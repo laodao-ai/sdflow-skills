@@ -47,14 +47,55 @@ def test_window_excludes_legacy_and_merge(repo):
     commit_all(repo, "checkpoint(task1-legacy): 旧 change 遗留")
     commit_all(repo, "checkpoint(task2-legacy): 旧 change 遗留")
     approved_change(repo, plan=PLAN2)
-    # 污染②：merge 带入的外部标签（--no-merges 只滤 merge commit 本身，
-    # 分支内普通提交仍在窗口——用 merge commit message 携带标签验证滤除）
-    subprocess.run(["git", "-C", str(repo), "merge", "--allow-unrelated-histories",
-                    "-s", "ours", "-m", "checkpoint(task2-external): merge携带",
-                    "HEAD"], capture_output=True, text=True)
+    # 污染②：真实双分支 merge——side 分支上做一个不带 task 标签的普通提交，
+    # 切回 main 后 --no-ff 合并，merge commit 自身消息携带外部标签
+    # （--no-merges 只滤 merge commit 本身；merge commit 消息携带的标签必须被滤除）
+    subprocess.run(["git", "-C", str(repo), "checkout", "-b", "side"],
+                    check=True, capture_output=True, text=True)
+    (repo / "side.txt").write_text("y", encoding="utf-8")
+    commit_all(repo, "docs: 旁支提交（无标签）")
+    subprocess.run(["git", "-C", str(repo), "checkout", "main"],
+                    check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo), "merge", "--no-ff", "side",
+                    "-m", "checkpoint(task2-external): merge携带"],
+                    check=True, capture_output=True, text=True)
     code, js, _ = run_gate(repo)
-    # 窗口内无任何 task 标签 → 0/2 完成，辅通道复选框未全勾 → CONTINUE_IMPL
+    # 窗口内无任何 task 标签（merge commit 被 --no-merges 滤除，side 分支内提交无标签）
+    # → 0/2 完成，辅通道复选框未全勾 → CONTINUE_IMPL
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == []
+
+def test_merged_branch_inner_commits_do_enter_window(repo):
+    # 已知不覆盖边界（design-diagrams 已知不覆盖清单固化）：--no-merges 只滤 merge
+    # commit 本身，分支内的普通提交仍会随 merge 进入窗口——本用例防止未来误以为
+    # --no-merges 能滤除整条分支的贡献。
+    (repo / "seed.txt").write_text("x", encoding="utf-8")
+    commit_all(repo, "seed")
+    approved_change(repo, plan=PLAN2)
+    subprocess.run(["git", "-C", str(repo), "checkout", "-b", "side"],
+                    check=True, capture_output=True, text=True)
+    (repo / "side.txt").write_text("y", encoding="utf-8")
+    commit_all(repo, "checkpoint(task9-side): x")
+    subprocess.run(["git", "-C", str(repo), "checkout", "main"],
+                    check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(repo), "merge", "--no-ff", "side",
+                    "-m", "merge side into main"],
+                    check=True, capture_output=True, text=True)
+    code, js, _ = run_gate(repo)
+    # 9 不在 plan（N=2, task1/2）内，不会误判齐 N；仍应是 CONTINUE_IMPL
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["9"]
+
+def test_uncommitted_plan_no_checkbox_unknown(repo):
+    # plan 写盘但不提交，且内容无任何复选框 → 双通道（标签窗口 / 复选框）皆不可判
+    d = approved_change(repo)  # 不带 plan 提交基底
+    (d / "superpowers-plan.md").write_text("### Task 1: A\n正文\n", encoding="utf-8")
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN" and "双通道" in js["reason"]
+
+def test_tg02_hit_sop_exists_falls_through(repo):
+    # tg02 命中且 sop 产物已在 → 不再 RUN_SOP，继续往下判（plan 缺 → RUN_PLAN）
+    approved_change(repo, tg02=True, sop=True)
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "RUN_PLAN"
 
 def test_plan_zero_titles_unknown(repo):
     approved_change(repo, plan="# 空计划，无任务标题\n")
