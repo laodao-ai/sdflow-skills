@@ -45,6 +45,12 @@
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
+### 未分组（批次为空）
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T25 | todo | OPEN | sdflow-ship |
+
 ## 已闭合（终态）摘要
 
 - 共 0 项已闭合（bug: 0，todo: 0）
