@@ -11,7 +11,7 @@
 | `streamline-workflow-automation`（Phase A） | ✅ 已归档 / merged | 三阶段连续化骨架 + 提交自动化 + bundle 骨架 + review UI 半归位(B1) | — | 归档 design G/P + `adr/0001`,`adr/0002` |
 | `issues-pool-batch-mgmt`（Phase B） | ✅ 已归档 / merged | 债务池 issues 结构 + 批次管理（I1–I13） | A | 归档 design §8 + 本 change design + grill B-Q1 |
 | `cross-model-outside-voice`（Phase C） | ⚪ 待开（**优先级↑**·adr/0006） | 跨模型 outside voice（C1–C7）+ TG-26 | A | 归档 design §9 + 归档 ROADMAP「Phase C 待迁」+ `adr/0006`（混编机队下天然可得） |
-| `minimize-repo-footprint` | 🔵 进行中（propose + grill 收敛 + model-baseline 重审·2026-07-03） | 规则全局解析(resolver **脚本化**) + 消费仓最小副本 + checkpoint 全局 | A · `adr/0005` | **`adr/0003`**(+grill-amendment) · **`adr/0005`** · **`adr/0006`**(resolver 脚本化) |
+| `minimize-repo-footprint` | 🔵 实现完成（待 impl-review/opsx-done） | 规则全局解析(resolver **脚本化**) + 消费仓最小副本 + checkpoint 全局 | A · `adr/0005` | **`adr/0003`**(+grill-amendment) · **`adr/0005`** · **`adr/0006`**(resolver 脚本化) |
 | `opsx-ship-orchestrator` | ⚪ 待开（**优先级↑**·adr/0006） | 阶段三窄编排 orchestrator（`opsx-ship`） | A（阶段三链就位） | **`adr/0004`** + `adr/0006`（编排 prose→结构，弱主模型漏步兜底） |
 | `extract-sdflow-repo`（暂名） | ⚪ 待开（footprint grill 2026-07-03 派生） | 抽 workflow 集群（≈11 skill）入独立 repo **sdflow**（前缀 `sdflow-`、canonical `~/.sdflow/`、拆 setup、dev-runtime 落地）；laodao-skills 留 misc | 独立（用 footprint 定的 canonical） | footprint grill + sdflow 命名 |
 | `workflow-metrics-loop`（暂名） | ⚪ 待开（2026-07-03 整体评估派生） | **度量回路**：聚合各层评审报告数据（findings 按层别/裁决结果/自动修 vs defer/成本），每 N 个 change 汇总一份，为"哪层值不值得留"类决策供数——替代目前 n≈小的"实测"依据（如 P3c） | 独立（只读报告产物，随时可开） | 2026-07-03 整体评估（explore）；`adr/0006` 背景 |

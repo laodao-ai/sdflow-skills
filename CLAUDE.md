@@ -19,7 +19,8 @@ bash setup.sh
 把每个含 `SKILL.md` 的顶层目录同时装到 `~/.claude/skills/` 和 `~/.codex/skills/`。
 Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Windows 用 copy + `.laodao-skills` marker。
 幂等，可反复运行。改动 skill 源码后一般无需重跑（symlink 场景）；仅在**新增/删除**顶层 skill 后重跑，
-以建立新链接、清理源已删除的孤儿链接。
+以建立新链接、清理源已删除的孤儿链接。**改 `opsx-project-init/assets/hack/` 下脚本后也必须重跑 `setup.sh`**
+（它们拷贝进 `~/.sdflow/hack/`，非 symlink，不重跑 = 新 SKILL 调旧脚本）。
 
 ### 运行测试
 
@@ -78,6 +79,16 @@ pytest buglist-recorder/tests/test_buglist.py::test_xxx -v   # 单个用例
 ### `hack/`
 
 - `checkpoint-commit.sh` — 变更过程中的检查点提交脚本（由 `opsx-project-init` 引用并测试）。
+
+### dev/runtime checkout 纪律（adr/0005 + 设计门拍板）
+
+- **运行 checkout** = `~/.skills/sdflow-skills`：只 `git pull` + `setup.sh`，日常一键用 `/sdflow-upgrade`；
+  remote 必须 = `laodao-ai/sdflow-skills.git`。
+- **开发 checkout** = 本仓：编辑 skill / bundle + local-first dogfood；改**规则**免重跑 setup、
+  改 **skill 或 assets/hack/ 脚本**须在开发 checkout 跑一次 `setup.sh` 才测得到——知情临时指 dev，
+  测完/合并后在运行 checkout 重跑 setup 还原。
+- **发布边界** = push（开发）→ pull（运行）→ **立即** setup（pull 与 setup 之间是"新 SKILL 调旧脚本"的窗口期）。
+- **回滚** = 运行 checkout `git checkout <上一已知良好 commit>` + 重跑 setup.sh。
 
 ## 修改本仓库的注意
 
