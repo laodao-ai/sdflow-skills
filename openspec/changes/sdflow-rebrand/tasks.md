@@ -3,6 +3,7 @@
 > 决策真相源 = [proposal.md](./proposal.md) + [design.md](./design.md)（§三 RENAME-MAP / §四 D1-D8）+ [spec-review-report.md](./spec-review-report.md)。
 > 全部未勾（ff + spec-review amendment，实现在阶段三）。需求 ID：**R-SR-1** 命名与品牌一致性 · **R-SR-2** 安装器品牌与 marker 兼容 · **R-SR-3** 托管区块 marker 迁移（ADDED，spec-review 新增）。
 > spec-review 2026-07-03〔spec-review-amendment〕：新增 0 组前置修复（改名的硬依赖地基）；1.2 引用面扩至第⑥类；4.3 断言逐名 pattern + 挪至末位；5.3 真实激活改道 merge 后新会话 /sdflow-upgrade。
+> **设计门拍板（2026-07-03）**：Q1=A（0 组纳入 scope）· Q2=维持 no-stub · Q3=追认 grill 跳过（T19 评估债保留）。
 
 ## 0. 前置修复（改名硬依赖的坏地基，先修后改名）〔spec-review-amendment〕
 
