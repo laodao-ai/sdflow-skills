@@ -77,10 +77,8 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
    - **结论**：PASS / FAIL
    - **结论行下方紧跟机器锚行（ship-gate 契约，模板写死二选一，勿改写措辞、勿两行并存）**：
 
-     ```
      <!-- ship-gate: verify=PASS -->
      <!-- ship-gate: verify=FAIL -->
-     ```
 
      ——二选一，/sdflow-ship 以字面查找机判
    - **逐需求核对表**：| 需求/任务 | 代码出处(文件:行/迁移/测试) | 状态(✅实现/⚠️Minor缺口/❌核心缺失) |
