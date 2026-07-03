@@ -11,19 +11,19 @@
 | T3 | `issues.py` | 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
 | T4 | `issues.py` | batch add 加 --if-exists skip 幂等选项；batch rename 后自动 reindex（或 SKILL 提示 rename 后跑 reindex） | 功能增强 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
 | T5 | `recorder` | 补 WONTDO / 0成员人标IN_PROGRESS 分支测试；抽 _find_row_file 消除 triage 与 set-status 定位逻辑重复（4处） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
-| T6 | `opsx-project-init/scripts/init.py` | 两个全局 hook 仅装 Claude 侧、Codex 会话静默不生效 | 基础设施 | OPEN | 2026-07-03 11:35 | minimize-repo-footprint |  |
-| T7 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 | 可观测性 | OPEN | 2026-07-03 13:57 | minimize-repo-footprint |  |
-| T8 | `impl-review/SKILL.md` | 置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核 | 功能增强 | OPEN | 2026-07-03 13:58 | minimize-repo-footprint |  |
-| T9 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 | 可观测性 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
-| T10 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 功能增强 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
-| T11 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 基础设施 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
-| T12 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） | 可观测性 | OPEN | 2026-07-03 14:38 | minimize-repo-footprint |  |
-| T13 | `opsx-project-init/tests/` | resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言 | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
-| T14 | `setup.sh` | Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支） | 基础设施 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
-| T15 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
-| T16 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
-| T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
-| T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | OPEN | 2026-07-03 16:18 | minimize-repo-footprint |  |
+| T6 | `opsx-project-init/scripts/init.py` | 两个全局 hook 仅装 Claude 侧、Codex 会话静默不生效 | 基础设施 | PROPOSED | 2026-07-03 11:35 | minimize-repo-footprint | minimize-repo-footprint |
+| T7 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 | 可观测性 | PROPOSED | 2026-07-03 13:57 | minimize-repo-footprint | minimize-repo-footprint |
+| T8 | `impl-review/SKILL.md` | 置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核 | 功能增强 | PROPOSED | 2026-07-03 13:58 | minimize-repo-footprint | minimize-repo-footprint |
+| T9 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 | 可观测性 | PROPOSED | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
+| T10 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 功能增强 | PROPOSED | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
+| T11 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 基础设施 | PROPOSED | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
+| T12 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） | 可观测性 | PROPOSED | 2026-07-03 14:38 | minimize-repo-footprint | minimize-repo-footprint |
+| T13 | `opsx-project-init/tests/` | resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言 | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
+| T14 | `setup.sh` | Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支） | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
+| T15 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
+| T16 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
+| T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
+| T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | PROPOSED | 2026-07-03 16:18 | minimize-repo-footprint | minimize-repo-footprint |
 
 ---
 
@@ -33,7 +33,7 @@
 |------|------|
 | 模块 | `opsx-project-init/scripts/init.py` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/minimize-repo-footprint/design.md`
 
@@ -51,7 +51,7 @@
 |------|------|
 | 模块 | `spec-review/SKILL.md + impl-review/SKILL.md` |
 | 类型 | 可观测性 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/adr/0006-execution-model-baseline-fleet-anchored.md`
 
@@ -69,7 +69,7 @@
 |------|------|
 | 模块 | `impl-review/SKILL.md` |
 | 类型 | 功能增强 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/adr/0006-execution-model-baseline-fleet-anchored.md`
 
@@ -87,7 +87,7 @@
 |------|------|
 | 模块 | `workflow.md + trigger-catalog.md` |
 | 类型 | 可观测性 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/adr/0006-execution-model-baseline-fleet-anchored.md`
 
@@ -105,7 +105,7 @@
 |------|------|
 | 模块 | `workflow.md 决策4 + opsx-ship(待开)` |
 | 类型 | 功能增强 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/adr/0006-execution-model-baseline-fleet-anchored.md`
 
@@ -123,7 +123,7 @@
 |------|------|
 | 模块 | `config.template.yaml + opsx-done/verify` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/adr/0006-execution-model-baseline-fleet-anchored.md`
 
@@ -141,7 +141,7 @@
 |------|------|
 | 模块 | `opsx-maintain / resolve-workflow.sh` |
 | 类型 | 可观测性 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/minimize-repo-footprint/spec-review-report.md`
 
@@ -159,7 +159,7 @@
 |------|------|
 | 模块 | `setup.sh` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/minimize-repo-footprint/design.md`
 
@@ -173,7 +173,7 @@
 |------|------|
 | 模块 | `setup.sh install_into` |
 | 类型 | 可观测性 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/minimize-repo-footprint/design.md`
 

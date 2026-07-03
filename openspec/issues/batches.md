@@ -8,3 +8,9 @@
 优先级: <待填>
 计划: <待填>
 
+### minimize-repo-footprint — minimize-repo-footprint
+状态: PLANNED
+成员: (生成) T10, T11, T12, T13, T14, T15, T16, T17, T18, T6, T7, T8, T9
+优先级: <待填>
+计划: <待填>
+

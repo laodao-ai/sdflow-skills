@@ -16,23 +16,23 @@
 | T4 | todo | PROPOSED | issues-pool-batch-mgmt |
 | T5 | todo | PROPOSED | issues-pool-batch-mgmt |
 
-### 未分组（批次为空）
+### 批次：minimize-repo-footprint
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T10 | todo | OPEN | minimize-repo-footprint |
-| T11 | todo | OPEN | minimize-repo-footprint |
-| T12 | todo | OPEN | minimize-repo-footprint |
-| T13 | todo | OPEN | minimize-repo-footprint |
-| T14 | todo | OPEN | minimize-repo-footprint |
-| T15 | todo | OPEN | minimize-repo-footprint |
-| T16 | todo | OPEN | minimize-repo-footprint |
-| T17 | todo | OPEN | minimize-repo-footprint |
-| T18 | todo | OPEN | minimize-repo-footprint |
-| T6 | todo | OPEN | minimize-repo-footprint |
-| T7 | todo | OPEN | minimize-repo-footprint |
-| T8 | todo | OPEN | minimize-repo-footprint |
-| T9 | todo | OPEN | minimize-repo-footprint |
+| T10 | todo | PROPOSED | minimize-repo-footprint |
+| T11 | todo | PROPOSED | minimize-repo-footprint |
+| T12 | todo | PROPOSED | minimize-repo-footprint |
+| T13 | todo | PROPOSED | minimize-repo-footprint |
+| T14 | todo | PROPOSED | minimize-repo-footprint |
+| T15 | todo | PROPOSED | minimize-repo-footprint |
+| T16 | todo | PROPOSED | minimize-repo-footprint |
+| T17 | todo | PROPOSED | minimize-repo-footprint |
+| T18 | todo | PROPOSED | minimize-repo-footprint |
+| T6 | todo | PROPOSED | minimize-repo-footprint |
+| T7 | todo | PROPOSED | minimize-repo-footprint |
+| T8 | todo | PROPOSED | minimize-repo-footprint |
+| T9 | todo | PROPOSED | minimize-repo-footprint |
 
 ## 已闭合（终态）摘要
 
