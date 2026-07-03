@@ -87,6 +87,7 @@
   - **verify/code-review 锚**：取该报告文件最后一次提交，其后**存在触及 `openspec/` 之外路径的提交** → 该步结论（PASS/FAIL/blocked 一律）判**陈旧** → NEXT=重跑该步；
   - **报告存在但从未提交**（`git log -1 -- <path>` 空）：视为 **fresh**（人机同权，手写产物合法），JSON 注明 `freshness=uncommitted`〔Q3=A〕；
   - **产物存在但无锚行 = 步进行中** → 重跑（同一 invocation 内熔断见 D5 补则）。由此获得：①verify FAIL 修复后重调不卡死（FAIL 陈旧→重验）；②干预后旧 PASS 不背书新代码（假✅路径焊死）；③**人机同权**——gate 只认盘面不辨产者，人工手跑某步/手写产物同样被认，**手改锚行 = 显式越权通道**（git 留痕可审计）；④**暂停语义** = ship 零跨步内存状态，停即停、重调 `/sdflow-ship` 即续；实现中断的 resume 由 gate 输出已完成任务号集（checkpoint 标签），ship 传给 SDD dispatch 勿重派。正常尾流不误伤（archive/commit 只触 openspec/，PASS 保鲜）。**残余不设防**：`--amend`/rebase 历史改写可骗过时点法（单人仓 + 不 squash 惯例，接受并记录）。
+  〔实现期回写 task4〕判定顺序补则：verify 现锚为 FAIL 且自身新鲜时，step8 的 cr 陈旧不单独 RERUN（避免抢跳），改由 VERIFY_FAIL 输出携带 cr_freshness=stale 提示；修复转绿后下一轮 step8 自然重报。
 - **D8 ship 零 git 写操作 + 意图透传**〔grill-amendment，Q3=A〕：git 单向操作只存在于 sdflow-done 一处——ship 全程不 commit/merge/push（各子 skill 的 checkpoint 归其自身；ship 无产物故无自身 checkpoint）；调用语中的 merge opt-out（"别合并/跑到 merge 前停"类）由 ship **原样透传**给 sdflow-done；push 维持用户手动，SHIPPED 摘要提醒（toolkit 源仓场景附"push 后新会话 /sdflow-upgrade"句）。与 gate 零副作用同构：ship = 纯编排读者。
 
 ## 六、组件清单（TG-14）

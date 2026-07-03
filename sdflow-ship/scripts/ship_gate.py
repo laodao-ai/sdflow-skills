@@ -229,6 +229,7 @@ def decide(root, change):
         emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-code-review",
              "code-review-report.md 在但无锚行 → 该步进行中，重跑")
     cr_stale, cr_fresh = is_stale(root, str(cr.relative_to(root)), "code", change)
+    cr_stale_note = None
     if cr_stale:
         # 陈旧判定优先级须让位于「verify=FAIL 之后修代码重验」链路：verify 已判 FAIL
         # 时不要求先重跑 code-review（否则陈旧 FAIL 卡死），留给 step9 判 RERUN_STALE。
@@ -237,6 +238,9 @@ def decide(root, change):
         if not verify_already_failed:
             emit("RERUN_STALE", EXIT_OK, "sdflow-code-review",
                  "code-review 结论后存在 openspec/ 外提交 → 结论陈旧，重审", freshness=cr_fresh)
+        # verify 已 FAIL：本轮不在此处抢跳，但把 cr 陈旧状态记下，
+        # 传给 step9 的 VERIFY_FAIL 输出（〔任务4 fix 轮 F1〕，避免陈旧信息在此处丢失）。
+        cr_stale_note = "（注意：code-review 结论亦已陈旧，修复后需重跑代码审）"
     # ── step 9：verify 终门 ────────────────────────────────────
     vf = cdir / "verify-report.md"
     if not vf.is_file():
@@ -248,7 +252,12 @@ def decide(root, change):
              "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）",
              freshness=v_fresh)
     if v_state == "neg":
-        emit("VERIFY_FAIL", EXIT_VFAIL, None, "verify FAIL：停并上抛缺口清单（报告内）")
+        reason = "verify FAIL：停并上抛缺口清单（报告内）"
+        extra = {}
+        if cr_stale_note:
+            reason += cr_stale_note
+            extra["cr_freshness"] = "stale"
+        emit("VERIFY_FAIL", EXIT_VFAIL, None, reason, **extra)
     if v_state is None:
         emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-done",
              "verify-report.md 在但无锚行 → 该步进行中，重跑")

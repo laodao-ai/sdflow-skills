@@ -67,3 +67,18 @@ def test_openspec_only_commits_keep_fresh(repo):
     commit_all(repo, "handoff only touches openspec")   # 正常尾流不误伤
     _, js, _ = run_gate(repo)
     assert js["verdict"] in ("RUN_VERIFY", "SHIPPED")   # 不得 RERUN_STALE
+
+def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
+    # F1 fix 轮：cr 陈旧 + verify 自身新鲜且 FAIL → VERIFY_FAIL 携带 cr 陈旧提示
+    d = impl_done(repo)
+    (d / "code-review-report.md").write_text(
+        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+    commit_all(repo, "cr alone")
+    touch_code(repo)             # 触及 src.py → cr 变陈旧
+    (d / "verify-report.md").write_text(
+        "<!-- ship-gate: verify=FAIL -->\n", encoding="utf-8")
+    commit_all(repo, "verify alone")   # verify 本身新鲜（其后无提交）
+    code, js, _ = run_gate(repo)
+    assert code == 5 and js["verdict"] == "VERIFY_FAIL"
+    assert js.get("cr_freshness") == "stale"
+    assert "code-review 结论亦已陈旧" in js["reason"]
