@@ -18,6 +18,11 @@
 | T10 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 功能增强 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
 | T11 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 基础设施 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
 | T12 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） | 可观测性 | OPEN | 2026-07-03 14:38 | minimize-repo-footprint |  |
+| T13 | `opsx-project-init/tests/` | resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言 | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
+| T14 | `setup.sh` | Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支） | 基础设施 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
+| T15 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
+| T16 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
+| T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
 
 ---
 
@@ -144,3 +149,17 @@
 **思路**：resolve-workflow.sh --explain 或 opsx-maintain 输出一行：canonical → <commit hash> (<N> 天未更新)；不做强告警，只做可观测
 
 **备注**：spec-review 2026-07-03 上抛区转记；与 T8/T10 同属机制健壮性批次候选
+
+---
+
+## T14: Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `setup.sh` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/minimize-repo-footprint/design.md`
+
+**动机**：task 1.2 声明「同 1.1 所有权检查」但实现无条件覆盖写；异物真实目录占位时 set -e 无文案中断（终审 Important#2 降债：Unix 不受影响、Windows 场景罕见）
