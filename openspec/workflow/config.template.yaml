@@ -1,7 +1,8 @@
 # ═════════════════════════════════════════════════════════════
 # 【config 起始模版】—— openspec/workflow/ bundle 的一部分。
 # 用法（新项目）：
-#   1. 把整个 openspec/workflow/ 拷入新项目（rules 引用其中文件，缺则断链）。
+#   1. 规则经全局 canonical（~/.sdflow/workflow）解析，仓内仅 tools/；下文 @openspec/workflow/... 引用在无本地
+#      副本的仓中 = 全局 bundle 内同名文件（resolve-workflow.sh 输出根）。
 #   2. 把本文件**另存为** openspec/config.yaml（OpenSpec 实际读取的是它，不是本模版）。
 #   3. 通用部分照搬：本注释、context 的「通用」段、全部 rules。
 #   4. 仅替换 context 的「本项目」段为该项目的 tech stack / 约定。
@@ -18,7 +19,7 @@ schema: spec-driven
 # 项目上下文（生成产物时展示给 AI）
 context: |
   ## 通用｜spec 工作流规则集（随模版携带，勿删）
-  spec 质量规则集见 openspec/workflow/：
+  spec 质量规则集见 openspec/workflow/（无本地副本时为 ~/.sdflow/workflow/，下同）：
   - trigger-catalog.md      触发词目录 TG-01~24（约束/领域/画图/模版必填槽 的公共触发源）
   - spec-checklists/        通用 base(BASE-01~28) + 领域 domains(backend·go / embedded·ml307c·esp32 / frontend)
   - design-diagrams.md      设计画图规则（哪些图、何时画、ASCII 优先）

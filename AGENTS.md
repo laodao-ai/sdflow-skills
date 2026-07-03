@@ -5,10 +5,10 @@
 <!-- opsx-init:start —— 由 opsx-project-init 维护，勿手改本区块 -->
 ## OpenSpec 工作流（opsx-project-init 铺设）
 
-端到端流程见 [openspec/workflow/workflow.md](./openspec/workflow/workflow.md)（真相源）。规则集在 `openspec/workflow/`：
+端到端流程见 workflow 规则集 `workflow.md`（真相源；本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。规则集在 `openspec/workflow/`：
 `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
 `ff-generation-constraints.md` · `design-diagrams.md` · `spec-review.md` · `generation-process.md`。
-质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`。
+质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。
 
 **强制操作规范**
 
@@ -17,9 +17,9 @@
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
   子 agent 调度期间（subagent-driven-development / spec-review / impl-review 运行中）禁 `/clear`。
 - **ff 开分支**：`opsx:ff` 若不在 feature 分支，先 `git checkout -b feat/{change}`（FF-0）。
-- **INDEX 同步**：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
+- **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 
-**配套 skill（workflow 依赖，需先安装）** — 均来自 laodao-skills（`bash ~/.skills/laodao-skills/setup.sh` 装到 Claude+Codex）：
+**配套 skill（workflow 依赖，需先安装）** — 均来自 laodao-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
 
 | skill | 在流程中的角色 |
 |---|---|

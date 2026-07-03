@@ -118,6 +118,8 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
 | `workflow.md` line62 `[checkpoint]` 约定 | 调用点单一源 | 路径改指 `~/.sdflow/hack/checkpoint-commit.sh`〔grill-amendment〕 |
 | `opsx-project-init update` 迁移路径 | 存量仓迁移 | 停复制规则 + 陈旧遮蔽告警（不自动删） |
 
+**issues.py 落点〔6.1 决策〕**：留 `issues-recorder/scripts/`（随 skill 软链全局可用，不迁 ~/.sdflow——它是 skill 私有脚本，非跨 skill 共享协议）
+
 ## 七、迁移（opt-in 删，永不自动删；措辞对齐反静默守卫）
 
 ```
