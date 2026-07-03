@@ -14,6 +14,7 @@
 | 工作流铺设/维护 | `opsx-project-init` | 一键把整套 OpenSpec spec 工作流 bundle 铺进任意项目（本仓库是该 bundle 权威源） |
 | 工作流铺设/维护 | `opsx-maintain` | 扫描 openspec 目录状态、对比 INDEX、报告差异并修复 |
 | 工作流铺设/维护 | `openspec-upgrade` | 升级 openspec CLI（`@fission-ai/openspec`）并刷新项目内 openspec skills |
+| 工作流铺设/维护 | `sdflow-upgrade` | 运行 checkout 一键升级：pull → setup → 版本展示（堵 pull→setup 窗口期） |
 | 评审（主审） | `spec-review` | 阶段二·设计审主审：并行多镜（领域+对抗+接地读码）→ 一份 spec-review-report |
 | 评审（主审） | `impl-review` | 阶段三·代码审主审：并行多镜 + 对抗裁决 + 置信过滤 → 一份 code-review-report |
 | 收尾 | `opsx-done` | 闭环：verify（证据锚点）→ hand-off → archive（delta 对码核验同步）→ commit → merge |
