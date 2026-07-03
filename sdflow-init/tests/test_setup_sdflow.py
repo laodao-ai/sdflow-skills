@@ -88,6 +88,27 @@ class TestCleanupOrphansDangling:
         assert (skills / "alien-skill").is_symlink()               # 非自属不动（红线）
 
 
+class TestRenameEndToEnd:
+    def test_rename_scenario_old_links_cleaned_new_links_made(self, tmp_path):
+        """跨改名端到端：预置 9 个指向本仓已不存在旧目录的自属链 → setup → 旧清新立。"""
+        home = tmp_path / "home"; skills = home / ".claude" / "skills"; skills.mkdir(parents=True)
+        for old in ["opsx-project-init","opsx-done","spec-review","impl-review","buglist-recorder"]:
+            (skills / old).symlink_to(REPO / old)      # 改名后这些源目录已不存在 → dangling
+        env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        for old in ["opsx-project-init","opsx-done","spec-review","impl-review","buglist-recorder"]:
+            assert not (skills / old).exists(), old     # 旧链清零
+        for new in ["sdflow-init","sdflow-done","sdflow-spec-review","sdflow-code-review","sdflow-buglist"]:
+            assert (skills / new).is_symlink(), new     # 新链建立
+
+    def test_layout_smoke(self, tmp_path):
+        """布局冒烟：canonical 软链指向改名后的 sdflow-init/assets/workflow；hack 两脚本可执行。"""
+        r, sdflow = run_setup(tmp_path)
+        assert (sdflow / "workflow").resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()
+        for s in ("checkpoint-commit.sh", "resolve-workflow.sh"):
+            assert (sdflow / "hack" / s).stat().st_mode & stat.S_IXUSR
+
+
 OUR_NAMES = {  # RENAME-MAP 旧名∪新名∪保留名单（marker 兼容边界，D5）
     "opsx-project-init","opsx-done","opsx-maintain","opsx-roadmap-planner",
     "spec-review","impl-review","buglist-recorder","todolist-recorder","issues-recorder",
