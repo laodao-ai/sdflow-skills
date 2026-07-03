@@ -35,7 +35,7 @@ description: >
 2. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
 3. **反静默守卫（显形部分）**：若 `gstack-review.md` **缺失 / 解析不出**，**打印显式降级日志**（"autoplan 输出未找到 → 本次缺广审层"），**绝不静默当'无此层'跑过**。
    > 〔Phase C 补〕完整的 outside-voice 复用（读 gstack-review.md 的 codex outside-voice 段 + 缺失时**回落自跑 codex 设计 voice** + 命中 HR-TG 单开领域 cross-model）属 Phase C（C2/C4）。Phase A 只做"跑 autoplan + 吃 findings + 缺失显式记降级"，不实现回落自跑与 cross-model。
-4. **checkpoint 提交（P2c 第 1 次）**：`hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。
+4. **checkpoint 提交（P2c 第 1 次）**：`~/.sdflow/hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目标准）
 
@@ -64,7 +64,7 @@ description: >
 - **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 impl-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强模型带上下文）已强于数值打分。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
 - 按 `design-diagrams.md`：命中触发的图**只验证存在/正确/未过时**，缺失/过时标记，不重画。
-- **checkpoint 提交（P2c 第 2 次）**：产出报告 + amendments 后 → `hack/checkpoint-commit.sh spec-review "并行多镜审 + 合并报告 + spec-review-amendment"`。
+- **checkpoint 提交（P2c 第 2 次）**：产出报告 + amendments 后 → `~/.sdflow/hack/checkpoint-commit.sh spec-review "并行多镜审 + 合并报告 + spec-review-amendment"`。
 
 **报告决策登记区格式**：
 

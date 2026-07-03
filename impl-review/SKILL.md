@@ -101,7 +101,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 - 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账）。
 - 修复代码，改动处标 `[impl-review-fix]`。
-- **checkpoint 提交**：产出报告 + 自动修复后 → `hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
+- **checkpoint 提交**：产出报告 + 自动修复后 → `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
 - **收敛口**：结尾一句——建议进 `/opsx-done`（verify → hand-off → archive → commit → merge）。
 
 ---
