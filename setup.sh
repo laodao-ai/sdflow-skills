@@ -66,8 +66,11 @@ install_into() {
 cleanup_orphans() {
   local dest="$1"
   [ -d "$dest" ] || return 0
-  for entry in "$dest"/*/; do
-    [ -e "$entry" ] || continue
+  # find 枚举一切一级条目（含悬空软链）——尾斜杠 glob "$dest"/*/ 在 POSIX 语义下
+  # 匹配不到 dangling 软链（因为它不再解析为目录），孤儿清理对真悬空链是死代码。
+  local entry
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
     local entry_name="$(basename "$entry")"
     [ "$entry_name" = "$REPO_NAME" ] && continue
 
@@ -99,7 +102,7 @@ cleanup_orphans() {
         cleaned+=("$entry_name @ $dest")
       fi
     fi
-  done
+  done < <(find "$dest" -mindepth 1 -maxdepth 1)
 }
 
 # ─── sdflow global home: canonical bundle anchor + hack scripts ──

@@ -57,3 +57,32 @@ class TestInstallSdflow:
         link = sdflow / "workflow"
         assert link.is_symlink()
         assert link.resolve() == (REPO / "opsx-project-init" / "assets" / "workflow").resolve()
+
+
+class TestCleanupOrphansDangling:
+    """0.1：尾斜杠 glob 看不见 dangling 链（POSIX 语义）——修为 find 枚举后必须能清。"""
+
+    def test_dangling_own_link_is_cleaned(self, tmp_path):
+        home = tmp_path / "home"
+        skills = home / ".claude" / "skills"
+        skills.mkdir(parents=True)
+        # 自属 dangling：目标路径含本仓名（basename REPO）但已不存在——模拟改名后的旧链。
+        # 注意：entry_name 必须不撞真实现存 skill 名（如 "spec-review"）——否则
+        # install_into（pipeline 中先于 cleanup_orphans 跑）会把它当同名活 skill 无条件
+        # ln -snf 自愈修复，导致 cleanup_orphans 永远等不到它变成 "gone"，
+        # 测试会因无关原因红/绿都失败，测不到本任务要修的枚举逻辑。
+        (skills / "spec-review-legacy").symlink_to(REPO / "spec-review-legacy-GONE")
+        env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        assert r.returncode == 0
+        assert not (skills / "spec-review-legacy").is_symlink()   # dangling 自属链被清
+        assert "spec-review-legacy" in (r.stdout + r.stderr)       # cleaned orphans 榜上有名
+
+    def test_foreign_dangling_link_is_kept(self, tmp_path):
+        home = tmp_path / "home"
+        skills = home / ".claude" / "skills"
+        skills.mkdir(parents=True)
+        (skills / "alien-skill").symlink_to("/nonexistent/other-tool/alien-skill")
+        env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+        subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        assert (skills / "alien-skill").is_symlink()               # 非自属不动（红线）
