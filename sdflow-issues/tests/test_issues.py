@@ -21,7 +21,7 @@ SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
 
 # Task 16：端到端一致性自检要用真实 buglist.py/todolist.py CLI 子进程（不借道 issues.py
 # 内部函数）造数据，定位方式镜像 issues.py 自身的 SKILLS_ROOT 探测（tests 目录上三级
-# 是 laodao-skills 根，sdflow-buglist/sdflow-todolist 与本 skill 是同级 sibling）。
+# 是 sdflow-skills 根，sdflow-buglist/sdflow-todolist 与本 skill 是同级 sibling）。
 BUGLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-buglist" / "scripts" / "buglist.py")
 TODOLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-todolist" / "scripts" / "todolist.py")
 

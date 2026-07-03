@@ -99,7 +99,7 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 
 **效果**：verify → archive → git commit → (可选) merge to main 四步机械操作全部由 Haiku 子 agent 执行，主 session 上下文隔离，不触发 model 切换 / cache reload。  
 **原理**：skill 调用 Agent tool 时指定 `model: haiku`，子 agent 只接收任务 prompt，不携带主 session 的大上下文。  
-**来源**：自建 skill，位于 `~/.skills/laodao-skills/sdflow-done/SKILL.md`，symlink 到 `~/.claude/skills/sdflow-done`。  
+**来源**：自建 skill，位于 `~/.skills/sdflow-skills/sdflow-done/SKILL.md`，symlink 到 `~/.claude/skills/sdflow-done`。  
 **操作**：
 
 ```bash

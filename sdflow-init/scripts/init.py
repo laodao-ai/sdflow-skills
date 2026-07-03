@@ -35,11 +35,6 @@ MARK_DOC = ("<!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本�
 MARK_IDX = ("<!-- opsx-init:rules:start —— 由 sdflow-init 维护，勿手改本区块 -->",
             "<!-- opsx-init:rules:end -->")
 
-MARK_TOKENS = {  # token → 完整新 marker；定位按 token（历史 marker 文案含旧 skill 名，全串匹配会漏）
-    "opsx-init:start": MARK_DOC, "opsx-init:rules:start": MARK_IDX,
-}
-
-
 def _find_marker_line(text, token):
     """按 token 定位 marker 整行（返回该行起止 offset），找不到返回 None。"""
     for line in text.splitlines(keepends=True):

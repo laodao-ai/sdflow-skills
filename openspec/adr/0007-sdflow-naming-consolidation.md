@@ -31,7 +31,7 @@
 
 ## Consequences
 
-- `RENAME-MAP` 是本次改名唯一数据源：9 个 skill 目录 `git mv`、`setup.sh` 的 `OUR_NAMES`/`OUR_LEGACY_NAMES`、各 `SKILL.md` 互引、`assets/workflow/workflow.md` 步骤表 prompt、`assets/snippets/` 托管区块模版，均从此表机械派生，任何后续再改名（若发生）须先改这张表。
+- `RENAME-MAP` 是本次改名唯一数据源：9 个 skill 目录 `git mv`、`setup.sh` 的 `OUR_LEGACY_NAMES`（迁移测试侧另维护对照集合 `OUR_NAMES`）、各 `SKILL.md` 互引、`assets/workflow/workflow.md` 步骤表 prompt、`assets/snippets/` 托管区块模版，均从此表机械派生，任何后续再改名（若发生）须先改这张表。
 - `setup.sh` 输出品牌升级为 `sdflow-skills v<VERSION>`（`VERSION` 新建 `0.9.0`）；marker 由 `.laodao-skills` 迁移为 `.sdflow-skills`，兼容识别集合收窄为「目录名 ∈ RENAME-MAP 旧名∪新名∪保留名单」，防止误伤 laodao 旧仓自身 misc skill 的 Windows 拷贝（评审 F8/DR-7）。
 - `trigger-map.md` 作为触发等价的评审面与断言输入随 change 留档；后续任何 skill 改名都应比照本次产出同类映射表，而非仅凭人工记忆核对触发短语。
 - 三保留名单（`embedded-test-sop` / `openspec-upgrade` / `sdflow-upgrade`）固化为本仓命名规范的显式例外，后续新增 skill 若域名/外部依赖与 `sdflow-` 前缀语义冲突，可参照 (c) 的豁免理由类比裁决，无需每次重新论证。

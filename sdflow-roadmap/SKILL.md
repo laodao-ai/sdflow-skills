@@ -185,7 +185,7 @@ roadmap 的质量 100% 取决于讨论是否充分。开工前**必须**先评�
 - [ ] 2.4 生成 openspec/roadmaps/{name}/task-log.md
 - [ ] 2.5 (可选) 保留或生成 openspec/roadmaps/{name}/memo.md
 - [ ] 2.6 生成 openspec/roadmaps/{name}/review.html：跑
-      `python3 ~/.skills/laodao-skills/sdflow-roadmap/scripts/gen_review_stub.py {name}`
+      `python3 ~/.skills/sdflow-skills/sdflow-roadmap/scripts/gen_review_stub.py {name}`
       （若报错提示项目未铺设 review 工具，先跑 sdflow-init init/update 再重试）
 
 ## 3. 交叉 review（强烈建议，别跳过——见陷阱 6）

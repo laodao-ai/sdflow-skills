@@ -325,4 +325,48 @@ done
 # 加总：9+5+3+3+62+19+5+3+3 = 112 行
 ```
 
+## laodao pattern 补轴（final-review fix）
+
+final-review 发现 2 HIGH（`sdflow-init/SKILL.md`、`sdflow-roadmap/SKILL.md` 安装指引仍指向
+`~/.skills/laodao-skills/`）+ 若干同轴 `laodao-skills` 品牌残留（workflow.md / Token_Saving_Strategies.md
+两对 assets↔instance、`sdflow-done/SKILL.md`、`openspec/config.yaml`）。逐条修复后，补跑一次全仓 `laodao`
+pattern 反向断言（不区分具体旧 skill 名，直接抓字面 `laodao`），核验残留是否均落在合法白名单内。
+
+修复清单（详见本次提交 diff）：
+1. `sdflow-init/SKILL.md` 安装指引 `bash ~/.skills/laodao-skills/setup.sh` → `sdflow-skills`；"3 个 laodao skill" → "3 个 sdflow skill"
+2. `sdflow-roadmap/SKILL.md` `~/.skills/laodao-skills/sdflow-roadmap/scripts/...` → `sdflow-skills`
+3. `sdflow-init/assets/workflow/workflow.md` + `openspec/workflow/workflow.md`（instance 同步）："随 laodao-skills setup.sh 安装" → sdflow-skills
+4. `sdflow-init/assets/workflow/reference/Token_Saving_Strategies.md` + `openspec/workflow/reference/Token_Saving_Strategies.md`（instance 同步）：`~/.skills/laodao-skills/sdflow-done/SKILL.md` → sdflow-skills
+5. `sdflow-done/SKILL.md`："随 laodao-skills setup.sh 各自独立 symlink" → sdflow-skills
+6. `openspec/config.yaml`：自称 "laodao-skills：老刀AI码场自建..." → "sdflow-skills：自建..."；marker 表述改为实况（`.sdflow-skills` 标记文件；旧 `.laodao-skills` 仅名单内兼容）
+7. `openspec/adr/0007-sdflow-naming-consolidation.md`：`OUR_NAMES`/`OUR_LEGACY_NAMES` 措辞改实况（setup.sh 只有 `OUR_LEGACY_NAMES`；`OUR_NAMES` 是迁移测试侧另维护的对照集合）
+8. `sdflow-init/scripts/init.py`：删除死常量 `MARK_TOKENS`（grep 全仓确认零调用点，仅定义本身与一处 superpowers-plan.md 历史记录引用，非代码调用）
+9. 顺带扫出并修复的同轴残留（不在原清单，扫描中发现）：`openspec/specs/spec-workflow/spec.md` 两处 "laodao-skills 权威源/bundle 公共家" → sdflow-skills；`sdflow-issues/tests/test_issues.py` 注释 "是 laodao-skills 根" → sdflow-skills
+
+验证命令（与原 Step 2 同白名单）：
+```bash
+WL='openspec/adr/|openspec/ROADMAP.md|openspec/CONTEXT.md|openspec/changes/archive/|openspec/issues/|openspec/changes/sdflow-rebrand/|\.superpowers/|docs/|memo-|laodao-ai'
+grep -rn "laodao" . --exclude-dir=.git --exclude-dir=node_modules 2>/dev/null | grep -Ev "$WL"
+```
+
+修复后残留 11 行，逐条判 clean：
+
+| # | 命中 | 判定 | 理由 |
+|---|---|---|---|
+| 1 | `setup.sh:25` 注释 "`.laodao-skills` 仅限我方名单" | clean | setup.sh 的 `.laodao-skills` 兼容逻辑注释（白名单项） |
+| 2 | `setup.sh:30` `[ -f "$1/.laodao-skills" ] && case "$OUR_LEGACY_NAMES"...` | clean | setup.sh 的 `.laodao-skills` 兼容逻辑代码本体（白名单项），实现向后兼容识别旧 Windows marker，非残留 bug |
+| 3 | `CLAUDE.md:7` "源项目 laodao-skills，本仓库建为 sdflow-skills" | clean | CLAUDE.md 历史叙述句（白名单项，明确允许） |
+| 4 | `CLAUDE.md:20` "旧 `.laodao-skills` marker 仍识别为自属" | clean | 如实描述 setup.sh 已实现的合法兼容行为（同 #1/#2 机制的文档化转述），非陈旧指称 |
+| 5 | `CLAUDE.md:61` 同上一处，安全兜底段落 | clean | 同 #4 |
+| 6 | `README.md:72` "Windows marker 检测，名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属" | clean | 同 #4，README 对同一兼容机制的说明 |
+| 7 | `sdflow-init/tests/test_setup_sdflow.py:126` 注释 "构造带 `.laodao-skills` marker 的目录" | clean | 迁移测试里的 legacy marker 字面（白名单项） |
+| 8 | 同文件 :130 `(d / ".laodao-skills").write_text(...)` | clean | 同 #7，测试数据构造 |
+| 9 | 同文件 :138 注释 "bilibili-research 是 laodao misc 财产" | clean | 指称"laodao 旧仓不动"类说明（白名单项）——bilibili-research 不在 RENAME-MAP 内，仍属旧仓 misc 财产 |
+| 10 | 同文件 :141 `assert (alien / ".laodao-skills").exists()` | clean | 同 #7/#8 |
+| 11 | `openspec/config.yaml:21` "旧 `.laodao-skills` 仅名单内兼容" | clean | 本次修复项 3-4 按任务指令改写后的实况表述，与 setup.sh 兼容逻辑一致 |
+
+**结论**：11 条残留全部判 clean，均为合法兼容逻辑代码/注释、迁移测试字面、历史叙述句或对同一兼容机制的
+如实转述，无白名单外的功能性残留。修复后 `diff -q` 两对 assets↔instance 文件均零输出，`python3 -m pytest -q`
+233 passed 无 warning。
+
 三处数字已与程序化计数实测结果对齐，未来如需验证可参照上述命令重跑。

@@ -13,12 +13,12 @@ context: |
   触发判定一律用具体行为描述，不用风险代号。
 
   ## 本项目｜tech stack / 约定
-  laodao-skills：老刀AI码场自建 Claude Code Skills 统一管理仓库（本身就是一个 skill 集合库，
+  sdflow-skills：自建 Claude Code Skills 统一管理仓库（本身就是一个 skill 集合库，
   非典型业务代码库）。
   - 每个 skill 是仓库根下一个目录：`SKILL.md`（frontmatter + 说明）+ 可选 `scripts/`（Python/Shell）
     + 可选 `assets/`（模版、bundle 资源）。
   - 安装机制：`setup.sh` 在 `~/.claude/skills/` 下为每个 skill 建相对路径 symlink（macOS/Linux）或
-    复制目录（Windows，写 `.laodao-skills` 标记文件）。
+    复制目录（Windows，写 `.sdflow-skills` 标记文件；旧 `.laodao-skills` 仅名单内兼容）。
   - 本仓库同时是 `sdflow-init` skill 的 **bundle 权威源**：其
     `sdflow-init/assets/workflow/` 就是铺给其他项目的 `openspec/workflow/` 唯一来源；
     改动这套 spec 工作流规则集，一律先改这里、再用 `sdflow-init update` 推到各使用项目，

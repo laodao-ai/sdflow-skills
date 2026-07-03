@@ -103,7 +103,7 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
 
 verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的未分诊 OPEN 项归入一个批次——这样上面第 2 段能引批次号，而不是逐条罗列裸 ID。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了 Sonnet 子代理，由该子代理顺带执行）。
 
-**脚本路径**：buglist.py / todolist.py / issues.py 分属 `sdflow-buglist`、`sdflow-todolist`、`sdflow-issues` 三个 sibling skill，随 laodao-skills `setup.sh` 各自独立 symlink 到 `~/.claude/skills/`（同 tag、sdflow-init 等 skill 引用兄弟脚本的既有约定）：
+**脚本路径**：buglist.py / todolist.py / issues.py 分属 `sdflow-buglist`、`sdflow-todolist`、`sdflow-issues` 三个 sibling skill，随 sdflow-skills `setup.sh` 各自独立 symlink 到 `~/.claude/skills/`（同 tag、sdflow-init 等 skill 引用兄弟脚本的既有约定）：
 
 ```
 ~/.claude/skills/sdflow-buglist/scripts/buglist.py
