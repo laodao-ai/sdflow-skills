@@ -80,20 +80,46 @@ class TestReviewToolDeployment:
         assert content == template.replace("__PROJECT_NAME__", "another-project")
 
 
-class TestCopyHack:
-    """copy_hack 把 assets/hack/*.sh 部署到消费仓 repo 根 hack/，保留可执行位。"""
+class TestNoConsumerHack:
+    """checkpoint 全局化（~/.sdflow/hack/，由 setup.sh 安装）：init/update 不再往消费仓铺 hack/。"""
 
-    def test_deploys_scripts_to_repo_root_hack_with_exec_bit(self, tmp_path):
-        n = init_mod.copy_hack(str(tmp_path))
-        script = tmp_path / "hack" / "checkpoint-commit.sh"
-        assert script.is_file()
-        assert n >= 1
-        assert script.stat().st_mode & stat.S_IXUSR  # 源 chmod +x，copymode 须保留
+    def test_init_module_has_no_copy_hack(self):
+        assert not hasattr(init_mod, "copy_hack")
 
-    def test_idempotent_rerun_overwrites_cleanly(self, tmp_path):
-        init_mod.copy_hack(str(tmp_path))
-        init_mod.copy_hack(str(tmp_path))  # update-mode 重跑
-        assert (tmp_path / "hack" / "checkpoint-commit.sh").is_file()
+    def test_run_does_not_create_consumer_hack_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        init_mod.run(str(tmp_path / "proj"), "init")
+        assert not (tmp_path / "proj" / "hack").exists()
+
+
+class TestBundleToolsOnly:
+    """R-MRF-1：copy_bundle 只部署 tools/ 子树，规则文件数 = 0。"""
+
+    def test_deploys_only_tools_subtree(self, tmp_path):
+        dst, n = copy_bundle(str(tmp_path))
+        wf = tmp_path / "openspec" / "workflow"
+        assert (wf / "tools" / "engine.js").is_file()
+        assert not (wf / "workflow.md").exists()
+        assert not (wf / "spec-checklists").exists()
+        assert not (wf / "code-checklists").exists()
+        md_rules = [p for p in wf.rglob("*.md") if "tools" not in p.parts]
+        assert md_rules == []                      # 规则文件数 = 0
+
+    def test_full_flag_restores_whole_bundle(self, tmp_path):
+        init_mod.copy_bundle(str(tmp_path), full=True)
+        wf = tmp_path / "openspec" / "workflow"
+        assert (wf / "workflow.md").is_file()      # --dev 整刷用（Task 7）
+
+
+class TestHandleConfigFromBundleSrc:
+    """2.5：config 模版改读 BUNDLE_SRC——消费仓无规则副本时 init 不得 FileNotFoundError。"""
+
+    def test_init_creates_config_without_consumer_template(self, tmp_path):
+        root = tmp_path / "proj"
+        (root / "openspec").mkdir(parents=True)    # 无 workflow/config.template.yaml
+        status, _ = init_mod.handle_config(str(root), "init")
+        assert status == "created"
+        assert (root / "openspec" / "config.yaml").is_file()
 
 
 class TestEnsureGlobalHooks:

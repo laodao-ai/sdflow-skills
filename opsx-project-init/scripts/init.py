@@ -88,9 +88,15 @@ def read_snippet(name):
 
 # ── bundle 铺设 ──────────────────────────────────────────────
 
-def copy_bundle(root):
+def copy_bundle(root, full=False):
+    """R-MRF-1 分层部署：默认只铺 tools/ 子树（规则经全局 canonical 解析，不复制进消费仓）。
+    full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用。"""
     dst = os.path.join(root, "openspec", "workflow")
-    shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True)
+    if full:
+        shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True)
+    else:
+        shutil.copytree(os.path.join(BUNDLE_SRC, "tools"),
+                        os.path.join(dst, "tools"), dirs_exist_ok=True)
     n = sum(len(fs) for _, _, fs in os.walk(dst))
     return dst, n
 
@@ -129,28 +135,6 @@ def copy_review_tool(root):
     return 2  # serve.sh + 根 review.html（tools/ 已由 copy_bundle 计入 openspec/workflow/）
 
 
-def copy_hack(root):
-    """铺设 hack/ 工作流脚本（checkpoint-commit.sh 等）到项目 repo 根 hack/。
-    源 = assets/hack/*.sh（工作流「过场提交」等自动化脚本，随 bundle 部署，供 step prompt 调用）。
-    update 模式覆盖刷新（托管内容，与 copy_bundle 同款语义；用户勿手改，要改改 assets/hack/ 再 update）。
-    保留可执行权限。返回铺设的文件数（源目录不存在则 0）。
-    """
-    if not os.path.isdir(HACK_SRC):
-        return 0
-    dst_dir = os.path.join(root, "hack")
-    os.makedirs(dst_dir, exist_ok=True)
-    n = 0
-    for name in sorted(os.listdir(HACK_SRC)):
-        src = os.path.join(HACK_SRC, name)
-        if not os.path.isfile(src):
-            continue
-        dst = os.path.join(dst_dir, name)
-        shutil.copyfile(src, dst)
-        shutil.copymode(src, dst)
-        n += 1
-    return n
-
-
 def ensure_dirs(root):
     made = []
     for d in CORE_DIRS:
@@ -165,7 +149,7 @@ def ensure_dirs(root):
 def handle_config(root, mode):
     """init: 缺则从模版生成，存在则报告需合并。update: 不动。返回 (状态, 提示)。"""
     cfg = os.path.join(root, "openspec", "config.yaml")
-    tmpl = os.path.join(root, "openspec", "workflow", "config.template.yaml")
+    tmpl = os.path.join(BUNDLE_SRC, "config.template.yaml")
     if mode == "update":
         return ("skip", "update 不动 config.yaml（如模版有变，模型按需合并通用段/rules）")
     if os.path.exists(cfg):
@@ -259,11 +243,7 @@ def run(root, mode):
         f"（{n_review} 文件，{'覆盖' if mode=='update' else '写入'}；tools/ 随 bundle 入 openspec/workflow/tools/）"
     )
 
-    n_hack = copy_hack(root)
-    if n_hack:
-        report.append(
-            f"铺 hack 脚本：hack/（{n_hack} 文件，{'覆盖' if mode=='update' else '写入'}；含 checkpoint-commit.sh）"
-        )
+    report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
 
     report.append("全局 hooks：\n" + ensure_global_hooks())
 
@@ -293,7 +273,7 @@ def run(root, mode):
             print("  · 编辑 openspec/config.yaml 的「## 本项目」context 段，填本项目 tech stack/约定")
         else:
             print("  · 合并 openspec/config.yaml：把模版的「通用」context 段 + rules 并入，保留你的「本项目」段")
-        print("  · 安装配套 skill：bash ~/.skills/laodao-skills/setup.sh（/spec-review /impl-review /opsx-done）")
+        print("  · 安装配套 skill：bash ~/.skills/sdflow-skills/setup.sh（/spec-review /impl-review /opsx-done）")
 
 
 def _die(msg):
