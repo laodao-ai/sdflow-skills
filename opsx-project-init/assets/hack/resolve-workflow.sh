@@ -14,7 +14,7 @@ EXPLAIN=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --root)    ROOT="${2:-}"; shift 2 ;;
+    --root)    [ $# -ge 2 ] || { echo "resolve-workflow: --root requires a value" >&2; exit 64; }; ROOT="$2"; shift 2 ;;
     --explain) EXPLAIN=1; shift ;;
     *) echo "resolve-workflow: unknown arg: $1" >&2; exit 64 ;;
   esac
@@ -37,7 +37,7 @@ has_wf=0; has_spec=0; has_code=0
 total=$((has_wf + has_spec + has_code))
 if [ "$total" -gt 0 ]; then
   if [ "$total" -lt 3 ]; then
-    echo "resolve-workflow: ⚠ 本仓规则副本部分残留（workflow.md=$has_wf spec-checklists=$has_spec code-checklists=$has_code）——按 pin 处理；想跟全局请删净、想 pin 请补齐" >&2
+    echo "resolve-workflow: ⚠ 本仓规则副本部分残留（workflow.md=${has_wf} spec-checklists=${has_spec} code-checklists=${has_code}）——按 pin 处理；想跟全局请删净、想 pin 请补齐" >&2
   fi
   explain "local-pin" "$LOCAL"
   echo "$LOCAL"
@@ -49,7 +49,7 @@ CANON=""
 if [ -d "$SDFLOW_HOME/workflow" ]; then
   CANON="$SDFLOW_HOME/workflow"
 elif [ -f "$SDFLOW_HOME/workflow-path" ]; then
-  CANON="$(head -n1 "$SDFLOW_HOME/workflow-path" | tr -d '\r' | sed -e 's/[[:space:]]*$//')"
+  CANON="$( (head -n1 "$SDFLOW_HOME/workflow-path" | tr -d '\r' | sed -e 's/[[:space:]]*$//') 2>/dev/null || true)"
 fi
 
 sane() {  # 最小健全性检查：防 pull 半坏态静默广播（spec-review D2）
@@ -63,5 +63,5 @@ if sane "$CANON"; then
 fi
 
 # 步3：显式降级（反静默守卫）——绝不静默当"本项目无此评审层"
-echo "resolve-workflow: ✗ 全局 workflow bundle 不可达或不完整（SDFLOW_HOME=$SDFLOW_HOME）。skill 应显式降级为通用评审并告警。修复：在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh" >&2
+echo "resolve-workflow: ✗ 全局 workflow bundle 不可达或不完整（SDFLOW_HOME=${SDFLOW_HOME}）。skill 应显式降级为通用评审并告警。修复：在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh" >&2
 exit 2
