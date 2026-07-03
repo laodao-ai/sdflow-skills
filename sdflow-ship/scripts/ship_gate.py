@@ -127,6 +127,20 @@ def checkboxes_all(plan):
     return not unchecked
 
 
+def branch_state(root):
+    """已并判定〔spec-review-amendment D6〕。"""
+    head = run_git(root, "rev-parse", "--abbrev-ref", "HEAD")
+    if head == "HEAD":
+        return "unknown"          # detached HEAD
+    for base in ("main", "master"):
+        if run_git(root, "rev-parse", "--verify", base):
+            if head == base:
+                return "merged"   # 已在 base 上（分支已删/已并场景）
+            return "merged" if not run_git(root, "log", f"{base}..HEAD",
+                                           "--oneline") else "pending"
+    return "unknown"
+
+
 def decide(root, change):
     cdir = root / "openspec" / "changes" / change
     # ── pre-flight：设计门（D7 起跑不越门）─────────────────────────
@@ -166,8 +180,39 @@ def decide(root, change):
             emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
                  f"实现进度 {len(done)}/{n}（窗口 {sha[:7] or '-'}..HEAD --no-merges）",
                  done_tasks=sorted(done, key=int))
-    # ── step 8/9/final 由任务3 填充；当前推进到 code-review ──────
-    emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review", "实现完成，进入代码审")
+    # ── step 8：code-review 门 ─────────────────────────────────
+    cr = cdir / "code-review-report.md"
+    if not cr.is_file():
+        emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review", "实现完成，进入代码审")
+    cr_state = pick_exclusive(cr, ANCHOR_CR_PASS, ANCHOR_CR_BLOCKED, "code-review")
+    if cr_state == "neg":
+        emit("BLOCKED_UPSTREAM", EXIT_BLOCKED, None,
+             "code-review 判 blocked：先解 blocker（见报告），gate 不蒙头跑")
+    if cr_state is None:
+        emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-code-review",
+             "code-review-report.md 在但无锚行 → 该步进行中，重跑")
+    # ── step 9：verify 终门 ────────────────────────────────────
+    vf = cdir / "verify-report.md"
+    if not vf.is_file():
+        emit("RUN_VERIFY", EXIT_OK, "sdflow-done", "进入收尾（verify→hand-off→archive→merge）")
+    v_state = pick_exclusive(vf, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL, "verify")
+    if v_state == "neg":
+        emit("VERIFY_FAIL", EXIT_VFAIL, None, "verify FAIL：停并上抛缺口清单（报告内）")
+    if v_state is None:
+        emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-done",
+             "verify-report.md 在但无锚行 → 该步进行中，重跑")
+    # ── final：SHIPPED 判定 ────────────────────────────────────
+    handoff = (cdir / "hand-off.md").is_file()
+    archived = any((root / "openspec" / "changes" / "archive").glob(f"*-{change}"))
+    bstate = branch_state(root)
+    if bstate == "unknown":
+        emit("UNKNOWN", EXIT_UNKNOWN, None, "detached HEAD，分支态判定不能")
+    if handoff and archived and bstate == "merged":
+        emit("SHIPPED", EXIT_OK, None,
+             "全通：verify PASS + hand-off + 已归档 + 分支已并。"
+             "未 push（手动控制）；toolkit 源仓请 push 后新会话 /sdflow-upgrade 激活")
+    emit("RUN_VERIFY", EXIT_OK, "sdflow-done",
+         f"verify PASS 但收尾未完（hand-off={handoff} archive={archived} branch={bstate}）")
 
 
 def main(argv=None):
