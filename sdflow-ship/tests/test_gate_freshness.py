@@ -21,6 +21,7 @@ def test_stale_pass_reruns_not_ship(repo):
     touch_code(repo)             # 报告后有 openspec/ 外提交
     _, js, _ = run_gate(repo)
     assert js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-code-review"
+    assert js["freshness"] == "stale"  # [impl-review-fix] 裁决项7：freshness 键锚定
 
 def test_stale_fail_reruns_not_exit5(repo):
     d = impl_done(repo)
@@ -50,16 +51,24 @@ def test_design_anchor_stale_on_design_edit(repo):
 
 def test_uncommitted_report_is_fresh(repo):
     # Q3=A：报告从未提交 → fresh + freshness=uncommitted
-    d = tail_ok(repo)
+    # [impl-review-fix] 裁决项7：原用 tail_ok() 先提交过 verify-report.md 再工作区覆盖，
+    # git log 仍能找到该路径的历史 sha，实测得到 freshness="fresh" 而非 "uncommitted"
+    # （report_last_sha 只看提交历史，不看工作区）——与本用例名/注释意图（报告从未
+    # 提交过）不符。改为让 verify-report.md 全程不进任何 commit，才是真正的
+    # "never committed" 路径（sha 为空 → freshness=uncommitted）。
+    d = impl_done(repo)
+    (d / "code-review-report.md").write_text(
+        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
     (d / "hand-off.md").write_text("x", encoding="utf-8")
     arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
     arch.mkdir(parents=True); (arch / "p.md").write_text("a", encoding="utf-8")
-    commit_all(repo, "tail")
-    # 用未提交的新 verify 报告覆盖（工作区改动不提交）
+    commit_all(repo, "tail without verify report")
+    # verify-report.md 只写盘，从未进入任何提交
     (d / "verify-report.md").write_text(
         "<!-- ship-gate: verify=PASS -->\n新一轮手写\n", encoding="utf-8")
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "SHIPPED"
+    assert js["freshness"] == "uncommitted"
 
 def test_openspec_only_commits_keep_fresh(repo):
     d = tail_ok(repo)

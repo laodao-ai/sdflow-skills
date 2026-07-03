@@ -107,3 +107,18 @@ def test_checkbox_fallback_advances(repo):
     approved_change(repo, plan=plan)  # 无标签但复选框全勾（回勾型执行器）
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "RUN_CODE_REVIEW"
+
+# [impl-review-fix] 裁决项1/2 回归覆盖
+def test_revert_commit_not_counted(repo):
+    approved_change(repo, plan=PLAN2)
+    commit_all(repo, "checkpoint(task1-a): x")
+    commit_all(repo, 'Revert "checkpoint(task2-b): y"')
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
+
+def test_non_git_root_unknown(tmp_path_factory):
+    # 独立于 repo fixture：必须是真正孤立的非 git 目录（不能是 repo 的子目录，
+    # 子目录会被 git 沿父级发现 .git，反而通过健全性检查）
+    non_git = tmp_path_factory.mktemp("non-git-root")
+    code, js, _ = run_gate(non_git)
+    assert code == 6 and js["verdict"] == "UNKNOWN"

@@ -47,6 +47,7 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T25 | todo | OPEN | sdflow-ship |
+| T26 | todo | OPEN | sdflow-ship |
 
 ## 已闭合（终态）摘要
 

@@ -40,8 +40,9 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
 
 已知不覆盖（接受并记录）:
     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
-    提交遍历不加 --first-parent（merge 内部提交逐一枚举，不漏检）。
-"""
+    提交遍历不加 --first-parent（merge 内部提交逐一枚举，不漏检）；
+    非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）。
+"""  # [impl-review-fix]
 import argparse
 import json
 import re
@@ -99,7 +100,7 @@ def anchors_in(path, candidates):
     """字面查找（零正则）。文件不存在返回 []。"""
     if not path.is_file():
         return []
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8", errors="replace")  # [impl-review-fix] 非 UTF-8 防崩
     return [a for a in candidates if a in text]
 
 
@@ -133,25 +134,41 @@ TAG_RE = re.compile(r"checkpoint\(task(\d+)-")
 
 def tg02_hit(cdir):
     p = cdir / "proposal.md"
-    return p.is_file() and "TG-02" in p.read_text(encoding="utf-8")  # 字面子串（归档实例为全角括号混用）
+    # [impl-review-fix] errors="replace" 防非 UTF-8 报告崩溃
+    return p.is_file() and "TG-02" in p.read_text(encoding="utf-8", errors="replace")  # 字面子串（归档实例为全角括号混用）
 
 
 def plan_task_count(plan):
-    return len(TASK_TITLE_RE.findall(plan.read_text(encoding="utf-8")))
+    # [impl-review-fix] 去重：重号任务标题（模板漂移/手误重复）不应虚增计数口径
+    text = plan.read_text(encoding="utf-8", errors="replace")
+    return len(set(TASK_TITLE_RE.findall(text)))
 
 
 def plan_first_sha(root, plan_rel):
     out = run_git(root, "log", "--diff-filter=A", "--format=%H", "--", plan_rel)
-    return out.splitlines()[-1] if out else ""
+    # [impl-review-fix] 取首行（最新一次新增记录，git log 默认新→旧序）而非末行：
+    # plan 被删后重建场景，重建视为该 plan 的新生命周期，窗口应锚定最新一次 A 记录，
+    # 否则窗口会回溯到已作废的旧生命周期首次新增点，混入重建前的历史提交。
+    return out.splitlines()[0] if out else ""
 
 
 def done_task_ids(root, sha):
     msgs = run_git(root, "log", f"{sha}..HEAD", "--no-merges", "--format=%s")
-    return {m.group(1) for line in msgs.splitlines() if (m := TAG_RE.search(line))}
+    ids = set()
+    for line in msgs.splitlines():
+        # [impl-review-fix] 先判字面前缀再锚定匹配：`Revert "checkpoint(task2-b): y"`
+        # 这类 revert 提交消息里 checkpoint(task 子串不在行首，不应计入完成集
+        # （TAG_RE.search 不锚位置会把它误计，match 从位置 0 锚定则天然排除）。
+        if not line.startswith("checkpoint(task"):
+            continue
+        m = TAG_RE.match(line)
+        if m:
+            ids.add(m.group(1))
+    return ids
 
 
 def checkboxes_all(plan):
-    text = plan.read_text(encoding="utf-8")
+    text = plan.read_text(encoding="utf-8", errors="replace")
     unchecked, checked = "- [ ]" in text, "- [x]" in text
     if not unchecked and not checked:
         return None
@@ -173,6 +190,12 @@ def branch_state(root):
 
 
 def decide(root, change):
+    # ── git 健全性前置：run_git 吞错会让下游静默失效（D9 等判定悄悄全假）──
+    # [impl-review-fix] 先验 git 可用且 --root 确为 git 仓，防止后续所有 run_git
+    # 调用因非仓/git 缺失而返回空串，被误判为"文件未提交"等正常态。
+    if not run_git(root, "rev-parse", "--git-dir"):
+        emit("UNKNOWN", EXIT_UNKNOWN, None,
+             "git 不可用或 --root 非 git 仓，无法读盘面")
     cdir = root / "openspec" / "changes" / change
     # ── pre-flight：设计门（D7 起跑不越门）─────────────────────────
     report = cdir / "spec-review-report.md"

@@ -44,3 +44,15 @@ def test_verify_conflict_anchors_unknown(repo):
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN"
     assert "verify" in js["reason"]
+
+def test_gbk_report_no_crash(repo):
+    # [impl-review-fix] 裁决项8：非 UTF-8（GBK）报告不应让 gate 崩溃（traceback）。
+    # 锚行本身是 ASCII，跨编码字节一致；中文正文用 GBK 编码拼接进 bytes 写盘，
+    # 断言只需不 traceback、能正常给出 verdict（errors="replace" 兜底解码）。
+    d = mkchange(repo)
+    body = b"<!-- ship-gate: design-approved -->\n" + "设计门拍板".encode("gbk") + b"\n"
+    (d / "spec-review-report.md").write_bytes(body)
+    commit_all(repo, "seed")
+    code, js, _ = run_gate(repo)
+    assert code in (0, 3, 4, 5, 6)  # 合法退出码集合，排除 traceback 导致的 1
+    assert "verdict" in js and js["verdict"]  # 正常给出 verdict（未因解码异常崩溃）
