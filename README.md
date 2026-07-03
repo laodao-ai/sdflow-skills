@@ -11,21 +11,35 @@
 
 | 分类 | Skill | 说明 |
 |------|-------|------|
-| 工作流铺设/维护 | `opsx-project-init` | 一键把整套 OpenSpec spec 工作流 bundle 铺进任意项目（本仓库是该 bundle 权威源） |
-| 工作流铺设/维护 | `opsx-maintain` | 扫描 openspec 目录状态、对比 INDEX、报告差异并修复 |
+| 工作流铺设/维护 | `sdflow-init` | 一键把整套 OpenSpec spec 工作流 bundle 铺进任意项目（本仓库是该 bundle 权威源） |
+| 工作流铺设/维护 | `sdflow-maintain` | 扫描 openspec 目录状态、对比 INDEX、报告差异并修复 |
 | 工作流铺设/维护 | `openspec-upgrade` | 升级 openspec CLI（`@fission-ai/openspec`）并刷新项目内 openspec skills |
 | 工作流铺设/维护 | `sdflow-upgrade` | 运行 checkout 一键升级：pull → setup → 版本展示（堵 pull→setup 窗口期） |
-| 评审（主审） | `spec-review` | 阶段二·设计审主审：并行多镜（领域+对抗+接地读码）→ 一份 spec-review-report |
-| 评审（主审） | `impl-review` | 阶段三·代码审主审：并行多镜 + 对抗裁决 + 置信过滤 → 一份 code-review-report |
-| 收尾 | `opsx-done` | 闭环：verify（证据锚点）→ hand-off → archive（delta 对码核验同步）→ commit → merge |
-| 规划 | `opsx-roadmap-planner` | 分阶段 roadmap 规划工作流，产出 requirements/design/roadmap/task-log 四件套 |
-| 记录（issues 池） | `buglist-recorder` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |
-| 记录（issues 池） | `todolist-recorder` | 改进想法 / 技术债收集池（非缺陷），全局唯一 T-ID |
-| 记录（issues 池） | `issues-recorder` | 跨 buglist+todolist 的 `issues/INDEX.md` 重建与批次注册表维护 |
+| 评审（主审） | `sdflow-spec-review` | 阶段二·设计审主审：并行多镜（领域+对抗+接地读码）→ 一份 spec-review-report |
+| 评审（主审） | `sdflow-code-review` | 阶段三·代码审主审：并行多镜 + 对抗裁决 + 置信过滤 → 一份 code-review-report |
+| 收尾 | `sdflow-done` | 闭环：verify（证据锚点）→ hand-off → archive（delta 对码核验同步）→ commit → merge |
+| 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，产出 requirements/design/roadmap/task-log 四件套 |
+| 记录（issues 池） | `sdflow-buglist` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |
+| 记录（issues 池） | `sdflow-todolist` | 改进想法 / 技术债收集池（非缺陷），全局唯一 T-ID |
+| 记录（issues 池） | `sdflow-issues` | 跨 buglist+todolist 的 `issues/INDEX.md` 重建与批次注册表维护 |
 | 测试 | `embedded-test-sop` | 为嵌入式固件功能生成手动测试 SOP + 配套日志自动分析规则（log-checks.yaml） |
 
-> 三个 recorder 与 `opsx-project-init`、`opsx-roadmap-planner` 为**数据类 skill**（带 `scripts/` + `tests/`），
+> 三个 recorder 与 `sdflow-init`、`sdflow-roadmap` 为**数据类 skill**（带 `scripts/` + `tests/`），
 > 由脚本保证确定性；其余为纯 Markdown 编排类。
+
+> **曾用名对照**（改名于 `sdflow-rebrand`，历史 PR / issue / 本地记忆若引用旧名，按此表换算）：
+>
+> | 旧名 | 新名 |
+> |------|------|
+> | `opsx-project-init` | `sdflow-init` |
+> | `opsx-done` | `sdflow-done` |
+> | `opsx-maintain` | `sdflow-maintain` |
+> | `opsx-roadmap-planner` | `sdflow-roadmap` |
+> | `spec-review` | `sdflow-spec-review` |
+> | `impl-review` | `sdflow-code-review` |
+> | `buglist-recorder` | `sdflow-buglist` |
+> | `todolist-recorder` | `sdflow-todolist` |
+> | `issues-recorder` | `sdflow-issues` |
 
 ## 安装
 
@@ -57,11 +71,11 @@ bash setup.sh
   - **Unix**：绝对路径 symlink —— 改源即时生效，仅新增/删 skill 后才需重跑。
   - **Windows**：复制目录 + 写 `.laodao-skills` 标记文件用于更新检测。
   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
-- **spec 工作流 bundle 的权威源**：`opsx-project-init/assets/workflow/` 是铺给其他项目的
-  `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `opsx-project-init update`
+- **spec 工作流 bundle 的权威源**：`sdflow-init/assets/workflow/` 是铺给其他项目的
+  `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `sdflow-init update`
   推到下游**，禁止只改某个下游项目的 `openspec/workflow/` 后忘记回灌。
 - **dogfooding**：仓库根的 `openspec/`（`workflow/` 规则 + `changes/specs/issues/config.yaml`）
-  是本仓库自身跑这套 OpenSpec 流程的实例；变更走 propose → 设计审 → 代码审 → `opsx-done` 归档。
+  是本仓库自身跑这套 OpenSpec 流程的实例；变更走 propose → 设计审 → 代码审 → `sdflow-done` 归档。
 
 ## 开发
 
@@ -69,8 +83,8 @@ bash setup.sh
 
 ```bash
 pytest                                                       # 全部
-pytest buglist-recorder/tests/                              # 单个 skill
-pytest buglist-recorder/tests/test_buglist.py::test_xxx -v  # 单个用例
+pytest sdflow-buglist/tests/                                # 单个 skill
+pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v    # 单个用例
 ```
 
 面向 AI 协作者的项目级指令见 [CLAUDE.md](./CLAUDE.md) / [AGENTS.md](./AGENTS.md)。

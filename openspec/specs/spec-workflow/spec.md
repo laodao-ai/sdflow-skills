@@ -8,52 +8,52 @@
 工作流 SHALL 通过 fresh-context 子代理 dispatch 获得评审独立性，MUST NOT 依赖 `/clear` 会话重置来隔离评审上下文，从而使评审阶段可连续自动运行。
 
 #### Scenario: 设计评审无需先 /clear
-- **WHEN** spec-review 编排器在生成/grill 上下文之后运行
+- **WHEN** sdflow-spec-review 编排器在生成/grill 上下文之后运行
 - **THEN** 它以 fresh 子代理 fan-out 领域镜/对抗镜/接地镜，主 session 无需先 `/clear`
 
 #### Scenario: 代码评审无需先 /clear
-- **WHEN** impl-review 编排器在 subagent-dev 实现之后运行
+- **WHEN** sdflow-code-review 编排器在 subagent-dev 实现之后运行
 - **THEN** 它以 fresh 子代理 fan-out 各镜，主 session 无需先 `/clear`
 
 ### Requirement: 评审决策登记进报告，不中途打断
 
 评审编排器 SHALL 把决策点（自动决策与需人拍板）连同选项、推荐、各分支后果登记进评审报告，MUST NOT 在评审中途以 `AskUserQuestion` 打断，使一遍评审能自主跑到完成。
 
-#### Scenario: spec-review 遇到 ≥2 合理方案
+#### Scenario: sdflow-spec-review 遇到 ≥2 合理方案
 - **WHEN** 某评审镜发现一个有 ≥2 合理方案或核验不了的事实的决策点
 - **THEN** 编排器把它写入 spec-review-report.md 决策登记区并继续，不中途弹 AskUserQuestion
 
 ### Requirement: 阶段二产出单一合并报告
 
-阶段二 SHALL 由 `spec-review` 编排器串起 autoplan 与 spec-review 并产出**单一** `spec-review-report.md`，MUST NOT 要求人工手动合并多份报告。
+阶段二 SHALL 由 `sdflow-spec-review` 编排器串起 autoplan 与 sdflow-spec-review 并产出**单一** `spec-review-report.md`，MUST NOT 要求人工手动合并多份报告。
 
 #### Scenario: 阶段二收尾
-- **WHEN** autoplan 与 spec-review 镜均完成
+- **WHEN** autoplan 与 sdflow-spec-review 镜均完成
 - **THEN** 编排器输出一份已去重合并、含决策登记区的 spec-review-report.md，供设计 HARD-GATE 人工一次性评审
 
-### Requirement: impl-review 为每次全跑的独立强制主审
+### Requirement: sdflow-code-review 为每次全跑的独立强制主审
 
-阶段三的 `impl-review` MUST 每次全跑、以独立冷视角作为强制代码评审主审（依据实测能抓真问题），SHALL NOT 因 subagent-dev 内部已评审而降级为高风险才跑的残差抽查。
+阶段三的 `sdflow-code-review` MUST 每次全跑、以独立冷视角作为强制代码评审主审（依据实测能抓真问题），SHALL NOT 因 subagent-dev 内部已评审而降级为高风险才跑的残差抽查。
 
-#### Scenario: 普通变更也跑 impl-review
+#### Scenario: 普通变更也跑 sdflow-code-review
 - **WHEN** 一个非高风险变更完成实现
-- **THEN** impl-review 编排器仍全跑（领域镜+对抗镜+历史镜+置信过滤+scope-drift），产出 code-review-report.md
+- **THEN** sdflow-code-review 编排器仍全跑（领域镜+对抗镜+历史镜+置信过滤+scope-drift），产出 code-review-report.md
 
 ### Requirement: 阶段三过设计门后连续自动跑到 merge
 
-阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `writing-plans → subagent-dev → impl-review → opsx-done`；能修的自动修，修不了或需拍板的 MUST 进 buglist/todolist 延后并由 hand-off 引导另开 change 清理。
+阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `writing-plans → subagent-dev → sdflow-code-review → sdflow-done`；能修的自动修，修不了或需拍板的 MUST 进 buglist/todolist 延后并由 hand-off 引导另开 change 清理。
 
 #### Scenario: 修不了的问题延后而非阻塞
-- **WHEN** impl-review 发现一个本 change 修不掉的问题
-- **THEN** 它进 buglist/todolist(defer) 并写入 hand-off，流程继续跑到 opsx-done，不设人类门阻塞
+- **WHEN** sdflow-code-review 发现一个本 change 修不掉的问题
+- **THEN** 它进 buglist/todolist(defer) 并写入 hand-off，流程继续跑到 sdflow-done，不设人类门阻塞
 
 ### Requirement: verify 为收尾最终门，位于所有修复之后
 
-`opsx-done` 的 verify MUST 在本 change 全部修复之后运行作为最终完整性门，SHALL NOT 前移进 impl-review（否则修复后 verify 结果 stale）；verify 判 ✅ 的每条需求 MUST 附一个可机验证据锚点（测试名/commit/文件:行），无锚点的 ✅ MUST 降级为 gap。
+`sdflow-done` 的 verify MUST 在本 change 全部修复之后运行作为最终完整性门，SHALL NOT 前移进 sdflow-code-review（否则修复后 verify 结果 stale）；verify 判 ✅ 的每条需求 MUST 附一个可机验证据锚点（测试名/commit/文件:行），无锚点的 ✅ MUST 降级为 gap。
 
 #### Scenario: 修复后才 verify
-- **WHEN** impl-review 及其修复循环全部完成
-- **THEN** opsx-done 先跑 verify（产 verify-report.md）再 archive
+- **WHEN** sdflow-code-review 及其修复循环全部完成
+- **THEN** sdflow-done 先跑 verify（产 verify-report.md）再 archive
 
 #### Scenario: 无证据锚点的 ✅ 降级为 gap
 - **WHEN** verify 核对某条需求但找不到测试名/commit/文件:行等机验锚点
@@ -61,11 +61,11 @@
 
 ### Requirement: hand-off 交接产物替代人工核对清单
 
-`opsx-done` SHALL 在 verify 之后、archive 之前产出 `hand-off.md`（done/not-done + 延后项 + 下阶段建议）随归档留档，作为人类异步再入口与下个 cleanup change 的输入种子；MUST NOT 保留旧的人工核对清单 `code-review-verify.md`。
+`sdflow-done` SHALL 在 verify 之后、archive 之前产出 `hand-off.md`（done/not-done + 延后项 + 下阶段建议）随归档留档，作为人类异步再入口与下个 cleanup change 的输入种子；MUST NOT 保留旧的人工核对清单 `code-review-verify.md`。
 
 #### Scenario: 收尾产出 hand-off
 - **WHEN** verify 通过
-- **THEN** opsx-done 生成 hand-off.md 并纳入归档
+- **THEN** sdflow-done 生成 hand-off.md 并纳入归档
 
 ### Requirement: 每步提交由显式收尾动作驱动，不用 hook
 
@@ -84,14 +84,14 @@ workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / 
 - **`checkpoint-commit.sh`** MUST 全局安装到 agent 中立的 canonical 根 `~/.sdflow/hack/`（**非** `~/.claude/hooks`——它是跨-agent bash 工具、非 Claude 事件 hook）、不再进消费仓 `hack/`。
 - **`config.yaml` / `changes/` / `specs/`** 天然属仓，仍仓内。
 
-消费仓的规则副本 SHALL 经 `opsx-project-init update` 采纳最新（改后 update 对规则改为"停复制 + 陈旧遮蔽告警"，见「迁移」需求），MUST NOT 直接编辑部署副本。`opsx-project-init` 的部署实现（`copy_bundle`）MUST 区分两种铺设模式：默认（消费仓）模式只拷 `tools/` 子树，且拷贝前若目的地 `tools/` 已存在 MUST 先整删再整拷（清后拷收敛），MUST NOT 用"存在则合并覆盖"语义（防上游删文件后消费仓残留孤儿文件）；`--dev` 整 bundle 刷新模式仅供 toolkit 源仓自身 dogfood 用，MUST 先校验 `--root` 解析后的真实路径等于本脚本所在 toolkit 仓根，不等则 MUST 拒绝执行（防误把整套规则灌进消费仓）。
+消费仓的规则副本 SHALL 经 `sdflow-init update` 采纳最新（改后 update 对规则改为"停复制 + 陈旧遮蔽告警"，见「迁移」需求），MUST NOT 直接编辑部署副本。`sdflow-init` 的部署实现（`copy_bundle`）MUST 区分两种铺设模式：默认（消费仓）模式只拷 `tools/` 子树，且拷贝前若目的地 `tools/` 已存在 MUST 先整删再整拷（清后拷收敛），MUST NOT 用"存在则合并覆盖"语义（防上游删文件后消费仓残留孤儿文件）；`--dev` 整 bundle 刷新模式仅供 toolkit 源仓自身 dogfood 用，MUST 先校验 `--root` 解析后的真实路径等于本脚本所在 toolkit 仓根，不等则 MUST 拒绝执行（防误把整套规则灌进消费仓）。
 
 #### Scenario: 修改 workflow 规则
 - **WHEN** 需要修改 workflow.md
-- **THEN** 改 laodao-skills 权威源 `opsx-project-init/assets/workflow/workflow.md`（不提根，仍是唯一权威源），消费仓经全局 canonical 自动跟随 released HEAD，不直接编辑消费仓副本
+- **THEN** 改 laodao-skills 权威源 `sdflow-init/assets/workflow/workflow.md`（不提根，仍是唯一权威源），消费仓经全局 canonical 自动跟随 released HEAD，不直接编辑消费仓副本
 
 #### Scenario: 新 init 的消费仓不含规则副本
-- **WHEN** 对一个新项目跑 `opsx-project-init init`
+- **WHEN** 对一个新项目跑 `sdflow-init init`
 - **THEN** 消费仓 `openspec/workflow/` 只含 `tools/`（≈5 文件），规则文件数 = 0；`checkpoint-commit.sh` 全局安装、不进仓 `hack/`
 
 #### Scenario: 消费仓 update 后 tools/ 收敛、不留孤儿文件
@@ -99,7 +99,7 @@ workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / 
 - **THEN** 消费仓 `openspec/workflow/tools/` 被整删重拷，废弃文件不再残留（MUST NOT 因 `dirs_exist_ok` 式合并覆盖而假装已同步）
 
 #### Scenario: --dev 只许 toolkit 源仓自用
-- **WHEN** 在某个消费仓（非 toolkit 源仓自身）误跑 `opsx-project-init update --dev`
+- **WHEN** 在某个消费仓（非 toolkit 源仓自身）误跑 `sdflow-init update --dev`
 - **THEN** 脚本校验 `--root` 与 toolkit 仓根不一致，拒绝执行并报错，MUST NOT 把整套规则文件灌进该消费仓
 
 ### Requirement: 债务池统一为 issues 结构且 INDEX 只生成
@@ -119,7 +119,7 @@ recorder 债务池 SHALL 统一为 `openspec/issues/{buglist,todolist}/` 结构�
 批次 SHALL 有第一类身份记录于 `issues/batches.md`（`PLANNED→IN_PROGRESS→DONE`，条目薄，批次 key = 清理 change 名）；每个 change 收尾时 sweep MUST 以 `源==本change` 为界只分诊本 change 新增的 OPEN 项入批次（源为空的孤儿项不归本次 sweep，交独立的通用 `--open-ungrouped` 清理流程处理）；`reindex` MUST 拿 item 池当 ground truth 同步批次状态——批次**成员数 ≥ 1 且全部进入各自 recorder 的终态集**（bug: `FIXED`/`WONTFIX`；todo: `DONE`/`WONTDO`，含 WONT\* 合法闭合）→ 批次判 `DONE`（0 成员批次 MUST 保持 `PLANNED`，防 vacuous-truth 假 DONE〔spec-review-amendment: D1〕），状态与成员不一致则标出纠正〔grill-amendment: B-Q1〕，MUST NOT 主动计算逾期或催办（改为被动摊清 + open 项下次清理自然纳入）。
 
 #### Scenario: sweep 只分诊本 change 新增项
-- **WHEN** 一个 change 在 opsx-done 生成 hand-off 那步运行 sweep
+- **WHEN** 一个 change 在 sdflow-done 生成 hand-off 那步运行 sweep
 - **THEN** 它把本 change 新增的 OPEN 项分诊入批次、在 `batches.md` 登记 `PLANNED`，并由 hand-off 引用；已在各自 change 分诊过的老项不被全量重诊
 
 #### Scenario: reindex 同步批次状态且不主动催办
@@ -132,7 +132,7 @@ recorder 债务池 SHALL 统一为 `openspec/issues/{buglist,todolist}/` 结构�
 
 ### Requirement: 规则全局解析 resolver（本地优先 → 全局兜底 → 显式降级）
 
-skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读取 workflow 规则 MUST 走统一三步 resolver：① 仓内**有规则文件本体**（`workflow.md` / `spec-checklists/` / `code-checklists/`）→ 用本地；② 否则 → 全局 canonical bundle；③ 全局也缺 → **显式降级**通用评审并告警，MUST NOT 静默当"无此层"。步①的存在判据 MUST 查**规则文件本体**、MUST NOT 查 `openspec/workflow/` 目录（`tools/` 使该目录在每个仓恒存在，查目录会令每个消费仓误命中本地 pin）。步②的 canonical 解析 MUST 平台无关回落：先试 `~/.sdflow/workflow/`（Unix 软链目录，透明），否则读 `~/.sdflow/workflow-path`（Windows 指针文件）取 bundle 路径。步③的"显式降级 + 告警"即 CONTEXT 术语『反静默守卫』的缺失面（见 `adr/0003`）。
+skills（sdflow-spec-review / sdflow-code-review / sdflow-done / recorders / opsx-ship）读取 workflow 规则 MUST 走统一三步 resolver：① 仓内**有规则文件本体**（`workflow.md` / `spec-checklists/` / `code-checklists/`）→ 用本地；② 否则 → 全局 canonical bundle；③ 全局也缺 → **显式降级**通用评审并告警，MUST NOT 静默当"无此层"。步①的存在判据 MUST 查**规则文件本体**、MUST NOT 查 `openspec/workflow/` 目录（`tools/` 使该目录在每个仓恒存在，查目录会令每个消费仓误命中本地 pin）。步②的 canonical 解析 MUST 平台无关回落：先试 `~/.sdflow/workflow/`（Unix 软链目录，透明），否则读 `~/.sdflow/workflow-path`（Windows 指针文件）取 bundle 路径。步③的"显式降级 + 告警"即 CONTEXT 术语『反静默守卫』的缺失面（见 `adr/0003`）。
 
 〔model-baseline-amendment / `adr/0006`〕上述三步链 MUST 由确定性脚本 **`~/.sdflow/hack/resolve-workflow.sh`** 实现（stdout = 规则根路径；全局缺失 → 非零退出 + stderr 固定告警文案）。skills MUST 通过调用该脚本解析规则路径，MUST NOT 把三步链作为指令文本交由执行模型逐步照做（执行机队 = opus/sonnet/gpt-5.5 机队锚定，prose 协议在弱档模型上的失效形态 = 静默跳步）；调用方 MUST NOT 静默吞脚本非零退出码。
 
@@ -178,9 +178,9 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读取 
 
 ### Requirement: 存量消费仓迁移不自动删、陈旧遮蔽须告警
 
-`opsx-project-init update` 对存量消费仓的规则副本 MUST 改为"停止复制"，MUST NOT 自动删除仓内既有规则文件（安全红线 + 免分辨源/消费仓 + 老仓平滑迁移）。当检测到仓内残留的旧规则文件**遮蔽**全局 canonical bundle 时，`opsx-project-init` MUST **显式告警**（说明它遮蔽全局且不再被刷新，删=跟全局 / 留=显式 pin），MUST NOT 静默让其陈旧。此告警即 CONTEXT 术语『反静默守卫』的**陈旧遮蔽**变体（元原则清单已补“悄悄用了旧的”，见 `adr/0003`）。
+`sdflow-init update` 对存量消费仓的规则副本 MUST 改为"停止复制"，MUST NOT 自动删除仓内既有规则文件（安全红线 + 免分辨源/消费仓 + 老仓平滑迁移）。当检测到仓内残留的旧规则文件**遮蔽**全局 canonical bundle 时，`sdflow-init` MUST **显式告警**（说明它遮蔽全局且不再被刷新，删=跟全局 / 留=显式 pin），MUST NOT 静默让其陈旧。此告警即 CONTEXT 术语『反静默守卫』的**陈旧遮蔽**变体（元原则清单已补“悄悄用了旧的”，见 `adr/0003`）。
 
-〔spec-review-amendment / impl-review-fix 935eb42〕告警触发点 = **`init` 与 `update` 两种模式均内联检测**（同一判据函数：新项目 fresh init 自然零残留、零告警；老仓被误当新项目跑 `init` 时也不因模式不同而假绿放过残留）+ **`opsx-maintain` 兜底扫描**（覆盖常年不跑 `init`/`update` 的仓）；检测范围 MUST 同时覆盖旧版仓内 `hack/checkpoint-commit.sh` **孤儿副本**（checkpoint 全局化后不再被任何机制刷新），并给对称提示（删=用全局 / 本地 workflow.md 副本仍引用它则勿删）。
+〔spec-review-amendment / impl-review-fix 935eb42〕告警触发点 = **`init` 与 `update` 两种模式均内联检测**（同一判据函数：新项目 fresh init 自然零残留、零告警；老仓被误当新项目跑 `init` 时也不因模式不同而假绿放过残留）+ **`sdflow-maintain` 兜底扫描**（覆盖常年不跑 `init`/`update` 的仓）；检测范围 MUST 同时覆盖旧版仓内 `hack/checkpoint-commit.sh` **孤儿副本**（checkpoint 全局化后不再被任何机制刷新），并给对称提示（删=用全局 / 本地 workflow.md 副本仍引用它则勿删）。
 
 #### Scenario: update 不删残留规则、给出遮蔽告警
 - **WHEN** 一个 pre-change 的存量消费仓（已有 ≈28 规则副本）跑 `update`

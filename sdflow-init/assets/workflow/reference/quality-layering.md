@@ -3,8 +3,8 @@
 > **定位**：回答"代码生成质量很高，后面还要那么多次 review 吗？"——不是砍 review，而是
 > **把标准前移进生成期已有的审查口，消掉事后 review 的冗余**。与 [`spec-review.md`](../spec-review.md)
 > §一（review 只做 prevention 焊不住的残差）同一条铁律，在**代码层**的展开。
-> **〔P3c 校准〕"消冗余" ≠ "impl-review 变可选"**——见 §五：事后 impl-review **每次全跑**做独立强制主审，
-> shift-left 消的是通用质量的重复查，不是 impl-review 本身。
+> **〔P3c 校准〕"消冗余" ≠ "sdflow-code-review 变可选"**——见 §五：事后 sdflow-code-review **每次全跑**做独立强制主审，
+> shift-left 消的是通用质量的重复查，不是 sdflow-code-review 本身。
 
 ---
 
@@ -20,7 +20,7 @@
 ```
 
 **关键**：这些 reviewer 都是 **fresh-context 独立子 agent**。所以"独立性"——我们一直强调的卖点——
-**生成期内部已经有了**。事后 `/clear + /impl-review` 再加的独立性只是"脱离 controller 的全冷独立"，边际收益。
+**生成期内部已经有了**。事后 `/clear + /sdflow-code-review` 再加的独立性只是"脱离 controller 的全冷独立"，边际收益。
 
 ## 二、但它们查的是**通用 rubric**，不是我们的领域清单
 
@@ -31,10 +31,10 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 | 维度 | 生成期已做? | 事后 review 重复? |
 |---|---|---|
 | spec 合规（建的=要的） | ✅ task-reviewer Part 1 | gstack/review **部分重复** |
-| 通用代码质量（CR-01~09 base） | ✅ 三层都查 | /impl-review base **大幅重复** |
+| 通用代码质量（CR-01~09 base） | ✅ 三层都查 | /sdflow-code-review base **大幅重复** |
 | **领域规则（CR-EMB/ML307C/ESP32/GO）** | ❌ 通用 rubric 盲区 | **真残差** ← 唯一不可替代 |
 | scope-drift / 计划完成度 | ⚠️ 部分 | gstack/review 补全 |
-| 全冷独立（脱离 controller） | ❌ 终审仍 controller 裁决 | /impl-review 补，但边际 |
+| 全冷独立（脱离 controller） | ❌ 终审仍 controller 裁决 | /sdflow-code-review 补，但边际 |
 | PR 级 DB/API/Auth 改动 | ❌ | 官方 code-review |
 
 **结论**：后置 review 的**通用质量部分是冗余**；真正残差只剩 **领域规则 + scope-drift + PR 风险 + 一点冷独立**。
@@ -47,7 +47,7 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 注入点 A:  plan 的 Global Constraints
            writing-plans 把 spec 的项目级约束逐字拷进每个任务，implementer + task-reviewer 都看得到
            → 既是 prevention（按约束写）又是逐任务 inline detection（每任务审 + fix 循环）
-           ★ 我们的 spec 已被 /spec-review 按 spec-checklists/domains 审过 → 好的 spec 自带领域约束
+           ★ 我们的 spec 已被 /sdflow-spec-review 按 spec-checklists/domains 审过 → 好的 spec 自带领域约束
              → 自动流进 Global Constraints。这条已半通：保证 design 的领域约束确实进了 plan 即可。
            ⚠️ 边界：SKILL 明确反对往【逐任务】reviewer 塞【宽泛清单】（"global-constraints 要 verbatim
              绑定项，不是 rubric；宽 rubric 留给终审"）。故注入点 A 只塞【该任务相关的具体领域约束】（逐字）。
@@ -55,7 +55,7 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 注入点 B:  final whole-branch reviewer 的 rubric  ← 最大杠杆
            subagent-driven-development 终审默认用 requesting-code-review 的【通用】模板；
            dispatch 时把 rubric 增强为「通用模板 + 命中栈的 code-checklists/domains/<栈>」
-           → 领域审在循环内、终审一次做掉，而非事后再单独跑 /impl-review。
+           → 领域审在循环内、终审一次做掉，而非事后再单独跑 /sdflow-code-review。
 ```
 
 ## 三点五、如何注入 + 升级安全（绝不改插件）
@@ -83,37 +83,37 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 
 ```
         Prevention(建对)             Inline Detection(循环内抓)          Residual(冷,事后)
- spec:  config.yaml 结构+D 约束      grill / 生成对话                    spec-review(validation+对抗+接地)
- code:  plan Global Constraints+TDD   逐任务双判审 + 终审(subagent-dev)    impl-review(领域+冷独立+scope)
-                                      ↑ 把 code-checklists 注入 B ↑       ↓ 消通用质量冗余,非缩掉 impl-review ↓
+ spec:  config.yaml 结构+D 约束      grill / 生成对话                    sdflow-spec-review(validation+对抗+接地)
+ code:  plan Global Constraints+TDD   逐任务双判审 + 终审(subagent-dev)    sdflow-code-review(领域+冷独立+scope)
+                                      ↑ 把 code-checklists 注入 B ↑       ↓ 消通用质量冗余,非缩掉 sdflow-code-review ↓
 ```
 
-设计侧用 config 固化结构/约束（prevention），让 spec-review 只做残差；
-代码侧把领域清单注入 plan 约束 + 终审 rubric（prevention + inline detection），让 impl-review 只做残差。
+设计侧用 config 固化结构/约束（prevention），让 sdflow-spec-review 只做残差；
+代码侧把领域清单注入 plan 约束 + 终审 rubric（prevention + inline detection），让 sdflow-code-review 只做残差。
 **同一手法，两层对称。**
 
-## 五、对 workflow 的影响：impl-review 是每次全跑的独立强制主审（P3c）
+## 五、对 workflow 的影响：sdflow-code-review 是每次全跑的独立强制主审（P3c）
 
-> **〔grill-amendment / P3c〕** 本节早前据注入点 B 推出"事后 impl-review 缩成薄残差、高风险才跑冷独立抽查"——
+> **〔grill-amendment / P3c〕** 本节早前据注入点 B 推出"事后 sdflow-code-review 缩成薄残差、高风险才跑冷独立抽查"——
 > **此推论已被否决**。注入点 B 确实把领域审前移进生成循环（即时 fix+re-review 闭环），但那**不使事后
-> impl-review 变边际**。
+> sdflow-code-review 变边际**。
 
-- **impl-review 每次全跑·独立冷·强制主审**：实测能抓出生成循环内被 hot controller 说服放过的真问题——这是
-  shift-left 消不掉的价值（循环内 reviewer 冷、但 controller 热；事后 impl-review 完全脱 controller）。
-- **注入点 B 与 impl-review 并存不是重复**（见 workflow.md §三.6 / design §7.2）：前者循环内即时闭环、便宜早修；
+- **sdflow-code-review 每次全跑·独立冷·强制主审**：实测能抓出生成循环内被 hot controller 说服放过的真问题——这是
+  shift-left 消不掉的价值（循环内 reviewer 冷、但 controller 热；事后 sdflow-code-review 完全脱 controller）。
+- **注入点 B 与 sdflow-code-review 并存不是重复**（见 workflow.md §三.6 / design §7.2）：前者循环内即时闭环、便宜早修；
   后者事后独立兜底网。机制/职责不同，**别把任一个优化掉**。
-- shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 impl-review 本身。impl-review 编排器还并入
+- shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 sdflow-code-review 本身。sdflow-code-review 编排器还并入
   `gstack/review`（scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤，合成一份 code-review-report.md。
 - **无 `/clear`（G1）**：独立性由评审 fan-out 的 fresh 子代理给，不由 `/clear` 给。
 
 TG 驱动的是**领域镜的选取 + outside voice 是否走 cross-model**（命中 HR-TG 才单开领域 cross-model），
-**不是"impl-review 跑不跑"**——impl-review 每次都跑。
+**不是"sdflow-code-review 跑不跑"**——sdflow-code-review 每次都跑。
 
 ## 六、检查清单（用 superpowers 跑实现时）
 
 - [ ] design 的领域约束是否确实进了 plan 的 **Global Constraints**（注入点 A）？
 - [ ] 终审 dispatch 是否把 rubric 增强为 **通用模板 + 命中栈 code-checklists/domains**（注入点 B）？
-- [ ] impl-review 是否**每次全跑**（P3c 独立冷强制主审，非高风险才跑）？并入 `gstack/review` 的 scope-drift + 完成度？
+- [ ] sdflow-code-review 是否**每次全跑**（P3c 独立冷强制主审，非高风险才跑）？并入 `gstack/review` 的 scope-drift + 完成度？
 - [ ] 是否**没有**依赖 `/clear`（G1：fresh 子代理即独立性；子 agent 调度中禁清）？
 
-*方法论 v2（P3c：impl-review 每次全跑强制主审）· 项目无关 · 配套 spec-review.md（设计侧残差）/ code-checklists/（领域清单）/ workflow.md（编排）*
+*方法论 v2（P3c：sdflow-code-review 每次全跑强制主审）· 项目无关 · 配套 spec-review.md（设计侧残差）/ code-checklists/（领域清单）/ workflow.md（编排）*

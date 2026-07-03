@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """buglist.py — 自动记录/回写/扫描 buglist 的确定性兜底脚本。
 
-skill `buglist-recorder` 的执行核心。把"判断"留给模型（现象 vs 根因、定优先级、
+skill `sdflow-buglist` 的执行核心。把"判断"留给模型（现象 vs 根因、定优先级、
 是否值得记录），把"确定性且易错"的部分交给本脚本：
   - 全局 ID 扫描自增（跨文件不撞号）
   - 今日文件/目录定位与创建（缺则建 + 写头部）

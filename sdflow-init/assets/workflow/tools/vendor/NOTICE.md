@@ -13,5 +13,5 @@
 
 Vendored (not loaded from a CDN) so the review tool works fully offline — this project is
 local-first by design, the review tool shouldn't be the one thing that needs network access.
-To upgrade: fetch from https://unpkg.com/marked@VERSION/marked.min.js and re-run `opsx-project-init update`
+To upgrade: fetch from https://unpkg.com/marked@VERSION/marked.min.js and re-run `sdflow-init update`
 on every project that uses this tool.

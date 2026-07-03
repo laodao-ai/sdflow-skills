@@ -19,7 +19,7 @@ bash setup.sh
 把每个含 `SKILL.md` 的顶层目录同时装到 `~/.claude/skills/` 和 `~/.codex/skills/`。
 Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Windows 用 copy + `.laodao-skills` marker。
 幂等，可反复运行。改动 skill 源码后一般无需重跑（symlink 场景）；仅在**新增/删除**顶层 skill 后重跑，
-以建立新链接、清理源已删除的孤儿链接。**改 `opsx-project-init/assets/hack/` 下脚本后也必须重跑 `setup.sh`**
+以建立新链接、清理源已删除的孤儿链接。**改 `sdflow-init/assets/hack/` 下脚本后也必须重跑 `setup.sh`**
 （它们拷贝进 `~/.sdflow/hack/`，非 symlink，不重跑 = 新 SKILL 调旧脚本）。
 
 ### 运行测试
@@ -28,12 +28,12 @@ Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Window
 
 ```bash
 pytest                                                  # 发现并运行全部 test_*.py
-pytest buglist-recorder/tests/                          # 单个 skill
-pytest buglist-recorder/tests/test_buglist.py::test_xxx -v   # 单个用例
+pytest sdflow-buglist/tests/                            # 单个 skill
+pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 ```
 
-带脚本+测试的 skill 仅这几个：`buglist-recorder`、`todolist-recorder`、`issues-recorder`、
-`opsx-project-init`、`opsx-roadmap-planner`。其余为纯 Markdown 编排类，无自动化测试。
+带脚本+测试的 skill 仅这几个：`sdflow-buglist`、`sdflow-todolist`、`sdflow-issues`、
+`sdflow-init`、`sdflow-roadmap`。其余为纯 Markdown 编排类，无自动化测试。
 
 ## 架构
 
@@ -50,9 +50,9 @@ pytest buglist-recorder/tests/test_buglist.py::test_xxx -v   # 单个用例
 
 ### 两类 skill
 
-1. **编排类（纯 Markdown）**：`spec-review` / `impl-review` / `opsx-done` / `opsx-maintain` /
+1. **编排类（纯 Markdown）**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` / `sdflow-maintain` /
    `embedded-test-sop` / `openspec-upgrade` — 靠 SKILL.md 指令驱动主 session 调度子代理，无脚本。
-2. **数据类（Markdown + Python）**：`*-recorder` / `opsx-project-init` / `opsx-roadmap-planner` —
+2. **数据类（Markdown + Python）**：`sdflow-buglist` / `sdflow-todolist` / `sdflow-issues` / `sdflow-init` / `sdflow-roadmap` —
    由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
 
 ### `setup.sh` 安装机制（核心，改动需谨慎）
@@ -66,11 +66,11 @@ pytest buglist-recorder/tests/test_buglist.py::test_xxx -v   # 单个用例
 
 本仓库既**产出** OpenSpec 工作流资产、又**用**它管理自身变更（dogfooding）：
 
-- **`opsx-project-init/assets/workflow/`** 是这套 spec 工作流 bundle 的**唯一权威源**——铺给其他项目的
-  `openspec/workflow/` 都源于此。改规则**先改 assets、再 `opsx-project-init update` 推下游**，
+- **`sdflow-init/assets/workflow/`** 是这套 spec 工作流 bundle 的**唯一权威源**——铺给其他项目的
+  `openspec/workflow/` 都源于此。改规则**先改 assets、再 `sdflow-init update` 推下游**，
   禁止只改某个下游项目的 `openspec/workflow/` 后忘记回灌。
-- **`openspec/workflow/`**（仓库根）— 是 bundle 铺进本仓库自身的**实例**，也是 `spec-review` /
-  `impl-review` / `opsx-done` 运行时读取的规则；它由 assets 权威源经 `opsx-project-init` 同步而来，勿单独改。
+- **`openspec/workflow/`**（仓库根）— 是 bundle 铺进本仓库自身的**实例**，也是 `sdflow-spec-review` /
+  `sdflow-code-review` / `sdflow-done` 运行时读取的规则；它由 assets 权威源经 `sdflow-init` 同步而来，勿单独改。
 - **`openspec/{changes,specs,issues,config.yaml}`** — 本仓库自身的 OpenSpec 变更管理，
   流程走 propose → review → done → archive，强制规范见文末托管区块。
 - **`.claude/skills/openspec-*` 与 `.codex/skills/openspec-*`** — openspec CLI（`@fission-ai/openspec`）
@@ -78,7 +78,7 @@ pytest buglist-recorder/tests/test_buglist.py::test_xxx -v   # 单个用例
 
 ### `hack/`
 
-- `checkpoint-commit.sh` — 变更过程中的检查点提交脚本（由 `opsx-project-init` 引用并测试）。
+- `checkpoint-commit.sh` — 变更过程中的检查点提交脚本（由 `sdflow-init` 引用并测试）。
 
 ### dev/runtime checkout 纪律（adr/0005 + 设计门拍板）
 
@@ -98,7 +98,7 @@ pytest buglist-recorder/tests/test_buglist.py::test_xxx -v   # 单个用例
 
 ## 本仓库自身的 OpenSpec 工作流规范
 
-下方为 `opsx-project-init` 铺设、`opsx-maintain` 维护的托管区块（**勿手改区块内部**），
+下方为 `sdflow-init` 铺设、`sdflow-maintain` 维护的托管区块（**勿手改区块内部**），
 是本仓库做变更时的强制流程，也是上文提到的规则真相源：
 
 <!-- opsx-init:start —— 由 opsx-project-init 维护，勿手改本区块 -->

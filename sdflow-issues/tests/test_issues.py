@@ -1,7 +1,7 @@
 """
 Tests for issues.py's Task 8 skeleton: cross-pool `read_pool` join (bug + todo)
 and D9 cross-pool ID conflict detection.
-Run with: python3 -m pytest issues-recorder/tests/ -v
+Run with: python3 -m pytest sdflow-issues/tests/ -v
 """
 import json
 import os
@@ -1012,7 +1012,7 @@ class TestEndToEndConsistency:
 
 def _run_cli(script, root, args, input_json=None):
     """通过真实 CLI 子进程调 buglist.py/todolist.py（stdin 喂 JSON，镜像
-    buglist-recorder/tests/test_buglist.py 的 run_add 写法：不传 --json，
+    sdflow-buglist/tests/test_buglist.py 的 run_add 写法：不传 --json，
     默认走 stdin，`input=None` 时等价于不喂 stdin JSON 的命令，如 triage/scan/set-status）。"""
     return subprocess.run(
         [sys.executable, script, "--root", str(root)] + args,
@@ -1112,7 +1112,7 @@ def _read_index_bytes(root):
 
 def _write_bug_file(root, date, rows):
     """写一个最小合法的 dated buglist 文件（新路径 openspec/issues/buglist/），
-    格式镜像 buglist-recorder/tests/test_buglist.py 的 _write_mixed_file。"""
+    格式镜像 sdflow-buglist/tests/test_buglist.py 的 _write_mixed_file。"""
     dir_path = Path(root) / "openspec" / "issues" / "buglist"
     dir_path.mkdir(parents=True, exist_ok=True)
     lines = [

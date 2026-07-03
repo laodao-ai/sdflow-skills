@@ -12,21 +12,21 @@ description: >
 
 # issues-recorder — 共享 issues 层（reindex / batch）
 
-本 skill 只是 `issues.py` 的**操作说明**，不是约定标准的定义处——它和 `buglist-recorder`
-（bug 池）、`todolist-recorder`（todo 池）是三个 sibling skill，共享同一套 `openspec/issues/`
+本 skill 只是 `issues.py` 的**操作说明**，不是约定标准的定义处——它和 `sdflow-buglist`
+（bug 池）、`sdflow-todolist`（todo 池）是三个 sibling skill，共享同一套 `openspec/issues/`
 目录约定（背景见 `openspec/changes/issues-pool-batch-mgmt/design.md` §五 B-Q2）：
 
 | skill | 管什么 | 脚本 |
 |---|---|---|
-| `buglist-recorder` | bug 池自己的 add/scan/set-status/triage | `buglist-recorder/scripts/buglist.py` |
-| `todolist-recorder` | todo 池自己的 add/scan/set-status/triage | `todolist-recorder/scripts/todolist.py` |
-| **本 skill** | **跨两池**的 `reindex`（生成 `issues/INDEX.md`）+ `batch`（`issues/batches.md` 注册表） | `issues-recorder/scripts/issues.py` |
+| `sdflow-buglist` | bug 池自己的 add/scan/set-status/triage | `sdflow-buglist/scripts/buglist.py` |
+| `sdflow-todolist` | todo 池自己的 add/scan/set-status/triage | `sdflow-todolist/scripts/todolist.py` |
+| **本 skill** | **跨两池**的 `reindex`（生成 `issues/INDEX.md`）+ `batch`（`issues/batches.md` 注册表） | `sdflow-issues/scripts/issues.py` |
 
 > **约定标准的唯一真相源在别处（I13）**：`openspec/issues/` 的目录结构、三维度 schema
 > （源change/批次/status）、状态码表、批次完成判据（D1）、batches.md 字段级 grammar、
 > B/T 前缀跨池互斥（D9）……这些定义全部在
-> [buglist-recorder/SKILL.md](../buglist-recorder/SKILL.md) 与
-> [todolist-recorder/SKILL.md](../todolist-recorder/SKILL.md) 的「约定速查」段（两边正文
+> [sdflow-buglist/SKILL.md](../sdflow-buglist/SKILL.md) 与
+> [sdflow-todolist/SKILL.md](../sdflow-todolist/SKILL.md) 的「约定速查」段（两边正文
 > 互为镜像，改一处需同步另一处）。**本文件不重复定义标准，只讲"怎么操作"**——要查规则去
 > 那两个文件，要查命令怎么敲留在本文件。
 
@@ -39,9 +39,9 @@ sibling 目录（`issues.py` 靠自身文件位置反查 `buglist.py`/`todolist.
 
 ## 何时触发
 
-- ✅ **`opsx-done` sweep 子步自动调用**（主要场景）：`opsx-done` 在写 hand-off.md 前，对
+- ✅ **`sdflow-done` sweep 子步自动调用**（主要场景）：`sdflow-done` 在写 hand-off.md 前，对
   本 change 新增的未分诊 OPEN 项逐条 `triage` 进同一批次后，**末尾固定跑一次
-  `issues.py reindex`** 刷新 INDEX——这一步在 `opsx-done` 流程里自动发生，不需要用户手动
+  `issues.py reindex`** 刷新 INDEX——这一步在 `sdflow-done` 流程里自动发生，不需要用户手动
   触发本 skill。
 - ✅ **人工重建 INDEX**：怀疑 INDEX.md 与 dated 文件（buglist/todolist）不同步、或刚手动
   改过某个 bug/todo 的状态想立刻看到板刷新 → 跑一次 `reindex`。
@@ -61,7 +61,7 @@ sibling 目录（`issues.py` 靠自身文件位置反查 `buglist.py`/`todolist.
 ### 1. `reindex`——重建 INDEX + 同步批次状态
 
 ```bash
-python3 ~/.claude/skills/issues-recorder/scripts/issues.py --root . reindex
+python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . reindex
 ```
 
 流程：`read_pool`（子进程调 `buglist.py scan --json` + `todolist.py scan --json` join 两池，
@@ -74,18 +74,18 @@ join 前先做 D9 跨池 ID 冲突检测，冲突即报错中止、不生成半�
 
 ```bash
 # 新建批次（状态=PLANNED，成员空占位；人写字段缺省留占位符）
-python3 ~/.claude/skills/issues-recorder/scripts/issues.py --root . batch add {change_name} \
+python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch add {change_name} \
   --title "清理项标题" --优先级 P1 --计划 "一句范围"
 
 # 批次进入实施阶段（人工权限，reindex 只会把它推到 DONE，不会推 PLANNED→IN_PROGRESS）
-python3 ~/.claude/skills/issues-recorder/scripts/issues.py --root . batch set-status {change_name} IN_PROGRESS
+python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch set-status {change_name} IN_PROGRESS
 
 # 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并，new key 已存在会报错）
-python3 ~/.claude/skills/issues-recorder/scripts/issues.py --root . batch rename {old_key} {new_key}
+python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {old_key} {new_key}
 ```
 
 - `batch add` 对已存在的 key 是**报错**而非静默 no-op（`_die`）——add 是"新建"语义，撞号
-  多半是误操作；调用方（如 `opsx-done` sweep 步）如果只是想确保批次存在，需要自己把
+  多半是误操作；调用方（如 `sdflow-done` sweep 步）如果只是想确保批次存在，需要自己把
   "报错信息含'已存在'" 当成幂等成功处理，脚本本身不做这层语义转换。
 - `batch rename` 刻意不复用 per-type 脚本的 `triage` 子命令改批次列，因为 `triage` 会顺带
   把"未分诊开放态"状态推进到 `PROPOSED`——`rename` 只该改标签本身，不该有这个副作用。
@@ -102,7 +102,7 @@ rev-parse --show-toplevel`），非 git 仓库时退化为 `os.path.abspath(--ro
 ## 注意
 
 - **并发假设边界（D8）**：本脚本假定单机单进程串行调用，不加锁。调用方（skill / CI /
-  `opsx-done` sweep 步）需自行保证不并发调用本脚本，也不与 `buglist.py`/`todolist.py`
+  `sdflow-done` sweep 步）需自行保证不并发调用本脚本，也不与 `buglist.py`/`todolist.py`
   的写操作并发交叉。
 - 模型的核心价值在**判断该不该建/改批次**（是否真的要开一个清理 change、批次范围怎么定），
   不是拼命令——命令本身是确定性操作，交给脚本。

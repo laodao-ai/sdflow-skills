@@ -102,7 +102,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 - 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账）。
 - 修复代码，改动处标 `[impl-review-fix]`。
 - **checkpoint 提交**：产出报告 + 自动修复后 → `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
-- **收敛口**：结尾一句——建议进 `/opsx-done`（verify → hand-off → archive → commit → merge）。
+- **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
 
 ---
 
@@ -119,7 +119,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 ### 修复 / defer 台账
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(附理由)；defer K 项 → buglist/todolist
 ### 结论
-  □ 建议进 /opsx-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
+  □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
 ```
 
 ## 模型选择（按本步性质，逐步定）
@@ -149,6 +149,6 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 - **每次全跑，非高风险才跑**（P3c；旧 quality-layering §五"缩成残差"结论已否决）。
 - **置信过滤要可审计**：滤掉的 <80 项一行带过，不静默丢。
 - **不重扫 CI 能抓的**：linter/typechecker/编译器范围内的不进镜。
-- **代码即 ground truth**：直接读 diff 与真实代码，不设接地镜（与 spec-review 的唯一结构差异，换历史镜 + 置信过滤）。
+- **代码即 ground truth**：直接读 diff 与真实代码，不设接地镜（与 sdflow-spec-review 的唯一结构差异，换历史镜 + 置信过滤）。
 - checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。
 - 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。

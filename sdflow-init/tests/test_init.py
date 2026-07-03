@@ -1,6 +1,6 @@
 """
 Tests for init.py's review-tool copying + generalized hook installer.
-Run with: python3 -m pytest opsx-project-init/tests/test_init.py -v
+Run with: python3 -m pytest sdflow-init/tests/test_init.py -v
 """
 import json
 import os

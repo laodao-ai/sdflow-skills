@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """init.py — 把 openspec/workflow/ bundle 铺进一个项目（或更新已铺过的项目）。
 
-skill `opsx-project-init` 的执行核心。权威源 = 本 skill 的 assets/workflow/（单一源）。
+skill `sdflow-init` 的执行核心。权威源 = 本 skill 的 assets/workflow/（单一源）。
 两种模式：
   init   —— 空项目首次铺设：建目录骨架、拷 bundle、从模版生成 config.yaml、注入
            INDEX.md / CLAUDE.md / AGENTS.md 的托管区块。
@@ -134,7 +134,7 @@ RULE_MARKERS = ("workflow.md", "spec-checklists", "code-checklists")
 
 
 def stale_shadow_warnings(root):
-    """反静默守卫·陈旧遮蔽（R-MRF-3）：update 内联为主 + opsx-maintain 兜底（同款判据）。只告警，绝不删。"""
+    """反静默守卫·陈旧遮蔽（R-MRF-3）：update 内联为主 + sdflow-maintain 兜底（同款判据）。只告警，绝不删。"""
     warns = []
     wf = os.path.join(root, "openspec", "workflow")
     found = [m for m in RULE_MARKERS if os.path.exists(os.path.join(wf, m))]
@@ -325,7 +325,7 @@ def run(root, mode, dev=False):
     except (OSError, shutil.Error) as e:
         _die(f"文件系统操作失败：{e}")
 
-    print(f"✓ opsx-project-init {mode} 完成 @ {os.path.abspath(root)}\n")
+    print(f"✓ sdflow-init {mode} 完成 @ {os.path.abspath(root)}\n")
     for r in report:
         print("  - " + r)
     if cstat in ("created", "exists"):
@@ -334,7 +334,7 @@ def run(root, mode, dev=False):
             print("  · 编辑 openspec/config.yaml 的「## 本项目」context 段，填本项目 tech stack/约定")
         else:
             print("  · 合并 openspec/config.yaml：把模版的「通用」context 段 + rules 并入，保留你的「本项目」段")
-        print("  · 安装配套 skill：bash ~/.skills/sdflow-skills/setup.sh（/spec-review /impl-review /opsx-done）")
+        print("  · 安装配套 skill：bash ~/.skills/sdflow-skills/setup.sh（/sdflow-spec-review /sdflow-code-review /sdflow-done）")
 
 
 def _die(msg):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """todolist.py — 自动记录/回写/扫描 todolist 的确定性兜底脚本。
 
-skill `todolist-recorder` 的执行核心。收集优化想法/技术债/改进等**非缺陷**项，
+skill `sdflow-todolist` 的执行核心。收集优化想法/技术债/改进等**非缺陷**项，
 作为后续排期的收集池。与 buglist 的差异：每月一文件、T 前缀、按类型而非优先级、
 详细块可选（轻量优先）、无根因/修复方案、状态码 OPEN/PROPOSED/DONE/WONTDO。
 

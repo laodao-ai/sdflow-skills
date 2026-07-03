@@ -1,6 +1,6 @@
 """
 Tests for gen_review_stub.py — generates openspec/roadmaps/<name>/review.html.
-Run with: python3 -m pytest opsx-roadmap-planner/tests/test_gen_review_stub.py -v
+Run with: python3 -m pytest sdflow-roadmap/tests/test_gen_review_stub.py -v
 """
 import sys
 from pathlib import Path

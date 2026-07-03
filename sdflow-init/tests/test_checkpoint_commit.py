@@ -1,5 +1,5 @@
 """Tests for assets/hack/checkpoint-commit.sh —— 工作流「过场提交」脚本。
-Run with: python3 -m pytest opsx-project-init/tests/test_checkpoint_commit.py -v
+Run with: python3 -m pytest sdflow-init/tests/test_checkpoint_commit.py -v
 """
 import subprocess
 from pathlib import Path

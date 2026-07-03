@@ -1,7 +1,7 @@
 """
 Tests for todolist.py's `doc`（关联文档）field: normalization, soft validation,
 detail-block rendering, and change-based auto-default.
-Run with: python3 -m pytest todolist-recorder/tests/ -v
+Run with: python3 -m pytest sdflow-todolist/tests/ -v
 """
 import json
 import os

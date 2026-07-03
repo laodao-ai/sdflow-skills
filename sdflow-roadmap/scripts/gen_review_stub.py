@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """生成 openspec/roadmaps/{name}/review.html —— roadmap 四件套产出后顺手落一份查看器 stub。
 
-读取项目根 openspec/workflow/tools/review-stub.html 模板（由 opsx-project-init 铺设），替换
+读取项目根 openspec/workflow/tools/review-stub.html 模板（由 sdflow-init 铺设），替换
 __PROJECT_NAME__（项目根目录名，对一次安装永不变，故不重蹈 __SCOPE__ 的过时症）后写为
 openspec/roadmaps/{name}/review.html——目录 scope 不再靠模板占位符固化，而由 engine.js 在
 加载时从 window.location.pathname 推导。
 
 与 change-review-stub.py 那个 hook 的取舍不同：hook 是自动触发、缺前提静默跳过；这里是
-opsx-roadmap-planner 流程里模型显式调用的一步，缺前提直接抛错更利于及时发现。
+sdflow-roadmap 流程里模型显式调用的一步，缺前提直接抛错更利于及时发现。
 """
 import argparse
 import os
@@ -21,7 +21,7 @@ def gen_review_stub(root, name):
     if not (os.path.isfile(stub_template_path) and os.path.isfile(root_review_path)):
         raise FileNotFoundError(
             "项目未铺设 review 工具（缺 openspec/workflow/tools/review-stub.html 或 openspec/review.html）。"
-            "先跑 opsx-project-init init/update。"
+            "先跑 sdflow-init init/update。"
         )
     roadmap_dir = os.path.join(osroot, "roadmaps", name)
     if not os.path.isdir(roadmap_dir):

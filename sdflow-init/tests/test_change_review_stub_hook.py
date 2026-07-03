@@ -1,6 +1,6 @@
 """
 Tests for the change-review-stub.py PostToolUse hook.
-Run with: python3 -m pytest opsx-project-init/tests/test_change_review_stub_hook.py -v
+Run with: python3 -m pytest sdflow-init/tests/test_change_review_stub_hook.py -v
 """
 import json
 import subprocess

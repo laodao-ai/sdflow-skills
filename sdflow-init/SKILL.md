@@ -40,8 +40,8 @@ CLAUDE.md。**本 skill 的 `assets/workflow/` 是该 bundle 的唯一权威源*
 ### 第一步：跑脚本
 ```bash
 # 在目标项目根目录
-python ~/.claude/skills/opsx-project-init/scripts/init.py init      # 首次铺设
-python ~/.claude/skills/opsx-project-init/scripts/init.py update    # 重拉最新 bundle
+python ~/.claude/skills/sdflow-init/scripts/init.py init      # 首次铺设
+python ~/.claude/skills/sdflow-init/scripts/init.py update    # 重拉最新 bundle
 # 或显式指定项目根
 python <skill>/scripts/init.py init --root /path/to/project
 ```
@@ -62,8 +62,8 @@ workflow.md 的流程依赖 3 个 laodao skill，提示用户安装：
 ```bash
 bash ~/.skills/laodao-skills/setup.sh
 ```
-- `/spec-review` — 设计审主审 · `/impl-review` — 代码审主审 · `/opsx-done` — 闭环（verify→archive→commit→merge）
-（记录类按需：`/buglist-recorder`、`/todolist-recorder`。）
+- `/sdflow-spec-review` — 设计审主审 · `/sdflow-code-review` — 代码审主审 · `/sdflow-done` — 闭环（verify→archive→commit→merge）
+（记录类按需：`/sdflow-buglist`、`/sdflow-todolist`。）
 
 ## 铺设了什么
 

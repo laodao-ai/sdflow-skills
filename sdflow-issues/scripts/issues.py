@@ -2,8 +2,8 @@
 """issues.py — 共享 issues 层脚本：跨 bug+todo 两池（Task 8：read + D9 冲突检测；
 Task 9：reindex → issues/INDEX.md）。
 
-背景（design.md §五 grill-amendment B-Q2）：`buglist.py`（buglist-recorder）与
-`todolist.py`（todolist-recorder）是两个独立 skill 的独立脚本，各管自己一类
+背景（design.md §五 grill-amendment B-Q2）：`buglist.py`（sdflow-buglist）与
+`todolist.py`（sdflow-todolist）是两个独立 skill 的独立脚本，各管自己一类
 （add/scan/set-status/triage）。但 `reindex`/`batch` 是**跨 bug+todo**（join 两池 +
 维护 `issues/INDEX.md`/`issues/batches.md`）——这类跨类型命令归本脚本独占，不塞进
 per-type 脚本。
@@ -37,7 +37,7 @@ per-type 脚本。
 **并发假设边界（D8）**：本脚本假定单机单进程串行调用，不加锁、不做文件锁/乐观锁/CAS。
 umbrella 设计认定"并发/共享可变状态"属 TG-26，但 TG-26 要 Phase C 才落地；Phase B（本
 脚本所在阶段）显式声明串行假设、不实现锁——真需要并发调用本脚本，留给后续 change 补锁。
-调用方（skill / CI / opsx-done sweep 步）需自行保证不并发调用本脚本，也不与
+调用方（skill / CI / sdflow-done sweep 步）需自行保证不并发调用本脚本，也不与
 buglist.py/todolist.py 的写操作并发交叉。
 
 用法见 `python issues.py --help`。

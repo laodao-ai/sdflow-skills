@@ -20,7 +20,7 @@
 调用方在 ff prompt 第一句注入：
 `先确保在 feature 分支（不在则 git checkout -b feat/{change}），再按 config + trigger-catalog 生成`。
 
-> **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦在受保护分支（master/main）上执行 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 殊途同归调它）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 opsx-project-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。文档级强制（调用方注入 + review 核对）作为补充层。
+> **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦在受保护分支（master/main）上执行 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 殊途同归调它）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。文档级强制（调用方注入 + review 核对）作为补充层。
 
 ## 背景
 
