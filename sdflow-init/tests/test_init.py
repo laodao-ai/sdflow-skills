@@ -128,7 +128,7 @@ class TestUpdateDev:
     def test_dev_update_deploys_full_bundle(self, tmp_path, monkeypatch):
         root = self._seeded(tmp_path, monkeypatch)
         # --dev 身份校验（B2-F2）要求 root == toolkit 源仓根；此处伪造 SKILL_DIR 令 root 过检。
-        monkeypatch.setattr(init_mod, "SKILL_DIR", str(root / "opsx-project-init"))
+        monkeypatch.setattr(init_mod, "SKILL_DIR", str(root / "sdflow-init"))
         init_mod.run(str(root), "update", dev=True)
         assert (root / "openspec" / "workflow" / "workflow.md").is_file()
         assert (root / "openspec" / "workflow" / "spec-checklists").is_dir()
@@ -280,7 +280,7 @@ class TestDevRepoIdentityGuard:
 
     def test_dev_matching_source_repo_passes_identity_check(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
-        fake_skill_dir = tmp_path / "some-repo" / "opsx-project-init"
+        fake_skill_dir = tmp_path / "some-repo" / "sdflow-init"
         fake_skill_dir.mkdir(parents=True)
         monkeypatch.setattr(init_mod, "SKILL_DIR", str(fake_skill_dir))
         root = tmp_path / "some-repo"
@@ -356,3 +356,16 @@ class TestInjectMarkerMigration:
         f = tmp_path / "CLAUDE.md"
         init_mod.inject(str(f), *init_mod.MARK_DOC, "内容", header="# H")
         assert "sdflow-init 维护" in f.read_text(encoding="utf-8")
+
+    OLD_IDX_BLOCK = ("<!-- opsx-init:rules:start —— 由 opsx-project-init 维护，勿手改本区块 -->\n"
+                     "旧内容\n<!-- opsx-init:rules:end -->\n")
+
+    def test_old_idx_marker_block_replaced_not_duplicated(self, tmp_path):
+        f = tmp_path / "INDEX.md"
+        f.write_text("# 头\n\n" + self.OLD_IDX_BLOCK + "\n尾部用户内容\n", encoding="utf-8")
+        init_mod.inject(str(f), *init_mod.MARK_IDX, "新内容")
+        text = f.read_text(encoding="utf-8")
+        assert text.count("opsx-init:rules:start") == 1   # 只有一个区块（替换，非追加）
+        assert "新内容" in text and "旧内容" not in text
+        assert "sdflow-init 维护" in text                 # marker 文案已随替换更新
+        assert "尾部用户内容" in text                     # 区块外内容无损

@@ -73,16 +73,16 @@ L0 机械、L1 标准、L2 判断——三层盲区不同，叠起来才不漏�
   置信低 → 仍上抛（一行带过），绝不静默滤除
 ```
 
-**与 impl-review 的置信过滤是有意的不对称**（与"代码即 ground truth 故 impl-review 去接地镜"同类）：
+**与 sdflow-code-review 的置信过滤是有意的不对称**（与"代码即 ground truth 故 sdflow-code-review 去接地镜"同类）：
 
-| | impl-review（代码） | spec-review（设计） |
+| | sdflow-code-review（代码） | sdflow-spec-review（设计） |
 |---|---|---|
 | finding 量 | 大（具体到行） | 小（设计级） |
 | 单条漏掉的代价 | 低——CI/后续兜 | **高——设计洞会传导进实现** |
 | 该优化 | 精度（少 nitpick） | **召回（别漏关键洞）** |
 | 对不确定项 | **数值 <80 丢弃** | **标注 + 上抛，不丢** |
 
-一个低置信的「这边界场景 spec 没覆盖」，在代码侧是 nitpick 该滤，在设计侧恰是**最该 surface 的高价值捕获**——故 spec-review **不照搬数值一刀切**。它的"过滤"是第三步**对抗裁决**（强模型、带上下文，比 Haiku 数值打分更强）+ 第四步 **AskUserQuestion 上抛**，而非丢弃。
+一个低置信的「这边界场景 spec 没覆盖」，在代码侧是 nitpick 该滤，在设计侧恰是**最该 surface 的高价值捕获**——故 sdflow-spec-review **不照搬数值一刀切**。它的"过滤"是第三步**对抗裁决**（强模型、带上下文，比 Haiku 数值打分更强）+ 第四步 **AskUserQuestion 上抛**，而非丢弃。
 
 ## 五、现有机制的分工（瘦身 / 保留 / 升格）
 

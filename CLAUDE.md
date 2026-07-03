@@ -101,8 +101,8 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 下方为 `sdflow-init` 铺设、`sdflow-maintain` 维护的托管区块（**勿手改区块内部**），
 是本仓库做变更时的强制流程，也是上文提到的规则真相源：
 
-<!-- opsx-init:start —— 由 opsx-project-init 维护，勿手改本区块 -->
-## OpenSpec 工作流（opsx-project-init 铺设）
+<!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本区块 -->
+## OpenSpec 工作流（sdflow-init 铺设）
 
 端到端流程见 workflow 规则集 `workflow.md`（真相源；本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。规则集在 `openspec/workflow/`：
 `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
@@ -114,7 +114,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
-  子 agent 调度期间（subagent-driven-development / spec-review / impl-review 运行中）禁 `/clear`。
+  子 agent 调度期间（subagent-driven-development / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
 - **ff 开分支**：`opsx:ff` 若不在 feature 分支，先 `git checkout -b feat/{change}`（FF-0）。
 - **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 
@@ -122,10 +122,10 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 
 | skill | 在流程中的角色 |
 |---|---|
-| `/spec-review` | 设计审**主审**——并行多镜，按 `spec-checklists/domains` + 对抗 + 接地读码 |
-| `/impl-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
-| `/opsx-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
+| `/sdflow-spec-review` | 设计审**主审**——并行多镜，按 `spec-checklists/domains` + 对抗 + 接地读码 |
+| `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
+| `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
-> 另有两个记录类配套 skill（按需）：`/buglist-recorder`（缺陷）、`/todolist-recorder`（改进收集池），
+> 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
 > 同样来自 sdflow-skills，写入 `openspec/buglists|todolists/`。
 <!-- opsx-init:end -->

@@ -54,7 +54,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 
 ## 第一步：Verify（Sonnet 子 agent）
 
-> 用 Sonnet 而非 Haiku：verify 是**质量门**且要 grep 代码判 PASS/FAIL、辨核心 vs Minor 缺口，judgment 活，弱模型易误判 PASS 放不完整的活进归档。opsx-done 低频，省那点 token 不值。
+> 用 Sonnet 而非 Haiku：verify 是**质量门**且要 grep 代码判 PASS/FAIL、辨核心 vs Minor 缺口，judgment 活，弱模型易误判 PASS 放不完整的活进归档。sdflow-done 低频，省那点 token 不值。
 >
 > **P3h 禁弱模型（阶段三去人类门后 verify = 唯一终门）**：铁律"带门禁 / 无人逐条复核的步别用弱模型——假绿会放不完整的活过关"。verify 用强模型 + 下方 prompt 的 **"Do Not Trust the Report" 冷启**，靠证据锚点硬约束堵假✅，不靠人盯。见 design §7.3.1 / adr/0001。
 
@@ -97,7 +97,7 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
 2. **⏳ 未完成 / 延后**：本 change 新增的 buglist/todolist（sdflow-code-review defer 的，已按下方 §2.1 sweep 分诊进批次 `{change_name}`，见 `openspec/issues/batches.md`）+ 被延后的 ≥2 方案决策（附当时自动选了什么 / 为何拿不准）+ verify 的 Minor 缺口。
 3. **▶ 下一阶段建议**：建议开哪个清理 change、优先级；哪些 defer 项该一起清。
 
-> **为何独立成步、不并进 verify 或 archive**：verify 判"完整性"、hand-off 是"给人的高层交接 + 下阶段种子"，altitude 不同；时机必须在 verify **之后**（引其权威结论）、archive **之前**（随归档留档）。opsx-done 是自制 skill，加此步无碍。
+> **为何独立成步、不并进 verify 或 archive**：verify 判"完整性"、hand-off 是"给人的高层交接 + 下阶段种子"，altitude 不同；时机必须在 verify **之后**（引其权威结论）、archive **之前**（随归档留档）。sdflow-done 是自制 skill，加此步无碍。
 
 ### 2.1 issues sweep 子步（先于上面「三段内容」撰写，I5/I6）
 

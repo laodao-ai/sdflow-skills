@@ -95,16 +95,16 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 /model             # 跑完切回 Sonnet
 ```
 
-### 8. `/opsx-done` — OpenSpec 收尾自动派发 Haiku 子 agent
+### 8. `/sdflow-done` — OpenSpec 收尾自动派发 Haiku 子 agent
 
 **效果**：verify → archive → git commit → (可选) merge to main 四步机械操作全部由 Haiku 子 agent 执行，主 session 上下文隔离，不触发 model 切换 / cache reload。  
 **原理**：skill 调用 Agent tool 时指定 `model: haiku`，子 agent 只接收任务 prompt，不携带主 session 的大上下文。  
-**来源**：自建 skill，位于 `~/.skills/laodao-skills/opsx-done/SKILL.md`，symlink 到 `~/.claude/skills/opsx-done`。  
+**来源**：自建 skill，位于 `~/.skills/laodao-skills/sdflow-done/SKILL.md`，symlink 到 `~/.claude/skills/sdflow-done`。  
 **操作**：
 
 ```bash
-/opsx-done                    # 自动检测 active change
-/opsx-done add-mqtt-filter    # 指定 change 名
+/sdflow-done                    # 自动检测 active change
+/sdflow-done add-mqtt-filter    # 指定 change 名
 ```
 
 **步骤**（串行，任一失败则中止）：
@@ -153,7 +153,7 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 | 4 | `/caveman` 压缩回复 | ~75% 输出 token | 按需触发 |
 | 5 | `fewer-permission-prompts` | 低-中（减少往返） | 偶尔运行 |
 | 6 | 切换 Haiku 跑执行类 skill | ~80% | 每次手动切换 |
-| 7 | `/opsx-done` OpenSpec 收尾派发 Haiku 子 agent | 高（verify+archive+commit 全隔离） | 装一次，按需触发 |
+| 7 | `/sdflow-done` OpenSpec 收尾派发 Haiku 子 agent | 高（verify+archive+commit 全隔离） | 装一次，按需触发 |
 | 8 | 明确 scope 再调 skill | 中 | 改写习惯 |
 | 9 | 避免重型 skill 组合 | 高（按需） | 流程意识 |
 | 10 | 适时 `/clear` 重置上下文 | 中 | 任务完成后 |

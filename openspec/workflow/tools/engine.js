@@ -259,7 +259,7 @@ if (typeof document !== 'undefined') {
     // `loadSidebar(dir)` call), so the root directory listing still shows up
     // exactly as it does today — this is additive, not a replacement.
     // If INDEX.md is missing or fails to fetch (e.g. the project hasn't run
-    // opsx-project-init recently enough to have one, or it was deleted), that
+    // sdflow-init recently enough to have one, or it was deleted), that
     // must not surface as a scary "加载失败" error on first load — fall back to
     // the plain directory-listing view instead.
     async function bootstrap() {

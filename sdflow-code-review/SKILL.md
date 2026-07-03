@@ -18,7 +18,7 @@ description: >
 Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份** `code-review-report.md`。
 
 > **定位升级（P3c，须知情）**：本 skill **不是**"高风险才跑的冷独立抽查、边际残差"——那是旧
-> `quality-layering.md §五` 的结论，**已被否决**。impl-review 是**每次全跑的独立强制主审**：实测能抓出
+> `quality-layering.md §五` 的结论，**已被否决**。sdflow-code-review 是**每次全跑的独立强制主审**：实测能抓出
 > 生成循环内被 controller 说服放过的真问题。它把旧 `gstack/review`（scope-drift）+ 自制多镜清单审
 > 合并成一个编排器，产出一份 `code-review-report.md`（取代旧 staff-review-report.md + impl-review-report.md 分裂）。
 
@@ -35,7 +35,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 阶段三"领域审两遍"**不是重复**，两遍机制/职责不同——这是最反直觉、最该防后人"优化掉"的一条：
 
 ```
-  第一遍: subagent-dev 终审 + 注入点B        第二遍: 本 skill（事后 impl-review）
+  第一遍: subagent-dev 终审 + 注入点B        第二遍: 本 skill（事后 sdflow-code-review）
   ────────────────────────────────────────────────────────────────
   时机   生成循环内                          全部实现完成后
   机制   命中即派 fix 子代理修 + re-review 闭环  出报告 → 编排器修（无 re-review 紧闭环）
@@ -77,7 +77,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 > 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回结构化 findings（每条带：
 > 问题 / CR 编号 / 证据 `file:line` / 严重度 / 建议），**不要 AskUserQuestion**"。
 >
-> 〔Phase C 补〕impl-review **自带 code outside voice**（跨模型 codex，always）+ 命中 HR-TG 单开领域 cross-model
+> 〔Phase C 补〕sdflow-code-review **自带 code outside voice**（跨模型 codex，always）+ 命中 HR-TG 单开领域 cross-model
 > 属 Phase C（C3/C4）。Phase A 不实现跨模型镜。
 
 ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强模型）
