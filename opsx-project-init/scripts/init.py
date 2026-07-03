@@ -101,6 +101,25 @@ def copy_bundle(root, full=False):
     return dst, n
 
 
+RULE_MARKERS = ("workflow.md", "spec-checklists", "code-checklists")
+
+
+def stale_shadow_warnings(root):
+    """反静默守卫·陈旧遮蔽（R-MRF-3）：update 内联为主 + opsx-maintain 兜底（同款判据）。只告警，绝不删。"""
+    warns = []
+    wf = os.path.join(root, "openspec", "workflow")
+    found = [m for m in RULE_MARKERS if os.path.exists(os.path.join(wf, m))]
+    if found:
+        warns.append(
+            "⚠ openspec/workflow/ 残留规则副本（" + "、".join(found) + "）——遮蔽全局 bundle 且不再被 update 刷新："
+            "想跟全局最新 → 手动删净；想 pin 这一版 → 留着（显式逃生口）")
+    if os.path.isfile(os.path.join(root, "hack", "checkpoint-commit.sh")):
+        warns.append(
+            "⚠ hack/checkpoint-commit.sh 为旧版仓内副本（checkpoint 已全局化 → ~/.sdflow/hack/）："
+            "本仓无规则副本 → 可删改用全局；若保留本地 workflow.md 副本（pin）且其仍引用仓内路径 → 勿删")
+    return warns
+
+
 def copy_review_tool(root):
     """铺设 review 工具的「服务器根锚」文件：serve.sh + 根 review.html 到 openspec/ 根。
 
@@ -246,6 +265,10 @@ def run(root, mode):
     report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
 
     report.append("全局 hooks：\n" + ensure_global_hooks())
+
+    if mode == "update":
+        for w in stale_shadow_warnings(root):
+            report.append(w)
 
     cstat, cmsg = handle_config(root, mode)
     report.append(f"config.yaml：{cmsg}")

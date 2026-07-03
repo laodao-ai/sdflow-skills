@@ -122,6 +122,40 @@ class TestHandleConfigFromBundleSrc:
         assert (root / "openspec" / "config.yaml").is_file()
 
 
+class TestStaleShadowWarnings:
+    """R-MRF-3：残留规则/孤儿 checkpoint 只告警绝不删（反静默守卫·陈旧遮蔽变体）。"""
+
+    def _legacy_consumer(self, tmp_path):
+        root = tmp_path / "old"
+        wf = root / "openspec" / "workflow"
+        wf.mkdir(parents=True)
+        (wf / "workflow.md").write_text("# old rules\n", encoding="utf-8")
+        (root / "hack").mkdir()
+        (root / "hack" / "checkpoint-commit.sh").write_text("#!/bin/bash\n", encoding="utf-8")
+        return root
+
+    def test_warns_on_residual_rules_and_orphan_hack_without_deleting(self, tmp_path):
+        root = self._legacy_consumer(tmp_path)
+        warns = init_mod.stale_shadow_warnings(str(root))
+        assert any("遮蔽" in w for w in warns)
+        assert any("checkpoint-commit.sh" in w for w in warns)
+        assert (root / "openspec" / "workflow" / "workflow.md").exists()   # 绝不删
+        assert (root / "hack" / "checkpoint-commit.sh").exists()
+
+    def test_clean_consumer_no_warnings(self, tmp_path):
+        root = tmp_path / "clean"
+        (root / "openspec" / "workflow" / "tools").mkdir(parents=True)
+        assert init_mod.stale_shadow_warnings(str(root)) == []
+
+    def test_update_prints_warnings(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        root = self._legacy_consumer(tmp_path)
+        init_mod.run(str(root), "update")
+        out = capsys.readouterr().out
+        assert "遮蔽" in out
+        assert (root / "openspec" / "workflow" / "workflow.md").exists()
+
+
 class TestEnsureGlobalHooks:
     def _settings_path(self, home):
         return home / "settings.json"
