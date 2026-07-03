@@ -111,6 +111,27 @@ class TestBundleToolsOnly:
         assert (wf / "workflow.md").is_file()      # --dev 整刷用（Task 7）
 
 
+class TestUpdateDev:
+    """5.6：toolkit 源仓 dogfood 刷新——update --dev 整 bundle 刷 instance；普通 update 只 tools/。"""
+
+    def _seeded(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        root = tmp_path / "proj"
+        init_mod.run(str(root), "init")
+        return root
+
+    def test_plain_update_does_not_deploy_rules(self, tmp_path, monkeypatch):
+        root = self._seeded(tmp_path, monkeypatch)
+        init_mod.run(str(root), "update")
+        assert not (root / "openspec" / "workflow" / "workflow.md").exists()
+
+    def test_dev_update_deploys_full_bundle(self, tmp_path, monkeypatch):
+        root = self._seeded(tmp_path, monkeypatch)
+        init_mod.run(str(root), "update", dev=True)
+        assert (root / "openspec" / "workflow" / "workflow.md").is_file()
+        assert (root / "openspec" / "workflow" / "spec-checklists").is_dir()
+
+
 class TestHandleConfigFromBundleSrc:
     """2.5：config 模版改读 BUNDLE_SRC——消费仓无规则副本时 init 不得 FileNotFoundError。"""
 

@@ -28,7 +28,6 @@ SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(SKILL_DIR, "assets")
 BUNDLE_SRC = os.path.join(ASSETS, "workflow")
 REVIEW_TOOL_SRC = os.path.join(ASSETS, "review-tool")
-HACK_SRC = os.path.join(ASSETS, "hack")
 SNIPPETS = os.path.join(ASSETS, "snippets")
 
 MARK_DOC = ("<!-- opsx-init:start —— 由 opsx-project-init 维护，勿手改本区块 -->",
@@ -241,7 +240,7 @@ def ensure_global_hooks():
 
 # ── 主流程 ──────────────────────────────────────────────────
 
-def run(root, mode):
+def run(root, mode, dev=False):
     osroot = os.path.join(root, "openspec")
     if mode == "init":
         os.makedirs(osroot, exist_ok=True)
@@ -253,8 +252,9 @@ def run(root, mode):
     if made:
         report.append("建目录：" + " ".join(made))
 
-    dst, n = copy_bundle(root)
-    report.append(f"铺 bundle：openspec/workflow/（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
+    dst, n = copy_bundle(root, full=dev)
+    dev_suffix = "（--dev 整刷）" if dev else ""
+    report.append(f"铺 bundle：openspec/workflow/{dev_suffix}（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
 
     n_review = copy_review_tool(root)
     report.append(
@@ -308,8 +308,12 @@ def main():
     p = argparse.ArgumentParser(description="把 openspec/workflow bundle 铺进项目")
     p.add_argument("mode", choices=["init", "update"], help="init=首次铺设 / update=重拉最新 bundle")
     p.add_argument("--root", default=".", help="目标项目根（默认当前目录）")
+    p.add_argument("--dev", action="store_true",
+                   help="update 专用：整 bundle 刷新（toolkit 源仓 dogfood 用，消费仓勿用）")
     args = p.parse_args()
-    run(args.root, args.mode)
+    if args.dev and args.mode != "update":
+        _die("--dev 仅配 update 使用")
+    run(args.root, args.mode, dev=args.dev)
 
 
 if __name__ == "__main__":
