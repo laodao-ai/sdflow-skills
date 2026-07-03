@@ -32,8 +32,10 @@ verdict × exit × next 契约表:
     plan `### Task <n>:` 计数 N；齐 N 判完成；标题命中 0 → UNKNOWN。
 
 D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
-    design-approved: 其后触及 openspec/changes/{change}/ 的提交 → 失鲜（改设计须重审）
+    design-approved: 其后触及本 change 四件套路径（proposal/design/tasks.md 与 specs/）
+        的提交 → 失鲜（改设计须重审）；cr/verify/hand-off 等尾流产物不算，实现提交更不算
     verify / code-review: 其后触及 openspec/ 之外路径的提交 → 陈旧
+        （verify=FAIL 陈旧优先于 code-review 陈旧判定，保重验不因陈旧 CR 卡死）
     报告从未提交: fresh（freshness=uncommitted，人机同权）
 
 已知不覆盖（接受并记录）:
@@ -62,6 +64,35 @@ def run_git(root, *args):
     r = subprocess.run(["git", "-C", str(root), *args],
                        capture_output=True, text=True)
     return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def report_last_sha(root, rel):
+    return run_git(root, "log", "-1", "--format=%H", "--", rel)
+
+
+DESIGN_WATCHED_NAMES = ("proposal.md", "design.md", "tasks.md")   # D9〔design.md 决策源〕四件套
+
+
+def is_stale(root, rel, scope, change):
+    """D9 分域〔Q1=B/Q3=A〕。scope: 'design'|'code'。返回 (stale, freshness)。
+
+    design 域仅盯本 change 四件套路径（proposal/design/tasks.md 与 specs/）——
+    不可套用整个 openspec/changes/{change}/：该目录还装着 cr/verify/hand-off 等
+    正常尾流产物，套用整目录会让收尾提交把 design-approved 误判陈旧（链自锁）。
+    """
+    sha = report_last_sha(root, rel)
+    if not sha:
+        return False, "uncommitted"          # Q3=A：人机同权，手写产物合法
+    files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
+    base = f"openspec/changes/{change}/"
+    for f in filter(None, files.splitlines()):
+        if scope == "design" and f.startswith(base):
+            sub = f[len(base):]
+            if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
+                return True, "stale"
+        if scope == "code" and not f.startswith("openspec/"):
+            return True, "stale"
+    return False, "fresh"
 
 
 def anchors_in(path, candidates):
@@ -149,6 +180,12 @@ def decide(root, change):
         emit("REFUSE_START", EXIT_REFUSE, None,
              "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
              "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）")
+    design_stale, _design_fresh = is_stale(
+        root, str(report.relative_to(root)), "design", change)
+    if design_stale:
+        emit("REFUSE_START", EXIT_REFUSE, None,
+             "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
+             "（重跑 sdflow-spec-review 后重新拍板补锚）")
     # ── verify 冲突锚早检（多锚冲突 → UNKNOWN，任务3 完整接管步序）──
     vfile = cdir / "verify-report.md"
     if vfile.is_file():
@@ -191,11 +228,25 @@ def decide(root, change):
     if cr_state is None:
         emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-code-review",
              "code-review-report.md 在但无锚行 → 该步进行中，重跑")
+    cr_stale, cr_fresh = is_stale(root, str(cr.relative_to(root)), "code", change)
+    if cr_stale:
+        # 陈旧判定优先级须让位于「verify=FAIL 之后修代码重验」链路：verify 已判 FAIL
+        # 时不要求先重跑 code-review（否则陈旧 FAIL 卡死），留给 step9 判 RERUN_STALE。
+        vf_peek = cdir / "verify-report.md"
+        verify_already_failed = ANCHOR_VERIFY_FAIL in anchors_in(vf_peek, [ANCHOR_VERIFY_FAIL])
+        if not verify_already_failed:
+            emit("RERUN_STALE", EXIT_OK, "sdflow-code-review",
+                 "code-review 结论后存在 openspec/ 外提交 → 结论陈旧，重审", freshness=cr_fresh)
     # ── step 9：verify 终门 ────────────────────────────────────
     vf = cdir / "verify-report.md"
     if not vf.is_file():
         emit("RUN_VERIFY", EXIT_OK, "sdflow-done", "进入收尾（verify→hand-off→archive→merge）")
+    v_stale, v_fresh = is_stale(root, str(vf.relative_to(root)), "code", change)
     v_state = pick_exclusive(vf, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL, "verify")
+    if v_stale:
+        emit("RERUN_STALE", EXIT_OK, "sdflow-done",
+             "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）",
+             freshness=v_fresh)
     if v_state == "neg":
         emit("VERIFY_FAIL", EXIT_VFAIL, None, "verify FAIL：停并上抛缺口清单（报告内）")
     if v_state is None:
@@ -210,7 +261,8 @@ def decide(root, change):
     if handoff and archived and bstate == "merged":
         emit("SHIPPED", EXIT_OK, None,
              "全通：verify PASS + hand-off + 已归档 + 分支已并。"
-             "未 push（手动控制）；toolkit 源仓请 push 后新会话 /sdflow-upgrade 激活")
+             "未 push（手动控制）；toolkit 源仓请 push 后新会话 /sdflow-upgrade 激活",
+             freshness=v_fresh)
     emit("RUN_VERIFY", EXIT_OK, "sdflow-done",
          f"verify PASS 但收尾未完（hand-off={handoff} archive={archived} branch={bstate}）")
 
