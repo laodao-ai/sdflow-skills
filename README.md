@@ -17,6 +17,7 @@
 | 工作流铺设/维护 | `sdflow-upgrade` | 运行 checkout 一键升级：pull → setup → 版本展示（堵 pull→setup 窗口期） |
 | 评审（主审） | `sdflow-spec-review` | 阶段二·设计审主审：并行多镜（领域+对抗+接地读码）→ 一份 spec-review-report |
 | 评审（主审） | `sdflow-code-review` | 阶段三·代码审主审：并行多镜 + 对抗裁决 + 置信过滤 → 一份 code-review-report |
+| 编排（阶段三） | `sdflow-ship` | 阶段三编排器：gate 台账驱动 5.5→9 到 merge 建议 |
 | 收尾 | `sdflow-done` | 闭环：verify（证据锚点）→ hand-off → archive（delta 对码核验同步）→ commit → merge |
 | 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，产出 requirements/design/roadmap/task-log 四件套 |
 | 记录（issues 池） | `sdflow-buglist` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |

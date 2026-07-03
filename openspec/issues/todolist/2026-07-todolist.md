@@ -15,8 +15,8 @@
 | T7 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 | 可观测性 | PROPOSED | 2026-07-03 13:57 | minimize-repo-footprint | minimize-repo-footprint |
 | T8 | `impl-review/SKILL.md` | 置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核 | 功能增强 | PROPOSED | 2026-07-03 13:58 | minimize-repo-footprint | minimize-repo-footprint |
 | T9 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 | 可观测性 | PROPOSED | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
-| T10 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 功能增强 | PROPOSED | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
-| T11 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 基础设施 | PROPOSED | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
+| T10 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 功能增强 | DONE | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
+| T11 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 基础设施 | DONE | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
 | T12 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） | 可观测性 | PROPOSED | 2026-07-03 14:38 | minimize-repo-footprint | minimize-repo-footprint |
 | T13 | `opsx-project-init/tests/` | resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言 | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T14 | `setup.sh` | Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支） | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
@@ -25,7 +25,7 @@
 | T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | PROPOSED | 2026-07-03 16:18 | minimize-repo-footprint | minimize-repo-footprint |
 | T19 | `workflow.md + generation-process.md（权威源）` | 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户 | 可观测性 | PROPOSED | 2026-07-03 17:38 | sdflow-rebrand | sdflow-rebrand |
-| T20 | `spec-review/SKILL.md（现 sdflow-spec-review）` | 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项 | 代码质量 | PROPOSED | 2026-07-03 17:42 | sdflow-rebrand | sdflow-rebrand |
+| T20 | `spec-review/SKILL.md（现 sdflow-spec-review）` | 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项 | 代码质量 | DONE | 2026-07-03 17:42 | sdflow-rebrand | sdflow-rebrand |
 | T21 | `sdflow-init/scripts/init.py` | inject() 畸形态加固：多重复旧 marker 区块只修第一个 + _find_marker_line 的 text.index 在行内嵌相同 marker 文本时可能锚错位 | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
 | T22 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
 | T23 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
@@ -112,7 +112,7 @@
 |------|------|
 | 模块 | `workflow.md 决策4 + opsx-ship(待开)` |
 | 类型 | 功能增强 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/adr/0006-execution-model-baseline-fleet-anchored.md`
 
@@ -121,6 +121,7 @@
 **思路**：择一：①推荐项须过对抗镜复核（独立子代理试证伪推荐方案）才可自动选；②收紧为「缺客观判据（测试/基准可判）一律 defer 进 todolist」——与证据锚点同思路，不信自述
 
 **备注**：T7/T8 医的是评审侧，本条医决策侧的同构问题；建议随 opsx-ship change 一并落（其 design 正好要定阶段三决策协议）
+> 2026-07 状态：PROPOSED → DONE（change sdflow-ship, 3d0b546; sdflow-ship/SKILL.md 决策协议节 + workflow.md 决策4）
 
 ---
 
@@ -130,7 +131,7 @@
 |------|------|
 | 模块 | `config.template.yaml + opsx-done/verify` |
 | 类型 | 基础设施 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/adr/0006-execution-model-baseline-fleet-anchored.md`
 
@@ -139,6 +140,7 @@
 **思路**：config.template.yaml 加 model-tiers 段（强档=verify/对抗裁决/final 终审、中档=领域镜/生成、弱档=纯机械步 + 各档默认模型名）；opsx-done verify 与各编排 skill 读此段选模型
 
 **备注**：小活；opsx-ship 的 design 需逐步指定模型档，是最自然认领方（footprint 的 config 非目标仅限「不重排契约」，加段不冲突）
+> 2026-07 状态：PROPOSED → DONE（change sdflow-ship, 3d0b546; assets/workflow/model-tiers.md + config.template.yaml 覆盖段 + 四 SKILL 引用句）
 
 ---
 
@@ -214,7 +216,7 @@
 |------|------|
 | 模块 | `spec-review/SKILL.md（现 sdflow-spec-review）` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-rebrand/design.md`
 
@@ -223,6 +225,7 @@
 **思路**：①SKILL.md Step2 开头显式加一句「MUST 待 Step1 checkpoint 完成后才 fan-out；禁止与 Step1 并行——多镜的评审对象须含 autoplan amendment」（把隐含顺序变禁止性措辞，防执行者优化掉）；②补一条执行纪律：若确已并行（历史运行），Step3 裁决须 diff autoplan 的 amendment 并对照镜 findings 做增量核对、在报告注明
 
 **备注**：本轮（sdflow-rebrand）已按 ②的补救路径处理：autoplan 返回后核其是否改动四件套，有改动则在裁决步增量核对并写进报告
+> 2026-07 状态：PROPOSED → DONE（change sdflow-ship, 3d0b546; sdflow-spec-review/SKILL.md Step2 串行句）
 
 ---
 

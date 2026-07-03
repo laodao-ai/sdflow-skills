@@ -1,5 +1,7 @@
 # opsx-ship：阶段三过设计门后连续跑到 merge 的编排 orchestrator
 
+> 落地名 sdflow-ship，见 adr/0007 命名规范。
+
 设计把三阶段"连续化"做到了**设计层**（去 `/clear` G1、阶段三去人类门 P3e），却没做到**编排层**——人仍需照 `workflow.md` 逐步 copy prompt 手动调 5.5→9。新增 skill `opsx-ship`（暂定名，备选 opsx-deliver / opsx-run）补编排层：**一次调用**把阶段三 `embedded-test-sop`(条件) → `writing-plans`(→ subagent-dev) → `impl-review` → `opsx-done` → merge 串起来驱动。
 
 **窄 scope——明确不越两个人类点：**

@@ -20,8 +20,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T10 | todo | PROPOSED | minimize-repo-footprint |
-| T11 | todo | PROPOSED | minimize-repo-footprint |
 | T12 | todo | PROPOSED | minimize-repo-footprint |
 | T13 | todo | PROPOSED | minimize-repo-footprint |
 | T14 | todo | PROPOSED | minimize-repo-footprint |
@@ -39,7 +37,6 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T19 | todo | PROPOSED | sdflow-rebrand |
-| T20 | todo | PROPOSED | sdflow-rebrand |
 | T21 | todo | PROPOSED | sdflow-rebrand |
 | T22 | todo | PROPOSED | sdflow-rebrand |
 | T23 | todo | PROPOSED | sdflow-rebrand |
@@ -53,4 +50,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 0 项已闭合（bug: 0，todo: 0）
+- 共 3 项已闭合（bug: 0，todo: 3）
