@@ -102,10 +102,40 @@ cleanup_orphans() {
   done
 }
 
+# ─── sdflow global home: canonical bundle anchor + hack scripts ──
+# canonical 只接管自属软链/指针（对齐 skills 的所有权守卫）；~/.sdflow 其余视为本工具独占命名空间。
+install_sdflow() {
+  local sdflow="${SDFLOW_HOME:-$HOME/.sdflow}"
+  local bundle="$REPO_DIR/opsx-project-init/assets/workflow"
+  mkdir -p "$sdflow/hack"
+
+  if [ "$IS_WINDOWS" -eq 1 ]; then
+    printf '%s\n' "$bundle" > "$sdflow/workflow-path"
+    installed+=("workflow-path @ $sdflow")
+  else
+    if [ -e "$sdflow/workflow" ] && [ ! -L "$sdflow/workflow" ]; then
+      skipped+=("workflow @ $sdflow — 真实目录非本工具软链，未接管")
+    else
+      ln -snf "$bundle" "$sdflow/workflow"
+      installed+=("workflow @ $sdflow")
+    fi
+  fi
+
+  local f base
+  for f in "$REPO_DIR/opsx-project-init/assets/hack/"*.sh; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    cp "$f" "$sdflow/hack/$base"
+    chmod +x "$sdflow/hack/$base"
+    installed+=("hack/$base @ $sdflow")
+  done
+}
+
 for d in "${TARGET_DIRS[@]}"; do
   install_into "$d"
   cleanup_orphans "$d"
 done
+install_sdflow
 
 # ─── Summary ─────────────────────────────────────────────────
 version="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "unknown")"
