@@ -16,6 +16,12 @@
 | T4 | todo | PROPOSED | issues-pool-batch-mgmt |
 | T5 | todo | PROPOSED | issues-pool-batch-mgmt |
 
+### 未分组（批次为空）
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T6 | todo | OPEN | minimize-repo-footprint |
+
 ## 已闭合（终态）摘要
 
 - 共 0 项已闭合（bug: 0，todo: 0）

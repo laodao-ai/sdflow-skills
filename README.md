@@ -1,112 +1,78 @@
-# laodao-skills
+# sdflow-skills
 
-老刀AI码场自建 Claude Code Skills 统一管理仓库。
+围绕 **OpenSpec 规格驱动流程（spec-driven flow）** 的 Claude Code / Codex 自建 skills 集合，
+隶属老刀AI码场自建 skills 体系。提供一条从「铺工作流 → 生成变更 → 设计审 → 代码审 → 收尾归档」
+的规格驱动开发（SDD）闭环，外加缺陷 / 待办 / 批次的记录工具与嵌入式测试 SOP 生成。
+
+本仓库同时是这套 spec 工作流 bundle 的 **权威源**（见下方[工作原理](#工作原理)），
+既产出工作流资产、又用它管理自身变更（dogfooding）。
 
 ## Skills 列表
 
 | 分类 | Skill | 说明 |
 |------|-------|------|
-| 内容创作 | bilibili-research | B站搜索词调研与选题分析 |
-| 内容创作 | x-research | X/Twitter 调研 |
-| 内容创作 | youtube-research | YouTube 调研 |
-| 内容创作 | zhihu-research | 知乎调研 |
-| 开发工具 | commit-message | Git commit 信息生成 |
-| 开发工具 | ssh-tunnel | SSH 隧道管理 |
-| 开发工具 | tag | Git 语义化版本标签 |
-| 开发工具 | gstack-project-init | gstack 项目级文档归集 |
-| OpenSpec | opsx-maintain | OpenSpec 目录维护 |
-| OpenSpec | opsx-roadmap-planner | 分阶段 roadmap 规划工作流 |
-| 嵌入式 | embedded-lint | C 语言静态分析 |
-| 嵌入式 | embedded-test-sop | 嵌入式手动测试 SOP 生成 |
-| 文档转换 | docx2md | Word 转 Markdown |
-| 文档转换 | pdf2md | PDF 转 Markdown |
-| 文档转换 | xlsx2md | Excel 转 CSV |
-| 元工具 | **config-setup** | **模版驱动的项目级 settings 编排（详见下方专章）** |
-| 元工具 | update | 更新 laodao-skills |
+| 工作流铺设/维护 | `opsx-project-init` | 一键把整套 OpenSpec spec 工作流 bundle 铺进任意项目（本仓库是该 bundle 权威源） |
+| 工作流铺设/维护 | `opsx-maintain` | 扫描 openspec 目录状态、对比 INDEX、报告差异并修复 |
+| 工作流铺设/维护 | `openspec-upgrade` | 升级 openspec CLI（`@fission-ai/openspec`）并刷新项目内 openspec skills |
+| 评审（主审） | `spec-review` | 阶段二·设计审主审：并行多镜（领域+对抗+接地读码）→ 一份 spec-review-report |
+| 评审（主审） | `impl-review` | 阶段三·代码审主审：并行多镜 + 对抗裁决 + 置信过滤 → 一份 code-review-report |
+| 收尾 | `opsx-done` | 闭环：verify（证据锚点）→ hand-off → archive（delta 对码核验同步）→ commit → merge |
+| 规划 | `opsx-roadmap-planner` | 分阶段 roadmap 规划工作流，产出 requirements/design/roadmap/task-log 四件套 |
+| 记录（issues 池） | `buglist-recorder` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |
+| 记录（issues 池） | `todolist-recorder` | 改进想法 / 技术债收集池（非缺陷），全局唯一 T-ID |
+| 记录（issues 池） | `issues-recorder` | 跨 buglist+todolist 的 `issues/INDEX.md` 重建与批次注册表维护 |
+| 测试 | `embedded-test-sop` | 为嵌入式固件功能生成手动测试 SOP + 配套日志自动分析规则（log-checks.yaml） |
+
+> 三个 recorder 与 `opsx-project-init`、`opsx-roadmap-planner` 为**数据类 skill**（带 `scripts/` + `tests/`），
+> 由脚本保证确定性；其余为纯 Markdown 编排类。
 
 ## 安装
 
+把仓库 clone 到任意位置（安装用绝对路径 symlink，与仓库存放位置无关），然后运行 `setup.sh`：
+
 ```bash
-cd ~/.claude/skills
-git clone https://github.com/laodao-ai/laodao-skills.git
-cd laodao-skills
+git clone https://github.com/laodao-ai/sdflow-skills.git
+cd sdflow-skills
 bash setup.sh
 ```
 
+`setup.sh` 会把每个含 `SKILL.md` 的目录同时装到 **Claude**（`~/.claude/skills/`）和
+**Codex**（`~/.codex/skills/`）。幂等，可反复运行。
+
 ## 更新
 
-在 Claude Code 中直接使用：
-
-```
-/ld-update
-```
-
-或手动更新：
-
 ```bash
-cd ~/.claude/skills/laodao-skills
+cd sdflow-skills
 git pull
 bash setup.sh
 ```
 
 ## 工作原理
 
-- **Linux/macOS**：setup.sh 在 `~/.claude/skills/` 下为每个 skill 创建相对路径 symlink
-- **Windows**：setup.sh 将 skill 目录复制到 `~/.claude/skills/`，并写入 `.laodao-skills` 标记文件用于更新检测
+- **每个 skill 是一个自包含目录**：`SKILL.md`（frontmatter + 指令，唯一被 `setup.sh` 识别的标志）
+  + 可选 `scripts/`（Python/Shell）+ `tests/`（pytest）+ `assets/` / `references/`。
+- **安装机制**：`setup.sh` 遍历仓库根下所有目录，仅安装含 `SKILL.md` 的（故 `openspec/`、`docs/`、
+  `hack/` 不会被当 skill）。
+  - **Unix**：绝对路径 symlink —— 改源即时生效，仅新增/删 skill 后才需重跑。
+  - **Windows**：复制目录 + 写 `.laodao-skills` 标记文件用于更新检测。
+  - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
+- **spec 工作流 bundle 的权威源**：`opsx-project-init/assets/workflow/` 是铺给其他项目的
+  `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `opsx-project-init update`
+  推到下游**，禁止只改某个下游项目的 `openspec/workflow/` 后忘记回灌。
+- **dogfooding**：仓库根的 `openspec/`（`workflow/` 规则 + `changes/specs/issues/config.yaml`）
+  是本仓库自身跑这套 OpenSpec 流程的实例；变更走 propose → 设计审 → 代码审 → `opsx-done` 归档。
 
----
+## 开发
 
-## config-setup — 模版驱动的项目级 settings 编排
+数据类 skill 的测试自包含在各自 `tests/` 下，用 pytest 运行：
 
-进新项目的一站式设置入口。分析项目类型 → 匹配/生成模版 → 串行完成 plugin→skill 配置，写入 `.claude/settings.json`。
-
-### 架构
-
-`config-setup` 是一个编排入口，内含两个子 skill：
-
-| 命令 | 说明 |
-|------|------|
-| `/config-setup` | 主入口：分析项目、匹配模版、串行调度下面两个子 skill |
-| `/config-plugins` | 项目级 plugin 编排：浏览/决策/写入 `enabledPlugins` |
-| `/config-skills` | 项目级自建 skill 编排：4 态（on/name-only/user-invocable-only/off）编排 `skillOverrides` |
-
-### 模版
-
-预置模版按项目类型匹配，也可自定义：
-
-| 模版 | 适用场景 |
-|------|----------|
-| `content-creator` | SDD 内容创作工作区（OpenSpec + Hugo + 写作流水线） |
-| `go-backend` | Go 后端服务项目 |
-| `hugo-blog` | Hugo 静态博客项目 |
-
-### 三层 settings 模型
-
-settings 读取遵循三层合并：
-
-1. **Layer 1** — 用户全局 `~/.claude/settings.json`
-2. **Layer 2** — 用户本地 `~/.claude/settings.local.json`
-3. **Layer 3** — 项目级 `.claude/settings.json`（config-setup 的写入目标）
-
-### 安全特性
-
-- **备份**：每次写入前自动 `.bak.YYYYMMDD-HHMMSS`，保留最近 3 份
-- **原子写回**：tmp 文件 + `os.replace`，防止写一半崩溃
-- **健康检查**：检测 phantom（已删除）/ unset（新增未配置）的 plugin 和 skill
-- **幂等**：已 up-to-date 提前结束
-
-### 用法
-
-```
-/config-setup
+```bash
+pytest                                                       # 全部
+pytest buglist-recorder/tests/                              # 单个 skill
+pytest buglist-recorder/tests/test_buglist.py::test_xxx -v  # 单个用例
 ```
 
-或自然触发："配一下这个项目"、"进新项目"、"配 settings.json"等。
-
-详见 `config-setup/SKILL.md`。
-
-
----
+面向 AI 协作者的项目级指令见 [CLAUDE.md](./CLAUDE.md) / [AGENTS.md](./AGENTS.md)。
 
 ## 许可
 
