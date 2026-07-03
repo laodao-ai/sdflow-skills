@@ -5,13 +5,14 @@
 > 需求 ID 见 [specs/spec-workflow/spec.md](./specs/spec-workflow/spec.md)：**R-MRF-1** 分层部署 · **R-MRF-2** resolver · **R-MRF-3** 迁移。
 > grill 2026-07-03 后：**撤销"提根"**、canonical 改软链(Unix)/指针(Windows)、checkpoint 归 `~/.sdflow/hack/`。Codex-hook 空档已单记 todolist（超本 change 范围）。
 > model-baseline 重审（explore 2026-07-03，`adr/0006`）后：**resolver 脚本化**——三步链由 `~/.sdflow/hack/resolve-workflow.sh` 确定性执行，SKILL.md 只调用（§3 已按此改写）。
-> spec-review 2026-07-03 后〔spec-review-amendment，详见 [spec-review-report.md](./spec-review-report.md)〕：新增 0/2.5/3.4/5.6/5.7，重写 3.1，裁决 4.2 触发点；**Q1（运行 checkout 迁移归属）待设计门拍板**——Q1 未决不得进实现。
+> spec-review 2026-07-03 后〔spec-review-amendment，详见 [spec-review-report.md](./spec-review-report.md)〕：新增 0/2.5/3.4/5.6/5.7，重写 3.1，裁决 4.2 触发点。
+> **设计门拍板（2026-07-03）**：**Q1 = A**——运行 checkout 落位 `~/.skills/sdflow-skills/`（0.1 生效），并新增 `sdflow-upgrade` skill（§7）；**Q2 = 维持现状**（留副本即 pin，不加 marker）。
 >
 > **发布纪律（贯穿）**〔spec-review-amendment / autoplan #11〕：运行 checkout `git pull` 后**必须立即重跑 `setup.sh`**（symlink 生效的 SKILL.md 与拷贝生效的 `~/.sdflow/hack/` 脚本更新节奏不同步，窗口期靠 3.2 的 127 专属文案兜底显形）。
 
-## 0. 前置：拓扑接缝（待 Q1 拍板）〔spec-review-amendment〕
+## 0. 前置：拓扑接缝〔spec-review-amendment · 设计门拍板 Q1=A〕
 
-- [ ] 0.1 〔**Q1 拍板后生效**，推荐选项 A〕迁移运行 checkout 至 `laodao-ai/sdflow-skills.git`（重 clone 或改 remote + hard reset 到新仓 HEAD），并验证 `git -C ~/.skills/<runtime> remote get-url origin` = 开发仓 remote；写进 5.1 纪律段。**未迁移前禁止执行 1.1/1.2**（canonical 会钉死旧仓 b248c2d，本 change 全部成果无法到达消费方）〔R-MRF-1〕
+- [ ] 0.1 迁移运行 checkout：fresh clone `laodao-ai/sdflow-skills.git` → **`~/.skills/sdflow-skills/`**，在其中执行 `bash setup.sh`（重指全部 skill 软链）；验证 remote 正确、`~/.claude/skills/*` 与 `~/.codex/skills/*` 软链已指向新 checkout。注意：setup.sh 所有权检查可能把"指向旧仓 laodao-skills 的同名软链"视为非自属——须确认能接管或给出人工清理提示；旧 `~/.skills/laodao-skills` **保留不删**（misc 仓，处置归 `extract-sdflow-repo`）。**未迁移前禁止执行 1.1/1.2**（canonical 会钉死旧仓 b248c2d）〔R-MRF-1〕
 
 ## 1. canonical 全局位（不提根）〔R-MRF-1，grill-amendment〕
 
@@ -60,3 +61,8 @@
 ## 6. 与 issues 层交集收口
 
 - [ ] 6.1 定 `issues.py`（共享 issues 层脚本）物理落点——**只做落点决策并记录，不在本 change 实施迁移**（收窄范围，验收判据 = 决策写进 design/ADR）〔R-MRF-1，spec-review-amendment D10〕
+
+## 7. sdflow-upgrade skill〔设计门拍板新增 2026-07-03〕
+
+- [ ] 7.1 新建顶层 skill `sdflow-upgrade`（纯 Markdown 编排类，参照既有 `update`/ld-update 形态）：对 `~/.skills/sdflow-skills/` 执行升级三连——`git pull` → `bash setup.sh`（canonical + `~/.sdflow/hack/` 同步刷新，**结构性堵死 pull→setup 窗口期**）→ 显示版本与最新变更；提示消费仓按需跑 `opsx-project-init update`；含回滚一句（`git checkout <last-good>` + 重跑 setup，呼应 5.1 纪律段）〔R-MRF-1〕
+- [ ] 7.2 收尾同步：README「Skills 列表」加行 + 重跑 setup.sh 建新链（新增顶层 skill 约定）；旧 `update`（ld-update）skill **不动**（laodao 侧遗产，处置归 `extract-sdflow-repo`）〔R-MRF-1〕

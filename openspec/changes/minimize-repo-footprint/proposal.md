@@ -59,7 +59,7 @@
 2. ~~Windows 无软链兜底~~ → **已定**：指针文件 `~/.sdflow/workflow-path`（grill 2026-07-03）。
 3. ~~各 skill 规则读点的完整清单~~ → **已定**〔spec-review-amendment，接地镜实扫〕：spec-review 3 处 + impl-review 4 处；opsx-done / recorders = 0 处；opsx-ship 待其 change 落地后追加（移出本次验收）。
 4. ~~迁移告警的具体触发点与文案~~ → **已定**〔spec-review-amendment D4〕：update 内联为主 + `opsx-maintain` 兜底扫描；范围含 checkpoint 孤儿副本。
-5. **〔新增·需设计门拍板 = report Q1〕运行 checkout 迁移归属**：实测运行 checkout（`laodao-ai/laodao-skills.git` @b248c2d）与开发仓（`laodao-ai/sdflow-skills.git`）remote 分家、历史不相交——canonical 未迁移即建链会钉死旧仓。推荐本 change 认领（tasks 0.1），备选归 `extract-sdflow-repo` 并阻塞本 change。
+5. ~~运行 checkout 迁移归属~~ → **已定**〔设计门拍板 2026-07-03，Q1=A〕：本 change 认领——fresh clone 至 `~/.skills/sdflow-skills/` + setup.sh（tasks 0.1），并新增 `sdflow-upgrade` skill（tasks §7）；旧 laodao-skills checkout 保留，处置归 `extract-sdflow-repo`。
 
 ## Compliance
 

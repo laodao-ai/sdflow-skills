@@ -25,9 +25,13 @@
 | **A（推荐）** | 本 change 新增前置任务：迁移运行 checkout 到 sdflow-skills remote（重 clone 或改 remote + reset），并把"运行 checkout remote = 当前权威 remote"写进 5.1 纪律段与 setup 前置校验提示 | 本 change 自洽可验收；`extract-sdflow-repo` 范围缩小为"拆库收尾"。代价：本 change 范围 +1 个运维任务 |
 | B | 归 `extract-sdflow-repo`，本 change 声明其为硬前置并**阻塞等待** | change 边界干净。代价：本 change 完成即闲置，且 extract 尚未 materialize，闲置期不可控 |
 
+> ✅ **拍板（2026-07-03 设计门）**：选 **A**，并细化——运行 checkout 落位 **`~/.skills/sdflow-skills/`**（fresh clone + setup.sh，旧 laodao-skills 保留不删）；另新增 **`sdflow-upgrade`** skill（git pull → setup.sh → 版本/变更展示 → 提示消费仓 update，结构性堵 pull→setup 窗口），已入 tasks §7。
+
 **Q2 · 迁移期显式 pin marker？**（autoplan/Codex 单声部，留人工终审）
 
 ADR 现状 = "留本地规则副本即 pin"（无 marker 文件）。Codex 建议加显式 marker（如 `.workflow-pin`）区分"有意 pin"与"忘了删"。**默认维持 ADR 现状**（副本即声明，少一个状态文件），除非你认为"忘了删 vs 有意留"的区分值得一个 marker——4.2 的陈旧遮蔽告警已把两者都显形，功能上不缺。
+
+> ✅ **拍板（2026-07-03 设计门）**：维持现状，不加 marker。
 
 ### [自动决策]（高置信采纳，已回流 amendment，默认接受、可覆盖）
 

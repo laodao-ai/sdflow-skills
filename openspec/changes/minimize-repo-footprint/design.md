@@ -66,14 +66,15 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
 
 〔grill-amendment：**撤销提根**——bundle 留 `assets/workflow/` 不动；canonical 用**软链(Unix)/指针(Windows)**藏住 assets/ 布局。〕
 
-> ⚠️〔spec-review-amendment / 图过时警示〕下图"运行 checkout = `~/.skills/laodao-skills`（与开发 checkout 同 repo 两 clone）"的假设**已与实测不符**：运行 checkout remote = `laodao-ai/laodao-skills.git`（旧仓 @b248c2d），开发 checkout remote = `laodao-ai/sdflow-skills.git`（新仓）——两条互不相交的 git 历史，`push→pull→setup` 发布边界当前断裂。**Q1 拍板（迁移运行 checkout）后随 amendment 修图**；未迁移前 canonical 建链会钉死旧仓（见 tasks 0.1 禁令）。
+> ⚠️〔spec-review-amendment / 图过时警示〕原图"运行 checkout = `~/.skills/laodao-skills`（与开发 checkout 同 repo 两 clone）"的假设**与实测不符**：两 remote 分家（laodao-skills 旧 @b248c2d / sdflow-skills 新）、git 历史不相交，`push→pull→setup` 发布边界曾断裂。
+> ✅〔设计门拍板 2026-07-03，Q1=A〕运行 checkout 迁移为 **`~/.skills/sdflow-skills/`**（fresh clone 新仓 + setup.sh，tasks 0.1，先于 1.1/1.2）；配套 **`sdflow-upgrade`** skill（pull→setup→版本展示，tasks §7）承担日常升级，结构性堵 pull→setup 窗口。下图运行 checkout 路径已按拍板更新。
 
 ```
   ── 改前 ────────────────────────────────────────────────────
   opsx-project-init/assets/workflow/ (34)  ──copy_bundle──▶  消费仓 openspec/workflow/ (34)
 
   ── 改后 ────────────────────────────────────────────────────
-  运行 checkout = ~/.skills/laodao-skills （canonical 锚点, setup 在此跑）
+  运行 checkout = ~/.skills/sdflow-skills （canonical 锚点, setup 在此跑；0.1 迁入〔设计门拍板〕）
   ├── opsx-project-init/assets/workflow/   ← bundle 仍是唯一权威源(不提根)
   │        └──[copy_bundle 只部署 tools/ 子树]──┐
   ├── ~/.sdflow/  ← setup 建的 agent 中立全局家：
@@ -99,7 +100,7 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
 原稿"assets vs openspec 目录隔离"经 grill 换成**更本质的物理 checkout 隔离**：
 
 - **开发 checkout**（独立目录）：编辑 skill/bundle、跑 workflow dogfood；本地 `openspec/workflow` → local-first 吃**未发布**编辑。
-- **运行 checkout**（`~/.skills/laodao-skills`）：只 pull 完成品 + setup；canonical 锚点；只含**已发布**、不 run workflow on 自己。
+- **运行 checkout**（`~/.skills/sdflow-skills`〔设计门拍板 Q1=A，0.1 迁入〕）：只 pull 完成品 + setup（日常经 `sdflow-upgrade` skill 一键）；canonical 锚点；只含**已发布**、不 run workflow on 自己。
 - **发布边界** = push(开发) → pull(运行) → setup。
 - **运营细节（写进纪律段）**：改**规则**→ local-first 自动 dogfood；改 **skill 本身**→ 需在开发 checkout 跑 setup 才测得到（本机无外部消费者，canonical 临时指 dev 无碍）。
 
