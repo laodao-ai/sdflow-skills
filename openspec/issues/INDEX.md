@@ -22,6 +22,7 @@
 |----|------|--------|------------|
 | T10 | todo | OPEN | minimize-repo-footprint |
 | T11 | todo | OPEN | minimize-repo-footprint |
+| T12 | todo | OPEN | minimize-repo-footprint |
 | T6 | todo | OPEN | minimize-repo-footprint |
 | T7 | todo | OPEN | minimize-repo-footprint |
 | T8 | todo | OPEN | minimize-repo-footprint |

@@ -26,7 +26,7 @@
 ## Success Metrics
 
 - 新 init 的消费仓 `openspec/workflow/` 只含 `tools/`（≈5 文件），规则文件数 = 0。
-- skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）在**无本地规则副本**的消费仓能正确解析全局规则并跑通；全局缺失时**显式降级 + 告警**（非静默）。
+- skills（spec-review / impl-review；opsx-done / recorders 实扫无读点，opsx-ship 待其 change 落地后追加〔spec-review-amendment〕）在**无本地规则副本**的消费仓能正确解析全局规则并跑通——**验收锚点 = 5.7 激活验证的真实调用输出**，非"文本已改"；全局缺失时**显式降级 + 告警**（非静默）。
 - toolkit 源仓自身 dogfood 不受影响（本地副本 local-first 命中，仍吃"在用端"而非未发布编辑）。
 - 存量消费仓 `update` 后不丢功能：留旧副本照旧能跑、且收到"遮蔽全局"告警。
 
@@ -38,6 +38,7 @@
 - **不重排/重命名 `config.yaml` 契约**、不动 `changes/` `specs/` 本体结构。
 - **不提根**〔grill-amendment〕：bundle 留 `opsx-project-init/assets/`，canonical 间接层已解耦，提根买不到额外收益却要重写"唯一权威源"5 处约定。
 - **不含"移无关 skill（≈17）"**〔grill-amendment〕：独立卫生 change，失败模式/验证方式与本 change 不同。
+- **Windows bash 解释器依赖沿现状**〔spec-review-amendment〕：`~/.sdflow/hack/*.sh` 在 Windows 依赖 Git-Bash/WSL 执行，本 change 不解决；2.2 的"根治"仅指 git exec 位追踪丢失。
 
 ## Impact
 
@@ -56,8 +57,9 @@
 
 1. canonical 前缀命名（`~/.sdflow/` grill 暂用，低风险，可改）。
 2. ~~Windows 无软链兜底~~ → **已定**：指针文件 `~/.sdflow/workflow-path`（grill 2026-07-03）。
-3. 各 skill 规则读点的完整清单（spec-review/impl-review 已知；opsx-done/recorders/opsx-ship 待逐个扫）。
-4. 迁移告警的具体触发点与文案（`update` 内联？独立 `opsx-maintain` 检查？）。
+3. ~~各 skill 规则读点的完整清单~~ → **已定**〔spec-review-amendment，接地镜实扫〕：spec-review 3 处 + impl-review 4 处；opsx-done / recorders = 0 处；opsx-ship 待其 change 落地后追加（移出本次验收）。
+4. ~~迁移告警的具体触发点与文案~~ → **已定**〔spec-review-amendment D4〕：update 内联为主 + `opsx-maintain` 兜底扫描；范围含 checkpoint 孤儿副本。
+5. **〔新增·需设计门拍板 = report Q1〕运行 checkout 迁移归属**：实测运行 checkout（`laodao-ai/laodao-skills.git` @b248c2d）与开发仓（`laodao-ai/sdflow-skills.git`）remote 分家、历史不相交——canonical 未迁移即建链会钉死旧仓。推荐本 change 认领（tasks 0.1），备选归 `extract-sdflow-repo` 并阻塞本 change。
 
 ## Compliance
 

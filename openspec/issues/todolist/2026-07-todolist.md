@@ -17,6 +17,7 @@
 | T9 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 | 可观测性 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
 | T10 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 功能增强 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
 | T11 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 基础设施 | OPEN | 2026-07-03 14:08 | minimize-repo-footprint |  |
+| T12 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） | 可观测性 | OPEN | 2026-07-03 14:38 | minimize-repo-footprint |  |
 
 ---
 
@@ -125,3 +126,21 @@
 **思路**：config.template.yaml 加 model-tiers 段（强档=verify/对抗裁决/final 终审、中档=领域镜/生成、弱档=纯机械步 + 各档默认模型名）；opsx-done verify 与各编排 skill 读此段选模型
 
 **备注**：小活；opsx-ship 的 design 需逐步指定模型档，是最自然认领方（footprint 的 config 非目标仅限「不重排契约」，加段不冲突）
+
+---
+
+## T12: 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `opsx-maintain / resolve-workflow.sh` |
+| 类型 | 可观测性 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/minimize-repo-footprint/spec-review-report.md`
+
+**动机**：陈旧遮蔽告警只管本地侧残留；运行 checkout remote 正确但长期未 pull 时，所有跟 HEAD 的消费仓一起吃旧规则且无任何感知（spec-review A1-P7 / autoplan #12，超本 change 范围）
+
+**思路**：resolve-workflow.sh --explain 或 opsx-maintain 输出一行：canonical → <commit hash> (<N> 天未更新)；不做强告警，只做可观测
+
+**备注**：spec-review 2026-07-03 上抛区转记；与 T8/T10 同属机制健壮性批次候选

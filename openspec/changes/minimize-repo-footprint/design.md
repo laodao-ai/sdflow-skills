@@ -60,10 +60,13 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
 - **步2 平台回落链**〔grill-amendment〕：Unix 命中软链目录（透明）、Windows 命中指针文件；skill 不判平台（**判平台的是脚本**）。
 - **步3 = 反静默守卫**〔grill-amendment / CONTEXT〕：全局也缺 → 显式降级 + 告警，绝不静默当"无此层"。调用方 skill MUST NOT 静默吞脚本的非零退出码。
 - **为何脚本化**〔model-baseline-amendment / `adr/0006`〕：执行机队 = opus / sonnet / gpt-5.5（机队锚定，非开发时模型）。弱一档模型执行三步 prose 协议的典型失效 = 静默跳步（跳过本地直读全局、或全局缺时静默降级）——恰是反静默守卫要防的形态。脚本化后跨模型行为一致，且 resolver 分支测试从"模型行为测试"变普通脚本单测。这也是本仓「机械活交脚本、模型只做判断」哲学的应用。
+- **契约细则**〔spec-review-amendment，tasks 3.1 为准〕：`--root`（缺省 `git rev-parse --show-toplevel`，防 cwd 非仓根误判滑向全局）；`${SDFLOW_HOME:-$HOME/.sdflow}` env override（测试隔离）；步① 粒度 = **any-of 即 pin** + 部分残留专门告警（迁移期必经态，隐式语义两种实现各有一种静默失效）；步② 命中后最小健全性检查（workflow.md 非空 + 三顶层单元在，防 pull 半坏态静默广播）；步③ = 退出码 2；调用侧 `[ -x ]` 先判**脚本自身缺失**（专属"重跑 setup"文案，与步③ bundle 缺失区分）；`--explain` 来源诊断。
 
 ## 四、部署拓扑（组件/依赖图，TG-14）
 
 〔grill-amendment：**撤销提根**——bundle 留 `assets/workflow/` 不动；canonical 用**软链(Unix)/指针(Windows)**藏住 assets/ 布局。〕
+
+> ⚠️〔spec-review-amendment / 图过时警示〕下图"运行 checkout = `~/.skills/laodao-skills`（与开发 checkout 同 repo 两 clone）"的假设**已与实测不符**：运行 checkout remote = `laodao-ai/laodao-skills.git`（旧仓 @b248c2d），开发 checkout remote = `laodao-ai/sdflow-skills.git`（新仓）——两条互不相交的 git 历史，`push→pull→setup` 发布边界当前断裂。**Q1 拍板（迁移运行 checkout）后随 amendment 修图**；未迁移前 canonical 建链会钉死旧仓（见 tasks 0.1 禁令）。
 
 ```
   ── 改前 ────────────────────────────────────────────────────
@@ -126,6 +129,8 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
 ```
 
 〔grill-amendment / CONTEXT〕本告警 = **反静默守卫**的"陈旧遮蔽"变体（元原则清单已补"悄悄用了旧的"）：不是"读不到"（缺席），是"读到旧的还当新的"（静默陈旧），同样须显形。
+
+〔spec-review-amendment / D4〕触发点裁决（关闭 proposal 开放问题 4）：**update 内联为主 + `opsx-maintain` 兜底扫描**——两触发点均被动，兜底扫描收窄"常年不 update 的仓"敞口。检测范围**含旧版仓内 `hack/checkpoint-commit.sh` 孤儿副本**（不再被任何机制刷新/关注的旧全局化脚本），给对称提示："删=用全局 `~/.sdflow/hack/` / 本地 workflow.md 副本仍引用它则勿删"。
 
 ## 八、不做（Non-Goals，见 proposal）
 
