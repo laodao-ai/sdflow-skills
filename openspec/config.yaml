@@ -1,0 +1,50 @@
+schema: spec-driven
+
+# 项目上下文（生成产物时展示给 AI）
+context: |
+  ## 通用｜spec 工作流规则集（随模版携带，勿删）
+  spec 质量规则集见 openspec/workflow/：
+  - trigger-catalog.md      触发词目录 TG-01~24（约束/领域/画图/模版必填槽 的公共触发源）
+  - spec-checklists/        通用 base(BASE-01~28) + 领域 domains(backend·go / embedded·ml307c·esp32 / frontend)
+  - design-diagrams.md      设计画图规则（哪些图、何时画、ASCII 优先）
+  - ff-generation-constraints.md  生成时硬约束 D-1~D-6
+  - generation-process.md   生成过程（explore/brainstorming/grill 三相位）
+  起手对变更评估 trigger-catalog，命中的触发激活对应必填槽 / D约束 / 画图 / 领域清单。
+  触发判定一律用具体行为描述，不用风险代号。
+
+  ## 本项目｜tech stack / 约定
+  laodao-skills：老刀AI码场自建 Claude Code Skills 统一管理仓库（本身就是一个 skill 集合库，
+  非典型业务代码库）。
+  - 每个 skill 是仓库根下一个目录：`SKILL.md`（frontmatter + 说明）+ 可选 `scripts/`（Python/Shell）
+    + 可选 `assets/`（模版、bundle 资源）。
+  - 安装机制：`setup.sh` 在 `~/.claude/skills/` 下为每个 skill 建相对路径 symlink（macOS/Linux）或
+    复制目录（Windows，写 `.laodao-skills` 标记文件）。
+  - 本仓库同时是 `opsx-project-init` skill 的 **bundle 权威源**：其
+    `opsx-project-init/assets/workflow/` 就是铺给其他项目的 `openspec/workflow/` 唯一来源；
+    改动这套 spec 工作流规则集，一律先改这里、再用 `opsx-project-init update` 推到各使用项目，
+    禁止只改某个下游项目的 `openspec/workflow/` 后忘记回灌。
+  - 技术栈：以 Markdown（SKILL.md）+ Python 脚本（部分用 Bash）为主，无前端/后端服务、无数据库；
+    不命中 domains 清单中的 backend·go / embedded·ml307c·esp32 / frontend 任一领域。
+  - Forbidden patterns：不要把某个 skill 的示例/临时数据当作 bundle 的一部分提交；
+    不要在下游项目里直接改 `openspec/workflow/` 内容并遗忘同步回本仓库。
+
+# 按 artifact 注入的自定义规则（升级安全：在仓库内，openspec update 不覆盖）
+# 槽位分「无条件必填」与「〔TG-NN〕命中才必填」两类；TG 定义见 trigger-catalog.md。
+rules:
+  proposal:
+    - 无条件必含小节，统一用英文标题（与 OpenSpec 模板一致）：`## Why`（问题/动机）、`## Success Metrics`、`## Non-Goals`（不在本次范围）、`## Compliance`（合规声明，不适用写 N/A）
+    - 按 @openspec/workflow/trigger-catalog.md 评估并加节：TG-19→需求优先级(P0/P1/P2)、TG-20→利益相关方与外部依赖、TG-21→开放问题(负责人/截止)、TG-22→假设(失效影响)、TG-24→外部服务成本估算
+    - 命中 TG-01/02/03（技术栈）则在 Impact 标注，供下游按 @openspec/workflow/spec-checklists/ 选用领域清单
+  specs:
+    - 每个 Requirement 必挂 #### Scenario(WHEN/THEN)，Requirement 有稳定 ID（schema 已要求，强调不得遗漏）
+    - 验收标准可观察、可测试，不得只写"测试通过"
+  design:
+    - 无条件必含小节，英文标题：`## Compliance`（规则/边界合规声明，遵守或显式豁免，禁沉默例外）
+    - 按 trigger-catalog 命中加节：TG-04→v_old/v_new 对照表、TG-05→数据模型与生命周期、TG-07→请求/响应 JSON 示例、TG-08→失败模式表+可观测性、TG-15→可观测性、TG-16→NFR 数字化、TG-17→安全与数据保护、TG-23→决策记录 ADR、TG-13/14→组件清单
+    - 按 @openspec/workflow/design-diagrams.md 画图：TG-09→状态机图、TG-10→序列图、TG-11→数据流图、TG-12→决策图、TG-13→C4 Context+Container；非平凡变更至少一张组件/依赖图
+    - 代码事实(函数名/字段/API 路径)先核验再写入，禁从记忆直接写
+  tasks:
+    - 每个任务标注对应 Requirement ID（与 specs 双向追溯，无幽灵任务）
+    - 命中 TG-18(有测试计划) 则产出测试覆盖图（code path → 测试类型）
+    - 单任务控制在可独立验证的小粒度
+    - Group related tasks under numbered sections
