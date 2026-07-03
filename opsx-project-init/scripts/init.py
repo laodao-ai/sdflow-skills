@@ -89,13 +89,19 @@ def read_snippet(name):
 
 def copy_bundle(root, full=False):
     """R-MRF-1 分层部署：默认只铺 tools/ 子树（规则经全局 canonical 解析，不复制进消费仓）。
-    full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用。"""
+    full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用。
+
+    非 full 模式收敛性：拷贝前若 dst/tools 已存在则先 rmtree 再 copytree——tools/ 是随
+    workflow bundle 托管的子树（update 覆盖刷新语义），不落入"绝不自动删消费仓文件"红线；
+    清后拷保收敛，上游删文件不再残留（B2-F4）。full 模式维持 dirs_exist_ok 现状不变。"""
     dst = os.path.join(root, "openspec", "workflow")
     if full:
         shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True)
     else:
-        shutil.copytree(os.path.join(BUNDLE_SRC, "tools"),
-                        os.path.join(dst, "tools"), dirs_exist_ok=True)
+        tools_dst = os.path.join(dst, "tools")
+        if os.path.isdir(tools_dst):
+            shutil.rmtree(tools_dst)
+        shutil.copytree(os.path.join(BUNDLE_SRC, "tools"), tools_dst)
     n = sum(len(fs) for _, _, fs in os.walk(dst))
     return dst, n
 
@@ -241,51 +247,59 @@ def ensure_global_hooks():
 # ── 主流程 ──────────────────────────────────────────────────
 
 def run(root, mode, dev=False):
-    osroot = os.path.join(root, "openspec")
-    if mode == "init":
-        os.makedirs(osroot, exist_ok=True)
-    elif not os.path.isdir(osroot):
-        _die("openspec/ 不存在——update 需在已铺设的项目里跑；空项目请用 init")
+    if dev:
+        toolkit_root = os.path.realpath(os.path.dirname(SKILL_DIR))
+        if os.path.realpath(root) != toolkit_root:
+            _die("--dev 仅用于 toolkit 源仓自身（防把整套规则灌进消费仓）；当前 --root 不是本脚本所在仓")
 
-    report = []
-    made = ensure_dirs(root)
-    if made:
-        report.append("建目录：" + " ".join(made))
+    try:
+        osroot = os.path.join(root, "openspec")
+        if mode == "init":
+            os.makedirs(osroot, exist_ok=True)
+        elif not os.path.isdir(osroot):
+            _die("openspec/ 不存在——update 需在已铺设的项目里跑；空项目请用 init")
 
-    dst, n = copy_bundle(root, full=dev)
-    dev_suffix = "（--dev 整刷）" if dev else ""
-    report.append(f"铺 bundle：openspec/workflow/{dev_suffix}（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
+        report = []
+        made = ensure_dirs(root)
+        if made:
+            report.append("建目录：" + " ".join(made))
 
-    n_review = copy_review_tool(root)
-    report.append(
-        f"铺 review 根锚：openspec/review.html + openspec/serve.sh"
-        f"（{n_review} 文件，{'覆盖' if mode=='update' else '写入'}；tools/ 随 bundle 入 openspec/workflow/tools/）"
-    )
+        dst, n = copy_bundle(root, full=dev)
+        dev_suffix = "（--dev 整刷）" if dev else ""
+        report.append(f"铺 bundle：openspec/workflow/{dev_suffix}（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
 
-    report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
+        n_review = copy_review_tool(root)
+        report.append(
+            f"铺 review 根锚：openspec/review.html + openspec/serve.sh"
+            f"（{n_review} 文件，{'覆盖' if mode=='update' else '写入'}；tools/ 随 bundle 入 openspec/workflow/tools/）"
+        )
 
-    report.append("全局 hooks：\n" + ensure_global_hooks())
+        report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
 
-    if mode == "update":
+        report.append("全局 hooks：\n" + ensure_global_hooks())
+
+        # init 与 update 都跑：fresh init 无残留自然零告警；老仓误跑 init 不再假绿（B2-F3）。
         for w in stale_shadow_warnings(root):
             report.append(w)
 
-    cstat, cmsg = handle_config(root, mode)
-    report.append(f"config.yaml：{cmsg}")
+        cstat, cmsg = handle_config(root, mode)
+        report.append(f"config.yaml：{cmsg}")
 
-    # INDEX.md 托管区块
-    idx = os.path.join(osroot, "INDEX.md")
-    a = inject(idx, *MARK_IDX, read_snippet("index-section.md"),
-               header="# OpenSpec Index\n\n本文件是当前仓库 OpenSpec 资产索引。")
-    report.append(f"openspec/INDEX.md：{a}")
+        # INDEX.md 托管区块
+        idx = os.path.join(osroot, "INDEX.md")
+        a = inject(idx, *MARK_IDX, read_snippet("index-section.md"),
+                   header="# OpenSpec Index\n\n本文件是当前仓库 OpenSpec 资产索引。")
+        report.append(f"openspec/INDEX.md：{a}")
 
-    # CLAUDE.md / AGENTS.md 托管区块
-    sec = read_snippet("claude-section.md")
-    for fn in ("CLAUDE.md", "AGENTS.md"):
-        p = os.path.join(root, fn)
-        a = inject(p, *MARK_DOC, sec,
-                   header=f"# {fn.split('.')[0]}\n\n本文件为项目级 AI 指令。")
-        report.append(f"{fn}：{a}")
+        # CLAUDE.md / AGENTS.md 托管区块
+        sec = read_snippet("claude-section.md")
+        for fn in ("CLAUDE.md", "AGENTS.md"):
+            p = os.path.join(root, fn)
+            a = inject(p, *MARK_DOC, sec,
+                       header=f"# {fn.split('.')[0]}\n\n本文件为项目级 AI 指令。")
+            report.append(f"{fn}：{a}")
+    except (OSError, shutil.Error) as e:
+        _die(f"文件系统操作失败：{e}")
 
     print(f"✓ opsx-project-init {mode} 完成 @ {os.path.abspath(root)}\n")
     for r in report:

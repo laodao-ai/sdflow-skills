@@ -15,11 +15,13 @@ def run_resolve(cwd, sdflow_home, args=()):
 
 
 def make_bundle(path):
-    """一个健全的 bundle：workflow.md 非空 + 两个清单目录。"""
+    """一个健全的 bundle：workflow.md 非空 + 两个清单目录（各含至少一个条目，CR-F1 sane 判据）。"""
     path.mkdir(parents=True)
     (path / "workflow.md").write_text("# wf\n", encoding="utf-8")
     (path / "spec-checklists").mkdir()
+    (path / "spec-checklists" / "domains.md").write_text("# spec\n", encoding="utf-8")
     (path / "code-checklists").mkdir()
+    (path / "code-checklists" / "domains.md").write_text("# code\n", encoding="utf-8")
     return path
 
 
@@ -141,3 +143,52 @@ class TestEdgeCases:
         repo = make_repo(tmp_path / "repo", with_rules=True)
         r = run_resolve(repo, tmp_path / "no-sdflow", args=("--root",))
         assert r.returncode == 64
+
+    def test_root_flag_swallows_next_flag_exits_64(self, tmp_path):
+        """--root 后紧跟另一个 flag（如 --explain）时不得把它当值吞掉（B1-F4）。"""
+        repo = make_repo(tmp_path / "repo", with_rules=True)
+        r = run_resolve(repo, tmp_path / "no-sdflow", args=("--root", "--explain"))
+        assert r.returncode == 64
+
+    def test_deleted_cwd_exits_64(self, tmp_path):
+        """cwd 被删时不得静默 fallback 到失败的 pwd（B1-F1）——显式 exit 64 + 指引 --root。"""
+        d = tmp_path / "will-be-deleted"
+        d.mkdir()
+        r = subprocess.run(
+            ["bash", "-c", f'cd "{d}" && rmdir "{d}" && bash "{SCRIPT}" --explain'],
+            capture_output=True, text=True)
+        assert r.returncode == 64
+        assert "无法确定仓根" in r.stderr
+
+    def test_relative_sdflow_home_exits_2_and_warns(self, tmp_path):
+        """SDFLOW_HOME 非绝对路径时忽略全局 canonical 探测，本地无 pin → 步3降级 exit 2（B1-F3）。"""
+        repo = make_repo(tmp_path / "repo", with_rules=False)
+        r = run_resolve(repo, "relative/sdflow/path")
+        assert r.returncode == 2
+        assert "非绝对路径" in r.stderr
+
+    def test_sane_rejects_empty_checklist_dir(self, tmp_path):
+        """sane() 须要求两个清单目录各至少含一个条目，防「目录存在但空」静默判健全（CR-F1）。"""
+        repo = make_repo(tmp_path / "repo", with_rules=False)
+        bundle = tmp_path / "bundle"
+        bundle.mkdir()
+        (bundle / "workflow.md").write_text("# wf\n", encoding="utf-8")
+        (bundle / "spec-checklists").mkdir()  # 空目录
+        (bundle / "code-checklists").mkdir()
+        (bundle / "code-checklists" / "domains.md").write_text("# code\n", encoding="utf-8")
+        sdflow = tmp_path / "sdflow"
+        sdflow.mkdir()
+        (sdflow / "workflow").symlink_to(bundle)
+        r = run_resolve(repo, sdflow)
+        assert r.returncode == 2
+
+    def test_pointer_path_with_chinese_dir_resolves(self, tmp_path):
+        """指针文件指向含中文目录名的路径须能正常解析（gstack 5.3 缺口）。"""
+        repo = make_repo(tmp_path / "repo", with_rules=False)
+        bundle = make_bundle(tmp_path / "中文目录" / "bundle")
+        sdflow = tmp_path / "sdflow"
+        sdflow.mkdir()
+        (sdflow / "workflow-path").write_text(str(bundle) + "\n", encoding="utf-8")
+        r = run_resolve(repo, sdflow)
+        assert r.returncode == 0
+        assert r.stdout.strip() == str(bundle)

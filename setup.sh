@@ -116,8 +116,16 @@ install_sdflow() {
     if [ -e "$sdflow/workflow" ] && [ ! -L "$sdflow/workflow" ]; then
       skipped+=("workflow @ $sdflow — 真实目录非本工具软链，未接管")
     else
+      local old_target=""
+      if [ -L "$sdflow/workflow" ]; then
+        old_target="$(readlink "$sdflow/workflow" 2>/dev/null || true)"
+      fi
       ln -snf "$bundle" "$sdflow/workflow"
-      installed+=("workflow @ $sdflow")
+      if [ -n "$old_target" ] && [ "$old_target" != "$bundle" ]; then
+        installed+=("workflow @ $sdflow — 接管：$old_target → $bundle")
+      else
+        installed+=("workflow @ $sdflow")
+      fi
     fi
   fi
 

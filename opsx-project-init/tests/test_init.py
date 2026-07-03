@@ -127,6 +127,8 @@ class TestUpdateDev:
 
     def test_dev_update_deploys_full_bundle(self, tmp_path, monkeypatch):
         root = self._seeded(tmp_path, monkeypatch)
+        # --dev 身份校验（B2-F2）要求 root == toolkit 源仓根；此处伪造 SKILL_DIR 令 root 过检。
+        monkeypatch.setattr(init_mod, "SKILL_DIR", str(root / "opsx-project-init"))
         init_mod.run(str(root), "update", dev=True)
         assert (root / "openspec" / "workflow" / "workflow.md").is_file()
         assert (root / "openspec" / "workflow" / "spec-checklists").is_dir()
@@ -262,3 +264,73 @@ class TestEnsureGlobalHooks:
         assert "已注册" in msg
         data = json.loads(self._settings_path(home).read_text(encoding="utf-8"))
         assert len(data["hooks"]["PreToolUse"]) == 1  # not duplicated
+
+
+class TestDevRepoIdentityGuard:
+    """B2-F2：--dev 只准在 toolkit 源仓自身跑，防把整套规则灌进消费仓。"""
+
+    def test_dev_pointing_elsewhere_dies(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        other_root = tmp_path / "consumer-repo"
+        (other_root / "openspec").mkdir(parents=True)
+        with pytest.raises(SystemExit):
+            init_mod.run(str(other_root), "update", dev=True)
+        err = capsys.readouterr().err
+        assert "仅用于 toolkit 源仓" in err
+
+    def test_dev_matching_source_repo_passes_identity_check(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        fake_skill_dir = tmp_path / "some-repo" / "opsx-project-init"
+        fake_skill_dir.mkdir(parents=True)
+        monkeypatch.setattr(init_mod, "SKILL_DIR", str(fake_skill_dir))
+        root = tmp_path / "some-repo"
+        (root / "openspec").mkdir()
+        init_mod.run(str(root), "update", dev=True)  # 不应抛 SystemExit
+        assert (root / "openspec" / "workflow" / "workflow.md").is_file()
+
+
+class TestInitAlsoWarnsShadow:
+    """B2-F3：陈旧遮蔽告警按磁盘状态触发——init 也要跑，不再只挂 update。"""
+
+    def test_init_on_legacy_repo_warns_shadow(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        root = tmp_path / "old"
+        wf = root / "openspec" / "workflow"
+        wf.mkdir(parents=True)
+        (wf / "workflow.md").write_text("# old rules\n", encoding="utf-8")
+        init_mod.run(str(root), "init")
+        out = capsys.readouterr().out
+        assert "遮蔽" in out
+
+
+class TestCopyBundleConvergence:
+    """B2-F4：非 full 模式下 tools/ 收敛——update 覆盖后，上游已删的旧文件不得残留。"""
+
+    def test_update_clears_legacy_files_in_tools(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        root = tmp_path / "proj"
+        init_mod.run(str(root), "init")
+        legacy = root / "openspec" / "workflow" / "tools" / "legacy-removed-upstream.txt"
+        legacy.write_text("stale\n", encoding="utf-8")
+        assert legacy.exists()
+        init_mod.run(str(root), "update")
+        assert not legacy.exists()
+
+
+class TestRunFsErrorGuard:
+    """B1-F2：run() 主体 FS 操作异常须走 _die 惯例，不裸抛 traceback。"""
+
+    def test_readonly_root_dies_with_fs_error(self, tmp_path, monkeypatch, capsys):
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            pytest.skip("running as root — permission bits don't block writes")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        root = tmp_path / "proj"
+        root.mkdir()
+        root.chmod(0o500)
+        try:
+            with pytest.raises(SystemExit):
+                init_mod.run(str(root), "init")
+            err = capsys.readouterr().err
+            assert "文件系统操作失败" in err
+        finally:
+            root.chmod(0o700)

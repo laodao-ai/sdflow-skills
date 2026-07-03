@@ -14,14 +14,20 @@ EXPLAIN=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --root)    [ $# -ge 2 ] || { echo "resolve-workflow: --root requires a value" >&2; exit 64; }; ROOT="$2"; shift 2 ;;
+    --root)    [ $# -ge 2 ] || { echo "resolve-workflow: --root requires a value" >&2; exit 64; }
+               case "$2" in -*) echo "resolve-workflow: --root requires a value" >&2; exit 64;; esac
+               ROOT="$2"; shift 2 ;;
     --explain) EXPLAIN=1; shift ;;
     *) echo "resolve-workflow: unknown arg: $1" >&2; exit 64 ;;
   esac
 done
 
 if [ -z "$ROOT" ]; then
-  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd 2>/dev/null || true)"
+  if [ -z "$ROOT" ]; then
+    echo "resolve-workflow: ✗ 无法确定仓根（cwd 可能已被删除），请用 --root 显式指定" >&2
+    exit 64
+  fi
 fi
 
 explain() {
@@ -46,14 +52,24 @@ fi
 
 # 步2：全局 canonical——试目录（Unix 软链透明命中）→ 否则读指针文件（Windows）。平台判断在此，skill 不判平台。
 CANON=""
-if [ -d "$SDFLOW_HOME/workflow" ]; then
-  CANON="$SDFLOW_HOME/workflow"
-elif [ -f "$SDFLOW_HOME/workflow-path" ]; then
-  CANON="$( (head -n1 "$SDFLOW_HOME/workflow-path" | tr -d '\r' | sed -e 's/[[:space:]]*$//') 2>/dev/null || true)"
-fi
+case "$SDFLOW_HOME" in
+  /*)
+    if [ -d "$SDFLOW_HOME/workflow" ]; then
+      CANON="$SDFLOW_HOME/workflow"
+    elif [ -f "$SDFLOW_HOME/workflow-path" ]; then
+      # 读失败(权限/不存在)→CANON 空→sane 判失败→步3显式降级
+      CANON="$( (head -n1 "$SDFLOW_HOME/workflow-path" | tr -d '\r' | sed -e 's/[[:space:]]*$//') 2>/dev/null || true)"
+    fi
+    ;;
+  *)
+    echo "resolve-workflow: ⚠ SDFLOW_HOME 非绝对路径（${SDFLOW_HOME}），忽略全局 canonical" >&2
+    ;;
+esac
 
-sane() {  # 最小健全性检查：防 pull 半坏态静默广播（spec-review D2）
-  [ -n "$1" ] && [ -s "$1/workflow.md" ] && [ -d "$1/spec-checklists" ] && [ -d "$1/code-checklists" ]
+sane() {  # 最小健全性检查：防 pull 半坏态静默广播（spec-review D2）；两个清单目录须非空（CR-F1）
+  [ -n "$1" ] && [ -s "$1/workflow.md" ] \
+    && [ -d "$1/spec-checklists" ] && [ -n "$(ls -A "$1/spec-checklists" 2>/dev/null)" ] \
+    && [ -d "$1/code-checklists" ] && [ -n "$(ls -A "$1/code-checklists" 2>/dev/null)" ]
 }
 
 if sane "$CANON"; then

@@ -304,3 +304,16 @@ resolve-workflow: source=local-pin path=./openspec/workflow
 ```
 
 Codex CLI（`codex-cli 0.142.5`，`/opt/homebrew/bin/codex`）成功调用 `resolve-workflow.sh`，输出含 `source=local-pin`，与 Expected 一致——**A1-P5 沙盒拒绝假设未命中**，本机 Codex 沙盒放行了对开发 checkout（本仓）及 `$HOME/.sdflow` 的读取；未触发降级记录分支，故本任务未追加 todolist 条目。
+
+## impl-review 第零步：经评审 skill 真实触发 resolver（tasks 5.7 半句证据，2026-07-03 16:0x）
+
+```
+$ [ -x ~/.sdflow/hack/resolve-workflow.sh ] && echo RESOLVER_EXECUTABLE=yes
+RESOLVER_EXECUTABLE=yes
+$ RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)" --explain)
+exit_code=0
+stdout: /Users/cheneyzhao/Documents/04-sdflow-skills/openspec/workflow
+stderr: resolve-workflow: source=local-pin path=/Users/cheneyzhao/Documents/04-sdflow-skills/openspec/workflow
+```
+
+> 调用方 = /impl-review SKILL.md 第零步（更新后的读点协议），非直接 bash 取证——闭合 subagent-dev 终审 Important#1。
