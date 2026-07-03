@@ -109,7 +109,7 @@ cleanup_orphans() {
 # canonical 只接管自属软链/指针（对齐 skills 的所有权守卫）；~/.sdflow 其余视为本工具独占命名空间。
 install_sdflow() {
   local sdflow="${SDFLOW_HOME:-$HOME/.sdflow}"
-  local bundle="$REPO_DIR/opsx-project-init/assets/workflow"
+  local bundle="$REPO_DIR/sdflow-init/assets/workflow"
   mkdir -p "$sdflow/hack"
 
   if [ "$IS_WINDOWS" -eq 1 ]; then
@@ -133,7 +133,7 @@ install_sdflow() {
   fi
 
   local f base
-  for f in "$REPO_DIR/opsx-project-init/assets/hack/"*.sh; do
+  for f in "$REPO_DIR/sdflow-init/assets/hack/"*.sh; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"
     cp "$f" "$sdflow/hack/$base"

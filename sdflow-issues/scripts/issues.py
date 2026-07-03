@@ -54,15 +54,15 @@ import tempfile
 
 # ── 兄弟脚本定位 ─────────────────────────────────────────────────────────────
 # 按本脚本自身的文件位置（不是 --root / 目标项目根）定位 buglist.py/todolist.py：
-# setup.sh 把仓库里的每个顶层 skill 目录（buglist-recorder / todolist-recorder /
-# issues-recorder ...）各自绝对 symlink 到 ~/.claude/skills/、~/.codex/skills/ 下，
-# 三者在安装后仍是同级 sibling 目录，因此“issues-recorder/scripts 的上两级”这个
+# setup.sh 把仓库里的每个顶层 skill 目录（sdflow-buglist / sdflow-todolist /
+# sdflow-issues ...）各自绝对 symlink 到 ~/.claude/skills/、~/.codex/skills/ 下，
+# 三者在安装后仍是同级 sibling 目录，因此“sdflow-issues/scripts 的上两级”这个
 # 相对关系在源码仓库和安装后的位置都成立。--root 是完全独立的另一个概念：它是
 # *目标项目*（存 openspec/issues/... 的仓库）的根，两者不可混淆、不可互相替代。
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SKILLS_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-BUGLIST_SCRIPT = os.path.join(SKILLS_ROOT, "buglist-recorder", "scripts", "buglist.py")
-TODOLIST_SCRIPT = os.path.join(SKILLS_ROOT, "todolist-recorder", "scripts", "todolist.py")
+BUGLIST_SCRIPT = os.path.join(SKILLS_ROOT, "sdflow-buglist", "scripts", "buglist.py")
+TODOLIST_SCRIPT = os.path.join(SKILLS_ROOT, "sdflow-todolist", "scripts", "todolist.py")
 
 
 def atomic_write(path, text):

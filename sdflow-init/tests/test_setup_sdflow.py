@@ -22,7 +22,7 @@ class TestInstallSdflow:
         assert r.returncode == 0
         link = sdflow / "workflow"
         assert link.is_symlink()
-        assert link.resolve() == (REPO / "opsx-project-init" / "assets" / "workflow").resolve()
+        assert link.resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()
         for name in ("checkpoint-commit.sh", "resolve-workflow.sh"):
             f = sdflow / "hack" / name
             assert f.is_file() and not f.is_symlink()      # 拷贝，非软链
@@ -56,7 +56,7 @@ class TestInstallSdflow:
         assert "接管：" in (r.stdout + r.stderr)
         link = sdflow / "workflow"
         assert link.is_symlink()
-        assert link.resolve() == (REPO / "opsx-project-init" / "assets" / "workflow").resolve()
+        assert link.resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()
 
 
 class TestCleanupOrphansDangling:
