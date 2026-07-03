@@ -23,6 +23,7 @@
 | T15 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
 | T16 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 代码质量 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
 | T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | OPEN | 2026-07-03 16:01 | minimize-repo-footprint |  |
+| T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | OPEN | 2026-07-03 16:18 | minimize-repo-footprint |  |
 
 ---
 
@@ -163,3 +164,19 @@
 **关联文档**：`openspec/changes/minimize-repo-footprint/design.md`
 
 **动机**：task 1.2 声明「同 1.1 所有权检查」但实现无条件覆盖写；异物真实目录占位时 set -e 无文案中断（终审 Important#2 降债：Unix 不受影响、Windows 场景罕见）
+
+---
+
+## T18: skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `setup.sh install_into` |
+| 类型 | 可观测性 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/minimize-repo-footprint/design.md`
+
+**动机**：多 checkout 场景 skills 链被静默改指（对抗镜 B2-F1 后半）；历史行为、迁移依赖，仅缺可见性
+
+**思路**：install_into 在替换目标不同的既有软链时输出一行 接管：旧→新（同 install_sdflow 已修样式）

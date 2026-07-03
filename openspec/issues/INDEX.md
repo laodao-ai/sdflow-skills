@@ -28,6 +28,7 @@
 | T15 | todo | OPEN | minimize-repo-footprint |
 | T16 | todo | OPEN | minimize-repo-footprint |
 | T17 | todo | OPEN | minimize-repo-footprint |
+| T18 | todo | OPEN | minimize-repo-footprint |
 | T6 | todo | OPEN | minimize-repo-footprint |
 | T7 | todo | OPEN | minimize-repo-footprint |
 | T8 | todo | OPEN | minimize-repo-footprint |
