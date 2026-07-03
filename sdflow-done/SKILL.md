@@ -74,6 +74,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 5. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
    - 标题 + 日期 + change 名
    - **结论**：PASS / FAIL
+   - **结论行下方紧跟机器锚行（ship-gate 契约，模板写死二选一）**：`<!-- ship-gate: verify=PASS -->` 或 `<!-- ship-gate: verify=FAIL -->`——/sdflow-ship 以字面查找机判，勿改写措辞、勿两行并存
    - **逐需求核对表**：| 需求/任务 | 代码出处(文件:行/迁移/测试) | 状态(✅实现/⚠️Minor缺口/❌核心缺失) |
    - **缺口清单**：核心缺口（FAIL 项）+ Minor 缺口（注明可接受/deferred）
    - 此文件会随第三步归档一起进 `openspec/changes/archive/`，作为本 change 的验证留档

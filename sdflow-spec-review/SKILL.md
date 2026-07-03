@@ -84,6 +84,11 @@ description: >
 - 写 `{change_dir}/spec-review-report.md`：**决策登记区**（自动决策 / 需拍板 / 已裁掉）+ 各镜 findings（带置信/严重度，低置信项一行带过、可审计不静默丢）+ 裁决。
 - 据此更新 design/specs，改动处标 `[spec-review-amendment]`。
 - **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
+- **拍板回写协议（ship-gate 锚，D2）**：设计门拍板**发生后**，主 session MUST 立即把下行锚原样写入 `spec-review-report.md`（拍板记录区末尾）——写入者=主 session、触发点=用户批准动作；这是 `/sdflow-ship` pre-flight 的唯一机判依据：
+
+  `<!-- ship-gate: design-approved -->`
+
+  gate exit 3 时若拍板已发生，人工补此锚行 = 显式越权留痕（人机同权）。
 
 ---
 

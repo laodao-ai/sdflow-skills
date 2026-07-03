@@ -120,6 +120,10 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(附理由)；defer K 项 → buglist/todolist
 ### 结论
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
+
+  结论区末行为机器锚行（ship-gate 契约，二选一）：
+  <!-- ship-gate: code-review=pass -->   （建议进 /sdflow-done）
+  <!-- ship-gate: code-review=blocked --> （存在未解 blocker）
 ```
 
 ## 模型选择（按本步性质，逐步定）
