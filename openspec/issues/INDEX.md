@@ -20,7 +20,12 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
+| T10 | todo | OPEN | minimize-repo-footprint |
+| T11 | todo | OPEN | minimize-repo-footprint |
 | T6 | todo | OPEN | minimize-repo-footprint |
+| T7 | todo | OPEN | minimize-repo-footprint |
+| T8 | todo | OPEN | minimize-repo-footprint |
+| T9 | todo | OPEN | minimize-repo-footprint |
 
 ## 已闭合（终态）摘要
 

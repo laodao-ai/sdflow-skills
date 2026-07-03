@@ -2,6 +2,7 @@
 
 > 决策真相源 = [`adr/0003`](../../adr/0003-deploy-footprint-global-rules-minimal-repo-copy.md)（分层 + explore 骨架 + **grill-amendment 2026-07-03**）+ [`adr/0005`](../../adr/0005-dev-runtime-checkout-split.md)（dev/runtime checkout 分离）。术语见 [CONTEXT.md](../../CONTEXT.md)（**反静默守卫** 已扩到 bundle 解析 + 陈旧遮蔽；**开发/运行 checkout**）。
 > 本文经一轮逐决策 grill 收敛（2026-07-03），下列 §四/§五/§六/§七 的 〔grill-amendment〕 标记处为本轮修正。
+> 另经一轮执行模型基线重审（explore 2026-07-03，[`adr/0006`](../../adr/0006-execution-model-baseline-fleet-anchored.md) 机队锚定）：〔model-baseline-amendment〕 标记处 = resolver 从 prose 协议改**全局脚本**执行。
 
 ## 一、依赖与前置
 
@@ -22,7 +23,8 @@
 
 ## 三、解析 resolver（决策图，TG-12）
 
-skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规则的统一顺序，一条链覆盖两类仓：
+skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规则的统一顺序，一条链覆盖两类仓。
+〔model-baseline-amendment / `adr/0006`〕**执行主体 = 全局脚本 `~/.sdflow/hack/resolve-workflow.sh`，非 SKILL.md prose 协议**——下图三步链由脚本确定性执行（stdout = 规则根路径；全局缺失 → 非零退出 + stderr 固定告警文案），SKILL.md 只写"跑脚本、用输出路径；非零退出 → 显式降级 + 转发脚本告警文案"：
 
 ```
               skill 要读某规则文件（如 workflow.md / spec-checklists/…）
@@ -55,8 +57,9 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
 
 - **步1 查规则文件、不查目录**〔grill-amendment〕：`tools/`（≈5 文件）因"服务器根=openspec/"必须留在每个消费仓 `openspec/workflow/tools/`，故 `openspec/workflow/` 目录处处存在。查目录→恒真→每个消费仓误命中 pin。查**规则文件本体**才把"有 tools/ 无规则"的消费仓正确落到步2。
 - **步1 正牌用户 = 开发 checkout**〔grill-amendment / adr/0005〕：开发 checkout 有本地 `openspec/workflow`（WIP）→ 命中步1 → dogfood 自己未发布编辑；消费仓显式 pin 也走此步。**无需 config flag 声明"我是源仓"**——本地规则副本的存在即声明。
-- **步2 平台回落链**〔grill-amendment〕：Unix 命中软链目录（透明）、Windows 命中指针文件；skill 不判平台。
-- **步3 = 反静默守卫**〔grill-amendment / CONTEXT〕：全局也缺 → 显式降级 + 告警，绝不静默当"无此层"。
+- **步2 平台回落链**〔grill-amendment〕：Unix 命中软链目录（透明）、Windows 命中指针文件；skill 不判平台（**判平台的是脚本**）。
+- **步3 = 反静默守卫**〔grill-amendment / CONTEXT〕：全局也缺 → 显式降级 + 告警，绝不静默当"无此层"。调用方 skill MUST NOT 静默吞脚本的非零退出码。
+- **为何脚本化**〔model-baseline-amendment / `adr/0006`〕：执行机队 = opus / sonnet / gpt-5.5（机队锚定，非开发时模型）。弱一档模型执行三步 prose 协议的典型失效 = 静默跳步（跳过本地直读全局、或全局缺时静默降级）——恰是反静默守卫要防的形态。脚本化后跨模型行为一致，且 resolver 分支测试从"模型行为测试"变普通脚本单测。这也是本仓「机械活交脚本、模型只做判断」哲学的应用。
 
 ## 四、部署拓扑（组件/依赖图，TG-14）
 
@@ -72,7 +75,7 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
   │        └──[copy_bundle 只部署 tools/ 子树]──┐
   ├── ~/.sdflow/  ← setup 建的 agent 中立全局家：
   │     ├── workflow  ─软链(Unix)→ 上面 assets/workflow   /   workflow-path 指针(Windows)
-  │     └── hack/checkpoint-commit.sh  ← 拷贝(两平台, exec 位一次设好)
+  │     └── hack/{checkpoint-commit.sh, resolve-workflow.sh}  ← 拷贝(两平台, exec 位一次设好)
   └── (openspec/ 在此惰性存在, 不 run workflow on 自己  〔adr/0005〕)
 
   开发 checkout（独立目录 clone）
@@ -104,9 +107,10 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读规�
 | `opsx-project-init/assets/workflow/` | bundle 唯一权威源 | **不提根**〔grill-amendment〕；`copy_bundle` 改为只部署 `tools/` |
 | `~/.sdflow/workflow`（软链）/ `workflow-path`（指针） | canonical 解析位 | `setup.sh` 建：Unix 软链 / Windows 指针，锚运行 checkout〔grill-amendment〕 |
 | `~/.sdflow/hack/checkpoint-commit.sh` | 过场提交工具（全局） | 从消费仓 `hack/` 移此；拷贝、两平台、exec 位根治〔grill-amendment〕 |
+| `~/.sdflow/hack/resolve-workflow.sh` | **resolver 执行主体**（全局脚本） | 新增：确定性实现 §三 三步链（stdout=规则根路径 / 非零退出+告警文案）；随 setup 装，同 checkpoint〔model-baseline-amendment / adr/0006〕 |
 | `opsx-project-init/scripts/init.py` | 部署器 | `copy_bundle` 去规则（只 tools/）；`copy_hack` 改为不进消费仓（全局装） |
 | `setup.sh` | 安装器 | 加建 canonical 软链/指针 + 装 checkpoint 到 `~/.sdflow/hack/` |
-| 各 skill SKILL.md 规则读点 | 规则消费者 | 改按 §三 resolver（步2 走 canonical 回落链） |
+| 各 skill SKILL.md 规则读点 | 规则消费者 | 改为**调用 resolve-workflow.sh 用其输出路径**（不在指令内自行执行三步链）〔model-baseline-amendment〕 |
 | `workflow.md` line62 `[checkpoint]` 约定 | 调用点单一源 | 路径改指 `~/.sdflow/hack/checkpoint-commit.sh`〔grill-amendment〕 |
 | `opsx-project-init update` 迁移路径 | 存量仓迁移 | 停复制规则 + 陈旧遮蔽告警（不自动删） |
 

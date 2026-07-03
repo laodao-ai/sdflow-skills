@@ -4,6 +4,7 @@
 > 全部未勾（explore/propose + 一轮 grill 收敛，实现在阶段三）。
 > 需求 ID 见 [specs/spec-workflow/spec.md](./specs/spec-workflow/spec.md)：**R-MRF-1** 分层部署 · **R-MRF-2** resolver · **R-MRF-3** 迁移。
 > grill 2026-07-03 后：**撤销"提根"**、canonical 改软链(Unix)/指针(Windows)、checkpoint 归 `~/.sdflow/hack/`。Codex-hook 空档已单记 todolist（超本 change 范围）。
+> model-baseline 重审（explore 2026-07-03，`adr/0006`）后：**resolver 脚本化**——三步链由 `~/.sdflow/hack/resolve-workflow.sh` 确定性执行，SKILL.md 只调用（§3 已按此改写）。
 
 ## 1. canonical 全局位（不提根）〔R-MRF-1，grill-amendment〕
 
@@ -20,13 +21,13 @@
 - [ ] 2.3 `workflow.md` line62 `[checkpoint]` 单点约定改指 `~/.sdflow/hack/checkpoint-commit.sh`（步骤表简写不含硬路径，只改此一处）〔R-MRF-1，grill-amendment〕
 - [ ] 2.4 `serve.sh` / 根 `review.html` 复制逻辑保持（tools 最小副本模型不变）〔R-MRF-1〕
 
-## 3. 规则解析 resolver（R-MRF-2）
+## 3. 规则解析 resolver（R-MRF-2）〔model-baseline-amendment / adr/0006：resolver = 全局脚本，非 SKILL.md prose 协议〕
 
-- [ ] 3.1 定义 resolver 三步链 + 步2 平台回落链的**共享约定**（写进各 skill SKILL.md 引用的公共段 / 一句话协议）〔R-MRF-2〕
-- [ ] 3.2 各 skill 规则读点改按 resolver 解析——**先扫全读点清单**（spec-review/impl-review 已知；opsx-done/recorders/opsx-ship 逐个扫，见 proposal 开放问题3）〔R-MRF-2〕
-- [ ] 3.3 步1 判据 = 查**规则文件本体**（`workflow.md`/`spec-checklists/`/`code-checklists/`），**不查** `openspec/workflow/` 目录（tools/ 使目录恒存在）〔R-MRF-2〕
-- [ ] 3.4 步2 = "试 `~/.sdflow/workflow/` 目录 → 否则读 `~/.sdflow/workflow-path`"回落链（平台无关）〔R-MRF-2〕
-- [ ] 3.5 步3 显式降级 = **反静默守卫**：全局缺 → 通用评审 + 告警，不静默当"无此层"（措辞对齐 CONTEXT 术语）〔R-MRF-2〕
+> 机队锚定：执行模型 = opus/sonnet/gpt-5.5。三步链交模型逐条照做会静默跳步，故确定性脚本化，skill 只调用。
+
+- [ ] 3.1 新增 `resolve-workflow.sh`：确定性实现三步链——①查仓内**规则文件本体**（`workflow.md`/`spec-checklists/`/`code-checklists/`，**不查** `openspec/workflow/` 目录，tools/ 使其恒存在）→ ②canonical 回落链（试 `~/.sdflow/workflow/` 目录 → 否则读 `~/.sdflow/workflow-path` 指针；平台判断在脚本内）→ ③全局也缺 = **非零退出 + stderr 固定告警文案**（反静默守卫措辞）。stdout = 规则根路径。随 `setup.sh` 装到 `~/.sdflow/hack/`（同 checkpoint，exec 位一次设好）〔R-MRF-2〕
+- [ ] 3.2 各 skill 规则读点改为**调用脚本、用其 stdout 路径**——先扫全读点清单（spec-review/impl-review 已知；opsx-done/recorders/opsx-ship 逐个扫，见 proposal 开放问题3）；SKILL.md 统一一句话："跑 `~/.sdflow/hack/resolve-workflow.sh`，用输出路径读规则；非零退出 → 显式降级通用评审 + 转发脚本告警文案"〔R-MRF-2〕
+- [ ] 3.3 调用方守卫：skill MUST NOT 静默吞脚本非零退出码、MUST NOT 在指令内自行重实现三步链（防 prose 协议回潮）〔R-MRF-2〕
 
 ## 4. 迁移：opt-in 删 + 陈旧遮蔽告警（R-MRF-3）
 
@@ -37,7 +38,7 @@
 
 - [ ] 5.1 写 dev/runtime checkout 纪律段（`adr/0005`）：开发 checkout local-first dogfood 规则；改 skill 需 setup-from-dev；setup 只在运行 checkout 跑〔R-MRF-2〕
 - [ ] 5.2 `opsx-project-init/tests/` 跟部署模型改：init 后消费仓 `openspec/workflow/` 只含 tools/、规则数=0；checkpoint 不再进消费仓 hack/〔R-MRF-1〕
-- [ ] 5.3 resolver 分支测试：本地命中 / 全局软链命中 / 全局指针命中 / 全局缺降级告警〔R-MRF-2〕
+- [ ] 5.3 resolver **脚本单测**（从"模型行为测试"变普通单测，可测性提升〔adr/0006〕）：本地命中 / 全局软链命中 / 全局指针命中 / 全局缺 = 非零退出 + 告警文案断言〔R-MRF-2〕
 - [ ] 5.4 迁移测试：残留旧规则触发告警、不被删；留旧副本仍 local-first 命中〔R-MRF-3〕
 - [ ] 5.5 更新 `INDEX.md` / `CLAUDE.md` 托管区块措辞（若涉及规则落点描述）；ROADMAP 状态推进〔R-MRF-1〕
 

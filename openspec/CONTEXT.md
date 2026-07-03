@@ -72,9 +72,14 @@ _Avoid_: 笼统说"工作流已连续"（要分清是"无强制中断"还是"无
 laodao-skills 的两个物理副本，把"改规则的人"与"用规则的人"隔开。**开发 checkout**（独立目录的 clone）= 编辑 skill/bundle、跑 workflow dogfood 自己的地方；它留本地规则副本，解析时 local-first 命中、吃自己**尚未发布**的编辑。**运行 checkout**（`~/.skills/laodao-skills`）= 只 `git pull` 已完成的 skill 并 `setup` 安装、充当全局 canonical 解析锚点的地方；只含**已发布**内容，自己不 run workflow on 自己。发布边界 = push（开发）→ pull（运行），不靠 resolver 逻辑绕、靠 checkout 边界物理隔。
 _Avoid_: 把两者当"同一目录的两种模式"（是两个物理 clone）；把 dev/release 隔离归给 resolver（隔离来自 checkout 边界；resolver 只是让开发 checkout 能 local-first dogfood）
 
+**机队锚定 (Fleet-anchored Model Baseline)**:
+workflow 的能力目标按**实际执行机队**（opus / sonnet / gpt-5.5 等多家族混编）的最弱可靠档设定，**不按开发 workflow 时恰好在用的更强模型**。两条派生：①规则文件里"强/弱模型"一律是**相对机队的档位词**（强档跑 verify / 对抗裁决 / final 终审；中档跑领域镜 / 生成；弱档只跑纯机械步），"档位→模型"映射在消费仓 `config.yaml`；②凡机械 prose 协议（路径解析、回落链、步末固定动作）MUST 脚本化 / 结构化——弱档模型跑 prose 协议的典型失效 = **静默跳步**，与反静默守卫正面冲突且无痕迹。见 `adr/0006`。
+_Avoid_: 用"强模型"指某个具体产品名（档位相对机队，机队会换血）；把脚本化当可选优化（在本工作流是硬约束，是「机械活交脚本、模型只做判断」的升格）
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。
 - 「✅」在评审/verify 语境下曾被无条件信任——现约束为**必附证据锚点**方成立，否则是假✅。
 - 「镜」单字曾可能被误读成「镜子/mirror」——已钉死为「镜头/**review lens**」（聚焦单一角度的独立 reviewer 子代理），非映照。
 - 「连续」曾笼统指"自动化程度高"——已分 **设计层连续（无强制中断）** vs **编排层连续（无手动逐步触发）**，前者早达成、后者靠 `opsx-ship`（见 `adr/0004-opsx-ship-stage3-orchestrator.md`）。
+- 「强模型」曾隐含"开发 workflow 时所用的最强模型"——已钉为**相对执行机队的档位词**（机队锚定，见 `adr/0006`）；`adr/0001` 的"verify 用强模型、禁弱模型"按此重释 = 机队最强档（opus / gpt-5.5 级），sonnet 属中档不合格。

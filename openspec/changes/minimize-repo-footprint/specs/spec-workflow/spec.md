@@ -1,7 +1,7 @@
 # spec-workflow Specification (delta)
 
 > 本 delta = `minimize-repo-footprint`，把 `spec-workflow` 既有的**部署下发**规范从「整 bundle 复制进消费仓」改为「按内容性质分层 + 规则全局解析」。
-> 决策真相源 = [`adr/0003`](../../../adr/0003-deploy-footprint-global-rules-minimal-repo-copy.md)（分层 + explore 2026-07-03「落地设计骨架」节）+ 本 change [design.md](../../design.md)。
+> 决策真相源 = [`adr/0003`](../../../adr/0003-deploy-footprint-global-rules-minimal-repo-copy.md)（分层 + explore 2026-07-03「落地设计骨架」节）+ [`adr/0006`](../../../adr/0006-execution-model-baseline-fleet-anchored.md)（机队锚定 → resolver 脚本化）+ 本 change [design.md](../../design.md)。
 > **MODIFIED** 复述既有「workflow bundle 改在权威源、经部署下发」的**完整新版**（"改在权威源"不变，"消费仓全量副本"改为"分层 + resolver 解析"）。
 
 ## MODIFIED Requirements
@@ -31,6 +31,8 @@ workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / 
 
 skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读取 workflow 规则 MUST 走统一三步 resolver：① 仓内**有规则文件本体**（`workflow.md` / `spec-checklists/` / `code-checklists/`）→ 用本地；② 否则 → 全局 canonical bundle；③ 全局也缺 → **显式降级**通用评审并告警，MUST NOT 静默当"无此层"。步①的存在判据 MUST 查**规则文件本体**、MUST NOT 查 `openspec/workflow/` 目录（`tools/` 使该目录在每个仓恒存在，查目录会令每个消费仓误命中本地 pin）。步②的 canonical 解析 MUST 平台无关回落：先试 `~/.sdflow/workflow/`（Unix 软链目录，透明），否则读 `~/.sdflow/workflow-path`（Windows 指针文件）取 bundle 路径。步③的"显式降级 + 告警"即 CONTEXT 术语『反静默守卫』的缺失面（见 `adr/0003`）。
 
+〔model-baseline-amendment / `adr/0006`〕上述三步链 MUST 由确定性脚本 **`~/.sdflow/hack/resolve-workflow.sh`** 实现（stdout = 规则根路径；全局缺失 → 非零退出 + stderr 固定告警文案）。skills MUST 通过调用该脚本解析规则路径，MUST NOT 把三步链作为指令文本交由执行模型逐步照做（执行机队 = opus/sonnet/gpt-5.5 机队锚定，prose 协议在弱档模型上的失效形态 = 静默跳步）；调用方 MUST NOT 静默吞脚本非零退出码。
+
 #### Scenario: 消费仓无本地规则副本走全局
 - **WHEN** 一个消费仓 `openspec/workflow/` 只有 `tools/`、无规则文件，skill 要读 workflow.md
 - **THEN** resolver 步① 未命中（有 tools/ 目录但无规则文件）→ 落步② 从全局 canonical bundle 解析，跟随 released HEAD
@@ -45,7 +47,11 @@ skills（spec-review / impl-review / opsx-done / recorders / opsx-ship）读取 
 
 #### Scenario: canonical 解析平台回落
 - **WHEN** skill 在 Windows 上解析全局 bundle（平台无软链）
-- **THEN** 先试 `~/.sdflow/workflow/` 目录未果 → 回落读 `~/.sdflow/workflow-path` 指针取 bundle 路径；Unix 上则 `~/.sdflow/workflow/` 软链目录直接命中（透明）
+- **THEN** 先试 `~/.sdflow/workflow/` 目录未果 → 回落读 `~/.sdflow/workflow-path` 指针取 bundle 路径；Unix 上则 `~/.sdflow/workflow/` 软链目录直接命中（透明）；平台判断发生在 `resolve-workflow.sh` 内，skill 不判平台
+
+#### Scenario: resolver 由脚本执行而非模型 prose
+- **WHEN** 任一 skill 在任一执行模型（opus / sonnet / gpt-5.5 等）上需要解析规则路径
+- **THEN** 它调用 `~/.sdflow/hack/resolve-workflow.sh` 并使用其 stdout 路径；脚本非零退出时 skill 显式降级并转发脚本告警文案，不自行在指令内重实现三步链
 
 ### Requirement: 存量消费仓迁移不自动删、陈旧遮蔽须告警
 

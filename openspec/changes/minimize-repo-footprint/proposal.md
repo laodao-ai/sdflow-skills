@@ -18,7 +18,7 @@
 | hack | `checkpoint-commit.sh`（1） | 复制进仓 hack/ | **0**（全局，同两个全局 hook） |
 | 本体 | `config.yaml` / `changes/` / `specs/` | 仓内 | 仓内（天然属仓） |
 
-- **解析 resolver**：skills 读规则改为「仓内有规则文件 → 用本地；否则 → 全局 canonical bundle；全局也缺 → 显式降级 + 告警」（三步链，见 design）。
+- **解析 resolver**：skills 读规则改为「仓内有规则文件 → 用本地；否则 → 全局 canonical bundle；全局也缺 → 显式降级 + 告警」（三步链，见 design）。〔model-baseline-amendment / `adr/0006`〕三步链由**全局脚本 `~/.sdflow/hack/resolve-workflow.sh` 确定性执行**，SKILL.md 只调用——不写成模型逐步照做的 prose 协议（执行机队 = opus/sonnet/gpt-5.5，prose 协议在弱档模型上静默跳步）。
 - **全局钉法**〔grill-amendment〕：**不提根**——bundle 留 `opsx-project-init/assets/`；`setup.sh` 建 canonical（Unix 软链 `~/.sdflow/workflow` / Windows 指针 `~/.sdflow/workflow-path`）藏住 assets/ 布局，skills 走"试目录→否则读指针"回落链解析，锚点 = 运行 checkout（`adr/0005`）。
 - **checkpoint 全局化**〔grill-amendment〕：`checkpoint-commit.sh` 移到 agent 中立的 canonical 根 `~/.sdflow/hack/`（**非** `~/.claude/hooks`——它是跨-agent bash 工具、不是 Claude 事件 hook），顺带根治 `core.fileMode=false` exec 位丢失。
 - **迁移**：`update` 停止复制规则、检测残留旧规则则**告警**（删=跟全局 / 留=pin），**绝不自动删**。
@@ -41,7 +41,7 @@
 
 ## Impact
 
-- **代码**：`opsx-project-init/scripts/init.py`（`copy_bundle` 去规则、`copy_hack` 改全局装）、`setup.sh`（建 canonical 软链/指针 + 装 checkpoint 到 `~/.sdflow/hack/`）、各 skill SKILL.md 的规则读点（改 resolver 解析）、`workflow.md` line62 checkpoint 约定改指全局。〔grill-amendment：不提根，bundle 留 `assets/`〕
+- **代码**：`opsx-project-init/scripts/init.py`（`copy_bundle` 去规则、`copy_hack` 改全局装）、`setup.sh`（建 canonical 软链/指针 + 装 checkpoint 与 **resolve-workflow.sh** 到 `~/.sdflow/hack/`）、新增 `resolve-workflow.sh`（resolver 执行主体〔adr/0006〕）、各 skill SKILL.md 的规则读点（改**调 resolver 脚本**）、`workflow.md` line62 checkpoint 约定改指全局。〔grill-amendment:不提根，bundle 留 `assets/`〕
 - **spec**：MODIFY 既有「workflow bundle 改在权威源、经部署下发」（下发模型变）；ADD「规则全局解析 resolver」。
 - **测试**：`opsx-project-init/tests/`（init/checkpoint/hook 现有测试须跟部署模型改）。
 - **已知代价**：消费仓失去按仓 pin 规则（跟全局 HEAD，规则一改即刻影响所有仓）——ADR 已拍板接受。
