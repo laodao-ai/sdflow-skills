@@ -68,11 +68,11 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
 
-| 镜 | 数量 | 干什么 | 建议 model |
+| 镜 | 数量 | 干什么 | 建议档位 |
 |----|------|--------|-----------|
-| **领域镜** | 每命中领域 1 个 | 读 `DIFF_BASE..HEAD` diff + 相关真实代码，逐条过 `code-review-base.md` CR-01~09 + `domains/<栈>` CR-* 项，列违反/存疑项（带 `file:line`） | Sonnet（判断） |
-| **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | Sonnet（对抗推理） |
-| **历史镜** | 1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | Haiku（机械） |
+| **领域镜** | 每命中领域 1 个 | 读 `DIFF_BASE..HEAD` diff + 相关真实代码，逐条过 `code-review-base.md` CR-01~09 + `domains/<栈>` CR-* 项，列违反/存疑项（带 `file:line`） | 中档（判断） |
+| **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | 中档（对抗推理） |
+| **历史镜** | 1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） |
 
 > 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回结构化 findings（每条带：
 > 问题 / CR 编号 / 证据 `file:line` / 严重度 / 建议），**不要 AskUserQuestion**"。
@@ -83,7 +83,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强模型）
 
 1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）。
-2. **置信过滤**（借官方 code-review rubric，可下放 Haiku 子代理逐条打分）：每条打 0–100，**滤掉 <80**。
+2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
    明确滤除：CI 能抓的 / 纯 nitpick / 未改动行的既有问题 / 仅主观风格 / 已被注释显式抑制的。
 3. **对抗裁决**：对每条存活 finding 判"是否真的运行期出问题"——对抗镜反驳 ≥ 多数成立则采信。
 4. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
@@ -129,14 +129,16 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 ## 模型选择（按本步性质，逐步定）
 
+档位与缺省见规则根 `model-tiers.md`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可覆盖映射）。
+
 ```
-  主 session（裁决 / 自动裁 / 出报告）        强模型(Opus/Sonnet) ← 这是门禁,弱模型=假绿
-  领域镜 / 对抗镜（判断、对抗推理）           Sonnet
-  历史镜 / 置信过滤（git blame/打分，机械）   Haiku
+  主 session（裁决 / 自动裁 / 出报告）        强档 ← 这是门禁,弱档=假绿
+  领域镜 / 对抗镜（判断、对抗推理）           中档
+  历史镜 / 置信过滤（git blame/打分，机械）   弱档
 ```
 
-依据：评审是门禁，综合判断这层弱模型会"看着过其实没深究"；机械读 blame/打分可下放便宜模型。
-**不要**把综合判断委派给弱模型子代理。阶段三无人类门（不 AskUserQuestion，自动修/裁/defer）。
+依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读 blame/打分可下放弱档。
+**不要**把综合判断委派给弱档子代理。阶段三无人类门（不 AskUserQuestion，自动修/裁/defer）。
 
 ## 与 gstack/review、官方 code-review 的分工（并入 vs 弃用）
 

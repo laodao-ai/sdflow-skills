@@ -5,8 +5,9 @@ description: >
   hand-off.md → archive (openspec CLI, with
   delta-spec sync into openspec/specs/) → git commit → merge to the repo's default branch
   BY DEFAULT (opt out by saying so at invocation). Steps are fixed + each runs in its own
-  subagent, so model choice is per-step (no coupling): verify/archive → Sonnet (gate /
-  judgment), commit → Haiku (mechanical). The archive subagent verifies each delta against
+  subagent, so model choice is per-step (no coupling): verify/archive → the mid tier (gate /
+  judgment), commit → the light tier (mechanical); tier-to-model defaults are centralized in
+  model-tiers.md. The archive subagent verifies each delta against
   actual code so the synced spec reflects post-review reality, not a stale delta; merge
   runs by default (ff) in the main session unless opted out (one-way git kept visible).
   verify writes verify-report.md (every ✅ needs a machine-verifiable anchor — test name / commit /
@@ -18,9 +19,9 @@ description: >
 
 # sdflow-done — OpenSpec 变更收尾
 
-将 reconcile → verify → **hand-off** → archive → git commit → merge 串成一条收尾流水线。各步独立子代理、按本步性质选 model（见「模型选择」）：**verify / archive → Sonnet**（门禁/判断），**commit → Haiku**（机械）；**merge** 留主 session（单向 git，缺省执行、调用时可 opt-out）。
+将 reconcile → verify → **hand-off** → archive → git commit → merge 串成一条收尾流水线。各步独立子代理、按本步性质选 model（见「模型选择」）：**verify / archive → 中档**（门禁/判断），**commit → 弱档**（机械）；**merge** 留主 session（单向 git，缺省执行、调用时可 opt-out）。
 
-> **核心改进（v3，基于实战）**：① 归档**必须**走 `openspec archive` CLI 以**同步 delta 到主 specs**（旧版手动 `mv` 漏了这步，新能力永远进不了 `openspec/specs/`），遇中文遗留 spec 用 `--skip-specs` + 手动同步；② 默认分支自动检测（勿假设 main）；③ **merge 缺省执行**（ff），不想合并就在调用时明说；④ verify 必产 `verify-report.md` 存 change 目录（随归档留档）；⑤ 步骤固定 + 各步独立子代理 → 按本步性质选 model（verify/archive=Sonnet、commit=Haiku）。
+> **核心改进（v3，基于实战）**：① 归档**必须**走 `openspec archive` CLI 以**同步 delta 到主 specs**（旧版手动 `mv` 漏了这步，新能力永远进不了 `openspec/specs/`），遇中文遗留 spec 用 `--skip-specs` + 手动同步；② 默认分支自动检测（勿假设 main）；③ **merge 缺省执行**（ff），不想合并就在调用时明说；④ verify 必产 `verify-report.md` 存 change 目录（随归档留档）；⑤ 步骤固定 + 各步独立子代理 → 按本步性质选 model（verify/archive=中档、commit=弱档）。
 
 ---
 
@@ -52,13 +53,13 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 
 ---
 
-## 第一步：Verify（Sonnet 子 agent）
+## 第一步：Verify（中档子 agent）
 
-> 用 Sonnet 而非 Haiku：verify 是**质量门**且要 grep 代码判 PASS/FAIL、辨核心 vs Minor 缺口，judgment 活，弱模型易误判 PASS 放不完整的活进归档。sdflow-done 低频，省那点 token 不值。
+> 用中档而非弱档：verify 是**质量门**且要 grep 代码判 PASS/FAIL、辨核心 vs Minor 缺口，judgment 活，弱模型易误判 PASS 放不完整的活进归档。sdflow-done 低频，省那点 token 不值。
 >
 > **P3h 禁弱模型（阶段三去人类门后 verify = 唯一终门）**：铁律"带门禁 / 无人逐条复核的步别用弱模型——假绿会放不完整的活过关"。verify 用强模型 + 下方 prompt 的 **"Do Not Trust the Report" 冷启**，靠证据锚点硬约束堵假✅，不靠人盯。见 design §7.3.1 / adr/0001。
 
-派发 Agent（model: sonnet），prompt：
+派发 Agent（model: 按规则根 model-tiers.md 中档；config.yaml model-tiers 段可覆盖），prompt：
 
 ```
 你是 OpenSpec 验证助手。工作目录：{项目根目录}。
@@ -90,7 +91,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 
 ## 第二步：产出 hand-off.md（P3g，verify 之后 / archive 之前）
 
-verify 判定完（它才权威定完整性）后、归档前，产出 `{change_dir}/hand-off.md`——**异步人类再入口 + 下个 change 种子**，随归档一起进 `archive/`。主 session 直接写（它有本 change 的 why 与 defer 上下文）或派 Sonnet 子代理。
+verify 判定完（它才权威定完整性）后、归档前，产出 `{change_dir}/hand-off.md`——**异步人类再入口 + 下个 change 种子**，随归档一起进 `archive/`。主 session 直接写（它有本 change 的 why 与 defer 上下文）或派中档子代理。
 
 **三段内容**：
 
@@ -102,7 +103,7 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
 
 ### 2.1 issues sweep 子步（先于上面「三段内容」撰写，I5/I6）
 
-verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的未分诊 OPEN 项归入一个批次——这样上面第 2 段能引批次号，而不是逐条罗列裸 ID。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了 Sonnet 子代理，由该子代理顺带执行）。
+verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的未分诊 OPEN 项归入一个批次——这样上面第 2 段能引批次号，而不是逐条罗列裸 ID。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了中档子代理，由该子代理顺带执行）。
 
 **脚本路径**：buglist.py / todolist.py / issues.py 分属 `sdflow-buglist`、`sdflow-todolist`、`sdflow-issues` 三个 sibling skill，随 sdflow-skills `setup.sh` 各自独立 symlink 到 `~/.claude/skills/`（同 tag、sdflow-init 等 skill 引用兄弟脚本的既有约定）：
 
@@ -143,13 +144,13 @@ verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的
 
 ---
 
-## 第三步：Archive + Spec 同步（Sonnet 子 agent）
+## 第三步：Archive + Spec 同步（中档子 agent）
 
-整步交一个 **Sonnet** 子 agent 执行（隔离主 session 上下文）。它**不能假设知道本次实现细节**（fresh 上下文），所以 prompt 要求它**读真实代码核对每条 delta**——这样同步出的 spec 反映**终审后实况**而非可能过时的 delta，无需控制者口头传递偏差。
+整步交一个**中档**子 agent 执行（隔离主 session 上下文）。它**不能假设知道本次实现细节**（fresh 上下文），所以 prompt 要求它**读真实代码核对每条 delta**——这样同步出的 spec 反映**终审后实况**而非可能过时的 delta，无需控制者口头传递偏差。
 
 ⚠️ 归档**必须**用 `openspec archive` CLI（同步 delta→`openspec/specs/` + INDEX + 校验），**禁手动 `mv`**（漏 spec 同步）。
 
-派发 Agent（model: sonnet），prompt：
+派发 Agent（model: 按规则根 model-tiers.md 中档；config.yaml model-tiers 段可覆盖），prompt：
 
 ```
 你是 OpenSpec 归档助手。工作目录：{项目根目录}。语言中文。
@@ -200,11 +201,11 @@ MUST 段之后或行内。
 
 ---
 
-## 第四步：Git Commit（Haiku 子 agent）
+## 第四步：Git Commit（弱档子 agent）
 
-> 用 Haiku：本步纯机械（git add + 从 diff 生成 message），独立子代理无干扰、失败也就重生成 message。verify/archive 用 sonnet 是因它们是门禁/判断步（凭本步性质，非"统一"）。详见「模型选择」。
+> 用弱档：本步纯机械（git add + 从 diff 生成 message），独立子代理无干扰、失败也就重生成 message。verify/archive 用中档是因它们是门禁/判断步（凭本步性质，非"统一"）。详见「模型选择」。
 
-派发 Agent（model: haiku），prompt：
+派发 Agent（model: 按规则根 model-tiers.md 弱档；config.yaml model-tiers 段可覆盖），prompt：
 
 ```
 你是 Git 助手。工作目录：{项目根目录}。
@@ -273,7 +274,7 @@ sdflow-done 完成
 ## 设计原则
 
 - **串行门禁**：每步失败即中止；verify FAIL（核心缺口）不归档。
-- **model 按本步性质（独立子代理无耦合）**：verify/archive=Sonnet（门禁/判断），commit=Haiku（机械）；merge 留主 session（单向 git、缺省执行）。
+- **model 按本步性质（独立子代理无耦合）**：verify/archive=中档（门禁/判断），commit=弱档（机械）；merge 留主 session（单向 git、缺省执行）。
 - **归档必同步 spec**：用 `openspec archive` CLI；它做 spec 同步 + INDEX + 校验。手动 `mv` 是错的。
 - **中文遗留 spec**：`--skip-specs` + 手动同步（匹配遗留风格、按实况写、修自己引入的 invalid）。
 - **复选框对账要诚实**：勾真实完成的，未完成的留 `[ ]` + 说明。
@@ -286,21 +287,23 @@ sdflow-done 完成
 
 ## 模型选择（按本步性质，逐步定）
 
+> 档位与缺省见规则根 `model-tiers.md`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可覆盖映射）。
+
 **关键前提**：本 skill 步骤**固定**（不是运行时动态路由），且每步**独立子代理**（各自上下文）。所以——
-- **混用 model 无干扰**：haiku-commit 与 sonnet-verify 上下文隔离，互不污染；混用没有耦合代价。
+- **混用 model 无干扰**：弱档-commit 与中档-verify 上下文隔离，互不污染；混用没有耦合代价。
 - **无运行时误分类**：「误分类风险」是**动态路由**的事（高频循环里运行时按难度挑模型才会挑错）；固定步骤在写 skill 时一次定死，不存在该风险。
 
 因此 model 就是**纯粹的「这一步配不配」**，逐步独立判：
 
-| 步 | 性质 | model | 理由（本步自证） |
+| 步 | 性质 | 档位 | 理由（本步自证） |
 |---|---|---|---|
-| verify | **门禁** + grep 代码判 PASS/FAIL | **sonnet** | 弱模型假 PASS = 放不完整活进归档；门不能省 |
-| archive | spec 同步 + 读代码核 delta | **sonnet** | judgment 活 |
-| commit | git add + 从 diff 生成 message | **haiku** | 纯机械；失败也就重生成 message；独立上下文无副作用 |
+| verify | **门禁** + grep 代码判 PASS/FAIL | **中档** | 弱档假 PASS = 放不完整活进归档；门不能省 |
+| archive | spec 同步 + 读代码核 delta | **中档** | judgment 活 |
+| commit | git add + 从 diff 生成 message | **弱档** | 纯机械；失败也就重生成 message；独立上下文无副作用 |
 
-注 **turn 数 > 单 token 价**：弱模型在判断味的步上常多花 2-3× turn、总成本反高 → verify/archive 用 sonnet 不只为质量、也常更省。commit 机械、haiku 不会 flail。
+注 **turn 数 > 单 token 价**：弱档在判断味的步上常多花 2-3× turn、总成本反高 → verify/archive 用中档不只为质量、也常更省。commit 机械、弱档不会 flail。
 
-> 混用在固定步骤里唯一的**软成本**：分类会**过期**——若日后给某步加复杂逻辑（如 commit 加冲突处理），它不再机械、但 model 还写着 haiku。低风险，留注释提醒即可。
+> 混用在固定步骤里唯一的**软成本**：分类会**过期**——若日后给某步加复杂逻辑（如 commit 加冲突处理），它不再机械、但 model 还写着弱档。低风险，留注释提醒即可。
 >
 > 对比 subagent-driven-development 的实现循环（高频、动态、上百任务）：那里「便宜模型转写实现 + 强模型评审」是对的，但它**会**有运行时误分类风险（要靠评审兜底）。**规则随场景变。**
 
