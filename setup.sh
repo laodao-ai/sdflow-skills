@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# laodao-skills setup — install/update skills into BOTH:
+# sdflow-skills setup — install/update skills into BOTH:
 #   - Claude  ~/.claude/skills/
 #   - Codex   ~/.codex/skills/
 # Idempotent. Unix: absolute symlink (layout-independent). Windows: copy + marker.
@@ -22,6 +22,15 @@ installed=()
 skipped=()
 cleaned=()
 
+# marker 兼容收窄（D5）：.sdflow-skills 一律自属；.laodao-skills 仅限我方名单（防误伤 laodao misc 拷贝）
+OUR_LEGACY_NAMES=" opsx-project-init opsx-done opsx-maintain opsx-roadmap-planner spec-review impl-review buglist-recorder todolist-recorder issues-recorder sdflow-init sdflow-done sdflow-maintain sdflow-roadmap sdflow-spec-review sdflow-code-review sdflow-buglist sdflow-todolist sdflow-issues embedded-test-sop openspec-upgrade sdflow-upgrade "
+is_our_marker_copy() {  # $1 = 目录路径
+  local name="$(basename "$1")"
+  [ -f "$1/.sdflow-skills" ] && return 0
+  [ -f "$1/.laodao-skills" ] && case "$OUR_LEGACY_NAMES" in *" $name "*) return 0 ;; esac
+  return 1
+}
+
 # ─── Install all skills into one destination ─────────────────
 install_into() {
   local dest="$1"
@@ -34,22 +43,22 @@ install_into() {
 
     if [ "$IS_WINDOWS" -eq 1 ]; then
       # Windows: copy + marker file
-      if [ -d "$target" ] && [ ! -f "$target/.laodao-skills" ] && [ ! -L "$target" ]; then
+      if [ -d "$target" ] && [ ! -L "$target" ] && ! is_our_marker_copy "$target"; then
         skipped+=("$skill_name @ $dest")
         continue
       fi
-      if [ -d "$target" ] && [ -f "$target/.laodao-skills" ]; then
+      if [ -d "$target" ] && is_our_marker_copy "$target"; then
         rm -rf "$target"
       fi
       cp -r "$skill_dir" "$target"
-      git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null > "$target/.laodao-skills" || echo "unknown" > "$target/.laodao-skills"
+      git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null > "$target/.sdflow-skills" || echo "unknown" > "$target/.sdflow-skills"
       installed+=("$skill_name @ $dest")
     else
       # Unix: absolute symlink. Only ever replace symlinks or our own marker
       # copies — never clobber a real directory we don't own (e.g. another
       # tool's skill of the same name).
       if [ -e "$target" ] && [ ! -L "$target" ]; then
-        if [ -f "$target/.laodao-skills" ]; then
+        if is_our_marker_copy "$target"; then
           rm -rf "$target"
         else
           skipped+=("$skill_name @ $dest")
@@ -84,7 +93,7 @@ cleanup_orphans() {
       esac
     fi
     # Marker file (Windows copies)
-    [ -f "$entry/.laodao-skills" ] && is_ours=1
+    is_our_marker_copy "$entry" && is_ours=1
 
     # Ours, but the link now dangles (source skill removed) → clean up.
     # Use a resolve check (-e follows the symlink) so VALID links are kept,
@@ -151,7 +160,7 @@ install_sdflow
 # ─── Summary ─────────────────────────────────────────────────
 version="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "unknown")"
 echo ""
-echo "laodao-skills v${version} ready → ${TARGET_DIRS[*]}"
+echo "sdflow-skills v${version} ready → ${TARGET_DIRS[*]}"
 echo ""
 
 if [ ${#installed[@]} -gt 0 ]; then
@@ -162,7 +171,7 @@ fi
 if [ ${#skipped[@]} -gt 0 ]; then
   echo ""
   echo "  skipped (${#skipped[@]}):"
-  for s in "${skipped[@]}"; do echo "    ⚠ $s — already exists, not managed by laodao-skills"; done
+  for s in "${skipped[@]}"; do echo "    ⚠ $s — already exists, not managed by sdflow-skills"; done
 fi
 
 if [ ${#cleaned[@]} -gt 0 ]; then

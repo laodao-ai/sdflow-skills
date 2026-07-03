@@ -17,7 +17,7 @@ bash setup.sh
 ```
 
 把每个含 `SKILL.md` 的顶层目录同时装到 `~/.claude/skills/` 和 `~/.codex/skills/`。
-Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Windows 用 copy + `.laodao-skills` marker。
+Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Windows 用 copy + `.sdflow-skills` marker（名单内目录的存量 `.laodao-skills` 旧 marker 仍识别为自属）。
 幂等，可反复运行。改动 skill 源码后一般无需重跑（symlink 场景）；仅在**新增/删除**顶层 skill 后重跑，
 以建立新链接、清理源已删除的孤儿链接。**改 `sdflow-init/assets/hack/` 下脚本后也必须重跑 `setup.sh`**
 （它们拷贝进 `~/.sdflow/hack/`，非 symlink，不重跑 = 新 SKILL 调旧脚本）。
@@ -58,7 +58,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 ### `setup.sh` 安装机制（核心，改动需谨慎）
 
 - 遍历 `REPO_DIR/*/`，**仅含 `SKILL.md` 的目录才安装** → `openspec/`、`docs/`、`hack/` 不会被当 skill。
-- 安全兜底：**绝不覆盖非本仓库拥有的同名目录**（只处理自己的 symlink / `.laodao-skills` marker copy）；
+- 安全兜底：**绝不覆盖非本仓库拥有的同名目录**（只处理自己的 symlink / `.sdflow-skills` marker copy，名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属）；
   清理源已删除的孤儿链接（用 `-e` 解析检查，保留有效链接）。
 - 读 `REPO_DIR/VERSION` 显示版本；**当前仓库未包含 `VERSION`**，故安装摘要显示 `unknown`。
 
@@ -118,7 +118,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - **ff 开分支**：`opsx:ff` 若不在 feature 分支，先 `git checkout -b feat/{change}`（FF-0）。
 - **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 
-**配套 skill（workflow 依赖，需先安装）** — 均来自 laodao-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
+**配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
 
 | skill | 在流程中的角色 |
 |---|---|
@@ -127,5 +127,5 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 | `/opsx-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
 > 另有两个记录类配套 skill（按需）：`/buglist-recorder`（缺陷）、`/todolist-recorder`（改进收集池），
-> 同样来自 laodao-skills，写入 `openspec/buglists|todolists/`。
+> 同样来自 sdflow-skills，写入 `openspec/buglists|todolists/`。
 <!-- opsx-init:end -->

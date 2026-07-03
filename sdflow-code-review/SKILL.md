@@ -135,7 +135,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 ## 与 gstack/review、官方 code-review 的分工（并入 vs 弃用）
 
-| | gstack/review | 官方 /code-review | 本 skill（impl-review 编排器） |
+| | gstack/review | 官方 /code-review | 本 skill（sdflow-code-review 编排器） |
 |---|---|---|---|
 | 现状 | **并入本 skill Step1** | **弃用为独立 step（P3d）** | 每次全跑·独立冷·强制主审 |
 | 干什么 | scope-drift + 完成度审计 | 插件能力仅供历史镜/置信过滤**内部借用** | 清单逐条 + 对抗 + 置信过滤 + 合并出报告 |

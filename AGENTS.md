@@ -19,7 +19,7 @@
 - **ff 开分支**：`opsx:ff` 若不在 feature 分支，先 `git checkout -b feat/{change}`（FF-0）。
 - **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 
-**配套 skill（workflow 依赖，需先安装）** — 均来自 laodao-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
+**配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
 
 | skill | 在流程中的角色 |
 |---|---|
@@ -28,5 +28,5 @@
 | `/opsx-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
 > 另有两个记录类配套 skill（按需）：`/buglist-recorder`（缺陷）、`/todolist-recorder`（改进收集池），
-> 同样来自 laodao-skills，写入 `openspec/buglists|todolists/`。
+> 同样来自 sdflow-skills，写入 `openspec/buglists|todolists/`。
 <!-- opsx-init:end -->

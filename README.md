@@ -69,7 +69,7 @@ bash setup.sh
 - **安装机制**：`setup.sh` 遍历仓库根下所有目录，仅安装含 `SKILL.md` 的（故 `openspec/`、`docs/`、
   `hack/` 不会被当 skill）。
   - **Unix**：绝对路径 symlink —— 改源即时生效，仅新增/删 skill 后才需重跑。
-  - **Windows**：复制目录 + 写 `.laodao-skills` 标记文件用于更新检测。
+  - **Windows**：复制目录 + 写 `.sdflow-skills` 标记文件用于更新检测（名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属并可刷新）。
   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
 - **spec 工作流 bundle 的权威源**：`sdflow-init/assets/workflow/` 是铺给其他项目的
   `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `sdflow-init update`

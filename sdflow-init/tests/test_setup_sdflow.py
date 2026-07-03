@@ -86,3 +86,35 @@ class TestCleanupOrphansDangling:
         env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
         subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
         assert (skills / "alien-skill").is_symlink()               # 非自属不动（红线）
+
+
+OUR_NAMES = {  # RENAME-MAP 旧名∪新名∪保留名单（marker 兼容边界，D5）
+    "opsx-project-init","opsx-done","opsx-maintain","opsx-roadmap-planner",
+    "spec-review","impl-review","buglist-recorder","todolist-recorder","issues-recorder",
+    "sdflow-init","sdflow-done","sdflow-maintain","sdflow-roadmap","sdflow-spec-review",
+    "sdflow-code-review","sdflow-buglist","sdflow-todolist","sdflow-issues",
+    "embedded-test-sop","openspec-upgrade","sdflow-upgrade",
+}
+
+class TestBrandAndMarkerNarrowing:
+    def test_version_line_branded(self, tmp_path):
+        r, _ = run_setup(tmp_path)          # 复用本文件既有 helper
+        assert "sdflow-skills v0.9.0" in r.stdout
+
+    def test_legacy_marker_recognized_only_for_our_names(self, tmp_path):
+        # 沙箱内直接构造两个带 .laodao-skills marker 的目录（模拟 Windows copy 存量）
+        home = tmp_path / "home"; skills = home / ".claude" / "skills"; skills.mkdir(parents=True)
+        for name, ours in [("spec-review", True), ("bilibili-research", False)]:
+            d = skills / name; d.mkdir(); (d / "SKILL.md").write_text("x", encoding="utf-8")
+            (d / ".laodao-skills").write_text("legacyhash", encoding="utf-8")
+        env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        # 名单内（spec-review 属旧名，源目录已 git mv 改名为 sdflow-spec-review，不再存在于
+        # REPO_DIR）：is_our_marker_copy 识别自属 → install_into 因无同名源不会重建软链，
+        # 交由 cleanup_orphans 按孤儿清理规则移除（旧链消失，符合 spec.md「跨改名孤儿链真实
+        # 可清」场景与 design.md no-stub 拍板；MUST NOT 因不在名单而被当异物保留/误删判定错向）
+        assert not (skills / "spec-review").exists()
+        # 名单外（bilibili-research 是 laodao misc 财产）：skip 不动
+        alien = skills / "bilibili-research"
+        assert alien.is_dir() and not alien.is_symlink()
+        assert (alien / ".laodao-skills").exists()
