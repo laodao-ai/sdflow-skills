@@ -30,10 +30,23 @@ BUNDLE_SRC = os.path.join(ASSETS, "workflow")
 REVIEW_TOOL_SRC = os.path.join(ASSETS, "review-tool")
 SNIPPETS = os.path.join(ASSETS, "snippets")
 
-MARK_DOC = ("<!-- opsx-init:start —— 由 opsx-project-init 维护，勿手改本区块 -->",
+MARK_DOC = ("<!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本区块 -->",
             "<!-- opsx-init:end -->")
-MARK_IDX = ("<!-- opsx-init:rules:start —— 由 opsx-project-init 维护，勿手改本区块 -->",
+MARK_IDX = ("<!-- opsx-init:rules:start —— 由 sdflow-init 维护，勿手改本区块 -->",
             "<!-- opsx-init:rules:end -->")
+
+MARK_TOKENS = {  # token → 完整新 marker；定位按 token（历史 marker 文案含旧 skill 名，全串匹配会漏）
+    "opsx-init:start": MARK_DOC, "opsx-init:rules:start": MARK_IDX,
+}
+
+
+def _find_marker_line(text, token):
+    """按 token 定位 marker 整行（返回该行起止 offset），找不到返回 None。"""
+    for line in text.splitlines(keepends=True):
+        if token in line and line.lstrip().startswith("<!--"):
+            start = text.index(line)
+            return start, start + len(line)
+    return None
 
 CORE_DIRS = ["changes", "specs"]  # openspec 核心；buglists/todolists 由各自 recorder skill 首用时建
 
@@ -59,14 +72,25 @@ HOOKS = [
 # ── 标记区块幂等注入 ─────────────────────────────────────────
 
 def inject(path, start, end, content, header=""):
-    """有标记则替换标记间内容；无标记则追加；文件不存在则以 header 起头新建。返回动作描述。"""
+    """有标记则按 token 定位既有区块（含历史 marker 文案，如旧 skill 名）并原位替换为新
+    marker + 新内容；无标记则追加；文件不存在则以 header 起头新建。返回动作描述。
+
+    定位用 token（如 "opsx-init:start"）而非全串精确匹配——marker 文案随 skill 改名演化时
+    （如 opsx-project-init → sdflow-init），旧区块仍需被命中替换，而不是被判定"未找到"而追加
+    出重复区块。token 从 start/end 的 marker 文案中提取：格式固定为
+    "<!-- <token> —— ... -->"（start）/ "<!-- <token> -->"（end），token 即第二个空白分隔词。
+    """
+    start_token = start.split()[1]
+    end_token = end.split()[1]
     block = f"{start}\n{content.rstrip()}\n{end}\n"
     if os.path.exists(path):
         text = open(path, encoding="utf-8").read()
-        if start in text and end in text:
-            pre = text[:text.index(start)]
-            post = text[text.index(end) + len(end):]
-            new = pre + block.rstrip("\n") + post.lstrip("\n")
+        s_loc = _find_marker_line(text, start_token)
+        e_loc = _find_marker_line(text, end_token)
+        if s_loc and e_loc and s_loc[0] <= e_loc[0]:
+            pre = text[:s_loc[0]]
+            post = text[e_loc[1]:]
+            new = pre + block.rstrip("\n") + "\n" + post.lstrip("\n")
             if not new.endswith("\n"):
                 new += "\n"
             action = "更新托管区块"

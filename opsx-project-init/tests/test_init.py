@@ -334,3 +334,25 @@ class TestRunFsErrorGuard:
             assert "文件系统操作失败" in err
         finally:
             root.chmod(0o700)
+
+
+class TestInjectMarkerMigration:
+    """0.2：inject() 改 token 基定位——旧 marker 文案（opsx-project-init）区块被替换而非追加重复。"""
+
+    OLD_BLOCK = ("<!-- opsx-init:start —— 由 opsx-project-init 维护，勿手改本区块 -->\n"
+                 "旧内容\n<!-- opsx-init:end -->\n")
+
+    def test_old_marker_block_replaced_not_duplicated(self, tmp_path):
+        f = tmp_path / "CLAUDE.md"
+        f.write_text("# 头\n\n" + self.OLD_BLOCK + "\n尾部用户内容\n", encoding="utf-8")
+        init_mod.inject(str(f), *init_mod.MARK_DOC, "新内容")
+        text = f.read_text(encoding="utf-8")
+        assert text.count("opsx-init:start") == 1        # 只有一个区块（替换，非追加）
+        assert "新内容" in text and "旧内容" not in text
+        assert "sdflow-init 维护" in text                 # marker 文案已随替换更新
+        assert "尾部用户内容" in text                     # 区块外内容无损
+
+    def test_fresh_file_gets_new_marker(self, tmp_path):
+        f = tmp_path / "CLAUDE.md"
+        init_mod.inject(str(f), *init_mod.MARK_DOC, "内容", header="# H")
+        assert "sdflow-init 维护" in f.read_text(encoding="utf-8")
