@@ -72,6 +72,10 @@ _Avoid_: 笼统说"工作流已连续"（要分清是"无强制中断"还是"无
 laodao-skills 的两个物理副本，把"改规则的人"与"用规则的人"隔开。**开发 checkout**（独立目录的 clone）= 编辑 skill/bundle、跑 workflow dogfood 自己的地方；它留本地规则副本，解析时 local-first 命中、吃自己**尚未发布**的编辑。**运行 checkout**（`~/.skills/laodao-skills`）= 只 `git pull` 已完成的 skill 并 `setup` 安装、充当全局 canonical 解析锚点的地方；只含**已发布**内容，自己不 run workflow on 自己。发布边界 = push（开发）→ pull（运行），不靠 resolver 逻辑绕、靠 checkout 边界物理隔。
 _Avoid_: 把两者当"同一目录的两种模式"（是两个物理 clone）；把 dev/release 隔离归给 resolver（隔离来自 checkout 边界；resolver 只是让开发 checkout 能 local-first dogfood）
 
+**盘面即状态 (State-on-Disk)**:
+编排/索引类机制的进度与结论 MUST 从**已存在的产物盘面**推导（产物文件、git 历史、机器锚行），MUST NOT 另设可变 state 文件当第二真相源——第二真相源与盘面必然漂移（INDEX 手改漂移、SDD ledger gitignored 失联皆其实例）。机判锚点须是**确定性产出**（模板写死的机器注释行、checkpoint 标签约定），不押模型自由生成的自然语言措辞（grill 实证：结论行正则对真实存档全 miss）。实例：`reindex` 拿 item 池当 ground truth、`ship_gate` 以 change 产物+锚行+checkpoint 标签判步序。
+_Avoid_: 把"状态文件"当省事方案（它是漂移源）；把自然语言行当机判契约（措辞属概率空间）
+
 **机队锚定 (Fleet-anchored Model Baseline)**:
 workflow 的能力目标按**实际执行机队**（opus / sonnet / gpt-5.5 等多家族混编）的最弱可靠档设定，**不按开发 workflow 时恰好在用的更强模型**。两条派生：①规则文件里"强/弱模型"一律是**相对机队的档位词**（强档跑 verify / 对抗裁决 / final 终审；中档跑领域镜 / 生成；弱档只跑纯机械步），"档位→模型"映射在消费仓 `config.yaml`；②凡机械 prose 协议（路径解析、回落链、步末固定动作）MUST 脚本化 / 结构化——弱档模型跑 prose 协议的典型失效 = **静默跳步**，与反静默守卫正面冲突且无痕迹。见 `adr/0006`。
 _Avoid_: 用"强模型"指某个具体产品名（档位相对机队，机队会换血）；把脚本化当可选优化（在本工作流是硬约束，是「机械活交脚本、模型只做判断」的升格）

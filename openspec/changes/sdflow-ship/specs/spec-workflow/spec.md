@@ -7,7 +7,7 @@
 
 ### Requirement: 阶段三编排台账确定性（ship_gate）
 
-`sdflow-ship` 的步序推进 MUST 由确定性脚本 `ship_gate.py` 判定（**盘面即状态**：以 change 目录产物存在性与结论行为账本，MUST NOT 设可变 state 文件造第二真相源）；编排 skill MUST 在每步前后调用 gate 并遵其判定，MUST NOT 以 prose 记忆步序。gate MUST 只读（零副作用）、双输出（首行人读摘要 + JSON 机读）、以退出码承载门禁语义（0=可推进 / 3=拒绝起跑 / 4=上游 blocker / 5=verify FAIL）。机判锚点字面 MUST 双向钉死（脚本解析规则 ↔ 各报告格式约定同 change 演进）：设计门拍板 = 报告含「设计门拍板」行；verify 结论 = `结论：PASS|FAIL`；code-review 放行 = 结论区含「建议进 /sdflow-done」且无未解 blocker。
+`sdflow-ship` 的步序推进 MUST 由确定性脚本 `ship_gate.py` 判定（**盘面即状态**：以 change 目录产物存在性与结论行为账本，MUST NOT 设可变 state 文件造第二真相源）；编排 skill MUST 在每步前后调用 gate 并遵其判定，MUST NOT 以 prose 记忆步序。gate MUST 只读（零副作用）、双输出（首行人读摘要 + JSON 机读）、以退出码承载门禁语义（0=可推进 / 3=拒绝起跑 / 4=上游 blocker / 5=verify FAIL）。机判锚点 MUST 为**模板写死的机器注释行**〔grill-amendment：自然语言结论行正则对真实存档全 miss，禁作锚点〕：设计门拍板 = `<!-- ship-gate: design-approved -->`；verify 结论 = `<!-- ship-gate: verify=PASS -->` / `verify=FAIL`；code-review 放行 = `<!-- ship-gate: code-review=pass -->` / `=blocked`。三个报告的生成模板（sdflow-spec-review 拍板回写约定 / sdflow-done verify 模板 / sdflow-code-review 报告格式）MUST 输出对应锚行；gate 以字面查找（非正则）解析，锚行集合在脚本头注释与各模板双向钉死同 change 演进。
 
 #### Scenario: 未过设计门拒绝起跑
 - **WHEN** 对一个 spec-review-report.md 缺失或不含「设计门拍板」标记的 change 调用 /sdflow-ship
@@ -19,7 +19,23 @@
 
 #### Scenario: 前置产物缺失点名
 - **WHEN** 某步产物缺失（如 code-review-report.md 不在）
-- **THEN** gate 输出 next=对应 skill 与 missing 清单，编排按此推进；完成判据不可判（如 plan 复选框与 SDD ledger 双缺）时 gate 判 UNKNOWN 停上抛，MUST NOT 猜测推进
+- **THEN** gate 输出 next=对应 skill 与 missing 清单，编排按此推进；实现完成判据 MUST 以 **git 历史 checkpoint 任务标签为主锚**（plan 任务数 N 对 `checkpoint(task<k>-` 去重任务号集，齐 N 判完成〔grill-amendment〕）、plan 复选框全勾为辅，两通道皆不可判时 gate 判 UNKNOWN 停上抛，MUST NOT 猜测推进、MUST NOT 以 gitignored 的 SDD ledger 为判据
+
+#### Scenario: 陈旧 FAIL 不卡死 resume〔grill-amendment D9〕
+- **WHEN** verify-report 带 FAIL 锚行，其提交之后存在触及 `openspec/` 之外路径的修复提交，用户重调 /sdflow-ship
+- **THEN** gate 判该结论陈旧 → NEXT=重跑 sdflow-done（重验），MUST NOT 以陈旧 FAIL 退出卡死
+
+#### Scenario: 干预后陈旧 PASS 不放行〔grill-amendment D9〕
+- **WHEN** 各门禁锚行均为 pass/PASS，但其后有人手改了 `openspec/` 之外的代码
+- **THEN** gate 判受影响步结论陈旧 → 重跑该步，MUST NOT 让旧结论背书新代码直通 merge
+
+#### Scenario: 无锚行产物 = 步进行中〔grill-amendment D9〕
+- **WHEN** 某报告文件存在但不含任何 ship-gate 锚行（如中断的半成品）
+- **THEN** gate 判该步进行中 → NEXT=重跑该步，MUST NOT 当作已完成
+
+#### Scenario: 暂停后重调即续、人机同权〔grill-amendment D9〕
+- **WHEN** 链中途停止（任意原因），期间用户手动完成了某步（如手跑 /sdflow-code-review 产出报告），之后重调 /sdflow-ship
+- **THEN** gate 仅凭盘面推进（不辨产者），从下一缺口继续；实现中断场景 gate 输出已完成任务号集供 SDD 勿重派；ship MUST NOT 依赖任何跨步内存状态
 
 #### Scenario: 条件步按 TG 判定
 - **WHEN** change 的 proposal 未标注 TG-02（非嵌入式）
@@ -27,15 +43,15 @@
 
 ### Requirement: 模型档位映射（model-tiers）
 
-模型档位与映射 MUST 以消费仓 `config.yaml` 的 `model-tiers` 段为真相源（强档=verify/对抗裁决/final 终审；中档=领域镜/生成/实现；弱档=纯机械步；各档默认模型随段下发）；编排 skill（sdflow-ship/done/spec-review/code-review）的模型选择 MUST 引用该段并 MUST 内联缺省保底（无该段时按 opus/sonnet/haiku 缺省运行，不失效不硬依赖）；规则文件 MUST NOT 写死具体模型产品名做强弱判据（机队锚定，adr/0006(c)）。
+模型档位定义、职责清单与 canonical 缺省 MUST 以 workflow bundle 规则文件 **`model-tiers.md`** 为单一真相源（经 resolver 全局解析；强档=verify/对抗裁决/final 终审；中档=领域镜/生成/实现；弱档=纯机械步；缺省 opus/sonnet/haiku）〔grill-amendment：推翻"config 段真相源 + SKILL 内联缺省×4"——多处 copy 漂移面〕；消费仓 `config.yaml` 的 `model-tiers` 段 MUST 仅作可选 per-repo **覆盖**；编排 skill（sdflow-ship/done/spec-review/code-review）的模型选择 MUST 以一句引用指向规则文件与覆盖段，MUST NOT 内联具体模型名（机队锚定，adr/0006(c)）。
 
-#### Scenario: 消费仓无 model-tiers 段仍可运行
-- **WHEN** 存量消费仓 config.yaml 未合并 model-tiers 段，跑任一编排 skill
-- **THEN** skill 按内联缺省档位（opus/sonnet/haiku）运行，MUST NOT 报错或静默降级门禁步模型
+#### Scenario: 消费仓无覆盖段用 canonical 缺省
+- **WHEN** 消费仓 config.yaml 无 model-tiers 段，跑任一编排 skill
+- **THEN** skill 按规则根 `model-tiers.md` 的 canonical 缺省档位运行，MUST NOT 报错、MUST NOT 静默降级门禁步模型
 
-#### Scenario: verify 档位来自映射
-- **WHEN** 消费仓 model-tiers 把强档映射为某模型
-- **THEN** sdflow-done 的 verify 子代理按该映射选模型；映射缺失时用内联强档缺省，MUST NOT 落到弱档
+#### Scenario: verify 档位来自映射（覆盖优先）
+- **WHEN** 消费仓 config.yaml model-tiers 段把强档覆盖为某模型
+- **THEN** sdflow-done 的 verify 子代理按覆盖映射选模型；无覆盖时用规则文件强档缺省，MUST NOT 落到弱档
 
 ## MODIFIED Requirements
 
@@ -54,6 +70,10 @@
 #### Scenario: 一次调用驱动到 merge 建议
 - **WHEN** 对已过设计门的 change 调用 /sdflow-ship 且各步门禁全通过
 - **THEN** 链依 gate 判定逐步推进至 sdflow-done 完成（含 merge 缺省语义），输出最终摘要；全程无 AskUserQuestion
+
+#### Scenario: ship 零 git 写操作、merge 意图透传〔grill-amendment〕
+- **WHEN** 用户以"跑到 merge 前停"类意图调用 /sdflow-ship
+- **THEN** ship 将 opt-out 原样透传给 sdflow-done（merge 由 done 一处执行/跳过）；ship 自身 MUST NOT commit/merge/push，MUST NOT 自动 push（摘要提醒手动 push；toolkit 源仓附激活提示）
 
 ### Requirement: 阶段二产出单一合并报告
 
