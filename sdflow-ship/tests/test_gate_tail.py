@@ -1,4 +1,3 @@
-import subprocess
 from conftest import commit_all, mkchange
 from test_gate_preflight import run_gate
 from test_gate_impl_progress import approved_change, PLAN2
@@ -45,6 +44,24 @@ def test_full_pass_to_shipped(repo):
     commit_all(repo, "tail")
     code, js, _ = run_gate(repo)   # 沙箱在 main 无 feature 分支 → 视为已并
     assert code == 0 and js["verdict"] == "SHIPPED"
+
+def test_cr_report_no_anchor_in_progress(repo):
+    d = impl_done(repo)
+    (d / "code-review-report.md").write_text(
+        "# 报告\n审查中…\n", encoding="utf-8")
+    commit_all(repo, "cr-in-progress")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS" and js["next"] == "sdflow-code-review"
+
+def test_verify_report_no_anchor_in_progress(repo):
+    d = impl_done(repo)
+    (d / "code-review-report.md").write_text(
+        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+    (d / "verify-report.md").write_text(
+        "# 报告\n验证中…\n", encoding="utf-8")
+    commit_all(repo, "verify-in-progress")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS" and js["next"] == "sdflow-done"
 
 def test_verify_pass_but_no_handoff_run_verify_step(repo):
     d = impl_done(repo)
