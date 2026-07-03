@@ -29,6 +29,7 @@
 | T21 | `sdflow-init/scripts/init.py` | inject() 畸形态加固：多重复旧 marker 区块只修第一个 + _find_marker_line 的 text.index 在行内嵌相同 marker 文本时可能锚错位 | 代码质量 | OPEN | 2026-07-03 21:10 | sdflow-rebrand |  |
 | T22 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 代码质量 | OPEN | 2026-07-03 21:10 | sdflow-rebrand |  |
 | T23 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） | 代码质量 | OPEN | 2026-07-03 21:10 | sdflow-rebrand |  |
+| T24 | `setup.sh install_into 软链分支` | install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立 | 基础设施 | OPEN | 2026-07-03 21:29 | sdflow-rebrand |  |
 
 ---
 
@@ -263,3 +264,19 @@
 **关联文档**：`openspec/changes/sdflow-rebrand/design.md`
 
 **动机**：终审弱锚注记：R-SR-2 换写 Scenario 的 Windows 侧只有共享函数级锚点
+
+---
+
+## T24: install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `setup.sh install_into 软链分支` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/sdflow-rebrand/code-review-report.md`
+
+**动机**：impl-review 断言盲区镜实证：异物 basename 撞本仓 skill 名时被静默吃掉，违反「绝不动非自属产物」红线；属未改动行既有行为（laodao→sdflow 迁移曾依赖该替换语义），加严校验会破坏 dev↔runtime 切换——设计权衡后再修，勿被 T18 的「加提示」方案掩盖
+
+**思路**：设计判据候选：readlink 目标路径含已知 checkout 家族 / 目标 basename ∈ OUR_LEGACY_NAMES / marker 同源；配套测试须含「同名异物软链」态（现测试网空白）
