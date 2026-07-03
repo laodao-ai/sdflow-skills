@@ -370,3 +370,21 @@ grep -rn "laodao" . --exclude-dir=.git --exclude-dir=node_modules 2>/dev/null | 
 233 passed 无 warning。
 
 三处数字已与程序化计数实测结果对齐，未来如需验证可参照上述命令重跑。
+
+## marker token 显式判定（impl-review）
+
+`opsx-init:` 这个 token 字面在 `sdflow-init/scripts/init.py` 的 `MARK_DOC`/`MARK_IDX` 常量、以及全部
+托管区块（`CLAUDE.md`/`AGENTS.md` 的 `<!-- opsx-init:start -->...<!-- opsx-init:end -->`、
+`INDEX.md` 的 `<!-- opsx-init:rules:start -->...<!-- opsx-init:rules:end -->`）中**刻意保留**，
+不属于品牌残留：Task 0.2 明确采用「token 基定位」设计（`init.py:73` 注释「定位用 token（如
+"opsx-init:start"）而非全串精确匹配」），若改动 token 字面本身，会导致全部**存量消费仓**里已经铺设过
+的托管区块与新版 `init.py` 的定位正则失配（找不到旧区块 → 无法原地替换，只能追加造成重复区块），
+属于设计上的稳定锚点保留，非品牌统一遗漏项。`sdflow-init/tests/test_init.py` 中同 token 字面（`OLD_BLOCK`
+等）同理是对该兼容路径的测试覆盖，非残留。
+
+现状计数（`*.py` 范围内字面出现次数）：
+
+```bash
+grep -rn "opsx-init:" --include="*.py" . | wc -l
+# 13
+```

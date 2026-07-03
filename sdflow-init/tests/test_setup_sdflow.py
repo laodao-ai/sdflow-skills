@@ -120,22 +120,38 @@ OUR_NAMES = {  # RENAME-MAP 旧名∪新名∪保留名单（marker 兼容边界
 class TestBrandAndMarkerNarrowing:
     def test_version_line_branded(self, tmp_path):
         r, _ = run_setup(tmp_path)          # 复用本文件既有 helper
-        assert "sdflow-skills v0.9.0" in r.stdout
+        expected = "sdflow-skills v" + (REPO / "VERSION").read_text().strip()
+        assert expected in r.stdout
+
+    # OUR_NAMES 三分：旧名（源目录已不存在，需从仓内动态判）/ 现存名（源目录仍在仓内）。
+    # 别硬编码两份清单——用 (REPO/name/"SKILL.md").is_file() 派生，避免与仓内实际布局漂移。
+    _EXISTING_NAMES = sorted(n for n in OUR_NAMES if (REPO / n / "SKILL.md").is_file())
+    _GONE_NAMES = sorted(OUR_NAMES - set(_EXISTING_NAMES))
 
     def test_legacy_marker_recognized_only_for_our_names(self, tmp_path):
-        # 沙箱内直接构造两个带 .laodao-skills marker 的目录（模拟 Windows copy 存量）
+        """21 名单全量接线 + 1 个名单外对照，跑一次 setup，分三类断言。"""
         home = tmp_path / "home"; skills = home / ".claude" / "skills"; skills.mkdir(parents=True)
-        for name, ours in [("spec-review", True), ("bilibili-research", False)]:
+        all_names = list(OUR_NAMES) + ["bilibili-research"]
+        for name in all_names:
             d = skills / name; d.mkdir(); (d / "SKILL.md").write_text("x", encoding="utf-8")
             (d / ".laodao-skills").write_text("legacyhash", encoding="utf-8")
         env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
         r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
-        # 名单内（spec-review 属旧名，源目录已 git mv 改名为 sdflow-spec-review，不再存在于
-        # REPO_DIR）：is_our_marker_copy 识别自属 → install_into 因无同名源不会重建软链，
-        # 交由 cleanup_orphans 按孤儿清理规则移除（旧链消失，符合 spec.md「跨改名孤儿链真实
-        # 可清」场景与 design.md no-stub 拍板；MUST NOT 因不在名单而被当异物保留/误删判定错向）
-        assert not (skills / "spec-review").exists()
-        # 名单外（bilibili-research 是 laodao misc 财产）：skip 不动
+        assert r.returncode == 0
+
+        # 旧名（源目录已不存在）：is_our_marker_copy 识别自属 → install_into 因无同名源
+        # 不会重建软链，交由 cleanup_orphans 按孤儿清理规则移除（旧链消失，符合 spec.md
+        # 「跨改名孤儿链真实可清」场景与 design.md no-stub 拍板；MUST NOT 因不在名单而被
+        # 当异物保留/误删判定错向）
+        for name in self._GONE_NAMES:
+            assert not (skills / name).exists(), name
+
+        # 现存名（9 新名 + embedded-test-sop/openspec-upgrade/sdflow-upgrade，源仍在仓内）：
+        # 识别自属 → 刷新换链为指向仓内源目录的软链
+        for name in self._EXISTING_NAMES:
+            assert (skills / name).is_symlink(), name
+
+        # 名单外（bilibili-research 是 laodao misc 财产）：skip 不动，仍是带旧 marker 的真实目录
         alien = skills / "bilibili-research"
         assert alien.is_dir() and not alien.is_symlink()
         assert (alien / ".laodao-skills").exists()
