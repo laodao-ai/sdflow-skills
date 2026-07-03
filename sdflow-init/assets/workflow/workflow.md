@@ -61,6 +61,8 @@
 > D 约束 / 触发槽 / 画图 / 领域清单已由 `openspec/config.yaml` 的 rules **自动注入** opsx:ff——ff prompt 无需再内联。
 > `[checkpoint]` = 步末调 `~/.sdflow/hack/checkpoint-commit.sh <step> "<描述>"`（过场提交，非交互；区别于最终 `/commit-message`）。（缺失则先在运行 checkout 跑 setup.sh）
 
+> **编排层入口 = `/sdflow-ship {change}`**：一次调用经 ship_gate 确定性台账驱动 5.5→9（下表手动逐步仍为合法 reference 路径）。
+
 | 阶段 | 步 | command/skill | prompt（可复制） | 产出物 | 规则·条件 |
 |---|---|---|---|---|---|
 | 一 | 1 | /opsx:explore | `/opsx:explore {topic}` | — | generation-process ③发散；**问题模糊才跑** |
@@ -69,7 +71,7 @@
 | 二 | 4 | /sdflow-spec-review | `/sdflow-spec-review 独立审查 {change dir}` | spec-review-report.md | 编排器：内部 autoplan→并行多镜→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 2×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）** |
 | 二 | 5 | HARD-GATE | 人工过 **一份** `spec-review-report.md`（决策登记区已摊开选项+推荐+两方后果）→ 批准设计 | （人工：批准后才进实现） | generation-process 门；**★全流程唯一人类门** |
 | 二 | 5.5 | /embedded-test-sop | `/embedded-test-sop 基于 {change dir} 的 specs/ + 评审结论生成 {change}-sop.md 手工测试文档 + log-checks.yaml，存到 {change dir}。` | {change}-sop.md + log-checks.yaml | 嵌入式专属条件触发：TG-02(嵌入式固件) **∧**（启动/复位·状态机·协议 等高风险 **∨** TG-18 有测试计划）；非嵌入式天然不触发 |
-| 三 | 6 | /writing-plans | `/writing-plans 按 {change dir} 的 design.md 与评审结论生成原子任务清单 superpowers-plan.md，每任务 TDD，参考 tasks.md 分组；有测试计划则附测试覆盖图。把 design 的领域约束逐字写进 plan 的 Global Constraints。生成后自动以 subagent-driven-development 执行，自动完成全部任务，每任务完成跑测试套件确认无 warning、逐任务 checkpoint-commit。final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）作为额外 review lens 附给 reviewer。无法自动解决的记入 buglists 或 todolists` | superpowers-plan.md + 代码 | superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）** |
+| 三 | 6 | /writing-plans | `/writing-plans 按 {change dir} 的 design.md 与评审结论生成原子任务清单 superpowers-plan.md，每任务 TDD，参考 tasks.md 分组；有测试计划则附测试覆盖图。把 design 的领域约束逐字写进 plan 的 Global Constraints。生成后自动以 subagent-driven-development 执行，自动完成全部任务，每任务完成跑测试套件确认无 warning；` plan 每任务的 commit 步 MUST 显式写 `bash ~/.sdflow/hack/checkpoint-commit.sh task<N>-<slug> "<描述>"` 并由 implementer（实现子代理）自己执行——`task<N>-` 标签是 /sdflow-ship gate 完成判据主锚（主 session 事后补跑会因工作区已净而空转）。`final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）作为额外 review lens 附给 reviewer。无法自动解决的记入 buglists 或 todolists` | superpowers-plan.md + 代码 | superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）** |
 | 三 | 7 | /subagent-driven-development | （由步骤 6 自动触发）每任务完成跑测试套件、逐任务 checkpoint；final whole-branch 终审 dispatch 时把 `code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）` 作额外 review lens 附给 reviewer | 代码 | quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环） |
 | 三 | 8 | /sdflow-code-review | `/sdflow-code-review 每次全跑独立审查 {change dir} 的代码变更（并入 gstack/review 的 scope-drift+完成度审计；能修的自动修标 [impl-review-fix]、修不了/拿不准的记 buglists/todolists；汇总一份 code-review-report.md）。完成后 checkpoint-commit sdflow-code-review。` | code-review-report.md | 编排器：**每次全跑·独立冷·强制主审**（P3c，非高风险才跑）；清单逐条+对抗+历史镜+置信过滤；阶段三无人类门（自动修/裁/defer，不 AskUserQuestion） |
 | 三 | 9 | /sdflow-done | `/sdflow-done` | verify-report + hand-off + 归档 + 提交 + 合并 | sdflow-done skill；verify(防假✅证据锚点)→**issues sweep 子步(§2.1,已就位：分诊本change OPEN项入批次→reindex)**→hand-off.md→archive(+delta 同步)→commit→merge；**必跑（闭环）** |
@@ -79,7 +81,7 @@
 1. **git 分支在 ff prompt 内做（带守卫）= 规则 FF-0**：`若不在 feature 分支则 git checkout -b feat/{change}`。分支恰在生成开始时创建，spec 文件随分支落地，幂等。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
 2. **子代理 fresh-context 替代 `/clear`（最关键，G1）**：`/clear` 唯一作用是给评审独立上下文；但 sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md) 自认 `/clear` 只剩边际收益）。故**去掉两个 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev）运行中仍禁 `/clear`，必须跑完再进下一步。
 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（选项+推荐+两方后果），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
-4. **只在阶段二设计门停一次人类**：grill 是对话岛（人类对抗，不折叠）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：能修的自动修、≥2 方案有把握自动选推荐（记理由）、genuinely 拿不准的 defer 进 buglist/todolist，人类再入口 = 异步读 hand-off.md。
+4. **只在阶段二设计门停一次人类**：grill 是对话岛（人类对抗，不折叠）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议〔T10〕：①有客观判据（测试/断言/基准可判）→ 自动选并记理由；②无客观判据 → 派对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信（"有把握"）为唯一依据。人类再入口 = 异步读 hand-off.md。
 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。grill 多轮中途不提交、只收敛后一次。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
 6. **评审两层、不重复**：
    - **设计侧**：sdflow-spec-review 编排器 = autoplan（广审 CEO/design/eng/DX）+ 本项目多镜（领域镜+对抗镜+接地镜）合成一份报告。**autoplan 已含 eng 镜 → 多镜不重复跑 eng**。
