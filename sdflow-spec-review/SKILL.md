@@ -40,6 +40,8 @@ description: >
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目标准）
 
+> **串行纪律〔T20〕**：**MUST 待 Step1 checkpoint 完成后才 fan-out，禁止与 Step1 并行**（多镜评审对象须含 autoplan amendment）；若历史运行已并行，Step3 裁决须 diff autoplan amendment 增量核对并在报告注明。
+
 **规划镜头（主 session）**：
 
 - 按 `{change_dir}` 实际涉及的栈 + 内容判命中的 TG/领域 → 决定开哪几个**领域镜**（backend·go / embedded·ml307c·esp32 / frontend）。
