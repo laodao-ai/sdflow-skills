@@ -42,6 +42,7 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
 """
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -95,6 +96,37 @@ def pick_exclusive(path, positive, negative, label):
     return None
 
 
+TASK_TITLE_RE = re.compile(r"^### Task (\d+):", re.M)   # 计数用；锚行才禁正则
+TAG_RE = re.compile(r"checkpoint\(task(\d+)-")
+
+
+def tg02_hit(cdir):
+    p = cdir / "proposal.md"
+    return p.is_file() and "TG-02" in p.read_text(encoding="utf-8")  # 字面子串（归档实例为全角括号混用）
+
+
+def plan_task_count(plan):
+    return len(TASK_TITLE_RE.findall(plan.read_text(encoding="utf-8")))
+
+
+def plan_first_sha(root, plan_rel):
+    out = run_git(root, "log", "--diff-filter=A", "--format=%H", "--", plan_rel)
+    return out.splitlines()[-1] if out else ""
+
+
+def done_task_ids(root, sha):
+    msgs = run_git(root, "log", f"{sha}..HEAD", "--no-merges", "--format=%s")
+    return {m.group(1) for line in msgs.splitlines() if (m := TAG_RE.search(line))}
+
+
+def checkboxes_all(plan):
+    text = plan.read_text(encoding="utf-8")
+    unchecked, checked = "- [ ]" in text, "- [x]" in text
+    if not unchecked and not checked:
+        return None
+    return not unchecked
+
+
 def decide(root, change):
     cdir = root / "openspec" / "changes" / change
     # ── pre-flight：设计门（D7 起跑不越门）─────────────────────────
@@ -107,8 +139,35 @@ def decide(root, change):
     vfile = cdir / "verify-report.md"
     if vfile.is_file():
         pick_exclusive(vfile, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL, "verify")
-    # 步序判定由后续任务区块填充；当前最小可行：过门即建议进入计划步
-    emit("RUN_PLAN", EXIT_OK, "writing-plans", "已过设计门（骨架版：步序判定待任务2-4）")
+    # ── step 5.5：条件步（TG-02 字面子串；细判归模型）────────────
+    sop_note = ""
+    if tg02_hit(cdir):
+        if not (cdir / f"{change}-sop.md").is_file():
+            emit("RUN_SOP", EXIT_OK, "embedded-test-sop", "TG-02 命中且 sop 产物缺")
+    else:
+        sop_note = "SKIP_SOP(非嵌入式不触发); "
+    # ── step 6/7：plan 与完成判据〔Q2 窗口主锚〕──────────────────
+    plan = cdir / "superpowers-plan.md"
+    if not plan.is_file():
+        emit("RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
+    n = plan_task_count(plan)
+    if n == 0:
+        emit("UNKNOWN", EXIT_UNKNOWN, None,
+             "plan 无 '### Task <n>:' 标题（上游模板漂移？），完成判据不能")
+    sha = plan_first_sha(root, str(plan.relative_to(root)))
+    done = done_task_ids(root, sha) if sha else set()
+    if len(done) < n:
+        boxes = checkboxes_all(plan)
+        if boxes is True:
+            pass  # 辅通道：复选框全勾（回勾型执行器）
+        elif not sha and boxes is None:
+            emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
+        else:
+            emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
+                 f"实现进度 {len(done)}/{n}（窗口 {sha[:7] or '-'}..HEAD --no-merges）",
+                 done_tasks=sorted(done, key=int))
+    # ── step 8/9/final 由任务3 填充；当前推进到 code-review ──────
+    emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review", "实现完成，进入代码审")
 
 
 def main(argv=None):
