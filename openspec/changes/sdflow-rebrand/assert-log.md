@@ -32,7 +32,7 @@
 | CLAUDE.md 托管区块唯一 | `grep -c "opsx-init:start" CLAUDE.md` | `1` |
 | AGENTS.md 托管区块唯一 | `grep -c "opsx-init:start" AGENTS.md` | `1` |
 | INDEX.md 托管区块唯一 | `grep -c "opsx-init:rules:start" openspec/INDEX.md` | `1` |
-| 托管区块内容已是新名 | `grep -n "sdflow-spec-review" CLAUDE.md AGENTS.md openspec/INDEX.md` | 命中 4 处（CLAUDE.md 区块内 ×2、AGENTS.md ×2、INDEX.md ×0），均为新名（CLAUDE.md 全文 4 处其中 2 处区块外为 Task 4 既有） |
+| 托管区块内容已是新名 | `grep -n "sdflow-spec-review" CLAUDE.md AGENTS.md openspec/INDEX.md` | 命中 5 处（CLAUDE.md 区块内 ×2、AGENTS.md 区块内 ×2、INDEX.md 区块内 ×1，即 `openspec/INDEX.md:15`），均为新名（CLAUDE.md 全文 4 处其中 2 处区块外为 Task 4 既有） |
 
 **Task 2 的 marker token 迁移在此实测生效**：CLAUDE.md / AGENTS.md / INDEX.md 三个文件的旧
 `<!-- opsx-init:start —— 由 opsx-project-init 维护 -->` / `<!-- opsx-init:rules:start —— 由
@@ -205,7 +205,7 @@ sdflow-init/tests/test_setup_sdflow.py:114:    "spec-review","impl-review","bugl
 
 ### 第二轮（修复后重跑，全部 clean 或判定为合法既有设计）
 
-重跑同一命令，命中总行数从 128 降到 112（减少 16 行）；`pattern 无命中直接落 "clean"` 分支的
+重跑同一命令，命中总行数从 119 降到 112（减少 7 行，与修复 7 处一一对应）；`pattern 无命中直接落 "clean"` 分支的
 只有 `opsx-maintain` `opsx-roadmap-planner` `buglist-recorder` `todolist-recorder` `issues-recorder` 这 5 个
 （其原始命中本身就都在下方「clean 判定理由」表覆盖范围内，无需二次修复）。逐名结果：
 
@@ -290,6 +290,11 @@ bash hack/checkpoint-commit.sh task8-assert "update --dev 同步(marker 迁移�
 | 第一轮总行数 | 128 | 119 | 内嵌 dump 中逐 pattern 实测加总（见下方命令） |
 | 第二轮总行数 | 121 | 112 | 修复后重跑同一白名单命令，精确计数 |
 | `impl-review` 明细 | 21 | 19 | 第二轮实际仅 19 处，之前误数 |
+
+二轮勘误：正文叙述句与抽查表同步（此前仅附注更正）——上方 Step 1「验证结果」表的 INDEX.md 抽查数
+已由 ×0 改为 ×1（`openspec/INDEX.md:15`，合计 4→5），Step 2「第二轮」小节的正文叙述句已由
+「128 降到 112（减少 16 行）」改为「119 降到 112（减少 7 行）」，与本表、与 `.superpowers/sdd/task-8-report.md`
+的抽查行口径一致；`task-8-report.md` 中误写的 `CLAUDE.md ×3` 已同步改回实测 ×2。
 
 **勘误方法（程序化计数）**
 
