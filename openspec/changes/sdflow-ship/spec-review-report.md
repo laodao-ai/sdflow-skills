@@ -61,3 +61,12 @@
 
 四件套骨架（盘面即状态、机器锚行、零 git、透传）经三方独立攻击后站住；**两条 CRITICAL（Q1 链自锁、Q2 假齐 N）必须在实现前拍板修订**，其余 12 条自动决策已回流 tasks/design（标 [spec-review-amendment]）。
 **收敛口**：建议进设计 HARD-GATE——请勾选 Q1（推荐 B）、Q2（推荐 sha+--no-merges）、Q3（推荐 A）；批准后即可 writing-plans。
+
+---
+
+## 设计门拍板记录（2026-07-04）
+
+用户拍板：**Q1 = B**（新鲜度按锚分域）· **Q2 = 同意**（窗口 = plan 首提交 sha + `--no-merges`）· **Q3 = A**（未提交报告视为 fresh，`freshness=uncommitted`）。
+已回流定稿：design.md（决策图窗口 / §四 exit 6 / D5 回写协议 / D9 分域重写 / 风险表改述）+ specs delta（exit 6 + 多锚冲突句、窗口 MUST、Q1/Q3 新增两 Scenario）+ tasks.md（1.1-1.5、2.1、2.3、3.3 全部占位定稿），均标 `[spec-review-amendment]`。
+
+<!-- ship-gate: design-approved -->
