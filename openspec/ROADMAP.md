@@ -13,7 +13,7 @@
 | `cross-model-outside-voice`（Phase C） | ⚪ 待开（**优先级↑**·adr/0006） | 跨模型 outside voice（C1–C7）+ TG-26 | A | 归档 design §9 + 归档 ROADMAP「Phase C 待迁」+ `adr/0006`（混编机队下天然可得） |
 | `minimize-repo-footprint` | 🔵 实现完成（待 impl-review/opsx-done） | 规则全局解析(resolver **脚本化**) + 消费仓最小副本 + checkpoint 全局 | A · `adr/0005` | **`adr/0003`**(+grill-amendment) · **`adr/0005`** · **`adr/0006`**(resolver 脚本化) |
 | `opsx-ship-orchestrator` | ⚪ 待开（**优先级↑**·adr/0006） | 阶段三窄编排 orchestrator（`opsx-ship`） | A（阶段三链就位） | **`adr/0004`** + `adr/0006`（编排 prose→结构，弱主模型漏步兜底） |
-| `extract-sdflow-repo`（暂名） | ⚪ 待开（footprint grill 2026-07-03 派生） | 抽 workflow 集群（≈11 skill）入独立 repo **sdflow**（前缀 `sdflow-`、canonical `~/.sdflow/`、拆 setup、dev-runtime 落地）；laodao-skills 留 misc | 独立（用 footprint 定的 canonical） | footprint grill + sdflow 命名 |
+| `sdflow-rebrand`（曾用名 `extract-sdflow-repo`） | 🔵 实现完成（待 code-review/收尾） | rescope/supersede：拆库半已发生（repo 已迁 `laodao-ai/sdflow-skills`，misc skills 留守 laodao-skills），剩余 scope = 品牌收拢——全量 `sdflow-` 前缀改名（9 改 3 留）+ 品牌字符串清扫（`VERSION`/marker/setup 输出） | 独立（用 footprint 定的 canonical） | footprint grill + sdflow 命名 + `adr/0007` |
 | `workflow-metrics-loop`（暂名） | ⚪ 待开（2026-07-03 整体评估派生） | **度量回路**：聚合各层评审报告数据（findings 按层别/裁决结果/自动修 vs defer/成本），每 N 个 change 汇总一份，为"哪层值不值得留"类决策供数——替代目前 n≈小的"实测"依据（如 P3c） | 独立（只读报告产物，随时可开） | 2026-07-03 整体评估（explore）；`adr/0006` 背景 |
 
 > **待开的都暂不建目录**（避免 openspec 挂 stale pending change，同设计"反无声堆积"洁癖）；各自开工时再 materialize proposal/design/tasks/spec。B/C 互不依赖、与两个新 change 也互不依赖，均只依赖 A。
@@ -54,4 +54,5 @@
 - `adr/0004-opsx-ship-stage3-orchestrator.md` — opsx-ship 阶段三窄编排
 - `adr/0005-dev-runtime-checkout-split.md` — 开发/运行 checkout 分离（toolkit 自身 dev/release 靠两 clone 物理隔）
 - `adr/0006-execution-model-baseline-fleet-anchored.md` — 执行模型能力基线锚定机队（opus/sonnet/gpt-5.5，非开发时模型）：prose 协议脚本化硬约束、强/弱措辞相对机队、resolver 脚本化 + ROADMAP 调序的依据
+- `adr/0007-sdflow-naming-consolidation.md` — sdflow 品牌收拢命名决策：全量 `sdflow-` 前缀 + 三保留名单（`embedded-test-sop`/`openspec-upgrade`/`sdflow-upgrade`）；已评估未选 = plugin 冒号命名空间（Codex 无 plugin）、半量改名（品牌分裂）、留旧名 stub（no-stub 维持）
 - `CONTEXT.md` 新术语：**设计层连续 vs 编排层连续**（区分"无强制中断"与"无手动逐步触发"）；**终态集**（批次完成判据，B-Q1）；**开发/运行 checkout**（dev/release 物理隔，`adr/0005`）；**反静默守卫** 已扩到"全局 bundle 解析 + 陈旧遮蔽"（footprint grill）

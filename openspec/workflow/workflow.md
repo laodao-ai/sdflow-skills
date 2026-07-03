@@ -22,7 +22,7 @@
      └─ 收敛后 [checkpoint]（多轮中途不提交,只收敛后一次）
         │
  阶段二·设计审 ── 连续,无 /clear ───────────────────────────────────
-   sdflow-spec-review 编排器                      Step1 autoplan(广审)→Step2 并行多镜(本项目标准)→Step3 一份 report
+   sdflow-spec-review 编排器               Step1 autoplan(广审)→Step2 并行多镜(本项目标准)→Step3 一份 report
      └─ fresh 子代理替代 /clear 保独立；中途不 AskUserQuestion(决策登记进报告)
      └─ 内部 2×[checkpoint]（autoplan 子步 / sdflow-spec-review 子步）
         │
@@ -35,12 +35,12 @@
      └─ 领域问题在生成循环内命中即 fix子代理+re-review 即时闭环
      └─ 逐任务 [checkpoint]（subagent-dev 现状已有）
         │  (无 /clear——子 agent 调度中本就禁清；评审 fan-out 的 fresh 子代理即独立性)
-   sdflow-code-review 编排器                      每次全跑·独立冷视角·强制主审
+   sdflow-code-review 编排器               每次全跑·独立冷视角·强制主审
      └─ 并入 gstack/review(scope-drift+完成度)+领域镜+对抗镜+历史镜+置信过滤
      └─ 能修自动修[impl-review-fix]、修不了/拿不准 defer→buglist/todolist；一份 code-review-report.md
      └─ [checkpoint]
         │
-   sdflow-done                               verify(防假✅,证据锚点) → hand-off.md → archive(+delta 对码核验/同步) → commit → merge
+   sdflow-done                             verify(防假✅,证据锚点) → hand-off.md → archive(+delta 对码核验/同步) → commit → merge
         │
    hand-off.md ── 异步 ──▶ 人类读 → 决定开"清理 change" → 作为下个 change 输入
 ```
