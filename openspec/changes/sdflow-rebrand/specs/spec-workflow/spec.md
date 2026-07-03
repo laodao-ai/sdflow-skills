@@ -33,6 +33,22 @@
 - **WHEN** 运行 `bash setup.sh`
 - **THEN** 摘要首行输出 `sdflow-skills v0.9.0`（或当前 VERSION 内容）；VERSION 缺失时显式 `vunknown`，MUST NOT 伪造版号
 
+#### Scenario: marker 兼容以名单为界、不误伤他仓财产〔spec-review-amendment / autoplan F8〕
+- **WHEN** Windows 机器上同时存在 laodao-skills 旧仓自装的 misc skill 拷贝（带 `.laodao-skills` marker，目录名不在 RENAME-MAP∪保留名单内）
+- **THEN** sdflow 的 setup.sh 视其为**非自属** → skip 不刷不删；仅名单内目录的旧 marker 被识别为自属并迁移为 `.sdflow-skills`
+
+### Requirement: 托管区块 marker 迁移兼容〔spec-review-amendment〕
+
+`sdflow-init` 的托管区块注入（`inject()`）MUST 以**令牌行**（`opsx-init:start` / `opsx-init:rules:start` 等 token）定位既有区块，MUST NOT 依赖含 skill 名的 marker 全文精确匹配；改名后对含旧 marker 文案（"由 opsx-project-init 维护"）的存量消费仓执行 `update`，MUST **替换**原区块（新 marker 文案随之更新），MUST NOT 追加重复区块或使旧区块失管。
+
+#### Scenario: 存量旧 marker 区块被替换而非重复追加
+- **WHEN** 一个消费仓 CLAUDE.md 含旧 marker 文案的托管区块，跑新版 `sdflow-init update`
+- **THEN** 该区块被原位替换为新名内容（token 定位命中），文件中托管区块数量仍为 1；MUST NOT 出现两个 opsx-init 区块并存
+
+#### Scenario: 跨改名孤儿链真实可清
+- **WHEN** 本机存在指向已改名目录的 dangling 自属软链，在 canonical checkout 重跑 `setup.sh`
+- **THEN** 该链被 `cleanup_orphans` 枚举到并清除（枚举方式 MUST 覆盖 dangling 软链——尾斜杠 glob 不满足此要求）；新名链同轮建立
+
 ## MODIFIED Requirements
 
 ### Requirement: workflow bundle 改在权威源、经部署下发

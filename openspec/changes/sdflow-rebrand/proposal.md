@@ -8,6 +8,7 @@
 
 ## What Changes
 
+- **⓪前置修复两项（改名的硬依赖地基）**〔spec-review-amendment〕：`cleanup_orphans` 的 dangling 链枚举 bug（尾斜杠 glob 死代码，双镜沙箱实证）；`inject()` 托管区块 marker 全文匹配含旧名（改名后消费仓 update 会追加重复区块）→ token 基匹配迁移。两者不修，本 change 的孤儿清理与托管区块重注入承诺全部落空。
 - **①全量改名 9 个 skill 目录**（**BREAKING**：斜杠命令名变化，旧名即刻失效、不留 stub）：
 
   | 旧名 | 新名 | 旧名 | 新名 |
@@ -44,8 +45,8 @@
 
 ## Success Metrics
 
-- `ls */SKILL.md` 呈现 12 个目录 = 9 新名 + 3 保留名；`bash setup.sh` 后 `~/.claude/skills` 与 `~/.codex/skills` 只有新名链，旧名链被孤儿清理收走（测试锚定）。
-- grep 断言清单全绿：功能性文件（SKILL.md×12 / setup.sh / init.py / assets/snippets / assets/workflow/workflow.md / README）中零旧名残留（白名单：ADR/CONTEXT/ROADMAP 历史行/archive）。
+- `ls */SKILL.md` 呈现 12 个目录 = 9 新名 + 3 保留名；孤儿清理与新链建立经**沙箱测试锚定**（实现期），真实激活 = merge+push 后新会话 `/sdflow-upgrade` 在 canonical 完成（旧链清零在该步验收）〔spec-review-amendment：激活改道〕。
+- grep 断言清单全绿（**逐名定制 pattern 防子串碰撞；在托管区块重注入之后执行**）：功能性文件中零旧名残留（白名单：ADR/CONTEXT/ROADMAP 历史行/archive/issues 债池/docs/memo）〔spec-review-amendment〕。
 - 全部既有测试通过（改名后路径引用修正），且新增：跨改名孤儿清理测试、存量 `.laodao-skills` marker 兼容测试。
 - 触发验证：新 description 在 skill 列表加载后，原触发场景语句（如"记一下这个 bug""帮我 review 设计"）仍指向正确 skill（人工抽查 + description 对照表）。
 - setup.sh 输出 `sdflow-skills v<VERSION>`；消费仓跑一次 `sdflow-init update` 后托管区块引用全为新名。

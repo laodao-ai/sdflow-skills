@@ -44,16 +44,27 @@
        │             └─ ⑤ setup.sh/init.py 提示文案 + README 列表 + CLAUDE.md 正文
        ▼
   setup.sh 重跑：新名建链（install_into 自动拾取新目录）
-                旧名链 = 自属 dangling → cleanup_orphans 收走（跨改名场景，测试锚定）
-  消费仓：sdflow-init update → 托管区块重注入新名
+                旧名链 = 自属 dangling → cleanup_orphans 收走（**前提 = tasks 0.1 先修其
+                dangling 枚举 bug**——尾斜杠 glob 看不见悬空链，主干既有死代码〔spec-review-amendment〕）
+  消费仓：sdflow-init update → 托管区块重注入新名（**前提 = tasks 0.2 marker token 迁移**——
+                旧 marker 全文含 opsx-project-init，精确匹配失败会追加重复区块〔spec-review-amendment〕）
   【白名单，不改】adr/ · ROADMAP 历史行 · CONTEXT 术语史 · changes/archive/ · .superpowers/
+                · openspec/issues/ 债池历史 · docs/ · memo-*.md〔spec-review-amendment 补〕
+
+  〔spec-review-amendment〕引用面补第⑥类 + 两个盲区（引用面镜 F1/F2）：
+  ⑥ 规则方法论文档互相点名（assets/workflow/spec-review.md · ff-generation-constraints.md ·
+     reference/quality-layering.md · reference/README.md · Token_Saving_Strategies.md ·
+     vendor/NOTICE.md 自撰行）——运行时经 resolver 被 skill 加载的活跃规则，改漏 = 模型读到
+     指向旧 slash 名的调用指导（认知层静默漂移）
+  ＋ openspec/config.yaml context 字段（每次 ff 注入 prompt 的活跃上下文）
+  ＋ setup.sh:109/:133 承重路径（opsx-project-init/assets/… 目录名随 git mv 变化，改漏=canonical 断链）
 ```
 
 ## 四、决策
 
-- **D1 映射表驱动 + 白名单反向断言**〔adr/0006 机械活确定性〕：改名与文本 sweep 全部按 §三 RENAME-MAP 执行（tasks 写死确切命令 = 等效脚本化，可复核可重放）；收尾验证用**反向法**——全仓 grep 每个旧名，命中文件不在白名单即 FAIL（防"改哪些文件靠记忆"的遗漏模式，比正向清单可靠）。
+- **D1 映射表驱动 + 白名单反向断言**〔adr/0006 机械活确定性〕：改名与文本 sweep 全部按 §三 RENAME-MAP 执行（tasks 写死确切命令 = 等效脚本化，可复核可重放）；收尾验证用**反向法**——全仓 grep 每个旧名，命中文件不在白名单即 FAIL。〔spec-review-amendment / autoplan F2/F3〕两处硬化：**逐名定制 pattern**（`spec-review` ⊂ `sdflow-spec-review` 子串碰撞，须负向排除新名前缀；`workflow/spec-review.md` 是方法论文件名非 skill 名，文件名不改、命中白名单化）；**断言时点 = 5.4 托管区块重注入之后**（先断言必假 FAIL）。
 - **D2 触发等价表**：9 个改名 skill 的 description 重写产出一份 `trigger-map.md`（随 change 留档）：每行 = 旧触发短语集 → 新 description 中的对应短语 + slash 新名。**约束：原触发场景语句全保留**（如"记一下这个 bug"仍触发 sdflow-buglist），只换 slash 名、荡涤旧名指称；等价表即评审面（spec-review 逐行核对）。
-- **D3 marker 永久兼容**：新写入 `.sdflow-skills`；`.laodao-skills` **永久**识别为自属（一行判断成本换绝不误伤存量 Windows copy；不设兼容窗口——OQ2 裁定）。
+- **D3 marker 兼容（spec-review 收窄）**：新写入 `.sdflow-skills`；`.laodao-skills` 识别为自属**仅限目录名 ∈ RENAME-MAP 旧名∪新名∪保留名单**——Windows 上 laodao-skills 旧仓自己的 misc 拷贝同样带 `.laodao-skills` marker，全量兼容会把别仓财产误判自属而误刷/误删（autoplan F8）。名单外一律 skip。不设时间窗口（名单即边界）。
 - **D4 sibling 机制不变、只换字面**：issues.py 的"按脚本自身位置上溯 SKILLS_ROOT 再 join 目录名"机制保留，仅 :64-65 两个目录名字面换新（`sdflow-buglist`/`sdflow-todolist`）；sdflow-done SKILL §2.1 固定路径同步。**不借机抽象**（如把目录名做成 env/config——YAGNI，改名不是重构窗口）。
 - **D5 git mv 保历史**：9 目录一律 `git mv`（rename 检测保 blame 连续性）；文档性引用白名单不改（历史记录原则，同 proposal Non-Goals）。
 - **D6 VERSION = `0.9.0`**（OQ1 裁定）：rebrand 后基线，1.0 留给 opsx-ship + Phase C 齐后。setup.sh 输出 `sdflow-skills v0.9.0`。
@@ -81,17 +92,22 @@
 | `openspec/ROADMAP.md` | `extract-sdflow-repo` 行更名 `sdflow-rebrand` + supersede 注记 |
 | `adr/0007`（新建） | 命名方案决策记录（含 plugin 否决） |
 
-## 七、迁移顺序与回滚
+## 七、迁移顺序与回滚〔spec-review-amendment 重排：激活改道 + 断言最后〕
 
 ```
+  ⓪ 前置修复：cleanup_orphans dangling 枚举（0.1）+ inject() marker token 迁移（0.2）——坏地基先修
   ① git mv ×9（一次提交，保 rename 检测）
-  ② 文本 sweep（RENAME-MAP × 功能性引用面①-⑤）+ description 重写（D2 等价表同产出）
-  ③ 品牌三件（setup.sh 输出/VERSION/marker 兼容）
-  ④ 测试修正 + 新增（孤儿清理跨改名 / marker 兼容）→ 全量 pytest
-  ⑤ 白名单反向断言（D1）
-  ⑥ 本机激活：setup.sh 重跑 → 双侧 readlink 新名、旧链清零（真实输出留档）
-  ⑦ update --dev 同步 instance + 文档收尾（adr/0007 / ROADMAP / README）
-  回滚 = git revert 改名提交 + setup.sh 重跑（链随目录名自动还原；无数据迁移，纯可逆）
+  ② 文本 sweep（RENAME-MAP × 引用面①-⑥ 显式清单）+ description 重写（D2 等价表 + 机械断言）
+  ③ 品牌三件（setup.sh 输出/VERSION/marker 收窄兼容）
+  ④ 测试修正 + 新增（0.1/0.2/收窄/布局冒烟）→ 全量 pytest（全部沙箱，实现期禁跑真实 setup）
+  ⑤ update --dev 同步 instance + 托管区块重注入（marker 迁移实测生效）
+  ⑥ 白名单反向断言（D1 逐名 pattern；必须在 ⑤ 之后——先断言必假 FAIL）
+  ⑦ 文档收尾（adr/0007 / ROADMAP / README）
+  ⑧ 真实激活【本 change 流水线之外】：merge + push 后，新会话跑 /sdflow-upgrade——
+     在 canonical（~/.skills/sdflow-skills，REPO_NAME 匹配）pull + setup，旧链清理 + 新链建立
+     一次完成；同 session 自指矛盾自然解除（hand-off 承载，opsx-done 提醒）
+  回滚 = git revert 改名提交 + canonical 重跑 setup（本机可逆）；消费仓侧托管区块已重注入者
+     需再跑一次 update 回注旧名——**非全自动回滚**（F10 边界如实声明）
 ```
 
 ## Compliance
