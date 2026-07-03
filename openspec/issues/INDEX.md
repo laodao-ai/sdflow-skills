@@ -34,16 +34,16 @@
 | T8 | todo | PROPOSED | minimize-repo-footprint |
 | T9 | todo | PROPOSED | minimize-repo-footprint |
 
-### 未分组（批次为空）
+### 批次：sdflow-rebrand
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T19 | todo | OPEN | sdflow-rebrand |
-| T20 | todo | OPEN | sdflow-rebrand |
-| T21 | todo | OPEN | sdflow-rebrand |
-| T22 | todo | OPEN | sdflow-rebrand |
-| T23 | todo | OPEN | sdflow-rebrand |
-| T24 | todo | OPEN | sdflow-rebrand |
+| T19 | todo | PROPOSED | sdflow-rebrand |
+| T20 | todo | PROPOSED | sdflow-rebrand |
+| T21 | todo | PROPOSED | sdflow-rebrand |
+| T22 | todo | PROPOSED | sdflow-rebrand |
+| T23 | todo | PROPOSED | sdflow-rebrand |
+| T24 | todo | PROPOSED | sdflow-rebrand |
 
 ## 已闭合（终态）摘要
 

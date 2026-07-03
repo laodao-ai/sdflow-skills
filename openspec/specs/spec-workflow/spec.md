@@ -84,7 +84,7 @@ workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / 
 - **`checkpoint-commit.sh`** MUST 全局安装到 agent 中立的 canonical 根 `~/.sdflow/hack/`（**非** `~/.claude/hooks`——它是跨-agent bash 工具、非 Claude 事件 hook）、不再进消费仓 `hack/`。
 - **`config.yaml` / `changes/` / `specs/`** 天然属仓，仍仓内。
 
-消费仓的规则副本 SHALL 经 `sdflow-init update` 采纳最新（改后 update 对规则改为"停复制 + 陈旧遮蔽告警"，见「迁移」需求），MUST NOT 直接编辑部署副本。`sdflow-init` 的部署实现（`copy_bundle`）MUST 区分两种铺设模式：默认（消费仓）模式只拷 `tools/` 子树，且拷贝前若目的地 `tools/` 已存在 MUST 先整删再整拷（清后拷收敛），MUST NOT 用"存在则合并覆盖"语义（防上游删文件后消费仓残留孤儿文件）；`--dev` 整 bundle 刷新模式仅供 toolkit 源仓自身 dogfood 用，MUST 先校验 `--root` 解析后的真实路径等于本脚本所在 toolkit 仓根，不等则 MUST 拒绝执行（防误把整套规则灌进消费仓）。
+消费仓的规则副本 SHALL 经 `sdflow-init update` 采纳最新（update 对规则为"停复制 + 陈旧遮蔽告警"，见「迁移」需求），MUST NOT 直接编辑部署副本。`sdflow-init` 的部署实现（`copy_bundle`）MUST 区分两种铺设模式：默认（消费仓）模式只拷 `tools/` 子树，且拷贝前若目的地 `tools/` 已存在 MUST 先整删再整拷（清后拷收敛），MUST NOT 用"存在则合并覆盖"语义（防上游删文件后消费仓残留孤儿文件）；`--dev` 整 bundle 刷新模式仅供 toolkit 源仓自身 dogfood 用，MUST 先校验 `--root` 解析后的真实路径等于本脚本所在 toolkit 仓根，不等则 MUST 拒绝执行（防误把整套规则灌进消费仓）。
 
 #### Scenario: 修改 workflow 规则
 - **WHEN** 需要修改 workflow.md
@@ -132,7 +132,7 @@ recorder 债务池 SHALL 统一为 `openspec/issues/{buglist,todolist}/` 结构�
 
 ### Requirement: 规则全局解析 resolver（本地优先 → 全局兜底 → 显式降级）
 
-skills（sdflow-spec-review / sdflow-code-review / sdflow-done / recorders / opsx-ship）读取 workflow 规则 MUST 走统一三步 resolver：① 仓内**有规则文件本体**（`workflow.md` / `spec-checklists/` / `code-checklists/`）→ 用本地；② 否则 → 全局 canonical bundle；③ 全局也缺 → **显式降级**通用评审并告警，MUST NOT 静默当"无此层"。步①的存在判据 MUST 查**规则文件本体**、MUST NOT 查 `openspec/workflow/` 目录（`tools/` 使该目录在每个仓恒存在，查目录会令每个消费仓误命中本地 pin）。步②的 canonical 解析 MUST 平台无关回落：先试 `~/.sdflow/workflow/`（Unix 软链目录，透明），否则读 `~/.sdflow/workflow-path`（Windows 指针文件）取 bundle 路径。步③的"显式降级 + 告警"即 CONTEXT 术语『反静默守卫』的缺失面（见 `adr/0003`）。
+skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist·todolist·issues / opsx-ship〔待其 change 落地〕）读取 workflow 规则 MUST 走统一三步 resolver：① 仓内**有规则文件本体**（`workflow.md` / `spec-checklists/` / `code-checklists/`）→ 用本地；② 否则 → 全局 canonical bundle；③ 全局也缺 → **显式降级**通用评审并告警，MUST NOT 静默当"无此层"。步①的存在判据 MUST 查**规则文件本体**、MUST NOT 查 `openspec/workflow/` 目录（`tools/` 使该目录在每个仓恒存在，查目录会令每个消费仓误命中本地 pin）。步②的 canonical 解析 MUST 平台无关回落：先试 `~/.sdflow/workflow/`（Unix 软链目录，透明），否则读 `~/.sdflow/workflow-path`（Windows 指针文件）取 bundle 路径。步③的"显式降级 + 告警"即 CONTEXT 术语『反静默守卫』的缺失面（见 `adr/0003`）。
 
 〔model-baseline-amendment / `adr/0006`〕上述三步链 MUST 由确定性脚本 **`~/.sdflow/hack/resolve-workflow.sh`** 实现（stdout = 规则根路径；全局缺失 → 非零退出 + stderr 固定告警文案）。skills MUST 通过调用该脚本解析规则路径，MUST NOT 把三步链作为指令文本交由执行模型逐步照做（执行机队 = opus/sonnet/gpt-5.5 机队锚定，prose 协议在弱档模型上的失效形态 = 静默跳步）；调用方 MUST NOT 静默吞脚本非零退出码。
 
@@ -193,4 +193,48 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / recorders / ops
 #### Scenario: 留旧副本仍能跑（pin 逃生口）
 - **WHEN** 用户读到告警后选择保留本地规则副本
 - **THEN** 该仓 resolver 步① 继续命中本地副本、照旧能跑（即显式 pin 行为），不因 change 而丢功能
+
+### Requirement: skill 命名与品牌一致性
+
+工具链自制 skill MUST 统一使用 `sdflow-` 前缀命名（目录名 = 安装名 = 斜杠命令名），按 RENAME-MAP（design §三）执行：`sdflow-init`、`sdflow-done`、`sdflow-maintain`、`sdflow-roadmap`、`sdflow-spec-review`、`sdflow-code-review`、`sdflow-buglist`、`sdflow-todolist`、`sdflow-issues`。豁免保留名单 = `embedded-test-sop`（域技能）、`openspec-upgrade`（升级外部 CLI）、`sdflow-upgrade`。改名 SHALL 用 `git mv`（保 blame 连续）；主 spec 与功能性文件全文中的旧 skill 名 SHALL 随更名同步替换（语义不变）；文档性历史记录（`adr/`、ROADMAP 历史行、CONTEXT 术语史、`changes/archive/`）MUST NOT 回改。改名后各 SKILL.md 的 description MUST 随新名重写且**触发等价**：原触发场景语句集 SHALL 全部保留（仅替换斜杠命令名与旧名指称），等价性以 `trigger-map.md` 对照表留档可审。
+
+#### Scenario: 目录名与斜杠命令一致切换
+- **WHEN** 改名完成并在运行 checkout 重跑 `setup.sh`
+- **THEN** `~/.claude/skills/` 与 `~/.codex/skills/` 下只存在新名链（12 = 9 新 + 3 留）；旧名 dangling 链被孤儿清理收走，MUST NOT 残留
+
+#### Scenario: 触发等价不回退
+- **WHEN** 用户说出改名前即可触发某 skill 的语句（如"记一下这个 bug"）
+- **THEN** 新 description 仍使该语句触发对应新名 skill（sdflow-buglist）；trigger-map.md 中该短语有对照行
+
+#### Scenario: sibling 脚本路径随名迁移
+- **WHEN** `sdflow-issues` 的 `issues.py reindex` 需要子进程调用兄弟脚本
+- **THEN** 它按自身位置上溯 SKILLS_ROOT 后以**新目录名**（`sdflow-buglist`/`sdflow-todolist`）join 路径并成功调用；`sdflow-done` §2.1 的固定路径同为新名
+
+### Requirement: 安装器品牌标识与存量 marker 兼容
+
+`setup.sh` MUST 以 `sdflow-skills v<VERSION>` 标识输出（`VERSION` 文件为版号真相源，起始 `0.9.0`）；Windows copy 模式的 marker 文件 MUST 新写为 `.sdflow-skills`，且所有权判定对存量 `.laodao-skills` marker 的兼容 MUST **以名单为界**〔spec-review-amendment D5〕：仅目录名 ∈ RENAME-MAP 旧名∪新名∪保留名单时识别为自属可刷新（源已亡则按孤儿清理），名单外一律视为非自属 skip，MUST NOT 全量兼容（防误伤 laodao 旧仓 misc 拷贝）。
+
+#### Scenario: 存量 laodao marker 仍被识别为自属
+- **WHEN** 某 Windows 机器上存在旧版安装的 skill 拷贝（含 `.laodao-skills` marker），重跑新版 `setup.sh`
+- **THEN** 该拷贝被识别为自属 → 正常刷新并换写 `.sdflow-skills` marker；MUST NOT 走"非本工具产物"skip 分支
+
+#### Scenario: 版本标识来自 VERSION 文件
+- **WHEN** 运行 `bash setup.sh`
+- **THEN** 摘要首行输出 `sdflow-skills v0.9.0`（或当前 VERSION 内容）；VERSION 缺失时显式 `vunknown`，MUST NOT 伪造版号
+
+#### Scenario: marker 兼容以名单为界、不误伤他仓财产〔spec-review-amendment / autoplan F8〕
+- **WHEN** Windows 机器上同时存在 laodao-skills 旧仓自装的 misc skill 拷贝（带 `.laodao-skills` marker，目录名不在 RENAME-MAP∪保留名单内）
+- **THEN** sdflow 的 setup.sh 视其为**非自属** → skip 不刷不删；仅名单内目录的旧 marker 被识别为自属并迁移为 `.sdflow-skills`
+
+### Requirement: 托管区块 marker 迁移兼容〔spec-review-amendment〕
+
+`sdflow-init` 的托管区块注入（`inject()`）MUST 以**令牌行**（`opsx-init:start` / `opsx-init:rules:start` 等 token）定位既有区块，MUST NOT 依赖含 skill 名的 marker 全文精确匹配；改名后对含旧 marker 文案（"由 opsx-project-init 维护"）的存量消费仓执行 `update`，MUST **替换**原区块（新 marker 文案随之更新），MUST NOT 追加重复区块或使旧区块失管。
+
+#### Scenario: 存量旧 marker 区块被替换而非重复追加
+- **WHEN** 一个消费仓 CLAUDE.md 含旧 marker 文案的托管区块，跑新版 `sdflow-init update`
+- **THEN** 该区块被原位替换为新名内容（token 定位命中），文件中托管区块数量仍为 1；MUST NOT 出现两个 opsx-init 区块并存
+
+#### Scenario: 跨改名孤儿链真实可清
+- **WHEN** 本机存在指向已改名目录的 dangling 自属软链，在 canonical checkout 重跑 `setup.sh`
+- **THEN** 该链被 `cleanup_orphans` 枚举到并清除（枚举方式 MUST 覆盖 dangling 软链——尾斜杠 glob 不满足此要求）；新名链同轮建立
 
