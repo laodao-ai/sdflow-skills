@@ -96,7 +96,7 @@
 ## 七、风险 → 缓解
 
 - [结论行格式漂移致 gate 误判] → D5 双向钉死（脚本+SKILL 报告格式节）+ 单测断言字面；报告生成方与解析方同仓同 change 演进。
-- [外部 skill 产物形态变化] → 〔grill-amendment〕完成判据主锚改为**本仓自有** checkpoint 标签约定（git 历史，durable；对上游产物形态的依赖降为辅通道）；标签 `task<N>-` 前缀随本 change 升格为契约（写进 workflow.md 步 6 prompt 与 sdflow-ship SKILL）；双通道皆不可判 → UNKNOWN 停上抛（不猜）。
+- [外部 skill 产物形态变化] → 〔grill-amendment〕完成判据主锚改为**本仓自有** checkpoint 标签约定（git 历史，durable）；〔spec-review-amendment D7 改述〕**主锚分子 N 的提取（plan `### Task \d+:` 标题计数）仍强依赖上游 writing-plans 模板格式（本地已见 3 个缓存版本），并非整体降级为辅**——缓解：标题命中 0 → 显式 UNKNOWN（不猜）；标签 `task<N>-` 前缀随本 change 升格为契约（**注入点=plan 生成层：writing-plans 派发 args 要求每任务 commit 步显式用 checkpoint 脚本，由 implementer 执行**〔D1〕，写进 workflow.md 步 6 prompt 与 sdflow-ship SKILL）；双通道皆不可判 → UNKNOWN 停上抛（不猜）。
 - [ship 在消费仓跑但该仓无阶段三产物约定] → gate REFUSE_START 已兜（无 spec-review-report 即拒）；报错文案指引 workflow 步骤。
 - [弱主模型无视 gate 判定继续跑] → SKILL.md 措辞禁止性（MUST follow gate verdict）+ verify 终门仍在链尾兜底；残余接受（机队锚定的已知边界）。
 
