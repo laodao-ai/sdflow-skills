@@ -118,6 +118,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
   X1  reviewer 原始发现 + 主 session 裁掉理由；<80 滤除项一行带过
 ### 修复 / defer 台账
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(附理由)；defer K 项 → buglist/todolist
+  T10复核: <方案> | 对抗镜结论 <通过/证伪> | <一句理由>   ← 无客观判据的 ≥2 方案自动选必附
 ### 结论
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
 

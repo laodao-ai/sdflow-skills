@@ -17,7 +17,7 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一�
   步前问"NEXT 是谁 + 前置缺什么"，步后问"产物落了吗 + 门禁结论"。首行人读摘要照抄进对话，JSON 供判定。
 - **ship 零 git 写操作〔D8〕**：全程不 commit/merge/push（各子 skill 的 checkpoint 归其自身；ship 无产物故无自身 checkpoint）；**不自动 push**。
 - **merge 意图透传**：调用语含"别合并 / 跑到 merge 前停"类 opt-out → **原样转述给 sdflow-done**（git 单向操作只在 done 一处）。
-- **决策协议（T10 三级，替换"有把握自动选"）**：阶段三遇 ≥2 方案——①有客观判据（测试/断言/基准可判）→ 自动选并记理由；②无客观判据 → 派对抗镜复核推荐项，通过才自动选（复核记录写进该步报告）；③复核不过/无从复核 → defer 进 buglist/todolist + hand-off。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。**
+- **决策协议（T10 三级，替换"有把握自动选"）**：阶段三遇 ≥2 方案——①有客观判据（测试/断言/基准可判）→ 自动选并记理由；②无客观判据 → 派对抗镜复核推荐项，通过才自动选（复核记录写进该步报告）；③复核不过/无从复核 → defer 进 buglist/todolist + hand-off。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 复核记录格式：写入该步 code-review-report.md 的「修复 / defer 台账」区，行格式 = 「T10复核: <方案> | 对抗镜结论 <通过/证伪> | <一句理由>」。
 - 模型档位与缺省见规则根 `model-tiers.md`（经 ~/.sdflow/hack/resolve-workflow.sh 解析；config.yaml 的 model-tiers 段可覆盖映射）。
 
 ## 链序（gate 驱动，非记忆）
