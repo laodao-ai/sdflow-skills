@@ -2,7 +2,7 @@
 name: sdflow-spec-review
 description: >
   阶段二「设计评审编排器」——把 autoplan（广审）+ 本项目标准的并行多镜审（领域镜 + 对抗镜 + 接地镜）
-  编排成一次连续跑、产出**一份** spec-review-report.md 的评审。主 session（强模型）协调：Step1 跑
+  编排成一次连续跑、产出**一份** spec-review-report.md 的评审。主 session（强档）协调：Step1 跑
   autoplan 吃其 findings，Step2 fan-out 多个 fresh 子代理并行审本项目标准，Step3 去重合并 + 对抗裁决 →
   一份报告。**中途不打断**——撞到"≥2 方案 / 核验不了的事实"不 AskUserQuestion，而是写进报告「决策登记区」
   （选项 + 推荐 + 两方后果），人工在设计 HARD-GATE 一次性过报告拍板。**不依赖 /clear**——子代理 fresh
@@ -59,12 +59,12 @@ description: >
 
 > 每个子代理 prompt 必须自带：`{change_dir}` 路径、它负责的清单/角度、"返回结构化 findings 列表（每条带：问题 / 证据 file:line / **置信度(高/中/低)** / 严重度 / 建议），**不要 AskUserQuestion**"。
 
-## 第三步：综合 + 对抗裁决 → 决策登记进报告（主 session · 强模型）
+## 第三步：综合 + 对抗裁决 → 决策登记进报告（主 session · 强档）
 
 - **合并去重**：把 autoplan findings（Step1）+ 各镜 findings 汇成一池，**去重**（同一问题多镜命中合并）。
 - **对抗裁决**：对每条 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
 - **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由），供人类设计门复核"裁得对不对"。
-- **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强模型带上下文）已强于数值打分。
+- **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
 - 按 `design-diagrams.md`：命中触发的图**只验证存在/正确/未过时**，缺失/过时标记，不重画。
 - **checkpoint 提交（P2c 第 2 次）**：产出报告 + amendments 后 → `~/.sdflow/hack/checkpoint-commit.sh spec-review "并行多镜审 + 合并报告 + spec-review-amendment"`。

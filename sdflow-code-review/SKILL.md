@@ -2,7 +2,7 @@
 name: sdflow-code-review
 description: >
   阶段三「代码评审编排器」——**每次全跑·独立冷视角·强制主审**（非"高风险才跑的边际抽查"；实测能抓循环内被
-  controller 说服放过的真问题）。主 session（强模型）协调：Step1 并入 gstack/review（scope-drift + 计划
+  controller 说服放过的真问题）。主 session（强档）协调：Step1 并入 gstack/review（scope-drift + 计划
   完成度审计），Step2 fan-out 多个 fresh 子代理并行审本项目 code-checklists（领域镜 + 对抗镜 + 历史镜），
   Step3 置信过滤（<80 滤除）+ 对抗裁决，Step4 **能修的自动修**（标 [impl-review-fix]）、≥2 方案有把握自动
   选推荐（记理由）、修不了/拿不准的 defer 进 buglist/todolist，Step5 汇总**一份** code-review-report.md。
@@ -80,7 +80,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 > 〔Phase C 补〕sdflow-code-review **自带 code outside voice**（跨模型 codex，always）+ 命中 HR-TG 单开领域 cross-model
 > 属 Phase C（C3/C4）。Phase A 不实现跨模型镜。
 
-## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强模型）
+## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
 
 1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）。
 2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
