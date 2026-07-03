@@ -1,5 +1,5 @@
 ---
-name: opsx-done
+name: sdflow-done
 description: >
   Finalize an OpenSpec change: reconcile tasks → verify (evidence-anchored, anti-false-green) →
   hand-off.md → archive (openspec CLI, with
@@ -13,10 +13,10 @@ description: >
   file:line; no-anchor ✅ → gap); a hand-off.md (done/not-done + deferred items + next-stage advice)
   is produced after verify and before archive, and travels with the archive. As the final gate after
   stage-3 drops the human gate, verify runs on a strong model with a Do-Not-Trust cold start. Use when
-  implementation is complete and reviewed. Trigger with /opsx-done.
+  implementation is complete and reviewed. Trigger with /sdflow-done.
 ---
 
-# opsx-done — OpenSpec 变更收尾
+# sdflow-done — OpenSpec 变更收尾
 
 将 reconcile → verify → **hand-off** → archive → git commit → merge 串成一条收尾流水线。各步独立子代理、按本步性质选 model（见「模型选择」）：**verify / archive → Sonnet**（门禁/判断），**commit → Haiku**（机械）；**merge** 留主 session（单向 git，缺省执行、调用时可 opt-out）。
 

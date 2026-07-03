@@ -1,5 +1,5 @@
 ---
-name: impl-review
+name: sdflow-code-review
 description: >
   阶段三「代码评审编排器」——**每次全跑·独立冷视角·强制主审**（非"高风险才跑的边际抽查"；实测能抓循环内被
   controller 说服放过的真问题）。主 session（强模型）协调：Step1 并入 gstack/review（scope-drift + 计划
@@ -8,10 +8,10 @@ description: >
   选推荐（记理由）、修不了/拿不准的 defer 进 buglist/todolist，Step5 汇总**一份** code-review-report.md。
   **阶段三无人类门**——不 AskUserQuestion，自动修/自动裁/defer，残差交 hand-off 异步再入口。**不依赖 /clear**
   ——子代理 fresh context 即独立性。代码即 ground truth（无接地镜，换历史镜 + 置信过滤）。出报告标
-  [impl-review-fix]。Trigger with /impl-review。
+  [impl-review-fix]。也可说"sdflow 代码审"。Trigger with /sdflow-code-review。
 ---
 
-# impl-review — 阶段三代码评审编排器（每次全跑·独立冷·强制主审）
+# sdflow-code-review — 阶段三代码评审编排器（每次全跑·独立冷·强制主审）
 
 把 workflow 规则集的 `code-checklists/`（经 resolve-workflow.sh 解析，通用 base CR-01~09 + 领域 delta CR-*）操作化为一次
 **连续跑的编排代码评审**：Step1 gstack/review（scope-drift + 完成度）→ Step2 并行多镜（本项目清单）→

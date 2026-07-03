@@ -1,5 +1,5 @@
 ---
-name: opsx-project-init
+name: sdflow-init
 description: >
   把整套 OpenSpec spec 工作流（openspec/workflow/ bundle）一键铺进一个项目：建目录骨架、拷规则集、
   从模版生成/合并 config.yaml、注入 INDEX.md 与 CLAUDE.md/AGENTS.md 的托管区块，并说明 3 个配套 skill。
@@ -7,10 +7,10 @@ description: >
   铺过来 / 装一下 spec 工作流 / 新项目搭一套和 04-iot-tools 一样的 openspec / 更新这个项目的 workflow
   规则到最新"，就用本 skill**——别手动一个个拷文件。脚本兜底确定性铺设与幂等注入，模型只管判断
   （填 config 的本项目段、合并已存在的 config）。本 skill 的 assets/workflow/ 是这套 bundle 的唯一
-  权威源；init 铺设、update 重拉最新。Trigger with /opsx-project-init。
+  权威源；init 铺设、update 重拉最新。Trigger with /sdflow-init。
 ---
 
-# opsx-project-init — 一键铺设 OpenSpec spec 工作流
+# sdflow-init — 一键铺设 OpenSpec spec 工作流
 
 把 `openspec/workflow/` 这套**项目无关**的 spec 工作流 bundle 铺进任意项目，并接好 config / INDEX /
 CLAUDE.md。**本 skill 的 `assets/workflow/` 是该 bundle 的唯一权威源**——新项目从这里铺，bundle 有改动

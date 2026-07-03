@@ -1,6 +1,6 @@
 ---
-name: opsx:maintain
-description: 扫描 openspec 目录状态，对比 INDEX.md，报告差异并修复。归档变更后、手动增删 spec 后、合并上游更新后使用。
+name: sdflow-maintain
+description: 扫描 openspec 目录状态，对比 INDEX.md，报告差异并修复。归档变更后、手动增删 spec 后、合并上游更新后使用。Trigger with /sdflow-maintain。
 license: MIT
 compatibility: 需要 openspec 目录结构（openspec/specs/、openspec/rules/、openspec/INDEX.md）。
 metadata:

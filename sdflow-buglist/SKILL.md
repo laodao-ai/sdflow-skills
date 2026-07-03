@@ -1,15 +1,15 @@
 ---
-name: buglist-recorder
+name: sdflow-buglist
 description: >
   自动把发现的 bug 记录进 openspec/issues/buglist/YYYY-MM-DD-buglist.md（每天一文件，全局唯一 ID），
   并支持状态回写（OPEN→VERIFIED→FIXED…）与扫描列表。**只要在烧板验证、日志分析、代码审查、
   调试中发现了 bug 或缺陷，或用户说"记一下这个 bug / 这个问题记到 buglist / 标记 Bxx 已修 /
   列一下还没修的 bug"，就用本 skill**——不要手动拼 Markdown 表格和详细块，交给脚本保证 ID 不撞号、
   状态总览表与详细块双写一致、FIXED 必带根因和证据。本 skill 自包含整套 buglist 约定，是该约定的
-  唯一真相源。Trigger with /buglist-recorder。
+  唯一真相源。Trigger with /sdflow-buglist。
 ---
 
-# buglist-recorder — 自动记录 / 回写 / 扫描 buglist
+# sdflow-buglist — 自动记录 / 回写 / 扫描 buglist
 
 把"发现 bug → 落档 → 跟踪状态"这条易错的机械流程交给脚本兜底，模型只做判断。
 **本 skill 自包含整套约定**（不依赖任何外部 rule 文件）。

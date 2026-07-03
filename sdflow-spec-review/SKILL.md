@@ -1,5 +1,5 @@
 ---
-name: spec-review
+name: sdflow-spec-review
 description: >
   阶段二「设计评审编排器」——把 autoplan（广审）+ 本项目标准的并行多镜审（领域镜 + 对抗镜 + 接地镜）
   编排成一次连续跑、产出**一份** spec-review-report.md 的评审。主 session（强模型）协调：Step1 跑
@@ -7,10 +7,11 @@ description: >
   一份报告。**中途不打断**——撞到"≥2 方案 / 核验不了的事实"不 AskUserQuestion，而是写进报告「决策登记区」
   （选项 + 推荐 + 两方后果），人工在设计 HARD-GATE 一次性过报告拍板。**不依赖 /clear**——子代理 fresh
   context 即独立性。只审 prevention（config 固化的结构/约束）焊不住的残差：①Validation ②对抗 ③接地读码。
-  与 autoplan 互补不重复（autoplan 已含 eng 镜）。出报告标 [spec-review-amendment]。Trigger with /spec-review。
+  与 autoplan 互补不重复（autoplan 已含 eng 镜）。出报告标 [spec-review-amendment]。也可说"sdflow 设计审"。
+  Trigger with /sdflow-spec-review。
 ---
 
-# spec-review — 阶段二设计评审编排器
+# sdflow-spec-review — 阶段二设计评审编排器
 
 把 workflow 规则集的 `spec-review.md`（经 resolve-workflow.sh 解析，Detection 方法论）+ `spec-checklists/domains/`（领域 R 项）
 操作化为一次**连续跑的编排评审**：Step1 autoplan（广审）→ Step2 并行多镜（本项目标准）→ Step3 合并成

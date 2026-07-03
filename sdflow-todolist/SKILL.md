@@ -1,16 +1,16 @@
 ---
-name: todolist-recorder
+name: sdflow-todolist
 description: >
   自动把优化想法 / 技术债 / 改进点等**非缺陷**项记录进 openspec/issues/todolist/YYYY-MM-todolist.md
   （每月一文件，全局唯一 T-ID），并支持状态回写（OPEN→PROPOSED→DONE…）与扫描列表。**只要冒出一个
   "以后可以改进 / 这里能优化 / 这是个技术债 / 记个 TODO / 加进待办池"的想法，或用户说"记一下这个优化、
   这个改进想法存一下、标记 Txx 已完成、列一下待办"，就用本 skill**——别手动拼 Markdown，交给脚本保证
   T-ID 不撞号、轻量项只记一行、DONE 必带关联 change/commit。注意：这是攒"没坏但可以更好"的池子，
-  已确认的 bug（坏了的东西）该用 buglist-recorder 而不是本 skill。本 skill 自包含整套 todolist 约定，
-  是该约定的唯一真相源。Trigger with /todolist-recorder。
+  已确认的 bug（坏了的东西）该用 sdflow-buglist 而不是本 skill。本 skill 自包含整套 todolist 约定，
+  是该约定的唯一真相源。Trigger with /sdflow-todolist。
 ---
 
-# todolist-recorder — 自动记录 / 回写 / 扫描 todolist
+# sdflow-todolist — 自动记录 / 回写 / 扫描 todolist
 
 把"冒出改进想法 → 落进收集池 → 实施时回写"这条易丢的流程交给脚本兜底。
 todolist 是**优化/技术债/改进**的收集池（没坏但能更好），实施时再走 OpenSpec change 落地。

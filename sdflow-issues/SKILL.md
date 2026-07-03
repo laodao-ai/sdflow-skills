@@ -1,16 +1,16 @@
 ---
-name: issues-recorder
+name: sdflow-issues
 description: >
   共享 issues 层的**薄操作型 skill**——`issues.py` 独占跨 buglist+todolist 两池的命令
   （`reindex` 重建 `openspec/issues/INDEX.md` + 同步 `openspec/issues/batches.md` 批次状态；
   `batch add/set-status/rename` 维护批次注册表），owns `issues/INDEX.md` + `issues/batches.md`
-  两个跨池共享文件。**主要由 `opsx-done` 的 issues sweep 子步在收尾时自动调用**（分诊完当前
+  两个跨池共享文件。**主要由 `sdflow-done` 的 issues sweep 子步在收尾时自动调用**（分诊完当前
   change 的 bug/todo 后跑 `reindex` 刷新 INDEX）；**人工场景**：想重建 INDEX.md、新建/推进/
   改名一个批次、盘点批次完成度时，也用本 skill——不要手改 `issues/INDEX.md`（首行有
-  `DO NOT EDIT` banner，手改会在下次 reindex 时被无条件覆盖）。Trigger with /issues-recorder。
+  `DO NOT EDIT` banner，手改会在下次 reindex 时被无条件覆盖）。Trigger with /sdflow-issues。
 ---
 
-# issues-recorder — 共享 issues 层（reindex / batch）
+# sdflow-issues — 共享 issues 层（reindex / batch）
 
 本 skill 只是 `issues.py` 的**操作说明**，不是约定标准的定义处——它和 `sdflow-buglist`
 （bug 池）、`sdflow-todolist`（todo 池）是三个 sibling skill，共享同一套 `openspec/issues/`
