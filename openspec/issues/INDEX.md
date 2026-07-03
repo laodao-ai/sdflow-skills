@@ -42,12 +42,12 @@
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
-### 未分组（批次为空）
+### 批次：sdflow-ship
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T25 | todo | OPEN | sdflow-ship |
-| T26 | todo | OPEN | sdflow-ship |
+| T25 | todo | PROPOSED | sdflow-ship |
+| T26 | todo | PROPOSED | sdflow-ship |
 
 ## 已闭合（终态）摘要
 
