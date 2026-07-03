@@ -24,6 +24,8 @@
 | T16 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | PROPOSED | 2026-07-03 16:18 | minimize-repo-footprint | minimize-repo-footprint |
+| T19 | `workflow.md + generation-process.md（权威源）` | 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户 | 可观测性 | OPEN | 2026-07-03 17:38 | sdflow-rebrand |  |
+| T20 | `spec-review/SKILL.md（现 sdflow-spec-review）` | 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项 | 代码质量 | OPEN | 2026-07-03 17:42 | sdflow-rebrand |  |
 
 ---
 
@@ -180,3 +182,39 @@
 **动机**：多 checkout 场景 skills 链被静默改指（对抗镜 B2-F1 后半）；历史行为、迁移依赖，仅缺可见性
 
 **思路**：install_into 在替换目标不同的既有软链时输出一行 接管：旧→新（同 install_sdflow 已修样式）
+
+---
+
+## T19: 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `workflow.md + generation-process.md（权威源）` |
+| 类型 | 可观测性 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/sdflow-rebrand/design.md`
+
+**动机**：sdflow-rebrand 起手时主 session 以「explore 已履行对话岛职能」为由跳过 grill，声明埋在长消息末尾用户未看到——用户重估：grill 是对 explore 结论的二次审视（隔步回头死磕），与 explore 现场拍板不可互相折叠，不能轻易跳过；本次 Detection 层（接地镜/对抗镜）抓到的 sweep 面漏洞即 grill 缺席的代价旁证
+
+**思路**：**待评估，勿当定案**。候选思路（评估时的输入而非结论）：①默认必跑，可跳前提硬条件化（如 explore 同轮逐项拍板 + 无新增术语 + ADR 已排 + 用户明示可跳）；②跳过判定进 spec-review-report 决策登记区单列供设计门勾选；③与 T9（非平凡硬定义）同族同批评估。最终规则以该次评估结论为准
+
+**备注**：用户反馈原话：grill 很重要，是对前面 explore 讨论结果的再次审视，不能轻易跳过；本次 change 放行
+
+---
+
+## T20: 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `spec-review/SKILL.md（现 sdflow-spec-review）` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/sdflow-rebrand/design.md`
+
+**动机**：SKILL.md 本为 Step1→Step2 串行，但主 session 两轮实际执行均将 autoplan 与多镜并行化求快——若 autoplan 对 proposal/design/specs 落 [gstack-amendment]，并行导致多镜审的是改动前快照，丢失「后续镜复审 autoplan 修改、抓修改后不一致」的设计性质（用户 2026-07-03 指出）
+
+**思路**：①SKILL.md Step2 开头显式加一句「MUST 待 Step1 checkpoint 完成后才 fan-out；禁止与 Step1 并行——多镜的评审对象须含 autoplan amendment」（把隐含顺序变禁止性措辞，防执行者优化掉）；②补一条执行纪律：若确已并行（历史运行），Step3 裁决须 diff autoplan 的 amendment 并对照镜 findings 做增量核对、在报告注明
+
+**备注**：本轮（sdflow-rebrand）已按 ②的补救路径处理：autoplan 返回后核其是否改动四件套，有改动则在裁决步增量核对并写进报告
