@@ -3,6 +3,8 @@
 > 本区块由 `opsx-project-init` 维护——`openspec/workflow/` bundle 的规则索引。
 > 新增/删 workflow 规则后重跑 `opsx-project-init update`，或手动同步本表。
 
+> 无本地规则副本的仓：下表文件位于全局 canonical `~/.sdflow/workflow/`，相对链接不可点，以文件名为准。
+
 | 名称 | 文件 | 作用 |
 |---|---|---|
 | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：生成(ff+grill)→设计审(spec-review 编排器)→设计 GATE→实现+代码审+收尾(subagent-dev→impl-review→opsx-done)；去 /clear、连续跑到 merge |

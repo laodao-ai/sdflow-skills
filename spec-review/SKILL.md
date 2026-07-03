@@ -12,7 +12,7 @@ description: >
 
 # spec-review — 阶段二设计评审编排器
 
-把 `openspec/workflow/spec-review.md`（Detection 方法论）+ `spec-checklists/domains/`（领域 R 项）
+把 workflow 规则集的 `spec-review.md`（经 resolve-workflow.sh 解析，Detection 方法论）+ `spec-checklists/domains/`（领域 R 项）
 操作化为一次**连续跑的编排评审**：Step1 autoplan（广审）→ Step2 并行多镜（本项目标准）→ Step3 合并成
 **一份** `spec-review-report.md`。取代旧"autoplan + spec-review 各出报告 + 人工手动合并（旧 step 7）"三步。
 
@@ -27,7 +27,7 @@ description: >
 ## 第零步：确认对象 + 读规则
 
 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
-2. 读 `openspec/workflow/spec-review.md`（方法论）、`trigger-catalog.md`（触发）。无 `openspec/workflow/` 则降级通用评审并提示。
+2. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用评审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用评审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/spec-review.md`（方法论）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
 
 ## 第一步：autoplan 子步（广审，吃其 findings）
 
@@ -110,5 +110,5 @@ description: >
 
 - **只做 prevention 焊不住的残差**（T/S 项交给 config/lint，不重扫）。
 - **必须读真实代码**，不得只验 spec 自洽（接地镜专司此事）。
-- 项目无关：所有路径相对当前项目的 `openspec/workflow/`。
-- checkpoint 脚本相对项目根 `hack/checkpoint-commit.sh`（opsx-project-init 部署）；无则退化为普通 `git add -A && git commit`。
+- 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。
+- checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。

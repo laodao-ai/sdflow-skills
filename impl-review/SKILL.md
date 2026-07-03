@@ -13,7 +13,7 @@ description: >
 
 # impl-review — 阶段三代码评审编排器（每次全跑·独立冷·强制主审）
 
-把 `openspec/workflow/code-checklists/`（通用 base CR-01~09 + 领域 delta CR-*）操作化为一次
+把 workflow 规则集的 `code-checklists/`（经 resolve-workflow.sh 解析，通用 base CR-01~09 + 领域 delta CR-*）操作化为一次
 **连续跑的编排代码评审**：Step1 gstack/review（scope-drift + 完成度）→ Step2 并行多镜（本项目清单）→
 Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份** `code-review-report.md`。
 
@@ -53,8 +53,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
 2. 确认代码已实现且在 feature 分支（`git branch --show-current`）。算 diff base：
    `git fetch origin <base> --quiet && DIFF_BASE=$(git merge-base origin/<base> HEAD)`。
-3. 读 `openspec/workflow/code-checklists/README.md`（架构/选用）、`code-review-base.md`（CR-01~09）、
-   `trigger-catalog.md`（触发）。无 `openspec/workflow/code-checklists/` 则降级通用代码审并提示。
+3. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用代码审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用代码审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/code-checklists/README.md`（架构/选用）、`$RULES_ROOT/code-checklists/code-review-base.md`（CR-01~09）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
 
 ## 第一步：gstack/review 子步（并入，scope-drift + 完成度）
 
@@ -151,5 +150,5 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 - **置信过滤要可审计**：滤掉的 <80 项一行带过，不静默丢。
 - **不重扫 CI 能抓的**：linter/typechecker/编译器范围内的不进镜。
 - **代码即 ground truth**：直接读 diff 与真实代码，不设接地镜（与 spec-review 的唯一结构差异，换历史镜 + 置信过滤）。
-- checkpoint 脚本相对项目根 `hack/checkpoint-commit.sh`（opsx-project-init 部署）；无则退化为普通 `git add -A && git commit`。
-- 项目无关：所有路径相对当前项目的 `openspec/workflow/`。
+- checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。
+- 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。

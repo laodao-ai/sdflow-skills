@@ -43,6 +43,11 @@ metadata:
    额外检查（仅报告，不修复）：
    - 扫描根 CLAUDE.md 和子目录 CLAUDE.md，检查是否引用了已删除的 spec 或 rule 路径
    - 如果发现过时引用，在报告中标注 "CLAUDE.md 中可能存在过时引用：xxx"
+   - **workflow bundle 陈旧遮蔽兜底扫描**：检查 `openspec/workflow/` 下是否残留规则文件本体（`workflow.md` /
+     `spec-checklists/` / `code-checklists/` 任一存在），及仓根 `hack/checkpoint-commit.sh` 孤儿副本。
+     发现 workflow 规则文件本体，输出与 `opsx-project-init update` 同款告警："遮蔽全局且不再被刷新：删=跟全局 /
+     留=显式 pin"；发现 checkpoint 孤儿副本，对称提示："删=用全局 ~/.sdflow/hack/ / 本地 workflow.md 副本
+     （pin）仍引用它则勿删"。**只报告绝不删**。
 
 4. **询问用户是否修复**
 
