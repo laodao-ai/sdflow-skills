@@ -142,6 +142,38 @@ def test_revert_commit_not_counted(repo):
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
 
+def test_t34_no_checkbox_task_not_globally_passed(repo):
+    # 〔T34〕task1 段全勾、task2 段无复选框(仅散文) → 旧全局 checkboxes_all 会因"全文无 - [ ]"
+    # 假齐放行(假✅)；分段绑定后 task2 无框不计入 → CONTINUE_IMPL done_tasks==["1"]
+    d = approved_change(repo, plan="### Task 1: A\n- [x] done\n### Task 2: B\n还没做（无复选框）\n")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
+
+def test_t34_checkbox_union_with_checkpoint(repo):
+    # 〔T34〕task1 由 checkpoint、task2 由其段复选框全勾 → 两通道并集齐 → RUN_CODE_REVIEW
+    approved_change(repo, plan="### Task 1: A\n(无框,靠 checkpoint)\n### Task 2: B\n- [x] done\n")
+    commit_all(repo, "checkpoint(task1-a): A")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "RUN_CODE_REVIEW"
+
+def test_t34_fenced_checkbox_not_counted(repo):
+    # 〔T34/codex#4〕task1 段只有 fenced code block 里的伪 [x]、无真实清单行 → 忽略代码块后
+    # task1 不算完成（若不忽略则假✅ 齐）；task2 真勾 → 仅 task1 未完 → CONTINUE_IMPL
+    plan = ("### Task 1: A\n实现说明\n```\n- [x] 这是代码块里的示例，不是真勾\n```\n"
+            "### Task 2: B\n- [x] real\n")
+    approved_change(repo, plan=plan)
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
+
+def test_t34_duplicate_task_number_unknown(repo):
+    # 〔T34/codex#3+对抗B-1c〕重号 ### Task 1: 两段(一段全勾一段未勾) → set 折叠会掩盖假✅
+    # → 必须判 UNKNOWN
+    plan = ("### Task 1: 占位\n- [x] 无关小项\n### Task 1: 真实\n- [ ] 真活未做\n"
+            "### Task 2: B\n- [x] d\n")
+    approved_change(repo, plan=plan)
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN"
+
 def test_non_git_root_unknown(tmp_path_factory):
     # 独立于 repo fixture：必须是真正孤立的非 git 目录（不能是 repo 的子目录，
     # 子目录会被 git 沿父级发现 .git，反而通过健全性检查）

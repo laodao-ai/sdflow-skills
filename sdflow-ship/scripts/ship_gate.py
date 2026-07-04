@@ -277,12 +277,63 @@ def done_task_ids(root, sha, change):
     return ids
 
 
-def checkboxes_all(plan):
+# [ship-gate-hardening-2 T34] 复选框辅通道按 Task 分段绑定（替换旧全局 checkboxes_all）。
+# 旧实现全文子串判"无任何 - [ ]"即放行所有 task——一个无复选框的 task（仅散文）会被
+# 全局放行（假✅），且代码块/散文里的 - [x] 会被误当完成入口。
+CHECKBOX_RE = re.compile(r"^\s*-\s+\[([ xX])\]")   # 行锚定复选框（非全文子串）
+
+
+def _checkbox_states(text):
+    # [T34] 逐行扫描，忽略 fenced code block（``` 围栏），行锚定复选框；返回 [checked_bool,...]。
+    states = []
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = CHECKBOX_RE.match(line)
+        if m:
+            states.append(m.group(1) in ("x", "X"))
+    return states
+
+
+def _plan_segments(text):
+    # [T34] 按 `### Task <n>:` 位置切段，返回 [(task_num, segment_text), ...]；
+    # 首个 Task 前的前言段不归任何 task 号（其框忽略）。
+    matches = list(TASK_TITLE_RE.finditer(text))
+    segs = []
+    for i, m in enumerate(matches):
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        segs.append((m.group(1), text[start:end]))
+    return segs
+
+
+def checkbox_done_ids(plan):
+    # [T34] 复选框完成集：某 task 号计入 当且仅当其段内有复选框且全部已勾（行锚定 + 忽略代码块）。
     text = plan.read_text(encoding="utf-8", errors="replace")
-    unchecked, checked = "- [ ]" in text, "- [x]" in text
-    if not unchecked and not checked:
-        return None
-    return not unchecked
+    done = set()
+    for num, seg in _plan_segments(text):
+        states = _checkbox_states(seg)
+        if states and all(states):
+            done.add(num)
+    return done
+
+
+def plan_has_any_checkbox(plan):
+    # [T34] 全 plan 有无（行锚定、非代码块内）复选框——供"双通道皆不可判"分支用。
+    text = plan.read_text(encoding="utf-8", errors="replace")
+    return bool(_checkbox_states(text))
+
+
+def plan_has_duplicate_task(plan):
+    # [T34/codex#3+对抗B-1c] 重号 `### Task <n>:` 段检测：plan_task_ids 的 set 会把重号折叠，
+    # 掩盖"一段全勾一段未勾"的假✅——重号即判不可判。
+    text = plan.read_text(encoding="utf-8", errors="replace")
+    nums = TASK_TITLE_RE.findall(text)
+    return len(nums) != len(set(nums))
 
 
 # [spec-review-amendment H4] branch_state() 已移除：D3 终态判据改 change 域可达性
@@ -364,19 +415,24 @@ def decide(root, change):
     if n == 0:
         emit("UNKNOWN", EXIT_UNKNOWN, None,
              "plan 无 '### Task <n>:' 标题（上游模板漂移？），完成判据不能")
+    # [ship-gate-hardening-2 T34] 重号 Task 段 → UNKNOWN（set 折叠掩盖一段全勾一段未勾的假✅）
+    if plan_has_duplicate_task(plan):
+        emit("UNKNOWN", EXIT_UNKNOWN, None,
+             "plan 出现重号 '### Task <n>:' 段（手改/复制粘贴），完成判据不可判"
+             "——重号折叠会掩盖某段未完成的假✅")
     sha = plan_first_sha(root, str(plan.relative_to(root)))
-    done = done_task_ids(root, sha, change) if sha else set()
+    # [ship-gate-hardening-2 T34] 两通道完成集并集：checkpoint 主锚 ∪ 复选框分段辅通道
+    checkpoint_done = done_task_ids(root, sha, change) if sha else set()
+    checkbox_done = checkbox_done_ids(plan)   # 按 Task 分段绑定（非全局全勾放行）
+    done = checkpoint_done | checkbox_done
     done_in_plan = done & plan_ids            # [spec-review-amendment B4] 只认计划内号
     if plan_ids - done:                       # 计划内有未完成号 → 未齐（集合归属,非基数）
-        boxes = checkboxes_all(plan)
-        if boxes is True:
-            pass  # 辅通道：复选框全勾（回勾型执行器）
-        elif not sha and boxes is None:
+        # 双通道皆不可判：plan 未提交（checkpoint 空）且全 plan 无复选框（辅通道空判）
+        if not sha and not plan_has_any_checkbox(plan):
             emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
-        else:
-            emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
-                 f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
-                 done_tasks=sorted(done_in_plan, key=int))
+        emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
+             f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
+             done_tasks=sorted(done_in_plan, key=int))
     # ── step 8：code-review 门 ─────────────────────────────────
     cr = cdir / "code-review-report.md"
     if not cr.is_file():
