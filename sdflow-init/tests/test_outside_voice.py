@@ -66,3 +66,38 @@ def test_unknown_subcommand_usage_exit2():
     r = run(["bogus"])
     assert r.returncode == 2
     assert "usage" in r.stderr
+
+
+def test_render_frame_and_delimiters(tmp_path):
+    ctx = tmp_path / "ctx.md"
+    ctx.write_text("some diff content\n")
+    r = run(["render-prompt", "--context-file", str(ctx)])
+    assert r.returncode == 0
+    assert "找它【漏了】什么" in r.stdout
+    assert "BEGIN UNTRUSTED CONTEXT" in r.stdout
+    assert "END UNTRUSTED CONTEXT" in r.stdout
+    assert "some diff content" in r.stdout
+    assert "OV_TRUNCATED=false" in r.stderr
+
+
+def test_render_truncation(tmp_path):
+    ctx = tmp_path / "big.md"
+    ctx.write_text("A" * 4000)
+    r = run(["render-prompt", "--context-file", str(ctx)],
+            env={"OV_MAX_CONTEXT_BYTES": "1000"})
+    assert r.returncode == 0
+    assert "TRUNCATED" in r.stdout
+    assert "OV_TRUNCATED=true" in r.stderr
+
+
+def test_render_secret_hit_exit3(tmp_path):
+    ctx = tmp_path / "leak.md"
+    ctx.write_text("key=AKIA" + "A" * 16 + "\n")
+    r = run(["render-prompt", "--context-file", str(ctx)])
+    assert r.returncode == 3
+    assert "secret-hit" in r.stderr
+
+
+def test_render_missing_file_exit2(tmp_path):
+    r = run(["render-prompt", "--context-file", str(tmp_path / "nope.md")])
+    assert r.returncode == 2
