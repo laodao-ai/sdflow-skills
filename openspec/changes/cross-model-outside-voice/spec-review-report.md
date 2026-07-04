@@ -68,4 +68,6 @@
 
 2026-07-04 设计门拍板（用户）：**Q1–Q5 全按推荐（A）**。落点：Q1 → proposal Success Metric 4 + tasks 4.6（裁决区按 runner 分桶）；Q2 → tasks 2.4 既有编码（T25 先行 + dry-run 后才动 §3/§4）；Q3 → M4 内复评条款（10 次后按 codex 桶采纳率复评降采样）；Q4 → 维持 grill Q3 拍板（无软开关；codex 异议已留痕即闭）；Q5 → tasks 5.1 附录复评注记。
 
+**拍板重申（2026-07-04，人工补锚·显式越权留痕）**：SDD final review 后 design.md 锚行枚举补 `simulated-source` 一行（纯 doc-sync——spec R2 与两 SKILL 权威交付物本已含该枚举，仅 design 示例行滞后，final reviewer 判 no-action-required）。用户经 ship gate REFUSE_START 上抛确认：该改动不改变 Q1–Q5 拍板实质，拍板重申、补锚续跑。
+
 <!-- ship-gate: design-approved -->
