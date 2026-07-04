@@ -67,7 +67,9 @@ def test_uncommitted_report_is_fresh(repo):
     (d / "verify-report.md").write_text(
         "<!-- ship-gate: verify=PASS -->\n新一轮手写\n", encoding="utf-8")
     code, js, _ = run_gate(repo)
-    assert code == 0 and js["verdict"] == "SHIPPED"
+    # 〔H1〕active 存在 → RUN_VERIFY（非 SHIPPED）；本用例主张仍是 freshness=uncommitted
+    # （report_last_sha 空 → 人机同权），验其经 final RUN_VERIFY 携带 freshness 无误
+    assert code == 0 and js["verdict"] == "RUN_VERIFY"
     assert js["freshness"] == "uncommitted"
 
 def test_openspec_only_commits_keep_fresh(repo):

@@ -31,7 +31,9 @@ def test_verify_fail_exit5(repo):
     code, js, _ = run_gate(repo)
     assert code == 5 and js["verdict"] == "VERIFY_FAIL"
 
-def test_full_pass_to_shipped(repo):
+def test_verify_pass_active_present_run_verify(repo):
+    # 〔H1/HRTG-1〕active 目录仍在 = archive 尚未发生 → 恒 RUN_VERIFY，绝不 SHIPPED
+    # （即便有旧同名 archive dir）。真 SHIPPED（归档后 active 缺席）见 test_gate_terminal.py。
     d = impl_done(repo)
     (d / "code-review-report.md").write_text(
         "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
@@ -42,8 +44,8 @@ def test_full_pass_to_shipped(repo):
     arch.mkdir(parents=True)
     (arch / "proposal.md").write_text("归档\n", encoding="utf-8")
     commit_all(repo, "tail")
-    code, js, _ = run_gate(repo)   # 沙箱在 main 无 feature 分支 → 视为已并
-    assert code == 0 and js["verdict"] == "SHIPPED"
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "RUN_VERIFY"   # active 存在 → 不 SHIPPED（H1）
 
 def test_cr_report_no_anchor_in_progress(repo):
     d = impl_done(repo)

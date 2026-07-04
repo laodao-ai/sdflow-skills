@@ -74,6 +74,44 @@ def run_git(root, *args):
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
+def run_git_rc(root, *args):
+    # [spec-review-amendment H3] 返回码可见版：run_git 把 git 错误与「路径不在树/空输出」
+    # 都折叠成空串，D3 无法区分「base 不存在→UNKNOWN」vs「ls-tree 空→REFUSE」。此版保留 rc。
+    r = subprocess.run(["git", "-C", str(root), *args],
+                       capture_output=True, text=True)
+    return r.returncode, r.stdout.strip()
+
+
+def base_ref(root):
+    # [spec-review-amendment H3] 单一 base 解析：main 优先 master 次，皆无→None（→UNKNOWN）。
+    for base in ("main", "master"):
+        rc, _ = run_git_rc(root, "rev-parse", "--verify", base)
+        if rc == 0:
+            return base
+    return None
+
+
+def archived_dirs_in_tree(root, ref, change):
+    # [spec-review-amendment H2/H5] 纯 git 域发现（非文件系统 glob，工作树无关、忽略未跟踪
+    # 垃圾目录）：列 ref 树里 archive/ 的直接子项，以 re.escape(change) 套日期前缀 fullmatch
+    # （H5 注入防御：--change 的 * ? [] 不当 glob 元字符）。返回匹配的 archive 目录名 set。
+    rc, out = run_git_rc(root, "ls-tree", "--name-only", ref,
+                         "openspec/changes/archive/")
+    if rc != 0 or not out:
+        return set()
+    pat = re.compile(r"\d{4}-\d\d-\d\d-" + re.escape(change) + r"$")
+    return {line.rsplit("/", 1)[-1] for line in out.splitlines()
+            if pat.fullmatch(line.rsplit("/", 1)[-1])}
+
+
+def archived_verify_passed(root, ref, archive_dir):
+    # [spec-review-amendment H1/BR-2] SHIPPED 前追读归档目录内 verify-report.md 的 verify=PASS
+    # 锚（从 ref 树）——不把「归档⟹已验」当无条件蕴含（手工空壳归档目录不得假 SHIPPED）。
+    rc, out = run_git_rc(root, "show",
+                         f"{ref}:openspec/changes/archive/{archive_dir}/verify-report.md")
+    return rc == 0 and ANCHOR_VERIFY_PASS in out
+
+
 def report_last_sha(root, rel):
     return run_git(root, "log", "-1", "--format=%H", "--", rel)
 
@@ -215,18 +253,10 @@ def checkboxes_all(plan):
     return not unchecked
 
 
-def branch_state(root):
-    """已并判定〔spec-review-amendment D6〕。"""
-    head = run_git(root, "rev-parse", "--abbrev-ref", "HEAD")
-    if head == "HEAD":
-        return "unknown"          # detached HEAD
-    for base in ("main", "master"):
-        if run_git(root, "rev-parse", "--verify", base):
-            if head == base:
-                return "merged"   # 已在 base 上（分支已删/已并场景）
-            return "merged" if not run_git(root, "log", f"{base}..HEAD",
-                                           "--oneline") else "pending"
-    return "unknown"
+# [spec-review-amendment H4] branch_state() 已移除：D3 终态判据改 change 域可达性
+# （archived_dirs_in_tree + base 树），不再用「当前 HEAD 分支是否并进 base」这一全局近似；
+# final 路径（active 存在）恒 RUN_VERIFY 不判 SHIPPED，故也无需 branch_state。detached HEAD
+# 对 D3 判定无关（凭 base 树可达仍可 SHIPPED）——旧「detached→UNKNOWN」契约随之废止。
 
 
 def decide(root, change):
@@ -237,6 +267,34 @@ def decide(root, change):
         emit("UNKNOWN", EXIT_UNKNOWN, None,
              "git 不可用或 --root 非 git 仓，无法读盘面")
     cdir = root / "openspec" / "changes" / change
+    # ── D3 归档终态短路〔B3 + D3 硬化 H1-H6〕: active 缺席时纯 git 域查归档 ──
+    # 顺序关键：短路必须在设计门 pre-flight 与 freshness 之前——归档 commit 的 --name-only
+    # 会列出 active 路径删除记录，若先跑 freshness 会引入新误报；短路后该路径天然不可达。
+    if not cdir.exists():
+        base = base_ref(root)
+        head_dirs = archived_dirs_in_tree(root, "HEAD", change)   # H2 纯 git 域(工作树无关)
+        base_dirs = archived_dirs_in_tree(root, base, change) if base else set()
+        if base is None:
+            if head_dirs:
+                emit("UNKNOWN", EXIT_UNKNOWN, None,
+                     "归档存在于 HEAD 树但仓无 base(main/master)，无法判是否已并 → 判定不能")
+            emit("REFUSE_START", EXIT_REFUSE, None,
+                 "change 不存在（active 与 archive 均无）")
+        # H1/BR-2: SHIPPED 须归档在 base 树 且 archived verify=PASS 锚（空壳不放行）
+        if any(archived_verify_passed(root, base, d) for d in base_dirs):
+            emit("SHIPPED", EXIT_OK, None,
+                 "全通（归档后重跑识别）：归档已并 base + verify=PASS 锚。"
+                 "未 push（手动控制）；toolkit 源仓请 push 后新会话 /sdflow-upgrade 激活")
+        if base_dirs:
+            # 归档已并 base 但无 verify=PASS 锚（空壳/未验）→ fail-safe 不判 SHIPPED〔H1/Q3〕
+            emit("UNKNOWN", EXIT_UNKNOWN, None,
+                 "归档已并 base 但缺 verify=PASS 锚（空壳/未验）→ fail-safe 不判 SHIPPED，请人工核验")
+        if head_dirs:
+            # H4: detached 无关，凭 base 树可达；仅在 HEAD 树=归档未并 base
+            emit("RUN_VERIFY", EXIT_OK, "sdflow-done",
+                 "已归档但未并 base，完成 merge 收尾")
+        emit("REFUSE_START", EXIT_REFUSE, None,
+             "change 不存在（active 与 archive 均无）")
     # ── pre-flight：设计门（D7 起跑不越门）─────────────────────────
     report = cdir / "spec-review-report.md"
     if ANCHOR_DESIGN not in anchors_in(report, [ANCHOR_DESIGN]):
@@ -326,19 +384,15 @@ def decide(root, change):
     if v_state is None:
         emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-done",
              "verify-report.md 在但无锚行 → 该步进行中，重跑")
-    # ── final：SHIPPED 判定 ────────────────────────────────────
+    # ── final：active 存在 + verify PASS → 收尾未完（绝不 SHIPPED）─────
+    # [spec-review-amendment H1/HRTG-1] active 目录仍在 = archive 尚未发生（真 archive 移走
+    # active）→ 本态至多「待收尾」。真 SHIPPED（归档后）由 decide 开头的 D3 短路识别
+    # （active 缺席 + base 树可达 + archived verify=PASS 锚）。旧逻辑凭 archive glob 存在性
+    # 判 SHIPPED 会被旧/同名 archive 误触发（HRTG-1 假 SHIPPED），故 active 存在时不判 SHIPPED。
     handoff = (cdir / "hand-off.md").is_file()
-    archived = any((root / "openspec" / "changes" / "archive").glob(f"*-{change}"))
-    bstate = branch_state(root)
-    if bstate == "unknown":
-        emit("UNKNOWN", EXIT_UNKNOWN, None, "detached HEAD，分支态判定不能")
-    if handoff and archived and bstate == "merged":
-        emit("SHIPPED", EXIT_OK, None,
-             "全通：verify PASS + hand-off + 已归档 + 分支已并。"
-             "未 push（手动控制）；toolkit 源仓请 push 后新会话 /sdflow-upgrade 激活",
-             freshness=v_fresh)
     emit("RUN_VERIFY", EXIT_OK, "sdflow-done",
-         f"verify PASS 但收尾未完（hand-off={handoff} archive={archived} branch={bstate}）")
+         f"verify PASS，收尾未完（hand-off={handoff}；archive+merge 由 sdflow-done，"
+         "归档后 SHIPPED 由 gate 短路识别）", freshness=v_fresh)
 
 
 def main(argv=None):
