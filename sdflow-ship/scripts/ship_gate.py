@@ -14,18 +14,18 @@
 退出码: 0=可推进(含 SHIPPED/SKIP) 3=REFUSE_START 4=BLOCKED_UPSTREAM 5=VERIFY_FAIL 6=UNKNOWN
 
 verdict × exit × next 契约表:
-    REFUSE_START     3  -                  未过设计门（若拍板已发生请人工补锚——显式越权留痕）
+    REFUSE_START     3  -                  未过设计门（补锚）｜change 不存在（active 与 archive 均无）〔B3〕
     RUN_SOP          0  embedded-test-sop  TG-02 命中且 {change}-sop.md 缺
     RUN_PLAN         0  writing-plans      superpowers-plan.md 缺
-    CONTINUE_IMPL    0  subagent-dev       标签集未齐 N（JSON done_tasks=已完成任务号集，SDD 勿重派）
+    CONTINUE_IMPL    0  subagent-dev       plan_ids⊄done_ids〔B4 集合归属〕（JSON done_tasks=计划内已完成号集，SDD 勿重派）
     RUN_CODE_REVIEW  0  sdflow-code-review code-review-report.md 缺
     BLOCKED_UPSTREAM 4  -                  code-review=blocked
-    RUN_VERIFY       0  sdflow-done        verify-report.md 缺
+    RUN_VERIFY       0  sdflow-done        verify-report.md 缺｜active 存在 verify=PASS 待收尾｜归档未并 base 待 merge 收尾〔B3/BR-10〕
     VERIFY_FAIL      5  -                  verify=FAIL 且未陈旧
     RERUN_STALE      0  <该步 skill>        D9 陈旧结论 → 重跑该步
     STEP_IN_PROGRESS 0  <该步 skill>        产物在但无锚行
-    SHIPPED          0  -                  final 全通（hand-off+archive+分支已并）
-    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/detached HEAD
+    SHIPPED          0  -                  归档已并 base + archived verify=PASS 锚〔B3+D3硬化,含归档后重跑识别；active 缺席才判,detached 无关〕
+    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能
 
 完成判据窗口〔B1 闭区间〕: superpowers-plan.md 首次提交 sha 起，窗口 [sha, HEAD] 闭区间
     `git log <sha>..HEAD --no-merges` 加 sha 自身 subject（同前缀+TAG_RE 规则）收集
@@ -48,7 +48,9 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
         （显式越权同权级，git 留痕可审计）；
     经 impl-review 豁免的四件套编辑不经二次批准即随档 ship（安全边界=约定级「仅装饰性
-        改动」，gate 不做 hunk 分析；若某次措辞修正实际改动设计语义会静默 merge，设计门 Q2 接受）。
+        改动」，gate 不做 hunk 分析；若某次措辞修正实际改动设计语义会静默 merge，设计门 Q2 接受）；
+    精确同名 change 历史归档过（archive 有真同名旧档 + 已并 base + 带 verify=PASS 锚）而新一轮
+        同名 change 尚未建 active 目录时，D3 短路按旧档报 SHIPPED——change 重名属反模式，接受〔B3〕。
 """  # [impl-review-fix]
 import argparse
 import json
