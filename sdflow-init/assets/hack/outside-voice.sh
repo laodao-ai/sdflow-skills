@@ -74,6 +74,8 @@ do_exec() {  # $1=context file  $2=timeout 秒
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$PWD"
   workdir=$(mktemp -d "${TMPDIR:-/tmp}/outside-voice.XXXXXX")
   trap "rm -rf '$workdir'" EXIT
+  # 预扫：让 secret 证据落真实 stderr（重定向会吞 render_prompt 内部的报告——review fix）
+  secret_scan "$ctx" || exit 3
   render_prompt "$ctx" > "$workdir/prompt.md" 2> "$workdir/render.meta"
   cat "$workdir/render.meta" >&2
   timeout "$tmo" codex exec -C "$repo_root" -s read-only --ephemeral \

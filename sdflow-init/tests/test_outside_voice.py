@@ -173,3 +173,4 @@ def test_exec_secret_hit_exit3(tmp_path):
     r = run(["exec", "--context-file", str(ctx)],
             env={"PATH": f"{bin_dir}:{path_without_codex()}"})
     assert r.returncode == 3
+    assert "secret-hit" in r.stderr
