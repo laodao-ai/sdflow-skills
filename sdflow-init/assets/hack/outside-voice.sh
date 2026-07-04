@@ -69,6 +69,26 @@ render_prompt() {  # $1=context file → stdout 完整 prompt；stderr 末行 OV
   echo "OV_TRUNCATED=$truncated" >&2
 }
 
+do_exec() {  # $1=context file  $2=timeout 秒
+  local ctx="$1" tmo="$2" rc repo_root workdir
+  repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$PWD"
+  workdir=$(mktemp -d "${TMPDIR:-/tmp}/outside-voice.XXXXXX")
+  trap "rm -rf '$workdir'" EXIT
+  render_prompt "$ctx" > "$workdir/prompt.md" 2> "$workdir/render.meta"
+  cat "$workdir/render.meta" >&2
+  timeout "$tmo" codex exec -C "$repo_root" -s read-only --ephemeral \
+    --output-last-message "$workdir/last-message.md" - \
+    < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log"
+  rc=$?
+  if [ "$rc" -eq 124 ]; then cat "$workdir/stderr.log" >&2; exit 124; fi
+  if [ "$rc" -ne 0 ]; then cat "$workdir/stderr.log" >&2; exit 1; fi
+  if [ ! -s "$workdir/last-message.md" ]; then
+    { echo "codex 最终消息为空（cli log 尾部）:"; tail -5 "$workdir/cli.log"; } >&2
+    exit 1
+  fi
+  cat "$workdir/last-message.md"
+}
+
 cmd="${1:-}"
 [ $# -gt 0 ] && shift
 case "$cmd" in
@@ -91,7 +111,7 @@ case "$cmd" in
     if [ "$cmd" = "render-prompt" ]; then
       render_prompt "$ctx"
     else
-      echo "exec not implemented yet" >&2; exit 2   # Task 3 移除
+      do_exec "$ctx" "$tmo"
     fi
     ;;
   *)

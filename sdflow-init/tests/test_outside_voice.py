@@ -17,6 +17,8 @@ def make_fake_codex(tmp_path, mode="ok"):
     """PATH 前置的假 codex；写 --output-last-message 文件，stdout 掺噪声。"""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
+
+    # Fake codex
     fake = bin_dir / "codex"
     fake.write_text(textwrap.dedent("""\
         #!/usr/bin/env bash
@@ -36,6 +38,26 @@ def make_fake_codex(tmp_path, mode="ok"):
         esac
         """))
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+
+    # Fake timeout (on systems without GNU coreutils)
+    fake_timeout = bin_dir / "timeout"
+    fake_timeout.write_text(textwrap.dedent("""\
+        #!/usr/bin/env bash
+        # Simple timeout stub: timeout <seconds> <command> [args...]
+        sec="$1"; shift
+        "$@" &
+        pid=$!
+        sleep_pid=""
+        (sleep "$sec"; kill -9 "$pid" 2>/dev/null) &
+        sleep_pid=$!
+        wait "$pid" 2>/dev/null
+        rc=$?
+        kill -9 "$sleep_pid" 2>/dev/null
+        [ "$rc" -eq 137 ] && exit 124  # killed by -9, treat as timeout
+        exit "$rc"
+        """))
+    fake_timeout.chmod(fake_timeout.stat().st_mode | stat.S_IEXEC)
+
     return str(bin_dir)
 
 
@@ -101,3 +123,53 @@ def test_render_secret_hit_exit3(tmp_path):
 def test_render_missing_file_exit2(tmp_path):
     r = run(["render-prompt", "--context-file", str(tmp_path / "nope.md")])
     assert r.returncode == 2
+
+
+def test_exec_ok_clean_stdout(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "FAKE_CODEX_MODE": "ok"})
+    assert r.returncode == 0
+    assert r.stdout.strip() == "FAKE_FINDINGS"      # 只有最终消息
+    assert "noise" not in r.stdout                   # CLI 噪声不进 findings 通道
+
+
+def test_exec_error_exit1_stderr_forwarded(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "FAKE_CODEX_MODE": "err"})
+    assert r.returncode == 1
+    assert "auth error" in r.stderr
+
+
+def test_exec_timeout_124(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+    r = run(["exec", "--context-file", str(ctx), "--timeout", "1"],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "FAKE_CODEX_MODE": "hang"})
+    assert r.returncode == 124
+
+
+def test_exec_missing_codex_maps_exit1(tmp_path):
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+    r = run(["exec", "--context-file", str(ctx)], env={"PATH": path_without_codex()})
+    assert r.returncode == 1                         # 127 归一到 1，确定性映射
+
+
+def test_exec_empty_final_message_exit1(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "FAKE_CODEX_MODE": "empty"})
+    assert r.returncode == 1
+    assert "最终消息为空" in r.stderr
+
+
+def test_exec_secret_hit_exit3(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "leak.md"; ctx.write_text("key=AKIA" + "A" * 16 + "\n")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}"})
+    assert r.returncode == 3
