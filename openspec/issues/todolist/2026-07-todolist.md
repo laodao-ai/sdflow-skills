@@ -36,6 +36,7 @@
 | T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | OPEN | 2026-07-04 10:51 | cross-model-outside-voice |  |
 | T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | OPEN | 2026-07-04 11:57 | cross-model-outside-voice |  |
 | T30 | `sdflow-init/assets/hack/outside-voice.sh + tests` | helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖 | 代码质量 | OPEN | 2026-07-04 12:46 | cross-model-outside-voice |  |
+| T31 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） | 代码质量 | OPEN | 2026-07-04 13:35 | cross-model-outside-voice |  |
 
 ---
 
@@ -394,3 +395,19 @@
 **动机**：cross-model-outside-voice final whole-branch review（opus）triage：四项均不在 SKILL 驱动的真实执行路径上（默认值合法/协议恒传路径/极端环境），judged record-as-debt 非 must-fix；其中 flag 缺值已实测复现挂死（真实流程不可达）
 
 **思路**：一次小清理：①OV_MAX_CONTEXT_BYTES 数值校验否则回落默认；②while 参数解析对缺值 flag 直接 usage exit 2；③mktemp 失败即 die；④fake timeout stub 换确定性信号同步
+
+---
+
+## T31: voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/cross-model-outside-voice/code-review-report.md`
+
+**动机**：cross-model-outside-voice 代码审（8 镜 + 双 codex voice + fallback）确认的真实但非阻塞项，本轮已修 21 项后的残差
+
+**思路**：①协议节 18 行在两 SKILL 逐字重复→下沉 bundle 单一源文件；②cap/timeout 校准——实测 185KB context 致 codex 300s 超时（本轮 code-voice 实证），需 OV_MAX 与 timeout 匹配调参或分片；③同 change 并行评审 context 文件互踩（固定命名无锁）→ 加运行 ID 后缀或 flock；④调用方 voice stdout 落点规范空白（/tmp 固定名并发覆盖）；⑤父进程被杀后 timeout/codex 孤儿存活（进程组治理）；⑥UNTRUSTED CONTEXT 分隔符可被内容伪造→nonce 化（frame 措辞缓解已加）；⑦UTF-8 字节截断切碎多字节字符；⑧setup.sh cp 覆盖运行中脚本非原子→tmp+mv；另：codex -s read-only 沙箱边界黑盒验证（能否读 -C 外/执行 shell）

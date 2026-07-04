@@ -147,6 +147,7 @@
 | context 超预算〔spec-review-amendment〕 | 大 diff 超字节上限 | helper 截断 | 保头尾截断 + 锚行 truncated=true 留痕 | pytest |
 | secret 粗筛命中〔spec-review-amendment〕 | context-file 含密钥模式 | SKILL 构造侧 | 拒发该次 voice + reason_code=secret-hit 留痕 | pytest |
 | autoplan 原生执行不可用 | skill 未安装 | Step1' | 模拟广审 + 显式标注「降级模式」 | 冒烟 |
+| timeout/gtimeout 缺失 | 环境未装 GNU coreutils（macOS 常见） | preflight missing-deps / exec 显式报错 | 报告留痕 reason_code 可诊断，不与 codex 报错混淆 | pytest |
 
 ## 可观测性（BASE-11）
 
@@ -164,7 +165,7 @@
 
 ## 安全与数据保护（BASE-28，TG-17）
 
-- **信任边界** = 仓库代码 → 外部 LLM（OpenAI）。发送范围限 prompt 模板 + diff/评审对象摘录；**文件系统边界指令**写进模板：不读 `~/.claude`、`~/.sdflow` 等 skill/规则定义，不读 `.env`、密钥文件，只看仓库代码。
+- **信任边界** = 仓库代码 → 外部 LLM（OpenAI）。发送范围 = prompt 模板 + 上下文摘录，且 codex 在 -C <repo_root> 只读沙箱内**可自行读取仓库树**（含 gitignored 文件）——「不读 .env/密钥」是 prompt 层约束非文件系统 ACL，属接受的剩余风险[impl-review-fix]；**文件系统边界指令**写进模板：不读 `~/.claude`、`~/.sdflow` 等 skill/规则定义，不读 `.env`、密钥文件，只看仓库代码。
 - **总闸 = 环境层**〔grill-amendment Q3〕：是否安装/认证 codex CLI 即出境总闸——装即同意、不装即天然关停（层降级为同模型子代理而非消失）；工作流层不设软开关，不替环境层操心。
 - **凭证**：codex CLI 自管 auth，helper 不接触、不落日志；stderr 转发时按行透传原文（codex CLI 自身不在 stderr 打印凭证）。
 - **最小权限**：helper 只读、无网络操作自身（网络由 codex CLI 发起）。
