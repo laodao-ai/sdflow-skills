@@ -53,7 +53,7 @@
 > OPEN 项入**单一批次**（key=本 change 名）→ 末尾跑 `issues.py reindex` 刷新 INDEX/批次状态 → hand-off 第 2 段引用该批次号
 > （不再逐条罗列裸 ID）。脚本分工：`sdflow-buglist`/`sdflow-todolist` 的 `scan`/`triage` 分诊 + `sdflow-issues` 的
 > `batch add`/`reindex` 管批次与索引。细则见 `sdflow-done` skill 的 SKILL.md §2.1（配套 skill，不在本 bundle 内，随 sdflow-skills `setup.sh` 安装）。
-> 〔Phase C 补〕sdflow-spec-review / sdflow-code-review 加**跨模型 outside voice** + 命中 **HR-TG** 单开领域 cross-model（C2/C3/C4）。
+> 〔Phase C 补〕sdflow-spec-review / sdflow-code-review 加**跨模型 outside voice** + 命中 **HR-TG** 单开领域 cross-model（C2/C3/C4）——**已落地**：调用协议见两 SKILL「outside-voice helper 调用协议」节，helper 契约 = `~/.sdflow/hack/outside-voice.sh` 头注释
 
 ## 二、逐步 prompt（可直接复制）
 
@@ -73,7 +73,7 @@
 | 二 | 5.5 | /embedded-test-sop | `/embedded-test-sop 基于 {change dir} 的 specs/ + 评审结论生成 {change}-sop.md 手工测试文档 + log-checks.yaml，存到 {change dir}。` | {change}-sop.md + log-checks.yaml | 嵌入式专属条件触发：TG-02(嵌入式固件) **∧**（启动/复位·状态机·协议 等高风险 **∨** TG-18 有测试计划）；非嵌入式天然不触发 |
 | 三 | 6 | /writing-plans | `/writing-plans 按 {change dir} 的 design.md 与评审结论生成原子任务清单 superpowers-plan.md，每任务 TDD，参考 tasks.md 分组；有测试计划则附测试覆盖图。把 design 的领域约束逐字写进 plan 的 Global Constraints。生成后自动以 subagent-driven-development 执行，自动完成全部任务，每任务完成跑测试套件确认无 warning；` plan 每任务的 commit 步 MUST 显式写 `bash ~/.sdflow/hack/checkpoint-commit.sh task<N>-<slug> "<描述>"` 并由 implementer（实现子代理）自己执行——`task<N>-` 标签是 /sdflow-ship gate 完成判据主锚（主 session 事后补跑会因工作区已净而空转）。`final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）作为额外 review lens 附给 reviewer。无法自动解决的记入 buglists 或 todolists` | superpowers-plan.md + 代码 | superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）** |
 | 三 | 7 | /subagent-driven-development | （由步骤 6 自动触发）每任务完成跑测试套件、逐任务 checkpoint；final whole-branch 终审 dispatch 时把 `code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）` 作额外 review lens 附给 reviewer | 代码 | quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环） |
-| 三 | 8 | /sdflow-code-review | `/sdflow-code-review 每次全跑独立审查 {change dir} 的代码变更（并入 gstack/review 的 scope-drift+完成度审计；能修的自动修标 [impl-review-fix]、修不了/拿不准的记 buglists/todolists；汇总一份 code-review-report.md）。完成后 checkpoint-commit sdflow-code-review。` | code-review-report.md | 编排器：**每次全跑·独立冷·强制主审**（P3c，非高风险才跑）；清单逐条+对抗+历史镜+置信过滤；阶段三无人类门（自动修/裁/defer，不 AskUserQuestion） |
+| 三 | 8 | /sdflow-code-review | `/sdflow-code-review 每次全跑独立审查 {change dir} 的代码变更（并入 gstack/review 的 scope-drift+完成度审计；能修的自动修标 [impl-review-fix]、修不了/拿不准的记 buglists/todolists；汇总一份 code-review-report.md）。完成后 checkpoint-commit sdflow-code-review。` | code-review-report.md | 编排器：**每次全跑·独立冷·强制主审**（P3c，非高风险才跑）；清单逐条+对抗+历史镜+置信过滤；阶段三无人类门（自动修/裁/defer，不 AskUserQuestion）+ 跨模型 outside voice（always code voice + HR-TG 领域 cross-model） |
 | 三 | 9 | /sdflow-done | `/sdflow-done` | verify-report + hand-off + 归档 + 提交 + 合并 | sdflow-done skill；verify(防假✅证据锚点)→**issues sweep 子步(§2.1,已就位：分诊本change OPEN项入批次→reindex)**→hand-off.md→archive(+delta 同步)→commit→merge；**必跑（闭环）** |
 
 ## 三、关键设计决策
