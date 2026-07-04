@@ -6,14 +6,14 @@
 
 `ship_gate.py` 的**实现完成判据**（阶段三主锚）目前有两处 pre-existing 精度局限（ship-gate-hardening 代码审 HR-TG code 镜发现、非其引入、defer 为 T32/T34）：
 
-1. **checkpoint 任务号无 change 归属**——`checkpoint(task<N>-)` 标签不带 change 名，同一 feature 分支上交错推进两个 change 时同号任务会互相污染完成集。窗口下界 `plan_first_sha` 只做了**部分**隔离（各 change plan 首次提交 sha 不同 → 窗口不同），一旦两 change 的 plan 与 task 提交落进同一窗口区间即撞号，可致**假齐 → 误放行 RUN_CODE_REVIEW**（假✅，本工作流头号失效模式）。
+1. **checkpoint 任务号无 change 归属**——`checkpoint(task<N>-)` 标签不带 change 名，同一 feature 分支上交错推进两个 change（**stacking**：已在 feat/A 上再建 change B）时同号任务会互相污染完成集。窗口下界 `plan_first_sha` 只做**部分**隔离，一旦两 change 的 plan 与 task 提交落进同一窗口区间即撞号，可致**假齐 → 误放行 RUN_CODE_REVIEW**（假✅）。**注**〔grill Q1〕：触发需 **stacking 反模式 + 撞 plan 同号 + 窗口重叠** 三重条件（FF-0 只拦 main 建 change、不拦 feature 分支上 stacking；B4 集合归属已滤计划外号）——故本项定位为**契约正确性加固 + 防御纵深**（gate 不假设分支纪律永不破），非活体高频 bug。
 2. **复选框辅通道全局粒度**——`checkboxes_all` 只看全文有无 `- [ ]`/`- [x]`，一个全局勾选即放行**所有** plan task，未按 `### Task <n>:` 分段绑定；与 checkpoint 集合归属主锚并存时可放大假齐面。
 
 两者都是"绝大多数盘面正确、但在特定交错/回勾盘面下产生假✅"的精度洞。gate 的存在意义就是堵假✅，这两处属其自身判据的残留缝隙，值得在一个窄 change 内根治。
 
 ## What Changes
 
-- **T32（P1）checkpoint 任务标签加 change 命名空间**：checkpoint 任务提交格式引入 change 归属（具体编码格式经 design ADR 定夺，候选：步名内嵌 `checkpoint(<change>:task<N>-)` / git trailer / 旁挂字段）；gate 完成判据**只认当前 change 的任务标签**，跨 change 同号不再互相计入。**BREAKING（契约层）**：checkpoint 任务提交格式变更，牵连 producer（`checkpoint-commit.sh` 调用约定）+ consumer（`ship_gate.py` 解析）+ `sdflow-ship` 派发 args + 下游 plan 模板。
+- **T32（P2，防御纵深）checkpoint 任务标签加 change 命名空间**：checkpoint 任务提交格式引入 change 归属（具体编码格式经 design ADR 定夺，候选：步名内嵌 `checkpoint(<change>:task<N>-)` / git trailer / 旁挂字段）；gate 完成判据**只认当前 change 的任务标签**，跨 change 同号不再互相计入。**BREAKING（契约层）**：checkpoint 任务提交格式变更，牵连 producer（`checkpoint-commit.sh` 调用约定）+ consumer（`ship_gate.py` 解析）+ `sdflow-ship` 派发 args + 下游 plan 模板。
 - **T32 向后兼容**：旧无命名空间 `checkpoint(task<N>-)` 历史标签的读取语义必须保留、不得因新格式判读崩溃（具体归属策略——宽松「无命名空间视同任意 change」vs 严格「命名空间 change 忽略裸标签」——经 design ADR 定夺）。
 - **T34（P2）复选框辅通道按 Task 分段绑定**：`checkboxes_all` 全局判据改为按 `### Task <n>:` 分段解析，每段复选框状态绑定到对应 task_id；辅通道完成集与 checkpoint 主锚完成集按号合并，一个全局勾选不再放行未各自勾选的其它 task。自包含于 `ship_gate.py` + tests。
 
@@ -37,8 +37,8 @@
 
 | 优先级 | 需求 | 依据 |
 |--------|------|------|
-| **P1** | T32 change 命名空间隔离 | 根治跨 change 假✅（数据正确性级），hand-off 点名最有价值 |
-| **P2** | T34 复选框分段绑定 | 放大假齐面收窄；自包含小改，搭 T32 车 |
+| **P2** | T32 change 命名空间隔离（防御纵深） | 加固契约正确性；污染需 stacking+同号+窗口三重巧合，非活体高频〔grill Q1 降 P1→P2〕 |
+| **P2** | T34 复选框分段绑定 | 回勾型执行器全局单勾可在**单 change 内**发生假✅，更贴近活体 |
 | **停置** | T33 工作树 dirty 新鲜度 | 与「盘面即状态=committed 产物」有本质张力，**不在本次范围**，需先单独拍板 |
 
 ## 假设〔TG-22〕

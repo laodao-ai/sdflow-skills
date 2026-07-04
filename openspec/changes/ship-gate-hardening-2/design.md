@@ -11,12 +11,14 @@
 
 窗口下界 `plan_first_sha` 对跨 change 污染只做**部分**隔离：两 change 若在同一分支交错、plan 与 task 提交落进重叠窗口，同号 task 仍互相计入 → 假齐 → 假✅。checkpoint 契约由 `checkpoint-commit.sh`（producer，逐字插值 `<step>`）+ `sdflow-ship` 派发 args（规定 step=`task<N>-<slug>`）+ gate（consumer 解析）三方共识——属**版本化契约套件**〔TG-25〕。
 
+**可达性与立场〔grill-amendment Q1〕**：污染场景**可达但非常规**——唯一入口是 **stacking**（已在 `feat/A` 上再 `openspec new change B`，把第二个 change 摞进同一 feature 分支）；FF-0 只拦 `main`/`master` 上建 change，**不拦 feature 分支上再建 change**（已验 `ff0-branch-guard.py`），故 stacking 不被阻断。叠加既有 **B4 集合归属**（`done & plan_ids` 已滤计划外号），真咬到假✅ 需 **stacking + 撞 plan 同号 + 窗口重叠** 三重条件同时成立。因此 T32 的定位是**契约正确性加固 + 防御纵深**（change-归属的标签本就更对；gate 不假设"独立分支纪律"永不破），**非**修一个活体高频 bug——据此定 **P2**（与 T34 同级，不虚高 P1）。**立论铁律**：MUST NOT 用"每 change 独立分支是纪律"作任何缓解——该纪律若成立则 T32 整个不可达（立论自否）；gate 恰恰取"纪律可能破"立场才使 T32 有意义（立场固化见 `adr/0008-gate-defense-in-depth-not-trust-discipline.md`）。
+
 **约束**：① gate 只读零副作用不变；② 假✅ 是头号失效模式，任何取舍向**假阴（多一次 CONTINUE_IMPL）安全、假阳（假 SHIPPED/RUN_CODE_REVIEW）禁止**倾斜；③ `checkpoint-commit.sh` 焊死单行 `-m` subject（禁 `\` 续行/heredoc）——改契约优先不动 producer 脚本；④ 向后兼容旧无命名空间标签为一等约束（proposal A1）。
 
 ## Goals / Non-Goals
 
 **Goals：**
-- T32：完成判据按 change 归属隔离任务号，新格式 change 免疫跨 change 同号污染。
+- T32（P2，防御纵深）：完成判据按 change 归属隔离任务号，新格式 change 免疫**命名空间标签**的跨 change 同号污染（触发本需 stacking，见 Context 可达性）。
 - T32：旧无命名空间 `checkpoint(task<N>-)` 标签读取语义保留、不崩溃。
 - T34：复选框辅通道按 `### Task <n>:` 分段绑定，一个全局 `[x]` 不放行未各自勾选的其它 task。
 - ship-gate-hardening 既有 B1/B2/B3/B4 语义**逐字不变**（回归全绿）。
@@ -53,7 +55,9 @@
 ```
 
 - **为何裸标签仍计**（A1）：gate 中途升级时，进行中 change 的已产生裸标签不能丢（否则回退到 CONTINUE_IMPL——虽属**安全侧假阴**，但徒增摩擦）；且窗口下界已把裸标签大致框到本 change 时段。
-- **为何新格式即免疫**：一旦 plan 派发命名标签，污染 change B 的标签是 `checkpoint(<B>:task<N>-)` → group(1)=B≠当前 → **正确排除**；叠加既有 `done & plan_ids`（B4），残留假✅面塌缩到「两个都用旧裸格式的 change 同窗口交错且撞 plan 号」——历史边角，记已知不覆盖。
+- **为何新格式即免疫（命名污染）**：一旦 plan 派发命名标签，污染 change B 的**命名标签** `checkpoint(<B>:task<N>-)` → group(1)=B≠当前 → **正确排除**；叠加既有 `done & plan_ids`（B4），命名污染面塌缩。
+- **残留（裸污染方）**：即便当前 change A 用命名格式，stacking 进来的**裸格式**污染方仍走窗口计入 → 对裸污染方**不免疫**。残留 = 「裸格式污染方 stacking + 撞 plan 号」，记已知不覆盖。
+- **审议过收紧、故意不做〔grill-amendment Q3〕**：考虑过"per-change 模式检测"（A 窗口内出现 ≥1 命名标签 → 判 A 为命名 change → 忽略所有裸标签 → 对裸污染全免疫）。**故意不采纳**：T32 已 P2 防御纵深、残留是三重巧合，收紧要两遍扫描 + 引入 A1 过渡摩擦（在飞 change 出现首个命名 tag 后早期裸 tag 停计=假阴摩擦），KISS 不划算；两方案都只增假阴（无假阳），保持简单不引入任何假阳。收紧留作"stacking 若变常态"的 D2-b 式后手。
 - **假阴/假阳倾斜自检**：命名不匹配 → 排除（可能少计 = 假阴安全）；裸标签 → 计入（保今日行为，不新增假阳）。方向合规（约束②）。
 
 ### ADR-3：T34 复选框按 Task 分段绑定
@@ -98,14 +102,14 @@ plan_ids - done_ids == ∅ ? ─是→ 进 code-review 门
 
 ## Risks / Trade-offs
 
-- **[两个旧裸格式 change 同窗口交错且撞 plan 号 → 残留假✅]** → 缓解：新格式 change 全免疫；该场景需两 change 都不用新格式且同分支交错同号——实操罕见（每 change 独立 feature 分支是既定纪律）。记入 `ship_gate.py`「已知不覆盖」，不在本次根治（Non-Goal）。
-- **[change 名含非 kebab 字符破坏 `:` 解析]** → 缓解：openspec 强制 change 名 kebab-case；gate `TAG_RE` 命名组限 `[a-z0-9][a-z0-9-]*`，非法即不匹配命名分支（退化为裸/不计，假阴安全），不崩溃。
+- **[残留假✅：stacking + 双旧裸格式 + 撞 plan 号 三重巧合]** → 界定〔grill-amendment Q1〕：T32 的污染场景本身已要求 stacking（Context 可达性）；新格式 change 对**命名空间标签**污染全免疫，残留仅剩「污染方也用旧裸格式（gate 升级前的历史 change 摞进来）」这一子集，再叠加撞 plan 号（B4 之上）+ 窗口重叠。记入 `ship_gate.py`「已知不覆盖」，Non-Goal。**MUST NOT 用"独立分支纪律"作缓解**——该纪律若成立则 T32 整个不可达（立论自否），故 gate 取防御纵深立场：不假设纪律永不破。
+- **[change 名含非 kebab 字符破坏 `:` 解析]** → 缓解：openspec 强制 change 名 kebab-case（**实证**〔grill-amendment Q3 接地〕：openspec 1.4.1 CLI `new change "Bad:Name"` 被拒「must be lowercase (use kebab-case)」——`:`/大写/空格皆不可能入名）；gate `TAG_RE` 命名组再限 `[a-z0-9][a-z0-9-]*` 双保险，非法即不匹配命名分支（退化为裸/不计，假阴安全），不崩溃。且归属用**精确 `==change`**（非前缀）比较，`foo` 与 `foo-bar` 天然互斥，无假阳。
 - **[gate 中途升级致进行中 change 已产裸标签语义变化]** → 缓解：ADR-2 裸标签保留计入 = 今日行为，无回归。
 - **[T34 分段解析边界（段内无框 / plan 未提交）]** → 缓解：保留 UNKNOWN 双通道不可判分支；段内无框 = 该 task 仅凭 checkpoint 主锚判，不因分段新增假阳。
 
 ## Migration Plan
 
-1. gate 解析先落地（读双格式）→ 再改 `sdflow-ship` 派发 args 产新格式：**读容忍先行**，避免"先产新格式但 gate 还不认"的窗口。
+1. gate 解析先落地（读双格式）→ 再改 `sdflow-ship` 派发 args 产新格式：**读容忍先行**，避免"先产新格式但 gate 还不认"的窗口。**dogfood 自举〔grill-amendment Q2〕**：本 change 自己的 task checkpoint 即用命名空间格式，故解析器 MUST 排为**第一个任务组**（tasks §1）——否则解析器落地前，工作树 gate（symlink 即时生效）用旧硬前缀读不到命名 checkpoint、窗口内暂时少数 done（gate 每次调用重解析全窗口故 2.3 后自愈，但期间 SDD 按少数 done_tasks 重派已完成 task = churn）。解析器先行从根上消除该 churn。
 2. 无数据迁移（无持久状态；纯 git 历史读取）。旧标签原地兼容，无需回填。
 3. **回滚**：`ship_gate.py` + SKILL + checkpoint 契约均 git 版本化；坏则 `git checkout <prev>` + `setup.sh`（SKILL/脚本走 symlink/拷贝生效）。
 4. 部署边界：改 `sdflow-ship`（skill 本体 symlink，pull 即生效）；`checkpoint-commit.sh` 本 change **零改**故无 `~/.sdflow/hack/` 重装窗口。
