@@ -241,8 +241,10 @@ def plan_task_ids(plan):
     # [spec-review-amendment B4/D5] plan 声明的任务号集（去重）。完成判据按**集合归属**
     # （plan_ids ⊆ done_ids）而非基数（len(done) < n）——否则计划外任务号（遗留/错号/
     # merge 内提交的 checkpoint(task9-)）会顶替缺失的计划内号让基数达标而假齐（假✅）。
+    # [impl-review-fix CR-F2] fence-aware：fenced 代码块内的 `### Task N:` 示例标题不算任务
+    # （与复选框同 fence 口径，经共享 _parse_plan——前向引用，运行时已定义，模块级合法）。
     text = plan.read_text(encoding="utf-8", errors="replace")
-    return set(TASK_TITLE_RE.findall(text))
+    return set(_parse_plan(text)[0])
 
 
 def plan_task_count(plan):
@@ -288,15 +290,24 @@ def done_task_ids(root, sha, change):
     return ids
 
 
-# [ship-gate-hardening-2 T34] 复选框辅通道按 Task 分段绑定（替换旧全局 checkboxes_all）。
-# 旧实现全文子串判"无任何 - [ ]"即放行所有 task——一个无复选框的 task（仅散文）会被
-# 全局放行（假✅），且代码块/散文里的 - [x] 会被误当完成入口。
+# [ship-gate-hardening-2 T34 + impl-review-fix CR-F1/F2] 复选框辅通道按 Task 分段绑定。
+# 旧全局 checkboxes_all 全文子串判"无任何 - [ ]"即放行所有 task——无复选框的 task（仅散文）
+# 会被全局放行（假✅）。CR-F1/F2〔代码审对抗镜+outside-voice 两声共识〕：Task 标题与复选框
+# MUST 共享**同一个全文 fence 状态**（单遍 _parse_plan）——旧版"先切段、每段各自重置 in_fence"
+# 会让悬空/跨段围栏泄漏（段内未闭合 ``` 吞掉真实未勾项 → 假✅）、且标题正则对围栏无感知
+# （fenced 示例标题被当真 task/误判重号）。二者统一到一次带 fence 状态的整文扫描。
 CHECKBOX_RE = re.compile(r"^\s*-\s+\[([ xX])\]")   # 行锚定复选框（非全文子串）
 
 
-def _checkbox_states(text):
-    # [T34] 逐行扫描，忽略 fenced code block（``` 围栏），行锚定复选框；返回 [checked_bool,...]。
-    states = []
+def _parse_plan(text):
+    # [T34/impl-review-fix] fence-aware 单遍解析（Task 标题与复选框统一围栏口径）。
+    # fenced code block（``` 围栏）内的行对 Task 标题与复选框**均不可见**（CR-F1/F2）。
+    # 返回 (task_order[出现序,含重号], boxes_by_task{num:[checked_bool]}, any_checkbox, unbalanced)。
+    # unbalanced=True 表示 EOF 时围栏未闭合（悬空 ```）——plan 无法可靠解析（CR-F1）。
+    task_order = []
+    boxes_by_task = {}
+    any_checkbox = False
+    cur = None
     in_fence = False
     for line in text.splitlines():
         if line.lstrip().startswith("```"):
@@ -304,47 +315,45 @@ def _checkbox_states(text):
             continue
         if in_fence:
             continue
-        m = CHECKBOX_RE.match(line)
-        if m:
-            states.append(m.group(1) in ("x", "X"))
-    return states
-
-
-def _plan_segments(text):
-    # [T34] 按 `### Task <n>:` 位置切段，返回 [(task_num, segment_text), ...]；
-    # 首个 Task 前的前言段不归任何 task 号（其框忽略）。
-    matches = list(TASK_TITLE_RE.finditer(text))
-    segs = []
-    for i, m in enumerate(matches):
-        start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        segs.append((m.group(1), text[start:end]))
-    return segs
+        tm = TASK_TITLE_RE.match(line)
+        if tm:
+            cur = tm.group(1)
+            task_order.append(cur)
+            boxes_by_task.setdefault(cur, [])
+            continue
+        cm = CHECKBOX_RE.match(line)
+        if cm:
+            any_checkbox = True
+            if cur is not None:   # 前言段（首个 Task 前）的框不归任何 task，忽略
+                boxes_by_task[cur].append(cm.group(1) in ("x", "X"))
+    return task_order, boxes_by_task, any_checkbox, in_fence
 
 
 def checkbox_done_ids(plan):
     # [T34] 复选框完成集：某 task 号计入 当且仅当其段内有复选框且全部已勾（行锚定 + 忽略代码块）。
     text = plan.read_text(encoding="utf-8", errors="replace")
-    done = set()
-    for num, seg in _plan_segments(text):
-        states = _checkbox_states(seg)
-        if states and all(states):
-            done.add(num)
-    return done
+    _, boxes, _, _ = _parse_plan(text)
+    return {num for num, states in boxes.items() if states and all(states)}
 
 
 def plan_has_any_checkbox(plan):
     # [T34] 全 plan 有无（行锚定、非代码块内）复选框——供"双通道皆不可判"分支用。
     text = plan.read_text(encoding="utf-8", errors="replace")
-    return bool(_checkbox_states(text))
+    return _parse_plan(text)[2]
 
 
 def plan_has_duplicate_task(plan):
-    # [T34/codex#3+对抗B-1c] 重号 `### Task <n>:` 段检测：plan_task_ids 的 set 会把重号折叠，
-    # 掩盖"一段全勾一段未勾"的假✅——重号即判不可判。
+    # [T34/codex#3+对抗B-1c] 重号 `### Task <n>:` 检测（fence-aware）：set 折叠重号会掩盖
+    # "一段全勾一段未勾"的假✅；fenced 里的示例标题不算（CR-F2）。
     text = plan.read_text(encoding="utf-8", errors="replace")
-    nums = TASK_TITLE_RE.findall(text)
-    return len(nums) != len(set(nums))
+    order = _parse_plan(text)[0]
+    return len(order) != len(set(order))
+
+
+def plan_unbalanced_fence(plan):
+    # [impl-review-fix CR-F1] EOF 时围栏未闭合（悬空 ```）→ 悬空围栏吞真实项 → fail-safe UNKNOWN。
+    text = plan.read_text(encoding="utf-8", errors="replace")
+    return _parse_plan(text)[3]
 
 
 # [spec-review-amendment H4] branch_state() 已移除：D3 终态判据改 change 域可达性
@@ -421,6 +430,11 @@ def decide(root, change):
     plan = cdir / "superpowers-plan.md"
     if not plan.is_file():
         emit("RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
+    # [impl-review-fix CR-F1] 未闭合 fenced code block（悬空 ```）→ 悬空围栏会吞掉真实
+    # 未勾项与 Task 标题（假✅/漏 task）→ plan 无法可靠解析 → fail-safe UNKNOWN（先于其余判据）。
+    if plan_unbalanced_fence(plan):
+        emit("UNKNOWN", EXIT_UNKNOWN, None,
+             "plan 有未闭合的 fenced code block(```)，悬空围栏吞真实项，完成判据无法可靠解析")
     plan_ids = plan_task_ids(plan)
     n = len(plan_ids)
     if n == 0:

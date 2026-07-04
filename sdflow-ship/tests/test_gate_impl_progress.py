@@ -174,6 +174,35 @@ def test_t34_duplicate_task_number_unknown(repo):
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN"
 
+def test_t34_unclosed_fence_unknown(repo):
+    # 〔impl-review-fix CR-F1〕未闭合 fenced block（笔误漏闭合）→ 全文 fence 状态不平衡、
+    # 悬空围栏会吞掉后续真实未勾项 + Task 标题 → 无法可靠解析完成判据 → UNKNOWN(fail-safe)。
+    # 旧版分段各自重置 in_fence → 段1[x]被当完成、段2 done2 也当完成 → 假✅ RUN_CODE_REVIEW。
+    plan = ("### Task 1: A\n- [x] done1\n```\n- [ ] 真实未完成(被悬空fence吞)\n"
+            "### Task 2: B\n- [x] done2\n")
+    approved_change(repo, plan=plan)
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN"
+
+def test_t34_task_header_in_fence_not_counted(repo):
+    # 〔impl-review-fix CR-F2/对抗B场景4〕fenced 代码块内的 `### Task N:` 是模板/格式示例、
+    # 非真任务 → 不得计入 plan_ids、不得误判重号 UNKNOWN（标题正则须与复选框同 fence 口径）。
+    plan = ("### Task 1: 真实任务\n- [x] done\n模板示例:\n```\n### Task 1: <替换标题>\n"
+            "- [ ] <替换>\n```\n### Task 2: B\n- [x] d\n")
+    approved_change(repo, plan=plan)
+    commit_all(repo, "checkpoint(task1-a): A")
+    commit_all(repo, "checkpoint(task2-b): B")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "RUN_CODE_REVIEW"   # fence 内示例标题不算重号/task
+
+def test_t34_fence_any_checkbox_consistent(repo):
+    # 〔impl-review-fix 场景3〕plan_has_any_checkbox 与 checkbox_done_ids 对同一 fence 口径
+    # 一致（统一 _parse_plan 后不再矛盾）：task1 段仅代码块内伪框(忽略)、task2 真勾。
+    plan = ("### Task 1: A\n```\n- [x] 代码块示例\n```\n真实无框\n### Task 2: B\n- [x] real\n")
+    approved_change(repo, plan=plan)
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
+
 def test_non_git_root_unknown(tmp_path_factory):
     # 独立于 repo fixture：必须是真正孤立的非 git 目录（不能是 repo 的子目录，
     # 子目录会被 git 沿父级发现 .git，反而通过健全性检查）

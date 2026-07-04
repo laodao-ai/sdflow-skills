@@ -45,6 +45,17 @@ def test_namespace_mixed_bare_and_named(repo):
     assert js["verdict"] == "RUN_CODE_REVIEW"
 
 
+def test_namespace_noncanonical_ns_degrades_safe(repo):
+    # 〔code-review CR-F3〕命名组 [a-z0-9][a-z0-9-]* 不含大写/下划线（openspec 强制 kebab 名，
+    # 此为防御性锁定）：非法 ns 的命名标签整体不匹配 TAG_RE → 该行不计入（假阴安全，
+    # 绝非误归属给别的 change）。防后续修改无意打破成"误计入"。
+    approved_change(repo, plan=PLAN2)
+    commit_all(repo, "checkpoint(Demo:task1-a): 大写 ns（非法 kebab）")
+    commit_all(repo, "checkpoint(task2-b): 裸 task2")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
+
+
 def test_namespace_other_change_named_not_counted(repo):
     # 〔T32〕当前 demo 只完成 task1（命名），另一 change 的 other:task2 不计
     # → task2 未完 → CONTINUE_IMPL，done_tasks 只报 demo 的 1
