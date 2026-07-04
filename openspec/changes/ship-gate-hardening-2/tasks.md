@@ -1,8 +1,8 @@
 # tasks — ship-gate-hardening-2
 
 > 追溯：R1 = 需求「完成判据任务号按 change 命名空间隔离」〔T32〕· R2 = 需求「复选框辅通道按 Task 分段绑定」〔T34〕。
-> 每 task commit MUST 用命名空间格式：`checkpoint-commit.sh <change>:task<N>-<slug>`（本 change=`ship-gate-hardening-2`，dogfood 新契约）。
-> **顺序〔grill-amendment Q2〕：T32 解析器先行**——解析器（1.3）落地前，工作树 gate（symlink 即时生效）用旧 `TAG_RE`（硬前缀 `checkpoint(task`）读不到命名空间 checkpoint，会在窗口内**暂时少数** done（gate 每次调用重解析全窗口，故 2.3 落地后自愈，但期间 SDD 可能按少数的 done_tasks 重派已完成 task = churn）。把解析器排为第一个任务组即从根上消除该 churn，令本 change 端到端 dogfood 命名空间格式名副其实。
+> **本 change 自己的 task commit 用裸格式**〔spec-review 设计门 Q1=A / 对抗 B-4〕：`checkpoint-commit.sh task<N>-<slug>`（**非**命名空间格式）——因 RUN_PLAN（生成 plan）在链路里早于 task 1.4（改派发 args），本 change 的 plan 必然读到旧裸格式 args、无自动传导机制；self 走裸格式 = A1 向后兼容、gate 新旧解析器都认、零 churn、无自证损失。**命名空间 producer 格式靠 task 1.1/1.4 的真-git 测试验证正确性，对下一个 change 首次端到端消费**（本 change 只 dogfood parser/consumer）。
+> **顺序：T32 解析器先行**——为自然 TDD 序（先落核心 parser 变更），非为消 churn（self=裸格式下新旧 gate 都认裸标签、本无 churn；grill Q2 原 churn 论证在 Q1=A 后不再适用）。
 
 ## 1. T32 change 命名空间隔离〔R1〕（解析器先行——dogfood 自举前提，design ADR-1/2 + 协议套件 scope-check）
 

@@ -97,4 +97,14 @@
 
 本轮 spec-review **抓出 grill 漏掉的 3 枚硬伤**（grill 死磕了 ADR 逻辑/可达性/parser 自举，漏了契约权威面 G1、producer 时序 B-4、spec 结构 G2）+ 5 枚中等 + 1 defer。**无一枚是"假✅ 穿门"**（对抗镜明确：所有爆点属假阴/churn/治理问题，未破假阳红线），故设计骨架稳。D1-D6 已就地 amend；**Q1（producer 时序）/ Q2（spec 结构）需你在设计门拍板**。
 
-□ 建议进设计 HARD-GATE（拍 Q1/Q2 → 回写 `design-approved` 锚 → writing-plans）
+☑ 已过设计 HARD-GATE（拍 Q1/Q2 → 回写 `design-approved` 锚 → writing-plans）
+
+---
+
+## 设计门拍板记录（2026-07-04）
+
+- **Q1 = A**（self 用裸格式）：本 change 只 dogfood parser/consumer，自 checkpoint 用裸格式（A1 兼容）；producer 命名空间格式靠真-git 测试验证、下个 change 首次端到端消费。→ tasks 表头 + design Migration 已改 [spec-review-amendment]。
+- **Q2 = A**（改用 MODIFIED）：spec delta 转 `## MODIFIED Requirements`，逐字复现「阶段三编排台账确定性」需求（16 Scenario 保真）+ 追加 6 条 T32/T34 Scenario + 消解「前置产物缺失点名」的"全勾为辅"矛盾 + 主需求正文提命名空间/分段。→ specs delta 已重构，validate 通过（22 Scenario）。
+- D1-D6 自动决策 amendment 全部保留；broad-F2 defer→todolist（producer 指令单一源）。
+
+<!-- ship-gate: design-approved -->

@@ -114,7 +114,7 @@ plan_ids - done_ids == ∅ ? ─是→ 进 code-review 门
 
 ## Migration Plan
 
-1. gate 解析先落地（读双格式）→ 再改 `sdflow-ship` 派发 args 产新格式：**读容忍先行**，避免"先产新格式但 gate 还不认"的窗口。**dogfood 自举〔grill-amendment Q2〕**：本 change 自己的 task checkpoint 即用命名空间格式，故解析器 MUST 排为**第一个任务组**（tasks §1）——否则解析器落地前，工作树 gate（symlink 即时生效）用旧硬前缀读不到命名 checkpoint、窗口内暂时少数 done（gate 每次调用重解析全窗口故 2.3 后自愈，但期间 SDD 按少数 done_tasks 重派已完成 task = churn）。解析器先行从根上消除该 churn。
+1. gate 解析先落地（读双格式）→ 再改 producer 派发 args 产新格式：**读容忍先行**，避免"先产新格式但 gate 还不认"的窗口。**dogfood 范围〔spec-review 设计门 Q1=A / 对抗 B-4 修正〕**：本 change 只 dogfood **parser/consumer**——它自己的 task checkpoint 用**裸格式**（`checkpoint(task<N>-)`），因 RUN_PLAN 生成 plan 在链路里早于改派发 args 的 task 1.4、无自动传导机制（tasks.md 表头的 MUST 是文档句、不进 writing-plans 派发逻辑）。裸格式走 A1 兼容、新旧 gate 都认、零 churn（grill Q2 的"解析器先行消 churn"论证在 self=裸格式后不再适用；解析器先行改为纯 TDD 排序理由）。**producer 命名空间格式的正确性靠 task 1.1/1.4 的真-git 测试保证（比活体跑一次更强），对下一个 change 首次端到端消费**——这不是 dogfood 缺陷，是 producer 与 consumer 落地天然有一个 change 的相位差（consumer 本 change 落，producer 格式下个 change 首用）。
 2. 无数据迁移（无持久状态；纯 git 历史读取）。旧标签原地兼容，无需回填。
 3. **回滚**：`ship_gate.py` + SKILL + checkpoint 契约均 git 版本化；坏则 `git checkout <prev>` + `setup.sh`（SKILL/脚本走 symlink/拷贝生效）。
 4. 部署边界：改 `sdflow-ship`（skill 本体 symlink，pull 即生效）；`checkpoint-commit.sh` 本 change **零改**故无 `~/.sdflow/hack/` 重装窗口。
