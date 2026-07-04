@@ -139,10 +139,16 @@ def tg02_hit(cdir):
     return p.is_file() and "TG-02" in p.read_text(encoding="utf-8", errors="replace")  # 字面子串（归档实例为全角括号混用）
 
 
-def plan_task_count(plan):
-    # [impl-review-fix] 去重：重号任务标题（模板漂移/手误重复）不应虚增计数口径
+def plan_task_ids(plan):
+    # [spec-review-amendment B4/D5] plan 声明的任务号集（去重）。完成判据按**集合归属**
+    # （plan_ids ⊆ done_ids）而非基数（len(done) < n）——否则计划外任务号（遗留/错号/
+    # merge 内提交的 checkpoint(task9-)）会顶替缺失的计划内号让基数达标而假齐（假✅）。
     text = plan.read_text(encoding="utf-8", errors="replace")
-    return len(set(TASK_TITLE_RE.findall(text)))
+    return set(TASK_TITLE_RE.findall(text))
+
+
+def plan_task_count(plan):
+    return len(plan_task_ids(plan))
 
 
 def plan_first_sha(root, plan_rel):
@@ -232,13 +238,15 @@ def decide(root, change):
     plan = cdir / "superpowers-plan.md"
     if not plan.is_file():
         emit("RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
-    n = plan_task_count(plan)
+    plan_ids = plan_task_ids(plan)
+    n = len(plan_ids)
     if n == 0:
         emit("UNKNOWN", EXIT_UNKNOWN, None,
              "plan 无 '### Task <n>:' 标题（上游模板漂移？），完成判据不能")
     sha = plan_first_sha(root, str(plan.relative_to(root)))
     done = done_task_ids(root, sha) if sha else set()
-    if len(done) < n:
+    done_in_plan = done & plan_ids            # [spec-review-amendment B4] 只认计划内号
+    if plan_ids - done:                       # 计划内有未完成号 → 未齐（集合归属,非基数）
         boxes = checkboxes_all(plan)
         if boxes is True:
             pass  # 辅通道：复选框全勾（回勾型执行器）
@@ -246,8 +254,8 @@ def decide(root, change):
             emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
         else:
             emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
-                 f"实现进度 {len(done)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间）",
-                 done_tasks=sorted(done, key=int))
+                 f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
+                 done_tasks=sorted(done_in_plan, key=int))
     # ── step 8：code-review 门 ─────────────────────────────────
     cr = cdir / "code-review-report.md"
     if not cr.is_file():

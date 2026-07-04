@@ -81,8 +81,10 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
                     "-m", "merge side into main"],
                     check=True, capture_output=True, text=True)
     code, js, _ = run_gate(repo)
-    # 9 不在 plan（N=2, task1/2）内，不会误判齐 N；仍应是 CONTINUE_IMPL
-    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["9"]
+    # 9 是计划外号（plan={1,2}）：仍进 done_ids（窗口机制不变，--no-merges 只滤 merge 本身），
+    # 但〔B4 集合归属〕计划外号不计入完成、不上报——done_tasks 只报计划内已完成（此处空）；
+    # 仍是 CONTINUE_IMPL（plan_ids={1,2} 未被覆盖）
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == []
 
 def test_plan_task1_same_commit_counts(repo):
     # 〔B1 闭区间〕plan 与 checkpoint(task1-) 同 commit（checkpoint add -A 携带未提交 plan）
@@ -97,6 +99,16 @@ def test_plan_task1_same_commit_counts(repo):
     commit_all(repo, "checkpoint(task2-bar): B")
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "RUN_CODE_REVIEW"   # done={1,2} 齐（闭区间含 sha 自身）
+
+def test_offplan_task_no_false_complete(repo):
+    # 〔B4 集合归属〕plan=task1/task2，只完成 task1 + 一个计划外 task9（遗留/错号/merge 内）
+    # → 基数判齐会假齐(len={1,9}=2=N)；集合归属须判 CONTINUE_IMPL（task2 未完不放行）
+    approved_change(repo, plan=PLAN2)
+    commit_all(repo, "checkpoint(task1-a): A")
+    commit_all(repo, "checkpoint(task9-stray): 计划外/遗留")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL"     # 非假齐
+    assert js["done_tasks"] == ["1"]            # 只报计划内已完成，不含计划外 9
 
 def test_uncommitted_plan_no_checkbox_unknown(repo):
     # plan 写盘但不提交，且内容无任何复选框 → 双通道（标签窗口 / 复选框）皆不可判
