@@ -77,6 +77,54 @@ def test_openspec_only_commits_keep_fresh(repo):
     _, js, _ = run_gate(repo)
     assert js["verdict"] in ("RUN_VERIFY", "SHIPPED")   # 不得 RERUN_STALE
 
+def test_impl_review_exempt_bare_and_colon(repo):
+    # 〔B2〕checkpoint(impl-review) 裸 + 带冒号描述，触及 design.md/tasks.md → 豁免不失鲜
+    d = approved_change(repo, plan=PLAN2)
+    (d / "design.md").write_text("v1\n", encoding="utf-8")
+    commit_all(repo, "checkpoint(impl-review)")               # 裸
+    (d / "tasks.md").write_text("t\n", encoding="utf-8")
+    commit_all(repo, "checkpoint(impl-review): 勾选回填")      # 冒号
+    _, js, _ = run_gate(repo)
+    assert js["verdict"] != "REFUSE_START"   # 豁免,续跑(CONTINUE_IMPL)
+
+def test_impl_review_evil_suffix_stale(repo):
+    # 〔BR-7〕checkpoint(impl-review)evil 右括号后尾串垃圾 → 精确式不豁免 → 失鲜
+    d = approved_change(repo, plan=PLAN2)
+    (d / "design.md").write_text("v1\n", encoding="utf-8")
+    commit_all(repo, "checkpoint(impl-review)evil")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
+def test_impl_review_fix_variant_stale(repo):
+    # 〔grill/BR-7〕checkpoint(impl-review-fix) 变体 → 不豁免 → 失鲜
+    d = approved_change(repo, plan=PLAN2)
+    (d / "design.md").write_text("v1\n", encoding="utf-8")
+    commit_all(repo, "checkpoint(impl-review-fix): 改设计")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
+def test_empty_subject_touch_design_stale(repo):
+    # 〔BR-6 分帧边界〕空 subject 帧触及 design.md → 不豁免 → 失鲜
+    import subprocess
+    d = approved_change(repo, plan=PLAN2)
+    (d / "design.md").write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "--allow-empty-message", "-m", ""],
+                   check=True, capture_output=True)
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
+def test_interleaved_impl_review_and_normal_stale(repo):
+    # 〔BR-6 分帧正确性〕同窗口 impl-review(改 tasks.md) + 普通 subject(改 design.md) 交错
+    # → 分帧须把 design.md 正确归到普通帧 → 失鲜（分帧 bug 的杀伤方向=假豁免，专测）
+    d = approved_change(repo, plan=PLAN2)
+    (d / "tasks.md").write_text("t\n", encoding="utf-8")
+    commit_all(repo, "checkpoint(impl-review): 勾选回填 tasks")   # 豁免帧
+    (d / "design.md").write_text("语义改\n", encoding="utf-8")
+    commit_all(repo, "docs: 手动改设计")                          # 普通帧 → design.md 失鲜
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
 def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
     # F1 fix 轮：cr 陈旧 + verify 自身新鲜且 FAIL → VERIFY_FAIL 携带 cr 陈旧提示
     d = impl_done(repo)

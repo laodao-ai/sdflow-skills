@@ -34,7 +34,9 @@ verdict × exit × next 契约表:
 
 D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     design-approved: 其后触及本 change 四件套路径（proposal/design/tasks.md 与 specs/）
-        的提交 → 失鲜（改设计须重审）；cr/verify/hand-off 等尾流产物不算，实现提交更不算
+        的提交 → 失鲜（改设计须重审）；cr/verify/hand-off 等尾流产物不算，实现提交更不算；
+        例外〔B2〕: subject 精确 `checkpoint(impl-review)` 或 `checkpoint(impl-review):…`
+        的提交豁免（阶段三合法尾流修订，code-review 回填措辞/勾选），只认 subject 不认 hunk
     verify / code-review: 其后触及 openspec/ 之外路径的提交 → 陈旧
         （verify=FAIL 陈旧优先于 code-review 陈旧判定，保重验不因陈旧 CR 卡死）
     报告从未提交: fresh（freshness=uncommitted，人机同权）
@@ -42,7 +44,11 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
 已知不覆盖（接受并记录）:
     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
     提交遍历不加 --first-parent（merge 内部提交逐一枚举，不漏检）；
-    非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）。
+    非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）；
+    伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
+        （显式越权同权级，git 留痕可审计）；
+    经 impl-review 豁免的四件套编辑不经二次批准即随档 ship（安全边界=约定级「仅装饰性
+        改动」，gate 不做 hunk 分析；若某次措辞修正实际改动设计语义会静默 merge，设计门 Q2 接受）。
 """  # [impl-review-fix]
 import argparse
 import json
@@ -85,14 +91,34 @@ def is_stale(root, rel, scope, change):
     sha = report_last_sha(root, rel)
     if not sha:
         return False, "uncommitted"          # Q3=A：人机同权，手写产物合法
-    files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
     base = f"openspec/changes/{change}/"
+    if scope == "design":
+        # [spec-review-amendment B2] 带 subject 分帧遍历，checkpoint(impl-review) 精确式豁免。
+        # 帧形（--format=%x00%s --name-only）：`\x00<subject>\n\n<file>\n<file>…`，按 \x00 切帧，
+        # 帧首行=subject、余非空行=触及文件。MUST NOT 加 --no-merges/--first-parent〔BR-6 护栏〕
+        # ——头注释承诺 merge 内部提交逐一枚举不漏检；--no-merges 会改变 merge 场景失鲜语义。
+        out = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=%x00%s")
+        for frame in out.split("\x00"):
+            if not frame:
+                continue
+            lines = frame.split("\n")
+            subject = lines[0]
+            # [spec-review-amendment BR-7] 精确式：裸 checkpoint(impl-review) 或带冒号描述；
+            # 裸 startswith 闭合前缀仍收 `checkpoint(impl-review)evil` 尾串垃圾，故用精确式。
+            if subject == "checkpoint(impl-review)" or subject.startswith("checkpoint(impl-review):"):
+                continue                      # 阶段三合法尾流修订，豁免不失鲜
+            for f in lines[1:]:
+                if not f:
+                    continue
+                if f.startswith(base):
+                    sub = f[len(base):]
+                    if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
+                        return True, "stale"
+        return False, "fresh"
+    # scope == "code"：行为逐字不变（无 subject、无豁免、无 --no-merges）
+    files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
     for f in filter(None, files.splitlines()):
-        if scope == "design" and f.startswith(base):
-            sub = f[len(base):]
-            if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
-                return True, "stale"
-        if scope == "code" and not f.startswith("openspec/"):
+        if not f.startswith("openspec/"):
             return True, "stale"
     return False, "fresh"
 
