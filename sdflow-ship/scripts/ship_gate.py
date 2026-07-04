@@ -43,7 +43,9 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
 
 已知不覆盖（接受并记录）:
     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
-    提交遍历不加 --first-parent（merge 内部提交逐一枚举，不漏检）；
+    提交遍历不加 --first-parent（merge 内部提交逐一枚举）；但 evil-merge——仅存在于 merge
+        commit 自身、两 parent 提交都没碰过的改动——因 --name-only 默认不产 merge diff 而漏检
+        （对抗镜 Adv-B；普通冲突解决 merge 多被 side 分支内碰同名文件的提交顺带判陈旧，暴露面偏对抗）；
     非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）；
     伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
         （显式越权同权级，git 留痕可审计）；
@@ -70,26 +72,38 @@ ALL_ANCHORS = [ANCHOR_DESIGN, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL,
 EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN = 0, 3, 4, 5, 6
 
 
+# [impl-review-fix] git 调用统一注入两道加固（对抗镜 Adv-A + 正确性/历史镜 F1）：
+#   ① -c core.quotePath=false：git 默认把非 ASCII 路径 C-quote（八进制+首尾引号），
+#      裸 f.startswith(base)/startswith("openspec/") 对中文文件名路径全失配 → design 域假鲜
+#      （拍板后偷改中文名 spec 静默放行=假✅）/ code 域假陈旧。本项目中文文件名密集，realistic。
+#   ② errors="replace"：报告内容/subject/文件名非 UTF-8 时 strict 解码抛 UnicodeDecodeError
+#      → 退出码 1 逸出契约集 {0,3,4,5,6}；与头注释「非 UTF-8 以 replace 解码」及本地 read_text
+#      路径的既有加固对齐（archived verify 走 git show 是首个用 subprocess 读报告内容的路径）。
+_GIT_HARDEN = ("-c", "core.quotePath=false")
+
+
 def run_git(root, *args):
-    r = subprocess.run(["git", "-C", str(root), *args],
-                       capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args],
+                       capture_output=True, text=True, errors="replace")
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
 def run_git_rc(root, *args):
     # [spec-review-amendment H3] 返回码可见版：run_git 把 git 错误与「路径不在树/空输出」
-    # 都折叠成空串，D3 无法区分「base 不存在→UNKNOWN」vs「ls-tree 空→REFUSE」。此版保留 rc。
-    r = subprocess.run(["git", "-C", str(root), *args],
-                       capture_output=True, text=True)
+    # 都折叠成空串，base_ref 的 None 性据此驱动「base 不存在→UNKNOWN」vs「归档缺→REFUSE」分岔。
+    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args],
+                       capture_output=True, text=True, errors="replace")
     return r.returncode, r.stdout.strip()
 
 
 def base_ref(root):
     # [spec-review-amendment H3] 单一 base 解析：main 优先 master 次，皆无→None（→UNKNOWN）。
+    # [impl-review-fix] 限定 refs/heads/（CV-2）：裸 `rev-parse --verify main` 会把名为 main/
+    # master 的 tag 误当 base 分支；D3 判据须锚在分支语义，返回完整 ref 传给 ls-tree/show。
     for base in ("main", "master"):
-        rc, _ = run_git_rc(root, "rev-parse", "--verify", base)
+        rc, _ = run_git_rc(root, "rev-parse", "--verify", f"refs/heads/{base}")
         if rc == 0:
-            return base
+            return f"refs/heads/{base}"
     return None
 
 
@@ -106,12 +120,19 @@ def archived_dirs_in_tree(root, ref, change):
             if pat.fullmatch(line.rsplit("/", 1)[-1])}
 
 
-def archived_verify_passed(root, ref, archive_dir):
-    # [spec-review-amendment H1/BR-2] SHIPPED 前追读归档目录内 verify-report.md 的 verify=PASS
-    # 锚（从 ref 树）——不把「归档⟹已验」当无条件蕴含（手工空壳归档目录不得假 SHIPPED）。
+def archived_verify_state(root, ref, archive_dir):
+    # [spec-review-amendment H1/BR-2] SHIPPED 前追读归档目录内 verify-report.md 的 verify 锚
+    # （从 ref 树）——不把「归档⟹已验」当无条件蕴含（手工空壳归档目录不得假 SHIPPED）。
+    # [impl-review-fix] tri-state（CV-1/HRTG-c2 三声）：active 路径靠 pick_exclusive 对冲突锚
+    # 判 UNKNOWN，D3 短路须同等互斥——PASS+FAIL 并存 = 'conflict'（→UNKNOWN），非只查 PASS in。
     rc, out = run_git_rc(root, "show",
                          f"{ref}:openspec/changes/archive/{archive_dir}/verify-report.md")
-    return rc == 0 and ANCHOR_VERIFY_PASS in out
+    if rc != 0:
+        return "none"
+    has_pass, has_fail = ANCHOR_VERIFY_PASS in out, ANCHOR_VERIFY_FAIL in out
+    if has_pass and has_fail:
+        return "conflict"
+    return "pass" if has_pass else "none"
 
 
 def report_last_sha(root, rel):
@@ -282,13 +303,18 @@ def decide(root, change):
                      "归档存在于 HEAD 树但仓无 base(main/master)，无法判是否已并 → 判定不能")
             emit("REFUSE_START", EXIT_REFUSE, None,
                  "change 不存在（active 与 archive 均无）")
-        # H1/BR-2: SHIPPED 须归档在 base 树 且 archived verify=PASS 锚（空壳不放行）
-        if any(archived_verify_passed(root, base, d) for d in base_dirs):
+        # H1/BR-2: SHIPPED 须归档在 base 树 且 archived verify 锚 tri-state 判定
+        base_states = [archived_verify_state(root, base, d) for d in base_dirs]
+        if "conflict" in base_states:
+            # 归档 verify-report 并存 PASS/FAIL 冲突锚 → 同 active 路径 pick_exclusive 语义〔CV-1〕
+            emit("UNKNOWN", EXIT_UNKNOWN, None,
+                 "归档 verify-report 并存 PASS/FAIL 冲突锚 → 判定不能，请人工裁决删其一")
+        if "pass" in base_states:
             emit("SHIPPED", EXIT_OK, None,
                  "全通（归档后重跑识别）：归档已并 base + verify=PASS 锚。"
                  "未 push（手动控制）；toolkit 源仓请 push 后新会话 /sdflow-upgrade 激活")
         if base_dirs:
-            # 归档已并 base 但无 verify=PASS 锚（空壳/未验）→ fail-safe 不判 SHIPPED〔H1/Q3〕
+            # 归档已并 base 但无 verify=PASS 锚（空壳/未验/仅 FAIL）→ fail-safe 不判 SHIPPED〔H1/Q3〕
             emit("UNKNOWN", EXIT_UNKNOWN, None,
                  "归档已并 base 但缺 verify=PASS 锚（空壳/未验）→ fail-safe 不判 SHIPPED，请人工核验")
         if head_dirs:

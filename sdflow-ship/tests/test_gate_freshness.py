@@ -127,6 +127,17 @@ def test_interleaved_impl_review_and_normal_stale(repo):
     code, js, _ = run_gate(repo)
     assert code == 3 and js["verdict"] == "REFUSE_START"
 
+def test_chinese_named_spec_edit_still_stale(repo):
+    # 〔Adv-A / impl-review-fix〕core.quotePath: 拍板后改中文名 spec 路径 → 必须仍判失鲜
+    # （git 默认 C-quote 非 ASCII 路径会让裸 startswith 失配 → 静默放行=假✅）
+    d = approved_change(repo, plan=PLAN2)
+    specs = d / "specs"
+    specs.mkdir(exist_ok=True)
+    (specs / "功能规格.md").write_text("拍板后偷改设计语义\n", encoding="utf-8")
+    commit_all(repo, "docs: 改中文名 spec")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"   # 不因中文名放行
+
 def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
     # F1 fix 轮：cr 陈旧 + verify 自身新鲜且 FAIL → VERIFY_FAIL 携带 cr 陈旧提示
     d = impl_done(repo)

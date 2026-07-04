@@ -100,6 +100,30 @@ def test_detached_head_archived_shipped(repo):
     assert code == 0 and js["verdict"] == "SHIPPED"
 
 
+def test_archived_verify_conflict_unknown(repo):
+    # 〔CV-1/HRTG-c2〕归档 verify-report 并存 PASS+FAIL 冲突锚 → UNKNOWN（同 active pick_exclusive）
+    arch = mk_archive(repo, "2026-07-04-demo", verify_pass=False)
+    (arch / "verify-report.md").write_text(
+        "<!-- ship-gate: verify=PASS -->\n<!-- ship-gate: verify=FAIL -->\n",
+        encoding="utf-8")
+    commit_all(repo, "archive with conflict anchors")
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN" and "冲突" in js["reason"]
+
+
+def test_gbk_archived_verify_no_crash(repo):
+    # 〔Corr-1/F1〕归档 verify-report 非 UTF-8(GBK) → 不崩(errors=replace)，给合法 verdict
+    arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
+    arch.mkdir(parents=True)
+    (arch / "proposal.md").write_text("归档\n", encoding="utf-8")
+    body = b"<!-- ship-gate: verify=PASS -->\n" + "验证通过".encode("gbk") + b"\n"
+    (arch / "verify-report.md").write_bytes(body)
+    commit_all(repo, "archive gbk verify")
+    code, js, _ = run_gate(repo)
+    assert code in (0, 3, 4, 5, 6)          # 合法退出码集,未因解码崩溃(exit 1)
+    assert js["verdict"] == "SHIPPED"       # ASCII 锚行不受 GBK 正文影响
+
+
 def test_change_with_glob_metachar_safe(repo):
     # ⑩〔H5〕--change 含 glob 元字符 → re.escape 不当模式；archive 有 …-axb，查 a?b 不误命中
     mk_archive(repo, "2026-07-04-axb")

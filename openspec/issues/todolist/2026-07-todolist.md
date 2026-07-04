@@ -37,6 +37,9 @@
 | T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | PROPOSED | 2026-07-04 11:57 | cross-model-outside-voice | cross-model-outside-voice |
 | T30 | `sdflow-init/assets/hack/outside-voice.sh + tests` | helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖 | 代码质量 | PROPOSED | 2026-07-04 12:46 | cross-model-outside-voice | cross-model-outside-voice |
 | T31 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） | 代码质量 | PROPOSED | 2026-07-04 13:35 | cross-model-outside-voice | cross-model-outside-voice |
+| T32 | `ship_gate.py` | 完成判据 checkpoint 任务号加 change 命名空间 | 代码质量 | OPEN | 2026-07-04 16:50 | ship-gate-hardening |  |
+| T33 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态 | 代码质量 | OPEN | 2026-07-04 16:50 | ship-gate-hardening |  |
+| T34 | `ship_gate.py` | 复选框辅通道按 Task 分段绑定 | 代码质量 | OPEN | 2026-07-04 16:50 | ship-gate-hardening |  |
 
 ---
 
@@ -411,3 +414,57 @@
 **动机**：cross-model-outside-voice 代码审（8 镜 + 双 codex voice + fallback）确认的真实但非阻塞项，本轮已修 21 项后的残差
 
 **思路**：①协议节 18 行在两 SKILL 逐字重复→下沉 bundle 单一源文件；②cap/timeout 校准——实测 185KB context 致 codex 300s 超时（本轮 code-voice 实证），需 OV_MAX 与 timeout 匹配调参或分片；③同 change 并行评审 context 文件互踩（固定命名无锁）→ 加运行 ID 后缀或 flock；④调用方 voice stdout 落点规范空白（/tmp 固定名并发覆盖）；⑤父进程被杀后 timeout/codex 孤儿存活（进程组治理）；⑥UNTRUSTED CONTEXT 分隔符可被内容伪造→nonce 化（frame 措辞缓解已加）；⑦UTF-8 字节截断切碎多字节字符；⑧setup.sh cp 覆盖运行中脚本非原子→tmp+mv；另：codex -s read-only 沙箱边界黑盒验证（能否读 -C 外/执行 shell）
+
+---
+
+## T32: 完成判据 checkpoint 任务号加 change 命名空间
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `ship_gate.py` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/ship-gate-hardening/design.md`
+
+**动机**：完成锚 checkpoint(task<n>-) 无 change 归属,同分支交错跑两个 change 时同号任务可污染完成集(窗口下界 plan_first_sha 已部分缓解,非彻底)
+
+**思路**：checkpoint 契约加 change slug/trailer 如 checkpoint(<change>:task1-) 或 sdflow-change: trailer,gate 只认当前 change;旧格式歧义时 UNKNOWN
+
+**备注**：ship-gate-hardening 代码审 HR-TG code 镜发现,pre-existing 非本 change 引入
+
+---
+
+## T33: 新鲜度可选纳入工作树 dirty 状态
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `ship_gate.py` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/ship-gate-hardening/design.md`
+
+**动机**：is_stale 只看已提交盘面,verify/code-review 后工作树 staged/unstaged/untracked 的非 openspec 代码改动不触发 RERUN_STALE
+
+**思路**：code scope 可选追加 git status --porcelain 分类;报告锚后存在 dirty 非 openspec 路径→RERUN_STALE/UNKNOWN。注:与「盘面即状态=committed 产物」设计张力,需先定性
+
+**备注**：HR-TG code 镜发现,pre-existing
+
+---
+
+## T34: 复选框辅通道按 Task 分段绑定
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `ship_gate.py` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/ship-gate-hardening/design.md`
+
+**动机**：checkboxes_all 只看全文有无 - [x]/- [ ],一个全局勾选可放行所有 plan task,未按 ### Task <n>: 分段;与集合归属主锚并存时可能覆盖
+
+**思路**：按 ### Task <n>: 分段解析,要求每个计划内 task 段都有完成标记,否则 checkbox fallback 不覆盖 checkpoint 集合归属
+
+**备注**：HR-TG code 镜发现,pre-existing
