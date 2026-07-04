@@ -155,7 +155,7 @@
 **机器锚行 v1（grill-amendment Q5 + spec-review-amendment 文法硬化·盘面即状态）**：留痕不押自然语言措辞——SKILL.md 模板**逐字规定**下列 HTML 注释锚行（叙述随模型写，锚行不许改），供 Success Metrics 机验与 `workflow-metrics-loop` 直接 grep。v1 修正三个评审揭穿的坑：①严格 KV（原 `reason="自由文本"`、`hit=…|none` 松散文法必漂移——人类原因文本放锚行外）；②**按调用位点复数化**（一次评审 0–4 次调用，单数「固定首行」装不下 code-voice 成功 + hr-tg 回落的组合态）；③**guard 与 runner 正交拆分**（原 `mode=guard-degraded` 塌缩「守卫为何触发」与「实际谁跑的」两个独立维度，守卫触发频率永远无法追踪）：
 
 ```
-<!-- sdflow:outside-voice v1 site="code-voice|hr-tg|design-voice" guard="none|file-missing|section-not-found|zero-findings|stale" runner="codex|claude-fallback" reason_code="<枚举码或空>" findings="N" truncated="true|false" -->
+<!-- sdflow:outside-voice v1 site="code-voice|hr-tg|design-voice" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" runner="codex|claude-fallback" reason_code="<枚举码或空>" findings="N" truncated="true|false" -->
 <!-- sdflow:hr-tg v1 hit="TG-08,TG-17|none" evidence="<判据触发点一句>" -->
 <!-- sdflow:step1-broad-review v1 mode="native|simulated" -->
 ```
