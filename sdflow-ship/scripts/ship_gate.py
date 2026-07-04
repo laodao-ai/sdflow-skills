@@ -217,7 +217,7 @@ def pick_exclusive(path, positive, negative, label):
 
 
 TASK_TITLE_RE = re.compile(r"^### Task (\d+):", re.M)   # 计数用；锚行才禁正则
-TAG_RE = re.compile(r"checkpoint\(task(\d+)-")
+TAG_RE = re.compile(r"checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-")  # [T32] 可选命名空间组
 
 
 def tg02_hit(cdir):
@@ -246,10 +246,12 @@ def plan_first_sha(root, plan_rel):
     return out.splitlines()[0] if out else ""
 
 
-def done_task_ids(root, sha):
+def done_task_ids(root, sha, change):
     # [spec-review-amendment B1] 窗口闭区间 [sha, HEAD]：{sha}..HEAD 排他 + sha 自身 subject。
     # checkpoint 的 add -A 会把未提交的 superpowers-plan.md 与 task1 锚打进同一 commit（即 sha），
     # 排他 {sha}..HEAD 会漏数 task1；追加解析 sha 自身 subject（同前缀+TAG_RE 规则）补齐。
+    # [ship-gate-hardening-2 T32] change 命名空间归属：命名标签 checkpoint(<ns>:task<N>-)
+    # 仅当 ns==change（精确==，非前缀）计入；裸标签 checkpoint(task<N>-) 走窗口计入（A1 兼容）。
     msgs = run_git(root, "log", f"{sha}..HEAD", "--no-merges", "--format=%s")
     lines = msgs.splitlines()
     self_subject = run_git(root, "log", "-1", "--format=%s", sha)
@@ -258,13 +260,20 @@ def done_task_ids(root, sha):
     ids = set()
     for line in lines:
         # [impl-review-fix] 先判字面前缀再锚定匹配：`Revert "checkpoint(task2-b): y"`
-        # 这类 revert 提交消息里 checkpoint(task 子串不在行首，不应计入完成集
+        # 这类 revert 提交消息里 checkpoint( 子串不在行首，不应计入完成集
         # （TAG_RE.search 不锚位置会把它误计，match 从位置 0 锚定则天然排除）。
-        if not line.startswith("checkpoint(task"):
+        # [ship-gate-hardening-2 T32/A-F1] 前缀过滤 MUST 放宽为 "checkpoint("——旧硬前缀
+        # "checkpoint(task" 会把命名标签 checkpoint(<ns>:task 在 TAG_RE.match 前整条跳过，
+        # 令 T32 静默失效并吞掉本 change 自己的命名完成号。
+        if not line.startswith("checkpoint("):
             continue
         m = TAG_RE.match(line)
-        if m:
-            ids.add(m.group(1))
+        if not m:
+            continue
+        ns, num = m.group(1), m.group(2)
+        if ns is not None and ns != change:
+            continue  # 命名空间不匹配当前 change → 排除（假阴安全，不新增假阳）
+        ids.add(num)
     return ids
 
 
@@ -356,7 +365,7 @@ def decide(root, change):
         emit("UNKNOWN", EXIT_UNKNOWN, None,
              "plan 无 '### Task <n>:' 标题（上游模板漂移？），完成判据不能")
     sha = plan_first_sha(root, str(plan.relative_to(root)))
-    done = done_task_ids(root, sha) if sha else set()
+    done = done_task_ids(root, sha, change) if sha else set()
     done_in_plan = done & plan_ids            # [spec-review-amendment B4] 只认计划内号
     if plan_ids - done:                       # 计划内有未完成号 → 未齐（集合归属,非基数）
         boxes = checkboxes_all(plan)
