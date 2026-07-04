@@ -65,6 +65,13 @@
 | T33 | todo | PROPOSED | ship-gate-hardening |
 | T34 | todo | PROPOSED | ship-gate-hardening |
 
+### 批次：ship-gate-hardening-2
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T35 | todo | PROPOSED | ship-gate-hardening-2 |
+| T36 | todo | PROPOSED | ship-gate-hardening-2 |
+
 ### 未分组（批次为空）
 
 | ID | Pool | Status | 关联Change |

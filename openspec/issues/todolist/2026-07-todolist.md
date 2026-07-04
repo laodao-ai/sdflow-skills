@@ -40,6 +40,8 @@
 | T32 | `ship_gate.py` | 完成判据 checkpoint 任务号加 change 命名空间 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
 | T33 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
 | T34 | `ship_gate.py` | 复选框辅通道按 Task 分段绑定 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
+| T35 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态(T33 停置延续) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
+| T36 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` | checkpoint 派发指令文案收敛为单一真相源(broad-F2) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
 
 ---
 
@@ -468,3 +470,37 @@
 **思路**：按 ### Task <n>: 分段解析,要求每个计划内 task 段都有完成标记,否则 checkbox fallback 不覆盖 checkpoint 集合归属
 
 **备注**：HR-TG code 镜发现,pre-existing
+
+---
+
+## T35: 新鲜度可选纳入工作树 dirty 状态(T33 停置延续)
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `ship_gate.py` |
+| 类型 | 代码质量 |
+| 状态 | PROPOSED |
+
+**关联文档**：`openspec/changes/ship-gate-hardening-2/design.md`
+
+**动机**：is_stale 只看已提交盘面,verify/code-review 后工作树里的新代码不触发 RERUN_STALE
+
+**思路**：先 grill 拍板 gate 该不该越过 committed 边界(与盘面即状态张力),再决定加 git status --porcelain 分类兜底
+
+**备注**：design 已停置,需独立 change
+
+---
+
+## T36: checkpoint 派发指令文案收敛为单一真相源(broad-F2)
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` |
+| 类型 | 代码质量 |
+| 状态 | PROPOSED |
+
+**关联文档**：`openspec/changes/ship-gate-hardening-2/design.md`
+
+**动机**：同一条 checkpoint-commit.sh 派发约定硬编码在 workflow.md 权威源+SKILL.md 两处独立维护,本轮实证会漏改一处(G1)
+
+**思路**：workflow.md 权威定义,SKILL.md 用引用/参数化复述而非独立文案
