@@ -32,3 +32,9 @@
 优先级: <待填>
 计划: <待填>
 
+### ship-gate-hardening — ship-gate-hardening
+状态: PLANNED
+成员: (生成) T32, T33, T34
+优先级: <待填>
+计划: <待填>
+

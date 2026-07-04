@@ -60,6 +60,14 @@
 |----|------|--------|------------|
 | T26 | todo | PROPOSED | sdflow-ship |
 
+### 批次：ship-gate-hardening
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T32 | todo | PROPOSED | ship-gate-hardening |
+| T33 | todo | PROPOSED | ship-gate-hardening |
+| T34 | todo | PROPOSED | ship-gate-hardening |
+
 ### 未分组（批次为空）
 
 | ID | Pool | Status | 关联Change |
