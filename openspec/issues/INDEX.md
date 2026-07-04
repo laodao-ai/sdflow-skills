@@ -10,9 +10,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| B1 | bug | PROPOSED | cross-model-outside-voice |
-| B2 | bug | PROPOSED | cross-model-outside-voice |
-| B3 | bug | PROPOSED | cross-model-outside-voice |
 | T28 | todo | PROPOSED | cross-model-outside-voice |
 | T29 | todo | PROPOSED | cross-model-outside-voice |
 | T30 | todo | PROPOSED | cross-model-outside-voice |
@@ -76,4 +73,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 4 项已闭合（bug: 0，todo: 4）
+- 共 7 项已闭合（bug: 3，todo: 4）
