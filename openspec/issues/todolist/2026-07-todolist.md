@@ -34,6 +34,7 @@
 | T26 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 功能增强 | PROPOSED | 2026-07-04 02:40 | sdflow-ship | sdflow-ship |
 | T27 | `openspec/workflow + resolve-workflow.sh` | workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突 | 基础设施 | OPEN | 2026-07-04 09:57 | minimize-repo-footprint |  |
 | T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | OPEN | 2026-07-04 10:51 | cross-model-outside-voice |  |
+| T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | OPEN | 2026-07-04 11:57 | cross-model-outside-voice |  |
 
 ---
 
@@ -357,3 +358,21 @@
 **思路**：候选落点：①workflow.md 阶段表每步附「标准起手 prompt」栏（单一源）；②各编排 skill（sdflow-spec-review/sdflow-code-review/sdflow-done/sdflow-ship）收敛口输出模板加「下一步完整 prompt」区块；③与 hand-off.md 的 next-stage advice 段合流。注意与 T27（规则可参考副本）同属「把工作流内部知识显性给用户」一族
 
 **备注**：提出于 cross-model-outside-voice spec-review 进行中；属 workflow bundle 级改进，非本 change scope
+
+---
+
+## T29: 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` |
+| 类型 | 可观测性 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/ROADMAP.md`
+
+**动机**：用户 2026-07-04 提出：想知道时间花在哪——每个子代理耗时、spec-review/ship 内部每个子步耗时、阶段级汇总，为流程优化与「哪层值不值得留」供数
+
+**思路**：候选：①盘面即状态路线——checkpoint commit 时间戳序列已是天然步级时长锚（零新状态，写个汇总脚本 git log --format 即可推各步耗时）；②子代理耗时——harness 已在 Agent 结果里带 duration_ms/usage，编排 skill 收尾时抄进报告锚行（如 v1 锚行加 duration_s 字段）；③阶段汇总——并入 workflow-metrics-loop（ROADMAP 待开，只读报告产物聚合）。与 T28（阶段收尾提示）同族：都是把工作流内部信息显性化。**〔用户补充 2026-07-04〕等待人工确认/暂停的时间须单列并可剔除**——纯 commit 时间差会把人类门等待（设计门拍板、grill 对话、会话中断）算进步时长，失真；候选判据：人类门/交互步（grill、设计门、AskUserQuestion 区间）打独立锚或按步类型白名单剔除，报「工作时长」与「墙钟时长」两列
+
+**备注**：内容上属 workflow-metrics-loop scope 的先行需求；提出于 cross-model-outside-voice ship 进行中
