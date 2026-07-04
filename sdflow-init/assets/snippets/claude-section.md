@@ -23,4 +23,4 @@
 | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
 > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
-> 同样来自 sdflow-skills，写入 `openspec/buglists|todolists/`。
+> 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。

@@ -48,3 +48,10 @@ rules:
     - 命中 TG-18(有测试计划) 则产出测试覆盖图（code path → 测试类型）
     - 单任务控制在可独立验证的小粒度
     - Group related tasks under numbered sections
+
+# model-tiers（可选覆盖段）——真相源 = 规则根 model-tiers.md（resolver 解析）。
+# 此段仅 per-repo 覆盖"档位→模型"映射；缺省请勿填（留空即用 canonical 缺省）。
+# model-tiers:
+#   strong: <model-id>
+#   mid: <model-id>
+#   light: <model-id>

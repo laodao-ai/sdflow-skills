@@ -60,7 +60,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - 遍历 `REPO_DIR/*/`，**仅含 `SKILL.md` 的目录才安装** → `openspec/`、`docs/`、`hack/` 不会被当 skill。
 - 安全兜底：**绝不覆盖非本仓库拥有的同名目录**（只处理自己的 symlink / `.sdflow-skills` marker copy，名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属）；
   清理源已删除的孤儿链接（用 `-e` 解析检查，保留有效链接）。
-- 读 `REPO_DIR/VERSION` 显示版本；**当前仓库未包含 `VERSION`**，故安装摘要显示 `unknown`。
+- 读 `REPO_DIR/VERSION` 显示版本（如 `v0.9.0`）。
 
 ### OpenSpec 的双重角色（`openspec/`）
 
@@ -69,8 +69,10 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - **`sdflow-init/assets/workflow/`** 是这套 spec 工作流 bundle 的**唯一权威源**——铺给其他项目的
   `openspec/workflow/` 都源于此。改规则**先改 assets、再 `sdflow-init update` 推下游**，
   禁止只改某个下游项目的 `openspec/workflow/` 后忘记回灌。
-- **`openspec/workflow/`**（仓库根）— 是 bundle 铺进本仓库自身的**实例**，也是 `sdflow-spec-review` /
-  `sdflow-code-review` / `sdflow-done` 运行时读取的规则；它由 assets 权威源经 `sdflow-init` 同步而来，勿单独改。
+- **`openspec/workflow/`**（仓库根）— **只保留 `tools/`**（review 工具机械，`sdflow-init update` 托管刷新）；
+  规则**不在仓内存副本**——`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` 运行时经
+  `~/.sdflow/hack/resolve-workflow.sh` 解析到全局 canonical `~/.sdflow/workflow/`（由 setup.sh
+  软链至运行 checkout 的 `sdflow-init/assets/workflow/`）。勿把规则文件重新拷回仓内（会形成 pin 遮蔽全局）。
 - **`openspec/{changes,specs,issues,config.yaml}`** — 本仓库自身的 OpenSpec 变更管理，
   流程走 propose → review → done → archive，强制规范见文末托管区块。
 - **`.claude/skills/openspec-*` 与 `.codex/skills/openspec-*`** — openspec CLI（`@fission-ai/openspec`）
@@ -78,15 +80,16 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 
 ### `hack/`
 
-- `checkpoint-commit.sh` — 变更过程中的检查点提交脚本（由 `sdflow-init` 引用并测试）。
+- `checkpoint-commit.sh` — **旧版仓内副本**（checkpoint 已全局化：真相源 = `sdflow-init/assets/hack/checkpoint-commit.sh`，
+  由 setup.sh 装到 `~/.sdflow/hack/`，运行时一律调全局路径）。本仓已无规则副本，此文件可删。
 
 ### dev/runtime checkout 纪律（adr/0005 + 设计门拍板）
 
 - **运行 checkout** = `~/.skills/sdflow-skills`：只 `git pull` + `setup.sh`，日常一键用 `/sdflow-upgrade`；
   remote 必须 = `laodao-ai/sdflow-skills.git`。
-- **开发 checkout** = 本仓：编辑 skill / bundle + local-first dogfood；改**规则**免重跑 setup、
-  改 **skill 或 assets/hack/ 脚本**须在开发 checkout 跑一次 `setup.sh` 才测得到——知情临时指 dev，
-  测完/合并后在运行 checkout 重跑 setup 还原。
+- **开发 checkout** = 本仓：编辑 skill / bundle。本仓不再保留规则副本（规则经全局 canonical 解析），
+  故改 **skill、assets/workflow 规则或 assets/hack/ 脚本**都须在开发 checkout 跑一次 `setup.sh`
+  才测得到——知情临时指 dev，测完/合并后在运行 checkout 重跑 setup 还原。
 - **发布边界** = push（开发）→ pull（运行）→ **立即** setup（pull 与 setup 之间是"新 SKILL 调旧脚本"的窗口期）。
 - **回滚** = 运行 checkout `git checkout <上一已知良好 commit>` + 重跑 setup.sh。
 
@@ -127,5 +130,5 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
 > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
-> 同样来自 sdflow-skills，写入 `openspec/buglists|todolists/`。
+> 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
 <!-- opsx-init:end -->
