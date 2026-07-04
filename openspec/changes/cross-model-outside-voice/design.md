@@ -29,24 +29,27 @@
 - **备选**：①Python 脚本——测试更顺，但 hack/ 家先例全 bash、SKILL prose 直调 bash 链最短，未选；②放某 skill 的 `scripts/`——两 review skill 共享，仓内放谁家都造成另一家跨目录引用，全局家消除该耦合，未选。
 - **代价**：改 assets/hack/ 后必须重跑 setup.sh（copy 非 symlink，CLAUDE.md 已有此纪律）。
 
-### D2. helper 接口 = 子命令 + 结构化退出码（adr/0006(b) prose 脚本化）
-- **选中**：`outside-voice.sh preflight` → stdout 单词 `ready|not_installed|not_authed|disabled`（exit 0）；`outside-voice.sh exec --prompt-file <f> [--timeout 300]` → codex findings 原样到 stdout（exit 0），超时 exit 124、codex 报错 exit 1（stderr 转发）。SKILL.md 只剩「跑脚本 → 按 mode/exit code 分支」。
+### D2. helper 接口 = 子命令 + 结构化退出码（adr/0006(b) prose 脚本化）〔grill-amendment: prompt 归属两层拆分〕
+- **选中**：`outside-voice.sh preflight` → stdout 单词 mode（exit 0）；`outside-voice.sh exec --context-file <f> [--timeout 300]` → codex findings 原样到 stdout（exit 0），超时 exit 124、codex 报错 exit 1（stderr 转发）。SKILL.md 只剩「跑脚本 → 按 mode/exit code 分支」。
+- **preflight 浅探针二态（grill Q2/Q3 拍板）**：`not_installed | ready`——砍掉归档设计照搬的 `not_authed` 深探：试跑判 auth = 每次评审白烧一次真调用 + 对 codex stderr 的脆模式匹配（CLI 升级即漂移）。auth 失败由 exec 阶段自然暴露（exit 1 + stderr 转发），走同一条回落链，报告留痕「exec 失败（stderr 摘要）」——可观测性等价、原因可见。
+- **prompt 归属（grill Q1 拍板）**：**框架归 helper、上下文归 SKILL**——「找漏」框定 + 文件系统边界指令以 heredoc 内嵌 helper（安全措辞不依赖调用方自觉，忘传即无边界的失效被结构性消除）；SKILL 经 `--context-file` 传评审对象上下文（设计四件套摘录 / code diff / 命中的 HR-TG 域）；helper 拼接「框架 + 上下文」经 stdin 喂 `codex exec`（stdin 喂法已核验，codex-cli 0.142.5）。设计/代码/领域三种 voice 差异全在上下文，helper 无 mode 参数。
 - **边界**：fallback「派 fresh Claude 子代理」是模型动作（Task 调度），不进脚本；脚本只管探测/调用/超时这些机械段——机械活交脚本、模型只做判断。
 - **备选**：单命令自动内部 fallback（脚本里没法派子代理，必然做半截）——未选。
 
-### D3. off-switch = env `SDFLOW_CODEX_VOICE=off` 单轨起步
-- **选中**：preflight 首查该 env，命中即返回 `disabled`。会话/机器级关停足够覆盖「不想让代码出境 / codex 抽风临时关」两个真实场景。
-- **备选**：①`config.yaml` 仓级一行——bash 解析 YAML 引入重依赖或脆 grep，且 helper 是全局脚本不应绑仓级配置读取，未选（留待真实需求出现再加层）；②双轨——复杂度先付，未选。
-- **注**：归档 design 写 `LAODAO_CODEX_VOICE`，按 `adr/0007` 品牌收拢定名 `SDFLOW_CODEX_VOICE`。
+### D3. 不设 off-switch——启停由环境层决定〔grill-amendment Q3 拍板〕
+- **选中**：工作流层**不提供任何软开关**（env / config 均不做）。出境同意在安装 + 认证 codex CLI 那一刻已成立（该 CLI 的唯一用途就是把代码发给 OpenAI），工作流只是复用一条环境已同意的通道；「不想出境」的机器/CI 不装 codex 即天然关停（preflight `not_installed` → 回落子代理，留痕）。preflight 随之缩为**二态** `not_installed | ready`。
+- **备选**：①env `SDFLOW_CODEX_VOICE=off` 单轨（原稿）——靠人记忆或 shell profile，粒度错位，未选；②config.yaml 仓级 + env 双层 fail-closed（grill 中间稿）——为环境层职责在工作流层造开关，未选。归档 design 的 off-switch 项（自 gstack 提炼）随之裁掉，不再是 C1/C6 交付物。
+- **接受的剩余风险**：混用机器上某仓想单独关无软手段（codex 抽风时也无快捷止损，最坏每调用等 300s 超时后回落）——接受，属环境层问题；真成痛点再评估，不预付复杂度。
 
 ### D4. T25 修复路径 = 主 session Skill 机制原生执行（①），模拟仅显式降级（③）
 - **选中**：Step1 由主 session 经 Skill 机制原生执行 autoplan / gstack review（指令直接进主 session，非子代理转述）——方向已拍板（用户 2026-07-03），sdflow-ship 评审轮已有原生执行先例；与 T20 串行纪律（Step1 checkpoint 后才 fan-out）天然兼容。原生不可用 → ③模拟广审 + 报告显式标注「模拟广审（降级模式）」。
 - **备选**：②gstack headless 调用路径——是否存在未调研，作 P2 补充项不阻塞（见 Open Questions）。
 - **两 skill 同修**：sdflow-code-review Step1 的 gstack/review 同构问题按同路径改。
 
-### D5. HR-TG 子集单一源 = trigger-catalog 附录段
+### D5. HR-TG 子集单一源 = trigger-catalog 附录段，且 catalog 升格五层〔grill-amendment Q6〕
 - **选中**：trigger-catalog.md 新增「HR-TG 子集」附录（成员 {TG-04/06/07/08/09/16/17/26} + 入选判据「做错会运行期爆炸/数据损坏/安全泄漏且难回退」）；两 SKILL 的规划镜头步只引用 ID 集合，不复制清单。
-- **备选**：写死两 SKILL.md（两份副本必漂移，正是 ff-generation-constraints 背景一节实证过的反模式）——未选。
+- **五层升格（grill Q6 拍板）**：评审 cross-model 事实上是 catalog 第五消费维度，维护协议 MUST 同步，否则未来新 TG 无机制提醒判 HR、子集「未列入」型腐烂（BASE-29 语义）：①自述「四层」→「五层」；②「四、消费方」表加行（评审 cross-model | 消费方 = 两 review skill 规划镜头 | 引用 HR-TG 附录 ID 集）；③「五、扩展约定」加一条——新增触发 MUST 显式判定是否入 HR-TG（是/否都写，不许空着）；④「六、检查清单」加对应核对项。
+- **备选**：①写死两 SKILL.md（两份副本必漂移，ff-generation-constraints 背景一节实证过的反模式）——未选；②附录不入维护协议（低调姿态，靠人记得判 HR）——grill Q6 揭穿即「未列入」型漂移温床，未选。
 
 ### D6. TG-26 四列定义（归类 D. 行为/状态）
 | ID | 触发条件 | D约束 | 领域 | 画图 | 模版槽 |
@@ -55,15 +58,20 @@
 
 领域列锚点已核验：GO-01（goroutine 并发与同步）/GO-03（TOCTOU）、EMB-01（受限回调上下文）/EMB-10（volatile/内存可见性）、ML307C-01、ESP32-02 均为既有条目。
 
-### D7. prompt 模板内嵌 helper（heredoc），不另立文件
-- **选中**：「找漏」框定 +「文件系统边界」指令 ~1KB，heredoc 内嵌使 helper 单文件自包含，拷改与部署面最小。
-- **备选**：独立模板文件进 `~/.sdflow/hack/`——多一个部署物、多一处路径解析失败模式，收益仅是模板可独立编辑，未选。
+### D8. outside-voice findings 豁免自评置信滤，直通对抗裁决〔grill-amendment Q4 拍板〕
+- **选中**：code-review Step3 的「<80 置信滤」**只作用于同族镜 findings**；outside-voice findings 跳过置信滤、一律直通对抗裁决（有把握裁决记理由 / 拿不准 defer），被裁掉的连理由落报告「已裁掉」区（反静默压制既有机制）。
+- **理由**：①T8 已实证同族阈值尚且跨模型不可比，拿 Claude 校准的 80 筛 GPT 自评纯属噪声；②outside voice 价值在异见，用同族标尺筛异见 = 结构性自我审查，违反「任何一层评审覆盖不得无声蒸发」元原则；③单次 voice findings 量级个位数，粗筛降噪收益不存在。
+- **边界**：不动 T8 本身（同族阈值改判据留其自身的债）。
+
+### D7. prompt 框架内嵌 helper（heredoc），不另立文件〔grill-amendment: 与 D2 两层拆分对齐〕
+- **选中**：「找漏」框定 +「文件系统边界」指令（框架层，~1KB）heredoc 内嵌，helper 单文件自包含；评审对象上下文**不在此列**——由 SKILL 经 `--context-file` 传入（见 D2）。
+- **备选**：①独立模板文件进 `~/.sdflow/hack/`——多一个部署物、多一处路径解析失败模式，未选；②prompt 全由 SKILL 组装——文件系统边界指令沦为「靠调用方记得写」的 prose 协议，违反 adr/0006(b)，未选（grill Q1 揭穿的原 D2/D7 矛盾即由此消解）。
 
 ## 组件清单（BASE-25）
 
 | 组件 | 职责 | 技术栈 | 部署 |
 |------|------|--------|------|
-| `outside-voice.sh` | preflight 探测 / codex exec 包装（超时、stderr 转发）/ prompt 模板 / off-switch | Bash | `sdflow-init/assets/hack/` → setup.sh → `~/.sdflow/hack/` |
+| `outside-voice.sh` | preflight 二态探测 / codex exec 包装（超时、stderr 转发）/ prompt 框架内嵌 | Bash | `sdflow-init/assets/hack/` → setup.sh → `~/.sdflow/hack/` |
 | sdflow-spec-review Step1' | 原生执行 autoplan + 复用 outside-voice findings + 反静默守卫回落 | SKILL.md prose（判断层） | 仓根 skill 目录（symlink 安装） |
 | sdflow-spec-review 规划镜头' | 顺带 HR-TG 判定 + 留痕 | SKILL.md prose | 同上 |
 | sdflow-code-review Step1' | 原生执行 gstack /review（同构修复） | SKILL.md prose | 同上 |
@@ -89,8 +97,8 @@
 ```
   主session          outside-voice.sh        codex CLI         Claude子代理
      │ preflight ────────→│                      │                  │
-     │←─ mode ────────────│ (env off→disabled;   │                  │
-     │                    │  command -v+试跑)     │                  │
+     │←─ mode ────────────│ (command -v;         │                  │
+     │                    │  不试跑、无软开关)     │                  │
      │ [ready] exec ─────→│─ prompt(找漏+边界) ──→│                  │
      │←─ findings(stdout)─│←─ stdout(5min封顶) ──│                  │
      │ [非ready/124/1] ───────────────────────────────同prompt────→│
@@ -101,10 +109,8 @@
 ## 决策图（TG-12：preflight/守卫回落链）
 
 ```
-  SDFLOW_CODEX_VOICE=off? ──是──→ disabled → 跳过+报告"已显式关闭"
-        │否
-  codex 装了/认证了/试跑通? ──否──→ not_installed/not_authed → fallback Claude 子代理(留痕)
-        │是(ready)
+  codex 装了?(command -v) ──否──→ not_installed → fallback Claude 子代理(留痕)
+        │是(ready；auth 不预探,exec 段暴露〔grill Q2〕)
   exec 5min 内返回? ──否(124/1)──→ fallback Claude 子代理(留痕原因)
         │是
   findings 进合并池(留痕"已跑 codex")
@@ -121,8 +127,7 @@
 | 失败模式 | 触发条件 | 处理者 | 用户可见行为 | 测试 |
 |---------|---------|--------|------------|------|
 | codex 未安装 | `command -v codex` 失败 | preflight → SKILL | 报告留痕「not_installed → 已回落子代理」 | pytest |
-| codex 未认证 | 试跑报 auth 错 | preflight → SKILL | 同上（not_authed） | pytest（mock 试跑） |
-| 显式关闭 | env=off | preflight | 报告「已显式关闭」，跳过 | pytest |
+| codex 未认证 | exec 阶段 auth 报错 | helper exit 1 + stderr 转发 → SKILL | 回落子代理，留痕 stderr 摘要（含 auth 原因）〔grill Q2：不预探〕 | pytest（假 codex 非零退出） |
 | exec 超时 | >300s | helper exit 124 → SKILL | 回落子代理，留痕「超时」 | pytest（sleep 假 codex） |
 | exec 报错 | codex 非零退出 | helper exit 1 + stderr 转发 → SKILL | 回落子代理，留痕 stderr 摘要 | pytest |
 | helper 缺失 | 未跑 setup.sh | SKILL `[ -x ]` 前置检查 | 显式提示「先在运行 checkout 跑 setup.sh」+ 回落子代理，不静默 | SKILL 步骤核验 |
@@ -131,12 +136,20 @@
 
 ## 可观测性（BASE-11）
 
-报告 outside-voice 段为必填、**四态穷尽留痕**：已跑 codex / 已回落子代理（含原因）/ 已显式关闭 / 守卫降级（含触发原因）——不存在「无记录」合法态。HR-TG 判定无论正反留痕（「命中 TG-xx → 已跑领域 cross-model」或「未命中」）。所有降级走显式日志，符合反静默守卫。
+报告 outside-voice 段为必填、**三态穷尽留痕**〔grill-amendment Q3：裁软开关后〕：已跑 codex / 已回落子代理（含原因）/ 守卫降级（含触发原因）——不存在「无记录」合法态。HR-TG 判定无论正反留痕。所有降级走显式日志，符合反静默守卫。
+
+**机器锚行（grill-amendment Q5·盘面即状态）**：留痕不押自然语言措辞——SKILL.md 模板**逐字规定**下列 HTML 注释锚行为对应 section 固定首行（叙述随模型写，锚行不许改），供 Success Metrics 机验与 `workflow-metrics-loop` 直接 grep：
+
+```
+<!-- outside-voice: mode=codex|fallback|guard-degraded reason="<原因或空>" findings=N -->
+<!-- hr-tg: hit=TG-08,TG-17 | none -->
+<!-- step1-broad-review: native|simulated -->        ← T25 降级标注的机判形态（R5）
+```
 
 ## 安全与数据保护（BASE-28，TG-17）
 
 - **信任边界** = 仓库代码 → 外部 LLM（OpenAI）。发送范围限 prompt 模板 + diff/评审对象摘录；**文件系统边界指令**写进模板：不读 `~/.claude`、`~/.sdflow` 等 skill/规则定义，不读 `.env`、密钥文件，只看仓库代码。
-- **总闸**：`SDFLOW_CODEX_VOICE=off` 即数据出境总闸（敏感仓一键关停，层降级为同模型子代理而非消失）。
+- **总闸 = 环境层**〔grill-amendment Q3〕：是否安装/认证 codex CLI 即出境总闸——装即同意、不装即天然关停（层降级为同模型子代理而非消失）；工作流层不设软开关，不替环境层操心。
 - **凭证**：codex CLI 自管 auth，helper 不接触、不落日志；stderr 转发时按行透传原文（codex CLI 自身不在 stderr 打印凭证）。
 - **最小权限**：helper 只读、无网络操作自身（网络由 codex CLI 发起）。
 
@@ -144,8 +157,8 @@
 
 | 文档 | 本 change 改? | 改什么 / 不改的理由 |
 |------|------|------|
-| `trigger-catalog.md`（assets 权威源） | ✅ | TG-26 四列（D6）+ HR-TG 子集附录（D5）+ 消费方表补 design-diagrams 引用 |
-| `openspec/INDEX.md` | ✅ | TG 计数「TG-01~24」→「TG-01~26」（顺带修 TG-25 既有漂移） |
+| `trigger-catalog.md`（assets 权威源） | ✅ | TG-26 四列（D6）+ HR-TG 子集附录（D5）+ **五层升格四处同步**（自述/消费方表/扩展约定/检查清单，grill Q6）+ 消费方表补 design-diagrams 引用 |
+| `openspec/INDEX.md` | ✅ | TG 计数「TG-01~24」→「TG-01~26」（顺带修 TG-25 既有漂移）+ 描述「驱动…四层」→「五层」（grill Q6） |
 | `design-diagrams.md`（assets） | ✅ | TG-26 画图列非空（序列图）→ 触发条件表加 TG-26 引用行 |
 | `spec-checklists/`（base+domains） | ❌ | TG-26 模版槽挂 domain **既有** T 项（GO-01/03、EMB-01/10），不新增条目 |
 | `code-checklists/` | ⚠️ 落地核对 | domains 与 spec-checklists 同源，若并发 CR 项已存在则只补 TG-26 引用，缺则补引用行（实现期逐文件核对后回填本表） |
@@ -180,7 +193,7 @@
 
 - `adr/0006`(a)(b)(c)：机械段全脚本化（D2）；档位措辞不写死模型名——**遵守**。
 - C7 / 归档 design §9.0 grill-amendment（读产出物 ✓ 依赖内部 ✗）：helper 零 gstack 引用——**遵守**。
-- `adr/0007` 命名（`SDFLOW_` 前缀，D3）——**遵守**。
+- `adr/0007` 命名——**不再涉及**（D3 裁掉 env 开关后本 change 无新品牌前缀标识符，N/A）。
 - `adr/0005` dev/runtime checkout 纪律（Migration 步骤 1/2/4）——**遵守**。
 - bundle 权威源纪律（改 assets、update 推下游，禁只改下游）——**遵守**。
 - trigger-catalog 扩展约定（新 ID 不复用、四列回填、消费方引用不复制定义）——**遵守**（D6 + scope-check 表）。

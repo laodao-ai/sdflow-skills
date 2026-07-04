@@ -32,6 +32,7 @@
 | T24 | `setup.sh install_into 软链分支` | install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立 | 基础设施 | PROPOSED | 2026-07-03 21:29 | sdflow-rebrand | sdflow-rebrand |
 | T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | PROPOSED | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
 | T26 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 功能增强 | PROPOSED | 2026-07-04 02:40 | sdflow-ship | sdflow-ship |
+| T27 | `openspec/workflow + resolve-workflow.sh` | workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突 | 基础设施 | OPEN | 2026-07-04 09:57 | minimize-repo-footprint |  |
 
 ---
 
@@ -319,3 +320,21 @@
 **动机**：D5 熔断当前靠主 session prose 计数，弱模型可能忘计或混淆
 
 **思路**：候选：checkpoint 标记 attempt / gate 输出含建议重试上限的结构化提示 / 宿主层计数——均需先解 D1 零副作用与计数落盘的矛盾
+
+---
+
+## T27: workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `openspec/workflow + resolve-workflow.sh` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/adr/0003-deploy-footprint-global-rules-minimal-repo-copy.md`
+
+**动机**：用户 2026-07-04 提出：规则移全局 canonical（~/.sdflow/workflow/）后，项目内无法用 @ 直接引用规则文件，参考与复制 prompt 不便
+
+**思路**：与 minimize-repo-footprint 拍板（勿把规则拷回仓内，副本会被 resolver 判 pin 遮蔽全局）正面相抵，落地前需设计消解方案，候选：①只读 reference 拷贝且标注/改造 resolver 不识别为 pin ②仓内 symlink 指向 ~/.sdflow/workflow（@ 可达且不算副本，需验证 resolver 行为）③resolve-workflow.sh 加打印路径/内容子命令满足复制 prompt 诉求
+
+**备注**：提出于 cross-model-outside-voice 会话，内容上属 minimize-repo-footprint 后续

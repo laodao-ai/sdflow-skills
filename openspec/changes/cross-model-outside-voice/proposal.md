@@ -6,7 +6,7 @@
 
 ## What Changes
 
-- **新增共享 codex helper**（自包含重写，不引用 gstack 内部；源 = `sdflow-init/assets/hack/`，setup.sh 装到 `~/.sdflow/hack/`）：preflight 探针（ready / not_installed / not_authed / disabled）+ exec 包装（5min 超时）+「找漏」与文件系统边界 prompt 模板 + off-switch〔C1/C6〕。
+- **新增共享 codex helper**（自包含重写，不引用 gstack 内部；源 = `sdflow-init/assets/hack/`，setup.sh 装到 `~/.sdflow/hack/`）：preflight 浅探针（二态 not_installed / ready，〔grill-amendment Q2/Q3〕）+ exec 包装（5min 超时）+「找漏」与文件系统边界 prompt 框架〔C1/C6〕。归档设计中的 off-switch 已裁——启停由环境层（装/不装 codex）决定，工作流层不设软开关〔grill-amendment Q3〕。
 - **fallback 到原生 Task 子代理**：非 ready / 报错 / 超时 → 同 prompt 派 fresh Claude 子代理，非阻塞，审查永不因此中断〔C6〕。
 - **sdflow-spec-review 接入**〔C2/C7〕：复用 autoplan 产出的 `gstack-review.md` 里的 codex outside-voice findings + 反静默守卫（缺失 / 解析不出 / 0 条 → 显式降级日志 + 回落自跑 codex 设计 voice）+ 命中 HR-TG 单开领域 cross-model。
 - **sdflow-code-review 接入**〔C3〕：自带 code outside voice（always，无前置层零重叠）+ 命中 HR-TG 单开领域 cross-model。
@@ -36,8 +36,8 @@
 
 ## Success Metrics
 
-1. **outside-voice 层留痕覆盖率** — 基准 0%（现无此层）→ 目标 100%：每次 sdflow-code-review 报告含 outside-voice 段（真跑 codex 或显式降级记录，二者必居其一）— 度量：抽查 code-review-report.md。
-2. **广审层静默模拟次数** — 基准：模拟未标注（T25 两轮实证）→ 目标 0：Step1 每次运行要么原生执行、要么显式标注「模拟广审（降级模式）」— 度量：报告与运行日志核对。
+1. **outside-voice 层留痕覆盖率** — 基准 0%（现无此层）→ 目标 100%：每次 sdflow-code-review 报告含 outside-voice 段（真跑 codex 或显式降级记录，二者必居其一）— 度量：grep 机器锚行 `<!-- outside-voice: … -->`〔grill Q5：确定性机判，不押自然语言〕。
+2. **广审层静默模拟次数** — 基准：模拟未标注（T25 两轮实证）→ 目标 0：Step1 每次运行要么原生执行、要么显式标注「模拟广审（降级模式）」— 度量：grep 机器锚行 `<!-- step1-broad-review: … -->`〔grill Q5〕。
 3. **无 codex 环境评审完成率** — 基准 N/A → 目标 100%：无 codex / 无 gstack 环境下 fallback 冒烟通过、审查不中断 — 度量：§8.3 冒烟测试。
 
 ## 需求优先级（TG-19）
@@ -59,14 +59,14 @@
 
 | 问题 | 归属 | 截止 |
 |------|------|------|
-| off-switch 形态：env `SDFLOW_CODEX_VOICE=off` vs `config.yaml` 一行 vs 双轨 | design.md 决策记录 | 设计门前 |
+| ~~off-switch 形态~~ | 已闭〔grill Q3〕：不设 off-switch，启停归环境层 | — |
 | helper 语言形态：bash 单脚本 vs Python（本仓测试惯例 pytest） | design.md 决策记录 | 设计门前 |
 | gstack headless 调用路径是否存在、可否作原生执行的补充 | 实现期调研（P2） | 不阻塞 P0 |
 
 ## 成本估算（TG-24）
 
 - codex exec 每次评审 0–4 调用：code-review 1（always code voice）+ 0–1（HR-TG 领域）；spec-review 0–1（仅守卫回落时）+ 0–1（HR-TG 领域）。单次 5min 封顶。
-- 计费走用户 codex CLI 认证的 OpenAI 订阅/额度；按 review 输入以 diff + prompt 模板（~KB 级）计，每 change 量级为个位数调用，边际成本可忽略；off-switch 可整体关停归零。
+- 计费走用户 codex CLI 认证的 OpenAI 订阅/额度；按 review 输入以 diff + prompt 模板（~KB 级）计，每 change 量级为个位数调用，边际成本可忽略；不装 codex 的环境天然归零（无软开关，〔grill Q3〕）。
 
 ## Non-Goals
 
