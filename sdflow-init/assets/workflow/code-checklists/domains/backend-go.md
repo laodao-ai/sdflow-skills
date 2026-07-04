@@ -12,5 +12,6 @@
 | CR-GO-03 | **Goroutine 生命周期** | 新 goroutine 有明确退出条件（channel close / ctx.Done）；用 WaitGroup/errgroup 等待防泄漏；goroutine 内 panic 有 recover 兜底；循环变量捕获陷阱；channel 死锁风险 |
 | CR-GO-04 | **资源 defer 惯用法** | 文件 / `resp.Body` 用 `defer Close()`；循环内 defer 陷阱 → 改匿名函数立即释放；锁用 `defer mu.Unlock()` 紧跟 `mu.Lock()` |
 | CR-GO-05 | **类型断言 / 转换** | `interface{}`/`any` 断言用双值形式防 panic；`[]byte ↔ string` 避免不必要 copy（热路径 unsafe 须注明理由）；JSON 数字默认 `float64`，需 `int64` 用 Decoder + UseNumber |
+| CR-GO-06 | **共享状态并发正确性**〔TG-26〕 | 多 goroutine 读写共享变量有一致加锁策略（Mutex/RWMutex/channel 三选一并说明理由）；check-then-act 复合操作的原子性（TOCTOU）；map 并发写保护；对照 spec 侧 GO-01/GO-03（评审实证：CR-GO-03 只管生命周期不管竞态，故新增本条） |
 
 *规则集 v1 · extends backend · 项目无关*
