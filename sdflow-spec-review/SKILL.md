@@ -36,8 +36,12 @@ description: >
 2. **主 session 落盘〔R5〕**：autoplan 原生机制只写 plan file，无「写任意路径」能力——执行完由**主 session** 汇总其结论 Write 落盘 `{change_dir}/gstack-review.md`（改动标 `[gstack-amendment]`），文件头 + 本报告 Step1 段各写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`；native 声明附一句侧信道佐证（如 autoplan 双声真实调用事实/运行痕迹）。
 3. **降级路径**：autoplan skill 不可用 → 子代理模拟广审 + 报告显式标注「模拟广审（降级模式）」+ 锚行 `mode="simulated"`，MUST NOT 伪装原生。
 4. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
-5. **反静默守卫（显形部分）**：若 `gstack-review.md` **缺失 / 解析不出**，**打印显式降级日志**（"autoplan 输出未找到 → 本次缺广审层"），**绝不静默当'无此层'跑过**。
-   > 〔Phase C 补〕完整的 outside-voice 复用（读 gstack-review.md 的 codex outside-voice 段 + 缺失时**回落自跑 codex 设计 voice** + 命中 HR-TG 单开领域 cross-model）属 Phase C（C2/C4）。Phase A 只做"跑 autoplan + 吃 findings + 缺失显式记降级"，不实现回落自跑与 cross-model。
+5. **outside-voice 复用守卫（三前置·R2）**：复用 `gstack-review.md` 的 codex outside-voice findings 前按序判：
+   ①**来源**——其 `step1-broad-review` 锚行为 `simulated` → 产物一律视同无效（模拟可臆造格式合规的 codex 段，结构检查挡不住）；
+   ②**新鲜度**——产物早于 `{change_dir}` 最新改动（`git log -1 --format=%ct -- {change_dir}` 对比）→ 视同缺失；
+   ③**结构**——文件缺失 / 解析不出 codex 段（解析锚定 `codex#N` 标签约定，见 adr/0002；实现期已抓真实样本校准）/ codex findings 为 0 条。
+   任一不过 → 打印带原因码（file-missing|section-not-found|zero-findings|stale|simulated-source）的显式降级日志，**回落自跑设计 outside voice**（按下方「helper 调用协议」，site="design-voice"）；诱因为文件整体缺失时措辞 MUST 声明「仅补偿 outside-voice 切片，广审其余镜仍缺」。三关全过 → 复用不重开（避免双 codex），报告记「复用 autoplan outside voice N 条」。
+   > **C2 依赖 P2b 交叉引用〔3.2〕**：C2"复用"成立仅当 autoplan 每次都跑（P2b）；autoplan 未跑的变更本 skill MUST 自跑设计 outside voice（即守卫回落路径），不得因"复用了一个没产生的东西"漏掉整层。
 6. **checkpoint 提交（P2c 第 1 次）**：`~/.sdflow/hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目标准）
@@ -50,6 +54,7 @@ description: >
 - 按风险定**对抗镜**数量：普通 2 个，高风险 3 个。固定 1 个**接地镜**（机械读码核验）。
 - 只审命中的；config 已固化的结构/占位/一致性（T/S）不进任何镜。
 - **防重叠（1.4）**：autoplan 已含 eng 镜 → 本 skill 领域镜**不重复跑 eng 视角**，只跑本项目 `spec-checklists/domains` 里 autoplan 不碰的 R 项，别让两层重复计数。
+- **HR-TG 判定〔C4·R3〕**：命中 TG 集 ∩ HR-TG 子集（**单一源 = trigger-catalog「HR-TG 子集」附录**，此处只引用不复制清单）≠ ∅ → 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）。判定无论正反写报告并带 v1 锚行 `<!-- sdflow:hr-tg v1 hit="TG-xx,…|none" evidence="<判据触发点一句>" -->`（命中必填 evidence，30 秒可人工复核）。
 
 **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
 
@@ -69,6 +74,8 @@ description: >
 - **对抗裁决**：对每条 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
 - **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由），供人类设计门复核"裁得对不对"。
 - **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。
+- **outside-voice findings 直通〔R4〕**：runner=codex 的 voice findings 与各镜同池对抗裁决；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 后果），绝不静默采纳（user sovereignty）。
+- **锚行存在性自检〔R1/R3/R5〕**：出报告后机械 grep 三类 v1 锚行（`sdflow:outside-voice`/`sdflow:hr-tg`/`sdflow:step1-broad-review`），缺失即本步报错阻塞（机械失职拦截，非人类门）；锚行 `findings=N` 与合并池实收数 diff 一次。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
 - 按 `design-diagrams.md`：命中触发的图**只验证存在/正确/未过时**，缺失/过时标记，不重画。
 - **checkpoint 提交（P2c 第 2 次）**：产出报告 + amendments 后 → `~/.sdflow/hack/checkpoint-commit.sh spec-review "并行多镜审 + 合并报告 + spec-review-amendment"`。
@@ -119,6 +126,26 @@ description: >
 | 清单 | 四个 gstack skill 各自的 | 本项目 spec-checklists/domains |
 | 决策 | 自动决策（登记进报告） | 主 session 对抗裁决（登记进报告） |
 | eng 视角 | **已含** | **不重复**（防重叠 1.4） |
+
+## outside-voice helper 调用协议（契约单一源 = `~/.sdflow/hack/outside-voice.sh` 头注释，此处只给分支决策，不转述接口细节）
+
+```
+HELPER=~/.sdflow/hack/outside-voice.sh
+[ -x "$HELPER" ] 不成立 → 显式提示「outside-voice.sh 未安装——先跑 bash setup.sh」+ 直接派 fallback 子代理（不静默）
+版本核对：$HELPER version 输出与本 SKILL 预期主版本(1.x)不符 → 告警"helper 疑似陈旧，重跑 setup.sh"后继续
+preflight：仅精确匹配 "ready" 走 codex；"not_installed" 或任何畸形输出/非零退出 → fallback（reason_code=not-installed|preflight-error）
+context 构造（摘录规则定死，不现场发挥）：写 {change_dir}/.outside-voice/<site>-context.md（固定命名、下轮覆盖、不删，留调试证据）
+  site=design-voice → proposal「What Changes」+ design「Decisions」全文
+  site=hr-tg       → 命中 TG 判据触发点 + 相关 diff hunk
+exec：$HELPER exec --context-file <f>
+  exit 0   → stdout 即 findings 进合并池；锚行 runner="codex"
+  exit 124 → fallback（reason_code=timeout）      exit 1 → fallback（reason_code=exec-error，stderr 摘要写锚行外正文）
+  exit 3   → 本次 voice 拒发不 fallback（reason_code=secret-hit；密钥既不出境也不进子代理 prompt）
+fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh Claude 子代理（同源同 prompt；框架已含范围收窄）；
+  无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 runner="claude-fallback"
+锚行（每调用位点一行，truncated 取 helper stderr 的 OV_TRUNCATED）：
+  <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" runner="codex|claude-fallback" reason_code="…" findings="N" truncated="true|false" -->
+```
 
 ## 注意
 
