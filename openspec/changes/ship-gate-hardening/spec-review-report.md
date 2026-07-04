@@ -93,4 +93,18 @@
 
 ## 收敛口
 
-**不建议直接进设计 HARD-GATE 放行**——评审揪出 3 条需你拍板（Q1 真实假✅超scope / Q2 重开你 grill 拍的取舍 / Q3 D3 硬化改 grill 拍的设计），且 2 条 HIGH 涉及 gate 头号失效模式（假✅）。clear-cut 收敛（A1-A6）已直接落档。**请对 Q1/Q2/Q3 拍板**后，我据此定稿 design/tasks（Q1 若选 A 则扩 scope、Q3 若选 A 则落 D3 纯 git 域实现），再进设计门写 design-approved 锚 → 自动接 /sdflow-ship。
+评审揪出 3 条需拍板 + A1-A6 clear-cut 收敛。已过设计 HARD-GATE。
+
+## 拍板记录区（设计门 · 用户 AskUserQuestion 批准）
+
+- **Q1 = 当场纳入本 change 修**（BR-3）→ 落 design **D5**（完成判据集合归属 `plan_ids ⊆ done_ids`）+ tasks **§4 B4**（5.1-5.3→4.1-4.3）+ spec Scenario〔B4〕；scope 从 3 缺陷扩为 **4 缺陷**。
+- **Q2 = 维持 B2 现取舍**（BR-1）→ D2 不动（约定级安全边界 + 已登记窗口）；proposal 记「Q2 维持」理由（机判语义 vs 措辞落不了地，撞回已弃 D2-c）。
+- **Q3 = D3 硬化 bundle 全采纳**（BR-2/BR-4/HRTG-1/2/3/4）→ 落 design **「D3 硬化 bundle」H1-H6** + tasks 3.1（×10 用例）/3.2（按 H1-H6 落码）+ spec Scenario〔B3+D3 硬化〕。
+- **A1-A6**（BR-5/6/7/8/9/10）clear-cut 已直接落 design/tasks/spec。
+- **N1**（BR-12 债台账）+ **BR-11**（done archived-unmerged 入口）→ 转下游 hand-off/todolist 关注，非本 change 阻塞。
+
+设计门拍板已发生，主 session 回写机判锚（下行）：
+
+<!-- ship-gate: design-approved -->
+
+**下一步**：按用户 standing 指令，自动接 `/sdflow-ship` 跑阶段三到 merge。

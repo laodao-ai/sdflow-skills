@@ -9,8 +9,11 @@
 - **B1（P2）修复**：实现进度收集窗口改为**包含 plan 落地 commit 自身**——`plan_first_sha` 返回的 sha 目前作 `{sha}..HEAD` 排他起点（`ship_gate.py:231-232`），当 checkpoint 的 `add -A` 把 `superpowers-plan.md` 与 task1 锚打进同一 commit 时，task1 被漏数（已复现 11/12 误报）。
 - **B2（P2）修复**：design 域新鲜度守卫（`is_stale` scope="design"，`ship_gate.py:88-93`）增加**阶段三合法尾流修订的豁免机制**——code-review 按工作流设计对 design.md/tasks.md 打 `[impl-review-fix]` 补丁并 `checkpoint(impl-review)` 提交，不应判「拍板失鲜」。豁免机制 ≥2 方案（commit subject 白名单 / 重申锚 / 监视面收窄），选型见 design.md 决策记录。
 - **B3（P3）修复**：pre-flight 增加**归档终态识别**——change 目录已移入 `openspec/changes/archive/`（日期前缀锚死 glob 匹配 `YYYY-MM-DD-{change}`）且**该归档已落 base 树**（change 域可达，非全局分支态）时输出 SHIPPED，而非按 active 路径找不到 spec-review-report.md 就误报「未过设计门 REFUSE_START」（`ship_gate.py:199-205`；行 287-297 已有 SHIPPED 判定但归档后不可达）。glob 锚死日期前缀与 change 域判据两点选型见 design.md D3〔grill-amendment〕。
-- **契约文档同步**：`ship_gate.py` 头注释契约表（窗口语义、新鲜度豁免、SHIPPED-after-archive）与 `sdflow-ship/SKILL.md` 相应提示语同步更新；`tests/` 补三缺陷的回归测试（`test_gate_impl_progress.py` / `test_gate_freshness.py` / 新终态用例）。
-- 无 BREAKING：退出码语义、锚行字面集、JSON 输出字段均不变（B3 为新增可达路径，B1/B2 为误报收敛）。
+- **B4（P0）修复**〔spec-review 发现 · 设计门 Q1 纳入〕：完成判据从**基数比较** `len(done) < n` 改**任务号集合归属** `plan_ids ⊆ done_ids`——现基数比较下一个计划外任务号（`checkpoint(task9-…)` 遗留/错号/merge 内提交）可**顶替**缺失的计划内号让 `len(done)==N` 假齐、误放行 code-review（对抗-核验镜活体复现：plan=task1/task2、done={1,9} → 假齐）。与 D1 同函数、D1 会放大此假✅，故一并修。见 design D5。
+- **D3 硬化 bundle**〔spec-review 发现 · 设计门 Q3 全采纳〕：grill 拍的 change 域判据方向对但不完整，补 H1-H6：SHIPPED 追读 archived verify=PASS 锚（防空壳假 SHIPPED）、发现改纯 git 域（ls-tree HEAD∪base 替工作树 glob，兑现"跨分支也对"）、`base_ref()`+返回码可见 helper、detached 契约调和、`--change` 注入防御、多命中 any-可达。见 design「D3 硬化 bundle」。
+- **契约文档同步**：`ship_gate.py` 头注释契约表（窗口语义闭区间、新鲜度豁免精确式、SHIPPED-after-archive+verify 锚、RUN_VERIFY 归档未并变体、集合归属完成判据、detached 分域）与 `sdflow-ship/SKILL.md` 相应提示语同步更新；`tests/` 补四缺陷回归（`test_gate_impl_progress.py` / `test_gate_freshness.py` / 新 `test_gate_terminal.py`）。
+- 无 BREAKING：退出码语义、锚行字面集、JSON 输出字段均不变（B3/D3 硬化为新增可达路径 + 收紧误 SHIPPED，B1/B2/B4 为误报/假✅ 收敛）。
+- **B2 取舍经设计门 Q2 维持**：三声（codex+CEO）指出 B2 豁免凭 subject 前缀而非改动类型的 soundness 洞，重开 grill Q2 的接受取舍；设计门拍板**维持现取舍**（约定级安全边界 + 已登记窗口），理由：机判"语义 vs 措辞"落不了地（撞回已弃的 D2-c hunk 复杂度）。
 
 ## Capabilities
 
@@ -38,8 +41,8 @@
 
 | 优先级 | 项 | 理由 |
 |---|---|---|
-| P0 | B1 窗口漏数、B2 失鲜误判 | 两者各在实战中直接触发人工越权，且每轮 ship 必经此判定路径 |
-| P1 | B3 归档终态识别 | 只在归档后重跑 gate 时触发，误报但不阻塞主链（主链已完成） |
+| P0 | B1 窗口漏数、B2 失鲜误判、**B4 完成判据假齐**、**D3-H1 假 SHIPPED** | 前二实战触发人工越权；B4 是活体复现的假✅（放不完整活过完成门）；D3-H1 空壳目录假 SHIPPED 同属头号失效模式；均每轮 ship 必经判定路径 |
+| P1 | B3 归档终态识别 + D3-H2/H3/H5 域一致性 | 归档后重跑触发；发现域/base 解析/注入防御随 B3 实现一并落 |
 | P2 | 契约文档/SKILL 提示语同步 | 防文档与实现漂移，随修不独立成活 |
 
 ## 假设（TG-22）

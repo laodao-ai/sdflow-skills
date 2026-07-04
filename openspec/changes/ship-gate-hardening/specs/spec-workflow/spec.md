@@ -54,9 +54,13 @@
 - **WHEN** change 的 proposal 未标注 TG-02（非嵌入式）
 - **THEN** gate 对 step 5.5 输出 SKIP 并记录理由；命中 TG-02 时高风险/TG-18 细判归模型（每步内部判断，prose 允许域）
 
-#### Scenario: 归档后识别 SHIPPED 终态〔B3〕
-- **WHEN** change 的 active 目录 `openspec/changes/{change}/` 不存在，但**日期前缀锚死 glob** `openspec/changes/archive/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{change}/` 命中，且该归档目录**已存在于 base(main/master) 的树里**（`git ls-tree <base>` 非空——change 域可达，与当前 HEAD 所在分支无关）
-- **THEN** gate MUST 输出 SHIPPED（exit 0），MUST NOT 按 active 路径找不到 spec-review-report.md 而误报「未过设计门 REFUSE_START」；该短路判定 MUST 位于设计门 pre-flight 与新鲜度检查之前（归档 commit 的路径删除记录不得引入失鲜误报）；glob MUST 锚死日期前缀而非 `*-{change}`〔grill-amendment：后缀开口 glob 会让别的 change 的归档撞名误命中〕；终态判据 MUST 为 change 域可达性而非全局 `branch_state()`〔grill-amendment：全局分支态会在跨无关分支查已并 change 时误判 RUN_VERIFY〕
+#### Scenario: 归档后识别 SHIPPED 终态〔B3 + D3 硬化〕
+- **WHEN** change 的 active 目录 `openspec/changes/{change}/` 不存在，但归档目录 `archive/<YYYY-MM-DD>-{change}/`（发现经**纯 git 域** `git ls-tree HEAD ∪ ls-tree <base>` 列举 + `re.escape(change)` 套日期前缀 fullmatch，**MUST NOT 用文件系统 glob**〔H2/BR-4〕）**已存在于 base 树** 且该归档目录内 `verify-report.md` **含 `<!-- ship-gate: verify=PASS -->` 锚**〔H1/BR-2〕
+- **THEN** gate MUST 输出 SHIPPED（exit 0），MUST NOT 按 active 路径找不到 spec-review-report.md 而误报「未过设计门」；该短路判定 MUST 位于设计门 pre-flight 与新鲜度检查之前；终态判据 MUST 为 change 域可达性（`git ls-tree <base>`）而非全局 `branch_state()`〔grill-amendment〕；发现 MUST 与判据同域（纯 git，工作树无关）——MUST NOT 用工作树 glob（否则跨分支查已并 change 会假 REFUSE、未跟踪垃圾目录会假 RUN_VERIFY）〔H2/BR-4〕；SHIPPED MUST 追读 archived verify=PASS 锚——MUST NOT 仅凭目录存在性放行（手工空壳归档目录不得假 SHIPPED）〔H1/BR-2〕；`--change` MUST 校验为 slug 或 `re.escape` 后匹配，MUST NOT 把用户输入当 glob 元字符〔H5/HRTG-4〕；base 无 main/master → UNKNOWN，detached HEAD 对 D3 判定无关（凭 base 树可达仍可 SHIPPED）〔H3/H4〕；active 存在时 final SHIPPED 的 archived 谓词 MUST 收紧，MUST NOT 被旧/同名 archive 触发〔H1/HRTG-1〕
+
+#### Scenario: 完成判据按任务号集合归属，非基数〔B4〕
+- **WHEN** plan 有 `### Task 1:`/`### Task 2:`（计划号集 {1,2}），实现窗口内出现 `checkpoint(task1-…)` 与一个**计划外**的 `checkpoint(task9-…)`（遗留/错号/merge 内提交），task2 从未完成
+- **THEN** gate 的完成判据 MUST 按**任务号集合归属**（plan 号集 ⊆ 完成号集）判齐，MUST NOT 按基数 `len(done) < n` 判——否则计划外 task9 会顶替缺失的 task2 让 `len(done)=2=N` 假齐、误放行 RUN_CODE_REVIEW（活体复现的假✅）；此盘面 MUST 输出 CONTINUE_IMPL，`done_tasks` MUST 只报计划内已完成号（不含 9）
 
 #### Scenario: 归档但未并入 base = merge 收尾未完〔B3〕
 - **WHEN** active 目录不存在、日期前缀 glob 命中 archive，但该归档目录**不在 base 树里**（archive commit 停在未并分支，`git ls-tree <base>` 空）

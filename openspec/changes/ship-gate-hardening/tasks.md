@@ -1,6 +1,6 @@
 # ship-gate-hardening — Tasks
 
-> 需求追溯：全部任务对应 `specs/spec-workflow/spec.md` MODIFIED Requirement「阶段三编排台账确定性（ship_gate）」下的三组 Scenario——〔B1〕窗口闭区间、〔B2〕尾流修订豁免、〔B3〕归档终态。设计决策 = design.md D1-D4。
+> 需求追溯：全部任务对应 `specs/spec-workflow/spec.md` MODIFIED Requirement「阶段三编排台账确定性（ship_gate）」下的 Scenario——〔B1〕窗口闭区间、〔B2〕尾流修订豁免、〔B3〕归档终态（+D3 硬化 H1-H6）、〔B4〕完成判据集合归属。设计决策 = design.md D1-D5。〔spec-review-amendment：B4/D5 + D3 硬化 bundle 经设计门 Q1/Q3 拍板纳入；B2 取舍经 Q2 维持〕
 
 ## 1. B1 窗口闭区间（design D1；Scenario〔B1〕×2）
 
@@ -19,17 +19,28 @@
 
 ## 3. B3 归档终态（design D3；Scenario〔B3〕×3）
 
-- [ ] 3.1 新建 `test_gate_terminal.py` 加失败测试 ×6〔grill-amendment：终态判据改 change 域 + 后缀碰撞用例〕：①归档目录**已在 base 树**→SHIPPED exit 0；②归档目录**不在 base 树**（archive commit 停在未并分支）→RUN_VERIFY(next=sdflow-done)；③active 与 archive 均无→REFUSE_START reason 含「change 不存在」；④active 存在 + **精确同名**旧归档并存→active 优先（走既有 pre-flight，不受 archive 干扰）；⑤active 缺席 + 仅存在**后缀撞名**旧档（如查 `demo` 而 archive 只有 `2026-07-04-cross-demo`）→ 锚死日期前缀 glob 不命中 → REFUSE_START「change 不存在」（**非** SHIPPED 误报）；⑥**跨分支不误判**：demo 归档已并 base，HEAD 切到无关未并分支再查 demo → 仍 SHIPPED（**非** RUN_VERIFY——证明判据是 change 域而非全局 branch_state）
-- [ ] 3.2 改 `decide()`（`ship_gate.py:192-211`）：git 健全性后、设计门 pre-flight 前插入归档短路分支（cdir 缺席 → **日期前缀锚死 glob `[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{change}`** → **change 域可达性判据**：`git ls-tree <base> -- openspec/changes/archive/<dir>/` 非空 → SHIPPED / 空 → RUN_VERIFY / glob 不命中 → REFUSE_START「change 不存在」；base 无 main/master → UNKNOWN）；**同步把 `ship_gate.py:289` 既有 `archived` 的 `*-{change}` 换成同款锚死 glob**；3.1 全绿
-- [ ] 3.3 `ship_gate.py` 头注释契约表：verdict 表 SHIPPED 行补「（含归档后重跑识别）」、REFUSE_START 行补 change 不存在变体、〔spec-review-amendment BR-10〕**RUN_VERIFY 行（:23）补「/ 归档未并 base 待 merge 收尾」变体**（D3 新增触发源，契约表原仅写「verify 缺」）；「已知不覆盖」追加同名旧归档误中一条
+> **设计门 Q3 拍板：D3 硬化 bundle 全采纳**，3.1/3.2 已按 H1-H6 落实（下）。
 
-> ⚠️ **task 3.1/3.2 待设计门 D3 硬化 bundle 拍板后修订**（见 spec-review-report.md 决策登记区 Q3）：BR-2（SHIPPED 追读 archived verify=PASS 锚）、BR-4（发现改纯 git 域 `ls-tree HEAD∪base` 替代工作树 glob）、HRTG-1（active 存在时 final SHIPPED 也须收紧 archived 谓词）、HRTG-2（`base_ref()` + 返回码可见 git helper 区分「base 不存在」vs「ls-tree 空」）、HRTG-3（detached HEAD 契约调和）、HRTG-4（`--change` slug 校验 / `re.escape` fullmatch 替代 glob 元字符）。拍板前不落 3.1/3.2 具体实现。
+- [ ] 3.1 新建 `test_gate_terminal.py` 失败测试 ×10：①归档在 base 树+archived verify=PASS 锚→SHIPPED exit0；②归档仅在 HEAD 树（未并）→RUN_VERIFY(next=sdflow-done)；③皆无→REFUSE reason 含「change 不存在」；④active+精确同名旧档→active 优先；⑤后缀撞名旧档→不误命中→REFUSE；⑥跨分支查已并 change→仍 SHIPPED（change 域证明）；⑦〔H1/BR-2〕archive 命中在 base 但**无 verify=PASS 锚**（空壳目录）→**不 SHIPPED**（降 RUN_VERIFY 或 UNKNOWN）；⑧〔H2/BR-4〕磁盘有**未 git 跟踪**的 archive 垃圾目录→glob 时代会假 RUN_VERIFY，纯 git 域下**不误命中**；⑨〔H4/HRTG-3〕detached HEAD + 归档已并 base→SHIPPED（detached 对 D3 无关）；⑩〔H5/HRTG-4〕`--change` 含 `* ? []` 元字符→安全（slug 校验/re.escape，不当 glob 模式）
+- [ ] 3.2 改 `decide()`（`ship_gate.py:192-211`）插入归档短路（git 健全性后、pre-flight 前），按 D3 硬化 bundle：
+  - **H3** 加 `base_ref()`（main/master 优先，缺失→UNKNOWN）+ 返回码可见 git helper（区分 git 错误 / 空树 / 不存在）
+  - **H2** 发现用纯 git 域：`git ls-tree HEAD -- openspec/changes/archive/` ∪ `git ls-tree <base> -- …`，对子项名以 **H5** `re.escape(change)` 套日期前缀 `\d{4}-\d\d-\d\d-` fullmatch（不用文件系统 glob、不把 `--change` 插进 glob）
+  - 分派：匹配集**任一在 base 树 且该目录 archived `verify-report.md` 含 `verify=PASS` 锚**（**H1** 追读）→ SHIPPED；仅在 HEAD 树（未并）→ RUN_VERIFY「已归档未并 base，完成 merge 收尾」；皆无匹配 → REFUSE「change 不存在」（**H6** 多命中经 any-可达天然确定）
+  - **H1 续**：收紧 `ship_gate.py:287-299` final SHIPPED 的 `archived` 谓词——不再 `any(glob("*-{change}"))` 凭存在性，改判「当前 lifecycle 的归档」（active 存在时归档本属异常，宜 RUN_VERIFY/UNKNOWN 不 SHIPPED）；**H5** `ship_gate.py:289` 一并去 glob 元字符风险
+  - **H4** 头注释/状态机「detached→UNKNOWN」契约调和：detached 下 D3 短路仍可 SHIPPED，仅 active 路径 final branch_state 保留 detached→UNKNOWN；3.1 全绿
+- [ ] 3.3 `ship_gate.py` 头注释契约表：SHIPPED 行补「（含归档后重跑识别，追读 archived verify=PASS 锚）」、REFUSE_START 行补 change 不存在变体、〔BR-10〕RUN_VERIFY 行（:23）补「/ 归档未并 base 待 merge 收尾」变体、〔H4〕detached HEAD 语义分域注记；「已知不覆盖」追加精确同名旧档误中一条
 
-## 4. 契约同步 + 收尾（proposal「契约文档同步」；design Migration）
+## 4. B4 完成判据集合归属（design D5；设计门 Q1 纳入 · Scenario〔B4〕）
 
-- [ ] 4.1 `sdflow-ship/SKILL.md` 链序段核对：REFUSE_START 提示语与新 reason 变体一致（「未过设计门…补锚」与「change 不存在」两分支）；`test_skill_text.py` / `test_anchor_contract.py` 全绿（锚行字面集未动，应零改动通过——若红即契约破坏，停下修）
-- [ ] 4.2 全量回归：`pytest sdflow-ship/tests/` 全绿 + 仓级 `pytest` 全绿（307+ 基线不降）
-- [ ] 4.3 归档时主 spec 同步核对：`openspec/specs/spec-workflow/spec.md` 窗口语义句按 delta 更新（sdflow-done archive CLI 自动，人工核对不漏）
+- [ ] 4.1 `test_gate_impl_progress.py` 加失败测试：plan=task1/task2（N=2），窗口内 `checkpoint(task1-…)` + **计划外** `checkpoint(task9-…)`，断言 **CONTINUE_IMPL 非假齐**（task2 未完不放行）、`done_tasks` 只报计划内已完成（不含 9）〔Scenario: 计划外任务号不顶替缺失计划内号〕
+- [ ] 4.2 改 `decide()` 完成判据（`ship_gate.py:227-242`）：新增 `plan_task_ids(plan)`（解析 `### Task <n>:` 号集，复用 `TASK_TITLE_RE`），判据从 `len(done) < n` 改 `plan_ids - done_ids != ∅`（未齐）；CONTINUE_IMPL 上报 `done_tasks = sorted(done_ids ∩ plan_ids, key=int)`；4.1 转绿。复选框辅通道基准随改集合归属
+- [ ] 4.3 回归：既有 `test_all_tags_present_advances`（task1+task2 全齐）、`test_continue_impl_with_done_set`（仅 task1）、`test_merged_branch_inner_commits_do_enter_window`（done=["9"] 计划外，N=2）保持绿——最后一条现应更明确为 CONTINUE_IMPL（9∉plan_ids，plan_ids={1,2}⊄done）
+
+## 5. 契约同步 + 收尾（proposal「契约文档同步」；design Migration）
+
+- [ ] 5.1 `sdflow-ship/SKILL.md` 链序段核对：REFUSE_START 提示语与新 reason 变体一致（「未过设计门…补锚」与「change 不存在」两分支）；`test_skill_text.py` / `test_anchor_contract.py` 全绿（锚行字面集未动，应零改动通过——若红即契约破坏，停下修）
+- [ ] 5.2 全量回归：`pytest sdflow-ship/tests/` 全绿 + 仓级 `pytest` 全绿（307+ 基线不降）
+- [ ] 5.3 归档时主 spec 同步核对：`openspec/specs/spec-workflow/spec.md` 窗口语义句按 delta 更新（sdflow-done archive CLI 自动，人工核对不漏）
 
 ## 测试覆盖图（TG-18）
 

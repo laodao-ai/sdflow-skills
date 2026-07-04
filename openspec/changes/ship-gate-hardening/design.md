@@ -49,6 +49,23 @@
 - **备选）改 sdflow-ship SKILL.md 提示「归档后勿重跑 gate」**：prose 治 prose，违反 adr/0006(b) 的立场。弃。
 - **已知不覆盖（追加声明）**：**精确同名** change 历史归档过（日期前缀锚死 glob 仍命中真同名旧档 `YYYY-MM-DD-{change}`，且该旧档已在 base 树）、而新一轮同名 change 尚未建 active 目录时，gate 会按旧档报 SHIPPED——change 重名属流程反模式（ROADMAP 登记可查），接受并记录。〔grill-amendment〕注意与后缀碰撞区分：后缀撞名（`cross-demo` 撞 `demo`）已由锚死日期前缀 glob 消除，不在此「已知不覆盖」内；这里残留的仅是**字面完全同名**这一反模式。
 
+#### D3 硬化 bundle〔spec-review-amendment · 设计门 Q3 全采纳〕
+
+评审发现 grill 拍的 change 域判据虽方向对（评"本批次质量最高"），但**不完整**，six 处硬化全采纳：
+
+- **H1（BR-2+HRTG-1，假✅ 高危）SHIPPED 前追读 archived verify=PASS 锚**：D3 短路判 SHIPPED **MUST 追读**归档目录内 `verify-report.md` 的 `<!-- ship-gate: verify=PASS -->` 锚（CLI 归档必携带，近零漏报）——不再把「归档⟹已验」当无条件蕴含（手工 `mkdir` 空壳目录 commit+merge 会假 SHIPPED）。与「盘面即状态、锚即 ground truth」一致：终态判定 MUST 读锚，MUST NOT 只信目录存在性。**同理 active 存在时的 final SHIPPED 路径（`ship_gate.py:287-299`）的 `archived` 谓词须收紧**——不得被旧/垃圾同名 archive glob 触发（当前 `any(glob)` 只判存在性）；active 存在时归档已发生本属异常，宜 RUN_VERIFY/UNKNOWN 而非 SHIPPED。
+- **H2（BR-4）发现改纯 git 域，与判据同域**：发现 MUST NOT 用文件系统 glob（工作树域，依赖当前 checkout 含归档目录 + 会误纳未跟踪垃圾目录）。改用 `git ls-tree HEAD` ∪ `git ls-tree <base>` 列 `openspec/changes/archive/` 子项：**在 base 树 → SHIPPED、仅在 HEAD 树（归档提交未并）→ RUN_VERIFY、皆无 → REFUSE「不存在」**。工作树无关、天然忽略未跟踪垃圾。这才真正兑现 grill 的「change 域跨分支也对」（否则发现环节仍工作树域，主张名不副实）。
+- **H3（HRTG-2）返回码可见 git helper + 单一 `base_ref()`**：`run_git()` 把 git 错误与「路径不在树」都折叠成空串，D3 无法区分「base 不存在→UNKNOWN」vs「ls-tree 空→REFUSE/RUN_VERIFY」。MUST 加返回码可见的 git helper + 单一 `base_ref()`（main/master 优先级 + 缺失=UNKNOWN 语义），先定 base 再 ls-tree。
+- **H4（HRTG-3）detached HEAD 契约调和**：D3 改 change 域可达性后，detached HEAD 对 D3 判定**已无关**（不再经 branch_state）。MUST 更新头注释/状态机的「detached→UNKNOWN」契约：detached 下 D3 短路仍可 SHIPPED（凭 base 树可达），仅 active 路径的 final branch_state 判定保留 detached→UNKNOWN。补 detached+archived=SHIPPED 测试。
+- **H5（HRTG-4）`--change` 注入防御**：`--change` 值 MUST 校验为 slug（`[a-z0-9][a-z0-9-]*`）或对 archive 子项遍历用 `re.escape(change)` fullmatch，MUST NOT 把用户输入直接插进 glob（`* ? []` 会被当元字符，且 active 查找当字面、archive 查找当模式，两域不一致）。
+- **H6（BR-9）多命中确定性**：同名 change 多次 ship（多个日期前缀归档）时，判据为**匹配集任一目录在 base 树 → SHIPPED，否则 RUN_VERIFY**（纯 git 域方案天然支持 any-可达，不需选「取哪个 `<dir>`」）。
+
+### D5（BR-3）：完成判据从基数比较改任务号集合归属〔spec-review-amendment · 设计门 Q1 纳入 · scope +1 缺陷〕
+
+- **选定**：`decide()` 完成判据从 `len(done) < n`（基数）改为**任务号集合归属** `plan_ids ⊆ done_ids`。新增 `plan_task_ids(plan)` 解析 `### Task <n>:` 的号集（复用 `TASK_TITLE_RE`），`done_task_ids` 已返回号集，判 `plan_ids - done_ids == ∅` 为齐；未齐时 `CONTINUE_IMPL` 上报 `done_tasks = sorted(done_ids ∩ plan_ids)`（只报计划内已完成）。
+- **理由**：现基数比较把「完成计数 == 计划计数」当齐——一个**计划外任务号**（`checkpoint(task9-…)` 遗留/错号/merge 内提交）可**顶替**一个缺失的计划内号（活体复现：plan=task1/task2、done={"1","9"}、len=2 → 假齐进 code-review，task2 从未完成）。既有 `test_merged_branch_inner_commits_do_enter_window` 已证计划外 "9" 会进 done_ids，"只差补 task1 即成灾"。集合归属根治。
+- **与 D1 正交叠加**：D1 让 plan 落地 commit 自身的 task **入窗口**（修漏数/假红），D5 让「入窗口的号必须属计划内、且计划内号全齐」（修假齐/假✅）。同函数、两个方向，叠加后完成判据既不漏也不假。复选框辅通道（`ship_gate.py:234-236`）语义不变（仍在未齐分支内兜底），但其判定基准随主判据改为集合归属。
+
 ### D4：测试以真实复现盘面为 fixture
 
 三缺陷各 ≥2 用例，落点沿用既有测试文件结构：
@@ -56,8 +73,9 @@
 | 缺陷 | 文件 | 用例 |
 |---|---|---|
 | B1 | `test_gate_impl_progress.py` | ①plan 与 task1 锚同 commit → task1 计入、齐 N 判完成；②plan 单独提交（既有路径）不回归 |
-| B2 | `test_gate_freshness.py` | ①拍板后 `checkpoint(impl-review)` 触及 design.md/tasks.md → 不失鲜；②拍板后普通 subject 触及 design.md → 照判失鲜（既有行为不回归）；③伪 subject 前缀相近（如 `checkpoint(impl-review2`——前缀匹配语义边界）明确判定 |
-| B3 | 新 `test_gate_terminal.py`（或并入 preflight） | ①归档+已并 → SHIPPED exit 0；②归档+未并 → RUN_VERIFY；③active 与 archive 均无 → REFUSE_START「change 不存在」理由；④active 在时 archive 同名旧档不干扰（active 优先） |
+| B2 | `test_gate_freshness.py` | ①拍板后 `checkpoint(impl-review)`/`: 描述` 触及 design.md/tasks.md → 不失鲜；②普通 subject 触及 design.md → 照判失鲜；③变体 `checkpoint(impl-review-fix)`/`impl-reviewX` + 尾串 `checkpoint(impl-review)evil` → 不豁免〔BR-7〕；④空 subject 帧 → 照失鲜〔BR-6〕；⑤同窗口 impl-review+普通 subject 交错各改一件套 → 普通那件照失鲜〔BR-6〕 |
+| B3 | 新 `test_gate_terminal.py` | ①归档在 base 树+verify=PASS 锚 → SHIPPED；②归档仅在 HEAD 树（未并）→ RUN_VERIFY；③皆无 → REFUSE「不存在」；④active + 精确同名旧档 → active 优先；⑤后缀撞名旧档 → 不误命中；⑥跨分支查已并 change → 仍 SHIPPED；⑦〔BR-2〕archive 命中但无 verify=PASS 锚（空壳）→ 不 SHIPPED；⑧〔BR-4〕未跟踪垃圾 archive 目录 → 不误 RUN_VERIFY；⑨〔H4〕detached HEAD+归档已并 → SHIPPED；⑩〔H5〕`--change` 含 glob 元字符 → 安全（slug 校验/re.escape） |
+| B4〔D5·Q1〕 | `test_gate_impl_progress.py` | ①plan=task1/task2、done={task1,task9 计划外} → **CONTINUE_IMPL 非假齐**（集合归属，task2 未完不放行）；②plan 号全被 done 覆盖 → 判齐；③计划外号不计入 done_tasks 上报 |
 
 ## 状态机图〔TG-09：change 生命周期终态修复〕
 
@@ -73,8 +91,8 @@
               ┌───────────────┤ 失鲜(四件套被改)──REFUSE_START
               │               │   ★D2: checkpoint(impl-review) 闭合前缀豁免，不入此转换
               ▼               ▼
-           RUN_SOP ──▶ RUN_PLAN ──▶ CONTINUE_IMPL(done<N) ──▶ 齐 N
-          (TG-02时)           ★D1: 窗口含 plan commit 自身      │
+           RUN_SOP ──▶ RUN_PLAN ──▶ CONTINUE_IMPL(plan_ids⊄done) ─▶ plan_ids⊆done
+          (TG-02时)     ★D1: 窗口含 plan commit 自身 ★D5: 集合归属非计数  │
                                                                ▼
         BLOCKED_UPSTREAM ◀──blocked── RUN_CODE_REVIEW ──pass──▶ RUN_VERIFY
                                                                │
@@ -95,20 +113,20 @@
   git 健全性 ──不可用──▶ UNKNOWN
       │
       ▼
-  ★D3 active cdir 存在？──否──▶ archive/YYYY-MM-DD-{change} 命中?──否──▶ REFUSE_START(change 不存在)
-      │是                          │是（日期前缀锚死,不撞后缀同名）
-      │                            ▼
-      │                     归档目录在 base 树?(git ls-tree,change域)──是──▶ SHIPPED
-      │                            │否──▶ RUN_VERIFY(merge 收尾)
+  ★D3 active cdir 存在？─否─▶ ls-tree HEAD∪base 列 archive/(纯git域,re.escape)──无──▶ REFUSE(不存在)
+      │是                       │命中（H2 发现=判据同域,H5 注入防御）
+      │                         ▼
+      │                  在 base 树 且 archived verify=PASS 锚?(H1)──是──▶ SHIPPED
+      │                         │仅在HEAD树(未并)──▶ RUN_VERIFY(merge收尾)  [base无→UNKNOWN H3]
       ▼
   design-approved 锚在？──否──▶ REFUSE_START(未过设计门)
       │是
       ▼
-  ★D2 四件套失鲜？(checkpoint(impl-review) 闭合前缀提交豁免)──失鲜──▶ REFUSE_START(重审)
+  ★D2 四件套失鲜？(checkpoint(impl-review) 精确式提交豁免)──失鲜──▶ REFUSE_START(重审)
       │鲜
       ▼
-  (verify 冲突锚早检) → SOP → plan 在？→ ★D1 完成判据(窗口[sha,HEAD]闭区间)
-      → code-review 门 → verify 终门 → final SHIPPED 判定（原有，保留）
+  (verify 冲突锚早检) → SOP → plan 在？→ ★D1 窗口[sha,HEAD]闭区间 ★D5 plan_ids⊆done 集合归属
+      → code-review 门 → verify 终门 → final SHIPPED(★H1 archived 谓词收紧,不被旧档触发)
 ```
 
 ## Risks / Trade-offs
