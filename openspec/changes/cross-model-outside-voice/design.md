@@ -13,7 +13,7 @@
 ## Goals / Non-Goals
 
 **Goals:**
-- C1/C6：自包含 codex helper（preflight + exec 包装 + prompt 模板 + off-switch）+ Claude 子代理 fallback，全程非阻塞。
+- C1/C6：自包含 codex helper（preflight + exec 包装 + prompt 框架）+ Claude 子代理 fallback，全程非阻塞（无软开关，grill Q3）[gstack-amendment]。
 - C2/C7：spec-review 复用 autoplan outside-voice findings + 反静默守卫回落；gstack 边界守恒（读产出物 ✓ 依赖内部 ✗）。
 - C3：code-review 自带 code outside voice（always）。
 - C4：HR-TG 判定 + TG-26 入 catalog（四列 + 消费方引用 + INDEX 计数）。
@@ -77,7 +77,7 @@
 | sdflow-code-review Step1' | 原生执行 gstack /review（同构修复） | SKILL.md prose | 同上 |
 | sdflow-code-review outside-voice 子步（新） | always code voice + HR-TG 领域 cross-model | SKILL.md prose 调 helper | 同上 |
 | trigger-catalog.md（bundle 源） | TG-26 四列 + HR-TG 附录 | Markdown | `sdflow-init/assets/workflow/` → canonical → 消费仓 update |
-| tests | preflight 四态 / exec 超时与退出码 / off-switch | pytest subprocess | `sdflow-init/tests/` |
+| tests | preflight 二态 / exec 超时与退出码 [gstack-amendment] | pytest subprocess | `sdflow-init/tests/` |
 
 ## 组件/依赖图（TG-14）
 

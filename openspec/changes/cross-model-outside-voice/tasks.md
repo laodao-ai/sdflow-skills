@@ -1,7 +1,7 @@
 # Tasks: cross-model-outside-voice
 
 > Requirement ID 速查（specs/spec-workflow/spec.md）：
-> **R1** 跨模型 outside voice 默认开、可关、失败回落且非阻塞 · **R2** 复用挂反静默守卫 ·
+> **R1** 跨模型 outside voice 默认开、失败回落且非阻塞（环境层启停）[gstack-amendment] · **R2** 复用挂反静默守卫 ·
 > **R3** HR-TG 判定并留痕 · **R4** tension 不静默采纳 · **R5** 广审层原生执行/显式降级（T25）·
 > **R6** gstack 边界守恒
 

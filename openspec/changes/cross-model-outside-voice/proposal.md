@@ -24,7 +24,7 @@
 
 ### Modified Capabilities
 
-- `spec-workflow`：新增 Requirement——①跨模型 outside voice 默认开、可 off-switch、失败 fallback 且非阻塞〔C1/C6/C7〕；②高风险由 HR-TG 子集判定并留痕〔C4〕；③outside-voice 复用的反静默守卫（缺失/0 条 → 显式降级 + 回落自跑）〔C2·grill-amendment〕；④Step1 广审层原生执行或显式标注降级（T25，取代「模拟当原生」现状）。
+- `spec-workflow`：新增 Requirement——①跨模型 outside voice 默认开、失败 fallback 且非阻塞（启停由环境层决定，无软开关）[gstack-amendment]〔C1/C6/C7〕；②高风险由 HR-TG 子集判定并留痕〔C4〕；③outside-voice 复用的反静默守卫（缺失/0 条 → 显式降级 + 回落自跑）〔C2·grill-amendment〕；④Step1 广审层原生执行或显式标注降级（T25，取代「模拟当原生」现状）。
 
 ## Impact
 
