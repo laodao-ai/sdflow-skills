@@ -11,7 +11,7 @@
 
 窗口下界 `plan_first_sha` 对跨 change 污染只做**部分**隔离：两 change 若在同一分支交错、plan 与 task 提交落进重叠窗口，同号 task 仍互相计入 → 假齐 → 假✅。checkpoint 契约由 `checkpoint-commit.sh`（producer，逐字插值 `<step>`）+ `sdflow-ship` 派发 args（规定 step=`task<N>-<slug>`）+ gate（consumer 解析）三方共识——属**版本化契约套件**〔TG-25〕。
 
-**可达性与立场〔grill-amendment Q1〕**：污染场景**可达但非常规**——唯一入口是 **stacking**（已在 `feat/A` 上再 `openspec new change B`，把第二个 change 摞进同一 feature 分支）；FF-0 只拦 `main`/`master` 上建 change，**不拦 feature 分支上再建 change**（已验 `ff0-branch-guard.py`），故 stacking 不被阻断。叠加既有 **B4 集合归属**（`done & plan_ids` 已滤计划外号），真咬到假✅ 需 **stacking + 撞 plan 同号 + 窗口重叠** 三重条件同时成立。因此 T32 的定位是**契约正确性加固 + 防御纵深**（change-归属的标签本就更对；gate 不假设"独立分支纪律"永不破），**非**修一个活体高频 bug——据此定 **P2**（与 T34 同级，不虚高 P1）。**立论铁律**：MUST NOT 用"每 change 独立分支是纪律"作任何缓解——该纪律若成立则 T32 整个不可达（立论自否）；gate 恰恰取"纪律可能破"立场才使 T32 有意义（立场固化见 `adr/0008-gate-defense-in-depth-not-trust-discipline.md`）。
+**可达性与立场〔grill-amendment Q1〕**：污染场景**可达但非常规**——唯一入口是 **stacking**（已在 `feat/A` 上再 `openspec new change B`，把第二个 change 摞进同一 feature 分支）；FF-0 只拦 `main`/`master` 上建 change，**不拦 feature 分支上再建 change**（已验 `ff0-branch-guard.py`），故 stacking 不被阻断。叠加既有 **B4 集合归属**（`done & plan_ids` 已滤计划外号），假✅ 触发条件〔spec-review-amendment 对抗 A-F2 校正〕：**"撞 plan 同号"在 OpenSpec 任务从 1 顺序编号惯例下近乎必然、非独立低概率项**，"窗口重叠"在 stacking 下也基本成立——故真实门槛**≈两条件：stacking + 污染方用裸格式**（原"三重巧合"表述高估了难度）。注：若 G1 权威源 workflow.md 未同步改，本仓主路径恒产裸格式 → "裸格式其一"由 A 自己满足，残留可达性进一步升高（G1 修复是让"裸其一"条件可枯竭的前提）。因此 T32 的定位是**契约正确性加固 + 防御纵深**（change-归属的标签本就更对；gate 不假设"独立分支纪律"永不破），**非**修一个活体高频 bug——据此定 **P2**（与 T34 同级，不虚高 P1）。**立论铁律**：MUST NOT 用"每 change 独立分支是纪律"作任何缓解——该纪律若成立则 T32 整个不可达（立论自否）；gate 恰恰取"纪律可能破"立场才使 T32 有意义（立场固化见 `adr/0008-gate-defense-in-depth-not-trust-discipline.md`）。
 
 **约束**：① gate 只读零副作用不变；② 假✅ 是头号失效模式，任何取舍向**假阴（多一次 CONTINUE_IMPL）安全、假阳（假 SHIPPED/RUN_CODE_REVIEW）禁止**倾斜；③ `checkpoint-commit.sh` 焊死单行 `-m` subject（禁 `\` 续行/heredoc）——改契约优先不动 producer 脚本；④ 向后兼容旧无命名空间标签为一等约束（proposal A1）。
 
@@ -57,7 +57,7 @@
 - **为何裸标签仍计**（A1）：gate 中途升级时，进行中 change 的已产生裸标签不能丢（否则回退到 CONTINUE_IMPL——虽属**安全侧假阴**，但徒增摩擦）；且窗口下界已把裸标签大致框到本 change 时段。
 - **为何新格式即免疫（命名污染）**：一旦 plan 派发命名标签，污染 change B 的**命名标签** `checkpoint(<B>:task<N>-)` → group(1)=B≠当前 → **正确排除**；叠加既有 `done & plan_ids`（B4），命名污染面塌缩。
 - **残留（裸污染方）**：即便当前 change A 用命名格式，stacking 进来的**裸格式**污染方仍走窗口计入 → 对裸污染方**不免疫**。残留 = 「裸格式污染方 stacking + 撞 plan 号」，记已知不覆盖。
-- **审议过收紧、故意不做〔grill-amendment Q3〕**：考虑过"per-change 模式检测"（A 窗口内出现 ≥1 命名标签 → 判 A 为命名 change → 忽略所有裸标签 → 对裸污染全免疫）。**故意不采纳**：T32 已 P2 防御纵深、残留是三重巧合，收紧要两遍扫描 + 引入 A1 过渡摩擦（在飞 change 出现首个命名 tag 后早期裸 tag 停计=假阴摩擦），KISS 不划算；两方案都只增假阴（无假阳），保持简单不引入任何假阳。收紧留作"stacking 若变常态"的 D2-b 式后手。
+- **审议过收紧、故意不做〔grill-amendment Q3〕**：考虑过"per-change 模式检测"（A 窗口内出现 ≥1 命名标签 → 判 A 为命名 change → 忽略所有裸标签 → 对裸污染全免疫）。**故意不采纳**：T32 已 P2 防御纵深、残留门槛≈两条件（stacking + 裸污染方，见 Context A-F2 校正），收紧要两遍扫描 + 引入 A1 过渡摩擦（在飞 change 出现首个命名 tag 后早期裸 tag 停计=假阴摩擦），KISS 不划算；两方案都只增假阴（无假阳），保持简单不引入任何假阳。收紧留作"stacking 若变常态"的 D2-b 式后手。
 - **假阴/假阳倾斜自检**：命名不匹配 → 排除（可能少计 = 假阴安全）；裸标签 → 计入（保今日行为，不新增假阳）。方向合规（约束②）。
 
 ### ADR-3：T34 复选框按 Task 分段绑定
@@ -65,7 +65,8 @@
 `checkboxes_all(plan)`（全局布尔）→ `checkbox_done_ids(plan)`（每 task 号集）：
 
 - 按 `TASK_TITLE_RE`（`^### Task (\d+):`）的匹配位置把 plan 正文切成**段**，每段归属其 task 号。
-- 某 task 号 ∈ checkbox_done 当且仅当**其段内**存在复选框且**全部已勾**（段内无 `- [ ]` 且有 `- [x]`）。
+- 某 task 号 ∈ checkbox_done 当且仅当**其段内**存在复选框且**全部已勾**。复选框识别 MUST **行锚定** `^\s*-\s+\[[ xX]\]`（非全文子串），且 MUST **忽略 fenced code block（```…```）内的伪复选框**〔spec-review-amendment codex#4：现 `checkboxes_all` 全文子串会把代码块/散文里的 `- [x]` 误当完成入口〕。
+- **重号 Task 段〔spec-review-amendment codex#3/对抗B-1c〕**：若同一 task 号对应多个 `### Task N:` 段（plan 手改/复制粘贴事故，本仓 impl-review 尾流修订常见），MUST 判该 plan **UNKNOWN**（`plan_task_ids` 用 `set` 会把重号折叠、掩盖"一段全勾一段未勾"的假✅）——fail-safe 优先于 guess。锚测 `test_duplicate_task_number_unknown`。
 - 完成集合并：`done_ids = checkpoint_done_ids ∪ checkbox_done_ids`，再 `done_in_plan = done_ids & plan_ids`（B4 不变）。
 - **保留** `plan 未提交且无任何复选框 → UNKNOWN 双通道不可判` 分支（sha 空 ∧ 全 plan 无框）。
 
@@ -92,13 +93,17 @@ plan_ids - done_ids == ∅ ? ─是→ 进 code-review 门
 
 | 契约点 | 文件 | 本 change 改动 | 兼容义务 |
 |--------|------|---------------|---------|
-| **格式产出（producer 约定）** | `sdflow-ship/SKILL.md` RUN_PLAN→writing-plans 派发 args | step `task<N>-<slug>` → `<change>:task<N>-<slug>` | 新 change 起用；旧 change 已产标签不回改 |
-| **产出脚本** | `sdflow-init/assets/hack/checkpoint-commit.sh` | **零改**（逐字插值 step，命名空间在调用侧） | — |
-| **解析（consumer）** | `sdflow-ship/scripts/ship_gate.py` `TAG_RE`/`done_task_ids` | 可选命名空间组 + 归属规则 + 分段复选框 | 裸标签保留计入（A1） |
-| **规范** | `openspec/specs/spec-workflow/spec.md` 完成判据需求 | +命名空间隔离/分段绑定 Scenario | 既有 B1-B4 Scenario 不变 |
-| **头注释「已知不覆盖」** | `ship_gate.py` 头部 | +双旧格式同窗残留 + T33 停置 | — |
+| **格式产出·权威源〔spec-review-amendment G1〕** | `sdflow-init/assets/workflow/workflow.md:74`（bundle **唯一权威源**，CLAUDE.md 定；比 SKILL.md 上位） | step `task<N>-<slug>` → `<change>:task<N>-<slug>` + 注裸格式兼容；archive 后按纪律触发 `sdflow-init update` 推下游 | 漏改=本仓真实 dogfood 主路径恒产裸格式→T32 对主路径形同虚设 |
+| **格式产出·消费引用** | `sdflow-ship/SKILL.md:29` RUN_PLAN→writing-plans 派发 args | 同上（与权威源同批改齐、勿只改一处） | 新 change 起用；旧 change 已产标签不回改 |
+| **产出脚本** | `sdflow-init/assets/hack/checkpoint-commit.sh` | **零改**（逐字插值 step，命名空间在调用侧；接地实证 `:` 作 step 安全） | — |
+| **解析·正则** | `ship_gate.py` `TAG_RE` | 可选命名空间组 | 裸标签退化为原匹配（A1） |
+| **解析·前缀过滤〔spec-review-amendment A-F1〕** | `ship_gate.py:263` `startswith("checkpoint(task")` | **MUST 同步放宽**为 `startswith("checkpoint(")`（否则命名标签在 `TAG_RE.match` 前被整条 `continue` 跳过→T32 静默失效+吞自己的命名完成号） | 回归测试 MUST 用**真实 git commit** fixture（非字符串 mock），否则测不出此洞 |
+| **解析·归属+分段** | `ship_gate.py` `done_task_ids`(+`change` 参)/`checkbox_done_ids` | 归属规则 + 分段复选框 + 重号 UNKNOWN | B4 叠加不变 |
+| **权威性测试** | `sdflow-ship/tests/test_workflow_authority.py:16` | 断言 token `"task<N>-"` → 更新为命名空间格式断言（防旧 token 被钉死） | — |
+| **规范** | `openspec/specs/spec-workflow/spec.md` 完成判据需求 | 命名空间隔离/分段绑定（结构 ADDED vs MODIFIED 待设计门 Q2 拍板） | 消解与既有"前置产物缺失点名"Scenario"全勾为辅"的书面矛盾 |
+| **头注释** | `ship_gate.py:32` + 头部「已知不覆盖」 | 更新 `checkpoint(task<k>-` 引用 + 裸污染残留 + T33 停置 | — |
 
-> **scope-check**：以上 5 点必须同批改齐——漏 SKILL 派发 args = 新格式永不产生；漏头注释 = 残留假✅无声。tasks 逐点建任务，verify 逐点核。
+> **scope-check**：以上 **9 点必须同批改齐**〔spec-review 从 5 点补至 9〕——漏权威源 workflow.md = T32 对主路径形同虚设（G1 blocker）；漏 `startswith:263` = 功能静默失效（A-F1）；漏头注释 = 残留假✅无声。tasks 逐点建任务，verify 逐点核。
 
 ## Risks / Trade-offs
 

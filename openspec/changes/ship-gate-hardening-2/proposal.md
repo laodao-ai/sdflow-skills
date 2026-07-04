@@ -6,7 +6,7 @@
 
 `ship_gate.py` 的**实现完成判据**（阶段三主锚）目前有两处 pre-existing 精度局限（ship-gate-hardening 代码审 HR-TG code 镜发现、非其引入、defer 为 T32/T34）：
 
-1. **checkpoint 任务号无 change 归属**——`checkpoint(task<N>-)` 标签不带 change 名，同一 feature 分支上交错推进两个 change（**stacking**：已在 feat/A 上再建 change B）时同号任务会互相污染完成集。窗口下界 `plan_first_sha` 只做**部分**隔离，一旦两 change 的 plan 与 task 提交落进同一窗口区间即撞号，可致**假齐 → 误放行 RUN_CODE_REVIEW**（假✅）。**注**〔grill Q1〕：触发需 **stacking 反模式 + 撞 plan 同号 + 窗口重叠** 三重条件（FF-0 只拦 main 建 change、不拦 feature 分支上 stacking；B4 集合归属已滤计划外号）——故本项定位为**契约正确性加固 + 防御纵深**（gate 不假设分支纪律永不破），非活体高频 bug。
+1. **checkpoint 任务号无 change 归属**——`checkpoint(task<N>-)` 标签不带 change 名，同一 feature 分支上交错推进两个 change（**stacking**：已在 feat/A 上再建 change B）时同号任务会互相污染完成集。窗口下界 `plan_first_sha` 只做**部分**隔离，一旦两 change 的 plan 与 task 提交落进同一窗口区间即撞号，可致**假齐 → 误放行 RUN_CODE_REVIEW**（假✅）。**注**〔grill Q1 + spec-review A-F2 校正〕：触发门槛**≈两条件：stacking 反模式 + 污染方用裸格式**（FF-0 只拦 main 建 change、不拦 feature 分支 stacking；"撞 plan 同号"在任务从 1 顺序编号惯例下近乎必然、非独立巧合；B4 已滤计划外号）——故本项定位为**契约正确性加固 + 防御纵深**（gate 不假设分支纪律永不破），非活体高频 bug。
 2. **复选框辅通道全局粒度**——`checkboxes_all` 只看全文有无 `- [ ]`/`- [x]`，一个全局勾选即放行**所有** plan task，未按 `### Task <n>:` 分段绑定；与 checkpoint 集合归属主锚并存时可放大假齐面。
 
 两者都是"绝大多数盘面正确、但在特定交错/回勾盘面下产生假✅"的精度洞。gate 的存在意义就是堵假✅，这两处属其自身判据的残留缝隙，值得在一个窄 change 内根治。
@@ -29,7 +29,9 @@
 
 - **`sdflow-ship/scripts/ship_gate.py`**：`TAG_RE` / `done_task_ids`（命名空间过滤）、`checkboxes_all` → 分段绑定；`decide()` 完成判据分支。
 - **`sdflow-init/assets/hack/checkpoint-commit.sh`**：任务 checkpoint 契约（若 ADR 选步名内嵌，则 producer 侧仅约定不改脚本；若选 trailer，则改脚本——ADR 定夺后确定牵连面）。
-- **`sdflow-ship/SKILL.md`**：RUN_PLAN → writing-plans 派发 args 的 checkpoint 格式约定（`task<N>-<slug>` → 命名空间格式）。
+- **`sdflow-init/assets/workflow/workflow.md:74`**〔spec-review G1〕：bundle **唯一权威源**的 checkpoint 派发格式（`task<N>-<slug>` → 命名空间格式）——**必须与 SKILL.md 同批改**，否则本仓 dogfood 主路径恒产裸格式、T32 对主路径形同虚设。archive 后按纪律 `sdflow-init update` 推下游。
+- **`sdflow-ship/SKILL.md:29`**：RUN_PLAN → writing-plans 派发 args 的 checkpoint 格式约定（消费引用，同步改）。
+- **`sdflow-ship/tests/test_workflow_authority.py:16`**〔spec-review G1〕：钉死旧 token `"task<N>-"` 的断言须更新，否则 CI 反挡新格式。
 - **`sdflow-ship/tests/`**：新增 T32 命名空间隔离 + 向后兼容 + T34 分段绑定锚测。
 - **不动**：ship-gate-hardening 已固化的 D3 归档终态 / B2 豁免 / B1 窗口 / B4 集合归属；已声明「已知不覆盖」接受项。
 
