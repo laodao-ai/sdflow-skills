@@ -13,7 +13,7 @@
 | 名称 | 文件 | 作用 |
 |---|---|---|
 | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：生成(ff+grill)→设计审(sdflow-spec-review 编排器)→设计 GATE→实现+代码审+收尾(subagent-dev→sdflow-code-review→sdflow-done)；去 /clear、连续跑到 merge |
-| `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-01~26，驱动 约束/领域清单/画图/必填槽 五层 |
+| `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-01~26，驱动 约束/领域清单/画图/必填槽/评审cross-model 五层 |
 | `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | `opsx:ff` 起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6 |
 | `generation-process` | [workflow/generation-process.md](./workflow/generation-process.md) | 生成过程三相位：发散(explore)/收敛(brainstorming)/对抗压测(grill) |
 | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
