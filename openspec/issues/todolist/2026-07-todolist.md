@@ -33,6 +33,7 @@
 | T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | PROPOSED | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
 | T26 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 功能增强 | PROPOSED | 2026-07-04 02:40 | sdflow-ship | sdflow-ship |
 | T27 | `openspec/workflow + resolve-workflow.sh` | workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突 | 基础设施 | OPEN | 2026-07-04 09:57 | minimize-repo-footprint |  |
+| T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | OPEN | 2026-07-04 10:51 | cross-model-outside-voice |  |
 
 ---
 
@@ -338,3 +339,21 @@
 **思路**：与 minimize-repo-footprint 拍板（勿把规则拷回仓内，副本会被 resolver 判 pin 遮蔽全局）正面相抵，落地前需设计消解方案，候选：①只读 reference 拷贝且标注/改造 resolver 不识别为 pin ②仓内 symlink 指向 ~/.sdflow/workflow（@ 可达且不算副本，需验证 resolver 行为）③resolve-workflow.sh 加打印路径/内容子命令满足复制 prompt 诉求
 
 **备注**：提出于 cross-model-outside-voice 会话，内容上属 minimize-repo-footprint 后续
+
+---
+
+## T28: 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` |
+| 类型 | 功能增强 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/cross-model-outside-voice/spec-review-report.md`
+
+**动机**：用户 2026-07-04 提出：阶段收尾时只说「下一步是 X」不够——应给出下一阶段的完整 prompt 文本，便于用户核对将要发生什么、复制到别处用，或确认后原样执行
+
+**思路**：候选落点：①workflow.md 阶段表每步附「标准起手 prompt」栏（单一源）；②各编排 skill（sdflow-spec-review/sdflow-code-review/sdflow-done/sdflow-ship）收敛口输出模板加「下一步完整 prompt」区块；③与 hand-off.md 的 next-stage advice 段合流。注意与 T27（规则可参考副本）同属「把工作流内部知识显性给用户」一族
+
+**备注**：提出于 cross-model-outside-voice spec-review 进行中；属 workflow bundle 级改进，非本 change scope

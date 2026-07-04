@@ -38,7 +38,7 @@
 
 1. **outside-voice 层留痕覆盖率** — 基准 0%（现无此层）→ 目标 100%：每次 sdflow-code-review 报告含 outside-voice 段（真跑 codex 或显式降级记录，二者必居其一）— 度量：grep 机器锚行 `<!-- outside-voice: … -->`〔grill Q5：确定性机判，不押自然语言〕。
 2. **广审层静默模拟次数** — 基准：模拟未标注（T25 两轮实证）→ 目标 0：Step1 每次运行要么原生执行、要么显式标注「模拟广审（降级模式）」— 度量：grep 机器锚行 `<!-- step1-broad-review: … -->`〔grill Q5〕。
-3. **无 codex 环境评审完成率** — 基准 N/A → 目标 100%：无 codex / 无 gstack 环境下 fallback 冒烟通过、审查不中断 — 度量：§8.3 冒烟测试。
+3. **（回归项，非新能力指标）无 codex 环境评审完成率**〔spec-review-amendment 重标：该性质本 change 前即应恒成立，验收时勿当「新层已验证有效」的证据〕 — 目标 100%：无 codex / 无 gstack 环境下 fallback 冒烟通过、审查不中断 — 度量：§8.3 冒烟测试。
 
 ## 需求优先级（TG-19）
 
@@ -53,15 +53,16 @@
 | codex CLI 已安装且可认证 | fallback 到 Claude 子代理——只丢跨模型增益，层不丢，非阻塞 |
 | `gstack-review.md` 文件名 / codex 段格式稳定 | 反静默守卫触发：显式降级 + 回落自跑 codex 设计 voice，绝不静默当「本次无 voice」 |
 | autoplan 每次都跑（P2b）→ `gstack-review.md` 每次都在 | C2 复用失去前提：spec-review MUST 自跑设计 outside voice（守卫 fallback 路径），C2 与 P2b 两条 MUST 交叉引用 |
-| Skill 机制可在主 session 原生执行 autoplan（sdflow-ship 评审轮先例） | 退 T25 思路③：显式标注「模拟广审（降级模式）」，不伪装原生 |
+| Skill 机制可在主 session 原生执行 autoplan（依据 = 本 change spec-review 2026-07-04 实证；原 sdflow-ship「先例」文不对题已撤）〔spec-review-amendment〕 | **三态失效模型**：不可用 → 退思路③模拟+显式标注；**可用但产物不落编排期望路径** → 主 session 落盘责任（design D4）兜住；均不伪装原生 |
 
 ## 开放问题（TG-21）
 
 | 问题 | 归属 | 截止 |
 |------|------|------|
 | ~~off-switch 形态~~ | 已闭〔grill Q3〕：不设 off-switch，启停归环境层 | — |
-| helper 语言形态：bash 单脚本 vs Python（本仓测试惯例 pytest） | design.md 决策记录 | 设计门前 |
-| gstack headless 调用路径是否存在、可否作原生执行的补充 | 实现期调研（P2） | 不阻塞 P0 |
+| ~~helper 语言形态~~ | 已闭〔design D1〕：bash（hack 家先例，pytest subprocess 测） | — |
+| gstack headless 调用路径是否存在、可否作原生执行的补充 | 实现期调研（P2）；〔spec-review-amendment〕若原生路径实测不可行则升 P0 阻塞 | 见 design OQ 升级条款 |
+| ~~向 gstack 上游贡献以消灭自维护拷贝~~ | 已评估否决〔spec-review X4〕：adr/0002 已拍板自包含边界，solo 无上游维护关系精力；显式留痕防「缺省未讨论」 | — |
 
 ## 成本估算（TG-24）
 
