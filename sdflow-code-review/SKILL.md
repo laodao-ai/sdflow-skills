@@ -65,6 +65,8 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 **规划镜头（主 session）**：按 `{change_dir}` 命中的 TG/栈定**领域镜**；按风险定**对抗镜**（普通 2 / 高风险 3）；
 固定 1 个**历史镜**。linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
 
+- **HR-TG 判定〔C4·R3〕**：命中 TG 集 ∩ HR-TG 子集（**单一源 = trigger-catalog「HR-TG 子集」附录**，此处只引用不复制清单）≠ ∅ → 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）。判定无论正反写报告并带 v1 锚行 `<!-- sdflow:hr-tg v1 hit="TG-xx,…|none" evidence="<判据触发点一句>" -->`（命中必填 evidence，30 秒可人工复核）。
+
 **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
 
 | 镜 | 数量 | 干什么 | 建议档位 |
@@ -75,15 +77,15 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 > 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回结构化 findings（每条带：
 > 问题 / CR 编号 / 证据 `file:line` / 严重度 / 建议），**不要 AskUserQuestion**"。
->
-> 〔Phase C 补〕sdflow-code-review **自带 code outside voice**（跨模型 codex，always）+ 命中 HR-TG 单开领域 cross-model
-> 属 Phase C（C3/C4）。Phase A 不实现跨模型镜。
+
+**第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。findings 进 Step3 合并池；v1 锚行按位点写入报告。**always-on 复评条款〔设计门 Q3〕**：累计跑满 10 次后按报告分桶采纳率复评是否降采样为 HR-only。
 
 ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
 
 1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）。
 2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
    明确滤除：CI 能抓的 / 纯 nitpick / 未改动行的既有问题 / 仅主观风格 / 已被注释显式抑制的。
+   **outside-voice 豁免〔R4·D8〕**：`runner=codex` 的 findings 跳过 <80 数值滤直通对抗裁决（跨模型自评不可比、异见不被同族标尺误杀）；`runner=claude-fallback` 属同族产物照过滤。
 3. **对抗裁决**：对每条存活 finding 判"是否真的运行期出问题"——对抗镜反驳 ≥ 多数成立则采信。
 4. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
    判"不成立"的连理由落入报告「已裁掉」区。<80 滤除项也**一行带过（可审计），不静默丢**（静默 = "全过了"的假象）。
@@ -95,15 +97,37 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 - **修不了 / genuinely 拿不准**：defer → 写 buglist（本 change 引入的代码 bug）/ todolist（改进/关注点），
   本 change 不处理，交 hand-off 引导另开清理 change。
 - **绝不 AskUserQuestion**（阶段三无人类门）。
+- **裁决分桶〔4.6·M4〕**：voice findings 的裁决结果按 runner 分桶计数（codex / claude-fallback 各记 采纳[impl-review-fix]/裁掉/defer），写入报告「修复 / defer 台账」，供采纳率 Success Metric 与 10 次复评消费。
 
 ## 第五步：产出 + 收敛口
 
 - 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账）。
+- **锚行存在性自检〔R1/R3/R5〕**：出报告后机械 grep 三类 v1 锚行，缺失即本步报错阻塞；`findings=N` 与合并池实收数 diff 一次。
 - 修复代码，改动处标 `[impl-review-fix]`。
 - **checkpoint 提交**：产出报告 + 自动修复后 → `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
 - **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
 
 ---
+
+## outside-voice helper 调用协议（契约单一源 = `~/.sdflow/hack/outside-voice.sh` 头注释，此处只给分支决策，不转述接口细节）
+
+```
+HELPER=~/.sdflow/hack/outside-voice.sh
+[ -x "$HELPER" ] 不成立 → 显式提示「outside-voice.sh 未安装——先跑 bash setup.sh」+ 直接派 fallback 子代理（不静默）
+版本核对：$HELPER version 输出与本 SKILL 预期主版本(1.x)不符 → 告警"helper 疑似陈旧，重跑 setup.sh"后继续
+preflight：仅精确匹配 "ready" 走 codex；"not_installed" 或任何畸形输出/非零退出 → fallback（reason_code=not-installed|preflight-error）
+context 构造（摘录规则定死，不现场发挥）：写 {change_dir}/.outside-voice/<site>-context.md（固定命名、下轮覆盖、不删，留调试证据）
+  site=code-voice → git diff $DIFF_BASE..HEAD 全量
+  site=hr-tg      → 命中 TG 判据触发点 + 相关 diff hunk
+exec：$HELPER exec --context-file <f>
+  exit 0   → stdout 即 findings 进合并池；锚行 runner="codex"
+  exit 124 → fallback（reason_code=timeout）      exit 1 → fallback（reason_code=exec-error，stderr 摘要写锚行外正文）
+  exit 3   → 本次 voice 拒发不 fallback（reason_code=secret-hit；密钥既不出境也不进子代理 prompt）
+fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh Claude 子代理（同源同 prompt；框架已含范围收窄）；
+  无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 runner="claude-fallback"
+锚行（每调用位点一行，truncated 取 helper stderr 的 OV_TRUNCATED）：
+  <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" runner="codex|claude-fallback" reason_code="…" findings="N" truncated="true|false" -->
+```
 
 ## 报告格式（code-review-report.md）
 
@@ -118,6 +142,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 ### 修复 / defer 台账
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(附理由)；defer K 项 → buglist/todolist
   T10复核: <方案> | 对抗镜结论 <通过/证伪> | <一句理由>   ← 无客观判据的 ≥2 方案自动选必附
+  voice分桶: codex 采纳x/裁掉y/defer z · fallback 采纳a/裁掉b/defer c   ← M4 采纳率数据源
 ### 结论
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
 
