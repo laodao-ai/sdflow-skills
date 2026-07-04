@@ -12,6 +12,7 @@
 |----|------|--------|------------|
 | B1 | bug | PROPOSED | cross-model-outside-voice |
 | B2 | bug | PROPOSED | cross-model-outside-voice |
+| B3 | bug | PROPOSED | cross-model-outside-voice |
 | T28 | todo | PROPOSED | cross-model-outside-voice |
 | T29 | todo | PROPOSED | cross-model-outside-voice |
 | T30 | todo | PROPOSED | cross-model-outside-voice |
