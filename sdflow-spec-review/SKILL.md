@@ -30,13 +30,15 @@ description: >
 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
 2. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用评审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用评审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/spec-review.md`（方法论）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
 
-## 第一步：autoplan 子步（广审，吃其 findings）
+## 第一步：autoplan 子步（广审·原生执行，吃其 findings）
 
-1. 对 `{change_dir}` 跑 autoplan（gstack 广审 CEO/design/eng/DX·自动决策），评审结论写入 `{change_dir}/gstack-review.md`，改动标 `[gstack-amendment]`。autoplan 跑自己的流程，prompt 不注入。
-2. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
-3. **反静默守卫（显形部分）**：若 `gstack-review.md` **缺失 / 解析不出**，**打印显式降级日志**（"autoplan 输出未找到 → 本次缺广审层"），**绝不静默当'无此层'跑过**。
+1. **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 autoplan（其指令直接进主 session 执行，MUST NOT 派子代理读其 SKILL.md 转述模拟）。autoplan 跑自己的流程，prompt 不注入；其内部 AskUserQuestion 人类门（premise 确认 / 最终批准）按 G2/C5 适配：不弹窗，连同其自动决策一并登记进本评审报告「决策登记区」，设计门一次拍板。
+2. **主 session 落盘〔R5〕**：autoplan 原生机制只写 plan file，无「写任意路径」能力——执行完由**主 session** 汇总其结论 Write 落盘 `{change_dir}/gstack-review.md`（改动标 `[gstack-amendment]`），文件头 + 本报告 Step1 段各写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`；native 声明附一句侧信道佐证（如 autoplan 双声真实调用事实/运行痕迹）。
+3. **降级路径**：autoplan skill 不可用 → 子代理模拟广审 + 报告显式标注「模拟广审（降级模式）」+ 锚行 `mode="simulated"`，MUST NOT 伪装原生。
+4. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
+5. **反静默守卫（显形部分）**：若 `gstack-review.md` **缺失 / 解析不出**，**打印显式降级日志**（"autoplan 输出未找到 → 本次缺广审层"），**绝不静默当'无此层'跑过**。
    > 〔Phase C 补〕完整的 outside-voice 复用（读 gstack-review.md 的 codex outside-voice 段 + 缺失时**回落自跑 codex 设计 voice** + 命中 HR-TG 单开领域 cross-model）属 Phase C（C2/C4）。Phase A 只做"跑 autoplan + 吃 findings + 缺失显式记降级"，不实现回落自跑与 cross-model。
-4. **checkpoint 提交（P2c 第 1 次）**：`~/.sdflow/hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。
+6. **checkpoint 提交（P2c 第 1 次）**：`~/.sdflow/hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目标准）
 
