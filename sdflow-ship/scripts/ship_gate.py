@@ -29,8 +29,12 @@ verdict × exit × next 契约表:
 
 完成判据窗口〔B1 闭区间〕: superpowers-plan.md 首次提交 sha 起，窗口 [sha, HEAD] 闭区间
     `git log <sha>..HEAD --no-merges` 加 sha 自身 subject（同前缀+TAG_RE 规则）收集
-    checkpoint(task<k>- 去重任务号集 done_ids；plan `### Task <n>:` 号集 plan_ids；
-    plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；标题命中 0 → UNKNOWN。
+    checkpoint(<change>:task<k>- 命名空间标签去重任务号集 done_ids〔ship-gate-hardening-2 T32：
+        gate 只认当前 change 的命名标签，跨 change stacking 不互相污染；裸 checkpoint(task<k>-
+        旧格式向后兼容仍计入窗口；startswith 前缀过滤放宽为 "checkpoint("〕；
+    复选框辅通道按 `### Task <n>:` 分段绑定并入 done_ids〔T34：行锚定+忽略代码块，非全局全勾放行〕；
+    plan `### Task <n>:` 号集 plan_ids；plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；
+    标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
 
 D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     design-approved: 其后触及本 change 四件套路径（proposal/design/tasks.md 与 specs/）
@@ -52,7 +56,14 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     经 impl-review 豁免的四件套编辑不经二次批准即随档 ship（安全边界=约定级「仅装饰性
         改动」，gate 不做 hunk 分析；若某次措辞修正实际改动设计语义会静默 merge，设计门 Q2 接受）；
     精确同名 change 历史归档过（archive 有真同名旧档 + 已并 base + 带 verify=PASS 锚）而新一轮
-        同名 change 尚未建 active 目录时，D3 短路按旧档报 SHIPPED——change 重名属反模式，接受〔B3〕。
+        同名 change 尚未建 active 目录时，D3 短路按旧档报 SHIPPED——change 重名属反模式，接受〔B3〕；
+    〔ship-gate-hardening-2 T32〕命名空间隔离对**裸格式污染方**不免疫：stacking（feat/A 上再建
+        change B，FF-0 不拦）+ B 用旧裸格式 + 撞 plan 号 → 裸标签走窗口计入仍污染 A 的完成集。
+        新格式 change 对命名污染全免疫；残留仅"裸污染方 stacking + 撞号"。MUST NOT 用"每 change
+        独立分支纪律"作缓解——纪律成立则污染不可达、隔离自否（防御纵深立场，见 adr/0008）；
+    〔ship-gate-hardening-2 T33 停置〕新鲜度只看已提交盘面，不看工作树 staged/unstaged/untracked
+        的非 openspec 代码改动——与「盘面即状态=committed 产物」设计一致，是否纳入工作树 dirty
+        需先单独拍板 gate 该不该越过 committed 边界，本批不做。
 """  # [impl-review-fix]
 import argparse
 import json
