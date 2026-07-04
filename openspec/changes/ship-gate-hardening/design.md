@@ -30,20 +30,23 @@
 - **备选 b）改 checkpoint-commit.sh 先单独提交 plan**：治因不治判定——gate 应对「plan 与 task1 同 commit」这一合法盘面健壮，而不是要求上游永不产生它（人工手跑也可能产生）。弃。
 - 理由：追加一次 `-1` 解析零边界风险、语义直白；spec 原文的窗口表述（`<sha>..HEAD`）随修为闭区间表述。
 
-### D2（B2）：design 域失鲜扫描按 commit subject 白名单豁免 `checkpoint(impl-review` 前缀 ⭐〔TG-23 决策记录〕
+### D2（B2）：design 域失鲜扫描按 commit subject 白名单豁免 `checkpoint(impl-review)` 前缀 ⭐〔TG-23 决策记录〕
 
-- **选定（方案 a）**：`is_stale(scope="design")` 逐 commit 判定时，subject 以字面前缀 `checkpoint(impl-review` 起始的提交**不触发失鲜**（其触及四件套视为阶段三合法尾流修订）。实现上把 `git log {sha}..HEAD --name-only --format=` 换为带 subject 的分组遍历（`--format=%x00%s` 分帧或 `%H` 逐条），按 commit 粒度过滤后再看触及路径。
+- **选定（方案 a）**：`is_stale(scope="design")` 逐 commit 判定时，subject 以**闭合字面前缀 `checkpoint(impl-review)`**（含右括号）起始的提交**不触发失鲜**（其触及四件套视为阶段三合法尾流修订）。实现上把 `git log {sha}..HEAD --name-only --format=` 换为带 subject 的分组遍历（`--format=%x00%s` 分帧或 `%H` 逐条），按 commit 粒度过滤后再看触及路径。
+  - 〔grill-amendment〕**前缀必须闭合**：`checkpoint-commit.sh <step>` 恒产出 `checkpoint(<step>)` 或 `checkpoint(<step>): <desc>`，code-review 的 step 名恒为 `impl-review`（`[impl-review-fix]` 只是报告标记，非 step 名）。闭合前缀 `checkpoint(impl-review)` 对两种真实产物零漏豁免（`checkpoint(impl-review): …` 第 22 字符正是 `)`，`startswith` 成立），同时排除 `checkpoint(impl-review-fix)`/`checkpoint(impl-reviewX)` 等**从不合法产生**的变体。开口前缀 `checkpoint(impl-review`（无右括号）会把这些变体误纳入豁免，凭空放宽绕过面，与「豁免面刻意窄」自相矛盾——弃。
 - **备选 b）重申锚 `design-reaffirmed`**：code-review 完成时回写新锚行推进新鲜度基线。语义最正，但扩契约面（新锚行 × 脚本头注释 × 两 SKILL 模板 × `test_anchor_contract.py` 双向钉死），且回写者与补丁作者是同一主体（sdflow-code-review 主 session），相对方案 a 没有额外保证——成本高、增益零。弃（若未来出现多个合法尾流写者再升级）。
 - **备选 c）监视面收窄（tasks.md 勾选-only diff 豁免）**：需 diff 内容分析（所有变更行均为 `- [ ]`→`- [x]`），复杂且**不覆盖 design.md 措辞补丁**（本轮实际触发源之一）。弃。
-- **信任模型一致性**：gate 已信任 checkpoint subject——完成判据 `done_task_ids` 就靠 `checkpoint(task<n>-` 前缀（`ship_gate.py:158-166`，含 revert 防御的 `startswith` + `TAG_RE.match` 先例，豁免判定沿用同一「字面前缀」手法）。伪造 subject 绕过失鲜 = 显式越权同权级（git 留痕可审计），与既有「已知不覆盖」条目同类，追加声明即可。
-- **豁免面刻意窄**：只豁免 `checkpoint(impl-review` 一个前缀。`checkpoint(spec-review` 发生在拍板前（无需豁免）；`checkpoint(task<n>-` 实现提交按约定不触碰四件套（若触碰，判失鲜是**正确**行为——实现改设计须重审）；人工/其他 subject 触及四件套照判失鲜。
+- **信任模型一致性**：gate 已信任 checkpoint subject——完成判据 `done_task_ids` 就靠 `checkpoint(task<n>-` 前缀（`ship_gate.py:158-166`，含 revert 防御的 `startswith("checkpoint(task")` + `TAG_RE.match` **两道闸**先例）。〔grill-amendment〕豁免判定的闭合前缀 `checkpoint(impl-review)`（右括号即第二道结构闸的等效物）正是为对齐该先例——先例靠 `TAG_RE` 挡掉 `checkpoint(task` 开头但非 `task<n>-` 的噪声，豁免靠右括号挡掉 `impl-review` 开头但非精确 step 名的变体。伪造 subject 绕过失鲜 = 显式越权同权级（git 留痕可审计），与既有「已知不覆盖」条目同类，追加声明即可。
+- **豁免面刻意窄**：只豁免闭合前缀 `checkpoint(impl-review)` 一个 step 名。`checkpoint(spec-review)` 发生在拍板前（无需豁免）；`checkpoint(task<n>-` 实现提交按约定不触碰四件套（若触碰，判失鲜是**正确**行为——实现改设计须重审）；`checkpoint(impl-review-fix)`/`checkpoint(impl-reviewX)` 等右括号后带尾串的变体从不由 checkpoint 脚本合法产生，**照判失鲜**；人工/其他 subject 触及四件套照判失鲜。
 
 ### D3（B3）：pre-flight 前置归档终态短路（active 缺席时查 archive + 分支态）
 
-- **选定**：`decide()` 在 git 健全性检查后、设计门 pre-flight 前，增加：`cdir` 不存在时 → 查 `openspec/changes/archive/*-{change}` glob——命中且 `branch_state()=="merged"` → **SHIPPED**（exit 0）；命中但 `pending` → **RUN_VERIFY**（next=sdflow-done，理由「已归档但分支未并，完成 merge 收尾」）；不命中 → **REFUSE_START** 但理由改为「change 不存在（active 与 archive 均无）」，与「未过设计门」区分。
+- **选定**：`decide()` 在 git 健全性检查后、设计门 pre-flight 前，增加：`cdir` 不存在时 → 查**日期前缀锚死 glob**（见下条）——命中且**该 archive 目录已在 base 树里**（change 域可达，见下「终态判据」）→ **SHIPPED**（exit 0）；命中但不在 base 树 → **RUN_VERIFY**（next=sdflow-done，理由「已归档但分支未并，完成 merge 收尾」）；不命中 → **REFUSE_START** 但理由改为「change 不存在（active 与 archive 均无）」，与「未过设计门」区分。
+- **终态判据必须是 change 域，不用全局 `branch_state()`**〔grill-amendment〕：`branch_state()`（`ship_gate.py:178-189`）答的是「当前 HEAD 分支有没有并进 base」，是**全局**问题，与「demo 这个 change 有没有 merge」无关。反例：demo 已在 `feat/demo` 上 archive+merge 到 main，之后切到无关新分支 `feat/other`（有未并提交）再查 demo → 全局 `branch_state()=pending` → 误判 RUN_VERIFY「去跑收尾」，而 demo 早已 ship。这与它要修的 B3 是**同一类缺陷**（判据取错域）。改用**匹配到的那个 archive 目录是否已存在于 base(main/master) 的树里**判定：`git ls-tree <base> -- openspec/changes/archive/<dir>/` 非空（或 `cat-file -e <base>:<path>`）即「demo 的归档已落 base」→ SHIPPED；不在 base 树 → RUN_VERIFY。**与当前 HEAD 在哪条分支无关**：并了就是 SHIPPED、没并就是 pending，跨分支查也对。base 不存在（无 main/master）时回落 UNKNOWN（同 `branch_state()` 的 unknown 语义）。只多一个 `git ls-tree` 只读调用，守 D8 零副作用红线，是真正的盘面推导。
 - **顺序关键**：短路必须在设计门 freshness 检查**之前**——归档 commit 的 `--name-only` 会列出 active 路径的删除记录，若先跑 freshness 会引入新误报；短路后该路径天然不可达。
+- **glob 必须锚死日期前缀**〔grill-amendment〕：归档命名恒为 `<YYYY-MM-DD>-<change>`，用 `[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{change}` 而非 `*-{change}`。开口 `*-{change}` 是**后缀匹配**，`*` 吞任意前缀 → 别的 change（如 `cross-demo`）的归档会撞进 `demo` 的查询，让 gate 对不存在的 change 误报 SHIPPED/RUN_VERIFY。B3 之前该 glob 只喂 final SHIPPED（active 齐全时碰撞无害），D3 把它提为**pre-flight 载荷判据**，碰撞从无害升级为误判源，故须锚死。`ship_gate.py:289` 既有 `archived` 一并换同款保持一致。注意这与「同名旧档」（精确同名 `demo` 历史归档）是**两个问题**：后缀碰撞靠锚死日期前缀消除；精确同名旧档走下方「已知不覆盖」。
 - **备选）改 sdflow-ship SKILL.md 提示「归档后勿重跑 gate」**：prose 治 prose，违反 adr/0006(b) 的立场。弃。
-- **已知不覆盖（追加声明）**：同名 change 历史归档过（`archive/*-{change}` 命中旧档）且新一轮同名 change 尚未建目录时，gate 会按旧档误报 SHIPPED——change 重名属流程反模式（ROADMAP 登记可查），接受并记录。
+- **已知不覆盖（追加声明）**：**精确同名** change 历史归档过（日期前缀锚死 glob 仍命中真同名旧档 `YYYY-MM-DD-{change}`，且该旧档已在 base 树）、而新一轮同名 change 尚未建 active 目录时，gate 会按旧档报 SHIPPED——change 重名属流程反模式（ROADMAP 登记可查），接受并记录。〔grill-amendment〕注意与后缀碰撞区分：后缀撞名（`cross-demo` 撞 `demo`）已由锚死日期前缀 glob 消除，不在此「已知不覆盖」内；这里残留的仅是**字面完全同名**这一反模式。
 
 ### D4：测试以真实复现盘面为 fixture
 
@@ -67,7 +70,7 @@
   未拍板 ──REFUSE_START──▶ 拍板(design-approved 锚)
                               │
               ┌───────────────┤ 失鲜(四件套被改)──REFUSE_START
-              │               │   ★D2: checkpoint(impl-review) 前缀豁免，不入此转换
+              │               │   ★D2: checkpoint(impl-review) 闭合前缀豁免，不入此转换
               ▼               ▼
            RUN_SOP ──▶ RUN_PLAN ──▶ CONTINUE_IMPL(done<N) ──▶ 齐 N
           (TG-02时)           ★D1: 窗口含 plan commit 自身      │
@@ -91,16 +94,16 @@
   git 健全性 ──不可用──▶ UNKNOWN
       │
       ▼
-  ★D3 active cdir 存在？──否──▶ archive/*-{change} 命中？──否──▶ REFUSE_START(change 不存在)
-      │是                          │是
+  ★D3 active cdir 存在？──否──▶ archive/YYYY-MM-DD-{change} 命中?──否──▶ REFUSE_START(change 不存在)
+      │是                          │是（日期前缀锚死,不撞后缀同名）
       │                            ▼
-      │                     branch merged？──是──▶ SHIPPED
+      │                     归档目录在 base 树?(git ls-tree,change域)──是──▶ SHIPPED
       │                            │否──▶ RUN_VERIFY(merge 收尾)
       ▼
   design-approved 锚在？──否──▶ REFUSE_START(未过设计门)
       │是
       ▼
-  ★D2 四件套失鲜？(checkpoint(impl-review 前缀提交豁免)──失鲜──▶ REFUSE_START(重审)
+  ★D2 四件套失鲜？(checkpoint(impl-review) 闭合前缀提交豁免)──失鲜──▶ REFUSE_START(重审)
       │鲜
       ▼
   (verify 冲突锚早检) → SOP → plan 在？→ ★D1 完成判据(窗口[sha,HEAD]闭区间)
@@ -112,7 +115,7 @@
 - **[风险] 豁免前缀被滥用**（人工把设计改动伪装成 impl-review 提交）→ 缓解：与既有 subject 信任模型同级（人机同权、git 留痕可审计）；头注释「已知不覆盖」显式追加此条；review 时 git log 可查。
 - **[风险] `--format=%x00%s` 分帧解析引入新解析 bug** → 缓解：沿用 `done_task_ids` 已验证的 `startswith` 字面前缀手法；B2 测试③覆盖前缀边界。
 - **[风险] B3 的 archive glob 误中同名旧档** → 缓解：active 优先（测试④）；重名反模式声明进「已知不覆盖」。
-- **[取舍] 方案 a 豁免粒度是 commit 级非 hunk 级**——一个 `checkpoint(impl-review)` commit 若同时夹带真正的设计变更也会被豁免。接受：该 commit 由 sdflow-code-review 编排产生（受 skill 约束），且 code-review 本身就是审过这些补丁的门。
+- **[取舍] 方案 a 豁免粒度是 commit 级非 hunk 级**——一个 `checkpoint(impl-review)` commit 若同时夹带真正的设计变更也会被豁免。〔grill-amendment：正当性主张降级为「约定+已知窗口」〕安全边界是**约定级**，不是 gate 保证的门：①gate 只锚 subject 前缀，**不核验生产者**——手跑 `checkpoint-commit.sh impl-review` 或他步复用该 tag 同样被豁免；②对四件套的编辑**无独立门审过**——code-review 是 design.md 措辞补丁的作者而非审阅者（D2-b 弃选理由已承认「回写者与补丁作者同一主体」）。真实安全依赖「code-review 对四件套仅作装饰性改动（措辞/勾选）」这一**约定**，gate 不核验、不做 hunk 分析。由此存在**已知窗口**：拍板后经 `impl-review` 豁免的四件套编辑不经二次批准即随档 ship；若某次"措辞修正"实际改动设计语义，会静默 merge。接受并记录（进头注释「已知不覆盖」）——契合「任何一层覆盖不得无声蒸发」：把窗口显形，不以"审过的门"糊过。加轻量 hunk 约束（D2-c）复杂度高、重申锚（D2-b）成本高增益零，均已弃。
 
 ## Migration Plan
 

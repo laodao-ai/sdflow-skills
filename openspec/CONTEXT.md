@@ -95,3 +95,4 @@ _Avoid_: 再造 R1~R6 式风险代号（触发一律具体行为描述）
 - 「镜」单字曾可能被误读成「镜子/mirror」——已钉死为「镜头/**review lens**」（聚焦单一角度的独立 reviewer 子代理），非映照。
 - 「连续」曾笼统指"自动化程度高"——已分 **设计层连续（无强制中断）** vs **编排层连续（无手动逐步触发）**，前者早达成、后者靠 `opsx-ship`（见 `adr/0004-opsx-ship-stage3-orchestrator.md`）。
 - 「强模型」曾隐含"开发 workflow 时所用的最强模型"——已钉为**相对执行机队的档位词**（机队锚定，见 `adr/0006`）；`adr/0001` 的"verify 用强模型、禁弱模型"按此重释 = 机队最强档（opus / gpt-5.5 级），sonnet 属中档不合格。
+- 「已并 / merged」曾被 `ship_gate.branch_state()` 隐式当作"**当前 HEAD 分支**有没有并进 base"（全局分支态）——已钉为 **change 域可达性**：一个 change 是否 merged，判据是「它的归档目录在不在 base(main/master) 的树里」（`git ls-tree <base>`），**与当前 HEAD 在哪条分支无关**（ship-gate-hardening D3 grill）。是「盘面即状态」在终态判定上的落地：判据必须锚在「这个 change 的产物落没落 base」这一确定性盘面，不用"当前分支"这个和 change 无关的全局近似。全局近似只在 change 自身分支上恰好成立，跨无关分支查已并 change 会误判"待收尾"。

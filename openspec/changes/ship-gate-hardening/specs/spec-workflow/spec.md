@@ -35,8 +35,8 @@
 - **THEN** gate MUST 保持 design-approved 有效（新鲜度按锚分域：该锚仅当其后存在触及本 change 四件套路径的提交才失鲜须重审），MUST NOT 因实现提交判其陈旧而 REFUSE_START（防实现期链自锁）
 
 #### Scenario: 阶段三合法尾流修订不失鲜〔B2〕
-- **WHEN** design-approved 锚行已落，其后 sdflow-code-review 按工作流对 design.md/tasks.md 打 `[impl-review-fix]` 补丁并以 commit subject 字面前缀 `checkpoint(impl-review` 提交（触及四件套路径）
-- **THEN** gate 的 design 域新鲜度判定 MUST 豁免该类提交（不判拍板失鲜、不 REFUSE_START）；豁免面 MUST 仅限该字面前缀（其他 subject 触及四件套照判失鲜——实现改设计须重审的既有语义不变）；伪造 subject 绕过豁免属显式越权同权级（git 留痕可审计），MUST 在脚本头注释「已知不覆盖」中声明
+- **WHEN** design-approved 锚行已落，其后 sdflow-code-review 按工作流对 design.md/tasks.md 打 `[impl-review-fix]` 补丁并以 commit subject 闭合字面前缀 `checkpoint(impl-review)`（含右括号）提交（触及四件套路径）
+- **THEN** gate 的 design 域新鲜度判定 MUST 豁免该类提交（不判拍板失鲜、不 REFUSE_START）；豁免面 MUST 仅限**闭合前缀 `checkpoint(impl-review)`**〔grill-amendment：右括号即第二道结构闸，对齐 `done_task_ids` 的 `startswith`+`TAG_RE` 双闸先例〕——`checkpoint(impl-review-fix)`/`checkpoint(impl-reviewX)` 等右括号后带尾串的变体从不由 checkpoint 脚本合法产生，MUST NOT 豁免（照判失鲜）；其他 subject 触及四件套照判失鲜（实现改设计须重审的既有语义不变）；伪造 subject 绕过豁免属显式越权同权级（git 留痕可审计），MUST 在脚本头注释「已知不覆盖」中声明
 
 #### Scenario: 未提交报告视为 fresh〔spec-review-amendment 设计门拍板 Q3=A〕
 - **WHEN** 某报告文件存在且含锚行，但从未 git 提交（`git log -1 -- <path>` 空输出）
@@ -55,13 +55,13 @@
 - **THEN** gate 对 step 5.5 输出 SKIP 并记录理由；命中 TG-02 时高风险/TG-18 细判归模型（每步内部判断，prose 允许域）
 
 #### Scenario: 归档后识别 SHIPPED 终态〔B3〕
-- **WHEN** change 的 active 目录 `openspec/changes/{change}/` 不存在，但 `openspec/changes/archive/*-{change}/` 命中，且分支态为已并（HEAD 在 base 上或 base..HEAD 为空）
-- **THEN** gate MUST 输出 SHIPPED（exit 0），MUST NOT 按 active 路径找不到 spec-review-report.md 而误报「未过设计门 REFUSE_START」；该短路判定 MUST 位于设计门 pre-flight 与新鲜度检查之前（归档 commit 的路径删除记录不得引入失鲜误报）
+- **WHEN** change 的 active 目录 `openspec/changes/{change}/` 不存在，但**日期前缀锚死 glob** `openspec/changes/archive/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{change}/` 命中，且该归档目录**已存在于 base(main/master) 的树里**（`git ls-tree <base>` 非空——change 域可达，与当前 HEAD 所在分支无关）
+- **THEN** gate MUST 输出 SHIPPED（exit 0），MUST NOT 按 active 路径找不到 spec-review-report.md 而误报「未过设计门 REFUSE_START」；该短路判定 MUST 位于设计门 pre-flight 与新鲜度检查之前（归档 commit 的路径删除记录不得引入失鲜误报）；glob MUST 锚死日期前缀而非 `*-{change}`〔grill-amendment：后缀开口 glob 会让别的 change 的归档撞名误命中〕；终态判据 MUST 为 change 域可达性而非全局 `branch_state()`〔grill-amendment：全局分支态会在跨无关分支查已并 change 时误判 RUN_VERIFY〕
 
-#### Scenario: 归档但分支未并 = merge 收尾未完〔B3〕
-- **WHEN** active 目录不存在、archive 命中，但分支态为 pending（base..HEAD 非空）
+#### Scenario: 归档但未并入 base = merge 收尾未完〔B3〕
+- **WHEN** active 目录不存在、日期前缀 glob 命中 archive，但该归档目录**不在 base 树里**（archive commit 停在未并分支，`git ls-tree <base>` 空）
 - **THEN** gate MUST 输出 RUN_VERIFY（next=sdflow-done）并在 reason 说明「已归档但分支未并，完成 merge 收尾」，MUST NOT 判 SHIPPED、MUST NOT 判 REFUSE_START
 
 #### Scenario: change 不存在与未过设计门区分〔B3〕
-- **WHEN** active 目录与 archive 归档均不存在（change 名拼错或从未创建）
+- **WHEN** active 目录不存在、且日期前缀锚死 glob 在 archive 下无命中（change 名拼错或从未创建；后缀撞名的别的 change 归档因 glob 锚死日期段 MUST NOT 误命中）
 - **THEN** gate MUST 输出 REFUSE_START 且 reason 为「change 不存在（active 与 archive 均无）」，MUST NOT 输出误导性的「未过设计门请补锚」提示；active 目录存在时同名历史归档 MUST NOT 干扰判定（active 优先）

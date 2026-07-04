@@ -10,15 +10,15 @@
 
 ## 2. B2 尾流修订豁免（design D2；Scenario〔B2〕）
 
-- [ ] 2.1 `test_gate_freshness.py` 加失败测试：design-approved 后 subject 前缀 `checkpoint(impl-review` 的提交触及 design.md+tasks.md，断言不失鲜、不 REFUSE_START〔Scenario: 阶段三合法尾流修订不失鲜〕
-- [ ] 2.2 改 `is_stale`（`ship_gate.py:77-96`）design 域：git log 改带 subject 分帧遍历，字面前缀 `checkpoint(impl-review` 的 commit 跳过失鲜判定；2.1 转绿
-- [ ] 2.3 反向回归测试：拍板后普通 subject 触及 design.md 照判失鲜（既有行为）；前缀边界用例（如 `checkpoint(impl-review-fix`、`checkpoint(impl-reviewX` 均属前缀命中——字面 startswith 语义）明确断言
-- [ ] 2.4 `ship_gate.py` 头注释：D9 分域段追加豁免规则一句 +「已知不覆盖」追加「伪造 checkpoint(impl-review subject 可绕过失鲜（显式越权同权级，git 留痕）」
+- [ ] 2.1 `test_gate_freshness.py` 加失败测试：design-approved 后 subject 闭合前缀 `checkpoint(impl-review)` 的提交触及 design.md+tasks.md，断言不失鲜、不 REFUSE_START〔Scenario: 阶段三合法尾流修订不失鲜〕。两种真实产物各一例：`checkpoint(impl-review)`（裸）与 `checkpoint(impl-review): 描述`
+- [ ] 2.2 改 `is_stale`（`ship_gate.py:77-96`）design 域：git log 改带 subject 分帧遍历，**闭合字面前缀 `checkpoint(impl-review)`**（含右括号）的 commit 跳过失鲜判定；2.1 转绿。**护栏〔grill-amendment〕**：豁免分支 MUST 只在 `scope=="design"` 内生效，`scope=="code"`（cr/verify 新鲜度）路径行为逐字不变——重构 git log 循环时用既有 `test_gate_freshness.py` 的 code 域用例（`test_stale_pass_reruns_not_ship` 等）回归兜底
+- [ ] 2.3 〔grill-amendment 反转边界断言〕反向回归测试：①拍板后普通 subject 触及 design.md 照判失鲜（既有行为）；②**边界用例 `checkpoint(impl-review-fix)`、`checkpoint(impl-reviewX)` 右括号后带尾串 → 不豁免、照判失鲜**（闭合前缀语义：右括号是第二道结构闸，从不由 checkpoint 脚本合法产生的变体不得蹭豁免）
+- [ ] 2.4 `ship_gate.py` 头注释：D9 分域段追加豁免规则一句（闭合前缀 `checkpoint(impl-review)`）+「已知不覆盖」追加两条〔grill-amendment〕：①「伪造/手工 checkpoint(impl-review) subject 可绕过失鲜——gate 不核验生产者（显式越权同权级，git 留痕）」；②「拍板后经 impl-review 豁免的四件套编辑不经二次批准即随档 ship（安全边界=约定级『仅装饰性改动』，gate 不做 hunk 分析）」
 
 ## 3. B3 归档终态（design D3；Scenario〔B3〕×3）
 
-- [ ] 3.1 新建 `test_gate_terminal.py` 加失败测试 ×4：①归档+已并→SHIPPED exit 0；②归档+未并→RUN_VERIFY(next=sdflow-done)；③active 与 archive 均无→REFUSE_START reason 含「change 不存在」；④active 存在 + 同名旧归档并存→active 优先（走既有 pre-flight，不受 archive 干扰）
-- [ ] 3.2 改 `decide()`（`ship_gate.py:192-211`）：git 健全性后、设计门 pre-flight 前插入归档短路分支（cdir 缺席 → archive glob → branch_state 分派 SHIPPED / RUN_VERIFY / REFUSE_START「change 不存在」）；3.1 全绿
+- [ ] 3.1 新建 `test_gate_terminal.py` 加失败测试 ×6〔grill-amendment：终态判据改 change 域 + 后缀碰撞用例〕：①归档目录**已在 base 树**→SHIPPED exit 0；②归档目录**不在 base 树**（archive commit 停在未并分支）→RUN_VERIFY(next=sdflow-done)；③active 与 archive 均无→REFUSE_START reason 含「change 不存在」；④active 存在 + **精确同名**旧归档并存→active 优先（走既有 pre-flight，不受 archive 干扰）；⑤active 缺席 + 仅存在**后缀撞名**旧档（如查 `demo` 而 archive 只有 `2026-07-04-cross-demo`）→ 锚死日期前缀 glob 不命中 → REFUSE_START「change 不存在」（**非** SHIPPED 误报）；⑥**跨分支不误判**：demo 归档已并 base，HEAD 切到无关未并分支再查 demo → 仍 SHIPPED（**非** RUN_VERIFY——证明判据是 change 域而非全局 branch_state）
+- [ ] 3.2 改 `decide()`（`ship_gate.py:192-211`）：git 健全性后、设计门 pre-flight 前插入归档短路分支（cdir 缺席 → **日期前缀锚死 glob `[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-{change}`** → **change 域可达性判据**：`git ls-tree <base> -- openspec/changes/archive/<dir>/` 非空 → SHIPPED / 空 → RUN_VERIFY / glob 不命中 → REFUSE_START「change 不存在」；base 无 main/master → UNKNOWN）；**同步把 `ship_gate.py:289` 既有 `archived` 的 `*-{change}` 换成同款锚死 glob**；3.1 全绿
 - [ ] 3.3 `ship_gate.py` 头注释契约表：verdict 表 SHIPPED 行补「（含归档后重跑识别）」、REFUSE_START 行补 change 不存在变体；「已知不覆盖」追加同名旧归档误中一条
 
 ## 4. 契约同步 + 收尾（proposal「契约文档同步」；design Migration）

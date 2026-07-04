@@ -8,7 +8,7 @@
 
 - **B1（P2）修复**：实现进度收集窗口改为**包含 plan 落地 commit 自身**——`plan_first_sha` 返回的 sha 目前作 `{sha}..HEAD` 排他起点（`ship_gate.py:231-232`），当 checkpoint 的 `add -A` 把 `superpowers-plan.md` 与 task1 锚打进同一 commit 时，task1 被漏数（已复现 11/12 误报）。
 - **B2（P2）修复**：design 域新鲜度守卫（`is_stale` scope="design"，`ship_gate.py:88-93`）增加**阶段三合法尾流修订的豁免机制**——code-review 按工作流设计对 design.md/tasks.md 打 `[impl-review-fix]` 补丁并 `checkpoint(impl-review)` 提交，不应判「拍板失鲜」。豁免机制 ≥2 方案（commit subject 白名单 / 重申锚 / 监视面收窄），选型见 design.md 决策记录。
-- **B3（P3）修复**：pre-flight 增加**归档终态识别**——change 目录已移入 `openspec/changes/archive/*-{change}/` 且分支已并时输出 SHIPPED，而非按 active 路径找不到 spec-review-report.md 就误报「未过设计门 REFUSE_START」（`ship_gate.py:199-205`；行 287-297 已有 SHIPPED 判定但归档后不可达）。
+- **B3（P3）修复**：pre-flight 增加**归档终态识别**——change 目录已移入 `openspec/changes/archive/`（日期前缀锚死 glob 匹配 `YYYY-MM-DD-{change}`）且**该归档已落 base 树**（change 域可达，非全局分支态）时输出 SHIPPED，而非按 active 路径找不到 spec-review-report.md 就误报「未过设计门 REFUSE_START」（`ship_gate.py:199-205`；行 287-297 已有 SHIPPED 判定但归档后不可达）。glob 锚死日期前缀与 change 域判据两点选型见 design.md D3〔grill-amendment〕。
 - **契约文档同步**：`ship_gate.py` 头注释契约表（窗口语义、新鲜度豁免、SHIPPED-after-archive）与 `sdflow-ship/SKILL.md` 相应提示语同步更新；`tests/` 补三缺陷的回归测试（`test_gate_impl_progress.py` / `test_gate_freshness.py` / 新终态用例）。
 - 无 BREAKING：退出码语义、锚行字面集、JSON 输出字段均不变（B3 为新增可达路径，B1/B2 为误报收敛）。
 
