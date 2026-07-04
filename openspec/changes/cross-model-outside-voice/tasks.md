@@ -35,10 +35,11 @@
 - [ ] 4.3 规划镜头步加 HR-TG 判定 + 留痕（同 3.3）〔R3〕
 - [ ] 4.4 tension 适配：有把握自动裁决记理由 / 拿不准 defer 进 issues 池 + hand-off；置信滤豁免**仅限 runner=codex**（fallback 照过同族滤）；outside-voice 留痕用 v1 锚行**按调用位点复数化**（code-voice / hr-tg 各一行）〔R4·BASE-11·grill Q3/Q5·spec-review-amendment〕
 - [ ] 4.5 〔spec-review-amendment 新增〕两 SKILL 收尾步加锚行存在性机械自检（grep 三类 v1 锚行，缺失即本步报错）+ findings=N 与合并池实收数机械 diff〔R1/R3/R5〕
+- [ ] 4.6 〔设计门 Q1 拍板新增〕报告裁决区按 runner 分桶计数（采纳/裁掉/defer 各计），供 Success Metric 4 与「10 次复评」条款消费〔R4·proposal M4〕
 
 ## 5. trigger-catalog 与契约套件（C4/§7.5 → R3）
 
-- [ ] 5.1 `sdflow-init/assets/workflow/trigger-catalog.md`：D. 行为/状态 加 TG-26 行（四列按 design D6）+ 新增「HR-TG 子集」附录段（成员 + 入选判据，单一源）+ **五层升格四处同步**（自述四→五层、消费方表加评审 cross-model 行、扩展约定加「新增触发 MUST 显式判 HR 是/否」、检查清单加核对项）〔R3·design D5/D6 grill-amendment Q6〕
+- [ ] 5.1 `sdflow-init/assets/workflow/trigger-catalog.md`：D. 行为/状态 加 TG-26 行（四列按 design D6）+ 新增「HR-TG 子集」附录段（成员 + 入选判据，单一源）+ **五层升格四处同步**（自述四→五层、消费方表加评审 cross-model 行、扩展约定加「新增触发 MUST 显式判 HR 是/否」、检查清单加核对项）+ 附录注记「跑满 10 次运行后按 HR-TG 命中率复评子集」〔R3·design D5/D6 grill-amendment Q6·设计门 Q5〕
 - [ ] 5.2 `sdflow-init/assets/workflow/design-diagrams.md`：触发条件表加 TG-26 → 序列图（竞态交互时序）引用行〔R3·scope-check 表〕
 - [ ] 5.3 `code-checklists/domains/backend-go.md` **新增 CR-GO-06 共享状态并发正确性条目**（对应 spec 侧 GO-01/GO-03；评审读码实证现有 CR-GO-01~05 无一覆盖竞态正确性）+ 各栈补 TG-26 引用〔R3·design scope-check spec-review-amendment〕
 - [ ] 5.4 `sdflow-init/assets/workflow/workflow.md` 阶段二/三步表追加 outside-voice 子步引用（归档 ROADMAP 约束1；只引用编号不复制定义）〔R1〕

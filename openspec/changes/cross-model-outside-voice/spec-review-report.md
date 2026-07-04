@@ -64,4 +64,8 @@
 
 **建议：修订已落（D1-D9 amendment）→ 可进设计 HARD-GATE**。门上待办 = Q1-Q5 五项拍板（推荐全 A）。B1 类阻塞已通过 D1/D5 的机制澄清 + 实证锚点解除；无未闭合的 critical。
 
-<!-- 拍板记录区：设计门拍板后由主 session 回写 ship-gate 锚 -->
+## 拍板记录区
+
+2026-07-04 设计门拍板（用户）：**Q1–Q5 全按推荐（A）**。落点：Q1 → proposal Success Metric 4 + tasks 4.6（裁决区按 runner 分桶）；Q2 → tasks 2.4 既有编码（T25 先行 + dry-run 后才动 §3/§4）；Q3 → M4 内复评条款（10 次后按 codex 桶采纳率复评降采样）；Q4 → 维持 grill Q3 拍板（无软开关；codex 异议已留痕即闭）；Q5 → tasks 5.1 附录复评注记。
+
+<!-- ship-gate: design-approved -->

@@ -39,6 +39,7 @@
 1. **outside-voice 层留痕覆盖率** — 基准 0%（现无此层）→ 目标 100%：每次 sdflow-code-review 报告含 outside-voice 段（真跑 codex 或显式降级记录，二者必居其一）— 度量：grep 机器锚行 `<!-- outside-voice: … -->`〔grill Q5：确定性机判，不押自然语言〕。
 2. **广审层静默模拟次数** — 基准：模拟未标注（T25 两轮实证）→ 目标 0：Step1 每次运行要么原生执行、要么显式标注「模拟广审（降级模式）」— 度量：grep 机器锚行 `<!-- step1-broad-review: … -->`〔grill Q5〕。
 3. **（回归项，非新能力指标）无 codex 环境评审完成率**〔spec-review-amendment 重标：该性质本 change 前即应恒成立，验收时勿当「新层已验证有效」的证据〕 — 目标 100%：无 codex / 无 gstack 环境下 fallback 冒烟通过、审查不中断 — 度量：§8.3 冒烟测试。
+4. **outside-voice finding 采纳率**〔设计门 Q1 拍板新增〕 — 基准：无数据 → 目标：每次评审报告裁决区按 `runner=codex / claude-fallback` **分桶**记录「采纳进 amendment / 裁掉 / defer」计数（fallback 兜底不得稀释跨模型价值统计）；**复评条款（Q3）**：跑满 10 次后按 codex 桶采纳率复评 always-on 是否降采样为 HR-only — 度量：grep v1 锚行 + 报告裁决区计数。首份样本 = 本 change spec-review 本轮（codex 声采纳进 amendment ≥6 条）。
 
 ## 需求优先级（TG-19）
 
