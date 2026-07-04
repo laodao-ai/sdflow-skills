@@ -27,9 +27,10 @@ verdict × exit × next 契约表:
     SHIPPED          0  -                  final 全通（hand-off+archive+分支已并）
     UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/detached HEAD
 
-完成判据窗口〔设计门拍板 Q2〕: superpowers-plan.md 首次提交 sha 起
-    `git log <sha>..HEAD --no-merges` 收集 checkpoint(task<k>- 去重任务号集；
-    plan `### Task <n>:` 计数 N；齐 N 判完成；标题命中 0 → UNKNOWN。
+完成判据窗口〔B1 闭区间〕: superpowers-plan.md 首次提交 sha 起，窗口 [sha, HEAD] 闭区间
+    `git log <sha>..HEAD --no-merges` 加 sha 自身 subject（同前缀+TAG_RE 规则）收集
+    checkpoint(task<k>- 去重任务号集 done_ids；plan `### Task <n>:` 号集 plan_ids；
+    plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；标题命中 0 → UNKNOWN。
 
 D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     design-approved: 其后触及本 change 四件套路径（proposal/design/tasks.md 与 specs/）
@@ -153,9 +154,16 @@ def plan_first_sha(root, plan_rel):
 
 
 def done_task_ids(root, sha):
+    # [spec-review-amendment B1] 窗口闭区间 [sha, HEAD]：{sha}..HEAD 排他 + sha 自身 subject。
+    # checkpoint 的 add -A 会把未提交的 superpowers-plan.md 与 task1 锚打进同一 commit（即 sha），
+    # 排他 {sha}..HEAD 会漏数 task1；追加解析 sha 自身 subject（同前缀+TAG_RE 规则）补齐。
     msgs = run_git(root, "log", f"{sha}..HEAD", "--no-merges", "--format=%s")
+    lines = msgs.splitlines()
+    self_subject = run_git(root, "log", "-1", "--format=%s", sha)
+    if self_subject:
+        lines.append(self_subject)
     ids = set()
-    for line in msgs.splitlines():
+    for line in lines:
         # [impl-review-fix] 先判字面前缀再锚定匹配：`Revert "checkpoint(task2-b): y"`
         # 这类 revert 提交消息里 checkpoint(task 子串不在行首，不应计入完成集
         # （TAG_RE.search 不锚位置会把它误计，match 从位置 0 锚定则天然排除）。
@@ -238,7 +246,7 @@ def decide(root, change):
             emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
         else:
             emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
-                 f"实现进度 {len(done)}/{n}（窗口 {sha[:7] or '-'}..HEAD --no-merges）",
+                 f"实现进度 {len(done)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间）",
                  done_tasks=sorted(done, key=int))
     # ── step 8：code-review 门 ─────────────────────────────────
     cr = cdir / "code-review-report.md"

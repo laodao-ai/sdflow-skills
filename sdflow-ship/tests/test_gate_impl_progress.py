@@ -84,6 +84,20 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
     # 9 不在 plan（N=2, task1/2）内，不会误判齐 N；仍应是 CONTINUE_IMPL
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["9"]
 
+def test_plan_task1_same_commit_counts(repo):
+    # 〔B1 闭区间〕plan 与 checkpoint(task1-) 同 commit（checkpoint add -A 携带未提交 plan）
+    # → task1 锚在窗口起点 sha 自身，排他窗口会漏数；闭区间须计入
+    d = mkchange(repo)
+    (d / "spec-review-report.md").write_text(
+        "<!-- ship-gate: design-approved -->\n", encoding="utf-8")
+    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+    commit_all(repo, "seed change")           # approved base，无 plan
+    (d / "superpowers-plan.md").write_text(PLAN2, encoding="utf-8")
+    commit_all(repo, "checkpoint(task1-foo): plan+task1 同 commit")  # plan 首次提交 == task1 锚
+    commit_all(repo, "checkpoint(task2-bar): B")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "RUN_CODE_REVIEW"   # done={1,2} 齐（闭区间含 sha 自身）
+
 def test_uncommitted_plan_no_checkbox_unknown(repo):
     # plan 写盘但不提交，且内容无任何复选框 → 双通道（标签窗口 / 复选框）皆不可判
     d = approved_change(repo)  # 不带 plan 提交基底
