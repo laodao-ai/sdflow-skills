@@ -70,4 +70,6 @@
 
 **拍板重申（2026-07-04，人工补锚·显式越权留痕）**：SDD final review 后 design.md 锚行枚举补 `simulated-source` 一行（纯 doc-sync——spec R2 与两 SKILL 权威交付物本已含该枚举，仅 design 示例行滞后，final reviewer 判 no-action-required）。用户经 ship gate REFUSE_START 上抛确认：该改动不改变 Q1–Q5 拍板实质，拍板重申、补锚续跑。
 
+**拍板重申 #2（2026-07-04，同类先例适用·显式越权留痕）**：code-review 步的 `[impl-review-fix]` 修订触发 gate 二次失鲜判定——改动 = design 安全节措辞修正（承认 read-only 沙箱可读仓树，评审裁决项 C3）+ tasks.md 30 项勾选回填（C4 记账）。两者均为阶段三工作流合法产物、不触 Q1–Q5 拍板实质；按本 session 用户已确认的同类先例（doc-sync → 拍板重申补锚）续跑。gate 对评审补丁的误判已记 **B2**（失鲜判定应豁免带 [impl-review-fix] 标记的评审后修订）。
+
 <!-- ship-gate: design-approved -->
