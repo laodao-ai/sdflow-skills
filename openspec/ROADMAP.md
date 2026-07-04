@@ -10,10 +10,10 @@
 |---|---|---|---|---|
 | `streamline-workflow-automation`（Phase A） | ✅ 已归档 / merged | 三阶段连续化骨架 + 提交自动化 + bundle 骨架 + review UI 半归位(B1) | — | 归档 design G/P + `adr/0001`,`adr/0002` |
 | `issues-pool-batch-mgmt`（Phase B） | ✅ 已归档 / merged | 债务池 issues 结构 + 批次管理（I1–I13） | A | 归档 design §8 + 本 change design + grill B-Q1 |
-| `cross-model-outside-voice`（Phase C） | ⚪ 待开（**优先级↑**·adr/0006） | 跨模型 outside voice（C1–C7）+ TG-26 | A | 归档 design §9 + 归档 ROADMAP「Phase C 待迁」+ `adr/0006`（混编机队下天然可得） |
-| `minimize-repo-footprint` | 🔵 实现完成（待 impl-review/opsx-done） | 规则全局解析(resolver **脚本化**) + 消费仓最小副本 + checkpoint 全局 | A · `adr/0005` | **`adr/0003`**(+grill-amendment) · **`adr/0005`** · **`adr/0006`**(resolver 脚本化) |
-| `sdflow-ship`（曾用名 `opsx-ship-orchestrator`） | 🔵 实现完成（待 code-review/收尾） | 阶段三窄编排 orchestrator（`sdflow-ship`） | A（阶段三链就位） | **`adr/0004`** + `adr/0006`（编排 prose→结构，弱主模型漏步兜底） |
-| `sdflow-rebrand`（曾用名 `extract-sdflow-repo`） | 🔵 实现完成（待 code-review/收尾） | rescope/supersede：拆库半已发生（repo 已迁 `laodao-ai/sdflow-skills`，misc skills 留守 laodao-skills），剩余 scope = 品牌收拢——全量 `sdflow-` 前缀改名（9 改 3 留）+ 品牌字符串清扫（`VERSION`/marker/setup 输出） | 独立（用 footprint 定的 canonical） | footprint grill + sdflow 命名 + `adr/0007` |
+| `cross-model-outside-voice`（Phase C） | 🟡 **下一棒**（建议序前两棒已交付·adr/0006 优先级↑） | 跨模型 outside voice（C1–C7）+ TG-26 + **T25 前置**（Step1 autoplan「模拟执行」修复——§6.3 要复用 autoplan 产物，前提是产物为真） | A | 归档 design §9 + 归档 ROADMAP「Phase C 待迁」+ `adr/0006`（混编机队下天然可得）+ 2026-07-04 explore（T25 并入） |
+| `minimize-repo-footprint` | ✅ 已归档 / merged | 规则全局解析(resolver **脚本化**) + 消费仓最小副本 + checkpoint 全局 | A · `adr/0005` | **`adr/0003`**(+grill-amendment) · **`adr/0005`** · **`adr/0006`**(resolver 脚本化) |
+| `sdflow-ship`（曾用名 `opsx-ship-orchestrator`） | ✅ 已归档 / merged | 阶段三窄编排 orchestrator（`sdflow-ship`） | A（阶段三链就位） | **`adr/0004`** + `adr/0006`（编排 prose→结构，弱主模型漏步兜底） |
+| `sdflow-rebrand`（曾用名 `extract-sdflow-repo`） | ✅ 已归档 / merged | rescope/supersede：拆库半已发生（repo 已迁 `laodao-ai/sdflow-skills`，misc skills 留守 laodao-skills），剩余 scope = 品牌收拢——全量 `sdflow-` 前缀改名（9 改 3 留）+ 品牌字符串清扫（`VERSION`/marker/setup 输出） | 独立（用 footprint 定的 canonical） | footprint grill + sdflow 命名 + `adr/0007` |
 | `workflow-metrics-loop`（暂名） | ⚪ 待开（2026-07-03 整体评估派生） | **度量回路**：聚合各层评审报告数据（findings 按层别/裁决结果/自动修 vs defer/成本），每 N 个 change 汇总一份，为"哪层值不值得留"类决策供数——替代目前 n≈小的"实测"依据（如 P3c） | 独立（只读报告产物，随时可开） | 2026-07-03 整体评估（explore）；`adr/0006` 背景 |
 
 > **待开的都暂不建目录**（避免 openspec 挂 stale pending change，同设计"反无声堆积"洁癖）；各自开工时再 materialize proposal/design/tasks/spec。B/C 互不依赖、与两个新 change 也互不依赖，均只依赖 A。
@@ -21,6 +21,7 @@
 > 〔2026-07-03 整体评估补〕`workflow-metrics-loop` 独立于建议序，随时可插（只读报告产物）；opsx-ship materialize 时须把 adr/0006 约束(b)写进其 proposal 硬约束——**步序推进用确定性台账（state 文件/脚本判"下一步/上步产物在否"），SKILL.md prose 只管每步内部判断**（否则是用 prose 协议治 prose 协议）。相关债：T9（"非平凡"硬定义）/ T10（阶段三自动选推荐判据，随 opsx-ship 落）/ T11（档位映射认领，opsx-ship 首选）。
 > `minimize-repo-footprint` 已于 2026-07-03 materialize（explore 落骨架 → proposal/design/tasks/spec 就位，分支 `feat/minimize-repo-footprint`），进入 propose 阶段。
 > `opsx-ship-orchestrator` 已改名并 materialize 为 `sdflow-ship`（分支 `feat/sdflow-ship`，proposal/design/tasks/spec 就位），2026-07-04 实现完成，进入 code-review/收尾 阶段。
+> 〔2026-07-04 登记〕`minimize-repo-footprint` / `sdflow-ship` / `sdflow-rebrand` 三 change 均已归档 merge（见 `changes/archive/2026-07-03-*`）。**下一棒 = Phase C `cross-model-outside-voice`**，并将 T25 收进其 scope 作前置——T25（Step1 autoplan 被「子代理读 SKILL.md 模拟执行」替换）直接决定 §6.3「复用 autoplan 产物的 outside-voice findings」是否为真，属同域同文件（sdflow-spec-review / sdflow-code-review Step1），非搭车。
 
 ---
 
