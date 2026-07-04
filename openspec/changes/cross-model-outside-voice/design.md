@@ -203,7 +203,7 @@
 
 | 问题 | 归属 | 影响 |
 |------|------|------|
-| gstack headless 调用路径是否存在（T25 思路②） | 实现期 P2 调研 | 〔spec-review-amendment〕带升级条款：①原生路径实测不可行则本项升 P0 阻塞（原「不阻塞」依据的 sdflow-ship 先例已被评审证伪，现依据 = 本轮 spec-review 实证） |
+| gstack headless 调用路径是否存在（T25 思路②） | 实现期 P2 调研 | 〔spec-review-amendment〕带升级条款：①原生路径实测不可行则本项升 P0 阻塞（原「不阻塞」依据的 sdflow-ship 先例已被评审证伪，现依据 = 本轮 spec-review 实证）。调研结论：codex 侧 `codex exec` 已提供 `review` 子命令与通用 headless prompt 入口可用；gstack 侧 `~/.claude/skills/gstack/bin/` 下仅有 `gstack-review-log`/`gstack-review-read` 两个日志读写辅助工具，未发现独立无头广审入口，故本 change 原生路径已实证可行 → 维持 P2 不升级。 |
 | ~~code-checklists 并发 CR 项现状~~ | 已闭〔spec-review-amendment〕 | 评审读码实证：backend-go 需新增 CR-GO-06，见 scope-check 表 |
 | autoplan 原生执行的上下文占用实测 | 实现期观察 | 超限才升级为问题（连 OQ headless）；本轮实证一次全量原生跑（三相位双声）可完成，量级已知 |
 
