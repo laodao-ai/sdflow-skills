@@ -55,11 +55,10 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
    `git fetch origin <base> --quiet && DIFF_BASE=$(git merge-base origin/<base> HEAD)`。
 3. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用代码审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用代码审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/code-checklists/README.md`（架构/选用）、`$RULES_ROOT/code-checklists/code-review-base.md`（CR-01~09）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
 
-## 第一步：gstack/review 子步（并入，scope-drift + 完成度）
+## 第一步：gstack/review 子步（并入·原生执行，scope-drift + 完成度）
 
-- 对本分支跑 gstack `/review` 全量流程（不因 prompt 措辞裁剪原生步骤），**必须含 scope-drift（顺手多改）
-  与计划完成度缺口（建的=计划的?）**，结论纳入 Step3 合并池。
-- **显式降级**：gstack/review 不可用/失败 → 打印显式日志（"scope/完成度审计层缺失"），**不静默跳过**。
+- **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 gstack `/review` 全量流程（指令直接进主 session，MUST NOT 派子代理读其 SKILL.md 模拟；不因 prompt 措辞裁剪原生步骤），**必须含 scope-drift（顺手多改）与计划完成度缺口（建的=计划的?）**，结论纳入 Step3 合并池；报告 Step1 段写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`。
+- **显式降级**：gstack/review 不可用 → 子代理模拟 + 显式日志（"scope/完成度审计层缺失 → 模拟降级"）+ 锚行 `mode="simulated"`，MUST NOT 伪装原生，**不静默跳过**。
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目清单）
 
