@@ -33,10 +33,10 @@
 | T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | DONE | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
 | T26 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 功能增强 | PROPOSED | 2026-07-04 02:40 | sdflow-ship | sdflow-ship |
 | T27 | `openspec/workflow + resolve-workflow.sh` | workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突 | 基础设施 | OPEN | 2026-07-04 09:57 | minimize-repo-footprint |  |
-| T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | OPEN | 2026-07-04 10:51 | cross-model-outside-voice |  |
-| T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | OPEN | 2026-07-04 11:57 | cross-model-outside-voice |  |
-| T30 | `sdflow-init/assets/hack/outside-voice.sh + tests` | helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖 | 代码质量 | OPEN | 2026-07-04 12:46 | cross-model-outside-voice |  |
-| T31 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） | 代码质量 | OPEN | 2026-07-04 13:35 | cross-model-outside-voice |  |
+| T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | PROPOSED | 2026-07-04 10:51 | cross-model-outside-voice | cross-model-outside-voice |
+| T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | PROPOSED | 2026-07-04 11:57 | cross-model-outside-voice | cross-model-outside-voice |
+| T30 | `sdflow-init/assets/hack/outside-voice.sh + tests` | helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖 | 代码质量 | PROPOSED | 2026-07-04 12:46 | cross-model-outside-voice | cross-model-outside-voice |
+| T31 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） | 代码质量 | PROPOSED | 2026-07-04 13:35 | cross-model-outside-voice | cross-model-outside-voice |
 
 ---
 
@@ -352,7 +352,7 @@
 |------|------|
 | 模块 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` |
 | 类型 | 功能增强 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/cross-model-outside-voice/spec-review-report.md`
 
@@ -370,7 +370,7 @@
 |------|------|
 | 模块 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` |
 | 类型 | 可观测性 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/ROADMAP.md`
 
@@ -388,7 +388,7 @@
 |------|------|
 | 模块 | `sdflow-init/assets/hack/outside-voice.sh + tests` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/cross-model-outside-voice/superpowers-plan.md`
 
@@ -404,7 +404,7 @@
 |------|------|
 | 模块 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/cross-model-outside-voice/code-review-report.md`
 

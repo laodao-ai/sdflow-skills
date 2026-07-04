@@ -6,6 +6,17 @@
 
 ## Open 项（按批次）
 
+### 批次：cross-model-outside-voice
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| B1 | bug | PROPOSED | cross-model-outside-voice |
+| B2 | bug | PROPOSED | cross-model-outside-voice |
+| T28 | todo | PROPOSED | cross-model-outside-voice |
+| T29 | todo | PROPOSED | cross-model-outside-voice |
+| T30 | todo | PROPOSED | cross-model-outside-voice |
+| T31 | todo | PROPOSED | cross-model-outside-voice |
+
 ### 批次：issues-pool-batch-mgmt
 
 | ID | Pool | Status | 关联Change |
@@ -46,9 +57,14 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T25 | todo | PROPOSED | sdflow-ship |
 | T26 | todo | PROPOSED | sdflow-ship |
+
+### 未分组（批次为空）
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T27 | todo | OPEN | minimize-repo-footprint |
 
 ## 已闭合（终态）摘要
 
-- 共 3 项已闭合（bug: 0，todo: 3）
+- 共 4 项已闭合（bug: 0，todo: 4）
