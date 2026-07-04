@@ -84,6 +84,10 @@ _Avoid_: 用"强模型"指某个具体产品名（档位相对机队，机队会
 评审/报告产物里由 SKILL 模板**逐字规定**的 HTML 注释行（如 `<!-- outside-voice: mode=… -->`），承载状态留痕的机判形态——「盘面即状态」在报告层的实例：叙述随模型写、锚行不许改，Success Metrics 与度量回路只 grep 锚行。区别于**证据锚点**：锚行记「这一层本次跑成什么形态」，锚点证「这一条 ✅ 凭什么成立」。
 _Avoid_: 拿自然语言结论行当机判契约（措辞属概率空间，ship grill 实证正则全 miss）
 
+**HR-TG（高风险触发子集）**:
+trigger-catalog 附录维护的 TG 具名子集（做错会运行期爆炸/数据损坏/安全泄漏且难回退）。评审规划镜头判「命中 ∩ HR-TG ≠ ∅」→ 单开领域 cross-model。是 catalog 第五消费层（评审 cross-model）的判据源，不是新风险分级体系。
+_Avoid_: 再造 R1~R6 式风险代号（触发一律具体行为描述）
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。

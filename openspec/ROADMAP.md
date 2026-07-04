@@ -10,7 +10,7 @@
 |---|---|---|---|---|
 | `streamline-workflow-automation`（Phase A） | ✅ 已归档 / merged | 三阶段连续化骨架 + 提交自动化 + bundle 骨架 + review UI 半归位(B1) | — | 归档 design G/P + `adr/0001`,`adr/0002` |
 | `issues-pool-batch-mgmt`（Phase B） | ✅ 已归档 / merged | 债务池 issues 结构 + 批次管理（I1–I13） | A | 归档 design §8 + 本 change design + grill B-Q1 |
-| `cross-model-outside-voice`（Phase C） | 🟡 **下一棒**（建议序前两棒已交付·adr/0006 优先级↑） | 跨模型 outside voice（C1–C7）+ TG-26 + **T25 前置**（Step1 autoplan「模拟执行」修复——§6.3 要复用 autoplan 产物，前提是产物为真） | A | 归档 design §9 + 归档 ROADMAP「Phase C 待迁」+ `adr/0006`（混编机队下天然可得）+ 2026-07-04 explore（T25 并入） |
+| `cross-model-outside-voice`（Phase C） | 🔵 实现完成（进 code-review/收尾） | 跨模型 outside voice（C1–C7）+ TG-26 + **T25 前置**（Step1 autoplan「模拟执行」修复——§6.3 要复用 autoplan 产物，前提是产物为真） | A | 归档 design §9 + 归档 ROADMAP「Phase C 待迁」+ `adr/0006`（混编机队下天然可得）+ 2026-07-04 explore（T25 并入） |
 | `minimize-repo-footprint` | ✅ 已归档 / merged | 规则全局解析(resolver **脚本化**) + 消费仓最小副本 + checkpoint 全局 | A · `adr/0005` | **`adr/0003`**(+grill-amendment) · **`adr/0005`** · **`adr/0006`**(resolver 脚本化) |
 | `sdflow-ship`（曾用名 `opsx-ship-orchestrator`） | ✅ 已归档 / merged | 阶段三窄编排 orchestrator（`sdflow-ship`） | A（阶段三链就位） | **`adr/0004`** + `adr/0006`（编排 prose→结构，弱主模型漏步兜底） |
 | `sdflow-rebrand`（曾用名 `extract-sdflow-repo`） | ✅ 已归档 / merged | rescope/supersede：拆库半已发生（repo 已迁 `laodao-ai/sdflow-skills`，misc skills 留守 laodao-skills），剩余 scope = 品牌收拢——全量 `sdflow-` 前缀改名（9 改 3 留）+ 品牌字符串清扫（`VERSION`/marker/setup 输出） | 独立（用 footprint 定的 canonical） | footprint grill + sdflow 命名 + `adr/0007` |

@@ -30,7 +30,7 @@
 | T22 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
 | T23 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
 | T24 | `setup.sh install_into 软链分支` | install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立 | 基础设施 | PROPOSED | 2026-07-03 21:29 | sdflow-rebrand | sdflow-rebrand |
-| T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | PROPOSED | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
+| T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | DONE | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
 | T26 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 功能增强 | PROPOSED | 2026-07-04 02:40 | sdflow-ship | sdflow-ship |
 | T27 | `openspec/workflow + resolve-workflow.sh` | workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突 | 基础设施 | OPEN | 2026-07-04 09:57 | minimize-repo-footprint |  |
 | T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | OPEN | 2026-07-04 10:51 | cross-model-outside-voice |  |
@@ -297,7 +297,7 @@
 |------|------|
 | 模块 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-ship/design.md`
 
@@ -306,6 +306,7 @@
 **思路**：**方向已拍板（用户 2026-07-03：希望发挥 autoplan 本身的能力）**：①为主——主 session 经 Skill 机制原生执行 autoplan（其指令直接进主 session，非子代理转述），与 T20 串行序天然兼容；③仅作 fallback 且必须显式标注「模拟广审（降级模式）」；②调研 gstack headless 路径作补充。sdflow-code-review 的 Step1 gstack/review 同构问题一并按此方向修。sdflow-ship 评审轮已当场切换原生执行（先例）
 
 **备注**：本轮 sdflow-ship 评审进行中：Step1 已按现状（模拟）在跑，报告将显式标注降级而非伪装原生
+> 2026-07 状态：PROPOSED → DONE（change cross-model-outside-voice tasks §2 (task5/task6/task7 checkpoints)）
 
 ---
 
