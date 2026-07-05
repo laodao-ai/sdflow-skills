@@ -69,11 +69,10 @@
 计划: T47 engine.js 深链抽 resolveInitialDir+bootstrap 为可注入 mock 的纯函数补单测（深链逻辑现零单测，测试补强）。注：原 T48/T49（init.py python 守卫 / settings.json 并发）已挪入 sdflow-init-hardening（按 module 归位）
 
 ### three-lens-decision-framework — three-lens-decision-framework
-状态: DONE
+状态: PLANNED
 成员: (生成)
 优先级: P3
 计划: 已完成/分散——three-lens-decision-framework change 已 ship（5de9ede）；残差 T50(cosmetic 决策区边框) 已挪入 rec2-obs-readability（按功能归 G6）
-⚠️ 不一致: 状态标记为 DONE，但成员未全部进入终态（当前成员：0 名成员）——reindex 不会自动纠正 状态: 的值（不越权），请人工核实后用 `batch set-status` 改回或补完成员状态
 
 ### sdflow-init-hardening — sdflow-init-hardening
 状态: PLANNED
