@@ -60,6 +60,9 @@ spec-review A-2 实测：仅"正例 match + 捕获对"时，`task(\d+)-?`（尾 
 
 ## Risks / Trade-offs
 
-- **不覆盖 doc↔doc 漂移**：本 change 不新增 doc↔doc 机械守卫（证伪为循环）。残差 = 既有子串断言 + spec-review G1 兜底。**接受**——原想机械化的那层被证明不 sound，硬做只会造假绿。
+- **不覆盖 doc↔doc 漂移**：本 change 不新增 doc↔doc 机械守卫（证伪为循环）。残差 = 既有子串断言（弱） + **人工评审**（无自动化兜底）。**接受**——原想机械化的那层被证明不 sound，硬做只会造假绿。
+  - <!-- [spec-review-amendment DF2] --> 诚实披露：既有 `test_workflow_authority.py` 两条 doc 子串断言中，`assert "task<N>-" in t`（第 19 行）是同段 `"<change>:task<N>-"`（第 18 行）的**子串**，逻辑恒真——对"裸兼容语义"**零守卫力**（Round 1 的 M2）。故 doc↔doc 侧真正有效的弱守卫只有命名格式那条，别把这对断言笼统当"弱但真实守卫"高估。
+  - <!-- [spec-review-amendment DF3] --> 措辞更正：先前把残差写作"spec-review **G1 兜底**"是不当类比——G1（见 proposal）是过去一次靠人工评审**运气**抓到的漏改事故，非可重复触发的机械机制。doc↔doc 链**无自动化兜底、纯依赖人工评审**，已知比 producer→parser 链（有本 change 的机械绑定测试）弱；不拿 G1 包装成防线。
 - **producer 站点漂移概率低**：`checkpoint-commit.sh` 包裹逻辑稳定、少改。但集成测试便宜、且它是**唯一**真铸造 subject 的地方，值得一测（防未来重构无声破链）。
 - **负例集非穷举**：负例矩阵挡的是已知放松类，不能证明 `TAG_RE` 对所有畸形输入正确。接受——目标是封住 spec-review 实证的漏报类，非形式化验证。
+  - <!-- [spec-review-amendment DF1] --> 已补 Round 2 冷审（对抗镜#1 mutation）实证的一类漏报：号位加宽为字母数字（`task(\d+)-`→`task([a-z0-9]+)-`），负例 `checkpoint(taskab-slug)`；并修正 `checkpoint(task-1-)` 注释（其实挡的是"号位空/含前导符号"，非"号位允许非数字"）。已知仍不穷举（DF4-7 记 todolist）。

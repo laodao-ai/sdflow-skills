@@ -42,11 +42,15 @@ def test_bare_subject_matches_with_null_namespace(repo):
 
 
 # design D2 负例矩阵：每条 MUST NOT match，封住"TAG_RE 被放松后 happy 例仍绿"的漏报。
+# [spec-review-amendment DF1] 每条注释=其唯一哨兵的放松类（对抗镜#1 mutation 模拟核实：
+# 放松该类 → 该负例从 None 翻转为 match）。task-1-（号位空/含前导符号）与 taskab-（号位加宽
+# 为字母数字）是两类不同放松，需各自负例——单靠 task-1- 挡不住 task[a-z0-9]+ 的纯字母加宽。
 NEGATIVE_CASES = [
-    ("checkpoint(task1slug)",   "尾 dash 变可选（丢 task1/task12 边界锚）"),
-    ("checkpoint(DEMO:task1-)", "命名空间允许大写（破 kebab 锁）"),
-    ("checkpoint(task-1-)",     "号位允许非数字"),
-    ("checkpoint(:task1-)",     "空命名空间"),
+    ("checkpoint(task1slug)",   "尾 dash 变可选（task(\\d+)-? → 丢 task1/task12 边界锚）"),
+    ("checkpoint(DEMO:task1-)", "命名空间允许大写（[a-z0-9]→[A-Za-z0-9]，破 kebab 锁）"),
+    ("checkpoint(task-1-)",     "号位空或含前导符号（task(\\d*)- / task(-?\\d+)- 变体）"),
+    ("checkpoint(taskab-slug)", "号位加宽为字母数字（task(\\d+)- → task([a-z0-9]+)-）"),
+    ("checkpoint(:task1-)",     "空命名空间（[a-z0-9]+ → [a-z0-9]* 允许 0 字符）"),
 ]
 
 

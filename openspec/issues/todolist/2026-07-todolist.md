@@ -42,6 +42,10 @@
 | T34 | `ship_gate.py` | 复选框辅通道按 Task 分段绑定 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
 | T35 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态(T33 停置延续) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
 | T36 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` | checkpoint 派发指令文案收敛为单一真相源(broad-F2) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
+| T37 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声) | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
+| T38 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
+| T39 | `sdflow-ship/tests/test_producer_parser_contract.py:19` | 集成测试 run_producer 造文件名含冒号(f-demo:task1-slug.txt),NTFS 非法——Unix 跑绿,Windows CI 会误红 | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
+| T40 | `sdflow-ship/tests/test_producer_parser_contract.py:27` | producer→parser 集成正例仅用单数字任务号(1),未覆盖多位数(如 12)group(2) 边界 | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
 
 ---
 
@@ -504,3 +508,59 @@
 **动机**：同一条 checkpoint-commit.sh 派发约定硬编码在 workflow.md 权威源+SKILL.md 两处独立维护,本轮实证会漏改一处(G1)
 
 **思路**：workflow.md 权威定义,SKILL.md 用引用/参数化复述而非独立文案
+
+---
+
+## T37: delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声)
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
+
+**备注**：DF4(spec-review Round2)。轻于原 M3(测试已改真实脚本非抠文本),但仍是独立 doc 副本,Risks 未披露。择机收敛或至少披露。
+
+---
+
+## T38: spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
+
+**备注**：DF5(spec-review Round2)。规范文本精确性,已实现故未爆雷。可改为明确占位任意 ns。
+
+---
+
+## T39: 集成测试 run_producer 造文件名含冒号(f-demo:task1-slug.txt),NTFS 非法——Unix 跑绿,Windows CI 会误红
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-ship/tests/test_producer_parser_contract.py:19` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
+
+**备注**：DF6(spec-review Round2)。本测试层 Unix 取向,极低概率。若上 Windows CI 改固定占位文件名(文件名与契约无关,只需 porcelain 非空)。
+
+---
+
+## T40: producer→parser 集成正例仅用单数字任务号(1),未覆盖多位数(如 12)group(2) 边界
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-ship/tests/test_producer_parser_contract.py:27` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
+
+**备注**：DF7(spec-review Round2)。非本 change 引入的新缺口,补一例多位数号增强边界覆盖。

@@ -89,3 +89,88 @@ spec-review-report.md · 决策登记区
 ## 拍板记录
 
 - **Q1 → 选 B（缩到可靠内核）**〔用户设计门拍板〕。据此重写 design/specs/tasks（标 `[spec-review-amendment]`）：B 收敛为**纯测试新增、零 doc/skill 改动**——① producer→parser 集成测试（H2）② `TAG_RE` 负例矩阵（H3）；撤 D3 瘦身（H4）、撤循环 doc-抽取（A-1/M1）、delta spec 不自复制字面（M3）；既有 `test_workflow_authority.py` 子串断言保留不动（避 H1、作 doc 侧弱守卫）。修订版须回设计门再过一次。
+
+---
+
+# 复审门 Round 2 — Q1=B 修订版设计审（sdflow-spec-review 编排）
+
+> 本轮 = 上一行"修订版须回设计门再过一次"承诺的复审。触发背景：`/sdflow-ship` 因 gate `anchors_in` 子串误配（第 85 行对锚的**描述性提及**被当真锚，已记 **B4/VERIFIED**）假判"设计已过门"而越门起跑，实现三任务已落地全绿；现补这道设计门复审。**本轮是事后审计而非实现前把关**——拍板须追认覆盖已落地的 task1-3。
+>
+> 编排：Step1 主 session 原生广审 + codex outside-voice（超时→claude-fallback）；Step2 fan-out 对抗镜×2 + 接地镜×1（fresh context）；Step3 主 session 综合对抗裁决。实现已全绿（sdflow-ship 85/85、仓级 348/348）作接地。
+
+## 镜头与锚（自检）
+
+- Step1 广审锚：见 `gstack-review.md` 首行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`（Round 2 重写）。
+- outside-voice：codex exec **exit 124 超时** → claude-fallback 只读回落（同源同 prompt）。锚：
+
+<!-- sdflow:outside-voice v1 site="design-voice" guard="none" runner="claude-fallback" reason_code="timeout" findings="4" truncated="false" -->
+
+- HR-TG 判定：命中 TG-01（工具链）；HR-TG 子集 ∩ 命中集 = **∅**（纯测试新增、零运行时行为/数据路径/安全面，无"运行期爆炸/数据损坏/安全泄漏"）。锚：
+
+<!-- sdflow:hr-tg v1 hit="none" evidence="纯测试新增,零运行时行为/数据/安全面,不满足HR-TG入选判据" -->
+
+- 领域镜：`domains/`（backend-go/backend/embedded*/frontend）**无一命中**（Python 测试 + skills 元变更）→ 不开领域镜（如实记录，非静默跳）。
+
+## 综合结论
+
+**核心内核 sound、已接地验证**：接地镜 16/16 代码事实全符合；三路独立对抗（对抗镜×2 + OV-fallback）经 mutation 模拟共识——4 条负例各为真哨兵（非空断言）、集成测试双层独立断言无假绿、D3「零 doc/skill/ship_gate.py 改动」跨三 commit diff 核实成立、sys.path 注入安全。**无 CRITICAL 技术缺陷**。残差为 1 个中等覆盖缺口 + 2 个中等诚实性/披露项 + 若干低 prose 项。
+
+## 决策登记区
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│ [需拍板] Q2  设计门追认 + 是否要求 DF1-DF3 修订后再写锚（见收敛口）    │
+│ [需拍板] Q3  DF1 负例覆盖缺口：是否补一条 taskab- 负例 + 修注释        │
+│ [自动决策] D-A  核心内核 sound,默认采纳(接地16/16+三路对抗共识)         │
+│ [已裁掉] X1  对抗镜#2 对 DF1 的"仅术语瑕疵"判定(裁：低估,见 DF1)        │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+## Findings（带置信/严重度；低置信一行带过、不静默丢）
+
+### 接地镜（机械读码，弱档）
+- **G〔通过·高〕** 7 大事实 16 细项全符合：`ship_gate.py:231` TAG_RE 字面/捕获组、`:526` `__main__` 守卫、import 无副作用；`checkpoint-commit.sh:46` 包裹 `checkpoint($step): $desc` + 无变更静默跳；`conftest.py:8` repo fixture；`test_workflow_authority.py` 既有断言存在；4 条负例当前 TAG_RE 实跑均 None；实现文件断言与 design 一致。
+
+### DF1〔中 · CONFIRMED〕负例矩阵一处真实覆盖缺口 + 第 3 条注释名不副实
+- 来源：对抗镜#1 F1（mutation 模拟严谨）；对抗镜#2/OV 判"仅术语瑕疵"→**主 session 裁决：低估，采信对抗镜#1**（见 X1）。
+- 实质：`task(\d+)-` 若被放松成 `task([a-z0-9]+)-`（号位允许**字母**，如 `checkpoint(taskab-slug)`），现有 2 正例 + 4 负例**无一翻红** → 该放松类无守卫。第 3 条 `checkpoint(task-1-)` 注释写"号位允许非数字"，但它实际挡的是"带 dash/空号"变体（`task([\w-]+)-`/`task(\d*)-`），**不挡纯字母加宽**——注释与实际防御类不符。
+- 严重度：中（触及本 change 核心卖点"负例封住放松即保绿"的一个可复现盲区；design D2 已声明"负例集非穷举"作部分兜底）。
+- 建议：补一条 `checkpoint(taskab-slug)`（号位字母）负例；把第 3 条注释改为准确描述（"带 dash/空号变体"）。
+
+### DF2〔中 · CONFIRMED〕D3「既有断言=弱但真实守卫」未披露 M2 空转残留
+- 来源：对抗镜#2 F1。`test_workflow_authority.py:19` `assert "task<N>-" in t` 是第 18 行 `"<change>:task<N>-"` 的子串 → 逻辑恒真（M2，Round 1 提出但修订版四份文档均未提及/处理）。design D3/Risks 称这些为"弱但真实的守卫"**偏乐观**——其中一条对"裸兼容语义"零守卫力。
+- 建议：design Risks 显式披露 M2（该断言对裸兼容语义无守卫），勿笼统称"弱但真实"。
+
+### DF3〔中 · CONFIRMED〕"spec-review G1 兜底"是自我拆台的类比（方法论双标）
+- 来源：对抗镜#2 F2。G1（proposal:6 自述）= 过去一次靠人工评审运气抓到的事故，非可重复机械机制。本 change 立项理由是"producer→parser 不能只靠评审"，却对 doc↔doc 链接受"下次评审人也能像上次一样抓到"作缓解——同设计两条链两把尺子。
+- 建议：Risks 改措辞为"doc↔doc 无自动化兜底、依赖人工评审、已知比 producer→parser 弱"，勿用"G1"包装成机制。
+
+### 低置信/低严重（一行带过，可审计）
+- **DF4〔低〕** `spec.md:12` Scenario prose 仍复述标签形状（`<当前change>:task<号>-<slug> 形态`）——M3 轻量回声，又一份需人工保持一致的 doc 副本，Risks 未披露。
+- **DF5〔低·遣词〕** `spec.md:12` "`<当前change>`" 易被误读为"须用本 change 真实 slug"，而实现用任意占位 `demo`。
+- **DF6〔低·可移植〕** 测试造文件名含冒号 `f-demo:task1-slug.txt`（NTFS 非法），Unix 跑绿，Windows CI 会误红（本测试层 Unix 取向，极低概率）。
+- **DF7〔低〕** 集成测试仅用单数字任务号 "1"，未覆盖多位数（如 "12"）`group(2)` 边界（非本 change 引入的新缺口）。
+
+## 已裁掉（反静默压制，可审计）
+- **X1**：对抗镜#2 与 OV 对 DF1 判"第 3 条负例名不副实但功能等价、仅术语瑕疵、非真实缺口"。**裁决：部分裁掉——采信对抗镜#1**。理由：对抗镜#2/OV 测的是 `task([\w-]+)-`/`task(\d*)-`（带 dash/空号，第 3 条确能挡）；对抗镜#1 测的是 `task([a-z0-9]+)-`（纯字母，第 3 条**挡不住**且无其他负例覆盖）——两者测的是不同放松变体，对抗镜#1 的 `taskab-` 盲区客观存在。故 DF1 保留为"真但窄的覆盖缺口 + 注释不准"，非纯术语。
+
+## 收敛口
+
+**建议**：Q1=B 修订版设计**技术上 sound、已接地验证，可进设计 HARD-GATE**。但因本轮为事后审计，拍板须**追认覆盖已落地的 task1-3**。两个从属决策留人拍板：
+- **Q2（追认）**：拍板即追认 task1-3 合法，随后写真 `<!-- ship-gate: design-approved -->` 锚（独立成行，勿依赖 B4 的子串误配）+ 提交 → ship 可从 RUN_CODE_REVIEW 续跑。
+- **Q3（是否修订后再写锚）**：DF1（补 `taskab-` 负例 + 修注释）+ DF2/DF3（Risks 诚实披露）均属廉价 `[spec-review-amendment]` 增补。推荐**先应用 DF1-DF3 再写锚**（闭掉唯一真覆盖缺口 + 让 Risks 诚实），DF4-DF7 记 todolist 择机。若认为残差可接受，也可直接追认写锚、把 DF1-DF3 记 todolist。
+
+---
+
+## 拍板记录 · Round 2（Q1=B 修订版复审门）
+
+- **通过 · 先修 DF1-DF3 再追认**〔用户设计门拍板 2026-07-05〕。已应用：
+  - **DF1**：`test_producer_parser_contract.py` 补 `checkpoint(taskab-slug)` 负例（挡"号位加宽为字母数字"）+ 修 `checkpoint(task-1-)` 注释为准确的"号位空/含前导符号"（7 passed）。
+  - **DF2**：`design.md` Risks 披露 M2——既有 `test_workflow_authority.py:19` `assert "task<N>-" in t` 是同段子串、逻辑恒真、对裸兼容语义零守卫力。
+  - **DF3**：`design.md` Risks 更正"G1 兜底"措辞为"doc↔doc 无自动化兜底、纯依赖人工评审"。
+  - **DF4-7**：记 todolist `T37/T38/T39/T40`（spec prose M3 轻回声 / 遣词歧义 / 文件名含冒号 Windows / 单数字号覆盖）。
+- **追认覆盖 task1-3**：本轮为事后审计（gate B4 子串误配致越门起跑），拍板即追认已落地的 producer→parser 集成测试 / TAG_RE 负例矩阵 / 回归三任务合法。仓级 349 pytest 全绿。
+- 真锚写入下方（**独立成行**，勿依赖第 85 行描述性提及；gate B4 待修 / 已记 buglist）：
+
+<!-- ship-gate: design-approved -->
+
