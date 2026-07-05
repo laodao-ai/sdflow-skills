@@ -79,6 +79,10 @@ def test_render_table_has_independent_and_flags(tmp_path):
     table = lma.render_table(rows, no_anchor)
     assert "独立" in table and "≥10" in table  # 表含独立列 + N≥10 标记
     assert "无锚样本" in table  # 无锚计数呈现
+    # 真哨兵：Σ独立=10轮×2=20 真值入表（防独立聚合退化,非仅列名存在）
+    assert "| 20 |" in table
+    # 补充：Σfindings=10轮×5=50 也真入表（防端到端数值退化）
+    assert "| 50 |" in table
 
 def test_out_of_enum_lens_flagged(tmp_path):
     _write(tmp_path, "c1", _a("对抗镜1", 3, 1, 1))  # 未折叠的非法值
