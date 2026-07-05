@@ -6,29 +6,12 @@
 
 ## Open 项（按批次）
 
-### 批次：checkpoint-tag-single-source
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T37 | todo | PROPOSED | checkpoint-tag-single-source |
-| T38 | todo | PROPOSED | checkpoint-tag-single-source |
-
 ### 批次：cross-model-outside-voice
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T28 | todo | PROPOSED | cross-model-outside-voice |
-| T29 | todo | PROPOSED | cross-model-outside-voice |
 | T30 | todo | PROPOSED | cross-model-outside-voice |
 | T31 | todo | PROPOSED | cross-model-outside-voice |
-
-### 批次：gate-anchor-line-scoped
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T41 | todo | PROPOSED | gate-anchor-line-scoped |
-| T42 | todo | PROPOSED | gate-anchor-line-scoped |
-| T43 | todo | PROPOSED | gate-anchor-line-scoped |
 
 ### 批次：gate-checkpoint-hardening
 
@@ -63,6 +46,17 @@
 | T8 | todo | PROPOSED | minimize-repo-footprint |
 | T9 | todo | PROPOSED | minimize-repo-footprint |
 
+### 批次：rec2-obs-readability
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T27 | todo | PROPOSED | minimize-repo-footprint |
+| T28 | todo | PROPOSED | cross-model-outside-voice |
+| T29 | todo | PROPOSED | cross-model-outside-voice |
+| T41 | todo | PROPOSED | gate-anchor-line-scoped |
+| T42 | todo | PROPOSED | gate-anchor-line-scoped |
+| T50 | todo | PROPOSED | three-lens-decision-framework |
+
 ### 批次：review-tool-followups
 
 | ID | Pool | Status | 关联Change |
@@ -86,31 +80,6 @@
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
-### 批次：sdflow-ship
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T26 | todo | PROPOSED | sdflow-ship |
-
-### 批次：ship-gate-hardening-2
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T35 | todo | PROPOSED | ship-gate-hardening-2 |
-| T36 | todo | PROPOSED | ship-gate-hardening-2 |
-
-### 批次：three-lens-decision-framework
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T50 | todo | PROPOSED | three-lens-decision-framework |
-
-### 未分组（批次为空）
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T27 | todo | OPEN | minimize-repo-footprint |
-
 ## 已闭合（终态）摘要
 
-- 共 16 项已闭合（bug: 4，todo: 12）
+- 共 22 项已闭合（bug: 4，todo: 18）

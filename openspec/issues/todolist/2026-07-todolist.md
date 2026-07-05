@@ -31,31 +31,31 @@
 | T23 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
 | T24 | `setup.sh install_into 软链分支` | install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立 | 基础设施 | PROPOSED | 2026-07-03 21:29 | sdflow-rebrand | sdflow-rebrand |
 | T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | DONE | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
-| T26 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 功能增强 | PROPOSED | 2026-07-04 02:40 | sdflow-ship | sdflow-ship |
-| T27 | `openspec/workflow + resolve-workflow.sh` | workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突 | 基础设施 | OPEN | 2026-07-04 09:57 | minimize-repo-footprint |  |
-| T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | PROPOSED | 2026-07-04 10:51 | cross-model-outside-voice | cross-model-outside-voice |
-| T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | PROPOSED | 2026-07-04 11:57 | cross-model-outside-voice | cross-model-outside-voice |
+| T26 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 功能增强 | DONE | 2026-07-04 02:40 | sdflow-ship | sdflow-ship |
+| T27 | `openspec/workflow + resolve-workflow.sh` | workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突 | 基础设施 | PROPOSED | 2026-07-04 09:57 | minimize-repo-footprint | rec2-obs-readability |
+| T28 | `sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段` | 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行） | 功能增强 | PROPOSED | 2026-07-04 10:51 | cross-model-outside-voice | rec2-obs-readability |
+| T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | PROPOSED | 2026-07-04 11:57 | cross-model-outside-voice | rec2-obs-readability |
 | T30 | `sdflow-init/assets/hack/outside-voice.sh + tests` | helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖 | 代码质量 | PROPOSED | 2026-07-04 12:46 | cross-model-outside-voice | cross-model-outside-voice |
 | T31 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） | 代码质量 | PROPOSED | 2026-07-04 13:35 | cross-model-outside-voice | cross-model-outside-voice |
 | T32 | `ship_gate.py` | 完成判据 checkpoint 任务号加 change 命名空间 | 代码质量 | DONE | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
 | T33 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态 | 代码质量 | WONTDO | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
 | T34 | `ship_gate.py` | 复选框辅通道按 Task 分段绑定 | 代码质量 | DONE | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
-| T35 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态(T33 停置延续) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
-| T36 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` | checkpoint 派发指令文案收敛为单一真相源(broad-F2) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
-| T37 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声) | 代码质量 | PROPOSED | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
-| T38 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo | 代码质量 | PROPOSED | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
+| T35 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态(T33 停置延续) | 代码质量 | DONE | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
+| T36 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` | checkpoint 派发指令文案收敛为单一真相源(broad-F2) | 代码质量 | DONE | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
+| T37 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声) | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
+| T38 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
 | T39 | `sdflow-ship/tests/test_producer_parser_contract.py:19` | 集成测试 run_producer 造文件名含冒号(f-demo:task1-slug.txt),NTFS 非法——Unix 跑绿,Windows CI 会误红 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
 | T40 | `sdflow-ship/tests/test_producer_parser_contract.py:27` | producer→parser 集成正例仅用单数字任务号(1),未覆盖多位数(如 12)group(2) 边界 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
-| T41 | `sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md` | 评审结束输出一条可点击链接(报告路径→file:// 或网页视图)，点开即看结果，免手动找 report | 功能增强 | PROPOSED | 2026-07-05 11:26 | gate-anchor-line-scoped | gate-anchor-line-scoped |
-| T42 | `workflow bundle: generation-process.md / design-diagrams.md / 产物模版` | 文档除条目化描述(主给 AI/程序)外，尽量用多图+多表从多角度描述(给人看)；考虑人读层/机读层分离；不拘一问题一图表 | 功能增强 | PROPOSED | 2026-07-05 12:07 | gate-anchor-line-scoped | gate-anchor-line-scoped |
-| T43 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` | producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1） | 代码质量 | PROPOSED | 2026-07-05 13:41 | gate-anchor-line-scoped | gate-anchor-line-scoped |
+| T41 | `sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md` | 评审结束输出一条可点击链接(报告路径→file:// 或网页视图)，点开即看结果，免手动找 report | 功能增强 | PROPOSED | 2026-07-05 11:26 | gate-anchor-line-scoped | rec2-obs-readability |
+| T42 | `workflow bundle: generation-process.md / design-diagrams.md / 产物模版` | 文档除条目化描述(主给 AI/程序)外，尽量用多图+多表从多角度描述(给人看)；考虑人读层/机读层分离；不拘一问题一图表 | 功能增强 | PROPOSED | 2026-07-05 12:07 | gate-anchor-line-scoped | rec2-obs-readability |
+| T43 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` | producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1） | 代码质量 | DONE | 2026-07-05 13:41 | gate-anchor-line-scoped | gate-anchor-line-scoped |
 | T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | DONE | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | DONE | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T46 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 功能增强 | DONE | 2026-07-05 17:26 | - |  |
 | T47 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
 | T48 | `setup.sh + 全仓 python 调用点` | python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
 | T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
-| T50 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 代码质量 | PROPOSED | 2026-07-05 21:08 | three-lens-decision-framework | three-lens-decision-framework |
+| T50 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 代码质量 | PROPOSED | 2026-07-05 21:08 | three-lens-decision-framework | rec2-obs-readability |
 | T51 | `sdflow-done/SKILL.md commit步 + merge检查` | tracked 非-openspec 改动被 commit 步 git add -u 先提交、绕过 merge 前 untracked 硬检查的"停下问"——需 commit 步暂存策略与 merge 卫生检查对齐(gate-checkpoint-hardening SR-2 缩简版只覆盖 untracked,tracked 一路 defer) | 代码质量 | PROPOSED | 2026-07-05 22:43 | gate-checkpoint-hardening | gate-checkpoint-hardening |
 | T52 | `sdflow-done/SKILL.md merge untracked 检查` | merge 前 untracked 检查现为机械"任何 ??→halt 人工triage"(CR-4);精确区分"本 change 新产 vs 既有 debris"需在分支切出点落 untracked baseline 快照再 diff,可减少既有 debris 的误停——脚本化探索 | 功能增强 | PROPOSED | 2026-07-05 23:15 | gate-checkpoint-hardening | gate-checkpoint-hardening |
 
@@ -339,13 +339,14 @@
 |------|------|
 | 模块 | `sdflow-ship/SKILL.md` |
 | 类型 | 功能增强 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-ship/design.md`
 
 **动机**：D5 熔断当前靠主 session prose 计数，弱模型可能忘计或混淆
 
 **思路**：候选：checkpoint 标记 attempt / gate 输出含建议重试上限的结构化提示 / 宿主层计数——均需先解 D1 零副作用与计数落盘的矛盾
+> 2026-07 状态：PROPOSED → DONE（gate-checkpoint-hardening (98f10b9)）
 
 ---
 
@@ -355,7 +356,7 @@
 |------|------|
 | 模块 | `openspec/workflow + resolve-workflow.sh` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/adr/0003-deploy-footprint-global-rules-minimal-repo-copy.md`
 
@@ -498,7 +499,7 @@
 |------|------|
 | 模块 | `ship_gate.py` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/ship-gate-hardening-2/design.md`
 
@@ -507,6 +508,7 @@
 **思路**：先 grill 拍板 gate 该不该越过 committed 边界(与盘面即状态张力),再决定加 git status --porcelain 分类兜底
 
 **备注**：design 已停置,需独立 change
+> 2026-07 状态：PROPOSED → DONE（gate-checkpoint-hardening (98f10b9)）
 
 ---
 
@@ -516,13 +518,14 @@
 |------|------|
 | 模块 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/ship-gate-hardening-2/design.md`
 
 **动机**：同一条 checkpoint-commit.sh 派发约定硬编码在 workflow.md 权威源+SKILL.md 两处独立维护,本轮实证会漏改一处(G1)
 
 **思路**：workflow.md 权威定义,SKILL.md 用引用/参数化复述而非独立文案
+> 2026-07 状态：PROPOSED → DONE（gate-checkpoint-hardening (98f10b9)）
 
 ---
 
@@ -532,11 +535,12 @@
 |------|------|
 | 模块 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
 
 **备注**：DF4(spec-review Round2)。轻于原 M3(测试已改真实脚本非抠文本),但仍是独立 doc 副本,Risks 未披露。择机收敛或至少披露。
+> 2026-07 状态：PROPOSED → DONE（gate-checkpoint-hardening (98f10b9)）
 
 ---
 
@@ -546,11 +550,12 @@
 |------|------|
 | 模块 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
 
 **备注**：DF5(spec-review Round2)。规范文本精确性,已实现故未爆雷。可改为明确占位任意 ns。
+> 2026-07 状态：PROPOSED → DONE（gate-checkpoint-hardening (98f10b9)）
 
 ---
 
@@ -680,3 +685,15 @@
 **动机**：code-review F5：cosmetic 对齐，不成比例故 defer
 
 **思路**：缩短 Q1 行文案或整框加宽6行，二选一
+
+---
+
+## T43: producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（gate-checkpoint-hardening (98f10b9)）

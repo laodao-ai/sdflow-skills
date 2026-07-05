@@ -21,16 +21,16 @@
 计划: grill 跳过条件规则化(T19) + Windows marker 分支测试(T23) + install_into 软链所有权校验(T24)。注：原 T21/T22（init.py inject/文件句柄）已挪入 sdflow-init-hardening（按 module 归位）
 
 ### sdflow-ship — sdflow-ship
-状态: PLANNED
+状态: DONE
 成员: (生成) T25, T26
 优先级: P3（T25 已 DONE）
 计划: gate 熔断重试计数脚本化探索（零副作用约束下的计数下沉）
 
 ### cross-model-outside-voice — cross-model-outside-voice
 状态: PLANNED
-成员: (生成) B1, B2, B3, T28, T29, T30, T31
+成员: (生成) B1, B2, B3, T30, T31
 优先级: P2（B1-B3 已 FIXED）
-计划: voice 层硬化：阶段结束提示+可复制 prompt·各 agent/子阶段时长记录·helper 健壮性×4·voice defer×8
+计划: voice 层硬化(余 T30/T31)：helper 健壮性×4·voice defer×8。注：T28(阶段提示+可复制prompt)/T29(时长记录)已按功能归 G6 挪入 rec2-obs-readability
 
 ### ship-gate-hardening — ship-gate-hardening
 状态: DONE
@@ -39,22 +39,22 @@
 计划: 已完成——T32(命名空间隔离)/T34(复选框分段绑定) 由 ship-gate-hardening-2 实现并 ship；T33(dirty 新鲜度) 延续为 T35、关 WONTDO
 
 ### ship-gate-hardening-2 — ship-gate-hardening-2
-状态: PLANNED
+状态: DONE
 成员: (生成) T35, T36
 优先级: P3
 计划: 新鲜度可选纳入工作树 dirty 状态(T33 停置延续) + checkpoint 派发指令文案收敛为单一真相源(broad-F2)
 
 ### checkpoint-tag-single-source — checkpoint-tag-single-source
-状态: PLANNED
+状态: DONE
 成员: (生成) B4, T37, T38
 优先级: P1 ★
 计划: anchors_in 子串→行级锚定修 B4（设计门假过的元 bug，本批最高优先） + delta spec Scenario 措辞澄清(标签形状 T37/占位符用词 T38)
 
 ### gate-anchor-line-scoped — gate-anchor-line-scoped
-状态: PLANNED
-成员: (生成) T41, T42, T43
+状态: DONE
+成员: (生成) T43
 优先级: P2（★ T43 前置）
-计划: 主=T43 producer 模板收紧为独占 bare line（防未来报告照抄模板致 gate 误判，与 B4 同源、系统镜 silent 失效）；次=T41 报告吐可点击链接 + T42 人读层多图多表（F6 体验，用户镜）。主次判定：T43 属正确性骨架先动，T41/T42 骨架稳后随批带
+计划: 已完成/分散——T43(producer 模板独占 bare line) 随 gate-checkpoint-hardening ship（98f10b9）；T41(可点击链接)/T42(人读多图) 已挪入 rec2-obs-readability（按功能归 G6）
 
 ### drop-per-dir-review-stub — drop-per-dir-review-stub
 状态: DONE
@@ -69,10 +69,11 @@
 计划: T47 engine.js 深链抽 resolveInitialDir+bootstrap 为可注入 mock 的纯函数补单测（深链逻辑现零单测，测试补强）。注：原 T48/T49（init.py python 守卫 / settings.json 并发）已挪入 sdflow-init-hardening（按 module 归位）
 
 ### three-lens-decision-framework — three-lens-decision-framework
-状态: PLANNED
-成员: (生成) T50
+状态: DONE
+成员: (生成)
 优先级: P3
-计划: F6 cosmetic——T50 spec-review SKILL 决策区边框加宽消除右│视觉参差（纯视觉、结构未破、不影响语义）。主次判定：三镜均低，纯人读打磨，可随任一相邻批随手带，不值单开循环
+计划: 已完成/分散——three-lens-decision-framework change 已 ship（5de9ede）；残差 T50(cosmetic 决策区边框) 已挪入 rec2-obs-readability（按功能归 G6）
+⚠️ 不一致: 状态标记为 DONE，但成员未全部进入终态（当前成员：0 名成员）——reindex 不会自动纠正 状态: 的值（不越权），请人工核实后用 `batch set-status` 改回或补完成员状态
 
 ### sdflow-init-hardening — sdflow-init-hardening
 状态: PLANNED
@@ -85,4 +86,10 @@
 成员: (生成) T51, T52
 优先级: P3
 计划: gate/checkpoint 硬化残差: T51 tracked 非-openspec 改动被 commit 步 git add -u 先提交绕过 merge untracked 检查(需 commit 步暂存策略对齐) + T52 merge untracked 精确 baseline 快照 diff(减少既有 debris 误停)
+
+### rec2-obs-readability — rec2-obs-readability
+状态: PLANNED
+成员: (生成) T27, T28, T29, T41, T42, T50
+优先级: P3
+计划: REC-2 观测 & 人读体验(=G6，跨批重切): T27 仓内规则可参考副本 · T28 阶段结束提示+可复制 prompt · T29 各 agent/子阶段时长记录 · T41 评审报告可点击链接 · T42 人读层多图多表 · T50 spec-review 决策区边框 cosmetic。主次: 用户镜杠杆最高的一批,但均 polish 非正确性,骨架稳后带。
 
