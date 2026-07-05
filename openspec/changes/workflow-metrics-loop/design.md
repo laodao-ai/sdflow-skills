@@ -124,6 +124,11 @@
 - [naive parse 锚行遇措辞漂移腐坏（F1-T2 类）] → 消费脚本复用 fence-aware 行级锚解析口径 + 反例测试，禁裸 `split`。
 - [两 SKILL 落锚措辞漂移，两生产者不一致] → 契约单一源（权威规范文件），SKILL 只引用不复制字段清单。
 
+〔spec-review-amendment 诚实声明补充〕
+- [dedup 合并习惯**系统性漂移**（非 IID 噪声）→ 独立率跨轮趋势可能是合并松紧漂移伪影] → 聚合表旁 MUST 附一行免责：「独立率跨轮不保证同口径，复评时校验最近几轮合并尺度是否一致」；漂移非 N 轮可自动抵消（对抗镜1-2）。
+- [普通 fan-out 镜（domain/adversarial/grounding/history）**子代理执行失败 vs 真 0 findings 无区分态**——失败会被写成 `findings=0` 污染分母] → pre-existing（本 change 首次让它载入决策数据）；本 change 不根治（补失败协议超 P0），Risks 显式记，defer 进 todolist（对抗镜1-3）。
+- [自指坑残差：review 报告里引用/示范锚语法若未包 fence，聚合器 grep archive 可能误取] → 直白版已证伪（glob 仅 `*-review-report.md`、design.md 不命中；示例锚确在 fence 内）；残差闭合 = TG-25 契约加 MUST「review 报告中示范锚语法 MUST 包 ``` fence 内」〔SR-N〕（对抗镜2-1）。
+
 ## Migration Plan
 
 - 纯新增旁路 + 一处 prose→锚 替换，**无数据迁移**。voice分桶吸收：老归档报告的 prose 行不回填（历史样本 n 小），新报告起用锚；聚合脚本只认锚、跳过无锚老报告（显式计「无锚样本 N，不纳入」，不静默）。
@@ -134,7 +139,9 @@
 
 - 〔grill 定性 · defer〕**grill 层度量口径未定义 → 需自己的 explore**（非本 change）：`[grill-amendment]` 无 ID/无结构化链接，「amendment 下游存活率」无 ground truth 关联；裸数条数是误导指标故不采。与 T29 并列为 workflow-metrics-loop 伞下独立 deferred item，记入 todolist（见 task 4.2）。
 - 〔grill Q3 已解决〕~~聚合脚本落点~~ → **定 `workflow/tools/`**（bundle，随 sdflow-init 推下游；消费仓同样用两评审 SKILL、可复用聚合器）。
-- **10 轮复评节奏 per-镜独立计数 vs 全镜共享窗口**？倾向 per-镜独立累计满 10 次触发该镜复评——本 grill 下一支（Q5）钉。
+- 〔grill Q5 已定〕10 轮复评节奏 = per-(层,镜) 独立计数、聚合器派生列（见 ADR-5）。
+- 〔spec-review 决策门 Q1 · SR-D〕**同轮 outside-voice 多 site 撞键**：加可选 `site` 消歧字段（保 hr-tg vs 泛检信号，推荐）vs 钉死合并规则（求和/覆盖）。schema 层决策，实现前须定。
+- 〔spec-review 决策门 Q2 · SR-G〕**消费仓 opt-out**：无条件 SHALL 落锚 + 缺字段阻塞随 bundle 推所有消费仓，低频小仓零收益期却背记账+硬阻塞。加 `config.yaml` 开关（默认源仓 on / 下游 off 或自检降软警告，推荐）vs 无条件全推（接受下游负担）。
 
 ## Compliance
 

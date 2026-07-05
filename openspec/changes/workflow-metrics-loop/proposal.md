@@ -28,7 +28,7 @@
 ## Success Metrics
 
 - 一轮 spec-review + 一轮 code-review 跑完，机械 grep 能取到**每镜一行** `lens-metric v1` 锚，字段齐全、`findings=N` 与合并池实收数一致。
-- 聚合脚本对 ≥2 个归档 change 跑，输出一张多列表且各镜「独立贡献」列非空（证明去重导出通路打通）。
+- 〔spec-review-amendment SR-H〕**本 change 验收 = pytest fixture**（合成 ≥2 份带锚报告，验聚合/去重导出/fence-aware 解析逻辑正确、独立列非空）——现有归档报告**零** `lens-metric` 锚，故「对真实归档 change 跑出非空表」是**部署后观察项**（须本 change ship 后再有 ≥2 个后续 change 走完全流程才满足），MUST NOT 作本 change 的 verify 门槛（否则 verify 拿不出机验锚点、被自造的「未来时」指标卡死）。
 - 现有 `voice分桶` prose 行在 code-review 报告中**已被锚取代**（grep 无残留自由文本分桶）。
 
 ## Non-Goals
