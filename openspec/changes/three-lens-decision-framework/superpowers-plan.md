@@ -126,10 +126,11 @@ bash ~/.sdflow/hack/checkpoint-commit.sh three-lens-decision-framework:task2-bas
 - old（行144）: `T10复核: <方案> | 对抗镜结论 <通过/证伪> | <一句理由>   ← 无客观判据的 ≥2 方案自动选必附`
 - new（行144）: `T10复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附`
 
-- [ ] **Step 5: 机械核对（无残留「有把握自动选」是硬门）**
+- [ ] **Step 5: 机械核对（无残留「有把握自动选」*主动指令* 是硬门）**
 
-Run: `grep -n "有把握" sdflow-code-review/SKILL.md`
-Expected: 无输出（三处「有把握自动选」全清）。
+Run: `grep -n "有把握自动选" sdflow-code-review/SKILL.md`
+Expected: 无输出（三处「有把握自动选」*主动指令* 全清）。
+> 注：裸 `grep "有把握"` **会**命中 Step3 新 canonical T10 文本内的两处引用（「替换旧『有把握自动选』」元引用 + MUST NOT 条款的『有把握』）——这两处是 ship:23 canonical 自带、**正确保留**，非存活指令。故硬门精确到「有把握自动选」主动指令，勿用裸「有把握」（原计划此处措辞过宽，已修）。
 Run: `grep -n "T10 三级协议\|按三镜 + 主次\|三镜+主次" sdflow-code-review/SKILL.md`
 Expected: 多行命中（描述/导语/Step4/台账）。
 
