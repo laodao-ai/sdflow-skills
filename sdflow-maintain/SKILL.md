@@ -63,8 +63,37 @@ metadata:
 
    **如果用户拒绝**：输出 "跳过修复" 并结束。
 
+5. **lens-metric 度量 surfacing 检查（机械收尾步，独立于 INDEX 差异，防死列 SR-A）**
+
+   本步与上面 INDEX 修复流程无关、无条件跑在**每次维护会话最后**（无论步骤 4 是否有修复）。
+
+   - **config 门控**：读 `openspec/config.yaml` 的 `metrics.enabled`——缺省或 `false` → 跳过本步（不执行、不提示）。
+   - 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示"resolve-workflow.sh 未安装——先在运行
+     checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh`"并跳过本步；否则
+     `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 →
+     原样转发脚本 stderr 告警并跳过本步（绝不静默，也不阻塞整个 `/sdflow-maintain`）；成功 → 聚合器路径 =
+     `$RULES_ROOT/tools/lens_metric_aggregate.py`（本仓源仓可直接是 `sdflow-init/assets/workflow/tools/` 下的同一份）。
+   - 跑 `python3 <聚合器路径> --root "$(git rev-parse --show-toplevel)"`（只读，不写任何文件，见聚合器契约
+     `sdflow-init/assets/workflow/lens-metric-contract.md`）。
+   - 扫描输出多列表的 `flag` 列，把命中 `≥10待复评`（**出现轮数 ≥10 的镜**）的每一行单独摘出，在**本次维护
+     报告的最后**用独立、显眼的区块呈现——**MUST NOT** 与上方 INDEX 差异报告混排、**MUST NOT** 折叠进长段落
+     或被前面内容淹没（呼应 grill-not-skippable：待办判定不能埋在长消息里）：
+
+     ```
+     ⚠️ 度量待复评（N 项，出现轮数≥10）——只提示不判断、不自动砍，人读表后自行决定保留/降采样/收紧触发/淘汰：
+       - {layer}/{lens}({site}) 出现轮数={轮} 采纳率={..} 独立率={..}
+       …
+     ```
+
+   - 无命中（表格为空或全部 <10 轮）→ 同样输出一行「度量表：无 ≥10 待复评项」，不省略（防止用户以为本步没跑）。
+   - **只提示不判断、不自动砍**：本步 MUST NOT 建议或执行降采样/淘汰/收紧触发——决策交人（消费见
+     `sdflow-code-review/SKILL.md` 反馈条款）。聚合器本身零新持久态（view-only、可重生），本步同样**不新增任何
+     "已复评"登记文件**——每次维护重新聚合、重新呈现是预期行为（幂等重复提示，代价远低于死列风险）。
+
 **护栏**
 
 - **禁止修改 CLAUDE.md** — 不管是根目录还是子目录的 CLAUDE.md，都只报告不修改
 - **只修改 INDEX.md** — 修复范围严格限定在 `openspec/INDEX.md` 一个文件
 - **所有修改必须经用户确认** — 不自动修复，先报告再询问
+- **步骤 5（lens-metric surfacing）只读不写** — 不产生任何文件改动、不算作"修复"，不受上面「只修改
+  INDEX.md」的例外覆盖；只提示不判断，砍镜/降采样决策一律交人

@@ -77,7 +77,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 > 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回结构化 findings（每条带：
 > 问题 / CR 编号 / 证据 `file:line` / 严重度 / 建议），**不要 AskUserQuestion**"。
 
-**第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。findings 进 Step3 合并池；v1 锚行按位点写入报告。**always-on 复评条款〔设计门 Q3〕**：累计跑满 10 次后按报告分桶采纳率复评是否降采样为 HR-only。
+**第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。findings 进 Step3 合并池；v1 锚行按位点写入报告。**复评条款已泛化〔workflow-metrics-loop ADR-5，见第五步「反馈回路」〕**：原「累计 10 次后按采纳率复评降采样为 HR-only」是本条 outside-voice 专属规则，现升级为 per-(层,镜) 通用条款（本镜只是其中一个评估单元，不再单独定义判据）。
 
 ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
 
@@ -101,7 +101,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 - **绝不 AskUserQuestion**（阶段三无人类门）。
 - **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg` 各独立计数）的裁决结果计
   采纳[impl-review-fix]/裁掉/defer，供 Step5 落对应 `lens-metric` 锚——原「voice分桶」自由 prose 台账行已被此锚吸收取代，
-  采纳率 Success Metric 与 10 次复评仍消费该数据，只是承载形态从自由文本行改为结构化可 grep 的锚。
+  这份逐镜计数是下方「反馈回路〔泛化〕」判据的数据来源，只是承载形态从自由文本行改为结构化可 grep 的锚。
 
 ## 第五步：产出 + 收敛口
 
@@ -114,6 +114,14 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
   **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
   **旁路声明**：lens-metric 锚缺失/取值违规仅拦报告完整性，**MUST NOT** 反向改写已裁决 findings 的采纳结论
   或本轮「建议进 /sdflow-done」结论。
+- **反馈回路〔泛化，workflow-metrics-loop ADR-5〕**：原「outside-voice 累计 10 次后按采纳率复评降采样为
+  HR-only」条款**泛化到 per-(层,镜)**——本 skill 落的每条 `lens-metric` 锚（domain/adversarial/history/
+  outside-voice(各 site)/broad 均适用，非仅 outside-voice）都是该判据的原始数据；判据本身升级为**采纳率 +
+  独立率双列**（单看采纳率会误留"高采纳但全冗余"的镜，独立率才是砍镜依据；两率定义/归属见规则根
+  `lens-metric-contract.md`）。**本 skill 不做聚合、不做复评判断、不主动 surfacing**——聚合与「出现轮数≥10」
+  的机械显著提示由 `/sdflow-maintain` 收尾步触发（跑 `tools/lens_metric_aggregate.py` 只读聚合所有归档报告）；
+  是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
+  不含评审架构本身的取舍）。
 - 修复代码，改动处标 `[impl-review-fix]`。
 - **checkpoint 提交**：产出报告 + 自动修复后 → `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
 - **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
@@ -158,6 +166,8 @@ fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 
   <!-- sdflow:lens-metric v1 layer="code-review" lens="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
   字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）；
   原「voice分桶」自由 prose 行已被 outside-voice 镜的此锚吸收取代。
+  这些锚跨 change 归档后由 `/sdflow-maintain` 聚合、按 per-(层,镜) 采纳率+独立率双列复评（见第五步「反馈回路」），
+  本报告不重复该判据、只负责落准确的锚。
 ### 结论
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
 
