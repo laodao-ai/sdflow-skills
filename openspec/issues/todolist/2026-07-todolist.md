@@ -60,6 +60,7 @@
 | T52 | `sdflow-done/SKILL.md merge untracked 检查` | merge 前 untracked 检查现为机械"任何 ??→halt 人工triage"(CR-4);精确区分"本 change 新产 vs 既有 debris"需在分支切出点落 untracked baseline 快照再 diff,可减少既有 debris 的误停——脚本化探索 | 功能增强 | PROPOSED | 2026-07-05 23:15 | gate-checkpoint-hardening | gate-checkpoint-hardening |
 | T53 | `workflow 度量 + sdflow-grill/spec-review/code-review` | 建立 review 价值度量机制:量化每轮评审(grill/spec-review/code-review 及各镜/层/codex-vs-claude)的价值——findings 产出数·采纳[impl-review-fix]/裁掉/defer 分桶·致命/高/中/低分布·独立(非重复)贡献;评审运行时落度量记录(泛化现有 voice 分桶+10次采纳率复评到全镜);据累积数据数据驱动决定各层/镜/触发条件的必要性(保留/降采样/收紧触发/淘汰低价值镜) | 功能增强 | PROPOSED | 2026-07-05 23:36 | main | rec2-obs-readability |
 | T54 | `workflow 度量 / grill amendment 存活率` | grill amendment-下游存活率 度量 | 可观测性 | PROPOSED | 2026-07-06 02:04 | workflow-metrics-loop | workflow-metrics-loop |
+| T55 | `lens_metric_aggregate.py` | 聚合器易用性/健壮性观察(code-review X3/X4 defer,低危):glob 空表 vs archive 不存在无法区分;转义引号 site 值截断产生多余分组行(site 不校验已契约注明) | 代码质量 | PROPOSED | 2026-07-06 02:36 | workflow-metrics-loop | workflow-metrics-loop |
 
 ---
 

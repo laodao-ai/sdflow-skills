@@ -86,6 +86,7 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T54 | todo | PROPOSED | workflow-metrics-loop |
+| T55 | todo | PROPOSED | workflow-metrics-loop |
 
 ## 已闭合（终态）摘要
 
