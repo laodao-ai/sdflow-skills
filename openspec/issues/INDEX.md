@@ -78,6 +78,7 @@
 |----|------|--------|------------|
 | T27 | todo | OPEN | minimize-repo-footprint |
 | T41 | todo | OPEN | gate-anchor-line-scoped |
+| T42 | todo | OPEN | gate-anchor-line-scoped |
 
 ## 已闭合（终态）摘要
 
