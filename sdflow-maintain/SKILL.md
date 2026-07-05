@@ -60,7 +60,8 @@ metadata:
      - 对于新 rule：添加到「设计强制规范」表格
    - 已删未清理的条目：从 INDEX.md 所有表格中移除
    - 代码路径缺失的映射：根据 spec 内容推断代码路径，添加到速查表
-   - 修复后显示变更摘要："已更新 INDEX.md：+N -M"
+   - 修复后显示变更摘要："已更新 INDEX.md：+N -M"，**继续执行步骤 5**（lens-metric 度量 surfacing
+     检查——与 INDEX 是否修复无关，见下）。[impl-review-fix CF-3]
 
    **如果用户拒绝**：输出 "跳过修复"，**继续执行步骤 5**（lens-metric 度量 surfacing 检查——与用户是否
    同意修复 INDEX 无关，见下）。

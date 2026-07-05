@@ -14,19 +14,26 @@ ANCHOR_PREFIX = "<!-- sdflow:lens-metric v1"
 LAYER_ENUM = {"spec-review", "code-review"}
 LENS_ENUM = {"domain", "adversarial", "grounding", "history", "outside-voice", "broad"}
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')  # 受限 kv：key="value"，禁裸 split
+_FENCE_OPEN = re.compile(r'^\s*(`{3,})')  # [impl-review-fix CF-4] 捕获反引号确切长度
 
 
 def _fence_aware_lines(text):
-    """产出非 fenced-block 行。fence 翻转口径同 ship_gate._line_scoped_hits：
-    line.lstrip().startswith('```')（本脚本内重实现，不跨 skill import）。"""
-    in_fence = False
+    """产出非 fenced-block 行。真实 CommonMark fence 语义：记录开启 fence 的
+    确切反引号长度，收尾须遇到 >= 该长度的同字符 fence 才闭合——故 4-反引号外层
+    可安全嵌套 3-反引号内层示范锚（内层不会被误判为已跳出）。
+    [impl-review-fix CF-4]（本脚本内重实现，不跨 skill import）。"""
+    fence_len = None  # None = 不在 fence 内；否则为需要匹配的最小闭合长度
     for line in text.splitlines():
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
+        m = _FENCE_OPEN.match(line)
+        if fence_len is None:
+            if m:
+                fence_len = len(m.group(1))
+                continue
+            yield line
+        else:
+            if m and len(m.group(1)) >= fence_len:
+                fence_len = None
             continue
-        if in_fence:
-            continue
-        yield line
 
 
 def parse_anchor(line):
@@ -50,17 +57,24 @@ def parse_report(path):
 
 
 def aggregate(archive_root):
-    """扫 archive/**/*-review-report.md；返回 (锚行 rows, 无锚 change 名 list)。"""
-    rows, no_anchor = [], []
+    """扫 archive/**/*-review-report.md；返回 (锚行 rows, 无锚 change 名 list,
+    解析失败 change 名 list)。[impl-review-fix CF-2] 单个报告文件读取/解码失败
+    （编码坏字节、IO 错误等）不拖垮全局聚合——单独 try/except，坏文件显式计入
+    「解析失败」桶（不静默丢弃），其余报告照常聚合。"""
+    rows, no_anchor, parse_failed = [], [], []
     for report in sorted(Path(archive_root).glob("**/*-review-report.md")):
-        rr = parse_report(report)
+        try:
+            rr = parse_report(report)
+        except (OSError, UnicodeDecodeError, ValueError):
+            parse_failed.append(report.parent.name)
+            continue
         if rr:
             for f in rr:
                 f["_change"] = report.parent.name
             rows.extend(rr)
         else:
             no_anchor.append(report.parent.name)
-    return rows, no_anchor
+    return rows, no_anchor, parse_failed
 
 
 def _int(v):

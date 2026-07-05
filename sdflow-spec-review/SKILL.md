@@ -108,7 +108,15 @@ description: >
 
   gate exit 3 时若拍板已发生，人工补此锚行 = 显式越权留痕（人机同权）。
 
-  **〔SR-M〕lens-metric 锚随拍板最终化**：spec-review 的 `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，其 `lens-metric` 锚 MUST 在**拍板回写时**（与上方 ship-gate 拍板锚同步写入 `spec-review-report.md`）最终确定/重算，反映门后最终裁决，MUST NOT 用 Step3 pre-gate 临时裁决充当最终采纳率——门前若因 `metrics.enabled=true` 已落的锚视为草稿值，拍板时原地更新覆盖，不新开一行。
+  **〔SR-M〕lens-metric 锚随拍板最终化（best-effort，无机械兜底）〔impl-review-fix CF-8〕**：spec-review 的
+  `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，
+  其 `lens-metric` 锚 SHOULD 在**拍板回写时**（与上方 ship-gate 拍板锚同步写入 `spec-review-report.md`）最终确定/重算，
+  反映门后最终裁决，避免用 Step3 pre-gate 临时裁决充当最终采纳率——门前若因 `metrics.enabled=true` 已落的锚视为草稿值，
+  拍板时原地更新覆盖，不新开一行。**此为 best-effort、无机械兜底**：与 `ship-gate: design-approved` 锚不同（后者有
+  `ship_gate.py` 硬拦截），此重算**无任何下游校验**——聚合器（`/sdflow-maintain` 的 `lens_metric_aggregate.py`）
+  不知晓某行锚是"草稿"还是"已最终化"，主 session 漏执行本步不会被任何机制发现；采纳率/独立率的门后复评可能悄悄
+  停留在 pre-gate 的临时值上。与本节前述"数值一致性是主 session 信任边界、非机械门"口径一致——此局限已知且不新增
+  `ship_gate` 兜底（超本 change scope）。
 
 ---
 
