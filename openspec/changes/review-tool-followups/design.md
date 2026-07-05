@@ -61,7 +61,7 @@
 - **开发循环镜**：(A) 焊进机械路径、零未来心智；(B)/(C) 靠人记着跑，未来每次升级都可能漏。
 - **主次**：本问题里 **用户镜（失败 hook 直接干扰）＋ 开发循环镜（不靠人）** 压倒系统镜的「少一个软依赖」——因为缺口的伤害面正是用户被打扰、且靠人必漏。故选 (A)，系统镜的代价用 fail-safe 探测消化。
 
-**Windows 降级**（回应 Open Question）：`setup.sh` 有 `IS_WINDOWS` 分支。retire 步 MUST **fail-safe**：`python3` 缺失 / 调用非零退出**不阻断** setup（打印提示后继续），因为 retire 本身是尽力而为的清理，不该让工具链安装因它失败。实现上以 `command -v python3` 探测 + `|| echo "提示"` 兜底。
+**Windows 降级 + 命名差异**〔spec-review BE-10/NEW-5 揭穿·改口〕：`setup.sh` 有 `IS_WINDOWS` 分支。retire 步 MUST **fail-safe**：解释器缺失 / 调用非零退出**不阻断** setup（打印提示后继续）。**实现构造 MUST 钉死**（A5）：`{ command -v <py> >/dev/null 2>&1 && <py> "$REPO_DIR/.../init.py" retire-hooks ; } || echo "提示"`——尾部 `|| echo` 收尾**必需**（`set -e` 下仅 `command -v` 门控或 if-guard 挡不住 present-but-nonzero，then-body 仍被 set -e 中止）。**探测 MUST `python3 || python`（A6/Q-D2）**：原 `command -v python3` 是错的——Windows/Git-Bash 解释器常名 `python`，`python3` 解析空 → retire 被 fail-safe **静默跳过** → Windows 机经 `/sdflow-upgrade` **永拿不到 retire 自愈**（T44 在 Windows 零收益）。这不是"缺 Python 的可接受降级"，是 launcher 命名差异致**系统性漏 retire**。消费仓 `sdflow-init update` 路径同名假设、同洞（Q-D2 定边界）。
 
 ### ADR-2〔T45〕bootstrap 读 hash 定初始 scope〔grill-amendment〕
 
@@ -71,9 +71,13 @@
 
 - **删白名单**〔grill Q1〕：原设计的 `^/(changes|roadmaps)/` 内容白名单**删除**——它与 `navigate` 写出的 hash 契约自相矛盾（会拒绝 app 自己产的 `#/specs/…`、`#/INDEX.md` 回链），且是 security theater：**路径遍历**已由服务器根（`serve.sh` cd openspec/）兜住（`#/etc/passwd`→404），**真正的洞**是协议相对 URL（`#//evil.com/x` 跨源 fetch）——白名单防不住、既有同源守卫（244）恰好防住。故复用 244、不造新白名单。
 - **回写非任务**〔grill Q2〕：`navigate(...,true)` 早已 `history.pushState({path},'','#${path}')`（engine.js:217）——写入侧完整，T45 唯一缺读取侧。原 task 2.3「回写 hash」是幻影任务，删。
-- **陈旧 hash 404 → 回落 + 显形**〔grill Q3〕：深链指向已归档/移动的 change 时 hash 404，MUST NOT 停在 navigate 裸报错（loadDoc 先 fetch 抛错、未及 loadSidebar → 侧栏空、无🏠、卡死）；SHALL 回落根 bootstrap（INDEX/全树，恢复完整导航）**并显式提示**「深链 X 未找到（可能已归档），已回首页」。遵 CONTEXT 反静默守卫：结论不静默蒸发，静默回落（吞掉「深链没命中」）与假✅ 同构、禁用。
+- **陈旧 hash 404 → 回落 + 显形**〔grill Q3；spec-review A1/A2 加固机制〕：深链指向已归档/移动的 change 时 hash 404，MUST NOT 停在 navigate 裸报错（loadDoc 先 fetch 抛错、未及 loadSidebar → 侧栏空、无🏠、卡死）；SHALL 回落根锚全树（恢复完整导航）**并显式提示**「深链 X 未找到（可能已归档），已回首页」。**实现机制（评审揭穿·必守）**：
+  - **不能建在 `await navigate(hash)` 上**——`navigate`（engine.js:209-221）自吞 fetch 错、成功/失败都返 `undefined`，bootstrap 收不到 404 信号（F-B CONFIRMED）。故 bootstrap MUST **自派发**：自己 try/catch 里按 `path.endsWith('/')` 调 `loadDir`/`loadDoc`（复制 navigate 的记账 currentPath/pushState），catch 到失败才走回落。
+  - **防递归（F-D）**：回落 MUST 走 `initialDir==='/'` 的 INDEX 路径，**MUST NOT 重调 `bootstrap()`**（bootstrap 会再读同一坏 hash → 循环 404）；回落前 `history.replaceState({path:'/'},'',location.pathname)` 清坏 hash（无 hashchange 监听，安全）。
+  - **notice 注入顺序（NEW-1）**：提示 MUST 在回落渲染**之后**、以**专用 DOM 节点** `insertAdjacentHTML`/`appendChild` 注入，MUST NOT 用 `contentBody.innerHTML=`（会被 loadDoc/loadDir 的 innerHTML 写擦掉 → 提示静默蒸发，恰违它引的反静默守卫）。
+  遵 CONTEXT 反静默守卫：结论不静默蒸发，静默回落（吞掉「深链没命中」）与假✅ 同构、禁用。
 
-**为何不重建路由框架**：既有 hash 历史机制已在跑，只在 bootstrap 增「读 hash + 同源守卫 + 404 回落显形」一支，增量最小、不引入新抽象。
+**为何不重建路由框架**：不引入新路由抽象——复用既有 hash 历史机制。但**诚实标定增量**〔spec-review 揭穿·改口〕：原写"增量最小、单文件单分支"是**低估**。实为 engine.js 内**多分支**——读 hash + 抽 `url.pathname`（A3）+ 同源守卫 + bootstrap 自派发 loadDir/loadDoc（因 navigate 吞错，A1）+ 防递归 replaceState 清 hash（F-D）+ 专用 notice 节点（A2）+ `initialDir` const→let（A8）。仍限于单文件（engine.js），但绝非"一支"。**风险集中警示（BR-9）**：这堆最重的实现活落在 T45（P3、engine.js 无 pytest）——tasks 3.2 的四态手测是唯一回归网，MUST 严格执行（尤其 404 态）。
 
 **三镜 + 主次判定〔决策框架〕**（宽目标 + 复用守卫 vs 窄白名单）：
 - **系统镜**：复用既有同源守卫（244）+ 服务器根兜遍历——一致、少码、无新维护面；窄白名单反要额外写码去掐断 app 自己的 hash 契约。
