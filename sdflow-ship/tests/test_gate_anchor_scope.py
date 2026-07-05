@@ -1,5 +1,7 @@
 """锚检测行锚定 + fence-aware（B4）：anchors_in / _line_scoped_hits。"""
 import importlib.util
+import json
+import sys
 from pathlib import Path
 import subprocess
 import pytest
@@ -96,3 +98,43 @@ def test_archived_unbalanced_none(tmp_path):
     (d / "verify-report.md").write_text(f"{VPASS}\n```\n{VFAIL}\n", encoding="utf-8")
     _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "unb")
     assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "none"
+
+
+GATE = REPO / "sdflow-ship" / "scripts" / "ship_gate.py"
+
+
+def _run_gate(root, change="demo"):
+    r = subprocess.run([sys.executable, str(GATE), "--change", change, "--root", str(root)],
+                       capture_output=True, text=True)
+    lines = r.stdout.strip().splitlines()
+    return r.returncode, (json.loads(lines[-1]) if lines else {})
+
+
+def test_decide_b4_board_refuse_start(tmp_path):
+    # B4 盘面：spec-review-report 仅描述性提及 design-approved（无独占锚）→ REFUSE_START
+    from conftest import mkchange, commit_all
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "t"); _git(tmp_path, "config", "user.email", "t@t")
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text("〔TG-25：契约〕\n", encoding="utf-8")   # 非嵌入式，避免 RUN_SOP
+    d.joinpath("spec-review-report.md").write_text(
+        f"拍板后才写 `{DESIGN}`（当前未获批）。\n", encoding="utf-8")
+    commit_all(tmp_path, "seed")
+    code, js = _run_gate(tmp_path)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
+
+def test_contract_archived_corpus_anchor_hits():
+    # 契约：归档真实报告语料的独占锚行 → _line_scoped_hits 命中（防模板假设静默失效）
+    # 样本源 = 归档 corpus（实证 15/15 独占顶格），非 SKILL 展示块
+    archive = REPO / "openspec" / "changes" / "archive"
+    samples = list(archive.glob("*/spec-review-report.md")) + \
+              list(archive.glob("*/verify-report.md")) + \
+              list(archive.glob("*/code-review-report.md"))
+    assert samples, "无归档报告语料"
+    for f in samples:
+        text = f.read_text(encoding="utf-8", errors="replace")
+        for anc in _sg.ALL_ANCHORS:
+            if anc in text:   # 该报告含此锚（子串层）
+                hits, _ = _sg._line_scoped_hits(text, [anc])
+                assert anc in hits, f"{f.name} 的真锚 {anc} 行级判据下漏检——模板锚未独占一行?"

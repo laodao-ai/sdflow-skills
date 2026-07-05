@@ -64,6 +64,19 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     〔ship-gate-hardening-2 T33 停置〕新鲜度只看已提交盘面，不看工作树 staged/unstaged/untracked
         的非 openspec 代码改动——与「盘面即状态=committed 产物」设计一致，是否纳入工作树 dirty
         需先单独拍板 gate 该不该越过 committed 边界，本批不做。
+    〔gate-anchor-line-scoped〕机判锚 MUST 独占一行（strip 后行级等值 + 忽略 ``` 代码块内），
+        两处解析点 anchors_in（读文件）/ archived_verify_state（git-show 文本）共用同一文本级
+        核心 `_line_scoped_hits`，杜绝两路径各判各的漂移〔ADR-1/2/4〕；
+    〔ADR-5〕互斥锚对（verify PASS/FAIL、code-review pass/blocked）若遇未闭合 ``` fence 吞掉负锚，
+        不得因此误判 pass——保守判 UNKNOWN（active，pick_exclusive）/ none（archived，
+        archived_verify_state），宁可判定不能也不假阳；
+    〔ADR-6〕tg02_hit 触发检测 = 声明式匹配全角括号头注 `〔TG-02`（ff 强制格式），非裸子串——
+        描述性提及/代码引用/否定句（如提及 "TG-01/02/03"）不再误触发 RUN_SOP；
+    多行 HTML 注释内嵌锚不解析：不判断锚是否落在更大的 `<!-- ... -->` 多行注释块「内部」被
+        整体注释掉——模板锚本身即单行注释，独占一行等值已足；多行嵌套锚属人为构造，归
+        「显式越权同权级」（git 留痕可审计）；
+    `~~~` 围栏 / 带语言标签围栏（如 ```python）导致的围栏识别误判不特判——仅认 ``` 前缀翻转，
+        非本仓现实语料出现的变体不收，且方向 = 安全侧假阴（漏判不覆盖 ≠ 假阳）。
 """  # [impl-review-fix]
 import argparse
 import json
@@ -453,7 +466,7 @@ def decide(root, change):
     vfile = cdir / "verify-report.md"
     if vfile.is_file():
         pick_exclusive(vfile, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL, "verify")
-    # ── step 5.5：条件步（TG-02 字面子串；细判归模型）────────────
+    # ── step 5.5：条件步（TG-02 声明式 〔TG-02 匹配，非裸子串；细判归模型）──
     sop_note = ""
     if tg02_hit(cdir):
         if not (cdir / f"{change}-sop.md").is_file():
