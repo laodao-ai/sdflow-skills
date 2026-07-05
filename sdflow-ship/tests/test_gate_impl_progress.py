@@ -232,3 +232,26 @@ def test_tg02_declaration_hit(tmp_path):
     d = mkchange(tmp_path, "demo")
     d.joinpath("proposal.md").write_text("〔TG-02：嵌入式固件变更〕\n", encoding="utf-8")
     assert _sg.tg02_hit(d) is True
+
+
+# [Task 6/A3: tg02_hit 头部区域限定] —— 正文（首个 "## " 之后）文档性提及声明串不触发假 RUN_SOP
+def test_tg02_body_mention_not_hit(tmp_path):
+    """正文 `## ` 段内含 〔TG-02： 声明串（文档性提及/示例引用）→ tg02_hit False
+
+    活体复现：本 change（gate-anchor-line-scoped）proposal.md 正文
+    「正例（`〔TG-02：` 头注）」讨论示例，整体子串匹配会误命中。
+    """
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# t\n\n〔TG-25：契约〕\n\n## What\n正例（`〔TG-02：` 头注）示例\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is False
+
+
+def test_tg02_header_declaration_hit(tmp_path):
+    """头部（首个 `## ` 之前）声明式 〔TG-02：…〕 → tg02_hit True"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# t\n\n〔TG-02：嵌入式固件变更〕\n\n## What\n正文无关内容\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is True

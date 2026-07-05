@@ -281,7 +281,14 @@ def tg02_hit(cdir):
     text = p.read_text(encoding="utf-8", errors="replace")  # 非 UTF-8 防崩
     # [ADR-6] 声明式匹配（全角括号头注 〔TG-NN：，ff 强制格式），非裸子串——
     # 描述性提及/代码引用/否定句(TG-01/02/03)不触发假 RUN_SOP（dogfood B4 类）
-    return "〔TG-02" in text
+    # [ADR-6/A3] 只在头部声明区（开头→首个 "## " 前）找声明式 〔TG-02——
+    # 正文对 TG-02 的文档性提及不触发假 RUN_SOP（dogfood：讨论 tg02 的 proposal 正文含示例声明串）
+    header_lines = []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            break
+        header_lines.append(line)
+    return "〔TG-02" in "\n".join(header_lines)
 
 
 def plan_task_ids(plan):
