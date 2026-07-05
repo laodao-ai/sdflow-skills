@@ -61,7 +61,14 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T47 | todo | PROPOSED | review-tool-followups |
-| T48 | todo | python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | OPEN |
+
+### 批次：sdflow-init-hardening
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T21 | todo | PROPOSED | sdflow-rebrand |
+| T22 | todo | PROPOSED | sdflow-rebrand |
+| T48 | todo | PROPOSED | review-tool-followups |
 | T49 | todo | PROPOSED | review-tool-followups |
 
 ### 批次：sdflow-rebrand
@@ -69,8 +76,6 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T19 | todo | PROPOSED | sdflow-rebrand |
-| T21 | todo | PROPOSED | sdflow-rebrand |
-| T22 | todo | PROPOSED | sdflow-rebrand |
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
@@ -98,8 +103,7 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T27 | todo | OPEN | minimize-repo-footprint |
-| T46 | todo | OPEN | - |
 
 ## 已闭合（终态）摘要
 
-- 共 15 项已闭合（bug: 4，todo: 11）
+- 共 16 项已闭合（bug: 4，todo: 12）

@@ -26,8 +26,8 @@
 | T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | PROPOSED | 2026-07-03 16:18 | minimize-repo-footprint | minimize-repo-footprint |
 | T19 | `workflow.md + generation-process.md（权威源）` | 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户 | 可观测性 | PROPOSED | 2026-07-03 17:38 | sdflow-rebrand | sdflow-rebrand |
 | T20 | `spec-review/SKILL.md（现 sdflow-spec-review）` | 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项 | 代码质量 | DONE | 2026-07-03 17:42 | sdflow-rebrand | sdflow-rebrand |
-| T21 | `sdflow-init/scripts/init.py` | inject() 畸形态加固：多重复旧 marker 区块只修第一个 + _find_marker_line 的 text.index 在行内嵌相同 marker 文本时可能锚错位 | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
-| T22 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
+| T21 | `sdflow-init/scripts/init.py` | inject() 畸形态加固：多重复旧 marker 区块只修第一个 + _find_marker_line 的 text.index 在行内嵌相同 marker 文本时可能锚错位 | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-init-hardening |
+| T22 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-init-hardening |
 | T23 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
 | T24 | `setup.sh install_into 软链分支` | install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立 | 基础设施 | PROPOSED | 2026-07-03 21:29 | sdflow-rebrand | sdflow-rebrand |
 | T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | DONE | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
@@ -51,10 +51,10 @@
 | T43 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` | producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1） | 代码质量 | PROPOSED | 2026-07-05 13:41 | gate-anchor-line-scoped | gate-anchor-line-scoped |
 | T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | DONE | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | DONE | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
-| T46 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 功能增强 | OPEN | 2026-07-05 17:26 | - |  |
+| T46 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 功能增强 | DONE | 2026-07-05 17:26 | - |  |
 | T47 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
-| T48 | `setup.sh + 全仓 python 调用点` | python3 |  | python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | OPEN | review-tool-followups | review-tool-followups |  |
-| T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
+| T48 | `setup.sh + 全仓 python 调用点` | python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
+| T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
 | T50 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 代码质量 | PROPOSED | 2026-07-05 21:08 | three-lens-decision-framework | three-lens-decision-framework |
 
 ---
@@ -588,13 +588,14 @@
 |------|------|
 | 模块 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` |
 | 类型 | 功能增强 |
-| 状态 | OPEN |
+| 状态 | DONE |
 
 **动机**：workflow bundle 是发布给其它项目/用户的产品，必须自包含，不能依赖某人的私有记忆(decision-three-lens-framework.md 是行为层真相源，但子代理跑评审时够不着、其它 checkout 也没有)。T46 = 把框架从私有记忆搬进发布的 workflow。
 
 **思路**：grill 定稿五决策(2026-07-05)：①【形态×落点】增强现有 BASE-12「备选方案记录/ADR」原地改，不新增独立编号项(避双源/规则重叠)。②【强度×深度】分两层——行为层(记忆)每个决策都用；书面层(BASE-12)只在 TG-23(≥2合理方案/非显然设计)触发时 MUST 写三镜+主次，不下沉到琐碎决策。③【落点·候选③】除 BASE-12 外，也把三镜编码进 workflow.md G2 决策登记区格式：现「选项+推荐+两方后果」→「选项+推荐+三面后果(系统/用户/开发循环)+主次判定」。④【候选③另半】code-review SKILL.md Step4「≥2方案有把握自动选推荐(记理由)」的记理由 → 按三镜+主次，与 spec-review 登记一致、产品自包含。⑤【进程】走独立 OpenSpec change(带 spec delta 防漂移)，不裸改源；grill 成果直接喂四件套。三处落点：BASE-12 + workflow.md G2 + sdflow-code-review/SKILL.md Step4。
 
 **备注**：触及的 spec 需求(delta 要改)：openspec/specs/spec-workflow/spec.md 第18行「评审决策登记进报告」(『各分支后果』→『三面后果+主次』)、第432/436行「outside-voice tension」(『两方观点+推荐+后果』同步)、BASE-12 质量门(标R,评审项)。真相源=记忆 decision-three-lens-framework.md。参考样例=review-tool-followups 的 ADR-0/1/2(已按三镜回填)。排序：review-tool-followups 先跑完再开本 change(用户拍板)。BASE-12 现文：『2-3方案对比(含最小可行+理想架构)；关键决策按ADR结构落盘：背景/候选方案/决策/理由/当前方案代价』——三镜挂进『候选方案』评估法+『理由』加主次判定行。
+> 2026-07 状态：OPEN → DONE（three-lens-decision-framework (5de9ede)）
 
 ---
 
@@ -612,13 +613,13 @@
 
 ---
 
-## T48: python3||python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫
+## T48: python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫
 
 | 属性 | 值 |
 |------|------|
 | 模块 | `setup.sh + 全仓 python 调用点` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/review-tool-followups/design.md`
 

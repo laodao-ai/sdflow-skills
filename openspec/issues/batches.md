@@ -16,9 +16,9 @@
 
 ### sdflow-rebrand — sdflow-rebrand
 状态: PLANNED
-成员: (生成) T19, T20, T21, T22, T23, T24
+成员: (生成) T19, T20, T23, T24
 优先级: P2（T20 已 DONE）
-计划: recorder inject 畸形态加固 + Windows marker 分支测试 + grill 跳过条件规则化 + install_into 软链所有权校验
+计划: grill 跳过条件规则化(T19) + Windows marker 分支测试(T23) + install_into 软链所有权校验(T24)。注：原 T21/T22（init.py inject/文件句柄）已挪入 sdflow-init-hardening（按 module 归位）
 
 ### sdflow-ship — sdflow-ship
 状态: PLANNED
@@ -53,24 +53,30 @@
 ### gate-anchor-line-scoped — gate-anchor-line-scoped
 状态: PLANNED
 成员: (生成) T41, T42, T43
-优先级: <待填>
-计划: <待填>
+优先级: P2（★ T43 前置）
+计划: 主=T43 producer 模板收紧为独占 bare line（防未来报告照抄模板致 gate 误判，与 B4 同源、系统镜 silent 失效）；次=T41 报告吐可点击链接 + T42 人读层多图多表（F6 体验，用户镜）。主次判定：T43 属正确性骨架先动，T41/T42 骨架稳后随批带
 
 ### drop-per-dir-review-stub — drop-per-dir-review-stub
 状态: DONE
 成员: (生成) T44, T45
-优先级: <待填>
-计划: <待填>
+优先级: —（已闭合）
+计划: 已完成——T44(退役 hook 自愈接进 setup.sh) + T45(engine.js scoped 深链恢复) 随 review-tool-followups ship（ab1ef45）
 
 ### review-tool-followups — review-tool-followups
 状态: PLANNED
-成员: (生成) T47, T48, T49
-优先级: <待填>
-计划: <待填>
+成员: (生成) T47
+优先级: P3
+计划: T47 engine.js 深链抽 resolveInitialDir+bootstrap 为可注入 mock 的纯函数补单测（深链逻辑现零单测，测试补强）。注：原 T48/T49（init.py python 守卫 / settings.json 并发）已挪入 sdflow-init-hardening（按 module 归位）
 
 ### three-lens-decision-framework — three-lens-decision-framework
 状态: PLANNED
 成员: (生成) T50
-优先级: <待填>
-计划: <待填>
+优先级: P3
+计划: F6 cosmetic——T50 spec-review SKILL 决策区边框加宽消除右│视觉参差（纯视觉、结构未破、不影响语义）。主次判定：三镜均低，纯人读打磨，可随任一相邻批随手带，不值单开循环
+
+### sdflow-init-hardening — sdflow-init-hardening
+状态: PLANNED
+成员: (生成) T21, T22, T48, T49
+优先级: P2
+计划: sdflow-init/scripts/init.py 健壮性（同文件、fold-vs-defer 三条齐）：主=T49 settings.json 原子写并发 lost-update TOCTOU 收窗（silent 覆盖、数据丢失面）；次=T21 inject() marker 锚错位/多旧块只修首个 · T22 open().read()→with open() 清 19 Unraisable · T48 python3/python 探测加 sys.version_info 守卫（低概率 Python2）
 
