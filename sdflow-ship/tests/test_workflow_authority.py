@@ -21,7 +21,15 @@ def test_step6_tag_contract():
 
 
 def test_skill_producer_arg_namespaced():
-    # [ship-gate-hardening-2 T32/G1] 消费引用 SKILL.md 与权威源同批改齐为命名空间格式
+    # [gate-checkpoint-hardening T36/SR-4/SR-5] checkpoint 标签格式权威源单一化到
+    # ship_gate.py 的 TAG_RE：workflow.md 保留一处格式串样例（含权威引用），
+    # sdflow-ship/SKILL.md 只引用（TAG_RE/workflow.md），不复述完整格式串。
+    wf = Path(__file__).resolve().parents[2] / "sdflow-init" / "assets" / "workflow" / "workflow.md"
+    w = wf.read_text(encoding="utf-8")
+    assert "<change>:task<N>-<slug>" in w   # 格式源在 workflow.md
+    assert "TAG_RE" in w   # workflow.md 标注权威见 ship_gate.py TAG_RE
+
     skill = Path(__file__).resolve().parents[1] / "SKILL.md"   # parents[1] = sdflow-ship/
     s = skill.read_text(encoding="utf-8")
-    assert "<change>:task<N>-<slug>" in s
+    assert "<change>:task<N>-<slug>" not in s   # SKILL 不再复述完整格式串
+    assert "TAG_RE" in s   # SKILL 改为引用式（引用 workflow.md/TAG_RE）

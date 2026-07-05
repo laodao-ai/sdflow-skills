@@ -271,6 +271,12 @@ def pick_exclusive(path, positive, negative, label):
 
 
 TASK_TITLE_RE = re.compile(r"^### Task (\d+):", re.M)   # 计数用；锚行才禁正则
+# [T36/SR-4] canonical shape 权威源 = 本 TAG_RE：checkpoint(<change-slug>:task<N>-<slug>)
+# （命名空间组可选，向后兼容裸 task<N>- 旧格式）。workflow.md 的格式串样例、sdflow-ship/SKILL.md
+# 的引用式派发句均须与此正则保持一致；test_producer_parser_contract 钉死 producer(checkpoint-commit.sh
+# 落的标签串) ↔ parser(本 TAG_RE) 的一致性。checkpoint-commit.sh 本身 format-agnostic（只裹
+# `checkpoint($step)`，不校验形状），**非格式源**。
+# SR-4 checklist：改此正则前先 grep workflow.md 里的格式串样例是否需要同步更新。
 TAG_RE = re.compile(r"checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-")  # [T32] 可选命名空间组
 
 
