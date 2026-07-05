@@ -18,10 +18,16 @@ def test_gate_header_lists_all_anchors():
             assert a in text, f"gate 头注释缺锚行 {a}"
 
 def test_skill_templates_carry_same_literals():
+    # SR-6: 子串断言会被"锚行带反引号"或"同行尾注"糊弄过（子串仍命中），
+    # 改为逐行 strip 等值比较，并显式断言锚行本身干净（独占裸行、无反引号、无同行尾注）。
     for rel, anchors in PAIRS:
         text = (REPO / rel).read_text(encoding="utf-8")
+        lines = text.splitlines()
         for a in anchors:
-            assert a in text, f"{rel} 模板缺锚行 {a}（双向钉死破坏）"
+            assert any(line.strip() == a for line in lines), \
+                f"{rel} 模板缺独占裸行锚 {a}（双向钉死破坏，或锚行未独占裸行）"
+            assert "`" + a not in text and a + "`" not in text, \
+                f"{rel} 锚 {a} 疑似被反引号包裹，未独占裸行"
 
 
 CR_SKILL = "sdflow-code-review/SKILL.md"

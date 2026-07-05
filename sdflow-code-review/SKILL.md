@@ -146,8 +146,10 @@ fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
 
   结论区末行为机器锚行（ship-gate 契约，二选一）：
-  <!-- ship-gate: code-review=pass -->   （建议进 /sdflow-done）
-  <!-- ship-gate: code-review=blocked --> （存在未解 blocker）
+  （pass：建议进 /sdflow-done）
+  <!-- ship-gate: code-review=pass -->
+  （blocked：存在未解 blocker）
+  <!-- ship-gate: code-review=blocked -->
 ```
 
 ## 模型选择（按本步性质，逐步定）
