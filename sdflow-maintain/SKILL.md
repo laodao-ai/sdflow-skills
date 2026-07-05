@@ -38,7 +38,8 @@ metadata:
    - **已删未清理**：INDEX.md 中列出但文件系统中不存在的 spec/rule
    - **代码路径缺失**：新增的 spec/rule 在代码路径速查表中没有对应映射
 
-   如果无差异，输出 "INDEX.md 与文件系统一致，无需更新" 并结束。
+   如果无差异，输出 "INDEX.md 与文件系统一致，无需更新"，**跳过步骤 4，直接执行步骤 5**（lens-metric
+   度量 surfacing 检查——与 INDEX 是否有差异无关，见下）。
 
    额外检查（仅报告，不修复）：
    - 扫描根 CLAUDE.md 和子目录 CLAUDE.md，检查是否引用了已删除的 spec 或 rule 路径
@@ -61,7 +62,8 @@ metadata:
    - 代码路径缺失的映射：根据 spec 内容推断代码路径，添加到速查表
    - 修复后显示变更摘要："已更新 INDEX.md：+N -M"
 
-   **如果用户拒绝**：输出 "跳过修复" 并结束。
+   **如果用户拒绝**：输出 "跳过修复"，**继续执行步骤 5**（lens-metric 度量 surfacing 检查——与用户是否
+   同意修复 INDEX 无关，见下）。
 
 5. **lens-metric 度量 surfacing 检查（机械收尾步，独立于 INDEX 差异，防死列 SR-A）**
 
