@@ -17,11 +17,25 @@
 
 ### Requirement: 评审决策登记进报告，不中途打断
 
-评审编排器 SHALL 把决策点（自动决策与需人拍板）连同选项、推荐、各分支后果登记进评审报告，MUST NOT 在评审中途以 `AskUserQuestion` 打断，使一遍评审能自主跑到完成。
+评审编排器 SHALL 把决策点（自动决策与需人拍板）连同选项、推荐、**决策后果**登记进评审报告，MUST NOT 在评审中途以 `AskUserQuestion` 打断，使一遍评审能自主跑到完成。
+
+**决策后果 SHALL 按三镜展开**——系统镜（对系统本身：耦合 / 依赖 / 复杂度 / 可回退性）、用户镜（对最终用户使用：体验 / 可感知行为 / 干扰）、开发循环镜（对后续开发过程循环：心智负担 / 是否靠人 / 流程开销 / 复用性）——并 MUST 附**一句主次判定**（对当前这个决策，三镜哪个更重要、为何据此选定），MUST NOT 只罗列三镜后果而不判主次。触发深度 SHALL 分层：行为层每个决策都按三镜 + 主次分析；书面写入报告的三镜 + 主次 MUST 覆盖命中 TG-23（≥2 合理方案 / 非显然设计）的**方案选择**决策点，琐碎决策（无 ≥2 合理方案）SHALL NOT 被强制写满三镜段（避免样板税）。**「核验不了的事实」类决策点（Q2 事实核验）不属 TG-23，走「待核验证据 / 风险 / 默认处理」登记，不强制三镜**〔CV4：TG-23 定义仅 ≥2 方案，事实核验另类〕。
 
 #### Scenario: sdflow-spec-review 遇到 ≥2 合理方案
-- **WHEN** 某评审镜发现一个有 ≥2 合理方案或核验不了的事实的决策点
-- **THEN** 编排器把它写入 spec-review-report.md 决策登记区并继续，不中途弹 AskUserQuestion
+- **WHEN** 某评审镜发现一个有 ≥2 合理方案的决策点（命中 TG-23）
+- **THEN** 编排器把它写入 spec-review-report.md 决策登记区（选项 + 推荐 + 三面后果 + 主次判定）并继续，不中途弹 AskUserQuestion
+
+#### Scenario: sdflow-code-review 自动选推荐项按三镜记理由
+- **WHEN** 阶段三 code-review 按 T10 三级协议在 ≥2 方案中自动选定推荐项（有客观判据自动选 / 无则对抗镜复核 / 复核不过 defer；判据定义引主 spec T10 需求，本需求不重定义）
+- **THEN** 记入 code-review-report.md 台账的理由 SHALL 按三镜 + 主次判定组织（与 spec-review 决策登记同口径），MUST NOT 只写一句主观理由
+
+#### Scenario: 琐碎决策不被强制写满三镜
+- **WHEN** 某决策点无 ≥2 合理方案（显然设计、单一可行路径）
+- **THEN** 编排器 SHALL NOT 强制为其写满三面后果 + 主次判定段（书面三镜门只对命中 TG-23 的决策 MUST），避免样板噪声淹没报告
+
+#### Scenario: 评审/grill 新发现工作走 fold-vs-defer 判据
+- **WHEN** 评审 / grill 过程中发现当前 change 未覆盖的新需求或修复
+- **THEN** 是否并入当前 change SHALL 按【对当前 change 工作的影响 + workflow 循环固定成本高】判——related 信号（紧耦合 / 一致性修复 / blast-radius 小）使其进入 fold 候选，候选再经**防吸积 AND 门（同 capability ∧ 高耦合 ∧ 低增量，三者皆满足）**才 fold 进当前 change、任一不满足则 defer 另开——此判定走三镜（开发循环镜通常主导），MUST NOT 反射式以「change 单一职责」教条拆分（拆 change 有一整轮循环固定成本）；判据成文于 BASE-18〔impl-review-fix F4/CV4：与 BASE-18 防吸积 AND 门口径一致，消除「任一即 fold」宽版二义〕
 
 ### Requirement: 阶段二产出单一合并报告
 
@@ -453,11 +467,12 @@ sdflow-spec-review 复用 autoplan 产出的 `gstack-review.md` outside-voice fi
 - **THEN** 不开领域 cross-model，报告记「HR-TG 判定：未命中」
 
 ### Requirement: outside-voice tension 不静默采纳
-outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdflow-spec-review 写入报告决策登记区（选项 + 推荐 + 两方视角，设计 HARD-GATE 人一次性拍板）；sdflow-code-review 有把握则自动裁决并记理由、拿不准则 defer 进 buglist/todolist + hand-off。outside voice 的建议 MUST NOT 被静默自动采纳（不直接改代码/设计而不留痕）。**`runner=codex`** 的 outside-voice findings MUST NOT 经自评置信阈值（<80）预过滤——跨模型自评不可比、异见易被同族标尺误杀——一律直通对抗裁决，被裁掉的连理由落报告「已裁掉」区〔grill-amendment Q4〕；`runner=claude-fallback` 的 findings 属同族产物，照过同族置信滤（豁免理由对其不成立）〔spec-review-amendment〕。
+
+outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdflow-spec-review 写入报告决策登记区（选项 + 推荐 + 两方视角 + **三面后果（系统 / 用户 / 开发循环）+ 主次判定**，设计 HARD-GATE 人一次性拍板）；sdflow-code-review 按 T10 三级协议自动裁决（有客观判据自动裁 / 无则派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist/todolist + hand-off）并**按三镜 + 主次记理由**，MUST NOT 以自评置信（"有把握"）为自动裁决唯一依据〔impl-review-fix F1/CV2：与 T10 三处 skill + 本需求 scenario 对齐，勿把已淘汰的「有把握」措辞焊回权威 spec〕。outside voice 的建议 MUST NOT 被静默自动采纳（不直接改代码/设计而不留痕）。**`runner=codex`** 的 outside-voice findings MUST NOT 经自评置信阈值（<80）预过滤——跨模型自评不可比、异见易被同族标尺误杀——一律直通对抗裁决，被裁掉的连理由落报告「已裁掉」区〔grill-amendment Q4〕；`runner=claude-fallback` 的 findings 属同族产物，照过同族置信滤（豁免理由对其不成立）〔spec-review-amendment〕。
 
 #### Scenario: 设计侧分歧进决策登记区
 - **WHEN** codex voice 与 spec-review 主审对同一设计点结论相反
-- **THEN** 报告决策登记区新增 TENSION 条目（两方观点 + 推荐 + 后果），不中途 AskUserQuestion
+- **THEN** 报告决策登记区新增 TENSION 条目（两方观点 + 推荐 + 三面后果 + 主次判定），不中途 AskUserQuestion
 
 #### Scenario: 代码侧分歧自动裁决或 defer
 - **WHEN** codex voice 与 code-review 主审分歧且裁决无客观判据

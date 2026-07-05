@@ -87,6 +87,12 @@
 | T35 | todo | PROPOSED | ship-gate-hardening-2 |
 | T36 | todo | PROPOSED | ship-gate-hardening-2 |
 
+### 批次：three-lens-decision-framework
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T50 | todo | PROPOSED | three-lens-decision-framework |
+
 ### 未分组（批次为空）
 
 | ID | Pool | Status | 关联Change |
