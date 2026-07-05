@@ -241,7 +241,15 @@ MUST 段之后或行内。
 **缺省合并**：除非第 0.1 步记下 `{merge_intent}=skip`（用户调用时明确不合并），否则前四步成功后**直接 ff 合并**，不再逐次询问。
 
 - `{merge_intent}=skip` → 跳过本步，摘要里标「⏭ 按调用意图跳过 merge（分支留待手动处理）」。**不自动 push**。
-- `{merge_intent}=merge`（默认）→ 主 session 直接执行（单向 git，留主 session 可见，不丢子代理）：
+- `{merge_intent}=merge`（默认）→ **先做 untracked 硬检查，再执行 checkout+merge**（单向 git，留主 session 可见，不丢子代理）：
+
+**merge 前 untracked 硬检查**〔spec-review-amendment SR-2，防"未追踪工作经 checkout+ff-merge 存活于磁盘却从未进 base git 历史"〕：
+```bash
+git status --porcelain
+```
+筛出 `??`（untracked）开头的行——这些是本 change 分支生命周期内（从 base 切出到此刻）新产生的未追踪文件；判据 MUST 排除仓库既有 debris（分支切出前就存在、与本 change 无关的遗留未追踪项），拿不准是否为既有 debris 时从严算作"新产"（宁可多停一次，不放过真正未落盘进历史的产物）。
+- 存在此类 untracked → **非交互 halt+报告**，停下并列出文件清单，建议「先 `git add` 纳入版本控制并提交，或确认与本 change 无关后再重跑」；复用既有"ff 不可行→停下报告"惯用法，**MUST NOT 用 AskUserQuestion 中途问**、**MUST NOT 静默继续 ff-merge**。
+- 无此类 untracked（或人工处理/确认后重入本步）→ 继续：
 
 ```bash
 git checkout {base_branch}

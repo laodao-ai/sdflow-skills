@@ -61,9 +61,13 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         change B，FF-0 不拦）+ B 用旧裸格式 + 撞 plan 号 → 裸标签走窗口计入仍污染 A 的完成集。
         新格式 change 对命名污染全免疫；残留仅"裸污染方 stacking + 撞号"。MUST NOT 用"每 change
         独立分支纪律"作缓解——纪律成立则污染不可达、隔离自否（防御纵深立场，见 adr/0008）；
-    〔ship-gate-hardening-2 T33 停置〕新鲜度只看已提交盘面，不看工作树 staged/unstaged/untracked
-        的非 openspec 代码改动——与「盘面即状态=committed 产物」设计一致，是否纳入工作树 dirty
-        需先单独拍板 gate 该不该越过 committed 边界，本批不做。
+    〔gate-checkpoint-hardening T33/T35 定夺，正式化原 ship-gate-hardening-2 T33 停置〕新鲜度
+        MUST 只看已提交盘面（committed 产物与结论锚行），MUST NOT 纳入工作树 staged/unstaged/
+        untracked 的非 openspec 代码改动——与「盘面即状态=committed 产物」地基一致，越过 committed
+        边界会让 gate 判定随未提交、可撤销的工作树状态摇摆；`sdflow-ship` MAY 在收尾以非门禁软
+        提示告知工作树有未提交改动、gate 判定不含它们，MUST NOT 改变退出码。merge 前 untracked
+        硬检查〔spec-review-amendment SR-2〕落在 `sdflow-done` 的 merge 步（非交互 halt+报告上抛，
+        复用既有"ff 不可行→停下报告"惯用法），MUST NOT 上移进 gate 本身——本文件逻辑不变。
     〔gate-anchor-line-scoped〕机判锚 MUST 独占一行（strip 后行级等值 + 忽略 ``` 代码块内），
         两处解析点 anchors_in（读文件）/ archived_verify_state（git-show 文本）共用同一文本级
         核心 `_line_scoped_hits`，杜绝两路径各判各的漂移〔ADR-1/2/4〕；

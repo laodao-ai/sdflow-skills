@@ -33,6 +33,7 @@ RUN_SOP→跑 embedded-test-sop（TG-18/高风险细判归模型） · RUN_PLAN�
 - **停即停、重调即续**：ship 零跨步内存状态，任何时刻中断后重调 `/sdflow-ship {change}`，gate 从盘面推导缺口继续。
 - **gate 不辨产者**：期间人工手跑某步（如手跑 /sdflow-code-review）产出的报告同样被认；手改锚行 = 显式越权通道（git 留痕可审计）。
 - 实现中断的 resume：gate 输出已完成任务号集 → 传 SDD 勿重派。
+- **工作树 dirty 软提示（非门禁）**〔T33/T35 定夺〕：gate 新鲜度判定 committed-only，不看工作树 staged/unstaged/untracked 的非 openspec 改动〔见 `ship_gate.py` 注释〕。收尾（SHIPPED）或 resume 续跑前，MAY 检查一次工作树（`git status --porcelain`，排除 `openspec/` 路径）——若存在未提交的非-openspec 改动，在摘要末尾附加一行提示"工作树有未提交改动，gate 判定不含它们"；此提示**仅信息性**，MUST NOT 改变 gate 的退出码或推进/拒绝结论。
 
 ## SHIPPED 摘要模板
 
@@ -41,5 +42,6 @@ RUN_SOP→跑 embedded-test-sop（TG-18/高风险细判归模型） · RUN_PLAN�
 /sdflow-ship 完成 — {change}
   链: [sop|SKIP] → plan+impl({n}/{n} 任务) → code-review(pass) → done(verify PASS, merged)
   ⏸ 未 push（手动控制）。toolkit 源仓：push 后新会话跑 /sdflow-upgrade 激活。
+  [若工作树有未提交的非-openspec 改动] 提示：工作树有未提交改动，gate 判定不含它们（非门禁，仅信息性）。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
