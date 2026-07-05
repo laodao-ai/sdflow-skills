@@ -11,12 +11,16 @@
 - **THEN** 编排器把它写入 spec-review-report.md 决策登记区（选项 + 推荐 + 三面后果 + 主次判定）并继续，不中途弹 AskUserQuestion
 
 #### Scenario: sdflow-code-review 自动选推荐项按三镜记理由
-- **WHEN** 阶段三 code-review 在 ≥2 方案中自动选定推荐项（判据词遵各自流程既有规定，本需求不改判据、只定理由格式）
+- **WHEN** 阶段三 code-review 按 T10 三级协议在 ≥2 方案中自动选定推荐项（有客观判据自动选 / 无则对抗镜复核 / 复核不过 defer；判据定义引主 spec T10 需求，本需求不重定义）
 - **THEN** 记入 code-review-report.md 台账的理由 SHALL 按三镜 + 主次判定组织（与 spec-review 决策登记同口径），MUST NOT 只写一句主观理由
 
 #### Scenario: 琐碎决策不被强制写满三镜
 - **WHEN** 某决策点无 ≥2 合理方案（显然设计、单一可行路径）
 - **THEN** 编排器 SHALL NOT 强制为其写满三面后果 + 主次判定段（书面三镜门只对命中 TG-23 的决策 MUST），避免样板噪声淹没报告
+
+#### Scenario: 评审/grill 新发现工作走 fold-vs-defer 判据
+- **WHEN** 评审 / grill 过程中发现当前 change 未覆盖的新需求或修复
+- **THEN** 是否并入当前 change SHALL 按【对当前 change 工作的影响 + workflow 循环固定成本高】判——related + 低影响（紧耦合 / 同 capability / 一致性修复 / blast-radius 小）→ fold 进当前 change，真独立 / 扩容大 / 需自身设计审查 → defer 另开——此判定走三镜（开发循环镜通常主导），MUST NOT 反射式以「change 单一职责」教条拆分（拆 change 有一整轮循环固定成本）；判据成文于 BASE-18
 
 ### Requirement: outside-voice tension 不静默采纳
 

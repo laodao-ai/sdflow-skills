@@ -65,5 +65,20 @@
 ## 收敛
 - 广审 + codex + 完整性镜 + 对抗镜四路，**独立同证漏落点**（3→5）+ 揪出 change 自身 delta 内部矛盾——层层加值验证。
 - 已 amend 五项（D2-D5 落 proposal/design/tasks/delta，标 `[spec-review-amendment]`）；`openspec validate` 通过。
-- 唯一 [需拍板] = Q1（scope，推荐 B，已按 B amend）。
-- **建议进设计 HARD-GATE**：人工过本报告拍板（尤其 Q1 A/B），批准 → writing-plans。
+- 唯一 [需拍板] = Q1（scope）。
+
+---
+
+## 设计 HARD-GATE 拍板记录（2026-07-05）
+
+**Q1 → 采 A（顺手对齐 T10）**。理由（主次翻转）：接地核实 T10 早已是既定行为（ship:23 / 主spec:48 / workflow.md:84 / code-review 台账:144 均 T10），code-review:7/30/96「有把握」是漏改陈旧散文、且与自身台账:144 自相矛盾 → A 是**纯一致性修复非行为变更**，blast-radius 担忧坍缩，系统镜（消除既有矛盾）压倒开发循环镜（单一职责）。已回改 B→A（design ADR-4；delta tension 判据对齐 T10；落点③含 T10 对齐）。
+
+**追加决策 → fold「fold-vs-defer scope-triage 判据」进 T46（落点⑥ / ADR-5）**。用户指出该判据复用率高且 workflow 未成文，**且一次完整 workflow 循环固定成本极高、固守单一职责教条推高周期与成本**。用此判据递归判它自己：同 capability（workflow 决策治理）+ 高耦合（三镜在 scope 决策上的应用）+ 低增量 → fold。落 BASE-18 + delta scenario。
+
+**增量微审（新增内容自检，反静默）**：① 与 BASE-18 原文互补非冲突（独立拆 / 相关合）；② 防吸积三条件（同 capability+高耦合+低增量）即防 BASE-10 蔓延闸；③ **吸积自警**：门上已 fold 两次（T10+判据），判据自限（下个新发现仍过三条件），就此打住不邀第三次 fold，进实现。
+
+**落点集终态 = 6**：① BASE-12 三镜 · ② workflow.md G2 · ③ code-review（三镜+T10）· ④ spec-review SKILL · ⑤ ship 台账 · ⑥ BASE-18 scope-triage。
+
+**门结论：设计已批准 → 进 writing-plans / 实现。**
+
+<!-- ship-gate: design-approved -->
