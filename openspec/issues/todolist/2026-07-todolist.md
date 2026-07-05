@@ -49,8 +49,8 @@
 | T41 | `sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md` | 评审结束输出一条可点击链接(报告路径→file:// 或网页视图)，点开即看结果，免手动找 report | 功能增强 | PROPOSED | 2026-07-05 11:26 | gate-anchor-line-scoped | gate-anchor-line-scoped |
 | T42 | `workflow bundle: generation-process.md / design-diagrams.md / 产物模版` | 文档除条目化描述(主给 AI/程序)外，尽量用多图+多表从多角度描述(给人看)；考虑人读层/机读层分离；不拘一问题一图表 | 功能增强 | PROPOSED | 2026-07-05 12:07 | gate-anchor-line-scoped | gate-anchor-line-scoped |
 | T43 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` | producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1） | 代码质量 | PROPOSED | 2026-07-05 13:41 | gate-anchor-line-scoped | gate-anchor-line-scoped |
-| T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | OPEN | 2026-07-05 16:09 | drop-per-dir-review-stub |  |
-| T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | OPEN | 2026-07-05 16:09 | drop-per-dir-review-stub |  |
+| T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
+| T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 
 ---
 

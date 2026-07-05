@@ -22,6 +22,13 @@
 | T30 | todo | PROPOSED | cross-model-outside-voice |
 | T31 | todo | PROPOSED | cross-model-outside-voice |
 
+### 批次：drop-per-dir-review-stub
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T44 | todo | PROPOSED | drop-per-dir-review-stub |
+| T45 | todo | PROPOSED | drop-per-dir-review-stub |
+
 ### 批次：gate-anchor-line-scoped
 
 | ID | Pool | Status | 关联Change |
