@@ -54,14 +54,13 @@ HOOKS = [
         "matcher": "Bash",
         "cmd": 'python3 "$HOME/.claude/hooks/ff0-branch-guard.py"',
     },
-    {
-        "name": "change-review-stub.py",
-        "src": os.path.join(ASSETS, "hooks", "change-review-stub.py"),
-        "event": "PostToolUse",
-        "matcher": "Bash",
-        "cmd": 'python3 "$HOME/.claude/hooks/change-review-stub.py"',
-    },
 ]
+
+# 退役 hook 名单（ADR-1）：hook 安装本是「只增不减」，退役一个 hook 时存量安装的
+# ~/.claude/settings.json 会留孤儿注册 + ~/.claude/hooks/ 残留脚本 → 之后每次 Bash 触发失败
+# hook。retire_hooks() 在 init/update 每次跑时自愈：外科式摘 settings 注册 + 删脚本；
+# fresh 安装无残留则全 no-op。后续任何 hook 退役都往这里加名即可。
+RETIRED_HOOKS = ["change-review-stub.py"]
 
 
 # ── 标记区块幂等注入 ─────────────────────────────────────────
@@ -263,6 +262,78 @@ def ensure_global_hooks():
     return "\n".join(f"  · {spec['name']}：{ensure_global_hook(spec)}" for spec in HOOKS)
 
 
+def _home_claude():
+    return os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+
+
+def _deregister_hook_in_settings(settings, name):
+    """从 settings.json 各 event 列表外科式摘除 command 引用 `name` 脚本的条目：
+    entry 内多 hook 时只删匹配的那个、保留兄弟；entry 内 hook 全被删则整条 entry 丢弃；
+    保留其余用户/其它 skill 的 hook。改动则回写。坏 JSON / 结构异常一律 fail-safe 跳过。
+    返回是否发生了摘除。"""
+    if not os.path.exists(settings):
+        return False
+    try:
+        data = json.load(open(settings, encoding="utf-8"))
+    except (ValueError, OSError):
+        return False
+    if not isinstance(data, dict) or not isinstance(data.get("hooks"), dict):
+        return False
+    changed = False
+    for event, event_list in list(data["hooks"].items()):
+        if not isinstance(event_list, list):
+            continue
+        new_list = []
+        for entry in event_list:
+            inner = entry.get("hooks") if isinstance(entry, dict) else None
+            if isinstance(inner, list):
+                kept = [h for h in inner if name not in ((h or {}).get("command") or "")]
+                if len(kept) != len(inner):
+                    changed = True
+                    if kept:
+                        entry["hooks"] = kept
+                        new_list.append(entry)
+                    # kept 为空 → 该 entry 仅剩退役 hook，整条丢弃
+                else:
+                    new_list.append(entry)
+            else:
+                new_list.append(entry)
+        data["hooks"][event] = new_list
+    if changed:
+        with open(settings, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    return changed
+
+
+def retire_hooks():
+    """反注册 RETIRED_HOOKS 里的每个退役 hook（自愈存量安装，ADR-1）：
+    ① 从 ~/.claude/settings.json 外科式摘除其注册；② 删 ~/.claude/hooks/ 里的脚本。
+    幂等、fail-safe（坏 JSON / 缺文件不崩）、fresh 安装无残留则 no-op。返回多行动作汇总。"""
+    home_claude = _home_claude()
+    settings = os.path.join(home_claude, "settings.json")
+    hooks_dir = os.path.join(home_claude, "hooks")
+    acts = []
+    for name in RETIRED_HOOKS:
+        deregistered = _deregister_hook_in_settings(settings, name)
+        script = os.path.join(hooks_dir, name)
+        removed_file = False
+        if os.path.isfile(script):
+            try:
+                os.remove(script)
+                removed_file = True
+            except OSError:
+                pass
+        notes = []
+        if deregistered:
+            notes.append("摘 settings 注册")
+        if removed_file:
+            notes.append("删脚本")
+        if notes:
+            acts.append(f"{name}：" + " + ".join(notes))
+    return "\n".join(f"  · {a}" for a in acts) if acts else "  · 无退役 hook 残留"
+
+
 # ── 主流程 ──────────────────────────────────────────────────
 
 def run(root, mode, dev=False):
@@ -296,6 +367,9 @@ def run(root, mode, dev=False):
         report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
 
         report.append("全局 hooks：\n" + ensure_global_hooks())
+
+        # 退役 hook 反注册（ADR-1）：init 与 update 都跑，自愈存量安装（fresh 则 no-op）。
+        report.append("退役 hook 清理：\n" + retire_hooks())
 
         # init 与 update 都跑：fresh init 无残留自然零告警；老仓误跑 init 不再假绿（B2-F3）。
         for w in stale_shadow_warnings(root):

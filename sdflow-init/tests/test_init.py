@@ -369,3 +369,128 @@ class TestInjectMarkerMigration:
         assert "新内容" in text and "旧内容" not in text
         assert "sdflow-init 维护" in text                 # marker 文案已随替换更新
         assert "尾部用户内容" in text                     # 区块外内容无损
+
+
+class TestRetiredHooks:
+    """ADR-1（drop-per-dir-review-stub）：init.py 需能反注册退役的全局 hook。
+    hook 安装本是「只增不减」——退役一个 hook 时，存量安装的 ~/.claude/settings.json
+    会留孤儿注册 + ~/.claude/hooks/ 残留脚本，之后每次 Bash 触发失败 hook。
+    retire_hooks() 在 init/update 每次跑时自愈：外科式摘 settings.json 条目 + 删脚本。"""
+
+    RETIRED = "change-review-stub.py"  # 当前退役名单里的 hook
+
+    def _settings(self, home):
+        return home / "settings.json"
+
+    def _make_home_with_retired(self, home):
+        """构造一个「装过退役 hook」的存量 home：脚本 + settings 注册；另含一个无关 hook (ff0)。"""
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / self.RETIRED).write_text("print('stub')\n", encoding="utf-8")
+        (home / "hooks" / "ff0-branch-guard.py").write_text("print('ff0')\n", encoding="utf-8")
+        self._settings(home).write_text(json.dumps({
+            "hooks": {
+                "PreToolUse": [{"matcher": "Bash", "hooks": [
+                    {"type": "command", "command": 'python3 "$HOME/.claude/hooks/ff0-branch-guard.py"'}
+                ]}],
+                "PostToolUse": [{"matcher": "Bash", "hooks": [
+                    {"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'}
+                ]}],
+            }
+        }), encoding="utf-8")
+
+    def test_retires_existing_registration_and_script_keeping_others(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        self._make_home_with_retired(home)
+
+        init_mod.retire_hooks()
+
+        # 脚本删除
+        assert not (home / "hooks" / self.RETIRED).exists()
+        # settings 里退役 hook 的注册被摘除
+        data = json.loads(self._settings(home).read_text(encoding="utf-8"))
+        blob = json.dumps(data)
+        assert "change-review-stub.py" not in blob
+        # 无关 hook (ff0) 与其脚本保留
+        assert "ff0-branch-guard.py" in blob
+        assert (home / "hooks" / "ff0-branch-guard.py").exists()
+
+    def test_fresh_install_is_noop(self, tmp_path, monkeypatch):
+        """从未装过退役 hook 的 fresh 安装：只有 ff0，retire 全 no-op、不误删、不崩。"""
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / "ff0-branch-guard.py").write_text("print('ff0')\n", encoding="utf-8")
+        self._settings(home).write_text(json.dumps({
+            "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/ff0-branch-guard.py"'}
+            ]}]}
+        }), encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+
+        init_mod.retire_hooks()  # 不抛
+
+        assert (home / "hooks" / "ff0-branch-guard.py").exists()
+        data = json.loads(self._settings(home).read_text(encoding="utf-8"))
+        assert len(data["hooks"]["PreToolUse"]) == 1
+
+    def test_no_settings_file_still_deletes_script(self, tmp_path, monkeypatch):
+        """settings.json 不存在，但 hooks/ 里残留退役脚本 → 删脚本、不崩。"""
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / self.RETIRED).write_text("print('stub')\n", encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+
+        init_mod.retire_hooks()
+
+        assert not (home / "hooks" / self.RETIRED).exists()
+
+    def test_bad_json_settings_is_failsafe(self, tmp_path, monkeypatch):
+        """settings.json 非法 JSON：反注册不崩（fail-safe），脚本删除照常进行。"""
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / self.RETIRED).write_text("print('stub')\n", encoding="utf-8")
+        self._settings(home).write_text("{ not valid json ", encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+
+        init_mod.retire_hooks()  # 不抛
+
+        assert not (home / "hooks" / self.RETIRED).exists()
+
+    def test_multiple_registrations_all_removed(self, tmp_path, monkeypatch):
+        """退役 hook 被误注册多条（多个 entry）→ 全部摘除。"""
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / self.RETIRED).write_text("print('stub')\n", encoding="utf-8")
+        self._settings(home).write_text(json.dumps({
+            "hooks": {"PostToolUse": [
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'}]},
+                {"matcher": "Bash", "hooks": [{"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'}]},
+            ]}
+        }), encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+
+        init_mod.retire_hooks()
+
+        data = json.loads(self._settings(home).read_text(encoding="utf-8"))
+        assert "change-review-stub.py" not in json.dumps(data)
+
+    def test_mixed_entry_keeps_sibling_hook(self, tmp_path, monkeypatch):
+        """一个 matcher entry 内同时含退役 hook 与另一 hook → 只摘退役、保留兄弟、entry 不空则留。"""
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / self.RETIRED).write_text("print('stub')\n", encoding="utf-8")
+        self._settings(home).write_text(json.dumps({
+            "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'},
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/other-tool.py"'},
+            ]}]}
+        }), encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+
+        init_mod.retire_hooks()
+
+        data = json.loads(self._settings(home).read_text(encoding="utf-8"))
+        blob = json.dumps(data)
+        assert "change-review-stub.py" not in blob
+        assert "other-tool.py" in blob
