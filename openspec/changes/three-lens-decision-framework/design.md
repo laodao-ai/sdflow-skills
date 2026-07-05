@@ -63,19 +63,21 @@
 
 ---
 
-## 三处落点的精确编辑锚（实现依据）
+## 五处落点的精确编辑锚（实现依据）〔spec-review 完整性镜穷举校准：原 3 处 → 5 处〕
 
 | 落点 | 文件 | 现状锚 | 改法 |
 |---|---|---|---|
-| ① BASE-12 | `sdflow-init/assets/workflow/spec-checklists/spec-quality-base.md`（BASE-12 行） | 「2-3 方案对比（含最小可行 + 理想架构）；关键决策按 ADR 结构落盘：背景 / 候选方案 / 决策 / 理由 / 当前方案代价」 | 「候选方案」评估法补三镜（系统/用户/开发循环）；「理由」补主次判定行；**TG-23 触发时 MUST 三镜 + 主次**，否则 SHOULD |
-| ② G2 | `sdflow-init/assets/workflow/workflow.md`（G2 段，约行 72 / 83） | 「决策登记进报告（选项 + 推荐 + **两方后果**）」 | →「选项 + 推荐 + **三面后果（系统 / 用户 / 开发循环）+ 主次判定**」；设计门行（行72）同步措辞 |
-| ③ Step4 | `sdflow-code-review/SKILL.md`（Step 4，约行 96 / 143） | 「≥2 方案有把握自动选推荐（**记理由**）」；台账行 | 「记理由」→「按**三镜 + 主次**记理由」；台账行格式补主次判定 |
+| ① BASE-12 | `sdflow-init/assets/workflow/spec-checklists/spec-quality-base.md`（BASE-12，行 31） | 「2-3 方案对比（含最小可行 + 理想架构）；关键决策按 ADR 结构落盘：背景 / 候选方案 / 决策 / 理由 / 当前方案代价」 | 「候选方案」评估法补三镜（系统/用户/开发循环）；「理由」补主次判定行；**TG-23 触发时 MUST 三镜 + 主次**，否则 SHOULD。**三镜为新挂入 ADR 结构、非替换旧串**（此文件无「两方后果」精确串，勿用 grep-replace 误判无需改） |
+| ② G2 | `sdflow-init/assets/workflow/workflow.md`（行 72 设计门 + 行 83 G2） | 「决策登记进报告（选项 + 推荐 + **两方后果**）」 | →「选项 + 推荐 + **三面后果（系统 / 用户 / 开发循环）+ 主次判定**」；行 72 设计门行同步 |
+| ③ code-review | `sdflow-code-review/SKILL.md`（frontmatter 7-8 / 导语 30 / Step4 行 96 / 台账 143-144） | 「≥2 方案有把握自动选推荐（**记理由**）」；台账「附理由」/「T10复核」行 | 「记理由/附理由」→「按**三镜 + 主次**记」；台账行补主次判定。**判据词「有把握」不动**（T10 对齐 defer，见 Q1） |
+| ④ spec-review〔F1/CV1〕 | `sdflow-spec-review/SKILL.md`（frontmatter 8 / 正文 24 / TENSION 77 / 格式块 89） | 「选项 + 推荐 + **两方后果**」/ TENSION「两方视角 + 推荐 + **后果**」/ 格式块「选项A/B + 推荐 + **各自后果**」 | 全部 → 三面后果 + 主次判定。**决策登记区实际执行入口，内联硬编码须改**，否则归档后主 spec 与发布产品矛盾 |
+| ⑤ ship 台账〔完整性镜〕 | `sdflow-ship/SKILL.md`（行 23 T10 台账） | 「T10复核: <方案> \| 对抗镜结论 <通过/证伪> \| <一句理由>」（与 code-review:144 同串） | 随 code-review 台账同步补主次判定，防两处台账格式不一致 |
 
 ## spec delta（防漂移）
 
 `specs/spec-workflow/spec.md` 两条 MODIFIED：
-- **评审决策登记进报告**：后果字段「各分支后果」→「三面后果（系统/用户/开发循环）+ 主次判定」；补 TG-23 深度门 clause + code-review 侧 scenario。
-- **outside-voice tension 不静默采纳**：TENSION 条目「两方视角 / 后果」→「两方视角 + 三面后果 + 主次判定」。
+- **评审决策登记进报告**：后果字段「各分支后果」→「三面后果（系统/用户/开发循环）+ 主次判定」；补 TG-23 深度门 clause + code-review 侧 scenario。**「≥2 合理方案」（命中 TG-23，走三镜）与「核验不了的事实」（Q2 事实核验，不走三镜）分列**〔CV4：TG-23 定义仅 ≥2 方案，勿把事实核验混标 TG-23〕。
+- **outside-voice tension 不静默采纳**：TENSION 条目「两方视角 / 后果」→「两方视角 + 三面后果 + 主次判定」；判据词用中性「自动裁决」不引入 T10/「有客观判据」新词，避免与本 change 纯三镜 scope 冲突〔F1 内部矛盾修复〕。
 
 ## 部署纪律（实现必做）
 
@@ -86,3 +88,6 @@
 - 行为层记忆内容重写（仍是真相源，只搬运）。
 - 既有 ADR（review-tool-followups）回填——已完成，作样例。
 - 触发漏判的自动化检测（靠对抗镜兜底，未来另议）。
+- **docs/ 可视化镜像刷新**〔spec-review F3〕：非权威源、量大，延后另 change 刷（显式声明，非静默留漂移）。
+- **「有把握」→ T10 三级协议对齐**〔spec-review F2/CV2，决策登记 Q1 采 B〕：pre-existing 债（主 spec:48 已 T10、code-review:96 仍「有把握」），非 T46 引入；纯三镜单一职责，defer 进 todolist。
+- **trigger-catalog「≥2 合理方案」判例补充**〔对抗镜 X2 提示，降 TG-23 漏判漂移〕：可选优化，defer。
