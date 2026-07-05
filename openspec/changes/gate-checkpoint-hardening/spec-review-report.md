@@ -72,4 +72,9 @@
 ### 结论
 - **不建议直接进设计 HARD-GATE**——SR-1（致命）+ SR-2（高）是两个真设计点的实质缺陷，需用户就 Q1/Q2 拍板后才算设计收敛。
 - 自动决策 D1-D5 已作 `[spec-review-amendment]` 落 design/specs/tasks/proposal；D6 记录留实现期。
-- 收敛口：请用户裁 Q1（ADR-2 重做方向）+ Q2（ADR-1 机制），拍板后写 `<!-- ship-gate: design-approved -->` 锚，方可进阶段三。
+- 收敛口：请用户裁 Q1（ADR-2 重做方向）+ Q2（ADR-1 机制），拍板后写 design-approved 锚，方可进阶段三。
+
+### 设计门拍板记录
+- 2026-07-05 用户拍板：Q1 = 锚行集合判据 + 无状态 helper；Q2 = merge 缩简版（只 untracked + halt+报告）。全部 amendment 已落 design/specs/tasks/proposal，validate 通过。批准进阶段三。
+
+<!-- ship-gate: design-approved -->
