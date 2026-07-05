@@ -46,6 +46,7 @@
 | T38 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo | 代码质量 | PROPOSED | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
 | T39 | `sdflow-ship/tests/test_producer_parser_contract.py:19` | 集成测试 run_producer 造文件名含冒号(f-demo:task1-slug.txt),NTFS 非法——Unix 跑绿,Windows CI 会误红 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
 | T40 | `sdflow-ship/tests/test_producer_parser_contract.py:27` | producer→parser 集成正例仅用单数字任务号(1),未覆盖多位数(如 12)group(2) 边界 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
+| T41 | `sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md` | 评审结束输出一条可点击链接(报告路径→file:// 或网页视图)，点开即看结果，免手动找 report | 功能增强 | OPEN | 2026-07-05 11:26 | gate-anchor-line-scoped |  |
 
 ---
 

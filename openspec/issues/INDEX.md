@@ -77,6 +77,7 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T27 | todo | OPEN | minimize-repo-footprint |
+| T41 | todo | OPEN | gate-anchor-line-scoped |
 
 ## 已闭合（终态）摘要
 
