@@ -256,7 +256,7 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist�
 
 ### Requirement: 阶段三编排台账确定性（ship_gate）
 
-`sdflow-ship` 的步序推进 MUST 由确定性脚本 `ship_gate.py` 判定（**盘面即状态**：以 change 目录产物存在性与结论行为账本，MUST NOT 设可变 state 文件造第二真相源）；编排 skill MUST 在每步前后调用 gate 并遵其判定，MUST NOT 以 prose 记忆步序。gate MUST 只读（零副作用）、双输出（首行人读摘要 + JSON 机读）、以退出码承载门禁语义（0=可推进 / 3=拒绝起跑 / 4=上游 blocker / 5=verify FAIL / **6=UNKNOWN 判定不能**〔spec-review-amendment〕）；同一报告并存冲突锚行 MUST 判 UNKNOWN 点名冲突行，MUST NOT 猜优先级。机判锚点 MUST 为**模板写死的机器注释行**〔grill-amendment：自然语言结论行正则对真实存档全 miss，禁作锚点〕：设计门拍板 = `<!-- ship-gate: design-approved -->`；verify 结论 = `<!-- ship-gate: verify=PASS -->` / `verify=FAIL`；code-review 放行 = `<!-- ship-gate: code-review=pass -->` / `=blocked`。三个报告的生成模板（sdflow-spec-review 拍板回写约定 / sdflow-done verify 模板 / sdflow-code-review 报告格式）MUST 输出对应锚行；gate 以字面查找（非正则）解析，锚行集合在脚本头注释与各模板双向钉死同 change 演进。**完成判据的两处加固**〔ship-gate-hardening-2〕：① checkpoint 任务标签 MUST 按 change 命名空间归属隔离（`checkpoint(<change>:task<N>-)`，gate 只认当前 change；裸标签向后兼容，详见下方「完成任务号按 change 命名空间隔离」Scenario 组）；② 复选框辅通道 MUST 按 `### Task <n>:` 分段绑定、MUST NOT 全局全勾放行所有 task（详见下方「复选框辅通道按 Task 分段绑定」Scenario 组）。
+`sdflow-ship` 的步序推进 MUST 由确定性脚本 `ship_gate.py` 判定（**盘面即状态**：以 change 目录产物存在性与结论行为账本，MUST NOT 设可变 state 文件造第二真相源）；编排 skill MUST 在每步前后调用 gate 并遵其判定，MUST NOT 以 prose 记忆步序。gate MUST 只读（零副作用）、双输出（首行人读摘要 + JSON 机读）、以退出码承载门禁语义（0=可推进 / 3=拒绝起跑 / 4=上游 blocker / 5=verify FAIL / **6=UNKNOWN 判定不能**〔spec-review-amendment〕）；同一报告并存冲突锚行 MUST 判 UNKNOWN 点名冲突行，MUST NOT 猜优先级。机判锚点 MUST 为**模板写死的机器注释行**〔grill-amendment：自然语言结论行正则对真实存档全 miss，禁作锚点〕：设计门拍板 = `<!-- ship-gate: design-approved -->`；verify 结论 = `<!-- ship-gate: verify=PASS -->` / `verify=FAIL`；code-review 放行 = `<!-- ship-gate: code-review=pass -->` / `=blocked`。三个报告的生成模板（sdflow-spec-review 拍板回写约定 / sdflow-done verify 模板 / sdflow-code-review 报告格式）MUST 输出对应锚行；gate 以**行级字面查找**解析——逐行 `strip()` 后整行等值于锚字面、忽略 fenced code block（```）内的行；MUST NOT 用纯子串（否则报告正文对锚的**描述性提及**或代码块内文档示例会假命中，让门禁被非结论文本触发）〔gate-anchor-line-scoped B4〕。锚行集合在脚本头注释与各模板双向钉死同 change 演进（各模板 MUST 把锚写在独占一行）。**完成判据的两处加固**〔ship-gate-hardening-2〕：① checkpoint 任务标签 MUST 按 change 命名空间归属隔离（`checkpoint(<change>:task<N>-)`，gate 只认当前 change；裸标签向后兼容，详见下方「完成任务号按 change 命名空间隔离」Scenario 组）；② 复选框辅通道 MUST 按 `### Task <n>:` 分段绑定、MUST NOT 全局全勾放行所有 task（详见下方「复选框辅通道按 Task 分段绑定」Scenario 组）。
 
 #### Scenario: 未过设计门拒绝起跑
 - **WHEN** 对一个 spec-review-report.md 缺失或不含「设计门拍板」标记的 change 调用 /sdflow-ship
@@ -345,6 +345,22 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist�
 #### Scenario: 重号 Task 段判 UNKNOWN〔T34/ship-gate-hardening-2〕
 - **WHEN** plan 出现两个同号 `### Task 1:` 段，其一全勾（或有 checkpoint）、其二含未勾 `- [ ]`
 - **THEN** gate MUST 判该 plan UNKNOWN（重号不可判），MUST NOT 因任一段全勾就把 task1 计入完成集而掩盖另一段未完成（`plan_task_ids` 的 `set` 折叠重号的假✅）
+
+#### Scenario: 描述性锚提及不触发门禁〔gate-anchor-line-scoped B4〕
+- **WHEN** 某报告（如 spec-review-report.md）正文含机判锚字面（`<!-- ship-gate: design-approved -->` 等）但**非独占一行**——内联在描述句中（前后有其它字符 / 行内反引号包裹）、或独占一行但位于 fenced code block（```）内作文档示例，且结论区**无**独占一行的真锚
+- **THEN** gate 的锚检测 MUST 判该锚**未命中**（返回集合不含它）——描述性提及 / 文档示例 MUST NOT 触发对应门禁；对 design-approved 而言此盘面 MUST 判 REFUSE_START（未过设计门），MUST NOT 因子串命中假过设计门越过 adr/0004 红线〔活体复现：checkpoint-tag-single-source 报告仅含描述句即被首跑假放行 RUN_PLAN〕；行级判据 MUST 保留多命中语义——`verify=PASS` 与 `verify=FAIL` 各独占一行并存时 MUST 仍各自命中以触发 UNKNOWN 冲突判定，MUST NOT 因行级收紧而漏返冲突锚；锚检测的两处解析点（读文件的 `anchors_in` 与读 git-show 文本的 `archived_verify_state`）MUST 共用同一行级判据，MUST NOT 只收紧其一
+
+#### Scenario: 归档 verify 描述性提及不触发假 SHIPPED〔gate-anchor-line-scoped B4·SHIPPED 路径〕
+- **WHEN** 归档目录的 `verify-report.md`（经 `git show <base>:…` 读出）正文**描述性提及** `<!-- ship-gate: verify=PASS -->`（内联句 / 代码块内文档示例）但**无独占一行的真 PASS 锚**
+- **THEN** `archived_verify_state` MUST 判其 verify 态为 `none`（非 `pass`），使归档终态短路 MUST NOT 输出假 SHIPPED——空壳 / 未验 / 仅描述性提及的归档目录 MUST 落 fail-safe（不 SHIPPED，请人工核验）；此判据 MUST 与 `anchors_in` 同为行级整行等值 + 忽略 fenced code block（同一 `_line_scoped_hits` 核心），MUST NOT 保留裸子串路径
+
+#### Scenario: 未闭合 fence 隔断互斥锚对不判假通过〔gate-anchor-line-scoped OV-2·设计门 Q1=A〕
+- **WHEN** 某报告的**互斥锚对**（verify `PASS`/`FAIL` 或 code-review `pass`/`blocked`）中正锚独占一行在 fenced code block 外、负锚独占一行落在**未闭合**（无配对收尾 ```）的 fence 内被吞
+- **THEN** 行级锚检测核心 MUST 回报**未闭合信号**，互斥锚对消费方（`pick_exclusive` / `archived_verify_state`）遇未闭合信号 MUST **保守判定**（`pick_exclusive`→UNKNOWN 点名「未闭合 fence 隔断互斥锚」；`archived_verify_state`→`none` 不 SHIPPED），MUST NOT 因只见正锚而判 pass（否则从旧裸子串的 conflict 语义回归为危险假阳）；单锚判定（`anchors_in` 查 design-approved，无互斥对）不受此约束——未闭合吞唯一锚 = 空命中 = REFUSE_START，方向为安全侧假阴
+
+#### Scenario: TG-02 条件步检测用声明式匹配非裸子串〔gate-anchor-line-scoped ADR-6·dogfood〕
+- **WHEN** 某 change 的 proposal **描述性提及** `TG-02`（反引号代码引用 / 否定句 `TG-01/02/03 均不命中` / 散文讨论），但**未以声明式头注** `〔TG-02：…〕` 标注该触发（即该 change 非嵌入式、不该跑 embedded-test-sop）
+- **THEN** gate 的 TG-02 条件步检测（`tg02_hit`）MUST 判**未命中** → step 5.5 输出 SKIP，MUST NOT 因子串命中正文对 TG-02 的**文档性提及/示例声明串**而误判 RUN_SOP（嵌入式 SOP）；检测 MUST 限定在 proposal **头部声明区**（文件开头→首个 `## ` 标题前）找 `〔TG-02`〔A3，dogfood 二轮：整体子串含加冒号仍被正文示例串假阳〕，真嵌入式 change 的头部 `〔TG-02：…〕` 声明仍 MUST 正确命中 → RUN_SOP；头部未用括号声明的（非常规）embedded proposal 漏检为安全侧假阴（ff 强制头注括号格式故实际不发生），记 Non-Goals
 
 ### Requirement: 模型档位映射（model-tiers）
 

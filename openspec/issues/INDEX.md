@@ -10,7 +10,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| B4 | bug | PROPOSED | checkpoint-tag-single-source |
 | T37 | todo | PROPOSED | checkpoint-tag-single-source |
 | T38 | todo | PROPOSED | checkpoint-tag-single-source |
 
@@ -22,6 +21,14 @@
 | T29 | todo | PROPOSED | cross-model-outside-voice |
 | T30 | todo | PROPOSED | cross-model-outside-voice |
 | T31 | todo | PROPOSED | cross-model-outside-voice |
+
+### 批次：gate-anchor-line-scoped
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T41 | todo | PROPOSED | gate-anchor-line-scoped |
+| T42 | todo | PROPOSED | gate-anchor-line-scoped |
+| T43 | todo | PROPOSED | gate-anchor-line-scoped |
 
 ### 批次：issues-pool-batch-mgmt
 
@@ -77,9 +84,7 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T27 | todo | OPEN | minimize-repo-footprint |
-| T41 | todo | OPEN | gate-anchor-line-scoped |
-| T42 | todo | OPEN | gate-anchor-line-scoped |
 
 ## 已闭合（终态）摘要
 
-- 共 12 项已闭合（bug: 3，todo: 9）
+- 共 13 项已闭合（bug: 4，todo: 9）

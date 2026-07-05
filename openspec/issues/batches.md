@@ -50,3 +50,9 @@
 优先级: P1 ★
 计划: anchors_in 子串→行级锚定修 B4（设计门假过的元 bug，本批最高优先） + delta spec Scenario 措辞澄清(标签形状 T37/占位符用词 T38)
 
+### gate-anchor-line-scoped — gate-anchor-line-scoped
+状态: PLANNED
+成员: (生成) T41, T42, T43
+优先级: <待填>
+计划: <待填>
+
