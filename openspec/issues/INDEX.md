@@ -6,6 +6,14 @@
 
 ## Open 项（按批次）
 
+### 批次：checkpoint-tag-single-source
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| B4 | bug | PROPOSED | checkpoint-tag-single-source |
+| T37 | todo | PROPOSED | checkpoint-tag-single-source |
+| T38 | todo | PROPOSED | checkpoint-tag-single-source |
+
 ### 批次：cross-model-outside-voice
 
 | ID | Pool | Status | 关联Change |
@@ -80,4 +88,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 7 项已闭合（bug: 3，todo: 4）
+- 共 9 项已闭合（bug: 3，todo: 6）

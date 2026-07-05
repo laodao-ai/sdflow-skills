@@ -42,8 +42,8 @@
 | T34 | `ship_gate.py` | 复选框辅通道按 Task 分段绑定 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
 | T35 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态(T33 停置延续) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
 | T36 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` | checkpoint 派发指令文案收敛为单一真相源(broad-F2) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
-| T37 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声) | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
-| T38 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
+| T37 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声) | 代码质量 | PROPOSED | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
+| T38 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo | 代码质量 | PROPOSED | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
 | T39 | `sdflow-ship/tests/test_producer_parser_contract.py:19` | 集成测试 run_producer 造文件名含冒号(f-demo:task1-slug.txt),NTFS 非法——Unix 跑绿,Windows CI 会误红 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
 | T40 | `sdflow-ship/tests/test_producer_parser_contract.py:27` | producer→parser 集成正例仅用单数字任务号(1),未覆盖多位数(如 12)group(2) 边界 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
 
@@ -517,7 +517,7 @@
 |------|------|
 | 模块 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
 
@@ -531,7 +531,7 @@
 |------|------|
 | 模块 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
 
