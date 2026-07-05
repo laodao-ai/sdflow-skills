@@ -20,11 +20,11 @@
 
 #### Scenario: 评审/grill 新发现工作走 fold-vs-defer 判据
 - **WHEN** 评审 / grill 过程中发现当前 change 未覆盖的新需求或修复
-- **THEN** 是否并入当前 change SHALL 按【对当前 change 工作的影响 + workflow 循环固定成本高】判——related + 低影响（紧耦合 / 同 capability / 一致性修复 / blast-radius 小）→ fold 进当前 change，真独立 / 扩容大 / 需自身设计审查 → defer 另开——此判定走三镜（开发循环镜通常主导），MUST NOT 反射式以「change 单一职责」教条拆分（拆 change 有一整轮循环固定成本）；判据成文于 BASE-18
+- **THEN** 是否并入当前 change SHALL 按【对当前 change 工作的影响 + workflow 循环固定成本高】判——related 信号（紧耦合 / 一致性修复 / blast-radius 小）使其进入 fold 候选，候选再经**防吸积 AND 门（同 capability ∧ 高耦合 ∧ 低增量，三者皆满足）**才 fold 进当前 change、任一不满足则 defer 另开——此判定走三镜（开发循环镜通常主导），MUST NOT 反射式以「change 单一职责」教条拆分（拆 change 有一整轮循环固定成本）；判据成文于 BASE-18〔impl-review-fix F4/CV4：与 BASE-18 防吸积 AND 门口径一致，消除「任一即 fold」宽版二义〕
 
 ### Requirement: outside-voice tension 不静默采纳
 
-outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdflow-spec-review 写入报告决策登记区（选项 + 推荐 + 两方视角 + **三面后果（系统 / 用户 / 开发循环）+ 主次判定**，设计 HARD-GATE 人一次性拍板）；sdflow-code-review 有把握则自动裁决并**按三镜 + 主次记理由**、拿不准则 defer 进 buglist/todolist + hand-off。outside voice 的建议 MUST NOT 被静默自动采纳（不直接改代码/设计而不留痕）。**`runner=codex`** 的 outside-voice findings MUST NOT 经自评置信阈值（<80）预过滤——跨模型自评不可比、异见易被同族标尺误杀——一律直通对抗裁决，被裁掉的连理由落报告「已裁掉」区〔grill-amendment Q4〕；`runner=claude-fallback` 的 findings 属同族产物，照过同族置信滤（豁免理由对其不成立）〔spec-review-amendment〕。
+outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdflow-spec-review 写入报告决策登记区（选项 + 推荐 + 两方视角 + **三面后果（系统 / 用户 / 开发循环）+ 主次判定**，设计 HARD-GATE 人一次性拍板）；sdflow-code-review 按 T10 三级协议自动裁决（有客观判据自动裁 / 无则派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist/todolist + hand-off）并**按三镜 + 主次记理由**，MUST NOT 以自评置信（"有把握"）为自动裁决唯一依据〔impl-review-fix F1/CV2：与 T10 三处 skill + 本需求 scenario 对齐，勿把已淘汰的「有把握」措辞焊回权威 spec〕。outside voice 的建议 MUST NOT 被静默自动采纳（不直接改代码/设计而不留痕）。**`runner=codex`** 的 outside-voice findings MUST NOT 经自评置信阈值（<80）预过滤——跨模型自评不可比、异见易被同族标尺误杀——一律直通对抗裁决，被裁掉的连理由落报告「已裁掉」区〔grill-amendment Q4〕；`runner=claude-fallback` 的 findings 属同族产物，照过同族置信滤（豁免理由对其不成立）〔spec-review-amendment〕。
 
 #### Scenario: 设计侧分歧进决策登记区
 - **WHEN** codex voice 与 spec-review 主审对同一设计点结论相反

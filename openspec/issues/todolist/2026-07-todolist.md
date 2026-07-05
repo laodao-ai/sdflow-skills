@@ -55,6 +55,7 @@
 | T47 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
 | T48 | `setup.sh + 全仓 python 调用点` | python3 |  | python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | OPEN | review-tool-followups | review-tool-followups |  |
 | T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
+| T50 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 代码质量 | OPEN | 2026-07-05 21:08 | three-lens-decision-framework |  |
 
 ---
 
@@ -660,3 +661,19 @@
 | 状态 | DONE |
 
 > 2026-07 状态：PROPOSED → DONE（review-tool-followups）
+
+---
+
+## T50: Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/three-lens-decision-framework/design.md`
+
+**动机**：code-review F5：cosmetic 对齐，不成比例故 defer
+
+**思路**：缩短 Q1 行文案或整框加宽6行，二选一

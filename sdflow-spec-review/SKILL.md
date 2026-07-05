@@ -5,7 +5,7 @@ description: >
   编排成一次连续跑、产出**一份** spec-review-report.md 的评审。主 session（强档）协调：Step1 跑
   autoplan 吃其 findings，Step2 fan-out 多个 fresh 子代理并行审本项目标准，Step3 去重合并 + 对抗裁决 →
   一份报告。**中途不打断**——撞到"≥2 方案 / 核验不了的事实"不 AskUserQuestion，而是写进报告「决策登记区」
-  （选项 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），人工在设计 HARD-GATE 一次性过报告拍板。**不依赖 /clear**——子代理 fresh
+  （≥2 方案：选项 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定；事实核验：待核验证据 + 风险 + 默认处理，不强制三镜），人工在设计 HARD-GATE 一次性过报告拍板。**不依赖 /clear**——子代理 fresh
   context 即独立性。只审 prevention（config 固化的结构/约束）焊不住的残差：①Validation ②对抗 ③接地读码。
   与 autoplan 互补不重复（autoplan 已含 eng 镜）。出报告标 [spec-review-amendment]。也可说"sdflow 设计审"。
   Trigger with /sdflow-spec-review。
