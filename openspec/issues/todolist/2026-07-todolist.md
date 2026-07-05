@@ -49,12 +49,12 @@
 | T41 | `sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md` | 评审结束输出一条可点击链接(报告路径→file:// 或网页视图)，点开即看结果，免手动找 report | 功能增强 | PROPOSED | 2026-07-05 11:26 | gate-anchor-line-scoped | gate-anchor-line-scoped |
 | T42 | `workflow bundle: generation-process.md / design-diagrams.md / 产物模版` | 文档除条目化描述(主给 AI/程序)外，尽量用多图+多表从多角度描述(给人看)；考虑人读层/机读层分离；不拘一问题一图表 | 功能增强 | PROPOSED | 2026-07-05 12:07 | gate-anchor-line-scoped | gate-anchor-line-scoped |
 | T43 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` | producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1） | 代码质量 | PROPOSED | 2026-07-05 13:41 | gate-anchor-line-scoped | gate-anchor-line-scoped |
-| T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
-| T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
+| T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | DONE | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
+| T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | DONE | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T46 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 功能增强 | OPEN | 2026-07-05 17:26 | - |  |
-| T47 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 代码质量 | OPEN | 2026-07-05 19:14 | review-tool-followups |  |
-| T48 | `setup.sh + 全仓 python 调用点` | python3||python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | OPEN | 2026-07-05 19:14 | review-tool-followups |  |
-| T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | OPEN | 2026-07-05 19:14 | review-tool-followups |  |
+| T47 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
+| T48 | `setup.sh + 全仓 python 调用点` | python3 |  | python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | OPEN | review-tool-followups | review-tool-followups |  |
+| T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
 
 ---
 
@@ -603,7 +603,7 @@
 |------|------|
 | 模块 | `sdflow-init/assets/workflow/tools/engine.js` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/review-tool-followups/design.md`
 
@@ -631,8 +631,32 @@
 |------|------|
 | 模块 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/review-tool-followups/design.md`
 
 **备注**：code-review CV-2(置信40低)。temp+os.replace 已解撕裂JSON(本次目标)；lost-update 因 RETIRED 幂等下次重收敛、低影响。真解需文件锁，暂记不修。
+
+---
+
+## T44: 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README)
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-init/scripts/init.py + setup.sh` |
+| 类型 | 基础设施 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（review-tool-followups）
+
+---
+
+## T45: 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-init/assets/workflow/tools/engine.js` |
+| 类型 | 功能增强 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（review-tool-followups）

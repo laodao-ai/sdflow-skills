@@ -22,13 +22,6 @@
 | T30 | todo | PROPOSED | cross-model-outside-voice |
 | T31 | todo | PROPOSED | cross-model-outside-voice |
 
-### 批次：drop-per-dir-review-stub
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T44 | todo | PROPOSED | drop-per-dir-review-stub |
-| T45 | todo | PROPOSED | drop-per-dir-review-stub |
-
 ### 批次：gate-anchor-line-scoped
 
 | ID | Pool | Status | 关联Change |
@@ -63,6 +56,14 @@
 | T8 | todo | PROPOSED | minimize-repo-footprint |
 | T9 | todo | PROPOSED | minimize-repo-footprint |
 
+### 批次：review-tool-followups
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T47 | todo | PROPOSED | review-tool-followups |
+| T48 | todo | python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | OPEN |
+| T49 | todo | PROPOSED | review-tool-followups |
+
 ### 批次：sdflow-rebrand
 
 | ID | Pool | Status | 关联Change |
@@ -91,7 +92,8 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T27 | todo | OPEN | minimize-repo-footprint |
+| T46 | todo | OPEN | - |
 
 ## 已闭合（终态）摘要
 
-- 共 13 项已闭合（bug: 4，todo: 9）
+- 共 15 项已闭合（bug: 4，todo: 11）

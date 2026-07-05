@@ -57,8 +57,14 @@
 计划: <待填>
 
 ### drop-per-dir-review-stub — drop-per-dir-review-stub
-状态: PLANNED
+状态: DONE
 成员: (生成) T44, T45
+优先级: <待填>
+计划: <待填>
+
+### review-tool-followups — review-tool-followups
+状态: PLANNED
+成员: (生成) T47, T48, T49
 优先级: <待填>
 计划: <待填>
 
