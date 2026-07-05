@@ -4,8 +4,8 @@
 
 ## What Changes
 
-- **T26**（ADR-2）`sdflow-ship/SKILL.md` + `ship_gate.py` — 熔断：持久化计数不可做（撞盘面即状态/gate 零副作用/ship 零跨步状态三红线，登记接受取舍）；但**触发判据硬化**——重跑一步前检查 `HEAD` 与该步报告自本 turn 上次跑后是否未推进，未推进即判无进展停上抛（从"LLM 数数"降级为"LLM 做一次具体 git 对照"）。
-- **T35**（ADR-1）`ship_gate.py` + `sdflow-ship/SKILL.md` + `sdflow-done/SKILL.md` — gate 新鲜度守 committed-only（T33/T35 gate 侧 WONTDO）；阶段流转软提示（sdflow-ship）+ **merge 边界硬检查**（sdflow-done：工作树有未提交非-openspec 改动则停下问、不静默 merge，防漏 ship 未提交工作）。
+- **T26**（ADR-2，spec-review Q1 定稿）`sdflow-ship/SKILL.md` + `ship_gate.py` — 熔断：持久化计数不可做（撞三红线，登记接受取舍）；触发判据 = **该步 ship-gate 锚行集合是否变化**（复用 `_line_scoped_hits`，HEAD/mtime 不作免疫信号），做成**无状态比较 helper**（快照作参数、不落地、可 CI 测）。〔spec-review SR-1 推翻了 grill 的 HEAD/mtime 判据〕
+- **T35**（ADR-1，spec-review Q2 缩简版）`ship_gate.py` + `sdflow-ship/SKILL.md` + `sdflow-done/SKILL.md` — gate 新鲜度守 committed-only（T33/T35 gate 侧 WONTDO）；软提示（sdflow-ship）+ **merge 前只查「分支内新产 untracked」→ halt+报告（非交互，不引入阶段三 AskUserQuestion）**。〔tracked 经 git add -u 一路 defer todolist T51〕
 - **T36**（ADR-3）`ship_gate.py` TAG_RE + `workflow.md` + `sdflow-ship/SKILL.md` — checkpoint 标签**格式/规则分治单源**：格式权威 = TAG_RE（加 canonical-shape 头注释，`checkpoint-commit.sh` format-agnostic 非源）；规则「每任务用命名空间标签」就地留 workflow.md 一处，SKILL 引用（TG-25）。
 - **T37** `spec-workflow` — Scenario 复述标签形状标注为"样例非权威"（权威在 TAG_RE），消除又一份 doc 副本。
 - **T38** `spec-workflow` — Scenario 用词 `<当前change>` → `<change-slug>`，消除"须填真实 slug"歧义。

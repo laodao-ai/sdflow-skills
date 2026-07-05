@@ -34,8 +34,9 @@
   - 开发循环镜：A 零改动零维护；B 加检测+测试+误报调参（重）；C 一句软提示（轻）。
 - **决策（grill 定稿）**〔grill-amendment〕：**C（gate 守 committed-only）+ 在 merge 边界给硬检查**——两层：
   - **gate 侧**：新鲜度 committed-only 正式化，T33/T35 gate 判定关 WONTDO（B 的工作树信号与"盘面即状态"张力且高假阳，不进门禁）。
-  - **提示分强弱**：阶段流转全程 = `sdflow-ship` **软提示**（信息性，工作树有未提交非-openspec 改动时告知"gate 判定不含它们"）；**merge 边界** = `sdflow-done` merge 步**硬前置检查**——工作树有未提交非-openspec 改动则**停下问、不静默 merge**（防"忘 commit → 在缺了该随档提交之工作的盘面上 verify PASS 并 merge → 静默 ship 不完整活"）。
-  - **grill 揭示**：T35 的真诉求不在"报告新鲜度"（committed-only 对报告是对的），而在 **verify→merge 边界漏 ship 未提交工作**；软提示会被忽略 = 假安全感，故 merge 边界必须有牙齿。硬检查是 merge 卫生前提、**不碰 gate 的盘面即状态**（落 sdflow-done 非 gate）。
+  - **提示分强弱（设计门 Q2=缩简版 定稿）**〔spec-review-amendment SR-2〕：阶段流转全程 = `sdflow-ship` **软提示**；**merge 边界** = `sdflow-done` merge 步硬检查，但**缩到只查「本 change 分支生命周期内新产生的 untracked 文件」**，存在则以 **halt+报告（非交互）停下上抛人工**——复用 sdflow-done 既有非交互 halt 惯用法，**MUST NOT 引入阶段三中途 AskUserQuestion**〔SR-2/领域-F2：既有 spec MUST「阶段三全程无 AskUserQuestion / 无人类阻塞门」，"停下问"若=交互提问则直接违反〕。判据排除仓库既有 debris。
+  - **spec-review 校准（3 点）**：① "停下问"改 halt+报告，不撞 no-AskUserQuestion；② 判据从模糊"非-openspec 改动"收窄为"分支内新产 untracked"（对抗B-F1：宽则误挡逼出 opt-out、窄则漏，untracked 才是"存活到 base 却没进历史"真风险）；③ **tracked 非-openspec 被 commit 步 `git add -u` 先提交的一路〔codex-2〕defer todolist**（自身有 commit 步策略对齐问题，不塞本 change）。
+  - **grill 揭示**：T35 的真诉求在 **verify→merge 边界漏 ship 未提交工作**（对抗B-F2 证 merge 位时序对）；软提示会被忽略故 merge 边界要有牙齿；硬检查是 merge 卫生前提、不碰 gate 盘面即状态。
 - **fold 决策**〔grill-amendment〕：merge 硬检查动 `sdflow-done`（本 change 原 scope 外）。**采 fold 而非 defer**——判据「同一问题（未提交工作漏 ship）不分多次实现」：软提示 + 硬检查是**同一诉求的两半**，拆开则同一问题跑两轮 workflow 循环、两次接地。**主次：开发循环镜主导**（循环固定成本 >> 多碰一个 skill 的耦合增量）；防吸积仍成立（同"未提交工作正确性"诉求、blast-radius 小、无需 sdflow-done 自身设计审）。
 - **三镜**：系统镜——gate 纯洁保住，多碰 sdflow-done 一处 merge 前置（低耦合）；用户镜——merge 前挡一道，真正防漏 ship；开发循环镜——一次做完同一问题。**主次：ADR 决策取系统镜（gate 纯洁）为门槛、fold 取开发循环镜为准**。
 - **当前方案代价**：merge 硬检查可能对"故意留着的无关未提交改动"误挡 → 需一句 opt-out / 或限定"非-openspec 改动"范围（实现期定精确判据）；阶段软提示仍可被忽略，但 merge 边界已兜底。
@@ -53,8 +54,8 @@
   - 开发循环镜：A 零维护；B/C 高复杂度且撞红线。
 - **决策（grill 定稿）**〔grill-amendment〕：**持久化 = 不做（A 的一半），但熔断触发判据从"模糊计数"硬化为"具体盘面对照"**。
   - **持久化不可做**（irreducible）：失败重跑零 git 痕迹、零盘面差异；任何计数要么落 state 文件（撞盘面即状态）要么跨 invocation（撞 D9）。这条站得住。
-  - **触发判据硬化**：熔断从"数我重试了几次"改为——编排器重跑一步**前**，检查 `HEAD` 与该步报告是否**自本 turn 上次跑后未推进**（HEAD 未移动 + 报告 mtime/sha 未变）；未推进即判无进展 → 停上抛人工。仍保留一个不可消除的 within-invocation "before 快照" bit，但**从"让 LLM 数数"降级成"让 LLM 做一次具体 git 对照"**。
-  - **grill 揭示的张力**：`adr/0006(b)` 禁 prose 记忆步序（LLM 漂移），而熔断计数同属 prose 记忆——原 A 的"短时例外"说辞有走私嫌疑。硬化后：把最弱一环（LLM 计数，含 context 压缩即丢的失败面）换成较硬一环（LLM 做具体 HEAD/报告对照），漂移面显著缩小。1 bit before-快照不可消除是架构下限、非偷懒。
+  - ~~**触发判据硬化**：检查 HEAD 与报告是否未推进~~〔**spec-review-amendment SR-1 推翻**：对抗镜证此判据失效——`HEAD 未移 AND 报告未变` 中 HEAD 移动是 OR 逃逸口，修复类步（/sdflow-code-review 修→commit 循环）几乎必产 commit → HEAD 动即判"有进展"→ 熔断永不触发、无限循环复现且比"数数版"更糟；mtime/sha 弱信号、未提交报告无 git sha〕。
+  - **触发判据（设计门 Q1=A 定稿）**〔spec-review-amendment〕：熔断以**「该步 ship-gate 锚行集合是否变化」**为准（复用 gate 的 `_line_scoped_hits`/`anchors_in` 语义——gate 真正关心的结论锚）；重跑前后锚行集合无净变化即判无进展，**HEAD 移动与 mtime 变化 MUST NOT 作免疫信号**。比较做成**无状态 helper（gate 子命令/小脚本）**：两次锚行快照由编排器 in-invocation 持有作参数传入、helper 不落地不跨 invocation（不撞 D9——**复议了被误否决的候选 C**：纯比较函数不持久化）、可 CI 断言（满足"机械活交脚本"）。fail-safe：快照缺失→保守判"无进展"。仅适用有锚报告步（STEP_IN_PROGRESS/RERUN_STALE），非报告步不适用〔codex-5〕。
 - **三镜**：系统镜——不破三红线（仍不持久化），判据具体化；用户镜无感；开发循环镜——后人照抄"HEAD 未推进检查"比照抄"数数"不易错。**主次：系统镜主导**。
 - **T26 归口**：从"探索"关为**已探索 → 产出「触发判据硬化」具体改进 + 持久化 defer（撞三红线，登记接受取舍）**，非纯 WONTDO。
 - **当前方案代价**：仍依赖编排器执行该对照（信任面不变），但触发从不可复核的计数变为可复核的 git 对照，风险面缩小。
@@ -84,7 +85,7 @@
 | `workflow.md` | producer 指令 | ✅ 就地留规则一处、标"形状由 TAG_RE 执行"（T36） | — |
 | `sdflow-ship/SKILL.md` | 派发指令复述 + 台账锚 | ✅ 改引用 workflow.md（T36） | — |
 | `spec-workflow/spec.md` | Scenario 复述标签形状 + `<当前change>` 用词 | ✅ T37 标"样例非权威" + T38 `<当前change>`→`<change-slug>` | — |
-| `sdflow-init/assets/hack/checkpoint-commit.sh` | **format-agnostic 透传** | ⬜ 不改（可选：`--help` 补一句"格式见 TAG_RE 契约"） | **非格式载体**——只裹 `checkpoint($step)`、不认识 task 格式，不得引作源 |
+| `sdflow-init/assets/hack/checkpoint-commit.sh` | **format-agnostic 透传** | ⬜ 不改〔SR-7：脚本无 --help 分支，勿引作缓解〕 | **非格式载体**——只裹 `checkpoint($step)`、不认识 task 格式，不得引作源 |
 | `sdflow-code-review/SKILL.md` 台账锚 | 消费格式 | ⬜ 不改 | 台账锚是消费格式非标签源，无漂移面 |
 
 **锚族 B：ship-gate 机器锚**（`<!-- ship-gate: X -->`，report 锚，**T43 真身**）
@@ -110,7 +111,7 @@
 
 - **[T35 软提示遗漏]** → 软提示非门禁，用户可能忽略；接受（gate 判定纯洁性优先，见 ADR-1 代价）。
 - **[T26 负结果被误读为"没做"]** → hand-off/spec 明写"已探索·结论=不下沉·理由"，附三红线，避免后人重开。
-- **[引用式文案降低就地可读性]** → 派发格式从"就地可抄"变"跳去看契约"；以 checkpoint-commit.sh `--help` 稳定接口缓解。
+- **[引用式文案降低就地可读性]** → 派发格式从"就地可抄"变"跳去看 TAG_RE 契约"；以 workflow.md 就地留规则一处（含格式串样例）缓解，规则源就地可读。〔spec-review-amendment SR-7：原写"以 checkpoint-commit.sh --help 缓解"——**该脚本无 --help 分支**（dirty 仓跑会真 commit），删除该失据缓解说法〕
 - **[spec delta 与主 spec 遗留中文格式冲突]** → 归档时按 sdflow-done 的 `--skip-specs` fallback 处理（既有流程）。
 
 ## Migration Plan

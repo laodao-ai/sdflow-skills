@@ -56,6 +56,7 @@
 | T48 | `setup.sh + 全仓 python 调用点` | python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
 | T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
 | T50 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 代码质量 | PROPOSED | 2026-07-05 21:08 | three-lens-decision-framework | three-lens-decision-framework |
+| T51 | `sdflow-done/SKILL.md commit步 + merge检查` | tracked 非-openspec 改动被 commit 步 git add -u 先提交、绕过 merge 前 untracked 硬检查的"停下问"——需 commit 步暂存策略与 merge 卫生检查对齐(gate-checkpoint-hardening SR-2 缩简版只覆盖 untracked,tracked 一路 defer) | 代码质量 | OPEN | 2026-07-05 22:43 | gate-checkpoint-hardening |  |
 
 ---
 
