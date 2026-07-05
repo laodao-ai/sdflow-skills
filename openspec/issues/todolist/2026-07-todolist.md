@@ -58,6 +58,7 @@
 | T50 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 代码质量 | PROPOSED | 2026-07-05 21:08 | three-lens-decision-framework | rec2-obs-readability |
 | T51 | `sdflow-done/SKILL.md commit步 + merge检查` | tracked 非-openspec 改动被 commit 步 git add -u 先提交、绕过 merge 前 untracked 硬检查的"停下问"——需 commit 步暂存策略与 merge 卫生检查对齐(gate-checkpoint-hardening SR-2 缩简版只覆盖 untracked,tracked 一路 defer) | 代码质量 | PROPOSED | 2026-07-05 22:43 | gate-checkpoint-hardening | gate-checkpoint-hardening |
 | T52 | `sdflow-done/SKILL.md merge untracked 检查` | merge 前 untracked 检查现为机械"任何 ??→halt 人工triage"(CR-4);精确区分"本 change 新产 vs 既有 debris"需在分支切出点落 untracked baseline 快照再 diff,可减少既有 debris 的误停——脚本化探索 | 功能增强 | PROPOSED | 2026-07-05 23:15 | gate-checkpoint-hardening | gate-checkpoint-hardening |
+| T53 | `workflow 度量 + sdflow-grill/spec-review/code-review` | 建立 review 价值度量机制:量化每轮评审(grill/spec-review/code-review 及各镜/层/codex-vs-claude)的价值——findings 产出数·采纳[impl-review-fix]/裁掉/defer 分桶·致命/高/中/低分布·独立(非重复)贡献;评审运行时落度量记录(泛化现有 voice 分桶+10次采纳率复评到全镜);据累积数据数据驱动决定各层/镜/触发条件的必要性(保留/降采样/收紧触发/淘汰低价值镜) | 功能增强 | PROPOSED | 2026-07-05 23:36 | main | rec2-obs-readability |
 
 ---
 

@@ -56,6 +56,7 @@
 | T41 | todo | PROPOSED | gate-anchor-line-scoped |
 | T42 | todo | PROPOSED | gate-anchor-line-scoped |
 | T50 | todo | PROPOSED | three-lens-decision-framework |
+| T53 | todo | PROPOSED | main |
 
 ### 批次：review-tool-followups
 
