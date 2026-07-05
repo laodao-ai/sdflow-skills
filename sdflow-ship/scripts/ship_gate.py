@@ -140,7 +140,8 @@ def archived_verify_state(root, ref, archive_dir):
                          f"{ref}:openspec/changes/archive/{archive_dir}/verify-report.md")
     if rc != 0:
         return "none"
-    has_pass, has_fail = ANCHOR_VERIFY_PASS in out, ANCHOR_VERIFY_FAIL in out
+    hits, _ = _line_scoped_hits(out, [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL])  # [ADR-4] 行级，非子串
+    has_pass, has_fail = ANCHOR_VERIFY_PASS in hits, ANCHOR_VERIFY_FAIL in hits
     if has_pass and has_fail:
         return "conflict"
     return "pass" if has_pass else "none"

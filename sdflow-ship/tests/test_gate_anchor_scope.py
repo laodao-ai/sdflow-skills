@@ -1,6 +1,7 @@
 """锚检测行锚定 + fence-aware（B4）：anchors_in / _line_scoped_hits。"""
 import importlib.util
 from pathlib import Path
+import subprocess
 
 REPO = Path(__file__).resolve().parents[2]
 _gate_path = REPO / "sdflow-ship" / "scripts" / "ship_gate.py"
@@ -11,6 +12,10 @@ _spec.loader.exec_module(_sg)   # __main__ 守卫，加载无副作用
 DESIGN = "<!-- ship-gate: design-approved -->"
 VPASS = "<!-- ship-gate: verify=PASS -->"
 VFAIL = "<!-- ship-gate: verify=FAIL -->"
+
+
+def _git(root, *a):
+    subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True)
 
 
 def test_inline_mention_not_hit(tmp_path):
@@ -40,3 +45,34 @@ def test_conflict_multi_hit(tmp_path):
     f.write_text(f"{VPASS}\n{VFAIL}\n", encoding="utf-8")
     got = _sg.anchors_in(f, [VPASS, VFAIL])
     assert VPASS in got and VFAIL in got
+
+
+def test_core_descriptive_pass_not_hit():
+    # 核心单元：描述性提及 PASS 的文本 → hits 不含 PASS
+    text = f"归档说明：曾写过 `{VPASS}` 但后撤。\n```\n{VPASS}\n```\n"
+    hits, unbalanced = _sg._line_scoped_hits(text, [VPASS, VFAIL])
+    assert VPASS not in hits
+
+
+def test_archived_descriptive_pass_none(tmp_path):
+    # 端到端：git fixture，归档 verify-report 仅描述性提及 PASS（无真锚）→ archived_verify_state 判 none
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "t"); _git(tmp_path, "config", "user.email", "t@t")
+    d = tmp_path / "openspec" / "changes" / "archive" / "2026-07-05-demo"
+    d.mkdir(parents=True)
+    (d / "verify-report.md").write_text(f"结论待定；模板锚示例：`{VPASS}`。\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "arch")
+    assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "none"
+
+
+def test_archived_true_pass_and_conflict(tmp_path):
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "t"); _git(tmp_path, "config", "user.email", "t@t")
+    d = tmp_path / "openspec" / "changes" / "archive" / "2026-07-05-demo"
+    d.mkdir(parents=True)
+    (d / "verify-report.md").write_text(f"{VPASS}\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "pass")
+    assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "pass"
+    (d / "verify-report.md").write_text(f"{VPASS}\n{VFAIL}\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "conflict")
+    assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "conflict"
