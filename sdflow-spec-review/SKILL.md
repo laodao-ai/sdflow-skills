@@ -70,12 +70,14 @@ description: >
 
 ## 第三步：综合 + 对抗裁决 → 决策登记进报告（主 session · 强档）
 
-- **合并去重**：把 autoplan findings（Step1）+ 各镜 findings 汇成一池，**去重**（同一问题多镜命中合并）。
+- **合并去重**：把 autoplan findings（Step1）+ 各镜 findings 汇成一池，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，折叠到 canonical lens 后供第四步落锚时导出各镜`独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
 - **对抗裁决**：对每条 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
 - **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由），供人类设计门复核"裁得对不对"。
 - **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。
 - **outside-voice findings 直通〔R4〕**：runner=codex 的 voice findings 与各镜同池对抗裁决；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
-- **锚行存在性自检〔R1/R3/R5〕**：出报告后机械 grep 三类 v1 锚行（`sdflow:outside-voice`/`sdflow:hr-tg`/`sdflow:step1-broad-review`），缺失即本步报错阻塞（机械失职拦截，非人类门）；锚行 `findings=N` 与合并池实收数 diff 一次。
+- **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、第四步对应自检项跳过（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按第四步「度量锚」格式逐镜落锚（**采纳/裁掉/defer 为设计门拍板前的临时裁决，MUST 在拍板回写时最终确定，见〔SR-M〕**）。
+- **锚行存在性自检〔R1/R3/R5〕**：出报告后机械 grep 四类 v1 锚行（`sdflow:outside-voice`/`sdflow:hr-tg`/`sdflow:step1-broad-review`/**`sdflow:lens-metric`**），缺失即本步报错阻塞（机械失职拦截，非人类门）；锚行 `findings=N` 与合并池实收数 diff 一次。
+  **lens-metric 自检扩一类**：不止存在性——缺任一必填字段，或 `layer`/`lens`/`runner`/`sev` 取值越域/子格式不符（取值域/子格式见规则根 `lens-metric-contract.md`，唯一权威源）均报错阻塞；数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）是主 session 信任边界、非机械可验，自检 MUST NOT 谎称能机械保证数值正确。**config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
 - 按 `design-diagrams.md`：命中触发的图**只验证存在/正确/未过时**，缺失/过时标记，不重画。
 - **checkpoint 提交（P2c 第 2 次）**：产出报告 + amendments 后 → `~/.sdflow/hack/checkpoint-commit.sh spec-review "并行多镜审 + 合并报告 + spec-review-amendment"`。
@@ -95,6 +97,9 @@ description: >
 ## 第四步：产出
 
 - 写 `{change_dir}/spec-review-report.md`：**决策登记区**（自动决策 / 需拍板 / 已裁掉）+ 各镜 findings（带置信/严重度，低置信项一行带过、可审计不静默丢）+ 裁决。
+- **度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落，见第三步）**：Step3 裁决后为 `domain`/`adversarial`/`grounding`/`outside-voice`（`site=design-voice|hr-tg` 若均调用，各独立一行）/`broad`（autoplan）各落一行：
+  `<!-- sdflow:lens-metric v1 layer="spec-review" lens="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->`
+  字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）。
 - 据此更新 design/specs，改动处标 `[spec-review-amendment]`。
 - **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
 - **拍板回写协议（ship-gate 锚，D2）**：设计门拍板**发生后**，主 session MUST 立即把下行锚原样写入 `spec-review-report.md`（拍板记录区末尾）——写入者=主 session、触发点=用户批准动作；这是 `/sdflow-ship` pre-flight 的唯一机判依据：
@@ -102,6 +107,8 @@ description: >
   <!-- ship-gate: design-approved -->
 
   gate exit 3 时若拍板已发生，人工补此锚行 = 显式越权留痕（人机同权）。
+
+  **〔SR-M〕lens-metric 锚随拍板最终化**：spec-review 的 `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，其 `lens-metric` 锚 MUST 在**拍板回写时**（与上行 `<!-- ship-gate: design-approved -->` 同步写入 `spec-review-report.md`）最终确定/重算，反映门后最终裁决，MUST NOT 用 Step3 pre-gate 临时裁决充当最终采纳率——门前若因 `metrics.enabled=true` 已落的锚视为草稿值，拍板时原地更新覆盖，不新开一行。
 
 ---
 
