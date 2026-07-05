@@ -51,6 +51,7 @@
 | T43 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` | producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1） | 代码质量 | PROPOSED | 2026-07-05 13:41 | gate-anchor-line-scoped | gate-anchor-line-scoped |
 | T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
+| T46 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 功能增强 | OPEN | 2026-07-05 17:26 | - |  |
 
 ---
 
@@ -574,3 +575,19 @@
 
 **备注**：DF7(spec-review Round2)。非本 change 引入的新缺口,补一例多位数号增强边界覆盖。
 > 2026-07 状态：OPEN → DONE（checkpoint-tag-single-source (code-review [impl-review-fix]: 加 test_kebab_namespace_multidigit_captures 覆盖多位数号)）
+
+---
+
+## T46: 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` |
+| 类型 | 功能增强 |
+| 状态 | OPEN |
+
+**动机**：workflow bundle 是发布给其它项目/用户的产品，必须自包含，不能依赖某人的私有记忆(decision-three-lens-framework.md 是行为层真相源，但子代理跑评审时够不着、其它 checkout 也没有)。T46 = 把框架从私有记忆搬进发布的 workflow。
+
+**思路**：grill 定稿五决策(2026-07-05)：①【形态×落点】增强现有 BASE-12「备选方案记录/ADR」原地改，不新增独立编号项(避双源/规则重叠)。②【强度×深度】分两层——行为层(记忆)每个决策都用；书面层(BASE-12)只在 TG-23(≥2合理方案/非显然设计)触发时 MUST 写三镜+主次，不下沉到琐碎决策。③【落点·候选③】除 BASE-12 外，也把三镜编码进 workflow.md G2 决策登记区格式：现「选项+推荐+两方后果」→「选项+推荐+三面后果(系统/用户/开发循环)+主次判定」。④【候选③另半】code-review SKILL.md Step4「≥2方案有把握自动选推荐(记理由)」的记理由 → 按三镜+主次，与 spec-review 登记一致、产品自包含。⑤【进程】走独立 OpenSpec change(带 spec delta 防漂移)，不裸改源；grill 成果直接喂四件套。三处落点：BASE-12 + workflow.md G2 + sdflow-code-review/SKILL.md Step4。
+
+**备注**：触及的 spec 需求(delta 要改)：openspec/specs/spec-workflow/spec.md 第18行「评审决策登记进报告」(『各分支后果』→『三面后果+主次』)、第432/436行「outside-voice tension」(『两方观点+推荐+后果』同步)、BASE-12 质量门(标R,评审项)。真相源=记忆 decision-three-lens-framework.md。参考样例=review-tool-followups 的 ADR-0/1/2(已按三镜回填)。排序：review-tool-followups 先跑完再开本 change(用户拍板)。BASE-12 现文：『2-3方案对比(含最小可行+理想架构)；关键决策按ADR结构落盘：背景/候选方案/决策/理由/当前方案代价』——三镜挂进『候选方案』评估法+『理由』加主次判定行。
