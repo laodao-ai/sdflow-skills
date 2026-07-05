@@ -310,9 +310,11 @@ def _deregister_hook_in_settings(settings, name):
                 new_list.append(entry)
         data["hooks"][event] = new_list
     if changed:
-        with open(settings, "w", encoding="utf-8") as f:
+        tmp = settings + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.write("\n")
+        os.replace(tmp, settings)   # 原子替换（POSIX + Windows 同名卷内保证）
     return changed
 
 

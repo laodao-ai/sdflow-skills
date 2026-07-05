@@ -564,3 +564,15 @@ class TestRetireHooksCli:
         monkeypatch.setattr(sys, "argv", ["init.py", "retire-hooks"])
         init_mod.main()
         assert "无退役 hook 残留" in capsys.readouterr().out
+
+    def test_settings_write_is_atomic_no_tmp_residue(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"; (home / "hooks").mkdir(parents=True)
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        settings = home / "settings.json"
+        settings.write_text(json.dumps({"hooks": {"PostToolUse": [
+            {"matcher": "Bash", "hooks": [
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'}]}
+        ]}}), encoding="utf-8")
+        assert init_mod._deregister_hook_in_settings(str(settings), "change-review-stub.py") is True
+        json.loads(settings.read_text(encoding="utf-8"))   # 合法 JSON = 未撕裂
+        assert list(home.glob("*.tmp")) == []              # 无 .tmp 残渣
