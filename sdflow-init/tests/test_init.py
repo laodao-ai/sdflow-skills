@@ -576,3 +576,16 @@ class TestRetireHooksCli:
         assert init_mod._deregister_hook_in_settings(str(settings), "change-review-stub.py") is True
         json.loads(settings.read_text(encoding="utf-8"))   # 合法 JSON = 未撕裂
         assert list(home.glob("*.tmp")) == []              # 无 .tmp 残渣
+
+    def test_deregister_write_failsafe_on_oserror(self, tmp_path, monkeypatch):
+        # FB-3: 写路径 OSError（只读/满盘/权限）→ fail-safe 返回 False，不裸抛 traceback、不中断循环
+        home = tmp_path / "home"; (home / "hooks").mkdir(parents=True)
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        settings = home / "settings.json"
+        settings.write_text(json.dumps({"hooks": {"PostToolUse": [
+            {"matcher": "Bash", "hooks": [
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'}]}
+        ]}}), encoding="utf-8")
+        monkeypatch.setattr(init_mod.os, "replace",
+                            lambda *a, **k: (_ for _ in ()).throw(OSError("readonly")))
+        assert init_mod._deregister_hook_in_settings(str(settings), "change-review-stub.py") is False

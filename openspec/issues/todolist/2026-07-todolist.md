@@ -52,6 +52,9 @@
 | T44 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 基础设施 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | PROPOSED | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T46 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 功能增强 | OPEN | 2026-07-05 17:26 | - |  |
+| T47 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 代码质量 | OPEN | 2026-07-05 19:14 | review-tool-followups |  |
+| T48 | `setup.sh + 全仓 python 调用点` | python3||python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | OPEN | 2026-07-05 19:14 | review-tool-followups |  |
+| T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | OPEN | 2026-07-05 19:14 | review-tool-followups |  |
 
 ---
 
@@ -591,3 +594,45 @@
 **思路**：grill 定稿五决策(2026-07-05)：①【形态×落点】增强现有 BASE-12「备选方案记录/ADR」原地改，不新增独立编号项(避双源/规则重叠)。②【强度×深度】分两层——行为层(记忆)每个决策都用；书面层(BASE-12)只在 TG-23(≥2合理方案/非显然设计)触发时 MUST 写三镜+主次，不下沉到琐碎决策。③【落点·候选③】除 BASE-12 外，也把三镜编码进 workflow.md G2 决策登记区格式：现「选项+推荐+两方后果」→「选项+推荐+三面后果(系统/用户/开发循环)+主次判定」。④【候选③另半】code-review SKILL.md Step4「≥2方案有把握自动选推荐(记理由)」的记理由 → 按三镜+主次，与 spec-review 登记一致、产品自包含。⑤【进程】走独立 OpenSpec change(带 spec delta 防漂移)，不裸改源；grill 成果直接喂四件套。三处落点：BASE-12 + workflow.md G2 + sdflow-code-review/SKILL.md Step4。
 
 **备注**：触及的 spec 需求(delta 要改)：openspec/specs/spec-workflow/spec.md 第18行「评审决策登记进报告」(『各分支后果』→『三面后果+主次』)、第432/436行「outside-voice tension」(『两方观点+推荐+后果』同步)、BASE-12 质量门(标R,评审项)。真相源=记忆 decision-three-lens-framework.md。参考样例=review-tool-followups 的 ADR-0/1/2(已按三镜回填)。排序：review-tool-followups 先跑完再开本 change(用户拍板)。BASE-12 现文：『2-3方案对比(含最小可行+理想架构)；关键决策按ADR结构落盘：背景/候选方案/决策/理由/当前方案代价』——三镜挂进『候选方案』评估法+『理由』加主次判定行。
+
+---
+
+## T47: engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice)
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-init/assets/workflow/tools/engine.js` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/review-tool-followups/design.md`
+
+**备注**：code-review FB-1。现靠 verify-manual-t45 浏览器四态实测兜，无回归网。抽出 resolveInitialDir(已具名)用 URL/window stub 单测同源/跨源/畸形/空 hash；bootstrap 分支注入 loadDir/loadDoc/content mock 断言 404→INDEX+notice 恰一次。
+
+---
+
+## T48: python3||python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `setup.sh + 全仓 python 调用点` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/review-tool-followups/design.md`
+
+**备注**：code-review FB-5。非本 change 引入(既有系统性缺口)，故未在本 change 修。建议统一加最小版本守卫或探测 python3.x。
+
+---
+
+## T49: settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖)
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/review-tool-followups/design.md`
+
+**备注**：code-review CV-2(置信40低)。temp+os.replace 已解撕裂JSON(本次目标)；lost-update 因 RETIRED 幂等下次重收敛、低影响。真解需文件锁，暂记不修。

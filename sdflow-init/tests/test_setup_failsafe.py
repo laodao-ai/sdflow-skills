@@ -36,3 +36,13 @@ def test_retire_snippet_probes_python_when_no_python3(tmp_path):
                        env={"PATH": f"{fakebin}"},
                        capture_output=True, text=True)
     assert "RAN_retire-hooks" in r.stdout
+
+
+def test_setup_sh_retire_block_binds_to_real_construct():
+    """FB-4: 绑定真实 setup.sh——防有人改 retire 块丢掉 fail-safe 尾式/python 探测（上面手抄
+    snippet 测的是副本、测不到 setup.sh 本身的漂移）。此测直接断言真文件含关键构造。"""
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "setup.sh").read_text(encoding="utf-8")
+    assert "retire-hooks" in text                     # 接线存在
+    assert "|| echo" in text                          # A5 fail-safe 尾式
+    assert "python3" in text and "_py=python" in text  # A6 python3||python 探测

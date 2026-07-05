@@ -310,11 +310,17 @@ def _deregister_hook_in_settings(settings, name):
                 new_list.append(entry)
         data["hooks"][event] = new_list
     if changed:
-        tmp = settings + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-        os.replace(tmp, settings)   # 原子替换（POSIX + Windows 同名卷内保证）
+        # [impl-review-fix] FB-3：写路径也 fail-safe（与上面读路径一致）。只读/满盘/权限异常时
+        # os.replace 抛 OSError——若裸抛会打断 retire_hooks() 的 RETIRED_HOOKS 循环（后续 hook 全
+        # 不处理）且给 setup.sh 留一段裸 traceback，违「绝不中止、坏则跳过」初衷。捕获→返 False。
+        try:
+            tmp = settings + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            os.replace(tmp, settings)   # 原子替换（POSIX + Windows 同名卷内保证）
+        except OSError:
+            return False
     return changed
 
 

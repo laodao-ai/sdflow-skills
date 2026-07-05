@@ -98,8 +98,9 @@ if (typeof module !== 'undefined' && module.exports) {
 if (typeof document !== 'undefined') {
   (function () {
     // A3: 深链来源优先级 hash → pathname。hash 经同一 origin 检查后**取 url.pathname**
-    // （非 raw hash 原样——`#http://host/changes/X/` 同源但非 /path 形态；提取 pathname
-    // 顺带归一 %2F 编码）。跨源 / 畸形 hash 回落 pathname。A8: let（供 currentPath+popstate 共用）。
+    // （非 raw hash 原样——`#http://host/changes/X/` 同源但非 /path 形态）。跨源 / 畸形 hash
+    // 回落 pathname。A8: let（供 currentPath+popstate 共用）。目录 vs 文档的形态归一在 bootstrap
+    // 用 probe 重定向感知处理（见下 CV-1），故此处不判尾斜杠。
     function resolveInitialDir() {
       const raw = window.location.hash.slice(1);   // 去前导 '#'
       if (raw) {
@@ -283,15 +284,25 @@ if (typeof document !== 'undefined') {
       // A1: 自派发——不能用 `await navigate(hash)`，navigate 自吞 fetch 错、成功/失败都返
       // undefined，bootstrap 收不到 404 信号。这里自己 try/catch 调 loadDir/loadDoc。
       try {
-        if (initialDir.endsWith('/')) await loadDir(initialDir);
-        else await loadDoc(initialDir);
-        currentPath = initialDir;
-        history.replaceState({ path: initialDir }, '', window.location.hash);  // A8/OV-2: Back 回深链
+        // [impl-review-fix] CV-1：hash 深链可能是无尾斜杠的目录路径（`#/changes/x` 漏尾斜杠是
+        // 合理输入）。服务器对目录 301 到带尾斜杠 URL，若裸按 endsWith('/') 分派会把目录当文档
+        // loadDoc（渲染目录列表乱码 + 侧栏错显父目录，且 fetch 视角 200 不触发 notice）。故先
+        // probe 取重定向后的真实路径，按其形态分派；probe 非 2xx → 抛 → 走 404 回落。
+        const probe = await fetch(initialDir);
+        if (!probe.ok) throw new Error('deep-link ' + probe.status);
+        const resolved = new URL(probe.url).pathname;   // 重定向后：目录得尾斜杠
+        if (resolved.endsWith('/')) await loadDir(resolved);
+        else await loadDoc(resolved);
+        currentPath = resolved;
+        history.replaceState({ path: resolved }, '', window.location.hash);  // A8/OV-2: Back 回深链
       } catch (err) {
         // F-D 防递归：清坏 hash（无 hashchange 监听，安全），MUST NOT 重调 bootstrap()
         history.replaceState({ path: '/' }, '', window.location.pathname);
         initialDir = '/';
-        try { await loadDoc('/INDEX.md'); currentPath = '/INDEX.md'; }
+        // [impl-review-fix] FB-2：回落成功后同步 history.state 到实际落点，否则 state.path 停在
+        // '/' 而 currentPath 已是 '/INDEX.md'——用户点走再 Back，popstate 读 state.path='/' 会把
+        // INDEX 静默换成裸目录列表（回退结果 ≠ 离开时所见）。
+        try { await loadDoc('/INDEX.md'); currentPath = '/INDEX.md'; history.replaceState({ path: '/INDEX.md' }, '', window.location.pathname); }
         catch (e) { await navigate('/', false); }
         // A2/NEW-1: notice 在回落渲染**之后**、专用 DOM 节点、作 contentBody 的兄弟插入
         // （MUST NOT contentBody.innerHTML= —— 会被 loadDoc/loadDir 擦掉 → 提示静默蒸发）
