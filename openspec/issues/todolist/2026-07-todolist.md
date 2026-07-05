@@ -59,6 +59,7 @@
 | T51 | `sdflow-done/SKILL.md commit步 + merge检查` | tracked 非-openspec 改动被 commit 步 git add -u 先提交、绕过 merge 前 untracked 硬检查的"停下问"——需 commit 步暂存策略与 merge 卫生检查对齐(gate-checkpoint-hardening SR-2 缩简版只覆盖 untracked,tracked 一路 defer) | 代码质量 | PROPOSED | 2026-07-05 22:43 | gate-checkpoint-hardening | gate-checkpoint-hardening |
 | T52 | `sdflow-done/SKILL.md merge untracked 检查` | merge 前 untracked 检查现为机械"任何 ??→halt 人工triage"(CR-4);精确区分"本 change 新产 vs 既有 debris"需在分支切出点落 untracked baseline 快照再 diff,可减少既有 debris 的误停——脚本化探索 | 功能增强 | PROPOSED | 2026-07-05 23:15 | gate-checkpoint-hardening | gate-checkpoint-hardening |
 | T53 | `workflow 度量 + sdflow-grill/spec-review/code-review` | 建立 review 价值度量机制:量化每轮评审(grill/spec-review/code-review 及各镜/层/codex-vs-claude)的价值——findings 产出数·采纳[impl-review-fix]/裁掉/defer 分桶·致命/高/中/低分布·独立(非重复)贡献;评审运行时落度量记录(泛化现有 voice 分桶+10次采纳率复评到全镜);据累积数据数据驱动决定各层/镜/触发条件的必要性(保留/降采样/收紧触发/淘汰低价值镜) | 功能增强 | PROPOSED | 2026-07-05 23:36 | main | rec2-obs-readability |
+| T54 | `workflow 度量 / grill amendment 存活率` | grill amendment-下游存活率 度量 | 可观测性 | PROPOSED | 2026-07-06 02:04 | workflow-metrics-loop | workflow-metrics-loop |
 
 ---
 
@@ -708,3 +709,24 @@
 | 状态 | DONE |
 
 > 2026-07 状态：PROPOSED → DONE（gate-checkpoint-hardening (98f10b9)）
+
+---
+
+## T54: grill amendment-下游存活率 度量
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `workflow 度量 / grill amendment 存活率` |
+| 类型 | 可观测性 |
+| 状态 | PROPOSED |
+
+**关联文档**：无（本项为独立探索）
+
+**动机**：workflow-metrics-loop 初期设计（T29 为 checkpoint 成本度量）后续需评估 grill 层的价值。T29 之 grill amendment 派生项：候选指标是「[grill-amendment] 标签下游被采纳的条数」，但尚无口径定义（什么算"采纳"、用什么 ground truth、如何计数）、无数据源（[grill-amendment] tag 当前仅标记 defer item，未建 ID/追踪链路）。
+
+**思路**：
+- 问题界定：「口径未定义」——[grill-amendment] 标签的下游物料（buglist/todolist defer item、spec amendment）无统一 ID scheme 与链接机制，原始记录无追踪链路（现仅存 change 报告内的 deferred items 列表）。
+- 数据悬而未决：裸数「amendment 条数」是误导指标（无法按采纳度/质量分层）。真实度量需先定义「价值」口径（采纳率、致命/高/中/低分布、独立贡献vs重复、与别镜的去重）。
+- 归属：本条非本 change（workflow-metrics-loop）的工作，本 change 做的是成本度量 + 各镜产出聚合。grill 存活率/价值度量待独立 change 评估。
+
+**备注**：workflow-metrics-loop 伞下与 T29 并列的伴生项，记录为「后续需单独评估」的问题；优先级低于成本度量，先从数据源（追踪链路）和口径（定义价值）出发评估可行性。

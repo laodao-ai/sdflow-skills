@@ -92,3 +92,8 @@
 优先级: P3
 计划: REC-2 观测 & 人读体验(=G6，跨批重切): T27 仓内规则可参考副本 · T28 阶段结束提示+可复制 prompt · T29 各 agent/子阶段时长记录 · T41 评审报告可点击链接 · T42 人读层多图多表 · T50 spec-review 决策区边框 cosmetic · **T53 review 价值度量机制(数据驱动决定各评审层/镜/触发的必要性)**。主次: T27-T42/T50 多为 polish(用户镜)、骨架稳后带；**★T53 例外——数据驱动基建(开发循环镜)，量化各层价值后可反过来重定评审架构(降采样/收紧触发/淘汰低价值镜)，价值高于其余、宜先动**。与 T29(时长)、sdflow-code-review 现有 voice 分桶+10次采纳率复评同源，可一并设计。
 
+### workflow-metrics-loop — workflow-metrics-loop
+状态: PLANNED
+成员: (生成) T54
+优先级: P3
+计划: workflow 度量基建：T29 成本度量（checkpoint 时间戳+各编排 skill 报告）+ T54 grill amendment 存活率度量（后续独立评估，口径/数据源待定）

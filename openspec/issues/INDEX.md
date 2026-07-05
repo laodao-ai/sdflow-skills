@@ -81,6 +81,12 @@
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
+### 批次：workflow-metrics-loop
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T54 | todo | PROPOSED | workflow-metrics-loop |
+
 ## 已闭合（终态）摘要
 
 - 共 22 项已闭合（bug: 4，todo: 18）
