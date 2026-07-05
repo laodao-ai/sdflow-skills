@@ -727,6 +727,6 @@
 **思路**：
 - 问题界定：「口径未定义」——[grill-amendment] 标签的下游物料（buglist/todolist defer item、spec amendment）无统一 ID scheme 与链接机制，原始记录无追踪链路（现仅存 change 报告内的 deferred items 列表）。
 - 数据悬而未决：裸数「amendment 条数」是误导指标（无法按采纳度/质量分层）。真实度量需先定义「价值」口径（采纳率、致命/高/中/低分布、独立贡献vs重复、与别镜的去重）。
-- 归属：本条非本 change（workflow-metrics-loop）的工作，本 change 做的是成本度量 + 各镜产出聚合。grill 存活率/价值度量待独立 change 评估。
+- 归属：本条非本 change（workflow-metrics-loop）的工作，本 change 做的是价值度量 + 各镜产出聚合（成本维度是 T29 另立）。grill 存活率/价值度量待独立 change 评估。
 
 **备注**：workflow-metrics-loop 伞下与 T29 并列的伴生项，记录为「后续需单独评估」的问题；优先级低于成本度量，先从数据源（追踪链路）和口径（定义价值）出发评估可行性。

@@ -108,7 +108,7 @@ description: >
 
   gate exit 3 时若拍板已发生，人工补此锚行 = 显式越权留痕（人机同权）。
 
-  **〔SR-M〕lens-metric 锚随拍板最终化**：spec-review 的 `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，其 `lens-metric` 锚 MUST 在**拍板回写时**（与上行 `<!-- ship-gate: design-approved -->` 同步写入 `spec-review-report.md`）最终确定/重算，反映门后最终裁决，MUST NOT 用 Step3 pre-gate 临时裁决充当最终采纳率——门前若因 `metrics.enabled=true` 已落的锚视为草稿值，拍板时原地更新覆盖，不新开一行。
+  **〔SR-M〕lens-metric 锚随拍板最终化**：spec-review 的 `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，其 `lens-metric` 锚 MUST 在**拍板回写时**（与上方 ship-gate 拍板锚同步写入 `spec-review-report.md`）最终确定/重算，反映门后最终裁决，MUST NOT 用 Step3 pre-gate 临时裁决充当最终采纳率——门前若因 `metrics.enabled=true` 已落的锚视为草稿值，拍板时原地更新覆盖，不新开一行。
 
 ---
 
