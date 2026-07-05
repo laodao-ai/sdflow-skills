@@ -174,8 +174,9 @@ bash ~/.sdflow/hack/checkpoint-commit.sh three-lens-decision-framework:task3-cod
 
 - [ ] **Step 5: 机械核对**
 
-Run: `grep -n "两方后果\|两方视角\|各自后果" sdflow-spec-review/SKILL.md`
-Expected: 无输出（四处全清）。
+Run: `grep -n "两方后果\|各自后果" sdflow-spec-review/SKILL.md`
+Expected: 无输出（决策后果格式串全清）。
+> 注：**「两方视角」刻意保留**——tension 本质是 voice/主审两方视角，本 change 只升级其「后果」为三面后果+主次判定，不动「两方视角」。故门只查「两方后果/各自后果」，勿列「两方视角」（原计划此处过宽，已修）。
 Run: `grep -n "三面后果\|主次判定" sdflow-spec-review/SKILL.md`
 Expected: 多行命中。
 
@@ -256,18 +257,24 @@ Run: `bash setup.sh`
 Expected: 正常结束（软链 + `~/.sdflow/workflow` canonical 刷新；改 assets 才测得到）。
 说明：本仓为**开发 checkout**——此步让全局 canonical 指向本 checkout 的 assets；合并后由运行 checkout `/sdflow-upgrade` 还原（不在本 change 内做）。
 
-- [ ] **Step 2: 六权威源残留终检（排除 docs/）**
+- [ ] **Step 2: 六权威源残留终检（排除 docs/；精确到真该清的格式串）**
 
-Run:
+只查决策后果格式串「两方后果 / 各自后果」（这两个是被替换的旧格式标签）：
 ```bash
-grep -rn "两方后果\|两方视角\|各自后果\|有把握自动选" \
+grep -rn "两方后果\|各自后果" \
   sdflow-init/assets/workflow/workflow.md \
   sdflow-init/assets/workflow/spec-checklists/spec-quality-base.md \
   sdflow-code-review/SKILL.md \
   sdflow-spec-review/SKILL.md \
   sdflow-ship/SKILL.md
 ```
-Expected: **无输出**（六权威源旧措辞全清；docs/ 镜像不在本次范围，不查）。
+Expected: **无输出**（旧格式串全清）。
+再单独核 code-review 无残留「有把握自动选」*主动指令*：
+```bash
+grep -n "≥2 方案有把握\|方案有把握自动" sdflow-code-review/SKILL.md
+```
+Expected: **无输出**（主动指令全清）。
+> 注：**不查「两方视角」**（tension 刻意保留）、**不用裸「有把握自动选」**（canonical T10 文本内「替换旧『有把握自动选』」元引用正确保留）。这两处过宽检已在 Task 3/4 修正。
 
 - [ ] **Step 3: Commit（部署无源变更则跳过；setup.sh 若改动 deployed 副本则 checkpoint）**
 
