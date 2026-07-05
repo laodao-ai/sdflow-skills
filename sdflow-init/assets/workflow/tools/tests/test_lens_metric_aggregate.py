@@ -47,3 +47,57 @@ def test_sev_subformat_robust():
     # sev 省级/乱序/多空格 仍作为整串取回（子解析健壮性在渲染层校验，这里只保不腐坏）
     a = ANCHOR.replace('sev="致0/高2/中2/低1"', 'sev="高2/致0"')
     assert lma.parse_anchor(a)["sev"] == "高2/致0"
+
+
+def _write(tmp_path, change, *anchors):
+    d = tmp_path / "archive" / change; d.mkdir(parents=True)
+    (d / "code-review-report.md").write_text("\n".join(anchors) + "\n", encoding="utf-8")
+
+def _a(lens, findings, 采纳, 独立, site="—", layer="code-review"):
+    return (f'<!-- sdflow:lens-metric v1 layer="{layer}" lens="{lens}" runner="claude" '
+            f'site="{site}" findings="{findings}" 采纳="{采纳}" 裁掉="0" defer="0" '
+            f'独立="{独立}" sev="致0/高{采纳}/中0/低0" -->')
+
+def test_aggregate_two_changes(tmp_path):
+    _write(tmp_path, "c1", _a("domain", 5, 3, 2), _a("adversarial", 4, 2, 1))
+    _write(tmp_path, "c2", _a("domain", 6, 4, 3))
+    rows, no_anchor = lma.aggregate(tmp_path / "archive")
+    assert len(rows) == 3 and no_anchor == []
+
+def test_no_anchor_report_counted(tmp_path):
+    _write(tmp_path, "c1", _a("domain", 5, 3, 2))
+    old = tmp_path / "archive" / "old"; old.mkdir(parents=True)
+    (old / "code-review-report.md").write_text("旧格式 voice分桶: codex 采纳3/裁掉0\n", encoding="utf-8")
+    rows, no_anchor = lma.aggregate(tmp_path / "archive")
+    assert "old" in no_anchor  # 显式计无锚样本，不静默跳过
+
+def test_render_table_has_independent_and_flags(tmp_path):
+    # 独立列非空 + 出现轮数≥10 标记（构造 domain 出现 10 轮）
+    for i in range(10):
+        _write(tmp_path, f"c{i}", _a("domain", 5, 3, 2))
+    rows, no_anchor = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    assert "独立" in table and "≥10" in table  # 表含独立列 + N≥10 标记
+    assert "无锚样本" in table  # 无锚计数呈现
+
+def test_out_of_enum_lens_flagged(tmp_path):
+    _write(tmp_path, "c1", _a("对抗镜1", 3, 1, 1))  # 未折叠的非法值
+    rows, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, [])
+    assert "越域" in table or "invalid" in table.lower()  # 非法 lens 值被标记不静默
+
+def test_no_synthetic_score(tmp_path):
+    _write(tmp_path, "c1", _a("domain", 5, 3, 2))
+    rows, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, [])
+    assert "综合分" not in table and "价值分" not in table  # 描述性多列,无合成分
+
+def test_unclosed_fence_swallows_trailing_anchors(tmp_path):
+    # 诚实留档：奇数个 ``` （未闭合 fence）会把其后所有行都视为 fence 内，
+    # 导致尾部锚被漏计（少计而非误取，方向偏保守，暂可接受）。
+    anchor2 = _a("adversarial", 4, 2, 1)
+    text = _a("domain", 5, 3, 2) + "\n```\n" + anchor2 + "\n"  # 只开未关
+    p = tmp_path / "archive" / "c1"; p.mkdir(parents=True)
+    (p / "code-review-report.md").write_text(text, encoding="utf-8")
+    rows = lma.parse_report(p / "code-review-report.md")
+    assert len(rows) == 1  # 第二个锚因未闭合 fence 被漏计,不是被误取
