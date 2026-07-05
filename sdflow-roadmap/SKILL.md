@@ -214,7 +214,7 @@ roadmap 的质量 100% 取决于讨论是否充分。开工前**必须**先评�
 | `task-log.md` | DID：执行过程记录（初始占位） | `references/task-log-template.md` |
 | `memo.md` (可选) | 讨论备忘，考古用 | `references/memo-template.md` |
 
-> 浏览 roadmap 文档包：用项目根 `openspec/serve.sh` 起 HTTP 服务、开 `openspec/review.html`（根查看器经路径 scope 导航到任意 `roadmaps/{name}/`）——不再每目录生成 `review.html` stub。
+> 浏览 roadmap 文档包：用项目根 `openspec/serve.sh` 起 HTTP 服务、开 `openspec/review.html`（根查看器起于全树，经内置 INDEX/树浏览到任意 `roadmaps/{name}/`）——不再每目录生成 `review.html` stub（放弃 scoped 深链，可接受降级）。
 
 #### 4 件套之间的引用关系
 

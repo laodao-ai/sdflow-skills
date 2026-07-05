@@ -7,7 +7,7 @@
 workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / `code-checklists/` / review UI / hooks / checkpoint 脚本）与自制 skill 的改动 MUST 在权威源（sdflow-skills 的 bundle 公共家与 skill 目录）进行，MUST NOT 只改消费仓副本。部署 SHALL **按内容性质分层**，而非整 bundle 复制：
 
 - **规则**（`workflow/*.md` + `spec-checklists/` + `code-checklists/`）MUST **不再复制进消费仓**，改由 skills 从全局 canonical bundle 解析（见「规则解析 resolver」需求）。
-- **review UI 机械**（`tools/` + `serve.sh` + `review.html`）SHALL 仍复制进消费仓 `openspec/`（服务器根=openspec/ 约束逼留，尽量少）。review UI SHALL 以**根锚单一查看面**提供——`openspec/review.html` 经 engine 从 `window.location.pathname` 推导 scope、一份即可导航到任意 change/roadmap；MUST NOT 为每个 change 或 roadmap 生成独立的 `review.html` stub（既冗余于根锚，又违最小部署足迹 adr/0003）。
+- **review UI 机械**（`tools/` + `serve.sh` + `review.html`）SHALL 仍复制进消费仓 `openspec/`（服务器根=openspec/ 约束逼留，尽量少）。review UI SHALL 以**根锚单一查看面**提供——`openspec/review.html` 起于全树（其 `location.pathname` 为根 → scope=""），经内置 INDEX/树在应用内浏览到任意 change/roadmap；MUST NOT 为每个 change 或 roadmap 生成独立的 `review.html` stub（既冗余于根锚，又违最小部署足迹 adr/0003）。**可接受降级**：随每目录 stub 一并放弃「直接打开某 change 的 scoped 首屏/深链」（engine 初始 scope 仅取自 `location.pathname`、不读 hash/query）——浏览能力不回退，深链便利留待后续增强（见 issues）。
 - **全局 Claude hook**（`~/.claude/hooks/` + 注册进 `~/.claude/settings.json`）集 SHALL = `{ff0-branch-guard}`（PreToolUse.Bash 的 FF-0 分支守卫）。`sdflow-init` MUST 维护一份**退役 hook 名单**并在 init/update 每次运行时对其**反注册**（从 settings.json 各事件列表外科式摘除匹配条目 + 删除 `~/.claude/hooks/` 里的脚本，幂等、存量安装自愈、fresh 安装 no-op）；MUST NOT 只增不减而在存量安装留下指向已删脚本的孤儿注册。
 - **`checkpoint-commit.sh`** MUST 全局安装到 agent 中立的 canonical 根 `~/.sdflow/hack/`（**非** `~/.claude/hooks`——它是跨-agent bash 工具、非 Claude 事件 hook）、不再进消费仓 `hack/`。
 - **`config.yaml` / `changes/` / `specs/`** 天然属仓，仍仓内。
@@ -32,7 +32,7 @@ workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / 
 
 #### Scenario: 建 change 不再落每目录 review stub
 - **WHEN** 跑 `openspec new change X`（或经 `/opsx:ff` 等入口 scaffold 变更）
-- **THEN** `openspec/changes/X/` 目录**不含** `review.html`；查看该变更改由根锚 `openspec/review.html` 经路径 scope 导航，能力不回退
+- **THEN** `openspec/changes/X/` 目录**不含** `review.html`；查看该变更改由根锚 `openspec/review.html` 起服务、经内置 INDEX/树浏览抵达（浏览能力不回退；放弃每目录 scoped 深链，属可接受降级）
 
 #### Scenario: 退役 hook 在存量安装被反注册自愈
 - **WHEN** 某存量安装曾装过 `change-review-stub.py`（`~/.claude/hooks/` 有脚本、`settings.json` PostToolUse.Bash 有其注册条目），随后跑 `sdflow-init update`

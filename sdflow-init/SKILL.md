@@ -107,5 +107,5 @@ CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强�
 - **退役 hook 反注册（自愈）**：`init`/`update` 每次跑时按 `RETIRED_HOOKS` 名单把已退役的全局 hook
   从 `~/.claude/settings.json` 摘除注册 + 删 `~/.claude/hooks/` 里的脚本（外科式、保留他项、fresh 安装 no-op）。
   当前名单含 `change-review-stub.py`（每目录 review.html stub 生产者已废弃——改由根查看器 `openspec/review.html`
-  经路径 scope 导航到任意 change/roadmap，见 review UI 说明）。
+  起服务、经内置 INDEX/树浏览到任意 change/roadmap；放弃每目录 scoped 深链，属可接受降级）。
 - 脚本默认 `--root .`（当前目录）；务必在目标项目根跑，或用 `--root` 指定。

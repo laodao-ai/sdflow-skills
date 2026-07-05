@@ -49,7 +49,7 @@ function parentOf(dirPath) {
 
 function normalizeProjectName(projectName) {
   // `projectName` comes from `window.__OPENSPEC_PROJECT_NAME__`, baked into review-stub.html
-  // at generation time (see init.py / change-review-stub.py / gen_review_stub.py). It can be
+  // at generation time (see init.py's copy_review_tool). It can be
   // missing entirely (undefined, e.g. an old template copy predating this feature), empty, or
   // — in the rare case someone serves the raw unrendered template — the literal, unsubstituted
   // `__PROJECT_NAME__` token. All three cases must normalize to '' so every caller (path bar,

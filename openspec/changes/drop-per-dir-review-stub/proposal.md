@@ -1,6 +1,6 @@
 ## Why
 
-review.html 查看器工具目前有**三个入口**产出 `review.html`：① 根锚 `openspec/review.html`（HTTP 服务根，engine.js 从 `window.location.pathname` 推 scope，靠它一份即可导航到任意 change/roadmap）；② `change-review-stub.py`（全局 PostToolUse hook，`openspec new change` 后自动补 `changes/<name>/review.html`）；③ `sdflow-roadmap` 的 `gen_review_stub.py`（roadmap 流程显式一步，产 `roadmaps/<name>/review.html`）。
+review.html 查看器工具目前有**三个入口**产出 `review.html`：① 根锚 `openspec/review.html`（HTTP 服务根，起于全树 scope=""，经内置 INDEX/树浏览到任意 change/roadmap）；② `change-review-stub.py`（全局 PostToolUse hook，`openspec new change` 后自动补 `changes/<name>/review.html`，其 `location.pathname` 令 engine scoped 到该目录=每目录深链首屏）；③ `sdflow-roadmap` 的 `gen_review_stub.py`（roadmap 流程显式一步，产 `roadmaps/<name>/review.html`）。
 
 ②③ 这两份**每目录 stub 与根锚内容同源**（同一模板替换 `__PROJECT_NAME__`），scope 已由 engine.js 从路径推导、不再靠占位符固化——即根锚一份就够看，每目录 stub 是**冗余产物 + 每次建 change 都自动落一份文件的足迹噪音**（违 adr/0003「最小部署足迹」精神）。移除这两个生产者即可，根查看器保留不变。
 
@@ -19,7 +19,7 @@ review.html 查看器工具目前有**三个入口**产出 `review.html`：① �
 - `openspec new change X` 后 `changes/X/` **不再**出现 `review.html`；`sdflow-roadmap` 流程不再产 `roadmaps/X/review.html`。
 - 存量安装跑一次 `sdflow-init update` 后：`~/.claude/settings.json` 的 PostToolUse.Bash 中**无** change-review-stub 条目、`~/.claude/hooks/change-review-stub.py` **不存在**，且**每次 Bash 调用不再有 hook 报错**。
 - 根查看器 `serve.sh` + `openspec/review.html` 打开后仍能导航到任意 change/roadmap（能力不回退）。
-- `sdflow-init/tests/` 与 `sdflow-roadmap/tests/` 全绿；仓级 pytest 无回归。
+- `sdflow-init/tests/` 全绿；`sdflow-roadmap/` 变纯 Markdown、无专属 pytest（其 `tests/` 随 `gen_review_stub` 删除而消失）；**仓级** `pytest` 无回归。
 
 ## Non-Goals
 
@@ -27,6 +27,7 @@ review.html 查看器工具目前有**三个入口**产出 `review.html`：① �
 - **不动 archive 内历史 `review.html`**（已归档产物是留档，不追溯清理）。
 - **不改 `spec.md:99` 根锚复制需求**本身（根锚照旧铺）；本 change 只在同一需求的 hooks 枚举里摘掉一个退役 hook。
 - **不重构 `ff0-branch-guard` hook**或 hook 安装框架其余部分（只加反注册能力，不改安装语义）。
+- **可接受降级（非回退）**：每目录 stub 曾提供「直接打开某 change/roadmap 的 scoped 首屏/深链」（其 `location.pathname` 令 engine 直接 scoped）。移除后根锚起于全树、经 INDEX/树浏览抵达——**浏览任意 change/roadmap 的能力不回退**，但失去 URL 深链便利。恢复深链（如根 `/review.html#/changes/X/` hash 路由）不在本次范围，defer 为 todolist 增强。
 
 ## Capabilities
 

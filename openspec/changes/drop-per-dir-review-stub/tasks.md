@@ -25,7 +25,7 @@
 - [x] **3.1** 删 `sdflow-roadmap/scripts/gen_review_stub.py`。
 - [x] **3.2** 删 `sdflow-roadmap/tests/test_gen_review_stub.py`。
 - [x] **3.3** 改 `sdflow-roadmap/SKILL.md`：去掉调用 gen_review_stub 生成 `roadmaps/<name>/review.html` 的那一步及相关说明（保留 roadmap 其余流程）。
-- [x] **3.4** 跑 `pytest sdflow-roadmap/tests/` 全绿。
+- [x] **3.4** 删 3.1/3.2 后 `sdflow-roadmap/tests/` 目录随之消失（git 不留空目录，roadmap 变纯 Markdown、无专属 pytest）；改跑**仓级** `pytest` 确认无 roadmap 相关用例遗留、无回归。〔CR-F3 措辞订正：不再声称跑已不存在的 `pytest sdflow-roadmap/tests/`〕
 - [x] **3.5** commit：`checkpoint-commit.sh drop-per-dir-review-stub:task3-drop-roadmap-stub "移除 roadmap gen_review_stub + 测试 + SKILL 步"`
 
 ## Task 4：文档同步

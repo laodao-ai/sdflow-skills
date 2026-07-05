@@ -475,6 +475,48 @@ class TestRetiredHooks:
         data = json.loads(self._settings(home).read_text(encoding="utf-8"))
         assert "change-review-stub.py" not in json.dumps(data)
 
+    def test_malformed_non_dict_hook_element_does_not_crash(self, tmp_path, monkeypatch):
+        """[impl-review-fix] CR-F1：hooks 列表混入非 dict truthy 元素（字符串等）时，
+        反注册 MUST fail-safe 不抛（旧实现 `(h or {}).get` 会 AttributeError 冒穿崩 init/update）。"""
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / self.RETIRED).write_text("print('stub')\n", encoding="utf-8")
+        self._settings(home).write_text(json.dumps({
+            "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+                "not-a-dict-entry",
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'},
+            ]}]}
+        }), encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+
+        init_mod.retire_hooks()  # 不抛
+
+        data = json.loads(self._settings(home).read_text(encoding="utf-8"))
+        blob = json.dumps(data)
+        assert "change-review-stub.py" not in blob   # 退役项摘除
+        assert "not-a-dict-entry" in blob            # 畸形非 dict 元素原样保留、未误删
+
+    def test_non_string_command_does_not_crash(self, tmp_path, monkeypatch):
+        """[impl-review-fix] CR-F1：command 字段是非字符串 truthy 值（如 int）时不得
+        `TypeError`（`name not in 123` 崩溃）；应视为不匹配、原样保留。"""
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        (home / "hooks" / self.RETIRED).write_text("print('stub')\n", encoding="utf-8")
+        self._settings(home).write_text(json.dumps({
+            "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [
+                {"type": "command", "command": 123},
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'},
+            ]}]}
+        }), encoding="utf-8")
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+
+        init_mod.retire_hooks()  # 不抛
+
+        data = json.loads(self._settings(home).read_text(encoding="utf-8"))
+        blob = json.dumps(data)
+        assert "change-review-stub.py" not in blob   # 退役项摘除
+        assert "123" in blob                         # 非 str command 条目原样保留
+
     def test_mixed_entry_keeps_sibling_hook(self, tmp_path, monkeypatch):
         """一个 matcher entry 内同时含退役 hook 与另一 hook → 只摘退役、保留兄弟、entry 不空则留。"""
         home = tmp_path / "home"

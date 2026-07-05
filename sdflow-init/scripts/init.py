@@ -266,6 +266,16 @@ def _home_claude():
     return os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
 
 
+def _hook_command(h):
+    """安全取一个 hook entry 的 command 字符串：h 非 dict、或 command 非 str（含缺失）
+    一律回 ''——让调用方的 `name in ...` 判为不匹配、原样保留。settings.json 用户/三方
+    工具可写，畸形条目（非 dict 元素 / 非 str command）不得让反注册抛异常（[impl-review-fix] CR-F1）。"""
+    if not isinstance(h, dict):
+        return ""
+    c = h.get("command")
+    return c if isinstance(c, str) else ""
+
+
 def _deregister_hook_in_settings(settings, name):
     """从 settings.json 各 event 列表外科式摘除 command 引用 `name` 脚本的条目：
     entry 内多 hook 时只删匹配的那个、保留兄弟；entry 内 hook 全被删则整条 entry 丢弃；
@@ -287,7 +297,7 @@ def _deregister_hook_in_settings(settings, name):
         for entry in event_list:
             inner = entry.get("hooks") if isinstance(entry, dict) else None
             if isinstance(inner, list):
-                kept = [h for h in inner if name not in ((h or {}).get("command") or "")]
+                kept = [h for h in inner if name not in _hook_command(h)]
                 if len(kept) != len(inner):
                     changed = True
                     if kept:
