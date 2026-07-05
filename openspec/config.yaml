@@ -55,3 +55,7 @@ rules:
 #   strong: <model-id>
 #   mid: <model-id>
 #   light: <model-id>
+
+# 评审价值度量（lens-metric）开关：源仓 dogfood 高频，默认开
+metrics:
+  enabled: true

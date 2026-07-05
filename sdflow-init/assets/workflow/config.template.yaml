@@ -58,3 +58,8 @@ rules:
 #   strong: <model-id>
 #   mid: <model-id>
 #   light: <model-id>
+
+# 评审价值度量（lens-metric）开关：低频消费仓默认关（避免零收益期背记账+硬阻塞）；
+# 高频仓可改 true 开启。契约见 lens-metric-contract.md。
+metrics:
+  enabled: false
