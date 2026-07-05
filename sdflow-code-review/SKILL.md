@@ -81,13 +81,16 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
 
-1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）。
+1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
+   折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
 2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
    明确滤除：CI 能抓的 / 纯 nitpick / 未改动行的既有问题 / 仅主观风格 / 已被注释显式抑制的。
    **outside-voice 豁免〔R4·D8〕**：`runner=codex` 的 findings 跳过 <80 数值滤直通对抗裁决（跨模型自评不可比、异见不被同族标尺误杀）；`runner=claude-fallback` 属同族产物照过滤。
 3. **对抗裁决**：对每条存活 finding 判"是否真的运行期出问题"——对抗镜反驳 ≥ 多数成立则采信。
 4. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
    判"不成立"的连理由落入报告「已裁掉」区。<80 滤除项也**一行带过（可审计），不静默丢**（静默 = "全过了"的假象）。
+5. **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、
+   Step5 对应自检项跳过（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按下方「报告格式」区逐镜落锚。
 
 ## 第四步：自动修 / 自动裁 / defer（阶段三无人类门，P3e）
 
@@ -96,12 +99,21 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 - **修不了 / genuinely 拿不准**：defer → 写 buglist（本 change 引入的代码 bug）/ todolist（改进/关注点），
   本 change 不处理，交 hand-off 引导另开清理 change。
 - **绝不 AskUserQuestion**（阶段三无人类门）。
-- **裁决分桶〔4.6·M4〕**：voice findings 的裁决结果按 runner 分桶计数（codex / claude-fallback 各记 采纳[impl-review-fix]/裁掉/defer），写入报告「修复 / defer 台账」，供采纳率 Success Metric 与 10 次复评消费。
+- **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg` 各独立计数）的裁决结果计
+  采纳[impl-review-fix]/裁掉/defer，供 Step5 落对应 `lens-metric` 锚——原「voice分桶」自由 prose 台账行已被此锚吸收取代，
+  采纳率 Success Metric 与 10 次复评仍消费该数据，只是承载形态从自由文本行改为结构化可 grep 的锚。
 
 ## 第五步：产出 + 收敛口
 
-- 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账）。
-- **锚行存在性自检〔R1/R3/R5〕**：出报告后机械 grep 三类 v1 锚行，缺失即本步报错阻塞；`findings=N` 与合并池实收数 diff 一次。
+- 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账 + 度量锚）。
+- **锚行存在性自检〔R1/R3/R5〕**：出报告后机械 grep 四类 v1 锚行（Step1 broad-review / hr-tg / outside-voice / **lens-metric**），
+  缺失即本步报错阻塞；`findings=N` 与合并池实收数 diff 一次。
+  **lens-metric 自检扩一类**：不止存在性——缺任一必填字段，或 `layer`/`lens`/`runner`/`sev` 取值越域/子格式不符
+  （取值域/子格式见规则根 `lens-metric-contract.md`，唯一权威源）均报错阻塞；数值一致性（`findings`/`采纳`/`独立`
+  等是否与合并池实收数吻合）**是主 session 信任边界、非机械可验**，自检 MUST NOT 谎称能机械保证数值正确。
+  **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
+  **旁路声明**：lens-metric 锚缺失/取值违规仅拦报告完整性，**MUST NOT** 反向改写已裁决 findings 的采纳结论
+  或本轮「建议进 /sdflow-done」结论。
 - 修复代码，改动处标 `[impl-review-fix]`。
 - **checkpoint 提交**：产出报告 + 自动修复后 → `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
 - **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
@@ -141,7 +153,11 @@ fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 
 ### 修复 / defer 台账
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(按三镜+主次附理由)；defer K 项 → buglist/todolist
   T10复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附
-  voice分桶: codex 采纳x/裁掉y/defer z · fallback 采纳a/裁掉b/defer c   ← M4 采纳率数据源
+### 度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落，见第三步/第五步）
+  domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（gstack/review Step1）各落一行：
+  <!-- sdflow:lens-metric v1 layer="code-review" lens="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
+  字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）；
+  原「voice分桶」自由 prose 行已被 outside-voice 镜的此锚吸收取代。
 ### 结论
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
 
