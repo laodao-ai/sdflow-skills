@@ -256,10 +256,12 @@ def anchor_set(text):
 
 def breaker_no_progress(before, after):
     """熔断纯函数：before/after 为两次 anchor_set() 快照（frozenset）。集合无净变化
-    （before == after）→ True=无进展，判熔断。fail-safe：before is None（快照缺失，
-    如 context 压缩丢失上一次记录）→ 保守返 True（宁可误判无进展，不放行假免疫）。
-    HEAD 移动/mtime 变化 MUST NOT 作为免疫信号——本函数不接收、不比较它们。"""
-    if before is None:
+    （before == after）→ True=无进展，判熔断。fail-safe：**任一快照缺失**（before 或
+    after is None，如 context 压缩丢记录、或重跑后报告不存在/不可读）→ 保守返 True（宁可
+    误判无进展停上抛，不放行假免疫）〔impl-review-fix CR-2：原只护 before，after=None 时对
+    非空 before 返 False=假放行，正是要防的漏网〕。HEAD 移动/mtime 变化 MUST NOT 作为免疫
+    信号——本函数不接收、不比较它们。"""
+    if before is None or after is None:
         return True
     return before == after
 
@@ -295,8 +297,10 @@ def pick_exclusive(path, positive, negative, label):
 
 
 TASK_TITLE_RE = re.compile(r"^### Task (\d+):", re.M)   # 计数用；锚行才禁正则
-# [T36/SR-4] canonical shape 权威源 = 本 TAG_RE：checkpoint(<change-slug>:task<N>-<slug>)
-# （命名空间组可选，向后兼容裸 task<N>- 旧格式）。workflow.md 的格式串样例、sdflow-ship/SKILL.md
+# [T36/SR-4] canonical shape 权威源 = 本 TAG_RE。**parser 契约实际只执行到 `task<N>-` 前缀**
+# （命名空间组可选、向后兼容裸 task<N>- 旧格式）；`<slug>` 是**建议性**约定（可读性/去重），
+# TAG_RE 不校验其存在或形状〔impl-review-fix CR-3：勿把 <slug> 读成 parser 强制契约〕。
+# workflow.md 的格式串样例、sdflow-ship/SKILL.md
 # 的引用式派发句均须与此正则保持一致；test_producer_parser_contract 钉死 producer(checkpoint-commit.sh
 # 落的标签串) ↔ parser(本 TAG_RE) 的一致性。checkpoint-commit.sh 本身 format-agnostic（只裹
 # `checkpoint($step)`，不校验形状），**非格式源**。

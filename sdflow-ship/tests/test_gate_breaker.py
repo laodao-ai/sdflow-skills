@@ -36,3 +36,11 @@ def test_progress_when_new_anchor_added():
 def test_failsafe_missing_snapshot():
     after = anchor_set(f"# 报告\n{ANCHOR_VERIFY_PASS}\n")
     assert breaker_no_progress(None, after) is True
+
+
+def test_failsafe_missing_after_snapshot():
+    # [impl-review-fix CR-2] after=None（重跑后报告不存在/不可读）同样保守判无进展，
+    # 防非空 before + after=None 被误判"有进展"假放行。
+    before = anchor_set(f"# 报告\n{ANCHOR_VERIFY_PASS}\n")
+    assert breaker_no_progress(before, None) is True
+    assert breaker_no_progress(None, None) is True

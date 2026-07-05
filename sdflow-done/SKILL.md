@@ -245,9 +245,10 @@ MUST 段之后或行内。
 
 **merge 前 untracked 硬检查**〔spec-review-amendment SR-2，防"未追踪工作经 checkout+ff-merge 存活于磁盘却从未进 base git 历史"〕：
 ```bash
-git status --porcelain
+git -c core.quotePath=false status --porcelain
 ```
-筛出 `??`（untracked）开头的行——这些是本 change 分支生命周期内（从 base 切出到此刻）新产生的未追踪文件；判据 MUST 排除仓库既有 debris（分支切出前就存在、与本 change 无关的遗留未追踪项），拿不准是否为既有 debris 时从严算作"新产"（宁可多停一次，不放过真正未落盘进历史的产物）。
+〔impl-review-fix CR-6：`-c core.quotePath=false` 与 ship_gate.py 的 `_GIT_HARDEN` 一致，中文文件名不被 C-quote 转义，halt 清单可读〕
+筛出 `??`（untracked）开头的行。**判据机械化**〔impl-review-fix CR-4：原"排除既有 debris"要模型主观分类，违反"机械活交脚本、模型只做判断"——改为纯机械 halt〕：**任何 `??` untracked 存在即 halt+报告**，把"是本 change 新产物、还是仓库既有 debris"的分诊交给 halt 处的**人工**（人比对清单一眼可判），脚本/skill 侧不做该分类。**边界声明**〔impl-review-fix CR-5：`git status --porcelain` 默认不含被 `.gitignore` 忽略的文件——本检查**不覆盖** gitignore 排除的路径；若怀疑某交付物被误 gitignore（该追踪却被 ignore），须另行核查，不在本检查范围〕。
 - 存在此类 untracked → **非交互 halt+报告**，停下并列出文件清单，建议「先 `git add` 纳入版本控制并提交，或确认与本 change 无关后再重跑」；复用既有"ff 不可行→停下报告"惯用法，**MUST NOT 用 AskUserQuestion 中途问**、**MUST NOT 静默继续 ff-merge**。
 - 无此类 untracked（或人工处理/确认后重入本步）→ 继续：
 
