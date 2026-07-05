@@ -33,7 +33,7 @@
 
 - **规则**（`workflow/*.md` + `spec-checklists/` + `code-checklists/`，≈28 文件）→ **全局唯一**，skills 全局解析、消费仓不复制。
 - **review UI 机械**（`tools/` + `serve.sh` + `review.html`，≈5 文件）→ **留 `openspec/` 最小**（服务器根=openspec/ 约束，不落地即 404）。
-- **`hack/checkpoint-commit.sh`** → **全局**（同 ff0-branch-guard / change-review-stub 两个全局 hook；顺带根治 `core.fileMode=false` 的 exec 位坑）。
+- **`hack/checkpoint-commit.sh`** → **全局**（同 ff0-branch-guard 全局 hook；顺带根治 `core.fileMode=false` 的 exec 位坑）。
 - **`config.yaml` / `changes/` / `specs/`** → 仓内（本体）。
 - **明确接受的代价**：消费仓失去按仓 pin 工作流规则（跟随全局 HEAD）。
 - **未决（留其 design 定）**：全局 bundle 路径解析机制——固定 `~/.skills/laodao-skills/…` 约定 vs env var；建议默认约定 + env var 覆盖。

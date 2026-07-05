@@ -75,7 +75,7 @@ openspec/
 │   ├── config.template.yaml
 │   ├── spec-checklists/  code-checklists/   (base + domains)
 │   ├── tools/            ← engine.js + engine.css + vendor/marked.min.js + review-stub.html（B1 归位进 bundle）
-│   │                       （review-stub.html 是模板，roadmap/change 目录的 review.html 由它生成）
+│   │                       （review-stub.html 是模板，根 review.html 由它渲染；不再生成每目录 stub）
 │   └── reference/         (说明类，可删)
 ├── config.yaml            ← init 从 config.template.yaml 生成（本项目段待填）
 ├── INDEX.md               ← 注入「工作流规则」托管区块
@@ -104,10 +104,8 @@ CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强�
 - **不覆盖用户内容**：config.yaml 的本项目段、CLAUDE.md/AGENTS.md 标记区块外的内容，脚本一律不动。
 - **`openspec/rules/` 不在本 bundle**（destructive-commands、task-completion 等是独立通用规则，按需自行加）。
 - **FF-0 硬强制（全局）**：hook 脚本源在本 skill 的 `assets/hooks/ff0-branch-guard.py`，由 `init`/`update` **全局安装**到 `~/.claude/hooks/` + 注册进 `~/.claude/settings.json` 的 PreToolUse.Bash（幂等、跨所有项目，**不写项目 `.claude/`**）。使得在 `master`/`main` 上跑 `openspec new change`（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 共用此 CLI 入口）被直接拦下，逼先开 feature 分支。想卸载：删 `~/.claude/hooks/ff0-branch-guard.py` + 移除 `~/.claude/settings.json` 中对应 PreToolUse entry。权威定义见 `workflow/ff-generation-constraints.md` FF-0。
-- **change 目录自动补 review.html（全局第二个 hook）**：hook 脚本源在本 skill 的
-  `assets/hooks/change-review-stub.py`，由 `init`/`update` 全局安装到 `~/.claude/hooks/` + 注册进
-  `~/.claude/settings.json` 的 `PostToolUse.Bash`。`openspec new change <name>` 跑完后，若项目已铺设
-  review 工具（`openspec/review.html` 存在），自动在新建的 `openspec/changes/<name>/` 下补一份
-  `review.html`（scope 指向该目录），随 `openspec archive` 一起搬迁、无需重新生成。项目未铺设 review
-  工具时静默跳过，不强迫铺设顺序。
+- **退役 hook 反注册（自愈）**：`init`/`update` 每次跑时按 `RETIRED_HOOKS` 名单把已退役的全局 hook
+  从 `~/.claude/settings.json` 摘除注册 + 删 `~/.claude/hooks/` 里的脚本（外科式、保留他项、fresh 安装 no-op）。
+  当前名单含 `change-review-stub.py`（每目录 review.html stub 生产者已废弃——改由根查看器 `openspec/review.html`
+  经路径 scope 导航到任意 change/roadmap，见 review UI 说明）。
 - 脚本默认 `--root .`（当前目录）；务必在目标项目根跑，或用 `--root` 指定。
