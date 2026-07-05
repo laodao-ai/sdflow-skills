@@ -423,11 +423,15 @@ def _die(msg):
 
 def main():
     p = argparse.ArgumentParser(description="把 openspec/workflow bundle 铺进项目")
-    p.add_argument("mode", choices=["init", "update"], help="init=首次铺设 / update=重拉最新 bundle")
+    p.add_argument("mode", choices=["init", "update", "retire-hooks"],
+                   help="init=首次铺设 / update=重拉最新 bundle / retire-hooks=只反注册退役 hook（自愈，不碰 openspec/）")
     p.add_argument("--root", default=".", help="目标项目根（默认当前目录）")
     p.add_argument("--dev", action="store_true",
                    help="update 专用：整 bundle 刷新（toolkit 源仓 dogfood 用，消费仓勿用）")
     args = p.parse_args()
+    if args.mode == "retire-hooks":       # A4: 早分支，先于 osroot/dev——只自愈全局 hook，与项目无关
+        print("退役 hook 清理：\n" + retire_hooks())
+        return
     if args.dev and args.mode != "update":
         _die("--dev 仅配 update 使用")
     run(args.root, args.mode, dev=args.dev)

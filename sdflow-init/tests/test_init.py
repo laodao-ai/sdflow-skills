@@ -536,3 +536,31 @@ class TestRetiredHooks:
         blob = json.dumps(data)
         assert "change-review-stub.py" not in blob
         assert "other-tool.py" in blob
+
+
+class TestRetireHooksCli:
+    """T44: `init.py retire-hooks` 独立 mode——只调 retire_hooks()，不需 openspec/。"""
+
+    def test_retire_hooks_mode_cleans_stale_hook(self, tmp_path, monkeypatch, capsys):
+        home = tmp_path / "home"
+        (home / "hooks").mkdir(parents=True)
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        (home / "hooks" / "change-review-stub.py").write_text("# stale\n", encoding="utf-8")
+        (home / "settings.json").write_text(json.dumps({"hooks": {"PostToolUse": [
+            {"matcher": "Bash", "hooks": [
+                {"type": "command", "command": 'python3 "$HOME/.claude/hooks/change-review-stub.py"'}]}
+        ]}}), encoding="utf-8")
+        monkeypatch.setattr(sys, "argv", ["init.py", "retire-hooks"])
+        init_mod.main()
+        assert not (home / "hooks" / "change-review-stub.py").exists()
+        data = json.loads((home / "settings.json").read_text(encoding="utf-8"))
+        assert data["hooks"]["PostToolUse"] == []
+        assert "change-review-stub.py" in capsys.readouterr().out
+
+    def test_retire_hooks_mode_needs_no_openspec(self, tmp_path, monkeypatch, capsys):
+        home = tmp_path / "home"; home.mkdir()
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["init.py", "retire-hooks"])
+        init_mod.main()
+        assert "无退役 hook 残留" in capsys.readouterr().out
