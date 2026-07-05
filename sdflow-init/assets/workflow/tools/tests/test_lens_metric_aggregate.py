@@ -18,6 +18,8 @@ def test_parse_valid_anchor():
 def test_non_anchor_line_returns_none():
     assert lma.parse_anchor("普通一行文字，含 lens-metric 字样但非锚") is None
     assert lma.parse_anchor("- 列表项 sdflow:lens-metric v1 内联提及") is None  # 非行首前缀
+    # 真哨兵：完整锚前缀出现在行中但非行首（startswith 正确=None；裸 in 会误取→捕获退化）
+    assert lma.parse_anchor('foo bar <!-- sdflow:lens-metric v1 layer="x" lens="domain" -->') is None
 
 def test_fence_block_lines_skipped():
     text = "正文\n```\n" + ANCHOR + "\n```\n正文2\n"
