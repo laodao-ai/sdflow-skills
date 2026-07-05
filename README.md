@@ -63,6 +63,8 @@ git pull
 bash setup.sh
 ```
 
+`setup.sh`（含 `/sdflow-upgrade`）现也触发退役 hook 自愈——升级工具链即清理存量死 hook（`change-review-stub.py`），不必等某项目跑 `sdflow-init update`。
+
 ## 工作原理
 
 - **每个 skill 是一个自包含目录**：`SKILL.md`（frontmatter + 指令，唯一被 `setup.sh` 识别的标志）
