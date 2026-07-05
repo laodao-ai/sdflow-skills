@@ -83,3 +83,9 @@ spec-review-report.md · 决策登记区
 - 选 **C** → 归档本 change 为 WONTDO + 把 producer↔parser 缺口（H2）单记一条 todolist（它独立有价值）。
 
 > 设计门拍板发生后才写 `<!-- ship-gate: design-approved -->`（当前**故意不写**——设计未获批）。
+
+---
+
+## 拍板记录
+
+- **Q1 → 选 B（缩到可靠内核）**〔用户设计门拍板〕。据此重写 design/specs/tasks（标 `[spec-review-amendment]`）：B 收敛为**纯测试新增、零 doc/skill 改动**——① producer→parser 集成测试（H2）② `TAG_RE` 负例矩阵（H3）；撤 D3 瘦身（H4）、撤循环 doc-抽取（A-1/M1）、delta spec 不自复制字面（M3）；既有 `test_workflow_authority.py` 子串断言保留不动（避 H1、作 doc 侧弱守卫）。修订版须回设计门再过一次。
