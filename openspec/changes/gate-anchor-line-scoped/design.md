@@ -57,6 +57,16 @@ spec-review 的 codex outside-voice（OV-2）证伪了原 grill Q2 的「未闭�
 
 **为何选 A（而非接受）**：本 change 本旨即堵锚检测假阳；旧行为对此盘面安全、ADR-2 使其危险=回归，留新洞自相矛盾；`plan_unbalanced_fence` 现成、成本 ≈5 行 + 2 测试。ADR-2 定位维持「防御性」，但 ADR-5 把其唯一真危险副作用（互斥锚对回归）焊死。
 
+### ADR-6〔spec-review-amendment · dogfood 发现 · 设计门 Q3=A1〕：`tg02_hit` 触发检测从裸子串→声明式匹配
+
+跑 gate 现场暴露**第三个同类子串 bug**：`tg02_hit`（`ship_gate.py:234`）`return "TG-02" in proposal.md 文本` 会把 proposal 里对 `TG-02` 的**描述性提及/代码引用/否定句**误判为命中 → 假 RUN_SOP（误当嵌入式 change 要跑 embedded-test-sop）。本 change 的 proposal 讨论该函数（`"TG-02" in`）即触发，卡住自己的 ship——与 B4 同一「子串误配描述性提及」bug 类。
+
+**与锚检测的关键区别**：TG 标签**合法内联**于 proposal 散文/头注（`〔TG-02：嵌入式固件变更〕`），**不能行锚定**（不像机判锚独占一行）。
+
+**决策（Q3=A1）**：`tg02_hit` 改匹配**声明式** `〔TG-02`（全角开括号 + 标签，或含冒号 `〔TG-02：`），非裸 `"TG-02"`。接地：全部 8 份归档 proposal 的 TG 声明皆 `〔TG-NN：` 形（`〔TG-01：`/`〔TG-12：`…），ff-generation 强制此头注格式；描述性提及（反引号代码 `"TG-02"`）、否定句（`TG-01/02/03 均不命中`）均无 `〔TG-02` → 天然排除。
+- **备选** A2（剥代码 span+正则词边界）：多覆盖无括号声明形式，但更复杂、否定句仍可能误命中；A3（只扫头注/触发表区）：最精准但需定位声明区边界、实现重。均逊于 A1 的「贴合既有约定 + 一行改动」。
+- **残差（如实记）**：未用 `〔〕` 括号声明 TG-02 的（非常规）embedded proposal 会漏检 → 不跑 SOP = 安全侧假阴（且约定强制括号，实际不发生）；记入 Non-Goals。
+
 ## 实现草图（ADR-1/2/4 一并）
 
 ```python

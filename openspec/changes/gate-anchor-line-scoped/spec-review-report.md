@@ -27,6 +27,8 @@
 │ [自动决策] D3  BR-3/OV-1/对抗镜1 收敛：契约样本源歧义 → tasks3.4 已钉      │
 │                「样本源=归档 corpus，非 SKILL 展示块」+ 3.5 消歧义源头     │
 │ [自动决策] D4  design 行号漂移(_parse_plan) → 已按接地镜校正              │
+│ [已拍板] Q2-DOGFOOD 跑 gate 现场：tg02_hit(:237) 第三个同类子串 bug 假   │
+│               RUN_SOP 卡本 change ship → 折入本 change(Q3=A1 声明式匹配)   │
 │ [已裁掉]  X1   对抗镜1/2 均判「未闭合 fence=安全侧」→ 被 OV-2 具体两锚     │
 │                场景推翻（非静默丢：见下裁决）                              │
 │ [已裁掉]  X2   OV-1 即时假阴断言（真报告会漏锚）→ 15/15 归档实证证伪，     │
@@ -76,6 +78,8 @@
 ## 拍板记录
 
 - **Q1-TENSION → A（采纳）**：加 unbalanced 处理（复用 `plan_unbalanced_fence` :353-356），互斥锚对（`pick_exclusive`/`archived_verify_state`）遇未闭合 fence 保守失败到安全侧。design ADR-5 + tasks 2b.1-2b.3 + spec delta「未闭合 fence 隔断互斥锚对不判假通过」Scenario 已同步。
-- 用户于设计 HARD-GATE 批准（选 A）。主 session 据此写入 ship-gate 机判锚（独占一行）：
+- 用户于设计 HARD-GATE 批准（选 A）。
+- **Q2-DOGFOOD → 折入 / Q3 → A1**：跑 ship_gate 现场暴露 `tg02_hit`(:237) 第三个同类子串 bug——对 proposal 里 TG-02 描述性提及假阳 → 假 RUN_SOP 卡住本 change 自己 ship。用户拍板折入本 change；修法 Q3=A1 声明式 `〔TG-02` 匹配（非行锚——TG 标签内联）。design +ADR-6, tasks +§2c, spec delta +Scenario(26 条)。
+- 用户于设计 HARD-GATE 再次批准（含 tg02 折入 + Q3=A1）。锚刷新至本次提交（防新增四件套改动使拍板失鲜）：
 
 <!-- ship-gate: design-approved -->

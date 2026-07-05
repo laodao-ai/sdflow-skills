@@ -8,12 +8,13 @@
 
 **活体复现（本仓 · 元 bug）**：`checkpoint-tag-single-source` 的 `spec-review-report.md` 第 85 行是一句描述句（形如「拍板发生后才写 \`<!-- ship-gate: design-approved -->\`（当前故意不写——设计未获批）」），无任何独占一行的锚（`grep -n "^<!-- ship-gate: design-approved -->"` 空），但 `grep -c "ship-gate: design-approved"` = 1。gate 首跑即凭这句子串命中判「设计已批」→ 返回 `RUN_PLAN`，让该 change 在设计门**实际未过**（报告明写「修订版须回设计门再过一次」）时越过 adr/0004 红线起跑。已记 buglist **B4（P1）**。
 
-这是门禁自身的正确性缺陷，且**不止一处**〔grill 证伪初稿「anchors_in 唯一入口」〕：①`anchors_in`（`:198`）服务设计门 / verify / code-review 锚检测；②`archived_verify_state`（`:143`）**另用裸子串** `ANCHOR_VERIFY_PASS in out` 查 git-show 出的归档 verify-report.md，**不经 anchors_in**——同一 bug 类，归档 verify 描述性提及 `verify=PASS` 而无真锚 → 可致**假 SHIPPED**。穷举确认锚检测**仅此两处**（`:237` 的 `"TG-02" in` 是触发标签、非 ship-gate 锚，故意子串，不动）。gate 的存在意义就是堵假✅，此洞直接侵蚀设计门与 SHIPPED 两道判定，值得在一个窄 change 内把**锚检测 bug 类**根治（非只补单实例）。
+这是门禁自身的正确性缺陷，且**不止一处**〔grill 证伪初稿「anchors_in 唯一入口」〕：①`anchors_in`（`:198`）服务设计门 / verify / code-review 锚检测；②`archived_verify_state`（`:143`）**另用裸子串** `ANCHOR_VERIFY_PASS in out` 查 git-show 出的归档 verify-report.md，**不经 anchors_in**——同一 bug 类，归档 verify 描述性提及 `verify=PASS` 而无真锚 → 可致**假 SHIPPED**。锚检测子串洞为两处（`anchors_in` + `archived_verify_state`）；**跑 gate 现场（dogfood）又暴露第三个同类子串 bug**：`tg02_hit`（`:237` `"TG-02" in proposal`）把对 TG-02 的描述性提及/代码引用误判为命中 → 假 RUN_SOP，正卡住本 change 自己的 ship。虽非 ship-gate 锚（是触发标签、修法不同=声明式匹配非行锚，见 design ADR-6），但**同属「gate 子串检测误配描述性提及」bug 类**，设计门 Q3 拍板一并折入根治。gate 的存在意义就是堵假✅，此洞直接侵蚀设计门与 SHIPPED 两道判定，值得在一个窄 change 内把**锚检测 bug 类**根治（非只补单实例）。
 
 ## What Changes
 
 - **锚检测从子串升级到行锚定 + fence-aware，两处解析点统一到共用核心**〔grill Q1〕：抽文本级核心 `_line_scoped_hits(text, candidates)`——候选锚 MUST 以**独占一行**出现（`line.strip() == anchor` 整行字面等值，非子串）且**忽略 fenced code block（\`\`\`）内的行**；`anchors_in`（读文件）与 `archived_verify_state`（`:143`，git-show 文本）**都改走此核心**（后者三态 `conflict`/`pass`/`none` 返回逐字不变，只换检测维）。保留「字面查找（非正则）」精神：行级用等值比较，无需正则。
 - **新增锚检测负例矩阵**（`sdflow-ship/tests/`）：断言一组 MUST NOT match 的报告文本——①锚**内联**在描述句中（前后有其它字符）→ 不命中；②锚在 \`\`\` 代码块内独占一行 → 不命中；③锚在行内反引号 span 中 → 不命中。正例回归：模板真产的独占一行锚（前后可有空白）→ 命中。冲突检测回归：`verify=PASS` 与 `verify=FAIL` 各独占一行并存 → 两者皆命中 → 仍判 UNKNOWN。
+- **`tg02_hit` 触发检测收紧（声明式匹配）**〔dogfood 折入·Q3=A1〕：`tg02_hit`（`:234`）从裸 `"TG-02" in proposal` 改匹配**声明式** `〔TG-02`（全角括号头注形，ff 强制格式）——排除对 TG-02 的描述性提及/代码引用/否定句误命中的假 RUN_SOP。与锚检测并列为「gate 检测从子串收紧」。
 - **零行为外扩**：退出码语义、锚字面集、JSON 字段均不变；仅把「命中」从子串收紧为行级等值（收敛假阳性，不新增放行路径）。真锚（模板产出）在新旧实现下都命中，无回归。
 
 ## Capabilities
@@ -28,7 +29,7 @@
 
 ## Impact
 
-- **代码**：`sdflow-ship/scripts/ship_gate.py`（抽 `_line_scoped_hits` 文本核心；`anchors_in`（`:198`）+ `archived_verify_state`（`:143`）改走核心 + 头注释契约表锚检测语义一句）。
+- **代码**：`sdflow-ship/scripts/ship_gate.py`（抽 `_line_scoped_hits` 文本核心；`anchors_in`（`:198`）+ `archived_verify_state`（`:143`）改走核心 + 未闭合 fence 保守判定〔ADR-5〕；`tg02_hit`（`:234`）声明式匹配〔ADR-6〕 + 头注释契约表）。
 - **测试**：`sdflow-ship/tests/`（新增锚检测负例/正例锚测 + archived verify 描述性 PASS 负例；`test_gate_terminal.py` / 设计门相关既有用例回归）。
 - **技术栈**：纯 Python 编排脚本 + pytest，不命中 TG-01/02/03 任何领域清单（backend·go / embedded / frontend 均不适用）。
 - **下游**：`/sdflow-ship` 编排 skill 的所有未来运行；`anchors_in` 属 skill 本体，随 setup.sh symlink 即时生效，无需 sdflow-init update 推送。
@@ -38,12 +39,14 @@
 
 - **假命中收敛（两路径）** — 基准：B4 活体盘面（报告仅含描述性锚提及）首跑 `RUN_PLAN` 假过设计门 → 目标：同盘面判 `REFUSE_START`；归档 verify 描述性提及 PASS 不再 `has_pass=True` — 度量：负例用真实复现文本（内联锚句 + 代码块内锚）断言 `anchors_in`/`archived_verify_state` 不命中。
 - **真锚零回归** — 基准：三模板产出的独占一行锚在旧实现命中（15 份归档报告实证锚均独占顶格）→ 目标：新实现仍命中、既有 gate 测试套全绿 — 度量：`pytest sdflow-ship/tests/` 通过数不降 + 正例/冲突回归用例绿。
+- **tg02 假阳收敛** — 基准：本 change proposal 描述性提及 TG-02 → 假 RUN_SOP（活体）→ 目标：声明式匹配下同 proposal 判 SKIP、真 `〔TG-02：` 声明仍判 RUN_SOP — 度量：负例（描述性提及/代码引用/否定句）+ 正例（`〔TG-02：` 头注）各一测。
 
 ## 需求优先级〔TG-19〕
 
 | 优先级 | 项 | 理由 |
 |---|---|---|
 | P1 | 锚检测行锚定 + fence-aware（`anchors_in` + `archived_verify_state`） | 设计门假过的元 bug，活体复现；两处锚检测点的假阳性直穿设计门与 SHIPPED 两道判定 |
+| P1 | `tg02_hit` 声明式匹配 | dogfood 活体复现：描述性提及 TG-02 → 假 RUN_SOP 卡 ship；同 bug 类 |
 | P2 | 头注释契约表锚检测语义同步 | 防文档与实现漂移，随修不独立成活 |
 
 ## 假设〔TG-22〕

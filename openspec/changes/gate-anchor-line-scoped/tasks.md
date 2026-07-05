@@ -25,6 +25,13 @@
 - [ ] 2b.2 实现：`pick_exclusive`（:217-227）与 `archived_verify_state`（:143）消费核心的 `unbalanced` 信号——为真时**保守失败到安全侧**：`pick_exclusive` → emit UNKNOWN（同冲突路径，reason 注「未闭合 fence 隔断互斥锚，判定不能」）；`archived_verify_state` → 返 `none`（不 SHIPPED）。**单锚调用方 `anchors_in`（设计门 design-approved）不消费 unbalanced**——未闭合吞唯一锚 = 空命中 = REFUSE_START，本就安全侧假阴，无需特判；2b.1 转绿
 - [ ] 2b.3 回归：既有 `pick_exclusive`/`archived_verify_state` 的正常（fence 平衡）用例逐字不变——unbalanced 分支只在末尾 in_fence 为真时触发，平衡报告零影响
 
+## 2c. `tg02_hit` 声明式匹配（design ADR-6 · dogfood 折入 · 设计门 Q3=A1）
+
+- [ ] 2c.1 [TDD] 写失败测试（`test_gate_impl_progress.py` 增）：proposal 含**描述性** `TG-02`——代码引用 `` `"TG-02" in` ``、否定句 `TG-01/02/03 均不命中`、散文提及——但**无** `〔TG-02` 声明头注 → 断言 `tg02_hit(cdir)` 为 **False**（decide 判 SKIP/继续，**非** RUN_SOP）。旧裸子串会 True→假 RUN_SOP，先红（本 change proposal 自身即此盘面）
+- [ ] 2c.2 [TDD] 写正例测试：proposal 头注含 `〔TG-02：嵌入式固件变更〕` → `tg02_hit` 为 **True**（RUN_SOP 不误伤真嵌入式 change）
+- [ ] 2c.3 实现：`tg02_hit`（`ship_gate.py:234`）`return p.is_file() and "TG-02" in text` 改为匹配声明式 `"〔TG-02" in text`（全角开括号；含冒号变体 `〔TG-02：`/`〔TG-02:` 亦可，按接地 8 份 proposal 均 `〔TG-NN：`）；2c.1/2c.2 转绿。头注释注明「声明式匹配，非裸子串——描述性提及不触发」
+- [ ] 2c.4 回归：`test_gate_impl_progress.py` 既有消费 `tg02_hit`/RUN_SOP 的用例——若其 fixture 用裸 `TG-02` 造 proposal，MUST 改为 `〔TG-02：` 声明形（否则新匹配下真嵌入式盘面失效、测试假绿或假红）；核对并同步
+
 ## 3. 端到端门禁回归 + 契约同步
 
 - [ ] 3.1 [TDD] 端到端负例：构造一个 change 目录，其 `spec-review-report.md` **仅**含描述性锚提及（无独占锚行）、无 tasks 产物，跑 `decide()` 断言 `REFUSE_START`（exit 3，未过设计门）——证 B4 盘面在 gate 顶层已堵（非仅单元层）

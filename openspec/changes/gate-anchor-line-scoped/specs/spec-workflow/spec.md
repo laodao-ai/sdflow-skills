@@ -103,3 +103,7 @@
 #### Scenario: 未闭合 fence 隔断互斥锚对不判假通过〔gate-anchor-line-scoped OV-2·设计门 Q1=A〕
 - **WHEN** 某报告的**互斥锚对**（verify `PASS`/`FAIL` 或 code-review `pass`/`blocked`）中正锚独占一行在 fenced code block 外、负锚独占一行落在**未闭合**（无配对收尾 ```）的 fence 内被吞
 - **THEN** 行级锚检测核心 MUST 回报**未闭合信号**，互斥锚对消费方（`pick_exclusive` / `archived_verify_state`）遇未闭合信号 MUST **保守判定**（`pick_exclusive`→UNKNOWN 点名「未闭合 fence 隔断互斥锚」；`archived_verify_state`→`none` 不 SHIPPED），MUST NOT 因只见正锚而判 pass（否则从旧裸子串的 conflict 语义回归为危险假阳）；单锚判定（`anchors_in` 查 design-approved，无互斥对）不受此约束——未闭合吞唯一锚 = 空命中 = REFUSE_START，方向为安全侧假阴
+
+#### Scenario: TG-02 条件步检测用声明式匹配非裸子串〔gate-anchor-line-scoped ADR-6·dogfood〕
+- **WHEN** 某 change 的 proposal **描述性提及** `TG-02`（反引号代码引用 / 否定句 `TG-01/02/03 均不命中` / 散文讨论），但**未以声明式头注** `〔TG-02：…〕` 标注该触发（即该 change 非嵌入式、不该跑 embedded-test-sop）
+- **THEN** gate 的 TG-02 条件步检测（`tg02_hit`）MUST 判**未命中** → step 5.5 输出 SKIP，MUST NOT 因裸子串 `"TG-02" in proposal` 命中描述性提及而误判 RUN_SOP（嵌入式 SOP）；检测 MUST 锚定**声明式** `〔TG-02`（全角括号头注形，ff-generation 强制约定），真嵌入式 change 的 `〔TG-02：…〕` 声明仍 MUST 正确命中 → RUN_SOP；未用括号声明的（非常规）embedded proposal 漏检为安全侧假阴（约定强制括号故实际不发生），记 Non-Goals
