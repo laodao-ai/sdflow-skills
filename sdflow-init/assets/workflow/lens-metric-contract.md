@@ -8,6 +8,8 @@
 - lens  ∈ {domain, adversarial, grounding, history, outside-voice, broad}（canonical 投影；折叠表见 §折叠）
 - runner∈ {claude, codex, claude-fallback}
 - site  ∈ {code-voice, hr-tg, design-voice, —}（可选消歧，仅 outside-voice，不进 lens enum；非 outside-voice 用 —）
+  **〔impl-review-fix CF-补2〕site 仅分组消歧、不纳入越域自检**：任意取值只多一个分组行，不阻塞（与 layer/lens/runner/sev
+  四个受自检约束的必检字段不同，两 SKILL 的锚行存在性自检 MUST NOT 因 site 值另类而报错）。
 - findings/采纳/裁掉/defer/独立 = int≥0
 - sev = 致N/高N/中N/低N（四级定序、零也写 0、分隔符恒 /；仅采纳项计入）
 

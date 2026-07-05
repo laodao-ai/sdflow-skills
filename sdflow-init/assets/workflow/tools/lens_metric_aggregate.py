@@ -78,32 +78,49 @@ def aggregate(archive_root):
 
 
 def _int(v):
+    """契约字段 int≥0。[impl-review-fix CF-5] 解析失败（如 "3.0" 这类浮点串）
+    或负值均判「数值非法」——不静默吞成 0 装作正常，返回 (值, is_bad) 二元组，
+    调用侧显式标记 flag，同 ⚠越域 口径不静默。"""
     try:
-        return int(v)
+        n = int(v)
     except (TypeError, ValueError):
-        return 0
+        return 0, True
+    if n < 0:
+        return n, True
+    return n, False
 
 
-def render_table(rows, no_anchor):
-    """多列可排序描述性表（无合成分）。按 (layer,lens,site) 分组：
+def render_table(rows, no_anchor, parse_failed=None):
+    """多列可排序描述性表（无合成分）。按 (layer,lens,runner,site) 分组
+    [impl-review-fix CF-1]（契约键含 runner——codex 与 claude-fallback 的
+    outside-voice 需分行，不可合并）：
     出现轮数 · Σfindings · Σ采纳 · Σ裁掉 · Σdefer · Σ独立 · 采纳率 · 独立率 · flag。"""
-    grp = defaultdict(lambda: dict(轮=0, f=0, 采纳=0, 裁掉=0, defer=0, 独立=0, bad=False))
+    parse_failed = parse_failed or []
+    grp = defaultdict(lambda: dict(轮=0, f=0, 采纳=0, 裁掉=0, defer=0, 独立=0,
+                                    bad=False, num_bad=False))
     for r in rows:
         lens = r.get("lens", "")
         bad = (r.get("layer") not in LAYER_ENUM) or (lens not in LENS_ENUM)
-        key = (r.get("layer", "?"), lens or "?", r.get("site", "—"))
+        key = (r.get("layer", "?"), lens or "?", r.get("runner", "?"), r.get("site", "—"))
         g = grp[key]
         g["轮"] += 1
-        g["f"] += _int(r.get("findings"))
-        g["采纳"] += _int(r.get("采纳"))
-        g["裁掉"] += _int(r.get("裁掉"))
-        g["defer"] += _int(r.get("defer"))
-        g["独立"] += _int(r.get("独立"))
+        num_bad = False
+        vals = {}
+        for fld in ("findings", "采纳", "裁掉", "defer", "独立"):
+            v, nb = _int(r.get(fld))
+            vals[fld] = v
+            num_bad = num_bad or nb
+        g["f"] += vals["findings"]
+        g["采纳"] += vals["采纳"]
+        g["裁掉"] += vals["裁掉"]
+        g["defer"] += vals["defer"]
+        g["独立"] += vals["独立"]
         g["bad"] = g["bad"] or bad
-    hdr = "| layer | lens | site | 出现轮数 | Σfindings | Σ采纳 | Σ裁掉 | Σdefer | Σ独立 | 采纳率 | 独立率 | flag |"
-    sep = "|" + "---|" * 12
+        g["num_bad"] = g["num_bad"] or num_bad
+    hdr = "| layer | lens | runner | site | 出现轮数 | Σfindings | Σ采纳 | Σ裁掉 | Σdefer | Σ独立 | 采纳率 | 独立率 | flag |"
+    sep = "|" + "---|" * 13
     lines = [hdr, sep]
-    for (layer, lens, site), g in sorted(grp.items()):
+    for (layer, lens, runner, site), g in sorted(grp.items()):
         denom = g["采纳"] + g["裁掉"] + g["defer"]
         采纳率 = f"{g['采纳']/denom:.0%}" if denom else "—"
         独立率 = f"{g['独立']/g['f']:.0%}" if g["f"] else "—"
@@ -112,10 +129,20 @@ def render_table(rows, no_anchor):
             flags.append("≥10待复评")
         if g["bad"]:
             flags.append("⚠越域")
-        lines.append(f"| {layer} | {lens} | {site} | {g['轮']} | {g['f']} | {g['采纳']} | "
+        if g["num_bad"]:
+            flags.append("⚠数值非法")
+        lines.append(f"| {layer} | {lens} | {runner} | {site} | {g['轮']} | {g['f']} | {g['采纳']} | "
                      f"{g['裁掉']} | {g['defer']} | {g['独立']} | {采纳率} | {独立率} | {' '.join(flags) or '—'} |")
     lines.append("")
-    lines.append(f"> 无锚样本 {len(no_anchor)} 份（旧格式,不纳入）: {', '.join(no_anchor) or '无'}")
+    # [impl-review-fix CF-7] 「N 份」= 报告文件数（每 change 常含 spec/code 两份），
+    # 非去重后的 change 数——同名 change 连续出现两次不是 bug，是 spec+code 两份报告；
+    # 另附去重后 change 数供快速核对规模。
+    lines.append(f"> 无锚样本 {len(no_anchor)} 份（旧格式,不纳入；份=报告文件数，"
+                 f"每 change 常含 spec/code 两份，非 change 数；去重后 {len(set(no_anchor))} 个 change）: "
+                 f"{', '.join(no_anchor) or '无'}")
+    # [impl-review-fix CF-2] 解析失败桶显式呈现，不静默丢弃坏文件。
+    lines.append(f"> 解析失败 {len(parse_failed)} 份（编码/IO 错误，已跳过未计入聚合，不拖垮全局）: "
+                 f"{', '.join(parse_failed) or '无'}")
     lines.append("> 独立率跨轮不保证同口径（dedup 合并尺度可能漂移），复评时校验最近几轮尺度一致。")
     return "\n".join(lines)
 
@@ -125,8 +152,8 @@ def main(argv=None):
     ap.add_argument("--root", default=".", help="仓根（含 openspec/changes/archive）")
     args = ap.parse_args(argv)
     archive = Path(args.root) / "openspec" / "changes" / "archive"
-    rows, no_anchor = aggregate(archive)
-    print(render_table(rows, no_anchor))
+    rows, no_anchor, parse_failed = aggregate(archive)
+    print(render_table(rows, no_anchor, parse_failed))
     return 0
 
 

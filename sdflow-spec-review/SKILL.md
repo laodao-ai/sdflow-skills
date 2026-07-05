@@ -76,7 +76,7 @@ description: >
 - **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。
 - **outside-voice findings 直通〔R4〕**：runner=codex 的 voice findings 与各镜同池对抗裁决；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
 - **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、第四步对应自检项跳过（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按第四步「度量锚」格式逐镜落锚（**采纳/裁掉/defer 为设计门拍板前的临时裁决，MUST 在拍板回写时最终确定，见〔SR-M〕**）。
-- **锚行存在性自检〔R1/R3/R5〕**：出报告后机械 grep 四类 v1 锚行（`sdflow:outside-voice`/`sdflow:hr-tg`/`sdflow:step1-broad-review`/**`sdflow:lens-metric`**），缺失即本步报错阻塞（机械失职拦截，非人类门）；锚行 `findings=N` 与合并池实收数 diff 一次。
+- **锚行存在性自检〔R1/R3/R5〕〔impl-review-fix CF-9〕**：出报告后 grep 四类 v1 锚行（`sdflow:outside-voice`/`sdflow:hr-tg`/`sdflow:step1-broad-review`/**`sdflow:lens-metric`**），缺失即本步报错阻塞（非人类门）；锚行 `findings=N` 与合并池实收数 diff 一次。**此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `design-approved` 锚由 `ship_gate.py` 外部拦截不同）——去掉暗示外部强制的"机械"表述，诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"。
   **lens-metric 自检扩一类**：不止存在性——缺任一必填字段，或 `layer`/`lens`/`runner`/`sev` 取值越域/子格式不符（取值域/子格式见规则根 `lens-metric-contract.md`，唯一权威源）均报错阻塞；数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）是主 session 信任边界、非机械可验，自检 MUST NOT 谎称能机械保证数值正确。**config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
 - 按 `design-diagrams.md`：命中触发的图**只验证存在/正确/未过时**，缺失/过时标记，不重画。
@@ -100,6 +100,10 @@ description: >
 - **度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落，见第三步）**：Step3 裁决后为 `domain`/`adversarial`/`grounding`/`outside-voice`（`site=design-voice|hr-tg` 若均调用，各独立一行）/`broad`（autoplan）各落一行：
   `<!-- sdflow:lens-metric v1 layer="spec-review" lens="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->`
   字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）。
+- **反馈回路免责声明（与 sdflow-code-review 对称）〔impl-review-fix CF-补〕**：本 skill 只落锚，**不做聚合、
+  不做复评判断、不主动 surfacing**——跨 change 归档后的锚聚合、按采纳率+独立率复评、"出现轮数≥10"的显著提示，
+  一律由 `/sdflow-maintain` 收尾步统一做（跑 `tools/lens_metric_aggregate.py` 只读聚合所有归档报告）；是否保留/
+  降采样/收紧触发/淘汰某镜一律人决，本 skill MUST NOT 自行判断或执行。
 - 据此更新 design/specs，改动处标 `[spec-review-amendment]`。
 - **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
 - **拍板回写协议（ship-gate 锚，D2）**：设计门拍板**发生后**，主 session MUST 立即把下行锚原样写入 `spec-review-report.md`（拍板记录区末尾）——写入者=主 session、触发点=用户批准动作；这是 `/sdflow-ship` pre-flight 的唯一机判依据：
