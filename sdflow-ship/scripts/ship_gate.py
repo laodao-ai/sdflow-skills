@@ -140,7 +140,9 @@ def archived_verify_state(root, ref, archive_dir):
                          f"{ref}:openspec/changes/archive/{archive_dir}/verify-report.md")
     if rc != 0:
         return "none"
-    hits, _ = _line_scoped_hits(out, [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL])  # [ADR-4] 行级，非子串
+    hits, unbalanced = _line_scoped_hits(out, [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL])  # [ADR-4] 行级，非子串
+    if unbalanced:   # [ADR-5] 保守：未闭合 fence 不判 SHIPPED
+        return "none"
     has_pass, has_fail = ANCHOR_VERIFY_PASS in hits, ANCHOR_VERIFY_FAIL in hits
     if has_pass and has_fail:
         return "conflict"
@@ -237,8 +239,14 @@ def emit(verdict, exit_code, next_step, reason, **extra):
 
 
 def pick_exclusive(path, positive, negative, label):
-    """互斥锚对解析：两者并存 → UNKNOWN（不猜优先级）。返回 'pos'/'neg'/None。"""
-    found = anchors_in(path, [positive, negative])
+    """互斥锚对解析：两者并存 / 未闭合 fence → UNKNOWN（不猜）。返回 'pos'/'neg'/None。"""
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace")
+    found, unbalanced = _line_scoped_hits(text, [positive, negative])
+    if unbalanced:   # [ADR-5] 未闭合 fence 可吞负锚 → 保守不判 pass
+        emit("UNKNOWN", EXIT_UNKNOWN, None,
+             f"{label} 报告含未闭合 fence（``` 悬空），无法可靠判定互斥锚，请人工修复围栏后重试")
     if positive in found and negative in found:
         emit("UNKNOWN", EXIT_UNKNOWN, None,
              f"{label} 报告并存冲突锚行（{positive} 与 {negative}），请人工裁决删除其一")

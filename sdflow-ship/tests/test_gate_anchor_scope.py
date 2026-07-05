@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import subprocess
+import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 _gate_path = REPO / "sdflow-ship" / "scripts" / "ship_gate.py"
@@ -76,3 +77,22 @@ def test_archived_true_pass_and_conflict(tmp_path):
     (d / "verify-report.md").write_text(f"{VPASS}\n{VFAIL}\n", encoding="utf-8")
     _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "conflict")
     assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "conflict"
+
+
+def test_pick_exclusive_unbalanced_unknown(tmp_path):
+    # 正锚在 fence 外 + 未闭合 ``` + 负锚在内被吞 → 不得判 pass，须 UNKNOWN
+    f = tmp_path / "verify-report.md"
+    f.write_text(f"{VPASS}\n```\n{VFAIL}\n", encoding="utf-8")   # ``` 未闭合
+    with pytest.raises(SystemExit) as e:
+        _sg.pick_exclusive(f, VPASS, VFAIL, "verify")
+    assert e.value.code == _sg.EXIT_UNKNOWN
+
+
+def test_archived_unbalanced_none(tmp_path):
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "t"); _git(tmp_path, "config", "user.email", "t@t")
+    d = tmp_path / "openspec" / "changes" / "archive" / "2026-07-05-demo"
+    d.mkdir(parents=True)
+    (d / "verify-report.md").write_text(f"{VPASS}\n```\n{VFAIL}\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "unb")
+    assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "none"
