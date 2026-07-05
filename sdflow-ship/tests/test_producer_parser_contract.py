@@ -39,3 +39,19 @@ def test_bare_subject_matches_with_null_namespace(repo):
     assert m is not None
     assert m.group(1) is None
     assert m.group(2) == "1"
+
+
+# design D2 负例矩阵：每条 MUST NOT match，封住"TAG_RE 被放松后 happy 例仍绿"的漏报。
+NEGATIVE_CASES = [
+    ("checkpoint(task1slug)",   "尾 dash 变可选（丢 task1/task12 边界锚）"),
+    ("checkpoint(DEMO:task1-)", "命名空间允许大写（破 kebab 锁）"),
+    ("checkpoint(task-1-)",     "号位允许非数字"),
+    ("checkpoint(:task1-)",     "空命名空间"),
+]
+
+
+@pytest.mark.parametrize("subject,relaxation", NEGATIVE_CASES,
+                         ids=[c[0] for c in NEGATIVE_CASES])
+def test_tag_re_rejects_relaxations(subject, relaxation):
+    assert TAG_RE.match(subject) is None, \
+        f"负例 {subject!r} 竟被 match——{relaxation} 类放松未被挡住"
