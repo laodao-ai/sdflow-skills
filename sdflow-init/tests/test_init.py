@@ -46,8 +46,8 @@ class TestReviewToolDeployment:
         osroot = project_dir / "openspec"
         content = (osroot / "review.html").read_text(encoding="utf-8")
         template = (osroot / "workflow" / "tools" / "review-stub.html").read_text(encoding="utf-8")
-        # 模板源（openspec/workflow/tools/）须保持原始未替换——它是另两个生产者
-        # （change-review-stub.py hook、gen_review_stub.py）各自替换的源，须仍含字面 token。
+        # 模板源（openspec/workflow/tools/）须保持原始未替换——它是 copy_review_tool 渲染
+        # 根 review.html 的源模板，须仍含字面 token（每目录 stub 生产者已移除）。
         assert "__PROJECT_NAME__" in template
         # 生成的根 review.html 须已替换为项目目录名，且与模板逐字节一致（仅 token 被换）。
         assert "__PROJECT_NAME__" not in content

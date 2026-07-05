@@ -158,7 +158,7 @@ def copy_review_tool(root):
 
     根 review.html = openspec/workflow/tools/review-stub.html 模板替换 __PROJECT_NAME__ 为
     项目目录名（该值对一次安装永不变，不重蹈 __SCOPE__ 过时症）。模板本身保持原始未替换
-    （供 change-review-stub.py / gen_review_stub.py 两个生产者读作源）。update 覆盖刷新。
+    （作本函数渲染根 review.html 的源模板）。update 覆盖刷新。
     """
     osroot = os.path.join(root, "openspec")
 
