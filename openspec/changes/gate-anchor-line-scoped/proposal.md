@@ -1,6 +1,6 @@
 # gate-anchor-line-scoped — Proposal
 
-〔TG-01：工具链（Python gate 脚本）〕〔TG-25：契约套件（锚检测负例）〕〔TG-12：决策逻辑（门禁判定）〕〔TG-23：≥2 方案（锚检测方式）〕〔TG-22：未验证前提（锚行独占一行）〕
+〔TG-25：契约套件（锚检测负例）〕〔TG-23：≥2 方案（锚检测方式）〕〔TG-22：未验证前提（锚行独占一行）〕〔TG-18：测试计划〕〔TG-12：决策逻辑（门禁判定）〕 — 技术栈 TG-01/02/03 **均不命中**（元仓 Python gate 脚本，非后端服务/嵌入式/前端）〔spec-review-amendment BR-1〕；HR-TG 子集命中 = none
 
 ## Why
 

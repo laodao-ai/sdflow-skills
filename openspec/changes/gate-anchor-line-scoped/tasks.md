@@ -14,7 +14,7 @@
 
 ## 2. `archived_verify_state` 折入共用核心（design ADR-4 · grill Q1）
 
-- [ ] 2.1 [TDD] 写失败测试：造一份 archived `verify-report.md` 文本，正文**描述性提及** `<!-- ship-gate: verify=PASS -->`（内联句 / 代码块内）但**无真独占 PASS 锚**，断言 `archived_verify_state` 判 **`none`**（非 `pass`）——旧裸子串会误判 `pass` → 假 SHIPPED，此负例先红
+- [ ] 2.1 [TDD] 写失败测试〔spec-review-amendment BR-2：archived_verify_state 签名=(root,ref,archive_dir)，经 `git show <ref>:…verify-report.md` 取文本、**不接受文本入参**〕：**分两层测**——①**核心单元**：`_line_scoped_hits(out_text, [PASS,FAIL])` 对「描述性提及 PASS 的文本」返回不含 PASS（直接喂文本）；②**端到端**：用 git fixture（临时 repo `git commit` 一个 archive/`<date>-<change>`/verify-report.md，内容为描述性提及 PASS 无真锚）跑 `archived_verify_state(root, base_ref, dir)` 断言判 **`none`**（非 `pass`）——旧裸子串会误判 `pass`→假 SHIPPED，此负例先红
 - [ ] 2.2 [TDD] 回归测试：真 archived verify-report（PASS 独占一行）→ `archived_verify_state` 判 `pass`；PASS+FAIL 各独占一行并存 → 判 `conflict`（三态逐字不变）
 - [ ] 2.3 实现：`archived_verify_state`（`ship_gate.py:143`）把 `X in out` 裸子串改为 `hits = _line_scoped_hits(out, [PASS, FAIL]); has_pass = PASS in hits; has_fail = FAIL in hits`；`conflict`/`pass`/`none` 分派逐字不变；2.1/2.2 转绿
 - [ ] 2.4 回归：`test_gate_terminal.py` 中消费 `archived_verify_state` 的 SHIPPED/空壳 fail-safe 用例逐字不变保持绿（真锚仍命中，空壳仍 fail-safe）
@@ -24,7 +24,8 @@
 - [ ] 3.1 [TDD] 端到端负例：构造一个 change 目录，其 `spec-review-report.md` **仅**含描述性锚提及（无独占锚行）、无 tasks 产物，跑 `decide()` 断言 `REFUSE_START`（exit 3，未过设计门）——证 B4 盘面在 gate 顶层已堵（非仅单元层）
 - [ ] 3.2 回归：既有设计门/归档终态用例（`test_gate_terminal.py` 及任何消费 `anchors_in`/`archived_verify_state` 的用例）逐字不变保持绿——真锚（模板独占一行）在新实现命中，pre-flight/SHIPPED 路径行为不变
 - [ ] 3.3 `ship_gate.py` 头注释契约表：锚检测语义补一句「机判锚 MUST 独占一行（行级等值，忽略 \`\`\` 代码块），两处解析点（anchors_in / archived_verify_state）共用 `_line_scoped_hits`——描述性提及/文档示例不触发」；「已知不覆盖」追加两条：①多行 HTML 注释内嵌锚不解析（人为构造，显式越权同权级）②未闭合 fence 吞真锚→失败到安全侧（不做 unbalanced→UNKNOWN，见 design Non-Goals）
-- [ ] 3.4〔锚检测契约测试〕新增/增补契约测试：把三模板真产的锚行样本 ↔ `_line_scoped_hits` 命中双向钉死（模板若把锚与它文同行输出则测试变红报警，防假设失效静默回归）
+- [ ] 3.4〔锚检测契约测试〕新增/增补契约测试：把三模板真产的锚行样本 ↔ `_line_scoped_hits` 命中双向钉死（模板若把锚与它文同行输出则测试变红报警，防假设失效静默回归）。**〔spec-review-amendment BR-3/OV-1/对抗镜1 收敛〕契约样本源 MUST = 归档真实报告语料**（`openspec/changes/archive/*/{spec-review,verify,code-review}-report.md` 的真锚行，实证 15/15 独占顶格），**MUST NOT** 取 `sdflow-code-review/SKILL.md:150-151` 等**展示性 fenced 块字面行**（那两行锚带同行尾注 `（建议进…）`，行级收紧下 `strip()!=anchor`，误当 fixture 会让 contract test 假红 → 实现者可能误削弱断言）
+- [ ] 3.5〔spec-review-amendment BR-3 顺手·可选〕消歧义源头：把 `sdflow-code-review/SKILL.md:150-151` 展示块里锚行的同行尾注 `（建议进…）`/`（存在未解 blocker）` 挪到锚行**之前/之后独立行**，使 SKILL 展示的锚也独占一行（与真产报告一致，杜绝"照抄模板"歧义）。属 skill 文档微调、非本 change 硬需求，defer 亦可
 
 ## 4. 全量回归 + 收敛
 
