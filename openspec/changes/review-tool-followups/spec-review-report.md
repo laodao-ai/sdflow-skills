@@ -76,3 +76,9 @@
 - 自动决策 A1–A9 已回填 design/spec/tasks（[spec-review-amendment]）。
 - **3 项需拍板（Q-D1/D2/D3）留设计 HARD-GATE**——建议人工一次性过本报告拍板。
 - 拍板批准后进 writing-plans / 实现。**评审揭穿的核心**：T45 的 Q3 远比原设计估的重（navigate 契约 + 防递归 + notice 注入顺序），实现须严格照 A1/A2 钉的机制走，否则反静默承诺静默落空。
+
+## 四、设计门拍板记录
+
+- **2026-07-05 · 用户批准（设计 HARD-GATE）**：3 项需拍板 **Q-D1 / Q-D2 / Q-D3 全采推荐 A**——① settings.json 原子写本 change 修（task 1.4b）；② Windows `python3 || python` 双修 setup.sh + 消费仓 update 路径（task 1.3）；③ 完整实现 T45 Q3 + tasks 3.2 四态手测硬约束。A1–A9 自动决策一并生效。批准进 writing-plans / 实现。
+
+<!-- ship-gate: design-approved -->
