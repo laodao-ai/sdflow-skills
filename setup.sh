@@ -157,6 +157,19 @@ for d in "${TARGET_DIRS[@]}"; do
 done
 install_sdflow
 
+# ─── retire deregistered global hooks (T44) ─────────────────────
+# 死 hook（change-review-stub.py）每次 Bash 调用都 fire 报错，直到被反注册。把自愈焊进
+# 工具链升级路径，令 /sdflow-upgrade 即时清掉，不必等某项目跑 sdflow-init update。
+# fail-safe：绝不中止 setup（清理是尽力而为，非安装必要步）。
+_py=""
+command -v python3 >/dev/null 2>&1 && _py=python3
+[ -z "$_py" ] && command -v python >/dev/null 2>&1 && _py=python
+if [ -n "$_py" ]; then
+  { "$_py" "$REPO_DIR/sdflow-init/scripts/init.py" retire-hooks ; } || echo "  ⚠ retire-hooks 跳过（非致命）"
+else
+  echo "  ⚠ retire-hooks 跳过：PATH 无 python3/python（非致命）"
+fi
+
 # ─── Summary ─────────────────────────────────────────────────
 version="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "unknown")"
 echo ""
