@@ -97,7 +97,20 @@ if (typeof module !== 'undefined' && module.exports) {
 
 if (typeof document !== 'undefined') {
   (function () {
-    const initialDir = window.location.pathname.replace(/[^/]*$/, '');
+    // A3: 深链来源优先级 hash → pathname。hash 经同一 origin 检查后**取 url.pathname**
+    // （非 raw hash 原样——`#http://host/changes/X/` 同源但非 /path 形态；提取 pathname
+    // 顺带归一 %2F 编码）。跨源 / 畸形 hash 回落 pathname。A8: let（供 currentPath+popstate 共用）。
+    function resolveInitialDir() {
+      const raw = window.location.hash.slice(1);   // 去前导 '#'
+      if (raw) {
+        try {
+          const u = new URL(raw, window.location.origin);
+          if (u.origin === window.location.origin) return u.pathname;
+        } catch (e) { /* 畸形 hash → 回落 */ }
+      }
+      return window.location.pathname.replace(/[^/]*$/, '');
+    }
+    let initialDir = resolveInitialDir();
     // Baked into review-stub.html at generation time (see formatPathBar's comment above for
     // why this is safe to bake in, unlike the removed __SCOPE__ mechanism). `|| ''` covers the
     // undefined case (old template copy predating this feature); formatPathBar covers the rest.
@@ -264,15 +277,29 @@ if (typeof document !== 'undefined') {
     // the plain directory-listing view instead.
     async function bootstrap() {
       if (initialDir === '/') {
-        try {
-          await loadDoc('/INDEX.md');
-          currentPath = '/INDEX.md';
-          return;
-        } catch (err) {
-          // fall through to the plain root directory listing below
-        }
+        try { await loadDoc('/INDEX.md'); currentPath = '/INDEX.md'; return; }
+        catch (err) { await navigate('/', false); return; }   // 既有根回落
       }
-      await navigate(initialDir, false);
+      // A1: 自派发——不能用 `await navigate(hash)`，navigate 自吞 fetch 错、成功/失败都返
+      // undefined，bootstrap 收不到 404 信号。这里自己 try/catch 调 loadDir/loadDoc。
+      try {
+        if (initialDir.endsWith('/')) await loadDir(initialDir);
+        else await loadDoc(initialDir);
+        currentPath = initialDir;
+        history.replaceState({ path: initialDir }, '', window.location.hash);  // A8/OV-2: Back 回深链
+      } catch (err) {
+        // F-D 防递归：清坏 hash（无 hashchange 监听，安全），MUST NOT 重调 bootstrap()
+        history.replaceState({ path: '/' }, '', window.location.pathname);
+        initialDir = '/';
+        try { await loadDoc('/INDEX.md'); currentPath = '/INDEX.md'; }
+        catch (e) { await navigate('/', false); }
+        // A2/NEW-1: notice 在回落渲染**之后**、专用 DOM 节点、作 contentBody 的兄弟插入
+        // （MUST NOT contentBody.innerHTML= —— 会被 loadDoc/loadDir 擦掉 → 提示静默蒸发）
+        const notice = document.createElement('div');
+        notice.className = 'deep-link-notice';
+        notice.textContent = '深链未找到（可能已归档），已回首页。';
+        content.insertBefore(notice, contentBody);
+      }
     }
 
     bootstrap();

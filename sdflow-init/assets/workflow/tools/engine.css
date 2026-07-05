@@ -122,3 +122,12 @@ body {
 a.auto-link {
   color: #0969da;
 }
+
+.deep-link-notice {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid #d9a441;
+  background: #fdf6e3;
+  color: #6b5320;
+  font-size: 0.9em;
+}
