@@ -263,8 +263,12 @@ TAG_RE = re.compile(r"checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-")  # [T32
 
 def tg02_hit(cdir):
     p = cdir / "proposal.md"
-    # [impl-review-fix] errors="replace" 防非 UTF-8 报告崩溃
-    return p.is_file() and "TG-02" in p.read_text(encoding="utf-8", errors="replace")  # 字面子串（归档实例为全角括号混用）
+    if not p.is_file():
+        return False
+    text = p.read_text(encoding="utf-8", errors="replace")  # 非 UTF-8 防崩
+    # [ADR-6] 声明式匹配（全角括号头注 〔TG-NN：，ff 强制格式），非裸子串——
+    # 描述性提及/代码引用/否定句(TG-01/02/03)不触发假 RUN_SOP（dogfood B4 类）
+    return "〔TG-02" in text
 
 
 def plan_task_ids(plan):

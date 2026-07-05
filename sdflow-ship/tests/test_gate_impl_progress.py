@@ -3,6 +3,12 @@ from pathlib import Path
 from conftest import commit_all, mkchange
 from test_gate_preflight import run_gate
 
+# Load ship_gate module for direct function testing
+_scripts_path = str(Path(__file__).parent.parent / "scripts")
+if _scripts_path not in sys.path:
+    sys.path.insert(0, _scripts_path)
+import ship_gate as _sg
+
 PLAN2 = "### Task 1: A\n- [ ] s\n### Task 2: B\n- [ ] s\n"
 
 def approved_change(repo, plan=None, sop=False, tg02=False):
@@ -209,3 +215,20 @@ def test_non_git_root_unknown(tmp_path_factory):
     non_git = tmp_path_factory.mktemp("non-git-root")
     code, js, _ = run_gate(non_git)
     assert code == 6 and js["verdict"] == "UNKNOWN"
+
+
+# [Task 4: tg02_hit 声明式匹配] —— 防止描述性提及/代码引用/否定句触发假 RUN_SOP
+def test_tg02_descriptive_mention_not_hit(tmp_path):
+    """描述性提及 / 代码引用 / 否定句，无 〔TG-02 声明 → tg02_hit False"""
+    d = mkchange(tmp_path, "demo")
+    # 讨论 `"TG-02" in` 检测；技术栈 TG-01/02/03 均不命中。无 〔TG-02 声明
+    d.joinpath("proposal.md").write_text(
+        '讨论 `"TG-02" in` 检测；技术栈 TG-01/02/03 均不命中。\n', encoding="utf-8")
+    assert _sg.tg02_hit(d) is False
+
+
+def test_tg02_declaration_hit(tmp_path):
+    """声明式 〔TG-02：…〕 格式 → tg02_hit True"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text("〔TG-02：嵌入式固件变更〕\n", encoding="utf-8")
+    assert _sg.tg02_hit(d) is True
