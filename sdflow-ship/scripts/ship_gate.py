@@ -195,12 +195,33 @@ def is_stale(root, rel, scope, change):
     return False, "fresh"
 
 
+def _line_scoped_hits(text, candidates):
+    """文本级行锚定核心（零正则）：候选须独占一行（strip 后等值），忽略 fenced code block。
+    返回 (hits[按 candidates 原序去重], unbalanced[EOF 时围栏未闭合])。
+    anchors_in（读文件）与 pick_exclusive/archived_verify_state（互斥锚对）共用〔ADR-4/5〕。
+    fence 翻转口径同 _parse_plan（line.lstrip().startswith("```")）。"""
+    cand = set(candidates)
+    hit = set()
+    in_fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        s = line.strip()
+        if s in cand:
+            hit.add(s)
+    return [a for a in candidates if a in hit], in_fence
+
+
 def anchors_in(path, candidates):
-    """字面查找（零正则）。文件不存在返回 []。"""
+    """行级字面查找（零正则）：机判锚 MUST 独占一行（strip 后等值）、忽略 ``` 代码块——
+    描述性提及/文档示例不触发〔B4/ADR-1/2〕。文件不存在返回 []。"""
     if not path.is_file():
         return []
-    text = path.read_text(encoding="utf-8", errors="replace")  # [impl-review-fix] 非 UTF-8 防崩
-    return [a for a in candidates if a in text]
+    text = path.read_text(encoding="utf-8", errors="replace")  # 非 UTF-8 防崩
+    return _line_scoped_hits(text, candidates)[0]
 
 
 def emit(verdict, exit_code, next_step, reason, **extra):
