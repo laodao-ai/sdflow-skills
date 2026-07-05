@@ -44,8 +44,8 @@
 | T36 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` | checkpoint 派发指令文案收敛为单一真相源(broad-F2) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
 | T37 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声) | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
 | T38 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | spec Scenario 用词 <当前change> 易被误读为须用本 change 真实 slug,实现实际用任意占位 demo | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
-| T39 | `sdflow-ship/tests/test_producer_parser_contract.py:19` | 集成测试 run_producer 造文件名含冒号(f-demo:task1-slug.txt),NTFS 非法——Unix 跑绿,Windows CI 会误红 | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
-| T40 | `sdflow-ship/tests/test_producer_parser_contract.py:27` | producer→parser 集成正例仅用单数字任务号(1),未覆盖多位数(如 12)group(2) 边界 | 代码质量 | OPEN | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
+| T39 | `sdflow-ship/tests/test_producer_parser_contract.py:19` | 集成测试 run_producer 造文件名含冒号(f-demo:task1-slug.txt),NTFS 非法——Unix 跑绿,Windows CI 会误红 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
+| T40 | `sdflow-ship/tests/test_producer_parser_contract.py:27` | producer→parser 集成正例仅用单数字任务号(1),未覆盖多位数(如 12)group(2) 边界 | 代码质量 | DONE | 2026-07-05 09:55 | checkpoint-tag-single-source |  |
 
 ---
 
@@ -545,11 +545,12 @@
 |------|------|
 | 模块 | `sdflow-ship/tests/test_producer_parser_contract.py:19` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
 
 **备注**：DF6(spec-review Round2)。本测试层 Unix 取向,极低概率。若上 Windows CI 改固定占位文件名(文件名与契约无关,只需 porcelain 非空)。
+> 2026-07 状态：OPEN → DONE（checkpoint-tag-single-source (code-review [impl-review-fix]: run_producer 改固定文件名 change.txt)）
 
 ---
 
@@ -559,8 +560,9 @@
 |------|------|
 | 模块 | `sdflow-ship/tests/test_producer_parser_contract.py:27` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/checkpoint-tag-single-source/design.md`
 
 **备注**：DF7(spec-review Round2)。非本 change 引入的新缺口,补一例多位数号增强边界覆盖。
+> 2026-07 状态：OPEN → DONE（checkpoint-tag-single-source (code-review [impl-review-fix]: 加 test_kebab_namespace_multidigit_captures 覆盖多位数号)）
