@@ -82,4 +82,6 @@
 - **Q2-DOGFOOD → 折入 / Q3 → A1**：跑 ship_gate 现场暴露 `tg02_hit`(:237) 第三个同类子串 bug——对 proposal 里 TG-02 描述性提及假阳 → 假 RUN_SOP 卡住本 change 自己 ship。用户拍板折入本 change；修法 Q3=A1 声明式 `〔TG-02` 匹配（非行锚——TG 标签内联）。design +ADR-6, tasks +§2c, spec delta +Scenario(26 条)。
 - 用户于设计 HARD-GATE 再次批准（含 tg02 折入 + Q3=A1）。锚刷新至本次提交（防新增四件套改动使拍板失鲜）：
 
+- **Q3-dogfood-2 → A3（头部区域限定）**：实现期跑 gate 再暴露 Q3=A1 的 `〔TG-02` 整体子串（含加冒号）仍被本 change proposal 正文示例声明串 `〔TG-02：`（line 42）假阳。用户拍板 A3：`tg02_hit` 只扫 proposal 头部声明区（首个 `## ` 前）。design ADR-6/tasks §2c/spec tg02 Scenario 同步；实现 @627396d（tg02 header-region + 活体回归）。锚随本次四件套同步再刷新（防失鲜）。
+
 <!-- ship-gate: design-approved -->

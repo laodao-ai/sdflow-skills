@@ -106,4 +106,4 @@
 
 #### Scenario: TG-02 条件步检测用声明式匹配非裸子串〔gate-anchor-line-scoped ADR-6·dogfood〕
 - **WHEN** 某 change 的 proposal **描述性提及** `TG-02`（反引号代码引用 / 否定句 `TG-01/02/03 均不命中` / 散文讨论），但**未以声明式头注** `〔TG-02：…〕` 标注该触发（即该 change 非嵌入式、不该跑 embedded-test-sop）
-- **THEN** gate 的 TG-02 条件步检测（`tg02_hit`）MUST 判**未命中** → step 5.5 输出 SKIP，MUST NOT 因裸子串 `"TG-02" in proposal` 命中描述性提及而误判 RUN_SOP（嵌入式 SOP）；检测 MUST 锚定**声明式** `〔TG-02`（全角括号头注形，ff-generation 强制约定），真嵌入式 change 的 `〔TG-02：…〕` 声明仍 MUST 正确命中 → RUN_SOP；未用括号声明的（非常规）embedded proposal 漏检为安全侧假阴（约定强制括号故实际不发生），记 Non-Goals
+- **THEN** gate 的 TG-02 条件步检测（`tg02_hit`）MUST 判**未命中** → step 5.5 输出 SKIP，MUST NOT 因子串命中正文对 TG-02 的**文档性提及/示例声明串**而误判 RUN_SOP（嵌入式 SOP）；检测 MUST 限定在 proposal **头部声明区**（文件开头→首个 `## ` 标题前）找 `〔TG-02`〔A3，dogfood 二轮：整体子串含加冒号仍被正文示例串假阳〕，真嵌入式 change 的头部 `〔TG-02：…〕` 声明仍 MUST 正确命中 → RUN_SOP；头部未用括号声明的（非常规）embedded proposal 漏检为安全侧假阴（ff 强制头注括号格式故实际不发生），记 Non-Goals

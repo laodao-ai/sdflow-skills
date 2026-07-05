@@ -27,9 +27,9 @@
 
 ## 2c. `tg02_hit` 声明式匹配（design ADR-6 · dogfood 折入 · 设计门 Q3=A1）
 
-- [ ] 2c.1 [TDD] 写失败测试（`test_gate_impl_progress.py` 增）：proposal 含**描述性** `TG-02`——代码引用 `` `"TG-02" in` ``、否定句 `TG-01/02/03 均不命中`、散文提及——但**无** `〔TG-02` 声明头注 → 断言 `tg02_hit(cdir)` 为 **False**（decide 判 SKIP/继续，**非** RUN_SOP）。旧裸子串会 True→假 RUN_SOP，先红（本 change proposal 自身即此盘面）
+- [ ] 2c.1 [TDD] 写失败测试（`test_gate_impl_progress.py` 增）：proposal **正文**（某 `## ` 段后）含示例声明串 `` `〔TG-02：` `` / 代码引用 `` `"TG-02" in` `` / 否定句，但**头部声明区无** `〔TG-02` → 断言 `tg02_hit(cdir)` 为 **False**（本 change proposal line 42 即活体盘面）。整体子串（含加冒号）会 True→假 RUN_SOP，先红
 - [ ] 2c.2 [TDD] 写正例测试：proposal 头注含 `〔TG-02：嵌入式固件变更〕` → `tg02_hit` 为 **True**（RUN_SOP 不误伤真嵌入式 change）
-- [ ] 2c.3 实现：`tg02_hit`（`ship_gate.py:234`）`return p.is_file() and "TG-02" in text` 改为匹配声明式 `"〔TG-02" in text`（全角开括号；含冒号变体 `〔TG-02：`/`〔TG-02:` 亦可，按接地 8 份 proposal 均 `〔TG-NN：`）；2c.1/2c.2 转绿。头注释注明「声明式匹配，非裸子串——描述性提及不触发」
+- [ ] 2c.3 实现〔A3 头部区域，dogfood 二轮修正〕：`tg02_hit`（`ship_gate.py`）只在 proposal **头部声明区**（开头→首个 `## ` 前）找 `"〔TG-02"`——整体子串（含加冒号）被本 change 正文示例声明串 `〔TG-02：` 假阳，故须头部限定；2c.1/2c.2 转绿。头注释注明「头部声明区匹配——正文文档性提及不触发」
 - [ ] 2c.4 回归：`test_gate_impl_progress.py` 既有消费 `tg02_hit`/RUN_SOP 的用例——若其 fixture 用裸 `TG-02` 造 proposal，MUST 改为 `〔TG-02：` 声明形（否则新匹配下真嵌入式盘面失效、测试假绿或假红）；核对并同步
 
 ## 3. 端到端门禁回归 + 契约同步
