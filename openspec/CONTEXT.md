@@ -92,6 +92,18 @@ _Avoid_: 再造 R1~R6 式风险代号（触发一律具体行为描述）
 在**已有 feature 分支**上再 `openspec new change` 建第二个变更，使两个 change 的工件与 checkpoint 提交交错落在同一分支历史里。**FF-0 只拦 `main`/`master` 上建 change，不拦 feature 分支上 stacking**（实证 `ff0-branch-guard.py`）——故它可达但非常规。是 `ship_gate` 完成判据跨 change 污染（同号 task 互相计入 → 假✅）的唯一触发入口；gate 对此取**防御纵深**立场（change-命名空间标签隔离，见 ship-gate-hardening-2），**MUST NOT 用"每 change 独立分支是纪律"作缓解**——该纪律若成立则污染不可达、隔离本身失去意义（立论自否），gate 恰取"纪律可能破"立场才使隔离有价值。
 _Avoid_: 把 stacking 当"被 FF-0 禁止"（FF-0 不拦它）；用"独立分支纪律"给 stacking 残留兜底（自否）
 
+**度量回路 (Metrics Loop)**:
+把每轮评审的**价值**结构化落锚、跨 change 只读聚合成表、据累积数据**人决**评审架构（保留 / 降采样 / 收紧触发 / 淘汰低价值镜）的反馈回路。**供数不供裁决**——给维度不给结论，砍哪镜是人读表后的决定。ROADMAP 暂名 `workflow-metrics-loop`；价值半由 lens-metric 锚承载，成本半（时长）另立、粒度更粗（见下）。
+_Avoid_: 合成价值分 / 自动砍镜（回路只供数）；把聚合表当持久态（它是可重生 view，锚才是真相源）
+
+**独立贡献 (Independent Contribution)**:
+一个评审镜「**单独抓到且被采纳、无其他镜共抓**」的发现量——衡量它**不可替代**的非冗余价值。与采纳率（精度）并存答两个不同问题：采纳率高但独立=0 = 冗余镜（该砍），二者俱高 = 不可替代。是「淘汰哪镜」的真轴。对去重合并粒度敏感（「同一问题」无 ground truth），故作 **N 轮噪声 flag**、非单轮自动砍依据。
+_Avoid_: 拿采纳率单独判「该不该留镜」（会误留 100% 采纳但全冗余的镜）
+
+**价值度量 vs 成本度量粒度分界 (Value/Cost Metric Grain Split)**:
+评审**价值**可测到**镜级**（per-lens，从报告锚导出）；**时长/成本**只能测到**层/阶段级**（per-phase，从 checkpoint 时间戳导出——harness 不暴露子代理耗时，见 `adr/0009`）。两者数据源与粒度不同，**不能相除成 per-lens value/cost 比**。
+_Avoid_: 给单一镜算「性价比」（成本无镜级数据源，per-agent 计时不可行）
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。

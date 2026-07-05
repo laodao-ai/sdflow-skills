@@ -401,7 +401,17 @@
 
 **思路**：候选：①盘面即状态路线——checkpoint commit 时间戳序列已是天然步级时长锚（零新状态，写个汇总脚本 git log --format 即可推各步耗时）；②子代理耗时——harness 已在 Agent 结果里带 duration_ms/usage，编排 skill 收尾时抄进报告锚行（如 v1 锚行加 duration_s 字段）；③阶段汇总——并入 workflow-metrics-loop（ROADMAP 待开，只读报告产物聚合）。与 T28（阶段收尾提示）同族：都是把工作流内部信息显性化。**〔用户补充 2026-07-04〕等待人工确认/暂停的时间须单列并可剔除**——纯 commit 时间差会把人类门等待（设计门拍板、grill 对话、会话中断）算进步时长，失真；候选判据：人类门/交互步（grill、设计门、AskUserQuestion 区间）打独立锚或按步类型白名单剔除，报「工作时长」与「墙钟时长」两列
 
-**备注**：内容上属 workflow-metrics-loop scope 的先行需求；提出于 cross-model-outside-voice ship 进行中
+**〔grill 调研定稿 2026-07-06，workflow-metrics-loop grill 派生 · [grill-amendment]〕**：
+- **候选②（duration_ms）作废**——接地证实本 harness 的 Agent 工具只回子代理最终文本、**不暴露结构化 duration_ms**（全仓零捕获），且镜为并行 fan-out 无法按镜隔离墙钟、子代理自报不可靠 → per-镜/per-agent 耗时**无诚实数据源**，砍。原 workflow-metrics-loop change 已据此撤除 dur_s（见其 design ADR-3）。
+- **采候选①（checkpoint 时间戳）为唯一数据源**，定标准：
+  - **数据源**：`git log --format='%ct %s'` over change 的 checkpoint 序列；步类型解析 tag 前缀（`checkpoint(grill|spec-review|spec-review-autoplan|impl-review)` + `checkpoint(<change>:taskN-slug)` 用 ship_gate `TAG_RE`）。
+  - **粒度**：阶段/层（**到不了镜**——同 Q1 因）。故 T29 答「该不该留这**层**」，workflow-metrics 答「该不该留这**镜**」（价值）；两者不同粒度，**不能相除成 per-镜 value/cost 比**。
+  - **指标**：per-步类型墙钟 = 相邻 ct 差；聚合 = **N-change 均值**。
+  - **人类门剔除**：`checkpoint(grill)` 类 + 报告含 `<!-- ship-gate: design-approved -->` 的区间 → **锚定**（非 subject 文本）单列「人类门时长」，绝不并进层成本。
+  - **诚实声明（MUST）**：测的是**墙钟 elapsed 非计算成本**（含会话空闲，git 无法恢复纯计算）；**单 change 数不可信、只信聚合**；离群标记不平均。
+  - **进程**：独立 change（数据源=git log，与 workflow-metrics 报告锚聚合器不同源）；归同一 ROADMAP `workflow-metrics-loop` 伞下，日后可共用一张 dashboard（两数据源一表）。
+
+**备注**：内容上属 workflow-metrics-loop scope 的先行需求；提出于 cross-model-outside-voice ship 进行中。〔2026-07-06 更新〕已从 workflow-metrics-loop change 撤出**另立**——该 change 只做价值度量，T29 成本另开，标准见上。
 
 ---
 
