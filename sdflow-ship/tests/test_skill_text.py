@@ -17,7 +17,10 @@ def test_zero_git_and_passthrough():
 
 def test_fuse_and_resume():
     t = text()
-    assert "重跑一次仍无锚行" in t and "UNKNOWN" in t     # D5 熔断
+    # T26/SR-1：熔断判据 = 该步锚行集合是否变化，非 HEAD/mtime；见 test_gate_breaker.py 的
+    # anchor_set/breaker_no_progress 单测（本处只钉 SKILL 文案含新判据关键词，非重复逻辑测试）。
+    assert "锚行集合" in t and "无净变化" in t and "UNKNOWN" in t     # D5 熔断
+    assert "HEAD 移动" in t and "文件修改时间戳" in t and "MUST NOT 作免疫信号" in t
     assert "重调" in t and "勿重派" in t                  # D9 resume
 
 def test_trigger_words_scoped():

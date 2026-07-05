@@ -244,6 +244,26 @@ def anchors_in(path, candidates):
     return _line_scoped_hits(text, candidates)[0]
 
 
+# [T26/SR-1] 熔断锚行集合判据：判据 = 该步 ship-gate 锚行集合是否变化（非 HEAD/mtime）。
+# 两个纯函数/无状态 helper：不落地文件、无副作用，供上层熔断逻辑（人工/skill 层，非本文件）
+# 对比"上一次快照"与"本次重跑"的锚集，判该步是否有实质进展。
+def anchor_set(text):
+    """返回该报告文本命中的结论锚集合（frozenset）。复用 _line_scoped_hits 对
+    ALL_ANCHORS 的行级字面匹配语义（独占裸行 + fence-aware），不另造正则/子串判断。"""
+    hits, _unbalanced = _line_scoped_hits(text, ALL_ANCHORS)
+    return frozenset(hits)
+
+
+def breaker_no_progress(before, after):
+    """熔断纯函数：before/after 为两次 anchor_set() 快照（frozenset）。集合无净变化
+    （before == after）→ True=无进展，判熔断。fail-safe：before is None（快照缺失，
+    如 context 压缩丢失上一次记录）→ 保守返 True（宁可误判无进展，不放行假免疫）。
+    HEAD 移动/mtime 变化 MUST NOT 作为免疫信号——本函数不接收、不比较它们。"""
+    if before is None:
+        return True
+    return before == after
+
+
 def emit(verdict, exit_code, next_step, reason, **extra):
     human = f"[ship-gate] {verdict}"
     if next_step:
