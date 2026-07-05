@@ -1,0 +1,552 @@
+<style>
+  /* ============ tokens ============ */
+  :root {
+    --ground:   #F1F1EC;
+    --surface:  #F9F9F5;
+    --raised:   #FFFFFF;
+    --ink:      #14181D;
+    --muted:    #565E6B;
+    --faint:    #8A93A1;
+    --hair:     #E2E1D8;
+    --hair-2:   #ECEBE3;
+    --accent:   #A9620E;
+    --accent-2: #C8791A;
+    --accent-bg:#F3E7D2;
+    --pass:     #1E7A57;
+    --pass-bg:  #DCEDE4;
+    --refuse:   #A93A28;
+    --refuse-bg:#F0DED9;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --measure: 74ch;
+    --radius: 4px;
+    --shadow: 0 1px 2px rgba(20,24,29,.05), 0 6px 20px -12px rgba(20,24,29,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:   #0D1116;
+      --surface:  #12171D;
+      --raised:   #171E26;
+      --ink:      #E7EBF1;
+      --muted:    #9AA4B2;
+      --faint:    #656E7C;
+      --hair:     #242C35;
+      --hair-2:   #1D242C;
+      --accent:   #E0912F;
+      --accent-2: #EEA748;
+      --accent-bg:rgba(224,145,47,.13);
+      --pass:     #43B489;
+      --pass-bg:  rgba(67,180,137,.13);
+      --refuse:   #E37461;
+      --refuse-bg:rgba(227,116,97,.13);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#F1F1EC; --surface:#F9F9F5; --raised:#FFFFFF; --ink:#14181D; --muted:#565E6B; --faint:#8A93A1;
+    --hair:#E2E1D8; --hair-2:#ECEBE3; --accent:#A9620E; --accent-2:#C8791A; --accent-bg:#F3E7D2;
+    --pass:#1E7A57; --pass-bg:#DCEDE4; --refuse:#A93A28; --refuse-bg:#F0DED9;
+    --shadow:0 1px 2px rgba(20,24,29,.05),0 6px 20px -12px rgba(20,24,29,.18);
+  }
+  :root[data-theme="dark"] {
+    --ground:#0D1116; --surface:#12171D; --raised:#171E26; --ink:#E7EBF1; --muted:#9AA4B2; --faint:#656E7C;
+    --hair:#242C35; --hair-2:#1D242C; --accent:#E0912F; --accent-2:#EEA748; --accent-bg:rgba(224,145,47,.13);
+    --pass:#43B489; --pass-bg:rgba(67,180,137,.13); --refuse:#E37461; --refuse-bg:rgba(227,116,97,.13);
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -14px rgba(0,0,0,.6);
+  }
+
+  /* ============ base ============ */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .wrap { display: grid; grid-template-columns: 246px minmax(0,1fr); gap: 0; max-width: 1240px; margin: 0 auto; }
+
+  /* ============ side nav ============ */
+  nav.side {
+    position: sticky; top: 0; align-self: start; height: 100vh;
+    padding: 34px 22px 40px; border-right: 1px solid var(--hair);
+    overflow-y: auto; background: var(--surface);
+  }
+  nav.side .brand { font-family: var(--mono); font-weight: 700; font-size: .82rem; letter-spacing: .06em;
+    color: var(--ink); text-transform: uppercase; line-height: 1.4; margin-bottom: 4px; }
+  nav.side .brand b { color: var(--accent); }
+  nav.side .tag { font-size: .72rem; color: var(--faint); margin-bottom: 26px; font-family: var(--mono); }
+  nav.side a { display: block; text-decoration: none; color: var(--muted); font-size: .86rem;
+    padding: 6px 10px; border-radius: var(--radius); border-left: 2px solid transparent; margin: 1px 0;
+    transition: color .15s, background .15s, border-color .15s; }
+  nav.side a:hover { color: var(--ink); background: var(--hair-2); }
+  nav.side a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-bg); font-weight: 600; }
+  nav.side a .n { font-family: var(--mono); font-size: .74rem; color: var(--faint); margin-right: 8px; }
+  nav.side a.active .n { color: var(--accent); }
+  nav.side .navnote { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--hair);
+    font-size: .74rem; color: var(--faint); line-height: 1.5; }
+
+  /* ============ content ============ */
+  main { padding: 0 clamp(24px, 5vw, 76px) 120px; min-width: 0; }
+  section { padding-top: 78px; scroll-margin-top: 20px; }
+  .eyebrow { font-family: var(--mono); font-size: .74rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .eyebrow::before { content: ""; width: 22px; height: 1.5px; background: var(--accent); display: inline-block; }
+  h1 { font-size: clamp(2.1rem, 4.4vw, 3.1rem); line-height: 1.05; letter-spacing: -.02em; font-weight: 800;
+    text-wrap: balance; margin: 0 0 20px; }
+  h2 { font-size: clamp(1.5rem, 2.6vw, 1.95rem); line-height: 1.12; letter-spacing: -.015em; font-weight: 750;
+    text-wrap: balance; margin: 0 0 14px; }
+  h3 { font-size: 1.06rem; font-weight: 700; letter-spacing: -.01em; margin: 26px 0 10px; }
+  p { max-width: var(--measure); color: var(--ink); margin: 0 0 14px; }
+  p.lede { font-size: 1.14rem; line-height: 1.55; color: var(--muted); max-width: 62ch; }
+  .muted { color: var(--muted); }
+  code, .mono { font-family: var(--mono); font-size: .86em; }
+  p code, li code, td code { background: var(--hair-2); padding: .08em .38em; border-radius: 3px;
+    font-size: .82em; color: var(--ink); border: 1px solid var(--hair); }
+  a.inl { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  a.inl:hover { border-bottom-color: var(--accent); }
+  strong { font-weight: 700; }
+
+  /* ============ hero ============ */
+  header.hero { grid-column: 1 / -1; padding: clamp(44px,7vw,80px) clamp(24px,5vw,76px) 30px;
+    border-bottom: 1px solid var(--hair); position: relative; overflow: hidden; }
+  header.hero .kick { font-family: var(--mono); font-size: .76rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin-bottom: 18px; }
+  header.hero p.lede { margin-bottom: 30px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 34px; margin-top: 8px; }
+  .stat .v { font-family: var(--mono); font-size: 1.9rem; font-weight: 700; letter-spacing: -.02em;
+    color: var(--ink); font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: .78rem; color: var(--muted); letter-spacing: .02em; }
+  .stat .v .u { font-size: .9rem; color: var(--accent); margin-left: 3px; }
+
+  /* ============ stage rail ============ */
+  .rail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 26px 0 6px; }
+  .rail .stg { border: 1px solid var(--hair); border-radius: var(--radius); background: var(--raised);
+    padding: 16px 16px 18px; position: relative; box-shadow: var(--shadow); }
+  .rail .stg .ph { font-family: var(--mono); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--faint); font-weight: 700; }
+  .rail .stg h4 { margin: 6px 0 4px; font-size: 1.02rem; font-weight: 750; letter-spacing: -.01em; }
+  .rail .stg .role { font-size: .82rem; color: var(--muted); }
+  .rail .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+  .chip { font-family: var(--mono); font-size: .72rem; padding: 3px 8px; border-radius: 3px;
+    background: var(--hair-2); color: var(--muted); border: 1px solid var(--hair); white-space: nowrap; }
+  .chip.gate { background: var(--accent-bg); color: var(--accent); border-color: color-mix(in srgb,var(--accent) 30%,transparent); font-weight: 700; }
+  .lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 0 color-mix(in srgb,var(--accent) 60%,transparent); animation: pulse 2.6s infinite; margin-right: 7px; vertical-align: middle; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent);} 70%{box-shadow:0 0 0 8px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
+
+  /* ============ generic cards ============ */
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(2,1fr); }
+  .g3 { grid-template-columns: repeat(3,1fr); }
+  .card { border: 1px solid var(--hair); border-radius: var(--radius); background: var(--raised);
+    padding: 18px 18px 20px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 6px; font-size: .98rem; font-weight: 750; letter-spacing: -.01em; display: flex; align-items: baseline; gap: 8px; }
+  .card h4 .idx { font-family: var(--mono); font-size: .78rem; color: var(--accent); font-weight: 700; }
+  .card p { font-size: .87rem; color: var(--muted); margin: 0; max-width: none; }
+  .card .why { margin-top: 8px; font-size: .8rem; color: var(--faint); border-top: 1px dashed var(--hair); padding-top: 8px; }
+
+  /* ============ pills ============ */
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: .7rem;
+    font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 100px; text-transform: uppercase; white-space: nowrap; }
+  .pill.enf { background: var(--accent-bg); color: var(--accent); border: 1px solid color-mix(in srgb,var(--accent) 32%,transparent); }
+  .pill.adv { background: transparent; color: var(--muted); border: 1px dashed var(--faint); }
+  .pill.pass { background: var(--pass-bg); color: var(--pass); border: 1px solid color-mix(in srgb,var(--pass) 30%,transparent); }
+  .pill.refuse { background: var(--refuse-bg); color: var(--refuse); border: 1px solid color-mix(in srgb,var(--refuse) 30%,transparent); }
+
+  /* ============ ship_gate panel ============ */
+  .gatewrap { border: 1px solid var(--hair); border-radius: var(--radius); background: var(--surface);
+    padding: 24px; box-shadow: var(--shadow); overflow-x: auto; }
+  .gatecore { display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+  .gatecore .node { font-family: var(--mono); font-weight: 700; text-align: center; border: 1.5px solid var(--accent);
+    color: var(--accent); background: var(--accent-bg); border-radius: 6px; padding: 12px 22px; font-size: .92rem; }
+  .gatecore .node small { display: block; font-weight: 400; color: var(--muted); font-size: .68rem; margin-top: 3px; letter-spacing: .02em; }
+  .routes { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px,1fr)); gap: 8px; }
+  .route { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--hair);
+    border-radius: var(--radius); background: var(--raised); }
+  .route .verdict { font-family: var(--mono); font-size: .76rem; font-weight: 700; color: var(--ink); }
+  .route .act { font-size: .76rem; color: var(--muted); margin-top: 1px; }
+  .route .ec { font-family: var(--mono); font-size: .66rem; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-left: auto; flex-shrink: 0; }
+  .route.go { border-left: 2px solid var(--pass); } .route.go .ec { background: var(--pass-bg); color: var(--pass); }
+  .route.stop { border-left: 2px solid var(--refuse); } .route.stop .ec { background: var(--refuse-bg); color: var(--refuse); }
+  .route.loop { border-left: 2px solid var(--accent); } .route.loop .ec { background: var(--accent-bg); color: var(--accent); }
+
+  /* ============ skill matrix ============ */
+  .matrix { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; }
+  .skill { border: 1px solid var(--hair); border-radius: var(--radius); background: var(--raised);
+    padding: 16px 18px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .skill .top { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 2px; }
+  .skill .nm { font-family: var(--mono); font-weight: 700; font-size: .92rem; color: var(--ink); }
+  .skill .kind { font-size: .68rem; font-family: var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
+  .skill .role { font-size: .84rem; color: var(--muted); margin: 6px 0 10px; }
+  .skill .io { display: flex; gap: 8px; font-size: .74rem; font-family: var(--mono); color: var(--faint); flex-wrap: wrap; margin-bottom: 10px; }
+  .skill .io b { color: var(--muted); font-weight: 400; }
+  .skill .foot { margin-top: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--hair-2); }
+
+  /* ============ tables ============ */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--hair); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .86rem; background: var(--raised); min-width: 560px; }
+  thead th { text-align: left; font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); font-weight: 700; padding: 11px 14px; border-bottom: 1.5px solid var(--hair); background: var(--surface); white-space: nowrap; }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--hair-2); color: var(--ink); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--hair-2); }
+  td.k { font-weight: 600; }
+
+  /* ============ callout ============ */
+  .callout { border: 1px solid var(--hair); border-left: 3px solid var(--accent); border-radius: var(--radius);
+    background: var(--surface); padding: 18px 20px; margin: 20px 0; }
+  .callout .lab { font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+  .callout p { margin: 0; max-width: none; }
+  .callout.big { border-left-width: 4px; }
+  .callout.big p { font-size: 1.06rem; line-height: 1.55; }
+
+  /* ============ law flow ============ */
+  .lawflow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; gap: 0; margin: 22px 0; }
+  .lawflow .box { border: 1px solid var(--hair); border-radius: var(--radius); background: var(--raised); padding: 14px 16px; box-shadow: var(--shadow); }
+  .lawflow .box .t { font-weight: 700; font-size: .9rem; margin-bottom: 4px; }
+  .lawflow .box .d { font-size: .78rem; color: var(--muted); }
+  .lawflow .arr { display: flex; align-items: center; justify-content: center; padding: 0 12px; color: var(--faint); font-family: var(--mono); font-weight: 700; }
+  .lawflow .box.gate { border-color: var(--accent); }
+  .lawflow .box.gate .t { color: var(--accent); }
+
+  /* ============ best-practice list ============ */
+  .bp { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
+  .bp .row { display: flex; gap: 12px; padding: 13px 15px; border: 1px solid var(--hair); border-radius: var(--radius); background: var(--raised); }
+  .bp .row .th { font-family: var(--mono); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); min-width: 66px; padding-top: 1px; }
+  .bp .row .bd { font-size: .84rem; color: var(--ink); }
+  .bp .row .bd .st { display: inline-block; font-family: var(--mono); font-size: .68rem; font-weight: 700; margin-left: 6px; }
+  .st.ok { color: var(--pass); } .st.gap { color: var(--accent); }
+
+  .fix { border: 1px solid var(--hair); border-radius: var(--radius); background: var(--surface); padding: 16px 18px; display: flex; gap: 14px; align-items: flex-start; }
+  .fix .num { font-family: var(--mono); font-weight: 800; font-size: 1.4rem; color: var(--accent); line-height: 1; }
+  .fix .bd h4 { margin: 0 0 4px; font-size: .95rem; }
+  .fix .bd p { margin: 0; font-size: .83rem; color: var(--muted); max-width: none; }
+
+  /* ============ footer ============ */
+  footer { grid-column: 1 / -1; border-top: 1px solid var(--hair); padding: 34px clamp(24px,5vw,76px) 60px;
+    color: var(--faint); font-size: .82rem; }
+  footer .srcs { display: flex; flex-wrap: wrap; gap: 6px 8px; margin-top: 10px; }
+  footer .srcs span { font-family: var(--mono); font-size: .72rem; padding: 3px 8px; border: 1px solid var(--hair); border-radius: 3px; color: var(--muted); }
+
+  .sub { color: var(--muted); font-size: .88rem; max-width: var(--measure); margin: -4px 0 22px; }
+
+  /* reveal */
+  .reveal { opacity: 0; transform: translateY(12px); transition: opacity .5s ease, transform .5s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .lamp { animation: none; }
+    html { scroll-behavior: auto; }
+  }
+  html { scroll-behavior: smooth; }
+
+  /* responsive */
+  @media (max-width: 920px) {
+    .wrap { grid-template-columns: 1fr; }
+    nav.side { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--hair);
+      display: flex; flex-wrap: wrap; gap: 2px 4px; align-items: center; padding: 16px 20px; }
+    nav.side .brand, nav.side .tag, nav.side .navnote { width: 100%; }
+    nav.side .tag { margin-bottom: 8px; }
+    nav.side a { padding: 5px 9px; font-size: .8rem; border-left: none; border: 1px solid var(--hair); }
+    nav.side a.active { border-color: var(--accent); }
+    nav.side .navnote { display: none; }
+    .g2, .g3, .matrix, .bp, .rail { grid-template-columns: 1fr; }
+    .lawflow { grid-template-columns: 1fr; }
+    .lawflow .arr { padding: 6px; transform: rotate(90deg); }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kick">SDFLOW · Spec 工作流控制台</div>
+    <h1>从需求到 merge：三阶段、只停一次人类门。</h1>
+    <p class="lede">一个变更（change）穿过生成 → 设计审 → 实现收尾三个阶段，尽量连续自动运行——
+      <code>/clear</code> 由子代理 fresh 上下文替代、中途决策登记进报告、每步 checkpoint 提交；
+      全流程<strong>只在阶段二设计门停一次人类</strong>。</p>
+    <div class="stats">
+      <div class="stat"><div class="v">9<span class="u">步</span></div><div class="k">explore → merge</div></div>
+      <div class="stat"><div class="v">1<span class="u">门</span></div><div class="k">唯一人类 HARD-GATE</div></div>
+      <div class="stat"><div class="v">12<span class="u">态</span></div><div class="k">ship_gate 判定态</div></div>
+      <div class="stat"><div class="v">8<span class="u">份</span></div><div class="k">skill 详解已展开</div></div>
+    </div>
+    <div class="rail" style="margin-top:34px">
+      <div class="stg">
+        <div class="ph">阶段一 · 生成</div>
+        <h4>人类对话岛</h4>
+        <div class="role">grill 是人对着设计死磕，深度参与</div>
+        <div class="chips"><span class="chip">opsx:explore</span><span class="chip">opsx:ff</span><span class="chip">grill-with-docs</span></div>
+      </div>
+      <div class="stg">
+        <div class="ph">阶段二 · 设计审</div>
+        <h4>连续审 + 一次拍板</h4>
+        <div class="role">多镜并行合成一份报告，人过报告拍板</div>
+        <div class="chips"><span class="chip">sdflow-spec-review</span><span class="chip gate"><span class="lamp"></span>HARD-GATE</span></div>
+      </div>
+      <div class="stg">
+        <div class="ph">阶段三 · 实现收尾</div>
+        <h4>全自动跑到 merge</h4>
+        <div class="role">gate 驱动、无人类门、异步读 hand-off</div>
+        <div class="chips"><span class="chip">plan+impl</span><span class="chip">code-review</span><span class="chip">done</span></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="side">
+    <div class="brand">SD<b>FLOW</b> 控制台</div>
+    <div class="tag">workflow overview · v1</div>
+    <a href="#invariants"><span class="n">01</span>全局不变量</a>
+    <a href="#gate"><span class="n">02</span>ship_gate 判定机</a>
+    <a href="#skills"><span class="n">03</span>skill 矩阵</a>
+    <a href="#law"><span class="n">04</span>建议式 vs 强制</a>
+    <a href="#bp"><span class="n">05</span>最佳实践</a>
+    <div class="navnote">这是迭代 hub 的 v1。图表与结论以仓内 <span class="mono">docs/</span> 为准，后续持续增补调研内容。</div>
+  </nav>
+
+  <main>
+
+    <!-- ============ invariants ============ -->
+    <section id="invariants" class="reveal">
+      <div class="eyebrow">01 — 贯穿全流程的铁律</div>
+      <h2>五条全局不变量</h2>
+      <p class="sub">这些不是某一步的细节，而是整条流水线共享的铁律——读懂它们，才读得懂每步为什么这么设计。</p>
+      <div class="grid g3">
+        <div class="card">
+          <h4><span class="idx">①</span>唯一人类门</h4>
+          <p>只在阶段二设计门停。阶段二错 → 白做，值一个门；阶段三已实现、残差可追踪，不值门。</p>
+          <div class="why">grill 是对话岛不折叠；阶段三禁 AskUserQuestion，走三级决策协议。</div>
+        </div>
+        <div class="card">
+          <h4><span class="idx">②</span>连续跑 · 无 /clear</h4>
+          <p>评审本就 fan-out 到 fresh-context 子代理，独立性由此而来，不由 <code>/clear</code> 给。</p>
+          <div class="why">子代理调度运行中仍禁 /clear，必须跑完再进下一步。</div>
+        </div>
+        <div class="card">
+          <h4><span class="idx">③</span>每步 checkpoint</h4>
+          <p>「逻辑步骤完成」是语义不是事件，不用 hook；碎 commit = 细粒度回退点。</p>
+          <div class="why">grill 多轮中途不提交、只收敛后一次；不 squash。</div>
+        </div>
+        <div class="card">
+          <h4><span class="idx">④</span>反静默压制</h4>
+          <p>裁掉的 reviewer finding 只能降级/批注、不得静默丢，连理由落报告「已裁掉」区。</p>
+          <div class="why">焊死热主 session 带生成历史裁决的合成层偏置。</div>
+        </div>
+        <div class="card">
+          <h4><span class="idx">⑤</span>防假 ✅</h4>
+          <p>去人类门后 verify 是唯一终门。每条 ✅ 必附机验锚点（测试名 / commit / 文件:行）。</p>
+          <div class="why">verify 用强模型 + 「Do Not Trust the Report」冷启，禁降档。</div>
+        </div>
+        <div class="card" style="background:var(--surface);border-style:dashed">
+          <h4 style="color:var(--accent)">↳ 一条主线</h4>
+          <p>把不变量焊进确定性载体（脚本/文件/被门读的 git 产物），把判断留给强模型 + 冷子代理。见 <a class="inl" href="#law">§04</a>。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ship_gate ============ -->
+    <section id="gate" class="reveal">
+      <div class="eyebrow">02 — 阶段三最底层</div>
+      <h2>ship_gate 判定机</h2>
+      <p class="sub">编排器 <code>/sdflow-ship</code> 每步前后必调 gate，<strong>照判定走、禁凭 prose 记忆步序</strong>。
+        gate 从盘面（产物 + 锚 + checkpoint 标签）推导「下一步是谁」，每个执行完的步都回到 gate 再问——这就是「盘面即状态」。</p>
+      <div class="gatewrap">
+        <div class="gatecore">
+          <div class="node">ship_gate<small>每步前后必调 · 从盘面推导</small></div>
+        </div>
+        <div class="routes">
+          <div class="route stop"><div><div class="verdict">REFUSE_START</div><div class="act">未过设计门 / change 不存在</div></div><span class="ec">exit 3</span></div>
+          <div class="route go"><div><div class="verdict">RUN_SOP</div><div class="act">TG-02 命中且 sop 缺</div></div><span class="ec">exit 0</span></div>
+          <div class="route go"><div><div class="verdict">RUN_PLAN</div><div class="act">writing-plans → SDD</div></div><span class="ec">exit 0</span></div>
+          <div class="route go"><div><div class="verdict">CONTINUE_IMPL</div><div class="act">传 done_tasks，勿重派</div></div><span class="ec">exit 0</span></div>
+          <div class="route go"><div><div class="verdict">RUN_CODE_REVIEW</div><div class="act">实现完成，进代码审</div></div><span class="ec">exit 0</span></div>
+          <div class="route go"><div><div class="verdict">RUN_VERIFY</div><div class="act">进收尾 sdflow-done</div></div><span class="ec">exit 0</span></div>
+          <div class="route loop"><div><div class="verdict">RERUN_STALE</div><div class="act">产物过期，重跑 next 步</div></div><span class="ec">exit 0</span></div>
+          <div class="route loop"><div><div class="verdict">STEP_IN_PROGRESS</div><div class="act">步在跑，重跑 next（熔断防死循环）</div></div><span class="ec">exit 0</span></div>
+          <div class="route stop"><div><div class="verdict">BLOCKED_UPSTREAM</div><div class="act">上游阻塞，上抛清单</div></div><span class="ec">exit 4</span></div>
+          <div class="route stop"><div><div class="verdict">VERIFY_FAIL</div><div class="act">核心缺口，上抛清单</div></div><span class="ec">exit 5</span></div>
+          <div class="route stop"><div><div class="verdict">UNKNOWN</div><div class="act">无法判定，转述 reason</div></div><span class="ec">exit 6</span></div>
+          <div class="route go"><div><div class="verdict">SHIPPED</div><div class="act">完成，输出摘要 ✅</div></div><span class="ec">exit 0</span></div>
+        </div>
+      </div>
+      <div class="callout">
+        <div class="lab">resume · 人机同权</div>
+        <p>ship 零跨步内存状态——任何时刻中断，重调 <code>/sdflow-ship {change}</code> 即从盘面推导缺口续跑；期间人工手跑某步产出的报告同样被 gate 认（gate 不辨产者），手改锚行 = 显式越权通道（git 留痕可审计）。</p>
+      </div>
+    </section>
+
+    <!-- ============ skills ============ -->
+    <section id="skills" class="reveal">
+      <div class="eyebrow">03 — 每个 skill 的角色与契约</div>
+      <h2>skill 矩阵</h2>
+      <p class="sub">主流程涉及的 skill 分两类：<strong>外部黑盒</strong>（gstack / superpowers，只画契约、内部另有详解）与
+        <strong>自制编排器</strong>（sdflow-* / grill）。每张卡标注「本 workflow 注入是建议式还是强制」的主基调。</p>
+
+      <h3>外部黑盒</h3>
+      <div class="matrix">
+        <div class="skill">
+          <div class="top"><span class="nm">gstack · autoplan</span><span class="kind">外部 / 广审</span></div>
+          <div class="role">四审（CEO/Design/Eng/DX）顺序跑 + 6 决策原则自动决策 + 审计留盘 + 最终门交人。</div>
+          <div class="io"><span><b>进</b> 计划文件</span><span><b>出</b> 增补计划 + gstack-review.md</span></div>
+          <div class="foot"><span class="pill adv">注入多为建议式</span><span class="pill enf">下游锚兜底</span></div>
+        </div>
+        <div class="skill">
+          <div class="top"><span class="nm">gstack · /review</span><span class="kind">外部 / 代码审</span></div>
+          <div class="role">落地前 diff 结构性审 + fix-first。本机变体单模型单遍、无 specialist fan-out。</div>
+          <div class="io"><span><b>进</b> diff BASE..HEAD</span><span><b>出</b> findings + review-log</span></div>
+          <div class="foot"><span class="pill adv">scope+完成度本内建</span><span class="pill adv">进合并池靠外层</span></div>
+        </div>
+        <div class="skill">
+          <div class="top"><span class="nm">superpowers · writing-plans</span><span class="kind">外部 / 计划</span></div>
+          <div class="role">拆成原子任务 TDD 计划。纯文本产物、<strong>零机械校验</strong>，三道自觉护栏。</div>
+          <div class="io"><span><b>进</b> design + 评审</span><span><b>出</b> superpowers-plan.md</span></div>
+          <div class="foot"><span class="pill adv">全建议式</span><span class="pill enf">ship_gate 读标签强制</span></div>
+        </div>
+        <div class="skill">
+          <div class="top"><span class="nm">superpowers · subagent-dev</span><span class="kind">外部 / 实现</span></div>
+          <div class="role">逐任务 fresh 实现 + 双裁决审 + fix 闭环 + 整支终审；台账 resume 抗 compaction。</div>
+          <div class="io"><span><b>进</b> plan</span><span><b>出</b> commits + progress.md</span></div>
+          <div class="foot"><span class="pill enf">台账/commit 强制</span><span class="pill adv">注入点B 建议式</span></div>
+        </div>
+      </div>
+
+      <h3>自制编排器</h3>
+      <div class="matrix">
+        <div class="skill">
+          <div class="top"><span class="nm">grill-with-docs</span><span class="kind">自制 / 对话岛</span></div>
+          <div class="role">对抗压测设计、对齐术语、查码揭穿、按需落 ADR/术语表。刻意不机械化保开放性。</div>
+          <div class="io"><span><b>进</b> design + 代码</span><span><b>出</b> design/ADR/CONTEXT</span></div>
+          <div class="foot"><span class="pill adv">几乎全建议式</span><span class="pill enf">下游设计门审计</span></div>
+        </div>
+        <div class="skill">
+          <div class="top"><span class="nm">sdflow-spec-review</span><span class="kind">自制 / 设计门主审</span></div>
+          <div class="role">autoplan 广审 + 领域/对抗/接地多镜 → 一份报告 → 设计 HARD-GATE 拍板。</div>
+          <div class="io"><span><b>进</b> 四件套</span><span><b>出</b> spec-review-report.md</span></div>
+          <div class="foot"><span class="pill enf">锚行自检 + design-approved 锚</span></div>
+        </div>
+        <div class="skill">
+          <div class="top"><span class="nm">sdflow-code-review</span><span class="kind">自制 / 代码审主审</span></div>
+          <div class="role">每次全跑 · 独立冷 · 强制主审：gstack/review + 多镜 + code-voice + 置信过滤。</div>
+          <div class="io"><span><b>进</b> diff + 代码</span><span><b>出</b> code-review-report.md</span></div>
+          <div class="foot"><span class="pill enf">锚行自检 + code-review=pass 锚</span></div>
+        </div>
+        <div class="skill">
+          <div class="top"><span class="nm">sdflow-done</span><span class="kind">自制 / 收尾闭环</span></div>
+          <div class="role">verify（强档终门）→ hand-off → archive（CLI 同步）→ commit → ff-merge。</div>
+          <div class="io"><span><b>进</b> 实现 + 四件套</span><span><b>出</b> 归档 + merge</span></div>
+          <div class="foot"><span class="pill enf">verify 锚 + archive CLI + git --ff-only</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ law ============ -->
+    <section id="law" class="reveal">
+      <div class="eyebrow">04 — 理解全部详解的总纲</div>
+      <h2>注入的强制性：建议式 vs 强制</h2>
+      <div class="callout big">
+        <div class="lab">元规律</div>
+        <p>本 workflow 往 skill 注入的规则/prompt <strong>绝大多数是「建议式」</strong>；真正的「强制」<strong>不靠控制 skill 内部</strong>，
+          而靠在下游放一道读 git/文件的确定性门——注入本应产出的锚/产物产不出，就 REFUSE / 循环重跑。<strong>注入处建议式，下游门处强制。</strong></p>
+      </div>
+      <div class="lawflow">
+        <div class="box"><div class="t">prompt 注入</div><div class="d">建议式，可被执行它的模型忽略（无特权分级）</div></div>
+        <div class="arr">→</div>
+        <div class="box"><div class="t">skill 执行</div><div class="d">模型自觉产出锚 / 产物 / commit</div></div>
+        <div class="arr">→</div>
+        <div class="box gate"><div class="t">下游确定性门</div><div class="d">读到 → 放行（强制生效）；读不到 → REFUSE / 循环</div></div>
+      </div>
+      <p class="sub" style="margin-top:20px">八个注入项的定性汇总——只有背后有确定性载体（脚本/文件/被门读的 git 产物）的才转「强制」：</p>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>注入项</th><th>目标 skill</th><th>类型</th><th>强制靠的下游载体</th></tr></thead>
+          <tbody>
+            <tr><td class="k">人类门登记进报告（不弹窗）</td><td>autoplan</td><td><span class="pill adv">建议式</span></td><td>sdflow 锚行自检 + 设计门 HARD-GATE</td></tr>
+            <tr><td class="k">findings 落盘 + 进合并池</td><td>autoplan / review</td><td><span class="pill adv">编排层</span></td><td>主 session 落盘 + grep 锚行自检</td></tr>
+            <tr><td class="k">必审 scope-drift + 完成度</td><td>review</td><td><span class="pill adv">建议式</span></td><td>本就内建、默认不阻断</td></tr>
+            <tr><td class="k">checkpoint 命名空间标签 <code>&lt;change&gt;:task&lt;N&gt;</code></td><td>writing-plans / SDD</td><td><span class="pill adv">建议式</span></td><td><strong>ship_gate 读 git 标签作完成判据 → 写错卡 gate</strong></td></tr>
+            <tr><td class="k">design 约束逐字进 Global Constraints</td><td>writing-plans</td><td><span class="pill adv">建议式</span></td><td>无校验漏抄不抓</td></tr>
+            <tr><td class="k">领域清单作终审 review lens（注入点 B）</td><td>SDD</td><td><span class="pill adv">建议式</span></td><td><strong>事后 sdflow-code-review 每次全跑独立主审兜底</strong></td></tr>
+            <tr><td class="k"><code>done_tasks</code> 别重派</td><td>SDD</td><td><span class="pill enf">强制</span></td><td>台账文件 progress.md + git</td></tr>
+            <tr><td class="k">设计已批（放行阶段三）</td><td>ship 链</td><td><span class="pill enf">强制</span></td><td>ship_gate 读 <code>design-approved</code> 锚</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <div class="lab">自制编排器上更明显</div>
+        <p>sdflow-* 自己带机械门——<strong>锚行存在性自检</strong>（grep 三类 v1 锚缺失即报错阻塞，抓漏镜）、<strong>ship-gate 锚</strong>、
+          <strong>archive CLI validate</strong>、<strong>buglist FIXED 门禁</strong>、<strong>git --ff-only</strong>——这些是强制；而判断层
+          （对抗裁决、反静默压制、置信分流、verify 防假✅、model 档位）是建议式，靠强档主 session + 铁律 + 下游门兜底。
+          唯一刻意不机械化的是 grill（人类对话岛），严谨性靠人类在场 + 下游设计门审计。</p>
+      </div>
+    </section>
+
+    <!-- ============ best practices ============ -->
+    <section id="bp" class="reveal">
+      <div class="eyebrow">05 — 从 gstack / superpowers / grill 提炼</div>
+      <h2>自建 skill 最佳实践</h2>
+      <p class="sub">可迁移做法逐条对照「我们已内化 <span class="mono" style="color:var(--pass)">✓</span> / 值得补强
+        <span class="mono" style="color:var(--accent)">⚠</span>」。大部分我们已在用，可作为验证过的正确做法固化。</p>
+      <div class="bp">
+        <div class="row"><div class="th">状态</div><div class="bd">状态外化进文件/git，对抗 compaction；停即停、重调即续<span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">交接</div><div class="bd">大产物给文件路径，dispatch 只描述一个任务、不贴历史<span class="st gap">⚠ 部分</span></div></div>
+        <div class="row"><div class="th">独立</div><div class="bd">独立性靠 fresh 子代理，不靠 <code>/clear</code><span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">防假绿</div><div class="bd">Do-Not-Trust + 每 finding 引原码 + 置信过滤（低置信可审计不静默丢）<span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">评审</div><div class="bd">禁 pre-judge findings；escalate-not-drop<span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">去门</div><div class="bd">明码决策原则 + 审计留痕；人类门分级 + 批处理<span class="st gap">⚠ 缺原则集</span></div></div>
+        <div class="row"><div class="th">降级</div><div class="bd">每条降级显式打日志/写锚，绝不静默<span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">强制</div><div class="bd">下游放确定性门读锚/产物，把「建议」变「强制」<span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">模型</div><div class="bd">按角色选档、必须显式指定；turn count beats token price<span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">脚本</div><div class="bd">机械活交脚本、模型只做判断；载重不变量用 MUST/STOP<span class="st ok">✓</span></div></div>
+        <div class="row"><div class="th">注入边界</div><div class="bd">发外部模型的 context 围栏掉 skill 定义文件<span class="st gap">⚠ 缺前缀</span></div></div>
+        <div class="row"><div class="th">对话类</div><div class="bd">刻意不机械化保开放性；稀疏产物设门槛；姿态=触发即反应<span class="st ok">✓</span></div></div>
+      </div>
+
+      <h3 style="margin-top:32px">三条可执行补强</h3>
+      <div class="grid g3">
+        <div class="fix"><div class="num">1</div><div class="bd"><h4>编本地「决策原则清单」</h4><p>仿 autoplan 6 原则 + 三分类，供 T10「有客观判据自动选」引用。现只有协议、无明码原则集。</p></div></div>
+        <div class="fix"><div class="num">2</div><div class="bd"><h4>大产物走文件交接</h4><p>多镜 fan-out 的大 diff/报告仿 SDD review-package 走文件，不返回进主 session 压上下文。</p></div></div>
+        <div class="fix"><div class="num">3</div><div class="bd"><h4>发 codex 加 injection 前缀</h4><p>outside-voice 的 context 加「不读 skill 定义目录」前缀，补齐边界（autoplan 已有、我们缺）。</p></div></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div>Spec 工作流控制台 · v1 —— 人类向可视化 hub，迭代中。真相源 <span class="mono">sdflow-init/assets/workflow/workflow.md</span>；本页图表与结论对应仓内 <span class="mono">docs/</span>。</div>
+    <div class="srcs">
+      <span>workflow-overview.md</span><span>skill-authoring-best-practices.md</span>
+      <span>workflow-skills/gstack-autoplan.md</span><span>gstack-review.md</span>
+      <span>superpowers-writing-plans.md</span><span>superpowers-subagent-dev.md</span>
+      <span>grill-with-docs.md</span><span>sdflow-spec-review.md</span>
+      <span>sdflow-code-review.md</span><span>sdflow-done.md</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var secs = Array.prototype.slice.call(document.querySelectorAll('main section[id]'));
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.side a'));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+
+    if ('IntersectionObserver' in window) {
+      var reveal = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); reveal.unobserve(e.target); } });
+      }, { rootMargin: '0px 0px -12% 0px', threshold: .08 });
+      document.querySelectorAll('.reveal').forEach(function (el) { reveal.observe(el); });
+
+      var spy = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (e.isIntersecting) {
+            links.forEach(function (l) { l.classList.remove('active'); });
+            var a = map[e.target.id]; if (a) a.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
+      secs.forEach(function (s) { spy.observe(s); });
+    } else {
+      document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+    }
+  })();
+</script>
