@@ -94,7 +94,10 @@
 
 ### Task 6: 部署 + 全量验证
 
-- [ ] 6.1 开发 checkout 跑 `bash setup.sh`（改 assets/workflow + assets/hack 才让全局 canonical 生效）
-- [ ] 6.2 `~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)"` 确认 canonical 指向本 checkout；抽查 workflow.md 改动经全局生效
-- [ ] 6.3 全仓 `pytest` 零回归
-- [ ] 6.4 commit：`bash ~/.sdflow/hack/checkpoint-commit.sh gate-checkpoint-hardening:task6-deploy-verify`
+- [x] 6.1 开发 checkout 跑 `bash setup.sh`（改 assets/workflow + assets/hack 才让全局 canonical 生效）
+- [x] 6.2 `~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)"` 确认 canonical 指向本 checkout；抽查 workflow.md 改动经全局生效
+- [x] 6.3 全仓 `pytest` 零回归
+- [x] 6.4 commit：`bash ~/.sdflow/hack/checkpoint-commit.sh gate-checkpoint-hardening:task6-deploy-verify`
+
+
+> **部署验证记录**：`setup.sh` 部署成功（canonical `~/.sdflow/workflow` → 本 dev checkout）；`resolve-workflow.sh` 确认；全仓 `pytest` **374 passed** 零回归。
