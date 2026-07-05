@@ -18,7 +18,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ [需拍板] Q1-TENSION  未闭合 fence + 互斥锚对 = 危险假阳（codex OV-2 证伪   │
+│ [已拍板 A] Q1-TENSION 未闭合 fence + 互斥锚对 = 危险假阳（codex OV-2 证伪 │
 │                      grill Q2 的「安全侧」前提）→ A 加 unbalanced 处理(荐) │
 │                      / B 接受并如实记缺口。重开 grill Q2。                  │
 │ [自动决策] D1  BR-1 proposal TG 头误标 TG-01 → 已改（去 TG-01，元仓无栈） │
@@ -71,12 +71,11 @@
 
 ## 收敛口
 
-**不建议**径直进设计 HARD-GATE 批准——存在 **1 条 [需拍板] Q1-TENSION**（OV-2，重开 grill Q2）。请就选项 A/B 拍板：
-- 选 **A** → design/tasks 加 unbalanced 处理 task（我改完再追认写锚）；
-- 选 **B** → design Non-Goals 定稿为"已知缺口"，即可批准写锚。
-
-其余 findings 已作 [spec-review-amendment] 落地（proposal/design/tasks），无阻塞。
+设计 HARD-GATE **已批准（Q1=A）**：Q1-TENSION 采纳选项 A——加未闭合 fence 检测，互斥锚对遇 unbalanced 保守判 UNKNOWN/none（design ADR-5 / tasks §2b / spec delta 新增 Scenario 均已落）。其余 findings 已作 [spec-review-amendment] 落地。**可进 writing-plans → 实现**。
 
 ## 拍板记录
 
-- （待用户在设计 HARD-GATE 就 Q1-TENSION 拍板；拍板后主 session 补 `<!-- ship-gate: design-approved -->` 锚）
+- **Q1-TENSION → A（采纳）**：加 unbalanced 处理（复用 `plan_unbalanced_fence` :353-356），互斥锚对（`pick_exclusive`/`archived_verify_state`）遇未闭合 fence 保守失败到安全侧。design ADR-5 + tasks 2b.1-2b.3 + spec delta「未闭合 fence 隔断互斥锚对不判假通过」Scenario 已同步。
+- 用户于设计 HARD-GATE 批准（选 A）。主 session 据此写入 ship-gate 机判锚（独占一行）：
+
+<!-- ship-gate: design-approved -->

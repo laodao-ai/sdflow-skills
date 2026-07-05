@@ -99,3 +99,7 @@
 #### Scenario: 归档 verify 描述性提及不触发假 SHIPPED〔gate-anchor-line-scoped B4·SHIPPED 路径〕
 - **WHEN** 归档目录的 `verify-report.md`（经 `git show <base>:…` 读出）正文**描述性提及** `<!-- ship-gate: verify=PASS -->`（内联句 / 代码块内文档示例）但**无独占一行的真 PASS 锚**
 - **THEN** `archived_verify_state` MUST 判其 verify 态为 `none`（非 `pass`），使归档终态短路 MUST NOT 输出假 SHIPPED——空壳 / 未验 / 仅描述性提及的归档目录 MUST 落 fail-safe（不 SHIPPED，请人工核验）；此判据 MUST 与 `anchors_in` 同为行级整行等值 + 忽略 fenced code block（同一 `_line_scoped_hits` 核心），MUST NOT 保留裸子串路径
+
+#### Scenario: 未闭合 fence 隔断互斥锚对不判假通过〔gate-anchor-line-scoped OV-2·设计门 Q1=A〕
+- **WHEN** 某报告的**互斥锚对**（verify `PASS`/`FAIL` 或 code-review `pass`/`blocked`）中正锚独占一行在 fenced code block 外、负锚独占一行落在**未闭合**（无配对收尾 ```）的 fence 内被吞
+- **THEN** 行级锚检测核心 MUST 回报**未闭合信号**，互斥锚对消费方（`pick_exclusive` / `archived_verify_state`）遇未闭合信号 MUST **保守判定**（`pick_exclusive`→UNKNOWN 点名「未闭合 fence 隔断互斥锚」；`archived_verify_state`→`none` 不 SHIPPED），MUST NOT 因只见正锚而判 pass（否则从旧裸子串的 conflict 语义回归为危险假阳）；单锚判定（`anchors_in` 查 design-approved，无互斥对）不受此约束——未闭合吞唯一锚 = 空命中 = REFUSE_START，方向为安全侧假阴

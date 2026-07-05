@@ -49,6 +49,14 @@ grill 证伪 proposal 初稿「`anchors_in` 是唯一解析入口」——`ship_
 
 **失败方向接地（为何折入纯赚）**：设计门（`anchors_in` 查 design-approved）假阳=越门（危险）、假阴=拒起跑（安全）；SHIPPED（`archived_verify_state`）假阳=假 SHIPPED（危险，正是要堵）、假阴=判「未 ship」让用户复核（无害）。两处收紧都**只降危险假阳、只增无害假阴**，方向一致。
 
+### ADR-5〔spec-review-amendment OV-2 · 设计门 Q1=A〕：未闭合 fence → 互斥锚对保守判定
+
+spec-review 的 codex outside-voice（OV-2）证伪了原 grill Q2 的「未闭合 fence 一律安全侧」前提。反例：文本 `<正锚>` 在 fence 外、随后**未闭合** \`\`\`、`<负锚>` 在其内被吞 → `_line_scoped_hits` 只返正锚 → `pick_exclusive`（:220 `positive in found` 真 → 返 `"pos"`）/ `archived_verify_state`（`has_pass=T/has_fail=F`）从**应有 conflict/UNKNOWN 翻成 pass** → 危险假阳（旧裸子串两锚都命中→conflict，安全）。**即 ADR-2 对此盘面是引入假阳的回归。**
+
+**决策（设计门 Q1=A 拍板）**：`_line_scoped_hits` 扫描末尾若 `in_fence` 仍为真（未闭合）→ 返回信号（`(hits, unbalanced=True)` 或旁挂谓词，复用现成 `plan_unbalanced_fence` :353-356 的检测惯例）。**互斥锚对调用方**（`pick_exclusive`、`archived_verify_state`）遇 `unbalanced=True` → 判 **UNKNOWN/none**（保守失败到安全侧，宁可多一次人工核验也不放假阳）。**单锚调用方**（设计门 `anchors_in` 查 design-approved，无互斥对）不受影响——未闭合吞掉唯一锚 → 空命中 → REFUSE_START，仍是安全侧假阴。
+
+**为何选 A（而非接受）**：本 change 本旨即堵锚检测假阳；旧行为对此盘面安全、ADR-2 使其危险=回归，留新洞自相矛盾；`plan_unbalanced_fence` 现成、成本 ≈5 行 + 2 测试。ADR-2 定位维持「防御性」，但 ADR-5 把其唯一真危险副作用（互斥锚对回归）焊死。
+
 ## 实现草图（ADR-1/2/4 一并）
 
 ```python
@@ -88,5 +96,5 @@ def anchors_in(path, candidates):
 
 - **不校验锚出现次数**：同一锚独占多行只算命中一次（`set`）；模板产一行，多行属异常但不改门禁方向（仍命中=已过），不在本 change 处理。
 - **不做 HTML 注释语义解析**：不判断锚是否在更大的 `<!-- ... -->` 多行注释块内被「注释掉」——模板锚本身就是单行 HTML 注释，独占一行等值已足；多行注释嵌套锚属人为构造，归「显式越权同权级」（git 留痕可审计），头注释「已知不覆盖」声明。
-- **未闭合 fence 处理〔spec-review-amendment OV-2：grill Q2 前提被证伪，改判待设计门拍板〕**：ADR-2 用简单 \`\`\` 奇偶翻转（同 T34），不检测 \`~~~\` 变体 / 带语言标签围栏（对抗镜1 核实此二者非本仓现实语料，安全）。**但「未闭合 fence 一律失败到安全侧」的原判被 codex OV-2 证伪**：对**互斥锚对**（verify PASS/FAIL、code-review pass/blocked），若正锚在 fence 外、负锚在未闭合 \`\`\` 内被吞 → `_line_scoped_hits` 只返正锚 → `pick_exclusive`/`archived_verify_state` 从应有的 **conflict/UNKNOWN 翻成 pass**（旧裸子串两锚都命中→conflict）=**危险假阳、可假 SHIPPED/假放行**。单锚吞没确是安全侧假阴，但两锚非对称吞没不是。→ 此项**改判为 [需拍板]**（见 spec-review-report 决策区 Q1-TENSION）：选项 A 给 `_line_scoped_hits` 加未闭合检测（复用现成 `plan_unbalanced_fence` :353-356），互斥锚对调用方遇 unbalanced 判 UNKNOWN/none（保守失败到安全侧）——成本低、闭合此洞、契合本 change 堵假阳的本旨；选项 B 接受并**如实**记「互斥锚对 + 未闭合 fence 隔断 = 已知假阳缺口」（非安全侧）。**推荐 A。** 单锚 design-approved 不受影响（无互斥对）。
+- **未闭合 fence：已由 ADR-5 处理（设计门 Q1=A）**——不再列为不覆盖项。互斥锚对遇未闭合 fence → 保守判 UNKNOWN/none（见 ADR-5，复用 plan_unbalanced_fence）。仍不覆盖：`~~~` 围栏 / 带语言标签围栏的**误判**（对抗镜1 核实非本仓现实语料，且方向=安全侧假阴）——如需再收由后续 change 处理。
 - **T37/T38（delta spec Scenario 措辞）不在本 change**：属 `checkpoint-tag-single-source` 批次的文档 prose 清理，与 `anchors_in` 代码正交，另行处理。
