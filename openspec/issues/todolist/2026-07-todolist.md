@@ -37,9 +37,9 @@
 | T29 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 | 可观测性 | PROPOSED | 2026-07-04 11:57 | cross-model-outside-voice | cross-model-outside-voice |
 | T30 | `sdflow-init/assets/hack/outside-voice.sh + tests` | helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖 | 代码质量 | PROPOSED | 2026-07-04 12:46 | cross-model-outside-voice | cross-model-outside-voice |
 | T31 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） | 代码质量 | PROPOSED | 2026-07-04 13:35 | cross-model-outside-voice | cross-model-outside-voice |
-| T32 | `ship_gate.py` | 完成判据 checkpoint 任务号加 change 命名空间 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
-| T33 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
-| T34 | `ship_gate.py` | 复选框辅通道按 Task 分段绑定 | 代码质量 | PROPOSED | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
+| T32 | `ship_gate.py` | 完成判据 checkpoint 任务号加 change 命名空间 | 代码质量 | DONE | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
+| T33 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态 | 代码质量 | WONTDO | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
+| T34 | `ship_gate.py` | 复选框辅通道按 Task 分段绑定 | 代码质量 | DONE | 2026-07-04 16:50 | ship-gate-hardening | ship-gate-hardening |
 | T35 | `ship_gate.py` | 新鲜度可选纳入工作树 dirty 状态(T33 停置延续) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
 | T36 | `sdflow-init/assets/workflow/workflow.md + sdflow-ship/SKILL.md` | checkpoint 派发指令文案收敛为单一真相源(broad-F2) | 代码质量 | PROPOSED | 2026-07-04 20:22 | ship-gate-hardening-2 | ship-gate-hardening-2 |
 | T37 | `openspec/changes/checkpoint-tag-single-source/specs/spec-workflow/spec.md:12` | delta spec Scenario prose 复述标签形状(<change>:task<号>-<slug>)——又一份需人工与 workflow.md/SKILL.md 保持一致的 doc 副本(M3 轻回声) | 代码质量 | PROPOSED | 2026-07-05 09:55 | checkpoint-tag-single-source | checkpoint-tag-single-source |
@@ -429,7 +429,7 @@
 |------|------|
 | 模块 | `ship_gate.py` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/ship-gate-hardening/design.md`
 
@@ -438,6 +438,7 @@
 **思路**：checkpoint 契约加 change slug/trailer 如 checkpoint(<change>:task1-) 或 sdflow-change: trailer,gate 只认当前 change;旧格式歧义时 UNKNOWN
 
 **备注**：ship-gate-hardening 代码审 HR-TG code 镜发现,pre-existing 非本 change 引入
+> 2026-07 状态：PROPOSED → DONE（ship-gate-hardening-2(archived 2026-07-04); ship_gate.py:231 [T32]命名组+test_gate_namespace.py）
 
 ---
 
@@ -447,7 +448,7 @@
 |------|------|
 | 模块 | `ship_gate.py` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | WONTDO |
 
 **关联文档**：`openspec/changes/ship-gate-hardening/design.md`
 
@@ -456,6 +457,7 @@
 **思路**：code scope 可选追加 git status --porcelain 分类;报告锚后存在 dirty 非 openspec 路径→RERUN_STALE/UNKNOWN。注:与「盘面即状态=committed 产物」设计张力,需先定性
 
 **备注**：HR-TG code 镜发现,pre-existing
+> 2026-07 状态：PROPOSED → WONTDO（延续为 T35(ship-gate-hardening-2 批次),同一 dirty 新鲜度想法,闭 T33 避免双计数）
 
 ---
 
@@ -465,7 +467,7 @@
 |------|------|
 | 模块 | `ship_gate.py` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/ship-gate-hardening/design.md`
 
@@ -474,6 +476,7 @@
 **思路**：按 ### Task <n>: 分段解析,要求每个计划内 task 段都有完成标记,否则 checkbox fallback 不覆盖 checkpoint 集合归属
 
 **备注**：HR-TG code 镜发现,pre-existing
+> 2026-07 状态：PROPOSED → DONE（ship-gate-hardening-2(archived 2026-07-04); ship_gate.py:332 checkbox_done_ids/:345 plan_has_duplicate_task [T34]）
 
 ---
 

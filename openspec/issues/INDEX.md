@@ -65,14 +65,6 @@
 |----|------|--------|------------|
 | T26 | todo | PROPOSED | sdflow-ship |
 
-### 批次：ship-gate-hardening
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T32 | todo | PROPOSED | ship-gate-hardening |
-| T33 | todo | PROPOSED | ship-gate-hardening |
-| T34 | todo | PROPOSED | ship-gate-hardening |
-
 ### 批次：ship-gate-hardening-2
 
 | ID | Pool | Status | 关联Change |
@@ -88,4 +80,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 9 项已闭合（bug: 3，todo: 6）
+- 共 12 项已闭合（bug: 3，todo: 9）
