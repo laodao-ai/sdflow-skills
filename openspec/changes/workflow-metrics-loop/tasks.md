@@ -36,7 +36,8 @@
 
 - [ ] 4.1 泛化反馈：把「累计 10 次采纳率复评」从仅 outside-voice 扩到 per-镜，判据升采纳率+独立率双列；人决声明（回路供数不自动砍镜）[workflow-metrics: 数据驱动反馈]
 - [ ] 4.1b **surfacing hook（防死列）**〔SR-A〕：给 `/sdflow-maintain` 加机械收尾检查步——只读聚合表、`出现轮数≥10 且未复评` 的镜**显著提示**（不判断不自动砍）；MUST NOT 埋进长报告 [workflow-metrics: 数据驱动反馈]
-- [ ] 4.1c 〔决策门 Q1/Q2 定后落〕SR-D `site` 消歧字段 or 合并规则 · SR-G `config.yaml` 消费仓 opt-out——**待设计门拍板后**据选项落契约/config；未定前 MUST NOT 实现撞键行 [workflow-metrics: 度量锚契约 / 数据驱动反馈]
+- [ ] 4.1c 〔决策门 Q1=A〕契约加可选 `site` 字段（仅 outside-voice，键升 `(layer,lens,runner,site,轮)`）；两 SKILL 落 outside-voice 锚时按调用位点填 `site`，聚合器解析 `site` 列 [workflow-metrics: 度量锚契约]
+- [ ] 4.1d 〔决策门 Q2=A〕`config.yaml` 度量开关（源仓默认 on / 消费仓默认 off）；两 SKILL 落锚+自检受其门控（关闭时不落锚不阻塞）；契约规范记默认值 [spec-workflow: 度量落锚 config 门控]
 - [ ] 4.2 grill 层不纳入：确认两 SKILL 不给 grill 落锚；把 grill「amendment 下游存活率」度量作**独立 deferred item** 写入 `openspec/issues/todolist`——明写「口径未定义（amendment 无 ID/无 ground truth 链接）、需自己的 explore、非本 change；裸数条数是误导指标不采；归 workflow-metrics-loop 伞下与 T29 并列」 [workflow-metrics: grill 留档边界] [/sdflow-todolist]
 
 > 〔grill-amendment〕原 4.2「镜级 dur_s」任务已删——成本维度撤出另立 T29（per-镜 dur_s 无诚实数据源，见 design ADR-3）。T29 另立标准见本次 grill 调研结论（记入 todolist T29）。

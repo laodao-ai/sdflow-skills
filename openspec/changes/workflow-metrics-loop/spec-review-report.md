@@ -64,8 +64,12 @@
 
 ## 结论
 
-- **11 项 [自动决策] 已 amend**（标 `[spec-review-amendment]`，validate valid）；**2 项 [需拍板] Q1(site)/Q2(消费仓 opt-out)** 待设计门定——两者均 schema/config 层、实现前必须定（task 4.1c 已锁「未定前 MUST NOT 实现撞键行」）。
-- 接地诚实度高、代码事实 0 不符；grill 已消 3 处致命，spec-review 再补 11 处设计缺口（回路空转、数值自检诚实化、枚举校验、pre-gate 时序、消费仓负担…）。
-- **建议进设计 HARD-GATE**：用户过本报告 + 定 Q1/Q2 → 批准进阶段三（writing-plans）。
+- **11 项 [自动决策] 已 amend**（标 `[spec-review-amendment]`，validate valid）。
+- **2 项 [需拍板] 设计门已拍板**：**Q1=A**（加可选 `site` 消歧字段，键升 `(layer,lens,runner,site,轮)`）· **Q2=A**（`config.yaml` 度量开关，源仓默认 on / 消费仓默认 off）——已落契约 spec/design/tasks（4.1c/4.1d），validate valid。
+- 接地诚实度高、代码事实 0 不符；grill 已消 3 处致命，spec-review 再补 11 处设计缺口 + 2 项拍板收敛。
 
-□ 建议进设计 HARD-GATE（待 Q1/Q2 拍板）
+## 拍板记录
+
+用户 2026-07-06 过本报告，Q1=A / Q2=A 拍板，批准进阶段三（writing-plans）。
+
+<!-- ship-gate: design-approved -->

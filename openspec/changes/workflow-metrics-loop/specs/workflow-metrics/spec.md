@@ -4,7 +4,7 @@
 
 评审**价值** SHALL 以结构化锚行 `sdflow:lens-metric v1` 记录，一行对应一（层, 镜, runner, 轮）四元组，MUST NOT 以自由 prose 承载（否则跨 change 聚合须 parse 自由文本，措辞漂移即腐坏——ROADMAP adr/0006(b) 禁「prose 治 prose」）。契约字段与取值域 SHALL 由 `sdflow-init/assets/workflow/` 下的**单一权威规范**定义，各生产者 SKILL 引用而 MUST NOT 复制字段清单。
 
-字段：`layer`（`spec-review`|`code-review`）、`lens`（`domain`|`adversarial`|`grounding`|`history`|`outside-voice`|`broad`）、`runner`（`claude`|`codex`|`claude-fallback`）、`findings`（int≥0，去重前自报数）、`采纳`/`裁掉`/`defer`（int≥0）、`独立`（int≥0）、`sev`（`致N/高N/中N/低N`，仅采纳项）。〔grill-amendment：原含 `dur_s`，因无诚实数据源砍除，成本另立 T29——见 design ADR-3〕
+字段：`layer`（`spec-review`|`code-review`）、`lens`（`domain`|`adversarial`|`grounding`|`history`|`outside-voice`|`broad`）、`runner`（`claude`|`codex`|`claude-fallback`）、`site`（**可选消歧**：`code-voice`|`hr-tg`|`design-voice`|`—`，**仅 `outside-voice` 用、不进 `lens` enum**——消同轮多次 codex 调用的四元组撞键，保 hr-tg 定向复核 vs 泛检信号区分〔SR-D 决策门 Q1=A〕）、`findings`（int≥0，去重前自报数）、`采纳`/`裁掉`/`defer`（int≥0）、`独立`（int≥0）、`sev`（`致N/高N/中N/低N`，仅采纳项）。〔grill-amendment：原含 `dur_s`，因无诚实数据源砍除，成本另立 T29——见 design ADR-3〕
 
 `lens` 字段 SHALL 为 **canonical 投影**（非报告「源」列逐字）：主 session 写锚时按规范映射折叠——完整性镜并入 `grounding`、编号对抗镜（对抗镜1/2/3）折叠到 `adversarial`、autoplan/gstack 各子声折叠到 `broad`、codex/fallback 折叠到 `outside-voice`（映射表见 design ADR-2）。`独立` SHALL 在**折叠到类型之后**计算。
 
@@ -12,7 +12,7 @@
 
 〔spec-review-amendment SR-E〕**enum 扩展治理**：新增镜类型（6 值 `lens` 枚举未列的）MUST 先升契约版本号至 `v2` 并更新 ADR-2 折叠表，**MUST NOT 静默塞入 `broad`**（`broad` 是低区分度兜底桶，新镜价值信号被广审噪声稀释 = 反噬「数据驱动优化评审架构」本命题）。
 
-〔spec-review-amendment SR-D · 决策门 Q1 待定〕**同轮同 `(layer,lens,runner)` 多次调用消歧**：`outside-voice` 同轮现实可有 `code-voice`/`hr-tg`（或 `design-voice`/`hr-tg`）两次独立 codex 调用，四元组撞键——待决策门定「加可选 `site` 消歧字段（保 hr-tg vs 泛检信号）vs 钉死合并规则」，实现前 MUST 有明确规则，MUST NOT 让主 session 现场随意加总/覆盖。
+〔spec-review-amendment SR-D · 决策门 Q1=A 已定〕**同轮多次 outside-voice 调用以 `site` 消歧**：`outside-voice` 同轮的 `code-voice`/`hr-tg`（或 `design-voice`/`hr-tg`）各落**独立一行**、以 `site` 区分（唯一性键升为 `(layer,lens,runner,site,轮)`），MUST NOT 加总成一行抹掉 hr-tg vs 泛检的区分。非 outside-voice 镜 `site=—`。
 
 #### Scenario: 每镜落一行合规锚
 - **WHEN** 一轮 spec-review 或 code-review 的 Step3 裁决完成

@@ -46,6 +46,7 @@
 | `layer` | `spec-review` \| `code-review` | 评审层 | 编排 skill 自知 |
 | `lens` | `domain` \| `adversarial` \| `grounding` \| `history` \| `outside-voice` \| `broad` | 镜别 **canonical 投影**（非 `源` 逐字，映射规则见 ADR-2；grounding 仅 spec-review 且含完整性镜；history 仅 code-review；broad=Step1 广审/autoplan/gstack 整体） | 规划镜头时已定，写锚时按 ADR-2 折叠 |
 | `runner` | `claude` \| `codex` \| `claude-fallback` | 执行模型（镜=claude；outside-voice=codex/fallback） | fan-out 时已定 |
+| `site`〔SR-D〕 | `code-voice` \| `hr-tg` \| `design-voice` \| `—` | **可选消歧**（仅 outside-voice，不进 lens enum）——同轮多次 codex 调用各独立一行，键升 `(layer,lens,runner,site,轮)` | 调用位点已定 |
 | `findings` | int≥0 | 该镜**去重前**自报条数 | 子代理返回计数 |
 | `采纳` `裁掉` `defer` | int≥0 | 该镜所报 finding 的裁决分桶（**共抓的 finding 记入每个命中镜**） | Step3 裁决 |
 | `独立` | int≥0 | 该镜**单独抓到且被采纳**、无其他镜共抓的条数（非冗余真值） | Step3 去重共现导出 |
@@ -140,8 +141,8 @@
 - 〔grill 定性 · defer〕**grill 层度量口径未定义 → 需自己的 explore**（非本 change）：`[grill-amendment]` 无 ID/无结构化链接，「amendment 下游存活率」无 ground truth 关联；裸数条数是误导指标故不采。与 T29 并列为 workflow-metrics-loop 伞下独立 deferred item，记入 todolist（见 task 4.2）。
 - 〔grill Q3 已解决〕~~聚合脚本落点~~ → **定 `workflow/tools/`**（bundle，随 sdflow-init 推下游；消费仓同样用两评审 SKILL、可复用聚合器）。
 - 〔grill Q5 已定〕10 轮复评节奏 = per-(层,镜) 独立计数、聚合器派生列（见 ADR-5）。
-- 〔spec-review 决策门 Q1 · SR-D〕**同轮 outside-voice 多 site 撞键**：加可选 `site` 消歧字段（保 hr-tg vs 泛检信号，推荐）vs 钉死合并规则（求和/覆盖）。schema 层决策，实现前须定。
-- 〔spec-review 决策门 Q2 · SR-G〕**消费仓 opt-out**：无条件 SHALL 落锚 + 缺字段阻塞随 bundle 推所有消费仓，低频小仓零收益期却背记账+硬阻塞。加 `config.yaml` 开关（默认源仓 on / 下游 off 或自检降软警告，推荐）vs 无条件全推（接受下游负担）。
+- 〔spec-review 决策门 Q1=A 已定 · SR-D〕同轮 outside-voice 多 site 撞键 → **加可选 `site` 消歧字段**（各独立一行，保 hr-tg vs 泛检信号），键升 `(layer,lens,runner,site,轮)`。
+- 〔spec-review 决策门 Q2=A 已定 · SR-G〕消费仓负担 → **`config.yaml` 度量开关**（源仓默认 on / 消费仓默认 off，关闭时不落锚不阻塞）。
 
 ## Compliance
 
