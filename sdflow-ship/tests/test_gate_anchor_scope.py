@@ -81,13 +81,20 @@ def test_archived_true_pass_and_conflict(tmp_path):
     assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "conflict"
 
 
-def test_pick_exclusive_unbalanced_unknown(tmp_path):
+def test_pick_exclusive_unbalanced_unknown(tmp_path, capsys):
     # 正锚在 fence 外 + 未闭合 ``` + 负锚在内被吞 → 不得判 pass，须 UNKNOWN
+    # [impl-review-fix 修B/对抗镜2-F1] 仅断言 exit code == EXIT_UNKNOWN 不足以区分分支：
+    # 两锚并存的 conflict 分支同样退出 EXIT_UNKNOWN。须同时断言 emit 的 JSON reason
+    # 含"未闭合 fence"，确认真正命中的是 unbalanced 分支而非 conflict 分支。
     f = tmp_path / "verify-report.md"
     f.write_text(f"{VPASS}\n```\n{VFAIL}\n", encoding="utf-8")   # ``` 未闭合
     with pytest.raises(SystemExit) as e:
         _sg.pick_exclusive(f, VPASS, VFAIL, "verify")
     assert e.value.code == _sg.EXIT_UNKNOWN
+    out = capsys.readouterr().out
+    last_line = out.strip().splitlines()[-1]
+    reason = json.loads(last_line)["reason"]
+    assert "未闭合 fence" in reason
 
 
 def test_archived_unbalanced_none(tmp_path):
@@ -132,9 +139,14 @@ def test_contract_archived_corpus_anchor_hits():
               list(archive.glob("*/verify-report.md")) + \
               list(archive.glob("*/code-review-report.md"))
     assert samples, "无归档报告语料"
+    # [impl-review-fix 修C/对抗镜2-F2] 空转兜底：若语料存在但无一篇含任何已知锚子串，
+    # 内层断言全程不执行，测试会"假绿"（看似通过实则未验证任何东西）。加计数器兜底。
+    checked = 0
     for f in samples:
         text = f.read_text(encoding="utf-8", errors="replace")
         for anc in _sg.ALL_ANCHORS:
             if anc in text:   # 该报告含此锚（子串层）
+                checked += 1
                 hits, _ = _sg._line_scoped_hits(text, [anc])
                 assert anc in hits, f"{f.name} 的真锚 {anc} 行级判据下漏检——模板锚未独占一行?"
+    assert checked > 0, "契约测试未匹配到任何真锚，可能已空转"

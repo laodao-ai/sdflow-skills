@@ -255,3 +255,34 @@ def test_tg02_header_declaration_hit(tmp_path):
         "# t\n\n〔TG-02：嵌入式固件变更〕\n\n## What\n正文无关内容\n",
         encoding="utf-8")
     assert _sg.tg02_hit(d) is True
+
+
+# [impl-review-fix 修A] tg02_hit 头部扫描 fence-aware + 声明行匹配回归覆盖
+def test_tg02_fenced_heading_in_header_still_hits(tmp_path):
+    """头部区 fenced 围栏内的 `## Example` 不算头部边界——围栏后（仍在首个真 `## ` 前）
+    的真声明行 〔TG-02：…〕 须命中（对抗镜1 假阴修复：旧裸循环遇围栏内 `## ` 误 break）。"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n```\n## Example\n```\n〔TG-02：嵌入式固件变更〕\n## Real Section\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is True
+
+
+def test_tg02_fenced_example_in_header_not_hit(tmp_path):
+    """头部区 fenced 围栏内展示 〔TG-02：嵌入式〕 作为示例，真声明行是 〔TG-25：契约〕
+    → tg02_hit False（对抗镜1 假阳修复：旧裸子串匹配把围栏内示例也计入 header_lines）。"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n```\n〔TG-02：嵌入式〕\n```\n〔TG-25：契约〕\n## Real\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is False
+
+
+def test_tg02_header_descriptive_mention_not_hit(tmp_path):
+    """头部区描述性散文提及 〔TG-02： （反引号引用格式说明），真声明行是 〔TG-25：契约〕
+    → tg02_hit False（codex OV-code-2：声明行须以「〔TG」起始，排除描述提及）。"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n说明：正例形如 `〔TG-02：`\n〔TG-25：契约〕\n## Real\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is False
