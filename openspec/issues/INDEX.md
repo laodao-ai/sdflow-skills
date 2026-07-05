@@ -30,6 +30,13 @@
 | T42 | todo | PROPOSED | gate-anchor-line-scoped |
 | T43 | todo | PROPOSED | gate-anchor-line-scoped |
 
+### 批次：gate-checkpoint-hardening
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T51 | todo | PROPOSED | gate-checkpoint-hardening |
+| T52 | todo | PROPOSED | gate-checkpoint-hardening |
+
 ### 批次：issues-pool-batch-mgmt
 
 | ID | Pool | Status | 关联Change |

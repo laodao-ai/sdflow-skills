@@ -80,3 +80,9 @@
 优先级: P2
 计划: sdflow-init/scripts/init.py 健壮性（同文件、fold-vs-defer 三条齐）：主=T49 settings.json 原子写并发 lost-update TOCTOU 收窗（silent 覆盖、数据丢失面）；次=T21 inject() marker 锚错位/多旧块只修首个 · T22 open().read()→with open() 清 19 Unraisable · T48 python3/python 探测加 sys.version_info 守卫（低概率 Python2）
 
+### gate-checkpoint-hardening — gate-checkpoint-hardening
+状态: PLANNED
+成员: (生成) T51, T52
+优先级: P3
+计划: gate/checkpoint 硬化残差: T51 tracked 非-openspec 改动被 commit 步 git add -u 先提交绕过 merge untracked 检查(需 commit 步暂存策略对齐) + T52 merge untracked 精确 baseline 快照 diff(减少既有 debris 误停)
+
