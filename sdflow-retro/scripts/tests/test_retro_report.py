@@ -1,4 +1,5 @@
 import sys
+import os
 import subprocess
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -181,3 +182,23 @@ def test_report_idempotent(tmp_path):
     a = R.build_report(str(root))
     b = R.build_report(str(root))
     assert a == b
+
+
+def test_atomic_write_preserves_mode_on_overwrite(tmp_path):
+    target = tmp_path / "openspec/retro/report.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("old")
+    os.chmod(str(target), 0o644)
+    R.atomic_write(str(target), "new")           # 覆盖已存在文件
+    assert target.read_text() == "new"
+    mode = os.stat(str(target)).st_mode & 0o777
+    assert mode == 0o644, f"权限被静默收紧到 {oct(mode)}（D13：覆盖须保原 0644，非 mkstemp 的 0600）"
+
+
+def test_main_writes_report_and_returns_zero(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(grill)")
+    rc = R.main(["--root", str(root)])
+    assert rc == 0
+    assert (root / "openspec/retro/report.md").is_file()
