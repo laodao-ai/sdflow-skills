@@ -73,6 +73,21 @@ def test_no_anchor_report_counted(tmp_path):
     rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
     assert "old" in no_anchor  # 显式计无锚样本，不静默跳过
 
+def test_aggregate_missing_archive_returns_empty(tmp_path):
+    # T61：aggregate 对缺失 archive 目录显式返回空三元组契约（不抛）。把「缺目录→空」
+    # 从 Path.glob 的偶然实现行为升成 aggregate 的显式契约，两处 call site
+    # （surfacing_block / build_report 聚合③）才能安全删掉不可达的死 try/except。
+    # 诚实留档：修前 glob 亦返空（行为等价），本测试锁契约、防未来重构回退，非 before/after 反证。
+    assert lma.aggregate(tmp_path / "no-such-archive") == ([], [], [])
+
+
+def test_aggregate_file_as_root_returns_empty(tmp_path):
+    # T61：archive_root 恰是文件（非目录）时同样返空不抛——显式 is_dir 守卫覆盖此退化输入。
+    f = tmp_path / "not-a-dir"
+    f.write_text("x", encoding="utf-8")
+    assert lma.aggregate(f) == ([], [], [])
+
+
 def test_render_table_has_independent_and_flags(tmp_path):
     # 独立列非空 + 出现轮数≥10 标记（构造 domain 出现 10 轮）
     for i in range(10):

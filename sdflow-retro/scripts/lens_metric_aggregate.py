@@ -65,7 +65,12 @@ def aggregate(archive_root):
     """扫 archive/**/*-review-report.md；返回 (锚行 rows, 无锚 change 名 list,
     解析失败 change 名 list)。[impl-review-fix CF-2] 单个报告文件读取/解码失败
     （编码坏字节、IO 错误等）不拖垮全局聚合——单独 try/except，坏文件显式计入
-    「解析失败」桶（不静默丢弃），其余报告照常聚合。"""
+    「解析失败」桶（不静默丢弃），其余报告照常聚合。
+    [T61] 显式契约：archive_root 不是目录（缺失/被删/恰是文件）→ 返回空三元组。
+    这把「缺 archive → 空」从 Path.glob 的偶然实现行为升成本函数的文档化契约，
+    使 call site 无需再包不可达的防御性 try/except。"""
+    if not Path(archive_root).is_dir():
+        return [], [], []
     rows, no_anchor, parse_failed = [], [], []
     for report in sorted(Path(archive_root).glob("**/*-review-report.md")):
         try:

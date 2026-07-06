@@ -330,12 +330,11 @@ def surfacing_block(root):
     """
     archive_root = os.path.join(root, "openspec", "changes", "archive")
     counts = defaultdict(int)
-    try:
-        rows, _no_anchor, _parse_failed = LMA.aggregate(archive_root)
-        for r in rows:
-            counts[LMA.group_key(r)] += 1
-    except (OSError, ValueError):
-        pass  # archive 不存在/不可读 → 视同无样本，走「无命中」固定行，不崩报告
+    # [T61] aggregate 已按显式契约处理缺失/非目录 archive（返空不抛），逐文件读错也在其内部
+    # try/except 处理——故此处无需再包防御性 try/except（原 catch 不可达、注释误导已删）。
+    rows, _no_anchor, _parse_failed = LMA.aggregate(archive_root)
+    for r in rows:
+        counts[LMA.group_key(r)] += 1
     thr = LMA.REVIEW_ROUNDS_THRESHOLD  # [T59] 与 render_table 共享同源阈值，不再本地硬编码 10
     flagged = [(k, c) for k, c in counts.items() if c >= thr]
     if not flagged:
@@ -441,11 +440,10 @@ def build_report(root):
     lines.append("## 聚合③ per-镜价值表（lens-metric 聚合，扫 archive）")
     lines.append("")
     archive_root = os.path.join(root, "openspec", "changes", "archive")
-    try:
-        agg_rows, no_anchor, parse_failed = LMA.aggregate(archive_root)
-        lines.append(LMA.render_table(agg_rows, no_anchor, parse_failed))
-    except (OSError, ValueError) as e:
-        lines.append(f"> 聚合③不可用（{e}）——archive 不存在或不可读，留空。")
+    # [T61] 同上：aggregate 显式契约保证缺失/非目录 archive 返空不抛，render_table 对空
+    # rows 产出仅含表头 + 空样本脚注的合法表——无需防御性 try/except（原 catch 不可达）。
+    agg_rows, no_anchor, parse_failed = LMA.aggregate(archive_root)
+    lines.append(LMA.render_table(agg_rows, no_anchor, parse_failed))
     lines.append("")
 
     return "\n".join(lines) + "\n"
