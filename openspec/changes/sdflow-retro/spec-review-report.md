@@ -93,4 +93,10 @@
 ---
 
 ## 收敛口
-冷审存活 findings 已全部落 amendment（下方 [spec-review-amendment]）。唯一 [需拍板] Q1（retro 前向定位、历史 best-effort/薄）呼应用户 grill 决策，建议设计门确认后进 HARD-GATE → writing-plans。
+冷审存活 findings 已全部落 amendment（[spec-review-amendment]）。唯一 [需拍板] Q1（retro 前向定位、历史 best-effort/薄）呼应用户 grill 决策，建议设计门确认后进 HARD-GATE → writing-plans。
+
+## 拍板记录（设计门）
+- **2026-07-06 设计门批准**：用户拍板 **Q1 = 批准（前向为主、历史 best-effort/薄）**——认 D8-D13 边界引擎实测修订 + retro"真价值在向前、历史尽力解析不假装全覆盖"的诚实定位。全部 [自动决策] D-A~D-H/D8-D13 采纳、无翻改；lens-metric 锚 5 行反映门后最终裁决（全采纳，SR-M 无需重算）。
+- 进 writing-plans（实现）→ code-review → done。
+
+<!-- ship-gate: design-approved -->
