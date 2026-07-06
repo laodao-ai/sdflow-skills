@@ -17,3 +17,9 @@ node_modules/
 
 # outside-voice 调试留档不入库（评审四源命中: 全量 diff/潜在敏感内容防经 checkpoint add -A 永久入历史）[impl-review-fix]
 **/.outside-voice/
+
+# Python 运行期产物（防 checkpoint-commit.sh 的 git add -A 把测试/运行生成的字节码缓存
+# 裹进手写 commit——batch-triage 大扫除批一项一 commit 协议同根因风险）[impl-review-fix]
+__pycache__/
+*.pyc
+.pytest_cache/

@@ -3,7 +3,8 @@
 > **定位**：`batches.md` 按「哪个 change 发现的」切批；本文件把待处理项按**目标功能域**重新聚拢，
 > 找出「一个 change 清 2-3 批」的合批机会。判据 = BASE-18 fold-vs-defer 防吸积 AND 门
 > （`同 capability ∧ 高耦合 ∧ 低增量` 三者皆满足才 fold）。
-> 生成于 2026-07-05；数据源 = `todolist.py scan` + `batches.md`。待处理 38 项（bug 全 FIXED）。
+> 生成于 2026-07-05；数据源 = `todolist.py scan` + `batches.md`。待处理 38 项（bug: B1-B4 FIXED，
+> B5 OPEN——存疑→单开，见 §5.2）〔impl-review-fix〕。
 >
 > **2026-07-07 重划说明（batch-triage-strategy）**：本次重划是**增维度，不是重构**——下方
 > 「二、合批建议（AND 门）」的 REC-1/2/3 既有框架**保持不动**（已验证，不重 litigate 其设计），
@@ -92,7 +93,7 @@ REC-1+REC-2 联手把 **gate-anchor-line-scoped 整批拆干净**（T43→REC-1�
 | G7 init.py 健壮性 T21 T22 T48 T49 | **相关批**（✅已 ship） | 已归档，不再是待处理项 |
 | **T63 / T64**（G7 之后新冒出的 init.py 后续项） | **排除**（逻辑面，归单开——延迟绑定：等下次触碰 `init.py` 时顺手带） | 见 5.2 反例（逻辑面项） |
 | **T51 / T52**（`sdflow-done/SKILL.md` gate-checkpoint-hardening 残差） | **排除**（逻辑面，归单开——延迟绑定：等下次触碰 `sdflow-done/SKILL.md` 时顺手带） | 见 5.2 反例（逻辑面项） |
-| G8 viewer T47 | **单开**（延迟绑定子态：随任何前端触碰带） | 单项、无同 cap 伙伴，也非低危正交琐碎（engine.js 深链逻辑补单测，属测试新增但绑定复杂前端行为，判据存疑从严单开） |
+| G8 viewer T47 | **排除**（行为面路径硬排除）〔impl-review-fix〕 | 落点 `sdflow-init/assets/workflow/tools/engine.js`，精确命中 `*/assets/workflow/*`——与 T50/T41/T42 同类硬排除理由，非"存疑从严"弱框架；归属结论不变（单开，随任何前端触碰带） |
 | **T54**（`workflow 度量/grill amendment 存活率`，2026-07-06 新增） | **排除**（逻辑面，归单开——延迟绑定：等下次触碰 workflow 度量口径时顺手带） | 新增度量口径本身即新逻辑面（非纯记录），非纯 docs/tests，MUST NOT 入大扫除批 |
 | **T55**（`lens_metric_aggregate.py` 聚合器健壮性，2026-07-06 新增） | **排除**（逻辑面，归单开） | 落 `sdflow-retro/` 脚本代码，改「glob 空表 vs archive 不存在」的区分逻辑 + site 值截断分组，均是解析/判定逻辑变更，非纯 tests |
 | **T58**（`sdflow-retro/lens_metric_aggregate` fence-aware tilde fence，2026-07-06 新增） | **排除**（逻辑面，归单开） | 落 `sdflow-retro/` 脚本代码，新增 fence 解析分支（CommonMark `~~~`），是解析逻辑扩展 |
@@ -100,6 +101,8 @@ REC-1+REC-2 联手把 **gate-anchor-line-scoped 整批拆干净**（T43→REC-1�
 | **T60**（`sdflow-retro/retro_report` `_run_git` returncode 检查，2026-07-06 新增） | **排除**（逻辑面，归单开） | 落 `sdflow-retro/` 脚本代码，新增 returncode 判定分支（区分 git 失败 vs 真无提交），是逻辑面变更 |
 | **T61**（`sdflow-retro/retro_report` 死 except 移除+注释订正，2026-07-06 新增） | **排除**（存疑→单开，fail-closed） | 触 `sdflow-retro/` 脚本代码，移除 except 分支牵动错误处理路径，边界存疑，按 fail-closed 默认排除，MUST NOT 标候选 |
 | **T62**（`sdflow-retro/retro_report._run_git` 失败节流去重，2026-07-06 新增） | **排除**（逻辑面，归单开） | 落 `sdflow-retro/` 脚本代码，新增去重/节流逻辑（同一 subcmd 失败去重或按 sha 聚合），是逻辑面变更 |
+| **T56**（`trivial_shape.py` / workflow-cost-opt Leg1 判器残余，2026-07-06 新增，OPEN） | **排除**（双重命中：行为面路径+逻辑面）〔impl-review-fix〕 | 落点 `*trivial_shape.py`，精确命中 `BEHAVIOR_PATH_PATTERNS`；且内容是判器逻辑补强（tests/ 免检范围收紧、盖 conftest/`__init__`/`tests/plugins/*`），属逻辑面变更，双重排除 |
+| **T57**（`workflow/model-tiers` 档位矩阵新增「升级档」，2026-07-06 新增，OPEN） | **排除**（双重命中：行为面路径+逻辑面）〔impl-review-fix〕 | 落点 `sdflow-init/assets/workflow/model-tiers.md`，命中 `*/assets/workflow/*`；且内容是新增档位矩阵设计（功能增强），属逻辑面变更，双重排除 |
 
 ### 5.2 Worked example（正反齐全，Q1 路径守卫落地）
 
@@ -107,7 +110,7 @@ REC-1+REC-2 联手把 **gate-anchor-line-scoped 整批拆干净**（T43→REC-1�
 
 - `{T50 · sdflow-spec-review/SKILL.md 决策登记区 ASCII 框 · 为何无逻辑面：纯排版对齐，无分支/无契约变化 · 低危证据：单文件、改动范围 6 行以内 · 生成物/CI/目录跨度检查：无生成物、无重型 CI、单文件 · 归属：排除——落点是 `SKILL.md`，命中 `BEHAVIOR_PATH_PATTERNS`，即便内容纯 cosmetic 也硬排除}`
 - `{T41 · sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md（评审结束输出可点击链接） · 为何看似无逻辑面：纯输出格式增强 · 低危证据：不改判定逻辑 · 检查结果：跨 2 个 SKILL.md，目录跨度已算宽 · 归属：排除——落点是 `SKILL.md`，命中硬排除；且跨 2 文件已不算"个体琐碎"}`
-- `{T42 · workflow bundle（generation-process.md / design-diagrams.md / 产物模版） · 为何看似无逻辑面：文档呈现形式增强（加图表） · 低危证据：不改结论 · 检查结果：落点笼统"workflow bundle 多处"，未列精确文件 · 归属：排除——双重命中：落点在 `*/assets/workflow/*`（硬排除）+ 路径宽泛未列精确文件（fail-closed 存疑规则）}`
+- `{T42 · workflow bundle（generation-process.md / design-diagrams.md / 产物模版） · 为何看似无逻辑面：文档呈现形式增强（加图表） · 低危证据：不改结论 · 检查结果：订正〔impl-review-fix〕——原文实列 2 个精确文件（`generation-process.md`、`design-diagrams.md`），仅第三项"产物模版"是笼统提法，非"完全未列精确文件" · 归属：排除——落点（含精确列出的两个文件）命中 `*/assets/workflow/*`（硬排除即已足够，不依赖"未列精确文件"这条不准确的补充理由）}`
 
 **反例 B——逻辑面项（无论描述多琐碎都排除）**：
 
@@ -125,8 +128,15 @@ REC-1+REC-2 联手把 **gate-anchor-line-scoped 整批拆干净**（T43→REC-1�
   sdflow-init/tests/test_init.py（`--dev` + `_die` 补 subprocess 测试，对应
   `test_dev_pointing_elsewhere_dies` 一类用例）· 为何无逻辑面：只对既有测试补充断言/覆盖分支，
   不新增任何生产代码路径或判定逻辑，测试本身对错只影响 CI 红绿、不影响运行期用户行为 · 低危证据：
-  改动局限于 tests/ 目录，最坏情况是断言写错导致该测试误红/误绿，不会静默改变工具实际行为
-  （同 Leg1 `trivial_shape.py` 对"仅新增 tests"豁免多镜的同源理由）· 生成物/CI/目录跨度检查：
+  改动局限于 tests/ 目录，最坏情况是断言写错导致该测试误红/误绿，不会静默改变工具实际行为 ·
+  **诚实注（口径不等同 Leg1，非简单同源）〔impl-review-fix〕**：Leg1 `trivial_shape.py` 的
+  「无逻辑面」白名单只豁免**新增**的 tests 文件（`git diff` 里全新路径）；T13 改的是**既有**
+  test_*.py（补充断言/覆盖分支），字面落在 Leg1 判据里会归入 logic-line 判定、不享受"仅新增
+  tests"豁免——这一维度比 Leg1 **更宽**。仍判候选的理由是 batch-triage 自身定义（非机械照搬
+  Leg1 形状）：①只动断言/覆盖分支，不新增任何生产代码路径或判定逻辑；②不碰任何生产代码路径
+  （install_into/resolver 等）；③坏断言有 CI 兜底（既有 pytest 套件跑红即发现，不会静默改变
+  工具实际行为）——三条共同支撑"无逻辑面 ∧ 低危"，但这是本判据下的独立论证，不是"同 Leg1
+  仅新增 tests 同源理由"的字面套用 · 生成物/CI/目录跨度检查：
   无生成物、无重型 CI 新增触发面（复用既有 pytest 套件）、目录跨度 3 个文件、同目录
   `sdflow-init/tests/` · 归属：候选——非行为面路径（`tests/` 不在 `BEHAVIOR_PATH_PATTERNS`），
   且与 G2 其余"改安装期生产逻辑"的项（T14/T18/T23/T24 等）低耦合，可独立拉出}`
@@ -139,8 +149,9 @@ REC-1+REC-2 联手把 **gate-anchor-line-scoped 整批拆干净**（T43→REC-1�
 
 ### 5.3 诚实标注：本仓大扫除批候选池薄
 
-扫过 `openspec/issues/todolist/` 现存 PROPOSED 项（含 2026-07-06 新增的 T54/T55/T58/T59/T60/
-T61/T62，已补标于上方 5.1 表，全部排除——理由见各行；覆盖到 T62，即 T1-T64 全量）与
+扫过 `openspec/issues/todolist/` 现存 PROPOSED + OPEN 待处理项全量（含 2026-07-06 新增的
+T54/T55/T56/T57/T58/T59/T60/T61/T62，已补标于上方 5.1 表，全部排除——理由见各行；其中
+T56/T57 为 OPEN 状态、非 PROPOSED，同样纳入本次扫描并双重命中行为面路径+逻辑面）〔impl-review-fix〕与
 `openspec/issues/buglist/` 现存 OPEN 项后，**严格按上方判据（正交 ∧ 无逻辑面 ∧ 低危 ∧ 非行为面
 路径，fail-closed 存疑即排除）逐项核对，本仓当前只筛出 1 个真候选（T13）**——候选池薄，这个
 数现已有全量表逐项归属背书（非扫了但未落表的口头声明）。原因：本仓多数 debt 落点

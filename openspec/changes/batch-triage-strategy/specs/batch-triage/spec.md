@@ -75,7 +75,7 @@ issue 级判据 SHALL 与 Leg1 `trivial_shape.py` 的「无逻辑面白名单」
 
 #### Scenario: 收尾计数自检
 - **WHEN** 大扫除批实现完成
-- **THEN** `git log --oneline <base>..HEAD` 的 commit 数 == 候选 item 数 == plan 独立 task 数，不等即视为违反 item 粒度、须拆
+- **THEN** 核对的是 **item 实现 checkpoint commit 数**（`git log --oneline <base>..HEAD` 里 subject 匹配 item-checkpoint 形状/含 item ID 的提交，按 item ID 去重计数）—— **非** `base..HEAD` 区间的 raw 总 commit 数（该区间还含 ff/plan/review-fix 等非 item commit）〔impl-review-fix，订正计数公式不精确〕；该数 == 候选 item 数 == plan 独立 task 数，不等即视为违反 item 粒度、须拆
 
 ### Requirement: consolidation-plan 三元标注
 `openspec/issues/consolidation-plan.md` SHALL 对每个待处理项做**三元标注**批归属（相关批 / 大扫除批候选 / 单开），并至少含一个 worked example（真无逻辑面项→候选、行为面路径/逻辑面项→排除）。（术语统一：全文用「三元标注」，勿用「二分」——终态有三个。）

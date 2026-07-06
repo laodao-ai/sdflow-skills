@@ -98,12 +98,18 @@ issue 池待处理项
 ## Migration Plan
 
 - 纯新增 + 文档重划，无运行时迁移。
-- bundle 改动经 `sdflow-init update` 推下游；本仓 dogfood 跑一次 `setup.sh` 使 canonical 生效。
-- 回滚 = revert 规则文件 + consolidation-plan（判据未被任何自动门强依赖，回滚零副作用）。
+- **本仓-local，无 bundle 改动、无回灌**〔impl-review-fix，订正 pre-Q2 残留〕：D6 已定案落点为
+  `openspec/issues/`（非 `sdflow-init/assets/workflow/`），故不涉 `sdflow-init update` 推下游、
+  不涉 `setup.sh` 使 canonical 生效——本仓 `git commit` 提交即生效，dev checkout 与 runtime
+  checkout（`~/.skills/sdflow-skills`）`git pull` 后均直接读到最新文件，无需额外部署步骤。
+- 回滚 = revert 规则文件（`batch-triage-rules.md`）+ `consolidation-plan.md`（判据未被任何自动门
+  强依赖，回滚零副作用）。
 
 ## Compliance
 
-- 遵守 bundle 权威源纪律（改 assets/workflow → update 回灌）。
+- **本仓-local 纪律**（取代 bundle 权威源纪律）〔impl-review-fix，订正 pre-Q2 残留〕：本判据文件
+  MUST NOT 拷进 `sdflow-init/assets/workflow/`、MUST NOT 部署下游；不适用「改 assets/workflow →
+  update 回灌」纪律（该纪律只约束真正的 bundle 文件，本判据不是）。
 - 遵守审查顺序（/review → push → /code-review）。
 - 遵守红线：判据只作用「无逻辑面/低危」，逻辑面全审；不改任何评审安全层。
 

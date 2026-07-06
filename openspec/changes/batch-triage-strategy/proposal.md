@@ -32,7 +32,11 @@
 - `consolidation-plan.md` 有明确「相关批 vs 大扫除批」二分标注。
 - workflow 规则有正交批安全判据 + 聚合上限数值，且与 Leg1「无逻辑面」判据**同类、可交叉引用**。
 - 判据对现有 debt 池能正确二分（≥1 个 worked example：无逻辑面项→候选、逻辑面项→排除）。
-- **误纳率 = 0**：逻辑面项被误纳入大扫除批的数量恒为 0（fail-closed：判不准即排除，宁可退化为单开 change）。
+- **误纳率 0 是纪律目标，非机械不变量**〔impl-review-fix，对齐 D4 + spec.md「MUST NOT 声称有自动
+  兜底门」〕：判据是纯规则 checklist，无判器脚本、无自动兜底门；"逻辑面项不被误纳入大扫除批"
+  靠的是应用判据者遵守「存疑即排除」（fail-closed）纪律，不是脚本/gate 可验证的机械性质。本
+  change MUST NOT 声称有自动化机制保证误纳率恒为 0——若发生误纳，责任归执行分诊的 human/model
+  未遵守纪律，而非"门失效"。
 
 ## Non-Goals
 

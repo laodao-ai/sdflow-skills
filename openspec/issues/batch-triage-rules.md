@@ -181,23 +181,44 @@ BEHAVIOR_PATH_PATTERNS = (
 sweep 的实现 plan **MUST** 为每个 item 生成一个独立的 `### Task N: <itemID> …`，checkpoint
 的 slug/描述里须带上 item ID，方便回溯每个 commit 对应哪个 item。
 
+**生成物越界防线 MUST**〔impl-review-fix，红线镜实测复现〕：`git add -A` 不仅可能裹进
+未提交的其余 item 改动（上述"item 粒度"防线），也可能裹进**语言运行期产物**（如执行 T13
+类含"改测试→跑 pytest"的 item 后，工作区会出现 `__pycache__/`、`.pytest_cache/` 等字节码
+缓存）——同一 `git add -A` 根因、另一半未被上面协议堵住。因此 sweep 执行 **MUST** 满足以下
+之一：
+1. 执行前确认仓根 `.gitignore` 已覆盖本仓常见语言运行期产物（`__pycache__/`、
+   `.pytest_cache/`、`*.pyc` 等）；或
+2. 每次 checkpoint 前跑 `git status --porcelain`，人工核对待提交列表里**不含**上述运行期
+   产物路径，如混入须先 `git rm --cached`/补 `.gitignore` 再提交。
+
+此防线与「item 越界」防线并列，都是 `git add -A` 同一根因的两个越界面，缺一不可。
+
 ### 验证锚 MUST
 
 verify / code-review 阶段 **MUST** 核对：
 
 ```
-候选 item 数 == 独立 task 数 == 独立 commit 数
+候选 item 数 == 独立 task 数 == item 实现 checkpoint commit 数
 ```
 
-三者须**相等**。之所以靠 verify 显式核对而非 gate 自动检查，是因为 `ship_gate.py` 的
+三者须**相等**。**〔impl-review-fix，订正计数公式不精确〕**：核对对象是 **item 实现 checkpoint
+commit 数**——即 `git log --oneline <base>..HEAD` 里 **subject 匹配 item-checkpoint 形状
+（含 item ID）的提交、按 item ID 去重后计数**——而**非** `base..HEAD` 区间的 raw 总 commit
+数。sweep 所在 change 作为一个整体还会含 ff/plan/review-fix 等非 item commit（例如生成
+plan、grill 回写、code-review-fix 收尾等），这些不计入本核对，否则 raw 总数会系统性偏大、
+误报"违反 item 粒度"。
+
+之所以靠 verify 显式核对而非 gate 自动检查，是因为 `ship_gate.py` 的
 `TAG_RE` 目前只识别 `task<N>` 这种任务标签，不识别 item ID，机器无法自动核对这条不变量——
 这条核对责任落在 verify 这一步的人工/模型显式动作上，不是机械保证。收尾自检可直接跑：
 
 ```bash
-git log --oneline <base>..HEAD | wc -l   # 应等于候选 item 数、等于 plan 独立 task 数
+git log --oneline <base>..HEAD | grep -c '<item-checkpoint-slug-pattern>'  # 按 item ID 去重计数
+# 应等于候选 item 数、等于 plan 独立 task 数——不是 base..HEAD 的 raw 总 commit 数
 ```
 
-数不相等，视为违反 item 粒度，须回溯拆分修正，不得直接放行。
+数不相等（去重后的 item-checkpoint commit 数 ≠ item 数 ≠ task 数），视为违反 item 粒度，
+须回溯拆分修正，不得直接放行；保留设计决策本身不变（N item = N commit 保 revert 粒度）。
 
 ---
 
