@@ -51,11 +51,14 @@
 **D5 — `consolidation-plan.md` 二分重划，保留 REC 相关合批不动。**
 重划 = 在既有「二、合批建议（AND 门）」旁增「大扫除批候选」维度 + 二分标注；顺带刷新 stale 状态（REC-1/G7 等已 ship）。相关合批框架已验证，仅加维度。
 
-**D6 — bundle 权威源纪律。**
-批次判据规则落 `sdflow-init/assets/workflow/`（唯一权威源），改后 `sdflow-init update` 回灌下游 + `INDEX.md` 同步；禁只改某下游副本。
+**D6 — 本仓-local 落点 + 发布 deferred（Q2 定案，取代原「bundle 权威源」）。**〔spec-review Q2〕
+原 D6「规则落 bundle、`sdflow-init update` 回灌下游」被冷源接地**证伪整套部署故事**：`copy_bundle(full=False)` 只铺 `tools/`（test_init.py:138 钉死普通 update 不部署 workflow.md）；INDEX 是 `index-section.md` 的渲染副本（手改 `openspec/INDEX.md` 会被 `inject()` 覆盖）；BASE-18 只在本仓 roadmap（下游悬空）；consolidation-plan 下游无对应机制。**定案**：判据落**本仓 `openspec/issues/`**（`consolidation-plan.md` + `batch-triage-rules.md`），作 sdflow-skills 自有规划文档，**不进 bundle、不部署下游**——真实消费者就是本仓，且规则未经验证。**发布 deferred**：本仓 dogfood 验证有效（真跑大扫除批、省轮次未掉安全）后，作**未来独立 change** 发布（泛化去本仓依赖 + BASE-18 落 bundle + 修部署机制 + workflow.md 钩子）；候选池太薄则退化为注记不发布。对齐 Leg1（验证后才进 bundle）。
 
 **D7 — 大扫除批内「一项一 commit」硬 MUST（item 粒度）。**〔grill 定案 Q-c〕
 备选：SHOULD（允许攒几个极琐碎项一 commit）。弃因：允许 sweep 的**安全前提**就是"坏了能单独回退"（roadmap 红线在回退面的落法）；SHOULD 破防。选：sweep 作一个 change 走一轮评审（一 PR），内部 N item = N commit（item = 一个 issue/todo ID，非一文件——同文件两 typo 仍两 commit，revert 粒度对齐「项」）。成本极低、买断"一坏项污染整批"。
+
+**D8 — issue 级判据继承 Leg1 行为面路径硬排除（Q1 定案）。**〔spec-review Q1〕
+冷镜挖出「无逻辑面」两种口径打架：**内容 cosmetic（人看描述）vs 路径承载行为（Leg1 保守机判）**。worked example T50/T41/T42 内容 cosmetic 但落 `SKILL.md`/`bundle`（Leg1 `BEHAVIOR_PATH_PATTERNS` 无条件排除）。备选：把「同类 Leg1」降为"共享目标、口径更松"（人看描述判 cosmetic 即放行 SKILL.md 改）。弃因：弱化安全——sweep SKILL.md 改动稀释评审、behavior-面可能被漏审，正是 Leg1 机械拒绝这么做的理由、也是红线怕的。**选**：判据 MUST 把「落点命中 Leg1 `BEHAVIOR_PATH_PATTERNS`」作**硬排除**（无论描述多 cosmetic）。后果：T50/T41/T42 移出候选；**本仓大扫除批候选池薄**（多数 debt 落行为面文件）——这是 dogfood 要诚实实测的关键信号（也是 D6 发布 deferred 的判据来源）。
 
 ### 判据决策流（issue → 批归属，ASCII）
 

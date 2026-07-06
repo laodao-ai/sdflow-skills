@@ -8,8 +8,8 @@
 - **workflow 规则集补「大扫除批」规范**（bundle 权威源 `sdflow-init/assets/workflow/`）：
   - 大扫除批**定义** + **硬边界**：正交批只装个体琐碎/低危项，**禁装有逻辑面的东西**（稀释评审注意力 + 无关改动挤一 commit 坏单独回退）。
   - **聚合上限**：每项低危 ≠ 聚合低危——限**文件数 / 目录跨度 / 是否含生成物 / CI 面积**，防 N 个散 typo 压垮 review 注意力 + 坏 bisect/revert 粒度。
-- **新增 issue 级「无逻辑面/低危」近似判据**：与 Leg1 白名单**同类**、但作用在 **issue 级 pre-diff**（无 diff 可读），故**不能字面复用 `trivial_shape.py`**（它需 diff）——是「同类判据、非同一脚本」。形态（脚本化 vs 纯规则）见开放问题，交 grill。
-- **首个客场**：拿 `issues/` 池现有 debt 做 worked example 验证判据——无逻辑面 cosmetic 项（rec2 的 T50/T41/T42 等）→ 大扫除批候选；**逻辑面项（T63/T64 init fence-aware、T51/T52 merge untracked baseline、T30/T31 voice helper）→ 判据必须排除**。
+- **新增 issue 级「无逻辑面/低危」近似判据**（grill 定=纯规则 checklist、非脚本；spec-review Q1 定=**采纳 Leg1 行为面路径守卫**）：与 Leg1 白名单**同类**（继承其 `BEHAVIOR_PATH_PATTERNS` 路径守卫——落 `SKILL.md`/`*/assets/workflow/*` 的项**硬排除，无论描述多 cosmetic**）、作用在 **issue 级 pre-diff**，不字面复用 `trivial_shape.py`（它需 diff）——「同类判据、非同一脚本」。
+- **首个客场**：拿 `issues/` 池现有 debt 做 worked example——**T50/T41/T42 落 SKILL.md/bundle（行为面路径）→ 判据排除**（内容 cosmetic 但落点承载行为）；**逻辑面项（T63/T64/T51/T52）→ 排除**；真候选须落**非行为面路径**（纯 docs/README/注释/tests）。**诚实标注**：本仓多数 debt 落行为面文件 → 大扫除批**候选池薄**，dogfood 要实测其在本仓值不值。
 
 ## Capabilities
 
@@ -21,10 +21,11 @@
 
 ## Impact
 
-- `openspec/issues/consolidation-plan.md`（重划：加大扫除批维度 + 二分）。
-- `sdflow-init/assets/workflow/`（**bundle 权威源**）新增批次判据规则（如 `batch-triage.md`）+ `trigger-catalog.md`/`INDEX.md` 同步——改 bundle **须走 `sdflow-init update` 回灌**下游，禁只改下游。
-- 若判据脚本化（开放问题 Q-a）：新增 issue 级判器脚本 + pytest（落点待定：`sdflow-init/assets/workflow/tools/` 或记录类 skill 的 `scripts/`）。
-- **不碰**评审安全层（多镜/对抗/接地/outside-voice 一律不动）；判据只放行「每项个体琐碎/低危」。
+- `openspec/issues/consolidation-plan.md`（重划：加大扫除批维度 + 三元标注 + 每项判定记录）。
+- `openspec/issues/batch-triage-rules.md`（新，**本仓-local**——判据 checklist + 3 硬 MUST + fail-closed 记录）。**Q2 定案=本仓-local**：MUST NOT 进 bundle、MUST NOT 部署下游；**无回灌/INDEX snippet/trigger-catalog** 那一整套（冷源接地证实 D6 原「普通 update 回灌」事实性错误）。
+- 判据=纯规则（grill Q-a），**无 scripts/、无 pytest**。
+- **发布 deferred**：向下游发布是**验证后的未来独立 change**（对齐 Leg1：本仓验证有效才进 bundle）。
+- **不碰**评审安全层（多镜/对抗/接地/outside-voice 一律不动）；判据只放行「非行为面路径 ∧ 个体琐碎/低危」。
 
 ## Success Metrics
 

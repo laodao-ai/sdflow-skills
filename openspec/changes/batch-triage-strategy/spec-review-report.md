@@ -105,6 +105,13 @@
 
 ---
 
-## 结论
-- ☑ **建议进设计 HARD-GATE**：Q1（判据口径，推荐采纳 Leg1 路径守卫）+ Q2（架构，推荐本仓-local）需人拍板；建议**先 Q2 后 Q1**。6 项 amendment 已采纳回写。
-- 拍板后我回写 specs（含 Q1/Q2 结果 + SR-M lens-metric 最终化 + ship-gate: design-approved 锚）。
+## 结论 + 设计门拍板记录
+
+- **设计 HARD-GATE 已通过**（用户拍板 2026-07-07）：
+  - **Q2 = 本仓-local**（判据落 `openspec/issues/`，不进 bundle、不部署下游；**发布 deferred** 至本仓 dogfood 验证有效后作未来独立 change——对齐 Leg1）。
+  - **Q1 = 采纳 Leg1 行为面路径守卫**（落 SKILL.md/bundle 的项硬排除，T50/T41/T42 改标排除，换真非行为面候选，诚实标本仓候选池薄）。
+- **6 项 amendment（A1-A6）已采纳回写** specs/proposal/design/tasks；X1 裁掉。
+- **SR-M lens-metric 最终化**：门后最终裁决 = 所有 finding 均采纳（Q1/Q2 按推荐落地、A1-A6 采纳）、X1 裁掉——上方 4 条 lens-metric 锚的 `采纳`/`裁掉`/`独立` 计数与门后一致，**本行确认为最终值**（非草稿）。
+- **下一步**：进实现——`/sdflow-ship batch-triage-strategy`（SOP→plan→impl→code-review→done）或手动 `writing-plans`。
+
+<!-- ship-gate: design-approved -->

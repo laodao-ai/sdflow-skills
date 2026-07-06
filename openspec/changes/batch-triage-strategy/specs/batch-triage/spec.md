@@ -31,14 +31,20 @@ issue 级「无逻辑面 ∧ 低危」判据 SHALL 是一份 workflow 规则文�
 
 #### Scenario: 判据是规则文档而非脚本
 - **WHEN** 审阅 issue 级判据的落地形态
-- **THEN** 它是 `sdflow-init/assets/workflow/` 下一份规则文档的 checklist，不引入任何判器脚本或 pytest
+- **THEN** 它是本仓 `openspec/issues/` 下一份规则文档的 checklist，不引入任何判器脚本或 pytest
 
 ### Requirement: 判据同类 Leg1 白名单且非同一脚本
 issue 级判据 SHALL 与 Leg1 `trivial_shape.py` 的「无逻辑面白名单」判据**同类**（同一「无逻辑面/低危」语义标准），但 MUST NOT 字面复用 `trivial_shape.py`（后者需 diff、post-diff 判形状，本判据 pre-diff）。判据规则文档 SHALL 与 Leg1 白名单交叉引用。
 
+**行为面路径硬排除（MUST，Q1 定案——采纳 Leg1 路径守卫）**：判据 MUST 把「item 落点命中 Leg1 `BEHAVIOR_PATH_PATTERNS`（`SKILL.md`、`*/assets/workflow/*`、`*ship_gate.py`、`*trivial_shape.py` 等）」作为**硬排除**信号——**无论 item 描述多 cosmetic，落点在行为面文件即排除出大扫除批**（这些文件承载行为，markdown 改动也可能改行为，机判分不清；同 Leg1 的保守偏 NOT_EXEMPT 立场）。这是「同类 Leg1」的具体含义：不是"人看描述判 cosmetic 就放行"，而是继承 Leg1 的路径守卫。
+
 #### Scenario: 判据不依赖 diff、且交叉引用 Leg1
 - **WHEN** 审阅 issue 级判据规则
 - **THEN** 它不依赖任何 diff（pre-diff 即可应用），且其文档显式交叉引用 Leg1 `trivial_shape.py` 的无逻辑面标准、注明「同类判据、非同一脚本」
+
+#### Scenario: 行为面路径项即便描述 cosmetic 也被排除
+- **WHEN** 一个 item 描述是 cosmetic（如「决策区边框」「可点击链接」），但落点是 `SKILL.md` 或 `*/assets/workflow/*`
+- **THEN** 判据 MUST 排除它出大扫除批（命中 Leg1 `BEHAVIOR_PATH_PATTERNS`），归单开或相关合批
 
 ### Requirement: 大扫除批聚合上限
 即使每项个体低危，大扫除批 SHALL 受聚合上限约束，分三类落法：
@@ -72,23 +78,23 @@ issue 级判据 SHALL 与 Leg1 `trivial_shape.py` 的「无逻辑面白名单」
 - **THEN** `git log --oneline <base>..HEAD` 的 commit 数 == 候选 item 数 == plan 独立 task 数，不等即视为违反 item 粒度、须拆
 
 ### Requirement: consolidation-plan 三元标注
-`openspec/issues/consolidation-plan.md` SHALL 对每个待处理项做**三元标注**批归属（相关批 / 大扫除批候选 / 单开），并至少含一个 worked example（无逻辑面项→候选、逻辑面项→排除）。（术语统一：全文用「三元标注」，勿用「二分」——终态有三个。）
+`openspec/issues/consolidation-plan.md` SHALL 对每个待处理项做**三元标注**批归属（相关批 / 大扫除批候选 / 单开），并至少含一个 worked example（真无逻辑面项→候选、行为面路径/逻辑面项→排除）。（术语统一：全文用「三元标注」，勿用「二分」——终态有三个。）
 
-> **⚠ 待 Q1 拍板**：原候选示例 T50/T41/T42 落点是行为面路径（SKILL.md/workflow bundle），Leg1 `trivial_shape.py` 的 `BEHAVIOR_PATH_PATTERNS` 会排除之。若 Q1 采纳「Leg1 路径守卫」，这三项 MUST **改标排除**、候选示例换成真正落非行为面路径（纯 docs/README/注释/tests）的项。
+**Q1 定案落地（行为面路径守卫）**：**T50/T41/T42 MUST 标「排除」**——它们内容虽 cosmetic，但落点是 `SKILL.md`/`workflow bundle`（命中 Leg1 `BEHAVIOR_PATH_PATTERNS`）。候选示例 MUST 换成真正落**非行为面路径**（纯 `docs/`/`README`/代码注释/`tests/`）的琐碎项。**诚实标注（MUST）**：consolidation-plan SHALL 记一句「本仓大扫除批候选池薄」——本仓多数 debt 落 SKILL.md/scripts/workflow（行为面），严格路径守卫后真正安全的候选可能个位数；此薄度是 dogfood 要实测回答"大扫除批在本仓值不值"的关键信号（见 proposal「验证后发布」排序）。
 
 #### Scenario: consolidation-plan 含正反 worked example
 - **WHEN** 读 `consolidation-plan.md`
-- **THEN** 它含大扫除批维度 + 三元标注，且至少一个真无逻辑面项（落非行为面路径）标为候选、至少一个逻辑面项（如 T63/T64/T51/T52）标为排除
+- **THEN** 它含大扫除批维度 + 三元标注；T50/T41/T42 标排除（行为面路径）；至少一个真落非行为面路径的无逻辑面项标候选（若本仓无则显式记「候选池空/薄」）；至少一个逻辑面项（如 T63/T64/T51/T52）标排除
 
-### Requirement: 批次判据规则落点
-批次判据规则 SHALL 落在单一权威源（本仓-local 的 `workflow.md` issues-sweep 段，或 bundle `sdflow-init/assets/workflow/`——二选一待设计门 Q2 拍板），MUST NOT 只改某下游副本、MUST NOT 分散多副本。
+### Requirement: 批次判据规则落点——本仓-local（Q2 定案）
+批次判据规则 SHALL 落在**本仓 `openspec/issues/`**（`consolidation-plan.md` 及旁边的 `batch-triage-rules.md`），作为 sdflow-skills 仓自有的规划纪律文档，**MUST NOT 拷进 bundle `sdflow-init/assets/workflow/`、MUST NOT 部署到下游消费仓**。这是一份本仓自用产物（非经 `resolve-workflow.sh` 解析的 workflow 规则），故**不涉回灌/INDEX snippet/BASE-18 悬空**等 bundle 部署机制。
 
-<!-- [spec-review-amendment] A5 + Q2: 前提（本仓-local vs bundle-published）待设计门 Q2 拍板；下附冷源接地订正 -->
+**发布 deferred（MUST 记录）**：向下游发布**推迟到本仓 dogfood 验证之后**——真跑 ≥1 个大扫除批、有证据证明省了评审轮次且未掉安全，才作为**未来独立 change** 发布（届时须泛化去本仓依赖 + BASE-18 定义落 bundle + 修 4 部署机制 + workflow.md 加 issues-sweep 钩子 + cross-ref `spec-workflow` 的「workflow bundle 改在权威源」Requirement）。若 dogfood 证明候选池太薄/价值边际，可退化为 consolidation-plan 一句注记、不发布（亦为有效结论）。对齐 Leg1（`trivial_shape.py` 亦是本仓验证后才进 bundle）。
 
-> **⚠ 待 Q2 拍板**：落**本仓-local**（推荐）还是**bundle-published**（次选）未定，见 spec-review-report Q2。Q2=本仓-local 时无回灌/INDEX snippet（落 `workflow.md` issues-sweep 段引用）；以下"部署机制真相"仅当 Q2=bundle-published 时适用。
+#### Scenario: 规则落本仓 issues/、不进 bundle
+- **WHEN** 新增大扫除批判据规则
+- **THEN** 它位于 `openspec/issues/`（非 `sdflow-init/assets/workflow/`），本仓 `git` 提交即生效（dev/runtime checkout pull 后皆有），无任何文件进入部署下游的 bundle
 
-**部署机制真相（冷源接地订正，仅 bundle-published 适用）**：① 普通 `sdflow-init update`（`copy_bundle(full=False)`）**只铺 `tools/`、不铺规则 markdown**——需 `update --dev`/`full=True` 或 setup.sh 软链 canonical（`~/.sdflow/workflow`），故 MUST NOT 声称"普通 update 回灌规则"；② INDEX 同步 MUST 编辑 `sdflow-init/assets/snippets/index-section.md`（`inject()` 每次 update 无条件整体替换其渲染副本 `openspec/INDEX.md`；手改 INDEX.md 会被下次 update 静默覆盖）；③ 规则若引用 `BASE-18 AND 门`，MUST 一并把 BASE-18 概念落 bundle（否则下游读不到、成悬空引用）；④ 接入点 = `workflow.md` 的 issues cleanup/sweep 段（非 `trigger-catalog.md`——后者是内容触发单一源）。**参见既有 `spec-workflow` capability 的「workflow bundle 改在权威源、经部署下发」Requirement**（同域契约，含 `copy_bundle`/`inject`/pin 遮蔽机制）。MUST NOT 只改某下游 `openspec/workflow/` 副本。
-
-#### Scenario: 规则新增后 INDEX 同步且在 bundle 源
-- **WHEN** 新增大扫除批判据规则文件
-- **THEN** 文件位于 `sdflow-init/assets/workflow/` 下、且 INDEX 含对应登记条目
+#### Scenario: 发布是验证后的未来 change
+- **WHEN** 考虑把 batch-triage 铺给下游消费仓
+- **THEN** 它 MUST 是本仓 dogfood 验证有效之后的独立 change，而非本 change 的一部分
