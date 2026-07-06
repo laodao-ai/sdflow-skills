@@ -77,3 +77,36 @@ class TestT22WithOpen:
         load_open = re.findall(r'\bjson\.load\(open\(', src)
         assert bare_read == [] and load_open == [], \
             f"残留未用 with 的读侧 open：read={bare_read} json.load(open)={load_open}"
+
+
+# ── T21: inject 畸形态加固 ────────────────────────────────────────
+
+class TestT21InjectMalformed:
+    START, END = init_mod.MARK_DOC
+    TOKEN = "opsx-init:start"
+
+    def test_find_marker_line_not_misanchored_by_inline_token(self):
+        """T21: _find_marker_line 用逐行 offset 累加、非 text.index 子串查找——marker 串
+        在**真 marker 行之前**以行内嵌入（非行首）出现时不得锚到那个 inline 位置。
+        修前 `text.index(line)` 返回最早子串命中（inline 处）→ 锚错位。"""
+        marker = self.START
+        # 首行 "note: <marker>" 本身不是 marker 行（lstrip 后非 <!-- 起），但含 marker 子串；
+        # 真 marker 行在其后。
+        text = f"note: {marker}\n\n{marker}\n真内容\n{self.END}\n"
+        loc = init_mod._find_marker_line(text, self.TOKEN)
+        expected_start = text.index("\n\n") + 2          # 真 marker 行起点（第三行）
+        assert loc == (expected_start, expected_start + len(marker) + 1), \
+            "锚到了行内嵌入的 inline marker、非真 marker 行"
+
+    def test_inject_collapses_multiple_stale_blocks(self, tmp_path):
+        """T21: 文件含多个重复托管区块（手工粘贴畸形态）→ inject 须全部收敛为单块，
+        非只替换第一个而遗留其余。修前 first-start..first-end 只动首块 → 次块残留。"""
+        block = (f"{self.START}\n旧内容A\n{self.END}\n")
+        f = tmp_path / "CLAUDE.md"
+        f.write_text("# 头\n\n" + block + "\n中间用户内容\n\n" + block + "\n尾部\n",
+                     encoding="utf-8")
+        init_mod.inject(str(f), *init_mod.MARK_DOC, "新内容")
+        text = f.read_text(encoding="utf-8")
+        assert text.count("opsx-init:start") == 1, "多重复块未收敛为单块"
+        assert "新内容" in text and "旧内容A" not in text
+        assert "尾部" in text                              # 末尾用户内容保留

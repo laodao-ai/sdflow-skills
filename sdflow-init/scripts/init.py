@@ -40,12 +40,23 @@ MARK_DOC = ("<!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本�
 MARK_IDX = ("<!-- opsx-init:rules:start —— 由 sdflow-init 维护，勿手改本区块 -->",
             "<!-- opsx-init:rules:end -->")
 
-def _find_marker_line(text, token):
-    """按 token 定位 marker 整行（返回该行起止 offset），找不到返回 None。"""
+def _find_all_marker_lines(text, token):
+    """[T21] 逐行累加 offset，产出 text 中**所有** marker 行的 (start, end) offset。
+    「marker 行」= 含 token ∧ lstrip 后以 "<!--" 起。inject 用之收敛多个重复托管区块。"""
+    off = 0
     for line in text.splitlines(keepends=True):
         if token in line and line.lstrip().startswith("<!--"):
-            start = text.index(line)
-            return start, start + len(line)
+            yield off, off + len(line)
+        off += len(line)
+
+
+def _find_marker_line(text, token):
+    """按 token 定位**第一个** marker 整行（返回该行起止 offset），找不到返回 None。
+    [T21] 逐行累加 offset 定位（经 _find_all_marker_lines），**非** `text.index(line)`
+    子串查找——marker 串若在真 marker 行之前以行内嵌入（非行首）出现，text.index 会锚到
+    那个 inline 子串位置（错位、破坏区块替换）。"""
+    for start, end in _find_all_marker_lines(text, token):
+        return start, end
     return None
 
 CORE_DIRS = ["changes", "specs"]  # openspec 核心；buglists/todolists 由各自 recorder skill 首用时建
@@ -85,11 +96,14 @@ def inject(path, start, end, content, header=""):
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        s_loc = _find_marker_line(text, start_token)
-        e_loc = _find_marker_line(text, end_token)
-        if s_loc and e_loc and s_loc[0] <= e_loc[0]:
-            pre = text[:s_loc[0]]
-            post = text[e_loc[1]:]
+        starts = list(_find_all_marker_lines(text, start_token))
+        ends = list(_find_all_marker_lines(text, end_token))
+        if starts and ends and starts[0][0] <= ends[-1][1]:
+            # [T21] 收敛 first-start .. last-end 整段（含中间任何重复托管块）为单块——
+            # 手工粘贴出的多重复块全部归一，非只替换首块而遗留其余（区块间内容属受管
+            # 区域范畴，按契约「勿手改本区块」正规化收敛）。
+            pre = text[:starts[0][0]]
+            post = text[ends[-1][1]:]
             new = pre + block.rstrip("\n") + "\n" + post.lstrip("\n")
             if not new.endswith("\n"):
                 new += "\n"
