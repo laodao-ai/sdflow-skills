@@ -281,8 +281,7 @@ def surfacing_block(root):
     try:
         rows, _no_anchor, _parse_failed = LMA.aggregate(archive_root)
         for r in rows:
-            key = (r.get("layer", "?"), r.get("lens", "?"), r.get("runner", "?"), r.get("site", "—"))
-            counts[key] += 1
+            counts[LMA.group_key(r)] += 1
     except (OSError, ValueError):
         pass  # archive 不存在/不可读 → 视同无样本，走「无命中」固定行，不崩报告
     flagged = [(k, c) for k, c in counts.items() if c >= 10]

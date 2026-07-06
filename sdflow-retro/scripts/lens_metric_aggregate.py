@@ -90,6 +90,13 @@ def _int(v):
     return n, False
 
 
+def group_key(r):
+    """lens-metric 锚的分组键 (layer, lens, runner, site)——render_table 与
+    下游 surfacing 共用，杜绝两处手写归一化漂移（尤其 lens 空串→"?"）。"""
+    return (r.get("layer", "?"), r.get("lens", "") or "?",
+            r.get("runner", "?"), r.get("site", "—"))
+
+
 def render_table(rows, no_anchor, parse_failed=None):
     """多列可排序描述性表（无合成分）。按 (layer,lens,runner,site) 分组
     [impl-review-fix CF-1]（契约键含 runner——codex 与 claude-fallback 的
@@ -101,7 +108,7 @@ def render_table(rows, no_anchor, parse_failed=None):
     for r in rows:
         lens = r.get("lens", "")
         bad = (r.get("layer") not in LAYER_ENUM) or (lens not in LENS_ENUM)
-        key = (r.get("layer", "?"), lens or "?", r.get("runner", "?"), r.get("site", "—"))
+        key = group_key(r)
         g = grp[key]
         g["轮"] += 1
         num_bad = False

@@ -229,3 +229,20 @@ def test_build_report_includes_surfacing_block(tmp_path):
     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
     md = R.build_report(str(root))
     assert "⚠️ 待复评:" in md
+
+
+def test_surfacing_groupkey_matches_render_table_on_empty_lens(tmp_path):
+    # lens="" 的锚：surfacing 分组键须与 render_table 归一化一致(空串→"?")，否则漏报
+    import lens_metric_aggregate as LMA
+    r = {"layer": "spec-review", "lens": "", "runner": "claude", "site": "—"}
+    assert LMA.group_key(r) == ("spec-review", "?", "claude", "—")
+    # 且 surfacing_block 对 10 份 lens="" 锚真能命中(不漏报)
+    archive = tmp_path / "openspec/changes/archive"
+    d = archive / "2026-01-01-x"
+    d.mkdir(parents=True)
+    anchor = ('<!-- sdflow:lens-metric v1 layer="spec-review" lens="" runner="claude" '
+              'site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="1" sev="致0/高0/中0/低1" -->')
+    (d / "spec-review-report.md").write_text("\n".join([anchor] * 10) + "\n")
+    block = R.surfacing_block(str(tmp_path))
+    assert "⚠️ 待复评:" in block
+    assert "出现轮数 10" in block   # 10 份同键锚合并计数=10，命中≥10
