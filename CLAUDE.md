@@ -33,7 +33,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 ```
 
 带脚本+测试的 skill 仅这几个：`sdflow-buglist`、`sdflow-todolist`、`sdflow-issues`、
-`sdflow-init`。其余为纯 Markdown 编排类，无自动化测试。
+`sdflow-init`、`sdflow-retro`。其余为纯 Markdown 编排类，无自动化测试。
 
 ## 架构
 
@@ -52,8 +52,8 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 
 1. **编排类（纯 Markdown）**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` / `sdflow-maintain` /
    `sdflow-roadmap` / `embedded-test-sop` / `openspec-upgrade` — 靠 SKILL.md 指令驱动主 session 调度子代理，无脚本。
-2. **数据类（Markdown + Python）**：`sdflow-buglist` / `sdflow-todolist` / `sdflow-issues` / `sdflow-init` —
-   由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
+2. **数据类（Markdown + Python）**：`sdflow-buglist` / `sdflow-todolist` / `sdflow-issues` / `sdflow-init` /
+   `sdflow-retro` — 由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
 
 ### `setup.sh` 安装机制（核心，改动需谨慎）
 
@@ -80,6 +80,9 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
   （每阶段 → 一次未来 change）。现有 `workflow-cost-optimization`（评审工作流成本优化三腿四阶段）。
 - **`.claude/skills/openspec-*` 与 `.codex/skills/openspec-*`** — openspec CLI（`@fission-ai/openspec`）
   init 时生成的官方 change-workflow skills，随仓库提交，**非本仓库维护的源**，勿在此手改。
+- **`openspec/retro/report.md`** — `sdflow-retro` 只读再生的全 change 成本×价值复盘活文档
+  （阶段墙钟 join per-镜 lens-metric 锚，只呈现不决策），随仓库提交（tracked，view-only，
+  跑 `python3 sdflow-retro/scripts/retro_report.py --root .` 再生覆盖，勿手改）。
 
 ### `hack/`
 
