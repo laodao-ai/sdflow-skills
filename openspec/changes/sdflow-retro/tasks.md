@@ -10,12 +10,12 @@
 - [ ] 1.5 git 硬化：`core.quotePath=false` + `errors="replace"`（承 trivial_shape 口径），畸形输出不崩
 
 ## 2. 镜价值维吸收 + join
-- [ ] 2.1 接入 `lens_metric_aggregate.py`（OQ2：留 bundle 经 resolve-workflow 引用 / 或移入 scripts——按 grill 定）
+- [ ] 2.1 `git mv` `lens_metric_aggregate.py` + `tests/test_lens_metric_aggregate.py`：`sdflow-init/assets/workflow/tools/` → `sdflow-retro/scripts/`〔grill Q2 移入〕；SKILL 编排 subprocess 调它（skill-local，不再经 resolver）
 - [ ] 2.2 per-change join：把该 change 归档报告的 lens-metric 锚（采纳率/独立率）挂到该 change 复盘行；无锚 → 标"无度量锚"不阻塞
-- [ ] 2.3 change 类型分类（OQ3）：读该 change 评审报告的 `hr-tg` 锚 + 阶段Δ → 琐碎/routine/HR-TG（不新造判据）
+- [ ] 2.3 hr-tg 客观 flag：读该 change 报告的 `hr-tg` 锚 hit（none/TG号）作报告列〔grill Q3a：不做语义 change 类型分桶，只客观 flag〕
 
 ## 3. 报告合成（view-only 再生）
-- [ ] 3.1 `openspec/retro/report.md` 生成：per-change 行（阶段Δ + 镜价值 + 类型）+ 聚合段（阶段占比 / 成本双峰散点）
+- [ ] 3.1 `openspec/retro/report.md` 生成（**tracked 活文档**，含**进行中 change 标 in-progress**）：per-change 行（阶段Δ + 镜价值 + hr-tg flag）+ 聚合段（阶段占比 / 成本双峰散点 / per-镜价值表）
 - [ ] 3.2 顶部覆盖计数：覆盖 N / 有镜锚 M / 边界不可解析 K，缺口显性〔fail-safe〕
 - [ ] 3.3 N≥10 待复评镜 surfacing 显著呈现（surfacing 正主迁入 retro）
 - [ ] 3.4 幂等：源无变化二次运行产出等价报告（无漂移）
@@ -24,9 +24,13 @@
 - [ ] 4.1 `sdflow-retro/SKILL.md`：frontmatter（name/description，触发"复盘/评估 workflow/成本/镜价值"）+ 编排（调脚本→再生报告→显著呈现待复评）
 - [ ] 4.2 数据类 skill 约定：机械活交脚本、SKILL 只判断编排
 
-## 5. maintain 瘦身（策略 B，级联）
+## 5. 级联改动（maintain 瘦身 + 聚合器迁移善后）
 - [ ] 5.1 `sdflow-maintain/SKILL.md` 步骤 5：内联聚合 surfacing → 薄指针「跑 `/sdflow-retro` 看完整复盘（含 N≥10 待复评镜）」；不丢归档后自动提醒 cadence
 - [ ] 5.2 核对 maintain 回归纯 INDEX.md 本职（description 若提聚合则同步）
+- [ ] 5.3 `sdflow-init/scripts/init.py`：删聚合器的派生/tools-tests 排除逻辑（它不再是 bundle 工具）〔D2 善后〕
+- [ ] 5.4 `sdflow-init/tests/test_init.py`：改断言（不再断言聚合器部署到消费仓 `tools/`）；跑测试确认绿
+- [ ] 5.5 `sdflow-code-review/SKILL.md` + `sdflow-spec-review/SKILL.md` 的 prose 指针：`lens_metric_aggregate` 由「/sdflow-maintain 跑 tools/…」改指「/sdflow-retro 跑 scripts/…」
+- [ ] 5.6 `openspec/INDEX.md`：workflow-metrics 条目里聚合器路径提及更新（tools/ → sdflow-retro/scripts/）
 
 ## 6. 测试覆盖（TG-18，数据类必测）
 

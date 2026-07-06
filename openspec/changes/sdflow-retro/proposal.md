@@ -18,14 +18,16 @@
 - `workflow-retro`: workflow 复盘/评估——从 git 历史 + 归档评审报告，只读再生"全项目 change 成本×价值复盘"，供 roadmap 优先级 / 镜去留决策提供数据（不自动决策，只呈现）。
 
 ### Modified Capabilities
-- `workflow-metrics`: 需求「数据驱动反馈供数不供裁决，砍镜由人决」的 **SR-A surfacing 机械点**由绑定 `/sdflow-maintain` 改为绑定 `/sdflow-retro`（镜价值聚合 + surfacing 的正主迁移）；`/sdflow-maintain` 保留**薄指针**指向 `/sdflow-retro`，不丢归档后自动提醒（策略 B）。
-- （注：若 OQ1 定为"改 checkpoint tag 格式"或 OQ2 定为"移动聚合器"，会额外触及 `spec-workflow` / `workflow-metrics` 的相关需求——当前倾向均"不改"，故本 change 只 MODIFIED 上述一条；grill 若翻案再补 delta。）
+- `workflow-metrics`（两条 MODIFIED）:
+  - **SR-A surfacing 正主迁移**：需求「数据驱动反馈供数不供裁决」的 surfacing 机械点由绑 `/sdflow-maintain` 改为绑 `/sdflow-retro`；`/sdflow-maintain` 保留**薄指针**不丢归档后自动提醒（策略 B）。
+  - **SR-K 聚合器位置**〔grill Q2〕：`lens_metric_aggregate.py` 由 bundle `sdflow-init/assets/workflow/tools/`（随 `sdflow-init update` 派生消费仓）**移进 `sdflow-retro/scripts/`**（skill 独占，全局安装即用，不再派生）——因调研证改后唯一运行时消费者 = retro。
+- （OQ1 已 grill 定为"不改 tag" → 不触及 `spec-workflow` checkpoint 需求。）
 
 ## Impact
 
 - **新增**：`sdflow-retro/`（SKILL.md + scripts/ + tests/）；`openspec/retro/report.md`（生成物）。
-- **迁移**：`lens_metric_aggregate.py`（现 `sdflow-init/assets/workflow/tools/`）的归属/引用（移进 skill vs 留 bundle 由 retro 引用——见 OQ2）。
-- **修改**：`sdflow-maintain/SKILL.md` 步骤 5（瘦身为指针）；可能 `checkpoint-commit.sh` + `spec-workflow/spec.md`（取决于 OQ1）。
+- **迁移〔grill Q2〕**：`git mv lens_metric_aggregate.py`（+ 其 tests）`sdflow-init/assets/workflow/tools/` → `sdflow-retro/scripts/`；连带 `sdflow-init/init.py` 删该文件派生/排除逻辑、`sdflow-init/tests/test_init.py` 改断言、code-review/spec-review SKILL 的 prose 指针改指 retro、`openspec/INDEX.md` 更新。
+- **修改**：`sdflow-maintain/SKILL.md` 步骤 5（瘦身为薄指针）。**不改** `checkpoint-commit.sh`/`spec-workflow`（OQ1 grill 定不碰 tag）。
 - **共享生产者风险**：`checkpoint-commit.sh` 被所有 workflow skill 使用，且其 tag 格式是 `ship_gate.py` 的解析契约（`spec-workflow` spec.md:335-398 命名空间隔离 + `checkpoint(impl-review)` 精确豁免）——任何 tag 格式改动 MUST 不破坏 ship_gate（见 OQ1）。
 - **部署**：本 change 触及 bundle（`checkpoint-commit.sh` 若改 / 可能 lens_metric_aggregate.py 位置）+ 新 skill，merge 后须 push → 运行 checkout `/sdflow-upgrade` 激活。
 

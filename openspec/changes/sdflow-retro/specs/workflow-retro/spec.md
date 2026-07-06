@@ -2,12 +2,16 @@
 
 ### Requirement: sdflow-retro 只读再生全项目 change 成本×价值复盘
 
-`sdflow-retro` SHALL 从 git 历史（成本/时间维）+ 归档评审报告的 `lens-metric` 锚（价值维）**只读再生**全项目所有 change 的复盘报告，落 `openspec/retro/report.md`。报告 SHALL 为可随时重跑的 **view**（锚行与 git 历史为 state 真相源），MUST NOT 写入新持久可变态、MUST NOT 增量手工维护（承 `lens_metric_aggregate.py` view-only 契约，避免漂移）。复盘 SHALL **供数不供裁决**：呈现每个 change 的阶段墙钟 + 镜 findings/采纳率/独立率 + 双峰/阶段占比聚合，「砍哪镜/降采样/调优先级」一律人决，retro MUST NOT 依数据自动决策。
+`sdflow-retro` SHALL 从 git 历史（成本/时间维）+ 归档评审报告的 `lens-metric` 锚（价值维）**只读再生**全项目所有 change 的复盘报告，落 `openspec/retro/report.md`。报告 SHALL 为可随时重跑的 **view**（锚行与 git 历史为 state 真相源），MUST NOT 写入新持久可变态、MUST NOT 增量手工维护（承 `lens_metric_aggregate.py` view-only 契约，避免漂移）。报告文件 SHALL **tracked（提交进 git）作长期活文档**（团队可见）；跑 `/sdflow-retro` 再生并提交刷新，归档新 change 后未跑前 report 为 stale 属**已知接受取舍**（锚/git 历史才是真相源）。报告 SHALL **含进行中 change**（活动 `openspec/changes/*/`，标 `in-progress`），MUST NOT 只报已归档而藏当前工作。复盘 SHALL **供数不供裁决**：呈现每个 change 的阶段墙钟 + 镜 findings/采纳率/独立率 + 双峰/阶段占比聚合，「砍哪镜/降采样/调优先级」一律人决，retro MUST NOT 依数据自动决策。
 
 #### Scenario: 再生全项目复盘
 - **WHEN** `/sdflow-retro` 对含 ≥1 归档 change 的仓运行
 - **THEN** SHALL 再生 `openspec/retro/report.md`，每个已归档 change 有一行成本（阶段墙钟）+ 一行价值（镜 findings/采纳率，或标注"无度量锚"），并聚合出阶段占比 / 成本双峰
 - **THEN** 二次运行（源无变化）SHALL 产出等价报告（view-only 幂等），MUST NOT 因重跑产生漂移
+
+#### Scenario: 含进行中 change 标 in-progress
+- **WHEN** 仓内存在活动（未归档）change
+- **THEN** SHALL 将其纳入报告并标 `in-progress`（成本维取其部分生命周期），价值维若未落锚则标"无度量锚"，MUST NOT 从报告静默排除进行中工作
 
 #### Scenario: 只呈现不决策
 - **WHEN** 某镜采纳率/独立率低、或某 change 成本畸高
