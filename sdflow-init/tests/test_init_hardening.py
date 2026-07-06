@@ -4,6 +4,7 @@ Run: python3 -m pytest sdflow-init/tests/test_init_hardening.py -v
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -110,3 +111,36 @@ class TestT21InjectMalformed:
         assert text.count("opsx-init:start") == 1, "多重复块未收敛为单块"
         assert "新内容" in text and "旧内容A" not in text
         assert "尾部" in text                              # 末尾用户内容保留
+
+
+# ── T48: setup.sh python 探测版本校验 ────────────────────────────
+
+class TestT48SetupVersionCheck:
+    def test_setup_probe_rejects_non_py36(self, tmp_path):
+        """T48: 探测落到非 Python3.6+（裸 `python` 是 py2）时须跳过、不喂 init.py
+        （f-string 解析期崩）。修前探测块无版本校验 → 会喂 py2 → FAIL。
+        本测复刻 setup.sh 探测块逻辑（另有 bind 测锁真文件）。"""
+        fakebin = tmp_path / "bin"; fakebin.mkdir()
+        py = fakebin / "python"
+        # 假 py2：-c 版本校验退出 1（模拟 <3.6）；其它参数 echo RAN（若被误喂 init.py 可检测）
+        py.write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN_$*\n')
+        py.chmod(0o755)
+        snippet = (
+            '_py=""\n'
+            'command -v python3 >/dev/null 2>&1 && _py=python3\n'
+            '[ -z "$_py" ] && command -v python >/dev/null 2>&1 && _py=python\n'
+            'if [ -z "$_py" ]; then echo NOPY\n'
+            'elif ! "$_py" -c \'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)\' '
+            '>/dev/null 2>&1; then echo SKIP_VER\n'
+            'else "$_py" /nonexistent retire-hooks; fi\n'
+        )
+        r = subprocess.run(["/bin/bash", "-c", snippet],
+                           env={"PATH": str(fakebin)}, capture_output=True, text=True)
+        assert "SKIP_VER" in r.stdout, "非 py3.6+ 未被版本校验拦下"
+        assert "RAN_" not in r.stdout, "把 init.py 误喂给了 py2"
+
+    def test_setup_sh_has_version_check(self):
+        """T48 bind: 绑真 setup.sh——探测块须含 3.6+ 版本校验构造，防漂移丢失。"""
+        root = Path(__file__).resolve().parents[2]
+        text = (root / "setup.sh").read_text(encoding="utf-8")
+        assert "version_info >= (3, 6)" in text, "setup.sh 探测块缺 3.6+ 版本校验"

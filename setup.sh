@@ -164,10 +164,15 @@ install_sdflow
 _py=""
 command -v python3 >/dev/null 2>&1 && _py=python3
 [ -z "$_py" ] && command -v python >/dev/null 2>&1 && _py=python
-if [ -n "$_py" ]; then
-  { "$_py" "$REPO_DIR/sdflow-init/scripts/init.py" retire-hooks ; } || echo "  ⚠ retire-hooks 跳过（非致命）"
-else
+# [T48] 校验落到的解释器是 Python 3.6+——裸 `python` 可能是 Python2，喂 init.py 会在
+# f-string 解析期崩（整模块编译先于任何语句执行，init.py 内的版本守卫无从拦截自身 parse），
+# 故版本把关只能在调用侧。三分支互斥（无 python / 版本不符 / 正常），各出单一提示。
+if [ -z "$_py" ]; then
   echo "  ⚠ retire-hooks 跳过：PATH 无 python3/python（非致命）"
+elif ! "$_py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then
+  echo "  ⚠ retire-hooks 跳过：$_py 非 Python 3.6+（init.py 需 f-string，非致命）"
+else
+  { "$_py" "$REPO_DIR/sdflow-init/scripts/init.py" retire-hooks ; } || echo "  ⚠ retire-hooks 跳过（非致命）"
 fi
 
 # ─── Summary ─────────────────────────────────────────────────

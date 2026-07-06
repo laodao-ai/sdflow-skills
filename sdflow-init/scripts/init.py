@@ -24,6 +24,9 @@ import os
 import shutil
 import sys
 
+# [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 探测 3.6+ 才喂）：
+# 整模块编译先于任何语句执行，f-string 在 py<3.6 上是解析期 SyntaxError——模块内加
+# `sys.version_info` 守卫无从拦截自身 parse，故这里只声明契约、不放无功能的假守卫。
 try:
     import fcntl  # POSIX 独有；Windows 无 → T49 锁降级为 best-effort 无锁
 except ImportError:  # pragma: no cover （沙箱恒 POSIX，Windows 分支无法在此覆盖）
