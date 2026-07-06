@@ -75,6 +75,9 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
   软链至运行 checkout 的 `sdflow-init/assets/workflow/`）。勿把规则文件重新拷回仓内（会形成 pin 遮蔽全局）。
 - **`openspec/{changes,specs,issues,config.yaml}`** — 本仓库自身的 OpenSpec 变更管理，
   流程走 propose → review → done → archive，强制规范见文末托管区块。
+- **`openspec/roadmaps/{name}/`** — 项目级 roadmap 文档包（长期真相源，`sdflow-roadmap` 铺设）：
+  requirements/design/roadmap/task-log 四件套 + 可选 memo；比单次 change 更大的层级，统摄多阶段规划
+  （每阶段 → 一次未来 change）。现有 `workflow-cost-optimization`（评审工作流成本优化三腿四阶段）。
 - **`.claude/skills/openspec-*` 与 `.codex/skills/openspec-*`** — openspec CLI（`@fission-ai/openspec`）
   init 时生成的官方 change-workflow skills，随仓库提交，**非本仓库维护的源**，勿在此手改。
 

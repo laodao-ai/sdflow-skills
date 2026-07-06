@@ -18,10 +18,43 @@
 - **产出**: `openspec/roadmaps/workflow-cost-optimization/` 下 requirements/design/roadmap/task-log/memo 五件。
 - **来源**: 一轮深度对话（本 session），从「G1+G2 能不能合批」起、经 change `adaptive-workflow-routing` 的 grill+4冷源 spec-review、收敛出「成本优化边界=逻辑面有无」的贯穿洞察 → 三腿 roadmap。
 - **备注**:
-  - **P1 由 change `adaptive-workflow-routing` 承载**（名不同：该 change 原为大机制、设计门 Q1=A 收敛为 Leg1 白名单判器，名保留未改）。它在 `feat/adaptive-workflow-routing` 分支、待设计门最终批准。
-  - 本 roadmap 在独立分支 `feat/plan-workflow-cost-optimization`（off main），不与 A 分支纠缠。
+  - **P1 由 change `adaptive-workflow-routing` 承载**（名不同：该 change 原为大机制、设计门 Q1=A 收敛为 Leg1 白名单判器，名保留未改）。**已 merge + `/sdflow-upgrade` 激活**（trivial_shape.py 在 `~/.sdflow/workflow/tools/`）。
+  - 本 roadmap 在独立分支 `feat/plan-workflow-cost-optimization`（rebase 到含 P1 的最新 main），不与 A 分支纠缠。
 
-## ## Review 处置
+### [交叉 review] roadmap 四件套 → v2
+- **状态**: ✅ 完成（`/plan-eng-review` 取其实质：codex 冷模型 outside voice + 四维工程审）
+- **产出**: codex 冷审回 30 条 → 主 session 叠加四维审 + 对抗裁决去重为 15 组 → 用户批「全采纳 9 组」→ roadmap v2 + design/requirements 同步。
 
-> 交叉 review（autoplan / plan-eng-review）**尚未跑**（proportionality：本 session 已极长，且 roadmap 内容多为本 session 深度讨论 + 一轮真实 4 冷源 spec-review 的结晶）。
-> **⏭ 延后**：cross-review 作为承载变更 `plan-workflow-cost-optimization` 归档前的 task（见其 tasks.md §3），或用户按需触发 `/plan-eng-review`。归档前须回填此小节至无「未处置」。
+## Review 处置
+
+> 交叉 review 已跑（plan-eng-review 实质：codex 独立冷审 30 条 + 主 session 四维工程审）。每条 findings 显式标注 采纳/延后/裁掉，无「未处置」。
+
+**✅ 采纳（9 组，已改进 roadmap v2 / design / requirements）**
+
+| # | 源 | 处置 | 落点 |
+|---|---|---|---|
+| A1 | #1 | P1 状态自相矛盾（在途 vs 已 merge）→ 订正为「✅ 已交付」 | roadmap 概览/阶段1/依赖图、design §2.1、task-log |
+| A2 | #11/#26 | 置信过滤丢弃 findings 是安全关键路径，剔出机械快档集 | roadmap 阶段2a、design §2.2 + D5 |
+| A3 | #23/#24/#30 | 缺阶段级基线 + 收益门槛 → 新增 P0 基线采样（Leg2 前置，用 checkpoint 时间戳）| roadmap 阶段0、design §2.2 + D6、requirements §5 |
+| A4 | #15 | P2 太大（快档=策略改 vs 后台=调度机制改）→ 拆 P2a/P2b | roadmap 阶段2a/2b、design D7 |
+| A5 | #12/#22/#25 | 缺 fail-closed + 弱档准入前提 → 补 P2a/P2b 验收 | roadmap 阶段2a/2b、requirements §5 |
+| A6 | #16/#17 | P3「接地镜不依赖 autoplan」不稳：amendment 可新增核验目标 → 强化边界（新增+改动两类，非仅增量）| roadmap 阶段3、design §2.2 |
+| A7 | #20/#21 | P4 正交批缺聚合上限（每项低危≠聚合低危）→ 补文件数/目录跨度/生成物/CI 面积上限 | roadmap 阶段4、design D4 |
+| A8 | #2/#4/#6 | design §2.1 措辞过松（"纯文档路径/纯展示版本常量"）→ 引用 P1 实际守卫（行为面路径/扩展名锚定/VERSION收窄/conftest排除）| design §2.1 |
+| A9 | #29 | "P1/P2/P4 可并行" 需加注同文件冲突（P2a/P2b/P3 均改两评审 SKILL.md 须串行）| roadmap 概览/依赖图 |
+
+**⏭ 延后（记档，未来 implement 阶段处理）**
+
+| # | 源 | 延后理由 |
+|---|---|---|
+| D1 | #3 | fixtures/golden/snapshot 残留 → 交叉引用已有 **T56**（trivial_shape F6 残留），P1 后续清理 change 处理 |
+| D2 | #7 | P4 判据不能**字面**复用 trivial_shape（它需 diff、P4 是 issue 级 pre-diff）→ P4 真正设计时立 issue 级近似判据（已在 roadmap 阶段4 记明「同类非同脚本」）|
+| D3 | #28 | /sdflow-upgrade 未验收消费仓实际加载新 skill 非缓存 → 次要，P2/P3 交付时带上验收项 |
+
+**⚪ 裁掉（反静默压制，记原始发现 + 裁掉理由，供后人复核裁得对不对）**
+
+| # | 源 | 原始发现 | 裁掉理由 |
+|---|---|---|---|
+| X1 | #5 | 跳 Step2 后 Step1 变单点守门 | 设计**显式接受**：Step1 恒跑正是白名单兜底（trigger scope-drift 揭穿伪装逻辑改），非疏漏——非新问题 |
+| X2 | #8 | "有逻辑面省不了"是错误二分（可更窄镜/证据复用/缓存/局部重审）| D1 的**刻意简化**；列举项是超本 roadmap scope 的未来探索方向，非当前漏洞（记为未来探索，不阻塞本 roadmap）|
+| X3 | #9/#10/#19 | dogfood 一次不能证明所有 change 需同等强度 / 墙钟≠不干等 / P4 文档层低估行为风险 | 轻度稻草人——设计未做被反驳的强主张（只主张冷镜层 load-bearing）；#10「墙钟≠人不阻塞」、#19「P4 有行为风险」两点措辞提醒已分别并入 A4(P2b分开记账)/A7(P4聚合上限)，非独立裁掉 |
