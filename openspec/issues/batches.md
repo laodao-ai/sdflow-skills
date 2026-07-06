@@ -76,7 +76,7 @@
 
 ### sdflow-init-hardening — sdflow-init-hardening
 状态: PLANNED
-成员: (生成) T21, T22, T48, T49
+成员: (生成) T21, T22, T48, T49, T63, T64
 优先级: P2
 计划: sdflow-init/scripts/init.py 健壮性（同文件、fold-vs-defer 三条齐）：主=T49 settings.json 原子写并发 lost-update TOCTOU 收窗（silent 覆盖、数据丢失面）；次=T21 inject() marker 锚错位/多旧块只修首个 · T22 open().read()→with open() 清 19 Unraisable · T48 python3/python 探测加 sys.version_info 守卫（低概率 Python2）
 

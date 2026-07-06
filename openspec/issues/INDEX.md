@@ -71,6 +71,8 @@
 | T22 | todo | PROPOSED | sdflow-rebrand |
 | T48 | todo | PROPOSED | review-tool-followups |
 | T49 | todo | PROPOSED | review-tool-followups |
+| T63 | todo | PROPOSED | sdflow-init-hardening |
+| T64 | todo | PROPOSED | sdflow-init-hardening |
 
 ### 批次：sdflow-rebrand
 

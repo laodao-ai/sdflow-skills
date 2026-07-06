@@ -37,4 +37,4 @@
 
 - [x] 5.1 全量 `pytest sdflow-init/tests/` 绿 + 全仓 `pytest` 无新增回归（已知 pre-existing B5 除外）
 - [x] 5.2 `/sdflow-code-review`（cold，load-bearing；T49/T21 触逻辑面必跑多镜）→ pass。冷主审 6 镜四源收敛揪出 T21 collapse 不安全(回退)+T49 半边(register 未硬化)+ensure_global_hook 崩溃面 → 6 fold 修 + 2 defer(T63/T64)。见 code-review-report.md
-- [ ] 5.3 `/sdflow-done`（verify→hand-off→archive→commit→merge main）
+- [x] 5.3 `/sdflow-done`（verify→hand-off→archive→commit→merge main）
