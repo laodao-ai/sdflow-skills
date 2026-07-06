@@ -1,4 +1,5 @@
 import sys
+import subprocess
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import retro_report as R
@@ -20,3 +21,52 @@ def test_discover_active_and_archive(tmp_path):
     assert got["foo"]["archive_dir"].endswith("2026-07-05-foo")
     assert got["bar"]["active"] is False
     assert got["bar"]["archive_dir"].endswith("2026-07-02-bar")
+
+
+def _git(root, *args):
+    return subprocess.run(["git", "-C", str(root), *args],
+                          capture_output=True, text=True, errors="replace").stdout
+
+
+def _init_repo(tmp_path):
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "config", "user.email", "t@t")
+    _git(tmp_path, "config", "user.name", "t")
+    return tmp_path
+
+
+def _commit(root, files: dict, msg):
+    for rel, body in files.items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(body)
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", msg)
+
+
+def test_seed_mass_excluded_and_0_1_guard(tmp_path):
+    root = _init_repo(tmp_path)
+    # 创世 mass 提交碰 3 个 change dir → seed-mass
+    _commit(root, {
+        "openspec/changes/archive/2026-07-02-seedA/proposal.md": "x",
+        "openspec/changes/archive/2026-07-02-seedB/proposal.md": "y",
+        "openspec/changes/archive/2026-07-02-seedC/proposal.md": "z",
+    }, "chore:初始化")
+    changes = R.discover_changes(str(root))
+    seed = R.seed_mass_shas(str(root), threshold=3)
+    b = R.boundary_for_change(str(root), "seedA", changes["seedA"], seed)
+    # seedA 的 pre-archive 路径 0 提交（创世只碰 archive 路径），兜底 archive 后剔 seed-mass → 仍 0/1
+    assert b["unresolved"] is True
+    assert "边界不可解析" in b["note"]
+
+
+def test_normal_change_boundary(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(grill)")
+    changes = R.discover_changes(str(root))
+    seed = R.seed_mass_shas(str(root), threshold=3)
+    b = R.boundary_for_change(str(root), "foo", changes["foo"], seed)
+    assert b["unresolved"] is False
+    assert len(b["commits"]) == 2
+    assert b["commits"][0]["subject"] == "checkpoint(ff)"
