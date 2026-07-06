@@ -264,3 +264,89 @@ def hr_tg_flags(info):
         return "—"
     return {"spec_hr_tg": pick("spec-review-report.md"),
             "code_hr_tg": pick("code-review-report.md")}
+
+
+def build_report(root):
+    """组装全项目 change 成本×价值复盘报告（view-only 再生，无持久状态）。
+
+    顶部覆盖计数「覆盖 N change / 有真锚 M / 边界不可解析 K」——M 必须显性
+    （避免样本量 N 被误当趋势看：实测常见 M << N）。per-change 表含 hr-tg 双列
+    + in-progress 标记；聚合段①阶段占比②成本双峰③per-镜价值表（内嵌
+    lens_metric_aggregate 的整表聚合输出，扫 archive）。
+    """
+    changes = discover_changes(root)
+    seed = seed_mass_shas(root)
+    rows, M, K = [], 0, 0
+    stage_totals = {}
+    for name, info in sorted(changes.items()):
+        b = boundary_for_change(root, name, info, seed)
+        wt = stage_walltimes(root, name, b["commits"]) if not b["unresolved"] else \
+            {"stages": {}, "total_min": 0.0, "n_ckpt": len(b["commits"]), "reorder_suspected": False}
+        val = lens_value_for_change(info)
+        hr = hr_tg_flags(info)
+        if val["has_anchor"]:
+            M += 1
+        if b["unresolved"]:
+            K += 1
+        for stage, minutes in wt["stages"].items():
+            stage_totals[stage] = stage_totals.get(stage, 0.0) + minutes
+        rows.append((name, info, b, wt, val, hr))
+    N = len(changes)
+
+    lines = ["# 全项目 change 成本×价值复盘（view-only 再生）", "",
+             f"> 覆盖 {N} change / 有真锚 {M} / 边界不可解析 {K}",
+             "> 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。", ""]
+
+    # per-change 表
+    lines.append("## per-change 明细")
+    lines.append("")
+    lines.append("| change | 总墙钟(min) | #ckpt | spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | 状态 |")
+    lines.append("|---|---|---|---|---|---|---|---|---|")
+    for name, info, b, wt, val, hr in rows:
+        status = "in-progress" if info["active"] and not info["archive_dir"] else "archived"
+        note = "（边界不可解析）" if b["unresolved"] else ""
+        rate = "无度量锚" if not val["has_anchor"] else f'{val["accept_rate"]}'
+        lines.append(f'| {name} | {wt["total_min"]}{note} | {wt["n_ckpt"]} | '
+                     f'{hr["spec_hr_tg"]} | {hr["code_hr_tg"]} | '
+                     f'{val["sum_findings"] if val["has_anchor"] else "—"} | {rate} | '
+                     f'{val["sum_independent"] if val["has_anchor"] else "—"} | {status} |')
+    lines.append("")
+
+    # 聚合①阶段占比
+    lines.append("## 聚合① 阶段占比")
+    lines.append("")
+    grand_total = sum(stage_totals.values())
+    if grand_total > 0:
+        lines.append("| 阶段 | 墙钟(min) | 占比 |")
+        lines.append("|---|---|---|")
+        for stage, minutes in sorted(stage_totals.items(), key=lambda kv: -kv[1]):
+            pct = f"{minutes / grand_total:.0%}"
+            lines.append(f"| {stage} | {round(minutes, 1)} | {pct} |")
+    else:
+        lines.append("> 无可用阶段墙钟数据（全部边界不可解析或无 change）。")
+    lines.append("")
+
+    # 聚合②成本双峰：总墙钟 x vs code-review 占比 y
+    lines.append("## 聚合② 成本双峰（总墙钟 x / code-review 占比% y）")
+    lines.append("")
+    lines.append("| change | 总墙钟(min) | code-review 占比 |")
+    lines.append("|---|---|---|")
+    for name, info, b, wt, val, hr in rows:
+        total = wt["total_min"]
+        cr = wt["stages"].get("code-review", 0.0)
+        pct = f"{cr / total:.0%}" if total else "—"
+        lines.append(f"| {name} | {total} | {pct} |")
+    lines.append("")
+
+    # 聚合③ per-镜价值表（内嵌 lens_metric_aggregate 整表聚合）
+    lines.append("## 聚合③ per-镜价值表（lens-metric 聚合，扫 archive）")
+    lines.append("")
+    archive_root = os.path.join(root, "openspec", "changes", "archive")
+    try:
+        agg_rows, no_anchor, parse_failed = LMA.aggregate(archive_root)
+        lines.append(LMA.render_table(agg_rows, no_anchor, parse_failed))
+    except (OSError, ValueError) as e:
+        lines.append(f"> 聚合③不可用（{e}）——archive 不存在或不可读，留空。")
+    lines.append("")
+
+    return "\n".join(lines) + "\n"

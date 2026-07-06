@@ -152,3 +152,15 @@ def test_hr_tg_two_columns(tmp_path):
     f = R.hr_tg_flags(info)
     assert f["spec_hr_tg"] == "none"
     assert f["code_hr_tg"] == "TG-06"
+
+
+def test_build_report_coverage_counts(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(grill)")
+    d = root / "openspec/changes/foo"
+    (d / "spec-review-report.md").write_text(ANCHOR.format(layer="spec-review", f=9, a=9, ind=6) + "\n")
+    md = R.build_report(str(root))
+    assert "覆盖" in md and "有真锚" in md and "边界不可解析" in md
+    assert "foo" in md
+    assert "in-progress" in md  # foo 是活动 change
