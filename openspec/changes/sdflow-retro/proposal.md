@@ -29,7 +29,7 @@
 - **迁移〔grill Q2〕**：`git mv lens_metric_aggregate.py`（+ 其 tests）`sdflow-init/assets/workflow/tools/` → `sdflow-retro/scripts/`；连带 `sdflow-init/init.py` 删该文件派生/排除逻辑、`sdflow-init/tests/test_init.py` 改断言、code-review/spec-review SKILL 的 prose 指针改指 retro、`openspec/INDEX.md` 更新。
 - **修改**：`sdflow-maintain/SKILL.md` 步骤 5（瘦身为薄指针）。**不改** `checkpoint-commit.sh`/`spec-workflow`（OQ1 grill 定不碰 tag）。
 - **共享生产者风险**：`checkpoint-commit.sh` 被所有 workflow skill 使用，且其 tag 格式是 `ship_gate.py` 的解析契约（`spec-workflow` spec.md:335-398 命名空间隔离 + `checkpoint(impl-review)` 精确豁免）——任何 tag 格式改动 MUST 不破坏 ship_gate（见 OQ1）。
-- **部署**：本 change 触及 bundle（`checkpoint-commit.sh` 若改 / 可能 lens_metric_aggregate.py 位置）+ 新 skill，merge 后须 push → 运行 checkout `/sdflow-upgrade` 激活。
+- **部署**〔spec-review-amendment B1〕：本 change 触及 bundle（聚合器**移出** `assets/workflow/tools/` + init.py 派生逻辑改）+ 新 skill；**不改** `checkpoint-commit.sh`（OQ1 定）。merge 后须 push → 运行 checkout `/sdflow-upgrade` 激活。
 
 ## Success Metrics
 
