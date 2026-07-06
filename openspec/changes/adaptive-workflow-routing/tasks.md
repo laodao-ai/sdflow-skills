@@ -15,9 +15,9 @@
 
 ## 3. delta 复核 + 部署
 
-- [ ] 3.1 按代码实况核 `specs/spec-workflow/spec.md` delta（MODIFIED 沿用原标题「sdflow-code-review 为每次全跑的独立强制主审」，保 OpenSpec 定位）与落点一致；`openspec validate adaptive-workflow-routing` 通过 [spec-workflow]
-- [ ] 3.2 开发 checkout 跑 `bash setup.sh`（改 assets/workflow 才让全局 canonical 生效、测得到）；hand-off 记「merge 后 push→运行 checkout /sdflow-upgrade」[spec-workflow: bundle 权威源]
-- [ ] 3.3 issues sweep：把 Q1=A 放弃的前向机制里仍有价值的想法（如「更宽轻量化需先解 diff-时序/HR-TG 机判」）+ 冷审 defer 项记入 todolist 留档 [/sdflow-todolist]
+- [x] 3.1 按代码实况核 `specs/spec-workflow/spec.md` delta（MODIFIED 沿用原标题「sdflow-code-review 为每次全跑的独立强制主审」，保 OpenSpec 定位）与落点一致；`openspec validate adaptive-workflow-routing` 通过 [spec-workflow]
+- [~] 3.2 〔激活时做〕开发 checkout 跑 `bash setup.sh`（改 assets/workflow 才让全局 canonical 生效、测得到）；hand-off 记「merge 后 push→运行 checkout /sdflow-upgrade」[spec-workflow: bundle 权威源]
+- [x] 3.3 issues sweep：把 Q1=A 放弃的前向机制里仍有价值的想法（如「更宽轻量化需先解 diff-时序/HR-TG 机判」）+ 冷审 defer 项记入 todolist 留档 [/sdflow-todolist]
 
 ## 测试覆盖图（TG-18）
 
