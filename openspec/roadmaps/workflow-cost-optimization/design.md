@@ -54,6 +54,13 @@
 
 **前置：先建基线（交叉审 #23/#24，采纳）**——P2/P3 前先做 **P0 阶段级墙钟基线采样**（用已有 checkpoint 时间戳，近乎免费）+ 定收益门槛。定位=**照妖镜**：explore（2026-07-06）实测 checkpoint Δ 已看出评审成本**双峰**——大逻辑 change 评审占 ~9%、小 change 占 73%。故 **P2 价值域 = 有逻辑面的小 change**（评审是它大头），对大 change 是噪声。
 
+**P0 基线实测收口（2026-07-06，`sdflow-retro` 全 18-change 聚合，见 `openspec/retro/report.md`）**——照妖镜发话，且**改写了 P2 的价值主张**：
+1. **阶段占比**：spec-review **43%**、impl 29%、ff 11%、grill 6%、code-review **5%**、done 0%。Leg1(P1) 优化的 code-review 只占 5%——降范围的天花板本就低（但 P1 白名单是零损失免镜，仍值得，只是别指望它撬动总墙钟）。
+2. **spec-review 的 43% 被人类门墙钟主导**：阶段墙钟是 elapsed 口径（含人读报告/拍板/生成，adr/0009），离群点 `checkpoint-tag-single-source` 单 spec-rev 678min 即人在设计门读+拍的时间，**非 agent 算力**。
+3. **⟹ P2（机械镜 opus→light）的墙钟收益结构性趋零**：机械镜在 fan-out 里**并行**、多半不是最慢镜（判断/对抗镜 mid/strong 更慢），且只占一个被人类时间主导的 elapsed 的小片——**降它砍不动关键路径**。但 **token 收益是真的**（opus→light 每镜实省）。故 **P2 立项重定位为 token play，墙钟目标降级为「不回归」**（不设下降门槛）。见 D11。
+4. **墙钟的真杠杆在 Leg3，不在 Leg2**：少付几次「人类门 + 生成」= 降轮次（相关合批 + 大扫除批）才动得了 43% 那块。Leg2 每轮机械镜提速对聚合墙钟近乎不可见——**战略权重上调 Leg3、下调 Leg2 的墙钟预期**（Leg2 仍做，但主收益是 token 与关键路径串行段，非聚合墙钟）。
+5. **价值锚太薄，禁砍镜**：仅 3/18 change 有真锚（锚契约上线前的旧格式占 15）、per-(层,镜) 出现轮数全 <10，`待复评: 无`。已测各镜均高价值（采纳 88–100%、独立 40–85%），**接地镜独立率 75%**（机械但 load-bearing）——**P2/P3 降档/流水线它须带 fail-closed，砍镜闸门未到（见 requirements §5 门槛）**。度量回路刚起步，每个未来 change 自动落锚，多跑几轮才够格驱动架构取舍。
+
 **HOW**：
 1. **P2 档位矩阵强制落地（核心）**：`model-tiers.md` 升 `档位 × 运行时` 矩阵；SKILL fan-out **报档位、不写死模型**，主 session 经 resolver 按当前运行时列解析字面模型传 Agent `model=`。机械镜（接地/历史）实降 light（**省墙钟 + 省 token**），judgment/裁决/门禁不动。
    - **真相（explore）**：机械镜在 `model-tiers.md` 早已映射 light，但**无脚本强制**→ fan-out 不带 `model=` → 子代理**继承父 opus**。P2 不是"引入快档"，是把 advisory 变**强制**（opus→light 的 token 省下来比墙钟更实在）。
@@ -88,6 +95,8 @@
 | D8 | P2 核心 = 档位 `矩阵×运行时` 强制落地（SKILL 报档位、resolver 按运行时解析、不写死模型）| 单列表 + 硬编码 haiku——机队会换血/工具可能是 codex（adr/0006）；且 advisory 不强制=文档说 light 实跑 opus（explore） |
 | D9 | P2 价值域 = 有逻辑面**小** change | 认为 P2 普适——checkpoint 实测双峰：大 change 评审占 9%（P2 噪声）、小 change 占 73%（P2 真杠杆）（explore 2026-07-06） |
 | D10 | P2b 后台降为 P2 小尾巴（仅 spec-review 段）| 独立阶段——code-review 阶段三无人类门（P3e）人本就能走开、后台不加值；harness 通知半免费（explore） |
+| D11 | **P0 基线收口：P2 重定位为 token play，墙钟目标降级为「不回归」；墙钟真杠杆归 Leg3** | 保留 P2「省墙钟」主张——18-change 实测 spec-review 43% 被人类门 elapsed 主导、机械镜并行且非最慢镜，降档砍不动聚合墙钟（`sdflow-retro` report，2026-07-06）。token 收益仍真、P2 仍做，只是验收改 token 侧 |
+| D12 | **砍镜闸门：per-(层,镜) 出现轮数≥10 ∧ 独立率<20% ∧ 采纳率<50%（连续 2 复评窗）才议降采样** | 凭单轮/主观砍镜——价值锚仅 3 change、轮数全<10、已测镜均高价值（接地镜独立率 75%）；数据未到，任何砍镜=拍脑袋（阈值为保守起始值，积累后可校） |
 
 ## 4. 放弃项（留档，防后人重蹈）
 

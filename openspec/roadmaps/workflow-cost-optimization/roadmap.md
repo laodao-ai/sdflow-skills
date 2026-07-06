@@ -1,5 +1,6 @@
 # workflow 成本优化 实施路线图
 
+> 版本：v3（2026-07-06，P0 基线收口：`sdflow-retro` 18-change 实测 → P2 墙钟杠杆证伪、重定位 token play、Leg3 提为墙钟主杠杆、砍镜闸门定案）
 > 版本：v2（2026-07-06，吸收 plan-eng-review 交叉审：codex 冷审 30 条去重后 9 组采纳）
 >
 > 相关文档（均位于 `openspec/roadmaps/workflow-cost-optimization/`）：
@@ -7,15 +8,15 @@
 
 ## 概览
 
-三腿并行、非强依赖（各自独立可交付）。**Leg 1（P1）已完成并激活**（change `adaptive-workflow-routing` 已 merge + `/sdflow-upgrade`）。Leg 2 收益最直接，但**先做 P0 阶段级基线采样**——没有基线就无法判断 P2/P3 的调度复杂度是否换来真收益（交叉审 #23/#24）。Leg 3 是策略/文档层，随时可做。
+三腿并行、非强依赖（各自独立可交付）。**Leg 1（P1）已完成并激活**（change `adaptive-workflow-routing` 已 merge + `/sdflow-upgrade`）。**P0 基线已收口**（`sdflow-retro` 18-change 实测），并**改写了 leg 权重**：spec-review 占 43%（人类门 elapsed 主导）、code-review 仅 5%，故 **Leg2（P2 机械镜降档）的墙钟收益证伪、重定位为 token play**（墙钟不回归即可）；**聚合墙钟的真杠杆是 Leg3 降轮次**（少付几次人类门），战略权重上调 Leg3。详见 design §2.2 收口段 + D11/D12、requirements §5 门槛。
 
 > **P2 价值域澄清（explore 2026-07-06，checkpoint 时间戳实测）**：评审成本占比**高度双峰**——大逻辑 change 评审只占 ~9%（生成 + 设计门人决策吃 88%），小 change 评审占到 **73%**（`drop-per-dir-review-stub` 27min 里 code-review 独占 19.8min）。**P2 的真实杠杆域 = 有逻辑面的小 change**（撞评审、且评审是它的大头），对大 change 是噪声。这正印证 roadmap 立项动机（小 change 付不成比例评审开销 → 逼合批）。P1 杀无逻辑面小 change，P2 杀有逻辑面小 change，互补。
 
 | 阶段 | 归属 | 依赖 | 里程碑 |
 |---|---|---|---|
 | **P1** · code-review 无逻辑面白名单免 Step2 | Leg 1 | —（已交付） | ✅ 三类形状免多镜 + 反误免可测（trivial_shape.py + 34 测试，已 merge） |
-| **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | checkpoint 时间戳收成 per-阶段/per-change 类型基线 + 设收益门槛（Leg2 前置，近乎免费；定位=**照妖镜**，看清双峰、定 P2 值不值） |
-| **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 | `model-tiers.md` 升 3档×运行时矩阵、SKILL fan-out **报档位不写死模型**、机械镜实降 light（省墙钟**+ 省 token**）、fail-closed；含 P2b 后台小尾巴 |
+| **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | ✅ **已收口**（`sdflow-retro` 全 18-change 聚合 + 收益门槛定案，见下「阶段 0」+ requirements §5）；照妖镜结论：spec-review 43%（人类门主导）、code-review 5%、**P2 墙钟证伪→改 token play** |
+| **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | `model-tiers.md` 升 3档×运行时矩阵、SKILL fan-out **报档位不写死模型**、机械镜实降 light（**主收益=省 token**，墙钟**不回归**即可，见 D11）、fail-closed；含 P2b 后台小尾巴 |
 | **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
 | **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | 无 | consolidation-plan 重划 + 正交批安全判据**+ 聚合上限** |
 
@@ -62,6 +63,11 @@
 ### 交付物
 基线采样脚本 + `requirements.md` 验收总纲补收益门槛。
 
+### ✅ 收口结论（2026-07-06，`sdflow-retro` 全 18-change 聚合 `openspec/retro/report.md`）
+- **基线数据**：阶段占比 spec-review 43% / impl 29% / ff 11% / grill 6% / code-review 5% / done 0%。成本双峰印证（大 change 评审占比低、小 change 高）。
+- **门槛定案**：见 requirements §5 表——**P2 主指标 = token 下降**（非墙钟）；P2 墙钟降级为「不回归」；安全「误免率恒 0 + fail-closed」；砍镜闸门「出现轮数≥10 ∧ 独立率<20% ∧ 采纳率<50% 连续 2 窗」。
+- **对下游的改写**（design D11/D12）：① P2 从「省墙钟+token」收窄为 token play（机械镜非聚合墙钟关键路径、且被人类门 elapsed 淹没）；② 墙钟真杠杆归 Leg3；③ 价值锚太薄（3/18、轮数全<10），现阶段**禁砍任何镜**，接地镜独立率 75% 尤须 fail-closed 保护。
+
 ---
 
 ## 阶段 2 · 档位矩阵强制落地 + 机械镜降档（Leg 2，交叉审 #11/#12/#15/#22/#25/#26 + explore 2026-07-06）
@@ -70,7 +76,7 @@
 P0 基线（判机械镜是否在关键路径、验收有基准）。
 
 ### 目标
-把 `model-tiers.md` 从**单列 3 档**（只有 canonical 缺省）升成 **`档位 × 运行时` 矩阵**，并让 SKILL fan-out **报档位、不写死模型名**——机械镜实降到 light 档（省墙钟 **+ 省 token**），judgment 镜/裁决/门禁不动。
+把 `model-tiers.md` 从**单列 3 档**（只有 canonical 缺省）升成 **`档位 × 运行时` 矩阵**，并让 SKILL fan-out **报档位、不写死模型名**——机械镜实降到 light 档（**主收益 = 省 token**；墙钟**不回归**即可，P0 基线证伪其墙钟杠杆，见 D11），judgment 镜/裁决/门禁不动。
 
 > **explore 挖出的真相（2026-07-06）**：机械镜（接地/历史）在 `model-tiers.md` 里**早已映射到 light**，但**无任何脚本强制**——SKILL fan-out 不带 per-镜 `model=`，Agent 子代理**继承父 session（opus）**。故"文档说 light、实际大概率跑 opus"。P2 的真实内容**不是"引入快档"，是把 advisory 档位变成强制落地**（顺带把 opus→light 的 token 省下来，这比墙钟收益更实在）。
 
@@ -98,7 +104,7 @@ light   │ haiku       │ gpt-5-mini│  机械查证需读懂：接地镜/历
 ### 验收
 - 机械镜实际跑 light 档（可查运行档位）；判断镜/置信打分/裁决仍 mid/strong（不误降）。
 - 降档不可用时可观测地退回强审（fail-closed 可测）。
-- 该镜墙钟对 P0 基线下降（多轮同基线）**+ token 实测降**（opus→light）。
+- **主验收 = token 实测降**（opus→light，per-镜 token/轮下降）；墙钟对 P0 基线**不回归**即可（不设下降门槛，P0 收口 D11：机械镜非聚合墙钟关键路径）。
 
 ### 交付物
 `model-tiers.md` 矩阵重构 + 两评审 skill fan-out 档位报告/解析 + config.yaml 覆盖段说明，`/sdflow-upgrade` 激活。
@@ -165,4 +171,4 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 - **P2/P3 同改两评审 SKILL.md → MUST 串行**（并行 caveat #29）。
 - P4 触及 `consolidation-plan.md`/`ff-generation-constraints.md`，与 P2/P3 文件互斥 → 可与之并行。
 
-**建议次序：P0（基线/照妖镜，近乎免费）→ P2（档位矩阵，收益最直接、且省 token）→ P4（策略层，轻，可与 P2 并行）→ P3（流水线，调度复杂度最高，压后）**。较原 v1「P2 整块提前」更稳——先建观测、再进调度复杂区（交叉审 #30）。
+**建议次序（P0 已收口后更新）：P4（Leg3 批次策略——P0 证明它才是聚合墙钟真杠杆，且文件互斥可与 P2 并行）＋ P2（档位矩阵，主收益 token）并行 → P3（流水线，调度复杂度最高，压后）**。较原 v1/v2「P2 整块提前」再调整——P0 数据把 Leg3 从「随时可做的轻策略层」提为「墙钟主杠杆」，宜与 P2 同期起（P2 省 token、P4 省墙钟，两轴互补）；P3 仍压后（先有 P2 观测/矩阵再进串行调度区，交叉审 #30）。
