@@ -63,10 +63,10 @@
 | T55 | `lens_metric_aggregate.py` | 聚合器易用性/健壮性观察(code-review X3/X4 defer,低危):glob 空表 vs archive 不存在无法区分;转义引号 site 值截断产生多余分组行(site 不校验已契约注明) | 代码质量 | PROPOSED | 2026-07-06 02:36 | workflow-metrics-loop | workflow-metrics-loop |
 | T56 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 | 代码质量 | OPEN | 2026-07-06 13:44 | adaptive-workflow-routing |  |
 | T57 | `workflow/model-tiers` | 档位矩阵新增「升级档」（更高档，延后） | 功能增强 | OPEN | 2026-07-06 15:24 | main |  |
-| T58 | `sdflow-retro/lens_metric_aggregate` | fence-aware 只支持反引号 fence，不支持 CommonMark ~~~ tilde fence | 代码质量 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
-| T59 | `sdflow-retro/retro_report+lens_metric_aggregate` | ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量 | 代码质量 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
-| T60 | `sdflow-retro/retro_report` | _run_git 不检查 returncode，git 失败与真无提交不可区分 | 可观测性 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
-| T61 | `sdflow-retro/retro_report` | build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导 | 代码质量 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
+| T58 | `sdflow-retro/lens_metric_aggregate` | fence-aware 只支持反引号 fence，不支持 CommonMark ~~~ tilde fence | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T59 | `sdflow-retro/retro_report+lens_metric_aggregate` | ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量 | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T60 | `sdflow-retro/retro_report` | _run_git 不检查 returncode，git 失败与真无提交不可区分 | 可观测性 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T61 | `sdflow-retro/retro_report` | build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导 | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
 
 ---
 
@@ -774,7 +774,7 @@
 |------|------|
 | 模块 | `sdflow-retro/lens_metric_aggregate` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 
@@ -792,7 +792,7 @@
 |------|------|
 | 模块 | `sdflow-retro/retro_report+lens_metric_aggregate` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 
@@ -810,7 +810,7 @@
 |------|------|
 | 模块 | `sdflow-retro/retro_report` |
 | 类型 | 可观测性 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 
@@ -828,7 +828,7 @@
 |------|------|
 | 模块 | `sdflow-retro/retro_report` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 

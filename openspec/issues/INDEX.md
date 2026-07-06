@@ -80,6 +80,15 @@
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
+### 批次：sdflow-retro
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T58 | todo | PROPOSED | sdflow-retro |
+| T59 | todo | PROPOSED | sdflow-retro |
+| T60 | todo | PROPOSED | sdflow-retro |
+| T61 | todo | PROPOSED | sdflow-retro |
+
 ### 批次：workflow-metrics-loop
 
 | ID | Pool | Status | 关联Change |
@@ -92,6 +101,8 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | B5 | bug | OPEN | workflow-metrics-loop |
+| T56 | todo | OPEN | adaptive-workflow-routing |
+| T57 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 

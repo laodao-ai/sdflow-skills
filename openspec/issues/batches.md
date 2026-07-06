@@ -97,3 +97,10 @@
 成员: (生成) T54, T55
 优先级: P3
 计划: workflow 度量基建：T29 成本度量（checkpoint 时间戳+各编排 skill 报告）+ T54 grill amendment 存活率度量（后续独立评估，口径/数据源待定）
+
+### sdflow-retro — sdflow-retro
+状态: PLANNED
+成员: (生成) T58, T59, T60, T61
+优先级: <待填>
+计划: <待填>
+
