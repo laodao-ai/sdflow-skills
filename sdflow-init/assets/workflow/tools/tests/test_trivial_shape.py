@@ -9,11 +9,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from trivial_shape import classify_diff  # noqa: E402
 
 
-def _diff(path, added=(), removed=(), new=False, rename_to=None):
+def _diff(path, added=(), removed=(), new=False, rename_to=None,
+          copy_to=None, mode_only=False):
     """构造最小 unified diff 文本。"""
     lines = []
-    b = rename_to or path
+    b = copy_to or rename_to or path
     lines.append(f"diff --git a/{path} b/{b}")
+    if mode_only:
+        lines.append("old mode 100644")
+        lines.append("new mode 100755")
+        return "\n".join(lines) + "\n"  # 无 hunk/内容
     if new:
         lines.append("new file mode 100644")
         lines.append("index 0000000..abcdef0")
@@ -23,6 +28,12 @@ def _diff(path, added=(), removed=(), new=False, rename_to=None):
         lines.append("similarity index 100%")
         lines.append(f"rename from {path}")
         lines.append(f"rename to {rename_to}")
+        return "\n".join(lines) + "\n"
+    elif copy_to:
+        lines.append("similarity index 100%")
+        lines.append(f"copy from {path}")
+        lines.append(f"copy to {copy_to}")
+        return "\n".join(lines) + "\n"
     else:
         lines.append("index abcdef0..1234567 100644")
         lines.append(f"--- a/{path}")
@@ -148,3 +159,55 @@ def test_mixed_one_logic_file_not_exempt():
     d = (_diff("foo.py", added=["# comment"])
          + _diff("bar.py", added=["y = 1"]))
     assert _verdict(d) == "NOT_EXEMPT"
+
+
+# ---- code-review [impl-review-fix] 冷镜 F1-F7 危险方向补洞 ----
+
+def test_requirements_txt_not_exempt():  # F1: 依赖 pin 是 load-bearing
+    d = _diff("requirements.txt", added=["requests==2.99.0"], removed=["requests==2.31.0"])
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_runtime_txt_not_exempt():  # F1
+    d = _diff("runtime.txt", added=["python-3.13"])
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_docs_dir_code_not_exempt():  # F2: docs/ 下 .py 是代码不是文档
+    d = _diff("docs/conf.py", added=["extensions = ['sphinx.ext.autodoc']"])
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_docs_dir_txt_exempt():  # F2 反面: docs/ 下 .txt 仍算文档
+    d = _diff("docs/notes.txt", added=["任意文档"])
+    assert _verdict(d) == "EXEMPT"
+
+def test_readme_named_code_not_exempt():  # F3: README_gen.py 是代码
+    d = _diff("scripts/README_gen.py", added=["print('gen')"])
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_readme_rst_exempt():  # F3 反面: 真 README.rst 是文档
+    d = _diff("README.rst", added=["新增说明"])
+    assert _verdict(d) == "EXEMPT"
+
+def test_mode_only_chmod_not_exempt():  # F4: chmod 是行为改动
+    d = _diff("hack/run.sh", mode_only=True)
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_removed_line_dashdash_content_not_dropped():  # F5: 内容 `-- x` 不被 header guard 吞
+    # 该行是逻辑;若被误吞则文件只剩注释行→误 EXEMPT。修后应 NOT_EXEMPT。
+    d = _diff("foo.py", added=["# ok comment"], removed=["-- del = logic"])
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_added_line_plusplus_content_not_dropped():  # F5: 内容 `++ x`
+    d = _diff("app.js", added=["++counter"])
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_copy_detected_not_exempt():  # F7: copy = 新 codepath
+    d = _diff("mod.py", copy_to="mod_copy.py")
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_new_tests_init_not_exempt():  # F6: __init__.py import 副作用
+    d = _diff("tests/__init__.py", added=["from x import *"], new=True)
+    assert _verdict(d) == "NOT_EXEMPT"
+
+def test_version_still_exempt_after_refine():  # 回归: VERSION 仍免
+    d = _diff("VERSION", added=["v0.9.1"], removed=["v0.9.0"])
+    assert _verdict(d) == "EXEMPT"

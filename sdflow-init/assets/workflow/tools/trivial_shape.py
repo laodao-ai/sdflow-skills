@@ -39,14 +39,25 @@ BEHAVIOR_PATH_PATTERNS = (
     "*trivial_shape.py",
 )
 
-# 约定文档路径：改动视为纯文档（可免）。VERSION/CHANGELOG 收编版本常量③。
-DOC_PATH_PATTERNS = (
-    "README*", "*/README*",
-    "CHANGELOG*", "*/CHANGELOG*",
-    "docs/*", "*/docs/*",
-    "*.txt",
-    "VERSION", "*/VERSION",
-)
+# 约定文档判定：扩展名锚定（防 requirements.txt/docs/conf.py/README_gen.py 等 load-bearing 被误当文档）
+# 〔impl-review-fix F1/F2/F3〕
+DOC_EXTS = (".md", ".rst", ".txt")
+DOC_BASENAMES_NOEXT = ("README", "CHANGELOG", "LICENSE", "NOTICE")  # 允许无扩展或 DOC_EXTS
+
+
+def is_doc_file(path):
+    base = os.path.basename(path)
+    stem, ext = os.path.splitext(base)
+    under_docs = path.startswith("docs/") or "/docs/" in path
+    if base == "VERSION":
+        return True
+    if stem in DOC_BASENAMES_NOEXT and ext in ("",) + DOC_EXTS:
+        return True
+    if ext == ".rst":  # rst 任何位置皆文档
+        return True
+    if under_docs and ext in DOC_EXTS:  # docs/ 下仅 doc 扩展名算文档（.py 等落回代码判定）
+        return True
+    return False
 
 # 语言 → 行注释标记（仅行注释；块注释不支持 → 保守判逻辑）
 LINE_COMMENT = {
@@ -74,35 +85,44 @@ def _is_comment_or_blank(content, marker):
 
 
 def parse_diff(diff_text):
-    """解析 unified diff → [(path, is_new, is_rename, changed_lines)]。
-    changed_lines = 该文件所有 +/- 内容行（去掉 +++/---）的内容（不含前导 +/-）。"""
+    """解析 unified diff → [dict(path,is_new,is_rename,mode_changed,lines)]。
+    〔impl-review-fix F5〕hunk-state 机：`+++ `/`--- ` 仅在文件头区（未见 @@）当 header；
+    进入 hunk 后 `+`/`-` 一律内容行（含内容以 `-- `/`++ ` 起始者，不再被 header guard 误吞）。"""
     files = []
     cur = None
+    in_hunk = False
     for line in diff_text.splitlines():
         if line.startswith("diff --git "):
             if cur is not None:
                 files.append(cur)
-            cur = {"path": None, "is_new": False, "is_rename": False, "lines": []}
-            # 从 "diff --git a/X b/Y" 兜底取路径（+++ 可能是 /dev/null）
-            parts = line.split(" b/", 1)
+            cur = {"path": None, "is_new": False, "is_rename": False,
+                   "mode_changed": False, "lines": []}
+            in_hunk = False
+            parts = line.split(" b/", 1)  # 兜底取路径（+++ 可能是 /dev/null）
             if len(parts) == 2:
                 cur["path"] = parts[1]
         elif cur is None:
             continue
-        elif line.startswith("new file mode"):
-            cur["is_new"] = True
-        elif line.startswith("rename from ") or line.startswith("rename to "):
-            cur["is_rename"] = True
-        elif line.startswith("+++ b/"):
-            cur["path"] = line[6:]
-        elif line.startswith("+++ ") or line.startswith("--- "):
-            continue
         elif line.startswith("@@"):
-            continue
-        elif line.startswith("+"):
-            cur["lines"].append(line[1:])
-        elif line.startswith("-"):
-            cur["lines"].append(line[1:])
+            in_hunk = True
+        elif not in_hunk:
+            # 文件头区
+            if line.startswith("new file mode"):
+                cur["is_new"] = True
+            elif line.startswith(("rename from ", "rename to ", "copy from ", "copy to ")):
+                cur["is_rename"] = True  # copy 同 rename 处理〔F7〕
+            elif line.startswith(("old mode ", "new mode ")):
+                cur["mode_changed"] = True  # 〔F4〕
+            elif line.startswith("+++ b/"):
+                cur["path"] = line[6:]
+            # 其余头行（index/+++ /dev/null/--- 等）忽略
+        else:
+            # hunk 内：内容行
+            if line.startswith("+"):
+                cur["lines"].append(line[1:])
+            elif line.startswith("-"):
+                cur["lines"].append(line[1:])
+            # 上下文行（空格前缀）/`\ No newline`（\ 前缀）→ 忽略
     if cur is not None:
         files.append(cur)
     return [f for f in files if f["path"]]
@@ -111,25 +131,29 @@ def parse_diff(diff_text):
 def classify_file(f):
     """→ (ok: bool, reason: str)。ok=True 表示该文件的改动属白名单形状。"""
     path = f["path"]
+    base = os.path.basename(path)
+    _, ext = os.path.splitext(base)
+
+    # 行为面路径 MUST 优先（bundle markdown 承载行为）
     if _match_any(path, BEHAVIOR_PATH_PATTERNS):
         return False, f"behavior-path:{path}"
-    if f["is_rename"]:
-        return False, f"rename:{path}"
+    if f["is_rename"]:  # 含 copy〔F7〕
+        return False, f"rename-or-copy:{path}"
+    if f["mode_changed"]:  # chmod 是行为改动〔F4〕
+        return False, f"mode-change:{path}"
 
-    base = os.path.basename(path)
-    _, ext = os.path.splitext(path)
-    in_tests = "tests/" in path or path.startswith("tests/")
+    in_tests = path.startswith("tests/") or "/tests/" in path
 
-    # ② 仅新增 tests/ 文件（排除 conftest）
+    # ② 仅新增 tests/ 文件（排除 import 副作用 conftest/__init__）
     if f["is_new"]:
-        if in_tests and base != "conftest.py":
+        if in_tests and base not in ("conftest.py", "__init__.py"):
             return True, f"new-test:{path}"
-        if _match_any(path, DOC_PATH_PATTERNS):
+        if is_doc_file(path):
             return True, f"new-doc:{path}"
         return False, f"new-codepath:{path}"
 
-    # ① 约定文档路径 → 纯文档（含 VERSION/CHANGELOG，收编版本常量③）
-    if _match_any(path, DOC_PATH_PATTERNS):
+    # ① 约定文档（扩展名锚定：VERSION/README/CHANGELOG/docs下doc扩展/.rst）
+    if is_doc_file(path):
         return True, f"doc-path:{path}"
 
     # 任意非约定文档 .md → 保守 NOT（可能承载行为）
@@ -140,6 +164,8 @@ def classify_file(f):
     marker = LINE_COMMENT.get(ext)
     if marker is None:
         return False, f"unsupported-lang:{path}"
+    if not f["lines"]:  # 空内容改动（mode-only 兜底/纯元数据）→ 不 vacuous 放行〔F4〕
+        return False, f"no-content-change:{path}"
     for content in f["lines"]:
         if not _is_comment_or_blank(content, marker):
             return False, f"logic-line:{path}"
