@@ -104,6 +104,24 @@ def test_archived_change_full_boundary_via_bare_path(tmp_path):
     assert subjects[-1] == "chore(openspec): archive foo"
 
 
+def test_run_git_failure_traces_stderr(tmp_path, capsys):
+    # T60 反证：git 失败（returncode≠0）须向 stderr 留痕，否则「git 报错」与「真无提交」
+    # 都表现为空 stdout、静默不可区分。修前 _run_git 不看 returncode → stderr 无留痕 → FAIL。
+    root = _init_repo(tmp_path)
+    out = R._run_git(str(root), "nonexistent-subcommand-xyz")
+    captured = capsys.readouterr()
+    assert out == ""                              # 失败时 stdout 空（返回契约不变）
+    assert "git 失败" in captured.err              # 但有可见留痕，不静默
+
+
+def test_run_git_success_no_stderr_noise(tmp_path, capsys):
+    # T60：正常 git 成功不应产生 stderr 噪声（留痕只在失败路径）。
+    root = _init_repo(tmp_path)
+    _commit(root, {"a.txt": "x"}, "init")
+    R._run_git(str(root), "log", "--format=%H")
+    assert capsys.readouterr().err == ""
+
+
 def test_map_stage_longest_prefix(tmp_path):
     assert R.map_stage("checkpoint(impl-review)") == "code-review"
     assert R.map_stage("checkpoint(impl-review-fix)") == "code-review"

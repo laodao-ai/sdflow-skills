@@ -39,9 +39,17 @@ def discover_changes(root):
 
 
 def _run_git(root, *args):
-    return subprocess.run(
+    # [T60] git 失败（returncode≠0）向 stderr 留痕——否则「git 报错」与「真无提交」
+    # 都表现为空 stdout、静默不可区分（边界解析会把 git 故障误当无历史）。
+    # 仍返回 stdout（失败时通常为空）以保持所有调用方契约不变。
+    proc = subprocess.run(
         ["git", "-C", root, "-c", "core.quotePath=false", *args],
-        capture_output=True, text=True, errors="replace").stdout
+        capture_output=True, text=True, errors="replace")
+    if proc.returncode != 0:
+        sys.stderr.write(
+            f"[sdflow-retro] git 失败 (rc={proc.returncode}): git {' '.join(args)}\n"
+            f"  stderr: {proc.stderr.strip()}\n")
+    return proc.stdout
 
 
 def git_commits_for_path(root, relpath):
