@@ -36,4 +36,4 @@
 
 - [x] 5.1 全量 `pytest sdflow-retro/scripts/tests/` 零回归、零 warning
 - [x] 5.2 dogfood 再生 `openspec/retro/report.md` 确认幂等无漂移（`python3 sdflow-retro/scripts/retro_report.py --root .`）
-- [ ] 5.3 交 `/sdflow-code-review`（T58/T60 逻辑面真审）
+- [x] 5.3 交 `/sdflow-code-review`（T58/T60 逻辑面真审）→ pass；冷主审加挖 4 缺陷(2 高/中 fence bug + is_dir/glob 契约洞 + docstring)全折叠修 + T62 defer

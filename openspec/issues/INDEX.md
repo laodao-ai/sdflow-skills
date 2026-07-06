@@ -89,6 +89,12 @@
 | T60 | todo | PROPOSED | sdflow-retro |
 | T61 | todo | PROPOSED | sdflow-retro |
 
+### 批次：sdflow-retro-cleanup
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T62 | todo | PROPOSED | sdflow-retro-cleanup |
+
 ### 批次：workflow-metrics-loop
 
 | ID | Pool | Status | 关联Change |
