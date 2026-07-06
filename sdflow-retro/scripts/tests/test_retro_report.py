@@ -71,3 +71,30 @@ def test_normal_change_boundary(tmp_path):
     assert b["unresolved"] is False
     assert len(b["commits"]) == 2
     assert b["commits"][0]["subject"] == "checkpoint(ff)"
+
+
+def test_map_stage_longest_prefix(tmp_path):
+    assert R.map_stage("checkpoint(impl-review)") == "code-review"
+    assert R.map_stage("checkpoint(impl-review-fix)") == "code-review"
+    assert R.map_stage("checkpoint(spec-review-autoplan)") == "spec-review"
+    assert R.map_stage("checkpoint(spec-review-gate)") == "spec-review"
+    assert R.map_stage("checkpoint(design-gate)") == "spec-review"
+    assert R.map_stage("checkpoint(writing-plans)") == "impl"
+    assert R.map_stage("checkpoint(model-baseline)") == "impl"
+    assert R.map_stage("checkpoint(sdflow-retro:task3-boundary)") == "impl"
+    assert R.map_stage("checkpoint(final-review)") == "code-review"
+    assert R.map_stage("checkpoint(ff)") == "ff"
+    assert R.map_stage("checkpoint(grill)") == "grill"
+    assert R.map_stage("feat(x): 随手") == "unknown"
+
+
+def test_archive_rename_detects_done(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    # 用 git mv 模拟归档
+    (root / "openspec/changes/archive/2026-07-06-foo").mkdir(parents=True)
+    _git(root, "mv", "openspec/changes/foo/proposal.md",
+         "openspec/changes/archive/2026-07-06-foo/proposal.md")
+    _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "chore(openspec): archive foo")
+    sha = _git(root, "rev-parse", "HEAD").strip()
+    assert R.is_archive_rename(str(root), sha, "foo") is True

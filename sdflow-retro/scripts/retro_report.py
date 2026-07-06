@@ -87,3 +87,61 @@ def boundary_for_change(root, name, info, seed_shas):
         return {"commits": commits, "unresolved": True,
                 "note": f"边界不可解析（提交数={len(commits)}，seed/单步 change）"}
     return {"commits": commits, "unresolved": False, "note": ""}
+
+
+# 最长前缀词表：按前缀长度降序尝试匹配 checkpoint(<inner>)
+_STAGE_RULES = [
+    ("impl-review", "code-review"),
+    ("final-review", "code-review"),
+    ("sdd-final-review", "code-review"),
+    ("spec-review", "spec-review"),
+    ("design-gate", "spec-review"),
+    ("writing-plans", "impl"),
+    ("model-baseline", "impl"),
+    ("grill", "grill"),
+    ("ff", "ff"),
+    ("propose", "other"),
+    ("plan", "other"),
+    ("roadmap", "other"),
+    ("issues", "other"),
+]
+_CKPT_RE = re.compile(r"^checkpoint\(([^)]*)\)")
+
+
+def map_stage(subject):
+    m = _CKPT_RE.match(subject.strip())
+    if not m:
+        return "unknown"
+    inner = m.group(1)
+    # 命名空间任务标签 <change>:task<N>-... → impl
+    tail = inner.split(":", 1)[1] if ":" in inner else inner
+    if re.match(r"task\d+", tail) or tail.endswith("-impl"):
+        return "impl"
+    # 最长前缀匹配：规则按前缀长度降序
+    for prefix, stage in sorted(_STAGE_RULES, key=lambda r: -len(r[0])):
+        if inner.startswith(prefix):
+            return stage
+    if inner.endswith("-cross-review"):
+        return "other"
+    return "unknown"
+
+
+def is_archive_rename(root, sha, name):
+    out = _run_git(root, "show", "--name-status", "--format=", sha)
+    moved_out = False
+    into_archive = False
+    for line in out.splitlines():
+        if not line.strip():
+            continue
+        cols = line.split("\t")
+        status = cols[0]
+        paths = cols[1:]
+        if status.startswith("R") and len(paths) == 2:
+            src, dst = paths
+            if f"changes/{name}/" in src and "changes/archive/" in dst and dst.rstrip("/").find(name) != -1:
+                return True
+        if status == "D" and any(f"changes/{name}/" in p and "/archive/" not in p for p in paths):
+            moved_out = True
+        if status == "A" and any(f"changes/archive/" in p and name in p for p in paths):
+            into_archive = True
+    return moved_out and into_archive
