@@ -11,6 +11,9 @@ from pathlib import Path
 from collections import defaultdict
 
 ANCHOR_PREFIX = "<!-- sdflow:lens-metric v1"
+# [T59] 「出现轮数 ≥N 待复评」阈值单一源——render_table 与 retro_report.surfacing_block
+# 共同引用（此前两处各硬编码 10，调整易改一处漏一处致 flag 口径漂移）。
+REVIEW_ROUNDS_THRESHOLD = 10
 LAYER_ENUM = {"spec-review", "code-review"}
 LENS_ENUM = {"domain", "adversarial", "grounding", "history", "outside-voice", "broad"}
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')  # 受限 kv：key="value"，禁裸 split
@@ -134,8 +137,8 @@ def render_table(rows, no_anchor, parse_failed=None):
         采纳率 = f"{g['采纳']/denom:.0%}" if denom else "—"
         独立率 = f"{g['独立']/g['f']:.0%}" if g["f"] else "—"
         flags = []
-        if g["轮"] >= 10:
-            flags.append("≥10待复评")
+        if g["轮"] >= REVIEW_ROUNDS_THRESHOLD:
+            flags.append(f"≥{REVIEW_ROUNDS_THRESHOLD}待复评")
         if g["bad"]:
             flags.append("⚠越域")
         if g["num_bad"]:

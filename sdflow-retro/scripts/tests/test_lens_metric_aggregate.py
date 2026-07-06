@@ -167,6 +167,21 @@ def test_negative_numeric_value_flagged(tmp_path):
     table = lma.render_table(rows, no_anchor)
     assert "⚠数值非法" in table
 
+def test_review_rounds_threshold_is_shared_constant():
+    # T59 反证：≥10 待复评阈值须为单一共享常量（此前 render_table + surfacing_block
+    # 两处各硬编码 10，调整易改一处漏一处致口径漂移）。修前 FAIL：无此常量（AttributeError）。
+    assert lma.REVIEW_ROUNDS_THRESHOLD == 10
+
+
+def test_render_table_threshold_uses_shared_constant(monkeypatch):
+    # T59 反证：render_table 的 ≥N flag 须引用共享常量而非硬编码 10。
+    # 把常量临时降到 3、构造同键 3 轮，应被 flag。修前硬编码 10 → 3 轮不 flag → FAIL。
+    monkeypatch.setattr(lma, "REVIEW_ROUNDS_THRESHOLD", 3)
+    rows = [lma.parse_anchor(_a("domain", 5, 3, 2)) for _ in range(3)]
+    table = lma.render_table(rows, [])
+    assert "待复评" in table
+
+
 def test_fence_aware_ignores_tilde_fence():
     # T58 反证：CommonMark ~~~ tilde fence 内的示范锚必须被跳过（此前只认 ``` 反引号，
     # ~~~ 代码块里的示范 lens-metric 锚会被误计入聚合）。

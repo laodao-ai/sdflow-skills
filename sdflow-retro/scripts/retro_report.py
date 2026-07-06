@@ -328,10 +328,11 @@ def surfacing_block(root):
             counts[LMA.group_key(r)] += 1
     except (OSError, ValueError):
         pass  # archive 不存在/不可读 → 视同无样本，走「无命中」固定行，不崩报告
-    flagged = [(k, c) for k, c in counts.items() if c >= 10]
+    thr = LMA.REVIEW_ROUNDS_THRESHOLD  # [T59] 与 render_table 共享同源阈值，不再本地硬编码 10
+    flagged = [(k, c) for k, c in counts.items() if c >= thr]
     if not flagged:
-        return "⚠️ 待复评: 无（所有镜出现轮数<10）"
-    lines = ["⚠️ 待复评: 以下镜出现轮数≥10、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:"]
+        return f"⚠️ 待复评: 无（所有镜出现轮数<{thr}）"
+    lines = [f"⚠️ 待复评: 以下镜出现轮数≥{thr}、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:"]
     for (layer, lens, runner, site), c in sorted(flagged):
         lines.append(f"  - {lens}（layer={layer} runner={runner} site={site}，出现轮数 {c}）")
     return "\n".join(lines)

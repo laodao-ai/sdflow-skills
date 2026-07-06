@@ -343,6 +343,21 @@ def test_surfacing_block_flags_ge10(tmp_path):
     assert "出现轮数 10" in block
 
 
+def test_surfacing_threshold_uses_shared_constant(tmp_path, monkeypatch):
+    # T59 反证：surfacing_block 的 ≥10 阈值须引用 LMA.REVIEW_ROUNDS_THRESHOLD 同源常量，
+    # 非本地硬编码 10。把常量临时降到 3、构造同键 3 轮，应触发 flag。
+    # 修前 surfacing_block 硬编码 `c >= 10` → 3 轮不命中 → "出现轮数 3" 不在 block → FAIL。
+    import lens_metric_aggregate as LMA
+    monkeypatch.setattr(LMA, "REVIEW_ROUNDS_THRESHOLD", 3)
+    for i in range(1, 4):
+        d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
+        d.mkdir(parents=True)
+        (d / "spec-review-report.md").write_text(
+            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n")
+    block = R.surfacing_block(str(tmp_path))
+    assert "出现轮数 3" in block
+
+
 def test_build_report_includes_surfacing_block(tmp_path):
     root = _init_repo(tmp_path)
     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
