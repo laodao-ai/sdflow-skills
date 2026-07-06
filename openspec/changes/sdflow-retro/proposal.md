@@ -26,7 +26,7 @@
 ## Impact
 
 - **新增**：`sdflow-retro/`（SKILL.md + scripts/ + tests/）；`openspec/retro/report.md`（生成物）。
-- **迁移〔grill Q2〕**：`git mv lens_metric_aggregate.py`（+ 其 tests）`sdflow-init/assets/workflow/tools/` → `sdflow-retro/scripts/`；连带 `sdflow-init/init.py` 删该文件派生/排除逻辑、`sdflow-init/tests/test_init.py` 改断言、code-review/spec-review SKILL 的 prose 指针改指 retro、`openspec/INDEX.md` 更新。
+- **迁移〔grill Q2 + spec-review 修订〕**：`git mv lens_metric_aggregate.py`（+ 其 tests）`sdflow-init/assets/workflow/tools/` → `sdflow-retro/scripts/`；连带：`sdflow-init/init.py` **仅移源文件——`ignore_patterns("tests")` 通用排除 MUST 保留**（还护 `trivial_shape.py` 测试，F5/G2）；`test_init.py` 断言（line 119+126）**改指 trivial_shape 非删**（保 tests-exclusion 覆盖）；**4 处** SKILL prose 指针（code-review:132 / spec-review:105 / **spec-review:120** / maintain:78）+ `docs/workflow-skills/sdflow-code-review.md:57` 改指 retro；`openspec/INDEX.md` 加 retro/ 条目 + 聚合器路径更新。
 - **修改**：`sdflow-maintain/SKILL.md` 步骤 5（瘦身为薄指针）。**不改** `checkpoint-commit.sh`/`spec-workflow`（OQ1 grill 定不碰 tag）。
 - **共享生产者风险**：`checkpoint-commit.sh` 被所有 workflow skill 使用，且其 tag 格式是 `ship_gate.py` 的解析契约（`spec-workflow` spec.md:335-398 命名空间隔离 + `checkpoint(impl-review)` 精确豁免）——任何 tag 格式改动 MUST 不破坏 ship_gate（见 OQ1）。
 - **部署**〔spec-review-amendment B1〕：本 change 触及 bundle（聚合器**移出** `assets/workflow/tools/` + init.py 派生逻辑改）+ 新 skill；**不改** `checkpoint-commit.sh`（OQ1 定）。merge 后须 push → 运行 checkout `/sdflow-upgrade` 激活。
@@ -57,12 +57,12 @@
 
 ## Assumptions
 
-- **A1** checkpoint 前缀是阶段的可靠信号（`checkpoint(<stage>)` / `checkpoint(<change>:task<N>)`）——已验：全 checkpoint 历史前缀一致（本 session 实测）。失效影响：阶段映射需人工兜底。
-- **A2** `git log -- openspec/changes/<change>/`（含 archive 路径）能界定 change 生命周期——大体成立（每个 change 的提交都碰其目录）；边界模糊处（rebase/interleave）best-effort。失效影响：历史 change 边界不准，未来靠 OQ1 约定兜。
-- **A3** 归档评审报告的 lens-metric 锚齐全——受 `config.yaml metrics.enabled` 门控（源仓 on），历史归档报告已有真锚（`workflow-metrics-loop` dogfood 落过）。失效影响：镜价值维对无锚 change 留空，不阻塞。
+- **A1**〔spec-review 修订〕checkpoint 前缀映射**阶段**信号——**仅对生成期阶段可靠**（grill/spec-review/impl-review 是 checkpoint 前缀）；**归档/收尾提交前缀不可靠**（实测 14/15 是 `chore/feat` 非 `checkpoint(done-archive)`）→ done 阶段改靠 path-rename（D8），不靠前缀。
+- **A2**〔spec-review 修订·原过度断言〕`git log -- changes/<name>/`（pre-archive 路径）**多数** change 能界定生命周期，但**非全部**：创世 mass 提交（`db3c824`）致 2 个 2026-07-02 seed change 的 pre-archive 路径 0 提交（原"每个 change 提交都碰其目录/一把捞全"是单样本外推，已证伪）→ 须 archive 路径兜底 + seed 剔除 + 0/1 守卫（D9）。失效影响：早期 seed change 边界 best-effort/不可解析，标注不崩。
+- **A3**〔spec-review 修订·原过度断言〕lens-metric 锚**仅最近 2/17 change 有真锚**（`workflow-metrics-loop`、`adaptive-workflow-routing`；metrics-loop 之前的时代无锚）→ 镜价值维对历史 88% 空。失效影响：per-镜聚合 N=2 近乎无统计意义（顶部显性"有真锚 M"防误当趋势）；**retro 真价值在向前**（新 change 有锚），历史 best-effort。
 
 ## Compliance
 
 - 承 adr/0009（计时粒度只到阶段级）、lens-metric 反馈回路的 user-sovereignty（只呈现不决策）、`grill-not-skippable`。
-- view-only 再生，零新持久可变态（承 `lens_metric_aggregate.py` 的 view-only 契约）。
+- 〔spec-review 修订·域轴2〕report.md 是**可重生 view**（锚/git 历史为 state 真相源），零新持久可变**状态**——report 文件本身 tracked（活文档）但非 state，故与 `lens_metric_aggregate.py` "不写持久文件"的 stdout-view 契约口径统一为"零新 state"而非"零文件写"。
 - 触及 bundle → 权威源改动 + 部署下发（spec-workflow「workflow bundle 改动须在权威源」需求）。

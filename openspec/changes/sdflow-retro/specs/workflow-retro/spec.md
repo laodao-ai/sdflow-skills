@@ -13,6 +13,14 @@
 - **WHEN** 仓内存在活动（未归档）change
 - **THEN** SHALL 将其纳入报告并标 `in-progress`（成本维取其部分生命周期），价值维若未落锚则标"无度量锚"，MUST NOT 从报告静默排除进行中工作
 
+#### Scenario: 价值维扫 active+archive 两源、跨 spec+code 两份报告〔D11〕
+- **WHEN** 某 change（活动或归档）同时有 `spec-review-report.md` 与 `code-review-report.md`，各带 layer 不同的 lens-metric 锚
+- **THEN** per-change 价值 join SHALL 扫 **active `changes/*/` 与 archive 两处**、聚合**两份报告**的锚并按 layer 分归属，MUST NOT 只扫 archive（否则有锚的活动 change 被误标"无度量锚"）、MUST NOT 只取一份（否则漏 spec/code 一半锚）
+
+#### Scenario: N≥10 待复评镜机械显著呈现〔D12〕
+- **WHEN** 聚合表存在某镜出现轮数 ≥10 未复评
+- **THEN** SHALL 在报告顶部**独立 `⚠️ 待复评` 区块 + 固定前缀标记**呈现（位置/标记可机验），MUST NOT 仅以"显著"形容词表述（不可机验 = 死列风险自我复现，同 `grill-not-skippable`）
+
 #### Scenario: 只呈现不决策
 - **WHEN** 某镜采纳率/独立率低、或某 change 成本畸高
 - **THEN** SHALL 在报告显著呈现供人判断，MUST NOT 自动标记"应砍"或改任何 workflow 配置
@@ -29,6 +37,14 @@ change 生命周期边界 SHALL 由 `git log -- openspec/changes/<name>/`（含�
 #### Scenario: 历史裸标签 best-effort
 - **WHEN** 某历史 change 的 checkpoint 为裸阶段标签（`checkpoint(spec-review)` 无 change 名）
 - **THEN** 归属仍由提交路径确定（不受裸标签影响），阶段由前缀映射；映射不出的归"unknown 阶段"桶并在报告标注，MUST NOT 静默漏
+
+#### Scenario: done/归档阶段靠 path-rename 非 subject 前缀〔D8〕
+- **WHEN** 某 change 的归档提交 subject 为 `chore(openspec)`/`feat(...)` 而非 `checkpoint(done-archive)`（实测 14/15 归档提交如此）
+- **THEN** done/收尾阶段 SHALL 由"提交把 change 目录 `git mv` 进 `archive/`"的**路径 rename 事件**判定，MUST NOT 仅靠 subject 前缀（否则 done 阶段对多数历史 change 恒空）
+
+#### Scenario: seed change 边界守卫〔D9〕
+- **WHEN** 某 change 的 pre-archive 路径 `git log` 为 0 提交（创世 mass 提交只碰其 archive 路径），或全 change 只有恰好 1 提交
+- **THEN** SHALL 兜底查 archive 路径 + 显式守卫 0/1 提交（墙钟不可算即标"边界不可解析"计入 K、不崩），并剔除碰 ≥3 change 目录的 seed-mass 提交，MUST NOT 因单样本假设"pre-archive 路径必非空"而崩或漏
 
 ### Requirement: 时间维只到阶段级且诚实标注含人决策时间
 
