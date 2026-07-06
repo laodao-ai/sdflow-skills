@@ -5,7 +5,7 @@
 ## What Changes
 
 - **`consolidation-plan.md` 按框架重划**：在既有「相关合批」（AND 门）之外新增「大扫除批」维度，把待处理项二分——**相关项**（同 capability、高耦合）走 AND 门合批；**散落琐碎正交项**归大扫除批。
-- **workflow 规则集补「大扫除批」规范**（bundle 权威源 `sdflow-init/assets/workflow/`）：
+- **本仓判据规则补「大扫除批」规范**（Q2 定案=本仓-local，落 `openspec/issues/batch-triage-rules.md`，**非 bundle**；发布 deferred 至本仓 dogfood 验证后）：<!-- [impl-review-fix] F-H: 原写「补 workflow 规则集(bundle 权威源)」是 pre-Q2 残留,与 D6 本仓-local 定案矛盾 -->
   - 大扫除批**定义** + **硬边界**：正交批只装个体琐碎/低危项，**禁装有逻辑面的东西**（稀释评审注意力 + 无关改动挤一 commit 坏单独回退）。
   - **聚合上限**：每项低危 ≠ 聚合低危——限**文件数 / 目录跨度 / 是否含生成物 / CI 面积**，防 N 个散 typo 压垮 review 注意力 + 坏 bisect/revert 粒度。
 - **新增 issue 级「无逻辑面/低危」近似判据**（grill 定=纯规则 checklist、非脚本；spec-review Q1 定=**采纳 Leg1 行为面路径守卫**）：与 Leg1 白名单**同类**（继承其 `BEHAVIOR_PATH_PATTERNS` 路径守卫——落 `SKILL.md`/`*/assets/workflow/*` 的项**硬排除，无论描述多 cosmetic**）、作用在 **issue 级 pre-diff**，不字面复用 `trivial_shape.py`（它需 diff）——「同类判据、非同一脚本」。
@@ -47,7 +47,7 @@
 
 ## Compliance
 
-- **bundle 权威源纪律**：改 `sdflow-init/assets/workflow/` → `sdflow-init update` 回灌，禁只改某下游 `openspec/workflow/`。
+- **本仓-local 落点纪律**（Q2/D6）：判据落本仓 `openspec/issues/`，**MUST NOT 进 bundle `sdflow-init/assets/workflow/`、不部署下游、无回灌**；本仓 git commit 即生效。发布下游是验证后的未来独立 change。<!-- [impl-review-fix] F-H: 原「bundle 权威源纪律…回灌」是 pre-Q2 残留,与本仓-local 定案矛盾 -->
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push → `/code-review`（远程 PR）。
 - **红线**：降成本 MUST NOT 靠砍评审安全（判据只作用于「无逻辑面/低危」，逻辑面一律走全审）。
 
