@@ -1,9 +1,14 @@
 import os
 import re
 import subprocess
+import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lens_metric_aggregate as LMA  # 复用其 fence-aware 锚解析（parse_report + _int），不重实现
+
 _DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}-(.+)$")
+_REPORT_NAMES = ("spec-review-report.md", "code-review-report.md")
 
 
 def discover_changes(root):
@@ -191,4 +196,46 @@ def stage_walltimes(root, name, commits):
         "total_min": round(total, 1),
         "n_ckpt": len(commits),
         "reorder_suspected": reorder
+    }
+
+
+def lens_value_for_change(info):
+    """扫该 change 的 active_dir + archive_dir 两处 spec/code review 报告，
+    复用 lens_metric_aggregate.parse_report（fence-aware）解析锚，按 layer 分归属。
+    坏文件（IO/解码错误）fail-safe 跳过，不崩、不拖垮整体聚合——同 aggregate() 的处理口径。
+    """
+    anchors = []
+    for base in (info.get("active_dir"), info.get("archive_dir")):
+        if not base:
+            continue
+        for rn in _REPORT_NAMES:
+            fp = os.path.join(base, rn)
+            if os.path.isfile(fp):
+                try:
+                    anchors.extend(LMA.parse_report(fp))
+                except (OSError, UnicodeDecodeError, ValueError):
+                    continue
+
+    by_layer = {}
+    sum_f = sum_a = sum_ind = 0
+    for a in anchors:
+        layer = a.get("layer", "unknown")
+        entry = by_layer.setdefault(layer, {"findings": 0, "采纳": 0, "独立": 0})
+        f_val, _ = LMA._int(a.get("findings"))
+        a_val, _ = LMA._int(a.get("采纳"))
+        ind_val, _ = LMA._int(a.get("独立"))
+        entry["findings"] += f_val
+        entry["采纳"] += a_val
+        entry["独立"] += ind_val
+        sum_f += f_val
+        sum_a += a_val
+        sum_ind += ind_val
+
+    rate = round(sum_a / sum_f, 2) if sum_f else None
+    return {
+        "has_anchor": bool(anchors),
+        "by_layer": by_layer,
+        "sum_findings": sum_f,
+        "accept_rate": rate,
+        "sum_independent": sum_ind,
     }

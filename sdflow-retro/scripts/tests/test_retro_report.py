@@ -111,3 +111,31 @@ def test_stage_walltimes_and_negative_clamp(tmp_path):
     assert got["stages"].get("grill", 0) == 0.0
     assert got["reorder_suspected"] is True
     assert got["n_ckpt"] == 3
+
+
+ANCHOR = ('<!-- sdflow:lens-metric v1 layer="{layer}" lens="domain" runner="claude" '
+          'site="—" findings="{f}" 采纳="{a}" 裁掉="0" defer="0" 独立="{ind}" '
+          'sev="致0/高1/中0/低0" -->')
+
+
+def test_lens_value_active_change_has_anchor(tmp_path):
+    d = tmp_path / "openspec/changes/live"
+    d.mkdir(parents=True)
+    (d / "spec-review-report.md").write_text(
+        ANCHOR.format(layer="spec-review", f=9, a=9, ind=6) + "\n")
+    (d / "code-review-report.md").write_text(
+        ANCHOR.format(layer="code-review", f=4, a=3, ind=2) + "\n")
+    info = {"active": True, "active_dir": str(d), "archive_dir": None}
+    v = R.lens_value_for_change(info)
+    assert v["has_anchor"] is True
+    assert v["sum_findings"] == 13
+    assert "spec-review" in v["by_layer"] and "code-review" in v["by_layer"]
+
+
+def test_lens_value_no_anchor(tmp_path):
+    d = tmp_path / "openspec/changes/bare"
+    d.mkdir(parents=True)
+    (d / "proposal.md").write_text("no anchor here")
+    info = {"active": True, "active_dir": str(d), "archive_dir": None}
+    v = R.lens_value_for_change(info)
+    assert v["has_anchor"] is False
