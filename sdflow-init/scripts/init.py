@@ -24,6 +24,11 @@ import os
 import shutil
 import sys
 
+try:
+    import fcntl  # POSIX 独有；Windows 无 → T49 锁降级为 best-effort 无锁
+except ImportError:  # pragma: no cover （沙箱恒 POSIX，Windows 分支无法在此覆盖）
+    fcntl = None
+
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(SKILL_DIR, "assets")
 BUNDLE_SRC = os.path.join(ASSETS, "workflow")
@@ -283,15 +288,59 @@ def _hook_command(h):
     return c if isinstance(c, str) else ""
 
 
+def _acquire_settings_lock(settings):
+    """T49：在独立 lockfile `<settings>.lock` 上取 fcntl.flock(LOCK_EX)，串行化整个
+    读-改-写-replace 临界区——杜绝并发 deregister「各基于旧内容读→写→replace，一次修改
+    被静默覆盖」的 lost-update。lockfile 独立于 settings.json（后者被 os.replace 换 inode，
+    锁须挂在不被替换的稳定 inode 上）且**不 unlink**（unlink-while-locked 经典竞态会破坏互斥）。
+    fcntl 仅 POSIX——Windows（fcntl 缺失）或加锁失败 → 返回 None，best-effort 降级为无锁
+    （保持既有行为、不新增崩溃面，局限：Windows 上并发 lost-update 窗口仍在）。返回持锁 fd 或 None。"""
+    if fcntl is None:
+        return None
+    try:
+        fd = os.open(settings + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+    except OSError:
+        return None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+    except OSError:
+        os.close(fd)
+        return None
+    return fd
+
+
+def _release_settings_lock(fd):
+    """释放 _acquire_settings_lock 取得的锁并关 fd（fd 为 None 时 no-op）。"""
+    if fd is None:
+        return
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
 def _deregister_hook_in_settings(settings, name):
     """从 settings.json 各 event 列表外科式摘除 command 引用 `name` 脚本的条目：
     entry 内多 hook 时只删匹配的那个、保留兄弟；entry 内 hook 全被删则整条 entry 丢弃；
     保留其余用户/其它 skill 的 hook。改动则回写。坏 JSON / 结构异常一律 fail-safe 跳过。
-    返回是否发生了摘除。"""
+    返回是否发生了摘除。
+
+    [T49] 整个读-改-写-replace 在 <settings>.lock 的排他 flock 下串行化（并发 lost-update
+    收窗）；锁在 POSIX 生效、Windows best-effort 降级无锁。"""
     if not os.path.exists(settings):
         return False
+    lock_fd = _acquire_settings_lock(settings)
     try:
-        data = json.load(open(settings, encoding="utf-8"))
+        return _deregister_hook_in_settings_locked(settings, name)
+    finally:
+        _release_settings_lock(lock_fd)
+
+
+def _deregister_hook_in_settings_locked(settings, name):
+    """_deregister_hook_in_settings 的临界区实现（须在持 <settings>.lock 下调用）。"""
+    try:
+        with open(settings, encoding="utf-8") as f:
+            data = json.load(f)
     except (ValueError, OSError):
         return False
     if not isinstance(data, dict) or not isinstance(data.get("hooks"), dict):
