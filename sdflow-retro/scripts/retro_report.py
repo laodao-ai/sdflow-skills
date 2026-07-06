@@ -268,16 +268,30 @@ def lens_value_for_change(info):
 
 
 def _read_hr_hit(base, report_name):
+    """读单个报告文件的 hr-tg 锚。
+    [impl-review-fix F2] 坏文件（权限拒绝/IO 错误）fail-safe 返回 "—"，不崩，
+    同 lens_value_for_change 对同类坏文件的处理口径。
+    [impl-review-fix F4] 复用 LMA._fence_aware_lines 过滤 fenced 示范锚（同 lens-metric
+    锚享同等 fence 护栏，避免文档里反引号包裹的示范 hr-tg 锚被误读为真判定）。
+    [impl-review-fix F7] 不遇首个锚即 return——续扫全文取最后一条命中，
+    以应对同一报告内多条 hr-tg 锚（如广审判定 + 后续更权威判定）时取最终判定而非 first-wins。
+    """
     if not base:
         return "—"
     fp = os.path.join(base, report_name)
     if not os.path.isfile(fp):
         return "—"
-    for line in open(fp, encoding="utf-8", errors="replace"):
+    try:
+        with open(fp, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError):
+        return "—"
+    hit = "—"
+    for line in LMA._fence_aware_lines(text):
         m = _HRTG_RE.search(line)
         if m:
-            return m.group(1)
-    return "—"
+            hit = m.group(1)
+    return hit
 
 
 def hr_tg_flags(info):

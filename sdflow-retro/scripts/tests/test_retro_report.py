@@ -185,6 +185,60 @@ def test_hr_tg_two_columns(tmp_path):
     assert f["code_hr_tg"] == "TG-06"
 
 
+def test_hr_tg_read_permission_failsafe(tmp_path, monkeypatch):
+    """[impl-review-fix F2] 反证测试：坏文件（权限拒绝/IO 错误）读取须 fail-safe 返回 "—"，
+    不冒泡异常穿透 hr_tg_flags→build_report→main()。
+    用 monkeypatch 替换模块级 open 确定性模拟 PermissionError，而非依赖 chmod 000——
+    后者在 root 用户或某些文件系统下仍可读，跨环境不稳定，达不到"确保确定性"。
+    修前：_read_hr_hit 裸 open 无 try/except，异常直接冒泡，本测试 FAIL（抛 PermissionError）。
+    """
+    d = tmp_path / "openspec/changes/hh"; d.mkdir(parents=True)
+    fp = d / "spec-review-report.md"
+    fp.write_text(HRTG.format(hit="TG-01") + "\n")
+
+    real_open = open
+
+    def _boom(path, *a, **k):
+        if str(path) == str(fp):
+            raise PermissionError("denied")
+        return real_open(path, *a, **k)
+
+    monkeypatch.setattr(R, "open", _boom, raising=False)
+
+    got = R._read_hr_hit(str(d), "spec-review-report.md")
+    assert got == "—"
+
+
+def test_hr_tg_skips_fenced_example(tmp_path):
+    """[impl-review-fix F4] 反证测试：fence 内的示范 hr-tg 锚必须被跳过，只读 fence 外真锚。
+    修前：_read_hr_hit 逐行裸 regex 无 fence-aware 过滤，会误读 fence 内的第一条锚 "TG-99"，
+    本测试 FAIL（得到 "TG-99" 而非 "none"）。
+    """
+    d = tmp_path / "openspec/changes/hh"; d.mkdir(parents=True)
+    content = "\n".join([
+        "some report body",
+        "```",
+        HRTG.format(hit="TG-99"),  # 示范锚，fence 内，应被跳过
+        "```",
+        HRTG.format(hit="none"),   # fence 外的真锚
+        "",
+    ])
+    (d / "spec-review-report.md").write_text(content)
+    got = R._read_hr_hit(str(d), "spec-review-report.md")
+    assert got == "none"
+
+
+def test_hr_tg_multi_anchor_takes_last(tmp_path):
+    """[impl-review-fix F7] 反证测试：同一报告内多条 hr-tg 锚时取最后一条=最终判定，非 first-wins。
+    修前：_read_hr_hit 遇首个锚即 return，本测试 FAIL（得到 "none" 而非 "TG-06"）。
+    """
+    d = tmp_path / "openspec/changes/hh"; d.mkdir(parents=True)
+    content = HRTG.format(hit="none") + "\n" + HRTG.format(hit="TG-06") + "\n"
+    (d / "code-review-report.md").write_text(content)
+    got = R._read_hr_hit(str(d), "code-review-report.md")
+    assert got == "TG-06"
+
+
 def test_build_report_coverage_counts(tmp_path):
     root = _init_repo(tmp_path)
     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
