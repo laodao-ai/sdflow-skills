@@ -82,19 +82,32 @@ def seed_mass_shas(root, threshold=3):
 
 
 def boundary_for_change(root, name, info, seed_shas):
+    # [impl-review-fix] F1: 致命 bug 修复——归档 change 的 active_dir 在磁盘上已不存在（None），
+    # 原实现只 _fetch(active_dir)(None→[]) 再兜底 archive_dir（archive 路径 git log 只看得到
+    # rename 后的历史，看不到 rename 前的活动期提交），导致 17/18 归档 change 假性「边界不可解析」。
+    # 修法：始终查裸 pre-archive 路径 openspec/changes/<name>（git log 对该 pathspec 历史性可达，
+    # 不依赖该目录当前是否还在磁盘/HEAD 上——这是 design D1 的本意）∪ archive 路径（归档 rename
+    # 提交只碰 archive 路径），按 sha 去重、按 ts 升序合并。
     def _fetch(relpath):
         if not relpath:
             return []
-        rel = os.path.relpath(relpath, root)
-        cs = git_commits_for_path(root, rel)
+        cs = git_commits_for_path(root, relpath)
         return [c for c in cs if c["sha"] not in seed_shas]
-    commits = _fetch(info.get("active_dir"))
-    if len(commits) == 0:
-        commits = _fetch(info.get("archive_dir"))
-    if len(commits) <= 1:
-        return {"commits": commits, "unresolved": True,
-                "note": f"边界不可解析（提交数={len(commits)}，seed/单步 change）"}
-    return {"commits": commits, "unresolved": False, "note": ""}
+
+    by_sha = {}
+    for c in _fetch(f"openspec/changes/{name}"):
+        by_sha.setdefault(c["sha"], c)
+    archive_dir = info.get("archive_dir")
+    if archive_dir:
+        arel = os.path.relpath(archive_dir, root)
+        for c in _fetch(arel):
+            by_sha.setdefault(c["sha"], c)
+    merged = sorted(by_sha.values(), key=lambda c: c["ts"])
+
+    if len(merged) <= 1:
+        return {"commits": merged, "unresolved": True,
+                "note": f"边界不可解析（提交数={len(merged)}，seed/单步 change）"}
+    return {"commits": merged, "unresolved": False, "note": ""}
 
 
 # 最长前缀词表：按前缀长度降序尝试匹配 checkpoint(<inner>)
@@ -106,6 +119,12 @@ _STAGE_RULES = [
     ("design-gate", "spec-review"),
     ("writing-plans", "impl"),
     ("model-baseline", "impl"),
+    # [impl-review-fix] F6: 补前缀——本仓真实存在 checkpoint(done-archive)/checkpoint(done-verify)/
+    # 裸 checkpoint(gate) 提交，原词表无匹配落 unknown 桶；F1 修复后归档 change 的 done 阶段提交
+    # 会大量出现，须能正确归类。gate 归 spec-review 因 design-gate 已归 spec-review，裸 gate 同族。
+    ("done-archive", "done"),
+    ("done-verify", "done"),
+    ("gate", "spec-review"),
     ("grill", "grill"),
     ("ff", "ff"),
     ("propose", "other"),
@@ -135,6 +154,10 @@ def map_stage(subject):
 
 
 def is_archive_rename(root, sha, name):
+    # [impl-review-fix] F5: name in p 是裸子串匹配，foo 会误配 foo-2 的归档路径；
+    # 改用目录边界锚定（archive/YYYY-MM-DD-<name>/ 或整段结尾），F1 修复后 pre-archive 全历史
+    # 回归、跨 change 提交交集变多，这个雷会被引爆，故一并锚定。
+    archive_pat = re.compile(rf"changes/archive/\d{{4}}-\d{{2}}-\d{{2}}-{re.escape(name)}(/|$)")
     out = _run_git(root, "show", "--name-status", "--format=", sha)
     moved_out = False
     into_archive = False
@@ -146,11 +169,11 @@ def is_archive_rename(root, sha, name):
         paths = cols[1:]
         if status.startswith("R") and len(paths) == 2:
             src, dst = paths
-            if f"changes/{name}/" in src and "changes/archive/" in dst and dst.rstrip("/").find(name) != -1:
+            if f"changes/{name}/" in src and archive_pat.search(dst):
                 return True
         if status == "D" and any(f"changes/{name}/" in p and "/archive/" not in p for p in paths):
             moved_out = True
-        if status == "A" and any(f"changes/archive/" in p and name in p for p in paths):
+        if status == "A" and any(archive_pat.search(p) for p in paths):
             into_archive = True
     return moved_out and into_archive
 

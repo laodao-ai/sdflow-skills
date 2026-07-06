@@ -74,6 +74,36 @@ def test_normal_change_boundary(tmp_path):
     assert b["commits"][0]["subject"] == "checkpoint(ff)"
 
 
+def test_archived_change_full_boundary_via_bare_path(tmp_path):
+    """[impl-review-fix] F1 反证测试：归档 change 即使 active_dir=None（磁盘上已不在活动区），
+    boundary_for_change 也必须通过裸 pre-archive 路径 openspec/changes/<name> 找回全部历史提交，
+    不能只剩 1 条 archive rename 提交——这正是 17/18 归档 change 假性「边界不可解析」的根因。
+    修前：只查 active_dir(None→[]) 再兜底 archive_dir（1 条 rename）→ unresolved True, commits=1。
+    修后：裸路径∪archive路径按 sha 去重 → 应捞回 ff/grill/impl-review + rename 共 4 条。
+    """
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(grill)")
+    _commit(root, {"openspec/changes/foo/tasks.md": "c"}, "checkpoint(impl-review)")
+    # 归档：git mv 全目录进 archive，active_dir 从此在磁盘上消失
+    (root / "openspec/changes/archive").mkdir(parents=True, exist_ok=True)
+    _git(root, "mv", "openspec/changes/foo", "openspec/changes/archive/2026-07-06-foo")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "chore(openspec): archive foo")
+
+    changes = R.discover_changes(str(root))
+    assert changes["foo"]["active_dir"] is None
+    assert changes["foo"]["archive_dir"] is not None
+
+    seed = R.seed_mass_shas(str(root))
+    b = R.boundary_for_change(str(root), "foo", changes["foo"], seed)
+    assert b["unresolved"] is False, f"边界应可解析，实际 note={b['note']!r} commits={b['commits']}"
+    assert len(b["commits"]) == 4  # ff + grill + impl-review + archive-rename
+    subjects = [c["subject"] for c in b["commits"]]
+    assert subjects[0] == "checkpoint(ff)"
+    assert subjects[-1] == "chore(openspec): archive foo"
+
+
 def test_map_stage_longest_prefix(tmp_path):
     assert R.map_stage("checkpoint(impl-review)") == "code-review"
     assert R.map_stage("checkpoint(impl-review-fix)") == "code-review"

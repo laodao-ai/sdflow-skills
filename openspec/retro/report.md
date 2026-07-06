@@ -1,6 +1,6 @@
 # 全项目 change 成本×价值复盘（view-only 再生）
 
-> 覆盖 18 change / 有真锚 3 / 边界不可解析 17
+> 覆盖 18 change / 有真锚 3 / 边界不可解析 2
 > 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。
 
 ⚠️ 待复评: 无（所有镜出现轮数<10）
@@ -9,55 +9,60 @@
 
 | change | 总墙钟(min) | #ckpt | spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | 状态 |
 |---|---|---|---|---|---|---|---|---|
-| adaptive-workflow-routing | 0.0（边界不可解析） | 1 | none | none | 28 | 0.96 | 19 | archived |
-| checkpoint-tag-single-source | 0.0（边界不可解析） | 1 | none | none | — | 无度量锚 | — | archived |
-| cross-model-outside-voice | 0.0（边界不可解析） | 1 | — | TG-08,TG-17 | — | 无度量锚 | — | archived |
-| drop-per-dir-review-stub | 0.0（边界不可解析） | 1 | — | none | — | 无度量锚 | — | archived |
-| gate-anchor-line-scoped | 0.0（边界不可解析） | 1 | none | none | — | 无度量锚 | — | archived |
-| gate-checkpoint-hardening | 0.0（边界不可解析） | 1 | none | none | — | 无度量锚 | — | archived |
+| adaptive-workflow-routing | 111.1 | 7 | none | none | 28 | 0.96 | 19 | archived |
+| checkpoint-tag-single-source | 753.8 | 6 | none | none | — | 无度量锚 | — | archived |
+| cross-model-outside-voice | 229.7 | 12 | — | TG-08,TG-17 | — | 无度量锚 | — | archived |
+| drop-per-dir-review-stub | 53.8 | 5 | — | none | — | 无度量锚 | — | archived |
+| gate-anchor-line-scoped | 7.0 | 9 | none | none | — | 无度量锚 | — | archived |
+| gate-checkpoint-hardening | 87.8 | 10 | none | none | — | 无度量锚 | — | archived |
 | issues-pool-batch-mgmt | 0.0（边界不可解析） | 0 | — | — | — | 无度量锚 | — | archived |
-| minimize-repo-footprint | 0.0（边界不可解析） | 1 | — | — | — | 无度量锚 | — | archived |
-| plan-workflow-cost-optimization | 0.0（边界不可解析） | 1 | — | — | — | 无度量锚 | — | archived |
-| review-tool-followups | 0.0（边界不可解析） | 1 | none | none | — | 无度量锚 | — | archived |
-| sdflow-rebrand | 0.0（边界不可解析） | 1 | — | — | — | 无度量锚 | — | archived |
+| minimize-repo-footprint | 136.5 | 10 | — | — | — | 无度量锚 | — | archived |
+| plan-workflow-cost-optimization | 23.8 | 3 | — | — | — | 无度量锚 | — | archived |
+| review-tool-followups | 70.4 | 8 | none | none | — | 无度量锚 | — | archived |
+| sdflow-rebrand | 253.0 | 14 | — | — | — | 无度量锚 | — | archived |
 | sdflow-retro | 89.1 | 6 | none | — | 32 | 0.88 | 15 | in-progress |
-| sdflow-ship | 0.0（边界不可解析） | 1 | — | — | — | 无度量锚 | — | archived |
-| ship-gate-hardening | 0.0（边界不可解析） | 1 | TG-09 | TG-09 | — | 无度量锚 | — | archived |
-| ship-gate-hardening-2 | 0.0（边界不可解析） | 1 | none | none | — | 无度量锚 | — | archived |
+| sdflow-ship | 290.8 | 10 | — | — | — | 无度量锚 | — | archived |
+| ship-gate-hardening | 180.8 | 8 | TG-09 | TG-09 | — | 无度量锚 | — | archived |
+| ship-gate-hardening-2 | 110.0 | 8 | none | none | — | 无度量锚 | — | archived |
 | streamline-workflow-automation | 0.0（边界不可解析） | 0 | — | — | — | 无度量锚 | — | archived |
-| three-lens-decision-framework | 0.0（边界不可解析） | 1 | none | none | — | 无度量锚 | — | archived |
-| workflow-metrics-loop | 0.0（边界不可解析） | 1 | none | none | 16 | 0.94 | 10 | archived |
+| three-lens-decision-framework | 75.3 | 10 | none | none | — | 无度量锚 | — | archived |
+| workflow-metrics-loop | 119.2 | 6 | none | none | 16 | 0.94 | 10 | archived |
 
 ## 聚合① 阶段占比
 
 | 阶段 | 墙钟(min) | 占比 |
 |---|---|---|
-| ff | 44.8 | 50% |
-| spec-review | 40.3 | 45% |
-| grill | 4.0 | 4% |
+| spec-review | 1122.4 | 43% |
+| impl | 751.8 | 29% |
+| ff | 285.6 | 11% |
+| grill | 155.2 | 6% |
+| code-review | 137.4 | 5% |
+| other | 99.7 | 4% |
+| unknown | 39.3 | 2% |
+| done | 0.5 | 0% |
 
 ## 聚合② 成本双峰（总墙钟 x / code-review 占比% y）
 
 | change | 总墙钟(min) | code-review 占比 |
 |---|---|---|
-| adaptive-workflow-routing | 0.0 | — |
-| checkpoint-tag-single-source | 0.0 | — |
-| cross-model-outside-voice | 0.0 | — |
-| drop-per-dir-review-stub | 0.0 | — |
-| gate-anchor-line-scoped | 0.0 | — |
-| gate-checkpoint-hardening | 0.0 | — |
+| adaptive-workflow-routing | 111.1 | 3% |
+| checkpoint-tag-single-source | 753.8 | 1% |
+| cross-model-outside-voice | 229.7 | 11% |
+| drop-per-dir-review-stub | 53.8 | 0% |
+| gate-anchor-line-scoped | 7.0 | 100% |
+| gate-checkpoint-hardening | 87.8 | 8% |
 | issues-pool-batch-mgmt | 0.0 | — |
-| minimize-repo-footprint | 0.0 | — |
-| plan-workflow-cost-optimization | 0.0 | — |
-| review-tool-followups | 0.0 | — |
-| sdflow-rebrand | 0.0 | — |
+| minimize-repo-footprint | 136.5 | 8% |
+| plan-workflow-cost-optimization | 23.8 | 0% |
+| review-tool-followups | 70.4 | 11% |
+| sdflow-rebrand | 253.0 | 12% |
 | sdflow-retro | 89.1 | 0% |
-| sdflow-ship | 0.0 | — |
-| ship-gate-hardening | 0.0 | — |
-| ship-gate-hardening-2 | 0.0 | — |
+| sdflow-ship | 290.8 | 3% |
+| ship-gate-hardening | 180.8 | 5% |
+| ship-gate-hardening-2 | 110.0 | 7% |
 | streamline-workflow-automation | 0.0 | — |
-| three-lens-decision-framework | 0.0 | — |
-| workflow-metrics-loop | 0.0 | — |
+| three-lens-decision-framework | 75.3 | 7% |
+| workflow-metrics-loop | 119.2 | 9% |
 
 ## 聚合③ per-镜价值表（lens-metric 聚合，扫 archive）
 
