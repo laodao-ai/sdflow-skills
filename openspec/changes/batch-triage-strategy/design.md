@@ -63,10 +63,12 @@
 issue 池待处理项
       │
       ▼
- ┌─────────────────────────┐   是   ┌──────────────────────────┐
- │ 与其它项 同cap∧高耦合?   ├──────▶│ 相关合批（BASE-18 AND门） │
- └───────────┬─────────────┘        │  REC-1/2/3 既有框架        │
-             │ 否（正交）            └──────────────────────────┘
+ ┌──────────────────────────────┐ 是 ┌──────────────────────────┐
+ │ 完整 BASE-18 AND门:            ├───▶│ 相关合批                  │
+ │ 同cap∧高耦合∧**低增量** 三腿? │    │  REC-1/2/3 既有框架        │
+ └───────────┬──────────────────┘    └──────────────────────────┘
+             │ 否（正交；或同cap高耦合但高增量→单开/拆）
+             ▼（正交继续下判）
              ▼
  ┌─────────────────────────┐   否（有逻辑面/存疑）
  │ issue级判据: 无逻辑面∧低危?├──────────────┐
@@ -109,4 +111,10 @@ issue 池待处理项
 - ~~**Q-c**：一项一 commit 硬规则 vs SHOULD？~~ **已定案（grill）= 硬 MUST，item 粒度**（D7）。
 
 > **三个开放问题（Q-a/b/c）grill 已全部定案回写。** 无残留未决。
+>
+> **〔spec-review 收敛，见 `spec-review-report.md`〕**：冷镜（对抗×3+接地+codex）大丰收——
+> **2 项需设计门拍板**：Q1（worked example/判据「同类 Leg1」口径矛盾——推荐采纳 Leg1 行为面路径守卫、换示例、诚实标本仓候选池薄）、
+> Q2（batch-triage = 本仓-local vs bundle-published——推荐本仓-local；D6 回灌故事经接地证实整体破裂：copy_bundle full=False/INDEX 指错 index-section.md/BASE-18 下游悬空/trigger-catalog 错接入点）。建议**先 Q2 后 Q1**。
+> **6 项已采纳 amendment（[spec-review-amendment] 回写 specs）**：A1 D7 执行协议+验证锚 · A2 三分类补低增量第三腿 · A3 延迟绑定作单开子态 · A4 聚合上限有牙升MUST+每项判定记录 · A5 cross-ref spec-workflow · A6 术语统一三元标注。
+> 拍板后回写 specs 最终版 + SR-M lens-metric 最终化 + `ship-gate: design-approved` 锚。
 > **Q-d（grill 收敛检验）**：塌成纯 markdown 后价值是否仍在、是否值独立 change？**定案 = 是**——3 条硬 MUST（禁逻辑面/生成物隔离/一项一 commit）为具体安全栏非「小心点」；对真实 backlog 做真分诊、解锁 rec2 cosmetic/观测群一轮扫；改 bundle 权威源 + 立 spec capability + 属安全判据（dogfood 教训：冷审 load-bearing 区）→ **独立 change + 保留全 spec-review，不因「只是 markdown」降路径**。
