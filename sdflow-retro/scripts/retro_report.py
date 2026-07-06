@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lens_metric_aggregate as LMA  # 复用其 fence-aware 锚解析（parse_report + _int），不重实现
@@ -267,6 +268,32 @@ def hr_tg_flags(info):
             "code_hr_tg": pick("code-review-report.md")}
 
 
+def surfacing_block(root):
+    """D12：N≥10 待复评镜 surfacing 机械契约。扫 archive 的 lens-metric 锚，
+    按 (layer,lens,runner,site) 分组计「出现轮数」（口径须与 lens_metric_aggregate.
+    render_table 一致——直接复用同一分组键，不重复定义）；轮数≥10 的镜在报告顶部
+    独立区块列出，固定前缀标记 `⚠️ 待复评:`（可机验，MUST NOT 仅用形容词）。
+    无命中也必须输出固定行——防止「长期无命中」被静默省略成死列（同 hr-tg 空箱同理，
+    grill-not-skippable 教训：跳过类判定不能不可见）。
+    """
+    archive_root = os.path.join(root, "openspec", "changes", "archive")
+    counts = defaultdict(int)
+    try:
+        rows, _no_anchor, _parse_failed = LMA.aggregate(archive_root)
+        for r in rows:
+            key = (r.get("layer", "?"), r.get("lens", "?"), r.get("runner", "?"), r.get("site", "—"))
+            counts[key] += 1
+    except (OSError, ValueError):
+        pass  # archive 不存在/不可读 → 视同无样本，走「无命中」固定行，不崩报告
+    flagged = [(k, c) for k, c in counts.items() if c >= 10]
+    if not flagged:
+        return "⚠️ 待复评: 无（所有镜出现轮数<10）"
+    lines = ["⚠️ 待复评: 以下镜出现轮数≥10、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:"]
+    for (layer, lens, runner, site), c in sorted(flagged):
+        lines.append(f"  - {lens}（layer={layer} runner={runner} site={site}，出现轮数 {c}）")
+    return "\n".join(lines)
+
+
 def build_report(root):
     """组装全项目 change 成本×价值复盘报告（view-only 再生，无持久状态）。
 
@@ -296,7 +323,8 @@ def build_report(root):
 
     lines = ["# 全项目 change 成本×价值复盘（view-only 再生）", "",
              f"> 覆盖 {N} change / 有真锚 {M} / 边界不可解析 {K}",
-             "> 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。", ""]
+             "> 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。",
+             "", surfacing_block(root), ""]
 
     # per-change 表
     lines.append("## per-change 明细")

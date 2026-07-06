@@ -202,3 +202,30 @@ def test_main_writes_report_and_returns_zero(tmp_path):
     rc = R.main(["--root", str(root)])
     assert rc == 0
     assert (root / "openspec/retro/report.md").is_file()
+
+
+def test_surfacing_block_fixed_prefix(tmp_path):
+    # 无命中也必须有固定前缀行（可机验，D12：防死列自我复现）
+    block = R.surfacing_block(str(tmp_path))
+    assert block.strip().startswith("⚠️ 待复评:")
+    assert "无（所有镜出现轮数<10）" in block
+
+
+def test_surfacing_block_flags_ge10(tmp_path):
+    # 同一 (layer,lens,runner,site) 分组出现 10 次 → 触发 ≥10待复评
+    for i in range(1, 11):
+        d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
+        d.mkdir(parents=True)
+        (d / "spec-review-report.md").write_text(
+            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n")
+    block = R.surfacing_block(str(tmp_path))
+    assert block.strip().startswith("⚠️ 待复评:")
+    assert "domain" in block
+    assert "出现轮数 10" in block
+
+
+def test_build_report_includes_surfacing_block(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    md = R.build_report(str(root))
+    assert "⚠️ 待复评:" in md
