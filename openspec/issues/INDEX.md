@@ -56,7 +56,6 @@
 | T41 | todo | PROPOSED | gate-anchor-line-scoped |
 | T42 | todo | PROPOSED | gate-anchor-line-scoped |
 | T50 | todo | PROPOSED | three-lens-decision-framework |
-| T53 | todo | PROPOSED | main |
 
 ### 批次：review-tool-followups
 
@@ -88,6 +87,12 @@
 | T54 | todo | PROPOSED | workflow-metrics-loop |
 | T55 | todo | PROPOSED | workflow-metrics-loop |
 
+### 未分组（批次为空）
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| B5 | bug | OPEN | workflow-metrics-loop |
+
 ## 已闭合（终态）摘要
 
-- 共 22 项已闭合（bug: 4，todo: 18）
+- 共 23 项已闭合（bug: 4，todo: 19）
