@@ -139,3 +139,16 @@ def test_lens_value_no_anchor(tmp_path):
     info = {"active": True, "active_dir": str(d), "archive_dir": None}
     v = R.lens_value_for_change(info)
     assert v["has_anchor"] is False
+
+
+HRTG = '<!-- sdflow:hr-tg v1 hit="{hit}" evidence="x" -->'
+
+
+def test_hr_tg_two_columns(tmp_path):
+    d = tmp_path / "openspec/changes/hh"; d.mkdir(parents=True)
+    (d / "spec-review-report.md").write_text(HRTG.format(hit="none") + "\n")
+    (d / "code-review-report.md").write_text(HRTG.format(hit="TG-06") + "\n")
+    info = {"active": True, "active_dir": str(d), "archive_dir": None}
+    f = R.hr_tg_flags(info)
+    assert f["spec_hr_tg"] == "none"
+    assert f["code_hr_tg"] == "TG-06"

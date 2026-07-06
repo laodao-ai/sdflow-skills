@@ -9,6 +9,7 @@ import lens_metric_aggregate as LMA  # 复用其 fence-aware 锚解析（parse_r
 
 _DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}-(.+)$")
 _REPORT_NAMES = ("spec-review-report.md", "code-review-report.md")
+_HRTG_RE = re.compile(r'<!--\s*sdflow:hr-tg\s+v1\s+hit="([^"]*)"')
 
 
 def discover_changes(root):
@@ -239,3 +240,27 @@ def lens_value_for_change(info):
         "accept_rate": rate,
         "sum_independent": sum_ind,
     }
+
+
+def _read_hr_hit(base, report_name):
+    if not base:
+        return "—"
+    fp = os.path.join(base, report_name)
+    if not os.path.isfile(fp):
+        return "—"
+    for line in open(fp, encoding="utf-8", errors="replace"):
+        m = _HRTG_RE.search(line)
+        if m:
+            return m.group(1)
+    return "—"
+
+
+def hr_tg_flags(info):
+    def pick(rn):
+        for base in (info.get("active_dir"), info.get("archive_dir")):
+            hit = _read_hr_hit(base, rn)
+            if hit != "—":
+                return hit
+        return "—"
+    return {"spec_hr_tg": pick("spec-review-report.md"),
+            "code_hr_tg": pick("code-review-report.md")}
