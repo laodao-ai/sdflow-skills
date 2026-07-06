@@ -167,6 +167,35 @@ def test_negative_numeric_value_flagged(tmp_path):
     table = lma.render_table(rows, no_anchor)
     assert "⚠数值非法" in table
 
+def test_fence_aware_ignores_tilde_fence():
+    # T58 反证：CommonMark ~~~ tilde fence 内的示范锚必须被跳过（此前只认 ``` 反引号，
+    # ~~~ 代码块里的示范 lens-metric 锚会被误计入聚合）。
+    # 修前 FAIL：~~~ 不被识别为 fence，锚被原样产出当真数据。
+    text = "正文\n~~~\n" + ANCHOR + "\n~~~\n正文2\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines                      # ~~~ 内锚不产出
+    assert "正文" in lines and "正文2" in lines       # fence 外内容仍正常产出
+
+
+def test_tilde_fence_not_closed_by_backtick():
+    # T58 反证：~~~ 开启的 fence 内出现 ``` 不构成闭合（CommonMark 要求同字符闭合）。
+    # 修前 FAIL：~~~ 根本不被当 fence（锚被产出），且随后 ``` 的误闭合逻辑吞掉块外内容。
+    text = "~~~\n" + ANCHOR + "\n```\n仍在 tilde 块内\n~~~\n块外\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines                      # ~~~ 块内锚不漏出
+    assert "仍在 tilde 块内" not in lines            # ``` 不闭合 ~~~ 块
+    assert "块外" in lines                          # ~~~ 才是真正闭合，块外内容产出
+
+
+def test_backtick_fence_not_closed_by_tilde():
+    # T58 反证（对称）：``` 开启的 fence 内出现 ~~~ 不构成闭合。
+    text = "```\n" + ANCHOR + "\n~~~\n仍在反引号块内\n```\n块外\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines
+    assert "仍在反引号块内" not in lines             # ~~~ 不闭合 ``` 块
+    assert "块外" in lines
+
+
 def test_unclosed_fence_swallows_trailing_anchors(tmp_path):
     # 诚实留档：奇数个 ``` （未闭合 fence）会把其后所有行都视为 fence 内，
     # 导致尾部锚被漏计（少计而非误取，方向偏保守，暂可接受）。

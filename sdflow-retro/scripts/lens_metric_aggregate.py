@@ -14,25 +14,27 @@ ANCHOR_PREFIX = "<!-- sdflow:lens-metric v1"
 LAYER_ENUM = {"spec-review", "code-review"}
 LENS_ENUM = {"domain", "adversarial", "grounding", "history", "outside-voice", "broad"}
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')  # 受限 kv：key="value"，禁裸 split
-_FENCE_OPEN = re.compile(r'^\s*(`{3,})')  # [impl-review-fix CF-4] 捕获反引号确切长度
+_FENCE_OPEN = re.compile(r'^\s*(`{3,}|~{3,})')  # [impl-review-fix CF-4 / T58] 反引号或波浪号 fence，捕获确切标记
 
 
 def _fence_aware_lines(text):
     """产出非 fenced-block 行。真实 CommonMark fence 语义：记录开启 fence 的
-    确切反引号长度，收尾须遇到 >= 该长度的同字符 fence 才闭合——故 4-反引号外层
-    可安全嵌套 3-反引号内层示范锚（内层不会被误判为已跳出）。
-    [impl-review-fix CF-4]（本脚本内重实现，不跨 skill import）。"""
-    fence_len = None  # None = 不在 fence 内；否则为需要匹配的最小闭合长度
+    标记字符（` 或 ~）与确切长度，收尾须遇到「同字符且长度 >= 开启长度」的 fence
+    才闭合——故 4-反引号外层可安全嵌套 3-反引号内层示范锚（内层不会被误判为已跳出），
+    且 ``` 与 ~~~ 互不闭合（T58：此前只认反引号，~~~ 代码块里的示范锚被误计入聚合）。
+    [impl-review-fix CF-4 / T58]（本脚本内重实现，不跨 skill import）。"""
+    fence = None  # None = 不在 fence 内；否则 (标记字符, 需匹配的最小闭合长度)
     for line in text.splitlines():
         m = _FENCE_OPEN.match(line)
-        if fence_len is None:
+        if fence is None:
             if m:
-                fence_len = len(m.group(1))
+                marker = m.group(1)
+                fence = (marker[0], len(marker))
                 continue
             yield line
         else:
-            if m and len(m.group(1)) >= fence_len:
-                fence_len = None
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1]:
+                fence = None
             continue
 
 
