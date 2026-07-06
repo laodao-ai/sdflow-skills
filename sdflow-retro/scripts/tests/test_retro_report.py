@@ -57,6 +57,7 @@ def test_seed_mass_excluded_and_0_1_guard(tmp_path):
     b = R.boundary_for_change(str(root), "seedA", changes["seedA"], seed)
     # seedA 的 pre-archive 路径 0 提交（创世只碰 archive 路径），兜底 archive 后剔 seed-mass → 仍 0/1
     assert b["unresolved"] is True
+    assert len(b["commits"]) == 0  # seed-mass 提交被剔除后 archive 兜底也为空——若剔除失效会剩 1 条，此断言区分二者
     assert "边界不可解析" in b["note"]
 
 
