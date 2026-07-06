@@ -63,6 +63,10 @@
 | T55 | `lens_metric_aggregate.py` | 聚合器易用性/健壮性观察(code-review X3/X4 defer,低危):glob 空表 vs archive 不存在无法区分;转义引号 site 值截断产生多余分组行(site 不校验已契约注明) | 代码质量 | PROPOSED | 2026-07-06 02:36 | workflow-metrics-loop | workflow-metrics-loop |
 | T56 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 | 代码质量 | OPEN | 2026-07-06 13:44 | adaptive-workflow-routing |  |
 | T57 | `workflow/model-tiers` | 档位矩阵新增「升级档」（更高档，延后） | 功能增强 | OPEN | 2026-07-06 15:24 | main |  |
+| T58 | `sdflow-retro/lens_metric_aggregate` | fence-aware 只支持反引号 fence，不支持 CommonMark ~~~ tilde fence | 代码质量 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
+| T59 | `sdflow-retro/retro_report+lens_metric_aggregate` | ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量 | 代码质量 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
+| T60 | `sdflow-retro/retro_report` | _run_git 不检查 returncode，git 失败与真无提交不可区分 | 可观测性 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
+| T61 | `sdflow-retro/retro_report` | build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导 | 代码质量 | OPEN | 2026-07-06 20:16 | sdflow-retro |  |
 
 ---
 
@@ -761,3 +765,75 @@
 **思路**：触发条件=出现单靠 strong(opus) 仍吃力的超复杂 change，或想让主力 session 跑更省 sonnet、仅超复杂步升 opus 时再设计。
 
 **备注**：来源：explore 2026-07-06 P0+P2 深挖；关联 roadmap workflow-cost-optimization P2 档位矩阵（design D8）。
+
+---
+
+## T58: fence-aware 只支持反引号 fence，不支持 CommonMark ~~~ tilde fence
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-retro/lens_metric_aggregate` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/sdflow-retro/design.md`
+
+**动机**：code-review code-voice F8：_fence_aware_lines 只匹配 ``` 反引号 fence，~~~ 代码块里的示范 lens-metric/hr-tg 锚会被误计入聚合。既有聚合器限制（本 change 迁入前即有），非本 change 引入
+
+**思路**：记录 fence marker 字符+长度，闭合要求同字符且长度足够；补 ~~~ 回归测试。retro 复用 parse_report 故连带受益
+
+**备注**：defer 自 sdflow-retro code-review；既有既存问题非本 change 回归
+
+---
+
+## T59: ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-retro/retro_report+lens_metric_aggregate` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/sdflow-retro/design.md`
+
+**动机**：code-review 领域镜 F9：与刚 group_key 抽取根治的两处手写漂移同类风险，阈值调整易改一处漏一处致 surfacing/render_table flag 口径不一致
+
+**思路**：抽共享常量如 REVIEW_WINDOW=10 到 lens_metric_aggregate，两处引用
+
+**备注**：低危 defer 自 sdflow-retro code-review
+
+---
+
+## T60: _run_git 不检查 returncode，git 失败与真无提交不可区分
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-retro/retro_report` |
+| 类型 | 可观测性 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/sdflow-retro/design.md`
+
+**动机**：code-review 领域镜+对抗镜2 F10：_run_git subprocess check=False，git 报错(权限/损坏仓/未安装)与该路径确 0 提交都产空 stdout，都归边界不可解析，无法诊断区分。设计偏 fail-open 风格
+
+**思路**：可选：检查 returncode 非 0 时区分标记边界解析失败原因(git-error vs no-commits)，或至少 stderr 留痕
+
+**备注**：低危 design-accepted defer 自 sdflow-retro code-review
+
+---
+
+## T61: build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-retro/retro_report` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/sdflow-retro/design.md`
+
+**动机**：code-review 对抗镜2 F11：Path.glob 对不存在/不可读目录静默返空不抛，该 try/except 分支不可达；注释描述archive不存在不崩 实际由 glob 行为达成非此 catch，易误导维护者
+
+**思路**：改注释诚实说明，或改用 os.path.isdir 显式判空分支语义更直白
+
+**备注**：极低危 defer 自 sdflow-retro code-review
