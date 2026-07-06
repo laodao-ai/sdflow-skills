@@ -98,3 +98,16 @@ def test_archive_rename_detects_done(tmp_path):
     _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "chore(openspec): archive foo")
     sha = _git(root, "rev-parse", "HEAD").strip()
     assert R.is_archive_rename(str(root), sha, "foo") is True
+
+
+def test_stage_walltimes_and_negative_clamp(tmp_path):
+    commits = [
+        {"sha": "a", "ts": 1000, "subject": "checkpoint(ff)"},
+        {"sha": "b", "ts": 1600, "subject": "checkpoint(grill)"},       # ff→grill: 600s=10min 归 ff
+        {"sha": "c", "ts": 1500, "subject": "checkpoint(spec-review)"}, # 负 Δ → 钳 0 归 grill
+    ]
+    got = R.stage_walltimes(str(tmp_path), "foo", commits)
+    assert got["stages"]["ff"] == 10.0
+    assert got["stages"].get("grill", 0) == 0.0
+    assert got["reorder_suspected"] is True
+    assert got["n_ckpt"] == 3

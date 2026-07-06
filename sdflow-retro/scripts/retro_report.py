@@ -145,3 +145,50 @@ def is_archive_rename(root, sha, name):
         if status == "A" and any(f"changes/archive/" in p and name in p for p in paths):
             into_archive = True
     return moved_out and into_archive
+
+
+def stage_walltimes(root, name, commits):
+    """
+    计算相邻 commit 时间差累加到各阶段的墙钟数。
+
+    Args:
+        root: 项目根目录
+        name: change 名称
+        commits: 升序 commit list，每个包含 {"sha", "ts", "subject"}
+
+    Returns:
+        {"stages": {stage: minutes}, "total_min": float, "n_ckpt": int, "reorder_suspected": bool}
+    """
+    stages = {}
+    reorder = False
+
+    # 相邻提交差计入前一个提交的阶段
+    for i in range(len(commits) - 1):
+        cur, nxt = commits[i], commits[i + 1]
+        delta_s = nxt["ts"] - cur["ts"]
+
+        # 负数 → 钳 0 且标记 reorder
+        if delta_s < 0:
+            delta_s = 0
+            reorder = True
+
+        # 当前提交的阶段
+        if is_archive_rename(root, cur["sha"], name):
+            stage = "done"
+        else:
+            stage = map_stage(cur["subject"])
+
+        # 累加到该阶段（秒转分钟）
+        stages[stage] = stages.get(stage, 0.0) + delta_s / 60.0
+
+    # 末提交若是 archive rename，单独标记 done 存在（无后继 Δ）
+    if commits and is_archive_rename(root, commits[-1]["sha"], name):
+        stages.setdefault("done", 0.0)
+
+    total = sum(stages.values())
+    return {
+        "stages": stages,
+        "total_min": round(total, 1),
+        "n_ckpt": len(commits),
+        "reorder_suspected": reorder
+    }
