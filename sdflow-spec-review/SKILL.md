@@ -102,7 +102,7 @@ description: >
   字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）。
 - **反馈回路免责声明（与 sdflow-code-review 对称）〔impl-review-fix CF-补〕**：本 skill 只落锚，**不做聚合、
   不做复评判断、不主动 surfacing**——跨 change 归档后的锚聚合、按采纳率+独立率复评、"出现轮数≥10"的显著提示，
-  一律由 `/sdflow-maintain` 收尾步统一做（跑 `tools/lens_metric_aggregate.py` 只读聚合所有归档报告）；是否保留/
+  一律由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；是否保留/
   降采样/收紧触发/淘汰某镜一律人决，本 skill MUST NOT 自行判断或执行。
 - 据此更新 design/specs，改动处标 `[spec-review-amendment]`。
 - **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
@@ -117,7 +117,7 @@ description: >
   其 `lens-metric` 锚 SHOULD 在**拍板回写时**（与上方 ship-gate 拍板锚同步写入 `spec-review-report.md`）最终确定/重算，
   反映门后最终裁决，避免用 Step3 pre-gate 临时裁决充当最终采纳率——门前若因 `metrics.enabled=true` 已落的锚视为草稿值，
   拍板时原地更新覆盖，不新开一行。**此为 best-effort、无机械兜底**：与 `ship-gate: design-approved` 锚不同（后者有
-  `ship_gate.py` 硬拦截），此重算**无任何下游校验**——聚合器（`/sdflow-maintain` 的 `lens_metric_aggregate.py`）
+  `ship_gate.py` 硬拦截），此重算**无任何下游校验**——聚合器（`/sdflow-retro` 的 `lens_metric_aggregate.py`）
   不知晓某行锚是"草稿"还是"已最终化"，主 session 漏执行本步不会被任何机制发现；采纳率/独立率的门后复评可能悄悄
   停留在 pre-gate 的临时值上。与本节前述"数值一致性是主 session 信任边界、非机械门"口径一致——此局限已知且不新增
   `ship_gate` 兜底（超本 change scope）。

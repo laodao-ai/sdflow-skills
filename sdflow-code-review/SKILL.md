@@ -129,7 +129,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
   outside-voice(各 site)/broad 均适用，非仅 outside-voice）都是该判据的原始数据；判据本身升级为**采纳率 +
   独立率双列**（单看采纳率会误留"高采纳但全冗余"的镜，独立率才是砍镜依据；两率定义/归属见规则根
   `lens-metric-contract.md`）。**本 skill 不做聚合、不做复评判断、不主动 surfacing**——聚合与「出现轮数≥10」
-  的机械显著提示由 `/sdflow-maintain` 收尾步触发（跑 `tools/lens_metric_aggregate.py` 只读聚合所有归档报告）；
+  的机械显著提示由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；
   是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
   不含评审架构本身的取舍）。
 - 修复代码，改动处标 `[impl-review-fix]`。
@@ -176,7 +176,7 @@ fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 
   <!-- sdflow:lens-metric v1 layer="code-review" lens="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
   字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）；
   原「voice分桶」自由 prose 行已被 outside-voice 镜的此锚吸收取代。
-  这些锚跨 change 归档后由 `/sdflow-maintain` 聚合、按 per-(层,镜) 采纳率+独立率双列复评（见第五步「反馈回路」），
+  这些锚跨 change 归档后由 `/sdflow-retro` 聚合、按 per-(层,镜) 采纳率+独立率双列复评（见第五步「反馈回路」），
   本报告不重复该判据、只负责落准确的锚。
 ### 结论
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）

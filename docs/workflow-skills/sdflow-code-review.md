@@ -54,7 +54,7 @@ flowchart TD
 |---|---|---|
 | 1 | scope-drift + 完成度 | 原生执行 gstack/review，写 `mode="native\|simulated"` 锚；降级须显式日志不静默 |
 | 2 | 并行多镜 | 领域镜（CR-01~09 + domains）/ 对抗镜（证明运行期爆：竞态/泄漏/错误路径）/ 历史镜（git blame + 旧 review 意见）；linter/typechecker 能抓的不进镜 |
-| 2.5 | 跨模型第二意见 | **always** 跑 code-voice（不受清单约束、不占镜位）；「10 次后按采纳率复评降采样」条款已泛化到 per-(层,镜)、判据升采纳率+独立率双列，surfacing 由 `/sdflow-maintain` 机械触发，砍/降采样人决（详见 SKILL.md 第五步「反馈回路」） |
+| 2.5 | 跨模型第二意见 | **always** 跑 code-voice（不受清单约束、不占镜位）；「10 次后按采纳率复评降采样」条款已泛化到 per-(层,镜)、判据升采纳率+独立率双列，surfacing 由 `/sdflow-retro` 机械触发，砍/降采样人决（详见 SKILL.md 第五步「反馈回路」） |
 | 3 | 置信过滤 + 裁决 | 每条 0-100 **滤 <80**（可下放弱档打分）；**outside-voice 豁免**：runner=codex 跳过 <80 直通；**反静默压制**：<80 滤除也一行带过，不静默丢 |
 | 4 | 自动修/裁/defer | 能修自动修 `[impl-review-fix]`；≥2 方案按 **T10 三级**（有客观判据自动选/无则派对抗镜复核/复核不过 defer）；**裁决分桶**（codex/claude-fallback 各记采纳/裁掉/defer） |
 | 5 | 出报告 + 收敛 | **锚行存在性自检**（grep 三类 v1 锚，缺失即报错阻塞；findings=N 与实收数 diff）；checkpoint；建议进 `/sdflow-done` |

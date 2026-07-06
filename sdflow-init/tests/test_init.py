@@ -111,19 +111,19 @@ class TestBundleToolsOnly:
         assert (wf / "workflow.md").is_file()      # --dev 整刷用（Task 7）
 
     def test_tools_tests_not_deployed_to_consumer(self, tmp_path):
-        """[impl-review-fix CF-6]：tools/tests/（聚合器脚本的内部 pytest，如
-        test_lens_metric_aggregate.py）不得铺进消费仓——只污染其 pytest 收集，无实际用途。
-        脚本本体（lens_metric_aggregate.py）仍照常部署。"""
+        """[impl-review-fix CF-6]：tools/tests/（tools/ 脚本的内部 pytest，如
+        test_trivial_shape.py）不得铺进消费仓——只污染其 pytest 收集，无实际用途。
+        脚本本体（trivial_shape.py）仍照常部署。"""
         dst, _ = copy_bundle(str(tmp_path))
         tools_dst = Path(dst) / "tools"
-        assert (tools_dst / "lens_metric_aggregate.py").is_file()
+        assert (tools_dst / "trivial_shape.py").is_file()
         assert not (tools_dst / "tests").exists()
 
     def test_full_flag_still_includes_tools_tests(self, tmp_path):
         """--dev 整刷（toolkit 源仓 dogfood 用）不排除 tests/——那是刷回源仓工作树，需要完整。"""
         init_mod.copy_bundle(str(tmp_path), full=True)
         wf = tmp_path / "openspec" / "workflow"
-        assert (wf / "tools" / "tests" / "test_lens_metric_aggregate.py").is_file()
+        assert (wf / "tools" / "tests" / "test_trivial_shape.py").is_file()
 
 
 class TestUpdateDev:

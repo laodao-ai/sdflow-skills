@@ -113,9 +113,9 @@ def copy_bundle(root, full=False):
     workflow bundle 托管的子树（update 覆盖刷新语义），不落入"绝不自动删消费仓文件"红线；
     清后拷保收敛，上游删文件不再残留（B2-F4）。full 模式维持 dirs_exist_ok 现状不变。
 
-    非 full 模式排除 tools/tests/：那是聚合器脚本（lens_metric_aggregate.py）的内部 pytest，
+    非 full 模式排除 tools/tests/：那是 tools/ 脚本（如 trivial_shape.py）的内部 pytest，
     只服务 toolkit 源仓自身开发，铺进消费仓既无用又污染其 pytest 收集（消费仓 `pytest` 会误
-    捡进 test_lens_metric_aggregate.py）。脚本本体仍随 tools/ 正常部署，只是不带 tests/ 子目录
+    捡进 test_trivial_shape.py）。脚本本体仍随 tools/ 正常部署，只是不带 tests/ 子目录
     （# [impl-review-fix CF-6]）。full 模式（--dev，仅 toolkit 源仓自身用）不排除——dogfood 场景
     就是要连 tests/ 一起刷回 toolkit 源仓工作树。"""
     dst = os.path.join(root, "openspec", "workflow")
