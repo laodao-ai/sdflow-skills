@@ -85,8 +85,12 @@ _Avoid_: 用"强模型"指某个具体产品名（档位相对机队，机队会
 _Avoid_: 拿自然语言结论行当机判契约（措辞属概率空间，ship grill 实证正则全 miss）
 
 **HR-TG（高风险触发子集）**:
-trigger-catalog 附录维护的 TG 具名子集（做错会运行期爆炸/数据损坏/安全泄漏且难回退）。评审规划镜头判「命中 ∩ HR-TG ≠ ∅」→ 单开领域 cross-model。是 catalog 第五消费层（评审 cross-model）的判据源，不是新风险分级体系。
-_Avoid_: 再造 R1~R6 式风险代号（触发一律具体行为描述）
+trigger-catalog 附录维护的 TG 具名子集（做错会运行期爆炸/数据损坏/安全泄漏且难回退）。**两个消费层**：①第五消费层「评审 cross-model」——判「命中 ∩ HR-TG ≠ ∅」→ 单开领域 cross-model；②〔adaptive-workflow-routing〕第六消费层「路由地板」——命中 → 判非平凡地板成立、强制 FULL，空集 → 该 change 的**非平凡四谓词之一**放行（HR-TG 只当四分之一，必要非充分：其单独只为 cross-model 标定，不足以当通用轻量化地板）。仍**不是分级体系**——保持**二元、内容派生**（命中/不命中，脚本按 path/content 判），非自选 S/M/L 序数。
+_Avoid_: 再造 R1~R6 式风险代号（触发一律具体行为描述）；把 HR-TG 当**充分**地板（∅ 从没被标定为「安全到可减 code-review」，只标定为「不需额外 cross-model」）
+
+**平凡 / 非平凡（trivial / non-trivial change）**〔adaptive-workflow-routing〕:
+路由决定编排深度的**二元判定**——非平凡 = 该走完整 workflow（grill 建议跑、spec-review/code-review FULL）；平凡 = 可轻量化。由**四条内容派生谓词机判**（P1 命中 HR-TG · P2 面超阈 · P3 有开放决策 · P4 非 known-pattern，**任一即非平凡**），全脚本判、无模型判断层，语义残留归 grill。「平凡」须显式声明、设计门核声明 vs 脚本硬信号。
+_Avoid_: 当作**自选大小标签**（是内容派生谓词、脚本判、可审声明门核，非 S/M/L 自评）；把「HR-TG∅」直接当平凡（HR-TG 只是四谓词之一）
 
 **Stacking（变更摞叠）**:
 在**已有 feature 分支**上再 `openspec new change` 建第二个变更，使两个 change 的工件与 checkpoint 提交交错落在同一分支历史里。**FF-0 只拦 `main`/`master` 上建 change，不拦 feature 分支上 stacking**（实证 `ff0-branch-guard.py`）——故它可达但非常规。是 `ship_gate` 完成判据跨 change 污染（同号 task 互相计入 → 假✅）的唯一触发入口；gate 对此取**防御纵深**立场（change-命名空间标签隔离，见 ship-gate-hardening-2），**MUST NOT 用"每 change 独立分支是纪律"作缓解**——该纪律若成立则污染不可达、隔离本身失去意义（立论自否），gate 恰取"纪律可能破"立场才使隔离有价值。
