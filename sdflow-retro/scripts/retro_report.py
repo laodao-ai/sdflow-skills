@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import subprocess
@@ -350,3 +351,37 @@ def build_report(root):
     lines.append("")
 
     return "\n".join(lines) + "\n"
+
+
+def atomic_write(path, text):
+    d = os.path.dirname(path) or "."
+    os.makedirs(d, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        try:
+            mode = os.stat(path).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default=".")
+    args = ap.parse_args(argv)
+    root = os.path.abspath(args.root)
+    md = build_report(root)
+    out = os.path.join(root, "openspec", "retro", "report.md")
+    atomic_write(out, md)
+    print(f"[sdflow-retro] 复盘报告已再生 → {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

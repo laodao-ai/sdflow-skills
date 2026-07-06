@@ -164,3 +164,20 @@ def test_build_report_coverage_counts(tmp_path):
     assert "覆盖" in md and "有真锚" in md and "边界不可解析" in md
     assert "foo" in md
     assert "in-progress" in md  # foo 是活动 change
+
+
+def test_atomic_write_preserves_on_replace_and_no_tmp(tmp_path):
+    target = tmp_path / "openspec/retro/report.md"
+    R.atomic_write(str(target), "hello")
+    assert target.read_text() == "hello"
+    # 无残留 tmp
+    assert not any(p.suffix == ".tmp" for p in (tmp_path / "openspec/retro").iterdir())
+
+
+def test_report_idempotent(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(grill)")
+    a = R.build_report(str(root))
+    b = R.build_report(str(root))
+    assert a == b
