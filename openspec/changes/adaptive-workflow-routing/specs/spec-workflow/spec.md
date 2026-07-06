@@ -1,36 +1,34 @@
 # Spec Delta — spec-workflow
 
+> 〔设计门 Q1=A 收敛〕本 change 从「前向自适应路由大机制」收敛为**仅** code-review 入口的无逻辑面白名单豁免。故只保留对 code-review 需求的一处 MODIFIED，**沿用原需求标题**（保 OpenSpec MODIFIED 定位）。
+
 ## MODIFIED Requirements
 
-### Requirement: sdflow-code-review 强制主审，两层深度按逻辑面自适应
+### Requirement: sdflow-code-review 为每次全跑的独立强制主审
 
-阶段三的 `sdflow-code-review` MUST **每次必跑**、以独立冷视角作强制代码评审主审，MUST **恒产 code-review-report.md**，SHALL NOT 跳过代码评审。深度按**两层**规则（承实测硬化，**非**「只高风险才跑」的边际抽查）：
+阶段三的 `sdflow-code-review` MUST **每次必跑**、以独立冷视角作为强制代码评审主审（依据实测能抓真问题），MUST **恒产 code-review-report.md**，SHALL NOT 跳过代码评审、SHALL NOT 降级为「高风险才跑的残差抽查」（**默认开、仅机判无逻辑面才关**，非风险判断 gate-on）。深度按**两层**规则：
 
-- **Step1（gstack/review：scope-drift + 计划完成度）MUST 每次必跑**，MUST NOT 因任何路由判定降级或跳过——它既是便宜的评审地板，又是**验「平凡」诚实性的守卫**（自称无逻辑面的 diff 若偷藏逻辑改动，scope-drift 抓）。
-- **Step2（多镜 fan-out：领域镜+对抗镜+历史镜+置信过滤+对抗裁决）MUST 对任何含行为/逻辑面的 change 每次全跑**（依据实测能抓 controller 说服放过的真问题）；**仅当** change 匹配「通用平凡形状白名单」（注释/文档-only · tests/-only · 版本常量-only，**机判无逻辑面**，多镜结构上零产出）时**可免 Step2**。此免除 MUST 由 Step1 scope-drift 守卫：scope-drift 若揭出隐藏逻辑改动 → 白名单形状声明作废 → Step2 照跑。**默认开**（有逻辑必跑多镜），仅机判无逻辑面才关，MUST NOT 以「风险高低」判断作为 gate-off Step2 的依据。
+- **Step1（gstack/review：scope-drift + 计划完成度）MUST 每次必跑**，MUST NOT 因任何判定降级或跳过——既是便宜的评审地板，又是**验白名单形状诚实性的守卫**（自称无逻辑面的 diff 若偷藏逻辑改动，scope-drift 抓）。
+- **Step2（多镜 fan-out：领域镜+对抗镜+历史镜+置信过滤+对抗裁决）MUST 对任何含行为/逻辑面的 change 每次全跑**；**仅当** change 的 diff **机判命中「无逻辑面白名单形状」**时可免 Step2（多镜结构上零产出）。免除 MUST 由 Step1 scope-drift 守卫：scope-drift 揭出隐藏逻辑 → 白名单判定作废 → Step2 照跑。
+
+**无逻辑面白名单形状**（机判、post-diff、由确定性脚本判，MUST NOT 依作者自评）SHALL 仅含：①`diff 仅动代码内注释行（语言感知）或约定文档路径文件（README*/CHANGELOG*/docs/**/*.txt）`——**任意其他 `.md`（消费仓根级/散落 markdown 可能承载行为）默认 NOT 无逻辑面**；②`diff 仅新增 tests/ 下文件`；③`diff 仅改无 code-path 依赖的纯展示/元数据版本常量`。判器 MUST **语言感知**（按语言解析注释/块注释/多行字符串边界，MUST NOT 裸正则前缀）；MUST 应用**行为面路径豁免清单**——凡 diff 触及 workflow bundle 自身（`sdflow-init/assets/workflow/**`、编排/评审 `SKILL.md`、`ship_gate.py`、`route`/判器脚本、`workflow.md`）即 NOT 无逻辑面（**这些 markdown/脚本承载行为，非文档**），即便 diff 形状看似「仅动 markdown」；`tests/` 豁免 MUST 排除被生产码 import 的 test helper（如 `conftest.py`）；版本常量 MUST 整行匹配 `^\s*<IDENT>\s*=\s*<version-literal>\s*$` 且拒绝任何附加 token（防夹带 `API_VERSION`/`SCHEMA_VERSION` 等切 code-path 的 load-bearing 常量）。
 
 #### Scenario: 有逻辑面的普通变更 Step2 多镜照跑
-- **WHEN** 一个 HR-TG∅、有先例、routine 但**含逻辑改动**的变更完成实现
-- **THEN** sdflow-code-review 的 Step1 与 Step2（多镜 fan-out）均 MUST 全跑，MUST NOT 因判定「routine/平凡」而免多镜
+- **WHEN** 一个含逻辑改动的变更完成实现（不匹配任何白名单形状）
+- **THEN** sdflow-code-review 的 Step1 与 Step2 多镜 fan-out 均 MUST 全跑，MUST NOT 因「routine/低风险」而免多镜
 
-#### Scenario: 白名单无逻辑面形状免 Step2 但 Step1 恒跑
-- **WHEN** 一个 diff 仅动注释/文档行（匹配白名单形状、机判无逻辑面）的变更
-- **THEN** Step1（scope-drift+完成度）MUST 跑；确认无隐藏逻辑后 Step2 多镜可免（结构零产出），仍产 code-review-report.md，MUST NOT 跳过 Step1
+#### Scenario: 纯注释/文档 diff 免 Step2 但 Step1 恒跑
+- **WHEN** 一个 diff 仅动注释/纯文档行（语言感知判定、且不触行为面路径清单）的变更
+- **THEN** Step1（scope-drift+完成度）MUST 跑；确认无隐藏逻辑后 Step2 多镜可免（结构零产出），仍产 code-review-report.md
 
 #### Scenario: scope-drift 揭穿伪装的白名单形状
-- **WHEN** 某 change 自称「仅改注释」但 Step1 scope-drift 揭出其顺手改了逻辑
-- **THEN** 白名单形状判定 MUST 作废、Step2 多镜 MUST 照跑，MUST NOT 凭作废的形状声明免多镜
+- **WHEN** 某 change 自称「仅改注释」但 Step1 scope-drift 揭出顺手改了逻辑
+- **THEN** 白名单判定 MUST 作废、Step2 多镜 MUST 照跑
 
-#### Scenario: 命中 HR-TG 的变更强制两层全跑
-- **WHEN** 一个命中 HR-TG（如 TG-27 改 gate/bundle 自身）的变更完成实现
-- **THEN** sdflow-code-review MUST 全跑 Step1 + Step2 多镜 fan-out，MUST NOT 免任何一层
+#### Scenario: 改 bundle/SKILL/gate 自身即便是 markdown 也不免多镜
+- **WHEN** 一个 diff 只改 `sdflow-code-review/SKILL.md` 或 `workflow.md` 一行指令（形状=仅动 markdown）
+- **THEN** 判器 MUST 因行为面路径豁免清单判其 NOT 无逻辑面 → Step2 多镜照跑，MUST NOT 因「仅动 markdown」误免（bundle markdown 承载行为）
 
-## ADDED Requirements
-
-### Requirement: 设计门核平凡声明与脚本硬信号一致
-
-阶段二设计门 SHALL 在放行任何轻量化路径前，核对 ff 产物的**平凡声明**与确定性脚本的 L0/L1 硬信号（HR-TG 命中集 / 变更面 / 开放决策 / 先例）。声明与硬信号一致方可放行轻量化；矛盾（声明平凡但脚本命中 HR-TG 或面超阈）MUST 拒并点名冲突项。此核验为**新增门禁项**，MUST NOT 削弱既有设计门红线（承 adr/0004）。
-
-#### Scenario: 声明平凡但脚本命中 HR-TG 被设计门拒
-- **WHEN** 某 change 的平凡声明称 HR-TG∅，但脚本算出命中 TG-27
-- **THEN** 设计门 SHALL 判矛盾、拒绝轻量化放行、点名 TG-27 冲突，MUST NOT 采信声明越过脚本硬信号
+#### Scenario: load-bearing 版本常量不免多镜
+- **WHEN** 一个 diff 改 `API_VERSION = 2` 或 `SCHEMA_VERSION`（切 code-path/契约）
+- **THEN** 判器 MUST NOT 判其为白名单版本常量（其有 code-path 依赖）→ Step2 照跑

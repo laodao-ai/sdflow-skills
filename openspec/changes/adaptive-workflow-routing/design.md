@@ -1,187 +1,94 @@
-# Design — adaptive-workflow-routing
+# Design — adaptive-workflow-routing（Q1=A 收敛版）
+
+> 本 design 为设计门 Q1=A 拍板后的重写版。原 D1–D8 前向机制（HR-TG 双向化/四谓词/掏 L2/route.py 三层归口/calibrator）**已整体放弃**，仅保留「code-review 入口无逻辑面白名单免 Step2」这一最小安全子集。放弃理由见 `spec-review-report.md`（4 冷源：时序矛盾/HR-TG 不可机判/门核正交/ROI 抽空）。
 
 ## Context
 
-现 workflow bundle 的深度**由触发决定、不分 S/M/L**（`trigger-catalog` 的 TG 命中 → 激活对应领域清单/画图/约束）。但这套路由**只单向升级**：命中高风险 TG → 加审；从不因「低风险 + 清晰」而放行轻量化。后果——每个 change 都付全额编排成本（grill + spec-review 多镜 + superpowers + code-review 多镜 + done），逼出「合批摊薄固定成本」的反模式。
+`sdflow-code-review` 每次全跑多镜 fan-out。实测硬化（spec-workflow:52）要求它「每次全跑、非高风险才跑」，因为多镜 fresh 冷独立能抓循环内被 controller 说服放过的真 bug。但对**结构上无行为面**的 diff（纯注释/文档、仅加测试、纯版本号），多镜结构上零产出——免之无损。本 change 把这一窄豁免机判化、落地。
 
-关键既有资产（本设计复用，不另造）：
-- `trigger-catalog.md §7` **HR-TG 子集**（单一源，成员 `TG-04/06/07/08/09/16/17/26`，入选判据「做错会运行期爆炸 / 数据损坏 / 安全泄漏，且难回退」），现仅被评审 cross-model 层单向消费；§7 已带「跑满 10 次按命中率复评子集」注记。
-- `workflow-metrics` 能力（lens-metric 契约 + 只读聚合器 + 数据驱动反馈「供数不供裁决」，T53 已 ship，现 7 条归档锚）。
-- `spec-workflow` 硬需求「决策后果按三镜 + 主次」「sdflow-code-review 为每次全跑的独立强制主审」「workflow bundle 改在权威源经部署下发」。
-
-约束：**「深度由内容触发决定、不分 S/M/L」是拍板地基**（adr 级），本设计 MUST NOT 引入自选尺寸标签绕过它。
+冷审教训（写入 design 供后人）：**「在 diff 存在前用脚本机判语义复杂度」不成立**——谓词多为 diff 派生（净行/形状），而路由/声明本想发生在 ff/grill（diff 前）；HR-TG 成员是语义触发、今天由模型判非脚本。故 A 把豁免限定在**唯一真正机判可靠的时刻与对象**：code-review 入口（diff 已在）× 无逻辑面形状（结构可判）。
 
 ## Goals / Non-Goals
 
 **Goals:**
-- 让编排深度**双向自适应**：低风险 + 高清晰 → 放行轻量化，使小 change 便宜到可随便开（消解合批诱因）。
-- 轻量化的安全性**不靠作者自评**：客观地板（HR-TG，脚本判）+ 可审平凡声明（设计门核）+ 后向校准（数据驱动）。
-- 给「非平凡」一个可判硬定义（吸收 T9），给阶段交接一个下一步推荐器（吸收 T28）。
+- 让**机判证明零产出**的形状（注释/文档/纯测试/展示版本号）免 code-review Step2 多镜，省 fan-out 成本、零语义风险。
+- 豁免**纯机判**（不依赖作者自评）、**post-diff**（diff 已存在）、**语言感知**、**行为面路径豁免**兜住 bundle 自身 markdown。
 
 **Non-Goals:**
-- 不引入 S/M/L 自选尺寸。
-- 不放松 done 收尾门（恒跑）。
-- 不自动砍任何评审镜/层（校准供数、人裁）。
-- 不在本 change 内解决 OQ1/OQ2/OQ3。
+- 前向路由 / 非平凡谓词 / 平凡声明 / HR-TG 双向化 / calibrator / grill-spec-review 轻量化（Q1=A 全弃）。
+- 覆盖「有逻辑面的 routine change」——有逻辑一律 Step2 照跑。
 
 ## Decisions
 
-### D1 · 复用 HR-TG 集合、新增一个消费层（非平行新集），HR-TG 只当非平凡四谓词之一
+### A1 · 豁免在 code-review 入口判、对象=无逻辑面形状（而非 ff 前路由）
 
-**决定**：**复用现有 HR-TG 集合**，为它**新增第六消费层「路由地板」**（不 fork 平行风险集）；语义双向（命中→升级不变；空集→**放行资格之一**）。**HR-TG 只是非平凡四谓词的四分之一**（必要非充分）——命中即非平凡地板成立，但**空集不等于平凡**，还需另三谓词（面/开放决策/known-pattern）同时放行。
+**决定**：轻量化时刻 = **code-review Step2 之前**（diff 已存在）；对象 = **机判无逻辑面白名单形状**。Step1 恒跑、有逻辑面 Step2 全跑。
+**理由**：消除原设计的时序矛盾（diff 派生谓词却在 diff 前判）——形状判定天然需要 diff，放到 code-review 入口才可机判。code-review 是最后一道找新 bug 的门，故守卫从严：Step1 恒跑当地板。
+**备选否决**：ff 前路由（冷审证不可机判）；覆盖有逻辑 routine（收益薄且不可靠，见 report Q1）。
 
-**理由**：①单一源——HR-TG 已是内容派生客观谓词（脚本按 path/content 判，非自选序数），§5.117 已有「客观+可审」模式，复用比造平行集干净。②HR-TG 的 ∅ 只标定为「不需额外 cross-model」、**从没标定为「安全到可减 code-review」**，故 MUST NOT 当充分地板——只当四分之一，另三谓词兜「HR-TG∅ 但微妙/新颖」的漏（反例：单文件微妙算法 HR-TG∅ 但非 known-pattern → 仍判非平凡 FULL）。③术语诚实——CONTEXT.md 已补 HR-TG 第二消费层，「不造新概念」软化为「复用集合 + 新增消费层」。
-**备选否决**：①S/M/L 自选尺寸——地基拒绝（自评=逃避评审杠杆）。②独立 risk-score 标量——见 D2。③把 HR-TG 当**充分**地板——上述反例即证不足。
-**残余风险**：即便四谓词，`HR-TG∅ ∧ 有先例 ∧ 面小 ∧ 逻辑微妙` 仍可能漏 → 只能靠后向 calibrator + OQ1 的 known-pattern 硬化兜底，地板**不可证完备**。
+### A2 · 白名单三形状 + 语言感知判器（非裸正则）
 
-**新增 TG-27（评审机制 / gate 契约 / workflow bundle 自身变更）入 HR-TG**：grounding 发现现 HR-TG 成员全是产品码风险（DB/API/安全/并发），缺「元层」类。**本 change 自身跑现地板会被误判平凡**（不命中任一现有 HR-TG 成员）——但改 gate 做错会静默放过坏活且难回退（活体：dogfood gate 子串 bug 假过设计门），完全符合入选判据。故补 TG-27，本 change 即其首个实例。
+**决定**：白名单 = ①仅动注释/纯文档行 ②仅新增 `tests/` 下文件（排除生产码 import 的 helper 如 `conftest.py`）③仅改无 code-path 依赖的纯展示版本常量（整行匹配 `^\s*<IDENT>\s*=\s*<version-literal>\s*$`、拒附加 token）。判器 MUST 语言感知（按语言解析注释/块注释/多行字符串边界）。
+**理由**：裸正则前缀无法跟踪块注释状态、多行字符串、语言混排（冷审 A-F1/C3）——会把携逻辑行误判注释。版本常量整行+拒 token 防夹带 load-bearing 常量（`API_VERSION`/`SCHEMA_VERSION` 切 code-path）。
+**备选否决**：裸正则（不可靠）；「仅动 markdown 文档」宽泛豁免（本 repo markdown 承载行为，见 A3）。
 
-### D2 · 评判用布尔谓词、非标量分数（备选：0–100 复杂度/清晰度打分）
+### A3 · 行为面路径豁免清单（吸收原 TG-27 元层护栏，与部署解耦）
 
-**决定**：非平凡判定 = **四条布尔谓词**（P1–P4，任一成立即非平凡），**无标量分数**、**无模型判断层**（见 D7）——全脚本机判。
+**决定**：diff 触及 workflow bundle 自身（`sdflow-init/assets/workflow/**`、编排/评审 `SKILL.md`、`workflow.md`、`ship_gate.py`、判器脚本）→ 判器 MUST 判 NOT 无逻辑面，即便 diff 形状=仅动 markdown。**硬编码路径前缀、不查 HR-TG 表、与是否部署无关**。
+**理由**：本 bundle 的编排/评审逻辑就写在 SKILL.md/workflow.md 等 markdown 里（冷审 C1 本repo致命）——「markdown=文档」在此是伪命题。硬编码路径护栏解掉原设计 TG-27 自指引导期（冷审 E2）：改评审机制自身的 change 永不被误免，无需等 TG-27 部署。
+**备选否决**：靠 HR-TG/TG-27 判元层（不可脚本化 + 引导期自豁免，冷审 A2/E2）。
 
-**理由**：单一标量是 T8 的 `<80` 阈值教训——跨模型不可比、不透明、可凑分。布尔谓词可审、可门核、跨 runner 稳定。
-**备选否决**：0–100 打分——同 T8 失效模式；且分数掩盖「为何这样判」，校准时无法定位。
+### A4 · 判器沿 ship_gate.py 纪律，Step1 scope-drift 守卫豁免
 
-### D3 · 前向 router + 后向 calibrator 双环，缺一不可（备选：只做前向路由）
+**决定**：判器为 `assets/workflow/tools/` 下确定性脚本，沿 `ship_gate.py`：只读、git-harden（`core.quotePath=false`/`errors=replace`）、双输出（human + JSON）、`--change`/`--root` 纯参数无写盘。豁免 MUST 由 Step1 scope-drift 守卫——揭出隐藏逻辑 → 白名单判定作废 → Step2 照跑。
+**理由**：判器读 git diff 判形状，需 git-harden 防非 UTF-8 逸出（冷审 D3）。Step1 恒跑是「伪装成注释的逻辑改」的兜底（冷审 A-F5.4：加错的测试/伪装注释）。
+**备选否决**：判器读散文声明（本 A 无平凡声明，判器只读 diff，故不涉 fence-aware 假阳场景——原 D3 顾虑随平凡声明取消而消解）。
 
-**决定**：前向 router（即时路由：信号→四谓词机判→路由）+ 后向 calibrator（lens-metric 扩「路由决策对错」维度 → 调 HR-TG 边界 / 谓词判据）一起交付。
-
-**理由**：**没校准的自适应 = 自评滥用换皮**——无法知道某次 LIGHT 是否漏了真 bug。校准把「路由判得准不准」变成可累积的数据（LIGHT 事后有 buglist 回指=判松；FULL 各镜零产出=判紧），兑现 §7 已有复评注记。主次：前向即时省成本（收益）、后向保正确性——**后向是信任前向的前提**。
-**备选否决**：只做前向——短期省成本，但把「判松放过坏活」变成无反馈的盲区，违背强化门禁的初衷。
-
-### D4 · grill 永不被路由自动跳，只推荐 + 征询（grill 记忆约束，本 change 不定 T19 规则）
-
-**决定**：grill **不属**可自动轻量化的阶段。路由器至多经阶段推荐器**建议**跳 grill 并**征询用户**（独立选择块、动作之前、给真实否决窗口）；机器 MUST NOT 代跳。本 change 只提供「推荐 + 征询」机制，**MUST NOT 把「何时可跳 grill」定成规则**——那是 T19 的独立评估。
-
-**理由**：撞两条既有硬约束——①用户反馈 `grill-not-skippable`（2026-07-03）：「跳过条件正式评估定规则前一律默认跑 grill；确要跳必须先问用户」，且明令「勿预设 T19 结论」；曾以运行时裁量跳 grill、声明埋长消息=剥夺介入，正是此坑。②adr/0004：grill「本性不可折叠」。「显著呈现」弱于「先问用户」——呈现 ≠ 征询否决，故取后者。
-**代价**：grill 从「4 个可轻量化阶段」降为「不可自动轻量化」，scope 缩一格；但省的是多轮 grill 的编排成本，征询用户一次 y/N 很便宜，不亏。
-
-### D5 · 非平凡四谓词硬定义（原 OQ1 拍板：known-pattern 去模糊化）
-
-**决定**：非平凡 = 四谓词任一成立（沿复杂度/清晰度两轴），全不触发才平凡。各谓词定义见 specs `workflow-routing`「非平凡由四谓词硬定义」需求。关键——**P4 非 known-pattern 的去模糊化（原 OQ1）**：`known-pattern` 双来源 = ①bundle 内「通用平凡形状白名单」（脚本判、项目无关、单一源；起手三条：注释/文档-only · tests/-only · 版本常量-only；扩容即命中 TG-27 走 FULL）∨ ②指名可核归档先例（门核存在 ∧ 触同 capability）；皆无 → 非 known-pattern → 非平凡。
-
-**理由**：把「这是常规模式」从模糊自证变可核声明——不能挥手说 known，要么命中机判形状白名单、要么点名真归档 change，门去查。安全方向最优（默认无先例→FULL；谎报先例被门查穿）。**冷启动**（新项目空 archive）：仅白名单形状 day-1 可轻量化，其余保守判非平凡（正确：尚无 known 模式），每类首次付 FULL 后暖机——**与后向校准冷启动共用同一暖机曲线**（故一并答了原 OQ2 的冷启动半，OQ2 只剩「复评节奏」）。
-**备选否决**：①known-pattern 纯模型自证——正是流于形式重灾区（OQ1 病灶）。②裸行数当面主判据——1 文件可巨大/5 文件可琐碎，故 P2 以结构信号为主、100 净行仅兜底。
-
-### D6 · code-review 两层切：Step1 焊死 + Step2 仅机判无逻辑面免（原 OQ3 拍定）
-
-**决定**：code-review **不整体轻量化**，按内部两子步分治——**Step1（gstack/review：scope-drift + 完成度）恒跑**（便宜的评审地板 + 验平凡诚实性的守卫）；**Step2（多镜 fan-out）对任何有逻辑面的 change 每次全跑**，**仅当匹配「通用平凡形状白名单」（注释/文档-only · tests/-only · 版本常量-only，机判无逻辑面）时可免**（多镜结构上零产出），且该免除由 Step1 scope-drift 守卫（揭出隐藏逻辑→白名单作废→Step2 照跑）。
-
-**理由**：`SKILL.md:5,20-21` 的实测硬化特指 **Step2 fresh 冷独立**抓 controller 说服放过的真问题——它对**有逻辑面**的 change 不可降；但白名单形状**结构上无行为面**，多镜跑了必零产出，免之无损。**与被否决的「只高风险才跑」本质不同**：那是用**风险判断** gate-on（默认关、会放过低风险逻辑 bug）；本方案用**无逻辑面机械事实** gate-off（默认开、仅注释/test/版本免），有逻辑必跑多镜。code-review 是最后一道自动门（done 只 verify 不找新 bug），故守卫从严。
-**代价/收益**：可轻量化集收敛为 **{ spec-review, superpowers }**；code-review 仅白名单免多镜、收益小但安全，省成本大头在 grill（多轮人类）+ spec-review 多镜 + superpowers fan-out，不塌。
-**备选否决**：①code-review 整体降本地单遍——赌单遍够、撞硬需求（我 Q5 初版，被本 D6 精确化取代）。②平凡也不碰 code-review——比 D6 保守，但连白名单形状都跑满多镜、白费。
-
-### D7 · 路由器无模型判断层，四谓词全机判，语义残留归 grill
-
-**决定**：路由器**不含独立模型判断层**（撤销初稿的「L2 清晰度判定[判断·出理由]」）——四谓词 P1–P4 经 D5 定义后**全部脚本机判**（P1 HR-TG path/content · P2 面结构信号 · P3 grep 决策区/OQ · P4 白名单形状机判 ∨ 先例存在性核）。**任何需要语义判断的残留**（先例是否"真"同类、需求是否"真"无歧义）**MUST NOT 由路由器自评**，归 grill（人·推荐+征询，D4）承接。
-
-**理由**：D5/D6 的谓词硬化把 L2 掏空了——留一个已空的模型判断层，只会诱导「路由器自评清晰度」，正是全程在防的自评滥用。撤掉它更诚实、更贴「机械交脚本、判断留人/grill」地基，且与 D4「grill 不可自动跳」自洽——grill 正是语义判断的唯一归口。P3/P4 机判漏检（隐性未声明决策 / 先例形似神不似）的安全兜底也落在 grill（推荐+征询给人否决窗口）。
-**代价**：分层从「L0 信号→L1 地板→L2 判断→L3 路由」简化为「L0 信号→L1 四谓词机判→L2 路由」；无模型判断层意味着**路由器不承担消歧**，消歧永远是 grill（人）的活。
-
-### D8 · 路由器 = 独立脚本 route.py，三层归口调用（含托管块驱动 ff 边界）
-
-**决定**：路由器/推荐器落为**独立脚本 `workflow/tools/route.py`**（唯一真相源，类比 `ship_gate.py`：四谓词机判 + 输出推荐 + 可复制 prompt）。调用**三层归口**——①**自有 orchestrator**（`sdflow-spec-review`/`sdflow-ship`/`sdflow-code-review`/`sdflow-done`）入口 Step0 调 `route.py` 自评；②**ff→grill 边界**（`opsx:ff` 非本仓、MUST NOT 改）——在 **`sdflow-init` 托管块（CLAUDE.md/AGENTS.md）加一行**「ff 产物生成后 MUST 跑 `route.py`」，靠 CLAUDE.md 常驻上下文驱动，`sdflow-init update` 重注入升级安全；③**workflow.md 阶段表**记一句人读兜底。
-
-**理由**：路由逻辑单一源（脚本），谁调都渲染同一份，避免 prose 协议漂移（承「机械 prose MUST 脚本化」）。ff 边界碰不到自有 skill，用**我们自己的托管块**（非改 ff）达成「ff 后调脚本」——比 workflow.md 文档化更强（常驻 vs 需主动读），且升级安全。**MUST NOT** 改 `opsx:ff`/`grill-with-docs` 等非本仓 skill，**MUST NOT** 上 hook（碰 adr/0008 hook 纪律 + 退役 hook 教训）。
-**诚实边界**：托管块驱动是「agent 遵上下文指令」= **best-effort**（非硬 hook，理论可能不跑）；可接受——ff 推荐只是建议，**硬门在设计门**（spec-review 自有、强制平凡声明 vs 脚本硬信号），漏了 ff 推荐设计门照样兜误路由（防御纵深，承 adr/0008）。
-
-### 路由决策流（TG-12 决策图）
-
-```
-每个阶段交接点（ff后/grill后/spec-review后/…）：
-
-  ┌─────────────────────────────────────────────────────────┐
-  │ L0 信号采集 [脚本·确定性]                                 │
-  │  diff 文件/模块/路径 · HR-TG 命中集 · 含 specs delta?     │
-  │  决策登记区/OQ 空? · 白名单形状? · 先例存在且触同cap?      │
-  └───────────────────────────┬─────────────────────────────┘
-                              ▼
-     L1 四谓词判定 [四谓词全脚本机判 · 无模型判断层]
-     P1 HR-TG命中(地板) ∨ P2 面超阈 ∨ P3 有开放决策 ∨ P4 非known-pattern ?
-                   │任一成立               │全不成立
-                   ▼                       ▼
-             非平凡·强制 FULL          判平凡
-                   │              L2 路由: 每阶段 LIGHT/SKIP
-                   │              + 平凡声明行(指四谓词依据)
-                   │                       │
-                   ▼                       ▼
-              ┌──────────────────────────────────────────┐
-              │ 设计门核：平凡声明 vs 脚本 L0/L1 硬信号     │
-              │  对不上(声明松/脚本命中) → 当场拒(穿帮)     │
-              └──────────────────────────────────────────┘
-
-  语义残留(先例是否"真"同类 / 需求是否"真"无歧义)——路由器不判，
-  归 grill(人·推荐+征询,见 D4)；P3/P4 漏检的安全兜底也在 grill。
-```
-
-### 每阶段路由政策
-
-| 阶段 | 路由信号 | FULL | LIGHT / SKIP |
-|---|---|---|---|
-| grill | 清晰度（开放决策/新颖） | 有分叉·新机制 | 无开放决策 ∧ known → **仅推荐跳 + 征询用户（绝不自动跳，见 D4）** |
-| spec-review | 复杂度（HR-TG/跨模块） | 命中 HR-TG 或面超阈 | HR-TG∅ ∧ 面有界 → autoplan-lite / 单遍自查 |
-| superpowers | 机械 vs 新逻辑 | 新逻辑 | 机械/单测 → inline TDD，不 fan-out |
-| code-review | 逻辑面（Step2 多镜） | Step1 恒跑 + 有逻辑面 → Step2 多镜全跑 | 仅白名单机判无逻辑面 → 免 Step2；Step1 恒跑守卫（见 D6） |
-| done | — | 恒跑（收尾门，已按 model 分档） | 不放松 |
-
-### 组件清单（TG-14）
+### 组件清单
 
 | 组件 | 类型 | owns |
 |---|---|---|
-| `trigger-catalog.md §7` | 规则（改） | HR-TG 双向化语义 + TG-27 成员 |
-| `workflow.md` | 规则（改） | 非平凡四条谓词定义 + 每阶段路由政策 + 阶段交接推荐 |
-| `workflow/tools/route.py`（新） | 脚本 | 路由器单一源：L0 信号 + 四谓词全机判 + 输出推荐/可复制 prompt——无模型判断层，语义残留归 grill |
-| 各编排 SKILL | 指令（改） | 入口 Step0 调 `route.py` 自评 → light/full 分支 + 推荐输出（自有：spec-review/ship/code-review/done） |
-| `sdflow-init` 托管块（CLAUDE.md/AGENTS.md） | 注入（改） | 加一行「ff 后 MUST 跑 route.py」驱动 ff→grill 边界（非改 opsx:ff，升级安全） |
-| `lens_metric_aggregate.py` + 契约 | 脚本/规则（改） | 路由决策价值维度（LIGHT逃逸/FULL空产出） |
-| 设计门（spec-workflow） | 需求（改） | 核平凡声明 vs 脚本硬信号 |
+| `assets/workflow/tools/<判器>.py`（新） | 脚本 | 无逻辑面形状机判（语言感知 + 行为面路径豁免）+ 双输出 |
+| `sdflow-code-review/SKILL.md` | 指令（改） | Step2 前调判器；命中→免 Step2、Step1 恒跑守卫 |
+| `spec-workflow` code-review 需求 | 需求（改，原标题） | 两层深度 + 白名单豁免规范 |
 
-### 组件依赖图
+### 判器决策流
 
 ```
-   trigger-catalog §7 ──(HR-TG集,单一源)──▶ L0 信号脚本
-        (TG-27)                                │
-                                               ▼
-   workflow.md ──(非平凡定义/路由政策)──▶ 各编排 SKILL ──▶ 设计门(核声明)
-        │                                      │
-        └──(阶段推荐)──────────────────────────┘
-                                               │ 运行时落 lens-metric 锚
-                                               ▼
-                      lens-metric 契约 ──▶ 聚合器(路由决策维度) ──▶ 校准反馈
-                                                        │
-                        (调 HR-TG 边界 / 谓词判据) ◀──────┘
+  code-review 入口（diff 已存在，Step1 已跑）
+        │
+        ▼  判器 [脚本·post-diff·语言感知]
+   diff 触行为面路径清单(bundle/SKILL/gate/workflow.md)?
+        │yes → NOT 无逻辑面 → Step2 照跑
+        │no
+        ▼
+   diff 仅匹配白名单形状(注释/文档-only ∨ tests/-only ∨ 展示版本常量)?
+        │no  → Step2 照跑
+        │yes
+        ▼
+   Step1 scope-drift 有隐藏逻辑?
+        │yes → 白名单作废 → Step2 照跑
+        │no  → 免 Step2（结构零产出）· 仍产报告
 ```
 
 ## Risks / Trade-offs
 
-- **[自评滥用：作者宽松自证「known-pattern」放行轻量化]** → L1 客观地板焊死高危面（脚本判，焊不掉）；平凡声明设计门核；后向校准事后捕获判松项（见 OQ1）。
-- **[校准冷启动：现仅 7 条锚，数据不足以调参]** → 冷启动期路由靠静态谓词兜底，校准环只累积不裁决（见 OQ2）。
-- **[削弱 code-review：现「每次全跑」硬需求有实测支撑（抓被说服放过的真 bug）]** → 两层切（D6）：Step1 恒跑守卫、Step2 仅对白名单机判无逻辑面形状免（多镜结构零产出）；有逻辑必跑多镜，非「高风险才跑」。
-- **[HR-TG 覆盖不全：漏进的高危类被误判平凡]** → TG-27 补元层；§5.117 强制新 TG 判 HR-TG 归属；校准环兜底（有滞后）。
-- **[阶段推荐器被当强制：用户以为必须照推荐走]** → 推荐 MUST 标「可覆盖」，路由决策可人工改走 FULL。
+- **[语言感知判器实现复杂：跨语言注释/块注释/多行字符串]** → 起手只支持有把握的语言子集 + 明确单行注释语言，不确定即判 NOT 无逻辑面（保守偏 Step2 照跑）。
+- **[消费仓自己的「markdown=行为」文件（prompt/config-as-markdown）]** → A3 路径清单只护 sdflow bundle 自身，护不住任意消费仓的行为-markdown。**保守处理**：白名单形状①的「纯文档」MUST 限定为**约定文档路径**（`README*`/`CHANGELOG*`/`docs/**`/`*.txt`）+ **代码内注释行**（语言感知）；**任意其他 `.md`（含消费仓根级/散落 markdown）默认判 NOT 无逻辑面**（可能承载行为）——宁可少免、不误免。消费仓若要扩展自己的文档路径，走 config（本 change 不做，留 todolist）。
+- **[tests/ 免多镜放过「加错的测试」]** → tests/ 豁免由 Step1 scope-drift + 「排除生产码 import 的 helper」双重收窄；仍属已知残余，收益（省纯加测试的多镜）对价小。
+- **[收益窄]** → 诚实接受：A 只省三类形状的 Step2，是「安全的省」的最大子集；更宽的省已证不安全/不可机判（report Q1）。
 
 ## Migration Plan
 
-- 属 `sdflow-init/assets/workflow/` 权威源改动 → merge 后 MUST push → 运行 checkout `/sdflow-upgrade`（`sdflow-init update` 推消费仓）激活。
-- **向后兼容**：默认路由行为 = 现状（全 FULL）；轻量化是**opt-in 放行**（HR-TG∅ ∧ 声明齐才放）——存量流程不因升级变松。
-- **回滚**：路由政策集中在 workflow.md + 信号脚本；回退 = 恢复「非平凡必跑」措辞 + 停用信号脚本，编排 SKILL 的 full 分支即现状。
+- 属 `assets/workflow/` 权威源改动 → merge 后 push → 运行 checkout `/sdflow-upgrade`。
+- **向后兼容**：默认 = 全 FULL；豁免是 opt-in 机判（命中白名单形状 ∧ 不触行为面路径 ∧ scope-drift 无隐藏逻辑）——存量流程不变松。
+- **回滚**：停用判器 = 恢复「Step2 每次全跑」现状。
 
 ## Open Questions
 
-> 〔grill 拍板记录，2026-07-06〕三个原 OQ 均经 grill 拍定，退出开放集：
-> - **OQ1**（L2 反流于形式）→ **D5**：known-pattern 双来源、指名可核先例 / 机判白名单形状。
-> - **OQ2 冷启动半** → **D5 冷启动姿态**：保守默认 + 白名单暖机，与校准共用暖机曲线。
-> - **OQ3**（code-review 每次全跑 reconciliation，原核心张力）→ **D6**：Step1 焊死 + Step2 仅机判无逻辑面白名单免。
-
-**余下仅一处非阻塞待定**（不 gate 实现，可实现期并行定）：
-
-- **OQ2′ · 校准复评节奏**：路由决策的复评窗口沿用 §7「跑满 10 次」还是按路由决策量（如累计 N 个 LIGHT 样本）另定、多久回一次。**非阻塞**——冷启动兜底已定（D5），节奏可在 P2 校准实现时按首批数据体感定。**负责人=设计门/实现期；截止=P2 校准落地前。**
+（无阻塞）。判器支持的语言子集起手范围可在实现期按有把握程度定（保守未支持语言一律判 NOT 无逻辑面）。
 
 ## Compliance
 
-- 承 **adr/0004**（设计门红线不可子串假过）：平凡声明是**新增**核验项且门核为**行级 vs 脚本硬信号**，强化而非削弱门禁。
-- 承 **workflow-metrics「供数不供裁决」**：校准环不自动改路由，仅供数据，裁决由人。
-- 承 **「深度由触发决定、不分 S/M/L」地基**：路由用 HR-TG 客观谓词，未引入自选尺寸。
-- 承 **[[grill-not-skippable]] 共识**：grill 跳过 MUST 显著呈现，非埋进长消息。
-- **豁免**：本 change 不含 TG-04/05/07/08/16/17（无 DB/数据对象/API/外部依赖/NFR/信任边界），对应领域清单不适用。
+- 承 adr/0004 设计门红线不削弱；承 spec-workflow「code-review 每次全跑」实测硬化（不变式保留、仅机判零产出形状免多镜、非高风险才跑）；承 `grill-not-skippable`（不碰 grill）。
+- 冷审放弃的前向机制风险（时序/HR-TG机判/门核正交/calibrator偏差）随 A 收敛**全部消解**（无对应组件）。

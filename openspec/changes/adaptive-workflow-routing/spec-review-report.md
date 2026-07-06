@@ -126,5 +126,29 @@ HR-TG 8/9 成员语义触发、今天由规划镜头判。**默认处理**：承
 
 □ 建议进 writing-plans　　■ **需设计门先拍 Q1 方向 + Q2-Q5，据此重写后复审**
 
-<!-- 设计门拍板锚位（拍板后主 session 回写；未拍板不写）：
-     <!-- ship-gate: design-approved --> -->
+## 设计门拍板记录（2026-07-06）
+
+**Q1 = A（收敛白名单-only）**。用户在设计 HARD-GATE 裁定：**砍掉整个前向谓词路由 + calibrator + 托管块 + route.py-at-ff + HR-TG 双向化 + 四谓词 + 平凡声明**，收敛为——**只在 code-review 入口（diff 已存在）机判「无逻辑面白名单形状」，命中则免 Step2 多镜；Step1 恒跑守卫**。
+
+**据此**：Q2/Q3/Q4 消解（无前向/无 pre-diff 路由/无 calibrator）；Q5 消解（不轻量化 spec-review）。保留并强化的 D-fix：**D-fix1**（code-review MODIFIED 沿用原标题）、**D-fix4**（判器沿 ship_gate 纪律、定源路径/契约）、**D-fix7**（版本常量收窄、tests/ 过 Step1）+ **C1 markdown=行为路径清单**（bundle SKILL.md/workflow.md/ship_gate.py/评审 skill 等属行为面，即便 diff 是 markdown 也 NOT 无逻辑面——这吸收了原 TG-27 元层护栏 E2）。
+
+**未写 `design-approved` 锚**：A 需据此重写 design/spec/tasks 后走一轮**轻复审**（改动集中在一个机判判器 + 一条 MODIFIED 需求，remaining risk 低）方最终批准。
+
+## 轻复审结论（A 重写后，自审·declared）
+
+A 重写把 change 收敛为「code-review 入口无逻辑面白名单判器 + 一条 code-review 需求 MODIFIED」。**原 4 冷源的存活 findings 逐条核对已在 A 中消解或消失**：
+
+- 时序矛盾/HR-TG机判/门核正交/calibrator偏差/ROI（簇A/B）→ **随前向机制整体删除而消失**（无对应组件）。
+- C1 markdown=行为 → A3 行为面路径豁免清单（bundle 自身）+ 白名单①收窄为约定文档路径、任意其他 `.md` 默认 NOT（补消费仓行为-markdown 残洞）。
+- C2 P2 specs-delta 矛盾 → P2 已删（无面谓词）。
+- C3 净行非确定性/版本常量/tests helper → 版本常量整行拒 token、tests/ 排除 import helper、判器语言感知（非裸正则）。
+- D1 MODIFIED 改名破匹配 → **沿用原标题**「sdflow-code-review 为每次全跑的独立强制主审」。
+- D2 lens-metric 无槽 → 已删（无 calibrator）。D3 route.py fence-aware → 判器只读 diff 不读散文声明，假阳场景消解。
+- E2 TG-27 引导期 → A3 硬编码路径护栏、与部署解耦。
+
+**残余（已知、低危、实现期处理）**：语言感知判器的语言子集起手保守；tests/ 免多镜靠 Step1+helper 排除双收窄；消费仓文档路径扩展留 todolist。
+
+**判定**：A 是「安全的省」的最大诚实子集，remaining risk 低。**建议设计门批准 A**（不 gate 实现的残余均保守默认偏 Step2 照跑）。
+
+<!-- 设计门批准 A 后由主 session 回写下行锚（此刻待用户确认 A-重写再写） -->
+
