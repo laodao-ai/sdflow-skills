@@ -172,6 +172,23 @@ def test_lens_value_no_anchor(tmp_path):
     assert v["has_anchor"] is False
 
 
+def test_lens_value_flags_illegal_number(tmp_path):
+    """[impl-review-fix F3] 反证测试：锚里 findings="-7"（负值契约非法）、
+    采纳="abc"（非数字，_int 静默当 0）时，lens_value_for_change 必须把 is_bad
+    传播出来（不能像修前那样三处 `_, _ = LMA._int(...)` 丢弃），否则同一批坏锚
+    在聚合③（render_table）打 ⚠数值非法、在 per-change 表却悄悄看起来正常——
+    两张表对同源数据给出互相矛盾的可信度呈现。
+    修前：返回 dict 无 "num_bad" 键，本测试 FAIL（KeyError）。
+    """
+    d = tmp_path / "openspec/changes/bad"
+    d.mkdir(parents=True)
+    (d / "spec-review-report.md").write_text(
+        ANCHOR.format(layer="spec-review", f="-7", a="abc", ind=1) + "\n")
+    info = {"active": True, "active_dir": str(d), "archive_dir": None}
+    v = R.lens_value_for_change(info)
+    assert v["num_bad"] is True
+
+
 HRTG = '<!-- sdflow:hr-tg v1 hit="{hit}" evidence="x" -->'
 
 
@@ -249,6 +266,24 @@ def test_build_report_coverage_counts(tmp_path):
     assert "覆盖" in md and "有真锚" in md and "边界不可解析" in md
     assert "foo" in md
     assert "in-progress" in md  # foo 是活动 change
+
+
+def test_build_report_per_change_stage_columns(tmp_path):
+    """[impl-review-fix F12] 反证测试：design.md 报告 schema（约 103-105 行）明确
+    per-change 表列含 4 个阶段 Δ 列 spec-rev Δ | impl Δ | code-rev Δ | done Δ，
+    tasks.md task 3.1 同样要求"per-change 行（阶段Δ 含 done Δ）"，但实现只有总墙钟，
+    wt["stages"] 从未按行渲染——"某 change 卡在哪个阶段"这个 design 承诺能力不可得。
+    修前：per-change 表头无这 4 列，本测试 FAIL。
+    """
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(spec-review)")
+    _commit(root, {"openspec/changes/foo/tasks.md": "c"}, "checkpoint(foo:task1-impl)")
+    md = R.build_report(str(root))
+    assert "spec-rev Δ" in md
+    assert "impl Δ" in md
+    assert "code-rev Δ" in md
+    assert "done Δ" in md
 
 
 def test_atomic_write_preserves_on_replace_and_no_tmp(tmp_path):

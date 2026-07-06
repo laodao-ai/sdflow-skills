@@ -244,12 +244,18 @@ def lens_value_for_change(info):
 
     by_layer = {}
     sum_f = sum_a = sum_ind = 0
+    num_bad = False
     for a in anchors:
         layer = a.get("layer", "unknown")
         entry = by_layer.setdefault(layer, {"findings": 0, "采纳": 0, "独立": 0})
-        f_val, _ = LMA._int(a.get("findings"))
-        a_val, _ = LMA._int(a.get("采纳"))
-        ind_val, _ = LMA._int(a.get("独立"))
+        # [impl-review-fix F3] 不再丢弃 is_bad——修前 `_, _ = LMA._int(...)` 三处静默
+        # 吞掉非法值标记（负数契约非法 / 非数字串），导致同一批坏锚在聚合③
+        # （render_table）打 ⚠数值非法、在这里（per-change 表数据源）却悄悄看起来
+        # 正常，同源数据两张表互相矛盾。此处收集 is_bad，供 build_report 打 ⚠ 标记。
+        f_val, f_bad = LMA._int(a.get("findings"))
+        a_val, a_bad = LMA._int(a.get("采纳"))
+        ind_val, ind_bad = LMA._int(a.get("独立"))
+        num_bad = num_bad or f_bad or a_bad or ind_bad
         entry["findings"] += f_val
         entry["采纳"] += a_val
         entry["独立"] += ind_val
@@ -264,6 +270,7 @@ def lens_value_for_change(info):
         "sum_findings": sum_f,
         "accept_rate": rate,
         "sum_independent": sum_ind,
+        "num_bad": num_bad,
     }
 
 
@@ -330,6 +337,13 @@ def surfacing_block(root):
     return "\n".join(lines)
 
 
+def _stage_col(wt, stage):
+    """[impl-review-fix F12] per-change 表阶段 Δ 列格式化——0 或缺失均显 "—"，
+    非 0 时四舍五入 1 位小数，与其余 "—" 空箱口径一致（同 hr-tg/无度量锚同理）。"""
+    v = wt["stages"].get(stage, 0)
+    return round(v, 1) if v else "—"
+
+
 def build_report(root):
     """组装全项目 change 成本×价值复盘报告（view-only 再生，无持久状态）。
 
@@ -365,13 +379,24 @@ def build_report(root):
     # per-change 表
     lines.append("## per-change 明细")
     lines.append("")
-    lines.append("| change | 总墙钟(min) | #ckpt | spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | 状态 |")
-    lines.append("|---|---|---|---|---|---|---|---|---|")
+    # [impl-review-fix F12] 补 design.md schema（约 103-105 行）承诺的 4 个阶段 Δ 列，
+    # 插在 总墙钟 与 #ckpt 之间（对齐 design 列序）——F1 修复边界解析后 wt["stages"]
+    # 现在对归档 change 有真实非零值，此列才变得有意义。
+    lines.append("| change | 总墙钟(min) | spec-rev Δ | impl Δ | code-rev Δ | done Δ | #ckpt | "
+                 "spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | 状态 |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for name, info, b, wt, val, hr in rows:
         status = "in-progress" if info["active"] and not info["archive_dir"] else "archived"
         note = "（边界不可解析）" if b["unresolved"] else ""
         rate = "无度量锚" if not val["has_anchor"] else f'{val["accept_rate"]}'
-        lines.append(f'| {name} | {wt["total_min"]}{note} | {wt["n_ckpt"]} | '
+        # [impl-review-fix F3] num_bad 时行级追加 ⚠数值非法标记，与聚合③（render_table）
+        # 对同一批坏锚的呈现口径一致——不能一张表打 flag、另一张悄悄看着正常。
+        if val["has_anchor"] and val.get("num_bad"):
+            rate += " ⚠数值非法"
+        lines.append(f'| {name} | {wt["total_min"]}{note} | '
+                     f'{_stage_col(wt, "spec-review")} | {_stage_col(wt, "impl")} | '
+                     f'{_stage_col(wt, "code-review")} | {_stage_col(wt, "done")} | '
+                     f'{wt["n_ckpt"]} | '
                      f'{hr["spec_hr_tg"]} | {hr["code_hr_tg"]} | '
                      f'{val["sum_findings"] if val["has_anchor"] else "—"} | {rate} | '
                      f'{val["sum_independent"] if val["has_anchor"] else "—"} | {status} |')
