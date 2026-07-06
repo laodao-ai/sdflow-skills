@@ -26,8 +26,8 @@
 | T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | PROPOSED | 2026-07-03 16:18 | minimize-repo-footprint | minimize-repo-footprint |
 | T19 | `workflow.md + generation-process.md（权威源）` | 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户 | 可观测性 | PROPOSED | 2026-07-03 17:38 | sdflow-rebrand | sdflow-rebrand |
 | T20 | `spec-review/SKILL.md（现 sdflow-spec-review）` | 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项 | 代码质量 | DONE | 2026-07-03 17:42 | sdflow-rebrand | sdflow-rebrand |
-| T21 | `sdflow-init/scripts/init.py` | inject() 畸形态加固：多重复旧 marker 区块只修第一个 + _find_marker_line 的 text.index 在行内嵌相同 marker 文本时可能锚错位 | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-init-hardening |
-| T22 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-init-hardening |
+| T21 | `sdflow-init/scripts/init.py` | inject() 畸形态加固：多重复旧 marker 区块只修第一个 + _find_marker_line 的 text.index 在行内嵌相同 marker 文本时可能锚错位 | 代码质量 | DONE | 2026-07-03 21:10 | sdflow-rebrand | sdflow-init-hardening |
+| T22 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 代码质量 | DONE | 2026-07-03 21:10 | sdflow-rebrand | sdflow-init-hardening |
 | T23 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） | 代码质量 | PROPOSED | 2026-07-03 21:10 | sdflow-rebrand | sdflow-rebrand |
 | T24 | `setup.sh install_into 软链分支` | install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立 | 基础设施 | PROPOSED | 2026-07-03 21:29 | sdflow-rebrand | sdflow-rebrand |
 | T25 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 代码质量 | DONE | 2026-07-03 23:57 | sdflow-ship | sdflow-ship |
@@ -53,8 +53,8 @@
 | T45 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 功能增强 | DONE | 2026-07-05 16:09 | drop-per-dir-review-stub | drop-per-dir-review-stub |
 | T46 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 功能增强 | DONE | 2026-07-05 17:26 | - |  |
 | T47 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | review-tool-followups |
-| T48 | `setup.sh + 全仓 python 调用点` | python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
-| T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | PROPOSED | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
+| T48 | `setup.sh + 全仓 python 调用点` | python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 基础设施 | DONE | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
+| T49 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 代码质量 | DONE | 2026-07-05 19:14 | review-tool-followups | sdflow-init-hardening |
 | T50 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 代码质量 | PROPOSED | 2026-07-05 21:08 | three-lens-decision-framework | rec2-obs-readability |
 | T51 | `sdflow-done/SKILL.md commit步 + merge检查` | tracked 非-openspec 改动被 commit 步 git add -u 先提交、绕过 merge 前 untracked 硬检查的"停下问"——需 commit 步暂存策略与 merge 卫生检查对齐(gate-checkpoint-hardening SR-2 缩简版只覆盖 untracked,tracked 一路 defer) | 代码质量 | PROPOSED | 2026-07-05 22:43 | gate-checkpoint-hardening | gate-checkpoint-hardening |
 | T52 | `sdflow-done/SKILL.md merge untracked 检查` | merge 前 untracked 检查现为机械"任何 ??→halt 人工triage"(CR-4);精确区分"本 change 新产 vs 既有 debris"需在分支切出点落 untracked baseline 快照再 diff,可减少既有 debris 的误停——脚本化探索 | 功能增强 | PROPOSED | 2026-07-05 23:15 | gate-checkpoint-hardening | gate-checkpoint-hardening |
@@ -274,11 +274,12 @@
 |------|------|
 | 模块 | `sdflow-init/scripts/init.py` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-rebrand/design.md`
 
 **动机**：幂等下不自然产生，仅手工粘贴畸形态（终审 triage：记债不阻塞）
+> 2026-07 状态：PROPOSED → DONE（sdflow-init-hardening: _find_marker_line offset 修 misanchor; 多块 collapse 拆入 T63(fence-aware)）
 
 ---
 
@@ -288,11 +289,12 @@
 |------|------|
 | 模块 | `sdflow-init/scripts/init.py` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-rebrand/design.md`
 
 **动机**：默认 -q 下 233 passed 无 warning；-W error 加严才暴露；修法机械（终审 triage）
+> 2026-07 状态：PROPOSED → DONE（sdflow-init-hardening (merged 0ccf3ce)）
 
 ---
 
@@ -648,11 +650,12 @@
 |------|------|
 | 模块 | `setup.sh + 全仓 python 调用点` |
 | 类型 | 基础设施 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/review-tool-followups/design.md`
 
 **备注**：code-review FB-5。非本 change 引入(既有系统性缺口)，故未在本 change 修。建议统一加最小版本守卫或探测 python3.x。
+> 2026-07 状态：PROPOSED → DONE（sdflow-init-hardening (merged 0ccf3ce)）
 
 ---
 
@@ -662,11 +665,12 @@
 |------|------|
 | 模块 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/review-tool-followups/design.md`
 
 **备注**：code-review CV-2(置信40低)。temp+os.replace 已解撕裂JSON(本次目标)；lost-update 因 RETIRED 幂等下次重收敛、低影响。真解需文件锁，暂记不修。
+> 2026-07 状态：PROPOSED → DONE（sdflow-init-hardening (merged 0ccf3ce)）
 
 ---
 

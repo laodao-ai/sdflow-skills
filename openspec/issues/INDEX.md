@@ -67,10 +67,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T21 | todo | PROPOSED | sdflow-rebrand |
-| T22 | todo | PROPOSED | sdflow-rebrand |
-| T48 | todo | PROPOSED | review-tool-followups |
-| T49 | todo | PROPOSED | review-tool-followups |
 | T63 | todo | PROPOSED | sdflow-init-hardening |
 | T64 | todo | PROPOSED | sdflow-init-hardening |
 
@@ -114,4 +110,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 23 项已闭合（bug: 4，todo: 19）
+- 共 27 项已闭合（bug: 4，todo: 23）
