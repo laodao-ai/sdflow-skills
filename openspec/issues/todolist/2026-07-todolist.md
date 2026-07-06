@@ -62,6 +62,7 @@
 | T54 | `workflow 度量 / grill amendment 存活率` | grill amendment-下游存活率 度量 | 可观测性 | PROPOSED | 2026-07-06 02:04 | workflow-metrics-loop | workflow-metrics-loop |
 | T55 | `lens_metric_aggregate.py` | 聚合器易用性/健壮性观察(code-review X3/X4 defer,低危):glob 空表 vs archive 不存在无法区分;转义引号 site 值截断产生多余分组行(site 不校验已契约注明) | 代码质量 | PROPOSED | 2026-07-06 02:36 | workflow-metrics-loop | workflow-metrics-loop |
 | T56 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 | 代码质量 | OPEN | 2026-07-06 13:44 | adaptive-workflow-routing |  |
+| T57 | `workflow/model-tiers` | 档位矩阵新增「升级档」（更高档，延后） | 功能增强 | OPEN | 2026-07-06 15:24 | main |  |
 
 ---
 
@@ -744,3 +745,19 @@
 | 状态 | DONE |
 
 > 2026-07 状态：PROPOSED → DONE（workflow-metrics-loop (01092c5)）
+
+---
+
+## T57: 档位矩阵新增「升级档」（更高档，延后）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `workflow/model-tiers` |
+| 类型 | 功能增强 |
+| 状态 | OPEN |
+
+**动机**：model-tiers 3档×运行时矩阵之上可能需要一个更高档：超复杂问题升级到 Fable，或主力档动态升级（sonnet 主力→opus 应对超复杂需求）。当前无此需求。
+
+**思路**：触发条件=出现单靠 strong(opus) 仍吃力的超复杂 change，或想让主力 session 跑更省 sonnet、仅超复杂步升 opus 时再设计。
+
+**备注**：来源：explore 2026-07-06 P0+P2 深挖；关联 roadmap workflow-cost-optimization P2 档位矩阵（design D8）。

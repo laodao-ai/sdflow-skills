@@ -13,6 +13,19 @@
 
 ## 2026-07-06
 
+### [explore] P0+P2 接地深挖 → P2 章节重构（v2→含矩阵）
+- **状态**: ✅ 完成（`/opsx:explore` 只摊不写，产出固化进 roadmap/design 活文档）
+- **接地发现**（改了 P2 的认知）:
+  - **档位是 advisory、零脚本强制**：`model-tiers.md` 说机械镜→light，但 fan-out 不带 `model=`、子代理继承父 opus → "文档说 light 实跑 opus"。P2 真实内容 = 把 advisory 变强制（+ opus→light 省 token，比墙钟更实在）。
+  - **评审成本双峰**（checkpoint 时间戳实测 6 change）：大逻辑 change 评审占 ~9%、小 change 占 73%（`drop-per-dir-review-stub`）。→ **P2 价值域 = 有逻辑面小 change**，大 change 噪声。纠正上轮"P2 天花板低"的单样本误判。
+  - **P2b 后台价值窄**：仅 spec-review→设计门段有值；code-review 阶段三无人类门（P3e）人本就能走开、不加值；harness 通知半免费 → P2b 降为 P2 小尾巴，不配独立阶段。
+- **用户决定**:
+  - 档位不写死模型 → 升 `3 档 × 运行时` 矩阵（Claude Code/Codex 列，config.yaml 可覆盖）；resolver 按运行时列解析字面模型。
+  - 置信打分 light→mid（丢弃 findings、有判断权重，不配 light；不新增档）。
+  - 升级档（Fable/主力档动态升级 sonnet→opus 应对超复杂）**当前无需求 → 延后留档**（见 todolist）。
+  - 硬约束记档：Agent `model=` enum 不含 codex，跨运行时只走 outside-voice。
+- **落点**: roadmap 概览+阶段2 重写（P2a/P2b 合并为 P2、矩阵、双峰价值域、P2b 降级）+ 依赖图；design §2.2 + 决策记录 D5 精化/D7 被 D10 修正/补 D8 矩阵·D9 价值域·D10 P2b 降级。
+
 ### [阶段 0 / 规划] roadmap 文档包产出
 - **状态**: ✅ 完成
 - **产出**: `openspec/roadmaps/workflow-cost-optimization/` 下 requirements/design/roadmap/task-log/memo 五件。

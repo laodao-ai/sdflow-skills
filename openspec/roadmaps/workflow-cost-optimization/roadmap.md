@@ -9,17 +9,19 @@
 
 三腿并行、非强依赖（各自独立可交付）。**Leg 1（P1）已完成并激活**（change `adaptive-workflow-routing` 已 merge + `/sdflow-upgrade`）。Leg 2 收益最直接，但**先做 P0 阶段级基线采样**——没有基线就无法判断 P2/P3 的调度复杂度是否换来真收益（交叉审 #23/#24）。Leg 3 是策略/文档层，随时可做。
 
+> **P2 价值域澄清（explore 2026-07-06，checkpoint 时间戳实测）**：评审成本占比**高度双峰**——大逻辑 change 评审只占 ~9%（生成 + 设计门人决策吃 88%），小 change 评审占到 **73%**（`drop-per-dir-review-stub` 27min 里 code-review 独占 19.8min）。**P2 的真实杠杆域 = 有逻辑面的小 change**（撞评审、且评审是它的大头），对大 change 是噪声。这正印证 roadmap 立项动机（小 change 付不成比例评审开销 → 逼合批）。P1 杀无逻辑面小 change，P2 杀有逻辑面小 change，互补。
+
 | 阶段 | 归属 | 依赖 | 里程碑 |
 |---|---|---|---|
 | **P1** · code-review 无逻辑面白名单免 Step2 | Leg 1 | —（已交付） | ✅ 三类形状免多镜 + 反误免可测（trivial_shape.py + 34 测试，已 merge） |
-| **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | checkpoint 时间戳收成 per-阶段/per-change 类型基线 + 设收益门槛（Leg2 前置，近乎免费） |
-| **P2a** · 机械镜换快档 | Leg 2 | P0 | 机械镜跑快档、**fail-closed 退回强审**、墙钟对基线降 |
-| **P2b** · fan-out 后台 + 通知 | Leg 2 | 无 | fan-out 后台派发、完成 ping、人不阻塞（调度机制改，与 P2a 风险不同故拆分） |
-| **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2a 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
+| **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | checkpoint 时间戳收成 per-阶段/per-change 类型基线 + 设收益门槛（Leg2 前置，近乎免费；定位=**照妖镜**，看清双峰、定 P2 值不值） |
+| **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 | `model-tiers.md` 升 3档×运行时矩阵、SKILL fan-out **报档位不写死模型**、机械镜实降 light（省墙钟**+ 省 token**）、fail-closed；含 P2b 后台小尾巴 |
+| **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
 | **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | 无 | consolidation-plan 重划 + 正交批安全判据**+ 聚合上限** |
 
 > 每阶段开独立 OpenSpec 变更（`implement-workflow-cost-optimization-pN` 或语义名），完成归档后进下一个。
-> **并行 caveat（交叉审 #29）**：P0/P1/P4 触及互斥文件可并行；**P2a/P2b/P3 均改 `sdflow-spec-review`/`sdflow-code-review` 的 SKILL.md，MUST 串行**（否则并行改同批规则→审查上下文错位 + merge 冲突）。开并行 leg 前先核文件集是否相交。
+> **并行 caveat（交叉审 #29）**：P0/P1/P4 触及互斥文件可并行；**P2/P3 均改 `sdflow-spec-review`/`sdflow-code-review` 的 SKILL.md，MUST 串行**（否则并行改同批规则→审查上下文错位 + merge 冲突）。开并行 leg 前先核文件集是否相交。
+> **P2b 降级说明（explore 2026-07-06）**：原独立「P2b fan-out 后台」已并入 P2 作**小尾巴**——挖下去发现后台化只在 **spec-review→设计门**（人须等报告拍板）那一段有值；**code-review 阶段三无人类门（P3e），人本就能走开、后台化几乎不加值**；且 harness 已有子代理完成通知（半免费）。不配独立阶段。
 
 ---
 
@@ -62,55 +64,51 @@
 
 ---
 
-## 阶段 2a · 机械镜换快档（Leg 2，交叉审 #12/#15/#22/#25/#26）
+## 阶段 2 · 档位矩阵强制落地 + 机械镜降档（Leg 2，交叉审 #11/#12/#15/#22/#25/#26 + explore 2026-07-06）
 
 ### 前置条件
-P0 基线（判该镜是否在关键路径、验收有基准）。
+P0 基线（判机械镜是否在关键路径、验收有基准）。
 
 ### 目标
-把**纯机械查证类**镜（接地镜 / 历史镜）跑快档模型，压缩关键路径延迟。**判断镜（领域/对抗）绝不动。**
+把 `model-tiers.md` 从**单列 3 档**（只有 canonical 缺省）升成 **`档位 × 运行时` 矩阵**，并让 SKILL fan-out **报档位、不写死模型名**——机械镜实降到 light 档（省墙钟 **+ 省 token**），judgment 镜/裁决/门禁不动。
 
-> **⚠️ 置信过滤剔出快档集（交叉审 #11/#26，采纳）**：置信过滤会**丢弃 findings**（<80），是安全关键路径，弱档=假绿——直接违反本设计"判断镜换快档禁"原则。故 P2a 的机械快档集**只含接地镜/历史镜**，置信过滤留强/中档。
+> **explore 挖出的真相（2026-07-06）**：机械镜（接地/历史）在 `model-tiers.md` 里**早已映射到 light**，但**无任何脚本强制**——SKILL fan-out 不带 per-镜 `model=`，Agent 子代理**继承父 session（opus）**。故"文档说 light、实际大概率跑 opus"。P2 的真实内容**不是"引入快档"，是把 advisory 档位变成强制落地**（顺带把 opus→light 的 token 省下来，这比墙钟收益更实在）。
 
-### 子任务
-- `sdflow-spec-review` / `sdflow-code-review` 的镜档位映射：接地/历史镜显式指快档；`model-tiers.md` 补「延迟也是选档理由（不只省钱）」+ **明确哪些任务绝不允许弱档（判断/裁决/置信过滤）+ 弱档输出必须带的证据**。
-- **fail-closed（交叉审 #12/#22）**：无法确认实际运行档位 / 快档调用失败 → **退回强档强审**，不静默降级。
+### 档位矩阵（3 档 × 运行时，取代单列表）
 
-### 验收
-- 机械镜实际跑快档（可查运行档位）；判断镜/置信过滤仍强/中档（不误降）。
-- 快档不可用时可观测地退回强审（fail-closed 可测）。
-- 该镜墙钟对 P0 基线下降（多轮同基线）。
+```
+        │ Claude Code │ Codex     │ config.yaml 可 per-repo 覆盖任一格
+────────┼─────────────┼───────────┼──────────
+strong  │ opus        │ gpt-5-high│  裁决/门禁/verify/终审（永不降）
+mid     │ sonnet      │ gpt-5     │  判断镜/对抗镜/生成/实现 + 置信打分（★light→mid 上移）
+light   │ haiku       │ gpt-5-mini│  机械查证需读懂：接地镜/历史镜
+```
 
-### 交付物
-两评审 skill 镜档位映射 + `model-tiers.md` 更新，`/sdflow-upgrade` 激活。
-
----
-
-## 阶段 2b · fan-out 后台 + 通知（Leg 2，交叉审 #15）
-
-### 前置条件
-无（与 P2a 独立；但与 P2a/P3 同改 SKILL.md，须串行安排）。
-
-### 目标
-把 fan-out 子代理后台派发、完成 ping，把「人干等 5-10min」变非阻塞。**注意：这降的是人的阻塞感、不是 workflow 实际完成更快（交叉审 #10）**——与 P2a 的真墙钟收益分开记账。
+- **置信打分 light→mid（交叉审 A2/#11/#26，采纳）**：它**丢弃 findings**（<80）、有判断权重、会误杀真 finding——不配 light，用现有 mid 接住（**不新增档**）。
+- **不写死 haiku（用户 #1）**：档位是相对机队的相对词（adr/0006）；SKILL 只报「light 档」，主 session 经 resolver 查矩阵 → 按**当前运行时列** → 解析字面模型 → 传 Agent `model=`。config.yaml `model-tiers` 段可覆盖任一格。
+- **硬约束（explore 边界）**：Claude Code 的 Agent `model=` 只吃 `{opus,sonnet,haiku,fable}` 字面名——**codex 不在此 enum**。矩阵「Codex 运行时」列指**整个工作流跑在 Codex host 时**镜子用什么，**不是**"在 Claude host 里把某镜换成 codex"（跨运行时只能走 outside-voice.sh 子进程路，非普通镜档位）。
+- **升级档延后**：曾想加一个更高档（Fable/主力档动态升级 sonnet→opus 应对超复杂）——当前无需求，留档（见 todolist），不进本矩阵。
 
 ### 子任务
-- fan-out 默认后台派发 + 完成通知；主 session 综合仍等齐（屏障保留）。
-- **失败回退（交叉审 #22）**：后台任务挂起/通知丢失/并行结果不一致 → 可观测退回，不让评审悄悄少跑一镜。
+- `model-tiers.md` 重构为矩阵 + 补「延迟也是选档理由（不只省钱）」+ **明确哪些任务绝不允许 light（判断/裁决/置信打分）**。
+- `sdflow-spec-review` / `sdflow-code-review` fan-out：mechanical 镜显式**报档位**，主 session resolver 解析运行时列后传 `model=`（永不硬编码模型名）。
+- **fail-closed（交叉审 #12/#22）**：无法确认实际运行档位 / 降档调用失败 → **退回强档强审**，不静默降级。
+- **P2b 后台小尾巴（原独立阶段，已降级）**：**仅 spec-review→设计门**那段值得后台化（人须等报告拍板）；**code-review 阶段三无人类门（P3e）人本就能走开，不做**；harness 已有完成通知（半免费），只需把 spec-review fan-out 派成不阻塞主 session。
 
 ### 验收
-- fan-out 后台跑、完成 ping；人阻塞时间降（非 workflow 墙钟，分开度量）。
-- 后台异常有回退，不静默丢镜。
+- 机械镜实际跑 light 档（可查运行档位）；判断镜/置信打分/裁决仍 mid/strong（不误降）。
+- 降档不可用时可观测地退回强审（fail-closed 可测）。
+- 该镜墙钟对 P0 基线下降（多轮同基线）**+ token 实测降**（opus→light）。
 
 ### 交付物
-两评审 skill fan-out 调度段更新，`/sdflow-upgrade` 激活。
+`model-tiers.md` 矩阵重构 + 两评审 skill fan-out 档位报告/解析 + config.yaml 覆盖段说明，`/sdflow-upgrade` 激活。
 
 ---
 
 ## 阶段 3 · 接地镜流水线（Leg 2，交叉审 #16/#17/#18）
 
 ### 前置条件
-P2a 落地后（快档 + 观测在手，流水线更稳）。
+P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 
 ### 目标
 放松「fan-out 必等 Step1 autoplan 完」的串行纪律**仅对接地镜**——它核代码事实、不依赖 autoplan 的设计 findings，可提前并行起跑。
@@ -156,16 +154,15 @@ P2a 落地后（快档 + 观测在手，流水线更稳）。
 
 ```
   P1 (Leg1) ✅ 已交付
-  P0 (Leg2 基线采样) ──┬──▶ P2a (机械镜快档, fail-closed)
-                       │          │
-                       │          ▼
-                       └──▶ P3 (接地镜流水线, P2a 后更稳)
-  P2b (fan-out 后台) ──独立──▶ 交付   （但与 P2a/P3 同改 SKILL.md → 三者串行）
+  P0 (Leg2 基线/照妖镜) ──┬──▶ P2 (档位矩阵强制落地 + 机械镜降档, 含 P2b 后台小尾巴, fail-closed)
+                          │          │
+                          │          ▼
+                          └──▶ P3 (接地镜流水线, P2 后更稳)
   P4 (Leg3 批次) ──独立──▶ 交付
 ```
 
-- **P0 是 P2a/P3 的前置**（无基线不立项）。
-- **P2a/P2b/P3 同改两评审 SKILL.md → MUST 串行**（并行 caveat #29）。
+- **P0 是 P2/P3 的前置**（无基线不立项；且 P0 双峰数据可能直接告诉你 P2 只对小 change 值得）。
+- **P2/P3 同改两评审 SKILL.md → MUST 串行**（并行 caveat #29）。
 - P4 触及 `consolidation-plan.md`/`ff-generation-constraints.md`，与 P2/P3 文件互斥 → 可与之并行。
 
-**建议次序：P0（基线，近乎免费）→ P2a（快档试点，收益最直接）→ P4（策略层，轻，可与 P2 并行）→ P2b（后台）→ P3（流水线，调度复杂度最高，压后）**。较原 v1「P2 整块提前」更稳——先建观测、再进调度复杂区（交叉审 #30）。
+**建议次序：P0（基线/照妖镜，近乎免费）→ P2（档位矩阵，收益最直接、且省 token）→ P4（策略层，轻，可与 P2 并行）→ P3（流水线，调度复杂度最高，压后）**。较原 v1「P2 整块提前」更稳——先建观测、再进调度复杂区（交叉审 #30）。
