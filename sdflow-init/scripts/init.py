@@ -83,7 +83,8 @@ def inject(path, start, end, content, header=""):
     end_token = end.split()[1]
     block = f"{start}\n{content.rstrip()}\n{end}\n"
     if os.path.exists(path):
-        text = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
         s_loc = _find_marker_line(text, start_token)
         e_loc = _find_marker_line(text, end_token)
         if s_loc and e_loc and s_loc[0] <= e_loc[0]:
@@ -105,7 +106,8 @@ def inject(path, start, end, content, header=""):
 
 
 def read_snippet(name):
-    return open(os.path.join(SNIPPETS, name), encoding="utf-8").read()
+    with open(os.path.join(SNIPPETS, name), encoding="utf-8") as f:
+        return f.read()
 
 
 # ── bundle 铺设 ──────────────────────────────────────────────
@@ -181,7 +183,8 @@ def copy_review_tool(root):
 
     stub_path = os.path.join(osroot, "workflow", "tools", "review-stub.html")
     project_name = os.path.basename(os.path.abspath(root))
-    template_text = open(stub_path, encoding="utf-8").read()
+    with open(stub_path, encoding="utf-8") as f:
+        template_text = f.read()
     rendered = template_text.replace("__PROJECT_NAME__", project_name)
     with open(os.path.join(osroot, "review.html"), "w", encoding="utf-8") as f:
         f.write(rendered)
@@ -224,8 +227,12 @@ def ensure_global_hook(spec):
     dst = os.path.join(hooks_dir, spec["name"])
     if not os.path.exists(spec["src"]):
         return f"跳过（hook 源缺失：{spec['src']}）"
-    new_src = open(spec["src"], encoding="utf-8").read()
-    old_src = open(dst, encoding="utf-8").read() if os.path.exists(dst) else None
+    with open(spec["src"], encoding="utf-8") as f:
+        new_src = f.read()
+    old_src = None
+    if os.path.exists(dst):
+        with open(dst, encoding="utf-8") as f:
+            old_src = f.read()
     if old_src != new_src:
         shutil.copyfile(spec["src"], dst)
         acts.append("脚本已" + ("更新" if old_src is not None else "安装") + f" {dst}")
@@ -235,7 +242,8 @@ def ensure_global_hook(spec):
     settings = os.path.join(home_claude, "settings.json")
     if os.path.exists(settings):
         try:
-            data = json.load(open(settings, encoding="utf-8"))
+            with open(settings, encoding="utf-8") as f:
+                data = json.load(f)
         except (ValueError, OSError):
             return "脚本已就位；跳过注册（~/.claude/settings.json 非合法 JSON，请手动注册）"
         if not isinstance(data, dict):

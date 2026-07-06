@@ -63,3 +63,17 @@ class TestT49ConcurrentLostUpdate:
         assert init_mod._deregister_hook_in_settings(str(settings), RETIRED) is True
         json.loads(settings.read_text(encoding="utf-8"))       # 合法 = 未撕裂
         assert list(tmp_path.glob("*.tmp")) == []
+
+
+# ── T22: open().read() 统一 with open() ──────────────────────────
+
+class TestT22WithOpen:
+    def test_no_bare_open_read_or_json_load_open_in_source(self):
+        """T22: init.py 读侧不得有裸 `open(...).read()` / `json.load(open(...))`——
+        文件句柄靠 GC 关，`-W error` 下爆 19 个 PytestUnraisableExceptionWarning。
+        读侧一律 `with open() as f:`。写侧本已 with，不受影响。"""
+        src = Path(init_mod.__file__).read_text(encoding="utf-8")
+        bare_read = re.findall(r'(?<!with )\bopen\([^\n]*?\)\.read\(\)', src)
+        load_open = re.findall(r'\bjson\.load\(open\(', src)
+        assert bare_read == [] and load_open == [], \
+            f"残留未用 with 的读侧 open：read={bare_read} json.load(open)={load_open}"
