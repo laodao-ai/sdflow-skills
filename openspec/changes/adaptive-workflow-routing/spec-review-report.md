@@ -150,5 +150,7 @@ A 重写把 change 收敛为「code-review 入口无逻辑面白名单判器 + �
 
 **判定**：A 是「安全的省」的最大诚实子集，remaining risk 低。**建议设计门批准 A**（不 gate 实现的残余均保守默认偏 Step2 照跑）。
 
-<!-- 设计门批准 A 后由主 session 回写下行锚（此刻待用户确认 A-重写再写） -->
+**设计门批准 concrete A（2026-07-06）**：用户在 HARD-GATE 批准收敛版 A（code-review 无逻辑面白名单免 Step2）。轻复审通过、冷审存活 findings 逐条消解、remaining risk 低。放行阶段三。
+
+<!-- ship-gate: design-approved -->
 

@@ -61,6 +61,14 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目清单）
 
+**Step2 前置·无逻辑面白名单免除判定（机判·post-diff）**：fan-out 前跑
+`python3 $RULES_ROOT/tools/trivial_shape.py --base "$DIFF_BASE" --root "$(git rev-parse --show-toplevel)"`——
+退出码 **0=EXEMPT**（diff 仅无逻辑面白名单形状：代码内注释/约定文档路径 README·CHANGELOG·docs·VERSION/仅新增 tests/；
+多镜结构上零产出）→ **免本步 fan-out**，报告 Step2 段注明「无逻辑面豁免（trivial_shape EXEMPT）」并附判器 JSON 的 `reason`；
+Step1（scope-drift）已恒跑守卫伪装逻辑。**1=NOT_EXEMPT**（有逻辑面 / 命中行为面路径 bundle·SKILL.md·workflow.md·
+ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**（保守）。**默认开、仅机判无逻辑面才关，非「高风险才跑」**；
+判器缺失/不可执行 → 视同 NOT_EXEMPT 照跑（不静默免）。
+
 **规划镜头（主 session）**：按 `{change_dir}` 命中的 TG/栈定**领域镜**；按风险定**对抗镜**（普通 2 / 高风险 3）；
 固定 1 个**历史镜**。linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
 

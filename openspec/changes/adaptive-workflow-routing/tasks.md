@@ -6,12 +6,12 @@
 
 ## 1. 无逻辑面形状判器（核心）
 
-- [ ] 1.1 新建判器脚本 `sdflow-init/assets/workflow/tools/<判器>.py`：读 `git diff <base>..HEAD`，**语言感知**判三白名单形状（①注释/纯文档-only ②仅新增 `tests/`（排除生产码 import 的 helper）③纯展示版本常量整行匹配拒附加 token）；**行为面路径豁免清单**（`assets/workflow/**`/编排评审 `SKILL.md`/`workflow.md`/`ship_gate.py`/判器自身 → NOT 无逻辑面）；沿 `ship_gate.py` 纪律（只读/git-harden `core.quotePath=false`+`errors=replace`/双输出 human+JSON/`--change`+`--root` 纯参数无写盘）；**保守默认**：不支持的语言/拿不准 → 判 NOT 无逻辑面 [spec-workflow: code-review 两层（MODIFIED）]
-- [ ] 1.2 pytest 反例矩阵：注释+逻辑混改 hunk 不误判无逻辑面（块注释/多行字符串边界）；**改 `SKILL.md`/`workflow.md` 一行→行为面路径命中→NOT 无逻辑面**；`API_VERSION=2`/`SCHEMA_VERSION`（load-bearing）不判版本常量；`conftest.py`/被 import 的 test helper 不入 tests/ 豁免；纯注释-only/纯 tests/-only/纯展示版本号→命中；不支持语言→保守 NOT [spec-workflow: code-review 两层]
+- [x] 1.1 新建判器脚本 `sdflow-init/assets/workflow/tools/<判器>.py`：读 `git diff <base>..HEAD`，**语言感知**判三白名单形状（①注释/纯文档-only ②仅新增 `tests/`（排除生产码 import 的 helper）③纯展示版本常量整行匹配拒附加 token）；**行为面路径豁免清单**（`assets/workflow/**`/编排评审 `SKILL.md`/`workflow.md`/`ship_gate.py`/判器自身 → NOT 无逻辑面）；沿 `ship_gate.py` 纪律（只读/git-harden `core.quotePath=false`+`errors=replace`/双输出 human+JSON/`--change`+`--root` 纯参数无写盘）；**保守默认**：不支持的语言/拿不准 → 判 NOT 无逻辑面 [spec-workflow: code-review 两层（MODIFIED）]
+- [x] 1.2 pytest 反例矩阵：注释+逻辑混改 hunk 不误判无逻辑面（块注释/多行字符串边界）；**改 `SKILL.md`/`workflow.md` 一行→行为面路径命中→NOT 无逻辑面**；`API_VERSION=2`/`SCHEMA_VERSION`（load-bearing）不判版本常量；`conftest.py`/被 import 的 test helper 不入 tests/ 豁免；纯注释-only/纯 tests/-only/纯展示版本号→命中；不支持语言→保守 NOT [spec-workflow: code-review 两层]
 
 ## 2. SKILL 接入
 
-- [ ] 2.1 `sdflow-code-review/SKILL.md`：Step2 fan-out 前调判器——命中白名单形状 ∧ Step1 scope-drift 无隐藏逻辑 → 免 Step2（报告注明「无逻辑面豁免」）；否则 Step2 照跑；措辞明确「默认开、仅机判无逻辑面才关，非高风险才跑」+ Step1 恒跑守卫 [spec-workflow: code-review 两层]
+- [x] 2.1 `sdflow-code-review/SKILL.md`：Step2 fan-out 前调判器——命中白名单形状 ∧ Step1 scope-drift 无隐藏逻辑 → 免 Step2（报告注明「无逻辑面豁免」）；否则 Step2 照跑；措辞明确「默认开、仅机判无逻辑面才关，非高风险才跑」+ Step1 恒跑守卫 [spec-workflow: code-review 两层]
 
 ## 3. delta 复核 + 部署
 
