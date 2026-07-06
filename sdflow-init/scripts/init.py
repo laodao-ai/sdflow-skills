@@ -27,6 +27,7 @@ import sys
 # [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 探测 3.6+ 才喂）：
 # 整模块编译先于任何语句执行，f-string 在 py<3.6 上是解析期 SyntaxError——模块内加
 # `sys.version_info` 守卫无从拦截自身 parse，故这里只声明契约、不放无功能的假守卫。
+
 try:
     import fcntl  # POSIX 独有；Windows 无 → T49 锁降级为 best-effort 无锁
 except ImportError:  # pragma: no cover （沙箱恒 POSIX，Windows 分支无法在此覆盖）
@@ -45,7 +46,9 @@ MARK_IDX = ("<!-- opsx-init:rules:start —— 由 sdflow-init 维护，勿手�
 
 def _find_all_marker_lines(text, token):
     """[T21] 逐行累加 offset，产出 text 中**所有** marker 行的 (start, end) offset。
-    「marker 行」= 含 token ∧ lstrip 后以 "<!--" 起。inject 用之收敛多个重复托管区块。"""
+    「marker 行」= 含 token ∧ lstrip 后以 "<!--" 起。`_find_marker_line` 取其首个作安全
+    offset 定位。注：判据尚非 fence-aware（会命中 ``` 代码块内演示的 marker）——多块收敛的
+    fence-aware + 配对校验版本已 defer todolist（本仓满是 marker 示例，naive 收敛会劫持注入）。"""
     off = 0
     for line in text.splitlines(keepends=True):
         if token in line and line.lstrip().startswith("<!--"):
@@ -99,14 +102,16 @@ def inject(path, start, end, content, header=""):
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        starts = list(_find_all_marker_lines(text, start_token))
-        ends = list(_find_all_marker_lines(text, end_token))
-        if starts and ends and starts[0][0] <= ends[-1][1]:
-            # [T21] 收敛 first-start .. last-end 整段（含中间任何重复托管块）为单块——
-            # 手工粘贴出的多重复块全部归一，非只替换首块而遗留其余（区块间内容属受管
-            # 区域范畴，按契约「勿手改本区块」正规化收敛）。
-            pre = text[:starts[0][0]]
-            post = text[ends[-1][1]:]
+        s_loc = _find_marker_line(text, start_token)
+        e_loc = _find_marker_line(text, end_token)
+        if s_loc and e_loc and s_loc[0] <= e_loc[0]:
+            # [T21] 仅替换**第一对** start..end（经安全的逐行 offset 定位，见 _find_marker_line）。
+            # 注：多重复托管块只收敛首块（次块残留），是**已知残差**——正确的多块收敛须
+            # fence-aware（不误命中 ``` 代码块内演示的 marker）+ start/end 配对校验（不跨孤儿
+            # marker 吞用户内容），否则在本仓这类满是 marker 示例的 workflow-doc 仓会劫持注入/
+            # 静默丢内容（code-review adv 镜实证 F1/F2）。已 defer todolist，非本轻量批 scope。
+            pre = text[:s_loc[0]]
+            post = text[e_loc[1]:]
             new = pre + block.rstrip("\n") + "\n" + post.lstrip("\n")
             if not new.endswith("\n"):
                 new += "\n"
@@ -256,15 +261,31 @@ def ensure_global_hook(spec):
     else:
         acts.append("脚本已最新")
 
+    # [F-C] settings 注册走 <settings>.lock（与 deregister 同一把锁）——register×deregister
+    # 跨进程并发不再互相 lost-update（否则一进程基于旧 snapshot 写回会复活退役 hook / 丢当前 hook）。
     settings = os.path.join(home_claude, "settings.json")
+    lock_fd = _acquire_settings_lock(settings)
+    try:
+        acts.append(_register_hook_in_settings_locked(settings, spec))
+    finally:
+        _release_settings_lock(lock_fd)
+    return "；".join(acts)
+
+
+def _register_hook_in_settings_locked(settings, spec):
+    """在持 <settings>.lock 下把 spec 幂等注册进 settings.json，返回注册状态描述。
+    [F-B] 遍历既有条目用 isinstance 守卫 + `_hook_command`——畸形 settings（非 dict entry /
+    非 str command，用户/三方工具可写）不再裸抛 AttributeError/TypeError（原 `entry.get`/
+    `h.get`/`name in (... or "")` 会崩，与 _deregister 的 CR-F1 口径不对称，此处对齐）。
+    [F-C] 写走共享 _atomic_write_settings（tmp+os.replace，与 deregister 同口径）。"""
     if os.path.exists(settings):
         try:
             with open(settings, encoding="utf-8") as f:
                 data = json.load(f)
         except (ValueError, OSError):
-            return "脚本已就位；跳过注册（~/.claude/settings.json 非合法 JSON，请手动注册）"
+            return "跳过注册（~/.claude/settings.json 非合法 JSON，请手动注册）"
         if not isinstance(data, dict):
-            return "脚本已就位；跳过注册（~/.claude/settings.json 顶层非对象）"
+            return "跳过注册（~/.claude/settings.json 顶层非对象）"
     else:
         data = {}
 
@@ -278,20 +299,18 @@ def ensure_global_hook(spec):
         hooks[spec["event"]] = event_list
 
     for entry in event_list:
-        for h in (entry.get("hooks") or []):
-            if spec["name"] in (h.get("command") or ""):
-                acts.append("已注册（全局）")
-                return "；".join(acts)
+        inner = entry.get("hooks") if isinstance(entry, dict) else None
+        for h in (inner or []):
+            if spec["name"] in _hook_command(h):
+                return "已注册（全局）"
 
     event_list.append({
         "matcher": spec["matcher"],
         "hooks": [{"type": "command", "command": spec["cmd"]}],
     })
-    with open(settings, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    acts.append(f"已注册 → ~/.claude/settings.json（{spec['event']}）")
-    return "；".join(acts)
+    if _atomic_write_settings(settings, data):
+        return f"已注册 → ~/.claude/settings.json（{spec['event']}）"
+    return "跳过注册（settings.json 写失败，请手动注册）"
 
 
 def ensure_global_hooks():
@@ -335,13 +354,35 @@ def _acquire_settings_lock(settings):
 
 
 def _release_settings_lock(fd):
-    """释放 _acquire_settings_lock 取得的锁并关 fd（fd 为 None 时 no-op）。"""
+    """释放 _acquire_settings_lock 取得的锁并关 fd（fd 为 None 时 no-op）。
+    [F-D] flock(LOCK_UN)/os.close 的 OSError（EBADF/EINTR 等罕见态）一律吞——retire-hooks
+    CLI 模式无 run() 的外层 try 兜底，此处裸抛会打断 RETIRED_HOOKS 循环 + 留裸 traceback，
+    违「绝不中止、坏则跳过」（fail-safe 与 FB-3 一致）。os.close 恒在 finally 执行。"""
     if fd is None:
         return
     try:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-    finally:
-        os.close(fd)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+
+
+def _atomic_write_settings(settings, data):
+    """[F-C] 原子写 settings.json（tmp + os.replace）——deregister 与 register 共用同一写口径。
+    **须在持 <settings>.lock 下调用**。写成功返回 True；OSError（只读/满盘/权限）→ 不裸抛、
+    返回 False（FB-3：绝不中止 retire_hooks 循环 / setup.sh，坏则跳过）。tmp 用固定名
+    `<settings>.tmp`，失败残渣下次成功写覆盖消费（唯一名 tempfile 化已 defer todolist）。"""
+    try:
+        tmp = settings + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        os.replace(tmp, settings)   # 原子替换（POSIX + Windows 同名卷内保证）
+    except OSError:
+        return False
+    return True
 
 
 def _deregister_hook_in_settings(settings, name):
@@ -391,16 +432,9 @@ def _deregister_hook_in_settings_locked(settings, name):
                 new_list.append(entry)
         data["hooks"][event] = new_list
     if changed:
-        # [impl-review-fix] FB-3：写路径也 fail-safe（与上面读路径一致）。只读/满盘/权限异常时
-        # os.replace 抛 OSError——若裸抛会打断 retire_hooks() 的 RETIRED_HOOKS 循环（后续 hook 全
-        # 不处理）且给 setup.sh 留一段裸 traceback，违「绝不中止、坏则跳过」初衷。捕获→返 False。
-        try:
-            tmp = settings + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-                f.write("\n")
-            os.replace(tmp, settings)   # 原子替换（POSIX + Windows 同名卷内保证）
-        except OSError:
+        # [impl-review-fix] FB-3：写路径 fail-safe（与读路径一致），走共享 _atomic_write_settings
+        # （tmp+os.replace，OSError→False 不裸抛，不打断 retire_hooks 循环 / setup.sh）。
+        if not _atomic_write_settings(settings, data):
             return False
     return changed
 

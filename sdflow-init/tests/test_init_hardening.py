@@ -99,18 +99,19 @@ class TestT21InjectMalformed:
         assert loc == (expected_start, expected_start + len(marker) + 1), \
             "锚到了行内嵌入的 inline marker、非真 marker 行"
 
-    def test_inject_collapses_multiple_stale_blocks(self, tmp_path):
-        """T21: 文件含多个重复托管区块（手工粘贴畸形态）→ inject 须全部收敛为单块，
-        非只替换第一个而遗留其余。修前 first-start..first-end 只动首块 → 次块残留。"""
-        block = (f"{self.START}\n旧内容A\n{self.END}\n")
+    def test_inject_single_block_replace_unchanged(self, tmp_path):
+        """T21: 单块替换语义（经安全 offset finder）不变——既有 TestInjectMarkerMigration
+        覆盖迁移，本测补一条正常单块替换 + 区块外内容保全。
+        注：多重复块收敛（fence-aware + 配对校验）已 defer todolist（naive collapse 在本仓
+        marker-示例满仓的场景会劫持注入/吞内容，见 code-review F1/F2），本轮不做。"""
+        block = f"{self.START}\n旧内容\n{self.END}\n"
         f = tmp_path / "CLAUDE.md"
-        f.write_text("# 头\n\n" + block + "\n中间用户内容\n\n" + block + "\n尾部\n",
-                     encoding="utf-8")
+        f.write_text("# 头\n\n" + block + "\n尾部用户内容\n", encoding="utf-8")
         init_mod.inject(str(f), *init_mod.MARK_DOC, "新内容")
         text = f.read_text(encoding="utf-8")
-        assert text.count("opsx-init:start") == 1, "多重复块未收敛为单块"
-        assert "新内容" in text and "旧内容A" not in text
-        assert "尾部" in text                              # 末尾用户内容保留
+        assert text.count("opsx-init:start") == 1
+        assert "新内容" in text and "旧内容" not in text
+        assert "尾部用户内容" in text
 
 
 # ── T48: setup.sh python 探测版本校验 ────────────────────────────
@@ -127,20 +128,100 @@ class TestT48SetupVersionCheck:
         py.chmod(0o755)
         snippet = (
             '_py=""\n'
-            'command -v python3 >/dev/null 2>&1 && _py=python3\n'
-            '[ -z "$_py" ] && command -v python >/dev/null 2>&1 && _py=python\n'
-            'if [ -z "$_py" ]; then echo NOPY\n'
-            'elif ! "$_py" -c \'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)\' '
-            '>/dev/null 2>&1; then echo SKIP_VER\n'
+            'for _cand in python3 python; do\n'
+            '  if command -v "$_cand" >/dev/null 2>&1 && "$_cand" -c '
+            "'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then\n"
+            '    _py="$_cand"; break\n'
+            '  fi\n'
+            'done\n'
+            'if [ -z "$_py" ]; then echo NOPY36\n'
             'else "$_py" /nonexistent retire-hooks; fi\n'
         )
         r = subprocess.run(["/bin/bash", "-c", snippet],
                            env={"PATH": str(fakebin)}, capture_output=True, text=True)
-        assert "SKIP_VER" in r.stdout, "非 py3.6+ 未被版本校验拦下"
+        assert "NOPY36" in r.stdout, "非 py3.6+ 未被版本校验拦下"
         assert "RAN_" not in r.stdout, "把 init.py 误喂给了 py2"
+
+    def test_setup_probe_falls_back_to_valid_candidate(self, tmp_path):
+        """T48/codex#4: python3 不合格但 python 合格时须 fallback 到 python（不止校验第一个）。"""
+        fakebin = tmp_path / "bin"; fakebin.mkdir()
+        # python3 = 假 py2（版本校验退出 1）；python = 合格 py3.6+（版本校验退出 0）
+        (fakebin / "python3").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN3_$*\n')
+        (fakebin / "python").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 0; fi\necho RANP_$*\n')
+        (fakebin / "python3").chmod(0o755); (fakebin / "python").chmod(0o755)
+        snippet = (
+            '_py=""\n'
+            'for _cand in python3 python; do\n'
+            '  if command -v "$_cand" >/dev/null 2>&1 && "$_cand" -c '
+            "'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then\n"
+            '    _py="$_cand"; break\n'
+            '  fi\n'
+            'done\n'
+            'if [ -z "$_py" ]; then echo NOPY36\n'
+            'else "$_py" retire-hooks; fi\n'
+        )
+        r = subprocess.run(["/bin/bash", "-c", snippet],
+                           env={"PATH": str(fakebin)}, capture_output=True, text=True)
+        assert "RANP_retire-hooks" in r.stdout, "python3 旧版时未 fallback 到合格 python"
+        assert "NOPY36" not in r.stdout
 
     def test_setup_sh_has_version_check(self):
         """T48 bind: 绑真 setup.sh——探测块须含 3.6+ 版本校验构造，防漂移丢失。"""
         root = Path(__file__).resolve().parents[2]
         text = (root / "setup.sh").read_text(encoding="utf-8")
         assert "version_info >= (3, 6)" in text, "setup.sh 探测块缺 3.6+ 版本校验"
+
+
+# ── 冷 code-review 折叠修：ensure_global_hook 对称硬化（F-B 崩溃守卫 / F-C 锁+原子）──
+
+class TestEnsureGlobalHookHardening:
+    def _spec(self, src):
+        return {"name": "myhook.py", "src": str(src), "event": "PreToolUse",
+                "matcher": "Bash", "cmd": 'python3 "$HOME/.claude/hooks/myhook.py"'}
+
+    def test_malformed_settings_does_not_crash(self, tmp_path, monkeypatch):
+        """F-B: 畸形 settings（非 dict entry / 非 str command，用户/三方工具可写）注册路径
+        不得裸崩——原 `entry.get`/`h.get`/`name in (...or"")` 会 AttributeError/TypeError
+        （与 _deregister 的 CR-F1 守卫不对称）。实证坐实过。"""
+        home = tmp_path / "home"; (home / "hooks").mkdir(parents=True)
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        src = tmp_path / "myhook.py"; src.write_text("x\n", encoding="utf-8")
+        (home / "settings.json").write_text(json.dumps({"hooks": {"PreToolUse": [
+            "not-a-dict-entry",
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": 123}]},
+        ]}}), encoding="utf-8")
+        msg = init_mod.ensure_global_hook(self._spec(src))   # 不抛
+        assert "已注册" in msg or "已就位" in msg or "已" in msg
+
+    def test_register_acquires_exclusive_lock(self, tmp_path, monkeypatch):
+        """F-C: register 路径也须在 <settings>.lock 上串行化——外部持锁时 ensure 阻塞。
+        修前 register 裸读写不持锁 → 与 deregister 并发 lost-update。"""
+        fcntl = pytest.importorskip("fcntl")
+        home = tmp_path / "home"; (home / "hooks").mkdir(parents=True)
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        src = tmp_path / "myhook.py"; src.write_text("x\n", encoding="utf-8")
+        settings = home / "settings.json"
+        settings.write_text(json.dumps({"hooks": {}}), encoding="utf-8")
+        fd = os.open(str(settings) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        done = threading.Event()
+        def worker():
+            init_mod.ensure_global_hook(self._spec(src)); done.set()
+        t = threading.Thread(target=worker, daemon=True); t.start()
+        try:
+            assert not done.wait(timeout=0.6), "外部持锁时 register 未阻塞 → 未串行化"
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN); os.close(fd)
+        assert done.wait(timeout=3.0)
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        assert "myhook.py" in json.dumps(data)
+
+    def test_register_write_atomic_no_tmp_residue(self, tmp_path, monkeypatch):
+        """F-C: register 写走 tmp+os.replace（原子），成功后无 .tmp 残渣。"""
+        home = tmp_path / "home"; (home / "hooks").mkdir(parents=True)
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+        src = tmp_path / "myhook.py"; src.write_text("x\n", encoding="utf-8")
+        init_mod.ensure_global_hook(self._spec(src))
+        data = json.loads((home / "settings.json").read_text(encoding="utf-8"))   # 合法=未撕裂
+        assert "myhook.py" in json.dumps(data)
+        assert list(home.glob("*.tmp")) == []

@@ -161,16 +161,19 @@ install_sdflow
 # 死 hook（change-review-stub.py）每次 Bash 调用都 fire 报错，直到被反注册。把自愈焊进
 # 工具链升级路径，令 /sdflow-upgrade 即时清掉，不必等某项目跑 sdflow-init update。
 # fail-safe：绝不中止 setup（清理是尽力而为，非安装必要步）。
-_py=""
-command -v python3 >/dev/null 2>&1 && _py=python3
-[ -z "$_py" ] && command -v python >/dev/null 2>&1 && _py=python
-# [T48] 校验落到的解释器是 Python 3.6+——裸 `python` 可能是 Python2，喂 init.py 会在
+# [T48] 挑一个 Python 3.6+ 解释器喂 init.py——裸 `python` 可能是 Python2，喂进去会在
 # f-string 解析期崩（整模块编译先于任何语句执行，init.py 内的版本守卫无从拦截自身 parse），
-# 故版本把关只能在调用侧。三分支互斥（无 python / 版本不符 / 正常），各出单一提示。
+# 故版本把关只能在调用侧。**逐候选校验、取首个 3.6+**（不只看 python3：若 python3 恰是旧版
+# 而 python 合格，仍能用——修 code-review codex#4「只校验第一个候选、不 fallback」）。
+_py=""
+for _cand in python3 python; do
+  if command -v "$_cand" >/dev/null 2>&1 \
+     && "$_cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then
+    _py="$_cand"; break
+  fi
+done
 if [ -z "$_py" ]; then
-  echo "  ⚠ retire-hooks 跳过：PATH 无 python3/python（非致命）"
-elif ! "$_py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then
-  echo "  ⚠ retire-hooks 跳过：$_py 非 Python 3.6+（init.py 需 f-string，非致命）"
+  echo "  ⚠ retire-hooks 跳过：PATH 无 Python 3.6+（init.py 需 f-string，非致命）"
 else
   { "$_py" "$REPO_DIR/sdflow-init/scripts/init.py" retire-hooks ; } || echo "  ⚠ retire-hooks 跳过（非致命）"
 fi
