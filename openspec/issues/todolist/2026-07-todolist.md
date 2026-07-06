@@ -67,6 +67,7 @@
 | T59 | `sdflow-retro/retro_report+lens_metric_aggregate` | ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量 | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
 | T60 | `sdflow-retro/retro_report` | _run_git 不检查 returncode，git 失败与真无提交不可区分 | 可观测性 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
 | T61 | `sdflow-retro/retro_report` | build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导 | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T62 | `sdflow-retro/retro_report._run_git` | T60 留痕在系统性 git 损坏下无节流放大：seed_mass_shas 对每个 sha 调 _run_git，仓库整体损坏时每 commit rc≠0 各写一行 stderr，O(commits) 无去重无节流。低危(仅真故障下噪声非虚警;view-only不中断)。改法:同一 subcmd 失败去重,或 seed 循环 per-sha 失败聚合成一条 | 可观测性 | OPEN | 2026-07-06 21:08 | sdflow-retro-cleanup |  |
 
 ---
 

@@ -226,6 +226,55 @@ def test_backtick_fence_not_closed_by_tilde():
     assert "块外" in lines
 
 
+def test_closing_fence_with_trailing_content_not_a_close():
+    # [impl-review-fix] 对抗镜1 爆点1：CommonMark 闭合 fence 之后只能有空白，
+    # `` ``` extra `` 不是合法闭合。此前前缀匹配把它当闭合 → 状态失同步（既可漏真锚
+    # 又可混假锚，且污染扩散到文件剩余部分）。修前 FAIL：`` ``` extra `` 误闭合。
+    text = "```\n" + ANCHOR + "\n``` extra\n仍在 fence 内\n```\n块外\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines                # 内锚不漏出
+    assert "仍在 fence 内" not in lines         # `` ``` extra `` 非法闭合，仍在块内
+    assert "块外" in lines                     # 裸 ``` 才是真正闭合
+
+
+def test_indented_4spaces_not_a_fence():
+    # [impl-review-fix] 对抗镜1 爆点2：CommonMark ≥4 空格缩进是代码块、非 fence 开启。
+    # 此前 \s* 吞任意缩进 → 缩进的 ``` 被误判 fence，吞掉其后 fence 外真锚。
+    # 修前 FAIL：4 空格缩进 ``` 被当 fence，ANCHOR 被吞。
+    text = "普通段落\n    ```\n" + ANCHOR + "\n    ```\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR in lines                    # 4 空格缩进非 fence，真锚应产出
+
+
+def test_3space_indent_still_a_fence():
+    # [impl-review-fix] 边界锁：≤3 空格缩进仍是合法 CommonMark fence，锚被跳过。
+    text = "x\n   ```\n" + ANCHOR + "\n   ```\n"
+    lines = list(lma._fence_aware_lines(text))
+    assert ANCHOR not in lines
+
+
+def test_aggregate_is_dir_oserror_returns_empty(tmp_path, monkeypatch):
+    # [impl-review-fix] 对抗镜2：is_dir() 自身在父目录 EACCES 时抛 OSError（非返 False），
+    # 「返空不抛」契约须真正兑现——否则删掉的 call-site OSError catch 不再兜底 → 冒泡崩溃。
+    # 修前 FAIL：is_dir 抛 PermissionError 直接穿透 aggregate。
+    def _boom(self):
+        raise PermissionError("denied")
+    monkeypatch.setattr(lma.Path, "is_dir", _boom)
+    assert lma.aggregate(tmp_path / "archive") == ([], [], [])
+
+
+def test_aggregate_glob_oserror_returns_empty(tmp_path, monkeypatch):
+    # [impl-review-fix] codex outside-voice：「返空不抛」契约须覆盖 glob 遍历异常，
+    # 不止 is_dir——is_dir 与 glob 是两处独立异常源。call-site catch 已删，glob 中途
+    # PermissionError 会冒泡崩 build_report。修前 FAIL：is_dir 通过后 glob 抛错穿透 aggregate。
+    (tmp_path / "archive").mkdir()
+
+    def _boom(self, pattern):
+        raise PermissionError("denied during traversal")
+    monkeypatch.setattr(lma.Path, "glob", _boom)
+    assert lma.aggregate(tmp_path / "archive") == ([], [], [])
+
+
 def test_unclosed_fence_swallows_trailing_anchors(tmp_path):
     # 诚实留档：奇数个 ``` （未闭合 fence）会把其后所有行都视为 fence 内，
     # 导致尾部锚被漏计（少计而非误取，方向偏保守，暂可接受）。

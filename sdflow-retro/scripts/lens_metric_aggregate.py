@@ -17,15 +17,19 @@ REVIEW_ROUNDS_THRESHOLD = 10
 LAYER_ENUM = {"spec-review", "code-review"}
 LENS_ENUM = {"domain", "adversarial", "grounding", "history", "outside-voice", "broad"}
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')  # 受限 kv：key="value"，禁裸 split
-_FENCE_OPEN = re.compile(r'^\s*(`{3,}|~{3,})')  # [impl-review-fix CF-4 / T58] 反引号或波浪号 fence，捕获确切标记
+_FENCE_OPEN = re.compile(r'^ {0,3}(`{3,}|~{3,})')  # [impl-review-fix CF-4 / T58 / 对抗镜1] 反引号或波浪号 fence；缩进 0-3 空格（CommonMark：≥4 空格是代码块非 fence，不用 \s* 免吞 tab/深缩进）
 
 
 def _fence_aware_lines(text):
-    """产出非 fenced-block 行。真实 CommonMark fence 语义：记录开启 fence 的
-    标记字符（` 或 ~）与确切长度，收尾须遇到「同字符且长度 >= 开启长度」的 fence
-    才闭合——故 4-反引号外层可安全嵌套 3-反引号内层示范锚（内层不会被误判为已跳出），
-    且 ``` 与 ~~~ 互不闭合（T58：此前只认反引号，~~~ 代码块里的示范锚被误计入聚合）。
-    [impl-review-fix CF-4 / T58]（本脚本内重实现，不跨 skill import）。"""
+    """产出非 fenced-block 行。真实 CommonMark fence 语义：
+    - 开启：0-3 空格缩进 + ≥3 个同字符 fence marker（` 或 ~），行尾可带 info string；
+    - 记录标记字符与确切长度；收尾须遇到「同字符 ∧ 长度 >= 开启长度 ∧ marker 之后仅空白」
+      的 fence 才闭合——故 4-反引号外层可安全嵌套 3-反引号内层示范锚，且 ``` 与 ~~~ 互不闭合。
+    [对抗镜1 修]两处 CommonMark 合规化：① 开启缩进从「任意前导空白」收紧为 0-3 空格
+    （≥4 空格缩进的 ``` 是代码块非 fence，此前被误判 fence 吞掉其后真锚，且旧写法还吞 tab）；
+    ② 闭合行 marker 之后若有非空白内容（如 `` ``` extra ``）
+    不构成合法闭合（此前前缀匹配误闭合 → 状态失同步、漏真锚/混假锚、污染扩散）。
+    [impl-review-fix CF-4 / T58 / 对抗镜1]（本脚本内重实现，不跨 skill import）。"""
     fence = None  # None = 不在 fence 内；否则 (标记字符, 需匹配的最小闭合长度)
     for line in text.splitlines():
         m = _FENCE_OPEN.match(line)
@@ -36,7 +40,9 @@ def _fence_aware_lines(text):
                 continue
             yield line
         else:
-            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1]:
+            # 闭合：同字符 ∧ 长度足够 ∧ marker 之后仅空白（闭合行不带 info string/trailing）
+            if (m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1]
+                    and line[m.end():].strip() == ""):
                 fence = None
             continue
 
@@ -67,12 +73,19 @@ def aggregate(archive_root):
     （编码坏字节、IO 错误等）不拖垮全局聚合——单独 try/except，坏文件显式计入
     「解析失败」桶（不静默丢弃），其余报告照常聚合。
     [T61] 显式契约：archive_root 不是目录（缺失/被删/恰是文件）→ 返回空三元组。
-    这把「缺 archive → 空」从 Path.glob 的偶然实现行为升成本函数的文档化契约，
-    使 call site 无需再包不可达的防御性 try/except。"""
-    if not Path(archive_root).is_dir():
+    「返空不抛」覆盖**整个 archive 扫描阶段**——is_dir 自身在父目录 EACCES 抛 OSError、
+    或 glob 遍历中途遇 PermissionError/OSError（对抗镜2 + codex outside-voice 收敛：
+    is_dir 与 glob 是两处独立异常源），都吞成空三元组，绝不冒泡。否则删掉的 call-site
+    OSError catch 不再兜底 → 崩 build_report。逐文件读/解码错仍走下方 per-file try/except
+    计入「解析失败」桶（那是"坏文件不拖垮全局"，与"扫描阶段整体不抛"不同层）。"""
+    try:
+        if not Path(archive_root).is_dir():
+            return [], [], []
+        reports = sorted(Path(archive_root).glob("**/*-review-report.md"))
+    except OSError:
         return [], [], []
     rows, no_anchor, parse_failed = [], [], []
-    for report in sorted(Path(archive_root).glob("**/*-review-report.md")):
+    for report in reports:
         try:
             rr = parse_report(report)
         except (OSError, UnicodeDecodeError, ValueError):

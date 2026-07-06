@@ -321,10 +321,11 @@ def hr_tg_flags(info):
 
 
 def surfacing_block(root):
-    """D12：N≥10 待复评镜 surfacing 机械契约。扫 archive 的 lens-metric 锚，
+    """D12：待复评镜 surfacing 机械契约。扫 archive 的 lens-metric 锚，
     按 (layer,lens,runner,site) 分组计「出现轮数」（口径须与 lens_metric_aggregate.
-    render_table 一致——直接复用同一分组键，不重复定义）；轮数≥10 的镜在报告顶部
-    独立区块列出，固定前缀标记 `⚠️ 待复评:`（可机验，MUST NOT 仅用形容词）。
+    render_table 一致——直接复用同一分组键，不重复定义）；轮数 ≥ 阈值
+    （`LMA.REVIEW_ROUNDS_THRESHOLD`，与 render_table 同源，文档不写死字面量）的镜
+    在报告顶部独立区块列出，固定前缀标记 `⚠️ 待复评:`（可机验，MUST NOT 仅用形容词）。
     无命中也必须输出固定行——防止「长期无命中」被静默省略成死列（同 hr-tg 空箱同理，
     grill-not-skippable 教训：跳过类判定不能不可见）。
     """
