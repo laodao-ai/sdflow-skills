@@ -140,7 +140,7 @@
 
 ### 前置条件
 - [x] **ROI 门（显式阈值，冷审 F4）** — ✅ **已过（2026-07-07，GO 变体 a）**：B4/B5 已同类（子串/prose-inline 混淆）两连发、B5 自认「非根治」→ 已达立项线；**GO = 立项待 P2 完成即启**——P2（`e43460c`）已交付，故取变体 a、不等新事故起手（拍板见 task-log「阶段 5 起手 / ROI 门结论」）。〔变体 b「再出 ≥1 例同类 gate 假过/假红更确证」未采用，留作若 P5 中途受阻的回退依据〕
-- [x] **核实 ship_gate.py 真实铺设路径** — ✅ **已核（survey 实测）**：`ship_gate.py` **只在 `sdflow-ship/scripts/`、走 skill symlink，非 bundle 回灌消费仓** → 迁移爆炸半径**大降**（不触 `sdflow-init update` 回灌链、消费仓无 tools/ 侧改动）。**残留起手项**：归档 inline 锚精确篇数（「57」为约数、冷审实测 review-report ~39，以实测为准，F6）——S1 起手第一步精核，不阻立项。
+- [x] **核实 ship_gate.py 真实铺设路径** — ✅ **已核（survey 实测）**：`ship_gate.py` **只在 `sdflow-ship/scripts/`、走 skill symlink，非 bundle 回灌消费仓** → 迁移爆炸半径**大降**（不触 `sdflow-init update` 回灌链、消费仓无 tools/ 侧改动）。**归档 inline 锚精确篇数（F6，已回填实测）**：design 阶段估算「88 文件/168 锚行」；P5 完工后用 `grep -rlE '<!-- ship-gate:' openspec/changes/archive/` 精确复核，**实测 85 文件/153 锚行**——design 数字混入了 3 处 prose 里的 `ship-gate: xxx` 反引号提及（grep 命令示例/文档叙述，非真实 `<!-- ship-gate: ... -->` HTML 注释锚），以此实测数为准；差值不影响 P5 迁移范围（dual-read 覆盖全部真实锚，误差不改变 Task1-7 交付面）。
 - [x] 阶段 2（anchor-lint）已完成（`e43460c`）——**注（冷审 F1）**：P2 校验度量锚、与 S1 的 gate 锚**不相干**，非 S1 的锚层前置依赖；此处只是 Leg1 先行的顺序结果，不是「P2 为 S1 补机验」。
 
 ### 目标
