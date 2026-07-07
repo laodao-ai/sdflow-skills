@@ -3,8 +3,10 @@ Tests for issues.py's Task 8 skeleton: cross-pool `read_pool` join (bug + todo)
 and D9 cross-pool ID conflict detection.
 Run with: python3 -m pytest sdflow-issues/tests/ -v
 """
+import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +26,22 @@ SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
 # 是 sdflow-skills 根，sdflow-buglist/sdflow-todolist 与本 skill 是同级 sibling）。
 BUGLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-buglist" / "scripts" / "buglist.py")
 TODOLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-todolist" / "scripts" / "todolist.py")
+
+
+def _load_module_from_path(name, path):
+    """按文件路径 import 一个独立脚本模块（buglist.py/todolist.py 不是包，无法
+    `import buglist`）——用 importlib.util.spec_from_file_location 直接从文件路径加载，
+    只为读它们的模块级常量（如 `STATUS_CODES`），不依赖它们互相 import（三脚本子进程
+    解耦的既定风格，见 issues.py 模块 docstring）。两脚本都用 `if __name__ == "__main__"`
+    守卫入口，import 不会触发 argparse/执行。"""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+buglist_mod = _load_module_from_path("buglist_for_test", BUGLIST_SCRIPT)
+todolist_mod = _load_module_from_path("todolist_for_test", TODOLIST_SCRIPT)
 
 
 class TestReadPoolJoin:
@@ -145,6 +163,66 @@ class TestReadPoolConflictGuard:
             pass
         else:
             pytest.fail("expected CrossPoolIDConflict to be raised, join returned normally")
+
+
+class TestTerminalStatusesCrossScriptConsistency:
+    """T3 守卫：bug 终态集 {FIXED,WONTFIX}、todo 终态集 {DONE,WONTDO} 在多处独立硬编码
+    （`issues.py TERMINAL_STATUSES`、buglist.py/todolist.py 的 `cmd_scan`/`cmd_triage`
+    内联字面量），改任一处忘了另一处会静默漂移——本类锁死这几处互相一致。
+
+    （a）issues.TERMINAL_STATUSES[pool] 必须是对应 recorder STATUS_CODES 的子集
+    （终态状态词必须真实存在于该 recorder 的合法状态码表里）。
+
+    （b）buglist.py/todolist.py 的 `cmd_scan`（`nonterminal = set(STATUS_CODES) - {...}`，
+    约:629/596）与 `cmd_triage`（`open_untriaged = set(STATUS_CODES) - {...}`，约:534/508）
+    内联的终态字面量，实际是**各自硬编码的字面量集合**、不从 `issues.TERMINAL_STATUSES`
+    派生（两脚本各自独立、不 import issues.py，见 issues.py 模块 docstring"子进程解耦"）。
+    单纯断言 `{"FIXED","WONTFIX"} == issues.TERMINAL_STATUSES["bug"]` 只是重申 issues.py
+    自己常量的已知值，测不出 buglist.py/todolist.py 源码里的字面量是否已经漂移——因此
+    这里额外用正则从两个源文件里抠出所有 `{"A","B",...}` 形态的字面量集合，断言其中
+    确有 >=2 处（对应 cmd_scan + cmd_triage 两个已知内联点）完整覆盖 issues.py 的终态集，
+    这样任一处漏改都会让本测试变红。
+    """
+
+    @staticmethod
+    def _inline_literal_sets(source_text):
+        """提取源码里形如 {"A", "B", ...} 的字面量字符串集合列表（用于定位
+        cmd_scan/cmd_triage 里减法表达式的终态字面量）。"""
+        sets = []
+        for m in re.finditer(r'\{\s*(?:"[A-Z_]+"\s*,?\s*)+\}', source_text):
+            codes = re.findall(r'"([A-Z_]+)"', m.group(0))
+            sets.append(set(codes))
+        return sets
+
+    def test_terminal_sets_are_subset_of_recorder_status_codes(self):
+        assert issues_mod.TERMINAL_STATUSES["bug"] <= set(buglist_mod.STATUS_CODES)
+        assert issues_mod.TERMINAL_STATUSES["todo"] <= set(todolist_mod.STATUS_CODES)
+
+    def test_terminal_sets_match_expected_literal_values(self):
+        assert {"FIXED", "WONTFIX"} == issues_mod.TERMINAL_STATUSES["bug"]
+        assert {"DONE", "WONTDO"} == issues_mod.TERMINAL_STATUSES["todo"]
+
+    def test_buglist_inline_terminal_literals_match_issues_constant(self):
+        bug_src = Path(BUGLIST_SCRIPT).read_text(encoding="utf-8")
+        bug_terminal = issues_mod.TERMINAL_STATUSES["bug"]
+        literal_sets = self._inline_literal_sets(bug_src)
+        covering = [s for s in literal_sets if bug_terminal <= s]
+        assert len(covering) >= 2, (
+            f"buglist.py 里少于 2 处内联字面量集合覆盖终态集 {bug_terminal}"
+            f"（cmd_scan/cmd_triage 应各有一处）——候选集合：{literal_sets}；"
+            "很可能是某处内联字面量与 issues.TERMINAL_STATUSES['bug'] 已漂移"
+        )
+
+    def test_todolist_inline_terminal_literals_match_issues_constant(self):
+        todo_src = Path(TODOLIST_SCRIPT).read_text(encoding="utf-8")
+        todo_terminal = issues_mod.TERMINAL_STATUSES["todo"]
+        literal_sets = self._inline_literal_sets(todo_src)
+        covering = [s for s in literal_sets if todo_terminal <= s]
+        assert len(covering) >= 2, (
+            f"todolist.py 里少于 2 处内联字面量集合覆盖终态集 {todo_terminal}"
+            f"（cmd_scan/cmd_triage 应各有一处）——候选集合：{literal_sets}；"
+            "很可能是某处内联字面量与 issues.TERMINAL_STATUSES['todo'] 已漂移"
+        )
 
 
 class TestAtomicWrite:
