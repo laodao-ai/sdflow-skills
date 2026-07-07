@@ -42,6 +42,13 @@
 | T8 | todo | PROPOSED | minimize-repo-footprint |
 | T9 | todo | PROPOSED | minimize-repo-footprint |
 
+### 批次：mlh-p2-anchor-lint
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T68 | todo | PROPOSED | mlh-p2-anchor-lint |
+| T69 | todo | PROPOSED | mlh-p2-anchor-lint |
+
 ### 批次：rec2-obs-readability
 
 | ID | Pool | Status | 关联Change |

@@ -73,8 +73,8 @@
 | T65 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` | gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类 | 基础设施 | OPEN | 2026-07-07 09:34 | main |  |
 | T66 | `cmd_scan(buglist/todolist) + cmd_batch_rename(issues)` | recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化 | 性能优化 | PROPOSED | 2026-07-07 13:03 | issues-pool-hardening | issues-pool-hardening |
 | T67 | `cmd_add id 校验(buglist/todolist)` | 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55) | 代码质量 | PROPOSED | 2026-07-07 13:03 | issues-pool-hardening | issues-pool-hardening |
-| T68 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 | 代码质量 | OPEN | 2026-07-07 16:57 | mlh-p2-anchor-lint |  |
-| T69 | `sdflow-init/copy_bundle` | 缺 pin 消费仓 update 端到端交叉不变量测试（workflow.md/spec-checklists/code-checklists 原封不动、仅 tools+契约刷新） | 代码质量 | OPEN | 2026-07-07 16:57 | mlh-p2-anchor-lint |  |
+| T68 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 | 代码质量 | PROPOSED | 2026-07-07 16:57 | mlh-p2-anchor-lint | mlh-p2-anchor-lint |
+| T69 | `sdflow-init/copy_bundle` | 缺 pin 消费仓 update 端到端交叉不变量测试（workflow.md/spec-checklists/code-checklists 原封不动、仅 tools+契约刷新） | 代码质量 | PROPOSED | 2026-07-07 16:57 | mlh-p2-anchor-lint | mlh-p2-anchor-lint |
 
 ---
 
@@ -946,7 +946,7 @@
 |------|------|
 | 模块 | `anchor_lint` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/mlh-p2-anchor-lint/design.md`
 
@@ -962,7 +962,7 @@
 |------|------|
 | 模块 | `sdflow-init/copy_bundle` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/mlh-p2-anchor-lint/design.md`
 
