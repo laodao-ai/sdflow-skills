@@ -1076,6 +1076,30 @@ class TestReindexZeroMemberBatchStaysPlanned:
         assert "成员: (生成)" in content
 
 
+class TestReindexZeroMemberBatchHumanInProgressStaysInProgress:
+    """T5（本次任务）补测：0 成员批次若人工用 `batch set-status` 标为 IN_PROGRESS（既非
+    DONE 也非完成判据要求的 PLANNED），reindex 不该动它——`_sync_one_entry` 对
+    `is_complete=False` 分支只在 `status_val == "DONE"` 时才追加 ⚠️ 警告，其余任何人写
+    状态值（含 IN_PROGRESS）原样保留。这与 TestReindexZeroMemberBatchStaysPlanned
+    是同一条代码路径（该测试只覆盖了 PLANNED 这一个具体值），此处换一个状态值补证
+    "不特判某个字面状态"，不是新分支。"""
+
+    def test_zero_member_batch_marked_in_progress_by_human_not_reset_by_reindex(self, tmp_path):
+        _write_batches_md(tmp_path, [
+            "### batch-1 — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        _run_batch(tmp_path, ["set-status", "batch-1", "IN_PROGRESS"])
+        # 无任何 item 引用 batch-1（两池都不写 dated 文件）——0 成员
+        _run_reindex(tmp_path)
+        content = _read_batches(tmp_path)
+        assert "状态: IN_PROGRESS" in content
+        assert "状态: DONE" not in content
+        assert "状态: PLANNED" not in content
+        assert "⚠️ 不一致" not in content
+        assert "成员: (生成)" in content
+
+
 class TestReindexDoesNotOverrideHumanDoneStatus:
     """Task 11 载重约束 4（Q3 不越权纠正）：批次 batches.md 里标了 DONE 但成员未全进
     终态（有 OPEN 等）→ reindex 只追加 `⚠️ 不一致` 警告，绝不改人写的 `状态:` 值。"""

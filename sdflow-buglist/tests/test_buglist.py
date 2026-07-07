@@ -642,6 +642,65 @@ class TestTriage:
         assert "ERROR" in proc.stderr
 
 
+class TestSetStatus:
+    """T5（本次任务）补测：cmd_set_status 此前无任何测试覆盖——补 WONTFIX 门禁分支
+    （必须 --reason）+ 基本回归网，确保 `_find_row_file` 抽取（消 set-status/triage
+    重复的『遍历 list_files 找含该 ID 的表行』逻辑）不改变 set-status 的定位/门禁/双写行为。"""
+
+    def test_not_found_id_errors(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status_raw(tmp_path, "B99", "WONTFIX", "--reason", "x")
+        assert result.returncode != 0
+        assert "ERROR" in result.stderr
+
+    def test_wontfix_without_reason_dies(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status_raw(tmp_path, "B1", "WONTFIX")
+        assert result.returncode != 0
+        assert "WONTFIX" in result.stderr
+
+    def test_wontfix_with_reason_updates_table_block_and_history(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status(tmp_path, "B1", "WONTFIX", "--reason", "不复现，不值得修")
+        assert result["old"] == "OPEN"
+        assert result["new"] == "WONTFIX"
+        content = _buglist_content(tmp_path)
+        assert "| 状态 | WONTFIX |" in content
+        assert "不复现，不值得修" in content
+        scanned = _scan_json(tmp_path, [])
+        assert scanned["problems"] == []
+
+    def test_non_terminal_transition_updates_table_and_block(self, tmp_path):
+        """回归网：普通（非门禁）状态转换仍能通过 `_find_row_file` 正确定位到含该 ID 的
+        文件/表行/详细块，双写一致。"""
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status(tmp_path, "B1", "IN_PROGRESS")
+        assert result["old"] == "OPEN"
+        assert result["new"] == "IN_PROGRESS"
+        content = _buglist_content(tmp_path)
+        assert "| 状态 | IN_PROGRESS |" in content
+        scanned = _scan_json(tmp_path, [])
+        assert scanned["problems"] == []
+
+
+def _set_status(root, bug_id, to, *extra_args):
+    result = _set_status_raw(root, bug_id, to, *extra_args)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def _set_status_raw(root, bug_id, to, *extra_args):
+    return subprocess.run(
+        [sys.executable, SCRIPT, "--root", str(root), "set-status",
+         "--id", bug_id, "--to", to, *extra_args],
+        capture_output=True, text=True,
+    )
+
+
 def _triage(root, bug_id, batch):
     proc = subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "triage", "--id", bug_id, "--批次", batch],

@@ -657,6 +657,64 @@ class TestTriage:
         assert "ERROR" in proc.stderr
 
 
+class TestSetStatus:
+    """T5（本次任务）补测：cmd_set_status 此前无任何测试覆盖——补 WONTDO 门禁分支
+    （必须 --reason）+ 基本回归网，确保 `_find_row_file` 抽取（消 set-status/triage
+    重复的『遍历 list_files 找含该 ID 的表行』逻辑）不改变 set-status 的定位/门禁/双写行为。"""
+
+    def test_not_found_id_errors(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status_raw(tmp_path, "T99", "WONTDO", "--reason", "x")
+        assert result.returncode != 0
+        assert "ERROR" in result.stderr
+
+    def test_wontdo_without_reason_dies(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status_raw(tmp_path, "T1", "WONTDO")
+        assert result.returncode != 0
+        assert "WONTDO" in result.stderr
+
+    def test_wontdo_with_reason_updates_table_and_appends_minimal_block(self, tmp_path):
+        """todolist 详细块可选：base_payload 默认不建块（无 motivation/approach/note/doc），
+        WONTDO + --reason 走 `_minimal_block` 留痕分支——补块 + 状态 + 历史一次写入。"""
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status(tmp_path, "T1", "WONTDO", "--reason", "优先级太低，不做了")
+        assert result["old"] == "OPEN"
+        assert result["new"] == "WONTDO"
+        content = _todolist_content(tmp_path)
+        assert "| 状态 | WONTDO |" in content
+        assert "优先级太低，不做了" in content
+
+    def test_non_terminal_transition_without_block_updates_table_only(self, tmp_path):
+        """回归网：无详细块、无 evidence/reason 的普通转换只改表行，不强行建块——
+        同时验证 `_find_row_file` 抽取后仍能正确定位到该 ID 所在文件/表行。"""
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status(tmp_path, "T1", "PROPOSED")
+        assert result["old"] == "OPEN"
+        assert result["new"] == "PROPOSED"
+        content = _todolist_content(tmp_path)
+        assert "| T1 | " in content
+        assert "## T1:" not in content  # 无块场景不该被顺带建块
+
+
+def _set_status(root, item_id, to, *extra_args):
+    result = _set_status_raw(root, item_id, to, *extra_args)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def _set_status_raw(root, item_id, to, *extra_args):
+    return subprocess.run(
+        [sys.executable, SCRIPT, "--root", str(root), "set-status",
+         "--id", item_id, "--to", to, *extra_args],
+        capture_output=True, text=True,
+    )
+
+
 def _triage(root, item_id, batch):
     proc = subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "triage", "--id", item_id, "--批次", batch],

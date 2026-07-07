@@ -300,6 +300,22 @@ def block_ranges(lines):
     return out
 
 
+def _find_row_file(root, item_id):
+    """定位含 item_id 的状态总览表行所在的月度文件（T5：从 `cmd_set_status`/
+    `cmd_triage` 抽出——两处遍历 `list_files` 找含该 ID 表行的逻辑逐字相同，
+    镜像 buglist.py 的同名 helper，各自模块内抽、不跨 recorder 共享，D4）。
+    返回 (path, lines, sec, rows)；找不到则 `_die` 退出（沿用两处原有的错误文案），
+    调用方无需再自行判空。"""
+    for path in list_files(root):
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+        sec = split_sections(lines)
+        rows = parse_table_rows(lines, sec) if sec else {}
+        if item_id in rows:
+            return path, lines, sec, rows
+    _die(f"未找到 ID：{item_id}")
+
+
 def cmd_next_id(args):
     root = repo_root(args.root)
     conflicts = id_conflicts(root)
@@ -417,18 +433,7 @@ def cmd_set_status(args):
     if new not in STATUS_CODES:
         _die(f"状态码非法：{new}")
 
-    target = None
-    for path in list_files(root):
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-        sec = split_sections(lines)
-        rows = parse_table_rows(lines, sec) if sec else {}
-        if args.id in rows:
-            target = (path, lines, sec, rows)
-            break
-    if not target:
-        _die(f"未找到 ID：{args.id}")
-    path, lines, sec, rows = target
+    path, lines, sec, rows = _find_row_file(root, args.id)
 
     # 门禁
     if new == "DONE" and not args.evidence:
@@ -490,18 +495,7 @@ def cmd_triage(args):
     root = repo_root(args.root)
     batch = getattr(args, "批次")
 
-    target = None
-    for path in list_files(root):
-        with open(path, encoding="utf-8") as f:
-            lines = f.readlines()
-        sec = split_sections(lines)
-        rows = parse_table_rows(lines, sec) if sec else {}
-        if args.id in rows:
-            target = (path, lines, sec, rows)
-            break
-    if not target:
-        _die(f"未找到 ID：{args.id}")
-    path, lines, sec, rows = target
+    path, lines, sec, rows = _find_row_file(root, args.id)
 
     cells = rows[args.id]["cells"]
     old_status = cells[4]
