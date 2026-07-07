@@ -80,7 +80,8 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch add {cha
 # 批次进入实施阶段（人工权限，reindex 只会把它推到 DONE，不会推 PLANNED→IN_PROGRESS）
 python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch set-status {change_name} IN_PROGRESS
 
-# 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并，new key 已存在会报错）
+# 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并，new key 已存在会报错；
+# 成功后自动 reindex 刷新 INDEX）
 python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {old_key} {new_key}
 ```
 
@@ -88,7 +89,14 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {
   多半是误操作；调用方（如 `sdflow-done` sweep 步）如果只是想确保批次存在，需要自己把
   "报错信息含'已存在'" 当成幂等成功处理，脚本本身不做这层语义转换。
 - `batch rename` 刻意不复用 per-type 脚本的 `triage` 子命令改批次列，因为 `triage` 会顺带
-  把"未分诊开放态"状态推进到 `PROPOSED`——`rename` 只该改标签本身，不该有这个副作用。
+  把"未分诊开放态"状态推进到 `PROPOSED`——`rename` 只该改标签本身，不该有这个（状态推进的）
+  副作用。
+- `batch rename` 写盘（dated 文件 tag + `batches.md` key）全部成功后会**自动跑一次
+  `reindex`** 刷新 `issues/INDEX.md`（Task 7）——调用方不需要再手动补一次 reindex；`reindex`
+  失败只吞成 stderr 警告（"rename 已生效，INDEX 未刷新，请手动 reindex"），`rename` 本体仍
+  exit 0，不因这个"顺带刷新"步骤的失败反噬成 rename 失败假象。**因此 `rename` 现在不是无副
+  作用操作**：它明确会触发一次 INDEX 重建，与上一条"不该有的副作用"（triage 顺带推进状态）
+  是两回事，不要混为一谈。
 
 ## `--root` 与 git 根
 

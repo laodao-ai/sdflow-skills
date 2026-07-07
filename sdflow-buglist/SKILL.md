@@ -180,7 +180,9 @@ sdflow-todolist 依赖同一份，见其 SKILL.md 对应段）：
   两条生成行（按上面「批次完成判据」）。
 - `batch add / set-status / rename`——`issues/batches.md` 注册表操作：`add` 新建 `PLANNED`
   条目（成员空）；`set-status` 只改状态生成行；`rename` 改批次 key + 同步两池里所有该批次成员的
-  批次 tag。批次生命周期 `PLANNED → IN_PROGRESS → DONE`（`PLANNED→IN_PROGRESS` 由人在真正开
+  批次 tag（含 auto-reindex——写盘成功后自动跑一次 `reindex` 刷新 INDEX，失败只 stderr 警告，
+  `rename` 本体仍 exit 0，调用方无需再手动补 reindex）。批次生命周期
+  `PLANNED → IN_PROGRESS → DONE`（`PLANNED→IN_PROGRESS` 由人在真正开
   cleanup change 时手动 `set-status`；`→DONE` 通常由 reindex 按完成判据被动同步——人也可以用
   `set-status` 直接标，reindex 不会越权纠正，只在状态和成员终态不一致时追加 `⚠️` 警告）。
 
