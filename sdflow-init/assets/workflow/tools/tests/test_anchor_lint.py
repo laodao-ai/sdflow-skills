@@ -38,3 +38,46 @@ def test_anchor_prefix_four_families():
     assert al.anchor_prefix('note <!-- sdflow:hr-tg v1 --> inline') is None or True  # 描述性内联(前缀非行首)
     assert al.anchor_prefix('<!-- sdflow:step1-broad-review v1 mode="native" -->') == "step1-broad-review"
     assert al.anchor_prefix('plain text') is None
+
+
+def _write_config(tmp_path, body):
+    d = tmp_path / "openspec"; d.mkdir(parents=True, exist_ok=True)
+    (d / "config.yaml").write_text(body, encoding="utf-8"); return tmp_path
+
+def test_metrics_file_absent_false(tmp_path):
+    al = _mod(); assert al.read_metrics_enabled(tmp_path) is False        # ① 无文件
+
+def test_metrics_no_block_false(tmp_path):                                # ② 消费仓常态
+    al = _mod(); root = _write_config(tmp_path, "schema: spec-driven\ncontext: |\n  x\n")
+    assert al.read_metrics_enabled(root) is False
+
+def test_metrics_block_illegal_raises(tmp_path):                          # ③ 块在值非法
+    al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: yes\n")
+    import pytest
+    with pytest.raises(al.MetricsError):
+        al.read_metrics_enabled(root)
+
+def test_metrics_true(tmp_path):                                          # ④
+    al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: true\n")
+    assert al.read_metrics_enabled(root) is True
+
+def test_metrics_block_boundary(tmp_path):                                # 块边界：另一段的 enabled 不误读
+    al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: false\nother:\n  enabled: true\n")
+    assert al.read_metrics_enabled(root) is False
+
+
+def test_existence_missing_mandatory(tmp_path):
+    al = _mod()
+    report = '<!-- sdflow:hr-tg v1 hit="none" -->\n<!-- sdflow:step1-broad-review v1 mode="native" -->\n'  # 缺 outside-voice
+    v = al.check_existence(report, "code-review", metrics_on=False)
+    assert any(x["kind"] == "missing-anchor" and "outside-voice" in x["detail"] for x in v)
+
+def test_existence_min_required_rows(tmp_path):
+    al = _mod()
+    # metrics 开：有 domain lens-metric 但缺 broad+outside-voice 行
+    report = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+              '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+              '<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" runner="claude" -->\n')
+    v = al.check_existence(report, "code-review", metrics_on=True)
+    kinds = {x["detail"] for x in v if x["kind"] == "missing-lens-row"}
+    assert "broad" in " ".join(kinds) and "outside-voice" in " ".join(kinds)

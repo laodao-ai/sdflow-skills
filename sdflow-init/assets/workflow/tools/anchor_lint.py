@@ -94,3 +94,58 @@ def anchor_prefix(line):
         if s.startswith(pref):
             return name
     return None
+
+
+class MetricsError(Exception):
+    pass
+
+
+_TOP_KEY = re.compile(r'^\S')                              # 顶层键：行首非空白
+_ENABLED = re.compile(r'^\s+enabled:\s*(true|false)\s*$')  # metrics 块内合法布尔（仅小写 true/false）
+
+
+def read_metrics_enabled(root):
+    """真四态：①文件不存在→False ②有文件无顶层 metrics: 块→False（消费仓常态放行）
+    ③metrics: 块在但块内(至下一顶层键前)解不出合法 enabled: true|false→MetricsError(fail-closed)
+    ④解出→bool。块边界=先定位 ^metrics: 再限范围到下一顶层键。"""
+    cfg = Path(root) / "openspec" / "config.yaml"
+    try:
+        lines = cfg.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False                                        # ①
+    idx = next((i for i, ln in enumerate(lines) if ln.rstrip() == "metrics:" or ln.startswith("metrics:")), None)
+    if idx is None:
+        return False                                        # ②
+    for ln in lines[idx + 1:]:                              # ③④ 块内至下一顶层键
+        if _TOP_KEY.match(ln) and not ln.startswith(" "):
+            break
+        m = _ENABLED.match(ln)
+        if m:
+            return m.group(1) == "true"
+    raise MetricsError("metrics: 块存在但解不出合法 enabled: true|false")
+
+
+MANDATORY = ("outside-voice", "hr-tg", "step1-broad-review")
+MIN_LENS_ROWS = ("broad", "outside-voice")
+
+
+def check_existence(report_text, layer, metrics_on):
+    outside = list(fence_outside_lines(report_text))
+    present, lens_rows = set(), set()
+    for ln in outside:
+        name = anchor_prefix(ln)
+        if name:
+            present.add(name)
+            if name == "lens-metric":
+                lens_rows.add(parse_kv(ln).get("lens", ""))
+    v = []
+    for fam in MANDATORY:
+        if fam not in present:
+            v.append({"kind": "missing-anchor", "detail": fam})
+    if metrics_on:
+        if "lens-metric" not in present:
+            v.append({"kind": "missing-anchor", "detail": "lens-metric (metrics.enabled)"})
+        for need in MIN_LENS_ROWS:
+            if need not in lens_rows:
+                v.append({"kind": "missing-lens-row", "detail": need})
+    return v
