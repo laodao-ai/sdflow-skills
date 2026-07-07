@@ -5,7 +5,7 @@
 - **对象**：`issues-pool-hardening`（G1，T1-T5 issues.py/recorder 健壮性合批），feat 分支。
 - **广审层（Step1）**：grill-substituted（见 `gstack-review.md`）——design/eng 深度已由交互 grill 覆盖，CEO/DX 镜未跑（诚实缺口，内部工具低边际）。
 - **多镜层（Step2）**：4 镜 fresh-context 并行——领域镜(backend) · 对抗镜 A(D1/T2) · 对抗镜 B(D2/D3/scope) · 接地镜(核验)。
-- **outside-voice（cross-model）**：**本轮未跑**（诚实缺口——广审 grill-substituted 无 codex 产物可复用，我也未自跑 design-voice；4 镜为同家族，跨家族盲区未覆盖）。
+- **outside-voice（cross-model）**：**已跑 design-voice（codex，exit 0）**〔设计门补跑 Q4〕——抓到同族 4 镜全漏的 3 个相邻腐蚀向量（OV-1/2/3），**全部 fold** 进本 change。跨家族补盲价值兑现。
 - **裁决**：接地镜 10/10 主张全符合（0 事实错误）；同族/对抗镜合计抓出 **1 blocker + 2 硬设计缺口 + 若干完备性/措辞项**，全部经代码接地。**结论：不建议原样进 ship——需先过下方 3 个 [需拍板] + 应用 [自动决策] amendment，才达设计门放行。**
 
 ---
@@ -88,7 +88,12 @@ grill 把 skip 收敛为 match-or-error 以避"静默吞字段"坑，但冷镜�
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" runner="claude" site="code-facts" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
 <!-- sdflow:hr-tg v1 hit="none" evidence="数据类工具脚本改动，无运行期爆炸/数据损坏难回退面命中 HR-TG 子集" -->
 
-> outside-voice 锚：本轮未跑 cross-model outside-voice（诚实缺口，非降级伪装），故不落 `sdflow:outside-voice` 锚。
+<!-- sdflow:outside-voice v1 site="design-voice" guard="none" runner="codex" reason_code="ok" findings="3" truncated="false" -->
+
+**outside-voice(codex) 3 findings（全 fold）**：
+- **OV-1（高）**：`scan` 只验 `len>=5` 按固定列位读→无块坏行列错位不进 `problems`、`--strict` 也抓不到 → 加 scan 行 arity 校验（读侧盘面完整性）。
+- **OV-2（高）**：batch key 只守 `|`/换行不够——`batches.md` header ` — ` 分隔，key 含 ` — ` 被切坏 → batch key slug 校验（拒 ` — `/首尾空白）三处复用。
+- **OV-3（中）**：自定义 `id` 缺语法+查重（`parse_table_rows` 按 ID dict 重复静默丢行）→ `id` 须 `ID_RE.fullmatch`+不重复，scan 报重复 ID。
 
 ---
 
@@ -96,4 +101,23 @@ grill 把 skip 收敛为 match-or-error 以避"静默吞字段"坑，但冷镜�
 
 **不建议原样进设计 HARD-GATE 放行**。冷镜（补 grill 非冷盲区）抓到 1 个 blocker（C1，D1 守卫落点错位会让旗舰修复落空）+ 2 个需 reshape D2/D3 的硬设计缺口（Q2/Q3）+ 1 个诚实性问题（Q1）。**请在设计门一次性拍 Q1/Q2/Q3**（推荐 C/B/A）；拍板后我应用全部 [自动决策] amendment（C1/C5/C7 等，标 `[spec-review-amendment]`）+ 按 Q 结果 reshape D2/D3，再重跑 `validate --strict` → 写 `design-approved` 锚。
 
-> 注：本轮 outside-voice(cross-model) 未跑——若你要补跨家族第二意见再放行，我可单跑 design-voice；否则同族 4 镜 + 接地已覆盖 domain/adversarial/grounding，可带此缺口进门。
+---
+
+## 拍板记录（设计 HARD-GATE，2026-07-07）
+
+用户在设计门一次性拍板 + 补跑 design-voice。结果：
+
+- **Q1 = B**：保留 `--strict` 作 T2.5 follow-up 预置接口（后面只需 wire+检查、不重做）；配诚实降级叙事——本 change 内 `--strict` 无消费者、不记作"已堵静默蒸发"（proposal/design/adr 已订正）。
+- **Q2 = B**：`--if-exists skip` 改 **skip-with-warn**（no-op + stderr 警告字段被忽略），弃 match-or-error（避 placeholder 死胡同 + 禁解析人写行）。
+- **Q3 = A**：`rename` auto-reindex 异常吞-warn + rename exit 0 + 承认全库副作用面。
+- **OV-1 = fold**：`scan` 加行 arity 检测（读侧盘面完整性）纳入本 change。
+
+**已应用 amendment（标 `[spec-review-amendment]`）**：C1(BLOCKER 守卫落点+全写路径) · C5(T3 内联字面量) · C7(块子表/title) · C8(doc-sync) · C9(措辞降级) · C10(行号) · OV-1/OV-2/OV-3。design/specs/tasks/proposal/adr 全同步，`openspec validate --strict` 通过。
+
+**lens-metric（SR-M 最终化）**：所有 finding 均采纳（fold/amend），0 裁掉设计缺陷（X1 非缺陷）、0 defer——pre-gate 草稿锚的采纳数即最终值。
+
+**放行**：blocker(C1) 已修、3 硬缺口(Q2/Q3/OV-1) 已 reshape、cross-model 补盲已 fold。设计门通过。
+
+<!-- ship-gate: design-approved -->
+
+> follow-up（不在本 change，交 hand-off）：T2.5 = `sdflow-done` sweep 用 `reindex --strict`（触 SKILL.md 行为面）；roadmap「去字符串化机器状态层」（Path B + T65）。

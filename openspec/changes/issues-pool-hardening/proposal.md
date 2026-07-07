@@ -5,7 +5,7 @@ issues 池 recorder（`issues.py` 跨池命令 + `buglist.py` / `todolist.py` pe
 ## What Changes
 
 - **T2（数据完整性·系统性 correctness）**：recorder 写入前对字段（`module` / `summary` / 批次名等）里的 `｜` 统一转义（或拒绝含 `｜` 的字段），杜绝位置解析读错列的静默腐蚀。
-- **T1（可观测性）**：`issues.py reindex` 把子进程 `scan` 报出的 problems 回显到 stderr——独立跑 reindex 时表↔块不一致对用户可见（兑现 D5 承诺）。
+- **T1（可观测性）**：`issues.py reindex` 把子进程 `scan` 报出的 problems 回显到 stderr——独立跑 reindex 时表↔块不一致对用户可见（兑现 D5 承诺）。**本 change 交付的即此 stderr 回显**；另加 `--strict` opt-in flag 作为 T2.5 follow-up 的**预置接口**——本 change 内**无消费者、不产生 enforcement 价值**，不记作"已堵非交互静默蒸发"〔spec-review Q1，见 design D2〕。
 - **T3（一致性守卫）**：加终态集跨脚本一致性测试——`issues.py` 的 `TERMINAL_STATUSES` ⊆ 对应 recorder 的 `STATUS_CODES`，防未来改终态码时静默漂移。
 - **T4（幂等）**：`batch add` 加 `--if-exists skip` 幂等选项；`batch rename` 后自动 `reindex`（或 SKILL 明示 rename 后须 reindex）。
 - **T5（去重 + 测试）**：抽 `_find_row_file` 消除 `triage` 与 `set-status` 的定位逻辑重复（4 处）；补 WONTDO / 0 成员人标 IN_PROGRESS 的分支测试。
