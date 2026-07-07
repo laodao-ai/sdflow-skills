@@ -57,4 +57,4 @@ issues 池 recorder 三脚本（`buglist.py` / `todolist.py` per-type + `issues.
 
 ## 上位关系（去字符串化机器状态层 roadmap）
 
-本 change 走 **Path A（现状 markdown 表 + reject 硬化）**，是刻意的短期务实解。更根的 **Path B（总览行结构化 = YAML frontmatter 索引 + prose 块）** 会让 T2 整个蒸发、删掉 recorder 里大片表解析/双写一致机械——但属范畴不同的大改，**不折进本 change**（fold-vs-defer 循环成本纪律）。B 与 **T65（gate 状态锚迁 frontmatter）同根**「去字符串化机器状态层」，二者合并为一个 roadmap 阶段统一权衡（见 todolist 交叉引用）。D1 选 reject 而非 escape，部分正因它是通往 B 的低成本桥：零机械投资、不挡未来结构化重构。
+本 change 走 **Path A（现状 markdown 表 + reject 硬化）**，是刻意的短期务实解。更根的 **Path B（总览行结构化 = YAML frontmatter 索引 + prose 块）** 会让 T2 整个蒸发、删掉 recorder 里大片表解析/双写一致机械——但属范畴不同的大改，**不折进本 change**（fold-vs-defer 循环成本纪律）。B 与 **T65（gate 状态锚迁 frontmatter）同根**「去字符串化机器状态层」，二者合并为一个 roadmap 阶段统一权衡（见 todolist 交叉引用）。D1 选 reject 而非 escape，部分正因它是通往 B 的低成本桥：零机械投资、不挡未来结构化重构。**决策全文见 `openspec/adr/0010-issues-machine-state-markdown-plus-reject-defer-structuring.md`**（markdown+reject 守盘面、结构化延后 roadmap）。
