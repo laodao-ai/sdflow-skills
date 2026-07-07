@@ -16,7 +16,7 @@ issues 池 recorder（`buglist.py` / `todolist.py` / `issues.py`）以 markdown 
 
 ### Requirement: reindex 一致性问题可观测且不阻断重建
 
-`issues.py reindex` SHALL 把子进程 `scan` 报出的表↔块一致性 problems **回显到 stderr**（逐条带 pool / 文件定位），使独立跑 reindex 时的不一致对用户可见（兑现 D5 承诺）。problems 非空 MUST NOT 使 reindex 失败——INDEX SHALL 照常确定性重建、退出码为 0；此与**致命错误**（无法读取文件等）仍以非 0 退出相区分（一致性警示与致命失败分层）。
+`issues.py reindex` SHALL 把子进程 `scan` 报出的表↔块一致性 problems **回显到 stderr**（逐条带 pool / 文件定位），使独立跑 reindex 时的不一致对用户可见（兑现 D5 承诺）。**默认**：problems 非空 MUST NOT 使 reindex 失败——INDEX SHALL 照常确定性重建、退出码为 0（不因一个坏块阻断整池刷新）。reindex SHALL 提供 **`--strict`** 选项：problems 非空时以**非 0 退出码**结束，供非交互调用 / 收尾门做 enforcement——防非交互场景（sweep / hook / CI）stderr 被吞 + 默认 exit 0 致一致性问题**静默蒸发**（反静默元原则）。**致命错误**（无法读取文件等）无论是否 `--strict` 仍以非 0 退出（与一致性警示分层）。
 
 #### Scenario: problems 回显 stderr 但不阻断 INDEX 重建
 
@@ -27,3 +27,8 @@ issues 池 recorder（`buglist.py` / `todolist.py` / `issues.py`）以 markdown 
 
 - **WHEN** 不经 `scan`、直接运行 `reindex`，且池中存在表↔块不一致项
 - **THEN** 用户从 stderr 看到具体不一致项（而非静默重建、不一致被吞）
+
+#### Scenario: --strict 下 problems 非空即非 0 退出
+
+- **WHEN** 以 `reindex --strict` 运行且池中存在表↔块不一致项
+- **THEN** problems 回显 stderr 后以**非 0 退出码**结束（供非交互 / 收尾门 enforcement）；同一不一致下默认（无 `--strict`）仍 exit 0、INDEX 照常重建

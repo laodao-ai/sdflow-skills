@@ -5,22 +5,24 @@
 - [ ] 1.3 实现：三 recorder 写路径加 table-cell-safe 校验 helper——总览行字段含 `|`/换行即 `_die`（复用既有 `_die` 写时校验惯例，**无解析器改动**、无读路径回归面）
 - [ ] 1.4 跑三 recorder `tests/` + 全套件回归，确认绿
 
-## 2. T1 reindex 一致性问题回显 stderr
+## 2. T1 reindex 一致性问题回显 stderr + `--strict` enforcement
 
-- [ ] 2.1 写失败测试（TDD）：制造表↔块不一致 → `issues.py reindex` 把 problems 逐条回显 stderr（带 pool/文件定位）、exit 0、INDEX 仍重建
-- [ ] 2.2 实现：reindex 收集子进程 `scan` 的 problems 非空即回显 stderr；**不因 problems 改 exit code**（致命错误仍走既有非 0 退出，分层）
-- [ ] 2.3 跑 `sdflow-issues/tests/` + 相关，确认独立跑 reindex 时不一致不再静默
+- [ ] 2.1 写失败测试（TDD）：制造表↔块不一致 → 默认 `reindex` 把 problems 逐条回显 stderr（带 pool/文件定位）、exit 0、INDEX 仍重建
+- [ ] 2.2 写失败测试：`reindex --strict` 遇 problems 非空 → 回显 stderr 后 **exit 非 0**（同一不一致下默认无 `--strict` 仍 exit 0）
+- [ ] 2.3 实现：reindex 收集子进程 `scan` problems 非空即回显 stderr；默认不改 exit code；加 `--strict` 使 problems 非空 exit 非 0（致命错误无论是否 strict 仍走既有非 0，分层）
+- [ ] 2.4 跑 `sdflow-issues/tests/`，确认默认 lenient + `--strict` enforcement 两路
+- [ ] 2.5 [**延迟绑定 follow-up，不在本 change**] 记 todo：`sdflow-done` sweep 步调 `reindex --strict`（触 `sdflow-done/SKILL.md` 行为面 + 别 capability，单开/搭便车）
 
 ## 3. T3 终态集跨脚本一致性守卫测试
 
 - [ ] 3.1 加测试：`import` 三脚本常量，断言 `issues.py` 的 `TERMINAL_STATUSES` ⊆ `buglist.py` / `todolist.py` 各自 `STATUS_CODES`（终态码重命名即测试红）
 - [ ] 3.2 跑测试确认现状通过（守卫就位；此为纯新增测试、不改生产逻辑）
 
-## 4. T4 batch 操作幂等
+## 4. T4 batch 操作幂等（match-or-error）
 
-- [ ] 4.1 写失败测试（TDD）：`batch add --if-exists skip` 重复调 no-op 退出 0；`batch rename` 后 INDEX/`batches.md` 成员行已自动同步（auto-reindex）
-- [ ] 4.2 实现：`batch add` 加 `--if-exists skip`（已存在同 key → no-op exit 0）；`batch rename` 成功后自动调 `reindex`（失败时不触发）
-- [ ] 4.3 跑 `sdflow-issues/tests/`，确认幂等 + rename 后无 INDEX 陈旧
+- [ ] 4.1 写失败测试（TDD）：`batch add --if-exists skip` —— (a) key 存在且无字段/字段与现有一致 → no-op exit 0；(b) key 存在但带**不一致**字段 → `_die`（保 anti-trap）；`batch rename` 后 INDEX/`batches.md` 成员行已自动同步
+- [ ] 4.2 实现：`batch add` 加 `--if-exists skip`（match-or-error：一致/无字段 no-op、冲突字段仍 `_die`）；`batch rename` 成功后自动调 `reindex`（失败时不触发）
+- [ ] 4.3 跑 `sdflow-issues/tests/`，确认 match-or-error 幂等 + rename 后无 INDEX 陈旧
 
 ## 5. T5 定位逻辑去重 + 分支补测
 
