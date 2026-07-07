@@ -667,6 +667,69 @@ class TestBatchAdd:
         assert not _batches_path(tmp_path).exists()
 
 
+class TestBatchAddKeyEmptyGuard:
+    """[impl-review-fix] FIX-3（领域 F1 PoC）：`_reject_batch_key_unsafe` 此前的
+    `str(key) != str(key).strip()` 检查对空字符串恒为 False（`"".strip() == ""`），
+    空/纯空白 key 会被放行，写出 `###  — title` 这种 key 位置是空白的 header——
+    `_BATCH_HEADER_RE` 的 `(?P<key>.+?)` 要求至少一个字符，永远解析不回这个 key，
+    是个从写入那一刻起就读不回来的僵尸条目。add/rename 两个写 header 的入口都要挡。"""
+
+    def test_batch_add_rejects_empty_key(self, tmp_path):
+        proc = _run_batch_raw(tmp_path, ["add", ""])
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        assert not _batches_path(tmp_path).exists()
+
+    def test_batch_add_rejects_whitespace_only_key(self, tmp_path):
+        proc = _run_batch_raw(tmp_path, ["add", "   "])
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+
+    def test_batch_rename_rejects_empty_new_key(self, tmp_path):
+        _write_batches_md(tmp_path, [
+            "### real — 标题\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        proc = _run_batch_raw(tmp_path, ["rename", "real", ""])
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        # 未被腐蚀：原条目仍在
+        content = _read_batches(tmp_path)
+        assert "### real — 标题" in content
+
+
+class TestBatchAddCellSafety:
+    """[impl-review-fix] FIX-5（CV-2 codex PoC）：`cmd_batch_add` 把 优先级/计划 原样
+    写进 `f"优先级: {priority}\\n"`/`f"计划: {plan}\\n"` 单行，此前未挂
+    `_reject_cell_unsafe`——含换行的值能在 batches.md 里注入一整条伪造的
+    `### … — …` header 行，被 `_BATCH_HEADER_RE` 当成新批次条目解析出来。"""
+
+    def test_batch_add_rejects_newline_in_priority(self, tmp_path):
+        proc = _run_batch_raw(
+            tmp_path, ["add", "k", "--优先级", "P1\n### evil — x"]
+        )
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        path = _batches_path(tmp_path)
+        if path.exists():
+            assert "evil" not in path.read_text(encoding="utf-8")
+
+    def test_batch_add_rejects_newline_in_plan(self, tmp_path):
+        proc = _run_batch_raw(
+            tmp_path, ["add", "k", "--计划", "一句话\n### evil — x"]
+        )
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        path = _batches_path(tmp_path)
+        if path.exists():
+            assert "evil" not in path.read_text(encoding="utf-8")
+
+    def test_batch_add_rejects_pipe_in_priority(self, tmp_path):
+        proc = _run_batch_raw(tmp_path, ["add", "k", "--优先级", "P1 | evil"])
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+
+
 class TestBatchAddIfExistsSkip:
     """Task 7（T4）：`batch add --if-exists skip` = skip-with-warn——遇已存在同 key
     直接 no-op + exit 0 + stderr 警告，**不做字段比较、不解析人写行**（match-or-error
@@ -973,7 +1036,12 @@ class TestBatchRenameAutoReindex:
     def test_batch_rename_reindex_failure_warns_but_exit0(self, tmp_path, monkeypatch, capsys):
         """构造 reindex 核心异常（monkeypatch `_reindex_core`）：rename 本体（batches.md
         header 改名 + dated 文件批次列同步）已在 reindex 调用之前写盘完成，reindex 失败
-        只应吞成 stderr 警告，不应让整个 rename 调用以非 0 退出或抛未捕获异常。"""
+        只应吞成 stderr 警告，不应让整个 rename 调用以非 0 退出或抛未捕获异常。
+
+        [impl-review-fix] FIX-4：警告文案不再断言"INDEX 未刷新"——`_reindex_core` 内部
+        先写 INDEX.md、再同步 batches.md，失败若发生在后半段，INDEX 其实已经刷新成功，
+        旧文案对这种情况是错的。只断言文案如实指向"reindex 失败，需要手动重跑"，不
+        断言具体哪个文件的状态。"""
         _write_batches_md(tmp_path, [
             "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
             "优先级: P1\n", "计划: x\n",
@@ -991,11 +1059,44 @@ class TestBatchRenameAutoReindex:
         issues_mod.cmd_batch_rename(args)  # 不应抛异常 / 不应 SystemExit(非0)
 
         captured = capsys.readouterr()
-        assert "INDEX 未刷新" in captured.err
+        assert "reindex 失败" in captured.err
+        assert "手动" in captured.err
+        assert "INDEX 未刷新" not in captured.err  # 不再对具体文件状态做不实断言
 
         # rename 本体已生效（写盘发生在 reindex 调用之前）
         content = _read_batches(tmp_path)
         assert "### new-batch — 清理项" in content
+
+
+class TestBatchRenameAutoReindexProblemsEcho:
+    """[impl-review-fix] FIX-4（领域 F2 + 对抗 B-F1 PoC）：`cmd_batch_rename` 的
+    auto-reindex 此前 `try: _reindex_core(root)` 丢弃返回的 `(items, problems)`——
+    reindex 成功但两池 scan 测出 problems（如 OV-1 行 arity 异常）非空时，rename
+    完全不吐这个信号（静默蒸发）。现在必须把 problems 逐条回显到 stderr。"""
+
+    def test_batch_rename_echoes_reindex_problems_to_stderr(self, tmp_path):
+        _write_batches_md(tmp_path, [
+            "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        dir_path = tmp_path / "openspec" / "issues" / "buglist"
+        dir_path.mkdir(parents=True)
+        content = (
+            "# 2026-01-01 Buglist\n\n"
+            "> 来源：test\n"
+            "> 创建日期：2026-01-01\n\n"
+            "## 状态总览\n\n"
+            "| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |\n"
+            "|----|------|----------|--------|------|------|------------|------|\n"
+            "| B1 | `foo.c:1` | fixture | P2 | OPEN | 10:00 | x | old-batch |\n"
+            "| B2 | `foo.c:1` | A | B 都坏了 | P2 | OPEN | 10:00 | x | |\n"
+        )
+        (dir_path / "2026-01-01-buglist.md").write_text(content, encoding="utf-8")
+
+        proc = _run_batch_raw(tmp_path, ["rename", "old-batch", "new-batch"])
+        assert proc.returncode == 0, proc.stderr
+        assert "arity" in proc.stderr
+        assert "B2" in proc.stderr
 
 
 class TestReindexSyncBatchesMembers:

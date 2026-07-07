@@ -701,6 +701,72 @@ class TestSetStatus:
         assert "## T1:" not in content  # 无块场景不该被顺带建块
 
 
+class TestSetStatusCellSafety:
+    """[impl-review-fix] FIX-1（A-F1 PoC，镜像 buglist.py）：cmd_set_status 把
+    evidence/reason/month 原样拼进历史行 `> {month} 状态：{old} → {new}（{note}）`，
+    此前未挂 `_reject_cell_unsafe` 守卫——含换行的 reason/evidence 会被 `block_ranges()`
+    在注入点截断真实块（或在 `_minimal_block` 场景下伪装出新的 `---`/`## ID:` 行），
+    `scan` 完全测不出（静默腐蚀）。入口必须 fail-closed，写盘前不留任何腐蚀。"""
+
+    def test_set_status_rejects_newline_in_reason(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        before = _todolist_content(tmp_path)
+        result = _set_status_raw(tmp_path, "T1", "WONTDO", "--reason", "x\n\n---\n\ny")
+        assert result.returncode != 0
+        assert "ERROR" in result.stderr
+        assert _todolist_content(tmp_path) == before
+
+    def test_set_status_rejects_pipe_in_reason(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status_raw(tmp_path, "T1", "WONTDO", "--reason", "a | b")
+        assert result.returncode != 0
+        assert "ERROR" in result.stderr
+
+    def test_set_status_rejects_newline_in_evidence(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        before = _todolist_content(tmp_path)
+        result = _set_status_raw(tmp_path, "T1", "PROPOSED", "--evidence", "abc\n---\ndef")
+        assert result.returncode != 0
+        assert "ERROR" in result.stderr
+        assert _todolist_content(tmp_path) == before
+
+    def test_set_status_rejects_newline_in_month(self, tmp_path):
+        proc = run_add(tmp_path, base_payload())
+        assert proc.returncode == 0, proc.stderr
+        result = _set_status_raw(tmp_path, "T1", "PROPOSED", "--month", "2026-01\nEVIL")
+        assert result.returncode != 0
+        assert "ERROR" in result.stderr
+
+
+class TestScanDuplicateIdCrossFile:
+    """[impl-review-fix] FIX-2（CV-1+A-F2 双镜 PoC，镜像 buglist.py）：重复 ID 检测
+    语义上应是全池（跨全部 dated 文件）唯一性检查。此前 `cmd_scan` 的 Counter 在 for
+    循环体内逐文件重建，只测得出单文件内重复，漏检跨文件同 ID（例如
+    2026-01/2026-02 两个月度文件都出现 T1）。"""
+
+    def test_scan_reports_duplicate_id_across_two_dated_files(self, tmp_path):
+        _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", [
+            {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
+        ])
+        result = _scan_json(tmp_path, [])
+        assert any("重复" in p and "T1" in p for p in result["problems"])
+
+    def test_scan_still_reports_duplicate_id_within_single_file(self, tmp_path):
+        """回归：单文件内重复检测（既有覆盖）不因改成全池维度而失效。"""
+        _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+            {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
+        ])
+        result = _scan_json(tmp_path, [])
+        assert any("重复" in p and "T1" in p for p in result["problems"])
+
+
 def _set_status(root, item_id, to, *extra_args):
     result = _set_status_raw(root, item_id, to, *extra_args)
     assert result.returncode == 0, result.stderr

@@ -332,7 +332,16 @@ def _reject_batch_key_unsafe(key):
     key 却没有，两次查找同一"逻辑 key"会得到不同结果。
 
     MUST 用于 `cmd_batch_add` 的 `key`、`cmd_batch_rename` 的 `new_key`（写 header 的
-    唯一两处入口）。"""
+    唯一两处入口）。
+
+    [impl-review-fix] FIX-3（领域 F1 PoC）：空/纯空白 key 此前会绕过下面的
+    `str(key) != str(key).strip()` 检查——对空字符串 `""`，`"".strip()` 仍是 `""`，
+    两侧相等，检查恒为 False，空 key 被放行。放行后写出的 header 是
+    `###  — title`（key 位置是空白），`_BATCH_HEADER_RE` 的 `(?P<key>.+?)` 要求至少
+    一个字符，永远无法从这个 header 解析回 key——这条注册从写入的那一刻起就是个
+    读不回来的僵尸条目。必须在做首尾空白比较之前，先单独拒绝空/纯空白 key。"""
+    if not str(key).strip():
+        _die(f"batch key 不可为空/纯空白（会写出解析不回来的僵尸 header）：{key!r}")
     _reject_cell_unsafe(key, "batch key")
     if " — " in str(key) or str(key) != str(key).strip():
         _die(
@@ -367,6 +376,17 @@ def _reindex_core(root):
     return items, problems
 
 
+def _echo_problems(problems):
+    """把 `_reindex_core` 返回的 problems（两池 `scan --json` 透传的一致性自检结果，
+    如表↔块不一致 / 重复 ID / OV-1 行 arity 异常）逐条回显到 stderr。
+
+    [impl-review-fix] FIX-4：从 `cmd_reindex` 抽出，供 `cmd_batch_rename` 的 auto-reindex
+    共用——此前 auto-reindex 只 `try: _reindex_core(root)` 丢弃返回值，reindex 成功但
+    problems 非空时 rename 完全不吐这个信号（静默蒸发），必须复用同一段回显逻辑。"""
+    for p in problems:
+        print(p, file=sys.stderr)
+
+
 def cmd_reindex(args):
     """重建 `issues/INDEX.md` + 同步 `issues/batches.md` 状态（Task 9 + Task 11 两部分）。
 
@@ -394,8 +414,7 @@ def cmd_reindex(args):
     closed_n = len(items) - open_n
     print(f"reindex：已重建 {index_path}（open {open_n} 项，已闭合 {closed_n} 项）")
 
-    for p in problems:
-        print(p, file=sys.stderr)
+    _echo_problems(problems)
     if getattr(args, "strict", False) and problems:
         sys.exit(1)
 
@@ -668,6 +687,12 @@ def cmd_batch_add(args):
     root = repo_root(args.root)
     _reject_batch_key_unsafe(args.key)
     _reject_cell_unsafe(args.title, "title")
+    # [impl-review-fix] FIX-5（CV-2 codex PoC）：优先级/计划此前原样写进
+    # `f"优先级: {priority}\n"`/`f"计划: {plan}\n"` 单行，未挂守卫——含换行的值能在
+    # batches.md 里注入一整条伪造的 `### … — …` header 行，被 `_BATCH_HEADER_RE` 当成
+    # 一个新批次条目解析出来。挂在原始入口参数（写盘前）上，拒 `|`/换行。
+    _reject_cell_unsafe(getattr(args, "优先级"), "优先级")
+    _reject_cell_unsafe(getattr(args, "计划"), "计划")
     path = batches_md_path(root)
     lines = _read_batches_lines(path)
     if _batch_entry_exists(lines, args.key):
@@ -795,11 +820,18 @@ def cmd_batch_rename(args):
 
     auto-reindex（Task 7，T4）：以上写盘全部成功后，自动调 `_reindex_core` 刷新
     `issues/INDEX.md`（否则 INDEX 会滞留旧 key，要等下一次显式 reindex 才刷新，中间是
-    一段静默陈旧态）。**reindex 失败只吞成 stderr 警告**（"rename 已生效，INDEX 未刷新，
-    请手动 reindex"）、**rename 本体仍 exit 0**——rename 该做的写盘已经全部完成，不该让
-    reindex 这个"顺带刷新"步骤的失败反噬成 rename 失败假象，也不留 INDEX 陈旧的静默态
-    （用户能看到警告、知道要手动补一次 reindex）。rename 写盘前失败（上面的校验类 `_die`）
-    仍不会走到这一步、不会触发 reindex。
+    一段静默陈旧态）。**reindex 失败只吞成 stderr 警告**、**rename 本体仍 exit 0**——
+    rename 该做的写盘已经全部完成，不该让 reindex 这个"顺带刷新"步骤的失败反噬成 rename
+    失败假象。rename 写盘前失败（上面的校验类 `_die`）仍不会走到这一步、不会触发 reindex。
+
+    [impl-review-fix] FIX-4（领域 F2 + 对抗 B-F1 PoC）：此前 `try: _reindex_core(root)`
+    丢弃返回的 `(items, problems)`——reindex 成功但两池 `scan --json` 测出 problems
+    非空时，rename 完全不吐这个信号（静默蒸发，换个入口就能复现 T1 那类"reindex
+    problems 被丢弃"腐蚀）。现在解包并用 `_echo_problems` 回显。同时 `except` 分支的
+    警告文案此前无条件断言"INDEX 未刷新"——但 `_reindex_core` 内部是先
+    `atomic_write` INDEX.md、再 `sync_batches_md`，若失败发生在后者，INDEX 其实已经
+    刷新成功，"INDEX 未刷新"这句话不准。文案改为不断言具体哪个文件的状态，只如实说
+    "reindex 失败，可能已部分刷新，请手动重跑 reindex 收敛"。
     """
     root = repo_root(args.root)
     old_key, new_key = args.old, args.new
@@ -832,12 +864,19 @@ def cmd_batch_rename(args):
     ))
 
     try:
-        _reindex_core(root)
+        items, problems = _reindex_core(root)
     except Exception as e:
+        # [impl-review-fix] FIX-4：不断言 INDEX/batches.md 具体处于哪个状态——失败可能
+        # 发生在 `atomic_write` INDEX.md 之前（两者都未刷新），也可能发生在其后的
+        # `sync_batches_md`（INDEX 已刷新、只有 batches.md 未同步），旧文案"INDEX 未
+        # 刷新"对后一种情况是错的。
         print(
-            f"batch rename: rename 已生效，INDEX 未刷新，请手动 reindex：{e}",
+            f"batch rename: rename 已生效，但 reindex 失败（INDEX/batches.md 可能已"
+            f"部分刷新），请手动重跑 reindex：{e}",
             file=sys.stderr,
         )
+    else:
+        _echo_problems(problems)
 
 
 def main():

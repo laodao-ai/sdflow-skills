@@ -26,7 +26,6 @@ import re
 import subprocess
 import sys
 import tempfile
-from collections import Counter
 
 
 def atomic_write(path, text):
@@ -433,6 +432,17 @@ def cmd_set_status(args):
     if new not in STATUS_CODES:
         _die(f"状态码非法：{new}")
 
+    # [impl-review-fix] FIX-1（A-F1 PoC，镜像 buglist.py）：evidence/reason/month 会被
+    # 原样拼进历史行 `> {month} 状态：{old} → {new}（{note}）` 以及无块时的 `_minimal_block`，
+    # 此前未挂守卫——含换行的 reason/evidence（例如引用一段 markdown、恰好含独立的 `---`
+    # 行）会被 `block_ranges()` 在注入点截断真实块，甚至在 `_minimal_block` 场景下让
+    # 注入内容伪装成新的 `---` 分隔/`## ID:` 标题，`scan` 返回 `problems: []` 完全测不出
+    # （静默腐蚀）。挂在写盘前的原始入口参数上，拒 `|`/换行即可同时杀死块注入和静默
+    # 截断两个 PoC——两者都要求 reason/evidence/month 含换行。
+    _reject_cell_unsafe(args.evidence, "evidence")
+    _reject_cell_unsafe(args.reason, "reason")
+    _reject_cell_unsafe(args.month, "month")
+
     path, lines, sec, rows = _find_row_file(root, args.id)
 
     # 门禁
@@ -528,6 +538,12 @@ def cmd_triage(args):
 def cmd_scan(args):
     root = repo_root(args.root)
     items, problems = [], []
+    # [impl-review-fix] FIX-2（CV-1+A-F2 双镜 PoC，镜像 buglist.py）：重复 ID 检测必须是
+    # 全池（跨全部 dated 文件）唯一性检查——T-ID 语义上应全局唯一，不只是"单文件内不重复"。
+    # 此前 Counter 在下面循环体内逐文件重建，只测得出单文件内重复，漏检跨文件同 ID
+    # （例如 2026-01-todolist.md 与 2026-02-todolist.md 都出现 T1）。改为收集
+    # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数。
+    raw_id_locations = []  # [(id, rel_path), ...]，按遍历顺序累积，不逐文件清空
     for path in list_files(root):
         with open(path, encoding="utf-8") as f:
             lines = f.readlines()
@@ -537,13 +553,13 @@ def cmd_scan(args):
         rel = os.path.relpath(path, root)
         # OV-3：重复 ID 检测（镜像 buglist.py）——必须在 parse_table_rows 已经按 ID 建 dict
         # 丢行之前、从原始表行里数，否则重复的那一行早被静默吞掉，dict 视角里只剩 1 个 ID。
+        # 这里只收集，真正的计数在主循环结束后跨全部文件统一做（避免漏检跨文件重复）。
         if sec:
             raw_ids = [
                 lines[i].strip().strip("|").split("|", 1)[0].strip()
                 for i in range(sec["rows_start"], sec["rows_end"])
             ]
-            for dup_id in sorted({rid for rid, cnt in Counter(raw_ids).items() if cnt > 1}):
-                problems.append(f"{rel}: 重复 ID：{dup_id}（parse_table_rows 会静默丢行）")
+            raw_id_locations.extend((rid, rel) for rid in raw_ids)
         # OV-1：行 arity 检测（镜像 buglist.py）——无块坏行（如描述含裸 `|`）会把某数据行
         # 拆成多于/少于标准列数的 cells，`parse_table_rows` 只要求 `len(cells) >= 5` 就照单
         # 按固定列位读，列错位不会自己报错——必须显式核对每一原始数据行的列数，标准 8 列
@@ -575,6 +591,20 @@ def cmd_scan(args):
                           "change": c[6] if len(c) > 6 and c[6] != "-" else None,
                           "batch": c[7] if len(c) > 7 and c[7] else None,
                           "file": rel})
+
+    # [impl-review-fix] FIX-2：全池维度统一计数重复 ID（覆盖同文件内重复 + 跨文件重复）。
+    dup_locations = {}
+    for rid, rel in raw_id_locations:
+        dup_locations.setdefault(rid, []).append(rel)
+    for dup_id in sorted(rid for rid, locs in dup_locations.items() if len(locs) > 1):
+        locs = dup_locations[dup_id]
+        if len(set(locs)) == 1:
+            problems.append(f"{locs[0]}: 重复 ID：{dup_id}（parse_table_rows 会静默丢行）")
+        else:
+            problems.append(
+                f"跨文件重复 ID：{dup_id}（出现于：{', '.join(sorted(set(locs)))}——"
+                "ID 应全池唯一）"
+            )
 
     if args.status:
         items = [b for b in items if b["status"] == args.status]
