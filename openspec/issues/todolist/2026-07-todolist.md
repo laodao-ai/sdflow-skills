@@ -75,10 +75,10 @@
 | T67 | `cmd_add id 校验(buglist/todolist)` | 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55) | 代码质量 | PROPOSED | 2026-07-07 13:03 | issues-pool-hardening | issues-pool-hardening |
 | T68 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 | 代码质量 | PROPOSED | 2026-07-07 16:57 | mlh-p2-anchor-lint | mlh-p2-anchor-lint |
 | T69 | `sdflow-init/copy_bundle` | 缺 pin 消费仓 update 端到端交叉不变量测试（workflow.md/spec-checklists/code-checklists 原封不动、仅 tools+契约刷新） | 代码质量 | PROPOSED | 2026-07-07 16:57 | mlh-p2-anchor-lint | mlh-p2-anchor-lint |
-| T70 | `init.py config-lint` | config_lint 的 _second_level_keys/块扫描仅识别两空格缩进，tab 缩进的 model-tiers 子键隐形→越域非法子键 fail-open 静默通过（对抗A实测复现，边缘 YAML） | 代码质量 | OPEN | 2026-07-07 20:30 | mlh-p3-determ-guards |  |
-| T71 | `test_mirror_consistency.py` | _ast_no_doc 对剥 docstring 后空体函数坍塌：两个仅含 docstring 的同名 stub AST 相等→理论假过（当前 11+6 helper 均有真逻辑不可利用，加固可标记空体） | 代码质量 | OPEN | 2026-07-07 20:30 | mlh-p3-determ-guards |  |
-| T72 | `issues.py batch lint` | batch 条目整行缺失 优先级:/计划: 字段（非空值而是整行删除）当前不校验（实现有意窄化到值语法层，对抗A确认为文档化边界）——考虑补结构完整性校验抓手改腐坏 | 功能增强 | OPEN | 2026-07-07 20:30 | mlh-p3-determ-guards |  |
-| T73 | `anchor_lint.py + init.py config-lint` | metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定 | 功能增强 | OPEN | 2026-07-07 20:30 | mlh-p3-determ-guards |  |
+| T70 | `init.py config-lint` | config_lint 的 _second_level_keys/块扫描仅识别两空格缩进，tab 缩进的 model-tiers 子键隐形→越域非法子键 fail-open 静默通过（对抗A实测复现，边缘 YAML） | 代码质量 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
+| T71 | `test_mirror_consistency.py` | _ast_no_doc 对剥 docstring 后空体函数坍塌：两个仅含 docstring 的同名 stub AST 相等→理论假过（当前 11+6 helper 均有真逻辑不可利用，加固可标记空体） | 代码质量 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
+| T72 | `issues.py batch lint` | batch 条目整行缺失 优先级:/计划: 字段（非空值而是整行删除）当前不校验（实现有意窄化到值语法层，对抗A确认为文档化边界）——考虑补结构完整性校验抓手改腐坏 | 功能增强 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
+| T73 | `anchor_lint.py + init.py config-lint` | metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定 | 功能增强 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
 
 ---
 

@@ -49,6 +49,15 @@
 | T68 | todo | PROPOSED | mlh-p2-anchor-lint |
 | T69 | todo | PROPOSED | mlh-p2-anchor-lint |
 
+### 批次：mlh-p3-determ-guards
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T70 | todo | PROPOSED | mlh-p3-determ-guards |
+| T71 | todo | PROPOSED | mlh-p3-determ-guards |
+| T72 | todo | PROPOSED | mlh-p3-determ-guards |
+| T73 | todo | PROPOSED | mlh-p3-determ-guards |
+
 ### 批次：rec2-obs-readability
 
 | ID | Pool | Status | 关联Change |

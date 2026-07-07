@@ -32,3 +32,4 @@
 | `workflow-retro` | [specs/workflow-retro/spec.md](./specs/workflow-retro/spec.md) | `sdflow-retro` 只读再生全项目 change 成本×价值复盘：change 边界靠提交路径检测（非 tag 格式）、时间维仅到阶段级并诚实标注含人决策时间、价值维扫 active+archive 两源合并 spec/code 双报告锚、N≥10 待复评镜机械显著呈现、供数不供裁决 |
 | `retro-report` | [retro/report.md](./retro/report.md)（`/sdflow-retro` 再生）| 全 change 成本×价值复盘活文档：git 提交阶段墙钟（成本维）+ lens-metric 锚聚合（价值维）合成 per-change 明细/阶段占比/成本双峰/per-镜价值表；view-only 再生，不做任何取舍决策 |
 | `batch-triage` | [specs/batch-triage/spec.md](./specs/batch-triage/spec.md) | issues 池待处理项分诊三分类（相关合批/大扫除批/单开）：大扫除批硬边界（禁装逻辑面）+ issue 级 pre-diff fail-closed 判据（无自动兜底）+ 同类 Leg1 行为面路径守卫 + 聚合上限（MUST 有上限 + 生成物隔离）+ 一项一 commit 执行协议；本仓-local 不进 bundle |
+| `determinism-guards` | [specs/determinism-guards/spec.md](./specs/determinism-guards/spec.md) | 机械层确定性守卫三件套：recorder 镜像 helper 剥-docstring-AST 等价一致性测试（3 向 3 个 + 2 向 14 个）、`init.py config-lint`（手写 stdlib、条件化放行、fail-closed）、`issues.py batch lint`（优先级/计划占位符豁免 + 前导 token 后缀不校验）；均只判机械可判的一致性/语法，不越权判内容 |
