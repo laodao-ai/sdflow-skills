@@ -81,3 +81,70 @@ def test_existence_min_required_rows(tmp_path):
     v = al.check_existence(report, "code-review", metrics_on=True)
     kinds = {x["detail"] for x in v if x["kind"] == "missing-lens-row"}
     assert "broad" in " ".join(kinds) and "outside-voice" in " ".join(kinds)
+
+
+def _lm(**kw):
+    base = dict(layer="code-review", lens="domain", runner="claude",
+               findings="2", 采纳="1", 裁掉="1", defer="0", 独立="0", sev="致0/高1/中0/低0")
+    base.update(kw)
+    return "<!-- sdflow:lens-metric v1 " + " ".join(f'{k}="{v}"' for k, v in base.items()) + " -->"
+
+def _enums():
+    return _mod().load_enums(CONTRACT)
+
+def test_lens_enum_out_of_domain():
+    al = _mod(); v = al.check_lens_metric(_lm(lens="bogus"), "code-review", _enums())
+    assert any(x["field"] == "lens" for x in v)
+
+def test_layer_must_equal_cli():
+    al = _mod(); v = al.check_lens_metric(_lm(layer="spec-review"), "code-review", _enums())
+    assert any(x["field"] == "layer" and "cli" in x["kind"] for x in v)
+
+def test_bad_sev():
+    al = _mod(); v = al.check_lens_metric(_lm(sev="致0/高1/中0"), "code-review", _enums())
+    assert any(x["field"] == "sev" for x in v)
+
+def test_count_not_nonneg_int():
+    al = _mod()
+    for bad in ("-1", "1.5", "", "三"):
+        v = al.check_lens_metric(_lm(findings=bad), "code-review", _enums())
+        assert any(x["field"] == "findings" for x in v), bad
+
+def test_site_not_checked():
+    al = _mod(); v = al.check_lens_metric(_lm(site="weird-value"), "code-review", _enums())
+    assert v == []                                          # site 任意值合法
+
+def test_missing_required_field():
+    al = _mod()
+    anchor = '<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" -->'  # 缺多字段
+    v = al.check_lens_metric(anchor, "code-review", _enums())
+    assert any(x["field"] == "runner" for x in v)
+
+
+def _run(report_path, layer, root=None):
+    cmd = [sys.executable, str(SCRIPT), "--report", str(report_path), "--layer", layer]
+    if root: cmd += ["--root", str(root)]
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+def test_clean_report_exit0(tmp_path):
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root); assert r.returncode == 0, r.stderr
+
+def test_missing_report_error_exit2(tmp_path):
+    r = _run(tmp_path / "nope.md", "code-review", tmp_path); assert r.returncode == 2
+
+def test_violation_exit1(tmp_path):
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text("<!-- sdflow:hr-tg v1 hit=\"none\" -->\n", encoding="utf-8")
+    r = _run(rpt_path, "code-review", root); assert r.returncode == 1
+    assert '"' in r.stdout or r.stdout.strip()              # JSON 输出
+
+def test_config_bad_block_exit2(tmp_path):
+    root = _write_config(tmp_path, "metrics:\n  enabled: yes\n")
+    rpt_path = tmp_path / "r.md"
+    rpt_path.write_text('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+                        '<!-- sdflow:step1-broad-review v1 mode="native" -->\n', encoding="utf-8")
+    r = _run(rpt_path, "code-review", root); assert r.returncode == 2

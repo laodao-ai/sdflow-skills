@@ -7,6 +7,7 @@ fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggreg
 import argparse, json, re, sys
 from pathlib import Path
 
+
 EXIT_CLEAN, EXIT_VIOLATION, EXIT_ERROR = 0, 1, 2
 
 ANCHOR_PREFIXES = {
@@ -149,3 +150,77 @@ def check_existence(report_text, layer, metrics_on):
             if need not in lens_rows:
                 v.append({"kind": "missing-lens-row", "detail": need})
     return v
+
+
+_NONNEG_INT = re.compile(r'^\d+$')
+
+
+def check_lens_metric(report_text, cli_layer, enums):
+    """校验 fence 外真 lens-metric 锚的字段完整性/枚举归属/layer==--layer/sev 子格式/五计数 int≥0。
+    `site` 字段 MUST NOT 校验（契约 CF-补2，任意值合法）。数值一致性（findings vs 实收数）不校验（脚本不兜）。"""
+    v = []
+    for ln in fence_outside_lines(report_text):
+        if anchor_prefix(ln) != "lens-metric":
+            continue
+        kv = parse_kv(ln)
+        for f in REQUIRED_FIELDS:
+            if f not in kv:
+                v.append({"anchor": ln.strip()[:80], "field": f, "kind": "missing-field"})
+        if kv.get("layer") and kv["layer"] not in enums["layer"]:
+            v.append({"anchor": ln.strip()[:80], "field": "layer", "kind": "out-of-enum"})
+        if kv.get("layer") and kv["layer"] != cli_layer:
+            v.append({"anchor": ln.strip()[:80], "field": "layer", "kind": "layer-ne-cli"})
+        if kv.get("lens") and kv["lens"] not in enums["lens"]:
+            v.append({"anchor": ln.strip()[:80], "field": "lens", "kind": "out-of-enum"})
+        if kv.get("runner") and kv["runner"] not in enums["runner"]:
+            v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "out-of-enum"})
+        if kv.get("sev") and not enums["sev_re"].match(kv["sev"]):
+            v.append({"anchor": ln.strip()[:80], "field": "sev", "kind": "bad-subformat"})
+        for cf in COUNT_FIELDS:
+            if cf in kv and not _NONNEG_INT.match(kv[cf]):
+                v.append({"anchor": ln.strip()[:80], "field": cf, "kind": "not-nonneg-int"})
+    return v
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="评审报告锚自检门（确定性·fail-closed）")
+    ap.add_argument("--report", required=True)
+    ap.add_argument("--layer", required=True, choices=["spec-review", "code-review"])
+    ap.add_argument("--root", default=".")
+    args = ap.parse_args(argv)
+    # 1) 读报告（fail-closed）
+    try:
+        report_text = Path(args.report).read_text(encoding="utf-8")
+    except OSError as e:
+        print(f"[anchor_lint] ERROR 读不到报告: {args.report}: {e}", file=sys.stderr)
+        print(json.dumps({"result": "ERROR", "reason": "report-unreadable"}, ensure_ascii=False))
+        return EXIT_ERROR
+    # 2) 读枚举 + metrics（fail-closed）
+    try:
+        enums = load_enums()
+    except EnumsError as e:
+        print(f"[anchor_lint] ERROR 契约枚举: {e}", file=sys.stderr)
+        print(json.dumps({"result": "ERROR", "reason": "enums"}, ensure_ascii=False))
+        return EXIT_ERROR
+    try:
+        metrics_on = read_metrics_enabled(args.root)
+    except MetricsError as e:
+        print(f"[anchor_lint] ERROR config metrics 块坏: {e}", file=sys.stderr)
+        print(json.dumps({"result": "ERROR", "reason": "metrics-block-bad"}, ensure_ascii=False))
+        return EXIT_ERROR
+    # 3) 校验
+    violations = check_existence(report_text, args.layer, metrics_on)
+    if metrics_on:
+        violations += check_lens_metric(report_text, args.layer, enums)
+    if violations:
+        for x in violations:
+            print(f"[anchor_lint] VIOLATION {x}", file=sys.stderr)
+        print(json.dumps({"result": "VIOLATION", "violations": violations}, ensure_ascii=False))
+        return EXIT_VIOLATION
+    print("[anchor_lint] CLEAN", file=sys.stderr)
+    print(json.dumps({"result": "CLEAN"}, ensure_ascii=False))
+    return EXIT_CLEAN
+
+
+if __name__ == "__main__":
+    sys.exit(main())
