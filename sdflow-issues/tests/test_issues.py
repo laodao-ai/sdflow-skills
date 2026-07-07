@@ -1480,6 +1480,191 @@ class TestEndToEndConsistency:
         assert batches_first == batches_second
 
 
+class TestSweep:
+    """Task 1（roadmap 阶段 1 mlh-p1-issues-sweep）：`issues.py sweep --change X` 原子
+    子命令——把 sdflow-done §2.1 手跑 4 步 issues 分诊循环固化为一次确定性、非原子、
+    fail-closed、可重跑收敛的操作（design.md D1-D6）。全部子步走 subprocess CLI
+    （scan --open-ungrouped / triage / batch add --if-exists skip / reindex）。
+    """
+
+    def test_sweep_open_ungrouped(self, tmp_path):
+        """--open-ungrouped 口径 = 源==X ∧ 非终态 ∧ 批次空——非 OPEN 的非终态项
+        （IN_PROGRESS）也要被纳入 triage（不因 --status OPEN 漏掉）。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-x", "batch": ""},
+            {"id": "B2", "status": "IN_PROGRESS", "change": "chg-x", "batch": ""},
+        ])
+        _write_todo_file(tmp_path, "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "chg-x", "batch": ""},
+        ])
+
+        proc = _run_sweep(tmp_path, ["--change", "chg-x"])
+        assert proc.returncode == 0, proc.stderr
+
+        for iid in ("B1", "B2", "T1"):
+            assert _item_batch(tmp_path, iid) == "chg-x"
+            assert _item_status(tmp_path, iid) == "PROPOSED"
+
+        batches_content = _read_batches(tmp_path)
+        assert "### chg-x —" in batches_content  # batches.md 有该批次条目
+        assert "chg-x" in _read_index(tmp_path)  # INDEX.md 已刷新
+
+    def test_sweep_idempotent(self, tmp_path):
+        """同 change 连跑两次：第二次 rc==0，triage/batch add 均 no-op，无净变化。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-y", "batch": ""},
+        ])
+        _write_todo_file(tmp_path, "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "chg-y", "batch": ""},
+        ])
+
+        _run_sweep(tmp_path, ["--change", "chg-y"])
+        batches_first = _read_batches(tmp_path)
+        index_first = _read_index_bytes(tmp_path)
+
+        proc2 = _run_sweep_raw(tmp_path, ["--change", "chg-y"])
+        assert proc2.returncode == 0, proc2.stderr
+
+        batches_second = _read_batches(tmp_path)
+        index_second = _read_index_bytes(tmp_path)
+        assert batches_first == batches_second
+        assert index_first == index_second
+        assert batches_second.count("### chg-y") == 1
+
+    def test_sweep_rejects_empty_change(self, tmp_path):
+        """空/纯空白/含 em-dash/含 pipe/含换行的 --change 一律在任何写盘前被拒；
+        源为空的孤儿项不受影响（未进任何批次、状态不变）。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "", "batch": ""},  # 孤儿（源为空）
+        ])
+
+        for bad_change in ("", "   ", "a — b", "a|b", "a\nb"):
+            proc = _run_sweep_raw(tmp_path, ["--change", bad_change])
+            assert proc.returncode != 0, f"bad_change={bad_change!r} 应被拒但 rc==0"
+            assert proc.stderr.strip() != ""
+
+        # 孤儿未被误纳、状态/批次未被改动；batches.md 不该被凭空建出来
+        assert _item_batch(tmp_path, "B1") == ""
+        assert _item_status(tmp_path, "B1") == "OPEN"
+        assert not _batches_path(tmp_path).exists()
+
+    def test_sweep_excludes_orphans(self, tmp_path):
+        """合法非空 change 下，源为空的孤儿项天然不匹配 --change 过滤，不被纳入。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-z", "batch": ""},
+            {"id": "B2", "status": "OPEN", "change": "", "batch": ""},  # 孤儿
+        ])
+
+        _run_sweep(tmp_path, ["--change", "chg-z"])
+
+        assert _item_batch(tmp_path, "B1") == "chg-z"
+        assert _item_batch(tmp_path, "B2") == ""
+        assert _item_status(tmp_path, "B2") == "OPEN"
+
+    def test_sweep_triage_fail_closed(self, tmp_path, monkeypatch, capsys):
+        """逐项 triage 第 i 项非零退出 → sweep 整体非零退出，stderr 报明失败点位
+        （pool/id/已 tag 的 id 列表）；前面已成功的项保持已 tag。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-f", "batch": ""},
+            {"id": "B2", "status": "OPEN", "change": "chg-f", "batch": ""},
+        ])
+        real_run = subprocess.run
+
+        class _FakeFailProc:
+            returncode = 1
+            stdout = ""
+            stderr = "simulated triage failure"
+
+        def fake_run(cmd, **kwargs):
+            if "triage" in cmd and "B2" in cmd:
+                return _FakeFailProc()
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+
+        args = types.SimpleNamespace(root=str(tmp_path), change="chg-f")
+        with pytest.raises(SystemExit) as exc_info:
+            issues_mod.cmd_sweep(args)
+        assert exc_info.value.code != 0
+
+        err = capsys.readouterr().err
+        assert "B2" in err  # 失败点位含失败的 id
+        assert "bug" in err  # 失败点位含 pool
+        assert "B1" in err  # 已 tag 列表含 B1
+
+        assert _item_batch(tmp_path, "B1") == "chg-f"  # 前 i-1 项已 tag
+        assert _item_batch(tmp_path, "B2") == ""  # 失败项未被 tag
+        assert not _batches_path(tmp_path).exists()  # 还没跑到 batch add 步
+
+    def test_sweep_rerun_converges(self, tmp_path, monkeypatch):
+        """部分失败（B2 triage 注入失败）后移除注入重跑：全部收敛 tag，batches.md
+        建成、INDEX 刷新；已 tag 项（B1）不受重跑影响（幂等）。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-g", "batch": ""},
+            {"id": "B2", "status": "OPEN", "change": "chg-g", "batch": ""},
+        ])
+        real_run = subprocess.run
+
+        class _FakeFailProc:
+            returncode = 1
+            stdout = ""
+            stderr = "simulated triage failure"
+
+        def fake_run(cmd, **kwargs):
+            if "triage" in cmd and "B2" in cmd:
+                return _FakeFailProc()
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        args = types.SimpleNamespace(root=str(tmp_path), change="chg-g")
+        with pytest.raises(SystemExit):
+            issues_mod.cmd_sweep(args)
+
+        assert _item_batch(tmp_path, "B1") == "chg-g"
+        assert _item_batch(tmp_path, "B2") == ""
+
+        # 重跑走真实 CLI 子进程（不共享父进程内 monkeypatch 状态，天然不受影响）
+        proc = _run_sweep_raw(tmp_path, ["--change", "chg-g"])
+        assert proc.returncode == 0, proc.stderr
+
+        assert _item_batch(tmp_path, "B1") == "chg-g"
+        assert _item_batch(tmp_path, "B2") == "chg-g"
+        assert _item_status(tmp_path, "B1") == "PROPOSED"
+        assert _item_status(tmp_path, "B2") == "PROPOSED"
+        assert "### chg-g —" in _read_batches(tmp_path)
+        assert "chg-g" in _read_index(tmp_path)
+
+    def test_sweep_reindex_fail_closed(self, tmp_path, monkeypatch, capsys):
+        """末步 reindex 非零退出也判 sweep 整体失败（fail-closed，区别 rename 的
+        warn-only）；此时 triage/batch add 均已成功落盘。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-h", "batch": ""},
+        ])
+        real_run = subprocess.run
+
+        class _FakeFailProc:
+            returncode = 1
+            stdout = ""
+            stderr = "simulated reindex failure"
+
+        def fake_run(cmd, **kwargs):
+            if "reindex" in cmd:
+                return _FakeFailProc()
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        args = types.SimpleNamespace(root=str(tmp_path), change="chg-h")
+        with pytest.raises(SystemExit) as exc_info:
+            issues_mod.cmd_sweep(args)
+        assert exc_info.value.code != 0
+
+        err = capsys.readouterr().err
+        assert "reindex" in err
+
+        assert _item_batch(tmp_path, "B1") == "chg-h"
+        assert "### chg-h —" in _read_batches(tmp_path)
+
+
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
 def _run_cli(script, root, args, input_json=None):
@@ -1648,3 +1833,46 @@ def _write_batches_md(root, lines):
     path = _batches_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(lines), encoding="utf-8")
+
+
+def _run_sweep_raw(root, extra_args):
+    return subprocess.run(
+        [sys.executable, SCRIPT, "--root", str(root), "sweep"] + extra_args,
+        capture_output=True, text=True,
+    )
+
+
+def _run_sweep(root, extra_args):
+    proc = _run_sweep_raw(root, extra_args)
+    assert proc.returncode == 0, proc.stderr
+    return proc
+
+
+def _find_item_line(root, item_id):
+    """跨 buglist/todolist 两池 dated 文件找含 item_id 的总览表行（用于断言 sweep
+    落盘后的状态/批次列）——不依赖调用方知道该 id 属于哪个 pool。"""
+    for sub in ("buglist", "todolist"):
+        dir_path = Path(root) / "openspec" / "issues" / sub
+        if not dir_path.exists():
+            continue
+        for f in sorted(dir_path.glob("*.md")):
+            text = f.read_text(encoding="utf-8")
+            for line in text.splitlines():
+                if re.match(rf"^\|\s*{re.escape(item_id)}\s*\|", line.strip()):
+                    return line
+    return None
+
+
+def _item_cells(root, item_id):
+    line = _find_item_line(root, item_id)
+    assert line is not None, f"item {item_id} 未在任何 dated 文件里找到"
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _item_status(root, item_id):
+    return _item_cells(root, item_id)[4]
+
+
+def _item_batch(root, item_id):
+    cells = _item_cells(root, item_id)
+    return cells[7] if len(cells) > 7 else ""

@@ -879,6 +879,70 @@ def cmd_batch_rename(args):
         _echo_problems(problems)
 
 
+# ── sweep（Task 1，roadmap 阶段 1）────────────────────────────────────────────
+# `sweep --change X`：把 sdflow-done §2.1 收尾的 issues 分诊从"模型手跑 4 步 bash
+# 循环"固化为一次确定性、非原子、fail-closed、可重跑收敛的操作（design.md D1-D6）。
+# 全部子步走 subprocess CLI（scan --open-ungrouped / triage / batch add --if-exists
+# skip / reindex），不直调 cmd_*（避 args-namespace 脆弱性 + `_scan_pool` 硬编码无
+# 过滤参数）。
+
+def cmd_sweep(args):
+    """入口守卫（先于任何写盘）→ 逐池 `scan --change X --open-ungrouped --json`
+    （= 源==X ∧ 非终态 ∧ 批次空，D3）→ 逐项 `triage --id --批次 X`（查 returncode，
+    非零即 fail-closed 报点位，D4/D5）→ `batch add X --if-exists skip`（D2 幂等）→
+    `reindex`（末步也 fail-closed，区别于 rename 的 warn-only，D4）。
+    """
+    root = repo_root(args.root)
+    change = (args.change or "").strip()
+    if not change:
+        _die("sweep --change 不可为空（防空 change 误纳孤儿）")
+    _reject_batch_key_unsafe(change)  # 拒 |/换行/ — /首尾空白，先于任何写盘（D5）
+
+    tagged = []  # 已成功 tag 的 id（失败时报点位用）
+    for script, pool, idkey in (
+        (BUGLIST_SCRIPT, "bug", "bugs"),
+        (TODOLIST_SCRIPT, "todo", "items"),
+    ):
+        proc = subprocess.run(
+            [sys.executable, script, "--root", root, "scan",
+             "--change", change, "--open-ungrouped", "--json"],
+            capture_output=True, text=True,
+        )
+        if proc.returncode != 0:
+            _die(f"sweep: {pool} scan 失败 (rc={proc.returncode}): {proc.stderr.strip()}")
+        items = json.loads(proc.stdout).get(idkey, [])
+        for it in items:
+            iid = it["id"]
+            tp = subprocess.run(
+                [sys.executable, script, "--root", root, "triage",
+                 "--id", iid, "--批次", change],
+                capture_output=True, text=True,
+            )
+            if tp.returncode != 0:
+                _die(
+                    f"sweep: triage 失败于 {pool} 第 {iid} 项 (rc={tp.returncode})；"
+                    f"已 tag={tagged}: {tp.stderr.strip()}"
+                )
+            tagged.append(iid)
+
+    ba = subprocess.run(
+        [sys.executable, __file__, "--root", root, "batch", "add",
+         change, "--if-exists", "skip"],
+        capture_output=True, text=True,
+    )
+    if ba.returncode != 0:
+        _die(f"sweep: batch add 失败 (rc={ba.returncode}): {ba.stderr.strip()}")
+
+    ri = subprocess.run(
+        [sys.executable, __file__, "--root", root, "reindex"],
+        capture_output=True, text=True,
+    )
+    if ri.returncode != 0:
+        _die(f"sweep: reindex 失败 (rc={ri.returncode}): {ri.stderr.strip()}")
+
+    print(f"sweep {change}: tagged {len(tagged)} 项 {tagged}")
+
+
 def main():
     p = argparse.ArgumentParser(
         description="共享 issues 层：跨 bug+todo 的 reindex / batch"
@@ -917,6 +981,14 @@ def main():
     sr.add_argument("old")
     sr.add_argument("new")
     sr.set_defaults(func=cmd_batch_rename)
+
+    sw = sub.add_parser(
+        "sweep",
+        help="原子分诊本 change 未分批非终态项入批次（scan --open-ungrouped → triage → "
+             "batch add --if-exists skip → reindex，全子步 subprocess CLI，fail-closed）",
+    )
+    sw.add_argument("--change", required=True, help="本 change 名（不可为空，防误纳孤儿）")
+    sw.set_defaults(func=cmd_sweep)
 
     args = p.parse_args()
     args.func(args)
