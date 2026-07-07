@@ -120,7 +120,7 @@ verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的
 
 若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.codex/skills/`、或本仓库内 `find . -name buglist.py` 兜底定位，找不到就停下问用户脚本在哪。
 
-以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。原手写 4 步循环（scan 两池 → 逐项 triage → batch add → reindex）已固化为 `issues.py` 的原子子命令 `sweep`，一行跑完：
+以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。原手写 4 步循环（scan 两池 → 逐项 triage → batch add → reindex）已固化为 `issues.py` 的一键封装子命令 `sweep`〔impl-review-fix：措辞订正，非原子、fail-closed、可重跑收敛〕，一行跑完：
 
 ```bash
 python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change {change_name}
@@ -284,7 +284,7 @@ sdflow-done 完成
 - **verify 必产 `verify-report.md`** 存 change 目录（随归档留档）。
 - **verify 防假✅（P3h）**：每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；强档 + Do-Not-Trust 冷启（阶段三去人类门后 verify 是唯一终门，禁降档）。见 design §7.3.1 / adr/0001。
 - **hand-off.md（P3g）**：verify 之后 / archive 之前产出（done/not-done + 延后项 + 下阶段建议），随归档留档，作异步人类再入口 + 下个 change 种子；**不直接搬运 verify 的 ✅**（复核锚点存在性）。
-- **issues sweep 子步（§2.1，D3/D4）**：写 hand-off 正文前先跑；`scan`/`triage` **显式传 `--change {本change}`**（不靠 `detect_change` 猜，D4）；只建 **1 个批次、key=本 change 名**（Q2 保守，禁跨 change 合并）；**末尾跑 `issues.py reindex`**（D3）刷新 INDEX + 同步批次状态；只圈 `源==本change` 的未分诊 OPEN 项，孤儿（源=""）不归本 sweep，交独立清理流程兜底。
+- **issues sweep 子步（§2.1，D3/D4）**〔impl-review-fix：本条订正——旧版描述手写 4 步循环，§2.1 已改用 sweep 一键封装〕：写 hand-off 正文前先跑 `issues.py sweep --change {本change}` 一键调用（内部固化 scan 两池 → 逐项 triage → batch add → reindex 全部子步，不再手写 4 步循环）；**显式传 `--change {本change}`**（不靠 `detect_change` 猜，D4）；只建 **1 个批次、key=本 change 名**（Q2 保守，禁跨 change 合并）；内部末尾跑 `reindex`（D3）刷新 INDEX + 同步批次状态；只圈 `源==本change` 的未分诊 OPEN 项，孤儿（源=""）不归本 sweep，交独立清理流程兜底；非原子、fail-closed，半途失败直接重跑同一条命令收敛。
 
 ## 模型选择（按本步性质，逐步定）
 

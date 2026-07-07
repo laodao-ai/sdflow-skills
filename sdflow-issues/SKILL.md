@@ -20,7 +20,7 @@ description: >
 |---|---|---|
 | `sdflow-buglist` | bug 池自己的 add/scan/set-status/triage | `sdflow-buglist/scripts/buglist.py` |
 | `sdflow-todolist` | todo 池自己的 add/scan/set-status/triage | `sdflow-todolist/scripts/todolist.py` |
-| **本 skill** | **跨两池**的 `reindex`（生成 `issues/INDEX.md`）+ `batch`（`issues/batches.md` 注册表）+ `sweep`（原子分诊封装） | `sdflow-issues/scripts/issues.py` |
+| **本 skill** | **跨两池**的 `reindex`（生成 `issues/INDEX.md`）+ `batch`（`issues/batches.md` 注册表）+ `sweep`（一键分诊封装，非原子） | `sdflow-issues/scripts/issues.py` |
 
 > **约定标准的唯一真相源在别处（I13）**：`openspec/issues/` 的目录结构、三维度 schema
 > （源change/批次/status）、状态码表、批次完成判据（D1）、batches.md 字段级 grammar、
@@ -98,7 +98,7 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {
   作用操作**：它明确会触发一次 INDEX 重建，与上一条"不该有的副作用"（triage 顺带推进状态）
   是两回事，不要混为一谈。
 
-### 3. `sweep --change X`——原子分诊本 change 未分批非终态项（sdflow-done §2.1 的一行封装）
+### 3. `sweep --change X`——一键分诊本 change 未分批非终态项（sdflow-done §2.1 的一行封装）〔impl-review-fix：措辞订正，非"原子"〕
 
 ```bash
 python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change {change_name}
@@ -106,7 +106,8 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change
 
 语义：把「源 == X ∧ 非终态 ∧ 批次空」的 bug/todo 一次性归入批次 X——即 `sdflow-done` §2.1
 原手写 4 步循环（scan 两池 → 逐项 triage → batch add → reindex）的一键封装，内部全走子进程
-CLI（不直调 `cmd_*`），对外只暴露一个原子入口。
+CLI（不直调 `cmd_*`），对外只暴露一个单一入口（**非原子**——见下方"非原子、fail-closed、
+重跑收敛"）。
 
 - **扫描口径 `--open-ungrouped`**：等价于 `scan --change X --open-ungrouped --json`——非终态
   （非 CLOSED/VERIFIED 等终态）∧ 批次空，**不是** `--status OPEN`（后者漏非 OPEN 的非终态项、

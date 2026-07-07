@@ -889,11 +889,21 @@ def cmd_batch_rename(args):
 def cmd_sweep(args):
     """入口守卫（先于任何写盘）→ 逐池 `scan --change X --open-ungrouped --json`
     （= 源==X ∧ 非终态 ∧ 批次空，D3）→ 逐项 `triage --id --批次 X`（查 returncode，
-    非零即 fail-closed 报点位，D4/D5）→ `batch add X --if-exists skip`（D2 幂等）→
+    非零即 fail-closed 报点位，D4/D5）→ 0 命中直接返回，不建僵尸批次条目
+    （[impl-review-fix] FIX-2）→ `batch add X --if-exists skip`（D2 幂等）→
     `reindex`（末步也 fail-closed，区别于 rename 的 warn-only，D4）。
+
+    [impl-review-fix] FIX-5：`--change` 首尾若有空白，此前被静默 `.strip()` 后当合法
+    change 使用（例如 `" chg"` 悄悄变成 `"chg"`）——但配套文档承诺"含空白即拒"，静默
+    纠正违反契约、也让调用方误以为原始参数被原样接受。改为：先比较原始参数与其 strip
+    结果是否相同，不同则 fail-closed（先于任何写盘），不再静默改写用户输入。
     """
     root = repo_root(args.root)
-    change = (args.change or "").strip()
+    raw_change = args.change or ""
+    # [impl-review-fix] FIX-5：首尾空白 fail-closed，不静默 strip 后放行。
+    if raw_change != raw_change.strip():
+        _die(f"sweep --change 首尾不可有空白（不静默 strip，防误纳）：{raw_change!r}")
+    change = raw_change
     if not change:
         _die("sweep --change 不可为空（防空 change 误纳孤儿）")
     _reject_batch_key_unsafe(change)  # 拒 |/换行/ — /首尾空白，先于任何写盘（D5）
@@ -910,7 +920,14 @@ def cmd_sweep(args):
         )
         if proc.returncode != 0:
             _die(f"sweep: {pool} scan 失败 (rc={proc.returncode}): {proc.stderr.strip()}")
-        items = json.loads(proc.stdout).get(idkey, [])
+        data = json.loads(proc.stdout)
+        # [impl-review-fix] FIX-1：此前只取 idkey，`problems`（per-type 脚本自身的一致性
+        # 自检信号，如表↔块不一致/重复 ID/OV-1 行 arity 异常）被静默丢弃——重蹈
+        # CR-4/FIX-4 修过的"problems 静默蒸发"坑。非空即回显 stderr（带 pool 标注），
+        # **不收紧退出码**（更强的 `reindex --strict` enforcement 是延后的 roadmap T2.5）。
+        for p in (data.get("problems") or []):
+            print(f"sweep: {pool} scan problems: {p}", file=sys.stderr)
+        items = data.get(idkey, [])
         for it in items:
             iid = it["id"]
             tp = subprocess.run(
@@ -924,6 +941,13 @@ def cmd_sweep(args):
                     f"已 tag={tagged}: {tp.stderr.strip()}"
                 )
             tagged.append(iid)
+
+    # [impl-review-fix] FIX-2：0 命中（tagged 为空）时此前仍无条件建批次条目——0 成员的
+    # 批次因 D1 vacuous-truth 排除永远不会被 reindex 判 DONE，逐 change 累积僵尸 PLANNED
+    # 条目。改为仅当确有命中项时才建批次/刷新 INDEX；0 命中直接返回，不写盘。
+    if not tagged:
+        print(f"sweep {change}: tagged 0 项，无匹配项，跳过 batch add/reindex")
+        return
 
     ba = subprocess.run(
         [sys.executable, __file__, "--root", root, "batch", "add",
@@ -939,6 +963,11 @@ def cmd_sweep(args):
     )
     if ri.returncode != 0:
         _die(f"sweep: reindex 失败 (rc={ri.returncode}): {ri.stderr.strip()}")
+    # [impl-review-fix] FIX-1：reindex 成功路径此前丢弃 `ri.stderr`——reindex 子进程内部
+    # `_echo_problems` 写的 problems 回显（两池一致性自检信号）到这里被整体静默蒸发。
+    # 非空即透传到本进程 stderr。
+    elif ri.stderr.strip():
+        print(ri.stderr, end="" if ri.stderr.endswith("\n") else "\n", file=sys.stderr)
 
     print(f"sweep {change}: tagged {len(tagged)} 项 {tagged}")
 
@@ -984,8 +1013,12 @@ def main():
 
     sw = sub.add_parser(
         "sweep",
-        help="原子分诊本 change 未分批非终态项入批次（scan --open-ungrouped → triage → "
-             "batch add --if-exists skip → reindex，全子步 subprocess CLI，fail-closed）",
+        # [impl-review-fix] FIX-3：原措辞"原子分诊"误导——本命令是多子步 subprocess 顺序
+        # 调用（scan→triage→batch add→reindex），非原子（无跨子步事务），fail-closed +
+        # 失败后重跑收敛，改为准确措辞。
+        help="一键封装（非原子、fail-closed、可重跑收敛）：把本 change 未分批非终态项分诊"
+             "入批次（scan --open-ungrouped → triage → batch add --if-exists skip → "
+             "reindex，全子步 subprocess CLI）",
     )
     sw.add_argument("--change", required=True, help="本 change 名（不可为空，防误纳孤儿）")
     sw.set_defaults(func=cmd_sweep)

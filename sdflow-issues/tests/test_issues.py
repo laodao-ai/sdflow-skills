@@ -1561,6 +1561,96 @@ class TestSweep:
         assert _item_batch(tmp_path, "B2") == ""
         assert _item_status(tmp_path, "B2") == "OPEN"
 
+    def test_sweep_zero_items(self, tmp_path):
+        """[impl-review-fix] FIX-2：0 命中（无匹配本 change 的 open-ungrouped 项）时，
+        sweep 退出码 0，但不建批次条目——0 成员批次因 D1 vacuous-truth 排除永远不会被
+        reindex 判 DONE，逐 change 累积会变成僵尸 PLANNED 条目，源头直接不建。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "other-chg", "batch": ""},
+        ])
+        proc = _run_sweep_raw(tmp_path, ["--change", "chg-empty"])
+        assert proc.returncode == 0, proc.stderr
+        assert not _batches_path(tmp_path).exists()
+        assert _item_batch(tmp_path, "B1") == ""  # 未匹配的项不受影响
+
+    def test_sweep_rejects_whitespace_change(self, tmp_path):
+        """[impl-review-fix] FIX-5：首尾含空白的 change（strip 后非空）也必须被拒——
+        此前会被静默 `.strip()` 后当合法 change 使用，违反"含空白即拒"的契约。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg", "batch": ""},
+        ])
+        for bad_change in (" chg", "chg "):
+            proc = _run_sweep_raw(tmp_path, ["--change", bad_change])
+            assert proc.returncode != 0, f"bad_change={bad_change!r} 应被拒但 rc==0"
+            assert proc.stderr.strip() != ""
+
+        assert _item_batch(tmp_path, "B1") == ""  # 未被误纳
+        assert not _batches_path(tmp_path).exists()  # 未曾写盘
+
+    def test_sweep_scan_fail_closed(self, tmp_path, monkeypatch, capsys):
+        """[impl-review-fix] FIX-4：scan 子进程非零退出 → sweep 整体非零退出，stderr
+        报明 pool/步；此前完全没测过这个分支。此时还没跑到 triage，不应有任何写盘。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-scan", "batch": ""},
+        ])
+        real_run = subprocess.run
+
+        class _FakeFailProc:
+            returncode = 1
+            stdout = ""
+            stderr = "simulated scan failure"
+
+        def fake_run(cmd, **kwargs):
+            if "scan" in cmd:
+                return _FakeFailProc()
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+
+        args = types.SimpleNamespace(root=str(tmp_path), change="chg-scan")
+        with pytest.raises(SystemExit) as exc_info:
+            issues_mod.cmd_sweep(args)
+        assert exc_info.value.code != 0
+
+        err = capsys.readouterr().err
+        assert "scan" in err
+        assert "bug" in err
+
+        assert _item_batch(tmp_path, "B1") == ""  # 未被 tag，scan 就已失败
+        assert not _batches_path(tmp_path).exists()  # 完全没写盘
+
+    def test_sweep_batch_add_fail_closed(self, tmp_path, monkeypatch, capsys):
+        """[impl-review-fix] FIX-4：batch add 子进程非零退出 → sweep 整体非零退出，
+        stderr 报明 batch add 步；此时 triage 已成功落盘（tag 已写），但 batches.md
+        未建成——此前完全没测过这个分支。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "chg-ba", "batch": ""},
+        ])
+        real_run = subprocess.run
+
+        class _FakeFailProc:
+            returncode = 1
+            stdout = ""
+            stderr = "simulated batch add failure"
+
+        def fake_run(cmd, **kwargs):
+            if "batch" in cmd and "add" in cmd:
+                return _FakeFailProc()
+            return real_run(cmd, **kwargs)
+
+        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+
+        args = types.SimpleNamespace(root=str(tmp_path), change="chg-ba")
+        with pytest.raises(SystemExit) as exc_info:
+            issues_mod.cmd_sweep(args)
+        assert exc_info.value.code != 0
+
+        err = capsys.readouterr().err
+        assert "batch add" in err
+
+        assert _item_batch(tmp_path, "B1") == "chg-ba"  # triage 已成功落盘
+        assert not _batches_path(tmp_path).exists()  # batch add 未成功，未建成
+
     def test_sweep_triage_fail_closed(self, tmp_path, monkeypatch, capsys):
         """逐项 triage 第 i 项非零退出 → sweep 整体非零退出，stderr 报明失败点位
         （pool/id/已 tag 的 id 列表）；前面已成功的项保持已 tag。"""
@@ -1636,7 +1726,14 @@ class TestSweep:
 
     def test_sweep_reindex_fail_closed(self, tmp_path, monkeypatch, capsys):
         """末步 reindex 非零退出也判 sweep 整体失败（fail-closed，区别 rename 的
-        warn-only）；此时 triage/batch add 均已成功落盘。"""
+        warn-only）；此时 triage/batch add 均已成功落盘。
+
+        [impl-review-fix] FIX-6：注入的 fake stderr 故意不含字面 "reindex"（改用
+        "boom"）——此前用 "simulated reindex failure" 会让下面
+        `assert "reindex" in err` 巧合通过（哪怕代码自身完全没标注是 reindex 步失败，
+        断言也会因为注入的假 stderr 本身含这个词而通过）。现在 err 里的 "reindex" 只能
+        来自被测代码自己格式化的 `sweep: reindex 失败 (...)` 前缀，断言才是真的在验证
+        代码的失败点位标注。"""
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "chg-h", "batch": ""},
         ])
@@ -1645,7 +1742,7 @@ class TestSweep:
         class _FakeFailProc:
             returncode = 1
             stdout = ""
-            stderr = "simulated reindex failure"
+            stderr = "boom"
 
         def fake_run(cmd, **kwargs):
             if "reindex" in cmd:
@@ -1659,7 +1756,8 @@ class TestSweep:
         assert exc_info.value.code != 0
 
         err = capsys.readouterr().err
-        assert "reindex" in err
+        assert "reindex" in err  # 只能来自代码自身的 "sweep: reindex 失败" 标注
+        assert "boom" in err  # 且确实透传了子进程的失败原因
 
         assert _item_batch(tmp_path, "B1") == "chg-h"
         assert "### chg-h —" in _read_batches(tmp_path)
