@@ -103,10 +103,9 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| B5 | bug | OPEN | workflow-metrics-loop |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 
-- 共 28 项已闭合（bug: 4，todo: 24）
+- 共 29 项已闭合（bug: 5，todo: 24）
