@@ -57,6 +57,19 @@
 <!-- 日志条目从这里开始，最新的放最上面 -->
 
 ## 2026-07-07
+
+### [阶段 5 起手决策 / ROI 门结论] P5 gate 锚→frontmatter 立项（GO 变体 a）
+- **状态**: ▶ 已拍板起手（尚未开 change；本条为立项决策留痕）
+- **触发**: `/opsx:explore` 复盘「更新 roadmap 进展 + 下一步」——核对发现 P5 两大前置已双双落到利好侧。
+- **ROI 门结论（显式阈值，冷审 F4）**: 取 **GO 变体 a**——「立项待 P2 完成即启」。P2（`e43460c`）已交付即满足，**不等**变体 b 的新一例同类 gate 假过/假红事故。依据：B4/B5 子串/prose-inline 混淆两连发已达立项线、B5 自认非根治；痛点实证充分，无需再攒事故。变体 b 保留为 P5 中途受阻时的回退确证依据。
+- **前置核实落定**:
+  - `ship_gate.py` 铺设路径 = **仅 `sdflow-ship/scripts/`、走 skill symlink，非 bundle 回灌消费仓**（survey 实测）→ 迁移**不触** `sdflow-init update` 回灌链、消费仓 tools/ 侧零改动 → 爆炸半径较 roadmap 撰写时预估**大降**。
+  - 阶段 2 与 S1 gate 锚**不相干**（冷审 F1），仅顺序结果，非锚层前置。
+- **起手第一步（残留核实项，不阻立项）**: 精核归档 inline 锚**精确篇数**（「57」约数、冷审实测 review-report ~39，以起手实测为准，F6）——决定 dual-read 归档读半场的语料范围。
+- **scope 边界重申**: 家族① gate 锚迁 frontmatter；`_line_scoped_hits` **仅删 live 报告解析半场**，**归档读半场永久保留**（归档不可变，冷审 F2）；gate 消费侧 dual-read + 写坏 YAML fail-closed。
+- **下一步**: 退出 explore → `/opsx:new implement-mechanical-layer-hardening-p5-gate-frontmatter`（proposal 引本 roadmap 阶段 5，design 复用 `design.md`，规范增量落 spec-workflow「ship-gate 锚契约 MODIFIED」）。
+
+## 2026-07-07
 ### [阶段 2 完成总结] anchor-lint 产出侧校验器已交付（mlh-p2-anchor-lint → e43460c）
 - **状态**: ✅ 完成（归档 `openspec/changes/archive/2026-07-07-mlh-p2-anchor-lint/`，merge main e43460c，未 push 时点后由本轮维护一并 push）
 - **交付物**:
