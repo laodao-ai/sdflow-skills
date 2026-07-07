@@ -58,7 +58,7 @@
 
 ### 子任务
 #### 2.A anchor_lint 脚本
-- [ ] 2.A.1 `anchor_lint.py --report <path> --layer spec-review|code-review`：扫四类锚（outside-voice/hr-tg/step1-broad-review/lens-metric）存在性 + enum/字段/子格式合法性（enum 从 `lens-metric-contract.md` 单一源读，不复制清单）；缺锚/越域即非零退出。复用 `ship_gate.anchor_set`/`_line_scoped_hits` + `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`（均已是纯函数），不重实现。
+- [ ] 2.A.1 `anchor_lint.py --report <path> --layer spec-review|code-review`：扫四类锚（outside-voice/hr-tg/step1-broad-review/lens-metric）存在性 + enum/字段/子格式合法性（enum 从 `lens-metric-contract.md` 单一源读，不复制清单）；缺锚/越域即非零退出。复用 `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`（度量锚变长 KV 走**前缀匹配**；**不用** `ship_gate.anchor_set`/`_line_scoped_hits`——那是 gate 锚**定长整行**原语、匹配不了变长度量锚，冷审 F1），不重实现。
 - [ ] 2.A.2 测试：喂缺字段/越域/缺锚/fence 内示范锚的样本报告，断言退出码。
 - [ ] 2.A.3 两审 SKILL 的锚自检步改为调 `anchor_lint`；**保留声明**「`findings=N` 与合并池实收数的数值一致性仍是主 session 信任边界、非机械可验」（脚本不谎称能保证数值正确）。
 
@@ -82,7 +82,7 @@
 
 ### 子任务
 #### 3.A recorder 镜像 helper 一致性测试（= P3）
-- [ ] 3.A.1 对 ~10 个 verbatim helper（`atomic_write`/`repo_root`/`_reject_cell_unsafe`/`detect_change`/`normalize_doc_paths`/`auto_default_doc`/`split_sections`/`parse_table_rows`/`block_ranges`/`_ids_in_files`/`_find_row_file`）加 `inspect.getsource` 源码级相等断言（或等价一致性测试），跨 buglist/todolist/issues。**不抽公共模块**（D4 红线禁跨 recorder import）。
+- [ ] 3.A.1 对 verbatim helper 加 `inspect.getsource` 源码级相等断言（或等价一致性测试），**按实际拓扑（冷审 F3）**：**3 向**（buglist/todolist/issues）= `atomic_write`/`repo_root`/`_reject_cell_unsafe`；**2 向**（buglist↔todolist）= `detect_change`/`normalize_doc_paths`/`auto_default_doc`/`split_sections`/`parse_table_rows`/`block_ranges`/`_ids_in_files`/`_find_row_file`（issues.py 依 D4「绝不解析人写行」不含表解析 helper）。**不抽公共模块**（D4 红线禁跨 recorder import）。
 - [ ] 3.A.2 故意改一处 helper 断言测试变红，验证守卫生效。
 
 #### 3.B config.yaml + batches.md lint（= P4）
@@ -137,29 +137,29 @@
 ## 阶段 5 · 家族① gate 状态锚 → frontmatter（Leg 2，就绪需先过 ROI 门）
 
 ### 前置条件
-- [ ] **ROI 评估门**：正式评估「inline 锚这套是否会反复出同类 bug」（现有数据点 = B4/B5 两条）——够立项才开工（T65 自我告诫「别在清理惯性里反应式开工」）。
-- [ ] **核实 ship_gate.py 真实铺设路径**：确认是否 bundle 回灌消费仓（现只在 `sdflow-ship/scripts/`、走 skill symlink → 若非回灌，爆炸半径大降）。
-- [ ] 阶段 2（anchor-lint）已把锚层机验补齐（迁移期更稳）。
+- [ ] **ROI 门（显式阈值，冷审 F4）**：B4/B5 已同类（子串/prose-inline 混淆）两连发、B5 自认「非根治」→ 视为**已达立项线**；GO = 立项待 P2 完成即启，**或** P2 上线后再出 ≥1 例同类 gate 假过/假红更确证。二者择一 S1 起手定（门是显式阈值，非主观「够不够」）。
+- [ ] **核实 ship_gate.py 真实铺设路径 + 归档锚精确篇数**：是否 bundle 回灌消费仓（现只在 `sdflow-ship/scripts/`、走 skill symlink → 若非回灌爆炸半径大降）；归档 inline 锚篇数（「57」为约数、冷审实测 review-report ~39，以实测为准，F6）。
+- [ ] 阶段 2（anchor-lint）已完成——**注（冷审 F1）**：P2 校验度量锚、与 S1 的 gate 锚**不相干**，非 S1 的锚层前置依赖；此处只是 Leg1 先行的顺序结果，不是「P2 为 S1 补机验」。
 
 ### 目标
-- gate 状态（design-approved/verify=PASS|FAIL/code-review=pass|blocked）迁报告 YAML frontmatter；正文再提及锚串不被误当标记；dual-read 窗口关闭后删 `_line_scoped_hits` 整套解析机器。
+- gate 状态（design-approved/verify=PASS|FAIL/code-review=pass|blocked）迁报告 YAML frontmatter；正文再提及锚串不被误当标记；删 `_line_scoped_hits` 的 **live 报告解析半场**（**归档读半场永久保留**，冷审 F2）。
 
 ### 子任务
 #### 5.A frontmatter 状态 schema + 产者迁移
 - [ ] 5.A.1 定义报告 frontmatter 状态 schema（design_approved: bool / verify: PASS|FAIL / code_review: pass|blocked）。
 - [ ] 5.A.2 三 producer SKILL（spec-review 拍板回写 / done verify / code-review）改写 frontmatter 而非 inline 锚。
 #### 5.B gate 消费侧 dual-read + fail-closed
-- [ ] 5.B.1 `ship_gate.py` 读 frontmatter（`safe_load`）；**dual-read 窗口**同时认 57 篇归档旧 inline 锚（`archived_verify_state` 读归档不断）。
+- [ ] 5.B.1 `ship_gate.py` 读 frontmatter（`safe_load`）；**dual-read** 同时认归档旧 inline 锚（`archived_verify_state` 读归档不断）。**注（冷审 F2）**：归档不可变，此归档读路径**永久保留**、非临时窗口。
 - [ ] 5.B.2 LLM 写坏 YAML → `safe_load` 异常 fail-closed（判「无有效状态」→ gate 停下报告，绝不静默过门）。
 - [ ] 5.B.3 更新/迁移 gate 锚契约测试（`test_anchor_contract.py`/`test_producer_parser_contract.py`）+ B5 聚合语料测试到 frontmatter。
-#### 5.C 解析机器退役（窗口关闭后）
-- [ ] 5.C.1 dual-read 窗口关闭条件达成后，删 `_line_scoped_hits` 及 fence-aware/互斥/fail-safe 机器（本阶段收尾任务）。
+#### 5.C 解析机器退役（仅 live 半场，冷审 F2）
+- [ ] 5.C.1 删 `_line_scoped_hits` 的 **live 报告解析半场**（fence-aware/互斥/fail-safe 针对 live 报告部分）；**`archived_verify_state` 的归档读 `_line_scoped_hits` 永久保留**（归档 inline 锚不可变）——「删整套」订正为「删 live、保留归档读」（本阶段收尾任务）。
 
 ### 验收标准
 - [ ] 报告正文任意提及锚串 → gate 不误判（根治 B4/B5 类）。
 - [ ] LLM 写坏 frontmatter → gate fail-closed 停下报告，不静默过门。
-- [ ] 57 篇归档旧 inline 锚在窗口内仍被正确识别（dual-read）。
-- [ ] 产者↔gate 契约测试全绿；`_line_scoped_hits` 在窗口关闭后删除。
+- [ ] 归档旧 inline 锚（精确篇数以起手核实为准）仍被 dual-read 正确识别。
+- [ ] 产者↔gate 契约测试全绿；`_line_scoped_hits` **live 解析半场**删除、**归档读半场保留**（冷审 F2）。
 - [ ] 行为面路径（若确认 bundle 回灌）硬排除、绝不 fold/sweep；改权威源 + `sdflow-init update` 回灌流程走全。
 
 ### 交付物
@@ -191,7 +191,7 @@
 ```
 Leg 1（脚本化，先行、多数可并行）
   P1 issues.py sweep ──┐（改 issues.py + done SKILL）
-  P2 anchor-lint ──────┤（改两审 SKILL 自检步）── 为 P5 迁移期补锚层机验
+  P2 anchor-lint ──────┤（改两审 SKILL 自检步；校验度量锚，与 P5 gate 锚不相干、非 P5 前置，冷审 F1）
   P3 镜像一致性测试 ────┤（纯增测，独立）
   P4 config/batches lint┘（纯增校验器，独立）
   P4' 编排机械步下沉（P5-P8 中ROI，依赖 P1-P3 先落，按痛点子集）
@@ -212,7 +212,7 @@ Leg 2（去字符串化，就绪度分级）
 | 阶段 2 | 2.A（anchor-lint） | 是 |
 | 阶段 3 | 3.A（镜像测试）/ 3.B（config·batch lint） | 各是；可合批 |
 | 阶段 4 | 4.A-4.D（P5-P8） | 每子项各一次；按痛点取子集 |
-| 阶段 5 | 5.A/5.B/5.C（迁移+dual-read+退役） | 一次大 change（高仪式） |
+| 阶段 5 | 5.A/5.B/5.C（迁移+dual-read+**仅退役 live 解析半场**） | 一次大 change（高仪式；退役只删 live 侧、归档读永久保留，冷审 F2） |
 | 阶段 6 | north-star | 触发后另 explore |
 
 ## 附录 C · 未来 OpenSpec 变更映射

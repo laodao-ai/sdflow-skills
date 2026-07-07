@@ -35,11 +35,22 @@
 > **归档前人工复核项**：确认本小节**不存在「未处置」状态**的条目。
 
 <!-- review issue 登记从这里开始 -->
-**⏭ 阶段 3.5 交叉 review 本次 skip（2026-07-07，用户拍板）**
-- **决定**: 跳过 `/autoplan` 交叉 review，plan change 直接归档。
-- **理由**: ① roadmap 三件套已由 3 镜并行 survey 接地产出（memo 存考古）；② 姊妹 roadmap `workflow-cost-optimization` 已跑过 `plan-eng-review`（codex 冷审 30 条），本 roadmap 复用同套四件套结构与红线纪律，边际新风险低；③ 本 change 无 spec delta、无代码，爆炸半径限于文档。
-- **残留缺口（诚实登记，非「未处置」）**: 规划未经独立冷镜二次审——若后续 P1 实施阶段发现 roadmap 阶段划分/ROI 判据有洞，回填修订本 roadmap 即可（roadmap 是活文档，非一次性冻结）。
-- **复核**: 本小节无「未处置」状态条目（跳过=已处置的显式决定）。
+**阶段 3.5 交叉 review：跑了独立冷镜（2026-07-07，用户选「跑独立冷镜冷审」）**
+
+`/autoplan` 在本会话 Skill 面板未直接暴露 → 用 fresh-context 冷镜 agent（plan-eng-review 视角）把三件套作整体 plan 冷审。冷镜总判「可归档，须先订正 F1/F2 表述硬伤，不动两腿骨架」。7 条 finding 处置如下：
+
+| # | 严重度 | 冷镜发现 | 处置 |
+|---|---|---|---|
+| F1 | 高 | anchor_lint 复用清单技术错配（度量锚变长 KV 走 `parse_anchor` 前缀匹配，非 `_line_scoped_hits` 定长整行）；且「P2 为 P5 补锚层机验」是假依赖（两套锚互不相干） | ✅ **采纳**：design §2 技术栈拆两行 + 决策 2 理由 + 候选表 P2；roadmap 2.A.1 + 阶段 5 前置注 + 附录 A 箭头 |
+| F2 | 高 | dual-read 关闭条件未定义；归档 inline 锚不可变、`archived_verify_state` **永久**靠 `_line_scoped_hits` 读 →「删整套解析机器」高估，只能删 live 半场 | ✅ **采纳**：design 决策 6 加③非对称性 + §6.4 + §6.1 风险行；roadmap 目标行 + 5.B.1 + 5.C + 验收 + 附录 B |
+| F3 | 中 | 8/11 helper 只在 buglist+todolist（issues.py 依 D4 不含表解析 helper）→ 3.A.1 拓扑写错 | ✅ **采纳**：design 决策 7 + 候选表 P3；roadmap 3.A.1 拆 3 向/2 向 |
+| F4 | 中 | S1 ROI 门 go 阈值未定义，与「B4/B5 已两连发」有内部张力 | ✅ **采纳**：design §9 + roadmap 阶段 5 前置，锐化为显式阈值（B4/B5 已达线，GO 待 P2 完成或再出 1 例） |
+| F5 | 低 | requirements 头部列 memo.md，违反「四件套不引用 memo」 | ✅ **采纳**：requirements 头部移除 memo 条目 |
+| F6 | 低 | 「57 篇」精确数未核实（实测 review-report ~39） | ✅ **采纳**：软化为约数，并入 S1 起手核实前置（design §9 + roadmap 阶段 5 前置/5.B.1/验收） |
+| F7 | 低 | P8 两子项（SOP 常量收割 / roadmap 处置对账）YAGNI 风险，但护栏（按痛点+留痕）到位 | ⏭ **延后**：阶段 4 起手时掂量收益<维护成本；护栏已在 roadmap 4.D/验收，无需现在改文档 |
+
+- **未见问题维度**（冷镜背书）：scope 未越界、度量锚只补 lint 取舍站得住、反模式/D4 处理正确、并行 caveat 恰当、子任务粒度合理。
+- **归档前复核**：本小节无「未处置」状态条目（F1-F6 采纳并已改文件、F7 显式延后）。
 
 ---
 

@@ -53,7 +53,8 @@ Leg 2 S2（家族② recorder 索引，north-star，ROI 触发才起）：
 |---|---|---|
 | 脚本 | Python 3 + pytest（各 skill 自包含 `tests/`） | 确定性判据 own + 测试兜底 |
 | 结构化状态 | YAML frontmatter（`yaml.safe_load`） | 机器状态载体（替字符串嵌正文） |
-| 复用纯函数 | `ship_gate.anchor_set`/`_line_scoped_hits`、`lens_metric_aggregate.parse_anchor`/`_fence_aware_lines` | anchor-lint 直接复用，不重实现 |
+| 复用纯函数（度量锚校验 = anchor-lint） | `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`（**前缀匹配变长 KV payload**） | anchor-lint 直接复用，不重实现 |
+| gate 锚原语（S1 用，**非** anchor-lint） | `ship_gate.anchor_set`/`_line_scoped_hits`（**定长整行字面匹配**，仅配 gate 状态锚） | S1 迁移 / dual-read 侧使用 |
 | 契约单一源 | `lens-metric-contract.md`（enum/折叠）、`trigger-catalog.md`（HR-TG 子集）、`model-tiers.md`（档位） | lint/校验从单一源读取，不复制清单 |
 
 ## 3. 架构决策
@@ -83,7 +84,7 @@ Leg 2 S2（家族② recorder 索引，north-star，ROI 触发才起）：
 - **P1 `issues.py sweep`**：SKILL 自认「纯机械 bash」，纯新增子命令 + 一个测试，零爆炸半径，收益最直接 → 开路。
 - **P2 anchor-lint**：复用现成纯函数，把每轮 review 必跑的手 grep+肉眼核 enum 降为机验 → 高频门禁，高 ROI。
 - **P3/P4 守卫补全**：镜像一致性测试 + config/batches lint，纯增测/增校验器，护消费仓。
-- 去字符串化 S1 放到脚本化把「锚层机验」补齐之后做，迁移期更稳。
+- 去字符串化 S1 排在 Leg1 之后，纯因**就绪度/仪式排序**（S1 高仪式、需前置 ROI 门），**与 P2 无锚层依赖**——P2 校验的是度量锚（`parse_anchor` 前缀匹配变长 KV），S1 迁的是 gate 状态锚（`_line_scoped_hits` 定长整行），两套锚、两套解析机互不相干，P2 不为 S1 补任何机验（冷审 F1 订正）。
 
 ### 决策 3：去字符串化只搬「整块 + 歧义 + 有解析机」的家族①②，边缘度量锚只补 lint 不迁载体
 
@@ -113,13 +114,13 @@ Leg 2 S2（家族② recorder 索引，north-star，ROI 触发才起）：
 
 ### 决策 6：S1 的两处失败面预置为设计约束（dual-read 窗口 + LLM 坏 YAML fail-closed）
 
-**决策**：S1 迁移必须同时交付——① gate 对 57 篇归档 inline 锚的 **dual-read 兼容窗口**（`archived_verify_state` 读归档、B5 聚合测试扫归档语料都依赖旧锚）；② 报告 frontmatter 被 LLM 写坏时 `safe_load` 抛异常的 **fail-closed 兜底**（判为「无有效状态」→ gate 停下报告，绝不静默当已过门）。
+**决策**：S1 迁移必须同时交付——① gate 对归档 inline 锚（约数待核，见 §9）的 **dual-read 兼容**（`archived_verify_state` 读归档、B5 聚合测试扫归档语料都依赖旧锚）；② 报告 frontmatter 被 LLM 写坏时 `safe_load` 抛异常的 **fail-closed 兜底**（判为「无有效状态」→ gate 停下报告，绝不静默当已过门）；③ **非对称性识别（冷审 F2）**：归档报告不可变（`archive/` 只有 inline 锚），`archived_verify_state`（`ship_gate.py:151/485`）**永久**靠 `_line_scoped_hits` 读归档判 base 已并 change 的 verify 态——故 dual-read **不是临时窗口**：live 报告解析可切 frontmatter，但**归档读路径的 `_line_scoped_hits` 永久保留**（除非回填 frontmatter 进历史归档，改历史不可取）。
 
 **选择理由**：去字符串化 MUST NOT 引入比「缺 inline 锚」更糙的新静默面（R3）。frontmatter 的 parse 失败面比 inline grep 更集中，兜底策略是迁移的前提而非可选。
 
 ### 决策 7：recorder 镜像一致性用测试兜底，不抽公共模块
 
-**决策**：~10 个 verbatim helper 的漂移用 `inspect.getsource` 相等断言（或等价源码级一致性测试）兜底，**不**跨 recorder 抽 import。
+**决策**：verbatim helper 的漂移用 `inspect.getsource` 相等断言（或等价源码级一致性测试）兜底，**不**跨 recorder 抽 import。**按实际拓扑分组（冷审 F3）**：`atomic_write`/`repo_root`/`_reject_cell_unsafe` **三向**（buglist/todolist/issues）；`detect_change`/`normalize_doc_paths`/`auto_default_doc`/`split_sections`/`parse_table_rows`/`block_ranges`/`_ids_in_files`/`_find_row_file` **仅两向**（buglist↔todolist——issues.py 依 D4「绝不解析人写行」不含表解析 helper）。
 
 **替代方案**：
 - **A. 抽公共模块共享 import** → 撞 D4 红线（三 recorder 刻意无共享 import，`issues.py` 以 subprocess 调另两个，「绝不解析人写行」的隔离设计）。
@@ -135,8 +136,8 @@ Leg 2 S2（家族② recorder 索引，north-star，ROI 触发才起）：
 | 编号 | 候选 | 现在模型/人做什么 | 下沉成 | 保留给模型/人 | ROI | 落点阶段 |
 |---|---|---|---|---|---|---|
 | P1 | `issues.py sweep --change X` | done §2.1 手跑 4 步 bash（scan两池→逐id triage→batch add→reindex） | 一个原子子命令 | 无（纯机械） | 高 | 阶段 1 |
-| P2 | anchor-lint 产出侧校验器 | 出报告后手 grep 四类 v1 锚 + 肉眼核 enum/子格式 | `anchor_lint.py`（复用 `ship_gate.anchor_set`/`parse_anchor`；enum 从 contract 单一源读） | `findings=N` 与实收数的数值一致性 | 高 | 阶段 2 |
-| P3 | 三 recorder 镜像 helper 一致性 | 靠 docstring「镜像 buglist」注释维系，无测试 | `inspect.getsource` 相等断言（不破 D4 隔离） | — | 高 | 阶段 3 |
+| P2 | anchor-lint 产出侧校验器 | 出报告后手 grep 四类 v1 锚 + 肉眼核 enum/子格式 | `anchor_lint.py`（复用 `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`，度量锚变长 KV 走前缀匹配，**非** gate 锚定长整行原语；enum 从 contract 单一源读） | `findings=N` 与实收数的数值一致性 | 高 | 阶段 2 |
+| P3 | recorder 镜像 helper 一致性（3 向 3 个 / 2 向 8 个，见决策 7） | 靠 docstring「镜像 buglist」注释维系，无测试 | `inspect.getsource` 相等断言（不破 D4 隔离） | — | 高 | 阶段 3 |
 | P4 | config.yaml + batches.md lint | 无 validator；`优先级`/`计划` 只挡 `\|`/换行不校验取值 | `config_lint`（yaml 可解析+必填键+tier 枚举）+ `batch lint`（优先级枚举、计划非占位） | — | 高 | 阶段 3 |
 | P5 | embedded-test-sop 日志判定 | 手读长串口日志逐条按 `log-checks.yaml` 匹配 | `log_check.py` 解释器（时间窗+子串+severity rollup） | yaml 标「需人眼」的平台侧项 | 中 | 阶段 4 |
 | P6 | maintain INDEX 对账 | 手扫 specs/rules ↔ INDEX 表格 set-diff + CLAUDE.md 过时引用 | `maintain_scan.py` 只读差异报告 | 新 spec 归哪组 + 是否修复 | 中 | 阶段 4 |
@@ -171,7 +172,7 @@ openspec/changes/plan-mechanical-layer-hardening/   ← 承载本次规划产出
 |---|---|---|
 | **S1 bundle 爆炸半径**：改 ship_gate/报告模版回灌所有消费仓 | 中（可能被高估） | 先核实：ship_gate.py 现只在 `sdflow-ship/scripts/`、走 skill symlink，**不在** bundle 路径 → 若确认非回灌，风险大降；行为面路径仍硬排除、绝不 fold/sweep |
 | **S1 LLM 写坏 frontmatter YAML** | 中 | 决策 6：`safe_load` 异常 → fail-closed 判「无有效状态」，gate 停下报告 |
-| **S1 57 篇归档 inline 锚不兼容** | 中 | 决策 6：dual-read 兼容窗口（gate 同时认 frontmatter + 旧 inline 锚，读归档路径不断） |
+| **S1 归档 inline 锚不兼容** | 中 | 决策 6：dual-read（gate 同时认 frontmatter + 旧 inline 锚）；归档读路径 `_line_scoped_hits` **永久保留**（归档不可变，非临时窗口，冷审 F2） |
 | **脚本越权做判断致假绿** | 中 | 决策 5：每候选显式切判断留模型；lint/校验只 own 机械归约 |
 | **脚本化引入新静默面**（异常吞+exit0） | 高 | R3 红线：所有新脚本 fail-closed + 可观测，pytest 覆盖坏输入断言非零退出 |
 | **清理惯性反应式开工**（T65 自我告诫） | 中 | S1 前置一道 ROI 评估门（inline 锚这套是否会反复出同类 bug）；S2 干脆 north-star 不排期 |
@@ -191,7 +192,7 @@ openspec/changes/plan-mechanical-layer-hardening/   ← 承载本次规划产出
 
 ### 6.4 作废处置
 
-- S1 完成后，`ship_gate.py` 的 `_line_scoped_hits` 及相关 fence-aware/互斥/fail-safe 机器 → 在 dual-read 窗口关闭后删除（该删除本身是 S1 change 的收尾任务，非本规划动）。
+- S1 完成后，`ship_gate.py` 的 **live 报告解析半场**（fence-aware/互斥/fail-safe 针对 live 报告的部分）可删；**但 `archived_verify_state` 的归档读路径 `_line_scoped_hits` 永久保留**（归档 inline 锚不可变，见决策 6 ③）。故「删整套解析机器」订正为「删 live 侧解析、保留归档读」（冷审 F2）。该删除是 S1 change 收尾任务，非本规划动。
 
 ## 7. 规范层契约（与 OpenSpec specs 的映射）
 
@@ -217,7 +218,7 @@ openspec/changes/plan-mechanical-layer-hardening/   ← 承载本次规划产出
 
 ## 9. 未决 / 可延后事项
 
-- **S1 是否真开工**：前置 ROI 评估门（inline 锚这套是否会反复出同类 bug）——B4/B5 是两个数据点，是否够立项待评。**未决，S1 change 起手先评**。
-- **ship_gate.py 真实铺设路径**：核实是否 bundle 回灌消费仓（影响 S1 爆炸半径判定）。**S1 起手第一步核**。
+- **S1 是否真开工**：前置 ROI 门，**判据锐化为显式阈值（冷审 F4）**——B4/B5 已是同类（子串/prose-inline 混淆）两连发、且 B5 自认「非根治」，视为**已达立项线**；GO 判据 = 立项待 P2 anchor-lint 完成即启，**或**若 P2 上线后再出 ≥1 例同类 gate 假过/假红则更确证。二者择一在 S1 change 起手定，但门是显式阈值非主观「够不够」。
+- **ship_gate.py 真实铺设路径 + 归档锚篇数**：核实是否 bundle 回灌消费仓（影响 S1 爆炸半径判定）；同步核实归档 inline 锚报告**精确篇数**（design/requirements 引用的「57 篇」为约数、冷审实测 review-report 约 39 篇，dual-read 覆盖以实测数为准，冷审 F6）。**S1 起手第一步核**。
 - **S2（Path B）触发器**：「recorder 持续出腐蚀 bug / 想在数据上建工具」何时满足——**不排期，被动触发**。
 - **Leg 1 阶段 4（P5-P8 中 ROI 项）粒度**：可能进一步拆分或按需只做子集——**留到阶段 4 起手时按当时痛点排**。
