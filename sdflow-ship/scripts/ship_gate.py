@@ -235,6 +235,85 @@ def _line_scoped_hits(text, candidates):
     return [a for a in candidates if a in hit], in_fence
 
 
+# [mlh-p5] frontmatter 状态解析（手写 stdlib，不 import yaml——保零依赖不变量）。
+# live 读与归档 git-show 文本读共用此单一核心（防漂移，D4）。
+FIELD_ENUMS = {
+    "design_approved": (True, False),   # bool
+    "verify": ("PASS", "FAIL"),
+    "code_review": ("pass", "blocked"),
+}
+
+
+def parse_ship_gate_frontmatter(text):
+    """解析报告 frontmatter 的 ship-gate 状态。返回 (state, error)：
+      state: {field: value}（已枚举校验）；{} = absent（无 frontmatter / 无 ship-gate 键）
+      error: None（干净）或 (field|'frontmatter', category)
+             category ∈ unterminated|duplicate-key|out-of-domain|bad-type|tab-indent
+    D2 只认文件首块：首行须 '---'（去 BOM）；正文 --- 横线不参与。
+    D3 坏≠无：absent(state={},error=None) vs 坏(error!=None) 由调用方分流退出码。
+    D5 重复键→duplicate-key（枚举全部同名键计数，非取最后一个）。"""
+    if text.startswith("﻿"):
+        text = text[1:]
+    lines = text.splitlines()               # 统一 \r\n/\n（值不残留 \r）
+    if not lines or lines[0].strip() != "---":
+        return {}, None                     # absent：无首块 frontmatter
+    end = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end = i
+            break
+    if end is None:
+        return {}, ("frontmatter", "unterminated")
+    block = lines[1:end]
+    # 找顶层 ship-gate: 键（0 缩进），统计出现次数（重复→坏）
+    top_idx = [i for i, ln in enumerate(block)
+               if ln.rstrip() == "ship-gate:" and not ln[:1].isspace()]
+    if len(top_idx) == 0:
+        return {}, None                     # absent：有 frontmatter 但无 ship-gate 键
+    if len(top_idx) > 1:
+        return {}, ("ship-gate", "duplicate-key")
+    # 收集 ship-gate: 下方缩进的 field: value（下一个 0 缩进非空行为界）
+    start = top_idx[0] + 1
+    state, seen = {}, {}
+    for ln in block[start:]:
+        if ln.strip() == "":
+            continue
+        if not ln[:1].isspace():
+            break                           # 回到 0 缩进 = ship-gate 块结束
+        if "\t" in ln[:len(ln) - len(ln.lstrip())]:
+            return {}, ("frontmatter", "tab-indent")
+        body = ln.strip()
+        if ":" not in body:
+            return {}, ("frontmatter", "bad-type")
+        field, _, raw = body.partition(":")
+        field, raw = field.strip(), raw.strip()
+        if field not in FIELD_ENUMS:
+            continue                         # 非本 schema 字段（外来 metadata），忽略
+        seen[field] = seen.get(field, 0) + 1
+        if seen[field] > 1:
+            return {}, (field, "duplicate-key")
+        val = _coerce_ship_gate_value(field, raw)
+        if val is _BAD_TYPE:
+            return {}, (field, "bad-type")
+        if val not in FIELD_ENUMS[field]:
+            return {}, (field, "out-of-domain")
+        state[field] = val
+    return state, None
+
+
+_BAD_TYPE = object()
+
+
+def _coerce_ship_gate_value(field, raw):
+    if field == "design_approved":
+        if raw == "true":
+            return True
+        if raw == "false":
+            return False
+        return _BAD_TYPE                     # yes/1/True 等非规范 bool → 坏
+    return raw                               # verify/code_review：字符串，交枚举校验
+
+
 def anchors_in(path, candidates):
     """行级字面查找（零正则）：机判锚 MUST 独占一行（strip 后等值）、忽略 ``` 代码块——
     描述性提及/文档示例不触发〔B4/ADR-1/2〕。文件不存在返回 []。"""
