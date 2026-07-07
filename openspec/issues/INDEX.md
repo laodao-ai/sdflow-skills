@@ -35,7 +35,6 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T12 | todo | PROPOSED | minimize-repo-footprint |
-| T13 | todo | PROPOSED | minimize-repo-footprint |
 | T14 | todo | PROPOSED | minimize-repo-footprint |
 | T15 | todo | PROPOSED | minimize-repo-footprint |
 | T16 | todo | PROPOSED | minimize-repo-footprint |
@@ -110,4 +109,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 27 项已闭合（bug: 4，todo: 23）
+- 共 28 项已闭合（bug: 4，todo: 24）
