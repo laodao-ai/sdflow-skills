@@ -12,7 +12,7 @@ issues 池 recorder（`buglist.py` / `todolist.py` / `issues.py`）把每条 deb
 ## Consequences
 
 - **issues-pool-hardening 落地本 ADR**：T2 实现为总览行字段写时 table-cell-safe reject（`|` + 换行），scope 钉死总览表 row 字段，详细块 prose 不受限。
-- **与 D2（--strict）同系反静默**：同一 change 里 reindex 加 `--strict` opt-in enforcement，堵"非交互调用 stderr 被吞 + exit 0"的静默蒸发——reject（写时挡腐蚀）与 --strict（收尾抓不一致）是盘面完整性的两道写/读侧守卫。
+- **与 D2（--strict）同系反静默〔spec-review Q1 诚实降级〕**：reject（写时挡腐蚀）+ scan arity 检测（读侧抓已存在腐蚀，OV-1）是本 change **当场生效**的两道盘面完整性守卫。reindex 另加的 `--strict` opt-in enforcement 是**为 T2.5 follow-up 预置的接口**——本 change 内**无非交互消费者**（sweep 的 wiring 已 defer），故它**尚未**真堵"非交互 stderr 被吞 + exit 0"的静默蒸发；那道 enforcement 待 T2.5 wire sweep 后才落地。MUST NOT 把它记作本 change 已达成的收益。
 - **roadmap「去字符串化机器状态层」**：Path B（recorder 索引结构化）+ T65（gate 状态锚迁 frontmatter）合为两阶段；本 change 的 reject 是其低成本前置桥，不与之冲突。
 - **与 adr/0006、0008、0009 同哲学**：workflow「不押上游理想假设」——此处不押"字段永远干净"，写时守盘面。
 - **CONTEXT.md**：无新术语（本决策是设计选择非领域词汇）；「盘面即状态」外延澄清——盘面不必是 markdown 表，结构化 YAML 亦是合法盘面，故延后结构化不违背该原则。
