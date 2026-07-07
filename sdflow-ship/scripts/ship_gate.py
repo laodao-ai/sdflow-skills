@@ -4,11 +4,25 @@
 
 契约（与三个 SKILL.md 报告模板双向钉死；tests/test_anchor_contract.py 断言两侧同组字面）:
 
-锚行字面集（grep -F 语义，零正则）:
-    <!-- ship-gate: design-approved -->        spec-review-report.md（sdflow-spec-review 拍板回写）
-    <!-- ship-gate: verify=PASS -->            verify-report.md（sdflow-done verify 模板）
+机判锚形态〔mlh-p5 迁 frontmatter〕:
+    live 读（active change 报告）: 报告**头部** frontmatter `ship-gate.{field}` 优先；absent
+        （无 frontmatter / 无 ship-gate 键，含未迁移的旧报告）→ 回退下方 inline 锚字面（过渡期
+        兼容）；frontmatter 存在但坏（越域/重复键/未闭合/tab 缩进等）→ UNKNOWN(6) fail-closed，
+        不回退 inline（防坏 frontmatter 被 inline 兜底悄悄放行）。
+    归档读（archived change 报告）: 与 live 共用同一严格 helper `parse_ship_gate_frontmatter`
+        dual-read——frontmatter 优先（新归档）；absent（迁移前旧归档，永久保留）→ 回退 inline；
+        坏 frontmatter → fail-safe 判无 pass（归档不可变、无人可修，不回退 inline 掩盖假 SHIPPED）。
+
+ship-gate frontmatter 字段（三字段，下划线命名，防与旧 inline 锚字面连字符漂移，取值域见 FIELD_ENUMS）:
+    design_approved: true|false   spec-review-report.md（sdflow-spec-review 拍板回写，头部 prepend）
+    verify: PASS|FAIL             verify-report.md（sdflow-done verify 模板，头部 prepend）
+    code_review: pass|blocked     code-review-report.md（sdflow-code-review 模板，头部 prepend）
+
+inline 锚行字面集（grep -F 语义，零正则；过渡期兼容 + 旧归档永久兜底，三 SKILL 新产出报告不再落）:
+    <!-- ship-gate: design-approved -->        spec-review-report.md（旧格式）
+    <!-- ship-gate: verify=PASS -->            verify-report.md（旧格式）
     <!-- ship-gate: verify=FAIL -->
-    <!-- ship-gate: code-review=pass -->       code-review-report.md（sdflow-code-review 模板）
+    <!-- ship-gate: code-review=pass -->       code-review-report.md（旧格式）
     <!-- ship-gate: code-review=blocked -->
 
 退出码: 0=可推进(含 SHIPPED/SKIP) 3=REFUSE_START 4=BLOCKED_UPSTREAM 5=VERIFY_FAIL 6=UNKNOWN

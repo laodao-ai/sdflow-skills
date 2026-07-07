@@ -162,6 +162,26 @@ fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 
 
 ## 报告格式（code-review-report.md）
 
+**报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
+MUST 在文件**最顶端**（prepend，非追加末尾）写：
+
+```yaml
+---
+ship-gate:
+  code_review: pass
+---
+```
+或
+```yaml
+---
+ship-gate:
+  code_review: blocked
+---
+```
+
+——`code_review` 字段二选一（`pass`/`blocked`，下划线字段名、小写值），/sdflow-ship 读此 frontmatter 机判。
+若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。头部之后紧接下方正文（含人读结论行，不可省略）：
+
 ```
 ## code-review 报告 — {change}
 ### 命中范围
@@ -183,11 +203,7 @@ fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 
 ### 结论
   □ 建议进 /sdflow-done   □ defer 残差已入 buglist/todolist（hand-off 会引用）
 
-  结论区末行为机器锚行（ship-gate 契约，二选一）：
-  （pass：建议进 /sdflow-done）
-  <!-- ship-gate: code-review=pass -->
-  （blocked：存在未解 blocker）
-  <!-- ship-gate: code-review=blocked -->
+  （机判锚已迁至报告**头部** frontmatter `ship-gate.code_review: pass|blocked`，见上；此处结论区末行只保留人读勾选结论，不再重复机判锚）
 ```
 
 ## 模型选择（按本步性质，逐步定）

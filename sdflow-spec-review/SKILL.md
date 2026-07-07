@@ -105,17 +105,30 @@ description: >
   降采样/收紧触发/淘汰某镜一律人决，本 skill MUST NOT 自行判断或执行。
 - 据此更新 design/specs，改动处标 `[spec-review-amendment]`。
 - **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
-- **拍板回写协议（ship-gate 锚，D2）**：设计门拍板**发生后**，主 session MUST 立即把下行锚原样写入 `spec-review-report.md`（拍板记录区末尾）——写入者=主 session、触发点=用户批准动作；这是 `/sdflow-ship` pre-flight 的唯一机判依据：
+- **拍板回写协议（ship-gate 锚，D2，mlh-p5 迁 frontmatter）**：设计门拍板**发生后**，主 session MUST 立即把 `ship-gate.design_approved`
+  写入 `spec-review-report.md`**的报告头部 frontmatter**（文件首块，非文件末尾、非正文）——写入者=主 session、触发点=用户批准动作；
+  这是 `/sdflow-ship` pre-flight 的唯一机判依据：
 
-  <!-- ship-gate: design-approved -->
+  ```yaml
+  ---
+  ship-gate:
+    design_approved: true
+  ---
+  ```
 
-  gate exit 3 时若拍板已发生，人工补此锚行 = 显式越权留痕（人机同权）。
+  写入规则：若 `spec-review-report.md` 已有首块 frontmatter（首行即 `---`），MUST 将 `ship-gate:` 键合并进该已有块（不新开第二块、
+  不破坏已有其他键）；若尚无 frontmatter，MUST 在文件最顶端新建此块（**prepend**，MUST NOT 追加到文件末尾）。
+  **正文人读拍板记录行保留不删**：决策登记区/拍板记录区仍写一行人读结论（如"设计门已拍板批准，日期 XXXX-XX-XX"）——
+  frontmatter 是机判锚，人读行仍留在正文供人阅读、不因迁移而消失。
 
-  **〔SR-M〕lens-metric 锚随拍板最终化（best-effort，无机械兜底）〔impl-review-fix CF-8〕**：spec-review 的
+  gate exit 3 时若拍板已发生，人工补此 frontmatter 块 = 显式越权留痕（人机同权）。
+
+  **〔SR-M〕lens-metric 锚随拍板最终化（best-effort，无机械兜底，仍在正文、不迁移）〔impl-review-fix CF-8〕**：spec-review 的
   `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，
-  其 `lens-metric` 锚 SHOULD 在**拍板回写时**（与上方 ship-gate 拍板锚同步写入 `spec-review-report.md`）最终确定/重算，
+  其 `lens-metric` 锚 SHOULD 在**拍板回写时**（与上方 `ship-gate.design_approved` frontmatter **同步**写入 `spec-review-report.md`，
+  两处各写——头部 frontmatter 落机判状态、正文 lens-metric 注释落度量）最终确定/重算，
   反映门后最终裁决，避免用 Step3 pre-gate 临时裁决充当最终采纳率——门前若因 `metrics.enabled=true` 已落的锚视为草稿值，
-  拍板时原地更新覆盖，不新开一行。**此为 best-effort、无机械兜底**：与 `ship-gate: design-approved` 锚不同（后者有
+  拍板时原地更新覆盖，不新开一行。**此为 best-effort、无机械兜底**：与 `ship-gate.design_approved` frontmatter 不同（后者有
   `ship_gate.py` 硬拦截），此重算**无任何下游校验**——聚合器（`/sdflow-retro` 的 `lens_metric_aggregate.py`）
   不知晓某行锚是"草稿"还是"已最终化"，主 session 漏执行本步不会被任何机制发现；采纳率/独立率的门后复评可能悄悄
   停留在 pre-gate 的临时值上。与本节前述"数值一致性是主 session 信任边界、非机械门"口径一致——此局限已知且不新增

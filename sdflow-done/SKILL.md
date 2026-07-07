@@ -73,14 +73,28 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 3. 用 Grep/Read 核对**代码/迁移/测试**是否反映每条要求（迁移文件、SP、Go、前端、测试）
 4. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
 5. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
+   - **报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
+     MUST 在文件**最顶端**（prepend，非追加末尾）写：
+
+     ```yaml
+     ---
+     ship-gate:
+       verify: PASS
+     ---
+     ```
+     或
+
+     ```yaml
+     ---
+     ship-gate:
+       verify: FAIL
+     ---
+     ```
+
+     ——`verify` 字段二选一（`PASS`/`FAIL`，大写、非布尔），/sdflow-ship 读此 frontmatter 机判。
+     若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。
    - 标题 + 日期 + change 名
-   - **结论**：PASS / FAIL
-   - **结论行下方紧跟机器锚行（ship-gate 契约，模板写死二选一，勿改写措辞、勿两行并存）**：
-
-     <!-- ship-gate: verify=PASS -->
-     <!-- ship-gate: verify=FAIL -->
-
-     ——二选一，/sdflow-ship 以字面查找机判
+   - **结论**：PASS / FAIL（人读结论行，紧跟标题下方，供人阅读；frontmatter 已是机判锚，此行不可省略）
    - **逐需求核对表**：| 需求/任务 | 代码出处(文件:行/迁移/测试) | 状态(✅实现/⚠️Minor缺口/❌核心缺失) |
    - **缺口清单**：核心缺口（FAIL 项）+ Minor 缺口（注明可接受/deferred）
    - 此文件会随第三步归档一起进 `openspec/changes/archive/`，作为本 change 的验证留档
