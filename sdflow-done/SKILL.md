@@ -74,22 +74,20 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 4. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
 5. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
    - **报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
-     MUST 在文件**最顶端**（prepend，非追加末尾）写：
+     MUST 在文件**最顶端**（prepend，非追加末尾）写下方模板之一（**`ship-gate:` 与首尾 `---` 须顶格列 0——下方模板已按
+     实际应写入报告的列对齐单独排版，忽略本段说明文字自身的列表缩进，勿把说明文字的缩进也复制进报告**）：
 
-     ```yaml
-     ---
-     ship-gate:
-       verify: PASS
-     ---
-     ```
+---
+ship-gate:
+  verify: PASS
+---
+
      或
 
-     ```yaml
-     ---
-     ship-gate:
-       verify: FAIL
-     ---
-     ```
+---
+ship-gate:
+  verify: FAIL
+---
 
      ——`verify` 字段二选一（`PASS`/`FAIL`，大写、非布尔），/sdflow-ship 读此 frontmatter 机判。
      若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。

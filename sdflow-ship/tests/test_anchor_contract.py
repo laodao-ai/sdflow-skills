@@ -20,6 +20,10 @@ PRODUCER_FRONTMATTER = [
 
 def test_producer_frontmatter_fields():
     # 字段名 ∈ FIELD_ENUMS（精确下划线，非连字符）+ 三 SKILL 模板确实各自声明了该字段。
+    # 注：本测试对每行 .strip() 后比对——这是有意的粗筛（"字段是否被提及"），**不**覆盖列 0
+    # 契约（parse_ship_gate_frontmatter 要求顶层 `ship-gate:` 键不缩进）。列敏感的可解析性验证见
+    # 下方 test_producer_frontmatter_parseable，它直接从真实文件字节抽取、不 strip，真正堵住
+    #「模板字面缩进导致 parser 静默判 absent」的回归（mlh-p5 cold review Finding 1）。
     for rel, field, value_lines in PRODUCER_FRONTMATTER:
         assert field in ship_gate.FIELD_ENUMS, f"{field} 不在 ship_gate.FIELD_ENUMS（读写两侧字段名漂移）"
         assert "code-review" not in ship_gate.FIELD_ENUMS, "FIELD_ENUMS 不应含连字符字段名"
@@ -38,17 +42,58 @@ def test_producer_frontmatter_fields():
                 f"{rel} 模板值 {raw!r} 不在 {field} 的 FIELD_ENUMS 定义域 {ship_gate.FIELD_ENUMS[field]}"
 
 
+# [mlh-p5 Task4 fix, Finding 2] 从真实 SKILL.md 抽取字面 frontmatter 模板块的核心。
+# 提取方式（保持可维护，锚点故意宽松/不要求列 0——若模板重新被缩进破坏，锚点仍应找到块，
+# 让下面 parse 调用吃到"坏"的字面文本从而真的判 absent 并让断言变红，而不是让提取器本身
+# 因为找不到锚点而以另一种方式静默跳过）：
+#   1. 逐行找 `ln.strip() == "ship-gate:"` 的锚点行（HTML/prose 不会写出这个裸行，来自
+#      三 SKILL 各自维护的 ship-gate frontmatter 模板，工程上唯一）；
+#   2. 从锚点向上找最近一条 `ln.strip() == "---"`（块首栅栏）；
+#   3. 从锚点向下找最近一条 `ln.strip() == "---"`（块尾栅栏）；
+#   4. 取 [块首, 块尾] 闭区间的**原始行**（不 strip，保留列信息）拼回文本，整段喂给
+#      parse_ship_gate_frontmatter——与解析器实际读文件时看到的字节完全一致。
+# 一个文件可能含多个块（如 sdflow-done 的 verify PASS/FAIL 两个模板），故返回 list。
+def _extract_frontmatter_blocks(text):
+    lines = text.splitlines()
+    blocks = []
+    for i, ln in enumerate(lines):
+        if ln.strip() != "ship-gate:":
+            continue
+        start = next((j for j in range(i - 1, -1, -1) if lines[j].strip() == "---"), None)
+        end = next((j for j in range(i + 1, len(lines)) if lines[j].strip() == "---"), None)
+        if start is None or end is None:
+            continue
+        blocks.append("\n".join(lines[start:end + 1]))
+    return blocks
+
+
 def test_producer_frontmatter_parseable():
-    # 断言 parse_ship_gate_frontmatter 真能读出三 SKILL 模板声明的字段（非只字符串巧合命中）。
-    samples = {
-        "design_approved": "---\nship-gate:\n  design_approved: true\n---\n",
-        "verify": "---\nship-gate:\n  verify: PASS\n---\n",
-        "code_review": "---\nship-gate:\n  code_review: pass\n---\n",
-    }
-    for field, text in samples.items():
-        state, err = ship_gate.parse_ship_gate_frontmatter(text)
-        assert err is None, f"{field} 样例 frontmatter 解析出错: {err}"
-        assert field in state, f"{field} 样例 frontmatter 未被解析出（解析器与模板字段名脱节）"
+    # [mlh-p5 Task4 fix, Finding 2] 用真实 SKILL.md 字节喂 parser（而非手写理想化样例字符串）——
+    # 若某模板缩进破坏了 parser 要求的顶层 `ship-gate:` 列 0 契约（Finding 1 的原始 bug 形态），
+    # 抽取到的块喂给 parse_ship_gate_frontmatter 会返回 ({}, None)（absent），下面
+    # `field in state` 断言随之变红，真正堵住"模板字面 = parser 可读"这一不变量的回归。
+    for rel, field, value_lines in PRODUCER_FRONTMATTER:
+        text = (REPO / rel).read_text(encoding="utf-8")
+        blocks = _extract_frontmatter_blocks(text)
+        assert blocks, f"{rel} 未找到任何 ---/ship-gate:/--- 字面模板块（结构被整体改写？）"
+        for value_line in value_lines:
+            _, _, want_raw = value_line.partition(":")
+            want_raw = want_raw.strip()
+            matching = [b for b in blocks if value_line in b]
+            assert matching, \
+                f"{rel} 未找到声明 {value_line!r} 的模板块（字段/值漂移，或该模板块整体缺失）"
+            for block in matching:
+                state, err = ship_gate.parse_ship_gate_frontmatter(block)
+                assert err is None, \
+                    f"{rel} 声明 {value_line!r} 的模板块解析出错: {err}\n--- 抽取的原始块 ---\n{block}"
+                assert field in state, (
+                    f"{rel} 模板块声明 {value_line!r} 但 parse_ship_gate_frontmatter 未解析出字段 "
+                    f"{field!r}（返回 state={state!r}）——模板缩进很可能破坏了 `ship-gate:` 须列 0 的契约"
+                    f"\n--- 抽取的原始块 ---\n{block}"
+                )
+                want = ship_gate._coerce_ship_gate_value(field, want_raw)
+                assert state[field] == want, \
+                    f"{rel} 解析出的 {field}={state[field]!r} 与模板声明 {value_line!r} 不符"
 
 
 def test_no_hyphenated_field_name_in_producer_templates():
