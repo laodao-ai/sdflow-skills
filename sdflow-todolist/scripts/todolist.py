@@ -269,7 +269,8 @@ def split_sections(lines):
             break
     if table_hdr is None:
         return None
-    rows_start = table_hdr + 2  # 跳过表头 + 分隔行
+    sep = table_hdr + 1  # |----|----|
+    rows_start = sep + 1
     rows_end = rows_start
     while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
         rows_end += 1
@@ -287,9 +288,12 @@ def parse_table_rows(lines, sec):
 
 def block_ranges(lines):
     out = {}
-    starts = [(i, m.group(1)) for i, ln in enumerate(lines)
-              if (m := re.match(r"##\s+([A-Z]\d+)\s*:", ln))]
-    for i, bid in starts:
+    starts = []
+    for i, ln in enumerate(lines):
+        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
+        if m:
+            starts.append((i, m.group(1)))
+    for idx, (i, bid) in enumerate(starts):
         end = len(lines)
         for j in range(i + 1, len(lines)):
             if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
