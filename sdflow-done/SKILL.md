@@ -120,32 +120,19 @@ verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的
 
 若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.codex/skills/`、或本仓库内 `find . -name buglist.py` 兜底定位，找不到就停下问用户脚本在哪。
 
-以下命令均在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根：
+以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。原手写 4 步循环（scan 两池 → 逐项 triage → batch add → reindex）已固化为 `issues.py` 的原子子命令 `sweep`，一行跑完：
 
-1. **显式传 `--change`（D4）**：扫描本 change 名下的 OPEN 项，不靠 `detect_change` 猜：
-   ```bash
-   python3 ~/.claude/skills/sdflow-buglist/scripts/buglist.py scan --status OPEN --change {change_name} --json
-   python3 ~/.claude/skills/sdflow-todolist/scripts/todolist.py scan --status OPEN --change {change_name} --json
-   ```
-   （JSON 顶层键分别是 `bugs` / `items`，每项含 `id`。）
-2. **逐项 triage 进同一个批次**（Q2 保守裁决：**永远只建 1 个批次、key = 本 change 名，禁跨 change 合并**）：
-   ```bash
-   python3 ~/.claude/skills/sdflow-buglist/scripts/buglist.py triage --id {id} --批次 {change_name}
-   python3 ~/.claude/skills/sdflow-todolist/scripts/todolist.py triage --id {id} --批次 {change_name}
-   ```
-   对每个第 1 步扫出的 `id` 都跑一次（bug 用 buglist 的 triage，todo 用 todolist 的）。`triage` 对已 PROPOSED 的项 no-op（D7 幂等），重跑本步安全。
-3. **建批次条目（PLANNED）**：
-   ```bash
-   python3 ~/.claude/skills/sdflow-issues/scripts/issues.py batch add {change_name}
-   ```
-   `batch add` 对已存在的 key 报错而非静默 no-op（新建语义）；若报错信息是"批次 key 已存在"，视为**已建过、跳过**（不是失败），继续下一步。
-4. **末尾跑 reindex（D3）**——必须在上面 triage / batch add 之后跑，刷新 `openspec/issues/INDEX.md` + 同步 `batches.md` 的 `状态:`/`成员:` 生成行：
-   ```bash
-   python3 ~/.claude/skills/sdflow-issues/scripts/issues.py reindex
-   ```
-5. **hand-off 引用该批次**：上面「三段内容」第 2 段写批次号 `{change_name}`（指向 `openspec/issues/batches.md` 对应条目 + `openspec/issues/INDEX.md`），不再逐条罗列裸 ID。
+```bash
+python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change {change_name}
+```
 
-**范围边界（design §4.2，不在本 sweep 内）**：sweep 只圈**源 == 本 change**的未分诊 OPEN 项。孤儿项（源 = `""`，多 change 并行、`detect_change` 探不出归属的）**不归本 sweep 管**——由独立的通用「清 bug/todo」工作流兜底（`scan --open-ungrouped` → `triage` → 另开 cleanup change），不因 sweep 窄而无声蒸发；sweep 本身保持窄而确定，别为了兜孤儿把 sweep 的 `--change` 过滤放宽。
+**必须显式传 `--change {本change}`（D4）**——不靠 `detect_change` 猜；sweep 内部即用该值扫描 `--open-ungrouped`（非终态 ∧ 批次空）、逐项 triage 进同一批次、`batch add --if-exists skip`、末尾 `reindex`。**hand-off 引用该批次**：上面「三段内容」第 2 段写批次号 `{change_name}`（指向 `openspec/issues/batches.md` 对应条目 + `openspec/issues/INDEX.md`），不再逐条罗列裸 ID。
+
+**执行纪律（D6）**：调用方 MUST 串行跑本步、勿与手动 triage 交叉——sweep 写窗口比单条命令更长（N 次 triage 写 + batch add + reindex），并发安全未焊接（归 TG-26/Phase C）。
+
+**失败语义（非原子、fail-closed、重跑收敛）**：sweep 不是真原子——任一子步（scan/triage/batch add/reindex）非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/哪个 pool/已 tag 的 id 列表），不静默继续；已 tag 项在重跑时被「批次空」过滤天然排除，故半途失败后**直接重跑同一条命令即可收敛到完成**，无需手工回滚。
+
+**范围边界（design §4.2，不在本 sweep 内）**：sweep 只圈**源 == 本 change**的未分诊非终态项（`--open-ungrouped` 口径）。孤儿项（源 = `""`，多 change 并行、`detect_change` 探不出归属的）**不归本 sweep 管**——由独立的通用「清 bug/todo」工作流兜底（`scan --open-ungrouped` → `triage` → 另开 cleanup change），不因 sweep 窄而无声蒸发；sweep 本身保持窄而确定，别为了兜孤儿放宽 `--change` 过滤。
 
 ---
 

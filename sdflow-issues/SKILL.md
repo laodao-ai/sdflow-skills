@@ -20,7 +20,7 @@ description: >
 |---|---|---|
 | `sdflow-buglist` | bug 池自己的 add/scan/set-status/triage | `sdflow-buglist/scripts/buglist.py` |
 | `sdflow-todolist` | todo 池自己的 add/scan/set-status/triage | `sdflow-todolist/scripts/todolist.py` |
-| **本 skill** | **跨两池**的 `reindex`（生成 `issues/INDEX.md`）+ `batch`（`issues/batches.md` 注册表） | `sdflow-issues/scripts/issues.py` |
+| **本 skill** | **跨两池**的 `reindex`（生成 `issues/INDEX.md`）+ `batch`（`issues/batches.md` 注册表）+ `sweep`（原子分诊封装） | `sdflow-issues/scripts/issues.py` |
 
 > **约定标准的唯一真相源在别处（I13）**：`openspec/issues/` 的目录结构、三维度 schema
 > （源change/批次/status）、状态码表、批次完成判据（D1）、batches.md 字段级 grammar、
@@ -97,6 +97,34 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {
   exit 0，不因这个"顺带刷新"步骤的失败反噬成 rename 失败假象。**因此 `rename` 现在不是无副
   作用操作**：它明确会触发一次 INDEX 重建，与上一条"不该有的副作用"（triage 顺带推进状态）
   是两回事，不要混为一谈。
+
+### 3. `sweep --change X`——原子分诊本 change 未分批非终态项（sdflow-done §2.1 的一行封装）
+
+```bash
+python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change {change_name}
+```
+
+语义：把「源 == X ∧ 非终态 ∧ 批次空」的 bug/todo 一次性归入批次 X——即 `sdflow-done` §2.1
+原手写 4 步循环（scan 两池 → 逐项 triage → batch add → reindex）的一键封装，内部全走子进程
+CLI（不直调 `cmd_*`），对外只暴露一个原子入口。
+
+- **扫描口径 `--open-ungrouped`**：等价于 `scan --change X --open-ungrouped --json`——非终态
+  （非 CLOSED/VERIFIED 等终态）∧ 批次空，**不是** `--status OPEN`（后者漏非 OPEN 的非终态项、
+  也不过滤批次空）。
+- **幂等**：`batch add` 内部固定带 `--if-exists skip`（撞号即跳过而非报错）+ `triage` 本身对
+  已 PROPOSED/已终态项 no-op + `reindex` 确定性重建——同一 `--change` 连跑多次，第二次 exit 0
+  且盘面无净变化。
+- **空 change 入口守卫**：`--change` 为空/纯空白，或未过 `_reject_batch_key_unsafe`（含
+  `|`/换行/` — `/首尾空白）→ 先于任何写盘 `_die`，防止把源 = `""` 的孤儿项误纳进空批次。
+- **非原子、fail-closed、重跑收敛**：sweep 不是真原子——scan/逐项 triage/batch add/reindex
+  任一子步非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/哪个 pool/已 tag 的
+  id 列表）；已 tag 项因「批次空」过滤在重跑时天然被排除，故半途失败后**直接重跑同一条命令
+  即可收敛**，不需要手工回滚。reindex 失败也判整体失败（与 `batch rename` 的 warn-only 不同
+  ——sweep 语义是"一次分诊闭环"，INDEX 未刷新即闭环未完成）。
+- **调用方 MUST 串行（D6）**：写窗口比 `reindex`/`batch` 单条命令更长（N 次 triage 写 + batch
+  add + reindex），并发安全未焊接（同 D8 边界，见下）；调用方（`sdflow-done` §2.1）不得与手动
+  triage 交叉执行。
+- 孤儿项（源 = `""`）不归 sweep 管，仍由独立的 `scan --open-ungrouped` 兜底工作流处理。
 
 ## `--root` 与 git 根
 
