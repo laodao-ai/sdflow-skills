@@ -6,11 +6,11 @@
 
 | ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
 |----|------|------|------|------|------|------------|------|
-| T1 | `issues.py` | reindex 回显子进程 scan 的 problems 到 stderr（补齐独立跑 reindex 时表↔块不一致的可见性，D5 承诺） | 可观测性 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
-| T2 | `recorder` | 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
-| T3 | `issues.py` | 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
-| T4 | `issues.py` | batch add 加 --if-exists skip 幂等选项；batch rename 后自动 reindex（或 SKILL 提示 rename 后跑 reindex） | 功能增强 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
-| T5 | `recorder` | 补 WONTDO / 0成员人标IN_PROGRESS 分支测试；抽 _find_row_file 消除 triage 与 set-status 定位逻辑重复（4处） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-batch-mgmt |
+| T1 | `issues.py` | reindex 回显子进程 scan 的 problems 到 stderr（补齐独立跑 reindex 时表↔块不一致的可见性，D5 承诺） | 可观测性 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T2 | `recorder` | 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T3 | `issues.py` | 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T4 | `issues.py` | batch add 加 --if-exists skip 幂等选项；batch rename 后自动 reindex（或 SKILL 提示 rename 后跑 reindex） | 功能增强 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T5 | `recorder` | 补 WONTDO / 0成员人标IN_PROGRESS 分支测试；抽 _find_row_file 消除 triage 与 set-status 定位逻辑重复（4处） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
 | T6 | `opsx-project-init/scripts/init.py` | 两个全局 hook 仅装 Claude 侧、Codex 会话静默不生效 | 基础设施 | PROPOSED | 2026-07-03 11:35 | minimize-repo-footprint | minimize-repo-footprint |
 | T7 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 | 可观测性 | PROPOSED | 2026-07-03 13:57 | minimize-repo-footprint | minimize-repo-footprint |
 | T8 | `impl-review/SKILL.md` | 置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核 | 功能增强 | PROPOSED | 2026-07-03 13:58 | minimize-repo-footprint | minimize-repo-footprint |

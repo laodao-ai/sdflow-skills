@@ -20,7 +20,7 @@
 | T51 | todo | PROPOSED | gate-checkpoint-hardening |
 | T52 | todo | PROPOSED | gate-checkpoint-hardening |
 
-### 批次：issues-pool-batch-mgmt
+### 批次：issues-pool-hardening
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
