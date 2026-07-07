@@ -4,6 +4,7 @@
 <!-- sdflow:lens-metric v1 layer="…" lens="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
 
 ## 字段与取值域
+> **机读取值域单一源见下方 `## 机读取值域` 的 ```lens-metric-enums``` 块**——消费脚本（`anchor_lint` 读、`lens_metric_aggregate` 硬编码由一致性测试守卫）MUST 从该块取 layer/lens/runner/sev，MUST NOT 在脚本内另复制清单〔mlh-p2-anchor-lint grill〕。以下散文条目为人读语义注记（折叠/消歧说明），取值以机读块为准。
 - layer ∈ {spec-review, code-review}
 - lens  ∈ {domain, adversarial, grounding, history, outside-voice, broad}（canonical 投影；折叠表见 §折叠）
 - runner∈ {claude, codex, claude-fallback}
@@ -12,6 +13,15 @@
   四个受自检约束的必检字段不同，两 SKILL 的锚行存在性自检 MUST NOT 因 site 值另类而报错）。
 - findings/采纳/裁掉/defer/独立 = int≥0
 - sev = 致N/高N/中N/低N（四级定序、零也写 0、分隔符恒 /；仅采纳项计入）
+
+## 机读取值域（消费脚本单一源·勿在脚本内复制）
+> 机读枚举权威区〔mlh-p2-anchor-lint grill〕。格式钉死：fence info-string 恒为 `lens-metric-enums`；块内每行 `key: 逗号分隔值`（`sev-format` 为字面模板，`N` 表任意非负整数）。`site` **不入本块**——它不受越域自检约束（CF-补2），消费脚本 MUST NOT 校验 site 取值。新增/改枚举 MUST 只改此块（散文注记同步更新），并按 §enum 扩展治理 升版本。
+```lens-metric-enums
+layer: spec-review, code-review
+lens: domain, adversarial, grounding, history, outside-voice, broad
+runner: claude, codex, claude-fallback
+sev-format: 致N/高N/中N/低N
+```
 
 ## 归属规则（钉死）
 findings/采纳/裁掉/defer 按「哪些镜报过该 finding」归属，共抓则每命中镜各记一次；

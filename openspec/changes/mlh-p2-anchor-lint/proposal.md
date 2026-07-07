@@ -15,6 +15,8 @@ spec-review Step3 / code-review Step5 出报告后，靠**主 session 手 grep �
 - **新增 `tools/tests/test_anchor_lint.py`**：坏样本（缺锚 / 越域枚举 / 缺字段 / fence 内示范锚）→ 断言非零退出；干净样本 → 0；metrics 门控关闭时 lens-metric 缺锚不阻塞。
 - **改 `sdflow-spec-review/SKILL.md`（Step3 自检步）与 `sdflow-code-review/SKILL.md`（Step5 自检步）**：把「模型手 grep 四类锚 + 肉眼核枚举」改为调 `anchor_lint`；**保留诚实声明**——`findings=N` 与合并池实收数的数值一致性仍是主 session 信任边界、非机械可验（脚本不谎称能保证数值正确）。
 - repo-root `openspec/workflow/tools/anchor_lint.py` 副本由 `sdflow-init update` 托管刷新（不手 copy，与 trivial_shape.py 一致）。
+- **给契约 `lens-metric-contract.md` 加 `lens-metric-enums` 机读 fenced 块**〔grill Q2=B〕：作 anchor_lint + aggregator 的枚举机读单一源；散文 bullet 保留作注记 + 指针。bundle 权威源改动，经 `sdflow-init update` 下发。
+- **`sdflow-retro/tests/` 加 aggregator 枚举一致性测试**〔grill Q3=B〕：断言 `lens_metric_aggregate.LAYER_ENUM`/`LENS_ENUM` == 契约机读块，把「契约单一源、硬编码不漂移」变成机验。
 
 ## Capabilities
 
@@ -40,9 +42,9 @@ spec-review Step3 / code-review Step5 出报告后，靠**主 session 手 grep �
 
 ## Non-Goals
 
-- **不改** lens-metric 锚形/字段/枚举本身（契约 `lens-metric-contract.md` 不动）。
+- **不改** lens-metric 锚形/字段/枚举**取值**本身（契约只加机读块承载既有枚举，不新增/删枚举项）。
 - **不做**数值一致性机验（`findings=N` vs 合并池实收数——主 session 信任边界，脚本诚实不兜）。
-- **不改** `lens_metric_aggregate.py`（只复用其纯函数；aggregator 自身硬编码 enum 的潜在不一致留作 design 记录的 out-of-scope 后续）。
+- **不改** `lens_metric_aggregate.py` **源码**（只加一致性测试守卫其硬编码 == 契约块，不重构其读取路径——那是更大改动，超本 change）。
 - **不做** config.yaml / batches.md 结构 lint（那是 roadmap 阶段 3 P3.B 的 scope）。
 - **不迁** gate 状态锚 → frontmatter（roadmap 阶段 5）。
 
