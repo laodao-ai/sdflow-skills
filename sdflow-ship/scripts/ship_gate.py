@@ -81,6 +81,10 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         「显式越权同权级」（git 留痕可审计）；
     `~~~` 围栏 / 带语言标签围栏（如 ```python）导致的围栏识别误判不特判——仅认 ``` 前缀翻转，
         非本仓现实语料出现的变体不收，且方向 = 安全侧假阴（漏判不覆盖 ≠ 假阳）。
+    〔mlh-p5 Q4〕live 与归档双读均：好 frontmatter（如 verify: PASS）判定后不再交叉扫描
+        同文件残留的 inline 锚（`<!-- ship-gate: verify=FAIL -->` 等）——frontmatter 有效
+        即视为唯一真相源；迁移前手改遗留残留 inline 反锚会被静默忽略。迁移后新产出的
+        报告不应再残留 inline 锚，故此盲区风险随迁移完成而收敛，接受。
 """  # [impl-review-fix]
 import argparse
 import json
@@ -157,6 +161,15 @@ def archived_verify_state(root, ref, archive_dir):
                          f"{ref}:openspec/changes/archive/{archive_dir}/verify-report.md")
     if rc != 0:
         return "none"
+    # [mlh-p5 Task3 D4/G2] frontmatter 优先（新归档），共用同一严格 helper（防漂移）——
+    # 与 live 侧的区别：live 坏→UNKNOWN(6) 停；归档坏→fail-safe 'none'（不 emit、不 exit，
+    # 归档不可变、无人可修，只能保守判无 verify pass，不回退 inline 掩盖假 SHIPPED）。
+    state, err = parse_ship_gate_frontmatter(out)
+    if err is not None:
+        return "none"                        # 坏 frontmatter → fail-safe（不回退 inline 掩盖）
+    if "verify" in state:                     # Q4：frontmatter 有效即采信，不再交叉扫 inline
+        return "pass" if state["verify"] == "PASS" else "none"
+    # absent（迁移前旧归档，无 ship-gate frontmatter 键）→ 回退旧 inline 读半场，永久保留
     hits, unbalanced = _line_scoped_hits(out, [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL])  # [ADR-4] 行级，非子串
     if unbalanced:   # [ADR-5] 保守：未闭合 fence 不判 SHIPPED
         return "none"
