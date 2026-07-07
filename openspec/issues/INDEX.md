@@ -58,6 +58,13 @@
 | T72 | todo | PROPOSED | mlh-p3-determ-guards |
 | T73 | todo | PROPOSED | mlh-p3-determ-guards |
 
+### 批次：mlh-p5-gate-frontmatter
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T74 | todo | PROPOSED | mlh-p5-gate-frontmatter |
+| T75 | todo | PROPOSED | mlh-p5-gate-frontmatter |
+
 ### 批次：rec2-obs-readability
 
 | ID | Pool | Status | 关联Change |
