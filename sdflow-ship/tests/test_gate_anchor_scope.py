@@ -132,21 +132,23 @@ def test_decide_b4_board_refuse_start(tmp_path):
 
 
 def test_contract_archived_corpus_anchor_hits():
-    # 契约：归档真实报告语料的独占锚行 → _line_scoped_hits 命中（防模板假设静默失效）
-    # 样本源 = 归档 corpus（实证 15/15 独占顶格），非 SKILL 展示块
+    # 契约：归档报告语料【聚合】实证 gate 关键锚以【独占裸行】承载——模板若悄悄去独占行，
+    # 这些锚会从聚合集里消失（防模板假设静默失效）。
+    # 【B5 修正】原契约"子串出现即断言行级命中"不自洽：报告正文会把锚串作为【讨论对象】
+    # inline 提及（如 2026-07-05-gate-checkpoint-hardening/verify-report.md 在表格里讨论
+    # "锚模板独占裸行"），那类 inline/fenced 提及本就不该被 _line_scoped_hits 计入——
+    # "提及"与"标记"只有 _line_scoped_hits 能区分，故拿子串交叉校验它天生必误红。
+    # 改为聚合不变量：只断言"语料里 gate 真读的锚各至少一篇以独占行承载"，对 inline 提及免疫。
     archive = REPO / "openspec" / "changes" / "archive"
     samples = list(archive.glob("*/spec-review-report.md")) + \
               list(archive.glob("*/verify-report.md")) + \
               list(archive.glob("*/code-review-report.md"))
     assert samples, "无归档报告语料"
-    # [impl-review-fix 修C/对抗镜2-F2] 空转兜底：若语料存在但无一篇含任何已知锚子串，
-    # 内层断言全程不执行，测试会"假绿"（看似通过实则未验证任何东西）。加计数器兜底。
-    checked = 0
+    exclusive = set()
     for f in samples:
         text = f.read_text(encoding="utf-8", errors="replace")
-        for anc in _sg.ALL_ANCHORS:
-            if anc in text:   # 该报告含此锚（子串层）
-                checked += 1
-                hits, _ = _sg._line_scoped_hits(text, [anc])
-                assert anc in hits, f"{f.name} 的真锚 {anc} 行级判据下漏检——模板锚未独占一行?"
-    assert checked > 0, "契约测试未匹配到任何真锚，可能已空转"
+        hits, _ = _sg._line_scoped_hits(text, _sg.ALL_ANCHORS)   # fence-aware 独占行判据
+        exclusive.update(hits)
+    # 聚合断言（非"每处子串"）：gate 关键锚在语料里实证以独占行承载；模板全局回退即缺锚。
+    assert DESIGN in exclusive, "归档 spec-review 语料无一以独占行承载 design-approved——模板可能已去独占行"
+    assert VPASS in exclusive or VFAIL in exclusive, "归档 verify 语料无一以独占行承载 verify=PASS/FAIL"
