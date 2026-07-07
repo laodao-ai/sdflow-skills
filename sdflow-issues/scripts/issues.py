@@ -122,13 +122,20 @@ class CrossPoolIDConflict(RuntimeError):
 
 # ── 跨池 read ────────────────────────────────────────────────────────────────
 
-def _scan_pool(script, root, pool):
+def _scan_pool(script, root, pool, problems_out=None):
     """子进程调 `{script} --root {root} scan --json`，给每项打 `pool` 标记后返回列表。
 
     推荐子进程而非 import（brief 明确要求）：buglist.py / todolist.py 是两个独立 skill
     各自的执行核心，子进程调用只依赖它们的 CLI 契约（`scan --json` 的输出结构），不依赖
     其内部函数签名——两边各自演进互不牵连，也不会把共享层的 issues.py 变成两个 per-type
     脚本的隐式反向依赖源。
+
+    `problems_out`（Task 5，T1）：可选的列表，非 None 时把子进程 `scan --json` 输出里的
+    `problems`（表↔块不一致 / 重复 ID / OV-1 行 arity 异常等，per-type 脚本自己的一致性
+    自检结果）原样 extend 进去。此前这里直接丢弃 `data["problems"]`——per-type 脚本测出的
+    一致性问题永远到不了调用 `read_pool` 的 reindex，属静默蒸发。默认 `None`（不收集，
+    行为与改动前一致）——只有显式传入列表的调用方（`cmd_reindex`）才会拿到这份信号，不
+    改变 `read_pool`/`_scan_pool` 对既有调用方（如 `cmd_batch_rename`）的返回值形状。
     """
     proc = subprocess.run(
         [sys.executable, script, "--root", str(root), "scan", "--json"],
@@ -139,6 +146,8 @@ def _scan_pool(script, root, pool):
             f"{os.path.basename(script)} scan --json 失败（exit={proc.returncode}）：{proc.stderr}"
         )
     data = json.loads(proc.stdout)
+    if problems_out is not None:
+        problems_out.extend(data.get("problems") or [])
     # buglist.py 输出键是 "bugs"，todolist.py 输出键是 "items"（两脚本各自的命名，
     # 不统一——brief 明确提醒过这个坑，这里按 pool 分别取对应键）。
     raw_items = data.get("bugs" if pool == "bug" else "items") or []
@@ -165,7 +174,7 @@ def cross_pool_id_conflicts(items):
     return sorted(bug_ids & todo_ids)
 
 
-def read_pool(root):
+def read_pool(root, problems_out=None):
     """读跨两池（bug + todo）的 item 列表，join 结果里每项都带 `pool`（'bug' | 'todo'）
     标记，且至少含 `id`/`status`/`change`/`batch`/`pool` 五个字段（bug 池额外带
     priority/module/... 等 buglist 专属字段，todo 池额外带 type/module/... 等 todolist
@@ -176,12 +185,19 @@ def read_pool(root):
     跨池撞号，直接抛 `CrossPoolIDConflict`、**不静默 join**——调用方（reindex/batch，
     Task 9-11）不应该在数据已经撞号的情况下继续往下算 INDEX/batches。
 
+    `problems_out`（Task 5，T1）：可选列表，非 None 时收集两池 `scan --json` 各自的
+    `problems`（透传见 `_scan_pool`）。默认 `None`，返回值形状与改动前完全一致——
+    `cmd_batch_rename` 等既有调用方无需改动。
+
     **并发假设边界（D8）**：本函数只读、不加锁。dated 文件本身靠 buglist.py/todolist.py
     的 atomic_write 保证不会读到半截内容，但两次 `scan --json` 子进程调用之间没有任何
     快照隔离——如果调用期间另一进程正并发 add/set-status，两池读到的"时刻"不保证一致。
     Phase B 显式假定单机单进程串行调用，不处理这类竞态（同模块 docstring D8）。
     """
-    items = _scan_pool(BUGLIST_SCRIPT, root, "bug") + _scan_pool(TODOLIST_SCRIPT, root, "todo")
+    items = (
+        _scan_pool(BUGLIST_SCRIPT, root, "bug", problems_out)
+        + _scan_pool(TODOLIST_SCRIPT, root, "todo", problems_out)
+    )
     conflicts = cross_pool_id_conflicts(items)
     if conflicts:
         raise CrossPoolIDConflict(
@@ -329,15 +345,25 @@ def cmd_reindex(args):
     """重建 `issues/INDEX.md` + 同步 `issues/batches.md` 状态（Task 9 + Task 11 两部分）。
 
     流程：`read_pool`（内含 D9 跨池 ID 冲突检测，冲突即抛 `CrossPoolIDConflict` 中止，
-    不生成半截 INDEX、也不碰 batches.md）→ `generate_index_md` 纯函数重建全文 →
-    `atomic_write` 原子落盘 INDEX.md → `sync_batches_md`（Task 11：拿同一份 `items`
-    当 ground truth 同步 batches.md 每批的 `成员:`/`状态:` 生成行，含 D1 完成判据、
-    Q3 不越权纠正、Q2 orphan 报警）。
+    不生成半截 INDEX、也不碰 batches.md；同时收集两池 `scan --json` 各自的 `problems`——
+    表↔块不一致 / 重复 ID / OV-1 行 arity 异常等一致性自检结果）→ `generate_index_md`
+    纯函数重建全文 → `atomic_write` 原子落盘 INDEX.md → `sync_batches_md`（Task 11：拿
+    同一份 `items` 当 ground truth 同步 batches.md 每批的 `成员:`/`状态:` 生成行，含 D1
+    完成判据、Q3 不越权纠正、Q2 orphan 报警）。
     **禁读旧 INDEX.md**（D3）：全量确定性重建，不与磁盘上旧内容比较/合并。
+
+    T1（Task 5）：两池 `problems` 此前被 `_scan_pool` 静默丢弃——per-type 脚本测出的
+    一致性问题（表↔块不一致等）永远到不了这里，reindex 看着"成功"却完全不知道底层
+    数据已经腐蚀。现在 reindex 结束后把非空 `problems` 逐条回显到 stderr（**默认仍
+    exit 0**——reindex 本身该做的事（重建 INDEX/同步 batches）已经做完，且这类
+    "低置信度默认不阻断"的口径与本 change 别处一致；只有显式传 `--strict` 时，存在
+    problems 才让本次调用以非 0 退出，供想要强门禁的调用方（如 CI）选择性收紧。
+    `--strict` 目前是预置接口，本 change 内无消费者主动传它。
     """
     root = repo_root(args.root)
+    problems = []
     try:
-        items = read_pool(root)
+        items = read_pool(root, problems)
     except RuntimeError as e:
         _die(str(e))
         return  # pragma: no cover（_die 已 sys.exit(1)，此行只安抚静态分析）
@@ -351,6 +377,11 @@ def cmd_reindex(args):
     open_n = sum(1 for it in items if not _is_terminal(it))
     closed_n = len(items) - open_n
     print(f"reindex：已重建 {index_path}（open {open_n} 项，已闭合 {closed_n} 项）")
+
+    for p in problems:
+        print(p, file=sys.stderr)
+    if getattr(args, "strict", False) and problems:
+        sys.exit(1)
 
 
 # ── issues/batches.md 注册表 + batch 命令（Task 10，Q2 rename / Q3 字段级 grammar） ──
@@ -771,6 +802,11 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("reindex", help="重建 issues/INDEX.md（open×批次板）+ 同步 issues/batches.md 状态")
+    s.add_argument(
+        "--strict", action="store_true",
+        help="两池一致性自检有 problems（表↔块不一致/OV-1 行 arity 异常等）时以非 0 退出"
+             "（默认不加此参数：problems 仍回显到 stderr，但 exit 0）",
+    )
     s.set_defaults(func=cmd_reindex)
 
     batch_p = sub.add_parser("batch", help="issues/batches.md 注册表操作（add/set-status/rename）")

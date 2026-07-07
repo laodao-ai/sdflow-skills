@@ -550,6 +550,18 @@ def cmd_scan(args):
             ]
             for dup_id in sorted({rid for rid, cnt in Counter(raw_ids).items() if cnt > 1}):
                 problems.append(f"{rel}: 重复 ID：{dup_id}（parse_table_rows 会静默丢行）")
+        # OV-1：行 arity 检测（镜像 buglist.py）——无块坏行（如描述含裸 `|`）会把某数据行
+        # 拆成多于/少于标准列数的 cells，`parse_table_rows` 只要求 `len(cells) >= 5` 就照单
+        # 按固定列位读，列错位不会自己报错——必须显式核对每一原始数据行的列数，标准 8 列
+        # （新格式，含批次列）/7 列（旧格式，无批次列）之外的一律判定 arity 异常。
+        if sec:
+            for i in range(sec["rows_start"], sec["rows_end"]):
+                cells_raw = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+                if len(cells_raw) not in (7, 8):
+                    rid = cells_raw[0] if cells_raw else "?"
+                    problems.append(
+                        f"{rel}: {rid} 行 arity 异常：{len(cells_raw)} 列（应 8/7）"
+                    )
         # 块若存在必须有对应表行（块可选，故只单向查）
         for bid in blocks:
             if bid not in rows:

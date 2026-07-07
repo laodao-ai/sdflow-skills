@@ -367,6 +367,35 @@ class TestScanDuplicateId:
         assert any("重复" in p and "T1" in p for p in result["problems"])
 
 
+class TestScanRowArity:
+    """OV-1（镜像 buglist.py）：无块坏行——数据行本身列数与标准 7/8 不符（例如描述字段
+    意外含裸 `|`，把一行拆多了列），`parse_table_rows` 只要求 `len(cells) >= 5` 就照单
+    按固定列位读（列错位不会自己报错）。scan 必须显式核对行 arity 并报出来。"""
+
+    def test_scan_flags_arity_corrupted_row(self, tmp_path):
+        todolist_dir = tmp_path / "openspec" / "issues" / "todolist"
+        todolist_dir.mkdir(parents=True)
+        content = (
+            "# 2026-01 TODO\n\n"
+            "> 项目：test\n\n"
+            "## 状态总览\n\n"
+            "| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |\n"
+            "|----|------|------|------|------|------|------------|------|\n"
+            "| T1 | `foo.c` | A | B 有问题 | 性能优化 | OPEN | 2026-01-01 10:00 | x | |\n"
+        )
+        (todolist_dir / "2026-01-todolist.md").write_text(content, encoding="utf-8")
+        result = _scan_json(tmp_path, [])
+        assert any("arity" in p and "T1" in p for p in result["problems"])
+
+    def test_scan_does_not_flag_valid_7_or_8_col_rows(self, tmp_path):
+        """7 列（旧格式，无批次列）/8 列（新格式）都是合法 arity，不应误报。"""
+        _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        result = _scan_json(tmp_path, [])
+        assert not any("arity" in p for p in result["problems"])
+
+
 class TestAtomicWrite:
     def test_writes_content_and_creates_parent_dir(self, tmp_path):
         target = tmp_path / "sub" / "dir" / "file.md"

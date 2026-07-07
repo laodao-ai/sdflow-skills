@@ -389,6 +389,71 @@ class TestReindexGeneratesIndexMd:
         assert not (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
 
 
+class TestReindexProblemsEcho:
+    """Task 5（T1）：`_scan_pool` 此前静默丢弃两池 `scan --json` 各自的 `problems`
+    （表↔块不一致等一致性自检结果）——reindex 应把它们回显到 stderr，默认仍 exit 0
+    （problems 不阻断 reindex 本该做的重建），只有显式 `--strict` 时才让存在 problems
+    的这次调用以非 0 退出。"""
+
+    def test_reindex_echoes_problems_to_stderr_exit0(self, tmp_path):
+        # _write_bug_file 只写总览表行、不写对应的 "## B1:" 详细块——buglist.py 的
+        # scan 会把这判成"表有 B1 但缺详细块"问题（见 buglist.py cmd_scan），这条
+        # problem 此前在 issues.py 的 read_pool/_scan_pool 里被静默丢弃。
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
+            capture_output=True, text=True,
+        )
+
+        assert proc.returncode == 0, proc.stderr
+        assert "B1" in proc.stderr
+        assert "缺详细块" in proc.stderr
+        # problems 回显不影响 reindex 本该完成的重建
+        assert (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
+
+    def test_reindex_strict_exits_nonzero_on_problems(self, tmp_path):
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+
+        # 无 --strict：exit 0（沿用默认口径）
+        proc_default = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
+            capture_output=True, text=True,
+        )
+        assert proc_default.returncode == 0, proc_default.stderr
+
+        # 有 --strict + 仍存在 problems：exit 非 0
+        proc_strict = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex", "--strict"],
+            capture_output=True, text=True,
+        )
+        assert proc_strict.returncode != 0
+        assert "B1" in proc_strict.stderr
+        # INDEX.md 仍应已被重建（--strict 只影响退出码，不影响重建本身）
+        assert (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
+
+    def test_reindex_strict_exits_zero_when_no_problems(self, tmp_path):
+        """--strict 只在存在 problems 时才收紧退出码——干净数据不受影响。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        # 补上 B1 的详细块，避免"表↔块不一致"这条 problem 触发。
+        path = tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md"
+        with open(path, "a", encoding="utf-8") as f:
+            f.write("\n---\n\n## B1: fixture\n\n| 字段 | 值 |\n|------|----|\n| 状态 | OPEN |\n")
+
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex", "--strict"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stderr.strip() == ""
+
+
 class TestArgparseSkeleton:
     """argparse 骨架含 reindex/batch 两子命令（reindex 真实现见 Task 9；batch 真实现见 Task 10——
     仅 `batch` 不带任何子操作时仍应非静默报错，见 test_batch_subcommand_without_action_errors_non_silently）。"""
