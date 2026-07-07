@@ -293,6 +293,18 @@ def _die(msg):
     sys.exit(1)
 
 
+def _reject_cell_unsafe(value, field):
+    """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
+    MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。
+    与 buglist.py / todolist.py 的同名函数逐字同款（三脚本各自独立、不互相 import，
+    见模块 docstring "子进程解耦"）。本文件当前无写表字段的命令入口调用它——留作
+    后续任务（本脚本 batch add/rename 等写路径）复用的 helper。"""
+    if value is None:
+        return
+    if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
+        _die(f"字段 {field} 含非法字符（| 或换行），会破坏总览表列对齐：{value!r}")
+
+
 def cmd_reindex(args):
     """重建 `issues/INDEX.md` + 同步 `issues/batches.md` 状态（Task 9 + Task 11 两部分）。
 

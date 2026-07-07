@@ -363,10 +363,19 @@ def cmd_add(args):
         _die(f"状态码非法：{status}")
 
     date = today_str(args.date)
-    path = ensure_file(root, date, data.get("source"))
     bid = data.get("id") or next_id(root, args.prefix)
     time_str = args.time or datetime.datetime.now().strftime("%H:%M")
     change = data.get("change") or detect_change(root)
+
+    # T2 守卫：挂原始用户参数（写盘前），不是 join 后的行字符串——顺序上必须在
+    # ensure_file（会落盘建头部文件）之前，拒绝时不留任何新文件/新行残留。
+    _reject_cell_unsafe(data["module"], "module")
+    _reject_cell_unsafe(data["summary"], "summary")
+    _reject_cell_unsafe(change, "change")
+    _reject_cell_unsafe(data.get("batch"), "batch")
+    _reject_cell_unsafe(time_str, "time")
+
+    path = ensure_file(root, date, data.get("source"))
 
     docs = normalize_doc_paths(data.get("doc"))
     if not docs:
@@ -613,6 +622,15 @@ def _as_list(fix):
 def _die(msg):
     print("ERROR: " + msg, file=sys.stderr)
     sys.exit(1)
+
+
+def _reject_cell_unsafe(value, field):
+    """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
+    MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。"""
+    if value is None:
+        return
+    if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
+        _die(f"字段 {field} 含非法字符（| 或换行），会破坏总览表列对齐：{value!r}")
 
 
 def main():

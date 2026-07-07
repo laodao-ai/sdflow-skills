@@ -264,6 +264,32 @@ class TestBatchColumn:
         assert t1["batch"] == "batch-1"
 
 
+class TestCellSafety:
+    """T2：状态总览表按 `|` 切列，字段值含 ASCII `|` 或换行会破坏列对齐（静默腐蚀）。
+    cmd_add 入口必须在写盘前 fail-closed 拒绝——不能只在 `" | ".join(cells)` 拼接后的
+    行字符串上检测（那时 `|` 已被 split 消费，测不出用户传入的原始违规字符，是假覆盖）。"""
+
+    def test_add_rejects_pipe_in_summary(self, tmp_path):
+        payload = base_payload(summary="A | B 都坏了")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "todolist"
+        if d.exists():
+            for f in d.glob("*-todolist.md"):
+                assert "A | B" not in f.read_text(encoding="utf-8")
+
+    def test_add_rejects_newline_in_module(self, tmp_path):
+        payload = base_payload(module="foo.c:1\n| EVIL | ROW |")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "todolist"
+        if d.exists():
+            for f in d.glob("*-todolist.md"):
+                assert "EVIL" not in f.read_text(encoding="utf-8")
+
+
 class TestAtomicWrite:
     def test_writes_content_and_creates_parent_dir(self, tmp_path):
         target = tmp_path / "sub" / "dir" / "file.md"
