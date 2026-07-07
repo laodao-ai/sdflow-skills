@@ -32,7 +32,12 @@ class TestInstallSdflow:
         run_setup(tmp_path)
         r, sdflow = run_setup(tmp_path)
         assert r.returncode == 0
-        assert (sdflow / "workflow").is_symlink()
+        link = sdflow / "workflow"
+        assert link.is_symlink()
+        assert link.resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()  # T13: 重跑后链目标不漂移
+        for name in ("checkpoint-commit.sh", "resolve-workflow.sh"):                        # T13: 重跑后 hack 脚本仍在
+            f = sdflow / "hack" / name
+            assert f.is_file() and not f.is_symlink()
 
     def test_foreign_real_dir_not_clobbered(self, tmp_path):
         home = tmp_path / "home"

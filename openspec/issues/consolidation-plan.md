@@ -162,3 +162,33 @@ T56/T57 为 OPEN 状态、非 PROPOSED，同样纳入本次扫描并双重命中
 验证之后"，而 dogfood 要验证的正是"大扫除批在本仓值不值"；候选池个位数（目前=1）意味着即便
 真跑一次大扫除批，规模也撑不起"一 change 清一片"的合批收益叙事——这条实证应当直接喂给未来
 判断"要不要发布这套判据给下游仓库"的决策，而不是被这次重划悄悄掩盖。
+
+### 5.4 dogfood 实测注记（T13, N=1, 2026-07-07）
+
+对唯一候选 **T13** 真跑了一次分诊→修复，实测判据。因 N=1，**未套 batch change 仪式**（1 个
+todo ID = 1 个 commit，"合批"与"item 粒度串行"无从演练，套仪式属范畴错误），走普通平改。
+
+**关键结论：N=1 结构性触不到发布门。** spec「发布 deferred」Requirement 的发布门 = 两条证据
+AND（① 省评审轮次 ∧ ② 未掉安全）。① 需 N≥2（batch 价值全在"合"），T13 单项**结构性无法
+产出**——故 T13 dogfood **只能触达 spec 已明确祝福的降级分支**（"候选池太薄/价值边际→退化为
+不发布、记本仓注记，亦为有效结论"），触不到发布分支。**据此关掉发布门悬念：判据保留
+本仓-local，向下游发布维持 deferred（当前证据指向"退化为不发布"）。**
+
+**实测到的三条（只有"真跑"才得到）**：
+
+1. **pre-diff 判据把 T13 的 scope 高估了一个子项**：接地核对 T13 的 4 子项——1a（`test_resolve_workflow.py`
+   降级路径补 stdout 空断言）、1b（`--root` 缺值补 stderr 文案断言）、2（`test_setup_sdflow.py`
+   `test_idempotent_rerun` 补重跑后链目标+hack 脚本断言）为**真缺**、纯断言补强、已修；子项 3
+   （`--dev`+`_die` 补 subprocess 测试）经查**行为已被 `test_init.py::test_dev_pointing_elsewhere_dies`
+   (in-process monkeypatch+capsys) 覆盖**，subprocess 变体冗余，**未做**。→ pre-diff（凭描述+落点）
+   判候选时会略高估工作量，接地后须逐子项复核。
+2. **安全腿（生成物越界防线）实测守住**：T13 是"改测试→跑 pytest"项，正是 impl-review-fix 那条
+   `git add -A` 越界防线针对的精确场景。跑 pytest 后 `.pytest_cache/` 确被生成（`git status --ignored`
+   显 `!!`），但 `git status --porcelain`（checkpoint 的 `git add -A` 纳入面）**只含 2 个手写 test
+   文件、无任何字节码缓存**——`.gitignore` 的 `__pycache__/`/`*.pyc`/`.pytest_cache/` 三条实测拦下。
+3. **N=1 下"一项一 commit"退化为普通单 commit**：无多 item 可串，串行 checkpoint 协议/聚合上限
+   均无从演练——再次印证候选池薄使 batch 机制在本仓无实质价值。
+
+**未掉安全 ✓（可测的那半已验），省评审轮次 ✗（N=1 结构性测不了）** → 发布门 AND 不成立，
+维持 deferred/退化不发布。此注记 + git log（T13 平改 commit）即 dogfood 可追溯痕迹，未来"发不发布"
+的 change 引用本节即可。

@@ -18,7 +18,7 @@
 | T10 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 功能增强 | DONE | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
 | T11 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 基础设施 | DONE | 2026-07-03 14:08 | minimize-repo-footprint | minimize-repo-footprint |
 | T12 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） | 可观测性 | PROPOSED | 2026-07-03 14:38 | minimize-repo-footprint | minimize-repo-footprint |
-| T13 | `opsx-project-init/tests/` | resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言 | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
+| T13 | `opsx-project-init/tests/` | resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言 | 代码质量 | DONE | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T14 | `setup.sh` | Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支） | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T15 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T16 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
@@ -844,3 +844,15 @@
 **思路**：改注释诚实说明，或改用 os.path.isdir 显式判空分支语义更直白
 
 **备注**：极低危 defer 自 sdflow-retro code-review
+
+---
+
+## T13: resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `opsx-project-init/tests/` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（sdflow-init/tests 补断言3子项已修(test_resolve_workflow.py 降级stdout空+--root缺值stderr文案; test_setup_sdflow.py idempotent_rerun 补链目标+hack脚本), pytest 28 passed; 第4子项(--dev _die subprocess)经查已被 test_init.py::test_dev_pointing_elsewhere_dies 覆盖,冗余未做; batch-triage dogfood 唯一候选平改, 详见 consolidation-plan.md §5.4）

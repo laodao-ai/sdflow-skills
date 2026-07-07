@@ -136,6 +136,7 @@ class TestEdgeCases:
             r = run_resolve(repo, sdflow)
             assert r.returncode == 2
             assert "显式降级" in r.stderr
+            assert r.stdout.strip() == ""       # T13: 降级路径不得往 stdout 吐路径（防 skill 误把告警当解析结果）
         finally:
             pointer.chmod(0o644)  # 允许 tmp_path 清理时删除
 
@@ -143,6 +144,7 @@ class TestEdgeCases:
         repo = make_repo(tmp_path / "repo", with_rules=True)
         r = run_resolve(repo, tmp_path / "no-sdflow", args=("--root",))
         assert r.returncode == 64
+        assert "--root requires a value" in r.stderr   # T13: 缺值须显式报错文案，非静默 exit
 
     def test_root_flag_swallows_next_flag_exits_64(self, tmp_path):
         """--root 后紧跟另一个 flag（如 --explain）时不得把它当值吞掉（B1-F4）。"""
