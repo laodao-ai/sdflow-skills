@@ -305,6 +305,26 @@ def _reject_cell_unsafe(value, field):
         _die(f"字段 {field} 含非法字符（| 或换行），会破坏总览表列对齐：{value!r}")
 
 
+def _reject_batch_key_unsafe(key):
+    """batches.md header slug 守卫（OV-2）：header 行是 `### {key} — {title}`
+    （`_BATCH_HEADER_RE`，em dash U+2014 前后各一空格作分隔符）。`_reject_cell_unsafe`
+    只挡 `|`/换行——不够，因为 key 本身若含 ` — ` 分隔符，会被 `_BATCH_HEADER_RE` 的
+    非贪婪匹配切坏：例如 key="a — b" 写成 header 后，解析出的 key 变成 "a"、
+    title 变成 "b"，原始完整 key 从此在 batches.md 里再也匹配不到——`_find_batch_entry_range`
+    找不到它，等于这条注册从写入的那一刻起就是个读不回来的僵尸条目。首尾空白同理：
+    `_BATCH_HEADER_RE` 用 `\\s*$` 吃掉尾部空白，写入时 key 有尾随空格、读回解析出的
+    key 却没有，两次查找同一"逻辑 key"会得到不同结果。
+
+    MUST 用于 `cmd_batch_add` 的 `key`、`cmd_batch_rename` 的 `new_key`（写 header 的
+    唯一两处入口）。"""
+    _reject_cell_unsafe(key, "batch key")
+    if " — " in str(key) or str(key) != str(key).strip():
+        _die(
+            "batch key 非法（含 ' — ' em dash 分隔符，或首尾有空白），会破坏 "
+            f"batches.md header（`### {{key}} — {{title}}`）解析：{key!r}"
+        )
+
+
 def cmd_reindex(args):
     """重建 `issues/INDEX.md` + 同步 `issues/batches.md` 状态（Task 9 + Task 11 两部分）。
 
@@ -592,6 +612,8 @@ def cmd_batch_add(args):
     忽略，是更隐蔽的坑。
     """
     root = repo_root(args.root)
+    _reject_batch_key_unsafe(args.key)
+    _reject_cell_unsafe(args.title, "title")
     path = batches_md_path(root)
     lines = _read_batches_lines(path)
     if _batch_entry_exists(lines, args.key):
@@ -712,6 +734,7 @@ def cmd_batch_rename(args):
     """
     root = repo_root(args.root)
     old_key, new_key = args.old, args.new
+    _reject_batch_key_unsafe(new_key)
 
     path = batches_md_path(root)
     lines = _read_batches_lines(path)

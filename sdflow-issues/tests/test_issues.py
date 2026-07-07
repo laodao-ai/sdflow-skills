@@ -466,6 +466,27 @@ class TestBatchAdd:
         assert "### batch-1 — batch-1" in content
         assert "### batch-2 — batch-2" in content
 
+    def test_batch_add_rejects_emdash_delimiter_in_key(self, tmp_path):
+        """OV-2：header 是 `### {key} — {title}`（em dash U+2014 分隔）——key 本身若含
+        ` — `，`_BATCH_HEADER_RE` 会把它切坏（key 被截断成分隔符之前的部分），
+        `_find_batch_entry_range` 之后再也找不到完整原 key。必须 fail-closed，而不是
+        静默写入一个会腐蚀后续解析的条目。"""
+        proc = _run_batch_raw(tmp_path, ["add", "a — b"])
+        assert proc.returncode != 0
+        assert proc.stderr.strip() != ""
+        assert not _batches_path(tmp_path).exists()
+
+    def test_batch_add_rejects_leading_trailing_space_in_key(self, tmp_path):
+        proc = _run_batch_raw(tmp_path, ["add", " batch-1 "])
+        assert proc.returncode != 0
+        assert proc.stderr.strip() != ""
+
+    def test_batch_add_rejects_newline_in_title(self, tmp_path):
+        proc = _run_batch_raw(tmp_path, ["add", "batch-1", "--title", "evil\ntitle"])
+        assert proc.returncode != 0
+        assert proc.stderr.strip() != ""
+        assert not _batches_path(tmp_path).exists()
+
 
 class TestBatchSetStatus:
     """Task 10：`batch set-status {key} {S}` 只改该条目的 `状态:` 生成行，不动人写行/成员行。"""
@@ -683,6 +704,28 @@ class TestBatchRename:
         text = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(
             encoding="utf-8")
         assert "EVIL" not in text
+
+    def test_batch_rename_rejects_emdash_delimiter_in_new_key(self, tmp_path):
+        """OV-2：new_key 含 ` — `（em dash 分隔符）会破坏 batches.md header 解析
+        （同 test_batch_add_rejects_emdash_delimiter_in_key 的理由）。必须在写盘
+        （改 batches.md header / 同步 dated 文件批次列）之前 fail-closed，
+        且不能有任何部分写入（old-batch 原样保留、dated 文件不被同步改动）。"""
+        _write_batches_md(tmp_path, [
+            "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": "old-batch"},
+        ])
+        proc = _run_batch_raw(tmp_path, ["rename", "old-batch", "a — b"])
+        assert proc.returncode != 0
+        assert proc.stderr.strip() != ""
+        content = _read_batches(tmp_path)
+        assert "### old-batch — 清理项" in content
+        text = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(
+            encoding="utf-8")
+        b1_line = next(l for l in text.splitlines() if l.strip().startswith("| B1"))
+        assert "old-batch" in b1_line
 
 
 class TestReindexSyncBatchesMembers:
