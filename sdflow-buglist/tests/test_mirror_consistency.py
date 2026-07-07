@@ -134,6 +134,23 @@ def test_logic_drift_is_caught():
     assert _ast_no_doc(helper_a) != _ast_no_doc(helper_b)
 
 
+def test_priorities_constant_consistency():
+    """`PRIORITIES` 是 buglist.py:57 / issues.py 各自声明的模块级列表常量（mlh-p3-determ-guards
+    Task 3）——不是函数，`_ast_no_doc` 走的 `inspect.getsource` + AST 函数体剥离路径对
+    list 字面量常量不适用（`getsource` 拿到的是赋值语句而非函数定义，`tree.body[0]` 仍是
+    `ast.Assign`，硬套函数体剥离逻辑会在 `func_node.body = body` 处对 `Assign` 节点赋值
+    `body` 属性——`ast.Assign` 没有 `body` 字段，是静默属性注入而非报错，比对完全失真；
+    另外 `buglist.py` 与 `issues.py` 两处字面量文本很可能逐字相同，直接对整条 `Assign`
+    语句做源码级 AST 比对测不出"改了其中一处但忘了改另一处"这类值漂移）。
+
+    改用独立的 `==` 值相等路径（R4 五镜订正）：两个模块加载后各自的 `PRIORITIES` 属性
+    直接值比较，不经由 `_ast_no_doc`/`inspect.getsource`——这条断言只守"两处字面量当前
+    取值相等"，任一处漂移（如 issues.py 漏改成 `["P0","P1","P2","P3"]`）都会让这里直接
+    拉红，不依赖 AST 函数体解析路径。
+    """
+    assert BUG.PRIORITIES == ISS.PRIORITIES
+
+
 def test_helper_deletion_is_not_silently_swallowed():
     """helper 删除证伪（spec 需求① scenario·L1）：比对代码必须用直接属性访问
     `getattr(m, f)`——上面 `test_three_way_mirror_consistency` / `test_two_way_mirror_consistency`

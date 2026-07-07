@@ -437,6 +437,12 @@ def cmd_reindex(args):
 BATCH_STATUSES = ["PLANNED", "IN_PROGRESS", "DONE"]
 BATCH_PLACEHOLDER = "<待填>"  # 与 buglist.py `_has_rootcause` 的 <待分析> 同款占位符风格
 
+# `优先级:` 人写字段的合法前导 token 集合（Task 3，mlh-p3-determ-guards）：与
+# buglist.py:57 同款字面量（一致性由 test_mirror_consistency.py 的
+# `test_priorities_constant_consistency` 值相等断言守，非跨 import——D4 红线禁止
+# 三脚本互相 import，各自内联一份）。`batch lint` 用它校验 `优先级:` 字段前导 token。
+PRIORITIES = ["P0", "P1", "P2", "P3", "P4"]
+
 # entry 头：`### {key} — {title}`（key/title 间用 em dash " — " 分隔，字面量，非正则元字符）
 _BATCH_HEADER_RE = re.compile(r"^### (?P<key>.+?) — (?P<title>.+?)\s*$")
 # 冒号兼容全角 `：`（Task 10 carry-over）：人手改 batches.md 很容易在中文输入法下敲成全角
@@ -667,6 +673,110 @@ def sync_batches_md(root, items):
         new_lines.extend(_sync_one_entry(entry_lines, member_ids, is_complete))
 
     atomic_write(path, "".join(new_lines))
+
+
+# ── batch lint（Task 3，mlh-p3-determ-guards） ──────────────────────────────
+# 只读语法校验 `issues/batches.md` 每条目的 `优先级:`/`计划:` 两个人写字段（Q3
+# grammar）——不解析语义（不判断该批次是否"真该是"P1 还是 P2），只守字段的语法形状：
+# `优先级:` 前导 token 须 ∈ `PRIORITIES ∪ {—}`，`计划:` 非占位时须非空白。
+# 复用 `_split_batches_entries`（逐条切分，Task 11 已有）——不重新解析 batches.md。
+
+_BATCH_PRIORITY_LINE_RE = re.compile(r"^优先级[:：]\s*(.*)$")
+_BATCH_PLAN_LINE_RE = re.compile(r"^计划[:：]\s*(.*)$")
+# 前导 token 提取：`P` + 一位数字，或 em dash（U+2014，"已闭合/无需分级"的合法记法）。
+# 只取前导 token、**匹配后剩余字符串不校验**（H4 订正：`P1 ★` 裸后缀须过，不能要求
+# 括号包裹或空后缀）——是否属于 PRIORITIES 集合的判断在 `_lint_priority_field` 里做，
+# 这条正则本身允许 P0-P9（`\d` 不区分 0-4/5-9），越界数字（如 P7）靠集合成员判断拒绝。
+_BATCH_PRIORITY_PREFIX_RE = re.compile(r"^(P\d|—)")
+
+
+def _find_batch_field_value(entry_lines, field_re):
+    """在一个 batches.md 条目的原始行列表里找第一处匹配 `field_re` 的行，返回其捕获组
+    （已 strip）；条目内没有该字段行时返回 `None`（区分"字段存在但为空"与"字段整行
+    缺失"两种状态，供调用方各自判定是否要报违规）。"""
+    for line in entry_lines:
+        m = field_re.match(line.rstrip("\n"))
+        if m:
+            return m.group(1).strip()
+    return None
+
+
+def _lint_priority_field(value):
+    """校验非占位 `优先级:` 值是否合法；合法返回 `None`，非法返回违规原因文案。
+
+    豁免：`value == BATCH_PLACEHOLDER`（`<待填>`）——D5/H1，优先级与计划两字段
+    同等豁免占位符，合法的"未分诊/未填"状态。调用方须在调本函数前自行判断占位符
+    豁免（本函数只管非占位值的语法）。
+    """
+    m = _BATCH_PRIORITY_PREFIX_RE.match(value.strip())
+    token = m.group(1) if m else None
+    if token is None or token not in PRIORITIES + ["—"]:
+        return (
+            f"前导 token 须 ∈ {{{', '.join(PRIORITIES)}, —}}（匹配后剩余字符串不校验，"
+            f"如 'P1 ★'/'P2（说明）' 均合法）：{value!r}"
+        )
+    return None
+
+
+def _lint_plan_field(value):
+    """校验非占位 `计划:` 值是否合法；合法返回 `None`，非法返回违规原因文案。
+    豁免同 `_lint_priority_field`：`value == BATCH_PLACEHOLDER` 时调用方不应调本函数。
+    """
+    if not value.strip():
+        return f"非占位时不可为空白：{value!r}"
+    return None
+
+
+def _lint_one_entry(entry_lines):
+    """校验单个 batches.md 条目的 `优先级:`/`计划:` 字段，返回违规列表
+    `[(field_label, value, reason), ...]`；无违规返回 `[]`。
+
+    字段整行缺失（`_find_batch_field_value` 返回 `None`）不算违规——本命令只做
+    "值存在时的语法校验"，不校验字段是否必须存在（`batch add` 保证新建条目必有
+    这两行且缺省写占位符，理论上不会缺失；手改/损坏文件的缺失字段场景不在本命令
+    职责范围，属另一类结构完整性检查）。
+    """
+    violations = []
+    priority = _find_batch_field_value(entry_lines, _BATCH_PRIORITY_LINE_RE)
+    if priority is not None and priority != BATCH_PLACEHOLDER:
+        reason = _lint_priority_field(priority)
+        if reason:
+            violations.append(("优先级", priority, reason))
+
+    plan = _find_batch_field_value(entry_lines, _BATCH_PLAN_LINE_RE)
+    if plan is not None and plan != BATCH_PLACEHOLDER:
+        reason = _lint_plan_field(plan)
+        if reason:
+            violations.append(("计划", plan, reason))
+
+    return violations
+
+
+def cmd_batch_lint(args):
+    """`batch lint`：只读校验 `issues/batches.md` 全部条目的 `优先级:`/`计划:` 字段语法
+    （Q3 grammar 的人写字段）。fail-closed：任一条目任一字段违规 → 非零退出并逐条指明
+    "批次 key + 字段 + 原因 + 原始值"，不覆写/不修改 batches.md 任何字节（纯读）。
+    全部通过 → exit 0 并打印校验条目数摘要。
+
+    复用 `_split_batches_entries`（Task 11 已有的逐条切分逻辑）——不重新解析
+    batches.md、不引入第二套 header/entry 定位规则。
+    """
+    root = repo_root(args.root)
+    path = batches_md_path(root)
+    lines = _read_batches_lines(path)
+    _, entries = _split_batches_entries(lines) if lines else ([], [])
+
+    problems = []
+    for key, entry_lines in entries:
+        for field, value, reason in _lint_one_entry(entry_lines):
+            problems.append(f"批次 '{key}' 字段 {field} 非法：{reason}")
+
+    if problems:
+        for p in problems:
+            print("ERROR: " + p, file=sys.stderr)
+        sys.exit(1)
+
+    print(f"batch lint：{len(entries)} 条批次全部通过（优先级/计划字段语法校验）")
 
 
 def cmd_batch_add(args):
@@ -1010,6 +1120,12 @@ def main():
     sr.add_argument("old")
     sr.add_argument("new")
     sr.set_defaults(func=cmd_batch_rename)
+
+    sl = batch_sub.add_parser(
+        "lint",
+        help="只读校验全部批次的 优先级:/计划: 人写字段语法（占位符豁免，fail-closed）",
+    )
+    sl.set_defaults(func=cmd_batch_lint)
 
     sw = sub.add_parser(
         "sweep",
