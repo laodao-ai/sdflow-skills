@@ -118,6 +118,48 @@ class TestConfigLintRegressionBaseline:
         assert r.returncode == 0, r.stderr
 
 
+class TestConfigLintEncodingError:
+    """[impl-review-fix] F2：`lint_config` 此前只 `except OSError`——非 UTF-8 config.yaml
+    会让 `f.read()` 抛 `UnicodeDecodeError`，未被捕获、以裸 traceback 崩溃（不是干净的
+    reason + 非零退出）。补捕获 `UnicodeDecodeError`，与 anchor_lint.py 的既有范式
+    （read_metrics_enabled / load_enums 同款 `except (OSError, UnicodeDecodeError)`）对齐。"""
+
+    def test_non_utf8_config_yaml_clean_reason_nonzero(self, tmp_path):
+        osdir = tmp_path / "openspec"
+        osdir.mkdir(parents=True)
+        (osdir / "config.yaml").write_bytes(
+            b"schema: spec-driven\nrules:\n  proposal:\n\xff\xfe bad bytes here \n"
+        )
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "Traceback" not in r.stderr
+        assert "config.yaml" in r.stderr
+
+
+class TestConfigLintMissingFile:
+    """补测（minor polish）：config.yaml 整个文件不存在（连 openspec/ 目录都没有）时，
+    `lint_config` 走 `except OSError` 分支报干净 reason + 非零退出，不裸 KeyError/FileNotFoundError。"""
+
+    def test_missing_config_yaml_clean_reason_nonzero(self, tmp_path):
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "Traceback" not in r.stderr
+        assert "config.yaml" in r.stderr
+
+
+class TestConfigLintGitRootAutoProbe:
+    """补测（minor polish）：`--root` 省略时走 `_git_root_or_dot()` 自动探测 git 仓根——
+    在本仓任意子目录下裸跑 `config-lint`（不传 --root）应能探到仓根并 lint 通过（本仓
+    真实 config.yaml 干净）。"""
+
+    def test_no_root_flag_probes_git_root(self):
+        r = subprocess.run(
+            ["python3", str(INIT_PY), "config-lint"],
+            capture_output=True, text=True, cwd=str(REPO_ROOT / "sdflow-init"),
+        )
+        assert r.returncode == 0, r.stderr
+
+
 class TestConfigLintCliSmoke:
     """adv-A 爆点2：config-lint 加进 mode choices 后，既有 3 个 mode（init/update/
     retire-hooks）的 argparse 解析 + 实际执行不受扰动（未误引入 add_subparsers 重构）。"""

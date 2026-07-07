@@ -302,7 +302,11 @@ def lint_config(root):
     try:
         with open(cfg_path, encoding="utf-8") as f:
             text = f.read()
-    except OSError as e:
+    # [impl-review-fix] F2：此前只捕 OSError——非 UTF-8 config.yaml 会让 f.read() 抛
+    # UnicodeDecodeError，未被捕获、以裸 traceback 崩溃。补捕获，与本 bundle 范式源
+    # anchor_lint.py::read_metrics_enabled / load_enums 的既有 except (OSError,
+    # UnicodeDecodeError) 写法对齐（commit 8f1d2bc 已确立的口径，本文件新写时漏跟）。
+    except (OSError, UnicodeDecodeError) as e:
         return [f"config.yaml 不可读: {cfg_path}: {e}"]
     lines = text.splitlines()
     reasons = []

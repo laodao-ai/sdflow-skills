@@ -484,11 +484,22 @@ def _read_batches_lines(path):
     `batches.md`，故在此单点补齐是覆盖面最全、最不易遗漏未来新增插入点的实现：只有
     整个文件的最后一行可能缺换行（`readlines()` 对其余每一行都保证以 `\\n` 结尾），
     在此统一补上后，下游任何位置的 `lines.insert(...)` 都不会再粘连到前一行。
+
+    [impl-review-fix] F2：`open()/readlines()` 此前无编码错误守卫——非 UTF-8
+    batches.md（存在但内容损坏/编码不对）会让本函数抛出未捕获的 `UnicodeDecodeError`，
+    以裸 traceback 一路冒泡到调用方（`batch lint`/`batch add`/`sync_batches_md` 等，
+    均是 CLI 入口路径）。改为 `open`+`readlines` 整体包一层 try，`(OSError,
+    UnicodeDecodeError)` 一律走 `_die`（干净 reason + 非零退出），不再裸崩。**不改**
+    缺失文件的 `[]` 语义（上面 `os.path.exists` 分支原样保留，`cmd_batch_add` 首次建
+    文件依赖它）——只加固"文件存在但读不出"这一种此前完全没守住的失败模式。
     """
     if not os.path.exists(path):
         return []
-    with open(path, encoding="utf-8") as f:
-        lines = f.readlines()
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except (OSError, UnicodeDecodeError) as e:
+        _die(f"batches.md 读取失败（编码或 IO 错误）：{path}: {e}")
     if lines and not lines[-1].endswith("\n"):
         lines[-1] = lines[-1] + "\n"
     return lines
@@ -683,11 +694,17 @@ def sync_batches_md(root, items):
 
 _BATCH_PRIORITY_LINE_RE = re.compile(r"^优先级[:：]\s*(.*)$")
 _BATCH_PLAN_LINE_RE = re.compile(r"^计划[:：]\s*(.*)$")
-# 前导 token 提取：`P` + 一位数字，或 em dash（U+2014，"已闭合/无需分级"的合法记法）。
-# 只取前导 token、**匹配后剩余字符串不校验**（H4 订正：`P1 ★` 裸后缀须过，不能要求
-# 括号包裹或空后缀）——是否属于 PRIORITIES 集合的判断在 `_lint_priority_field` 里做，
-# 这条正则本身允许 P0-P9（`\d` 不区分 0-4/5-9），越界数字（如 P7）靠集合成员判断拒绝。
-_BATCH_PRIORITY_PREFIX_RE = re.compile(r"^(P\d|—)")
+# 前导 token 提取：`P` + PRIORITIES 定义域内一位数字（0-4，且后面不可再跟数字），或
+# em dash（U+2014，"已闭合/无需分级"的合法记法）。只取前导 token、**匹配后剩余字符串
+# 不校验**（H4 订正：`P1 ★` 裸后缀须过，不能要求括号包裹或空后缀）——是否属于 PRIORITIES
+# 集合的最终判断仍在 `_lint_priority_field` 里做（单数字越界值如 P5-P9 仍会落到那里
+# 被拒）。
+# [impl-review-fix] F3：此前 `P\d` 只匹配一位数字就停——对 `P10`/`P40` 这类两位数，
+# 正则会截断匹配出 `P1`/`P4`（合法 token），P10/P40 被误判通过（P10/P40 不是任何合法
+# 优先级）。改为 `P[0-4](?!\d)`：用负向前瞻 `(?!\d)` 排除"匹配到的数字后面还紧跟着
+# 数字"的情况，两位数及以上（P10/P40/P50…）一律在此处就不匹配前导 token，落入
+# `_lint_priority_field` 的 `token is None` 分支被拒，不会被截断误判。
+_BATCH_PRIORITY_PREFIX_RE = re.compile(r"^(P[0-4](?!\d)|—)")
 
 
 def _find_batch_field_value(entry_lines, field_re):
@@ -760,9 +777,18 @@ def cmd_batch_lint(args):
 
     复用 `_split_batches_entries`（Task 11 已有的逐条切分逻辑）——不重新解析
     batches.md、不引入第二套 header/entry 定位规则。
+
+    [impl-review-fix] F1：设计的失败模式表要求 batches.md 缺失 → 报告 + 非零退出。
+    此前直接调 `_read_batches_lines`（返回 `[]`）→ `entries` 为空 → 循环 0 次跑完 →
+    打印 "0 条批次全部通过"、exit 0——文件缺失被静默判成"全部通过"的假阳。`_read_batches_lines`
+    的 missing→[] 语义本身不能改（`cmd_batch_add` 首次建文件依赖它），故在本命令入口单独
+    显式探测文件是否存在，缺失即 `_die`（非零退出 + 明确 reason），仿 `lint_config` 报告
+    config.yaml 缺失的做法。
     """
     root = repo_root(args.root)
     path = batches_md_path(root)
+    if not os.path.exists(path):
+        _die(f"batches.md 不存在，无法校验：{path}")
     lines = _read_batches_lines(path)
     _, entries = _split_batches_entries(lines) if lines else ([], [])
 

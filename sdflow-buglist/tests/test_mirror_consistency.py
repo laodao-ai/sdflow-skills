@@ -66,10 +66,21 @@ THREE_WAY = ["atomic_write", "repo_root", "_reject_cell_unsafe"]
 
 # 只在 buglist.py / todolist.py 两份之间镜像的表/块解析 helper（issues.py 不含，
 # 断言范围明确不含 issues——见模块 docstring）。
+#
+# [impl-review-fix] F5：原始 11-helper 审计（THREE_WAY 3 个 + TWO_WAY 原 8 个）遗漏了
+# 6 个同样在 buglist.py/todolist.py 两处逐字同款、但从未纳入本守卫覆盖范围的 helper
+# （`_id_sort_key`/`validate_doc_paths`/`all_ids`/`next_id`/`_die`/`_load_json`）——
+# 冷审 + codex 独立复现确认这 6 个当前均剥 docstring 后 AST 等价。守卫本该覆盖它们，
+# 遗漏意味着它们能在未来任一方悄悄改动而不拉红，架空"确定性守卫"这条设计承诺。
+# 只加进 TWO_WAY（不进 THREE_WAY）：issues.py 只有 `_die` 存在，其余 5 个 issues.py
+# 都没有；`_die` 虽三份都有，但其三向 AST 等价性未经本次核验，不擅自扩大 THREE_WAY
+# 断言范围，留给后续专门核验。
 TWO_WAY = [
     "detect_change", "normalize_doc_paths", "auto_default_doc",
     "split_sections", "parse_table_rows", "block_ranges",
     "_ids_in_files", "_find_row_file",
+    "_id_sort_key", "validate_doc_paths", "all_ids",
+    "next_id", "_die", "_load_json",
 ]
 
 

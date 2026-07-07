@@ -78,6 +78,22 @@ class TestBatchLintRejectsBadPriority:
         assert proc.returncode != 0
         assert "b3" in proc.stderr
 
+    def test_two_digit_p10_is_rejected(self, tmp_path):
+        """[impl-review-fix] F3：`^(P\\d|—)` 只匹配 `P` + 一位数字就停——对 `P10`，
+        正则会截断匹配出 `P1`（合法 token），P10 被误判通过。P10 不是任何合法优先级，
+        必须被拒。"""
+        _write_batches_md_entry(tmp_path, "b6", priority="P10", plan="一句范围")
+        proc = _run_batch_lint(tmp_path)
+        assert proc.returncode != 0
+        assert "b6" in proc.stderr
+
+    def test_two_digit_p40_is_rejected(self, tmp_path):
+        """同上，`P40` 会被旧正则截断匹配成 `P4`（合法）而误判通过，必须被拒。"""
+        _write_batches_md_entry(tmp_path, "b7", priority="P40", plan="一句范围")
+        proc = _run_batch_lint(tmp_path)
+        assert proc.returncode != 0
+        assert "b7" in proc.stderr
+
 
 class TestBatchLintRejectsBlankPlan:
     def test_non_placeholder_blank_plan_is_rejected(self, tmp_path):
@@ -134,10 +150,37 @@ class TestBatchLintAcceptsGroundedGoodSamples:
 
 
 class TestBatchLintRegressionOnRealBatchesMd:
-    """回归基线：仓库自身真实 `openspec/issues/batches.md` 全部现存条目（含 3 条
+    """回归基线：仓库自身真实 `openspec/issues/batches.md` 全部现存条目（19 条，含 3 条
     `优先级: <待填>` + 1 条 `P1 ★` + 2 条 `—（已闭合）`）必须全部通过——lint 规则
     不能把已知合法的存量数据判假阳。"""
 
     def test_real_batches_md_all_entries_pass(self):
         proc = _run_batch_lint(REPO_ROOT)
         assert proc.returncode == 0, proc.stderr
+
+
+class TestBatchLintMissingBatchesMdFailsClosed:
+    """[impl-review-fix] F1：设计的失败模式表要求 batches.md 缺失 → 报告 + 非零退出。
+    此前 `cmd_batch_lint` 经 `_read_batches_lines` 的 missing→[] 语义把"文件不存在"
+    静默判成"0 条批次全部通过"、exit 0——本用例复现该假阳并锁死修复后的 fail-closed 行为。"""
+
+    def test_missing_batches_md_nonzero_with_reason(self, tmp_path):
+        # tmp_path 下无 openspec/issues/batches.md，也无 openspec/ 目录本身
+        proc = _run_batch_lint(tmp_path)
+        assert proc.returncode != 0
+        assert "batches.md" in proc.stderr
+
+
+class TestBatchLintNonUtf8BatchesMdFailsClosedCleanly:
+    """[impl-review-fix] F2：`_read_batches_lines` 的 `open()/readlines()` 此前无编码错误
+    守卫——非 UTF-8 batches.md 会让 `batch lint` 以裸 `UnicodeDecodeError` traceback 崩溃，
+    而非干净的 reason + 非零退出。"""
+
+    def test_non_utf8_batches_md_clean_reason_nonzero(self, tmp_path):
+        path = _batches_path(tmp_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"# Issues \xe6\xb3\xa8\xe5\x86\x8c\xe8\xa1\xa8\n\xff\xfe bad bytes \n")
+        proc = _run_batch_lint(tmp_path)
+        assert proc.returncode != 0
+        assert "Traceback" not in proc.stderr
+        assert "batches.md" in proc.stderr
