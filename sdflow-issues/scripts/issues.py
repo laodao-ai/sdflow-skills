@@ -341,16 +341,38 @@ def _reject_batch_key_unsafe(key):
         )
 
 
+def _reindex_core(root):
+    """reindex 核心逻辑（无 CLI 层退出码/文案语义）：`read_pool`（内含 D9 跨池 ID 冲突
+    检测，冲突即抛 `CrossPoolIDConflict`；子进程失败抛 `RuntimeError`——本函数**不捕获、
+    直接向上抛**，退出码/报错文案由调用方决定）→ `generate_index_md` 纯函数重建全文 →
+    `atomic_write` 原子落盘 INDEX.md → `sync_batches_md`（Task 11：拿同一份 `items` 当
+    ground truth 同步 batches.md 每批的 `成员:`/`状态:` 生成行）。
+    **禁读旧 INDEX.md**（D3）：全量确定性重建，不与磁盘上旧内容比较/合并。
+
+    返回 `(items, problems)`：`items` 供调用方统计 open/closed 计数，`problems` 是两池
+    `scan --json` 各自的一致性自检结果（透传自 `read_pool`）。
+
+    两个调用方：
+      - `cmd_reindex`（CLI `reindex` 子命令）：捕获 `RuntimeError` 走 `_die`（exit 1），
+        并按 `--strict` 决定 problems 是否收紧退出码。
+      - `cmd_batch_rename` 的 auto-reindex（Task 7，T4）：捕获任意异常只 warn，不 `_die`——
+        rename 本体的写盘已在调用本函数之前完成，reindex 失败不该反噬成 rename 失败假象。
+    """
+    problems = []
+    items = read_pool(root, problems)
+    content = generate_index_md(items)
+    index_path = os.path.join(root, "openspec", "issues", "INDEX.md")
+    atomic_write(index_path, content)
+    sync_batches_md(root, items)
+    return items, problems
+
+
 def cmd_reindex(args):
     """重建 `issues/INDEX.md` + 同步 `issues/batches.md` 状态（Task 9 + Task 11 两部分）。
 
-    流程：`read_pool`（内含 D9 跨池 ID 冲突检测，冲突即抛 `CrossPoolIDConflict` 中止，
-    不生成半截 INDEX、也不碰 batches.md；同时收集两池 `scan --json` 各自的 `problems`——
-    表↔块不一致 / 重复 ID / OV-1 行 arity 异常等一致性自检结果）→ `generate_index_md`
-    纯函数重建全文 → `atomic_write` 原子落盘 INDEX.md → `sync_batches_md`（Task 11：拿
-    同一份 `items` 当 ground truth 同步 batches.md 每批的 `成员:`/`状态:` 生成行，含 D1
-    完成判据、Q3 不越权纠正、Q2 orphan 报警）。
-    **禁读旧 INDEX.md**（D3）：全量确定性重建，不与磁盘上旧内容比较/合并。
+    核心逻辑见 `_reindex_core`；本函数只负责 CLI 层：捕获 `RuntimeError`（跨池 ID 冲突/
+    子进程失败）走 `_die`（exit 1，不生成半截 INDEX、也不碰 batches.md），成功后打印摘要，
+    并按 `--strict` 决定 problems 是否收紧退出码。
 
     T1（Task 5）：两池 `problems` 此前被 `_scan_pool` 静默丢弃——per-type 脚本测出的
     一致性问题（表↔块不一致等）永远到不了这里，reindex 看着"成功"却完全不知道底层
@@ -361,19 +383,13 @@ def cmd_reindex(args):
     `--strict` 目前是预置接口，本 change 内无消费者主动传它。
     """
     root = repo_root(args.root)
-    problems = []
     try:
-        items = read_pool(root, problems)
+        items, problems = _reindex_core(root)
     except RuntimeError as e:
         _die(str(e))
         return  # pragma: no cover（_die 已 sys.exit(1)，此行只安抚静态分析）
 
-    content = generate_index_md(items)
     index_path = os.path.join(root, "openspec", "issues", "INDEX.md")
-    atomic_write(index_path, content)
-
-    sync_batches_md(root, items)
-
     open_n = sum(1 for it in items if not _is_terminal(it))
     closed_n = len(items) - open_n
     print(f"reindex：已重建 {index_path}（open {open_n} 项，已闭合 {closed_n} 项）")
@@ -638,9 +654,16 @@ def cmd_batch_add(args):
     """`batch add {key}`：新建 PLANNED 条目，成员空；人写字段按参数写，缺省留占位
     （`BATCH_PLACEHOLDER`，不是空字符串——占位和"确实填了空值"要能区分）。
 
-    已存在同 key → 报错（非 no-op）：add 是"新建"语义，撞号多半是误操作，报错比静默
-    跳过更安全——静默 no-op 会让调用方以为参数（title/优先级/计划）已生效，实际全被
+    已存在同 key，默认 → 报错（非 no-op）：add 是"新建"语义，撞号多半是误操作，报错比
+    静默跳过更安全——静默 no-op 会让调用方以为参数（title/优先级/计划）已生效，实际全被
     忽略，是更隐蔽的坑。
+
+    `--if-exists skip`（Task 7，T4，opt-in）：显式传入时改为 skip-with-warn——已存在
+    同 key → no-op（exit 0）+ stderr 警告，**字段参数被忽略**。刻意**不做字段比较**、
+    不解析人写行去判断"是否真无变化"（match-or-error 方案已被 spec-review 否掉：
+    `优先级`/`计划` 缺省会写 `BATCH_PLACEHOLDER`，重跑时传具体值 vs 已有占位符，
+    "相等"判据在语义上就是死胡同——占位符从不代表"用户确认过的空值"）。忽略字段是
+    这条 opt-in 分支的声明语义，不是缺陷；不想忽略字段就不要传 `--if-exists skip`。
     """
     root = repo_root(args.root)
     _reject_batch_key_unsafe(args.key)
@@ -648,6 +671,13 @@ def cmd_batch_add(args):
     path = batches_md_path(root)
     lines = _read_batches_lines(path)
     if _batch_entry_exists(lines, args.key):
+        if getattr(args, "if_exists", None) == "skip":
+            print(
+                f"batch add: 批次 key 已存在，--if-exists skip：no-op，字段参数被忽略："
+                f"{args.key}",
+                file=sys.stderr,
+            )
+            return
         _die(f"批次 key 已存在：{args.key}（add 不覆写已有条目；改状态用 set-status，改名用 rename）")
 
     title = args.title or args.key
@@ -762,6 +792,14 @@ def cmd_batch_rename(args):
     失败都不会把 `batches.md` 改成指向一个内容对不上的新 key；`read_pool` 失败时更是连一个
     字节都不落盘。多文件写入本身无跨文件事务（D6 已知边界，靠"重跑收敛"），但至少不会因为
     校验类失败留下半吊子状态。
+
+    auto-reindex（Task 7，T4）：以上写盘全部成功后，自动调 `_reindex_core` 刷新
+    `issues/INDEX.md`（否则 INDEX 会滞留旧 key，要等下一次显式 reindex 才刷新，中间是
+    一段静默陈旧态）。**reindex 失败只吞成 stderr 警告**（"rename 已生效，INDEX 未刷新，
+    请手动 reindex"）、**rename 本体仍 exit 0**——rename 该做的写盘已经全部完成，不该让
+    reindex 这个"顺带刷新"步骤的失败反噬成 rename 失败假象，也不留 INDEX 陈旧的静默态
+    （用户能看到警告、知道要手动补一次 reindex）。rename 写盘前失败（上面的校验类 `_die`）
+    仍不会走到这一步、不会触发 reindex。
     """
     root = repo_root(args.root)
     old_key, new_key = args.old, args.new
@@ -793,6 +831,14 @@ def cmd_batch_rename(args):
         {"old_key": old_key, "new_key": new_key, "items_changed": len(changed)}, ensure_ascii=False
     ))
 
+    try:
+        _reindex_core(root)
+    except Exception as e:
+        print(
+            f"batch rename: rename 已生效，INDEX 未刷新，请手动 reindex：{e}",
+            file=sys.stderr,
+        )
+
 
 def main():
     p = argparse.ArgumentParser(
@@ -817,6 +863,10 @@ def main():
     sa.add_argument("--title", help="批次标题（缺省=key）")
     sa.add_argument("--优先级", dest="优先级", help="人写字段，缺省留占位")
     sa.add_argument("--计划", dest="计划", help="人写字段（一句范围），缺省留占位")
+    sa.add_argument(
+        "--if-exists", dest="if_exists", choices=["skip"], default=None,
+        help="key 已存在时的行为，默认报错；skip = no-op + stderr 警告，忽略本次字段参数",
+    )
     sa.set_defaults(func=cmd_batch_add)
 
     ss = batch_sub.add_parser("set-status", help="改批次状态（只精确 patch `状态:` 生成行，不动人写行）")

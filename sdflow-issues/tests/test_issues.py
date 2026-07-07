@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -666,6 +667,46 @@ class TestBatchAdd:
         assert not _batches_path(tmp_path).exists()
 
 
+class TestBatchAddIfExistsSkip:
+    """Task 7（T4）：`batch add --if-exists skip` = skip-with-warn——遇已存在同 key
+    直接 no-op + exit 0 + stderr 警告，**不做字段比较、不解析人写行**（match-or-error
+    方案已被 spec-review 否掉：placeholder `<待填>` vs 补填会造 UX 死胡同）。skip 是
+    opt-in，忽略字段是其声明语义，不是缺陷。"""
+
+    def test_batch_add_if_exists_skip_warns_and_noops(self, tmp_path):
+        _run_batch(tmp_path, ["add", "batch-1", "--title", "原标题"])
+        proc = _run_batch_raw(tmp_path, ["add", "batch-1", "--if-exists", "skip"])
+        assert proc.returncode == 0, proc.stderr
+        assert "已存在" in proc.stderr
+        assert "忽略" in proc.stderr
+        content = _read_batches(tmp_path)
+        # no-op：原条目未变，未被重复写入
+        assert content.count("### batch-1") == 1
+        assert "### batch-1 — 原标题" in content
+
+    def test_batch_add_if_exists_skip_ignores_fields_no_die(self, tmp_path):
+        _run_batch(tmp_path, ["add", "batch-1"])
+        proc = _run_batch_raw(
+            tmp_path,
+            ["add", "batch-1", "--优先级", "P1", "--if-exists", "skip"],
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stderr.strip() != ""
+        content = _read_batches(tmp_path)
+        # 字段参数被忽略（声明语义，不是比较后判定"无变化"）：原占位符未被 P1 覆盖
+        assert "优先级: <待填>" in content
+        assert "优先级: P1" not in content
+
+    def test_batch_add_without_if_exists_still_dies(self, tmp_path):
+        """未传 --if-exists 时保原行为（撞 key 报错，非 no-op）——skip 是 opt-in。"""
+        _run_batch(tmp_path, ["add", "batch-1"])
+        proc = _run_batch_raw(tmp_path, ["add", "batch-1"])
+        assert proc.returncode != 0
+        assert proc.stderr.strip() != ""
+        content = _read_batches(tmp_path)
+        assert content.count("### batch-1") == 1
+
+
 class TestBatchSetStatus:
     """Task 10：`batch set-status {key} {S}` 只改该条目的 `状态:` 生成行，不动人写行/成员行。"""
 
@@ -904,6 +945,57 @@ class TestBatchRename:
             encoding="utf-8")
         b1_line = next(l for l in text.splitlines() if l.strip().startswith("| B1"))
         assert "old-batch" in b1_line
+
+
+class TestBatchRenameAutoReindex:
+    """Task 7（T4）：`batch rename` 成功写盘后自动调 reindex 刷新 issues/INDEX.md——
+    此前 rename 只改 batches.md + dated 文件的批次列，INDEX.md 要等下次显式 reindex
+    才会反映新 key，中间是一段静默陈旧态。auto-reindex 异常吞掉只 warn（"rename 已
+    生效，INDEX 未刷新，请手动 reindex"）、rename 本体仍 exit 0——不让 reindex 失败
+    反噬成 rename 失败假象。"""
+
+    def test_batch_rename_auto_reindex_refreshes_index(self, tmp_path):
+        _write_batches_md(tmp_path, [
+            "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": "old-batch"},
+        ])
+
+        _run_batch(tmp_path, ["rename", "old-batch", "new-batch"])
+
+        content = _read_index(tmp_path)
+        assert "批次：new-batch" in content
+        assert "| B1 |" in content
+        assert "批次：old-batch" not in content
+
+    def test_batch_rename_reindex_failure_warns_but_exit0(self, tmp_path, monkeypatch, capsys):
+        """构造 reindex 核心异常（monkeypatch `_reindex_core`）：rename 本体（batches.md
+        header 改名 + dated 文件批次列同步）已在 reindex 调用之前写盘完成，reindex 失败
+        只应吞成 stderr 警告，不应让整个 rename 调用以非 0 退出或抛未捕获异常。"""
+        _write_batches_md(tmp_path, [
+            "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": "old-batch"},
+        ])
+
+        def boom(root):
+            raise RuntimeError("simulated reindex failure")
+
+        monkeypatch.setattr(issues_mod, "_reindex_core", boom)
+
+        args = types.SimpleNamespace(root=str(tmp_path), old="old-batch", new="new-batch")
+        issues_mod.cmd_batch_rename(args)  # 不应抛异常 / 不应 SystemExit(非0)
+
+        captured = capsys.readouterr()
+        assert "INDEX 未刷新" in captured.err
+
+        # rename 本体已生效（写盘发生在 reindex 调用之前）
+        content = _read_batches(tmp_path)
+        assert "### new-batch — 清理项" in content
 
 
 class TestReindexSyncBatchesMembers:
