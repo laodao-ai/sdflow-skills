@@ -57,14 +57,39 @@
 <!-- 日志条目从这里开始，最新的放最上面 -->
 
 ## 2026-07-07
+### [阶段 2 完成总结] anchor-lint 产出侧校验器已交付（mlh-p2-anchor-lint → e43460c）
+- **状态**: ✅ 完成（归档 `openspec/changes/archive/2026-07-07-mlh-p2-anchor-lint/`，merge main e43460c，未 push 时点后由本轮维护一并 push）
+- **交付物**:
+  - `sdflow-init/assets/workflow/tools/anchor_lint.py`（新，`--report --layer [--root]`，退出码 0=CLEAN/1=VIOLATION/2=ERROR，双输出 human+JSON，纯 stdlib）+ `tools/tests/test_anchor_lint.py`。
+  - `lens-metric-contract.md` 加 `## 机读取值域` + ```lens-metric-enums``` 机读块（消费脚本单一源，anchor_lint 用 `__file__` 相对定位读取，绝不回落硬编码）。
+  - `init.py copy_bundle` 刷 tools/ 时一并刷 sibling 契约（防本地 pin 部署错配，设计门 Q1 fold）+ `sdflow-init/tests/test_init_contract_sync.py`。
+  - `lens_metric_aggregate` tests 加 aggregator↔契约 enum 一致性 + 双解析器交叉断言（grill 拍板）。
+  - spec-review Step3 / code-review Step5 自检步接 `anchor_lint`；保留「数值一致性仍是主 session 信任边界」诚实声明。
+- **规范增量**: spec-workflow +1 ADDED 需求（锚自检由确定性脚本判定）+ 14 Scenario。
+- **冷层两度兑现价值**（生成循环内放过、独立冷镜挖出）:
+  - spec-review **H1**（三收敛高危）: metrics 门控原设计会让 100% 消费仓每轮评审假阻塞（源仓 config `metrics.enabled=true` 掩盖 dogfood 测不出）→ 订正为真四态（无块→放行）。已记 memory `dogfood-blind-spot-source-config`。
+  - spec-review **H3**: design 与 roadmap「复用不重实现」矛盾 → 调和为脚本内重实现（跨 skill import 在消费仓 break）。
+  - code-review **F1**（高危，领域镜+对抗A 独立复现）: `check_lens_metric` truthy 取值让空串字段绕过校验→假 CLEAN，7 个绿 SDD implementer + 注入点B 全放过 → 订正为存在性校验。
+- **实际耗时**: 全流程 ~2h（opsx:ff → grill 3 决 → spec-review 5 冷镜+codex → SDD 7 任务 242 passed → code-review 6 冷镜+codex 自动修 11 项 → done verify PASS → archive → merge）。
+- **defer**: T68/T69 → batch `mlh-p2-anchor-lint`（hand-off 引用）。
+- **下一步**: 进阶段 3（确定性守卫补全）。
+
+### [阶段 1 完成总结] issues.py sweep 原子子命令已交付（mlh-p1-issues-sweep → ca66d60）
+- **状态**: ✅ 完成（归档 `openspec/changes/archive/2026-07-07-mlh-p1-issues-sweep/`，merge main ca66d60）
+- **交付物**: `issues.py sweep --change X` 原子子命令（内部 scan 两池 → 按 change 过滤 → 逐项 triage → batch add → reindex，幂等）+ 测试；`sdflow-done/SKILL.md` §2.1 手循环 4 步 prose 收成一行命令（保留「孤儿项不归本 sweep」边界声明）。
+- **规范增量**: spec-workflow +1 ADDED（issues sweep 原子子命令）。
+- **冷层价值**: 设计评审 5 镜抓 4 条硬伤（空 change 孤儿致命 / batch add 报错 / triage 缺位 / scan 口径歧义）全订正；code-review 冷审 auto-fix 7 项（reindex-problems 吞、原子措辞矛盾、失败路径无测）。
+- **备注**: P1 交付时未即时登记本日志，本轮维护补记（真相以归档为准）。
+
+## 2026-07-07
 ### [阶段 2 / mlh-p2-anchor-lint spec-review] 「复用→重实现」调和（H3/BASE-08）
 - spec-review 领域镜 BASE-08 抓出 design 决策与 roadmap「复用不重实现」正面矛盾。裁决：遵 F1 实质（变长 KV 前缀匹配、不用 _line_scoped_hits），但因跨 skill import 在消费仓 break，实现为脚本内重实现同款逻辑。已改 roadmap.md 2.A.1 + design.md §2 技术栈行。
 
 ## 2026-07-07
 
 ### [进度核对] 实施侧全阶段未开工确认（防误判固化）
-- **状态**: ℹ️ 进度快照（非阶段交付，仅登记当前真相，防将来重复核对时误判）
-- **当前进度**: 除阶段 0（规划，见下条）外，**Leg1 的 P1-P4、Leg2 的 P5-P6 全部未开工**——无任何 `implement-mechanical-layer-hardening-p*` change 存在。
+- **状态**: ℹ️ 进度快照 · ⚠️ **已被上方阶段 1/2 完成总结取代**（本条为规划刚落时的历史快照，P1/P2 现已交付；保留供追溯，勿据此判「未开工」）
+- **当前进度**: 除阶段 0（规划，见下条）外，**Leg1 的 P1-P4、Leg2 的 P5-P6 全部未开工**——无任何 `implement-mechanical-layer-hardening-p*` change 存在。〔订正：P1（ca66d60）、P2（e43460c）已交付；余 P3-P4、P5-P6 待做〕
 - **plan change 状态**: 承载本 roadmap 的 `plan-mechanical-layer-hardening` **仍活跃、未归档**（分支 `feat/plan-mechanical-layer-hardening`）；阶段 3.5 交叉 review + 归档尚未走。
 - **易混点固化（勿误记为阶段交付）**: `issues-pool-hardening`（2026-07-07 已归档）**不是** P3 或 P6 的交付——roadmap P6 前置已把它定位成「通往 S2 的**低成本前置桥**（reject 把腐蚀类堵死）」；它早于本 roadmap 撰写，P3/P6 的 scope 已是「扣掉 issues-pool-hardening 之后剩下的」。故 recorder 一致性测试（P3.A）、config/batch lint（P3.B）、家族②迁移（P6）**均仍待做**。
 - **下一步**: 走阶段 3.5（`/autoplan` 交叉 review → 处置登记）→ 归档 plan change → `/opsx:new implement-mechanical-layer-hardening-p1-issues-sweep` 进阶段 1。

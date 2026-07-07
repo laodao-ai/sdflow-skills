@@ -11,9 +11,9 @@
 
 | 阶段 | 腿 | 里程碑 | 就绪度 |
 |---|---|---|---|
-| **P1** · `issues.py sweep --change X` | Leg 1 | done sweep 4 步手循环 → 一个原子子命令 | ✅ 就绪（开路，最易） |
-| **P2** · anchor-lint 产出侧校验器 | Leg 1 | 每轮 review 手 grep+肉眼核 enum → 机验门 | ✅ 就绪（复用现成纯函数） |
-| **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | ✅ 就绪（纯增测/校验器） |
+| **P1** · `issues.py sweep --change X` | Leg 1 | done sweep 4 步手循环 → 一个原子子命令 | ✅ **已交付**（ca66d60） |
+| **P2** · anchor-lint 产出侧校验器 | Leg 1 | 每轮 review 手 grep+肉眼核 enum → 机验门 | ✅ **已交付**（e43460c） |
+| **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | 🔄 就绪（进行中，纯增测/校验器） |
 | **P4** · 编排 SKILL 机械步下沉 | Leg 1 | P5-P8 中 ROI 项按痛点做子集 | 就绪（按需排） |
 | **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` 解析机器、正文提及不误判 | 就绪需**先过 ROI 评估门** + 核 gate 铺设路径 |
 | **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发 + 删 ~40处/文件表解析 | **north-star**（ADR 0010 defer，不排期） |
