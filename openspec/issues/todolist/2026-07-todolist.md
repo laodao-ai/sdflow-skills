@@ -70,6 +70,7 @@
 | T62 | `sdflow-retro/retro_report._run_git` | T60 留痕在系统性 git 损坏下无节流放大：seed_mass_shas 对每个 sha 调 _run_git，仓库整体损坏时每 commit rc≠0 各写一行 stderr，O(commits) 无去重无节流。低危(仅真故障下噪声非虚警;view-only不中断)。改法:同一 subcmd 失败去重,或 seed 循环 per-sha 失败聚合成一条 | 可观测性 | PROPOSED | 2026-07-06 21:08 | sdflow-retro-cleanup | sdflow-retro-cleanup |
 | T63 | `sdflow-init/scripts/init.py:inject/_find_all_marker_lines` | inject 多块收敛须 fence-aware + start/end 配对校验（naive collapse 已回退） | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
 | T64 | `sdflow-init/scripts/init.py:_atomic_write_settings` | settings.json 原子写 tmp 改唯一名（tempfile.mkstemp）关闭无锁降级路径撕裂 | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
+| T65 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` | gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类 | 基础设施 | OPEN | 2026-07-07 09:34 | main |  |
 
 ---
 
@@ -856,3 +857,19 @@
 | 状态 | DONE |
 
 > 2026-07 状态：PROPOSED → DONE（sdflow-init/tests 补断言3子项已修(test_resolve_workflow.py 降级stdout空+--root缺值stderr文案; test_setup_sdflow.py idempotent_rerun 补链目标+hack脚本), pytest 28 passed; 第4子项(--dev _die subprocess)经查已被 test_init.py::test_dev_pointing_elsewhere_dies 覆盖,冗余未做; batch-triage dogfood 唯一候选平改, 详见 consolidation-plan.md §5.4）
+
+---
+
+## T65: gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**动机**：B4/B5 同根：ship-gate 状态锚（design-approved/verify=PASS|FAIL/code-review=pass|blocked）inline 嵌在报告正文，逼 gate 用 fence-aware+独占行+line-scoped 一整套解析去区分『真标记 vs 正文提及』。B5 的聚合不变量补丁是在旧架构里绕过，非根治。状态若在 frontmatter（结构化数据），正文再怎么提及锚串都不会被误当标记，整类 bug 从根消失，且可删掉那套解析机器。
+
+**思路**：scope 严格收窄到家族①（gate 状态判据）——家族③逐条 inline tag（[impl-review-fix]/〔TG-N〕/task<N>/item ID，位置相关）和家族④模版槽位占位（<待填>等）明确留 inline，不搬。须评估三处风险：①bundle 爆炸半径（ship_gate.py+报告模版+生产者 SKILL.md 全在 assets/workflow/ 铺下游 → 改权威源+sdflow-init update 回灌所有消费仓，高仪式单开 change，行为面路径硬排除、绝不 fold/sweep）；②LLM 产报告写坏 YAML → safe_load 抛的兜底策略（比缺 inline 锚更糙的失败面）；③57 篇归档报告是 inline 锚 → gate/corpus 的兼容窗口/dual-read。
+
+**备注**：够格作为 workflow-cost-optimization roadmap 的一个阶段（与『评审机器复杂度』直接相关）。动机证据=buglist B4/B5。别在清理惯性里反应式开工——正式评估 ROI（inline 锚这套是否会反复出同类 bug）后再决定做不做。
