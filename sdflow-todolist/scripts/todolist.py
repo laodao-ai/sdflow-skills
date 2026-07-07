@@ -329,12 +329,18 @@ def cmd_add(args):
     month = this_month(args.month)
     tid = data.get("id") or next_id(root, args.prefix)
     # OV-3 守卫（镜像 buglist.py）：显式传 id 时才校验（next_id 自动生成的号必然合法、必然
-    # 不重，不需要重复查）。语法用 `[A-Z]+\d+` 全量 fullmatch，不借用带 `\b` 的 ID_RE。
+    # 不重，不需要重复查）。语法用单字母前缀 `[A-Z]\d+` 全量 fullmatch，不借用带 `\b` 的 ID_RE。
+    # 必须是单字母前缀（不是 `[A-Z]+\d+`）：代码库对 ID 的识别全部只认单字母——
+    # `_ids_in_files` 的 `\| *([A-Z]\d+) *\|`、`ID_RE = \b([A-Z])(\d+)\b`、block_ranges 均如此，
+    # 若语法校验放行多字母前缀（如 "TT12"），all_ids() 根本认不出它，查重形同虚设
+    # （两次 add 同一个 "TT12" 都会静默通过），且它会破坏 block_ranges 的正则匹配。
+    # 先判 isinstance(str)：id 若是 JSON 数字等非字符串，直接 fullmatch 会抛裸 TypeError，
+    # 破坏 _die 的 ERROR: 契约，须在此优雅拒绝。
     # 查重用 all_ids(root)：此刻新文件/新行还未落盘（ensure_file 在下面），all_ids 看到的是
     # 落盘前的既有全集，不会把本次正在 add 的 id 算进去，语义正确。
     if data.get("id"):
-        if not re.fullmatch(r"[A-Z]+\d+", tid):
-            _die(f"显式 id 语法非法（应形如 T12）：{tid!r}")
+        if not (isinstance(tid, str) and re.fullmatch(r"[A-Z]\d+", tid)):
+            _die(f"显式 id 语法非法（应形如 T12，单字母前缀）：{tid!r}")
         if tid in all_ids(root):
             _die(f"显式 id 与既有重复（会静默丢行）：{tid}")
     time_str = args.time or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")

@@ -302,6 +302,28 @@ class TestExplicitIdGuard:
         content = _buglist_content(tmp_path)
         assert content.count("| B1 ") == 1
 
+    def test_add_rejects_multiletter_prefix_id(self, tmp_path):
+        """代码库 ID 识别（`_ids_in_files` 的 `\\| *([A-Z]\\d+) *\\|`、`ID_RE = \\b([A-Z])(\\d+)\\b`）
+        全部只认单字母前缀，`BB12` 这类多字母前缀语法上就该被拒——否则会破 block_ranges 匹配，
+        且 all_ids() 认不出它，导致查重对多字母 id 静默失效（两次 add 同一个 BB12 都会 returncode 0）。"""
+        payload = base_payload(id="BB12")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "buglist"
+        if d.exists():
+            for f in d.glob("*-buglist.md"):
+                assert "BB12" not in f.read_text(encoding="utf-8")
+
+    def test_add_rejects_nonstring_id(self, tmp_path):
+        """id 若是 JSON 数字（如 123）而非字符串，`re.fullmatch(pattern, 123)` 会抛裸 TypeError，
+        破坏 `_die` 的 `ERROR:` 契约——非字符串 id 必须走优雅 _die，不能是未捕获异常栈。"""
+        payload = base_payload(id=123)
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        assert "Traceback" not in proc.stderr
+
 
 class TestScanDuplicateId:
     """OV-3：即便重复 ID 绕过了 add 的查重（例如手工编辑池文件），scan 也必须把它报出来——

@@ -366,14 +366,20 @@ def cmd_add(args):
     date = today_str(args.date)
     bid = data.get("id") or next_id(root, args.prefix)
     # OV-3 守卫：显式传 id 时才校验（next_id 自动生成的号必然合法、必然不重，不需要重复查）。
-    # 语法用 `[A-Z]+\d+` 全量 fullmatch——不能借用带 `\b` 的 ID_RE.fullmatch，那个模式对
+    # 语法用单字母前缀 `[A-Z]\d+` 全量 fullmatch——不能借用带 `\b` 的 ID_RE.fullmatch，那个模式对
     # "B1" 这类无内部单词边界缺口的整串会拒绝匹配（\b 在两端本就满足，但 fullmatch 要求
     # 整串被两个捕获组精确覆盖，混用 \b 反而更脆），直接用不带 \b 的简单 fullmatch 更可靠。
+    # 必须是单字母前缀（不是 `[A-Z]+\d+`）：代码库对 ID 的识别全部只认单字母——
+    # `_ids_in_files` 的 `\| *([A-Z]\d+) *\|`、`ID_RE = \b([A-Z])(\d+)\b`、block_ranges 均如此，
+    # 若语法校验放行多字母前缀（如 "BB12"），all_ids() 根本认不出它，查重形同虚设
+    # （两次 add 同一个 "BB12" 都会静默通过），且它会破坏 block_ranges 的正则匹配。
+    # 先判 isinstance(str)：id 若是 JSON 数字等非字符串，直接 fullmatch 会抛裸 TypeError，
+    # 破坏 _die 的 ERROR: 契约，须在此优雅拒绝。
     # 查重用 all_ids(root)：此刻新文件/新行还未落盘（ensure_file 在下面），all_ids 看到的是
     # 落盘前的既有全集，不会把本次正在 add 的 id 算进去，语义正确。
     if data.get("id"):
-        if not re.fullmatch(r"[A-Z]+\d+", bid):
-            _die(f"显式 id 语法非法（应形如 B12）：{bid!r}")
+        if not (isinstance(bid, str) and re.fullmatch(r"[A-Z]\d+", bid)):
+            _die(f"显式 id 语法非法（应形如 B12，单字母前缀）：{bid!r}")
         if bid in all_ids(root):
             _die(f"显式 id 与既有重复（会静默丢行）：{bid}")
     time_str = args.time or datetime.datetime.now().strftime("%H:%M")
