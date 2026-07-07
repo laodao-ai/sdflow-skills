@@ -88,4 +88,9 @@
 
 **建议进设计 HARD-GATE**——12 findings 全采纳并已回写（design/proposal/spec/tasks 标 [spec-review-amendment]），openspec validate ✓。**唯一需拍板 = Q1**（config_lint 手写 stdlib vs PyYAML，推荐手写 A，已按 A 回写）。用户批准 → 进 writing-plans（SDD）。
 
-<!-- 拍板记录区（设计门批准后主 session 回写 ship-gate 锚于此） -->
+## 拍板记录区
+
+- **2026-07-07 设计门批准**：用户过报告拍板 → **Q1 = 手写 stdlib 行扫描（A，推荐项）**，与已回写 design D3 一致，无需再改设计。其余 D1-D6 自动决策默认采纳、无覆盖。批准进 writing-plans（SDD）。
+- lens-metric 锚最终化：所有 finding 均采纳、无裁掉、无 defer——Step3 草稿值 == 门后终值（Q1 未翻改任何 finding 去向），上方度量锚即最终值。
+
+<!-- ship-gate: design-approved -->
