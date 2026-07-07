@@ -42,9 +42,10 @@ spec-review Step3 / code-review Step5 出报告后，靠**主 session 手 grep �
 
 ## Non-Goals
 
-- **不改** lens-metric 锚形/字段/枚举**取值**本身（契约只加机读块承载既有枚举，不新增/删枚举项）。
-- **不做**数值一致性机验（`findings=N` vs 合并池实收数——主 session 信任边界，脚本诚实不兜）。
-- **不改** `lens_metric_aggregate.py` **源码**（只加一致性测试守卫其硬编码 == 契约块，不重构其读取路径——那是更大改动，超本 change）。
+- **不改** lens-metric 锚形/字段/枚举**取值**本身（可证伪：契约 diff 只加 `lens-metric-enums` 块，不增删枚举项）。
+- **不做**数值一致性机验（`findings=N` vs 合并池实收数——主 session 信任边界，脚本诚实不兜；可证伪：anchor_lint 无「数值一致性」违规输出路径）。
+- **不改** `lens_metric_aggregate.py` **源码**（可证伪：`git diff` 不含对 `sdflow-retro/scripts/lens_metric_aggregate.py` 的修改行，只加 `scripts/tests/` 一致性测试）。
+- **[spec-review 追加]** 修 `sdflow-init/scripts/init.py` 的 `copy_bundle` 使契约随 `tools/` 同刷（Q1=A，防本地 pin 部署错配）；anchor_lint 增 `layer==--layer` / 计数 int≥0 / metrics 开时 broad+outside-voice 最小必有行 校验（H2/M3/Q2）。
 - **不做** config.yaml / batches.md 结构 lint（那是 roadmap 阶段 3 P3.B 的 scope）。
 - **不迁** gate 状态锚 → frontmatter（roadmap 阶段 5）。
 
