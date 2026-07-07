@@ -306,6 +306,45 @@ class TestCellSafety:
         assert "evil|key" not in content
 
 
+class TestExplicitIdGuard:
+    """OV-3：add 允许 JSON payload 显式传 `id`（`tid = data.get("id") or next_id(...)`），
+    但显式 id 此前无语法校验、无查重——非 `[A-Z]+\\d+` 的 id 会破 block_ranges 的正则匹配，
+    重复 id 会被 parse_table_rows 的按 ID 建 dict 静默丢掉一整行。两者都必须在写盘前 fail-closed。"""
+
+    def test_add_rejects_malformed_explicit_id(self, tmp_path):
+        payload = base_payload(id="bad id")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "todolist"
+        if d.exists():
+            for f in d.glob("*-todolist.md"):
+                assert "bad id" not in f.read_text(encoding="utf-8")
+
+    def test_add_rejects_duplicate_explicit_id(self, tmp_path):
+        proc1 = run_add(tmp_path, base_payload())
+        assert proc1.returncode == 0, proc1.stderr
+        assert json.loads(proc1.stdout)["id"] == "T1"
+        proc2 = run_add(tmp_path, base_payload(id="T1"))
+        assert proc2.returncode != 0
+        assert "ERROR" in proc2.stderr
+        content = _todolist_content(tmp_path)
+        assert content.count("| T1 ") == 1
+
+
+class TestScanDuplicateId:
+    """OV-3：即便重复 ID 绕过了 add 的查重（例如手工编辑池文件），scan 也必须把它报出来——
+    parse_table_rows 按 ID 建 dict，重复 ID 会静默丢一行，不报的话用户完全无感知。"""
+
+    def test_scan_reports_duplicate_id(self, tmp_path):
+        _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+            {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
+        ])
+        result = _scan_json(tmp_path, [])
+        assert any("重复" in p and "T1" in p for p in result["problems"])
+
+
 class TestAtomicWrite:
     def test_writes_content_and_creates_parent_dir(self, tmp_path):
         target = tmp_path / "sub" / "dir" / "file.md"

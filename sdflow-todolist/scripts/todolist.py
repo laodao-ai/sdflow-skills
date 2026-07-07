@@ -26,6 +26,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 
 
 def atomic_write(path, text):
@@ -327,6 +328,15 @@ def cmd_add(args):
 
     month = this_month(args.month)
     tid = data.get("id") or next_id(root, args.prefix)
+    # OV-3 守卫（镜像 buglist.py）：显式传 id 时才校验（next_id 自动生成的号必然合法、必然
+    # 不重，不需要重复查）。语法用 `[A-Z]+\d+` 全量 fullmatch，不借用带 `\b` 的 ID_RE。
+    # 查重用 all_ids(root)：此刻新文件/新行还未落盘（ensure_file 在下面），all_ids 看到的是
+    # 落盘前的既有全集，不会把本次正在 add 的 id 算进去，语义正确。
+    if data.get("id"):
+        if not re.fullmatch(r"[A-Z]+\d+", tid):
+            _die(f"显式 id 语法非法（应形如 T12）：{tid!r}")
+        if tid in all_ids(root):
+            _die(f"显式 id 与既有重复（会静默丢行）：{tid}")
     time_str = args.time or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     change = data.get("change") or detect_change(root)
 
@@ -525,6 +535,15 @@ def cmd_scan(args):
         rows = parse_table_rows(lines, sec) if sec else {}
         blocks = block_ranges(lines)
         rel = os.path.relpath(path, root)
+        # OV-3：重复 ID 检测（镜像 buglist.py）——必须在 parse_table_rows 已经按 ID 建 dict
+        # 丢行之前、从原始表行里数，否则重复的那一行早被静默吞掉，dict 视角里只剩 1 个 ID。
+        if sec:
+            raw_ids = [
+                lines[i].strip().strip("|").split("|", 1)[0].strip()
+                for i in range(sec["rows_start"], sec["rows_end"])
+            ]
+            for dup_id in sorted({rid for rid, cnt in Counter(raw_ids).items() if cnt > 1}):
+                problems.append(f"{rel}: 重复 ID：{dup_id}（parse_table_rows 会静默丢行）")
         # 块若存在必须有对应表行（块可选，故只单向查）
         for bid in blocks:
             if bid not in rows:
