@@ -58,7 +58,7 @@
 
 ### 子任务
 #### 2.A anchor_lint 脚本
-- [ ] 2.A.1 `anchor_lint.py --report <path> --layer spec-review|code-review`：扫四类锚（outside-voice/hr-tg/step1-broad-review/lens-metric）存在性 + enum/字段/子格式合法性（enum 从 `lens-metric-contract.md` 单一源读，不复制清单）；缺锚/越域即非零退出。复用 `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`（度量锚变长 KV 走**前缀匹配**；**不用** `ship_gate.anchor_set`/`_line_scoped_hits`——那是 gate 锚**定长整行**原语、匹配不了变长度量锚，冷审 F1），不重实现。
+- [ ] 2.A.1 `anchor_lint.py --report <path> --layer spec-review|code-review`：扫四类锚（outside-voice/hr-tg/step1-broad-review/lens-metric）存在性 + enum/字段/子格式合法性（enum 从 `lens-metric-contract.md` 单一源读，不复制清单）；缺锚/越域即非零退出。遵 F1 实质（度量锚变长 KV 走前缀匹配、**不用** `ship_gate._line_scoped_hits` 定长整行原语）；因 anchor_lint 作 bundle tools/ 经 update 铺进消费仓、而 `sdflow-retro/scripts` 不在消费仓，`import lens_metric_aggregate` 运行时 break，故**脚本内重实现同款 fence-aware + 前缀 kv 逻辑**（非 import 复用）〔mlh-p2-anchor-lint 调和〕。
 - [ ] 2.A.2 测试：喂缺字段/越域/缺锚/fence 内示范锚的样本报告，断言退出码。
 - [ ] 2.A.3 两审 SKILL 的锚自检步改为调 `anchor_lint`；**保留声明**「`findings=N` 与合并池实收数的数值一致性仍是主 session 信任边界、非机械可验」（脚本不谎称能保证数值正确）。
 

@@ -53,7 +53,7 @@ Leg 2 S2（家族② recorder 索引，north-star，ROI 触发才起）：
 |---|---|---|
 | 脚本 | Python 3 + pytest（各 skill 自包含 `tests/`） | 确定性判据 own + 测试兜底 |
 | 结构化状态 | YAML frontmatter（`yaml.safe_load`） | 机器状态载体（替字符串嵌正文） |
-| 复用纯函数（度量锚校验 = anchor-lint） | `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`（**前缀匹配变长 KV payload**） | anchor-lint 直接复用，不重实现 |
+| 同款纯函数逻辑（度量锚校验 = anchor-lint） | 对齐 `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`（**前缀匹配变长 KV payload**） | 因 anchor_lint 随 bundle tools/ 铺进消费仓、`sdflow-retro/scripts` 不在消费仓内、跨 skill import 运行时 break，anchor-lint **脚本内重实现同款逻辑**（非 import 复用）〔mlh-p2-anchor-lint 调和〕 |
 | gate 锚原语（S1 用，**非** anchor-lint） | `ship_gate.anchor_set`/`_line_scoped_hits`（**定长整行字面匹配**，仅配 gate 状态锚） | S1 迁移 / dual-read 侧使用 |
 | 契约单一源 | `lens-metric-contract.md`（enum/折叠）、`trigger-catalog.md`（HR-TG 子集）、`model-tiers.md`（档位） | lint/校验从单一源读取，不复制清单 |
 

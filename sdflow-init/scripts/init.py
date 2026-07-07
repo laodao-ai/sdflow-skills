@@ -156,6 +156,11 @@ def copy_bundle(root, full=False):
             shutil.rmtree(tools_dst)
         shutil.copytree(os.path.join(BUNDLE_SRC, "tools"), tools_dst,
                          ignore=shutil.ignore_patterns("tests"))
+        # [mlh-p2-anchor-lint] 契约是 tools/anchor_lint.py 的运行时机读依赖（读 lens-metric-enums 块），
+        # 须与 tools/ 同批刷新，否则本地 pin 消费仓 update 后「新脚本+旧契约无块」永久 fail-closed。
+        contract_src = os.path.join(BUNDLE_SRC, "lens-metric-contract.md")
+        if os.path.isfile(contract_src):
+            shutil.copy2(contract_src, os.path.join(dst, "lens-metric-contract.md"))
     n = sum(len(fs) for _, _, fs in os.walk(dst))
     return dst, n
 

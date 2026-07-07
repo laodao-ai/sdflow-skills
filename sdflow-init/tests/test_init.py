@@ -102,8 +102,14 @@ class TestBundleToolsOnly:
         assert not (wf / "workflow.md").exists()
         assert not (wf / "spec-checklists").exists()
         assert not (wf / "code-checklists").exists()
-        md_rules = [p for p in wf.rglob("*.md") if "tools" not in p.parts]
-        assert md_rules == []                      # 规则文件数 = 0
+        # [mlh-p2-anchor-lint] lens-metric-contract.md 不是「规则文件」而是 tools/anchor_lint.py
+        # 的运行时机读依赖（读 lens-metric-enums 块），须与 tools/ 同批铺，故显式排除在外。
+        md_rules = [
+            p for p in wf.rglob("*.md")
+            if "tools" not in p.parts and p.name != "lens-metric-contract.md"
+        ]
+        assert md_rules == []                      # 规则文件数 = 0（契约文件除外）
+        assert (wf / "lens-metric-contract.md").is_file()
 
     def test_full_flag_restores_whole_bundle(self, tmp_path):
         init_mod.copy_bundle(str(tmp_path), full=True)
