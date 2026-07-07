@@ -289,6 +289,33 @@ class TestCellSafety:
             for f in d.glob("*-todolist.md"):
                 assert "EVIL" not in f.read_text(encoding="utf-8")
 
+    def test_add_rejects_newline_in_title(self, tmp_path):
+        """[impl-review-fix] FIX-6（C7 amendment + 领域镜 F4，镜像 buglist）：显式 title 会
+        原样拼进块头 `## {id}: {title}`（`_build_block`），此前未挂 `_reject_cell_unsafe`——
+        含换行的 title 会在块头行里造出孤儿行，污染 block_ranges() 的解析。用 motivation 触发
+        建块，确保守卫在真正拼块头前就已 fail-closed。"""
+        payload = base_payload(title="正常标题\n## EVIL: 注入块头", motivation="x")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "todolist"
+        if d.exists():
+            for f in d.glob("*-todolist.md"):
+                assert "EVIL" not in f.read_text(encoding="utf-8")
+
+    def test_add_rejects_newline_in_project(self, tmp_path):
+        """[impl-review-fix] FIX-6：project 会原样拼进新建文件头部 `> 项目：{project}` 行
+        （HEADER_TMPL，仅当月文件不存在时才建），此前未挂 `_reject_cell_unsafe`——含换行的
+        project 会在头部注入额外行，污染文件头结构。"""
+        payload = base_payload(project="正常项目\n> 项目：EVIL")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "todolist"
+        if d.exists():
+            for f in d.glob("*-todolist.md"):
+                assert "EVIL" not in f.read_text(encoding="utf-8")
+
     def test_triage_rejects_pipe_in_batch(self, tmp_path):
         """C1 BLOCKER 补漏：triage 也把批次写进总览管道表 cells[7]，同款守卫必须覆盖，
         不能只在 add 入口挡。传入含 `|` 的批次值应 fail-closed，且该行 cells[7] 不被腐蚀。"""

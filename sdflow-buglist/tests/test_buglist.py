@@ -276,6 +276,33 @@ class TestCellSafety:
         content = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(encoding="utf-8")
         assert "evil|key" not in content
 
+    def test_add_rejects_newline_in_title(self, tmp_path):
+        """[impl-review-fix] FIX-6（C7 amendment + 领域镜 F4）：显式 title 会原样拼进块头
+        `## {id}: {title}`（BLOCK_TMPL），此前未挂 `_reject_cell_unsafe`——含换行的 title
+        会在块头行里造出孤儿行，block_ranges() 的 `##\\s+[A-Z]\\d+\\s*:` 正则可能被腐蚀成
+        另一个"块"，静默污染文档结构。"""
+        payload = base_payload(title="正常标题\n## EVIL: 注入块头")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "buglist"
+        if d.exists():
+            for f in d.glob("*-buglist.md"):
+                assert "EVIL" not in f.read_text(encoding="utf-8")
+
+    def test_add_rejects_newline_in_source(self, tmp_path):
+        """[impl-review-fix] FIX-6：source 会原样拼进新建文件头部 `> 来源：{source}` 行
+        （HEADER_TMPL，仅当日文件不存在时才建），此前未挂 `_reject_cell_unsafe`——含换行的
+        source 会在头部注入额外行，污染文件头结构。"""
+        payload = base_payload(source="正常来源\n> 来源：EVIL")
+        proc = run_add(tmp_path, payload)
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        d = tmp_path / "openspec" / "issues" / "buglist"
+        if d.exists():
+            for f in d.glob("*-buglist.md"):
+                assert "EVIL" not in f.read_text(encoding="utf-8")
+
 
 class TestExplicitIdGuard:
     """OV-3：add 允许 JSON payload 显式传 `id`（`bid = data.get("id") or next_id(...)`），

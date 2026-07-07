@@ -368,6 +368,13 @@ def cmd_add(args):
     _reject_cell_unsafe(change, "change")
     _reject_cell_unsafe(data.get("batch"), "batch")
     _reject_cell_unsafe(time_str, "time")
+    # [impl-review-fix] FIX-6（C7 amendment + 领域镜 F4，镜像 buglist）：title 会原样拼进
+    # 块头 `## {id}: {title}`（`_build_block`），project 会原样拼进新建文件头部
+    # `> 项目：{project}` 行（HEADER_TMPL，仅当月文件不存在时才建）——两者此前都没挂守卫，
+    # 含换行会分别腐蚀 block_ranges() 的块头正则、污染文件头结构。挂在 ensure_file
+    # （首次落盘点）之前，与上面几个字段同一批 fail-closed，拒绝时不留任何新文件/新行残留。
+    _reject_cell_unsafe(data.get("title"), "title")
+    _reject_cell_unsafe(data.get("project"), "project")
 
     path = ensure_file(root, month, data.get("project"))
 
