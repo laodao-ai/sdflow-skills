@@ -71,6 +71,8 @@
 | T63 | `sdflow-init/scripts/init.py:inject/_find_all_marker_lines` | inject 多块收敛须 fence-aware + start/end 配对校验（naive collapse 已回退） | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
 | T64 | `sdflow-init/scripts/init.py:_atomic_write_settings` | settings.json 原子写 tmp 改唯一名（tempfile.mkstemp）关闭无锁降级路径撕裂 | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
 | T65 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` | gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类 | 基础设施 | OPEN | 2026-07-07 09:34 | main |  |
+| T66 | `cmd_scan(buglist/todolist) + cmd_batch_rename(issues)` | recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化 | 性能优化 | OPEN | 2026-07-07 13:03 | issues-pool-hardening |  |
+| T67 | `cmd_add id 校验(buglist/todolist)` | 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55) | 代码质量 | OPEN | 2026-07-07 13:03 | issues-pool-hardening |  |
 
 ---
 
