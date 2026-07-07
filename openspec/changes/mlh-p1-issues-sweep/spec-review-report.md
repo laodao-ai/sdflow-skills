@@ -79,4 +79,10 @@
 ### 结论
 冷审在「trivial」change 上抓出 **1 致命 + 2 高 + 4 中**真设计硬伤（空 change 孤儿腐蚀、batch add 幂等破产、triage 失败吞错、口径不自洽等），全部 amend 到 design/spec/tasks（标 `[spec-review-amendment]`）。设计现已实现就绪。
 
-□ **建议进设计 HARD-GATE**：请拍板 Q1（scan 口径，推荐 A=--open-ungrouped）→ 批准后进 `/sdflow-ship`（SDD 实现 → code-review → done → merge）。
+☑ **建议进设计 HARD-GATE**：请拍板 Q1（scan 口径，推荐 A=--open-ungrouped）→ 批准后进 `/sdflow-ship`（SDD 实现 → code-review → done → merge）。
+
+### 拍板记录（设计 HARD-GATE）
+- **2026-07-07 用户拍板**：Q1 = **A（`--open-ungrouped`）** —— 与已 amend 的 design D3/spec 场景1 一致。设计门通过，批准进 `/sdflow-ship`。
+- lens-metric 采纳/裁掉锚已反映最终裁决（Q1=A 即 D-d 采纳，与 Step3 一致，无翻改）。
+
+<!-- ship-gate: design-approved -->
