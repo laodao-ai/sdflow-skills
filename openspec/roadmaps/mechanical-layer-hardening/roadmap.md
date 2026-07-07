@@ -13,7 +13,7 @@
 |---|---|---|---|
 | **P1** · `issues.py sweep --change X` | Leg 1 | done sweep 4 步手循环 → 一个原子子命令 | ✅ **已交付**（ca66d60） |
 | **P2** · anchor-lint 产出侧校验器 | Leg 1 | 每轮 review 手 grep+肉眼核 enum → 机验门 | ✅ **已交付**（e43460c） |
-| **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | 🔄 就绪（进行中，纯增测/校验器） |
+| **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | ✅ **已交付**（a6a2adc，change `mlh-p3-determ-guards`；冷审 F5 守卫覆盖 8→14 helper） |
 | **P4** · 编排 SKILL 机械步下沉 | Leg 1 | P5-P8 中 ROI 项按痛点做子集 | 就绪（按需排） |
 | **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` 解析机器、正文提及不误判 | 就绪需**先过 ROI 评估门** + 核 gate 铺设路径 |
 | **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发 + 删 ~40处/文件表解析 | **north-star**（ADR 0010 defer，不排期） |
@@ -82,19 +82,19 @@
 
 ### 子任务
 #### 3.A recorder 镜像 helper 一致性测试（= P3）
-- [ ] 3.A.1 对 verbatim helper 加 `inspect.getsource` 源码级相等断言（或等价一致性测试），**按实际拓扑（冷审 F3）**：**3 向**（buglist/todolist/issues）= `atomic_write`/`repo_root`/`_reject_cell_unsafe`；**2 向**（buglist↔todolist）= `detect_change`/`normalize_doc_paths`/`auto_default_doc`/`split_sections`/`parse_table_rows`/`block_ranges`/`_ids_in_files`/`_find_row_file`（issues.py 依 D4「绝不解析人写行」不含表解析 helper）。**不抽公共模块**（D4 红线禁跨 recorder import）。
-- [ ] 3.A.2 故意改一处 helper 断言测试变红，验证守卫生效。
+- [x] 3.A.1 对 verbatim helper 加源码级一致性断言——**契约订正（grill Path B）**：由 `inspect.getsource` byte 全等改为**剥 docstring 后 AST 等价**（9/11 helper 仅 docstring 合法分化，byte 全等会假阳）。拓扑：**3 向**（buglist/todolist/issues）= `atomic_write`/`repo_root`/`_reject_cell_unsafe`；**2 向**（buglist↔todolist）= 原 8 个 + **冷审 F5 扩 6 个**（`_id_sort_key`/`validate_doc_paths`/`all_ids`/`next_id`/`_die`/`_load_json`，实测 byte-identical）= 14 个。顺手归一 todolist `split_sections`/`block_ranges` 2 处逻辑异写（零回归）。**不抽公共模块**（D4）。
+- [x] 3.A.2 故意逻辑分叉证伪（`test_logic_drift_is_caught`）+ helper 删除证伪（裸 getattr 无吞 AttributeError）验证守卫生效。
 
 #### 3.B config.yaml + batches.md lint（= P4）
-- [ ] 3.B.1 `config_lint`（`init.py` 子命令或独立脚本）：yaml 可解析 + `schema`/`rules`（proposal/specs/design/tasks 四段）必填 + `model-tiers` 覆盖段子键枚举（`strong`/`mid`/`light`）+ `metrics.enabled` bool。
-- [ ] 3.B.2 `issues.py batch lint`：`优先级` ∈ PRIORITIES 枚举、`计划` 非占位符（非 `<待填>`）时非空；复用 `_split_batches_entries` 逐条 grammar 校验。
-- [ ] 3.B.3 各自测试（坏 config / 坏 batch 字段 → 非零退出）。
+- [x] 3.B.1 `config_lint`（`init.py` **第 4 个 mode**，**手写 stdlib 行扫描不 import yaml**——follow anchor_lint 范式，零依赖惯例）：`schema`/`rules`（proposal/specs/design/tasks 四段）必填 + `model-tiers`（若存在）子键枚举 ⊆ {strong/mid/light} + `metrics`（若存在）`enabled` bool；**顶层块缺失条件化放行**（防 mlh-p2 假阳）。含冷审 F2（UnicodeDecodeError fail-closed）。
+- [x] 3.B.2 `issues.py batch lint`：`优先级` 前导 token ∈ PRIORITIES∪{—}（**冷审 F3 正则 `^(P[0-4](?!\d)|—)` 拒 P10/P40**，后缀不校验容 `P1 ★`）、占位符 `<待填>` 双字段豁免、`计划` 非占位时非空；复用 `_split_batches_entries` 只读校验。含冷审 F1（缺 batches.md→非零 fail-closed）。
+- [x] 3.B.3 各自测试（坏 config / 坏 batch 字段 → 非零退出）。
 
 ### 验收标准
-- [ ] 改任一 verbatim helper 未同步三处 → 一致性测试红。
-- [ ] 坏 config.yaml（打错 tier 子键/坏 yaml/缺必填段）→ `config_lint` 非零退出。
-- [ ] batches.md `优先级` 非枚举值 / `计划` 空 → `batch lint` 报错。
-- [ ] `pytest` 全绿。
+- [x] 改任一 verbatim helper 未同步 → 一致性测试红（`test_logic_drift_is_caught` 证伪实证）。
+- [x] 坏 config.yaml（打错 tier 子键/缺必填段/metrics 非 bool）→ `config_lint` 非零退出。
+- [x] batches.md `优先级` 非法 / `计划` 空 → `batch lint` 报错；现存真实数据零假阳。
+- [x] `pytest` 全绿（4 目录 396 passed，全仓 627）。
 
 ### 交付物
 - recorder 镜像一致性测试；`config_lint` + `issues.py batch lint` + 测试。

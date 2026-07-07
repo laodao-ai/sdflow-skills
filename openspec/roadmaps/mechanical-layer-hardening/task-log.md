@@ -87,6 +87,16 @@
 
 ## 2026-07-07
 
+### [阶段 3 / mlh-p3-determ-guards] 确定性守卫补全 P3 交付（SHIPPED）
+- **状态**: ✅ 已交付（change `mlh-p3-determ-guards`，archive `2026-07-07-mlh-p3-determ-guards`，merge `a6a2adc`）
+- **scope**: 3.A recorder 镜像 helper 一致性测试 + 3.B config/batch lint 合批（低耦合低增量，按 batch-triage 判据合批）。纯增测/校验器、零行为改动、零 SKILL.md 改动。
+- **契约订正（grill Path B）**: A2「三份 byte-identical」实测证伪——9/11 helper 仅 docstring 合法分化。契约由 byte 全等改锁**剥 docstring 后 AST 等价**；2 个逻辑等价异写（split_sections/block_ranges）顺手归一到 buglist 写法（零回归）。
+- **新 capability**: `determinism-guards`（4 需求，openspec/specs/determinism-guards/spec.md）——未来 P4 机械层下沉可扩展本 capability。
+- **冷主审兑现 load-bearing**: SDD 4 任务审全绿；whole-branch 冷主审（领域+对抗×2+历史+codex OV）抓 5 真 bug 全自动修——F1 致命（batch lint 缺 batches.md fail-open 报全过，违设计失败模式表）/ F2 高（UnicodeDecodeError 裸 traceback 双处，历史镜实证重蹈 mlh-p2 `8f1d2bc` anchor_lint 已修的坑）/ F5 高（守卫漏 6 byte-identical helper，design「11 完整」证伪→TWO_WAY 8→14、总覆盖 17）/ F3 中（正则过匹配 P10→收紧 `^(P[0-4](?!\d)|—)`）/ 测试缺口低。裁 F4（paradigm-consistent）；defer T70-73 → 批次 `mlh-p3-determ-guards`。
+- **验证**: verify=PASS（opus 冷启 Do-Not-Trust，实跑 4 目录 396 / 全仓 627，真实数据零假阳，坏输入非零，validate 5/5）。
+- **Leg1 进度**: P1（ca66d60）/ P2（e43460c）/ **P3（a6a2adc）全交付**；余 P4（按需排）+ Leg2 P5-P6（north-star）。
+- **下一步**: 视痛点决定是否起 P4（编排 SKILL 机械步下沉）；defer 批次 T70-73 择期单开 cleanup 清（非阻塞）。
+
 ### [进度核对] 实施侧全阶段未开工确认（防误判固化）
 - **状态**: ℹ️ 进度快照 · ⚠️ **已被上方阶段 1/2 完成总结取代**（本条为规划刚落时的历史快照，P1/P2 现已交付；保留供追溯，勿据此判「未开工」）
 - **当前进度**: 除阶段 0（规划，见下条）外，**Leg1 的 P1-P4、Leg2 的 P5-P6 全部未开工**——无任何 `implement-mechanical-layer-hardening-p*` change 存在。〔订正：P1（ca66d60）、P2（e43460c）已交付；余 P3-P4、P5-P6 待做〕
