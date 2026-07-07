@@ -25,20 +25,27 @@ def test_refuse_when_anchor_missing(repo):
     assert code == 3 and js["verdict"] == "REFUSE_START"
 
 def test_pass_gate_when_anchor_present(repo):
+    # [mlh-p5 Task5] live 迁 frontmatter（原 inline design-approved 锚）
     d = mkchange(repo)
     (d / "spec-review-report.md").write_text(
-        "# 报告\n<!-- ship-gate: design-approved -->\n", encoding="utf-8")
+        "---\nship-gate:\n  design_approved: true\n---\n# 报告\n", encoding="utf-8")
     commit_all(repo, "seed")
     code, js, human = run_gate(repo)
     assert code == 0 and js["verdict"] != "REFUSE_START"
     assert human.startswith("[ship-gate]")  # D2 首行人读
 
 def test_verify_conflict_anchors_unknown(repo):
+    # [mlh-p5 Task5] live 迁 frontmatter：frontmatter 世界里"两个互斥锚并存"的等价形态是
+    # 顶层同字段重复键（duplicate-key）——inline 的 PASS+FAIL 并存判据在 Task 6 退役
+    # pick_exclusive 后不再可达，迁移后改用 duplicate-key 复现"歧义 verify 状态→UNKNOWN"
+    # 同一不变量（verdict/exit/reason 含"verify"均不变；与 test_frontmatter_live_read.py::
+    # test_live_dup_key_unknown 覆盖重叠，属有意——两处分别锚 preflight 早检入口与
+    # frontmatter 解析器本身，双证据不算冗余）。
     d = mkchange(repo)
     (d / "spec-review-report.md").write_text(
-        "<!-- ship-gate: design-approved -->\n", encoding="utf-8")
+        "---\nship-gate:\n  design_approved: true\n---\n# 报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "<!-- ship-gate: verify=PASS -->\n<!-- ship-gate: verify=FAIL -->\n",
+        "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n# 验证报告\n",
         encoding="utf-8")
     commit_all(repo, "seed")
     code, js, _ = run_gate(repo)
@@ -49,8 +56,12 @@ def test_gbk_report_no_crash(repo):
     # [impl-review-fix] 裁决项8：非 UTF-8（GBK）报告不应让 gate 崩溃（traceback）。
     # 锚行本身是 ASCII，跨编码字节一致；中文正文用 GBK 编码拼接进 bytes 写盘，
     # 断言只需不 traceback、能正常给出 verdict（errors="replace" 兜底解码）。
+    # [mlh-p5 Task5] live 迁 frontmatter：GBK 鲁棒性改在 frontmatter 解析路径
+    # （parse_ship_gate_frontmatter 内 read_text errors="replace"）上验证，
+    # Task 6 退役 inline 读点后此覆盖仍有效。
     d = mkchange(repo)
-    body = b"<!-- ship-gate: design-approved -->\n" + "设计门拍板".encode("gbk") + b"\n"
+    body = (b"---\nship-gate:\n  design_approved: true\n---\n"
+            + "设计门拍板".encode("gbk") + b"\n")
     (d / "spec-review-report.md").write_bytes(body)
     commit_all(repo, "seed")
     code, js, _ = run_gate(repo)

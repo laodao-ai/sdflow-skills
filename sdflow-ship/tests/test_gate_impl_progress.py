@@ -12,9 +12,12 @@ import ship_gate as _sg
 PLAN2 = "### Task 1: A\n- [ ] s\n### Task 2: B\n- [ ] s\n"
 
 def approved_change(repo, plan=None, sop=False, tg02=False):
+    # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）：
+    # 本 helper 是多文件共用的高杠杆基座（tail/freshness/frontmatter_live_read 均经此链路），
+    # 迁移后 design_ok 判定改走 frontmatter 路径，gate verdict 不变（design_approved=true 恒真）。
     d = mkchange(repo)
     (d / "spec-review-report.md").write_text(
-        "<!-- ship-gate: design-approved -->\n", encoding="utf-8")
+        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", encoding="utf-8")
     prop = "# p\n〔TG-02：嵌入式〕\n" if tg02 else "# p\n〔TG-01：工具链〕\n"
     (d / "proposal.md").write_text(prop, encoding="utf-8")
     if sop:
@@ -96,8 +99,9 @@ def test_plan_task1_same_commit_counts(repo):
     # 〔B1 闭区间〕plan 与 checkpoint(task1-) 同 commit（checkpoint add -A 携带未提交 plan）
     # → task1 锚在窗口起点 sha 自身，排他窗口会漏数；闭区间须计入
     d = mkchange(repo)
+    # [mlh-p5 Task5] live 迁 frontmatter（同上 helper 理由）
     (d / "spec-review-report.md").write_text(
-        "<!-- ship-gate: design-approved -->\n", encoding="utf-8")
+        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", encoding="utf-8")
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     commit_all(repo, "seed change")           # approved base，无 plan
     (d / "superpowers-plan.md").write_text(PLAN2, encoding="utf-8")

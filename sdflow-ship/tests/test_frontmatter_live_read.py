@@ -59,6 +59,35 @@ def test_live_body_mention_immune(repo):
     assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS"
 
 
+def test_live_body_mention_immune_design_approved(repo):
+    # [mlh-p5 Task5 Step3 B4/B5 根治验证] spec-review-report 正文含旧 inline 锚字面
+    # `<!-- ship-gate: design-approved -->` 但仅作【描述性提及】（反引号内、非独占裸行），
+    # frontmatter 无 design_approved 键（absent）→ 回退 inline 时也读不出真锚 → REFUSE_START
+    # （未过设计门），MUST NOT 因正文提及假过门。
+    d = mkchange(repo)
+    d.joinpath("spec-review-report.md").write_text(
+        "# 设计审报告\n讨论：模板锚形如 `<!-- ship-gate: design-approved -->`（尚未拍板）。\n",
+        encoding="utf-8")
+    d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
+
+def test_live_body_mention_immune_code_review(repo):
+    # [mlh-p5 Task5 Step3 B4/B5 根治验证] code-review-report 正文含旧 inline 锚字面
+    # `<!-- ship-gate: code-review=pass -->` 但仅作【描述性提及】（反引号内、非独占裸行），
+    # frontmatter 无 code_review 键 → 回退 inline 也读不出真锚 → STEP_IN_PROGRESS
+    # （该步进行中，MUST NOT 因正文提及假放行 BLOCKED_UPSTREAM 之外的"pass"）。
+    d = impl_done(repo)
+    d.joinpath("code-review-report.md").write_text(
+        "# 代码审报告\n对账清单：结论锚字面为 `<!-- ship-gate: code-review=pass -->`（审查中，未落）。\n",
+        encoding="utf-8")
+    commit_all(repo, "cr")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS" and js["next"] == "sdflow-code-review"
+
+
 def test_live_design_approved_frontmatter(repo):
     # spec-review-report frontmatter design_approved: true（无 inline 锚）→ 过设计门 → plan 缺 RUN_PLAN
     d = mkchange(repo)

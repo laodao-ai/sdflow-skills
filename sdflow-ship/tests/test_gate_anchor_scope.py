@@ -152,3 +152,29 @@ def test_contract_archived_corpus_anchor_hits():
     # 聚合断言（非"每处子串"）：gate 关键锚在语料里实证以独占行承载；模板全局回退即缺锚。
     assert DESIGN in exclusive, "归档 spec-review 语料无一以独占行承载 design-approved——模板可能已去独占行"
     assert VPASS in exclusive or VFAIL in exclusive, "归档 verify 语料无一以独占行承载 verify=PASS/FAIL"
+
+
+def test_contract_live_frontmatter_corpus_fields():
+    # [mlh-p5 Task5 Step4] B5 聚合语料 live 侧对应契约：above 的
+    # test_contract_archived_corpus_anchor_hits 只扫【归档】语料（本仓 openspec/changes/archive/，
+    # 保留 inline，永久不迁）——本仓目前尚无第二个 producer 已迁移 frontmatter 的活跃报告可扫
+    # （本 change 自身报告的迁移属 tasks.md 5.3，非本步范围），故用与三 producer SKILL.md
+    # 模板一致的代表性 frontmatter 样本（覆盖三字段各自的全部枚举取值）构造聚合语料，断言
+    # gate 真读的 parse_ship_gate_frontmatter 在聚合层面对每个枚举值都能解析出【非 inline】
+    # 承载的字段——对应「live 侧」不再依赖 _line_scoped_hits 独占行判据，与归档聚合契约
+    # （行级判据）形成 live/归档两套承载形态的对照证据，防止某一侧模板漂移后另一侧假绿掩盖。
+    samples = [
+        ("---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", "design_approved", True),
+        ("---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", "verify", "PASS"),
+        ("---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", "verify", "FAIL"),
+        ("---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", "code_review", "pass"),
+        ("---\nship-gate:\n  code_review: blocked\n---\n# 代码审报告\n", "code_review", "blocked"),
+    ]
+    covered = set()
+    for text, field, want in samples:
+        state, err = _sg.parse_ship_gate_frontmatter(text)
+        assert err is None, f"live 语料样本解析出错: {err}\n{text}"
+        assert state.get(field) == want, f"live 语料样本 {field}={want!r} 未被 frontmatter 解析器识别: {state!r}"
+        covered.add(field)
+    # 聚合断言：三个 gate 关键字段各至少一枚举值经 frontmatter 承载被识别（不依赖任一 inline 锚常量）
+    assert covered == set(_sg.FIELD_ENUMS), "live frontmatter 语料聚合未覆盖全部 gate 字段"

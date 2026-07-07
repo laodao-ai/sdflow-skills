@@ -31,6 +31,13 @@ def test_duplicate_field_key_error():      # D5：重复键 → 坏（不取最�
     state, err = P("---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n")
     assert err is not None and err[1] == "duplicate-key"
 
+def test_duplicate_toplevel_key_error():   # [mlh-p5 Task5 补 Task1 遗留覆盖缺口]
+    # 顶层 `ship-gate:` 键本身重复两次（非字段级重复）→ 坏，category == "duplicate-key"，
+    # 且 err[0] 点名的是键名本身 "ship-gate"（与字段级重复的 err[0]=字段名区分）。
+    state, err = P("---\nship-gate:\n  verify: PASS\nship-gate:\n  code_review: pass\n---\n")
+    assert state == {} and err is not None
+    assert err[0] == "ship-gate" and err[1] == "duplicate-key"
+
 def test_out_of_domain_error():            # 越域
     state, err = P("---\nship-gate:\n  verify: MAYBE\n---\n")
     assert err is not None and err[0] == "verify" and err[1] == "out-of-domain"

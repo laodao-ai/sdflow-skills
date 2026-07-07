@@ -4,11 +4,12 @@ from test_gate_impl_progress import approved_change, PLAN2
 from test_gate_tail import impl_done
 
 def tail_ok(repo):
+    # [mlh-p5 Task5] live 迁 frontmatter（原 inline 双锚，产出的 gate verdict 不变）
     d = impl_done(repo)
     (d / "code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "<!-- ship-gate: verify=PASS -->\n", encoding="utf-8")
+        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "reports")
     return d
 
@@ -25,10 +26,11 @@ def test_stale_pass_reruns_not_ship(repo):
 
 def test_stale_fail_reruns_not_exit5(repo):
     d = impl_done(repo)
+    # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "<!-- ship-gate: verify=FAIL -->\n", encoding="utf-8")
+        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "reports")
     touch_code(repo)             # FAIL 之后修了代码 → 重验不卡死
     code, js, _ = run_gate(repo)
@@ -57,15 +59,16 @@ def test_uncommitted_report_is_fresh(repo):
     # 提交过）不符。改为让 verify-report.md 全程不进任何 commit，才是真正的
     # "never committed" 路径（sha 为空 → freshness=uncommitted）。
     d = impl_done(repo)
+    # [mlh-p5 Task5] live 迁 frontmatter（未提交语义靠"从未进 commit"承载，与锚承载格式无关）
     (d / "code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "hand-off.md").write_text("x", encoding="utf-8")
     arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
     arch.mkdir(parents=True); (arch / "p.md").write_text("a", encoding="utf-8")
     commit_all(repo, "tail without verify report")
     # verify-report.md 只写盘，从未进入任何提交
     (d / "verify-report.md").write_text(
-        "<!-- ship-gate: verify=PASS -->\n新一轮手写\n", encoding="utf-8")
+        "---\nship-gate:\n  verify: PASS\n---\n新一轮手写\n", encoding="utf-8")
     code, js, _ = run_gate(repo)
     # 〔H1〕active 存在 → RUN_VERIFY（非 SHIPPED）；本用例主张仍是 freshness=uncommitted
     # （report_last_sha 空 → 人机同权），验其经 final RUN_VERIFY 携带 freshness 无误
@@ -141,12 +144,13 @@ def test_chinese_named_spec_edit_still_stale(repo):
 def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
     # F1 fix 轮：cr 陈旧 + verify 自身新鲜且 FAIL → VERIFY_FAIL 携带 cr 陈旧提示
     d = impl_done(repo)
+    # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     commit_all(repo, "cr alone")
     touch_code(repo)             # 触及 src.py → cr 变陈旧
     (d / "verify-report.md").write_text(
-        "<!-- ship-gate: verify=FAIL -->\n", encoding="utf-8")
+        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "verify alone")   # verify 本身新鲜（其后无提交）
     code, js, _ = run_gate(repo)
     assert code == 5 and js["verdict"] == "VERIFY_FAIL"
