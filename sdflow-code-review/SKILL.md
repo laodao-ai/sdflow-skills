@@ -114,13 +114,15 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 ## 第五步：产出 + 收敛口
 
 - 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账 + 度量锚）。
-- **锚行存在性自检〔R1/R3/R5〕〔impl-review-fix CF-9〕**：出报告后 grep 四类 v1 锚行（Step1 broad-review / hr-tg /
-  outside-voice / **lens-metric**），缺失即本步报错阻塞；`findings=N` 与合并池实收数 diff 一次。**此自检由
-  同一执行落锚的主 session 自行运行、非独立外部门**（与 `design-approved` 锚由 `ship_gate.py` 外部拦截不同）——
-  措辞去掉暗示外部强制的"机械"表述，诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"。
-  **lens-metric 自检扩一类**：不止存在性——缺任一必填字段，或 `layer`/`lens`/`runner`/`sev` 取值越域/子格式不符
-  （取值域/子格式见规则根 `lens-metric-contract.md`，唯一权威源）均报错阻塞；数值一致性（`findings`/`采纳`/`独立`
-  等是否与合并池实收数吻合）**是主 session 信任边界、非机械可验**，自检 MUST NOT 谎称能机械保证数值正确。
+- **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调
+  `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --root "$(git rev-parse --show-toplevel)"`——
+  退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚（Step1
+  broad-review / hr-tg / outside-voice / **lens-metric**）存在性 + lens-metric 字段/枚举/sev/layer==--layer/
+  计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。
+  **此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `design-approved` 锚由 `ship_gate.py` 外部
+  拦截不同）——诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"。
+  **保留信任边界声明**：数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）**是主 session 信任
+  边界、非机械可验**，脚本 MUST NOT 谎称能机械保证数值正确。
   **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
   **旁路声明**：lens-metric 锚缺失/取值违规仅拦报告完整性，**MUST NOT** 反向改写已裁决 findings 的采纳结论
   或本轮「建议进 /sdflow-done」结论。
