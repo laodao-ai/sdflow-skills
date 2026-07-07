@@ -1,10 +1,9 @@
-## 1. T2 字段 `|` 安全（系统性 correctness，先做——最基础 + 最高风险）
+## 1. T2 总览表 row 字段 table-cell-safe（写时 reject，系统性 correctness，先做）
 
-- [ ] 1.1 pre-flight：扫现有 `openspec/issues/**` 确认有无既存**未转义裸 `|`** 腐蚀行，记录基线（design 风险「现有池可能已有裸 `|`」的缓解前提）
-- [ ] 1.2 写失败测试（TDD）：含 ASCII `|` 字段 write→read 往返逐字节一致——`buglist.py` / `todolist.py` / `issues.py` 三 recorder 各一例
-- [ ] 1.3 写失败测试：旧**未转义裸 `|`** 历史行解析 fail-safe（不抛异常、尽力还原、不二次腐蚀）
-- [ ] 1.4 实现：写路径把字段值 `|`→`\|` 转义；三处解析器 `strip("|").split("|")`（`buglist.py:293` / `todolist.py:282` / `issues.py:678`）改为**按未转义 `|` 切列** + 读出反转义
-- [ ] 1.5 跑三 recorder `tests/` + 全套件回归，确认绿（转义往返 + 旧裸 `|` 容错用例通过）
+- [ ] 1.1 写失败测试（TDD）：`add` / `set-status` / batch 写入时，`module` / `summary` / `change` / batch key 含 ASCII `|` **或**换行 → `_die` 拒绝（三 recorder 各覆盖）
+- [ ] 1.2 写测试：**详细块 prose 字段**含 `|` / 换行 **正常写入不被拒**（守 scope，不误扩到块）
+- [ ] 1.3 实现：三 recorder 写路径加 table-cell-safe 校验 helper——总览行字段含 `|`/换行即 `_die`（复用既有 `_die` 写时校验惯例，**无解析器改动**、无读路径回归面）
+- [ ] 1.4 跑三 recorder `tests/` + 全套件回归，确认绿
 
 ## 2. T1 reindex 一致性问题回显 stderr
 

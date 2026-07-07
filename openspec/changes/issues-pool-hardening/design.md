@@ -16,10 +16,10 @@ issues 池 recorder 三脚本（`buglist.py` / `todolist.py` per-type + `issues.
 
 ## Decisions
 
-### D1（T2）字段 `|` 用**转义**（`\|`），解析器改按未转义 `|` 切列
-- **选**：写路径把字段值里的 ASCII `|` 转义为 `\|`；三处解析器从 `split("|")` 改为**按未转义 `|` 切列**（`\|` 不作分隔符），读出后反转义还原。
-- **弃**：①**拒绝**含 `|` 的字段（fail-closed）——丢数据、挡掉合法含管道的描述（如命令行 `a | b`），用户敌对；②**替换为全角 `｜`**（U+FF5C）——无需改解析器但**有损**（无法还原原文 ASCII 管道），对"记录真实命令/日志"的债务字段不可接受。
-- **理由**：转义是 markdown 标准（`\|` 渲染即 `|`），无损可逆；解析器改动虽牵动三处读路径，但那正是位置解析正确性的根，值得一次修对。
+### D1（T2）总览表 row 字段**写时 reject**——table-cell-safe 守卫（`|` + 换行）
+- **选**：写路径对**总览表 row 字段**（`module` / `summary` / `change` / batch key）做 table-cell-safe 校验——含 ASCII `|` **或**换行即 `_die` 拒绝（复用本仓既有写时校验惯例：`buglist.py:357-361` priority/status 非法即 `_die`）。详细块字段（现象/根因/… prose）**不受此限**（非 `|` 分隔、`|`/换行进块无害）。
+- **弃**：①**转义**（`\|` + 三处解析器改按未转义切列 + 反转义）——引入全新转义语义、动三处读路径核心、且是给「未来若结构化就被扔掉的机械」投资；②**替换为全角 `｜`**（U+FF5C）——有损、且悄悄改用户字节。
+- **理由**：(a) 现存池**0 行**字段含 `|`（全量扫过），"保留字面 `|`"需求实测=0，escape 唯一优势无处兑现；(b) reject 零解析器改动、0 向后兼容负担、fail-closed 对齐本仓纪律、复用 `_die` 成例；(c) **换行是比 `|` 更狠的兄弟风险**（截断整行 + 产生孤儿行），一并纳入 table-cell-safe；(d) 守的是 CONTEXT.md「**盘面即状态**」——总览表即盘面，列错位/行截断 = 盘面腐蚀；(e) reject 是通往未来「结构化机器状态层」roadmap 的**低成本桥**（零机械投资、不挡重构）。
 
 ### D2（T1）reindex problems 回显 stderr，但**不因 problems 变红**
 - **选**：`reindex` 收集子进程 `scan` 报出的 problems，非空则逐条回显 stderr（带 pool/文件定位），**exit code 保持 0、INDEX 照常重建**。
@@ -38,17 +38,21 @@ issues 池 recorder 三脚本（`buglist.py` / `todolist.py` per-type + `issues.
 
 ## Risks / Trade-offs
 
-- **[T2 解析器改动牵动三处所有读路径]** → 全套件回归 + 新增**转义往返测试**（write→read 幂等：含 `|` 字段存取还原一致）；三 recorder 各测一遍。
-- **[T2 向后兼容：现有池可能已有裸 `|` 腐蚀行]** → 实现前扫现有池确认；读路径对**旧裸 `|`** fail-safe（尽力解析、不 crash、不再二次腐蚀），加专门容错测试。
+- **[T2 reject 挡掉合法含 `|`/换行 的字段]** → 实测 0 现存 occurrence、需求罕见；写者遇拒可改写（换措辞或用全角 ｜），且错误**响亮不静默**（写时即 `_die`，胜过转义/替换悄悄改字节）。无解析器改动、无读路径回归面。
+- **[T2 向后兼容]** → **不适用**：现存池 0 行裸 `|`（全量扫过），无旧腐蚀数据要容错，原设计为此设想的 fail-safe 解析/迁移**取消**。
 - **[T3 守卫测试要枚举各 recorder 终态集常量]** → 测试直接 import 三脚本的 `TERMINAL_STATUSES`/`STATUS_CODES` 做子集断言，常量重命名即测试红（正是目的）。
 - **[T4 auto-reindex 扩大 rename 副作用面]** → reindex 已验证幂等，副作用可控；rename 失败时不触发 reindex（先成功后同步）。
 
 ## Migration Plan
 
-- 无 schema/目录迁移。T2 落地后若扫到现有裸 `|` 数据：读路径容错即可覆盖（不强制一次性迁移）；若选一次性转义现有数据，作为独立幂等步、可回滚（git）。
+- **无迁移**：现存池 0 行裸 `|`，reject 是纯写时新守卫，不触碰任何既有数据。
 - 回滚：本 change 纯 repo-local 脚本 + 测试，`git revert` 即恢复；无下游/bundle 影响面。
 
 ## Open Questions
 
-- T2：是否需要对**批次名**（`batches.md` 的 key、进 `|` 表列）同样施加 `|` 转义/拒绝？倾向拒绝（批次 key 应是干净 slug，含 `|` 本就异常）——待 spec/实现时定。
+- ~~T2 批次名是否也守卫~~ **已定**（grill）：batch key 纳入 table-cell-safe reject 范围（批次 key 应是干净 slug，含 `|`/换行本就异常）。
 - T5：`issues.py` 的 `cmd_batch_set_status` 是否也共享同一 dup？接地看它是独立路径（`issues.py:611`），暂不纳入 `_find_row_file` 抽取，待实现核对。
+
+## 上位关系（去字符串化机器状态层 roadmap）
+
+本 change 走 **Path A（现状 markdown 表 + reject 硬化）**，是刻意的短期务实解。更根的 **Path B（总览行结构化 = YAML frontmatter 索引 + prose 块）** 会让 T2 整个蒸发、删掉 recorder 里大片表解析/双写一致机械——但属范畴不同的大改，**不折进本 change**（fold-vs-defer 循环成本纪律）。B 与 **T65（gate 状态锚迁 frontmatter）同根**「去字符串化机器状态层」，二者合并为一个 roadmap 阶段统一权衡（见 todolist 交叉引用）。D1 选 reject 而非 escape，部分正因它是通往 B 的低成本桥：零机械投资、不挡未来结构化重构。

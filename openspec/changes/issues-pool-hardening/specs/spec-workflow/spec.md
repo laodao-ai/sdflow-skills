@@ -1,18 +1,18 @@
 ## ADDED Requirements
 
-### Requirement: recorder 字段内容安全——防 `|` 致表列腐蚀
+### Requirement: 总览表 row 字段 table-cell-safe（写时 reject 守盘面完整性）
 
-issues 池 recorder（`buglist.py` / `todolist.py` / `issues.py`）以 markdown 表存状态总览，其行解析按 `|` 切列。recorder SHALL 保证**字段值内的 ASCII `|` 不破坏列的位置解析**：写路径 MUST 把字段值（`module` / `summary` / 批次名等）里的 `|` 转义为 `\|`；解析器 MUST 按**未转义** `|` 切列、读出后反转义还原原值；读路径遇既有**未转义**（历史腐蚀）`|` MUST fail-safe——尽力解析、不抛异常、不产生二次腐蚀。此为系统性数据完整性保证，非单点修补。
+issues 池 recorder（`buglist.py` / `todolist.py` / `issues.py`）以 markdown 表存状态总览（「盘面即状态」的盘面），其行按 `|` 切列。recorder SHALL 在**写路径**保证进入总览表 row 的字段（`module` / `summary` / `change` / batch key）**table-cell-safe**：字段含 ASCII `|` **或**换行（会致列错位 / 整行截断而腐蚀盘面）时 MUST 拒绝写入（`_die` 报清晰错误，复用既有 priority/status 非法即拒的写时校验惯例），MUST NOT 静默转义或替换。详细块的 prose 字段（现象/根因/修复等）不受此约束（非 `|` 分隔表）。此为写时 fail-closed 守卫，非事后解析补救。
 
-#### Scenario: 含 `|` 字段存取往返逐字节一致
+#### Scenario: 字段含 `|` 或换行被写时拒绝
 
-- **WHEN** 记录一条 `summary` 或 `module` 字段含 ASCII `|` 的 item（如命令 `grep a | b`）
-- **THEN** 写入表中为转义形式 `\|`，后续 `scan` / `set-status` 读回的字段值与原文逐字节一致，且该行及后续列不发生错位
+- **WHEN** 记录或回写一条 item，其 `summary` / `module` / `change` / batch key 含 ASCII `|` 或换行
+- **THEN** recorder 以清晰错误拒绝写入（`_die`），不产生任何列错位 / 行截断的腐蚀盘面，并提示改写
 
-#### Scenario: 旧裸 `|` 腐蚀行解析不 crash
+#### Scenario: 详细块 prose 不受 table-cell-safe 约束
 
-- **WHEN** 解析一个字段含**未转义** `|` 的历史遗留行
-- **THEN** 解析器不抛异常、尽力还原可读列、不对该行做二次腐蚀（fail-safe 降级而非崩溃）
+- **WHEN** 一条 item 的详细块字段（现象 / 根因 / 修复等 prose）含 `|` 或换行
+- **THEN** 正常写入（详细块非 `|` 分隔表、无腐蚀风险），不被拒绝
 
 ### Requirement: reindex 一致性问题可观测且不阻断重建
 
