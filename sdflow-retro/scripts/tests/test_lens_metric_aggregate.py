@@ -327,3 +327,32 @@ def test_dual_parser_cross_assert():
     assert e["layer"] == block["layer"]
     assert e["lens"] == block["lens"]
     assert e["runner"] == block["runner"]
+
+
+def test_fence_core_cross_equivalence():
+    # [impl-review-fix] F10 fence 核交叉断言：两个独立实现（anchor_lint.fence_outside_lines
+    # 与 lens_metric_aggregate._fence_aware_lines）对同一批边界样本必须逐样本产出等价的
+    # fence-outside 行序列——防止两处重实现的 fence 语义悄悄漂移。
+    spec = importlib.util.spec_from_file_location("anchor_lint", _ANCHOR_LINT)
+    al = importlib.util.module_from_spec(spec); spec.loader.exec_module(al)
+
+    samples = [
+        # 1) 未闭合 fence：尾部行按两实现约定的偏保守语义都应视为 fence 内（不产出）
+        "正文\n```\n" + ANCHOR + "\n",
+        # 2) ~~~ vs ``` ：tilde fence 内容跳过，非同字符不构成闭合
+        "a\n~~~\n" + ANCHOR + "\n```\n仍在 tilde 块内\n~~~\n块外\n",
+        # 3) 0-3 空格缩进仍是合法 fence
+        "x\n   ```\n" + ANCHOR + "\n   ```\n块外\n",
+        # 4) 4 空格缩进不构成 fence（代码块，非 fence 开启）
+        "普通段落\n    ```\n" + ANCHOR + "\n    ```\n",
+        # 5) 闭合行带尾内容非法闭合（CommonMark：闭合行 marker 后只能有空白）
+        "```\n" + ANCHOR + "\n``` extra\n仍在 fence 内\n```\n块外\n",
+        # 6) 闭合 marker 比开启更长仍合法闭合（≥ 同字符 marker 长度即可）
+        "```\n" + ANCHOR + "\n`````\n块外\n",
+        # 7) 4-反引号外层包 3-反引号内层：内层不构成外层闭合
+        "正文\n````\n```\n" + ANCHOR + "\n```\n````\n正文2\n",
+        # 8) 普通行，无 fence
+        "普通行1\n普通行2\n",
+    ]
+    for s in samples:
+        assert list(al.fence_outside_lines(s)) == list(lma._fence_aware_lines(s)), repr(s)

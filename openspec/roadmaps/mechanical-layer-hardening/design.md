@@ -136,7 +136,7 @@ Leg 2 S2（家族② recorder 索引，north-star，ROI 触发才起）：
 | 编号 | 候选 | 现在模型/人做什么 | 下沉成 | 保留给模型/人 | ROI | 落点阶段 |
 |---|---|---|---|---|---|---|
 | P1 | `issues.py sweep --change X` | done §2.1 手跑 4 步 bash（scan两池→逐id triage→batch add→reindex） | 一个原子子命令 | 无（纯机械） | 高 | 阶段 1 |
-| P2 | anchor-lint 产出侧校验器 | 出报告后手 grep 四类 v1 锚 + 肉眼核 enum/子格式 | `anchor_lint.py`（复用 `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`，度量锚变长 KV 走前缀匹配，**非** gate 锚定长整行原语；enum 从 contract 单一源读） | `findings=N` 与实收数的数值一致性 | 高 | 阶段 2 |
+| P2 | anchor-lint 产出侧校验器 | 出报告后手 grep 四类 v1 锚 + 肉眼核 enum/子格式 | `anchor_lint.py`（脚本内重实现同款逻辑，跨 skill import 消费仓 break，非复用 `lens_metric_aggregate.parse_anchor`/`_fence_aware_lines`；度量锚变长 KV 走前缀匹配，**非** gate 锚定长整行原语；enum 从 contract 单一源读）[impl-review-fix F8] | `findings=N` 与实收数的数值一致性 | 高 | 阶段 2 |
 | P3 | recorder 镜像 helper 一致性（3 向 3 个 / 2 向 8 个，见决策 7） | 靠 docstring「镜像 buglist」注释维系，无测试 | `inspect.getsource` 相等断言（不破 D4 隔离） | — | 高 | 阶段 3 |
 | P4 | config.yaml + batches.md lint | 无 validator；`优先级`/`计划` 只挡 `\|`/换行不校验取值 | `config_lint`（yaml 可解析+必填键+tier 枚举）+ `batch lint`（优先级枚举、计划非占位） | — | 高 | 阶段 3 |
 | P5 | embedded-test-sop 日志判定 | 手读长串口日志逐条按 `log-checks.yaml` 匹配 | `log_check.py` 解释器（时间窗+子串+severity rollup） | yaml 标「需人眼」的平台侧项 | 中 | 阶段 4 |

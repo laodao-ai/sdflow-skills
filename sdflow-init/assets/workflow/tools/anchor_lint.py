@@ -38,7 +38,7 @@ def load_enums(contract_path=None):
     p = Path(contract_path) if contract_path else _default_contract()
     try:
         text = p.read_text(encoding="utf-8")
-    except OSError as e:
+    except (OSError, UnicodeDecodeError) as e:  # [impl-review-fix] F4
         raise EnumsError(f"契约不可读: {p}: {e}")
     lines = text.splitlines()
     body, in_block, fence_char, fence_len = [], False, None, 0
@@ -93,7 +93,9 @@ def anchor_prefix(line):
     s = line.strip()
     for pref, name in ANCHOR_PREFIXES.items():
         if s.startswith(pref):
-            return name
+            rest = s[len(pref):]                              # [impl-review-fix] F5 token 边界
+            if rest == "" or rest[0].isspace() or rest.startswith("-->"):
+                return name
     return None
 
 
@@ -101,7 +103,6 @@ class MetricsError(Exception):
     pass
 
 
-_TOP_KEY = re.compile(r'^\S')                              # 顶层键：行首非空白
 _ENABLED = re.compile(r'^\s+enabled:\s*(true|false)\s*$')  # metrics 块内合法布尔（仅小写 true/false）
 
 
@@ -112,13 +113,17 @@ def read_metrics_enabled(root):
     cfg = Path(root) / "openspec" / "config.yaml"
     try:
         lines = cfg.read_text(encoding="utf-8").splitlines()
-    except OSError:
+    except FileNotFoundError:
         return False                                        # ①
+    except (OSError, UnicodeDecodeError) as e:               # [impl-review-fix] F2 fail-open→fail-closed
+        raise MetricsError(f"config 读取失败(非缺失): {e}")
     idx = next((i for i, ln in enumerate(lines) if ln.rstrip() == "metrics:" or ln.startswith("metrics:")), None)
     if idx is None:
         return False                                        # ②
     for ln in lines[idx + 1:]:                              # ③④ 块内至下一顶层键
-        if _TOP_KEY.match(ln) and not ln.startswith(" "):
+        if ln.strip() == "" or ln.strip().startswith("#"):   # [impl-review-fix] F3 跳注释/空行
+            continue
+        if not ln.startswith((" ", "\t")):                    # 下一顶层键（非缩进）
             break
         m = _ENABLED.match(ln)
         if m:
@@ -166,15 +171,15 @@ def check_lens_metric(report_text, cli_layer, enums):
         for f in REQUIRED_FIELDS:
             if f not in kv:
                 v.append({"anchor": ln.strip()[:80], "field": f, "kind": "missing-field"})
-        if kv.get("layer") and kv["layer"] not in enums["layer"]:
+        if "layer" in kv and kv["layer"] not in enums["layer"]:  # [impl-review-fix] F1 存在性判断，空串落违规
             v.append({"anchor": ln.strip()[:80], "field": "layer", "kind": "out-of-enum"})
-        if kv.get("layer") and kv["layer"] != cli_layer:
+        if "layer" in kv and kv["layer"] != cli_layer:  # [impl-review-fix] F1
             v.append({"anchor": ln.strip()[:80], "field": "layer", "kind": "layer-ne-cli"})
-        if kv.get("lens") and kv["lens"] not in enums["lens"]:
+        if "lens" in kv and kv["lens"] not in enums["lens"]:  # [impl-review-fix] F1
             v.append({"anchor": ln.strip()[:80], "field": "lens", "kind": "out-of-enum"})
-        if kv.get("runner") and kv["runner"] not in enums["runner"]:
+        if "runner" in kv and kv["runner"] not in enums["runner"]:  # [impl-review-fix] F1
             v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "out-of-enum"})
-        if kv.get("sev") and not enums["sev_re"].match(kv["sev"]):
+        if "sev" in kv and not enums["sev_re"].match(kv["sev"]):  # [impl-review-fix] F1
             v.append({"anchor": ln.strip()[:80], "field": "sev", "kind": "bad-subformat"})
         for cf in COUNT_FIELDS:
             if cf in kv and not _NONNEG_INT.match(kv[cf]):
@@ -191,7 +196,7 @@ def main(argv=None):
     # 1) 读报告（fail-closed）
     try:
         report_text = Path(args.report).read_text(encoding="utf-8")
-    except OSError as e:
+    except (OSError, UnicodeDecodeError) as e:  # [impl-review-fix] F4
         print(f"[anchor_lint] ERROR 读不到报告: {args.report}: {e}", file=sys.stderr)
         print(json.dumps({"result": "ERROR", "reason": "report-unreadable"}, ensure_ascii=False))
         return EXIT_ERROR

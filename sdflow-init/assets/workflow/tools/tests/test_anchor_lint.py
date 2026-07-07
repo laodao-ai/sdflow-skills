@@ -35,9 +35,13 @@ def test_fence_outside_excludes_demo_anchor():
 def test_anchor_prefix_four_families():
     al = _mod()
     assert al.anchor_prefix('<!-- sdflow:hr-tg v1 hit="none" -->') == "hr-tg"
-    assert al.anchor_prefix('note <!-- sdflow:hr-tg v1 --> inline') is None or True  # 描述性内联(前缀非行首)
+    assert al.anchor_prefix('note <!-- sdflow:hr-tg v1 --> inline') is None  # [impl-review-fix] F7 去恒真
     assert al.anchor_prefix('<!-- sdflow:step1-broad-review v1 mode="native" -->') == "step1-broad-review"
     assert al.anchor_prefix('plain text') is None
+
+def test_version_token_boundary():                     # [impl-review-fix] F5 补测：v10 不当 v1
+    al = _mod()
+    assert al.anchor_prefix('<!-- sdflow:lens-metric v10 layer="x" -->') is None
 
 
 def _write_config(tmp_path, body):
@@ -64,6 +68,10 @@ def test_metrics_true(tmp_path):                                          # ④
 def test_metrics_block_boundary(tmp_path):                                # 块边界：另一段的 enabled 不误读
     al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: false\nother:\n  enabled: true\n")
     assert al.read_metrics_enabled(root) is False
+
+def test_metrics_top_comment_between(tmp_path):        # [impl-review-fix] F3 补测：顶层注释/空行不误判块边界
+    al = _mod(); root = _write_config(tmp_path, "metrics:\n# 注释\n  enabled: true\n")
+    assert al.read_metrics_enabled(root) is True
 
 
 def test_existence_missing_mandatory(tmp_path):
@@ -119,6 +127,36 @@ def test_missing_required_field():
     anchor = '<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" -->'  # 缺多字段
     v = al.check_lens_metric(anchor, "code-review", _enums())
     assert any(x["field"] == "runner" for x in v)
+
+def test_empty_field_rejected():                            # [impl-review-fix] F1 补测：空串须落违规
+    al = _mod(); enums = _enums()
+    assert any(x["field"] == "layer" for x in al.check_lens_metric(_lm(layer=""), "code-review", enums))
+    assert any(x["field"] == "lens" for x in al.check_lens_metric(_lm(lens=""), "code-review", enums))
+    assert any(x["field"] == "runner" for x in al.check_lens_metric(_lm(runner=""), "code-review", enums))
+    assert any(x["field"] == "sev" for x in al.check_lens_metric(_lm(sev=""), "code-review", enums))
+
+def test_numeric_consistency_not_checked():                 # [impl-review-fix] F9 诚实边界：数值一致性脚本不兜
+    al = _mod()
+    v = al.check_lens_metric(_lm(findings="99"), "code-review", _enums())  # findings 与"实收数"不符也合法
+    assert v == []
+
+def test_min_required_both_present_ok():                    # [impl-review-fix] F11 正例：broad+outside-voice 都在
+    al = _mod()
+    report = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+              '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+              '<!-- sdflow:lens-metric v1 layer="code-review" lens="broad" runner="claude" -->\n'
+              '<!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" runner="claude" -->\n')
+    v = al.check_existence(report, "code-review", metrics_on=True)
+    assert not any(x["kind"] == "missing-lens-row" for x in v)
+
+def test_min_required_single_missing():                     # [impl-review-fix] F11 单缺：只缺 broad
+    al = _mod()
+    report = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+              '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+              '<!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" runner="claude" -->\n')
+    v = al.check_existence(report, "code-review", metrics_on=True)
+    missing = {x["detail"] for x in v if x["kind"] == "missing-lens-row"}
+    assert missing == {"broad"}
 
 
 def _run(report_path, layer, root=None):
