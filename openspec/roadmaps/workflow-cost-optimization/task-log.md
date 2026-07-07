@@ -11,6 +11,20 @@
 
 ---
 
+## 2026-07-07
+
+### [阶段 4] 批次策略交付并归档（进度同步补记）
+- **状态**: ✅ 完成（承载 change `batch-triage-strategy`，2026-07-06 archive + merge `725caf3`；本条为 roadmap 状态回填，实施发生在上一 session）
+- **交付**（逐条对上 roadmap 阶段 4 交付物）:
+  - `consolidation-plan.md` 按框架重划——相关项走 BASE-18 AND 门、散落琐碎正交项归「大扫除批」。
+  - `openspec/issues/batch-triage-rules.md`（**新，本仓-local**）——大扫除批 3 硬 MUST + fail-closed + 聚合上限（文件数/目录跨度/生成物/CI 面积）+ issue 级近似判据（采纳 Leg1 行为面路径守卫，`SKILL.md`/`*/assets/workflow/*` 硬排除）。
+  - INDEX 登记 `batch-triage` capability；spec 同步至 `specs/batch-triage`。
+- **设计偏移（spec-review Q2 定案，须记档）**: roadmap 阶段 4 原写「workflow 规则补批次判据」（暗示进 bundle），实际 **Q2 定案=本仓-local**——判据 **MUST NOT 进 bundle、MUST NOT 部署下游**，向下游发布 **deferred** 到本仓 dogfood 验证后（对齐 Leg1）。冷源接地证实原「普通 update 回灌」是**事实性错误**（D6 修正）。判据为**纯规则 checklist、无 scripts/无 pytest**。
+- **本仓 dogfood caveat**: 本仓多数 issues debt 落行为面文件（SKILL.md/bundle）→ 大扫除批**候选池薄**，本仓实际价值待 dogfood 实测（change §5.4 注记 + 后续 `0e07c35`）。
+- **对 roadmap 的影响**: 概览表/阶段 4/依赖图/建议次序同步为 v4——P4 标 ✅，剩 P2/P3 走 Leg2 串行区（P2 先、P3 压后）。**Leg3（降轮次=墙钟主杠杆）首个阶段已落地。**
+
+---
+
 ## 2026-07-06
 
 ### [explore] P0 分析收口 → 基线证伪 P2 墙钟杠杆、定收益门槛

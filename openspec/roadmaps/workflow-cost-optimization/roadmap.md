@@ -1,5 +1,6 @@
 # workflow 成本优化 实施路线图
 
+> 版本：v4（2026-07-07，进度同步：**P4（批次策略）已交付并归档**——change `batch-triage-strategy` merged `725caf3`；剩 P2/P3 待做）
 > 版本：v3（2026-07-06，P0 基线收口：`sdflow-retro` 18-change 实测 → P2 墙钟杠杆证伪、重定位 token play、Leg3 提为墙钟主杠杆、砍镜闸门定案）
 > 版本：v2（2026-07-06，吸收 plan-eng-review 交叉审：codex 冷审 30 条去重后 9 组采纳）
 >
@@ -18,7 +19,7 @@
 | **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | ✅ **已收口**（`sdflow-retro` 全 18-change 聚合 + 收益门槛定案，见下「阶段 0」+ requirements §5）；照妖镜结论：spec-review 43%（人类门主导）、code-review 5%、**P2 墙钟证伪→改 token play** |
 | **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | `model-tiers.md` 升 3档×运行时矩阵、SKILL fan-out **报档位不写死模型**、机械镜实降 light（**主收益=省 token**，墙钟**不回归**即可，见 D11）、fail-closed；含 P2b 后台小尾巴 |
 | **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
-| **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | 无 | consolidation-plan 重划 + 正交批安全判据**+ 聚合上限** |
+| **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | —（已交付） | ✅ consolidation-plan 重划 + 大扫除批 3 硬 MUST + 聚合上限 + issue 级 Leg1 路径守卫（change `batch-triage-strategy` merged `725caf3`；规则**本仓-local**、发布 deferred，见阶段 4 状态段） |
 
 > 每阶段开独立 OpenSpec 变更（`implement-workflow-cost-optimization-pN` 或语义名），完成归档后进下一个。
 > **并行 caveat（交叉审 #29）**：P0/P1/P4 触及互斥文件可并行；**P2/P3 均改 `sdflow-spec-review`/`sdflow-code-review` 的 SKILL.md，MUST 串行**（否则并行改同批规则→审查上下文错位 + merge 冲突）。开并行 leg 前先核文件集是否相交。
@@ -133,7 +134,12 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 
 ---
 
-## 阶段 4 · 批次策略：相关合批 + 大扫除批（Leg 3，交叉审 #7/#20/#21）
+## 阶段 4 · 批次策略：相关合批 + 大扫除批（Leg 3，交叉审 #7/#20/#21，✅ 已交付）
+
+### 状态
+**已完成并归档**。change `batch-triage-strategy`（plan → impl 3 → code-review 8 自修 → verify → archive + merge `725caf3`）交付全部子任务。
+- **设计偏移（spec-review Q2 定案）**：判据规则**未进 bundle**——落 `openspec/issues/batch-triage-rules.md`（**本仓-local**），冷源接地证实原「workflow 规则/bundle 回灌」是事实性错误；**向下游发布 deferred**（对齐 Leg1：本仓 dogfood 验证有效才进 bundle）。判据=**纯规则 checklist、无 scripts/无 pytest**。
+- **本仓 dogfood caveat**：本仓多数 issues debt 落行为面文件（SKILL.md/bundle）→ 大扫除批**候选池薄**，其在本仓实际价值待 dogfood 实测（见 change §5.4 注记）。
 
 ### 前置条件
 无。
@@ -164,11 +170,11 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
                           │          │
                           │          ▼
                           └──▶ P3 (接地镜流水线, P2 后更稳)
-  P4 (Leg3 批次) ──独立──▶ 交付
+  P4 (Leg3 批次) ──独立──▶ ✅ 已交付（batch-triage-strategy merged 725caf3）
 ```
 
 - **P0 是 P2/P3 的前置**（无基线不立项；且 P0 双峰数据可能直接告诉你 P2 只对小 change 值得）。
 - **P2/P3 同改两评审 SKILL.md → MUST 串行**（并行 caveat #29）。
 - P4 触及 `consolidation-plan.md`/`ff-generation-constraints.md`，与 P2/P3 文件互斥 → 可与之并行。
 
-**建议次序（P0 已收口后更新）：P4（Leg3 批次策略——P0 证明它才是聚合墙钟真杠杆，且文件互斥可与 P2 并行）＋ P2（档位矩阵，主收益 token）并行 → P3（流水线，调度复杂度最高，压后）**。较原 v1/v2「P2 整块提前」再调整——P0 数据把 Leg3 从「随时可做的轻策略层」提为「墙钟主杠杆」，宜与 P2 同期起（P2 省 token、P4 省墙钟，两轴互补）；P3 仍压后（先有 P2 观测/矩阵再进串行调度区，交叉审 #30）。
+**建议次序（v4 更新，P4 已交付）：~~P4~~ ✅ 已归档 → 余 P2（档位矩阵，主收益 token）先做 → P3（流水线，调度复杂度最高，压后）**。原 v3 建议「P4 ＋ P2 并行」中的 **P4 已由 `batch-triage-strategy` 独立交付**（P0 数据把 Leg3 从「随时可做的轻策略层」提为「墙钟主杠杆」，故先落）；剩 P2/P3 走 Leg2 串行区——P2 先（档位矩阵 + 观测在手），P3 压后（先有 P2 观测/矩阵再进串行调度区，交叉审 #30）。**注意 P2/P3 同改两评审 SKILL.md，MUST 串行。**
