@@ -6,11 +6,11 @@
 
 | ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
 |----|------|------|------|------|------|------------|------|
-| T1 | `issues.py` | reindex 回显子进程 scan 的 problems 到 stderr（补齐独立跑 reindex 时表↔块不一致的可见性，D5 承诺） | 可观测性 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
-| T2 | `recorder` | 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
-| T3 | `issues.py` | 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
-| T4 | `issues.py` | batch add 加 --if-exists skip 幂等选项；batch rename 后自动 reindex（或 SKILL 提示 rename 后跑 reindex） | 功能增强 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
-| T5 | `recorder` | 补 WONTDO / 0成员人标IN_PROGRESS 分支测试；抽 _find_row_file 消除 triage 与 set-status 定位逻辑重复（4处） | 代码质量 | PROPOSED | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T1 | `issues.py` | reindex 回显子进程 scan 的 problems 到 stderr（补齐独立跑 reindex 时表↔块不一致的可见性，D5 承诺） | 可观测性 | DONE | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T2 | `recorder` | 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性） | 代码质量 | DONE | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T3 | `issues.py` | 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移） | 代码质量 | DONE | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T4 | `issues.py` | batch add 加 --if-exists skip 幂等选项；batch rename 后自动 reindex（或 SKILL 提示 rename 后跑 reindex） | 功能增强 | DONE | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+| T5 | `recorder` | 补 WONTDO / 0成员人标IN_PROGRESS 分支测试；抽 _find_row_file 消除 triage 与 set-status 定位逻辑重复（4处） | 代码质量 | DONE | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
 | T6 | `opsx-project-init/scripts/init.py` | 两个全局 hook 仅装 Claude 侧、Codex 会话静默不生效 | 基础设施 | PROPOSED | 2026-07-03 11:35 | minimize-repo-footprint | minimize-repo-footprint |
 | T7 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 | 可观测性 | PROPOSED | 2026-07-03 13:57 | minimize-repo-footprint | minimize-repo-footprint |
 | T8 | `impl-review/SKILL.md` | 置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核 | 功能增强 | PROPOSED | 2026-07-03 13:58 | minimize-repo-footprint | minimize-repo-footprint |
@@ -71,8 +71,8 @@
 | T63 | `sdflow-init/scripts/init.py:inject/_find_all_marker_lines` | inject 多块收敛须 fence-aware + start/end 配对校验（naive collapse 已回退） | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
 | T64 | `sdflow-init/scripts/init.py:_atomic_write_settings` | settings.json 原子写 tmp 改唯一名（tempfile.mkstemp）关闭无锁降级路径撕裂 | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
 | T65 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` | gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类 | 基础设施 | OPEN | 2026-07-07 09:34 | main |  |
-| T66 | `cmd_scan(buglist/todolist) + cmd_batch_rename(issues)` | recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化 | 性能优化 | OPEN | 2026-07-07 13:03 | issues-pool-hardening |  |
-| T67 | `cmd_add id 校验(buglist/todolist)` | 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55) | 代码质量 | OPEN | 2026-07-07 13:03 | issues-pool-hardening |  |
+| T66 | `cmd_scan(buglist/todolist) + cmd_batch_rename(issues)` | recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化 | 性能优化 | PROPOSED | 2026-07-07 13:03 | issues-pool-hardening | issues-pool-hardening |
+| T67 | `cmd_add id 校验(buglist/todolist)` | 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55) | 代码质量 | PROPOSED | 2026-07-07 13:03 | issues-pool-hardening | issues-pool-hardening |
 
 ---
 
@@ -875,3 +875,63 @@
 **思路**：scope 严格收窄到家族①（gate 状态判据）——家族③逐条 inline tag（[impl-review-fix]/〔TG-N〕/task<N>/item ID，位置相关）和家族④模版槽位占位（<待填>等）明确留 inline，不搬。须评估三处风险：①bundle 爆炸半径（ship_gate.py+报告模版+生产者 SKILL.md 全在 assets/workflow/ 铺下游 → 改权威源+sdflow-init update 回灌所有消费仓，高仪式单开 change，行为面路径硬排除、绝不 fold/sweep）；②LLM 产报告写坏 YAML → safe_load 抛的兜底策略（比缺 inline 锚更糙的失败面）；③57 篇归档报告是 inline 锚 → gate/corpus 的兼容窗口/dual-read。
 
 **备注**：够格作为 workflow-cost-optimization roadmap 的一个阶段（与『评审机器复杂度』直接相关）。动机证据=buglist B4/B5。别在清理惯性里反应式开工——正式评估 ROI（inline 锚这套是否会反复出同类 bug）后再决定做不做。
+
+---
+
+## T1: reindex 回显子进程 scan 的 problems 到 stderr（补齐独立跑 reindex 时表↔块不一致的可见性，D5 承诺）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `issues.py` |
+| 类型 | 可观测性 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（issues-pool-hardening 实现(SDD 10任务+code-review 6 fix), 全仓552 passed）
+
+---
+
+## T2: 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `recorder` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（issues-pool-hardening 实现(SDD 10任务+code-review 6 fix), 全仓552 passed）
+
+---
+
+## T3: 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `issues.py` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（issues-pool-hardening 实现(SDD 10任务+code-review 6 fix), 全仓552 passed）
+
+---
+
+## T4: batch add 加 --if-exists skip 幂等选项；batch rename 后自动 reindex（或 SKILL 提示 rename 后跑 reindex）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `issues.py` |
+| 类型 | 功能增强 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（issues-pool-hardening 实现(SDD 10任务+code-review 6 fix), 全仓552 passed）
+
+---
+
+## T5: 补 WONTDO / 0成员人标IN_PROGRESS 分支测试；抽 _find_row_file 消除 triage 与 set-status 定位逻辑重复（4处）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `recorder` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（issues-pool-hardening 实现(SDD 10任务+code-review 6 fix), 全仓552 passed）

@@ -4,7 +4,7 @@
 
 ### issues-pool-hardening — issues-pool-batch-mgmt
 状态: PLANNED
-成员: (生成) T1, T2, T3, T4, T5
+成员: (生成) T1, T2, T3, T4, T5, T66, T67
 优先级: P2
 计划: issues.py/recorder 健壮性：problems 回显·含｜字段转义防列腐蚀·终态集跨脚本守卫测试·batch 幂等选项·_find_row_file 抽取去重
 

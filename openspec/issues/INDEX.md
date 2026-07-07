@@ -24,11 +24,8 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T1 | todo | PROPOSED | issues-pool-batch-mgmt |
-| T2 | todo | PROPOSED | issues-pool-batch-mgmt |
-| T3 | todo | PROPOSED | issues-pool-batch-mgmt |
-| T4 | todo | PROPOSED | issues-pool-batch-mgmt |
-| T5 | todo | PROPOSED | issues-pool-batch-mgmt |
+| T66 | todo | PROPOSED | issues-pool-hardening |
+| T67 | todo | PROPOSED | issues-pool-hardening |
 
 ### 批次：minimize-repo-footprint
 
@@ -109,4 +106,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 29 项已闭合（bug: 5，todo: 24）
+- 共 34 项已闭合（bug: 5，todo: 29）
