@@ -260,6 +260,22 @@ class TestCellSafety:
             for f in d.glob("*-buglist.md"):
                 assert "EVIL" not in f.read_text(encoding="utf-8")
 
+    def test_triage_rejects_pipe_in_batch(self, tmp_path):
+        """C1 BLOCKER 补漏：triage 也把批次写进总览管道表 cells[7]，同款守卫必须覆盖，
+        不能只在 add 入口挡。传入含 `|` 的批次值应 fail-closed，且该行 cells[7] 不被腐蚀。"""
+        _write_mixed_file(tmp_path / "openspec" / "issues" / "buglist", "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "triage",
+             "--id", "B1", "--批次", "evil|key"],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode != 0
+        assert "ERROR" in proc.stderr
+        content = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(encoding="utf-8")
+        assert "evil|key" not in content
+
 
 class TestAtomicWrite:
     def test_writes_content_and_creates_parent_dir(self, tmp_path):

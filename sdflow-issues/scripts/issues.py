@@ -297,8 +297,8 @@ def _reject_cell_unsafe(value, field):
     """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
     MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。
     与 buglist.py / todolist.py 的同名函数逐字同款（三脚本各自独立、不互相 import，
-    见模块 docstring "子进程解耦"）。本文件当前无写表字段的命令入口调用它——留作
-    后续任务（本脚本 batch add/rename 等写路径）复用的 helper。"""
+    见模块 docstring "子进程解耦"）。挂在 `_retag_items_in_dated_files`（`batch rename`
+    的跨池同步写路径，写 cells[7]）入口，守的是 `new_key` 原始参数。"""
     if value is None:
         return
     if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
@@ -669,6 +669,7 @@ def _retag_items_in_dated_files(root, items, old_key, new_key):
     每个受影响文件只读一次、原地改完全部命中行、写一次（`atomic_write`）——不会对同一
     文件重复打开写入。返回 `[{"pool", "id", "file"}, ...]`（改动了哪些项，供调用方汇报/测试）。
     """
+    _reject_cell_unsafe(new_key, "new_key")
     targets = [it for it in items if it.get("batch") == old_key]
     by_file = {}
     for it in targets:

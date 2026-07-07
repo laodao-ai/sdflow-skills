@@ -516,6 +516,7 @@ def cmd_triage(args):
     open_untriaged = set(STATUS_CODES) - {"FIXED", "WONTFIX", "PROPOSED"}
     new_status = "PROPOSED" if old_status in open_untriaged else old_status
 
+    _reject_cell_unsafe(batch, "batch")
     cells[4] = new_status
     while len(cells) < 8:  # 旧格式（无批次列）行防御式补齐，不越界写 cells[7]
         cells.append("")

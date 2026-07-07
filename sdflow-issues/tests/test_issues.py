@@ -650,6 +650,40 @@ class TestBatchRename:
         assert "### a — A" in content
         assert "### b — B" in content
 
+    def test_batch_rename_rejects_pipe_in_new_key(self, tmp_path):
+        """C1 BLOCKER 补漏：rename 把 new_key 写进跨池 item 的总览管道表 cells[7]
+        （`_retag_items_in_dated_files`），同款守卫必须覆盖 add 之外的这条写路径。
+        含 `|` 的 new_key 应 fail-closed，且已有成员行的 cells[7] 不被腐蚀。"""
+        _write_batches_md(tmp_path, [
+            "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": "old-batch"},
+        ])
+        proc = _run_batch_raw(tmp_path, ["rename", "old-batch", "evil|key"])
+        assert proc.returncode != 0
+        assert proc.stderr.strip() != ""
+        text = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(
+            encoding="utf-8")
+        b1_line = next(l for l in text.splitlines() if l.strip().startswith("| B1"))
+        assert "evil|key" not in b1_line
+        assert "old-batch" in b1_line
+
+    def test_batch_rename_rejects_newline_in_new_key(self, tmp_path):
+        _write_batches_md(tmp_path, [
+            "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
+            "优先级: P1\n", "计划: x\n",
+        ])
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": "old-batch"},
+        ])
+        proc = _run_batch_raw(tmp_path, ["rename", "old-batch", "evil\n| EVIL | ROW |"])
+        assert proc.returncode != 0
+        text = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(
+            encoding="utf-8")
+        assert "EVIL" not in text
+
 
 class TestReindexSyncBatchesMembers:
     """Task 11 载重约束 1（成员填充）：reindex 按 item 的批次 tag 聚合成员，
