@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 
 # [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 探测 3.6+ 才喂）：
@@ -240,6 +241,134 @@ def handle_config(root, mode):
         return ("exists", "config.yaml 已存在 → 模型合并「通用」context 段 + rules，保留「本项目」段与用户键")
     shutil.copyfile(tmpl, cfg)
     return ("created", "已从 config.template.yaml 生成 config.yaml → 填写「本项目」context 段")
+
+
+# ── config-lint（mlh-p3-determ-guards Task 2）──────────────────
+#
+# openspec/config.yaml 结构 fail-closed 校验门：只校验结构（顶层键存在 / 子键归属），
+# 不碰内容文案。**手写 stdlib 行级扫描**（follow anchor_lint.py::read_metrics_enabled 范式，
+# MUST NOT `import yaml`——本脚本被 symlink 进消费仓，消费仓多数无 PyYAML，import 会
+# ImportError 崩溃，与 fail-closed 相悖）。顶层块（model-tiers / metrics）「先探测存在再
+# 校验」，块整段缺失一律条件化放行（mlh-p2 假阳教训，memory dogfood-blind-spot-source-config：
+# sdflow-init update 从不注入新顶层键，故 100% 存量消费仓 config 无这些块，缺块是正常态、
+# 不是违规）；绝不裸 `cfg["k"]["j"]` 式取键，坏了是 KeyError 裸 traceback，不是人可读 reason。
+
+TIER_ALLOWED_SUBKEYS = {"strong", "mid", "light"}
+RULES_REQUIRED_SUBKEYS = ("proposal", "specs", "design", "tasks")
+
+
+def _find_top_level_block(lines, key):
+    """定位顶层 `<key>:` 行；返回 (key行索引, 块内容范围终点) 或 None（键整段不存在）。
+    「顶层」= 行首即键名（不缩进）；块终点 = 下一处非缩进/非空/非注释行（同 anchor_lint 的
+    「至下一顶层键前」口径），中途的空行/注释行跳过不计入终止判据。"""
+    start = None
+    for i, ln in enumerate(lines):
+        if ln.rstrip() == f"{key}:" or ln.startswith(f"{key}:"):
+            start = i
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for i in range(start + 1, len(lines)):
+        ln = lines[i]
+        if ln.strip() == "" or ln.strip().startswith("#"):
+            continue
+        if not ln.startswith((" ", "\t")):
+            end = i
+            break
+    return start, end
+
+
+def _second_level_keys(lines, start, end):
+    """在 [start+1, end) 范围内收集二级子键名（恰 2 空格缩进、非 3+ 空格、以 `:` 结尾的行）。
+    3+ 空格缩进的行是子键下的列表项/更深层级，不计入子键集合。"""
+    keys = set()
+    for ln in lines[start + 1:end]:
+        s = ln.strip()
+        if not s or s.startswith("#"):
+            continue
+        if ln.startswith("  ") and not ln.startswith("   ") and ":" in s:
+            keys.add(s.split(":", 1)[0].strip())
+    return keys
+
+
+def lint_config(root):
+    """校验 <root>/openspec/config.yaml 的结构，返回 reason 字符串列表（空 = 干净）。
+    校验项：① 顶层 `schema:` 键存在 ② 顶层 `rules:` 块存在且含 proposal/specs/design/tasks
+    四子键（无条件必填） ③ 顶层 `model-tiers:`（若存在）子键 ⊆ {strong,mid,light}
+    ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false}。config.yaml 本身缺失/不可读
+    单独报一条 reason（不当 KeyError 崩）。"""
+    cfg_path = os.path.join(root, "openspec", "config.yaml")
+    try:
+        with open(cfg_path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError as e:
+        return [f"config.yaml 不可读: {cfg_path}: {e}"]
+    lines = text.splitlines()
+    reasons = []
+
+    if _find_top_level_block(lines, "schema") is None:
+        reasons.append("缺顶层 schema: 键")
+
+    rules_block = _find_top_level_block(lines, "rules")
+    if rules_block is None:
+        reasons.append("缺顶层 rules: 块")
+    else:
+        start, end = rules_block
+        sub = _second_level_keys(lines, start, end)
+        missing = [k for k in RULES_REQUIRED_SUBKEYS if k not in sub]
+        if missing:
+            reasons.append(f"rules: 缺子键 {missing}（须含 proposal/specs/design/tasks）")
+
+    tiers_block = _find_top_level_block(lines, "model-tiers")  # 条件化：块整段缺失 → 跳过（放行）
+    if tiers_block is not None:
+        start, end = tiers_block
+        sub = _second_level_keys(lines, start, end)
+        bad = sorted(sub - TIER_ALLOWED_SUBKEYS)
+        if bad:
+            reasons.append(f"model-tiers: 子键越域 {bad}（须 ⊆ {{strong,mid,light}}）")
+
+    metrics_block = _find_top_level_block(lines, "metrics")  # 条件化：块整段缺失 → 跳过（放行）
+    if metrics_block is not None:
+        start, end = metrics_block
+        valid = False
+        for ln in lines[start + 1:end]:
+            s = ln.strip()
+            if not s or s.startswith("#"):
+                continue
+            if s.startswith("enabled:") and s.split(":", 1)[1].strip() in ("true", "false"):
+                valid = True
+        if not valid:
+            reasons.append("metrics: enabled 值非法或缺失（须为 true|false）")
+
+    return reasons
+
+
+def cmd_config_lint(root):
+    """跑 lint_config 并落 stdout/stderr + 退出码：干净 0，违规非零、reason 逐条 stderr。"""
+    reasons = lint_config(root)
+    if reasons:
+        for r in reasons:
+            print(f"[config-lint] VIOLATION: {r}", file=sys.stderr)
+        return 1
+    print("[config-lint] CLEAN", file=sys.stderr)
+    return 0
+
+
+def _git_root_or_dot():
+    """config-lint 专用 --root 缺省探测：`git rev-parse --show-toplevel` 探 git 仓根；
+    非 git 仓 / 命令失败 → 降级当前目录 "."（M7）。**不复用** init/update/retire-hooks 的
+    `default="."`——那三个 mode 的 "." 语义是「就地铺设/操作当前目录」，config-lint 校验的是
+    openspec/config.yaml，在 git 仓子目录里跑时应回溯到仓根而非误判"当前子目录没有 openspec/"。"""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        )
+        top = out.stdout.strip()
+        return top if top else "."
+    except (OSError, subprocess.CalledProcessError):
+        return "."
 
 
 def ensure_global_hook(spec):
@@ -551,18 +680,24 @@ def _die(msg):
 
 def main():
     p = argparse.ArgumentParser(description="把 openspec/workflow bundle 铺进项目")
-    p.add_argument("mode", choices=["init", "update", "retire-hooks"],
-                   help="init=首次铺设 / update=重拉最新 bundle / retire-hooks=只反注册退役 hook（自愈，不碰 openspec/）")
-    p.add_argument("--root", default=".", help="目标项目根（默认当前目录）")
+    p.add_argument("mode", choices=["init", "update", "retire-hooks", "config-lint"],
+                   help="init=首次铺设 / update=重拉最新 bundle / retire-hooks=只反注册退役 hook（自愈，"
+                        "不碰 openspec/） / config-lint=校验 openspec/config.yaml 结构（fail-closed）")
+    p.add_argument("--root", default=None,
+                   help="目标项目根（init/update/retire-hooks 默认当前目录；config-lint 缺省探 git 仓根，"
+                        "非 git 仓降级当前目录）")
     p.add_argument("--dev", action="store_true",
                    help="update 专用：整 bundle 刷新（toolkit 源仓 dogfood 用，消费仓勿用）")
     args = p.parse_args()
+    if args.mode == "config-lint":         # 早分支：mode 第 4 值，不引入 add_subparsers 重构
+        root = args.root if args.root is not None else _git_root_or_dot()
+        sys.exit(cmd_config_lint(root))
     if args.mode == "retire-hooks":       # A4: 早分支，先于 osroot/dev——只自愈全局 hook，与项目无关
         print("退役 hook 清理：\n" + retire_hooks())
         return
     if args.dev and args.mode != "update":
         _die("--dev 仅配 update 使用")
-    run(args.root, args.mode, dev=args.dev)
+    run(args.root if args.root is not None else ".", args.mode, dev=args.dev)
 
 
 if __name__ == "__main__":
