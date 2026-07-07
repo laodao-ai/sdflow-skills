@@ -102,6 +102,18 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         无假过风险，B4/B5 根治）。归档读 dual-read 侧仍保留旧语义：好 frontmatter 判定后不再
         交叉扫同文件残留 inline 锚（frontmatter 有效即唯一真相源；旧归档 absent 才回退 inline）。
         此盲区随 live 退役彻底收敛，仅归档 dual-read 保留"好 frontmatter 不交叉扫 inline"，接受。
+    〔impl-review-fix A1 多块 stale-first-block〕D2「只认 frontmatter 首块」为自指免疫**有意**
+        牺牲全文冲突检测：本仓报告正文常讨论 ship-gate frontmatter（含 body 内示例块），若报告
+        顶部残旧首块 + 下方追加新块，只读首块。缓解=producer MUST 覆写首块 + verify-report 每次
+        fresh 写。MUST NOT 改为「第二块存在→fail」（会重开自指陷阱，误崩讨论 frontmatter 的合法
+        报告）。断言钉死：test_second_frontmatter_block_ignored_by_design。
+    〔impl-review-fix 引号值严格〕`verify: "PASS"`（带引号）→ out-of-domain（有意，enum 严格
+        字面匹配，不做 YAML 引号剥离）。断言钉死：test_quoted_value_is_strict。
+    〔impl-review-fix B3 归档 encoding〕run_git/run_git_rc 用 subprocess 默认 locale 解码
+        （errors="replace"），与 live 本地读 `read_text(encoding="utf-8")` 不对称（pre-existing
+        惯例）；非 UTF-8 locale + 归档报告含 BOM/非 ASCII frontmatter 时，git-show 文本解码差异
+        可能令 parse 判 false absent → 归档回退 inline（方向安全：假阴漏判，非假阳假过）。仅登记，
+        不改 subprocess（pre-existing，超本 change scope）。
 """  # [impl-review-fix]
 import argparse
 import json
@@ -248,8 +260,10 @@ def is_stale(root, rel, scope, change):
 def _line_scoped_hits(text, candidates):
     """文本级行锚定核心（零正则）：候选须独占一行（strip 后等值），忽略 fenced code block。
     返回 (hits[按 candidates 原序去重], unbalanced[EOF 时围栏未闭合])。
-    anchors_in（读文件）与 pick_exclusive/archived_verify_state（互斥锚对）共用〔ADR-4/5〕。
-    fence 翻转口径同 _parse_plan（line.lstrip().startswith("```")）。"""
+    [impl-review-fix FIX-5] 现役唯一调用方 = archived_verify_state（归档 dual-read 兜底旧 inline）；
+    anchors_in / pick_exclusive 已从 live decide() 退役（Task6 迁 frontmatter 后），现仅 test-
+    referenced 孤儿，不再是本核心的运行时共用方。fence 翻转口径同 _parse_plan
+    （line.lstrip().startswith("```")）。"""
     cand = set(candidates)
     hit = set()
     in_fence = False
@@ -281,7 +295,12 @@ def parse_ship_gate_frontmatter(text):
              category ∈ unterminated|duplicate-key|out-of-domain|bad-type|tab-indent
     D2 只认文件首块：首行须 '---'（去 BOM）；正文 --- 横线不参与。
     D3 坏≠无：absent(state={},error=None) vs 坏(error!=None) 由调用方分流退出码。
-    D5 重复键→duplicate-key（枚举全部同名键计数，非取最后一个）。"""
+    D5 重复键→duplicate-key（枚举全部同名键计数，非取最后一个）。
+    [impl-review-fix FIX-1] 只认 ship-gate 直接子键（首个非空子行的缩进层级）；深于该层级的行
+    是嵌套子树，跳过不扫（不参与 FIELD_ENUMS 匹配）——杜绝 `note:` 下嵌套 design_approved 假过门。
+    [impl-review-fix FIX-2] 顶层 `ship-gate:` 后带非空内容（内联标量/inline map）→ bad-type（非
+    absent），防归档路径把它当 absent 回退 inline 造成假 SHIPPED。
+    [impl-review-fix FIX-3] 支持 YAML `#` 注释：块内独占注释行整行跳过；值行尾部 ` #` 注释剥离。"""
     if text.startswith("﻿"):
         text = text[1:]
     lines = text.splitlines()               # 统一 \r\n/\n（值不残留 \r）
@@ -295,28 +314,57 @@ def parse_ship_gate_frontmatter(text):
     if end is None:
         return {}, ("frontmatter", "unterminated")
     block = lines[1:end]
-    # 找顶层 ship-gate: 键（0 缩进），统计出现次数（重复→坏）
-    top_idx = [i for i, ln in enumerate(block)
-               if ln.rstrip() == "ship-gate:" and not ln[:1].isspace()]
-    if len(top_idx) == 0:
+    # 找顶层 ship-gate: 键，统计出现次数（重复→坏）。
+    # [impl-review-fix FIX-2/FIX-4] 顶层探测识别**任何以 ship-gate: 起始的行**（不再只认整行
+    # == "ship-gate:" 的规范空 map 头）：tab 缩进 → tab-indent 坏（FIX-4，与字段行 tab 检测对称）；
+    # 空格缩进 = 嵌套键（非顶层），忽略；0 缩进 = 真顶层键——若其后 rstrip 还有非空内容（内联标量/
+    # inline map，如 `ship-gate: []`/`ship-gate: true`）→ bad-type（FIX-2，杜绝归档误回退 inline）。
+    top_hdrs = []                            # [(index, line)]，0 缩进的顶层 ship-gate: 行
+    for i, ln in enumerate(block):
+        if not ln.lstrip().startswith("ship-gate:"):
+            continue
+        indent_ws = ln[:len(ln) - len(ln.lstrip())]
+        if "\t" in indent_ws:
+            return {}, ("frontmatter", "tab-indent")   # FIX-4：tab 缩进顶层键
+        if indent_ws:
+            continue                         # 空格缩进 = 嵌套键，非顶层，忽略
+        top_hdrs.append((i, ln))
+    if len(top_hdrs) == 0:
         return {}, None                     # absent：有 frontmatter 但无 ship-gate 键
-    if len(top_idx) > 1:
+    if len(top_hdrs) > 1:
         return {}, ("ship-gate", "duplicate-key")
-    # 收集 ship-gate: 下方缩进的 field: value（下一个 0 缩进非空行为界）
-    start = top_idx[0] + 1
+    header_idx, header = top_hdrs[0]
+    if header.rstrip() != "ship-gate:":     # FIX-2：非规范空 map 头（带内联标量值）→ 坏
+        return {}, ("ship-gate", "bad-type")
+    # 收集 ship-gate: 下方缩进的 field: value（下一个 0 缩进非空行为界）。
+    # [impl-review-fix FIX-1] 只认 ship-gate 直接子键：首个非空子行的缩进 = 直接子键层级；
+    # 缩进深于该层级的行是嵌套子树，跳过不扫（不参与 FIELD_ENUMS 匹配，杜绝嵌套字段假过门）。
+    start = header_idx + 1
     state, seen = {}, {}
+    direct_indent = None
     for ln in block[start:]:
         if ln.strip() == "":
             continue
         if not ln[:1].isspace():
             break                           # 回到 0 缩进 = ship-gate 块结束
-        if "\t" in ln[:len(ln) - len(ln.lstrip())]:
+        # [impl-review-fix FIX-3a] 块内独占注释行（strip 后以 # 起始）跳过——放在 tab/冒号检测之前
+        if ln.strip().startswith("#"):
+            continue
+        indent_ws = ln[:len(ln) - len(ln.lstrip())]
+        indent = len(indent_ws)
+        if direct_indent is None:
+            direct_indent = indent          # 首个非空非注释子行定直接子键层级
+        if indent > direct_indent:
+            continue                         # FIX-1：嵌套子树（深于直接层级），跳过不扫
+        if "\t" in indent_ws:
             return {}, ("frontmatter", "tab-indent")
         body = ln.strip()
         if ":" not in body:
             return {}, ("frontmatter", "bad-type")
         field, _, raw = body.partition(":")
-        field, raw = field.strip(), raw.strip()
+        field = field.strip()
+        # [impl-review-fix FIX-3b] 值行尾部 # 注释在枚举比对前剥离（enum 值均不含 #，安全）
+        raw = raw.split(" #", 1)[0].strip()
         if field not in FIELD_ENUMS:
             continue                         # 非本 schema 字段（外来 metadata），忽略
         seen[field] = seen.get(field, 0) + 1
@@ -709,7 +757,7 @@ def decide(root, change):
         emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review", "实现完成，进入代码审")
     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：code_review 优先
     # （pass→'pos'/blocked→'neg'）；坏→UNKNOWN(6) 已 emit；absent→None→STEP_IN_PROGRESS（无锚语义）。
-    cr_front = live_ship_gate_state(cr, "code-review")
+    cr_front = live_ship_gate_state(cr, "code_review")   # [impl-review-fix FIX-5] label 用下划线，与字段名一致
     if cr_front is not None:
         cv = cr_front.get("code_review")
         cr_state = "pos" if cv == "pass" else "neg" if cv == "blocked" else None

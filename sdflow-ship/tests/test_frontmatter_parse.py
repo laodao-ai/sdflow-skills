@@ -53,3 +53,63 @@ def test_tab_indent_error():               # tab 缩进 → 坏
 def test_crlf_stripped():                  # CRLF 值不残留 \r
     state, err = P("---\r\nship-gate:\r\n  verify: PASS\r\n---\r\n")
     assert state == {"verify": "PASS"} and err is None
+
+
+# ─── [impl-review-fix] 冷主审 whole-branch findings ───────────────────────────
+
+def test_nested_field_not_accepted():
+    # [impl-review-fix FIX-1] 嵌套在 note: 下的 design_approved 不得被当直接字段接受（假过设计门）。
+    # 只认 ship-gate 直接子键：深于直接层级的行是嵌套子树，跳过不扫。
+    state, err = P("---\nship-gate:\n  note:\n    design_approved: true\n---\n")
+    assert state == {} and err is None      # absent，不假过门
+    # 同理 verify / code_review 嵌套亦不被采纳
+    state, err = P("---\nship-gate:\n  note:\n    verify: PASS\n---\n")
+    assert state == {} and err is None
+    state, err = P("---\nship-gate:\n  note:\n    code_review: pass\n---\n")
+    assert state == {} and err is None
+
+
+def test_nested_deep_ignored_direct_kept():
+    # [impl-review-fix FIX-1] 直接子键正常采纳，其下嵌套子树被跳过（不污染、不误坏）。
+    state, err = P("---\nship-gate:\n  verify: PASS\n  note:\n    design_approved: true\n---\n")
+    assert state == {"verify": "PASS"} and err is None
+
+
+def test_toplevel_ship_gate_scalar_is_bad():
+    # [impl-review-fix FIX-2] 顶层 ship-gate 带内联标量/inline 值 → bad-type（非 absent）。
+    for scalar in ("[]", "true", "{verify: PASS}", "null"):
+        state, err = P(f"---\nship-gate: {scalar}\n---\n")
+        assert state == {} and err == ("ship-gate", "bad-type"), scalar
+
+
+def test_toplevel_tab_indent():
+    # [impl-review-fix FIX-4] tab 缩进的顶层 ship-gate: 行判 tab-indent 坏（与字段行 tab 检测对称）。
+    state, err = P("---\n\tship-gate:\n  verify: PASS\n---\n")
+    assert err is not None and err[1] == "tab-indent"
+
+
+def test_comment_line_skipped():
+    # [impl-review-fix FIX-3a] 块内独占注释行（strip 后以 # 起始）跳过，不误判 bad-type。
+    state, err = P("---\nship-gate:\n  # 待复核\n  verify: PASS\n---\n")
+    assert state == {"verify": "PASS"} and err is None
+
+
+def test_trailing_comment_on_value():
+    # [impl-review-fix FIX-3b] 值行尾部 # 注释在枚举比对前剥离。
+    state, err = P("---\nship-gate:\n  verify: PASS  # confirmed\n---\n")
+    assert state == {"verify": "PASS"} and err is None
+
+
+def test_quoted_value_is_strict():
+    # [impl-review-fix FIX-6] 引号值严格：verify: "PASS" → out-of-domain（有意，enum 严格匹配）。
+    state, err = P('---\nship-gate:\n  verify: "PASS"\n---\n')
+    assert err is not None and err[0] == "verify" and err[1] == "out-of-domain"
+
+
+def test_second_frontmatter_block_ignored_by_design():
+    # [impl-review-fix FIX-6 A1] D2「只认首块」自指免疫：首块 PASS + 正文第二块 FAIL → 读首块 PASS。
+    # 有意的自指免疫权衡（报告正文可含 ship-gate frontmatter 示例块），MUST NOT 改为「第二块→fail」。
+    txt = ("---\nship-gate:\n  verify: PASS\n---\n# 报告正文\n\n"
+           "示例第二块：\n---\nship-gate:\n  verify: FAIL\n---\n")
+    state, err = P(txt)
+    assert state == {"verify": "PASS"} and err is None

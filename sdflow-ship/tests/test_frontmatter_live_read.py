@@ -150,6 +150,19 @@ def test_live_design_approved_frontmatter(repo):
     assert code == 0 and js["verdict"] == "RUN_PLAN"   # 过设计门（frontmatter）→ plan 缺
 
 
+def test_live_toplevel_scalar_bad_unknown(repo):
+    # [impl-review-fix FIX-2] 顶层 ship-gate 带内联标量值（ship-gate: true）→ bad-type →
+    # live 侧 fail-closed UNKNOWN(6)（非 absent 假放行）。设计门读点即拦下。
+    d = mkchange(repo)
+    d.joinpath("spec-review-report.md").write_text(
+        "---\nship-gate: true\n---\n# 设计审报告\n", encoding="utf-8")
+    d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN"
+    assert "ship-gate" in js["reason"] and "bad-type" in js["reason"]
+
+
 def test_live_dup_key_unknown(repo):
     # 重复 verify 键 → duplicate-key → UNKNOWN(6)（verify 早检拦下，不取最后一个）
     d = impl_done(repo)

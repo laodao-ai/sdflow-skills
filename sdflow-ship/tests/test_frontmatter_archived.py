@@ -58,3 +58,12 @@ def test_archived_q4_frontmatter_wins(tmp_path):
         tmp_path,
         f"---\nship-gate:\n  verify: PASS\n---\n{VFAIL}\n")
     assert _sg.archived_verify_state(tmp_path, "main", dirname) == "pass"
+
+
+def test_archived_bad_scalar_no_inline_fallback(tmp_path):
+    # [impl-review-fix FIX-2] 顶层 ship-gate 带内联标量值（坏 bad-type）+ 残留 inline PASS 诱饵
+    # → 坏 frontmatter fail-safe 'none'，MUST NOT 回退 inline 误判 'pass'（假 SHIPPED）。
+    dirname = _seed_archive(
+        tmp_path,
+        f"---\nship-gate: []\n---\n{VPASS}\n")
+    assert _sg.archived_verify_state(tmp_path, "main", dirname) == "none"
