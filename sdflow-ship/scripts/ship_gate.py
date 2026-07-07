@@ -4,21 +4,23 @@
 
 契约（与三个 SKILL.md 报告模板双向钉死；tests/test_anchor_contract.py 断言两侧同组字面）:
 
-机判锚形态〔mlh-p5 迁 frontmatter〕:
-    live 读（active change 报告）: 报告**头部** frontmatter `ship-gate.{field}` 优先；absent
-        （无 frontmatter / 无 ship-gate 键，含未迁移的旧报告）→ 回退下方 inline 锚字面（过渡期
-        兼容）；frontmatter 存在但坏（越域/重复键/未闭合/tab 缩进等）→ UNKNOWN(6) fail-closed，
-        不回退 inline（防坏 frontmatter 被 inline 兜底悄悄放行）。
-    归档读（archived change 报告）: 与 live 共用同一严格 helper `parse_ship_gate_frontmatter`
-        dual-read——frontmatter 优先（新归档）；absent（迁移前旧归档，永久保留）→ 回退 inline；
-        坏 frontmatter → fail-safe 判无 pass（归档不可变、无人可修，不回退 inline 掩盖假 SHIPPED）。
+机判锚形态〔mlh-p5 迁 frontmatter；Task6 退役 live inline 读半场〕:
+    live 读（active change 报告）: **只读**报告**头部** frontmatter `ship-gate.{field}`；absent
+        （无 frontmatter / 无 ship-gate 键）→ 既有无锚语义（design→REFUSE_START、verify /
+        code-review→STEP_IN_PROGRESS），**不回退 inline**（Task6 退役：三 producer 已全写
+        frontmatter，live 正文残留 inline 锚被完全忽略）；frontmatter 存在但坏（越域/重复键/
+        未闭合/tab 缩进等）→ UNKNOWN(6) fail-closed（防坏 frontmatter 悄悄放行）。
+    归档读（archived change 报告）: 与 live 共用同一严格 helper `parse_ship_gate_frontmatter`，
+        但**保留 inline dual-read**（`_line_scoped_hits` 归档读半场永久，冷审 F2）——frontmatter
+        优先（新归档）；absent（迁移前旧归档，永久保留）→ 回退 inline；坏 frontmatter → fail-safe
+        判无 pass（归档不可变、无人可修，不回退 inline 掩盖假 SHIPPED）。
 
 ship-gate frontmatter 字段（三字段，下划线命名，防与旧 inline 锚字面连字符漂移，取值域见 FIELD_ENUMS）:
     design_approved: true|false   spec-review-report.md（sdflow-spec-review 拍板回写，头部 prepend）
     verify: PASS|FAIL             verify-report.md（sdflow-done verify 模板，头部 prepend）
     code_review: pass|blocked     code-review-report.md（sdflow-code-review 模板，头部 prepend）
 
-inline 锚行字面集（grep -F 语义，零正则；过渡期兼容 + 旧归档永久兜底，三 SKILL 新产出报告不再落）:
+inline 锚行字面集（grep -F 语义，零正则；Task6 后**仅归档读半场**用于旧归档兜底，live 不再读；三 SKILL 新产出报告不再落）:
     <!-- ship-gate: design-approved -->        spec-review-report.md（旧格式）
     <!-- ship-gate: verify=PASS -->            verify-report.md（旧格式）
     <!-- ship-gate: verify=FAIL -->
@@ -95,10 +97,11 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         「显式越权同权级」（git 留痕可审计）；
     `~~~` 围栏 / 带语言标签围栏（如 ```python）导致的围栏识别误判不特判——仅认 ``` 前缀翻转，
         非本仓现实语料出现的变体不收，且方向 = 安全侧假阴（漏判不覆盖 ≠ 假阳）。
-    〔mlh-p5 Q4〕live 与归档双读均：好 frontmatter（如 verify: PASS）判定后不再交叉扫描
-        同文件残留的 inline 锚（`<!-- ship-gate: verify=FAIL -->` 等）——frontmatter 有效
-        即视为唯一真相源；迁移前手改遗留残留 inline 反锚会被静默忽略。迁移后新产出的
-        报告不应再残留 inline 锚，故此盲区风险随迁移完成而收敛，接受。
+    〔mlh-p5 Q4；Task6 退役 live inline 后收敛〕live 读**只认 frontmatter**：好 frontmatter
+        判定后不看正文任何 inline 锚，absent 亦不回退 inline（正文残留 inline 锚被完全忽略，
+        无假过风险，B4/B5 根治）。归档读 dual-read 侧仍保留旧语义：好 frontmatter 判定后不再
+        交叉扫同文件残留 inline 锚（frontmatter 有效即唯一真相源；旧归档 absent 才回退 inline）。
+        此盲区随 live 退役彻底收敛，仅归档 dual-read 保留"好 frontmatter 不交叉扫 inline"，接受。
 """  # [impl-review-fix]
 import argparse
 import json
@@ -350,14 +353,18 @@ def anchors_in(path, candidates):
     return _line_scoped_hits(text, candidates)[0]
 
 
-# [T26/SR-1] 熔断锚行集合判据：判据 = 该步 ship-gate 锚行集合是否变化（非 HEAD/mtime）。
-# 两个纯函数/无状态 helper：不落地文件、无副作用，供上层熔断逻辑（人工/skill 层，非本文件）
-# 对比"上一次快照"与"本次重跑"的锚集，判该步是否有实质进展。
+# [T26/SR-1；mlh-p5 Task6 D11] 熔断状态集合判据：判据 = 该步 ship-gate **frontmatter 状态集合**
+# 是否变化（非 HEAD/mtime、非 inline 锚行）。两个纯函数/无状态 helper：不落地文件、无副作用，
+# 供上层熔断逻辑（人工/skill 层，非本文件）对比"上一次快照"与"本次重跑"的状态集，判有无实质进展。
 def anchor_set(text):
-    """返回该报告文本命中的结论锚集合（frozenset）。复用 _line_scoped_hits 对
-    ALL_ANCHORS 的行级字面匹配语义（独占裸行 + fence-aware），不另造正则/子串判断。"""
-    hits, _unbalanced = _line_scoped_hits(text, ALL_ANCHORS)
-    return frozenset(hits)
+    """返回该报告 frontmatter 的 ship-gate 状态集合（frozenset of (field, value) 对）。
+    [mlh-p5 Task6 D11] 迁 frontmatter：复用 parse_ship_gate_frontmatter 提取状态 dict（与 live
+    读点单核一致，防漂移），键值对集合作快照；坏 frontmatter → 空集（保守，无净变化倾向判无进展）。
+    inline 锚已随 live 读点退役，不再参与熔断进展判据（正文残留 inline 锚被忽略）。"""
+    state, err = parse_ship_gate_frontmatter(text)
+    if err is not None:
+        return frozenset()
+    return frozenset(state.items())
 
 
 def breaker_no_progress(before, after):
@@ -402,9 +409,9 @@ def pick_exclusive(path, positive, negative, label):
     return None
 
 
-# [mlh-p5 Task2/D3] live 读点 dual-read 分流：frontmatter 有效→state；坏→UNKNOWN(6) 不回退；
-# absent→None 交调用方回退 inline（过渡期）。坏 frontmatter 的退出码映射集中于此（越域/重复键/
-# 坏语法/类型不符→UNKNOWN，歧义须人裁、防 exit0 重跑死循环）。
+# [mlh-p5 Task2/D3；Task6 退役 live inline] live 读点分流：frontmatter 有效→state；坏→UNKNOWN(6)；
+# absent→None 交调用方走既有无锚语义（**不再回退 inline**）。坏 frontmatter 的退出码映射集中于此
+# （越域/重复键/坏语法/类型不符→UNKNOWN，歧义须人裁、防 exit0 重跑死循环）。
 def _fail_closed_on_bad(err, label):
     field, cat = err
     emit("UNKNOWN", EXIT_UNKNOWN, None,
@@ -413,8 +420,9 @@ def _fail_closed_on_bad(err, label):
 
 def live_ship_gate_state(path, label):
     """live 读某报告的 ship-gate 状态 dict。frontmatter 有效→state；坏→UNKNOWN(6) 停（不回退）；
-    absent（无 frontmatter / 无 ship-gate 键）→返回 None 交调用方回退 inline（过渡期 D6/D3）。
-    与归档 git-show 文本读共用 parse_ship_gate_frontmatter 单核（防漂移，D4）。"""
+    absent（无 frontmatter / 无 ship-gate 键）→返回 None，调用方走既有无锚语义（Task6 退役 live
+    inline 回退，live 只读 frontmatter）。与归档 git-show 文本读共用 parse_ship_gate_frontmatter
+    单核（防漂移，D4；归档侧仍 dual-read inline，live 侧不）。"""
     if not path.is_file():
         return None
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -632,13 +640,12 @@ def decide(root, change):
         emit("REFUSE_START", EXIT_REFUSE, None,
              "change 不存在（active 与 archive 均无）")
     # ── pre-flight：设计门（D7 起跑不越门）─────────────────────────
-    # [mlh-p5 Task2 D1] dual-read：frontmatter design_approved 优先→absent 回退 inline anchors_in。
+    # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：design_approved 优先；
+    # absent（无 frontmatter / 无 ship-gate 键）→ sr_state=None → design_ok=False → REFUSE_START
+    # （既有无锚语义，不回退 inline）；坏 frontmatter → live_ship_gate_state 内 UNKNOWN(6) 已 emit。
     report = cdir / "spec-review-report.md"
     sr_state = live_ship_gate_state(report, "spec-review")   # 坏→UNKNOWN(6) 已 emit；absent→None
-    if sr_state is not None:
-        design_ok = sr_state.get("design_approved") is True
-    else:
-        design_ok = ANCHOR_DESIGN in anchors_in(report, [ANCHOR_DESIGN])
+    design_ok = sr_state is not None and sr_state.get("design_approved") is True
     if not design_ok:
         emit("REFUSE_START", EXIT_REFUSE, None,
              "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
@@ -649,14 +656,14 @@ def decide(root, change):
         emit("REFUSE_START", EXIT_REFUSE, None,
              "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
              "（重跑 sdflow-spec-review 后重新拍板补锚）")
-    # ── verify 冲突锚早检（多锚冲突 → UNKNOWN，任务3 完整接管步序）──
-    # [mlh-p5 Task2 D1] dual-read：frontmatter 优先——坏（含重复键=冲突）→UNKNOWN(6) 已在
-    # live_ship_gate_state 内 emit；有效 frontmatter 单值无冲突可放行；absent 才回退 inline
-    # pick_exclusive（其 PASS+FAIL 并存→UNKNOWN 语义原样保留）。
+    # ── verify 冲突锚早检（坏 frontmatter → UNKNOWN，保步序早停）──
+    # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：坏 frontmatter（含重复
+    # verify 键=冲突的等价形态 duplicate-key）→ live_ship_gate_state 内 UNKNOWN(6) emit 早停；
+    # 有效单值 / absent 不早停（absent = 无锚语义，留待 step9 判 STEP_IN_PROGRESS）。此调用仅
+    # 为副作用（触发坏→UNKNOWN 早检以保步序），返回值有意丢弃。
     vfile = cdir / "verify-report.md"
     if vfile.is_file():
-        if live_ship_gate_state(vfile, "verify") is None:   # absent → 回退 inline 冲突检
-            pick_exclusive(vfile, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL, "verify")
+        live_ship_gate_state(vfile, "verify")   # 坏→UNKNOWN(6) 早停；live 只读 frontmatter
     # ── step 5.5：条件步（TG-02 声明式 〔TG-02 匹配，非裸子串；细判归模型）──
     sop_note = ""
     if tg02_hit(cdir):
@@ -700,14 +707,14 @@ def decide(root, change):
     cr = cdir / "code-review-report.md"
     if not cr.is_file():
         emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review", "实现完成，进入代码审")
-    # [mlh-p5 Task2 D1] dual-read：frontmatter code_review 优先（pass→'pos'/blocked→'neg'）；
-    # 坏→UNKNOWN(6) 已 emit；absent→回退 inline pick_exclusive（保留其冲突→UNKNOWN 语义）。
+    # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：code_review 优先
+    # （pass→'pos'/blocked→'neg'）；坏→UNKNOWN(6) 已 emit；absent→None→STEP_IN_PROGRESS（无锚语义）。
     cr_front = live_ship_gate_state(cr, "code-review")
     if cr_front is not None:
         cv = cr_front.get("code_review")
         cr_state = "pos" if cv == "pass" else "neg" if cv == "blocked" else None
     else:
-        cr_state = pick_exclusive(cr, ANCHOR_CR_PASS, ANCHOR_CR_BLOCKED, "code-review")
+        cr_state = None                          # absent → 无锚 → STEP_IN_PROGRESS
     if cr_state == "neg":
         emit("BLOCKED_UPSTREAM", EXIT_BLOCKED, None,
              "code-review 判 blocked：先解 blocker（见报告），gate 不蒙头跑")
@@ -719,14 +726,11 @@ def decide(root, change):
     if cr_stale:
         # 陈旧判定优先级须让位于「verify=FAIL 之后修代码重验」链路：verify 已判 FAIL
         # 时不要求先重跑 code-review（否则陈旧 FAIL 卡死），留给 step9 判 RERUN_STALE。
-        # [mlh-p5 Task2 D1] dual-read：frontmatter verify==FAIL 优先；坏→UNKNOWN(6) 已在
-        # 上方 verify 早检 emit（此处 live 读同文件不会再遇坏）；absent→回退 inline anchors_in。
+        # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：frontmatter verify==FAIL
+        # 优先；坏→UNKNOWN(6) 已在上方 verify 早检 emit（此处同文件不会再遇坏）；absent→非 FAIL。
         vf_peek = cdir / "verify-report.md"
         vp_front = live_ship_gate_state(vf_peek, "verify")
-        if vp_front is not None:
-            verify_already_failed = vp_front.get("verify") == "FAIL"
-        else:
-            verify_already_failed = ANCHOR_VERIFY_FAIL in anchors_in(vf_peek, [ANCHOR_VERIFY_FAIL])
+        verify_already_failed = vp_front is not None and vp_front.get("verify") == "FAIL"
         if not verify_already_failed:
             emit("RERUN_STALE", EXIT_OK, "sdflow-code-review",
                  "code-review 结论后存在 openspec/ 外提交 → 结论陈旧，重审", freshness=cr_fresh)
@@ -738,14 +742,14 @@ def decide(root, change):
     if not vf.is_file():
         emit("RUN_VERIFY", EXIT_OK, "sdflow-done", "进入收尾（verify→hand-off→archive→merge）")
     v_stale, v_fresh = is_stale(root, str(vf.relative_to(root)), "code", change)
-    # [mlh-p5 Task2 D1] dual-read：frontmatter verify 优先（PASS→'pos'/FAIL→'neg'）；坏→UNKNOWN(6)
-    # 已在 verify 早检 emit；absent→回退 inline pick_exclusive（保留其冲突→UNKNOWN 语义）。
+    # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：verify 优先（PASS→'pos'/
+    # FAIL→'neg'）；坏→UNKNOWN(6) 已在 verify 早检 emit；absent→None→STEP_IN_PROGRESS（无锚语义）。
     vf_front = live_ship_gate_state(vf, "verify")
     if vf_front is not None:
         vv = vf_front.get("verify")
         v_state = "pos" if vv == "PASS" else "neg" if vv == "FAIL" else None
     else:
-        v_state = pick_exclusive(vf, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL, "verify")
+        v_state = None                           # absent → 无锚 → STEP_IN_PROGRESS
     if v_stale:
         emit("RERUN_STALE", EXIT_OK, "sdflow-done",
              "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）",

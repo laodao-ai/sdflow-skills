@@ -1,4 +1,6 @@
-# [mlh-p5 Task2] live 读点 dual-read（frontmatter 优先→absent 回退 inline，坏→UNKNOWN 不回退）。
+# [mlh-p5 Task6] live 读点 **只读 frontmatter**（inline 回退已退役）：frontmatter 有效→state；
+# 坏→UNKNOWN(6) 不回退；absent（无 frontmatter / 无 ship-gate 键）→ 既有无锚语义（不回退 inline，
+# 正文残留 inline 锚被完全忽略）。归档读半场仍 dual-read inline（永久，见 test_gate_anchor_scope）。
 # 沿用 test_gate_*.py 的 fixture 构造法：写 openspec/changes/{c}/ 报告 + 跑 decide，断言退出码/verdict。
 from conftest import commit_all, mkchange
 from test_gate_preflight import run_gate
@@ -9,7 +11,7 @@ def test_live_verify_frontmatter_pass(repo):
     # verify-report frontmatter verify: PASS → 走 frontmatter 读出 PASS → 正常推进（RUN_VERIFY 收尾）
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "cr+verify")
@@ -17,24 +19,42 @@ def test_live_verify_frontmatter_pass(repo):
     assert code == 0 and js["verdict"] == "RUN_VERIFY"
 
 
-def test_live_verify_absent_fallback_inline(repo):
-    # 无 ship-gate frontmatter 键 + 旧 inline verify=FAIL 锚 → absent 回退 inline 读出（过渡期零破坏）
+def test_live_verify_inline_retired_absent(repo):
+    # [mlh-p5 Task6 D1] 退役 live inline 回退：verify-report **仅**旧 inline verify=FAIL 锚
+    # （无 frontmatter）→ absent → live 只读 frontmatter → 正文 inline FAIL 被完全忽略 →
+    # 不再回退读出 FAIL（Task2 曾判 VERIFY_FAIL），而是走无锚语义 STEP_IN_PROGRESS。
+    # 这是 D1 退役的直接对照：同一 fixture 在 Task2 判 VERIFY_FAIL(5)，Task6 判 STEP_IN_PROGRESS(0)。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "<!-- ship-gate: verify=FAIL -->\n", encoding="utf-8")
     commit_all(repo, "cr+verify")
     code, js, _ = run_gate(repo)
-    assert code == 5 and js["verdict"] == "VERIFY_FAIL"   # 回退 inline 读出 FAIL
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS"   # inline FAIL 不再回退读出
+    assert js["next"] == "sdflow-done"
 
 
-def test_live_verify_bad_no_fallback(repo):
-    # frontmatter verify: MAYBE(越域) → UNKNOWN(6)，MUST NOT 回退 inline。
-    # 正文另塞 inline verify=PASS 锚做诱饵：若错误回退会读出 PASS 推进，断言证明未回退。
+def test_live_code_review_inline_retired_absent(repo):
+    # [mlh-p5 Task6 D1] code-review 读点退役 inline：code-review-report **仅**旧 inline
+    # code-review=pass 锚（无 frontmatter）→ absent → 不再回退读出 pass → STEP_IN_PROGRESS
+    # （该步进行中），MUST NOT 因正文独占行 inline pass 锚假放行推进到 verify。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
         "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+    commit_all(repo, "cr")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS"
+    assert js["next"] == "sdflow-code-review"
+
+
+def test_live_verify_bad_no_fallback(repo):
+    # frontmatter verify: MAYBE(越域) → UNKNOWN(6)（verify 早检拦下）。
+    # [mlh-p5 Task6] 正文另塞独占行 inline verify=PASS 锚做诱饵：退役后无回退且早检已 fail-closed
+    # UNKNOWN，断言证明坏 frontmatter 不被 inline 兜底、正文 inline 锚不被读。
+    d = impl_done(repo)
+    d.joinpath("code-review-report.md").write_text(
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "---\nship-gate:\n  verify: MAYBE\n---\n<!-- ship-gate: verify=PASS -->\n",
         encoding="utf-8")
@@ -45,24 +65,25 @@ def test_live_verify_bad_no_fallback(repo):
     assert "verify" in js["reason"] and "out-of-domain" in js["reason"]
 
 
-def test_live_body_mention_immune(repo):
-    # frontmatter 无键（首行非 ---）+ 正文散文提及 ship-gate: verify: PASS → absent 回退 inline，
-    # inline 也无真锚 → 不命中（STEP_IN_PROGRESS，非误读 PASS 推进）。
+def test_live_verify_body_mention_immune(repo):
+    # [mlh-p5 Task6] frontmatter 无键（首行非 ---）+ 正文散文提及 ship-gate: verify: PASS →
+    # absent → live 只读 frontmatter，正文提及不命中 → STEP_IN_PROGRESS（非误读 PASS 推进）。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "# 验证报告\n正文提及 ship-gate: verify: PASS 但这不是 frontmatter\n",
         encoding="utf-8")
     commit_all(repo, "cr+verify")
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS"
+    assert js["next"] == "sdflow-done"
 
 
 def test_live_body_mention_immune_design_approved(repo):
-    # [mlh-p5 Task5 Step3 B4/B5 根治验证] spec-review-report 正文含旧 inline 锚字面
+    # [mlh-p5 Task5/Task6 B4/B5 根治验证] spec-review-report 正文含旧 inline 锚字面
     # `<!-- ship-gate: design-approved -->` 但仅作【描述性提及】（反引号内、非独占裸行），
-    # frontmatter 无 design_approved 键（absent）→ 回退 inline 时也读不出真锚 → REFUSE_START
+    # frontmatter 无 design_approved 键（absent）→ live 只读 frontmatter → REFUSE_START
     # （未过设计门），MUST NOT 因正文提及假过门。
     d = mkchange(repo)
     d.joinpath("spec-review-report.md").write_text(
@@ -74,11 +95,41 @@ def test_live_body_mention_immune_design_approved(repo):
     assert code == 3 and js["verdict"] == "REFUSE_START"
 
 
+def test_live_design_standalone_inline_retired_refuse(repo):
+    # [mlh-p5 Task6 D1 最强正文免疫证明 — 退役后根治] spec-review-report **无 frontmatter**
+    # （absent）+ 正文含**独占一行**（anchors_in 会命中）的 inline `<!-- ship-gate: design-approved -->`。
+    # Task2 时 absent → 回退 anchors_in → 读出独占行真锚 → design_ok=True → 假过门放行；
+    # Task6 退役后 absent → live 只读 frontmatter → 独占行 inline 锚被完全忽略 → REFUSE_START。
+    # 这是 D1 退役对独占裸行 inline 锚（唯一能骗过 anchors_in 的形态）的根治证据。
+    d = mkchange(repo)
+    d.joinpath("spec-review-report.md").write_text(
+        "# 设计审报告\n\n## 拍板\n<!-- ship-gate: design-approved -->\n", encoding="utf-8")
+    d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
+
+def test_live_design_frontmatter_present_no_key_inline_ignored(repo):
+    # [mlh-p5 Task6 Q4 不漏假过] spec-review-report **有 frontmatter 首块**（含 ship-gate 键但
+    # **非 design_approved**）+ 正文含独占一行 inline design-approved → design 门仍 REFUSE_START。
+    # frontmatter 首块存在（sr_state 非 None）→ live 只读 frontmatter 状态，design_approved 缺 →
+    # design_ok=False；正文独占行 inline 锚被完全忽略（Q4「frontmatter 存在则不回退 inline」）。
+    d = mkchange(repo)
+    d.joinpath("spec-review-report.md").write_text(
+        "---\nship-gate:\n  verify: PASS\n---\n# 设计审报告\n\n"
+        "## 拍板\n<!-- ship-gate: design-approved -->\n", encoding="utf-8")
+    d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+
+
 def test_live_body_mention_immune_code_review(repo):
-    # [mlh-p5 Task5 Step3 B4/B5 根治验证] code-review-report 正文含旧 inline 锚字面
+    # [mlh-p5 Task5/Task6 B4/B5 根治验证] code-review-report 正文含旧 inline 锚字面
     # `<!-- ship-gate: code-review=pass -->` 但仅作【描述性提及】（反引号内、非独占裸行），
-    # frontmatter 无 code_review 键 → 回退 inline 也读不出真锚 → STEP_IN_PROGRESS
-    # （该步进行中，MUST NOT 因正文提及假放行 BLOCKED_UPSTREAM 之外的"pass"）。
+    # frontmatter 无 code_review 键 → live 只读 frontmatter → STEP_IN_PROGRESS
+    # （该步进行中，MUST NOT 因正文提及假放行）。
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
         "# 代码审报告\n对账清单：结论锚字面为 `<!-- ship-gate: code-review=pass -->`（审查中，未落）。\n",
@@ -100,10 +151,10 @@ def test_live_design_approved_frontmatter(repo):
 
 
 def test_live_dup_key_unknown(repo):
-    # 重复 verify 键 → duplicate-key → UNKNOWN(6)（早检拦下，不取最后一个）
+    # 重复 verify 键 → duplicate-key → UNKNOWN(6)（verify 早检拦下，不取最后一个）
     d = impl_done(repo)
     d.joinpath("code-review-report.md").write_text(
-        "<!-- ship-gate: code-review=pass -->\n", encoding="utf-8")
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
     d.joinpath("verify-report.md").write_text(
         "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n", encoding="utf-8")
     commit_all(repo, "cr+verify")

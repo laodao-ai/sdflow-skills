@@ -1,3 +1,7 @@
+---
+ship-gate:
+  design_approved: true
+---
 # spec-review 报告 — mlh-p5-gate-frontmatter
 
 ## 命中范围
@@ -129,6 +133,4 @@
 ## 设计门拍板（2026-07-07）
 用户设计门批准：进 /sdflow-ship。Q4 定案 = frontmatter 有效即采信 + 登记盲区（已落 design/specs A4）。lens-metric 采纳数即最终（13 簇全采纳，无门后翻改，SR-M 无需重算）。
 
-<!-- ship-gate: design-approved -->
-
-> 注（D10）：本锚用当前 inline 协议；mlh-p5 自身迁移收尾（tasks 5.3）时把本报告 inline 锚转 frontmatter，届时 gate 只读 frontmatter 才能自测闭环。
+> 注（D10 已迁 · Task6）：本报告 design-approved 锚已迁至**头部 frontmatter** `ship-gate.design_approved: true`（原正文 inline `<!-- ship-gate: design-approved -->` 已移除）——退役 live inline 读点后 gate 只读 frontmatter，此迁移使 gate 能读出自身 design-approved 达成自测闭环（dogfood 不 REFUSE on itself）。
