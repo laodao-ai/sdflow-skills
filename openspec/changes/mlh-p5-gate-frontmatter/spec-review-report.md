@@ -126,4 +126,9 @@
 - 冷审拦下 1 致命（D1 迁移后 2/3 结论静默失效）+ 3 高，若未审直接实现会严重翻车——**冷审 load-bearing 再次兑现**。
 - 建议：应用 amendment 后**进设计 HARD-GATE**，人工过本报告拍板 → 拍板回写 frontmatter 时代前用现行 inline 协议（`<!-- ship-gate: design-approved -->`，见下），批准后 → /sdflow-ship 续跑（plan → impl → code-review → done）。
 
-<!-- 设计门拍板后由主 session 在此追加：ship-gate: design-approved 锚（当前 inline 协议，mlh-p5 自身迁移收尾时再转 frontmatter，见 D10） -->
+## 设计门拍板（2026-07-07）
+用户设计门批准：进 /sdflow-ship。Q4 定案 = frontmatter 有效即采信 + 登记盲区（已落 design/specs A4）。lens-metric 采纳数即最终（13 簇全采纳，无门后翻改，SR-M 无需重算）。
+
+<!-- ship-gate: design-approved -->
+
+> 注（D10）：本锚用当前 inline 协议；mlh-p5 自身迁移收尾（tasks 5.3）时把本报告 inline 锚转 frontmatter，届时 gate 只读 frontmatter 才能自测闭环。

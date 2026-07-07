@@ -142,7 +142,7 @@ ship-gate:
 
 - ~~**Q1（= D3）**：手写 stdlib vs `yaml.safe_load`~~ → **grill 已决：手写 stdlib**（ship_gate 零依赖不变量 + 门禁不崩，见 D3）。
 - **Q2〔spec-review-amendment，升 P0 决策门〕**：三类报告注入 `ship-gate:` frontmatter 后 `openspec validate`/`archive` CLI 是否报错？归档走 `openspec archive`（禁手动 mv），若 CLI 解析 report frontmatter 并对未知键报错则归档步炸。风险实际偏低（validate 只吃 proposal/tasks/specs、report 非校验对象——接地/领域镜均判低风险），但 **MUST 在写任何 producer 前实测 GO/NO-GO**（tasks 1.1 从「核」升为 P0 决策门）。
-- **Q4〔spec-review-amendment，需设计门定〕**：归档「好 frontmatter=PASS + 残留 inline=FAIL」是否仍交叉检查 inline 冲突（保现 archived_verify_state 的 PASS+FAIL→conflict 保护）？倾向 frontmatter 有效即采信、不再扫 inline（简单），但须**登记「已知不覆盖」盲区**；或保留交叉检查（更稳、更复杂）。设计门拍板。
+- ~~**Q4**~~ → **设计门已决（frontmatter 有效即采信 + 登记盲区）**：归档 frontmatter 有效 PASS 时 MUST NOT 再交叉扫 inline FAIL——frontmatter 即真相（简单路径）；「好 frontmatter=PASS 掩盖残留 inline=FAIL」的盲区 MUST 在 `ship_gate.py`「已知不覆盖」头注释登记（迁移后新归档不会有残留 inline，风险低）。
 - **Q3**：live 报告若同时有 frontmatter 与正文残留 inline 锚，是否需迁移期一次性清正文旧锚？倾向否（live 解析只读 frontmatter，正文锚天然失效），design 定为不强制清、只不解析。
 
 ## Compliance
