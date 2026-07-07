@@ -224,6 +224,41 @@ class TestTerminalStatusesCrossScriptConsistency:
             "很可能是某处内联字面量与 issues.TERMINAL_STATUSES['todo'] 已漂移"
         )
 
+    @staticmethod
+    def _cmd_scan_nonterminal_literal(source_text):
+        """精确定位 cmd_scan 里 `nonterminal = set(STATUS_CODES) - {...}` 语句
+        （约 buglist.py:629 / todolist.py:596）的排除字面量集合——与 cmd_triage 的
+        `open_untriaged = set(STATUS_CODES) - {...}`（多含一个 "PROPOSED"，语义上
+        本就不能严格 == 终态集，只能用覆盖判定）区分开。cmd_scan 这条排除集在语义上
+        就是该 pool 的终态集本身，理应严格相等——单纯的『覆盖』判定（`<=`）测不出
+        『多塞一个非终态码』这种过度包含漂移（字面量仍是终态集的超集，覆盖判定不会
+        变红，但 nonterminal/open_ungrouped 计算会静默丢项）。"""
+        m = re.search(
+            r'nonterminal\s*=\s*set\(STATUS_CODES\)\s*-\s*\{\s*((?:"[A-Z_]+"\s*,?\s*)+)\}',
+            source_text,
+        )
+        assert m, "未在源码中定位到 cmd_scan 的 `nonterminal = set(STATUS_CODES) - {...}` 语句"
+        return set(re.findall(r'"([A-Z_]+)"', m.group(1)))
+
+    def test_buglist_cmd_scan_exclusion_set_strictly_equals_terminal_statuses(self):
+        """严格 ==（区别于上面两条测『覆盖』的用例）：cmd_scan 的排除字面量集合
+        必须与 issues.TERMINAL_STATUSES['bug'] 严格相等，不能只是超集——防止误把
+        非终态码（如 BLOCKED）也塞进这条排除集，导致 nonterminal 计算漏项。"""
+        bug_src = Path(BUGLIST_SCRIPT).read_text(encoding="utf-8")
+        literal = self._cmd_scan_nonterminal_literal(bug_src)
+        assert literal == issues_mod.TERMINAL_STATUSES["bug"], (
+            f"buglist.py cmd_scan 的 nonterminal 排除集 {literal} 与 "
+            f"issues.TERMINAL_STATUSES['bug'] {issues_mod.TERMINAL_STATUSES['bug']} 不严格相等"
+        )
+
+    def test_todolist_cmd_scan_exclusion_set_strictly_equals_terminal_statuses(self):
+        todo_src = Path(TODOLIST_SCRIPT).read_text(encoding="utf-8")
+        literal = self._cmd_scan_nonterminal_literal(todo_src)
+        assert literal == issues_mod.TERMINAL_STATUSES["todo"], (
+            f"todolist.py cmd_scan 的 nonterminal 排除集 {literal} 与 "
+            f"issues.TERMINAL_STATUSES['todo'] {issues_mod.TERMINAL_STATUSES['todo']} 不严格相等"
+        )
+
 
 class TestAtomicWrite:
     """同款原子写 helper（供后续任务写 issues/INDEX.md / issues/batches.md 用）。"""
