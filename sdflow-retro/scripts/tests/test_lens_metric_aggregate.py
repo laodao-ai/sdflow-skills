@@ -284,3 +284,46 @@ def test_unclosed_fence_swallows_trailing_anchors(tmp_path):
     (p / "code-review-report.md").write_text(text, encoding="utf-8")
     rows = lma.parse_report(p / "code-review-report.md")
     assert len(rows) == 1  # 第二个锚因未闭合 fence 被漏计,不是被误取
+
+
+# [mlh-p2-anchor-lint Task 4] aggregator 硬编码 enum 对契约块一致性 + 双解析器交叉断言。
+# 注：文件顶部已用 importlib 把 lens_metric_aggregate.py 按绝对路径加载为 `lma`
+# （非常规 `import lens_metric_aggregate`，因 scripts/ 未必在 sys.path 上）——此处复用
+# 该既有 `lma`，不再重复 `import lens_metric_aggregate as lma`（会与顶部加载方式冲突/多余）。
+_REPO = Path(__file__).resolve().parents[3]                # 仓根：tests/scripts/sdflow-retro/仓根
+_CONTRACT = _REPO / "sdflow-init" / "assets" / "workflow" / "lens-metric-contract.md"
+_ANCHOR_LINT = _REPO / "sdflow-init" / "assets" / "workflow" / "tools" / "anchor_lint.py"
+
+
+def _parse_enum_block_minimal(contract_path):
+    """极简契约 lens-metric-enums 块解析（不 import anchor_lint，独立实现）。"""
+    text = Path(contract_path).read_text(encoding="utf-8")
+    lines, out, in_block = text.splitlines(), {}, False
+    for ln in lines:
+        if not in_block:
+            if ln.strip().startswith("```lens-metric-enums") or ln.strip().startswith("~~~lens-metric-enums"):
+                in_block = True
+            continue
+        if ln.strip().startswith("```") or ln.strip().startswith("~~~"):
+            break
+        if ":" in ln:
+            k, v = ln.split(":", 1)
+            out[k.strip()] = {x.strip() for x in v.split(",") if x.strip()}
+    return out
+
+
+def test_aggregator_enum_matches_contract():
+    block = _parse_enum_block_minimal(_CONTRACT)
+    assert lma.LAYER_ENUM == block["layer"]
+    assert lma.LENS_ENUM == block["lens"]
+
+
+def test_dual_parser_cross_assert():
+    """交叉断言：anchor_lint.load_enums 与本测试 mini-parser 对同一契约解出的 layer/lens/runner 相等。"""
+    spec = importlib.util.spec_from_file_location("anchor_lint", _ANCHOR_LINT)
+    al = importlib.util.module_from_spec(spec); spec.loader.exec_module(al)
+    e = al.load_enums(_CONTRACT)
+    block = _parse_enum_block_minimal(_CONTRACT)
+    assert e["layer"] == block["layer"]
+    assert e["lens"] == block["lens"]
+    assert e["runner"] == block["runner"]
