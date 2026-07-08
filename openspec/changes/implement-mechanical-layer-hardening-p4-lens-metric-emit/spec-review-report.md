@@ -1,4 +1,11 @@
+---
+ship-gate:
+  design_approved: true
+---
+
 # Spec-Review 报告 · implement-mechanical-layer-hardening-p4-lens-metric-emit
+
+> **设计 HARD-GATE 已拍板批准 · 2026-07-08**（用户过本报告批准 → writing-plans）。ship-gate 机判锚见头部 frontmatter；下方 lens-metric 锚已按〔SR-M〕最终化。
 
 <!-- sdflow:step1-broad-review v1 mode="simulated" -->
 
@@ -135,7 +142,7 @@
 
 ## 度量锚（lens-metric v1）
 
-> config `metrics.enabled=true` → 落锚。**本轮锚由主 session 手折叠归约**（本 change 提议的 emitter 尚未实现）——正是本 change 要消除的手数环节；计数含 judgment（哪些镜报了哪条、裁决），属残余信任边界。roster：broad·domain·adversarial·grounding·outside-voice(design-voice)·outside-voice(hr-tg)。**采纳/裁掉/defer 为设计门拍板前临时裁决，拍板时按〔SR-M〕最终化重算。**
+> config `metrics.enabled=true` → 落锚。**本轮锚由主 session 手折叠归约**（本 change 提议的 emitter 尚未实现）——正是本 change 要消除的手数环节；计数含 judgment（哪些镜报了哪条、裁决），属残余信任边界。roster：broad·domain·adversarial·grounding·outside-voice(design-voice)·outside-voice(hr-tg)。**〔SR-M 已最终化·2026-07-08〕**：设计门拍板后核对——全部采纳项已落 amendment（无中置信项翻改去向）、X1 维持裁掉，故 pre-gate 计数即最终值、原地不新开行。
 
 <!-- sdflow:outside-voice v1 site="design-voice" guard="simulated-source" runner="codex" reason_code="none" findings="6" truncated="false" -->
 <!-- sdflow:outside-voice v1 site="hr-tg" guard="none" runner="codex" reason_code="none" findings="4" truncated="false" -->
