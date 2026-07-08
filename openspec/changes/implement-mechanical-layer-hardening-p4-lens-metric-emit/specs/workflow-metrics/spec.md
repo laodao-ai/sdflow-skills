@@ -10,7 +10,7 @@
 
 **归属规则 MUST 钉死**：`findings/采纳/裁掉/defer` 按「哪些镜报过该 finding」归属，共抓则每命中镜各记一次；`独立` 仅在「唯一报过 ∧ 被采纳」时 +1。`sev` 子格式 MUST 钉死为 `致N/高N/中N/低N` 四级**定序、零也写 0、分隔符恒 `/`**（禁省略某级或改序，防自由子格式脆弱——F1-T2 类）〔spec-review-amendment SR-I〕。
 
-**〔mlh-p4-lens-metric-emit〕计数归约由确定性 emitter 执行、非手数**：上述折叠（原始镜名 → canonical `lens`）+ 归属（`findings/采纳/裁掉/defer` 每命中镜各记一次）+ `独立`（唯一报过 ∧ 被采纳、折叠后计）+ `sev` rollup（仅采纳项）SHALL 由 `lens_metric_emit.py` 对**主 session 给的结构化 findings**（每条带命中镜集/裁决/sev/layer/runner/site）确定性归约产出，MUST NOT 再由主 session 手折叠手数手写锚。emitter 详细契约见新增能力 `lens-metric-emit`。**去重（是否同一 finding）+ 对抗裁决 + 严重度定级** SHALL 保留给模型（产出结构化输入），emitter 只做机械归约、MUST NOT 越权做判断。
+**〔mlh-p4-lens-metric-emit〕计数归约由确定性 emitter 执行、非手数**：上述折叠（原始镜名 → canonical `lens`）+ 归属（`findings/采纳/裁掉/defer` 每命中镜各记一次）+ `独立`（唯一报过 ∧ 被采纳、折叠后计）+ `sev` rollup（仅采纳项）SHALL 由 `lens_metric_emit.py` 对**主 session 给的结构化 findings + 本轮 lens roster**〔grill-amendment：roster 补零-finding 镜的强制行〕确定性归约产出，MUST NOT 再由主 session 手折叠手数手写锚。折叠映射 SHALL 由契约 `lens-metric-fold` 机读块**单一源**承载〔grill-amendment：原折叠仅活在 prose ADR-2、无代码单一源，本 change 机读化根治〕。emitter 详细契约见新增能力 `lens-metric-emit`。**去重（是否同一 finding）+ 对抗裁决 + 严重度定级** SHALL 保留给模型（产出结构化输入），emitter 只做机械归约、MUST NOT 越权做判断。
 
 〔spec-review-amendment SR-E〕**enum 扩展治理**：新增镜类型（6 值 `lens` 枚举未列的）MUST 先升契约版本号至 `v2` 并更新 ADR-2 折叠表，**MUST NOT 静默塞入 `broad`**（`broad` 是低区分度兜底桶，新镜价值信号被广审噪声稀释 = 反噬「数据驱动优化评审架构」本命题）。
 

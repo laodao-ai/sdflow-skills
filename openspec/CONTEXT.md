@@ -108,6 +108,14 @@ _Avoid_: 拿采纳率单独判「该不该留镜」（会误留 100% 采纳但�
 评审**价值**可测到**镜级**（per-lens，从报告锚导出）；**时长/成本**只能测到**层/阶段级**（per-phase，从 checkpoint 时间戳导出——harness 不暴露子代理耗时，见 `adr/0009`）。两者数据源与粒度不同，**不能相除成 per-lens value/cost 比**。
 _Avoid_: 给单一镜算「性价比」（成本无镜级数据源，per-agent 计时不可行）
 
+**计数归约 vs 分类判断 (Count Reduction vs Classification Judgment)** 〔grill-amendment · adr/0012〕:
+lens-metric 度量原「数值一致性 = 主 session 信任边界（自做去重又写锚、非机械可验）」被 `lens_metric_emit` 一分为二：**计数归约**（把已分类的结构化 findings 折叠成 per-镜 `findings/采纳/裁掉/defer/独立` + `sev` rollup）是**确定性机械活**，下沉给脚本、不再是信任边界；**分类判断**（每条 finding 归哪镜/裁决/几级——去重、对抗裁决、严重度定级）是 judgment、保留给模型，成为**残余**信任边界。脚本只保证「计数是所给输入的正确归约」，MUST NOT 谎称「输入忠实反映合并池」。是「机械活交脚本、模型只做判断」在度量回路的精确切分——把一个笼统的「信任边界」拆成「机械可下沉的半」与「judgment 必留的半」。
+_Avoid_: 说 emitter「消灭了信任边界」（只收窄——分类判断仍是残余边界）；把计数归约当 judgment 留给模型手数（那是被本 change 下沉掉的机械活）
+
+**镜名册 (Lens Roster)** 〔grill-amendment · adr/0012〕:
+一轮评审**跑了哪些镜**的显式清单，独立于每镜是否有 finding。emitter 需它才能为「跑了但零 finding」的镜落全零行——该信息**无法从 findings 集反推**（零贡献镜在 findings 里不现身）。是「反静默」在度量层的落点：跑了没抓到 ≠ 没跑，前者须落零行留痕（同 hr-tg 空箱、grill 跳过类判定的显形纪律）。
+_Avoid_: 从 findings 推 roster（推不出零贡献镜）；零-finding 镜省略落行（把「跑了没抓到」静默吞）
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。
@@ -115,4 +123,5 @@ _Avoid_: 给单一镜算「性价比」（成本无镜级数据源，per-agent �
 - 「镜」单字曾可能被误读成「镜子/mirror」——已钉死为「镜头/**review lens**」（聚焦单一角度的独立 reviewer 子代理），非映照。
 - 「连续」曾笼统指"自动化程度高"——已分 **设计层连续（无强制中断）** vs **编排层连续（无手动逐步触发）**，前者早达成、后者靠 `opsx-ship`（见 `adr/0004-opsx-ship-stage3-orchestrator.md`）。
 - 「强模型」曾隐含"开发 workflow 时所用的最强模型"——已钉为**相对执行机队的档位词**（机队锚定，见 `adr/0006`）；`adr/0001` 的"verify 用强模型、禁弱模型"按此重释 = 机队最强档（opus / gpt-5.5 级），sonnet 属中档不合格。
+- 「lens-metric 折叠表」曾只活在契约 prose（无代码单一源），grill 揭穿 aggregator 只 group 不 fold——已机读化为契约 `lens-metric-fold` 块作折叠单一源（见 `adr/0012`）；「数值一致性=信任边界」已拆为**计数归约（机械下沉）vs 分类判断（残余边界）**两半，勿再当一个笼统边界。
 - 「已并 / merged」曾被 `ship_gate.branch_state()` 隐式当作"**当前 HEAD 分支**有没有并进 base"（全局分支态）——已钉为 **change 域可达性**：一个 change 是否 merged，判据是「它的归档目录在不在 base(main/master) 的树里」（`git ls-tree <base>`），**与当前 HEAD 在哪条分支无关**（ship-gate-hardening D3 grill）。是「盘面即状态」在终态判定上的落地：判据必须锚在「这个 change 的产物落没落 base」这一确定性盘面，不用"当前分支"这个和 change 无关的全局近似。全局近似只在 change 自身分支上恰好成立，跨无关分支查已并 change 会误判"待收尾"。

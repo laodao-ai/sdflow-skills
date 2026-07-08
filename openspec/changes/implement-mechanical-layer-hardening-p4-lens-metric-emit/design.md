@@ -29,18 +29,19 @@
 主 session（判断层，保留）                emitter（机械归约层，新增）              校验/聚合（既有）
 ──────────────────────────────────────────────────────────────────────────────────────────
 Step3 去重+对抗裁决+定级                                                          
-  ↓ 产出结构化 findings(JSON)                                                     
-  [ {lenses:[raw镜名…], verdict:采纳|裁掉|defer,                                  
-     sev:致|高|中|低, layer, runner, site?}, … ]                                 
+  ↓ 产出结构化 findings + roster〔grill-amendment〕                               
+  { roster:[canonical lens…本轮跑了哪些镜],                                       
+    findings:[ {lenses:[raw镜名…], verdict:采纳|裁掉|defer,                       
+                sev:致|高|中|低, layer, runner, site?}, … ] }                     
         │                                                                        
-        └──▶ lens_metric_emit --layer L --findings f.json                        
-                 1. 读契约 lens-metric-enums 块（enums 单一源）                    
+        └──▶ lens_metric_emit --layer L --input in.json                          
+                 1. 读契约 lens-metric-enums + lens-metric-fold 块（enums+折叠 单一源）
                  2. 逐 finding: fold 每 raw 镜名 → canonical lens 集(去重)          
                  3. 归属: 每命中 canonical lens 记 findings/verdict +1            
                  4. 独立: |canonical 集|==1 ∧ verdict==采纳 → 该 lens 独立 +1       
                  5. sev rollup: 每 lens 按采纳项 sev 级累加 → 致N/高N/中N/低N       
-                 6. emit 每 canonical lens 一行合规锚 ────────────────────────▶ anchor_lint 过(构造保证)
-                    (site 分组: outside-voice 各 site 独立行)                      ────▶ 归档后 aggregator 聚合
+                 6. emit 每 **roster** lens 一行：有 finding→归约计数，零→全零行 ──▶ anchor_lint 过(构造保证)
+                    (强制 broad/outside-voice 恒有行; site 分组各独立行)           ────▶ 归档后 aggregator 聚合
 ```
 
 ## 组件清单（TG-14 · BASE-25）
@@ -54,15 +55,21 @@ Step3 去重+对抗裁决+定级
 
 ## Decisions
 
-### ADR-1：输入 = per-finding 结构化 JSON，emitter 内聚合（非模型预聚合）
-- **决策**：emitter 吃**逐条 finding**（每条带命中镜集/裁决/sev），聚合在 emitter 内做。
-- **为何**：若让模型给「已按 lens 聚合的计数」，就是把手数换个地方——没消灭手数信任边界。只有喂 per-finding、emitter 归约，计数才真机械化。
-- **Alt（弃）**：模型给 per-lens 预聚合计数 → emitter 只校验格式。弃因未下沉计数、痛点#2 未闭。
+### ADR-1〔grill-amendment〕：输入 = per-finding 结构化 findings **+ lens roster**，emitter 内聚合
+- **决策**：emitter 吃两部分——① 逐条 finding（每条带命中镜集/裁决/sev）；② **本轮跑了哪些镜的名册 `roster`**（canonical lens 列表，独立于是否有 finding）。聚合在 emitter 内做。
+- **为何（grill 揭穿 2 驱动）**：per-finding 归约只能为「有 finding 的镜」产行；但 anchor_lint `MIN_LENS_ROWS=("broad","outside-voice")`（:135）在 metrics 开时**强制** broad/outside-voice 行存在，且「一个镜跑了但零 finding」**无法从 findings 推出**（findings 里根本没它）。故必须显式喂 roster，emitter 才能为零-finding 的镜落零行、满足强制行——否则 emitter 输出**过不了 anchor_lint**（自相矛盾 ADR-4）。
+- **Alt（弃）**：只喂 findings、emitter 从 findings 推 roster——grill 揭穿其推不出「跑了但零 finding」的镜，强制行缺失。
 
-### ADR-2：折叠逻辑重实现（不 import aggregator）+ 枚举读契约机读块 + 源仓一致性测试守漂移
-- **决策**：emitter **重实现折叠**（原始镜名 → canonical lens，如 `对抗镜N→adversarial`/`完整性镜→grounding`/`codex→outside-voice`），**枚举**（layer/lens/runner/sev-format）从契约 `lens-metric-enums` 块读（单一源、不复制）；在源仓加一致性测试断言 **emitter 折叠 ≡ aggregator 折叠**（二者跨 skill 不能 import，同「fence-aware 三处重实现」既有模式，靠源仓测试守）。
-- **为何**：消费仓无 sdflow-retro，emitter 不能 import aggregator；枚举有机读块可单一源读，但折叠表是 prose（契约 ADR-2）。重实现 + 源仓守卫是最低契约churn、与既有重实现模式一致的选择。
-- **Alt（弃/记开放问题）**：把折叠表提升为契约机读块（如 `lens-metric-fold`）。更长期干净但触契约、增 scope；本 change 不做，记开放问题供未来。
+### ADR-5〔grill-amendment〕：零-finding 镜落全零行，强制 broad/outside-voice 恒有行
+- **决策**：emitter 为 `roster` 中每个 canonical lens 恒落一行——有 finding 则归约计数，零 finding 则落全零行（`findings=采纳=裁掉=defer=独立=0`、`sev=致0/高0/中0/低0`）。metrics 开时 roster MUST 含 `broad` 与 `outside-voice`（满足 MIN_LENS_ROWS），emitter 若发现 roster 缺此二者 → fail-closed 报明（防产出被 anchor_lint 拒）。
+- **为何**：MIN_LENS_ROWS 是 anchor_lint 硬约束；零行是「本镜跑了但没抓到」的诚实留痕（反静默——空箱也显形，同 hr-tg 空箱纪律）。
+- **Alt（弃）**：零-finding 镜不落行——过不了 anchor_lint 且「跑了没抓到」被静默吞（违反元原则）。
+
+### ADR-2〔grill-amendment〕：折叠表提升为契约机读块 `lens-metric-fold`，emitter 从单一源读（根治）
+- **决策**：在 `lens-metric-contract.md` 新增机读块 `lens-metric-fold`（同 `lens-metric-enums` 格式，`原始镜名: canonical-lens` 映射），emitter **从该块读折叠**（layer/lens/runner/sev 仍从 `lens-metric-enums` 读）——折叠**单一源**、emitter 非第二拷贝。枚举/折叠均不在脚本内复制清单。
+- **为何（grill 揭穿驱动）**：grill 证伪原「emitter 折叠 ≡ aggregator 折叠」缓解——`lens_metric_aggregate.group_key`（:116）**只 group、不 fold**，读的归档锚 `lens` 值早已 canonical（模型写锚时手折叠过）；**折叠表当前只活在契约 prose（ADR-2/SR-D），从无代码单一源**。若 emitter「重实现折叠」，它就是**折叠的第一份且唯一代码拷贝**，与契约 prose 漂移无守卫（治标）。提升为机读块 = 折叠从此单一源、emitter/未来任何消费者都读它（根治，与契约「各生产者引用而 MUST NOT 复制清单」纪律一致）。
+- **版本**：`lens-metric-fold` 是把**既有** prose 折叠映射机读化、**非新增镜类型**，故契约版本 v1 不升（enum 扩展治理只管新 lens 值）；块内新增/改映射走同块单一源更新。
+- **Alt（弃）**：emitter 内硬编码折叠 + fixture 测试对契约 prose——grill 揭穿其仍是「prose + 一份代码拷贝」，fixture 与 prose 仍漂移（治标）。用户拍板取根治。
 
 ### ADR-3：信任边界一分为二——计数归约（机械）vs 输入分类（残余 judgment）
 - **决策**：脚本保证「计数是**所给输入**的正确归约」；**不**保证「输入 findings 集 == 合并池实收 finding」。后者（模型对每条 finding 的镜集/裁决/sev 分类）显式声明为**残余主 session 信任边界**。
@@ -78,17 +85,17 @@ lens-metric 是跨模块共享契约；本 change 加 emitter 产者，MUST 确�
 
 | 套件成员 | 角色 | 本 change 义务 | 是否改 |
 |----------|------|----------------|--------|
-| `lens-metric-contract.md` `lens-metric-enums` 块 | 枚举单一源 | emitter 读取，MUST NOT 复制/分叉 | 仅补 prose 注记（不改枚举、不升版本）|
-| `lens_metric_emit.py`（新）| 产者（归约）| 折叠/归属/sev 严守契约规则 | 新增 |
+| `lens-metric-contract.md` | 枚举+折叠单一源 | emitter 读取，MUST NOT 复制/分叉 | 〔grill〕**加 `lens-metric-fold` 机读块**（既有 prose 折叠机读化，非新 lens 值 → 不升版本）+ 补 emitter 注记 |
+| `lens_metric_emit.py`（新）| 产者（归约）| 折叠/归属/sev 严守契约、折叠+枚举均读契约单一源 | 新增 |
 | `anchor_lint.py` | 校验者 | emitter 输出按构造过它；同读枚举 | 不改 |
-| `lens_metric_aggregate.py` | 消费者（聚合）| 折叠须与 emitter 一致（源仓测试守）| 不改 |
-| spec-review/code-review SKILL | 产者调用点 | 落锚步改调 emitter | 改落锚步 |
+| `lens_metric_aggregate.py` | 消费者（聚合）| **仅 group 已 canonical 值、不 fold**（grill 确认）；其 canonical lens 输出 ⊆ fold 块 canonical 集 | 不改 |
+| spec-review/code-review SKILL | 产者调用点 | 落锚步改调 emitter；构造 findings+roster | 改落锚步 |
 
-**D-6 声明**：本 change **未越** lens-metric 共享契约边界——不改锚形/枚举/版本，emitter 严守契约折叠/归属/sev 规则、读枚举单一源；套件四成员一致性由「emitter 输出过 anchor_lint」+「emitter 折叠 ≡ aggregator 折叠」两测试守。
+**D-6 声明〔grill-amendment〕**：本 change **触** lens-metric 共享契约（加 `lens-metric-fold` 机读块）但**未越界**——不改锚形/枚举/契约版本（fold 块是既有 prose 折叠的机读化、非新 lens 类型）；折叠从此**单一源**（根治原「prose 无代码单一源」）。套件一致性由「emitter 输出过 anchor_lint」（ADR-4）+「折叠/枚举均读契约单一源」（ADR-2，无双实现可漂移）守。
 
 ## Risks / Trade-offs
 
-- **[折叠双实现漂移]**（emitter 重实现折叠，aggregator 另有一份）→ **Mitigation**：源仓一致性测试断言二者折叠等价（ADR-2）；折叠表本身钉在契约 prose。
+- **[折叠漂移]**〔grill-amendment，原「双实现漂移」判据已证伪〕：grill 揭穿 aggregator **无折叠**（只 group 已 canonical 值），故不存在「emitter vs aggregator 双实现」；真风险是 emitter 折叠 vs 契约折叠表漂移 → **Mitigation**：折叠提升为契约 `lens-metric-fold` 机读块、emitter 读单一源（ADR-2 根治），**无第二拷贝可漂移**；另加测试断言 aggregator 消费的 canonical lens ⊆ fold 块输出集。
 - **[输入分类错但计数"正确"]** 模型把 finding 归错镜/错裁决，emitter 仍机械归约出"自洽但错"的计数 → **Mitigation**：不可机械消除（judgment），ADR-3 诚实声明为残余边界；这与现状同等（现状手数也依赖分类正确），本 change 不使其变糟、只把计数环节的错误面消除。
 - **[emitter 与 anchor_lint 枚举读取时机不一致]** 若契约升 v2 而 emitter 缓存旧枚举 → **Mitigation**：二者均运行时读契约、不缓存；enum 扩展治理（SR-E）要求升版本同步。
 - **[消费仓 config 关 metrics]** → emitter 不落锚（门控一致），非风险，测试覆盖。
@@ -99,7 +106,7 @@ lens-metric 是跨模块共享契约；本 change 加 emitter 产者，MUST 确�
 - 部署：改 bundle 权威源 → `sdflow-init update` 下发消费仓（本仓 dogfood 直接 symlink 生效）。
 - 回滚：删脚本 + SKILL 落锚步 revert 回手数（无状态残留）。
 
-## Open Questions
+## Open Questions〔grill：两问已收敛，无遗留〕
 
-- **折叠表机读化**（ADR-2 Alt）：是否未来把折叠表从 prose 提升为契约 `lens-metric-fold` 机读块，让 emitter/aggregator 单一源读折叠（消灭双实现漂移面）？本 change 不做（触契约、增 scope），记此备未来 ROI 复评。
-- emitter 输入 JSON 的 sev 字段是「单级」（每 finding 一个致/高/中/低）还是允许多级？本设计取**单级**（一条 finding 一个严重度），实现时若发现主 session 有多级需求再议。
+- ~~折叠表机读化~~ → **已拍定（grill 共识 = 根治）**：本 change 即加契约 `lens-metric-fold` 机读块、emitter 单一源读折叠（见 ADR-2）。不再是未来项。
+- ~~sev 单级 vs 多级~~ → **已拍定单级**：一条 finding 一个严重度（致/高/中/低），emitter 按采纳项 sev 级 rollup。无遗留。

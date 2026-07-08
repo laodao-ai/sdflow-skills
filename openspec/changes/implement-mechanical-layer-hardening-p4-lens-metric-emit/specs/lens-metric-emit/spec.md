@@ -2,7 +2,7 @@
 
 ### Requirement: lens-metric 计数由确定性 emitter 从结构化 findings 归约
 
-lens-metric 锚的计数（`findings`/`采纳`/`裁掉`/`defer`/`独立` + `sev` rollup）SHALL 由确定性脚本 `lens_metric_emit.py` 归约，MUST NOT 再由主 session 手数手写。emitter 的**输入** SHALL 为主 session 给的结构化 findings（每条至少携带：命中镜集 `lenses`、裁决 `verdict`∈{采纳,裁掉,defer}、严重度 `sev`∈{致,高,中,低}、`layer`、`runner`、可选 `site`）；emitter 按 `lens-metric-contract.md` 的**折叠表**将原始镜名投影到 canonical `lens`、按**归属规则**（`findings/采纳/裁掉/defer` 每命中镜各记一次；`独立` 仅「唯一报过 ∧ 被采纳」时 +1、折叠到类型后计）逐 canonical lens 归约，输出**每 lens 一行**字段齐全、取值在域内、`sev` 子格式为 `致N/高N/中N/低N`（仅采纳项计入、零也写 0、分隔恒 `/`）的合规锚行。
+lens-metric 锚的计数（`findings`/`采纳`/`裁掉`/`defer`/`独立` + `sev` rollup）SHALL 由确定性脚本 `lens_metric_emit.py` 归约，MUST NOT 再由主 session 手数手写。emitter 的**输入** SHALL 含两部分〔grill-amendment〕：① `roster`（本轮跑了哪些 canonical lens，独立于是否有 finding）；② 结构化 findings（每条至少携带：命中镜集 `lenses`、裁决 `verdict`∈{采纳,裁掉,defer}、严重度 `sev`∈{致,高,中,低}、`layer`、`runner`、可选 `site`）。emitter 按 `lens-metric-contract.md` 的 **`lens-metric-fold` 机读块**将原始镜名投影到 canonical `lens`〔grill-amendment：折叠从契约机读块单一源读、非脚本内 prose 拷贝〕、按**归属规则**（`findings/采纳/裁掉/defer` 每命中镜各记一次；`独立` 仅「唯一报过 ∧ 被采纳」时 +1、折叠到类型后计）逐 canonical lens 归约，**为 `roster` 中每个 lens 恒输出一行**字段齐全、取值在域内、`sev` 子格式为 `致N/高N/中N/低N`（仅采纳项计入、零也写 0、分隔恒 `/`）的合规锚行。
 
 emitter SHALL 只做机械归约，MUST NOT 做去重（是否同一 finding）、对抗裁决、严重度定级——这三者 SHALL 保留给模型/主 session（产出结构化输入）。
 
@@ -18,17 +18,25 @@ emitter SHALL 只做机械归约，MUST NOT 做去重（是否同一 finding）�
 - **WHEN** 输入 finding 的镜名为 `对抗镜2` 或 `完整性镜` 或 `codex`
 - **THEN** emitter SHALL 分别折叠为 canonical `adversarial`/`grounding`/`outside-voice` 后再归约，MUST NOT 产出枚举外的 `lens` 值
 
+#### Scenario: roster 中零-finding 镜落全零行〔grill-amendment〕
+- **WHEN** `roster` 含某 lens（如 `outside-voice`）但本轮无任何 finding 命中它
+- **THEN** emitter SHALL 仍为该 lens 落一行全零锚（`findings=采纳=裁掉=defer=独立=0`、`sev=致0/高0/中0/低0`），MUST NOT 省略该行（反静默：跑了没抓到也留痕）
+
+#### Scenario: metrics 开时强制 broad/outside-voice 行〔grill-amendment〕
+- **WHEN** `metrics.enabled` 为真而输入 `roster` 缺 `broad` 或 `outside-voice`
+- **THEN** emitter SHALL fail-closed 报明缺失（因 `anchor_lint` 的 `MIN_LENS_ROWS` 强制此二行存在，缺则输出必被拒），MUST NOT 产出会被 anchor_lint 拒的部分锚
+
 ### Requirement: emitter 坏输入 fail-closed 不静默
 
-emitter 对坏输入（非法 JSON、缺必填字段、`verdict`/`lens`/`layer`/`runner` 越域、`sev` 级别非法）SHALL **fail-closed**：非零退出 + stderr 携带**可读 reason（含被拒字段名 + 失败类别）**，MUST NOT 静默产出空锚或部分锚、MUST NOT exit 0。枚举/折叠 SHALL 从契约 `lens-metric-enums` 机读块**单一源读取**，MUST NOT 在脚本内复制枚举清单；因 emitter 作 bundle tool 铺进消费仓、而 `sdflow-retro/scripts` 不在消费仓，emitter MUST NOT `import lens_metric_aggregate`/`ship_gate`，SHALL 脚本内重实现同款折叠/归约逻辑（非 import 复用）。
+emitter 对坏输入（非法 JSON、缺必填字段、`verdict`/`lens`/`layer`/`runner` 越域、`sev` 级别非法、`roster` 缺失或含枚举外 lens、未知原始镜名无折叠映射）SHALL **fail-closed**：非零退出 + stderr 携带**可读 reason（含被拒字段名 + 失败类别）**，MUST NOT 静默产出空锚或部分锚、MUST NOT exit 0、**MUST NOT 把未知镜名静默塞入 `broad`**（SR-E）。枚举 SHALL 从契约 `lens-metric-enums` 机读块、**折叠 SHALL 从契约 `lens-metric-fold` 机读块**〔grill-amendment〕**单一源读取**，MUST NOT 在脚本内复制枚举/折叠清单；因 emitter 作 bundle tool 铺进消费仓、而 `sdflow-retro/scripts` 不在消费仓，emitter MUST NOT `import lens_metric_aggregate`/`ship_gate`，SHALL 脚本内重实现同款归约/fence 逻辑（非 import 复用）。
 
 #### Scenario: 越域枚举非零退出
 - **WHEN** 输入某 finding 的 `verdict=通过` 或 `lens=对抗镜1`（未折叠）或 `layer=review`（越域）
 - **THEN** emitter SHALL 非零退出，stderr 报明被拒字段名 + 失败类别，MUST NOT 产出锚行
 
-#### Scenario: 契约枚举单一源读取
-- **WHEN** emitter 需要 layer/lens/runner/sev-format 取值域
-- **THEN** SHALL 从 `lens-metric-contract.md` 的 `lens-metric-enums` fenced 块读取，MUST NOT 在脚本内另复制清单（与 `anchor_lint` 同源）
+#### Scenario: 契约枚举/折叠单一源读取〔grill-amendment〕
+- **WHEN** emitter 需要 layer/lens/runner/sev-format 取值域，或原始镜名→canonical lens 折叠
+- **THEN** 取值域 SHALL 从 `lens-metric-contract.md` 的 `lens-metric-enums` 块读、折叠 SHALL 从 `lens-metric-fold` 块读，MUST NOT 在脚本内另复制清单（枚举与 `anchor_lint` 同源；折叠为本 change 新增契约机读块、emitter 为其首个消费者）
 
 ### Requirement: emitter 输出按构造通过 anchor_lint 且信任边界诚实收窄
 
