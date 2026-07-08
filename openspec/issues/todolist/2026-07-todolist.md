@@ -94,10 +94,10 @@
 | T86 | `anchor_lint.py load_enums` | 未闭合 fence 不 fail-closed（与 emitter _read_block_pairs 同盲区，本 change 已修 emitter 侧）——EOF 前无闭合围栏时静默把剩余全文当块体；契约受版本控制利用面低，但两侧同错致等价性测试假绿风险 | 代码质量 | PROPOSED | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 | T87 | `lens_metric_emit.py load_enums + anchor_lint.py` | lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试 | 代码质量 | PROPOSED | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 | T88 | `仓库 CI/pre-commit` | 无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并 | 基础设施 | PROPOSED | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit | implement-mechanical-layer-hardening-p4-lens-metric-emit |
-| T89 | `roadmap_writeback_draft.py` | probe_format 全文扫描非限定 phase：混合格式 roadmap 会误判 checkbox，目标 phase 是表格式时不 fail-loud 反空匹配误诊断（修法:probe 增 phase 参数只扫该 phase 行段） | 代码质量 | OPEN | 2026-07-09 01:50 | done-roadmap-writeback |  |
-| T90 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） | 代码质量 | OPEN | 2026-07-09 01:50 | done-roadmap-writeback |  |
-| T91 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） | 代码质量 | OPEN | 2026-07-09 01:50 | done-roadmap-writeback |  |
-| T92 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 | 代码质量 | OPEN | 2026-07-09 01:50 | done-roadmap-writeback |  |
+| T89 | `roadmap_writeback_draft.py` | probe_format 全文扫描非限定 phase：混合格式 roadmap 会误判 checkbox，目标 phase 是表格式时不 fail-loud 反空匹配误诊断（修法:probe 增 phase 参数只扫该 phase 行段） | 代码质量 | PROPOSED | 2026-07-09 01:50 | done-roadmap-writeback | done-roadmap-writeback |
+| T90 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） | 代码质量 | PROPOSED | 2026-07-09 01:50 | done-roadmap-writeback | done-roadmap-writeback |
+| T91 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） | 代码质量 | PROPOSED | 2026-07-09 01:50 | done-roadmap-writeback | done-roadmap-writeback |
+| T92 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 | 代码质量 | PROPOSED | 2026-07-09 01:50 | done-roadmap-writeback | done-roadmap-writeback |
 
 ---
 
@@ -1083,7 +1083,7 @@
 |------|------|
 | 模块 | `roadmap_writeback_draft.py` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/done-roadmap-writeback/design.md`
 
@@ -1097,7 +1097,7 @@
 |------|------|
 | 模块 | `roadmap_writeback_draft.py` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/done-roadmap-writeback/design.md`
 
@@ -1111,7 +1111,7 @@
 |------|------|
 | 模块 | `roadmap_writeback_draft.py` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/done-roadmap-writeback/design.md`
 
@@ -1125,7 +1125,7 @@
 |------|------|
 | 模块 | `test_roadmap_writeback_draft.py` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/done-roadmap-writeback/design.md`
 

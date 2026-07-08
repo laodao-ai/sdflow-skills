@@ -13,6 +13,15 @@
 | T30 | todo | PROPOSED | cross-model-outside-voice |
 | T31 | todo | PROPOSED | cross-model-outside-voice |
 
+### 批次：done-roadmap-writeback
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T89 | todo | PROPOSED | done-roadmap-writeback |
+| T90 | todo | PROPOSED | done-roadmap-writeback |
+| T91 | todo | PROPOSED | done-roadmap-writeback |
+| T92 | todo | PROPOSED | done-roadmap-writeback |
+
 ### 批次：gate-checkpoint-hardening
 
 | ID | Pool | Status | 关联Change |
