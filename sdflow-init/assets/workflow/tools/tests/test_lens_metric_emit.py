@@ -41,3 +41,27 @@ def test_load_fold_codomain_out_of_enum_fail_closed(tmp_path):
     c.write_text("```lens-metric-fold\n某镜: newlens\n```\n", encoding="utf-8")
     import pytest
     with pytest.raises(m.EmitError): m.load_fold(c, e)
+
+def test_fold_hit_identity_passthrough():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    assert m.fold_hit({"raw":"domain"}, e, f) == ("domain","claude","—")
+
+def test_fold_hit_nonidentity_map():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    assert m.fold_hit({"raw":"对抗镜2"}, e, f) == ("adversarial","claude","—")
+
+def test_fold_hit_outside_voice_needs_runner_site():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    assert m.fold_hit({"raw":"codex","runner":"codex","site":"hr-tg"}, e, f) == ("outside-voice","codex","hr-tg")
+    import pytest
+    with pytest.raises(m.EmitError): m.fold_hit({"raw":"codex"}, e, f)      # 缺 runner/site
+
+def test_fold_hit_unknown_raw_fail_closed_not_broad():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    import pytest
+    with pytest.raises(m.EmitError): m.fold_hit({"raw":"神秘镜"}, e, f)     # SR-E 不塞 broad
+
+def test_fold_hit_site_injection_fail_closed():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    import pytest
+    with pytest.raises(m.EmitError): m.fold_hit({"raw":"codex","runner":"codex","site":'a"b'}, e, f)

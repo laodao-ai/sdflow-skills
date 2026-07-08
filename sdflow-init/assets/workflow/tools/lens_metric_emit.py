@@ -66,3 +66,27 @@ def load_fold(contract_path, enums):
             raise EmitError(f"lens-metric-fold codomain 越 lens-enum: {raw}→{canon}")  # C3 自校验
         fold_map[raw] = canon
     return fold_map
+
+
+def fold_hit(hit, enums, fold_map):
+    """一个 hit → 行键 (lens, runner, site)。恒等 pass-through；未知 raw fail-closed（不塞 broad）。"""
+    if not isinstance(hit, dict) or "raw" not in hit:
+        raise EmitError(f"hit 缺 raw: {hit!r}")
+    raw = hit["raw"]
+    if raw in enums["lens"]:
+        canon = raw                                  # 恒等 pass-through（ADR-7）
+    elif raw in fold_map:
+        canon = fold_map[raw]
+    else:
+        raise EmitError(f"未知 raw 镜名无折叠映射: {raw}")  # SR-E 不静默塞 broad
+    if canon == "outside-voice":
+        runner, site = hit.get("runner"), hit.get("site")
+        if runner is None or site is None:
+            raise EmitError(f"outside-voice hit 缺 runner/site: {hit!r}")
+    else:
+        runner, site = "claude", "—"
+    if runner not in enums["runner"]:
+        raise EmitError(f"runner 越域: {runner}")
+    if isinstance(site, str) and _SITE_BAD.search(site):
+        raise EmitError(f"site 含非法字符（注入）: {site!r}")  # C7
+    return (canon, runner, site)
