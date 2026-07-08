@@ -9,14 +9,14 @@
 
 两腿六阶段。**Leg 1（脚本化）先行**——就绪、高 ROI、低爆炸半径，阶段 1-4 各自独立可交付、可并行（除共享文件外）。**Leg 2（去字符串化）就绪度分级**——阶段 5（S1 gate 锚）就绪但前置 ROI 评估门 + 高仪式；阶段 6（S2 recorder 索引）**north-star 不排期**，ROI 触发才起。
 
-> **进度里程碑（2026-07-08）**：**Leg 1 高 ROI 三阶段 P1/P2/P3 全交付**（sweep / anchor-lint / determ-guards）+ **Leg 2 P5 gate 锚→frontmatter 已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`）+ **P5 尾巴 T74/T75 已清结**（change `mlh-p5-parser-cleanup`，merge `007b00d`：parser 首行 `---` 无闭合改判 absent + `unterminated` 死类别退役 + live inline 死符号删除）——机械层「脚本化」主干 + 「去字符串化」家族① 均已立且尾巴清尽。余 P4（编排步下沉）+ Leg 2 P6（recorder 索引）。**目标态重评（2026-07-08）**：P4 从「按需 0/7」翻为「★5 项该做未做（4.C/4.B/4.D.1/2/4）+ ◐2 项该做待 embedded 契约（4.A/4.D.3）」，判据锚目标态非现状快照；P6 从「north-star 不排期」经端态复核**拍板 = 端态 A**（根治：迁 frontmatter 使 `｜` 腐蚀类结构上不可能；否决 B 治标；约束①历史不迁使成本≈P5 dual-read；压轴排 ★P4 后）——详见各阶段前置的目标态重评订正块 + 建议批次 todolist `mlh-p4-target-state`。
+> **进度里程碑（2026-07-08）**：**Leg 1 高 ROI 三阶段 P1/P2/P3 全交付**（sweep / anchor-lint / determ-guards）+ **Leg 2 P5 gate 锚→frontmatter 已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`）+ **P5 尾巴 T74/T75 已清结**（change `mlh-p5-parser-cleanup`，merge `007b00d`：parser 首行 `---` 无闭合改判 absent + `unterminated` 死类别退役 + live inline 死符号删除）——机械层「脚本化」主干 + 「去字符串化」家族① 均已立且尾巴清尽。**P4（编排步下沉）已启**——4.C `lens_metric_emit` ✅ 已交付（change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge `bd7c05f`：手数信任边界机械化 + adr/0012 + 8源×2冷审），余 ★4 项（4.B/4.D.1/2/4）+ ◐2 项（4.A/4.D.3 待 embedded 契约）+ Leg 2 P6（recorder 索引，端态 A 压轴）。**目标态重评（2026-07-08）**：P4 从「按需 0/7」翻为「★5 项该做未做（4.C/4.B/4.D.1/2/4）+ ◐2 项该做待 embedded 契约（4.A/4.D.3）」，判据锚目标态非现状快照；P6 从「north-star 不排期」经端态复核**拍板 = 端态 A**（根治：迁 frontmatter 使 `｜` 腐蚀类结构上不可能；否决 B 治标；约束①历史不迁使成本≈P5 dual-read；压轴排 ★P4 后）——详见各阶段前置的目标态重评订正块 + 建议批次 todolist `mlh-p4-target-state`。
 
 | 阶段 | 腿 | 里程碑 | 就绪度 |
 |---|---|---|---|
 | **P1** · `issues.py sweep --change X` | Leg 1 | done sweep 4 步手循环 → 一个原子子命令 | ✅ **已交付**（ca66d60） |
 | **P2** · anchor-lint 产出侧校验器 | Leg 1 | 每轮 review 手 grep+肉眼核 enum → 机验门 | ✅ **已交付**（e43460c） |
 | **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | ✅ **已交付**（a6a2adc，change `mlh-p3-determ-guards`；冷审 F5 守卫覆盖 8→14 helper） |
-| **P4** · 编排 SKILL 机械步下沉 | Leg 1 | 4.A-4.D.4 按目标态逐项脚本化 | 就绪（★5 项该做 · ◐2 项待 embedded 契约；批次 `mlh-p4-target-state`） |
+| **P4** · 编排 SKILL 机械步下沉 | Leg 1 | 4.A-4.D.4 按目标态逐项脚本化 | 🔄 **进行中**（4.C ✅ 已交付 `bd7c05f`；余 ★4 项 4.B/4.D.1/2/4 + ◐2 项待 embedded 契约；批次 `mlh-p4-target-state`） |
 | **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` **live 解析半场**、正文提及不误判、归档 dual-read 永久保留 | ✅ **已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`；spec-review 六镜拦 1致命+3高 / impl-review 抓 2 真 bug；662 passed·dogfood CLEAN） |
 | **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发（写侧）+ 新数据可查询基底 | **端态 A 已定**（根治；约束①使成本≈P5 dual-read；压轴排 P4 后；T85） |
 
@@ -125,7 +125,7 @@
 #### 4.B `maintain_scan.py`（P6）
 - [ ] 4.B.1 maintain INDEX↔文件系统 set-diff + CLAUDE.md 过时引用 + bundle 陈旧告警只读报告；保留「新 spec 归哪组 / 是否修复」给模型/人。
 #### 4.C `lens_metric_emit.py`（P7）
-- [ ] 4.C.1 吃结构化 findings（每条带命中镜集 + 裁决 + sev）→ 归约出格式/字段/enum 正确的 lens-metric 锚行 + 计数；把「数值一致性信任边界」从手数收敛成脚本归约；保留去重 + 对抗裁决给模型。
+- [x] 4.C.1 吃结构化 findings（每条带命中镜集 + 裁决 + sev）→ 归约出格式/字段/enum 正确的 lens-metric 锚行 + 计数；把「数值一致性信任边界」从手数收敛成脚本归约；保留去重 + 对抗裁决给模型。〔✅ 已交付，change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge `bd7c05f`：`lens_metric_emit.py` 186 行 stdlib + 契约 fold/input-schema 机读块 + 四方单一源守卫 + 两审 SKILL 落锚步；adr/0012；spec-review 8 源/code-review 8 源冷审 F1 高危订正；39+100 passed·dogfood CLEAN。详见 task-log〕
 #### 4.D 小校验器组（P8）
 - [ ] 4.D.1 outside-voice 复用守卫（锚 mode + 时间戳 + 结构三判 → reason_code 退出码）。
 - [ ] 4.D.2 HR-TG 交集判定（TG 集 ∩ HR-TG 子集 → hit 列表/none + 规范锚串，清单从 trigger-catalog 单一源读；`tg02_hit` 已有先例）。

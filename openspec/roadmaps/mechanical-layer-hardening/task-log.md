@@ -58,6 +58,21 @@
 
 ## 2026-07-08
 
+### [阶段 4 / 任务 4.C] lens_metric_emit 确定性归约器交付（SHIPPED + ARCHIVED，merge `bd7c05f`）
+- **状态**: ✅ 完成（change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，archive `2026-07-08-implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge main `bd7c05f`）
+- **scope**: P4 ★ 组最高项 4.C——把 lens-metric 锚计数从主 session **手数**下沉为机械归约，直闭 requirements §1.2 痛点 #2「手数信任边界」。
+- **交付物**:
+  - `lens_metric_emit.py`（186 行纯 stdlib）：折叠 pass-through（`fold_hit`）+ 行键 `(lens,runner,site)` 归属/独立/sev-rollup（`reduce`）+ all-or-nothing fail-closed（`main`，坏第 N 条→零锚+非零退出）。
+  - 契约单一源：`lens-metric-contract.md` 加 `lens-metric-fold` 机读块（折叠单一源，`load_fold` 自校验 codomain⊆lens）+ `lens-metric-input-schema` 机读块（emitter 输入权威 schema、bundle 可达）。
+  - 四方单一源守卫：emitter/anchor_lint/aggregator/契约一致无漂移（`test_load_enums_equivalence`/`test_fold_codomain_subset_lens_enum`/`test_aggregator_enum_matches_contract`/`test_min_lens_rows_matches_anchor_lint`）。
+  - 两审 SKILL 落锚步改调 emitter（构造 roster+findings → exit0 才落 → anchor_lint 自检；门控关不调；保留残余信任边界声明）：`sdflow-spec-review/SKILL.md:99`、`sdflow-code-review/SKILL.md:112`。
+- **规范增量**: NEW capability `lens-metric-emit`（`openspec/specs/lens-metric-emit/spec.md`）+ workflow-metrics MODIFIED（C19「计数归约机械化，分类正确性为残余信任边界」）。
+- **grill**: 死磕 design 揭穿 2 处代码 vs 主张（aggregator 无折叠→折叠无代码单一源；anchor_lint 强制行不可从 findings 推）→ 共识根治：折叠机读化 + emitter 输入补 roster；**adr/0012** 新建。
+- **冷层价值**: spec-review 8 源多镜（6 镜 + 2 codex 声 + 广审）→ 20+ findings 收敛 roster/fold/fail-closed 三类设计缺口（5 镜共识，codex+Claude 双命中 anchor_set 第三调用方）；code-review 8 源冷审 **F1 高危**（`check_lens_metric` truthy 取值让空串绕过校验→假 CLEAN，7 SDD implementer + 注入点 B 全放过 → 订正为存在性校验）+ 自动修 11 项。dogfood 闭环坐实：本 change 的 code-review 度量锚由刚建的 emitter 自身归约产出。
+- **验证**: verify=PASS（opus 冷启 Do-Not-Trust）；`test_lens_metric_emit.py` **39 passed**、tools 全套件 **100 passed**、`-W error` 0 warning；端到端 `--layer spec-review` exit 0 出 6 行合规锚。
+- **defer**: T86（anchor_lint 未闭合 fence 同盲区）/ T87（`lens-metric-enums` 重复键静默覆盖）/ T88（无 CI/pre-commit，单一源守卫仅手动 pytest 生效）→ 批次 `implement-mechanical-layer-hardening-p4-lens-metric-emit`（hand-off 建议 T86+T87 合一个「fence 解析硬化」cleanup change）。
+- **下一步**: P4 剩余 ★ 项（4.B maintain_scan / 4.D.1/2/4 小守卫，批次 `mlh-p4-target-state`）；4.A/4.D.3 待 embedded 契约排后；P6/端态 A（T85）压轴。
+
 ### [P6 端态拍板] recorder 索引→frontmatter 端态决策 = A（根治），否决 B（治标）
 - **状态**: ✅ 决策已定（实现未起，压轴排 ★P4 后；todolist T85）
 - **决策**: **端态 A（迁 frontmatter）**——用户以「根治 + 达成目标」判据选定，否决端态 B（reject-over-restructure）。
