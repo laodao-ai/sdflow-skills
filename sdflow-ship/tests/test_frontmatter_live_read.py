@@ -174,3 +174,44 @@ def test_live_dup_key_unknown(repo):
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN"
     assert "verify" in js["reason"] and "duplicate-key" in js["reason"]
+
+
+UNCLOSED = "---\nship-gate:\n  design_approved: true\n无闭合横线，正文继续\n"
+
+
+def test_live_unclosed_design_refuse_with_hint(repo):
+    # [T74 1.5/3.1b] 首行 --- 无闭合的 spec-review-report → design 读点 absent → REFUSE_START(3)，
+    # 且 emit reason 含结构提示子串（提醒补闭合行）。
+    d = mkchange(repo)
+    d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")  # 非嵌入式避 RUN_SOP
+    d.joinpath("spec-review-report.md").write_text(UNCLOSED, encoding="utf-8")
+    commit_all(repo, "seed")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    assert "未见闭合" in js["reason"]
+
+
+def test_live_unclosed_code_review_step_in_progress_with_hint(repo):
+    # [T74 3.1b] 同形态报告作 code-review-report → STEP_IN_PROGRESS(0)/next=sdflow-code-review，
+    # 不 UNKNOWN(6)，reason 含结构提示。
+    d = impl_done(repo)
+    d.joinpath("code-review-report.md").write_text(UNCLOSED, encoding="utf-8")
+    commit_all(repo, "cr-unclosed")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS"
+    assert js["next"] == "sdflow-code-review"
+    assert "未见闭合" in js["reason"]
+
+
+def test_live_unclosed_verify_step_in_progress_with_hint(repo):
+    # [T74 3.1b] 同形态报告作 verify-report → STEP_IN_PROGRESS(0)/next=sdflow-done，
+    # **不 UNKNOWN(6)**（坐实无闭合首块不再硬崩），reason 含结构提示。
+    d = impl_done(repo)
+    d.joinpath("code-review-report.md").write_text(
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+    d.joinpath("verify-report.md").write_text(UNCLOSED, encoding="utf-8")
+    commit_all(repo, "verify-unclosed")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS"
+    assert js["next"] == "sdflow-done"
+    assert "未见闭合" in js["reason"]

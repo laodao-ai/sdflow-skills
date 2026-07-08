@@ -115,6 +115,12 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         可能令 parse 判 false absent → 归档回退 inline（方向安全：假阴漏判，非假阳假过）。仅登记，
         不改 subprocess（pre-existing，超本 change scope）。
 """  # [impl-review-fix]
+# [T74/grill-amendment Q2] 已知不覆盖（登记越权盲区，非正常可达）：
+#   「首行 --- 无闭合 × 归档 verify-report 正文独占一行 inline PASS 锚」杂交形态——
+#   改判 absent 后 archived_verify_state 会回退 inline 扫到独占行 PASS → 判 pass。
+#   但此形态**无 producer 产出**：目标态 producer 写 frontmatter 不写 inline，旧 producer
+#   首行恒 '#' 非 '---'。须手工伪造归档才能构造 = 显式越权（git 留痕可审计，adr/0008/0011）。
+#   目标态论证：迁移期评估安全锚 producer 契约而非现存语料快照（见 design ADR-4）。
 import argparse
 import json
 import re
@@ -485,6 +491,25 @@ def live_ship_gate_state(path, label):
     return None                              # absent → 调用方回退 inline
 
 
+def _unclosed_frontmatter_hint(path):
+    """[T74 1.5/spec-review Q1=A；design ADR-5] live 读点上层**独立轻量结构诊断**：
+    报告首行为 '---' 但全文无第二个 '---'（首块不闭合，parse 判 absent）→ 返回结构提示串
+    供 emit reason 追加。纯诊断——MUST NOT 改 parse 返回签名、MUST NOT 改 verdict/退出码、
+    MUST NOT 探测意图（≠candidate②）。文件不存在 / 首行非 '---' / 已闭合 → 返回 ''（无提示）。
+    与 parse 首块判据同口径（去 BOM、strip 后等值、只认第 2 行起首个 '---'），防诊断与解析漂移。"""
+    if not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if text.startswith("﻿"):
+        text = text[1:]
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ""
+    if any(lines[i].strip() == "---" for i in range(1, len(lines))):
+        return ""                            # 已闭合 → 非本诊断场景（坏/有效由 parse 处置）
+    return "（结构提示：首行为 `---` 但未见闭合 `---`，已按正文处理；欲声明状态请补闭合行）"
+
+
 TASK_TITLE_RE = re.compile(r"^### Task (\d+):", re.M)   # 计数用；锚行才禁正则
 # [T36/SR-4] canonical shape 权威源 = 本 TAG_RE。**parser 契约实际只执行到 `task<N>-` 前缀**
 # （命名空间组可选、向后兼容裸 task<N>- 旧格式）；`<slug>` 是**建议性**约定（可读性/去重），
@@ -700,7 +725,8 @@ def decide(root, change):
     if not design_ok:
         emit("REFUSE_START", EXIT_REFUSE, None,
              "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
-             "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）")
+             "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）"
+             + _unclosed_frontmatter_hint(report))
     design_stale, _design_fresh = is_stale(
         root, str(report.relative_to(root)), "design", change)
     if design_stale:
@@ -771,7 +797,8 @@ def decide(root, change):
              "code-review 判 blocked：先解 blocker（见报告），gate 不蒙头跑")
     if cr_state is None:
         emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-code-review",
-             "code-review-report.md 在但无锚行 → 该步进行中，重跑")
+             "code-review-report.md 在但无锚行 → 该步进行中，重跑"
+             + _unclosed_frontmatter_hint(cr))
     cr_stale, cr_fresh = is_stale(root, str(cr.relative_to(root)), "code", change)
     cr_stale_note = None
     if cr_stale:
@@ -814,7 +841,8 @@ def decide(root, change):
         emit("VERIFY_FAIL", EXIT_VFAIL, None, reason, **extra)
     if v_state is None:
         emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-done",
-             "verify-report.md 在但无锚行 → 该步进行中，重跑")
+             "verify-report.md 在但无锚行 → 该步进行中，重跑"
+             + _unclosed_frontmatter_hint(vf))
     # ── final：active 存在 + verify PASS → 收尾未完（绝不 SHIPPED）─────
     # [spec-review-amendment H1/HRTG-1] active 目录仍在 = archive 尚未发生（真 archive 移走
     # active）→ 本态至多「待收尾」。真 SHIPPED（归档后）由 decide 开头的 D3 短路识别

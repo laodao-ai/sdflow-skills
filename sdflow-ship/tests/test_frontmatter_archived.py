@@ -67,3 +67,29 @@ def test_archived_bad_scalar_no_inline_fallback(tmp_path):
         tmp_path,
         f"---\nship-gate: []\n---\n{VPASS}\n")
     assert _sg.archived_verify_state(tmp_path, "main", dirname) == "none"
+
+
+def test_archived_unclosed_no_inline_none(tmp_path):
+    # [T74 3.5/目标态 fail-safe] 首行 --- 无闭合 + 正文无 inline 锚（模拟 producer 迁后漏闭合）
+    # → parse 判 absent → 回退 inline 扫空 → archived_verify_state 判 'none'（不 SHIPPED，方向安全）。
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "t"); _git(tmp_path, "config", "user.email", "t@t")
+    d = tmp_path / "openspec" / "changes" / "archive" / "2026-07-08-demo"
+    d.mkdir(parents=True)
+    (d / "verify-report.md").write_text(
+        "---\nship-gate:\n  verify: PASS\n无闭合横线，正文继续\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "arch-unclosed")
+    assert _sg.archived_verify_state(tmp_path, "main", "2026-07-08-demo") == "none"
+
+
+def test_archived_unclosed_with_inline_pass_is_registered_blindspot(tmp_path):
+    # [T74 3.5/登记盲区] 对照：首行 --- 无闭合 + 正文独占一行 inline PASS 锚 → 回退 inline
+    # 扫到独占行 → 判 'pass'。**记录其为已登记越权盲区、非正常可达**（producer 不产此形态）。
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.name", "t"); _git(tmp_path, "config", "user.email", "t@t")
+    d = tmp_path / "openspec" / "changes" / "archive" / "2026-07-08-demo"
+    d.mkdir(parents=True)
+    (d / "verify-report.md").write_text(
+        "---\n无闭合首块\n" + _sg.ANCHOR_VERIFY_PASS + "\n", encoding="utf-8")
+    _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "arch-hybrid")
+    assert _sg.archived_verify_state(tmp_path, "main", "2026-07-08-demo") == "pass"
