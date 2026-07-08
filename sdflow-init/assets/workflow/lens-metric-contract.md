@@ -32,6 +32,26 @@ findings/采纳/裁掉/defer 按「哪些镜报过该 finding」归属，共抓�
 领域镜→domain · 对抗镜1/2/3→adversarial · 接地镜/完整性镜→grounding · 历史镜→history ·
 codex(任何 site)/claude-fallback→outside-voice · autoplan(CEO/Eng/DX/design)+gstack-adv→broad
 
+## 机读折叠（消费脚本单一源·勿在脚本内复制）〔mlh-p4-lens-metric-emit〕
+> 折叠单一源。格式同 `lens-metric-enums`：fence info-string 恒为 `lens-metric-fold`；每行 `原始镜名: canonical-lens`。**只列非恒等映射**——恒等（raw 已 ∈ lens enum，如 domain/grounding/history/broad）由 emitter `raw∈lens_enum` pass-through 承载、不列本块（ADR-7）。canonical 值 MUST ∈ `lens-metric-enums` 的 lens 域（emitter `load_fold` 读入即自校验）。
+```lens-metric-fold
+对抗镜1: adversarial
+对抗镜2: adversarial
+对抗镜3: adversarial
+领域镜: domain
+历史镜: history
+接地镜: grounding
+完整性镜: grounding
+完整性接地镜: grounding
+codex: outside-voice
+claude-fallback: outside-voice
+autoplan-ceo: broad
+autoplan-design: broad
+autoplan-eng: broad
+autoplan-dx: broad
+gstack-adv: broad
+```
+
 ## enum 扩展治理
 新增镜类型（enum 未列）MUST 先升版本号至 v2 + 更新折叠表，MUST NOT 静默塞入 broad。
 
