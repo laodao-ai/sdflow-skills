@@ -2,13 +2,13 @@
 
 sdflow-done 收尾流水线对 **roadmap 文档包零触碰**。roadmap 驱动的分阶段 change 归档后，复选框 / task-log 完成总结 / 里程碑状态全靠**人工手动回填**（本会话刚为 lens-metric-emit=P4/4.C 手动补过一次）。issues 侧早有 `§2.1 sweep` 自动化，roadmap 侧是**对称缺口**。
 
-> 〔spec-review-amendment · adr/0014〕本 change 经 grill + 7 镜 spec-review + 两次目标态纠正，骨架从「起手锚 best-effort」重构为「**编号统一 + producer 机械生成投影链**」——根因是起手锚 producer 契约无机械闭环（靠人写对锚 = adr/0006 静默跳步）+ 致命误勾。
+> 〔spec-review-amendment · adr/0014 + grill-amendment 第二轮〕本 change 经两轮 grill + 7 镜 spec-review + 三次目标态纠正，骨架 = 「**归属镜像投影 + producer 机械生成链**」——根因：起手锚无机械闭环（靠人写对锚 = adr/0006 静默跳步）+ 致命误勾 + 「tasks 号=roadmap 号」粒度失配（改为 roadmap 保规划粒度仅借格式、change 归属）。
 
 ## What Changes
 
-- **编号统一投影**：roadmap 子任务号（`4.D.1`）= 唯一编号；roadmap 驱动 change 的 tasks.md 顶层组采用之（`## 4.D.1`）。done 归档**镜像** tasks 组完成态 → roadmap 同号复选框（组全 `[x]`→勾、defer 组 `[ ]` 不勾）。**真相源 = 归档实况盘面（tasks 完成态，第 0.3 步已对账），非起手锚快照**。
-- **producer 机械生成投影链**：roadmap 结构化生成 → change **scaffold**（从 roadmap 抄编号 + 机械写 `roadmap: {name}` 锚 + proposal 引用）→ 实现勾 tasks → 镜像回写。每环机械、不靠人写对。
-- **关联判据**：L1 = tasks 的 `<!-- roadmap: {name} -->` 锚（scaffold 写）；漏锚兜底 **lint**（tasks 用 roadmap 式编号 `N.X.Y` 却无 name 锚 → **fail-closed 拦，非静默**）。L2 = 扫 tasks 组完成态（盘面，不靠锚 subtask）。
+- **归属镜像投影**：roadmap **保规划粒度**（子任务 = change 级交付点）、**仅借** tasks 复选框 `- [ ]` + 编码 `N.X.Y` **格式**；change **归属** roadmap 子任务（归属锚 `subtasks` + tasks 顶层组借号作归属标签）。done 归档**镜像** tasks 归属组完成态 → roadmap 同号复选框（组全 `[x]`→勾、defer 组 `[ ]` 不勾）。**真相源 = 归档实况盘面（tasks 完成态，第 0.3 步已对账），非起手锚快照；roadmap 与 tasks 不互拖粒度**。
+- **producer 机械生成投影链**：roadmap 结构化生成 → change **scaffold**（`--subtasks` → **双向写** roadmap 复选框(结构化格式) + change tasks 归属组骨架 + 归属锚 + proposal 引用）→ 实现勾 tasks → 归属镜像回写。每环机械、不靠人写对。
+- **关联判据**：L1 = tasks 的 `<!-- roadmap: {name} subtasks: … -->` 锚（scaffold 写）；漏锚兜底 **lint**（tasks 用 roadmap 式编号 `N.X.Y` 却无 name 锚 → **fail-closed 拦，非静默**）。L2 = 锚 `subtasks`（归属范围）∩ tasks 归属组盘面完成态（范围声明用锚、完成看盘面）。
 - **回写机械/判断切分**：镜像勾选（行首锚定）+ 阶段状态 enum **机械聚合**（从复选框）= 脚本；完成总结叙述 + 里程碑句 = 模型。真判断仅两处。
 - **生成侧结构化**（sdflow-roadmap 两模板）：子任务号 + 阶段状态 enum 列 + task-log 机器锚。
 - **fail-safe**：漏锚（有编号无 name）fail-closed 非静默；镜像不匹配（roadmap 改号）→ 降级标注落 task-log；全程不阻塞 archive/merge。
@@ -45,6 +45,7 @@ sdflow-done 收尾流水线对 **roadmap 文档包零触碰**。roadmap 驱动�
 
 - 不碰 issues 回写（§2.1 sweep）。不做 roadmap Review 处置对账（4.D.4）。
 - 不改 opsx:ff（官方）——scaffold 外挂。
+- **roadmap MUST NOT 下沉到 openspec tasks 实现步粒度**（只借复选框/编码格式，保规划粒度）。
 - 不全 frontmatter 化 roadmap（叙述层留散文）。不背 dual-read。
 - 暂不做阶段状态 enum 漂移对账（人工编辑 roadmap 后回读校验）——显式记风险接受 + todolist，不留白。
 

@@ -128,9 +128,9 @@ _Avoid_: 全 frontmatter 化 roadmap（损叙述层人读）；在回写侧硬�
 两类「写盘面」的失效容忍分野。**正确性门**（verify / gate / lens-metric emitter）：错=假✅ / 放不完整的活，零容忍 → **fail-closed** all-or-nothing 正当。**记录维护回写**（roadmap 回写）：漏=记录陈旧、可事后补、非正确性缺陷 → **best-effort + 降级标注**（三级：全写 / 部分写+标注未做项 / 完全做不了才留人工），fail-closed 只在末级。roadmap 回写误用 emitter 的 all-or-nothing 会为一个 id 定位不到就丢弃本可回写的部分，记录反更差。best-effort+标注 = 反静默守卫（降级+告警）在记录维护的应用，非放松纪律。
 _Avoid_: 拿 fail-closed all-or-nothing 套记录维护回写（过度严格、丢可回写部分）；把 best-effort 当「允许静默漏」（未做项 MUST 降级标注显形）
 
-**编号统一投影 (Unified-numbering Projection)** 〔spec-review-amendment · adr/0014〕:
-roadmap 子任务完成态 = change tasks.md 完成态的**直接投影**（同编号、零映射）。roadmap 驱动 change 的 tasks.md 顶层组采用 roadmap 子任务号（`## 4.D.1`），`sdflow-done` 归档时**镜像** tasks 组完成态 → roadmap 复选框（组内全 `[x]`→勾）。是「盘面即状态」在 roadmap 回写的落地——真相源 = **归档实况盘面**（tasks 完成态，done 第 0.3 步已对账），非起手锚固化的快照。取代「起手锚写死 subtask 集」——后者是「可变状态写死的第二真相源」，会与实现期 defer 漂移（起手声明 3 个、实交付 2 个 → 误勾）。
-_Avoid_: 起手锚写死 subtask 集当勾选真相（起手≠归档实况，defer 致误勾）；给 roadmap 子任务与 change task 各设一套编号再靠锚映射（映射即漂移源，统一编号消除之）
+**归属镜像投影 (Membership-mirror Projection)** 〔spec-review-amendment · adr/0014；grill-amendment 第二轮精化〕:
+roadmap 子任务完成态 = change tasks 完成态的**盘面投影**，真相源 = **归档实况盘面**（tasks 完成态，done 第 0.3 步已对账），非起手锚固化快照。对齐机制经第二轮 grill 精化为**「change 归属 roadmap 子任务 + roadmap 借结构化格式」**、**非「tasks 号 = roadmap 号」的强编号统一**——实证粒度失配：roadmap 复选框 `4.C.1` = 一次 change 粒度、change tasks `1.1~7.x` = 该 change 内部实现分解、天生细一层。落地：**roadmap 保规划粒度**（子任务 = change 级交付点），**仅借鉴** tasks 复选框 `- [ ]` + 层级编码 `N.X.Y` **格式**（机械可镜像）、**MUST NOT 下沉到 tasks 实现步粒度**；change scaffold 机械写**归属锚** `<!-- roadmap: {name} subtasks: 4.D.1,… -->`（关联范围）+ change tasks 顶层组借 roadmap 子任务号作归属标签；`sdflow-done` 归档**镜像** change tasks 归属组完成态 → roadmap 同号复选框（合批 defer 组未完成→留 `[ ]`）。实际勾选 = **归属范围（锚）∩ tasks 盘面完成**。
+_Avoid_: 起手锚写死 subtask 集当**完成**真相（锚只声明关联范围、完成看盘面；起手≠归档实况，混用致 defer 误勾）；把「编号统一」当「tasks 号=roadmap 号」强统一（粒度失配——会拖 roadmap 到实现步或压平 change 功能分组）；让 roadmap 借 tasks 的**粒度**（只借复选框/编码**格式**，roadmap 保规划粒度）
 
 **producer 机械生成链 (Producer Mechanical Generation Chain)** 〔spec-review-amendment · adr/0014〕:
 把「靠人写对」升级为「producer 机械产出」的确定性链条——roadmap 结构化生成 → change **scaffold**（从 roadmap 抄编号 + 机械写 name 锚 + proposal 引用）→ 实现勾 tasks → 镜像回写。每环确定性、不靠自觉。是「机械 prose 协议 MUST 脚本化」（`adr/0006`）+「目标态论证」（`adr/0011`）的合流落地：评估目标态安全性时锚「producer 契约会不会机械产出」，**MUST NOT** 降格为「人/AI 起手会不会记得遵守一条无门禁 prose MUST」（后者是 `adr/0006` 点名的静默跳步，被 spec-review 哲学镜揭穿为「目标态论证误套行为合规」）。
@@ -146,4 +146,5 @@ _Avoid_: 把「起手 MUST 带锚/编号」当目标态达成（无机械生成 
 - 「lens-metric 折叠表」曾只活在契约 prose（无代码单一源），grill 揭穿 aggregator 只 group 不 fold——已机读化为契约 `lens-metric-fold` 块作折叠单一源（见 `adr/0012`）；「数值一致性=信任边界」已拆为**计数归约（机械下沉）vs 分类判断（残余边界）**两半，勿再当一个笼统边界。
 - 「已并 / merged」曾被 `ship_gate.branch_state()` 隐式当作"**当前 HEAD 分支**有没有并进 base"（全局分支态）——已钉为 **change 域可达性**：一个 change 是否 merged，判据是「它的归档目录在不在 base(main/master) 的树里」（`git ls-tree <base>`），**与当前 HEAD 在哪条分支无关**（ship-gate-hardening D3 grill）。是「盘面即状态」在终态判定上的落地：判据必须锚在「这个 change 的产物落没落 base」这一确定性盘面，不用"当前分支"这个和 change 无关的全局近似。全局近似只在 change 自身分支上恰好成立，跨无关分支查已并 change 会误判"待收尾"。
 - 「roadmap 回写失败」曾拟套 lens-metric emitter 的 all-or-nothing fail-closed——已钉为**记录维护回写**（best-effort + 降级标注三级），区别于正确性门的零容忍 fail-closed（见 `adr/0013`）；「L1 关联判据」曾拟解析 proposal 自然语言引用（现状快照谬误）——已锚 producer **关联锚**机器行（见「关联锚」/`adr/0013`）。
-- 「roadmap 回写真相源」曾拟锚**起手锚固化的 subtask 集**（`adr/0013`）——spec-review 揭穿其为可变状态写死的第二真相源（起手≠归档实况致误勾）+ 无机械闭环（靠人写对锚 = `adr/0006` 静默跳步），已重构为**编号统一投影**（真相源=归档 tasks.md 完成态）+ **producer 机械生成链**（scaffold 机械产出编号/锚），`adr/0014` 部分 supersede `adr/0013`。
+- 「roadmap 回写真相源」曾拟锚**起手锚固化的 subtask 集**（`adr/0013`）——spec-review 揭穿其为可变状态写死的第二真相源（起手≠归档实况致误勾）+ 无机械闭环（靠人写对锚 = `adr/0006` 静默跳步），已重构为**归属镜像投影**（真相源=归档 tasks.md 完成态）+ **producer 机械生成链**（scaffold 机械产出编号/锚），`adr/0014` 部分 supersede `adr/0013`。
+- 「roadmap↔tasks 对齐」第二轮 grill 精化：曾拟「tasks 号 = roadmap 号」强编号统一——实证粒度失配（roadmap 复选框=change 粒度、tasks=实现分解、细一层），已改为**归属镜像**（roadmap 保规划粒度、仅借复选框/编码**格式**；change 归属 roadmap 子任务；勾选=归属范围∩tasks 盘面完成），roadmap 与 tasks **MUST NOT 互相拖到对方粒度**（见「归属镜像投影」/`adr/0014`）。

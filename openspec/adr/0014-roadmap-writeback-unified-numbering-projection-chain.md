@@ -16,6 +16,18 @@
 4. **关联判据收缩**：L1（关联哪个 roadmap）= 读 tasks 的 `<!-- roadmap: {name} -->` 锚（scaffold 机械写）；漏锚兜底 = lint（tasks 用 roadmap 式编号 `N.X.Y` 却无 name 锚 → **fail-closed 拦，非静默**——tasks 编号形态是「这是 roadmap 驱动 change」的机械可判信号）。L2（哪些子任务 + 完成没）= 扫 tasks 顶层组完成态（靠盘面，**不靠锚 subtask**）。
 5. **best-effort 大幅简化**：同号镜像消除「散文层 id 误命中 / subtask 校验 / 起手声明≠交付」一堆补丁；残余 best-effort 仅「roadmap 复选框号与 tasks 组号不匹配（roadmap 改号）→ 降级标注留人工」，概率低。
 
+## 〔grill-amendment · 第二轮 grill 粒度精化〕
+
+Decision 2/4/5 的「编号统一」经第二轮 grill 精化——**不是「change tasks 号 = roadmap 号」的强统一**（实证暴露粒度失配：roadmap 复选框 `4.C.1` = 一次 change 粒度、change tasks `1.1~7.x` = 该 change 内部实现分解，天生细一层；强统一会把 roadmap 拖到 tasks 实现粒度、或把 change 功能分组压平），**而是**：
+
+- **roadmap 保规划粒度**（子任务 = 一次 change / 一个交付点，如 `4.C.1`），**仅借鉴** tasks 的复选框 `- [ ]` + 层级编码 `N.X.Y` **格式**使其机械可镜像——**MUST NOT 下沉到 openspec tasks 实现步粒度**（那会让 roadmap 索引层塞满每个 change 的实现分解、失去长期规划真相源定位）〔用户第三次目标态纠正：roadmap 借格式不借粒度〕。
+- **对齐 = change 归属 roadmap 子任务**：scaffold 机械写归属锚 `<!-- roadmap: {name} subtasks: 4.D.1,4.D.2,4.D.4 -->`（声明这个 change 关联哪些 roadmap 复选框）+ change tasks 顶层组借 roadmap 子任务号作**归属标签**（合批区分 defer），组内保留 change 自己的实现分解编号。
+- **锚 = name + subtasks 归属声明**（修正 Decision 4「仅 name」）：`subtasks` 是**关联范围**（这个 change 打算做哪些复选框）、非完成声明；实际勾选 = **归属范围 ∩ tasks 盘面完成**。
+- **done 镜像归属组完成态**：change tasks 归属组完成 → 勾 roadmap 同号复选框；合批 defer 的子任务对应组未完成 → roadmap 复选框留 `[ ]`（盘面兜底，消 Q2 误勾）。
+- **scaffold 双向机械生成**：一次写 roadmap 索引复选框（结构化格式，规划粒度）+ change tasks 归属骨架 + 归属锚（三处同源，Q1 闭合）。
+
+核心：roadmap（规划真相源，粒度不动）与 tasks（实现真相源）靠「change 归属 + roadmap 借结构化格式」对齐镜像，**MUST NOT 互相拖到对方粒度**。
+
 ## supersede adr/0013
 
 - `adr/0013` D-1（锚 `name+phase+subtask` schema）→ 本 ADR 收缩为**仅 name 锚**，subtask/完成靠 tasks 盘面。
