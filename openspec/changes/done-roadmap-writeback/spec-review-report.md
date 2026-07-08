@@ -1,3 +1,7 @@
+---
+ship-gate:
+  design_approved: true
+---
 # spec-review-report — done-roadmap-writeback（第三轮·最小核）
 
 <!-- sdflow:step1-broad-review v1 mode="simulated" -->
@@ -22,6 +26,10 @@
   │ [已裁掉] （无）——对抗镜对 C-7 自标 refuted=true=不直接崩,已降级为低而非裁掉,留档   │
   └──────────────────────────────────────────────────────────────────────┘
 ```
+
+**拍板记录（人读）**：设计门已拍板**批准**，日期 **2026-07-09**。Q1–Q5 全部**采纳**（经第三轮 amendment 切分线重画落地，checkpoint `6f15c8f`：P-1 时序占位 / P-2 定位到 phase 机械·勾哪几行判断 / P-3 格式分形态 fail-loud / P-4 异步闭环第六步摘要抬行+残差登记 / P-5 detection fence-aware 防自指）+ D1 五条一并落。机判锚已写头部 frontmatter `ship-gate.design_approved: true`。
+
+**〔SR-M〕lens-metric 锚最终化**：门后最终裁决 = 15 采纳 / 0 裁掉 / 0 defer——与 Step3 pre-gate 临时裁决**一致**（所有 finding 经 amendment 采纳落地、无翻改），下方各镜 lens-metric 锚**即最终值**，无需原地重算覆盖。
 
 ---
 
