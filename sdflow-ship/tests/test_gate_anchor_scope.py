@@ -1,10 +1,11 @@
-"""锚检测行锚定 + fence-aware（B4）：anchors_in / _line_scoped_hits。"""
+"""锚检测行锚定 + fence-aware（B4）：_line_scoped_hits / archived_verify_state。
+[T75] 旧 live inline 读半场专属用例已随死符号删除退役，仅保留归档 dual-read 守卫 +
+语料契约（详见 ship_gate.py 头注释「保留边界」）。"""
 import importlib.util
 import json
 import sys
 from pathlib import Path
 import subprocess
-import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 _gate_path = REPO / "sdflow-ship" / "scripts" / "ship_gate.py"
@@ -19,35 +20,6 @@ VFAIL = "<!-- ship-gate: verify=FAIL -->"
 
 def _git(root, *a):
     subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True)
-
-
-def test_inline_mention_not_hit(tmp_path):
-    # B4 活体复现：锚内联在描述句中（行内反引号），非独占一行 → 不命中
-    f = tmp_path / "spec-review-report.md"
-    f.write_text(f"拍板后才写 `{DESIGN}`（当前未获批）。\n", encoding="utf-8")
-    assert _sg.anchors_in(f, [DESIGN]) == []
-
-
-def test_fenced_anchor_not_hit(tmp_path):
-    # 锚独占一行但在 ``` 代码块内作文档示例 → 不命中（ADR-2）
-    f = tmp_path / "spec-review-report.md"
-    f.write_text(f"结论区\n```\n{DESIGN}\n```\n正文无真锚\n", encoding="utf-8")
-    assert _sg.anchors_in(f, [DESIGN]) == []
-
-
-def test_standalone_anchor_hit(tmp_path):
-    # 独占一行的真锚（前后可有空白）→ 命中
-    f = tmp_path / "spec-review-report.md"
-    f.write_text(f"结论\n\n   {DESIGN}   \n", encoding="utf-8")
-    assert _sg.anchors_in(f, [DESIGN]) == [DESIGN]
-
-
-def test_conflict_multi_hit(tmp_path):
-    # PASS 与 FAIL 各独占一行并存 → 两者皆命中（保 ADR-3 多命中）
-    f = tmp_path / "verify-report.md"
-    f.write_text(f"{VPASS}\n{VFAIL}\n", encoding="utf-8")
-    got = _sg.anchors_in(f, [VPASS, VFAIL])
-    assert VPASS in got and VFAIL in got
 
 
 def test_core_descriptive_pass_not_hit():
@@ -79,22 +51,6 @@ def test_archived_true_pass_and_conflict(tmp_path):
     (d / "verify-report.md").write_text(f"{VPASS}\n{VFAIL}\n", encoding="utf-8")
     _git(tmp_path, "add", "-A"); _git(tmp_path, "commit", "-q", "-m", "conflict")
     assert _sg.archived_verify_state(tmp_path, "main", "2026-07-05-demo") == "conflict"
-
-
-def test_pick_exclusive_unbalanced_unknown(tmp_path, capsys):
-    # 正锚在 fence 外 + 未闭合 ``` + 负锚在内被吞 → 不得判 pass，须 UNKNOWN
-    # [impl-review-fix 修B/对抗镜2-F1] 仅断言 exit code == EXIT_UNKNOWN 不足以区分分支：
-    # 两锚并存的 conflict 分支同样退出 EXIT_UNKNOWN。须同时断言 emit 的 JSON reason
-    # 含"未闭合 fence"，确认真正命中的是 unbalanced 分支而非 conflict 分支。
-    f = tmp_path / "verify-report.md"
-    f.write_text(f"{VPASS}\n```\n{VFAIL}\n", encoding="utf-8")   # ``` 未闭合
-    with pytest.raises(SystemExit) as e:
-        _sg.pick_exclusive(f, VPASS, VFAIL, "verify")
-    assert e.value.code == _sg.EXIT_UNKNOWN
-    out = capsys.readouterr().out
-    last_line = out.strip().splitlines()[-1]
-    reason = json.loads(last_line)["reason"]
-    assert "未闭合 fence" in reason
 
 
 def test_archived_unbalanced_none(tmp_path):
@@ -147,10 +103,11 @@ def test_contract_archived_corpus_anchor_hits():
     exclusive = set()
     for f in samples:
         text = f.read_text(encoding="utf-8", errors="replace")
-        hits, _ = _sg._line_scoped_hits(text, _sg.ALL_ANCHORS)   # fence-aware 独占行判据
+        hits, _ = _sg._line_scoped_hits(text, [VPASS, VFAIL])   # [T75] verify-only 锚，fence-aware 独占行判据
         exclusive.update(hits)
     # 聚合断言（非"每处子串"）：gate 关键锚在语料里实证以独占行承载；模板全局回退即缺锚。
-    assert DESIGN in exclusive, "归档 spec-review 语料无一以独占行承载 design-approved——模板可能已去独占行"
+    # [T75/BR-3] gate 从不从归档读 design/CR 锚（那些 inline 读半场已退役），故只断言
+    # verify 锚以独占行承载；原 `DESIGN in exclusive` 测的是 gate 消费不到的东西，删。
     assert VPASS in exclusive or VFAIL in exclusive, "归档 verify 语料无一以独占行承载 verify=PASS/FAIL"
 
 

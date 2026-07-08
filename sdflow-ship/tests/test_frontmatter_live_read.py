@@ -97,10 +97,12 @@ def test_live_body_mention_immune_design_approved(repo):
 
 def test_live_design_standalone_inline_retired_refuse(repo):
     # [mlh-p5 Task6 D1 最强正文免疫证明 — 退役后根治] spec-review-report **无 frontmatter**
-    # （absent）+ 正文含**独占一行**（anchors_in 会命中）的 inline `<!-- ship-gate: design-approved -->`。
-    # Task2 时 absent → 回退 anchors_in → 读出独占行真锚 → design_ok=True → 假过门放行；
+    # （absent）+ 正文含**独占一行**（旧 live inline 读半场会命中）的 inline
+    # `<!-- ship-gate: design-approved -->`。
+    # Task2 时 absent → 回退旧 live inline 读半场 → 读出独占行真锚 → design_ok=True → 假过门放行；
     # Task6 退役后 absent → live 只读 frontmatter → 独占行 inline 锚被完全忽略 → REFUSE_START。
-    # 这是 D1 退役对独占裸行 inline 锚（唯一能骗过 anchors_in 的形态）的根治证据。
+    # 这是 D1 退役对独占裸行 inline 锚（唯一能骗过旧 live inline 读半场的形态）的根治证据
+    # （该读半场专属函数已随 T75 删除）。
     d = mkchange(repo)
     d.joinpath("spec-review-report.md").write_text(
         "# 设计审报告\n\n## 拍板\n<!-- ship-gate: design-approved -->\n", encoding="utf-8")

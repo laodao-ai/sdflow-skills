@@ -84,11 +84,11 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         提示告知工作树有未提交改动、gate 判定不含它们，MUST NOT 改变退出码。merge 前 untracked
         硬检查〔spec-review-amendment SR-2〕落在 `sdflow-done` 的 merge 步（非交互 halt+报告上抛，
         复用既有"ff 不可行→停下报告"惯用法），MUST NOT 上移进 gate 本身——本文件逻辑不变。
-    〔gate-anchor-line-scoped〕机判锚 MUST 独占一行（strip 后行级等值 + 忽略 ``` 代码块内），
-        两处解析点 anchors_in（读文件）/ archived_verify_state（git-show 文本）共用同一文本级
-        核心 `_line_scoped_hits`，杜绝两路径各判各的漂移〔ADR-1/2/4〕；
-    〔ADR-5〕互斥锚对（verify PASS/FAIL、code-review pass/blocked）若遇未闭合 ``` fence 吞掉负锚，
-        不得因此误判 pass——保守判 UNKNOWN（active，pick_exclusive）/ none（archived，
+    〔gate-anchor-line-scoped〕机判锚 MUST 独占一行（strip 后行级等值 + 忽略 ``` 代码块内）——
+        `archived_verify_state`（git-show 文本，归档 dual-read 现役唯一调用方）经由 `_line_scoped_hits`
+        核心判定，杜绝子串/行级两路径各判各的漂移〔ADR-1/2/4；T75 起 live 侧 inline 读半场已退役〕；
+    〔ADR-5〕互斥锚对（verify PASS/FAIL）若遇未闭合 ``` fence 吞掉负锚，
+        不得因此误判 pass——保守判 none（archived，
         archived_verify_state），宁可判定不能也不假阳；
     〔ADR-6〕tg02_hit 触发检测 = 声明式匹配全角括号头注 `〔TG-02`（ff 强制格式），非裸子串——
         描述性提及/代码引用/否定句（如提及 "TG-01/02/03"）不再误触发 RUN_SOP；
@@ -128,13 +128,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-ANCHOR_DESIGN = "<!-- ship-gate: design-approved -->"
+# [T75] design/code-review inline 锚常量已随 Task6 live inline 读半场退役而删除；
+# 仅 verify 锚保留——archived_verify_state 的归档 dual-read 兜底旧 inline 现役唯一在用。
 ANCHOR_VERIFY_PASS = "<!-- ship-gate: verify=PASS -->"
 ANCHOR_VERIFY_FAIL = "<!-- ship-gate: verify=FAIL -->"
-ANCHOR_CR_PASS = "<!-- ship-gate: code-review=pass -->"
-ANCHOR_CR_BLOCKED = "<!-- ship-gate: code-review=blocked -->"
-ALL_ANCHORS = [ANCHOR_DESIGN, ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL,
-               ANCHOR_CR_PASS, ANCHOR_CR_BLOCKED]
+ALL_ANCHORS = [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL]
 
 EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN = 0, 3, 4, 5, 6
 
@@ -190,8 +188,8 @@ def archived_dirs_in_tree(root, ref, change):
 def archived_verify_state(root, ref, archive_dir):
     # [spec-review-amendment H1/BR-2] SHIPPED 前追读归档目录内 verify-report.md 的 verify 锚
     # （从 ref 树）——不把「归档⟹已验」当无条件蕴含（手工空壳归档目录不得假 SHIPPED）。
-    # [impl-review-fix] tri-state（CV-1/HRTG-c2 三声）：active 路径靠 pick_exclusive 对冲突锚
-    # 判 UNKNOWN，D3 短路须同等互斥——PASS+FAIL 并存 = 'conflict'（→UNKNOWN），非只查 PASS in。
+    # [impl-review-fix] tri-state（CV-1/HRTG-c2 三声）：D3 短路须与 active 侧冲突锚判 UNKNOWN
+    # 同等互斥——PASS+FAIL 并存 = 'conflict'（→UNKNOWN），非只查 PASS in。
     rc, out = run_git_rc(root, "show",
                          f"{ref}:openspec/changes/archive/{archive_dir}/verify-report.md")
     if rc != 0:
@@ -266,9 +264,9 @@ def is_stale(root, rel, scope, change):
 def _line_scoped_hits(text, candidates):
     """文本级行锚定核心（零正则）：候选须独占一行（strip 后等值），忽略 fenced code block。
     返回 (hits[按 candidates 原序去重], unbalanced[EOF 时围栏未闭合])。
-    [impl-review-fix FIX-5] 现役唯一调用方 = archived_verify_state（归档 dual-read 兜底旧 inline）；
-    anchors_in / pick_exclusive 已从 live decide() 退役（Task6 迁 frontmatter 后），现仅 test-
-    referenced 孤儿，不再是本核心的运行时共用方。fence 翻转口径同 _parse_plan
+    [impl-review-fix FIX-5；T75] 现役唯一调用方 = archived_verify_state（归档 dual-read 兜底旧
+    inline）；live decide() 侧的 inline 读半场已随 Task6 迁 frontmatter 退役，其专属读点函数
+    随 T75 一并删除（不再留孤儿）。fence 翻转口径同 _parse_plan
     （line.lstrip().startswith("```")）。"""
     cand = set(candidates)
     hit = set()
@@ -401,15 +399,6 @@ def _coerce_ship_gate_value(field, raw):
     return raw                               # verify/code_review：字符串，交枚举校验
 
 
-def anchors_in(path, candidates):
-    """行级字面查找（零正则）：机判锚 MUST 独占一行（strip 后等值）、忽略 ``` 代码块——
-    描述性提及/文档示例不触发〔B4/ADR-1/2〕。文件不存在返回 []。"""
-    if not path.is_file():
-        return []
-    text = path.read_text(encoding="utf-8", errors="replace")  # 非 UTF-8 防崩
-    return _line_scoped_hits(text, candidates)[0]
-
-
 # [T26/SR-1；mlh-p5 Task6 D11] 熔断状态集合判据：判据 = 该步 ship-gate **frontmatter 状态集合**
 # 是否变化（非 HEAD/mtime、非 inline 锚行）。两个纯函数/无状态 helper：不落地文件、无副作用，
 # 供上层熔断逻辑（人工/skill 层，非本文件）对比"上一次快照"与"本次重跑"的状态集，判有无实质进展。
@@ -445,25 +434,6 @@ def emit(verdict, exit_code, next_step, reason, **extra):
     print(json.dumps({"verdict": verdict, "next": next_step,
                       "reason": reason, **extra}, ensure_ascii=False))
     sys.exit(exit_code)
-
-
-def pick_exclusive(path, positive, negative, label):
-    """互斥锚对解析：两者并存 / 未闭合 fence → UNKNOWN（不猜）。返回 'pos'/'neg'/None。"""
-    if not path.is_file():
-        return None
-    text = path.read_text(encoding="utf-8", errors="replace")
-    found, unbalanced = _line_scoped_hits(text, [positive, negative])
-    if unbalanced:   # [ADR-5] 未闭合 fence 可吞负锚 → 保守不判 pass
-        emit("UNKNOWN", EXIT_UNKNOWN, None,
-             f"{label} 报告含未闭合 fence（``` 悬空），无法可靠判定互斥锚，请人工修复围栏后重试")
-    if positive in found and negative in found:
-        emit("UNKNOWN", EXIT_UNKNOWN, None,
-             f"{label} 报告并存冲突锚行（{positive} 与 {negative}），请人工裁决删除其一")
-    if positive in found:
-        return "pos"
-    if negative in found:
-        return "neg"
-    return None
 
 
 # [mlh-p5 Task2/D3；Task6 退役 live inline] live 读点分流：frontmatter 有效→state；坏→UNKNOWN(6)；
@@ -698,7 +668,7 @@ def decide(root, change):
         # H1/BR-2: SHIPPED 须归档在 base 树 且 archived verify 锚 tri-state 判定
         base_states = [archived_verify_state(root, base, d) for d in base_dirs]
         if "conflict" in base_states:
-            # 归档 verify-report 并存 PASS/FAIL 冲突锚 → 同 active 路径 pick_exclusive 语义〔CV-1〕
+            # 归档 verify-report 并存 PASS/FAIL 冲突锚 → 同 active 路径冲突锚判 UNKNOWN 语义〔CV-1〕
             emit("UNKNOWN", EXIT_UNKNOWN, None,
                  "归档 verify-report 并存 PASS/FAIL 冲突锚 → 判定不能，请人工裁决删其一")
         if "pass" in base_states:

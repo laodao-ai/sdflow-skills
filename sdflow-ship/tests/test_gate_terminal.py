@@ -101,7 +101,7 @@ def test_detached_head_archived_shipped(repo):
 
 
 def test_archived_verify_conflict_unknown(repo):
-    # 〔CV-1/HRTG-c2〕归档 verify-report 并存 PASS+FAIL 冲突锚 → UNKNOWN（同 active pick_exclusive）
+    # 〔CV-1/HRTG-c2〕归档 verify-report 并存 PASS+FAIL 冲突锚 → UNKNOWN（同 active 冲突锚判 UNKNOWN 语义）
     arch = mk_archive(repo, "2026-07-04-demo", verify_pass=False)
     (arch / "verify-report.md").write_text(
         "<!-- ship-gate: verify=PASS -->\n<!-- ship-gate: verify=FAIL -->\n",
