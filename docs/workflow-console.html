@@ -1,3 +1,9 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sdflow 工作流控制台</title>
 <style>
   /* ============ tokens ============ */
   :root {
@@ -255,7 +261,8 @@
     .lawflow .arr { padding: 6px; transform: rotate(90deg); }
   }
 </style>
-
+</head>
+<body>
 <div class="wrap">
 
   <header class="hero">
@@ -264,6 +271,9 @@
     <p class="lede">一个变更（change）穿过生成 → 设计审 → 实现收尾三个阶段，尽量连续自动运行——
       <code>/clear</code> 由子代理 fresh 上下文替代、中途决策登记进报告、每步 checkpoint 提交；
       全流程<strong>只在阶段二设计门停一次人类</strong>。</p>
+    <p style="margin-top:14px;font-size:13px;opacity:.75">
+      文字详解版（内容超集）→ <a href="workflow-overview.md">workflow-overview.md</a>　·
+      字段 / 脚本映射速查 → <a href="workflow-map.html">workflow-map.html</a></p>
     <div class="stats">
       <div class="stat"><div class="v">9<span class="u">步</span></div><div class="k">explore → merge</div></div>
       <div class="stat"><div class="v">1<span class="u">门</span></div><div class="k">唯一人类 HARD-GATE</div></div>
@@ -550,3 +560,5 @@
     }
   })();
 </script>
+</body>
+</html>
