@@ -51,3 +51,41 @@ def detect_markers(text):
         if m:
             result.append((m.group("roadmap"), m.group("phase")))
     return result
+
+
+FLAG_RE = re.compile(r"^(?P<roadmap>[a-z0-9][a-z0-9-]*)#(?P<phase>\d+)$")
+
+
+def resolve_association(change_name, proposal_text, tasks_text, flag=None):
+    """优先级 flag > marker > prefix; 多通道不一致 warn. 无信号返回 None."""
+    candidates = {}  # source -> (roadmap, phase)
+    prefix = parse_prefix(change_name)
+    if prefix:
+        candidates["prefix"] = prefix
+    markers = detect_markers(proposal_text) + detect_markers(tasks_text)
+    if markers:
+        candidates["marker"] = markers[0]
+    if flag:
+        fm = FLAG_RE.match(flag.strip())
+        if fm:
+            candidates["flag"] = (fm.group("roadmap"), fm.group("phase"))
+    if not candidates:
+        return None
+    for source in ("flag", "marker", "prefix"):
+        if source in candidates:
+            chosen_source = source
+            break
+    chosen = candidates[chosen_source]
+    warnings = []
+    for source, val in candidates.items():
+        if val != chosen:
+            warnings.append(
+                "关联不一致: %s=%s#%s vs 采纳 %s=%s#%s"
+                % (source, val[0], val[1], chosen_source, chosen[0], chosen[1])
+            )
+    return {
+        "roadmap": chosen[0],
+        "phase": chosen[1],
+        "source": chosen_source,
+        "warnings": warnings,
+    }

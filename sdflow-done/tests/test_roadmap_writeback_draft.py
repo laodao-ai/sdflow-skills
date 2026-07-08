@@ -50,3 +50,31 @@ def test_detect_markers_placeholder_name_not_matched():
     # 字面占位 {name} 非 [a-z0-9-] → 不匹配
     text = "<!-- roadmap: {name}#{phase} -->"
     assert rwd.detect_markers(text) == []
+
+
+def test_resolve_prefix_only():
+    a = rwd.resolve_association(
+        "implement-mechanical-layer-hardening-p4-x", "", "", None
+    )
+    assert a["roadmap"] == "mechanical-layer-hardening"
+    assert a["phase"] == "4"
+    assert a["source"] == "prefix"
+    assert a["warnings"] == []
+
+
+def test_resolve_flag_overrides_prefix_with_warning():
+    a = rwd.resolve_association(
+        "implement-foo-p1-x", "", "", "bar#2"
+    )
+    assert (a["roadmap"], a["phase"], a["source"]) == ("bar", "2", "flag")
+    assert len(a["warnings"]) == 1  # foo#1(prefix) vs bar#2(flag) 不一致 warn
+
+
+def test_resolve_marker_fallback_when_prefix_absent():
+    proposal = "<!-- roadmap: wco#3 -->"
+    a = rwd.resolve_association("done-roadmap-writeback", proposal, "", None)
+    assert (a["roadmap"], a["phase"], a["source"]) == ("wco", "3", "marker")
+
+
+def test_resolve_none_when_no_signal():
+    assert rwd.resolve_association("done-roadmap-writeback", "散文无 marker", "", None) is None
