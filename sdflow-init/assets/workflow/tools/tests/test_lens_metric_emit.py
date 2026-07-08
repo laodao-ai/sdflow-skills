@@ -242,3 +242,15 @@ def test_aggregator_enum_matches_contract():
 def test_min_lens_rows_matches_anchor_lint():
     m = _mod(); al = _load("anchor_lint", AL)
     assert set(m.MANDATORY_LENS) == set(al.MIN_LENS_ROWS)     # C17 分叉①=B
+
+
+# --- golden fixture（两审 SKILL 落锚步引用的 schema 样例，emitter 吃它须 exit0 且过 anchor_lint） ---
+
+FIX = TOOLS / "tests" / "fixtures" / "lens_metric_input.json"
+
+def test_golden_fixture_emits_and_lints(tmp_path):
+    r = subprocess.run([sys.executable, str(SCRIPT), "--layer", "spec-review", "--input", str(FIX)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.count("lens-metric v1") >= 2
+    al = _load("anchor_lint", AL); enums = al.load_enums(CONTRACT)
+    assert al.check_lens_metric(r.stdout + "\n", "spec-review", enums) == []

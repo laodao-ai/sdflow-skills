@@ -27,6 +27,8 @@ sev-format: 致N/高N/中N/低N
 findings/采纳/裁掉/defer 按「哪些镜报过该 finding」归属，共抓则每命中镜各记一次；
 独立 仅在「唯一报过 ∧ 被采纳」时 +1；独立在折叠到 lens 类型之后计。
 数值跨源一致性 = 主 session 信任边界（自做去重又写锚、自核无独立性），非机械门。
+〔mlh-p4〕计数由 `lens_metric_emit.py` 从结构化 findings + 行键 roster 确定性归约产出（非手数）；
+「独立在折叠后计」精化为「折叠到**行键 `(lens,runner,site)`** 后计」。
 
 ## 折叠表（canonical 投影）
 领域镜→domain · 对抗镜1/2/3→adversarial · 接地镜/完整性镜→grounding · 历史镜→history ·
