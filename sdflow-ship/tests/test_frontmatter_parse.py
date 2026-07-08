@@ -29,7 +29,7 @@ def test_unclosed_frontmatter_is_absent():   # [T74] 首行 --- 无闭合 → ab
 
 
 def test_unclosed_frontmatter_first_line_only():
-    # [T74] 首行 --- + 全文无第二个 --- → 首块不闭合 → absent（走既有无锚语义），非 unterminated 坏
+    # [T74] 首行 --- + 全文无第二个 --- → 首块不闭合 → absent（走既有无锚语义），非旧错误类别
     state, err = P("---\n随便正文，没有闭合横线\nship-gate 也不在块内\n")
     assert state == {} and err is None
 

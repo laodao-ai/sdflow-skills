@@ -799,8 +799,12 @@ def decide(root, change):
     else:
         v_state = None                           # absent → 无锚 → STEP_IN_PROGRESS
     if v_stale:
+        # [impl-review-fix OV-2] verify 读点 stale 判定先于 absent 分支（L~812）——若报告同时是
+        # 「首行 --- 无闭合」absent 态，stale 会先 emit 而吞掉未闭合结构提示、且「结论陈旧」措辞对
+        # 无有效结论的报告失准。附加纯结构提示（非空才追加，同三读点口径），不改 verdict/退出码/next。
         emit("RERUN_STALE", EXIT_OK, "sdflow-done",
-             "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）",
+             "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）"
+             + _unclosed_frontmatter_hint(vf),
              freshness=v_fresh)
     if v_state == "neg":
         reason = "verify FAIL：停并上抛缺口清单（报告内）"

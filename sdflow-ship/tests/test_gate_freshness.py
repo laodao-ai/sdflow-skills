@@ -36,6 +36,24 @@ def test_stale_fail_reruns_not_exit5(repo):
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done"
 
+def test_stale_unclosed_verify_appends_hint(repo):
+    # [impl-review-fix OV-2] verify 读点 stale 分支（next=sdflow-done）在 verify-report 首行 ---
+    # 无闭合(absent) 时追加纯结构提示：避免把无有效结论的报告误称「结论陈旧」且吞掉未闭合诊断。
+    # 该分支仅在「code-review 新鲜 ∧ verify 陈旧」窄边界可达——否则 code-review stale 分支
+    # (next=sdflow-code-review) 先触发。故 fixture 须把 code-review-report 提交在外部改动之后
+    # （cr 新鲜），verify-report 提交在其前（verify 因后续外部提交而陈旧）。verdict/退出码/next 不变。
+    d = impl_done(repo)
+    (d / "verify-report.md").write_text(
+        "---\nship-gate:\n  verify: PASS\n无闭合横线，正文继续\n", encoding="utf-8")   # 首块无闭合 → absent
+    commit_all(repo, "verify report (unclosed)")
+    touch_code(repo)             # 外部提交 → 使 verify-report 陈旧
+    (d / "code-review-report.md").write_text(
+        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+    commit_all(repo, "code-review report after external change → cr 新鲜")
+    code, js, _ = run_gate(repo)
+    assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done"
+    assert "未见闭合" in js["reason"]   # 结构提示未被 stale 分支吞掉
+
 def test_design_anchor_survives_impl_commits(repo):
     # Q1=B 断言①：实现提交不令 design-approved 失鲜
     approved_change(repo, plan=PLAN2)

@@ -81,6 +81,8 @@
 | T73 | `anchor_lint.py + init.py config-lint` | metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定 | 功能增强 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
 | T74 | `sdflow-ship` | ship_gate parser 裸---首行(无闭合)误判 unterminated 致 UNKNOWN | 代码质量 | PROPOSED | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
 | T75 | `sdflow-ship` | ship_gate 清理 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_* | 代码质量 | PROPOSED | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
+| T76 | `ship_gate.py archived_verify_state` | 归档杂交盲区硬化后续（设计门已接受净负、登记为已知盲区）：冷代码审对抗镜给出比「仅手工伪造」更锋利的可达性论证——迁移半成品编辑残留独占行 inline PASS 锚、自指文档独占行引用（呼应 gate-substring-dogfood 自指坑）；建议未来加**非语义** lint/监控扫「归档 verify-report 首行 --- 无闭合」形态告警（不改 parser 语义、不重开设计门 adr/0004），据此复评「给归档侧特殊 fail-safe」ROI（design L121 当前选①绝） | 基础设施 | OPEN | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
+| T77 | `openspec/specs/spec-workflow spec.md` | 「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留） | 代码质量 | OPEN | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
 
 ---
 
