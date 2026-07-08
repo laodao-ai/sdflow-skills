@@ -143,3 +143,53 @@ def test_reduce_roster_dup_key_fail_closed():
     r = _base_roster() + [{"lens":"broad","runner":"claude","site":"—"}]
     with pytest.raises(m.EmitError):
         m.reduce(r, [], "spec-review", e, f)
+
+
+def _run(inp_path, layer="spec-review"):
+    return subprocess.run([sys.executable, str(SCRIPT), "--layer", layer, "--input", str(inp_path)],
+                          capture_output=True, text=True)
+
+
+def test_cli_valid_emits(tmp_path):
+    inp = tmp_path/"in.json"
+    inp.write_text(json.dumps({
+        "roster":[{"lens":"broad","runner":"claude","site":"—"},
+                  {"lens":"outside-voice","runner":"codex","site":"hr-tg"}],
+        "findings":[{"hits":[{"raw":"broad"}], "verdict":"采纳","sev":"高"}]}, ensure_ascii=False), encoding="utf-8")
+    r = _run(inp)
+    assert r.returncode == 0
+    assert r.stdout.count("<!-- sdflow:lens-metric v1") == 2
+
+
+def test_cli_bad_json_exit1_no_stdout(tmp_path):
+    inp = tmp_path/"in.json"; inp.write_text("{not json", encoding="utf-8")
+    r = _run(inp)
+    assert r.returncode == 1 and "<!-- sdflow:lens-metric" not in r.stdout and r.stderr.strip()
+
+
+def test_cli_partial_fail_no_partial_anchor(tmp_path):
+    # 第 2 条 finding 坏（采纳缺 sev）→ 全失败、stdout 无任何锚（all-or-nothing）
+    inp = tmp_path/"in.json"
+    inp.write_text(json.dumps({
+        "roster":[{"lens":"broad","runner":"claude","site":"—"},
+                  {"lens":"outside-voice","runner":"codex","site":"hr-tg"}],
+        "findings":[{"hits":[{"raw":"broad"}],"verdict":"采纳","sev":"高"},
+                    {"hits":[{"raw":"broad"}],"verdict":"采纳"}]}, ensure_ascii=False), encoding="utf-8")
+    r = _run(inp)
+    assert r.returncode == 1 and "<!-- sdflow:lens-metric" not in r.stdout
+
+
+def test_cli_idempotent_cross_process(tmp_path):
+    inp = tmp_path/"in.json"
+    inp.write_text(json.dumps({
+        "roster":[{"lens":"broad","runner":"claude","site":"—"},
+                  {"lens":"domain","runner":"claude","site":"—"},
+                  {"lens":"outside-voice","runner":"codex","site":"hr-tg"}],
+        "findings":[{"hits":[{"raw":"domain"}],"verdict":"采纳","sev":"中"}]}, ensure_ascii=False), encoding="utf-8")
+    import os
+    env0 = dict(os.environ, PYTHONHASHSEED="0"); env1 = dict(os.environ, PYTHONHASHSEED="1")
+    a = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--input",str(inp)],
+                       capture_output=True, text=True, env=env0).stdout
+    b = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--input",str(inp)],
+                       capture_output=True, text=True, env=env1).stdout
+    assert a == b and a.count("lens-metric v1") == 3      # 跨 hashseed 字节一致

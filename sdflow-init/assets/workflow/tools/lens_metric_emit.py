@@ -157,3 +157,28 @@ def reduce(roster, findings, layer, enums, fold_map):
             f'defer="{c["defer"]}" 独立="{c["独立"]}" sev="{sev_str}" -->'
         )
     return lines
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="lens-metric 锚 emitter（确定性·fail-closed·门控外置）")
+    ap.add_argument("--layer", required=True, choices=["spec-review", "code-review"])
+    ap.add_argument("--input", required=True)
+    ap.add_argument("--contract", default=None)
+    args = ap.parse_args(argv)
+    contract = args.contract or str(Path(__file__).resolve().parent.parent / "lens-metric-contract.md")
+    try:
+        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        enums = load_enums(contract)
+        fold_map = load_fold(contract, enums)
+        if not isinstance(data, dict) or "roster" not in data or "findings" not in data:
+            raise EmitError("输入缺 roster/findings 顶层键")
+        lines = reduce(data["roster"], data["findings"], args.layer, enums, fold_map)  # all-or-nothing
+    except (EmitError, json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
+        print(f"[lens_metric_emit] FAIL: {e}", file=sys.stderr)
+        return EXIT_FAIL
+    print("\n".join(lines))                                # 仅全校验过才输出（无部分锚）
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    sys.exit(main())
