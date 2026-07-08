@@ -147,3 +147,46 @@ def locate_phase_rows(roadmap_text, phase):
     只定位到 phase 行集(机械), 不判勾哪几行(留人)."""
     pat = re.compile(r"^- \[ \] " + re.escape(phase) + r"\.")
     return [ln.rstrip() for ln in roadmap_text.splitlines() if pat.match(ln)]
+
+
+def assemble_draft(assoc, verify_value, tasks_done, tasks_total, change_name,
+                   branch, fmt, candidate_rows, pytest_count=None):
+    """拼 hand-off 回填草稿. 机械锚只填步2 已实现事实; archive/merge 静态占位(P-1).
+    只列候选行集(机械), 勾哪几行/价值叙述留人(P-2)."""
+    roadmap, phase = assoc["roadmap"], assoc["phase"]
+    pytest_str = str(pytest_count) if pytest_count is not None else "N/A（纯 Markdown 或未采集）"
+    lines = [
+        "### ▶ roadmap 回填草稿（%s#%s，关联来源: %s）" % (roadmap, phase, assoc["source"]),
+        "",
+        "> 助手机械搬运（定位到 phase + 盘面锚），**判断留人**：勾哪几行 / 算不算满足验收标准 / 价值叙述 / 阶段状态 / deferred。",
+    ]
+    for w in assoc.get("warnings", []):
+        lines.append("> ⚠ %s" % w)
+    lines += [
+        "",
+        "**机械锚（步2 已实现事实）**：",
+        "- change: `%s`" % change_name,
+        "- verify: %s" % verify_value,
+        "- tasks 完成态: %d/%d" % (tasks_done, tasks_total),
+        "- 分支: `%s`" % branch,
+        "- pytest: %s" % pytest_str,
+        "- archive 路径: `<待归档后由人补>`  ◀ P-1 预测值不预填",
+        "- merge: `<待 merge 后由人补>`",
+        "",
+    ]
+    if fmt == "checkbox":
+        if candidate_rows:
+            lines.append("**候选复选框行集（phase %s，请人判断勾哪几行）**：" % phase)
+            lines.extend(candidate_rows)
+        else:
+            lines.append("**候选复选框**：phase %s 下未定位到未勾复选框行——请人工核对。" % phase)
+    else:
+        lines.append("**⚠ fail-loud**：目标 roadmap 为非复选框格式（表格/散文式），助手不产复选框草稿——复选框/状态回填请人工。")
+    lines += [
+        "",
+        "**task-log 完成总结骨架（价值叙述留人补）**：",
+        "- [%s] %s#%s：<一句交付摘要，人补> — verify %s, %d/%d tasks, merge `<待补>`"
+        % (change_name, roadmap, phase, verify_value, tasks_done, tasks_total),
+        "  - 价值（grill/冷审/defer/耗时）：<人补>",
+    ]
+    return "\n".join(lines)

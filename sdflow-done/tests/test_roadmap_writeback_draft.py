@@ -151,3 +151,46 @@ def test_locate_phase_rows_only_unchecked_of_phase():
 
 def test_locate_phase_rows_empty_when_none():
     assert rwd.locate_phase_rows(CHECKBOX_ROADMAP, "9") == []
+
+
+def _assoc(source="prefix", warnings=None):
+    return {"roadmap": "mlh", "phase": "4", "source": source, "warnings": warnings or []}
+
+
+def test_assemble_draft_checkbox_has_mechanical_anchors_and_placeholders():
+    out = rwd.assemble_draft(
+        _assoc(), "PASS", 5, 5, "implement-mlh-p4-x", "feat/x",
+        "checkbox", ["- [ ] 4.A.1 甲"], pytest_count=39
+    )
+    assert "change: `implement-mlh-p4-x`" in out
+    assert "verify: PASS" in out
+    assert "5/5" in out
+    assert "pytest: 39" in out
+    assert "- [ ] 4.A.1 甲" in out  # 候选行集
+    # P-1: archive/merge 占位不预填当前日期
+    assert "<待归档后由人补>" in out
+    assert "<待 merge 后由人补>" in out
+    # P-2: 不产 per-行"建议勾"(措辞), 只列候选行集供人判
+    assert "建议勾" not in out
+
+
+def test_assemble_draft_table_prose_fail_loud():
+    out = rwd.assemble_draft(
+        _assoc(), "PASS", 3, 3, "implement-wco-p2-y", "feat/y",
+        "table-prose", [], pytest_count=None
+    )
+    assert "fail-loud" in out or "非复选框格式" in out
+    assert "pytest: N/A" in out
+
+
+def test_assemble_draft_warnings_surfaced():
+    out = rwd.assemble_draft(
+        _assoc(source="flag", warnings=["关联不一致: prefix=a#1 vs 采纳 flag=b#2"]),
+        "PASS", 1, 1, "c", "b", "checkbox", [], None
+    )
+    assert "关联不一致" in out
+
+
+def test_assemble_draft_deterministic():
+    args = (_assoc(), "PASS", 2, 2, "c", "b", "checkbox", ["- [ ] 4.A.1 甲"], 10)
+    assert rwd.assemble_draft(*args) == rwd.assemble_draft(*args)  # 同输入同输出
