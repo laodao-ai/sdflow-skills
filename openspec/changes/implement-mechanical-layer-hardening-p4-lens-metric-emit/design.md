@@ -3,10 +3,10 @@
 ## Context
 
 **现状（D-1 代码事实）**：lens-metric 锚的计数当前由主 session 手做——
-- `sdflow-spec-review/SKILL.md:79` / `sdflow-code-review/SKILL.md:124` 落锚步：主 session 手折叠原始镜名 → canonical `lens`、手数 `findings/采纳/裁掉/defer/独立`、手写 `sev` rollup、手拼锚行。
+- 两审 SKILL 落锚步：主 session 手折叠原始镜名 → canonical `lens`、手数 `findings/采纳/裁掉/defer/独立`、手写 `sev` rollup、手拼锚行〔spec-review-amendment 接地订正：精确锚点为 `sdflow-spec-review/SKILL.md` 手折叠 :73 + emission Step4 :99-101、`sdflow-code-review/SKILL.md` 计数 :110-112 + emission Step5 :116；原引 :79/:124 落在 anchor_lint 自检门子步、非 emission 步〕。
 - `lens-metric-contract.md`（`~/.sdflow/workflow/`，bundle 单一源）钉死锚形 + 枚举（`lens-metric-enums` 机读块）+ 折叠表（ADR-2，**prose**）+ 归属规则，并明写「数值跨源一致性 = 主 session 信任边界、非机械可验」。
 - `anchor_lint.py`（bundle tool，`check_lens_metric`）机验锚**格式/枚举/sev/计数 int≥0**，但 `REQUIRED_FIELDS` 只校验存在性与域，**诚实声明不保证数值正确**。
-- `lens_metric_aggregate.py`（skill-local，`sdflow-retro/scripts/`）跨 change 聚合归档锚，内部 `group_key`/fold **硬编码折叠逻辑**（消费仓无 sdflow-retro，故不与 emitter 互 import）。
+- `lens_metric_aggregate.py`（skill-local，`sdflow-retro/scripts/`）跨 change 聚合归档锚：`group_key`(:116) **只按 `(layer,lens,runner,site)` group、不 fold**（读的归档锚 `lens` 值早已 canonical），另硬编码 `LENS_ENUM`/`LAYER_ENUM`(:17-18) 副本仅作越域 flag（消费仓无 sdflow-retro，故不与 emitter 互 import）〔spec-review-amendment 接地订正：原句「内部 group_key/fold 硬编码折叠逻辑」系 grill 前残留错误表述，与真实代码及本文档 ADR-2 自身结论「aggregator 无折叠」冲突，已更正〕。
 
 **约束**：emitter 作 bundle tool 铺进消费仓 `openspec/workflow/tools/`，运行时**禁 import** `lens_metric_aggregate`/`ship_gate`（消费仓无 sdflow-retro/sdflow-ship）；**禁 import yaml**（消费仓无 PyYAML）——同 `anchor_lint` 零依赖 + 重实现惯例。
 
