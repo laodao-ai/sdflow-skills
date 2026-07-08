@@ -28,6 +28,12 @@ def test_load_enums_missing_block(tmp_path):
     import pytest
     with pytest.raises(m.EmitError): m.load_enums(bad)
 
+def test_load_block_unclosed_fence_fail_closed(tmp_path):
+    m = _mod(); bad = tmp_path/"c.md"
+    bad.write_text("```lens-metric-enums\nlayer: spec-review,code-review\n", encoding="utf-8")  # 无闭合围栏
+    with pytest.raises(m.EmitError):
+        m.load_enums(bad)
+
 def test_load_fold_dup_key_fail_closed(tmp_path):
     m = _mod(); e = m.load_enums(CONTRACT)
     c = tmp_path/"c.md"
@@ -65,6 +71,16 @@ def test_fold_hit_site_injection_fail_closed():
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
     import pytest
     with pytest.raises(m.EmitError): m.fold_hit({"raw":"codex","runner":"codex","site":'a"b'}, e, f)
+
+def test_fold_hit_raw_unhashable_fail_closed():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    with pytest.raises(m.EmitError):
+        m.fold_hit({"raw":["broad"]}, e, f)               # raw 非字符串（unhashable）→ 干净 EmitError 非裸 TypeError
+
+def test_fold_hit_ov_site_non_str_fail_closed():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    with pytest.raises(m.EmitError):
+        m.fold_hit({"raw":"codex","runner":"codex","site":["x"]}, e, f)   # site 非字符串 → 先类型后注入拦截
 
 def _ef():
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e); return m, e, f
@@ -145,6 +161,34 @@ def test_reduce_roster_dup_key_fail_closed():
         m.reduce(r, [], "spec-review", e, f)
 
 
+def test_reduce_roster_site_non_str_fail_closed():
+    m, e, f = _ef()
+    roster = [{"lens":"broad","runner":"claude","site":123},
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+    with pytest.raises(m.EmitError):
+        m.reduce(roster, [], "spec-review", e, f)
+
+def test_reduce_roster_lens_unhashable_fail_closed():
+    m, e, f = _ef()
+    roster = [{"lens":["broad"],"runner":"claude","site":"—"},
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+    with pytest.raises(m.EmitError):
+        m.reduce(roster, [], "spec-review", e, f)
+
+def test_reduce_non_ov_wrong_runner_site_fail_closed():
+    m, e, f = _ef()
+    roster = [{"lens":"broad","runner":"codex","site":"x"},          # 幽灵行：非 ov 却 runner/site 越出强制归约
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+    with pytest.raises(m.EmitError):
+        m.reduce(roster, [], "spec-review", e, f)
+
+def test_reduce_rejected_illegal_sev_fail_closed():
+    m, e, f = _ef()
+    findings = [{"hits":[{"raw":"broad"}], "verdict":"裁掉", "sev":"严重"}]  # 非法 sev 级，即便非采纳也 fail-closed
+    with pytest.raises(m.EmitError):
+        m.reduce(_base_roster(), findings, "spec-review", e, f)
+
+
 def _run(inp_path, layer="spec-review"):
     return subprocess.run([sys.executable, str(SCRIPT), "--layer", layer, "--input", str(inp_path)],
                           capture_output=True, text=True)
@@ -201,6 +245,16 @@ def test_cli_null_roster_clean_fail(tmp_path):
     r = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--input",str(inp)],
                        capture_output=True, text=True)
     assert r.returncode == 1 and r.stdout == "" and "FAIL" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_cli_non_str_field_clean_fail(tmp_path):
+    inp = tmp_path/"in.json"
+    inp.write_text(json.dumps({
+        "roster":[{"lens":"broad","runner":"claude","site":"—"},
+                  {"lens":"outside-voice","runner":"codex","site":123}],
+        "findings":[]}, ensure_ascii=False), encoding="utf-8")
+    r = _run(inp)
+    assert r.returncode == 1 and "Traceback" not in r.stderr and "FAIL" in r.stderr
 
 
 # --- 产出↔校验/聚合一致性守卫（跨模块单一源；importlib 加载真实模块，非脚本 import） ---

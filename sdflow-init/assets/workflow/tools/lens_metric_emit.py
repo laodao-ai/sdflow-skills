@@ -19,7 +19,7 @@ class EmitError(Exception):
 def _read_block_pairs(text, info_string):
     """fence-aware 读 fenced 块内 `k: v` 行为 (k,v) 对列表（重实现同 anchor_lint 口径，不 import）。"""
     open_re = re.compile(r'^ {0,3}(`{3,}|~{3,})' + re.escape(info_string) + r'\s*$')
-    body, in_block, fc, fl = [], False, None, 0
+    body, in_block, closed, fc, fl = [], False, False, None, 0
     for ln in text.splitlines():
         if not in_block:
             m = open_re.match(ln)
@@ -28,10 +28,13 @@ def _read_block_pairs(text, info_string):
             continue
         c = _FENCE.match(ln)
         if c and c.group(1)[0] == fc and len(c.group(1)) >= fl and ln[c.end():].strip() == "":
+            closed = True
             break
         body.append(ln)
     if not in_block:
         raise EmitError(f"契约缺 {info_string} 机读块")
+    if not closed:
+        raise EmitError(f"{info_string} 块未闭合")
     pairs = []
     for ln in body:
         if ":" in ln:
@@ -70,8 +73,8 @@ def load_fold(contract_path, enums):
 
 def fold_hit(hit, enums, fold_map):
     """一个 hit → 行键 (lens, runner, site)。恒等 pass-through；未知 raw fail-closed（不塞 broad）。"""
-    if not isinstance(hit, dict) or "raw" not in hit:
-        raise EmitError(f"hit 缺 raw: {hit!r}")
+    if not isinstance(hit, dict) or "raw" not in hit or not isinstance(hit["raw"], str):
+        raise EmitError(f"hit 缺 raw/raw 非字符串: {hit!r}")
     raw = hit["raw"]
     if raw in enums["lens"]:
         canon = raw                                  # 恒等 pass-through（ADR-7）
@@ -83,12 +86,14 @@ def fold_hit(hit, enums, fold_map):
         runner, site = hit.get("runner"), hit.get("site")
         if runner is None or site is None:
             raise EmitError(f"outside-voice hit 缺 runner/site: {hit!r}")
+        if not isinstance(runner, str) or not isinstance(site, str):
+            raise EmitError(f"outside-voice hit runner/site 非字符串: {hit!r}")
     else:
         runner, site = "claude", "—"
     if runner not in enums["runner"]:
         raise EmitError(f"runner 越域: {runner}")
-    if isinstance(site, str) and _SITE_BAD.search(site):
-        raise EmitError(f"site 含非法字符（注入）: {site!r}")  # C7
+    if _SITE_BAD.search(site):
+        raise EmitError(f"site 含非法字符（注入）: {site!r}")  # C7 先类型后注入：非 str site 已在上方拦截，此处 site 恒为 str
     return (canon, runner, site)
 
 
@@ -101,12 +106,16 @@ def reduce(roster, findings, layer, enums, fold_map):
     for it in roster:
         if not isinstance(it, dict) or not {"lens","runner","site"} <= set(it):
             raise EmitError(f"roster 项缺字段: {it!r}")
+        if not all(isinstance(it[k], str) for k in ("lens","runner","site")):
+            raise EmitError(f"roster 字段类型非字符串: {it!r}")
         if it["lens"] not in enums["lens"]:
             raise EmitError(f"roster lens 越域: {it['lens']}")
         if it["runner"] not in enums["runner"]:
             raise EmitError(f"roster runner 越域: {it['runner']}")
         if _SITE_BAD.search(it["site"]):
             raise EmitError(f"roster site 注入: {it['site']!r}")
+        if it["lens"] != "outside-voice" and (it["runner"] != "claude" or it["site"] != "—"):
+            raise EmitError(f"非 outside-voice 行键必须 runner=claude site=—: {it!r}")  # Fix B：防幽灵行击穿强制行
         key = (it["lens"], it["runner"], it["site"])
         if key in seen:
             raise EmitError(f"roster 重复行键: {key}")
@@ -129,8 +138,10 @@ def reduce(roster, findings, layer, enums, fold_map):
         if verdict not in VERDICTS:
             raise EmitError(f"verdict 越域: {verdict}")
         sev = fd.get("sev")
-        if verdict == "采纳" and (not sev or sev not in enums["sev_levels"]):
-            raise EmitError(f"采纳 finding 缺/非法 sev: {fd!r}")         # C12
+        if sev is not None and sev not in enums["sev_levels"]:
+            raise EmitError(f"finding sev 非法: {fd!r}")                # Fix A：任何 verdict 的非空 sev 都须合法
+        if verdict == "采纳" and not sev:
+            raise EmitError(f"采纳 finding 缺 sev: {fd!r}")             # C12
         keyset = {fold_hit(h, enums, fold_map) for h in hits}
         for k in keyset:
             if k not in counts:
@@ -143,6 +154,7 @@ def reduce(roster, findings, layer, enums, fold_map):
         if len(keyset) == 1 and verdict == "采纳":
             counts[next(iter(keyset))]["独立"] += 1
     # 4) sev 不变量：Σsev == 采纳
+    # 同函数内自防御（防未来重构打破采纳/sev 锁步），当前结构下不可达、非跨模块校验
     for k, c in counts.items():
         if sum(c["sev"].values()) != c["采纳"]:
             raise EmitError(f"sev rollup 不变量破: {k} Σsev≠采纳")
