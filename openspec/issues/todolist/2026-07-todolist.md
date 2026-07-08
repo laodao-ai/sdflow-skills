@@ -91,9 +91,9 @@
 | T83 | `embedded-test-sop + log_check.py(新)` | P4·4.A 串口日志规则判定脚本化：时间窗+must_contain/not/before+severity rollup 输出 PASS/FAIL，平台需人眼项留模型。目标态该做,正当排后——本仓无 embedded producer 契约可 dogfood,待真实 embedded 消费仓需求(producer 契约就绪度,非痛感) | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
 | T84 | `embedded-test-sop SOP模式A 小校验器(新)` | P4·4.D.3 SOP 模式A 源码常量/TAG 收割脚本化：正则 emit 常量表 name/值/来源:行。同 embedded 排后 | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
 | T85 | `roadmap mechanical-layer-hardening / recorder` | P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块 | 基础设施 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
-| T86 | `anchor_lint.py load_enums` | 未闭合 fence 不 fail-closed（与 emitter _read_block_pairs 同盲区，本 change 已修 emitter 侧）——EOF 前无闭合围栏时静默把剩余全文当块体；契约受版本控制利用面低，但两侧同错致等价性测试假绿风险 | 代码质量 | OPEN | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit |  |
-| T87 | `lens_metric_emit.py load_enums + anchor_lint.py` | lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试 | 代码质量 | OPEN | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit |  |
-| T88 | `仓库 CI/pre-commit` | 无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并 | 基础设施 | OPEN | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit |  |
+| T86 | `anchor_lint.py load_enums` | 未闭合 fence 不 fail-closed（与 emitter _read_block_pairs 同盲区，本 change 已修 emitter 侧）——EOF 前无闭合围栏时静默把剩余全文当块体；契约受版本控制利用面低，但两侧同错致等价性测试假绿风险 | 代码质量 | PROPOSED | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit | implement-mechanical-layer-hardening-p4-lens-metric-emit |
+| T87 | `lens_metric_emit.py load_enums + anchor_lint.py` | lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试 | 代码质量 | PROPOSED | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit | implement-mechanical-layer-hardening-p4-lens-metric-emit |
+| T88 | `仓库 CI/pre-commit` | 无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并 | 基础设施 | PROPOSED | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 
 ---
 
@@ -1037,7 +1037,7 @@
 |------|------|
 | 模块 | `anchor_lint.py load_enums` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/implement-mechanical-layer-hardening-p4-lens-metric-emit/design.md`
 
@@ -1051,7 +1051,7 @@
 |------|------|
 | 模块 | `lens_metric_emit.py load_enums + anchor_lint.py` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/implement-mechanical-layer-hardening-p4-lens-metric-emit/design.md`
 
@@ -1065,7 +1065,7 @@
 |------|------|
 | 模块 | `仓库 CI/pre-commit` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/implement-mechanical-layer-hardening-p4-lens-metric-emit/design.md`
 

@@ -20,6 +20,14 @@
 | T51 | todo | PROPOSED | gate-checkpoint-hardening |
 | T52 | todo | PROPOSED | gate-checkpoint-hardening |
 
+### 批次：implement-mechanical-layer-hardening-p4-lens-metric-emit
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T86 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
+| T87 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
+| T88 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
+
 ### 批次：issues-pool-hardening
 
 | ID | Pool | Status | 关联Change |
