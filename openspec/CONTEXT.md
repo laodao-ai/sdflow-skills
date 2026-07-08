@@ -128,13 +128,21 @@ _Avoid_: 全 frontmatter 化 roadmap（损叙述层人读）；在回写侧硬�
 两类「写盘面」的失效容忍分野。**正确性门**（verify / gate / lens-metric emitter）：错=假✅ / 放不完整的活，零容忍 → **fail-closed** all-or-nothing 正当。**记录维护回写**（roadmap 回写）：漏=记录陈旧、可事后补、非正确性缺陷 → **best-effort + 降级标注**（三级：全写 / 部分写+标注未做项 / 完全做不了才留人工），fail-closed 只在末级。roadmap 回写误用 emitter 的 all-or-nothing 会为一个 id 定位不到就丢弃本可回写的部分，记录反更差。best-effort+标注 = 反静默守卫（降级+告警）在记录维护的应用，非放松纪律。
 _Avoid_: 拿 fail-closed all-or-nothing 套记录维护回写（过度严格、丢可回写部分）；把 best-effort 当「允许静默漏」（未做项 MUST 降级标注显形）
 
-**归属镜像投影 (Membership-mirror Projection)** 〔spec-review-amendment · adr/0014；grill-amendment 第二轮精化〕:
+**归属镜像投影 (Membership-mirror Projection)** 〔adr/0014；**superseded by adr/0015**——第二轮 spec-review C1（scaffold 撞 openspec「文件存在=done」短路产出链）/C2（阶段 enum deferred 无机器信号、不可机械聚合）揭穿机械镜像越界判断，回填改最小核助手、判断留人；本条留档备史〕:
 roadmap 子任务完成态 = change tasks 完成态的**盘面投影**，真相源 = **归档实况盘面**（tasks 完成态，done 第 0.3 步已对账），非起手锚固化快照。对齐机制经第二轮 grill 精化为**「change 归属 roadmap 子任务 + roadmap 借结构化格式」**、**非「tasks 号 = roadmap 号」的强编号统一**——实证粒度失配：roadmap 复选框 `4.C.1` = 一次 change 粒度、change tasks `1.1~7.x` = 该 change 内部实现分解、天生细一层。落地：**roadmap 保规划粒度**（子任务 = change 级交付点），**仅借鉴** tasks 复选框 `- [ ]` + 层级编码 `N.X.Y` **格式**（机械可镜像）、**MUST NOT 下沉到 tasks 实现步粒度**；change scaffold 机械写**归属锚** `<!-- roadmap: {name} subtasks: 4.D.1,… -->`（关联范围）+ change tasks 顶层组借 roadmap 子任务号作归属标签；`sdflow-done` 归档**镜像** change tasks 归属组完成态 → roadmap 同号复选框（合批 defer 组未完成→留 `[ ]`）。实际勾选 = **归属范围（锚）∩ tasks 盘面完成**。
 _Avoid_: 起手锚写死 subtask 集当**完成**真相（锚只声明关联范围、完成看盘面；起手≠归档实况，混用致 defer 误勾）；把「编号统一」当「tasks 号=roadmap 号」强统一（粒度失配——会拖 roadmap 到实现步或压平 change 功能分组）；让 roadmap 借 tasks 的**粒度**（只借复选框/编码**格式**，roadmap 保规划粒度）
 
-**producer 机械生成链 (Producer Mechanical Generation Chain)** 〔spec-review-amendment · adr/0014〕:
+**producer 机械生成链 (Producer Mechanical Generation Chain)** 〔adr/0014；**superseded by adr/0015**——scaffold 双向生成撞 C1（openspec done 判定），回填改最小核助手；本条留档备史〕:
 把「靠人写对」升级为「producer 机械产出」的确定性链条——roadmap 结构化生成 → change **scaffold**（从 roadmap 抄编号 + 机械写 name 锚 + proposal 引用）→ 实现勾 tasks → 镜像回写。每环确定性、不靠自觉。是「机械 prose 协议 MUST 脚本化」（`adr/0006`）+「目标态论证」（`adr/0011`）的合流落地：评估目标态安全性时锚「producer 契约会不会机械产出」，**MUST NOT** 降格为「人/AI 起手会不会记得遵守一条无门禁 prose MUST」（后者是 `adr/0006` 点名的静默跳步，被 spec-review 哲学镜揭穿为「目标态论证误套行为合规」）。
 _Avoid_: 把「起手 MUST 带锚/编号」当目标态达成（无机械生成 = 靠自觉 = 静默跳步）；用「现状 producer（opsx:ff）不可改」限制目标（目标态应加确定性生成环，非迁就现状流程）
+
+**完成判定的盘面-判断切分 (Completion: On-disk Fact vs Judgment)** 〔spec-review-amendment · adr/0015〕:
+roadmap 子任务「完成」判定分两层——**确定性盘面**（对应 change 是否归档/merge/verify=PASS，机械可读，`ship_gate` 已用同款盘面）+ **是否满足验收标准 / 算不算完成 / 勾哪些复选框**（语义判断，现状人做、目标态仍人做）。现状实证：「某子任务算不算完成」从来不是机械读复选框，是人对照人写的 `### 验收标准` 判的；deferred（排后/放弃）更是纯规划判断，二值复选框 `[ ]` 根本不承载（`[ ]` 无法区分「未做」vs「显式放弃」）。把判断的一半硬做成机械聚合（如从复选框推 deferred enum）是**范畴错误**（`adr/0015` C2）。
+_Avoid_: 从二值复选框机械推「阶段是否 delivered / 某项是否 deferred」（那是判断，撞 C2 循环+无信号）；把「完成判定」整体当确定性盘面（只有「change 是否交付」是盘面，「算不算满足验收标准」是判断）
+
+**回填降摩擦助手 (Writeback Assist, not Auto-writeback)** 〔spec-review-amendment · adr/0015〕:
+`sdflow-done` 收尾读**确定性盘面**（change 归档/verify=PASS/merge/tasks 完成态/验证数字）生成人可确认的 roadmap **回填草稿**（候选复选框 + task-log 完成总结骨架含机械锚），进 hand-off 提示人异步确认回填（同现状独立「回填对账」commit，从纯手写降为改草稿）。**判断留人**（算不算完成/勾哪些/价值叙述/阶段状态/deferred），非无人干预自动回写——因完成判定本质含判断（见上条）。是「机械活交脚本、判断留模型」在 roadmap 回填的落点：自动化**机械搬运**（盘面读取 + 骨架预填）、判断留人**确认**。**弃** scaffold 双向（撞 C1）/ enum 机械聚合（撞 C2）/ 编号统一归属镜像（粒度失配）/ 强制迁移——roadmap/tasks 保现状散文格式，助手适配、不要求机读化。
+_Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，撞 C1/C2）；用 scaffold 预建 roadmap 复选框（撞 openspec done 判定 + 孤儿认领）；阶段三给它加人类门（阶段三无 AskUserQuestion——草稿进 hand-off 让人异步确认，非弹窗）
 
 ## Flagged ambiguities
 
@@ -148,3 +156,4 @@ _Avoid_: 把「起手 MUST 带锚/编号」当目标态达成（无机械生成 
 - 「roadmap 回写失败」曾拟套 lens-metric emitter 的 all-or-nothing fail-closed——已钉为**记录维护回写**（best-effort + 降级标注三级），区别于正确性门的零容忍 fail-closed（见 `adr/0013`）；「L1 关联判据」曾拟解析 proposal 自然语言引用（现状快照谬误）——已锚 producer **关联锚**机器行（见「关联锚」/`adr/0013`）。
 - 「roadmap 回写真相源」曾拟锚**起手锚固化的 subtask 集**（`adr/0013`）——spec-review 揭穿其为可变状态写死的第二真相源（起手≠归档实况致误勾）+ 无机械闭环（靠人写对锚 = `adr/0006` 静默跳步），已重构为**归属镜像投影**（真相源=归档 tasks.md 完成态）+ **producer 机械生成链**（scaffold 机械产出编号/锚），`adr/0014` 部分 supersede `adr/0013`。
 - 「roadmap↔tasks 对齐」第二轮 grill 精化：曾拟「tasks 号 = roadmap 号」强编号统一——实证粒度失配（roadmap 复选框=change 粒度、tasks=实现分解、细一层），已改为**归属镜像**（roadmap 保规划粒度、仅借复选框/编码**格式**；change 归属 roadmap 子任务；勾选=归属范围∩tasks 盘面完成），roadmap 与 tasks **MUST NOT 互相拖到对方粒度**（见「归属镜像投影」/`adr/0014`）。
+- 「roadmap 回填自动化」三轮收敛终局〔`adr/0015`〕：机械回写骨架（起手锚 `adr/0013` → 编号统一 → 归属镜像+scaffold `adr/0014`）经两轮 spec-review **全被揭穿**（C1 scaffold 撞 openspec「文件存在=done」短路产出链、C2 阶段 enum deferred 无机器信号不可机械、defer 重现原痛点、ROI 失衡）；现状实证「**完成判定含判断**」（人对照验收标准判、非机械读复选框）——已收敛为**回填降摩擦助手**（盘面搬运机械、判断留人确认），`adr/0015` supersede `adr/0013`+`adr/0014`。

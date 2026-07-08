@@ -1,63 +1,35 @@
 ## ADDED Requirements
 
-<!-- 〔spec-review-amendment · adr/0014 + grill-amendment 第二轮〕归属镜像投影：roadmap 保规划粒度借格式, change 归属, 盘面镜像 -->
+<!-- 〔spec-review-amendment · adr/0015〕最小核: 回填降摩擦助手, 机械搬运自动化、判断留人 -->
 
-### Requirement: roadmap 归属镜像与关联判据
+### Requirement: roadmap 回填降摩擦助手（判断留人）
 
-roadmap SHALL 保规划粒度（子任务 = 一次 change / 一个交付点）、**仅借鉴** tasks 的复选框 `- [ ]` + 层级编码 `N.X.Y` 格式使其机械可镜像，MUST NOT 下沉到 openspec tasks 实现步粒度。roadmap 驱动 change SHALL 通过归属锚 `<!-- roadmap: {name} subtasks: … -->` 声明归属的 roadmap 子任务（关联范围）+ tasks 顶层组借 roadmap 子任务号作归属标签。`sdflow-done` 关联判据 = L1 读 name 锚（关联哪个 roadmap）+ L2 锚 `subtasks`（归属范围）∩ tasks 归属组盘面完成态（哪些真做了），MUST NOT 靠起手锚当**完成**真相（锚只声明范围、完成看盘面）。tasks 顶层用 roadmap 式编号 `N.X.Y` 却无 name 锚 MUST lint fail-closed 拦、MUST NOT 静默跳过。
+`sdflow-done` 收尾（hand-off 那步）SHALL 在检测到 change 关联某 roadmap 时，读**确定性盘面**（archive 路径 / verify=PASS frontmatter / merge / tasks 完成态 / 验证数字）生成 roadmap **回填草稿**（候选复选框 + task-log 完成总结骨架含机械锚）写进 `hand-off.md`，并提示人异步确认回填。回填是**记录维护且完成判定含判断**（现状实证：人对照 `### 验收标准` 判），故助手 MUST 只自动化**机械搬运**（盘面读取 + 骨架预填），**判断留人确认**（算不算满足验收标准 / 勾哪些复选框 / 完成总结价值叙述 / 阶段状态 / deferred）。助手 MUST NOT 无人干预直接机械改 roadmap；MUST NOT scaffold 预建 roadmap 复选框 / 写 change 产物文件（避开 openspec「文件存在=done」短路，C1）；MUST NOT 从二值复选框机械聚合阶段状态 enum / 推 deferred（C2，判断留人写散文）。阶段三无 AskUserQuestion——草稿走 hand-off 异步确认，MUST NOT 弹窗、MUST NOT 阻塞归档/merge。
 
-#### Scenario: 真相源为归档 tasks 完成态盘面
-- **WHEN** 回写判定某 roadmap 子任务是否勾选
-- **THEN** 依据 change tasks 归属组的复选框完成态（组全 `[x]`→勾），锚 `subtasks` 仅界定关联范围，MUST NOT 用锚声明当完成真相
+#### Scenario: 关联时生成回填草稿进 hand-off
+- **WHEN** change 声明关联某 roadmap 且已归档（archive 路径 + verify=PASS 盘面可读）
+- **THEN** 助手读盘面生成回填草稿（候选复选框 + task-log 完成总结骨架含 change/merge/archive/验证数字机械锚）写进 hand-off，提示人过目后回填
 
-#### Scenario: 实际勾选 = 归属范围 ∩ 盘面完成
-- **WHEN** 归属锚声明 `subtasks: 4.D.1,4.D.2,4.D.4` 但 tasks 组 `## 4.D.4` 有 `[ ]`（defer）
-- **THEN** 勾 roadmap `4.D.1`/`4.D.2`、`4.D.4` 保持 `[ ]`（范围内但盘面未完成），堵起手声明 ≠ 实际交付的误勾
+#### Scenario: 判断留人、助手不代判
+- **WHEN** 生成回填草稿
+- **THEN** 助手 MUST NOT 直接机械改 roadmap 复选框 / 不机械聚合阶段状态 enum / 不推 deferred；「算不算满足验收标准、勾哪些、价值叙述、阶段状态、deferred」由人在确认环节判定
 
-#### Scenario: 漏 name 锚 fail-closed 非静默
-- **WHEN** tasks 顶层组用 roadmap 式编号 `N.X.Y` 但无 `<!-- roadmap: {name} … -->` 锚
-- **THEN** lint（起手）或 done（归档）MUST fail-closed 提示留人工，MUST NOT 当「无关联」静默跳过
+#### Scenario: 不碰 change 产物文件（避 C1）
+- **WHEN** 助手运行
+- **THEN** MUST NOT 写 change 的 tasks.md/proposal.md 等产物文件（避免第二 producer 触发 openspec「文件存在=done」短路 opsx:ff 产出链）；只读盘面 + 写 hand-off 草稿
 
-#### Scenario: roadmap 保规划粒度仅借格式
-- **WHEN** 生成/迁移 roadmap 索引层
-- **THEN** 子任务复选框粒度 = change 级交付点、仅借 tasks 的 `- [ ]`+`N.X.Y` 格式，MUST NOT 塞入每个 change 的实现步分解（不下沉 tasks 粒度）
+#### Scenario: 阶段三无门、不阻塞
+- **WHEN** 回填草稿生成
+- **THEN** 草稿进 hand-off 供人异步确认，done 流程继续（不弹窗、不阻塞归档/merge）
 
-### Requirement: sdflow-done 归属镜像回写
+### Requirement: roadmap 关联声明轻量、漏则退现状
 
-`sdflow-done` SHALL 在 archive 之后、commit 之前**归属镜像**回写：扫 tasks 归属组（`## N.X.Y`）完成态 → 勾 roadmap 同号复选框（组全 `[x]`→勾、有 `[ ]`→不勾）+ 机械聚合阶段状态 enum + 追加 task-log 完成总结 + 按需更新里程碑句；产物随第四步 `git add openspec/` 提交。勾选 / 阶段 enum = 脚本机械（勾选行首锚定 `^- \[ \] {id}`）；完成总结叙述 / 里程碑句 = 模型写、脚本校验机器锚。回写 MUST NOT 阻塞 archive/merge；归属锚 subtasks 里某号在 roadmap 找不到同号复选框（roadmap 改号）MUST 降级标注落 task-log、MUST NOT 静默。
+change 声明关联 roadmap SHALL 用轻量标记（`proposal.md`/`tasks.md` 中一行 `<!-- roadmap: {name} -->`，或调用 done 时指定 `--roadmap {name}`）；`sdflow-done` 检测到则生成回填草稿。未声明关联 MUST 退回现状（人全手工回填）、MUST NOT fail-closed 阻塞归档（回填助手是辅助、非正确性门）；MAY 对「未声明但疑似 roadmap 驱动」轻量提示，MUST NOT 强制。
 
-#### Scenario: 归属组全完成镜像勾选
-- **WHEN** tasks 归属组 `## 4.D.1` 内复选框全 `[x]`
-- **THEN** 勾 roadmap `4.D.1` 复选框（行首锚定，不误命中散文层 id 提及）
+#### Scenario: 轻量声明触发草稿
+- **WHEN** change 含 `<!-- roadmap: {name} -->` 标记或 done 传 `--roadmap`
+- **THEN** 助手据此定位 roadmap 生成回填草稿
 
-#### Scenario: defer 组不误勾
-- **WHEN** tasks 归属组 `## 4.D.4` 内有 `[ ]`（实现期 defer）
-- **THEN** roadmap `4.D.4` 复选框保持 `[ ]` 不勾（盘面兜底）
-
-#### Scenario: 阶段状态 enum 机械聚合
-- **WHEN** 更新阶段状态列
-- **THEN** 脚本从该阶段全子任务复选框机械聚合（无完成=planned / 部分=in-progress / 全非deferred完成=delivered / 显式放弃=deferred），MUST NOT 靠模型判断
-
-#### Scenario: 镜像不匹配降级标注
-- **WHEN** 归属锚 subtasks 某号在 roadmap 找不到同号复选框
-- **THEN** 降级标注「未能镜像：{subtask}」落 task-log（持久、随归档 commit），archive/merge 继续，MUST NOT 静默、MUST NOT 只落 stdout 摘要
-
-#### Scenario: 完成总结机械/判断切分
-- **WHEN** 写 task-log 完成总结（每 `(change,subtask)` 一条机器锚）
-- **THEN** 叙述内容由模型写、脚本只校验机器锚在场且幂等；里程碑散文句由模型判断改（仅阶段状态跨阈值时），脚本不碰
-
-### Requirement: roadmap 生成侧结构化与 change scaffold（双向）
-
-`sdflow-roadmap` 生成的 roadmap SHALL 结构化索引层：子任务为借 tasks 复选框/编码格式的复选框（保规划粒度）+ 交付标注槽、概览表含阶段 `状态` enum 列（值集入单一机读契约）、task-log 条目含机器锚行；叙述层保留散文。`sdflow-roadmap` SHALL 提供 **change scaffold**：给定归属子任务（`--subtasks 4.D.1,4.D.2`）**双向机械生成**——roadmap 索引复选框（结构化格式）+ change tasks 顶层归属组骨架 + `<!-- roadmap: {name} subtasks: … -->` 锚 + proposal 引用，不靠人写对。存量 roadmap 一次性迁移新格式，MUST NOT 维护 dual-read。
-
-#### Scenario: scaffold 双向机械生成
-- **WHEN** 起 roadmap 驱动 change，`--subtasks 4.D.1,4.D.2`
-- **THEN** scaffold 同源写 roadmap 索引复选框（结构化格式）+ change tasks 顶层归属组 `## 4.D.1`/`## 4.D.2` + 归属锚 + proposal 引用，三处机械产出、非人手写
-
-#### Scenario: 概览表阶段状态 enum 列
-- **WHEN** 生成/迁移 roadmap 概览表
-- **THEN** 每阶段行含 `状态` 列、取值 ∈ 契约单一源 enum 集，回写脚本可机械聚合更新
-
-#### Scenario: 旧 roadmap 迁移不 dual-read
-- **WHEN** 存量 roadmap（旧散文格式）纳入回写
-- **THEN** 一次性迁移到新索引层格式（概览表加 enum 列 + 子任务复选框借格式；不可映射的散文值如「端态A已定」显式补 enum 或标 legacy），回写只认新格式、MUST NOT 维护 dual-read
+#### Scenario: 未声明退回现状不阻塞
+- **WHEN** change 无关联声明（普通 change 或漏标）
+- **THEN** 回填草稿不生成、done 行为与现状零差异；MUST NOT fail-closed 阻塞（可 MAY 轻量提示疑似关联）

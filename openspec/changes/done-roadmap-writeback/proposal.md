@@ -1,79 +1,67 @@
 ## Why
 
-sdflow-done 收尾流水线对 **roadmap 文档包零触碰**。roadmap 驱动的分阶段 change 归档后，复选框 / task-log 完成总结 / 里程碑状态全靠**人工手动回填**（本会话刚为 lens-metric-emit=P4/4.C 手动补过一次）。issues 侧早有 `§2.1 sweep` 自动化，roadmap 侧是**对称缺口**。
+sdflow-done 收尾流水线对 **roadmap 文档包零触碰**。roadmap 驱动的分阶段 change 归档后，复选框 / task-log 完成总结 / 里程碑状态全靠**人工手动回填**（本会话刚为 lens-metric-emit=P4/4.C 手动补过一次，commit「回填对账」）。issues 侧早有 `§2.1 sweep`，roadmap 侧是对称缺口。
 
-> 〔spec-review-amendment · adr/0014 + grill-amendment 第二轮〕本 change 经两轮 grill + 7 镜 spec-review + 三次目标态纠正，骨架 = 「**归属镜像投影 + producer 机械生成链**」——根因：起手锚无机械闭环（靠人写对锚 = adr/0006 静默跳步）+ 致命误勾 + 「tasks 号=roadmap 号」粒度失配（改为 roadmap 保规划粒度仅借格式、change 归属）。
+> 〔spec-review-amendment · adr/0015〕**三轮收敛终局**：机械回写骨架（起手锚 → 编号统一 → 归属镜像+scaffold）经两轮 spec-review 全被揭穿（C1 scaffold 撞 openspec「文件存在=done」短路产出链、C2 阶段 enum 不可机械、defer 回痛点、ROI 失衡）+ 现状实证「完成判定含判断」→ 收敛为**回填降摩擦助手**（机械搬运自动化、判断留人）。
 
 ## What Changes
 
-- **归属镜像投影**：roadmap **保规划粒度**（子任务 = change 级交付点）、**仅借** tasks 复选框 `- [ ]` + 编码 `N.X.Y` **格式**；change **归属** roadmap 子任务（归属锚 `subtasks` + tasks 顶层组借号作归属标签）。done 归档**镜像** tasks 归属组完成态 → roadmap 同号复选框（组全 `[x]`→勾、defer 组 `[ ]` 不勾）。**真相源 = 归档实况盘面（tasks 完成态，第 0.3 步已对账），非起手锚快照；roadmap 与 tasks 不互拖粒度**。
-- **producer 机械生成投影链**：roadmap 结构化生成 → change **scaffold**（`--subtasks` → **双向写** roadmap 复选框(结构化格式) + change tasks 归属组骨架 + 归属锚 + proposal 引用）→ 实现勾 tasks → 归属镜像回写。每环机械、不靠人写对。
-- **关联判据**：L1 = tasks 的 `<!-- roadmap: {name} subtasks: … -->` 锚（scaffold 写）；漏锚兜底 **lint**（tasks 用 roadmap 式编号 `N.X.Y` 却无 name 锚 → **fail-closed 拦，非静默**）。L2 = 锚 `subtasks`（归属范围）∩ tasks 归属组盘面完成态（范围声明用锚、完成看盘面）。
-- **回写机械/判断切分**：镜像勾选（行首锚定）+ 阶段状态 enum **机械聚合**（从复选框）= 脚本；完成总结叙述 + 里程碑句 = 模型。真判断仅两处。
-- **生成侧结构化**（sdflow-roadmap 两模板）：子任务号 + 阶段状态 enum 列 + task-log 机器锚。
-- **fail-safe**：漏锚（有编号无 name）fail-closed 非静默；镜像不匹配（roadmap 改号）→ 降级标注落 task-log；全程不阻塞 archive/merge。
-- 旧 2 roadmap 迁移新格式（不 dual-read）。issues 不动（§2.1 sweep）。**无 BREAKING**（无关联零差异）。
+- **回填降摩擦助手**：done 收尾读**确定性盘面**（archive 路径 / verify=PASS frontmatter / merge / tasks 完成态 / 验证数字）生成 roadmap **回填草稿**（候选复选框 + task-log 完成总结骨架含机械锚）写进 hand-off，提示人**异步确认回填**。从「纯手写回填」降为「改助手草稿」。
+- **完成判定盘面-判断切分**（现状实证）：change 是否交付=确定性盘面（机械）；是否满足验收标准 / 算不算完成 / 勾哪些=判断（人）。助手只搬运盘面、**判断留人确认**。
+- **弃机械回写骨架**：无 scaffold 双向（消 C1：不写 change 产物、不碰 opsx:ff done 判定）/ 无阶段 enum 机械聚合（消 C2：deferred 留人写散文）/ 无编号统一归属镜像（消粒度失配）/ 无强制 roadmap 机读化迁移（现状散文即可）。
+- **关联轻量声明，漏=现状**：change 轻量标记 `<!-- roadmap: {name} -->`（或 done `--roadmap`）；未声明退回现状人工回填、**不 fail-closed 阻塞**（辅助非门）。
+- **阶段三无门**：草稿走 hand-off 异步确认、不弹窗、不阻塞归档/merge。issues 不动。**无 BREAKING**。
 
 ## Capabilities
 
 ### New Capabilities
-
-（无——加需求到现有 spec-workflow。）
+（无。）
 
 ### Modified Capabilities
-
-- `spec-workflow`: 新增三 Requirement——① roadmap 编号统一与关联判据（tasks 采用 roadmap 子任务号 + L1 name 锚 + 漏锚 lint）② sdflow-done 镜像回写（tasks 完成态 → roadmap，机械镜像 + 判断切分）③ roadmap 生成侧结构化与 change scaffold（producer 机械生成）。与既有「批次注册表与 reindex 被动同步」（issues sweep）为对称收尾回写契约。
+- `spec-workflow`: 新增两 Requirement——① roadmap 回填降摩擦助手（done 收尾读盘面生成草稿进 hand-off、判断留人、不机械镜像）② roadmap 关联声明轻量、漏则退现状不阻塞。与 `§2.1 sweep`（issues 自动 triage）为对称收尾契约——但回填是**助人确认**（完成判定含判断），非无人干预。
 
 ## Impact
 
-- **改 skill 本体**：`sdflow-done/SKILL.md`（3.5 镜像步，并入 archive 中档子代理）+ `sdflow-roadmap/SKILL.md` + `references/{roadmap,task-log}-template.md`（索引层结构化）+ scaffold 子命令。
-- **新增脚本**：change scaffold + 回写（镜像勾选/阶段 enum 聚合/机器锚校验）+ 关联 lint → `scripts/` + `tests/`（改 scripts 必跑 tests 红线）。
-- **workflow 规则**：关联锚/编号约定改 `sdflow-init/assets/workflow/`（权威源）再 `sdflow-init update` 推下游（bundle dogfooding 红线），**不只改仓内 openspec/workflow/**。
-- **迁移** 2 roadmap（mechanical-layer-hardening / workflow-cost-optimization）。
-- **外部影响方**：sdflow-done/sdflow-roadmap 经 symlink 铺所有消费仓；条件触发 + fail-safe 保无 roadmap 仓零差异。
-- **不改 opsx:ff**（官方）——scaffold 作其外的本仓 producer 环。
+- **改**：`sdflow-done/SKILL.md`（hand-off 步加回填草稿生成 + 提示）+（可选）轻脚本读盘面拼骨架 → `scripts/`+`tests/`。
+- **不改**：`sdflow-roadmap`（模板/生成侧不动）、**不迁移存量 roadmap**（现状散文格式即可）、不改 opsx:ff。
+- 关联声明约定若入 workflow 规则 → 改 `sdflow-init/assets/workflow/` 再 update（bundle 纪律）；轻量非门。
+- 外部影响方：sdflow-done 经 symlink 铺所有消费仓；无关联/无 roadmap 仓零差异（草稿不生成）。
 
 ## Success Metrics
 
-- roadmap 驱动 change 归档后，roadmap 复选框**镜像** tasks 完成态（defer 项不误勾）、阶段 enum 机械更新、task-log 完成总结带机器锚——无需手动回填。
-- 漏 name 锚（有 roadmap 编号）→ lint/done **fail-closed 提示、非静默**。
-- 无关联 change / 无 roadmap 仓：done 行为零差异。
-- scaffold/回写/lint 坏输入 → fail-closed 非零退出，pytest 覆盖。
-- **正路径经一次真实全链 dogfood**（scaffold→实现→镜像），非仅 fixture（补 spec-review Q3）。
+- roadmap 驱动 change 归档后，hand-off 含回填草稿（候选复选框 + task-log 骨架含机械锚）——人过目补判断即可回填，省手敲 change/merge/archive/验证数字 + 定位复选框行。
+- 无关联 change / 无 roadmap 仓：done 行为零差异（不生成草稿）。
+- 判断（算不算完成/价值叙述/阶段状态/deferred）由人确认——助手不代判、不无人干预改 roadmap。
+- 若加脚本：坏输入（盘面缺失/定位不到）→ fail-closed 非零退出或标「留人工」，pytest 覆盖。
 
 ## Non-Goals
 
-- 不碰 issues 回写（§2.1 sweep）。不做 roadmap Review 处置对账（4.D.4）。
-- 不改 opsx:ff（官方）——scaffold 外挂。
-- **roadmap MUST NOT 下沉到 openspec tasks 实现步粒度**（只借复选框/编码格式，保规划粒度）。
-- 不全 frontmatter 化 roadmap（叙述层留散文）。不背 dual-read。
-- 暂不做阶段状态 enum 漂移对账（人工编辑 roadmap 后回读校验）——显式记风险接受 + todolist，不留白。
+- 不碰 issues 回写（§2.1 sweep）。不做 4.D.4 Review 对账。不改 opsx:ff。
+- **不 scaffold 双向 / 不 enum 机械聚合 / 不编号统一归属镜像 / 不强制 roadmap 机读化迁移**（弃机械回写骨架，消 C1/C2/粒度失配/H4）。
+- 不做无人干预自动回写（完成判定含判断，助手只搬运盘面、判断留人）。
 
 ## Compliance
 
-- 全局红线：脚本 fail-closed + pytest 覆盖坏输入非零退出；判断（完成总结/里程碑句）显式留模型。
-- 反静默：漏锚 fail-closed 非静默；降级标注落 task-log。
-- 目标态论证正解：producer 契约机械保证（scaffold），非「人遵守 prose MUST」（adr/0014）。
-- bundle 纪律：workflow 规则改 assets/workflow 再 update；skill 本体改后跑 setup.sh。
+- 全局红线：若加脚本 fail-closed + pytest 覆盖坏输入；判断（算不算完成/价值叙述/阶段状态）显式留人。
+- 反静默：漏关联可提示（非静默假装无此层）；草稿定位不到标「留人工」。
+- bundle 纪律：关联约定若入 workflow 规则改 assets/workflow 再 update；sdflow-done 改后跑 setup.sh。
 - 审查顺序：`/review` → push → `/code-review`。
 
 ## 需求优先级（TG-19）
 
-- **P0** · 编号统一 + L1 name 锚 + 漏锚 lint（关联判据地基，机械闭环）。
-- **P0** · done 镜像回写（tasks 完成态 → roadmap，机械镜像勾选 + 阶段 enum 聚合）。
-- **P0** · change scaffold（producer 机械生成 tasks 编号 + 锚，闭合"靠人写对"）。
-- **P1** · 生成侧模板结构化 + task-log 完成总结（模型叙述 + 机器锚）。
-- **P1** · 里程碑句更新 + 旧 2 roadmap 迁移。
-- **P2** · 阶段 enum 漂移对账（backlog）。
+- **P0** · 回填草稿生成（读确定性盘面 → 候选复选框 + task-log 骨架含机械锚）。
+- **P0** · sdflow-done 收尾提示步（检测关联 → 草稿进 hand-off、不阻塞）。
+- **P1** · 关联声明轻量约定 + 漏则退现状不阻塞。
+- **P2** · 未声明但疑似 roadmap 驱动的轻量提示。
 
 ## 利益相关方与外部依赖（TG-20）
 
-- **所有 sdflow-skills 消费仓**：sdflow-done/sdflow-roadmap 经 symlink 铺设；条件触发 + fail-safe 保无 roadmap 仓零影响。
-- **opsx:ff（官方，不改）**：scaffold 作其外/后的本仓 producer 环，不侵入。
-- **/sdflow-ship 链**：done 是链末端；镜像回写 MUST NOT 破坏 merge 缺省语义。
+- **所有 sdflow-skills 消费仓**：sdflow-done 经 symlink 铺设；无关联/无 roadmap 仓零差异。
+- **不改 opsx:ff（官方）**：助手只读盘面 + 写 hand-off 草稿，不碰 change 产物文件（避 C1）。
+- **/sdflow-ship 链**：done 是链末端；草稿走 hand-off 异步、不破坏 merge 缺省语义。
 
 ## 假设（TG-22）
 
-- **假设 1** · roadmap 驱动 change 的 tasks.md 由 scaffold **机械生成**（编号抄自 roadmap、name 锚自动写），非靠人写对。**失效**（跳过 scaffold 手写）：漏 name 锚 → lint fail-closed 拦（编号形态可判），非静默。
-- **假设 2** · change tasks 组完成态是归档时的可信盘面（done 第 0.3 步对账保证）。**失效**：对账缺失 → 沿用 done 现有复选框对账门。
-- **假设 3** · roadmap 子任务号在 change 生命周期内稳定（scaffold 后 roadmap 不重排该 change 关联子任务号）。**失效**：roadmap 改号 → 镜像不上 → 降级标注留人工（残余 best-effort）。
+- **假设 1** · change 归档时确定性盘面（archive 路径 / verify=PASS frontmatter / tasks 完成态）可读（done 第 0.3/1 步已产生）。**失效**：盘面缺 → 草稿标「盘面缺失、留人工」，不伪造。
+- **假设 2** · 完成判定含判断（现状实证：人对照验收标准判），故助手生成草稿、人确认——**非无人干预**。**失效面**：若强求全自动 → 撞 C2（把判断当机械），本设计明确不做。
+- **假设 3** · roadmap 现状散文格式够人读 + 助手草稿定位复选框（借现有 `- [ ] {id}` 格式）。**失效**：定位不到 → 标「留人工」，不猜写。
