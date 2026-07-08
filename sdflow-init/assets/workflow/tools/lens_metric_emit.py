@@ -172,6 +172,8 @@ def main(argv=None):
         fold_map = load_fold(contract, enums)
         if not isinstance(data, dict) or "roster" not in data or "findings" not in data:
             raise EmitError("输入缺 roster/findings 顶层键")
+        if not isinstance(data["roster"], list) or not isinstance(data["findings"], list):
+            raise EmitError("roster/findings 必须是数组")
         lines = reduce(data["roster"], data["findings"], args.layer, enums, fold_map)  # all-or-nothing
     except (EmitError, json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         print(f"[lens_metric_emit] FAIL: {e}", file=sys.stderr)

@@ -193,3 +193,11 @@ def test_cli_idempotent_cross_process(tmp_path):
     b = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--input",str(inp)],
                        capture_output=True, text=True, env=env1).stdout
     assert a == b and a.count("lens-metric v1") == 3      # 跨 hashseed 字节一致
+
+
+def test_cli_null_roster_clean_fail(tmp_path):
+    inp = tmp_path/"in.json"
+    inp.write_text('{"roster": null, "findings": []}', encoding="utf-8")
+    r = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--input",str(inp)],
+                       capture_output=True, text=True)
+    assert r.returncode == 1 and r.stdout == "" and "FAIL" in r.stderr and "Traceback" not in r.stderr
