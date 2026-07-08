@@ -7,7 +7,7 @@
 `sdflow-done` 收尾六步（接地核验一致）：`0 对账 → 1 verify → 2 hand-off(§2.1 sweep) → 3 archive → 4 commit → 5 merge → 6 摘要`。缺口：全流程对 `openspec/roadmaps/` 零触碰，靠人工回填。
 
 **两轮 spec-review 两致命（否决机械回写）**：
-- **C1**：`@fission-ai/openspec` CLI 判 artifact done **只看文件存在**（`state.js:artifactOutputExists`），`apply: requires: [tasks]`。任何在 change 产物文件（tasks/proposal）上抢写的第二 producer（scaffold）会短路 opsx:ff 产出链。判定机制在官方 CLI、本仓改不了。
+- **C1**：`@fission-ai/openspec` CLI 判 artifact done **只看文件存在**（`artifactOutputExists` 定义于 `dist/core/artifact-graph/outputs.js` = `resolveArtifactOutputs(...).length>0`，`state.js` 仅 import+调用）〔spec-review-amendment · 接地事实修正〕，`apply: requires: [tasks]`。任何在 change 产物文件（tasks/proposal）上抢写的第二 producer（scaffold）会短路 opsx:ff 产出链。判定机制在官方 CLI、本仓改不了。
 - **C2**：阶段 enum 公式 `全非deferred完成=delivered` 自身循环 + deferred 无机器信号（二值复选框 `[ ]` 无法区分「未做」vs「显式放弃」）——把规划判断当机械聚合，范畴错误。
 
 **现状实践核验**（实地查 git/roadmap）：完成判定 = 人在 change 归档**后**读确定性盘面（merge/verify=PASS/归档进 base）+ 对照人写 `### 验收标准`（语义判断）→ **手动**勾复选框 + 写交付标注 + task-log 完成总结（commit「回填对账」）。**完成判定本质含判断，现状无机械判据**。
