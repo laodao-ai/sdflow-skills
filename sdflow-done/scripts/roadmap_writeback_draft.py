@@ -132,3 +132,18 @@ def read_tasks_completion(change_dir):
         elif s.startswith("- [ ]"):
             total += 1
     return (done, total)
+
+
+def probe_format(roadmap_text):
+    """任一行以 `- [ ]`/`- [x]` 开头 → checkbox; 否则 table-prose(P-3)."""
+    for line in roadmap_text.splitlines():
+        if re.match(r"^- \[[ xX]\]", line):
+            return "checkbox"
+    return "table-prose"
+
+
+def locate_phase_rows(roadmap_text, phase):
+    """该 phase(N.*) 下未勾 `- [ ]` 候选行(整行原样); 只 checkbox 式.
+    只定位到 phase 行集(机械), 不判勾哪几行(留人)."""
+    pat = re.compile(r"^- \[ \] " + re.escape(phase) + r"\.")
+    return [ln.rstrip() for ln in roadmap_text.splitlines() if pat.match(ln)]

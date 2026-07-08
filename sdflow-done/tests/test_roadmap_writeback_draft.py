@@ -119,3 +119,35 @@ def test_verify_state_malformed_bad_enum(tmp_path):
 def test_tasks_completion_counts(tmp_path):
     _write(tmp_path, "tasks.md", "- [x] a\n- [x] b\n- [ ] c\n普通行\n")
     assert rwd.read_tasks_completion(tmp_path) == (2, 3)
+
+
+CHECKBOX_ROADMAP = (
+    "- [x] 1.A.1 done item\n"
+    "- [ ] 4.A.1 phase4 待办甲\n"
+    "- [x] 4.C.1 phase4 已交付\n"
+    "- [ ] 4.D.1 phase4 待办乙\n"
+    "- [ ] 5.A.1 phase5 待办\n"
+)
+TABLE_ROADMAP = (
+    "| **P1** · x | Leg 1 | — | ✅ 已交付 |\n"
+    "| **P2** · y | Leg 2 | P0 | 🔄 |\n"
+    "- 脚本：散文 bullet 无复选框\n"
+)
+
+
+def test_probe_format_checkbox():
+    assert rwd.probe_format(CHECKBOX_ROADMAP) == "checkbox"
+
+
+def test_probe_format_table_prose():
+    assert rwd.probe_format(TABLE_ROADMAP) == "table-prose"
+
+
+def test_locate_phase_rows_only_unchecked_of_phase():
+    rows = rwd.locate_phase_rows(CHECKBOX_ROADMAP, "4")
+    assert rows == ["- [ ] 4.A.1 phase4 待办甲", "- [ ] 4.D.1 phase4 待办乙"]
+    # 已勾 4.C.1 不入候选; 别的 phase(1/5) 不入
+
+
+def test_locate_phase_rows_empty_when_none():
+    assert rwd.locate_phase_rows(CHECKBOX_ROADMAP, "9") == []
