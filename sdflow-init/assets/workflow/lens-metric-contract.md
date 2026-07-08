@@ -44,7 +44,6 @@ codex(任何 site)/claude-fallback→outside-voice · autoplan(CEO/Eng/DX/design
 历史镜: history
 接地镜: grounding
 完整性镜: grounding
-完整性接地镜: grounding
 codex: outside-voice
 claude-fallback: outside-voice
 autoplan-ceo: broad
@@ -53,6 +52,25 @@ autoplan-eng: broad
 autoplan-dx: broad
 gstack-adv: broad
 ```
+
+## 机读输入 schema（emitter 输入单一权威源·bundle 可达）〔impl-review-fix mlh-p4：ADR-6 落地〕
+> `lens_metric_emit.py` 的输入 JSON 权威 schema。两审 SKILL 落锚步引用**本块**（bundle 分发可达，
+> 不依赖源仓 `tools/tests/` fixture——消费仓非 full 拷贝不含 tests/）。字段名英文、取值中文。
+```lens-metric-input-schema
+{
+  "roster": [
+    {"lens": "<canonical ∈ lens enum>", "runner": "<∈ runner enum>", "site": "<code-voice|hr-tg|design-voice|—>"}
+  ],
+  "findings": [
+    {"hits": [{"raw": "<原始镜名>", "runner": "<outside-voice 时必填>", "site": "<outside-voice 时必填>"}],
+     "verdict": "采纳|裁掉|defer", "sev": "致|高|中|低"}
+  ]
+}
+```
+> 约束（emitter fail-closed 强制）：① roster 每个 `(lens,runner,site)` 行键各一条（含零-finding 行）；
+> 非 outside-voice 行 MUST `runner="claude" site="—"`。② finding `hits` 非空；`verdict=采纳` 时 `sev` 必填非空、
+> 其余 verdict 若带 sev 也须合法级。③ **无 per-finding `layer`**——锚 layer 单一源 = `--layer`。
+> ④ 所有字段类型 MUST 为字符串（非字符串 fail-closed，非静默）。
 
 ## enum 扩展治理
 新增镜类型（enum 未列）MUST 先升版本号至 v2 + 更新折叠表，MUST NOT 静默塞入 broad。
