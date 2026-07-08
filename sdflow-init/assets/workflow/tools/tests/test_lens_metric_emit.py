@@ -1,4 +1,4 @@
-import subprocess, sys, json, importlib.util
+import subprocess, sys, json, importlib.util, pytest
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent.parent
@@ -103,3 +103,43 @@ def test_reduce_same_type_multi_instance_independent():
     findings = [{"hits":[{"raw":"对抗镜1"},{"raw":"对抗镜2"}], "verdict":"采纳","sev":"致"}]
     adv = [l for l in m.reduce(roster, findings, "spec-review", e, f) if 'lens="adversarial"' in l][0]
     assert '采纳="1"' in adv and '独立="1"' in adv and 'sev="致1/高0/中0/低0"' in adv
+
+def _base_roster():
+    return [{"lens":"broad","runner":"claude","site":"—"},
+            {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+
+def test_reduce_empty_hits_fail_closed():
+    m, e, f = _ef()
+    with pytest.raises(m.EmitError):
+        m.reduce(_base_roster(), [{"hits":[], "verdict":"采纳","sev":"高"}], "spec-review", e, f)
+
+def test_reduce_accepted_missing_sev_fail_closed():
+    m, e, f = _ef()
+    with pytest.raises(m.EmitError):
+        m.reduce(_base_roster(), [{"hits":[{"raw":"broad"}], "verdict":"采纳"}], "spec-review", e, f)
+
+def test_reduce_bad_verdict_fail_closed():
+    m, e, f = _ef()
+    with pytest.raises(m.EmitError):
+        m.reduce(_base_roster(), [{"hits":[{"raw":"broad"}], "verdict":"通过","sev":"高"}], "spec-review", e, f)
+
+def test_reduce_bad_layer_fail_closed():
+    m, e, f = _ef()
+    with pytest.raises(m.EmitError):
+        m.reduce(_base_roster(), [], "review", e, f)
+
+def test_reduce_finding_lens_not_in_roster_fail_closed():
+    m, e, f = _ef()
+    with pytest.raises(m.EmitError):              # C4：domain 不在 roster
+        m.reduce(_base_roster(), [{"hits":[{"raw":"domain"}], "verdict":"采纳","sev":"高"}], "spec-review", e, f)
+
+def test_reduce_roster_missing_mandatory_fail_closed():
+    m, e, f = _ef()
+    with pytest.raises(m.EmitError):              # 缺 outside-voice
+        m.reduce([{"lens":"broad","runner":"claude","site":"—"}], [], "spec-review", e, f)
+
+def test_reduce_roster_dup_key_fail_closed():
+    m, e, f = _ef()
+    r = _base_roster() + [{"lens":"broad","runner":"claude","site":"—"}]
+    with pytest.raises(m.EmitError):
+        m.reduce(r, [], "spec-review", e, f)
