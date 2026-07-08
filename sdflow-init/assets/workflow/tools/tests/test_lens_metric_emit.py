@@ -201,3 +201,44 @@ def test_cli_null_roster_clean_fail(tmp_path):
     r = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--input",str(inp)],
                        capture_output=True, text=True)
     assert r.returncode == 1 and r.stdout == "" and "FAIL" in r.stderr and "Traceback" not in r.stderr
+
+
+# --- 产出↔校验/聚合一致性守卫（跨模块单一源；importlib 加载真实模块，非脚本 import） ---
+
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mm = importlib.util.module_from_spec(spec); spec.loader.exec_module(mm); return mm
+
+AL = TOOLS / "anchor_lint.py"
+# repo_root/sdflow-retro/scripts/lens_metric_aggregate.py — TOOLS =
+# .../sdflow-init/assets/workflow/tools，需 4 层 .parent 才到 repo root
+# （brief 草稿写 3 层算错，落到 sdflow-init/sdflow-retro/... 不存在；已按真实目录改正）。
+AGG = TOOLS.parent.parent.parent.parent / "sdflow-retro" / "scripts" / "lens_metric_aggregate.py"
+
+def test_emit_then_check_lens_metric_clean(tmp_path):
+    m, e, f = _ef()
+    roster = [{"lens":"broad","runner":"claude","site":"—"},
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+    lines = m.reduce(roster, [{"hits":[{"raw":"broad"}],"verdict":"采纳","sev":"高"}], "spec-review", e, f)
+    al = _load("anchor_lint", AL); enums = al.load_enums(CONTRACT)
+    report = "\n".join(lines) + "\n"
+    assert al.check_lens_metric(report, "spec-review", enums) == []   # 无违规（C5 精确口径）
+
+def test_load_enums_equivalence():
+    m = _mod(); al = _load("anchor_lint", AL)
+    me, ae = m.load_enums(CONTRACT), al.load_enums(CONTRACT)
+    for k in ("layer","lens","runner"):
+        assert me[k] == ae[k]
+    assert me["sev_re"].pattern == ae["sev_re"].pattern       # C10 逐字段等价
+
+def test_fold_codomain_subset_lens_enum():
+    m = _mod(); e = m.load_enums(CONTRACT); fold = m.load_fold(CONTRACT, e)
+    assert set(fold.values()) <= e["lens"]                   # C3
+
+def test_aggregator_enum_matches_contract():
+    m = _mod(); e = m.load_enums(CONTRACT); agg = _load("lens_metric_aggregate", AGG)
+    assert agg.LENS_ENUM == e["lens"] and agg.LAYER_ENUM == e["layer"]   # C23
+
+def test_min_lens_rows_matches_anchor_lint():
+    m = _mod(); al = _load("anchor_lint", AL)
+    assert set(m.MANDATORY_LENS) == set(al.MIN_LENS_ROWS)     # C17 分叉①=B
