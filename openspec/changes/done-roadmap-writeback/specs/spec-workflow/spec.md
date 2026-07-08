@@ -13,7 +13,7 @@
 - 助手 MUST NOT 产 per-行「建议勾」（那是判断，会渗回机械侧撞 adr/0015 切分）——只产**阶段级候选行集**供人挑。
 - 助手 MUST NOT 无人干预直接机械改 roadmap；MUST NOT scaffold 预建 roadmap 复选框 / 写 change 产物文件（避开 openspec「文件存在=done」短路，C1）；MUST NOT 从二值复选框机械聚合阶段状态 enum / 推 deferred（C2，判断留人写散文）。
 
-**时序锚清单（P-1）**：草稿机械锚 MUST 只含步2 **已实现事实**（verify=PASS / tasks 完成态 / change 名 / 分支 / pytest 数[有测试则从 verify-report 取、无则标 N/A]）。archive 路径（第三步，含 `{date}`）与 merge（第五步）在草稿生成时**尚不存在**，MUST 留占位「待归档后由人补」，MUST NOT 当确定性盘面预填（防跨零点日期漂移 + merge opt-out 后记一次未发生的 merge）。
+**时序锚清单（P-1）**：草稿机械锚 MUST 只含步2 **已实现事实**（verify=PASS / tasks 完成态 / change 名 / 分支 / pytest 数[经 `--pytest-count` 显式传入则填、缺省 N/A（verify-report 无契约计数字段，不 scrape 散文避免第二真相源）]〔impl-review-fix FIX-4：订正与实现不符的旧措辞"有测试则从 verify-report 取"——脚本从未从 verify-report 抽取过 pytest 数，`--pytest-count` 是唯一 wiring〕）。archive 路径（第三步，含 `{date}`）与 merge（第五步）在草稿生成时**尚不存在**，MUST 留占位「待归档后由人补」，MUST NOT 当确定性盘面预填（防跨零点日期漂移 + merge opt-out 后记一次未发生的 merge）。
 
 **阶段三无 AskUserQuestion**——草稿走 hand-off 异步确认，MUST NOT 弹窗、MUST NOT 阻塞归档/merge。
 

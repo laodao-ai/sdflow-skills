@@ -154,13 +154,18 @@ verify 判完之后，跑 roadmap 回填助手机械核生成回填草稿，供�
 
 ```bash
 python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
-  --change {change_name} --root . 2>/tmp/rwd_err; echo "exit=$?"; cat /tmp/rwd_err
+  --change {change_name} --root . 2>/tmp/rwd_err.$$; echo "exit=$?"; cat /tmp/rwd_err.$$
 ```
+
+〔impl-review-fix FIX-7：`/tmp/rwd_err` 改 `/tmp/rwd_err.$$`（`$$` = 当前 shell PID），防并发跑多个 change 收尾时互相覆盖临时文件〕
+
+> 〔impl-review-fix FIX-7〕exit 3/4/5/6/7 均属**预期分支**、非异常——本命令 MUST 在非 `set -e` 语境执行（`set -e` 下非零退出会直接中断脚本，吞掉后续的 stderr 转述与 hand-off 记录逻辑）。
 
 **退出码处置（遵脚本判定，不静默）**：
 - `0` → stdout 即回填草稿，**原样贴进 hand-off.md 的「▶ 下一阶段建议」段**（作 roadmap 回填草稿子块）；stderr 有 `WARN 关联不一致` 则一并转述。
 - `3`（无关联，退现状）→ change 非 roadmap 驱动，**不产草稿**；若分支名/change 名疑似 roadmap 驱动，hand-off 留一行「未检测到 roadmap 关联标记；若属某 roadmap 请手动回填」（反静默 SHOULD）。
 - `4`（盘面 absent / roadmap 缺）/ `5`（frontmatter 畸形 fail-closed）/ `6`（verify≠PASS）→ hand-off 记一行「roadmap 回填草稿未生成：<stderr 原因>，请人工」（**不静默、不伪造**）。
+- `7`（`--roadmap` 覆写格式不符 `BAD_ROADMAP_FLAG`）〔impl-review-fix FIX-7〕→ 不静默 fallback 到 marker/前缀；hand-off 记一行「roadmap 回填草稿未生成：--roadmap 格式不符 <stderr 原文>，请修正后重跑」。
 - `2`（change dir 缺）→ 异常，停下核对。
 
 **判断留人**：草稿只列 phase 候选行集 + 机械锚（archive/merge 占位），**勾哪几行 / 算不算满足验收标准 / 价值叙述 / 阶段状态 / deferred 由人在异步回填时判**——助手 MUST NOT 代判、MUST NOT 直接改 roadmap、MUST NOT 写 change 产物文件（避 C1）。
@@ -297,10 +302,12 @@ sdflow-done 完成
   Specs:   ✅ 同步主 specs（新建 / 追加 / INDEX）｜或 ⚠️ --skip-specs 手动同步
   Commit:  {hash} — {message}
   Merge:   ✅ {base_branch} ← {feat_branch}（ff）｜⏭ 按调用意图跳过
-  Roadmap: ⚠ 回填草稿待人确认（见 hand-off「▶ 下一阶段建议」）｜— 无关联
+  Roadmap: ⚠ 回填草稿待人确认（见 hand-off「▶ 下一阶段建议」）｜⛔ 未生成(<原因>,exit4/5/6/7)｜— 无关联
   Push:    ⏸ 未 push（用户手动控制）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+〔impl-review-fix FIX-7：Roadmap 行补第三态「⛔ 未生成」——脚本 exit 4/5/6/7 时草稿未产出，摘要 MUST NOT 仍呈现「⚠ 待人确认」（暗示有草稿可看）〕
 
 ---
 

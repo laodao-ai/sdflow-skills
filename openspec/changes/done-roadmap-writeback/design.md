@@ -51,7 +51,9 @@ change 归档(done · hand-off 步=第二步)
    ├─ 复选框式(如 mlh `- [ ] 1.A.1`): 定位该 phase 的【候选复选框行集】(借现状格式, 不判勾哪几行)
    └─ 表格/散文式(如 wco `| ✅`): 不产复选框草稿, fail-loud 告知「非复选框格式、复选框回填请人工」
    ▼
-生成回填草稿(进 hand-off) + task-log 完成总结骨架(两形态都产, 机械锚: change名/verify结论/archive占位/pytest数[有则取无则N/A])
+生成回填草稿(进 hand-off) + task-log 完成总结骨架(两形态都产, 机械锚: change名/verify结论/archive占位/
+   pytest数[经--pytest-count显式传入则填、缺省N/A——verify-report无契约计数字段, 不scrape散文避免第二
+   真相源, [impl-review-fix]FIX-4订正旧措辞])
    │
    ▼  阶段三无门 → 不弹窗, 走 hand-off; 且 done 第六步摘要抬一行「⚠ roadmap {name} 回填待确认」使 merge 时点可见  ◀ P-4 消 C-4
 人过目草稿: 判断算不算满足验收标准 → 勾哪几行 + 补价值叙述/阶段状态/deferred/里程碑 → 提交(同现状"回填对账"commit)

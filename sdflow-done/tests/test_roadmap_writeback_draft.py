@@ -52,6 +52,36 @@ def test_detect_markers_placeholder_name_not_matched():
     assert rwd.detect_markers(text) == []
 
 
+# [impl-review-fix] FIX-1: fence-aware CommonMark 合规新增测试
+
+
+def test_detect_markers_mixed_fence_delimiters_not_closed_by_other_char():
+    # ``` 开的块里出现 ~~~ 行不应提前关闭(不同字符, CommonMark 语义)——marker 应保持隐藏
+    text = "```\n~~~\n<!-- roadmap: foo#1 -->\n~~~\n```\n"
+    assert rwd.detect_markers(text) == []
+
+
+def test_detect_markers_unclosed_fence_hides_marker_and_signals_unclosed():
+    text = "```\n<!-- roadmap: foo#1 -->\n"
+    markers, unclosed = rwd.detect_markers_ex(text)
+    assert markers == []  # 未闭合 fence 内容仍视为围栏内, marker 不检测(不静默漏检——见 unclosed 信号)
+    assert unclosed is True
+
+
+def test_detect_markers_closed_fence_no_unclosed_signal():
+    text = "```\n<!-- roadmap: foo#1 -->\n```\n正文\n<!-- roadmap: bar#2 -->\n"
+    markers, unclosed = rwd.detect_markers_ex(text)
+    assert markers == [("bar", "2")]
+    assert unclosed is False
+
+
+def test_detect_markers_four_space_indent_backtick_not_misjudged_as_fence():
+    # 4 空格缩进的 ``` 是 markdown 缩进码块(非法 fence, CommonMark 要求 0-3 空格)——
+    # 不应误判为开启围栏, 其后的正文 marker 仍应被检测到
+    text = "正文\n    ```\n<!-- roadmap: foo#1 -->\n"
+    assert rwd.detect_markers(text) == [("foo", "1")]
+
+
 def test_resolve_prefix_only():
     a = rwd.resolve_association(
         "implement-mechanical-layer-hardening-p4-x", "", "", None
@@ -78,6 +108,53 @@ def test_resolve_marker_fallback_when_prefix_absent():
 
 def test_resolve_none_when_no_signal():
     assert rwd.resolve_association("done-roadmap-writeback", "散文无 marker", "", None) is None
+
+
+# [impl-review-fix] FIX-2: --roadmap malformed 不静默 fallback
+
+
+def test_resolve_bad_flag_raises_not_fallback():
+    # flag 非法(漏 #) → 抛 BadRoadmapFlag, 不静默 fallback 到 prefix(foo#1)
+    import pytest
+
+    with pytest.raises(rwd.BadRoadmapFlag):
+        rwd.resolve_association("implement-foo-p1-x", "", "", "mlh-p4")
+
+
+def test_resolve_bad_flag_uppercase_raises():
+    import pytest
+
+    with pytest.raises(rwd.BadRoadmapFlag):
+        rwd.resolve_association("implement-foo-p1-x", "", "", "MLH#4")
+
+
+# [impl-review-fix] FIX-5: 同源多 marker 冲突不静默
+
+
+def test_resolve_association_multi_marker_conflict_warns_and_takes_first():
+    proposal = "<!-- roadmap: foo#1 -->\n"
+    tasks = "<!-- roadmap: bar#2 -->\n"
+    a = rwd.resolve_association("done-roadmap-writeback", proposal, tasks, None)
+    assert a is not None
+    assert (a["roadmap"], a["phase"]) == ("foo", "1")  # 取首条(proposal 先于 tasks)
+    assert any("同源多 marker" in w for w in a["warnings"])
+
+
+def test_resolve_association_same_marker_twice_no_conflict_warning():
+    proposal = "<!-- roadmap: foo#1 -->\n"
+    tasks = "<!-- roadmap: foo#1 -->\n"
+    a = rwd.resolve_association("done-roadmap-writeback", proposal, tasks, None)
+    assert not any("同源多 marker" in w for w in a["warnings"])
+
+
+# [impl-review-fix] FIX-1: resolve_association 消费 unclosed 信号
+
+
+def test_resolve_association_unclosed_fence_warns():
+    proposal = "```\n还没闭合的围栏内容"
+    a = rwd.resolve_association("implement-mlh-p4-x", proposal, "", None)
+    assert a is not None
+    assert any("未闭合代码围栏" in w for w in a["warnings"])
 
 
 def _write(tmp_path, name, content):
@@ -119,6 +196,55 @@ def test_verify_state_malformed_bad_enum(tmp_path):
 def test_tasks_completion_counts(tmp_path):
     _write(tmp_path, "tasks.md", "- [x] a\n- [x] b\n- [ ] c\n普通行\n")
     assert rwd.read_tasks_completion(tmp_path) == (2, 3)
+
+
+# [impl-review-fix] FIX-3: frontmatter verify 锚到顶层 ship-gate 直接子键
+
+
+def test_verify_state_nested_non_shipgate_verify_not_adopted(tmp_path):
+    # note.verify 是嵌套在 note: 下的 verify, 不是顶层 ship-gate 的直接子键 → 不得采纳为 good/PASS
+    _write(tmp_path, "verify-report.md", "---\nnote:\n  verify: PASS\n---\n")
+    state, val = rwd.read_verify_state(tmp_path)
+    assert state != "good"
+    assert val != "PASS"
+
+
+def test_verify_state_shipgate_present_but_note_verify_not_confused(tmp_path):
+    # 顶层 ship-gate 块存在且有 verify, 但同时另一个顶层键 note 下也嵌套 verify(干扰项)
+    # → 仍只采纳 ship-gate 的直接子键
+    _write(
+        tmp_path,
+        "verify-report.md",
+        "---\nship-gate:\n  verify: PASS\nnote:\n  verify: FAIL\n---\n",
+    )
+    assert rwd.read_verify_state(tmp_path) == ("good", "PASS")
+
+
+def test_verify_state_shipgate_deeper_nested_verify_ignored(tmp_path):
+    # ship-gate 块下有更深一层嵌套 key 里的 verify(非直接子键) → 忽略, 直接子键仍是唯一采信源
+    _write(
+        tmp_path,
+        "verify-report.md",
+        "---\nship-gate:\n  verify: PASS\n  note:\n    verify: FAIL\n---\n",
+    )
+    assert rwd.read_verify_state(tmp_path) == ("good", "PASS")
+
+
+# [impl-review-fix] FIX-6: read_text 编码兜底(不裸 traceback)
+
+
+def test_verify_state_non_utf8_returns_malformed_not_traceback(tmp_path):
+    p = tmp_path / "verify-report.md"
+    p.write_bytes(b"---\nship-gate:\n  verify: PASS\n---\n\xff\xfe\x00bad-bytes")
+    state, val = rwd.read_verify_state(tmp_path)
+    assert state == "malformed"
+    assert val is None
+
+
+def test_tasks_completion_non_utf8_returns_zero_not_traceback(tmp_path):
+    p = tmp_path / "tasks.md"
+    p.write_bytes(b"- [x] a\n\xff\xfe\x00bad-bytes")
+    assert rwd.read_tasks_completion(tmp_path) == (0, 0)
 
 
 CHECKBOX_ROADMAP = (
@@ -175,6 +301,8 @@ def test_assemble_draft_checkbox_has_mechanical_anchors_and_placeholders():
 
 
 def test_assemble_draft_table_prose_fail_loud():
+    # [impl-review-fix] FIX-4: pytest_count=None(缺省, 即 --pytest-count 未传)时始终 N/A——
+    # --pytest-count 是 pytest 数唯一的 wiring 入口, 无第二真相源(不 scrape verify-report 散文)
     out = rwd.assemble_draft(
         _assoc(), "PASS", 3, 3, "implement-wco-p2-y", "feat/y",
         "table-prose", [], pytest_count=None
@@ -270,3 +398,13 @@ def test_main_board_absent_returns_4(tmp_path):
     _mk_roadmap(tmp_path, "mlh", CHECKBOX_ROADMAP)
     r = _run(tmp_path, "implement-mlh-p4-v")
     assert r.returncode == 4
+
+
+def test_main_bad_roadmap_flag_returns_7(tmp_path):
+    # [impl-review-fix] FIX-2: --roadmap 格式不符(漏 #) → exit 7, 不静默 fallback 到前缀 mlh#4
+    _mk_change(tmp_path, "implement-mlh-p4-bad")
+    _mk_roadmap(tmp_path, "mlh", CHECKBOX_ROADMAP)
+    r = _run(tmp_path, "implement-mlh-p4-bad", extra=["--roadmap", "mlh-p4"])
+    assert r.returncode == 7
+    assert "BAD_ROADMAP_FLAG" in r.stderr
+    assert "roadmap 回填草稿" not in r.stdout  # 未产草稿
