@@ -90,3 +90,70 @@ def fold_hit(hit, enums, fold_map):
     if isinstance(site, str) and _SITE_BAD.search(site):
         raise EmitError(f"site 含非法字符（注入）: {site!r}")  # C7
     return (canon, runner, site)
+
+
+def reduce(roster, findings, layer, enums, fold_map):
+    """全校验通过才产锚（all-or-nothing）：返回锚行 list；任一坏 → EmitError。"""
+    if layer not in enums["layer"]:
+        raise EmitError(f"--layer 越域: {layer}")
+    # 1) roster → 行键（去重 + 越域 + site 消毒 + MIN_LENS_ROWS）
+    roster_keys, seen = [], set()
+    for it in roster:
+        if not isinstance(it, dict) or not {"lens","runner","site"} <= set(it):
+            raise EmitError(f"roster 项缺字段: {it!r}")
+        if it["lens"] not in enums["lens"]:
+            raise EmitError(f"roster lens 越域: {it['lens']}")
+        if it["runner"] not in enums["runner"]:
+            raise EmitError(f"roster runner 越域: {it['runner']}")
+        if _SITE_BAD.search(it["site"]):
+            raise EmitError(f"roster site 注入: {it['site']!r}")
+        key = (it["lens"], it["runner"], it["site"])
+        if key in seen:
+            raise EmitError(f"roster 重复行键: {key}")
+        seen.add(key); roster_keys.append(key)
+    roster_lenses = {k[0] for k in roster_keys}
+    for need in MANDATORY_LENS:                          # 被调即视 metrics-on
+        if need not in roster_lenses:
+            raise EmitError(f"roster 缺强制行 lens={need}（MIN_LENS_ROWS）")
+    # 2) 累加器
+    counts = {k: {"findings":0,"采纳":0,"裁掉":0,"defer":0,"独立":0,
+                  "sev":{lv:0 for lv in enums["sev_levels"]}} for k in roster_keys}
+    # 3) 逐 finding
+    for fd in findings:
+        if not isinstance(fd, dict) or "hits" not in fd or "verdict" not in fd:
+            raise EmitError(f"finding 缺 hits/verdict: {fd!r}")
+        hits = fd["hits"]
+        if not isinstance(hits, list) or not hits:
+            raise EmitError(f"finding hits 空/非数组: {fd!r}")           # C11
+        verdict = fd["verdict"]
+        if verdict not in VERDICTS:
+            raise EmitError(f"verdict 越域: {verdict}")
+        sev = fd.get("sev")
+        if verdict == "采纳" and (not sev or sev not in enums["sev_levels"]):
+            raise EmitError(f"采纳 finding 缺/非法 sev: {fd!r}")         # C12
+        keyset = {fold_hit(h, enums, fold_map) for h in hits}
+        for k in keyset:
+            if k not in counts:
+                raise EmitError(f"finding 命中行 {k} 不在 roster")       # C4 反方向
+        for k in keyset:
+            counts[k]["findings"] += 1
+            counts[k][verdict] += 1
+            if verdict == "采纳":
+                counts[k]["sev"][sev] += 1
+        if len(keyset) == 1 and verdict == "采纳":
+            counts[next(iter(keyset))]["独立"] += 1
+    # 4) sev 不变量：Σsev == 采纳
+    for k, c in counts.items():
+        if sum(c["sev"].values()) != c["采纳"]:
+            raise EmitError(f"sev rollup 不变量破: {k} Σsev≠采纳")
+    # 5) emit（确定序 = 行键排序）
+    lines = []
+    for k in sorted(roster_keys):
+        c = counts[k]
+        sev_str = "/".join(f"{lv}{c['sev'][lv]}" for lv in enums["sev_levels"])
+        lines.append(
+            f'<!-- sdflow:lens-metric v1 layer="{layer}" lens="{k[0]}" runner="{k[1]}" '
+            f'site="{k[2]}" findings="{c["findings"]}" 采纳="{c["采纳"]}" 裁掉="{c["裁掉"]}" '
+            f'defer="{c["defer"]}" 独立="{c["独立"]}" sev="{sev_str}" -->'
+        )
+    return lines

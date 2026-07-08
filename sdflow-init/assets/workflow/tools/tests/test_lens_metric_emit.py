@@ -65,3 +65,41 @@ def test_fold_hit_site_injection_fail_closed():
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
     import pytest
     with pytest.raises(m.EmitError): m.fold_hit({"raw":"codex","runner":"codex","site":'a"b'}, e, f)
+
+def _ef():
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e); return m, e, f
+
+def test_reduce_single_accepted():
+    m, e, f = _ef()
+    roster = [{"lens":"domain","runner":"claude","site":"—"},
+              {"lens":"broad","runner":"claude","site":"—"},
+              {"lens":"outside-voice","runner":"codex","site":"design-voice"}]
+    findings = [{"hits":[{"raw":"domain"}], "verdict":"采纳", "sev":"高"}]
+    lines = m.reduce(roster, findings, "spec-review", e, f)
+    dom = [l for l in lines if 'lens="domain"' in l][0]
+    assert 'findings="1"' in dom and '采纳="1"' in dom and '独立="1"' in dom
+    assert 'sev="致0/高1/中0/低0"' in dom
+    # 零-finding 行全零
+    ov = [l for l in lines if 'lens="outside-voice"' in l][0]
+    assert 'findings="0"' in ov and 'sev="致0/高0/中0/低0"' in ov and 'site="design-voice"' in ov
+
+def test_reduce_coreport_no_independent():
+    m, e, f = _ef()
+    roster = [{"lens":"domain","runner":"claude","site":"—"},
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"},
+              {"lens":"broad","runner":"claude","site":"—"}]
+    findings = [{"hits":[{"raw":"domain"},{"raw":"codex","runner":"codex","site":"hr-tg"}],
+                 "verdict":"采纳","sev":"中"}]
+    lines = m.reduce(roster, findings, "spec-review", e, f)
+    for lens in ("domain","outside-voice"):
+        row = [l for l in lines if f'lens="{lens}"' in l][0]
+        assert '采纳="1"' in row and '独立="0"' in row     # 共抓：各记采纳、均不独立
+
+def test_reduce_same_type_multi_instance_independent():
+    m, e, f = _ef()
+    roster = [{"lens":"adversarial","runner":"claude","site":"—"},
+              {"lens":"broad","runner":"claude","site":"—"},
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+    findings = [{"hits":[{"raw":"对抗镜1"},{"raw":"对抗镜2"}], "verdict":"采纳","sev":"致"}]
+    adv = [l for l in m.reduce(roster, findings, "spec-review", e, f) if 'lens="adversarial"' in l][0]
+    assert '采纳="1"' in adv and '独立="1"' in adv and 'sev="致1/高0/中0/低0"' in adv
