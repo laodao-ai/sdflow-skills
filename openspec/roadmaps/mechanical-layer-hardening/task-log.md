@@ -58,6 +58,17 @@
 
 ## 2026-07-08
 
+### [阶段 5 尾巴清理] P5 defer T74/T75 清结（mlh-p5-parser-cleanup → SHIPPED + ARCHIVED，merge `007b00d`）
+- **状态**: ✅ SHIPPED + ARCHIVED——阶段5 完成总结遗留的 defer T74/T75 已单开 cleanup change 清结；`/sdflow-ship` 全链 gate 驱动跑通：plan → SDD(3 任务) → code-review → done → ff-merge main（`007b00d`）。
+- **scope**: 清 `mlh-p5-gate-frontmatter` 收尾遗留的两条 P5 尾巴——**T74**（正确性 + spec 修订）：`parse_ship_gate_frontmatter` 首行 `---` 无闭合由 fail-closed `unterminated` 改判 `absent`（`({}, None)`），弥合「只认首块」与「写坏 fail-closed」两 Scenario 措辞张力、堵 live 对干净无闭合报告硬崩 UNKNOWN(6)；退役 `unterminated` 死类别；加 live 三读点纯结构诊断提示 `_unclosed_frontmatter_hint`（走上层独立结构判定，不改 parse 签名/verdict/退出码，不波及 anchor_set/archived 三调用方）。**T75**（纯机械清理）：删 Task6 退役后只剩 test 引用的孤儿符号 `anchors_in`/`pick_exclusive`/`ANCHOR_DESIGN`/`ANCHOR_CR_PASS`/`ANCHOR_CR_BLOCKED` + `ALL_ANCHORS` 收缩至 verify-only（**保留** `ANCHOR_VERIFY_PASS`/`ANCHOR_VERIFY_FAIL`/`_line_scoped_hits` 归档 dual-read 现役）；`test_gate_anchor_scope.py` 外科改写不整删。三项向后兼容。
+- **冷审成果**: SDD 3 任务审全绿（Task1 1 轮 fix 修模块头契约 docstring「未闭合」措辞漂移——parse 改判后不再 UNKNOWN(6)）；whole-branch 冷主审（1 领域 + 2 对抗 + 1 历史 + codex outside-voice）——对抗镜 parse-edge **bit-复现**归档杂交盲区（首行`---`无闭合 × 正文独占 inline PASS 锚）UNKNOWN(6)→SHIPPED(0) 回归。**裁决**：核实 design.md L136（grill-amendment Q2 + spec-review BR-2）该形态已被**设计门显式识别 + 判净负 + 接受**（mitigation = 无 producer 产出 + 头注册登记 + 目标态回归测试俱在），实现忠实 → 阶段三不重开设计门（adr/0004）、不 block；冷镜新增可达性论证（迁移半成品编辑 / 自指文档，呼应 gate-substring-dogfood）defer 供未来复评。自动修 F2（verify stale 分支吞未闭合诊断 + 「结论陈旧」措辞失准）/F3（grep unterminated 命中测试注释、与 plan Step8 冲突）。
+- **验证**: verify=PASS（opus 冷启 Do-Not-Trust，15 子项各附机验锚点）；`pytest -W error` **157 passed / 0 warning**；delta 同步 spec-workflow（`openspec validate` valid）。
+- **defer**: T76（归档盲区**非语义** lint/监控硬化后续 + 复评「给归档侧特殊 fail-safe」ROI，design L121 当前选①绝）、T77（delta spec「过渡期回退 inline」Scenario 迁移窗已闭、宜标历史）→ todolist 批次 `mechanical-layer-hardening`。
+- **commit 链**: `e1b03a6`(Task1 parse absent+unterminated 退役) → `36eed0a`(Task1fix 契约 docstring) → `b56f88b`(Task2 live hint+盲区登记) → `b472642`(Task3 删死符号+外科测试) → `f001c70`(code-review 自动修 F2/F3+报告) → `007b00d`(archive+spec 同步+merge main)。
+- **下一步**: **P5（含尾巴）完全清结**。余 Leg1 P4（编排 SKILL 机械步下沉，按痛点排）+ Leg2 P6（recorder 索引，north-star 不排期，ROI 触发才起）；P6 起手时一并评估 T76 归档盲区 lint（低优先、设计门中立、可独立小 change）。
+
+## 2026-07-08
+
 ### [阶段 5 完成总结] gate 状态锚 inline→frontmatter 迁移 Task1-7 交付（SHIPPED + ARCHIVED，Leg2 S1）
 - **状态**: ✅ SHIPPED + ARCHIVED（SDD Task1-7 全绿 → `/sdflow-code-review` 多镜代码审（3 对抗+领域+历史，codex hr-tg/code-voice 独家挖 2 真 bug：嵌套字段假过门 / 坏标量回退）自动修 5 组 → `/sdflow-done` verify=PASS → **change `mlh-p5-gate-frontmatter` 已 archive + merge main（`1b069a7`）**；delta 同步 spec-workflow（ship-gate 锚 inline→frontmatter）。defer T74/T75 入批次 `mlh-p5-gate-frontmatter`）
 - **scope**: ship-gate 状态锚从报告正文 inline HTML 注释迁到报告 YAML frontmatter——`ship_gate.py` **live 侧改为纯 frontmatter 读**（inline 解析半场退役：`anchors_in`/`pick_exclusive`×3/peek/`anchor_set`熔断 helper 全迁）；**归档侧 dual-read 永久保留**（frontmatter 优先→无则回退 inline，旧归档不回归）。三 producer（`sdflow-spec-review` 拍板回写 / `sdflow-done` verify 模板 / `sdflow-code-review` 报告格式）头部改写 frontmatter 写入，正文保留人读结论行。属家族① Leg2（去字符串化）S1 交付。

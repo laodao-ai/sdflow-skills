@@ -27,6 +27,13 @@
 | T66 | todo | PROPOSED | issues-pool-hardening |
 | T67 | todo | PROPOSED | issues-pool-hardening |
 
+### 批次：mechanical-layer-hardening
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T76 | todo | OPEN | mlh-p5-parser-cleanup |
+| T77 | todo | OPEN | mlh-p5-parser-cleanup |
+
 ### 批次：minimize-repo-footprint
 
 | ID | Pool | Status | 关联Change |

@@ -9,7 +9,7 @@
 
 两腿六阶段。**Leg 1（脚本化）先行**——就绪、高 ROI、低爆炸半径，阶段 1-4 各自独立可交付、可并行（除共享文件外）。**Leg 2（去字符串化）就绪度分级**——阶段 5（S1 gate 锚）就绪但前置 ROI 评估门 + 高仪式；阶段 6（S2 recorder 索引）**north-star 不排期**，ROI 触发才起。
 
-> **进度里程碑（2026-07-08）**：**Leg 1 高 ROI 三阶段 P1/P2/P3 全交付**（sweep / anchor-lint / determ-guards）+ **Leg 2 P5 gate 锚→frontmatter 已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`）——机械层「脚本化」主干 + 「去字符串化」家族① 均已立。余 P4（编排步下沉，按需子集）+ Leg 2 P6（recorder 索引，north-star 不排期，ROI 触发才起）。
+> **进度里程碑（2026-07-08）**：**Leg 1 高 ROI 三阶段 P1/P2/P3 全交付**（sweep / anchor-lint / determ-guards）+ **Leg 2 P5 gate 锚→frontmatter 已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`）+ **P5 尾巴 T74/T75 已清结**（change `mlh-p5-parser-cleanup`，merge `007b00d`：parser 首行 `---` 无闭合改判 absent + `unterminated` 死类别退役 + live inline 死符号删除）——机械层「脚本化」主干 + 「去字符串化」家族① 均已立且尾巴清尽。余 P4（编排步下沉，按需子集）+ Leg 2 P6（recorder 索引，north-star 不排期，ROI 触发才起）。
 
 | 阶段 | 腿 | 里程碑 | 就绪度 |
 |---|---|---|---|
@@ -166,6 +166,13 @@
 
 ### 交付物
 - 报告 frontmatter 状态 schema；三 producer SKILL 迁移；gate dual-read + fail-closed；契约测试迁移；（窗口后）解析机器删除。
+
+### 尾巴清理（change `mlh-p5-parser-cleanup`，merge `007b00d`，2026-07-08）
+> 阶段5 主 change 收尾 defer 的 T74/T75 由后续 cleanup change 清结（非阻塞尾巴，独立一次 change 粒度）：
+- [x] **T74** — `parse_ship_gate_frontmatter` 首行 `---` 无闭合由 fail-closed `unterminated` 改判 `absent`（弥合「只认首块」与「写坏 fail-closed」两 Scenario 措辞张力、堵 live 硬崩 UNKNOWN(6)）；`unterminated` 死类别退役；加 live 三读点纯结构诊断提示（不改 parse 签名/verdict/退出码）。delta 修订 spec-workflow「阶段三编排台账确定性」Requirement。
+- [x] **T75** — 删 5.C.1 退役后只剩 test 引用的孤儿死符号（`anchors_in`/`pick_exclusive`/`ANCHOR_DESIGN`/`ANCHOR_CR_PASS`/`ANCHOR_CR_BLOCKED` + `ALL_ANCHORS` 收缩 verify-only）；归档 dual-read 现役边界（`ANCHOR_VERIFY_PASS`/`ANCHOR_VERIFY_FAIL`/`_line_scoped_hits`）保留不波及。
+- **冷审残差 defer**：T76（归档杂交盲区**非语义** lint/监控硬化后续，设计门已接受净负、冷镜给出更锋利可达性论证供未来复评 ROI）、T77（delta spec「过渡期回退 inline」Scenario 迁移窗已闭宜标历史）→ todolist 批次 `mechanical-layer-hardening`。
+- **验证**: verify=PASS；`pytest -W error` 157 passed / 0 warning；spec delta validate valid。
 
 ---
 
