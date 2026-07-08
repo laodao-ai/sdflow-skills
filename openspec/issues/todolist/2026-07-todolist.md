@@ -91,6 +91,9 @@
 | T83 | `embedded-test-sop + log_check.py(新)` | P4·4.A 串口日志规则判定脚本化：时间窗+must_contain/not/before+severity rollup 输出 PASS/FAIL，平台需人眼项留模型。目标态该做,正当排后——本仓无 embedded producer 契约可 dogfood,待真实 embedded 消费仓需求(producer 契约就绪度,非痛感) | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
 | T84 | `embedded-test-sop SOP模式A 小校验器(新)` | P4·4.D.3 SOP 模式A 源码常量/TAG 收割脚本化：正则 emit 常量表 name/值/来源:行。同 embedded 排后 | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
 | T85 | `roadmap mechanical-layer-hardening / recorder` | P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块 | 基础设施 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T86 | `anchor_lint.py load_enums` | 未闭合 fence 不 fail-closed（与 emitter _read_block_pairs 同盲区，本 change 已修 emitter 侧）——EOF 前无闭合围栏时静默把剩余全文当块体；契约受版本控制利用面低，但两侧同错致等价性测试假绿风险 | 代码质量 | OPEN | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit |  |
+| T87 | `lens_metric_emit.py load_enums + anchor_lint.py` | lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试 | 代码质量 | OPEN | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit |  |
+| T88 | `仓库 CI/pre-commit` | 无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并 | 基础设施 | OPEN | 2026-07-08 20:52 | implement-mechanical-layer-hardening-p4-lens-metric-emit |  |
 
 ---
 
@@ -1025,3 +1028,45 @@
 | 状态 | WONTDO |
 
 > 2026-07 状态：OPEN → WONTDO（已复评(explore 2026-07-08)：①绝 HOLD 且被迁移完成强化。冷代码审对抗镜给的最锋利可达路径「迁移半成品编辑残留独占行 inline PASS 锚」是【迁移窗专属】论据——T75 删净 live inline 死码、三 producer 全迁后迁移窗已闭，无待迁 producer 即无半成品可残留，该路径失效。稳态下要凑齐「首行 --- 无闭合 × 正文独占行 inline PASS」杂交形态只能人手伪造 git-committed 畸形归档=adr/0008 显式越权(git 可审计)。非语义 monitor 三点不成立：(1)稳态恒零命中=纯仪式(producer 只写 frontmatter 不产②)；(2)非安全边界——有 git 写权的越权者能同样手改绕过，adr/0008 立场=git 写靠历史审计非运行时防；(3)开发循环镜主导判主次，系统镜给 monitor 的「外部无漂移」一分被压过。已在位 mitigation(头注册 ship_gate.py:118-123 + 目标态回归测试 test_archived_unclosed_*)足够。未来 P6 等新迁移窗的 insurance 价值由「目标态回归测试 per 迁移」成熟模式兜底(P5 即如此)，不需常驻 monitor。故 ①绝 不建 monitor，无代码产出。）
+
+---
+
+## T86: 未闭合 fence 不 fail-closed（与 emitter _read_block_pairs 同盲区，本 change 已修 emitter 侧）——EOF 前无闭合围栏时静默把剩余全文当块体；契约受版本控制利用面低，但两侧同错致等价性测试假绿风险
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `anchor_lint.py load_enums` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/implement-mechanical-layer-hardening-p4-lens-metric-emit/design.md`
+
+**备注**：code-review CR-D1；平行 CR-C3（emitter 侧已修）
+
+---
+
+## T87: lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `lens_metric_emit.py load_enums + anchor_lint.py` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/implement-mechanical-layer-hardening-p4-lens-metric-emit/design.md`
+
+**备注**：code-review CR-D2
+
+---
+
+## T88: 无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `仓库 CI/pre-commit` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/implement-mechanical-layer-hardening-p4-lens-metric-emit/design.md`
+
+**备注**：code-review CR-D3（治理层）
