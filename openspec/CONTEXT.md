@@ -136,13 +136,13 @@ _Avoid_: 起手锚写死 subtask 集当**完成**真相（锚只声明关联范�
 把「靠人写对」升级为「producer 机械产出」的确定性链条——roadmap 结构化生成 → change **scaffold**（从 roadmap 抄编号 + 机械写 name 锚 + proposal 引用）→ 实现勾 tasks → 镜像回写。每环确定性、不靠自觉。是「机械 prose 协议 MUST 脚本化」（`adr/0006`）+「目标态论证」（`adr/0011`）的合流落地：评估目标态安全性时锚「producer 契约会不会机械产出」，**MUST NOT** 降格为「人/AI 起手会不会记得遵守一条无门禁 prose MUST」（后者是 `adr/0006` 点名的静默跳步，被 spec-review 哲学镜揭穿为「目标态论证误套行为合规」）。
 _Avoid_: 把「起手 MUST 带锚/编号」当目标态达成（无机械生成 = 靠自觉 = 静默跳步）；用「现状 producer（opsx:ff）不可改」限制目标（目标态应加确定性生成环，非迁就现状流程）
 
-**完成判定的盘面-判断切分 (Completion: On-disk Fact vs Judgment)** 〔spec-review-amendment · adr/0015〕:
-roadmap 子任务「完成」判定分两层——**确定性盘面**（对应 change 是否归档/merge/verify=PASS，机械可读，`ship_gate` 已用同款盘面）+ **是否满足验收标准 / 算不算完成 / 勾哪些复选框**（语义判断，现状人做、目标态仍人做）。现状实证：「某子任务算不算完成」从来不是机械读复选框，是人对照人写的 `### 验收标准` 判的；deferred（排后/放弃）更是纯规划判断，二值复选框 `[ ]` 根本不承载（`[ ]` 无法区分「未做」vs「显式放弃」）。把判断的一半硬做成机械聚合（如从复选框推 deferred enum）是**范畴错误**（`adr/0015` C2）。
-_Avoid_: 从二值复选框机械推「阶段是否 delivered / 某项是否 deferred」（那是判断，撞 C2 循环+无信号）；把「完成判定」整体当确定性盘面（只有「change 是否交付」是盘面，「算不算满足验收标准」是判断）
+**完成判定的盘面-判断切分 (Completion: On-disk Fact vs Judgment)** 〔spec-review-amendment · adr/0015 + 第三轮精化〕:
+roadmap 子任务「完成」判定分两层——**确定性盘面**（对应 change 是否归档/merge/verify=PASS，机械可读，`ship_gate` 已用同款盘面）+ **是否满足验收标准 / 算不算完成 / 勾哪些复选框**（语义判断，现状人做、目标态仍人做）。现状实证：「某子任务算不算完成」从来不是机械读复选框，是人对照人写的 `### 验收标准` 判的；deferred（排后/放弃）更是纯规划判断，二值复选框 `[ ]` 根本不承载（`[ ]` 无法区分「未做」vs「显式放弃」）。把判断的一半硬做成机械聚合（如从复选框推 deferred enum）是**范畴错误**（`adr/0015` C2）。**第三轮精化：切分线精确落在「有无确定性信号」上**——「定位到 phase」有确定性信号（change 名前缀 `implement-{roadmap}-pN` 编码 roadmap+phase）故**机械**；「这个 change 勾该 phase 里**哪几行** / 算不算完成」无机械判据故**判断留人**。前两轮把整个「回写」当机械是过度机械化，把整个「定位」当判断则矫枉过正——定位到 phase（机械）、勾哪几行（判断）才是精确切分。
+_Avoid_: 从二值复选框机械推「阶段是否 delivered / 某项是否 deferred」（那是判断，撞 C2 循环+无信号）；把「完成判定」整体当确定性盘面（只有「change 是否交付」是盘面，「算不算满足验收标准」是判断）；把「定位到具体行/勾哪几行」划机械侧（无确定性信号，是判断——助手只定位到 phase 候选行集）
 
 **回填降摩擦助手 (Writeback Assist, not Auto-writeback)** 〔spec-review-amendment · adr/0015〕:
-`sdflow-done` 收尾读**确定性盘面**（change 归档/verify=PASS/merge/tasks 完成态/验证数字）生成人可确认的 roadmap **回填草稿**（候选复选框 + task-log 完成总结骨架含机械锚），进 hand-off 提示人异步确认回填（同现状独立「回填对账」commit，从纯手写降为改草稿）。**判断留人**（算不算完成/勾哪些/价值叙述/阶段状态/deferred），非无人干预自动回写——因完成判定本质含判断（见上条）。是「机械活交脚本、判断留模型」在 roadmap 回填的落点：自动化**机械搬运**（盘面读取 + 骨架预填）、判断留人**确认**。**弃** scaffold 双向（撞 C1）/ enum 机械聚合（撞 C2）/ 编号统一归属镜像（粒度失配）/ 强制迁移——roadmap/tasks 保现状散文格式，助手适配、不要求机读化。
-_Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，撞 C1/C2）；用 scaffold 预建 roadmap 复选框（撞 openspec done 判定 + 孤儿认领）；阶段三给它加人类门（阶段三无 AskUserQuestion——草稿进 hand-off 让人异步确认，非弹窗）
+`sdflow-done` 收尾（hand-off 步）读**步2 已实现盘面**（verify=PASS/tasks 完成态/change 名/分支；archive/merge 是步3/步5 才有的未来锚 → 留占位不预填）生成人可确认的 roadmap **回填草稿**（该 phase 候选复选框行集 + task-log 完成总结骨架含机械锚），进 hand-off 提示人异步确认回填（同现状独立「回填对账」commit，从纯手写降为改草稿），并在 done 第六步摘要抬一行使 merge 时点可见（异步闭环残差已显式登记）。**判断留人**（勾哪几行/算不算完成/价值叙述/阶段状态/deferred），非无人干预自动回写——因完成判定本质含判断（见上条）。是「机械活交脚本、判断留模型」在 roadmap 回填的落点：自动化**机械搬运**（前缀解析定位到 phase + 盘面读取 + 骨架预填）、判断留人**确认**。关联 = change 名前缀 `implement-{roadmap}-pN` 主 + marker `#{phase}` 兜底（检测 fence-aware+行锚定+排除自身讨论区，防自指假阳）；roadmap 格式**实测分裂**（复选框式/表格式）→ 助手探测形态、非复选框式 fail-loud 留人工。**弃** scaffold 双向（撞 C1）/ enum 机械聚合（撞 C2）/ 编号统一归属镜像（粒度失配）/ 强制迁移。
+_Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，撞 C1/C2）；用 scaffold 预建 roadmap 复选框（撞 openspec done 判定 + 孤儿认领）；阶段三给它加人类门（阶段三无 AskUserQuestion——草稿进 hand-off 让人异步确认，非弹窗）；把 archive 路径/merge 当步2 盘面预填（是预测值，跨零点漂/merge opt-out 记假事实）；朴素子串检测 marker（撞 change 自身含串的自指假阳）
 
 ## Flagged ambiguities
 
@@ -157,3 +157,4 @@ _Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，�
 - 「roadmap 回写真相源」曾拟锚**起手锚固化的 subtask 集**（`adr/0013`）——spec-review 揭穿其为可变状态写死的第二真相源（起手≠归档实况致误勾）+ 无机械闭环（靠人写对锚 = `adr/0006` 静默跳步），已重构为**归属镜像投影**（真相源=归档 tasks.md 完成态）+ **producer 机械生成链**（scaffold 机械产出编号/锚），`adr/0014` 部分 supersede `adr/0013`。
 - 「roadmap↔tasks 对齐」第二轮 grill 精化：曾拟「tasks 号 = roadmap 号」强编号统一——实证粒度失配（roadmap 复选框=change 粒度、tasks=实现分解、细一层），已改为**归属镜像**（roadmap 保规划粒度、仅借复选框/编码**格式**；change 归属 roadmap 子任务；勾选=归属范围∩tasks 盘面完成），roadmap 与 tasks **MUST NOT 互相拖到对方粒度**（见「归属镜像投影」/`adr/0014`）。
 - 「roadmap 回填自动化」三轮收敛终局〔`adr/0015`〕：机械回写骨架（起手锚 `adr/0013` → 编号统一 → 归属镜像+scaffold `adr/0014`）经两轮 spec-review **全被揭穿**（C1 scaffold 撞 openspec「文件存在=done」短路产出链、C2 阶段 enum deferred 无机器信号不可机械、defer 重现原痛点、ROI 失衡）；现状实证「**完成判定含判断**」（人对照验收标准判、非机械读复选框）——已收敛为**回填降摩擦助手**（盘面搬运机械、判断留人确认），`adr/0015` supersede `adr/0013`+`adr/0014`。
+- 「回填助手切分线」第三轮 spec-review 再精化〔`adr/0015` P-1..P-5〕：最小核仍残 **2 致命 + 3 高**（4 镜 + 广审 + outside-voice 高度收敛），根因=**切分线画错位置**——`定位哪些复选框` 被误划机械侧（实为判断）+ 时序矛盾（步2 读步3/步5 才存在的盘面）+ 异步无闭环 + 格式实测分裂 + dogfood 自指坑。修法：**定位到 phase**（change 名前缀 `implement-{roadmap}-pN` 确定性信号 → 机械）、**勾哪几行**（判断留人）；archive/merge 留占位不预填（P-1）；格式分形态 fail-loud（P-3，两存量 roadmap 格式实测 grep 54 vs 0）；异步闭环第六步摘要抬一行 + 残差登记（P-4）；detection fence-aware 防自指（P-5）。**元教训**：点驱动修补（前两轮杀机械回写点）会留相邻面（定位/时序/闭环）——面治需系统扫，非逐条补丁。

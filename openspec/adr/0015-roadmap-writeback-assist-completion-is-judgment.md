@@ -41,3 +41,21 @@
 - roadmap/tasks 保**现状散文格式**（人读），助手适配、不要求机读化。
 - CONTEXT：新术语「回填降摩擦助手」「完成判定的盘面-判断切分」。
 - **元教训**：两轮 grill + 两轮 spec-review 反复揭穿「想把记录维护过度机械化」；现状实证锚定「完成判定本质含判断」——**目标态论证的正确用法是锚现状实践揭示的判断/机械真实边界，而非一厢情愿把判断也机械化**（这是对 `adr/0011` 目标态论证的一次边界校准：目标态 producer 契约能机械保证的是「盘面搬运」，不是「判断」）。
+
+---
+
+## 第三轮 spec-review 精化：切分线重画（Q1–Q5）〔spec-review-amendment〕
+
+第三轮 4 镜 + 广审 + outside-voice **高度收敛**：最小核消掉了 C1/C2 机械回写致命，但残留 **2 致命 + 3 高**，**同一根因 = 「机械搬运/判断」切分线画错位置**。据此精化（方向不变、位置校准）：
+
+- **P-1 时序锚清单收窄（消 C-1 致命）**：草稿在 done 第二步(hand-off) 生成，此刻 archive 路径(第三步，含 `{date}`)与 merge(第五步) **尚不存在**——`盘面即状态` 铁律下它们不是状态、是预测。草稿机械锚**只含步2 已实现事实**：`verify=PASS frontmatter / tasks 完成态 / change 名 / feat 分支`。archive 路径 / merge 状态**留占位「待归档后由人补」**，MUST NOT 当确定性盘面预填（防跨零点日期漂 + merge opt-out 后记一次没发生的 merge）。
+- **P-2 定位切分线校准（消 C-2 致命，本轮核心）**：「定位哪些复选框」被误划机械侧——实则拆两半：
+  - **机械（助手）**：从 **change 名前缀 `implement-{roadmap}-pN-*` 确定性解析** roadmap+phase（命名约定本已编码双粒度，`adr/0014` 曾弃之、本轮复用）→ 定位到该 **phase 的候选复选框行集**（借现状 `- [ ] {id}` 格式）。
+  - **判断（人）**：这个 change 到底勾该 phase 里**哪几行**（phase 跨多 change 时 change→行是判断）+ 算不算满足验收标准。
+  - 助手只产**阶段级候选行集**，MUST NOT 产 per-行「建议勾」（那是判断）。这样定位(阶段级)机械、勾哪些判断，与 D-1 盘面-判断切分自洽。
+- **P-3 格式分形态 fail-loud（消 C-3 高）**：两存量 roadmap 格式**实测分裂**（mlh 复选框式 `- [ ] 1.A.1` grep 54 / wco 表格 `| ✅` + 散文 grep 0）。助手**探测承载形态**：复选框式→定位阶段候选行；表格/散文式→**不产复选框草稿、fail-loud 告知**「roadmap {name} 非复选框格式、复选框回填请人工」（反静默，非静默退现状）。task-log 完成总结骨架两形态都产。
+- **P-4 异步闭环可见（消 C-4 高）**：草稿进 hand-off **且** done 第六步摘要**抬一行**「⚠ roadmap {name} 回填草稿待人确认(见 hand-off)」使其在 merge 时点可见(不只冻结进归档)。design 显式登记残差：**产草稿即止、apply 由人异步、不保证**（经 `/sdflow-ship` 全自动链人被支走时尤然）——诚实登记而非宣称降摩擦却留断头路。MAY 落 todolist 一条，非强制。
+- **P-5 detection fail-closed 防自指（消 C-5 高）**：关联检测 MUST **fence-aware**(跳过 code fence/行内 code)+**行锚定**(标记独占一行)+**排除 change 自身讨论区**——本 change 8 处产物字面含 marker 串，朴素子串检测必假阳(MEMORY「gate 子串检测 dogfood 自指坑」同型)。change 名前缀解析(P-2)为主通道时 detection 是兜底，但兜底路径仍须 fence-aware。
+- **D1 低风险五条**：C-6 marker 定兜底通道(change 名前缀为主)、`--roadmap` 仅直调 done 覆写、不一致 warn；C-8 pytest 数锚「有测试从 verify-report 取、无则 N/A」不当交付事实预填(纯 Markdown change 无测试)；C-9 坏输入契约**三分**(absent 留人工 / malformed fail-closed 标畸形 / verify≠PASS 不出完成候选)、写成与载体无关的可判定行为规范；C-12 反静默 MAY→**SHOULD**(未声明疑似 roadmap 驱动→hand-off 留一行提示)；C-15 `artifactOutputExists` 定位订正(定义于 `outputs.js`，已改)。
+
+**元教训（续 adr/0011 边界校准）**：切分线的正确位置由**现状实践 + 确定性盘面的真实边界**决定——「定位到阶段」有确定性信号(change 名前缀)故机械，「勾哪几行/算不算完成」无机械判据故留人。前两轮把整个「回写」当机械是过度机械化；本轮把整个「定位」当判断则是矫枉过正——**精确切分线落在「有无确定性信号」上**。

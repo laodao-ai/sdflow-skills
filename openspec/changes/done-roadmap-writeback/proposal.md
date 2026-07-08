@@ -6,10 +6,13 @@ sdflow-done 收尾流水线对 **roadmap 文档包零触碰**。roadmap 驱动�
 
 ## What Changes
 
-- **回填降摩擦助手**：done 收尾读**确定性盘面**（archive 路径 / verify=PASS frontmatter / merge / tasks 完成态 / 验证数字）生成 roadmap **回填草稿**（候选复选框 + task-log 完成总结骨架含机械锚）写进 hand-off，提示人**异步确认回填**。从「纯手写回填」降为「改助手草稿」。
-- **完成判定盘面-判断切分**（现状实证）：change 是否交付=确定性盘面（机械）；是否满足验收标准 / 算不算完成 / 勾哪些=判断（人）。助手只搬运盘面、**判断留人确认**。
-- **弃机械回写骨架**：无 scaffold 双向（消 C1：不写 change 产物、不碰 opsx:ff done 判定）/ 无阶段 enum 机械聚合（消 C2：deferred 留人写散文）/ 无编号统一归属镜像（消粒度失配）/ 无强制 roadmap 机读化迁移（现状散文即可）。
-- **关联轻量声明，漏=现状**：change 轻量标记 `<!-- roadmap: {name} -->`（或 done `--roadmap`）；未声明退回现状人工回填、**不 fail-closed 阻塞**（辅助非门）。
+- **回填降摩擦助手**：done 收尾（hand-off 步）读**步2 已实现盘面**（verify=PASS frontmatter / tasks 完成态 / change 名 / 分支 / pytest 数[有则取]）生成 roadmap **回填草稿**（该 phase 候选复选框行集 + task-log 完成总结骨架含机械锚，archive/merge 留占位）写进 hand-off，提示人**异步确认回填**。从「纯手写回填」降为「改助手草稿」。
+- **切分线：定位到 phase 机械、勾哪几行判断**〔第三轮精化〕：解析 change→roadmap+phase（**change 名前缀 `implement-{roadmap}-pN` 确定性信号**）+ 定位该 phase 候选行集=机械；这个 change 勾**哪几行** / 算不算满足验收标准 / 价值叙述 / 阶段状态 / deferred=判断留人。助手只产阶段级候选行集，**MUST NOT 产 per-行建议勾**。
+- **时序锚收窄**（消 C-1）：archive 路径(步3,含日期)/merge(步5) 在草稿生成(步2)时**尚不存在**，留占位「待归档后人补」，MUST NOT 当盘面预填（防日期漂 + 记未发生的 merge）。
+- **格式分形态 fail-loud**（消 C-3）：两存量 roadmap 格式实测分裂（mlh 复选框式 / wco 表格式）；复选框式→定位候选行，表格/散文式→**fail-loud 告知人工**（非静默退现状）。
+- **弃机械回写骨架**：无 scaffold 双向（消 C1）/ 无阶段 enum 机械聚合（消 C2）/ 无编号统一归属镜像（消粒度失配）/ 无强制 roadmap 机读化迁移（现状散文即可）。
+- **关联 change 名前缀为主、marker 兜底、fence-aware**（消 C-5 自指 + C-14 chicken-egg）：前缀解析为主（无需人手标）+ marker `<!-- roadmap: {name}#{phase} -->` 兜底（检测 fence-aware+行锚定+排除自身讨论区）+ `--roadmap` 覆写；未声明退现状**不 fail-closed 阻塞**，疑似驱动 SHOULD 提示。
+- **异步闭环可见**（消 C-4）：草稿进 hand-off **且** done 第六步摘要抬一行「回填待确认」使 merge 时点可见；显式登记「产草稿即止、不保证 apply」残差。
 - **阶段三无门**：草稿走 hand-off 异步确认、不弹窗、不阻塞归档/merge。issues 不动。**无 BREAKING**。
 
 ## Capabilities
@@ -29,10 +32,10 @@ sdflow-done 收尾流水线对 **roadmap 文档包零触碰**。roadmap 驱动�
 
 ## Success Metrics
 
-- roadmap 驱动 change 归档后，hand-off 含回填草稿（候选复选框 + task-log 骨架含机械锚）——人过目补判断即可回填，省手敲 change/merge/archive/验证数字 + 定位复选框行。
-- 无关联 change / 无 roadmap 仓：done 行为零差异（不生成草稿）。
-- 判断（算不算完成/价值叙述/阶段状态/deferred）由人确认——助手不代判、不无人干预改 roadmap。
-- 若加脚本：坏输入（盘面缺失/定位不到）→ fail-closed 非零退出或标「留人工」，pytest 覆盖。
+- roadmap 驱动 change（`implement-{roadmap}-pN` 命名）归档后，hand-off 含回填草稿（该 phase 候选行集 + task-log 骨架含机械锚）+ 第六步摘要抬一行——人过目补判断即可回填，省手敲 change/verify/pytest 数 + 定位到 phase 的候选行集。
+- 无关联 change / 无 roadmap 仓 / marker 仅在 fence 内：done 行为零差异（不生成草稿，fence-aware 不误检测）。
+- 判断（勾哪几行/算不算完成/价值叙述/阶段状态/deferred）由人确认——助手定位到 phase（机械）、不代判勾哪几行、不无人干预改 roadmap。
+- 若加脚本：坏输入**三分**（absent 留人工 / malformed fail-closed 标畸形 / verify≠PASS 不出完成候选）→ 非零退出或标「留人工」，pytest 覆盖（含 fence 内不误检测）。
 
 ## Non-Goals
 
@@ -42,26 +45,29 @@ sdflow-done 收尾流水线对 **roadmap 文档包零触碰**。roadmap 驱动�
 
 ## Compliance
 
-- 全局红线：若加脚本 fail-closed + pytest 覆盖坏输入；判断（算不算完成/价值叙述/阶段状态）显式留人。
-- 反静默：漏关联可提示（非静默假装无此层）；草稿定位不到标「留人工」。
+- 全局红线：若加脚本 fail-closed + pytest 覆盖坏输入**三分**（absent/malformed/verify≠PASS，C-9）；判断（算不算完成/勾哪几行/价值叙述/阶段状态）显式留人。
+- 反静默：漏关联 **SHOULD** 提示（C-12，非静默假装无此层）；草稿定位不到/非复选框格式 fail-loud 标「留人工」；双通道不一致 warn。
+- detection fail-closed（C-5）：marker 检测 fence-aware + 行锚定 + 排除 change 自身讨论区（防自指假阳）。
+- 盘面即状态（C-1）：archive/merge 预测值不当盘面预填，留占位待人补。
 - bundle 纪律：关联约定若入 workflow 规则改 assets/workflow 再 update；sdflow-done 改后跑 setup.sh。
 - 审查顺序：`/review` → push → `/code-review`。
 
 ## 需求优先级（TG-19）
 
-- **P0** · 回填草稿生成（读确定性盘面 → 候选复选框 + task-log 骨架含机械锚）。
-- **P0** · sdflow-done 收尾提示步（检测关联 → 草稿进 hand-off、不阻塞）。
-- **P1** · 关联声明轻量约定 + 漏则退现状不阻塞。
-- **P2** · 未声明但疑似 roadmap 驱动的轻量提示。
+- **P0** · 关联解析（change 名前缀 `implement-{roadmap}-pN` 主 + marker 兜底 fence-aware）+ 回填草稿生成（定位 phase 候选行集 + task-log 骨架含机械锚，archive/merge 占位）。
+- **P0** · sdflow-done 收尾提示步（检测关联 → 草稿进 hand-off、第六步摘要抬一行、不阻塞）。
+- **P1** · 格式分形态 fail-loud + 漏则退现状不阻塞 + 双通道优先级/warn。
+- **P2** · 未声明但疑似 roadmap 驱动的轻量提示（SHOULD）。
 
 ## 利益相关方与外部依赖（TG-20）
 
 - **所有 sdflow-skills 消费仓**：sdflow-done 经 symlink 铺设；无关联/无 roadmap 仓零差异。
 - **不改 opsx:ff（官方）**：助手只读盘面 + 写 hand-off 草稿，不碰 change 产物文件（避 C1）。
-- **/sdflow-ship 链**：done 是链末端；草稿走 hand-off 异步、不破坏 merge 缺省语义。
+- **/sdflow-ship 链**：done 是链末端；草稿走 hand-off 异步、不破坏 merge 缺省语义；ship 全自动链下第六步摘要行是回填可见的唯一信号（C-4 残差登记）。`--roadmap` 经 ship 不透传（仅 in-file 前缀/marker 通道存活），故前缀/marker 为主。
 
 ## 假设（TG-22）
 
-- **假设 1** · change 归档时确定性盘面（archive 路径 / verify=PASS frontmatter / tasks 完成态）可读（done 第 0.3/1 步已产生）。**失效**：盘面缺 → 草稿标「盘面缺失、留人工」，不伪造。
-- **假设 2** · 完成判定含判断（现状实证：人对照验收标准判），故助手生成草稿、人确认——**非无人干预**。**失效面**：若强求全自动 → 撞 C2（把判断当机械），本设计明确不做。
-- **假设 3** · roadmap 现状散文格式够人读 + 助手草稿定位复选框（借现有 `- [ ] {id}` 格式）。**失效**：定位不到 → 标「留人工」，不猜写。
+- **假设 1（时序精化）** · 草稿在 hand-off（步2）生成时，**只有** verify=PASS frontmatter（步1）/ tasks 完成态（步0.3）/ change 名 / 分支可读；archive 路径（步3）/ merge（步5）**尚不存在**——留占位不预填（P-1）。**失效**：步2 盘面缺 → 草稿标「盘面缺失、留人工」，不伪造。
+- **假设 2** · 完成判定含判断（现状实证：人对照验收标准判），故助手定位到 phase（机械）、生成草稿、人确认勾哪几行——**非无人干预**。**失效面**：若强求全自动定位到行 → 撞 C2/判断渗机械侧，本设计明确不做。
+- **假设 3（格式分裂已实证）** · 存量 roadmap 格式**不统一**（mlh 复选框式 grep 54 / wco 表格式 grep 0）——助手 MUST 探测形态：复选框式借 `- [ ] {id}` 定位、表格/散文式 **fail-loud 留人工**（P-3），不假设统一格式、不静默退现状。
+- **假设 4（关联信号）** · roadmap 驱动 change 遵 `implement-{roadmap}-pN-*` 命名（确定性编码 roadmap+phase）。**失效**：命名不符 → marker 兜底；均无 → 退现状 + 疑似驱动 SHOULD 提示。
