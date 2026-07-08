@@ -9,7 +9,7 @@
 
 两腿六阶段。**Leg 1（脚本化）先行**——就绪、高 ROI、低爆炸半径，阶段 1-4 各自独立可交付、可并行（除共享文件外）。**Leg 2（去字符串化）就绪度分级**——阶段 5（S1 gate 锚）就绪但前置 ROI 评估门 + 高仪式；阶段 6（S2 recorder 索引）**north-star 不排期**，ROI 触发才起。
 
-> **进度里程碑（2026-07-07）**：**Leg 1 高 ROI 三阶段 P1/P2/P3 全交付**（sweep / anchor-lint / determ-guards）——机械层「脚本化」主干已立。余 P4（编排步下沉，按需子集）。**下一步 = P5 起手**：其 ROI 门经 P2 交付已过（GO 变体 a），且 survey 核实 `ship_gate.py` 非 bundle 回灌、爆炸半径大降——两大前置双双落到利好侧（详见阶段 5 前置区）。
+> **进度里程碑（2026-07-08）**：**Leg 1 高 ROI 三阶段 P1/P2/P3 全交付**（sweep / anchor-lint / determ-guards）+ **Leg 2 P5 gate 锚→frontmatter 已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`）——机械层「脚本化」主干 + 「去字符串化」家族① 均已立。余 P4（编排步下沉，按需子集）+ Leg 2 P6（recorder 索引，north-star 不排期，ROI 触发才起）。
 
 | 阶段 | 腿 | 里程碑 | 就绪度 |
 |---|---|---|---|
@@ -17,7 +17,7 @@
 | **P2** · anchor-lint 产出侧校验器 | Leg 1 | 每轮 review 手 grep+肉眼核 enum → 机验门 | ✅ **已交付**（e43460c） |
 | **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | ✅ **已交付**（a6a2adc，change `mlh-p3-determ-guards`；冷审 F5 守卫覆盖 8→14 helper） |
 | **P4** · 编排 SKILL 机械步下沉 | Leg 1 | P5-P8 中 ROI 项按痛点做子集 | 就绪（按需排） |
-| **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` 解析机器、正文提及不误判 | ▶ **可起手**（ROI 门经 P2 交付已过·GO 变体 a；gate 路径已核实非 bundle→爆炸半径降；起手仅剩精核归档锚篇数） |
+| **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` **live 解析半场**、正文提及不误判、归档 dual-read 永久保留 | ✅ **已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`；spec-review 六镜拦 1致命+3高 / impl-review 抓 2 真 bug；662 passed·dogfood CLEAN） |
 | **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发 + 删 ~40处/文件表解析 | **north-star**（ADR 0010 defer，不排期） |
 
 > 每阶段开独立 OpenSpec 变更（`implement-mechanical-layer-hardening-pN-<theme>`），归档后进下一个。
@@ -136,7 +136,7 @@
 
 ---
 
-## 阶段 5 · 家族① gate 状态锚 → frontmatter（Leg 2，就绪需先过 ROI 门）
+## 阶段 5 · 家族① gate 状态锚 → frontmatter（Leg 2）✅ 已交付（change `mlh-p5-gate-frontmatter`，merge `1b069a7`）
 
 ### 前置条件
 - [x] **ROI 门（显式阈值，冷审 F4）** — ✅ **已过（2026-07-07，GO 变体 a）**：B4/B5 已同类（子串/prose-inline 混淆）两连发、B5 自认「非根治」→ 已达立项线；**GO = 立项待 P2 完成即启**——P2（`e43460c`）已交付，故取变体 a、不等新事故起手（拍板见 task-log「阶段 5 起手 / ROI 门结论」）。〔变体 b「再出 ≥1 例同类 gate 假过/假红更确证」未采用，留作若 P5 中途受阻的回退依据〕
@@ -148,21 +148,21 @@
 
 ### 子任务
 #### 5.A frontmatter 状态 schema + 产者迁移
-- [ ] 5.A.1 定义报告 frontmatter 状态 schema（design_approved: bool / verify: PASS|FAIL / code_review: pass|blocked）。
-- [ ] 5.A.2 三 producer SKILL（spec-review 拍板回写 / done verify / code-review）改写 frontmatter 而非 inline 锚。
+- [x] 5.A.1 定义报告 frontmatter 状态 schema（design_approved: bool / verify: PASS|FAIL / code_review: pass|blocked）。
+- [x] 5.A.2 三 producer SKILL（spec-review 拍板回写 / done verify / code-review）改写 frontmatter 而非 inline 锚。
 #### 5.B gate 消费侧 dual-read + fail-closed
-- [ ] 5.B.1 `ship_gate.py` 读 frontmatter（`safe_load`）；**dual-read** 同时认归档旧 inline 锚（`archived_verify_state` 读归档不断）。**注（冷审 F2）**：归档不可变，此归档读路径**永久保留**、非临时窗口。
-- [ ] 5.B.2 LLM 写坏 YAML → `safe_load` 异常 fail-closed（判「无有效状态」→ gate 停下报告，绝不静默过门）。
-- [ ] 5.B.3 更新/迁移 gate 锚契约测试（`test_anchor_contract.py`/`test_producer_parser_contract.py`）+ B5 聚合语料测试到 frontmatter。
+- [x] 5.B.1 `ship_gate.py` 读 frontmatter（**实现取手写 stdlib `parse_ship_gate_frontmatter` 首块锚定、不 import yaml**——follow anchor_lint 零依赖惯例）；**dual-read** 同时认归档旧 inline 锚（`archived_verify_state` 读归档不断）。**注（冷审 F2）**：归档不可变，此归档读路径**永久保留**、非临时窗口。
+- [x] 5.B.2 LLM 写坏 frontmatter → 解析异常 fail-closed（判「无有效状态」→ UNKNOWN 停下报告，绝不静默过门）。
+- [x] 5.B.3 更新/迁移 gate 锚契约测试（`test_anchor_contract.py`/`test_producer_parser_contract.py`）+ B5 聚合语料测试到 frontmatter。
 #### 5.C 解析机器退役（仅 live 半场，冷审 F2）
-- [ ] 5.C.1 删 `_line_scoped_hits` 的 **live 报告解析半场**（fence-aware/互斥/fail-safe 针对 live 报告部分）；**`archived_verify_state` 的归档读 `_line_scoped_hits` 永久保留**（归档 inline 锚不可变）——「删整套」订正为「删 live、保留归档读」（本阶段收尾任务）。
+- [x] 5.C.1 删 `_line_scoped_hits` 的 **live 报告解析半场**（`anchors_in`/`pick_exclusive`×3/peek/`anchor_set` 熔断 helper 全迁）；**`archived_verify_state` 的归档读 `_line_scoped_hits` 永久保留**（归档 inline 锚不可变）——「删整套」订正为「删 live、保留归档读」（本阶段收尾任务）。
 
 ### 验收标准
-- [ ] 报告正文任意提及锚串 → gate 不误判（根治 B4/B5 类）。
-- [ ] LLM 写坏 frontmatter → gate fail-closed 停下报告，不静默过门。
-- [ ] 归档旧 inline 锚（精确篇数以起手核实为准）仍被 dual-read 正确识别。
-- [ ] 产者↔gate 契约测试全绿；`_line_scoped_hits` **live 解析半场**删除、**归档读半场保留**（冷审 F2）。
-- [ ] 行为面路径（若确认 bundle 回灌）硬排除、绝不 fold/sweep；改权威源 + `sdflow-init update` 回灌流程走全。
+- [x] 报告正文任意提及锚串 → gate 不误判（根治 B4/B5 类；`test_live_body_mention_immune` 等正文免疫测试覆盖）。
+- [x] LLM 写坏 frontmatter → gate fail-closed 停下报告，不静默过门。
+- [x] 归档旧 inline 锚（实测 85 文件/153 锚行）仍被 dual-read 正确识别。
+- [x] 产者↔gate 契约测试全绿；`_line_scoped_hits` **live 解析半场**删除、**归档读半场保留**（冷审 F2）。
+- [x] 行为面路径 N/A：survey 已核实 `ship_gate.py` 只在 `sdflow-ship/scripts/`、非 bundle 回灌消费仓，无 `sdflow-init update` 回灌链改动（前置区已定案）。
 
 ### 交付物
 - 报告 frontmatter 状态 schema；三 producer SKILL 迁移；gate dual-read + fail-closed；契约测试迁移；（窗口后）解析机器删除。

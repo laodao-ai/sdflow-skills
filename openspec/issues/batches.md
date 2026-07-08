@@ -125,6 +125,6 @@
 ### mlh-p5-gate-frontmatter — mlh-p5-gate-frontmatter
 状态: PLANNED
 成员: (生成) T74, T75
-优先级: <待填>
-计划: <待填>
+优先级: P3
+计划: ship_gate parser 健壮性 + 死代码清理（defer 自 mlh-p5-gate-frontmatter，非阻塞）：T74 裸 `---` 首行无闭合误判 unterminated 致 UNKNOWN·T75 清 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_*。择期单开 cleanup change。
 

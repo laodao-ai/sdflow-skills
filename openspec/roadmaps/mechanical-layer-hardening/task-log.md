@@ -58,14 +58,14 @@
 
 ## 2026-07-08
 
-### [阶段 5 完成总结] gate 状态锚 inline→frontmatter 迁移 Task1-7 交付（SHIPPED，Leg2 S1）
-- **状态**: ✅ SHIPPED（SDD Task1-7 全绿；change `mlh-p5-gate-frontmatter` 尚未 archive/merge，续经 `/sdflow-code-review` → `/sdflow-done` 收尾）
+### [阶段 5 完成总结] gate 状态锚 inline→frontmatter 迁移 Task1-7 交付（SHIPPED + ARCHIVED，Leg2 S1）
+- **状态**: ✅ SHIPPED + ARCHIVED（SDD Task1-7 全绿 → `/sdflow-code-review` 多镜代码审（3 对抗+领域+历史，codex hr-tg/code-voice 独家挖 2 真 bug：嵌套字段假过门 / 坏标量回退）自动修 5 组 → `/sdflow-done` verify=PASS → **change `mlh-p5-gate-frontmatter` 已 archive + merge main（`1b069a7`）**；delta 同步 spec-workflow（ship-gate 锚 inline→frontmatter）。defer T74/T75 入批次 `mlh-p5-gate-frontmatter`）
 - **scope**: ship-gate 状态锚从报告正文 inline HTML 注释迁到报告 YAML frontmatter——`ship_gate.py` **live 侧改为纯 frontmatter 读**（inline 解析半场退役：`anchors_in`/`pick_exclusive`×3/peek/`anchor_set`熔断 helper 全迁）；**归档侧 dual-read 永久保留**（frontmatter 优先→无则回退 inline，旧归档不回归）。三 producer（`sdflow-spec-review` 拍板回写 / `sdflow-done` verify 模板 / `sdflow-code-review` 报告格式）头部改写 frontmatter 写入，正文保留人读结论行。属家族① Leg2（去字符串化）S1 交付。
 - **冷审成果**: spec-review 并行六镜（领域+对抗×3+接地+codex）拦下 **1 致命+3 高**（D1 live 读点不止 `anchors_in`，须覆盖 `pick_exclusive`×3/peek/`anchor_set`全集合；D2 手写解析器首块锚定契约；D3 坏≠无键退出码映射；D4 live/归档共用严格 helper 防漂移）全采纳，落 spec-review-amendment 转 Task0 必办项。实现期 SDD 内跨任务冷审又抓 **1 Critical**（Task4：spec-review/done frontmatter 模板脱离列表缩进列 0 对齐导致解析器读不出，`e01e28f` 修复：模板顶格旁注 + 契约测试改为从真实 SKILL.md 抽取 fence 喂 parser，防 strip 抹列信息假绿）。
 - **验证**: 全仓 `pytest` 662 passed；dogfood CLEAN（gate 读自身报告 frontmatter 不 REFUSE-on-self，`test_live_body_mention_immune` 等正文免疫测试覆盖 B4/B5 根治）。
 - **F6 归档锚精确篇数订正**: design/roadmap 阶段估算「88 文件/168 锚行」经本轮 `grep -rlE '<!-- ship-gate:' openspec/changes/archive/` 实测为 **85 文件/153 锚行**（design 数字混入 3 处 prose 反引号提及，非真实 HTML 注释锚）；已回填 roadmap 阶段 5 前置区，差值不改变 Task1-7 迁移范围。
 - **commit 链**: `7100e03`(Task1 解析器) → `209341b`(Task2 live dual-read) → `4f6b53d`(Task3 archived dual-read) → `a836b90`(Task4 producer 迁移) → `e01e28f`(Task4fix 冷审 Critical 修复) → `8cb50d7`(Task5 测试迁移) → `66da7ca`(Task6 退役 live inline) → 本条(Task7 roadmap/task-log 同步)。
-- **下一步**: 续经 `/sdflow-code-review`（全仓多镜代码审）→ `/sdflow-done`（verify → archive → merge main）收尾；Leg2 S2（recorder 索引，阶段 6）north-star 不排期，ROI 触发才起。
+- **下一步**: ✅ 收尾已完成（code-review + done + archive + merge `1b069a7`）。**Leg1（P1-P3）+ Leg2 S1（P5）均已交付**；余 Leg1 P4（编排 SKILL 机械步下沉，按痛点排）+ Leg2 S2（recorder 索引，阶段 6）north-star 不排期，ROI 触发才起。defer T74/T75（ship_gate parser 裸 `---` 首行误判 / live inline 死代码清理）非阻塞，批次 `mlh-p5-gate-frontmatter` 择期单开 cleanup 清。
 
 ## 2026-07-07
 
