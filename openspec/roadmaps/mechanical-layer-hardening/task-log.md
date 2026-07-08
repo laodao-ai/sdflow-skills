@@ -58,6 +58,37 @@
 
 ## 2026-07-08
 
+### [P6 端态拍板] recorder 索引→frontmatter 端态决策 = A（根治），否决 B（治标）
+- **状态**: ✅ 决策已定（实现未起，压轴排 ★P4 后；todolist T85）
+- **决策**: **端态 A（迁 frontmatter）**——用户以「根治 + 达成目标」判据选定，否决端态 B（reject-over-restructure）。
+- **判据（两条用户约束驱动）**:
+  - **约束①「新规则只对新 workflow 文档有效、历史文档不管」** → A 的最大成本（就地改写 90 条活记录）**归零**，降为 P5 gate-frontmatter 已 ship 的成熟范式：新写 frontmatter + 历史表 dual-read 永久冻结只读、**零数据改写**。A 从「全 roadmap 最险」降到「P5 同级」。
+  - **约束②「希望根治问题、达成目标」** → B 按定义**治标**（`_reject_cell_unsafe` 在脆弱 markdown 表基底上永久架守卫拦 `｜`，且只守脚本写、人手编辑绕过、arity 仅兜列数变化）；A **治本**（YAML 原生转义使 `｜` 腐蚀类结构上不可能，非被拦住）。要根治 → B 出局。
+- **诚实边界**（免日后被 A scope 绊到）:
+  - A **非**「删掉一切解析」：历史表读 `parse_table_rows` 冻结保留（同 P5 归档读半场）；A 删的是**写侧**（`_reject_cell_unsafe` 腐蚀守卫 + `_render_item_table` + 双写表半场）。
+  - 「删整类解析机器」是非能 100% 兑现的字面目标；**根治的真实达成 = 未来腐蚀结构上不可能，A 100% 达成**。
+  - 可查询基底（ADR 0010 触发器②）从「决胜条件」降为 A 的**附赠**——根治本身已判 A，不再需要「是否建数据工具」这个问。
+- **ADR 0010 复核**: 原「defer / ROI 触发才起」判据 = 快照妥协（拿「现在腐蚀被 reject 堵死」反推不做），本次目标态复核**推翻**。
+- **排期**: 改 3 recorder 写路径 + consumer dual-read 读 + 重写测试套；压轴排 ★ P4 之后（4.C 等 ROI 更清晰、隔离项先做）；落地复用 P5 fail-closed YAML + dual-read 范式。
+- **下一步**: ★ P4 推进（4.C 先行）；P6/A 作 roadmap 终点 change，实现前单独 explore/design。
+
+### [现状复核 / P4·P6] 缺口盘点：主干四阶段全交付，P4/P6 未做（附目标态重评触发）
+- **状态**: ℹ️ 复核快照（非阶段交付，附录 D「遇计划外情况必记」义务）
+- **触发**: 由 `docs/workflow-map.md`（接地现状全景）反查 roadmap/requirements 缺口。
+- **实测核对**（脚本实存 + 复选框）:
+  - **主干（Tier 1，已承诺+高 ROI）全绿**：P1 `issues.py sweep`、P2 `anchor_lint.py`、P3 `test_mirror_consistency`+`init.py config-lint`+`batch lint`、P5 `ship_gate.py` frontmatter parser（+尾巴 T74/T75）——脚本均在、复选框全勾、已 merge。
+  - **P4（编排步下沉）7 子项全未建**：`log_check.py`(4.A)、`maintain_scan.py`(4.B)、`lens_metric_emit.py`(4.C)、4.D.1-4.D.4 小校验器——`find` 确认三脚本不存在，复选框全 `[ ]`。
+  - **P6（recorder 索引→frontmatter）未建**：north-star，复选框 `[ ]`。
+- **map 忠实度**: map 如实标 `log_check.py`「尚未建」、手数/双写/镜像守卫均呈现为「当前机制」，无谎报。顺手订正 map §4 一处编号刺（survey P5 vs 阶段5 撞号）。
+- **⚠️ 重要转向（用户拍板）**: 原「P4/P6 按需/ROI 触发不做」的判据是**拿现状快照（现在不痛）反推目标不该做**——**已否决**。开发阶段应锚**目标态**（requirements §1.3 愿景 + adr/0006 硬约束：凡机械 prose 协议 MUST 脚本化/结构化）重评「该做未做 / 可不做」。
+- **目标态重评结论**（已回填 roadmap P4/P6 前置的订正块）:
+  - **★ 该做未做**（原被快照压住，翻案）: 4.C `lens_metric_emit`（**最高**，直闭 §1.2 痛点#2「手数信任边界」；anchor_lint 自认「不谎称保证数值正确」即洞未合的自供）· 4.B `maintain_scan`（纯机械 set-diff）· 4.D.1 · 4.D.2 · 4.D.4。
+  - **◐ 该做·正当排后**（判据 = **producer 契约就绪度**，非痛感）: 4.A `log_check` · 4.D.3——本仓无 embedded producer 契约可 dogfood，待真实 embedded 消费仓需求。
+  - **P6 端态取舍**（决策项，归人）: 端态 A（做 P6，删整类解析机器，独占实现愿景「整类解析机器可删」）vs 端态 B（reject-over-restructure，腐蚀不可能但永久维护解析机器+镜像守卫）。**fork 判据 = 「删机器」是硬目标还是仅达成「不腐蚀」的手段**；判可不做时依据须是「B 满足终极愿景」而非「现在不痛」。ADR 0010 的 B 选择需在此判据下复核是否快照妥协。
+  - **真·可不做 = 无**（除非 P6 判为「手段」）。P4 从「按需 0/7」翻为「★5 该做 + ◐2 待契约」。
+- **建议批次**: todolist `mlh-p4-target-state`（T78-T85，PLANNED，`openspec/issues/batches.md`）——T78-T84 = P4 脚本化候选，T85 = P6 端态决策。
+- **下一步**: 用户就 P6 端态 A/B 拍板 → ★ 组按优先级 `/opsx:new implement-mechanical-layer-hardening-p4-<子项>`（4.C 先行）。
+
 ### [阶段 5 尾巴清理] P5 defer T74/T75 清结（mlh-p5-parser-cleanup → SHIPPED + ARCHIVED，merge `007b00d`）
 - **状态**: ✅ SHIPPED + ARCHIVED——阶段5 完成总结遗留的 defer T74/T75 已单开 cleanup change 清结；`/sdflow-ship` 全链 gate 驱动跑通：plan → SDD(3 任务) → code-review → done → ff-merge main（`007b00d`）。
 - **scope**: 清 `mlh-p5-gate-frontmatter` 收尾遗留的两条 P5 尾巴——**T74**（正确性 + spec 修订）：`parse_ship_gate_frontmatter` 首行 `---` 无闭合由 fail-closed `unterminated` 改判 `absent`（`({}, None)`），弥合「只认首块」与「写坏 fail-closed」两 Scenario 措辞张力、堵 live 对干净无闭合报告硬崩 UNKNOWN(6)；退役 `unterminated` 死类别；加 live 三读点纯结构诊断提示 `_unclosed_frontmatter_hint`（走上层独立结构判定，不改 parse 签名/verdict/退出码，不波及 anchor_set/archived 三调用方）。**T75**（纯机械清理）：删 Task6 退役后只剩 test 引用的孤儿符号 `anchors_in`/`pick_exclusive`/`ANCHOR_DESIGN`/`ANCHOR_CR_PASS`/`ANCHOR_CR_BLOCKED` + `ALL_ANCHORS` 收缩至 verify-only（**保留** `ANCHOR_VERIFY_PASS`/`ANCHOR_VERIFY_FAIL`/`_line_scoped_hits` 归档 dual-read 现役）；`test_gate_anchor_scope.py` 外科改写不整删。三项向后兼容。

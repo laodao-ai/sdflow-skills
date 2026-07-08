@@ -64,6 +64,19 @@
 | T72 | todo | PROPOSED | mlh-p3-determ-guards |
 | T73 | todo | PROPOSED | mlh-p3-determ-guards |
 
+### 批次：mlh-p4-target-state
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T78 | todo | PROPOSED | - |
+| T79 | todo | PROPOSED | - |
+| T80 | todo | PROPOSED | - |
+| T81 | todo | PROPOSED | - |
+| T82 | todo | PROPOSED | - |
+| T83 | todo | PROPOSED | - |
+| T84 | todo | PROPOSED | - |
+| T85 | todo | PROPOSED | - |
+
 ### 批次：mlh-p5-gate-frontmatter
 
 | ID | Pool | Status | 关联Change |

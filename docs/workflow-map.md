@@ -173,7 +173,7 @@
 | **resolve-workflow.sh** | setup（规则根解析） | 各 skill 前置 | `--root`；本地 pin vs 全局 canonical bundle | **0** 成功 / **2** 降级 / **64** 用法 | bundle/hack | `:5-7`,`:69` |
 | **outside-voice.sh** | spec-review / code-review | 两审 outside-voice 镜 | `--context-file` · secret_scan · codex read-only · timeout 300 | preflight/exec；**0** / **1** err / **3** secret / **124** timeout | bundle/hack | `:5-15`,`:45` |
 | **checkpoint-commit.sh** | 全阶段（过场提交） | 各编排 skill | `<step>`+描述 · `git status --porcelain` · 固定 message | 无变更静默跳过；**0** / **2** 用法/非仓 | bundle/hack | `:7-20`,`:39` |
-| **log_check.py** | （计划未建） | 拟 embedded-test-sop | 拟：`--log serial.log --rules *.yaml` · 时间窗 · must_contain/not/before · severity rollup | **尚未建**（roadmap mechanical-layer-hardening 阶段4 P5 候选，按需排） | 拟 bundle | roadmap:118 |
+| **log_check.py** | （计划未建） | 拟 embedded-test-sop | 拟：`--log serial.log --rules *.yaml` · 时间窗 · must_contain/not/before · severity rollup | **尚未建**（roadmap mechanical-layer-hardening 阶段4 · 子任务 4.A，按需排；survey 内部编号 P5，勿与已交付的「阶段5 gate→frontmatter」撞号） | 拟 bundle | roadmap:118 |
 
 ---
 

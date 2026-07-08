@@ -83,6 +83,14 @@
 | T75 | `sdflow-ship` | ship_gate 清理 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_* | 代码质量 | PROPOSED | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
 | T76 | `ship_gate.py archived_verify_state` | 归档杂交盲区硬化后续（设计门已接受净负、登记为已知盲区）：冷代码审对抗镜给出比「仅手工伪造」更锋利的可达性论证——迁移半成品编辑残留独占行 inline PASS 锚、自指文档独占行引用（呼应 gate-substring-dogfood 自指坑）；建议未来加**非语义** lint/监控扫「归档 verify-report 首行 --- 无闭合」形态告警（不改 parser 语义、不重开设计门 adr/0004），据此复评「给归档侧特殊 fail-safe」ROI（design L121 当前选①绝） | 基础设施 | WONTDO | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
 | T77 | `openspec/specs/spec-workflow spec.md` | 「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留） | 代码质量 | OPEN | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
+| T78 | `sdflow-code-review/spec-review SKILL + lens_metric_emit.py(新)` | P4·4.C lens-metric 数值一致性从模型手数下沉为脚本归约：吃已判结构化 findings(带命中镜集+裁决+sev)→机械归约计数+锚行；去重/对抗裁决留模型。闭合 requirements §1.2 痛点#2『手数信任边界』、adr/0006 硬约束——目标态该做(原按快照压为按需,已翻案) | 代码质量 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T79 | `sdflow-maintain + maintain_scan.py(新)` | P4·4.B maintain INDEX↔文件系统 set-diff 只读报告脚本化(+CLAUDE.md 过时引用+bundle 陈旧告警)；归哪组/是否修留人。纯机械集合求差、每次 maintain 都跑、dogfood 可测——目标态该做 | 代码质量 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T80 | `两审 outside-voice 小校验器(新)` | P4·4.D.1 outside-voice 复用守卫脚本化：锚 mode+时间戳+结构三判→reason_code 退出码 | 代码质量 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T81 | `两审 HR-TG 小校验器(新)` | P4·4.D.2 HR-TG 交集判定脚本化：TG 集∩HR-TG 子集→hit 列表/none+规范锚串，清单从 trigger-catalog 单一源读(tg02_hit 先例) | 代码质量 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T82 | `roadmap 对账小校验器(新)` | P4·4.D.4 roadmap task-log『Review 处置』对账脚本化：parse 小节断言无『未处置』状态 | 可观测性 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T83 | `embedded-test-sop + log_check.py(新)` | P4·4.A 串口日志规则判定脚本化：时间窗+must_contain/not/before+severity rollup 输出 PASS/FAIL，平台需人眼项留模型。目标态该做,正当排后——本仓无 embedded producer 契约可 dogfood,待真实 embedded 消费仓需求(producer 契约就绪度,非痛感) | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T84 | `embedded-test-sop SOP模式A 小校验器(新)` | P4·4.D.3 SOP 模式A 源码常量/TAG 收割脚本化：正则 emit 常量表 name/值/来源:行。同 embedded 排后 | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T85 | `roadmap mechanical-layer-hardening / recorder` | P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块 | 基础设施 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
 
 ---
 
