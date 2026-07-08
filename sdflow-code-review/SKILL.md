@@ -110,8 +110,9 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 - **绝不 AskUserQuestion**（阶段三无人类门）。
 - **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕〔impl-review-fix mlh-p4〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg`
   各独立计数）的裁决结果**构造进** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/history/broad +
-  outside-voice 每个调用过的 site）], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（schema 见 `lens-metric-emit`
-  能力 + golden fixture `tools/tests/fixtures/lens_metric_input.json`，非手数）——原「voice分桶」自由 prose 台账行已被此锚吸收
+  outside-voice 每个调用过的 site）], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见 `lens-metric-emit`
+  能力的 input schema 机读块，非手数；源仓另有 golden fixture 示范 `tools/tests/fixtures/lens_metric_input.json`——消费仓非
+  full 拷贝不含 `tests/`、404 属预期，以能力 input schema 为准）〔impl-review-fix mlh-p4-fix〕——原「voice分桶」自由 prose 台账行已被此锚吸收
   取代，这份 roster+findings 是下方「反馈回路〔泛化〕」判据的数据来源，Step5 调 emitter 归约后落成结构化可 grep 的锚。
 
 ## 第五步：产出 + 收敛口
