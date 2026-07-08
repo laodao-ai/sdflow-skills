@@ -146,6 +146,25 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change
 
 **范围边界（design §4.2，不在本 sweep 内）**：sweep 只圈**源 == 本 change**的未分诊非终态项（`--open-ungrouped` 口径）。孤儿项（源 = `""`，多 change 并行、`detect_change` 探不出归属的）**不归本 sweep 管**——由独立的通用「清 bug/todo」工作流兜底（`scan --open-ungrouped` → `triage` → 另开 cleanup change），不因 sweep 窄而无声蒸发；sweep 本身保持窄而确定，别为了兜孤儿放宽 `--change` 过滤。
 
+### 2.2 roadmap 回填降摩擦助手子步（§2.1 之后、写 hand-off 三段之前）〔done-roadmap-writeback〕
+
+verify 判完之后，跑 roadmap 回填助手机械核生成回填草稿，供人异步确认回填 roadmap（切分线：**定位到 phase 机械、勾哪几行判断留人**）。主 session 直接跑（纯机械脚本）。
+
+**脚本路径**（sibling 约定，同 §2.1）：`~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py`（兜底 `~/.codex/skills/…` 或本仓 `find . -name roadmap_writeback_draft.py`）。
+
+```bash
+python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
+  --change {change_name} --root . 2>/tmp/rwd_err; echo "exit=$?"; cat /tmp/rwd_err
+```
+
+**退出码处置（遵脚本判定，不静默）**：
+- `0` → stdout 即回填草稿，**原样贴进 hand-off.md 的「▶ 下一阶段建议」段**（作 roadmap 回填草稿子块）；stderr 有 `WARN 关联不一致` 则一并转述。
+- `3`（无关联，退现状）→ change 非 roadmap 驱动，**不产草稿**；若分支名/change 名疑似 roadmap 驱动，hand-off 留一行「未检测到 roadmap 关联标记；若属某 roadmap 请手动回填」（反静默 SHOULD）。
+- `4`（盘面 absent / roadmap 缺）/ `5`（frontmatter 畸形 fail-closed）/ `6`（verify≠PASS）→ hand-off 记一行「roadmap 回填草稿未生成：<stderr 原因>，请人工」（**不静默、不伪造**）。
+- `2`（change dir 缺）→ 异常，停下核对。
+
+**判断留人**：草稿只列 phase 候选行集 + 机械锚（archive/merge 占位），**勾哪几行 / 算不算满足验收标准 / 价值叙述 / 阶段状态 / deferred 由人在异步回填时判**——助手 MUST NOT 代判、MUST NOT 直接改 roadmap、MUST NOT 写 change 产物文件（避 C1）。
+
 ---
 
 ## 第三步：Archive + Spec 同步（中档子 agent）
@@ -278,6 +297,7 @@ sdflow-done 完成
   Specs:   ✅ 同步主 specs（新建 / 追加 / INDEX）｜或 ⚠️ --skip-specs 手动同步
   Commit:  {hash} — {message}
   Merge:   ✅ {base_branch} ← {feat_branch}（ff）｜⏭ 按调用意图跳过
+  Roadmap: ⚠ 回填草稿待人确认（见 hand-off「▶ 下一阶段建议」）｜— 无关联
   Push:    ⏸ 未 push（用户手动控制）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -297,6 +317,7 @@ sdflow-done 完成
 - **verify 防假✅（P3h）**：每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；强档 + Do-Not-Trust 冷启（阶段三去人类门后 verify 是唯一终门，禁降档）。见 design §7.3.1 / adr/0001。
 - **hand-off.md（P3g）**：verify 之后 / archive 之前产出（done/not-done + 延后项 + 下阶段建议），随归档留档，作异步人类再入口 + 下个 change 种子；**不直接搬运 verify 的 ✅**（复核锚点存在性）。
 - **issues sweep 子步（§2.1，D3/D4）**〔impl-review-fix：本条订正——旧版描述手写 4 步循环，§2.1 已改用 sweep 一键封装〕：写 hand-off 正文前先跑 `issues.py sweep --change {本change}` 一键调用（内部固化 scan 两池 → 逐项 triage → batch add → reindex 全部子步，不再手写 4 步循环）；**显式传 `--change {本change}`**（不靠 `detect_change` 猜，D4）；只建 **1 个批次、key=本 change 名**（Q2 保守，禁跨 change 合并）；内部末尾跑 `reindex`（D3）刷新 INDEX + 同步批次状态；只圈 `源==本change` 的未分诊 OPEN 项，孤儿（源=""）不归本 sweep，交独立清理流程兜底；非原子、fail-closed，半途失败直接重跑同一条命令收敛。
+- **roadmap 回填助手（§2.2，done-roadmap-writeback）**：verify 之后跑 `roadmap_writeback_draft.py` 生成 roadmap 回填草稿进 hand-off + 第六步摘要抬一行（merge 时点可见）；**与 §2.1 issues sweep 同位不同性**——同为 done 收尾盘面消费，但 sweep 机械终写机器独占文件（INDEX）、roadmap 回填**助人确认**（完成判定含判断，写入语义相反，不诱导复用 sweep 自动落盘）。切分线：定位到 phase=机械（change 名前缀确定性信号）、勾哪几行=判断留人；archive/merge 预测值留占位不预填（P-1）；detection fence-aware 防自指（P-5）；非复选框格式 fail-loud（P-3）。**残差登记**：草稿产出即止、apply 由人异步、不保证（经 /sdflow-ship 全自动链人被支走时尤然）。
 
 ## 模型选择（按本步性质，逐步定）
 
