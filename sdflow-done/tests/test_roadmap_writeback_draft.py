@@ -194,3 +194,79 @@ def test_assemble_draft_warnings_surfaced():
 def test_assemble_draft_deterministic():
     args = (_assoc(), "PASS", 2, 2, "c", "b", "checkbox", ["- [ ] 4.A.1 甲"], 10)
     assert rwd.assemble_draft(*args) == rwd.assemble_draft(*args)  # 同输入同输出
+
+
+import subprocess
+
+SCRIPT = str(Path(__file__).resolve().parent.parent / "scripts" / "roadmap_writeback_draft.py")
+
+
+def _run(root, change, extra=None):
+    cmd = ["python3", SCRIPT, "--change", change, "--root", str(root), "--branch", "feat/t"]
+    if extra:
+        cmd += extra
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def _mk_change(root, name, verify="PASS", proposal="", tasks="- [x] a\n- [ ] b\n"):
+    d = root / "openspec" / "changes" / name
+    d.mkdir(parents=True)
+    if verify is not None:
+        (d / "verify-report.md").write_text(
+            "---\nship-gate:\n  verify: %s\n---\n" % verify, encoding="utf-8")
+    (d / "proposal.md").write_text(proposal, encoding="utf-8")
+    (d / "tasks.md").write_text(tasks, encoding="utf-8")
+    return d
+
+
+def _mk_roadmap(root, name, text):
+    d = root / "openspec" / "roadmaps" / name
+    d.mkdir(parents=True)
+    (d / "roadmap.md").write_text(text, encoding="utf-8")
+
+
+def test_main_happy_checkbox(tmp_path):
+    _mk_change(tmp_path, "implement-mlh-p4-x")
+    _mk_roadmap(tmp_path, "mlh", CHECKBOX_ROADMAP)
+    r = _run(tmp_path, "implement-mlh-p4-x")
+    assert r.returncode == 0
+    assert "roadmap 回填草稿" in r.stdout
+    assert "- [ ] 4.A.1" in r.stdout
+
+
+def test_main_no_association_returns_3(tmp_path):
+    # dogfood 自指: change 名非 implement-* 前缀 + proposal 内 marker 仅在散文/行内 code
+    _mk_change(tmp_path, "done-roadmap-writeback",
+               proposal="轻量标记 `<!-- roadmap: {name}#{phase} -->` 兜底")
+    r = _run(tmp_path, "done-roadmap-writeback")
+    assert r.returncode == 3  # 无关联 → 退现状(P-5 fence-aware 未误检测)
+
+
+def test_main_table_prose_fail_loud_still_exit0(tmp_path):
+    _mk_change(tmp_path, "implement-wco-p2-y")
+    _mk_roadmap(tmp_path, "wco", TABLE_ROADMAP)
+    r = _run(tmp_path, "implement-wco-p2-y")
+    assert r.returncode == 0
+    assert "fail-loud" in r.stdout or "非复选框格式" in r.stdout
+
+
+def test_main_malformed_board_returns_5(tmp_path):
+    d = _mk_change(tmp_path, "implement-mlh-p4-z", verify=None)
+    (d / "verify-report.md").write_text("---\nverify: MAYBE\n---\n", encoding="utf-8")
+    _mk_roadmap(tmp_path, "mlh", CHECKBOX_ROADMAP)
+    r = _run(tmp_path, "implement-mlh-p4-z")
+    assert r.returncode == 5
+
+
+def test_main_verify_fail_returns_6(tmp_path):
+    _mk_change(tmp_path, "implement-mlh-p4-w", verify="FAIL")
+    _mk_roadmap(tmp_path, "mlh", CHECKBOX_ROADMAP)
+    r = _run(tmp_path, "implement-mlh-p4-w")
+    assert r.returncode == 6
+
+
+def test_main_board_absent_returns_4(tmp_path):
+    _mk_change(tmp_path, "implement-mlh-p4-v", verify=None)  # 无 verify-report
+    _mk_roadmap(tmp_path, "mlh", CHECKBOX_ROADMAP)
+    r = _run(tmp_path, "implement-mlh-p4-v")
+    assert r.returncode == 4

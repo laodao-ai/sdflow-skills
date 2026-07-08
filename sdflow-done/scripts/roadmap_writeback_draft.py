@@ -5,7 +5,10 @@
 切分线: 定位到 phase = 机械（change 名前缀确定性信号）; 勾哪几行 = 判断留人.
 stdlib-only, 确定性（无墙钟/随机）, fail-closed.
 """
+import argparse
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 # change 名前缀 implement-{roadmap}-pN-* ; roadmap 可含横杠, -p\d+ 作定界, 可选尾缀
@@ -190,3 +193,71 @@ def assemble_draft(assoc, verify_value, tasks_done, tasks_total, change_name,
         "  - 价值（grill/冷审/defer/耗时）：<人补>",
     ]
     return "\n".join(lines)
+
+
+def _git_branch(root):
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+    except Exception:
+        return "<unknown>"
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description="roadmap 回填降摩擦助手机械核")
+    p.add_argument("--change", required=True)
+    p.add_argument("--root", default=".")
+    p.add_argument("--roadmap", default=None, help="{name}#{phase} 覆写(优先级最高)")
+    p.add_argument("--branch", default=None)
+    p.add_argument("--pytest-count", type=int, default=None)
+    args = p.parse_args(argv)
+
+    root = Path(args.root)
+    change_dir = root / "openspec" / "changes" / args.change
+    if not change_dir.exists():
+        sys.stderr.write("CHANGE_DIR_MISSING %s\n" % change_dir)
+        return 2
+
+    proposal = change_dir / "proposal.md"
+    tasks = change_dir / "tasks.md"
+    proposal_text = proposal.read_text(encoding="utf-8") if proposal.exists() else ""
+    tasks_text = tasks.read_text(encoding="utf-8") if tasks.exists() else ""
+
+    assoc = resolve_association(args.change, proposal_text, tasks_text, args.roadmap)
+    if assoc is None:
+        sys.stderr.write("NO_ASSOCIATION 未声明关联且名前缀不符 → 退现状(不产草稿)\n")
+        return 3
+
+    state, verify_value = read_verify_state(change_dir)
+    if state == "absent":
+        sys.stderr.write("BOARD_ABSENT verify-report 缺/无 frontmatter → 留人工\n")
+        return 4
+    if state == "malformed":
+        sys.stderr.write("BOARD_MALFORMED verify frontmatter 畸形 → fail-closed 留人工\n")
+        return 5
+    if verify_value != "PASS":
+        sys.stderr.write("VERIFY_NOT_PASS verify=%s → 不出完成候选\n" % verify_value)
+        return 6
+
+    roadmap_path = root / "openspec" / "roadmaps" / assoc["roadmap"] / "roadmap.md"
+    if not roadmap_path.exists():
+        sys.stderr.write("ROADMAP_MISSING %s → 留人工\n" % roadmap_path)
+        return 4
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    fmt = probe_format(roadmap_text)
+    rows = locate_phase_rows(roadmap_text, assoc["phase"]) if fmt == "checkbox" else []
+
+    tasks_done, tasks_total = read_tasks_completion(change_dir)
+    branch = args.branch or _git_branch(root)
+    draft = assemble_draft(assoc, verify_value, tasks_done, tasks_total,
+                           args.change, branch, fmt, rows, args.pytest_count)
+    sys.stdout.write(draft + "\n")
+    for w in assoc["warnings"]:
+        sys.stderr.write("WARN %s\n" % w)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
