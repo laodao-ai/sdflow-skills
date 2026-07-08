@@ -81,7 +81,7 @@
 | T73 | `anchor_lint.py + init.py config-lint` | metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定 | 功能增强 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
 | T74 | `sdflow-ship` | ship_gate parser 裸---首行(无闭合)误判 unterminated 致 UNKNOWN | 代码质量 | PROPOSED | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
 | T75 | `sdflow-ship` | ship_gate 清理 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_* | 代码质量 | PROPOSED | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
-| T76 | `ship_gate.py archived_verify_state` | 归档杂交盲区硬化后续（设计门已接受净负、登记为已知盲区）：冷代码审对抗镜给出比「仅手工伪造」更锋利的可达性论证——迁移半成品编辑残留独占行 inline PASS 锚、自指文档独占行引用（呼应 gate-substring-dogfood 自指坑）；建议未来加**非语义** lint/监控扫「归档 verify-report 首行 --- 无闭合」形态告警（不改 parser 语义、不重开设计门 adr/0004），据此复评「给归档侧特殊 fail-safe」ROI（design L121 当前选①绝） | 基础设施 | OPEN | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
+| T76 | `ship_gate.py archived_verify_state` | 归档杂交盲区硬化后续（设计门已接受净负、登记为已知盲区）：冷代码审对抗镜给出比「仅手工伪造」更锋利的可达性论证——迁移半成品编辑残留独占行 inline PASS 锚、自指文档独占行引用（呼应 gate-substring-dogfood 自指坑）；建议未来加**非语义** lint/监控扫「归档 verify-report 首行 --- 无闭合」形态告警（不改 parser 语义、不重开设计门 adr/0004），据此复评「给归档侧特殊 fail-safe」ROI（design L121 当前选①绝） | 基础设施 | WONTDO | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
 | T77 | `openspec/specs/spec-workflow spec.md` | 「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留） | 代码质量 | OPEN | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
 
 ---
@@ -1005,3 +1005,15 @@
 **关联文档**：`openspec/changes/mlh-p5-gate-frontmatter/design.md`
 
 **备注**：code-review defer(fallback-F2): Task6 退役只从 decide() 摘调用,函数本体+ANCHOR_DESIGN/ANCHOR_CR_PASS/ANCHOR_CR_BLOCKED 成 test-referenced 孤儿。ANCHOR_VERIFY_PASS/FAIL 仍被 archived_verify_state 真用勿删。另开 cleanup 删死函数+测试。
+
+---
+
+## T76: 归档杂交盲区硬化后续（设计门已接受净负、登记为已知盲区）：冷代码审对抗镜给出比「仅手工伪造」更锋利的可达性论证——迁移半成品编辑残留独占行 inline PASS 锚、自指文档独占行引用（呼应 gate-substring-dogfood 自指坑）；建议未来加**非语义** lint/监控扫「归档 verify-report 首行 --- 无闭合」形态告警（不改 parser 语义、不重开设计门 adr/0004），据此复评「给归档侧特殊 fail-safe」ROI（design L121 当前选①绝）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `ship_gate.py archived_verify_state` |
+| 类型 | 基础设施 |
+| 状态 | WONTDO |
+
+> 2026-07 状态：OPEN → WONTDO（已复评(explore 2026-07-08)：①绝 HOLD 且被迁移完成强化。冷代码审对抗镜给的最锋利可达路径「迁移半成品编辑残留独占行 inline PASS 锚」是【迁移窗专属】论据——T75 删净 live inline 死码、三 producer 全迁后迁移窗已闭，无待迁 producer 即无半成品可残留，该路径失效。稳态下要凑齐「首行 --- 无闭合 × 正文独占行 inline PASS」杂交形态只能人手伪造 git-committed 畸形归档=adr/0008 显式越权(git 可审计)。非语义 monitor 三点不成立：(1)稳态恒零命中=纯仪式(producer 只写 frontmatter 不产②)；(2)非安全边界——有 git 写权的越权者能同样手改绕过，adr/0008 立场=git 写靠历史审计非运行时防；(3)开发循环镜主导判主次，系统镜给 monitor 的「外部无漂移」一分被压过。已在位 mitigation(头注册 ship_gate.py:118-123 + 目标态回归测试 test_archived_unclosed_*)足够。未来 P6 等新迁移窗的 insurance 价值由「目标态回归测试 per 迁移」成熟模式兜底(P5 即如此)，不需常驻 monitor。故 ①绝 不建 monitor，无代码产出。）

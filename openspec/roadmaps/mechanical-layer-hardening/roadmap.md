@@ -36,14 +36,14 @@
 
 ### 子任务
 #### 1.A issues.py sweep 子命令
-- [ ] 1.A.1 `issues.py sweep --change X`：内部 scan buglist+todolist 两池 → 按 change 过滤 OPEN 项 → 逐项 triage 入批次（bug/todo 各走对应脚本，幂等：已 PROPOSED no-op）→ `batch add X`（已存在跳过）→ `reindex`，一路做完。
-- [ ] 1.A.2 `test_issues.py` 扩 sweep 用例（含幂等重跑、空 change、孤儿项不纳入的边界）。
-- [ ] 1.A.3 `sdflow-done/SKILL.md` §2.1 改为调 `sweep`（把手循环 prose 替换为一行命令；保留「孤儿项不归本 sweep」边界声明）。
+- [x] 1.A.1 `issues.py sweep --change X`：内部 scan buglist+todolist 两池 → 按 change 过滤 OPEN 项 → 逐项 triage 入批次（bug/todo 各走对应脚本，幂等：已 PROPOSED no-op）→ `batch add X`（已存在跳过）→ `reindex`，一路做完。
+- [x] 1.A.2 `test_issues.py` 扩 sweep 用例（含幂等重跑、空 change、孤儿项不纳入的边界）。
+- [x] 1.A.3 `sdflow-done/SKILL.md` §2.1 改为调 `sweep`（把手循环 prose 替换为一行命令；保留「孤儿项不归本 sweep」边界声明）。
 
 ### 验收标准
-- [ ] `sweep --change X` 幂等（重跑无副作用）；只圈 `源==X ∧ 非终态 ∧ 批次空` 项；孤儿（源="")不纳入。
-- [ ] `pytest sdflow-issues/tests/` 全绿；新增 sweep 用例覆盖边界。
-- [ ] done SKILL §2.1 不再要求模型手跑 4 步 bash。
+- [x] `sweep --change X` 幂等（重跑无副作用）；只圈 `源==X ∧ 非终态 ∧ 批次空` 项；孤儿（源="")不纳入。
+- [x] `pytest sdflow-issues/tests/` 全绿；新增 sweep 用例覆盖边界。
+- [x] done SKILL §2.1 不再要求模型手跑 4 步 bash。
 
 ### 交付物
 - `issues.py sweep` 子命令 + 测试；`sdflow-done/SKILL.md` §2.1 精简。
@@ -60,14 +60,14 @@
 
 ### 子任务
 #### 2.A anchor_lint 脚本
-- [ ] 2.A.1 `anchor_lint.py --report <path> --layer spec-review|code-review`：扫四类锚（outside-voice/hr-tg/step1-broad-review/lens-metric）存在性 + enum/字段/子格式合法性（enum 从 `lens-metric-contract.md` 单一源读，不复制清单）；缺锚/越域即非零退出。遵 F1 实质（度量锚变长 KV 走前缀匹配、**不用** `ship_gate._line_scoped_hits` 定长整行原语）；因 anchor_lint 作 bundle tools/ 经 update 铺进消费仓、而 `sdflow-retro/scripts` 不在消费仓，`import lens_metric_aggregate` 运行时 break，故**脚本内重实现同款 fence-aware + 前缀 kv 逻辑**（非 import 复用）〔mlh-p2-anchor-lint 调和〕。
-- [ ] 2.A.2 测试：喂缺字段/越域/缺锚/fence 内示范锚的样本报告，断言退出码。
-- [ ] 2.A.3 两审 SKILL 的锚自检步改为调 `anchor_lint`；**保留声明**「`findings=N` 与合并池实收数的数值一致性仍是主 session 信任边界、非机械可验」（脚本不谎称能保证数值正确）。
+- [x] 2.A.1 `anchor_lint.py --report <path> --layer spec-review|code-review`：扫四类锚（outside-voice/hr-tg/step1-broad-review/lens-metric）存在性 + enum/字段/子格式合法性（enum 从 `lens-metric-contract.md` 单一源读，不复制清单）；缺锚/越域即非零退出。遵 F1 实质（度量锚变长 KV 走前缀匹配、**不用** `ship_gate._line_scoped_hits` 定长整行原语）；因 anchor_lint 作 bundle tools/ 经 update 铺进消费仓、而 `sdflow-retro/scripts` 不在消费仓，`import lens_metric_aggregate` 运行时 break，故**脚本内重实现同款 fence-aware + 前缀 kv 逻辑**（非 import 复用）〔mlh-p2-anchor-lint 调和〕。
+- [x] 2.A.2 测试：喂缺字段/越域/缺锚/fence 内示范锚的样本报告，断言退出码。
+- [x] 2.A.3 两审 SKILL 的锚自检步改为调 `anchor_lint`；**保留声明**「`findings=N` 与合并池实收数的数值一致性仍是主 session 信任边界、非机械可验」（脚本不谎称能保证数值正确）。
 
 ### 验收标准
-- [ ] 坏样本（缺锚/越域 enum/缺字段）→ 非零退出；干净样本 → 0。
-- [ ] 受 `config.yaml metrics.enabled` 门控：关闭时 lens-metric 一类不校验不阻塞（与 SKILL 现有门控一致）。
-- [ ] 两审 SKILL 自检步不再是「模型手 grep」而是调脚本；数值一致性边界诚实保留。
+- [x] 坏样本（缺锚/越域 enum/缺字段）→ 非零退出；干净样本 → 0。
+- [x] 受 `config.yaml metrics.enabled` 门控：关闭时 lens-metric 一类不校验不阻塞（与 SKILL 现有门控一致）。
+- [x] 两审 SKILL 自检步不再是「模型手 grep」而是调脚本；数值一致性边界诚实保留。
 
 ### 交付物
 - `anchor_lint.py` + 测试；spec-review/code-review SKILL 自检步接脚本。

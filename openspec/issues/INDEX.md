@@ -31,7 +31,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T76 | todo | OPEN | mlh-p5-parser-cleanup |
 | T77 | todo | OPEN | mlh-p5-parser-cleanup |
 
 ### 批次：minimize-repo-footprint
@@ -136,4 +135,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 34 项已闭合（bug: 5，todo: 29）
+- 共 35 项已闭合（bug: 5，todo: 30）
