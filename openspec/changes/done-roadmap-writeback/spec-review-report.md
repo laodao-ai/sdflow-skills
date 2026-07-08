@@ -1,137 +1,135 @@
-# Spec Review Report — done-roadmap-writeback
+# Spec Review Report — done-roadmap-writeback（第二轮）
 
-> 阶段二设计评审（sdflow-spec-review 编排）。7 路并行冷审：广审(broad·simulated) + 对抗×3(adversarial) + 接地(grounding) + workflow哲学(domain) + codex outside-voice(design-voice)。中途不打断，决策登记进本报告，人工设计 HARD-GATE 一次拍板。
+> 阶段二设计评审 · 第二轮（审第二轮 grill 重构后的**归属镜像投影**骨架）。7 路冷审：广审(broad·simulated) + 对抗×3(adversarial) + 接地(grounding) + 哲学(domain) + outside-voice(claude-fallback·codex usage limit 回落)。
 
 <!-- sdflow:step1-broad-review v1 mode="simulated" -->
-> Step1 广审为 simulated 降级（子代理跑 CEO/design/eng/DX 视角，未原生调 gstack autoplan skill）；据此 outside-voice 复用守卫判 `simulated-source` → 回落自跑 design outside-voice（codex，见 gstack-review.md 佐证）。
 
 ## 概要
 
-**7 镜收敛度极高**，findings 聚成一个**设计级根因** + 若干实现期缺口。核心裁决：本设计的机械机制（机器锚行 / 机械-判断切分 / 反静默双落盘意图）延续本仓成熟范式，但**整个自动化可靠性系于「人/AI 起手记得写正确的锚」这一 producer 契约，而该契约无任何机械强制或检测**——这是 2 个致命 + 多个高危 finding 的共同根因，且踩中本仓 adr/0006「机械 prose 协议 MUST 脚本化，否则 = 静默跳步」的靶心。
+新骨架对第一轮 Q1（锚无闭环）/Q2（误勾）**有真实结构性解决**（对抗1、哲学镜均认可"归属镜像/盘面即状态"核心站得住），但第二轮 7 镜收敛到**更深的方向性问题**——两个致命 + 一串高危 + 一个 ROI 根因，且其中一条由**官方 CLI 源码证实**（非推理）：
 
-**接地镜 9 条代码事实全部核实一致**（design 对 sdflow-done 六步/两模板/§2.1 sweep/范式脚本叙述准确），设计非架空——问题在机制完备性，不在事实错误。
+- **producer 机械生成链第一环（scaffold↔opsx:ff）用源码证实是结构性冲突**，非"细节待补"。
+- **阶段 enum 公式在起点就不可机械实现**（deferred 无信号）。
+- **scaffold 双向预建被多镜判为过度工程**，且未真正消除"靠人写对"（只挪位置）。
+- **defer 常见模式下 roadmap 复选框永停 `[ ]`——原痛点换皮重现**。
+- **ROI 根本失衡**：投入两轮 grill + 两轮 7 镜 spec-review + scaffold/lint/迁移，对应消除的是"一次几分钟手工勾框"，全仓仅 2 roadmap、频率个位数。
+
+**这轮结论：不建议进设计门批准原全量设计，核心指向大幅简化（scaffold 存废是关键拍板）。**
 
 ---
 
 ## 决策登记区
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│ [需拍板] Q1  关联锚 producer 契约无机械闭环（致命·多镜共识·根因） │
-│ [需拍板] Q2  锚 subtask 集起手写死 ≠ 实际交付集 → 误勾（致命）      │
-│ [需拍板] Q3  6 件全量 scope vs 最小可行版 + 正路径无真实 dogfood   │
-│ [自动决策] D1-D10  修法已定，设计门默认接受（详见下）              │
-│ [已裁掉]  无（findings 质量均高，无静默丢弃；1 条弱证据自排除见末）  │
-└────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ [需拍板] Q1  scaffold 双向预建：存废 / 改 done create-or-update（致命根因·多镜） │
+│ [需拍板] Q2  阶段 enum "deferred" 公式循环、缺机器信号（致命）        │
+│ [需拍板] Q3  defer 重现原痛点 + scope/ROI 最小可行版（高·根因）       │
+│ [自动决策] D1-D9  修法已定，设计门默认接受（详见下）                  │
+│ [已裁掉]  无（findings 均成立；对抗1 纠正主 session 一处 prompt 框架，记录）│
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### [需拍板] Q1 — 关联锚 producer 契约无机械闭环（致命·根因）
+### [需拍板] Q1 — scaffold 双向预建：存废 / 改 done create-or-update（致命根因）
 
-**命中镜**：哲学镜[Major] + 对抗1[致命] + 广审[高] + codex[高] + 对抗2[中高]（5 镜共识）。
+**命中镜**：对抗1[致命·源码] + outside-voice[高] + 广审[中·CEO] + 对抗3[高] + 哲学[Minor]（5 镜共识）。
 
-**问题**：L1/L2 全靠 grep proposal 里的 `<!-- roadmap: … -->` 锚，但「起手 MUST 带锚」只是 `task 1.2` 的纯 prose 声明，**无 lint/gate 校验锚是否真被写入**（对比本仓 `config_lint`/`batch lint` 先例——同类"prose 契约必须脚本化校验"问题的既有解法，本设计的 P0 项偏没配）。哲学镜的锋利判定：我 grill 时把 L1 从"解析自然语言"纠正到"读机器锚"只走了一半——**"producer 会带锚"这个目标态假设本身若无机械支撑，就是把 adr/0011 目标态论证（解析器语义）误套到"人是否遵守无门禁 prose MUST"（行为合规），恰是 adr/0006 点名的静默跳步**。
+**问题（三条收敛到一个根因——scaffold 双向预建）**：
+- **C1 [致命·源码证实]**：`@fission-ai/openspec` CLI 的 `detectCompleted`（`state.js:11-30`）判 artifact "done" **只看文件存在、不看内容**；`tasks` 是依赖链末端、`apply` 门槛=tasks done。**scaffold 抢先写 tasks.md 空骨架 → opsx:ff 判 tasks/proposal 已完成 → 静默跳过 proposal/specs/design 生成**（产出链短路）。proposal 也在碰撞半径（scaffold 写引用 → proposal 判 done → specs/design 基于残缺 proposal）。这是 producer 链第一环的结构冲突，**用官方源码证伪、非推测**。
+- **H1**：scaffold 双向预建 roadmap 复选框的**必要性未论证**——Success Metrics 无一条要求"change 进行中 roadmap 可见在途"。且 scaffold 未真正消除"靠人写对"：`--subtasks` 参数仍 100% 靠人敲，选错（4.D.1 打成 4.D.2）lint 不查、done 按错范围静默镜像——**与被否决的 adr/0013 本质同构，只挪位置**（forget-anchor → wrong-param）。
+- **H2**：scaffold 预建单向不可逆 → change 废弃不走 done 留"看似在途实已死"孤儿复选框；两 change 认领同号 → 谁先 done 谁生效、另一个静默吞。
+- **H5**：scaffold 起手就写 roadmap.md 概览表（新开手写 pipe-table 写路径）——**与本 roadmap 自己 P6 立项要治的 markdown 表 `｜` 腐蚀直接矛盾**，且损坏的是跨阶段规划真相源。
 
-**三个选项**：
+**推荐 = 去掉 scaffold 双向预建，改 done 时 create-or-update**（outside-voice①源码级论证）：
+- 归属信息只写进 change tasks 的归属锚（`subtasks`），**roadmap 复选框推迟到 done 镜像时按锚 create-or-update**（而非 scaffold 预建 + done update-only）。
+- **一举消除**：C1（scaffold 不写 tasks/proposal → 不触发 opsx:ff 短路）+ H1（不预建）+ H2（roadmap 复选框永远 done 单点生成、无孤儿）+ H5（少一次早写）+ 双向原子性。
+- 三镜后果：**系统镜**——roadmap 复选框单点生成，无第二真相源/无预建孤儿；**用户镜**——起 change 摩擦更小（不跑 scaffold）；**开发循环镜**——scope 砍一个 producer 能力（scaffold 双向）。**主次**：主=消除第一环结构冲突（C1 致命）；次=损失"在途可见性"（Success Metrics 本就不要求，可接受）。
+- 残留：关联仍靠 lint（tasks 用 roadmap 编号无 name 锚 → 拦）+ 归属锚（人写或 opsx:ff 后轻量补，**只碰 change tasks/锚、不碰 roadmap**）。
 
-| 选项 | 内容 | 系统镜 | 用户镜 | 开发循环镜 |
-|---|---|---|---|---|
-| **A 补机械闭环** | ①ff/spec-review 阶段加 lint「proposal 提及某 roadmap 名/该 change 是 roadmap 驱动 但缺锚 → 拦」②`roadmap-link` 写锚时校验 subtask id 真存在于 roadmap ③"有锚但 name 解析不到目录" → fail-closed 非静默 | 锚全生命周期机械闭环，真落地 adr/0006 | 起手漏锚被 gate 拦、当场补 | scope 再增（+lint），但根治 |
-| **B 换关联判据** | 不靠"起手写锚"，改双向：roadmap 侧维护「子任务 ↔ change 名」映射（producer 集中在 roadmap.md 维护，比每个 change proposal 写锚更少遗漏面），done 拿本 change 名反查 | 关联信号集中一处、漏面小 | 无需起手记得写锚 | roadmap.md 附录 C 已有"阶段→建议 change 名"雏形；但"建议名"≠实际名，需契约化 |
-| **C 降级为诚实辅助** | 承认这是记录维护辅助非正确性门，接受"漏锚→退化手动回填"，但**必须显式化漏锚检测**（spec-review 加人工审查项「roadmap 驱动 change 必带锚」），删掉 design/proposal 里"真漏会被 hand-off 提示"的不实承诺 | 不假装根治、诚实收窄 | 漏锚有人工审查兜 | scope 最小，但自动化价值打折 |
+### [需拍板] Q2 — 阶段 enum "deferred" 公式循环、缺机器信号（致命）
 
-**推荐 = A（主）+ C 的诚实收窄（次）**。理由：Q1 是整个 change 价值的地基——若锚无机械闭环，回写自动化的可靠性等于"人不忘写锚"的概率，与原痛点（人不忘手动回填）同构，价值存疑（广审/对抗共识）。A 用 lint 补闭环、真落地 adr/0006（与本仓 config_lint/batch lint 一脉）；同时采纳 C：无论如何删掉"真漏会被提示"的不实承诺（哲学镜证其在当前机制下不可兑现）。**主次**：先补 A 的锚存在性 lint（P0，闭合根因），B 的双向映射作为 A 之上的加固备选（若 lint 仍嫌不足再上）。
+**命中镜**：对抗2[致命] + 哲学[Major]（2 镜共识）。
 
-### [需拍板] Q2 — 锚 subtask 集起手写死 ≠ 实际交付集 → 误勾（致命）
+**问题**：聚合公式 `全非deferred完成=delivered / 显式放弃=deferred`（design.md:81）**自身循环**——delivered 要先知道哪些 deferred，但 deferred 是输出；且**全文档无处定义"显式放弃"如何从二值复选框 `[ ]`/`[x]` 机械读出**（`[ ]` 未做 vs 已弃渲染相同）。真实数据：P4 的 4.A/4.D.3 是◐排后（`[ ]`），P4 全 ★ 项交付后 enum **永卡 in-progress、到不了 delivered**。spec 说"MUST NOT 靠模型判断"，但 deferred 判据源缺失 → 要么退化模型判断（违 MUST）、要么死枚举值。
 
-**命中镜**：对抗3[致命，独立贡献]。
+**推荐**：① 补**行级机器信号**（子任务行加 `<!-- status: deferred -->` 锚/专用 checkbox 变体，纳入生成侧结构化契约、与 enum 值集同单一源）；或 ② **砍 deferred enum**（只 planned/in-progress/delivered，"排后/放弃"靠叙述层散文，不进机械 enum）。推荐 ②（更简，deferred 本就是规划判断、不该硬塞机械聚合），系统镜=enum 只承载可机械判的三态，判断态留叙述层。
 
-**问题**：锚在 change **起手**写死 `subtask: 3.A,3.B`（真实先例 mlh-p3 合批 3.A+3.B），若实现期 defer 掉其中一项（如 4.D.4 被 defer 的先例），"全定位→勾全部"的机械逻辑（MUST NOT 解析自然语言、只判"能否定位到复选框行"）会**把从未交付的子任务机械勾成 `[x]`**——污染"复选框=项目真相源"核心不变量，且回写在 archive 后自动发生、无人工卡点。这比 design 唯一关注的"漏标注"严重（假阳性）。
+### [需拍板] Q3 — defer 重现原痛点 + scope/ROI 最小可行版（高·根因）
 
-**选项**：①勾选真相以**本 change 的 tasks.md 完成态**为准（脚本交叉核对 tasks.md 对应任务是否 `[x]`），锚只定"关联哪些"、不定"完成哪些"；②回写前要求人工/模型确认实际交付集（引入判断）；③锚在归档时按实际完成**重写** subtask 字段再回写。
+**命中镜**：对抗3[高] + 对抗2[互证] + outside-voice[中·ROI] + 广审[高·Q3未落地]。
 
-**推荐 = ①**。理由：tasks.md 复选框是本 change 内已有的"实际完成"确定性盘面（done 第 0.3 步已做 tasks 复选框对账），脚本"勾 roadmap 子任务 ⟺ 对应 change 任务在 tasks.md 已 `[x]`"是机械可判、无需判断，且堵死"锚声明≠实际交付"的假阳。系统镜：复选框真相源不被污染；开发循环镜：复用已有的 tasks 对账盘面，零新判断。
+**问题**：
+- **H3 defer 回痛点**：组内任何 `[ ]` → roadmap 复选框永不勾（刚性）。"核心做了 + 测试 defer 进 todolist、verify PASS 正常归档"这种**常见模式**下，roadmap 永停 `[ ]`、无补触发路径（回写只 archive-time 一次）= "永久假过期"——**正是本 change 想消灭的手动回填痛点换皮重现**。
+- **R1 ROI 失衡**：触发仅"一次几分钟手工"，投入两轮 grill + 两轮 7 镜 + scaffold/lint/迁移/dogfood；2 roadmap、频率个位数。上一轮 Q3 推荐的"最小可行版"未落地（design 全量、三项并 P0、未记裁决）。
 
-### [需拍板] Q3 — 6 件 scope vs 最小可行版 + 正路径无真实 dogfood
-
-**命中镜**：广审[中·CEO] + 对抗1[高·dogfood]。
-
-**问题**：①6 件 scope（含改 sdflow-roadmap 生成格式 + 迁 2 roadmap）服务的既有基数只有 **2 个 roadmap**（1 个高频），边际收益存疑；②本 change 自身无锚 → 只能 dogfood"无关联跳过"分支，**best-effort 回写正路径的真实端到端编排（子代理判断 + archive/commit 时序 + git add 收纳）在整个 change 生命周期从未真实跑过一次**，只 fixture 单测——正是 MEMORY「emitter dogfood 独家挖出致命 F1」教训的反面（主动放弃对正路径的冷 dogfood）。
-
-**选项**：①全量 6 件 + 补 Q1/Q2 闭环（scope 最大、根治）；②最小可行版（先做 done 消费端认新格式 + 关联锚 lint，旧 2 roadmap 暂人工回填，等第 3 个 roadmap 或 mlh 阶段 5/6 再迁移生成侧）；③全量但**必须**加一个真实 roadmap 驱动 change 走一次完整 dogfood（如给某个 mlh 剩余子项起 change 时带锚、真跑一次回写）。
-
-**推荐 = ② + ③的 dogfood 要求**。理由：CEO 视角 2 样本撑不起 6 件全量的边际投入；最小可行版先落"关联锚 lint + done 消费端"（闭合 Q1 根因、价值最高的 P0），生成侧模板优化/迁移待真实需求触发。无论选哪个 scope，正路径 MUST 有一次真实 dogfood（③），不留"首次生效在未来某 change 归档、设计者上下文已消散"的盲区。
+**推荐 = 最小可行版 + defer 语义修**：
+- **scope 砍到最小可行**：`lint（漏锚 fail-closed）+ done create-or-update 盘面镜像`（Q1 推荐）两件核心先上，**砍掉 scaffold 双向 + 生成侧模板预建 + 暂缓旧 2 roadmap 迁移**（待真实第 3 个 roadmap 或频率上升再做）。
+- **defer 语义**：组内 defer → 该子任务复选框走"部分勾 + 降级标注"（区分"整组未做"vs"核心做了尾巴 defer"），或以 change verify 完成 + tasks 完成态综合判——避免"永久假过期"。
+- 主次：主=先验证价值再投入（ROI）；次=在途可见性/生成侧结构化暂缓（可增量补）。
 
 ### [自动决策]（设计门默认接受，可覆盖）
 
-- **D1 反静默口子修法**〔对抗2+哲学+codex+广审〕：①"有锚但 name 解析不到目录/四件套不完整" → **fail-closed 留人工，非静默跳过**（与"真无锚"分流不同分支）；②降级标注**落 task-log**（在 roadmaps/，持久、随第四步 commit），**不落 hand-off（见 D2）、不只落 stdout 摘要**（spec 三处措辞"task-log/摘要"须统一为"MUST 落 task-log"）。
-- **D2 hand-off 时序修**〔codex 独家〕：`hand-off.md` 在第二步生成、第三步随 archive **移入 `changes/archive/`**——回写在 3.5 步（archive 后）已无 active `{change_dir}/hand-off.md`。故降级标注 MUST 落 **task-log**（回写目标本体、不随归档移走），不落 hand-off。spec/design/tasks 三处"写 hand-off"改"写 task-log"。
-- **D3 定位鲁棒**〔对抗2+3+codex〕：勾选定位 MUST **行首锚定** `^- \[ \] {id}\b`（防命中散文层 id 提及如 roadmap.md:111，本仓 P3 F1/F3 同款正则过匹配坑）；概览表状态列更新 MUST 用结构化表解析（防 cell 内 `|`/加粗错位），插入后校验列数与表头一致；task-log 插入点定位 MUST 处理重复日期 H2（真实有两个 `## 2026-07-08`）。补对应 spec Scenario + pytest。
-- **D4 判断切分重划**〔codex+对抗3+哲学〕：阶段状态 enum **可机械化**（codex 给函数：无完成子任务=planned/部分=in-progress/全非deferred完成=delivered/显式放弃=deferred，从该 phase 全子任务复选框聚合）——移出"判断"、归脚本；**里程碑散文句**才是真判断（跨 6 阶段综述，roadmap.md:12 一整段），"判断收窄两处"修正为"里程碑句一处 + 完成总结叙述一处"。design D-2/D-5 补 enum 机械判定规则。
-- **D5 SKILL:195 误引删/弱化**〔广审+哲学+codex〕：`sdflow-roadmap/SKILL.md:195` 原文是"`/opsx:verify` 接 post-hook 校验 task-log Review 处置**穷尽性**"（校验≠写入、verify≠done），与本 change 回写不同。删掉 adr/0013/design/proposal 三处"设计原意兑现"强断言，改谦抑措辞或直接用 fold 判据（不需误引背书）。
-- **D6 3.5 步 model 档位**〔广审+哲学〕：回写步含判断（完成总结/里程碑句），MUST 显式定档——建议**并入第三步 archive 中档子代理**（仿 §2.1 sweep 折进第二步先例，省一个子代理编排成本）。补 tasks 5.1 + 模型选择表。
-- **D7 bundle 纪律**〔广审〕：关联锚契约/起手规范是 workflow 规则 → MUST 改 `sdflow-init/assets/workflow/`（权威源，已核实 ff-generation-constraints.md/trigger-catalog 无 roadmap 字样）再 `sdflow-init update` 推下游，**不只改仓内 openspec/workflow/**（dogfooding 红线）。tasks 1.2 显式点名目标文件 + 加回灌步。
-- **D8 幂等键**〔对抗3+codex〕：task-log 机器锚幂等键 = 每 `(change, subtask)` 一条锚（模型叙述可合并、脚本锚逐 subtask 校验）；勾选对已 `[x]`+标注行的重跑行为 MUST 定义（行首锚定 `- [ ]` 天然对已勾行 no-op，写进 spec）。
-- **D9 enum 值集单一源**〔哲学〕：`{planned,in-progress,delivered,deferred}` MUST 纳入 D-1 同一份机读契约（roadmap-template + 回写脚本都从该文件读，不各自硬编码）——同 lens-metric-contract 单一源纪律。
-- **D10 阶段状态漂移对账**〔哲学〕：阶段状态 enum 是从复选框派生的缓存值，人工编辑 roadmap 后会漂移、无 `reindex` 式回读校验兜底 → 在 Non-Goals/Open Questions **显式记一笔"暂不做漂移对账，风险接受"** + todolist 存 backlog，不留白（反第二真相源）。
+- **D1 补回 round-1 丢失的 fail-closed 分支**〔哲学 Major，点驱动修补遗漏面〕：spec-review-1 D1"有 name 锚但解析不到 roadmap 目录 → fail-closed 留人工、非静默"，第二轮重写 D-7 时**丢了**——补回 + spec Scenario + 测试（反静默口子回归）。
+- **D2 组边界 fence-aware 解析**〔对抗3〕：归属组完成态扫描 MUST fence-aware（组内 fenced code block 含 `- [ ] 示例` 会误判，MEMORY `gate-substring-detection-dogfood` 同款坑）；定义组结束边界。
+- **D3 迁移异质分治**〔对抗2/广审/接地〕：`workflow-cost-optimization` **无复选框/无编号/纯散文**——"同上迁移"是假动作，须单独设计（甚至不迁）；mlh 自身 `1.A.x`=实现步 vs `4.D.x`=change 级，**编号粒度已不统一**，迁移前先做粒度审计。
+- **D4 概览表写路径硬化**〔对抗2〕：MUST 复用 `sdflow-issues` 已硬化的表原语（`_reject_cell_unsafe`/表解析）或 fail-closed，**MUST NOT 新开裸手写 pipe-table 写路径**（重蹈 P6 治的腐蚀）。
+- **D5 归属锚完整性校验**〔对抗3/outside-voice〕：lint MUST 校验锚 `subtasks` **覆盖 tasks 全部 `## N.X.Y` 组**（非只存在性）——防"存在于 tasks 但游离锚外的组静默漏镜像"。
+- **D6 空归属组断言**〔广审〕：镜像脚本对归属组 MUST 断言 ≥1 复选框才判"全 `[x]`"（防 vacuous-truth 误勾）。
+- **D7 里程碑句阈值机械化**〔哲学〕：触发 = 本轮聚合 enum ≠ task-log 最近锚记录的 enum（机械对比），只把"写什么内容"留模型（防"要不要写"也变判断）。
+- **D8 spec/单一源补全**〔对抗1/哲学〕：spec 补"子任务号不存在 fail-closed" Scenario；锚格式/编号正则纳入同一机读契约（不止 enum 值集）；task-log 插入点锚定（防误落 Review 处置区，`task-log.md:33` vs `:55` 双相似 marker）；辅助任务归属从 Open Question 升 Decision。
+- **D9 措辞精确**〔哲学/outside-voice〕："不靠人写对"改"不靠人写对锚的**语法/落点**"——**选哪些子任务是规划判断、不可也不该机械化**（同选哪个阶段动手），别让"机械生成"盖过这条边界。
+
+### [对抗裁决细化] outside-voice/对抗1 纠正主 session 一处框架
+
+主 session 派对抗镜时 prompt 用了"scaffold 换汤不换药"框架——对抗1 精确纠正：本轮 tasks 2.1"子任务号不存在 fail-closed"是从"零校验→有校验"的**实质改进**，非同构复现；残余是"**锚内容对不对（选对子任务号）**"未兜底，这是不可机械化的规划判断（哲学镜 D9 同源）。记录以正视听，非裁掉任何 finding。
 
 ---
 
-## 各镜 findings 汇总（按簇）
+## 各镜 findings 汇总
 
-| 簇 | finding | 命中镜 | 置信 | sev | 裁决 |
-|---|---|---|---|---|---|
-| **A 锚无闭包** | A1 锚 MUST 无 lint 校验存在（违 adr/0006） | 哲学/对抗1/广审/codex | 高 | 致 | Q1 |
-| | A2 subtask id 不校验存在于 roadmap | 对抗1/codex | 高 | 高→并Q1 | Q1 |
-| | A3 锚 subtask 集≠交付集→误勾 | 对抗3 | 高 | 致 | Q2 |
-| **B 反静默** | B1 降级标注落点三处矛盾、可只写 stdout | 对抗2 | 高 | 高 | D1 |
-| | B2 hand-off 时序：3.5 步 hand-off 已随归档移走 | codex(独家) | 高 | 高 | D2 |
-| | B3 "有锚但 name 错/roadmap 缺"=无锚同分支静默吞 | 对抗2/codex/广审/哲学 | 高 | 高 | D1 |
-| **C 定位** | C1 subtask id 散文层误命中、写坏叙述层 | 对抗2 | 高 | 高 | D3 |
-| | C2 概览表 enum 列插入无健壮表解析 | 对抗2/3/codex | 中高 | 中 | D3 |
-| | C3 task-log 自由格式(重复日期H2)插入点 | 对抗3 | 中高 | 中 | D3 |
-| **D 切分** | D-a 里程碑句实为跨6阶段综述、判断被低估 | 对抗3/codex | 高 | 高 | D4 |
-| | D-b enum 判定函数缺失(可机械化) | codex/哲学 | 高 | 高→D4 | D4 |
-| | D-c enum 4值表达力不足+双列漂移(端态A已定) | 对抗3/对抗2/广审 | 高 | 中 | D4/D10 |
-| **E 接地** | E1 SKILL:195 误引撑非越界 | 广审/哲学/codex | 高 | 高 | D5 |
-| **F scope** | F1 正路径无真实 dogfood | 对抗1 | 高 | 中 | Q3 |
-| | F2 6件服务2roadmap边际收益存疑 | 广审(CEO) | 中 | 中 | Q3 |
-| | F3 merge中止时roadmap在main仍旧值 | 对抗2 | 中 | 低 | 记风险 |
-| | F4 并行分支放大roadmap merge冲突面 | 对抗1 | 中 | 低 | 记风险 |
-| | F5 关联锚规则须改assets/workflow(bundle纪律) | 广审 | 中 | 中 | D7 |
-| **G 杂** | G1 3.5步无model档位 | 广审/哲学 | 高 | 中 | D6 |
-| | G2 幂等键未定义 | 对抗3/codex | 中 | 中 | D8 |
-| | G3 enum值集缺单一源 | 哲学 | 中 | 低 | D9 |
-| **接地** | 9 条代码事实全部核实一致 | grounding | — | — | ✓无异常 |
-
-**[已裁掉/自排除]**：对抗2 自查排除"issues sweep 与回写并发写 openspec/"（单会话内两步严格串行、非真并发）——非静默丢弃，记录于此备审。
+| 簇 | finding | 命中镜 | sev | 裁决 |
+|---|---|---|---|---|
+| **C1** | scaffold 抢写 tasks/proposal → opsx:ff 文件存在性判 done 短路产出链（**CLI 源码证实**） | 对抗1(独)/广审 | 致 | Q1 |
+| **C2** | 阶段 enum deferred 公式循环 + 无机器信号 | 对抗2/哲学 | 致 | Q2 |
+| **H1** | scaffold 双向预建必要性未论证 + 没消除"靠人写对"（只挪位置） | outside-voice/广审/对抗1/哲学 | 高 | Q1 |
+| **H2** | 归属锚存在性非完整性门禁 + 孤儿认领/作废 change 无回收 | 对抗3/outside-voice | 高 | Q1/D5 |
+| **H3** | defer 常见模式 roadmap 永停[ ]=原痛点换皮重现 | 对抗3/对抗2 | 高 | Q3 |
+| **H4** | 旧 2 roadmap 异质"同上迁移"假动作 + mlh 自身编号粒度已不统一 | 对抗2/广审/接地 | 高 | D3 |
+| **H5** | 概览表新开手写 pipe-table 写路径 vs 本 roadmap P6 治腐蚀矛盾 | 对抗2 | 高 | D4/Q1 |
+| **H6** | round-1 fail-closed 分支第二轮重写丢失（反静默回归） | 哲学(独) | 高 | D1 |
+| **R1** | ROI 失衡：过度工程 vs 一次几分钟手工 | outside-voice/广审 | 高 | Q3 |
+| **M1-M10** | 单子任务功能组vs归属标签/组边界fence/空组vacuous/lint假阳/多分支冲突/scaffold绕review/里程碑阈值/辅助任务归属/task-log marker/spec缺Scenario | 对抗×3/广审/domain/ov | 中 | D2/D5/D6/D7/D8 |
+| **L1-L3** | 单一源锚正则/复选框antidrift/多roadmap关联 | 哲学/对抗2 | 低 | D8 |
+| **接地** | 6 事实一致；2 缺口=已知迁移映射（就绪度≠enum、wco无状态列） | grounding | — | 并入 D3 |
 
 ---
 
 ## 度量锚（lens-metric v1）
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" runner="claude" site="—" findings="10" 采纳="10" 裁掉="0" defer="0" 独立="2" sev="致2/高4/中3/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="7" 采纳="7" 裁掉="0" defer="0" 独立="1" sev="致1/高2/中4/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" runner="claude" site="—" findings="8" 采纳="8" 裁掉="0" defer="0" 独立="2" sev="致1/高3/中3/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="design-voice" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="0" sev="致1/高4/中1/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" runner="claude" site="—" findings="14" 采纳="14" 裁掉="0" defer="0" 独立="9" sev="致2/高5/中6/低1" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致1/高3/中2/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="4" sev="致1/高2/中1/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" runner="claude" site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="0" sev="致0/高1/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="claude-fallback" site="design-voice" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="1" sev="致0/高3/中2/低0" -->
 
-<!-- sdflow:outside-voice v1 site="design-voice" guard="simulated-source" runner="codex" reason_code="reused-source-simulated" findings="6" truncated="false" -->
+<!-- sdflow:outside-voice v1 site="design-voice" guard="none" runner="claude-fallback" reason_code="exec-error" findings="5" truncated="false" -->
 
-<!-- sdflow:hr-tg v1 hit="none" evidence="命中 TG-12/14/18/19/20/22/23 均不在 HR-TG 子集{TG-04/06/07/08/09/16/17/26}；文档回写编排、误写可 git 回退，非运行期爆炸/数据损坏难回退类" -->
+<!-- sdflow:hr-tg v1 hit="none" evidence="命中 TG-12/14/18/19/20/22/23 均不在 HR-TG 子集；文档回写编排、误写可 git 回退，非运行期爆炸/数据损坏难回退类" -->
 
-> **残余信任边界声明**：findings 分类（归哪镜/裁决/sev）、roster 完备性、JSON 誊写准确性仍是主 session 信任边界；emitter 只保证给定输入的确定性归约。`采纳/裁掉/defer` 为设计门拍板前临时值，拍板时最终化（SR-M，best-effort）。
+> **codex 降级留痕**：本轮 codex outside-voice 命中 usage limit（exit 0 但输出空 + stderr 报错）→ 反静默守卫回落自跑 claude-fallback（runner="claude-fallback"、reason_code="exec-error"）；跨家族盲区本轮缺失、以同家族 fresh-context 补偿。
+> **残余信任边界**：findings 分类/roster 完备/JSON 誊写仍是主 session 信任边界；`采纳/裁掉` 为拍板前临时值，拍板时最终化（SR-M）。
 
 ---
 
 ## 收敛口
 
-**不建议直接进设计 HARD-GATE 批准原设计。** 本轮抓出 **2 致命 + 5 高**，且核心（Q1 锚无机械闭环、Q2 误勾）是**设计级方向问题、非实现期顺手补的缺口**。建议设计门按此序拍板：
+**不建议进设计 HARD-GATE 批准原全量设计。** 第二轮 7 镜抓 **2 致命 + 7 高**（对抗镜独立贡献 9，含一条 CLI 源码级致命），且核心是**方向性问题非收尾缺口**：
 
-1. **先决 Q1**（锚机械闭环方向：A补lint / B换判据 / C诚实降级）——它是价值地基，决定后续是否值得投入。
-2. **决 Q2**（误勾修法，推荐①交叉核对 tasks.md 完成态）——堵真相源污染。
-3. **决 Q3**（scope 全量 vs 最小可行版 + 强制一次正路径真实 dogfood）。
-4. Q1-Q3 定向后，**D1-D10 作为 amendment 一并落**（多为实现约束/spec Scenario 补充），重写 design/specs/tasks 标 `[spec-review-amendment]`。
+1. **先决 Q1**（scaffold 存废）——推荐**去掉 scaffold 双向预建、改 done create-or-update**，一举消除 C1（源码证实的第一环结构冲突）+ H1/H2/H5。这是最大简化杠杆。
+2. **决 Q2**（enum deferred）——推荐砍 deferred enum、留三态机械值。
+3. **决 Q3**（defer 回痛点 + ROI）——推荐**最小可行版**（lint + done create-or-update 镜像两件核心先上，砍 scaffold/生成侧预建/暂缓迁移），defer 语义修避免"永久假过期"。
+4. Q1-Q3 定向后 D1-D9 作 amendment 落。
 
-拍板后按 D2 起手规范补齐、按 A 补锚 lint，此设计方可成熟进实现。**这是本仓「冷层 load-bearing」的又一实证**——7 镜在实现前拦下了一个"接地事实全对、但机械闭环有系统性缺口"的设计。
+**元信号（诚实呈现）**：本 change 经**两轮 grill + 两轮 spec-review**，每轮都揭穿当前骨架的一个根本问题（起手锚无闭环 → 编号统一粒度失配 → 归属镜像 scaffold 结构冲突 + enum 不可实现 + defer 回痛点）。叠加 R1 的 ROI 失衡——**这强烈提示：要么大幅简化到最小可行版（lint + done 镜像），要么重新评估"这个自动化是否值得此投入"**。冷层反复 load-bearing 地拦下过度工程，本身是设计该收敛的信号。
 
-<!-- 设计门拍板后：主 session 在此文件头部 prepend frontmatter ship-gate.design_approved=true（拍板前不写） -->
+<!-- 设计门拍板后：主 session 在此文件头部 prepend frontmatter ship-gate.design_approved=true（拍板前不写；本轮明确不建议直接批准） -->
