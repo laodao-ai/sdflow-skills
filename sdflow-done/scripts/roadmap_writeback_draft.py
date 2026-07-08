@@ -17,3 +17,37 @@ def parse_prefix(change_name):
     if not m:
         return None
     return (m.group("roadmap"), m.group("phase"))
+
+
+# marker 整行匹配: <!-- roadmap: {name}#{phase} -->  (name=小写字母数字横杠, phase=数字)
+MARKER_RE = re.compile(
+    r"^<!--\s*roadmap:\s*(?P<roadmap>[a-z0-9][a-z0-9-]*)#(?P<phase>\d+)\s*-->$"
+)
+
+
+def strip_code_fences(text):
+    """去掉 ``` / ~~~ 围栏码块内容, 使其中 marker 不被检测."""
+    out = []
+    in_fence = False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            out.append(line)
+    return "\n".join(out)
+
+
+def detect_markers(text):
+    """fence-aware + 行锚定 + 独占一行的 marker 检测(P-5 防自指).
+    返回 [(roadmap, phase), ...]; fence 内/缩进码块/行内 code/散文行一律忽略."""
+    result = []
+    for line in strip_code_fences(text).splitlines():
+        if line.startswith("    ") or line.startswith("\t"):
+            continue  # markdown 缩进码块
+        stripped = line.strip()
+        m = MARKER_RE.match(stripped)  # 整行匹配 → 散文/行内 code 不命中
+        if m:
+            result.append((m.group("roadmap"), m.group("phase")))
+    return result
