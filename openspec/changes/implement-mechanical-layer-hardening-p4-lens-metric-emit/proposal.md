@@ -4,11 +4,11 @@ lens-metric 锚的计数（`findings`/`采纳`/`裁掉`/`defer`/`独立` + `sev`
 
 ## What Changes
 
-- **新增 `lens_metric_emit.py`**（bundle tool，经 `sdflow-init update` 铺进消费仓 `openspec/workflow/tools/`）：吃**主 session 给的结构化 findings**（JSON：每条带 `命中镜集`/`裁决`∈{采纳,裁掉,defer}/`sev`/`layer`/`runner`/`site`），按 `lens-metric-contract.md` 的**折叠表 + 归属规则**确定性归约出——① 每 canonical lens 一行**格式/枚举/字段合法**的 lens-metric 锚；② per-镜计数（`findings`/`采纳`/`裁掉`/`defer`/`独立`，`独立`=唯一报过 ∧ 被采纳、折叠后计）；③ `sev` rollup（`致/高/中/低`，仅采纳项计入，零也写 0）。枚举/折叠从契约 **`lens-metric-enums` 块单一源读**（不在脚本内复制清单，follow anchor_lint 惯例）。
+- **新增 `lens_metric_emit.py`**（bundle tool，经 `sdflow-init update` 铺进消费仓 `openspec/workflow/tools/`）：吃**主 session 给的行键 roster + 结构化 findings**（JSON，字段名英文/取值中文，权威 schema 见能力 `lens-metric-emit`〔spec-review-amendment ADR-6〕：roster=`(lens,runner,site)` 行键列表；findings 每条带 `hits`（命中行）/`verdict`∈{采纳,裁掉,defer}/`sev`；**无 per-finding layer**，layer 单一源=`--layer`〔ADR-9〕），按 `lens-metric-contract.md` 的**折叠表 + 归属规则**确定性归约出——① 每**行键 `(lens,runner,site)`** 一行**格式/枚举/字段合法**的 lens-metric 锚；② per-行键计数（`findings`/`采纳`/`裁掉`/`defer`/`独立`，`独立`=唯一报过 ∧ 被采纳、折叠到行键后计〔ADR-8〕）；③ `sev` rollup（`致/高/中/低`，仅采纳项计入，零也写 0）。枚举从契约 **`lens-metric-enums` 块**、折叠从 **`lens-metric-fold` 块**单一源读（不在脚本内复制清单，follow anchor_lint 惯例）。
 - **信任边界收窄（非消灭，诚实声明）**：计数从「手数」收敛为「脚本对**已给结构化输入**的确定性归约」；残余信任边界 = 「模型是否把每条 finding 分类正确（`命中镜集`/`裁决`/`sev`）」。脚本 MUST NOT 谎称保证「输入 findings 与合并池实收 finding 吻合」——它只保证**计数是所给输入的正确归约**。去重 + 对抗裁决 + sev 定级仍是模型的活（产出结构化输入）。
 - **两审 SKILL 落锚步改调 emitter**：`sdflow-spec-review` Step3 / `sdflow-code-review` Step3-5 的 lens-metric 落锚由「手折叠 + 手写锚」改为「构造结构化 findings → 调 `lens_metric_emit` → 落其输出」。
 - **产出侧闭环**：emitter 输出的锚**按构造即通过 `anchor_lint`**（二者同读契约 `lens-metric-enums` 单一源）；fail-closed——坏输入（越域 enum / 缺字段 / 非法裁决值 / 坏 JSON）非零退出 + 可读 reason，绝不静默产出空锚或 exit 0。
-- **受 `config.yaml metrics.enabled` 门控**：关闭时不落锚（与现有门控一致）。
+- **门控由 SKILL 层承担、emitter 不读 config**〔spec-review-amendment ADR-10〕：`metrics.enabled` 关时 SKILL 不调 emitter（不落锚）、开时才调；emitter 被调即视 metrics-on、无条件强制 mandatory rows。此举从根消除「emitter 复刻 config 四态 fail-closed」整类问题（含 dogfood 缺失/坏块分治盲区）。
 
 ## Capabilities
 
@@ -21,6 +21,6 @@ lens-metric 锚的计数（`findings`/`采纳`/`裁掉`/`defer`/`独立` + `sev`
 ## Impact
 
 - **新增**：`sdflow-init/assets/workflow/tools/lens_metric_emit.py`（bundle 权威源）+ pytest（坏输入 fail-closed / 折叠归属 / 独立计数 / sev rollup / 幂等）。
-- **修改**：`sdflow-spec-review/SKILL.md`、`sdflow-code-review/SKILL.md` 落锚步；`lens-metric-contract.md` 若需补「emitter 为归约产者」注记（不改枚举、不升版本）。
-- **无外部依赖**：纯 stdlib + 读契约文件（禁 import yaml / 禁 import lens_metric_aggregate——消费仓无 sdflow-retro，同 anchor_lint 重实现折叠/fence 逻辑）。
+- **修改**：`sdflow-spec-review/SKILL.md`、`sdflow-code-review/SKILL.md` 落锚步（构造行键 roster + hits findings、门控关时不调 emitter）；`lens-metric-contract.md` 加 `lens-metric-fold` 机读块（只列非恒等映射）+ 补「emitter 为归约产者」注记（不改枚举、不升版本）；`独立在折叠后计` prose 精化为「折叠到行键后计」。
+- **无外部依赖**：纯 stdlib + 读契约文件（禁 import yaml / 禁读 config〔ADR-10 门控外置〕/ 禁 import lens_metric_aggregate——消费仓无 sdflow-retro，同 anchor_lint 重实现折叠/fence 逻辑）。
 - **兼容**：不改锚形/枚举/契约版本（v1 不变）；归档旧锚不受影响；关 metrics 的消费仓无行为变化。

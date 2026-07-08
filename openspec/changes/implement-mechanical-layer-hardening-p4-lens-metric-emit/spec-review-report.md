@@ -159,6 +159,16 @@
 
 ## 收敛口
 
-**不建议进设计 HARD-GATE。** 本轮 8 源高收敛揭出的 C1–C4 是结构性缺陷（roster schema / 折叠恒等语义 / 漂移守卫方向 / 反方向静默漏计），C6/C7/C11/C12 是 fail-closed 边界缺口——均需回改 ADR-1/ADR-5、spec R1/R2 与补 ADR，非补测试可弥。**建议**：先由用户就 Q1–Q6 拍板 → 一轮 design/specs amendment（标 `[spec-review-amendment]`）→ 再过设计门。
+**初裁（评审当轮）：不建议进设计 HARD-GATE**——8 源高收敛揭出 C1–C4 结构性缺陷 + C6/C7/C11/C12 fail-closed 缺口，需回改 ADR/spec 而非补测试。
 
-拍板后主 session 须：① 按拍板回写 `ship-gate.design_approved` 至本报告头部 frontmatter；② 按〔SR-M〕最终化 lens-metric 锚采纳/裁掉/defer；③ 正文补人读拍板记录行。
+### Amendment 回流已完成（用户就分叉①②拍板：①B ②A）
+
+用户同意「两次面治 pass」+ 分叉①B（MIN_LENS_ROWS 一致性测试）②A（折叠恒等 pass-through）。已回流（标 `[spec-review-amendment]`）：
+
+- **Pass 1（输入契约）**：design 新增 **ADR-6~10**（权威 input schema / 恒等 pass-through / 归属键=行键 / 删 per-finding layer / 门控归 SKLL）；spec `lens-metric-emit` R1 升行键粒度 + R2 坏输入穷举（hits:[] / 采纳缺 sev+Σ不变量 / site 注入 / all-or-nothing / 重复键 / C4 反方向）+ R3 收窄 check_lens_metric；workflow-metrics MODIFIED 归属键升行键；proposal 门控措辞改 SKILL；tasks 2.x/3.x 重排。→ 收 C1/C2/C4/C6/C7/C8/C11/C12/C13/C14/C16/C18。
+- **Pass 2（单一源）**：design 新增 **ADR-11**（单一源边界清单）+ Risks C3 守卫方向修正（fold_codomain⊆lens-enum 双向 + aggregator enum 一致性 + emitter 自校验）；tasks 4.2~4.5 补 codomain/load_enums 等价性/MIN_LENS_ROWS 一致性/跨 subprocess 幂等测试。→ 收 C3/C10/C15/C17/C23。
+- **诚实账/记录类**：C19（ADR-3/Risks 补新错误面账）· X1（Migration caveat）· X2（tasks 7.1 区分机械 vs 文档锚点）。
+- **已回流验证**：`openspec validate --strict` ✓ · `anchor_lint` CLEAN。
+
+### 待用户决定：设计 HARD-GATE
+amendment 已落，C1–C4 结构缺陷 + 边界缺口均已收口。**是否批准进设计 HARD-GATE（→ writing-plans）由用户拍板**。批准后主 session 须：① 回写 `ship-gate.design_approved` 至本报告头部 frontmatter；② 按〔SR-M〕最终化 lens-metric 锚采纳/裁掉/defer；③ 正文补人读拍板记录行。

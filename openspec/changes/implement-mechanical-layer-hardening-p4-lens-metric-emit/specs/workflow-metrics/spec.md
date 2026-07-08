@@ -10,7 +10,7 @@
 
 **归属规则 MUST 钉死**：`findings/采纳/裁掉/defer` 按「哪些镜报过该 finding」归属，共抓则每命中镜各记一次；`独立` 仅在「唯一报过 ∧ 被采纳」时 +1。`sev` 子格式 MUST 钉死为 `致N/高N/中N/低N` 四级**定序、零也写 0、分隔符恒 `/`**（禁省略某级或改序，防自由子格式脆弱——F1-T2 类）〔spec-review-amendment SR-I〕。
 
-**〔mlh-p4-lens-metric-emit〕计数归约由确定性 emitter 执行、非手数**：上述折叠（原始镜名 → canonical `lens`）+ 归属（`findings/采纳/裁掉/defer` 每命中镜各记一次）+ `独立`（唯一报过 ∧ 被采纳、折叠后计）+ `sev` rollup（仅采纳项）SHALL 由 `lens_metric_emit.py` 对**主 session 给的结构化 findings + 本轮 lens roster**〔grill-amendment：roster 补零-finding 镜的强制行〕确定性归约产出，MUST NOT 再由主 session 手折叠手数手写锚。折叠映射 SHALL 由契约 `lens-metric-fold` 机读块**单一源**承载〔grill-amendment：原折叠仅活在 prose ADR-2、无代码单一源，本 change 机读化根治〕。emitter 详细契约见新增能力 `lens-metric-emit`。**去重（是否同一 finding）+ 对抗裁决 + 严重度定级** SHALL 保留给模型（产出结构化输入），emitter 只做机械归约、MUST NOT 越权做判断。
+**〔mlh-p4-lens-metric-emit〕计数归约由确定性 emitter 执行、非手数**：上述折叠（原始镜名 → canonical `lens`）+ 归属（`findings/采纳/裁掉/defer` 每命中**行键**各记一次）+ `独立`（唯一报过 ∧ 被采纳、折叠到**行键**后计）+ `sev` rollup（仅采纳项）SHALL 由 `lens_metric_emit.py` 对**主 session 给的结构化 findings + 本轮行键 roster**〔spec-review-amendment ADR-1/ADR-8：roster 与归属/独立键升为行键 `(lens,runner,site)`、与锚落锚键对齐；roster 补零-finding 行的强制行〕确定性归约产出，MUST NOT 再由主 session 手折叠手数手写锚。折叠映射 SHALL 由契约 `lens-metric-fold` 机读块**单一源**承载、`fold(raw)=raw if∈lens_enum elif fold_map else fail-closed`〔spec-review-amendment ADR-7 恒等 pass-through〕；`load_fold` 后 SHALL 自校验 codomain⊆`lens-enum`〔spec-review-amendment C3〕。emitter **门控外置、不读 config**（关时 SKILL 不调 emitter）〔spec-review-amendment ADR-10〕；layer 单一源=`--layer`、无 per-finding layer〔ADR-9〕。emitter 详细契约见新增能力 `lens-metric-emit`。**去重（是否同一 finding）+ 对抗裁决 + 严重度定级** SHALL 保留给模型（产出结构化输入），emitter 只做机械归约、MUST NOT 越权做判断。
 
 〔spec-review-amendment SR-E〕**enum 扩展治理**：新增镜类型（6 值 `lens` 枚举未列的）MUST 先升契约版本号至 `v2` 并更新 ADR-2 折叠表，**MUST NOT 静默塞入 `broad`**（`broad` 是低区分度兜底桶，新镜价值信号被广审噪声稀释 = 反噬「数据驱动优化评审架构」本命题）。
 
@@ -26,4 +26,4 @@
 
 #### Scenario: 计数归约机械化，分类正确性为残余信任边界〔mlh-p4-lens-metric-emit 修订 SR-B〕
 - **WHEN** 考察 `findings`/`采纳`/`裁掉`/`defer`/`独立` 计数的正确性
-- **THEN** 「按归属规则把结构化 findings 折叠成 per-镜计数」SHALL 由 `lens_metric_emit` **确定性归约**（此环节不再是信任边界——脚本保证「计数是所给输入的正确归约」）；但「输入 findings 集是否忠实反映合并池（模型对每条 finding 的命中镜集/裁决/sev 分类是否正确）」SHALL 声明为**残余主 session 信任边界**（judgment，非机械可验），emitter/自检 MUST NOT 谎称能机械保证输入分类正确
+- **THEN** 「按归属规则把结构化 findings 折叠成 per-行键计数」SHALL 由 `lens_metric_emit` **确定性归约**（此环节不再是信任边界——脚本保证「计数是所给输入的正确归约」）；但「输入 findings 集是否忠实反映合并池（模型对每条 finding 的 `hits`/`verdict`/`sev` 分类是否正确）+ `roster` 完备性 + JSON 誊写」SHALL 声明为**残余主 session 信任边界**（judgment，非机械可验）〔spec-review-amendment C19：诚实计入 emitter 引入的新手工工序错误面〕，emitter/自检 MUST NOT 谎称能机械保证输入分类正确
