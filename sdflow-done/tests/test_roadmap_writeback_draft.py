@@ -78,3 +78,44 @@ def test_resolve_marker_fallback_when_prefix_absent():
 
 def test_resolve_none_when_no_signal():
     assert rwd.resolve_association("done-roadmap-writeback", "散文无 marker", "", None) is None
+
+
+def _write(tmp_path, name, content):
+    p = tmp_path / name
+    p.write_text(content, encoding="utf-8")
+    return p
+
+
+def test_verify_state_good_pass(tmp_path):
+    _write(tmp_path, "verify-report.md", "---\nship-gate:\n  verify: PASS\n---\n# r\n")
+    assert rwd.read_verify_state(tmp_path) == ("good", "PASS")
+
+
+def test_verify_state_absent_when_missing(tmp_path):
+    assert rwd.read_verify_state(tmp_path) == ("absent", None)
+
+
+def test_verify_state_absent_when_no_frontmatter(tmp_path):
+    _write(tmp_path, "verify-report.md", "# 无 frontmatter\nPASS\n")
+    assert rwd.read_verify_state(tmp_path) == ("absent", None)
+
+
+def test_verify_state_malformed_unclosed(tmp_path):
+    _write(tmp_path, "verify-report.md", "---\nship-gate:\n  verify: PASS\n")
+    assert rwd.read_verify_state(tmp_path) == ("malformed", None)
+
+
+def test_verify_state_malformed_duplicate_key(tmp_path):
+    _write(tmp_path, "verify-report.md",
+           "---\nverify: PASS\nverify: FAIL\n---\n")
+    assert rwd.read_verify_state(tmp_path) == ("malformed", None)
+
+
+def test_verify_state_malformed_bad_enum(tmp_path):
+    _write(tmp_path, "verify-report.md", "---\nverify: MAYBE\n---\n")
+    assert rwd.read_verify_state(tmp_path) == ("malformed", None)
+
+
+def test_tasks_completion_counts(tmp_path):
+    _write(tmp_path, "tasks.md", "- [x] a\n- [x] b\n- [ ] c\n普通行\n")
+    assert rwd.read_tasks_completion(tmp_path) == (2, 3)

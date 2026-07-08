@@ -6,6 +6,7 @@
 stdlib-only, 确定性（无墙钟/随机）, fail-closed.
 """
 import re
+from pathlib import Path
 
 # change 名前缀 implement-{roadmap}-pN-* ; roadmap 可含横杠, -p\d+ 作定界, 可选尾缀
 PREFIX_RE = re.compile(r"^implement-(?P<roadmap>.+)-p(?P<phase>\d+)(?:-.+)?$")
@@ -89,3 +90,45 @@ def resolve_association(change_name, proposal_text, tasks_text, flag=None):
         "source": chosen_source,
         "warnings": warnings,
     }
+
+
+def read_verify_state(change_dir):
+    """读 verify-report.md 的 ship-gate frontmatter verify 字段.
+    返回 (state, value): state ∈ {good, absent, malformed}.
+    absent=文件缺/无首块 frontmatter; malformed=未闭合/无 verify/重复键/坏枚举."""
+    path = Path(change_dir) / "verify-report.md"
+    if not path.exists():
+        return ("absent", None)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return ("absent", None)
+    fm, closed = [], False
+    for line in lines[1:]:
+        if line.strip() == "---":
+            closed = True
+            break
+        fm.append(line)
+    if not closed:
+        return ("malformed", None)
+    vals = [m.group(1) for m in (re.match(r"^\s*verify:\s*(\S+)\s*$", ln) for ln in fm) if m]
+    if len(vals) != 1:
+        return ("malformed", None)  # 0=无字段, >1=重复键
+    if vals[0] not in ("PASS", "FAIL"):
+        return ("malformed", None)  # 坏枚举
+    return ("good", vals[0])
+
+
+def read_tasks_completion(change_dir):
+    """tasks.md 复选框 (done, total)."""
+    path = Path(change_dir) / "tasks.md"
+    if not path.exists():
+        return (0, 0)
+    done = total = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if s.startswith("- [x]") or s.startswith("- [X]"):
+            done += 1
+            total += 1
+        elif s.startswith("- [ ]"):
+            total += 1
+    return (done, total)
