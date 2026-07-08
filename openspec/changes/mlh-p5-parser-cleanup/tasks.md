@@ -9,6 +9,7 @@
 - [ ] 1.2 退役 `unterminated` 死类别：docstring 的 `category ∈ unterminated|duplicate-key|out-of-domain|bad-type|tab-indent` 移除 `unterminated`；同步 A5/emit reason 相关注释若提及 unterminated 则订正。
 - [ ] 1.3 grep `unterminated` 全库确认无任何**产生路径**（仅剩历史注释或零残留），作为 1.1/1.2 完成验证。
 - [ ] 1.4〔grill-amendment Q2〕 `ship_gate.py` 头注释「已知不覆盖」登记归档杂交盲区：「首行 `---` 无闭合 × 正文独占一行 inline PASS 锚」→ 归档回退 inline 可判假 pass，但无 producer 产出（目标态 producer 不写 inline、旧 producer 首行 `#`），须手工伪造归档=显式越权（adr/0008/0011）。注明目标态论证依据。
+- [ ] 1.5〔spec-review Q1=A；design ADR-5〕live 读点纯结构诊断提示：live 遇 absent 且盘面「首行 `---` 无闭合」→ emit reason 附结构提示「首行为 `---` 但未见闭合 `---`，已按正文处理；欲声明状态请补闭合行」。实现 MUST 走 **live 读点上层独立轻量结构判定**（re-check 首行 `---` 且无第二个 `---`），**MUST NOT 改 `parse_ship_gate_frontmatter` 返回签名**（防波及 anchor_set/archived 三调用方）、MUST NOT 改 verdict/退出码、MUST NOT 探测意图（≠candidate②）。测试：断言该 live 报告 emit reason 含结构提示子串，且 verdict/退出码与无提示时一致；断言归档侧与 anchor_set 侧不受此提示影响。
 
 ## 2. T75 — live inline 死代码删除〔Scenario: 解析半场退役边界〕
 

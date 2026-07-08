@@ -120,6 +120,16 @@ archived_verify_state:    err → return "none"          absent → 回退 inlin
 
 **为何不给归档侧特殊 fail-safe（选 ①绝，非方向 C）**：目标态归档侧对漏闭合本就 fail-safe，为 producer 不产出的杂交形态引入「无闭合」双语义会破坏 A4「共用严格核心」防漂移收益，ROI 负。
 
+### ADR-5〔spec-review Q1=A 拍板〕：absent「首行 `---` 无闭合」子形态加纯结构诊断提示
+
+**决策**：设计门拍板 Q1=A 纳入。live 读点遇 absent 且盘面为「首行 `---` 但无闭合」时，emit reason 附一句**纯结构**提示（如「首行为 `---` 但未见闭合 `---`，已按正文处理；欲声明状态请补闭合行」），恢复 DX actionability——防漏闭合 frontmatter 的开发者被「缺锚/你没写」误导。
+
+**实现约束（load-bearing，防实现走偏）**：
+- **纯结构 ≠ 意图探测**：只报客观结构（首行 `---` + 无第二个 `---`），MUST NOT 探测「下一非空行是否 `key:` 形态」（candidate②，已因自指风险弃）；不重开自指免疫。
+- **不改 verdict**：仍判 absent → REFUSE_START(spec-review) / STEP_IN_PROGRESS(code-review·verify)，提示只进 reason 文案，MUST NOT 改退出码或放行语义。
+- **MUST NOT 改 `parse_ship_gate_frontmatter` 返回签名**〔遵 adr/0011〕：为区分「首行 `---` 无闭合」absent 子形态，走 **live 读点上层独立轻量结构判定**（re-check 首行 `---` 且无闭合），MUST NOT 给 parse 加 hint 字段——否则再次波及三调用方（`anchor_set`/`archived_verify_state`/`live_ship_gate_state`），重蹈本轮 BR-1 覆辙。归档侧与 anchor_set 侧 MUST NOT 受此 DX 提示影响（提示仅 live 诊断用途）。
+- 测试：断言「首行 `---` 无闭合」live 报告的 emit reason 含结构提示子串，且 verdict/退出码不变。
+
 ## Risks / Trade-offs
 
 - **[诊断精度损失]** 报告真想用 frontmatter 声明状态却忘闭合 `---` → 判 absent → verify 走「未验」→ 不 SHIPPED，人看到的是「无锚」而非「unterminated 未闭合」。→ **可接受且方向安全（假阴漏判，非假阳假过）**，与 `ship_gate.py:115` 已登记接受的 "false absent → 方向安全" 完全同构；且 producer SKILL 模板产出的 frontmatter 均配对闭合，此情形属边缘中的边缘。

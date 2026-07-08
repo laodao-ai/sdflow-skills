@@ -1,4 +1,10 @@
+---
+ship-gate:
+  design_approved: true
+---
 # spec-review-report — mlh-p5-parser-cleanup
+
+> **设计门已拍板批准**（2026-07-08）：人工过报告，Q1=A（DX 诊断增强纳入本 change），D1-D6 采纳项已回流 design/adr/specs/tasks。头部 frontmatter `design_approved: true` 为 `/sdflow-ship` pre-flight 唯一机判锚（正文此行供人读，不因迁移消失）。
 
 > 阶段二设计评审（连续多镜编排）。对象：ship_gate.py 解析器收尾清理（T74 无闭合`---`改判 absent + unterminated 退役 + T75 死代码）。
 > 镜配置：Step1 autoplan 广审（native：codex 跨家族 + Claude eng/DX subagent）· Step2 领域镜 0（无栈命中）+ 对抗镜 2（spec自洽/测试完备）+ 接地镜 1 · HR-TG=none。
@@ -25,8 +31,9 @@
 │  D4  GR-1 design 表格三读点行号偏差 → 改符号锚（抗腐蚀）                   │
 │  D5  TC-2 live 三读点测 2/3 → tasks 补 code-review 无闭合用例             │
 │  D6  SC-1 A3 枚举①② 视觉混淆 → 改字母/数字区分（cosmetic）               │
-│ [需拍板] 设计门勾选                                                      │
-│  Q1  BR-4 DX 诊断增强：漏闭合 absent 加纯结构 reason vs 保持最简          │
+│ [已决 Q1=A] 设计门拍板选 A 纳入                                          │
+│  Q1  BR-4 DX 诊断增强 → 纳入本 change（design ADR-5 / spec Scenario /     │
+│      tasks 1.5：live 上层加纯结构 reason，不改 parse 签名/verdict）        │
 │ [已裁掉] 无（所有 finding 采纳或登记，无静默丢）                          │
 │ [defer]  TC-3 BOM/CRLF+无闭合组合测试（代码路径正交可证，可选）           │
 └──────────────────────────────────────────────────────────────────────┘
@@ -78,7 +85,7 @@
 
 ## lens-metric 度量锚（草稿值，设计门拍板时按 SR-M 最终化）
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="4" 采纳="3" 裁掉="0" defer="1" 独立="2" sev="致0/高0/中1/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="2" sev="致0/高0/中1/低3" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="design-voice" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" runner="claude" site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="1" sev="致0/高0/中0/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" runner="claude" site="—" findings="4" 采纳="3" 裁掉="0" defer="1" 独立="3" sev="致0/高0/中1/低2" -->
