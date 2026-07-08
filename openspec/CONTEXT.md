@@ -116,6 +116,18 @@ _Avoid_: 说 emitter「消灭了信任边界」（只收窄——分类判断仍
 一轮评审**跑了哪些镜**的显式清单，独立于每镜是否有 finding。emitter 需它才能为「跑了但零 finding」的镜落全零行——该信息**无法从 findings 集反推**（零贡献镜在 findings 里不现身）。是「反静默」在度量层的落点：跑了没抓到 ≠ 没跑，前者须落零行留痕（同 hr-tg 空箱、grill 跳过类判定的显形纪律）。
 _Avoid_: 从 findings 推 roster（推不出零贡献镜）；零-finding 镜省略落行（把「跑了没抓到」静默吞）
 
+**关联锚 (Roadmap Link Anchor)** 〔grill-amendment · adr/0013〕:
+roadmap-驱动 change 起手在 proposal 写的机器注释行 `<!-- roadmap: {name} phase: {PN} subtask: {id,...} -->`，是 `sdflow-done` 回写步定位「回写哪个 roadmap 的哪些子任务」的**确定性单一源**。L1（关联哪个 roadmap）grep `name`、L2（哪些子任务）读 `subtask` 列表——**均读锚字段、不解析 proposal 自然语言引用**（引用形态自由、措辞属概率空间、正则半数 miss，同 gate frontmatter / lens-metric 弃自然语言）。无锚→按无关联静默跳过（producer 违约 fail-safe）。是「盘面即状态 / 机器锚行」在 roadmap 关联判定上的落点。
+_Avoid_: 从 proposal 自然语言引用推关联（现状实证 2/6 全路径、余别名/缺失，非稳态）；把 L2 当模型判断（锚带 subtask id→机械读）
+
+**roadmap 索引层 vs 叙述层 (Index Layer vs Narrative Layer)** 〔grill-amendment · adr/0013〕:
+roadmap 文档的两层信息。**索引层**=机器要消费的状态（子任务复选框、阶段状态 enum、里程碑进度、task-log 机器锚）→ 生成侧**结构化**让 done 回写机械定位；**叙述层**=人读的（目标/设计理由/完成总结叙述/里程碑句）→ 留散文。优化 roadmap 生成格式 = 结构化索引层、叙述层保人读，同 recorder「总览表(索引)+详细块(叙述)」、gate「frontmatter(状态)+正文(叙述)」。结构化投入放**生成侧摊销**（生成一次、回写多次），非压在回写侧适配散文（半个现状快照）。
+_Avoid_: 全 frontmatter 化 roadmap（损叙述层人读）；在回写侧硬适配现状散文（把结构化复杂度错放消费侧）
+
+**记录维护回写 vs 正确性门 (Bookkeeping Writeback vs Correctness Gate)** 〔grill-amendment · adr/0013〕:
+两类「写盘面」的失效容忍分野。**正确性门**（verify / gate / lens-metric emitter）：错=假✅ / 放不完整的活，零容忍 → **fail-closed** all-or-nothing 正当。**记录维护回写**（roadmap 回写）：漏=记录陈旧、可事后补、非正确性缺陷 → **best-effort + 降级标注**（三级：全写 / 部分写+标注未做项 / 完全做不了才留人工），fail-closed 只在末级。roadmap 回写误用 emitter 的 all-or-nothing 会为一个 id 定位不到就丢弃本可回写的部分，记录反更差。best-effort+标注 = 反静默守卫（降级+告警）在记录维护的应用，非放松纪律。
+_Avoid_: 拿 fail-closed all-or-nothing 套记录维护回写（过度严格、丢可回写部分）；把 best-effort 当「允许静默漏」（未做项 MUST 降级标注显形）
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。
@@ -125,3 +137,4 @@ _Avoid_: 从 findings 推 roster（推不出零贡献镜）；零-finding 镜省
 - 「强模型」曾隐含"开发 workflow 时所用的最强模型"——已钉为**相对执行机队的档位词**（机队锚定，见 `adr/0006`）；`adr/0001` 的"verify 用强模型、禁弱模型"按此重释 = 机队最强档（opus / gpt-5.5 级），sonnet 属中档不合格。
 - 「lens-metric 折叠表」曾只活在契约 prose（无代码单一源），grill 揭穿 aggregator 只 group 不 fold——已机读化为契约 `lens-metric-fold` 块作折叠单一源（见 `adr/0012`）；「数值一致性=信任边界」已拆为**计数归约（机械下沉）vs 分类判断（残余边界）**两半，勿再当一个笼统边界。
 - 「已并 / merged」曾被 `ship_gate.branch_state()` 隐式当作"**当前 HEAD 分支**有没有并进 base"（全局分支态）——已钉为 **change 域可达性**：一个 change 是否 merged，判据是「它的归档目录在不在 base(main/master) 的树里」（`git ls-tree <base>`），**与当前 HEAD 在哪条分支无关**（ship-gate-hardening D3 grill）。是「盘面即状态」在终态判定上的落地：判据必须锚在「这个 change 的产物落没落 base」这一确定性盘面，不用"当前分支"这个和 change 无关的全局近似。全局近似只在 change 自身分支上恰好成立，跨无关分支查已并 change 会误判"待收尾"。
+- 「roadmap 回写失败」曾拟套 lens-metric emitter 的 all-or-nothing fail-closed——已钉为**记录维护回写**（best-effort + 降级标注三级），区别于正确性门的零容忍 fail-closed（见 `adr/0013`）；「L1 关联判据」曾拟解析 proposal 自然语言引用（现状快照谬误）——已锚 producer **关联锚**机器行（见「关联锚」/`adr/0013`）。
