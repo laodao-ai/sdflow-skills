@@ -292,7 +292,7 @@ def parse_ship_gate_frontmatter(text):
     """解析报告 frontmatter 的 ship-gate 状态。返回 (state, error)：
       state: {field: value}（已枚举校验）；{} = absent（无 frontmatter / 无 ship-gate 键）
       error: None（干净）或 (field|'frontmatter', category)
-             category ∈ unterminated|duplicate-key|out-of-domain|bad-type|tab-indent
+             category ∈ duplicate-key|out-of-domain|bad-type|tab-indent
     D2 只认文件首块：首行须 '---'（去 BOM）；正文 --- 横线不参与。
     D3 坏≠无：absent(state={},error=None) vs 坏(error!=None) 由调用方分流退出码。
     D5 重复键→duplicate-key（枚举全部同名键计数，非取最后一个）。
@@ -312,7 +312,10 @@ def parse_ship_gate_frontmatter(text):
             end = i
             break
     if end is None:
-        return {}, ("frontmatter", "unterminated")
+        # [T74] 首行 --- 但全文无第二个 --- → 首块不闭合 → 不构成 frontmatter block，
+        # 首行 --- 视作正文/markdown 水平线 → absent（走既有无锚语义），非坏、非 fail-closed。
+        # 与「D2 只认文件首块」定义统一：无闭合 --- 不成块。
+        return {}, None
     block = lines[1:end]
     # 找顶层 ship-gate: 键，统计出现次数（重复→坏）。
     # [impl-review-fix FIX-2/FIX-4] 顶层探测识别**任何以 ship-gate: 起始的行**（不再只认整行

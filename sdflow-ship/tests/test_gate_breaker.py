@@ -77,3 +77,9 @@ def test_bad_frontmatter_empty_state():
     # （无净变化倾向判无进展，不因坏结构假造进展信号）。
     bad = "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n# 报告\n"
     assert anchor_set(bad) == frozenset()
+
+
+def test_anchor_set_absent_on_unclosed_frontmatter():
+    # [T74/BR-1] 钉死「挪格子不改熔断进展判据」：首行 --- 无第二个 --- 改判 absent 后，
+    # anchor_set 仍返回空集（与旧 unterminated 行为一致），防未来重构 anchor_set 短路时无声失守。
+    assert anchor_set("---\nship-gate:\n  verify: PASS\n") == frozenset()

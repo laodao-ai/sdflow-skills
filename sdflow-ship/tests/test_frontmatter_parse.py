@@ -23,9 +23,15 @@ def test_bom_stripped():                   # D2：去 BOM
     state, err = P("﻿---\nship-gate:\n  verify: PASS\n---\n")
     assert state == {"verify": "PASS"} and err is None
 
-def test_unterminated_is_error():          # --- 不配对 → 坏
+def test_unclosed_frontmatter_is_absent():   # [T74] 首行 --- 无闭合 → absent（首块不成立，非坏）
     state, err = P("---\nship-gate:\n  verify: PASS\n")
-    assert err is not None and err[1] == "unterminated"
+    assert state == {} and err is None
+
+
+def test_unclosed_frontmatter_first_line_only():
+    # [T74] 首行 --- + 全文无第二个 --- → 首块不闭合 → absent（走既有无锚语义），非 unterminated 坏
+    state, err = P("---\n随便正文，没有闭合横线\nship-gate 也不在块内\n")
+    assert state == {} and err is None
 
 def test_duplicate_field_key_error():      # D5：重复键 → 坏（不取最后一个）
     state, err = P("---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n")
