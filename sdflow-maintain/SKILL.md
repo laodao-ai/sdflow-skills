@@ -14,41 +14,18 @@ metadata:
 
 **步骤**
 
-1. **扫描文件系统**
+1-3. **调 maintain_scan.py 出只读差异报告**
 
-   扫描 `openspec/specs/` 下所有 `spec.md` 文件和 `openspec/rules/` 下所有 `.md` 文件，收集当前存在的 spec 和 rule 列表。
+   跑 `python3 sdflow-maintain/scripts/maintain_scan.py --root <仓根>`（缺省自动探测 git 根），
+   得四类分节只读报告：**新增未索引** / **已删未清理**（specs/rules ↔ INDEX 托管块外双向 set-diff，
+   链接路径 join）/ **过时引用**（CLAUDE.md 引用已删 spec/rule）/ **陈旧遮蔽**（workflow bundle 残留规则本体）。
 
-   对于 specs：从目录名提取名称（如 `openspec/specs/cache/spec.md` → `cache`）
-   对于 rules：从文件名提取名称（如 `openspec/rules/database.md` → `database`）
+   脚本纯读、fail-closed（坏输入非零退出 + stderr 明示，绝不半信半疑输出「一致」），零写文件。
+   set-diff 判据（RULE_MARKERS / opsx-init:rules 托管块 token）canonical 见 `sdflow-init/scripts/init.py`，
+   maintain_scan 保自包含副本经一致性守卫 pytest（`tests/test_marker_consistency.py`）机验同步。
 
-2. **解析 INDEX.md**
-
-   读取 `openspec/INDEX.md`，解析所有 markdown 表格行，提取已列出的 spec 和 rule 名称。
-
-   解析范围：
-   - 「设计强制规范」段落中的 rules 表格
-   - 各主题分组中的 specs 表格
-   - 「代码路径速查」表格中引用的所有名称
-
-3. **对比并生成报告**
-
-   对比扫描结果与 INDEX.md 已列条目，按以下类别报告差异：
-
-   - **新增未索引**：文件系统中存在但 INDEX.md 中未列出的 spec/rule
-   - **已删未清理**：INDEX.md 中列出但文件系统中不存在的 spec/rule
-   - **代码路径缺失**：新增的 spec/rule 在代码路径速查表中没有对应映射
-
-   如果无差异，输出 "INDEX.md 与文件系统一致，无需更新"，**跳过步骤 4，直接执行步骤 5**（提示跑
+   如果报告显示无差异，输出 "INDEX.md 与文件系统一致，无需更新"，**跳过步骤 4，直接执行步骤 5**（提示跑
    `/sdflow-retro` 复盘——与 INDEX 是否有差异无关，见下）。
-
-   额外检查（仅报告，不修复）：
-   - 扫描根 CLAUDE.md 和子目录 CLAUDE.md，检查是否引用了已删除的 spec 或 rule 路径
-   - 如果发现过时引用，在报告中标注 "CLAUDE.md 中可能存在过时引用：xxx"
-   - **workflow bundle 陈旧遮蔽兜底扫描**：检查 `openspec/workflow/` 下是否残留规则文件本体（`workflow.md` /
-     `spec-checklists/` / `code-checklists/` 任一存在），及仓根 `hack/checkpoint-commit.sh` 孤儿副本。
-     发现 workflow 规则文件本体，输出与 `sdflow-init update` 同款告警："遮蔽全局且不再被刷新：删=跟全局 /
-     留=显式 pin"；发现 checkpoint 孤儿副本，对称提示："删=用全局 ~/.sdflow/hack/ / 本地 workflow.md 副本
-     （pin）仍引用它则勿删"。**只报告绝不删**。
 
 4. **询问用户是否修复**
 
@@ -59,7 +36,6 @@ metadata:
      - 对于新 spec：根据 spec 文件内容推断所属主题分组，无法推断时询问用户
      - 对于新 rule：添加到「设计强制规范」表格
    - 已删未清理的条目：从 INDEX.md 所有表格中移除
-   - 代码路径缺失的映射：根据 spec 内容推断代码路径，添加到速查表
    - 修复后显示变更摘要："已更新 INDEX.md：+N -M"，**继续执行步骤 5**（提示跑 `/sdflow-retro`
      复盘——与 INDEX 是否修复无关，见下）。[impl-review-fix CF-3]
 
