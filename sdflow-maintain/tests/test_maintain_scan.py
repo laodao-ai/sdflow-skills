@@ -71,3 +71,54 @@ def test_error_type_exists():
 def test_missing_git_root_raises(tmp_path):
     with pytest.raises(ms.MaintainScanError):
         ms.find_repo_root(str(tmp_path))
+
+
+def _run(root):
+    return ms.run_scan(root)
+
+
+def test_new_unindexed_spec(tmp_path):
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body="")
+    r = _run(root)
+    assert "新增未索引" in r and "foo" in r
+
+
+def test_stale_indexed_rule(tmp_path):
+    body = "| `bar` | [rules/bar.md](./rules/bar.md) | x |"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body)
+    r = _run(root)
+    assert "已删未清理" in r and "bar" in r
+
+
+def test_fully_consistent(tmp_path):
+    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=body)
+    r = _run(root)
+    assert "一致" in r
+
+
+def test_managed_block_entries_not_stale(tmp_path):
+    # 托管块内列 trigger-catalog（无对应 rules/rule 文件），MUST NOT 报「已删未清理」
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="",
+                     managed_entries=["trigger-catalog"])
+    r = _run(root)
+    assert "trigger-catalog" not in r
+
+
+def test_non_spec_link_row_excluded(tmp_path):
+    # retro-report → retro/report.md 既非 specs 也非 rules，MUST NOT 参与 set-diff
+    body = "| `retro-report` | [retro/report.md](./retro/report.md) | x |"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body)
+    r = _run(root)
+    assert "retro-report" not in r
+    assert "已删未清理" not in r or "无" in r
+
+
+def test_managed_marker_unpaired_fails(tmp_path):
+    # 只有 start 无 end → 结构不可信 → 非零退出（防假一致）
+    idx = f"# I\n\n{MANAGED_START}\n| `x` | [rules/x.md](./rules/x.md) | y |\n"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="")
+    import pathlib
+    pathlib.Path(root, "openspec", "INDEX.md").write_text(idx, encoding="utf-8")
+    with pytest.raises(ms.MaintainScanError):
+        ms.run_scan(root)
