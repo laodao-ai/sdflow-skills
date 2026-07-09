@@ -147,3 +147,27 @@ def test_managed_marker_unpaired_fails(tmp_path):
     pathlib.Path(root, "openspec", "INDEX.md").write_text(idx, encoding="utf-8")
     with pytest.raises(ms.MaintainScanError):
         ms.run_scan(root)
+
+
+def test_claude_stale_ref_reported(tmp_path):
+    # INDEX 列 gone（spec 类）但 fs 无 → gone 进已删集；CLAUDE.md 引 gone → 报
+    body = "| `gone` | [specs/gone/spec.md](./specs/gone/spec.md) | x |"
+    claude = "见 openspec/specs/gone/spec.md 的定义\n"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body, claude=claude)
+    r = _run(root)
+    assert "过时引用" in r and "gone" in r and "CLAUDE.md" in r
+
+
+def test_claude_placeholder_generic_fence_not_reported(tmp_path):
+    body = "| `gone` | [specs/gone/spec.md](./specs/gone/spec.md) | x |"
+    claude = textwrap.dedent("""\
+        占位: openspec/roadmaps/{name}/ 是活文档
+        泛指: openspec/specs/ 目录
+        ```
+        围栏举例: openspec/specs/gone/spec.md
+        ```
+        """)
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body, claude=claude)
+    r = _run(root)
+    # gone 仍是已删集，但 CLAUDE 里只有占位/泛指/围栏 → 不报 CLAUDE 过时引用
+    assert "过时引用" not in r or "CLAUDE.md" not in r.split("过时引用")[1].split("陈旧遮蔽")[0]

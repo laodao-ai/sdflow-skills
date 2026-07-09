@@ -128,6 +128,46 @@ def parse_index_entries(body_lines):
     return {"spec": specs, "rule": rules}
 
 
+# 引用匹配契约（M1/D4）：openspec/(specs|rules)/<name>(/|.md)，<name> ∈ [a-z0-9-]+
+_REF = re.compile(r"openspec/(?:specs|rules)/([a-z0-9-]+)(?:/|\.md)")
+# 占位符：花括号 token（{name} 等）
+_PLACEHOLDER = re.compile(r"\{[a-z0-9_-]+\}")
+
+
+def _iter_claude_files(root):
+    for dirpath, _dirs, files in os.walk(root):
+        if os.sep + ".git" in dirpath:
+            continue
+        if "CLAUDE.md" in files:
+            yield os.path.join(dirpath, "CLAUDE.md")
+
+
+def scan_claude_refs(root, deleted):
+    """扫根+子目录 CLAUDE.md，报引用已删 spec/rule 路径的位置。
+    排除：代码围栏/行内 code、占位符 {name}、泛指路径（无具体 <name>）。"""
+    hits = []
+    for path in _iter_claude_files(root):
+        try:
+            text = open(path, encoding="utf-8").read()
+        except (OSError, UnicodeDecodeError) as e:
+            raise MaintainScanError(f"CLAUDE.md 不可读: {path}: {e}")
+        in_fence = False
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            # 剥行内 code 段再匹配（排除 `...` 内提及）
+            stripped = re.sub(r"`[^`]*`", "", line)
+            stripped = _PLACEHOLDER.sub("", stripped)
+            for name in _REF.findall(stripped):
+                if name in deleted:
+                    rel = os.path.relpath(path, root)
+                    hits.append(f"{rel}:{lineno}: {name}")
+    return hits
+
+
 def set_diff(fs, indexed):
     return {
         "new": {k: fs[k] - indexed[k] for k in ("spec", "rule")},
@@ -150,8 +190,10 @@ def run_scan(root):
     body, mgr_warns = split_managed_block(_read_index(root))
     indexed = parse_index_entries(body)
     diff = set_diff(fs, indexed)
-    # 报告渲染在 Task 7 完善；此处最小可断言渲染
-    return build_report(diff, mgr_warns, claude_refs=[], stale_shadow=[])
+    deleted = diff["stale"]["spec"] | diff["stale"]["rule"]
+    claude_refs = scan_claude_refs(root, deleted)
+    # stale_shadow（workflow bundle 陈旧遮蔽）渲染在 Task 7 完善；此处最小可断言渲染
+    return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=[])
 
 
 def build_report(diff, mgr_warns, claude_refs, stale_shadow):
@@ -165,6 +207,11 @@ def build_report(diff, mgr_warns, claude_refs, stale_shadow):
     for t in ("spec", "rule"):
         for n in sorted(diff["stale"][t]):
             lines.append(f"- {n}（{t}）")
+    lines.append("## 过时引用")
+    for ref in claude_refs:
+        lines.append(f"- {ref}")
+    if not claude_refs:
+        lines.append("- 无")
     if not any_diff:
         lines.append("")
         lines.append("一致，无差异")
