@@ -97,7 +97,8 @@ def split_managed_block(index_text):
 def parse_index_entries(body_lines):
     """链接路径 join：只纳 specs/{name}/spec.md（spec 类）/ rules/{name}.md（rule 类）。
     四类判据（H2/Q1=A）：①无链接语法的结构行（表头/分隔/散文）跳过 ②a specs/rules 条目入集
-    ②b 非-spec/rule 链接（retro-report 等）静默排除 ③有链接语法但 target 解析不出路径 → fail-closed。"""
+    ②b 非-spec/rule 链接（retro-report 等）静默排除 ③有链接语法但 target 解析不出路径 → fail-closed
+    （防假一致：链接语法存活但抽不出 target，说明正则/输入有意外形态，宁可拒绝输出也不当①静默放过）。"""
     specs, rules = set(), set()
     in_fence = False
     for line in body_lines:
@@ -106,9 +107,16 @@ def parse_index_entries(body_lines):
             continue
         if in_fence:
             continue
+        if "](" not in line:
+            continue  # ① 结构行（无链接语法：表头/分隔/散文），跳过不 fail
         links = _ANY_LINK.findall(line)
         if not links:
-            continue  # ① 结构行，跳过不 fail
+            # ③ 有链接开启子串 "](" 但正则抽不出 target（如空 target `[x]()`、未闭合 `[x](`）
+            # → 真少读，fail-closed，拒绝在不完整信息下输出报告（防假一致）
+            raise MaintainScanError(
+                "INDEX 表体链接语法存活但 target 解析不出路径，拒绝输出（防假一致）: "
+                f"{line!r}"
+            )
         for target in links:
             sm = _SPEC_LINK.search(target)
             rm = _RULE_LINK.search(target)

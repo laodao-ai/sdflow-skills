@@ -114,6 +114,31 @@ def test_non_spec_link_row_excluded(tmp_path):
     assert "已删未清理" not in r or "无" in r
 
 
+def test_broken_link_target_fails(tmp_path):
+    # 判据③：块外表体行含链接语法 "](" 但 target 解析不出路径（空 target）→ fail-closed
+    body = "| `x` | [x]() | y |"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body)
+    with pytest.raises(ms.MaintainScanError):
+        ms.run_scan(root)
+
+
+def test_broken_link_target_unclosed_fails(tmp_path):
+    # 判据③：未闭合链接语法（缺右括号）同样是 target 解析不出路径 → fail-closed
+    body = "| `x` | [x](broken-link-no-close | y |"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body)
+    with pytest.raises(ms.MaintainScanError):
+        ms.run_scan(root)
+
+
+def test_non_spec_link_still_excluded_not_fail(tmp_path):
+    # ③ 不误伤 ②b：合法非-spec/rule 链接照常静默排除，不应被误判为「target 解析不出路径」
+    body = "| `retro-report` | [retro/report.md](./retro/report.md) | x |"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body)
+    r = _run(root)
+    assert "retro-report" not in r
+    assert "一致" in r
+
+
 def test_managed_marker_unpaired_fails(tmp_path):
     # 只有 start 无 end → 结构不可信 → 非零退出（防假一致）
     idx = f"# I\n\n{MANAGED_START}\n| `x` | [rules/x.md](./rules/x.md) | y |\n"
