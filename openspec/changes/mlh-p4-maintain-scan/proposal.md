@@ -30,7 +30,7 @@
 - 三类 set-diff 全部由 `maintain_scan.py` 产出，SKILL.md 步骤 1-3 无「手扫/手比对」prose。
 - 坏输入（INDEX 缺失、表格畸形、目录不存在等）全部 fail-closed（非零退出 + 响亮报错），pytest 有对应负例断言。
 - 判断部分（归组/是否修复）显式保留在 SKILL.md 步骤 4，脚本零写文件。
-- 现有 maintain 行为（会话末提示 retro 等）不回归。
+- 现有 maintain 的**保留行为**（会话末提示 retro、步骤 4 修复判断）不回归。〔spec-review-amendment M4：措辞收窄，见 Non-Goal「代码路径缺失退役」〕
 
 ## Non-Goals
 
@@ -38,6 +38,7 @@
 - **不**把「新 spec 归哪主题分组」的判断下沉进脚本（内容判断留模型）。
 - **不**动 4.D 小校验器组（4.D.1/2/4，另一次 change）与 ◐ 组（4.A/4.D.3，待 embedded 契约）。
 - **不**改 `INDEX.md` 的生成/格式约定，也不触 `openspec/issues/INDEX.md`（那是 issues.py 的领地）。
+- **代码路径缺失校验退役〔spec-review-amendment M4/D7〕**：现行 SKILL 步骤 2-3 有第三类差异「代码路径缺失」（代码路径速查表无映射）。本仓真实 INDEX 无此表（已废弃），故本 change **显式不下沉该校验**（YAGNI 退役），只保双向 set-diff 两类；不算「行为回归」，因该表在目标态已不存在。若未来消费仓有此需求再单开。
 
 ## Open Questions (TG-21)
 

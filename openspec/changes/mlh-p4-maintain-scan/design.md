@@ -1,3 +1,5 @@
+> **〔spec-review 状态·2026-07-09〕** 6 冷镜审出 3 HIGH（含致），机械面 12 条 amendment 已落（本文件 + spec + tasks 标 `[spec-review-amendment]`），**2 决策待设计门拍板**（见 `spec-review-report.md` 决策登记区）：**Q1** = 「少读→假一致」堵法（反转 grill D2 对 N 对账的否决，推荐链接路径 join + 表体行严格解析）；**Q2** = 删 MARK_IDX 全串守卫、改 token 子串（推荐直接采）。设计门过 Q1/Q2 + amendment 落定后，建议对 H1/H2 补一轮轻 grill 或接地复核再批实现。
+
 ## Context
 
 `sdflow-maintain` 现为纯 Markdown 编排类 skill（零脚本）。其 SKILL.md 步骤 1-3 用 prose 指令让模型手做三类确定性 set-diff：① specs/rules ↔ INDEX 表格行、② CLAUDE.md 过时引用、③ workflow bundle 陈旧遮蔽兜底扫描（判据清单：`openspec/workflow/` 下残留 `workflow.md` / `spec-checklists/` / `code-checklists/` 任一 + 仓根 `hack/checkpoint-commit.sh` 孤儿副本）。步骤 4（按报告修复 INDEX）、步骤 5（提示 retro）是判断/编排。
@@ -40,8 +42,9 @@
 - **canonical 留 `init.py:RULE_MARKERS`**；
 - maintain_scan.py 保**自己一份副本**（自包含）+ **跨脚本一致性守卫 pytest**（照 determ-guards 终态集守卫范式）断言 `maintain_scan.RULE_MARKERS == init.RULE_MARKERS`，不等即 fail；
 - **T17 真闭合 = 机验同步（守卫测试），非物理单一源**（跨 skill 做不到）；
-- 第 3 份 bash 副本（resolve-workflow.sh）跨语言难同守 → **已知残差 defer**（不扩本 change scope，记 todolist）。
+- 第 3 份 bash 副本（`resolve-workflow.sh` 行 40-42/70-72 内联三处检查，非具名常量；design 原写「:46」实为告警 echo〔spec-review-amendment L2 订正〕）跨语言难同守 → **已知残差 defer**（不扩本 change scope，记 todolist）。
 **备选**：R3 整个留 init.py、maintain 不做兜底——否决，init 的检查只在 init/update 动作时跑，maintain 周期性兜底能抓「有人手塞规则副本却没跑 update」的 gap，有独立价值。
+**三镜主次判定〔spec-review-amendment L1/D12〕**：系统镜（真相源单一 vs 副本漂移）与开发循环镜（跨 skill import 运行时脆+破自包含 vs 双常量副本维护面）权衡——**开发循环镜主导**：跨 skill import 的运行时脆 + 破自包含成本 > 保副本 + 一致性守卫的维护面，故取守卫；用户镜无关（内部硬化）。
 
 ### D5 退出码语义（镜像 anchor_lint 口径）
 `0` = 扫描完成（**含有差异**，差异是正常结果，不是错误）；`非0` = 坏输入/无法可靠完成（INDEX 缺失/畸形、目录缺失）。实现镜像 `anchor_lint.py`：typed error（如 `MaintainScanError`）→ `main(argv)` 捕获打 stderr → `sys.exit(非0)`；`sys.exit(main())`。**理由**：与仓内既有数据类脚本一致，降认知成本。**备选**：有差异也非零（类 lint 门禁）——否决，maintain 是「报告→人判修」不是门禁，有差异非零会误导编排。
@@ -89,7 +92,9 @@ openspec/workflow/*      ┘                            ├ 已删未清理
 | INDEX 读到 0 条 spec 条目 | 合法空 INDEX（结构完好、无条目） | **退出 0**（报全部为新增未索引） | 响亮列出全部 specs 为「新增未索引」，人可自纠 |
 | specs/ 目录缺失 | `openspec/specs/` 不存在 | 非零退出 | stderr 明示「specs/ 缺失」 |
 | rules/ 目录缺失（可选） | `openspec/rules/` 不存在 | **退出 0（合法空集）** | rules 半场按「无规则可索引」处理，不 fail |
+| CLAUDE.md / workflow/ / hack/ 缺失〔spec-review-amendment M5/D8〕 | 可选输入目录/文件不存在 | **退出 0（空集 benign）** | 无文件即无过时引用 / 无残留即干净 |
 | CLAUDE.md 不可读 | 权限/编码异常 | 非零退出（fail-closed，不跳过） | stderr 明示文件 + 原因 |
+| INDEX 表体行少读→漏报已删〔spec-review-amendment H2/Q1 待精化〕 | 坏链接/微畸形行被静默跳过 | **（Q1 拍板后）表体 `\|` 行解析不出条目→fail-closed** | 现无正向信号，Q1 拍板落实前为已知缺口 |
 | 正常有差异 | set-diff 非空 | 退出 0 | 报告四类分节列出条目 |
 | 正常无差异 | 全一致 | 退出 0 | 报告「一致，无差异」 |
 

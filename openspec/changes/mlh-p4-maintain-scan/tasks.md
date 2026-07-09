@@ -53,12 +53,27 @@
 
 - [ ] 7.1 改 `sdflow-maintain/SKILL.md` 步骤 1-3：prose 手做改为「调 `maintain_scan.py` 出只读差异报告」；保留步骤 4（模型判断是否修复 INDEX）步骤 5（提示 retro）。〔D1〕
 - [ ] 7.2 SKILL.md 陈旧遮蔽 prose 改为「判据 canonical=`init.py:RULE_MARKERS`，maintain_scan 副本经一致性守卫机验」，删清单复述（闭 T17）。〔D4 grill A2〕
-- [ ] 7.3 更新 CLAUDE.md「带脚本+测试的 skill 仅这几个」名单加入 `sdflow-maintain`（数据类化后一致性）。
+- [ ] 7.3 更新分类文档**三处**〔spec-review-amendment M6/D9〕：(a) CLAUDE.md「带脚本+测试的 skill 仅这几个」名单加 `sdflow-maintain`；(b) CLAUDE.md「两类 skill」把 sdflow-maintain 从编排类挪到数据类；(c) README.md「其余为纯 Markdown 编排类」表述订正（原漏 (b)(c) 会致分类文档自相矛盾）。
 
 ## 8. 验收
 
 - [ ] 8.1 `pytest sdflow-maintain/tests/` 全绿；坏输入负例确认非零退出。〔R1-R5〕
 - [ ] 8.2 dogfood：在本仓根跑 `python3 sdflow-maintain/scripts/maintain_scan.py --root .`，人核报告与实际一致，`git status` 无变更。〔R5〕
+
+## 9. spec-review 增量〔spec-review-amendment〕
+
+> 6 冷镜收敛。Q1/Q2 两决策**待设计门拍板后**才落实现（标 ⏸）。
+
+- [ ] 9.1 〔H3/D1〕join-key 改链接路径:提取「已列条目」只纳链接匹配 `specs/{name}/spec.md`|`rules/{name}.md` 的行,类型由链接判;非 specs/rules 行(retro-report)不纳。测:真实 INDEX dogfood 无假阳。
+- [ ] 9.2 〔H1/Q2 ⏸〕托管块定位改稳定 token 子串 `opsx-init:rules:{start,end}`(镜像 init `_find_marker_line`,fence-aware),**删 MARK_IDX 全串守卫**,改断言 token==init.MARK_IDX[0].split()[1]。待设计门确认 Q2。
+- [ ] 9.3 〔H1/M2〕守卫加端到端 fixture(喂真实长形 marker INDEX 验托管块被识别+跳过,护匹配逻辑);守卫导入失败 hard-fail 非 skip。
+- [ ] 9.4 〔H2/Q1 ⏸〕少读→假一致:表体 `|` 起头行解析不出合法条目→fail-closed(反转 grill D2 的 N 对账否决)。待设计门拍板 Q1 选项。
+- [ ] 9.5 〔M1/D4〕R2 定义匹配契约:正则 `openspec/(specs|rules)/<name>(/|.md)`,跳 fence/行内 code/占位符 `{...}`/泛指。测:占位符/泛指/围栏内提及不误报。
+- [ ] 9.6 〔M5/D8〕补边界失败模式:CLAUDE.md/workflow//hack/ 缺失=空集 benign。
+- [ ] 9.7 〔M7/D10〕marker 检测 fence-aware(跳围栏内示例);CLAUDE.md 扫描只匹路径不匹 marker。
+- [ ] 9.8 〔M8/D11〕跳托管块时块内探到 specs/*/spec.md 模式→告警(堵审计无人区)。
+- [ ] 9.9 〔M3/D6·L4〕defer 记 todolist:告警文案第三漂移点 + checkpoint 孤儿路径(对齐 bash 第3份) + 守卫 importorskip 兜底。
+- [ ] 9.10 〔M4/D7〕代码路径缺失校验退役,已落 proposal Non-Goal,无需实现动作(留痕)。
 
 ### 测试覆盖图（TG-18）
 
