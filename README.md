@@ -26,7 +26,7 @@
 | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
 | 测试 | `embedded-test-sop` | 为嵌入式固件功能生成手动测试 SOP + 配套日志自动分析规则（log-checks.yaml） |
 
-> 三个 recorder、`sdflow-retro` 与 `sdflow-init` 为**数据类 skill**（带 `scripts/` + `tests/`），
+> 三个 recorder、`sdflow-retro`、`sdflow-init` 与 `sdflow-maintain` 为**数据类 skill**（带 `scripts/` + `tests/`），
 > 由脚本保证确定性；其余（含 `sdflow-roadmap`）为纯 Markdown 编排类。
 
 > **曾用名对照**（改名于 `sdflow-rebrand`，历史 PR / issue / 本地记忆若引用旧名，按此表换算）：

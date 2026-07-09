@@ -33,7 +33,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 ```
 
 带脚本+测试的 skill 仅这几个：`sdflow-buglist`、`sdflow-todolist`、`sdflow-issues`、
-`sdflow-init`、`sdflow-retro`。其余为纯 Markdown 编排类，无自动化测试。
+`sdflow-init`、`sdflow-retro`、`sdflow-maintain`。其余为纯 Markdown 编排类，无自动化测试。
 
 ## 架构
 
@@ -50,10 +50,10 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 
 ### 两类 skill
 
-1. **编排类（纯 Markdown）**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` / `sdflow-maintain` /
+1. **编排类（纯 Markdown）**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` /
    `sdflow-roadmap` / `embedded-test-sop` / `openspec-upgrade` — 靠 SKILL.md 指令驱动主 session 调度子代理，无脚本。
 2. **数据类（Markdown + Python）**：`sdflow-buglist` / `sdflow-todolist` / `sdflow-issues` / `sdflow-init` /
-   `sdflow-retro` — 由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
+   `sdflow-retro` / `sdflow-maintain` — 由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
 
 ### `setup.sh` 安装机制（核心，改动需谨慎）
 
