@@ -314,6 +314,20 @@ def test_index_unclosed_fence_fails(tmp_path):
     assert rc != 0
 
 
+def test_split_managed_block_unclosed_fence_fails():
+    # split_managed_block 自身状态机 fail-closed——直接单测（见上方说明：经完整 INDEX 文本
+    # 间接触发时会被 parse_index_entries 同样兜底，此分支需直调 split_managed_block 才能
+    # 确保该层独立可达、非死代码；删 split 的 raise 时本测试 MUST 失败）。
+    index_text = (
+        "# INDEX\n"
+        "\n"
+        "```\n"
+        "未闭合围栏，其后内容应被报错阻止处理\n"
+    )
+    with pytest.raises(ms.MaintainScanError):
+        ms.split_managed_block(index_text)
+
+
 def test_parse_index_entries_unclosed_fence_fails():
     # parse_index_entries 自身状态机同样兜底——直接单测（见上方说明：经完整 INDEX 文本
     # 间接触发时 split_managed_block 会先行拦截，此分支需直喂 body_lines 才能独立验证）。
