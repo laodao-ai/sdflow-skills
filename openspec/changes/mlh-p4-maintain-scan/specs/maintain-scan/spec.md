@@ -70,7 +70,7 @@
 
 maintain_scan 与 sdflow-init 共享判据。canonical 定义留 `sdflow-init/scripts/init.py`；maintain_scan 保自包含副本。为堵漂移（T17），pytest MUST 机验一致——不等即 fail。此为 T17 的真闭合（机验同步，非物理单一源）。〔grill-amendment〕
 
-**〔spec-review-amendment H1/Q2·待设计门确认结构变更〕** 冷审证 `MARK_IDX` 全串守卫**给假信心**（护常量不护匹配逻辑：消费仓 marker 文案漂移时守卫仍绿、工具却假红）。推荐**删除 MARK_IDX 全串一致性守卫**，改为 maintain 按稳定 token 子串定位托管块 + 守卫断言 `maintain 的 token == init.MARK_IDX[0].split()[1]`（token 是稳定契约），并**加端到端 fixture 守卫**（喂真实 INDEX.md 验托管块被识别+跳过，护匹配逻辑非只护常量字面）。RULE_MARKERS 无稳定子串替身、常量守卫保留。
+**〔spec-review-amendment H1/Q2·设计门已定 2026-07-09〕** 冷审证 `MARK_IDX` 全串守卫**给假信心**（护常量不护匹配逻辑：消费仓 marker 文案漂移时守卫仍绿、工具却假红）。**决定：删除 MARK_IDX 全串一致性守卫**，maintain 按稳定 token 子串定位托管块 + 守卫断言 `maintain 的 token == init.MARK_IDX[0].split()[1]`（token 是稳定契约），并**加端到端 fixture 守卫**（喂真实 INDEX.md 验托管块被识别+跳过，护匹配逻辑非只护常量字面）。RULE_MARKERS 无稳定子串替身、常量守卫保留。
 
 **〔spec-review-amendment M2/D5〕** 守卫 pytest 用 `importlib.util.spec_from_file_location` 跨 skill 加载 init.py（不 import，照 determ-guards `test_mirror_consistency.py` 先例）；加载失败 MUST **hard-fail 非 silent-skip**（try/except-skip = 真空绿，漂移漏网），但对「sdflow-init 目录整体缺席」场景用显式 path-assert 先判（避免 collect-time ModuleNotFoundError 误红，defer 记 importorskip 兜底）。
 
@@ -86,6 +86,10 @@ maintain_scan 与 sdflow-init 共享判据。canonical 定义留 `sdflow-init/sc
 - **WHEN** 喂 maintain 一份真实 INDEX.md（长形带尾注 marker）
 - **THEN** maintain MUST 正确识别并跳过托管块（护「匹配逻辑」而非只护常量字面）；用带尾注的真实 marker fixture，MUST NOT 用裸短串合成夹具（合成短串会掩盖 H1）
 
+#### Scenario: fence-aware 分支独立合成 fixture 覆盖〔spec-review-amendment 轻grill·low〕
+- **WHEN** 真实 INDEX.md 无 ``` 围栏（实测 0 个）→ 上条 fixture 覆盖不到 fence-aware 代码路径
+- **THEN** MUST 另加一份**合成 INDEX fixture**（围栏内放个 `opsx-init:rules:start` 示例），验证被跳过——否则 fence-aware 是无测试死代码
+
 #### Scenario: 守卫导入失败 hard-fail〔spec-review-amendment M2/D5〕
 - **WHEN** 守卫 pytest 无法加载 init.py 的常量（init 改名/移位致漂移）
 - **THEN** 守卫 MUST 非零失败，MUST NOT try/except-skip 静默跳过（真空绿）
@@ -98,11 +102,29 @@ maintain_scan 与 sdflow-init 共享判据。canonical 定义留 `sdflow-init/sc
 - **WHEN** `openspec/INDEX.md` 不存在
 - **THEN** 脚本非零退出并在 stderr 说明缺失，不输出「一致」误判
 
-> **〔spec-review-amendment H2/Q1·待设计门拍板〕核心缺口**：冷审 4 镜证「结构不可信」只抓**整段骨架丢失**，抓不到**逐行少读**（坏链接/微畸形行被解析器静默跳过 → 漏报「已删未清理」→ 假『一致』）——少读方向**无正向信号可 fail**。grill D2 否决的「机器锚行 N 对账」恰是唯一能把少读变响亮 fail 的机制。**下方「结构不可信」场景中『行畸形无法确信』一支需设计门在 Q1 拍板后落实**为可机验判据（推荐选项 A：链接路径 join + 表体 `|` 起头行解析不出合法条目即 fail-closed）。当前场景为 grill 原文，标注为待精化。
+> **〔spec-review-amendment H2/Q1·设计门已定 2026-07-09 + 轻 grill 收敛〕** 少读→假一致的堵法取**选项 A**（链接路径 join + 严格表体行判据），反转 grill D2 对「N 对账=过度设计」的否决。轻 grill 掰开**四类表体行**，fail 判据 MUST 按此分层（避免误伤 retro-report/表头行、避免过度宣称闭合）：
+>
+> | 类 | 特征 | 处置 |
+> |---|---|---|
+> | ① 结构行 | `\|` 起头、**无** `[..](..)` 链接（表头 `\| 名称 \| 文件 \|`、分隔 `\|---\|`、散文） | 跳过、**不** fail |
+> | ②a 条目 | 有链接、target 匹配 `specs/{n}/spec.md`\|`rules/{n}.md` | 入 set-diff；文件缺=报「已删未清理」**不** fail |
+> | ②b 非-spec 链接 | 有链接、target 解析出路径但非 specs/rules（`retro/report.md` 等） | **静默排除**（H3），**不** fail |
+> | ③ 真少读 | 有 `[..](..)` 链接语法但 target 空/畸形**解析不出任何路径** | **fail-closed**（唯一该 fail 的类） |
+>
+> **执行顺序 MUST**：托管块整段排除**先于**表体行 fail 评估（否则托管块内 workflow 行 target 非 specs/rules 会被误 fail）。
+> **诚实残差登记〔spec-review-amendment 轻grill/M-res〕**：选项 A **只缩小不填平** H2 的少读面——「链接语法被**整体破坏**、退化成无 `[..](..)` 的散文行」（如 `\| foo \| specs/foo/spec.md笔误没方括号 \|`）落入①类被当结构行跳过，若 foo 同时删则仍假『一致』。此型 A **不覆盖**，为**已知接受残差**（唯一补法 = 被否决的 N 对账 B，defer 记 todolist 指向之）。scenario **MUST NOT** 宣称 A 关闭 H2 全部少读——只关③类。
 
-#### Scenario: INDEX 结构不可信（防假一致）〔H2/Q1 待精化〕
-- **WHEN** `INDEX.md` 存在但 `opsx-init:rules` 托管 marker 不配对（**已机验锚**），或（Q1 拍板后）表体 `|` 起头行解析不出合法条目
+#### Scenario: INDEX 结构不可信→fail（③真少读 + marker 不配对）〔H2/Q1 已定〕
+- **WHEN** `opsx-init:rules` 托管 marker 不配对（**已机验锚**），或表体行有 `[..](..)` 链接语法但 target 解析不出任何路径（③真少读）
 - **THEN** 脚本非零退出并报错「INDEX 结构不可信，拒绝输出一致」，绝不在此状态下判「无差异」
+
+#### Scenario: 结构行/表头/分隔行不误 fail〔spec-review-amendment 轻grill〕
+- **WHEN** `INDEX.md` 含表头行 `| 名称 | 文件 |`、分隔行 `|---|---|`、或 `|` 起头的散文行（①类，无 `[..](..)` 链接）
+- **THEN** 一律跳过、**不** fail-closed（否则 maintain 在任何含表的 INDEX 上每次 fail = 自打脸假红）
+
+#### Scenario: 散文化少读为已知残差，不假宣称闭合〔spec-review-amendment 轻grill〕
+- **WHEN** 某已删 spec 的 INDEX 行链接语法被整体破坏、退化为无 `[..](..)` 的散文
+- **THEN** 该行落①类被跳过、不报「已删未清理」——此为**已知接受残差**（A 不覆盖），报告/spec 不宣称此型已堵，defer 指向 N 对账
 
 #### Scenario: INDEX 读到 0 条 spec 条目（合法响亮态）
 - **WHEN** `INDEX.md` 结构完好但托管块之外无任何 spec 条目

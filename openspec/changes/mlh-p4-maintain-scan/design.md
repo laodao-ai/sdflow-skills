@@ -1,4 +1,4 @@
-> **〔spec-review 状态·2026-07-09〕** 6 冷镜审出 3 HIGH（含致），机械面 12 条 amendment 已落（本文件 + spec + tasks 标 `[spec-review-amendment]`），**2 决策待设计门拍板**（见 `spec-review-report.md` 决策登记区）：**Q1** = 「少读→假一致」堵法（反转 grill D2 对 N 对账的否决，推荐链接路径 join + 表体行严格解析）；**Q2** = 删 MARK_IDX 全串守卫、改 token 子串（推荐直接采）。设计门过 Q1/Q2 + amendment 落定后，建议对 H1/H2 补一轮轻 grill 或接地复核再批实现。
+> **〔spec-review 已定·2026-07-09〕** 6 冷镜审出 3 HIGH（含致）+ 12 amendment；设计门拍板：**Q1=A**（链接路径 join + 严格表体四类判据，反转 grill D2 对 N 对账的否决）、**Q2=token 子串**（删 MARK_IDX 全串守卫 + 端到端 fixture）。**轻 grill 复核 H1/H2 通过**：Q2 token 字节实测三形态全中（历史证 token 恒稳）；Q1-A 方向成立，掰开四类判据（①结构行跳过 ②a 条目 ②b 非-spec 排除 ③真少读 fail）避免误伤 retro-report/表头行，并**诚实登记残差**——A 只缩小不填平少读（散文化破坏型 A 不覆盖，唯一补法 N 对账，defer）。详见 `spec-review-report.md` + spec R4。设计门已批准，进阶段三。
 
 ## Context
 
@@ -94,7 +94,8 @@ openspec/workflow/*      ┘                            ├ 已删未清理
 | rules/ 目录缺失（可选） | `openspec/rules/` 不存在 | **退出 0（合法空集）** | rules 半场按「无规则可索引」处理，不 fail |
 | CLAUDE.md / workflow/ / hack/ 缺失〔spec-review-amendment M5/D8〕 | 可选输入目录/文件不存在 | **退出 0（空集 benign）** | 无文件即无过时引用 / 无残留即干净 |
 | CLAUDE.md 不可读 | 权限/编码异常 | 非零退出（fail-closed，不跳过） | stderr 明示文件 + 原因 |
-| INDEX 表体行少读→漏报已删〔spec-review-amendment H2/Q1 待精化〕 | 坏链接/微畸形行被静默跳过 | **（Q1 拍板后）表体 `\|` 行解析不出条目→fail-closed** | 现无正向信号，Q1 拍板落实前为已知缺口 |
+| INDEX ③类真少读（链接语法存活但 target 解析不出路径）〔H2/Q1=A 已定〕 | 坏/畸形链接 target | **fail-closed 非零退出** | 四类判据仅③fail；①结构行/②b 非-spec 链接跳过不 fail |
+| INDEX 散文化破坏型少读〔已知接受残差〕 | 链接语法整体破坏退化散文 | 落①类跳过（A 不覆盖） | 唯一补法=N 对账（grill D2 否决），defer 记 todolist |
 | 正常有差异 | set-diff 非空 | 退出 0 | 报告四类分节列出条目 |
 | 正常无差异 | 全一致 | 退出 0 | 报告「一致，无差异」 |
 

@@ -65,9 +65,9 @@
 > 6 冷镜收敛。Q1/Q2 两决策**待设计门拍板后**才落实现（标 ⏸）。
 
 - [ ] 9.1 〔H3/D1〕join-key 改链接路径:提取「已列条目」只纳链接匹配 `specs/{name}/spec.md`|`rules/{name}.md` 的行,类型由链接判;非 specs/rules 行(retro-report)不纳。测:真实 INDEX dogfood 无假阳。
-- [ ] 9.2 〔H1/Q2 ⏸〕托管块定位改稳定 token 子串 `opsx-init:rules:{start,end}`(镜像 init `_find_marker_line`,fence-aware),**删 MARK_IDX 全串守卫**,改断言 token==init.MARK_IDX[0].split()[1]。待设计门确认 Q2。
+- [ ] 9.2 〔H1/Q2·门已定〕托管块定位改稳定 token 子串 `opsx-init:rules:{start,end}`(镜像 init `_find_marker_line` + startswith `<!--`,fence-aware),**删 MARK_IDX 全串守卫**,改断言 token==init.MARK_IDX[0].split()[1]。fence-aware 需独立合成 fixture(真实 INDEX 无围栏)。
 - [ ] 9.3 〔H1/M2〕守卫加端到端 fixture(喂真实长形 marker INDEX 验托管块被识别+跳过,护匹配逻辑);守卫导入失败 hard-fail 非 skip。
-- [ ] 9.4 〔H2/Q1 ⏸〕少读→假一致:表体 `|` 起头行解析不出合法条目→fail-closed(反转 grill D2 的 N 对账否决)。待设计门拍板 Q1 选项。
+- [ ] 9.4 〔H2/Q1·门已定=A + 轻grill 四类〕少读:按四类判据——①结构行(无`[..](..)`链接:表头/分隔/散文)跳过不fail·②a specs/rules 条目入set-diff(文件缺=报已删不fail)·②b 非-spec 链接(retro-report)静默排除·③有链接语法但 target 解析不出路径=真少读→fail-closed。**托管块排除先于表体 fail 评估**。诚实残差:链接语法整体破坏退化散文型少读 A 不覆盖=已知接受残差,defer 记 todolist 指向 N 对账(唯一补法)。
 - [ ] 9.5 〔M1/D4〕R2 定义匹配契约:正则 `openspec/(specs|rules)/<name>(/|.md)`,跳 fence/行内 code/占位符 `{...}`/泛指。测:占位符/泛指/围栏内提及不误报。
 - [ ] 9.6 〔M5/D8〕补边界失败模式:CLAUDE.md/workflow//hack/ 缺失=空集 benign。
 - [ ] 9.7 〔M7/D10〕marker 检测 fence-aware(跳围栏内示例);CLAUDE.md 扫描只匹路径不匹 marker。

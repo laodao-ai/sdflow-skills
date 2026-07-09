@@ -2,8 +2,12 @@
 change: mlh-p4-maintain-scan
 layer: spec-review
 mirrors: 6
-verdict: 需重审设计（多 HIGH，核心机制受挑战）
+verdict: 设计门已批准（Q1=A / Q2=token 拍板 + 轻 grill 复核通过）
+ship-gate:
+  design_approved: true
 ---
+
+> **设计 HARD-GATE 拍板记录（人读，2026-07-09）**：用户在设计门拍板 **Q1=A**（链接路径 join + 严格表体四类判据，反转 grill D2 对 N 对账的否决）、**Q2=token 子串**（删 MARK_IDX 全串守卫 + 端到端 fixture），并选「补轻 grill 再实现」。**轻 grill 复核 H1/H2 已通过**：Q2 token 字节实测三形态全中（历史证 token 恒稳）；Q1-A 方向成立、掰开四类判据避免误伤 retro-report/表头行，**诚实登记「散文化破坏型少读」为 A 不覆盖的已知接受残差**（唯一补法 N 对账已 defer）。四类判据 + 残差已落 spec R4 / design / tasks 9.4。**设计门批准，进阶段三 /sdflow-ship**。lens-metric 门后复核：采纳/裁掉/defer 计数未变（轻 grill 的收敛均属 H1/H2 既有 finding 的措辞精化，非新增裁决），锚保持。
 
 # spec-review-report · mlh-p4-maintain-scan
 
