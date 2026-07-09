@@ -168,6 +168,27 @@ def scan_claude_refs(root, deleted):
     return hits
 
 
+RULE_MARKERS = ("workflow.md", "spec-checklists", "code-checklists")
+
+
+def scan_stale_shadow(root):
+    """周期性兜底：openspec/workflow/ 残留规则本体 → 遮蔽全局 canonical。仅报告，绝不删。
+    canonical 判据 = init.py:RULE_MARKERS（本副本经一致性守卫测试机验，见 test_marker_consistency）。"""
+    warns = []
+    wf = os.path.join(root, "openspec", "workflow")
+    found = [m for m in RULE_MARKERS if os.path.exists(os.path.join(wf, m))]
+    if found:
+        warns.append(
+            "⚠ openspec/workflow/ 残留规则副本（" + "、".join(found)
+            + "）——遮蔽全局 bundle 且不再被 update 刷新："
+            "想跟全局最新→手动删净；想 pin 这一版→留着（显式逃生口）")
+    if os.path.isfile(os.path.join(root, "hack", "checkpoint-commit.sh")):
+        warns.append(
+            "⚠ hack/checkpoint-commit.sh 为旧版仓内副本（checkpoint 已全局化 → ~/.sdflow/hack/）："
+            "删=用全局；若保留本地 workflow.md 副本（pin）且其仍引用仓内路径→勿删")
+    return warns
+
+
 def set_diff(fs, indexed):
     return {
         "new": {k: fs[k] - indexed[k] for k in ("spec", "rule")},
@@ -192,8 +213,8 @@ def run_scan(root):
     diff = set_diff(fs, indexed)
     deleted = diff["stale"]["spec"] | diff["stale"]["rule"]
     claude_refs = scan_claude_refs(root, deleted)
-    # stale_shadow（workflow bundle 陈旧遮蔽）渲染在 Task 7 完善；此处最小可断言渲染
-    return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=[])
+    stale_shadow = scan_stale_shadow(root)
+    return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=stale_shadow)
 
 
 def build_report(diff, mgr_warns, claude_refs, stale_shadow):
@@ -211,6 +232,11 @@ def build_report(diff, mgr_warns, claude_refs, stale_shadow):
     for ref in claude_refs:
         lines.append(f"- {ref}")
     if not claude_refs:
+        lines.append("- 无")
+    lines.append("## 陈旧遮蔽（workflow bundle）")
+    for w in stale_shadow:
+        lines.append(f"- {w}")
+    if not stale_shadow:
         lines.append("- 无")
     if not any_diff:
         lines.append("")

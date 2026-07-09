@@ -202,3 +202,22 @@ def test_placeholder_in_specs_domain_not_reported(tmp_path):
     assert "CLAUDE.md:1:" not in claude_section
     # 对照：真实引用行（第2行）必须被报，证明扫描确实在工作
     assert "CLAUDE.md:2:" in claude_section
+
+
+def test_stale_shadow_workflow_body(tmp_path):
+    body = ""
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body,
+                     workflow=["workflow.md"])
+    r = _run(root)
+    assert "陈旧遮蔽" in r and "workflow.md" in r
+
+
+def test_stale_shadow_only_tools_clean(tmp_path):
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="")
+    wf = os.path.join(root, "openspec", "workflow", "tools")
+    os.makedirs(wf)
+    open(os.path.join(wf, "anchor_lint.py"), "w").write("x")
+    r = _run(root)
+    # 陈旧遮蔽节存在但无残留规则本体
+    seg = r.split("陈旧遮蔽")[1]
+    assert "workflow.md" not in seg and "spec-checklists" not in seg
