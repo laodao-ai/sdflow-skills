@@ -12,7 +12,9 @@
 - 三类 set-diff 由 `maintain_scan.py` 确定性产出只读报告；SKILL 步骤 1-3 改为调脚本。
 - 坏输入全 fail-closed（非零退出 + 响亮 stderr），pytest 有负例断言。
 - `sdflow-maintain` 升数据类（首个 `scripts/`+`tests/`），对齐仓内既有数据类 skill 形态。
-- 判据清单（陈旧遮蔽）收敛为脚本单一源（闭 T17 隐忧）。
+- 陈旧遮蔽判据跨脚本一致性由守卫测试机验（闭 T17 隐忧，见 D4）。
+
+> **目标态锚定（grill A1）**：本工具按**目标态消费仓结构**设计（specs/ + 可选 rules/ + INDEX），非按本仓（bundle 源仓）现状快照。`openspec/rules/` 是**可选**目标态目录（`sdflow-init/SKILL.md:105`「不在 bundle，按需自行加」）——maintain 处理之，**缺失=合法空集非 fatal**（见 D2/失败模式表）。本仓无 rules/ 是非典型特例，MUST NOT 据此砍 rules 半场（避免以现状否定目标，adr/0011 目标态论证）。
 
 **Non-Goals:**
 - 脚本不自动改 INDEX/任何文件（修复留模型步骤 4）。
@@ -24,20 +26,36 @@
 ### D1 只读报告，不自动修复（判断留人）
 脚本零写文件，只出结构化差异报告；SKILL 步骤 4 由模型按报告判断是否改 INDEX、新 spec 归哪组。**理由**：「是否修复 / 归哪组」是内容判断（§1.3 判断权留人/模型红线）；set-diff 本身才是确定性机械活。**备选**：脚本直接改 INDEX——否决，越权且把内容判断塞回脚本。
 
-### D2 INDEX 表格解析 + 畸形 fail-closed
-解析 `INDEX.md` markdown 表格行提取已列 spec/rule 名。**关键**：区分「INDEX 存在但表格畸形不可解析」与「INDEX 空」——前者 fail-closed 非零退出（绝不静默当作「空 INDEX → 全部新增」误判），后者是合法态（报全部为新增未索引）。**理由**：静默把畸形当空是典型静默面（§1.3 反静默红线）。
+### D2 INDEX 解析 fail-closed——重锚到「防假『一致』」〔grill-amendment〕
+解析 `INDEX.md` 提取已列 spec/rule 名。**grill 揭穿原方向锚错**：原设计把 fail-closed 锚在「畸形不当空」上，但两方向失效危险度不对称——「读到 0 条 → 报全部 specs 新增未索引」是**响亮自纠**（人一眼见幻影差异去查），真正的静默风险是**「误读少读 → 漏报某条已删未清理 → 报『一致』」= 假绿同构**（该红报绿）。故 fail-closed 判据**重锚到「解析不可信 → 防假一致」**：
+- 「读到 0 条 spec 条目」= **合法**（报全部为新增未索引，响亮不 fail）；
+- 「INDEX 结构骨架缺失 / 预期分节表头整个不见 / 托管 marker 不配对（见 D7）/ 表格行畸形到解析器无法确信」= **fail-closed 非零退出**，绝不带半信半疑的解析结果输出「一致」。
+**理由**：报告工具的反静默方向是堵「假一致」（misparse→false-consistent），不是机械纠结「空 vs 畸形」——区别于门的 all-or-nothing（呼应 §1.3 反静默 + adr/0013 记录维护 vs 正确性门）。**备选**：INDEX 放机器锚行声明「共 N 条」、解析数 vs 声明数对账——否决，过度设计，结构骨架校验已足够。
 
 ### D3 归组建议不下沉（定 Q1）
 脚本只报「新增未索引」条目名 + 类型（spec/rule），**不**建议归入哪个 INDEX 主题分组。**理由**：归组是内容判断，留模型步骤 4。
 
-### D4 陈旧遮蔽判据入脚本常量，收敛单一源（定 Q2 + 闭 T17）
-判据清单落 `maintain_scan.py` 模块常量（`STALE_BUNDLE_MARKERS = [workflow.md, spec-checklists/, code-checklists/]` + `hack/checkpoint-commit.sh` 孤儿检查），SKILL.md 陈旧遮蔽扫描 prose 改为「判据见 `maintain_scan.py` 常量」不再复述清单。**理由**：现在两处复述（脚本待建 + SKILL prose）会漂（T17）；一处定义即单一源。**备选**：判据从更上层配置读——否决，过度设计，判据本就少且稳。
+### D4 陈旧遮蔽判据——canonical-in-init + 一致性守卫，非物理单一源〔grill-amendment〕
+**grill 揭穿原「收敛单一源」不可达**：`init.py:169` 已有 canonical `RULE_MARKERS = ("workflow.md","spec-checklists","code-checklists")` + `stale_shadow_warnings()`，其 docstring 明写「update 内联为主 + **sdflow-maintain 兜底（同款判据）**」——设计意图本就让 maintain 做兜底消费者。maintain_scan 若自建常量 = 第 4 份副本（另有 `resolve-workflow.sh:46` bash 第 3 份），正是 T17 的漂移；跨 skill import init.py 破自包含且运行时脆（独立 symlink，init scripts 目录不在 maintain sys.path 上）；抽共享模块无基建。故：
+- **canonical 留 `init.py:RULE_MARKERS`**；
+- maintain_scan.py 保**自己一份副本**（自包含）+ **跨脚本一致性守卫 pytest**（照 determ-guards 终态集守卫范式）断言 `maintain_scan.RULE_MARKERS == init.RULE_MARKERS`，不等即 fail；
+- **T17 真闭合 = 机验同步（守卫测试），非物理单一源**（跨 skill 做不到）；
+- 第 3 份 bash 副本（resolve-workflow.sh）跨语言难同守 → **已知残差 defer**（不扩本 change scope，记 todolist）。
+**备选**：R3 整个留 init.py、maintain 不做兜底——否决，init 的检查只在 init/update 动作时跑，maintain 周期性兜底能抓「有人手塞规则副本却没跑 update」的 gap，有独立价值。
 
 ### D5 退出码语义（镜像 anchor_lint 口径）
 `0` = 扫描完成（**含有差异**，差异是正常结果，不是错误）；`非0` = 坏输入/无法可靠完成（INDEX 缺失/畸形、目录缺失）。实现镜像 `anchor_lint.py`：typed error（如 `MaintainScanError`）→ `main(argv)` 捕获打 stderr → `sys.exit(非0)`；`sys.exit(main())`。**理由**：与仓内既有数据类脚本一致，降认知成本。**备选**：有差异也非零（类 lint 门禁）——否决，maintain 是「报告→人判修」不是门禁，有差异非零会误导编排。
 
 ### D6 maintain 数据类化骨架
 新增 `sdflow-maintain/scripts/maintain_scan.py`（Python stdlib，无三方依赖）+ `sdflow-maintain/tests/test_maintain_scan.py`。skill 走 symlink，改源即时生效，`setup.sh` 逻辑不动（仅含 `SKILL.md` 目录才装的规则不变，本目录已有 SKILL.md）。
+
+### D7 职责边界：maintain vs sdflow-init 的 INDEX 分治 + 机器锚行界定〔grill-amendment〕
+INDEX 里「rules」撞两义：**义1** workflow bundle 规则（`openspec/workflow/*.md`）索引在 `<!-- opsx-init:rules:start..end -->` **托管块**、归 **sdflow-init**（`update` 刷新）；**义2** 消费仓通用规则（`openspec/rules/*.md`，可选）索引在托管块**之外**、归 **maintain**。maintain_scan 只 set-diff 义2：
+- 解析 INDEX 时**用机器锚行界定**（盘面即状态/机器锚行范式）——**跳过 `opsx-init:rules:start..end` 整段**，只在托管块之外提取 spec/rule 条目；不跳则 workflow bundle 条目被误当「已列 rule」→ 满屏「已删未清理」误报 + 诱导改 init 托管块（越界）；
+- 两个 marker 字符串 = `init.py:MARK_IDX` 常量——同 D4，maintain 保副本 + **一致性守卫 pytest**（第二处跨脚本常量守卫）；
+- 托管 marker **不配对**（只 start 无 end / 反之）→ fail-closed（畸形托管块不静默当边界，接 D2）。
+
+**双常量耦合诚实注**：maintain 依赖 init 两常量（`RULE_MARKERS`+`MARK_IDX`），是真耦合成本；但两处均一致性守卫兜底、且跨 skill import 更糟，取守卫。**备选**：目标态把 specs 索引与 init 托管块物理分家到两文件——否决，改动面波及 init 铺设契约，超本 change scope。
 
 ### 数据流（TG-11）
 
@@ -56,18 +74,21 @@ openspec/workflow/*      ┘                            ├ 已删未清理
 
 ## Risks / Trade-offs
 
-- **[INDEX 表格格式未来漂移致误解析]** → D2 fail-closed：不可解析即非零退出报错，不静默误判；pytest 固定「畸形→非零」负例断言。
-- **[陈旧遮蔽判据清单演进]** → D4 收敛脚本常量单一源，未来改判据只改一处；SKILL prose 不再持副本（闭 T17）。
+- **[INDEX 误解析致漏报「已删未清理」→ 假『一致』]**〔grill A4〕 → D2 fail-closed 重锚「解析不可信→防假一致」（真静默风险方向）；pytest 断言「结构骨架缺失/marker 不配对→非零」+「0 条→响亮报全新非 fail」。
+- **[陈旧遮蔽/托管块 marker 判据跨脚本漂移]**〔grill A2/A3〕 → canonical 留 init.py，maintain 副本 + 两处一致性守卫 pytest 机验（闭 T17）；bash 第 3 份 defer。
+- **[误把本仓现状（无 rules/）当目标限制]**〔grill A1〕 → 目标态锚定：rules/ 可选、缺失=合法空；不据现状砍半场。
 - **[归组误判风险]** → D3 归组不下沉，留模型，脚本层无此风险面。
-- **[maintain 数据类化增测试维护面]** → 可接受：换来确定性 + 可测，符合仓内数据类取向；测试自包含在 `tests/`。
+- **[maintain 数据类化 + 双常量耦合 init]** → 可接受：确定性+可测换维护面；双常量耦合由守卫兜底（D7），优于跨 skill import。
 
-## 失败模式表（TG-08）
+## 失败模式表（TG-08）〔grill-amendment〕
 
 | 失败模式 | 触发条件 | 脚本行为 | 可观测 |
 |---|---|---|---|
 | INDEX 缺失 | 无 `openspec/INDEX.md` | 非零退出 | stderr 明示「INDEX 缺失」 |
-| INDEX 畸形 | 表格结构不可解析出条目 | 非零退出（不当空处理） | stderr 明示「INDEX 表格不可解析」 |
-| specs/rules 目录缺失 | 目录不存在（≠ 空目录） | 非零退出 | stderr 区分「目录缺失」vs「空」 |
+| INDEX 结构不可信 | 分节骨架缺失 / 托管 marker 不配对 / 行畸形到无法确信 | **非零退出（防假『一致』）** | stderr 明示「INDEX 结构不可信，拒绝输出一致」 |
+| INDEX 读到 0 条 spec 条目 | 合法空 INDEX（结构完好、无条目） | **退出 0**（报全部为新增未索引） | 响亮列出全部 specs 为「新增未索引」，人可自纠 |
+| specs/ 目录缺失 | `openspec/specs/` 不存在 | 非零退出 | stderr 明示「specs/ 缺失」 |
+| rules/ 目录缺失（可选） | `openspec/rules/` 不存在 | **退出 0（合法空集）** | rules 半场按「无规则可索引」处理，不 fail |
 | CLAUDE.md 不可读 | 权限/编码异常 | 非零退出（fail-closed，不跳过） | stderr 明示文件 + 原因 |
 | 正常有差异 | set-diff 非空 | 退出 0 | 报告四类分节列出条目 |
 | 正常无差异 | 全一致 | 退出 0 | 报告「一致，无差异」 |

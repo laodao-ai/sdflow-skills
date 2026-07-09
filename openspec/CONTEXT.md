@@ -144,6 +144,14 @@ _Avoid_: 从二值复选框机械推「阶段是否 delivered / 某项是否 def
 `sdflow-done` 收尾（hand-off 步）读**步2 已实现盘面**（verify=PASS/tasks 完成态/change 名/分支；archive/merge 是步3/步5 才有的未来锚 → 留占位不预填）生成人可确认的 roadmap **回填草稿**（该 phase 候选复选框行集 + task-log 完成总结骨架含机械锚），进 hand-off 提示人异步确认回填（同现状独立「回填对账」commit，从纯手写降为改草稿），并在 done 第六步摘要抬一行使 merge 时点可见（异步闭环残差已显式登记）。**判断留人**（勾哪几行/算不算完成/价值叙述/阶段状态/deferred），非无人干预自动回写——因完成判定本质含判断（见上条）。是「机械活交脚本、判断留模型」在 roadmap 回填的落点：自动化**机械搬运**（前缀解析定位到 phase + 盘面读取 + 骨架预填）、判断留人**确认**。关联 = change 名前缀 `implement-{roadmap}-pN` 主 + marker `#{phase}` 兜底（检测 fence-aware+行锚定+排除自身讨论区，防自指假阳）；roadmap 格式**实测分裂**（复选框式/表格式）→ 助手探测形态、非复选框式 fail-loud 留人工。**弃** scaffold 双向（撞 C1）/ enum 机械聚合（撞 C2）/ 编号统一归属镜像（粒度失配）/ 强制迁移。
 _Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，撞 C1/C2）；用 scaffold 预建 roadmap 复选框（撞 openspec done 判定 + 孤儿认领）；阶段三给它加人类门（阶段三无 AskUserQuestion——草稿进 hand-off 让人异步确认，非弹窗）；把 archive 路径/merge 当步2 盘面预填（是预测值，跨零点漂/merge opt-out 记假事实）；朴素子串检测 marker（撞 change 自身含串的自指假阳）
 
+**报告工具反静默方向 (Report-tool Anti-silent Direction)** 〔grill-amendment · adr/0016〕:
+只读报告/对账工具（如 `maintain_scan` 的 set-diff）的 fail-closed 判据 MUST 锚在**「防假一致」方向**，非机械纠结「空 vs 畸形」。两方向失效危险度不对称：**解析读到 0 条 → 报全部差异**是**响亮自纠**（人一眼见幻影去查），**误读少读 → 漏报 → 报『一致』**才是**假绿同构**（该红报绿）。故：结构骨架可信但读 0 条 = **合法响亮态**（退出 0、不 fail）；结构骨架缺失 / 机器 marker 不配对 / 行畸形到解析器无法确信 = **fail-closed**（拒绝带半信半疑的解析输出「一致」）。区别于「门」的 all-or-nothing——报告工具不为「有差异」fail（有差异是正常产出），只为「无法自证解析可信」fail。是「反静默守卫」在只读报告层的方向化，呼应 `adr/0013` 记录维护 vs 正确性门。
+_Avoid_: 把报告工具 fail-closed 锚「畸形当空」（锚错方向，放过真正的「误读→假一致」）；把「读到 0 条」当失败（那是响亮自纠态）；照搬门的 all-or-nothing 到报告工具（有差异≠该 fail）
+
+**maintain / init 的 INDEX 分治 (Maintain vs Init INDEX Division)** 〔grill-amendment · adr/0016〕:
+`openspec/INDEX.md` 里「rules」撞两义须分治：**workflow bundle 规则**（`openspec/workflow/*.md`）索引在 `<!-- opsx-init:rules:start..end -->` **托管块**、归 **sdflow-init**（`update` 刷新）；**消费仓通用规则**（`openspec/rules/*.md`，可选目录，缺失=合法空）在托管块之外、归 **sdflow-maintain** 的 set-diff。maintain 解析 INDEX MUST **用机器锚行界定、跳过 init 托管块**（不跳则 bundle 条目被误当「已删未清理」+ 诱导越界改 init 领地）。maintain 依赖 init 两常量（`RULE_MARKERS`/`MARK_IDX`）：**canonical 留 `init.py`、maintain 保自包含副本 + 跨脚本一致性守卫 pytest**（跨 skill import 破自包含且运行时脆、物理单一源不可达）——T17 的真闭合 = 机验同步（守卫测试），非删到一份；跨语言副本（bash）难同守则 defer 登记。
+_Avoid_: maintain set-diff 时把 init 托管块条目当自己领地（越界+误报）；跨 skill import 取「物理单一源」（破自包含、运行时脆）；把「删到只剩一份」当 T17 闭合（跨 skill 不可达，机验同步才是）
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。
