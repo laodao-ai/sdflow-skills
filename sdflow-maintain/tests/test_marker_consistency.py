@@ -4,8 +4,6 @@ canonical = sdflow-init/scripts/init.py；maintain_scan 保自包含副本，此
 import importlib.util
 import os
 
-import pytest
-
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 INIT_PATH = os.path.join(REPO, "sdflow-init", "scripts", "init.py")
 MS_PATH = os.path.join(REPO, "sdflow-maintain", "scripts", "maintain_scan.py")
@@ -35,6 +33,11 @@ def test_managed_token_matches_init_mark_idx():
 
 def test_end_to_end_real_index_managed_block_skipped(tmp_path):
     # 喂真实长形 marker 的 INDEX，验托管块被识别+跳过（护匹配逻辑非只护常量字面）
+    # 链接 target 故意写成 rules/<name>.md 形态（命中 _RULE_LINK）：
+    # 若托管块剥离逻辑被破坏（未剥离/剥错），trigger-catalog 会被 parse_index_entries
+    # 收进 indexed["rule"]；而 fs 侧无 openspec/rules/trigger-catalog.md（未创建该目录/文件）
+    # → set_diff 判定"已删未清理" → 断言 fail。这样断言真依赖托管块被正确剥离（load-bearing），
+    # 而非之前 ./workflow/trigger-catalog.md 两个正则都不匹配、走②b 静默排除的假绿。
     start = INIT.MARK_IDX[0]
     end = INIT.MARK_IDX[1]
     (tmp_path / ".git").mkdir()
@@ -43,10 +46,10 @@ def test_end_to_end_real_index_managed_block_skipped(tmp_path):
     idx = (
         "# Index\n\n"
         f"{start}\n"
-        "| `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | x |\n"
+        "| `trigger-catalog` | [trigger-catalog](./rules/trigger-catalog.md) | x |\n"
         f"{end}\n"
     )
     (osp / "INDEX.md").write_text(idx, encoding="utf-8")
     r = MS.run_scan(str(tmp_path))
-    # 托管块内 trigger-catalog（无 rules/trigger-catalog.md）不被误报已删
+    # 托管块被正确剥离时，块内该条目不进 indexed → 不出现在"已删未清理"
     assert "trigger-catalog" not in r
