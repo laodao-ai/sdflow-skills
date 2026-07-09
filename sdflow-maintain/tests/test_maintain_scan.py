@@ -430,3 +430,42 @@ def test_stale_shadow_checkpoint_orphan(tmp_path):
     assert "陈旧遮蔽" in r
     seg = r.split("陈旧遮蔽")[1]
     assert "checkpoint-commit.sh" in seg
+
+
+# [impl-review-fix] 跨模型 outside-voice 审出 2 条：Fix-OV1（parse_index_entries 限定表格行，
+# spec H3/D1 锚定）、Fix-OV2（_iter_claude_files 精确剪枝 .git，不误剪 .github 等）。
+
+def test_parse_index_entries_prose_link_not_indexed(tmp_path):
+    # Fix-OV1: 散文行（非表格行）里偶然出现的 spec 链接 MUST NOT 被当已索引——spec H3/D1
+    # 要求「已列条目」锚在表格行链接目标路径模式。若仍按任意含 "](" 的行提取链接，本例会
+    # 误把散文里的 [foo](./specs/foo/spec.md) 当已索引，掩盖真实「新增未索引 foo」。
+    body = "见 [foo](./specs/foo/spec.md) 的相关说明，具体见正文，此行非表格行。"
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=body)
+    r = _run(root)
+    assert "新增未索引" in r
+    new_section = r.split("新增未索引")[1].split("已删未清理")[0]
+    assert "foo" in new_section
+
+
+def test_parse_index_entries_table_row_positive_regression(tmp_path):
+    # 回归：既有表格行正例（真实索引形态）在限定表格行后仍正确入集、判一致。
+    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=body)
+    r = _run(root)
+    assert "一致" in r
+
+
+def test_claude_dotgithub_not_pruned(tmp_path):
+    # Fix-OV2: _iter_claude_files 须精确剪枝 ".git"（仅路径组件恰为 ".git" 的目录），不误剪
+    # ".github" 等相似前缀目录。旧实现用子串 `os.sep + ".git" in dirpath` 判断，会把
+    # .github/CLAUDE.md 静默跳过，违反 spec R2「扫描根 + 各子目录 CLAUDE.md」。
+    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=body)
+    import pathlib
+    ghdir = pathlib.Path(root, ".github")
+    ghdir.mkdir()
+    (ghdir / "CLAUDE.md").write_text("见 openspec/specs/gone/spec.md 的定义\n", encoding="utf-8")
+    r = _run(root)
+    assert "过时引用" in r
+    section = r.split("过时引用")[1].split("陈旧遮蔽")[0]
+    assert "gone" in section and ".github" in section

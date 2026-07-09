@@ -102,9 +102,16 @@ def split_managed_block(index_text):
 
 def parse_index_entries(body_lines):
     """链接路径 join：只纳 specs/{name}/spec.md（spec 类）/ rules/{name}.md（rule 类）。
-    四类判据（H2/Q1=A）：①无链接语法的结构行（表头/分隔/散文）跳过 ②a specs/rules 条目入集
-    ②b 非-spec/rule 链接（retro-report 等）静默排除 ③有链接语法但 target 解析不出路径 → fail-closed
-    （防假一致：链接语法存活但抽不出 target，说明正则/输入有意外形态，宁可拒绝输出也不当①静默放过）。"""
+    [impl-review-fix] 候选行 MUST 先限定为 markdown 表格行（spec H3/D1：「已列条目」锚在
+    表格行链接目标路径模式）——`line.lstrip().startswith("|")` 且有表格 cell 结构（含 ≥2 个
+    `|`）才参与下方四类判据；非表格行（散文如「见 [foo](./specs/foo/spec.md)」、正文段落）
+    一律跳过、不参与 set-diff、也不触发③ fail-closed（防止散文里的偶然 spec 链接被误当
+    「已索引」，掩盖真实新增未索引条目）。表头分隔行 `|---|---|` 无链接语法，落①自然跳过，
+    不用特判。
+    四类判据（H2/Q1=A，现限定表格行内）：①无链接语法的结构行（表头/分隔）跳过 ②a specs/rules
+    条目入集 ②b 非-spec/rule 链接（retro-report 等）静默排除 ③有链接语法但 target 解析不出
+    路径 → fail-closed（防假一致：链接语法存活但抽不出 target，说明正则/输入有意外形态，
+    宁可拒绝输出也不当①静默放过）。"""
     specs, rules = set(), set()
     in_fence = False
     for line in body_lines:
@@ -113,8 +120,11 @@ def parse_index_entries(body_lines):
             continue
         if in_fence:
             continue
+        stripped = line.lstrip()
+        if not (stripped.startswith("|") and stripped.count("|") >= 2):
+            continue  # 非表格行（散文/正文），跳过不参与判据、不 fail
         if "](" not in line:
-            continue  # ① 结构行（无链接语法：表头/分隔/散文），跳过不 fail
+            continue  # ① 结构行（表头/分隔，无链接语法），跳过不 fail
         links = _ANY_LINK.findall(line)
         if not links:
             # ③ 有链接开启子串 "](" 但正则抽不出 target（如空 target `[x]()`、未闭合 `[x](`）
@@ -153,9 +163,11 @@ def _iter_claude_files(root):
         # 不可读子目录；传回调使目录级不可读也非零退出（对称文件级 open 失败）。
         raise MaintainScanError(f"目录扫描失败（不可读或其他 OSError）: {err.filename}: {err}")
 
-    for dirpath, _dirs, files in os.walk(root, onerror=_onerror):
-        if os.sep + ".git" in dirpath:
-            continue
+    for dirpath, dirnames, files in os.walk(root, onerror=_onerror):
+        # [impl-review-fix] 精确剪枝 .git：只剔除路径组件恰为 ".git" 的目录，原子串判断
+        # `os.sep + ".git" in dirpath` 误匹配 ".github"/".gitlab"/".gitea" 等目录，导致其下
+        # CLAUDE.md 被静默跳过（违反 spec R2「扫描根 + 各子目录 CLAUDE.md」）。
+        dirnames[:] = [d for d in dirnames if d != ".git"]
         if "CLAUDE.md" in files:
             yield os.path.join(dirpath, "CLAUDE.md")
 

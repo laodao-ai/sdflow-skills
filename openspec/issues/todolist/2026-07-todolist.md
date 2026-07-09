@@ -22,7 +22,7 @@
 | T14 | `setup.sh` | Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支） | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T15 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T16 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 代码质量 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
-| T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | PROPOSED | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
+| T17 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 基础设施 | DONE | 2026-07-03 16:01 | minimize-repo-footprint | minimize-repo-footprint |
 | T18 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 可观测性 | PROPOSED | 2026-07-03 16:18 | minimize-repo-footprint | minimize-repo-footprint |
 | T19 | `workflow.md + generation-process.md（权威源）` | 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户 | 可观测性 | PROPOSED | 2026-07-03 17:38 | sdflow-rebrand | sdflow-rebrand |
 | T20 | `spec-review/SKILL.md（现 sdflow-spec-review）` | 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项 | 代码质量 | DONE | 2026-07-03 17:42 | sdflow-rebrand | sdflow-rebrand |
@@ -101,6 +101,7 @@
 | T93 | `resolve-workflow.sh` | bash 第3份 RULE_MARKERS 内联副本（resolve-workflow.sh）跨语言难与 init.py/maintain_scan.py 同守——一致性守卫只覆盖两份 Python 副本，bash 副本漂移不被机验 | 基础设施 | OPEN | 2026-07-09 13:36 | mlh-p4-maintain-scan |  |
 | T94 | `maintain_scan.py + init.py` | 陈旧遮蔽告警文案第三处跨脚本复述 + checkpoint 孤儿路径：R-guard 不机验文案（文案守卫脆），maintain 抄 init 文案仅语义等价、漂移不被捕获——已知残差 | 代码质量 | OPEN | 2026-07-09 13:36 | mlh-p4-maintain-scan |  |
 | T95 | `sdflow-maintain/tests/test_marker_consistency.py` | 守卫加载用 assert os.path.isfile + exec_module hard-fail；sdflow-init 目录整体缺席场景可加 importorskip 更优雅降级（当前 path-assert 直接 fail，defer 兜底优化） | 代码质量 | OPEN | 2026-07-09 13:36 | mlh-p4-maintain-scan |  |
+| T96 | `maintain_scan.py _SPEC_LINK/_RULE_LINK` | 链接正则 [a-z0-9-]+ 与 scan_fs_specs/rules 目录名零字符集限制不对称：非规范命名(大写/下划线)的 spec/rule 被删且 INDEX 仍链接时，链接不命中正则→静默归②b排除→不进 stale→漏报已删未清理。openspec 强制 kebab 故低概率，彻底修需 scan_fs 也检非规范命名 | 代码质量 | OPEN | 2026-07-09 14:16 | mlh-p4-maintain-scan |  |
 
 ---
 
@@ -1145,3 +1146,15 @@
 | 状态 | DONE |
 
 > 2026-07 状态：PROPOSED → DONE（implement-mechanical-layer-hardening-p4-lens-metric-emit / bd7c05f（4.C lens_metric_emit.py 交付））
+
+---
+
+## T17: 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `opsx-maintain/SKILL.md + init.py` |
+| 类型 | 基础设施 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（mlh-p4-maintain-scan：maintain_scan.py 脚本化陈旧遮蔽判据 + test_marker_consistency.py 一致性守卫机验 RULE_MARKERS/token 与 init.py 相等（f4c61b4/6ce74fc），闭合改常量会漂的风险）
