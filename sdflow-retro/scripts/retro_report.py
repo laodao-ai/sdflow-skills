@@ -320,14 +320,11 @@ def hr_tg_flags(info):
             "code_hr_tg": pick("code-review-report.md")}
 
 
-def surfacing_block(root):
-    """D12：待复评镜 surfacing 机械契约。扫 archive 的 lens-metric 锚，
-    按 (layer,lens,runner,site) 分组计「出现轮数」（口径须与 lens_metric_aggregate.
-    render_table 一致——直接复用同一分组键，不重复定义）；轮数 ≥ 阈值
-    （`LMA.REVIEW_ROUNDS_THRESHOLD`，与 render_table 同源，文档不写死字面量）的镜
-    在报告顶部独立区块列出，固定前缀标记 `⚠️ 待复评:`（可机验，MUST NOT 仅用形容词）。
-    无命中也必须输出固定行——防止「长期无命中」被静默省略成死列（同 hr-tg 空箱同理，
-    grill-not-skippable 教训：跳过类判定不能不可见）。
+def surfacing_counts(root):
+    """扫 archive 的 lens-metric 锚，按 (layer,lens,runner,site) 分组计「出现轮数」
+    （口径与 lens_metric_aggregate.render_table 同源——复用 group_key），返回
+    (counts, flagged, thr)。单一源：surfacing_block 的文本渲染与 build_report 顶部
+    「一览」卡片的待复评镜计数都从此取，杜绝两处各算一遍出现漂移。
     """
     archive_root = os.path.join(root, "openspec", "changes", "archive")
     counts = defaultdict(int)
@@ -338,6 +335,19 @@ def surfacing_block(root):
         counts[LMA.group_key(r)] += 1
     thr = LMA.REVIEW_ROUNDS_THRESHOLD  # [T59] 与 render_table 共享同源阈值，不再本地硬编码 10
     flagged = [(k, c) for k, c in counts.items() if c >= thr]
+    return counts, flagged, thr
+
+
+def surfacing_block(root):
+    """D12：待复评镜 surfacing 机械契约。扫 archive 的 lens-metric 锚，
+    按 (layer,lens,runner,site) 分组计「出现轮数」（口径须与 lens_metric_aggregate.
+    render_table 一致——直接复用同一分组键，不重复定义）；轮数 ≥ 阈值
+    （`LMA.REVIEW_ROUNDS_THRESHOLD`，与 render_table 同源，文档不写死字面量）的镜
+    在报告顶部独立区块列出，固定前缀标记 `⚠️ 待复评:`（可机验，MUST NOT 仅用形容词）。
+    无命中也必须输出固定行——防止「长期无命中」被静默省略成死列（同 hr-tg 空箱同理，
+    grill-not-skippable 教训：跳过类判定不能不可见）。
+    """
+    counts, flagged, thr = surfacing_counts(root)
     if not flagged:
         return f"⚠️ 待复评: 无（所有镜出现轮数<{thr}）"
     lines = [f"⚠️ 待复评: 以下镜出现轮数≥{thr}、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:"]
@@ -351,6 +361,112 @@ def _stage_col(wt, stage):
     非 0 时四舍五入 1 位小数，与其余 "—" 空箱口径一致（同 hr-tg/无度量锚同理）。"""
     v = wt["stages"].get(stage, 0)
     return round(v, 1) if v else "—"
+
+
+# ============================ 一览（语义化总结）============================
+# 阶段/镜 内部键→中文可读名。仅影响顶部「一览」段的呈现，不改动下方明细表口径
+# （明细表沿用内部键，便于与 lens-metric 锚逐字核对）。
+STAGE_LABELS = {
+    "spec-review": "设计审", "code-review": "代码审", "impl": "写实现",
+    "grill": "grill 死磕", "ff": "ff 生成", "done": "收尾",
+    "other": "其他", "unknown": "未归类",
+}
+LENS_LABELS = {
+    "adversarial": "对抗", "domain": "领域", "broad": "广审",
+    "grounding": "接地", "history": "历史", "outside-voice": "外部声音",
+}
+
+
+def _fmt_dur(minutes):
+    """分钟→可读时长：≥60 分显 x.x hr；≥1 分显整数 min；亚分钟保留 1 位小数
+    （不 round 成 "0 min" 骗人——0.2min 的 plan 桩 change 如实显 "0.2 min"）。"""
+    if minutes >= 60:
+        return f"{minutes / 60:.1f} hr"
+    if minutes >= 1:
+        return f"{round(minutes)} min"
+    return f"{minutes:.1f} min"
+
+
+def _top_mirror(agg_rows):
+    """从原始锚行按聚合③同分组 (layer,lens,runner,site) 找 Σfindings 最大的一格。
+    与聚合③同口径（复用 LMA.group_key/_int），读者可在聚合③表逐行核对，不冒
+    (layer,lens) 求和把 site="—" rollup 与 per-site 行双计的风险。
+    返回 (label, findings, accept_rate_str) 或 None（无锚/全 0）。"""
+    grp = defaultdict(lambda: {"f": 0, "采纳": 0, "裁掉": 0, "defer": 0})
+    for r in agg_rows:
+        g = grp[LMA.group_key(r)]
+        for src, dst in (("findings", "f"), ("采纳", "采纳"),
+                         ("裁掉", "裁掉"), ("defer", "defer")):
+            v, _bad = LMA._int(r.get(src))
+            g[dst] += v
+    if not grp:
+        return None
+    (layer, lens, runner, site), g = max(grp.items(), key=lambda kv: kv[1]["f"])
+    if g["f"] <= 0:
+        return None
+    denom = g["采纳"] + g["裁掉"] + g["defer"]
+    rate = f"{g['采纳'] / denom:.0%}" if denom else "—"
+    label = f"{STAGE_LABELS.get(layer, layer)}{LENS_LABELS.get(lens, lens)}镜"
+    if runner not in ("claude", "?"):
+        label += f"（{runner}）"
+    return label, g["f"], rate
+
+
+def semantic_summary(N, M, stage_totals, cost_items, flagged_count, agg_rows):
+    """确定性条件模板：把已算好的聚合组织成「## 一览」（精简指标卡 + 语义化中文段落）。
+
+    **只呈现不决策**（本 skill 宪法）：只做数字的语言化复述与结构性对比
+    （占几成 / 相差几倍 / 谁最多），绝不含因果归因或取舍建议——模板里不出现
+    「说明 / 意味着 / 因此 / 所以 / 应 / 建议 / 该砍」等解读或决策词。指标卡只放
+    纯计数（不放平均值：重尾双峰分布下平均会掩盖真相，与聚合②立意冲突）。
+    全部分支确定性；无墙钟 / 无锚 / 单 change / 0 待复评 均有降级句，不崩。
+    """
+    grand = sum(stage_totals.values())
+    total_cell = f"~{_fmt_dur(grand)}" if grand > 0 else "—"
+    card = [
+        "| 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |",
+        "|---|---|---|---|",
+        f"| {N} | {total_cell} | {M} | {flagged_count} |",
+    ]
+
+    # 逐句确定性拼装，每句都是数字的描述性复述
+    s1 = f"本轮复盘覆盖 **{N} 个 change**"
+    if grand > 0:
+        s1 += f"，累计评审墙钟约 **{_fmt_dur(grand)}**"
+    s1 += (f"（其中 {M} 个带真实度量锚、可参与价值统计）。" if M
+           else "（本轮无带真实度量锚的 change，价值维暂无数据）。")
+    sents = [s1]
+
+    if grand > 0:
+        top = sorted(stage_totals.items(), key=lambda kv: -kv[1])[:2]
+        top_str = "、".join(f"{STAGE_LABELS.get(s, s)} {m / grand:.0%}" for s, m in top)
+        s2 = f"评审时间集中在 {top_str}"
+        if len(top) == 2:
+            s2 += f"（两者合计 {(top[0][1] + top[1][1]) / grand:.0%}）"
+        sents.append(s2 + "。")
+
+    valid = [(n, t) for n, t, unresolved in cost_items if t > 0 and not unresolved]
+    if len(valid) >= 2:
+        hi, lo = max(valid, key=lambda x: x[1]), min(valid, key=lambda x: x[1])
+        s3 = (f"单个 change 耗时最重的是 {hi[0]}（约 {_fmt_dur(hi[1])}）、"
+              f"最轻的是 {lo[0]}（{_fmt_dur(lo[1])}）")
+        # 倍数仅在最轻 change 墙钟 ≥1min 时给：亚分钟 elapsed 是提交时间戳噪声，
+        # 拿它当分母算出的倍数无意义（如 0.2min→3769 倍），如实略去不编造。
+        if lo[1] >= 1 and hi[1] / lo[1] >= 2:
+            s3 += f"，相差约 {round(hi[1] / lo[1])} 倍"
+        sents.append(s3 + "。")
+    elif len(valid) == 1:
+        sents.append(f"仅 {valid[0][0]} 有可解析墙钟（约 {_fmt_dur(valid[0][1])}）。")
+
+    tm = _top_mirror(agg_rows) if M else None
+    if tm:
+        label, findings, rate = tm
+        sents.append(f"价值侧，出问题最多的是 {label}（{findings} 条，采纳率 {rate}）。")
+
+    if flagged_count:
+        sents.append(f"另有 {flagged_count} 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。")
+
+    return "\n".join(["## 一览", "", *card, "", "".join(sents), ""])
 
 
 def build_report(root):
@@ -380,10 +496,18 @@ def build_report(root):
         rows.append((name, info, b, wt, val, hr))
     N = len(changes)
 
+    # 一览段入参（确定性）：待复评镜数与 surfacing_block 同源（surfacing_counts），
+    # agg_rows 复用 LMA.aggregate（deterministic、幂等；archive 扫描是毫秒级，与
+    # 聚合③各自独立调用不影响结果一致性）。
+    _c, flagged, _thr = surfacing_counts(root)
+    cost_items = [(nm, w["total_min"], bb["unresolved"]) for nm, _inf, bb, w, _v, _h in rows]
+    summary_agg, _na, _pf = LMA.aggregate(os.path.join(root, "openspec", "changes", "archive"))
+    summary_md = semantic_summary(N, M, stage_totals, cost_items, len(flagged), summary_agg)
+
     lines = ["# 全项目 change 成本×价值复盘（view-only 再生）", "",
              f"> 覆盖 {N} change / 有真锚 {M} / 边界不可解析 {K}",
              "> 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。",
-             "", surfacing_block(root), ""]
+             "", surfacing_block(root), "", summary_md]
 
     # per-change 表
     lines.append("## per-change 明细")

@@ -1,10 +1,21 @@
 # 全项目 change 成本×价值复盘（view-only 再生）
 
-> 覆盖 28 change / 有真锚 12 / 边界不可解析 2
+> 覆盖 30 change / 有真锚 14 / 边界不可解析 2
 > 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。
 
 ⚠️ 待复评: 以下镜出现轮数≥10、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:
-  - outside-voice（layer=code-review runner=codex site=code-voice，出现轮数 10）
+  - adversarial（layer=code-review runner=claude site=—，出现轮数 11）
+  - domain（layer=code-review runner=claude site=—，出现轮数 10）
+  - history（layer=code-review runner=claude site=—，出现轮数 10）
+  - outside-voice（layer=code-review runner=codex site=code-voice，出现轮数 12）
+
+## 一览
+
+| 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |
+|---|---|---|---|
+| 30 | ~70.1 hr | 14 | 4 |
+
+本轮复盘覆盖 **30 个 change**，累计评审墙钟约 **70.1 hr**（其中 14 个带真实度量锚、可参与价值统计）。评审时间集中在 设计审 39%、写实现 31%（两者合计 70%）。单个 change 耗时最重的是 checkpoint-tag-single-source（约 12.6 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审对抗镜（71 条，采纳率 90%）。另有 4 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
 
 ## per-change 明细
 
@@ -14,9 +25,11 @@
 | batch-triage-strategy | 107.4 | 41.9 | 50.0 | 10.8 | — | 8 | none | none | 29 | 0.9 | 11 | archived |
 | checkpoint-tag-single-source | 753.8 | 678.1 | 68.7 | 7.0 | — | 6 | none | none | — | 无度量锚 | — | archived |
 | cross-model-outside-voice | 229.7 | 71.6 | 76.0 | 24.6 | — | 12 | — | TG-08,TG-17 | — | 无度量锚 | — | archived |
+| done-roadmap-writeback | 193.4 | 120.4 | 31.8 | 6.9 | — | 13 | none | none | 52 | 0.94 | 10 | archived |
 | drop-per-dir-review-stub | 53.8 | — | 32.6 | — | — | 5 | — | none | — | 无度量锚 | — | archived |
 | gate-anchor-line-scoped | 7.0 | — | — | 7.0 | — | 9 | none | none | — | 无度量锚 | — | archived |
 | gate-checkpoint-hardening | 87.8 | 17.9 | 26.7 | 7.3 | — | 10 | none | none | — | 无度量锚 | — | archived |
+| implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 97.8 | 77.5 | 7.6 | — | 9 | TG-06 | TG-06 | 67 | 0.88 | 13 | archived |
 | issues-pool-batch-mgmt | 0.0（边界不可解析） | — | — | — | — | 0 | — | — | — | 无度量锚 | — | archived |
 | issues-pool-hardening | 206.3 | 40.5 | — | 8.8 | — | 10 | none | none | 28 | 0.86 | 9 | archived |
 | minimize-repo-footprint | 136.5 | 21.4 | 103.9 | 11.2 | — | 10 | — | — | — | 无度量锚 | — | archived |
@@ -43,13 +56,13 @@
 
 | 阶段 | 墙钟(min) | 占比 |
 |---|---|---|
-| spec-review | 1402.4 | 37% |
-| impl | 1197.3 | 32% |
-| ff | 285.6 | 8% |
-| unknown | 269.4 | 7% |
-| other | 216.5 | 6% |
-| code-review | 211.0 | 6% |
-| grill | 195.2 | 5% |
+| spec-review | 1620.6 | 39% |
+| impl | 1306.6 | 31% |
+| ff | 308.3 | 7% |
+| unknown | 269.4 | 6% |
+| grill | 258.6 | 6% |
+| code-review | 225.5 | 5% |
+| other | 216.5 | 5% |
 | done | 0.5 | 0% |
 
 ## 聚合② 成本双峰（总墙钟 x / code-review 占比% y）
@@ -60,9 +73,11 @@
 | batch-triage-strategy | 107.4 | 10% |
 | checkpoint-tag-single-source | 753.8 | 1% |
 | cross-model-outside-voice | 229.7 | 11% |
+| done-roadmap-writeback | 193.4 | 4% |
 | drop-per-dir-review-stub | 53.8 | 0% |
 | gate-anchor-line-scoped | 7.0 | 100% |
 | gate-checkpoint-hardening | 87.8 | 8% |
+| implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 3% |
 | issues-pool-batch-mgmt | 0.0 | — |
 | issues-pool-hardening | 206.3 | 4% |
 | minimize-repo-footprint | 136.5 | 8% |
@@ -93,43 +108,43 @@
 | code-review | adversarial | claude | none | 1 | 5 | 3 | 1 | 1 | 1 | 60% | 20% | — |
 | code-review | adversarial | claude | parse-edge+blast-radius | 1 | 1 | 0 | 0 | 1 | 0 | 0% | 0% | — |
 | code-review | adversarial | claude | refactor-honesty | 1 | 3 | 1 | 0 | 2 | 0 | 33% | 0% | — |
-| code-review | adversarial | claude | — | 9 | 54 | 41 | 5 | 8 | 27 | 76% | 50% | — |
+| code-review | adversarial | claude | — | 11 | 67 | 51 | 6 | 10 | 32 | 76% | 48% | ≥10待复评 |
 | code-review | broad | claude | native | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | code-review | broad | claude | none | 1 | 1 | 1 | 0 | 0 | 1 | 100% | 100% | — |
 | code-review | broad | claude | step1 | 2 | 0 | 0 | 0 | 0 | 0 | — | — | — |
-| code-review | broad | claude | — | 5 | 6 | 6 | 0 | 0 | 3 | 100% | 50% | — |
+| code-review | broad | claude | — | 7 | 8 | 7 | 1 | 0 | 3 | 88% | 38% | — |
 | code-review | broad | native | scope-drift | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | code-review | domain | claude | backend | 1 | 4 | 3 | 0 | 1 | 2 | 75% | 50% | — |
 | code-review | domain | claude | checklist | 1 | 2 | 0 | 1 | 1 | 0 | 0% | 0% | — |
 | code-review | domain | claude | none | 1 | 3 | 3 | 0 | 0 | 2 | 100% | 67% | — |
-| code-review | domain | claude | — | 8 | 26 | 19 | 4 | 3 | 9 | 73% | 35% | — |
+| code-review | domain | claude | — | 10 | 35 | 25 | 4 | 6 | 11 | 71% | 31% | ≥10待复评 |
 | code-review | history | claude | blame | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | code-review | history | claude | git-blame | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | code-review | history | claude | none | 1 | 2 | 1 | 1 | 0 | 0 | 50% | 0% | — |
-| code-review | history | claude | — | 8 | 4 | 2 | 2 | 0 | 0 | 50% | 0% | — |
+| code-review | history | claude | — | 10 | 10 | 6 | 3 | 1 | 1 | 60% | 10% | ≥10待复评 |
 | code-review | outside-voice | claude-fallback | code-voice | 1 | 4 | 2 | 1 | 1 | 1 | 50% | 25% | — |
-| code-review | outside-voice | codex | code-voice | 10 | 32 | 27 | 2 | 3 | 12 | 84% | 38% | ≥10待复评 |
-| code-review | outside-voice | codex | hr-tg | 2 | 3 | 3 | 0 | 0 | 2 | 100% | 67% | — |
+| code-review | outside-voice | codex | code-voice | 12 | 38 | 33 | 2 | 3 | 13 | 87% | 34% | ≥10待复评 |
+| code-review | outside-voice | codex | hr-tg | 3 | 7 | 6 | 0 | 1 | 2 | 86% | 29% | — |
 | spec-review | adversarial | claude | - | 1 | 8 | 8 | 0 | 0 | 4 | 100% | 50% | — |
 | spec-review | adversarial | claude | d1-t2 | 1 | 5 | 4 | 1 | 0 | 2 | 80% | 40% | — |
 | spec-review | adversarial | claude | d2-d3-scope | 1 | 4 | 4 | 0 | 0 | 2 | 100% | 50% | — |
 | spec-review | adversarial | claude | none | 2 | 30 | 28 | 2 | 0 | 9 | 93% | 30% | — |
-| spec-review | adversarial | claude | — | 5 | 41 | 35 | 4 | 2 | 22 | 85% | 54% | — |
+| spec-review | adversarial | claude | — | 7 | 71 | 64 | 5 | 2 | 29 | 90% | 41% | — |
 | spec-review | broad | claude | - | 1 | 3 | 3 | 0 | 0 | 1 | 100% | 33% | — |
 | spec-review | broad | claude | autoplan-adapted | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | spec-review | broad | claude | none | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
-| spec-review | broad | claude | — | 5 | 13 | 13 | 0 | 0 | 6 | 100% | 46% | — |
+| spec-review | broad | claude | — | 7 | 27 | 27 | 0 | 0 | 8 | 100% | 30% | — |
 | spec-review | broad | grill-substituted | design | 1 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
 | spec-review | domain | claude | backend | 1 | 5 | 5 | 0 | 0 | 1 | 100% | 20% | — |
 | spec-review | domain | claude | none | 2 | 12 | 12 | 0 | 0 | 3 | 100% | 25% | — |
-| spec-review | domain | claude | — | 3 | 16 | 16 | 0 | 0 | 12 | 100% | 75% | — |
+| spec-review | domain | claude | — | 5 | 26 | 26 | 0 | 0 | 13 | 100% | 50% | — |
 | spec-review | grounding | claude | - | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | spec-review | grounding | claude | code-facts | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | spec-review | grounding | claude | none | 2 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
-| spec-review | grounding | claude | — | 5 | 18 | 14 | 3 | 0 | 7 | 82% | 39% | — |
-| spec-review | outside-voice | claude-fallback | design-voice | 1 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
-| spec-review | outside-voice | codex | design-voice | 7 | 28 | 25 | 2 | 1 | 7 | 89% | 25% | — |
-| spec-review | outside-voice | codex | hr-tg | 1 | 3 | 3 | 0 | 0 | 1 | 100% | 33% | — |
+| spec-review | grounding | claude | — | 7 | 24 | 20 | 3 | 0 | 10 | 87% | 42% | — |
+| spec-review | outside-voice | claude-fallback | design-voice | 2 | 12 | 12 | 0 | 0 | 0 | 100% | 0% | — |
+| spec-review | outside-voice | codex | design-voice | 8 | 34 | 31 | 2 | 1 | 7 | 91% | 21% | — |
+| spec-review | outside-voice | codex | hr-tg | 2 | 7 | 7 | 0 | 0 | 2 | 100% | 29% | — |
 
 > 无锚样本 28 份（旧格式,不纳入；份=报告文件数，每 change 常含 spec/code 两份，非 change 数；去重后 15 个 change）: 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-streamline-workflow-automation, 2026-07-03-minimize-repo-footprint, 2026-07-03-minimize-repo-footprint, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-ship, 2026-07-03-sdflow-ship, 2026-07-04-cross-model-outside-voice, 2026-07-04-cross-model-outside-voice, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening-2, 2026-07-04-ship-gate-hardening-2, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-review-tool-followups, 2026-07-05-review-tool-followups, 2026-07-05-three-lens-decision-framework, 2026-07-05-three-lens-decision-framework, 2026-07-05-workflow-metrics-loop
 > 解析失败 0 份（编码/IO 错误，已跳过未计入聚合，不拖垮全局）: 无

@@ -398,3 +398,110 @@ def test_surfacing_groupkey_matches_render_table_on_empty_lens(tmp_path):
     block = R.surfacing_block(str(tmp_path))
     assert "⚠️ 待复评:" in block
     assert "出现轮数 10" in block   # 10 份同键锚合并计数=10，命中≥10
+
+
+# ============================ 一览（语义化总结）============================
+DECISION_WORDS = ["说明", "意味着", "因此", "所以", "建议", "应该",
+                  "该砍", "值得", "可考虑", "淘汰", "降采样", "优化掉"]
+
+
+def _agg(layer, lens, runner, site, f, a=0, cut=0, defer=0, ind=0):
+    return {"layer": layer, "lens": lens, "runner": runner, "site": site,
+            "findings": str(f), "采纳": str(a), "裁掉": str(cut),
+            "defer": str(defer), "独立": str(ind)}
+
+
+def test_fmt_dur_precision():
+    # 亚分钟保留小数（不 round 成 "0 min" 骗人）；≥1min 整数；≥60min 转 hr
+    assert R._fmt_dur(0.2) == "0.2 min"
+    assert R._fmt_dur(7) == "7 min"
+    assert R._fmt_dur(30.4) == "30 min"
+    assert R._fmt_dur(120) == "2.0 hr"
+    assert R._fmt_dur(756) == "12.6 hr"
+
+
+def test_semantic_summary_card_and_paragraph():
+    stage = {"spec-review": 400.0, "impl": 300.0, "code-review": 100.0}
+    cost = [("big", 756.0, False), ("small", 7.0, False), ("boundary", 0.0, True)]
+    agg = [_agg("code-review", "adversarial", "claude", "—", 10, a=8, cut=1, defer=1, ind=5),
+           _agg("code-review", "adversarial", "claude", "—", 5, a=4, ind=2),
+           _agg("spec-review", "domain", "claude", "—", 3, a=3)]
+    out = R.semantic_summary(4, 2, stage, cost, 1, agg)
+    # 指标卡：纯计数，无平均值列
+    assert "| 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |" in out
+    assert "| 4 | ~13.3 hr | 2 | 1 |" in out   # 总墙钟=stage_totals 之和 800min=13.3hr
+    assert "平均" not in out
+    # 段落：覆盖量 / 阶段大头 / 成本两端(含倍数) / 价值大头 / 待复评
+    assert "覆盖 **4 个 change**" in out
+    assert "设计审 50%" in out and "写实现 38%" in out and "合计 88%" in out
+    assert "最重的是 big（约 12.6 hr）" in out
+    assert "最轻的是 small（7 min）" in out
+    assert "相差约 108 倍" in out                      # 756/7≈108
+    assert "代码审对抗镜（15 条，采纳率 86%）" in out   # 10+5 findings 合并；采纳12/(12+1+1)=86%
+    assert "1 面镜达到待复评轮数阈值" in out
+
+
+def test_semantic_summary_no_decision_words():
+    stage = {"spec-review": 400.0, "impl": 300.0}
+    cost = [("big", 756.0, False), ("small", 7.0, False)]
+    agg = [_agg("code-review", "adversarial", "claude", "—", 10, a=8)]
+    out = R.semantic_summary(4, 2, stage, cost, 1, agg)
+    for w in DECISION_WORDS:
+        assert w not in out, f"决策/解读词泄漏: {w}"
+
+
+def test_semantic_summary_no_walltime_degrades():
+    # grand_total=0：总墙钟卡片显 "—"，无阶段句、无成本两端句，不崩
+    out = R.semantic_summary(3, 0, {}, [("a", 0.0, True)], 0, [])
+    assert "| 3 | — | 0 | 0 |" in out
+    assert "价值维暂无数据" in out
+    assert "评审时间集中在" not in out
+    assert "耗时最重" not in out
+
+
+def test_semantic_summary_no_anchor_degrades():
+    # M=0：价值维降级句，无 top-mirror 句（即便 agg 非空也不出，防止无锚却报价值）
+    stage = {"impl": 120.0}
+    agg = [_agg("code-review", "adversarial", "claude", "—", 10, a=8)]
+    out = R.semantic_summary(2, 0, stage, [("x", 120.0, False)], 0, agg)
+    assert "价值维暂无数据" in out
+    assert "出问题最多" not in out
+
+
+def test_semantic_summary_subminute_no_absurd_ratio():
+    # 最轻 change 亚分钟(0.2min)：如实显 0.2 min，但不给无意义倍数
+    cost = [("big", 756.0, False), ("plan", 0.2, False)]
+    out = R.semantic_summary(2, 1, {"impl": 756.2},
+                             cost, 0, [_agg("code-review", "domain", "claude", "—", 1, a=1)])
+    assert "最轻的是 plan（0.2 min）" in out
+    assert "倍" not in out
+
+
+def test_semantic_summary_single_change():
+    # 仅 1 个有效墙钟 change：出"仅 X 有可解析墙钟"，不出两端/倍数
+    out = R.semantic_summary(1, 0, {"impl": 50.0}, [("solo", 50.0, False)], 0, [])
+    assert "仅 solo 有可解析墙钟" in out
+    assert "最重的是" not in out
+
+
+def test_top_mirror_runner_suffix_for_outside_voice():
+    # 非 claude runner（outside-voice codex）作 label 后缀，claude 不加后缀
+    agg = [_agg("code-review", "outside-voice", "codex", "code-voice", 20, a=17, cut=2, defer=1, ind=8),
+           _agg("code-review", "domain", "claude", "—", 5, a=5)]
+    label, findings, rate = R._top_mirror(agg)
+    assert label == "代码审外部声音镜（codex）"
+    assert findings == 20
+    assert rate == "85%"                     # 17/(17+2+1)
+
+
+def test_top_mirror_none_when_no_findings():
+    assert R._top_mirror([]) is None
+    assert R._top_mirror([_agg("code-review", "domain", "claude", "—", 0)]) is None
+
+
+def test_build_report_includes_overview(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    md = R.build_report(str(root))
+    assert "## 一览" in md
+    assert "| 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |" in md

@@ -66,7 +66,10 @@ python3 ~/.codex/skills/sdflow-retro/scripts/retro_report.py --root "$(git rev-p
    findings/采纳率/独立发现数；坏文件（IO/解码错误）fail-safe 跳过，不崩报告。
 4. 原子写 `openspec/retro/report.md`：顶部覆盖计数（覆盖 N change / 有真锚 M / 边界
    不可解析 K——**M 必须显性**，样本量 N 不等于有真实度量锚的 M，实测常见 M ≪ N）、
-   D12 待复评区块、per-change 明细表（含 hr-tg 双列 + in-progress/archived 状态）、
+   D12 待复评区块、**一览段**（精简指标卡「复盘 change / 总墙钟 / 有真锚 / 待复评镜」+
+   语义化中文段落，把下方表格里的数字提炼成一眼可读的描述——只呈现不决策：只做占比/极值/
+   谁最多的描述性复述，不含「说明/建议/该砍」等解读或决策词；指标卡只放纯计数，不放
+   会掩盖双峰分布真相的平均值）、per-change 明细表（含 hr-tg 双列 + in-progress/archived 状态）、
    阶段占比、成本双峰（总墙钟 vs code-review 占比）、per-镜价值表。
 
 ## 跑完之后
