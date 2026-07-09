@@ -138,7 +138,7 @@
 状态: PLANNED
 成员: (生成) T78, T79, T80, T81, T82, T83, T84, T85
 优先级: P1（4.B 最高〔4.C 已交付〕· 4.D.* 次 · 4.A/4.D.3 待 embedded 契约 · T85=P6 端态 A 已定·压轴排 P4 后）
-计划: 目标态重评 P4 脚本化候选 + P6 端态决策。✅已交付:T78(4.C lens-metric 手数归约,闭合 §1.2 痛点#2 —— change implement-mechanical-layer-hardening-p4-lens-metric-emit / bd7c05f);★该做未做:T79(4.B maintain set-diff)·T80/T81/T82(4.D.1/2/4 小守卫);◐该做待 embedded 契约:T83(4.A log_check)·T84(4.D.3);端态已定:T85(P6=端态 A 迁 frontmatter 根治,否决 B 治标;约束①历史不迁使成本≈P5 dual-read;压轴排 P4 后)。判据=目标态(§1.3+adr/0006)+根治,非现状快照
+计划: 目标态重评 P4 脚本化候选 + P6 端态决策。✅已交付:T78(4.C lens-metric 手数归约,闭合 §1.2 痛点#2 —— change implement-mechanical-layer-hardening-p4-lens-metric-emit / bd7c05f);★该做未做〔explore 拍板 A·2 change：① T79(4.B maintain set-diff)块头单开 · ② T80/T81/T82(4.D.1/2/4 小守卫)三合一;4.B 先〕;◐该做待 embedded 契约:T83(4.A log_check)·T84(4.D.3);端态已定:T85(P6=端态 A 迁 frontmatter 根治,否决 B 治标;约束①历史不迁使成本≈P5 dual-read;压轴排 P4 后)。判据=目标态(§1.3+adr/0006)+根治,非现状快照
 
 ### implement-mechanical-layer-hardening-p4-lens-metric-emit — implement-mechanical-layer-hardening-p4-lens-metric-emit
 状态: PLANNED

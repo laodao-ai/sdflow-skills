@@ -117,9 +117,10 @@
 - [ ] 起手时按**目标态**（非当下痛感）确认 producer 契约就绪度——★ 组随时可起；◐ 组待 embedded 契约
 
 ### 目标
-- 把 survey 的编排机械步候选（4.A-4.D.4）**按目标态逐项脚本化**，模型不再手做确定性判定；每子项独立一次 change 粒度，按 producer 就绪度排序（**非**按当下痛点取子集）。
+- 把 survey 的编排机械步候选（4.A-4.D.4）**按目标态逐项脚本化**，模型不再手做确定性判定；按 producer 就绪度排序（**非**按当下痛点取子集）。
+  - **⚠️ change 粒度订正（2026-07-09，explore 拍板 A）**：原「每子项独立一次 change 粒度」按 fold-vs-defer 判据（workflow 循环固定成本高，同 capability∧低增量∧高耦合于同一基座则 fold）**订正**——★组落 **2 次 change**：① 4.B `maintain_scan.py`（块头·独立新脚本+maintain 数据类化，单开）；② 4.D 小校验器组（4.D.1/2/4 三个同型 reason_code 校验器三合一，不各开一次）。4.C 已交付（bd7c05f）。◐组（4.A/4.D.3）待 embedded 契约不排期。顺序：4.B 先、4.D 组后。
 
-### 子任务（每项 ≈ 一次 change，按痛点取子集）
+### 子任务（★组=2 change：4.B 单开 + 4.D.1/2/4 三合一；◐组待契约）
 #### 4.A `log_check.py`（P5）
 - [ ] 4.A.1 embedded-test-sop 模式 B：`log_check.py --log serial.log --rules *-log-checks.yaml` 解释器（时间窗 + `must_contain`/`must_not_contain`/`must_contain_before` + severity rollup），输出同款 PASS/FAIL 报告；保留 yaml 标「需人眼」的平台侧项给模型。
 #### 4.B `maintain_scan.py`（P6）
