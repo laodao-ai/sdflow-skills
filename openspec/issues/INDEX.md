@@ -85,7 +85,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T78 | todo | PROPOSED | - |
 | T79 | todo | PROPOSED | - |
 | T80 | todo | PROPOSED | - |
 | T81 | todo | PROPOSED | - |
@@ -165,4 +164,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 35 项已闭合（bug: 5，todo: 30）
+- 共 36 项已闭合（bug: 5，todo: 31）

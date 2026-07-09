@@ -125,7 +125,7 @@
 #### 4.B `maintain_scan.py`（P6）
 - [ ] 4.B.1 maintain INDEX↔文件系统 set-diff + CLAUDE.md 过时引用 + bundle 陈旧告警只读报告；保留「新 spec 归哪组 / 是否修复」给模型/人。
 #### 4.C `lens_metric_emit.py`（P7）
-- [x] 4.C.1 吃结构化 findings（每条带命中镜集 + 裁决 + sev）→ 归约出格式/字段/enum 正确的 lens-metric 锚行 + 计数；把「数值一致性信任边界」从手数收敛成脚本归约；保留去重 + 对抗裁决给模型。〔✅ 已交付，change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge `bd7c05f`：`lens_metric_emit.py` 186 行 stdlib + 契约 fold/input-schema 机读块 + 四方单一源守卫 + 两审 SKILL 落锚步；adr/0012；spec-review 8 源/code-review 8 源冷审 F1 高危订正；39+100 passed·dogfood CLEAN。详见 task-log〕
+- [x] 4.C.1 吃结构化 findings（每条带命中镜集 + 裁决 + sev）→ 归约出格式/字段/enum 正确的 lens-metric 锚行 + 计数；把「数值一致性信任边界」从手数收敛成脚本归约；保留去重 + 对抗裁决给模型。〔✅ 已交付，change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge `bd7c05f`：`lens_metric_emit.py` 186 行 stdlib + 契约 fold/input-schema 机读块 + 四方单一源守卫 + 两审 SKILL 落锚步；adr/0012；spec-review 8 源/code-review 8 源冷审 F1 高危订正；39+100 passed·dogfood CLEAN。详见 task-log。**issues 池闭环**：目标态重评批 `mlh-p4-target-state` 的 T78（=本 4.C）已回填 DONE（evidence `bd7c05f`，2026-07-09 对账）——该批 ★ 组余 T79(4.B)/T80/T81/T82(4.D.1/2/4)〕
 #### 4.D 小校验器组（P8）
 - [ ] 4.D.1 outside-voice 复用守卫（锚 mode + 时间戳 + 结构三判 → reason_code 退出码）。
 - [ ] 4.D.2 HR-TG 交集判定（TG 集 ∩ HR-TG 子集 → hit 列表/none + 规范锚串，清单从 trigger-catalog 单一源读；`tg02_hit` 已有先例）。
