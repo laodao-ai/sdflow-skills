@@ -221,3 +221,58 @@ def test_stale_shadow_only_tools_clean(tmp_path):
     # 陈旧遮蔽节存在但无残留规则本体
     seg = r.split("陈旧遮蔽")[1]
     assert "workflow.md" not in seg and "spec-checklists" not in seg
+
+
+def test_stale_shadow_present_not_reported_consistent(tmp_path):
+    # 结构完好、set-diff 全空，但 workflow/ 残留规则副本 → 不应输出「一致，无差异」
+    # （has_diff 须纳入 stale_shadow，否则「陈旧遮蔽」与「一致」自相矛盾）
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="",
+                     workflow=["workflow.md"])
+    r = _run(root)
+    assert "一致，无差异" not in r
+
+
+def test_index_missing_nonzero(tmp_path):
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=None)  # 无 INDEX.md
+    rc = ms.main(["--root", root])
+    assert rc != 0
+
+
+def test_specs_dir_missing_nonzero(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "openspec").mkdir()
+    (tmp_path / "openspec" / "INDEX.md").write_text("# I\n", encoding="utf-8")
+    rc = ms.main(["--root", str(tmp_path)])
+    assert rc != 0
+
+
+def test_zero_entries_index_is_ok_not_fail(tmp_path):
+    # 结构完好、0 条 spec 条目 → 退出 0 + 全部报新增未索引（响亮，非 fail）
+    root = make_repo(tmp_path, specs=["foo", "baz"], rules=[], index_body="")
+    rc = ms.main(["--root", root])
+    assert rc == 0
+    r = _run(root)
+    assert "foo" in r and "baz" in r
+
+
+def test_rules_dir_missing_is_ok(tmp_path):
+    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    root = make_repo(tmp_path, specs=["foo"], rules=None, index_body=body)  # 无 rules/
+    rc = ms.main(["--root", root])
+    assert rc == 0
+
+
+def test_readonly_no_file_writes(tmp_path):
+    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    root = make_repo(tmp_path, specs=["bar"], rules=[], index_body=body)
+    subprocess.run(["git", "-C", root, "add", "-A"], capture_output=True)
+    # 初始 commit 使 git status 可比
+    subprocess.run(["git", "-C", root, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-m", "init", "--allow-empty"], capture_output=True)
+    subprocess.run(["git", "-C", root, "add", "-A"], capture_output=True)
+    subprocess.run(["git", "-C", root, "-c", "user.email=t@t", "-c", "user.name=t",
+                    "commit", "-m", "seed"], capture_output=True)
+    ms.main(["--root", root])
+    st = subprocess.run(["git", "-C", root, "status", "--porcelain"],
+                        capture_output=True, text=True)
+    assert st.stdout.strip() == ""

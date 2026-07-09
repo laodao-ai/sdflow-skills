@@ -219,7 +219,10 @@ def run_scan(root):
 
 def build_report(diff, mgr_warns, claude_refs, stale_shadow):
     lines = ["# maintain_scan 差异报告", ""]
-    any_diff = any(diff[k][t] for k in ("new", "stale") for t in ("spec", "rule"))
+    any_diff = (
+        any(diff[k][t] for k in ("new", "stale") for t in ("spec", "rule"))
+        or bool(claude_refs) or bool(stale_shadow)
+    )
     lines.append("## 新增未索引")
     for t in ("spec", "rule"):
         for n in sorted(diff["new"][t]):
