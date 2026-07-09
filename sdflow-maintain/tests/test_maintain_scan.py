@@ -171,3 +171,34 @@ def test_claude_placeholder_generic_fence_not_reported(tmp_path):
     r = _run(root)
     # gone 仍是已删集，但 CLAUDE 里只有占位/泛指/围栏 → 不报 CLAUDE 过时引用
     assert "过时引用" not in r or "CLAUDE.md" not in r.split("过时引用")[1].split("陈旧遮蔽")[0]
+
+
+def test_claude_unreadable_fails(tmp_path):
+    # scan_claude_refs 的 except (OSError, UnicodeDecodeError): raise MaintainScanError
+    # 无测试覆盖；用非法 UTF-8 字节（可移植，优于 chmod 000 在 root/CI 下不可靠）触发 UnicodeDecodeError。
+    body = "| `gone` | [specs/gone/spec.md](./specs/gone/spec.md) | x |"
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body)
+    claude_path = os.path.join(root, "CLAUDE.md")
+    with open(claude_path, "wb") as f:
+        f.write(b"\xff\xfe bad bytes")
+    with pytest.raises(ms.MaintainScanError):
+        ms.run_scan(root)
+
+
+def test_placeholder_in_specs_domain_not_reported(tmp_path):
+    # 占位符 {name} 落在 specs/rules 匹配域内（非 test_claude_placeholder_generic_fence_not_reported
+    # 用的 roadmaps 前缀，那个前缀本就不在 specs|rules 域，未真正验证剥除逻辑）。
+    # 对照行（真实引用 openspec/specs/gone/spec.md）证明扫描确实在跑，只是占位符那行被排除。
+    body = "| `gone` | [specs/gone/spec.md](./specs/gone/spec.md) | x |"
+    claude = textwrap.dedent("""\
+        见 openspec/specs/{name}/spec.md 模板
+        见 openspec/specs/gone/spec.md 的定义
+        """)
+    root = make_repo(tmp_path, specs=[], rules=[], index_body=body, claude=claude)
+    r = _run(root)
+    assert "过时引用" in r and "gone" in r
+    claude_section = r.split("过时引用")[1]
+    # 占位符行（第1行）剥除后 "openspec/specs//spec.md" 不匹配 <name> 域 → 不应产生命中
+    assert "CLAUDE.md:1:" not in claude_section
+    # 对照：真实引用行（第2行）必须被报，证明扫描确实在工作
+    assert "CLAUDE.md:2:" in claude_section
