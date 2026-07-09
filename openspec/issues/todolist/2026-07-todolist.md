@@ -98,6 +98,9 @@
 | T90 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） | 代码质量 | PROPOSED | 2026-07-09 01:50 | done-roadmap-writeback | done-roadmap-writeback |
 | T91 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） | 代码质量 | PROPOSED | 2026-07-09 01:50 | done-roadmap-writeback | done-roadmap-writeback |
 | T92 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 | 代码质量 | PROPOSED | 2026-07-09 01:50 | done-roadmap-writeback | done-roadmap-writeback |
+| T93 | `resolve-workflow.sh` | bash 第3份 RULE_MARKERS 内联副本（resolve-workflow.sh）跨语言难与 init.py/maintain_scan.py 同守——一致性守卫只覆盖两份 Python 副本，bash 副本漂移不被机验 | 基础设施 | OPEN | 2026-07-09 13:36 | mlh-p4-maintain-scan |  |
+| T94 | `maintain_scan.py + init.py` | 陈旧遮蔽告警文案第三处跨脚本复述 + checkpoint 孤儿路径：R-guard 不机验文案（文案守卫脆），maintain 抄 init 文案仅语义等价、漂移不被捕获——已知残差 | 代码质量 | OPEN | 2026-07-09 13:36 | mlh-p4-maintain-scan |  |
+| T95 | `sdflow-maintain/tests/test_marker_consistency.py` | 守卫加载用 assert os.path.isfile + exec_module hard-fail；sdflow-init 目录整体缺席场景可加 importorskip 更优雅降级（当前 path-assert 直接 fail，defer 兜底优化） | 代码质量 | OPEN | 2026-07-09 13:36 | mlh-p4-maintain-scan |  |
 
 ---
 
