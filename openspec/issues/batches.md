@@ -152,3 +152,9 @@
 优先级: P3
 计划: roadmap_writeback_draft 健壮性 defer（非阻塞）：T89 probe_format 全文扫描非限定 phase（混合格式误判 checkbox；修法 probe 增 phase 参数只扫该 phase 行段）·T90 frontmatter 解析与 ship_gate.py parity 缺口 BOM/tab 缩进/YAML 行尾注释（nested-key 已 FIX-3 修）·T91 PREFIX_RE 贪婪 `.+` 对含 -pN- 样式 change 名命名固有歧义·T92 test_verify_state_malformed_* 无 ship-gate 包裹。
 
+### mlh-p4-maintain-scan — mlh-p4-maintain-scan
+状态: PLANNED
+成员: (生成) T93, T94, T95, T96
+优先级: <待填>
+计划: <待填>
+

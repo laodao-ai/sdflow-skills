@@ -58,7 +58,6 @@
 | T14 | todo | PROPOSED | minimize-repo-footprint |
 | T15 | todo | PROPOSED | minimize-repo-footprint |
 | T16 | todo | PROPOSED | minimize-repo-footprint |
-| T17 | todo | PROPOSED | minimize-repo-footprint |
 | T18 | todo | PROPOSED | minimize-repo-footprint |
 | T6 | todo | PROPOSED | minimize-repo-footprint |
 | T7 | todo | PROPOSED | minimize-repo-footprint |
@@ -80,6 +79,15 @@
 | T71 | todo | PROPOSED | mlh-p3-determ-guards |
 | T72 | todo | PROPOSED | mlh-p3-determ-guards |
 | T73 | todo | PROPOSED | mlh-p3-determ-guards |
+
+### 批次：mlh-p4-maintain-scan
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T93 | todo | PROPOSED | mlh-p4-maintain-scan |
+| T94 | todo | PROPOSED | mlh-p4-maintain-scan |
+| T95 | todo | PROPOSED | mlh-p4-maintain-scan |
+| T96 | todo | PROPOSED | mlh-p4-maintain-scan |
 
 ### 批次：mlh-p4-target-state
 
@@ -164,4 +172,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 36 项已闭合（bug: 5，todo: 31）
+- 共 37 项已闭合（bug: 5，todo: 32）
