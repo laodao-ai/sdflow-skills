@@ -1,6 +1,5 @@
 import importlib.util
 import os
-import subprocess
 import sys
 import textwrap
 
@@ -262,17 +261,28 @@ def test_rules_dir_missing_is_ok(tmp_path):
     assert rc == 0
 
 
+def _snapshot(root):
+    """os.walk 收集 root 下全部文件的 {相对路径: 字节内容}，跳过 .git（make_repo 造的是
+    mkdir 出的假 .git，本就无实质内容，但仍显式排除以稳妥）。用于只读不变量断言：
+    脚本运行前后快照必须逐字节相等，否则说明脚本写/改了文件（真 load-bearing，
+    不像原先依赖假 .git 令 `git status` 恒空的假绿写法）。"""
+    snap = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        if ".git" in dirnames:
+            dirnames.remove(".git")
+        for fname in filenames:
+            fpath = os.path.join(dirpath, fname)
+            rel = os.path.relpath(fpath, root)
+            with open(fpath, "rb") as f:
+                snap[rel] = f.read()
+    return snap
+
+
 def test_readonly_no_file_writes(tmp_path):
-    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
-    root = make_repo(tmp_path, specs=["bar"], rules=[], index_body=body)
-    subprocess.run(["git", "-C", root, "add", "-A"], capture_output=True)
-    # 初始 commit 使 git status 可比
-    subprocess.run(["git", "-C", root, "-c", "user.email=t@t", "-c", "user.name=t",
-                    "commit", "-m", "init", "--allow-empty"], capture_output=True)
-    subprocess.run(["git", "-C", root, "add", "-A"], capture_output=True)
-    subprocess.run(["git", "-C", root, "-c", "user.email=t@t", "-c", "user.name=t",
-                    "commit", "-m", "seed"], capture_output=True)
-    ms.main(["--root", root])
-    st = subprocess.run(["git", "-C", root, "status", "--porcelain"],
-                        capture_output=True, text=True)
-    assert st.stdout.strip() == ""
+    # bar 新增未索引、foo 已删未清理 —— 让 run_scan 有实际差异可报，而非空转
+    root = make_repo(tmp_path, specs=["bar"], rules=[],
+                     index_body="| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |")
+    before = _snapshot(root)
+    ms.run_scan(root)
+    after = _snapshot(root)
+    assert before == after
