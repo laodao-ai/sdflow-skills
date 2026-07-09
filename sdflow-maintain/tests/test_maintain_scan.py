@@ -45,8 +45,12 @@ def make_repo(tmp_path, specs=(), rules=None, index_body=None,
     if index_body is not None:
         managed = ""
         if managed_entries:
+            # [impl-review-fix] 链接形态改为 rules/{n}.md（命中 _RULE_LINK），使
+            # test_managed_block_entries_not_stale 真依赖 split_managed_block 的剥离——
+            # 原 workflow/{n}.md 形态不命中 _SPEC_LINK/_RULE_LINK，split_managed_block
+            # 换 no-op 该测试仍会过（假绿）。
             rows = "\n".join(
-                f"| `{n}` | [workflow/{n}.md](./workflow/{n}.md) | x |"
+                f"| `{n}` | [rules/{n}.md](./rules/{n}.md) | x |"
                 for n in managed_entries
             )
             managed = f"{MANAGED_START}\n{rows}\n{MANAGED_END}\n"
@@ -97,7 +101,9 @@ def test_fully_consistent(tmp_path):
 
 
 def test_managed_block_entries_not_stale(tmp_path):
-    # 托管块内列 trigger-catalog（无对应 rules/rule 文件），MUST NOT 报「已删未清理」
+    # 托管块内列 trigger-catalog，链接形态命中 _RULE_LINK（rules/trigger-catalog.md，无对应
+    # rules/ 文件）。若 split_managed_block 未真正剥离该块，parse_index_entries 会把它计入
+    # rules 集 → 因 fs 无对应文件而报「已删未清理」。MUST NOT 报，真依赖块被剥离（非假绿）。
     root = make_repo(tmp_path, specs=[], rules=[], index_body="",
                      managed_entries=["trigger-catalog"])
     r = _run(root)
@@ -286,3 +292,127 @@ def test_readonly_no_file_writes(tmp_path):
     ms.run_scan(root)
     after = _snapshot(root)
     assert before == after
+
+
+# [impl-review-fix] Fix-1: 三处 fence 状态机（split_managed_block / parse_index_entries /
+# scan_claude_refs）未闭合 ``` fail-closed。以下三条测试各打一处；INDEX 侧两个函数共享同一份
+# 输入行序列，数学上「split 干净通过」蕴含「喂给 parse_index_entries 的 body 围栏也balanced」
+# （成对 marker 检测要求 marker 间围栏必为偶数次切换，偶+偶=偶），故 parse_index_entries 自身
+# 兜底无法经完整 INDEX 文本间接逼出——用直接单测喂 body_lines 证明该层独立可达、非死代码。
+
+def test_index_unclosed_fence_fails(tmp_path):
+    # INDEX.md 含未闭合 ``` → split_managed_block 扫到文档尾 in_fence 仍 True → fail-closed
+    # （防「未闭合围栏后内容被静默当围栏跳过 → 假一致」，design D2）。
+    body = (
+        "```\n未闭合围栏，其后内容本应可见\n"
+        "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    )
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=body)
+    with pytest.raises(ms.MaintainScanError):
+        ms.run_scan(root)
+    rc = ms.main(["--root", root])
+    assert rc != 0
+
+
+def test_parse_index_entries_unclosed_fence_fails():
+    # parse_index_entries 自身状态机同样兜底——直接单测（见上方说明：经完整 INDEX 文本
+    # 间接触发时 split_managed_block 会先行拦截，此分支需直喂 body_lines 才能独立验证）。
+    body_lines = [
+        "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |",
+        "```",
+        "未闭合围栏",
+    ]
+    with pytest.raises(ms.MaintainScanError):
+        ms.parse_index_entries(body_lines)
+
+
+def test_claude_unclosed_fence_fails(tmp_path):
+    # 某 CLAUDE.md 含未闭合 ``` → scan_claude_refs 状态机同样 fail-closed
+    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    claude = "```\n未闭合围栏\n见 openspec/specs/foo/spec.md\n"
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=body, claude=claude)
+    with pytest.raises(ms.MaintainScanError):
+        ms.run_scan(root)
+
+
+def test_mgr_warns_not_consistent(tmp_path):
+    # [impl-review-fix] Fix-2 + Fix-6②: mgr_warns（疑似 spec 条目误置托管块内，M8/D11）
+    # MUST 纳入 has_diff 判定——把一条 specs 链接误放进 opsx-init:rules 托管块内、其余全一致，
+    # 报告 MUST 出现该告警且 MUST NOT 同时输出「一致，无差异」（否则告警与「一致」自相矛盾）。
+    idx = (
+        f"# I\n\n{MANAGED_START}\n"
+        "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |\n"
+        f"{MANAGED_END}\n"
+    )
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="")
+    import pathlib
+    pathlib.Path(root, "openspec", "INDEX.md").write_text(idx, encoding="utf-8")
+    r = _run(root)
+    assert "疑似 spec 条目误置于 init 托管块内" in r
+    assert "一致，无差异" not in r
+
+
+def test_claude_ref_deleted_from_fs_and_index_reported(tmp_path):
+    # [impl-review-fix] Fix-3: scan_claude_refs 判定改为直接核对 fs 是否存在，不再依赖
+    # diff["stale"]（= INDEX 列但 fs 缺）。主用例：spec 早已从 fs **和** INDEX 都清理干净
+    # （因此根本不在 stale 集里——stale = indexed - fs，indexed 里也没有它），但某 CLAUDE.md
+    # 忘了同步、仍引用它 → 仍须报「过时引用」。旧实现基于 diff["stale"] 会漏报此例。
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="",
+                     claude="见 openspec/specs/ghost/spec.md 的说明\n")
+    r = _run(root)
+    assert "过时引用" in r and "ghost" in r and "CLAUDE.md" in r
+
+
+def test_claude_dir_walk_unreadable_fails(tmp_path, monkeypatch):
+    # [impl-review-fix] Fix-5: os.walk 目录级不可读（权限异常等）也须 fail-closed，与文件级
+    # open() 失败对称。用 monkeypatch 让 os.walk 的 onerror 回调确定性触发（不用 chmod 000——
+    # root/CI 下不可靠）。
+    body = "| `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |"
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body=body)
+
+    def fake_walk(top, onerror=None, **kwargs):
+        if onerror is not None:
+            onerror(OSError(13, "Permission denied", os.path.join(str(top), "blocked")))
+        return iter([])
+
+    monkeypatch.setattr(ms.os, "walk", fake_walk)
+    with pytest.raises(ms.MaintainScanError):
+        ms.run_scan(root)
+
+
+def test_index_marker_inside_fence_not_treated_as_real(tmp_path):
+    # [impl-review-fix] Fix-6①: fence-aware —— INDEX 托管块 marker 出现在 ``` 围栏内的示例中
+    # （如文档讲解 marker 语法用的代码块）MUST NOT 被当真 marker：不应触发 marker 配对逻辑，
+    # 块外的真实条目应正常参与 set-diff。
+    idx = textwrap.dedent(f"""\
+        # I
+
+        以下是托管块 marker 的示例写法：
+        ```
+        {MANAGED_START}
+        ```
+
+        真实的 spec 索引：
+        | `foo` | [specs/foo/spec.md](./specs/foo/spec.md) | x |
+        """)
+    root = make_repo(tmp_path, specs=["foo"], rules=[], index_body="")
+    import pathlib
+    pathlib.Path(root, "openspec", "INDEX.md").write_text(idx, encoding="utf-8")
+    r = _run(root)
+    # 若围栏内示例被误当真 start marker（无对应 end）会因 marker 不配对而 raise；
+    # 正确行为是忽略它、正常识别块外 foo 条目、报告一致。
+    assert "一致" in r
+
+
+def test_stale_shadow_checkpoint_orphan(tmp_path):
+    # [impl-review-fix] Fix-6③: 仓根 hack/checkpoint-commit.sh 孤儿副本（旧版仓内副本，
+    # checkpoint 已全局化）→「陈旧遮蔽」节须报告该分支。
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="")
+    import pathlib
+    hack = pathlib.Path(root, "hack")
+    hack.mkdir()
+    (hack / "checkpoint-commit.sh").write_text("#!/bin/sh\necho old\n", encoding="utf-8")
+    r = _run(root)
+    assert "陈旧遮蔽" in r
+    seg = r.split("陈旧遮蔽")[1]
+    assert "checkpoint-commit.sh" in seg

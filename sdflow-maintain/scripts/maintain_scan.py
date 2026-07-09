@@ -79,6 +79,12 @@ def split_managed_block(index_text):
             start_idx = i
         elif start_idx is not None and end_idx is None and _is_marker_line(line, MANAGED_TOKEN_END):
             end_idx = i
+    if in_fence:
+        # [impl-review-fix] 围栏未闭合 fail-closed：奇偶取反状态机若无兜底，未闭合 ``` 会让
+        # 其后全部内容被静默当围栏跳过 → 假「一致」（design D2 防假一致方向）。
+        raise MaintainScanError(
+            "INDEX.md 围栏未闭合（```），结构不可信，拒绝输出（防假一致）"
+        )
     warnings = []
     if (start_idx is None) != (end_idx is None):
         raise MaintainScanError("INDEX 托管块 marker 不配对（只有 start 或只有 end），结构不可信")
@@ -125,25 +131,40 @@ def parse_index_entries(body_lines):
             elif rm:
                 rules.add(rm.group(1))
             # ②b 非-spec/rule 链接（retro/report.md, roadmaps/…）静默排除
+    if in_fence:
+        # [impl-review-fix] 围栏未闭合 fail-closed（同 split_managed_block，防假一致）
+        raise MaintainScanError(
+            "INDEX.md 表体围栏未闭合（```），结构不可信，拒绝输出（防假一致）"
+        )
     return {"spec": specs, "rule": rules}
 
 
 # 引用匹配契约（M1/D4）：openspec/(specs|rules)/<name>(/|.md)，<name> ∈ [a-z0-9-]+
-_REF = re.compile(r"openspec/(?:specs|rules)/([a-z0-9-]+)(?:/|\.md)")
+# [impl-review-fix] 捕获组同时留住 specs/rules 类型（原正则用非捕获组丢弃类型信息），
+# 使调用方能按类型分别核对对应 fs 目录，而非依赖 INDEX diff 的 stale 集。
+_REF = re.compile(r"openspec/(specs|rules)/([a-z0-9-]+)(?:/|\.md)")
 # 占位符：花括号 token（{name} 等）
 _PLACEHOLDER = re.compile(r"\{[a-z0-9_-]+\}")
 
 
 def _iter_claude_files(root):
-    for dirpath, _dirs, files in os.walk(root):
+    def _onerror(err):
+        # [impl-review-fix] 目录级不可读 fail-closed：os.walk 默认 onerror=None 会静默跳过
+        # 不可读子目录；传回调使目录级不可读也非零退出（对称文件级 open 失败）。
+        raise MaintainScanError(f"目录扫描失败（不可读或其他 OSError）: {err.filename}: {err}")
+
+    for dirpath, _dirs, files in os.walk(root, onerror=_onerror):
         if os.sep + ".git" in dirpath:
             continue
         if "CLAUDE.md" in files:
             yield os.path.join(dirpath, "CLAUDE.md")
 
 
-def scan_claude_refs(root, deleted):
-    """扫根+子目录 CLAUDE.md，报引用已删 spec/rule 路径的位置。
+def scan_claude_refs(root, fs_specs, fs_rules):
+    """扫根+子目录 CLAUDE.md，报引用了已从文件系统删除的 spec/rule 路径的位置。
+    [impl-review-fix] 判定改为直接核对 fs 是否存在该 spec/rule（对齐 spec R2「已从文件
+    系统删除」原文语义），不再依赖 INDEX stale 集（= INDEX 列但 fs 缺）——旧判据漏掉最
+    常见用例：spec 已归档、fs+INDEX 都清了、CLAUDE.md 忘同步。
     排除：代码围栏/行内 code、占位符 {name}、泛指路径（无具体 <name>）。"""
     hits = []
     for path in _iter_claude_files(root):
@@ -161,10 +182,17 @@ def scan_claude_refs(root, deleted):
             # 剥行内 code 段再匹配（排除 `...` 内提及）
             stripped = re.sub(r"`[^`]*`", "", line)
             stripped = _PLACEHOLDER.sub("", stripped)
-            for name in _REF.findall(stripped):
-                if name in deleted:
+            for kind, name in _REF.findall(stripped):
+                exists = name in (fs_specs if kind == "specs" else fs_rules)
+                if not exists:
                     rel = os.path.relpath(path, root)
                     hits.append(f"{rel}:{lineno}: {name}")
+        if in_fence:
+            # [impl-review-fix] 围栏未闭合 fail-closed（同 INDEX 侧两处，防假一致）
+            rel = os.path.relpath(path, root)
+            raise MaintainScanError(
+                f"CLAUDE.md 围栏未闭合（```），结构不可信，拒绝输出（防假一致）: {rel}"
+            )
     return hits
 
 
@@ -211,8 +239,8 @@ def run_scan(root):
     body, mgr_warns = split_managed_block(_read_index(root))
     indexed = parse_index_entries(body)
     diff = set_diff(fs, indexed)
-    deleted = diff["stale"]["spec"] | diff["stale"]["rule"]
-    claude_refs = scan_claude_refs(root, deleted)
+    # [impl-review-fix] scan_claude_refs 改吃 fs 集合直查存在性，不再吃 INDEX stale 集
+    claude_refs = scan_claude_refs(root, fs["spec"], fs["rule"])
     stale_shadow = scan_stale_shadow(root)
     return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=stale_shadow)
 
@@ -221,16 +249,22 @@ def build_report(diff, mgr_warns, claude_refs, stale_shadow):
     lines = ["# maintain_scan 差异报告", ""]
     any_diff = (
         any(diff[k][t] for k in ("new", "stale") for t in ("spec", "rule"))
-        or bool(claude_refs) or bool(stale_shadow)
+        or bool(claude_refs) or bool(stale_shadow) or bool(mgr_warns)
+        # [impl-review-fix] mgr_warns（疑似 spec 误置托管块内等）纳入 has_diff 判定，
+        # 否则该告警会与「一致，无差异」并存，自相矛盾。
     )
     lines.append("## 新增未索引")
-    for t in ("spec", "rule"):
-        for n in sorted(diff["new"][t]):
-            lines.append(f"- {n}（{t}）")
+    new_entries = [(t, n) for t in ("spec", "rule") for n in sorted(diff["new"][t])]
+    for t, n in new_entries:
+        lines.append(f"- {n}（{t}）")
+    if not new_entries:
+        lines.append("- 无")  # [impl-review-fix] 空节占位，对齐「过时引用」「陈旧遮蔽」写法
     lines.append("## 已删未清理")
-    for t in ("spec", "rule"):
-        for n in sorted(diff["stale"][t]):
-            lines.append(f"- {n}（{t}）")
+    stale_entries = [(t, n) for t in ("spec", "rule") for n in sorted(diff["stale"][t])]
+    for t, n in stale_entries:
+        lines.append(f"- {n}（{t}）")
+    if not stale_entries:
+        lines.append("- 无")  # [impl-review-fix] 空节占位
     lines.append("## 过时引用")
     for ref in claude_refs:
         lines.append(f"- {ref}")
