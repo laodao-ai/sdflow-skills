@@ -158,3 +158,27 @@
 优先级: <待填>
 计划: <待填>
 
+### opt-p0 — 工作流优化 P0 速赢（成本+门体验）
+状态: PLANNED
+成员: (生成) T100, T101, T102, T97, T98, T99
+优先级: P0
+计划: 档位强制/缓存前缀/前置准入/微变更通道/三层摘要头/对抗镜措辞——docs/sdflow-fable5/04 §1
+
+### opt-cost — 工作流优化·成本工程
+状态: PLANNED
+成员: (生成) T103, T104, T105
+优先级: P1
+计划: effort 预算/token 度量/thinking 分档
+
+### opt-review-reliability — 工作流优化·评审可靠性
+状态: PLANNED
+成员: (生成) T106, T107, T108, T109, T110, T111, T112, T113, T114
+优先级: P1
+计划: 二元裁决/位置去偏/实修率/validator/跨模型/红旗规则/元维护/注入前缀/决策清单
+
+### opt-structure — 工作流优化·结构增强
+状态: PLANNED
+成员: (生成) T115, T116, T117, T118, T119, T120, T121, T122, T123
+优先级: P2
+计划: spec 模版/高危升级/跨工件 lint/DAG/雾区/expand-contract/硬开关/文件交接/tracker 抽象
+

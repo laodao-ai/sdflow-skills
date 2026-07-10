@@ -108,6 +108,53 @@
 | T74 | todo | PROPOSED | mlh-p5-gate-frontmatter |
 | T75 | todo | PROPOSED | mlh-p5-gate-frontmatter |
 
+### 批次：opt-cost
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T103 | todo | PROPOSED | scoped-test-per-task |
+| T104 | todo | PROPOSED | scoped-test-per-task |
+| T105 | todo | PROPOSED | scoped-test-per-task |
+
+### 批次：opt-p0
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T100 | todo | PROPOSED | scoped-test-per-task |
+| T101 | todo | PROPOSED | scoped-test-per-task |
+| T102 | todo | PROPOSED | scoped-test-per-task |
+| T97 | todo | PROPOSED | scoped-test-per-task |
+| T98 | todo | PROPOSED | scoped-test-per-task |
+| T99 | todo | PROPOSED | scoped-test-per-task |
+
+### 批次：opt-review-reliability
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T106 | todo | PROPOSED | scoped-test-per-task |
+| T107 | todo | PROPOSED | scoped-test-per-task |
+| T108 | todo | PROPOSED | scoped-test-per-task |
+| T109 | todo | PROPOSED | scoped-test-per-task |
+| T110 | todo | PROPOSED | scoped-test-per-task |
+| T111 | todo | PROPOSED | scoped-test-per-task |
+| T112 | todo | PROPOSED | scoped-test-per-task |
+| T113 | todo | PROPOSED | scoped-test-per-task |
+| T114 | todo | PROPOSED | scoped-test-per-task |
+
+### 批次：opt-structure
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T115 | todo | PROPOSED | scoped-test-per-task |
+| T116 | todo | PROPOSED | scoped-test-per-task |
+| T117 | todo | PROPOSED | scoped-test-per-task |
+| T118 | todo | PROPOSED | scoped-test-per-task |
+| T119 | todo | PROPOSED | scoped-test-per-task |
+| T120 | todo | PROPOSED | scoped-test-per-task |
+| T121 | todo | PROPOSED | scoped-test-per-task |
+| T122 | todo | PROPOSED | scoped-test-per-task |
+| T123 | todo | PROPOSED | scoped-test-per-task |
+
 ### 批次：rec2-obs-readability
 
 | ID | Pool | Status | 关联Change |
