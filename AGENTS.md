@@ -2,6 +2,33 @@
 
 本文件为项目级 AI 指令。
 
+## 项目概览
+
+本仓库是面向 Claude Code 与 Codex 的 `sdflow-skills` 集合，也是 OpenSpec 工作流 bundle 的权威源，并使用自身的 `openspec/` 目录管理变更。
+
+- 每个根目录下含 `SKILL.md` 的目录都是可安装 skill；可选的 `scripts/`、`tests/`、`assets/`、`references/` 由该 skill 自行维护。
+- `sdflow-init/assets/workflow/` 是下游 `openspec/workflow/` 规则的唯一权威源。修改工作流规则时先改这里，再通过 `sdflow-init update` 更新下游；不要仅修改下游副本。
+- 本仓的 `openspec/workflow/` 只保留工具文件，运行时规则由全局 canonical bundle 解析。不要把规则副本重新放回该目录。
+- 面向用户的新增或更新文档默认使用中文；命令、路径、文件名、产品名和代码标识符保持原文。
+
+## 常用命令
+
+```bash
+bash setup.sh                                      # 安装或刷新 Claude 与 Codex 的 skills
+pytest                                             # 运行全部测试
+pytest <skill>/tests/                              # 运行单个数据类 skill 的测试
+pytest <skill>/tests/test_file.py::test_name -v    # 运行单个用例
+git diff --check                                   # 提交前检查空白错误
+```
+
+## 修改约定
+
+- 修改数据类 skill 的 `scripts/` 时，必须同时维护并运行该 skill 的 `tests/`；纯 Markdown skill 则重点检查指令、触发条件和引用路径。
+- 新增或删除顶层 skill 时，更新 `README.md` 的 Skills 列表，并运行 `bash setup.sh` 以创建新链接或清理孤儿链接。
+- Unix 下 skill 目录通过绝对路径 symlink 安装，通常修改源文件后立即生效；但新增/删除顶层 skill，以及修改 `sdflow-init/assets/hack/` 中会复制到 `~/.sdflow/hack/` 的脚本后，必须重新运行 `bash setup.sh`。
+- 保持 `SKILL.md` frontmatter 与目录职责一致；不要跨 skill 引用其内部脚本来实现运行时依赖，优先保持 skill 自包含。
+- 修改变更管理、规则或生成资产时，遵循下方 OpenSpec 托管区块定义的触发、审查和归档流程。
+
 <!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本区块 -->
 ## OpenSpec 工作流（sdflow-init 铺设）
 
