@@ -165,6 +165,14 @@
 | T122 | todo | PROPOSED | - |
 | T123 | todo | PROPOSED | - |
 
+### 批次：rebuild-sdflow-roadmap-v2
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T129 | todo | PROPOSED | rebuild-sdflow-roadmap-v2 |
+| T130 | todo | PROPOSED | rebuild-sdflow-roadmap-v2 |
+| T131 | todo | PROPOSED | rebuild-sdflow-roadmap-v2 |
+
 ### 批次：rec2-obs-readability
 
 | ID | Pool | Status | 关联Change |

@@ -93,6 +93,6 @@
   - <决策 2 一句话>
   - <决策 N 一句话>
 - **下一步**:
-  - `/opsx:new implement-<roadmap-name>-phase-1` 开新变更进入阶段 1 实施
+  - `/opsx:new implement-<roadmap-name>-p1` 开新变更进入阶段 1 实施（命名 MUST 用 `-p<N>`，与 sdflow-done 回填解析器契约一致）
 - **备注**:
   - <任何特殊情况、取舍、承诺>
