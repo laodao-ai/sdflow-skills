@@ -94,6 +94,8 @@ flowchart LR
 
 ### 2.6 setup-matt-pocock-skills（127 行 + 5 个 seed 模版）——一次性铺设器
 
+> 深潜详解（流程解剖 / 抽象操作层翻译对照 / 本仓实例注入点亲验 / 脆弱点 / sdflow 借鉴边界）另见 [setup-matt-pocock-skills.md](./setup-matt-pocock-skills.md)。
+
 - **产出**：三份约定文档（issue-tracker / triage-labels / domain）+ CLAUDE.md 或 AGENTS.md 的 `## Agent skills` 托管块（一节一行摘要+指针）。
 - **抽象层设计（最大亮点）**：下游 skills 只说抽象动作（"publish to the issue tracker" / "apply the ready-for-agent label" / Wayfinding 六操作 Map/Child/Blocking/Frontier/Claim/Resolve），本 skill 生成的约定文档把动作**翻译**成本仓具体命令（gh / glab / 建 `.scratch` 文件）——skill 与后端完全解耦，每后端内还带降级链（无原生 sub-issue→正文 `Part of #<map>` 行；GitLab blocking 是付费功能→文本行）。
 - **canonical 角色名固定、字符串可映射**：triage 状态机以 5 个不变角色运转，仓库只改映射表右列——「协议名 vs 实现名」分离。

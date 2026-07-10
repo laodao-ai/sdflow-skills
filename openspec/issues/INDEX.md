@@ -155,6 +155,7 @@
 | T121 | todo | PROPOSED | - |
 | T122 | todo | PROPOSED | - |
 | T123 | todo | PROPOSED | - |
+| T125 | todo | PROPOSED | - |
 
 ### 批次：rec2-obs-readability
 
@@ -214,6 +215,8 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
+| T126 | todo | OPEN | - |
+| T127 | todo | OPEN | - |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 | T65 | todo | OPEN | main |
