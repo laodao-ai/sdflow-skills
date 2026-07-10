@@ -98,6 +98,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
   故改 **skill、assets/workflow 规则或 assets/hack/ 脚本**都须在开发 checkout 跑一次 `setup.sh`
   才测得到——知情临时指 dev，测完/合并后在运行 checkout 重跑 setup 还原。
 - **发布边界** = push（开发）→ pull（运行）→ **立即** setup（pull 与 setup 之间是"新 SKILL 调旧脚本"的窗口期）。
+- **反向窗口**：pull 后既有 SKILL 路由（如 ship 链序）即生效（symlink 即时），而新增 skill 的链接须 setup 后才存在——已开 `impl-pipeline: tickets` 的仓在窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement；故 pull 与 setup 之间勿跑阶段三。
 - **回滚** = 运行 checkout `git checkout <上一已知良好 commit>` + 重跑 setup.sh。
 
 ## 修改本仓库的注意
