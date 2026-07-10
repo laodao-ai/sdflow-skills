@@ -156,6 +156,10 @@ _Avoid_: maintain set-diff 时把 init 托管块条目当自己领地（越界+�
 roadmap 规划中「决策形成过程」的原始素材层，与「决策结晶」（三件套正文）相对——血统类比：footage 是毛片、design §决策是成片（词源即本仓 sdflow-roadmap 的既有措辞，非 matt 套件概念）。物理形态两种：**长档** wayfinder 的 map+tickets 落 `roadmaps/{name}/footage/` 目录；**短档**可选 memo 保持包根 `memo.md`（既有落位不迁）。引用纪律统一：三件套 MUST NOT 引用任何考古层内容（`footage/` 或 `memo.md`），有价值结论须精炼后写入正文。
 _Avoid_: 把 footage 当 wayfinder 专属产物（它是考古层统称，memo 亦属之，短档没跑 wayfinder 也适用同一引用禁令）；「详见 footage/memo」类表述（考古层是草稿证据、非权威源）
 
+**ticket（实现分解单位）** 〔grill-amendment · matt-workflow-integration〕:
+tickets 实现管线的实现分解单位 = **tracer-bullet 垂直切片**（一条打穿全层、可独立验证的行为级路径），英文原词不译。在 plan 文件与 ship_gate 契约中以 **Task 号**呈现（`### Task N:` 标题 / `checkpoint(<change>:task<N>-)` 标签），一 ticket = 一 Task 号；ticket 内验收复选框 = **实现期完成信号**（implementer 与 checkpoint 标签**双写**）。与既有两层复选框的分工：roadmap 复选框 = 规划粒度、归档后镜像回写；change tasks.md 复选框 = 需求追溯层（R-ID 载体，ticket 由它派生但不取代它）、**archive 阶段才勾**。matt 套件中 wayfinder 的讨论 ticket（map 的 issues/<NN>）是另一种 ticket（讨论单位，非实现分解），需限定词区分。
+_Avoid_: 「票」「任务」混称（tasks.md 的「任务」与 ticket 勾选时机**相反**：归档期 vs 实现期，混称会让 ship-tasks-flip 失鲜坑换面目重现）；把 wayfinder 讨论 ticket 与实现 ticket 混为一谈
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。

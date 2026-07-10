@@ -162,6 +162,13 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 
 ---
 
+## 阶段 C · tasks 受限并行 frontier（占位，待启）
+
+> 目标：让 tickets 管线的工作 frontier 从首版严格串行放宽为受限并行（T118 受限并行部分），以 `matt-workflow-integration` 试点判赢（Phase A 判据三条过，见其 `pilot-briefing.md`）为硬前置。
+> 雾区备注：具体设计信息目前空缺——每 ticket 分支下 gate 完成窗口的可见性契约尚未设计（当前 gate 完成窗口 = 当前分支 `[plan_first_sha, HEAD]` 闭区间，受限并行下每 ticket 分支的 checkpoint 标签在合回主分支前不可见、`done_tasks` 系统性少算，是契约级改动；`matt-workflow-integration` proposal Non-Goals 已声明此缺口）。具体设计留待启动时另行 explore，本 roadmap 不在此展开。
+
+---
+
 ## 阶段依赖图
 
 ```

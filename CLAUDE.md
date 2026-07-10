@@ -98,6 +98,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
   故改 **skill、assets/workflow 规则或 assets/hack/ 脚本**都须在开发 checkout 跑一次 `setup.sh`
   才测得到——知情临时指 dev，测完/合并后在运行 checkout 重跑 setup 还原。
 - **发布边界** = push（开发）→ pull（运行）→ **立即** setup（pull 与 setup 之间是"新 SKILL 调旧脚本"的窗口期）。
+- **反向窗口**：pull 后既有 SKILL 路由（如 ship 链序）即生效（symlink 即时），而新增 skill 的链接须 setup 后才存在——已开 `impl-pipeline: tickets` 的仓在窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement；故 pull 与 setup 之间勿跑阶段三。
 - **回滚** = 运行 checkout `git checkout <上一已知良好 commit>` + 重跑 setup.sh。
 
 ## 修改本仓库的注意
@@ -124,7 +125,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
-  子 agent 调度期间（subagent-driven-development / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
+  子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
 - **ff 开分支**：`opsx:ff` 若不在 feature 分支，先 `git checkout -b feat/{change}`（FF-0）。
 - **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 

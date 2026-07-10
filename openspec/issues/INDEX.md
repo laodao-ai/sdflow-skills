@@ -44,6 +44,17 @@
 | T66 | todo | PROPOSED | issues-pool-hardening |
 | T67 | todo | PROPOSED | issues-pool-hardening |
 
+### 批次：matt-workflow-integration
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T118 | todo | PROPOSED | - |
+| T120 | todo | PROPOSED | - |
+| T125 | todo | PROPOSED | - |
+| T126 | todo | PROPOSED | - |
+| T127 | todo | PROPOSED | - |
+| T128 | todo | PROPOSED | matt-workflow-integration |
+
 ### 批次：mechanical-layer-hardening
 
 | ID | Pool | Status | 关联Change |
@@ -149,13 +160,10 @@
 | T115 | todo | PROPOSED | - |
 | T116 | todo | PROPOSED | - |
 | T117 | todo | PROPOSED | - |
-| T118 | todo | PROPOSED | - |
 | T119 | todo | PROPOSED | - |
-| T120 | todo | PROPOSED | - |
 | T121 | todo | PROPOSED | - |
 | T122 | todo | PROPOSED | - |
 | T123 | todo | PROPOSED | - |
-| T125 | todo | PROPOSED | - |
 
 ### 批次：rec2-obs-readability
 
@@ -215,8 +223,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T126 | todo | OPEN | - |
-| T127 | todo | OPEN | - |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 | T65 | todo | OPEN | main |

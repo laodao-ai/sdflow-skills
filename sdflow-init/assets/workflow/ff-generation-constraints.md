@@ -22,6 +22,38 @@
 
 > **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦在受保护分支（master/main）上执行 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 殊途同归调它）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。文档级强制（调用方注入 + review 核对）作为补充层。
 
+## wayfinder→ff 衔接契约（条件：change 源于 wayfinder map）
+
+> 本节是**条件契约**，非 D-1~D-6 硬约束——只在 change 源于 wayfinder map 时生效，不占用 D 编号
+> （按下文「约束集设计判据」④：无关变更应条件触发，命中才注入）。
+> 调用方（`config.yaml` rules 自动注入、`workflow/workflow.md` ff 步骤）**只引用本节标题「wayfinder→ff 衔接契约」，
+> 不复制条款文本**——与 D-1~D-6 的单一源纪律同构。
+
+change 若源于 wayfinder map（即由 wayfinder chart 铺图逐 ticket 决议收敛后触发 `opsx:ff`），ff 起手须遵守：
+
+1. **逐区读 map**：
+   - Destination → 喂 proposal 动机与 Success Metrics（D-5）；
+   - Decisions-so-far → **逐 ticket zoom 到决议全文**，MUST NOT 只读摘要行（防 ff「prefer making reasonable decisions」对已决项重新决歪）；zoom 设上界 **≤8 张展开全文**，超出按与本 change 的相关性截断，并在 proposal 中注明截断；
+   - Out-of-scope → 喂 Non-Goals 可证伪假设（D-3）。
+2. **TG 判命中前置**：TG（触发目录）判命中前置到 chart 阶段，写入 map Notes；此为**增强非转移**——ff 起手判触发纪律不变（Notes 有则核对、无则照常全判），Notes 缺失不构成失败态、不硬卡。
+3. **回链**：proposal SHALL 回链 map 供溯源；design 决策段源自已决 ticket 的 SHALL 内联回链该 ticket——
+   机器可 grep 的锚格式：`〔wayfinder-resolved: <map路径>#ticket-<N>〕`（固定前缀
+   `wayfinder-resolved:`，grill 瘦跑以该前缀为唯一判据，无此前缀一律全深度）。
+
+**边界**：本契约只约束「wayfinder → opsx:ff 出 change」路径；roadmap 结晶直写 requirements/design/roadmap/task-log 四件套不经 ff，不受此节约束。
+
+## 切片建议（条件：仓 `impl-pipeline: tickets`）
+
+> 本条款与上节条件不同，勿混——上节条件是「change 源于 wayfinder map」，本条款条件是
+> 「仓 `openspec/config.yaml` 顶层键 `impl-pipeline: tickets`」，两者互不蕴含。
+
+仓已开 `impl-pipeline: tickets` 时，design.md 决策区 **MAY** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）。
+出 ticket 模式（`sdflow-implement`）消费该节的语义是**建议，非契约**——节缺席时自主出 ticket；
+对切片粒度的争议走既有 T10 三级决策协议。
+
+切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀（两类「ticket」语义须物理区分——本节的
+「切片建议 ticket」与上节 wayfinder map 的「已决 ticket」不是一回事，防 grill 瘦跑误判「已决」）。
+
 ## 背景
 
 D-1~D-5 原本以纯文本形式内嵌在早期工作流文档的 `/opsx:ff` 命令 prompt 单元格里
