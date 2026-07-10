@@ -184,7 +184,7 @@ flowchart TD
 
 1. skill 与模板重写（P0）→ dev checkout 跑 `setup.sh`（adr/0005：symlink 场景改 SKILL.md 即时生效，重跑为防新增/删除模板文件产生孤儿）。
 2. tracker doc 分流 + CLAUDE.md 第二锚（P0，与 1 同 commit 可）。
-3. 存量两包迁移（P2）：**执行前置〔spec-review-amendment SR-15〕**——①该包当前无进行中实施 change（两包均仍活跃演进：wco 剩 P2/P3、mlh 剩 P4 残项+P6——迁移窗口取其间隙，避免与在飞引用对撞）；②首个新流程 roadmap 已走通端到端（试点先于规模化，Q-C 待拍板确认）。每包一次 commit——requirements.md 按 D1 全节清点表并入 design.md 头部章（默认并入，确认已被吸收才弃，弃必记去向〔grill-amendment Q3〕；**头部章不占 `## N.` 编号序列，规避历史「design §N」位置引用级联位移**〔SR-15〕）→ 修补包内**前向结构引用**（wco：design:62、roadmap:69 等；mlh：roadmap:110、task-log:63,98 等，实施时逐一 grep 复核；task-log 历史 DID 条目保留不回改）→ 删 requirements.md → 合并文件头加**考古注记四要素**（旧文件路径 / 迁移日期+commit / 「历史版本见 git」/ 「旧 requirements §X → 现 design 位置」章节映射表〔SR-15/XE6/XD10〕）。**清点表落盘为文件随迁移 commit 提交**（非仅 commit message，中断可续）〔SR-15〕；每包迁移后**立即**跑一次 `maintain_scan.py`（非两包完成后才总检）〔SR-15〕。存量包 roadmap.md 已写满的远期阶段**不顺手薄化**（近细远雾只约束新生成；避免迁移中销毁既有细节）。
+3. 存量两包迁移（P2）：**执行前置〔spec-review-amendment SR-15〕**——①该包当前无进行中实施 change（两包均仍活跃演进：wco 剩 P2/P3、mlh 剩 P4 残项+P6——迁移窗口取其间隙，避免与在飞引用对撞）；②首个新流程 roadmap 已走通端到端（试点先于规模化；设计门 2026-07-10 Q-C 拍板生效）。每包一次 commit——requirements.md 按 D1 全节清点表并入 design.md 头部章（默认并入，确认已被吸收才弃，弃必记去向〔grill-amendment Q3〕；**头部章不占 `## N.` 编号序列，规避历史「design §N」位置引用级联位移**〔SR-15〕）→ 修补包内**前向结构引用**（wco：design:62、roadmap:69 等；mlh：roadmap:110、task-log:63,98 等，实施时逐一 grep 复核；task-log 历史 DID 条目保留不回改）→ 删 requirements.md → 合并文件头加**考古注记四要素**（旧文件路径 / 迁移日期+commit / 「历史版本见 git」/ 「旧 requirements §X → 现 design 位置」章节映射表〔SR-15/XE6/XD10〕）。**清点表落盘为文件随迁移 commit 提交**（非仅 commit message，中断可续）〔SR-15〕；每包迁移后**立即**跑一次 `maintain_scan.py`（非两包完成后才总检）〔SR-15〕。存量包 roadmap.md 已写满的远期阶段**不顺手薄化**（近细远雾只约束新生成；避免迁移中销毁既有细节）。
 4. 全仓表述同步（P2）。
 5. **回滚**：整链纯文本，`git revert` 逐 commit 可逆；requirements.md 历史内容 git 永存。
 

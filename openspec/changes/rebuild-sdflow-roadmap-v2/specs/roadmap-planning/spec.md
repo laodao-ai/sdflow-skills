@@ -47,7 +47,7 @@ design.md SHALL 以「需求与目标态」章开头，且该章 MUST NOT 占用
 
 ### Requirement: 讨论层按规模分档路由
 
-规划工作流 SHALL 按双判据路由讨论工具，MUST NOT 依赖事前轮数预估〔grill-amendment：对齐 spec-workflow F11 口径，事前「预估轮数」不可观测〕：①**起手显性信号**——请求自带长档特征（多阶段 roadmap、明示跨天推进、议题横跨多个子系统）→ 直接 wayfinder chart 铺图；②**事中触发**——起手不明则 `/opsx:explore` 起步，讨论实际跨 session/跨天、或经历上下文压缩/重置仍未收敛 → 升级切 wayfinder。map 的 destination SHALL 表述为「三件套定稿」。wayfinder 铺图判定无雾（单 session 装得下）时 SHALL 退回 explore 路径，MUST NOT 为无雾讨论维持 map。
+规划工作流 SHALL 按双判据路由讨论工具，MUST NOT 依赖事前轮数预估〔grill-amendment：对齐 spec-workflow F11 口径，事前「预估轮数」不可观测〕：①**起手显性信号**——请求自带长档特征（多阶段 roadmap、明示跨天推进、议题横跨多个子系统）→ 直接 wayfinder chart 铺图；②**事中触发**——起手不明则 `/opsx:explore` 起步，讨论实际跨 session/跨天、或经历上下文压缩/重置仍未收敛 → 升级切 wayfinder。map 的 destination SHALL 表述为「三件套定稿」。wayfinder 铺图判定无雾（单 session 装得下）时 SHALL 退回 explore 路径，MUST NOT 为无雾讨论维持 map。讨论层显现产品/商业野心信号时 SHALL 前置 `/office-hours` 验证需求真实性后再进入结晶（第三分支，与 review 分档共用同一信号词表；设计门 2026-07-10 Q-D 拍板保留〔spec-review-amendment D3〕）。
 
 #### Scenario: 起手长档信号直入 wayfinder
 

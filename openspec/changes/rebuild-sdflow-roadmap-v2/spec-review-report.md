@@ -1,3 +1,8 @@
+---
+ship-gate:
+  design_approved: true
+---
+
 # spec-review-report — rebuild-sdflow-roadmap-v2
 
 > 评审对象：`openspec/changes/rebuild-sdflow-roadmap-v2/` 四件套 @ grill 后 `f9753ce`。
@@ -59,6 +64,8 @@
 
 ## 决策登记区
 
+> **设计门已拍板批准，日期 2026-07-10**：Q-A 维持禁令（X7 翻案不采纳）、Q-B 维持野心轴（X8/C2 换轴不采纳）、Q-C 接受迁移前置（design Migration 前置②定稿生效）、Q-D 保留 office-hours 为讨论层第三分支（D3 采纳，tasks 1.2/specs R3 定稿）、Q-E 告知级已达人眼无盘面动作。lens-metric 已按门后终裁重算最终化〔SR-M〕。
+
 **〔自动决策〕**（高置信默认采纳，设计门可覆盖）
 
 - AD-1 前提门：三前提仓内实证成立（证据 scope 修正另由 SR-1 落盘）。
@@ -113,12 +120,12 @@
 ## lens-metric（Step3 裁决锚，设计门拍板后最终化〔SR-M〕）
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" runner="claude" site="—" findings="10" 采纳="10" 裁掉="0" defer="0" 独立="2" sev="致1/高4/中5/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="18" 采纳="12" 裁掉="2" defer="4" 独立="1" sev="致2/高5/中3/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="18" 采纳="13" 裁掉="4" defer="1" 独立="2" sev="致2/高6/中3/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" runner="claude" site="—" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="0" sev="致1/高2/中0/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="design-voice" findings="27" 采纳="15" 裁掉="7" defer="5" 独立="1" sev="致2/高6/中6/低1" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="design-voice" findings="27" 采纳="16" 裁掉="10" defer="1" 独立="2" sev="致2/高6/中7/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="hr-tg" findings="5" 采纳="4" 裁掉="0" defer="1" 独立="1" sev="致1/高3/中0/低0" -->
 
-残余信任边界声明：分类正确性（finding 归镜）、roster 完备性、findings JSON 誊写准确仍是主 session 信任边界；emitter 只保证确定性归约。采纳/裁掉/defer 为设计门拍板前临时裁决，拍板回写时最终化〔SR-M〕。
+残余信任边界声明：分类正确性（finding 归镜）、roster 完备性、findings JSON 誊写准确仍是主 session 信任边界；emitter 只保证确定性归约。**上方锚行为设计门拍板后最终值〔SR-M 已执行，2026-07-10〕**：Q-A/Q-B/Q-E→裁掉、Q-C/Q-D→采纳（emitter 重算原地覆盖），仅 DF-1/DF-2 留 defer（done 阶段落 todolist）。
 
 ## 收敛口
 
