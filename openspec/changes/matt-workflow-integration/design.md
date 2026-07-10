@@ -50,13 +50,15 @@ config.yaml impl-pipeline ──▶ plan 文件 frontmatter ──▶ 键缺失/
 ```
 - config 键为顶层可选段，沿 model-tiers 覆盖段先例（config.yaml:52-54 注释形态）；**sdflow-init 的 lint_config 只条件校验已知键、不拒未知顶层键（init.py:295-299 亲验）→ 零脚本改动**。validator 学新键（⑤ impl-pipeline 若存在值 ∈ {tickets,superpowers}）属可选硬化，留 Phase B（读取端非法→superpowers 已 fail-safe，无炸点）。
 - marker 形态取显式 frontmatter 键（对抗镜裁定内容嗅探『# Tickets:』为弱形态）。
-- gate 不读 config（零依赖不变量）；键读取由 ship 主 session 按链序做机械分支——有确定性信号故属机械执行而非判断；若试点误路由实发，键读取脚本化为后备硬化路径（假设表④）。
+- gate 不读 config（零依赖不变量）；键读取由 ship 主 session 按链序做机械分支——有确定性信号故属机械执行而非判断。
+- **〔spec-review-amendment F4〕脚本化从后备转正**：键/marker 读取落 stdlib-only route helper（enum reader + marker 解析 + Blocked-by 拓扑，不触 gate）+ 路由矩阵 pytest——三声跨家族独立收敛（dx-claude/ceo-codex/hr-tg-codex），且恰强化「零自动判断」拍板（prose→脚本）。marker **在但非法/重复/损坏 → 停（UNKNOWN 语义）**不静默回退，防两管线混跑；静默回退仅限缺席缺省态。路由产出一行 PIPELINE_RECEIPT。ship→skill 模式派发以显式字面 args 契约钉死（1.1/2.1 共享同一串）。
 
 ### D6 T126 衔接契约落点
 
 - 三段分流改 workflow.md 阶段一（图 :13-21 + 步骤表 :68 explore 行），wayfinder 入口与降级（缺装→explore）一并写入；衔接契约三条落 `ff-generation-constraints.md` 新节（FF-0 同级、条件 = change 源于 wayfinder map）：ff 起手逐区读 map（Destination→proposal 动机+D-5；**Decisions-so-far 逐 ticket zoom 决议全文**，防 ff:100「prefer making reasonable decisions」对已决项重决歪；Out-of-scope→D-3 假设）、TG 判命中前置 chart 写 map Notes、proposal 回链 map。
 - 权威源 = `sdflow-init/assets/workflow/`（本仓无规则副本，经全局 canonical 解析）；改后 dev checkout 重跑 setup.sh 才测得到（adr/0005）。
 - **TG 前置的执行者落点〔grill-amendment〕**：chart 是 wayfinder（外部 skill）模式、不认识 TG——义务落 workflow.md 阶段一 wayfinder 行（主 session 规则，任务 3.1），语义 = **增强非转移**：ff 起手判触发纪律不变（map Notes 有 TG 记录则核对、无则照常全判），Notes 缺失不构成失败态、不硬卡。
+- **〔spec-review-amendment F2〕注入通道补齐（对抗镜 CLI 实证）**：`openspec instructions` 的 rules/context 逐字来自 config.yaml、零 wayfinder 引用——仅写 ff-generation-constraints.md 不构成注入（FF-0 先例 = 调用方在 prompt 注入缺一不可）。契约生效须双通道同步落地：config.yaml `rules:` 段规则文本 + workflow.md ff 调用行（:69）显式携带 map 路径；zoom 上界 ≤8 张全文 + design 决策段内联回链来源 ticket（机械 grep 锚，供 T127 瘦跑判定）〔F11〕。
 - 与在飞 change rebuild-sdflow-roadmap-v2 的边界：该 change 的 roadmap 结晶**不经 ff**（其 Non-Goal 假设），本契约只约束「wayfinder → opsx:ff 出 change」路径，二者不相交；若其假设证伪需 ff 参与，届时本契约恰为其前置（已在其 Non-Goals 声明依赖方向）。
 
 ### D7 T127 grill 瘦跑落点
@@ -69,6 +71,7 @@ config.yaml impl-pipeline ──▶ plan 文件 frontmatter ──▶ 键缺失/
 - 试点 3-5 个有逻辑面的中型 change（排除纯文档/琐碎类——它们本不撞实现管线）；对照 = retro 30-change 池同类型分桶历史（memory: test-ratio-by-stack，change 类型是实证混杂因子）；≥1 消费仓验证缺省键路径（memory: dogfood-blind-spot）。
 - 判据三条结构、**定性人读拍板**（n=3-5 不设数字阈值，adr/0009 小样本警告）：① retro per-change impl Δ 方向性下降；② 冷层 Critical/严重 findings 与 done verify FAIL 不升；③ 护栏哨兵——冷层捕获「本应被每 ticket 审拦住」的严重项占比不恶化（恶化 = 熔断，停试点回退）。
 - 变量控制：试验期 implementer 档位钉死 mid（不叠加降档实验；「plan 含码→最便宜档誊抄」降档通道随预写代码消失而失效，model-tiers 判据重标另议）。
+- **〔spec-review-amendment F3a〕判赢材料严谨性修补**（与 Q1 拍板独立先行）：PIPELINE_RECEIPT 逐 change 留档并在计入样本前核对（误路由剔样）；NEEDS_CONTEXT 停摆率与阶段一 T126 上下文成本入观测项；选样拒绝条件成文（跨模块宽重构/接口高度不确定/纯文档类不入样）；token 维度尽力采集（会话侧可见即录）；每试点 SHIPPED 后先再生 retro 核对哨兵再选下一个；Phase C 在 workflow-cost-optimization roadmap 补占位（目标句+雾区备注）防孤儿承诺〔F9/B6〕；proposal Why 已补 wco P0/P2 证伪证据引用〔C3〕。
 
 ### D9 出 ticket 粒度人工话语权（开放问题③，grill 拍板 = A 收窄形制）
 
@@ -131,7 +134,11 @@ sequenceDiagram
 | 勾框/标签双写半态 | gate 双通道并集不假卡；执行模式逐 ticket 核对双信号 | implementer 契约钉死双写；单边缺失时执行模式补齐并记录 |
 | 冷层 Critical 率升（哨兵） | 试点期逐 change 对照基线 | 熔断：停试点、config 回缺省、实证记判赢材料（D8③） |
 | wayfinder 缺装（T126 大雾档） | 分流时检查 | 降级 explore（与 rebuild-sdflow-roadmap-v2 同款显式降级） |
-| implementer BLOCKED 无法盘面消解 | 状态词表 | 停并上抛（同 ship BLOCKED_UPSTREAM 语义），不静默跳 ticket |
+| implementer BLOCKED 无法盘面消解 | 状态词表 | 统一 halt envelope 停并上抛 + blocker 落盘 report file（git-tracked）〔spec-review-amendment F7〕，不静默跳 ticket |
+| ff 未真正读到 map（T126 静默跳过） | proposal 无 map 回链 | 注入通道双落（config rules + ff 调用行）；spec-review 顺带核对回链〔F2〕 |
+| 逐 ticket zoom 撑爆上下文 | map 决议 ticket >8 张 | zoom 上界 + 相关性截断 + 截断留痕〔F11〕 |
+| grill 瘦跑误判「已决」 | design 决策段无回链锚 | 无锚一律全深度死磕；锚为机械 grep 判据〔F11〕 |
+| resolver/domains 清单不可达 | resolve-workflow.sh 非 0 / 清单缺 | Standards 轴不假通过：显式停或记「未覆盖」〔F13〕 |
 
 ## 5. Scope-check 表（TG-25：writing-plans/subagent-dev 契约牵连面穷举，行锚本次亲验）
 
@@ -152,6 +159,10 @@ sequenceDiagram
 | README.md Skills 列表 | 增：sdflow-implement 行 |
 | openspec/specs/spec-workflow/spec.md:81 | 经本 change delta MODIFIED（archive 时对码同步） |
 | docs/（workflow-map/overview、sdflow-fable5/*、workflow-skills/superpowers-*.md 等） | **不回改**（历史快照原则）；活文档全量表述同步归 Phase B |
+| openspec/config.yaml `rules:` 段 | 改：T126 衔接契约规则文本注入〔spec-review-amendment F2〕 |
+| sdflow-init/assets/workflow/workflow.md ff 调用行（步骤表 :69） | 改：wayfinder 源 change 显式携带 map 路径〔F2〕 |
+| sdflow-ship/SKILL.md SHIPPED 摘要模板（:40-47） | 改：加 pipeline 字段（来源 = plan marker）〔F12〕 |
+| openspec/INDEX.md specs 能力表 | 归档期两在飞 change 同表尾追加行——后归档者先核表尾现状〔F9/B3〕 |
 | quality-layering.md / design-diagrams.md:58,91 等 reference 内 writing-plans 提法 | 不改（描述缺省管线仍准确）；Phase B 复核 |
 
 ## 6. Migration Plan
@@ -160,7 +171,8 @@ sequenceDiagram
 2. ship 链序 + assets 规则 + config 模板改动随本 change 落地；消费仓经下次 `sdflow-init update` 获得规则更新，config 键**不注入存量仓**（可选段，缺失 = 缺省管线，100% 存量仓行为不变）。
 3. 试点：本仓 config 开 `impl-pipeline: tickets` 跑首个试点 change；≥1 消费仓不开键验证缺省路径。
 4. **回滚**：config 键回缺省/删除即止血（在途 tickets change 按 marker 跑完或人工越权处置）；彻底回滚 = git revert 本 change + 重跑 setup.sh。
-5. **与 rebuild-sdflow-roadmap-v2 的实施串行〔grill 拍板〕**：本 change 评审先行推进到设计门前；两 change 共同触碰 CLAUDE.md 托管块（各经 assets 源），**实施必须串行**、后实施者 rebase 对齐托管块与 assets 改动，实施先后在设计门时定。
+5. **与 rebuild-sdflow-roadmap-v2 的实施串行〔grill 拍板；靶子经 spec-review 修正 F9/B3/B4〕**：实施仍串行、先后设计门定。实测两 change 的 CLAUDE.md 落点**物理不重叠**（本 change 改 opsx-init 托管块，彼 change 改 :79 与 Agent skills 手改节）——真正的追加冲突点是 **openspec/INDEX.md specs 能力表**（两 change 归档都在同表尾加行），后归档者归档前先核表尾现状。
+6. **测后还原（adr/0005 协议下半场）〔spec-review-amendment F9/B2〕**：dev checkout 测试完成/合并后，MUST 在运行 checkout（~/.skills/sdflow-skills）重跑 `bash setup.sh` 还原全局 symlink（验证 `readlink ~/.claude/skills/sdflow-ship` 指回运行 checkout）。发布窗口注意**反向**风险〔F9/B1〕：pull 后 ship 链序即生效（symlink 即时），而 sdflow-implement 链接须 setup 后才存在——窗口期内已开 tickets 键的仓触发 RUN_PLAN 会调不存在的 skill；CLAUDE.md 发布边界补此方向句。
 
 ## 7. Compliance（D-6）
 

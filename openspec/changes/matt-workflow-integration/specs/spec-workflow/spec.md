@@ -4,7 +4,7 @@
 
 ### Requirement: 阶段三过设计门后连续自动跑到 merge
 
-阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `实现管线 → sdflow-code-review → sdflow-done`；实现管线为可选双轨——缺省 `writing-plans → subagent-dev`，或经 `impl-orchestration` 能力的手动路由（config 键 + 盘面 marker，缺省/非法值一律 superpowers）选择 `sdflow-implement 双模式（出 ticket → 执行）`；**编排层入口 = `/sdflow-ship`**（一次调用驱动 5.5→9，按「阶段三编排台账确定性」需求经 ship_gate 推进；手动逐步仍为合法 reference 路径）。管线选择 MUST NOT 引入模型自动判断，MUST NOT 新增人类门。能修的自动修；**遇 ≥2 方案 MUST 按三级决策协议**〔T10，替换旧"有把握自动选"自评表述〕：①有客观判据（测试/断言/基准可判）→ 自动选并记理由；②无客观判据 → 派对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 并由 hand-off 引导另开 change 清理。MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。修不了或需拍板的 MUST 进 buglist/todolist 延后。
+阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `实现管线 → sdflow-code-review → sdflow-done`；实现管线为可选双轨——缺省 `writing-plans → subagent-dev`，或经 `impl-orchestration` 能力的手动路由（config 键 + 盘面 marker，缺省/非法值一律 superpowers）选择 `sdflow-implement 双模式（出 ticket → 执行）`；**编排层入口 = `/sdflow-ship`**（一次调用驱动 5.5→9，按「阶段三编排台账确定性」需求经 ship_gate 推进；手动逐步仍为合法 reference 路径）。管线选择 MUST NOT 引入模型自动判断，MUST NOT 新增人类门。实现管线内不可消解的 BLOCKED 停机属「defer-to-human 异常终态」而非人类门——与既有 BLOCKED_UPSTREAM 同构（停并上抛、人工再入口），不违背「无阻塞人类门」承诺（正常路径仍连续到 merge）〔spec-review-amendment F7〕。能修的自动修；**遇 ≥2 方案 MUST 按三级决策协议**〔T10，替换旧"有把握自动选"自评表述〕：①有客观判据（测试/断言/基准可判）→ 自动选并记理由；②无客观判据 → 派对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 并由 hand-off 引导另开 change 清理。MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。修不了或需拍板的 MUST 进 buglist/todolist 延后。
 
 #### Scenario: 修不了的问题延后而非阻塞
 
@@ -35,7 +35,7 @@
 
 ### Requirement: 阶段一讨论按雾量三段分流并约定 wayfinder→ff 衔接契约
 
-阶段一入口 SHALL 按讨论雾量三分：问题清晰 → 直接 `opsx:ff`；单 session 可收敛的模糊 → `/opsx:explore`；预估超单 session 的大雾 → wayfinder chart 铺图逐 ticket 决议。wayfinder 收敛后接 ff SHALL 遵守衔接契约三条：① ff 起手逐区读 map——Destination 喂 proposal 动机与 Success Metrics（D-5）、Decisions-so-far 逐 ticket zoom 到决议全文（MUST NOT 只读 map 摘要行，防 ff「prefer making reasonable decisions」对已决项重新决歪）、Out-of-scope 喂 Non-Goals 可证伪假设（D-3）；② TG 判命中 SHALL 前置到 chart 阶段写入 map Notes；③ proposal SHALL 回链 map 供溯源。
+阶段一入口 SHALL 按讨论雾量三分：问题清晰 → 直接 `opsx:ff`；单 session 可收敛的模糊 → `/opsx:explore`；**事中判定**超单 session（讨论已跨 session/跨天、或经历 /clear/压缩仍未收敛）→ 切换 wayfinder chart 铺图逐 ticket 决议〔spec-review-amendment F11：事前「预估轮数」不可观测，判据改事中触发〕。wayfinder 收敛后接 ff SHALL 遵守衔接契约三条：① ff 起手逐区读 map——Destination 喂 proposal 动机与 Success Metrics（D-5）、Decisions-so-far 逐 ticket zoom 到决议全文（MUST NOT 只读 map 摘要行，防 ff「prefer making reasonable decisions」对已决项重新决歪；zoom SHALL 设上界：≤8 张展开全文，超出按与本 change 相关性截断并在 proposal 注明〔F11〕）、Out-of-scope 喂 Non-Goals 可证伪假设（D-3）；② TG 判命中 SHALL 前置到 chart 阶段写入 map Notes；③ proposal SHALL 回链 map 供溯源，且 ff 写 design 决策段时源自已决 ticket 的 SHALL 内联回链该 ticket（机械可 grep 锚，同 R-ID 标注模式）〔F11〕。契约生效 SHALL 依赖双注入通道同步落地：`openspec/config.yaml` `rules:` 段规则文本 + workflow.md ff 调用行显式携带 map 路径——仅写入约束文件不构成注入（FF-0 先例）〔spec-review-amendment F2〕。
 
 #### Scenario: 大雾讨论走 wayfinder 后 ff 不重决已决项
 
@@ -49,7 +49,7 @@
 
 ### Requirement: grill 对上游已决分支瘦跑
 
-grill（阶段一对抗压测步）SHALL 对上游 wayfinder 已决分支瘦跑：引用该 ticket resolution 快速核对（决议是否仍与代码 ground truth 一致）即过，MUST NOT 对已决内容重复全深度死磕；ff 新生成或未经上游决议的部分 SHALL 照常全深度死磕。grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling ticket（生成前决策拷问）非冗余，MUST NOT 因上游已跑 grilling 而整跳 grill。
+grill（阶段一对抗压测步）SHALL 对上游 wayfinder 已决分支瘦跑：引用该 ticket resolution 快速核对（决议是否仍与代码 ground truth 一致）即过，MUST NOT 对已决内容重复全深度死磕；ff 新生成或未经上游决议的部分 SHALL 照常全深度死磕。瘦跑判定 SHALL 锚定 design 决策段的内联 ticket 回链（见衔接契约③）——无回链锚的分支 MUST 按全深度死磕，MUST NOT 以语义模糊匹配定「已决」〔spec-review-amendment F11〕。grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling ticket（生成前决策拷问）非冗余，MUST NOT 因上游已跑 grilling 而整跳 grill。
 
 #### Scenario: 已决分支快速核对
 
