@@ -1,6 +1,6 @@
 ---
 name: sdflow-ship
-description: 阶段三编排器——对已过设计门的 OpenSpec change 一次调用驱动 5.5→9（embedded-test-sop 条件 → writing-plans/subagent-dev → sdflow-code-review → sdflow-done→merge）。触发：「/sdflow-ship」「ship 这个 change」「阶段三跑到 merge」「过完设计门了，跑起来」。不含裸"ship"泛化触发。
+description: 阶段三编排器——对已过设计门的 OpenSpec change 一次调用驱动 5.5→9（embedded-test-sop 条件 → 实现管线 → sdflow-code-review → sdflow-done→merge）。触发：「/sdflow-ship」「ship 这个 change」「阶段三跑到 merge」「过完设计门了，跑起来」。不含裸"ship"泛化触发。
 ---
 
 # sdflow-ship — 阶段三编排器（盘面即状态）
@@ -26,7 +26,7 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一�
 ## 链序（gate 驱动，非记忆）
 
 REFUSE_START(exit3)→停并转述 reason 两变体："未过设计门（若拍板已发生请人工补锚——显式越权留痕）"｜"change 不存在（active 与 archive 均无）——核对 change 名拼写"〔B3〕 ·
-RUN_SOP→跑 embedded-test-sop（TG-18/高风险细判归模型） · RUN_PLAN→superpowers:writing-plans（**派发 args MUST 要求 plan 每任务 commit 步按 workflow.md §二/步骤6 的格式规则（权威见 `ship_gate.py` `TAG_RE`〔T36〕）显式写 checkpoint-commit 命令，由 implementer 执行**——gate 主锚契约；gate 只认当前 change 标签、跨 change stacking 不污染〔T32〕）→ subagent-driven-development 自动执行 · CONTINUE_IMPL→把 JSON `done_tasks` 已完成任务号集传给 SDD dispatch **勿重派** · RUN_CODE_REVIEW→/sdflow-code-review · BLOCKED_UPSTREAM(exit4)→停并原样上抛 blocker 清单 · RUN_VERIFY→/sdflow-done（透传 merge 意图） · VERIFY_FAIL(exit5)→停并原样上抛缺口清单 · RERUN_STALE→重跑 gate 指定步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜） · STEP_IN_PROGRESS→重跑该步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜）；**熔断判据（按 verdict 分治）**〔T26/SR-1；impl-review-fix CR-1〕：① **`STEP_IN_PROGRESS`**（报告在但无结论锚）→ 用锚行集合判据：同一 invocation 内重跑前后，以 `ship_gate.py` 无状态 helper `anchor_set(text)`/`breaker_no_progress(before, after)` 比较该步报告的 **ship-gate frontmatter 状态集合**〔mlh-p5 Task6 D11：判据迁 frontmatter 状态集，inline 锚已随 live 读点退役、不再参与进展判据〕（快照由编排器单 invocation 内持有作参数传入，helper 不落地、不跨 invocation），状态集无净变化即判无进展。② **`RERUN_STALE`**（报告有锚但陈旧）→ 进展信号是**新鲜度已刷新**（重跑后 gate 不再返回 `RERUN_STALE`），故其熔断以「重跑后 gate **仍**返回同一 `RERUN_STALE`」为准，**MUST NOT 用锚集不变误判**（stale 重跑常锚不变如 pass→pass，用锚集会假熔断误杀正常刷新）。任一判无进展 → 按 UNKNOWN 停上抛人工，禁无限静默循环；**HEAD 移动、文件修改时间戳变化 MUST NOT 作免疫信号**（修复类步几乎必产 commit，若把 HEAD 移动当"有进展"熔断永不触发）；**fail-safe：快照缺失（如 context 压缩丢失上一次记录）保守判无进展**，MUST NOT 默认放行再跑〔熔断〕（例外边界声明：重试判定是单 invocation 内的短时持有、非跨步状态记忆——与"禁 prose 记忆步序"红线不冲突〔adr/0006(b) 的步序判定已全部在 gate〕；持久化下沉为长期 defer 项见 todolist，撞三红线不做） · UNKNOWN(exit6)→停并转述 reason · SHIPPED→输出摘要。
+RUN_SOP→跑 embedded-test-sop（TG-18/高风险细判归模型） · RUN_PLAN→先跑 `python3 sdflow-implement/scripts/impl_route.py route --root "$(git rev-parse --show-toplevel)" --change {change}` 取 PIPELINE_RECEIPT（回显进对话）；`pipeline=tickets` → 按模式派发契约字面串派发 `sdflow-implement mode=tickets-plan change={change}`（ship 主 session inline 执行，MUST NOT 作为子代理派发）；`pipeline=superpowers` → superpowers:writing-plans（**派发 args MUST 要求 plan 每任务 commit 步按 workflow.md §二/步骤6 的格式规则（权威见 `ship_gate.py` `TAG_RE`〔T36〕）显式写 checkpoint-commit 命令，由 implementer 执行**——gate 主锚契约；gate 只认当前 change 标签、跨 change stacking 不污染〔T32〕）→ subagent-driven-development 自动执行；helper 非 0 退出（RouteStop，UNKNOWN 语义）→ 按 UNKNOWN 停上抛，不静默回退 · CONTINUE_IMPL→一律按 plan frontmatter marker 路由（同一 route CLI 调用取值，首跳 config 值不再参与）；`marker=tickets` → 按模式派发契约字面串派发 `sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任务号|none}`（值取自 gate JSON `done_tasks`，原样透传不重算不猜测）；marker 缺席 → 把 JSON `done_tasks` 已完成任务号集传给 SDD dispatch **勿重派**（subagent-driven-development）；**试验期权威声明**：「此二态 skill 路由以本链序为权威；gate JSON `next` 在此二态仍输出 writing-plans/subagent-dev，仅信息性（emit 串 Phase B 根治）。『照 next 跑』指令仅约束 RERUN_STALE/STEP_IN_PROGRESS。」 · RUN_CODE_REVIEW→/sdflow-code-review · BLOCKED_UPSTREAM(exit4)→停并原样上抛 blocker 清单 · RUN_VERIFY→/sdflow-done（透传 merge 意图） · VERIFY_FAIL(exit5)→停并原样上抛缺口清单 · RERUN_STALE→重跑 gate 指定步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜） · STEP_IN_PROGRESS→重跑该步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜）；**熔断判据（按 verdict 分治）**〔T26/SR-1；impl-review-fix CR-1〕：① **`STEP_IN_PROGRESS`**（报告在但无结论锚）→ 用锚行集合判据：同一 invocation 内重跑前后，以 `ship_gate.py` 无状态 helper `anchor_set(text)`/`breaker_no_progress(before, after)` 比较该步报告的 **ship-gate frontmatter 状态集合**〔mlh-p5 Task6 D11：判据迁 frontmatter 状态集，inline 锚已随 live 读点退役、不再参与进展判据〕（快照由编排器单 invocation 内持有作参数传入，helper 不落地、不跨 invocation），状态集无净变化即判无进展。② **`RERUN_STALE`**（报告有锚但陈旧）→ 进展信号是**新鲜度已刷新**（重跑后 gate 不再返回 `RERUN_STALE`），故其熔断以「重跑后 gate **仍**返回同一 `RERUN_STALE`」为准，**MUST NOT 用锚集不变误判**（stale 重跑常锚不变如 pass→pass，用锚集会假熔断误杀正常刷新）。任一判无进展 → 按 UNKNOWN 停上抛人工，禁无限静默循环；**HEAD 移动、文件修改时间戳变化 MUST NOT 作免疫信号**（修复类步几乎必产 commit，若把 HEAD 移动当"有进展"熔断永不触发）；**fail-safe：快照缺失（如 context 压缩丢失上一次记录）保守判无进展**，MUST NOT 默认放行再跑〔熔断〕（例外边界声明：重试判定是单 invocation 内的短时持有、非跨步状态记忆——与"禁 prose 记忆步序"红线不冲突〔adr/0006(b) 的步序判定已全部在 gate〕；持久化下沉为长期 defer 项见 todolist，撞三红线不做） · UNKNOWN(exit6)→停并转述 reason · SHIPPED→输出摘要。
 
 ## resume / 暂停 / 人机同权〔D9〕
 
@@ -40,7 +40,7 @@ RUN_SOP→跑 embedded-test-sop（TG-18/高风险细判归模型） · RUN_PLAN�
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 /sdflow-ship 完成 — {change}
-  链: [sop|SKIP] → plan+impl({n}/{n} 任务) → code-review(pass) → done(verify PASS, merged)
+  链: [sop|SKIP] → plan+impl({n}/{n} 任务, pipeline={superpowers|tickets}) → code-review(pass) → done(verify PASS, merged)
   ⏸ 未 push（手动控制）。toolkit 源仓：push 后新会话跑 /sdflow-upgrade 激活。
   [若工作树有未提交的非-openspec 改动] 提示：工作树有未提交改动，gate 判定不含它们（非门禁，仅信息性）。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
