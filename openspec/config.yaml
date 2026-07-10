@@ -35,6 +35,7 @@ rules:
     - 无条件必含小节，统一用英文标题（与 OpenSpec 模板一致）：`## Why`（问题/动机）、`## Success Metrics`、`## Non-Goals`（不在本次范围）、`## Compliance`（合规声明，不适用写 N/A）
     - 按 @openspec/workflow/trigger-catalog.md 评估并加节：TG-19→需求优先级(P0/P1/P2)、TG-20→利益相关方与外部依赖、TG-21→开放问题(负责人/截止)、TG-22→假设(失效影响)、TG-24→外部服务成本估算
     - 命中 TG-01/02/03（技术栈）则在 Impact 标注，供下游按 @openspec/workflow/spec-checklists/ 选用领域清单
+    - change 源于 wayfinder map 时：按 @openspec/workflow/ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读 map（Destination→动机+Success Metrics、Decisions-so-far→逐 ticket zoom 决议全文、Out-of-scope→Non-Goals 可证伪假设），proposal 回链 map
   specs:
     - 每个 Requirement 必挂 #### Scenario(WHEN/THEN)，Requirement 有稳定 ID（schema 已要求，强调不得遗漏）
     - 验收标准可观察、可测试，不得只写"测试通过"
@@ -43,6 +44,7 @@ rules:
     - 按 trigger-catalog 命中加节：TG-04→v_old/v_new 对照表、TG-05→数据模型与生命周期、TG-07→请求/响应 JSON 示例、TG-08→失败模式表+可观测性、TG-15→可观测性、TG-16→NFR 数字化、TG-17→安全与数据保护、TG-23→决策记录 ADR、TG-13/14→组件清单
     - 按 @openspec/workflow/design-diagrams.md 画图：TG-09→状态机图、TG-10→序列图、TG-11→数据流图、TG-12→决策图、TG-13→C4 Context+Container；非平凡变更至少一张组件/依赖图
     - 代码事实(函数名/字段/API 路径)先核验再写入，禁从记忆直接写
+    - change 源于 wayfinder map 时：按 @openspec/workflow/ff-generation-constraints.md「wayfinder→ff 衔接契约」，design 决策段源自已决 ticket 的须内联回链该 ticket
   tasks:
     - 每个任务标注对应 Requirement ID（与 specs 双向追溯，无幽灵任务）
     - 命中 TG-18(有测试计划) 则产出测试覆盖图（code path → 测试类型）
