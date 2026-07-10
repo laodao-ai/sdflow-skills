@@ -20,7 +20,7 @@
 | 编排（阶段三） | `sdflow-ship` | 阶段三编排器：gate 台账驱动 5.5→9 到 merge 建议 |
 | 编排（阶段三） | `sdflow-implement` | tickets 实现管线双模式：出 ticket（tracer-bullet 垂直切片）→ 执行（frontier 串行+每 ticket 双轴审）；由 /sdflow-ship 按 config 键/plan marker 条件路由 |
 | 收尾 | `sdflow-done` | 闭环：verify（证据锚点）→ hand-off → archive（delta 对码核验同步）→ commit → merge |
-| 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，产出 requirements/design/roadmap/task-log 四件套 |
+| 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，直写产出 design/roadmap/task-log 三件套（可选 memo），不经 change 壳 |
 | 记录（issues 池） | `sdflow-buglist` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |
 | 记录（issues 池） | `sdflow-todolist` | 改进想法 / 技术债收集池（非缺陷），全局唯一 T-ID |
 | 记录（issues 池） | `sdflow-issues` | 跨 buglist+todolist 的 `issues/INDEX.md` 重建与批次注册表维护 |

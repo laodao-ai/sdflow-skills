@@ -202,7 +202,7 @@ flowchart TD
 
 ### 4.6 sdflow-roadmap：闭环之上的规划层
 
-四件套 = requirements（WHAT）/ design（HOW+WHY）/ roadmap（WHEN+每阶段验收）/ task-log（DID），+ 可选 memo（讨论 footage，四件套不引用它）。硬性规则五条：固定存 `openspec/roadmaps/{name}/`；每个子任务粒度 = **恰好一次 `/opsx:new` 能完成**；产出过程本身走一个 OpenSpec change 承载；只规划不实施；强烈建议 3.5 步交叉 review（autoplan / plan-*-review）。
+三件套 = design（HOW+WHY，头部含「需求与目标态」伸缩章）/ roadmap（WHEN+每阶段验收）/ task-log（DID），+ 可选 memo（短档讨论备忘，考古用，三件套不引用）；长讨论（跨 session/跨天/压缩仍未收敛）改落 wayfinder footage/（`openspec/roadmaps/{name}/footage/`，同样不被三件套引用）。硬性规则：固定存 `openspec/roadmaps/{name}/`；每个子任务粒度 = **恰好一次 `/opsx:new` 能完成**；产出直写，不经 OpenSpec change 壳承载；只规划不实施；review 按野心信号分档——默认 `/plan-eng-review`，外部用户/变现/获客类野心信号才 `/autoplan` 三连。存量四件套包（含独立 requirements.md）冻结为合法历史形态，续跑兼容不强迁。
 方法论出处 `references/long-flow-skill-paradigm.md`：「skill 是助产士非 orchestrator」，契约可验证性 A/B/C 三级、目标全升 C。
 
 ---

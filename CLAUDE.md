@@ -76,9 +76,11 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - **`openspec/{changes,specs,issues,config.yaml}`** — 本仓库自身的 OpenSpec 变更管理，
   流程走 propose → review → done → archive，强制规范见文末托管区块。
 - **`openspec/roadmaps/{name}/`** — 项目级 roadmap 文档包（长期真相源，`sdflow-roadmap` 铺设）：
-  requirements/design/roadmap/task-log 四件套 + 可选 memo；比单次 change 更大的层级，统摄多阶段规划
-  （每阶段 → 一次未来 change）。现有 `workflow-cost-optimization`（评审工作流成本优化三腿四阶段）、
-  `mechanical-layer-hardening`（adr/0006 机械层固化：脚本化 + 去字符串化两腿六阶段）。
+  design/roadmap/task-log 三件套 + 可选 memo，直写落盘、不经 `plan-{topic}` change 壳；比单次 change
+  更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。roadmap 类 wayfinding 落
+  `openspec/roadmaps/{name}/footage/`（长讨论考古层；三件套不引用）。现有 `workflow-cost-optimization`
+  （评审工作流成本优化三腿四阶段）、`mechanical-layer-hardening`（adr/0006 机械层固化：脚本化 +
+  去字符串化两腿六阶段）沿用存量四件套格式（迁移受控延后，Q-C）。
 - **`.claude/skills/openspec-*` 与 `.codex/skills/openspec-*`** — openspec CLI（`@fission-ai/openspec`）
   init 时生成的官方 change-workflow skills，随仓库提交，**非本仓库维护的源**，勿在此手改。
 - **`openspec/retro/report.md`** — `sdflow-retro` 只读再生的全 change 成本×价值复盘活文档

@@ -150,7 +150,7 @@ roadmap 回写的初版论证用「现存 25 份归档报告 24 份不会触发�
 
 | 用户目标要素 | 现状实现 | 完成度 |
 |---|---|---|
-| roadmap 制定 | `sdflow-roadmap`（四件套 + 交叉 review） | ✅ |
+| roadmap 制定 | `sdflow-roadmap`（三件套直写 + 分档 review） | ✅ |
 | 需求明确 | `opsx:explore` + grill（人类对话岛，刻意不机械化） | ✅ |
 | 生成 Spec | `opsx:ff` + config.yaml 规则注入 + TG 触发目录 | ✅（依赖 OpenSpec 官方 skill） |
 | 设计评审 | `sdflow-spec-review`（autoplan+多镜+决策登记+HARD-GATE） | ✅ |

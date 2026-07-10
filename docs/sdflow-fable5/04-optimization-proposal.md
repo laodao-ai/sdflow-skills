@@ -182,7 +182,7 @@ Claude Code 官方 best practices 的明文警告：**「被要求找 gap 的 re
 
 ### 5.2 fog-of-war 进 roadmap 模版（P2）
 
-roadmap 四件套的远期阶段现在就要写任务级细节——这是 Matt wayfinder 点名的「预切假精确」反模式。**建议**：roadmap-template 增加约定——只有下一个阶段写到 change 粒度，更远阶段留「雾区」段（粗写目标与未决问题，标注「到达 frontier 时再拆」）；判据一句话：**能精确表述才建条目，能回答与否无关**。本仓 mlh roadmap 的 P6「端态已定未实现」实际已是这个形态，把实践升格为模版规则。
+roadmap 三件套的远期阶段现在就要写任务级细节——这是 Matt wayfinder 点名的「预切假精确」反模式。**建议**：roadmap-template 增加约定——只有下一个阶段写到 change 粒度，更远阶段留「雾区」段（粗写目标与未决问题，标注「到达 frontier 时再拆」）；判据一句话：**能精确表述才建条目，能回答与否无关**。本仓 mlh roadmap 的 P6「端态已定未实现」实际已是这个形态，把实践升格为模版规则。
 
 ### 5.3 expand–contract 宽重构协议进 bundle（P2）
 
