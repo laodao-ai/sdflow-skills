@@ -139,3 +139,17 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
 > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
 <!-- opsx-init:end -->
+
+## Agent skills
+
+### Issue tracker
+
+工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-tracker.md`。
+
+### Triage labels
+
+使用默认的五种 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `openspec/matt/triage-labels.md`。
+
+### Domain docs
+
+单一上下文布局：`openspec/CONTEXT.md` 与 `openspec/adr/`。详见 `openspec/matt/domain.md`。
