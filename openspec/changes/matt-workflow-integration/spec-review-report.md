@@ -1,3 +1,8 @@
+---
+ship-gate:
+  design_approved: true
+---
+
 # spec-review-report — matt-workflow-integration
 
 > 评审对象：四件套（grill 收敛后 dff6c95）。方法：Step1 autoplan 原生广审（CEO/Eng/DX 三 phase × Claude+codex 双声，46 条）→ Step2 对抗镜×2 + 接地镜×1 + HR-TG cross-model（16 条）→ Step3 主 session 合并去重对抗裁决（62 raw → 19 canonical）。全程 G2 无弹窗，决策登记制。
@@ -37,6 +42,8 @@
 
 ### 决策登记区
 
+> **拍板记录**：设计门已拍板批准，2026-07-10。Q1 = 维持定性判赢 + F3a 机械严谨性修补（codex 阈值路线不采纳，user sovereignty）；Q2 = 维持 fold（codex 拆分主张不采纳）；Q3 = 方案甲（完成信号后置双写，spec 草案转定稿）。lens-metric 锚已按门后终裁重算（F3b/F14 defer→裁掉）。
+
 **[需拍板 Q1] 试点实验严谨度档位（TENSION：codex 双声 vs 用户已有拍板）**
 codex 主张冻结数字阈值+全协变量+受控配对（X1/X4/C2 引 wco roadmap 同类决策定过数字门槛纪律）；你在三镜设计会已拍板「定性无阈值」（n=3-5 假精度）。**推荐：维持定性拍板 + F3a 全部机械严谨性修补落地 + 判赢材料显式声明局限。** 三面后果——系统：receipt/retro 通道现成、增量小；用户：每试点 change 多看一眼 receipt；开发循环：不冻结阈值保灵活、Phase B 拍板须自律防叙事带偏。主次判定：主=开发循环镜（判赢产物服务 Phase B 决策）。选 codex 路线则试点成本显著上升。
 
@@ -67,9 +74,9 @@ codex X8 判 scope creep 污染归因；但判赢指标全为阶段三口径，m
 ## 度量锚（lens-metric，metrics.enabled=true）
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" runner="claude" site="—" findings="4" 采纳="3" 裁掉="0" defer="1" 独立="2" sev="致1/高2/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="12" 采纳="9" 裁掉="1" defer="2" 独立="0" sev="致2/高5/中2/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" runner="claude" site="—" findings="12" 采纳="9" 裁掉="2" defer="1" 独立="0" sev="致2/高5/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="design-voice" findings="13" 采纳="9" 裁掉="1" defer="3" 独立="0" sev="致2/高5/中2/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="design-voice" findings="13" 采纳="9" 裁掉="3" defer="1" 独立="0" sev="致2/高5/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="hr-tg" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致2/高2/中2/低0" -->
 
 （残余信任边界声明：分类归属/roster 完备性/hits 誊写准确为主 session 信任边界；采纳/裁掉/defer 为设计门拍板前临时裁决，拍板回写时最终化〔SR-M〕。）
