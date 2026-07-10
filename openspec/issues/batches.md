@@ -178,7 +178,13 @@
 
 ### opt-structure — 工作流优化·结构增强
 状态: PLANNED
-成员: (生成) T115, T116, T117, T118, T119, T120, T121, T122, T123, T125
+成员: (生成) T115, T116, T117, T119, T121, T122, T123
 优先级: P2
 计划: spec 模版/高危升级/跨工件 lint/DAG/雾区/expand-contract/硬开关/文件交接/tracker 抽象
+
+### matt-workflow-integration — matt-workflow-integration
+状态: PLANNED
+成员: (生成) T118, T120, T125, T126, T127, T128
+优先级: <待填>
+计划: <待填>
 
