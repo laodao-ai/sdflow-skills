@@ -107,7 +107,9 @@ flowchart LR
 
 ## 3. 与 sdflow 多镜评审型工作流的事实差异
 
-（只列事实，优劣评估见 [../sdflow-fable5/04-optimization-proposal.md](../sdflow-fable5/04-optimization-proposal.md)。）
+（只列事实，优劣评估见 [../sdflow-fable5/04-optimization-proposal.md](../sdflow-fable5/04-optimization-proposal.md)；
+实现管线段（to-tickets/implement 替换 writing-plans/subagent-dev）的专题成本分析见
+[impl-pipeline-matt-vs-superpowers.md](impl-pipeline-matt-vs-superpowers.md)。）
 
 | 维度 | Matt 套件 | sdflow |
 |---|---|---|
