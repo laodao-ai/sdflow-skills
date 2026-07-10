@@ -145,7 +145,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 
 ### Issue tracker
 
-工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-tracker.md`。
+工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-tracker.md`。roadmap 类 wayfinding effort 的落盘根为 `openspec/roadmaps/{name}/footage/`（条件分流详见 tracker doc）。
 
 ### Triage labels
 
