@@ -36,7 +36,9 @@ change 若源于 wayfinder map（即由 wayfinder chart 铺图逐 ticket 决议�
    - Decisions-so-far → **逐 ticket zoom 到决议全文**，MUST NOT 只读摘要行（防 ff「prefer making reasonable decisions」对已决项重新决歪）；zoom 设上界 **≤8 张展开全文**，超出按与本 change 的相关性截断，并在 proposal 中注明截断；
    - Out-of-scope → 喂 Non-Goals 可证伪假设（D-3）。
 2. **TG 判命中前置**：TG（触发目录）判命中前置到 chart 阶段，写入 map Notes；此为**增强非转移**——ff 起手判触发纪律不变（Notes 有则核对、无则照常全判），Notes 缺失不构成失败态、不硬卡。
-3. **回链**：proposal SHALL 回链 map 供溯源；design 决策段源自已决 ticket 的 SHALL 内联回链该 ticket（机械可 grep 锚，同 R-ID 标注模式），供 grill 瘦跑判定「已决 vs 未决」分支。
+3. **回链**：proposal SHALL 回链 map 供溯源；design 决策段源自已决 ticket 的 SHALL 内联回链该 ticket——
+   机器可 grep 的锚格式：`〔wayfinder-resolved: <map路径>#ticket-<N>〕`（固定前缀
+   `wayfinder-resolved:`，grill 瘦跑以该前缀为唯一判据，无此前缀一律全深度）。
 
 **边界**：本契约只约束「wayfinder → opsx:ff 出 change」路径；roadmap 结晶直写 requirements/design/roadmap/task-log 四件套不经 ff，不受此节约束。
 
@@ -48,6 +50,9 @@ change 若源于 wayfinder map（即由 wayfinder chart 铺图逐 ticket 决议�
 仓已开 `impl-pipeline: tickets` 时，design.md 决策区 **MAY** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）。
 出 ticket 模式（`sdflow-implement`）消费该节的语义是**建议，非契约**——节缺席时自主出 ticket；
 对切片粒度的争议走既有 T10 三级决策协议。
+
+切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀（两类「ticket」语义须物理区分——本节的
+「切片建议 ticket」与上节 wayfinder map 的「已决 ticket」不是一回事，防 grill 瘦跑误判「已决」）。
 
 ## 背景
 

@@ -24,11 +24,25 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 FRONT_DELIM = "---"
-CONFIG_KEY = "impl-pipeline:"
 LEGAL_PIPELINES = ("tickets", "superpowers")
 
-TASK_HEADER_RE = re.compile(r"^###\s*Task\s+(\d+):", re.MULTILINE)
-BLOCKED_BY_RE = re.compile(r"^\*{0,2}Blocked-by:\*{0,2}\s*(.*)$", re.MULTILINE)
+# [impl-review-fix] 语义对齐 ship_gate.EXIT_UNKNOWN=6（设计禁 import gate，手动同步；
+# gate 侧字面见 ship_gate.py:137 `EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN
+# = 0, 3, 4, 5, 6`）。
+EXIT_ROUTE_STOP = 6
+
+# [impl-review-fix] 列 0 锚定 + 冒号前容忍空白（`impl-pipeline : tickets` 一类变体也命中），
+# 相比旧版 `line.startswith("impl-pipeline:")` 不再要求冒号紧跟键名。捕获组=冒号后原文（未 strip）。
+KEY_RE = re.compile(r"^impl-pipeline\s*:(.*)$")
+
+# [impl-review-fix] 与 ship_gate.TASK_TITLE_RE 逐字一致（^### Task (\d+):，单空格、无 M 标志——
+# 本模块逐行扫描不需要 MULTILINE）。排版漂移（`###Task 1:`/`### Task  1:`）不计任务，行为与
+# gate 一致（sdflow-ship/scripts/ship_gate.py:483 TASK_TITLE_RE）。
+TASK_HEADER_RE = re.compile(r"^### Task (\d+):")
+BLOCKED_BY_RE = re.compile(r"\*{0,2}Blocked-by:\*{0,2}\s*(.*)$")
+# [impl-review-fix] 疑似变体检测（大小写不同 / 全角冒号），case-insensitive、半角全角冒号皆认；
+# 仅当某行未被 BLOCKED_BY_RE 命中时才检查此正则，命中即判「疑似声明格式不识别」。
+BLOCKED_BY_VARIANT_RE = re.compile(r"(?i)\*{0,2}blocked-by\*{0,2}\s*[:：]")
 
 
 class RouteStop(Exception):
@@ -43,20 +57,29 @@ class TopoError(Exception):
 # 文本标量提取（config 与 marker frontmatter 共用：允许引号值、去行内注释）
 # ---------------------------------------------------------------------------
 
-def _extract_scalar(raw: str) -> str:
+def _extract_scalar(raw: str) -> Tuple[str, bool]:
+    """返回 (value, damaged)。
+
+    [impl-review-fix] 损坏标量 fail-closed 契约：未闭合引号、或闭合引号后跟非注释非空白
+    字符（如 `"tickets" junk`）→ damaged=True，调用方各自 fail-closed（config→
+    unknown-value 诊断值；marker→RouteStop），不再像旧版那样静默兜底成合法值绕过停机策略。
+    """
     s = raw.strip()
     if not s:
-        return ""
+        return "", False
     if s[0] in ("'", '"'):
         q = s[0]
         end = s.find(q, 1)
-        if end != -1:
-            return s[1:end]
-        return s[1:]  # 未闭合引号，兜底去掉起始引号字符
+        if end == -1:
+            return s[1:], True  # 未闭合引号 → 损坏
+        rest = s[end + 1:].strip()
+        if rest and not rest.startswith("#"):
+            return s[1:end], True  # 闭合引号后跟非注释垃圾 → 损坏
+        return s[1:end], False
     hash_idx = s.find("#")
     if hash_idx != -1:
         s = s[:hash_idx]
-    return s.strip()
+    return s.strip(), False
 
 
 # ---------------------------------------------------------------------------
@@ -69,26 +92,41 @@ def read_config_pipeline(root) -> Tuple[str, str]:
     返回 (pipeline, note)：
         缺失/空值      → ("superpowers", "absent")
         tickets/superpowers → (值, "ok")
-        其他值         → ("superpowers", "unknown-value:<v>")（F12：非法值回显，区别于缺省）
+        其他值/损坏标量 → ("superpowers", "unknown-value:<原文>")（F12：非法值回显，区别于缺省；
+                          损坏标量同归此路径——fail 向旧管线，且原文回显可诊断）
     """
     config_path = Path(root) / "openspec" / "config.yaml"
     if not config_path.exists():
         return "superpowers", "absent"
 
     text = config_path.read_text(encoding="utf-8", errors="replace")
-    raw_value: Optional[str] = None
+    if text.startswith("﻿"):
+        text = text[1:]  # [impl-review-fix] BOM 剥离，口径对齐 ship_gate.py:308
+
+    raw_field: Optional[str] = None
     for line in text.splitlines():
         # 顶层键要求列 0 起始（排除注释行 `# impl-pipeline: ...` 与缩进内文本，
-        # 如 `context: |` 块标量正文提及同名字样）。
-        if line.startswith(CONFIG_KEY):
-            raw_value = _extract_scalar(line[len(CONFIG_KEY):])
+        # 如 `context: |` 块标量正文提及同名字样）；KEY_RE 容忍冒号前空白。
+        m = KEY_RE.match(line)
+        if m is not None:
+            raw_field = m.group(1)
             break
 
-    if not raw_value:
+    if raw_field is None:
         return "superpowers", "absent"
-    if raw_value in LEGAL_PIPELINES:
-        return raw_value, "ok"
-    return "superpowers", f"unknown-value:{raw_value}"
+
+    raw_stripped = raw_field.strip()
+    if not raw_stripped:
+        return "superpowers", "absent"
+
+    value, damaged = _extract_scalar(raw_field)
+    if damaged:
+        return "superpowers", f"unknown-value:{raw_stripped}"
+    if not value:
+        return "superpowers", "absent"
+    if value in LEGAL_PIPELINES:
+        return value, "ok"
+    return "superpowers", f"unknown-value:{value}"
 
 
 # ---------------------------------------------------------------------------
@@ -101,13 +139,15 @@ def read_plan_marker(plan_path) -> Optional[str]:
     文件缺            → None
     无 frontmatter / 无键 → "superpowers"（旧管线产物，不嗅探正文内容）
     首块 frontmatter 含 impl-pipeline: tickets|superpowers 单值 → 该值
-    键重复 / 值非法 / frontmatter 未闭合 → raise RouteStop（UNKNOWN 语义，停）
+    键重复 / 值非法 / 值损坏（未闭合引号等）/ frontmatter 未闭合 → raise RouteStop（UNKNOWN 语义，停）
     """
     p = Path(plan_path)
     if not p.exists():
         return None
 
     text = p.read_text(encoding="utf-8", errors="replace")
+    if text.startswith("﻿"):
+        text = text[1:]  # [impl-review-fix] BOM 剥离，口径对齐 ship_gate.py:308
     lines = text.splitlines()
     if not lines or lines[0].strip() != FRONT_DELIM:
         return "superpowers"  # 无 frontmatter
@@ -120,20 +160,24 @@ def read_plan_marker(plan_path) -> Optional[str]:
     if close_idx is None:
         raise RouteStop(f"plan frontmatter 未闭合: {p}")
 
-    values: List[str] = []
+    raw_fields: List[str] = []
     for line in lines[1:close_idx]:
-        if line.startswith(CONFIG_KEY):
-            values.append(_extract_scalar(line[len(CONFIG_KEY):]))
+        m = KEY_RE.match(line)  # [impl-review-fix] 容忍冒号前空白
+        if m is not None:
+            raw_fields.append(m.group(1))
 
-    if not values:
+    if not raw_fields:
         return "superpowers"  # frontmatter 在，但无 impl-pipeline 键
-    if len(values) > 1:
+    if len(raw_fields) > 1:
         raise RouteStop(f"plan frontmatter impl-pipeline 键重复: {p}")
 
-    val = values[0]
-    if val not in LEGAL_PIPELINES:
-        raise RouteStop(f"plan frontmatter impl-pipeline 值非法: {val!r} ({p})")
-    return val
+    value, damaged = _extract_scalar(raw_fields[0])
+    if damaged:
+        raise RouteStop(
+            f"plan frontmatter impl-pipeline 值损坏: {raw_fields[0].strip()!r} ({p})")
+    if value not in LEGAL_PIPELINES:
+        raise RouteStop(f"plan frontmatter impl-pipeline 值非法: {value!r} ({p})")
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -153,36 +197,85 @@ def resolve_pipeline(config_pipeline: str, marker: Optional[str]) -> str:
 def parse_blocked_by(plan_text: str) -> Dict[int, Set[int]]:
     """按 `### Task N:` 分段解析 `Blocked-by:`（`none` 或逗号号列）。
 
+    [impl-review-fix] fence-aware：``` 围栏内的行对标题与声明行均不可见，口径与
+    ship_gate._parse_plan 一致（`line.lstrip().startswith("```")` 翻转围栏状态，围栏内
+    整行跳过）。
+
+    三态 fail-closed 契约（frontier 只服务 tickets plan，SKILL 契约要求每票显式声明依赖，
+    不再对「段内无 Blocked-by 行」静默当无依赖）：
+        每个 Task 段 MUST 恰好一条 canonical Blocked-by 行（`Blocked-by:` / `**Blocked-by:**`，
+        允许行内前缀如 `R-ID: 1.1 · Blocked-by: none`）：
+            0 条  → TopoError「Task N 缺 Blocked-by 声明」
+            >1 条 → TopoError「Task N Blocked-by 声明重复」
+        段内出现疑似变体（大小写不同如 `blocked-by:`、全角冒号 `Blocked-by：`）但未被
+        canonical 正则命中同一行 → TopoError「Task N 疑似 Blocked-by 声明格式不识别」。
+
     环 / 自环 / 引用不存在的依赖号 → raise TopoError（结构校验，与 done 集无关）。
+    EOF 时围栏未闭合（悬空 ```）→ raise TopoError（与 gate UNKNOWN 同向 fail-closed，防悬空
+    围栏吞真实 Task 段/Blocked-by 行而假判「无依赖」）。
     """
-    headers = list(TASK_HEADER_RE.finditer(plan_text))
-    if not headers:
+    task_ids: Set[int] = set()
+    segments: List[Tuple[int, List[str]]] = []
+    cur_tid: Optional[int] = None
+    cur_lines: List[str] = []
+    in_fence = False
+
+    def _flush() -> None:
+        if cur_tid is not None:
+            segments.append((cur_tid, cur_lines))
+
+    for line in plan_text.splitlines():
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = TASK_HEADER_RE.match(line)
+        if m:
+            _flush()
+            cur_tid = int(m.group(1))
+            cur_lines = []
+            task_ids.add(cur_tid)
+            continue
+        if cur_tid is not None:
+            cur_lines.append(line)
+    _flush()
+
+    if in_fence:
+        raise TopoError("plan 存在未闭合的 fenced 代码块（```），解析不可靠")
+
+    if not segments:
         return {}
 
-    task_ids: Set[int] = set()
-    segments: List[Tuple[int, str]] = []
-    for i, m in enumerate(headers):
-        tid = int(m.group(1))
-        start = m.end()
-        end = headers[i + 1].start() if i + 1 < len(headers) else len(plan_text)
-        segments.append((tid, plan_text[start:end]))
-        task_ids.add(tid)
-
     deps: Dict[int, Set[int]] = {}
-    for tid, seg in segments:
-        bm = BLOCKED_BY_RE.search(seg)
+    for tid, seg_lines in segments:
+        canonical_hits: List[str] = []
+        variant_hit = False
+        for line in seg_lines:
+            cm = BLOCKED_BY_RE.search(line)
+            if cm is not None:
+                canonical_hits.append(cm.group(1).strip())
+                continue
+            if BLOCKED_BY_VARIANT_RE.search(line):
+                variant_hit = True
+        if variant_hit:
+            raise TopoError(f"Task {tid} 疑似 Blocked-by 声明格式不识别")
+        if not canonical_hits:
+            raise TopoError(f"Task {tid} 缺 Blocked-by 声明")
+        if len(canonical_hits) > 1:
+            raise TopoError(f"Task {tid} Blocked-by 声明重复")
+
+        raw = canonical_hits[0]
         dep_set: Set[int] = set()
-        if bm is not None:
-            raw = bm.group(1).strip()
-            if raw and raw.lower() != "none":
-                for part in raw.split(","):
-                    part = part.strip()
-                    if not part:
-                        continue
-                    if not part.isdigit():
-                        raise TopoError(
-                            f"Task {tid} Blocked-by 含非法号: {part!r}")
-                    dep_set.add(int(part))
+        if raw and raw.lower() != "none":
+            for part in raw.split(","):
+                part = part.strip()
+                if not part:
+                    continue
+                if not part.isdigit():
+                    raise TopoError(
+                        f"Task {tid} Blocked-by 含非法号: {part!r}")
+                dep_set.add(int(part))
         deps[tid] = dep_set
 
     # 结构校验：自环 / 引用不存在的依赖号
@@ -265,7 +358,7 @@ def _cmd_route(args: argparse.Namespace) -> int:
         marker = read_plan_marker(plan_path)
     except RouteStop as e:
         print(str(e), file=sys.stderr)
-        return 6
+        return EXIT_ROUTE_STOP
 
     pipeline = resolve_pipeline(config_pipeline, marker)
 
@@ -298,7 +391,7 @@ def _cmd_frontier(args: argparse.Namespace) -> int:
     plan_path = Path(args.plan)
     if not plan_path.exists():
         print(f"plan 文件不存在: {plan_path}", file=sys.stderr)
-        return 6
+        return EXIT_ROUTE_STOP
 
     text = plan_path.read_text(encoding="utf-8", errors="replace")
 
@@ -313,7 +406,7 @@ def _cmd_frontier(args: argparse.Namespace) -> int:
                 continue
             if not part.isdigit():
                 print(f"--done 含非法号: {part!r}", file=sys.stderr)
-                return 6
+                return EXIT_ROUTE_STOP
             done.add(int(part))
 
     try:
@@ -321,7 +414,7 @@ def _cmd_frontier(args: argparse.Namespace) -> int:
         ready = next_ready(deps, done)
     except TopoError as e:
         print(str(e), file=sys.stderr)
-        return 6
+        return EXIT_ROUTE_STOP
 
     print(" ".join(str(x) for x in ready))
     return 0

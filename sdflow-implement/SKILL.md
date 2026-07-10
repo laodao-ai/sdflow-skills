@@ -58,9 +58,15 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 ### 起手检查
 
 1. **matt 语义源目录**必须已装（只读消费其语义，不改内部，adr/0002）：`~/.claude/skills/to-tickets`、
-   `~/.claude/skills/implement`、`~/.claude/skills/code-review`、`~/.claude/skills/tdd`。任一缺失 →
-   **显式停**，报告缺失的具体路径；MUST NOT 降级到臆造替代语义、MUST NOT 静默跳过检查。
-   config 未开 `impl-pipeline: tickets` 的仓本不会触发这条路径（缺省仓零暴露）。
+   `~/.claude/skills/implement`、`~/.claude/skills/code-review`、`~/.claude/skills/tdd`。**目录存在
+   不够**——须逐一 Read 其 `SKILL.md` 头部（frontmatter `description`），核验语义关键词在场：
+   `to-tickets` → 含 ticket/切片类词；`implement` → 含 implement/TDD 类词；`code-review` → 含
+   review 类词；`tdd` → 含 test 类词。任一目录缺失，或 `description` 与预期语义明显不符（同名空壳、
+   被改版成无关用途）→ **显式停**，报告缺失的具体路径 / 具体不符点；MUST NOT 降级到臆造替代语义、
+   MUST NOT 静默跳过检查。config 未开 `impl-pipeline: tickets` 的仓本不会触发这条路径（缺省仓零
+   暴露）。
+   > matt 套件官方仅发 Claude 侧（`~/.claude/skills/`），Codex 运行时未验证——Codex 宿主缺装即走
+   > 上述显式停路径，属已知范围收窄非遗漏。〔impl-review-fix〕
 2. 读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
    **建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
    用户，走 ship T10 三级决策协议（design D9）。
@@ -128,25 +134,32 @@ impl-pipeline: tickets
 **无 quiz-the-user**：不做人工粒度确认这一步（matt 原版 to-tickets 有此人类步，本 skill 删除——
 阶段三无人类门；粒度争议走 T10，不问用户）。
 
-### 落盘即返回
+### 落盘 → checkpoint → 返回（显式三步序列，B1 完成窗口锚）〔impl-review-fix〕
 
-写完 `superpowers-plan.md` 后**立即返回编排层（ship）**，**MUST NOT** 在同一次调用内继续派发
-implementer 或直通执行——必须保留 `ship_gate` 在"落盘之后 / 执行之前"对 fence / 标题 / 重号的三道
-校验插入点，让 gate 重新裁决一次是否可以进入 `CONTINUE_IMPL`。
+出 ticket 模式收尾按固定顺序执行——**返回发生在 checkpoint 之后**，不是「落盘即返回」；模型读到
+「立即返回」不得跳过第②步：
 
-### 收尾：显式 checkpoint（B1 完成窗口锚）
-
-plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点：
-
-```bash
-bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:plan" "出 ticket 落盘（B1 窗口锚）"
-```
-
-这条 checkpoint 的 slug（`plan`）**不带 `task<N>-` 前缀，不计入任何 ticket 的完成数**——它只建立
-`[sha, HEAD]` 闭区间的起点，供后续每张 ticket 的 `checkpoint(<change>:task<N>-<slug>)` 落在窗口内
-被 gate 识别。
+1. **写盘**：完成 `superpowers-plan.md`（结构见上「外衣」节）。
+2. **立即执行 checkpoint 命令**：plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点——
+   不依赖「首 ticket add -A 捎带提交」的巧合自愈〔adr/0017〕：
+   ```bash
+   bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:plan" "出 ticket 落盘（B1 窗口锚）"
+   ```
+   这条 checkpoint 的 slug（`plan`）**不带 `task<N>-` 前缀，不计入任何 ticket 的完成数**——它只
+   建立 `[sha, HEAD]` 闭区间的起点，供后续每张 ticket 的 `checkpoint(<change>:task<N>-<slug>)`
+   落在窗口内被 gate 识别。
+3. **返回编排层（ship）**：checkpoint 提交完成后才返回，**MUST NOT** 在同一次调用内继续派发
+   implementer 或直通执行——必须保留 `ship_gate` 在"落盘之后 / 执行之前"对 fence / 标题 / 重号的
+   三道校验插入点，让 gate 重新裁决一次是否可以进入 `CONTINUE_IMPL`。
 
 ## 执行模式（`mode=tickets-exec`）
+
+### 起手复核（跨会话语义源二次核验）〔impl-review-fix〕
+
+出 ticket 与执行可能跨会话 / 跨天——执行模式起手（frontier 计算前）MUST 重跑与出 ticket 模式
+起手检查同款的语义源核验（同上「matt 语义源目录」四项：逐一 Read SKILL.md 头部核验语义关键词
+在场），缺失 / 不符 → 显式停，报告具体路径 / 不符点。**MUST NOT** 凭记忆臆造 `tdd` /
+`code-review` 的语义（跨会话记忆不可靠，须重新读盘核验）。
 
 ### frontier 严格串行
 
@@ -170,7 +183,9 @@ dispatch prompt 必含：
   commit 即可，标签延后到该 ticket 双轴审通过后才由执行模式补打；
 - report file 路径契约：implementer **全量报告**写 `{change_dir}/impl-reports/task<N>-<slug>.md`，
   dispatch 的**返回值只带状态摘要**（四值状态词之一 + 一行摘要），**MUST NOT** 把全量报告贴进
-  返回文本（上下文经济学：大产物一律走文件交接，不进 prompt/返回值）。
+  返回文本（上下文经济学：大产物一律走文件交接，不进 prompt/返回值）。fix 轮次的 implementer
+  报告写 `{change_dir}/impl-reports/task<N>-<slug>-fix<轮次>.md`（不覆盖首轮报告，保留审计
+  轨迹）。〔impl-review-fix〕
 
 implementer 状态词表四值处置：
 
@@ -180,6 +195,11 @@ implementer 状态词表四值处置：
 | `DONE_WITH_CONCERNS` | 与 `DONE` 同路径进双轴审，implementer 所述 concerns **逐字**附给两轴审子代理〔F7〕 |
 | `NEEDS_CONTEXT` | 编排层**仅从盘面**（design.md / specs/ / ticket 文本）自答；答不出 → 走 T10（defer 或停），**MUST NOT 编造**答案 |
 | `BLOCKED` | 统一 halt envelope 停并上抛（见下），blocker 记录**落盘** `{change_dir}/impl-blockers.md`（git-tracked，防会话压缩蒸发）〔F7〕 |
+
+> `DONE_WITH_CONCERNS` 澄清〔impl-review-fix〕：dispatch 返回值仍只带一行摘要（不违反上文
+> 「返回值只带状态摘要」的契约）；执行模式收到该状态后 MUST Read 该票 report file
+> （`{change_dir}/impl-reports/task<N>-<slug>.md`）的 Concerns 小节取**全文**，逐字附给两轴审
+> 子代理——「逐字」的来源是 report file 全文，不是 dispatch 返回值里的那一行摘要。
 
 **halt envelope 五要素**（`BLOCKED` 与其他一切停机——依赖缺失、gate 拒绝——统一用这个形状呈现，
 不是自由散文）：
@@ -204,6 +224,20 @@ bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:task<N>-<slug>" "<一句话�
 > gate 的完成数会卡在 0/N。
 
 resume 时若发现"实现提交在、完成标签缺"，视为**审前中断**——进入续审，**不重新实现**。
+
+**双信号核对（机械可执行契约，执行模式启动或 resume 时 MUST 跑）**〔impl-review-fix〕：对 gate
+传入的 `done_tasks` **每个**任务号 N，逐个核对完成标签是否真实存在于提交历史，不信任 gate 返回
+的并集（gate 的复选框通道直读工作树，勾框未提交即可能被计入 done）：
+
+```bash
+git log --oneline | grep "checkpoint({change}:task<N>-"
+```
+
+- 复选框已勾但查无对应标签提交 → 判定「未审半态」：**撤销**该票的验收复选框勾选（恢复盘面与
+  提交历史一致）→ 该票从本轮 done 集中**剔除** → 进入续审（重新走每 ticket 双轴审），而非信任
+  gate 并集。
+- 方向声明：宁可重复审一轮（假阴安全），**MUST NOT** 把仅勾框、查无对应标签提交的票当作已审
+  通过处理。
 
 ### 文件交接〔T125〕
 
@@ -231,7 +265,10 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 裁决处置：
 
 - Critical / Important 发现 → 派 fix 子代理修复 + re-review，循环直至通过；**不带着未修的
-  Critical/Important 推进下一 ticket**。
+  Critical/Important 推进下一 ticket**。**熔断**〔impl-review-fix〕：同一发现（同 file:line +
+  同问题）连续 2 轮 re-review 仍未消解 → 停止循环，按 T10 三级决策协议处理（有客观判据自动选 /
+  无客观判据派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist 并停上抛），**MUST NOT**
+  无限循环。
 - Minor 发现 → defer 进 todolist，**JSON 显式带 `"change"` 字段**（省略会被脚本自动挂到"当前活跃
   change"，多 change 并行时会挂错，坑见 sdflow-todolist 的 `change` 字段说明）。
 
