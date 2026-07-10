@@ -134,6 +134,8 @@
 | T126 | `bundle` | wayfinder→ff 衔接契约 + 主流程三段分流入口：清晰直接 ff / 单 session 模糊走 explore / 超单 session 大雾走 wayfinder；契约三条=ff 起手逐区读 map（Destination→proposal 动机+D-5、Decisions-so-far 逐行 zoom 决议全文防 make-reasonable-decisions 重决歪、Out-of-scope→D-3 假设）+ TG 判命中前置到 chart 写 map Notes + proposal 回链 map（2026-07-10 探索会，调研代理 file:line 已接地） | 功能增强 | PROPOSED | 2026-07-10 17:58 | - | matt-workflow-integration |
 | T127 | `bundle` | grill 瘦跑规则：上游 wayfinder 已决分支引 resolution comment 快速核对即过、新生成/未决部分照常死磕——grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling 票（生成前决策）非冗余、不可整跳（2026-07-10 探索会） | 功能增强 | PROPOSED | 2026-07-10 17:58 | - | matt-workflow-integration |
 | T128 | `sdflow-implement` | impl_route.py PIPELINE_RECEIPT 的 marker 显示折叠：显式 `impl-pipeline: superpowers` 与无 frontmatter/无键的隐式缺省均显示 marker=none，路由行为等价但 receipt 可诊断性受损（F3a 判赢留档核对时无法分辨是否显式声明过）——需 read_plan_marker 返回值携带来源注记再区分显示（code-review defer，display-only 无路由风险） | 代码质量 | PROPOSED | 2026-07-11 01:37 | matt-workflow-integration | matt-workflow-integration |
+| T129 | `sdflow-roadmap` | 存量 wco/mlh 两包 requirements.md 并入 design.md 迁移（tasks 5.1-5.3 受控延后项，Q-C 拍板前置②）——触发条件：首个新流程 roadmap SHIPPED 且目标包无在飞 change；操作序列以归档 change rebuild-sdflow-roadmap-v2 的 tasks.md 5.1-5.3 + design Migration step3 为准（全节清点表/考古注记四要素/头部章不占编号序列/清点表落盘随 commit/per 包 maintain_scan） | 代码质量 | OPEN | 2026-07-11 02:30 | rebuild-sdflow-roadmap-v2 |  |
+| T130 | `bundle` | ff-generation-constraints.md:43 衔接契约边界句「requirements/design/roadmap/task-log 四件套」→「三件套」术语同步——matt-workflow-integration Task7 写入时 rebuild-sdflow-roadmap-v2 未落地所致漂移；属 assets/workflow 权威源（rebuild change Compliance 声明零 assets 改动故未扫），一词修正独立小改，改后消费仓经 sdflow-init update 获得 | 代码质量 | OPEN | 2026-07-11 02:30 | rebuild-sdflow-roadmap-v2 |  |
 
 ---
 
