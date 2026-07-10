@@ -1,6 +1,6 @@
 # task-log.md 模板（任务日志 — DID）
 
-用途：按时间倒序记录 `roadmap.md` 中每个已完成子任务的实际状态、耗时、问题、调整。是 roadmap 产出后唯一一份"活着的"文件（其他三件相对稳定）。
+用途：按时间倒序记录 `roadmap.md` 中每个已完成子任务的实际状态、耗时、问题、调整。是三件套产出后唯一一份"活着的"文件（其他两件相对稳定）。
 
 使用方法：把本模板内容 Write 到 `openspec/roadmaps/<name>/task-log.md` 作为初始文件。第一条日志记录 roadmap 文档包产出本身（作为阶段 0 / 规划的完成标记）。
 
@@ -17,7 +17,6 @@
 > 本文件按时间**倒序**记录 `roadmap.md` 中每个已完成子任务的状态、耗时、问题、调整。
 >
 > 相关文档（全部位于 `openspec/roadmaps/<name>/` 下）：
-> - 需求综述：`requirements.md`
 > - 整体设计：`design.md`
 > - 实施路线图：`roadmap.md`
 
@@ -66,12 +65,10 @@
 - **状态**: ✅ 完成
 - **实际耗时**: ~<N>h（含讨论）
 - **产出**:
-  - `openspec/roadmaps/<name>/requirements.md` — 需求综述
-  - `openspec/roadmaps/<name>/design.md` — 整体设计（含架构决策 + Q&A 已决议）
+  - `openspec/roadmaps/<name>/design.md` — 整体设计（含头部「需求与目标态」章 + 架构决策 + Q&A 已决议）
   - `openspec/roadmaps/<name>/roadmap.md` — 实施路线图（<N> 阶段 × <M> 子任务）
   - `openspec/roadmaps/<name>/task-log.md` — 任务日志（本文件）
-  - `openspec/roadmaps/<name>/memo.md` — 讨论备忘（可选，不被四件套引用）
-  - `openspec/changes/archive/<date>-<change-name>/` — SDD 变更盒子（已归档）
+  - `openspec/roadmaps/<name>/memo.md` — 讨论备忘（可选，短档考古用，不被三件套引用；长档讨论落 `footage/`，同样不被引用）
 - **关键决策回顾**（完整档案见 `design.md` §3 和 §10）:
   - <决策 1 一句话>
   - <决策 2 一句话>
