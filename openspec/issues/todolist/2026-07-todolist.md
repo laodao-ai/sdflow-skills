@@ -123,16 +123,16 @@
 | T115 | `bundle` | spec 模版增强：EARS 句式+三必填槽+测试 seam 决策槽（04 提案 §3.2/§3.3） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
 | T116 | `workflow` | 高危路径升级例外：HR-TG 类修复 defer-to-human 异步（04 提案 §3.5） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
 | T117 | `机械层` | 跨工件一致性检查 artifact_consistency.py 设计门前置（04 提案 §3.4） | 基础设施 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
-| T118 | `writing-plans` | tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T118 | `writing-plans` | tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | matt-workflow-integration |
 | T119 | `roadmap` | fog-of-war 进 roadmap 模版：远期阶段留雾区（04 提案 §5.2） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
-| T120 | `bundle` | expand-contract 宽重构协议进 bundle（04 提案 §5.3） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T120 | `bundle` | expand-contract 宽重构协议进 bundle（04 提案 §5.3） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | matt-workflow-integration |
 | T121 | `评审编排` | 大产物文件交接：镜报告超阈值写文件、返回只带路径（04 提案 §5.7） | 性能优化 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
 | T122 | `skills` | done/ship/init 加 disable-model-invocation 触发层硬开关（04 提案 §5.4） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
 | T123 | `issues` | 动作抽象层：recorder tracker 后端可插拔，仅当需求出现（04 提案 §5.5） | 基础设施 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
 | T124 | `bundle` | 规则注入策略分界落地：小而稳定且每镜必用的核心 rubric 运行时读一次全文贴入（可缓存稳定前缀），大部头/高频演进 delta 保持引用+anchor_lint；SKILL.md 禁静态内联不变（04 提案 §4.8，2026-07-10 拍板） | 功能增强 | PROPOSED | 2026-07-10 17:10 | - | opt-cost |
-| T125 | `评审编排` | 议题：fan-out 子代理产物默认落临时文件、返回只带路径——动机是交接可靠性（防最终文本截断/结构化输出失配/compaction 丢失），比 T121（超阈值才写文件）更进一步；讨论点：默认落盘 vs 阈值触发、临时文件生命周期与清理、主审读文件的路径契约（2026-07-10 探索会提出） | 基础设施 | PROPOSED | 2026-07-10 17:47 | - | opt-structure |
-| T126 | `bundle` | wayfinder→ff 衔接契约 + 主流程三段分流入口：清晰直接 ff / 单 session 模糊走 explore / 超单 session 大雾走 wayfinder；契约三条=ff 起手逐区读 map（Destination→proposal 动机+D-5、Decisions-so-far 逐行 zoom 决议全文防 make-reasonable-decisions 重决歪、Out-of-scope→D-3 假设）+ TG 判命中前置到 chart 写 map Notes + proposal 回链 map（2026-07-10 探索会，调研代理 file:line 已接地） | 功能增强 | OPEN | 2026-07-10 17:58 | - |  |
-| T127 | `bundle` | grill 瘦跑规则：上游 wayfinder 已决分支引 resolution comment 快速核对即过、新生成/未决部分照常死磕——grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling 票（生成前决策）非冗余、不可整跳（2026-07-10 探索会） | 功能增强 | OPEN | 2026-07-10 17:58 | - |  |
+| T125 | `评审编排` | 议题：fan-out 子代理产物默认落临时文件、返回只带路径——动机是交接可靠性（防最终文本截断/结构化输出失配/compaction 丢失），比 T121（超阈值才写文件）更进一步；讨论点：默认落盘 vs 阈值触发、临时文件生命周期与清理、主审读文件的路径契约（2026-07-10 探索会提出） | 基础设施 | PROPOSED | 2026-07-10 17:47 | - | matt-workflow-integration |
+| T126 | `bundle` | wayfinder→ff 衔接契约 + 主流程三段分流入口：清晰直接 ff / 单 session 模糊走 explore / 超单 session 大雾走 wayfinder；契约三条=ff 起手逐区读 map（Destination→proposal 动机+D-5、Decisions-so-far 逐行 zoom 决议全文防 make-reasonable-decisions 重决歪、Out-of-scope→D-3 假设）+ TG 判命中前置到 chart 写 map Notes + proposal 回链 map（2026-07-10 探索会，调研代理 file:line 已接地） | 功能增强 | PROPOSED | 2026-07-10 17:58 | - | matt-workflow-integration |
+| T127 | `bundle` | grill 瘦跑规则：上游 wayfinder 已决分支引 resolution comment 快速核对即过、新生成/未决部分照常死磕——grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling 票（生成前决策）非冗余、不可整跳（2026-07-10 探索会） | 功能增强 | PROPOSED | 2026-07-10 17:58 | - | matt-workflow-integration |
 
 ---
 
