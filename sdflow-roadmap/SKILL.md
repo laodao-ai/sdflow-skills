@@ -81,7 +81,7 @@ review：按野心分档 → /plan-eng-review（默认）或 /autoplan（野心�
 ### 规则 5：只做规划，不实施
 
 - 本 skill 输出**文档**，不输出代码、不配置服务器、不创建仓库
-- 实施动作留给"未来的 OpenSpec 变更"（`implement-blog-phase-1` 这类）
+- 实施动作留给"未来的 OpenSpec 变更"（`implement-blog-p1` 这类）
 - 如果用户在 roadmap 产出过程中要求"顺手把 X 也做了"，提醒他：那属于阶段 1 实施变更的 scope
 - 这条边界同样约束 wayfinder 铺图期间的 **Task** 类型票（wayfinder 唯一"做而非决定"的票型）：roadmap 讨论期的 Task 票 **MUST** 限定为**可行性验证**性质（如注册一个服务账号以判断其 API、探测现有系统现状），**MUST NOT** 用来产出正式实施成果——产出实施成果仍属未来阶段实施变更的 scope
 
@@ -109,7 +109,9 @@ review：按野心分档 → /plan-eng-review（默认）或 /autoplan（野心�
 |---|---|---|
 | **create** | 目录不存在 | 直接创建三件套 |
 | **continue** | 目录已存在，本次是增量推进 | 保留既有 task-log.md 的历史记录与「Review 处置」小节，只追加/更新受影响章节 |
-| **replan** | 目录已存在，本次是推翻重规划 | **先**在 task-log.md 落一条重规划记录（原因 + 时间），**再**改写受影响文件 |
+| **replan** | 目录已存在，本次是推翻重规划 | **先**在 task-log.md 落一条重规划记录（原因 + 时间），**再**改写受影响文件；task-log.md 既有历史记录（含刚落的重规划记录）在改写阶段 **MUST NOT** 删除或覆盖，只可追加 |
+
+**continue 与 replan 判据**：改动只影响未细化/未验收阶段、不推翻既有决策 → 倾向 continue；推翻已过 review 的决策或已完成子任务的前提 → 倾向 replan——以此为「区分依据」的生成基准，仍由操作者确认最终走哪条。
 
 无论 continue 或 replan，**MUST NOT** 静默覆盖既有活文档——向操作者显式说明区分依据，让其确认走哪条。
 
@@ -131,6 +133,8 @@ roadmap 的质量 100% 取决于讨论是否充分。开工前**必须**先评�
 
 用户通常已经经过一轮充分讨论（可能是前一轮对话里的），此时 roadmap-planner 可以直接起草。**判定点①**：显式说明「gate-0 五项已过，直接结晶」这一行依据，并写入 task-log.md。
 
+直接结晶前仍 **SHALL** 检查产品/商业野心信号（见下文「讨论层：三分支路由」分支 C 触发信号词表）——命中则先过 `/office-hours` 前置验证再结晶：gate-0 五项检验的是「讨论是否充分」，不检验「需求是否真实」，两关独立，五项全过不能免除野心信号检查。
+
 ### 任一项未通过 → 先进讨论层（见下节三分支路由）
 
 ---
@@ -138,6 +142,8 @@ roadmap 的质量 100% 取决于讨论是否充分。开工前**必须**先评�
 ## 讨论层：三分支路由
 
 判定点①的核心：讨论工具怎么选。**双判据**，**MUST NOT** 依赖事前轮数预估——「聊多少轮该升级」不可观测，判据只认信号，不认计数。
+
+长档信号与野心信号同时命中时，`/office-hours` 前置于 wayfinder chart——先验证需求真实性再铺图，避免为一个需求真实性未定的项目投入长档追踪成本。
 
 ### 分支 A（默认）：`/opsx:explore`
 
@@ -154,9 +160,13 @@ roadmap 的质量 100% 取决于讨论是否充分。开工前**必须**先评�
 
 **无雾自降级**：wayfinder chart 第 2 步（广度 grill）**SHALL 先以未持久化预检判雾**——即先在对话里判断有没有雾，判定**有雾**才落盘建 map/票；若已经建了文件才发现无雾，**清理已建文件并留一行痕迹**。判定无雾时不建 map，退回 explore 单 session 讨论后直接结晶；广度 grill 期间已经产生的讨论要点 **SHALL** 转录进后续 explore 讨论或 memo，**MUST NOT** 因判定无雾而清零。
 
-**宿主中立探测**：起手长档信号或事中触发命中后，先按**当前运行宿主**（Claude Code 或 Codex）探测 wayfinder 是否装载（如 `ls ~/.claude/skills/wayfinder` 或 `ls ~/.codex/skills/wayfinder`，取当前宿主对应路径）——**MUST NOT** 以 Claude 路径存在代理"全局可用"（Codex 宿主目前接地实测未装 wayfinder，这条降级路径会常驻）。不可用时显式提示并降级 explore+memo（长档策略回旧制），流程不阻塞。
+**宿主中立探测**：起手长档信号或事中触发命中后，先按**当前运行宿主**（Claude Code 或 Codex）探测 wayfinder 是否装载（如 `ls ~/.claude/skills/wayfinder` 或 `ls ~/.codex/skills/wayfinder`，取当前宿主对应路径）——**MUST NOT** 以 Claude 路径存在代理"全局可用"（Codex 宿主目前接地实测未装 wayfinder，这条降级路径会常驻）。不可用时显式提示并降级 explore+memo（长档策略回旧制），流程不阻塞——无 wayfinder 的长档降级模式下，memo 转为**必需、持续更新**的长档考古层（区别于短档场景 memo 可选定位的例外态）；恢复 wayfinder 后可将 memo 要点转录进 map，不叠加双写。
+
+**wayfinder 内部依赖降级**：wayfinder 票内调用 grilling/domain-modeling 失败（未装）时，票内降级为普通对话式讨论、票照常 resolve，显式提示装 matt 套件——**MUST NOT** 因此卡死或跳票。续跑/演练时若六操作行为与 tracker doc 约定描述不符，**SHALL** 显式告警「套件语义漂移」并停用长档路由（降级 explore+memo）待人核。
 
 **tracker doc preflight**：宿主探测通过后，**SHALL** 校验消费仓 `openspec/matt/issue-tracker.md` 是否存在且含 Wayfinding 小节。缺失时 **fail-closed 不进 wayfinder**：给出确定的初始化指引（提示运行 matt 套件的初始化 skill 铺设 tracker doc），并降级 explore+memo，不阻塞流程。
+
+**共享真相源基线记录**：tracker doc preflight 通过后，**SHALL** 记录 `openspec/CONTEXT.md` / `openspec/adr/` 当前基线（如 `git log -1 --format=%h -- openspec/CONTEXT.md openspec/adr/` 的输出）记入 map.md 头部或 task-log.md——长档跨 session 场景下，收尾 checklist ⑤ 需据此基线 diff 核对，无基线即无从机械核对。
 
 **wayfinder 票内的 domain-modeling 语境声明**：wayfinder 票内调用 grilling/domain-modeling（写术语/ADR）时，调用语 **SHALL** 声明「roadmap 探索期，决策未定稿」——避免把讨论期的临时判断当定稿写进 `openspec/CONTEXT.md`/`openspec/adr/`（收尾 checklist ⑤ 项会核对这条留下的增量，见下文）。
 
@@ -164,9 +174,11 @@ roadmap 的质量 100% 取决于讨论是否充分。开工前**必须**先评�
 
 **触发信号**（产品/商业野心信号词表——review 分档共用同一张表，见下文「review：按野心分档」）：外部用户、变现、获客、"用户画像未定"、"要不要做这个产品"。典型例子：面向外部用户的 SaaS、社区、付费工具。
 
+office-hours 属 roadmap 讨论层专用分支，**不进入** mainflow（workflow.md 阶段一）的 change 讨论编排——两处路由职权面不同：本分支只服务 roadmap-planner 内部的需求真实性前置校验，不代理、不影响单次 OpenSpec 变更的讨论层路由。
+
 **不触发**的场景（绝大多数）：技术重构、内部工具、基础设施、博客/文档工程、个人项目。
 
-office-hours 的 6 问（Demand/Status-quo/Wedge/Observation/Future-fit）把需求真实性逼出来后，**回到分支 A 或 B** 继续技术路径讨论——office-hours 本身不产出三件套内容，只是前置校验。
+office-hours 的 6 问（Demand/Status-quo/Wedge/Observation/Future-fit）把需求真实性逼出来后，**回到分支 A 或 B** 继续技术路径讨论——office-hours 本身不产出三件套内容，只是前置校验。office-hours 结束后 **SHALL** 重新按判定点①双判据评估（讨论状态可能已变，例如 office-hours 过程中暴露出新的多阶段/跨系统信号），并显式陈述回流依据一行（回到 A 还是 B、为什么）。
 
 ### 深度设计不在本流程内
 
@@ -181,6 +193,7 @@ office-hours 的 6 问（Demand/Status-quo/Wedge/Observation/Future-fit）把需
 | "帮我理一下这几个 bug 先后修哪个" | 无多阶段/无跨天信号，规模小 | gate-0 大概率直接过或轻量 explore，不建 map |
 | "我们聊聊要不要重构鉴权模块，还没想清楚" | 起手不明，无显式长档信号 | `/opsx:explore` 起步，视后续实际轮次/压缩情况事中触发 |
 | "这个 idea 已经聊了三天了，一直定不下来，帮我整理" | 事中触发信号（口述"聊了三天"） | 尚未建 map → 立即 wayfinder chart；若正逼近压缩 → 先 flush memo 再判定 |
+| "帮我规划一个面向外部用户的付费 SaaS，分三期上线" | 双信号并发：起手显性长档信号（多阶段）+ 产品/商业野心信号（外部用户+付费） | 先 `/office-hours`，通过后直入 wayfinder chart |
 
 ---
 
@@ -191,7 +204,7 @@ office-hours 的 6 问（Demand/Status-quo/Wedge/Observation/Future-fit）把需
 ### 落盘位置
 
 - map：`openspec/roadmaps/{name}/footage/map.md`
-- 票：`openspec/roadmaps/{name}/footage/issues/<NN>-<slug>.md`（本地 Markdown tracker 约定：`Type:` 记 `research`/`prototype`/`grilling`/`task`，`Status:` 记 `claimed`/`resolved`）
+- 票：`openspec/roadmaps/{name}/footage/issues/<NN>-<slug>.md`（本地 Markdown tracker 约定：`Type:` 记 `research`/`prototype`/`grilling`/`task`，`Status:` 记 `open`/`claimed`/`resolved`/`abandoned`——新票初态 `open`，`abandoned` 为显式放弃留痕）
 
 三件套引用边界见规则 3（两段式，不重复）。
 
@@ -227,11 +240,17 @@ map.md 顶部（Destination 之前）**SHALL** 留一行去向说明，例如：
 
 同一包二次 chart（如远期阶段补细讨论）**MUST NOT** 覆写既有 map。本 skill 钉死为**单 map 分批续用**：同一个 `map.md` 在其生命周期内允许多批次追加票，无需每次讨论都新开 map；**满 30 票时**归档当前 map 为 `footage/map-N.md`（`N` 从 1 起算）并新起一份 `map.md`，新 map 头部记一行「承接自 map-(N-1).md」，票号**不复用**（从旧 map 最大编号 +1 续起）。
 
+同包二次 chart 或新增票前，**SHALL** 轻量复验 `openspec/matt/issue-tracker.md` Wayfinding 小节仍在场（setup 重跑可能覆盖）——缺失即按上文「tracker doc preflight」的 fail-closed 路径处理。
+
+满 30 票归档前 **SHALL** 核对该 map 所有票已 `resolved` 或显式放弃（`abandoned` 留痕）——否则 **SHALL** 显式标注「带 N 张未决票归档」并留痕；被归档的 `map-N.md` 头部 **SHALL** 标 `Status: archived`。
+
 ---
 
 ## 结晶：产出三件套
 
 每个文件使用 `references/` 下对应的模板骨架。读对应模板，按项目实际内容填充。
+
+roadmap 的 wayfinder 收敛后**直写**三件套、**不经** `opsx:ff`——「wayfinder→ff 衔接契约」（`ff-generation-constraints.md`）属 change 生产路径，与本 skill 的直写路径互斥不叠加。
 
 | 文件 | 内容核心 | 模板 |
 |---|---|---|
@@ -324,15 +343,15 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 
 收尾前 **SHALL** 执行以下五项确认，**判定点③**——显式陈述通过/不通过并写入 task-log.md；跳过类判定须显著呈现。任一项不通过 **SHALL** 提示补齐后再收尾，**MUST NOT** 静默跳过。
 
-**① Review 处置无遗留**：task-log.md「Review 处置」小节不存在未处置状态的条目。
+**① Review 处置无遗留**：task-log.md「Review 处置」小节不存在未处置状态的条目。「Review 处置」小节**缺失**视为不通过——先建小节再判，**MUST NOT** 以「小节不存在=无未处置条目」真空通过。
 
-**② 三件套相互引用完整（最小引用图判定）**：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次；task-log.md 每条完成记录关联 roadmap.md 阶段；design 头部章与决策段无同值重复（只准互相引用，不准复述）。**不通过时报出具体文件与行号**，**MUST NOT** 笼统宣称「完整/不完整」。
+**② 三件套相互引用完整（最小引用图判定）**：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次；task-log.md 每条完成记录关联 roadmap.md 阶段；design 头部章与决策段无同值重复（只准互相引用，不准复述）。**不通过时报出具体文件与行号**，**MUST NOT** 笼统宣称「完整/不完整」。已细化阶段的回指采用「（见 design.md 决策 N）」锚点句式（`references/roadmap-template.md` 已含示例注释）。存量四件套包/逃生舱包（见「产出模式」节）本项判定范围 = 三件套两两引用 + `requirements.md` 按其历史约定核对；「头部章无重复」子判据对无头部章的 legacy 包记 `N/A`（`N/A` 为合法第三态，须显式陈述，不计入不通过）。
 
 **③ 考古层未被引用**：footage/（如走了长档）与包根 memo.md（如有）均未被三件套引用。
 
-**④ wayfinder 闭环**（如走了长档路径）：frontier 为空，或每张未 resolve 的票已显式放弃并留痕，map 标注 closed——**MUST NOT** 带着 open/claimed 票宣告定稿。
+**④ wayfinder 闭环**（如走了长档路径）：frontier 扫描 **SHALL** 覆盖 `footage/issues/` 全目录（含历史 map 世代——`map-1.md`…`map-(N-1).md` 对应的票，非仅当前 `map.md` 所列）；frontier 为空，或每张未 `resolve` 的票已显式放弃（`abandoned`）并留痕、map 标注 `closed`——**MUST NOT** 带着 `open`/`claimed` 票宣告定稿。操作者坚持越过时 **SHALL** 在 task-log.md 记录「带 N 张未决票结晶」+ 理由（显式越权留痕），**MUST NOT** 静默带票定稿。
 
-**⑤ 共享真相源核对**：本次讨论期间 `openspec/CONTEXT.md` / `openspec/adr/` 的新增与改动逐条对照三件套终稿——被终稿推翻的判据标 `superseded`（或 revert）并在 task-log.md 记一行，**MUST NOT** 让讨论期临时判断以定稿姿态留存在全局共享文件里。
+**⑤ 共享真相源核对**：本次讨论期间 `openspec/CONTEXT.md` / `openspec/adr/` 的新增与改动逐条对照三件套终稿——被终稿推翻的判据标 `superseded`（或 revert）并在 task-log.md 记一行，**MUST NOT** 让讨论期临时判断以定稿姿态留存在全局共享文件里。核对基准为讨论层记录的基线（见上文「共享真相源基线记录」）：以基线 commit 与当前 `openspec/CONTEXT.md`/`openspec/adr/` 的 diff 为准，长档跨 session 场景无基线即无从机械核对，此时先补记基线再核对。
 
 五项通过后，**SHALL** 软提示将包纳入版本控制（`git add`/`git commit`，软提示而非强制，与 recorder 先例对齐）。
 
@@ -344,7 +363,7 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 - 动词开头优先（表达"要做什么"）
 - 长度建议 ≤ 30 字符
 - 例：`rebuild-blog-v2`、`migrate-to-postgres`、`unify-auth-system`、`add-analytics-pipeline`
-- 这个名字同时是 `openspec/roadmaps/{name}/` 目录名、（如走长档）footage map 头部 `Tracker root:` 字段的锚，以及未来实施变更命名的前缀（`implement-{name}-phase-N`）——一名到底，避免未来追溯时多个名字对应同一件事
+- 这个名字同时是 `openspec/roadmaps/{name}/` 目录名、（如走长档）footage map 头部 `Tracker root:` 字段的锚，以及未来实施变更命名的前缀（`implement-{name}-p<N>`）——一名到底，避免未来追溯时多个名字对应同一件事
 
 ---
 
@@ -353,10 +372,12 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 roadmap 完成只是起点。后续每个阶段通过独立的 OpenSpec 变更推进：
 
 ```
-/opsx:new implement-{roadmap-name}-phase-1    # 阶段 1 实施
-/opsx:new implement-{roadmap-name}-phase-2    # 阶段 2 实施
+/opsx:new implement-{roadmap-name}-p1    # 阶段 1 实施
+/opsx:new implement-{roadmap-name}-p2    # 阶段 2 实施
 ...
 ```
+
+命名 **MUST** 用 `-p<N>`（非 `-phase-N`）——与 `sdflow-done` 回填解析器 `PREFIX_RE`（`implement-{roadmap}-p<N>[-…]`）及既有实践（如 `mlh-p4`）一致，用错命名回填草稿将 `NO_ASSOCIATION`。
 
 每个实施变更的 proposal 里：
 - **背景**：引用 `openspec/roadmaps/{name}/roadmap.md` 的对应阶段章节
@@ -462,6 +483,6 @@ roadmap 完成只是起点。后续每个阶段通过独立的 OpenSpec 变更�
 - **讨论阶段**：`/opsx:explore` 主导，发散出 4 个架构候选方向
 - **决策**：方向 C（单机 VPS + Cloudflare 代理）+ Blowfish 主题 + GEO 一等公民
 - **产出**：`openspec/roadmaps/blog-v2-rebuild/` 下的文档包（彼时结构含独立的需求文件，属该版本 skill 的历史形态；现行流程见上文「结晶：产出三件套」）
-- **范围**：产出阶段只交付文档包，实际搭建推到 `implement-blog-phase-N` 系列变更
+- **范围**：产出阶段只交付文档包，实际搭建推到后续一系列实施变更（彼时命名早于 `-p<N>` 命名规范确立，现行命名规范见上文「下游：阶段实施」节）
 
 这个实例可以作为决策叙事的参考。未来执行本 skill 时，走的是当前文档描述的三件套直写流程，不复现该实例的历史产出机制。

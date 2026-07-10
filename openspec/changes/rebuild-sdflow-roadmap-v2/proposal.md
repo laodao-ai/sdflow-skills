@@ -68,7 +68,7 @@ sdflow-roadmap 现行五阶段流程的仪式成本与产出价值错配，且�
 - **改**：`sdflow-roadmap/SKILL.md`（主体重写，office-hours 保留为讨论层第三分支〔Q-D 已拍板〕、整体 plan 话术、preflight 校验等存活清单见 tasks）；`sdflow-roadmap/references/design-template.md`、`roadmap-template.md`、`task-log-template.md`、`memo-template.md`、`long-flow-skill-paradigm.md`（导航块与注释）；`openspec/matt/issue-tracker.md`；`CLAUDE.md`（Agent skills 托管块一句 + 「四件套」表述）；`openspec/roadmaps/{workflow-cost-optimization,mechanical-layer-hardening}/{design.md,roadmap.md,task-log.md}`（存量合并与前向引用修补，task-log 仅修导航头、历史条目不回改〔spec-review-amendment SR-15〕）；`docs/sdflow-fable5/{01-goals-and-rationale.md,02-module-reference.md}` 等 docs 表述。**消费仓存量包零触碰**（冻结四件套合法形态，SR-1）。
 - **删**：`sdflow-roadmap/references/requirements-template.md`；存量两包的 `requirements.md`（内容并入各自 design.md）。
 - **依赖**：新增对 matt 套件（wayfinder → grilling/domain-modeling）的跨 skill 运行时依赖——失败模式与降级见 design.md（D-4）。
-- **脚本零波及**：无 `sdflow-roadmap/scripts/`；`roadmap_writeback_draft.py` 只读 roadmap.md/task-log.md（已核，见 Non-Goals 假设 3）。技术栈 TG-01/02/03 均不命中（纯 Markdown，无领域清单选用）。
+- **脚本零波及**：无 `sdflow-roadmap/scripts/`；`roadmap_writeback_draft.py` 只读 roadmap.md（已核，见 Non-Goals 假设 3）〔impl-review-fix〕。技术栈 TG-01/02/03 均不命中（纯 Markdown，无领域清单选用）。
 
 ## Compliance（合规声明）
 

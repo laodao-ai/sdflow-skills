@@ -26,7 +26,7 @@
 **`<root>` 条件分流**：若调用语以固定字面量声明了 map 路径（形如 `openspec/roadmaps/{name}/footage/map.md`），或本次 wayfinder 由 `sdflow-roadmap` 发起并指定该路径——该 effort 属 **roadmap 类**，`<root>` = `openspec/roadmaps/{name}/footage/`；其余情况 `<root>` 默认 = `openspec/matt/<effort>/`。
 
 - map：`<root>map.md`，记录 Notes、Decisions-so-far 和 Fog。
-- 子工作项：`<root>issues/<NN>-<slug>.md`。顶部使用 `Type:` 记录 `research`、`prototype`、`grilling` 或 `task`，使用 `Status:` 记录 `claimed` 或 `resolved`。
+- 子工作项：`<root>issues/<NN>-<slug>.md`。顶部使用 `Type:` 记录 `research`、`prototype`、`grilling` 或 `task`，使用 `Status:` 记录状态机 `open → claimed → resolved | abandoned`（新建票初态 `open`；`claimed` 为领取；`resolved` 为决议落盘；`abandoned` 为显式放弃留痕）。
 - 依赖：顶部以 `Blocked by: NN, NN` 列出依赖；列出的工作项全部为 `resolved` 后才解除阻塞。
 - frontier：在 `<root>issues/` 中查找未阻塞、未领取且未解决的工作项，按编号优先。
 - claim：先写入 `Status: claimed` 并保存，再开始工作。
@@ -45,7 +45,7 @@ Effort kind: roadmap
 
 ### stale claim 重认领
 
-发现某票 `Status: claimed` 但其 session 已中断（压缩/崩溃），长期无进展：在票尾追加一行中断注记后即可重认领、改回可工作状态继续处理——claimed 票不得永久掉出 frontier 无人问津。
+发现某票 `Status: claimed` 但其 session 已中断（压缩/崩溃），长期无进展：在票尾追加一行中断注记后，可改回 `open` 或由新会话直接重新 `claim` 继续处理——claimed 票不得永久掉出 frontier 无人问津。
 
 ### map 再入约定
 

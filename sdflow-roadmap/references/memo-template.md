@@ -4,6 +4,8 @@
 
 **定位**：memo 只承载**短档**讨论——单 session、无跨天/跨压缩场景的讨论备忘，保持包根 `memo.md` 落位不迁。**长档**讨论（跨 session、跨天、经历上下文压缩仍未收敛）改用 wayfinder chart 落盘 `footage/`（map + 票），不靠 memo 硬撑——memo 与 footage 是同一职能（讨论考古层）在不同规模下的两种落盘形态，二选一，不叠加；具体分档判据见 `SKILL.md`「讨论层：三分支路由」。
 
+**例外：无 wayfinder 的长档降级模式**——当前宿主无 wayfinder（`SKILL.md` 宿主中立探测判定后走的降级路径）时，长档讨论无法落 `footage/`，此时 memo 转为**必需且持续更新**的长档考古层，区别于上文短档场景下 memo 可选定位的默认态，这是一条例外态；恢复 wayfinder 后要点可转录进 map，不双写。
+
 **是否产出 memo 是可选的**——如果讨论过程有足够多的"对话现场感"、方案矩阵、打分对比值得保留为考古证据，就产出；如果讨论很简单直接得出结论，可以不产出。
 
 **例外：压缩前 flush 场景（此时 memo 转为必需）**〔spec-review-amendment SR-5〕：`/opsx:explore` 起步的讨论若检测到上下文压缩将要/刚刚发生、而 wayfinder map 尚未建立，**SHALL** 立即把当前推理要点 flush 进 memo.md——不追求打磨完整，抢救优先；避免"压缩后才想起留痕、能抢救的已是有损摘要"。flush 后再判定是否需要升级 wayfinder chart；若判定升级，memo 已有内容后续精炼转录进 map 的 Decisions-so-far / 票 Notes。

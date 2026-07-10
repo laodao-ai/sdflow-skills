@@ -82,7 +82,7 @@ flowchart LR
     WF -->|落盘| FT["roadmaps/{name}/footage/"]
     SK -->|结晶直写| PKG["roadmaps/{name}/ 三件套"]
     SK -->|分档调用| RV["plan-eng-review / autoplan（外部）"]
-    DONE["sdflow-done 回填助手"] -->|只读 roadmap.md/task-log.md| PKG
+    DONE["sdflow-done 回填助手"] -->|只读 roadmap.md| PKG
 ```
 
 ## 序列图：长档端到端（TG-10）

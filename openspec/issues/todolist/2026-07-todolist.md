@@ -136,6 +136,7 @@
 | T128 | `sdflow-implement` | impl_route.py PIPELINE_RECEIPT 的 marker 显示折叠：显式 `impl-pipeline: superpowers` 与无 frontmatter/无键的隐式缺省均显示 marker=none，路由行为等价但 receipt 可诊断性受损（F3a 判赢留档核对时无法分辨是否显式声明过）——需 read_plan_marker 返回值携带来源注记再区分显示（code-review defer，display-only 无路由风险） | 代码质量 | PROPOSED | 2026-07-11 01:37 | matt-workflow-integration | matt-workflow-integration |
 | T129 | `sdflow-roadmap` | 存量 wco/mlh 两包 requirements.md 并入 design.md 迁移（tasks 5.1-5.3 受控延后项，Q-C 拍板前置②）——触发条件：首个新流程 roadmap SHIPPED 且目标包无在飞 change；操作序列以归档 change rebuild-sdflow-roadmap-v2 的 tasks.md 5.1-5.3 + design Migration step3 为准（全节清点表/考古注记四要素/头部章不占编号序列/清点表落盘随 commit/per 包 maintain_scan） | 代码质量 | OPEN | 2026-07-11 02:30 | rebuild-sdflow-roadmap-v2 |  |
 | T130 | `bundle` | ff-generation-constraints.md:43 衔接契约边界句「requirements/design/roadmap/task-log 四件套」→「三件套」术语同步——matt-workflow-integration Task7 写入时 rebuild-sdflow-roadmap-v2 未落地所致漂移；属 assets/workflow 权威源（rebuild change Compliance 声明零 assets 改动故未扫），一词修正独立小改，改后消费仓经 sdflow-init update 获得 | 代码质量 | OPEN | 2026-07-11 02:30 | rebuild-sdflow-roadmap-v2 |  |
+| T131 | `bundle` | workflow.md 阶段一 wayfinder 缺装探测硬编码 Claude 单宿主路径（~/.claude/skills/wayfinder）——未同步 sdflow-roadmap SKILL.md 本轮新增的宿主中立探测口径（按当前宿主 Claude/Codex 分别探测，MUST NOT 以 Claude 路径代理全局）；Codex 宿主跑 mainflow 阶段一会重犯同款误判。属 assets/workflow 权威源（rebuild change Compliance 零 assets 改动故未扫），改后经 sdflow-init update 分发 | 代码质量 | OPEN | 2026-07-11 02:55 | rebuild-sdflow-roadmap-v2 |  |
 
 ---
 

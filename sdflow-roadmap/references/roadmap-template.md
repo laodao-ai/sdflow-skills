@@ -43,7 +43,7 @@
 | **阶段 3** · <名称> | <时间范围，粗略> | — | <milestone 一句话> | 雾区（目标句 + 备注） |
 | **阶段 4** · <名称> | <时间范围，粗略> | — | <milestone 一句话> | 雾区（目标句 + 备注） |
 
-每阶段建议开一个独立 OpenSpec 变更（`implement-<roadmap-name>-phase-N`），完成并归档后再进入下一阶段。
+每阶段建议开一个独立 OpenSpec 变更（`implement-<roadmap-name>-p<N>`），完成并归档后再进入下一阶段。
 
 ---
 
@@ -60,7 +60,8 @@
 ### 目标
 
 <!-- 这阶段结束后的世界状态。2-5 条 -->
-- <目标 1>
+<!-- 已细化阶段至少回指一次 design 决策，句式：（见 design.md 决策 N）——收尾 checklist ② 以此锚点核对 -->
+- <目标 1>（见 design.md 决策 N）
 - <目标 2>
 
 ### 子任务
@@ -154,24 +155,27 @@
 
 ## 附录 B · 子任务总数与估时
 
+<!-- 近细远雾同样约束本附录：只列近期已细化阶段（数字/估时/change 名来自已写满五节的阶段）；
+     远期（雾区）阶段行 MUST NOT 填子任务数/估时/change 名，用占位说明代替，到 frontier 补细后再登记实数。 -->
+
 | 阶段 | 子任务数 | 估时 |
 |---|---|---|
 | 阶段 1 | <N> | <H>h |
-| 阶段 2 | <N> | <H>h |
-| 阶段 3 | <N> | <H>h |
-| 阶段 4 | <N> | <H>h |
-| **合计** | **<N>** | **<H>h** |
+| 阶段 2 | <N>（如"概览"选了近期=2 个阶段） | <H>h |
+| 阶段 3 | （雾区——frontier 到达补细后再登记） | （雾区——frontier 到达补细后再登记） |
+| 阶段 4 | （雾区——frontier 到达补细后再登记） | （雾区——frontier 到达补细后再登记） |
+| **合计**（仅计入近期已细化阶段，雾区不计入） | **<N>** | **<H>h** |
 
 ## 附录 C · 未来 OpenSpec 变更映射
 
-每个阶段建议开独立变更：
+每个阶段建议开独立变更（命名 `implement-<roadmap-name>-p<N>`，非 `-phase-N`）；远期（雾区）阶段尚未定名，不预填 change 名：
 
 | 阶段 | 建议变更名 | 引用契约 |
 |---|---|---|
-| 阶段 1 | `implement-<roadmap-name>-phase-1` | <relevant capability> |
-| 阶段 2 | `implement-<roadmap-name>-phase-2-<theme>` | <relevant capability> |
-| 阶段 3 | `implement-<roadmap-name>-phase-3-<theme>` | <relevant capability> |
-| 阶段 4 | `implement-<roadmap-name>-phase-4-<theme>` | <relevant capability> |
+| 阶段 1 | `implement-<roadmap-name>-p1` | <relevant capability> |
+| 阶段 2 | `implement-<roadmap-name>-p2`（如"概览"选了近期=2 个阶段） | <relevant capability> |
+| 阶段 3 | （雾区——frontier 到达补细后再登记） | — |
+| 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
 
 每个实施变更的 proposal 引用 `openspec/roadmaps/<name>/roadmap.md` 对应阶段作为背景，design 复用 `openspec/roadmaps/<name>/design.md`，specs 扩展 `openspec/specs/<capability>`。
 

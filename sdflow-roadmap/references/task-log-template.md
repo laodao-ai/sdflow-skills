@@ -16,6 +16,9 @@
 
 > 本文件按时间**倒序**记录 `roadmap.md` 中每个已完成子任务的状态、耗时、问题、调整。
 >
+> 状态：ACTIVE
+> <!-- 取值：ACTIVE（正常推进）/ review-waived（跳过 review，人类显式授权）/ 未审待恢复（review 依赖失败或不可用，需修复后重试） -->
+>
 > 相关文档（全部位于 `openspec/roadmaps/<name>/` 下）：
 > - 整体设计：`design.md`
 > - 实施路线图：`roadmap.md`
@@ -56,19 +59,35 @@
 
 ---
 
+## Review 处置
+
+<!-- review（/plan-eng-review 或 /autoplan）产出的每条 issue 在此逐条追加一行，状态 ∈ 三态之一：
+     - ✅ 采纳：写明已在哪个文件哪一节改动
+     - ❌ 拒绝：写明拒绝理由（不得空白"不采纳"，理由必须可供后人复核）
+     - ⏭ 延后：写明延后到哪个阶段/哪个后续变更处理
+     示例：
+     - [issue 1 摘要] ✅ 采纳 —— 已在 design.md §决策 2 改动
+     - [issue 2 摘要] ❌ 拒绝 —— <可复核理由>
+     - [issue 3 摘要] ⏭ 延后 —— 延后到阶段 2 / implement-<name>-p2 处理
+-->
+
+<!-- 本小节不存在未处置条目是收尾 checklist ①的硬前提；小节缺失视为未通过（不得以"小节不存在=无未处置条目"真空通过）。 -->
+
 <!-- 日志条目从这里开始，最新的放最上面 -->
 
 ## YYYY-MM-DD
 
 ### [阶段 0 / 规划] <项目名> roadmap 文档包产出完成
 
+<!-- 阶段 0 记录关联 roadmap.md 概览节（规划期无实施阶段可挂，属 checklist ② 的声明式例外）。 -->
+
 - **状态**: ✅ 完成
 - **实际耗时**: ~<N>h（含讨论）
+<!-- 产出清单只列三件套本身；包内可另有考古层文件 memo.md / footage/，不列入正式产出清单、不被三件套引用——规则 3 -->
 - **产出**:
   - `openspec/roadmaps/<name>/design.md` — 整体设计（含头部「需求与目标态」章 + 架构决策 + Q&A 已决议）
   - `openspec/roadmaps/<name>/roadmap.md` — 实施路线图（<N> 阶段 × <M> 子任务）
   - `openspec/roadmaps/<name>/task-log.md` — 任务日志（本文件）
-  - `openspec/roadmaps/<name>/memo.md` — 讨论备忘（可选，短档考古用，不被三件套引用；长档讨论落 `footage/`，同样不被引用）
 - **关键决策回顾**（完整档案见 `design.md` §3 和 §10）:
   - <决策 1 一句话>
   - <决策 2 一句话>
