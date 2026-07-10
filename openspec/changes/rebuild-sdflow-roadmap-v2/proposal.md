@@ -6,7 +6,7 @@ sdflow-roadmap 现行五阶段流程的仪式成本与产出价值错配，且�
 
 ## What Changes
 
-- **BREAKING（约定层）** 四件套 → **三件套**：requirements.md 并入 design.md（头部新增「需求与目标态」伸缩章：工作流/重构型写痛点/目标态判据/Non-Goals 三小节；产品型展开受众/功能取舍/NFR 可选段）。PRD 独立文件退役——需求契约职能已由 change 级 specs → `openspec/specs/` 链承载（requirements-template.md:59-60 自认「本文件只做功能清单级描述」）。
+- **BREAKING（约定层，作用域=仅新产出〔spec-review-amendment SR-1〕）** 四件套 → **三件套**：requirements.md 并入 design.md（头部新增「需求与目标态」伸缩章，不占正文编号序列：工作流/重构型写痛点/目标态判据/验收门槛/Non-Goals；产品型展开受众/功能取舍/NFR 可选段）。PRD 独立文件退役——需求契约职能已由 change 级 specs → `openspec/specs/` 链承载（requirements-template.md:59-60 自认「本文件只做功能清单级描述」）。**存量兼容**：skill 全局 symlink 分发，消费仓存量四件套包（接地实测 8+ 个、含实质消费）冻结为合法历史形态，续跑一律兼容不强迁；操作者显式要求保留独立 requirements.md 时遵从（逃生舱〔SR-7〕）。
 - **去 change 壳**：roadmap 文档包产出改为 recorder 式直写 `openspec/roadmaps/{name}/`（先例 = buglist/todolist 直写 `openspec/issues/`），不再要求 `plan-{topic}` 变更承载；「review 处置完才算完」软门从 archive 时刻移到 skill 收尾 checklist（两个世界均无机械门，载体不变仍在 task-log.md）。
 - **讨论层分档改造**：双判据路由，去事前轮数预估〔grill-amendment，对齐 F11〕——起手显性信号（多阶段/跨天/多子系统）→ 直接 **wayfinder chart**（map destination = 三件套定稿），map+tickets 落 `openspec/roadmaps/{name}/footage/`；起手不明 → `/opsx:explore` 起步，事中触发（实际跨 session/压缩仍未收敛）升级 wayfinder；memo.md 从「长档强制」降为短档可选（footage 即结构化 footage，取代 memo 的考古职能）。
 - **规则 3 扩展**：「正式文档不引用 memo」扩展为两段式「三件套不引用 `footage/`，也不引用包根 `memo.md`」（两者同为讨论过程考古层；memo 保持包根落位不迁移〔grill-amendment Q2〕）。
@@ -30,15 +30,15 @@ sdflow-roadmap 现行五阶段流程的仪式成本与产出价值错配，且�
 
 | 指标 | 基准 → 目标 | 度量方式 |
 |---|---|---|
-| 产出仪式阶段数 | 5（讨论/开壳/产四件套/三连审/归档）→ 3（讨论/结晶直写/分档审+收尾 checklist） | SKILL.md 工作流章节数 + 下一次真实 roadmap 产出的实际步骤计数 |
-| 同一结论的跨文件同步面 | 4 处（requirements §5 + design §2.2 + roadmap 概览 + roadmap 阶段节，wco task-log.md:40 实证）→ ≤2 处（design 单源 + roadmap 概览引用） | 三件套模板中标注的「单一源块」清单；下次收口更新实测同步处数 |
-| 长讨论决策存活性 | 0（explore 结论 session 结束即蒸发，memo 靠自觉）→ 100% 落盘可续 | wayfinder map+tickets 在 footage/ 存在；下次长讨论跨 session 恢复实测 |
+| 产出仪式阶段数 | 5（讨论/开壳/产四件套/三连审/归档）→ 3（讨论/结晶直写/分档审+收尾 checklist）。脚注〔spec-review-amendment SR-20〕：本指标衡量**产出仪式**，不承诺长讨论轮数变少——wayfinder 自身两轮 HITL grilling 起步，其卖点是跨 session 生存性非提速 | SKILL.md 工作流章节数 + 下一次真实 roadmap 产出的实际步骤计数 |
+| 同一结论的跨文件同步面 | 4 处（requirements §5 + design §2.2 + roadmap 概览 + roadmap 阶段节，wco task-log.md:40 实证）→ ≤2 处，**并附机械口径**〔spec-review-amendment SR-20：文件合并本身不消灭 design 内部复述——对抗镜实证同一门槛值现存 ≥4 处独立文本〕：design 头部章与决策段 MUST NOT 重复同值只准互相引用（收尾 checklist ②项），roadmap 各节对门槛值只引用不复写 | 三件套模板中标注的「单一源块」清单；下次收口更新实测同步处数 |
+| 长讨论决策存活性 | 0（explore 结论 session 结束即蒸发，memo 靠自觉）→ 100% 落盘可续，**范围=已建 map 的 wayfinder 路径**〔SR-20：无雾降级与 map 前压缩两条边路由 R3 留痕/flush 规则兜底，非本指标承诺面〕 | wayfinder map+tickets 在 footage/ 存在；下次长讨论跨 session 恢复实测 |
 
 ## Non-Goals（不在本次范围）
 
 - **不改主流程 explore→ff→grill 的三段分流与 wayfinder→ff 衔接契约**（已记 T126/T127）。可证伪假设：roadmap 场景的 wayfinder 结晶目标是直写三件套、不经 opsx:ff，故衔接契约非本次依赖；若实施中发现 roadmap 结晶需要 ff 参与，此假设证伪、需先做 T126。
 - **不实现 wayfinding 六操作的机械校验（lint/脚本）**。可证伪假设：模型按 tracker doc 散文约定执行落盘/状态词足够可靠；若首次实测出现落盘位置错误或状态词漂移，假设证伪 → 补 anchor_lint 式校验（届时另开 change）。
-- **不动 sdflow-done 回填助手**（roadmap_writeback_draft.py）。可证伪假设：该脚本按 adr/0015 适配现状散文、只读 roadmap.md/task-log.md（roadmap_writeback_draft.py:349 已核），三件套合并不触其读点；若 design 阶段 grep 发现它读 requirements.md 或依赖被删节名，假设证伪 → scope 扩入本 change。
+- **不动 sdflow-done 回填助手**（roadmap_writeback_draft.py）。可证伪假设：该脚本按 adr/0015 适配现状散文、实读 change 侧 proposal.md/tasks.md（:322-325）+ roadmap 包侧仅 roadmap.md（:349-353），**从不读 requirements.md 也不读 task-log.md**（task-log 仅出现在其输出的指导片段中；接地镜复核修正原「只读 roadmap.md/task-log.md」表述〔spec-review-amendment SR-19〕），三件套合并不触其读点；若实施 grep 发现新增读点，假设证伪 → scope 扩入本 change。
 - **不做 recorder tracker 后端可插拔**（T123 池内待议）。
 - **不深化产品型 PRD 展开段的具体形制**。可证伪假设：伸缩段骨架（受众/功能取舍/NFR 占位）足以覆盖首个产品型 roadmap 的起步需求；若首个产品型 roadmap 实测骨架不够用，届时按实例补节。
 
@@ -65,7 +65,7 @@ sdflow-roadmap 现行五阶段流程的仪式成本与产出价值错配，且�
 
 ## Impact
 
-- **改**：`sdflow-roadmap/SKILL.md`（主体重写）；`sdflow-roadmap/references/design-template.md`、`roadmap-template.md`、`task-log-template.md`、`memo-template.md`（导航块与注释）；`openspec/matt/issue-tracker.md`；`CLAUDE.md`（Agent skills 托管块一句 + 「四件套」表述）；`openspec/roadmaps/{workflow-cost-optimization,mechanical-layer-hardening}/{design.md,roadmap.md}`（存量合并与引用修补）；`docs/sdflow-fable5/02-module-reference.md` 等 docs 表述。
+- **改**：`sdflow-roadmap/SKILL.md`（主体重写，含 office-hours 分支去留决议〔Q-D 拍板项〕、整体 plan 话术、preflight 校验等存活清单见 tasks）；`sdflow-roadmap/references/design-template.md`、`roadmap-template.md`、`task-log-template.md`、`memo-template.md`、`long-flow-skill-paradigm.md`（导航块与注释）；`openspec/matt/issue-tracker.md`；`CLAUDE.md`（Agent skills 托管块一句 + 「四件套」表述）；`openspec/roadmaps/{workflow-cost-optimization,mechanical-layer-hardening}/{design.md,roadmap.md,task-log.md}`（存量合并与前向引用修补，task-log 仅修导航头、历史条目不回改〔spec-review-amendment SR-15〕）；`docs/sdflow-fable5/{01-goals-and-rationale.md,02-module-reference.md}` 等 docs 表述。**消费仓存量包零触碰**（冻结四件套合法形态，SR-1）。
 - **删**：`sdflow-roadmap/references/requirements-template.md`；存量两包的 `requirements.md`（内容并入各自 design.md）。
 - **依赖**：新增对 matt 套件（wayfinder → grilling/domain-modeling）的跨 skill 运行时依赖——失败模式与降级见 design.md（D-4）。
 - **脚本零波及**：无 `sdflow-roadmap/scripts/`；`roadmap_writeback_draft.py` 只读 roadmap.md/task-log.md（已核，见 Non-Goals 假设 3）。技术栈 TG-01/02/03 均不命中（纯 Markdown，无领域清单选用）。
