@@ -58,7 +58,7 @@ flowchart LR
 | **自动决策要有明码原则 + 审计留痕** | autoplan 6 决策原则 + 三分类（mechanical/taste/user-challenge）+ Decision Audit Trail | 去人类门 ≠ 拍脑袋——**编码决策原则**、每个自动决策记一行审计 | ⚠️ 有 T10 三级协议，但**缺一份明码的「决策原则清单」**（见 §7-1） |
 | **分级人类门 + 批处理** | autoplan 只 2 道门（premise + user-challenge），其余自动，taste 攒到最终门一次问 | 只在真正需判断处停、且**批处理**（比中途弹窗看得全） | ✅ G2「决策登记进报告、设计门一次拍板」 |
 | **显式降级、绝不静默** | gstack headless→BLOCKED（不静默自动决策）；native vs simulated 锚；resolve-workflow exit2→显式降级+转发 stderr | 每条降级路径都**打日志/写锚**，永不静默跳过 | ✅ 锚行 `mode="native\|simulated"`、outside-voice guard 原因码 |
-| **下游放确定性门把「建议」变「强制」** | ship_gate 读锚放行 | 不控制上游 skill 内部，在下游读它本应产出的锚/产物；产不出就 REFUSE/循环 | ✅ ship_gate 全套锚（design-approved / code-review=pass / verify=PASS） |
+| **下游放确定性门把「建议」变「强制」** | ship_gate 读锚放行 | 不控制上游 skill 内部，在下游读它本应产出的锚/产物；产不出就 REFUSE/循环 | ✅ ship_gate 全套 frontmatter 机判锚（design_approved / code_review / verify） |
 
 ---
 

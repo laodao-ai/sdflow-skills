@@ -14,6 +14,7 @@
 > - **横向提炼**：[自建 Skill 最佳实践](./skill-authoring-best-practices.md)（从上述 skill 提炼可迁移做法 + 我们的补强项）
 > - **可视化控制台**：[workflow-console.html](./workflow-console.html)（本文的视觉/精简版，同 session 产出——本文是其内容超集）
 > - **字段 / 脚本映射速查**：[workflow-map.html](./workflow-map.html) · [workflow-map.md](./workflow-map.md)（阶段 × skill × 脚本 × frontmatter 字段全景，本次新增）
+> - **深度调研文档集**：[sdflow-fable5/](./sdflow-fable5/)（2026-07-10：设计动机 / 全模块参考 / 自改进闭环 / 优化建议）
 
 ---
 
@@ -121,9 +122,9 @@ flowchart TD
     S2 --> S3["Step3 · 对抗裁决 + 决策登记<br/>合并去重 → 一份 spec-review-report.md"]
     S3 --> CP2["[checkpoint] spec-review"]
     CP2 --> GATE{{"★ 设计 HARD-GATE<br/>人工过一份报告拍板"}}
-    GATE -->|批准| ANCHOR["写锚：&lt;!-- ship-gate: design-approved --&gt;"]
+    GATE -->|批准| FM["拍板回写 frontmatter<br/>design_approved: true"]
     GATE -->|打回| S2
-    ANCHOR --> SOP{"TG-02 ∧ 高风险?"}
+    FM --> SOP{"TG-02 ∧ 高风险?"}
     SOP -->|是| ES["embedded-test-sop<br/>生成手工测试 SOP + log-checks"]
     SOP -->|否| OUT(["→ 进阶段三"])
     ES --> OUT
@@ -132,7 +133,7 @@ flowchart TD
 | 步 | skill | 目标 | 产出 | 注意事项 |
 |---|---|---|---|---|
 | 4 | `sdflow-spec-review` [详解](./workflow-skills/sdflow-spec-review.md) | **设计门主审**：广审（[autoplan](./workflow-skills/gstack-autoplan.md)）+ 领域/对抗/接地多镜，合成**一份**报告 | `spec-review-report.md`（含决策登记区）+ 改动标 `[spec-review-amendment]` | 中途**不 AskUserQuestion**（决策登记进报告）；autoplan 已含 eng 镜 → 多镜**不重复跑 eng**；**必须读真实代码**（接地镜专司）；命中 HR-TG 单开领域 cross-model |
-| 5 | **HARD-GATE** | 人工过**一份**报告拍板批准设计 | 批准动作 → 写 `<!-- ship-gate: design-approved -->` 锚 | **★全流程唯一人类门**；决策登记区已摊开「选项 + 推荐 + 两方后果」；拍板**发生后**主 session 立即原样写锚（这是 `/sdflow-ship` pre-flight 唯一机判依据） |
+| 5 | **HARD-GATE** | 人工过**一份**报告拍板批准设计 | 批准动作 → 报告头部 frontmatter 回写 `design_approved: true` | **★全流程唯一人类门**；决策登记区已摊开「选项 + 推荐 + 两方后果」；拍板**发生后**主 session 立即在报告头部 prepend YAML 首块回写（这是 `/sdflow-ship` pre-flight 唯一机判依据） |
 | 5.5 | `embedded-test-sop` | 嵌入式固件生成**手工测试文档 + log-checks** | `{change}-sop.md` + `log-checks.yaml` | **条件触发**：TG-02（嵌入式）∧（启动/复位/状态机/协议 等高风险 ∨ TG-18 有测试计划）；非嵌入式天然不触发 |
 
 **决策登记区四类条目**（取代中途弹窗）
@@ -172,7 +173,7 @@ flowchart TD
 
 ### 4.2 底座：ship_gate 判定机（阶段三最底层）
 
-`ship_gate` 从**盘面（产物 + 锚 + checkpoint 标签）**推导「下一步是谁」，每个执行完的步都**回到 gate 再问**——这就是「盘面即状态、gate 驱动非记忆」。
+`ship_gate` 从**盘面（产物 + frontmatter 锚 + checkpoint 标签）**推导「下一步是谁」，每个执行完的步都**回到 gate 再问**——这就是「盘面即状态、gate 驱动非记忆」。
 
 ```mermaid
 flowchart LR
@@ -200,7 +201,7 @@ flowchart LR
 
 | 判定态 | 含义 | ship 动作 | exit |
 |---|---|---|---|
-| `REFUSE_START` | 未过设计门 / change 不存在 | 停，转述 reason（拍板已发生可人工补锚=显式越权留痕） | 3 |
+| `REFUSE_START` | 未过设计门 / change 不存在 | 停，转述 reason（拍板已发生可人工补 frontmatter 字段=显式越权留痕） | 3 |
 | `RUN_SOP` | TG-02 命中且 sop 产物缺 | 跑 `embedded-test-sop` | 0 |
 | `RUN_PLAN` | plan 缺 | `writing-plans` → `subagent-dev` | 0 |
 | `CONTINUE_IMPL` | 实现未完成 | 把 `done_tasks` 传 SDD **勿重派** | 0 |
@@ -214,7 +215,7 @@ flowchart LR
 | `SHIPPED` | 完成 | 输出 SHIPPED 摘要 | 0 |
 
 > **resume / 人机同权**：ship **零跨步内存状态**——任何时刻中断，重调 `/sdflow-ship {change}` 即从盘面推导缺口续跑；
-> 期间人工手跑某步产出的报告同样被 gate 认（gate 不辨产者），手改锚行 = 显式越权通道（git 留痕可审计）。
+> 期间人工手跑某步产出的报告同样被 gate 认（gate 不辨产者），手改 frontmatter 字段 = 显式越权通道（git 留痕可审计）。
 
 ---
 
@@ -257,17 +258,21 @@ flowchart TD
 | 消息 | 固定 Conventional（脚本焊死） | 从 diff 生成 |
 | 目的 | 碎回退点 + hook 安全网 | 正式闭环 |
 
-### 6.3 ship-gate 状态锚（机判契约，写在报告里）
+### 6.3 ship-gate 状态锚（机判契约，落在报告头部 frontmatter）
 
-| 锚 | 谁写 | 触发点 | gate 用途 |
-|---|---|---|---|
-| `<!-- ship-gate: design-approved -->` | 主 session | 用户设计门批准动作 | pre-flight 唯一放行依据 |
-| `<!-- ship-gate: code-review=pass -->` | code-review 编排器 | 报告收敛 | 判「可进 done」 |
-| `<!-- ship-gate: verify=PASS -->` | verify 子代理 | 逐需求核对通过 | 判「可归档 merge」 |
-| `<change>:task<N>-<slug>` | implementer | 每任务 commit | 实现完成判据主锚（gate 只认当前 change 标签） |
+三个报告状态锚自 2026-07-07（change `mlh-p5-gate-frontmatter`）起为**报告头部 YAML frontmatter 首块**里 `ship-gate:` 的直接子键（字段下划线命名，防连字符漂移）；checkpoint 标签仍是 git commit subject 契约，不变。
 
-> ⚠️ 锚是**机器契约**，必须整行独立、fence-aware（不被代码块/描述句误配）。此类「子串检测自指坑」曾致设计门假过（B4），
-> 详见 change `gate-anchor-line-scoped`（已 SHIPPED）。
+| 锚（frontmatter 字段 / commit 标签） | 承载处 | 谁写 | 触发点 | gate 用途 |
+|---|---|---|---|---|
+| `design_approved: true\|false`（严格 bool） | `spec-review-report.md` 头部 frontmatter | 主 session | 用户设计门批准动作（拍板后 prepend 回写） | pre-flight 唯一放行依据 |
+| `code_review: pass\|blocked`（小写） | `code-review-report.md` 头部 frontmatter | code-review 编排器 | 报告收敛 | 判「可进 done」；blocked → BLOCKED_UPSTREAM(4) |
+| `verify: PASS\|FAIL`（大写） | `verify-report.md` 头部 frontmatter | verify 子代理 | 逐需求核对通过 | 判「可归档 merge」 |
+| `<change>:task<N>-<slug>` | git commit subject（checkpoint） | implementer | 每任务 commit | 实现完成判据主锚（gate 只认当前 change 标签） |
+
+> ⚠️ 锚是**机器契约**：三个 frontmatter 字段的写法 = 在报告**头部 prepend YAML 首块**（`ship-gate:` 下直接子键，取值严格按上表 enum）；`ship_gate` **只认文件首块、只认 `ship-gate:` 直接子键层**（嵌套/第二块/正文一概不参与机判）。live 读到坏 frontmatter（越域 / 重复键 / tab 缩进等）fail-closed UNKNOWN(6)；归档读 fail-safe 判无 pass。真相源 = `ship_gate.py` `FIELD_ENUMS` + `parse_ship_gate_frontmatter`。
+> 另注意：报告**正文**的 4 类 v1 锚（step1-broad-review / hr-tg / outside-voice / lens-metric，由 `anchor_lint` 机验）与本表 frontmatter 机判锚是**两套不同的锚**，勿混述。
+>
+> **历史注记（旧格式已退役）**：frontmatter 之前，状态锚是报告正文的 inline HTML 注释（`<!-- ship-gate: design-approved -->` 等连字符字面），靠「整行独立 + fence-aware」防误配——该时代的「子串检测自指坑」曾致设计门假过（B4），详见 change `gate-anchor-line-scoped`（已 SHIPPED）。迁移 frontmatter 后此坑根治（首块之外正文怎么写都不参与机判）；旧 inline 锚仅在**归档读半场**对迁移前旧归档 dual-read 兜底，live 不再读、新报告不再落。
 
 ---
 
@@ -293,7 +298,7 @@ flowchart TD
 
 1. 这些外部 skill 都是 **prompt 驱动**（模型读指令跟随），本 workflow 的注入也在 **prompt 层** → **默认建议式**（执行它的模型可偏离/忽略，无特权分级）。
 2. 只有当注入项背后有**确定性载体**——脚本、文件、或被下游门禁读取的 git 产物——才**转成强制**。
-3. 关键手法：本 workflow **不控制外部 skill 内部**，而是**在下游放一道确定性门（`ship_gate` 读 git、设计门读锚、SDD 台账读文件）去读注入本应产出的锚/产物**——产不出就 REFUSE / 循环重跑。即 **注入处建议式 + 下游门处强制**。
+3. 关键手法：本 workflow **不控制外部 skill 内部**，而是**在下游放一道确定性门（`ship_gate` 读 git、设计门读 frontmatter、SDD 台账读文件）去读注入本应产出的锚/产物**——产不出就 REFUSE / 循环重跑。即 **注入处建议式 + 下游门处强制**。
 
 ```mermaid
 flowchart LR
@@ -315,13 +320,13 @@ flowchart LR
 | design 约束逐字进 Global Constraints | writing-plans | 建议式（无校验漏抄不抓） | —（靠模型自觉 + 下游 reviewer lens） |
 | 领域清单作终审 review lens（注入点 B） | SDD | 建议式（dispatch 一句话，漏填静默丢） | **事后 `sdflow-code-review` 每次全跑独立主审兜底** |
 | `done_tasks` 别重派 | SDD | **强制** | 台账文件 `.superpowers/sdd/progress.md` + git |
-| 设计已批（放行阶段三） | ship 链 | **强制** | `ship_gate` pre-flight 读 `<!-- ship-gate: design-approved -->` 锚 |
+| 设计已批（放行阶段三） | ship 链 | **强制** | `ship_gate` pre-flight 读报告头部 frontmatter `design_approved: true` |
 
 **一句话**：想让注入**强制**，就给它一个**确定性载体**（进 git 的 commit/标签、文件、被门读的锚）；只在 prompt 里写一句，永远只是**建议**。本 workflow 的健壮性正来自「把判断留给模型、把不变量焊进下游门」这条分工线。
 
 **同一规律，自制编排器上更明显**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` **自己带机械门**——
-**锚行存在性自检**（grep 三类 v1 锚缺失即报错阻塞，抓漏镜/漏 outside-voice）、**ship-gate 锚**（design-approved / code-review=pass / verify=PASS 被 `ship_gate` 读，缺则不放行）、**archive CLI validate**、**buglist FIXED 门禁 / issues 批次判据**、**`git --ff-only`**——这些是**强制**；而它们的**判断层**（对抗裁决、反静默压制、置信分流、verify「每 ✅ 附锚点防假✅」、model 档位）是**建议式**，靠强档主 session + 铁律 + 下游门兜底。唯一刻意**不机械化**的是 [`grill-with-docs`](./workflow-skills/grill-with-docs.md)（人类对话岛）——它几乎全建议式，严谨性靠**人类在场（不可轻跳）+ 下游设计门审计**。逐 skill 的建议式/强制拆解见各自「详解」的 §6。
+**正文 v1 锚存在性自检**（`anchor_lint` 机验 4 类 v1 正文锚——三类必在、lens-metric 受 metrics.enabled 门控——缺失即报错阻塞，抓漏镜/漏 outside-voice）、**ship-gate frontmatter 字段**（`design_approved` / `code_review` / `verify` 被 `ship_gate` 读首块，缺则不放行）、**archive CLI validate**、**buglist FIXED 门禁 / issues 批次判据**、**`git --ff-only`**——这些是**强制**；而它们的**判断层**（对抗裁决、反静默压制、置信分流、verify「每 ✅ 附锚点防假✅」、model 档位）是**建议式**，靠强档主 session + 铁律 + 下游门兜底。唯一刻意**不机械化**的是 [`grill-with-docs`](./workflow-skills/grill-with-docs.md)（人类对话岛）——它几乎全建议式，严谨性靠**人类在场（不可轻跳）+ 下游设计门审计**。逐 skill 的建议式/强制拆解见各自「详解」的 §6。
 
 ---
 
-*人类向总览 · 配套真相源 `sdflow-init/assets/workflow/workflow.md`（端到端规则）。外部 skill 内部细节见 [workflow-skills/](./workflow-skills/) 下 4 份详解。*
+*人类向总览 · 配套真相源 `sdflow-init/assets/workflow/workflow.md`（端到端规则）。外部 skill 内部细节见 [workflow-skills/](./workflow-skills/) 下 4 份详解。接地基线：2026-07-10——ship-gate 机判锚已为 frontmatter 口径（`ship_gate.py` `FIELD_ENUMS` / [workflow-map.md](./workflow-map.md) §3）。*

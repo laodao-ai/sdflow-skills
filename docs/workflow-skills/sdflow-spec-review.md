@@ -17,7 +17,7 @@
 |---|---|
 | 谁调它 | 阶段二第 4 步；或 `/sdflow-ship` 的 pre-flight 之前（设计门属人类点，ship 不跨） |
 | 进（输入） | `{change_dir}` 四件套（proposal/design/specs/tasks）+ 真实代码 |
-| 出（产物） | `spec-review-report.md`（决策登记区 + 各镜 findings + 裁决）；`gstack-review.md`（autoplan 落盘）；design/specs 改动标 `[spec-review-amendment]`；拍板后写 `<!-- ship-gate: design-approved -->` 锚 |
+| 出（产物） | `spec-review-report.md`（决策登记区 + 各镜 findings + 裁决 + lens-metric 度量锚〔config `metrics.enabled` 开时〕）；`gstack-review.md`（autoplan 落盘）；design/specs 改动标 `[spec-review-amendment]`；拍板**发生后**主 session 立即在报告头部 **prepend frontmatter 首块** `ship-gate:` → `design_approved: true`（`/sdflow-ship` pre-flight 唯一机判依据；旧 inline HTML 注释锚已退役，见 §2 两套锚分工） |
 | 两条连续性铁律 | **G1** 不依赖 `/clear`（独立性靠子代理 fresh 上下文）；**G2** 中途不 AskUserQuestion（决策登记进报告，设计门一次拍板） |
 
 ---
@@ -32,7 +32,7 @@ flowchart TD
     OVS["回落自跑 design-voice（outside-voice.sh）"]
     CP1["[checkpoint] spec-review-autoplan（P2c 第1次）"]
     S2["Step2 · 规划镜头 + 并行 fan-out<br/>领域镜 + 对抗镜×2~3 + 接地镜×1 + HR-TG cross-model"]
-    S3["Step3 · 综合 + 对抗裁决 → 决策登记<br/>合并去重 · 反静默压制 · 置信分流 · 锚行存在性自检"]
+    S3["Step3 · 综合 + 对抗裁决 → 决策登记<br/>合并去重 · 反静默压制 · 置信分流 · anchor_lint 锚自检"]
     CP2["[checkpoint] spec-review（P2c 第2次）"]
     S4["Step4 · 产出 spec-review-report.md + 收敛口"]
     GATE{{"★设计 HARD-GATE（人类门，不在本 skill 内）"}}
@@ -40,7 +40,7 @@ flowchart TD
     OVG -->|三关全过| CP1
     OVG -->|任一不过| OVS --> CP1
     CP1 --> S2 --> S3 --> CP2 --> S4 --> GATE
-    GATE -.拍板后.-> ANCH["主 session 写 design-approved 锚"]
+    GATE -.拍板后.-> ANCH["主 session prepend frontmatter 首块<br/>ship-gate.design_approved: true"]
 ```
 
 | 步 | 目标 | 注意事项 |
@@ -49,10 +49,16 @@ flowchart TD
 | 1 | autoplan 广审、吃 findings | **原生执行**（指令进主 session，禁派子代理转述）；主 session 汇总落盘 `gstack-review.md` 写 `mode="native"` 锚 + 侧信道佐证；**串行纪律 T20**：MUST 待本步 checkpoint 完成才 fan-out |
 | 1·守卫 | 复用还是自跑 outside-voice | 三前置：①来源（simulated 视同无效）②新鲜度（早于最新改动视同缺失）③结构（解析不出 codex 段/0 条）。任一不过 → 打印原因码 + 回落自跑 design-voice |
 | 2 | 规划并 fan-out 多镜 | **防重叠 1.4**：autoplan 已含 eng 镜 → 领域镜**不重复跑 eng**；HR-TG 命中单开领域 cross-model，写 v1 锚行 |
-| 3 | 对抗裁决 + 决策登记 | **反静默压制**（Q3）：裁掉的 finding 连理由进「已裁掉」区；**置信分流**：高采信/中标需确认/低仍上抛一行，**不照搬 <80 数值一刀切**（设计漏掉代价高，优化召回）；**锚行存在性自检**：grep 三类 v1 锚缺失即报错阻塞 |
-| 4 | 出报告 + 拍板回写 | 拍板**发生后**主 session 立即写 `<!-- ship-gate: design-approved -->`（ship pre-flight 唯一机判依据） |
+| 3 | 对抗裁决 + 决策登记 | **反静默压制**（Q3）：裁掉的 finding 连理由进「已裁掉」区；**置信分流**：高采信/中标需确认/低仍上抛一行，**不照搬 <80 数值一刀切**（设计漏掉代价高，优化召回）；**锚行自检（确定性脚本门）**：调 `$RULES_ROOT/tools/anchor_lint.py --layer spec-review` 机验 4 类正文 v1 锚（step1-broad-review / hr-tg / outside-voice / lens-metric），exit 1=违规 / 2=fail-closed **均阻塞本步** |
+| 4 | 出报告 + 拍板回写 | **度量锚**：config `metrics.enabled` 开时构造 roster+findings 调 `lens_metric_emit.py`——**exit 0 才**把其 stdout 落进报告，非 0 fail-closed **不落、禁手拼锚行顶替**；缺省/`false` → 不落锚、不调 emitter。拍板**发生后**主 session 立即在报告头部写 frontmatter `ship-gate:` → `design_approved: true`（已有首块则合并键入该块、不新开第二块，无则 prepend 新建；`/sdflow-ship` pre-flight 唯一机判依据） |
 
 **决策登记区**：`[自动决策]`（默认接受可覆盖）/ `[需拍板]`（≥2 方案或核验不了的事实）/ `[已裁掉]`（原始发现 + 裁掉理由）/ `TENSION`（voice 与主审分歧，两方视角 + 推荐 + 后果）。
+
+**两套锚分工（勿混述为一套）**：
+①**正文 4 类 v1 锚**（step1-broad-review / hr-tg / outside-voice / lens-metric）归 `anchor_lint.py` 机验。**诚实拦截力**：此门只挡「同一会话内忘记跑这步」，**挡不住「整段跳过本步」**；`findings=N` 等数值与合并池实收数的一致性仍是**主 session 信任边界**、非机械可验——脚本不谎称保证数值正确。
+②**ship-gate 机判锚**在报告头部 **frontmatter 首块**（`ship-gate:` → `design_approved: true|false`，严格 bool），归 `ship_gate.py` 读——只认文件首块、只认 `ship-gate:` 直接子键层；live 读坏 frontmatter fail-closed UNKNOWN(6)。旧 inline HTML 注释锚（`<!-- ship-gate: design-approved -->`）已随 mlh-p5 迁移**彻底退役**：live 与归档读半场均不再读（T75 已删该锚常量）；归档 dual-read 兜底仅保留给 verify 锚（verify-report.md），与 design_approved 无关。
+
+**反馈回路免责**：本 skill 只落 lens-metric 锚——跨 change 归档后的锚聚合、按采纳率/独立率复评、显著性提示一律归 `/sdflow-retro`（只读聚合）；是否砍镜/降采样/收紧触发/淘汰某镜**永远人决**，本 skill 不自行判断或执行。
 
 ---
 
@@ -75,6 +81,8 @@ flowchart TD
 | 领域/对抗/接地镜 | fresh-context 子代理 | 一条消息内全部派出，返回结构化 findings（问题/证据 file:line/置信/严重度/建议），**禁 AskUserQuestion** |
 | `outside-voice.sh` | 确定性脚本（退出码契约） | preflight `ready`→codex；exit0=findings（runner=codex）、exit124→fallback、exit3→拒发不 fallback（密钥）；畸形/非零→claude-fallback（只读子代理） |
 | `resolve-workflow.sh` | 脚本 | 解析规则根（本地 pin 或全局 canonical）；不硬编码 `openspec/workflow/` |
+| `anchor_lint.py` | 确定性脚本（退出码契约） | Step3 出报告后锚自检（`--layer spec-review`）：机验 4 类正文 v1 锚存在性 + lens-metric 字段/枚举；0=CLEAN、1=违规、2=fail-closed，**非 0 阻塞本步** |
+| `lens_metric_emit.py` | 确定性脚本（fail-closed） | Step4 度量锚 emitter（config `metrics.enabled` 门控，缺省/`false` 不调）；**exit 0 才**落其 stdout 进报告，非 0 不落、禁手拼锚行 |
 | `checkpoint-commit.sh` | 脚本 | 步末过场提交（P2c 两次） |
 
 ---
@@ -87,12 +95,14 @@ flowchart TD
 
 ## 6. ★ 本 workflow 注入的规则/prompt —— 建议式 vs 强制
 
-**统一判据**见[总览 §8](../workflow-overview.md#8-外部-skill-的注入强制性建议式-vs-强制统一规律)。sdflow-spec-review 自己**既是被 workflow 约束的对象、又是往子镜注入的编排者**。它比外部 skill 多一层**机械兜底**（锚行自检、ship-gate 锚、checkpoint 脚本）。
+**统一判据**见[总览 §8](../workflow-overview.md#8-外部-skill-的注入强制性建议式-vs-强制统一规律)。sdflow-spec-review 自己**既是被 workflow 约束的对象、又是往子镜注入的编排者**。它比外部 skill 多一层**机械兜底**（anchor_lint 锚自检、frontmatter 机判锚、lens_metric_emit、checkpoint 脚本）。
 
 | 项 | 类型 | 靠什么 |
 |---|---|---|
-| **锚行存在性自检**（Step3 grep 三类 v1 锚缺失即报错阻塞） | **强制（本 skill 内机械门）** | Step3 机械 grep，缺失即本步报错——机械失职拦截，非人类门 |
-| **拍板回写 design-approved 锚** | **强制（下游门读）** | `ship_gate` pre-flight 读此锚放行阶段三；不写=REFUSE_START |
+| **锚行自检**（Step3 调 `anchor_lint.py --layer spec-review`，exit 1=违规 / 2=fail-closed 均阻塞） | **强制（本 skill 内机械门）** | 确定性脚本机验 4 类正文 v1 锚——只挡「忘记跑这步」、挡不住「整段跳过」；`findings=N` 数值一致性仍是主 session 信任边界 |
+| **拍板回写 frontmatter `design_approved: true`** | **强制（下游门读）** | `ship_gate` pre-flight 读报告头部 frontmatter 首块放行阶段三；不写=REFUSE_START(3)、坏 frontmatter=UNKNOWN(6) fail-closed |
+| **lens-metric 度量锚 emitter**（`lens_metric_emit.py`） | **强制（fail-closed 脚本）+ config 门控** | `metrics.enabled` 缺省/`false` 不落不调；exit 0 才落 stdout，非 0 不落、禁手拼；roster 完备性/归类/誊写正确性仍是主 session 信任边界 |
+| **反馈回路**（锚聚合 / 复评 / 砍镜降采样） | **不在本 skill 内** | 聚合归 `/sdflow-retro` 只读聚合；砍镜/降采样/收紧触发一律人决，本 skill 不自动执行 |
 | **outside-voice.sh 调用契约** | **强制（退出码脚本）** | preflight/exec/exit 码确定性分支；密钥 exit3 拒发 |
 | checkpoint 提交（P2c ×2） | **强制（脚本）** | `checkpoint-commit.sh` 固定 Conventional message |
 | 「autoplan 原生执行、不派子代理转述」 | **半强制** | 报告写 `mode="native"` 锚 + 侧信道佐证；靠锚 + 主 session 遵从，非纯脚本 |
@@ -101,12 +111,16 @@ flowchart TD
 | **model 档位选择**（主 session 强档等） | **建议式** | 无机制强制控制者真用强档；靠遵从 model-tiers |
 | 防重叠 1.4 / 串行纪律 T20 | **建议式** | 靠主 session 遵从（T20 若历史并行，报告须注明——补偿式纪律） |
 
-**结论**：sdflow-spec-review 的**流程完整性**由三道机械门兜底——**锚行自检**（漏跑某镜/outside-voice 会被 grep 抓）、**ship-gate 锚**（不拍板不放行）、**checkpoint 脚本**；而**判断质量**（对抗裁决、反静默压制、置信分流、防重叠）是**自觉纪律**，靠强档主 session + SKILL.md 铁律，无逐条机械校验。这是刻意分工：**机械的交脚本焊死，判断的交强模型 + 下游门兜底**。
+**结论**：sdflow-spec-review 的**流程完整性**由三道机械门兜底——**anchor_lint 锚自检**（漏跑某镜/outside-voice/度量锚会被脚本抓，但只挡「忘记跑」、挡不住「整段跳过」）、**frontmatter 机判锚**（不拍板回写 `design_approved: true` 不放行）、**checkpoint 脚本**；而**判断质量**（对抗裁决、反静默压制、置信分流、防重叠）是**自觉纪律**，靠强档主 session + SKILL.md 铁律，无逐条机械校验。这是刻意分工：**机械的交脚本焊死，判断的交强模型 + 下游门兜底**。
 
 ---
 
 ## 7. 小结
 
 - 结构 = autoplan 广审 + 多镜 fan-out + 对抗裁决 → 一份报告 → 设计门拍板。
-- **机械兜底**：锚行存在性自检、design-approved 锚（下游 gate 读）、outside-voice.sh 退出码、checkpoint 脚本。
+- **机械兜底**：anchor_lint 锚自检（4 类正文 v1 锚）、frontmatter `design_approved` 机判锚（下游 `ship_gate` 读）、lens_metric_emit fail-closed、outside-voice.sh 退出码、checkpoint 脚本。
 - **自觉纪律**：反静默压制、对抗裁决、置信分流、防重叠、model 档位——靠强档主 session，无逐条校验。
+
+---
+
+*接地基线：2026-07-10 —— 对照 `sdflow-spec-review/SKILL.md`（第三步 anchor_lint 门 / 第四步 lens_metric_emit 与拍板回写 frontmatter）与 `sdflow-ship/scripts/ship_gate.py`（`FIELD_ENUMS` / `parse_ship_gate_frontmatter`）核实。ship-gate 机判锚已随 mlh-p5-gate-frontmatter（2026-07-07）迁至报告头部 frontmatter 首块，旧 inline HTML 注释锚彻底退役（归档 dual-read 兜底仅存 verify 锚半场，T75）。*

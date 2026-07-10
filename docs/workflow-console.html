@@ -431,13 +431,13 @@
           <div class="top"><span class="nm">sdflow-spec-review</span><span class="kind">自制 / 设计门主审</span></div>
           <div class="role">autoplan 广审 + 领域/对抗/接地多镜 → 一份报告 → 设计 HARD-GATE 拍板。</div>
           <div class="io"><span><b>进</b> 四件套</span><span><b>出</b> spec-review-report.md</span></div>
-          <div class="foot"><span class="pill enf">锚行自检 + design-approved 锚</span></div>
+          <div class="foot"><span class="pill enf">anchor_lint + frontmatter design_approved</span></div>
         </div>
         <div class="skill">
           <div class="top"><span class="nm">sdflow-code-review</span><span class="kind">自制 / 代码审主审</span></div>
           <div class="role">每次全跑 · 独立冷 · 强制主审：gstack/review + 多镜 + code-voice + 置信过滤。</div>
           <div class="io"><span><b>进</b> diff + 代码</span><span><b>出</b> code-review-report.md</span></div>
-          <div class="foot"><span class="pill enf">锚行自检 + code-review=pass 锚</span></div>
+          <div class="foot"><span class="pill enf">anchor_lint + frontmatter code_review</span></div>
         </div>
         <div class="skill">
           <div class="top"><span class="nm">sdflow-done</span><span class="kind">自制 / 收尾闭环</span></div>
@@ -476,7 +476,7 @@
             <tr><td class="k">design 约束逐字进 Global Constraints</td><td>writing-plans</td><td><span class="pill adv">建议式</span></td><td>无校验漏抄不抓</td></tr>
             <tr><td class="k">领域清单作终审 review lens（注入点 B）</td><td>SDD</td><td><span class="pill adv">建议式</span></td><td><strong>事后 sdflow-code-review 每次全跑独立主审兜底</strong></td></tr>
             <tr><td class="k"><code>done_tasks</code> 别重派</td><td>SDD</td><td><span class="pill enf">强制</span></td><td>台账文件 progress.md + git</td></tr>
-            <tr><td class="k">设计已批（放行阶段三）</td><td>ship 链</td><td><span class="pill enf">强制</span></td><td>ship_gate 读 <code>design-approved</code> 锚</td></tr>
+            <tr><td class="k">设计已批（放行阶段三）</td><td>ship 链</td><td><span class="pill enf">强制</span></td><td>ship_gate 读 frontmatter <code>design_approved: true</code></td></tr>
           </tbody>
         </table>
       </div>
