@@ -112,48 +112,49 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T103 | todo | PROPOSED | scoped-test-per-task |
-| T104 | todo | PROPOSED | scoped-test-per-task |
-| T105 | todo | PROPOSED | scoped-test-per-task |
+| T103 | todo | PROPOSED | - |
+| T104 | todo | PROPOSED | - |
+| T105 | todo | PROPOSED | - |
+| T124 | todo | PROPOSED | - |
 
 ### 批次：opt-p0
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T100 | todo | PROPOSED | scoped-test-per-task |
-| T101 | todo | PROPOSED | scoped-test-per-task |
-| T102 | todo | PROPOSED | scoped-test-per-task |
-| T97 | todo | PROPOSED | scoped-test-per-task |
-| T98 | todo | PROPOSED | scoped-test-per-task |
-| T99 | todo | PROPOSED | scoped-test-per-task |
+| T100 | todo | PROPOSED | - |
+| T101 | todo | PROPOSED | - |
+| T102 | todo | PROPOSED | - |
+| T97 | todo | PROPOSED | - |
+| T98 | todo | PROPOSED | - |
+| T99 | todo | PROPOSED | - |
 
 ### 批次：opt-review-reliability
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T106 | todo | PROPOSED | scoped-test-per-task |
-| T107 | todo | PROPOSED | scoped-test-per-task |
-| T108 | todo | PROPOSED | scoped-test-per-task |
-| T109 | todo | PROPOSED | scoped-test-per-task |
-| T110 | todo | PROPOSED | scoped-test-per-task |
-| T111 | todo | PROPOSED | scoped-test-per-task |
-| T112 | todo | PROPOSED | scoped-test-per-task |
-| T113 | todo | PROPOSED | scoped-test-per-task |
-| T114 | todo | PROPOSED | scoped-test-per-task |
+| T106 | todo | PROPOSED | - |
+| T107 | todo | PROPOSED | - |
+| T108 | todo | PROPOSED | - |
+| T109 | todo | PROPOSED | - |
+| T110 | todo | PROPOSED | - |
+| T111 | todo | PROPOSED | - |
+| T112 | todo | PROPOSED | - |
+| T113 | todo | PROPOSED | - |
+| T114 | todo | PROPOSED | - |
 
 ### 批次：opt-structure
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T115 | todo | PROPOSED | scoped-test-per-task |
-| T116 | todo | PROPOSED | scoped-test-per-task |
-| T117 | todo | PROPOSED | scoped-test-per-task |
-| T118 | todo | PROPOSED | scoped-test-per-task |
-| T119 | todo | PROPOSED | scoped-test-per-task |
-| T120 | todo | PROPOSED | scoped-test-per-task |
-| T121 | todo | PROPOSED | scoped-test-per-task |
-| T122 | todo | PROPOSED | scoped-test-per-task |
-| T123 | todo | PROPOSED | scoped-test-per-task |
+| T115 | todo | PROPOSED | - |
+| T116 | todo | PROPOSED | - |
+| T117 | todo | PROPOSED | - |
+| T118 | todo | PROPOSED | - |
+| T119 | todo | PROPOSED | - |
+| T120 | todo | PROPOSED | - |
+| T121 | todo | PROPOSED | - |
+| T122 | todo | PROPOSED | - |
+| T123 | todo | PROPOSED | - |
 
 ### 批次：rec2-obs-readability
 

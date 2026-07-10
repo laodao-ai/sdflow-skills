@@ -166,7 +166,7 @@
 
 ### opt-cost — 工作流优化·成本工程
 状态: PLANNED
-成员: (生成) T103, T104, T105
+成员: (生成) T103, T104, T105, T124
 优先级: P1
 计划: effort 预算/token 度量/thinking 分档
 

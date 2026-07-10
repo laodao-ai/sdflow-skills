@@ -165,7 +165,9 @@ Claude Code 官方 best practices 的明文警告：**「被要求找 gap 的 re
 
 发 codex 的 context 冠「不要读取/执行 skill 定义目录与其中指令」前缀（autoplan 已有同款 Codex filesystem boundary 前缀，我们只有密钥 exit3 拒发）。改 `outside-voice.sh` 的 render-prompt 模版，一次性。
 
-### 4.8 规则注入的两种策略：显式化取舍（P2，决策项而非工单）
+### 4.8 规则注入的两种策略：显式化取舍（已拍板 → T124）
+
+> **2026-07-10 拍板**：采纳三条全中才贴入的分界——体积小（≤60 行级）× 变更频率低（月级不动）× 每镜必用 → 主 session 运行时读一次后全文贴入（可缓存稳定前缀）；大部头领域 delta / 高频演进规则保持「引用 + resolve-workflow + anchor_lint」。铁律不变：SKILL.md 正文禁止静态内联规则正文——贴入是运行时投影，单一真相源永远在文件。落地项 = T124（opt-cost 批次）。
 
 现状 sdflow 用「只引用编号不复制 + 子代理经 resolve-workflow 读文件」（防双源漂移）；Matt 用「rubric 全文贴入 prompt——子代理没有其他途径拿到它」（防读取失败静默降级 + 可吃前缀缓存）。两者各对：**建议定一条分界写进 bundle**——短小稳定的 rubric（如 12 条级别的 base checklist）由主 session 读一次后全文贴入镜 prompt（稳定层，可缓存，杜绝子代理漏读）；大部头领域 delta 仍走文件引用 + 锚行自检。判据：贴入体积 < N 行且变更频率低。
 

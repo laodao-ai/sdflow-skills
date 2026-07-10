@@ -102,33 +102,34 @@
 | T94 | `maintain_scan.py + init.py` | 陈旧遮蔽告警文案第三处跨脚本复述 + checkpoint 孤儿路径：R-guard 不机验文案（文案守卫脆），maintain 抄 init 文案仅语义等价、漂移不被捕获——已知残差 | 代码质量 | PROPOSED | 2026-07-09 13:36 | mlh-p4-maintain-scan | mlh-p4-maintain-scan |
 | T95 | `sdflow-maintain/tests/test_marker_consistency.py` | 守卫加载用 assert os.path.isfile + exec_module hard-fail；sdflow-init 目录整体缺席场景可加 importorskip 更优雅降级（当前 path-assert 直接 fail，defer 兜底优化） | 代码质量 | PROPOSED | 2026-07-09 13:36 | mlh-p4-maintain-scan | mlh-p4-maintain-scan |
 | T96 | `maintain_scan.py _SPEC_LINK/_RULE_LINK` | 链接正则 [a-z0-9-]+ 与 scan_fs_specs/rules 目录名零字符集限制不对称：非规范命名(大写/下划线)的 spec/rule 被删且 INDEX 仍链接时，链接不命中正则→静默归②b排除→不进 stale→漏报已删未清理。openspec 强制 kebab 故低概率，彻底修需 scan_fs 也检非规范命名 | 代码质量 | PROPOSED | 2026-07-09 14:16 | mlh-p4-maintain-scan | mlh-p4-maintain-scan |
-| T97 | `model-tiers` | 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1） | 性能优化 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-p0 |
-| T98 | `评审编排` | prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2） | 性能优化 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-p0 |
-| T99 | `code-review` | 确定性检查前置准入门：pytest/lint/typecheck 未绿不进 fan-out（04 提案 §2.3） | 性能优化 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-p0 |
-| T100 | `workflow` | 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-p0 |
-| T101 | `spec-review` | 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-p0 |
-| T102 | `评审编排` | 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5） | 代码质量 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-p0 |
-| T103 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） | 性能优化 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-cost |
-| T104 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） | 可观测性 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-cost |
-| T105 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） | 性能优化 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-cost |
-| T106 | `code-review` | 裁决二元化 pass/fail+critique 替代连续置信分，retro 收敛校准（04 提案 §4.1） | 代码质量 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T107 | `评审编排` | 位置去偏：HIGH 级裁决换序重跑+fan-out 输入顺序打散（04 提案 §4.2） | 代码质量 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T108 | `retro` | 镜价值指标升级 resolution rate+假阳模式沉淀回 checklist（04 提案 §4.3） | 可观测性 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T109 | `code-checklists` | 测试大改=红旗 硬规则+intake diff 体积提示（04 提案 §4.4） | 代码质量 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T110 | `bundle` | 明码自动决策原则清单 decision-principles.md，T10 第①级引用（04 提案 §5.6） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T111 | `outside-voice` | injection 前缀：发 codex 的 context 冠不读 skill 定义目录（04 提案 §4.7） | 代码质量 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T112 | `评审编排` | 弱档 validator 复核层：置信过滤后复核 findings 引用真实性（04 提案 §4.6） | 代码质量 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T113 | `评审编排` | HIGH 级终局裁决跨模型双栈：outside-voice 延伸到裁决层（04 提案 §4.6） | 代码质量 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T114 | `bundle` | 规则条款元维护：条款触发证据扫描，零触发列待复评（04 提案 §6.3） | 可观测性 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-review-reliability |
-| T115 | `bundle` | spec 模版增强：EARS 句式+三必填槽+测试 seam 决策槽（04 提案 §3.2/§3.3） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T116 | `workflow` | 高危路径升级例外：HR-TG 类修复 defer-to-human 异步（04 提案 §3.5） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T117 | `机械层` | 跨工件一致性检查 artifact_consistency.py 设计门前置（04 提案 §3.4） | 基础设施 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T118 | `writing-plans` | tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T119 | `roadmap` | fog-of-war 进 roadmap 模版：远期阶段留雾区（04 提案 §5.2） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T120 | `bundle` | expand-contract 宽重构协议进 bundle（04 提案 §5.3） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T121 | `评审编排` | 大产物文件交接：镜报告超阈值写文件、返回只带路径（04 提案 §5.7） | 性能优化 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T122 | `skills` | done/ship/init 加 disable-model-invocation 触发层硬开关（04 提案 §5.4） | 功能增强 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
-| T123 | `issues` | 动作抽象层：recorder tracker 后端可插拔，仅当需求出现（04 提案 §5.5） | 基础设施 | PROPOSED | 2026-07-10 16:54 | scoped-test-per-task | opt-structure |
+| T97 | `model-tiers` | 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1） | 性能优化 | PROPOSED | 2026-07-10 16:54 | - | opt-p0 |
+| T98 | `评审编排` | prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2） | 性能优化 | PROPOSED | 2026-07-10 16:54 | - | opt-p0 |
+| T99 | `code-review` | 确定性检查前置准入门：pytest/lint/typecheck 未绿不进 fan-out（04 提案 §2.3） | 性能优化 | PROPOSED | 2026-07-10 16:54 | - | opt-p0 |
+| T100 | `workflow` | 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-p0 |
+| T101 | `spec-review` | 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-p0 |
+| T102 | `评审编排` | 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5） | 代码质量 | PROPOSED | 2026-07-10 16:54 | - | opt-p0 |
+| T103 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） | 性能优化 | PROPOSED | 2026-07-10 16:54 | - | opt-cost |
+| T104 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） | 可观测性 | PROPOSED | 2026-07-10 16:54 | - | opt-cost |
+| T105 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） | 性能优化 | PROPOSED | 2026-07-10 16:54 | - | opt-cost |
+| T106 | `code-review` | 裁决二元化 pass/fail+critique 替代连续置信分，retro 收敛校准（04 提案 §4.1） | 代码质量 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T107 | `评审编排` | 位置去偏：HIGH 级裁决换序重跑+fan-out 输入顺序打散（04 提案 §4.2） | 代码质量 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T108 | `retro` | 镜价值指标升级 resolution rate+假阳模式沉淀回 checklist（04 提案 §4.3） | 可观测性 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T109 | `code-checklists` | 测试大改=红旗 硬规则+intake diff 体积提示（04 提案 §4.4） | 代码质量 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T110 | `bundle` | 明码自动决策原则清单 decision-principles.md，T10 第①级引用（04 提案 §5.6） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T111 | `outside-voice` | injection 前缀：发 codex 的 context 冠不读 skill 定义目录（04 提案 §4.7） | 代码质量 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T112 | `评审编排` | 弱档 validator 复核层：置信过滤后复核 findings 引用真实性（04 提案 §4.6） | 代码质量 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T113 | `评审编排` | HIGH 级终局裁决跨模型双栈：outside-voice 延伸到裁决层（04 提案 §4.6） | 代码质量 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T114 | `bundle` | 规则条款元维护：条款触发证据扫描，零触发列待复评（04 提案 §6.3） | 可观测性 | PROPOSED | 2026-07-10 16:54 | - | opt-review-reliability |
+| T115 | `bundle` | spec 模版增强：EARS 句式+三必填槽+测试 seam 决策槽（04 提案 §3.2/§3.3） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T116 | `workflow` | 高危路径升级例外：HR-TG 类修复 defer-to-human 异步（04 提案 §3.5） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T117 | `机械层` | 跨工件一致性检查 artifact_consistency.py 设计门前置（04 提案 §3.4） | 基础设施 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T118 | `writing-plans` | tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T119 | `roadmap` | fog-of-war 进 roadmap 模版：远期阶段留雾区（04 提案 §5.2） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T120 | `bundle` | expand-contract 宽重构协议进 bundle（04 提案 §5.3） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T121 | `评审编排` | 大产物文件交接：镜报告超阈值写文件、返回只带路径（04 提案 §5.7） | 性能优化 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T122 | `skills` | done/ship/init 加 disable-model-invocation 触发层硬开关（04 提案 §5.4） | 功能增强 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T123 | `issues` | 动作抽象层：recorder tracker 后端可插拔，仅当需求出现（04 提案 §5.5） | 基础设施 | PROPOSED | 2026-07-10 16:54 | - | opt-structure |
+| T124 | `bundle` | 规则注入策略分界落地：小而稳定且每镜必用的核心 rubric 运行时读一次全文贴入（可缓存稳定前缀），大部头/高频演进 delta 保持引用+anchor_lint；SKILL.md 禁静态内联不变（04 提案 §4.8，2026-07-10 拍板） | 功能增强 | PROPOSED | 2026-07-10 17:10 | - | opt-cost |
 
 ---
 
