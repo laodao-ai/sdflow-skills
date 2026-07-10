@@ -8,12 +8,12 @@ sdflow-roadmap 现行五阶段流程的仪式成本与产出价值错配，且�
 
 - **BREAKING（约定层）** 四件套 → **三件套**：requirements.md 并入 design.md（头部新增「需求与目标态」伸缩章：工作流/重构型写痛点/目标态判据/Non-Goals 三小节；产品型展开受众/功能取舍/NFR 可选段）。PRD 独立文件退役——需求契约职能已由 change 级 specs → `openspec/specs/` 链承载（requirements-template.md:59-60 自认「本文件只做功能清单级描述」）。
 - **去 change 壳**：roadmap 文档包产出改为 recorder 式直写 `openspec/roadmaps/{name}/`（先例 = buglist/todolist 直写 `openspec/issues/`），不再要求 `plan-{topic}` 变更承载；「review 处置完才算完」软门从 archive 时刻移到 skill 收尾 checklist（两个世界均无机械门，载体不变仍在 task-log.md）。
-- **讨论层分档改造**：短（单 session 收得住）→ `/opsx:explore` 不变；长（>30 轮/跨天/跨 clear）→ **wayfinder chart**（map destination = 三件套定稿），map+tickets 落 `openspec/roadmaps/{name}/footage/`；memo.md 从「长档强制」降为短档可选（footage 即结构化 footage，取代 memo 的考古职能）。
-- **规则 3 扩展**：「正式文档不引用 memo」扩展为「三件套不引用 footage/ 内容」（footage 与 memo 同为讨论过程考古层）。
+- **讨论层分档改造**：双判据路由，去事前轮数预估〔grill-amendment，对齐 F11〕——起手显性信号（多阶段/跨天/多子系统）→ 直接 **wayfinder chart**（map destination = 三件套定稿），map+tickets 落 `openspec/roadmaps/{name}/footage/`；起手不明 → `/opsx:explore` 起步，事中触发（实际跨 session/压缩仍未收敛）升级 wayfinder；memo.md 从「长档强制」降为短档可选（footage 即结构化 footage，取代 memo 的考古职能）。
+- **规则 3 扩展**：「正式文档不引用 memo」扩展为两段式「三件套不引用 `footage/`，也不引用包根 `memo.md`」（两者同为讨论过程考古层；memo 保持包根落位不迁移〔grill-amendment Q2〕）。
 - **roadmap.md 近细远雾**：近期 1-2 阶段写满五节（前置/目标/子任务/验收/交付），远期阶段只写目标一句 + 雾区备注，到 frontier 才补细（fog-of-war 判据：能否现在精确表述）。
 - **review 分档**：默认单跑 `/plan-eng-review`；有产品/商业野心才 `/autoplan` 三连审。
-- **本仓消费约定**：`openspec/matt/issue-tracker.md` Wayfinding 小节加根目录条件分流（roadmap 类 effort → `openspec/roadmaps/{name}/footage/`，其余默认 `openspec/matt/<effort>/`）+ 标题补英文别名；CLAUDE.md Agent skills 托管块补 footage 约定一句作第二锚（防 setup-matt-pocock-skills 重跑覆盖回默认）。
-- **存量迁移**：两个在飞 roadmap 包（workflow-cost-optimization、mechanical-layer-hardening）requirements 并入 design + 包内节级引用修补（各 6-7 处）；归档树按「归档不可变」不回改，合并文件头加考古注记。
+- **本仓消费约定**：`openspec/matt/issue-tracker.md` Wayfinding 小节加根目录条件分流（roadmap 类 effort → `openspec/roadmaps/{name}/footage/`，其余默认 `openspec/matt/<effort>/`）+ 标题补英文别名；CLAUDE.md **双锚制**〔grill-amendment Q4〕——Agent skills 托管块内补 footage 一句（就近可见）+ :79 段重写携块外结构性锚（setup-matt-pocock-skills 重跑碰不到，覆盖场景的存活比对源）。
+- **存量迁移**：两个在飞 roadmap 包（workflow-cost-optimization、mechanical-layer-hardening）requirements 按全节清点表并入 design（默认并入、确认已被吸收才弃、弃必记去向〔grill-amendment Q3〕）+ 包内节级引用修补（各 6-7 处）；归档树按「归档不可变」不回改，合并文件头加考古注记。
 - **文档同步**：仓内「四件套」表述（sdflow-roadmap/SKILL.md、5 份 references/ 模板导航块、CLAUDE.md、docs/sdflow-fable5/02-module-reference.md 等，grep 穷举）。
 
 ## Capabilities

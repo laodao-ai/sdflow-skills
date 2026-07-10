@@ -32,12 +32,17 @@ design.md SHALL 以「需求与目标态」章开头。工作流/重构型项目
 
 ### Requirement: 讨论层按规模分档路由
 
-规划工作流 SHALL 按讨论规模路由讨论工具：单 session 可收敛的讨论用 `/opsx:explore`；预估超出单 session（>30 轮、跨天、或跨上下文重置）的讨论 SHALL 用 wayfinder chart 模式铺图，map 的 destination SHALL 表述为「三件套定稿」。wayfinder 铺图判定无雾（单 session 装得下）时 SHALL 退回 explore 路径，MUST NOT 为无雾讨论维持 map。
+规划工作流 SHALL 按双判据路由讨论工具，MUST NOT 依赖事前轮数预估〔grill-amendment：对齐 spec-workflow F11 口径，事前「预估轮数」不可观测〕：①**起手显性信号**——请求自带长档特征（多阶段 roadmap、明示跨天推进、议题横跨多个子系统）→ 直接 wayfinder chart 铺图；②**事中触发**——起手不明则 `/opsx:explore` 起步，讨论实际跨 session/跨天、或经历上下文压缩/重置仍未收敛 → 升级切 wayfinder。map 的 destination SHALL 表述为「三件套定稿」。wayfinder 铺图判定无雾（单 session 装得下）时 SHALL 退回 explore 路径，MUST NOT 为无雾讨论维持 map。
 
-#### Scenario: 长讨论走 wayfinder
+#### Scenario: 起手长档信号直入 wayfinder
 
-- **WHEN** 启动检查判定讨论规模为长档（预估 >30 轮或需跨天）
+- **WHEN** 用户请求自带长档特征（如多阶段 roadmap、明示跨天推进）
 - **THEN** 以 wayfinder chart 铺图，产生 map.md 与讨论票，逐票决议后进入结晶
+
+#### Scenario: 事中触发升级
+
+- **WHEN** explore 起步的讨论实际跨 session/跨天、或经历压缩仍未收敛
+- **THEN** 升级切 wayfinder chart，已形成的结论写入 map 的 Decisions-so-far/Notes，后续逐票推进
 
 #### Scenario: 无雾自降级
 
@@ -51,7 +56,7 @@ design.md SHALL 以「需求与目标态」章开头。工作流/重构型项目
 
 ### Requirement: footage 落盘位置与引用边界
 
-roadmap 类 effort 的 wayfinder map 与讨论票 SHALL 落盘于 `openspec/roadmaps/{name}/footage/`（map 为 `footage/map.md`，票为 `footage/issues/<NN>-<slug>.md`）。三件套 MUST NOT 引用 footage/ 下任何内容（含旧 memo 形态）；footage 中有价值的结论 SHALL 精炼后写入三件套。
+roadmap 类 effort 的 wayfinder map 与讨论票 SHALL 落盘于 `openspec/roadmaps/{name}/footage/`（map 为 `footage/map.md`，票为 `footage/issues/<NN>-<slug>.md`）。短档可选 memo SHALL 保持包根 `memo.md` 既有落位，MUST NOT 迁移〔grill-amendment Q2：拍板 A〕。三件套 MUST NOT 引用 `footage/` 下任何内容，也 MUST NOT 引用包根 `memo.md`（两者同为讨论过程考古层，物理位置不同、引用禁令相同）；考古层中有价值的结论 SHALL 精炼后写入三件套。
 
 #### Scenario: wayfinder 按约定落盘
 
@@ -61,7 +66,7 @@ roadmap 类 effort 的 wayfinder map 与讨论票 SHALL 落盘于 `openspec/road
 #### Scenario: 三件套引用检查
 
 - **WHEN** 结晶阶段写三件套时需要引用讨论结论
-- **THEN** 结论以精炼后的正文形式出现在三件套中，三件套全文不出现指向 `footage/` 的链接或「详见 footage」类表述
+- **THEN** 结论以精炼后的正文形式出现在三件套中，三件套全文不出现指向 `footage/` 或 `memo.md` 的链接、以及「详见 footage/memo」类表述
 
 ### Requirement: review 按项目野心分档
 

@@ -21,7 +21,7 @@ sdflow-roadmap 现行形态（五阶段：讨论 → 开 `plan-{topic}` change �
 ### D1 · 合并方向：requirements 并入 design（三件套），而非反向或二件套
 
 - **候选**：A 保持四件套；B requirements 并入 design（选中）；C 全并入 roadmap.md（二件套）。
-- **理由**：消费侧不对称是决定性证据——design.md 有 9 处归档实质引用（如 `archive/2026-07-07-mlh-p1-issues-sweep/design.md:3`「整体架构/立论权威源」），文件名保留则引用零断链；requirements.md 零实施消费者；C 会把稳定考古层（决策档案）和高频进度层（阶段状态）搅进同一 diff，且 roadmap.md 已是最长活文档。requirements 独有的两块载重内容（验收门槛表、愿景/目标态判据）整块搬入 design 头部，包内节级引用一次修补。
+- **理由**：消费侧不对称是决定性证据——design.md 有 9 处归档实质引用（如 `archive/2026-07-07-mlh-p1-issues-sweep/design.md:3`「整体架构/立论权威源」），文件名保留则引用零断链；requirements.md 零实施消费者；C 会把稳定考古层（决策档案）和高频进度层（阶段状态）搅进同一 diff，且 roadmap.md 已是最长活文档。requirements 迁移按**全节清点表**处置〔grill-amendment Q3：原「两块载重+Non-Goals」清单漏 §2 核心需求表（wco 的 R1-R4 表定义三腿结构，load-bearing 单一源）与 §4 受众/§6 参考〕——逐节标注 并入 / 已被吸收（注明吸收处）/ 弃置（git 史兜底）；预标去向：§1.3 愿景、§2 核心需求表、§3 Non-Goals、§5 验收总纲 → 并入 design 头部章；§4 受众 → 一句带过并入头部章首段；mlh §6 参考 → 实施时按内容判。原则：**默认并入，确认已被吸收才弃，弃必记去向**。包内节级引用一次修补。
 - **三镜与主次**：系统镜——单一源块从 4 处降 ≤2 处，漂移面收窄（mlh-p2 F8 类矛盾的结构性消除）；用户镜——写作与收口更新省一个文件的同步；开发循环镜——一次性文本修补（SKILL.md:4,48,138,182,211,222,265,277,340 + 4 份模板导航块 + 3 处仓级表述，全部已 grep 穷举）。**主判定：系统镜为主**——同步面收窄是实证痛点的直接根治，迁移成本一次性且可穷举。
 
 ### D2 · 去 change 壳：recorder 式直写
@@ -49,9 +49,10 @@ sdflow-roadmap 现行形态（五阶段：讨论 → 开 `plan-{topic}` change �
 - **理由**：现状 SKILL.md 已承认「纯技术重构无产品野心 → CEO review 可跳」「简单项目 → 单跑 eng」；本仓两个真实 roadmap 均为工作流型，三连审的 CEO/design 轴基本空转。分档判据可观察（外部用户/变现/获客信号）。风险（单审漏产品盲区）由消费期实施 change 的 spec-review 兜底，成本后移可接受（见 proposal 假设 3）。
 - **主判定：用户循环镜为主**——review 是流程中最重的 token/时间项，分档直接砍默认成本至 1/3。
 
-### D6 · memo 降级：footage 取代长档 memo，短档 memo 可选保留
+### D6 · memo 降级：footage 取代长档 memo，短档 memo 可选保留（包根落位不动）
 
-- **理由**：memo 策略表的存在动机（讨论过程对抗 compaction）被 footage 结构性解决——map+tickets 就是持久化的结构化 footage，且有 Decisions-so-far 索引，优于线性 memo。短档讨论（单 session）无跨 session 风险，memo 保留为可选（不写则 design 决策章写厚，现状规则不变）。规则 3「不引用 memo」措辞扩展为「不引用 footage/（含 memo）」——考古层语义统一。
+- **理由**：memo 策略表的存在动机（讨论过程对抗 compaction）被 footage 结构性解决——map+tickets 就是持久化的结构化 footage，且有 Decisions-so-far 索引，优于线性 memo。短档讨论（单 session）无跨 session 风险，memo 保留为可选（不写则 design 决策章写厚，现状规则不变）。
+- **落位拍板〔grill-amendment Q2〕**：memo 保持包根 `memo.md` 既有落位、不迁入 footage/（曾候选 B「物理统一考古层」，用户拍板保守不动：memo 是 sdflow-roadmap 自家产物、footage 一词亦源自本 skill SKILL.md:50 血统类比——调研核实 matt 套件零 memo 概念，迁移虽不触套件行为，但既有落位无迁移必要）。规则 3 措辞相应写实为**两段式**：「三件套不引用 `footage/`，也不引用包根 `memo.md`」——考古层语义统一、物理位置各安其位。
 
 ### D7 · 近细远雾：roadmap.md 阶段分层
 
@@ -65,7 +66,7 @@ sdflow-roadmap 现行形态（五阶段：讨论 → 开 `plan-{topic}` change �
 | `sdflow-roadmap/SKILL.md` | 规划工作流编排指令 | 主体重写（三件套/直写/分档/footage/近细远雾/收尾 checklist） |
 | `sdflow-roadmap/references/` | 模板骨架（5 → 4 个） | 删 requirements-template；design-template 加头部章；余者导航块与注释更新 |
 | `openspec/matt/issue-tracker.md` | wayfinder 落盘约定唯一注入点 | Wayfinding 小节条件分流 + 双语标题 |
-| CLAUDE.md Agent skills 托管块 | 约定第二锚 | 补 footage 一句 |
+| CLAUDE.md Agent skills 托管块 + :79 段 | 约定双锚〔grill-amendment Q4〕 | 块内补 footage 一句（就近可见，重跑同批覆盖）；:79 段重写携结构性锚（块外，setup 重跑碰不到） |
 | wayfinder / grilling / domain-modeling（外部） | 长讨论引擎 | 零改动，运行时依赖 |
 | plan-eng-review / autoplan（外部 gstack） | 内容质量 review | 零改动，调用推荐变化（adr/0002 边界内） |
 | `roadmap_writeback_draft.py`（sdflow-done） | 回填草稿助手 | **零改动**（读点已核不含 requirements.md） |
@@ -107,12 +108,15 @@ sequenceDiagram
 
 ## 分档路由决策图（TG-12）
 
+> 分档判据为双通道（起手显性信号 / 事中触发），MUST NOT 依赖事前轮数预估——「>30 轮」类数字判据已删〔grill-amendment：对齐 spec-workflow F11 证伪结论〕。误判大盘的兜底 = wayfinder 无雾自降级。
+
 ```mermaid
 flowchart TD
     S["讨论充分度检查"] -->|已充分| CRYST["直接结晶"]
-    S -->|不足| SIZE{"预估规模"}
-    SIZE -->|"单 session 收得住"| EXP["/opsx:explore（可选 memo）"]
-    SIZE -->|">30 轮 / 跨天 / 跨 clear"| WFC["wayfinder chart"]
+    S -->|不足| SIG{"起手长档信号?<br/>多阶段/跨天/多子系统"}
+    SIG -->|"无 → explore 起步"| EXP["/opsx:explore（可选 memo）"]
+    SIG -->|有| WFC["wayfinder chart"]
+    EXP -->|"事中触发: 跨session/压缩仍未收敛"| WFC
     WFC -->|无雾自降级| EXP
     WFC -->|有雾| MAP["footage/ 铺图逐票"]
     EXP --> CRYST
@@ -131,8 +135,8 @@ flowchart TD
 |---|---|---|---|
 | wayfinder 未安装 | 起手 `ls ~/.claude/skills/wayfinder/SKILL.md` 不存在 | 显式告知 + 退回 explore+memo（旧长档策略），流程不阻塞 | — |
 | grilling/domain-modeling 未装 | wayfinder 票内调用失败 | 票内降级为普通对话式讨论，票照常 resolve；提示装 matt 套件 | — |
-| tracker doc Wayfinding 小节缺失/被覆盖 | wayfinder 起手查不到分流规则 | wayfinder 按默认落 `openspec/matt/<effort>/`——**错位但不丢数据**；skill 起手核对小节在场，缺失即提示恢复（第二锚 CLAUDE.md 供比对） | 手工搬移 map+tickets 至 footage/（纯文件移动） |
-| setup-matt-pocock-skills 重跑覆盖定制 | 人在环草稿确认时发现 openspec/matt/ 与草稿不符 | CLAUDE.md 第二锚提示定制在场；覆盖后 git diff 可见、revert 即回 | `git checkout openspec/matt/` |
+| tracker doc Wayfinding 小节缺失/被覆盖 | wayfinder 起手查不到分流规则 | wayfinder 按默认落 `openspec/matt/<effort>/`——**错位但不丢数据**；skill 起手核对小节在场，缺失即提示恢复（比对源 = CLAUDE.md :79 段块外锚〔grill-amendment Q4：块内锚会随重跑同批覆盖，比对源指向须落在托管块外〕） | 手工搬移 map+tickets 至 footage/（纯文件移动） |
+| setup-matt-pocock-skills 重跑覆盖定制 | 人在环草稿确认时发现 openspec/matt/ 与草稿不符 | :79 段块外锚重跑后仍存活，供恢复比对；覆盖后 git diff 可见、revert 即回 | `git checkout openspec/matt/` |
 | 存量迁移中断 | 三件套引用断链（收尾 checklist 项） | checklist 拦截提示补齐 | `git revert`（迁移为纯文本 commit，requirements.md 内容在 git history 永存） |
 
 **可观测性**：分档判定结果（explore/wayfinder/直接结晶）、review 分档判定（eng/autoplan/跳过）、收尾 checklist 结果——三个判定点均要求在对话中显式陈述一行 + task-log.md 留痕（跳过类判定须显著呈现，不埋长消息）。
@@ -169,7 +173,7 @@ flowchart TD
 
 1. skill 与模板重写（P0）→ dev checkout 跑 `setup.sh`（adr/0005：symlink 场景改 SKILL.md 即时生效，重跑为防新增/删除模板文件产生孤儿）。
 2. tracker doc 分流 + CLAUDE.md 第二锚（P0，与 1 同 commit 可）。
-3. 存量两包迁移（P2）：每包一次 commit——requirements.md 内容整块并入 design.md 头部章 → 修补包内节级引用（wco：design:62、roadmap:69 等；mlh：roadmap:110、task-log:63,98 等，实施时逐一 grep 复核）→ 删 requirements.md → 合并文件头加考古注记（「2026-07 起 requirements 并入本文件，历史版本见 git」）。
+3. 存量两包迁移（P2）：每包一次 commit——requirements.md 按 D1 全节清点表并入 design.md 头部章（默认并入，确认已被吸收才弃，弃必记去向〔grill-amendment Q3〕）→ 修补包内节级引用（wco：design:62、roadmap:69 等；mlh：roadmap:110、task-log:63,98 等，实施时逐一 grep 复核）→ 删 requirements.md → 合并文件头加考古注记（「2026-07 起 requirements 并入本文件，历史版本见 git」）。存量包 roadmap.md 已写满的远期阶段**不顺手薄化**（近细远雾只约束新生成；避免迁移中销毁既有细节）。
 4. 全仓表述同步（P2）。
 5. **回滚**：整链纯文本，`git revert` 逐 commit 可逆；requirements.md 历史内容 git 永存。
 
