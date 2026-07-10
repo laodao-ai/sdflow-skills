@@ -152,6 +152,10 @@ _Avoid_: 把报告工具 fail-closed 锚「畸形当空」（锚错方向，放�
 `openspec/INDEX.md` 里「rules」撞两义须分治：**workflow bundle 规则**（`openspec/workflow/*.md`）索引在 `<!-- opsx-init:rules:start..end -->` **托管块**、归 **sdflow-init**（`update` 刷新）；**消费仓通用规则**（`openspec/rules/*.md`，可选目录，缺失=合法空）在托管块之外、归 **sdflow-maintain** 的 set-diff。maintain 解析 INDEX MUST **用机器锚行界定、跳过 init 托管块**（不跳则 bundle 条目被误当「已删未清理」+ 诱导越界改 init 领地）。maintain 依赖 init 两常量（`RULE_MARKERS`/`MARK_IDX`）：**canonical 留 `init.py`、maintain 保自包含副本 + 跨脚本一致性守卫 pytest**（跨 skill import 破自包含且运行时脆、物理单一源不可达）——T17 的真闭合 = 机验同步（守卫测试），非删到一份；跨语言副本（bash）难同守则 defer 登记。
 _Avoid_: maintain set-diff 时把 init 托管块条目当自己领地（越界+误报）；跨 skill import 取「物理单一源」（破自包含、运行时脆）；把「删到只剩一份」当 T17 闭合（跨 skill 不可达，机验同步才是）
 
+**ticket（实现分解单位）** 〔grill-amendment · matt-workflow-integration〕:
+tickets 实现管线的实现分解单位 = **tracer-bullet 垂直切片**（一条打穿全层、可独立验证的行为级路径），英文原词不译。在 plan 文件与 ship_gate 契约中以 **Task 号**呈现（`### Task N:` 标题 / `checkpoint(<change>:task<N>-)` 标签），一 ticket = 一 Task 号；ticket 内验收复选框 = **实现期完成信号**（implementer 与 checkpoint 标签**双写**）。与既有两层复选框的分工：roadmap 复选框 = 规划粒度、归档后镜像回写；change tasks.md 复选框 = 需求追溯层（R-ID 载体，ticket 由它派生但不取代它）、**archive 阶段才勾**。matt 套件中 wayfinder 的讨论 ticket（map 的 issues/<NN>）是另一种 ticket（讨论单位，非实现分解），需限定词区分。
+_Avoid_: 「票」「任务」混称（tasks.md 的「任务」与 ticket 勾选时机**相反**：归档期 vs 实现期，混称会让 ship-tasks-flip 失鲜坑换面目重现）；把 wayfinder 讨论 ticket 与实现 ticket 混为一谈
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。
