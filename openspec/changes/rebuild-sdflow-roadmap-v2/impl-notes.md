@@ -96,4 +96,12 @@
 
 **自检结果**：A 类 5 处已改并复核（`grep -rn "四件套\|4 件套\|4件套" --include="*.md" .` 复跑，A 类命中位置均已消失，B/C/D/E/F/G 类命中依旧在场符合预期，无新增/漏改）；`git diff openspec/specs/spec-workflow/spec.md` 为空；CLAUDE.md 块外段（:78-83）含 footage 第二锚句「roadmap 类 wayfinding 落 `openspec/roadmaps/{name}/footage/`（长讨论考古层；三件套不引用）」。
 
-## 6.2 双宿主 wayfinder 装载核验（task6 执行后补写）
+## 6.2 双宿主 wayfinder 装载核验（2026-07-11，task6）
+
+- dev checkout `bash setup.sh`：输出无异常、无孤儿误删；`readlink ~/.claude/skills/sdflow-roadmap` 与 `~/.codex/skills/sdflow-roadmap` 均指向本仓（symlink 即时生效）；requirements-template.md 删除后 references/ 同步为 5 文件，无残留孤儿链接。
+- 双宿主 wayfinder 装载现状：**claude 侧在场、codex 侧缺**——与 SKILL.md「宿主中立探测」措辞完全一致（接地预期：Codex 宿主长档路由降级 explore+memo 常驻，措辞如实不夸大）〔SR-9/XE5〕。
+
+## 附：defer 登记（done sweep 圈）
+
+- **T129**（迁移排期，task7）：存量 wco/mlh 两包 requirements 并入迁移——触发条件 = 首个新流程 roadmap SHIPPED 且目标包无在飞 change；操作序列 = tasks.md 5.1-5.3 + design Migration step3。
+- **T130**（术语跟进）：`sdflow-init/assets/workflow/ff-generation-constraints.md:43` 边界句「requirements/design/roadmap/task-log 四件套」→「三件套」——matt-workflow-integration Task 7 写入时本 change 未落地所致的术语漂移；属 assets 权威源（本 change Compliance 声明零 assets 改动，不在本轮扫），一词修正独立小改。
