@@ -59,6 +59,11 @@ rules:
 #   mid: <model-id>
 #   light: <model-id>
 
+# impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
+# 缺省请勿填（缺失/非法值一律 superpowers 旧管线）；仅在新出 ticket 时刻读一次，
+# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
+# impl-pipeline: tickets
+
 # 评审价值度量（lens-metric）开关：低频消费仓默认关（避免零收益期背记账+硬阻塞）；
 # 高频仓可改 true 开启。契约见 lens-metric-contract.md。
 metrics:
