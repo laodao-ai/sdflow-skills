@@ -1,0 +1,573 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 348de78..37f739c 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -57,7 +57,6 @@ git diff --check                                   # 提交前检查空白错误
+ > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ <!-- opsx-init:end -->
+-
+ ## Agent skills
+ 
+ ### Issue tracker
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 98e6dbc..8518213 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -142,7 +142,6 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
+ > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ <!-- opsx-init:end -->
+-
+ ## Agent skills
+ 
+ ### Issue tracker
+diff --git a/openspec/changes/mlh-p4-reason-code-validators/impl-reports/task5-bundle-dogfood.md b/openspec/changes/mlh-p4-reason-code-validators/impl-reports/task5-bundle-dogfood.md
+new file mode 100644
+index 0000000..e405554
+--- /dev/null
++++ b/openspec/changes/mlh-p4-reason-code-validators/impl-reports/task5-bundle-dogfood.md
+@@ -0,0 +1,115 @@
++# Task 5 — bundle 回灌 + 验收 dogfood（impl report）
++
++**状态：DONE**（末票；三校验器已回灌下游、权威源全套件全绿 0 warning、三校验器对本仓真实产物只读 dogfood 无误报）
++**R-ID：** OVG, HRT, RDC · **Blocked-by：** 4（已满足）
++
++---
++
++## 1. setup.sh 同步 canonical
++
++```
++$ bash setup.sh
++sdflow-skills v0.9.0 ready → ~/.claude/skills ~/.codex/skills
++  installed (34): … 全部 ✓
++  ✓ workflow @ ~/.sdflow — 接管：~/.skills/sdflow-skills/.../assets/workflow
++                            → /Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-init/assets/workflow
++  mode: symlink (Unix)
++```
++
++要点：无错。全局 canonical `~/.sdflow/workflow` 已「接管」指向**本 dev checkout** 的 `sdflow-init/assets/workflow`（dev checkout 纪律：测完/合并后运行 checkout 重跑 setup 还原）。
++
++## 2. sdflow-init update 推下游（实际调用方式）
++
++按 `sdflow-init/SKILL.md` update 范式，**直接调脚本**（非交互、非 CLI 子命令），plain `update`（非 `--dev`，故排除 `tests/`）：
++
++```
++$ python3 sdflow-init/scripts/init.py update --root .
++✓ sdflow-init update 完成 @ /Users/cheneyzhao/Documents/04-sdflow-skills
++  - 铺 bundle：openspec/workflow/（12 文件，覆盖）
++  - 铺 review 根锚：openspec/review.html + openspec/serve.sh（2 文件，覆盖；tools/ 随 bundle 入 openspec/workflow/tools/）
++  - config.yaml：update 不动
++  - openspec/INDEX.md / CLAUDE.md / AGENTS.md：更新托管区块
++```
++
++`init.py copy_bundle` 非 `--dev` 分支对 `tools/` 用 `ignore_patterns("tests")` → 下游 `openspec/workflow/tools/` **不含 tests/**（设计要求）。
++
++## 3. 一致性核对（权威源 ↔ 下游脚本本体）
++
++下游 `openspec/workflow/tools/` 列表：含三新校验器 `hr_tg_intersect.py`/`outside_voice_guard.py`/`review_disposition_check.py` + `anchor_lint.py`（已刷新），**无 tests/ 子目录**（`ls tests` → No such file or directory）。
++
++`diff` 逐脚本本体（auth vs downstream）：
++
++```
++IDENTICAL: outside_voice_guard.py
++IDENTICAL: hr_tg_intersect.py
++IDENTICAL: review_disposition_check.py
++IDENTICAL: anchor_lint.py
++```
++
++四脚本本体逐字一致；下游无 tests/。回灌纪律满足（MUST NOT 只改下游——本票只经权威源→update 推下游，未手改下游）。
++
++## 4. 权威源全套件（承 4.C 门槛）
++
++```
++$ python3 -m pytest sdflow-init/assets/workflow/tools/tests/ -W error -q
++183 passed in 0.67s
++```
++
++全绿、0 warning（`-W error` 下任何 warning 会转 error 使失败，实测 0 失败）。验收门**指向权威源 tests/**（下游无 tests/）。
++
++## 5. 本仓 dogfood（只读，未改任何产物）
++
++### 5.1 outside_voice_guard（T80）— reason_code 合理，fail-closed 归约正确
++
++对本仓真实 archived gstack-review.md 只读跑。按三前置按序归约（来源 mode > 新鲜度 fs-mtime > 结构 codex 段）：
++
++**① 来源前置命中（simulated-source）** — 两个 simulated-mode 归档产物：
++```
++$ outside_voice_guard --review-path <4.C lens-metric-emit>/gstack-review.md --change-dir <同>   → simulated-source  exit=1
++$ outside_voice_guard --review-path <mlh-p3-determ-guards>/gstack-review.md --change-dir <同>    → simulated-source  exit=1
++```
++核对源锚：两产物 `step1-broad-review v1 mode="simulated"` 属实 → `simulated-source` 是**正确**判定（adr/0002 simulated 视同无效不可复用），非误报。
++
++**② 新鲜度前置命中（stale，fail-safe）** — 三个 native-mode 归档产物：
++```
++$ outside_voice_guard --review-path <ship-gate-hardening>/gstack-review.md --change-dir <同>     → stale  exit=1
++$ outside_voice_guard --review-path <gate-anchor-line-scoped>/gstack-review.md --change-dir <同> → stale  exit=1
++$ outside_voice_guard --review-path <review-tool-followups>/gstack-review.md --change-dir <同>   → stale  exit=1
++```
++**研判：非误报，是 design.md 明列的 fail-safe。** mtime 排序取证（ship-gate-hardening）：产物 mtime `…642.7320678` vs 源最大 mtime `…642.7327764`（tasks.md），差 ~0.0007s（亚毫秒）——纯 git checkout 写序 artifact。design.md Risk 行「[T80 fs-mtime 跨 git 操作] → checkout 重置 mtime … fail-safe 朝 stale（重跑只成本），可接受」正是此场景。归档产物 mtime 是 checkout 制品、无「活跃编辑」语义，守卫朝 stale 保守（重跑成本、绝不假绿）符合预期。对**活跃 spec-review**（未归档、有真实编辑时序）fs-mtime 才有意义。
++
++无崩溃、无假绿；六枚举里命中的两枚（simulated-source/stale）均为诚实且方向安全的判定。
++
++### 5.2 hr_tg_intersect（T81）— hit + 依据模型判定串跑通
++
++用本 change 模型声明的命中 TG 集（proposal `TG-01,TG-22` + design section 锚 `TG-08,TG-11,TG-23`）+ 权威源 trigger-catalog：
++```
++$ hr_tg_intersect --tg-set 'TG-01,TG-08,TG-11,TG-22,TG-23' --trigger-catalog sdflow-init/assets/workflow/trigger-catalog.md
++hit:[TG-08]｜依据模型判定:[TG-01,TG-08,TG-11,TG-22,TG-23]
++<!-- sdflow:hr-tg v1 hit="TG-08" declared="TG-01,TG-08,TG-11,TG-22,TG-23" -->
++  exit=0
++```
++研判：HR-TG 子集单一源（`## 七、HR-TG` `> 成员：TG-04,06,07,08,09,16,17,26`）正常 parse；∩ 得 `TG-08`（唯一命中成员）；`依据模型判定` 使模型给的集显式可见（adr/0018）；扩 `declared=` 锚字段就位。exit 0（hit/none 均合法判定）。跑通、无误。
++
++### 5.3 review_disposition_check（T82）— 真实 task-log 不假阳（子串陷阱验证）
++
++对本仓两个真实 roadmap task-log（均含收尾句「无『未处置』…」，正是子串陷阱 memory `gate-substring-detection-dogfood` 的负例形态）：
++```
++$ review_disposition_check --task-log openspec/roadmaps/mechanical-layer-hardening/task-log.md   → section-ok-DISPOSITION-UNCHECKED  exit=0
++$ review_disposition_check --task-log openspec/roadmaps/workflow-cost-optimization/task-log.md   → section-ok-DISPOSITION-UNCHECKED  exit=0
++```
++**研判：不假阳（关键验收项）。** 两 task-log 的 `## Review 处置` 小节收尾句含「未处置」子串（`mechanical-layer-hardening:53`「本小节无「未处置」状态条目」/`workflow-cost-optimization:69`「…无「未处置」」），naive-grep 会误判——本脚本靠「小节存在 + 去注释后非空」结构判定绕开自指陷阱，正确输出 `section-ok-DISPOSITION-UNCHECKED`（诚实点明逐条未核，非假绿 present），exit 0。
++
++## 6. 验收标准逐条
++
++- [x] dev setup.sh 同步 canonical；`sdflow-init update` 推下游，权威源↔下游脚本本体逐字一致（下游无 tests/）
++- [x] 权威源 tools 全套件 `pytest -W error` → 183 passed、0 warning
++- [x] 本仓 dogfood：三校验器各对真实产物只读跑；T82 对真实 task-log **不假阳**
++- [x] 验收门 pytest 指向权威源 `sdflow-init/assets/workflow/tools/tests/`（非不存在的下游 tests/）
++
++## 7. Concerns
++
++无阻断性缺陷。两点观察（均 design 已预期、非缺陷）：
++
++- **T80 对归档 native 产物恒 stale**：归档态 fs-mtime 是 checkout 写序制品、无活跃编辑语义，守卫 fail-safe 朝 stale（design Risk 行明列，重跑只成本、绝不假绿）。对活跃 spec-review 场景 fs-mtime 才承载真实新鲜度信号。可接受。
++- **update 副作用 diff**：`sdflow-init update` 重注入托管区块时把 `CLAUDE.md`/`AGENTS.md` 的 `<!-- opsx-init:end -->` 后一空行归一（各 -1 空行），benign 排版归一；`openspec/workflow/tools/anchor_lint.py` 下游刷新到权威源版本（+18 行，diff 后 IDENTICAL）。均为 update 正常产物，随本票一并 commit。
+diff --git a/openspec/workflow/tools/anchor_lint.py b/openspec/workflow/tools/anchor_lint.py
+index f39099a..cbc0df5 100644
+--- a/openspec/workflow/tools/anchor_lint.py
++++ b/openspec/workflow/tools/anchor_lint.py
+@@ -157,6 +157,23 @@ def check_existence(report_text, layer, metrics_on):
+     return v
+ 
+ 
++HR_TG_REQUIRED_FIELDS = ("hit", "declared")  # mlh-p4 T81：declared= 承「依据模型判定」（adr/0018 输入可见）
++
++
++def check_hr_tg(report_text):
++    """校验 fence 外真 hr-tg 锚含 hit= + declared= 两字段（declared= 由 T81 hr_tg_intersect emit，承模型判定的命中集）。
++    只断言字段在场——字段值（TG 记号 CSV / none / 空串）任意合法，命中判定归模型，脚本不校验 CSV 内容。"""
++    v = []
++    for ln in fence_outside_lines(report_text):
++        if anchor_prefix(ln) != "hr-tg":
++            continue
++        kv = parse_kv(ln)
++        for f in HR_TG_REQUIRED_FIELDS:
++            if f not in kv:
++                v.append({"anchor": ln.strip()[:80], "field": f, "kind": "missing-field"})
++    return v
++
++
+ _NONNEG_INT = re.compile(r'^\d+$')
+ 
+ 
+@@ -215,6 +232,7 @@ def main(argv=None):
+         return EXIT_ERROR
+     # 3) 校验
+     violations = check_existence(report_text, args.layer, metrics_on)
++    violations += check_hr_tg(report_text)                  # hr-tg 恒必有锚，字段校验不受 metrics 门控
+     if metrics_on:
+         violations += check_lens_metric(report_text, args.layer, enums)
+     if violations:
+diff --git a/openspec/workflow/tools/hr_tg_intersect.py b/openspec/workflow/tools/hr_tg_intersect.py
+new file mode 100644
+index 0000000..91aef58
+--- /dev/null
++++ b/openspec/workflow/tools/hr_tg_intersect.py
+@@ -0,0 +1,114 @@
++#!/usr/bin/env python3
++"""hr_tg_intersect — 确定性 HR-TG 交集校验器（mlh-p4·T81）。
++吃「模型判好的命中 TG 集」作入参（--tg-set），与 HR-TG 子集（从 trigger-catalog 单一源读）求交，
++输出带「依据模型判定」的结果（模型给的输入集显式可见供复审，不 emit 裸 none）+ 规范锚串。
++纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 / 单一源损坏 fail-closed all-or-nothing。
++〔spec-review Q-D·推翻 grill Q1〕命中哪些 TG 无确定性信号 = 判断归模型；脚本只做确定性交集 + 出锚。
++HR-TG 清单 MUST 从 trigger-catalog 单一源读、MUST NOT 硬编码副本；catalog 路径由 --trigger-catalog 入参给、
++MUST NOT 用 __file__ 推导（openspec/workflow/ 下无副本，会 fail-closed 空跑，A3）。承 4.C lens_metric_emit 形态。"""
++import argparse, re, sys
++from pathlib import Path
++
++EXIT_OK, EXIT_FAIL = 0, 1
++
++_TG_TOKEN_RE = re.compile(r'TG-\d+')          # 宽松抽取（忽略 **bold**/空格）
++_TG_STRICT_RE = re.compile(r'^TG-\d+$')       # tg-set 逐 token 严格校验
++_H12_RE = re.compile(r'^#{1,2}\s')            # level-1/2 标题（段边界；level-3 `### ` 不匹配）
++_MEMBER_RE = re.compile(r'^\s*>\s*成员')       # `> 成员：...` 行（fence/引用前缀容忍空白）
++
++
++class EmitError(Exception):
++    """坏输入 fail-closed（单一源缺失/损坏/无成员、tg-set 记号非法）。"""
++    pass
++
++
++def load_hr_tg_subset(catalog_path):
++    """从 trigger-catalog 的 `## …HR-TG…` 段 `> 成员：` 行 parse HR-TG 成员集。
++    单一源缺失/不可读/无 HR-TG 段/段内无成员行/成员行无 TG 记号 → EmitError（不静默按空子集放行）。"""
++    try:
++        text = Path(catalog_path).read_text(encoding="utf-8")
++    except (OSError, UnicodeDecodeError) as e:
++        raise EmitError(f"trigger-catalog 不可读: {e}")
++    lines = text.splitlines()
++    start = None
++    for i, ln in enumerate(lines):
++        if _H12_RE.match(ln) and "HR-TG" in ln:      # 定位 HR-TG 段标题
++            start = i
++            break
++    if start is None:
++        raise EmitError("trigger-catalog 缺 `## …HR-TG…` 段（单一源损坏）")
++    members = None
++    for ln in lines[start + 1:]:
++        if _H12_RE.match(ln):                         # 到下一 level-1/2 标题 = 段结束
++            break
++        if _MEMBER_RE.match(ln):
++            members = _TG_TOKEN_RE.findall(ln)        # 段内 `> 成员：` 行才算数，不跨段借用
++            break
++    if members is None:
++        raise EmitError("HR-TG 段缺 `> 成员：` 行（单一源损坏）")
++    if not members:
++        raise EmitError("HR-TG `> 成员：` 行无 TG 成员（单一源损坏，不静默空子集）")
++    return set(members)
++
++
++def parse_tg_set(raw):
++    """--tg-set CSV → token 列表（原样、含重复，序化留给 intersect）。空串 = 空集。
++    任一 token 不形如 TG-<数字> → EmitError（坏输入 fail-closed）。"""
++    tokens = [t.strip() for t in raw.split(",")]
++    tokens = [t for t in tokens if t]
++    for t in tokens:
++        if not _TG_STRICT_RE.match(t):
++            raise EmitError(f"tg-set 含非法 TG 记号（须 TG-<数字>）: {t!r}")
++    return tokens
++
++
++def _sort_key(t):
++    return int(t[3:])                                 # "TG-" 后数字，数值序（非字典序）
++
++
++def _dedup_sorted(tokens):
++    return sorted(set(tokens), key=_sort_key)         # sorted(set(...)) 确定序
++
++
++def intersect(declared_tokens, hr_tg_subset):
++    """(命中集, 依据集) = (declared ∩ HR-TG 子集, declared)，均 dedup + 确定序。"""
++    declared = _dedup_sorted(declared_tokens)
++    hits = _dedup_sorted([t for t in set(declared_tokens) if t in hr_tg_subset])
++    return hits, declared
++
++
++def render(hits, declared):
++    """两行输出：结果行（依据模型判定可见，不裸 none）+ 规范 hr-tg 锚串（扩 declared= 字段）。"""
++    declared_csv = ",".join(declared)
++    if hits:
++        hit_csv = ",".join(hits)
++        result = f"hit:[{hit_csv}]｜依据模型判定:[{declared_csv}]"
++        anchor = f'<!-- sdflow:hr-tg v1 hit="{hit_csv}" declared="{declared_csv}" -->'
++    else:
++        result = f"none｜依据模型判定:[{declared_csv}]"
++        anchor = f'<!-- sdflow:hr-tg v1 hit="none" declared="{declared_csv}" -->'
++    return result + "\n" + anchor
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(
++        description="HR-TG 交集校验器（确定性·纯 stdlib·fail-closed·门控外置）")
++    ap.add_argument("--tg-set", required=True,
++                    help="模型判好的命中 TG 集，逗号分隔（空集传空串）")
++    ap.add_argument("--trigger-catalog", required=True,
++                    help="$RULES_ROOT/trigger-catalog.md 路径（HR-TG 单一源，禁 __file__ 推导）")
++    args = ap.parse_args(argv)
++    try:
++        hr_tg = load_hr_tg_subset(Path(args.trigger_catalog))   # 单一源先读（损坏即 fail-closed）
++        declared_tokens = parse_tg_set(args.tg_set)
++        hits, declared = intersect(declared_tokens, hr_tg)
++        out = render(hits, declared)                            # all-or-nothing：全过才产出
++    except EmitError as e:
++        print(f"[hr_tg_intersect] FAIL: {e}", file=sys.stderr)  # 坏输入：stderr FAIL、无 stdout
++        return EXIT_FAIL
++    print(out)                                                  # hit/none 均为合法判定 → EXIT_OK
++    return EXIT_OK
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/openspec/workflow/tools/outside_voice_guard.py b/openspec/workflow/tools/outside_voice_guard.py
+new file mode 100644
+index 0000000..489652a
+--- /dev/null
++++ b/openspec/workflow/tools/outside_voice_guard.py
+@@ -0,0 +1,123 @@
++#!/usr/bin/env python3
++"""outside_voice_guard — 确定性 outside-voice 复用守卫（mlh-p4·T80）。
++读一份 spec-review 的 outside-voice 产物（gstack-review.md）+ 一个 change 目录，
++按三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）按序归约出**唯一** reason_code（六枚举）。
++纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 fail-closed all-or-nothing。
++新鲜度用源文件 fs-mtime 直比〔spec-review Q-C：撤销 grill 的 git 反转、纯 fs-mtime〕，
++排除评审产物自身（gstack-review.md / spec-review-report.md / .outside-voice/）。承 4.C lens_metric_emit 形态。"""
++import argparse, re, sys
++from pathlib import Path
++
++EXIT_OK, EXIT_FAIL = 0, 1
++REASON_CODES = ("none", "file-missing", "section-not-found",
++                "zero-findings", "stale", "simulated-source")   # 本地常量豁免（ADR-11：输入独有、不写进锚、不跨模块共享）
++VALID_MODES = ("native", "simulated")                           # step1-broad-review 锚 mode 枚举（我们的锚，严格 fail-closed）
++SOURCE_FILES = ("proposal.md", "design.md", "tasks.md")         # + specs/** 递归；评审产物自身不在此列（inclusion allowlist 天然排除）
++
++_S1_RE = re.compile(r'<!--\s*sdflow:step1-broad-review\s+v1\b(.*?)-->')
++_OV_ANCHOR_RE = re.compile(r'<!--\s*sdflow:outside-voice\s+v1\b(.*?)-->')
++_ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
++_CODEX_LABEL_RE = re.compile(r'\bcodex#(\d+)\b')                 # adr/0002 codex#N 标签约定（次选解析路径）
++
++
++class EmitError(Exception):
++    """坏输入 fail-closed（我们的锚缺失/mode 非枚举/单一源不可读；区别于外部 codex 段的 best-effort 降级）。"""
++    pass
++
++
++def parse_mode(text):
++    """抓 step1-broad-review 锚 mode（我们的锚，严格）。锚缺失/缺 mode/mode 非枚举 → EmitError。"""
++    m = _S1_RE.search(text)
++    if not m:
++        raise EmitError("step1-broad-review 锚缺失或格式不符")
++    mode = dict(_ATTR_RE.findall(m.group(1))).get("mode")
++    if mode is None:
++        raise EmitError("step1-broad-review 锚缺 mode 属性")
++    if mode not in VALID_MODES:
++        raise EmitError(f"mode 非枚举值（须 native|simulated）: {mode!r}")
++    return mode
++
++
++def source_max_mtime(change_dir):
++    """源文件（proposal/design/tasks/specs/**）最大 fs-mtime；评审产物自身天然不在 allowlist。
++    change_dir 缺失/非目录/无源文件 → EmitError（无法判新鲜度，fail-closed）。"""
++    if not change_dir.is_dir():
++        raise EmitError(f"change 目录不存在或非目录: {change_dir}")
++    mtimes = []
++    for name in SOURCE_FILES:
++        p = change_dir / name
++        if p.is_file():
++            mtimes.append(p.stat().st_mtime)
++    specs_dir = change_dir / "specs"
++    if specs_dir.is_dir():
++        for p in sorted(specs_dir.rglob("*")):
++            if p.is_file():
++                mtimes.append(p.stat().st_mtime)
++    if not mtimes:
++        raise EmitError(f"change 目录无源文件（proposal/design/tasks/specs）: {change_dir}")
++    return max(mtimes)
++
++
++def parse_codex_findings(text):
++    """best-effort 解析 codex findings 计数。返回 int（含 0）；解析不出任何 codex 段 → None（→ section-not-found）。
++    codex 段外部所有（adr/0002:21），格式漂移不崩溃、fail-closed 到 None。"""
++    total = None
++    for m in _OV_ANCHOR_RE.finditer(text):
++        attrs = dict(_ATTR_RE.findall(m.group(1)))
++        if attrs.get("runner") != "codex":               # 仅 runner=codex 计入（claude-fallback 不算 codex 段）
++            continue
++        raw = attrs.get("findings")
++        if raw is None or not raw.isdigit():
++            continue                                      # 畸形 findings 属性：跳过（best-effort）
++        total = (total or 0) + int(raw)
++    if total is not None:
++        return total
++    labels = set(_CODEX_LABEL_RE.findall(text))           # 次选：adr/0002 codex#N 标签
++    if labels:
++        return len(labels)
++    return None
++
++
++def classify(review_path, change_dir):
++    """三前置按序（来源 > 新鲜度 > 结构）归约 → 唯一 reason_code。坏输入 → EmitError。"""
++    # 产物存在性（file-missing 是合法判定，不需 change_dir）
++    if not review_path.exists():
++        return "file-missing"
++    if not review_path.is_file():
++        raise EmitError(f"产物路径非普通文件: {review_path}")
++    try:
++        text = review_path.read_text(encoding="utf-8")
++    except (OSError, UnicodeDecodeError) as e:
++        raise EmitError(f"产物不可读: {e}")
++    # ①来源（mode；simulated 视同无效）
++    if parse_mode(text) == "simulated":
++        return "simulated-source"
++    # ②新鲜度（fs-mtime 直比；产物早于源文件最大 mtime → stale。此处才需 change_dir）
++    if review_path.stat().st_mtime < source_max_mtime(change_dir):
++        return "stale"
++    # ③结构（codex 段可解析否 / 条数）
++    n = parse_codex_findings(text)
++    if n is None:
++        return "section-not-found"
++    if n == 0:
++        return "zero-findings"
++    return "none"
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(
++        description="outside-voice 复用守卫（确定性·纯 stdlib·fail-closed·门控外置）")
++    ap.add_argument("--review-path", required=True, help="outside-voice 产物路径（gstack-review.md）")
++    ap.add_argument("--change-dir", required=True, help="change 目录（openspec/changes/<name>/）")
++    args = ap.parse_args(argv)
++    try:
++        code = classify(Path(args.review_path), Path(args.change_dir))
++    except EmitError as e:
++        print(f"[outside_voice_guard] FAIL: {e}", file=sys.stderr)   # 坏输入：stderr FAIL、无 stdout
++        return EXIT_FAIL
++    print(code)                                                       # reason_code 落 stdout（含 none）
++    return EXIT_OK if code == "none" else EXIT_FAIL                   # none=可复用 exit0；其余=非零（stdout 载码，区别于 stderr FAIL）
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/openspec/workflow/tools/review_disposition_check.py b/openspec/workflow/tools/review_disposition_check.py
+new file mode 100644
+index 0000000..eee22b2
+--- /dev/null
++++ b/openspec/workflow/tools/review_disposition_check.py
+@@ -0,0 +1,137 @@
++#!/usr/bin/env python3
++"""review_disposition_check — 确定性 roadmap Review 处置小节校验器（mlh-p4·T82）。
++读一份 roadmap task-log，fence/结构感知地断言 `## Review 处置` 小节存在且非空（非仅脚手架注释/空白），
++归约出唯一 reason_code(三枚举)：section-missing | section-empty | section-ok-DISPOSITION-UNCHECKED。
++纯 stdlib、无 subprocess、门控外置（不读 config）；文件缺失/不可读 fail-closed all-or-nothing。
++
++设计边界（design.md D4 / spec RDC）：
++- MUST NOT naive-grep 那个「已处置」的否定词子串——收尾声明句「本小节无『…』条目」含该子串却恰是合规态；
++  本脚本根本不匹配该子串，靠「小节存在 + 去注释后非空」的结构判定绕开自指陷阱（memory gate-substring-detection-dogfood）。
++- MUST NOT 断言逐条已处置（格式三实例不统一、无字面 token、机械不可达）——归模型；
++  输出码尾缀 -DISPOSITION-UNCHECKED 显式点明逐条未核（adr/0018 输出诚实，防 present 被误读为已核=假绿）。
++- fence 感知：`## Review 处置` 若仅出现在 code fence 内（示例文本）不算小节存在；
++  小节体的「非空」判定去除 HTML 注释 / 水平分隔线 / 空白后再看是否有实体内容。
++承 4.C lens_metric_emit 形态（EmitError + EXIT_OK/EXIT_FAIL、跨模块口径重实现不 import）。"""
++import argparse, re, sys
++from pathlib import Path
++
++EXIT_OK, EXIT_FAIL = 0, 1
++REASON_OK = "section-ok-DISPOSITION-UNCHECKED"   # 存在+非空达成；逐条处置显式未核
++REASON_MISSING = "section-missing"
++REASON_EMPTY = "section-empty"
++
++SECTION_TITLE = "Review 处置"                      # 模版 task-log-template.md:62 规定的 level-2 标题
++_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')  # code fence 起止（fence-aware，含缩进容忍）
++_H2_RE = re.compile(r'^##[ \t]+(.+?)[ \t]*$')    # level-2 标题（`### ` 不匹配：第三字符非空白）
++_H12_RE = re.compile(r'^#{1,2}[ \t]')            # level-1/2 标题（小节边界；level-3 不算边界=属小节内）
++_THEMATIC_RE = re.compile(r'^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$')  # 水平分隔线 --- / *** / ___
++_HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)              # HTML 注释（跨行）
++
++
++class EmitError(Exception):
++    """坏输入 fail-closed（task-log 文件缺失 / 非普通文件 / 解码失败）。"""
++    pass
++
++
++def _annotate_lines(lines):
++    """逐行标注 (line, is_live)：is_live = 不在 code fence 内、且不在 HTML 注释内的行。
++    fence 用 ``` / ~~~ 成对跟踪；HTML 注释按 <!-- ... --> 跨行跟踪（fence 内不解释注释）。
++    仅用于「结构定位」（标题/边界识别）——fence 内的伪标题、注释里的伪标题均非 live，不被当作小节。"""
++    out = []
++    in_fence, fence_char, fence_len = False, None, 0
++    in_comment = False
++    for ln in lines:
++        if in_fence:
++            m = _FENCE_RE.match(ln)
++            if (m and m.group(1)[0] == fence_char and len(m.group(1)) >= fence_len
++                    and ln[m.end():].strip() == ""):
++                in_fence = False
++            out.append((ln, False))                       # fence 内（含起止行）非 live
++            continue
++        if in_comment:
++            if "-->" in ln:
++                in_comment = False
++            out.append((ln, False))                       # 注释内非 live
++            continue
++        m = _FENCE_RE.match(ln)
++        if m:
++            in_fence, fence_char, fence_len = True, m.group(1)[0], len(m.group(1))
++            out.append((ln, False))                       # fence 起始行非 live
++            continue
++        # 移除本行内成对注释后若仍留悬空 <!-- → 进入跨行注释态（本行仍算 live，标题在 <!-- 前才有意义）
++        if "<!--" in _HTML_COMMENT_RE.sub("", ln):
++            in_comment = True
++        out.append((ln, True))
++    return out
++
++
++def find_section_body(text):
++    """结构感知定位 `## Review 处置` level-2 小节，返回小节体行列表；无该 live 小节 → None。
++    小节体 = 标题行之后到下一个 live level-1/2 标题之前的所有原始行（fence 内伪标题不作边界）。"""
++    annotated = _annotate_lines(text.splitlines())
++    start = None
++    for i, (ln, live) in enumerate(annotated):
++        if not live:
++            continue
++        m = _H2_RE.match(ln)
++        if m and m.group(1).strip() == SECTION_TITLE:
++            start = i
++            break
++    if start is None:
++        return None
++    body = []
++    for ln, live in annotated[start + 1:]:
++        if live and _H12_RE.match(ln):                    # 下一 level-1/2 标题 = 小节结束
++            break
++        body.append(ln)
++    return body
++
++
++def _has_entity_content(body_lines):
++    """小节体去除 HTML 注释后，是否残留实体内容（非空白、非水平分隔线）。
++    fenced 代码块内的真实内容计为内容（不剔除 fence 体）；仅剔注释/水平线/空白（脚手架/排版噪声）。"""
++    joined = _HTML_COMMENT_RE.sub("", "\n".join(body_lines))
++    for ln in joined.splitlines():
++        if not ln.strip():
++            continue
++        if _THEMATIC_RE.match(ln):
++            continue
++        return True
++    return False
++
++
++def classify(text):
++    """三前置 → 唯一 reason_code：小节缺失 / 仅脚手架空 / 存在且非空（逐条未核）。"""
++    body = find_section_body(text)
++    if body is None:
++        return REASON_MISSING
++    if not _has_entity_content(body):
++        return REASON_EMPTY
++    return REASON_OK
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(
++        description="roadmap Review 处置小节校验器（确定性·纯 stdlib·fail-closed·门控外置）")
++    ap.add_argument("--task-log", required=True, help="roadmap task-log.md 路径")
++    args = ap.parse_args(argv)
++    path = Path(args.task_log)
++    try:
++        if not path.exists():
++            raise EmitError(f"task-log 不存在: {path}")
++        if not path.is_file():
++            raise EmitError(f"task-log 非普通文件: {path}")
++        try:
++            text = path.read_text(encoding="utf-8")
++        except (OSError, UnicodeDecodeError) as e:
++            raise EmitError(f"task-log 不可读: {e}")
++        code = classify(text)
++    except EmitError as e:
++        print(f"[review_disposition_check] FAIL: {e}", file=sys.stderr)  # 坏输入：stderr FAIL、无 stdout
++        return EXIT_FAIL
++    print(code)                                                          # reason_code 落 stdout（含 missing/empty）
++    return EXIT_OK if code == REASON_OK else EXIT_FAIL                   # OK exit0；其余非零（stdout 载码，区别于 stderr FAIL）
++
++
++if __name__ == "__main__":
++    sys.exit(main())

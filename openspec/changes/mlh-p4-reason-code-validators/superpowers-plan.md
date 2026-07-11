@@ -73,7 +73,7 @@ impl-pipeline: tickets
 
 三校验器+测试落 bundle 权威源后推下游、跑全套件、对本仓真实产物 dogfood 只读验证——确保权威源与下游脚本本体一致、既有 tools 套件不回归、三校验器对本仓真实数据无误报（尤其 T82 对本仓真实 task-log 的收尾句不假阳、hr_tg 用本仓 change 的模型判定集跑通）。
 
-- [ ] dev checkout `bash setup.sh` 同步 canonical；`sdflow-init update` 推下游，权威源↔下游脚本本体一致（下游无 tests/）
-- [ ] 权威源 tools 全套件 `pytest -W error` 全绿、0 warning（承 4.C 门槛）
-- [ ] 本仓 dogfood：三校验器各对本仓真实产物只读跑一遍，T82 对真实 task-log 不假阳
-- [ ] 验收门 pytest 指向权威源 `sdflow-init/assets/workflow/tools/tests/`（非不存在的下游 tests/）
+- [x] dev checkout `bash setup.sh` 同步 canonical；`sdflow-init update` 推下游，权威源↔下游脚本本体一致（下游无 tests/）
+- [x] 权威源 tools 全套件 `pytest -W error` 全绿、0 warning（承 4.C 门槛）
+- [x] 本仓 dogfood：三校验器各对本仓真实产物只读跑一遍，T82 对真实 task-log 不假阳
+- [x] 验收门 pytest 指向权威源 `sdflow-init/assets/workflow/tools/tests/`（非不存在的下游 tests/）
