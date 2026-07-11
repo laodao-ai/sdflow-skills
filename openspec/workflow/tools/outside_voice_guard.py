@@ -18,6 +18,7 @@ _S1_RE = re.compile(r'<!--\s*sdflow:step1-broad-review\s+v1\b(.*?)-->')
 _OV_ANCHOR_RE = re.compile(r'<!--\s*sdflow:outside-voice\s+v1\b(.*?)-->')
 _ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
 _CODEX_LABEL_RE = re.compile(r'\bcodex#(\d+)\b')                 # adr/0002 codex#N 标签约定（次选解析路径）
+_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')                 # CommonMark fence：0-3 空格缩进 + ≥3 同字符 marker
 
 
 class EmitError(Exception):
@@ -25,9 +26,32 @@ class EmitError(Exception):
     pass
 
 
+def _fence_outside_lines(text):
+    """产出 fence 外行（CommonMark：0-3 空格缩进 + ≥3 同字符 marker 成对开合，闭合行 marker 后仅空白）。
+    口径与姊妹校验器 anchor_lint.fence_outside_lines / review_disposition_check._annotate_lines 一致——
+    D5 铁律：跨模块口径本文件内重实现，MUST NOT import。防 fence 内的文档示例锚被误算（adr/0018 输出诚实）。"""
+    fence = None
+    for ln in text.splitlines():
+        m = _FENCE_RE.match(ln)
+        if fence is None:
+            if m:
+                fence = (m.group(1)[0], len(m.group(1))); continue
+            yield ln
+        else:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1] and ln[m.end():].strip() == "":
+                fence = None
+            continue
+
+
+def _fence_outside_text(text):
+    """fence 外行 join 回文本；锚为单行、join 保行完整，fenced 锚被整块剔除（不参与匹配）。"""
+    return "\n".join(_fence_outside_lines(text))
+
+
 def parse_mode(text):
-    """抓 step1-broad-review 锚 mode（我们的锚，严格）。锚缺失/缺 mode/mode 非枚举 → EmitError。"""
-    m = _S1_RE.search(text)
+    """抓 step1-broad-review 锚 mode（我们的锚，严格）。锚缺失/缺 mode/mode 非枚举 → EmitError。
+    仅匹配 fence 外锚——fence 内的示例锚（文档演示）不得被取（与 parse_codex_findings 同口径）。"""
+    m = _S1_RE.search(_fence_outside_text(text))
     if not m:
         raise EmitError("step1-broad-review 锚缺失或格式不符")
     mode = dict(_ATTR_RE.findall(m.group(1))).get("mode")
@@ -60,7 +84,9 @@ def source_max_mtime(change_dir):
 
 def parse_codex_findings(text):
     """best-effort 解析 codex findings 计数。返回 int（含 0）；解析不出任何 codex 段 → None（→ section-not-found）。
-    codex 段外部所有（adr/0002:21），格式漂移不崩溃、fail-closed 到 None。"""
+    codex 段外部所有（adr/0002:21），格式漂移不崩溃、fail-closed 到 None。
+    仅匹配 fence 外锚 / codex#N 标签——fence 内的文档示例锚不得计入 findings（否则 outside-voice 层被静默当有效复用跳过，违 adr/0018）。"""
+    text = _fence_outside_text(text)
     total = None
     for m in _OV_ANCHOR_RE.finditer(text):
         attrs = dict(_ATTR_RE.findall(m.group(1)))

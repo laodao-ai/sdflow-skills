@@ -25,7 +25,8 @@ _FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')  # code fence 起止（fence-awa
 _H2_RE = re.compile(r'^##[ \t]+(.+?)[ \t]*$')    # level-2 标题（`### ` 不匹配：第三字符非空白）
 _H12_RE = re.compile(r'^#{1,2}[ \t]')            # level-1/2 标题（小节边界；level-3 不算边界=属小节内）
 _THEMATIC_RE = re.compile(r'^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$')  # 水平分隔线 --- / *** / ___
-_HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)              # HTML 注释（跨行）
+_HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)              # HTML 注释（非贪婪；结构定位用：标题行行首是否落注释内）
+_HTML_COMMENT_GREEDY_RE = re.compile(r'<!--.*-->', re.DOTALL)        # HTML 注释（贪婪；空判用：注释体含 --> 记号的模版例整体视作注释，见 _has_entity_content）
 
 
 class EmitError(Exception):
@@ -34,9 +35,11 @@ class EmitError(Exception):
 
 
 def _annotate_lines(lines):
-    """逐行标注 (line, is_live)：is_live = 不在 code fence 内、且不在 HTML 注释内的行。
+    """逐行标注 (line, is_live, in_fence)：is_live = 不在 code fence 内、且不在 HTML 注释内的行；
+    in_fence = 该行属 code fence（含起止行）。
     fence 用 ``` / ~~~ 成对跟踪；HTML 注释按 <!-- ... --> 跨行跟踪（fence 内不解释注释）。
-    仅用于「结构定位」（标题/边界识别）——fence 内的伪标题、注释里的伪标题均非 live，不被当作小节。"""
+    用于「结构定位」（标题/边界识别，看 is_live）与「空判」（fence 体计为内容，看 in_fence）——单一逐行态，
+    fence 内的伪标题、注释里的伪标题均非 live，不被当作小节。"""
     out = []
     in_fence, fence_char, fence_len = False, None, 0
     in_comment = False
@@ -46,22 +49,22 @@ def _annotate_lines(lines):
             if (m and m.group(1)[0] == fence_char and len(m.group(1)) >= fence_len
                     and ln[m.end():].strip() == ""):
                 in_fence = False
-            out.append((ln, False))                       # fence 内（含起止行）非 live
+            out.append((ln, False, True))                 # fence 内（含起止行）非 live、in_fence
             continue
         if in_comment:
             if "-->" in ln:
                 in_comment = False
-            out.append((ln, False))                       # 注释内非 live
+            out.append((ln, False, False))                # 注释内非 live
             continue
         m = _FENCE_RE.match(ln)
         if m:
             in_fence, fence_char, fence_len = True, m.group(1)[0], len(m.group(1))
-            out.append((ln, False))                       # fence 起始行非 live
+            out.append((ln, False, True))                 # fence 起始行非 live、in_fence
             continue
         # 移除本行内成对注释后若仍留悬空 <!-- → 进入跨行注释态（本行仍算 live，标题在 <!-- 前才有意义）
         if "<!--" in _HTML_COMMENT_RE.sub("", ln):
             in_comment = True
-        out.append((ln, True))
+        out.append((ln, True, False))
     return out
 
 
@@ -70,7 +73,7 @@ def find_section_body(text):
     小节体 = 标题行之后到下一个 live level-1/2 标题之前的所有原始行（fence 内伪标题不作边界）。"""
     annotated = _annotate_lines(text.splitlines())
     start = None
-    for i, (ln, live) in enumerate(annotated):
+    for i, (ln, live, _fence) in enumerate(annotated):
         if not live:
             continue
         m = _H2_RE.match(ln)
@@ -80,7 +83,7 @@ def find_section_body(text):
     if start is None:
         return None
     body = []
-    for ln, live in annotated[start + 1:]:
+    for ln, live, _fence in annotated[start + 1:]:
         if live and _H12_RE.match(ln):                    # 下一 level-1/2 标题 = 小节结束
             break
         body.append(ln)
@@ -89,9 +92,19 @@ def find_section_body(text):
 
 def _has_entity_content(body_lines):
     """小节体去除 HTML 注释后，是否残留实体内容（非空白、非水平分隔线）。
-    fenced 代码块内的真实内容计为内容（不剔除 fence 体）；仅剔注释/水平线/空白（脚手架/排版噪声）。"""
-    joined = _HTML_COMMENT_RE.sub("", "\n".join(body_lines))
-    for ln in joined.splitlines():
+    与 find_section_body 共用 _annotate_lines 的 fence/注释逐行态（统一注释模型，杜绝两套漂移）：
+    ① fence 内真实代码内容计为实体内容（不剔 fence 体，看 in_fence）；
+    ② 非 fence 行拼回后去 HTML 注释——用**贪婪** _HTML_COMMENT_GREEDY_RE：模版脚手架注释体常含 `-->` 记号
+       （如示例「例 F1 --> 采纳」），非贪婪会在首个 `-->` 早闭、把残余脚手架文字当实体内容 → 假绿；
+       gate 语义下「空」是 fail-closed 安全侧（判空=退出非零逼人补真实处置，判非空=放行=假绿有害），
+       故整段 `<!-- … -->` 视作注释、偏判空。剔水平分隔线/空白后仍有实体行 → 非空。"""
+    annotated = _annotate_lines(body_lines)
+    for ln, _live, in_fence in annotated:                 # ① fence 体真实内容 → 实体内容
+        if in_fence and ln.strip():
+            return True
+    nonfence = "\n".join(ln for ln, _live, in_fence in annotated if not in_fence)
+    stripped = _HTML_COMMENT_GREEDY_RE.sub("", nonfence)  # ② 贪婪去注释（含 --> 记号的脚手架整体剔除）
+    for ln in stripped.splitlines():
         if not ln.strip():
             continue
         if _THEMATIC_RE.match(ln):

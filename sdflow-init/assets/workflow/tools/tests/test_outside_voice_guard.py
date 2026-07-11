@@ -161,6 +161,25 @@ def test_claude_fallback_runner_not_codex(tmp_path):
     assert m.classify(rp, cd) == "section-not-found"  # 非 codex runner 不计入 codex 段
 
 
+# --- fence 感知：fence 内的示例锚不参与匹配（与姊妹校验器 anchor_lint 同口径）---
+
+def test_fenced_codex_anchor_not_counted_findings(tmp_path):
+    """fence 内的 runner=codex 示例锚（文档演示）不得计入 findings——真实无 codex 锚 → section-not-found，非 none（假绿）。"""
+    m = _mod()
+    fenced = "```\n" + _ov_anchor(2, runner="codex") + "\n```\n"
+    rp, cd = _make_change(tmp_path, codex=False, extra_body=fenced)   # 无真实 codex 锚，仅 fence 内示例
+    assert m.classify(rp, cd) == "section-not-found"
+
+
+def test_fenced_step1_anchor_not_taken_as_mode(tmp_path):
+    """fence 内的 simulated step1 示例锚不得被 parse_mode 取——fence 外真实 native 锚为准 → 不判 simulated-source。"""
+    m = _mod(); rp, cd = _make_change(tmp_path)
+    body = ("```\n" + _mode_anchor("simulated") + "\n```\n"
+            + _mode_anchor("native") + "\n# review\n" + _ov_anchor(1) + "\n")
+    rp.write_text(body, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
+    assert m.classify(rp, cd) == "none"               # fence 内 simulated 被跳过 → 取 fence 外 native
+
+
 # --- 纯 stdlib / 无 subprocess / 无 git fork（静态断言，comment/docstring 安全）---
 
 def test_no_subprocess_no_os_import_ast():

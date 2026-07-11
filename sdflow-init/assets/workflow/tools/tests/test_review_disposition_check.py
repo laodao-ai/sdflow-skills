@@ -84,6 +84,25 @@ def test_section_multiline_comment_stripped_is_empty():
     assert _classify_text(text) == EMPTY
 
 
+def test_section_scaffold_comment_internal_arrow_close_is_empty():
+    """小节仅一条脚手架注释、注释体含 `-->` 记号（如示例「例 F1 --> 采纳」）——统一注释模型整体视作注释 → EMPTY，
+    非贪婪残余脚手架文字曾被误当实体内容 → 假绿 OK（本用例锁定该修复）。"""
+    text = ("# t\n\n## Review 处置\n\n"
+            "<!-- 例 F1 --> 采纳：写明文件与节 -->\n\n"
+            "## next\n")
+    assert _classify_text(text) == EMPTY
+
+
+def test_section_multiline_scaffold_comment_internal_arrow_is_empty():
+    """跨行脚手架注释、中间行含 `-->` 记号——整体视作注释 → EMPTY（非贪婪会早闭泄漏残余脚手架文字=假绿）。"""
+    text = ("# t\n\n## Review 处置\n\n"
+            "<!-- review 逐条追加：\n"
+            "     例 F1 --> 采纳：写明文件与节\n"
+            "     另一条脚手架 -->\n\n"
+            "## next\n")
+    assert _classify_text(text) == EMPTY
+
+
 def test_section_with_bullet_content_is_ok():
     text = "# t\n\n## Review 处置\n\n<!-- 脚手架 -->\n- F1 采纳：已改 design。\n\n## next\n"
     assert _classify_text(text) == OK
