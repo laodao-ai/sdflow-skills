@@ -71,7 +71,7 @@ flowchart TD
 - **度量锚落锚**（受 config `metrics.enabled` 门控，缺省/`false` 整体跳过）：用 Step4 裁决计数构造的 roster+findings 调
   `lens_metric_emit.py --layer code-review`——**exit 0 才**把 stdout（逐镜 lens-metric 锚行）落进报告；exit ≠0（fail-closed）→
   本段不落、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。分类正确性 + roster 完备性 + findings 誊写准确仍是主 session 信任边界。
-- **锚行自检** = `anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review`：机验四类正文 v1 锚
+- **锚行自检** = `anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --trigger-catalog $RULES_ROOT/trigger-catalog.md`：机验四类正文 v1 锚
   （step1-broad-review / hr-tg / outside-voice / lens-metric）存在性 + lens-metric 字段/枚举/sev/`layer==--layer`/计数 int≥0；
   退出码非 0（1=违规 / 2=fail-closed）即本步报错阻塞，MUST NOT 静默吞。由**同一落锚的主 session 自跑、非独立外部门**——
   只挡「同会话内忘记跑这步」，挡不住「整段跳过」；数值一致性（findings/采纳/独立与实收数吻合）是主 session 信任边界、非机械可验。

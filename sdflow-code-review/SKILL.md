@@ -124,7 +124,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
   **不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。**保留残余信任边界声明**：分类正确性 + roster 完备性 +
   findings JSON 誊写准确仍是主 session 信任边界，emitter 只保证「给定输入的确定性归约」。
 - **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调
-  `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --root "$(git rev-parse --show-toplevel)"`——
+  `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——
   退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚（Step1
   broad-review / hr-tg / outside-voice / **lens-metric**）存在性 + lens-metric 字段/枚举/sev/layer==--layer/
   计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。

@@ -137,7 +137,7 @@
 | 锚 | 字段 | 取值域 |
 |----|------|--------|
 | `step1-broad-review` | `mode` | `native` \| `simulated` |
-| `hr-tg` | `hit`, `evidence` | `hit="TG-xx,…"` \| `"none"`；`evidence`=判据触发点（命中必填） |
+| `hr-tg` | `hit`, `declared`, `evidence` | `hit="TG-xx,…"` \| `"none"`（脚本重算 = `declared∩HR-TG`，M2）；`declared`=模型判定命中集（canonical，adr/0018 输入可见）；`evidence`=判据触发点（`hit≠none` 必填非空，M4） |
 | `outside-voice` | `site`,`guard`,`runner`,`reason_code`,`findings`,`truncated` | `runner` ∈ `codex`\|`claude-fallback`；`guard` ∈ none\|file-missing\|section-not-found\|zero-findings\|stale\|simulated-source；`truncated` ∈ true\|false |
 | `lens-metric` | `layer`,`lens`,`runner`,`site`,`findings`,`采纳`,`裁掉`,`defer`,`独立`,`sev` | 见下表（受 config `metrics.enabled` 门控） |
 
@@ -161,7 +161,7 @@
 | 脚本 | 阶段 | 触发 skill | 检查字段/输入 | 判据 & 退出码 | 分发 | file:line |
 |------|------|-----------|--------------|--------------|------|-----------|
 | **ship_gate.py** | ship（全程判官） | sdflow-ship | 四件套路径 · plan 号集 · 三报告 frontmatter · checkpoint/复选框完成集 · 归档 verify 锚 | 顺序门链；**0** 推进 / **3** REFUSE / **4** BLOCKED / **5** VFAIL / **6** UNKNOWN | skill-local | `:32-44`,`:647` |
-| **anchor_lint.py** | spec-review / code-review | 两审 | 报告文本 + `--layer`；4 类锚 + lens-metric 字段/enum/sev/计数 | fence-aware 行级；**0** CLEAN / **1** 违规 / **2** fail-closed | bundle | `:138`,`:163` |
+| **anchor_lint.py** | spec-review / code-review | 两审 | 报告文本 + `--layer` + 必需 `--trigger-catalog`（缺传→fail-closed）；4 类锚 + lens-metric 字段/enum/sev/计数；hr-tg 锚 M1（`hit=`/`declared=` 在场）+ M2（重算 `hit == declared∩HR-TG`）+ M4（`hit≠none ⟹ evidence` 非空）+ M-new（`declared`/`hit` 每 TG ∈ trigger-catalog 全集） | fence-aware 行级；**0** CLEAN / **1** 违规 / **2** fail-closed | bundle | `:138`,`:163`,`:365` |
 | **trivial_shape.py** | code-review（Step2 前） | sdflow-code-review | `git diff` 形状 · 行为面路径清单 · 文档扩展名 | 保守偏 NOT_EXEMPT；**0** EXEMPT / **1** 必跑 / **2** ERR→必跑 | bundle | `:183` |
 | **lens_metric_aggregate.py** | retro | sdflow-retro（import） | 归档 lens-metric 锚 · layer/lens enum · 五计数 | fence-aware 聚合，view-only（0） | skill-local | `:50`,`:70` |
 | **retro_report.py** | retro | sdflow-retro | git 历史（墙钟）· checkpoint→stage 映射 · lens-metric/hr-tg 锚 | 成本×价值 join，只呈现不决策（0） | skill-local | `:146`,`:356` |
