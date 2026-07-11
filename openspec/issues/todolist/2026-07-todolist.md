@@ -141,6 +141,11 @@
 | T133 | `grill 提示自动生成（sdflow-spec-review 门 / 阶段提示）` | 提示/触发 grill 时自动生成完整可复制 prompt，但须『脚手架完整+内容轻播种』校准：grill-with-docs=/grilling(relentless逐branch独立走设计树,一次一问,每问给推荐,事实自查决策抛人)+/domain-modeling。auto-prompt 只应含调用脚手架(change dir/全深度非wayfinder/MUST NOT skip/doc路径 adr→openspec/adr·术语→CONTEXT.md·INDEX/[grill-amendment]/收敛才提交)；MUST NOT 预装已分析的弱点清单+推荐(会 anchor+短路 grilling 独立发现盲点的核心价值,让它只 validate 我的结论而非找第6条)。至多给一句非绑定怀疑点并注明『非边界,去找我漏的』。关联 T132(grill 未跑 fail-closed 门,该门 REFUSE 时正好 emit 此 prompt)+T28(下一阶段附完整可复制 prompt)。 | 代码质量 | OPEN | 2026-07-11 09:14 | - |  |
 | T134 | `domain-modeling / grill-with-docs 领域文档路径感知` | domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。 | 代码质量 | OPEN | 2026-07-11 09:31 | - |  |
 | T135 | `sdflow-implement` | superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化 | 代码质量 | OPEN | 2026-07-11 12:48 | - |  |
+| T136 | `anchor_lint` | anchor_lint 只校验 hr-tg 锚字段在场、不重算交集——手改 hit=none/declared=TG-04 可绕过必开 cross-model（codex 冷审 high） | 基础设施 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
+| T137 | `config.yaml` | impl-pipeline:tickets 翻键注释写'首个试点(mlh-p4)'误导——mlh-p4 已由 plan marker 自锁，翻键实际只影响 scoped-test-per-task 及未来 change（对抗镜 medium） | 基础设施 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
+| T138 | `hr_tg_intersect` | hr_tg parse_tg_set 静默吞空 token（'TG-04,,TG-16'/',' 都过）+ catalog 成员用宽松 TG-\d+（'TG-04x'→TG-04）（codex medium） | 代码质量 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
+| T139 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） | 代码质量 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
+| T140 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 代码质量 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
 
 ---
 
@@ -1211,3 +1216,83 @@
 **动机**：ship_gate.py 把 superpowers-plan.md 作为唯一识别的完成判据契约文件名；tickets 管线（sdflow-implement）为复用零改动的 gate，被迫把 ticket 也写进 superpowers-plan.md（借壳）。文件名与实际管线（tickets）语义不符，对读者误导；gate 与两条管线三处对该文件名的依赖是隐式耦合。
 
 **思路**：把 plan 文件名从 gate 硬编码提为可配置/可发现（按 frontmatter marker 或 config 决定文件名，或 gate 扫描 openspec/changes/{change}/ 下带 impl-pipeline frontmatter 的任一 *.md）。属 ship 链序注释里的『emit 串 Phase B 根治』范畴。改动须同步 ship_gate.py TAG_RE/解析、impl_route.py、sdflow-implement/sdflow-ship 三处文档，保持向后兼容既有 superpowers-plan.md。
+
+---
+
+## T136: anchor_lint 重算 hr-tg 交集以堵手改绕过 cross-model
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `anchor_lint` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
+
+**动机**：codex 跨模型冷审：check_hr_tg 只断言 hit/declared 字段存在、接受任意值。正常流 hit 与 declared 都由 hr_tg_intersect.py 一次 emit 不会漂移，但手改报告写 hit=none declared=TG-04（TG-04 属 HR-TG）能通过 lint、静默跳过必开的领域 cross-model。属手改越权通道(git 留痕)的加固缺口。
+
+**思路**：让 anchor_lint 接 --trigger-catalog 路径，严格解析 declared、重算 declared∩HR-TG、要求 hit 与结果完全一致，并拒重复/畸形 hr-tg 锚。注意这是把 anchor_lint 从'字段在场校验'扩到'重算校验'，越出本 change 的机械-presence 设计边界，需先定夺是否愿意扩 anchor_lint 职责（adr/0018 机械/判断切分）。
+
+---
+
+## T137: config impl-pipeline 翻键 blast radius 与注释不符，需定夺全局切换 vs 仅试点
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `config.yaml` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
+
+**动机**：对抗镜冷审实证：mlh-p4 的 superpowers-plan.md 已含 impl-pipeline:tickets frontmatter marker，impl_route marker 优先于 config，故翻键对 mlh-p4 冗余；真正被 config=tickets 卷入的是无 plan 的 scoped-test-per-task（实跑 route 得 pipeline=tickets）及所有未来 change。注释'首个试点(mlh-p4)'主动误导读者以为仅 mlh-p4 受影响；CLAUDE.md 记的 pull→setup 反向窗口风险随全局键放大到每个未锁 change。
+
+**思路**：定夺意图：①若仅 pilot mlh-p4→config 键应保持注释态（mlh-p4 已自锁无需全局键），撤回翻键；②若确为仓级前向切换→改注释去掉误导性单-change 框定、明确 scoped-test-per-task 及后续全部 change 入 tickets。属需用户意图裁断项，hand-off 提请人决。
+
+---
+
+## T138: hr_tg_intersect 收紧坏输入解析（空 token/前后逗号/宽松成员正则）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `hr_tg_intersect` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
+
+**动机**：codex 冷审：声称坏输入 fail-closed，实际 parse_tg_set 过滤空 token 后 'TG-04,,TG-16' 返合法列表、单个 ',' 视作空集；catalog 成员抽取用宽松 TG-\d+ 令 'TG-04x' 被当 TG-04。畸形被静默正规化而非 fail-closed，可能掩盖模型侧记号错误（declared= 虽暴露但机械层不挡）。
+
+**思路**：仅允许原始空串表示空集；CSV 出现空单元/前后逗号即 EmitError；成员行改边界严格 token 解析，残余/畸形文本 fail-closed。
+
+---
+
+## T139: outside_voice_guard 双 step1 锚一致性校验
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `outside_voice_guard` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
+
+**动机**：codex+对抗镜冷审：规范可能写入两个同源 step1-broad-review 锚，parse_mode 只 .search 取第一个，双锚(native 在前 simulated 在后)静默取 native 忽略 simulated。属构造性/低概率（单锚是常态），但违'数量与 mode 一致否则 fail-closed'的稳健取向。
+
+**思路**：收集所有 fence 外 step1 锚，要求数量与 mode 一致（或至少多锚 mode 冲突时 fail-closed），不静默取首个。
+
+---
+
+## T140: anchor_lint declared= 必填收紧的向后兼容/迁移
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `anchor_lint` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
+
+**动机**：对抗镜冷审：check_hr_tg 令 declared 成必填字段，是对 hr-tg 锚 schema 的破坏性收紧无 grace。现存两个活跃 change 的 spec-review-report 带旧格式锚(hit=+evidence=无declared)，若被重 lint(--layer spec-review)会 exit1 阻塞。仅 low：实测无既有流程重 lint spec-review-report.md(code-review 只 lint code-review-report.md、done/verify 不重跑)，属过渡残留非活跃阻塞路径；转 consumer 仓若有旧报告落在重 lint 路径会硬失败。
+
+**思路**：评估是否给 declared 一个迁移 grace（缺失降级警告而非硬失败），或确认旧报告不会被重 lint 后接受现状。
