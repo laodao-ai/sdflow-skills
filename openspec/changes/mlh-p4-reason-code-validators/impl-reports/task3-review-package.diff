@@ -1,0 +1,563 @@
+diff --git a/sdflow-init/assets/workflow/tools/review_disposition_check.py b/sdflow-init/assets/workflow/tools/review_disposition_check.py
+new file mode 100644
+index 0000000..eee22b2
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/review_disposition_check.py
+@@ -0,0 +1,137 @@
++#!/usr/bin/env python3
++"""review_disposition_check — 确定性 roadmap Review 处置小节校验器（mlh-p4·T82）。
++读一份 roadmap task-log，fence/结构感知地断言 `## Review 处置` 小节存在且非空（非仅脚手架注释/空白），
++归约出唯一 reason_code(三枚举)：section-missing | section-empty | section-ok-DISPOSITION-UNCHECKED。
++纯 stdlib、无 subprocess、门控外置（不读 config）；文件缺失/不可读 fail-closed all-or-nothing。
++
++设计边界（design.md D4 / spec RDC）：
++- MUST NOT naive-grep 那个「已处置」的否定词子串——收尾声明句「本小节无『…』条目」含该子串却恰是合规态；
++  本脚本根本不匹配该子串，靠「小节存在 + 去注释后非空」的结构判定绕开自指陷阱（memory gate-substring-detection-dogfood）。
++- MUST NOT 断言逐条已处置（格式三实例不统一、无字面 token、机械不可达）——归模型；
++  输出码尾缀 -DISPOSITION-UNCHECKED 显式点明逐条未核（adr/0018 输出诚实，防 present 被误读为已核=假绿）。
++- fence 感知：`## Review 处置` 若仅出现在 code fence 内（示例文本）不算小节存在；
++  小节体的「非空」判定去除 HTML 注释 / 水平分隔线 / 空白后再看是否有实体内容。
++承 4.C lens_metric_emit 形态（EmitError + EXIT_OK/EXIT_FAIL、跨模块口径重实现不 import）。"""
++import argparse, re, sys
++from pathlib import Path
++
++EXIT_OK, EXIT_FAIL = 0, 1
++REASON_OK = "section-ok-DISPOSITION-UNCHECKED"   # 存在+非空达成；逐条处置显式未核
++REASON_MISSING = "section-missing"
++REASON_EMPTY = "section-empty"
++
++SECTION_TITLE = "Review 处置"                      # 模版 task-log-template.md:62 规定的 level-2 标题
++_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')  # code fence 起止（fence-aware，含缩进容忍）
++_H2_RE = re.compile(r'^##[ \t]+(.+?)[ \t]*$')    # level-2 标题（`### ` 不匹配：第三字符非空白）
++_H12_RE = re.compile(r'^#{1,2}[ \t]')            # level-1/2 标题（小节边界；level-3 不算边界=属小节内）
++_THEMATIC_RE = re.compile(r'^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$')  # 水平分隔线 --- / *** / ___
++_HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)              # HTML 注释（跨行）
++
++
++class EmitError(Exception):
++    """坏输入 fail-closed（task-log 文件缺失 / 非普通文件 / 解码失败）。"""
++    pass
++
++
++def _annotate_lines(lines):
++    """逐行标注 (line, is_live)：is_live = 不在 code fence 内、且不在 HTML 注释内的行。
++    fence 用 ``` / ~~~ 成对跟踪；HTML 注释按 <!-- ... --> 跨行跟踪（fence 内不解释注释）。
++    仅用于「结构定位」（标题/边界识别）——fence 内的伪标题、注释里的伪标题均非 live，不被当作小节。"""
++    out = []
++    in_fence, fence_char, fence_len = False, None, 0
++    in_comment = False
++    for ln in lines:
++        if in_fence:
++            m = _FENCE_RE.match(ln)
++            if (m and m.group(1)[0] == fence_char and len(m.group(1)) >= fence_len
++                    and ln[m.end():].strip() == ""):
++                in_fence = False
++            out.append((ln, False))                       # fence 内（含起止行）非 live
++            continue
++        if in_comment:
++            if "-->" in ln:
++                in_comment = False
++            out.append((ln, False))                       # 注释内非 live
++            continue
++        m = _FENCE_RE.match(ln)
++        if m:
++            in_fence, fence_char, fence_len = True, m.group(1)[0], len(m.group(1))
++            out.append((ln, False))                       # fence 起始行非 live
++            continue
++        # 移除本行内成对注释后若仍留悬空 <!-- → 进入跨行注释态（本行仍算 live，标题在 <!-- 前才有意义）
++        if "<!--" in _HTML_COMMENT_RE.sub("", ln):
++            in_comment = True
++        out.append((ln, True))
++    return out
++
++
++def find_section_body(text):
++    """结构感知定位 `## Review 处置` level-2 小节，返回小节体行列表；无该 live 小节 → None。
++    小节体 = 标题行之后到下一个 live level-1/2 标题之前的所有原始行（fence 内伪标题不作边界）。"""
++    annotated = _annotate_lines(text.splitlines())
++    start = None
++    for i, (ln, live) in enumerate(annotated):
++        if not live:
++            continue
++        m = _H2_RE.match(ln)
++        if m and m.group(1).strip() == SECTION_TITLE:
++            start = i
++            break
++    if start is None:
++        return None
++    body = []
++    for ln, live in annotated[start + 1:]:
++        if live and _H12_RE.match(ln):                    # 下一 level-1/2 标题 = 小节结束
++            break
++        body.append(ln)
++    return body
++
++
++def _has_entity_content(body_lines):
++    """小节体去除 HTML 注释后，是否残留实体内容（非空白、非水平分隔线）。
++    fenced 代码块内的真实内容计为内容（不剔除 fence 体）；仅剔注释/水平线/空白（脚手架/排版噪声）。"""
++    joined = _HTML_COMMENT_RE.sub("", "\n".join(body_lines))
++    for ln in joined.splitlines():
++        if not ln.strip():
++            continue
++        if _THEMATIC_RE.match(ln):
++            continue
++        return True
++    return False
++
++
++def classify(text):
++    """三前置 → 唯一 reason_code：小节缺失 / 仅脚手架空 / 存在且非空（逐条未核）。"""
++    body = find_section_body(text)
++    if body is None:
++        return REASON_MISSING
++    if not _has_entity_content(body):
++        return REASON_EMPTY
++    return REASON_OK
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(
++        description="roadmap Review 处置小节校验器（确定性·纯 stdlib·fail-closed·门控外置）")
++    ap.add_argument("--task-log", required=True, help="roadmap task-log.md 路径")
++    args = ap.parse_args(argv)
++    path = Path(args.task_log)
++    try:
++        if not path.exists():
++            raise EmitError(f"task-log 不存在: {path}")
++        if not path.is_file():
++            raise EmitError(f"task-log 非普通文件: {path}")
++        try:
++            text = path.read_text(encoding="utf-8")
++        except (OSError, UnicodeDecodeError) as e:
++            raise EmitError(f"task-log 不可读: {e}")
++        code = classify(text)
++    except EmitError as e:
++        print(f"[review_disposition_check] FAIL: {e}", file=sys.stderr)  # 坏输入：stderr FAIL、无 stdout
++        return EXIT_FAIL
++    print(code)                                                          # reason_code 落 stdout（含 missing/empty）
++    return EXIT_OK if code == REASON_OK else EXIT_FAIL                   # OK exit0；其余非零（stdout 载码，区别于 stderr FAIL）
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_empty_template.md b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_empty_template.md
+new file mode 100644
+index 0000000..e3b584f
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_empty_template.md
+@@ -0,0 +1,32 @@
++<!-- FIXTURE 来源：sdflow-roadmap/references/task-log-template.md（真实 in-repo 模版，行 1-78 摘录）。
++     用途：section-empty 正例——`## Review 处置` 存在但正文仅脚手架 HTML 注释（含「未处置条目」子串），无实体内容。
++     陷阱点：脚手架注释里出现「不存在未处置条目」——结构感知校验器去注释后判空，不得因该子串误判为有内容。-->
++# {项目名} 任务日志
++
++> 本文件按时间**倒序**记录 `roadmap.md` 中每个已完成子任务的状态、耗时、问题、调整。
++
++## 使用约定
++
++每完成一个 roadmap.md 中的子任务（或子任务组），追加一条记录：
++
++```markdown
++## YYYY-MM-DD
++### [阶段 X] <任务标题>
++- **状态**: ✅ 完成 / ⚠️ 部分完成
++```
++
++---
++
++## Review 处置
++
++<!-- review（/plan-eng-review 或 /autoplan）产出的每条 issue 在此逐条追加一行，状态 ∈ 三态之一：
++     - ✅ 采纳：写明已在哪个文件哪一节改动
++     - ❌ 拒绝：写明拒绝理由（不得空白"不采纳"，理由必须可供后人复核）
++     - ⏭ 延后：写明延后到哪个阶段/哪个后续变更处理
++-->
++
++<!-- 本小节不存在未处置条目是收尾 checklist ①的硬前提；小节缺失视为未通过（不得以"小节不存在=无未处置条目"真空通过）。 -->
++
++<!-- 日志条目从这里开始，最新的放最上面 -->
++
++## YYYY-MM-DD
+diff --git a/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_fence_trap.md b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_fence_trap.md
+new file mode 100644
+index 0000000..af6d934
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_fence_trap.md
+@@ -0,0 +1,27 @@
++<!-- FIXTURE 来源：基于真实 in-repo task-log 的 `## 使用约定` ```markdown 示例块结构派生。
++     用途：fence 感知负例——`## Review 处置` 仅作为示例文本出现在 code fence 内，非真实小节。
++     结构感知校验器 MUST NOT 把 fence 内的伪标题当作小节存在 → 应判 section-missing。-->
++# workflow 机械层固化 任务日志
++
++> 本文件按时间**倒序**记录子任务状态。
++
++## 使用约定
++
++task-log 的推荐骨架如下（示例，非真实小节）：
++
++```markdown
++## YYYY-MM-DD
++### [阶段 X] <任务标题>
++
++## Review 处置
++- [issue 摘要] ✅ 采纳 —— 已在 design.md 改动
++```
++
++以上为模版示例；真实小节尚未建立。
++
++---
++
++## 2026-07-08
++
++### [阶段 1] 骨架
++- **状态**: ✅ 完成
+diff --git a/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_missing.md b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_missing.md
+new file mode 100644
+index 0000000..d3b1e2b
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_missing.md
+@@ -0,0 +1,22 @@
++<!-- FIXTURE 来源：基于真实 in-repo task-log 结构（openspec/roadmaps/*/task-log.md 头部）派生，删去 `## Review 处置` 小节。
++     用途：section-missing 正例——全文无 `## Review 处置` 标题，MUST NOT 真空通过。-->
++# workflow 机械层固化 任务日志
++
++> 本文件按时间**倒序**记录 `roadmap.md` 中每个已完成子任务的状态、耗时、问题、调整。
++
++## 使用约定
++
++每完成一个 roadmap.md 中的子任务追加一条记录。
++
++```markdown
++## YYYY-MM-DD
++### [阶段 X] <任务标题>
++```
++
++---
++
++## 2026-07-08
++
++### [阶段 1] 骨架
++- **状态**: ✅ 完成
++- **备注**: 本 task-log 尚未建立 Review 处置 小节。
+diff --git a/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_bracket_variant.md b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_bracket_variant.md
+new file mode 100644
+index 0000000..cbbbd6a
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_bracket_variant.md
+@@ -0,0 +1,21 @@
++<!-- FIXTURE 来源：openspec/roadmaps/mechanical-layer-hardening/task-log.md 行 53 收尾声明句的**括号变体**——
++     真实句用「」（角括号）；此处逐字换成『』（双角括号）以覆盖 spec.md 场景「本小节无『未处置』状态条目」的括号变体。
++     用途：section-ok-DISPOSITION-UNCHECKED 正例 + 证明校验器括号无关（根本不匹配「未处置」子串，无论何种括号均不假阳）。-->
++# workflow 机械层固化 任务日志
++
++> 按时间倒序记录子任务状态。
++
++## Review 处置
++
++**阶段 3.5 交叉 review：独立冷镜冷审 7 条 finding**
++
++- F1 采纳：design §2 改动。
++- F7 延后：阶段 4 起手时掂量。
++- **归档前复核**：本小节无『未处置』状态条目（F1-F6 采纳并已改文件、F7 显式延后）。
++
++---
++
++## 2026-07-08
++
++### [阶段 1] 骨架
++- **状态**: ✅ 完成
+diff --git a/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_mlh.md b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_mlh.md
+new file mode 100644
+index 0000000..f11c161
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_mlh.md
+@@ -0,0 +1,48 @@
++<!-- FIXTURE 来源：openspec/roadmaps/mechanical-layer-hardening/task-log.md（真实 in-repo task-log，行 1-53 摘录，表格截断至 F1-F2）。
++     用途：section-ok-DISPOSITION-UNCHECKED 正例 + 收尾声明句自指陷阱负例。
++     陷阱点：blockquote 组头「不存在「未处置」状态」（行 35 变体）+ bullet「无「未处置」状态条目」（行 53 变体），
++     均含子串「未处置」——结构感知校验器 MUST NOT 因此假阳。使用约定含 ```markdown fence（内有 `## YYYY-MM-DD`）测 fence 感知。-->
++# workflow 机械层固化 任务日志
++
++> 本文件按时间**倒序**记录 `roadmap.md` 中每个已完成子任务的状态、耗时、问题、调整。
++
++## 使用约定
++
++每完成一个 roadmap.md 中的子任务（或子任务组），追加一条记录：
++
++```markdown
++## YYYY-MM-DD
++### [阶段 X / 任务 X.Y.Z] <任务标题>
++- **状态**: ✅ 完成 / ⚠️ 部分完成 / 🔄 已回滚 / ⏸ 暂停
++```
++
++**要记**：子任务状态变更、与设计预期不一致、需调整 roadmap/design/specs、跨阶段教训。
++
++---
++
++## Review 处置
++
++> 阶段 3.5 交叉 review（`/autoplan` 或 plan-*-review）产出的每条 issue 在此登记，必须标注下列状态之一：
++> - ✅ **采纳**：写明已在哪个文件哪一节改动
++> - ❌ **拒绝**：写明拒绝理由（不得空白「不采纳」）
++> - ⏭ **延后**：写明延后到哪个阶段 / 哪个后续变更
++>
++> **归档前人工复核项**：确认本小节**不存在「未处置」状态**的条目。
++
++<!-- review issue 登记从这里开始 -->
++**阶段 3.5 交叉 review：跑了独立冷镜（2026-07-07，用户选「跑独立冷镜冷审」）**
++
++| # | 严重度 | 冷镜发现 | 处置 |
++|---|---|---|---|
++| F1 | 高 | anchor_lint 复用清单技术错配 | ✅ **采纳**：design §2 技术栈拆两行 + 决策 2 理由 |
++| F2 | 高 | dual-read 关闭条件未定义 | ✅ **采纳**：design 决策 6 加③非对称性 + §6.4 |
++
++- **未见问题维度**（冷镜背书）：scope 未越界、度量锚只补 lint 取舍站得住。
++- **归档前复核**：本小节无「未处置」状态条目（F1-F6 采纳并已改文件、F7 显式延后）。
++
++---
++
++## 2026-07-08
++
++### [阶段 1] 骨架
++- **状态**: ✅ 完成
+diff --git a/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_wco.md b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_wco.md
+new file mode 100644
+index 0000000..9bea803
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/fixtures/task_log_review_ok_wco.md
+@@ -0,0 +1,29 @@
++<!-- FIXTURE 来源：openspec/roadmaps/workflow-cost-optimization/task-log.md（真实 in-repo task-log，行 1-71 摘录，采纳表截断至 A1-A2）。
++     用途：section-ok-DISPOSITION-UNCHECKED 正例 + 收尾声明句自指陷阱负例。
++     陷阱点：blockquote 收尾声明「无「未处置」」（行 69）含子串「未处置」——结构感知校验器 MUST NOT 假阳。-->
++# workflow 成本优化 任务日志
++
++> 按时间**倒序**记录 `roadmap.md` 中每个已完成子任务的状态、耗时、问题、调整。
++
++## 使用约定
++
++每完成一个 roadmap 子任务追加一条（倒序、只记非琐碎与计划外情况）。
++
++---
++
++## 2026-07-07
++
++### [交叉 review] roadmap 四件套 → v2
++- **状态**: ✅ 完成（`/plan-eng-review` 取其实质：codex 冷模型 outside voice + 四维工程审）
++- **产出**: codex 冷审回 30 条 → 主 session 叠加四维审 + 对抗裁决去重为 15 组 → 用户批「全采纳 9 组」。
++
++## Review 处置
++
++> 交叉 review 已跑（plan-eng-review 实质：codex 独立冷审 30 条 + 主 session 四维工程审）。每条 findings 显式标注 采纳/延后/裁掉，无「未处置」。
++
++**✅ 采纳（9 组，已改进 roadmap v2 / design / requirements）**
++
++| # | 源 | 处置 | 落点 |
++|---|---|---|---|
++| A1 | #1 | P1 状态自相矛盾（在途 vs 已 merge）→ 订正为「✅ 已交付」 | roadmap 概览/阶段1/依赖图、design §2.1、task-log |
++| A2 | #11/#26 | 置信过滤丢弃 findings 是安全关键路径，剔出机械快档集 | roadmap 阶段2a、design §2.2 + D5 |
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_review_disposition_check.py b/sdflow-init/assets/workflow/tools/tests/test_review_disposition_check.py
+new file mode 100644
+index 0000000..45977bd
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/test_review_disposition_check.py
+@@ -0,0 +1,199 @@
++import subprocess, sys, ast, importlib.util
++from pathlib import Path
++import pytest
++
++TOOLS = Path(__file__).resolve().parent.parent
++SCRIPT = TOOLS / "review_disposition_check.py"
++FIX = Path(__file__).resolve().parent / "fixtures"
++
++OK = "section-ok-DISPOSITION-UNCHECKED"
++MISSING = "section-missing"
++EMPTY = "section-empty"
++
++
++def _mod():
++    spec = importlib.util.spec_from_file_location("review_disposition_check", SCRIPT)
++    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
++
++
++def _classify_text(text):
++    return _mod().classify(text)
++
++
++def _classify_file(name):
++    return _mod().classify((FIX / name).read_text(encoding="utf-8"))
++
++
++# --- 三 reason_code 各有正例（真实 in-repo task-log 夹具）---
++
++def test_ok_real_mlh(): assert _classify_file("task_log_review_ok_mlh.md") == OK
++def test_ok_real_wco(): assert _classify_file("task_log_review_ok_wco.md") == OK
++def test_empty_real_template(): assert _classify_file("task_log_review_empty_template.md") == EMPTY
++def test_missing_real(): assert _classify_file("task_log_review_missing.md") == MISSING
++
++
++# --- 收尾声明句「无『未处置』」不触发假阳（真实负例夹具，含 fence/结构感知核心）---
++
++def test_closing_declaration_not_false_positive_mlh():
++    """MLH 真实夹具含 blockquote 组头「不存在「未处置」状态」+ bullet「无「未处置」状态条目」两处子串——判 OK 而非误报。"""
++    assert _classify_file("task_log_review_ok_mlh.md") == OK
++
++
++def test_closing_declaration_not_false_positive_wco():
++    """WCO 真实夹具含收尾声明「无「未处置」」——判 OK 而非误报。"""
++    assert _classify_file("task_log_review_ok_wco.md") == OK
++
++
++def test_closing_declaration_bracket_variant_double_corner():
++    """『未处置』（双角括号）括号变体同样不假阳——校验器根本不匹配「未处置」子串，括号无关。"""
++    assert _classify_file("task_log_review_ok_bracket_variant.md") == OK
++
++
++def test_no_naive_substring_match_on_weichuzhi():
++    """静态断言：源码不出现裸子串「未处置」比较（结构感知，非 grep）。"""
++    src = SCRIPT.read_text(encoding="utf-8")
++    assert "未处置" not in src
++
++
++# --- fence 感知：fence 内的伪标题不算小节存在（结构感知负例）---
++
++def test_fence_trap_section_inside_code_fence_is_missing():
++    """`## Review 处置` 仅出现在 ```markdown fence 内（示例文本）→ section-missing，不得当作小节存在。"""
++    assert _classify_file("task_log_review_fence_trap.md") == MISSING
++
++
++# --- 空/脚手架判定：仅 HTML 注释 / 空白 / 水平线 = 空 ---
++
++def test_section_only_html_comments_is_empty():
++    text = "# t\n\n## Review 处置\n\n<!-- 脚手架说明，逐条追加 -->\n\n<!-- 另一条注释 -->\n\n## 2026-07-08\n"
++    assert _classify_text(text) == EMPTY
++
++
++def test_section_only_whitespace_is_empty():
++    text = "# t\n\n## Review 处置\n\n   \n\t\n\n## 2026-07-08\n"
++    assert _classify_text(text) == EMPTY
++
++
++def test_section_only_thematic_break_is_empty():
++    text = "# t\n\n## Review 处置\n\n---\n\n<!-- c -->\n\n## next\n"
++    assert _classify_text(text) == EMPTY
++
++
++def test_section_multiline_comment_stripped_is_empty():
++    text = "# t\n\n## Review 处置\n\n<!-- 多行\n注释\n跨多行 -->\n\n## next\n"
++    assert _classify_text(text) == EMPTY
++
++
++def test_section_with_bullet_content_is_ok():
++    text = "# t\n\n## Review 处置\n\n<!-- 脚手架 -->\n- F1 采纳：已改 design。\n\n## next\n"
++    assert _classify_text(text) == OK
++
++
++def test_section_at_eof_no_next_heading_ok():
++    text = "# t\n\n## Review 处置\n\n- F1 采纳。\n"
++    assert _classify_text(text) == OK
++
++
++def test_section_at_eof_empty():
++    text = "# t\n\n## Review 处置\n\n<!-- 仅脚手架 -->\n"
++    assert _classify_text(text) == EMPTY
++
++
++# --- 小节边界：level-3 子标题属小节内（内容），sibling level-2 结束小节 ---
++
++def test_subheading_level3_is_content_within_section():
++    text = "# t\n\n## Review 处置\n\n### 冷镜发现\n采纳 F1。\n\n## next\n"
++    assert _classify_text(text) == OK
++
++
++def test_content_after_next_h2_not_counted():
++    """内容在下一个 ## 之后，不计入本小节；本小节自身只有注释 → empty。"""
++    text = "# t\n\n## Review 处置\n\n<!-- c -->\n\n## 2026-07-08\n\n- 真实内容但属别的小节\n"
++    assert _classify_text(text) == EMPTY
++
++
++# --- 标题匹配严格性：非 level-2 / 标题不符 不算命中 ---
++
++def test_level3_review_heading_not_matched():
++    """`### Review 处置`（level-3）不是目标小节（模版规定 level-2）→ missing。"""
++    text = "# t\n\n### Review 处置\n\n- F1 采纳。\n\n## next\n"
++    assert _classify_text(text) == MISSING
++
++
++def test_similar_but_different_title_not_matched():
++    text = "# t\n\n## Review 处置记录汇总\n\n- F1 采纳。\n\n## next\n"
++    assert _classify_text(text) == MISSING
++
++
++# --- fail-closed：文件缺失 / 不可读 ---
++
++def test_cli_missing_file_fail_closed(tmp_path):
++    r = _run(tmp_path / "nonexistent.md")
++    assert (r.returncode != 0 and r.stdout.strip() == ""
++            and "[review_disposition_check] FAIL" in r.stderr and "Traceback" not in r.stderr)
++
++
++def test_cli_directory_path_fail_closed(tmp_path):
++    r = _run(tmp_path)
++    assert (r.returncode != 0 and r.stdout.strip() == ""
++            and "[review_disposition_check] FAIL" in r.stderr)
++
++
++# --- CLI 契约：exit 码分流（OK exit0；missing/empty stdout 载码 + exit 非0）---
++
++def _run(task_log):
++    return subprocess.run(
++        [sys.executable, str(SCRIPT), "--task-log", str(task_log)],
++        capture_output=True, text=True)
++
++
++def test_cli_ok_exit0(tmp_path):
++    r = _run(FIX / "task_log_review_ok_mlh.md")
++    assert r.returncode == 0 and r.stdout.strip() == OK
++
++
++def test_cli_missing_exit_nonzero_stdout_carries_code():
++    r = _run(FIX / "task_log_review_missing.md")
++    assert r.returncode != 0 and r.stdout.strip() == MISSING and r.stderr.strip() == ""
++
++
++def test_cli_empty_exit_nonzero_stdout_carries_code():
++    r = _run(FIX / "task_log_review_empty_template.md")
++    assert r.returncode != 0 and r.stdout.strip() == EMPTY and r.stderr.strip() == ""
++
++
++# --- 纯 stdlib / 无 subprocess / 无 git（静态断言）---
++
++def _imported_modules():
++    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
++    imported = set()
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Import):
++            for a in node.names:
++                imported.add(a.name.split(".")[0])
++        elif isinstance(node, ast.ImportFrom):
++            if node.module:
++                imported.add(node.module.split(".")[0])
++    return imported
++
++
++def test_no_subprocess_no_os_no_yaml_import_ast():
++    imported = _imported_modules()
++    assert "subprocess" not in imported
++    assert "os" not in imported
++    assert "yaml" not in imported          # 门控外置：不读 config（无 yaml 解析）
++
++
++def test_no_exec_tokens_in_source():
++    """无实际执行/子进程/git 调用记号（docstring 里的 prose 提及由 AST import 测试覆盖，此处只查调用面）。"""
++    src = SCRIPT.read_text(encoding="utf-8")
++    for tok in ("os.system", "os.popen", "os.fork", "os.exec", "Popen",
++                "check_output", "check_call", "subprocess.run", "git log", "git status"):
++        assert tok not in src
++
++
++def test_does_not_read_config_file():
++    """门控外置：不读任何 config 文件（无 config.yaml 字面、无 yaml 导入）。"""
++    src = SCRIPT.read_text(encoding="utf-8")
++    assert "config.yaml" not in src
++    assert "yaml" not in _imported_modules()

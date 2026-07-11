@@ -140,6 +140,7 @@
 | T132 | `openspec/workflow/ + sdflow-spec-review 起手 fail-closed 门` | grill 相位防静默跳过：spec-review 起手机械核验『grill 已收敛』信号（workflow.md:83 已强制的 grill checkpoint-commit，或 design.md 内补 <!-- sdflow:grill-done --> 锚），无信号→REFUSE_START 提示先跑 grill。grill 本身是人类对话岛不能自动跑，但『跑没跑』可机械断言——同 ship_gate 设计门新鲜度 fail-closed 先例，把判断从模型记性挪到脚本。属 mechanical-layer-hardening 家族。关联 T19（T19 定何时可跳；本条定跳了就机械拦）。信号载体（commit-tag vs design.md 锚）待其自身 design 定。 | 代码质量 | OPEN | 2026-07-11 08:59 | - |  |
 | T133 | `grill 提示自动生成（sdflow-spec-review 门 / 阶段提示）` | 提示/触发 grill 时自动生成完整可复制 prompt，但须『脚手架完整+内容轻播种』校准：grill-with-docs=/grilling(relentless逐branch独立走设计树,一次一问,每问给推荐,事实自查决策抛人)+/domain-modeling。auto-prompt 只应含调用脚手架(change dir/全深度非wayfinder/MUST NOT skip/doc路径 adr→openspec/adr·术语→CONTEXT.md·INDEX/[grill-amendment]/收敛才提交)；MUST NOT 预装已分析的弱点清单+推荐(会 anchor+短路 grilling 独立发现盲点的核心价值,让它只 validate 我的结论而非找第6条)。至多给一句非绑定怀疑点并注明『非边界,去找我漏的』。关联 T132(grill 未跑 fail-closed 门,该门 REFUSE 时正好 emit 此 prompt)+T28(下一阶段附完整可复制 prompt)。 | 代码质量 | OPEN | 2026-07-11 09:14 | - |  |
 | T134 | `domain-modeling / grill-with-docs 领域文档路径感知` | domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。 | 代码质量 | OPEN | 2026-07-11 09:31 | - |  |
+| T135 | `sdflow-implement` | superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化 | 代码质量 | OPEN | 2026-07-11 12:48 | - |  |
 
 ---
 
@@ -1196,3 +1197,17 @@
 | 状态 | DONE |
 
 > 2026-07 状态：PROPOSED → DONE（mlh-p4-maintain-scan：maintain_scan.py 脚本化陈旧遮蔽判据 + test_marker_consistency.py 一致性守卫机验 RULE_MARKERS/token 与 init.py 相等（f4c61b4/6ce74fc），闭合改常量会漂的风险）
+
+---
+
+## T135: tickets 管线 plan 文件名不应硬编码为 superpowers-plan.md
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-implement` |
+| 类型 | 代码质量 |
+| 状态 | OPEN |
+
+**动机**：ship_gate.py 把 superpowers-plan.md 作为唯一识别的完成判据契约文件名；tickets 管线（sdflow-implement）为复用零改动的 gate，被迫把 ticket 也写进 superpowers-plan.md（借壳）。文件名与实际管线（tickets）语义不符，对读者误导；gate 与两条管线三处对该文件名的依赖是隐式耦合。
+
+**思路**：把 plan 文件名从 gate 硬编码提为可配置/可发现（按 frontmatter marker 或 config 决定文件名，或 gate 扫描 openspec/changes/{change}/ 下带 impl-pipeline frontmatter 的任一 *.md）。属 ship 链序注释里的『emit 串 Phase B 根治』范畴。改动须同步 ship_gate.py TAG_RE/解析、impl_route.py、sdflow-implement/sdflow-ship 三处文档，保持向后兼容既有 superpowers-plan.md。

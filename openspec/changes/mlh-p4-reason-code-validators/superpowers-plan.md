@@ -50,10 +50,10 @@ impl-pipeline: tickets
 
 给定一份 roadmap task-log，确定性地断言其 `## Review 处置` 小节存在且非空（非仅脚手架注释），输出 `section-missing|section-empty|section-ok-DISPOSITION-UNCHECKED`（输出码点明逐条处置未核）。禁裸子串匹配「未处置」（须 fence/结构感知，防收尾声明句自指假阳）；不断言逐条已处置（归模型）；文件不可读 fail-closed。
 
-- [ ] 三 reason_code 各有正例；小节缺失不被当作真空通过
-- [ ] 收尾声明句「无『未处置』」不触发假阳——负例夹具取**真实 in-repo task-log**（含「」/『』括号变体 + bullet/组头位置差异）
-- [ ] 不冒充逐条完整性（输出码显式 UNCHECKED）
-- [ ] 文件不可读 fail-closed；pytest 覆盖，随权威源套件 `-W error` 全绿
+- [x] 三 reason_code 各有正例；小节缺失不被当作真空通过
+- [x] 收尾声明句「无『未处置』」不触发假阳——负例夹具取**真实 in-repo task-log**（含「」/『』括号变体 + bullet/组头位置差异）
+- [x] 不冒充逐条完整性（输出码显式 UNCHECKED）
+- [x] 文件不可读 fail-closed；pytest 覆盖，随权威源套件 `-W error` 全绿
 
 ### Task 4: 三处 SKILL.md 接入 + hr-tg 锚扩 declared 字段
 
