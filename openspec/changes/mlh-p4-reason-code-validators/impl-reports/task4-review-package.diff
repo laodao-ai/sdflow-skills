@@ -1,0 +1,161 @@
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index f317752..2b4b7e6 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -72,7 +72,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**
+ **规划镜头（主 session）**：按 `{change_dir}` 命中的 TG/栈定**领域镜**；按风险定**对抗镜**（普通 2 / 高风险 3）；
+ 固定 1 个**历史镜**。linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
+ 
+-- **HR-TG 判定〔C4·R3〕**：命中 TG 集 ∩ HR-TG 子集（**单一源 = trigger-catalog「HR-TG 子集」附录**，此处只引用不复制清单）≠ ∅ → 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）。判定无论正反写报告并带 v1 锚行 `<!-- sdflow:hr-tg v1 hit="TG-xx,…|none" evidence="<判据触发点一句>" -->`（命中必填 evidence，30 秒可人工复核）。
++- **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+ 
+ **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+ 
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index f39099a..cbc0df5 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -157,6 +157,23 @@ def check_existence(report_text, layer, metrics_on):
+     return v
+ 
+ 
++HR_TG_REQUIRED_FIELDS = ("hit", "declared")  # mlh-p4 T81：declared= 承「依据模型判定」（adr/0018 输入可见）
++
++
++def check_hr_tg(report_text):
++    """校验 fence 外真 hr-tg 锚含 hit= + declared= 两字段（declared= 由 T81 hr_tg_intersect emit，承模型判定的命中集）。
++    只断言字段在场——字段值（TG 记号 CSV / none / 空串）任意合法，命中判定归模型，脚本不校验 CSV 内容。"""
++    v = []
++    for ln in fence_outside_lines(report_text):
++        if anchor_prefix(ln) != "hr-tg":
++            continue
++        kv = parse_kv(ln)
++        for f in HR_TG_REQUIRED_FIELDS:
++            if f not in kv:
++                v.append({"anchor": ln.strip()[:80], "field": f, "kind": "missing-field"})
++    return v
++
++
+ _NONNEG_INT = re.compile(r'^\d+$')
+ 
+ 
+@@ -215,6 +232,7 @@ def main(argv=None):
+         return EXIT_ERROR
+     # 3) 校验
+     violations = check_existence(report_text, args.layer, metrics_on)
++    violations += check_hr_tg(report_text)                  # hr-tg 恒必有锚，字段校验不受 metrics 门控
+     if metrics_on:
+         violations += check_lens_metric(report_text, args.layer, enums)
+     if violations:
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index 777289c..e3d49e3 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -159,6 +159,41 @@ def test_min_required_single_missing():                     # [impl-review-fix]
+     assert missing == {"broad"}
+ 
+ 
++# --- hr-tg 锚 declared= 字段 schema（mlh-p4 T81：承「依据模型判定」）---------
++
++def test_hr_tg_declared_present_ok():                       # hit=+declared= 齐 → 无违规
++    al = _mod()
++    report = '<!-- sdflow:hr-tg v1 hit="TG-04,TG-16" declared="TG-04,TG-16,TG-19" -->\n'
++    assert al.check_hr_tg(report) == []
++
++def test_hr_tg_none_with_declared_ok():                     # none 态 declared="" 亦合规（空集显式可见）
++    al = _mod()
++    report = '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
++    assert al.check_hr_tg(report) == []
++
++def test_hr_tg_missing_declared_violation():                # 缺 declared= → 违规（新 schema 强制该字段在场）
++    al = _mod()
++    report = '<!-- sdflow:hr-tg v1 hit="none" -->\n'
++    v = al.check_hr_tg(report)
++    assert any(x["field"] == "declared" and x["kind"] == "missing-field" for x in v)
++
++def test_hr_tg_missing_hit_violation():                     # 缺 hit= → 违规
++    al = _mod()
++    report = '<!-- sdflow:hr-tg v1 declared="TG-04" -->\n'
++    v = al.check_hr_tg(report)
++    assert any(x["field"] == "hit" and x["kind"] == "missing-field" for x in v)
++
++def test_hr_tg_value_content_not_checked():                 # 字段值任意（模型判定归模型，只断言字段在场）
++    al = _mod()
++    report = '<!-- sdflow:hr-tg v1 hit="whatever" declared="anything" -->\n'
++    assert al.check_hr_tg(report) == []
++
++def test_hr_tg_in_fence_not_checked():                      # fence 内示例锚不校验（同 lens-metric 口径）
++    al = _mod()
++    report = 'real\n```\n<!-- sdflow:hr-tg v1 hit="none" -->\n```\n'
++    assert al.check_hr_tg(report) == []
++
++
+ def _run(report_path, layer, root=None):
+     cmd = [sys.executable, str(SCRIPT), "--report", str(report_path), "--layer", layer]
+     if root: cmd += ["--root", str(root)]
+@@ -166,11 +201,18 @@ def _run(report_path, layer, root=None):
+ 
+ def test_clean_report_exit0(tmp_path):
+     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+-    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
++    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+            '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+     r = _run(rpt_path, "code-review", root); assert r.returncode == 0, r.stderr
+ 
++def test_hr_tg_missing_declared_exit1(tmp_path):            # 完整报告但 hr-tg 缺 declared= → VIOLATION（端到端）
++    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
++    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
++           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
++    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
++    r = _run(rpt_path, "code-review", root); assert r.returncode == 1, r.stderr
++
+ def test_missing_report_error_exit2(tmp_path):
+     r = _run(tmp_path / "nope.md", "code-review", tmp_path); assert r.returncode == 2
+ 
+diff --git a/sdflow-roadmap/SKILL.md b/sdflow-roadmap/SKILL.md
+index 7cd0b68..18f4b0e 100644
+--- a/sdflow-roadmap/SKILL.md
++++ b/sdflow-roadmap/SKILL.md
+@@ -343,7 +343,11 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子
+ 
+ 收尾前 **SHALL** 执行以下五项确认，**判定点③**——显式陈述通过/不通过并写入 task-log.md；跳过类判定须显著呈现。任一项不通过 **SHALL** 提示补齐后再收尾，**MUST NOT** 静默跳过。
+ 
+-**① Review 处置无遗留**：task-log.md「Review 处置」小节不存在未处置状态的条目。「Review 处置」小节**缺失**视为不通过——先建小节再判，**MUST NOT** 以「小节不存在=无未处置条目」真空通过。
++**① Review 处置无遗留**〔mlh-p4 T82〕：先调脚本机械断言「`## Review 处置` 小节存在+非空」（防真空、防子串陷阱、弱模型不可跳过），再由你判逐条——机械/判断切分：
++   - **规则根解析**：`RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`（`resolve-workflow.sh` 缺失或退出码非 0 → 显式提示「未装/解析失败，降级为人工断言小节存在+非空」并原样转发其 stderr，**MUST NOT** 静默当作「无此门」）。
++   - **调脚本**：`python3 $RULES_ROOT/tools/review_disposition_check.py --task-log openspec/roadmaps/{name}/task-log.md`——fence/结构感知地归约出唯一 reason_code：`section-missing`（小节缺失，退出码非 0，**MUST NOT** 以「小节不存在=无未处置条目」真空通过——先建小节再判）/ `section-empty`（仅脚手架注释/空白，退出码非 0）/ `section-ok-DISPOSITION-UNCHECKED`（存在+非空达成，退出码 0）。
++   - **信任边界声明（MUST 显式陈述一行）**：脚本**只断言小节存在+非空**（故输出码尾缀 `-DISPOSITION-UNCHECKED`，防 `present` 被误读为「已完整核验」=假绿）；**逐条是否真处置归你判定**——脚本不断言逐条已处置（三实例格式不统一、无字面 token、机械不可达），亦 **MUST NOT** naive-grep `未处置` 子串（收尾声明句「本小节无『未处置』条目」含该子串却恰是合规态）。
++   - **本项通过 =** 脚本判 `section-ok-DISPOSITION-UNCHECKED`（退出 0）**且**你复核小节内每条 issue 均标了上文「review 结果如何处理」的状态枚举之一、无遗留未处置条目。
+ 
+ **② 三件套相互引用完整（最小引用图判定）**：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次；task-log.md 每条完成记录关联 roadmap.md 阶段；design 头部章与决策段无同值重复（只准互相引用，不准复述）。**不通过时报出具体文件与行号**，**MUST NOT** 笼统宣称「完整/不完整」。已细化阶段的回指采用「（见 design.md 决策 N）」锚点句式（`references/roadmap-template.md` 已含示例注释）。存量四件套包/逃生舱包（见「产出模式」节）本项判定范围 = 三件套两两引用 + `requirements.md` 按其历史约定核对；「头部章无重复」子判据对无头部章的 legacy 包记 `N/A`（`N/A` 为合法第三态，须显式陈述，不计入不通过）。
+ 
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index 63070ad..0b67b39 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -36,11 +36,10 @@ description: >
+ 2. **主 session 落盘〔R5〕**：autoplan 原生机制只写 plan file，无「写任意路径」能力——执行完由**主 session** 汇总其结论 Write 落盘 `{change_dir}/gstack-review.md`（改动标 `[gstack-amendment]`），文件头 + 本报告 Step1 段各写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`；native 声明附一句侧信道佐证（如 autoplan 双声真实调用事实/运行痕迹）。
+ 3. **降级路径**：autoplan skill 不可用 → 子代理模拟广审 + 报告显式标注「模拟广审（降级模式）」+ 锚行 `mode="simulated"`，MUST NOT 伪装原生。
+ 4. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
+-5. **outside-voice 复用守卫（三前置·R2）**：复用 `gstack-review.md` 的 codex outside-voice findings 前按序判：
+-   ①**来源**——其 `step1-broad-review` 锚行为 `simulated` → 产物一律视同无效（模拟可臆造格式合规的 codex 段，结构检查挡不住）；
+-   ②**新鲜度**——产物早于 `{change_dir}` 最新改动（`git log -1 --format=%ct -- {change_dir}` 对比）→ 视同缺失；
+-   ③**结构**——文件缺失 / 解析不出 codex 段（解析锚定 `codex#N` 标签约定，见 adr/0002；实现期已抓真实样本校准）/ codex findings 为 0 条。
+-   任一不过 → 打印带原因码（file-missing|section-not-found|zero-findings|stale|simulated-source）的显式降级日志，**回落自跑设计 outside voice**（按下方「helper 调用协议」，site="design-voice"）；诱因为文件整体缺失时措辞 MUST 声明「仅补偿 outside-voice 切片，广审其余镜仍缺」。三关全过 → 复用不重开（避免双 codex），报告记「复用 autoplan outside voice N 条」。
++5. **outside-voice 复用守卫（确定性脚本门·R2）〔mlh-p4 T80〕**：复用 `gstack-review.md` 的 codex outside-voice findings 前，调守卫脚本出 reason_code——三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）的机械判定归脚本，复用/回落的**编排**归你：
++   `python3 $RULES_ROOT/tools/outside_voice_guard.py --review-path {change_dir}/gstack-review.md --change-dir {change_dir}`——脚本纯 stdlib、无 subprocess、新鲜度用源文件 fs-mtime 直比（排除评审产物自身，捕获未提交编辑；不调 git），归约出唯一 reason_code（`none|file-missing|section-not-found|zero-findings|stale|simulated-source`）落 stdout；`none` = 三前置全过、退出码 0；其余码退出码非 0（坏输入如 `step1-broad-review` 锚缺失/mode 非枚举 → stderr `[outside_voice_guard] FAIL` + 无 stdout，遵其判定 MUST NOT 静默吞）。
++   - **reason_code=`none`（退出 0）** → 复用不重开（避免双 codex），报告记「复用 autoplan outside voice N 条」。
++   - **其余 reason_code** → 打印带该原因码的显式降级日志，**回落自跑设计 outside voice**（按下方「helper 调用协议」，site="design-voice"）；诱因为 `file-missing`（文件整体缺失）时措辞 MUST 声明「仅补偿 outside-voice 切片，广审其余镜仍缺」。
+    > **C2 依赖 P2b 交叉引用〔3.2〕**：C2"复用"成立仅当 autoplan 每次都跑（P2b）；autoplan 未跑的变更本 skill MUST 自跑设计 outside voice（即守卫回落路径），不得因"复用了一个没产生的东西"漏掉整层。
+ 6. **checkpoint 提交（P2c 第 1 次）**：`~/.sdflow/hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。
+ 
+@@ -54,7 +53,7 @@ description: >
+ - 按风险定**对抗镜**数量：普通 2 个，高风险 3 个。固定 1 个**接地镜**（机械读码核验）。
+ - 只审命中的；config 已固化的结构/占位/一致性（T/S）不进任何镜。
+ - **防重叠（1.4）**：autoplan 已含 eng 镜 → 本 skill 领域镜**不重复跑 eng 视角**，只跑本项目 `spec-checklists/domains` 里 autoplan 不碰的 R 项，别让两层重复计数。
+-- **HR-TG 判定〔C4·R3〕**：命中 TG 集 ∩ HR-TG 子集（**单一源 = trigger-catalog「HR-TG 子集」附录**，此处只引用不复制清单）≠ ∅ → 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）。判定无论正反写报告并带 v1 锚行 `<!-- sdflow:hr-tg v1 hit="TG-xx,…|none" evidence="<判据触发点一句>" -->`（命中必填 evidence，30 秒可人工复核）。
++- **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+ 
+ **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+ 

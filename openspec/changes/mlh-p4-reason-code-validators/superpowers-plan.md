@@ -62,9 +62,9 @@ impl-pipeline: tickets
 
 把 sdflow-spec-review / sdflow-code-review / sdflow-roadmap 三处对应的模型手做机械判定步，改为「调对应校验器出 reason_code」，判断/编排语义保留给模型；T82 接入步显式声明「逐条处置是模型的活」；hr-tg 锚 schema 扩 `declared=` 字段承载 T81 的「依据模型判定」并让 anchor_lint 认得。
 
-- [ ] 三处 SKILL.md 手做 prose（手扫/手比对/手断言）替换为调校验器，无残留手做口径
-- [ ] hr-tg 锚 schema 加 `declared=` 字段 + anchor_lint 认新字段（不因其存在而报错/漏校验）
-- [ ] T82 接入步显式写「逐条无未处置归模型」的信任边界声明
+- [x] 三处 SKILL.md 手做 prose（手扫/手比对/手断言）替换为调校验器，无残留手做口径
+- [x] hr-tg 锚 schema 加 `declared=` 字段 + anchor_lint 认新字段（不因其存在而报错/漏校验）
+- [x] T82 接入步显式写「逐条无未处置归模型」的信任边界声明
 
 ### Task 5: bundle 回灌 + 验收 dogfood
 
