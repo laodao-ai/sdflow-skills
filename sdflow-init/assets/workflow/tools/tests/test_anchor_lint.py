@@ -159,6 +159,41 @@ def test_min_required_single_missing():                     # [impl-review-fix] 
     assert missing == {"broad"}
 
 
+# --- hr-tg 锚 declared= 字段 schema（mlh-p4 T81：承「依据模型判定」）---------
+
+def test_hr_tg_declared_present_ok():                       # hit=+declared= 齐 → 无违规
+    al = _mod()
+    report = '<!-- sdflow:hr-tg v1 hit="TG-04,TG-16" declared="TG-04,TG-16,TG-19" -->\n'
+    assert al.check_hr_tg(report) == []
+
+def test_hr_tg_none_with_declared_ok():                     # none 态 declared="" 亦合规（空集显式可见）
+    al = _mod()
+    report = '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+    assert al.check_hr_tg(report) == []
+
+def test_hr_tg_missing_declared_violation():                # 缺 declared= → 违规（新 schema 强制该字段在场）
+    al = _mod()
+    report = '<!-- sdflow:hr-tg v1 hit="none" -->\n'
+    v = al.check_hr_tg(report)
+    assert any(x["field"] == "declared" and x["kind"] == "missing-field" for x in v)
+
+def test_hr_tg_missing_hit_violation():                     # 缺 hit= → 违规
+    al = _mod()
+    report = '<!-- sdflow:hr-tg v1 declared="TG-04" -->\n'
+    v = al.check_hr_tg(report)
+    assert any(x["field"] == "hit" and x["kind"] == "missing-field" for x in v)
+
+def test_hr_tg_value_content_not_checked():                 # 字段值任意（模型判定归模型，只断言字段在场）
+    al = _mod()
+    report = '<!-- sdflow:hr-tg v1 hit="whatever" declared="anything" -->\n'
+    assert al.check_hr_tg(report) == []
+
+def test_hr_tg_in_fence_not_checked():                      # fence 内示例锚不校验（同 lens-metric 口径）
+    al = _mod()
+    report = 'real\n```\n<!-- sdflow:hr-tg v1 hit="none" -->\n```\n'
+    assert al.check_hr_tg(report) == []
+
+
 def _run(report_path, layer, root=None):
     cmd = [sys.executable, str(SCRIPT), "--report", str(report_path), "--layer", layer]
     if root: cmd += ["--root", str(root)]
@@ -166,10 +201,17 @@ def _run(report_path, layer, root=None):
 
 def test_clean_report_exit0(tmp_path):
     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
-    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
            '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root); assert r.returncode == 0, r.stderr
+
+def test_hr_tg_missing_declared_exit1(tmp_path):            # 完整报告但 hr-tg 缺 declared= → VIOLATION（端到端）
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root); assert r.returncode == 1, r.stderr
 
 def test_missing_report_error_exit2(tmp_path):
     r = _run(tmp_path / "nope.md", "code-review", tmp_path); assert r.returncode == 2

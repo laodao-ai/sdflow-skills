@@ -343,7 +343,11 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 
 收尾前 **SHALL** 执行以下五项确认，**判定点③**——显式陈述通过/不通过并写入 task-log.md；跳过类判定须显著呈现。任一项不通过 **SHALL** 提示补齐后再收尾，**MUST NOT** 静默跳过。
 
-**① Review 处置无遗留**：task-log.md「Review 处置」小节不存在未处置状态的条目。「Review 处置」小节**缺失**视为不通过——先建小节再判，**MUST NOT** 以「小节不存在=无未处置条目」真空通过。
+**① Review 处置无遗留**〔mlh-p4 T82〕：先调脚本机械断言「`## Review 处置` 小节存在+非空」（防真空、防子串陷阱、弱模型不可跳过），再由你判逐条——机械/判断切分：
+   - **规则根解析**：`RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`（`resolve-workflow.sh` 缺失或退出码非 0 → 显式提示「未装/解析失败，降级为人工断言小节存在+非空」并原样转发其 stderr，**MUST NOT** 静默当作「无此门」）。
+   - **调脚本**：`python3 $RULES_ROOT/tools/review_disposition_check.py --task-log openspec/roadmaps/{name}/task-log.md`——fence/结构感知地归约出唯一 reason_code：`section-missing`（小节缺失，退出码非 0，**MUST NOT** 以「小节不存在=无未处置条目」真空通过——先建小节再判）/ `section-empty`（仅脚手架注释/空白，退出码非 0）/ `section-ok-DISPOSITION-UNCHECKED`（存在+非空达成，退出码 0）。
+   - **信任边界声明（MUST 显式陈述一行）**：脚本**只断言小节存在+非空**（故输出码尾缀 `-DISPOSITION-UNCHECKED`，防 `present` 被误读为「已完整核验」=假绿）；**逐条是否真处置归你判定**——脚本不断言逐条已处置（三实例格式不统一、无字面 token、机械不可达），亦 **MUST NOT** naive-grep `未处置` 子串（收尾声明句「本小节无『未处置』条目」含该子串却恰是合规态）。
+   - **本项通过 =** 脚本判 `section-ok-DISPOSITION-UNCHECKED`（退出 0）**且**你复核小节内每条 issue 均标了上文「review 结果如何处理」的状态枚举之一、无遗留未处置条目。
 
 **② 三件套相互引用完整（最小引用图判定）**：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次；task-log.md 每条完成记录关联 roadmap.md 阶段；design 头部章与决策段无同值重复（只准互相引用，不准复述）。**不通过时报出具体文件与行号**，**MUST NOT** 笼统宣称「完整/不完整」。已细化阶段的回指采用「（见 design.md 决策 N）」锚点句式（`references/roadmap-template.md` 已含示例注释）。存量四件套包/逃生舱包（见「产出模式」节）本项判定范围 = 三件套两两引用 + `requirements.md` 按其历史约定核对；「头部章无重复」子判据对无头部章的 legacy 包记 `N/A`（`N/A` 为合法第三态，须显式陈述，不计入不通过）。
 
