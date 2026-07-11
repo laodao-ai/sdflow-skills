@@ -268,6 +268,33 @@ def test_hr_tg_in_fence_not_checked():                      # fence 内示例锚
     assert al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET) == []
 
 
+# --- F2 整行严格解析拒重复键（mlh-p4 Task5：防跨消费者 lint 末值胜 vs sdflow-retro 取首分歧）-----
+
+def test_parse_kv_strict_detects_dup():
+    al = _mod()
+    kv, dup = al.parse_kv_strict('hit="none" hit="TG-04" declared=""')
+    assert dup == ["hit"]
+    assert kv["hit"] == "TG-04"                              # 末值胜，与 parse_kv 同口径（续算用同一确定值）
+
+def test_parse_kv_strict_no_dup_empty_list():
+    al = _mod()
+    kv, dup = al.parse_kv_strict('hit="none" declared=""')
+    assert dup == []
+
+def test_f2_duplicate_key_violation():                       # 重复 hit= → dup-key violation
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" hit="TG-04" declared="" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "dup-key" and x["field"] == "hit" for x in v)
+
+def test_f2_duplicate_key_collect_not_raise_continues_m1():  # dup-key 不中断，其余校验（M1 缺字段等）仍续算
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 declared="" declared="" -->\n'   # 重复 declared= 且缺 hit=
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "dup-key" and x["field"] == "declared" for x in v)
+    assert any(x["kind"] == "missing-field" and x["field"] == "hit" for x in v)
+
+
 def _run(report_path, layer, root=None, catalog=None):
     if catalog is None:
         catalog = _write_catalog(Path(report_path).parent)  # 最小合法 catalog，自动落在 report 同目录
@@ -332,3 +359,19 @@ def test_config_bad_block_exit2(tmp_path):                   # F6：断言原因
     r = _run(rpt_path, "code-review", root)
     assert r.returncode == 2
     assert json.loads(r.stdout)["reason"] == "metrics-block-bad"
+
+
+def test_f9_cli_malformed_csv_returncode1_valid_json(tmp_path):
+    """F9 CLI 级回归（fold，Task4 审留 Minor）：畸形 hit= CSV（连续逗号→空 cell）经 main() 子进程跑到底，
+    须 returncode==1（VIOLATION，非 2/ERROR）且 stdout 仍是合法 JSON（json.loads 不抛——collect-not-raise
+    契约在 CLI 边界仍成立，不泄漏 traceback、不中断双输出），并含 kind=malformed-tg-csv。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n'
+           '<!-- sdflow:hr-tg v1 hit="TG-04,,TG-16" declared="TG-04,TG-16" evidence="x" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 1, r.stderr
+    payload = json.loads(r.stdout)                            # 不抛 = F9 契约核心断言
+    assert payload["result"] == "VIOLATION"
+    assert any(x["kind"] == "malformed-tg-csv" for x in payload["violations"])

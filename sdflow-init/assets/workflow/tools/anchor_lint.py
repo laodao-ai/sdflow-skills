@@ -89,6 +89,20 @@ def parse_kv(line):
     return {k: v for k, v in _KV.findall(line.strip())}
 
 
+def parse_kv_strict(line):
+    """整行严格解析 key="value" 对，附带探测重复键（F2：防跨消费者分歧——本脚本 dict 推导末值胜，
+    sdflow-retro 若取首会读到不同 hit=/declared=/evidence=，同一报告两处解读不一致）。
+    返回 (kv, dup)：kv 与 parse_kv 同口径（末值胜，供 caller 续算用同一确定值，不因重复键崩）；
+    dup 为重复出现的键名列表（每命中一次重复出现追加一次），空列表=无重复。本函数不 raise——
+    重复键是否算 violation 由 caller 决定（check_hr_tg 用 collect-not-raise，就地转 dict）。"""
+    seen, dup = {}, []
+    for k, val in _KV.findall(line.strip()):
+        if k in seen:
+            dup.append(k)
+        seen[k] = val
+    return seen, dup
+
+
 def anchor_prefix(line):
     s = line.strip()
     for pref, name in ANCHOR_PREFIXES.items():
@@ -252,20 +266,25 @@ def _parse_tg_csv(raw):
 
 
 def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
-    """校验 fence 外真 hr-tg 锚：M1 hit=/declared= 两字段在场；M2 重算 hit == declared∩HR-TG
-    （数值序逐元素比较，none⟺空交集）；M4 hit≠none(空) ⟹ evidence= 在场且 strip 后非空；
-    M-new declared/hit 每 TG ∈ all_tg_set（trigger-catalog 全集，M-new lint 侧）；F1 sentinel
-    （declared 空集须 ""、hit 空须 "none"，写反 → violation，仍尽力降级续算不中断其余校验）。
+    """校验 fence 外真 hr-tg 锚：F2 整行严格解析拒重复键（同键出现 ≥2 次，如 hit= 写两遍 → dup-key
+    violation；防跨消费者分歧——本脚本末值胜，sdflow-retro 若取首会读到不同字段值，同一报告两处
+    解读不一致）；M1 hit=/declared= 两字段在场；M2 重算 hit == declared∩HR-TG（数值序逐元素比较，
+    none⟺空交集）；M4 hit≠none(空) ⟹ evidence= 在场且 strip 后非空；M-new declared/hit 每 TG ∈
+    all_tg_set（trigger-catalog 全集，M-new lint 侧）；F1 sentinel（declared 空集须 ""、hit 空须
+    "none"，写反 → violation，仍尽力降级续算不中断其余校验）。
     诚实边界（S1）：M2 只堵内部一致性（hit 与 declared∩HR-TG 是否自洽），堵不住「declared 本身
     是否=真命中集」（无确定性信号，语义残余）——一致但错的锚 MUST 通过，MUST NOT 加强为 tamper-proof。
-    F9 collect-not-raise：CSV 解析畸形（非 TG-<数字> token / 空 cell）就地转 violation dict
-    （kind=malformed-tg-csv），MUST NOT raise EmitError 外抛（护 human + JSON 双输出不中断）。"""
+    F9 collect-not-raise：CSV 解析畸形（非 TG-<数字> token / 空 cell）、以及 F2 重复键，均就地转
+    violation dict（kind=malformed-tg-csv / dup-key），MUST NOT raise 外抛（护 human + JSON 双输出
+    不中断）。"""
     v = []
     for ln in fence_outside_lines(report_text):
         if anchor_prefix(ln) != "hr-tg":
             continue
-        kv = parse_kv(ln)
+        kv, dup_keys = parse_kv_strict(ln)
         anchor = ln.strip()[:80]
+        for dk in dup_keys:
+            v.append({"anchor": anchor, "field": dk, "kind": "dup-key"})
         for f in HR_TG_REQUIRED_FIELDS:
             if f not in kv:
                 v.append({"anchor": anchor, "field": f, "kind": "missing-field"})
