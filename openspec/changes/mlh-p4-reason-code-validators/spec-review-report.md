@@ -1,6 +1,11 @@
-<!-- 设计门拍板后由主 session 写 ship-gate.design_approved（未拍板前无此 frontmatter）-->
+---
+ship-gate:
+  design_approved: true
+---
 
 # spec-review-report · mlh-p4-reason-code-validators
+
+> **设计门已拍板批准（2026-07-11）**：用户裁定——① **保留 T82**（靠自身 merit：把防真空守卫机械化成不可跳，adr/0006；删 D4 原「凑 frontier」自指 justification）；② **本 change 继续**；③ **Q-D=(c) 模型传入命中 TG 集**（推翻 grill Q1，冷镜爆点5 证实读声明捕不全）；④ **Q-C** T80 新鲜度改源文件 fs-mtime 直比（撤销 grill Q3 git 反转，T80 回纯 stdlib）；⑤ **adr/0018 降 Proposed**。[spec-review-amendment] 已落 design/specs/tasks；A1-A13 + pilot caveat 带进实现期。
 
 <!-- sdflow:step1-broad-review v1 mode="simulated" -->
 > **Step1 广审模式说明**：本轮 autoplan 广审层由一个 fresh-context 广审子代理承担（未原生跑 autoplan skill，因本 change 是 workflow-infra 而非产品，autoplan 的 CEO/user 产品镜多不适用）——按 mode="simulated" 诚实标注（降级但适配）。outside-voice 由 fresh claude-fallback 子代理承担（runner="claude-fallback"，未走 codex helper）。

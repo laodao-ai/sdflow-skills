@@ -1,6 +1,6 @@
 # 0018 · 机械校验器输出诚实：不可验输入须在信号里可见
 
-> 状态：Accepted（2026-07-11，grill `mlh-p4-reason-code-validators` design 收敛）
+> 状态：**Proposed**（2026-07-11，grill 收敛时立、spec-review 降级）——原则成立，但三形态从**未实现样例**蒸馏、5 镜冷审揭穿各自落地待验（依据锚落点、UNCHECKED 码 SKILL 映射、fail-safe 语义）；**待 `mlh-p4-reason-code-validators` 至少一个形态真 ship + dogfood 验证后再升 Accepted**（spec-review 洞察5）。
 > 关联：MLH roadmap 阶段4·4.D · adr/0006(b)（机械 prose MUST 脚本化）· adr/0008（gate 防御纵深·不假设纪律成立）· adr/0016（只读报告工具反静默方向）· CONTEXT「反静默守卫」「信任边界」「机器锚行」
 
 ## Context

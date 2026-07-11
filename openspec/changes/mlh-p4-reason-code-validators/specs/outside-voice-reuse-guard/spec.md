@@ -2,19 +2,19 @@
 
 ### Requirement: outside-voice 复用三判归约为单一 reason_code
 
-校验器 SHALL 对 spec-review 复用 codex outside-voice 的三前置（来源 / 新鲜度 / 结构）按序判定，归约出**唯一** reason_code，取值属固定七枚举 `none|file-missing|section-not-found|zero-findings|stale|stale-dirty-tree|simulated-source`〔grill-amendment：新增 `stale-dirty-tree`〕。`none` = 三判全过（可复用），退出码 0；任一不过 = 对应原因码。
+校验器 SHALL 对 spec-review 复用 codex outside-voice 的三前置（来源 / 新鲜度 / 结构）按序判定，归约出**唯一** reason_code，取值属固定六枚举 `none|file-missing|section-not-found|zero-findings|stale|simulated-source`〔spec-review Q-C：撤销 grill 的 `stale-dirty-tree`，回 6 码〕。`none` = 三判全过（可复用），退出码 0；任一不过 = 对应原因码。
 
 #### Scenario: mode=simulated 判无效
 - **WHEN** `gstack-review.md` 的 `step1-broad-review` 锚 `mode="simulated"`
-- **THEN** 输出 `simulated-source`，退出码非 0（不可复用）
+- **THEN** 输出 `simulated-source`，退出码非 0
 
-#### Scenario: 产物陈旧
-- **WHEN** 产物 mtime 早于传入的 `change_mtime`（`{change_dir}` 最新改动 epoch 秒）
-- **THEN** 输出 `stale`
+#### Scenario: 产物早于源文件（陈旧）〔spec-review Q-C〕
+- **WHEN** 产物 `gstack-review.md` 的 fs-mtime 早于源文件（proposal/design/tasks/specs）最大 fs-mtime（**排除评审产物自身**：gstack-review.md / spec-review-report.md / .outside-voice/）
+- **THEN** 输出 `stale`（fail-safe 重跑，非假新鲜复用陈旧审查）
 
 #### Scenario: codex 段不可解析
 - **WHEN** `gstack-review.md` 存在但解析不出 codex findings 段
-- **THEN** 输出 `section-not-found`（best-effort parse 失败 fail-closed 到此码，不崩溃）
+- **THEN** 输出 `section-not-found`（best-effort parse 失败 fail-closed 到此码）
 
 #### Scenario: codex findings 为 0 条
 - **WHEN** codex 段可解析但 findings 计数为 0
@@ -25,20 +25,16 @@
 - **THEN** 输出 `file-missing`
 
 #### Scenario: 三判全过可复用
-- **WHEN** mode=native 且产物不陈旧且 codex 段可解析且 findings>0
+- **WHEN** mode=native 且产物不早于源文件 且 codex 段可解析 且 findings>0
 - **THEN** 输出 `none`，退出码 0
 
-#### Scenario: 工作树 dirty 时 fail-safe 判陈旧〔grill-amendment〕
-- **WHEN** `{change_dir}` 工作树有未提交改动（`git log` 时间不可信、无法确认新鲜）
-- **THEN** 输出 `stale-dirty-tree`（保守重跑 outside-voice，非假新鲜复用陈旧审查）
+### Requirement: 新鲜度用源文件 fs-mtime 直比、纯 stdlib、门控外置〔spec-review Q-C·撤销 grill Q3〕
 
-### Requirement: 自跑 git 作新鲜度事实 owner、门控外置〔grill-amendment〕
+校验器 SHALL 用 `os.stat` 比较产物 fs-mtime 与源文件最大 fs-mtime 判新鲜度，MUST NOT 调 subprocess / git，MUST NOT 读 config——纯 stdlib、纯函数可测。〔grill Q3 曾反转为「自跑 git + `git status --porcelain` 全目录 dirty」，但全目录 dirty 含评审产物自身 → 守卫恒判 stale → 双 codex（冷镜 F1 揭穿反噬）；fs-mtime 源文件直比既根治「git-log 看不到未提交」之坑、又无需 git。〕
 
-校验器 SHALL 自跑 `git log -1 --format=%ct -- {change_dir}`（新鲜度）与 `git status --porcelain -- {change_dir}`（dirty 检测）作为「新鲜度事实」的天然 owner，用 git fixture 测；MUST NOT 读 config（门控外置）。〔初版曾要求「不自跑 subprocess、`change_mtime` 由 SKILL 传参」，grill Q3 反转：`git log` 看不到未提交改动的语义 bug 与谁跑 git 无关，且传参是把未测接缝挪进 SKILL prose。此为三校验器中唯一 subprocess 例外。〕
-
-#### Scenario: 新鲜度事实自持可测
-- **WHEN** 判新鲜度 / dirty
-- **THEN** 脚本自跑 git 取事实（非依赖入参 mtime），行为由 git fixture 可复现测试锁定
+#### Scenario: 纯 stdlib 无 subprocess
+- **WHEN** 校验器执行任意判定路径
+- **THEN** 进程不 fork / exec 子进程；新鲜度用 fs-mtime 直比、不调 git
 
 ### Requirement: 坏输入 fail-closed
 
