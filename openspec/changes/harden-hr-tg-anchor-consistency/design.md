@@ -7,6 +7,8 @@
 > - **M-new fold**：grill 中发现「TG 只查 shape 不查存在」漏网格，与本功能相关 → 立即 fold 做掉。
 > - **scope 收窄**：T139（outside_voice_guard）是另一 capability，**剥出另开**（todolist T139）；本 change = hr-tg 锚一致性单一完整交付物。
 
+> **spec-review 收敛（2026-07-11，5 源冷审）`[spec-review-amendment]`**：广审+对抗×2+接地+codex 共识——完整性/scope/回灌口径**站得住**，但冷层揪出 10+ 条"机械化还没做完整"（fold 进本 change，见 tasks §3）：**F1** 我引入的 spec bug（`declared="none"` 应为 `""`）；**F2** 跨消费者重复键分歧（lint 末值胜 vs retro 取首）；**F3** M2/M-new「非 import」双份重实现无跨文件一致性兜底 → 加 golden 测试；**F4/F5** `_catalog()` fixture 缺 A–G 表 + `test_single_source_mutability` 的 `TG-99` 语义与 M-new 反例直撞 → 打崩 10+ 现有测试；**F6** check_hr_tg 签名变 + `_run()` 缺 catalog → argparse exit2 撞码假绿；**F7** catalog 内部一致（HR-TG⊆全集）；**F8** 全集解析边界钉死（防正文游离 TG）；**F9** 就地转 violation 不 raise（护 JSON 双输出）；**F10** evidence strip 判空。冷层承重再实证（F1 我引入、F2/F3 我漏）。
+
 ## Context
 
 MLH 阶段 4·4.D 三校验器 SHIPPED 后冷审 defer。本 change 收「hr-tg 锚一致性机械化」一件完整的事（`hr_tg_intersect` 出锚 + `anchor_lint` 校验），一次到目标态。
@@ -53,7 +55,8 @@ MLH 阶段 4·4.D 三校验器 SHIPPED 后冷审 defer。本 change 收「hr-tg 
 
 ## Risks / Trade-offs
 
-- **[部署 skew：工具经 sdflow-init update、SKILL 经 setup.sh，两路径可能不同步]** → `--trigger-catalog` 必需时 skew 会**响亮 fail-closed**（逼修），非 fail-open 静默降级门；由 CLAUDE.md pull→setup 原子纪律兜。这是架构事实、非现状妥协。
+- **[部署 skew：工具经 sdflow-init update、SKILL 经 setup.sh，两路径可能不同步]〔spec-review F11 澄清〕** → 两条分发链**速率不对称**：SKILL-local（setup.sh 全局瞬时）vs tools（`sdflow-init update` per-repo 手动）。**本仓 dev/runtime skew** 有 CLAUDE.md pull→setup 原子纪律兜；**下游消费仓**（第三方 openspec 项目）SKILL 新（传 `--trigger-catalog`）+ tools 旧（不认该参）→ argparse usage error（exit 2）——仍 fail-closed **响亮失败**（非静默放行），但无自动兜底、只能靠响亮暴露逼修。这是架构事实、非现状妥协；`sdflow-init update`/`/sdflow-upgrade` 提示语可加一句"anchor_lint 新增必需参数，请确认两侧同步"。
+- **[F15 中间态：活跃 change 的旧格式报告]** → `scoped-test-per-task/spec-review-report.md`（暂停待拍板、非归档）含旧格式锚（无 declared）。spec-review 是**全量重新生成**报告（非半增量），重跑即重 emit 新格式，故 M1 不误伤；若日后引入半增量续跑路径则须重验。ship 前实测一次该 change 重跑 spec-review 确认锚重 emit。
 - **[M-new catalog 全集解析]** → 复用既有成员解析口径、同单一源；catalog 表行 `| TG-NN |` 稳定可 parse，坏则 fail-closed。
 - **[M2 被误读 tamper-proof]** → docs 显式声明 + 「一致但错→仍过」边界确认负例。
 - **[bundle 回灌遗忘]** → Migration 段固化。
@@ -89,10 +92,12 @@ tg-set（模型判定，M3 严格 + M-new 存在）  ─┼─► hr_tg_intersec
 4. `sdflow-init update` 推下游副本（下游不含 tests/，核对脚本本体）。
 5. 回滚：还原两工具 + SKILL 接线；无数据迁移。
 
-## Open Questions（grill 已消解）
+## Open Questions（grill + spec-review 已消解）
 - ~~有无流程重 lint 归档报告~~ → B3 已核验：无 → 无需 grace（D1 零妥协）。
-- 违规 `kind` 命名（`hit-declared-mismatch`/`evidence-missing`）实现期可微调。
-- catalog「全 TG 集」解析：以 A–G 段表行 `| TG-NN |` 为源（删除的空号自然不在集）；实现期确认解析口径与成员解析一致。
+- ~~catalog「全 TG 集」解析口径~~ → **spec-review F8 已钉死**：只取 `## 三、触发词目录` 段到下一 level-1/2 标题间、`fullmatch ^\s*\|\s*TG-\d+\s*\|` 的表行；正文游离 TG 提及（`命中 TG-01`/`参见 TG-99 草案`）MUST NOT blind-regex 纳入。
+- **F3 跨文件一致性**：M2/M-new 遵仓内"非 import"约定（adr/0002），双份重实现的漂移风险由 **cross-tool golden 测试**（同 catalog+tg-set 两侧 hit 相等）机械兜底，仿 lens-metric 契约的跨解析器一致性测试先例。
+- **F14 新增-TG 类 change 自指**：评审"新增 TG"的 change 时，$RULES_ROOT/trigger-catalog 尚无新 TG，`declared="TG-27"` 被 M-new fail-closed——fail-safe（宁挡不误放），代价仅重跑；非 bug。
+- 违规 `kind` 命名（`hit-declared-mismatch`/`evidence-missing`/`dup-key`）实现期可微调。
 
 ## Compliance
 

@@ -21,9 +21,24 @@
 - [ ] 2.6 诚实边界：改 docstring「字段值任意合法、不校验 CSV 内容」旧表述 → 显式声明「M2 只堵内部一致性、declared 正确性属语义残余、非 tamper-proof」。〔R2·S1〕
 - [ ] 2.7 **故意测试反转**〔grill B4〕：`test_hr_tg_whatever_declared_anything`（传 catalog 后 `hit="whatever"` 应违规，非旧 `[]`）；删/改 docstring「任意合法」旧断言。〔R2〕
 - [ ] 2.8 SKILL 接线：`sdflow-code-review`/`sdflow-spec-review` anchor_lint 调用步补 `--trigger-catalog $RULES_ROOT/trigger-catalog.md`（**与工具改动同 change 原子落**，防 skew）。〔R2〕
-- [ ] 2.9 pytest（TG-18）：无 catalog→非零；缺 declared→违规（无 grace）；M2 一致→过、单字段手改→违规、**同改两字段一致但错→过（诚实边界确认负例）**；M4 缺 evidence→违规；M-new 不存在 TG→违规。〔R2〕
+- [ ] 2.9 pytest（TG-18）：无 catalog→非零；缺 declared→违规（无 grace）；M2 一致→过、单字段手改→违规、**同改两字段一致但错(`hit="none" declared=""`)→过（诚实边界确认负例）**；M4 缺/空白 evidence→违规；M-new 不存在 TG→违规。〔R2〕
 
-## 3. bundle 回灌 + 验收
+## 3. spec-review 冷层增补〔spec-review-amendment 2026-07-11，5 源冷审 fold〕
+
+> 全为"同片 hr-tg 一致性"的更多确定性维度/回归修复，按 decomposition standard 相关即 fold（非另开）。冷层承重：F1 是热层引入的 spec bug、F2/F3 是热层漏的跨消费者/跨文件一致性。
+
+- [ ] 3.1 **F1 sentinel**：M2/边界负例改 `hit="none" declared=""`（非 `"none"`）；实现 + 测 `declared="none"`/`hit=""` 判违规。〔R2〕
+- [ ] 3.2 **F2 整行严格解析**：hr-tg 锚拒重复键（`hit=`/`declared=`/`evidence=` 两次）/未闭合注释/残留；测跨消费者回归（`hit="none" hit="TG-04"…` 应违规，防 lint 末值胜 vs retro 取首）。〔R2〕
+- [ ] 3.3 **F3 跨文件一致性 golden 测试**（"非 import"契约的机械兜底，仿 lens-metric 先例）：同一 catalog+tg-set，断言 `hr_tg_intersect` emit 的 hit ⟺ `anchor_lint` 独立重算的 hit **逐元素相等**（含 numeric 同序）。〔R1+R2〕
+- [ ] 3.4 **F4 fixture retrofit**：`test_hr_tg_intersect.py` 的 `_catalog()` helper 补最小 A–G 表行（≥ 所有测试用到的 TG 号），否则 M-new 接线打崩 10+ 现有正例。〔R1〕
+- [ ] 3.5 **F5 test_single_source_mutability 重设计**：现用 `TG-99` 当"合法自定义成员"，与 M-new 反例 `TG-99`=不存在语义直撞；改用"A–G 表内存在但不在 HR-TG 8 员集"的 TG 号证"改 HR-TG 段即改行为"（全集不变）。〔R1〕
+- [ ] 3.6 **F6 check_hr_tg 签名 + _run() 巧合假绿**：更新全部 6 处单参 `check_hr_tg` 调用 + `_run()` helper 补 `--trigger-catalog`；`test_config_bad_block_exit2`/`test_missing_report_error_exit2` 改断言 **stderr 原因码**（非只 `returncode==2`，防 argparse 缺参 exit2 撞码假绿）。〔R2〕
+- [ ] 3.7 **F7 catalog 内部一致**：加载断言 `HR-TG 成员 ⊆ 全集`，成员含全集外 TG→fail-closed；`test_single_source_mutability` 类 fixture 若造全集外成员改为损坏源负例。〔R1+R2〕
+- [ ] 3.8 **F8 全集边界钉死**：全集只取 `## 三` 段 `^\s*\|\s*TG-\d+\s*\|` 表行（正文游离 TG 不入）；token 逐个 `fullmatch` 拒残留（`TG-04.0`）；测正文游离 `TG-99` 不入全集 + 残留后缀 fail-closed。〔R1〕
+- [ ] 3.9 **F9 错误处理契约**：新增校验就地转 violation dict（collect-not-raise），MUST NOT raise EmitError；测畸形 `hit=/declared=` 走结构化 violation、stdout 仍合法 JSON。〔R2〕
+- [ ] 3.10 **F12 docs 同步**：更新 `docs/workflow-map.md` + `docs/workflow-skills/{sdflow-spec-review,sdflow-code-review}.md` 里写死的 anchor_lint 调用串（补 `--trigger-catalog`），防 ground-truth 文档失真。
+
+## 4. bundle 回灌 + 验收
 
 - [ ] 3.1 两工具 + tests 落权威源 `sdflow-init/assets/workflow/tools/(tests/)`；dev `setup.sh` 同步 canonical。
 - [ ] 3.2 `sdflow-init update` 推下游（不含 tests/，核对脚本本体）。
