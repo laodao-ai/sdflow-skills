@@ -154,6 +154,27 @@ def test_malformed_tg_token_fail_closed():
         m.parse_tg_set("TG-04, banana")
 
 
+def test_tg_set_empty_cell_fail_closed():
+    """TG-04,,TG-16 连续逗号空 cell → EmitError（非静默过滤）。"""
+    m = _mod()
+    for raw in ("TG-04,,TG-16", ",", "TG-04,", ",TG-16", " , "):
+        with pytest.raises(m.EmitError):
+            m.parse_tg_set(raw)
+
+
+def test_tg_set_empty_string_is_empty_set():
+    """仅原始空串表空集（合法空集入口保留）。"""
+    m = _mod()
+    assert m.parse_tg_set("") == []
+
+
+def test_member_strict_token_rejects_malformed():
+    """成员/tg-set 畸形 token TG-04x → EmitError，不宽松正规化抽 TG-04。"""
+    m = _mod()
+    with pytest.raises(m.EmitError):
+        m.parse_tg_set("TG-04x")
+
+
 # --- 纯 stdlib / 无 subprocess / 无 git / 无 __file__ 推导 catalog（静态断言）---
 
 def test_no_subprocess_no_os_import_ast():

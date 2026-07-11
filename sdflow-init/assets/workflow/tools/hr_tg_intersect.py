@@ -52,11 +52,15 @@ def load_hr_tg_subset(catalog_path):
 
 
 def parse_tg_set(raw):
-    """--tg-set CSV → token 列表（原样、含重复，序化留给 intersect）。空串 = 空集。
+    """--tg-set CSV → token 列表（原样、含重复，序化留给 intersect）。
+    仅原始空串 = 空集；split 后出现空/纯空白 cell（前后/连续逗号）→ EmitError（M3 fail-closed）。
     任一 token 不形如 TG-<数字> → EmitError（坏输入 fail-closed）。"""
+    if raw == "":
+        return []
     tokens = [t.strip() for t in raw.split(",")]
-    tokens = [t for t in tokens if t]
     for t in tokens:
+        if t == "":
+            raise EmitError(f"tg-set 含空 cell（前后/连续逗号），仅空串表空集: {raw!r}")
         if not _TG_STRICT_RE.match(t):
             raise EmitError(f"tg-set 含非法 TG 记号（须 TG-<数字>）: {t!r}")
     return tokens
