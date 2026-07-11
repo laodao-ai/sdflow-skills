@@ -142,7 +142,6 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
 > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
 <!-- opsx-init:end -->
-
 ## Agent skills
 
 ### Issue tracker

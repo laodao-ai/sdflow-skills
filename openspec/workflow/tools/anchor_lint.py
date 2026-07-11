@@ -157,6 +157,23 @@ def check_existence(report_text, layer, metrics_on):
     return v
 
 
+HR_TG_REQUIRED_FIELDS = ("hit", "declared")  # mlh-p4 T81：declared= 承「依据模型判定」（adr/0018 输入可见）
+
+
+def check_hr_tg(report_text):
+    """校验 fence 外真 hr-tg 锚含 hit= + declared= 两字段（declared= 由 T81 hr_tg_intersect emit，承模型判定的命中集）。
+    只断言字段在场——字段值（TG 记号 CSV / none / 空串）任意合法，命中判定归模型，脚本不校验 CSV 内容。"""
+    v = []
+    for ln in fence_outside_lines(report_text):
+        if anchor_prefix(ln) != "hr-tg":
+            continue
+        kv = parse_kv(ln)
+        for f in HR_TG_REQUIRED_FIELDS:
+            if f not in kv:
+                v.append({"anchor": ln.strip()[:80], "field": f, "kind": "missing-field"})
+    return v
+
+
 _NONNEG_INT = re.compile(r'^\d+$')
 
 
@@ -215,6 +232,7 @@ def main(argv=None):
         return EXIT_ERROR
     # 3) 校验
     violations = check_existence(report_text, args.layer, metrics_on)
+    violations += check_hr_tg(report_text)                  # hr-tg 恒必有锚，字段校验不受 metrics 门控
     if metrics_on:
         violations += check_lens_metric(report_text, args.layer, enums)
     if violations:
