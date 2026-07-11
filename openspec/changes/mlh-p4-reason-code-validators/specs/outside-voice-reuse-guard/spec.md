@@ -2,7 +2,7 @@
 
 ### Requirement: outside-voice 复用三判归约为单一 reason_code
 
-校验器 SHALL 对 spec-review 复用 codex outside-voice 的三前置（来源 / 新鲜度 / 结构）按序判定，归约出**唯一** reason_code，取值属固定六枚举 `none|file-missing|section-not-found|zero-findings|stale|simulated-source`。`none` = 三判全过（可复用），退出码 0；任一不过 = 对应原因码。
+校验器 SHALL 对 spec-review 复用 codex outside-voice 的三前置（来源 / 新鲜度 / 结构）按序判定，归约出**唯一** reason_code，取值属固定七枚举 `none|file-missing|section-not-found|zero-findings|stale|stale-dirty-tree|simulated-source`〔grill-amendment：新增 `stale-dirty-tree`〕。`none` = 三判全过（可复用），退出码 0；任一不过 = 对应原因码。
 
 #### Scenario: mode=simulated 判无效
 - **WHEN** `gstack-review.md` 的 `step1-broad-review` 锚 `mode="simulated"`
@@ -28,13 +28,17 @@
 - **WHEN** mode=native 且产物不陈旧且 codex 段可解析且 findings>0
 - **THEN** 输出 `none`，退出码 0
 
-### Requirement: 输入契约门控外置、不自跑 subprocess
+#### Scenario: 工作树 dirty 时 fail-safe 判陈旧〔grill-amendment〕
+- **WHEN** `{change_dir}` 工作树有未提交改动（`git log` 时间不可信、无法确认新鲜）
+- **THEN** 输出 `stale-dirty-tree`（保守重跑 outside-voice，非假新鲜复用陈旧审查）
 
-校验器 SHALL 只接收已备齐的原始事实作入参（`gstack-review.md` 路径 + `change_mtime`），MUST NOT 自行调用 `git` 或任何 subprocess，MUST NOT 读 config——保持 stdlib-only 纯函数可测。
+### Requirement: 自跑 git 作新鲜度事实 owner、门控外置〔grill-amendment〕
 
-#### Scenario: 无 subprocess 调用
-- **WHEN** 校验器执行任意判定路径
-- **THEN** 进程不 fork / exec 子进程；`change_mtime` 取自入参而非脚本内 `git log`
+校验器 SHALL 自跑 `git log -1 --format=%ct -- {change_dir}`（新鲜度）与 `git status --porcelain -- {change_dir}`（dirty 检测）作为「新鲜度事实」的天然 owner，用 git fixture 测；MUST NOT 读 config（门控外置）。〔初版曾要求「不自跑 subprocess、`change_mtime` 由 SKILL 传参」，grill Q3 反转：`git log` 看不到未提交改动的语义 bug 与谁跑 git 无关，且传参是把未测接缝挪进 SKILL prose。此为三校验器中唯一 subprocess 例外。〕
+
+#### Scenario: 新鲜度事实自持可测
+- **WHEN** 判新鲜度 / dirty
+- **THEN** 脚本自跑 git 取事实（非依赖入参 mtime），行为由 git fixture 可复现测试锁定
 
 ### Requirement: 坏输入 fail-closed
 

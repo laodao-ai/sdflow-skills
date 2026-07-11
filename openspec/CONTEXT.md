@@ -146,6 +146,10 @@ _Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，�
 
 **报告工具反静默方向 (Report-tool Anti-silent Direction)** 〔grill-amendment · adr/0016〕:
 只读报告/对账工具（如 `maintain_scan` 的 set-diff）的 fail-closed 判据 MUST 锚在**「防假一致」方向**，非机械纠结「空 vs 畸形」。两方向失效危险度不对称：**解析读到 0 条 → 报全部差异**是**响亮自纠**（人一眼见幻影去查），**误读少读 → 漏报 → 报『一致』**才是**假绿同构**（该红报绿）。故：结构骨架可信但读 0 条 = **合法响亮态**（退出 0、不 fail）；结构骨架缺失 / 机器 marker 不配对 / 行畸形到解析器无法确信 = **fail-closed**（拒绝带半信半疑的解析输出「一致」）。区别于「门」的 all-or-nothing——报告工具不为「有差异」fail（有差异是正常产出），只为「无法自证解析可信」fail。是「反静默守卫」在只读报告层的方向化，呼应 `adr/0013` 记录维护 vs 正确性门。
+
+**机械校验器输出诚实 (Validator Output Honesty)** 〔grill-amendment · adr/0018〕:
+输出信号被下游决策消费的机械校验器，当裁决被**不可机械验证的输入**界定时，MUST 把该界定编码进信号本身，MUST NOT emit 与「已完整验证」不可区分的裸通过码——三形态：**暴露输入依据**（`hr_tg_intersect` 出 `none｜依据已声明:[...]` 使欠声明可审）、**在码里点名未核边界**（`review_disposition_check` 出 `section-ok-DISPOSITION-UNCHECKED` 而非裸 `present`）、**朝「漏判有害」方向 fail-safe**（`outside_voice_guard` 工作树 dirty→`stale-dirty-tree` 重跑，重跑只是成本、复用陈旧才是危害）。是「报告工具反静默方向」（adr/0016）从只读报告推广到**消费型信号校验器的输出诚实**、「假✅」防线在校验器自身输出的落点。区别于 fail-closed（坏输入→EXIT_FAIL）：**可读但不可验**的输入走信号内诚实，非崩溃非静默通过。
+_Avoid_: 用裸二态码把不可验界定藏进消费方会过度信任的干净信号（假绿/假阴/假新鲜温床）；让脚本用子串/正则兜底完整性判断（制造新假阳假阴）——完整性强制（声明 vs 实际、逐条处置）属模型/spec-review，非机械校验器职责。
 _Avoid_: 把报告工具 fail-closed 锚「畸形当空」（锚错方向，放过真正的「误读→假一致」）；把「读到 0 条」当失败（那是响亮自纠态）；照搬门的 all-or-nothing 到报告工具（有差异≠该 fail）
 
 **maintain / init 的 INDEX 分治 (Maintain vs Init INDEX Division)** 〔grill-amendment · adr/0016〕:

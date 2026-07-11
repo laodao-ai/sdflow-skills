@@ -2,15 +2,19 @@
 
 ### Requirement: 命中 TG 集与 HR-TG 子集求交
 
-校验器 SHALL 从 proposal.md 头部声明区抽取命中 TG 集，与 HR-TG 子集求交，输出命中列表 + 规范锚串（引 HR-TG 章节）或 `none`。命中判定 SHALL 复用 `tg02_hit` 三防线（fence-aware、只扫首个 `## ` 前头部区、只认 strip 后 `startswith("〔TG")` 的声明行）。
+校验器 SHALL 从 proposal.md 头部声明区抽取命中 TG 集，与 HR-TG 子集求交，输出**带「依据已声明」的**结果——`hit:[...]｜依据已声明:[...]` + 规范锚串 或 `none｜依据已声明:[...]`，把输入依据显式暴露（**不 emit 裸 `none`**，防高风险 TG 欠声明假阴不可见，adr/0018）〔grill-amendment Q1〕。命中判定 SHALL 复用 `tg02_hit` 三防线（fence-aware、只扫首个 `## ` 前头部区、只认 strip 后 `startswith("〔TG")` 的声明行）。
 
 #### Scenario: 命中 HR-TG 成员
 - **WHEN** proposal 头部声明 `〔TG-04：…〕〔TG-16：…〕〔TG-19：…〕`
-- **THEN** 输出 hit 列表 `[TG-04, TG-16]`（TG-19 不在 HR-TG 子集，剔除）+ 规范锚串
+- **THEN** 输出 `hit:[TG-04,TG-16]｜依据已声明:[TG-04,TG-16,TG-19]` + 规范锚串（TG-19 不属 HR-TG 故不在 hit、但在依据里可见）
 
 #### Scenario: 命中 TG 无一属 HR-TG
 - **WHEN** proposal 头部仅声明 `〔TG-01〕〔TG-19〕`（均不在子集）
-- **THEN** 输出 `none`，退出码 0
+- **THEN** 输出 `none｜依据已声明:[TG-01,TG-19]`，退出码 0
+
+#### Scenario: 依据可见使欠声明可审〔grill-amendment Q1〕
+- **WHEN** 某 change 实际命中 TG-07（高风险）但 proposal 头部漏声明 `〔TG-07〕`
+- **THEN** 校验器基于已声明输出（如 `none｜依据已声明:[TG-01]`），复审者可据「依据」sanity-check 欠声明；校验器 MUST NOT 冒充完整性（声明 vs 实际命中的强制属 spec-review / 模型职责）
 
 #### Scenario: 描述性提及不算命中
 - **WHEN** proposal 正文（首个 `## ` 之后）或 fenced 代码块内出现 `TG-04` 字样、或否定句「TG-04 不命中」

@@ -5,20 +5,20 @@
 
 ## 1. outside_voice_guard.py（capability: outside-voice-reuse-guard / T80）
 
-- [ ] 1.1 写 `tests/test_outside_voice_guard.py`：六 reason_code 正例（simulated-source / stale / section-not-found / zero-findings / file-missing / none）各一 + 锚缺失/mode非枚举 fail-closed 非零退出负例〔Req: 复用三判归约、坏输入 fail-closed〕
-- [ ] 1.2 实现 `outside_voice_guard.py`：`argparse`（`--review-path` + `--change-mtime`）、parse `step1-broad-review` 锚 mode、mtime 比对、best-effort codex 段 parse + findings 计数 → 单一 reason_code；`EmitError`+`EXIT_FAIL` all-or-nothing〔Req: 复用三判归约〕
-- [ ] 1.3 断言无 subprocess / 不读 config：测试中 patch/monkeypatch 校验不 fork，入参 mtime 生效〔Req: 输入契约门控外置〕
+- [ ] 1.1 写 `tests/test_outside_voice_guard.py`：**七** reason_code 正例（simulated-source / stale / **stale-dirty-tree** / section-not-found / zero-findings / file-missing / none）各一 + 锚缺失/mode非枚举 fail-closed 非零退出负例 + **工作树 dirty→stale-dirty-tree fail-safe（git fixture）**〔grill Q3；Req: 复用三判归约、坏输入 fail-closed、dirty fail-safe〕
+- [ ] 1.2 实现 `outside_voice_guard.py`：`argparse`（`--review-path` + `--change-dir`）、**自跑 `git log -1 --format=%ct`（新鲜度）+ `git status --porcelain`（dirty）**、parse `step1-broad-review` mode、best-effort codex 段 parse + findings 计数 → 单一 reason_code（dirty→`stale-dirty-tree`）；`EmitError`+`EXIT_FAIL` all-or-nothing〔grill Q3/D1；Req: 复用三判归约、自跑 git〕
+- [ ] 1.3 git fixture 测新鲜度 + dirty fail-safe（临时 git repo、造未提交改动断言 `stale-dirty-tree`）；断言不读 config〔grill Q3 反转初版「断言无 subprocess」；Req: 自跑 git 作新鲜度 owner、门控外置〕
 
 ## 2. hr_tg_intersect.py（capability: hr-tg-intersection-check / T81）
 
-- [ ] 2.1 写 `tests/test_hr_tg_intersect.py`：命中 HR-TG 成员→hit列表+锚串、无交集→none、描述性/否定/fence内不算命中、正文区声明不计、单一源变更即生效、单一源损坏 fail-closed〔Req: 求交、单一源读〕
+- [ ] 2.1 写 `tests/test_hr_tg_intersect.py`：命中→`hit:[...]｜依据已声明:[...]`+锚串、无交集→`none｜依据已声明:[...]`、**依据可见使欠声明可审**、描述性/否定/fence内不算命中、正文区声明不计、单一源变更即生效、单一源损坏 fail-closed〔grill Q1；Req: 求交带依据、单一源读〕
 - [ ] 2.2 实现 tg02_hit 三防线泛化：fence-aware + 头部区（首个 `## ` 前）+ `startswith("〔TG")` 声明行 → 抽全部 `〔TG-\d\d` 命中集〔Req: 求交（复用先例）〕
-- [ ] 2.3 实现 HR-TG 单一源 parse：定位 `## 七、HR-TG` 段抓 `> 成员：` 行 `TG-\d\d`，禁硬编码；求交 + 输出 hit/none + 规范锚串〔Req: HR-TG 清单从单一源读〕
+- [ ] 2.3 实现 HR-TG 单一源 parse：定位 `## 七、HR-TG` 段抓 `> 成员：` 行 `TG-\d\d`，禁硬编码；求交 + 输出 `hit/none｜依据已声明:[...]` + 规范锚串（不 emit 裸 none）〔grill Q1；Req: HR-TG 单一源读、依据暴露〕
 
 ## 3. review_disposition_check.py（capability: roadmap-review-reconcile / T82）
 
-- [ ] 3.1 写 `tests/test_review_disposition_check.py`：section-missing / section-empty / present 三码 + **收尾句「无『未处置』」不假阳负例** + 「不冒充逐条完整性」断言 + 文件不可读 fail-closed〔Req: 存在性非空断言、信任边界不假阳、坏输入 fail-closed〕
-- [ ] 3.2 实现 `## Review 处置` 小节定位（fence/结构感知）+ 非空判定（剔脚手架注释）→ `section-missing|section-empty|present`；**禁裸子串 `未处置`**〔Req: 存在性非空断言、信任边界〕
+- [ ] 3.1 写 `tests/test_review_disposition_check.py`：section-missing / section-empty / **section-ok-DISPOSITION-UNCHECKED** 三码 + **收尾句「无『未处置』」不假阳负例** + 「不冒充逐条完整性」断言 + 文件不可读 fail-closed〔grill Q2；Req: 存在性非空断言、信任边界不假阳、坏输入 fail-closed〕
+- [ ] 3.2 实现 `## Review 处置` 小节定位（fence/结构感知）+ 非空判定（剔脚手架注释）→ `section-missing|section-empty|section-ok-DISPOSITION-UNCHECKED`；**禁裸子串 `未处置`**〔grill Q2；Req: 存在性非空断言、信任边界〕
 - [ ] 3.3 SKILL 接入步 + 本 tool docstring 显式声明「逐条已处置为模型信任边界」（承 lens_metric_emit 诚实先例）〔Req: 逐条已处置为显式模型信任边界〕
 
 ## 4. 消费方 SKILL.md 接入（Blocked-by 1-3）
@@ -41,5 +41,5 @@
 | 坏输入 / 单一源损坏 / 文件缺失 | fail-closed 非零退出负例 |
 | T81 描述性/否定/fence/正文区不算命中 | tg02_hit 口径负例 |
 | T82 收尾句子串不假阳 | 陷阱负例（memory gate-substring-detection） |
-| 三校验器无 subprocess / 不读 config | 纯度断言 |
+| hr_tg/review_disposition 无 subprocess；T80 git fixture 新鲜度+dirty fail-safe | 纯度断言 + T80 git 例外测 |
 | bundle 双路径一致 + tools 全套件 -W error | dogfood / 集成 |
