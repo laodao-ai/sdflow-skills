@@ -1,3 +1,7 @@
+---
+ship-gate:
+  design_approved: true
+---
 ## spec-review 报告 — harden-hr-tg-anchor-consistency
 
 ### 命中范围
@@ -44,5 +48,4 @@
 
 ### 结论
 - 设计**方向站得住**（M1–M4+M-new 面治闭环、T137/T139 剥离有据、零妥协有 B3 支撑），15 条冷层发现**全为完整性/回归修复、非推翻决策**，已 fold 落 amendment。
-- □ 建议进设计 HARD-GATE（人工过本报告拍板 → 过门后 /sdflow-ship）
-- 拍板后主 session 写 `ship-gate.design_approved: true` 进本报告头部 frontmatter。
+- ☑ **设计门已拍板批准（2026-07-11）** → 头部 frontmatter `design_approved: true` 已回写 → 进 /sdflow-ship。
