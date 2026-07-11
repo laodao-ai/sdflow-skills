@@ -236,19 +236,76 @@ def load_all_tg_set(catalog_path):
     return full
 
 
+def _parse_tg_csv(raw):
+    """（同 hr_tg_intersect.parse_tg_set 口径，本地重实现——adr/0002 非 import 约定）CSV → token 列表。
+    仅原始空串 = 空集；split 后出现空/纯空白 cell（前后/连续逗号）或非法 TG 记号（须 TG-<数字>）
+    → EmitError（fail-closed；调用侧 check_hr_tg 用 F9 collect-not-raise 就地转 violation，不外抛）。"""
+    if raw == "":
+        return []
+    tokens = [t.strip() for t in raw.split(",")]
+    for t in tokens:
+        if t == "":
+            raise EmitError(f"CSV 含空 cell（前后/连续逗号），仅空串表空集: {raw!r}")
+        if not _TG_STRICT_RE.match(t):
+            raise EmitError(f"CSV 含非法 TG 记号（须 TG-<数字>）: {t!r}")
+    return tokens
+
+
 def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
-    """校验 fence 外真 hr-tg 锚含 hit= + declared= 两字段（declared= 由 T81 hr_tg_intersect emit，承模型判定的命中集）。
-    只断言字段在场——字段值（TG 记号 CSV / none / 空串）任意合法，命中判定归模型，脚本不校验 CSV 内容。
-    hr_tg_subset/all_tg_set：trigger-catalog 单一源解析结果（M2 重算 / M4 evidence / M-new 逐 TG
-    存在性校验见 Task 4；本签名先接好单一源，未使用不代表未来不用）。"""
+    """校验 fence 外真 hr-tg 锚：M1 hit=/declared= 两字段在场；M2 重算 hit == declared∩HR-TG
+    （数值序逐元素比较，none⟺空交集）；M4 hit≠none(空) ⟹ evidence= 在场且 strip 后非空；
+    M-new declared/hit 每 TG ∈ all_tg_set（trigger-catalog 全集，M-new lint 侧）；F1 sentinel
+    （declared 空集须 ""、hit 空须 "none"，写反 → violation，仍尽力降级续算不中断其余校验）。
+    诚实边界（S1）：M2 只堵内部一致性（hit 与 declared∩HR-TG 是否自洽），堵不住「declared 本身
+    是否=真命中集」（无确定性信号，语义残余）——一致但错的锚 MUST 通过，MUST NOT 加强为 tamper-proof。
+    F9 collect-not-raise：CSV 解析畸形（非 TG-<数字> token / 空 cell）就地转 violation dict
+    （kind=malformed-tg-csv），MUST NOT raise EmitError 外抛（护 human + JSON 双输出不中断）。"""
     v = []
     for ln in fence_outside_lines(report_text):
         if anchor_prefix(ln) != "hr-tg":
             continue
         kv = parse_kv(ln)
+        anchor = ln.strip()[:80]
         for f in HR_TG_REQUIRED_FIELDS:
             if f not in kv:
-                v.append({"anchor": ln.strip()[:80], "field": f, "kind": "missing-field"})
+                v.append({"anchor": anchor, "field": f, "kind": "missing-field"})
+        if "hit" not in kv or "declared" not in kv:
+            continue
+        hit_raw, decl_raw = kv["hit"], kv["declared"]
+        try:
+            # F1 sentinel：declared 空集须 ""（非 "none"）；"none" 字面不可解析为 CSV，
+            # 违规照记但降级按空集续算，避免同根因被误记成 malformed-tg-csv 掩盖真实 kind。
+            if decl_raw == "none":
+                v.append({"anchor": anchor, "field": "declared", "kind": "declared-none-literal"})
+                declared = []
+            else:
+                declared = _parse_tg_csv(decl_raw)
+            # F1 sentinel：hit 空须 "none"（非 ""）；"" 本身是合法空 CSV，可续算，仅额外记违规。
+            if hit_raw == "":
+                v.append({"anchor": anchor, "field": "hit", "kind": "hit-empty-not-none"})
+                actual = []
+            elif hit_raw == "none":
+                actual = []
+            else:
+                actual = _parse_tg_csv(hit_raw)
+            # M-new：declared/hit 每 TG ∈ catalog 全集
+            for t in set(declared):
+                if t not in all_tg_set:
+                    v.append({"anchor": anchor, "field": "declared", "kind": "tg-not-in-catalog"})
+            for t in set(actual):
+                if t not in all_tg_set:
+                    v.append({"anchor": anchor, "field": "hit", "kind": "tg-not-in-catalog"})
+            # M2：重算 expect_hits = declared ∩ HR-TG，与锚里 hit= 逐元素同序（数值序）比较
+            expect_hits = sorted({t for t in declared if t in hr_tg_subset}, key=lambda x: int(x[3:]))
+            actual_sorted = sorted(set(actual), key=lambda x: int(x[3:]))
+            if actual_sorted != expect_hits:
+                v.append({"anchor": anchor, "field": "hit", "kind": "hit-declared-mismatch"})
+            # M4：hit≠none(空) ⟹ evidence= 在场且 strip 后非空（按锚上实际 hit 声明门控，非按 expect_hits——
+            # 即便 M2 判 mismatch，只要锚声明了非空 hit，仍要求 evidence，两者独立校验）
+            if actual_sorted and kv.get("evidence", "").strip() == "":
+                v.append({"anchor": anchor, "field": "evidence", "kind": "evidence-missing"})
+        except EmitError:
+            v.append({"anchor": anchor, "field": "hit/declared", "kind": "malformed-tg-csv"})
     return v
 
 

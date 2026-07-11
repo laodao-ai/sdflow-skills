@@ -182,9 +182,9 @@ def test_min_required_single_missing():                     # [impl-review-fix] 
 
 # --- hr-tg 锚 declared= 字段 schema（mlh-p4 T81：承「依据模型判定」）---------
 
-def test_hr_tg_declared_present_ok():                       # hit=+declared= 齐 → 无违规
+def test_hr_tg_declared_present_ok():                       # hit=+declared=+evidence= 齐、M2 自洽 → 无违规
     al = _mod()
-    report = '<!-- sdflow:hr-tg v1 hit="TG-04,TG-16" declared="TG-04,TG-16,TG-19" -->\n'
+    report = '<!-- sdflow:hr-tg v1 hit="TG-04,TG-16" declared="TG-04,TG-16,TG-19" evidence="x" -->\n'
     assert al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET) == []
 
 def test_hr_tg_none_with_declared_ok():                     # none 态 declared="" 亦合规（空集显式可见）
@@ -204,10 +204,63 @@ def test_hr_tg_missing_hit_violation():                     # 缺 hit= → 违�
     v = al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET)
     assert any(x["field"] == "hit" and x["kind"] == "missing-field" for x in v)
 
-def test_hr_tg_value_content_not_checked():                 # 字段值任意（模型判定归模型，只断言字段在场）
+def test_hr_tg_malformed_csv_collect_not_raise():           # F9：非 TG-<num> 记号就地转 violation，不 raise
+    """Task4 前旧断言"字段值任意不校验"已被 M2/M-new 取代——CSV 语法与目录归属现受检；
+    仍不受检的仅"declared 是否=真命中集"（语义残余，S1，见 test_m2_consistent_but_wrong_still_passes）。"""
     al = _mod()
     report = '<!-- sdflow:hr-tg v1 hit="whatever" declared="anything" -->\n'
-    assert al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET) == []
+    v = al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET)   # 不 raise（F9 collect-not-raise）
+    assert any(x["kind"] == "malformed-tg-csv" for x in v)
+
+# --- M2 重算 / M4 evidence / M-new lint / F1 sentinel（mlh-p4 Task4）--------------------------
+
+def test_m2_hit_recompute_mismatch_violation():             # hit≠declared∩HR-TG → hit-declared-mismatch
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-04" declared="TG-19" evidence="x" -->\n'   # TG-19 非 HR-TG→expect_hits=[]≠[TG-04]
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "hit-declared-mismatch" for x in v)
+
+def test_m2_consistent_but_wrong_still_passes():
+    """诚实边界（S1）：hit="none" declared="" 内部自洽（M2 只堵一致性，堵不住"是否漏判真命中"）→ 必须过。"""
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+    assert al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET) == []
+
+def test_m4_evidence_missing_when_hit():                    # hit≠none 缺/纯空白 evidence → evidence-missing
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-04" declared="TG-04" evidence="   " -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "evidence-missing" for x in v)
+
+def test_m4_evidence_present_when_hit_ok():                 # 正例：hit≠none 且 evidence 非空白 → 无 evidence-missing
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-04" declared="TG-04" evidence="见 x 行" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert not any(x["kind"] == "evidence-missing" for x in v)
+
+def test_f1_declared_none_literal_is_violation():           # F1：declared="none" 字面（应为 ""）→ 违规
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" declared="none" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "declared-none-literal" for x in v)
+
+def test_f1_hit_empty_string_is_violation():                # F1：hit=""（应为 "none"）→ 违规
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="" declared="" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "hit-empty-not-none" for x in v)
+
+def test_mnew_lint_tg_not_in_catalog():                     # M-new lint 侧：declared 含全集外 TG → 违规
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" declared="TG-77" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "tg-not-in-catalog" for x in v)
+
+def test_mnew_lint_hit_tg_not_in_catalog():                 # M-new lint 侧：hit 含全集外 TG 亦违规（非仅 declared）
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-77" declared="TG-77" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "tg-not-in-catalog" and x["field"] == "hit" for x in v)
 
 def test_hr_tg_in_fence_not_checked():                      # fence 内示例锚不校验（同 lens-metric 口径）
     al = _mod()
