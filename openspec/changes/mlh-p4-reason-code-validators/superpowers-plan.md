@@ -37,11 +37,11 @@ impl-pipeline: tickets
 
 给定模型判好的命中 TG 集与 trigger-catalog，确定性地求「命中集 ∩ HR-TG 子集」，输出带「依据模型判定」的结果（`hit:[...]｜依据模型判定:[...]` 或 `none｜依据模型判定:[...]`，命中集确定序）+ 规范锚串。HR-TG 子集从 trigger-catalog 单一源读、禁硬编码；trigger-catalog 路径与 TG 集均由入参给定（不自扫 proposal、不 `__file__` 推导）；单一源损坏 fail-closed。
 
-- [ ] 命中 HR-TG 成员 / 无交集 / 空集三类正例，输出格式与确定序（sorted set）正确
-- [ ] HR-TG 清单从 trigger-catalog 单一源读，改单一源即改行为、无硬编码副本
-- [ ] trigger-catalog 路径由入参（`--trigger-catalog`）定位，裸调不依赖 `__file__` 推导
-- [ ] 单一源损坏/缺失 → 非零退出 + stderr，不静默按空子集放行
-- [ ] pytest 覆盖，随权威源套件 `-W error` 全绿
+- [x] 命中 HR-TG 成员 / 无交集 / 空集三类正例，输出格式与确定序（sorted set）正确
+- [x] HR-TG 清单从 trigger-catalog 单一源读，改单一源即改行为、无硬编码副本
+- [x] trigger-catalog 路径由入参（`--trigger-catalog`）定位，裸调不依赖 `__file__` 推导
+- [x] 单一源损坏/缺失 → 非零退出 + stderr，不静默按空子集放行
+- [x] pytest 覆盖，随权威源套件 `-W error` 全绿
 
 ### Task 3: review_disposition_check 校验器（Review 处置小节存在+非空）
 
