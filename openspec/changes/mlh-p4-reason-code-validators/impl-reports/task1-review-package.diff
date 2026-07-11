@@ -1,0 +1,357 @@
+diff --git a/sdflow-init/assets/workflow/tools/outside_voice_guard.py b/sdflow-init/assets/workflow/tools/outside_voice_guard.py
+new file mode 100644
+index 0000000..489652a
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/outside_voice_guard.py
+@@ -0,0 +1,123 @@
++#!/usr/bin/env python3
++"""outside_voice_guard — 确定性 outside-voice 复用守卫（mlh-p4·T80）。
++读一份 spec-review 的 outside-voice 产物（gstack-review.md）+ 一个 change 目录，
++按三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）按序归约出**唯一** reason_code（六枚举）。
++纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 fail-closed all-or-nothing。
++新鲜度用源文件 fs-mtime 直比〔spec-review Q-C：撤销 grill 的 git 反转、纯 fs-mtime〕，
++排除评审产物自身（gstack-review.md / spec-review-report.md / .outside-voice/）。承 4.C lens_metric_emit 形态。"""
++import argparse, re, sys
++from pathlib import Path
++
++EXIT_OK, EXIT_FAIL = 0, 1
++REASON_CODES = ("none", "file-missing", "section-not-found",
++                "zero-findings", "stale", "simulated-source")   # 本地常量豁免（ADR-11：输入独有、不写进锚、不跨模块共享）
++VALID_MODES = ("native", "simulated")                           # step1-broad-review 锚 mode 枚举（我们的锚，严格 fail-closed）
++SOURCE_FILES = ("proposal.md", "design.md", "tasks.md")         # + specs/** 递归；评审产物自身不在此列（inclusion allowlist 天然排除）
++
++_S1_RE = re.compile(r'<!--\s*sdflow:step1-broad-review\s+v1\b(.*?)-->')
++_OV_ANCHOR_RE = re.compile(r'<!--\s*sdflow:outside-voice\s+v1\b(.*?)-->')
++_ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
++_CODEX_LABEL_RE = re.compile(r'\bcodex#(\d+)\b')                 # adr/0002 codex#N 标签约定（次选解析路径）
++
++
++class EmitError(Exception):
++    """坏输入 fail-closed（我们的锚缺失/mode 非枚举/单一源不可读；区别于外部 codex 段的 best-effort 降级）。"""
++    pass
++
++
++def parse_mode(text):
++    """抓 step1-broad-review 锚 mode（我们的锚，严格）。锚缺失/缺 mode/mode 非枚举 → EmitError。"""
++    m = _S1_RE.search(text)
++    if not m:
++        raise EmitError("step1-broad-review 锚缺失或格式不符")
++    mode = dict(_ATTR_RE.findall(m.group(1))).get("mode")
++    if mode is None:
++        raise EmitError("step1-broad-review 锚缺 mode 属性")
++    if mode not in VALID_MODES:
++        raise EmitError(f"mode 非枚举值（须 native|simulated）: {mode!r}")
++    return mode
++
++
++def source_max_mtime(change_dir):
++    """源文件（proposal/design/tasks/specs/**）最大 fs-mtime；评审产物自身天然不在 allowlist。
++    change_dir 缺失/非目录/无源文件 → EmitError（无法判新鲜度，fail-closed）。"""
++    if not change_dir.is_dir():
++        raise EmitError(f"change 目录不存在或非目录: {change_dir}")
++    mtimes = []
++    for name in SOURCE_FILES:
++        p = change_dir / name
++        if p.is_file():
++            mtimes.append(p.stat().st_mtime)
++    specs_dir = change_dir / "specs"
++    if specs_dir.is_dir():
++        for p in sorted(specs_dir.rglob("*")):
++            if p.is_file():
++                mtimes.append(p.stat().st_mtime)
++    if not mtimes:
++        raise EmitError(f"change 目录无源文件（proposal/design/tasks/specs）: {change_dir}")
++    return max(mtimes)
++
++
++def parse_codex_findings(text):
++    """best-effort 解析 codex findings 计数。返回 int（含 0）；解析不出任何 codex 段 → None（→ section-not-found）。
++    codex 段外部所有（adr/0002:21），格式漂移不崩溃、fail-closed 到 None。"""
++    total = None
++    for m in _OV_ANCHOR_RE.finditer(text):
++        attrs = dict(_ATTR_RE.findall(m.group(1)))
++        if attrs.get("runner") != "codex":               # 仅 runner=codex 计入（claude-fallback 不算 codex 段）
++            continue
++        raw = attrs.get("findings")
++        if raw is None or not raw.isdigit():
++            continue                                      # 畸形 findings 属性：跳过（best-effort）
++        total = (total or 0) + int(raw)
++    if total is not None:
++        return total
++    labels = set(_CODEX_LABEL_RE.findall(text))           # 次选：adr/0002 codex#N 标签
++    if labels:
++        return len(labels)
++    return None
++
++
++def classify(review_path, change_dir):
++    """三前置按序（来源 > 新鲜度 > 结构）归约 → 唯一 reason_code。坏输入 → EmitError。"""
++    # 产物存在性（file-missing 是合法判定，不需 change_dir）
++    if not review_path.exists():
++        return "file-missing"
++    if not review_path.is_file():
++        raise EmitError(f"产物路径非普通文件: {review_path}")
++    try:
++        text = review_path.read_text(encoding="utf-8")
++    except (OSError, UnicodeDecodeError) as e:
++        raise EmitError(f"产物不可读: {e}")
++    # ①来源（mode；simulated 视同无效）
++    if parse_mode(text) == "simulated":
++        return "simulated-source"
++    # ②新鲜度（fs-mtime 直比；产物早于源文件最大 mtime → stale。此处才需 change_dir）
++    if review_path.stat().st_mtime < source_max_mtime(change_dir):
++        return "stale"
++    # ③结构（codex 段可解析否 / 条数）
++    n = parse_codex_findings(text)
++    if n is None:
++        return "section-not-found"
++    if n == 0:
++        return "zero-findings"
++    return "none"
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(
++        description="outside-voice 复用守卫（确定性·纯 stdlib·fail-closed·门控外置）")
++    ap.add_argument("--review-path", required=True, help="outside-voice 产物路径（gstack-review.md）")
++    ap.add_argument("--change-dir", required=True, help="change 目录（openspec/changes/<name>/）")
++    args = ap.parse_args(argv)
++    try:
++        code = classify(Path(args.review_path), Path(args.change_dir))
++    except EmitError as e:
++        print(f"[outside_voice_guard] FAIL: {e}", file=sys.stderr)   # 坏输入：stderr FAIL、无 stdout
++        return EXIT_FAIL
++    print(code)                                                       # reason_code 落 stdout（含 none）
++    return EXIT_OK if code == "none" else EXIT_FAIL                   # none=可复用 exit0；其余=非零（stdout 载码，区别于 stderr FAIL）
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_outside_voice_guard.py b/sdflow-init/assets/workflow/tools/tests/test_outside_voice_guard.py
+new file mode 100644
+index 0000000..0886001
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/test_outside_voice_guard.py
+@@ -0,0 +1,222 @@
++import subprocess, sys, ast, importlib.util, os
++from pathlib import Path
++import pytest
++
++TOOLS = Path(__file__).resolve().parent.parent
++SCRIPT = TOOLS / "outside_voice_guard.py"
++
++
++def _mod():
++    spec = importlib.util.spec_from_file_location("outside_voice_guard", SCRIPT)
++    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
++
++
++# --- 夹具构造：造一个 change 目录（源文件 + 一份 gstack-review.md），mtime 显式钉死 ---
++
++def _mode_anchor(mode="native"):
++    return f'<!-- sdflow:step1-broad-review v1 mode="{mode}" -->'
++
++
++def _ov_anchor(findings=1, runner="codex"):
++    return (f'<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
++            f'runner="{runner}" reason_code="ok" findings="{findings}" truncated="false" -->')
++
++
++def _make_change(tmp_path, mode="native", codex=True, findings=1,
++                 src_mtime=1_000_000, product_mtime=2_000_000, extra_body=""):
++    """返回 (review_path, change_dir)。product_mtime > src_mtime = fresh；反之 stale。"""
++    cd = tmp_path / "changes" / "mychange"
++    (cd / "specs" / "cap").mkdir(parents=True)
++    for name in ("proposal.md", "design.md", "tasks.md"):
++        f = cd / name; f.write_text(f"# {name}\n", encoding="utf-8")
++        os.utime(f, (src_mtime, src_mtime))
++    sp = cd / "specs" / "cap" / "spec.md"; sp.write_text("## ADDED\n", encoding="utf-8")
++    os.utime(sp, (src_mtime, src_mtime))
++    body = _mode_anchor(mode) + "\n# review\n" + extra_body
++    if codex:
++        body += "\n" + _ov_anchor(findings)
++    rp = cd / "gstack-review.md"; rp.write_text(body + "\n", encoding="utf-8")
++    os.utime(rp, (product_mtime, product_mtime))
++    return rp, cd
++
++
++# --- 六 reason_code 各一正例（直调核心归约函数）---
++
++def test_none_reusable(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path)
++    assert m.classify(rp, cd) == "none"
++
++
++def test_simulated_source(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, mode="simulated")
++    assert m.classify(rp, cd) == "simulated-source"
++
++
++def test_stale(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, product_mtime=500_000)   # 早于源 1M
++    assert m.classify(rp, cd) == "stale"
++
++
++def test_section_not_found(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
++    assert m.classify(rp, cd) == "section-not-found"
++
++
++def test_zero_findings(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, findings=0)
++    assert m.classify(rp, cd) == "zero-findings"
++
++
++def test_file_missing(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path); rp.unlink()
++    assert m.classify(rp, cd) == "file-missing"
++
++
++def test_reason_codes_are_six_enum():
++    m = _mod()
++    assert set(m.REASON_CODES) == {
++        "none", "file-missing", "section-not-found", "zero-findings", "stale", "simulated-source"}
++    assert len(m.REASON_CODES) == 6
++
++
++# --- 坏输入 fail-closed（EmitError；非静默产码掩盖损坏）---
++
++def test_anchor_missing_fail_closed(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path)
++    rp.write_text("# no anchor here\n" + _ov_anchor(1) + "\n", encoding="utf-8")
++    os.utime(rp, (2_000_000, 2_000_000))
++    with pytest.raises(m.EmitError):
++        m.classify(rp, cd)
++
++
++def test_mode_non_enum_fail_closed(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, mode="adapted")   # 非 native|simulated
++    with pytest.raises(m.EmitError):
++        m.classify(rp, cd)
++
++
++def test_change_dir_missing_fail_closed(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path)
++    with pytest.raises(m.EmitError):
++        m.classify(rp, tmp_path / "nonexistent")
++
++
++def test_change_dir_no_sources_fail_closed(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path)
++    empty = tmp_path / "empty"; empty.mkdir()
++    with pytest.raises(m.EmitError):
++        m.classify(rp, empty)
++
++
++# --- 三前置按序（来源 > 新鲜度 > 结构）---
++
++def test_simulated_precedes_stale(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, mode="simulated", product_mtime=500_000)
++    assert m.classify(rp, cd) == "simulated-source"   # 来源判先于新鲜度
++
++
++def test_stale_precedes_structure(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, codex=False, product_mtime=500_000)
++    assert m.classify(rp, cd) == "stale"              # 新鲜度先于结构
++
++
++# --- 新鲜度：排除评审产物自身 / specs 计入源 ---
++
++def test_review_artifacts_excluded_from_freshness(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path)        # product 2M > src 1M
++    srr = cd / "spec-review-report.md"; srr.write_text("# report\n", encoding="utf-8")
++    os.utime(srr, (9_000_000, 9_000_000))             # 评审产物远新于 product
++    ovdir = cd / ".outside-voice"; ovdir.mkdir()
++    ctx = ovdir / "design-voice-context.md"; ctx.write_text("ctx\n", encoding="utf-8")
++    os.utime(ctx, (9_000_000, 9_000_000))
++    assert m.classify(rp, cd) == "none"               # 评审产物不算源 → 不 stale
++
++
++def test_specs_file_counts_as_source_stale(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path)        # product 2M, src 1M
++    sp = cd / "specs" / "cap" / "spec.md"
++    os.utime(sp, (5_000_000, 5_000_000))              # specs 文件新于 product → stale
++    assert m.classify(rp, cd) == "stale"
++
++
++# --- codex 段 best-effort 解析 ---
++
++def test_codex_hash_label_fallback(tmp_path):
++    m = _mod(); rp, cd = _make_change(
++        tmp_path, codex=False, extra_body="- codex#1 finding a\n- codex#2 finding b\n")
++    assert m.classify(rp, cd) == "none"               # 2 个 codex#N 标签 → findings>0
++
++
++def test_malformed_codex_findings_section_not_found(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
++    bad = _mode_anchor("native") + '\n<!-- sdflow:outside-voice v1 runner="codex" findings="oops" -->\n'
++    rp.write_text(bad, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
++    assert m.classify(rp, cd) == "section-not-found"  # 畸形 findings → best-effort fail-closed
++
++
++def test_claude_fallback_runner_not_codex(tmp_path):
++    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
++    body = _mode_anchor("native") + "\n" + _ov_anchor(3, runner="claude-fallback") + "\n"
++    rp.write_text(body, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
++    assert m.classify(rp, cd) == "section-not-found"  # 非 codex runner 不计入 codex 段
++
++
++# --- 纯 stdlib / 无 subprocess / 无 git fork（静态断言，comment/docstring 安全）---
++
++def test_no_subprocess_no_os_import_ast():
++    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
++    imported = set()
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Import):
++            for a in node.names:
++                imported.add(a.name.split(".")[0])
++        elif isinstance(node, ast.ImportFrom):
++            if node.module:
++                imported.add(node.module.split(".")[0])
++    assert "subprocess" not in imported    # 无 subprocess → 无 fork/exec 子进程（含 git）
++    assert "os" not in imported            # 连 os 都不引 → 无 os.system/fork/exec/popen 通路
++
++
++def test_no_exec_tokens_in_source():
++    src = SCRIPT.read_text(encoding="utf-8")
++    for tok in ("os.system", "os.popen", "os.fork", "os.exec", "Popen", "check_output", "check_call"):
++        assert tok not in src
++
++
++# --- CLI 契约（子进程；exit 码 + stdout reason / stderr FAIL 分流）---
++
++def _run(review_path, change_dir):
++    return subprocess.run(
++        [sys.executable, str(SCRIPT), "--review-path", str(review_path),
++         "--change-dir", str(change_dir)], capture_output=True, text=True)
++
++
++def test_cli_none_exit0(tmp_path):
++    rp, cd = _make_change(tmp_path)
++    r = _run(rp, cd)
++    assert r.returncode == 0 and r.stdout.strip() == "none"
++
++
++def test_cli_simulated_exit_nonzero_stdout(tmp_path):
++    rp, cd = _make_change(tmp_path, mode="simulated")
++    r = _run(rp, cd)
++    assert r.returncode != 0 and r.stdout.strip() == "simulated-source" and r.stderr.strip() == ""
++
++
++def test_cli_stale_exit_nonzero(tmp_path):
++    rp, cd = _make_change(tmp_path, product_mtime=500_000)
++    r = _run(rp, cd)
++    assert r.returncode != 0 and r.stdout.strip() == "stale"
++
++
++def test_cli_bad_input_fail_closed_stderr_no_stdout(tmp_path):
++    rp, cd = _make_change(tmp_path, mode="adapted")
++    r = _run(rp, cd)
++    assert (r.returncode != 0 and r.stdout.strip() == ""
++            and "[outside_voice_guard] FAIL" in r.stderr and "Traceback" not in r.stderr)
++
++
++def test_cli_file_missing(tmp_path):
++    rp, cd = _make_change(tmp_path); rp.unlink()
++    r = _run(rp, cd)
++    assert r.returncode != 0 and r.stdout.strip() == "file-missing"

@@ -25,10 +25,10 @@ impl-pipeline: tickets
 
 给定一份 outside-voice 产物与一个 change 目录，确定性地归约出**唯一** reason_code（六枚举），依据三前置：①来源（产物内 `step1-broad-review` 锚的 mode，simulated 视同无效）②新鲜度（产物 fs-mtime 早于该 change 源文件最大 fs-mtime → 陈旧，且排除评审产物自身）③结构（codex findings 段可否解析、条数）。纯 stdlib、无 subprocess、门控外置、坏输入 all-or-nothing fail-closed。
 
-- [ ] 六 reason_code（none/file-missing/section-not-found/zero-findings/stale/simulated-source）各有正例，行为可复现验证
-- [ ] 新鲜度用源文件 fs-mtime 直比、排除评审产物自身；无 git/subprocess 调用（可断言不 fork）
-- [ ] 坏输入（锚缺失/mode 非枚举）非零退出 + stderr，不静默产码掩盖损坏
-- [ ] pytest 覆盖上述，随权威源套件 `-W error` 全绿
+- [x] 六 reason_code（none/file-missing/section-not-found/zero-findings/stale/simulated-source）各有正例，行为可复现验证
+- [x] 新鲜度用源文件 fs-mtime 直比、排除评审产物自身；无 git/subprocess 调用（可断言不 fork）
+- [x] 坏输入（锚缺失/mode 非枚举）非零退出 + stderr，不静默产码掩盖损坏
+- [x] pytest 覆盖上述，随权威源套件 `-W error` 全绿
 
 ### Task 2: hr_tg_intersect 校验器（模型传入 TG 集 ∩ HR-TG 子集）
 
