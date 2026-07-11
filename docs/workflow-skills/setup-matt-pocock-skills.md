@@ -80,6 +80,7 @@
 | 1 | **skill 绕锚硬编码约定文档路径**：套件自家 code-review 写死 `docs/agents/issue-tracker.md`、PRD 搜索只看 `docs/`、`specs/`、`.scratch/`；qa 写死 `gh issue create` | code-review/SKILL.md:13,29,31；qa/SKILL.md:47-49；本仓实例在 `openspec/matt/` → 这两个 skill 打折扣 | 约定文档模式的阿喀琉斯之踵：**锚必须唯一（CLAUDE.md 块），skill 一律经锚解析，禁止写死约定文档位置** |
 | 2 | **重跑覆盖定制**：Explore 步只查 `docs/agents/` 是否有既往产出（SKILL.md:27），不认识改道后的 `openspec/matt/`；重跑时若用户没细看草稿，定制会被 seed 模板覆盖回默认 | SKILL.md:27 vs 本仓改道事实 | 人在环确认是唯一兜底、非结构性保证；仓内定制应在 CLAUDE.md 锚块里**多写一句**当第二锚 |
 | 3 | **小节名跨语言字面不匹配**：wayfinder 按英文 "Wayfinding operations" 找小节，本仓标题是中文「Wayfinding 约定」 | wayfinder/SKILL.md:25 vs openspec/matt/issue-tracker.md:22 | 模型大概率能对上，但鲁棒做法是标题带双语别名 |
+| 4 | **`domain-modeling` 硬编码根 `docs/adr/`+`CONTEXT.md`**（`grill-with-docs` 内包）：不读本 skill 产出的 `openspec/matt/domain.md`，靠本 session CLAUDE.md `## Agent skills` 块覆盖赢冲突 | domain-modeling/SKILL.md「File structure」段 vs 本仓 openspec/ 布局；generation-process §六 已预警「否则另起一套 docs/adr/」 | 同 #1 阿喀琉斯之踵的又一实例，且更微妙：**本 skill 的 Section-C 域文档配置正为对齐它而设，但 domain-modeling 未 domain.md-aware → 对齐只落一半**（config 层写了、消费方不读）。硬化 = 让它 domain.md-path-aware（todolist T134）；未修前消费方（grill prompt / `workflow.md:83` 模版）手塞 `ADR→openspec/adr/` 重定向作 belt-and-suspenders。详见 [grill-with-docs.md](./grill-with-docs.md) §7.4 |
 
 ---
 
@@ -102,4 +103,4 @@ sdflow 已有此模式四层里的三层，逐层对照：
 
 ---
 
-*配套：[matt-pocock-workflow.md](./matt-pocock-workflow.md)（套件全景 + 12 条可借鉴机制）；本仓消费实例 `openspec/matt/issue-tracker.md`。*
+*配套：[matt-pocock-workflow.md](./matt-pocock-workflow.md)（套件全景 + 12 条可借鉴机制）；[grill-with-docs.md](./grill-with-docs.md)（Section-C 域文档配置的下游消费方 + 脆弱点 #4 展开）；本仓消费实例 `openspec/matt/issue-tracker.md`。*

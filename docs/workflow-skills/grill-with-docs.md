@@ -20,6 +20,8 @@
 | 出（产物） | design/ADR/CONTEXT 更新（标 `[grill-amendment]`）；`docs/adr/NNNN-*.md`（按需）；`CONTEXT.md` 术语表（按需，lazily） |
 | 本性 | **人类对话岛**——人对着设计死磕，不折叠、不自动化 |
 | 收敛 | **收敛后才 checkpoint**（多轮中途不提交，只收敛后一次） |
+| 组成 | **薄包装** = `/grilling`（拷问引擎）+ `/domain-modeling`（落 ADR/术语）——SKILL.md 仅一句 `Run a /grilling session, using the /domain-modeling skill`（拆解见 §7.1） |
+| 调用约束 | `disable-model-invocation: true`——**模型不能自调，只能人 `/grill-with-docs` 触发**；这正是 grill 常被静默跳过的机械根因（§7.2） |
 
 > **grill 不可轻跳**：grill 是对 explore 的二次审视；「跳过类判定」别埋进长消息里——须显著呈现（见记忆 [[grill-not-skippable]]）。
 
@@ -103,8 +105,47 @@ grill **不派子代理、不调脚本**（对话岛，主 session 直接与人�
 
 ---
 
-## 7. 小结
+## 7. 组成 · 调用约束 · 提示词模版 · 落档路径（2026-07-11 调研补记）
+
+### 7.1 组成拆解——薄包装 = grilling + domain-modeling
+
+grill-with-docs 的 SKILL.md 只有一句：`Run a /grilling session, using the /domain-modeling skill`。即它本身零逻辑，是两个 skill 的薄包装：
+
+| 内包 skill | 管什么 | 本文哪些规则来自它 |
+|---|---|---|
+| `/grilling`（拷问引擎） | relentless 逐分支走设计树、**一次一题**、每题给推荐、facts 查码 / decisions 抛人、未达共识不 enact | §2 的「一次一题 / 能查码就查码 / cross-reference code」 |
+| `/domain-modeling`（落档） | challenge glossary / sharpen fuzzy / concrete scenarios / update CONTEXT.md inline / **ADR 三门槛** | §2-3 的术语表 + ADR 规则 |
+
+> 拆开的用处：判「改哪条规则动哪个 skill」——改拷问节奏 → grilling；改落档格式 / 路径 → domain-modeling。
+
+### 7.2 调用约束 = 静默跳过的机械根因（→ todolist T132 门）
+
+grill-with-docs frontmatter `disable-model-invocation: true`：**模型调不动它**（Skill tool 直接拒），唯一入口是人手动 `/grill-with-docs`。这解释了「grill 常被静默跳过、要人手动触发」（记忆 [[grill-not-skippable]]）——不是模型偷懒，是机制上模型只能「提示人去触发」，那句提示一漏 grill 就没了。
+
+- **治法**（T132，属 mechanical-layer-hardening）：`sdflow-spec-review` 起手加 **fail-closed 门**，机械核验「grill 已收敛」信号（`workflow.md:83` 强制的 grill checkpoint-commit，或 design.md 内补 `<!-- sdflow:grill-done -->` 锚），无信号 → `REFUSE_START` 提示先跑 grill。grill 本身不能自动跑，但「跑没跑」可机械断言——同 `ship_gate` 设计门新鲜度先例，把判断从模型记性挪到脚本。
+
+### 7.3 提示词：校准 + 模版化（→ todolist T133）
+
+主 session 提示人跑 grill 时须附**完整可复制 prompt**（T28），且**已半模版化**——`workflow.md:83` 有一条带 `{change dir}` 占位的 grill 模版。但那条是**校准前的重版**，需按下述校准：
+
+**给什么（脚手架，非 grilling / config 自带）**：靶子 change dir、`[grill-amendment]` 标注、落档路径重定向（§7.4）、一个 `{非绑定怀疑点}` 模型填槽（本 change 特有、至多一句）。
+
+**不给什么（会短路 grill）**：预装的、已分析好的弱点清单 + 推荐。grilling 的价值 = **独立穷尽走完整棵树、逮你没想到的盲点**；喂它你的弱点地图 = anchor 效应 + 让它只 validate 你的结论而非发现第 N+1 条。「一次一题 / facts 查码 / decisions 抛人 / 揭穿矛盾」等**别写进 prompt**——grilling / domain-modeling 自带，写 = 冗余（`workflow.md:83` 现版正夹着这些冗余项，待删）。
+
+> **「做成模版自动生成？」**——是，但边界要清：模版由**静态脚手架**（change dir 占位 + `[grill-amendment]` + 路径重定向）+ **一个模型填槽**（`{非绑定怀疑点}`）组成。change dir 可机械填；怀疑点是**本 change 的接地判断，非机械可填**——模版给槽、模型在 emit 时填。故是「模版 + 一个判断槽」，非全确定性生成。T132 门 REFUSE 时按同一模版 emit。落地 = 把 `workflow.md:83` 那条校准（删冗余自带项 + 加 `{非绑定怀疑点}` 槽），workflow 与 gate 共用这一份单一源。
+
+### 7.4 落档路径：domain-modeling 硬编码根 `docs/adr/`（→ todolist T134）
+
+`domain-modeling` 裸 SKILL.md 硬编码根 `CONTEXT.md` + `docs/adr/`，**不读** `openspec/matt/domain.md`（`setup-matt-pocock-skills` 写的路径配置，详见 [该文档](./setup-matt-pocock-skills.md) §5 脆弱点 #4）。本仓靠 CLAUDE.md `## Agent skills` 块（`openspec/CONTEXT.md` + `openspec/adr/`）覆盖赢这场冲突——但 skill-local 硬编码是强 pull，脆。
+
+- generation-process §六 的「复用前先对齐路径」= `setup-matt-pocock-skills` 已在 **config 层**做完（`openspec/matt/domain.md` + CLAUDE.md 块），理应 config 层管、prompt 不必重复。
+- 但未硬化前（T134：让 domain-modeling domain.md-aware），grill prompt / `workflow.md:83` 模版**保留** `ADR→openspec/adr/、勿建根 docs/adr/` 作 belt-and-suspenders（几字换掉冲突风险；属脚手架非分析 seed，不违 §7.3 校准）。
+
+---
+
+## 8. 小结
 
 - grill = **人类对话岛**：一次一题死磕设计、对齐术语、查码揭穿、按需落 ADR/术语表。
 - **零 fan-out、零机械门**——刻意不机械化，保对话开放性。
 - **几乎全建议式**；严谨性靠**人类在场**（不可轻跳）+ **下游设计门审计**兜底，与总览 §8 同一规律。
+- **薄包装** = grilling + domain-modeling；`disable-model-invocation` 使它只能人触发 → 静默跳过的机械根因 → 治法是 spec-review 起手 fail-closed 门（T132）。提示词模版化落 `workflow.md:83`（校准：脚手架 + `{非绑定怀疑点}` 槽，删 grilling 自带冗余，T133）；落档路径靠 setup 的 config 层对齐 + belt-and-suspenders 重定向（T134）。
