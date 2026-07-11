@@ -142,7 +142,7 @@
 | T134 | `domain-modeling / grill-with-docs 领域文档路径感知` | domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。 | 代码质量 | OPEN | 2026-07-11 09:31 | - |  |
 | T135 | `sdflow-implement` | superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化 | 代码质量 | OPEN | 2026-07-11 12:48 | - |  |
 | T136 | `anchor_lint` | anchor_lint 只校验 hr-tg 锚字段在场、不重算交集——手改 hit=none/declared=TG-04 可绕过必开 cross-model（codex 冷审 high） | 基础设施 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
-| T137 | `config.yaml` | impl-pipeline:tickets 翻键注释写'首个试点(mlh-p4)'误导——mlh-p4 已由 plan marker 自锁，翻键实际只影响 scoped-test-per-task 及未来 change（对抗镜 medium） | 基础设施 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
+| T137 | `config.yaml` | impl-pipeline:tickets 翻键注释写'首个试点(mlh-p4)'误导——mlh-p4 已由 plan marker 自锁，翻键实际只影响 scoped-test-per-task 及未来 change（对抗镜 medium） | 基础设施 | DONE | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 | T138 | `hr_tg_intersect` | hr_tg parse_tg_set 静默吞空 token（'TG-04,,TG-16'/',' 都过）+ catalog 成员用宽松 TG-\d+（'TG-04x'→TG-04）（codex medium） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 | T139 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 | T140 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
@@ -1243,13 +1243,14 @@
 |------|------|
 | 模块 | `config.yaml` |
 | 类型 | 基础设施 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
 
 **动机**：对抗镜冷审实证：mlh-p4 的 superpowers-plan.md 已含 impl-pipeline:tickets frontmatter marker，impl_route marker 优先于 config，故翻键对 mlh-p4 冗余；真正被 config=tickets 卷入的是无 plan 的 scoped-test-per-task（实跑 route 得 pipeline=tickets）及所有未来 change。注释'首个试点(mlh-p4)'主动误导读者以为仅 mlh-p4 受影响；CLAUDE.md 记的 pull→setup 反向窗口风险随全局键放大到每个未锁 change。
 
 **思路**：定夺意图：①若仅 pilot mlh-p4→config 键应保持注释态（mlh-p4 已自锁无需全局键），撤回翻键；②若确为仓级前向切换→改注释去掉误导性单-change 框定、明确 scoped-test-per-task 及后续全部 change 入 tickets。属需用户意图裁断项，hand-off 提请人决。
+> 2026-07 状态：PROPOSED → DONE（582b2ee（撤回 impl-pipeline:tickets 翻键，选项①））
 
 ---
 
