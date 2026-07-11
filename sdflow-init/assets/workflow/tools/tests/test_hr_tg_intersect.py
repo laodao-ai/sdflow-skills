@@ -11,19 +11,32 @@ def _mod():
     m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
 
 
-# --- 夹具：造一份 trigger-catalog（HR-TG 段 + `> 成员：` 行），成员集可参数化 ---
+# --- 夹具：造一份 trigger-catalog（触发词目录全集表段 + HR-TG 段 + `> 成员：` 行），可参数化 ---
 
 # 真实 catalog 的 8 成员（仅夹具用，非从脚本复制清单——脚本 MUST 从单一源读）
 REAL_MEMBERS = "TG-04, TG-06, TG-07, TG-08, TG-09, TG-16, TG-17, TG-26"
 
+# 「触发词目录」全集表段（F4 retrofit）：含所有测试用到的 TG 号 + TG-99（F5 重设计用：全集内、非 HR-TG 成员）。
+# M-new「不存在」负例（如 TG-77/TG-88）刻意不入此表 —— 用以证全集边界钉死。
+_ALL_TG_TABLE = (
+    "## 三、触发词目录\n\n"
+    "| ID | 触发 |\n|---|---|\n"
+    + "".join(f"| TG-{n:02d} | x |\n" for n in (1, 4, 6, 7, 8, 9, 16, 17, 19, 26, 99))
+    + "\n"
+)
+
 
 def _catalog(tmp_path, members=REAL_MEMBERS, heading="## 七、HR-TG 子集（评审 cross-model 层单一源）",
-             member_line=None, trailing="\n*目录 v1 · 项目无关*\n"):
-    """写一份最小 trigger-catalog；member_line=None 则用标准 `> 成员：**...**` 行。"""
+             member_line=None, trailing="\n*目录 v1 · 项目无关*\n", prose_extra=""):
+    """写一份最小 trigger-catalog；member_line=None 则用标准 `> 成员：**...**` 行。
+    prose_extra：插在「触发词目录」表段之后、下一标题之前的游离正文（F8 边界测试用）。"""
     if member_line is None:
         member_line = f"> 成员：**{members}**"
     body = (
-        "# 触发目录\n\n## 六、检查清单\n\n- [ ] 无关小节\n\n"
+        "# 触发目录\n\n"
+        f"{_ALL_TG_TABLE}"
+        f"{prose_extra}"
+        "## 六、检查清单\n\n- [ ] 无关小节\n\n"
         f"{heading}\n\n"
         "> 高风险触发子集——命中任一 → 单开领域 cross-model。\n"
         f"{member_line}\n"
@@ -87,13 +100,46 @@ def test_anchor_none(tmp_path):
 # --- 单一源可变性：改 catalog 即改行为（证明非硬编码副本）---
 
 def test_single_source_mutability(tmp_path):
+    """改 HR-TG 段成员即改命中行为，全集（触发词目录）不变。用 TG-19（全集内、非 HR-TG 8 员）。"""
     m = _mod()
-    # 造一个成员集迥异于真实 8 成员的 catalog：仅 TG-99
-    cat = _catalog(tmp_path, members="TG-99")
+    cat = _catalog(tmp_path, members="TG-19")   # TG-19 在全集表内，非真实 HR-TG 成员
     subset = m.load_hr_tg_subset(cat)
-    assert subset == {"TG-99"}                              # 完全由单一源决定
-    hits, _ = m.intersect(m.parse_tg_set("TG-99, TG-04"), subset)
-    assert hits == ["TG-99"]                                # TG-04 现在不再命中（真实清单里它属 HR-TG）
+    assert subset == {"TG-19"}                              # 完全由单一源决定
+    hits, _ = m.intersect(m.parse_tg_set("TG-19,TG-04"), subset)
+    assert hits == ["TG-19"]                                # TG-04 不再命中（本 catalog HR-TG 段只列 TG-19）
+
+
+# --- M-new：declared/成员须存在于「触发词目录」全集（存在性）+ F8 全集边界 + F7 内部一致 ---
+
+def test_mnew_declared_tg_not_in_catalog_fail_closed(tmp_path):
+    """declared 含 catalog 全集外 TG（TG-77 shape 合法不存在）→ 非零退出。"""
+    m = _mod(); cat = _catalog(tmp_path)
+    rc = m.main(["--tg-set", "TG-77", "--trigger-catalog", str(cat)])
+    assert rc == m.EXIT_FAIL
+
+
+def test_mnew_full_set_boundary_ignores_prose_tg(tmp_path):
+    """正文游离 TG（'参见 TG-88 草案'）不入全集；引用它 → fail-closed。"""
+    m = _mod()
+    cat = _catalog(tmp_path, prose_extra="\n参见 TG-88 草案，非表行。\n")
+    rc = m.main(["--tg-set", "TG-88", "--trigger-catalog", str(cat)])
+    assert rc == m.EXIT_FAIL
+
+
+def test_mnew_token_fullmatch_rejects_residue(tmp_path):
+    """表行 token 逐个 fullmatch，残留后缀 TG-04.0 不当 TG-04 纳入全集。"""
+    m = _mod()
+    subset_all = m.load_all_tg_set(_catalog(tmp_path))
+    assert "TG-04" in subset_all and "TG-04.0" not in subset_all
+
+
+def test_f7_hr_tg_must_subset_full_set(tmp_path):
+    """HR-TG 成员含全集外 TG → 加载 fail-closed（catalog 内部一致）。"""
+    m = _mod()
+    # 成员 TG-77 不在全集表行内
+    cat = _catalog(tmp_path, members="TG-77")
+    with pytest.raises(m.EmitError):
+        m.load_hr_tg_subset(cat)
 
 
 def test_reads_real_catalog_members(tmp_path):
