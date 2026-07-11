@@ -84,22 +84,40 @@ def test_section_multiline_comment_stripped_is_empty():
     assert _classify_text(text) == EMPTY
 
 
-def test_section_scaffold_comment_internal_arrow_close_is_empty():
-    """小节仅一条脚手架注释、注释体含 `-->` 记号（如示例「例 F1 --> 采纳」）——统一注释模型整体视作注释 → EMPTY，
-    非贪婪残余脚手架文字曾被误当实体内容 → 假绿 OK（本用例锁定该修复）。"""
+def test_section_malformed_comment_trailing_render_text_is_ok():
+    """单行畸形注释 `<!-- x --> y -->`：首个 `-->` 后的 ` y -->` 按 CommonMark 是可见渲染文本 → section-ok
+    （非真假绿；用户写了会渲染的文本，逐行 live 判定如实识别为内容，不 fail-closed 误判空）。"""
     text = ("# t\n\n## Review 处置\n\n"
             "<!-- 例 F1 --> 采纳：写明文件与节 -->\n\n"
             "## next\n")
+    assert _classify_text(text) == OK
+
+
+def test_section_sandwich_real_content_between_comments_is_ok():
+    """前置注释 + 真实处置内容 + 收尾注释（这批 task-log 常见模式）→ section-ok（贪婪去注释回归护栏）。"""
+    text = ("# t\n\n## Review 处置\n\n"
+            "<!-- 脚手架：逐条追加 -->\n"
+            "F1 采纳：outside_voice_guard 改 fence-aware，见 commit\n"
+            "<!-- 收尾 checklist：无未处置条目 -->\n\n"
+            "## 2026-07-08\n")
+    assert _classify_text(text) == OK
+
+
+def test_section_empty_fence_only_markers_is_empty():
+    """空 code fence（仅 ``` 起止 marker、体内无内容）→ section-empty（codex F4：fence marker 行非实体内容）。"""
+    text = "# t\n\n## Review 处置\n\n```\n```\n\n## next\n"
     assert _classify_text(text) == EMPTY
 
 
-def test_section_multiline_scaffold_comment_internal_arrow_is_empty():
-    """跨行脚手架注释、中间行含 `-->` 记号——整体视作注释 → EMPTY（非贪婪会早闭泄漏残余脚手架文字=假绿）。"""
-    text = ("# t\n\n## Review 处置\n\n"
-            "<!-- review 逐条追加：\n"
-            "     例 F1 --> 采纳：写明文件与节\n"
-            "     另一条脚手架 -->\n\n"
-            "## next\n")
+def test_section_fence_with_body_is_ok():
+    """含真实代码体的 code fence → section-ok（fence 体真实内容计为实体内容）。"""
+    text = "# t\n\n## Review 处置\n\n```\nF1 采纳：见 patch\n```\n\n## next\n"
+    assert _classify_text(text) == OK
+
+
+def test_section_unclosed_comment_open_only_is_empty():
+    """未闭合注释开启行 `<!-- scaffold`（无 `-->`）→ section-empty（codex F4：悬空 <!-- 前无实体文本）。"""
+    text = "# t\n\n## Review 处置\n\n<!-- scaffold 逐条追加\n\n## next\n"
     assert _classify_text(text) == EMPTY
 
 

@@ -25,8 +25,7 @@ _FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')  # code fence 起止（fence-awa
 _H2_RE = re.compile(r'^##[ \t]+(.+?)[ \t]*$')    # level-2 标题（`### ` 不匹配：第三字符非空白）
 _H12_RE = re.compile(r'^#{1,2}[ \t]')            # level-1/2 标题（小节边界；level-3 不算边界=属小节内）
 _THEMATIC_RE = re.compile(r'^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$')  # 水平分隔线 --- / *** / ___
-_HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)              # HTML 注释（非贪婪；结构定位用：标题行行首是否落注释内）
-_HTML_COMMENT_GREEDY_RE = re.compile(r'<!--.*-->', re.DOTALL)        # HTML 注释（贪婪；空判用：注释体含 --> 记号的模版例整体视作注释，见 _has_entity_content）
+_HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)              # HTML 注释（非贪婪；结构定位 + 空判逐行剥行内成对注释共用）
 
 
 class EmitError(Exception):
@@ -91,25 +90,25 @@ def find_section_body(text):
 
 
 def _has_entity_content(body_lines):
-    """小节体去除 HTML 注释后，是否残留实体内容（非空白、非水平分隔线）。
-    与 find_section_body 共用 _annotate_lines 的 fence/注释逐行态（统一注释模型，杜绝两套漂移）：
-    ① fence 内真实代码内容计为实体内容（不剔 fence 体，看 in_fence）；
-    ② 非 fence 行拼回后去 HTML 注释——用**贪婪** _HTML_COMMENT_GREEDY_RE：模版脚手架注释体常含 `-->` 记号
-       （如示例「例 F1 --> 采纳」），非贪婪会在首个 `-->` 早闭、把残余脚手架文字当实体内容 → 假绿；
-       gate 语义下「空」是 fail-closed 安全侧（判空=退出非零逼人补真实处置，判非空=放行=假绿有害），
-       故整段 `<!-- … -->` 视作注释、偏判空。剔水平分隔线/空白后仍有实体行 → 非空。"""
-    annotated = _annotate_lines(body_lines)
-    for ln, _live, in_fence in annotated:                 # ① fence 体真实内容 → 实体内容
-        if in_fence and ln.strip():
+    """小节体逐行判定是否残留实体内容（非空白、非水平分隔线、非纯注释/纯 fence marker）。
+    与 find_section_body **共用同一** _annotate_lines 的 (live, in_fence) 逐行态（统一注释模型，杜绝两套漂移）——
+    不做任何整段 DOTALL sub（贪婪会吃掉两注释间的真实处置内容=误阻塞；非贪婪整段会泄漏残字=假绿）。逐行规则：
+      · in_fence 行：fence **体**真实代码内容（排除 ``` / ~~~ 起止 marker 行）→ 有内容；空 fence 仅 marker → 无。
+      · not live（注释内行）→ 跳过。
+      · live 行：先剥行内成对完整注释（非贪婪 _HTML_COMMENT_RE.sub），再取悬空未闭合 `<!--` 之前的文本
+        （split("<!--")[0]——开启行被 _annotate_lines 标为 live，其 `<!--` 前才是可见文本）；
+        该前文 strip 后非空且非水平线 → 有内容。
+    畸形注释 `<!-- x --> y -->` 尾随 ` y -->` 按 CommonMark 是可见渲染文本 → 判有内容（非假绿，如实识别）。"""
+    for ln, live, in_fence in _annotate_lines(body_lines):
+        if in_fence:
+            if ln.strip() and not _FENCE_RE.match(ln):    # fence 体真实内容（marker 行不计）
+                return True
+            continue
+        if not live:                                      # 注释内行
+            continue
+        residual = _HTML_COMMENT_RE.sub("", ln).split("<!--", 1)[0]  # 剥成对注释 + 取悬空 <!-- 前文本
+        if residual.strip() and not _THEMATIC_RE.match(residual):
             return True
-    nonfence = "\n".join(ln for ln, _live, in_fence in annotated if not in_fence)
-    stripped = _HTML_COMMENT_GREEDY_RE.sub("", nonfence)  # ② 贪婪去注释（含 --> 记号的脚手架整体剔除）
-    for ln in stripped.splitlines():
-        if not ln.strip():
-            continue
-        if _THEMATIC_RE.match(ln):
-            continue
-        return True
     return False
 
 
