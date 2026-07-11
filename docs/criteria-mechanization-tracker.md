@@ -45,8 +45,8 @@
 |---|---|---|---|---|---|
 | 4.1 | 4 类 v1 锚存在 + lens-metric 字段/enum/sev/layer 合法 | 🟢 | 各镜 emit + `lens_metric_emit.py` | `anchor_lint.py --layer spec-review`（`:163`；1 违规/2 fail-closed）| 已结构化门 |
 | 4.2 | 命中哪些 TG | 🔵 | — | — | 同 1.2 |
-| 4.3 | 命中集 ∩ HR-TG 子集 + 出锚 | 🟢(浅)| `hr_tg_intersect.py` → hr-tg 锚 `hit=/declared=` | 现: `anchor_lint.check_hr_tg` **仅字段在场**；模型据 hit≠∅ 开领域 cross-model | ⏳**pending `harden-hr-tg-anchor-consistency`**（设计门待拍板，未 ship）: 用锚点升深🟢——M2 重算 hit⟺declared∩HR-TG · M-new TG存在 · M4 evidence在场 · M-parse 整行严格拒重复键 · catalog内部一致 · 跨文件 golden。ship 后翻实并补 file:line |
-| 4.4 | declared 是否=真命中集 | 🔵 | — | — | S1 残余（无信号，adr/0018）；⏳ pending `harden-hr-tg-anchor-consistency` ship 后残余**收窄**为纯此项（M2 机械化"内部一致性"那半），档不变 |
+| 4.3 | 命中集 ∩ HR-TG 子集 + 出锚 | 🟢(深)| `hr_tg_intersect.py` → hr-tg 锚 `hit=/declared=/evidence=`（3字段 canonical）| ✅ `anchor_lint.check_hr_tg`（`:317`）: M2 重算 hit⟺declared∩HR-TG · M4 evidence在场 · M-new TG存在 · `_check_order_and_dup`（`:306`）numeric同序/拒重复 · `parse_kv_strict`（`:92`）整行拒重复键/未闭合/残留 · `load_hr_tg_subset`（`:221`）/`load_all_tg_set`（`:253`）F7子集/F8边界/fence-aware/段定位恰1 · 必需`--trigger-catalog`（`:438`）fail-closed · 跨文件 golden `test_hr_tg_cross_tool.py` | ✅ **ship `harden-hr-tg-anchor-consistency`（2026-07-11 merged 504ab4d）**：浅🟢→深🟢，仅 declared 正确性(4.4)留 🔵 |
+| 4.4 | declared 是否=真命中集 | 🔵 | — | — | S1 残余（无信号，adr/0018）；✅ ship `harden-hr-tg-anchor-consistency` 后残余**已收窄**为纯此项（M2 机械化了"内部一致性"那半），档不变（诚实边界、非缺口）|
 | 4.5 | outside-voice 复用前置（来源 mode/新鲜度/结构）| 🟢 | `outside_voice_guard.py` → reason_code | 编排据 reason_code 复用/回落 | mlh-p4 T80 |
 | 4.6 | 镜价值度量（findings/采纳/独立/sev）| 🟢 | `lens_metric_emit.py` → lens-metric 锚 | `/sdflow-retro` 聚合（`lens_metric_aggregate.py`）| 写此、用在 retro |
 | 4.7 | finding 对抗裁决（采纳/裁掉/defer、是否真爆）| 🔵 | — | — | 主 session 强档判断 |
@@ -88,7 +88,7 @@
 |---|---|---|---|---|---|
 | 5d.1 | 无逻辑面豁免（免多镜 fan-out）| 🟢 | — | `trivial_shape.py`（`:183`；0 EXEMPT/1 必跑/2 ERR）| — |
 | 5d.2 | 4 类锚 + lens-metric 合法 | 🟢 | 各镜 + emit | `anchor_lint --layer code-review`（`:163`）| 已结构化门 |
-| 5d.3 | HR-TG（同 4.3）| 🟢(浅)+🔵 | hr_tg_intersect | 现: `anchor_lint --layer code-review` 仅字段在场 | ⏳**pending `harden-hr-tg-anchor-consistency`**（同 4.3，共用 `check_hr_tg`）: ship 后升深🟢 |
+| 5d.3 | HR-TG（同 4.3）| 🟢(深) | hr_tg_intersect | ✅ `anchor_lint.check_hr_tg`（`:317`，同 4.3 共用 M1/M2/M4/M-new/M-parse）| ✅ **ship `harden-hr-tg-anchor-consistency`**：浅🟢→深🟢 |
 | 5d.4 | 置信过滤 <80 | 🟡 | — | 弱档子代理逐条打分 | 分数主观(🔵)，<80 切点机械(🟡)|
 | 5d.5 | 对抗裁决 / T10 三级自动选 | 🔵 | — | — | 判断 |
 | 5d.6 | 代码审结论机判 | 🟢 | `code-review-report.md` frontmatter `code_review: pass\|blocked` | `ship_gate`（blocked→BLOCKED_UPSTREAM(4)）| 写/用锚点对 |
@@ -131,12 +131,12 @@
 
 **跟踪法**：后续每推进一条 🟡→🟢，本表更新该行档位 + 补写/用锚点 `file:line`；🔵 项保持诚实标注、不强行机械化（避免假绿）。目标态 = 所有**有确定性信号**的判据（🟡）逐步清零进 🟢，🔵 稳定收敛为真残余。**上表计数为当前 shipped 态**——不含下方 ⏳pending 项（未 ship 不提前记账，守本表自身诚实纪律）。
 
-### ⏳ 待落实（pending ship，ship 后翻实并补 file:line）
+### ✅ 已落实（shipped）
 
-| change | 影响行 | 落地后效果 |
+| change | 影响行 | 落地效果 |
 |---|---|---|
-| `harden-hr-tg-anchor-consistency`（设计门待拍板）| **4.3 / 5d.3** hr-tg 用锚点 浅🟢→深🟢 · **4.4** S1 残余收窄 | anchor_lint.check_hr_tg 从"仅字段在场"升 M2 重算 hit⟺declared∩HR-TG + M-new TG存在 + M4 evidence在场 + M-parse 整行严格拒重复键 + catalog内部一致 + 跨文件 golden；§4 anchor_lint file:line 待刷新 |
+| `harden-hr-tg-anchor-consistency`（2026-07-11 merged `504ab4d`）| **4.3 / 5d.3** hr-tg 用锚点 浅🟢→深🟢 · **4.4** S1 残余收窄为纯"declared 正确性" | anchor_lint.check_hr_tg（`:317`）从"仅字段在场"升 M2 重算 hit⟺declared∩HR-TG + M-new TG存在 + M4 evidence在场 + M-parse 整行严格拒重复键/未闭合/残留 + numeric同序/去重 + catalog内部一致(F7)/边界(F8)/fence-aware + 段定位恰1 fail-closed + 跨文件 golden；冷层 code-review fold 修 7 条 parsing 面洞（成员严格/段歧义/fence/锚边界/序/独立错误收集/doc） |
 
-> **自指教训**：本表 v1 曾把此 change 的加深当既成事实写进 4.3——违反"未 ship 别提前记🟢"纪律（假绿）。已改 pending。这正是 tracker 的价值：连它自己都得守机械化诚实。
+> **自指教训**：本表 v1 曾把此 change 的加深当既成事实写进 4.3——违反"未 ship 别提前记🟢"纪律（假绿）。经历 pending→ship 后翻实的完整周期（2026-07-11 merged）。这正是 tracker 的价值：连它自己都得守机械化诚实——先记 pending、ship 后凭 merged commit + file:line 翻实。
 
 *v1 接地自 workflow-map.md + 各 SKILL.md + 脚本；写/用锚点 file:line 引 workflow-map（其 §4 脚本清单本身待刷新，见 T142）。逐阶段核校后升 v2。*
