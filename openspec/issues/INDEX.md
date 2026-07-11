@@ -100,6 +100,16 @@
 | T95 | todo | PROPOSED | mlh-p4-maintain-scan |
 | T96 | todo | PROPOSED | mlh-p4-maintain-scan |
 
+### 批次：mlh-p4-reason-code-validators
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T136 | todo | PROPOSED | mlh-p4-reason-code-validators |
+| T137 | todo | PROPOSED | mlh-p4-reason-code-validators |
+| T138 | todo | PROPOSED | mlh-p4-reason-code-validators |
+| T139 | todo | PROPOSED | mlh-p4-reason-code-validators |
+| T140 | todo | PROPOSED | mlh-p4-reason-code-validators |
+
 ### 批次：mlh-p4-target-state
 
 | ID | Pool | Status | 关联Change |
@@ -231,6 +241,10 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
+| T132 | todo | OPEN | - |
+| T133 | todo | OPEN | - |
+| T134 | todo | OPEN | - |
+| T135 | todo | OPEN | - |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 | T65 | todo | OPEN | main |

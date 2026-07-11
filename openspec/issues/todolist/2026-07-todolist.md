@@ -141,11 +141,11 @@
 | T133 | `grill 提示自动生成（sdflow-spec-review 门 / 阶段提示）` | 提示/触发 grill 时自动生成完整可复制 prompt，但须『脚手架完整+内容轻播种』校准：grill-with-docs=/grilling(relentless逐branch独立走设计树,一次一问,每问给推荐,事实自查决策抛人)+/domain-modeling。auto-prompt 只应含调用脚手架(change dir/全深度非wayfinder/MUST NOT skip/doc路径 adr→openspec/adr·术语→CONTEXT.md·INDEX/[grill-amendment]/收敛才提交)；MUST NOT 预装已分析的弱点清单+推荐(会 anchor+短路 grilling 独立发现盲点的核心价值,让它只 validate 我的结论而非找第6条)。至多给一句非绑定怀疑点并注明『非边界,去找我漏的』。关联 T132(grill 未跑 fail-closed 门,该门 REFUSE 时正好 emit 此 prompt)+T28(下一阶段附完整可复制 prompt)。 | 代码质量 | OPEN | 2026-07-11 09:14 | - |  |
 | T134 | `domain-modeling / grill-with-docs 领域文档路径感知` | domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。 | 代码质量 | OPEN | 2026-07-11 09:31 | - |  |
 | T135 | `sdflow-implement` | superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化 | 代码质量 | OPEN | 2026-07-11 12:48 | - |  |
-| T136 | `anchor_lint` | anchor_lint 只校验 hr-tg 锚字段在场、不重算交集——手改 hit=none/declared=TG-04 可绕过必开 cross-model（codex 冷审 high） | 基础设施 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
-| T137 | `config.yaml` | impl-pipeline:tickets 翻键注释写'首个试点(mlh-p4)'误导——mlh-p4 已由 plan marker 自锁，翻键实际只影响 scoped-test-per-task 及未来 change（对抗镜 medium） | 基础设施 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
-| T138 | `hr_tg_intersect` | hr_tg parse_tg_set 静默吞空 token（'TG-04,,TG-16'/',' 都过）+ catalog 成员用宽松 TG-\d+（'TG-04x'→TG-04）（codex medium） | 代码质量 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
-| T139 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） | 代码质量 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
-| T140 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 代码质量 | OPEN | 2026-07-11 13:58 | mlh-p4-reason-code-validators |  |
+| T136 | `anchor_lint` | anchor_lint 只校验 hr-tg 锚字段在场、不重算交集——手改 hit=none/declared=TG-04 可绕过必开 cross-model（codex 冷审 high） | 基础设施 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
+| T137 | `config.yaml` | impl-pipeline:tickets 翻键注释写'首个试点(mlh-p4)'误导——mlh-p4 已由 plan marker 自锁，翻键实际只影响 scoped-test-per-task 及未来 change（对抗镜 medium） | 基础设施 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
+| T138 | `hr_tg_intersect` | hr_tg parse_tg_set 静默吞空 token（'TG-04,,TG-16'/',' 都过）+ catalog 成员用宽松 TG-\d+（'TG-04x'→TG-04）（codex medium） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
+| T139 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
+| T140 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 
 ---
 
@@ -1225,7 +1225,7 @@
 |------|------|
 | 模块 | `anchor_lint` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
 
@@ -1241,7 +1241,7 @@
 |------|------|
 | 模块 | `config.yaml` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
 
@@ -1257,7 +1257,7 @@
 |------|------|
 | 模块 | `hr_tg_intersect` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
 
@@ -1273,7 +1273,7 @@
 |------|------|
 | 模块 | `outside_voice_guard` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
 
@@ -1289,7 +1289,7 @@
 |------|------|
 | 模块 | `anchor_lint` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/mlh-p4-reason-code-validators/design.md`
 
