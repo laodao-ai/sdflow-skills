@@ -109,6 +109,17 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - 数据类 skill 改 `scripts/` → 必跑 `tests/`；纯 Markdown skill 改的是指令与触发。
 - 审查顺序（下方托管区块有强制规范）不可颠倒：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
 
+## 设计/分析基准原则（一致性机械化优先 + 目标态导向）
+
+评估任何设计/change（尤其 grill、spec-review、决策收敛）**一律以此为基准**：
+
+1. **一致性机械化优先**：能用「可固化规则 + 脚本」确定性保证的一致性，**优先机械化**（承 adr/0006(b)「凡机械 prose MUST 脚本化」）；只有**机械真够不着的残余**（无确定性信号者，如「命中哪些 TG」「declared 是否真命中集」，adr/0018）才退到语义规则（模型判断 + 人读注记 + git 审计）。诚实边界 = 合法的残余划分，**不是弱点、不是妥协**。机械/语义切分线判据见 [[mechanical-judgment-split-signal-criterion]]（有无确定性信号）。
+2. **目标态导向，不拿现状反驳目标**：开发阶段以**最终目标态**为准。**MUST NOT** 用「现状语料/存量里这种情况很少/没出现」论证「目标不该做 / 该缩水」——迁移中「旧数据还没新形态」是必然，拿它当风险基线会把「目标态才暴露的面」误判为「不存在」，是拿现状给目标松绑。评估问「目标态 producer 会/不会产出该形态」，而非「现存文件里有没有」。见 [[target-state-not-current-snapshot]]。
+3. **面治优先于点补**：机械化时把同片一致性面**一次扫全**（spec 已 MUST 却无机械守的漏网格一并补），而非只补当场被点穿的一处，见 [[point-vs-surface-fix]]。
+4. **拆分标准 = 一个 change 一个完整阶段结果**（roadmap/change/task 通用）：scope 按「一个完整内聚交付物」定，**不按同批来源/顺手/凑票数**；别把一件事拆散跨多 change、别混不相干功能。执行中撞到**与本次功能相关的 bug/todo → 立即 fold 做掉**（不 defer、不另开）；**唯一合理 defer = 依赖的模块尚不存在 → 留占位 + 记 todo**（非"这条边角现在少见所以妥协"）。**碎片化是"反复对现状提疑问 + 给妥协方案（WARN/grace/flag）"的根因**——一次做完整、锚目标态 fail-closed，这些疑问根本不产生。见 [[change-scope-one-complete-stage-result]] + [[change-fold-vs-defer-cycle-cost]]（一体两面）。
+
+> 反面教训（本条成因）：grill mlh-p4-validators-hardening 时，我曾用「corpus 显示多数 hr-tg 锚是手写 evidence=、无 declared」论证「T136 重算覆盖薄、可不做」——被用户当场纠正为违反本基准（拿现状反驳目标）。正解 = 锚目标态（所有锚走脚本必有 declared=），M1–M4 全机械化，S1（declared 正确性）才留语义。
+
 ## 本仓库自身的 OpenSpec 工作流规范
 
 下方为 `sdflow-init` 铺设、`sdflow-maintain` 维护的托管区块（**勿手改区块内部**），
