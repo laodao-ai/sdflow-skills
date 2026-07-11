@@ -160,9 +160,87 @@ def check_existence(report_text, layer, metrics_on):
 HR_TG_REQUIRED_FIELDS = ("hit", "declared")  # mlh-p4 T81：declared= 承「依据模型判定」（adr/0018 输入可见）
 
 
-def check_hr_tg(report_text):
+# --- trigger-catalog 单一源解析（本地重实现，非 import hr_tg_intersect——仓内 adr/0002「非 import」约定；
+#     口径逐字对齐 hr_tg_intersect.py 的 load_hr_tg_subset/load_all_tg_set，两份重实现的一致性
+#     由 Task 6 F3 golden 测试机械兜底，此处不引入漂移风险自评） -----------------------------------
+
+class EmitError(Exception):
+    """trigger-catalog 单一源缺失/损坏 fail-closed（不静默按空集/WARN 降级放行）。"""
+    pass
+
+
+_TG_TOKEN_RE = re.compile(r'TG-\d+')          # 宽松抽取（忽略 **bold**/空格）
+_TG_STRICT_RE = re.compile(r'^TG-\d+$')       # 逐 token 严格校验
+_H12_RE = re.compile(r'^#{1,2}\s')            # level-1/2 标题（段边界；level-3 `### ` 不匹配）
+_MEMBER_RE = re.compile(r'^\s*>\s*成员')       # `> 成员：...` 行（fence/引用前缀容忍空白）
+_H3_SECTION_RE = re.compile(r'^##\s.*触发词目录')      # 「触发词目录」段标题定位（限 level-2）
+_TABLE_TG_RE = re.compile(r'^\s*\|\s*(TG-\d+)\s*\|')   # 段内表行首列 TG token；正文游离提及不匹配此形
+
+
+def load_hr_tg_subset(catalog_path):
+    """（同 hr_tg_intersect.load_hr_tg_subset 口径）从 trigger-catalog 的 `## …HR-TG…` 段
+    `> 成员：` 行 parse HR-TG 成员集。单一源缺失/不可读/无 HR-TG 段/段内无成员行/成员行无 TG 记号
+    → EmitError（不静默按空子集放行）。"""
+    try:
+        text = Path(catalog_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise EmitError(f"trigger-catalog 不可读: {e}")
+    lines = text.splitlines()
+    start = None
+    for i, ln in enumerate(lines):
+        if _H12_RE.match(ln) and "HR-TG" in ln:      # 定位 HR-TG 段标题
+            start = i
+            break
+    if start is None:
+        raise EmitError("trigger-catalog 缺 `## …HR-TG…` 段（单一源损坏）")
+    members = None
+    for ln in lines[start + 1:]:
+        if _H12_RE.match(ln):                         # 到下一 level-1/2 标题 = 段结束
+            break
+        if _MEMBER_RE.match(ln):
+            members = _TG_TOKEN_RE.findall(ln)        # 段内 `> 成员：` 行才算数，不跨段借用
+            break
+    if members is None:
+        raise EmitError("HR-TG 段缺 `> 成员：` 行（单一源损坏）")
+    if not members:
+        raise EmitError("HR-TG `> 成员：` 行无 TG 成员（单一源损坏，不静默空子集）")
+    hr_tg_set = set(members)
+    all_tg = load_all_tg_set(catalog_path)            # F7：HR-TG 成员须 ⊆ 触发词目录全集（catalog 内部一致）
+    if not hr_tg_set <= all_tg:
+        raise EmitError("HR-TG 成员含「触发词目录」全集外 TG（F7 内部不一致，单一源损坏）")
+    return hr_tg_set
+
+
+def load_all_tg_set(catalog_path):
+    """（同 hr_tg_intersect.load_all_tg_set 口径）从 trigger-catalog「触发词目录」段的表行
+    `| TG-NN | ... |` parse 全 TG 集（M-new，F8 边界钉死）：只取该段内表行首列、逐 token 严格
+    fullmatch；正文游离提及（非表行）MUST NOT 纳入。段缺失/段内无表行 → EmitError（单一源损坏
+    fail-closed，不静默按空集放行）。"""
+    try:
+        text = Path(catalog_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise EmitError(f"trigger-catalog 不可读: {e}")
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if _H3_SECTION_RE.match(ln)), None)
+    if start is None:
+        raise EmitError("trigger-catalog 缺「触发词目录」段（M-new 全集单一源损坏）")
+    full = set()
+    for ln in lines[start + 1:]:
+        if _H12_RE.match(ln):                          # 到下一 level-1/2 标题 = 段结束
+            break
+        mm = _TABLE_TG_RE.match(ln)
+        if mm and _TG_STRICT_RE.match(mm.group(1)):     # 逐 token 严格 fullmatch，拒残留后缀
+            full.add(mm.group(1))
+    if not full:
+        raise EmitError("「触发词目录」段无 `| TG-NN |` 表行（M-new 全集单一源损坏）")
+    return full
+
+
+def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
     """校验 fence 外真 hr-tg 锚含 hit= + declared= 两字段（declared= 由 T81 hr_tg_intersect emit，承模型判定的命中集）。
-    只断言字段在场——字段值（TG 记号 CSV / none / 空串）任意合法，命中判定归模型，脚本不校验 CSV 内容。"""
+    只断言字段在场——字段值（TG 记号 CSV / none / 空串）任意合法，命中判定归模型，脚本不校验 CSV 内容。
+    hr_tg_subset/all_tg_set：trigger-catalog 单一源解析结果（M2 重算 / M4 evidence / M-new 逐 TG
+    存在性校验见 Task 4；本签名先接好单一源，未使用不代表未来不用）。"""
     v = []
     for ln in fence_outside_lines(report_text):
         if anchor_prefix(ln) != "hr-tg":
@@ -208,6 +286,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="评审报告锚自检门（确定性·fail-closed）")
     ap.add_argument("--report", required=True)
     ap.add_argument("--layer", required=True, choices=["spec-review", "code-review"])
+    ap.add_argument("--trigger-catalog", required=True,
+                    help="HR-TG 单一源（trigger-catalog.md），M2/M-new 前提；必需，缺传→fail-closed，MUST NOT WARN 降级放行")
     ap.add_argument("--root", default=".")
     args = ap.parse_args(argv)
     # 1) 读报告（fail-closed）
@@ -230,9 +310,17 @@ def main(argv=None):
         print(f"[anchor_lint] ERROR config metrics 块坏: {e}", file=sys.stderr)
         print(json.dumps({"result": "ERROR", "reason": "metrics-block-bad"}, ensure_ascii=False))
         return EXIT_ERROR
-    # 3) 校验
+    # 3) 读 trigger-catalog 单一源（fail-closed，本地重实现——见文件上方注释）
+    try:
+        hr_tg_subset = load_hr_tg_subset(args.trigger_catalog)
+        all_tg_set = load_all_tg_set(args.trigger_catalog)
+    except EmitError as e:
+        print(f"[anchor_lint] ERROR trigger-catalog: {e}", file=sys.stderr)
+        print(json.dumps({"result": "ERROR", "reason": "catalog-bad"}, ensure_ascii=False))
+        return EXIT_ERROR
+    # 4) 校验
     violations = check_existence(report_text, args.layer, metrics_on)
-    violations += check_hr_tg(report_text)                  # hr-tg 恒必有锚，字段校验不受 metrics 门控
+    violations += check_hr_tg(report_text, hr_tg_subset, all_tg_set)  # hr-tg 恒必有锚，字段校验不受 metrics 门控
     if metrics_on:
         violations += check_lens_metric(report_text, args.layer, enums)
     if violations:

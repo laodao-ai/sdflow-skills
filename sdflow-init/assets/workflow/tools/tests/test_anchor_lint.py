@@ -1,5 +1,6 @@
-import subprocess, sys, importlib.util
+import json, subprocess, sys, importlib.util
 from pathlib import Path
+import pytest
 
 TOOLS = Path(__file__).resolve().parent.parent          # .../workflow/tools
 SCRIPT = TOOLS / "anchor_lint.py"
@@ -8,6 +9,26 @@ CONTRACT = TOOLS.parent / "lens-metric-contract.md"     # .../workflow/lens-metr
 def _mod():
     spec = importlib.util.spec_from_file_location("anchor_lint", SCRIPT)
     m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+
+
+# --- 最小 trigger-catalog 夹具（HR-TG 段 + 触发词目录全集表段），供 check_hr_tg 三参签名 / _run 用 ---
+
+_HR_TG_SUBSET = {"TG-04", "TG-16"}
+_ALL_TG_SET = {"TG-04", "TG-16", "TG-19"}
+
+def _write_catalog(dest_dir, members="TG-04, TG-16"):
+    body = (
+        "# 触发目录\n\n"
+        "## 三、触发词目录\n\n"
+        "| ID | 触发 |\n|---|---|\n"
+        "| TG-04 | x |\n| TG-16 | x |\n| TG-19 | x |\n\n"
+        "## 七、HR-TG 子集（评审 cross-model 层单一源）\n\n"
+        "> 高风险触发子集——命中任一 → 单开领域 cross-model。\n"
+        f"> 成员：**{members}**\n"
+    )
+    p = Path(dest_dir) / "trigger-catalog.md"
+    p.write_text(body, encoding="utf-8")
+    return p
 
 def test_load_enums_from_real_contract():
     al = _mod()
@@ -164,40 +185,66 @@ def test_min_required_single_missing():                     # [impl-review-fix] 
 def test_hr_tg_declared_present_ok():                       # hit=+declared= 齐 → 无违规
     al = _mod()
     report = '<!-- sdflow:hr-tg v1 hit="TG-04,TG-16" declared="TG-04,TG-16,TG-19" -->\n'
-    assert al.check_hr_tg(report) == []
+    assert al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET) == []
 
 def test_hr_tg_none_with_declared_ok():                     # none 态 declared="" 亦合规（空集显式可见）
     al = _mod()
     report = '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
-    assert al.check_hr_tg(report) == []
+    assert al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET) == []
 
 def test_hr_tg_missing_declared_violation():                # 缺 declared= → 违规（新 schema 强制该字段在场）
     al = _mod()
     report = '<!-- sdflow:hr-tg v1 hit="none" -->\n'
-    v = al.check_hr_tg(report)
+    v = al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET)
     assert any(x["field"] == "declared" and x["kind"] == "missing-field" for x in v)
 
 def test_hr_tg_missing_hit_violation():                     # 缺 hit= → 违规
     al = _mod()
     report = '<!-- sdflow:hr-tg v1 declared="TG-04" -->\n'
-    v = al.check_hr_tg(report)
+    v = al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET)
     assert any(x["field"] == "hit" and x["kind"] == "missing-field" for x in v)
 
 def test_hr_tg_value_content_not_checked():                 # 字段值任意（模型判定归模型，只断言字段在场）
     al = _mod()
     report = '<!-- sdflow:hr-tg v1 hit="whatever" declared="anything" -->\n'
-    assert al.check_hr_tg(report) == []
+    assert al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET) == []
 
 def test_hr_tg_in_fence_not_checked():                      # fence 内示例锚不校验（同 lens-metric 口径）
     al = _mod()
     report = 'real\n```\n<!-- sdflow:hr-tg v1 hit="none" -->\n```\n'
-    assert al.check_hr_tg(report) == []
+    assert al.check_hr_tg(report, _HR_TG_SUBSET, _ALL_TG_SET) == []
 
 
-def _run(report_path, layer, root=None):
-    cmd = [sys.executable, str(SCRIPT), "--report", str(report_path), "--layer", layer]
+def _run(report_path, layer, root=None, catalog=None):
+    if catalog is None:
+        catalog = _write_catalog(Path(report_path).parent)  # 最小合法 catalog，自动落在 report 同目录
+    cmd = [sys.executable, str(SCRIPT), "--report", str(report_path), "--layer", layer,
+           "--trigger-catalog", str(catalog)]
     if root: cmd += ["--root", str(root)]
     return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def test_anchor_lint_missing_catalog_fail_closed(tmp_path):
+    """未传 --trigger-catalog → argparse required 缺参 SystemExit(2)（fail-closed），MUST NOT WARN 放行。"""
+    al = _mod()
+    rpt = tmp_path / "r.md"
+    rpt.write_text('<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n', encoding="utf-8")
+    with pytest.raises(SystemExit) as e:
+        al.main(["--report", str(rpt), "--layer", "spec-review"])
+    assert e.value.code == 2
+
+
+def test_catalog_bad_exit2_reason(tmp_path):
+    """--trigger-catalog 指向损坏单一源（无 HR-TG 段）→ exit2 且原因码 catalog-bad（非只 returncode==2）。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = tmp_path / "r.md"
+    rpt.write_text('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+                   '<!-- sdflow:step1-broad-review v1 mode="native" -->\n', encoding="utf-8")
+    bad_catalog = tmp_path / "bad-catalog.md"
+    bad_catalog.write_text("# no HR-TG section here\n", encoding="utf-8")
+    r = _run(rpt, "code-review", root, catalog=bad_catalog)
+    assert r.returncode == 2
+    assert json.loads(r.stdout)["reason"] == "catalog-bad"
 
 def test_clean_report_exit0(tmp_path):
     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
@@ -213,8 +260,10 @@ def test_hr_tg_missing_declared_exit1(tmp_path):            # 完整报告但 hr
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root); assert r.returncode == 1, r.stderr
 
-def test_missing_report_error_exit2(tmp_path):
-    r = _run(tmp_path / "nope.md", "code-review", tmp_path); assert r.returncode == 2
+def test_missing_report_error_exit2(tmp_path):              # F6：断言原因码，防 argparse 缺参撞码假绿
+    r = _run(tmp_path / "nope.md", "code-review", tmp_path)
+    assert r.returncode == 2
+    assert json.loads(r.stdout)["reason"] == "report-unreadable"
 
 def test_violation_exit1(tmp_path):
     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
@@ -222,9 +271,11 @@ def test_violation_exit1(tmp_path):
     r = _run(rpt_path, "code-review", root); assert r.returncode == 1
     assert '"' in r.stdout or r.stdout.strip()              # JSON 输出
 
-def test_config_bad_block_exit2(tmp_path):
+def test_config_bad_block_exit2(tmp_path):                   # F6：断言原因码，防 argparse 缺参撞码假绿
     root = _write_config(tmp_path, "metrics:\n  enabled: yes\n")
     rpt_path = tmp_path / "r.md"
     rpt_path.write_text('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
                         '<!-- sdflow:step1-broad-review v1 mode="native" -->\n', encoding="utf-8")
-    r = _run(rpt_path, "code-review", root); assert r.returncode == 2
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 2
+    assert json.loads(r.stdout)["reason"] == "metrics-block-bad"
