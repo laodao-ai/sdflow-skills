@@ -147,6 +147,7 @@
 | T139 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 | T140 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 | T141 | `workflow bundle (roadmap/ff/spec-review/implement/code-review)` | 把「拆分标准=一个change一个完整阶段结果」融入 workflow 三处触发 | 基础设施 | OPEN | 2026-07-11 16:11 | - |  |
+| T142 | `docs/workflow-map.md` | workflow-map.md 广度刷新：补 mlh-p4 后 5 脚本 + hr-tg schema 回灌 | 基础设施 | OPEN | 2026-07-11 16:55 | - |  |
 
 ---
 
@@ -1311,3 +1312,17 @@
 **动机**：标准已入 memory[[change-scope-one-complete-stage-result]]+CLAUDE.md，但只约束我；进 bundle 才对所有跑此流程者生效。碎片化是「反复对现状提疑问+给妥协方案」的根因（grill hr-tg 实证：allow-legacy/grace/WARN 全是碎片化产物）。
 
 **思路**：单一源 reference/change-decomposition-standard.md（4规则+why），三处引用不复制：①roadmap 拆分（sdflow-roadmap：每 phase/change=完整阶段结果，别拆散别混）②ff 定 change spec（ff-generation-constraints 切片建议+scope 内聚约束、spec-checklists BASE-18 分解检查、workflow.md:83 grill 调用 prompt 加 scope 内聚镜）③执行中发现（sdflow-spec-review/implement/code-review：相关 bug/todo 立即 fold，仅无关或缺失依赖模块才 defer+PLACEHOLDER+todolist blocked-on-missing-module 标签）。自指：本身作一个完整 change 一次做完、不拆碎、不混。
+
+---
+
+## T142: workflow-map.md 广度刷新（补 5 脚本 + hr-tg 三字段）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `docs/workflow-map.md` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**动机**：map 接地自 mlh-p5-parser-cleanup(mlh-p4 之前)已过时：§4「14 脚本」缺 hr_tg_intersect/outside_voice_guard/review_disposition_check/lens_metric_emit/maintain_scan；§3.2 hr-tg 锚仍写 hit+evidence 2 字段(应 hit+declared+evidence)。hr-tg schema 回灌那半由 harden-hr-tg-anchor-consistency 的 F12 局部处理，但补 5 脚本是独立广度刷新。
+
+**思路**：按标准另开：不 fold 进 hr-tg change(基准②不混做)。随下次 map 维护统一刷 §4 脚本清单(14→19)+§3.2 hr-tg 三字段+§6 skew 风险展开。参考 docs/design-methodology.md §3 delta 表。
