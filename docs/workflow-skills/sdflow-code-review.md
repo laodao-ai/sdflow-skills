@@ -102,7 +102,7 @@ flowchart TD
 | 领域/对抗/历史镜 | fresh-context 子代理 | 一条消息全派出，返回结构化 findings，禁 AskUserQuestion |
 | `trivial_shape.py` | 确定性脚本（Step2 前置） | 无逻辑面白名单机判豁免：`--base "$DIFF_BASE"`，**0=EXEMPT** 免 fan-out / **1=NOT_EXEMPT** 照跑 / **2=ERROR** 保守照跑；判器缺失视同 NOT_EXEMPT |
 | `outside-voice.sh` | 确定性脚本 | code-voice（always）+ HR-TG（命中）跨模型；退出码契约同 spec-review |
-| `lens_metric_emit.py` / `anchor_lint.py` | 确定性脚本（Step5） | 度量锚归约（**exit 0 才落**，禁手拼）/ 四类 v1 锚机验门（`--layer code-review`，非 0 阻塞） |
+| `lens_metric_emit.py` / `anchor_lint.py` | 确定性脚本（Step5） | 度量锚归约（**exit 0 才落**，禁手拼）/ 四类 v1 锚机验门（`--layer code-review --trigger-catalog ...`，非 0 阻塞） |
 | 官方 `/code-review` | 插件能力**内部借用** | P3d 弃用为独立 step；仅供历史镜/置信过滤内部借用，不再独立 gh 回帖 |
 | `buglist.py`/`todolist.py` | 脚本 | defer 落档（本 change 引入的代码 bug / 改进关注点） |
 | `resolve-workflow.sh` / `checkpoint-commit.sh` | 脚本 | 规则解析 / 过场提交 |
@@ -121,7 +121,7 @@ flowchart TD
 
 | 项 | 类型 | 靠什么 |
 |---|---|---|
-| **锚行自检**（四类 v1 锚，`anchor_lint.py --layer code-review`） | **强制（确定性脚本门）** | Step5 调脚本，非 0（1=违规/2=fail-closed）即报错阻塞；数值一致性仍属主 session 信任边界 |
+| **锚行自检**（四类 v1 锚，`anchor_lint.py --layer code-review --trigger-catalog ...`） | **强制（确定性脚本门）** | Step5 调脚本，非 0（1=违规/2=fail-closed）即报错阻塞；数值一致性仍属主 session 信任边界 |
 | **frontmatter `ship-gate.code_review: pass\|blocked` 机判锚** | **强制（下游门读）** | `ship_gate` 读报告**头部 frontmatter 首块**判「可进 done」；blocked=BLOCKED_UPSTREAM 不放行；坏 frontmatter live 读 fail-closed UNKNOWN(6) |
 | **trivial_shape 无逻辑面豁免**（Step2 前置） | **强制（退出码脚本）** | exit 0 才免 fan-out；1/2/判器缺失一律照跑（保守偏 NOT_EXEMPT） |
 | **lens-metric 度量锚经 emitter 落锚** | **强制（脚本 fail-closed）** | `lens_metric_emit.py` exit 0 才落、禁手拼；受 config `metrics.enabled` 门控 |

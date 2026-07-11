@@ -49,7 +49,7 @@ flowchart TD
 | 1 | autoplan 广审、吃 findings | **原生执行**（指令进主 session，禁派子代理转述）；主 session 汇总落盘 `gstack-review.md` 写 `mode="native"` 锚 + 侧信道佐证；**串行纪律 T20**：MUST 待本步 checkpoint 完成才 fan-out |
 | 1·守卫 | 复用还是自跑 outside-voice | 三前置：①来源（simulated 视同无效）②新鲜度（早于最新改动视同缺失）③结构（解析不出 codex 段/0 条）。任一不过 → 打印原因码 + 回落自跑 design-voice |
 | 2 | 规划并 fan-out 多镜 | **防重叠 1.4**：autoplan 已含 eng 镜 → 领域镜**不重复跑 eng**；HR-TG 命中单开领域 cross-model，写 v1 锚行 |
-| 3 | 对抗裁决 + 决策登记 | **反静默压制**（Q3）：裁掉的 finding 连理由进「已裁掉」区；**置信分流**：高采信/中标需确认/低仍上抛一行，**不照搬 <80 数值一刀切**（设计漏掉代价高，优化召回）；**锚行自检（确定性脚本门）**：调 `$RULES_ROOT/tools/anchor_lint.py --layer spec-review` 机验 4 类正文 v1 锚（step1-broad-review / hr-tg / outside-voice / lens-metric），exit 1=违规 / 2=fail-closed **均阻塞本步** |
+| 3 | 对抗裁决 + 决策登记 | **反静默压制**（Q3）：裁掉的 finding 连理由进「已裁掉」区；**置信分流**：高采信/中标需确认/低仍上抛一行，**不照搬 <80 数值一刀切**（设计漏掉代价高，优化召回）；**锚行自检（确定性脚本门）**：调 `$RULES_ROOT/tools/anchor_lint.py --layer spec-review --trigger-catalog $RULES_ROOT/trigger-catalog.md` 机验 4 类正文 v1 锚（step1-broad-review / hr-tg / outside-voice / lens-metric），exit 1=违规 / 2=fail-closed **均阻塞本步** |
 | 4 | 出报告 + 拍板回写 | **度量锚**：config `metrics.enabled` 开时构造 roster+findings 调 `lens_metric_emit.py`——**exit 0 才**把其 stdout 落进报告，非 0 fail-closed **不落、禁手拼锚行顶替**；缺省/`false` → 不落锚、不调 emitter。拍板**发生后**主 session 立即在报告头部写 frontmatter `ship-gate:` → `design_approved: true`（已有首块则合并键入该块、不新开第二块，无则 prepend 新建；`/sdflow-ship` pre-flight 唯一机判依据） |
 
 **决策登记区**：`[自动决策]`（默认接受可覆盖）/ `[需拍板]`（≥2 方案或核验不了的事实）/ `[已裁掉]`（原始发现 + 裁掉理由）/ `TENSION`（voice 与主审分歧，两方视角 + 推荐 + 后果）。
@@ -81,7 +81,7 @@ flowchart TD
 | 领域/对抗/接地镜 | fresh-context 子代理 | 一条消息内全部派出，返回结构化 findings（问题/证据 file:line/置信/严重度/建议），**禁 AskUserQuestion** |
 | `outside-voice.sh` | 确定性脚本（退出码契约） | preflight `ready`→codex；exit0=findings（runner=codex）、exit124→fallback、exit3→拒发不 fallback（密钥）；畸形/非零→claude-fallback（只读子代理） |
 | `resolve-workflow.sh` | 脚本 | 解析规则根（本地 pin 或全局 canonical）；不硬编码 `openspec/workflow/` |
-| `anchor_lint.py` | 确定性脚本（退出码契约） | Step3 出报告后锚自检（`--layer spec-review`）：机验 4 类正文 v1 锚存在性 + lens-metric 字段/枚举；0=CLEAN、1=违规、2=fail-closed，**非 0 阻塞本步** |
+| `anchor_lint.py` | 确定性脚本（退出码契约） | Step3 出报告后锚自检（`--layer spec-review --trigger-catalog $RULES_ROOT/trigger-catalog.md`，后者为 M2/M-new 前提、必需参数）：机验 4 类正文 v1 锚存在性 + lens-metric 字段/枚举；0=CLEAN、1=违规、2=fail-closed，**非 0 阻塞本步** |
 | `lens_metric_emit.py` | 确定性脚本（fail-closed） | Step4 度量锚 emitter（config `metrics.enabled` 门控，缺省/`false` 不调）；**exit 0 才**落其 stdout 进报告，非 0 不落、禁手拼锚行 |
 | `checkpoint-commit.sh` | 脚本 | 步末过场提交（P2c 两次） |
 

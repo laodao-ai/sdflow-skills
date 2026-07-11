@@ -258,6 +258,71 @@ def test_no_hardcoded_member_list():
     assert "TG-04" not in src and "TG-26" not in src and "TG-16" not in src
 
 
+# --- [impl-review-fix] F-A：成员行严格抽取，拒畸形 token（TG-04x 非法后缀），不宽松 findall ---
+
+def test_famember_line_rejects_suffixed_token(tmp_path):
+    """F-A: `> 成员：**TG-04x**` 畸形 token（非法后缀）→ EmitError，不得宽松抽出 TG-04。"""
+    m = _mod()
+    cat = _catalog(tmp_path, member_line="> 成员：**TG-04x**")
+    with pytest.raises(m.EmitError):
+        m.load_hr_tg_subset(cat)
+
+
+def test_famember_line_rejects_mixed_valid_and_malformed(tmp_path):
+    """F-A: 成员行混入一个畸形 token（TG-06x）→ 整行 fail-closed，不局部放行合法 token。"""
+    m = _mod()
+    cat = _catalog(tmp_path, member_line="> 成员：**TG-04, TG-06x**")
+    with pytest.raises(m.EmitError):
+        m.load_hr_tg_subset(cat)
+
+
+def test_famember_line_normal_still_ok(tmp_path):
+    """F-A 正例：正常 `**TG-04, TG-06**` 成员行严格解析仍正常通过。"""
+    m = _mod()
+    cat = _catalog(tmp_path, member_line="> 成员：**TG-04, TG-06**")
+    subset = m.load_hr_tg_subset(cat)
+    assert subset == {"TG-04", "TG-06"}
+
+
+# --- [impl-review-fix] F-B：「触发词目录」段标题歧义 → fail-closed（拒 next() 静默取首劫持段边界）---
+
+def test_fb_ambiguous_section_heading_fail_closed(tmp_path):
+    """更早出现同含「触发词目录」子串的诱饵标题（`## 零、触发词目录草案（历史存档）`）
+    → 段定位歧义，MUST EmitError（旧 next() 取首会静默把诱饵段（含 TG-77）当真全集，fail-open）。"""
+    m = _mod()
+    p = tmp_path / "trigger-catalog.md"
+    body = (
+        "# 触发目录\n\n"
+        "## 零、触发词目录草案（历史存档）\n\n"
+        "| ID | 触发 |\n|---|---|\n| TG-77 | x |\n\n"
+        "## 三、触发词目录\n\n"
+        "| ID | 触发 |\n|---|---|\n| TG-04 | x |\n| TG-16 | x |\n\n"
+        "## 七、HR-TG 子集（评审 cross-model 层单一源）\n\n"
+        "> 成员：**TG-04, TG-16**\n"
+    )
+    p.write_text(body, encoding="utf-8")
+    with pytest.raises(m.EmitError):
+        m.load_all_tg_set(p)
+
+
+# --- [impl-review-fix] F-C：catalog 解析 fence-aware，段内围栏示例表行不纳入全集 ---
+
+def test_fc_fence_aware_catalog_parsing(tmp_path):
+    """段内 ``` 围栏代码块里的示例表行 `| TG-88 | 仅示例 |` 不得纳入「触发词目录」全集。"""
+    m = _mod()
+    cat = _catalog(tmp_path, prose_extra="\n```\n| TG-88 | 仅示例 |\n```\n")
+    all_tg = m.load_all_tg_set(cat)
+    assert "TG-88" not in all_tg
+
+
+def test_fc_fence_aware_catalog_cli_fail_closed(tmp_path):
+    """端到端：declared=TG-88（仅存在于围栏示例内）→ M-new 存在性校验判其「全集外」，CLI fail-closed。"""
+    m = _mod()
+    cat = _catalog(tmp_path, prose_extra="\n```\n| TG-88 | 仅示例 |\n```\n")
+    rc = m.main(["--tg-set", "TG-88", "--trigger-catalog", str(cat)])
+    assert rc == m.EXIT_FAIL
+
+
 # --- CLI 契约（子进程；exit 码 + stdout/stderr 分流）---
 
 def _run(tg_set, catalog):

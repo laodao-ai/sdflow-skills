@@ -13,12 +13,13 @@ from pathlib import Path
 
 EXIT_OK, EXIT_FAIL = 0, 1
 
-_TG_TOKEN_RE = re.compile(r'TG-\d+')          # 宽松抽取（忽略 **bold**/空格）
-_TG_STRICT_RE = re.compile(r'^TG-\d+$')       # tg-set 逐 token 严格校验
+_TG_STRICT_RE = re.compile(r'^TG-\d+$')       # tg-set / 成员 token 逐 token 严格校验
 _H12_RE = re.compile(r'^#{1,2}\s')            # level-1/2 标题（段边界；level-3 `### ` 不匹配）
 _MEMBER_RE = re.compile(r'^\s*>\s*成员')       # `> 成员：...` 行（fence/引用前缀容忍空白）
+_MEMBER_CONTENT_RE = re.compile(r'^\s*>\s*成员[：:]?\s*(.*)$')  # [impl-review-fix] F-A：抽成员行冒号后内容
 _H3_SECTION_RE = re.compile(r'^##\s.*触发词目录')      # 「触发词目录」段标题定位（限 level-2，避开文档 H1 标题同名误匹配）
 _TABLE_TG_RE = re.compile(r'^\s*\|\s*(TG-\d+)\s*\|')   # F8：段内表行首列 TG token；正文游离提及不匹配此形
+_FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')           # [impl-review-fix] F-C：CommonMark fence（同 anchor_lint 口径）
 
 
 class EmitError(Exception):
@@ -26,27 +27,69 @@ class EmitError(Exception):
     pass
 
 
+def fence_outside_lines(text):
+    """[impl-review-fix] F-C（同 anchor_lint.fence_outside_lines 口径，本地重实现——adr/0002 非 import 约定）
+    产出非 fenced-block 行（CommonMark：0-3 空格缩进 + ≥3 同字符 marker 开合、闭合行 marker 后仅空白）。
+    catalog 段/成员/表行解析先过此函数，段内围栏示例（``` | TG-88 | 仅示例 | ```）不得被当真纳入。"""
+    fence = None
+    for ln in text.splitlines():
+        m = _FENCE.match(ln)
+        if fence is None:
+            if m:
+                fence = (m.group(1)[0], len(m.group(1))); continue
+            yield ln
+        else:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1] and ln[m.end():].strip() == "":
+                fence = None
+            continue
+
+
+def _locate_unique_h12(lines, matches_fn, not_found_msg, ambiguous_msg):
+    """[impl-review-fix] F-B：收集全部匹配 level-2 段标题行，恰好 1 个才返回其索引；
+    0 个 / ≥2 个 → EmitError（fail-closed，MUST NOT 静默取首——同名标题会劫持段边界）。"""
+    idxs = [i for i, ln in enumerate(lines) if matches_fn(ln)]
+    if not idxs:
+        raise EmitError(not_found_msg)
+    if len(idxs) > 1:
+        raise EmitError(ambiguous_msg)
+    return idxs[0]
+
+
+def _parse_member_tokens(content):
+    """[impl-review-fix] F-A：成员行内容（`> 成员：` 后半段）→ 严格 TG token 列表。
+    剥外层 `**...**` markdown 粗体包裹后按逗号 split，逐 token 须 fullmatch `TG-<数字>`；
+    任一畸形 token（如 TG-99x/TG-99-removed 形）或空 → EmitError（fail-closed，不宽松正规化抽取）。"""
+    content = content.strip()
+    if content.startswith("**") and content.endswith("**") and len(content) >= 4:
+        content = content[2:-2].strip()
+    members = []
+    for t in (t.strip() for t in content.split(",")):
+        if not _TG_STRICT_RE.match(t):
+            raise EmitError(f"HR-TG 成员行含非法 TG 记号（须 TG-<数字> 形）: {t!r}")
+        members.append(t)
+    return members
+
+
 def load_hr_tg_subset(catalog_path):
     """从 trigger-catalog 的 `## …HR-TG…` 段 `> 成员：` 行 parse HR-TG 成员集。
-    单一源缺失/不可读/无 HR-TG 段/段内无成员行/成员行无 TG 记号 → EmitError（不静默按空子集放行）。"""
+    单一源缺失/不可读/无 HR-TG 段/段内无成员行/成员行无 TG 记号/畸形 token/段标题歧义
+    → EmitError（不静默按空子集放行，不静默取首劫持段边界）。"""
     try:
         text = Path(catalog_path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise EmitError(f"trigger-catalog 不可读: {e}")
-    lines = text.splitlines()
-    start = None
-    for i, ln in enumerate(lines):
-        if _H12_RE.match(ln) and "HR-TG" in ln:      # 定位 HR-TG 段标题
-            start = i
-            break
-    if start is None:
-        raise EmitError("trigger-catalog 缺 `## …HR-TG…` 段（单一源损坏）")
+    lines = list(fence_outside_lines(text))            # [impl-review-fix] F-C：段内围栏行先剔除
+    start = _locate_unique_h12(
+        lines, lambda ln: bool(_H12_RE.match(ln)) and "HR-TG" in ln,
+        "trigger-catalog 缺 `## …HR-TG…` 段（单一源损坏）",
+        "trigger-catalog 「HR-TG」段标题歧义（同名标题多处匹配，单一源损坏，fail-closed 拒静默取首）")
     members = None
     for ln in lines[start + 1:]:
         if _H12_RE.match(ln):                         # 到下一 level-1/2 标题 = 段结束
             break
         if _MEMBER_RE.match(ln):
-            members = _TG_TOKEN_RE.findall(ln)        # 段内 `> 成员：` 行才算数，不跨段借用
+            m = _MEMBER_CONTENT_RE.match(ln)
+            members = _parse_member_tokens(m.group(1) if m else "")  # [impl-review-fix] F-A：严格抽取
             break
     if members is None:
         raise EmitError("HR-TG 段缺 `> 成员：` 行（单一源损坏）")
@@ -61,23 +104,25 @@ def load_hr_tg_subset(catalog_path):
 
 def load_all_tg_set(catalog_path):
     """从 trigger-catalog「触发词目录」段的表行 `| TG-NN | ... |` parse 全 TG 集（M-new，F8 边界钉死）：
-    只取该段内表行首列、逐 token 严格 fullmatch；正文游离提及（非表行）MUST NOT 纳入。
-    段缺失 / 段内无表行 → EmitError（单一源损坏 fail-closed，不静默按空集放行）。"""
+    只取该段内表行首列、逐 token 严格 fullmatch；正文游离提及（非表行）MUST NOT 纳入，段内围栏
+    示例表行（F-C）MUST NOT 纳入。段缺失 / 段内无表行 / 段标题歧义（F-B）→ EmitError（单一源损坏
+    fail-closed，不静默按空集放行）。"""
     try:
         text = Path(catalog_path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise EmitError(f"trigger-catalog 不可读: {e}")
-    lines = text.splitlines()
-    start = next((i for i, ln in enumerate(lines) if _H3_SECTION_RE.match(ln)), None)
-    if start is None:
-        raise EmitError("trigger-catalog 缺「触发词目录」段（M-new 全集单一源损坏）")
+    lines = list(fence_outside_lines(text))            # [impl-review-fix] F-C：段内围栏行先剔除
+    start = _locate_unique_h12(
+        lines, lambda ln: bool(_H3_SECTION_RE.match(ln)),
+        "trigger-catalog 缺「触发词目录」段（M-new 全集单一源损坏）",
+        "trigger-catalog 「触发词目录」段标题歧义（同名标题多处匹配，单一源损坏，fail-closed 拒静默取首）")
     full = set()
     for ln in lines[start + 1:]:
         if _H12_RE.match(ln):                          # 到下一 level-1/2 标题 = 段结束
             break
         mm = _TABLE_TG_RE.match(ln)
-        if mm and _TG_STRICT_RE.match(mm.group(1)):     # 逐 token 严格 fullmatch，拒残留后缀
-            full.add(mm.group(1))
+        if mm:                                          # [impl-review-fix] 顺带清死代码：_TABLE_TG_RE 捕获组
+            full.add(mm.group(1))                        # 结构本身即 TG-\d+ fullmatch，外层再判恒真
     if not full:
         raise EmitError("「触发词目录」段无 `| TG-NN |` 表行（M-new 全集单一源损坏）")
     return full

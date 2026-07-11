@@ -295,6 +295,110 @@ def test_f2_duplicate_key_collect_not_raise_continues_m1():  # dup-key 不中断
     assert any(x["kind"] == "missing-field" and x["field"] == "hit" for x in v)
 
 
+# --- [impl-review-fix] F-A/F-B/F-C：anchor_lint 本地重实现的 catalog 解析同样加固（非仅赖 F3 golden）---
+
+def _catalog_body(all_tg_table, hr_tg_members, decoy_section="", prose_extra=""):
+    return (
+        "# 触发目录\n\n"
+        f"{decoy_section}"
+        "## 三、触发词目录\n\n"
+        "| ID | 触发 |\n|---|---|\n" + all_tg_table + "\n"
+        f"{prose_extra}"
+        "## 七、HR-TG 子集（评审 cross-model 层单一源）\n\n"
+        f"> 成员：**{hr_tg_members}**\n"
+    )
+
+
+def test_famember_line_rejects_suffixed_token_anchor_lint(tmp_path):
+    al = _mod()
+    body = _catalog_body("| TG-04 | x |\n", "TG-04x")
+    cat = tmp_path / "trigger-catalog.md"; cat.write_text(body, encoding="utf-8")
+    with pytest.raises(al.EmitError):
+        al.load_hr_tg_subset(cat)
+
+
+def test_fb_ambiguous_section_heading_fail_closed_anchor_lint(tmp_path):
+    al = _mod()
+    decoy = "## 零、触发词目录草案（历史存档）\n\n| ID | 触发 |\n|---|---|\n| TG-77 | x |\n\n"
+    body = _catalog_body("| TG-04 | x |\n| TG-16 | x |\n", "TG-04, TG-16", decoy_section=decoy)
+    cat = tmp_path / "trigger-catalog.md"; cat.write_text(body, encoding="utf-8")
+    with pytest.raises(al.EmitError):
+        al.load_all_tg_set(cat)
+
+
+def test_fc_fence_aware_catalog_parsing_anchor_lint(tmp_path):
+    al = _mod()
+    prose = "```\n| TG-88 | 仅示例 |\n```\n\n"
+    body = _catalog_body("| TG-04 | x |\n| TG-16 | x |\n", "TG-04, TG-16", prose_extra=prose)
+    cat = tmp_path / "trigger-catalog.md"; cat.write_text(body, encoding="utf-8")
+    all_tg = al.load_all_tg_set(cat)
+    assert "TG-88" not in all_tg
+    assert {"TG-04", "TG-16"} <= all_tg
+
+
+# --- [impl-review-fix] F-D：hr-tg 锚行须严格边界闭合（未闭合注释 / -->后残留 → violation）---
+
+def test_fd_unterminated_anchor_violation():
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" declared="" trailing\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] in ("unterminated-anchor", "malformed-anchor") for x in v)
+
+
+def test_fd_trailing_residue_after_close_violation():
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" declared="" --> trailing junk\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] in ("unterminated-anchor", "malformed-anchor") for x in v)
+
+
+def test_fd_normal_closed_anchor_ok():
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+    assert al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET) == []
+
+
+# --- [impl-review-fix] F-E：hit=/declared= 须原始序=numeric canonical 序、无重复元素 ---
+
+def test_fe_hit_out_of_order_violation():
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-16,TG-04" declared="TG-04,TG-16" evidence="x" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "hit-not-canonical-order" for x in v)
+
+
+def test_fe_hit_duplicate_violation():
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-04,TG-04" declared="TG-04" evidence="x" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    assert any(x["kind"] == "hit-duplicate" for x in v)
+
+
+def test_fe_normal_canonical_order_ok():
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-04,TG-16" declared="TG-04,TG-16" evidence="x" -->\n'
+    assert al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET) == []
+
+
+def test_fe_s1_still_passes_with_order_checks():
+    """S1 诚实边界不因 F-E 新增序校验倒退：hit="none" declared="" 仍必须过。"""
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+    assert al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET) == []
+
+
+# --- [impl-review-fix] F-F：declared/hit 各自独立 try/except，一侧畸形不吞另一侧已判定违规 ---
+
+def test_ff_declared_and_hit_violations_both_collected_independently():
+    al = _mod()
+    r = '<!-- sdflow:hr-tg v1 hit="TG-04,,TG-16" declared="TG-04,TG-77" evidence="x" -->\n'
+    v = al.check_hr_tg(r, _HR_TG_SUBSET, _ALL_TG_SET)
+    kinds = [(x["field"], x["kind"]) for x in v]
+    assert ("declared", "tg-not-in-catalog") in kinds
+    assert ("hit", "malformed-tg-csv") in kinds
+    assert len(v) == 2
+
+
 def _run(report_path, layer, root=None, catalog=None):
     if catalog is None:
         catalog = _write_catalog(Path(report_path).parent)  # 最小合法 catalog，自动落在 report 同目录

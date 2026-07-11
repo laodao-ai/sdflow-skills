@@ -183,36 +183,61 @@ class EmitError(Exception):
     pass
 
 
-_TG_TOKEN_RE = re.compile(r'TG-\d+')          # 宽松抽取（忽略 **bold**/空格）
 _TG_STRICT_RE = re.compile(r'^TG-\d+$')       # 逐 token 严格校验
 _H12_RE = re.compile(r'^#{1,2}\s')            # level-1/2 标题（段边界；level-3 `### ` 不匹配）
 _MEMBER_RE = re.compile(r'^\s*>\s*成员')       # `> 成员：...` 行（fence/引用前缀容忍空白）
+_MEMBER_CONTENT_RE = re.compile(r'^\s*>\s*成员[：:]?\s*(.*)$')  # [impl-review-fix] F-A：抽成员行冒号后内容
 _H3_SECTION_RE = re.compile(r'^##\s.*触发词目录')      # 「触发词目录」段标题定位（限 level-2）
 _TABLE_TG_RE = re.compile(r'^\s*\|\s*(TG-\d+)\s*\|')   # 段内表行首列 TG token；正文游离提及不匹配此形
 
 
+def _locate_unique_h12(lines, matches_fn, not_found_msg, ambiguous_msg):
+    """[impl-review-fix] F-B（同 hr_tg_intersect._locate_unique_h12 口径）：收集全部匹配 level-2
+    段标题行，恰好 1 个才返回其索引；0 个 / ≥2 个 → EmitError（fail-closed，MUST NOT 静默取首——
+    同名标题会劫持段边界）。"""
+    idxs = [i for i, ln in enumerate(lines) if matches_fn(ln)]
+    if not idxs:
+        raise EmitError(not_found_msg)
+    if len(idxs) > 1:
+        raise EmitError(ambiguous_msg)
+    return idxs[0]
+
+
+def _parse_member_tokens(content):
+    """[impl-review-fix] F-A（同 hr_tg_intersect._parse_member_tokens 口径）：成员行内容
+    （`> 成员：` 后半段）→ 严格 TG token 列表。剥外层 `**...**` markdown 粗体包裹后按逗号 split，
+    逐 token 须 fullmatch `TG-<数字>`；任一畸形 token 或空 → EmitError（fail-closed，不宽松正规化抽取）。"""
+    content = content.strip()
+    if content.startswith("**") and content.endswith("**") and len(content) >= 4:
+        content = content[2:-2].strip()
+    members = []
+    for t in (t.strip() for t in content.split(",")):
+        if not _TG_STRICT_RE.match(t):
+            raise EmitError(f"HR-TG 成员行含非法 TG 记号（须 TG-<数字> 形）: {t!r}")
+        members.append(t)
+    return members
+
+
 def load_hr_tg_subset(catalog_path):
     """（同 hr_tg_intersect.load_hr_tg_subset 口径）从 trigger-catalog 的 `## …HR-TG…` 段
-    `> 成员：` 行 parse HR-TG 成员集。单一源缺失/不可读/无 HR-TG 段/段内无成员行/成员行无 TG 记号
-    → EmitError（不静默按空子集放行）。"""
+    `> 成员：` 行 parse HR-TG 成员集。单一源缺失/不可读/无 HR-TG 段/段内无成员行/成员行无 TG 记号/
+    畸形 token/段标题歧义 → EmitError（不静默按空子集放行，不静默取首劫持段边界）。"""
     try:
         text = Path(catalog_path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise EmitError(f"trigger-catalog 不可读: {e}")
-    lines = text.splitlines()
-    start = None
-    for i, ln in enumerate(lines):
-        if _H12_RE.match(ln) and "HR-TG" in ln:      # 定位 HR-TG 段标题
-            start = i
-            break
-    if start is None:
-        raise EmitError("trigger-catalog 缺 `## …HR-TG…` 段（单一源损坏）")
+    lines = list(fence_outside_lines(text))       # [impl-review-fix] F-C：段内围栏行先剔除（复用本文件既有函数）
+    start = _locate_unique_h12(
+        lines, lambda ln: bool(_H12_RE.match(ln)) and "HR-TG" in ln,
+        "trigger-catalog 缺 `## …HR-TG…` 段（单一源损坏）",
+        "trigger-catalog 「HR-TG」段标题歧义（同名标题多处匹配，单一源损坏，fail-closed 拒静默取首）")
     members = None
     for ln in lines[start + 1:]:
         if _H12_RE.match(ln):                         # 到下一 level-1/2 标题 = 段结束
             break
         if _MEMBER_RE.match(ln):
-            members = _TG_TOKEN_RE.findall(ln)        # 段内 `> 成员：` 行才算数，不跨段借用
+            m = _MEMBER_CONTENT_RE.match(ln)
+            members = _parse_member_tokens(m.group(1) if m else "")  # [impl-review-fix] F-A：严格抽取
             break
     if members is None:
         raise EmitError("HR-TG 段缺 `> 成员：` 行（单一源损坏）")
@@ -228,22 +253,23 @@ def load_hr_tg_subset(catalog_path):
 def load_all_tg_set(catalog_path):
     """（同 hr_tg_intersect.load_all_tg_set 口径）从 trigger-catalog「触发词目录」段的表行
     `| TG-NN | ... |` parse 全 TG 集（M-new，F8 边界钉死）：只取该段内表行首列、逐 token 严格
-    fullmatch；正文游离提及（非表行）MUST NOT 纳入。段缺失/段内无表行 → EmitError（单一源损坏
-    fail-closed，不静默按空集放行）。"""
+    fullmatch；正文游离提及（非表行）MUST NOT 纳入，段内围栏示例表行（F-C）MUST NOT 纳入。
+    段缺失/段内无表行/段标题歧义（F-B）→ EmitError（单一源损坏 fail-closed，不静默按空集放行）。"""
     try:
         text = Path(catalog_path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise EmitError(f"trigger-catalog 不可读: {e}")
-    lines = text.splitlines()
-    start = next((i for i, ln in enumerate(lines) if _H3_SECTION_RE.match(ln)), None)
-    if start is None:
-        raise EmitError("trigger-catalog 缺「触发词目录」段（M-new 全集单一源损坏）")
+    lines = list(fence_outside_lines(text))       # [impl-review-fix] F-C：段内围栏行先剔除（复用本文件既有函数）
+    start = _locate_unique_h12(
+        lines, lambda ln: bool(_H3_SECTION_RE.match(ln)),
+        "trigger-catalog 缺「触发词目录」段（M-new 全集单一源损坏）",
+        "trigger-catalog 「触发词目录」段标题歧义（同名标题多处匹配，单一源损坏，fail-closed 拒静默取首）")
     full = set()
     for ln in lines[start + 1:]:
         if _H12_RE.match(ln):                          # 到下一 level-1/2 标题 = 段结束
             break
         mm = _TABLE_TG_RE.match(ln)
-        if mm and _TG_STRICT_RE.match(mm.group(1)):     # 逐 token 严格 fullmatch，拒残留后缀
+        if mm:                                          # [impl-review-fix] 顺带清死代码：捕获组结构本身即 TG-\d+ fullmatch
             full.add(mm.group(1))
     if not full:
         raise EmitError("「触发词目录」段无 `| TG-NN |` 表行（M-new 全集单一源损坏）")
@@ -265,13 +291,41 @@ def _parse_tg_csv(raw):
     return tokens
 
 
+_HR_TG_ANCHOR_FULL_RE = re.compile(r'^<!--\s*sdflow:hr-tg\s+v1(.*)-->\s*$')  # [impl-review-fix] F-D：整行严格边界
+
+
+def _numeric_key(t):
+    return int(t[3:])
+
+
+def _canonicalize(tokens):
+    """去重 + 数值序（brief 接口明令的 canonical 序，emit 侧 render 产出即此形）。"""
+    return sorted(set(tokens), key=_numeric_key)
+
+
+def _check_order_and_dup(v, anchor, field, tokens):
+    """[impl-review-fix] F-E：校验 tokens 的原始解析序列（非 set）——重复元素 → `<field>-duplicate`；
+    去重后（保留首次出现序）≠ canonical numeric 序 → `<field>-not-canonical-order`。
+    重复与乱序独立判定：重复时暂不重复报乱序（去重后天然与自身 canonical 一致时不重复噪声）。"""
+    if len(tokens) != len(set(tokens)):
+        v.append({"anchor": anchor, "field": field, "kind": f"{field}-duplicate"})
+    dedup_preserve_order = list(dict.fromkeys(tokens))
+    if dedup_preserve_order != _canonicalize(tokens):
+        v.append({"anchor": anchor, "field": field, "kind": f"{field}-not-canonical-order"})
+
+
 def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
-    """校验 fence 外真 hr-tg 锚：F2 整行严格解析拒重复键（同键出现 ≥2 次，如 hit= 写两遍 → dup-key
-    violation；防跨消费者分歧——本脚本末值胜，sdflow-retro 若取首会读到不同字段值，同一报告两处
-    解读不一致）；M1 hit=/declared= 两字段在场；M2 重算 hit == declared∩HR-TG（数值序逐元素比较，
-    none⟺空交集）；M4 hit≠none(空) ⟹ evidence= 在场且 strip 后非空；M-new declared/hit 每 TG ∈
-    all_tg_set（trigger-catalog 全集，M-new lint 侧）；F1 sentinel（declared 空集须 ""、hit 空须
-    "none"，写反 → violation，仍尽力降级续算不中断其余校验）。
+    """校验 fence 外真 hr-tg 锚：F-D 整行须严格匹配 `<!-- sdflow:hr-tg v1 ... -->` 边界（未闭合注释 /
+    `-->` 后尾随残留 → malformed-anchor/unterminated-anchor，不继续解析该行 kv）；F2 整行严格解析拒
+    重复键（同键出现 ≥2 次，如 hit= 写两遍 → dup-key violation；防跨消费者分歧——本脚本末值胜，
+    sdflow-retro 若取首会读到不同字段值，同一报告两处解读不一致）；M1 hit=/declared= 两字段在场；
+    F-E hit=/declared= 的原始解析序列须无重复元素、且去重后 = canonical 数值序（乱序/重复元素各自
+    独立 violation：hit-not-canonical-order/hit-duplicate、declared-not-canonical-order/declared-duplicate）；
+    M2 重算 hit == declared∩HR-TG（数值序逐元素比较，none⟺空交集）；M4 hit≠none(空) ⟹ evidence= 在场
+    且 strip 后非空；M-new declared/hit 每 TG ∈ all_tg_set（trigger-catalog 全集，M-new lint 侧）；
+    F1 sentinel（declared 空集须 ""、hit 空须 "none"，写反 → violation，仍尽力降级续算不中断其余校验）。
+    F-F：declared 侧与 hit 侧解析/校验各自独立 try/except——一侧 CSV 畸形不吞另一侧已可判定的 violation
+    （M-new/F-E 校验仅在该侧成功 parse 时进行；M2/M4 需两侧皆成功才比较，任一侧失败则跳过，不臆造）。
     诚实边界（S1）：M2 只堵内部一致性（hit 与 declared∩HR-TG 是否自洽），堵不住「declared 本身
     是否=真命中集」（无确定性信号，语义残余）——一致但错的锚 MUST 通过，MUST NOT 加强为 tamper-proof。
     F9 collect-not-raise：CSV 解析畸形（非 TG-<数字> token / 空 cell）、以及 F2 重复键，均就地转
@@ -281,8 +335,13 @@ def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
     for ln in fence_outside_lines(report_text):
         if anchor_prefix(ln) != "hr-tg":
             continue
-        kv, dup_keys = parse_kv_strict(ln)
         anchor = ln.strip()[:80]
+        m = _HR_TG_ANCHOR_FULL_RE.match(ln.strip())   # [impl-review-fix] F-D：整行边界严格校验
+        if not m:
+            kind = "unterminated-anchor" if "-->" not in ln else "malformed-anchor"
+            v.append({"anchor": anchor, "field": "anchor", "kind": kind})
+            continue
+        kv, dup_keys = parse_kv_strict(m.group(1))
         for dk in dup_keys:
             v.append({"anchor": anchor, "field": dk, "kind": "dup-key"})
         for f in HR_TG_REQUIRED_FIELDS:
@@ -291,6 +350,9 @@ def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
         if "hit" not in kv or "declared" not in kv:
             continue
         hit_raw, decl_raw = kv["hit"], kv["declared"]
+
+        # [impl-review-fix] F-F：declared 侧独立 try/except——hit 侧畸形不吞 declared 侧已判定 violation
+        declared = None
         try:
             # F1 sentinel：declared 空集须 ""（非 "none"）；"none" 字面不可解析为 CSV，
             # 违规照记但降级按空集续算，避免同根因被误记成 malformed-tg-csv 掩盖真实 kind。
@@ -299,6 +361,17 @@ def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
                 declared = []
             else:
                 declared = _parse_tg_csv(decl_raw)
+        except EmitError:
+            v.append({"anchor": anchor, "field": "declared", "kind": "malformed-tg-csv"})
+        if declared is not None:
+            for t in set(declared):
+                if t not in all_tg_set:                                    # M-new
+                    v.append({"anchor": anchor, "field": "declared", "kind": "tg-not-in-catalog"})
+            _check_order_and_dup(v, anchor, "declared", declared)          # F-E
+
+        # [impl-review-fix] F-F：hit 侧独立 try/except——declared 侧畸形不吞 hit 侧已判定 violation
+        actual = None
+        try:
             # F1 sentinel：hit 空须 "none"（非 ""）；"" 本身是合法空 CSV，可续算，仅额外记违规。
             if hit_raw == "":
                 v.append({"anchor": anchor, "field": "hit", "kind": "hit-empty-not-none"})
@@ -307,24 +380,24 @@ def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
                 actual = []
             else:
                 actual = _parse_tg_csv(hit_raw)
-            # M-new：declared/hit 每 TG ∈ catalog 全集
-            for t in set(declared):
-                if t not in all_tg_set:
-                    v.append({"anchor": anchor, "field": "declared", "kind": "tg-not-in-catalog"})
+        except EmitError:
+            v.append({"anchor": anchor, "field": "hit", "kind": "malformed-tg-csv"})
+        if actual is not None:
             for t in set(actual):
-                if t not in all_tg_set:
+                if t not in all_tg_set:                                    # M-new
                     v.append({"anchor": anchor, "field": "hit", "kind": "tg-not-in-catalog"})
+            _check_order_and_dup(v, anchor, "hit", actual)                 # F-E
+
+        if declared is not None and actual is not None:
             # M2：重算 expect_hits = declared ∩ HR-TG，与锚里 hit= 逐元素同序（数值序）比较
-            expect_hits = sorted({t for t in declared if t in hr_tg_subset}, key=lambda x: int(x[3:]))
-            actual_sorted = sorted(set(actual), key=lambda x: int(x[3:]))
+            expect_hits = sorted({t for t in declared if t in hr_tg_subset}, key=_numeric_key)
+            actual_sorted = sorted(set(actual), key=_numeric_key)
             if actual_sorted != expect_hits:
                 v.append({"anchor": anchor, "field": "hit", "kind": "hit-declared-mismatch"})
             # M4：hit≠none(空) ⟹ evidence= 在场且 strip 后非空（按锚上实际 hit 声明门控，非按 expect_hits——
             # 即便 M2 判 mismatch，只要锚声明了非空 hit，仍要求 evidence，两者独立校验）
             if actual_sorted and kv.get("evidence", "").strip() == "":
                 v.append({"anchor": anchor, "field": "evidence", "kind": "evidence-missing"})
-        except EmitError:
-            v.append({"anchor": anchor, "field": "hit/declared", "kind": "malformed-tg-csv"})
     return v
 
 
