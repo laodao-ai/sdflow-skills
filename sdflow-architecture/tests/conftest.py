@@ -1,8 +1,9 @@
 import textwrap
 
 def make_sad(status="draft", schema=1, facts=None, cache=0, assumptions=(),
-             slice_section=False, subsystems=("采集端",), extra=""):
-    """构造结构合法的 SAD 文本。assumptions=[(编号,处置)]，同时产内联与表行。"""
+             slice_section=False, subsystems=("采集端",), extra="", contract="draft"):
+    """构造结构合法的 SAD 文本。assumptions=[(编号,处置)]，同时产内联与表行。
+    contract 控制第 5 节各 contract 标签成熟度（默认 draft；B1 校验需 validated 时传入）。"""
     facts = facts or {"positioning": "missing", "external_systems": "missing",
                       "hard_constraints": "missing"}
     fm = ["---", f"sad_schema: {schema}", f"sad_status: {status}", "facts:"]
@@ -16,7 +17,7 @@ def make_sad(status="draft", schema=1, facts=None, cache=0, assumptions=(),
         "## 3. 外边界": "N/A — 单机无外部系统",
         "## 4. 架构策略与 ADR 索引": "见 openspec/adr/",
         "## 5. 子系统分解与 contract": "\n".join(
-            f"### 5.{i+1} {s}\n- contract[draft] {s}接口：语法/语义/错误语义主干"
+            f"### 5.{i+1} {s}\n- contract[{contract}] {s}接口：语法/语义/错误语义主干"
             for i, s in enumerate(subsystems)),
         "## 6. 运行场景": "场景A：启动→采集→上报",
         "## 7. 部署": "单机 binary",

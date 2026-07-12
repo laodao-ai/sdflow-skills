@@ -1,4 +1,5 @@
-import subprocess, sys, pathlib, shutil
+import subprocess, sys, pathlib, shutil, os, unicodedata
+import pytest
 from conftest import make_sad  # noqa: E402  (模块级导入：repo-wide pytest 下多 tests/ 目录同名
                                 # conftest.py 在 sys.modules 只留一个绑定；模块级导入随本文件
                                 # collection 期早绑定，避开函数级运行期延迟导入撞名的坑)
@@ -74,6 +75,7 @@ def test_template_missing_fail_closed_no_partial_layout(tmp_path):
     (fake_install / "references").mkdir(parents=True)
     shutil.copy(SCRIPT, fake_scripts / "sad_scaffold.py")
     shutil.copy(SCRIPT.parent / "sad_schema.py", fake_scripts / "sad_schema.py")
+    shutil.copy(SCRIPT.parent / "sad_lint.py", fake_scripts / "sad_lint.py")  # B1 迁移前复检依赖
 
     consumer = tmp_path / "consumer"
     make_repo(consumer)   # 新鲜消费仓：openspec/changes + openspec/specs 已建，无 adr/CONTEXT.md
@@ -112,9 +114,15 @@ def test_unresolved_assumption_locks_draft(tmp_path):
              "--slice-file", str(slice_f)], tmp_path)
     assert r.returncode == 5 and "假设-2" in r.stderr
 
+def _log_walkthrough(repo, tmp_path):
+    """B13 前置：写入冷走查 + 升档判定留痕两行（skeleton-ready 迁移的存在性锚）。"""
+    run(["log", "--root", str(repo), "--line", "冷走查完成，无阻断项"], tmp_path)
+    run(["log", "--root", str(repo), "--line", "升档判定：满足 skeleton-ready 条件"], tmp_path)
+
 def test_happy_path_to_skeleton_ready_inserts_slice(tmp_path):
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
     seed(repo, facts=ANSWERED, assumptions=[(1, "接受")], cache=0)
+    _log_walkthrough(repo, tmp_path)   # B13 前置留痕
     slice_f = tmp_path / "s.md"
     slice_f.write_text("- 穿越点[采集端]：§5.1 contract 条目\n- 骨架 DoD：…\n- 建议 change 名：skeleton-x\n", encoding="utf-8")
     r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
@@ -140,11 +148,15 @@ def test_out_of_table_transition_refused(tmp_path):
 
 def test_validated_removes_slice_and_fallback_logs_reason(tmp_path):
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
-    seed(repo, status="skeleton-ready", facts=ANSWERED, slice_section=True)
+    # B1：升 validated 要求 contract 已达 validated（否则前置复检拒），故 seed contract=validated
+    seed(repo, status="skeleton-ready", facts=ANSWERED, slice_section=True, contract="validated")
     r = run(["transition", "--root", str(repo), "--to", "validated", "--dod-confirmed"], tmp_path)
     assert r.returncode == 0
-    text = (repo / "openspec" / "architecture" / "sad.md").read_text(encoding="utf-8")
+    sad_p = repo / "openspec" / "architecture" / "sad.md"
+    text = sad_p.read_text(encoding="utf-8")
     assert "## 骨架切片建议" not in text and "sad_status: validated" in text
+    # 回落 draft 前须先把 contract 标签降回 draft（否则 B1 目标态复检拒——见 test_..._retained_validated_refused）
+    sad_p.write_text(text.replace("contract[validated]", "contract[draft]"), encoding="utf-8")
     r2 = run(["transition", "--root", str(repo), "--to", "draft", "--reason", "contract 大面积否决"], tmp_path)
     assert r2.returncode == 0
     assert "contract 大面积否决" in (repo / "openspec" / "architecture" / "sad-log.md").read_text(encoding="utf-8")
@@ -345,3 +357,252 @@ def test_context_add_fenced_term_not_conflict(tmp_path):
     # 确保 SAD 被新增（作为术语定义，而非冲突）
     text = ctx_path.read_text(encoding="utf-8")
     assert "**SAD**:" in text  # 术语定义形式
+
+
+# ==== Code-review fix wave B（scaffold 状态机/环境/并发面）[impl-review-fix] ====================
+
+SAD_MD = lambda repo: repo / "openspec" / "architecture" / "sad.md"
+SAD_LOG = lambda repo: repo / "openspec" / "architecture" / "sad-log.md"
+LINT = SCRIPT.parent / "sad_lint.py"
+
+
+# ---- B1: 迁移前目标态全量不变式复检（不落盘先验） ----------------------------------------
+
+def test_b1_validated_rejects_contract_draft(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, status="skeleton-ready", facts=ANSWERED, slice_section=True, contract="draft")
+    r = run(["transition", "--root", str(repo), "--to", "validated", "--dod-confirmed"], tmp_path)
+    assert r.returncode == 5 and "lint 违规" in r.stderr and "contract" in r.stderr
+    # 不落盘：status 仍 skeleton-ready
+    assert "sad_status: skeleton-ready" in SAD_MD(repo).read_text(encoding="utf-8")
+
+def test_b1_validated_passes_with_contract_validated_then_lint_clean(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, status="skeleton-ready", facts=ANSWERED, slice_section=True, contract="validated")
+    r = run(["transition", "--root", str(repo), "--to", "validated", "--dod-confirmed"], tmp_path)
+    assert r.returncode == 0
+    lr = subprocess.run([sys.executable, str(LINT), "--root", str(repo)],
+                        capture_output=True, text=True, cwd=tmp_path)
+    assert lr.returncode == 0, f"事后 lint 未过: {lr.stdout}{lr.stderr}"
+
+def test_b1_validated_to_draft_retained_validated_refused(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, status="validated", facts=ANSWERED, contract="validated")
+    r = run(["transition", "--root", str(repo), "--to", "draft", "--reason", "推翻"], tmp_path)
+    assert r.returncode == 5 and "contract" in r.stderr
+    assert "planned/draft" in r.stderr           # 回落专属文案
+    assert "sad_status: validated" in SAD_MD(repo).read_text(encoding="utf-8")   # 未落盘
+
+
+# ---- B2: set-fact 高阶态写 missing 拒绝 -------------------------------------------------
+
+def test_b2_set_fact_missing_on_high_order_refused(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, status="validated", facts=ANSWERED, contract="validated")
+    r = run(["set-fact", "--root", str(repo), "--fact", "positioning=missing"], tmp_path)
+    assert r.returncode == 5 and "回落" in r.stderr
+    assert "positioning: answered" in SAD_MD(repo).read_text(encoding="utf-8")   # 未回写
+
+def test_b2_set_fact_missing_on_draft_ok(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, status="draft", facts=ANSWERED)
+    r = run(["set-fact", "--root", str(repo), "--fact", "positioning=missing"], tmp_path)
+    assert r.returncode == 0
+    assert "positioning: missing" in SAD_MD(repo).read_text(encoding="utf-8")
+
+
+# ---- B3: sad-log 破口两处 --------------------------------------------------------------
+
+def test_b3_reinit_after_sad_deleted_preserves_log(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    before = SAD_LOG(repo).read_bytes()
+    SAD_MD(repo).unlink()
+    r = run(["init", "--root", str(repo)], tmp_path)
+    assert r.returncode == 0
+    after = SAD_LOG(repo).read_bytes()
+    assert after[:len(before)] == before          # 旧日志字节完整保留（append-only）
+    assert after.count(b"init") >= 2              # 两次 init 各留一痕
+
+def test_b3_readonly_log_file_set_fact_exit2_sad_unchanged(tmp_path):
+    if os.geteuid() == 0:
+        pytest.skip("root 绕过权限位，跳过只读日志测试")
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED)
+    before = SAD_MD(repo).read_bytes()
+    SAD_LOG(repo).chmod(0o444)   # 日志不可写、目录/SAD 可写 → 探针须先行拦截
+    try:
+        r = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
+        assert r.returncode == 2
+        assert SAD_MD(repo).read_bytes() == before   # 探针先行 → SAD 未动（无未审计迁移）
+    finally:
+        SAD_LOG(repo).chmod(0o644)
+
+
+# ---- B4: set-assumption 走共享 fence-aware 附录口径 -------------------------------------
+
+def test_b4_set_assumption_fence_aware_targets_real_row(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    # 真附录行（假设-1 未处置）；正文靠前处塞 fence 内伪行（假设-1 待校准）——旧实现会先改伪行假成功
+    text = make_sad(facts=ANSWERED, assumptions=[(1, "未处置")], cache=1)
+    fake_fence = "```\n| 假设-1 | §X | 伪行 | 伪 | 待校准 |\n```\n"
+    text = text.replace("# SAD\n", "# SAD\n\n" + fake_fence, 1)
+    SAD_MD(repo).write_text(text, encoding="utf-8")
+    r = run(["set-assumption", "--root", str(repo), "--assumption", "1=接受"], tmp_path)
+    assert r.returncode == 0
+    out = SAD_MD(repo).read_text(encoding="utf-8")
+    assert "| 假设-1 | §X | 伪行 | 伪 | 待校准 |" in out          # fence 伪行原样未动
+    assert "| 假设-1 | §2 | 某推测 | 类比 | 接受 |" in out        # 真附录行被改
+    # 目标行不存在 → exit 2（既有守卫，B4 复扫路径同样兜住）
+    r2 = run(["set-assumption", "--root", str(repo), "--assumption", "9=接受"], tmp_path)
+    assert r2.returncode == 2
+
+
+# ---- B5: 读守卫补齐 --------------------------------------------------------------------
+
+def test_b5_non_utf8_slice_file_exit2(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED)
+    slice_f = tmp_path / "s.md"; slice_f.write_bytes(b"- \x92\xff bad bytes\n")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 2 and "slice-file" in r.stderr
+
+def test_b5_non_utf8_context_exit2(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    (repo / "openspec" / "CONTEXT.md").write_bytes(b"# Context\n\xff\xfe bad\n")
+    r = run(["context-add", "--root", str(repo), "--term", "X", "--definition", "D"], tmp_path)
+    assert r.returncode == 2 and "CONTEXT.md" in r.stderr
+
+
+# ---- B6: OSError 边界 + preflight 类型检查 ---------------------------------------------
+
+def test_b6_preflight_architecture_is_file_exit3(tmp_path):
+    repo = make_repo(tmp_path)
+    (repo / "openspec" / "architecture").write_text("我是文件不是目录", encoding="utf-8")
+    r = run(["init", "--root", str(repo)], tmp_path)
+    assert r.returncode == 3 and "architecture" in r.stderr
+
+def test_b6_readonly_architecture_dir_set_fact_exit2(tmp_path):
+    if os.geteuid() == 0:
+        pytest.skip("root 绕过权限位，跳过只读目录测试")
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED)
+    arch = repo / "openspec" / "architecture"
+    before = SAD_MD(repo).read_bytes()
+    arch.chmod(0o555)
+    try:
+        r = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
+        assert r.returncode == 2
+        assert SAD_MD(repo).read_bytes() == before   # atomic_write OSError 兜住，SAD 未动
+    finally:
+        arch.chmod(0o755)
+
+
+# ---- B7: frontmatter 复刻消除 + 静默 no-op 堵死 ----------------------------------------
+
+def test_b7_missing_assumptions_open_key_set_fact_exit2(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    p = SAD_MD(repo)
+    text = "\n".join(l for l in p.read_text(encoding="utf-8").splitlines()
+                     if not l.startswith("assumptions_open:")) + "\n"
+    p.write_text(text, encoding="utf-8")
+    r = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
+    assert r.returncode == 2 and "assumptions_open" in r.stderr   # 非静默假成功
+
+
+# ---- B8: 写命令互斥锁面 ----------------------------------------------------------------
+
+def test_b8_preset_lock_blocks_set_fact(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED)
+    (repo / "openspec" / ".sad-scaffold.lock").write_text("held", encoding="utf-8")  # 新 mtime
+    r = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
+    assert r.returncode == 2 and "进行中" in r.stderr
+
+def test_b8_concurrent_adr_new_unique_numbers(tmp_path):
+    # 6 路并发 adr-new：锁串行化 → 编号互不相同 且 全部 exit 0（CI 不稳可标注但保留）
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    procs = [subprocess.Popen(
+                [sys.executable, str(SCRIPT), "adr-new", "--root", str(repo),
+                 "--title", f"T{i}", "--slug", f"s{i}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=tmp_path)
+             for i in range(6)]
+    rcs = [p.wait() for p in procs]
+    assert all(rc == 0 for rc in rcs), f"部分进程失败: {rcs}"
+    names = sorted(p.name for p in (repo / "openspec" / "adr").glob("*.md"))
+    nums = [n[:4] for n in names]
+    assert len(nums) == len(set(nums)) == 6, f"编号非唯一或数量不符: {names}"
+
+
+# ---- B9: log 换行注入拒绝 --------------------------------------------------------------
+
+def test_b9_log_newline_injection_rejected(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    r = run(["log", "--root", str(repo), "--line", "正常行\n- 伪造审计行"], tmp_path)
+    assert r.returncode == 2 and "换行" in r.stderr
+    assert "伪造审计行" not in SAD_LOG(repo).read_text(encoding="utf-8")
+
+
+# ---- B10: NFC 对称 --------------------------------------------------------------------
+
+def test_b10_pierce_nfd_nfc_normalization_passes(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    name_nfc = unicodedata.normalize("NFC", "café端")   # é 单码点
+    name_nfd = unicodedata.normalize("NFD", "café端")   # e + 组合尖音符
+    assert name_nfc != name_nfd                          # 前提：两形态字节不同
+    seed(repo, facts=ANSWERED, subsystems=(name_nfc,))
+    _log_walkthrough(repo, tmp_path)
+    slice_f = tmp_path / "s.md"; slice_f.write_text(f"- 穿越点[{name_nfd}]：§5\n", encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 0, f"NFC/NFD 归一失败: {r.stderr}"
+
+
+# ---- B11: --reason 未消费告警 ---------------------------------------------------------
+
+def test_b11_reason_unused_warns(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED, assumptions=[(1, "接受")], cache=0)
+    _log_walkthrough(repo, tmp_path)
+    slice_f = tmp_path / "s.md"; slice_f.write_text("- 穿越点[采集端]：§5\n", encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f), "--reason", "多余理由"], tmp_path)
+    assert r.returncode == 0 and "未使用" in r.stdout
+
+
+# ---- B12: slice 节唯一性守卫 ----------------------------------------------------------
+
+def test_b12_transition_skeleton_rejects_preexisting_slice(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED, assumptions=[(1, "接受")], cache=0, slice_section=True)  # 遗留切片节
+    _log_walkthrough(repo, tmp_path)
+    slice_f = tmp_path / "s.md"; slice_f.write_text("- 穿越点[采集端]：§5\n", encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 5 and "骨架切片建议" in r.stderr
+
+def test_b12_transition_validated_rejects_duplicate_slice(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    p = seed(repo, status="skeleton-ready", facts=ANSWERED, slice_section=True, contract="validated")
+    # 追加第二个骨架切片建议节（模拟遗留重复）
+    p.write_text(p.read_text(encoding="utf-8") + "\n## 骨架切片建议\n\n- 穿越点[采集端]：§5\n",
+                 encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "validated", "--dod-confirmed"], tmp_path)
+    assert r.returncode == 5 and "骨架切片建议" in r.stderr
+
+
+# ---- B13: 走查留痕存在性前置 ----------------------------------------------------------
+
+def test_b13_transition_skeleton_requires_walkthrough_log(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED, assumptions=[(1, "接受")], cache=0)
+    slice_f = tmp_path / "s.md"; slice_f.write_text("- 穿越点[采集端]：§5\n", encoding="utf-8")
+    # 无走查/升档判定留痕 → 拒
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 5 and "走查" in r.stderr
+    # 补两行 log 后 → 过
+    _log_walkthrough(repo, tmp_path)
+    r2 = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+              "--slice-file", str(slice_f)], tmp_path)
+    assert r2.returncode == 0
