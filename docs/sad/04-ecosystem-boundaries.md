@@ -109,7 +109,7 @@ SAD 居中，六条轴各挂一类相邻文档；SAD 只放每样的**架构决�
 
 **过程·操作轴新识别**：`environments.md`（dev/test/deploy 三态环境搭建，per-system 单例）为过程·操作轴真相源，README/CLAUDE.md 概要+引用；模板草案见 `environments-template-draft.md`。
 
-**未固化（留决策）**：① T1（SAD 只标空间成熟度、M 阶段引用 roadmap）牵动 sad-template contract 行约定 + 与 roadmap 引用纪律，属 D5，接地后定（03 §7 D5）；② `environments.md` / `testing-strategy.md` 等**过程轴文档是否纳入 sdflow 铺设/维护**——D 选项（专门 skill，工作名 `sdflow-ops`）草案占位见 `05-ops-skill-design-draft.md`；是否真做待 mqtt-console 接地写一遍 environments 暴露痛点后拍。architecture 侧「指出不代写」已落（SKILL 步骤⑤ 5.3）。
+**未固化（留决策）**：① T1（SAD 只标空间成熟度、M 阶段引用 roadmap）牵动 sad-template contract 行约定 + 与 roadmap 引用纪律，属 D5，接地后定（03 §7 D5）；② `environments.md` / `testing-strategy.md` 等**过程轴文档的体系与交付形态**（有几份·各装什么·skill / 模板+prompt / 并入 init）——方法论见 `05-process-axis-document-system.md`（纸上倾向「并入 sdflow-init 维护扫描 + 模板+prompt 起草」，独立 ops skill 暂不立；待 mqtt-console 接地真写一份 environments 验证）。architecture 侧「指出不代写」已落（SKILL 步骤⑤ 5.3）。
 
 ---
 
