@@ -7,7 +7,7 @@ description: |
   用户说"做一个 roadmap"、"帮我规划 xxx"、"分阶段实现 xxx"、"先想清楚再动手"、"有一堆事不知道从哪开始"、
   "重构计划"、"新项目怎么起步"、"这个项目太大了要拆"时必须使用本 skill。即使用户没明说"roadmap"三个字，
   只要项目规模超出单次 change 能完成，就主动建议使用本 skill——宁可 trigger 后发现不需要轻量退出，
-  也不要漏掉让用户陷入"边做边改"的陷阱。Trigger with /sdflow-roadmap。
+  也不要漏掉让用户陷入"边做边改"的陷阱。Trigger with /sdflow-roadmap。新项目起步尚无架构设计（SAD）时，先 /sdflow-architecture（消费仓需已 sdflow-init）。
 ---
 
 # Roadmap Planner
