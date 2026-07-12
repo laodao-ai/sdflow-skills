@@ -11,6 +11,7 @@ context-add，Task 5）只需新增一个 _cmd_xxx(args) 函数 + 一个 add_par
 """
 import argparse
 import pathlib
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,11 @@ TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "references" / "sad-tem
 
 SAD_LOG_HEADER = "# sad-log（append-only 判定留痕）\n"
 CONTEXT_STUB = "# Context\n\n## Language\n"
+
+# ---- Task 5: scaffold 分家（adr-new / context-add）常量 --------------------------------
+ADR_NUM_RE = re.compile(r"^(\d{4})-")
+SLUG_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
+LANGUAGE_HEADING = "## Language"
 
 
 def _die(code, msg):
@@ -122,6 +128,98 @@ def _cmd_log(args):
     if not log_path.is_file():
         _die(2, "sad-log.md 不存在——先跑 init 建骨架再记留痕")
     append_log(root, args.line)
+    return 0
+
+
+# ---- Task 5: scaffold 分家机械化（adr-new / context-add，REQ-9）------------------------
+# adr-new / context-add 合法运行在 sad init 尚未跑过的仓状态（preflight 只保证
+# openspec/adr、openspec/CONTEXT.md 存在，不保证 sad.md/sad-log.md 已建）——
+# ADR 分家、术语并入不该被「SAD 生命周期还没开始」阻塞。
+
+
+def _maybe_log(root, line):
+    """sad-log.md 缺失时 MUST NOT 静默跳过、也 MUST NOT die——显式提示 + 继续，exit 0。"""
+    log_path = root / sad_schema.LOG_REL_PATH
+    if log_path.is_file():
+        append_log(root, line)
+    else:
+        print("提示：sad-log.md 不存在（尚未跑 sad_scaffold init）——本次跳过留痕，不影响本次操作")
+
+
+def _cmd_adr_new(args):
+    root = Path(args.root).resolve()
+    announcements = []
+    preflight(root, announcements)
+    for line in announcements:
+        print(line)
+
+    if not SLUG_RE.fullmatch(args.slug):
+        _die(2, f"--slug 须匹配 [a-z0-9][a-z0-9-]*（ascii kebab），得到 {args.slug!r}")
+
+    adr_dir = root / "openspec" / "adr"
+
+    if args.number is not None:
+        if args.number < 0:
+            _die(2, f"--number 须为非负整数，得到 {args.number}")
+        number = args.number
+    else:
+        md_files = sorted(p for p in adr_dir.glob("*.md") if p.name != "README.md")
+        max_n = 0
+        for p in md_files:
+            m = ADR_NUM_RE.match(p.name)
+            if not m:
+                _die(2, f"无法识别编号模式（{p.name}）——人工指定 --number 越过扫描")
+            max_n = max(max_n, int(m.group(1)))
+        number = max_n + 1
+
+    nnnn = f"{number:04d}"
+    target = adr_dir / f"{nnnn}-{args.slug}.md"
+    if target.exists():
+        _die(2, f"目标 ADR 已存在：openspec/adr/{target.name}——MUST NOT 覆盖，"
+                f"换 --number 或人工核对已有文件后处理")
+
+    date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    skeleton = (f"# ADR {nnnn}: {args.title}\n\n"
+                f"- Status: Proposed\n- Date: {date}\n\n"
+                f"## Context\n\n## Decision\n\n## Consequences\n")
+    atomic_write(target, skeleton)
+    print(str(target))
+    _maybe_log(root, f"adr-new {nnnn}-{args.slug}")
+    return 0
+
+
+def _cmd_context_add(args):
+    root = Path(args.root).resolve()
+    announcements = []
+    preflight(root, announcements)
+    for line in announcements:
+        print(line)
+
+    ctx_path = root / "openspec" / "CONTEXT.md"
+    text = ctx_path.read_text(encoding="utf-8")
+    term_marker = f"**{args.term}**"
+
+    # 行锚定 + fence-aware（复用 sad_schema.body_lines——DEC-1/DEC-2 同一套扫描核心，
+    # 不为 CONTEXT.md 另写一份 ad hoc 扫描）。
+    for ln, line in sad_schema.body_lines(text):
+        if line.startswith(term_marker):
+            _die(2, f"术语 {args.term!r} 已存在（CONTEXT.md:{ln}: {line.strip()}）——"
+                    f"不覆盖，如需修订请人工编辑该行")
+
+    lines = text.splitlines()
+    entry_block = [""] + [f"{term_marker}:"] + args.definition.splitlines() + [""]
+    lang_ln = next((ln for ln, l in sad_schema.body_lines(text) if l.strip() == LANGUAGE_HEADING), None)
+    if lang_ln is None:
+        new_lines = lines + ["", LANGUAGE_HEADING] + entry_block
+    else:
+        end_ln = next((ln for ln, l in sad_schema.body_lines(text)
+                        if ln > lang_ln and l.startswith("## ")), None)
+        idx = (end_ln - 1) if end_ln is not None else len(lines)
+        new_lines = lines[:idx] + entry_block + lines[idx:]
+
+    new_text = "\n".join(new_lines) + "\n"
+    atomic_write(ctx_path, new_text)
+    _maybe_log(root, f"context-add {args.term}")
     return 0
 
 
@@ -361,6 +459,19 @@ def build_parser():
     p_set_assumption.add_argument("--root", required=True)
     p_set_assumption.add_argument("--assumption", required=True, help="<N>=<接受|待校准>")
     p_set_assumption.set_defaults(func=_cmd_set_assumption)
+
+    p_adr_new = sub.add_parser("adr-new", help="ADR 新建：编号扫描 max+1，未知模式 fail-closed（--number 可越）")
+    p_adr_new.add_argument("--root", required=True)
+    p_adr_new.add_argument("--title", required=True)
+    p_adr_new.add_argument("--slug", required=True)
+    p_adr_new.add_argument("--number", type=int, default=None)
+    p_adr_new.set_defaults(func=_cmd_adr_new)
+
+    p_context_add = sub.add_parser("context-add", help="CONTEXT.md ## Language 追加，同名冲突 fail-closed 不覆盖")
+    p_context_add.add_argument("--root", required=True)
+    p_context_add.add_argument("--term", required=True)
+    p_context_add.add_argument("--definition", required=True)
+    p_context_add.set_defaults(func=_cmd_context_add)
 
     return parser
 
