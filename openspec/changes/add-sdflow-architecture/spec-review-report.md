@@ -1,3 +1,7 @@
+---
+ship-gate:
+  design_approved: true
+---
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 <!-- sdflow:hr-tg v1 hit="TG-06,TG-08,TG-09" declared="TG-05,TG-06,TG-08,TG-09,TG-10,TG-12,TG-14,TG-18,TG-19,TG-20,TG-21,TG-22,TG-23,TG-24,TG-25" evidence="sad.md 格式为 schema/scaffold/lint 三方共享契约；codex 为可选外部依赖带降级链；文档级+contract 级双层状态机" -->
 <!-- sdflow:outside-voice v1 site="design-voice" guard="none" runner="codex" reason_code="none" findings="21" truncated="false" -->
@@ -61,6 +65,10 @@
 - F-D3 试点提名（→ Q1）。
 - F-D4 复述检测硬槽全面化（镜B F6 残余）：建议节穿越点引用集断言已覆盖最痛处；其余复述检测列 S1–S11 完整投影目标态。
 
+### 拍板记录
+
+设计门已拍板批准，日期 2026-07-12。Q1 = c（暂缓提名，SM-4 保持占位、试点出现时回填）；T1/T2 确认维持主审；自动决策 D1–D11 全部确认采纳，无覆盖。机判锚见文件头部 frontmatter `ship-gate.design_approved: true`。
+
 ## canonical 合并池（48 条，按面分组；全文见 gstack-review.md + 对话审查记录）
 
 | 面 | 条目数 | 命中镜 | 裁决 |
@@ -93,7 +101,7 @@
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="claude-fallback" site="hr-tg" findings="8" 采纳="7" 裁掉="1" defer="0" 独立="2" sev="致0/高6/中1/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" runner="codex" site="design-voice" findings="19" 采纳="10" 裁掉="7" defer="2" 独立="2" sev="致0/高5/中5/低0" -->
 
-**残余信任边界声明**：分类正确性（finding 归镜）、roster 完备性、findings JSON 誊写准确仍是主 session 信任边界——emitter 只保证给定输入的确定性归约。采纳/裁掉/defer 为**设计门拍板前的临时裁决**，拍板回写时最终确定（〔SR-M〕best-effort、无机械兜底）。
+**残余信任边界声明**：分类正确性（finding 归镜）、roster 完备性、findings JSON 誊写准确仍是主 session 信任边界——emitter 只保证给定输入的确定性归约。〔SR-M〕锚已随拍板最终化（2026-07-12）：设计门未翻改任何裁决（Q1=c 不涉 finding 去向、T1/T2 维持裁掉、D1–D11 确认采纳），上方锚行原地确认为最终值，无需重算。
 
 ## 收敛口
 
