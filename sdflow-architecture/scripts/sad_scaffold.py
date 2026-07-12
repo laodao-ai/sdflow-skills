@@ -69,7 +69,15 @@ def preflight(root, out):
     (root / "openspec" / "architecture").mkdir(exist_ok=True)
 
 
+def _load_template():
+    """读模版正文（is_file 前置校验留在 _cmd_init 开头，此处只做读取）。"""
+    return TEMPLATE_PATH.read_text(encoding="utf-8")
+
+
 def _cmd_init(args):
+    if not TEMPLATE_PATH.is_file():
+        _die(2, "skill 安装不完整：references/sad-template.md 缺失——重跑 bash setup.sh")
+
     root = Path(args.root).resolve()
     announcements = []
     preflight(root, announcements)
@@ -90,13 +98,13 @@ def _cmd_init(args):
         # replan
         if not args.reason or not args.reason.strip():
             _die(2, "--on-exists replan 须提供非空 --reason")
-        template_text = TEMPLATE_PATH.read_text(encoding="utf-8")
+        template_text = _load_template()
         atomic_write(sad_path, template_text)
         append_log(root, f"replan: {args.reason}")
         return 0
 
     # 全新
-    template_text = TEMPLATE_PATH.read_text(encoding="utf-8")
+    template_text = _load_template()
     atomic_write(sad_path, template_text)
     log_path = root / sad_schema.LOG_REL_PATH
     atomic_write(log_path, SAD_LOG_HEADER)
@@ -106,6 +114,9 @@ def _cmd_init(args):
 
 def _cmd_log(args):
     root = Path(args.root).resolve()
+    log_path = root / sad_schema.LOG_REL_PATH
+    if not log_path.is_file():
+        _die(2, "sad-log.md 不存在——先跑 init 建骨架再记留痕")
     append_log(root, args.line)
     return 0
 
