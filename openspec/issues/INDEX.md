@@ -6,6 +6,15 @@
 
 ## Open 项（按批次）
 
+### 批次：add-sdflow-architecture
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T143 | todo | PROPOSED | add-sdflow-architecture |
+| T144 | todo | PROPOSED | add-sdflow-architecture |
+| T145 | todo | PROPOSED | add-sdflow-architecture |
+| T146 | todo | PROPOSED | add-sdflow-architecture |
+
 ### 批次：cross-model-outside-voice
 
 | ID | Pool | Status | 关联Change |
@@ -105,7 +114,6 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T136 | todo | PROPOSED | mlh-p4-reason-code-validators |
-| T137 | todo | PROPOSED | mlh-p4-reason-code-validators |
 | T138 | todo | PROPOSED | mlh-p4-reason-code-validators |
 | T139 | todo | PROPOSED | mlh-p4-reason-code-validators |
 | T140 | todo | PROPOSED | mlh-p4-reason-code-validators |
@@ -245,10 +253,12 @@
 | T133 | todo | OPEN | - |
 | T134 | todo | OPEN | - |
 | T135 | todo | OPEN | - |
+| T141 | todo | OPEN | - |
+| T142 | todo | OPEN | - |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 | T65 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 
-- 共 37 项已闭合（bug: 5，todo: 32）
+- 共 38 项已闭合（bug: 5，todo: 33）

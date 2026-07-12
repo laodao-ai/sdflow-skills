@@ -148,10 +148,10 @@
 | T140 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 | T141 | `workflow bundle (roadmap/ff/spec-review/implement/code-review)` | 把「拆分标准=一个change一个完整阶段结果」融入 workflow 三处触发 | 基础设施 | OPEN | 2026-07-11 16:11 | - |  |
 | T142 | `docs/workflow-map.md` | workflow-map.md 广度刷新：补 mlh-p4 后 5 脚本 + hr-tg schema 回灌 | 基础设施 | OPEN | 2026-07-11 16:55 | - |  |
-| T143 | `sdflow-architecture` | frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言） | 功能增强 | OPEN | 2026-07-12 17:16 | add-sdflow-architecture |  |
-| T144 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） | 基础设施 | OPEN | 2026-07-12 17:16 | add-sdflow-architecture |  |
-| T145 | `sdflow-roadmap` | 观察 description 追加 SAD 指路句后的触发精度（架构类查询是否误触 roadmap） | 可观测性 | OPEN | 2026-07-12 18:34 | add-sdflow-architecture |  |
-| T146 | `sdflow-skills 工具族` | 扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥） | 代码质量 | OPEN | 2026-07-12 18:34 | add-sdflow-architecture |  |
+| T143 | `sdflow-architecture` | frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言） | 功能增强 | PROPOSED | 2026-07-12 17:16 | add-sdflow-architecture | add-sdflow-architecture |
+| T144 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） | 基础设施 | PROPOSED | 2026-07-12 17:16 | add-sdflow-architecture | add-sdflow-architecture |
+| T145 | `sdflow-roadmap` | 观察 description 追加 SAD 指路句后的触发精度（架构类查询是否误触 roadmap） | 可观测性 | PROPOSED | 2026-07-12 18:34 | add-sdflow-architecture | add-sdflow-architecture |
+| T146 | `sdflow-skills 工具族` | 扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥） | 代码质量 | PROPOSED | 2026-07-12 18:34 | add-sdflow-architecture | add-sdflow-architecture |
 
 ---
 
@@ -1340,7 +1340,7 @@
 |------|------|
 | 模块 | `sdflow-architecture` |
 | 类型 | 功能增强 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/add-sdflow-architecture/design.md`
 
@@ -1354,7 +1354,7 @@
 |------|------|
 | 模块 | `sdflow-architecture` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/add-sdflow-architecture/design.md`
 
@@ -1368,7 +1368,7 @@
 |------|------|
 | 模块 | `sdflow-roadmap` |
 | 类型 | 可观测性 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/add-sdflow-architecture/design.md`
 
@@ -1382,7 +1382,7 @@
 |------|------|
 | 模块 | `sdflow-skills 工具族` |
 | 类型 | 代码质量 |
-| 状态 | OPEN |
+| 状态 | PROPOSED |
 
 **关联文档**：`openspec/changes/add-sdflow-architecture/design.md`
 
