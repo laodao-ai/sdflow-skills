@@ -342,6 +342,19 @@ lint 通过码 `structure-ok-SEMANTICS-UNCHECKED`——复述信任边界：**li
 SAD 已 skeleton-ready · 建议骨架 change：<名> · 下游：/opsx:ff <名> · 软提示：git add openspec/architecture/ 纳入版本控制
 ```
 
+### 5.3 过程轴文档指路（指出不代写，与 5.1「建议骨架 change 不代开」同构）
+
+交棒时**一并对话提示**下游过程轴文档待建 + 可从 SAD 投影的锚——**本 skill MUST NOT 代写、MUST NOT 写进
+SAD**（environments/testing-strategy 是相邻文档，写进 SAD 违反 `quality-criteria.md` 边界总则）。architecture
+是上游**指路者**：给锚、不成文（代写只产出半空骨架 + 双写发散；四层归属见边界总则与 `docs/sad/04-ecosystem-boundaries.md`）。
+
+```
+过程轴文档待建（不代写，各自成文·引用 SAD 不复述）：
+· environments.md（dev/test/deploy 操作）：工具链锚=SAD §2 约束 · 本地依赖锚=SAD §3 外边界 · 部署锚=SAD §7 · 配置项锚=SAD §8 配置策略
+· testing-strategy.md（测试方法）：方法锚=SAD §1 可测试性 + §8 测试策略横切 · 集成测试点=SAD §5 contract（骨架 DoD 穿过）
+模板参考 docs/sad/environments-template-draft.md；README/CLAUDE.md 概要+引用不复述
+```
+
 ---
 
 ## 分家指令（ADR / 术语单一真相源；SAD 只引用不复述）
