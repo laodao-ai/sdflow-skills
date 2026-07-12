@@ -3,6 +3,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "scripts"))
 import sad_schema as S
 from conftest import make_sad
 
+TEMPLATE = pathlib.Path(__file__).parent.parent / "references" / "sad-template.md"
+
 def test_body_lines_skips_fences():
     text = "a\n```\n[假设-9]\n## 1. 目标与质量属性\n```\nb\n"
     lines = [l for _, l in S.body_lines(text)]
@@ -54,3 +56,21 @@ def test_every_reason_code_has_next_step():
                  "contract-invariant-violation", "slice-section-missing",
                  "slice-section-stale", "slice-pierce-set-mismatch"):
         assert S.REASON_NEXT_STEP[code].strip()
+
+def test_template_contains_all_anchors_verbatim():
+    text = TEMPLATE.read_text(encoding="utf-8")
+    lines = [l for _, l in S.body_lines(text)]
+    for anchor in S.SECTION_ANCHORS + (S.APPENDIX_ANCHOR,):
+        assert anchor in lines, anchor
+
+def test_template_marker_examples_fenced():
+    """模版内 [假设-N]/穿越点 示例必须都在 fence 内——正文实扫零命中（自指安全）。"""
+    text = TEMPLATE.read_text(encoding="utf-8")
+    inline, rows = S.scan_assumptions(text)
+    assert inline == [] and rows == []
+    assert S.scan_pierce_refs(text) == []
+
+def test_template_frontmatter_parses_as_fresh_draft():
+    fm = S.parse_frontmatter(TEMPLATE.read_text(encoding="utf-8"))
+    assert fm["sad_status"] == "draft" and fm["sad_schema"] == S.SAD_SCHEMA_VERSION
+    assert all(fm["facts"][k] == "missing" for k in S.FACT_KEYS)
