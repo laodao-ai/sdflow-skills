@@ -46,11 +46,14 @@ def test_schema_version_mismatch_not_fail_closed(tmp_path):
     assert r.returncode == 1 and "schema-version-mismatch" in r.stdout   # 独立码+指引
     assert "FAIL" not in r.stderr                                        # 不与损坏共用出口
 
+ANSWERED = {"positioning": "answered", "external_systems": "answered", "hard_constraints": "answered"}
+
 def test_contract_invariant(tmp_path):
     bad = make_sad(status="validated")  # validated 下残留 contract[draft]
     r = lint(tmp_path, bad)
     assert r.returncode == 1 and "contract-invariant-violation" in r.stdout
-    ok = make_sad(status="validated").replace("contract[draft]", "contract[validated]")
+    # validated 下 facts 须全 answered（A7），否则 facts-status-invariant 会独立拦截
+    ok = make_sad(status="validated", facts=ANSWERED).replace("contract[draft]", "contract[validated]")
     assert lint(tmp_path, ok).returncode == 0
 
 def test_slice_branch_assertions(tmp_path):
@@ -116,3 +119,64 @@ def test_contract_invariant_other_branches_unknown_tag(tmp_path):
     text_b = make_sad(status="draft").replace("contract[draft]", "contract[bogus]")
     r_b = lint(tmp_path, text_b)
     assert r_b.returncode == 1 and "contract-invariant-violation" in r_b.stdout
+
+
+# ---- A1 未闭合 fence fail-closed（lint 侧） ----------------------------------------
+def test_unclosed_fence_fail_closed(tmp_path):
+    r = lint(tmp_path, make_sad(extra="```\n未闭合 fence 内容\n"))
+    assert r.returncode == 2 and r.stderr.startswith("[sad_lint] FAIL:")
+    assert "未闭合" in r.stderr and S.PASS_CODE not in r.stdout
+
+
+# ---- A2 附录畸形行 fail-closed ---------------------------------------------------
+def test_malformed_appendix_row(tmp_path):
+    bad = make_sad(extra="| 假设-9 | §2 | 某推测 | 类比 | 未　处置 |\n")  # U+3000 全角空格
+    r = lint(tmp_path, bad)
+    assert r.returncode == 1 and "malformed-appendix-row" in r.stdout
+    assert lint(tmp_path, make_sad()).returncode == 0        # 表头/分隔行不误报
+
+
+# ---- A4 重复结构锚 fail-closed ---------------------------------------------------
+def test_duplicate_section(tmp_path):
+    dup_sec = make_sad().replace("## 9. 风险登记\n", "## 9. 风险登记\n\n占位\n\n## 9. 风险登记\n")
+    r = lint(tmp_path, dup_sec)
+    assert r.returncode == 1 and "duplicate-section" in r.stdout
+    dup_slice = (make_sad(status="skeleton-ready", slice_section=True, facts=ANSWERED)
+                 .replace("## 骨架切片建议\n", "## 骨架切片建议\n\n占位\n\n## 骨架切片建议\n"))
+    r2 = lint(tmp_path, dup_slice)
+    assert r2.returncode == 1 and "duplicate-section" in r2.stdout
+
+
+# ---- A5 同名子系统 / 穿越点重复 fail-closed --------------------------------------
+def test_duplicate_subsystem(tmp_path):
+    dup_sub = make_sad(subsystems=("采集端", "采集端"), status="skeleton-ready",
+                       slice_section=True, facts=ANSWERED)
+    r = lint(tmp_path, dup_sub)
+    assert r.returncode == 1 and "duplicate-subsystem" in r.stdout
+    # 子系统不重名，但穿越点行重复 → 同 code 对称断言
+    dup_pierce = make_sad(subsystems=("采集端", "上报端"), status="skeleton-ready",
+                          slice_section=True, facts=ANSWERED)
+    dup_pierce = dup_pierce.replace(
+        "- 穿越点[采集端]：§5 contract 条目",
+        "- 穿越点[采集端]：§5 contract 条目\n- 穿越点[采集端]：§5 contract 条目")
+    r2 = lint(tmp_path, dup_pierce)
+    assert r2.returncode == 1 and "duplicate-subsystem" in r2.stdout
+
+
+# ---- A6 contract 捕获 + 限节（lint 侧） -------------------------------------------
+def test_contract_capture_and_section_scope(tmp_path):
+    for bad_tag in ("contract[Validated]", "contract[]", "contract[draft"):   # 大小写/空/未闭合
+        text = make_sad(status="draft").replace("contract[draft]", bad_tag)
+        r = lint(tmp_path, text)
+        assert r.returncode == 1 and "contract-invariant-violation" in r.stdout, bad_tag
+    # 附录散文提及 contract[frozen] 不再误伤 draft
+    ok = make_sad(status="draft") + "类比 contract[frozen] 模式（附录散文）\n"
+    assert lint(tmp_path, ok).returncode == 0
+
+
+# ---- A7 facts×status 持续不变量（lint 侧） ---------------------------------------
+def test_facts_status_invariant(tmp_path):
+    partial = {"positioning": "answered", "external_systems": "answered", "hard_constraints": "missing"}
+    text = make_sad(status="validated", facts=partial).replace("contract[draft]", "contract[validated]")
+    r = lint(tmp_path, text)
+    assert r.returncode == 1 and "facts-status-invariant" in r.stdout

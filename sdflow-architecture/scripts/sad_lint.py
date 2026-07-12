@@ -91,6 +91,22 @@ def _check_contract_invariants(text, status, violations):
                 "contract-invariant-violation",
                 f"status=validated 但残留 contract[draft]（line {ln}）——须∈{{validated,frozen}}（planned 豁免）",
             ))
+    # [impl-review-fix] A6：未闭合 contract[ 标签 fail-closed（不得逃逸枚举校验）
+    for ln, raw in sad_schema.scan_contract_malformed(text):
+        violations.append((
+            "contract-invariant-violation",
+            f"未闭合 contract[ 标签（line {ln}）：{raw!r}——须写成 contract[<成熟度>]",
+        ))
+
+
+def _duplicates(names):
+    """保序返回出现 >1 次的元素（首次重复时记一次）。"""
+    seen, dups = set(), []
+    for n in names:
+        if n in seen and n not in dups:
+            dups.append(n)
+        seen.add(n)
+    return dups
 
 
 def _slice_section_present(text):
@@ -103,7 +119,20 @@ def _check_slice_branch(text, status, violations):
         if not present:
             violations.append(("slice-section-missing", "status=skeleton-ready 但缺「骨架切片建议」节"))
         else:
-            pierce, subsys = set(sad_schema.scan_pierce_refs(text)), set(sad_schema.scan_subsystems(text))
+            subsys_list = sad_schema.scan_subsystems(text)
+            pierce_list = sad_schema.scan_pierce_refs(text)
+            # [impl-review-fix] A5：set 折叠前先查重名——`### 5.1 X`+`### 5.2 X` 会让一条穿越点
+            # 同时满足两个子系统绕过集比对；穿越点列表重复同报（scaffold 已拒，lint 补对称断言）。
+            dup_sub = _duplicates(subsys_list)
+            if dup_sub:
+                violations.append((
+                    "duplicate-subsystem",
+                    f"第5节子系统重名 {dup_sub}——同名折叠会让一条穿越点满足两个子系统",
+                ))
+            dup_pierce = _duplicates(pierce_list)
+            if dup_pierce:
+                violations.append(("duplicate-subsystem", f"切片建议穿越点重复 {dup_pierce}"))
+            pierce, subsys = set(pierce_list), set(subsys_list)
             if pierce != subsys:
                 violations.append((
                     "slice-pierce-set-mismatch",
@@ -111,6 +140,28 @@ def _check_slice_branch(text, status, violations):
                 ))
     elif status == "validated" and present:
         violations.append(("slice-section-stale", "status=validated 但仍残留「骨架切片建议」节"))
+
+
+def _check_duplicate_anchors(text, violations):
+    # [impl-review-fix] A4：结构锚 fence 外重复 → 影子节可顶替真节，fail-closed。
+    for anchor, count in sad_schema.duplicate_anchors(text):
+        violations.append((
+            "duplicate-section",
+            f"结构锚 {anchor!r} 在 fence 外出现 {count} 次——影子节可顶替真节，须唯一",
+        ))
+
+
+def _check_facts_status_invariant(fm, violations):
+    # [impl-review-fix] A7：facts×status 持续不变量——升过 draft 的状态须 facts 三键全 answered。
+    status = fm["sad_status"]
+    if status not in ("skeleton-ready", "validated"):
+        return
+    unanswered = [k for k in sad_schema.FACT_KEYS if fm["facts"].get(k, "missing") != "answered"]
+    if unanswered:
+        violations.append((
+            "facts-status-invariant",
+            f"status={status} 但事实三问未齐：{unanswered}（须全 answered）",
+        ))
 
 
 def lint_text(text):
@@ -130,6 +181,8 @@ def lint_text(text):
     _check_quality_attr_order(sections, violations)
     _check_contract_invariants(text, fm["sad_status"], violations)
     _check_slice_branch(text, fm["sad_status"], violations)
+    _check_duplicate_anchors(text, violations)
+    _check_facts_status_invariant(fm, violations)
 
     return violations, n
 
