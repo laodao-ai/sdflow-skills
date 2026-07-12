@@ -82,3 +82,37 @@ def test_fence_inside_markers_not_counted(tmp_path):
     text = make_sad(extra="```\n[假设-7]\n## 11. 假节\n```\n")
     r = lint(tmp_path, text)
     assert r.returncode == 0        # fence 内标记/节锚不计
+
+def test_non_utf8_fail_closed(tmp_path):
+    p = tmp_path / "sad.md"
+    p.write_bytes(b"---\nsad_schema: 1\nsad_status: draft\n---\nbad \x92 byte\n")
+    r = subprocess.run([sys.executable, str(SCRIPT), "--sad", str(p)],
+                        capture_output=True, text=True)
+    assert r.returncode == 2
+    assert r.stderr.startswith("[sad_lint] FAIL:")
+    assert "structure-ok" not in r.stdout
+
+def test_slice_pierce_set_mismatch(tmp_path):
+    text = make_sad(subsystems=("采集端", "上报端"), status="skeleton-ready", slice_section=True)
+    text = text.replace("- 穿越点[上报端]：§5 contract 条目", "")
+    r = lint(tmp_path, text)
+    assert r.returncode == 1 and "slice-pierce-set-mismatch" in r.stdout
+
+def test_assumption_unresolved_code(tmp_path):
+    text = make_sad(assumptions=[(1, "未处置")])
+    r = lint(tmp_path, text)
+    assert r.returncode == 1
+    assert "assumption-unresolved" in r.stdout
+    assert "next-step:" in r.stdout
+
+def test_contract_invariant_other_branches_frozen_under_draft(tmp_path):
+    # status=draft 但 contract[frozen]——draft/skeleton-ready ⇒ contract∈{planned,draft}
+    text_a = make_sad(status="draft").replace("contract[draft]", "contract[frozen]")
+    r_a = lint(tmp_path, text_a)
+    assert r_a.returncode == 1 and "contract-invariant-violation" in r_a.stdout
+
+def test_contract_invariant_other_branches_unknown_tag(tmp_path):
+    # 未知 contract 标签
+    text_b = make_sad(status="draft").replace("contract[draft]", "contract[bogus]")
+    r_b = lint(tmp_path, text_b)
+    assert r_b.returncode == 1 and "contract-invariant-violation" in r_b.stdout

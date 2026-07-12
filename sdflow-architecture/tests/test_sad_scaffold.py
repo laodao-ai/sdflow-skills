@@ -284,6 +284,15 @@ def test_context_add_missing_sad_log_notice_not_blocking(tmp_path):
     assert not (repo / "openspec" / "architecture" / "sad-log.md").exists()
     assert "sad-log" in (r.stdout + r.stderr)
 
+def test_load_sad_non_utf8_fail_closed(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    sad_path = repo / "openspec" / "architecture" / "sad.md"
+    sad_path.write_bytes(b"---\nsad_schema: 1\nsad_status: draft\n---\nbad \x92 byte\n")
+    r = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
+    assert r.returncode == 2
+    assert "FAIL" in r.stderr
+
+
 def test_adr_new_and_context_add_append_log_when_present(tmp_path):
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
     run(["adr-new", "--root", str(repo), "--title", "T", "--slug", "t"], tmp_path)

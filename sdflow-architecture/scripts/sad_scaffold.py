@@ -53,8 +53,15 @@ def append_log(root, line):
 def load_sad(root):
     path = root / sad_schema.SAD_REL_PATH
     if not path.is_file():
-        _die(2, "sad.md 不存在——先跑 init 建骨架")
-    return path, path.read_text(encoding="utf-8")
+        if path.exists():
+            _die(2, "sad.md 不是常规文件——先跑 init 建骨架")
+        else:
+            _die(2, "sad.md 不存在——先跑 init 建骨架")
+    try:
+        return path, path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as e:
+        _die(2, f"sad 文件不可读（非 UTF-8 或 IO 错误）: {e}")
+        return path, None  # 不可达，安抚静态检查
 
 
 def preflight(root, out):

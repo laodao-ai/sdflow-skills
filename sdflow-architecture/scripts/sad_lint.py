@@ -152,9 +152,16 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     path = _resolve_path(args)
     if not path.is_file():
-        _die(2, f"sad.md 不存在：{path}")
+        if path.exists():
+            _die(2, f"sad.md 不是常规文件：{path}")
+        else:
+            _die(2, f"sad.md 不存在：{path}")
 
-    raw = path.read_text(encoding="utf-8")
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as e:
+        _die(2, f"sad 文件不可读（非 UTF-8 或 IO 错误）: {e}")
+        return 2  # 不可达，安抚静态检查
     text = raw.lstrip("﻿").replace("\r\n", "\n")
 
     try:
