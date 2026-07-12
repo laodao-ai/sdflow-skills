@@ -64,11 +64,13 @@ def test_template_contains_all_anchors_verbatim():
         assert anchor in lines, anchor
 
 def test_template_marker_examples_fenced():
-    """模版内 [假设-N]/穿越点 示例必须都在 fence 内——正文实扫零命中（自指安全）。"""
+    """模版内 [假设-N]/穿越点/contract[...] 示例必须都在 fence 内——正文实扫零命中（自指安全）。"""
     text = TEMPLATE.read_text(encoding="utf-8")
     inline, rows = S.scan_assumptions(text)
     assert inline == [] and rows == []
     assert S.scan_pierce_refs(text) == []
+    assert S.scan_contract_tags(text) == []
+    assert {h for h, _ in S._section_spans(text)} == set(S.SECTION_ANCHORS) | {S.APPENDIX_ANCHOR}
 
 def test_template_frontmatter_parses_as_fresh_draft():
     fm = S.parse_frontmatter(TEMPLATE.read_text(encoding="utf-8"))
