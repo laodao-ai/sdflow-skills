@@ -20,7 +20,9 @@ AI 模块级代码质量已可保证，瓶颈上移到系统级：局部最优 �
 
 ### Modified Capabilities
 
-（无——`roadmap-planning` 的 design 模板瘦身列为 Non-Goal 4 延后；`outside-voice-reuse-guard` 三前置校验机制原样复用不改其需求，升档走查复用既有 spec-review 机制、不另造 outside-voice 通道。）
+- `roadmap-planning`: description 增加「新项目起步尚无 SAD 先 `/sdflow-architecture`」指路句（REQ-11 双侧之一），delta 见 `specs/roadmap-planning/spec.md`〔spec-review-amendment：原「无 Modified」使该真实改动成为无 spec 覆盖的幽灵 delta，archive 对码核验将漏掉它〕。
+
+（design 模板瘦身仍列 Non-Goal 4 延后；`outside-voice-reuse-guard` 不改其需求——**v1 无产物复用、guard 不进默认路径**，升档形态为自编排镜阵 + `outside-voice.sh` 直调〔spec-review-amendment：修正 grill 前失鲜表述「复用既有 spec-review 机制」〕。）
 
 ## Impact
 
@@ -34,6 +36,7 @@ AI 模块级代码质量已可保证，瓶颈上移到系统级：局部最优 �
 1. **端到端跑通** — 基准 0（无此能力）→ 目标：样例需求走完五步产出 skeleton-ready SAD（含「骨架切片建议」节）— 度量：`sad_lint.py` 退出码 0 且 SAD 含该节（演练记录锚入 tasks 验证）〔grill-amendment 措辞同步〕。
 2. **机械断言覆盖** — 基准 0 → 目标：v1 三类断言（节存在性 / 假设计数 / 排序存在）各 ≥2 条 pytest 用例全绿 — 度量：pytest 通过计数。
 3. **反假绿锁生效** — 基准无 → 目标：事实三问任一缺失时状态机拒绝 skeleton-ready（锁 draft）— 度量：负路径 pytest 用例（缺项 → 拒绝）通过。
+4. **试点 outcome（后验）**〔spec-review-amendment：CEO 双声独立共识——前三条全是机制级，可全绿交付而零价值证据〕 — 基准无 → 目标：首个真实项目试点中，SAD 交棒后 4 周内骨架 change 真实开出、≥1 条 contract 回写 validated — 度量：消费仓 sad-log.md 迁移记录 + 骨架 change 归档。试点项目提名待拍板（决策登记 Q1）；Non-Goals 1–5 的证伪钟自试点启动起算。
 
 ## 需求优先级（TG-19）
 
@@ -61,6 +64,8 @@ AI 模块级代码质量已可保证，瓶颈上移到系统级：局部最优 �
 - **OQ1** L2 子系统设计方法论（步骤二）——负责人：操作者 + 后续 explore；节点：首个 SAD 试点后。
 - **OQ2** contract 机械化档位（schema / contract test / fitness function）——节点：骨架 change 落地后。
 - **OQ3** S1–S11 完整 lint 投影的排期——由试点数据驱动（「lint 绿但冷走查/人门抓出结构洞」计数）。
+- **OQ4**〔spec-review-amendment〕SAD 的**管线消费挂点**：change 管线（spec-review 接地镜 / ship）何时读 `openspec/architecture/sad.md`（候选：trigger-catalog 新 TG「仓内存在 SAD → 接地镜必读 contract 影响面」）——SAD 只有生产侧无消费侧则必失鲜；节点：试点后与 OQ3 合并评估。
+- **OQ5**〔spec-review-amendment〕维护期 SAD 修订的质量门：绕过 skill 直接手改 sad.md 正文当前无任何门——试点观察后定（候选：修订须经 skill continue / lint 挂 pre-commit）。
 
 ## 成本估算（TG-24）
 
