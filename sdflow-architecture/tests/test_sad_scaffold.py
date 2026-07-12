@@ -291,3 +291,48 @@ def test_adr_new_and_context_add_append_log_when_present(tmp_path):
     log = (repo / "openspec" / "architecture" / "sad-log.md").read_text(encoding="utf-8")
     assert "adr-new 0001-t" in log
     assert "context-add Y" in log
+
+
+def test_adr_new_number_collision_exit2(tmp_path):
+    """Fix 1: 重复编号应被占用检查拒绝。"""
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    # 先创建 0007-x.md
+    (repo / "openspec" / "adr" / "0007-x.md").write_text("existing", encoding="utf-8")
+    # 再用 --number 7 尝试创建 0007-y.md → 应返回码 2，stderr 含 0007，文件未创建
+    r = run(["adr-new", "--root", str(repo), "--number", "7", "--slug", "y", "--title", "T"], tmp_path)
+    assert r.returncode == 2
+    assert "0007" in r.stderr and "已被占用" in r.stderr
+    assert not (repo / "openspec" / "adr" / "0007-y.md").exists()
+
+
+def test_context_add_single_blank_between_entries(tmp_path):
+    """Fix 2: 两次连续 context-add 应只产生单空行分隔（无三连空行）。"""
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    # 第一次 context-add
+    r1 = run(["context-add", "--root", str(repo), "--term", "A", "--definition", "定义A"], tmp_path)
+    assert r1.returncode == 0
+    # 第二次 context-add
+    r2 = run(["context-add", "--root", str(repo), "--term", "B", "--definition", "定义B"], tmp_path)
+    assert r2.returncode == 0
+    # 检查文件内容：不应有三连空行
+    ctx = (repo / "openspec" / "CONTEXT.md").read_text(encoding="utf-8")
+    assert "\n\n\n" not in ctx, "检测到三连空行，说明 entry_block 空行未归一"
+    # 确保两个术语都在
+    assert "**A**" in ctx and "**B**" in ctx
+
+
+def test_context_add_fenced_term_not_conflict(tmp_path):
+    """Fix 2 回归: context-add 应 fence-aware，不与 fenced 块内的术语冲突。"""
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    ctx_path = repo / "openspec" / "CONTEXT.md"
+    # 构造一个含 ## Language 和 fenced 块（块内有 **SAD**）的 CONTEXT.md
+    ctx_path.write_text(
+        "# Context\n\n## Language\n\n```example\n**SAD**: 这是 fenced 块内的内容，不算术语定义\n```\n",
+        encoding="utf-8"
+    )
+    # 再用 context-add --term SAD 尝试添加 → 应返回 0（fence-aware，不认为 SAD 已存在）
+    r = run(["context-add", "--root", str(repo), "--term", "SAD", "--definition", "系统架构设计"], tmp_path)
+    assert r.returncode == 0, f"fence-aware 失效；stderr: {r.stderr}"
+    # 确保 SAD 被新增（作为术语定义，而非冲突）
+    text = ctx_path.read_text(encoding="utf-8")
+    assert "**SAD**:" in text  # 术语定义形式

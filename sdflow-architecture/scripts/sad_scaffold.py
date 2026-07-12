@@ -174,6 +174,12 @@ def _cmd_adr_new(args):
 
     nnnn = f"{number:04d}"
     target = adr_dir / f"{nnnn}-{args.slug}.md"
+
+    # Fix 1: 检查同号 ADR 是否已被占用（同号双 ADR 破坏编号唯一引用）
+    existing = [p.name for p in adr_dir.glob(f"{nnnn}-*.md") if p.name != target.name]
+    if existing:
+        _die(2, f"ADR 编号 {nnnn} 已被占用: {existing[0]}——同号双 ADR 破坏编号唯一引用")
+
     if target.exists():
         _die(2, f"目标 ADR 已存在：openspec/adr/{target.name}——MUST NOT 覆盖，"
                 f"换 --number 或人工核对已有文件后处理")
@@ -215,7 +221,12 @@ def _cmd_context_add(args):
         end_ln = next((ln for ln, l in sad_schema.body_lines(text)
                         if ln > lang_ln and l.startswith("## ")), None)
         idx = (end_ln - 1) if end_ln is not None else len(lines)
-        new_lines = lines[:idx] + entry_block + lines[idx:]
+        # Fix 2: 检查插入点前是否已是空行，若是则不加前导空行（避免空行翻倍）
+        if idx > 0 and lines[idx - 1].strip() == "":
+            entry_block_to_insert = entry_block[1:]  # 去掉前导空行
+        else:
+            entry_block_to_insert = entry_block
+        new_lines = lines[:idx] + entry_block_to_insert + lines[idx:]
 
     new_text = "\n".join(new_lines) + "\n"
     atomic_write(ctx_path, new_text)
