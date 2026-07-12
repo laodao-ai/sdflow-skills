@@ -26,9 +26,15 @@
 | DEC-3 | **假设双向锚**：正文 `[假设-N]` 内联标记 + SAD 附录假设清单表（编号/位置/内容/依据/处置∈{接受, 待校准, 未处置}）；lint 断言「内联标记数 == 清单行数 且 无未处置」 | 只有内联标记无法承载处置状态；只有清单无法定位正文位置；双向锚可机械对账 | 仅内联富标记 `[假设\|依据\|处置]`（行内过载难读）；仅清单（正文定位丢失） |
 | DEC-4 | **状态迁移只由 `sad_scaffold.py` 执行**，模型/人不得手改 frontmatter 跳级；scaffold 迁移前重跑锁 draft 前置检查 | 状态是机械可守的不变量，交模型自觉必漂移（机械化优先） | SKILL 指令约束模型手改（散文约束弱形态） |
 | DEC-5 | **lint 通过码 `structure-ok-SEMANTICS-UNCHECKED`**；坏输入（文件缺失/frontmatter 不可解析）fail-closed 非零 + stderr，与正常 reason_code 判定物理区分 | adr/0018 机械校验器输出诚实：防「lint 绿」被误读为「内容已审」 | 裸 `ok`/退出码 0（假绿高危） |
-| DEC-6 | **outside voice 复用既有 spec-review 机制**（升档时把 SAD 作为被审对象递入），不自造 codex 调用通道 | adr/0002 只复用产出不复用内部；`outside-voice-reuse-guard` 三前置校验白得 | skill 内直调 codex CLI（重复造轮 + 绕开既有守卫） |
+| DEC-6 | **升档多镜 = skill 自编排镜阵**（按自带 `review-lenses.md` fan-out fresh 子代理 + 对抗镜）；**outside voice 镜经自制 `~/.sdflow/hack/outside-voice.sh`** 调用（preflight 探测 → render-prompt 不可信上下文硬分隔 + secret 扫描 → `exec --timeout 600`；契约单一源 = 脚本头注释）〔grill-amendment 修正原「复用 spec-review 机制」表述〕 | 镜单是为 SAD 量身的资产（语义残余即镜位）；sdflow-spec-review 锚定 change 四件套，硬套则领域段空转、产物语义错配；outside-voice.sh 自包含零 gstack 内部依赖，自带探测/超时/密钥防出境 | 整体调用 sdflow-spec-review（工具错配）；skill 内裸调 codex CLI（绕开 secret 扫描与超时硬化，重复造轮） |
 | DEC-7 | **消费仓 preflight fail-closed**：无 `openspec/` 布局 → 显式指引先跑 `sdflow-init`，MUST NOT 自造半套布局 | 半套布局是后续所有 sdflow skill 的隐性坑（dogfood 盲区先例） | 静默降级只写 SAD 文件（布局漂移） |
-| DEC-8 | **文件写入一律原子写**（temp + rename） | 防半写损坏（生态既有纪律） | 直写 |
+| DEC-8 | **文件写入一律原子写**（temp + rename） | 防半写损坏（生态既有纪律） | 非原子直接写 |
+| DEC-9 | **SAD 产出直写 `openspec/architecture/`，不经 change 壳承载**〔grill-amendment〕 | SAD 是规划 live 文档非代码变更，delta/verify/archive 语义不适用；质量门内建（lint+冷走查+升档+人门），change 壳双重门禁纯增摩擦；先例：sdflow-roadmap 规则 4「产出直写，不经变更壳」（旧版变更壳已实证废弃）；第一个 change 壳 = 人拍板开的骨架 change | 用 openspec change 承载 SAD 生成过程（roadmap 已踩过并废弃的坑） |
+| DEC-10 | **交棒物 = SAD 内嵌「骨架切片建议」节，非独立草案文件**〔grill-amendment〕 | 先例：ff-generation-constraints「切片建议」节（消费语义 = 建议非契约）；穿越点**引用** §5 条目不复述（独立文件必复述、必失鲜）；少一个文件；骨架回写 validated 时移除该节，live 层保持当前态 | 独立 `skeleton-change-draft.md` 文件（复述失鲜 + 多一文件）；skill 代开骨架 change（越权工作流决策，打穿「直写规划层 / 管线实施层」分界） |
+| DEC-11 | **判定留痕落 `openspec/architecture/sad-log.md`（append-only，scaffold 追加）；走查矩阵内嵌 SAD 第 6 节正文，不生成独立走查报告**〔grill-amendment〕 | 对话不持久、commit 时机归用户（skill 不代 commit），留痕需显式文件；sad-log 角色类比 roadmap 的 task-log（DID），使消费仓三层完整成型：sad.md（live）+ adr/（decision）+ sad-log.md & git（history）；矩阵本就是第 6 节的内容形态，洞修复后即当前态 | 留痕靠 git commit message（时机不可控必丢）；留痕写进 SAD 本体（历史污染 live 层）；独立走查 report 文件（SAD 走查结果直接改文档本体，report 无消费场景） |
+| DEC-12 | **收尾三细则**〔grill-amendment〕：①模型档位——主 session 与冷走查子代理**均强档**，无可下放弱档的步（机械活已全部脚本化，scaffold/lint 零模型；SKILL.md 记一行引 model-tiers.md）②lint 假设计数**以正文实扫为准**，frontmatter `assumptions_open` 仅为 scaffold 缓存，两者不一致 → 独立 mismatch reason_code ③`sad_schema.py` 节标题锚 v1 **中文单语** | ①冷层承重实证 + 带门禁步勿弱档教训 ②正文是真相、缓存不可采信 ③生态与消费仓全中文，为不存在的英文场景配双语锚违反刚好够 | ①冷走查降弱档（假绿放行）②采信 frontmatter 或静默取其一 ③双语锚 |
+
+> **outside voice 工具链真相源注记〔grill-amendment〕**：wrapper 真相源 = `sdflow-init/assets/hack/outside-voice.sh`，由 setup.sh **拷贝**至 `~/.sdflow/hack/`（运行时调用路径；非 symlink，改真相源须重跑 setup）。配套三前置校验器 `outside_voice_guard.py` 真相源 = `sdflow-init/assets/workflow/tools/`（消费仓经 `resolve-workflow.sh` 解析 `$RULES_ROOT/tools/`）——其职责是**复用既有 outside-voice 产物**时的来源/新鲜度/结构校验；v1 每次升档均为新调用、无产物复用，guard 不进默认路径；未来若缓存/复用走查产物，SHALL 以 guard 校验后方可复用。
 
 ## 数据模型与生命周期（BASE-24，TG-05）
 
@@ -45,11 +51,13 @@ assumptions_open: 2          # 未处置假设数（scaffold 聚合回写，lint
 ---
 ```
 
+**facts 字段信任边界〔grill-amendment〕**：`answered` 语义 = **「已记录到人的回答」**（scaffold 经显式参数 `--fact <key>=answered` 写入，SKILL 指令要求发生在人实际作答之后）**≠「回答质量已核验」**——质量核验归人门（议程固定含「三问回答复核」条）；lint 只查枚举与 frontmatter 一致性。机械/语义切分：有无记录到回答 = 确定性信号（机械），回答是否真实充分 = 无确定性信号（语义归人）。
+
 **contract 成熟度标签**（SAD 第 5 节每条 contract 行内）：`planned | draft | validated | frozen`——`planned` 为 R10 全景占位（后期阶段子系统），`validated` 由骨架 change 落地后回写，`frozen` 改动须关联新 ADR。
 
 **假设标记**：正文 `[假设-N]` ↔ 附录清单行（DEC-3）。**数值溯源**：数值后缀 `〔人拍〕`/`〔推荐待校准〕`（v1 由 SKILL 指令要求 + 走查核对，lint 不查——目标态再机械化）。
 
-**生命周期**：SAD = live 层永远当前态；决策进 `openspec/adr/`（不可变 + supersession）；历史归 git。
+**生命周期**：SAD = live 层永远当前态；决策进 `openspec/adr/`（不可变 + supersession）；历史归 git。「骨架切片建议」节是 SAD **唯一的暂态节**——skeleton-ready 时由 scaffold 写入、骨架 change 回写 validated 时移除（DEC-10）。
 
 ## 状态机图（BASE-19，TG-09，含异常转换）
 
@@ -88,7 +96,7 @@ assumptions_open: 2          # 未处置假设数（scaffold 聚合回写，lint
   │               │◀──矩阵+洞───────────────────────────│              │               │
   │               │──lint──────────────────────────────────────────────▶│ reason_code   │
   │               │──scaffold 迁移 skeleton-ready(锁draft前置复检)─▶│    │               │
-  │               │ ⑤交棒：骨架 proposal 草案──────────────────────────────────────────▶│
+  │               │ ⑤交棒：SAD 内嵌「骨架切片建议」节──────────────────────────────────────────▶│
 ```
 
 ## 组件清单（BASE-25，TG-14）与依赖图
@@ -119,7 +127,7 @@ SKILL.md ─▶ intake-questionnaire ─▶ sad_scaffold ─▶ sad-template
 
 | 失败模式 | 表现 | 处置（D-4：超时/回滚） |
 |---|---|---|
-| codex CLI 未装/调用失败/超时 | 升档 outside voice 不可用 | 探测 + 单次调用超时 600s；降级 Claude 镜 + **显式提示不静默**；纯读操作无回滚需求（声明） |
+| codex 不可用/超时/密钥命中 | 升档 outside voice 不可用 | `outside-voice.sh preflight` 非 ready → 降级；`exec --timeout 600` 超时（退出 124）→ 降级；secret-hit（退出 3）→ **拒发并报人工**；降级一律 Claude 镜 + **显式提示不静默**；read-only ephemeral 无回滚需求（D-4 声明） |
 | codex 输出不可解析 | findings 段缺失 | 复用 `outside-voice-reuse-guard` 三前置校验（fail-closed 到 reason_code） |
 | scaffold 写入中断 | 半写文件 | 原子写 temp+rename（DEC-8），中断只留 temp 可清理 |
 | lint 坏输入 | frontmatter 损坏/文件缺失 | fail-closed 非零 + `[sad_lint] FAIL:` stderr，与正常判定物理区分（DEC-5） |
@@ -127,7 +135,7 @@ SKILL.md ─▶ intake-questionnaire ─▶ sad_scaffold ─▶ sad-template
 | 消费仓无 openspec 布局 | 分家无 home | preflight fail-closed → 指引 `sdflow-init`（DEC-7） |
 | SAD 单例已存在 | 二次触发 | continue/replan 显式区分，MUST NOT 静默覆盖（spec 需求） |
 
-**可观测性**：全部关键判定落 grep 可及的留痕行——「判据无分歧，单方案直出」/ 升档判定一行 / 降级提示一行 / scaffold 状态迁移记录（含回落原因）/ lint reason_code。无需额外日志设施。
+**可观测性**：全部关键判定落 grep 可及的留痕行，**家 = `openspec/architecture/sad-log.md`**（append-only，scaffold 追加；DEC-11）——「判据无分歧，单方案直出」/ 升档判定一行 / 降级提示一行 / scaffold 状态迁移记录（含回落原因）/ 走查轮次与洞数；lint reason_code 走进程输出。无需额外日志设施。
 
 ## 协议文档套件 scope-check 表（BASE-29，TG-25）
 
@@ -146,7 +154,7 @@ quality-criteria 为真相源、三处投影带 S 编号引用，改动牵连核
 - [AI 候选仍溜进反模式] → AP 自检强制前置 + 人门对比面；残余靠冷走查 S3 镜
 - [SAD 与 roadmap design.md 双写] → 职责已切（HOW vs WHY）；试点若现双写即触发 Non-Goal 4 的瘦身 change
 - [「lint 绿」误读为全绿] → DEC-5 输出诚实 + SKILL 指令含信任边界声明行（师承 review_disposition_check 先例）
-- [骨架 proposal 质量依赖 SAD 第 5/6 节质量] → 交棒模版含 contract 穿越点清单硬槽，缺穿越点即结构性可见
+- [骨架切片建议质量依赖 SAD 第 5/6 节质量] → 建议节含穿越点引用硬槽（引用 §5 条目），缺穿越点即结构性可见
 
 ## Migration Plan
 

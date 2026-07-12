@@ -164,6 +164,30 @@ _Avoid_: 把 footage 当 wayfinder 专属产物（它是考古层统称，memo �
 tickets 实现管线的实现分解单位 = **tracer-bullet 垂直切片**（一条打穿全层、可独立验证的行为级路径），英文原词不译。在 plan 文件与 ship_gate 契约中以 **Task 号**呈现（`### Task N:` 标题 / `checkpoint(<change>:task<N>-)` 标签），一 ticket = 一 Task 号；ticket 内验收复选框 = **实现期完成信号**（implementer 与 checkpoint 标签**双写**）。与既有两层复选框的分工：roadmap 复选框 = 规划粒度、归档后镜像回写；change tasks.md 复选框 = 需求追溯层（R-ID 载体，ticket 由它派生但不取代它）、**archive 阶段才勾**。matt 套件中 wayfinder 的讨论 ticket（map 的 issues/<NN>）是另一种 ticket（讨论单位，非实现分解），需限定词区分。
 _Avoid_: 「票」「任务」混称（tasks.md 的「任务」与 ticket 勾选时机**相反**：归档期 vs 实现期，混称会让 ship-tasks-flip 失鲜坑换面目重现）；把 wayfinder 讨论 ticket 与实现 ticket 混为一谈
 
+**SAD（系统架构设计文档 System Architecture Document）** 〔grill · add-sdflow-architecture，设计期〕:
+消费仓 `openspec/architecture/sad.md` 的**项目级单例 live 文档**（per-system 非 per-effort——roadmap 包是 effort 的、SAD 是系统的：一仓可多 roadmap，系统真相只一份）。十节骨架承载 HOW-structure（子系统/contract/横切）；与 roadmap 三件套三分：design.md=WHY-product、SAD=HOW-structure、roadmap.md=WHEN，互引不复述。由 `sdflow-architecture` 产出，**直写不经 change 壳**（先例 = roadmap 规则 4 直写）。
+_Avoid_: 把 SAD 当 roadmap design.md 的同义词（三分各有其职）；把 SAD 放 `roadmaps/{name}/` 包内（effort 归档了系统还活着）
+
+**skeleton-ready** 〔grill · add-sdflow-architecture，设计期〕:
+SAD 的交棒完成态——「**够切出骨架 change**」即合格；纸上 contract 全是假设，骨架真实调用验证之前**不存在 approved/定稿**。状态机 `draft → skeleton-ready → validated →（逐条）frozen`；升级门槛 = 事实三问齐 + 假设逐条处置。此 DoD 结构性降低对人的索取（价值类可占位）与文档完成度要求（contract 骨架前只强制语法/所有权/错误语义三层主干）。
+_Avoid_: 「approved SAD / 定稿」（伪严谨、倒逼 day-0 过度索取——被否记录见 change 附录）
+
+**骨架 change（Walking Skeleton Change）** 〔grill · add-sdflow-architecture，设计期〕:
+SAD 之后的**第一个** change：穿过全部子系统 contract 的最细垂直切片。DoD = 每条 L1 contract 被一次真实调用穿过 + 部署链路走通——**交付物是被验证的 contract，功能薄到可笑才是对的**。ticket 的 tracer-bullet 同思想上移到系统层；骨架落地 → contract 逐条 draft→validated。
+_Avoid_: 把骨架当 MVP/「第一个功能」（它验证边界不交付功能）；L2 子系统设计先于骨架全量展开（在未验证的 contract 上盖楼）
+
+**骨架切片建议 (Skeleton Slice Suggestion)** 〔grill · add-sdflow-architecture，设计期〕:
+SAD **唯一的暂态节**：升 skeleton-ready 时写入（contract 穿越点**引用** + 骨架 DoD + 建议 change 名），消费语义 = **建议非契约**（先例 = ff-generation-constraints 切片建议节）；人拍板后自行开骨架 change，skill MUST NOT 代开；骨架回写 validated 时移除该节（live 层当前态，历史归 git）。
+_Avoid_: 独立 skeleton-draft 文件（必复述 §5、必失鲜）；把建议节当契约消费
+
+**事实三问 (Three Fact Questions)** 〔grill · add-sdflow-architecture，设计期〕:
+sdflow-architecture 采集步的**全部**问卷：一句话定位 / 外部系统清单（含文档指针）/ 硬约束（栈-平台-部署形态-存量-合规）。任一缺 → fail-closed 锁 draft。配套纪律「**事实前置、价值后置**」：价值类（质量取舍/承受度/Non-goals）不进问卷，后置到拍板步挂具体产物以选择题问——「A/B 选哪个」优于「描述你的取舍」一个量级。
+_Avoid_: day-0 问抽象价值题（人答不出是问法错，非人无法提供）；把 `facts=answered` 读成「回答质量已核」（只表「已记录人答」，质量归人门）
+
+**假设显影 (Assumption Surfacing)** 〔grill · add-sdflow-architecture，设计期〕:
+防「幻觉架构文档」机制——AI 从薄需求也能产出**看起来权威**的完整 SAD，危险恰在权威感。推测/编造 MUST 标 `[假设-N]`（正文内联 ↔ 附录清单**双向锚**，处置 ∈ {接受, 待校准, 未处置}）；数值带溯源（人拍 / 推荐待校准）；lint 计数**以正文实扫为准**（frontmatter 仅缓存）；存在未处置 → 不得升 skeleton-ready。
+_Avoid_: 带 30 个未确认假设的「完整」SAD 当成品（那是 30 个洞的 draft）；采信 frontmatter 缓存计数（正文实扫为准，不一致报 mismatch）
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。

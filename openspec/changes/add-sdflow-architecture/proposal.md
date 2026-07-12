@@ -6,10 +6,11 @@ AI 模块级代码质量已可保证，瓶颈上移到系统级：局部最优 �
 
 ## What Changes
 
-- **新增顶层 skill `sdflow-architecture`**（系统架构设计编排器）：输入简单需求 → 五步流程（事实三问采集 → 分歧驱动候选推荐 → 挂产物拍板 → 冷走查 → 交棒）→ 产出 **skeleton-ready SAD**（`openspec/architecture/sad.md`，消费仓项目级单例）+ **骨架 change proposal 草案**（递进 OpenSpec 管线）。
+- **新增顶层 skill `sdflow-architecture`**（系统架构设计编排器）：输入简单需求 → 五步流程（事实三问采集 → 分歧驱动候选推荐 → 挂产物拍板 → 冷走查 → 交棒）→ 产出 **skeleton-ready SAD**（`openspec/architecture/sad.md`，消费仓项目级单例，**recorder 式直写不经 change 壳**）+ SAD 内嵌**「骨架切片建议」节**（穿越点引用 + 骨架 DoD + 建议 change 名；建议非契约，skill 不代开 change）〔grill-amendment〕。
 - **references/ 六件**：`sad-template.md`（十节骨架 + `[假设]`/数值溯源标记语法 + frontmatter 状态机字段）· `decomposition-rules.md`（拆分规则集 R1–R11 + 反模式 AP1–AP4）· `quality-criteria.md`（语义判据 S1–S11 + 机械化拆解表，**真相源**）· `review-lenses.md`（语义残余镜单，投影带 S 编号）· `intake-questionnaire.md`（事实三问）· `checklists/`（横切概念模板 / 质量属性候选库 / 外部依赖典型集 / R4 预期变化类别表）。
 - **scripts/ 两件 + tests/**：`sad_lint.py`（v1 最小机械集：十节存在性或显式 N/A、`[假设]` 计数、质量属性排序存在；fail-closed 退出码 + reason_code）· `sad_scaffold.py`（模版脚手架 / 文档状态机 draft→skeleton-ready→validated→frozen / 标记聚合统计）· pytest 测试。
 - **README「Skills 列表」同步 + 重跑 `setup.sh`** 建链（新增顶层 skill 纪律）。
+- **〔grill-amendment · fold〕`sdflow-roadmap/SKILL.md` description 加一句分工指路**（「新项目起步尚无 SAD 先 `/sdflow-architecture`」）——消解「新项目」入口的现役触发路由冲突；本 skill description 反向指路时间轴。
 
 ## Capabilities
 
@@ -26,11 +27,11 @@ AI 模块级代码质量已可保证，瓶颈上移到系统级：局部最优 �
 - **代码/目录**：新增 `sdflow-architecture/`（SKILL.md + references/ + scripts/ + tests/）；`README.md` Skills 列表；不触 `sdflow-init/assets/workflow/` bundle、不触 `openspec/workflow/`。
 - **消费仓布局**：skill 运行时在消费仓创建 `openspec/architecture/`（SAD 单例 live 层）——与 `openspec/adr/`（decision 层）、`openspec/CONTEXT.md`（词汇表）成兄弟；ADR/术语分家写入既有 home，SAD 只引用。
 - **技术栈标注（TG-01/02/03 判定）**：Markdown + Python（pytest），**不命中** backend/embedded/frontend 任一领域清单。
-- **外部依赖**：codex CLI（**可选**，仅升档多镜时作 outside voice 镜，未装/失败降级 Claude 镜 + 显式提示）。
+- **外部依赖**：codex（**可选**，仅升档多镜时作 outside voice 镜）——调用一律经自制 `~/.sdflow/hack/outside-voice.sh`（自包含、preflight/超时/secret 扫描内建），未装/失败降级 Claude 镜 + 显式提示〔grill-amendment〕。
 
 ## Success Metrics
 
-1. **端到端跑通** — 基准 0（无此能力）→ 目标：样例需求走完五步产出 skeleton-ready SAD + 骨架 proposal 草案 — 度量：`sad_lint.py` 退出码 0 且骨架 proposal 文件存在（演练记录锚入 tasks 验证）。
+1. **端到端跑通** — 基准 0（无此能力）→ 目标：样例需求走完五步产出 skeleton-ready SAD（含「骨架切片建议」节）— 度量：`sad_lint.py` 退出码 0 且 SAD 含该节（演练记录锚入 tasks 验证）〔grill-amendment 措辞同步〕。
 2. **机械断言覆盖** — 基准 0 → 目标：v1 三类断言（节存在性 / 假设计数 / 排序存在）各 ≥2 条 pytest 用例全绿 — 度量：pytest 通过计数。
 3. **反假绿锁生效** — 基准无 → 目标：事实三问任一缺失时状态机拒绝 skeleton-ready（锁 draft）— 度量：负路径 pytest 用例（缺项 → 拒绝）通过。
 
@@ -53,6 +54,7 @@ AI 模块级代码质量已可保证，瓶颈上移到系统级：局部最优 �
 - **A1** agent 有效 context 预算足以装下「一个子系统完整设计 + 邻居 contract 摘要」（R6 硬约束的常数成立）。失效影响：粒度带 3–7 需重标定。缓解：预算数值放 checklists 可调参。
 - **A2** 事实三问对典型项目 owner 约 5 分钟可答。失效影响：采集步卡壳率高。缓解：扩充各问追问提示。
 - **A3** 分歧驱动的候选数在真实项目收敛于 1–3 个方案。失效影响：拍板面爆炸。缓解：追加分歧合并规则。
+- **A4**〔grill-amendment〕消费仓一仓一系统（SAD 单例路径成立）。失效影响：monorepo 多系统时单例路径冲突。缓解：目录形态天然可演进为 `architecture/{system}/sad.md`（加法演进，不破坏单系统仓）；v1 遇「一仓多系统」声明显式提示不支持并留痕，不硬造布局。
 
 ## 开放问题（TG-21）
 
