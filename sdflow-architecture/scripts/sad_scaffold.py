@@ -46,6 +46,8 @@ def append_log(root, line):
 
 def load_sad(root):
     path = root / sad_schema.SAD_REL_PATH
+    if not path.is_file():
+        _die(2, "sad.md 不存在——先跑 init 建骨架")
     return path, path.read_text(encoding="utf-8")
 
 
@@ -146,9 +148,13 @@ def _precheck_skeleton(fm, text, args, subsys):
         _die(5, "假设对账未过：" + "; ".join(f"{c}({d})" for c, d in v))
     if not args.slice_file:
         _die(5, "缺 --slice-file（骨架切片建议内容，模型撰写、scaffold 机械插入）")
+    if not pathlib.Path(args.slice_file).is_file():
+        _die(2, f"slice 文件不存在: {args.slice_file}")
     pierce = [m.group(1) for l in pathlib.Path(args.slice_file).read_text(encoding="utf-8").splitlines()
               if (m := sad_schema.PIERCE_RE.match(l))]
-    if set(pierce) != set(subsys) or len(pierce) != len(set(pierce)):
+    if len(pierce) != len(set(pierce)):
+        _die(5, f"穿越点存在重复条目: {sorted(set(p for p in pierce if pierce.count(p) > 1))}")
+    if set(pierce) != set(subsys):
         _die(5, f"穿越点集≠第5节子系统集：穿越点{sorted(set(pierce))} vs 子系统{sorted(set(subsys))}")
 
 

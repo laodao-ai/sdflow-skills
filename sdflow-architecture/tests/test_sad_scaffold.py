@@ -160,3 +160,21 @@ def test_set_fact_and_set_assumption_update_cache(tmp_path):
     assert "positioning: answered" in text and "assumptions_open: 0" in text and "| 接受 |" in text
     r = run(["set-assumption", "--root", str(repo), "--assumption", "9=接受"], tmp_path)
     assert r.returncode == 2                          # 行不存在 fail-closed
+
+def test_slice_file_missing_exit2(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED)
+    slice_f = tmp_path / "nonexistent.md"
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 2 and "slice 文件不存在" in r.stderr
+
+def test_write_commands_before_init_exit2(tmp_path):
+    # openspec/ 布局存在但未 init，故无 sad.md
+    repo = make_repo(tmp_path)
+    r1 = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
+    assert r1.returncode == 2 and "sad.md 不存在" in r1.stderr
+    r2 = run(["set-assumption", "--root", str(repo), "--assumption", "1=接受"], tmp_path)
+    assert r2.returncode == 2 and "sad.md 不存在" in r2.stderr
+    r3 = run(["transition", "--root", str(repo), "--to", "skeleton-ready"], tmp_path)
+    assert r3.returncode == 2 and "sad.md 不存在" in r3.stderr
