@@ -23,13 +23,20 @@ description: >
 
 ## 路径与调用约定（先读）
 
-本 SKILL 出现的每条命令都用下列变量，运行前先在会话里定死其字面值：
+本 SKILL 出现的每条命令都用下列变量，运行前先在会话里定死其字面值。
+<!-- [impl-review-fix] C1：SKILL_DIR 改双宿主字面推导（原抽象占位 `<本 SKILL.md 所在目录>` 无推导命令，
+     模型易连引号一起误抄成 "~/..." 不展开，对抗镜实测 65% 命中率）——比照 sdflow-retro 惯例给出可直接
+     复制执行的字面路径，仅 SKILL_DIR 改写，$SKILL_DIR 的 15 处既有引用不动。 -->
 
 ```
-REPO="$(git rev-parse --show-toplevel)"     # 消费仓根（分家/SAD 落位都在其 openspec/ 下）
-SKILL_DIR=<本 SKILL.md 所在目录>            # 安装后 = ~/.claude/skills/sdflow-architecture（Codex 宿主为
-                                            #   ~/.codex/skills/sdflow-architecture）；经 symlink 指向源仓 checkout
-SAD="$REPO/openspec/architecture/sad.md"    # SAD 单例
+REPO="$(git rev-parse --show-toplevel)"                # 消费仓根（分家/SAD 落位都在其 openspec/ 下）
+SKILL_DIR="$HOME/.claude/skills/sdflow-architecture"    # Claude 宿主字面路径；Codex 宿主改用
+                                                         #   "$HOME/.codex/skills/sdflow-architecture"
+                                                         #   （按实际运行宿主二选一，找不到就都试一遍——
+                                                         #   两者皆经 symlink 指向源仓 checkout）
+                                                         # 用 $HOME 不用 ~：~ 在非交互 shell/部分字符串
+                                                         #   拼接场景不展开，会被当字面字符致路径不存在
+SAD="$REPO/openspec/architecture/sad.md"                # SAD 单例
 ```
 
 - 自带脚本一律 `python3 "$SKILL_DIR/scripts/<脚本>" <子命令> --root "$REPO" …`——**脚本在 skill 目录，`--root`
@@ -40,15 +47,21 @@ SAD="$REPO/openspec/architecture/sad.md"    # SAD 单例
 - **references（按名引用，不复述其内容）**：`references/intake-questionnaire.md`（①三问）·
   `references/decomposition-rules.md`（②R1–R11 + AP1–AP4）· `references/review-lenses.md`（④走查/升档信号表）·
   `references/quality-criteria.md`（S 编号真相源，人门清单源）· `references/sad-template.md`（十节骨架，scaffold
-  写入）· `references/checklists/`（R1 外部依赖典型集 / R4 变化类别表 / 横切模板 / 质量属性候选库）。
+  写入）· `references/checklists/`（①问②/第3节 外部依赖典型集 <!-- [impl-review-fix] C4②：原标签「R1」
+  误指——external-deps-typical.md 实际挂在步骤①三问②与 SAD 第3节外边界，不在 decomposition-rules R1 --> /
+  R4 变化类别表 / 横切模板 / 质量属性候选库）。
 
-## 信任边界（两条原文级声明，每次跑到相关步都显式陈述一行）
+## 信任边界（三条原文级声明，每次跑到相关步都显式陈述一行）
+<!-- [impl-review-fix] C6①：补第三条（与 B 波 _precheck_walkthrough_logs 行为同步），原「两条」改「三条」 -->
 
 - **「lint 通过 = 结构性通过 ≠ 内容已审」**——`sad_lint.py` v1 只断言结构（十节存在性 / 假设集合对账 /
   排序 / frontmatter 枚举 / 组合不变式 / 建议节分支），通过码 `structure-ok-SEMANTICS-UNCHECKED` 的尾缀即诚实
   提醒：绿不代表内容对，内容质量由冷走查 + 升档 + 人门守。
 - **「facts=answered = 已记录回答 ≠ 质量已核（复核在人门议程）」**——`set-fact <key>=answered` 只表示
   「已记录到人的回答」，不表示回答真实充分；回答质量核验固定列入人门议程第 1 条「三问回答复核」。
+- **「走查/人门是否真实发生机械不可证」**——scaffold 仅以 sad-log 留痕行**存在性**作迁移前置锚（`transition
+  --to skeleton-ready` 复检 ≥1 行含「走查」+ ≥1 行含「升档判定」，缺失 exit 5），**内容真实性归人门**，脚本
+  不判定留痕内容真伪。
 
 （同款信任边界还覆盖：候选真实性（是否凑数）、假设推测依据是否成立——均无确定性信号，归人门 + 冷走查复核。）
 
@@ -85,8 +98,8 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" init --root "$REPO"
 - **exit 0（全新）**：脚本已建 `sad.md` + `sad-log.md` 并 append `init` 留痕，进步骤 ①。
 
 **一仓多系统**：操作者声明消费仓是「一仓多系统」时，**显式提示**「v1 仅支持单系统单例（演进路径
-`openspec/architecture/{system}/` 已预留，v1 未启用）」并留痕（`log --line "多系统声明：按 v1 单例处理"`），
-MUST NOT 硬造多系统目录布局。
+`openspec/architecture/{system}/` 已预留，v1 未启用）」并留痕（`log --root "$REPO" --line "多系统声明：按 v1 单例处理"`），
+MUST NOT 硬造多系统目录布局。<!-- [impl-review-fix] C6⑤：L88 log --line 简写补全 --root "$REPO" -->
 
 > **回写与回落（既定后续动作，不经 continue/replan 分流）**——见文末「状态迁移速查」，此处不重复。
 
@@ -168,6 +181,10 @@ python3 "$SKILL_DIR/scripts/sad_scaffold.py" log --root "$REPO" --line "step=2 r
   登记同编号行（内联标记 ↔ 附录行**双向锚**：编号集合双向相等、双侧不重号）——一份「看起来完整」却带一堆
   未确认假设的 SAD 是 draft 不是成品。
 
+**时序纪律（加粗强制，与步骤 ① 同款）**：**MUST 实际呈现选择题并获得操作者拍板之后，才允许把定稿方案写入
+SAD 正文；MUST NOT 自行代答、MUST NOT 同轮自问自答。**
+<!-- [impl-review-fix] C2：补步骤③时序纪律双句，对齐步骤①强度 -->
+
 拍板后：把定稿方案写入 SAD 正文（第 1/2/3/4/5/7/8/9 节 + 附录假设清单，按 `references/sad-template.md` 骨架，
 每节「有内容 或 显式 `N/A — <理由>`」），并留痕候选快照 + 步骤到位：
 
@@ -226,20 +243,27 @@ S11 演进可维护性镜，按命中风险取镜）。**MUST NOT 整体调用 `
 S8 目标态）。调用经 `~/.sdflow/hack/outside-voice.sh`（**契约单一源 = 脚本头注释，此处只给分支决策，不转述
 接口细节**）：
 
+<!-- [impl-review-fix] C5：preflight 恒 exit 0（按 stdout 值判定，非退出码）改准确；补 exit 2 分支 +
+     catch-all 未列非零兜底（Task7 审留遗，已核 wrapper 头注释） -->
 ```
 HELPER=~/.sdflow/hack/outside-voice.sh
 [ -x "$HELPER" ] 不成立（不可执行/不存在）           → 显式降级 Claude 镜（与 preflight 非 ready 同一降级出口，不静默）
-preflight：仅精确匹配 "ready" 走 codex               → 其余（not_installed/missing-deps/畸形/非零）显式降级 Claude 镜
+preflight（恒 exit 0，按 stdout 值判定，非退出码）：
+  stdout 精确匹配 "ready"                            → 走 codex
+  stdout ∈ {not_installed, missing-deps} 或畸形值      → 显式降级 Claude 镜
 exec --context-file <f>：
   exit 0    → stdout findings 进镜阵合并池
+  exit 2    → 用法错/context 文件不存在或不可读：显式降级 Claude 镜（不静默，提示核对 --context-file 路径）
   exit 124  → 超时：显式降级 Claude 镜（不静默）
   exit 1    → exec-error：显式降级 Claude 镜（不静默，stderr 摘要写正文）
   exit 3    → secret-hit：拒发本镜、不 fallback、报人工核查
+  其余未列非零 → 显式降级 Claude 镜（不静默）
 ```
 
 **升档前 MUST 提示操作者确认消费仓无敏感明文**——codex read-only 沙箱防写不防读、不防出境；wrapper 的 secret
 扫描只覆盖显式喂入的 context 文件，仓内其他敏感文件不在其保护面。降级一律**显式提示不静默**，并留痕
-`log --line "升档镜阵：outside-voice reason_code=<…> → 降级 Claude 镜"`。
+`log --root "$REPO" --line "升档镜阵：outside-voice reason_code=<…> → 降级 Claude 镜"`。
+<!-- [impl-review-fix] C6⑤：L242 log --line 简写补全 --root "$REPO" -->
 
 ### 4.4 人门（固定议程，位置钉死 = 走查洞处置后、scaffold 迁移前）
 
@@ -247,13 +271,19 @@ exec --context-file <f>：
 
 1. **三问回答复核**——核验 facts 三问回答是否真实充分（facts=answered 只是已记录，质量在此复核）。
 2. **假设逐条处置**——每条 `[假设-N]` 由操作者「显式接受 或 标待校准」，处置经 scaffold 落盘（发生在操作者
-   逐条确认之后）：
+   逐条确认之后）。**时序纪律（加粗强制，与步骤 ① 同款）**：**MUST 实际由操作者对每条假设逐条显式处置
+   （接受/待校准）之后，才允许调 `set-assumption` 落盘；MUST NOT 自行代答、MUST NOT 同轮自问自答。**
+   <!-- [impl-review-fix] C2：补 4.4 假设处置时序纪律双句，对齐步骤①强度 -->
    ```
    python3 "$SKILL_DIR/scripts/sad_scaffold.py" set-assumption --root "$REPO" --assumption 1=接受
    python3 "$SKILL_DIR/scripts/sad_scaffold.py" set-assumption --root "$REPO" --assumption 2=待校准
    ```
    （处置 ∈ `接受|待校准`；`未处置` 不可经本把手写入。存在未处置假设 → 后续迁移会被锁 draft。）
 3. **走查洞处置确认**——逐洞确认已转成正文修订或假设条目、无遗留。
+
+**走查轮次与升档判定的 log 留痕是 `transition --to skeleton-ready` 的机械前置**：缺失（sad-log 无「走查」
+或「升档判定」字样的留痕行）→ scaffold fail-closed `exit 5`，不进步骤⑤。
+<!-- [impl-review-fix] C6②：与 B 波 _precheck_walkthrough_logs 行为同步 -->
 
 ---
 
@@ -291,6 +321,11 @@ python3 "$SKILL_DIR/scripts/sad_lint.py" --root "$REPO"
 
 lint 通过码 `structure-ok-SEMANTICS-UNCHECKED`——复述信任边界：**lint 通过 = 结构性通过 ≠ 内容已审**。
 
+**迁移前置全量结构复检（B 波新增行为）**：`transition` 在落盘前会对**迁移后的候选全文**跑一次完整结构不变式
+复检，命中违规 → `exit 5` 并列出违规 codes、不写盘；**含回落路径**（如 skeleton-ready→draft）——回落若仍
+残留 `contract[validated/frozen]` 标签会被拦截，须先把标签降回 `planned/draft` 再重跑迁移。
+<!-- [impl-review-fix] C6④：与 B 波 _lint_candidate_or_die 行为同步 -->
+
 **对话收尾行（原文级，交棒不得只埋在文件里）**：
 
 ```
@@ -301,14 +336,20 @@ SAD 已 skeleton-ready · 建议骨架 change：<名> · 下游：/opsx:ff <名>
 
 ## 分家指令（ADR / 术语单一真相源；SAD 只引用不复述）
 
-分家写入**全部机械化**，SAD 本体只索引/引用，**MUST NOT 复述**其内容（复述必双写发散）：
+分家写入**编号分配与骨架机械化**，**正文由模型用 Edit 补写**，SAD 本体只索引/引用，**MUST NOT 复述**其
+内容（复述必双写发散）。
+<!-- [impl-review-fix] C3①：原「全部机械化」措辞不准确——adr-new 只机械化编号扫描+骨架文件生成，
+     Context/Decision/Consequences 三节正文仍需模型手写 -->
 
 - **ADR → `openspec/adr/`**（不可变 + supersession 链），编号由 scaffold 机械分配：
   ```
   python3 "$SKILL_DIR/scripts/sad_scaffold.py" adr-new --root "$REPO" --title "<决策一句话>" --slug "<kebab-slug>"
   ```
   扫描既有文件名最大数字前缀 +1；**编号模式无法识别 → fail-closed**（脚本非零退出），此时人工核对后用
-  `--number <N>` 越过扫描。第一条分解 ADR（步骤 ② 判据）即经此产出。
+  `--number <N>` 越过扫描。第一条分解 ADR（步骤 ② 判据）即经此产出。**adr-new 产出骨架后 MUST 用 Edit
+  把步骤 ② 的判据/被否切法/AP 自检三行痕写入该 ADR 文件的 Context/Decision/Consequences 三节，MUST NOT
+  留空骨架。**
+  <!-- [impl-review-fix] C3②：补 adr-new 后必须补写正文的显式指示 -->
 - **术语 → `openspec/CONTEXT.md`**（生态既有 home），并入 `## Language` 段末尾：
   ```
   python3 "$SKILL_DIR/scripts/sad_scaffold.py" context-add --root "$REPO" --term "<术语>" --definition "<定义>"
@@ -341,3 +382,7 @@ MUST NOT 改写既有行）：单方案声明 / 升档判定（含未命中）/ 
 **`step=N reached` 步骤到位 / 候选摘要快照 / 走查执行者字段**——后三者是 continue 断点恢复的凭据（候选只活在
 对话里则 session 断即丢）。`transition` / `set-fact` / `set-assumption` / `init` 会自动 append 各自留痕；SKILL
 自身的判定留痕用 `log --line "<…>"` 显式追加。
+
+**log 纪律**：`--line` / `--reason` 的值须**单行**——含换行符（`\n`/`\r`）会被 `sad_scaffold.py` 拒绝
+（`exit 2`），防伪造 append-only 审计行；多行内容自行拼成一行摘要再传入。
+<!-- [impl-review-fix] C6③：与 B 波 _reject_newline 行为同步 -->

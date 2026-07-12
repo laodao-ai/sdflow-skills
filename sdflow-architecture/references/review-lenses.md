@@ -94,6 +94,9 @@ N/A 理由成立吗（「考虑过判不需要」是否站得住）；清单外�
 | 改动点 | 牵连文件 | 同步核对方式 |
 |---|---|---|
 | S 条目增/删/改 | `review-lenses.md`（S 编号引用）、`sad_lint.py`（注释 S 编号）、`SKILL.md` 人门清单 | v1：tasks 内人工 checklist；目标态：S 编号引用扫描脚本 |
-| sad-template 节结构变更 | `sad_schema.py` 节标题锚、`sad_lint` 节断言、tests | 改模板必跑 tests（节锚常量共享兜底） |
+| sad-template 节结构变更 | `sad_schema.py` 节标题锚、`sad_lint` 节断言、tests | 改模板必跑 tests（节锚常量共享，DEC-1 兜底） |
 | frontmatter 字段/枚举变更 | `sad_schema.py`（唯一改点）→ scaffold/lint 自动继承 | tests 覆盖枚举正负路径 |
 | 标记语法变更（`[假设-N]`） | `sad_schema.py` 正则（唯一改点）+ `sad-template.md` 示例 | tests + 模板示例同步 |
+
+<!-- [impl-review-fix] C7：BASE-29 表「sad-template 节结构变更」行恢复 DEC-1 引用（Task7 审留遗，
+     曾误改为「节锚常量共享兜底」丢失 DEC-1 出处） -->
