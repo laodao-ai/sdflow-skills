@@ -41,9 +41,10 @@ SAD 居中，六条轴各挂一类相邻文档；SAD 只放每样的**架构决�
      (contract 真相源)        │         (决策链 supersession)
                      ┌────────┴────────┐
                      │  SAD             │  architecture/sad.md
-        语言轴 ◀─────┤  L1 空间结构      ├─────▶ 过程/工程轴
-   CONTEXT.md        │  × 架构决策       │      testing-strategy.md (测试路线)
-   (统一语言)         │  per-system 单例  │      README/CONTRIBUTING (装/配/dev-env)
+        语言轴 ◀─────┤  L1 空间结构      ├─────▶ 过程轴
+   CONTEXT.md        │  × 架构决策       │      environments.md    (dev/test/deploy 搭建·操作)
+   (统一语言)         │  per-system 单例  │      testing-strategy.md (测试方法/路线)
+                     │                  │      README/CLAUDE.md    (概要+引用)
                      └────────┬────────┘
                               ▼
                           空间轴（下钻）
@@ -61,8 +62,9 @@ SAD 居中，六条轴各挂一类相邻文档；SAD 只放每样的**架构决�
 | 决策 | `openspec/adr/` | per-system | 决策链（不可变+supersession） | SAD §4 只索引 |
 | 语言 | `openspec/CONTEXT.md` | per-system | 统一语言 | SAD §10 只引用 |
 | 契约 | `openspec/specs/`（capability） | per-system | contract 真相源（delta 回流） | SAD/L2 引用（**待 D2 拍**，见 03 §4） |
-| 过程/工程 | `testing-strategy.md` | 工程实践 | 单元/集成测试路线、测试分层 | SAD §8 一条**横切引用**，不复述 |
-| 过程/操作 | `README`/`CONTRIBUTING`/dev-setup | 操作手册 | 安装/配置步骤、dev 环境搭建 | SAD **不涉及**；§2 只记栈/平台**约束**、§8 只记**配置策略**决策 |
+| 过程·方法 | `testing-strategy.md` | per-system | 测试**测什么/怎么分层**、contract 测试点 | SAD §8 一条**横切引用**，不复述 |
+| 过程·操作 | `environments.md` | per-system | **dev/test/deploy 三态环境搭建·怎么跑**（工具链/本地依赖/测试命令/CI/发布/回滚） | SAD **不涉及**；SAD §7 只记部署**架构决策**、§2 只记栈/平台**约束**、§8 只记**配置策略**决策 |
+| 概要入口 | `README` / `CLAUDE.md` | per-system | 关键命令 + 指针 | **概要+引用不复述**——CLAUDE.md 是 agent context 入口，放 build/test/run/deploy 各一行命令 + 指向 environments |
 
 ## 5. 真相源分工表（扩展 02 §1「分家」）
 
@@ -75,8 +77,9 @@ SAD 居中，六条轴各挂一类相邻文档；SAD 只放每样的**架构决�
 | 阶段/排期 | roadmap | 不含（成熟度是空间状态，非阶段） |
 | 决策 why | ADR | §4 索引 |
 | 术语 | CONTEXT | §10 引用 |
-| 测试路线 | testing-strategy | §8 一行引用 |
-| 安装/配置步骤 | README/CONTRIBUTING | 不含 |
+| 测试方法/路线 | testing-strategy | §8 一行引用 |
+| dev/test/deploy 环境搭建·操作 | **environments.md** | 不含（SAD §7 只留部署架构决策） |
+| 安装/配置/发布**步骤** | environments.md（README/CLAUDE 概要引用） | 不含 |
 | 配置**策略**（决策） | SAD §8 横切 | 本体 |
 | 平台/栈**约束** | SAD §2 | 本体 |
 
@@ -89,9 +92,9 @@ SAD 居中，六条轴各挂一类相邻文档；SAD 只放每样的**架构决�
 
 | 用户提的 | 架构切片（进 SAD，多已在） | 操作/过程主体（→ 相邻文档） |
 |---|---|---|
-| 开发/测试环境需求 | 栈/平台/工具链约束 → §2 | 装什么、起本地依赖步骤 → CONTRIBUTING |
-| 安装配置 | 配置**策略** → §8 横切；分发形态 → §7 | 安装命令/步骤 → README |
-| 单元/集成测试路线 | **可测试性**质量属性 → §1；架构撑测试（双sink可headless测/Engine可mock/contract 即集成测试点） | 框架/目录/泳道细节 → testing-strategy |
+| 开发/测试环境需求 | 栈/平台/工具链约束 → §2 | 装什么、起本地依赖、跑测试步骤 → **environments** §1/§2 |
+| 安装配置 | 配置**策略** → §8 横切；分发形态 → §7 | 安装/配置/发布**步骤** → **environments** §3；README/CLAUDE 概要引用 |
+| 单元/集成测试路线 | **可测试性**质量属性 → §1；架构撑测试（双sink可headless测/Engine可mock/contract 即集成测试点） | 测试**方法** → testing-strategy；测试**环境/怎么跑** → environments §2 |
 
 > 业界锚：arc42 把「测试概念」放 §8 Cross-cutting、testability 是质量属性，**没有**安装/dev环境/测试计划一等章节；C4 只画结构不碰过程。SAD 的测试观本就内建为 **contract-driven**（骨架 DoD =「每条 contract 被真实调用穿过」= 集成测试的架构表达）。
 
@@ -102,8 +105,11 @@ SAD 居中，六条轴各挂一类相邻文档；SAD 只放每样的**架构决�
 - `quality-criteria.md`：加「SAD 边界总则」（§2 四问，本文引用它不复述）
 - `checklists/quality-attribute-candidates.md`：补 **可测试性** 候选
 - `checklists/cross-cutting-template.md`：补 **测试策略** 横切候选
+- `quality-criteria.md`「边界总则」典型误收更新：dev/test/deploy 环境搭建 + 安装/配置/发布步骤 → `environments.md`（原笼统写 README/CONTRIBUTING）
 
-**未固化（留决策）**：T1（SAD 只标空间成熟度、M 阶段引用 roadmap）牵动 sad-template contract 行约定 + 与 roadmap 的引用纪律，属 D5，接地试跑后一并定（见 03 §7 D5）。
+**过程·操作轴新识别**：`environments.md`（dev/test/deploy 三态环境搭建，per-system 单例）为过程·操作轴真相源，README/CLAUDE.md 概要+引用；模板草案见 `environments-template-draft.md`。
+
+**未固化（留决策）**：① T1（SAD 只标空间成熟度、M 阶段引用 roadmap）牵动 sad-template contract 行约定 + 与 roadmap 引用纪律，属 D5，接地后定（03 §7 D5）；② `environments.md` / `testing-strategy.md` 等**过程轴文档是否纳入 sdflow 铺设/维护**（现由项目自写、无 skill 铺）——比单 skill 大的生态问题，待议。
 
 ---
 

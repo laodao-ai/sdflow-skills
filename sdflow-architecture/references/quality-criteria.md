@@ -13,7 +13,7 @@ S1–S11 判「进了 SAD 的内容好不好」；本总则判**该不该进**�
 3. **空间/当下？** 非时间排期——否（排期）→ roadmap
 4. **下游 context 要携带？** 模块 agent 生成时要知道的约束——否（纯人读手册）→ CONTRIBUTING
 
-**典型误收（起草时高发，MUST 挡）**：安装/配置**步骤**（→ README；SAD 只留 §8 配置**策略**决策）· dev/测试环境**搭建**（→ CONTRIBUTING；SAD 只留 §2 栈/平台**约束**）· 测试框架/目录/泳道**细节**（→ testing-strategy 文档；SAD 只留 §1 可测试性质量属性 + §8「测试策略」横切一行引用）· **阶段/排期**（→ roadmap；SAD 成熟度只标空间态 planned/draft/validated/frozen，不标 M 阶段）。
+**典型误收（起草时高发，MUST 挡）**：安装/配置/发布**步骤** + dev/test/deploy 环境**搭建**（→ `environments.md`；SAD 只留 §7 部署架构决策 · §2 栈/平台**约束** · §8 配置**策略**决策；README/CLAUDE 概要引用）· 测试框架/目录/泳道**细节**（→ testing-strategy 文档；SAD 只留 §1 可测试性质量属性 + §8「测试策略」横切一行引用）· **阶段/排期**（→ roadmap；SAD 成熟度只标空间态 planned/draft/validated/frozen，不标 M 阶段）。
 
 ## 语义判据全集（S1–S11）
 
