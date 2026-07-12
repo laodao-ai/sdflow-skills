@@ -148,6 +148,8 @@
 | T140 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 代码质量 | PROPOSED | 2026-07-11 13:58 | mlh-p4-reason-code-validators | mlh-p4-reason-code-validators |
 | T141 | `workflow bundle (roadmap/ff/spec-review/implement/code-review)` | 把「拆分标准=一个change一个完整阶段结果」融入 workflow 三处触发 | 基础设施 | OPEN | 2026-07-11 16:11 | - |  |
 | T142 | `docs/workflow-map.md` | workflow-map.md 广度刷新：补 mlh-p4 后 5 脚本 + hr-tg schema 回灌 | 基础设施 | OPEN | 2026-07-11 16:55 | - |  |
+| T143 | `sdflow-architecture` | frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言） | 功能增强 | OPEN | 2026-07-12 17:16 | add-sdflow-architecture |  |
+| T144 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） | 基础设施 | OPEN | 2026-07-12 17:16 | add-sdflow-architecture |  |
 
 ---
 
@@ -1327,3 +1329,31 @@
 **动机**：map 接地自 mlh-p5-parser-cleanup(mlh-p4 之前)已过时：§4「14 脚本」缺 hr_tg_intersect/outside_voice_guard/review_disposition_check/lens_metric_emit/maintain_scan；§3.2 hr-tg 锚仍写 hit+evidence 2 字段(应 hit+declared+evidence)。hr-tg schema 回灌那半由 harden-hr-tg-anchor-consistency 的 F12 局部处理，但补 5 脚本是独立广度刷新。
 
 **思路**：按标准另开：不 fold 进 hr-tg change(基准②不混做)。随下次 map 维护统一刷 §4 脚本清单(14→19)+§3.2 hr-tg 三字段+§6 skew 风险展开。参考 docs/design-methodology.md §3 delta 表。
+
+---
+
+## T143: frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-architecture` |
+| 类型 | 功能增强 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/add-sdflow-architecture/design.md`
+
+**动机**：design 状态机节目标态遗留
+
+---
+
+## T144: sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发）
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-architecture` |
+| 类型 | 基础设施 |
+| 状态 | OPEN |
+
+**关联文档**：`openspec/changes/add-sdflow-architecture/design.md`
+
+**动机**：DEC-1 被否备选的证伪条件登记
