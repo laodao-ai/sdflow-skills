@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""sad_scaffold.py — SAD 脚手架：init / preflight 两级 / 原子写 / 单例分流 / log 追加（DEC-8）。
+"""sad_scaffold.py — SAD 脚手架：init / preflight 两级 / 原子写 / 单例分流 / log 追加（DEC-8）；
+状态机（transition/set-fact/set-assumption，Task 4）。
 
 CLI: sad_scaffold.py <sub> --root <消费仓根> …
-exit 码约定：0=ok / 2=坏输入 / 3=preflight无openspec布局 / 4=单例冲突 / 5=迁移拒绝（reserved，Task 4）
+exit 码约定：0=ok / 2=坏输入 / 3=preflight无openspec布局 / 4=单例冲突 / 5=迁移拒绝（表外迁移/前置复检未过）
 
-argparse subparsers 结构：main() 的 dispatch 按子命令名查表，新增子命令（transition/
-set-fact/set-assumption/adr-new/context-add，Task 4/5）只需新增一个 _cmd_xxx(args) 函数
-+ 一个 add_parser 注册，不需要改动既有子命令的实现或 dispatch 逻辑。
+argparse subparsers 结构：main() 的 dispatch 按子命令名查表，新增子命令（adr-new/
+context-add，Task 5）只需新增一个 _cmd_xxx(args) 函数 + 一个 add_parser 注册，
+不需要改动既有子命令的实现或 dispatch 逻辑。
 """
 import argparse
+import pathlib
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -121,6 +123,206 @@ def _cmd_log(args):
     return 0
 
 
+# ---- 状态机（Task 4）：迁移表 + 锁 draft 正文实扫复检 + facts/假设处置把手 -----------------
+
+TRANSITIONS = {
+    ("draft", "skeleton-ready"):    "precheck+insert_slice",
+    ("skeleton-ready", "draft"):    "reason+remove_slice",
+    ("skeleton-ready", "validated"): "dod+remove_slice",
+    ("validated", "draft"):         "reason",
+}
+
+
+def _precheck_skeleton(fm, text, args, subsys):
+    """draft→skeleton-ready 前置复检：facts 三键 + 假设对账走正文实扫（DEC-1 共用核心），
+    MUST NOT 读 assumptions_open 缓存作门禁数据源——缓存只是回写产物，不是真相源。
+    """
+    missing = [k for k in sad_schema.FACT_KEYS if fm["facts"].get(k, "missing") != "answered"]
+    if missing:
+        _die(5, f"事实三问未齐（缺 {','.join(missing)}）——锁 draft（fail-closed）。"
+                f"人实际作答后跑 set-fact 记录。")
+    v = sad_schema.check_assumptions(text)            # 正文实扫，缓存 MUST NOT 参与门禁
+    if v:
+        _die(5, "假设对账未过：" + "; ".join(f"{c}({d})" for c, d in v))
+    if not args.slice_file:
+        _die(5, "缺 --slice-file（骨架切片建议内容，模型撰写、scaffold 机械插入）")
+    pierce = [m.group(1) for l in pathlib.Path(args.slice_file).read_text(encoding="utf-8").splitlines()
+              if (m := sad_schema.PIERCE_RE.match(l))]
+    if set(pierce) != set(subsys) or len(pierce) != len(set(pierce)):
+        _die(5, f"穿越点集≠第5节子系统集：穿越点{sorted(set(pierce))} vs 子系统{sorted(set(subsys))}")
+
+
+def _heading_ln(text, heading):
+    """定位顶级标题所在原始行号（1-indexed，fence-aware——复用 sad_schema.body_lines）。"""
+    return next((ln for ln, l in sad_schema.body_lines(text) if l.strip() == heading), None)
+
+
+def insert_slice(text, slice_content):
+    """在 APPENDIX_ANCHOR 标题行之前插入「## 骨架切片建议」+ 空行 + slice-file 内容；
+    无附录节则插在文末。"""
+    lines = text.splitlines()
+    block = [sad_schema.SLICE_ANCHOR, ""] + slice_content.rstrip("\n").splitlines() + [""]
+    ln = _heading_ln(text, sad_schema.APPENDIX_ANCHOR)
+    if ln is None:
+        new_lines = lines + block
+    else:
+        idx = ln - 1
+        new_lines = lines[:idx] + block + lines[idx:]
+    return "\n".join(new_lines) + "\n"
+
+
+def remove_slice(text):
+    """删除从 SLICE_ANCHOR 标题行起、至下一 `## ` 顶级标题行前（或 EOF）的整段。
+    无该节则原样返回（幂等）。"""
+    lines = text.splitlines()
+    start_ln = _heading_ln(text, sad_schema.SLICE_ANCHOR)
+    if start_ln is None:
+        return text
+    body = sad_schema.body_lines(text)
+    end_ln = next((ln for ln, l in body if ln > start_ln and l.startswith("## ")), None)
+    start_idx = start_ln - 1
+    end_idx = (end_ln - 1) if end_ln is not None else len(lines)
+    new_lines = lines[:start_idx] + lines[end_idx:]
+    return "\n".join(new_lines) + "\n"
+
+
+def _frontmatter_end(lines):
+    return next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+
+
+def _rewrite_top_key(text, prefix, new_line):
+    """重写 frontmatter 中以 prefix 开头的顶层键行（sad_status: / assumptions_open:）。"""
+    lines = text.splitlines()
+    end = _frontmatter_end(lines)
+    for i in range(1, end):
+        if lines[i].startswith(prefix):
+            lines[i] = new_line
+            break
+    return "\n".join(lines) + "\n"
+
+
+def _rewrite_status(text, to):
+    return _rewrite_top_key(text, "sad_status:", f"sad_status: {to}")
+
+
+def _recompute_assumptions_cache(text):
+    """回写 assumptions_open = 附录表中处置为「未处置」的行数（每次写命令后必做）。"""
+    _, rows = sad_schema.scan_assumptions(text)
+    open_count = sum(1 for _, d in rows if d == "未处置")
+    return _rewrite_top_key(text, "assumptions_open:", f"assumptions_open: {open_count}")
+
+
+def _rewrite_facts_line(text, key, value):
+    lines = text.splitlines()
+    end = _frontmatter_end(lines)
+    for i in range(1, end):
+        if lines[i].startswith("  ") and lines[i].strip().split(":", 1)[0].strip() == key:
+            lines[i] = f"  {key}: {value}"
+            return "\n".join(lines) + "\n"
+    _die(2, f"frontmatter facts 缺子键 {key}——sad.md 结构损坏")
+
+
+def _rewrite_appendix_row(line, new_disposition):
+    m = sad_schema.APPENDIX_ROW_RE.match(line)
+    start, end = m.span(2)
+    return line[:start] + new_disposition + line[end:]
+
+
+def _cmd_transition(args):
+    root = Path(args.root).resolve()
+    path, text = load_sad(root)
+    try:
+        fm = sad_schema.parse_frontmatter(text)
+    except sad_schema.SadParseError as e:
+        _die(2, str(e))
+
+    cur, to = fm["sad_status"], args.to
+    if (cur, to) not in TRANSITIONS:
+        _die(5, f"表外迁移 {cur}→{to}——合法迁移表见 design 状态机节")
+    tokens = TRANSITIONS[(cur, to)].split("+")
+
+    if "precheck" in tokens:
+        subsys = sad_schema.scan_subsystems(text)
+        _precheck_skeleton(fm, text, args, subsys)
+    if "reason" in tokens and (not args.reason or not args.reason.strip()):
+        _die(2, "该回落迁移须提供非空 --reason")
+    if "dod" in tokens and not args.dod_confirmed:
+        _die(2, "skeleton-ready→validated 须提供 --dod-confirmed")
+
+    new_text = text
+    if "insert_slice" in tokens:
+        slice_content = pathlib.Path(args.slice_file).read_text(encoding="utf-8")
+        new_text = insert_slice(new_text, slice_content)
+    if "remove_slice" in tokens:
+        new_text = remove_slice(new_text)
+    new_text = _rewrite_status(new_text, to)
+    new_text = _recompute_assumptions_cache(new_text)
+    atomic_write(path, new_text)
+
+    if "precheck" in tokens:
+        log_line = f"transition {cur}→{to}"
+    elif "dod" in tokens:
+        log_line = f"{to}：骨架 DoD 已确认"
+    else:
+        log_line = f"fallback {cur}→{to}: {args.reason}"
+    append_log(root, log_line)
+    return 0
+
+
+def _cmd_set_fact(args):
+    root = Path(args.root).resolve()
+    path, text = load_sad(root)
+    try:
+        sad_schema.parse_frontmatter(text)
+    except sad_schema.SadParseError as e:
+        _die(2, str(e))
+
+    k, sep, v = args.fact.partition("=")
+    k, v = k.strip(), v.strip()
+    if not sep or k not in sad_schema.FACT_KEYS or v not in sad_schema.FACT_VALUES:
+        _die(2, f"--fact 须为 <key>=<value>，key∈{sad_schema.FACT_KEYS}，"
+                f"value∈{sad_schema.FACT_VALUES}，得到 {args.fact!r}")
+
+    new_text = _rewrite_facts_line(text, k, v)
+    new_text = _recompute_assumptions_cache(new_text)
+    atomic_write(path, new_text)
+    append_log(root, f"set-fact {k}={v}")
+    return 0
+
+
+def _cmd_set_assumption(args):
+    root = Path(args.root).resolve()
+    path, text = load_sad(root)
+    try:
+        sad_schema.parse_frontmatter(text)
+    except sad_schema.SadParseError as e:
+        _die(2, str(e))
+
+    raw_n, sep, d = args.assumption.partition("=")
+    if not sep or not raw_n.strip().isdigit():
+        _die(2, f"--assumption 须为 <N>=<接受|待校准>，得到 {args.assumption!r}")
+    n, d = int(raw_n.strip()), d.strip()
+    if d not in ("接受", "待校准"):
+        _die(2, f"处置须∈(接受, 待校准)——「未处置」不可经本把手写入，得到 {d!r}")
+
+    lines = text.splitlines()
+    found = False
+    for i, line in enumerate(lines):
+        m = sad_schema.APPENDIX_ROW_RE.match(line)
+        if m and int(m.group(1)) == n:
+            lines[i] = _rewrite_appendix_row(line, d)
+            found = True
+            break
+    if not found:
+        _die(2, f"假设-{n} 行不存在于附录表——先补行再处置")
+
+    new_text = "\n".join(lines) + "\n"
+    new_text = _recompute_assumptions_cache(new_text)
+    atomic_write(path, new_text)
+    append_log(root, f"set-assumption 假设-{n}={d}")
+    return 0
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="sad_scaffold.py")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -135,6 +337,24 @@ def build_parser():
     p_log.add_argument("--root", required=True)
     p_log.add_argument("--line", required=True)
     p_log.set_defaults(func=_cmd_log)
+
+    p_transition = sub.add_parser("transition", help="迁移表驱动的状态迁移 + 锁 draft 正文实扫复检")
+    p_transition.add_argument("--root", required=True)
+    p_transition.add_argument("--to", required=True, choices=sad_schema.STATUS_ENUM)
+    p_transition.add_argument("--reason", default=None)
+    p_transition.add_argument("--slice-file", default=None)
+    p_transition.add_argument("--dod-confirmed", action="store_true")
+    p_transition.set_defaults(func=_cmd_transition)
+
+    p_set_fact = sub.add_parser("set-fact", help="记录 facts 三问之一的问答状态")
+    p_set_fact.add_argument("--root", required=True)
+    p_set_fact.add_argument("--fact", required=True, help="<key>=<answered|missing>")
+    p_set_fact.set_defaults(func=_cmd_set_fact)
+
+    p_set_assumption = sub.add_parser("set-assumption", help="改写附录假设表行处置")
+    p_set_assumption.add_argument("--root", required=True)
+    p_set_assumption.add_argument("--assumption", required=True, help="<N>=<接受|待校准>")
+    p_set_assumption.set_defaults(func=_cmd_set_assumption)
 
     return parser
 

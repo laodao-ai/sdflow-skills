@@ -1,4 +1,7 @@
 import subprocess, sys, pathlib, shutil
+from conftest import make_sad  # noqa: E402  (模块级导入：repo-wide pytest 下多 tests/ 目录同名
+                                # conftest.py 在 sys.modules 只留一个绑定；模块级导入随本文件
+                                # collection 期早绑定，避开函数级运行期延迟导入撞名的坑)
 SCRIPT = pathlib.Path(__file__).parent.parent / "scripts" / "sad_scaffold.py"
 
 def run(args, cwd):
@@ -84,3 +87,76 @@ def test_template_missing_fail_closed_no_partial_layout(tmp_path):
     # fail-closed：模版缺失须在任何 preflight 副作用之前拒绝，不留半套布局
     assert not (consumer / "openspec" / "adr").exists()
     assert not (consumer / "openspec" / "CONTEXT.md").exists()
+
+
+def seed(repo, **kw):
+    p = repo / "openspec" / "architecture" / "sad.md"
+    p.write_text(make_sad(**kw), encoding="utf-8")
+    return p
+
+ANSWERED = {"positioning": "answered", "external_systems": "answered", "hard_constraints": "answered"}
+
+def test_missing_fact_locks_draft(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts={**ANSWERED, "external_systems": "missing"})
+    slice_f = tmp_path / "s.md"; slice_f.write_text("- 穿越点[采集端]：§5\n", encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 5 and "external_systems" in r.stderr   # 指明缺失问项
+
+def test_unresolved_assumption_locks_draft(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED, assumptions=[(1, "接受"), (2, "未处置")])
+    slice_f = tmp_path / "s.md"; slice_f.write_text("- 穿越点[采集端]：§5\n", encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 5 and "假设-2" in r.stderr
+
+def test_happy_path_to_skeleton_ready_inserts_slice(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED, assumptions=[(1, "接受")], cache=0)
+    slice_f = tmp_path / "s.md"
+    slice_f.write_text("- 穿越点[采集端]：§5.1 contract 条目\n- 骨架 DoD：…\n- 建议 change 名：skeleton-x\n", encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 0
+    text = (repo / "openspec" / "architecture" / "sad.md").read_text(encoding="utf-8")
+    assert "sad_status: skeleton-ready" in text and "## 骨架切片建议" in text
+    assert "skeleton-ready" in (repo / "openspec" / "architecture" / "sad-log.md").read_text(encoding="utf-8")
+
+def test_pierce_set_mismatch_refused(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED, subsystems=("采集端", "上报端"))
+    slice_f = tmp_path / "s.md"; slice_f.write_text("- 穿越点[采集端]：§5\n", encoding="utf-8")
+    r = run(["transition", "--root", str(repo), "--to", "skeleton-ready",
+             "--slice-file", str(slice_f)], tmp_path)
+    assert r.returncode == 5 and "上报端" in r.stderr
+
+def test_out_of_table_transition_refused(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, facts=ANSWERED)                       # draft
+    r = run(["transition", "--root", str(repo), "--to", "validated", "--dod-confirmed"], tmp_path)
+    assert r.returncode == 5 and "迁移表" in r.stderr # draft→validated 表外
+
+def test_validated_removes_slice_and_fallback_logs_reason(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, status="skeleton-ready", facts=ANSWERED, slice_section=True)
+    r = run(["transition", "--root", str(repo), "--to", "validated", "--dod-confirmed"], tmp_path)
+    assert r.returncode == 0
+    text = (repo / "openspec" / "architecture" / "sad.md").read_text(encoding="utf-8")
+    assert "## 骨架切片建议" not in text and "sad_status: validated" in text
+    r2 = run(["transition", "--root", str(repo), "--to", "draft", "--reason", "contract 大面积否决"], tmp_path)
+    assert r2.returncode == 0
+    assert "contract 大面积否决" in (repo / "openspec" / "architecture" / "sad-log.md").read_text(encoding="utf-8")
+
+def test_set_fact_and_set_assumption_update_cache(tmp_path):
+    repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
+    seed(repo, assumptions=[(1, "未处置")], cache=1)
+    r = run(["set-fact", "--root", str(repo), "--fact", "positioning=answered"], tmp_path)
+    assert r.returncode == 0
+    r = run(["set-assumption", "--root", str(repo), "--assumption", "1=接受"], tmp_path)
+    assert r.returncode == 0
+    text = (repo / "openspec" / "architecture" / "sad.md").read_text(encoding="utf-8")
+    assert "positioning: answered" in text and "assumptions_open: 0" in text and "| 接受 |" in text
+    r = run(["set-assumption", "--root", str(repo), "--assumption", "9=接受"], tmp_path)
+    assert r.returncode == 2                          # 行不存在 fail-closed
