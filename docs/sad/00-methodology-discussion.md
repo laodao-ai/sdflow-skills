@@ -165,13 +165,13 @@ L2 空档的三个选项：
 | # | 问题 | 状态 | 结论指针 |
 |---|---|---|---|
 | Q1 | **分解判据与试验田**：判据（变化率/领域边界/数据所有权/context 预算）如何在具体新项目上选择与组合？需要一个真实项目接地验证 | ✅ 已结 | 见文末「Q1 结论」 |
-| Q2 | **L2 落地形态**：选项 c 往下推演——子系统级 capability 在 `specs/` 的命名与粒度约定、L2 文档模板 | ⏳ 待讨论 | — |
+| Q2 | **L2 落地形态**：选项 c 往下推演——子系统级 capability 在 `specs/` 的命名与粒度约定、L2 文档模板 | 🔄 讨论中 | 见 `03-subsystem-skill-design.md` §4/D2（补出 L1/L2 contract 落点不一致张力，待拍） |
 | Q3 | **Contract 机械化档位**：梯子爬到 schema / contract test / CI fitness function 哪一档，按项目栈与寿命定 | ⏳ 待讨论 | — |
-| Q4 | **沉淀成 skill**：升级 `sdflow-roadmap`（加 L2 + 骨架先行编排）vs 新开 `sdflow-sad`——本身是一次「拆分标准」的应用 | ⏳ 待讨论 | — |
+| Q4 | **沉淀成 skill**：升级 `sdflow-roadmap`（加 L2 + 骨架先行编排）vs 新开 `sdflow-sad`——本身是一次「拆分标准」的应用 | ✅ 已结 | L1 已落 `sdflow-architecture`；L2 定新 skill **`sdflow-subsystem`**（非升级 roadmap、共享 references 判据），见 `03-subsystem-skill-design.md` §2/D1 |
 
 **建议顺序**：先 Q1 后 Q2——拿真项目把判据和 L2 形态跑一遍，方法论才算过接地检验；否则等于在犯「纸上 contract 未经集成验证」的错。
 
-> **议程重构（2026-07-12）**：Q1 收结后，讨论改为按原始三步逐步推进——步骤一（架构设计）见 `01-step1-architecture-design.md`（逐条讨论中）；步骤二（子系统设计，吸收 Q2）、步骤三（任务拆分）后续各开一份文档。Q3（contract 机械化档位）、Q4（沉淀成 skill）挂在三步讨论完成之后。
+> **议程重构（2026-07-12）**：Q1 收结后，讨论改为按原始三步逐步推进——步骤一（架构设计）见 `01-step1-architecture-design.md`（逐条讨论中）+ skill 设计 `02-architecture-skill-design.md`；步骤二（子系统设计，吸收 Q2）见 `03-subsystem-skill-design.md`（已开，含 L2 方法论 + `sdflow-subsystem` skill 设计 + 与 roadmap 关系）；步骤三（任务拆分）后续再开一份。Q3（contract 机械化档位）挂在三步讨论完成之后。
 
 ---
 

@@ -1,6 +1,6 @@
 # 子系统拆分规则集：R1–R11 + 反模式黑名单 AP1–AP4
 
-> **真相源=本文件**；蓝本 `docs/sad/02-sad-skill-design.md` §5.1/§5.2 已冻结为设计考古层，不再更新——后续修订判据/反模式一律改本文件，不回改蓝本。
+> **真相源=本文件**；蓝本 `docs/sad/02-architecture-skill-design.md` §5.1/§5.2 已冻结为设计考古层，不再更新——后续修订判据/反模式一律改本文件，不回改蓝本。
 > 来源标注：Parnas 1972 信息隐藏 / Evans DDD / Newman / Skelton-Pais / Löwy / Nygard；四判据推导过程记录在 `docs/sad/00-*.md` Q1 结论（考古层），此处为完整可执行规则。
 
 ## Phase A：生成候选（从需求到候选清单）

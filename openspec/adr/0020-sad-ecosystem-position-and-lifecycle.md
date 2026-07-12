@@ -1,7 +1,7 @@
 # 0020 · SAD 生态位与生命周期（空间轴 skill 独立 + architecture/ 单例三层 + skeleton-ready DoD）
 
 > 状态：**Proposed**（2026-07-12，grill `add-sdflow-architecture` 收敛时立）——待该 change ship + 首个消费仓试点后升 Accepted。
-> 关联：`docs/sad/02-sad-skill-design.md`（设计定稿考古层，真相源移交声明在其头部）· change `add-sdflow-architecture` design DEC-1~12 · adr/0007（命名整合）· sdflow-roadmap 规则 4（直写先例）· CONTEXT「SAD / skeleton-ready / 骨架 change / 骨架切片建议 / 事实三问 / 假设显影」。
+> 关联：`docs/sad/02-architecture-skill-design.md`（设计定稿考古层，真相源移交声明在其头部）· change `add-sdflow-architecture` design DEC-1~12 · adr/0007（命名整合）· sdflow-roadmap 规则 4（直写先例）· CONTEXT「SAD / skeleton-ready / 骨架 change / 骨架切片建议 / 事实三问 / 假设显影」。
 
 ## Context
 

@@ -1,6 +1,6 @@
 # 评审镜单 + 走查/升档分档 + scope-check 核对清单
 
-> **真相源=本文件**；蓝本 `docs/sad/02-sad-skill-design.md` §3.3 / §5.4 已冻结为设计考古层，不再更新——修订一律改本文件。
+> **真相源=本文件**；蓝本 `docs/sad/02-architecture-skill-design.md` §3.3 / §5.4 已冻结为设计考古层，不再更新——修订一律改本文件。
 > `quality-criteria.md` 是 S 编号真相源，本文件的镜位条目**引用不复述** S 编号（单一真相源纪律，见 S11）。
 > BASE-29 scope-check 一节转写自 `openspec/changes/add-sdflow-architecture/design.md`「协议文档套件 scope-check 表」——该 design 文档属冻结四件套，**只读参照，不可回改**。
 
