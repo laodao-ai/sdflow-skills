@@ -29,8 +29,20 @@ def contain(root, rel):
     if not rel or not str(rel).strip():
         raise PathEscape("空路径")
 
+    # 空字节没有任何合法用途——在入口就显式拒绝，归一为 PathEscape，
+    # 而不是让它一路走到 os.lstat/os.readlink 触发未捕获的 ValueError
+    # （embedded null byte）逃出契约（调用方只 except PathEscape）。
+    if "\x00" in str(rel):
+        raise PathEscape(f"拒绝含空字节的路径: {rel!r}")
+
     p = PurePosixPath(str(rel).replace(os.sep, "/"))
 
+    # p.parts 为空 == 折叠后指向仓根自身/空路径（覆盖 "."、"./"、"././." 等
+    # 全部退化形态——PurePosixPath 会自动折叠掉这些，无需逐个枚举字符串）。
+    # 注意：`.` 作为【中间】part（如 "a/./b"）会被折叠掉，是安全的，不受影响；
+    # 这里拒绝的只是折叠后【整体为空】的情况。
+    if not p.parts:
+        raise PathEscape(f"拒绝指向仓根自身/空路径: {rel!r}")
     if p.is_absolute():
         raise PathEscape(f"拒绝绝对路径: {rel}")
     if any(part == ".." for part in p.parts):
@@ -39,10 +51,17 @@ def contain(root, rel):
     # 逐级 lstat：任一层（含目标自身）是 symlink 即拒绝。
     # 注意用 lstat 不用 exists —— 不存在的路径是合法的（写新文件），
     # 但【存在且是 symlink】就必须拒。
+    # fail-closed：is_symlink() 底层 os.lstat 遇到异常路径（如空字节、
+    # 过长路径等 OS 层拒绝）也归一为 PathEscape——查不了就不放行，
+    # 不让原始 OSError/ValueError 逃出契约。
     cur = root
     for part in p.parts:
         cur = cur / part
-        if cur.is_symlink():
+        try:
+            is_link = cur.is_symlink()
+        except (OSError, ValueError) as exc:
+            raise PathEscape(f"无法校验路径（判定 symlink 失败）: {cur} ({exc})")
+        if is_link:
             raise PathEscape(f"拒绝 symlink（自身或祖先）: {cur.relative_to(root)}")
 
     # 最终 realpath 必须仍在 root 内（防 symlink 之外的逃逸路径，如挂载点）

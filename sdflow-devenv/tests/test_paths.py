@@ -54,3 +54,27 @@ def test_nonexistent_path_ok_if_contained(tmp_path):
 def test_rejects_empty(tmp_path):
     with pytest.raises(PathEscape):
         contain(tmp_path, "")
+
+
+def test_rejects_dot(tmp_path):
+    # "." 折叠后 parts 为空 —— 必须拒绝，否则等同放行仓根本身
+    with pytest.raises(PathEscape):
+        contain(tmp_path, ".")
+
+
+def test_rejects_dot_slash(tmp_path):
+    with pytest.raises(PathEscape):
+        contain(tmp_path, "./")
+
+
+def test_rejects_dot_dot_dot_degenerate(tmp_path):
+    # "././." 同样折叠为空 parts
+    with pytest.raises(PathEscape):
+        contain(tmp_path, "././.")
+
+
+def test_rejects_embedded_null_byte_as_path_escape(tmp_path):
+    # 含 \x00 的路径必须归一为 PathEscape，而不是让 os.lstat 抛出的
+    # 原始 ValueError("embedded null byte") 逃出契约
+    with pytest.raises(PathEscape):
+        contain(tmp_path, "foo\x00bar")
