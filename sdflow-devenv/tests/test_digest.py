@@ -551,3 +551,203 @@ def test_find_make_target_selector_named_phony_does_not_match_dot_phony_line():
     整串 ".PHONY"（含点），字面不等于 "PHONY"，不应被误匹配。"""
     text = ".PHONY: x\n"
     assert find_make_target(text, "PHONY") is None
+
+
+# ---------------------------------------------------------------------------
+# task-4 第二轮面治：recipe 扫描内层 while 循环自己的终止条件
+# （评审用真 make -n 实测确认：ifeq/else/endif 分支、行首注释穿插、define 块
+# 都曾被旧版 `else: break` 静默截断/误判——真正防假绿的测法是「两份内容不同的
+# 同名 target → digest 必须不同」，不是「能不能解析不报错」）。
+# ---------------------------------------------------------------------------
+
+
+# ---- [Critical] ifeq/else/endif 在 recipe 内部：不终止扫描，两分支都计入 ----
+
+
+def test_find_make_target_ifeq_in_recipe_not_truncated():
+    """real make 实测（make -n）：两个分支都在同一个 recipe 区域内，只是按变量
+    求值选择执行哪个——静态解析选不出「会执行哪条」，但 recipe 扫描 MUST NOT
+    在 ifeq 处就地截断（旧版 `else: break` 的病：把 else 分支的内容悄悄丢了）。"""
+    text = (
+        "foo:\n"
+        "ifeq ($(OS),Linux)\n"
+        "\techo linux-branch\n"
+        "else\n"
+        "\techo mac-branch\n"
+        "endif\n"
+    )
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo linux-branch" in loc[2]
+    assert "echo mac-branch" in loc[2]
+
+
+def test_find_make_target_ifeq_branch_a_change_detected():
+    """改任一分支 —— digest 必须变（旧版 bug：else 分支及以后内容被静默截断成
+    空 recipe，两份内容不同的 Makefile 会算出同一个 digest，是本次 Critical
+    bug 的实测证据本尊）。"""
+    a = (
+        "foo:\nifeq ($(OS),Linux)\n\techo linux-branch\nelse\n"
+        "\techo mac-branch\nendif\n"
+    )
+    b = (
+        "foo:\nifeq ($(OS),Linux)\n\techo linux-branch\nelse\n"
+        "\techo DANGEROUS\nendif\n"
+    )
+    _, _, ra = find_make_target(a, "foo")
+    _, _, rb = find_make_target(b, "foo")
+    assert ra.strip() != "" and rb.strip() != ""
+    assert digest_make_recipe(ra) != digest_make_recipe(rb)
+
+
+def test_find_make_target_ifeq_branch_b_change_detected():
+    a = (
+        "foo:\nifeq ($(OS),Linux)\n\techo linux-branch\nelse\n"
+        "\techo mac-branch\nendif\n"
+    )
+    b = (
+        "foo:\nifeq ($(OS),Linux)\n\techo DANGEROUS\nelse\n"
+        "\techo mac-branch\nendif\n"
+    )
+    _, _, ra = find_make_target(a, "foo")
+    _, _, rb = find_make_target(b, "foo")
+    assert digest_make_recipe(ra) != digest_make_recipe(rb)
+
+
+def test_find_make_target_ifeq_condition_line_change_detected():
+    """条件行本身也要计入 digest —— 改 `ifeq` 判据（生效分支变了）也必须让
+    digest 变，不能只盯着两个分支的命令文本。"""
+    a = (
+        "foo:\nifeq ($(OS),Linux)\n\techo x\nelse\n\techo y\nendif\n"
+    )
+    b = (
+        "foo:\nifeq ($(OS),Darwin)\n\techo x\nelse\n\techo y\nendif\n"
+    )
+    _, _, ra = find_make_target(a, "foo")
+    _, _, rb = find_make_target(b, "foo")
+    assert digest_make_recipe(ra) != digest_make_recipe(rb)
+
+
+def test_method_digest_ifeq_branch_change_end_to_end(tmp_path):
+    """method_digest 顶层同样要抓到这件事——不仅 find_make_target 这一层。"""
+    src = {"file": "Makefile", "kind": "make-target", "selector": "foo"}
+    (tmp_path / "Makefile").write_text(
+        "foo:\nifeq ($(OS),Linux)\n\techo a\nelse\n\techo b\nendif\n"
+    )
+    d1 = method_digest(tmp_path, "make foo", None, [], src)
+    (tmp_path / "Makefile").write_text(
+        "foo:\nifeq ($(OS),Linux)\n\techo a\nelse\n\techo DANGEROUS\nendif\n"
+    )
+    d2 = method_digest(tmp_path, "make foo", None, [], src)
+    assert d1 != d2
+
+
+# ---- [Critical] 行首注释穿插 recipe 中间：不终止扫描 ----
+
+
+def test_find_make_target_col0_comment_inside_recipe_not_truncated():
+    """real make 实测（make -n）：`echo before` 和 `echo after` 两行都执行——
+    列 0 注释对 recipe 结构透明，不打断。旧版会在注释行就地 break，把
+    `echo after` 丢在 recipe 之外，永远测不出它被改动。"""
+    text = "foo:\n\techo before\n# comment in the middle\n\techo after\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo before" in loc[2]
+    assert "echo after" in loc[2]
+
+
+def test_find_make_target_comment_then_recipe_change_detected():
+    """注释【之后】的 recipe 行改动 —— digest 必须变（这是本次 bug 变体二的
+    实测证据：以前这部分内容被静默丢弃，改了也不变）。"""
+    a = "foo:\n\techo before\n# comment\n\techo after\n"
+    b = "foo:\n\techo before\n# comment\n\techo DANGEROUS\n"
+    _, _, ra = find_make_target(a, "foo")
+    _, _, rb = find_make_target(b, "foo")
+    assert digest_make_recipe(ra) != digest_make_recipe(rb)
+
+
+def test_method_digest_comment_then_recipe_change_end_to_end(tmp_path):
+    src = {"file": "Makefile", "kind": "make-target", "selector": "foo"}
+    (tmp_path / "Makefile").write_text(
+        "foo:\n\techo before\n# comment\n\techo after\n"
+    )
+    d1 = method_digest(tmp_path, "make foo", None, [], src)
+    (tmp_path / "Makefile").write_text(
+        "foo:\n\techo before\n# comment\n\techo DANGEROUS\n"
+    )
+    d2 = method_digest(tmp_path, "make foo", None, [], src)
+    assert d1 != d2
+
+
+# ---- [Important] define/endef 块里的假 target 不干扰外面真 target ----
+
+
+def test_find_make_target_define_block_fake_target_ignored():
+    """real make 实测（make -n）：`define` 块内的字面 `foo:` 不是规则定义，外面
+    真正的 `foo:` 才是。旧版会把两处当成「同名 target 内容冲突」拒绝一份完全
+    合法的 Makefile。"""
+    text = (
+        "define BUILD_SCRIPT\n"
+        "foo:\n"
+        "\techo fake\n"
+        "endef\n"
+        "\n"
+        "foo:\n"
+        "\techo real\n"
+    )
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo real" in loc[2]
+    assert "echo fake" not in loc[2]
+
+
+def test_find_make_target_define_block_unterminated_raises():
+    text = "define BUILD_SCRIPT\nfoo:\n\techo fake\n"
+    with pytest.raises(MakefileUnsupported):
+        find_make_target(text, "foo")
+
+
+def test_method_digest_define_block_fake_target_end_to_end(tmp_path):
+    src = {"file": "Makefile", "kind": "make-target", "selector": "foo"}
+    (tmp_path / "Makefile").write_text(
+        "define BUILD_SCRIPT\nfoo:\n\techo fake\nendef\n\nfoo:\n\techo real\n"
+    )
+    # MUST NOT raise MakefileUnsupported —— 这是一份合法的 Makefile。
+    d = method_digest(tmp_path, "make foo", None, [], src)
+    assert isinstance(d, str) and len(d) == 64
+
+
+# ---- [Important] ifeq/endif 包裹整个 target 头：fail-closed，消息要准确 ----
+
+
+def test_find_make_target_ifeq_wraps_target_head_raises_with_accurate_message():
+    """real make 实测（make -n）：两个分支各自完整重复一份 `foo:` + recipe，
+    生效哪个看变量求值。parser 不猜，但错误信息必须点明真实原因（条件块包裹）
+    并给出真实存在的逃生路径（source.file 整文件 digest）。"""
+    text = (
+        "ifeq ($(OS),Linux)\n"
+        "foo:\n"
+        "\techo linux\n"
+        "else\n"
+        "foo:\n"
+        "\techo mac\n"
+        "endif\n"
+    )
+    with pytest.raises(MakefileUnsupported) as exc_info:
+        find_make_target(text, "foo")
+    msg = str(exc_info.value)
+    assert "条件块" in msg
+    assert "file" in msg  # 逃生路径提示：source.file 整文件 digest
+
+
+# ---- [Minor] source == {"file": ""} 不许被短路跳过 ----
+
+
+def test_method_digest_empty_source_file_fails_closed(tmp_path):
+    """{"file": ""} 是坏输入 —— MUST NOT 被 `if source.get("file")` 短路成
+    "这段 source 没提供 file"，必须走到 contain() 的空路径校验去 fail-closed。"""
+    from devenv_paths import PathEscape
+
+    src = {"file": ""}
+    with pytest.raises(PathEscape):
+        method_digest(tmp_path, "cmd", None, [], src)

@@ -35,6 +35,28 @@ _ASSIGN_REMAINDER_RE = re.compile(
     r"^\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*[:+?]?=(?!=)"
 )
 
+# `define NAME ... endef` 多行变量块——real make 语义：块内文本是变量值的字面内容，
+# 不是 make 规则/target 定义，即便里面写着看起来像 `foo:` 的字面文本也不是。
+# 扫描 target 头时必须整块跳过，否则块内字面 `foo:` 会被误当成一次真实定义，
+# 与文件外真正的 `foo:` 撞出「同名 target 内容冲突」的假阳性拒绝
+# （task-4 第二轮 Important #2：define 块吞真实 target）。
+# 只认「不带 tab 前缀」的 define/endef 行——tab 前缀在 make 里恒定是 recipe 行，
+# 与下面 ifeq/else/endif 的判据同理，不猜 tab 前缀场景（tab 分支在 recipe 扫描
+# 里单独处理，走不到这几条正则）。
+_DEFINE_RE = re.compile(r"^[ ]*define\b")
+_ENDEF_RE = re.compile(r"^[ ]*endef\b")
+
+# 条件指令行：ifeq / ifneq / ifdef / ifndef / else / endif，允许前导空格但不允许
+# tab。real GNU make 实测确认（task-4 第二轮 Critical bug）：这些行【不终止】
+# recipe 扫描——两个分支的内容都属于同一个 target 的 recipe 区域（生效哪个分支
+# 要看变量求值，静态解析做不到，但 digest 的职责不是复现「会执行哪条」，而是
+# 「内容变了就要能测出来」，所以两个分支 + 条件行本身都要计入 digest —— 见
+# find_make_target 的 recipe 扫描分支与模块顶部 docstring 的诚实边界说明）。
+_COND_OPEN_RE = re.compile(r"^[ ]*(?:ifeq|ifneq|ifdef|ifndef)\b")
+_COND_ELSE_RE = re.compile(r"^[ ]*else\b")
+_COND_ENDIF_RE = re.compile(r"^[ ]*endif\b")
+_COND_ANY_RE = re.compile(r"^[ ]*(?:ifeq|ifneq|ifdef|ifndef|else|endif)\b")
+
 
 class DigestInputInvalid(Exception):
     """method_digest / find_make_target 的入参形状不对。
@@ -167,6 +189,28 @@ def find_make_target(text, selector):
     变量赋值行 / 无法判定嵌套深度的内联 `;` / 续行符后文件截断 / 同名 target 多处
     冲突 recipe）且命中 selector 时，raise MakefileUnsupported——不猜、不当哑巴，
     MUST NOT 静默退化为「空 recipe」。
+
+    recipe 扫描的终止判据（task-4 第二轮面治，real make 实测核对）：
+      继续扫描（计入 recipe 文本，不终止）—— tab 行 · 空行 · 【列 0】注释行
+      （`#...`，无前导空白）· 条件指令行（ifeq/ifneq/ifdef/ifndef/else/endif，
+      可有前导空格但不能有 tab）。
+      终止扫描（recipe 到此结束）—— 能明确判定是新 target 头（命中 _TARGET_RE）
+      或变量赋值行（命中 _ASSIGN_REMAINDER_RE）的行。
+      其余「看不懂」的行 —— raise MakefileUnsupported。「不认识这行」和「recipe
+      到此结束」是两回事，前者 MUST NOT 被静默当成后者处理（Critical bug 本尊：
+      `else: break` 曾把两者混为一谈，导致 ifeq 分支/行首注释后的内容被悄悄丢弃，
+      digest 算成截断版本，assertion 说谎测不出来）。
+
+    `define ... endef` 多行变量块在【target 头搜索】阶段整块跳过（块内字面 `foo:`
+    不是真实定义，见 _DEFINE_RE）。若某个 target 的定义被 ifeq/endif 整体包裹
+    （两个分支各自完整重复一份 target 头 + recipe），本 parser 仍然 fail-closed
+    拒绝（不猜哪个分支生效），但会给出专门的错误信息并提示改用整文件 digest
+    （source: {"file": ...}，不带 kind/selector）作为逃生路径。诚实边界：这种
+    「整体包裹」形态下，即便两个分支内容逐字相同，parser 也不尝试判等——每个
+    分支各自的 recipe 扫描会把相邻的 else/endif 行也计入自己的文本区域（continue
+    的设计使然），逐字比较天然不相等，因此也会 fail-closed 拒绝，不只是内容
+    真冲突时才拒绝。这是保守方向的过度拒绝，不是假绿，本 parser 不为这一角落
+    形态单独做「跨分支对齐再判等」的复杂化。
     """
     if not isinstance(text, str):
         raise DigestInputInvalid(f"text 须为 str，实际是 {type(text).__name__}")
@@ -175,10 +219,46 @@ def find_make_target(text, selector):
 
     lines = text.splitlines(keepends=True)
     n = len(lines)
+    # matches 内部是 4 元组 (start_line, end_line, recipe_text, in_conditional)——
+    # 第 4 项只在文件末尾判定「重复定义冲突要不要给条件块专用错误信息」时用，
+    # 对外一律裁成 3 元组返回（见函数末尾 [:3]），公开契约不变。
     matches = []
+    # cond_depth 只在【外层扫描自己走过】的 ifeq/else/endif 行上计数——若某个
+    # target 的 recipe 扫描把后续的 endif 一并吞进了自己的文本区域（结构上确实
+    # 如此，见下方 recipe 扫描的 _COND_ANY_RE 分支），外层不会看到那行 endif，
+    # cond_depth 不会被它减回去。诚实边界：这只影响「该 target 之后、文件更靠后
+    # 位置」出现的【另一次】冲突判定时，错误信息可能误标成「条件块包裹」而不是
+    # 真实原因；不影响 fail-closed 的方向本身（该拒绝的仍然拒绝），只是消息措辞
+    # 在这个罕见的角落场景可能不够精确，不为此再做跨层同步。
+    cond_depth = 0
     i = 0
     while i < n:
         line = lines[i]
+
+        if _DEFINE_RE.match(line):
+            j = i + 1
+            while j < n and not _ENDEF_RE.match(lines[j]):
+                j += 1
+            if j >= n:
+                raise MakefileUnsupported(
+                    f"`define` 块（`{line.strip()}`）缺少匹配的 `endef`——文件在此"
+                    f"截断，fail-closed 拒绝猜测"
+                )
+            i = j + 1
+            continue
+
+        if _COND_OPEN_RE.match(line):
+            cond_depth += 1
+            i += 1
+            continue
+        if _COND_ELSE_RE.match(line):
+            i += 1
+            continue
+        if _COND_ENDIF_RE.match(line):
+            cond_depth = max(0, cond_depth - 1)
+            i += 1
+            continue
+
         if line.startswith(("\t", " ", "#")):
             i += 1
             continue
@@ -247,6 +327,7 @@ def find_make_target(text, selector):
             while k < n:
                 ln = lines[k]
                 if ln.startswith("\t"):
+                    # 确定：tab 是 recipe 行的硬语法标记，必属于本 recipe。
                     recipe.append(ln)
                     k += 1
                     # recipe 行本身的续行：下一物理行【无论是否 tab 开头】都仍
@@ -259,21 +340,52 @@ def find_make_target(text, selector):
                             )
                         recipe.append(lines[k])
                         k += 1
-                elif ln.strip() == "":
-                    # 空行：可能是 recipe 内部的空行，也可能是 recipe 结束。
-                    # 向前看：若后面还有 tab 行则算 recipe 内部，否则结束。
-                    p = k
-                    while p < n and lines[p].strip() == "":
-                        p += 1
-                    if p < n and lines[p].startswith("\t"):
-                        recipe.extend(lines[k:p])
-                        k = p
-                    else:
-                        break
-                else:
-                    break
+                    continue
+                if ln.strip() == "":
+                    # 确定：空行本身从不终止 recipe（real make 实测：空行对
+                    # recipe 结构透明），计入文本区域后继续扫描。
+                    recipe.append(ln)
+                    k += 1
+                    continue
+                if ln.startswith("#"):
+                    # 确定：【列 0】注释行——real make 实测（task-4 第二轮
+                    # Critical bug 变体二）：`\techo before\n# comment\n\techo
+                    # after\n` 两条 echo 都执行，注释行不打断 recipe。旧版
+                    # `else: break` 会在这里悄悄丢掉注释之后的所有内容。
+                    recipe.append(ln)
+                    k += 1
+                    continue
+                if _COND_ANY_RE.match(ln):
+                    # 确定：ifeq/ifneq/ifdef/ifndef/else/endif——real make 实测
+                    # （task-4 第二轮 Critical bug 本尊）：两个分支的内容都属于
+                    # 同一 target 的 recipe 区域，生效哪个分支要看变量求值，静态
+                    # 解析做不到，但 digest 的职责不是复现「会执行哪条」而是
+                    # 「内容变了就要能测出来」——条件行本身 + 两个分支全部计入，
+                    # 改分支或改条件都要让 digest 变（保守 fail-closed，宁可
+                    # 多失鲜也不假绿）。
+                    recipe.append(ln)
+                    k += 1
+                    continue
 
-            matches.append((i + 1, k, "".join(recipe)))
+                # 走到这里：既不是 tab / 空行 / 列0注释 / 条件指令——只剩两种
+                # 可能：①确定的新语句（新 target 头 / 变量赋值），recipe 真的
+                # 结束了；②我们没见过的语法。两者【绝不能混为一谈】——旧版的
+                # `else: break` 就是把②当成①处理，静默截断出一份不完整的
+                # recipe，往后内容再怎么改 digest 都测不出来。
+                head = ln.split("#", 1)[0]
+                if _TARGET_RE.match(ln) or _ASSIGN_REMAINDER_RE.match(head):
+                    # 确定：新 target 头或变量赋值行——recipe 到此结束。
+                    break
+                raise MakefileUnsupported(
+                    f"target {selector!r} 的 recipe 扫描在第 {k + 1} 行遇到无法"
+                    f"识别的语法（`{ln.strip()}`）——既不是 tab 缩进的命令、空行、"
+                    f"列 0 注释，也不是已知的条件指令（ifeq/ifneq/ifdef/ifndef/"
+                    f"else/endif），也不像新的 target 定义或变量赋值——parser 不"
+                    f"猜这是「recipe 结束」还是「还没认识的 recipe 内容」，"
+                    f"fail-closed 拒绝猜测"
+                )
+
+            matches.append((i + 1, k, "".join(recipe), cond_depth > 0))
             # 跳过本次已消费的行（含可能不以 tab 开头的续行 recipe 内容）——
             # 不跳过的话，续行 recipe 里若恰好含 `:` 字面文本，会被外层循环
             # 误当成又一个规则头去扫描。
@@ -303,14 +415,33 @@ def find_make_target(text, selector):
     if not matches:
         return None
     if len(matches) == 1:
-        return matches[0]
+        return matches[0][:3]
 
     nonempty = [mm for mm in matches if mm[2].strip() != ""]
     if len(nonempty) > 1:
-        distinct_recipes = {mm[2] for mm in nonempty}
-        if len(distinct_recipes) == 1:
+        # 用 digest_make_recipe() 归一化后比较，不用原始字符串——新版 recipe 扫描
+        # 会把「recipe 后紧跟的空行」也计入原始文本（见上方 tab/空行/条件指令都
+        # continue 的设计），两处定义即便内容相同，原始文本里夹带的尾随空行数量
+        # 也可能不同；但那些空行本来就会被 digest_make_recipe 剥掉，不是真实差异，
+        # 不能拿原始字符串相等性来判「是否冲突」。
+        distinct_digests = {digest_make_recipe(mm[2]) for mm in nonempty}
+        if len(distinct_digests) == 1:
             # 内容完全相同的重复定义——用哪一处都不影响 digest，不算冲突。
-            return nonempty[-1]
+            return nonempty[-1][:3]
+        if any(mm[3] for mm in nonempty):
+            # 至少一处冲突定义是在 ifeq/ifneq/ifdef/ifndef ... endif 内部被发现的
+            # （task-4 第二轮 Important #3）：真实原因不是「Makefile 里随手写了两次
+            # 同名 target」，而是「target 头本身被条件块整体包裹，两个分支各自完整
+            # 重复一份定义」。保持 fail-closed（不猜哪个分支生效，方向仍然是对
+            # 的），但给出准确原因 + 真实存在的逃生路径：改整文件 digest。
+            raise MakefileUnsupported(
+                f"target {selector!r} 的定义被条件块（ifeq/ifneq/ifdef/ifndef/"
+                f"else/endif）包裹，无法静态判定生效分支——parser 不猜哪个分支的 "
+                f"recipe 才是最终生效版本，fail-closed 拒绝猜测。如需为整份 "
+                f"Makefile 建立时效锚，可改用 source: {{\"file\": <该 Makefile 路径>}}"
+                f"（不带 kind/selector）对整个文件做原始字节 digest，绕开 target "
+                f"级解析"
+            )
         raise MakefileUnsupported(
             f"target {selector!r} 在文件中出现 {len(matches)} 次，其中 "
             f"{len(nonempty)} 处 recipe 非空且内容不同——Make 语义是「后一个非空 "
@@ -320,9 +451,9 @@ def find_make_target(text, selector):
     if len(nonempty) == 1:
         # 多次出现但只有一处非空 recipe（其余是纯依赖声明）——real make 实测：
         # 无 recipe 的重复定义不会清空已有 recipe，直接用那唯一的非空版本。
-        return nonempty[0]
+        return nonempty[0][:3]
     # 全部出现处 recipe 都是空的——合法的「无命令 target」（如 .PHONY 聚合器）。
-    return matches[0]
+    return matches[0][:3]
 
 
 def digest_make_recipe(recipe_text):
@@ -384,7 +515,11 @@ def method_digest(root, method, smoke, fixtures, source):
 
     parts = [("method", method.encode("utf-8"))]
 
-    if source and source.get("file"):
+    if source and "file" in source:
+        # 用 "file" in source（键存在即处理），不用 source.get("file")（真值判定）——
+        # 后者会把 {"file": ""} 短路成「当没提供 file」静默跳过：空文件路径是坏
+        # 输入，应该走到下面 contain() 的空路径校验去 fail-closed 拒绝，而不是
+        # 在这里被短路成「这段 source 对 digest 没贡献」（task-4 第二轮 Minor）。
         file_rel = _require_str(source.get("file"), "source.file")
         src_path = contain(root, file_rel)
         kind = source.get("kind")
