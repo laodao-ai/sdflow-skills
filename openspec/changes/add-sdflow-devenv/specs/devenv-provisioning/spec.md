@@ -73,52 +73,106 @@ skill 的完成态 **MUST NOT 要求全部泳道 `verified`**——允许停在 
 - **WHEN** skill 收尾且存在未 `verified` 的泳道
 - **THEN** 收尾报告逐条列出这些泳道及其 `blocked_by`
 
-### Requirement: smoke 真跑与 negative control
+### Requirement: `verified` 由脚本亲自执行并落执行证据〔spec-review-amendment · ENG-1〕
 
-`verified` 的判定 SHALL 由**脚本执行验证**得出，**MUST NOT 由模型自称**。判据为**双向**：
+`verified` **SHALL 只能由 `devenv_scaffold.py verify-lane` 子命令产出**。该子命令 **MUST 由脚本自己 fork 执行** smoke（正向跑 + 阴性对照跑），捕获 exit code / 时长 / 输出摘要 / 测试计数，**据此自行决定**写 `verified` 还是 `scaffolded + blocked_by`。
 
-```
-verified ⟺ 依赖就绪时 smoke 绿 ∧ 抽掉依赖时 smoke 红
-```
+**`set-lane --status verified` MUST 一律拒绝**（exit 5）——状态 `verified` **MUST NOT** 由调用者（模型）传入。
 
-第二条即 **negative control**：一条泳道的 smoke 价值在于**真穿过它的依赖**，故抽掉依赖（不启动 broker / 容器）后它 **MUST 红**；**抽掉依赖仍绿 ⇒ 该 smoke 未真正穿过依赖（vacuous）⇒ MUST NOT 置 `verified`**。
+> **理由**：原设计的子命令里**没有一个会执行 smoke**，实际数据流只能是「模型跑 → 模型读 exit code → 模型调 `set-lane --status verified`」⇒ 脚本对「到底跑没跑、绿没绿」**零独立证据** ⇒「脚本执行验证」退化为「**模型自称，脚本盖章**」。
 
-`deps` 为空的泳道（纯逻辑 / 无外部依赖）**豁免** negative control，退回「smoke 含断言语句」这一最低机械门槛 + 冷审。
+`verify-lane` **MUST 原子写执行证据**至该 lane：`verified_at`（时间戳）· `verified_at_commit`（HEAD SHA）· `fwd_exit`（正向退出码）· `fwd_tests`（跑了几个测试 / 跳过几个）· `neg_exit`（阴性对照退出码，`n/a` 时为空）· `neg_strategy`（用了哪种抽离策略）· `evidence_digest`（command + smoke + source 的联合摘要）。
 
-#### Scenario: 抽掉依赖仍绿判为 vacuous
-- **WHEN** 某泳道 `deps: ["mosquitto"]`，停掉 mosquitto 后 smoke 仍然通过
-- **THEN** skill 判该 smoke 为 vacuous，该泳道 MUST NOT 置 `verified`，并记录该判定
+> **无执行证据落盘 ⇒ 冷审的「诚实镜」在数据上无从查证**——冷审子代理只能读文件、无法复跑命令，看到 `status: verified` 只能选择相信。执行证据是该镜的接地面。
 
-#### Scenario: 双向判据成立才置 verified
-- **WHEN** 依赖就绪时 smoke 绿且抽掉依赖时 smoke 红
-- **THEN** 该泳道置 `verified`
+**`verified` 是会过期的事实**〔CEO-8〕：`evidence_digest` 失配（人改了 Makefile recipe / 换了 smoke / 依赖升级）⇒ lint **MUST** 报「该泳道的验证证据已失效，需重跑 `verify-lane`」，**MUST NOT** 继续声称 `verified`。
 
-#### Scenario: 无依赖泳道豁免阴性对照
-- **WHEN** 某泳道 `deps: []`
-- **THEN** 仅以「smoke 绿 + 含断言语句」为判据，不执行 negative control
+#### Scenario: 模型不能自称 verified
+- **WHEN** 调用 `set-lane --id X --status verified`
+- **THEN** 脚本以 exit 5 拒绝，提示「`verified` 只能由 `verify-lane` 产出」
 
-### Requirement: smoke 执行边界
+#### Scenario: verify-lane 亲自执行并落证据
+- **WHEN** 调用 `verify-lane --id X`
+- **THEN** 脚本自己执行正向跑与阴性对照跑，并把 `fwd_exit` / `neg_exit` / `neg_strategy` / `evidence_digest` / `verified_at_commit` 写入该 lane
 
-skill 跑 smoke SHALL 遵守四条边界：
+#### Scenario: 证据失效时不再声称 verified
+- **WHEN** 某 `verified` 泳道的 `evidence_digest` 与当前 Makefile recipe / smoke 内容不再匹配
+- **THEN** lint 报该泳道验证证据失效并要求重跑 `verify-lane`
 
-1. **跑前先列出将执行的命令给操作者过目**，MUST NOT 偷跑——尤其会起容器 / 占端口者；操作者可指定跳过某条（该泳道留 `planned`）。
-2. **每条命令 SHALL 设超时**；超时 → `scaffolded` + `blocked_by` 如实写明「超时，未确认是环境问题还是 smoke 本身挂了」。
-3. **失败 MUST NOT 重试、MUST NOT 进入 debug 循环**——跑一次，失败即如实记 `blocked_by`（原始报错摘要 + 修复指引）。skill 的职责是**「建 + 验」而非「调通」**；修复归下次 `continue`。
-4. **真硬件泳道 MUST NOT 尝试执行**（需烧板）→ 直接 `scaffolded` + 指向 `embedded-test-sop` 的手动 SOP。
+### Requirement: negative control 是强信号而非定义〔spec-review-amendment · ENG-8 · 设计门 Q3〕
 
-skill **MUST NOT 替操作者安装系统依赖**（如 `brew install` / `docker pull` / `npx playwright install`）——只提供 doctor 脚本与安装命令。
+negative control（抽掉依赖 → smoke 必红）**MUST NOT** 作为 `verified` 的充要定义（⟺）。
 
-#### Scenario: 执行前列命令
-- **WHEN** skill 即将执行会启动 Docker 容器的 smoke
-- **THEN** skill 先列出该命令请操作者过目，获得同意后才执行
+> **理由**：它只证明「命令**耦合**依赖」，**不证明「断言有效」**——smoke body 写 `assert True`，只要 harness 的 fixture 连不上 broker 就会 error，照样能拿到「正向绿 + 反向红」⇒ 被判 `verified`。且对 **testcontainers / 内嵌 fallback**（Go/Node 生态**主流**写法）完全免疫：`docker compose stop` 对它们毫无影响 ⇒ **永久误判 vacuous**。把一个右手边没有通用实现的等式写进 spec 当 ⟺，本身就是假绿。
 
-#### Scenario: 失败不进 debug 循环
-- **WHEN** 某条 smoke 首次执行失败
-- **THEN** skill 如实记录 `blocked_by`（含报错摘要与修复指引）并继续下一条泳道，MUST NOT 反复重试或自行 debug
+**并行的两个机械门槛（两者独立，非替代）**：
 
-#### Scenario: 不替操作者装依赖
-- **WHEN** 检出本机缺少某系统依赖
-- **THEN** skill 输出安装命令与 doctor 指引，MUST NOT 自行执行安装
+| 门槛 | 适用 | 内容 |
+|---|---|---|
+| **① 测试真跑门槛（对所有泳道强制）** | 全部 | 解析 runner 的**结构化输出**（`go test -json` / pytest `collected N items`），**MUST 断言「本次至少跑了 ≥1 个测试且 0 skipped」**——否则正向绿**不成立**（`go test` 无匹配测试 → exit 0；pytest 全 skip → exit 0；recipe 是 `@echo TODO` → exit 0） |
+| **② negative control（强信号，条件适用）** | `neg_control: applicable` | 仅对**抽离机制已定义**的依赖类生效；反向的红 **MUST 匹配依赖特定的 expected-failure predicate**——**普通非零不通过**（红可能来自端口冲突 / 配置错误 / 前置步骤失败，不证明 smoke 正确） |
+
+**`neg_control` MUST 为独立字段**（`applicable | n/a — <理由>`），**MUST NOT** 通过清空 `deps` 来绕过。
+
+> **理由**：一条被误判 vacuous 的泳道，操作者最省力的出路就是清空 `deps` ⇒ negative control 整个消失 ⇒ **把假阴性换成了真·假绿**；且删 `deps` 会连带毁掉 doctor 与依赖清单。`neg_control: n/a` **MUST 触发冷审专镜 + 人门单独确认**。
+
+#### Scenario: 空转的测试不算绿
+- **WHEN** 正向跑 exit 0，但结构化输出显示 collected 0 个测试（或全部 skipped）
+- **THEN** 正向绿不成立，该泳道 MUST NOT 置 `verified`，`blocked_by` 记「未跑到任何测试」
+
+#### Scenario: 反向的红必须对得上因
+- **WHEN** 阴性对照跑出非零退出，但错误不匹配该依赖的 expected-failure predicate（如实为端口冲突）
+- **THEN** 该次阴性对照**不作为通过证据**，如实记录并留人裁决
+
+#### Scenario: 不能靠清空 deps 绕过
+- **WHEN** 某泳道的 `deps` 被清空以规避 negative control
+- **THEN** lint 检出「有外部依赖形态但 `deps` 为空」并报错；豁免 MUST 走 `neg_control: n/a — <理由>` 并触发冷审专镜
+
+### Requirement: 执行边界与「不伤害」红线〔spec-review-amendment · ENG-3（CRITICAL）〕
+
+**最高红线：skill MUST NOT 破坏操作者的机器状态。**
+
+原设计只禁「装依赖」（**加法**，可手动撤销），却允许「停服务」（**减法，破坏性更强**）且**11 条失败模式表中无一条要求恢复**——smoke 超时 / 脚本崩溃 / 操作者 Ctrl-C ⇒ 依赖**永久停在停止态**，而 skill 转头去跑下一条泳道。本条堵死它。
+
+**R1 · 只能停自己启动的东西**：每个依赖 MUST 声明 `owned_by: skill | operator`。**`owned_by: operator`（host service / 已在运行的 compose / 用户 `brew services` 起的 broker）→ MUST NOT stop**，一律拒绝。
+
+**R2 · 首选隔离式阴性对照，停服务是最后手段**：抽离依赖 SHALL 优先用**不改变机器状态**的策略——把 endpoint 指向必定不可达的地址（如 `MQTT_URL=tcp://127.0.0.1:1`）。**信号强度等价，副作用为零**。仅当隔离式不可行、且 `owned_by: skill` 时，才允许「停服务」，且 MUST：跑前**单列显著呈现**「将停止服务 X」（不混在命令清单里）· `try/finally` 恢复 · **恢复失败 MUST 响亮报告并写进 `devenv-log.md`**。
+
+**R3 · 超时 MUST 杀进程树**：runner SHALL 以独立 process group / session 启动子进程；超时先 TERM、限时后 KILL **整棵进程树**——否则 `docker compose up` 的孤儿容器继续占端口，下一条泳道拿到**假的「端口占用」**。容器等资源进 **cleanup ledger**，在 `finally` / SIGINT / SIGTERM 中回收；**cleanup 失败 MUST 是独立失败状态**，不能只写普通 `blocked_by`。
+
+**R4 · 跑前列命令 MUST 连 recipe body 一起展开**：只给操作者看 `make integration` 这**一行调用**，对「那个 target 里到底跑什么」提供**零信息量**——人只能橡皮图章。SHALL 同时展开该 target 的 recipe（recipe 本就要为 source digest 锚解析，成本为零）。
+
+**R5 · 失败 MUST NOT 重试、MUST NOT 进入 debug 循环**——skill 的职责是「建 + 验」而非「调通」；修复归下次 `continue`。
+
+**R6 · 真硬件泳道 MUST NOT 尝试执行**——由 lane 的 `kind: hardware` **机械识别**（非靠模型自觉），`verify-lane` 直接 refuse 并指向 `embedded-test-sop`。
+
+**R7 · MUST NOT 替操作者安装系统依赖**——只提供 doctor 脚本与安装命令。
+
+**R8 · 命令输出 MUST 脱敏后落盘**〔ENG-12〕：命令继承 agent session 的**完整环境变量**，失败回显可能含 `AMQP_URL=amqp://user:pass@host` 之类 ⇒ 写进 `blocked_by` / `devenv-log.md` ⇒ **commit → push**。捕获输出 SHALL：截断（尾 N 行 / 大小上限）· 过 secret 正则打码 · **MUST NOT** 把环境变量 dump 进任何落盘文件。
+
+#### Scenario: 拒绝停止操作者的服务
+- **WHEN** 某依赖 `owned_by: operator`（如用户 brew services 起的 mosquitto），而阴性对照需要抽离它
+- **THEN** skill MUST NOT 停止它；改用隔离式策略；若隔离式不可行则该泳道 `neg_control: n/a — 依赖为操作者所有，不可停`
+
+#### Scenario: 中断也要恢复
+- **WHEN** 阴性对照期间 smoke 超时 / 脚本抛异常 / 收到 SIGINT
+- **THEN** 被抽离的依赖 MUST 在 `finally` 中恢复；恢复失败 MUST 响亮报告并写进 devenv-log
+
+#### Scenario: 超时杀掉整棵进程树
+- **WHEN** `make integration` 超时，其子进程已拉起 docker 容器
+- **THEN** runner 杀掉整个进程组并按 cleanup ledger 回收容器，MUST NOT 留下孤儿占用端口
+
+#### Scenario: 跑前展开 recipe
+- **WHEN** skill 即将执行 `make integration`
+- **THEN** 呈现给操作者的内容包含该 target 的 recipe body，而不只是 `make integration` 这一行
+
+#### Scenario: secret 不进落盘文件
+- **WHEN** 失败命令的 stderr 含形如 `PASSWORD=xxx` 的内容
+- **THEN** 写入 `blocked_by` / devenv-log 前 MUST 打码
+
+#### Scenario: 真硬件泳道机械拒绝执行
+- **WHEN** 某泳道 `kind: hardware`
+- **THEN** `verify-lane` 直接 refuse 执行（脚本判定，非模型自觉），置 `scaffolded` 并指向 `embedded-test-sop`
 
 ### Requirement: 落地物追加边界——skill 是追加者非拥有者
 
@@ -180,7 +234,22 @@ lint SHALL 只核验 `source` 指向的文件行**是否存在**，**MUST NOT �
 
 冷审失败 SHALL 重派一次；再失败 SHALL **显式报告缺口**，**MUST NOT 无冷审静默过人门**。宿主无 fresh 子代理原语时 SHALL **显式降级并响亮留痕**，**MUST NOT 佯装冷审**。
 
-人门 SHALL 按固定议程逐条过：① 泳道设计复核 ② 未 `verified` 泳道逐条确认（接受现状 / 现在就装依赖）③ **落地物 diff 过目**（真代码进仓的最后一道人类护栏）④ N/A 槽逐条确认（是现状还是该有而没建）。
+**人门 MUST 拆成两道，且 diff 门 MUST 在执行之前**〔spec-review-amendment · ENG-7〕：
+
+> **理由**：原设计的时序是「写落地物 → 跑 smoke → 跑阴性对照 → … → 人门（含 diff 过目）」——**模型生成的 recipe body 与 smoke 源码，在任何人看过一眼之前就已经被执行了**。而「跑前列命令给操作者过目」给人看的是 `make integration` 这**一行调用**，对「target 里到底跑什么」提供**零信息量**。真正危险的内容恰恰不在那个门里。
+
+| 门 | 位置 | 议程 |
+|---|---|---|
+| **③-pre（执行前）** | 写完落地物、**跑 smoke 之前** | **落地物 diff 过目**（含 recipe body 与 smoke 源码全文）+ 将执行的命令清单（**recipe 展开**）+ 「将停止服务 X」的显著呈现（若有）。**这是真正的最后一道护栏。** **否决 → MUST 回退本次追加的改动**（工作区干净是前置，`git checkout -- <files>` 可行），MUST NOT 带着被否决的代码继续执行 |
+| **④（执行后）** | 冷审之后 | ① 泳道设计复核 ② 未 `verified` 泳道逐条确认（接受现状 / 现在装依赖）③ N/A 槽逐条确认 ④ 归位模式：**删源清单确认**（含 backup manifest 位置） |
+
+#### Scenario: 生成的代码在执行前被人看过
+- **WHEN** skill 写完 Makefile target 与 smoke 源码
+- **THEN** 在执行任何 smoke 之前，先呈现完整 diff（含 recipe body 与 smoke 全文）供操作者过目
+
+#### Scenario: 否决 diff 则回退
+- **WHEN** 操作者在 ③-pre 否决落地物 diff
+- **THEN** skill 回退本次追加的改动，MUST NOT 继续执行 smoke
 
 #### Scenario: 冷审必须 fresh 子代理
 - **WHEN** 进入冷审步
@@ -190,9 +259,29 @@ lint SHALL 只核验 `source` 指向的文件行**是否存在**，**MUST NOT �
 - **WHEN** skill 已写入 Makefile / harness / smoke 等真代码
 - **THEN** 人门议程含 diff 过目，操作者确认后才进入收尾
 
+### Requirement: lint 的触发点——挂 `sdflow-maintain`〔spec-review-amendment · CEO-2（CRITICAL）· 设计门 Q6〕
+
+`devenv_lint` **MUST 有自动触发点**：`sdflow-maintain` 在扫描 `openspec/` 一致性时 **SHALL 调用它**，报告：未 `verified` 的泳道清单 · 失配的 source digest · 空 `blocked_by` · 失效的执行证据。
+
+> **理由（dogfood 自指坑）**：本 change 把「无门禁——`assert-bindings` 这类检查无任何自动触发点，全靠人记得跑」列为**立项理由之一**，而原设计的 `devenv_lint` **自己也没有任何触发点**（与 `ship_gate` / `sdflow-done` / `sdflow-maintain` 零集成）。
+>
+> 更致命：**「渐进 DoD」允许泳道停在 `scaffolded`，而防止它烂成僵尸文档的唯一措施就是「lint 复述未完成清单」——若无人调用该 lint，该措施为空，前提结构性不成立。**「不强制完成」+「不检查未完成」= **名存实亡**，两者只能选一个。
+>
+> **诚实边界**：`sdflow-maintain` 是**人主动跑**的 ⇒ 本条提供的是「**更响的提醒**」而非**硬门禁**。此局限 MUST 显式登记，**MUST NOT 佯装硬拦截**（是否再加 `ship_gate` 硬拦截 → proposal Q-5）。
+
+#### Scenario: maintain 扫描调用 devenv lint
+- **WHEN** 在已有 `environments.md` 的消费仓运行 `sdflow-maintain`
+- **THEN** 其扫描结果包含 devenv 健康度：未 verified 泳道清单、失配的 source digest、空 blocked_by
+
+#### Scenario: 真实回归被拦下
+- **WHEN** 操作者修改了某 `verified` 泳道对应的 Makefile recipe（digest 失配）
+- **THEN** 下次 `sdflow-maintain` 扫描报出该泳道验证证据失效，要求重跑 `verify-lane`
+
 ### Requirement: 机械 lint 五条与诚实输出
 
-`devenv_lint.py` SHALL 执行五条机械检查：① **命令出处一致性**（`verified` 态泳道的 `source` 指向行必须存在）② **指针不悬空**（Markdown 链接 + 章节锚可达）③ **删源残留引用**（含代码注释）④ **N/A 显式性**（槽在但内容空 → 报错；显式 `N/A — <理由> + <后果>` 才通过）⑤ **入口复述检测**（README/CLAUDE 出现真相源才该有的完整命令表 → 告警）。
+`devenv_lint.py` SHALL 执行五条机械检查：① **命令出处一致性**（按 **selector 重定位 + digest 比对**，**MUST NOT** 用行号存在性——见「digest 出处锚」）② **指针不悬空**（Markdown 链接 + 章节锚可达）③ **删源残留引用**（含代码注释）④ **N/A 显式性**（槽在但内容空 → 报错；显式 `N/A — <理由> + <后果>` 才通过）⑤ **入口复述检测**（README/CLAUDE 出现真相源才该有的完整命令表 → 告警）。
+
+另 SHALL 断言：`verified` ⇒ **执行证据齐全且未失效**、**`blocked_by` 必须为空**〔ENG-15：绿泳道上挂着「本机无 mosquitto」= 文档在说谎〕；`scaffolded` ⇒ `blocked_by` 非空。
 
 lint 通过码 SHALL 带诚实后缀（如 `structure-ok-SEMANTICS-UNCHECKED`）——**lint 通过 = 结构性通过 ≠ 内容已审**；内容质量由冷审 + 人门守。
 
@@ -210,9 +299,61 @@ lint SHALL 按泳道状态分档核验：`verified` → 强制①；`scaffolded`
 - **WHEN** lint 全部机械检查通过
 - **THEN** 输出的通过码明示「结构通过，语义未核」
 
-### Requirement: 文档渲染与单一真相源
+### Requirement: 泳道数据落 JSON 侧文件与 digest 出处锚〔spec-review-amendment · ENG-5/ENG-4 · 设计门 Q4〕
 
-泳道的 `command` / `source` / `status` / `deps` / `covers` / `blocked_by` SHALL 以 `environments.md` 的 **frontmatter 为唯一机械真相源**。正文的命令表 SHALL 由 `devenv_scaffold.py render` **从 frontmatter 渲染**，并带 `DO NOT EDIT` banner，**MUST NOT 由人手写**——两处各写一遍必漂移。
+**泳道数据 MUST NOT 放 `environments.md` 的 frontmatter**，SHALL 落 `openspec/architecture/.devenv-lanes.json`（**标准库 `json`，零依赖，round-trip 无损**）。
+
+> **理由**：原设计的嵌套 `lanes[]`（8 键 × 含列表 × 含中文自由文本 × 含带冒号的值）**没有可用的解析/序列化方案**——目标环境**无 PyYAML**（本仓零第三方依赖，skill 靠 symlink 直接跑、无安装环节），而唯一先例 `sad_schema.parse_frontmatter` 是**手搓的扁平标量解析器**（固定键白名单，无列表、无引号处理），写侧是**行级正则改写**——这套手法在嵌套结构上完全用不了。
+
+`environments.md` 的 frontmatter 只留三个**扁平标量**：`sad`（`present|missing`）· `mode`（`greenfield|brownfield`）· **`schema_version`**（`<int>`，原设计漏了；monorepo 演进要动 schema，无版本键则存量文件无升级路径）。
+
+**`deps` MUST 为结构化描述符，lane MUST 有 `kind`**〔ENG-2（CRITICAL）〕：
+
+```json
+{
+  "id": "mqtt-integration",
+  "kind": "external-dep | ui | lang-bridge | hardware | pure",
+  "status": "planned | scaffolded | verified",
+  "neg_control": "applicable | n/a — <理由>",
+  "deps": [
+    {"name": "mosquitto",
+     "kind": "compose | host-service | port | toolchain | testcontainer",
+     "up": "<启动命令>", "down": "<抽离命令>",
+     "owned_by": "skill | operator",
+     "isolate": "<隔离式抽离：如 MQTT_URL=tcp://127.0.0.1:1>"}
+  ]
+}
+```
+
+> **理由**：原设计 `deps: [<name>...]` 是**裸字符串没有类型**，而 Q-4 却说要「按 `deps` 声明的类型分派」——**数据模型里根本没有类型这个信息**。给定 `["mosquitto"]`，执行器无从知道它是 compose 服务 / brew service / testcontainer ⇒ 只能猜，或回去问模型 ⇒ **「机械分派」变回模型判断**。
+>
+> 同一个洞炸掉另一条 MUST：原设计的 lane **无 `kind` 字段** ⇒「真硬件泳道 MUST NOT 执行」**无法机械识别**，只能靠模型自觉——而它防的恰恰是模型把烧板命令跑起来。
+
+**`kind: hardware` ⇒ `verify-lane` 直接 refuse 执行**（脚本判定）。**`deps[].kind: toolchain`（编译器 / protoc / node）⇒ negative control 显式 `n/a`**——**你无法「抽掉」一个编译器**。原 Q-4 的三条策略（compose stop / 不启动进程 / 坏端口）只覆盖「可控的网络服务」，约为依赖空间的一半；toolchain / env 凭证 / host CLI 二进制 / 浏览器 / GPU **一条都没覆盖**——不在数据模型里给 `n/a` 通道，实现期必然现场编 per-dep hack。
+
+**出处锚 MUST 按内容（digest），MUST NOT 按行号**：
+
+```
+source: {file: <path>, kind: make-target|npm-script|toolchain, selector: <target 名>, digest: <recipe 规范化后的 sha256 前缀>}
+```
+
+> **理由**：原设计的 `source: "Makefile:11-14"` + lint「查那行存不存在」——**「第 11-14 行存不存在」对任何长度 ≥14 行的文件恒为真**。用户在 Makefile 顶部插三行 ⇒ 锚点全部错位、lint 全绿、命令表继续声称出自那四行。**这是一个恒真断言，即设计好的假绿。**
+
+lint SHALL 用 parser 按 `selector` **重新定位** target，比对 recipe digest；**行号仅在 render 时动态生成供阅读，不作真相**。digest 失配 ⇒ 报「该 target 的实现已被改动，请复核 `command` 是否仍准确并重跑 `verify-lane`」——这才是要抓的东西（**命令表说谎**），而非「行没了」。
+
+正文的命令表 SHALL 由 `devenv_scaffold.py render` **从 `.devenv-lanes.json` 渲染**，带 `DO NOT EDIT` banner，**MUST NOT 由人手写**。
+
+#### Scenario: 行号变动不导致假绿
+- **WHEN** 操作者在 Makefile 顶部插入三行变量定义，使原 11-14 行指向不同内容
+- **THEN** lint 按 selector 重新定位 target 并比对 digest，digest 未变则通过、变了则报「实现已改动」；**MUST NOT** 因「11-14 行仍存在」而静默通过
+
+#### Scenario: 零第三方依赖
+- **WHEN** 在无 PyYAML 的环境运行 skill
+- **THEN** 泳道数据读写正常（走标准库 json），skill 不因缺少第三方依赖而失败
+
+### Requirement: 文档渲染与两文档边界
+
+skill SHALL 产出两份真相源，落 `openspec/architecture/`（与 `sad.md` 同居），**MUST NOT 落项目根或 `docs/`**：`environments.md`（操作轴）· `testing-strategy.md`（方法轴）。
 
 skill SHALL 产出两份真相源，落 `openspec/architecture/`（与 `sad.md` 同居），**MUST NOT 落项目根或 `docs/`**：`environments.md`（操作轴：dev / test / deploy）· `testing-strategy.md`（方法轴：分层 / contract 集成点 / mock 边界 / 护栏 / 盲区）。
 
@@ -244,19 +385,64 @@ skill SHALL 将「最小命令 + 指针」注入消费仓入口文件（CLAUDE.m
 - **WHEN** skill 二次触发并再次注入
 - **THEN** 既有 `opsx-devenv` 区块被原位替换，不产生重复区块
 
-### Requirement: 并发安全写入
+### Requirement: 并发安全写入〔spec-review-amendment · ENG-6/ENG-10〕
 
-`environments.md` / `testing-strategy.md` / `devenv-log.md` 的写入 SHALL 防并发损坏（**两个 session 同时跑本 skill 会撞车**）：所有落盘 **MUST 原子写**（temp + rename）；对同一文件的读-改-写序列 **MUST 持锁**（如 exclusive-create lock），**MUST NOT** 以「读入内存 → 改 → 覆写」的裸序列执行。
+所有落盘 **MUST 原子写**（`mkstemp` 唯一 tmp 名 + `os.replace`）；读-改-写序列 **MUST 持锁**，**MUST NOT** 以「读入内存 → 改 → 覆写」的裸序列执行。
 
-`devenv-log.md` SHALL 为 **append-only**，MUST NOT 改写既有行；`--line` 值含换行符 SHALL 被拒绝（防伪造审计行）。
+**锁 MUST 覆盖整个 `openspec/` 写域，三个 skill 共用同一锁名**（如 `openspec/.sdflow-write.lock`）。
 
-#### Scenario: 并发写不丢更新
-- **WHEN** 两个进程同时对同一 `environments.md` 执行 set-lane
-- **THEN** 两次更新均不丢失，或后者显式失败提示重试，MUST NOT 静默覆盖前者
+> **理由（互斥性不可组合）**：原设计给 devenv 单发一把 `.devenv-scaffold.lock`，与 `sad_scaffold` 的 `.sad-scaffold.lock` **是两把不同的锁**——但两者的写入面**重叠**（都注入 CLAUDE/AGENTS/README/INDEX）。且核验 `sdflow-init/scripts/init.py:126`：其 `inject()` 是**裸 `open(path,"w")` 全量覆写，无锁、无原子写** ⇒ devenv 注入 ‖ `/sdflow-init update` 覆写同一文件 ⇒ **devenv 的整块注入被静默吃掉**。「复用已验证机制」≠「**互斥性可组合**」。
+>
+> 本 change SHALL **顺带给 `init.py` 的 inject 补锁 + 原子写**（承基准 3：面治优先于点补——撞到的相邻漏网格一次扫全，而非给 devenv 发一把没人认的锁）。
 
-#### Scenario: log 拒绝多行值
-- **WHEN** 留痕 `--line` 的值含换行符
-- **THEN** 脚本以坏输入退出码拒绝
+**锁 MUST 短持有，MUST NOT 跨 smoke 执行持有**〔ENG-10〕：
+
+> **理由**：`sad_scaffold` 的锁参数为**亚秒级**操作而调（`STALE=120s`），而 devenv 的 smoke 可跑数分钟 ⇒ 锁若跨 smoke 持有，**并发 session 会把活锁判成残留锁** → 提示用户「删锁重试」→ 用户照做 → **两 session 同时写**。**陈旧锁检测由保护变成攻击面。**
+
+**状态写入 MUST 用 CAS**：`set-lane` / `verify-lane` SHALL 接受 `--expect <prior-status>`，锁内重读、lane 不存在或状态 ≠ expect ⇒ **exit 5 拒绝**（防真正的临界区——「模型读 lanes → 跑 smoke（进程外，长时间） → 写 status」——发生 lost update）。回写 MUST **只 patch 那一条 lane**，MUST NOT 用内存快照覆写整份 lanes。
+
+锁文件 MUST 记 owner（UUID + PID + 时间戳）；释放前**核对 owner**，**MUST NOT** 删除他人的锁。
+
+`devenv-log.md` SHALL 为 **append-only**；`--line` 含换行符 SHALL 被拒绝（防伪造审计行）。
+
+#### Scenario: 跨 skill 并发不丢注入
+- **WHEN** devenv 正在注入 CLAUDE.md，另一 session 同时跑 `/sdflow-init update`
+- **THEN** 两者经同一把 `openspec/` 写域锁串行化，任一方的托管块 MUST NOT 被静默覆盖
+
+#### Scenario: CAS 拒绝陈旧写入
+- **WHEN** 模型基于旧快照调 `set-lane --expect scaffolded`，但期间另一 session 已把该 lane 改成 planned
+- **THEN** 脚本 exit 5 拒绝，提示重读后重试
+
+#### Scenario: 锁不跨长跑持有
+- **WHEN** 某泳道的 smoke 需跑 5 分钟
+- **THEN** 锁在 smoke 执行期间**不被持有**（只在写状态的瞬间持有），并发 session 不会把它误判为残留锁
+
+### Requirement: 归位模式的删源护栏〔spec-review-amendment · codex-Eng · 设计门 Q1 的连带义务〕
+
+> **设计门 Q1 拍定：归位模式留在本 change。** 代价是删源护栏 MUST 从「工作区干净」升级——**clean worktree 并不足以保护删除**：它不保证仓库有有效 HEAD、不保证待删文件已 tracked、不保护 ignored 文件 / submodule / symlink。
+
+删除任一源文件前，skill **MUST 逐文件校验**：
+
+1. 仓库有**有效 HEAD**（非 unborn branch）
+2. 该文件**已 tracked**（untracked 文件删了 git 恢复不了）
+3. **非 submodule、非 symlink**
+4. 其**内容 digest 与搬运表人门确认时一致**（防确认后被改动）
+
+任一项不满足 ⇒ **fail-closed 拒绝删除该文件**，如实报告原因。
+
+删除前 SHALL 生成**可恢复的 backup manifest**（被删文件的路径 + 内容 digest + 可还原的 patch），落 `openspec/architecture/.devenv-backup/`，并在收尾对话中告知还原方式。
+
+#### Scenario: untracked 文件拒绝删除
+- **WHEN** 搬运表中某待删源文件未被 git tracked
+- **THEN** skill fail-closed 拒绝删除该文件，提示先 `git add` 或手动处理
+
+#### Scenario: 确认后被改动则拒删
+- **WHEN** 搬运表人门确认后、执行删除前，某待删文件内容发生变化（digest 不符）
+- **THEN** skill 拒绝删除该文件并要求重新确认
+
+#### Scenario: 删除可还原
+- **WHEN** 归位模式执行了删源
+- **THEN** `.devenv-backup/` 下存在可还原的 backup manifest，且收尾对话告知还原方式
 
 ### Requirement: 触发分工与前置声明
 

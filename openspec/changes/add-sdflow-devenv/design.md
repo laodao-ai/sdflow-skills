@@ -3,6 +3,31 @@
 > 设计源：`docs/sad/07-devenv-skill-design.md`（九条设计点逐条拍定）· 接地证据：`docs/sad/06-process-axis-grounding-receipt.md`
 > 命中 TG：05 · 08 · 09 · 10 · 11 · 12 · 13 · 14 · 15 · 17 · 18 · 19 · 21 · 22 · 23 · 25 · 26（HR-TG：08 / 09 / 17 / 26）
 
+---
+
+## ⚠️ spec-review 修订摘要（2026-07-13 · 设计门拍板后）
+
+> **四声（CEO×2 + Eng×2，零 DISAGREE）判定：三根承重柱空心。以下决策已被推翻或重写——正文中被推翻的段落保留为考古层，其结论以本节与 `specs/` 为准。**
+> 完整 findings 见 `gstack-review.md`；裁决与拍板记录见 `spec-review-report.md`。
+
+| 原决策 | 状态 | 新结论（真相源 = `specs/`） |
+|---|---|---|
+| **ADR-4**：negative control 为 `verified` 的 ⟺ **定义** | ❌ **推翻**（Q3） | **降为强信号**。它只证「命令**耦合**依赖」，不证「断言有效」（`assert True` 照样正绿反红）；对 testcontainers / 内嵌 fallback（**主流写法**）永久误判。改为：独立字段 `neg_control` · 仅对抽离机制已定义的依赖类生效 · 必须匹配 expected-failure predicate。**并行强制**新机械门槛：解析 `go test -json` / pytest `collected N`，断言「至少跑了 ≥1 个测试且 0 skipped」 → `spec.md` R「negative control 是强信号而非定义」 |
+| **组件清单**：`devenv_scaffold` 子命令 = init/set-lane/render/inject/log/doctor-gen | ❌ **致命缺失**（ENG-1） | **没有一个子命令会执行 smoke** ⇒ `verified` 实为「模型自称、脚本盖章」。**新增 `verify-lane` 子命令**（脚本自己 fork 正/反两跑 + 原子写执行证据）；**`set-lane --status verified` 一律拒绝**（exit 5） → `spec.md` R「`verified` 由脚本亲自执行并落执行证据」 |
+| **数据模型**：`lanes[]` 存 `environments.md` frontmatter（嵌套 YAML） | ❌ **无解析方案**（ENG-5 · Q4） | 目标环境**无 PyYAML**，本仓唯一先例只支持扁平标量。**改落 `.devenv-lanes.json`**（标准库、零依赖）；frontmatter 只留 `sad`/`mode`/**`schema_version`** 三个扁平标量 |
+| **数据模型**：`deps: [<name>]` 裸字符串 · lane 无 `kind` | ❌ **推翻**（ENG-2） | 无类型 ⇒ negative control 无从机械分派；无 `kind` ⇒「真硬件不执行」无从机械识别。**`deps` 升为结构化描述符**（`kind`/`up`/`down`/`owned_by`/`isolate`）+ **lane 加 `kind`** |
+| **ADR-5 / lint ①**：`source: "Makefile:11-14"` + 查「那行存不存在」 | ❌ **恒真断言**（ENG-4） | 「第 11-14 行存不存在」**对任何长度 ≥14 行的文件恒为真** = 设计好的假绿。**改内容 digest 锚**（`{file, kind, selector, digest}`），行号仅供阅读、不作真相 |
+| **ADR-10**：「复用 `sad_scaffold` 已验证模式」 | ⚠️ **不充分**（ENG-6/ENG-10） | ① **互斥性不可组合**——devenv 的锁挡不住 `sdflow-init`（不同锁名，且 `init.py` 的 inject 是**裸 `open(w)` 无锁无原子写**）⇒ 锁提升为 **`openspec/` 写域单一锁**，三 skill 共用；**顺带给 `init.py` 补锁 + 原子写**（面治优先于点补）② **锁参数与长跑 smoke 冲突**（`STALE=120s`，smoke 可跑数分钟 ⇒ 活锁被判残留锁 ⇒ 提示删锁 ⇒ 两 session 同写）⇒ 锁**短持有** + **CAS**（`--expect`）③ `chmod 0o644` ⇒ 生成的 doctor/broker 脚本**落盘即不可执行** ⇒ `atomic_write` 加 mode 参数 |
+| **失败模式表（11 条）** | ❌ **漏最危险的一条**（ENG-3，CRITICAL） | **无一条要求「恢复被抽离的依赖」**——超时/崩溃/Ctrl-C ⇒ 用户的 broker 永久停在停止态。且原设计只禁「装依赖」（**加法**）不禁「停服务」（**减法，更破坏性**）。**新红线**：只能停 `owned_by: skill` 的依赖 · **首选隔离式抽离**（endpoint 指向不可达地址，副作用为零）· `try/finally` 恢复 · **超时杀进程树 + cleanup ledger** → `spec.md` R「执行边界与『不伤害』红线」 |
+| **人门 diff 位置**（议程 ④，执行之后） | ❌ **推翻**（ENG-7） | **模型生成的代码在任何人看过之前就已被执行**。**diff 门移到 ③-pre（执行之前）**，且 MUST 展开 recipe body 与 smoke 全文（原先给人看的 `make integration` 一行**零信息量**）；补「否决 → 回退」路径 |
+| **安全节**：「不外发 ⇒ 无 secret 出境面」 | ❌ **结论错误**（ENG-12） | 漏了 **ingress → git**：命令继承 agent session 的**完整环境变量**，失败回显（`AMQP_URL=...:pass@...`）写进 `blocked_by`/`devenv-log` → **commit → push**。**不主动外发，但把 secret 写进了必然被外发的载体** ⇒ 输出捕获 MUST 截断 + 过 secret 正则 + MUST NOT dump 环境变量 |
+| **lint 的触发点** | ❌ **完全缺失**（CEO-2，CRITICAL · Q6) | 「无门禁」是立项理由之一，而 `devenv_lint` **自己也没有触发点** ⇒ **dogfood 自指坑**；且它是「渐进 DoD」防僵尸的**唯一解药**。**挂进 `sdflow-maintain` 扫描** → `specs/maintain-scan/spec.md`（新增 capability delta）。**诚实边界**：maintain 人主动跑 ⇒ 是「更响的提醒」非硬门禁 |
+| **ADR-9**：归位模式并入同一 skill | ✅ **维持**（设计门 Q1 推翻推荐） | 操作者拍定**留在同一 change**。**连带义务**：删源护栏从「工作区干净」升级为**逐文件前置校验**（HEAD 有效 / 已 tracked / 非 submodule / 非 symlink / digest 与人门确认时一致）+ **可恢复 backup manifest**——`clean worktree` **不足以**保护删除 |
+| **ADR-1**：编排器路线 | ✅ **维持**（Q5=B），但**如实记天花板** | 未重开 ADR。但 proposal MUST 写明：greenfield 能问出来的**不含** `06` 认定的全部价值（坑/护栏/盲区 day-0 问不出来）；且**已修掉两条伪证据**（「命令虚构是实测」实为**零虚构**；「88% 全是待决策项」被 `06` 三分法证伪） |
+| **实现前置（新增）** | ➕ **Q2** | **先跑 `sdflow-architecture` 的首个真实试点**（用同一个绿地项目）——它是上游 hand-off 自己写下的最高优先 next action，至今未做。一个项目的成本，同时验证：真实 SAD 能否长出 devenv 的锚 · greenfield 的虚构风险是否真实 · `lane-patterns` 五格在第二个样本上是否成立 |
+
+**ADR-2（全直写）· ADR-3（渐进 DoD）· ADR-6（依赖形态分格）· ADR-7（fence-aware）· ADR-8（SAD 缺失降级）维持不变**（ADR-7 另需扩测 CommonMark fence 变体：`~~~` / 四 backtick / 缩进 fence / 孤儿 / 逆序）。
+
 ## Context
 
 生态里「技术架构定了之后把 dev/test 环境真正建起来」无 skill 覆盖：`sdflow-architecture` 交棒止于「过程轴文档指路（指出不代写）」，下游为空；`sdflow-init` 铺的是 **workflow 的运行环境**（规则 bundle），按定义不管项目内容。

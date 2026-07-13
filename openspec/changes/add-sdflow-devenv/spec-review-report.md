@@ -157,9 +157,22 @@ ADR-1 把备选 (a) 表述为「模板 + 手跑 prompt（**没有 lint**）」= 
 
 ---
 
+## 拍板记录（设计门 · 2026-07-13）
+
+**六个需拍板项已由操作者逐条过。设计门结论：批准返工方向，`design_approved` 暂不置位——需按下表重写四件套后重审。**
+
+| # | 拍板 | 与推荐一致？ | 连带义务（MUST） |
+|---|---|---|---|
+| **Q1** | **归位模式留在同一 change**（不砍） | ❌ **推翻推荐 A** | 删源护栏 MUST 从「工作区干净」**升级为逐文件前置校验 + 可恢复 backup manifest**——codex 明确指出 clean worktree **不足以**保护删除（不保证 HEAD 有效 / 待删文件已 tracked / 非 submodule / 非 symlink）。归位既然留下，这条护栏就是**它留下的代价**，不可省 |
+| **Q2** | **先跑 `sdflow-architecture` 首个真实试点**（用同一个绿地项目） | ✅ | 成为**实现前置**（写进 tasks 第 0 组）；同时验证：真实 SAD 的 §3/§5 能否长出 devenv 需要的锚 · greenfield 的「命令虚构」风险是否真实存在 · `lane-patterns` 五格在**第二个样本**上是否还成立 |
+| **Q3** | **negative control 降为强信号**（非 `verified` 的 ⟺ 定义） | ✅ | 改 ADR-4 / R-5 / 状态机；`neg_control: applicable \| n/a — <理由>` **独立字段**（不靠删 `deps` 绕）；必须匹配 expected-failure predicate（普通非零不通过）；**并行强制**机械门槛：解析 `go test -json` / pytest `collected N`，断言「至少跑了 ≥1 个测试且 0 skipped」 |
+| **Q4** | **`lanes` 落 JSON 侧文件** | ✅ | `openspec/architecture/.devenv-lanes.json`（标准库、零依赖、round-trip 无损）；frontmatter 只留 `sad` / `mode` / **`schema_version`** 三个扁平标量（补上原设计漏掉的版本键） |
+| **Q5** | **维持 orchestrator 路线，但如实记天花板** | ⚠️ 选 B（未重开 ADR-1） | proposal MUST 写明天花板：**greenfield 能问出来的东西不含 `06` 认定的全部价值**（坑 / 护栏 / 盲区 day-0 根本问不出来）。**且 MUST 修掉两条伪证据**——「命令虚构是接地实测暴露」（`06` 实测为**零虚构**）与「88% 全是待决策项」（被 `06` 的三分法证伪）。**维持路线 ≠ 维持假证据** |
+| **Q6** | **lint 挂 `sdflow-maintain`** | ✅ | 新增一条 Requirement「lint 的触发点」；SM 改为「**在真实门上被自动调用并拦下一次真实回归**」。诚实边界：maintain 是**人主动跑**的 ⇒ 这是「更响的提醒」而非**硬门禁**——此局限 MUST 在 design 里显式登记，MUST NOT 佯装硬拦截 |
+
 ## 收敛口
 
-**不建议进设计 HARD-GATE。**
+**不建议进设计 HARD-GATE（当前四件套）。**
 
 四声零分歧地指出：三根承重柱空心 · 两条立项证据有问题（其一与自己引用的接地回执直接矛盾）· 一个未定义的持久化黑洞 · 两个不可逆操作缺对称护栏。**这不是「修几个洞就能过」的量级——ADR-1/4/5/9/10 五条决策中有四条需要重开。**
 
