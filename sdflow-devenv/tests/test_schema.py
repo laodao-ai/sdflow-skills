@@ -227,6 +227,12 @@ def test_not_applicable_requires_consequence():
     assert any("consequence" in e for e in S.validate_strategy(st))
 
 
+def test_not_applicable_requires_reason():
+    """not-applicable 只缺 reason —— 现有测试只测了缺 consequence"""
+    st = _strategy(e2e={"status": "not-applicable", "consequence": "集成路径无人验证"})
+    assert any("reason" in e for e in S.validate_strategy(st))
+
+
 def test_not_applicable_exempts_four_slots():
     """MUST 豁免 ①-④ —— 否则是逼模型为「不做这件事」编造废话（填表游戏）"""
     st = _strategy(e2e={"status": "not-applicable", "reason": "纯库",
@@ -252,6 +258,82 @@ def test_implemented_layer_missing_slots_fail():
     st = _strategy(unit={"status": "implemented", "lane_ids": ["hermetic"]})
     errs = S.validate_strategy(st)
     assert any("how" in e for e in errs)
+
+
+# ---- 面治：类型前置校验反例（每处坏类型都要有一条反例，喂错类型断言 SchemaInvalid）----
+
+def test_lane_id_missing_or_empty_rejected():
+    """lane.id 缺失 / 为空 —— 此前零反例覆盖"""
+    assert any("id" in e for e in S.validate_lane(_lane(id="")))
+    lane = _lane()
+    del lane["id"]
+    assert any("id" in e for e in S.validate_lane(lane))
+
+
+def test_lane_id_wrong_type_rejected():
+    for bad in (123, ["a"], {"a": 1}, True):
+        errs = S.validate_lane(_lane(id=bad))
+        assert any("lane.id" in e for e in errs), bad
+
+
+def test_lane_blocked_by_wrong_type_rejected():
+    """blocked_by 是真值但非 str（123 / list / dict）—— (x or "").strip() 会 AttributeError"""
+    for bad in (123, ["a"], {"a": 1}, True):
+        errs = S.validate_lane(_lane(blocked_by=bad))
+        assert any("blocked_by" in e for e in errs), bad
+
+
+def test_lane_verification_field_wrong_type_no_crash():
+    for field in ("method", "strength", "executor"):
+        for bad in (123, ["a"], {"a": 1}):
+            v = dict(_lane()["verification"])
+            v[field] = bad
+            errs = S.validate_lane(_lane(verification=v))
+            assert isinstance(errs, list)  # 不崩溃即可，具体文案已由其它用例覆盖
+
+
+def test_deps_element_wrong_type_rejected():
+    """deps[] 的单个元素非 dict —— 现有测试只测了 deps 整体类型错"""
+    errs = S.validate_lane(_lane(deps=[{"name": "mosquitto", "kind": "host-service"}, "not-a-dict"]))
+    assert any("deps[]" in e for e in errs)
+
+
+def test_plan_snapshot_rejects_non_dict_lane():
+    with pytest.raises(S.SchemaInvalid):
+        S.plan_snapshot("not-a-dict")
+    with pytest.raises(S.SchemaInvalid):
+        S.plan_snapshot(["a", "b"])
+
+
+def test_plan_snapshot_rejects_non_dict_verification():
+    """lane.get("verification") or {} 后直接 .get(k) —— 真值非 dict 会 AttributeError"""
+    for bad in (123, "not-a-dict", ["a"]):
+        lane = _lane(verification=bad)
+        with pytest.raises(S.SchemaInvalid):
+            S.plan_snapshot(lane)
+
+
+def test_schema_version_bool_rejected(tmp_path):
+    """schema_version=true 时 isinstance(True, int) 恒真 —— MUST 显式拒绝"""
+    root = _root(tmp_path)
+    (root / S.LANES_REL).write_text(json.dumps({"schema_version": True, "lanes": []}))
+    with pytest.raises(S.SchemaInvalid):
+        S.load_lanes(root)
+
+
+def test_save_lanes_unhashable_id_fail_closed(tmp_path):
+    """id 是 list（不可哈希）—— 构建判重 set 时 MUST NOT 裸抛 TypeError: unhashable type"""
+    root = _root(tmp_path)
+    with pytest.raises(S.SchemaInvalid):
+        S.save_lanes(root, {"schema_version": 1, "lanes": [_lane(id=["mqtt", "integration"])]})
+
+
+def test_save_lanes_mixed_type_duplicate_ids_no_crash(tmp_path):
+    """dupes 里混不同不可比较类型（str 与 int 各自重复）—— sorted() MUST NOT 裸抛 TypeError"""
+    root = _root(tmp_path)
+    lanes = [_lane(id="dup"), _lane(id="dup"), _lane(id=7), _lane(id=7)]
+    with pytest.raises(S.SchemaInvalid):
+        S.save_lanes(root, {"schema_version": 1, "lanes": lanes})
 
 
 # ---- CAS 快照 ----
