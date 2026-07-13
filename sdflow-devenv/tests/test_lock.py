@@ -177,3 +177,16 @@ def test_atomic_write_no_partial_file_on_replace_failure(tmp_path, monkeypatch):
     assert p.read_text() == "original\n"
     leftovers = [f for f in tmp_path.iterdir() if ".tmp-" in f.name]
     assert leftovers == []
+
+
+def test_atomic_write_non_utf8_leaves_no_orphan_tmp(tmp_path):
+    """f.write 抛 UnicodeEncodeError（非 OSError）时也必须清掉 tmp 文件。
+
+    孤立代理项 \\ud800 无法 UTF-8 编码 —— 若清理分支只捕 OSError，
+    这里会留下一个孤儿 .tmp-devenv。
+    """
+    target = tmp_path / "out.json"
+    with pytest.raises(UnicodeEncodeError):
+        atomic_write(target, "\ud800")
+    assert not target.exists()
+    assert list(tmp_path.glob("*.tmp-devenv")) == []

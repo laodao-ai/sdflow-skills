@@ -92,7 +92,10 @@ def atomic_write(path, text, mode=None):
             f.write(text)
         os.chmod(tmpname, mode)      # mkstemp 默认 0600
         os.replace(tmpname, str(path))
-    except OSError:
+    except BaseException:
+        # 【不能只捕 OSError】：f.write(text) 遇到无法 UTF-8 编码的内容（如孤立
+        # 代理项）抛的是 UnicodeEncodeError（ValueError 子类，不是 OSError），
+        # 只捕 OSError 会跳过清理、留下孤儿 tmp 文件。清理是无条件的。
         with contextlib.suppress(OSError):
             os.unlink(tmpname)
         raise
