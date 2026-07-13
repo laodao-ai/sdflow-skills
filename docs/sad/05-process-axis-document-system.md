@@ -1,7 +1,8 @@
 # 过程轴文档体系：文档集 · 边界 · 交付形态
 
 > 状态：**活文档**（explore 方法论产出）。**重构自** `05-ops-skill-design-draft.md`（该文已并入本文、不再单独存在，此处仅记沿革，非指针）——原文预设「做一个 ops skill」，本轮把主题拓宽为**过程轴文档体系的方法论**（有几份 · 各装什么 · 各自边界），**skill 从占位主题降级为 §5 的交付选项之一**（用户 2026-07-12：「最后不一定是 skill，也可能是模板+prompt」）。
-> **接地状态（2026-07-13）**：§6 硬前置**已完成**——mqtt-console 真写出两份过程轴文档，回执 `06-process-axis-grounding-receipt.md` 已回灌本文（§2.2 补槽 · §2.2.1 落位 · §3.0 两面投影 · §3.1 切线表 +7 行 · §4 二分改三分 · §5.2 拍板 **B+C，D 不立**）。
+> **接地状态（2026-07-13）**：§6 硬前置**已完成**——mqtt-console 真写出两份过程轴文档，回执 `06-process-axis-grounding-receipt.md` 已回灌本文（§2.2 补槽 · §2.2.1 落位 · §3.0 两面投影 · §3.1 切线表 +7 行 · §4 二分改三分）。
+> ⚠ **§5 交付形态已改判（同日晚）**：原拍「B+C，D 不立」**已推翻**——候选集把 skill 误定义为「生成器」，且 B 建立在对 `sdflow-init` 职责的误解上。**现立 `sdflow-devenv`**（过程轴编排器；且目标不止文档，是**把 dev/test 环境真正建起来**）。见 §5.2 与 **`07-devenv-skill-design.md`**。本文 §1–§4（文档集 / 边界 / 槽 / 投影率）**仍然有效**，是 07 的输入。
 > 定位：这是过程轴缺失的「00/01」——architecture 轴有方法论（00/01）垫底才有 02 skill 设计；过程轴此前只有 04（生态定位）+ environments 模板草案，**没有方法论**。本文补上它。
 > 引用不复述：轴间边界判据引用 `04-ecosystem-boundaries.md`（六轴生态 + SAD 边界总则），本文只展开过程轴**内部**的文档集与交付。
 
@@ -166,7 +167,20 @@ Makefile · package.json · wails.json · go.mod · 测试文件注释
 | 生成价值 | —（人跑 prompt） | **仅一半**（§4：SAD 只投影一半槽） | 同 D，一次性 |
 | 维护价值 | 无机制（靠人自觉） | **有**（入口指针漂移检测 + 边界守卫） | **有**（随 init update 扫描/刷新） |
 
-### 5.2 拍板：B + C，D 不立（2026-07-13 接地确认）
+### 5.2 ⚠ 已推翻（2026-07-13 晚）：D 立，B 作废 —— 见 `07-devenv-skill-design.md`
+
+> **本节曾拍板「B+C，D 不立」，当日即被操作者推翻两处前提。原文保留在下方作为推导考古层，结论不再有效。**
+>
+> **推翻理由一：候选集把 skill 等同于「生成器」，定义太窄。** §5.1 的候选表把 D 定义为「从 SAD 投影生成 + 维护」，于是 §4 一证伪「生成腿」（12%），D 就被否了。但操作者要的 skill 覆盖四件事——**模板 · 路径与文档关系 · 更新入口(CLAUDE/AGENTS/INDEX) · review**——**没有一件是「生成」**，全是**编排 · 托管 · 审查**。候选表里根本没有「编排器」这一项，所以否得太快。
+>
+> **推翻理由二：B 建立在对 `sdflow-init` 职责的误解上。** `sdflow-init` 初始化的是 **workflow 的运行环境**（规则 bundle、`opsx-init` 托管块），它**不管具体项目内容**（操作者原话）。而 `environments.md` 是项目内容 ⇒ **「并入 init 维护扫描」不成立，B 作废**。
+>
+> **更根本的翻转**：§4 的 88% 纯人写，真正含义**不是「生成价值低、不值得做 skill」**，而是「这 88% 全是**待决策项**，需要有人问、有人拍、有人留痕」——**这恰恰是编排器存在的理由**，与 `sdflow-architecture` 编排空间轴决策同构。而且目标也不止文档：**技术架构定了之后要把 dev/test 环境真正建起来**（Makefile / broker / CI / 测试 harness），文档只是它的真相源产物之一。
+>
+> **现结论**：立 **`sdflow-devenv`**（过程轴编排器，非生成器）——五步编排 · 三模式（新建/归位/continue）· 泳道三态渐进 DoD · 全直写 · 自 own `opsx-devenv` 托管块。**C（模板 + 归位型 prompt）并入其 `references/`**（成为 ⑤ 领域知识清单）；**下方 §5.2.1 的五条机械项移交 `devenv_lint.py`**（它们本身没错，错的只是挂靠对象）。完整设计 → **`07-devenv-skill-design.md`**。
+
+<details>
+<summary>（考古层：原「拍板 B+C，D 不立」推导，结论已失效）</summary>
 
 把 §2.1 + §4 合起来看：
 
@@ -193,11 +207,15 @@ Makefile · package.json · wails.json · go.mod · 测试文件注释
 
 > ⚠ **机械层的诚实边界**（接地自证，06 §4.3）：mqtt-console 那次归位自称「markdown 链接零悬空」**并且确实通过**，却漏掉了 `docs/README.md` 里一句「两份真相源在**仓库根**」的事实错误（文件实际在 `openspec/architecture/`）。**链接可达性校验抓不到散文里的事实错误**——这不是 ①②③④ 的弱点，是它们合法的残余，交 ⑤ 的启发式 + 人读兜。
 
-### 5.3 若最终仍走 D：命名候选
+</details>
 
-- `sdflow-ops`（operations，涵盖 env+test+操作，工作名）
-- `sdflow-environments`（太窄，漏 testing-strategy）
-- `sdflow-runbook`（偏部署操作，漏 dev/test）
+### 5.3 命名（已定：`sdflow-devenv`）
+
+**`sdflow-devenv`**（2026-07-13 拍定）——它建的是**项目的 dev/test 运行环境**。
+
+被否命名：`sdflow-ops`（ops 在行业里偏「运维/生产」，与本 skill 的 dev/test 语义不符）· `sdflow-environments`（漏 testing-strategy）· `sdflow-runbook`（偏部署操作，漏 dev/test）。
+
+> ⚠ 触发词面须与 `sdflow-init` 显式分流（「初始化环境」两者都像）：**装 workflow 规则 → init；建项目 dev/test 环境 → devenv**。见 `07` D6。
 
 ## 6. 前置与开放问题
 
