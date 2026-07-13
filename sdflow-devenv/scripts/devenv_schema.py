@@ -73,12 +73,6 @@ def _require_dict(v, field):
     return v
 
 
-def _require_list(v, field):
-    if not isinstance(v, list):
-        raise SchemaInvalid(f"{field} 须为数组，实际是 {_type_name(v)}")
-    return v
-
-
 def _require_int(v, field):
     # bool 是 int 的子类 —— isinstance(True, int) 恒真，须显式排除，否则
     # schema_version=true 会被静默当作合法版本号接受。
@@ -272,10 +266,7 @@ def _load(root, rel):
     ver = data.get("schema_version")
     if ver is None:
         raise SchemaInvalid(f"{rel} 缺 schema_version —— fail-closed")
-    # bool 是 int 子类：isinstance(True, int) 恒真，须显式排除，否则
-    # schema_version=true 会被静默当作合法的版本 1 接受。
-    if isinstance(ver, bool) or not isinstance(ver, int):
-        raise SchemaInvalid(f"{rel} schema_version 非整数: {ver!r}")
+    _require_int(ver, f"{rel} 的 schema_version")
     if ver > SCHEMA_VERSION:
         raise SchemaTooNew(
             f"{rel} 的 schema_version={ver} 高于本实现已知的 {SCHEMA_VERSION} —— "
