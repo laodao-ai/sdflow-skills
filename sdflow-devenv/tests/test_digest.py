@@ -302,3 +302,252 @@ def test_method_digest_rejects_non_str_method(tmp_path):
 def test_method_digest_rejects_non_str_fixture_element(tmp_path):
     with pytest.raises(DigestInputInvalid):
         method_digest(tmp_path, "cmd", None, [123], None)
+
+
+# ---------------------------------------------------------------------------
+# task-4 面治：find_make_target 每条返回路径逐条核对（评审只点了 2 条，
+# 这一节把「parser 遇到没预料的语法时会不会静默返回一个恒定/错误 recipe」
+# 挨个测一遍——真正防假绿的测法是「两份内容不同的同名 target → digest 必须
+# 不同」，不是只测「能不能解析」。
+# ---------------------------------------------------------------------------
+
+
+# ---- [Critical] 内联 `;` recipe：MUST 正确支持，不能静默算成空 ----
+
+
+def test_find_make_target_inline_semicolon_recipe_captured():
+    text = "foo: ; echo hi\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo hi" in loc[2]
+
+
+def test_find_make_target_inline_semicolon_recipe_change_detected():
+    """两份内容不同的内联 ; recipe —— digest 必须不同（这是 Critical bug 本尊：
+    以前两者都算出 hash("")，是与「行号锚」同构的假绿）。"""
+    a = "foo: ; echo hi\n"
+    b = "foo: ; echo TOTALLY DIFFERENT DANGEROUS COMMAND\n"
+    _, _, ra = find_make_target(a, "foo")
+    _, _, rb = find_make_target(b, "foo")
+    assert ra.strip() != "" and rb.strip() != "", "MUST NOT 静默算成空 recipe"
+    assert digest_make_recipe(ra) != digest_make_recipe(rb)
+
+
+def test_find_make_target_inline_semicolon_with_deps_before_it():
+    """`;` 前是依赖列表，`;` 后才是 recipe 首行（real make 实测确认的语义）。"""
+    text = "foo: a b ; echo real-recipe\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo real-recipe" in loc[2]
+
+
+def test_find_make_target_inline_semicolon_plus_following_tab_lines():
+    """Make 语义：一个 target 可以同时有内联 recipe 和后续 tab 行，两者都属于
+    该 recipe（不是互斥关系）。"""
+    text = "foo: ; echo first\n\techo second\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo first" in loc[2]
+    assert "echo second" in loc[2]
+
+
+def test_find_make_target_inline_semicolon_ambiguous_nesting_raises():
+    """`;` 出现在无法安全判定深度的形态里（未闭合的 `$(` 嵌套）——
+    fail-closed 拒绝猜测，MUST NOT 猜一个位置当 recipe 边界。"""
+    text = "foo: $(shell echo a ; echo b\n\techo hi\n"
+    with pytest.raises(MakefileUnsupported):
+        find_make_target(text, "foo")
+
+
+def test_find_make_target_inline_semicolon_ambiguous_unclosed_quote_raises():
+    text = "foo: \"a ; b\n\techo hi\n"
+    with pytest.raises(MakefileUnsupported):
+        find_make_target(text, "foo")
+
+
+def test_find_make_target_inline_semicolon_inside_balanced_paren_not_split():
+    """`;` 在配平的 `$(...)` 内部不是顶层 `;`，不应被当成 recipe 分隔符——
+    这里整行都还是依赖列表，没有内联 recipe。"""
+    text = "foo: $(shell echo a ; echo b)\n\techo real\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert loc[2].strip() == "echo real"
+
+
+def test_method_digest_inline_semicolon_recipe_end_to_end(tmp_path):
+    """method_digest 顶层验证同一件事：内联 ; recipe 的内容变化必须反映到
+    最终 digest（不仅仅是 find_make_target 这一层）。"""
+    src = {"file": "Makefile", "kind": "make-target", "selector": "foo"}
+    (tmp_path / "Makefile").write_text("foo: ; echo hi\n")
+    d1 = method_digest(tmp_path, "make foo", None, [], src)
+    (tmp_path / "Makefile").write_text("foo: ; echo DANGEROUS\n")
+    d2 = method_digest(tmp_path, "make foo", None, [], src)
+    assert d1 != d2
+
+
+# ---- [Important] 变量赋值行误判为「多 target 一行」----
+
+
+def test_find_make_target_assignment_line_before_real_target_not_misdetected():
+    text = "test := go test ./...\n\ntest:\n\techo real-target\n"
+    loc = find_make_target(text, "test")
+    assert loc is not None
+    assert "echo real-target" in loc[2]
+
+
+def test_find_make_target_export_assignment_line_not_misdetected():
+    """`export VAR := value` 同样是整行变量赋值，不是规则头——覆盖同一条
+    Important bug 的 `export` 前缀变体（面治，不只补审查点穿的那一种写法）。"""
+    text = "export test := go test ./...\n\ntest:\n\techo real-target\n"
+    loc = find_make_target(text, "test")
+    assert loc is not None
+    assert "echo real-target" in loc[2]
+
+
+def test_find_make_target_plain_equals_assignment_not_misdetected():
+    text = "test = go test ./...\ntest:\n\techo real\n"
+    loc = find_make_target(text, "test")
+    assert loc is not None
+
+
+def test_find_make_target_plus_equals_assignment_not_misdetected():
+    text = "test += extra\ntest:\n\techo real\n"
+    loc = find_make_target(text, "test")
+    assert loc is not None
+
+
+# ---- 续行符 `\`：target 头多行 ----
+
+
+def test_find_make_target_header_continuation_recipe_found():
+    """target 行本身跨多个物理行（依赖列表续行）——recipe 必须从续行结束后的
+    那一行开始扫，不能被续行的第二行误判为「非 tab 非空行」而提前截断
+    （否则又是一次静默空 recipe）。"""
+    text = "foo: dep1 \\\n     dep2\n\techo header-continued-recipe\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo header-continued-recipe" in loc[2]
+
+
+def test_find_make_target_header_continuation_content_change_detected():
+    a = "foo: dep1 \\\n     dep2\n\techo one\n"
+    b = "foo: dep1 \\\n     dep2\n\techo two\n"
+    _, _, ra = find_make_target(a, "foo")
+    _, _, rb = find_make_target(b, "foo")
+    assert digest_make_recipe(ra) != digest_make_recipe(rb)
+
+
+def test_find_make_target_header_continuation_truncated_file_raises():
+    """target 头以 `\\` 结尾但文件到此截断——无法安全判定，fail-closed。"""
+    text = "foo: dep1 \\\n"
+    with pytest.raises(MakefileUnsupported):
+        find_make_target(text, "foo")
+
+
+def test_find_make_target_header_continuation_with_inline_semicolon():
+    """续行的依赖列表里藏着内联 `;` recipe —— 必须跨物理行找到它。"""
+    text = "foo: dep1 \\\n     dep2 ; echo hi\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo hi" in loc[2]
+
+
+# ---- 续行符 `\`：recipe 行本身续行 ----
+
+
+def test_find_make_target_recipe_continuation_non_tab_line_included():
+    """recipe 行以 `\\` 续行，下一物理行不以 tab 开头——real make 实测：它仍属于
+    该 recipe。以前的 parser 会在这里提前 break，静默丢掉这行内容。"""
+    text = "foo:\n\techo line1 ; \\\necho line2-no-tab\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo line1" in loc[2]
+    assert "echo line2-no-tab" in loc[2]
+
+
+def test_find_make_target_recipe_continuation_change_detected():
+    """续行内容变化必须反映到 digest —— 防止「续行部分改了但 digest 不变」的
+    静默丢失式假绿。"""
+    a = "foo:\n\techo line1 ; \\\necho aaa\n"
+    b = "foo:\n\techo line1 ; \\\necho bbb\n"
+    _, _, ra = find_make_target(a, "foo")
+    _, _, rb = find_make_target(b, "foo")
+    assert digest_make_recipe(ra) != digest_make_recipe(rb)
+
+
+def test_find_make_target_recipe_continuation_truncated_file_raises():
+    text = "foo:\n\techo line1 ; \\\n"
+    with pytest.raises(MakefileUnsupported):
+        find_make_target(text, "foo")
+
+
+# ---- 同名 target 出现两次：合法空 vs 解析失败的空 / 冲突消解 ----
+
+
+def test_find_make_target_duplicate_conflicting_recipes_raises():
+    """两处都是非空且内容不同的 recipe —— real make 用「后一个覆盖」，但本
+    parser 不猜哪个最终生效，fail-closed 拒绝。"""
+    text = "foo:\n\techo first\n\nfoo:\n\techo second\n"
+    with pytest.raises(MakefileUnsupported):
+        find_make_target(text, "foo")
+
+
+def test_find_make_target_duplicate_identical_recipes_no_conflict():
+    """两处 recipe 内容完全相同 —— 用哪个都不影响 digest，不算冲突。"""
+    text = "foo:\n\techo same\n\nfoo:\n\techo same\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert "echo same" in loc[2]
+
+
+def test_find_make_target_duplicate_recipe_less_redefinition_merges():
+    """第一处只声明依赖、无 recipe，第二处才有 recipe —— real make 实测：
+    无 recipe 的重复定义不会清空已有 recipe，唯一的非空版本直接生效。"""
+    text = "foo: dep1\nfoo: dep2\n\techo real\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert loc[2].strip() == "echo real"
+
+
+def test_find_make_target_duplicate_recipe_less_redefinition_reverse_order():
+    text = "foo: dep1\n\techo real\nfoo: dep2\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert loc[2].strip() == "echo real"
+
+
+def test_find_make_target_legit_empty_recipe_single_occurrence():
+    """target 存在，但确实【没有任何命令】——这是合法的空 recipe（例如无操作
+    的聚合 target），必须原样返回空字符串,不能因为「空」就误判成解析失败。"""
+    text = "foo:\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert loc[2] == ""
+
+
+def test_find_make_target_legit_empty_recipe_multiple_occurrences():
+    """多处定义，但全部都没有 recipe —— 依然是合法的空（不是「解析失败导致
+    的空」），不应该 raise。"""
+    text = "foo: dep1\nfoo: dep2\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert loc[2] == ""
+
+
+# ---- .PHONY 声明行 / selector 恰好叫 PHONY ----
+
+
+def test_find_make_target_phony_declaration_line_not_confused_with_target():
+    """`.PHONY: foo` 这行不是「定义了 target foo」，selector=foo 时必须继续
+    往下找到真正的 `foo:` 定义，不能把 .PHONY 声明行的内容误当 foo 的 recipe。"""
+    text = ".PHONY: foo\nfoo:\n\techo real\n"
+    loc = find_make_target(text, "foo")
+    assert loc is not None
+    assert loc[2].strip() == "echo real"
+
+
+def test_find_make_target_selector_named_phony_does_not_match_dot_phony_line():
+    """selector 恰好叫 "PHONY"（不带前导点）—— `.PHONY: x` 这行的 target 名是
+    整串 ".PHONY"（含点），字面不等于 "PHONY"，不应被误匹配。"""
+    text = ".PHONY: x\n"
+    assert find_make_target(text, "PHONY") is None

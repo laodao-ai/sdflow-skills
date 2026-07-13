@@ -25,10 +25,15 @@ from devenv_paths import contain
 # group(1) = target 名，group(2) = ":" 或 "::"
 _TARGET_RE = re.compile(r"^([A-Za-z0-9_.\-/%$()]+)\s*(::?)(?!=)")
 
-# target-specific 变量赋值行的「疑似」判据：冒号后紧跟 `IDENT = / := / += / ?= value`。
-# 这与「target: 一堆前置依赖」在字面上无法可靠区分（Make 自身的语法也是靠语义消歧），
-# parser 不猜——命中就拒绝。
-_ASSIGN_REMAINDER_RE = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*[:+?]?=(?!=)")
+# 变量赋值行的判据：可选 `export` 前缀 + `IDENT = / := / += / ?= value`。
+# 两处复用：① target-specific 变量赋值（`target: VAR = value`，判 target 冒号后的
+# remainder）；② 整行变量赋值（`VAR := value`，判整行——用来把它从「多 target 一行」
+# 的兜底分支里摘出去，见 find_make_target 的 Important bug 修复）。
+# 这与「target: 一堆前置依赖」在字面上无法可靠区分的部分（target-specific 用法），
+# Make 自身的语法也是靠语义消歧，parser 不猜——命中就拒绝（MakefileUnsupported）。
+_ASSIGN_REMAINDER_RE = re.compile(
+    r"^\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*[:+?]?=(?!=)"
+)
 
 
 class DigestInputInvalid(Exception):
@@ -79,18 +84,89 @@ def _require_list_or_none(v, field):
     return v
 
 
+def _is_continuation_line(raw_line):
+    """物理行（含结尾换行）是否以续行符 `\\` 结尾（Make 的行续接语法）。
+
+    `\\\\`（转义反斜杠，字面双斜杠）不算续行——保守判断，宁可当作「不续行」，
+    真遇到这种字面反斜杠的怪 Makefile，后续解析大概率还是会因为找不到 recipe
+    而走到别的 fail-closed 分支，不会静默出错。
+    """
+    stripped = raw_line.rstrip("\n").rstrip("\r")
+    return stripped.endswith("\\") and not stripped.endswith("\\\\")
+
+
+def _find_toplevel_semicolon(remainder):
+    """在 target 行「冒号后的剩余文本」（可能已跨多个续行拼接）里找【结束依赖列表、
+    开始内联 recipe】的那个 `;`——即括号/引号嵌套深度为 0 的第一个 `;`
+    （real GNU make 验证：`foo: a;b` 里 `;` 前是依赖 "a"、`;` 后是 recipe "b"，
+    第一个顶层 `;` 之后的原样文本就是 recipe 首行，不会再被二次拆分）。
+
+    返回 (index, ambiguous)：
+      (int, False)  —— 找到，index 是该 `;` 在 remainder 里的位置
+      (None, False) —— 没有顶层 `;`（正常：没有内联 recipe）
+      (None, True)  —— 遇到未闭合的引号 / `$()` `${}` 嵌套，无法安全判定，
+                        调用方必须 fail-closed（MUST NOT 猜一个位置）
+    """
+    depth = 0
+    quote = None
+    i = 0
+    n = len(remainder)
+    while i < n:
+        c = remainder[i]
+        if quote:
+            if c == quote:
+                quote = None
+            i += 1
+            continue
+        if c in ("'", '"'):
+            quote = c
+            i += 1
+            continue
+        if c == "$" and i + 1 < n and remainder[i + 1] in "({":
+            depth += 1
+            i += 2
+            continue
+        if c in ")}" and depth > 0:
+            depth -= 1
+            i += 1
+            continue
+        if c == ";" and depth == 0:
+            return i, False
+        i += 1
+    if quote is not None or depth != 0:
+        return None, True
+    return None, False
+
+
 def find_make_target(text, selector):
     """按 target 名重定位，返回 (start_line, end_line, recipe_text) 或 None（未找到）。
 
     行号【仅供 render 时生成给人看】，不作真相——真相是 recipe 的 digest（顶部插行
     不影响返回内容，见 test_selector_survives_line_shift）。
 
-    recipe = target 行之后、所有以 tab 开头的行（Make 的语法硬要求：recipe 行必须
-    tab 开头，空格不行），直到遇到第一个非 tab 开头的非空行为止；recipe 内部的空行
-    只要后面还有 tab 行就算内部空行，不算结束。
+    recipe 的来源（Make 语义，均已用 GNU make 实测核对）：
+      - 内联 `;` recipe：冒号后第一个【顶层】`;`（不在 `$()/${}` 嵌套或引号内）
+        之后的文本就是 recipe 首行；
+      - 该行之后所有以 tab 开头的行也属于同一 recipe（tab 是 Make 的硬语法要求）；
+      - 内联 recipe 首行 / 任意 tab 行若以 `\\` 续行，下一物理行【无论是否 tab
+        开头】都仍属于该 recipe（real make 验证：续行只看有没有转义换行符，
+        与「新逻辑行必须 tab 开头」的规则无关）；
+      - target 定义行本身（冒号前后的依赖列表）也可能用 `\\` 续行成多物理行，
+        必须先拼成一个逻辑行再判定内联 `;` / recipe 起点，否则续行的第二行会被
+        误当成「非 tab 非空行」提前截断扫描，把真实存在的 recipe 静默判成空。
+      - recipe 内部的空行只要后面还有 tab 行就算内部空行，不算结束。
+
+    同名 target 在文件中出现多次时（Make 允许，语义是「依赖合并 + 后一个非空
+    recipe 覆盖前面」——real make 实测：多个非空 recipe 会 warning 后用最后一个
+    生效，多个空 recipe 定义不会互相覆盖）：本 parser 不猜「哪个是最后生效的」，
+    只在【明确无歧义】时才给出结果——全文只有 0 或 1 处非空 recipe（其余定义都是
+    纯依赖声明）时直接用那一处；出现 ≥2 处内容不同的非空 recipe 时 fail-closed
+    raise MakefileUnsupported。
 
     遇到已知无法可靠区分语义的语法（双冒号规则 / 多 target 一行 / target-specific
-    变量赋值行）且命中 selector 时，raise MakefileUnsupported——不猜、不当哑巴。
+    变量赋值行 / 无法判定嵌套深度的内联 `;` / 续行符后文件截断 / 同名 target 多处
+    冲突 recipe）且命中 selector 时，raise MakefileUnsupported——不猜、不当哑巴，
+    MUST NOT 静默退化为「空 recipe」。
     """
     if not isinstance(text, str):
         raise DigestInputInvalid(f"text 须为 str，实际是 {type(text).__name__}")
@@ -98,14 +174,20 @@ def find_make_target(text, selector):
         raise DigestInputInvalid(f"selector 须为 str，实际是 {type(selector).__name__}")
 
     lines = text.splitlines(keepends=True)
-    for i, line in enumerate(lines):
+    n = len(lines)
+    matches = []
+    i = 0
+    while i < n:
+        line = lines[i]
         if line.startswith(("\t", " ", "#")):
+            i += 1
             continue
 
         m = _TARGET_RE.match(line)
         if m:
             name, colon = m.group(1), m.group(2)
             if name != selector:
+                i += 1
                 continue
             if colon == "::":
                 raise MakefileUnsupported(
@@ -113,7 +195,22 @@ def find_make_target(text, selector):
                     f"同一 target 可能有多条独立规则块，单遍首匹配扫描会漏掉其余块，"
                     f"parser 不支持，fail-closed 拒绝猜测"
                 )
-            remainder = line[m.end():]
+
+            # 拼接 target 行头本身的续行（`foo: dep1 \` + 下一行 `dep2`），
+            # 否则续行的第二行会被 recipe 扫描误判为「非 tab 非空行」而提前
+            # 截断——这正是本次修复要根除的「静默空 recipe」同款病。
+            header_lines = [line]
+            j = i
+            while _is_continuation_line(header_lines[-1]):
+                j += 1
+                if j >= n:
+                    raise MakefileUnsupported(
+                        f"target {selector!r} 的规则头以续行符 `\\` 结尾但文件"
+                        f"在此截断——fail-closed 拒绝猜测"
+                    )
+                header_lines.append(lines[j])
+            remainder = "".join(header_lines)[m.end():]
+
             if _ASSIGN_REMAINDER_RE.match(remainder):
                 raise MakefileUnsupported(
                     f"target {selector!r} 疑似 target-specific 变量赋值行"
@@ -121,32 +218,77 @@ def find_make_target(text, selector):
                     f"字面上无法可靠区分，parser 不支持，fail-closed 拒绝猜测"
                 )
 
-            j = i + 1
+            semi_idx, ambiguous = _find_toplevel_semicolon(remainder)
+            if ambiguous:
+                raise MakefileUnsupported(
+                    f"target {selector!r} 的规则头里 `;` / 引号 / `$()`/`${{}}` "
+                    f"嵌套无法安全判定（`{line.strip()}`）——fail-closed 拒绝猜测，"
+                    f"以防误判内联 recipe 的边界"
+                )
+
             recipe = []
-            while j < len(lines):
-                ln = lines[j]
+            scan_from = j + 1
+            if semi_idx is not None:
+                # 冒号后第一个顶层 `;` 之后的文本就是内联 recipe 首行（Make
+                # 标准语法，foo: ; echo hi 与 foo:\n\techo hi 语义等价）——
+                # 这是本次修复的 Critical bug：以前这段文本被完全忽略，
+                # 两份内容不同的内联 recipe 会算出同一个（空）digest。
+                recipe.append(remainder[semi_idx + 1:])
+                while recipe and _is_continuation_line(recipe[-1]):
+                    if scan_from >= n:
+                        raise MakefileUnsupported(
+                            f"target {selector!r} 的内联 recipe 以续行符 `\\` "
+                            f"结尾但文件在此截断——fail-closed 拒绝猜测"
+                        )
+                    recipe.append(lines[scan_from])
+                    scan_from += 1
+
+            k = scan_from
+            while k < n:
+                ln = lines[k]
                 if ln.startswith("\t"):
                     recipe.append(ln)
-                    j += 1
+                    k += 1
+                    # recipe 行本身的续行：下一物理行【无论是否 tab 开头】都仍
+                    # 属于同一条 recipe 命令（real make 实测确认）。
+                    while recipe and _is_continuation_line(recipe[-1]):
+                        if k >= n:
+                            raise MakefileUnsupported(
+                                f"target {selector!r} 的 recipe 行以续行符 `\\` "
+                                f"结尾但文件在此截断——fail-closed 拒绝猜测"
+                            )
+                        recipe.append(lines[k])
+                        k += 1
                 elif ln.strip() == "":
                     # 空行：可能是 recipe 内部的空行，也可能是 recipe 结束。
                     # 向前看：若后面还有 tab 行则算 recipe 内部，否则结束。
-                    k = j
-                    while k < len(lines) and lines[k].strip() == "":
-                        k += 1
-                    if k < len(lines) and lines[k].startswith("\t"):
-                        recipe.extend(lines[j:k])
-                        j = k
+                    p = k
+                    while p < n and lines[p].strip() == "":
+                        p += 1
+                    if p < n and lines[p].startswith("\t"):
+                        recipe.extend(lines[k:p])
+                        k = p
                     else:
                         break
                 else:
                     break
-            return (i + 1, j, "".join(recipe))
 
-        # 严格单-target 形态没匹配上：可能是多 target 一行（`a b: dep`）之类
-        # parser 不认的规则头。只在它明确命中我们要找的 selector 时才拒绝——
-        # 无关行放过，不让别的 target 的定位也被这类噪声炸掉。
+            matches.append((i + 1, k, "".join(recipe)))
+            # 跳过本次已消费的行（含可能不以 tab 开头的续行 recipe 内容）——
+            # 不跳过的话，续行 recipe 里若恰好含 `:` 字面文本，会被外层循环
+            # 误当成又一个规则头去扫描。
+            i = k
+            continue
+
+        # 严格单-target 形态没匹配上：可能是变量赋值行（`VAR := value`），
+        # 也可能是多 target 一行（`a b: dep`）之类 parser 不认的规则头。
         head = line.split("#", 1)[0]
+        if _ASSIGN_REMAINDER_RE.match(head):
+            # Important bug 修复：整行变量赋值（如 `test := go test ./...`）
+            # 曾被下面的「冒号 + 空白分词」兜底逻辑误判成「多 target 一行」，
+            # 对同名变量+target 的常见 Makefile（小写变量命名习惯）造成误伤。
+            i += 1
+            continue
         if ":" in head:
             before_colon = head.split(":", 1)[0]
             names = before_colon.split()
@@ -156,7 +298,31 @@ def find_make_target(text, selector):
                     f"（`{line.strip()}`：多 target 一行 / 语法不明）——"
                     f"fail-closed 拒绝猜测"
                 )
-    return None
+        i += 1
+
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return matches[0]
+
+    nonempty = [mm for mm in matches if mm[2].strip() != ""]
+    if len(nonempty) > 1:
+        distinct_recipes = {mm[2] for mm in nonempty}
+        if len(distinct_recipes) == 1:
+            # 内容完全相同的重复定义——用哪一处都不影响 digest，不算冲突。
+            return nonempty[-1]
+        raise MakefileUnsupported(
+            f"target {selector!r} 在文件中出现 {len(matches)} 次，其中 "
+            f"{len(nonempty)} 处 recipe 非空且内容不同——Make 语义是「后一个非空 "
+            f"recipe 覆盖前面」，但 parser 不猜哪个是最终生效版本，"
+            f"fail-closed 拒绝猜测"
+        )
+    if len(nonempty) == 1:
+        # 多次出现但只有一处非空 recipe（其余是纯依赖声明）——real make 实测：
+        # 无 recipe 的重复定义不会清空已有 recipe，直接用那唯一的非空版本。
+        return nonempty[0]
+    # 全部出现处 recipe 都是空的——合法的「无命令 target」（如 .PHONY 聚合器）。
+    return matches[0]
 
 
 def digest_make_recipe(recipe_text):
