@@ -12,6 +12,17 @@ def test_accepts_plain_relative(tmp_path):
     assert got == (tmp_path / "Makefile").resolve()
 
 
+def test_accepts_mid_path_dot(tmp_path):
+    """中间的 `.` 会被 PurePosixPath 折叠掉，是合法路径——【必须】仍然通过。
+
+    回归锁：拒绝「折叠后为空」的修复，若被误改成「逐 part 见 `.` 就拒」，
+    这条会挂红。
+    """
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "b").write_text("x\n")
+    assert contain(tmp_path, "a/./b") == (tmp_path / "a" / "b").resolve()
+
+
 def test_rejects_absolute(tmp_path):
     with pytest.raises(PathEscape):
         contain(tmp_path, "/etc/passwd")

@@ -21,8 +21,13 @@ def contain(root, rel):
     root: Path —— 消费仓根（调用方保证它已 resolve）
     rel:  str  —— 模型提供的相对路径
 
-    raise PathEscape 于：空路径 / 绝对路径 / 含 `..` / symlink 祖先或自身 /
+    raise PathEscape 于：空路径 / 含空字节 / 折叠后指向仓根自身（"." "./" 等）/
+                        绝对路径 / 含 `..` / symlink 祖先或自身 /
+                        无法判定 symlink（OS 层拒绝，fail-closed）/
                         最终 realpath 落在 root 之外
+
+    非法输入【一律】raise PathEscape——调用方只需 except PathEscape 即可接住
+    全部拒绝分支，不会有原始 OSError/ValueError 漏出。
     """
     root = Path(root).resolve()
 
