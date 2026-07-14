@@ -158,194 +158,265 @@ planned  ──▶  scaffolded  ──▶  verified
 
 | # | 产物 | 位置 | 说明 |
 |---|---|---|---|
-| 1 | **`environments.md`** | `openspec/architecture/` | 过程·操作轴真相源：dev 搭建 / test 执行 / deploy 发布。frontmatter 存泳道状态（机械真相源），正文命令表**由脚本渲染** |
-| 2 | **`testing-strategy.md`** | 同上 | 过程·方法轴真相源：泳道分层 / contract=集成测试点 / mock 边界 / 护栏 / 盲区 |
-| 3 | **`devenv-log.md`** | 同上 | append-only 留痕：模式分流 · 泳道状态迁移 · 降级 · 冷审轮次（对称 `sad-log.md`；continue 断点恢复靠它） |
-| 4 | **落地物**（真代码） | 项目各处 | 见 §1.4 清单 |
+| 1 | ⭐ **`testing-strategy.md`** | `openspec/architecture/` | **测试的唯一真相源**——三层 × 六槽，**一层一个完整交代**（选型 · 规范 · 怎么跑 · 要配什么 · 状态 · **信心与盲区**）。**核心承诺的载体。** 泳道表与命令表由脚本渲染 |
+| 2 | **`environments.md`** | 同上 | **非测试**的环境真相源：**dev 搭建** + **deploy 发布**。**纯人写，零机械载体、零渲染**〔D9〕。「测试怎么跑」→ 一行指针指向 ① |
+| 3 | **`devenv-log.md`** | 同上 | append-only 留痕：模式分流 · 泳道状态迁移 · 降级 · 冷审轮次（对称 `sad-log.md`；`continue` 断点恢复靠它） |
+| 4 | **落地物**（真代码） | 项目各处 | 见 §1.4 |
 | 5 | **入口** | 项目根 / openspec | `opsx-devenv` 托管块 → CLAUDE.md / AGENTS.md / README.md；`openspec/INDEX.md` 条目 |
 
 ### 1.1 落位：与 SAD 同居（`05` §2.2.1）
 
 两份真相源落 `openspec/architecture/`，**不落项目根、不落 `docs/`**：过程轴与空间轴同属**设计真相源层**；`docs/` 是 as-built 解释层（系统「是什么」），「怎么搭/怎么跑」不属于它；落项目根则两头不靠。
 
-### 1.2 承载形态：全直写，质量门内建（操作者 2026-07-13 拍定）
+### 1.2 承载形态：全直写，质量门内建
 
-文档与脚手架**都直落盘，不开 change 壳**（recorder 式，先例：`sdflow-architecture` 规则 4 / `sdflow-roadmap`）。
+文档与脚手架**都直落盘，不开 change 壳**（recorder 式，先例：`sdflow-architecture` / `sdflow-roadmap`）。
 
-理由：**环境是前置基础设施**——走 change 壳有鸡生蛋（该 change 自己的测试要靠这套环境才能跑）。质量靠四层门内建：`devenv_lint`（机械）+ **smoke 真跑**（可执行性）+ 冷审子代理（语义）+ 人门（看 diff）。
+理由：**环境是前置基础设施**——走 change 壳有鸡生蛋（该 change 自己的测试要靠这套环境才能跑）。质量靠四层内建：**逐层问出口**（A 层清单）+ **smoke 真跑**（可执行性）+ 冷审子代理（语义）+ 人门（看 diff）。
 
-### 1.3 单一真相源纪律：命令表机械渲染，不双写
+### 1.3 数据模型：一份 JSON，服务 `testing-strategy.md` 的渲染
 
-泳道的命令、出处、状态在 frontmatter 是**机械真相源**；正文那张命令表（命令 | 跑什么 | 出处 | 状态）**由 `devenv_scaffold.py render` 从 frontmatter 渲染**，带 `DO NOT EDIT` banner。
+**机械载体只有一份**（`environments.md` 完全在机械层之外〔D9〕）：三层框架 + 泳道，落 `openspec/architecture/.devenv.json`。
 
-理由：两处各写一遍必漂移（承 CLAUDE.md 设计基准 1「一致性机械化优先」；生态先例：`issues/INDEX.md` 的 DO-NOT-EDIT banner）。
-
-> **MUST NOT 用 YAML frontmatter 承载 `lanes[]`**〔A20〕——嵌套结构（列表 × 中文自由文本 × 带冒号的值）在零第三方依赖下没有可用的解析方案。**落 JSON 侧文件**；`environments.md` 的 frontmatter 只留三个扁平标量：`sad` / `mode` / `schema_version`。
+> **MUST NOT 用 YAML frontmatter 承载它**〔A20〕——嵌套结构（列表 × 中文自由文本 × 带冒号的值）在零第三方依赖下没有可用的解析方案。
 
 ```json
 {
   "schema_version": 1,
-  "lanes": [
+
+  "layers": {                          // ⭐ 三层框架 —— 核心承诺的机器可读形态（§2.2）
+    "unit": {
+      "how": "go test（标准库 testing）",              // ① 本项目怎么实现
+      "convention": "*_test.go 与被测同包；一个用例 = 一个纯函数行为",  // ② 测试规范
+      "process": "本地 `go test ./...`；提交前必跑",   // ③ 怎么跑 · 何时跑 · 谁跑
+      "tooling": "无额外依赖",                        // ④ 要装什么 · 要写什么
+      "blind_spots": "全绿 ≠ 消息真的穿过了 TCP；不证明集成正确性",  // ⑥ ⭐ 证明了什么 · 看不见什么
+      "lane_ids": ["hermetic"]
+      // ⑤ 状态 —— 不在这里！它从 lanes[] 投影算出〔D6〕，MUST NOT 手写
+    },
+    "integration": {
+      "how": "⚠️ 待定",                               // ⚠️ 待定 是合法值〔D1〕
+      "convention": "⚠️ 待定",
+      "process": "⚠️ 待定",
+      "tooling": "⚠️ 待定",
+      "blind_spots": "⚠️ 待定",
+      "lane_ids": ["mqtt-real"]
+    },
+    "e2e": {
+      "status": "not-applicable",                     // ← 唯一需要人写的层状态（价值判断）
+      "reason": "本项目是一个库，没有端到端的部署形态",
+      "consequence": "库的使用者若把 API 用错，我们看不见——只能靠使用方自己的 e2e"
+      // not-applicable 时 ①–④、⑥ 槽豁免
+    }
+  },
+
+  "lanes": [                           // 泳道 = 层的槽③④的答案落成的形状〔D8〕
     {
       "id": "hermetic",
-      "layer": "unit",                                  // ← 对应 testing-strategy 的哪一层
-      "kind": "pure",
+      "layer": "unit",                                // 归哪层，由「它穿过哪些真实边界」判定〔D3〕
       "status": "verified",
       "verification": {
-        "method": "go test ./...",                      // 模型提，人拍板；MUST 非空
-        "executor": "script",                           // script 是默认首选；human 需写明为何程序跑不了
-        "strength": "覆盖纯逻辑；不穿过任何外部依赖，不证明集成正确性",  // 模型自陈强度与盲区
-        "evidence": {                                   // 一次历史执行的坐标 —— 无时效锚〔A23〕
-          "at_commit": "<HEAD SHA>",                    // 给人读：这次验证发生在哪
+        "method": "go test ./...",                    // ← 一条能跑的命令。就这样〔D2〕
+        "executor": "script",                         // script 是默认首选
+        "strength": "覆盖纯逻辑；不穿过任何外部依赖",   // 模型自陈；是层⑥槽的逐条来源
+        "evidence": {
+          "at_commit": "<HEAD SHA>",                  // 给人读的坐标 —— 无时效锚〔A23〕
           "at_time": "2026-07-14T10:23Z",
           "exit": 0,
-          "attested_by": "script"                       // 或 "human"（confirm-lane）—— 如实标，不防伪
+          "attested_by": "script"                     // 或 "human"（confirm-lane）—— 如实标，不防伪
         }
       },
-      "source": {"file": "-", "kind": "toolchain", "selector": "go test"},
+      "source": "直接 go test（本项目无 task runner）",  // ← 自由文本人读注记，非机械契约〔D2〕
       "smoke": "internal/console/smoke_test.go",
-      "covers": ["§5.2 消息运行时"],                     // ← SAD contract 锚（声明；命中与否归冷审）
+      "covers": ["§5.2 消息运行时"],                   // SAD contract 锚（声明；命中与否归冷审）
       "deps": []
     },
     {
-      "id": "integration",
+      "id": "mqtt-real",
       "layer": "integration",
-      "kind": "external-dep",
       "status": "scaffolded",
       "verification": {
-        "method": "make integration",
+        "method": "MQTT_PORT=1883 go test -tags=integration ./internal/console/",
         "executor": "script",
-        "strength": "真穿过 broker；但断言是否有效不由本方法保证（归冷审 vacuous 镜）"
+        "strength": "真穿过 broker；断言是否有效不由本方法保证（归冷审 vacuous 镜）"
       },
-      "source": {"file": "Makefile", "kind": "make-target",
-                 "selector": "integration"},           // lint 只查此 target 存在，不解析 recipe〔A21〕
+      "source": "直接 go test -tags=integration",
       "smoke": "internal/console/integration_smoke_test.go",
-      "deps": [{"name": "mosquitto", "kind": "host-service"}],
+      "deps": [{"name": "mosquitto", "note": "本机服务，brew install mosquitto"}],
       "blocked_by": "本机无 mosquitto — brew install mosquitto 后 /sdflow-devenv continue"
     }
   ]
 }
 ```
 
-> **数据模型的四条 MUST NOT**（逐条对应一条被否方案，加回来即违反 §0.0）：
-> `deps[]` 无 `owned_by`〔A16〕· `source` 无 `digest`〔A21〕· `evidence` 无任何时效 digest〔A23〕· **出处 MUST NOT 按行号**（机制 B）。
-> `verified` 的证据**只能由执行者本人写**（脚本 fork / 人门），且**两种来源如实区分**（§0.3）。
+**数据模型的五条 MUST NOT**（逐条对应一条被否方案；加回来即违反 §0.0）：
 
-**⭐ 第二份 JSON：`.devenv-strategy.json`（三层框架的载体）**——**核心承诺的机器可读形态**（§2.2）。三层 × 五槽落 JSON，`testing-strategy.md` 从它渲染。**`⚠️ 待定` 是合法值**（§3.1），渲染时显著呈现、收尾报告逐条列出。
+| MUST NOT | 〔案〕 |
+|---|---|
+| `deps[]` 有 `owned_by`（「运行时派生」的锚不存在） | A16 |
+| `source` 有 `digest` / 是结构化契约（`{file,kind,selector}`） | A21 · **A24** |
+| `evidence` 有任何**时效 digest** | A23 |
+| **出处按行号**（行号锚是恒真断言） | 机制 B |
+| **层状态手写**（它是泳道的投影，见 §2.2） | **A25** |
 
-> **`environments.md` 的十六槽 MUST NOT 强行 JSON 化**：只有**命令表与泳道状态表**从 JSON 渲染（它们真的会双写漂移），**其余十四槽是人写区**——`06` 接地实测：17 槽里 SAD 真投影只有 2 个，**其余是全篇最高价值的纯人写区**（坑 / 护栏 / 盲区）。把人写区强行 JSON 化，是又一次「为了机械而机械」〔A22 同类〕。
+**枚举纪律**〔**A24**〕：`layer` 是**封闭的三值**（`unit` / `integration` / `e2e`——它是核心承诺的骨架，见 §2.2）。**其余一切分类字段 MUST 是自由文本**（`source` · `deps[].note` · 泳道的形态）——**封闭枚举 = 未列举的形态当场罢工 = 一类项目被拒之门外**，这正是 A21 的病。
 
-### 1.4 落地物清单与边界（2026-07-13 逐条拍定）
+**`verified` 的证据只能由执行者本人写**（脚本 fork / 人门），且**两种来源如实区分**（§0.3）。
 
-| 落地物 | 写吗 | 谁 owns |
+### 1.4 落地物：按**风险**分两类，不按文件类型
+
+> **MUST NOT 在本文档里钉死「用什么跑测试」**〔**A24**〕——Makefile？`package.json` scripts？`justfile`？`idf.py`？**还是根本不需要，`go test ./...` 一条命令就够？**
+> **这是模型看着项目现场决定的，不是设计文档该规定的。** 钉死它 = 直接背叛 §0.1 的「不管什么项目」。
+
+| 类 | 是什么 | skill 的纪律 |
 |---|---|---|
-| **Makefile target**（每泳道一个） | ✅ 核心——**门禁逻辑在此** | **人**（skill 只追加） |
-| 测试 harness（build tag / 进程内 broker 包 / fixture 工厂） | ✅ | 人（skill 只追加） |
-| **每泳道一条 smoke** | ✅ `verified` 的唯一证据 | 人（skill 只追加；**归位模式复用已有测试**） |
-| broker / 依赖服务（compose 或 `hack/` 启停脚本） | ✅ | 人（skill 只追加） |
-| doctor 依赖自查（缺什么、怎么装） | ✅ =「常见坑」槽的可执行版 | 人（skill 只追加） |
-| **CI 配置** | ⚠️ 可选，**且只做调用壳** | 人（skill 只追加） |
+| **① 新建文件** | smoke · harness · 依赖服务启停 · doctor —— **具体是什么文件、什么语言、要不要造 task 入口，模型现场定** | 直接写。**风险为零**（文件本来不存在） |
+| **② 改已有文件** | 把命令接进项目已有的任务系统（**如果这个项目有、且确实需要**） | 见下四条 MUST |
 
-**CI 只做调用壳**（拍定）：
+**改已有文件的四条 MUST**（**与文件类型无关**——Makefile / `package.json` / `justfile` 一视同仁）：
 
-```
-Makefile:  make integration          ← 真门禁在这
-CI 配置:   - run: make integration    ← 只是个调用者
-```
+1. **先给 diff 给人看，确认后才写**——副驾不背着你动方向盘。
+2. **幂等标记块**——注释语法是**有界**的（`#` / `//` / `<!-- -->` 数得完）⇒ **可手写**〔基准 5〕。
+3. **可精确回滚**——skill 知道自己写了哪些行。
+4. **MUST NOT 猜文件里原来有什么**〔**A24**〕——那是通往手搓解析器的路〔A21〕。**要知道就问人**：「你项目里已经有跑集成测试的命令吗？」
 
-三条理由：**无 CI 的项目照样有完整本地门禁**（mqtt-console 无 CI，门禁全在 Makefile + `hack/`，接地实证可用）· **CI 平台可换而门禁不变** · **本地与 CI 跑同一条命令**，不会出现「CI 绿本地红」。项目无 CI → CI 槽显式 `N/A` + **记后果**（§2.1 纪律）。
+**默认路径是「不改」**：`verification.method` 就是一条裸命令（`go test -tags=integration ./...`），**大多数项目根本不需要接线**。只有当命令确实太复杂（要起 broker、要设一串环境变量），模型才**建议**造一个 task 入口。
 
-**核心边界：skill 是「追加者」，不是「拥有者」。**
+**skill 的减法能力：无**〔**A26** · D5〕：
 
-frontmatter 的 `source` 字段**可以指向人写的行**——所以 skill 不需要接管 Makefile，只需两个动作：**已有的 target → 登记**（读出来写进 frontmatter，跑 smoke 验证）· **缺失的 target → 追加**。lint 只查 `source` 指的行**存不存在**，不关心那行是谁写的。
+| 动作 | skill |
+|---|---|
+| 删除文件 | ❌ **MUST NOT**——**爆炸半径不受控**：指向它的引用可能在**仓外**（别人的书签、别的仓、藏在代码注释里的路径）。收尾报告给出 `git rm <file>`，**人自己敲** |
+| 改文件内容 | ✅ MAY（走上面四条 MUST）——文件在原地、引用不断、`git diff` 是真内容、`git checkout --` 精确回滚 |
 
-于是**托管区块只用于两处，落地物一概不用**：
+**托管区块只用于两处**：
 
 | 对象 | 谁 owns | 机制 |
 |---|---|---|
-| `environments.md` 的命令表 | **skill** | 机械渲染 + `DO NOT EDIT` banner |
+| `testing-strategy.md` 的三层框架 + 泳道表 | **skill** | 从 `.devenv.json` 机械渲染 + `DO NOT EDIT` banner |
 | CLAUDE / AGENTS / README / INDEX | **skill** | `opsx-devenv` 托管块，幂等整块替换 |
-| **Makefile / CI / harness / smoke** | **人** | **无托管块**——skill 只追加，追加时带一行来源注释供审计 |
+| **一切落地物**（harness / smoke / 依赖服务 / task 入口） | **人** | **无托管块**——它们是人机共有的活文件；skill 写第一版，此后人改人 own |
 
-Makefile 不设托管块的理由：托管块意味着「这块归 skill、会被整块覆盖」，而 Makefile 是**人机共有的活文件**，人随时会改 target 的实现。skill 只管「有没有这个 target」，不管「它里面怎么写」。
+### 1.5 git 护栏
 
-**重名冲突 → fail-closed**：已有 `integration:` 但语义不是本泳道 → 脚本报冲突、留人裁决，**MUST NOT 静默覆盖**（先例：`sad_scaffold.py context-add` 同名术语 fail-closed）。
+**skill 没有删除能力**（§1.4）⇒ **不需要「删源前工作区必须干净」这道护栏**〔A26〕。
 
-### 1.5 git 前置（写真代码 / 删用户文件的护栏）
-
-**写代码是加法，删源是减法——风险不对称，故分治**：
-
-| 动作 | git 前置 |
+| | |
 |---|---|
-| 写落地物（Makefile / compose / CI / harness / smoke） | **不要求**工作区干净 |
-| **归位模式的删源** | **fail-closed 要求工作区干净** |
+| **工作区** | **不要求干净**——skill 的一切写入都是「新建文件」或「有 diff 可看、可 `git checkout --` 回滚的改动」 |
+| **分支** | 不强制开分支（recorder 式直写 + 多次 `continue` 增量推进）；**在默认分支上 → 提示建议开分支**，让人拍 |
+| **commit** | **不自动 commit**（承 `CLAUDE.md`：commit 只在用户要求时），收尾给建议 message + `git add` 提示 |
+| **人门** | **必看 diff**（§5 ④ 议程）——真代码进仓的最后一道人类护栏 |
 
-删源那条 fail-closed 的理由：删错了想 `git revert`，若工作区混着用户其他未提交改动，会**把它们一起 revert 掉**——要求先 commit/stash，是让「可回滚」这个承诺真的成立。
-
-**分支**：不强制开分支（recorder 式直写 + 多次 `continue` 增量推进，开一堆分支反成累赘）；但**在默认分支上 → 提示建议开分支**，让人拍。
-**不自动 commit**（承 `CLAUDE.md`：commit 只在用户要求时），收尾给建议 message + `git add` 提示。
-**人门必看 diff**（④ 议程第 3 条）——真代码进仓的最后一道人类护栏。
+---
 
 ## 2. 包含哪些内容（槽）
 
-### 2.1 `environments.md` 十六槽
+### 2.1 `environments.md`：**非测试**的环境真相源（纯人写）
 
-（来源：`environments-template-draft.md`，已由 mqtt-console 接地补槽。原草案自称「十六槽」实列 14 个，接地补入两槽后**真为 16**。）
+**Q7 之后，`environments.md` 只管两件事**：**dev 怎么搭起来** · **deploy 怎么发出去**。**测试整个搬进 `testing-strategy.md`。**
 
 | § | 槽 |
 |---|---|
-| §1 dev | 前置工具链 · 本地依赖服务 · 构建+本地运行 · **构建副产物** · 常见坑 |
-| §2 test | 测试依赖 · 各层执行命令（**带出处列**）· **测试选择路由** · CI 环境 · fixture/测试数据 · 方法指针 |
-| §3 deploy | 目标平台+依赖版本 · 配置项清单 · 发布流程 · 回滚 · 架构决策指针 |
+| **§1 dev** | 前置工具链 · 本地依赖服务 · 构建 + 本地运行 · 构建副产物 · **常见坑** |
+| **§2 test** | **一行指针**：「测试怎么跑 → `testing-strategy.md`」 |
+| **§3 deploy** | 目标平台 + 依赖版本 · 配置项清单 · 发布流程 · **回滚** · 架构决策指针 |
 
-**两条接地纪律（血泪，MUST 守）**：
+**本文档零机械载体、零渲染、零 lint**〔D9 · **A27**〕：
 
-- **命令必须为真**：每条命令能在 Makefile / package.json 找到出处。在本 skill 里这条**天然成立**——命令表的出处就是 skill 自己刚写的 Makefile。
-- **N/A 须连带记后果**：显式 `N/A — <理由>` 之外，还要记它**留下的洞**（例：CI = N/A ⇒「`assert-bindings` 因此无任何自动触发点」）。只写 N/A 不写代价 = 把缺口藏进「这项不适用」。
+> 剩下的十槽**没有一槽是机械可渲染的**——而 `06` 的接地实测正好说到它们：「17 个槽里 SAD 真投影只有 2 个……**其余 10 个是纯人写**——而**纯人写区（常见坑 / 护栏 / 盲区）恰恰是全篇最高价值的部分**。」
+> **把人写区强行 JSON 化，是又一次「为了机械而机械」。** skill 在这里的角色是**提问 + 起草**：「你们部署到哪？回滚怎么做？**新人搭环境最容易卡在哪一步？**」
+> 槽空着 ⇒ 落 **`⚠️ 待定`**，人一眼看见，收尾报告列一行。**不拦。**
 
-### 2.2 ⭐ `testing-strategy.md`：**测试三层框架，一层都不许留白**（操作者定调，2026-07-13）
+**`N/A` 须连带记后果**：显式 `N/A — <理由>` 之外，还要记它**留下的洞**。只写 N/A 不写代价 = 把缺口藏进「这项不适用」。
+
+### 2.2 ⭐ `testing-strategy.md`：三层框架，**一层都不许留白**
 
 > **这是 skill 的核心承诺**：不管什么项目，跑完都拿到一份完整的测试与验证策略框架。
+> **「留白」= 该问的没问出口**，**不是**「格子里没字符串」——`⚠️ 待定` 是**合法产物**〔D1〕。
 
-**MUST 覆盖三层**：**单元测试** · **集成测试** · **端到端（e2e）测试**。每层 **MUST 答五槽**（模型根据本项目实际环境研究推荐，**由人拍板**）：
+#### 「层」= 保真度刻度，**不是测试类型分类法**〔D3 · **A25**〕
 
-| 槽 | 内容 |
+**一条泳道归哪层，由「它穿过哪些真实边界」判定，不由「它用什么测试框架」判定。**
+
+| 层 | 判据 |
 |---|---|
-| **① 本项目怎么实现** | 框架 / 库 / 工具选型（**模型现场调研推荐，MUST NOT 由规格预先钉死**） |
-| **② 测试规范** | 测试写在哪（目录/命名）· 什么算一个用例 · 该覆盖什么、不该覆盖什么 |
-| **③ 测试方法与流程** | 怎么跑（命令）· 什么时候跑（本地/CI/提交前）· 谁来跑 |
-| **④ 需要配备的工具与脚本** | 要装什么依赖 · 要写什么脚本/harness/fixture（**这些即落地物**） |
-| **⑤ 状态** | `已实现` / `不适用` / `人工`（三选一，各有强制附带项，见下） |
+| **单元** | **不穿任何真实外部边界**（无网络 / 无真文件 / 无真进程 / 无真依赖） |
+| **集成** | **穿过部分真实边界**（真 broker / 真进程 / 真语言桥 / 真文件系统 / 真生成物） |
+| **e2e** | **端到端穿过全部真实边界**（真 UI / 真硬件 / 真部署形态） |
 
-**⑤ 三态的强制附带项**（这是「防漏」的落点）：
+- vitest 的组件测试**不连任何真实依赖** ⇒ **单元层**，哪怕它渲染了 DOM。
+- `assert-bindings` 的**结构门禁**读的是**真的生成物文件** ⇒ **集成层**（它穿过了「生成物契约」这条真实边界）。
+- 真板烧录 ⇒ **e2e 层**，`executor: human`。
 
-| 状态 | **MUST 附带** | 为什么 |
+> **这样三层就与 §6.2 的「依赖形态阶梯」合成一个轴**：**形态决定你有哪些真实边界，边界决定泳道落在哪个刻度。**
+> **某个项目凑不满三层**（纯计算库没有「真实外部边界」可穿）⇒ 那一层 `不适用` + **后果**。**这不是偷懒，是物理事实。**
+
+#### 六槽（每层 MUST 答；模型现场调研推荐，**由人拍板**）
+
+| 槽 | 内容 | 谁答 |
 |---|---|---|
-| `已实现` | 对应**泳道**（`lanes[]` 中至少一条，且**状态 ≥ `scaffolded`**）+ 其命令与出处 | 声称已实现却没有泳道（或只挂一条 `planned` 空壳）= 文档在说谎 |
-| **`不适用`** | **理由 + 后果**——「不做这层，我们因此看不见什么」 | **不写后果，`不适用` 就是一个不需要负责的逃生舱**；写了后果，它才是一个**被知情接受的取舍** |
-| **`人工`** | **用户按什么方式来做**（具体步骤 / 检查清单 / 何时执行）+ **为什么程序跑不了** | `人工` 不是「这层没人管」的同义词——**人工测试也是测试方法**，必须可复述、可交接、可执行 |
+| **① 本项目怎么实现** | 框架 / 库 / 工具选型（**模型现场调研，MUST NOT 由本文档预先钉死**） | 模型提 → 人拍 |
+| **② 测试规范** | 测试写在哪（目录/命名）· 什么算一个用例 · 该覆盖什么、不该覆盖什么 | 模型提 → 人拍 |
+| **③ 测试方法与流程** | 怎么跑（**命令**）· 什么时候跑（本地/CI/提交前）· 谁来跑 | 模型提 → 人拍 ⟹ **落成泳道的 `verification`** |
+| **④ 需要配备的工具与脚本** | 要装什么依赖 · 要写什么 harness/fixture | 模型提 → 人拍 ⟹ **落成泳道的 `deps` + 落地物** |
+| **⑤ 状态** | `不适用` / `planned` / `scaffolded` / `verified` | ⚠️ **不是人答的槽**——**从泳道投影算出**（见下） |
+| **⑥ ⭐ 这层证明了什么 · 看不见什么** | **信心与盲区** | 模型提候选 → **人补上项目特有的那句** |
 
-**⑤=`不适用` 时，①–④ 槽豁免**（可统一填「不适用，见⑤」）——**否则就是逼模型为「不做这件事」编造「怎么实现/什么规范/什么工具」的废话——机械层会奖励空话、惩罚诚实。**
+**⭐ 为什么必须有 ⑥**（它是这个 skill 存在的理由）：
+
+> §0.1 的定调是「**提醒我要考虑哪些事情别忘了**」。
+> **人最容易忘的不是「用什么框架」**（一搜就有，模型必答）。**人最容易忘的是——「我这层全绿了，可我还是不知道什么？」**
+>
+> 真实案例（mqtt-console）：泄漏探针用 `CleanSession=true` 重连，而 MQTT 3.1.1 规定 `CleanSession=1` 的 CONNACK **恒** `SessionPresent=0` ⇒ **断言恒真，残留 session 回归全部漏过**。
+> **测试是绿的。数量是够的。它什么都没测出来。**
+> **一份没问过「这层看不见什么」的测试策略，正是这种绿的温床。**
+
+**⑥ 对每种状态都要答**（不只是 `不适用`）：
+
+| 状态 | ⑥ 要答什么 |
+|---|---|
+| **已跑绿的层** | **这层绿了，你依然不知道什么？**（「单元层全绿 ≠ 消息真的穿过了 TCP」） |
+| **`不适用`** | **不做这层，你因此看不见什么？**（「`不适用` MUST 记后果」**就是 ⑥ 在这个状态下的形态**） |
+| **`executor: human` 的层** | **人跑一遍能确认什么、确认不了什么？**（「人眼能看出渲染错位，看不出内存泄漏」） |
+
+#### ⑤ 状态：**从泳道投影算出，MUST NOT 手写**〔D6 · **A25**〕
+
+| 层状态 | 定义 |
+|---|---|
+| **`不适用`** | **零泳道，且人写了「理由 + 后果」** ← **唯一需要人拍的层状态**（它是价值判断） |
+| **`planned`** | 有泳道，但全部 `planned` |
+| **`scaffolded`** | 至少一条 `scaffolded`，无 `verified` → 渲染成 **「已搭好，未验证（缺 mosquitto）」** |
+| **`verified`** | 至少一条 `verified` → 渲染成 **「已验证 @ `abc123f` · 2026-07-14」** |
+
+- **「已实现」这个词整个废弃**〔A25〕——它实指「有脚手架」，而用户读到「集成测试：已实现」会以为它跑得起来。**「跑不绿是合法状态，跑不绿却装作跑得绿不是」**（§0.0）。
+- **「人工」不再是层状态**——它是泳道的 `executor`，渲染在泳道行上（`e2e：真板烧录 · 人工 · verified @ abc123f`）。**双写消除**（E7）。
+- **层状态零手写 ⇒ 无法伪造、无法漂移**——它是**投影**，不是声明。**这是结构性保证，不是拦截**（承 D1：让坏事没法发生，而不是发生后抓它）。
+
+#### `不适用` 时 ①–④、⑥ 槽豁免
+
+可统一填「不适用，见⑤」——**否则就是逼模型为「不做这件事」编造「怎么实现/什么规范/什么工具」的废话。机械层会奖励空话、惩罚诚实。**
+（`不适用` 的 `reason` + `consequence` **仍 MUST 有**——那正是 ⑥ 在这个状态下的形态。）
 
 #### 机器可读结构：三层框架 **MUST 落 JSON，Markdown 从 JSON 渲染**
 
-**这是「真机械」的前提。** 若让 lint 去解析自由格式 Markdown（找"单元测试"这一节、切出五个子槽、判断非空），就是**又一个手搓解析器**——本仓前科历历在目（`parse_frontmatter` 只支持扁平标量、`inject` 至今非 fence-aware、`ship_gate` 子串检测假阳）。
-
-**`lanes[]` 已经落 JSON 了，同一个道理必须贯彻到三层框架。** lint 检查的是 **JSON 字段**（槽在不在、`不适用` 有没有 `consequence`、`已实现` 的 `lane_ids` 指向的泳道状态够不够），**不是 Markdown 结构**。
-
-#### 与泳道的关系
-
-`testing-strategy.md` = **策略与框架**（方法轴：怎么测）· `environments.md` = **操作**（操作轴：怎么跑）· `lanes[]` = **机械真相源**，把两者连起来——**一条泳道 = 某一层的一个可执行入口**（lane 带 `layer` 字段）。
+若让 lint 去解析自由格式 Markdown（找"单元测试"这一节、切出六个子槽、判断非空），就是**又一个手搓解析器**——本仓前科历历在目。lint 检查 **JSON 字段**，不是 Markdown 结构。
 
 #### 框架是活的
 
-**MUST NOT** 被当作一次性定死的文档。开发中随时可 `continue` / `replan` 调整（某层从 `不适用` 变 `已实现`、工具选型换掉、规范收紧）。**首跑拿到「有方向和基本能力」的框架即达标**——**「不许留白」指五槽必须有答案（哪怕答案是「不适用+后果」），不等于要求三层全绿**。粗糙的首答（如「工具选型待调研」）合法；**空白 / 占位符不合法**。
+**MUST NOT** 被当作一次性定死的文档。开发中随时可 `continue` / `replan` 调整（某层从 `不适用` 变成有泳道、工具选型换掉、规范收紧）。
+**首跑拿到「有方向和基本能力」的框架即达标**——**「不许留白」指六槽都被问过，不等于要求三层全绿。** 粗糙的首答合法；`⚠️ 待定` 合法；**槽压根不存在，不合法。**
 
-### 2.3 两文档的精确切线（`05` §3.1，17 行）
+### 2.3 两份文档的切线：**测试 vs 非测试**〔D7 · **A27**〕
 
-**方法/决策 → testing-strategy；环境/操作 → environments。** 与「SAD §7 决策 ↔ env §3 操作」是**同一把刀**。
+| 文档 | 管什么 |
+|---|---|
+| **`testing-strategy.md`** | **测试的一切**——选型 · 规范 · **命令怎么跑** · 要装什么要写什么 · 状态 · 信心与盲区。**一层一个完整交代，不切成两半** |
+| **`environments.md`** | **非测试**——dev 搭建 · deploy 发布 |
 
-最漂亮的一对切线（接地实证）：**flake 的定性与放行决策**（是什么 · 为何不修 · 靠什么护栏）→ testing-strategy；**flake 护栏的实现**（Makefile 的 `|| retry once`）→ environments。同一件事，决策面与操作面各有一个家。
+> **为什么不按「方法 vs 操作」切**〔A27〕：**核心承诺是「每层交代清楚」——那一层的交代就该是完整的一块。**
+> 把它劈成「方法在这份、命令在那份」，**用户想知道「集成测试怎么跑」就得翻两份文档自己拼**。
+> **一个副驾的产物，不该是两份需要交叉引用的东西。**
 
 ---
 
@@ -374,7 +445,7 @@ Makefile 不设托管块的理由：托管块意味着「这块归 skill、会�
 
 | references 文件 | 固化什么 | 为什么固化在这（而非交模型临场发挥） |
 |---|---|---|
-| **`testing-framework.md`** ⭐ | **三层 × 五槽的提问清单**——每一格「一个有经验的人会问什么」。**核心承诺的唯一载体** | 枚举完备性**不能靠模型临场回忆**（承 02 §6）：模型每次会想起不同的 9 个问题，而清单保证**每次都是同样的 15 个** |
+| **`testing-framework.md`** ⭐ | **三层 × 六槽的提问清单**——每一格「一个有经验的人会问什么」。**核心承诺的唯一载体** | 枚举完备性**不能靠模型临场回忆**：模型每次会想起不同的九个问题，而清单保证**每次都是同样的十八个** |
 | `lane-patterns.md` | **依赖形态四问** + 每种形态的泳道阶梯**原理**（§6.2）。**固化「问什么」，不固化「答什么」** | 维度稳定（三层阶梯的道理十年不变）；工具选型随生态腐烂 ⇒ 交模型现场调研 + 人拍板 |
 | `boundary-rules.md` | 归位模式的切线表 + 归属判据（§5 ①'） | 归属判定是全流程唯一无确定性信号的一步 |
 | `review-lenses.md` | 冷审镜单（§3.4） | 语义残余的唯一防线 |
@@ -407,13 +478,13 @@ Makefile 不设托管块的理由：托管块意味着「这块归 skill、会�
 |---|---|---|
 | `devenv_paths` | **containment**——skill 写的每个文件 MUST 落在仓内 | 路径穿越**人看不见** ⇒ 必须拦 |
 | `devenv_schema` | 两份 JSON 的**结构与枚举**校验（给模型一份填空契约） | `status` 拼成 `verifed` **人看不见** ⇒ 必须拦 |
-| `devenv_lint` | **`⚠️ 待定` 计数 + `covers` 差集** —— **只报不拦** | 五槽留白**人一眼看得见** ⇒ 报，不拦〔闸门 0〕 |
+| `devenv_lint` | **`⚠️ 待定` 计数 + `covers` 差集 + 代价横幅** —— **只报不拦** | 六槽留白**人一眼看得见** ⇒ 报，不拦〔闸门 0〕 |
 
 **schema 与 lint 的切线，是本设计最容易被侵蚀的一条，MUST 守住：**
 
 ```
 schema  拦「结构」 —— 字段在不在 · 枚举合不合法 · 类型对不对     ← 人看不见
-lint    报「内容」 —— 五槽留白 · 不适用没写后果 · blocked_by 敷衍  ← 人一眼看见
+lint    报「内容」 —— 六槽留白 · 不适用没写后果 · blocked_by 敷衍  ← 人一眼看见
 ```
 
 **MUST NOT 把内容检查加回 schema。** 拦一个空的 `strength`，**并不会让模型写出好的 `strength`，只会让它写出「一句话」**——机械层会**奖励空话、惩罚诚实**。
@@ -471,7 +542,7 @@ lint    报「内容」 —— 五槽留白 · 不适用没写后果 · blocked_
 
 ### 3.5 拆解产出 = skill 的三份清单
 
-1. **A 层提问清单**（三层五槽 · 形态四问 · 归属判据）→ **`references/testing-framework.md` · `lane-patterns.md` · `boundary-rules.md`** ⭐ **核心承诺的载体**
+1. **A 层提问清单**（三层六槽 · 形态四问 · 归属判据）→ **`references/testing-framework.md` · `lane-patterns.md` · `boundary-rules.md`** ⭐ **核心承诺的载体**
 2. **冷审镜单**（E1–E11 的语义残余）→ `references/review-lenses.md`
 3. **人门清单**（价值判断：`不适用` 拍不拍 · 技术栈选型 · 依赖装不装 · **验证方法有没有效**）→ `SKILL.md` 的人门议程
 
@@ -482,7 +553,7 @@ lint    报「内容」 —— 五槽留白 · 不适用没写后果 · blocked_
 
 对策（**全部是「问 + 呈现」，无一条是「拦」**）：
 
-1. **三层五槽逐条问**——按 `testing-framework.md` 的清单，**一格一格问出口**。答不上来 ⇒ `⚠️ 待定`（合法），**MUST NOT 替人填**
+1. **三层六槽逐条问**——按 `testing-framework.md` 的清单，**一格一格问出口**。答不上来 ⇒ `⚠️ 待定`（合法），**MUST NOT 替人填**
 2. **验证方法 MUST 问到**——**不存在「不知道怎么验」的泳道**（人工测试也是方法）。模型提候选 + **自陈强度与盲区**，人拍板
 3. **尽可能跑一遍确认**：`script` 是默认首选，skill **亲自 fork 执行**（不问「你跑过吗」）；程序跑不了才降级 `human`，且 MUST 写明**为什么跑不了 + 人怎么做**
 4. **状态三态如实标**，`scaffolded` MUST 带**非空 `blocked_by` + 可辨认的修复指引**——**这一条靠「问」**：「这条为什么没跑绿？装什么能跑通？」
@@ -492,25 +563,28 @@ lint    报「内容」 —— 五槽留白 · 不适用没写后果 · blocked_
 
 **vacuous / `covers` 命中 / 验证方法是否有效 → 归冷审专镜 + 人门，机械层不管**（§0.0 闸门 1）。
 
-### 机制 B：命令溯源（服务 E1/E7）
+### 机制 B：命令即证据（服务 E1/E7）
 
-每条命令标 `source: {file, kind, selector}`，**只用于两件事**：① 渲染命令表的「出处」列（给人看）② 告诉 `verify-lane` 该跑什么。
+> **本机制已收缩到骨头，几乎不成其为一个「机制」——这是对的。**〔A21 · A23 · **A24**〕
 
-**三条 MUST NOT**：
+**`verification.method` 就是一条能跑的命令。** `verify-lane` fork 执行它，拿到**真实 exit code**。**那就是全部证据。**
 
-| MUST NOT | 正解 |
+**`source` 是一句自由文本的人读注记**（「直接 go test」/「Makefile 的 integration target」/「`package.json` 的 `test:e2e`」），**只用于渲染命令表的「出处」列**。
+
+| MUST NOT | 为什么 |
 |---|---|
-| **`source` 按行号** | 行号锚是**恒真断言**——「第 11–14 行存不存在」对任何长度 ≥14 行的文件恒为真。行号仅在 render 时动态生成供阅读，**不作真相** |
-| **对 `source` 做任何 make 语法解析**（含「按 selector 提取 recipe」与「用正则查 target 存在性」） | 无界语法面禁手搓〔**A21**〕 |
-| **加时效 digest**（试图证明「验证以来文件没变」） | 它结构上覆盖不了被测实现，**一个拦不全的锁比没有锁更坏**〔**A23**〕 |
+| **`source` 是结构化契约**（`{file, kind, selector}` + `kind` 枚举） | 它服务的是一个不存在的问题〔**A24**〕——「命令必须为真」在本 skill 里**天然成立**：命令表的出处就是 skill 自己刚跑过的那条，**exit code 就是证据** |
+| **`source` 按行号** | 行号锚是**恒真断言**（「第 11–14 行存不存在」对任何长度 ≥14 行的文件恒为真） |
+| **对 `source` 做任何语法解析** | 无界语法面禁手搓〔**A21**〕 |
+| **加时效 digest** | 它结构上覆盖不了被测实现，**一个拦不全的锁比没有锁更坏**〔**A23**〕 |
 
-**「target 真的存在、命令真的能跑」由 `verify-lane` 真 fork 执行来保证——make 自己是权威判官**：
+**「命令真的能跑」由 `verify-lane` 真 fork 执行来保证——工具自己是权威判官**：
 
 | 失效模式 | 谁抓住它 |
 |---|---|
-| `selector` 拼错 / target 压根不存在 | **`verify-lane` 跑 `make integration`** → make 报 `No rule to make target` → `exit≠0` → 泳道**进不了 `verified`**。**make 自己解释自己的语法**，覆盖 100% 语法面，零解析器，零维护 |
-| target 后来被人删了 / 改名了 | **`continue` 时 skill 问一句**：「上次 verified 于 `abc123f`，之后 `Makefile` 有改动，要重跑吗？」→ 重跑 → make 自己报。**git 就能回答，零新机制** |
-| skill 追加的 target 与人已有的**重名** | `verify-lane` 跑 make 时，**make 自己会打 `warning: overriding recipe for target`** 到 stderr ⇒ **捕获它即可**。零额外执行 |
+| 命令拼错 / target 不存在 | **`verify-lane` 真跑** → `make: No rule to make target` / `go: unknown flag` → `exit≠0` → 泳道**进不了 `verified`**。**工具自己解释自己的语法**，覆盖 100%，零解析器，零维护 |
+| 命令后来失效了（人改了 Makefile / 删了 target） | **`continue` 时 skill 问一句**：「`integration` 上次 verified 于 `abc123f`，之后 `Makefile` 有改动，要重跑吗？」→ 重跑 → 工具自己报。**git 就能回答，零新机制** |
+| skill 追加的 task 入口与人已有的**重名** | **`verify-lane` 跑的时候，工具自己会警告**（GNU make：`warning: overriding recipe for target`）⇒ **捕获它即可**。零额外执行 |
 
 **`verified` 的证据 = 一次历史执行的坐标**：
 
@@ -577,71 +651,85 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" init --root "$REPO"
 
 ### 五步
 
-**① 事实采集**——SAD 有源的**投影出来给人复核**（不直接采信，同 02 的成熟项目回填分支纪律），无源的**问**：
+**① 事实采集**——SAD 有源的**投影出来给人复核**（不直接采信），无源的**问**：
 
 - 投影：栈与平台约束 ← SAD §2 · 外部依赖 ← SAD §3 · **集成测试点 ← SAD §5 contract**（E2 的锚）
 - 必问（SAD 无源）：CI 平台？团队机器可用依赖（Docker / 特定 broker）？部署形态？
-- **时序纪律**（同 02）：MUST 实际提问并获得回答后才允许记录；MUST NOT 预填/臆测。
+- **时序纪律**：MUST 实际提问并获得回答后才允许记录；**MUST NOT 预填 / 臆测 / 替人拍板**。
 
-**（①' 归位模式专属）素材盘点 + 判归属 + 搬运表**——按 `references/boundary-rules.md`（切线表 + 边界四问）把每节判去一个格：`environments` / `testing-strategy` / roadmap（时间轴）/ SAD（架构决策）/ 入口（最小命令+指针）/ 删除（重复复述）。**搬运表 MUST 先给人确认再落笔**——归属判定是全流程**唯一无确定性信号**的一步，人门放这里，不放末尾审文档。
+**（①' 归位模式专属）素材盘点 + 判归属 + 搬运表**——按 `references/boundary-rules.md` 把每节判去一个格：`testing-strategy` / `environments` / roadmap（时间轴）/ SAD（架构决策）/ 入口（最小命令 + 指针）/ **已失效**。
 
-**删源的三种处置**（不是一个动作，搬运表 MUST 区分）：
+**skill 对旧素材的三种处置**〔D5 · **A26**〕：
 
-| 处置 | 何时 | 例（mqtt-console 接地） |
+| 处置 | skill 做什么 | 内容 |
 |---|---|---|
-| **整体删除** | 内容全搬走，且无人引用 | `docs/modules/testing.md` |
-| **部分保留 + 改写** | 只搬走一部分（如方法层），剩余留下 + 加指针 | `roadmaps/v2/testing-strategy.md`（方法搬走、时间轴留下） |
-| **降为一行指针** | 内容全搬走，但**外部引用面广**，直接删会大面积悬空 | 被十几处引用的入口文档 |
+| **整体失效** | 在文件**开头**加一行 `> ⚠️ 已失效 —— 内容已迁至 <path>` | **原样保留**（范围 = 整份，无歧义） |
+| **部分失效** | **删掉失效的那部分**（+ 留一行指针） | **删除**——**「失效范围」必须由「它不存在了」来界定**。留着内容只加一行标记，读者无法判断哪几行失效了 |
+| **真删文件** | ❌ **MUST NOT**——收尾报告给出 `git rm <file>`，**人自己敲** | 人决定 |
 
-**判据有确定性信号 —— `grep` 被引用面**（skill 先跑统计，带着数字进人门）：
+> **skill MUST NOT 删除用户的任何文件**〔A26〕：**爆炸半径不受控**——指向它的引用可能在**仓外**（别人的书签、别的仓的文档、藏在代码注释里的路径）。mqtt-console 那次，旧路径藏在 `Makefile` 注释和 7 个测试文件注释里，**共 20 处，而那还只是 `grep` 得到的**。
+> **看得见的双写，是一个待办；看不见的误删，是一个事故。**
 
-```
-引用数 = 0         → 可直接删
-引用数少（可枚举） → 改掉这些引用 + 删（mqtt-console 那次改了 20 处）
-引用数多 / 散      → 降为一行指针，避免大面积改动
-```
+**引用面统计**（`grep`，带着数字进人门）：`引用数 = 0` → 建议直接 `git rm` · `引用数少` → 建议改掉这些引用后 `git rm` · `引用数多 / 散` → 建议保留文件 + 顶部失效标记。
+**呈现纪律**：搬运表 MUST 单列一节「**以下 N 个文件建议删除（命令附后）**」，**不许只在表格某行标个 `[删除]` 混过去**（承 `grill-not-skippable`）。
 
-**呈现纪律**：搬运表 MUST 单列一节「**以下 N 个文件将被整体删除**」，**不许只在表格某行标个 `[删除]` 混过去**（承 `grill-not-skippable`：跳过类判定别埋进长消息）。
-**删后 MUST 扫残留引用**——且要扫到**代码注释里**（mqtt-console 那次，旧路径藏在 `Makefile` 注释和 7 个测试文件注释里，共 20 处）。落成 `devenv_lint` 的机械检查，不靠人记得。
-**git 前置**：删源 **fail-closed 要求工作区干净**（§1.5）。
+---
 
-**② 泳道设计出候选 → 人拍**——按 `references/lane-patterns.md` 给候选（**不让人从零想**）。拍板产出：几条泳道 · 各测什么 · mock 边界在哪 · 各守哪条 contract（`covers`）。候选数由**真实分歧**驱动（同 02 §5.2：禁稻草人凑数；无分歧允许单方案直出但 MUST 显式声明一行）。
+**② ⭐ 三层框架逐层问 → 泳道随之落定**〔D8 · **A28**〕
 
-**③ 落地脚手架 + 尽可能跑一遍确认**——写 Makefile target / CI 配置 / harness / **每泳道一条 smoke**（**归位模式：从已有测试里选一条当锚，不新写冗余的**）。
+> **这一步是核心承诺的产出步骤，也是人门的重心。**
+> **泳道不是一个独立的设计对象——它是六槽里 ③④ 的答案落成的形状。**
 
-> **③-pre 人门 MUST 在执行之前**：否则**模型生成的 recipe body 与 smoke 源码，在任何人看过一眼之前就已经被执行了**。而「跑前列命令给操作者过目」给人看的是 `make integration` 这**一行调用**，对「target 里到底跑什么」提供**零信息量**——真正危险的内容恰恰不在那个门里。
+按 `references/testing-framework.md` 的清单，**对三层各问六槽，一格一格问出口**：
+
+| 槽 | 产出 |
+|---|---|
+| ① 选型 · ② 规范 · **⑥ 信心与盲区** | → **落进 `testing-strategy.md` 的层块** |
+| **③ 怎么跑（命令）** | → **落成泳道的 `verification.method` / `executor`** |
+| **④ 要装什么 · 要写什么** | → **落成泳道的 `deps` + §1.4 的落地物清单** |
+| ⑤ 状态 | ← **不问。从泳道投影算出**〔D6〕 |
+
+- 泳道候选按 `references/lane-patterns.md` 给（**不让人从零想**）；候选数由**真实分歧**驱动（禁稻草人凑数；无分歧允许单方案直出但 MUST 显式声明一行）。
+- **人当场答不上来** ⇒ 落 **`⚠️ 待定`**（合法产物）。**MUST NOT 替人填。**
+- **某层确实不做** ⇒ `不适用` + **理由 + 后果**（「不做这层，我们因此看不见什么」）。**这是唯一需要人拍的层状态。**
+
+**③ 落地脚手架 + 尽可能跑一遍确认**——按 §1.4 写落地物（**具体是什么文件、要不要造 task 入口，模型现场定**）。
+
+> **③-pre 人门 MUST 在执行之前**：**模型写的 smoke 源码，会在任何人看过一眼之前就被执行。** 给人看「跑什么命令」是不够的——**MUST 给人看 smoke 与 harness 的 diff**（真正危险的内容在那里）。
 
 然后按 `executor` 分流（**`script` 是默认首选，skill 亲自 fork 执行，不问「你跑过吗」**）：
 
 | 结果 | 状态 |
 |---|---|
-| `script` 跑绿 | → `verified`（脚本写 evidence：`exit` / `at_commit` / `at_time` / `attested_by: script`——**无时效 digest**〔A23〕） |
-| `script` 跑红 / **依赖缺失** / **target 不存在**（make 报 `No rule to make target`〔A21〕） | → `scaffolded` + **写清 `blocked_by`**（能跑，只是条件不具备——下次 `continue` 再跑） |
-| **方法本身没法用程序跑**（真硬件 / UI 视觉 / 非 POSIX） | → `executor: human`，MUST 写明**为什么程序跑不了** + **人怎么做** → 人跑 → 人门确认 → `verified`（**标 `human-attested`**） |
+| `script` 跑绿 | → `verified`（脚本写 evidence：`exit` / `at_commit` / `at_time` / `attested_by: script`） |
+| `script` 跑红 / 依赖缺失 / 命令不存在 | → `scaffolded` + **写清 `blocked_by`**（**原始报错摘要 + 修复指引**）——能跑，只是条件不具备，下次 `continue` 再跑 |
+| **方法本身没法用程序跑**（真硬件 / UI 视觉判断） | → `executor: human`，MUST 写明**为什么程序跑不了** + **人怎么做** → 人跑 → 人门确认 → `verified`（`attested_by: human`） |
 
-> **`verified` 的两种来源在数据与文档里都可区分**（§0.0 诚实边界）：脚本验的 vs **人说的**。**MUST NOT 佯装脚本保证了后者。**
-> **vacuous（smoke 跑绿但没真穿过 / 断言恒真）不在此判**——**机械层不管，归冷审 vacuous 镜**（§3.2 E10）。
-
-**执行边界（四条，2026-07-13 拍定）**：
+**执行边界（四条）**：
 
 1. **跑前先列命令让人过目**，不偷跑——尤其会起容器 / 占端口的。人可以说「这条跳过，标 `planned`」。
-2. **每条命令有超时**（承 mqtt-console `-timeout 120s` 经验：无界超时会空耗）。超时 → `scaffolded` + `blocked_by` 如实写「超时，未确认是环境问题还是 smoke 本身挂了」。
-3. **失败不重试、不 debug** ——跑一次，失败就如实记 `blocked_by`（原始报错摘要 + 修复指引），**MUST NOT 陷进 debug 循环**。**skill 的职责是「建 + 验」，不是「调通」**；一旦允许它 debug，它会在一条泳道上耗光整个 session，而这与渐进 DoD 直接矛盾——**跑不绿本来就是合法状态**。修 smoke 是下次 `continue` 的活。
+2. **每条命令有超时**。超时 → `scaffolded` + `blocked_by` 如实写「超时，未确认是环境问题还是 smoke 本身挂了」。
+3. **失败不重试、不 debug**——跑一次，失败就如实记 `blocked_by`（**诊断可以给，修复不做**：「`dial tcp 127.0.0.1:1883: connection refused` —— 看起来 mosquitto 没起，`brew services start mosquitto` 后 `continue`」）。**skill 的职责是「建 + 验」，不是「调通」**；一旦允许它 debug，它会在一条泳道上耗光整个 session。**跑不绿本来就是合法状态。**
 4. **真硬件泳道天然不跑**（要烧板）→ 直接 `scaffolded` + 指向 `embedded-test-sop` 的手动 SOP。
 
 **MUST NOT 替操作者装系统依赖**（改用户机器、副作用不可逆）——给 doctor 脚本 + 安装命令。
 
-**④ 冷审 + 人门**——**MUST 由 fresh 子代理执行**（禁生成 session 自查，同 02）。按 `review-lenses.md` 取镜：
+**④ 冷审 + 人门**——**MUST 由 fresh 子代理执行**（禁生成 session 自查）。按 `review-lenses.md` 取镜：
 
 - **覆盖镜**（E2）：SAD 哪条 contract 没被任何泳道穿过？`covers` 声明是否真命中？
-- **vacuous 镜**（E10）：smoke 跑绿但什么都没断言吗？删掉被测逻辑它会红吗？
-- **边界镜**（E8）：架构决策漏进 env 了吗？阶段计划漏进 testing-strategy 了吗？
-- **诚实镜**（E6）：`planned` 有没有被伪装成 `verified`？`blocked_by` 是真原因还是敷衍？
-- **归位模式专属**：删源镜——搬运后源文件真删了吗？残留引用（含**代码注释里**的）扫干净了吗？
+- **vacuous 镜**（E10）：smoke 跑绿但什么都没断言吗？删掉被测逻辑它会红吗？**这是唯一防线。**
+- **盲区镜**（⑥ 槽）：每层的「看不见什么」写的是套话，还是这个项目特有的那句？
+- **诚实镜**（E6）：`blocked_by` 是真原因还是敷衍？`⚠️ 待定` 是真的问过了吗？
 
-人门固定议程：① 泳道设计复核 ② 未 verified 泳道逐条确认（接受现状 / 现在就装依赖）③ 落地物 diff 过目（真代码进仓）④ N/A 槽逐条确认（是现状还是该有而没建）。
+人门固定议程：① **三层框架逐层复核**（含 ⑥ 槽与 `不适用` 的后果）② 未 `verified` 泳道逐条确认（接受现状 / 现在就装依赖）③ **落地物 diff 过目**（真代码进仓）④ **建议删除的文件清单**（skill 不删，你敲命令）。
 
-**⑤ 文档 + 入口 + 交棒**——渲染命令表 · 写两份真相源 · 注入 `opsx-devenv` 托管块（CLAUDE/AGENTS/README）+ `openspec/INDEX.md` · **收尾报告逐条列出未 verified 的泳道**。
+**⑤ 渲染 + 入口 + 交棒**——**不再是「产出」，是「渲染」**〔D8〕：② 里已经拍板的东西，在这一步变成文档。
+
+- 从 `.devenv.json` 渲染 `testing-strategy.md`（三层框架 + 泳道表 + 命令表）
+- 起草 `environments.md`（**纯人写，零渲染**——skill 只是把 ① 问到的答案落成初稿）
+- 注入 `opsx-devenv` 托管块（CLAUDE / AGENTS / README）+ `openspec/INDEX.md`
+- **收尾报告 MUST 逐条列出**：所有 `⚠️ 待定` 槽 · 所有未 `verified` 泳道 · 所有建议删除的文件（附 `git rm` 命令）· **整体判定 + 下一步怎么调用**
+- **`testing-strategy.md` 顶部 MUST 渲染代价横幅**（若有待定）：`⚠️ 本框架 12/18 格待定，尚不构成一份可用的测试策略`〔D1〕
 
 ---
 
@@ -651,17 +739,17 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" init --root "$REPO"
 
 | 层 | 组件 | 内容 | 载体 |
 |---|---|---|---|
-| **A 脑** ⭐ | **① 三层框架提问清单** | **三层 × 五槽，每格「一个有经验的人会问什么」**——**核心承诺的唯一载体** | **`references/testing-framework.md`** |
-| **A 脑** | ② 泳道推导框架 | 依赖形态四问 + 阶梯原理 + 参考实例（**非**查表式规格库） | `references/lane-patterns.md`（§6.2） |
+| **A 脑** ⭐ | **① 三层框架提问清单** | **三层 × 六槽，每格「一个有经验的人会问什么」**——**核心承诺的唯一载体；§5 ② 步就是在跑它** | **`references/testing-framework.md`** |
+| **A 脑** | ② 泳道推导框架 | 依赖形态四问 + 阶梯原理 + 参考实例。**⚠️ 它是 ① 的附属**——专答六槽的 **③④**（怎么跑 / 要配什么），**不是一个平行的核心组件**〔A28〕 | `references/lane-patterns.md`（§6.2） |
 | **A 脑** | ③ 归属判据 | 切线表 + 边界四问（归位模式 ①' 步） | `references/boundary-rules.md` |
 | **A 脑** | ④ 编排 | §5 五步 + 三模式 + **时序纪律（先问后记）** + 人门议程 | **`SKILL.md` 主体** |
-| **A 脑** | ⑤ 冷审镜单 | E1–E11 的语义残余（§3.4） | `references/review-lenses.md` |
-| **A 脑** | ⑥ 负面知识 | **证伪过的验证方法**（negative control / 轮询观测 / 计数门槛，§3.4.2 E10 注） | `references/verification-patterns.md` |
+| **A 脑** | ⑤ 冷审镜单 | E1–E11 的语义残余（§3.4）+ **盲区镜**（⑥ 槽写的是套话还是真话） | `references/review-lenses.md` |
+| **A 脑** | ⑥ 负面知识 | **证伪过的验证方法**（negative control / 轮询观测 / 计数门槛，§3.4 E10 注） | `references/verification-patterns.md` |
 | **B 手** | ⑦ 建造 | scaffold · **verify-lane（真跑）** · render · inject | `scripts/devenv_scaffold.py` |
-| **C 记性** | ⑧ 账本 | 两份 JSON 的 schema + containment | `scripts/devenv_schema.py`（~80 行）· `devenv_paths.py` |
-| **C 记性** | ⑨ 提示器 | `⚠️ 待定` 计数 + `covers` 差集 —— **只报不拦** | `scripts/devenv_lint.py`（~30 行） |
+| **C 记性** | ⑧ 账本 | **一份** JSON 的 schema（三层框架 + 泳道）+ containment | `scripts/devenv_schema.py` · `devenv_paths.py` |
+| **C 记性** | ⑨ 提示器 | `⚠️ 待定` 计数 + `covers` 差集 + **代价横幅** —— **只报不拦** | `scripts/devenv_lint.py` |
 
-> **A 层的固化边界（操作者校准）**：02 说「枚举完备性不能靠模型临场回忆 ⇒ 清单固化」。本 skill **只固化到「问什么」为止**——**维度**（三层五槽、形态四问）固化以保证**每次都问同样的问题**；**答案**（具体用什么工具/库）**交模型现场调研 + 人决策**，因为工具随生态演进、固化即腐烂，而模型的知识面本就比静态表广。详见 §6.2。
+> **A 层的固化边界**：**只固化到「问什么」为止**——**维度**（三层六槽、形态四问）固化以保证**每次都问同样的问题**；**答案**（具体用什么工具/库、用不用 Makefile）**交模型现场调研 + 人决策**〔A24〕，因为工具随生态演进、固化即腐烂，而模型的知识面本就比静态表广。详见 §6.2。
 
 ### 6.2 `lane-patterns.md`：推导框架 + 参考实例（**不是**查表式候选库）
 
@@ -718,18 +806,18 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" init --root "$REPO"
 sdflow-devenv/
 ├─ SKILL.md                          # A④ 五步编排 · 三模式分流 · 时序纪律 · 人门议程
 ├─ references/                       # ★★★ A 层（脑）—— skill 的全部价值在这个目录里
-│  ├─ testing-framework.md           # A① ⭐ 三层×五槽提问清单 —— 核心承诺的唯一载体
-│  ├─ lane-patterns.md               # A② 依赖形态四问 + 阶梯原理（固化「问什么」）
+│  ├─ testing-framework.md           # A① ⭐ 三层×六槽提问清单 —— 核心承诺的唯一载体
+│  ├─ lane-patterns.md               # A② 六槽③④的推导框架（testing-framework 的附属）
 │  ├─ boundary-rules.md              # A③ 切线表 + 归属判据（①'步，归位模式）
 │  ├─ review-lenses.md               # A⑤ 冷审镜单（E1–E11 的语义残余）
 │  ├─ verification-patterns.md       # A⑥ 负面知识：证伪过的验证方法（别再走一遍）
-│  ├─ environments-template.md       # 十六槽渲染模版
-│  └─ testing-strategy-template.md   # 三层五槽渲染模版
+│  ├─ environments-template.md       # dev + deploy 十槽起草模版（纯人写，无渲染）
+│  └─ testing-strategy-template.md   # 三层六槽渲染模版
 ├─ scripts/                          # B 手 + C 记性 —— 加起来应 < 500 行
 │  ├─ devenv_scaffold.py             # B⑦ init/分流 · scaffold · verify-lane · render · inject · log
-│  ├─ devenv_schema.py               # C⑧ 两份 JSON 的 schema（~80 行）
+│  ├─ devenv_schema.py               # C⑧ .devenv.json 的 schema（结构与枚举，只拦人看不见的）
 │  ├─ devenv_paths.py                # C⑧ containment（别写到仓外）
-│  └─ devenv_lint.py                 # C⑨ ⚠️待定 计数 + covers 差集（~30 行，只报不拦）
+│  └─ devenv_lint.py                 # C⑨ ⚠️待定 计数 + covers 差集 + 代价横幅（只报不拦）
 └─ tests/                            # pytest（生态纪律：改 scripts 必跑 tests）
 ```
 
@@ -747,24 +835,36 @@ sdflow-devenv/
 
 ## 7. 生命周期
 
-### 7.1 泳道状态迁移表（表外一律拒绝）
+### 7.1 状态：泳道三态 + 层状态投影
+
+**只有一套状态词汇**〔D6 · A25〕——泳道有状态，**层没有**（层状态是泳道的投影，见 §2.2）。
+
+#### 泳道状态迁移表（表外一律拒绝）
 
 | 迁移 | 命令 | 前置 |
 |---|---|---|
-| — → planned | `set-lane --id X --status planned` | 泳道设计拍板后 |
-| planned → scaffolded | `set-lane --id X --status scaffolded --smoke <path> --blocked-by "<原因>"` | smoke 文件存在；**`verification.method` 非空**；`blocked_by` **非空且含可辨认的修复指引** |
-| **scaffolded → verified**<br>（`executor: script`） | **`verify-lane --id X`** | **脚本亲自 fork 执行** `verification.method`，捕获真实 exit code，**自行决定**写 `verified` 还是 `scaffolded + blocked_by`。**证据（`exit` / `at_commit` / `at_time`）只能由脚本自己写**。**这一步同时是「target 存在且能跑」的唯一判官——make 自己判**〔A21〕 |
-| **scaffolded → verified**<br>（`executor: human`） | **`confirm-lane --id X`** | 人跑完人工验证后，**经人门写入** `confirmed_what`。产出的绿**如实标 `attested_by: human`**（人说的，不是脚本验的）——**MUST NOT 声称脚本保证了执行者身份**〔A18：agent session 里模型是唯一命令执行者，机械上不可区分；**且本就不必防**，§0.0〕 |
-| verified → scaffolded（回落） | `set-lane --id X --status scaffolded --blocked-by "<原因>"` | **由人决定**——`continue` 时 skill **问一句**：「`integration` 上次 verified 于 `abc123f`（3 天前），之后 `Makefile` 有改动，要重跑吗？」〔**A23**：此前这一格是「`file_digests` 失配 ⇒ 自动回落」，即 410 行 sha256 时效锚。**它该是一句提醒，不是一道闸机**〕 |
+| — → `planned` | `set-lane --id X --status planned` | 三层框架 ② 步拍板后 |
+| `planned` → `scaffolded` | `set-lane --id X --status scaffolded --smoke <path> --blocked-by "<原因>"` | smoke 文件存在；`verification.method` 非空；**`blocked_by` 非空且含可辨认的修复指引** |
+| **`scaffolded` → `verified`**<br>（`executor: script`） | **`verify-lane --id X`** | **脚本亲自 fork 执行** `verification.method`，捕获真实 exit code，**自行决定**写 `verified` 还是 `scaffolded + blocked_by`。**证据只能由脚本自己写。** 这一步同时是「命令到底能不能跑」的唯一判官——**工具自己判**〔A21〕 |
+| **`scaffolded` → `verified`**<br>（`executor: human`） | **`confirm-lane --id X`** | 人跑完人工验证后，**经人门写入** `confirmed_what`。产出的绿**如实标 `attested_by: human`**（人说的，不是脚本验的）〔A18〕 |
+| `verified` → `scaffolded`（回落） | `set-lane --id X --status scaffolded --blocked-by "<原因>"` | **由人决定**——`continue` 时 skill **问一句**：「`integration` 上次 verified 于 `abc123f`（3 天前），之后 `Makefile` 有改动，要重跑吗？」〔A23：此处**没有** sha256 时效锚〕 |
 
 > **`set-lane --status verified` MUST 一律拒绝（exit 5）**——`set-lane` 只管 `planned` / `scaffolded` 两态。
-> **理由**：若无脚本亲自执行，实际数据流只能是「模型跑 → 模型读 exit code → 模型调 `set-lane --status verified`」⇒ 脚本对「到底跑没跑、绿没绿」**零独立证据**。
-> **⚠️ 这一条 MUST NOT 被当作「防伪」来辩护**——作为防伪它一文不值（`method` 设成 `true` 三个字符就能击穿它，更别提直接 Write 那份 JSON）〔A18〕。
-> **它的真实价值是「副驾顺手帮你试火」**：脚本亲自跑一遍，**当场就能告诉操作者「这条跑得起来 / 这条缺 mosquitto」**，成本极低。**它保证的是「跑过了」，不是「模型没撒谎」。** 保留它，是因为**它对「尽可能跑一遍确认」（§0.1）有用**——不是因为它拦得住谁。
+> **⚠️ 这一条 MUST NOT 被当作「防伪」来辩护**——作为防伪它一文不值（`method` 设成 `true` 三个字符就能击穿它）〔A18〕。
+> **它的真实价值是「副驾顺手帮你试火」**：脚本亲自跑一遍，**当场就能告诉你「这条跑得起来 / 这条缺 mosquitto」**。**它保证的是「跑过了」，不是「模型没撒谎」。**
 
-**`verified` 的语义 MUST 钉死**：它是 **`verified-at <sha>`——一次历史执行的记录**，**不是「当前工作区状态的绿灯」**。**任何 digest 都覆盖不了被测实现**（覆盖它需要跨语言 import 图分析，零依赖做不到——〔A19〕）⇒ **业务代码一改，那个绿灯就在说谎**。
+#### 层状态：投影，**MUST NOT 手写**
 
-> **故不设时效 digest，而是诚实呈现**〔A23〕：渲染进文档 **MUST 带 commit 锚 + 日期**（`verified-at abc123f · 2026-07-14`），**MUST NOT 呈现为无条件的绿**。**一个说清楚自己是什么的记录，胜过一个拦不全的锁**（§0.0 推论 1：假机械比诚实的语义层更危险）。
+| 层状态 | 从泳道算出 |
+|---|---|
+| `不适用` | **零泳道 + 人写了「理由 + 后果」** ← 唯一需要人拍的层状态 |
+| `planned` | 有泳道，全部 `planned` |
+| `scaffolded` | 至少一条 `scaffolded`，无 `verified` |
+| `verified` | 至少一条 `verified` |
+
+**`verified` 的语义 MUST 钉死**：它是 **`verified-at <sha>`——一次历史执行的记录**，**不是「当前工作区状态的绿灯」**。任何 digest 都覆盖不了被测实现〔A19〕⇒ **业务代码一改，那个绿灯就在说谎**。
+
+> **故不设时效 digest，而是诚实呈现**〔A23〕：渲染 **MUST 带 commit 锚 + 日期**（`verified-at abc123f · 2026-07-14`），**MUST NOT 呈现为无条件的绿**。**一个说清楚自己是什么的记录，胜过一个拦不全的锁。**
 
 ### 7.2 环境变更的回写
 
@@ -772,19 +872,20 @@ sdflow-devenv/
 
 ---
 
-## 8. 设计点（2026-07-13 逐条拍定，九条讨论）
+## 8. 设计点速查（结论；理由见对应小节与附录）
 
 | # | 设计点 | 结论 |
 |---|---|---|
-| D1 | `lane-patterns` 覆盖哪几格、多深？ | ✅ **按依赖形态分格（非语言）**，v1 五格全部从真样本蒸馏；**固化「问什么」不固化「答什么」**——工具选型交模型现场调研 + 人决策；实例标注「非规格」；未覆盖形态走兜底临场推导 + 登记 todo，**MUST NOT 凭空编造权威候选**（§6.2） |
-| D2 | CI 生成到什么程度？ | ✅ **门禁逻辑进 Makefile，CI 只做调用壳**——无 CI 的项目照样有完整本地门禁；CI 平台可换而门禁不变；本地与 CI 跑同一条命令（§1.4） |
-| D3 | E10 vacuous 能否机械化？ | ❌ **不能——原判定「✅ 能」已被三轮评审 + 一次接地实验推翻**（附录 A13/A14）。negative control **只证「命令耦合依赖」不证「断言有效」**、对 testcontainers 永久误判、且在本 skill 自己的接地样本上**结构性失效**；测试计数门槛**被 `assert True` 完美满足**；轮询式连接观测**对瞬时连接漏检 100%**（实验证伪）。**`assert True` 类语义恒真，任何外部插桩都堵不住**（要堵只有变异测试，判为太重）。⇒ **vacuous 属「防伪类」判据，机械层不管**（§0.0），**归冷审 vacuous 镜——唯一防线，MUST 如实声明** |
-| **D3'** | **那机械层管什么？** | ✅ **只管「防漏」**（§0.0）：三层五槽有没有留白 · 泳道有没有验证方法 · `不适用` 有没有记后果 · `human` 有没有写「为什么程序跑不了」和「人怎么做」· `scaffolded` 有没有 `blocked_by` · 未完成的有没有被逐条列出来。**全是结构检查，全有确定性信号。** |
-| D4 | 删源要不要单独人门？ | ✅ **不单开门，但并进搬运表人门 + 显著呈现**（单列「以下 N 个文件将被删除」）；**三种处置**（整体删 / 部分改写 / 降为指针）由 **`grep` 引用面**给判据；删后残留扫描入 lint；**删源 fail-closed 要求工作区干净**（§5 ①' + §1.5） |
-| D5 | monorepo / 多语言？ | ✅ **多语言是伪问题**——泳道是 `(命令,依赖,保真度,covers)` 四元组，天然异构（mqtt-console 六泳道横跨三运行时）。**monorepo：v1 单例 + 显式提示**，演进路径 `openspec/architecture/{system}/` 与 SAD **同步升**（`covers` 要锚得住，两者绑定演进才不撕裂） |
-| D6 | 与 `sdflow-init` 触发词面撞车？ | ✅ description 一句话判据：**装流程规则 → init；建项目 dev/test 环境 → devenv**（§9） |
-| D7 | smoke 执行边界（新增） | ✅ **跑前列命令让人过目**（不偷跑）· 每条有超时 · **失败不 debug**（职责是「建+验」不是「调通」；跑不绿是合法状态）· 真硬件不跑 → 指 `embedded-test-sop`（§5 ③） |
-| D8 | 落地物归谁 owns（新增） | ✅ **skill 是追加者不是拥有者**——Makefile/CI/harness/smoke **不设托管块**（人机共有的活文件），重名 fail-closed；托管块只用于 `environments.md` 命令表 + 入口四文件；**归位模式 smoke 复用已有测试**（§1.4） |
+| D1 | `lane-patterns` 覆盖哪几格、多深？ | **按依赖形态分格（非语言）**，五格从真样本蒸馏；**固化「问什么」不固化「答什么」**；实例标注「非规格」；**未覆盖形态走兜底临场推导 + 登记 todo，MUST NOT 凭空编造，也 MUST NOT 罢工**（§6.2） |
+| **D2** | **用什么跑测试？（Makefile / npm script / 裸命令）** | **本文档不管**〔**A24**〕——**模型看着项目现场决定**。钉死它 = 背叛「不管什么项目」。默认路径是**裸命令**（`go test -tags=integration ./...`），大多数项目**不需要接线**（§1.4） |
+| D3 | E10 vacuous 能否机械化？ | **不能**〔A12/A13/A14〕。三条方案全部证伪（计数门槛被 `assert True` 完美满足 · negative control 只证耦合不证有效 · 轮询观测漏检 100%）。**`assert True` 类语义恒真，任何外部插桩都堵不住** ⇒ **归冷审 vacuous 镜——唯一防线，MUST 如实声明** |
+| **D3'** | **那机械层管什么？** | **只拦「人看不见的」**（§3.3）：`status` 拼成 `verifed` · 路径穿越 · JSON 结构坏了。**「人一眼看得见的」（六槽留白、`不适用` 没写后果）只报不拦**〔D1 · A23 闸门 0〕 |
+| **D4** | **skill 能删用户的文件吗？** | **不能**〔**A26**〕。整体失效 → 顶部加标记（内容留着）；部分失效 → **删掉那段**（范围须由「不存在」界定）；**真删文件 → 给 `git rm` 命令，人自己敲**（§5 ①'） |
+| D5 | monorepo / 多语言？ | **多语言是伪问题**——泳道天然异构（mqtt-console 六泳道横跨三运行时）。**monorepo：v1 单例 + 显式提示**；演进路径 `openspec/architecture/{system}/` 与 SAD 同步升 |
+| D6 | 与 `sdflow-init` 触发词面撞车？ | 一句话判据：**装流程规则 → init；建项目 dev/test 环境 → devenv**（§9） |
+| D7 | smoke 执行边界 | **跑前给人看 smoke 的 diff**（不只是命令）· 每条有超时 · **失败不 debug**（诊断可以给，修复不做；跑不绿是合法状态）· 真硬件不跑 → 指 `embedded-test-sop`（§5 ③） |
+| **D8** | **落地物归谁 owns** | **skill 写第一版，此后人改人 own。** 一切落地物**不设托管块**（人机共有的活文件）；托管块只用于 **`testing-strategy.md` 的渲染区** + **入口四文件**（§1.4） |
+| **D9** | **核心承诺在流程的哪一步产出？** | **§5 的第 ② 步**〔**A28**〕——「三层框架逐层问六槽 → 泳道是槽③④的答案」。**⑤ 从「产出」降为「渲染」。** 人门重心在 ②（你做决定时陪着你），不在 ④（你做完之后审你） |
 
 ## 9. 触发分流与模型档位
 
@@ -1011,3 +1112,124 @@ sdflow-devenv/references/ ·····················     0 字  
    **评审能挑出「这一步走错了」，挑不出「这条路本身走错了」——因为每一镜都是被派去审这条路的。**
    **点破它的是操作者的一句「怎么感觉越改越乱了」。**
    ⇒ **「多轮评审高收敛」不是健康信号，它可能是「大家在同一条错路上越挖越深」的信号**（承 `CLAUDE.md` 基准 3「面治优先于点补」的更上位形态：**面治之上还有「这个面该不该存在」**）。
+
+---
+
+## 附录 B：grill 否掉的方案（A24–A28，2026-07-14）
+
+> **背景**：A23 的诊断是「**全部力气花在机械可验的东西上，核心承诺零字**」。
+> **这一轮 grill 发现它不只长在代码里——它长在文档的每一层。** A24–A28 是同一个病的五种形态。
+
+### A24：**「Makefile 是门禁载体」焊进设计**
+
+| # | 被否方案 | 否决理由 |
+|---|---|---|
+| **A24** | §1.4 落地物清单第一行：「**Makefile target（每泳道一个）—— 门禁逻辑在此**」；`source: {file, kind: "make-target", selector}` 结构化契约；「CI 只做调用壳，真门禁在 Makefile」；「已有 target → 登记 / 缺失 → 追加 / 重名 → fail-closed」 | 见下四条 |
+
+1. **它直接背叛核心承诺。** §0.1 说「**不管什么项目**」——而 Rust 用 cargo、Node 的门禁在 `package.json`、ESP32 用 `idf.py`，**大量 Go 项目 `go test ./...` 一条命令就够、根本不需要任何 task runner**。**「用什么跑测试」是模型看着项目现场决定的，不是设计文档该规定的。** 它污染了 **15 个小节**。
+2. **「登记已有 target」和「重名 fail-closed」这两条 MUST，在本文档自己的规则下无法实现。** 它们都要回答「这个 Makefile 里有没有 `integration` target」，而**每一条回答它的路都被自己堵死了**：正则/手搓解析器 →〔A21〕禁；`make -n` 探测 → **会执行任意代码**（`VERSION := $(shell …)` 在解析期就求值；`include generated.mk` 的 remake 规则会**真往仓库写文件**）；`make -p` 同样求值。
+   > **「这个 Makefile 有没有 target X」，在不执行任意代码的前提下无法回答**——**make 的 target 集合是变量环境的函数。** 这不是没想到办法，这是语义决定的。
+3. **而失败的后果是硬的**（现场实证）：GNU make 同名 target **后定义的赢** ⇒ skill 追加的那条**静默杀掉用户原来的构建行为**：
+   ```
+   Makefile:8: warning: overriding commands for target `integration'
+   Makefile:2: warning: ignoring old commands for target `integration'
+   skill 追加的：跑 go test          ← 用户原来那条，静默死了
+   ```
+4. **`source` 的结构化契约服务的是一个不存在的问题。** §2.1 自己写着「命令必须为真……**在本 skill 里这条天然成立**——命令表的出处就是 skill 自己刚跑过的那条」。**既然天然成立，`{file, kind, selector}` 就是纯仪式。真正的证据是 `verify-lane` 拿到的 exit code。**
+
+**替代方案**（§1.4 + 机制 B）：**落地物按「新建 / 改已有」两类风险分**（不按文件类型）；`verification.method` **就是一条裸命令**，默认**不接线**；`source` 降为**自由文本人读注记**；`source.kind` 枚举**删除**；**要知道文件里原来有什么，就问人**——「你项目里已经有跑集成测试的命令吗？」
+
+> **枚举纪律（一般化）**：**除了 `layer` 的三值**（核心承诺的骨架），**一切分类字段 MUST 是自由文本**。**封闭枚举 = 未列举的形态当场罢工 = 一类项目被拒之门外**——这正是 A21 的病（7 个罢工分支 = 7 类项目被拒），换了个地方长出来。
+
+### A25：**「层 = 测试类型分类法」·「已实现」这个层状态**
+
+| # | 被否方案 | 否决理由 |
+|---|---|---|
+| **A25** | §2.2 的三层（`单元/集成/e2e`）被当作**测试类型分类法**；层有**自己的三态**（`已实现` / `不适用` / `人工`），且 `已实现` 定义为「至少一条泳道且 ≥ `scaffolded`」 | 见下三条 |
+
+1. **两个互不相容的分类轴。** §2.2 要求每条泳道归入三层之一；而 §6.2 的**依赖形态阶梯**长得完全不一样（外部依赖 = 假替身→进程内→真实例（3 级）· UI = DOM runner→真浏览器（2 级）· 语言桥 = 结构门禁 + 形状测试（**两半，不是两层**）· 纯计算 = 单元 + golden（2 级））。**没有一格是「单元/集成/e2e」。**
+   **具体撞到哪**：`assert-bindings` 的结构门禁算单元还是集成？vitest 的组件测试算哪层？——**这是软件测试界吵了二十年的问题，而文档假装它有答案。**
+2. **「已实现」在说谎。** 它定义为「至少一条泳道且 ≥ `scaffolded`」，而 `scaffolded` = 「写了，**没验**，且 MUST 带 `blocked_by`」⇒ **一个层可以标着「已实现」，而它唯一的泳道从来没跑绿过。** 用户读到「集成测试：已实现」，他以为它跑得起来。
+   **而 §0.0 亲自写着：「跑不绿是合法状态，跑不绿却装作跑得绿不是。」——「已实现」这个词就在装。**
+3. **「人工」是双写。** 层有「人工」，泳道有 `executor: human`——**同一件事写两遍**，正是 E7（单一真相源）禁止的。**而且多泳道的层怎么算状态，文档根本没说**（3 条泳道：1 `verified` + 2 `planned` ⇒ ?）。
+
+**替代方案**（§2.2 + §7.1）：
+- **「层」= 保真度刻度**——**一条泳道归哪层，由「它穿过哪些真实边界」判定**（单元 = 不穿任何 · 集成 = 穿部分 · e2e = 端到端全穿），**不由它用什么测试框架判定**。⇒ **三层与形态阶梯合成一个轴**（形态决定你有哪些真实边界，边界决定泳道落在哪个刻度）。
+- **层无独立状态——从泳道投影算出**。「已实现 / 人工」**两词废弃**。`不适用` 是**唯一需要人拍的层状态**（它是价值判断）。**层状态零手写 ⇒ 无法伪造、无法漂移**：这是**结构性保证**，不是拦截。
+
+### A26：**skill 删除用户的文件**
+
+| # | 被否方案 | 否决理由 |
+|---|---|---|
+| **A26** | §5 ①' 归位模式的「删源」：三种处置（**整体删除** / 部分保留改写 / 降为一行指针）；`grep` 引用面给判据；删源 fail-closed 要求工作区干净；删后扫残留引用；冷审设「删源镜」 | 见下三条 |
+
+1. **它与副驾身份冲突。** §0.1：「**辅助**我搭建开发测试环境的，同时**提醒**我要考虑哪些事情别忘了。」——**删我的旧文档，既不是搭建，也不是提醒。是代劳，而且是最不可逆的那种。** 而它对核心承诺（三层框架无留白）的贡献**是零**。
+2. **「搬运表」这个人门是橡皮图章——而本文档自己在隔壁识别过这个失效模式。** §5 ③-pre 论证「跑前列命令给人过目」是假门：「给人看的是 `make integration` 这**一行调用**，对『target 里到底跑什么』提供**零信息量**——**真正危险的内容恰恰不在那个门里**。」
+   **搬运表完全同构**：它给人看「文件名 + 处置」，而真正的风险是「**这份文档里有没有一段内容没被搬走**」——**搬运表对此提供零信息量。** 一个人不可能逐条核对 20 个文件的内容再点确认。**他会点确认。**
+3. **爆炸半径不受 skill 控制。** 指向被删文件的引用可能在**仓外**（别人的书签、别的仓的文档、藏在代码注释里的路径）。mqtt-console 那次，旧路径藏在 `Makefile` 注释和 7 个测试文件注释里，**共 20 处——而那还只是 `grep` 得到的。**
+
+**替代方案**（§5 ①'）：**skill MUST NOT 删除用户的任何文件。**
+
+| 处置 | skill | 判据 |
+|---|---|---|
+| **整体失效** | 文件**开头**加 `> ⚠️ 已失效 —— 内容已迁至 <path>`，**内容原样保留** | 范围 = 整份，**无歧义** |
+| **部分失效** | **删掉失效的那部分内容** | **「失效范围」必须由「它不存在了」来界定**——留着内容只加一行标记，**读者无法判断哪几行失效了**，这是最糟的中间态（操作者定） |
+| **真删文件** | ❌ 收尾报告给出 `git rm <file>`，**人自己敲** | 爆炸半径不受控 |
+
+> **一句话：skill 可以改文件里的内容，MUST NOT 删掉文件本身。**
+> **看得见的双写，是一个待办；看不见的误删，是一个事故。**
+> 连带删除：§1.5 的「删源 fail-closed 要求工作区干净」（**失去对象**）· 冷审的「删源镜」（**失去对象**）。
+
+### A27：**两份文档的切线 = 「方法 vs 操作」**
+
+| # | 被否方案 | 否决理由 |
+|---|---|---|
+| **A27** | §2.3（承 `05` §3.1）：「**方法/决策 → testing-strategy；环境/操作 → environments**」，并称与「SAD §7 决策 ↔ env §3 操作」是同一把刀 | 见下三条 |
+
+1. **它导致逐格双写**，而 E7（单一真相源）亲自禁止：
+
+   | `testing-strategy` 的槽 | `environments` §2 test 的槽 |
+   |---|---|
+   | **③ 测试方法与流程**：怎么跑（**命令**）· 什么时候跑 | **各层执行命令**（带出处列）· **测试选择路由** |
+   | **④ 需要配备的工具与脚本**：装什么**依赖** · 写什么 **harness/fixture** | **测试依赖** · **fixture/测试数据** |
+
+2. **它把核心承诺切成两半。**「每层交代清楚」——**那一层的交代就该是完整的一块**。切开之后，**用户想知道「集成测试怎么跑」，得翻两份文档自己拼**。**一个副驾的产物，不该是两份需要交叉引用的东西。**
+3. **它举的「最漂亮的一对切线」在 A24 之后自己塌了**：*flake 的定性与放行决策 → strategy；flake 护栏的实现（`Makefile` 的 `|| retry once`）→ environments*。**而 A24 已经拍定：命令的载体交模型现场定，`source` 降为人读注记。** 那个 `|| retry once` 现在就是 `verification.method` 的一部分——**它没有第二个家了。**
+
+**替代方案**（§2.3）：**切线 = 测试 vs 非测试。** `testing-strategy.md` 是**测试的唯一真相源**（三层六槽完整）；`environments.md` 只管 **dev 搭建 + deploy 发布**，test 节降为一行指针。
+
+**连带**：`environments.md` 剩下的十槽**没有一槽是机械可渲染的** ⇒ **它是纯人写文档，零机械载体、零渲染、零 lint**。这一刀同时了结了「十六槽 MUST 从 JSON 渲染，但没有一个槽有承载字段」那条悬空 MUST〔闸门 2，同 A22〕——**它不需要载体，它本来就该是人写的**（`06` 接地实测：那 10 个纯人写槽「**恰恰是全篇最高价值的部分**」）。
+
+### A28：**核心承诺在流程里没有步骤**（A23 长在流程上）
+
+| # | 被否方案 | 否决理由 |
+|---|---|---|
+| **A28** | §5 的五步：① 事实采集 → **② 泳道设计** → ③ 落地脚手架 + 跑 → ④ 冷审 + 人门 → ⑤ 文档 + 入口 | **「三层」「六槽」「testing-strategy」—— 在五步里一次都没出现。** |
+
+**五步全是围绕「泳道」的。而「三层框架、一层都不许留白」——本文档通篇称为「核心承诺」的东西——被当成第 ⑤ 步的一个副产品：「写两份真相源」。**
+
+> **这和 A23 是同一个病，只是长在了流程上。**
+> A23 的诊断：*全部力气花在机械可验的东西（C 层），核心承诺（A 层）零字*。
+> **现在看流程：全部步骤花在泳道（能 fork、有 exit code、机械可验）上，而「问人十八个问题」不能——所以它没有步骤。**
+>
+> **它甚至解释了为什么 `tasks.md` 会把 `references/` 和 `SKILL.md` 排到第 6、7 位——因为流程本身就没把「问三层六槽」当成一个步骤。病根在这儿。**
+
+**替代方案**（§5）：**② 改为「三层框架逐层问 → 泳道随之落定」。**
+
+**关键洞见：泳道不是一个独立的设计对象——它是六槽里 ③④ 的答案落成的形状。**
+
+```
+① 事实采集
+② ⭐ 三层框架逐层问六槽  ← 核心承诺在这一步产出，人在这一步拍板
+     槽①②⑥ → 落进 testing-strategy 的层块
+     槽③④  → 落成泳道（lane-patterns 给候选）
+     槽⑤    → 不问，从泳道投影算出
+③ 落地脚手架 + 尽可能跑一遍确认
+④ 冷审 + 人门
+⑤ 渲染 + 入口 + 交棒     ← 从「产出」降为「渲染」
+```
+
+**三个后果**：
+1. **`lane-patterns.md` 降为 `testing-framework.md` 的附属**（它是「槽③④怎么答」的推导框架，不是平行的核心组件）。
+2. **第 ⑤ 步从「产出」变成「渲染」**——**这正好兑现 §0.1：「目标不是产出两份文档，而是建立环境——文档是产物之一。」**
+3. **人门的重心从「④ 末尾审文档」前移到「② 逐层拍板」**——**这才是副驾该在的位置：在你做决定的时候陪着你，而不是在你做完之后审你。**
