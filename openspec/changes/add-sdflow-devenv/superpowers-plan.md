@@ -1,3 +1,14 @@
+> # ⚠️ 已失效（2026-07-14）
+>
+> **本实现计划为 `docs/sad/07` 的旧设计所排——该设计已被 grill 九条决策整体推翻**（附录 **A23–A28**）。
+> 其中大部分 Task 是**已死机制**的工期（文件锁 / CAS / 时效 digest / make 解析 / 五槽 / 两文档「方法vs操作」切线），
+> 且 **Task 顺序本身就是病灶**——`references/` 排第 6、`SKILL.md` 排第 7，前面五层机械基础设施〔**A28**〕。
+>
+> **新的构建顺序见 `tasks.md`**（脑 → 手 → 记性）。
+> **本文件按 `adr/0022`「整体失效」处置：内容原样保留，不删。**
+
+---
+
 # sdflow-devenv Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
