@@ -1,0 +1,65 @@
+"""守「ff 之后是 grill，不是 spec-review」这条交棒规则。
+
+【为什么需要机械守】
+`grill-with-docs` 是 `disable-model-invocation: true` 的第三方 skill —— **模型唤不起它**，
+只能把 prompt 贴给人、由人手敲。而它在消费仓 CLAUDE.md 里【原本一次都没出现过】，
+于是 ff 跑完，模型自然跳到它唯一看得见的下一个 skill = /sdflow-spec-review。
+
+结果：一份**没被拷问过**的设计直接进设计审。而 spec-review 的多镜是在**已有设计的框架内**
+找问题——**它不会替你质疑这个框架本身**。这正是 07 的教训（18 面镜全在废弃分支里做优化）。
+
+∴ 两件事都得守：
+  1. 消费仓 CLAUDE.md 托管块里，这条交棒规则在不在
+  2. 它指向的那段 grill prompt，在 workflow.md 里还在不在（指针不能悬空）
+"""
+from pathlib import Path
+
+ASSETS = Path(__file__).resolve().parents[1] / "assets"
+SNIPPET = ASSETS / "snippets" / "claude-section.md"
+WORKFLOW = ASSETS / "workflow" / "workflow.md"
+
+
+def test_snippet_routes_ff_to_grill_not_spec_review():
+    """CLAUDE.md 托管块 MUST 写死：ff 之后是 grill，且 MUST 贴 prompt。"""
+    t = SNIPPET.read_text(encoding="utf-8")
+    assert "ff 之后是 grill" in t
+    assert "grill-with-docs" in t
+    assert "MUST NOT 直接跳到" in t and "sdflow-spec-review" in t
+    # 光说「下一步跑 grill」没用 —— 必须把 prompt 贴出来（它唤不起，只能人敲）
+    assert "原样贴出来" in t
+    assert "只能人手动触发" in t
+
+
+def test_grill_prompt_pointer_is_not_dangling():
+    """托管块让人去 workflow.md 步骤 3 取 prompt —— 那段 prompt MUST 真的在那里。
+
+    指针悬空 = 模型取不到 → 只能凭记忆重写 → 而托管块明令 MUST NOT 凭记忆重写
+    → 死锁，实际结果就是静默跳过 grill。
+    """
+    w = WORKFLOW.read_text(encoding="utf-8")
+    assert "`/grill-with-docs 死磕" in w, "workflow.md 步骤 3 的 grill prompt 不见了"
+
+
+def test_grill_prompt_carries_the_principles_landing():
+    """grill 是通则③（拿现状反驳目标）的最高发场景 —— prompt MUST 当场点名。
+
+    通则正文（CLAUDE.md 托管块）是通用表述；grill 场景下它有特定形态：
+    「现在代码不是这么写的，所以这个设计不对」。
+    而 grill 手边唯一的实证材料就是现状代码 ⇒ 这是它的【默认失效模式】，不是偶发。
+    """
+    w = WORKFLOW.read_text(encoding="utf-8")
+    assert "现状只用来核事实，不用来定对错" in w
+
+
+def test_grill_is_always_full_depth():
+    """grill 是独立审视 —— MUST NOT 因上游（explore / wayfinder 已决）就瘦跑。
+
+    拿上游产出给自己松绑，二次审视就退化成盖章。
+    回归：`wayfinder-resolved:` 锚曾被用作「grill 瘦跑判据」，已废除（锚只剩溯源用途）。
+    """
+    w = WORKFLOW.read_text(encoding="utf-8")
+    assert "一律全深度" in w
+
+    ff = (ASSETS / "workflow" / "ff-generation-constraints.md").read_text(encoding="utf-8")
+    assert "锚的用途只有溯源" in ff
+    assert "瘦跑以该前缀为唯一判据" not in ff   # 死条款已清

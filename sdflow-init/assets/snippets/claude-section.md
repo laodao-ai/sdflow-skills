@@ -61,6 +61,11 @@
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
   子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
 - **ff 开分支**：`opsx:ff` 若不在 feature 分支，先 `git checkout -b feat/{change}`（FF-0）。
+- 🔴 **ff 之后是 grill，不是 spec-review**：`opsx:ff` 产出四件套后，**MUST 提示下一步 = `/grill-with-docs`**
+  （阶段一的对抗层，见 `workflow.md` 步骤 3），**MUST NOT 直接跳到 `/sdflow-spec-review`**。
+  **且 MUST 把 `workflow.md` 步骤 3 的 grill prompt 原样贴出来**给用户复制——
+  `grill-with-docs` **只能人手动触发**（`disable-model-invocation: true`），**光说「下一步跑 grill」等于没提示**。
+  **MUST NOT 转述、精简、或凭记忆重写那段 prompt**（它是单一源，就在 `workflow.md` 步骤 3 的反引号里，照抄）。
 - **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 
 **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
@@ -73,3 +78,8 @@
 
 > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
 > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+
+> **`/grill-with-docs`（阶段一对抗层，来自 superpowers 插件，不是 sdflow-skills）**——**ff 之后、设计审之前的必经步**。
+> 它 **`disable-model-invocation: true`，只能人手动触发**：模型唤不起它，只能**把 prompt 贴给人、由人敲**。
+> 因此它极易被静默跳过——**跳过 grill = 把一份没被拷问过的设计直接送进设计审**，
+> 而 spec-review 的多镜是在**已有设计的框架内**找问题，**不会替你质疑这个框架本身**。
