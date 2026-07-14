@@ -162,6 +162,14 @@ def copy_bundle(root, full=False):
         contract_src = os.path.join(BUNDLE_SRC, "lens-metric-contract.md")
         if os.path.isfile(contract_src):
             shutil.copy2(contract_src, os.path.join(dst, "lens-metric-contract.md"))
+
+        # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联）。
+        # 规则本身不铺进消费仓（走全局 canonical），但【人】需要一份不用跳文件的完整参考，
+        # 且它得在自己的仓里、随仓走。它是 hack/gen_workflow_guide.py 的生成物（DO NOT EDIT），
+        # 单一源仍是 prompts/ + workflow.md —— 拷过来的是产物，不是新的真相源。
+        guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
+        if os.path.isfile(guide_src):
+            shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
     n = sum(len(fs) for _, _, fs in os.walk(dst))
     return dst, n
 

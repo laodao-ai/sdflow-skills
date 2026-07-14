@@ -17,6 +17,7 @@ from pathlib import Path
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
 SNIPPET = ASSETS / "snippets" / "claude-section.md"
 WORKFLOW = ASSETS / "workflow" / "workflow.md"
+PROMPTS = ASSETS / "workflow" / "prompts"
 
 
 def test_snippet_routes_ff_to_grill_not_spec_review():
@@ -36,8 +37,10 @@ def test_grill_prompt_pointer_is_not_dangling():
     指针悬空 = 模型取不到 → 只能凭记忆重写 → 而托管块明令 MUST NOT 凭记忆重写
     → 死锁，实际结果就是静默跳过 grill。
     """
-    w = WORKFLOW.read_text(encoding="utf-8")
-    assert "`/grill-with-docs 死磕" in w, "workflow.md 步骤 3 的 grill prompt 不见了"
+    assert "workflow/prompts/step3-grill.md" in SNIPPET.read_text(encoding="utf-8")
+    f = PROMPTS / "step3-grill.md"
+    assert f.is_file(), "指针悬空：prompts/step3-grill.md 不存在"
+    assert f.read_text(encoding="utf-8").startswith("/grill-with-docs 死磕")
 
 
 def test_grill_prompt_carries_the_principles_landing():
@@ -47,8 +50,7 @@ def test_grill_prompt_carries_the_principles_landing():
     「现在代码不是这么写的，所以这个设计不对」。
     而 grill 手边唯一的实证材料就是现状代码 ⇒ 这是它的【默认失效模式】，不是偶发。
     """
-    w = WORKFLOW.read_text(encoding="utf-8")
-    assert "现状只用来核事实，不用来定对错" in w
+    assert "现状只用来核事实，不用来定对错" in (PROMPTS / "step3-grill.md").read_text(encoding="utf-8")
 
 
 def test_grill_is_always_full_depth():
@@ -83,9 +85,9 @@ def test_plan_constraints_land_where_implementer_can_see_them():
     ⚠️ 这条断口在 superpowers 侧，我们改不了；只能让 plan 把约束【也】写进 Task 段。
        升级 superpowers 后若 task-brief 改成抽全文，本测试可以放宽 —— 但【先去读它的源码再放宽】。
     """
-    w = WORKFLOW.read_text(encoding="utf-8")
-    assert "每个 Task 段内复述" in w
-    assert "task-brief" in w and "不进 brief" in w
+    s6 = (PROMPTS / "step6-writing-plans.md").read_text(encoding="utf-8")
+    assert "每个 Task 段内复述" in s6
+    assert "task-brief" in s6 and "不进 brief" in s6
 
 
 def test_dispatch_sites_carry_the_principles():

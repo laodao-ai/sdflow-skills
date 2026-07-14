@@ -102,14 +102,23 @@ class TestBundleToolsOnly:
         assert not (wf / "workflow.md").exists()
         assert not (wf / "spec-checklists").exists()
         assert not (wf / "code-checklists").exists()
-        # [mlh-p2-anchor-lint] lens-metric-contract.md 不是「规则文件」而是 tools/anchor_lint.py
-        # 的运行时机读依赖（读 lens-metric-enums 块），须与 tools/ 同批铺，故显式排除在外。
-        md_rules = [
-            p for p in wf.rglob("*.md")
-            if "tools" not in p.parts and p.name != "lens-metric-contract.md"
-        ]
-        assert md_rules == []                      # 规则文件数 = 0（契约文件除外）
+        # 两个非规则的 .md 显式豁免：
+        # [mlh-p2-anchor-lint] lens-metric-contract.md —— tools/anchor_lint.py 的运行时机读依赖
+        #   （读 lens-metric-enums 块），须与 tools/ 同批铺。
+        # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联），是
+        #   hack/gen_workflow_guide.py 的【生成物】而非真相源（单一源仍是 prompts/ + workflow.md，
+        #   都在全局 canonical，不铺进消费仓）。规则走 canonical，但【人】需要一份随仓走、
+        #   不用跳文件的完整参考 —— 拷过来的是产物，不是新的真相源。
+        EXEMPT = {"lens-metric-contract.md", "WORKFLOW-GUIDE.md"}
+        md_rules = [p for p in wf.rglob("*.md")
+                    if "tools" not in p.parts and p.name not in EXEMPT]
+        assert md_rules == []                      # 规则文件数 = 0（两个豁免除外）
         assert (wf / "lens-metric-contract.md").is_file()
+        assert (wf / "WORKFLOW-GUIDE.md").is_file()
+
+        # 🔴 规则本体 MUST NOT 被铺进来 —— 它们走全局 canonical（改了即时生效，无需 update）
+        assert not (wf / "workflow.md").exists()
+        assert not (wf / "prompts").exists()
 
     def test_full_flag_restores_whole_bundle(self, tmp_path):
         init_mod.copy_bundle(str(tmp_path), full=True)

@@ -1,6 +1,10 @@
 from pathlib import Path
 
-WF = Path(__file__).resolve().parents[2] / "sdflow-init" / "assets" / "workflow" / "workflow.md"
+_WFDIR = Path(__file__).resolve().parents[2] / "sdflow-init" / "assets" / "workflow"
+WF = _WFDIR / "workflow.md"
+# checkpoint 标签格式串的单一源 —— prompt 拆分后它随 step6 搬进了 prompts/（模型取一行
+# 不必再读 17KB 的 workflow.md）。守卫跟着搬，别退回去查 workflow.md（那里现在只有指针）。
+STEP6 = _WFDIR / "prompts" / "step6-writing-plans.md"
 
 def test_orchestrator_entry_row():
     t = WF.read_text(encoding="utf-8")
@@ -12,7 +16,7 @@ def test_decision4_no_self_confidence():
     assert "对抗镜复核" in t
 
 def test_step6_tag_contract():
-    t = WF.read_text(encoding="utf-8")
+    t = STEP6.read_text(encoding="utf-8")
     # [ship-gate-hardening-2 T32] 主锚契约 = 命名空间格式 <change>:task<N>-（gate 只认当前
     # change 的标签，跨 change stacking 不污染完成集）；裸 task<N>- 旧格式向后兼容仍在文档。
     assert "<change>:task<N>-" in t and "checkpoint-commit.sh" in t
@@ -36,16 +40,16 @@ def test_workflow_tag_sample_actually_matches_TAG_RE():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
     from ship_gate import TAG_RE
 
-    w = WF.read_text(encoding="utf-8")
+    w = STEP6.read_text(encoding="utf-8")
     SAMPLE = "<change>:task<N>-<slug>"
-    assert SAMPLE in w, "workflow.md 丢了 checkpoint 标签格式串样例"
+    assert SAMPLE in w, "prompts/step6-writing-plans.md 丢了 checkpoint 标签格式串样例"
 
     # 把样例的占位符换成真值，拼出 checkpoint-commit.sh 实际产出的 subject
     tag = SAMPLE.replace("<change>", "add-pagination").replace("<N>", "3").replace("<slug>", "schema")
     subject = f"checkpoint({tag}): 实现 schema"
 
     m = TAG_RE.search(subject)
-    assert m, f"workflow.md 的样例拼出的 subject 不被 TAG_RE 认：{subject!r}"
+    assert m, f"step6 prompt 里的样例拼出的 subject 不被 TAG_RE 认：{subject!r}"
     assert m.group(1) == "add-pagination"   # 命名空间组 = change slug（T32：跨 change 不污染）
     assert m.group(2) == "3"                # 任务号组
 

@@ -226,4 +226,8 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$REPO_DIR/hack/sync_principles.py
     echo ""
     echo "  ⚠️ 三条通则有漂移（上面列了）。修：python3 hack/sync_principles.py --apply"
   fi
+  # 人读手册是 workflow.md + prompts/ 的生成物 —— 漂了就是「手册在教人跑一段已废的 prompt」
+  if ! python3 "$REPO_DIR/hack/gen_workflow_guide.py" --check; then
+    echo "  ⚠️ 修：python3 hack/gen_workflow_guide.py --write"
+  fi
 fi

@@ -62,10 +62,10 @@
   子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
 - **ff 开分支**：`opsx:ff` 若不在 feature 分支，先 `git checkout -b feat/{change}`（FF-0）。
 - 🔴 **ff 之后是 grill，不是 spec-review**：`opsx:ff` 产出四件套后，**MUST 提示下一步 = `/grill-with-docs`**
-  （阶段一的对抗层，见 `workflow.md` 步骤 3），**MUST NOT 直接跳到 `/sdflow-spec-review`**。
-  **且 MUST 把 `workflow.md` 步骤 3 的 grill prompt 原样贴出来**给用户复制——
+  （阶段一的对抗层），**MUST NOT 直接跳到 `/sdflow-spec-review`**。
+  **且 MUST 把 `workflow/prompts/step3-grill.md` 原样贴出来**给用户复制（整个文件就是那段 prompt，**只有 500 字节，别去读 workflow.md**）——
   `grill-with-docs` **只能人手动触发**（`disable-model-invocation: true`），**光说「下一步跑 grill」等于没提示**。
-  **MUST NOT 转述、精简、或凭记忆重写那段 prompt**（它是单一源，就在 `workflow.md` 步骤 3 的反引号里，照抄）。
+  **MUST NOT 转述、精简、或凭记忆重写那段 prompt**（单一源 = `workflow/prompts/step3-grill.md`，照抄）。
 - **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 
 **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：

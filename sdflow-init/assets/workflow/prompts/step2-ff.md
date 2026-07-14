@@ -1,0 +1,1 @@
+/opsx:ff {change}。若不在 feature 分支则先 git checkout -b feat/{change}。若 change 源于 wayfinder map：调用语显式携带 map 路径（如 @openspec/roadmaps/{name}/map.md）并按 ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读取。完成后 checkpoint-commit ff。
