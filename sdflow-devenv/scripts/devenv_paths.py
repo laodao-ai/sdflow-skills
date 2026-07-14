@@ -1,8 +1,13 @@
 """路径 containment —— 所有模型提供的路径的唯一入口。
 
 设计约束（spec: R-PATH）：
-  source.file / smoke / fixtures[] / 外部配置文件 / touched-files 清单
+  source.file / smoke / fixtures[] / touched-files 清单
   全是【模型填的自由文本】。任何读/写/删/digest 之前 MUST 经此校验。
+
+  注：外部配置文件（compose.yml / broker.conf / lockfile）【没有独立字段】——
+  它们归入 fixtures[]。前一版 spec 把「外部配置文件」写成与 fixtures[] 并列的
+  一项，而数据模型里根本没有承载它的字段（deps[] 只有 {name, kind}，无路径）
+  ⇒ 那条 MUST 从来没被实现过。见 R-DATA 与 07 附录 A16/A19/A21。
 
 【为什么要逐级查 symlink 祖先】：前一版只拒绝「目标文件本身是 symlink」，
 于是 `link/loot.txt`（父目录是指向仓外的 symlink）畅通无阻。

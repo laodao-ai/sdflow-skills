@@ -224,8 +224,14 @@ skill 的完成态 **MUST NOT 要求全部泳道 `verified`**——允许停在 
 
 > **理由**：`file_digests` **不覆盖被测实现**（覆盖它需要跨语言 import 图静态分析，零第三方依赖做不到——`07` 附录 A19）⇒ **业务代码一改，那个绿灯就在说谎**。故渲染进文档时 **MUST 带 commit 锚**，**MUST NOT 呈现为无条件的绿**。
 
-**`evidence.file_digests` 的覆盖面（MUST 明确，MUST NOT 写「可达」这种做不到的词）**：`source.file`（非 `-` 时，**整份文件的原始字节；MUST NOT 提取 recipe body**〔A21〕）+ `smoke` 文件 + **lane 显式声明的 `fixtures: []` 清单**。
-`fixtures` 由**模型声明、人门确认**（无独立信号 ⇒ 语义层，进 ③-pre 分类清单）。
+**`evidence.file_digests` 的覆盖面（MUST 明确，MUST NOT 写「可达」这种做不到的词）**：`source.file`（非 `-` 时，**整份文件的原始字节；MUST NOT 提取 recipe body**〔A21〕）+ `smoke` 文件 + **lane 显式声明的 `fixtures: []` 清单**——**穷尽，无第四项**。
+
+**`fixtures[]` 的语义 MUST 钉死**：**本泳道验证所依赖、需纳入时效锚的全部文件**——harness · testdata · **外部配置文件（`compose.yml` / `broker.conf` / lockfile 等）**。
+`fixtures` 由**模型声明、人门确认**（无独立信号 ⇒ 语义层，进 ③-pre 分类清单 + 冷审分类镜）。
+
+> **MUST NOT 把「外部配置文件」写成与 `fixtures[]` 并列的第四项**〔round-4 修正〕：前一版 spec 正是这么写的（"…+ `fixtures[]` 清单 **+ lane 声明的外部配置文件**"），而**数据模型里根本没有承载它的字段**——`deps[]` 只有 `{name, kind}`，**没有路径**。结果：`method_digest()` 的实现签名里压根没有这个参数，**这条 MUST 从来没被实现过，而 spec 不会报错**。
+> **这是 A16（`owned_by` 的锚不存在）的同类病，也正是 A19 预言的「平铺的 MUST ⇒ 实现期现场发明假机械」。**〔三轮 spec-review、14 镜未抓到；A21 拆机制时逐项对覆盖面才暴露〕
+> **纪律**：**写下「MUST 覆盖 X」之前，先在数据模型里指出承载 X 的那个字段。指不出 ⇒ 要么加字段，要么删掉这条 MUST。**
 
 **`evidence.method_at_verify` MUST 记录验证发生时的 `verification.method` 原文**（一个字符串）：
 
@@ -316,7 +322,7 @@ lane 需要的额外变量 SHALL **显式声明**（`env: []`）；**该声明�
 
 ### Requirement: 路径边界校验——所有模型提供的路径 MUST 经 containment 检查〔codex round-3〕
 
-`source.file` · `smoke` · `fixtures[]` · 外部配置文件 · touched-files 清单 —— **全是模型填的自由文本**。
+`source.file` · `smoke` · **`fixtures[]`**（含外部配置文件——**它没有独立字段，见 R-DATA**）· touched-files 清单 —— **全是模型填的自由文本**。
 
 **所有读 / 写 / 删 / digest 的路径 MUST 经统一的 containment helper**：
 

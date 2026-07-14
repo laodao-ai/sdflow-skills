@@ -175,8 +175,9 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'devenv_paths'`
 """路径 containment —— 所有模型提供的路径的唯一入口。
 
 设计约束（spec: R-PATH）：
-  source.file / smoke / fixtures[] / 外部配置文件 / touched-files 清单
+  source.file / smoke / fixtures[] / touched-files 清单
   全是【模型填的自由文本】。任何读/写/删/digest 之前 MUST 经此校验。
+  注：外部配置文件（compose.yml 等）无独立字段 —— 归入 fixtures[]（见 Task 4 注）。
 
 【为什么要逐级查 symlink 祖先】：前一版只拒绝「目标文件本身是 symlink」，
 于是 `link/loot.txt`（父目录是指向仓外的 symlink）畅通无阻。

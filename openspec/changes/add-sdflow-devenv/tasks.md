@@ -105,7 +105,8 @@
 - [ ] 2.6 **⭐ 路径 containment helper**（新增，横切）：① 只接受 **repo-relative 的规范化路径**——拒绝绝对路径、拒绝
   `..` ② **逐级 `lstat` 拒绝 symlink 祖先目录**（不只是目标文件本身）③ 验证最终 `realpath` 位于消费仓根之内；
   任一项不满足 ⇒ **fail-closed 拒绝该路径**，如实报告。**所有读 / 写 / 删 / digest 的路径（`source.file` ·
-  `smoke` · `fixtures[]` · 外部配置文件 · touched-files 清单）MUST 统一经它**，不得各自实现校验〔R-PATH〕
+  `smoke` · `fixtures[]`（**含外部配置文件——无独立字段，见 3.7 注**）· touched-files 清单）MUST 统一经它**，
+  不得各自实现校验〔R-PATH〕
 - [ ] 2.7 **⭐ CAS 快照覆盖整个 verification plan**（**不只 `status`**）：`status` + **`executor`** + **`kind`** +
   `method` + `source` + `smoke` + `fixtures` + `env` + `deps`——**尤其 `executor` 与 `kind`**，长跑期间 lane 从
   `script`/`pure` 被改成 `human`/`hardware`，旧脚本**仍能通过只比 `status` 的 CAS 回写**〔codex〕；digest 算法明确为
@@ -182,8 +183,16 @@
   > 写 `verified`」，**此刻 Makefile target 与 smoke 必然 uncommitted** ⇒ `git diff <at_commit> -- Makefile`
   > **在验证成功那一瞬间就报「已改动」**，锚在主路径上直接失效。
 - [ ] 4.4 **⭐ `file_digests` 覆盖面**（**MUST 明确，MUST NOT 写「可达」这种做不到的词**）：`source.file`（非 `-` 时，
-  **整份文件的原始字节，MUST NOT 提取 recipe body**〔A21〕）+ `smoke` 文件 + **lane 显式声明的 `fixtures[]` 清单**。
-  `fixtures` 由 **模型声明、人门确认**（无独立信号 ⇒ 语义层，进 ③-pre 分类清单）〔R-EXEC · R-DATA〕
+  **整份文件的原始字节，MUST NOT 提取 recipe body**〔A21〕）+ `smoke` 文件 + **lane 显式声明的 `fixtures[]` 清单**
+  ——**穷尽，无第四项**。`fixtures` 由 **模型声明、人门确认**（无独立信号 ⇒ 语义层，进 ③-pre 分类清单）。
+  **`fixtures[]` 的语义 MUST 钉死** = 本泳道验证所依赖、需纳时效锚的**全部文件**：harness · testdata ·
+  **外部配置（`compose.yml` / `broker.conf` / lockfile）**。
+  > **⚠️ MUST NOT 把「外部配置文件」写成与 `fixtures[]` 并列的第四项**〔round-4 修正〕：前一版 spec 正是这么写的，
+  > 而**数据模型里根本没有承载它的字段**（`deps[]` 只有 `{name, kind}`，无路径）⇒ 旧 `method_digest()` 的签名里
+  > 压根没这个参数，**这条 MUST 从来没被实现过，而 spec 不会报错**。**A16（`owned_by` 锚不存在）的同类病，
+  > A19 预言的「平铺 MUST ⇒ 实现期发明假机械」。**
+  > **纪律**：**写下「MUST 覆盖 X」之前，先在数据模型里指出承载 X 的那个字段——指不出就删掉这条 MUST。**
+  〔R-EXEC · R-DATA〕
 - [ ] 4.5 **证据失效检测（两条）**：① **`file_digests` 失配** ⇒ 报「验证证据已过期：`<file>` 已改动，需重验」
   （**允许多报**——Makefile 里别的 target 改了也报，刻意如此）② **`verification.method` ≠ `evidence.method_at_verify`**
   ⇒ 报「验证方法已改动（`<旧>` → `<新>`），需重验」。任一命中 **MUST NOT** 继续声称 `verified`〔R-EXEC · R-LINT〕
