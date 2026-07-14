@@ -211,8 +211,10 @@ skill 的完成态 **MUST NOT 要求全部泳道 `verified`**——允许停在 
 
 | `executor` | 子命令 | 证据 |
 |---|---|---|
-| `script` | **`verify-lane`** —— 脚本**自己 fork 执行** `verification.method`，捕获 exit code / 时长 / 输出摘要，**自行决定**写 `verified` 还是 `scaffolded + blocked_by` | `at` · `at_commit`（HEAD SHA）· `exit` · `output_digest` · `method_digest` |
-| `human` | **`confirm-lane`** —— 人跑完人工验证后，经人门写入 | `at` · `at_commit` · **`confirmed_what`** · `method_digest` · **`attested_by: human`** |
+| `script` | **`verify-lane`** —— 脚本**自己 fork 执行** `verification.method`，捕获 exit code / 时长 / 输出摘要，**自行决定**写 `verified` 还是 `scaffolded + blocked_by` | `at` · `at_commit`（HEAD SHA）· `exit` · `output_digest` · **`file_digests`** · **`method_at_verify`** |
+| `human` | **`confirm-lane`** —— 人跑完人工验证后，经人门写入 | `at` · `at_commit` · **`confirmed_what`** · **`file_digests`** · **`method_at_verify`** · **`attested_by: human`** |
+
+> **`verify-lane` 同时是「target 存在且能跑」的唯一判官**〔A21〕：`selector` 拼错 / target 不存在 ⇒ make 报 `No rule to make target` ⇒ `exit≠0` ⇒ **进不了 `verified`**。**make 自己解释自己的语法**——覆盖 100% 语法面，零解析器。**MUST NOT** 在 verify 之前另加一道「静态检查 target 是否存在」的正则。
 
 **`confirm-lane` 产出的 `verified` MUST 如实标 `human-attested`（人说的，不是脚本验的）**，并在渲染进文档时**与脚本验证的绿可区分**。
 
@@ -220,12 +222,27 @@ skill 的完成态 **MUST NOT 要求全部泳道 `verified`**——允许停在 
 
 **`verified` 的语义 MUST 钉死：它是 `verified-at <sha>`——一次历史执行的记录，不是「当前工作区状态的绿灯」。**
 
-> **理由**：`method_digest` **不覆盖被测实现**（覆盖它需要跨语言 import 图静态分析，零第三方依赖做不到——`07` 附录 A19）⇒ **业务代码一改，那个绿灯就在说谎**。故渲染进文档时 **MUST 带 commit 锚**，**MUST NOT 呈现为无条件的绿**。
+> **理由**：`file_digests` **不覆盖被测实现**（覆盖它需要跨语言 import 图静态分析，零第三方依赖做不到——`07` 附录 A19）⇒ **业务代码一改，那个绿灯就在说谎**。故渲染进文档时 **MUST 带 commit 锚**，**MUST NOT 呈现为无条件的绿**。
 
-**`method_digest` 的覆盖面（MUST 明确，MUST NOT 写「可达」这种做不到的词）**：验证命令（**含 Makefile recipe body 展开**）+ smoke 文件 + **lane 显式声明的 `fixtures: []` 清单** + lane 声明的外部配置文件。
+**`evidence.file_digests` 的覆盖面（MUST 明确，MUST NOT 写「可达」这种做不到的词）**：`source.file`（非 `-` 时，**整份文件的原始字节；MUST NOT 提取 recipe body**〔A21〕）+ `smoke` 文件 + **lane 显式声明的 `fixtures: []` 清单**。
 `fixtures` 由**模型声明、人门确认**（无独立信号 ⇒ 语义层，进 ③-pre 分类清单）。
 
-**证据失效**：`method_digest` 失配 ⇒ lint **MUST** 报「验证证据已过期，需重验」，**MUST NOT** 继续声称 `verified`。
+**`evidence.method_at_verify` MUST 记录验证发生时的 `verification.method` 原文**（一个字符串）：
+
+> **为什么需要它**〔A21 的面治补口〕：旧 `method_digest` 覆盖「验证命令字符串 + recipe body + smoke + fixtures」。A21 把它换成只认**文件**的 `file_digests` 后，**`verification.method` 这个字符串本身掉出了时效锚**——人把 `method` 从 `make integration` 改成 `make integration-fast`，一个文件都没动 ⇒ `file_digests` 不变 ⇒ lint 全绿 ⇒ `verified` 继续挂着，**而它验的根本不是这条命令**。
+> **它过闸门**：信号 = 两个字符串比较（确定性）；性质 = **防漏**（操作者改了方法忘了重跑），**非防伪**。成本 ≈ 一个字段 + 一行比较。
+> **CAS 不顶替它**：`plan_snapshot` 覆盖 `method`，但那是**验证执行期间的并发保护**（防止跑到一半被改），**不是跨时间的时效检测**——两者作用域不同。
+
+**证据失效**：以下任一 ⇒ lint **MUST** 报「验证证据已过期，需重验」，**MUST NOT** 继续声称 `verified`：
+
+1. **`file_digests` 失配**（`source.file` / `smoke` / 声明的 `fixtures` 任一字节变了）→ 报「`<file>` 已改动」。**允许多报**（改了 Makefile 里别的 target 也触发）——刻意如此，**防漏宁可多报**〔A21〕
+2. **`verification.method` ≠ `evidence.method_at_verify`** → 报「验证方法已改动（`<旧>` → `<新>`），需重验」
+
+> **仍然覆盖不到的（MUST 如实写明，MUST NOT 佯装）**：**被测实现**（`07` A19：跨语言 import 图分析零依赖做不到）⇒ **`verified` 是 `verified-at <sha>`**。
+
+#### Scenario: 改了验证方法字符串使证据过期
+- **WHEN** 某 `verified` 泳道的 `verification.method` 被从 `make integration` 改为 `make integration-fast`，但未重跑验证
+- **THEN** lint 报「验证方法已改动，需重验」——**MUST NOT** 因「文件都没变、`file_digests` 未失配」而放行
 
 #### Scenario: 模型不能自称 verified
 - **WHEN** 调用 `set-lane --id X --status verified`
@@ -233,7 +250,7 @@ skill 的完成态 **MUST NOT 要求全部泳道 `verified`**——允许停在 
 
 #### Scenario: verify-lane 亲自执行并落证据
 - **WHEN** 对 `executor: script` 的泳道调用 `verify-lane --id X`
-- **THEN** 脚本自己 fork 执行验证命令，把 `exit` / `output_digest` / `method_digest` / `at_commit` 写入该 lane
+- **THEN** 脚本自己 fork 执行验证命令，把 `exit` / `output_digest` / **`file_digests`** / `at_commit` 写入该 lane
 
 #### Scenario: human 通道的绿如实标注
 - **WHEN** 某 `executor: human` 泳道经 `confirm-lane` 进入 `verified`
@@ -244,7 +261,7 @@ skill 的完成态 **MUST NOT 要求全部泳道 `verified`**——允许停在 
 - **THEN** `verified` 显示为 `verified-at <sha 前 7 位>`，MUST NOT 呈现为无条件的绿
 
 #### Scenario: 改了声明的 fixture 使证据过期
-- **WHEN** 某 `verified` 泳道 `fixtures` 清单中的文件被修改，`method_digest` 失配
+- **WHEN** 某 `verified` 泳道 `fixtures` 清单中的文件被修改，`file_digests` 失配
 - **THEN** lint 报该泳道验证证据已过期并要求重验
 
 ### Requirement: 执行边界与「不伤害」
@@ -469,17 +486,17 @@ skill **MUST 在写入任何落地物之前**，**原子落盘** touched-files �
 
 #### Scenario: maintain 扫描调用 devenv lint
 - **WHEN** 在已有 `environments.md` 的消费仓运行 `sdflow-maintain`
-- **THEN** 扫描结果包含 devenv 健康度：未 verified 泳道清单 · **过期的 `method_digest`** · 空/敷衍的 `blocked_by` · **三层框架的留白**，且原样带诚实后缀
+- **THEN** 扫描结果包含 devenv 健康度：未 verified 泳道清单 · **失配的 `file_digests`** · 空/敷衍的 `blocked_by` · **三层框架的留白**，且原样带诚实后缀
 
 ### Requirement: 机械 lint——只查诚实（防漏），不查质量（防伪）
 
 `devenv_lint.py` SHALL 执行以下检查。**每一条都是「防漏」，无一条试图判断「质量」**（总则）：
 
 1. **验证方法非空**：任一泳道 `verification.method` 或 `verification.strength` 为空 → fail-closed
-2. **状态与证据匹配**：`verified` ⇒ `evidence` 齐全且 `method_digest` 未失配；`verified` ⇒ **`blocked_by` 必须为空**（绿泳道挂着「本机无 mosquitto」= 文档在说谎）；`scaffolded` ⇒ `blocked_by` 非空**且含可辨认修复指引**
+2. **状态与证据匹配**：`verified` ⇒ `evidence` 齐全且 **`file_digests` 未失配** 且 **`verification.method` == `evidence.method_at_verify`**；`verified` ⇒ **`blocked_by` 必须为空**（绿泳道挂着「本机无 mosquitto」= 文档在说谎）；`scaffolded` ⇒ `blocked_by` 非空**且含可辨认修复指引**
 3. **三层框架完整性**（读 `.devenv-strategy.json`，**非解析 Markdown**）：三层各自的槽逐一存在且非空 → 缺任一 fail-closed；**`status: not-applicable` 的层豁免 ①–④ 槽**
 4. **三层状态的强制附带项**：`not-applicable` ⇒ `consequence` 非空**且非占位**；`manual` ⇒ `why_not_scriptable` + `human_steps` 非空**且非占位**；`implemented` ⇒ `lane_ids` 指向的泳道**存在且 `status ∈ {scaffolded, verified}`**
-5. **命令出处一致性**：按 **selector 重定位 + digest 比对**，**MUST NOT** 用行号存在性
+5. **命令出处一致性**：**只查 `evidence.file_digests` 未失配**（逐文件原始字节）。**MUST NOT** 用行号存在性；**MUST NOT** 对 `source` 做任何 make 语法解析——**既不提取 recipe，也不用正则查 target 存在性**〔A21〕。「target 能不能跑」由 `verify-lane` 真跑一遍让 make 自己判
 6. **指针不悬空**：Markdown 链接 + 章节锚可达
 7. **删源残留引用**（含代码注释，**排除 `.devenv-backup/`**）
 8. **路径 containment**：所有声明的路径经边界校验
@@ -493,8 +510,8 @@ lint 通过码 SHALL 带诚实后缀（`structure-ok-SEMANTICS-UNCHECKED`）—�
 lint SHALL 按泳道状态分档：`verified` → 强制 2、5；`scaffolded` → 强制 `smoke` 存在 + `blocked_by`；`planned` → 不核验命令出处。**第 3/4 条是文档级检查，与泳道状态无关，每次都跑。**
 
 #### Scenario: verified 泳道证据过期被抓
-- **WHEN** 某 `verified` 泳道的 `method_digest` 与当前 recipe / smoke / 声明的 fixture 不再匹配
-- **THEN** lint fail-closed 报「验证证据已过期」
+- **WHEN** 某 `verified` 泳道的 `file_digests` 与当前 `source.file` / `smoke` / 声明的 `fixtures` 的字节内容不再匹配
+- **THEN** lint fail-closed 报「验证证据已过期：`<file>` 已改动，请重跑」
 
 #### Scenario: verified 泳道挂着 blocked_by 被抓
 - **WHEN** 某泳道 `verified` 但 `blocked_by` 非空
@@ -504,7 +521,7 @@ lint SHALL 按泳道状态分档：`verified` → 强制 2、5；`scaffolded` �
 - **WHEN** lint 全部机械检查通过
 - **THEN** 输出的通过码明示「结构通过，语义未核」
 
-### Requirement: 数据模型——两份 JSON 侧文件与 digest 出处锚
+### Requirement: 数据模型——两份 JSON 侧文件与出处锚（**零 make 解析**）
 
 **两份机械真相源，均落 `openspec/architecture/`，均为标准库 `json`（零依赖）**：
 
@@ -531,12 +548,14 @@ lint SHALL 按泳道状态分档：`verified` → 强制 2、5；`scaffolded` �
       "strength": "<模型自陈：证明了什么、盲区是什么>",
       "why_not_scriptable": "<executor=human 时必填>",
       "human_steps":        "<executor=human 时必填>",
-      "evidence": {"at": "...", "at_commit": "<HEAD SHA>", "exit": 0,
-                   "output_digest": "...", "method_digest": "...",
+      "evidence": {"at": "...", "at_commit": "<HEAD SHA — 给人读的坐标，不作机械比对基准>",
+                   "exit": 0, "output_digest": "...",
+                   "file_digests": {"<rel path>": "<sha256(原始字节)>"},
+                   "method_at_verify": "<验证时的 method 原文——A21 的面治补口>",
                    "confirmed_what": "<human 时>", "attested_by": "script | human"}
     },
     "source": {"file": "Makefile", "kind": "make-target",
-               "selector": "integration", "digest": "<按类型规范化后 sha256>"},
+               "selector": "integration"},
     "smoke": "<path>",
     "fixtures": ["<path>..."],
     "env": ["<额外环境变量名>..."],
@@ -549,6 +568,7 @@ lint SHALL 按泳道状态分档：`verified` → 强制 2、5；`scaffolded` �
 
 > **无独立信号的字段（MUST 进 ③-pre 人门 + 冷审分类镜，MUST NOT 佯装机械）**：`kind` · `layer` · `covers` · `fixtures` · `env` · `strength` · `why_not_scriptable`。
 > **本模型不含 `owned_by`**〔`07` 附录 A16〕——「运行时派生」的锚不存在（skill 不知道 recipe 内部启动了什么）。
+> **`source` 不含 `digest`；`evidence` 不含 `method_digest`**〔`07` 附录 A21〕——时效锚统一为 `evidence.file_digests`（逐文件原始字节），**target 级 recipe 解析整个删除**。
 
 **`.devenv-strategy.json` 数据模型**：
 
@@ -568,30 +588,57 @@ lint SHALL 按泳道状态分档：`verified` → 强制 2、5；`scaffolded` �
 }
 ```
 
-**出处锚 MUST 按内容 digest，MUST NOT 按行号**：
+**出处锚 MUST NOT 按行号**：
 
 > **理由**：`source: "Makefile:11-14"` + lint「查那行存不存在」——**「第 11–14 行存不存在」对任何长度 ≥14 行的文件恒为真**。**这是一个恒真断言，即设计好的假绿。**
 
-lint SHALL 用 parser 按 `selector` **重新定位** target，比对 digest；**行号仅在 render 时动态生成供阅读、不作真相**。
+**`source` MUST NOT 含 `digest` 字段；lint MUST NOT 对 `source` 做任何 GNU make 语法解析**〔`07` 附录 A21〕——**既 MUST NOT 按 `selector` 重定位 target 提取 recipe body，也 MUST NOT 用正则查 target 存在性**：
 
-**digest 的规范化规则 MUST 按文件类型分治**〔round-3 领域镜〕：
+> **理由一（禁 recipe 解析）**：**GNU make 的语法面无界**（条件块 / `define` / 双冒号 / 模式规则 / 续行 / 内联 `;` / target-specific 变量…）。手搓 make 解析器只能得到一个对真实 Makefile **有 N 种罢工姿势**的脆件，而**它罢工一次就击穿「不管什么项目都能给一份三层框架」这条核心承诺**——`ifeq`、双冒号、多 target 一行在真实 Makefile 里常见且合理。**同 A20（手搓 Markdown 解析器）同理，且 make 的语法面大一个数量级。**
+>
+> **理由二（连 target 存在性正则也禁）**：它过不了总则的信号闸门。**正则找不到 target 时**——**① fail-closed 报「不存在」**：但「正则找不到」**≠**「target 不存在」（`ifeq` 包裹 / `define` 内 / 一行多 target 均会漏判）⇒ **复杂 Makefile 上误报罢工，理由一原样复发**；**② 不报**：那它**永远不会 fail** ⇒ **恒真断言 = 假绿**。**两条路都是错的 ⇒ 该检查 MUST NOT 存在。**
 
-| 文件类型 | 规范化 |
+**「target 真的存在、命令真的能跑」SHALL 由 `verify-lane` 真 fork 执行来保证——make 自己是权威判官**：
+
+| 失效模式 | 谁抓住它 |
 |---|---|
-| **Makefile recipe** | 剥行首/行尾空白与纯空行；**MUST 保留 tab 缩进**（tab 有语法意义）；**MUST NOT 剥注释** |
-| **YAML / JSON / lockfile / 其余一切** | **直接对原始字节做 sha256，不做任何空白规范化** |
+| `selector` 拼错 / target 压根不存在 | **`verify-lane` 跑 `make <selector>`** → make 报 `No rule to make target` → `exit≠0` → **泳道 MUST NOT 进 `verified`**（**make 自己解释自己的语法，覆盖 100% 语法面，零解析器**） |
+| target 后来被人删了 / 改名了 | **`file_digests` 失配**（改 Makefile 必然改字节）→ lint 报「已改动，请重跑」 |
 
-> **为什么必须分治**：**YAML 的行首缩进本身就是语义**。若把为 Makefile 设计的「剥去行首空白」套用到 `compose.yml`，**两份缩进不同、语义完全不同的 YAML 会算出同一个 digest**——**这是一个结构上与「行号锚」完全同构的假绿**。而最省事的实现路径（一个通用 `normalize()` 套用到所有输入）**恰恰就是踩进这个洞的路径**。
+**⇒ lint 对 `source` 只查一件事：`evidence.file_digests` 未失配。** 行号仅在 render 时动态生成供阅读、**不作真相**。
+
+> **一般化规则（MUST 贯彻全 skill）**：**凡机械层需要知道「某个 make / shell / 语言构造是什么意思」，正解是「让那个工具自己回答」（真跑一遍 / 调 `make -n`），MUST NOT 手搓解析器去猜。** 本 skill 的核心机制恰好就是「尽可能跑一遍确认」——**跑一遍，就是最强的解析器。**
+
+**时效锚 = `evidence.file_digests`，MUST 逐文件、原始字节、零规范化**：
+
+- **覆盖面** = `source.file`（非 `-` 时）+ `smoke` + lane **显式声明的** `fixtures[]`
+- **算法** = `sha256(<文件原始字节>)`，**对所有文件类型一视同仁**；**MUST NOT** 做任何空白/注释/缩进规范化
+  > **注**：原「digest 规范化规则按文件类型分治」（Makefile 剥空白保 tab / YAML 原始字节）**整条删除**——它是 **recipe 提取的衍生债**：只有把 recipe body 切出来才有缩进噪声、才需要 normalize。**不提取 recipe ⇒ 无需规范化 ⇒「通用 `normalize()` 把两份缩进不同的 YAML 算出同一 digest」这个假绿在结构上不可能发生。** 严格更强，且不可能踩错。
+- **失配语义 = 提醒，不是抓贼**：报「`<file>` 自验证以来已改动 ⇒ 本泳道 `verified` 可能过期，请重跑」。**允许多报**（改了 Makefile 里的**别的** target 也会触发）——**这是刻意的**：多报的代价是重跑一次 smoke，消除多报的代价是 300 行解析器，且方向反了（**防漏宁可多报**）。
+- **MUST NOT** 覆盖「smoke **可达**的所有 harness/fixture」（`07` A19：零依赖做不到跨语言 import 图分析）
+- **MUST 如实写明：不覆盖被测实现** ⇒ `verified` = **`verified-at <sha>`**（历史执行记录，非当前绿灯）
+
+> **时效锚 MUST NOT 改用 `at_commit` + `git diff`**〔round-4 否决〕：skill 的**主路径**是「落地物刚写完 → 立刻 fork 跑 smoke → 写 `verified`」，**此刻 Makefile target 与 smoke 必然是 uncommitted 的** ⇒ `git diff <at_commit> -- Makefile` **在验证成功的那一瞬间就报「已改动」**，锚在主路径上直接失效。`at_commit` 保留在 `evidence` 里，但它是**给人读的坐标**，**不作机械比对基准**。
 
 **CAS 快照 digest 的算法 MUST 明确定义**：`sha256(json.dumps(snapshot, sort_keys=True, ensure_ascii=False).encode("utf-8"))`。
 
 #### Scenario: 行号变动不导致假绿
 - **WHEN** 操作者在 Makefile 顶部插入三行变量定义
-- **THEN** lint 按 selector 重新定位 target 并比对 digest，digest 未变则通过、变了则报「实现已改动」
+- **THEN** lint **MUST NOT** 因「行号指向的行存在」而通过；`file_digests` 中 `Makefile` 的字节 digest 已变 → 报「`Makefile` 已改动，本泳道验证可能过期，请重跑」
+
+#### Scenario: selector 指的 target 不存在——由 make 自己抓，非静态解析
+- **WHEN** 某泳道 `source.selector: "integraton"`（拼错），Makefile 里只有 `integration`
+- **THEN** `verify-lane` fork 执行 `make integraton` → make 报 `No rule to make target` → `exit≠0` ⇒ 泳道 **MUST NOT** 进 `verified`，如实落 `scaffolded` + `blocked_by`
+- **AND** lint **MUST NOT** 试图用正则静态判断该 target 是否存在（`07` A21：该判断在「找不到」方向无确定性信号）
+
+#### Scenario: 复杂 Makefile MUST NOT 导致 skill 罢工〔核心承诺回归守卫〕
+- **WHEN** 项目的 Makefile 用了 `ifeq` 条件块 / `define` 块 / 双冒号规则 / 一行多 target / 续行 / target-specific 变量赋值 / 内联 `;` recipe
+- **THEN** skill **MUST 全程正常工作**（digest 是整文件字节，与语法无关；能不能跑由 make 自己判）——**MUST NOT** 出现任何「Makefile 语法不支持 / 无法解析」类的 fail-closed 拒绝
+- **理由**：核心承诺是「**不管什么项目**都能给一份三层框架」。**一个语法罢工分支 = 一类项目被拒之门外。**
 
 #### Scenario: YAML 缩进变化必须被 digest 捕获
 - **WHEN** 某 lane 声明的 `compose.yml` 的缩进层级被改动（语义变了）
-- **THEN** 其 digest 变化被检出，**MUST NOT** 因「剥空白后相同」而漏报
+- **THEN** 其 digest 变化被检出（原始字节 sha256 天然捕获），**MUST NOT** 因任何规范化而漏报
 
 #### Scenario: 未知 schema_version 拒绝解析
 - **WHEN** JSON 的 `schema_version` 高于本实现已知版本

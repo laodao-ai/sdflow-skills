@@ -110,7 +110,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 - 数据类 skill 改 `scripts/` → 必跑 `tests/`；纯 Markdown skill 改的是指令与触发。
 - 审查顺序（下方托管区块有强制规范）不可颠倒：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
 
-## 设计/分析基准原则（一致性机械化优先 + 目标态导向）
+## 设计/分析基准原则（机械化优先 + 目标态导向 + 面治 + 完整拆分 + 无界不手搓）
 
 评估任何设计/change（尤其 grill、spec-review、决策收敛）**一律以此为基准**：
 
@@ -118,8 +118,16 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 2. **目标态导向，不拿现状反驳目标**：开发阶段以**最终目标态**为准。**MUST NOT** 用「现状语料/存量里这种情况很少/没出现」论证「目标不该做 / 该缩水」——迁移中「旧数据还没新形态」是必然，拿它当风险基线会把「目标态才暴露的面」误判为「不存在」，是拿现状给目标松绑。评估问「目标态 producer 会/不会产出该形态」，而非「现存文件里有没有」。见 [[target-state-not-current-snapshot]]。
 3. **面治优先于点补**：机械化时把同片一致性面**一次扫全**（spec 已 MUST 却无机械守的漏网格一并补），而非只补当场被点穿的一处，见 [[point-vs-surface-fix]]。
 4. **拆分标准 = 一个 change 一个完整阶段结果**（roadmap/change/task 通用）：scope 按「一个完整内聚交付物」定，**不按同批来源/顺手/凑票数**；别把一件事拆散跨多 change、别混不相干功能。执行中撞到**与本次功能相关的 bug/todo → 立即 fold 做掉**（不 defer、不另开）；**唯一合理 defer = 依赖的模块尚不存在 → 留占位 + 记 todo**（非"这条边角现在少见所以妥协"）。**碎片化是"反复对现状提疑问 + 给妥协方案（WARN/grace/flag）"的根因**——一次做完整、锚目标态 fail-closed，这些疑问根本不产生。见 [[change-scope-one-complete-stage-result]] + [[change-fold-vs-defer-cycle-cost]]（一体两面）。
+5. **机械化 ≠ 手搓解析器：语法面无界者，让工具自己回答**（基准 1 的手段约束）。决定机械化**之后**，选手段先问一句「**这个语法面能不能穷举**」：
+   - **有界 ⇒ 可手写解析**。如 CommonMark 的 fence 变体（` ``` ` / `~~~` / 四 backtick / 缩进 fence）——数得完，就写得对。
+   - **无界 ⇒ MUST NOT 手搓**（GNU make / shell / 通用编程语言）。手搓出来的必然是「对真实输入有 N 种罢工姿势」的脆件，**而每个罢工分支都是一类项目被拒之门外**——它会反过来击穿功能本身的承诺。
+   - **正解 = 让那个工具自己回答**：想知道 make target 存不存在，就 `make` 真跑一遍看 exit code（make 自己解释自己的语法，100% 覆盖、零维护）；想要权威展开就调 `make -n`。**别用解析器去猜工具的语义。**
+   - **降级判据**：**机械判定**必须正确（∴ 无界语法面 = 死路）；**给人看的展示**允许 best-effort + 降级（提取不出就说「请自行查看 X」，**MUST NOT fail-closed 罢工**）。两者的代码 **MUST NOT 互相复用**（否则解析器从后门复活）。
+   - **警号（最重要的一条）**：**当你发现「每轮 review 都在同一个函数里补一个新的语法分支」，那不是"还差最后一个 case"，那是"这个函数本来就不该存在"。** 无界语法面上，补丁循环永不收敛。
 
-> 反面教训（本条成因）：grill mlh-p4-validators-hardening 时，我曾用「corpus 显示多数 hr-tg 锚是手写 evidence=、无 declared」论证「T136 重算覆盖薄、可不做」——被用户当场纠正为违反本基准（拿现状反驳目标）。正解 = 锚目标态（所有锚走脚本必有 declared=），M1–M4 全机械化，S1（declared 正确性）才留语义。
+> 反面教训（基准 2 的成因）：grill mlh-p4-validators-hardening 时，我曾用「corpus 显示多数 hr-tg 锚是手写 evidence=、无 declared」论证「T136 重算覆盖薄、可不做」——被用户当场纠正为违反本基准（拿现状反驳目标）。正解 = 锚目标态（所有锚走脚本必有 declared=），M1–M4 全机械化，S1（declared 正确性）才留语义。
+>
+> 反面教训（基准 5 的成因）：`add-sdflow-devenv` 的设计要求「lint 用 parser 按 selector 重定位 make target、提取 recipe body 做 digest」（`docs/sad/07` 机制 B）。实现期三轮补丁螺旋——脚本 261→562 行、测试 304→753 行，每轮 review 都挖出一个新的 make 语法角落（内联 `;` → `ifeq` 块 → `define` 块 → 双冒号 → 一行多 target …），最终留下 **7 个「Makefile 语法不支持」的 fail-closed 分支**。而该 skill 的核心承诺是「**不管什么项目**，都能给一份三层测试框架」——**每个罢工分支都在直接背叛它**。正解（07 附录 **A21**）：digest 一律整文件原始字节（零解析、零规范化），「target 能不能跑」由 `verify-lane` **真跑一遍**让 make 自己判。脚本 562→119 行，罢工分支归零。**它甚至过了基准 1 的「有确定性信号」闸门（sha256 是真信号）——所以基准 1 不足以拦住它，必须有本条。**
 
 ## 本仓库自身的 OpenSpec 工作流规范
 

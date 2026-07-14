@@ -7,6 +7,30 @@
 > **cleanup ledger 自动记账（整个删除，同上）** · **`confirm-lane` 的调用者身份保证（删除，agent session 里模型是唯一执行者，
 > 且本就不必防）** · **`method_digest` 的"smoke 可达的 harness/fixture"覆盖（删除，"可达"需跨语言 import 图分析，
 > 零依赖做不到；改为 lane 显式声明的 `fixtures[]` 清单）**。
+>
+> 〔**round-4 · 2026-07-14 · 实现期修正**〕**再删一个机制**（见 `07` 附录 **A21**）：
+> **`source.digest` 字段 + 「按 `selector` 用 parser 重定位 make target、提取 recipe body 做 digest」+ 其衍生的
+> 「digest 规范化规则按文件类型分治」——三者一并删除。** 理由：GNU make **语法面无界**（`ifeq`/`define`/双冒号/
+> 模式规则/续行/内联 `;`/target-specific 变量…），手搓解析器必然带一堆「语法不支持」的罢工分支，而**它罢工一次就击穿
+> 「不管什么项目都能给一份三层框架」这条核心承诺**；且它精确防的是「操作者偷改 recipe 不重跑」（§0.0 已宣告此人不存在），
+> 却完全不覆盖真正高频的「被测实现改了」。**A20（手搓 Markdown 解析器）的理由逐字适用，只是当时没往这边看。**
+> **替代**：`source: {file, kind, selector}` 无 digest；时效锚 = **`evidence.file_digests`**（`source.file` + `smoke` +
+> 声明的 `fixtures[]`，**逐文件原始字节 sha256，零规范化**——不提取 recipe ⇒ 无缩进噪声 ⇒ 规范化规则整条消失）。
+> **实现期代价（务必记住）**：Task「digest」三轮补丁螺旋，脚本 261→562 行、测试 304→753 行，每轮 review 都挖出一个新的
+> make 语法角落。**无界语法面上补丁循环不会自己收敛——这本身就是「该删掉它」的信号。**
+>
+> **⚠️ 返工序（A21 后，实现进度的实际状态）**：Task 1/2 的产物**不受影响**；**Task 3 与 Task 4 的已提交代码需返工**，
+> 且 **MUST 先于 Task 5**（Task 8 的 `verify-lane`、Task 11 的 lint 都依赖它们的新接口）：
+>
+> | 文件 | 返工 |
+> |---|---|
+> | `scripts/devenv_digest.py` | **整体重写**：562 → ~60 行。删 `find_make_target` / `digest_make_recipe` / `method_digest` / 7 个 `MakefileUnsupported` 分支；改为 `file_digest` / `lane_file_digests` / `stale_files`，**零 make 知识** |
+> | `tests/test_digest.py` | **整体重写**：753 → ~180 行。**新增两条 A21 红线**：`test_complex_makefile_never_raises`（核心承诺守卫）· `test_no_make_parsing_symbols_exist`（防 parser 从后门爬回来） |
+> | `scripts/devenv_schema.py` | evidence 必填键 `method_digest` → **`file_digests`（dict）+ `method_at_verify`（str）**；加「`method` != `method_at_verify` ⇒ 报验证方法已改动」 |
+> | `tests/test_schema.py` | 同步 evidence fixture |
+>
+> **`method_at_verify` 是 A21 的面治补口，不是新功能**——见 4.3。旧 `method_digest` 覆盖了「命令字符串」这一面，
+> 换成只认文件的 `file_digests` 后它掉出去了。**拆错的机制时 MUST 接住它原本覆盖的合法面**（基准 3）。
 > Requirement 追溯：`R-*` = `specs/devenv-provisioning/spec.md`（21 条 Requirement，见下方图例）；
 > `A-1` = `specs/architecture-design/spec.md`；`M-1` = `specs/maintain-scan/spec.md`。
 > 纪律：改 `scripts/` 必跑 `tests/`。复选框在 `/sdflow-done` 的 archive 阶段勾——**实现期 MUST NOT 勾**。
@@ -51,8 +75,8 @@
 - [ ] 1.2 `scripts/devenv_schema.py`：**`.devenv-lanes.json` schema**（标准库 `json`，**零第三方依赖**）——lane 含
   `id` / `layer`（unit\|integration\|e2e）/ `kind`（external-dep\|ui\|lang-bridge\|hardware\|pure）/
   `status`（planned\|scaffolded\|verified）/
-  **`verification{method,executor,strength,why_not_scriptable,human_steps,evidence{at,at_commit,exit,output_digest,method_digest,confirmed_what,attested_by}}`** /
-  `source{file,kind,selector,digest}` / `smoke` / **`fixtures[]`** / **`env[]`** / `deps[{name,kind}]`
+  **`verification{method,executor,strength,why_not_scriptable,human_steps,evidence{at,at_commit,exit,output_digest,file_digests,method_at_verify,confirmed_what,attested_by}}`** /
+  `source{file,kind,selector}`（**无 `digest`**〔A21〕）/ `smoke` / **`fixtures[]`** / **`env[]`** / `deps[{name,kind}]`
   （**`deps` 不含 `owned_by`**）/ `covers` / `blocked_by`〔R-DATA〕
 - [ ] 1.3 `scripts/devenv_schema.py`：**`.devenv-strategy.json` schema**——`layers.{unit,integration,e2e}` 各含五槽
   `how/convention/process/tooling/status`；`status: implemented` 时另含 `lane_ids[]`；
@@ -108,12 +132,25 @@
 - [ ] 3.5 **`inject` 实现 fence-aware**——MUST NOT 照抄 `init.py`（其 `:49-52` 注释明示非 fence-aware）。覆盖
   CommonMark 全部 fence 变体（` ``` ` / `~~~` / 四 backtick / 缩进 fence）；孤儿 / 逆序 / 交错 → **fail-closed 报位置**
   〔R-MARKER〕
-- [ ] 3.6 **`source` digest 锚**：按 `selector` 用 parser 重定位 target，比对 digest；**MUST NOT 用行号存在性**
-  （对任何长度 ≥N 的文件恒真 = 设计好的假绿）〔R-DATA〕
-- [ ] 3.7 **⭐ digest 规范化规则按文件类型分治**（**MUST 明确定义，不留给实现现场发挥**）：
-  **Makefile recipe** — 剥行首/行尾空白与纯空行，**MUST 保留 tab 缩进**（tab 有语法意义），**MUST NOT 剥注释**；
-  **YAML / JSON / lockfile / 其余一切** — **直接对原始字节做 sha256，不做任何空白规范化**（YAML 缩进即语义，剥空白
-  会造出与「行号锚」同构的假绿）〔R-DATA〕
+- [ ] 3.6 **`source` 出处锚**〔**round-4 重写，见 A21**〕：`source: {file, kind, selector}`，**无 `digest` 字段**。
+  **`devenv_digest.py` MUST 零 make 知识**——lint 对 `source` **只查 `file_digests` 未失配**（见 3.7）。
+  **MUST NOT 用行号存在性**（恒真 = 假绿）· **MUST NOT 按 `selector` 提取 recipe body 做 digest**（make 语法面无界，
+  手搓解析器必带「语法不支持」罢工分支，**罢工一次即击穿「不管什么项目」的核心承诺**）· **MUST NOT 用正则查 target
+  存在性**（「正则找不到」≠「target 不存在」——`ifeq` 包裹 / `define` 内 / 一行多 target 都会漏判 ⇒ 要么**误报罢工**、
+  要么**永不 fail = 恒真假绿**，两条路都错）。
+  **「target 存在且能跑」由 `verify-lane` 真 fork 执行保证——make 自己是权威判官**：拼错/不存在 → make 报
+  `No rule to make target` → `exit≠0` → 泳道进不了 `verified`；被删/改名 → Makefile 字节变 → `file_digests` 失配。
+  > **一般化规则**：机械层想知道「某个 make/shell/语言构造是什么意思」，**正解是让那个工具自己回答**（真跑一遍 /
+  > `make -n`），**MUST NOT 手搓解析器去猜**。本 skill 的核心机制就是「尽可能跑一遍确认」——**跑一遍即最强的解析器。**
+  〔R-DATA · A21〕
+- [ ] 3.7 **⭐ 时效锚 = `evidence.file_digests`，逐文件原始字节，零规范化**〔**round-4 重写，取代原「分治」条**〕：
+  **算法** = `sha256(<文件原始字节>)`，**所有文件类型一视同仁**；**MUST NOT** 做任何空白/注释/缩进规范化。
+  **覆盖面** = `source.file`（非 `-` 时）+ `smoke` + lane 显式声明的 `fixtures[]`。
+  > **原「按文件类型分治」（Makefile 剥空白保 tab / YAML 原始字节）整条删除**——它是 **recipe 提取的衍生债**：只有切出
+  > recipe body 才有缩进噪声、才需要 normalize。**不提取 recipe ⇒ 无需规范化 ⇒「通用 `normalize()` 把两份缩进不同的
+  > YAML 算出同一 digest」这个假绿在结构上不可能发生**。严格更强，且不可能踩错。
+  **失配语义 = 提醒不是抓贼**；**允许多报**（改了 Makefile 里别的 target 也触发）——多报代价 = 重跑一次 smoke，
+  消除多报代价 = 300 行解析器，**且方向反了（防漏宁可多报）**〔R-DATA · A21〕
 - [ ] 3.8 **`append_makefile_target()`**：锁内「读 → 扫 target 名 → 补尾换行 → 以 tab 拼 recipe → 原子写」；
   **重名 → fail-closed**（脚本**只判名字碰撞**，**语义符不符归模型+人**，MUST NOT 假装机械判断了语义）〔R-APPEND〕
 - [ ] 3.9 **`doctor-gen` 子命令**：生成依赖自查脚本（`0o755`）+ 安装命令清单——**MUST NOT 替操作者安装**〔R-BOUND〕
@@ -123,7 +160,9 @@
 - [ ] 3.11 scaffold 测试：各退出码 · `set-lane --status verified` 被拒 · **render 输出 `verified-at <sha>` 且
   human-attested 与脚本验证在渲染上可区分** · render 输出含 `strength` · inject 在含 marker 演示的 fence 语料上不劫持
   （checkin **固定 fixture**，**MUST NOT 拿本仓活语料当 fixture**）· Makefile 追加三炸点（无尾换行 / tab / 重名） ·
-  **digest 规范化：改注释/改 tab 的行为符合规则** · **YAML 缩进变化必须改变 digest**（同一内容剥空白后不得判同）
+  **⭐ 复杂 Makefile 不罢工**（`ifeq` 块 / 双冒号 / 一行多 target / target-specific 变量 / `define` 块 / 续行 —— 逐个
+  造 fixture，**MUST 全部正常工作**，**MUST NOT 出现「语法不支持」类 fail-closed**）〔A21 回归守卫〕 ·
+  **任意文件字节变化必改变 digest**（含 YAML 缩进变化）· **行号位移必被检出**（整文件字节变了）
 
 ## 4. 验证：两条通道（`verified` 的唯一产出者）
 
@@ -132,13 +171,22 @@
 - [ ] 4.2 **`confirm-lane` 子命令**（`executor: human` 通道）：人跑完人工验证后，经人门写入 `confirmed_what`；产出的
   `verified` **MUST 如实标 `attested_by: human`**（人说的，不是脚本验的）——**MUST NOT 声称脚本保证了执行者本人写入**
   （agent session 里模型是唯一命令执行者，「模型不能代替操作者调用」按字面永远为假，**且本就不必防**）〔R-EXEC〕
-- [ ] 4.3 **执行证据原子落盘**：`at` / `at_commit`（HEAD SHA）/ `exit` / `output_digest` / `method_digest`——无证据则
-  冷审「诚实镜」在数据上无从查证〔R-EXEC〕
-- [ ] 4.4 **⭐ `method_digest` 覆盖面**（**MUST 明确，MUST NOT 写「可达」这种做不到的词**）：验证命令（**含 Makefile
-  recipe body 展开**）+ smoke 文件 + **lane 显式声明的 `fixtures[]` 清单** + lane 声明的外部配置文件。`fixtures` 由
-  **模型声明、人门确认**（无独立信号 ⇒ 语义层，进 ③-pre 分类清单）〔R-EXEC · R-DATA〕
-- [ ] 4.5 **证据失效检测**：`method_digest` 失配 ⇒ lint **MUST** 报「验证证据已过期，需重验」，**MUST NOT** 继续声称
-  `verified`〔R-EXEC · R-LINT〕
+- [ ] 4.3 **执行证据原子落盘**：`at` / `at_commit`（HEAD SHA，**给人读的坐标，MUST NOT 作机械比对基准**）/ `exit` /
+  `output_digest` / **`file_digests`** / **`method_at_verify`**——无证据则冷审「诚实镜」在数据上无从查证〔R-EXEC〕
+  > **`method_at_verify` = A21 的面治补口**：旧 `method_digest` 覆盖「验证命令字符串 + recipe + smoke + fixtures」；
+  > A21 换成只认**文件**的 `file_digests` 后，**`verification.method` 字符串本身掉出了时效锚**（人把 method 改成
+  > `make integration-fast`，一个文件没动 ⇒ digest 不变 ⇒ lint 全绿 ⇒ verified 挂着，而它验的根本不是这条命令）。
+  > 记下验证时的 method 原文，lint 一行比对即可。**信号确定（字符串比较）· 性质防漏 · 成本 ~5 行。**
+  > **CAS 不顶替它**：`plan_snapshot` 覆盖 `method`，但那是**验证期间的并发保护**，不是**跨时间的时效检测**。
+  > **`at_commit` 为何不能当时效锚**〔round-4 否决 git diff 方案〕：主路径是「落地物刚写完 → 立刻 fork 跑 smoke →
+  > 写 `verified`」，**此刻 Makefile target 与 smoke 必然 uncommitted** ⇒ `git diff <at_commit> -- Makefile`
+  > **在验证成功那一瞬间就报「已改动」**，锚在主路径上直接失效。
+- [ ] 4.4 **⭐ `file_digests` 覆盖面**（**MUST 明确，MUST NOT 写「可达」这种做不到的词**）：`source.file`（非 `-` 时，
+  **整份文件的原始字节，MUST NOT 提取 recipe body**〔A21〕）+ `smoke` 文件 + **lane 显式声明的 `fixtures[]` 清单**。
+  `fixtures` 由 **模型声明、人门确认**（无独立信号 ⇒ 语义层，进 ③-pre 分类清单）〔R-EXEC · R-DATA〕
+- [ ] 4.5 **证据失效检测（两条）**：① **`file_digests` 失配** ⇒ 报「验证证据已过期：`<file>` 已改动，需重验」
+  （**允许多报**——Makefile 里别的 target 改了也报，刻意如此）② **`verification.method` ≠ `evidence.method_at_verify`**
+  ⇒ 报「验证方法已改动（`<旧>` → `<新>`），需重验」。任一命中 **MUST NOT** 继续声称 `verified`〔R-EXEC · R-LINT〕
 - [ ] 4.6 **超时杀进程树**：`start_new_session=True` + TERM→KILL 整棵进程组；默认超时 **300s，可按 lane 覆盖**，
   **实际用值写进 evidence**（便于事后复核"是不是超时太短误杀"）〔R-BOUND〕
 - [ ] 4.7 **⭐ 中止后如实告知可能的孤儿资源**（**MUST NOT 假装能回收**）：recipe 内部起的 Docker 容器不属于子进程组，
@@ -156,10 +204,20 @@
   **显式声明**（`env: []`，无独立信号 ⇒ MUST 进 ③-pre 人门清单）；**敏感变量需人门单独授权，且 MUST NOT 落盘**〔R-BOUND〕
 - [ ] 4.11 落盘的命令输出**额外**截断 + 过 secret 正则打码——**但此为 best-effort 缓解、非泄露保证**；正则集合登记
   已知盲区，**MUST NOT 用绝对语气佯装保证**〔R-BOUND〕
-- [ ] 4.12 **跑前展开 recipe**：`verify-lane` 呈现给 SKILL.md 编排层的内容包含该 target 的 recipe body，不只是
-  `make integration` 这一行调用〔R-BOUND〕
-- [ ] 4.13 验证测试：verify-lane 亲自 fork 执行 · 证据字段齐全 · **`method_digest` 覆盖面**（改 `fixtures[]` 声明清单 /
-  外部配置文件 → digest 失配，改未声明内容 → 不失配）· 超时杀进程树（能杀的被杀，杀不到的被**响亮报告**而非静默）·
+- [ ] 4.12 **跑前呈现 recipe（best-effort 展示，⚠️ 不是机械判定）**〔**round-4 重写**〕：`verify-lane` 跑之前，向人 /
+  编排层**尽量**呈现该 target 的 recipe 原文（安全：recipe 里可能有 `rm -rf`、可能起容器），不只是 `make integration`
+  这一行调用。
+  > **⚠️ 这是 A21 的后门，措辞 MUST 精确**：本条**只做展示**，**MUST 是 best-effort**——提取不确定（条件块 / `define` /
+  > 续行 / 一行多 target …）时**降级为「无法自动展开，请查看 `<file>` 的 `<selector>` target」**，**MUST NOT fail-closed
+  > 罢工**（那正是 A21 杀掉的东西）。
+  > **两条硬约束**：① 本条的提取代码 **MUST NOT 被复用为任何 digest / 判定的基准**（`file_digests` 只认整文件原始
+  > 字节）——否则 parser 从后门原地复活；② **MUST NOT 为提高提取精度而扩充 make 语法覆盖**——想要权威展开，正解是
+  > **调 `make` 自己**（如 `make -n <target>`，并如实标注它会执行 `$(shell ...)` 的边界），**MUST NOT 手搓**。
+  > **判据**：机械保证的东西必须正确（∴ 无界语法面 = 死路）；**给人看的辅助允许 best-effort + 降级**。〔R-BOUND · A21〕
+- [ ] 4.13 验证测试：verify-lane 亲自 fork 执行 · 证据字段齐全 · **`file_digests` 覆盖面**（改 `fixtures[]` 声明清单 /
+  `source.file` / `smoke` → digest 失配，改未声明的其他文件 → 不失配）· **recipe 展示在复杂 Makefile 上降级而非罢工**
+  （`ifeq` 包裹的 target → 输出「无法自动展开，请查看…」，**MUST NOT** 抛异常/fail-closed）〔A21〕·
+  超时杀进程树（能杀的被杀，杀不到的被**响亮报告**而非静默）·
   **非 POSIX refuse → 走 human 通道**（mock 平台）· `kind: hardware` refuse → human · **子进程 env 不含 allowlist
   外的变量** · `set-lane --status verified` 被拒 · `confirm-lane` 落人门证据且 `attested_by: human`
 
@@ -167,7 +225,8 @@
 
 - [ ] 5.1 `devenv_lint.py` 主体骨架（**只查诚实，不查质量**——总则）〔R-LINT〕
 - [ ] 5.2 检查①：任一泳道 `verification.method` 或 `verification.strength` 为空 → fail-closed〔R-LINT〕
-- [ ] 5.3 检查②：状态与证据匹配——`verified` ⇒ `evidence` 齐全且 `method_digest` 未失配；`verified` ⇒
+- [ ] 5.3 检查②：状态与证据匹配——`verified` ⇒ `evidence` 齐全 ∧ **`file_digests` 未失配** ∧
+  **`verification.method` == `evidence.method_at_verify`**（A21 面治补口）；`verified` ⇒
   **`blocked_by` 必须为空**（绿泳道挂着「本机无 mosquitto」= 文档在说谎）；`scaffolded` ⇒ `blocked_by` 非空**且含
   可辨认修复指引**〔R-LINT〕
 - [ ] 5.4 **⭐ 检查③：三层框架完整性**（读 `.devenv-strategy.json`，**非解析 Markdown**）：三层各自的槽逐一存在且
@@ -178,7 +237,9 @@
 - [ ] 5.6 **反敷衍启发式**（与 `blocked_by` 同款）：`consequence` / `human_steps` / `blocked_by` **MUST NOT** 为纯
   占位符（`无` / `没有` / `N/A` / `TODO` / `待定` 独占整段 → 报警）；**诚实边界注释**：此为启发式，挡得住敷衍，挡不住
   「写得像模像样但没用」，后者归人门与冷审〔R-STRAT · R-LINT〕
-- [ ] 5.7 检查⑤：命令出处一致性——按 **selector 重定位 + digest 比对**，**MUST NOT** 用行号存在性〔R-LINT〕
+- [ ] 5.7 检查⑤：命令出处一致性——**只查 `evidence.file_digests` 未失配**（逐文件原始字节）。**MUST NOT** 用行号
+  存在性；**MUST NOT** 对 `source` 做任何 make 语法解析（**既不提取 recipe，也不用正则查 target 存在性**）——
+  「target 能不能跑」由 `verify-lane` 真跑一遍让 **make 自己判**〔R-LINT · A21〕
 - [ ] 5.8 检查⑥：指针不悬空——Markdown 链接 + 章节锚可达〔R-LINT〕
 - [ ] 5.9 检查⑦：删源残留引用（含代码注释，**排除 `.devenv-backup/`**）〔R-LINT〕
 - [ ] 5.10 检查⑧：路径 containment——所有声明的路径经边界校验（复用 2.6 的 helper）〔R-LINT · R-PATH〕
@@ -189,15 +250,17 @@
   泳道状态无关，每次都跑**；断言带 E 编号注释（scope-check 可机械核对）〔R-LINT〕
 - [ ] 5.13 **⭐ `sdflow-maintain` 集成**（`devenv_lint` 的**唯一触发点**）：检出 `environments.md` 存在 ⇒ 调用
   `devenv_lint` 并入扫描报告；报告 SHALL 含未 `verified` 泳道清单（`planned`/`scaffolded`，**逐条列出非只给计数**）·
-  过期的 `method_digest` · 空或敷衍的 `blocked_by` · **残留 `blocked_by` 的 `verified` 泳道** · 测试三层框架的留白；
+  失配的 `file_digests` · 空或敷衍的 `blocked_by` · **残留 `blocked_by` 的 `verified` 泳道** · 测试三层框架的留白；
   **报告 SHALL 原样透传 `devenv_lint` 的诚实后缀，MUST NOT 二次简化渲染成「verified = ✓」式的绿色状态**；无
   `environments.md` → 跳过（非报错）；`devenv_lint` 不可用 → **显式提示「检出 environments.md 但 devenv_lint 不可用，
   跳过健康度扫描」，MUST NOT 静默略过**。**注**：maintain 现为四类**硬编码**扫描、**无插件挂点** ⇒ 本任务是**新增代码**
   〔M-1〕
-- [ ] 5.14 lint 测试：各条造坏输入 fail-closed · **「行还在、内容变了」被抓** · **YAML 缩进变化被抓** · **三层缺
-  一层被抓** · **`not-applicable` 未记后果被抓** · **`manual` 无 `human_steps` 被抓** · **`implemented` 无对应泳道
-  被抓** · `blocked_by: TODO` 被抓 · `planned` 不误报 · 通过码含诚实后缀 · **maintain 集成：真实回归（`method_digest`
-  失配）被拦下** · **maintain 报告原样透传诚实后缀、不被二次渲染成绿色**
+- [ ] 5.14 lint 测试：各条造坏输入 fail-closed · **「行还在、内容变了」被抓** · **YAML 缩进变化被抓** · **target 被
+  改名/删除 → 通过 `file_digests` 失配被抓**（**非**靠静态解析）· **⭐ 复杂 Makefile（`ifeq`/双冒号/一行多 target/
+  `define`/续行）→ lint 正常工作，MUST NOT 「语法不支持」罢工**〔A21〕 · **三层缺一层被抓** · **`not-applicable` 未记
+  后果被抓** · **`manual` 无 `human_steps` 被抓** · **`implemented` 无对应泳道被抓** · `blocked_by: TODO` 被抓 ·
+  `planned` 不误报 · 通过码含诚实后缀 · **maintain 集成：真实回归（`file_digests` 失配）被拦下** ·
+  **maintain 报告原样透传诚实后缀、不被二次渲染成绿色**
 
 ## 6. references
 
@@ -294,9 +357,11 @@
   **诚实边界：零代码 greenfield 的 `verified` 数可为 0**，达标线为「三层框架完整 + 泳道表 + 待建清单」；**MUST NOT**
   为凑 `verified` 造空跑测试
 - [ ] 10.4 **SM-2（归位）**：在 **checkin 的 brownfield fixture** 上跑，删源集与搬运结果**确定性断言**
-- [ ] 10.5 **SM-6**：digest 锚生效——造「行还在、内容变了」的坏输入被抓；**YAML 缩进变化被 digest 捕获**（不因剥空白
-  后相同而漏报）
-- [ ] 10.6 **SM-4**：`sdflow-maintain` 扫描中 `devenv_lint` **被自动调用**，并在真实回归（`method_digest` 失配）上
+- [ ] 10.5 **SM-6**：出处锚生效——造「行还在、内容变了」的坏输入被抓；**任意文件字节变化被 digest 捕获**（含 YAML
+  缩进变化）；**target 被删/改名 → 经 `file_digests` 失配被抓**；**`selector` 拼错 → `verify-lane` 跑 make 时被 make
+  自己抓（`exit≠0` → 进不了 `verified`）**；**⭐ 复杂 Makefile（`ifeq`/双冒号/一行多 target/`define`/续行）上 skill
+  全程正常工作，MUST NOT 出现任何「语法不支持」类罢工**〔A21 核心承诺回归守卫〕
+- [ ] 10.6 **SM-4**：`sdflow-maintain` 扫描中 `devenv_lint` **被自动调用**，并在真实回归（`file_digests` 失配）上
   拦下，报告**原样透传诚实后缀**
 - [ ] 10.7 **SM-7（产品有效性）**：记录 clean checkout → 首条测试跑通的耗时 · 人工回答数 · 生成 diff 被保留的比例
 - [ ] 10.8 **SM-8（不伤害，round-3 改写）**：异常中断（超时 / SIGINT）下，能杀的进程树被杀，**杀不到的孤儿资源被
@@ -325,16 +390,24 @@ atomic_write(mode=)                │ 单元            │ 脚本类落 0o755 
 set-lane --status verified         │ 单元            │ **一律 exit 5 拒绝**   ← 核心守卫
 verify-lane (script 通道)          │ 集成            │ 亲自 fork 执行 · 证据字段齐全
 confirm-lane (human 通道)          │ 单元            │ 落人门证据 · `attested_by: human`
-**method_digest 覆盖面**            │ 单元            │ **改声明的 fixtures[]/外部配置 → digest 失配**
+**file_digests 覆盖面**             │ 单元            │ **改 source.file/smoke/声明的 fixtures[] → 失配**
+                                   │                │ 改未声明的其他文件 → 不失配
+**recipe 展示 best-effort**〔A21〕  │ 单元            │ **复杂 Makefile → 降级提示，MUST NOT 罢工**
 恢复路径(超时/中断)                 │ 故障注入        │ 能杀的进程树被杀 · **杀不到的被响亮报告，非静默**
 超时杀进程树                        │ 集成            │ TERM→KILL 整棵进程组 · 实际超时写进 evidence
 **最小环境 allowlist**              │ 单元            │ **子进程 env 不含 allowlist 外的变量**
 非 POSIX refuse                    │ 单元(mock平台)  │ verify-lane refuse → 走 human 通道
 kind:hardware refuse               │ 单元            │ verify-lane refuse → 走 human 通道
 ───────────────────────────────────┼────────────────┼────────────────────────────────────────
-source digest 锚                   │ 单元            │ **「行还在、内容变了」被抓**
-digest 规范化(分治)                 │ 单元            │ Makefile 改注释/改 tab 符合规则
-                                   │                │ **YAML 缩进变化必须改变 digest**
+source 出处锚〔A21 重写〕           │ 单元            │ **「行还在、内容变了」被抓**（整文件字节）
+                                   │                │ **target 改名/删除 → digest 失配被抓**
+                                   │                │ **任意字节变化改变 digest**（含 YAML 缩进）
+                                   │                │ **零 make 知识**（不解析、不查存在性）
+selector 拼错                       │ 集成            │ **verify-lane 跑 make → exit≠0 → 非 verified**
+                                   │                │ （**make 自己判**，非静态解析）
+**⭐ 复杂 Makefile 不罢工**〔A21〕   │ 单元            │ **ifeq / 双冒号 / 一行多 target / define /**
+                                   │                │ **续行 / target-specific 变量 → 全部正常**
+                                   │                │ **MUST NOT 有「语法不支持」fail-closed**
 append_makefile_target             │ 单元            │ 无尾换行 · tab · **重名 fail-closed(只判名)**
 inject (fence-aware)               │ 单元(固定fixture)│ ``` / ~~~ / 四backtick / 缩进 fence
                                    │                │ 孤儿 / 逆序 / 交错 → fail-closed
@@ -346,7 +419,7 @@ render (verified-at / human-attested) │ 单元         │ **verified 渲染�
                                    │                │ **已实现无对应泳道 → fail**
 devenv_lint 诚实性                  │ 单元            │ verified 残留 blocked_by 被抓
                                    │                │ blocked_by/consequence/human_steps: TODO 被抓
-sdflow-maintain 集成               │ 集成            │ **真实回归被拦下**（digest 失配）
+sdflow-maintain 集成               │ 集成            │ **真实回归被拦下**（file_digests 失配）
                                    │                │ **报告原样透传诚实后缀，不被二次渲染绿色**
 ───────────────────────────────────┼────────────────┼────────────────────────────────────────
 **touched-files 回退**              │ 集成(临时 git 仓)│ **新写文件(untracked)被精确删除**

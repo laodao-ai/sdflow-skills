@@ -22,8 +22,9 @@ def _lane(**kw):
             "executor": "script",
             "strength": "真穿过 broker；断言是否有效不由本方法保证",
         },
+        # A21：source 无 digest 字段（时效锚移入 evidence.file_digests）
         "source": {"file": "Makefile", "kind": "make-target",
-                   "selector": "integration", "digest": "abc123"},
+                   "selector": "integration"},
         "smoke": "internal/smoke_test.go",
         "fixtures": [],
         "env": [],
@@ -64,17 +65,73 @@ def test_scaffolded_requires_blocked_by():
     assert any("blocked_by" in e for e in S.validate_lane(_lane(blocked_by="")))
 
 
+def _evidence(method="make integration", **kw):
+    """A21：file_digests（文件锚）+ method_at_verify（命令字符串锚）取代 method_digest。"""
+    ev = {
+        "at_commit": "abc1234",
+        "exit": 0,
+        "file_digests": {"Makefile": "d" * 64},
+        "method_at_verify": method,
+        "attested_by": "script",
+    }
+    ev.update(kw)
+    return ev
+
+
 def test_verified_forbids_blocked_by():
     """绿泳道挂着「本机无 X」= 文档在说谎"""
     lane = _lane(status="verified", blocked_by="本机无 mosquitto")
-    lane["verification"]["evidence"] = {"at_commit": "abc", "exit": 0,
-                                        "method_digest": "d", "attested_by": "script"}
+    lane["verification"]["evidence"] = _evidence()
     assert any("blocked_by" in e for e in S.validate_lane(lane))
 
 
 def test_verified_requires_evidence():
     lane = _lane(status="verified", blocked_by="")
     assert any("evidence" in e for e in S.validate_lane(lane))
+
+
+def test_verified_with_full_evidence_passes():
+    lane = _lane(status="verified", blocked_by="")
+    lane["verification"]["evidence"] = _evidence()
+    assert S.validate_lane(lane) == []
+
+
+def test_verified_requires_file_digests():
+    """A21：file_digests 是必填证据（取代 method_digest）。"""
+    lane = _lane(status="verified", blocked_by="")
+    ev = _evidence()
+    del ev["file_digests"]
+    lane["verification"]["evidence"] = ev
+    assert any("file_digests" in e for e in S.validate_lane(lane))
+
+
+def test_file_digests_must_be_a_mapping():
+    lane = _lane(status="verified", blocked_by="")
+    lane["verification"]["evidence"] = _evidence(file_digests=["Makefile"])
+    assert any("file_digests" in e for e in S.validate_lane(lane))
+
+
+def test_verified_requires_method_at_verify():
+    """A21 面治补口：命令字符串本身也要有时效锚。"""
+    lane = _lane(status="verified", blocked_by="")
+    ev = _evidence()
+    del ev["method_at_verify"]
+    lane["verification"]["evidence"] = ev
+    assert any("method_at_verify" in e for e in S.validate_lane(lane))
+
+
+def test_changed_method_string_is_caught():
+    """⭐ A21 面治补口的核心用例。
+
+    人把 method 从 `make integration` 改成 `make integration-fast`：
+    一个文件都没动 ⇒ file_digests 不变 ⇒ 若不比这一下，verified 会继续挂着，
+    而它验的根本不是这条命令。
+    """
+    lane = _lane(status="verified", blocked_by="")
+    lane["verification"]["method"] = "make integration-fast"
+    lane["verification"]["evidence"] = _evidence(method="make integration")  # 验的是旧命令
+    errs = S.validate_lane(lane)
+    assert any("验证方法已改动" in e for e in errs), errs
 
 
 def test_bad_enum_rejected():

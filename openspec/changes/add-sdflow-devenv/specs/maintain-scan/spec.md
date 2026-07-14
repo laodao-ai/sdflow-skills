@@ -7,7 +7,7 @@
 报告 SHALL 包含：
 
 1. **未 `verified` 的泳道清单**（`planned` / `scaffolded`）及其 `blocked_by`——**逐条列出，MUST NOT 只给计数**
-2. **过期的 `method_digest`**（人改了 recipe / smoke / 声明的 fixture，使 `verified` 泳道的验证证据失效）
+2. **失配的 `file_digests`**（人改了 `source.file` / `smoke` / 声明的 fixture，使 `verified` 泳道的验证证据失效）
 3. **空或敷衍的 `blocked_by`**（`scaffolded` 泳道；诚实性违规）
 4. **残留 `blocked_by` 的 `verified` 泳道**（绿泳道挂着「本机无 X」= 文档在说谎）
 5. **测试三层框架的留白**（`.devenv-strategy.json` 中缺槽 / `不适用` 无后果 / `人工` 无步骤 / `已实现` 挂靠 `planned` 空壳泳道）
@@ -27,7 +27,7 @@
 - **THEN** `sdflow-maintain` 的扫描报告逐条列出这两条泳道及其 `blocked_by`
 
 #### Scenario: 拦下真实回归（验证证据过期）
-- **WHEN** 操作者修改了某 `verified` 泳道对应的 Makefile recipe，使其 `method_digest` 失配
+- **WHEN** 操作者修改了某 `verified` 泳道声明的 Makefile，使其 `file_digests` 失配
 - **THEN** 扫描报出该泳道验证证据已过期，要求重验
 
 #### Scenario: 无 environments.md 时跳过

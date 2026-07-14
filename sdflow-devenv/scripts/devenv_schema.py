@@ -161,9 +161,31 @@ def validate_lane(lane):
         ev = v.get("evidence")
         if not isinstance(ev, dict):
             ev = {}
-        for k in ("at_commit", "method_digest", "attested_by"):
+        # A21：file_digests（文件时效锚）+ method_at_verify（命令字符串时效锚）
+        # 取代原 method_digest（那个「联合摘要」要靠手搓 make 解析器提取 recipe body）。
+        for k in ("at_commit", "file_digests", "method_at_verify", "attested_by"):
             if not ev.get(k):
                 errs.append(f"verified MUST 有 evidence.{k}")
+
+        fd = ev.get("file_digests")
+        if fd is not None and not isinstance(fd, dict):
+            errs.append(
+                f"evidence.file_digests 须为 {{rel_path: sha256}} 映射，"
+                f"实际是 {type(fd).__name__}"
+            )
+
+        # A21 面治补口：file_digests 只认【文件】，verification.method 这个字符串
+        # 本身掉出了时效锚。人把 method 从 `make integration` 改成
+        # `make integration-fast` ⇒ 一个文件都没动 ⇒ digest 不变 ⇒ 若不比这一下，
+        # verified 会继续挂着，而它验的根本不是这条命令。
+        # （CAS 的 plan_snapshot 也覆盖 method，但那是【验证执行期间】的并发保护，
+        #   不是【跨时间】的时效检测——作用域不同，不能互相顶替。）
+        recorded_method = ev.get("method_at_verify")
+        if recorded_method and recorded_method != v.get("method"):
+            errs.append(
+                f"验证方法已改动（{recorded_method!r} → {v.get('method')!r}）"
+                "—— 验证证据已过期，需重验"
+            )
 
     deps = lane.get("deps")
     if deps is not None and not isinstance(deps, list):

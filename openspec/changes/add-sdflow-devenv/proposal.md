@@ -49,10 +49,16 @@
 - **⭐ 测试三层框架（`.devenv-strategy.json`），无一层可留白**：`unit` / `integration` / `e2e` 各答五槽（`how`/`convention`/`process`/`tooling`/`status`），**MUST 落 JSON**——`testing-strategy.md` 由脚本从 JSON 渲染（`DO NOT EDIT` banner），**MUST NOT 让 lint 解析自由格式 Markdown**（本仓前科：手搓解析器屡次假阳）。三态各有强制附带项：`implemented` ⇒ `lane_ids` 存在且对应泳道非 `planned`；`not-applicable` ⇒ `reason` + `consequence` 非占位（豁免其余四槽）；`manual` ⇒ `why_not_scriptable` + `human_steps` 非占位。
 - **⭐ 验证方法由模型研究提出、人拍板**〔ADR-4，取代前一版的 negative control ⟺ 定义〕：`executor: script` 是**默认、首选**；`human` 是**降级路径**，需写明为何程序跑不了。**MUST 分清两种「跑不了」**：方法本身没法程序跑（→ `executor: human` + `why_not_scriptable`）vs 能跑但条件不具备（→ `scaffolded` + `blocked_by`，下次 continue 再跑）——前一版把这两者混成一条 `human` 通道，「本机缺个依赖」也被标成「只能人工验证」，那是在撒谎。**「无法验证」不是合法状态**——人工测试也是验证方法，不设 `n/a` 通道。
 - **证据只能由执行者本人写**〔ADR-5〕：`set-lane --status verified` **一律拒绝**。`executor: script` → **`verify-lane`**（脚本自己 fork 执行，捕获 exit code / 时长 / digest）；`executor: human` → **`confirm-lane`**（人门写）。**`confirm-lane` 产出的绿如实标 `human-attested`**（人说的，不是脚本验的）——**MUST NOT 声称脚本保证了执行者本人写入**：agent session 里模型是唯一的命令执行者，那条 MUST 按字面永远为假，**且本就不必防**（总则）。
-- **`verified` 的语义钉死为 `verified-at <sha>`**——一次历史执行的记录，**不是当前状态的绿灯**：`method_digest` 不覆盖被测实现（覆盖它需要跨语言 import 图静态分析，零依赖做不到），业务代码一改，那个绿灯就在说谎，故渲染时 MUST 带 commit 锚。
+- **`verified` 的语义钉死为 `verified-at <sha>`**——一次历史执行的记录，**不是当前状态的绿灯**：时效锚（`evidence.file_digests`）不覆盖被测实现（覆盖它需要跨语言 import 图静态分析，零依赖做不到），业务代码一改，那个绿灯就在说谎，故渲染时 MUST 带 commit 锚。
 - **路径 containment 校验**：`source.file` / `smoke` / `fixtures[]` / 外部配置文件 / touched-files 清单全是模型填的自由文本，**MUST 经统一 containment helper**（拒绝绝对路径 / `..` / symlink 祖先 / 仓外 realpath）后才能读/写/删。
 - **touched-files 事务 journal**（`.devenv-txn.json`）：写入任何落地物之前先原子落盘，记录**原完整内容**（非仅 digest——digest 恢复不了文件）+ 原 mode。③-pre 被否决 ⇒ 按 journal 精确回退（新写的删、既有的用原内容复原），**MUST NOT** 用 `git checkout --`（对 untracked 无效）或无路径限定的 `git clean`（会误删操作者未 add 的其他文件）。崩溃后下次启动检测未完成 journal 并提供回退/继续选择。
-- **digest 按文件类型分治**：Makefile recipe 剥空白但保留 tab 缩进；YAML/JSON/lockfile 及其余一律对原始字节 sha256、不做任何规范化——**YAML 的行首缩进本身就是语义**，套用 Makefile 的规范化规则会让缩进不同、语义不同的 YAML 算出同一 digest（与「行号锚」同构的假绿）。
+- **⭐ 出处锚：MUST NOT 手搓 GNU make 解析器**〔round-4，见 `07` 附录 **A21**〕：`source: {file, kind, selector}`，**无 `digest` 字段**；**`devenv_digest.py` MUST 零 make 知识**。lint 对 `source` **只查一件事**：**`evidence.file_digests` 未失配**（`source.file` + `smoke` + 声明的 `fixtures[]`，**逐文件原始字节 sha256，零规范化**）。
+  **「target 存在且能跑」由 `verify-lane` 真 fork 执行保证——make 自己是权威判官**：`selector` 拼错/target 不存在 → make 报 `No rule to make target` → `exit≠0` → 进不了 `verified`；target 被删/改名 → Makefile 字节变 → `file_digests` 失配。
+  **理由**：GNU make 语法面**无界**（`ifeq`/`define`/双冒号/模式规则/续行/内联 `;`/target-specific 变量…），手搓解析器必带一堆「语法不支持」罢工分支——**而它罢工一次就直接击穿「不管什么项目都能给一份三层框架」这条核心承诺**。**A20（禁手搓 Markdown 解析器）的理由逐字适用，只是当时没往这边看。**
+  **连「target 存在性正则」也一并删**（同轮二次收缩）：「正则找不到」≠「target 不存在」（`ifeq` 包裹 / `define` 内 / 一行多 target 均漏判）⇒ 要么**误报罢工**（原病复发）、要么**永不 fail = 恒真假绿**（§0.0 亲手杀的东西）——**两条路都错，且它本就冗余**。
+  > **一般化规则（贯彻全 skill）**：机械层想知道「某个 make/shell/语言构造是什么意思」，**正解是让那个工具自己回答**（真跑一遍 / `make -n`），**MUST NOT 手搓解析器去猜**。本 skill 的核心机制恰好就是「**尽可能跑一遍确认**」——**跑一遍，就是最强的解析器。**
+  **连带删除原「digest 规范化按文件类型分治」**——那是 recipe 提取的**衍生债**（只有切出 recipe body 才有缩进噪声才需 normalize）。不提取 recipe ⇒ 无需规范化 ⇒「通用 `normalize()` 让两份缩进不同的 YAML 算出同一 digest」这个假绿**在结构上不可能发生**。严格更强、不可能踩错。
+  **代价 = 允许多报**（改 Makefile 里别的 target 也提醒重跑）：多报代价 = 重跑一次 smoke，消除多报代价 = 300 行解析器——**方向反了，防漏宁可多报**。
 - **⭐ 跨 skill 面治**（承基准 3，非可选）：三 skill 共用 `openspec/` 写域锁（`openspec/.sdflow-write.lock`）——`devenv_scaffold.py` 用新锁；**`sdflow-init/scripts/init.py` 的 `inject()` 补锁 + 原子写**（现为裸 `open(w)` 全量覆写、无锁无原子写）；**`sdflow-architecture/scripts/sad_scaffold.py` 从 `.sad-scaffold.lock` 迁到共用锁，并补 owner 记录 + 释放前核对**（现 `_acquire_lock` **从来没写入过 owner 信息**，`_release_lock` 也不核对）；**`atomic_write` 加 `mode` 参数**（现硬编码 `0o644`，复用它写 doctor 脚本会落盘即不可执行）。锁**短持有、MUST NOT 跨验证执行持有**，状态写入用 CAS、快照覆盖整条不可变 verification plan（`status`/`executor`/`kind`/`method`/`source`/`smoke`/`fixtures`/`env`/`deps`，不只 `status`）。加双向分流句（`sdflow-devenv` ⇄ `sdflow-init`）。
 - **泳道三态 + 渐进 DoD + 框架可迭代**：`planned → scaffolded → verified`，不强制全绿；诚实是硬要求（`scaffolded` MUST 带非空且非占位的 `blocked_by`）。
 - **lint 的触发点**：`devenv_lint` **挂进 `sdflow-maintain` 的扫描**。**没有触发点的 lint = 没有 lint**（本 change 立项理由之一，前两版的 lint 自己也没有触发点——dogfood 自指坑）。**诚实边界**：maintain 是**人主动跑**的 ⇒ 这是「更响的提醒」而非硬门禁，MUST NOT 佯装硬拦截。
@@ -71,9 +77,9 @@
 | **SM-1** | **⭐ 三层框架无留白**：任一项目跑完，`.devenv-strategy.json` 的 unit/integration/e2e 三层各自五槽（或 `not-applicable` 的豁免槽）**全部有内容**；`not-applicable` 有 `consequence`、`manual` 有 `why_not_scriptable`+`human_steps`、`implemented` 有对应泳道 | lint 断言 |
 | SM-2 | **归位模式回归**：在 **checkin 的 brownfield fixture** 上跑归位，删源集与搬运结果**确定性断言** | pytest（fixture 在 `tests/fixtures/brownfield/`） |
 | SM-3 | **新建模式跑通**：绿地项目跑通五步，产出完整三层框架 + 泳道表 + 待建清单。**诚实边界：零代码 greenfield 的 `verified` 数可为 0**，达标线 = 三层框架完整 + 泳道表 + 待建清单，**MUST NOT 为凑 `verified` 造空跑测试** | 执行证据落盘 |
-| SM-4 | **lint 有触发点且真拦得住**：`devenv_lint` **在 `sdflow-maintain` 扫描中被自动调用**，并在一次**真实回归**上拦下（人改了 Makefile 使 `method_digest` 失配） | maintain 集成测试 |
+| SM-4 | **lint 有触发点且真拦得住**：`devenv_lint` **在 `sdflow-maintain` 扫描中被自动调用**，并在一次**真实回归**上拦下（人改了 Makefile 使 `file_digests` 失配） | maintain 集成测试 |
 | SM-5 | **诚实性**：`verification.method`/`strength` 非空；`verified` ⇒ 证据（`evidence`）齐全**且 `blocked_by` 为空**；`scaffolded` ⇒ `blocked_by` 非空且**含可辨认修复指引**（非纯占位符） | lint 断言 + pytest |
-| SM-6 | **无恒真断言**：`source` 出处锚用**内容 digest**（非行号），造「行还在、内容变了」的坏输入必须被抓；**YAML 缩进变化被抓**（digest 按文件类型分治，不对 YAML 做空白规范化） | pytest |
+| SM-6 | **无恒真断言 + 不罢工**：`source` 出处锚用**文件内容 digest**（非行号、**非 recipe 解析、非 target 存在性正则**），造「行还在、内容变了」的坏输入必须被抓；target 被改名/删除经 **digest 失配**被抓；`selector` 拼错经 **`verify-lane` 跑 make（`exit≠0`）**被抓；**任意字节变化改变 digest**（含 YAML 缩进）；**⭐ 且在复杂 Makefile（`ifeq` / 双冒号 / 一行多 target / `define` / 续行）上 skill MUST 全程正常工作，MUST NOT 出现任何「语法不支持」类罢工**〔A21——核心承诺「不管什么项目」的回归守卫〕 | pytest + 集成 |
 | SM-7 | **产品有效性**：绿地项目从 clean checkout 到**首条测试跑通**的耗时 · 所需**人工回答数** · 生成 diff 被操作者**保留的比例** | 上游试点实测记录 |
 | SM-8 | **不伤害**：**注意——不再是「抽离的依赖 100% 恢复」**（skill 不再启停依赖，见 R1）：超时/中断后**如实报告可能的孤儿资源**（容器/端口占用），**MUST NOT 声称已清理**；子进程 env **不含 allowlist 外的变量**（含凭证不被继承）；路径 containment **拒绝仓外读/写/删** | pytest（注入超时 → 断言报告文案 / 断言 env allowlist / 断言 containment 拒绝） |
 
@@ -101,7 +107,7 @@
 | P | 需求 | 理由 |
 |---|---|---|
 | **P0** | 五步编排 + 三模式分流 · **测试三层框架（JSON + 五槽 + 三态强制附带项）** · **验证方法（`method`/`executor`/`strength`/`evidence`，两种「跑不了」分清）** · 泳道三态 + JSON schema · 落地物追加 · **`verify-lane` + `confirm-lane`** · **③-pre 人门 + touched-files journal 回退** · **路径 containment 校验** · `devenv_lint`（防漏检查）· 两份真相源渲染 | 缺任一则 skill 不成立 |
-| **P1** | `opsx-devenv` 托管块注入（fence-aware）+ INDEX · `lane-patterns` / `verification-patterns`（标「实例，非规格」）· 冷审镜单（覆盖镜 / 验证方法镜 / 分类镜 / vacuous 镜 / 诚实镜）· 归位模式删源三处置 + 逐文件护栏 + 可恢复备份 · **跨 skill 写域锁（三条腿）+ CAS 快照** · **最小环境 allowlist** · **digest 按文件类型分治** | 可用但不完整；并发安全、路径边界、执行环境隔离**不可后补** |
+| **P1** | `opsx-devenv` 托管块注入（fence-aware）+ INDEX · `lane-patterns` / `verification-patterns`（标「实例，非规格」）· 冷审镜单（覆盖镜 / 验证方法镜 / 分类镜 / vacuous 镜 / 诚实镜）· 归位模式删源三处置 + 逐文件护栏 + 可恢复备份 · **跨 skill 写域锁（三条腿）+ CAS 快照** · **最小环境 allowlist** · **出处锚 = `file_digests` 原始字节（零 make 知识，MUST NOT 手搓解析器）〔A21〕** | 可用但不完整；并发安全、路径边界、执行环境隔离**不可后补** |
 | **P2** | doctor 脚本生成 · CI 调用壳生成 · `sdflow-architecture` 交棒话术改写 · **双向分流句** · 未覆盖形态的 todo 登记 | 增益项，可迭代 |
 
 ## 利益相关方与外部依赖〔TG-20〕
@@ -161,7 +167,7 @@
 ## Capabilities
 
 ### New Capabilities
-- `devenv-provisioning`: 开发/测试环境搭建编排器——五步流水线 · 三模式分流 · **测试三层框架（落 JSON，无一层留白）** · **验证方法（模型提 + 人拍板，`script` 首选/`human` 降级，两种「跑不了」分清）** · 证据只能由执行者本人写（`verify-lane`/`confirm-lane`，`human-attested` 如实标注）· `verified = verified-at <sha>` · 泳道三态与渐进 DoD · 落地物追加（追加者非拥有者）· **路径 containment 校验** · **③-pre 人门 + touched-files journal 回退** · digest 按文件类型分治 · 机械 lint（**只查诚实/防漏，不查质量/防伪**）· 两份真相源渲染与入口托管注入 · **跨 skill 写域锁 + CAS** · **最小环境 allowlist**。
+- `devenv-provisioning`: 开发/测试环境搭建编排器——五步流水线 · 三模式分流 · **测试三层框架（落 JSON，无一层留白）** · **验证方法（模型提 + 人拍板，`script` 首选/`human` 降级，两种「跑不了」分清）** · 证据只能由执行者本人写（`verify-lane`/`confirm-lane`，`human-attested` 如实标注）· `verified = verified-at <sha>` · 泳道三态与渐进 DoD · 落地物追加（追加者非拥有者）· **路径 containment 校验** · **③-pre 人门 + touched-files journal 回退** · **出处锚 = `file_digests` 原始字节（零 make 知识；「能不能跑」由 verify-lane 真跑、make 自己判）** · 机械 lint（**只查诚实/防漏，不查质量/防伪**）· 两份真相源渲染与入口托管注入 · **跨 skill 写域锁 + CAS** · **最小环境 allowlist**。
 
 ### Modified Capabilities
 - `architecture-design`: 交棒后的过程轴下游**从「指出不代写 + 给模板路径」改为指向 `/sdflow-devenv`**；description 增加过程轴分流句。

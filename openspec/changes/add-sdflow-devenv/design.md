@@ -46,7 +46,8 @@
 |---|---|---|
 | `evidence.exit` · `output_digest` | **脚本 fork 执行的实际结果** | **机械**（`executor: script` 时——脚本自己产的） |
 | `evidence.confirmed_what` | **人门产物** | **语义**（`executor: human` 时——**人说的**，标 `attested_by: human`） |
-| `source.digest` · `method_digest` | **文件内容的 sha256**（按类型规范化） | **机械** |
+| `evidence.file_digests` | **文件的原始字节 sha256**（零规范化） | **机械**（`devenv_digest.py` **零 make 知识**〔A21〕） |
+| **target 存在且能跑** | **`verify-lane` 真跑 `make <selector>`，看 `exit`** | **机械**——但**判官是 make 自己**，**MUST NOT 静态解析**〔A21〕 |
 | `evidence.at_commit` | **`git rev-parse HEAD`** | **机械** |
 | `status` | 由 `evidence` 是否齐全推出 | **机械** |
 | `verification.method` | 模型研究 + 人拍板 | **语义**（存在性可机械查；**有效性不能**） |
@@ -144,9 +145,9 @@ mqtt-console 接地实测（`06`，**证据强度分层见 proposal**）：
           ┌─────────────▶│  scaffolded  │◀────────────┐
           │              └──────┬───────┘             │
           │  continue 推进       │                     │ 【回落】
-          │  (装完依赖/修完      │  按 executor 分流    │ method_digest 失配
-          │   smoke/换方法)      │                     │ (人改了 recipe/smoke/
-          │                     │                     │  声明的 fixture)
+          │  (装完依赖/修完      │  按 executor 分流    │ file_digests 失配
+          │   smoke/换方法)      │                     │ (人改了 source.file/
+          │                     │                     │  smoke/声明的 fixture)
           │        ┌────────────┴────────────┐        │
           │        │                         │        │
           │  executor=script           executor=human │
@@ -278,7 +279,8 @@ mqtt-console 接地实测（`06`，**证据强度分层见 proposal**）：
 | F3 | **超时后留下孤儿资源** | 杀掉**能杀到的**进程树；**recipe 内部起的容器不属于子进程组，杀不到** ⇒ **响亮报告「可能留下孤儿资源（容器/端口占用），请检查」**写进 `blocked_by` + devenv-log。**MUST NOT 声称已清理** | `scaffolded` + 显式提示 |
 | F4 | smoke 本身有 bug（正向就红） | 记 `blocked_by` + 报错摘要，**MUST NOT 进 debug 循环** | `scaffolded` |
 | F5 | Makefile target **名字**冲突 | **fail-closed** 留人裁决。**脚本只判名字碰撞，语义符不符归模型+人** | 中止该泳道 |
-| F6 | `source.digest` / `method_digest` 失配 | lint 报「验证证据已过期，需重验」 | `verified` → 回落 |
+| F6 | `evidence.file_digests` 失配（`source.file` / `smoke` / `fixtures[]` 任一字节变了） | lint 报「验证证据已过期：`<file>` 已改动，需重验」（**允许多报**） | `verified` → 回落 |
+| F6b | `source.selector` 拼错 / target 不存在 | **`verify-lane` 跑 `make <selector>` → make 报 `No rule to make target` → `exit≠0`**（**make 自己判**，lint **MUST NOT** 静态解析〔A21〕） | 进不了 `verified`，落 `scaffolded` + `blocked_by` |
 | F7 | **③-pre 被否决** | 按 **txn journal** 逐项回退（原先存在的→**用 journal 里的原内容**复原；新写的→删）。**MUST NOT** `git checkout --`（对 untracked 无效）或无路径限定的 `git clean` | 中止本轮 |
 | F8 | **写落地物后、③-pre 前崩溃** | **下次启动检测到未完成的 txn journal** ⇒ 向操作者报告并提供「回退 / 继续」选择，**MUST NOT 无视** | 启动时处理 |
 | F9 | **路径逃逸**（绝对路径 / `..` / symlink 祖先 / 仓外 realpath） | **containment helper fail-closed** | 拒绝 |
@@ -349,7 +351,7 @@ mqtt-console 接地实测（`06`，**证据强度分层见 proposal**）：
 
 **`confirm-lane` 的身份保证已删除**〔`07` 附录 A18〕：**在 agent session 里，模型是唯一的命令执行者**——「模型 MUST NOT 代替操作者调用」**按字面永远为假**。**且本就不必防**（ADR-0）⇒ **如实标注 `human-attested`，MUST NOT 声称脚本保证了执行者身份。**
 
-**`verified` 的语义钉死**：**`verified-at <sha>`——一次历史执行的记录，不是「当前状态的绿灯」**（`method_digest` **不覆盖被测实现**）。
+**`verified` 的语义钉死**：**`verified-at <sha>`——一次历史执行的记录，不是「当前状态的绿灯」**（`file_digests` **不覆盖被测实现**）。
 
 ### ADR-6：`lane-patterns` 按依赖形态分格 + 只固化「问什么」
 
@@ -359,16 +361,28 @@ mqtt-console 接地实测（`06`，**证据强度分层见 proposal**）：
 ### ADR-7：skill 是追加者，不是拥有者
 
 **决策**：落地物**不设托管区块**；**重名 fail-closed（只判名字，不判语义）**。
-**出处锚 MUST 按内容 digest，MUST NOT 按行号**——行号锚是**恒真断言**（「第 11–14 行存不存在」对任何长度 ≥14 行的文件恒为真）。
+**出处锚 MUST NOT 按行号**——行号锚是**恒真断言**（「第 11–14 行存不存在」对任何长度 ≥14 行的文件恒为真）。
 
-**digest 规范化 MUST 按文件类型分治**〔round-3 领域镜〕：
+**〔round-4 重写，见 `07` 附录 A21〕`source: {file, kind, selector}`，无 `digest` 字段；`devenv_digest.py` MUST 零 make 知识。**
 
-| 类型 | 规范化 |
+**lint 对 `source` 只查一件事**：**`evidence.file_digests` 未失配** = `source.file` + `smoke` + 声明的 `fixtures[]`，**逐文件原始字节 sha256，零规范化**。
+
+**「target 存在且能跑」由 `verify-lane` 真 fork 执行保证——make 自己是权威判官**：
+
+| 失效模式 | 谁抓住它 |
 |---|---|
-| **Makefile recipe** | 剥空白 / 纯空行；**保留 tab**（有语法意义）；**不剥注释** |
-| **YAML / JSON / lockfile / 其余** | **直接对原始字节 sha256** |
+| `selector` 拼错 / target 不存在 | **`verify-lane` 跑 `make <selector>`** → make 报 `No rule to make target` → `exit≠0` → **进不了 `verified`**（**make 自己解释自己的语法，100% 覆盖，零解析器**） |
+| target 后来被删/改名 | **`file_digests` 失配**（改 Makefile 必然改字节） |
 
-> **YAML 的行首缩进本身就是语义。** 把为 Makefile 设计的「剥去行首空白」套用到 `compose.yml` ⇒ **两份缩进不同、语义完全不同的 YAML 算出同一个 digest** ⇒ **一个与「行号锚」结构完全同构的假绿**。而**最省事的实现路径（一个通用 `normalize()`）恰恰就是踩进这个洞的路径**。
+> **为何删掉「按 selector 重定位 + 提取 recipe 做 digest」**：**GNU make 语法面无界**（`ifeq`/`define`/双冒号/模式规则/续行/内联 `;`/target-specific 变量…），手搓解析器必带一堆「语法不支持」罢工分支——**而它罢工一次就击穿「不管什么项目都能给一份三层框架」这条核心承诺**（`ifeq`、双冒号在真实 Makefile 里常见且合理）。**A20（手搓 Markdown 解析器）的理由逐字适用，只是当时没往这边看。**
+>
+> **为何连「target 存在性正则」也删**（同轮二次收缩）：它过不了 §0.0 的信号闸门。**正则找不到 target 时**——**① fail-closed 报「不存在」**：但「正则找不到」≠「不存在」（`ifeq` 包裹 / `define` 内 / 一行多 target 都会漏判）⇒ **误报罢工，原病复发**；**② 不报**：**永远不 fail = 恒真断言 = 假绿**。**两条路都错 ⇒ 删。** 而它**本就冗余**（上表已夹死该失效面）。
+>
+> **一般化规则**：机械层想知道「某个 make/shell/语言构造是什么意思」，**正解是让那个工具自己回答**（真跑一遍 / `make -n`），**MUST NOT 手搓解析器去猜**。本 skill 的核心机制恰好就是「**尽可能跑一遍确认**」——**跑一遍，就是最强的解析器。**
+>
+> **连带删除「digest 规范化按文件类型分治」**：那条规则是 **recipe 提取的衍生债**——只有切出 recipe body 才有缩进噪声、才需要 normalize。**不提取 recipe ⇒ 无需规范化 ⇒「通用 `normalize()` 把两份缩进不同的 YAML 算出同一 digest」这个假绿在结构上不可能发生**。严格更强，且不可能踩错。
+>
+> **代价 = 允许多报**（改了 Makefile 里别的 target 也提醒重跑）。**刻意如此**：多报的代价是重跑一次 smoke，消除多报的代价是 300 行解析器——**且方向反了，防漏宁可多报**。
 
 ### ADR-8：SAD 缺失 → 显式降级，非 fail-closed
 

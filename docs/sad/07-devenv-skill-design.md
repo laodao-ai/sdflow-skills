@@ -162,11 +162,14 @@ planned  ──▶  scaffolded  ──▶  verified
         "executor": "script",                           // script 是默认首选；human 需写明为何程序跑不了
         "strength": "覆盖纯逻辑；不穿过任何外部依赖，不证明集成正确性",  // 模型自陈强度与盲区
         "evidence": {                                   // 只能由执行者本人写（脚本 fork / 人门）
-          "at_commit": "<HEAD SHA>", "exit": 0,
-          "method_digest": "<验证命令+smoke+声明的 fixture 的联合摘要>"
+          "at_commit": "<HEAD SHA>", "exit": 0,         // at_commit 给人读，不作机械比对基准
+          "file_digests": {                             // 时效锚①：逐文件原始字节 sha256，零规范化
+            "internal/console/smoke_test.go": "<sha256>"
+          },
+          "method_at_verify": "go test ./..."           // 时效锚②：命令字符串本身（A21 面治补口）
         }
       },
-      "source": {"file": "-", "kind": "toolchain", "selector": "go test", "digest": "-"},
+      "source": {"file": "-", "kind": "toolchain", "selector": "go test"},
       "smoke": "internal/console/smoke_test.go",
       "covers": ["§5.2 消息运行时"],                     // ← SAD contract 锚（声明；命中与否归冷审）
       "deps": []
@@ -182,7 +185,7 @@ planned  ──▶  scaffolded  ──▶  verified
         "strength": "真穿过 broker；但断言是否有效不由本方法保证（归冷审 vacuous 镜）"
       },
       "source": {"file": "Makefile", "kind": "make-target",
-                 "selector": "integration", "digest": "<recipe 规范化后 sha256>"},
+                 "selector": "integration"},           // lint 只查此 target 存在，不解析 recipe〔A21〕
       "smoke": "internal/console/integration_smoke_test.go",
       "deps": [{"name": "mosquitto", "kind": "host-service"}],
       "blocked_by": "本机无 mosquitto — brew install mosquitto 后 /sdflow-devenv continue"
@@ -191,7 +194,7 @@ planned  ──▶  scaffolded  ──▶  verified
 }
 ```
 
-> **注**：`deps` **不再有 `owned_by` 字段**（附录 A16——那个「运行时派生」的锚不存在）；**出处按 digest 不按行号**（机制 B）；`verified` 的证据**只能由执行者本人写**（§0.3）。
+> **注**：`deps` **不再有 `owned_by` 字段**（附录 A16——那个「运行时派生」的锚不存在）；`source` **不再有 `digest` 字段**（附录 A21——时效锚移入 `evidence.file_digests`，**target 级 recipe 解析整个删除**）；**出处 MUST NOT 按行号**（机制 B）；`verified` 的证据**只能由执行者本人写**（§0.3）。
 
 ### 1.4 落地物清单与边界（2026-07-13 逐条拍定）
 
@@ -343,7 +346,7 @@ Makefile 不设托管块的理由：托管块意味着「这块归 skill、会�
 
 | 判据 | 可结构化（确定性信号 → 脚本断言） | 语义残余 | 残余归属 |
 |---|---|---|---|
-| E1 | `verified` 态：`source` 的 **digest 未失配**（按 selector 重定位，**非行号**）+ **命令真被脚本 fork 执行过**（`executor: script`）或**人确认过**（`human-attested`） | 「新人照文档真跑得起来吗」（坑写全了吗） | 冷审镜 + 真人首跑 |
+| E1 | `verified` 态：**命令真被脚本 fork 执行过且 `exit=0`**（`executor: script`——**「target 存在且能跑」由 make 自己判，非静态解析**）或**人确认过**（`human-attested`）+ **`evidence.file_digests` 未失配**（source/smoke/fixtures 逐文件原始字节，**非行号、非 recipe 解析**） | 「新人照文档真跑得起来吗」（坑写全了吗） | 冷审镜 + 真人首跑 |
 | E2 | SAD §5 contract 集合 vs 泳道 `covers` 字段并集**对账**（有 SAD 时；缺项列出） | `covers` 声明是否**真命中**（声明 ≠ 穿过） | 冷审镜（对抗镜） |
 | E3 | — （近乎无信号） | 全部 | 冷审镜 |
 | E4 | 弱启发：`verified` 泳道按依赖数排序，断言密度倒挂 → 只报不判 | 全部 | 冷审镜 |
@@ -407,26 +410,57 @@ Makefile 不设托管块的理由：托管块意味着「这块归 skill、会�
 
 ### 机制 B：命令溯源（服务 E1/E7）
 
-每条命令标 `source`——**MUST 按内容 digest（`{file, kind, selector, digest}`），MUST NOT 按行号**。
+> **⚠️ 本机制在 round-4 被大幅收缩**（`digest` 移出 `source`、target 级 recipe 解析整个删除）。**收缩理由见附录 A21——它是「防伪」路线的第八个幸存者，A13–A20 漏抓的一个。** 下文是收缩后的形态。
 
-> **行号锚是恒真断言**：`source: "Makefile:11-14"` + lint「查那行存不存在」——**「第 11–14 行存不存在」对任何长度 ≥14 行的文件恒为真**。用户在顶部插三行 ⇒ 锚点全部错位、lint 全绿、命令表继续声称出自那四行。**这是设计好的假绿。**
+每条命令标 `source: {file, kind, selector}`——**MUST NOT 按行号**。
 
-lint 用 parser 按 `selector` **重新定位** target，比对 recipe digest；行号仅在 render 时动态生成供阅读、**不作真相**。
+> **行号锚是恒真断言**：`source: "Makefile:11-14"` + lint「查那行存不存在」——**「第 11–14 行存不存在」对任何长度 ≥14 行的文件恒为真**。用户在顶部插三行 ⇒ 锚点全部错位、lint 全绿、命令表继续声称出自那四行。**这是设计好的假绿。**（这条诊断是对的，**收缩后依然成立**。）
 
-**digest 的规范化规则 MUST 按文件类型分治**（round-3 领域镜实证）：
+行号仅在 render 时动态生成供阅读、**不作真相**。
 
-| 文件类型 | 规范化 |
-|---|---|
-| **Makefile recipe** | 剥行首/行尾空白与纯空行；**MUST 保留 tab 缩进**（tab 有语法意义）；**MUST NOT 剥注释** |
-| **YAML / JSON / lockfile** | **直接对原始字节做 sha256，不做任何空白规范化** |
+**lint MUST NOT 对 `source` 做任何 make 语法解析**〔A21〕——**包括「按 `selector` 重定位 target 提取 recipe」和「用正则查 target 存在性」**。lint 对 `source` 只查**一件事**：**时效锚 `file_digests` 未失配**（见下）。
 
-> **为什么必须分治**：**YAML 的行首缩进本身就是语义**（决定嵌套层级）。若把为 Makefile 设计的「剥去行首空白」套用到 `compose.yml`，两份**缩进不同、语义完全不同**的 YAML 会算出**同一个 digest**——**这是一个结构上与「行号锚」完全同构的假绿**，而最省事的实现路径（写一个通用 `normalize()` 套用到所有 digest 输入）恰恰就是踩进这个洞的路径。
+**「target 真的存在、命令真的能跑」由 `verify-lane` 真 fork 执行来保证——make 自己是权威判官**：
 
-**`method_digest`（验证证据的时效锚）的定位 MUST 诚实**：它的价值是「**提醒你这个验证可能过期了**」，**不是「防止你撒谎」**。故：
+| 失效模式 | 谁抓住它 | 为什么这是最强的 |
+|---|---|---|
+| `selector` 拼错 / target 压根不存在 | **`verify-lane` 跑 `make integration`** → make 报 `No rule to make target` → `exit≠0` → **泳道进不了 `verified`** | **make 自己解释自己的语法**，覆盖 100% 语法面，零解析器，零维护 |
+| target 后来被人删了 / 改名了 | **`file_digests` 失配**（改 Makefile 必然改字节）→ lint 报「已改动，请重跑」 | 字节级信号，无歧义 |
 
-- 覆盖 **验证命令（含 recipe body 展开）+ smoke 文件 + lane 显式声明的 fixture 清单**
-- **MUST NOT** 追求覆盖「smoke **可达**的所有 harness/fixture」——「可达」需要跨语言 import 图静态分析，**零依赖做不到**，写进 spec 只会导致实现期现场发明假机械
+> **为什么连「target 存在性正则」也要删**（round-4 二次收缩）：它过不了 §0.0 的闸门。
+> **正则找不到 target 时怎么办**？——**① fail-closed 报「不存在」**：但 make 语法无界，「正则找不到」**≠**「target 不存在」（`ifeq` 包裹的、`define` 里的、一行多 target 的都可能漏判）⇒ **复杂 Makefile 上误报罢工**，A21 原样复发。**② 不报**：那它**永远不会 fail** ⇒ **恒真断言 = 假绿**，正是 §0.0 亲手杀掉的那个东西。
+> **两条路都是错的 ⇒ 这个检查本身不该存在。** 而它**本就冗余**——上表两行已经把这个失效面夹死了。
+>
+> **一般化的教训**：**凡是「机械层想知道某个 make/shell/语言构造是什么意思」的地方，正解都是「让那个工具自己回答」（真跑一遍 / 调 `make -n`），MUST NOT 手搓解析器去猜。** 本 skill 的核心机制恰好就是「**尽可能跑一遍确认**」（§0.3）——**跑一遍，就是最强的解析器。**
+
+**时效锚 = `evidence.file_digests`（逐文件、原始字节、零规范化）**：
+
+```json
+"evidence": {
+  "at_commit": "<HEAD SHA>", "exit": 0,
+  "file_digests": {            // ← 取代原 method_digest
+    "Makefile": "<sha256(原始字节)>",
+    "internal/console/integration_smoke_test.go": "<sha256(原始字节)>",
+    "testdata/broker.conf": "<sha256(原始字节)>"
+  }
+}
+```
+
+- **覆盖面** = `source.file`（非 `-` 时）+ `smoke` + lane **显式声明的** `fixtures[]`
+- **算法** = `sha256(路径的原始字节)`，**对所有文件类型一视同仁，MUST NOT 做任何规范化**
+  > **这比原来的「按文件类型分治」严格更强、且不可能踩错**：分治规则（Makefile 剥空白保 tab / YAML 原始字节）之所以存在，**纯粹是因为要提取 recipe body 才会引入缩进噪声**。不提取 recipe ⇒ 无噪声 ⇒ 无需规范化 ⇒ **「一个通用 `normalize()` 把两份缩进不同的 YAML 算出同一个 digest」这个假绿在结构上不可能发生**。规范化规则表本身就是 recipe 解析的衍生债，**主债一还，它自动消失**。
+- **失配语义 = 提醒，不是抓贼**：报「`Makefile` 自验证以来已改动 ⇒ 本泳道的 `verified` 可能过期，请重跑」。**允许多报**——操作者改了 Makefile 里的**别的** target 也会触发。**这是刻意的**：多报的代价是重跑一次 smoke，而消除这份多报的代价是一个 300 行的 make 解析器。**不划算，且方向反了（防漏宁可多报）。**
+- **MUST NOT** 追求覆盖「smoke **可达**的所有 harness/fixture」——「可达」需要跨语言 import 图静态分析，**零依赖做不到**，写进 spec 只会导致实现期现场发明假机械〔A19〕
 - **MUST 如实写明：它不覆盖被测实现** ⇒ **`verified` 是 `verified-at <sha>`（一次历史执行的记录），不是「当前状态的绿灯」**——业务代码一改，那个绿灯就在说谎
+
+**时效锚②：`evidence.method_at_verify`（验证时的 `method` 原文）**——**A21 的面治补口，MUST 有**：
+
+> 旧 `method_digest` 覆盖「验证命令字符串 + recipe body + smoke + fixtures」。A21 把它换成只认**文件**的 `file_digests` 后，**`verification.method` 这个字符串本身掉出了时效锚**：人把 `method` 从 `make integration` 改成 `make integration-fast`，**一个文件都没动** ⇒ `file_digests` 不变 ⇒ lint 全绿 ⇒ `verified` 继续挂着，**而它验的根本不是这条命令**。
+> **它过 §0.0 的两道闸门**：**信号** = 两个字符串比较（确定性）；**服务谁** = 操作者自己（改了方法忘了重跑）⇒ **防漏，非防伪**。**成本 ≈ 一个字段 + 一行比较。**
+> **CAS 不顶替它**：`plan_snapshot` 覆盖 `method`，但那是**验证执行期间的并发保护**（跑到一半被改 ⇒ 拒绝回写），**不是跨时间的时效检测**——作用域不同。
+> **教训**：**拆掉一个错的机制时，MUST 接住它原本覆盖的合法面**（承 CLAUDE.md 基准 3「面治优先于点补」）——否则拆出一个洞，比不拆更糟。
+
+> **为什么时效锚锚「文件内容」而不锚 `at_commit` + `git diff`**（round-4 一度考虑，**否决**）：skill 的**主路径**是「落地物刚写完 → 立刻 fork 跑 smoke → 写 `verified`」，**此刻那些文件必然是 uncommitted 的**（Makefile target 和 smoke 都是 skill 刚追加的）。以 `at_commit` 为锚会让 `git diff <at_commit> -- Makefile` 在**验证成功的那一瞬间就报「已改动」**——锚在主路径上直接失效。`at_commit` 保留在 `evidence` 里，但它是**给人读的坐标**（「这次验证发生在哪个 commit 附近」），**不是机械比对的基准**。
 
 ---
 
@@ -518,8 +552,8 @@ python3 "$SKILL_DIR/scripts/devenv_scaffold.py" init --root "$REPO"
 
 | 结果 | 状态 |
 |---|---|
-| `script` 跑绿 | → `verified`（脚本写 evidence：exit code / `at_commit` / `method_digest`） |
-| `script` 跑红 / **依赖缺失** | → `scaffolded` + **写清 `blocked_by`**（能跑，只是条件不具备——下次 `continue` 再跑） |
+| `script` 跑绿 | → `verified`（脚本写 evidence：exit code / `at_commit` / `file_digests`） |
+| `script` 跑红 / **依赖缺失** / **target 不存在**（make 报 `No rule to make target`〔A21〕） | → `scaffolded` + **写清 `blocked_by`**（能跑，只是条件不具备——下次 `continue` 再跑） |
 | **方法本身没法用程序跑**（真硬件 / UI 视觉 / 非 POSIX） | → `executor: human`，MUST 写明**为什么程序跑不了** + **人怎么做** → 人跑 → 人门确认 → `verified`（**标 `human-attested`**） |
 
 > **`verified` 的两种来源在数据与文档里都可区分**（§0.0 诚实边界）：脚本验的 vs **人说的**。**MUST NOT 佯装脚本保证了后者。**
@@ -650,9 +684,9 @@ sdflow-devenv/
 |---|---|---|
 | — → planned | `set-lane --id X --status planned` | 泳道设计拍板后 |
 | planned → scaffolded | `set-lane --id X --status scaffolded --smoke <path> --blocked-by "<原因>"` | smoke 文件存在；**`verification.method` 非空**；`blocked_by` **非空且含可辨认的修复指引** |
-| **scaffolded → verified**<br>（`executor: script`） | **`verify-lane --id X`** | **脚本亲自 fork 执行** `verification.method`，捕获真实 exit code，**自行决定**写 `verified` 还是 `scaffolded + blocked_by`。**证据（exit / `at_commit` / `method_digest`）只能由脚本自己写** |
+| **scaffolded → verified**<br>（`executor: script`） | **`verify-lane --id X`** | **脚本亲自 fork 执行** `verification.method`，捕获真实 exit code，**自行决定**写 `verified` 还是 `scaffolded + blocked_by`。**证据（exit / `at_commit` / `file_digests`）只能由脚本自己写**。**这一步同时是「target 存在且能跑」的唯一判官——make 自己判**〔A21〕 |
 | **scaffolded → verified**<br>（`executor: human`） | **`confirm-lane --id X`** | 人跑完人工验证后，**经人门写入** `confirmed_what`。产出的绿**如实标 `human-attested`**（人说的，不是脚本验的）——**MUST NOT 声称脚本保证了执行者身份**（附录 A18：agent session 里模型是唯一命令执行者，机械上不可区分；**且本就不必防**，§0.0） |
-| verified → scaffolded（回落） | `set-lane --id X --status scaffolded --blocked-by "<原因>"` | **`method_digest` 失配**（人改了 recipe / smoke / 声明的 fixture）⇒ 验证证据已过期，需重验 |
+| verified → scaffolded（回落） | `set-lane --id X --status scaffolded --blocked-by "<原因>"` | **`file_digests` 失配**（人改了 `source.file` / `smoke` / 声明的 fixture）⇒ 验证证据已过期，需重验 |
 
 > **`set-lane --status verified` MUST 一律拒绝（exit 5）**——`set-lane` 只管 `planned` / `scaffolded` 两态。
 > **理由**：若无脚本亲自执行，实际数据流只能是「模型跑 → 模型读 exit code → 模型调 `set-lane --status verified`」⇒ 脚本对「到底跑没跑、绿没绿」**零独立证据** ⇒ 退化为「**模型自称，脚本盖章**」。
@@ -716,7 +750,7 @@ sdflow-devenv/
 | A7 | **命令表人写 + frontmatter 存状态**（双写） | 命令/出处/状态两处各写一遍必漂移。改为 frontmatter 为机械真相源、正文表格**脚本渲染**（DO-NOT-EDIT banner） | 2026-07-13 |
 | A8 | **`lane-patterns` 按语言分格**（Go 格 / Node 格 / Python 格…） | 泳道结构**不由语言决定**，由**依赖形态**决定：同是 Go，连 broker 的服务与纯算法库泳道完全不同；而 Go 服务与 Java 服务连同一 broker，泳道结构几乎一样。改为**按依赖形态分格**（§6.2） | 2026-07-13 |
 | A9 | **`lane-patterns` 做成查表式权威规格库**（每个技术栈一套完整泳道规格 + 工具选型） | ①**工具随生态演进**，固化即开始腐烂；②模型的知识面本就比静态表广；③操作者校准：「更多依赖大模型调研和推荐，**不宜做太细太明确的限定**，让大模型推荐、人做决策」。改为**只固化「问什么」**（维度 + 判据），答案交模型调研 + 人拍 | 2026-07-13 |
-| A10 | **Makefile 设 `opsx-devenv` 托管块**（skill 拥有并整块覆盖） | Makefile 是**人机共有的活文件**——人随时会改 target 的实现，整块覆盖会吞掉人的改动。改为 **skill 只追加**、人 owns 内容；lint 只查 `source` 行存在性，不关心谁写的；重名 → fail-closed 留人裁决（§1.4） | 2026-07-13 |
+| A10 | **Makefile 设 `opsx-devenv` 托管块**（skill 拥有并整块覆盖） | Makefile 是**人机共有的活文件**——人随时会改 target 的实现，整块覆盖会吞掉人的改动。改为 **skill 只追加**、人 owns 内容；lint 只查 **`file_digests` 未失配**〔A21 二次修正：原为「查 source 行存在性」（行号锚 = 恒真断言），round-4 中途一度改为「target 存在性正则」，**同轮再删**——它在「找不到」方向无确定性信号，要么误报罢工、要么恒真假绿；「target 能不能跑」由 `verify-lane` **真跑一遍**让 make 自己判〕，不关心谁写的；重名 → **best-effort 正则检测** → 匹配到即 fail-closed 留人裁决（§1.4；漏判兜底 = 人门看 diff + make 自己报 `overriding recipe`） | 2026-07-13 |
 | A11 | **smoke 跑不绿时 skill 负责 debug 到通** | 一旦允许 debug，skill 会在一条泳道上耗光整个 session，与**渐进 DoD 直接矛盾**——跑不绿本来就是合法状态。skill 的职责是**「建 + 验」不是「调通」**；失败如实记 `blocked_by`，修复是下次 `continue` 的活（§5 ③ / D7） | 2026-07-13 |
 | A12 | **vacuous 检测靠变异测试**（删掉被测逻辑看 smoke 红不红） | 太重（要改代码 + 跑两遍全量）。**注：本条的替代方案（negative control）随后也被否，见 A13——vacuous 最终归冷审，机械层不管** | 2026-07-13 |
 
@@ -735,3 +769,36 @@ sdflow-devenv/
 
 > **A13–A20 的共同根因（§0.0）**：**它们全都在防伪。** 每一条都源自同一个动作——**写下「MUST 机械保证 X」，却没有回头问「这个保证的信号从哪来」。**
 > **代价**：三轮评审、14 镜、100+ findings。**这份代价买到的唯一结论就是 §0.0，务必守住。**
+
+### A21：手搓 GNU make 解析器 —— 防伪路线的**第八个幸存者**（round-4，实现期发现）
+
+| # | 被否方案 | 否决理由 | 否于 |
+|---|---|---|---|
+| **A21** | **lint 用 parser 按 `selector` 重定位 make target、提取 recipe body 做 digest**（原机制 B）+ 其衍生的 **`digest` 规范化规则按文件类型分治** | 见下四条，任一足够 | round-4（实现期 Task 4） |
+
+**它为什么活到了实现期**：§0.0 的闸门问的是「**这个保证的信号从哪来**」——而它**答得上来**（文件字节的 sha256，货真价实的确定性信号）。**它过了第一问，但没人问第二问：这个保证服务谁、值不值。** 加之它藏在「机制 B / 命令溯源」这个听起来天经地义的名字底下，而 round-3 的注意力被 digest 的**规范化规则**（分治、tab、YAML 缩进）完全吸走——**三轮评审、14 镜，没有一镜回头问「selector 重定位本身要不要」。**
+
+**四条否决理由**：
+
+1. **它直接击穿核心承诺。** 核心承诺是「**不管什么项目**，都能给用户一份三层测试与验证的框架」。实现出来的 parser 带 **7 个 fail-closed 罢工分支**（双冒号规则 · 多 target 一行 · target-specific 变量 · `ifeq` 包裹的 target · 同名 target 重定义 · 嵌套无法判定的内联 `;` · 续行截断）——而 `ifeq`、双冒号、多 target 一行在真实 Makefile 里**常见且合理**。**撞上任何一条，skill 当场罢工，「不管什么项目」立即破产。** 为了防一个 §0.0 已宣告不存在的攻击者而写的东西，最终攻击的是目标本身。
+2. **精度错配——本文档自己写下了判决书**（§3.3）：`method_digest`「**不覆盖被测实现**」。即：**高频失效源（业务代码改了）完全不覆盖，绿灯照常挂着；低频失效源（Makefile recipe 改了）却上 300 行 parser 精确到 target 级。** 在「反正测不准时效性」的维度上做高精度工程，而真正高频的维度直接放弃——**这不是防伪，但它是同一个病：为一个不重要的保证付高昂代价。**
+3. **A20 的理由逐字适用，只是当时没往这边看。** A20 否掉「手搓 **Markdown** 解析器」，引的是本仓前科（`parse_frontmatter` 只支持扁平标量 · `inject` 至今非 fence-aware · `ship_gate` 子串检测假阳）。**GNU make 的语法面比 Markdown frontmatter 大一个数量级，且无界。** 同一份设计里，一个手搓解析器被枪毙，另一个被写成 MUST。
+4. **不解析 recipe ⇒ 规范化规则整条消失。** 「按文件类型分治」（Makefile 剥空白保 tab / YAML 原始字节）**是 recipe 提取的衍生债**——只有把 recipe body 切出来才会引入缩进噪声，才需要 normalize，才有「通用 `normalize()` 把两份缩进不同的 YAML 算出同一 digest」这个假绿风险。**改为整文件原始字节 digest 后，规范化不存在 ⇒ 该假绿在结构上不可能发生。** 严格更强，且不可能踩错。
+
+**替代方案**（现机制 B）：`source: {file, kind, selector}` **无 digest**；**lint 对 `source` 不做任何 make 语法解析**（连「target 存在性正则」也不做——见下），只查 **`evidence.file_digests` 未失配**（source/smoke/fixtures **逐文件原始字节** sha256，零规范化）。**允许多报**（改了 Makefile 里别的 target 也提醒重跑）——多报的代价是重跑一次 smoke，消除多报的代价是 300 行解析器，且方向反了（**防漏宁可多报**）。
+
+**二次收缩（同轮）：连「用正则查 target 存在性」也删掉。** 它过不了 §0.0 的闸门——**正则找不到 target 时**：**① fail-closed 报「不存在」** ⇒ 但「正则找不到」≠「不存在」（`ifeq` 包裹 / `define` 内 / 一行多 target 都会漏判）⇒ **复杂 Makefile 上误报罢工，A21 原样复发**；**② 不报** ⇒ 它**永远不 fail** ⇒ **恒真断言 = 假绿**。**两条路都是错的 ⇒ 删。** 而它**本就冗余**：
+
+| 失效模式 | 谁抓住它 |
+|---|---|
+| `selector` 拼错 / target 不存在 | **`verify-lane` 真跑 `make integration`** → make 报 `No rule to make target` → `exit≠0` → **进不了 `verified`**。**make 自己是权威判官** |
+| target 后来被删/改名 | **`file_digests` 失配**（改 Makefile 必然改字节） |
+
+**⇒ `devenv_digest.py` 零 make 知识。** make 相关的浅正则只剩两处，**都在「追加/展示」侧、都 best-effort、都不做机械判定**：① `append_makefile_target` 的**重名检测**（匹配到 → fail-closed 拒绝追加；**漏判的兜底 = ③-pre 人门看 diff + make 自己会报 `overriding recipe for target`**——skill 是**追加者**，最坏后果是多一条定义，不删不改人的东西）② **recipe 展示**给人看（失败 → 降级提示，**MUST NOT 罢工**）。
+
+> **A21 给 §0.0 补的那一问**：闸门不止一道。
+> **第一问**：这个保证的**信号**从哪来？（答不上 ⇒ 删掉或划归语义层）
+> **第二问**（A21 新增）：**这个保证服务谁？它拦住的失效模式，和它自己引入的失效模式，哪个更常见？**
+> A21 第一问答得上，**栽在第二问**：它拦的是「操作者偷偷改了 recipe 还不重跑」（§0.0 已宣告此人不存在），它引入的是「Makefile 稍微写复杂一点 skill 就罢工」（**每个真实项目都会撞**）。
+>
+> **实现期的代价**：Task 4 三轮补丁螺旋（`devenv_digest.py` 261→562 行、`test_digest.py` 304→753 行），每一轮 review 都发现一个新的 make 语法角落。**无界的语法面上，补丁循环不会自己收敛——这本身就是「该删掉它」的信号。**
