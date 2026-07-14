@@ -262,8 +262,10 @@ planned  ──▶  scaffolded  ──▶  verified
 >
 > **数据模型每瘦一圈，都是一条假机械被拆掉。** 它现在只剩「记事本」该有的东西：**这条泳道是什么 · 怎么验 · 验没验过 · 在哪验的**。
 
-**⭐ 第二份 JSON：`.devenv-strategy.json`（三层框架的载体）**——**核心承诺的机器可读形态**（§2.2）。三层 × 五槽落 JSON，`testing-strategy.md` 从它渲染；**`⚠️ 待定` 是合法值**，渲染时显著呈现。
-> **round-4 冷审抓出的 critical**：`testing-strategy.md` 的三层五槽与 `environments.md` 的十六槽，**此前没有任何数据载体**——spec 却写着「MUST 从 JSON 渲染」。**这是一条悬空 MUST（闸门 2 的死法，同 A22）。** 本次补上 `.devenv-strategy.json`。
+**⭐ 第二份 JSON：`.devenv-strategy.json`（三层框架的载体）**——**核心承诺的机器可读形态**（§2.2）。三层 × 五槽落 JSON，`testing-strategy.md` 从它渲染。**`⚠️ 待定` 是合法值**（§3.1），渲染时显著呈现、收尾报告逐条列出。
+
+> **⚠️ `environments.md` 的十六槽仍无数据载体**（round-4 冷审抓出的 critical，**未解**）：spec 写着「整份 md MUST 从 JSON 渲染、MUST NOT 手写」，但 CI 平台 / 部署形态 / 回滚 / 常见坑……**十六槽里没有一个有承载字段**（`.devenv-lanes.json` 只有泳道，`.devenv-strategy.json` 只有三层框架）。**这是一条悬空 MUST——闸门 2 的死法，同 A22。**
+> **本轮处置（按闸门 0 定）**：**不新增第三份 JSON**。`environments.md` 里**只有命令表与泳道状态表从 JSON 渲染**（它们真的会双写漂移）；**其余十四槽是人写区**（`06` 接地实证：17 槽里 SAD 真投影只有 2 个，**其余是全篇最高价值的纯人写区**——坑 / 护栏 / 盲区）。**把人写区强行 JSON 化，是又一次「为了机械而机械」。** ⇒ **收窄那条 MUST**，删掉「槽完整性 lint」。
 
 ### 1.4 落地物清单与边界（2026-07-13 逐条拍定）
 

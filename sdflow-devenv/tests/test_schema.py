@@ -1,413 +1,349 @@
-import json, sys
+"""devenv_schema 的测试。
+
+【本文件测什么 / 不测什么】—— 直接对应 07 §3.3 的职责边界：
+
+    schema  拦「结构」   ← 本文件测的全是这个
+    lint    报「内容」   ← 五槽留白 / 不适用没写后果 / blocked_by 敷衍
+                          全部【不在这里】，归 test_lint.py，且断言的是「报了几条」不是「拒了」
+
+判据 = 【人看不看得见】：
+  - status 写成 'verifed' —— 长得像正常值，人看不见 ⇒ schema fail-closed 拦。
+  - e2e 五槽全空 —— 人打开文档一眼就看见 ⇒ lint 报，MUST NOT 拦。
+
+红线测试（防已否机制复活）见文件末尾。
+"""
+import sys
 from pathlib import Path
+
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import devenv_schema as S
+import devenv_schema as S  # noqa: E402
 
 
-def _root(tmp_path):
-    (tmp_path / "openspec" / "architecture").mkdir(parents=True)
-    return tmp_path
-
-
-def _lane(**kw):
-    base = {
-        "id": "mqtt-integration",
-        "layer": "integration",
-        "kind": "external-dep",
-        "status": "scaffolded",
-        "verification": {
-            "method": "make integration",
-            "executor": "script",
-            "strength": "真穿过 broker；断言是否有效不由本方法保证",
-        },
-        # A21：source 无 digest 字段（时效锚移入 evidence.file_digests）
-        "source": {"file": "Makefile", "kind": "make-target",
-                   "selector": "integration"},
-        "smoke": "internal/smoke_test.go",
-        "fixtures": [],
-        "env": [],
-        "deps": [{"name": "mosquitto", "kind": "host-service"}],
-        "covers": [],
-        "blocked_by": "本机无 mosquitto — brew install mosquitto 后 /sdflow-devenv continue",
+def _evidence(**over):
+    ev = {
+        "at_commit": "a" * 40,
+        "at_time": "2026-07-14T10:23:00Z",
+        "exit": 0,
+        "attested_by": "script",
     }
-    base.update(kw)
-    return base
+    ev.update(over)
+    return ev
 
+
+def _lane(**over):
+    lane = {
+        "id": "hermetic",
+        "layer": "unit",
+        "kind": "pure",
+        "status": "verified",
+        "verification": {
+            "method": "go test ./...",
+            "executor": "script",
+            "strength": "覆盖纯逻辑；不穿过外部依赖",
+            "evidence": _evidence(),
+        },
+        # A21：source 无 digest 字段。A23：evidence 也无任何 digest。
+        "source": {"file": "-", "kind": "toolchain", "selector": "go test"},
+        "smoke": "internal/console/smoke_test.go",
+        "deps": [],
+    }
+    lane.update(over)
+    return lane
+
+
+def _strategy(**over):
+    layers = {
+        "unit": {"status": "implemented", "how": "go test", "convention": "_test.go",
+                 "process": "make unit", "tooling": "无额外依赖", "lane_ids": ["hermetic"]},
+        "integration": {"status": "not-applicable", "reason": "无外部依赖",
+                        "consequence": "wire 层回归无自动化护栏"},
+        "e2e": {"status": "manual", "how": "playwright", "convention": "e2e/*.spec.ts",
+                "process": "人工按清单跑", "tooling": "浏览器",
+                "why_not_scriptable": "需人眼判断渲染",
+                "human_steps": "打开页面，逐项对照检查清单"},
+    }
+    data = {"schema_version": 1, "layers": layers}
+    data.update(over)
+    return data
+
+
+# ---------- lane：结构与枚举 ----------
 
 def test_valid_lane_passes():
     assert S.validate_lane(_lane()) == []
 
 
-def test_lane_rejects_owned_by():
-    """owned_by 已删除（07 附录 A16：运行时派生的锚不存在）"""
+def test_lane_rejects_non_dict():
+    assert S.validate_lane("nope")
+    assert S.validate_lane(["a"])
+
+
+@pytest.mark.parametrize("field,bad", [
+    ("layer", "e2ee"),
+    ("kind", "pure-ish"),
+    ("status", "verifed"),   # 典型 typo：长得像正常值 ⇒ 人看不见 ⇒ 必须拦
+])
+def test_lane_enum_typo_is_fail_closed(field, bad):
+    errs = S.validate_lane(_lane(**{field: bad}))
+    assert any(field in e for e in errs), errs
+
+
+def test_lane_id_must_be_string():
+    assert any("lane.id" in e for e in S.validate_lane(_lane(id=123)))
+    assert any("lane.id" in e for e in S.validate_lane(_lane(id=None)))
+
+
+def test_verification_must_be_object():
+    assert any("verification" in e for e in S.validate_lane(_lane(verification="go test")))
+
+
+def test_method_is_structurally_required():
+    """method 不是「防漏」检查——verify-lane 要拿它去 fork 执行，没有它 B 层的手动不了。"""
     lane = _lane()
-    lane["deps"][0]["owned_by"] = "skill"
-    errs = S.validate_lane(lane)
-    assert any("owned_by" in e for e in errs)
+    del lane["verification"]["method"]
+    assert any("method" in e for e in S.validate_lane(lane))
 
 
-def test_lane_requires_method_and_strength():
-    assert any("method" in e for e in S.validate_lane(_lane(verification={"executor": "script", "strength": "x"})))
-    assert any("strength" in e for e in S.validate_lane(
-        _lane(verification={"method": "m", "executor": "script"})))
+def test_executor_enum_enforced():
+    lane = _lane()
+    lane["verification"]["executor"] = "robot"
+    assert any("executor" in e for e in S.validate_lane(lane))
 
 
-def test_human_executor_requires_why_and_steps():
-    lane = _lane(verification={"method": "人工烧板", "executor": "human", "strength": "s"})
-    errs = S.validate_lane(lane)
-    assert any("why_not_scriptable" in e for e in errs)
-    assert any("human_steps" in e for e in errs)
+# ---------- lane：verified 的证据（历史执行坐标，无时效锚）----------
+
+@pytest.mark.parametrize("key", S.EVIDENCE_KEYS)
+def test_verified_requires_each_evidence_key(key):
+    lane = _lane()
+    del lane["verification"]["evidence"][key]
+    assert any(key in e for e in S.validate_lane(lane))
 
 
-def test_scaffolded_requires_blocked_by():
-    assert any("blocked_by" in e for e in S.validate_lane(_lane(blocked_by="")))
-
-
-def _evidence(method="make integration", **kw):
-    """A21：file_digests（文件锚）+ method_at_verify（命令字符串锚）取代 method_digest。"""
-    ev = {
-        "at_commit": "abc1234",
-        "exit": 0,
-        "file_digests": {"Makefile": "d" * 64},
-        "method_at_verify": method,
-        "attested_by": "script",
-    }
-    ev.update(kw)
-    return ev
-
-
-def test_verified_forbids_blocked_by():
-    """绿泳道挂着「本机无 X」= 文档在说谎"""
-    lane = _lane(status="verified", blocked_by="本机无 mosquitto")
-    lane["verification"]["evidence"] = _evidence()
-    assert any("blocked_by" in e for e in S.validate_lane(lane))
-
-
-def test_verified_requires_evidence():
-    lane = _lane(status="verified", blocked_by="")
+def test_verified_requires_evidence_object():
+    lane = _lane()
+    lane["verification"]["evidence"] = "跑过了"
     assert any("evidence" in e for e in S.validate_lane(lane))
 
 
-def test_verified_with_full_evidence_passes():
-    lane = _lane(status="verified", blocked_by="")
-    lane["verification"]["evidence"] = _evidence()
+def test_attested_by_enum_enforced():
+    """两种 verified 在数据里就是两种东西（07 §0.3）：脚本验的 vs 人说的。"""
+    lane = _lane()
+    lane["verification"]["evidence"] = _evidence(attested_by="probably")
+    assert any("attested_by" in e for e in S.validate_lane(lane))
+
+
+def test_human_attested_verified_is_legal():
+    lane = _lane()
+    lane["verification"]["executor"] = "human"
+    lane["verification"]["evidence"] = _evidence(attested_by="human")
     assert S.validate_lane(lane) == []
 
 
-def test_verified_requires_file_digests():
-    """A21：file_digests 是必填证据（取代 method_digest）。"""
-    lane = _lane(status="verified", blocked_by="")
-    ev = _evidence()
-    del ev["file_digests"]
-    lane["verification"]["evidence"] = ev
-    assert any("file_digests" in e for e in S.validate_lane(lane))
+def test_exit_zero_is_not_treated_as_missing():
+    """回归：exit=0 是最常见的值。若用 `if not ev.get(k)` 判存在，0 会被当成缺失。"""
+    lane = _lane()
+    lane["verification"]["evidence"] = _evidence(exit=0)
+    assert S.validate_lane(lane) == []
 
 
-def test_file_digests_must_be_a_mapping():
-    lane = _lane(status="verified", blocked_by="")
-    lane["verification"]["evidence"] = _evidence(file_digests=["Makefile"])
-    assert any("file_digests" in e for e in S.validate_lane(lane))
+def test_planned_lane_needs_no_evidence():
+    assert S.validate_lane(_lane(status="planned")) == []
 
 
-def test_verified_requires_method_at_verify():
-    """A21 面治补口：命令字符串本身也要有时效锚。"""
-    lane = _lane(status="verified", blocked_by="")
-    ev = _evidence()
-    del ev["method_at_verify"]
-    lane["verification"]["evidence"] = ev
-    assert any("method_at_verify" in e for e in S.validate_lane(lane))
+# ---------- lane：deps ----------
+
+def test_deps_kind_enum():
+    lane = _lane(deps=[{"name": "mosquitto", "kind": "broker"}])
+    assert any("deps[].kind" in e for e in S.validate_lane(lane))
 
 
-def test_changed_method_string_is_caught():
-    """⭐ A21 面治补口的核心用例。
-
-    人把 method 从 `make integration` 改成 `make integration-fast`：
-    一个文件都没动 ⇒ file_digests 不变 ⇒ 若不比这一下，verified 会继续挂着，
-    而它验的根本不是这条命令。
-    """
-    lane = _lane(status="verified", blocked_by="")
-    lane["verification"]["method"] = "make integration-fast"
-    lane["verification"]["evidence"] = _evidence(method="make integration")  # 验的是旧命令
-    errs = S.validate_lane(lane)
-    assert any("验证方法已改动" in e for e in errs), errs
+def test_owned_by_stays_dead():
+    """A16：deps[].owned_by 是「运行时派生」的假锚——skill 不知道 recipe 内部启了什么。"""
+    lane = _lane(deps=[{"name": "mosquitto", "kind": "host-service", "owned_by": "skill"}])
+    assert any("owned_by" in e for e in S.validate_lane(lane))
 
 
-def test_bad_enum_rejected():
-    assert S.validate_lane(_lane(layer="acceptance"))
-    assert S.validate_lane(_lane(kind="bogus"))
-    assert S.validate_lane(_lane(status="green"))
+def test_deps_must_be_list():
+    assert any("deps" in e for e in S.validate_lane(_lane(deps={"a": 1})))
 
 
-def test_schema_version_missing_fail_closed(tmp_path):
-    root = _root(tmp_path)
-    (root / S.LANES_REL).write_text(json.dumps({"lanes": []}))
-    with pytest.raises(S.SchemaInvalid):
-        S.load_lanes(root)
-
-
-def test_schema_version_future_fail_closed(tmp_path):
-    """MUST NOT 尽力解析未来版本"""
-    root = _root(tmp_path)
-    (root / S.LANES_REL).write_text(json.dumps({"schema_version": 999, "lanes": []}))
-    with pytest.raises(S.SchemaTooNew):
-        S.load_lanes(root)
-
-
-def test_roundtrip_no_pyyaml(tmp_path):
-    root = _root(tmp_path)
-    data = {"schema_version": 1, "lanes": [_lane()]}
-    S.save_lanes(root, data)
-    assert S.load_lanes(root) == data
-
-
-def test_duplicate_lane_id_rejected(tmp_path):
-    root = _root(tmp_path)
-    with pytest.raises(S.SchemaInvalid):
-        S.save_lanes(root, {"schema_version": 1, "lanes": [_lane(), _lane()]})
-
-
-# ---- 坏输入 fail-closed（JSON 语法 / 顶层类型 / 字段类型）----
-
-def test_load_lanes_malformed_json_fail_closed(tmp_path):
-    root = _root(tmp_path)
-    (root / S.LANES_REL).write_text("{not valid json,,,")
-    with pytest.raises(S.SchemaInvalid):
-        S.load_lanes(root)
-
-
-def test_load_lanes_top_level_not_object_fail_closed(tmp_path):
-    root = _root(tmp_path)
-    (root / S.LANES_REL).write_text(json.dumps([1, 2, 3]))
-    with pytest.raises(S.SchemaInvalid):
-        S.load_lanes(root)
-
-
-def test_load_strategy_top_level_not_object_fail_closed(tmp_path):
-    root = _root(tmp_path)
-    (root / S.STRATEGY_REL).write_text(json.dumps("just a string"))
-    with pytest.raises(S.SchemaInvalid):
-        S.load_strategy(root)
-
-
-def test_save_lanes_lanes_wrong_type_rejected(tmp_path):
-    """lanes 是字符串不是数组 —— MUST 落 SchemaInvalid，不是随机 AttributeError"""
-    root = _root(tmp_path)
-    with pytest.raises(S.SchemaInvalid):
-        S.save_lanes(root, {"schema_version": 1, "lanes": "not-a-list"})
-
-
-def test_save_lanes_element_not_object_rejected(tmp_path):
-    root = _root(tmp_path)
-    with pytest.raises(S.SchemaInvalid):
-        S.save_lanes(root, {"schema_version": 1, "lanes": ["not-a-dict"]})
-
-
-def test_validate_lane_rejects_non_dict():
-    errs = S.validate_lane("not-a-dict")
-    assert errs and any("object" in e for e in errs)
-
-
-def test_validate_lane_deps_wrong_type_rejected():
-    errs = S.validate_lane(_lane(deps="not-a-list"))
-    assert any("deps" in e for e in errs)
-
-
-def test_validate_lane_verification_wrong_type_rejected():
-    errs = S.validate_lane(_lane(verification="not-a-dict"))
-    assert any("verification" in e for e in errs)
-
-
-def test_validate_strategy_rejects_non_dict():
-    errs = S.validate_strategy(["not", "a", "dict"])
-    assert errs and any("object" in e for e in errs)
-
-
-def test_validate_strategy_layers_wrong_type_rejected():
-    st = _strategy()
-    st["layers"] = "not-a-dict"
-    errs = S.validate_strategy(st)
-    assert errs and any("layers" in e for e in errs)
-
-
-def test_validate_strategy_single_layer_wrong_type_rejected():
-    st = _strategy()
-    st["layers"]["e2e"] = "not-a-dict"
-    errs = S.validate_strategy(st)
-    assert any("e2e" in e for e in errs)
-
-
-# ---- strategy（三层框架）----
-
-def _strategy(**layers):
-    base = {
-        "schema_version": 1,
-        "layers": {
-            "unit": {"how": "go test", "convention": "*_test.go 同包",
-                     "process": "make unit，提交前", "tooling": "go 工具链",
-                     "status": "implemented", "lane_ids": ["hermetic"]},
-            "integration": {"how": "真 broker", "convention": "build tag realbroker",
-                            "process": "make integration", "tooling": "mosquitto",
-                            "status": "manual",
-                            "why_not_scriptable": "依赖启停内嵌在 recipe 字面文本，无法插桩",
-                            "human_steps": "1. brew services start mosquitto 2. make integration 3. 看到 PASS"},
-            "e2e": {"status": "not-applicable",
-                    "reason": "本项目是纯库，无可执行入口",
-                    "consequence": "集成后的真实使用路径无人验证"},
-        },
-        "known_blind_spots": [],
-    }
-    base["layers"].update(layers)
-    return base
-
+# ---------- strategy：三层骨架 ----------
 
 def test_valid_strategy_passes():
     assert S.validate_strategy(_strategy()) == []
 
 
-def test_missing_layer_fail_closed():
-    st = _strategy()
-    del st["layers"]["e2e"]
-    assert any("e2e" in e for e in S.validate_strategy(st))
+@pytest.mark.parametrize("missing", S.LAYERS)
+def test_missing_layer_is_fail_closed(missing):
+    """三层【必须都在】—— 核心承诺的结构骨架。缺一层不是「留白」，是「没这层」。"""
+    data = _strategy()
+    del data["layers"][missing]
+    assert any(missing in e for e in S.validate_strategy(data))
 
 
-def test_implemented_requires_lane_ids():
-    st = _strategy(unit={"how": "x", "convention": "x", "process": "x",
-                         "tooling": "x", "status": "implemented"})
-    assert any("lane_ids" in e for e in S.validate_strategy(st))
+def test_layer_status_enum():
+    data = _strategy()
+    data["layers"]["unit"]["status"] = "done"
+    assert any("unit.status" in e for e in S.validate_strategy(data))
 
 
-def test_not_applicable_requires_consequence():
-    """不写后果，「不适用」就是不需要负责的逃生舱"""
-    st = _strategy(e2e={"status": "not-applicable", "reason": "纯库"})
-    assert any("consequence" in e for e in S.validate_strategy(st))
+def test_pending_slots_are_legal():
+    """⭐ 核心行为反转：`⚠️ 待定` 是【合法】产物（07 §3.1）。
+
+    人当场答不上来（「e2e 我还没想好」）⇒ 原样落 PENDING。schema MUST NOT 拒绝它。
+    它由 lint 计数 + 渲染显眼 + 收尾报告逐条列出 ——【报，不拦】。
+
+    旧版在这里 fail-closed（"五槽不许留白"）。那是审计官的做法：
+    拦一个空的 strength，并不会让模型写出好的 strength，只会让它写出【一句话】。
+    机械层会奖励空话、惩罚诚实（07 §2.2 round-3 对抗镜实证）。
+    """
+    data = _strategy()
+    for slot in ("how", "convention", "process", "tooling"):
+        data["layers"]["unit"][slot] = S.PENDING
+    assert S.validate_strategy(data) == []
 
 
-def test_not_applicable_requires_reason():
-    """not-applicable 只缺 reason —— 现有测试只测了缺 consequence"""
-    st = _strategy(e2e={"status": "not-applicable", "consequence": "集成路径无人验证"})
-    assert any("reason" in e for e in S.validate_strategy(st))
+def test_all_pending_strategy_still_passes_schema():
+    """极端：三层全待定 —— schema 全过。这不是漏洞，是设计（副驾不拦人）。
+
+    可见性由别处保证：lint 报满屏、渲染显眼、收尾报告逐条列。人一眼就知道这次白跑了。
+    """
+    data = _strategy()
+    for name in S.LAYERS:
+        data["layers"][name] = {"status": "manual", "how": S.PENDING,
+                                "convention": S.PENDING, "process": S.PENDING,
+                                "tooling": S.PENDING, "why_not_scriptable": S.PENDING,
+                                "human_steps": S.PENDING}
+    assert S.validate_strategy(data) == []
 
 
-def test_not_applicable_exempts_four_slots():
-    """MUST 豁免 ①-④ —— 否则是逼模型为「不做这件事」编造废话（填表游戏）"""
-    st = _strategy(e2e={"status": "not-applicable", "reason": "纯库",
-                        "consequence": "集成路径无人验证"})
-    assert S.validate_strategy(st) == []
+def test_not_applicable_without_consequence_passes_schema():
+    """「不适用没写后果」是【内容】问题 ⇒ 归 lint 报，schema 放行。
+
+    这条测试是故意的：它锁死「schema 不做内容检查」这个边界。
+    若哪天有人把 consequence 检查加回 schema，这条会红——那正是它存在的意义。
+    """
+    data = _strategy()
+    data["layers"]["integration"] = {"status": "not-applicable", "reason": "无外部依赖"}
+    assert S.validate_strategy(data) == []
 
 
-def test_manual_requires_why_and_steps():
-    st = _strategy(integration={"how": "x", "convention": "x", "process": "x",
-                                "tooling": "x", "status": "manual"})
-    errs = S.validate_strategy(st)
-    assert any("why_not_scriptable" in e for e in errs)
-    assert any("human_steps" in e for e in errs)
+# ---------- IO ----------
+
+def test_roundtrip(tmp_path):
+    S.save_lanes(tmp_path, {"lanes": [_lane()]})
+    assert S.load_lanes(tmp_path)["lanes"][0]["id"] == "hermetic"
+    S.save_strategy(tmp_path, _strategy())
+    assert S.load_strategy(tmp_path)["layers"]["unit"]["status"] == "implemented"
 
 
-def test_placeholder_consequence_rejected():
-    for junk in ("无", "没有", "N/A", "TODO", "待定", "  "):
-        st = _strategy(e2e={"status": "not-applicable", "reason": "纯库", "consequence": junk})
-        assert any("consequence" in e for e in S.validate_strategy(st)), junk
-
-
-def test_implemented_layer_missing_slots_fail():
-    st = _strategy(unit={"status": "implemented", "lane_ids": ["hermetic"]})
-    errs = S.validate_strategy(st)
-    assert any("how" in e for e in errs)
-
-
-# ---- 面治：类型前置校验反例（每处坏类型都要有一条反例，喂错类型断言 SchemaInvalid）----
-
-def test_lane_id_missing_or_empty_rejected():
-    """lane.id 缺失 / 为空 —— 此前零反例覆盖"""
-    assert any("id" in e for e in S.validate_lane(_lane(id="")))
-    lane = _lane()
-    del lane["id"]
-    assert any("id" in e for e in S.validate_lane(lane))
-
-
-def test_lane_id_wrong_type_rejected():
-    for bad in (123, ["a"], {"a": 1}, True):
-        errs = S.validate_lane(_lane(id=bad))
-        assert any("lane.id" in e for e in errs), bad
-
-
-def test_lane_blocked_by_wrong_type_rejected():
-    """blocked_by 是真值但非 str（123 / list / dict）—— (x or "").strip() 会 AttributeError"""
-    for bad in (123, ["a"], {"a": 1}, True):
-        errs = S.validate_lane(_lane(blocked_by=bad))
-        assert any("blocked_by" in e for e in errs), bad
-
-
-def test_lane_verification_field_wrong_type_no_crash():
-    for field in ("method", "strength", "executor"):
-        for bad in (123, ["a"], {"a": 1}):
-            v = dict(_lane()["verification"])
-            v[field] = bad
-            errs = S.validate_lane(_lane(verification=v))
-            assert isinstance(errs, list)  # 不崩溃即可，具体文案已由其它用例覆盖
-
-
-def test_deps_element_wrong_type_rejected():
-    """deps[] 的单个元素非 dict —— 现有测试只测了 deps 整体类型错"""
-    errs = S.validate_lane(_lane(deps=[{"name": "mosquitto", "kind": "host-service"}, "not-a-dict"]))
-    assert any("deps[]" in e for e in errs)
-
-
-def test_plan_snapshot_rejects_non_dict_lane():
+def test_save_rejects_invalid(tmp_path):
     with pytest.raises(S.SchemaInvalid):
-        S.plan_snapshot("not-a-dict")
+        S.save_lanes(tmp_path, {"lanes": [_lane(status="verifed")]})
+
+
+def test_duplicate_lane_ids(tmp_path):
+    with pytest.raises(S.SchemaInvalid, match="重复"):
+        S.save_lanes(tmp_path, {"lanes": [_lane(), _lane()]})
+
+
+def test_unhashable_id_does_not_crash_dupe_check(tmp_path):
+    """非 string 的 id 由 validate_lane 各自报出，MUST NOT 在判重时 TypeError 崩溃。"""
     with pytest.raises(S.SchemaInvalid):
-        S.plan_snapshot(["a", "b"])
+        S.save_lanes(tmp_path, {"lanes": [_lane(id=["a"]), _lane(id={"b": 1})]})
 
 
-def test_plan_snapshot_rejects_non_dict_verification():
-    """lane.get("verification") or {} 后直接 .get(k) —— 真值非 dict 会 AttributeError"""
-    for bad in (123, "not-a-dict", ["a"]):
-        lane = _lane(verification=bad)
-        with pytest.raises(S.SchemaInvalid):
-            S.plan_snapshot(lane)
+def test_missing_file(tmp_path):
+    with pytest.raises(S.SchemaInvalid, match="不存在"):
+        S.load_lanes(tmp_path)
 
 
-def test_schema_version_bool_rejected(tmp_path):
-    """schema_version=true 时 isinstance(True, int) 恒真 —— MUST 显式拒绝"""
-    root = _root(tmp_path)
-    (root / S.LANES_REL).write_text(json.dumps({"schema_version": True, "lanes": []}))
-    with pytest.raises(S.SchemaInvalid):
-        S.load_lanes(root)
+def test_bad_json(tmp_path):
+    p = tmp_path / S.LANES_REL
+    p.parent.mkdir(parents=True)
+    p.write_text("{not json", encoding="utf-8")
+    with pytest.raises(S.SchemaInvalid, match="JSON 语法错误"):
+        S.load_lanes(tmp_path)
 
 
-def test_save_lanes_unhashable_id_fail_closed(tmp_path):
-    """id 是 list（不可哈希）—— 构建判重 set 时 MUST NOT 裸抛 TypeError: unhashable type"""
-    root = _root(tmp_path)
-    with pytest.raises(S.SchemaInvalid):
-        S.save_lanes(root, {"schema_version": 1, "lanes": [_lane(id=["mqtt", "integration"])]})
+def test_schema_too_new(tmp_path):
+    S.save_lanes(tmp_path, {"lanes": []})
+    p = tmp_path / S.LANES_REL
+    p.write_text(p.read_text(encoding="utf-8").replace('"schema_version": 1',
+                                                       '"schema_version": 99'),
+                 encoding="utf-8")
+    with pytest.raises(S.SchemaTooNew):
+        S.load_lanes(tmp_path)
 
 
-def test_save_lanes_mixed_type_duplicate_ids_no_crash(tmp_path):
-    """dupes 里混不同不可比较类型（str 与 int 各自重复）—— sorted() MUST NOT 裸抛 TypeError"""
-    root = _root(tmp_path)
-    lanes = [_lane(id="dup"), _lane(id="dup"), _lane(id=7), _lane(id=7)]
-    with pytest.raises(S.SchemaInvalid):
-        S.save_lanes(root, {"schema_version": 1, "lanes": lanes})
+def test_schema_version_true_is_not_an_integer(tmp_path):
+    """bool 是 int 的子类 —— isinstance(True, int) 恒真。不显式排除就会静默放行。"""
+    S.save_lanes(tmp_path, {"lanes": []})
+    p = tmp_path / S.LANES_REL
+    p.write_text(p.read_text(encoding="utf-8").replace('"schema_version": 1',
+                                                       '"schema_version": true'),
+                 encoding="utf-8")
+    with pytest.raises(S.SchemaInvalid, match="整数"):
+        S.load_lanes(tmp_path)
 
 
-# ---- CAS 快照 ----
+# ---------- 红线：防已否机制复活 ----------
 
-def test_plan_snapshot_covers_executor_and_kind():
-    """长跑期间 lane 从 script/pure 改成 human/hardware，只比 status 的 CAS 挡不住"""
-    a = _lane()
-    b = _lane()
-    b["verification"] = dict(b["verification"], executor="human",
-                             why_not_scriptable="x", human_steps="y")
-    assert S.plan_snapshot(a) != S.plan_snapshot(b)
+def test_no_resurrected_mechanisms():
+    """⭐ 红线：三个被否的机制 MUST NOT 从后门回到 schema 里。
 
-    c = _lane(kind="hardware")
-    assert S.plan_snapshot(a) != S.plan_snapshot(c)
+    - make 语法解析（A21）——无界语法面禁手搓；target 能不能跑，让 make 自己判
+    - 时效 digest（A23 闸门 0）——该由「continue 时问一句 + git」做的事
+    - 文件锁 / CAS（A23 闸门 3）——防一个不会发生的并发
 
+    警号（CLAUDE.md 基准 5）：「每轮 review 都在同一个函数里补一个新的语法分支」
+    不是「还差最后一个 case」，是「这个函数本来就不该存在」。
 
-def test_plan_snapshot_stable_under_key_order():
-    a = _lane()
-    b = {k: a[k] for k in reversed(list(a))}
-    assert S.plan_snapshot(a) == S.plan_snapshot(b)
+    【断言的是「符号」，不是「文本」】——这个区分是本测试正确性的全部。
+    本文件的 docstring、注释、以及【报错文案】都在解释「为什么没有这些机制」
+    （例：owned_by 的报错里就写着 "skill 不知道 recipe 内部启动了什么"）。
+    扫文本必然命中那些解释，报假阳。要断言的其实是：
+        「代码里没有名为 digest / sha256 / recipe … 的【标识符】，也没 import 它们」
+    ⇒ 走 AST 收集标识符集合，字符串字面量与注释天然不在其中。
+
+    （这个假阳我踩了三次：devenv_digest 的红线测试（docstring）→ 本测试 v1（注释）
+      → 本测试 v2（报错文案）。三次都是「扫文本」。记在这里，别再扫文本。）
+    """
+    import ast
+
+    src = Path(__file__).resolve().parents[1] / "scripts" / "devenv_schema.py"
+    tree = ast.parse(src.read_text(encoding="utf-8"))
+
+    symbols = set()
+    imports = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Name):
+            symbols.add(n.id.lower())
+        elif isinstance(n, ast.Attribute):
+            symbols.add(n.attr.lower())
+        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            symbols.add(n.name.lower())
+        elif isinstance(n, ast.arg):
+            symbols.add(n.arg.lower())
+        elif isinstance(n, ast.keyword) and n.arg:
+            symbols.add(n.arg.lower())
+        elif isinstance(n, ast.Import):
+            imports |= {a.name.split(".")[0].lower() for a in n.names}
+        elif isinstance(n, ast.ImportFrom) and n.module:
+            imports.add(n.module.split(".")[0].lower())
+
+    # 子串禁词：出现在【任何标识符】里都算复活。
+    banned_substrings = {"digest", "sha256", "recipe", "makefile",
+                         "atomic_write", "plan_snapshot"}
+    # 导入禁词：只查 import 名，MUST NOT 拿去做子串匹配 ——
+    # "re" 是 errs / rel / _require_* 的子串，子串匹配会把它们全打成阳性（我刚踩过）。
+    banned_imports = {"re", "hashlib", "fcntl", "devenv_lock", "devenv_digest"}
+
+    sym_hits = {b for b in banned_substrings for s in symbols if b in s}
+    imp_hits = banned_imports & imports
+    assert not (sym_hits | imp_hits), (
+        f"schema 里出现了已否机制的痕迹 —— 符号 {sorted(sym_hits)} / 导入 {sorted(imp_hits)}。"
+        "见 07 附录 A21（make 解析）· A23（时效 digest / 文件锁）。MUST NOT 从后门复活。"
+    )
