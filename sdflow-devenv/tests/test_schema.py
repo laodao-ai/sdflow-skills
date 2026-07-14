@@ -252,12 +252,37 @@ def test_handwritten_layer_status_is_rejected():
     (["scaffolded"], "scaffolded"),
     (["planned", "scaffolded"], "scaffolded"),
     (["verified"], "verified"),
-    (["planned", "scaffolded", "verified"], "verified"),  # 多泳道：有一条绿就算绿
+    (["verified", "verified"], "verified"),           # 全绿 ⇒ 才是绿
+    # ⭐ 投影取【最弱的那条泳道】，不是最强的那条 —— 见下面的回归测试
+    (["planned", "scaffolded", "verified"], "partial"),
+    (["planned", "verified"], "partial"),
+    (["scaffolded", "verified"], "partial"),
 ])
 def test_layer_status_projection(lane_statuses, want):
     lanes = [_lane(id=f"l{i}", status=st) for i, st in enumerate(lane_statuses)]
     layer = _layer(lane_ids=[l["id"] for l in lanes])
     assert S.layer_status(layer, lanes) == want
+
+
+def test_one_green_lane_does_not_make_the_layer_green():
+    """⭐ 回归 A29（mqtt-console 试点实证）：「有一条绿 ⇒ 整层 ✅ 已验证」是【假绿】。
+
+    这条病【曾经被写进本文件的断言里】——原 parametrize 有一行
+    `(["planned","scaffolded","verified"], "verified")  # 多泳道：有一条绿就算绿`。
+    也就是说：A25 杀掉了「手写层状态」，假绿就换到【投影规则】里长出来了，
+    而我把它当成正确行为固化进了测试。**杀掉一个机制不等于杀掉它的病。**
+
+    试点现场：e2e 层三条泳道 —— wails-live-e2e 绿、packaged-app-boot 与
+    packaged-app-visual 都是 planned（打包冒烟压根没做，而那正是「能不能交付」的唯一证据），
+    标题照报「✅ 已验证」。而【标题那一行才是被读的那一行】。
+    """
+    lanes = [_lane(id="live", status="verified"),
+             _lane(id="pkg-boot", status="planned"),
+             _lane(id="pkg-visual", status="planned")]
+    layer = _layer(lane_ids=["live", "pkg-boot", "pkg-visual"])
+
+    assert S.layer_status(layer, lanes) == "partial"
+    assert S.layer_lane_tally(layer, lanes) == (1, 3)   # 「3 条里绿了 1 条」
 
 
 def test_not_applicable_layer_projects_to_itself():

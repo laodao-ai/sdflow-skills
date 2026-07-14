@@ -192,6 +192,27 @@ def test_env_pending_none_when_not_seeded(tmp_path):
     assert L.env_pending(tmp_path) is None
 
 
+def test_skeleton_spells_pending_only_in_slots(tmp_path):
+    """⭐ 回归（mqtt-console 试点实证）：骨架的【说明文字/图例】MUST NOT 复现 PENDING 字面量。
+
+    env_pending 是「数这个字面量出现了几次」（基准 5：语法面只有一个元素 ⇒ 不必解析）。
+    该做法成立的前提是【这个字面量只有一个意思 = 一个未答的槽】——
+    维持这个前提是【骨架】的责任，不是 lint 的责任
+    （让 lint 去认「这行是图例不是槽」，就是又一个手搓 Markdown 解析器）。
+
+    试点现场：模型自创了一份出处图例，里头写了 `[⚠️ 待定] = 还没答案` ——
+    env_pending 当场恒 +1（报 3/10，真待定只有 2）。修法不是让脚本变聪明，
+    而是【把这份图例收进骨架，并且指称而不复现该标记】。
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import devenv_scaffold as F
+    (tmp_path / "openspec").mkdir()
+    F.main(["init", "--root", str(tmp_path)])
+
+    # 刚铺完 ⇒ 出现次数 MUST 恰好 == 槽数。多一次 = 有人把它写进了正文/图例。
+    assert L.env_pending(tmp_path) == len(F.ENV_SLOTS)
+
+
 def test_env_pending_counts_only_a_fixed_string(tmp_path):
     """⭐ 它【数一个固定字符串】，不切章节、不判结构（基准 5：语法面只有一个元素）。
 

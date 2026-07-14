@@ -72,6 +72,15 @@ def _log(root, line):
 # 【但「有模版 + 逐槽问出口」和「有 JSON 载体」是两件事】：
 # skill 铺骨架（下面这份）+ 按 references/environments-template.md 逐槽问 + 人填。
 # 它是【直写 Markdown】，没有 DO-NOT-EDIT 区块 —— 铺完就归人 own，skill 不再覆盖。
+#
+# 🔴 【骨架里 S.PENDING 只许出现在槽位上，MUST NOT 出现在说明文字/图例里】：
+# lint 的 env_pending 是【数这个字面量出现了几次】（基准 5：语法面只有一个元素 ⇒ 不必解析）。
+# 该做法成立的前提是【这个字面量只有一个意思 = 一个未答的槽】—— 维持这个前提是本骨架的责任，
+# 不是 lint 的责任（让 lint 去认「这行是图例不是槽」，就是又一个手搓 Markdown 解析器）。
+# mqtt-console 试点实证：模型现场自创的出处图例里写了 `[⚠️ 待定] = 还没答案`，
+# env_pending 当场恒 +1（报 3/10，真待定只有 2）。故图例改为【指称而不复现】该标记，
+# 并把这份图例收进骨架 —— 模型就不会再自己发明一份。
+# 守卫：tests/test_lint.py::test_env_pending_counted_but_not_blocking 断言刚铺完 == len(ENV_SLOTS)。
 
 ENV_SLOTS = [
     ("1.1", "前置工具链"),
@@ -92,6 +101,10 @@ ENV_SKELETON = f"""# 环境：搭建与发布
 >
 > 本文档由 `/sdflow-devenv` 铺骨架、**按 `references/environments-template.md` 逐槽问出来**。
 > **此后归你 own** —— skill 不会覆盖它。
+>
+> **出处标记**（每条内容后的方括号）：`[实测]` 本机真跑过 · `[代码]` 从源码读出 ·
+> `[人拍]` 操作者拍板 · `[调研]` 模型查证后给的推荐，人已确认。
+> **没答出来的槽，保留 skill 铺下的那个黄底待办标记**（收尾报告会逐条列出）。
 
 ## 1. dev —— 怎么在本机跑起来
 
@@ -401,10 +414,21 @@ def cmd_confirm_lane(args):
 
 _STATUS_TEXT = {
     "verified": "✅ 已验证",
+    "partial": "⚠️ 部分验证",          # ← 全绿才 ✅。有绿有非绿必须如实说（A29）
     "scaffolded": "⏸ 已搭好，未验证",
     "planned": "○ 计划中",
     S.NOT_APPLICABLE: "— 不适用",
 }
+
+
+def _layer_status_text(L, lanes):
+    """层状态那一行 —— 【它是整份文档最被人读的一行】，MUST NOT 报得比实情好。"""
+    st = S.layer_status(L, lanes)
+    if st != "partial":
+        return st, _STATUS_TEXT.get(st, st)
+    ok, total = S.layer_lane_tally(L, lanes)
+    return st, (f"{_STATUS_TEXT['partial']} —— **{total} 条泳道里只跑绿了 {ok} 条**，"
+                f"其余 {total - ok} 条见下表（这层**还没有**真正立起来）")
 
 _SLOT_TITLE = {
     "how": "① 本项目怎么实现",
@@ -435,9 +459,9 @@ def render_strategy(data):
     lanes = data.get("lanes") or []
     for name in S.LAYERS:
         L = (data.get("layers") or {}).get(name) or {}
-        st = S.layer_status(L, lanes)
+        st, st_text = _layer_status_text(L, lanes)
         lines += [f"## {_LAYER_TITLE[name]}", "",
-                  f"**状态**：{_STATUS_TEXT.get(st, st)}", ""]
+                  f"**状态**：{st_text}", ""]
 
         if st == S.NOT_APPLICABLE:
             lines += [f"**理由**：{L.get('reason')}", "",

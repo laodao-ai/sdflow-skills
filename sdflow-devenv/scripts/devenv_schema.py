@@ -118,6 +118,12 @@ def layer_status(layer, lanes):
     """⑤ 状态 —— 从泳道【投影】算出，不是声明（07 §2.2 · A25）。
 
     这是【结构性保证】而非拦截：层状态无法伪造、无法漂移，因为它压根不存在于数据里。
+
+    🔴 【投影取最弱的那条泳道，不是最强的那条】（07 A29 · mqtt-console 试点实证）：
+    「有一条绿 ⇒ 整层报 ✅ 已验证」是【假绿】—— 它是 A25 要杀的那条病，换了个地方长出来。
+    试点现场：e2e 层三条泳道，两条 planned（打包冒烟压根没做），标题照报「✅ 已验证」。
+    而【标题那一行才是被读的那一行】；下面泳道表里那两个 ○ 救不了它。
+    ∴ 全绿才 verified；有绿有非绿 ⇒ partial（如实说「3 条里绿了 1 条」）。
     """
     if isinstance(layer, dict) and layer.get("status") == NOT_APPLICABLE:
         return NOT_APPLICABLE
@@ -126,11 +132,20 @@ def layer_status(layer, lanes):
     if not mine:
         return "planned"
     statuses = {l.get("status") for l in mine}
-    if "verified" in statuses:
+    if statuses == {"verified"}:
         return "verified"
+    if "verified" in statuses:
+        return "partial"
     if "scaffolded" in statuses:
         return "scaffolded"
     return "planned"
+
+
+def layer_lane_tally(layer, lanes):
+    """(已 verified 数, 该层泳道总数) —— 给 partial 的标题用「3 条里绿了 1 条」。"""
+    ids = set(layer.get("lane_ids") or []) if isinstance(layer, dict) else set()
+    mine = [l for l in lanes if isinstance(l, dict) and l.get("id") in ids]
+    return sum(1 for l in mine if l.get("status") == "verified"), len(mine)
 
 
 # ---------- lanes ----------
