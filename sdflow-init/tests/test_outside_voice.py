@@ -82,7 +82,8 @@ def path_without_codex():
 def test_version():
     r = run(["version"])
     assert r.returncode == 0
-    assert r.stdout.strip() == "outside-voice.sh 1.0.0"
+    # 1.1.0：FRAME 增补三条通则（sdflow:principles）。主版本仍 1.x —— 调用方只核主版本。
+    assert r.stdout.strip() == "outside-voice.sh 1.1.0"
 
 
 def test_preflight_ready(tmp_path):

@@ -149,6 +149,15 @@ install_sdflow() {
     chmod +x "$sdflow/hack/$base"
     installed+=("hack/$base @ $sdflow")
   done
+
+  # 脚本要读的【数据文件】（非 .sh）—— 如 skill-principles.md：outside-voice.sh 的 FRAME 要 cat 它。
+  # 漏拷不会报错，只会让 outside-voice 静默走降级分支（少一段纪律，但仍跑）——正因为不报错，所以必须有这个循环。
+  for f in "$REPO_DIR/sdflow-init/assets/hack/"*.md; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    cp "$f" "$sdflow/hack/$base"
+    installed+=("hack/$base @ $sdflow")
+  done
 }
 
 for d in "${TARGET_DIRS[@]}"; do
