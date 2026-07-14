@@ -5,7 +5,7 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一�
 
 # sdflow-ship — 阶段三编排器（盘面即状态）
 
-<!-- sdflow:principles:start —— 由 hack/sync_principles.py 从 hack/skill-principles.md 注入，勿手改本区块 -->
+<!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 三条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
 
 ### ① 能查的自己查，能调研的自己调研

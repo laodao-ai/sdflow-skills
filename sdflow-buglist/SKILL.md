@@ -11,7 +11,7 @@ description: >
 
 # sdflow-buglist — 自动记录 / 回写 / 扫描 buglist
 
-<!-- sdflow:principles:start —— 由 hack/sync_principles.py 从 hack/skill-principles.md 注入，勿手改本区块 -->
+<!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
 ## 🟢 三条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
 
 ### ① 能查的自己查，能调研的自己调研

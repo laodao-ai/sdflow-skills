@@ -216,3 +216,14 @@ if [ "$IS_WINDOWS" -eq 1 ]; then
 else
   echo "  mode: symlink (Unix)"
 fi
+
+# ─── 三条通则一致性门（真相源在 sdflow-init/assets/，投放面 20 个）───────────
+# 【为什么放在 setup.sh 里】：一个「存在但没人跑」的门 = 不存在的门。
+# 装的时候顺手跑一次 —— 漂了当场看见，而不是等到某个 skill 带着旧通则跑了半天。
+if command -v python3 >/dev/null 2>&1 && [ -f "$REPO_DIR/hack/sync_principles.py" ]; then
+  echo ""
+  if ! python3 "$REPO_DIR/hack/sync_principles.py" --check; then
+    echo ""
+    echo "  ⚠️ 三条通则有漂移（上面列了）。修：python3 hack/sync_principles.py --apply"
+  fi
+fi
