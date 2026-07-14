@@ -82,7 +82,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 ```
 
 带脚本+测试的 skill 仅这几个：`sdflow-buglist`、`sdflow-todolist`、`sdflow-issues`、
-`sdflow-init`、`sdflow-retro`、`sdflow-maintain`、`sdflow-architecture`。其余为纯 Markdown 编排类，无自动化测试。
+`sdflow-init`、`sdflow-retro`、`sdflow-maintain`、`sdflow-architecture`、`sdflow-devenv`。其余为纯 Markdown 编排类，无自动化测试。
 <!-- [impl-review-fix] C8：清单失鲜补 sdflow-architecture（已有 scripts/ + tests/，此前遗漏） -->
 
 ## 架构

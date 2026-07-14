@@ -21,6 +21,7 @@
 | 编排（阶段三） | `sdflow-implement` | tickets 实现管线双模式：出 ticket（tracer-bullet 垂直切片）→ 执行（frontier 串行+每 ticket 双轴审）；由 /sdflow-ship 按 config 键/plan marker 条件路由 |
 | 收尾 | `sdflow-done` | 闭环：verify（证据锚点）→ hand-off → archive（delta 对码核验同步）→ commit → merge |
 | 规划 | `sdflow-architecture` | 系统架构设计编排器：简单需求 → skeleton-ready SAD（openspec/architecture/ 单例）+ 骨架切片建议交棒 |
+| 规划 | `sdflow-devenv` | 开发/测试环境副驾：定测试策略（单元/集成/e2e 三层，一层不留白）→ 落脚手架 → 尽可能真跑一遍确认 → 出 `testing-strategy.md` + `environments.md` |
 | 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，直写产出 design/roadmap/task-log 三件套（可选 memo），不经 change 壳 |
 | 记录（issues 池） | `sdflow-buglist` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |
 | 记录（issues 池） | `sdflow-todolist` | 改进想法 / 技术债收集池（非缺陷），全局唯一 T-ID |
@@ -28,7 +29,7 @@
 | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
 | 测试 | `embedded-test-sop` | 为嵌入式固件功能生成手动测试 SOP + 配套日志自动分析规则（log-checks.yaml） |
 
-> 三个 recorder、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement` 与 `sdflow-architecture` 为**数据类 skill**（带 `scripts/` + `tests/`），
+> 三个 recorder、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**（带 `scripts/` + `tests/`），
 > 由脚本保证确定性；其余（含 `sdflow-roadmap`）为纯 Markdown 编排类。
 
 > **曾用名对照**（改名于 `sdflow-rebrand`，历史 PR / issue / 本地记忆若引用旧名，按此表换算）：
