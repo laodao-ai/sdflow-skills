@@ -57,10 +57,10 @@
 
 ## 5. 上下游 skill 改动
 
-- [ ] **`sdflow-architecture`**：description 加过程轴分流句（「建 dev/test 环境 / 定测试策略 → `/sdflow-devenv`」）；交棒话术从「给模板路径」改为**指向下游 skill**（spec: `architecture-design`）
-  > ⏳ **未做** —— 交棒话术未加；`sdflow-devenv` 已可独立触发，不阻塞使用。
-- [ ] **`sdflow-maintain`**：检出 `.devenv.json` → 调 `devenv_lint`，**原样并入报告**（spec: `maintain-scan`）
-  > ⏳ **未做** —— `sdflow-maintain` 尚未检出 `.devenv.json`；`devenv_lint` 可手动跑，不阻塞。
+- [x] **`sdflow-architecture`**：description 加过程轴分流句（「建 dev/test 环境 / 定测试策略 → `/sdflow-devenv`」）；交棒话术从「给模板路径」改为**指向下游 skill**（spec: `architecture-design`）
+  > ✅ description 加过程轴分流句 + §5.3 交棒改指 `/sdflow-devenv`（原只给模板路径）。
+- [x] **`sdflow-maintain`**：检出 `.devenv.json` → 调 `devenv_lint`，**原样并入报告**（spec: `maintain-scan`）
+  > ✅ `scan_devenv()` 原样透传 lint 报告（不重渲染 ⇒ commit 锚不丢）；**不计入 any_diff**（提醒非门禁）；6 个 Scenario 逐条有测试。
   - **⚠️ 它是 devenv「不强制完成」的另一半**——不强制完成 + 不检查未完成 = 名存实亡
 
 ## 6. 仓级集成

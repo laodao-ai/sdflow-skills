@@ -98,12 +98,27 @@ skill SHALL 对**任何项目**产出一份测试与验证的策略框架：**�
 
 层 **SHALL NOT** 有手写的状态字段。其状态 SHALL 由 `lanes[]` **机械投影**算出：
 
+**🔴 投影 SHALL 取最弱的那条泳道，MUST NOT 取最强的那条**〔A29〕：
+
 | 层状态 | 定义 |
 |---|---|
 | `not-applicable` | 零泳道 + 人写了 `reason` + `consequence` ← **唯一需要人拍的层状态** |
 | `planned` | 有泳道，全部 `planned` |
-| `scaffolded` | 至少一条 `scaffolded`，无 `verified` → 渲染成「**已搭好，未验证（<blocked_by>）**」 |
-| `verified` | 至少一条 `verified` → 渲染成「**已验证 @ `<sha>` · <日期>**」 |
+| `scaffolded` | 至少一条 `scaffolded`，**无 `verified`** → 渲染成「**已搭好，未验证（<blocked_by>）**」 |
+| **`partial`** | **有 `verified`，但不是全部** → 渲染成「**⚠️ 部分验证 —— N 条泳道里只跑绿了 M 条**」 |
+| `verified` | **全部**泳道 `verified` → 渲染成「**已验证 @ `<sha>` · <日期>**」 |
+
+> **「至少一条 `verified` ⇒ 层 `verified`」是假绿**——它是本 Requirement 要杀的那条病（手写层状态会撒谎），
+> **换到投影函数里又长了出来**。mqtt-console 试点实证〔A29〕：e2e 层三条泳道，`packaged-app-boot` /
+> `packaged-app-visual` 都是 `planned`（**打包冒烟压根没做，而那正是「能不能交付」的唯一证据**），
+> 标题照报「✅ 已验证」。**而标题那一行才是被读的那一行**——下面泳道表里那两个 `○` 救不了它。
+>
+> **杀掉一个机制，不等于杀掉它的病。**
+
+#### Scenario: 一条绿不能把整层染绿
+- **WHEN** 某层三条泳道：一条 `verified`，两条 `planned`
+- **THEN** 层状态投影为 **`partial`**，渲染成「**⚠️ 部分验证 —— 3 条泳道里只跑绿了 1 条**」
+- **AND** **MUST NOT** 渲染成「✅ 已验证」
 
 **「已实现」/「人工」两个词 SHALL NOT 出现于文档**〔A25〕：
 

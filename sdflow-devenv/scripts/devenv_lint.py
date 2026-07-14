@@ -107,12 +107,6 @@ def lazy_blockers(data):
     return out
 
 
-def unverified_lanes(data):
-    return [(l.get("id"), l.get("status"), l.get("blocked_by"))
-            for l in data.get("lanes") or []
-            if isinstance(l, dict) and l.get("status") != "verified"]
-
-
 ENV_MD = "openspec/architecture/environments.md"
 SAD_MD = "openspec/architecture/sad.md"
 

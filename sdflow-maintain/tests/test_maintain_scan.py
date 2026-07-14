@@ -586,3 +586,28 @@ def test_scenario_bad_data_reported_not_swallowed(tmp_path):
     st, _ = ms.scan_devenv(str(tmp_path))
     assert st == "bad"
     assert "数据坏了" in ms.run_scan(str(tmp_path))
+
+
+def test_scenario_devenv_lint_unavailable_is_reported_not_swallowed(tmp_path, monkeypatch):
+    """Scenario: devenv_lint 不可用时【显式提示】—— MUST NOT 静默略过。
+
+    静默略过 = 用户以为扫过了（而它根本没跑）。这跟「没有触发点」是同一种病：
+    **一个看起来存在、实际不存在的检查。**
+    """
+    _devenv_repo(tmp_path, _blank_devenv())
+    # 让 import devenv_lint 失败（模拟未装 sdflow-devenv）
+    import builtins
+    real_import = builtins.__import__
+
+    def fake_import(name, *a, **kw):
+        if name == "devenv_lint":
+            raise ImportError("模拟未装 sdflow-devenv")
+        return real_import(name, *a, **kw)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.delitem(__import__("sys").modules, "devenv_lint", raising=False)
+
+    st, _ = ms.scan_devenv(str(tmp_path))
+    assert st == "unavailable"
+    r = ms.run_scan(str(tmp_path))
+    assert "devenv_lint` 不可用" in r and "跳过健康度扫描" in r     # 显式说了，没静默
