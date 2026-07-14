@@ -63,3 +63,41 @@ def test_grill_is_always_full_depth():
     ff = (ASSETS / "workflow" / "ff-generation-constraints.md").read_text(encoding="utf-8")
     assert "锚的用途只有溯源" in ff
     assert "瘦跑以该前缀为唯一判据" not in ff   # 死条款已清
+
+
+# ---------- superpowers 的 task-brief 断口（靠读第三方源码才发现的）----------
+
+def test_plan_constraints_land_where_implementer_can_see_them():
+    """⭐ 领域约束 MUST 落在【每个 Task 段内】，不能只写 plan 头部的 Global Constraints。
+
+    【这个洞是怎么发现的】（读 superpowers 6.1.1 源码）：
+      - `subagent-driven-development/scripts/task-brief` 的 awk 【只抽 `### Task N` 那一段】；
+      - 其 SKILL.md dispatch 契约白纸黑字：brief 是 "the single source of requirements"，
+        且 "Exact values … appear **only in the brief**"，五项必含里【没有 Global Constraints】；
+      - 而 `writing-plans` 的模版却写着 "Every task's requirements **implicitly** include
+        this section" —— **这个 implicitly 在 subagent-dev 的执行路径上是假的**。
+
+    ⇒ 「把 design 的领域约束逐字写进 Global Constraints」曾是一条【悬空的 MUST】：
+       写进去了，implementer 一个字都看不到（同 07 附录 A22 那类病 —— MUST 无承载）。
+
+    ⚠️ 这条断口在 superpowers 侧，我们改不了；只能让 plan 把约束【也】写进 Task 段。
+       升级 superpowers 后若 task-brief 改成抽全文，本测试可以放宽 —— 但【先去读它的源码再放宽】。
+    """
+    w = WORKFLOW.read_text(encoding="utf-8")
+    assert "每个 Task 段内复述" in w
+    assert "task-brief" in w and "不进 brief" in w
+
+
+def test_dispatch_sites_carry_the_principles():
+    """两条实现管线的 dispatch 点，都 MUST 点名「原文携带三条通则」。
+
+    子代理 fresh context —— 看不见 CLAUDE.md，也看不见 SKILL.md。
+    通则块自带传播纪律，但【声明在通则里】拦不住【dispatch 那一行忘了带】——
+    所以每个 dispatch 站点上都要点名（同 spec-review / code-review 的 fan-out）。
+    """
+    w = WORKFLOW.read_text(encoding="utf-8")
+    assert "dispatch prompt MUST 原文携带三条通则" in w        # superpowers 路径（步骤 7）
+
+    impl = (Path(__file__).resolve().parents[2] / "sdflow-implement" / "SKILL.md") \
+        .read_text(encoding="utf-8")
+    assert "「三条通则」区块全文" in impl                        # tickets 路径
