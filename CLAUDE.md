@@ -76,6 +76,12 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
   软链至运行 checkout 的 `sdflow-init/assets/workflow/`）。勿把规则文件重新拷回仓内（会形成 pin 遮蔽全局）。
 - **`openspec/{changes,specs,issues,config.yaml}`** — 本仓库自身的 OpenSpec 变更管理，
   流程走 propose → review → done → archive，强制规范见文末托管区块。
+- **`openspec/rules/`** — **项目级写作/工程规则的单一源**（区别于 `openspec/workflow/`：那是流程规则 bundle，
+  会推给下游项目；`rules/` 是本仓自己的）。引用时只写编号 + 路径，**MUST NOT 复制规则文本**。
+  - **`doc-authoring.md`（DOC-1）** — **正文即最终态，演进史进附录**。一切设计/决策类文档适用
+    （`docs/sad/*`、change 四件套、`adr/*`、`SKILL.md`…）。判据：**「只有读过上一版的人才需要的句子，不属于正文」**。
+    代价实证：`07` 的正文塞满考古层 ⇒ **四轮评审 18 镜全在废弃分支里做优化，无一看见起手式错了**——
+    考古层给了错误方向一层虚假的正当性。
 - **`openspec/roadmaps/{name}/`** — 项目级 roadmap 文档包（长期真相源，`sdflow-roadmap` 铺设）：
   design/roadmap/task-log 三件套 + 可选 memo，直写落盘、不经 `plan-{topic}` change 壳；比单次 change
   更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。roadmap 类 wayfinding 落
