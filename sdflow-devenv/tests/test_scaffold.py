@@ -334,3 +334,41 @@ def test_scaffold_does_not_parse_build_files():
         elif isinstance(n, ast.ImportFrom) and n.module:
             imports.add(n.module.split(".")[0])
     assert "re" not in imports, "scaffold MUST NOT import re —— 那是通往手搓解析器的路（A21）"
+
+
+# ---------- environments.md：模版骨架（人写区，零机械渲染）----------
+
+def test_init_seeds_environments_skeleton(repo, capsys):
+    """environments.md 不是「skill 给个初稿」—— skill 铺【十槽骨架】，然后逐槽问出来。"""
+    run("init", "--root", repo)
+    md = (repo / F.ENV_MD).read_text(encoding="utf-8")
+    assert md.count(S.PENDING) == 10          # 十槽全待定
+    for _, title in F.ENV_SLOTS:
+        assert title in md
+    assert "10 槽全待定" in capsys.readouterr().out
+
+
+def test_environments_test_section_is_a_pointer_only(repo):
+    """切线 = 测试 vs 非测试。MUST NOT 在 environments.md 里复述测试命令（双写必漂移）。"""
+    run("init", "--root", repo)
+    md = (repo / F.ENV_MD).read_text(encoding="utf-8")
+    body = md.split("## 2. 测试")[1].split("## 3.")[0]
+    assert "testing-strategy.md" in body
+    assert S.PENDING not in body               # test 节没有槽 —— 它只是一行指针
+
+
+def test_init_never_overwrites_existing_environments(repo):
+    """铺完就归人 own —— skill MUST NOT 覆盖它（它是纯人写，零机械渲染）。"""
+    (repo / "openspec" / "architecture").mkdir(parents=True)
+    (repo / F.ENV_MD).write_text("# 我自己写的\n\n别动我\n", encoding="utf-8")
+    run("init", "--root", repo)
+    assert "别动我" in (repo / F.ENV_MD).read_text(encoding="utf-8")
+
+
+def test_render_never_touches_environments(repo):
+    """render 只管 testing-strategy.md。environments.md 零机械渲染。"""
+    run("init", "--root", repo)
+    (repo / F.ENV_MD).write_text("# 人填过的\n\n常见坑：AirPlay 占 5000 端口\n",
+                                 encoding="utf-8")
+    run("render", "--root", repo)
+    assert "AirPlay" in (repo / F.ENV_MD).read_text(encoding="utf-8")

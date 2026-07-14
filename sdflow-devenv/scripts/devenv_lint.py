@@ -113,7 +113,27 @@ def unverified_lanes(data):
             if isinstance(l, dict) and l.get("status") != "verified"]
 
 
-def report(data, sad_contracts=()):
+ENV_MD = "openspec/architecture/environments.md"
+
+
+def env_pending(root):
+    """environments.md 里还有几个 `⚠️ 待定`。
+
+    【为什么这不是「解析 Markdown」】（基准 5：有界可手写 / 无界禁手搓）：
+    我们【数一个固定字符串出现了几次】—— 不切章节、不判层级、不认结构。
+    这个「语法面」只有一个元素（PENDING 这个字面量），穷举得完 ⇒ 合法。
+
+    ⚠️ MUST NOT 演化成「找到 §1.5 这一节、切出它的内容、判断非空」——
+    那就是又一个手搓 Markdown 解析器（07 A20），会在 fence / 嵌套 / 变体标题上罢工。
+    要更细的粒度，就问人，别猜。
+    """
+    p = Path(root) / ENV_MD
+    if not p.exists():
+        return None                       # 没铺过 ⇒ 不报（不是「没填」，是「还没到那一步」）
+    return p.read_text(encoding="utf-8").count(S.PENDING)
+
+
+def report(data, sad_contracts=(), root=None):
     """人读报告。返回字符串。【永远不 raise，永远不拦】。"""
     lines = []
 
@@ -122,6 +142,16 @@ def report(data, sad_contracts=()):
         lines += [b, ""]
     else:
         lines += ["✅ 三层框架六槽已答满（含「不适用 + 后果」）。", ""]
+
+    if root is not None:
+        n = env_pending(root)
+        if n:
+            lines += [f"⚠️ environments.md 还有 {n}/10 槽待定 —— "
+                      f"按 references/environments-template.md 逐槽问出来。",
+                      "   （最贵的三槽：常见坑 · 回滚 · 构建副产物 —— "
+                      "模型答不出来，只能问人，所以最容易被静默略过）", ""]
+        elif n == 0:
+            lines += ["✅ environments.md 十槽已答满。", ""]
 
     lanes = data.get("lanes") or []
     if lanes:
@@ -183,7 +213,7 @@ def main(argv=None):
             print(f"  - {e}", file=sys.stderr)
         return 2
 
-    print(report(data))
+    print(report(data, root=args.root))
     return 0   # ← 永远 0。有 15 格待定也是 0。
 
 

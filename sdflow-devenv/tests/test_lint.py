@@ -170,3 +170,44 @@ def test_report_marks_human_attested():
 def test_report_never_raises_on_weird_data():
     """报告是给人看的，MUST NOT 因为数据奇怪就崩 —— 崩了人就什么都看不到。"""
     L.report({"layers": {}, "lanes": [None, "x", {}]})
+
+
+# ---------- environments.md 的待定计数 ----------
+
+def test_env_pending_counted_but_not_blocking(tmp_path, capsys):
+    """environments.md 的十槽也进代价横幅 —— 但同样【只报不拦】。"""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import devenv_scaffold as F
+    (tmp_path / "openspec").mkdir()
+    F.main(["init", "--root", str(tmp_path)])
+    assert L.env_pending(tmp_path) == 10
+    assert L.main(["--root", str(tmp_path)]) == 0        # ← 不拦
+    out = capsys.readouterr().out
+    assert "environments.md 还有 10/10 槽待定" in out
+    assert "常见坑 · 回滚 · 构建副产物" in out             # 点名最贵的三槽
+
+
+def test_env_pending_none_when_not_seeded(tmp_path):
+    """没铺过 ⇒ 不报（不是「没填」，是「还没到那一步」）。"""
+    assert L.env_pending(tmp_path) is None
+
+
+def test_env_pending_counts_only_a_fixed_string(tmp_path):
+    """⭐ 它【数一个固定字符串】，不切章节、不判结构（基准 5：语法面只有一个元素）。
+
+    MUST NOT 演化成「找到 §1.5 这一节、切出内容、判断非空」——
+    那是又一个手搓 Markdown 解析器（07 A20），会在 fence / 嵌套 / 变体标题上罢工。
+    """
+    p = tmp_path / L.ENV_MD
+    p.parent.mkdir(parents=True)
+    # 故意用最刁钻的 markdown：fence 里、嵌套列表里、奇怪标题下
+    p.write_text(f"""# X
+```
+{S.PENDING}
+```
+- 嵌套
+  - {S.PENDING}
+##### 六级标题
+{S.PENDING}
+""", encoding="utf-8")
+    assert L.env_pending(tmp_path) == 3     # 数得准，且不可能罢工

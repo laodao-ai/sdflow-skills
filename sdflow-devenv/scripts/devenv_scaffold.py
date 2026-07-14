@@ -62,6 +62,87 @@ def _log(root, line):
         f.write(f"- `{_now()}` {line}\n")
 
 
+# ---------- environments.md：模版骨架（人写区，零机械渲染）----------
+#
+# 【为什么它没有 JSON 载体】（07 §2.1 · 附录 A27）：
+# 这十槽是【长自由文本】（「新人最容易卡在哪一步」「回滚怎么做」「有没有退不回去的东西」）。
+# 06 的接地实测：17 个槽里 SAD 真投影只有 2 个，其余是纯人写 —— 而【纯人写区恰恰是全篇
+# 最高价值的部分】。把它强行 JSON 化，只会让人写得更烂。
+#
+# 【但「有模版 + 逐槽问出口」和「有 JSON 载体」是两件事】：
+# skill 铺骨架（下面这份）+ 按 references/environments-template.md 逐槽问 + 人填。
+# 它是【直写 Markdown】，没有 DO-NOT-EDIT 区块 —— 铺完就归人 own，skill 不再覆盖。
+
+ENV_SLOTS = [
+    ("1.1", "前置工具链"),
+    ("1.2", "本地依赖服务"),
+    ("1.3", "构建 + 本地运行"),
+    ("1.4", "构建副产物"),
+    ("1.5", "常见坑"),
+    ("3.1", "目标平台 + 依赖版本"),
+    ("3.2", "配置项清单"),
+    ("3.3", "发布流程"),
+    ("3.4", "回滚"),
+    ("3.5", "架构决策指针"),
+]
+
+ENV_SKELETON = f"""# 环境：搭建与发布
+
+> 真相源。**测试怎么跑 → [`testing-strategy.md`](./testing-strategy.md)**（本文档不复述）。
+>
+> 本文档由 `/sdflow-devenv` 铺骨架、**按 `references/environments-template.md` 逐槽问出来**。
+> **此后归你 own** —— skill 不会覆盖它。
+
+## 1. dev —— 怎么在本机跑起来
+
+### 1.1 前置工具链
+{S.PENDING}
+
+### 1.2 本地依赖服务
+{S.PENDING}
+
+### 1.3 构建 + 本地运行
+{S.PENDING}
+
+### 1.4 构建副产物
+{S.PENDING}
+
+### 1.5 ⭐ 常见坑
+{S.PENDING}
+
+## 2. 测试
+
+测试策略与执行方式 → [`testing-strategy.md`](./testing-strategy.md)
+
+## 3. deploy —— 怎么发出去
+
+### 3.1 目标平台 + 依赖版本
+{S.PENDING}
+
+### 3.2 配置项清单
+{S.PENDING}
+
+### 3.3 发布流程
+{S.PENDING}
+
+### 3.4 ⭐ 回滚
+{S.PENDING}
+
+### 3.5 架构决策指针
+{S.PENDING}
+"""
+
+
+def _seed_environments(root):
+    """铺 environments.md 骨架。已存在 ⇒ 【不碰】（它归人 own）。"""
+    p = Path(root) / ENV_MD
+    if p.exists():
+        return 0
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(ENV_SKELETON, encoding="utf-8")
+    return len(ENV_SLOTS)
+
+
 # ---------- init：preflight + 模式分流 ----------
 
 def cmd_init(args):
@@ -89,9 +170,12 @@ def cmd_init(args):
         return 0
 
     S.save(root, S.blank())
+    n_env = _seed_environments(root)
     _log(root, f"起手：mode=new · sad={'ok' if sad else 'missing'}")
     print(f"mode=new · sad={'ok' if sad else 'missing'}")
     print(f"已建 {S.DEVENV_REL}（三层框架，十五格全待定 —— 这是合法起点）")
+    if n_env:
+        print(f"已铺 {ENV_MD}（{n_env} 槽全待定 —— 按 references/environments-template.md 逐槽问）")
     return 0
 
 
