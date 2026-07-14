@@ -180,3 +180,58 @@ def test_facts_status_invariant(tmp_path):
     text = make_sad(status="validated", facts=partial).replace("contract[draft]", "contract[validated]")
     r = lint(tmp_path, text)
     assert r.returncode == 1 and "facts-status-invariant" in r.stdout
+
+
+# ---------- fence 内的 contract 行（devenv 试点在真 SAD 上抓到的假绿）----------
+
+FENCED_SAD = """---
+sad_schema: 1
+sad_status: draft
+facts: {positioning: answered, external_systems: answered, hard_constraints: answered}
+assumptions_open: 0
+---
+# X
+
+## 5. 子系统分解与 contract
+
+### 5.1 连接与传输
+
+- **对外 contract**：
+```
+- contract[frozen] Engine 接口：语法=Connect/Subscribe；语义=非阻塞
+- contract[draft] SSH 隧道 DialFunc：语法=NewDialer→DialFunc
+```
+
+## 附录：假设清单
+散文里提到 contract[frozen] 只是类比，MUST NOT 被扫进来（§5 限定挡住它）。
+"""
+
+
+def test_fenced_contract_lines_are_scanned():
+    """⭐ 回归：contract 行写在 ``` fence 内时，MUST 仍被扫到。
+
+    【这个假绿怎么来的】（devenv 试点在 mqtt-console 的真 SAD 上抓到）：
+      · `sad-template.md` 明确要求 contract 行写在 fence 内（「contract 行格式示例（fence 内）」）
+      · 而 `_section5_body_lines` 原走 `body_lines`（DEC-2，**剥 fence**）
+      · ⇒ 真实 SAD 上抽出 **0 条**，`_check_contract_invariants` **从来没触发过**
+      · 而测试是绿的 —— 因为 `conftest.py` 的 fixture 恰好把 contract 行写在 fence **外**
+
+    **producer 说 fence 内，parser 剥 fence，fixture 站在 parser 这边 ⇒ 三方各说各话。**
+    修复后在 mqtt-console 的真 SAD 上当场抓到 3 条真违规（status=skeleton-ready 但 contract[validated]）。
+    """
+    names = S.scan_contract_names(FENCED_SAD)
+    assert [n for _, n in names] == ["Engine 接口", "SSH 隧道 DialFunc"]
+
+    tags = [t for _, t in S.scan_contract_tags(FENCED_SAD)]
+    assert tags == ["frozen", "draft"]        # 附录里那条类比提及【没有】被扫进来（§5 限定挡住）
+
+
+def test_fenced_contract_invariant_actually_fires():
+    """⭐ 不变式校验对 fence 内的 contract MUST 真的生效（原本恒不触发）。
+
+    sad_status=draft ⇒ contract ∈ {planned, draft}；上面 fixture 里有 contract[frozen] ⇒ 必须红。
+    """
+    violations = []
+    import sad_lint; sad_lint._check_contract_invariants(FENCED_SAD, "draft", violations)
+    assert any("frozen" in msg for _, msg in violations), \
+        "fence 内的 contract[frozen] 没被抓到 —— 不变式校验又变回了空转"

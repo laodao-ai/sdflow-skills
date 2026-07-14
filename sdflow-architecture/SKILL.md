@@ -5,7 +5,8 @@ description: >
   与 contract 定义 → 挂产物拍板 → 冷走查 + 人门 → skeleton-ready 交棒骨架 change。本 skill 管**空间轴**
   （一个系统当下怎么切成子系统、子系统间 contract 怎么定）。触发词面：「设计架构 / 划分子系统 / 定 contract /
   做一份 SAD / 系统架构设计 / 这个系统该怎么拆模块 / 架构评审」。**不触发**：单次 change 的 spec/design（走
-  /opsx:ff）、纯代码实现、bug 修复。**时间轴规划（分阶段 roadmap / 阶段排期 / 里程碑）→ 用 /sdflow-roadmap**
+  /opsx:ff）、纯代码实现、bug 修复。**过程轴（搭开发/测试环境 · 定测试策略 · 配 CI）→ 用 /sdflow-devenv**（本 skill 只定空间结构，不建环境）。
+  **时间轴规划（分阶段 roadmap / 阶段排期 / 里程碑）→ 用 /sdflow-roadmap**
   （本 skill 不排期，只定一个系统当下的空间结构）。**前置条件**：消费仓需已 `sdflow-init`——无 `openspec/`
   布局时首触即 preflight fail-closed 并指引先跑 /sdflow-init。Trigger with /sdflow-architecture。
 ---
@@ -421,10 +422,18 @@ SAD**（environments/testing-strategy 是相邻文档，写进 SAD 违反 `quali
 是上游**指路者**：给锚、不成文（代写只产出半空骨架 + 双写发散；四层归属见边界总则与 `docs/sad/04-ecosystem-boundaries.md`）。
 
 ```
-过程轴文档待建（不代写，各自成文·引用 SAD 不复述）：
-· environments.md（dev/test/deploy 操作）：工具链锚=SAD §2 约束 · 本地依赖锚=SAD §3 外边界 · 部署锚=SAD §7 · 配置项锚=SAD §8 配置策略
-· testing-strategy.md（测试方法）：方法锚=SAD §1 可测试性 + §8 测试策略横切 · 集成测试点=SAD §5 contract（骨架 DoD 穿过）
-模板参考 docs/sad/environments-template-draft.md；README/CLAUDE.md 概要+引用不复述
+过程轴文档待建 —— ⭐ 跑 `/sdflow-devenv`（它 owns 这一层，不要手写）：
+
+  /sdflow-devenv
+
+它会：定测试策略（单元/集成/e2e 三层，一层不留白）→ 落脚手架 → 尽可能真跑一遍确认
+     → 出 testing-strategy.md（机械渲染）+ environments.md（逐槽问出来）+ 入口索引
+
+可从本 SAD 投影的锚（devenv 会读，你不用手抄）：
+· environments.md：工具链锚=SAD §2 约束 · 本地依赖锚=SAD §3 外边界 · 部署锚=SAD §7 · 配置项锚=SAD §8
+· testing-strategy.md：方法锚=SAD §1 可测试性 + §8 测试策略横切
+· ⭐ 泳道覆盖对账：devenv_lint 会读 SAD §5 的 contract 集合，跟泳道 covers 做差集 —— 
+  所以 §5 的 contract 名写清楚，下游才对得上账
 ```
 
 ---

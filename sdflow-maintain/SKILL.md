@@ -92,6 +92,23 @@ metadata:
    得四类分节只读报告：**新增未索引** / **已删未清理**（specs/rules ↔ INDEX 托管块外双向 set-diff，
    链接路径 join）/ **过时引用**（CLAUDE.md 引用已删 spec/rule）/ **陈旧遮蔽**（workflow bundle 残留规则本体）。
 
+   **外加第五节：devenv 健康度**（若消费仓有 `openspec/architecture/.devenv.json`）——
+   脚本自动调 `devenv_lint`，把结果**原样并入**报告（代价横幅 · 待定槽 · 未 verified 泳道及其
+   `blocked_by` · 敷衍的 blocked_by · SAD contract 差集）。
+
+   > **🔴 它是提醒，不是门禁**〔`adr/0021`〕：`devenv_lint` 退出码**永远是 0**（除非数据坏了），
+   > 且**不计入**「有无差异」的判定。**MUST NOT** 把它转述成「通过 / 不通过」——
+   > 那是把「代价可见」做成了「机械拦截」，正是 devenv 整个设计要杀的东西。
+   >
+   > **🔴 结构通过 ≠ 内容已审**：**MUST NOT** 把 `verified` 二次简化成「✓ 已通过」。
+   > 它的语义是 **`verified-at <sha>`——一次历史执行的记录，不是当前状态的绿灯**；
+   > 业务代码一改，那个绿灯就在说谎。**转述时 SHALL 原样带上 commit 锚与日期**（脚本已原样透传，别改）。
+   >
+   > **为什么这一节必须存在（dogfood 自指坑）**：`devenv_lint` **原本没有任何触发点**——
+   > 而 devenv 的渐进 DoD 允许泳道停在 `scaffolded`、槽停在 `⚠️ 待定`，防止它烂成僵尸文档的
+   > **唯一措施就是「把代价摆到人眼前」**。**若无人调用该 lint，该措施为空。**
+   > 「不强制完成」+「不检查未完成」= 名存实亡，**两者只能选一个**。
+
    脚本纯读、fail-closed（坏输入非零退出 + stderr 明示，绝不半信半疑输出「一致」），零写文件。
    set-diff 判据（RULE_MARKERS / opsx-init:rules 托管块 token）canonical 见 `sdflow-init/scripts/init.py`，
    maintain_scan 保自包含副本经一致性守卫 pytest（`tests/test_marker_consistency.py`）机验同步。

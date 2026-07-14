@@ -114,6 +114,38 @@ def unverified_lanes(data):
 
 
 ENV_MD = "openspec/architecture/environments.md"
+SAD_MD = "openspec/architecture/sad.md"
+
+
+def sad_contracts(root):
+    """SAD §5 声明了哪些 contract。→ [name…]；无 SAD ⇒ None（≠ 空集，见下）。
+
+    【单一源】：contract 行格式的 owner 是 `sdflow-architecture`（它是 SAD 的 producer）。
+    这里【import 它的 scan_contract_names】，MUST NOT 在本文件另抄一份正则 —— 抄一份就是
+    一个新的漂移面：它改了行格式，我们静默算出空集，而空集长得跟「全都覆盖了」一模一样。
+
+    【None vs []】：
+      None = 【算不了】（无 SAD / 装不到 sad_schema）⇒ 调用方 MUST 响亮说「对账失效」
+      []   = 【算过了，SAD 里就没有 contract】
+    把这两者混成一个空列表，就是「佯装算过」——正是 spec §无 SAD 时响亮降级 要防的。
+    """
+    p = Path(root) / SAD_MD
+    if not p.exists():
+        return None
+    sib = Path(__file__).resolve().parents[2] / "sdflow-architecture" / "scripts"
+    if str(sib) not in sys.path:
+        sys.path.insert(0, str(sib))
+    try:
+        import sad_schema
+    except ImportError:
+        return None                      # 未装 sdflow-architecture ⇒ 算不了，不佯装
+    text = p.read_text(encoding="utf-8")
+    seen, out = set(), []
+    for _, name in sad_schema.scan_contract_names(text):
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
 
 
 def env_pending(root):
@@ -133,7 +165,7 @@ def env_pending(root):
     return p.read_text(encoding="utf-8").count(S.PENDING)
 
 
-def report(data, sad_contracts=(), root=None):
+def report(data, sad=(), root=None):
     """人读报告。返回字符串。【永远不 raise，永远不拦】。"""
     lines = []
 
@@ -183,14 +215,47 @@ def report(data, sad_contracts=(), root=None):
         lines += [f"   {i}: {b!r}" for i, b in lazy]
         lines.append("")
 
-    unc = uncovered_contracts(data, sad_contracts)
-    if unc:
-        lines.append("⚠️ SAD 里这些 contract 还没有泳道覆盖 —— 要建一条，还是明确不覆盖（记后果）？")
-        lines += [f"   {c}" for c in unc]
-        lines.append("")
+    # SAD 差集。None = 【算不了】（无 SAD / 未装 sdflow-architecture）—— MUST 响亮说，
+    # MUST NOT 静默当成「没有未覆盖的 contract」（那两者渲染出来长得一模一样）。
+    if sad is None:
+        lines += ["⚠️ **泳道覆盖对账失效** —— 读不到 SAD（`openspec/architecture/sad.md` 不存在，"
+                  "或未装 `sdflow-architecture`）。",
+                  "   测试策略只能靠读码猜，**可能漏掉边界**。建议先跑 `/sdflow-architecture`。", ""]
+    else:
+        unc = uncovered_contracts(data, sad)
+        if unc:
+            lines.append("⚠️ SAD 里这些 contract 还没有泳道覆盖 —— 要建一条，还是明确不覆盖（记后果）？")
+            lines += [f"   {c}" for c in unc]
+            lines.append("")
+        elif sad:
+            lines += [f"✅ SAD 的 {len(sad)} 条 contract 都有泳道覆盖（`covers` 声明；"
+                      f"**真穿过了没有** 要靠冷审的覆盖镜问）。", ""]
 
     lines.append("（本报告只呈现，不拦截 —— 见 adr/0021）")
     return "\n".join(lines)
+
+
+def render(root):
+    """load + validate + report ——【外部调用方的唯一入口】。→ (ok: bool, text: str)
+
+    【为什么要有这个函数】：`sdflow-maintain` 要把 lint 的结果【原样并入】它的扫描报告
+    （spec `maintain-scan`）。让它自己去 load+validate+report，就是把这三步复制一份 ⇒ 必漂。
+    ∴ 这里出一个函数，`main()` 和 maintain 【都调它】。
+
+    ok=False ⇒ text 是错误说明（坏 JSON / schema 不合法）——那是唯一 fail-closed 的情形。
+    """
+    try:
+        data = S.load(root)
+    except (S.SchemaInvalid, S.SchemaTooNew) as exc:
+        # 【这个才 fail-closed】：坏 JSON 是「人看不见的」——
+        # 它渲染不出来，用户只会看到一份空白文档，还以为是 skill 没跑。
+        return False, f"{exc}"
+
+    errs = S.validate(data)
+    if errs:
+        return False, ".devenv.json 不合法：\n" + "\n".join(f"  - {e}" for e in errs)
+
+    return True, report(data, sad=sad_contracts(root), root=root)
 
 
 def main(argv=None):
@@ -198,22 +263,12 @@ def main(argv=None):
     ap.add_argument("--root", required=True)
     args = ap.parse_args(argv)
 
-    try:
-        data = S.load(args.root)
-    except (S.SchemaInvalid, S.SchemaTooNew) as exc:
-        # 【这个才 fail-closed】：坏 JSON 是「人看不见的」——
-        # 它渲染不出来，用户只会看到一份空白文档，还以为是 skill 没跑。
-        print(f"[devenv_lint] FAIL: {exc}", file=sys.stderr)
+    ok, text = render(args.root)
+    if not ok:
+        print(f"[devenv_lint] FAIL: {text}", file=sys.stderr)
         return 2
 
-    errs = S.validate(data)
-    if errs:
-        print("[devenv_lint] FAIL: .devenv.json 不合法：", file=sys.stderr)
-        for e in errs:
-            print(f"  - {e}", file=sys.stderr)
-        return 2
-
-    print(report(data, root=args.root))
+    print(text)
     return 0   # ← 永远 0。有 15 格待定也是 0。
 
 

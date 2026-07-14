@@ -469,3 +469,120 @@ def test_claude_dotgithub_not_pruned(tmp_path):
     assert "过时引用" in r
     section = r.split("过时引用")[1].split("陈旧遮蔽")[0]
     assert "gone" in section and ".github" in section
+
+
+# ---------- devenv 健康度扫描（spec: maintain-scan —— 6 个 Scenario 逐条）----------
+#
+# 【为什么这一层是 load-bearing】：devenv_lint 【原本没有任何触发点】。
+# 而 devenv 的渐进 DoD 允许泳道停在 scaffolded、槽停在「⚠️ 待定」——
+# 防止它烂成僵尸文档的唯一措施就是「把代价摆到人眼前」（adr/0021）。
+# **若无人调用该 lint，该措施为空。**「不强制完成」+「不检查未完成」= 名存实亡。
+
+import json as _json
+
+
+def _devenv_repo(tmp_path, data=None):
+    """复用 make_repo 造最小一致仓（无差异），再铺 .devenv.json。
+
+    刻意用「无差异」的仓：这样报告里出现「一致，无差异」，
+    就能断言 devenv 的待定【没有】把 maintain 判成有差异（它是提醒，不是门禁）。
+    """
+    make_repo(tmp_path, specs=(), rules=[], index_body="# INDEX\n")
+    arch = tmp_path / "openspec" / "architecture"
+    arch.mkdir(parents=True, exist_ok=True)
+    if data is not None:
+        (arch / ".devenv.json").write_text(_json.dumps(data, ensure_ascii=False),
+                                           encoding="utf-8")
+    return tmp_path
+
+
+def _blank_devenv():
+    import sys as _s
+    from pathlib import Path as _P
+    _s.path.insert(0, str(_P(__file__).resolve().parents[2] / "sdflow-devenv" / "scripts"))
+    import devenv_schema
+    return devenv_schema.blank()
+
+
+def test_scenario_no_devenv_json_is_skipped(tmp_path):
+    """Scenario: 无 .devenv.json 时跳过 —— 不报错。"""
+    _devenv_repo(tmp_path, data=None)
+    assert ms.scan_devenv(str(tmp_path)) == ("absent", "")
+    assert "devenv 健康度" not in ms.run_scan(str(tmp_path))
+
+
+def test_scenario_cost_banner_passed_through_verbatim(tmp_path):
+    """Scenario: 代价横幅原样透传（12/15 待定 → 报告里就是那句话）。"""
+    d = _blank_devenv()
+    for slot in ("how", "convention", "process"):
+        d["layers"]["unit"][slot] = "已答"
+    _devenv_repo(tmp_path, d)
+    r = ms.run_scan(str(tmp_path))
+    assert "⚠️ 本框架 12/15 格待定，尚不构成一份可用的测试策略" in r
+
+
+def test_scenario_it_is_a_reminder_not_a_gate(tmp_path):
+    """⭐ Scenario: 它是提醒不是门禁 —— 十五格全待定，maintain 仍不失败。
+
+    devenv_lint 退出码永远是 0。把它渲染成「通过/不通过」，就是把「代价可见」
+    做成了「机械拦截」——正是 devenv 整个设计要杀的东西（adr/0021）。
+    """
+    _devenv_repo(tmp_path, _blank_devenv())
+    r = ms.run_scan(str(tmp_path))
+    assert "15/15 格待定" in r
+    assert "一致，无差异" in r          # ← devenv 的待定【没有】把 maintain 判成有差异
+    assert "提醒，非门禁" in r
+
+
+def test_scenario_unverified_lanes_listed_one_by_one(tmp_path):
+    """Scenario: 逐条报出未 verified 泳道及其 blocked_by —— MUST NOT 只给计数。"""
+    d = _blank_devenv()
+    d["lanes"] = [
+        {"id": "mqtt-real", "layer": "integration", "status": "scaffolded",
+         "blocked_by": "本机无 mosquitto（brew install mosquitto 后 continue）",
+         "verification": {"method": "make integration", "executor": "script"},
+         "source": "4 个 realbroker tag 文件", "deps": []},
+        {"id": "pkg-smoke", "layer": "e2e", "status": "scaffolded",
+         "blocked_by": "打包冒烟脚本未建",
+         "verification": {"method": "wails build", "executor": "human"},
+         "source": "待建", "deps": []},
+    ]
+    d["layers"]["integration"]["lane_ids"] = ["mqtt-real"]
+    d["layers"]["e2e"]["lane_ids"] = ["pkg-smoke"]
+    _devenv_repo(tmp_path, d)
+    r = ms.run_scan(str(tmp_path))
+    assert "mqtt-real" in r and "本机无 mosquitto" in r      # 逐条，带 blocked_by
+    assert "pkg-smoke" in r and "打包冒烟脚本未建" in r
+
+
+def test_scenario_verified_keeps_its_commit_anchor(tmp_path):
+    """⭐ Scenario: verified MUST NOT 渲染成无条件的绿 —— 原样带 commit 锚与日期。
+
+    `verified` 的语义是 `verified-at <sha>`：**一次历史执行的记录，不是当前状态的绿灯**。
+    业务代码一改，那个绿灯就在说谎。∴ maintain 【原样透传】lint 的文本，不重新渲染
+    （重渲染必然丢锚）。
+    """
+    d = _blank_devenv()
+    d["lanes"] = [{
+        "id": "go-hermetic", "layer": "unit", "status": "verified",
+        "verification": {"method": "go test ./...", "executor": "script",
+                         "evidence": {"at_commit": "abc123f" + "0" * 33,
+                                      "at_time": "2026-07-14T10:23:00Z",
+                                      "exit": 0, "attested_by": "script"}},
+        "source": "46 个 _test.go", "deps": []}]
+    d["layers"]["unit"]["lane_ids"] = ["go-hermetic"]
+    _devenv_repo(tmp_path, d)
+    r = ms.run_scan(str(tmp_path))
+    assert "abc123f" in r                     # commit 锚还在
+    assert "2026-07-14" in r                  # 日期还在
+    assert "✓ 已通过" not in r                 # 没有被二次简化成绿灯
+
+
+def test_scenario_bad_data_reported_not_swallowed(tmp_path):
+    """坏 .devenv.json ⇒ 报出来（lint 的唯一 fail-closed），但 maintain 本身不崩。"""
+    _devenv_repo(tmp_path, data=None)
+    (tmp_path / "openspec" / "architecture" / ".devenv.json").write_text(
+        "{not json", encoding="utf-8")
+    st, _ = ms.scan_devenv(str(tmp_path))
+    assert st == "bad"
+    assert "数据坏了" in ms.run_scan(str(tmp_path))

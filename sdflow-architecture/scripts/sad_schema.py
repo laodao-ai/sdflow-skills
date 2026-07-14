@@ -264,9 +264,32 @@ def duplicate_anchors(text):
 
 
 def _section5_body_lines(text):
-    """第 5 节（CONTRACT_SECTION）span 内的 (lineno, line)（fence-aware）。"""
-    return [(ln, line) for h, b in _section_spans(text) if h == CONTRACT_SECTION
-            for ln, line in b]
+    """第 5 节（CONTRACT_SECTION）span 内的 (lineno, line) —— 🔴 【含 fence 内的行】。
+
+    【为什么 contract 扫描 MUST NOT 剥 fence】（devenv 试点在真 SAD 上抓到的假绿）：
+    `sad-template.md` 明确要求 contract 行写在 fence 内（「contract 行格式示例（fence 内）」），
+    而真实 SAD 也确实这么写（mqtt-console：44 条 contract 全在 fence 里）。
+    原实现走 `body_lines`（DEC-2，剥 fence）⇒ **在任何真实 SAD 上都抽出 0 条** ⇒
+    `_check_contract_invariants` 从来没触发过，`devenv_lint` 的 contract 差集恒空。
+
+    **测试当时是绿的** —— 因为 `tests/conftest.py` 的 fixture 恰好把 contract 行写在 fence 外。
+    **producer 说 fence 内，parser 剥 fence，fixture 站在 parser 这边 ⇒ 三方各说各话的假绿。**
+
+    【为什么不必担心误伤】：A6② 的顾虑是「全文扫描会误伤附录/散文里的类比提及」——
+    那由 **§5 限定** 挡住（附录不在 §5 的 span 里），**不是**由剥 fence 挡住的。
+    §5 之内的 fence，本来就是 contract 该待的地方。
+
+    ⚠️ 其余一切扫描仍走 `body_lines`（剥 fence）—— 本函数是 contract 专用的例外，别扩大。
+    """
+    lines = text.splitlines()
+    out, in_span = [], False
+    for i, line in enumerate(lines, 1):
+        if line.startswith("## "):
+            in_span = (line.strip() == CONTRACT_SECTION)
+            continue
+        if in_span:
+            out.append((i, line))
+    return out
 
 
 def scan_contract_tags(text):
@@ -275,6 +298,32 @@ def scan_contract_tags(text):
     out = []
     for ln, line in _section5_body_lines(text):
         out += [(ln, m.group(1)) for m in CONTRACT_RE.finditer(line)]
+    return out
+
+
+CONTRACT_NAME_RE = re.compile(r"contract\[[^\]]*\]\s*([^：:|\n]+)")
+
+
+def scan_contract_names(text):
+    """只扫第 5 节 span 内的 contract 【名字】。返回 [(lineno, name)]。
+
+    行格式（本 skill 是它的 producer，故解析归这里；消费方 MUST NOT 另抄一份正则）：
+
+        - contract[draft] 采集端→上报端接口：语法/语义/质量/所有权/演进
+        | … | contract[draft] 采集端→上报端接口 | … |          ← 表格单元格里也合法
+
+    名字 = `contract[<tag>]` 之后、到 `：` / `:` / `|` / 行尾 为止的那一段（strip）。
+    语法面有界（固定字面前缀 + 三个终止符），穷举得完 ⇒ 可手写〔基准 5〕。
+
+    【谁在消费】：`sdflow-devenv` 的 `devenv_lint` 拿它跟泳道的 `covers` 并集做差集——
+    差集是【拿去问人的，不是拿去拦人的】（那条 contract 还没有泳道覆盖，要建一条吗？）。
+    """
+    out = []
+    for ln, line in _section5_body_lines(text):
+        for m in CONTRACT_NAME_RE.finditer(line):
+            name = m.group(1).strip()
+            if name:
+                out.append((ln, name))
     return out
 
 

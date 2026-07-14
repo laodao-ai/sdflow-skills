@@ -151,7 +151,21 @@ def test_template_contains_all_anchors_verbatim():
         assert anchor in lines, anchor
 
 def test_template_marker_examples_fenced():
-    """模版内 [假设-N]/穿越点/contract[...] 示例必须都在 fence 内——正文实扫零命中（自指安全）。"""
+    """模版里的标记示例 MUST NOT 被实扫命中（自指安全 —— `sad_scaffold init` 会把模版拷成用户的 sad.md）。
+
+    🔴 **两种标记，两种转义机制，别混**：
+
+      `[假设-N]` / 穿越点 → 靠 **fence**（`body_lines` 剥 fence，DEC-2）
+      `contract[...]`     → 靠 **放在 §5 之外**（contract 扫描【含 fence 内的行】）
+
+    **contract 为什么不能靠 fence 转义**（devenv 试点在真 SAD 上抓到的假绿）：
+    `sad-template.md` 曾把 contract 示例放在 §5 的 fence 里，于是真实 SAD 也照抄——
+    **contract 全写进 fence，而 parser 剥 fence ⇒ 扫出 0 条 ⇒ 不变式校验从来没触发过。**
+    （mqtt-console 实证：44 条 contract 全在 fence 里，`sad_lint` 一条都没看见。）
+
+    ⇒ fence 曾同时兼职「示例的转义」和「内容的容器」，两个职责互斥。
+      现在：**内容可以在 fence 里（照扫）；示例靠「不在 §5」来转义。**
+    """
     text = TEMPLATE.read_text(encoding="utf-8")
     inline, rows = S.scan_assumptions(text)
     assert inline == [] and rows == []

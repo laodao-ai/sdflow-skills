@@ -232,3 +232,76 @@ def test_env_pending_counts_only_a_fixed_string(tmp_path):
 {S.PENDING}
 """, encoding="utf-8")
     assert L.env_pending(tmp_path) == 3     # 数得准，且不可能罢工
+
+
+# ---------- SAD contract 差集（G3：曾有函数、有单测，却在【生产路径不可达】）----------
+
+SAD_SAMPLE = """---
+sad_schema: 1
+sad_status: draft
+---
+# X
+
+## 5. 子系统分解与 contract
+
+- contract[draft] 采集端→上报端接口：语法/语义/质量/所有权/演进
+- contract[planned] 上报端→云端接口：语法/所有权
+
+## 附录：假设清单
+这里提到 contract[draft] 只是散文类比，MUST NOT 被抽出来。
+"""
+
+
+def _seed_sad(root, text=SAD_SAMPLE):
+    p = root / L.SAD_MD
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+
+
+def test_sad_contracts_extracted_from_section5_only(tmp_path):
+    """contract 名从 SAD §5 抽出（附录里的类比提及不算）。
+
+    【单一源】：抽取用的是 `sdflow-architecture` 的 `scan_contract_names` ——
+    本文件 MUST NOT 另抄一份正则（抄一份 = 它改了行格式我们静默算出空集，
+    而空集渲染出来跟「全都覆盖了」一模一样）。
+    """
+    _seed_sad(tmp_path)
+    assert L.sad_contracts(tmp_path) == ["采集端→上报端接口", "上报端→云端接口"]
+
+
+def test_no_sad_is_None_not_empty(tmp_path):
+    """⭐ 无 SAD ⇒ None（【算不了】），不是 [] （【算过了，没有】）。
+
+    混成一个空列表就是【佯装算过】—— 而「算不了」和「全覆盖了」渲染出来长得一模一样。
+    """
+    assert L.sad_contracts(tmp_path) is None
+
+
+def test_uncovered_contracts_reach_the_CLI_report(tmp_path, capsys):
+    """⭐⭐ 回归 G3：差集 MUST 出现在 `devenv_lint.py --root` 的【真实输出】里。
+
+    【这个洞是怎么来的】：`uncovered_contracts()` 有实现、有单测、全绿——
+    但 `main()` 调 `report(data, root=...)` 时【不传 sad_contracts】，CLI 也没有 `--sad` 入口
+    ⇒ 生产路径上它【恒空】。而 `references/review-lenses.md` 却写着「机械部分已经算好了」，
+    冷审子代理读到会以为算过了、不去问人。**一个有单测的假绿。**
+
+    ∴ 本测试【走 CLI】，不走函数——单测证明不了可达性。
+    """
+    d = _full()
+    d["lanes"][0]["covers"] = ["采集端→上报端接口"]     # 只覆盖第一条
+    S.save(tmp_path, d)
+    _seed_sad(tmp_path)
+
+    assert L.main(["--root", str(tmp_path)]) == 0        # 只报不拦
+    out = capsys.readouterr().out
+    assert "上报端→云端接口" in out                      # ← 未覆盖的那条，真的印出来了
+    assert "还没有泳道覆盖" in out
+
+
+def test_missing_sad_degrades_loudly_in_the_CLI_report(tmp_path, capsys):
+    """无 SAD ⇒ 报告 MUST 响亮说「对账失效」，MUST NOT 静默当成「全覆盖」。"""
+    S.save(tmp_path, _full())
+    assert L.main(["--root", str(tmp_path)]) == 0        # 仍不拦
+    out = capsys.readouterr().out
+    assert "泳道覆盖对账失效" in out
+    assert "可能漏掉边界" in out

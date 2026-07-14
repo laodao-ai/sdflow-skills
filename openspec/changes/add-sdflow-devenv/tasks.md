@@ -58,24 +58,28 @@
 ## 5. 上下游 skill 改动
 
 - [ ] **`sdflow-architecture`**：description 加过程轴分流句（「建 dev/test 环境 / 定测试策略 → `/sdflow-devenv`」）；交棒话术从「给模板路径」改为**指向下游 skill**（spec: `architecture-design`）
+  > ⏳ **未做** —— 交棒话术未加；`sdflow-devenv` 已可独立触发，不阻塞使用。
 - [ ] **`sdflow-maintain`**：检出 `.devenv.json` → 调 `devenv_lint`，**原样并入报告**（spec: `maintain-scan`）
+  > ⏳ **未做** —— `sdflow-maintain` 尚未检出 `.devenv.json`；`devenv_lint` 可手动跑，不阻塞。
   - **⚠️ 它是 devenv「不强制完成」的另一半**——不强制完成 + 不检查未完成 = 名存实亡
 
 ## 6. 仓级集成
 
-- [ ] `setup.sh` 重跑——`sdflow-devenv/` 现有 `SKILL.md`，装进 `~/.claude/skills/` 与 `~/.codex/skills/`
-- [ ] README「Skills 列表」加 `sdflow-devenv`
-- [ ] `CLAUDE.md` 的「数据类 skill」清单加 `sdflow-devenv`（它有 scripts + tests）
+- [x] `setup.sh` 重跑——`sdflow-devenv/` 现有 `SKILL.md`，装进 `~/.claude/skills/` 与 `~/.codex/skills/`
+- [x] README「Skills 列表」加 `sdflow-devenv`
+- [x] `CLAUDE.md` 的「数据类 skill」清单加 `sdflow-devenv`（它有 scripts + tests）
 
 ## 7. ⭐ 首个真实试点（验收兼路线证伪）
 
-- [ ] **在一个真项目上跑一遍**（候选：`mqtt-console` —— 它是本设计的接地样本，六泳道横跨三运行时）
-- [ ] **验 A-8**：「模型能不能为三层提出**像样的**验证方法」——**这个前提至今零实证**
-- [ ] **验核心承诺**：产出的 `testing-strategy.md` 是否**每层交代清楚、一层不留白**
-- [ ] **验 ⑥ 槽**：「这层看不见什么」写出来的是**套话**，还是**这个项目特有的那句**
+- [x] **在一个真项目上跑一遍**（候选：`mqtt-console` —— 它是本设计的接地样本，六泳道横跨三运行时）
+- [x] **验 A-8**：「模型能不能为三层提出**像样的**验证方法」——**这个前提至今零实证**
+- [x] **验核心承诺**：产出的 `testing-strategy.md` 是否**每层交代清楚、一层不留白**
+- [x] **验 ⑥ 槽**：「这层看不见什么」写出来的是**套话**，还是**这个项目特有的那句**
 - [ ] 试点结论回灌 `references/`（未覆盖的形态 → 补格；证伪的方法 → 记入 `verification-patterns.md`）
+  > ⏳ **未做** —— mqtt-console 试点结论已写进 `docs/sad/07` 附录 C，但未回灌 `references/`。
 
 ## 8. 收尾
 
 - [ ] `/sdflow-code-review`（远程 PR）
-- [ ] `/sdflow-done` —— verify → archive → commit → merge
+  > ⏭ **按用户明示跳过** —— 直接走 `/sdflow-done`（verify 仍为唯一终门）。
+- [x] `/sdflow-done` —— verify → archive → commit → merge

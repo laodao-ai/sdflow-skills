@@ -246,6 +246,49 @@ def _read_index(root):
         raise MaintainScanError(f"INDEX.md 不可读: {e}")
 
 
+# ---------- devenv 健康度（spec: maintain-scan）----------
+#
+# 【为什么这一节必须存在（dogfood 自指坑）】
+# add-sdflow-devenv 把「无门禁——某些检查没有任何自动触发点、全靠人记得跑」列为立项理由之一，
+# 而它的 devenv_lint 【原本自己也没有任何触发点】。
+#
+# 更要命的是：devenv 的渐进 DoD 允许泳道停在 scaffolded、槽停在 `⚠️ 待定`，而防止它烂成
+# 僵尸文档的【唯一措施就是把代价摆到人眼前】（adr/0021）——若无人调用该 lint，该措施为空。
+# **「不强制完成」+「不检查未完成」= 名存实亡，两者只能选一个。**
+# 本节是 devenv 选择「不强制完成」后必须配的那一半。
+
+DEVENV_REL = os.path.join("openspec", "architecture", ".devenv.json")
+
+
+def scan_devenv(root):
+    """→ (状态, 文本)。状态 ∈ {absent, unavailable, bad, ok}
+
+    absent      消费仓无 .devenv.json          ⇒ 跳过（非报错）
+    unavailable 有 .devenv.json 但未装 sdflow-devenv ⇒ 【显式提示】，MUST NOT 静默略过
+    bad         数据坏了（lint 的唯一 fail-closed）
+    ok          text = lint 报告【原样】
+
+    🔴 **原样透传，MUST NOT 重新渲染**：spec 明禁把 lint 结果二次简化成「verified = ✓」式的
+       绿色状态——`verified` 的语义是 `verified-at <sha>`（一次历史执行的记录，不是当前绿灯）。
+       重渲染必然丢掉 commit 锚。所以这里【一个字都不改】地并进报告。
+    """
+    if not os.path.isfile(os.path.join(root, DEVENV_REL)):
+        return "absent", ""
+
+    sib = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       os.pardir, "sdflow-devenv", "scripts")
+    sib = os.path.normpath(sib)
+    if sib not in sys.path:
+        sys.path.insert(0, sib)
+    try:
+        import devenv_lint
+    except ImportError:
+        return "unavailable", ""
+
+    ok, text = devenv_lint.render(root)
+    return ("ok" if ok else "bad"), text
+
+
 def run_scan(root):
     fs = {"spec": scan_fs_specs(root), "rule": scan_fs_rules(root)}
     body, mgr_warns = split_managed_block(_read_index(root))
@@ -254,10 +297,12 @@ def run_scan(root):
     # [impl-review-fix] scan_claude_refs 改吃 fs 集合直查存在性，不再吃 INDEX stale 集
     claude_refs = scan_claude_refs(root, fs["spec"], fs["rule"])
     stale_shadow = scan_stale_shadow(root)
-    return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=stale_shadow)
+    devenv = scan_devenv(root)
+    return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=stale_shadow,
+                        devenv=devenv)
 
 
-def build_report(diff, mgr_warns, claude_refs, stale_shadow):
+def build_report(diff, mgr_warns, claude_refs, stale_shadow, devenv=("absent", "")):
     lines = ["# maintain_scan 差异报告", ""]
     any_diff = (
         any(diff[k][t] for k in ("new", "stale") for t in ("spec", "rule"))
@@ -292,6 +337,22 @@ def build_report(diff, mgr_warns, claude_refs, stale_shadow):
         lines.append("一致，无差异")
     for w in mgr_warns:
         lines.append(w)
+
+    # devenv 健康度 —— 🔴 【MUST NOT 进 any_diff】：它是【提醒】，不是【门禁】（adr/0021）。
+    # devenv_lint 的退出码永远是 0（除非数据坏了）；把它渲染成「通过/不通过」就是把
+    # 「代价可见」做成了「机械拦截」，正是 devenv 整个设计要杀的东西。
+    st, text = devenv
+    if st != "absent":
+        lines.append("")
+        lines.append("## devenv 健康度（提醒，非门禁 —— adr/0021）")
+        if st == "unavailable":
+            lines.append("- ⚠️ 检出 `.devenv.json` 但 `devenv_lint` 不可用（未装 sdflow-devenv），"
+                         "跳过健康度扫描")
+        elif st == "bad":
+            lines.append(f"- ⚠️ `.devenv.json` 数据坏了：{text}")
+        else:
+            # 【原样】并入 —— 一个字都不改（commit 锚、待定横幅、blocked_by 全带着）
+            lines += ["", text]
     return "\n".join(lines)
 
 

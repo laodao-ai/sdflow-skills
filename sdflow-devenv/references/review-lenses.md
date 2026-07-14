@@ -67,11 +67,16 @@
 
 ## ③ 覆盖镜（有 SAD 时）
 
-**机械部分已经算好了**（脚本对账 SAD §5 contract 集合 vs 泳道 `covers` 并集，差集交给 skill 去问人）。
+**机械部分已经算好了** —— `devenv_lint` 跑 `sad_contracts(root)`（读 `openspec/architecture/sad.md` §5，
+用 `sdflow-architecture` 的 `scan_contract_names` 抽 contract 名）跟泳道 `covers` 并集做差集，
+**差集直接印在 lint 报告里**。**读不到 SAD 时它响亮说「对账失效」，不佯装算过。**
 
-**这面镜只审机械算不出的那半**：
+**⇒ 这面镜 MUST NOT 重算差集**（那是脚本的活）。**它只审机械算不出的那半**：
 
 > **`covers` 声明的 contract，泳道**真的**穿过了吗？**
+
+**差集只证明「有没有声明」，证明不了「声明是不是真的」。** 一条泳道写 `covers: ["消息运行时"]`，
+但它的 `method` 跑的是纯 mock —— 差集是空的，contract 却一步都没被穿过。**这一格没有确定性信号，只能靠这面镜。**
 
 - 泳道 A 声称 `covers: ["§5.2 消息运行时"]`，但它的 smoke 只测了一个纯函数 ⇒ **声明不实**。
 - **跨真实边界的 contract**（网络 / 文件 / 进程 / 语言桥），**MUST NOT 只用假引擎糊弄**——一条只跑假替身的泳道，不能声称覆盖了「消息真的送达」这条 contract。
