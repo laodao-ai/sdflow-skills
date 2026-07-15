@@ -23,7 +23,7 @@ class TestInstallSdflow:
         link = sdflow / "workflow"
         assert link.is_symlink()
         assert link.resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()
-        for name in ("checkpoint-commit.sh", "resolve-workflow.sh"):
+        for name in ("checkpoint-commit.sh", "resolve-workflow.sh", "resolve-models.sh"):
             f = sdflow / "hack" / name
             assert f.is_file() and not f.is_symlink()      # 拷贝，非软链
             assert f.stat().st_mode & stat.S_IXUSR          # exec 位一次设好
@@ -35,7 +35,7 @@ class TestInstallSdflow:
         link = sdflow / "workflow"
         assert link.is_symlink()
         assert link.resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()  # T13: 重跑后链目标不漂移
-        for name in ("checkpoint-commit.sh", "resolve-workflow.sh"):                        # T13: 重跑后 hack 脚本仍在
+        for name in ("checkpoint-commit.sh", "resolve-workflow.sh", "resolve-models.sh"):   # T13: 重跑后 hack 脚本仍在
             f = sdflow / "hack" / name
             assert f.is_file() and not f.is_symlink()
 
@@ -107,11 +107,41 @@ class TestRenameEndToEnd:
             assert (skills / new).is_symlink(), new     # 新链建立
 
     def test_layout_smoke(self, tmp_path):
-        """布局冒烟：canonical 软链指向改名后的 sdflow-init/assets/workflow；hack 两脚本可执行。"""
+        """布局冒烟：canonical 软链指向改名后的 sdflow-init/assets/workflow；hack 三脚本可执行。"""
         r, sdflow = run_setup(tmp_path)
         assert (sdflow / "workflow").resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()
-        for s in ("checkpoint-commit.sh", "resolve-workflow.sh"):
+        for s in ("checkpoint-commit.sh", "resolve-workflow.sh", "resolve-models.sh"):
             assert (sdflow / "hack" / s).stat().st_mode & stat.S_IXUSR
+
+
+class TestResolveModelsInstallPath:
+    """add-codex-host-support Task 6，dogfood 盲区守（memory dogfood-blind-spot-source-config）：
+    仓内 `sdflow-init/assets/hack/resolve-models.sh` 绿 ≠ 消费仓 `~/.sdflow/hack/resolve-models.sh`
+    装对——本测试跑真实 setup.sh 安装管线，再调**安装后的路径**（非仓内源路径）验证端到端可用。"""
+
+    def test_installed_copy_at_sdflow_hack_path_resolves_correctly(self, tmp_path):
+        r, sdflow = run_setup(tmp_path)
+        assert r.returncode == 0, r.stderr
+        installed = sdflow / "hack" / "resolve-models.sh"
+        assert installed.is_file() and not installed.is_symlink()   # 拷贝安装，非仓内直跑
+        assert installed != (REPO / "sdflow-init" / "assets" / "hack" / "resolve-models.sh")
+
+        # 用 --root 指向一个独立空仓（不是本仓自己）——强制走「全局 canonical」分支读
+        # model-tiers.md（sdflow/workflow 软链 → 本仓 sdflow-init/assets/workflow），
+        # 端到端验证安装后的 resolve-models.sh + 安装后的 sibling resolve-workflow.sh 配合可用。
+        consumer_repo = tmp_path / "consumer-repo"
+        (consumer_repo / "openspec").mkdir(parents=True)
+        env = dict(os.environ, SDFLOW_HOME=str(sdflow))
+        env.pop("CLAUDECODE", None)
+        env["CODEX_THREAD_ID"] = "11111111-2222-3333-4444-555555555555"
+        proc = subprocess.run(
+            ["bash", str(installed), "--root", str(consumer_repo)],
+            capture_output=True, text=True, env=env, timeout=15,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert "export SDFLOW_HOST=codex" in proc.stdout
+        assert "export SDFLOW_TIER_STRONG=gpt-5.6-sol" in proc.stdout
+        assert "export SDFLOW_VOICE_RUNNER=claude" in proc.stdout
 
 
 OUR_NAMES = {  # RENAME-MAP 旧名∪新名∪保留名单（marker 兼容边界，D5）

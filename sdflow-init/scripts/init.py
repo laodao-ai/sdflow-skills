@@ -262,7 +262,81 @@ def handle_config(root, mode):
 # 不是违规）；绝不裸 `cfg["k"]["j"]` 式取键，坏了是 KeyError 裸 traceback，不是人可读 reason。
 
 TIER_ALLOWED_SUBKEYS = {"strong", "mid", "light"}
+TIER_FLEET_KEYS = {"claude", "codex"}          # add-codex-host-support ADR-8：按机队分键
 RULES_REQUIRED_SUBKEYS = ("proposal", "specs", "design", "tasks")
+
+
+def _valid_model_id(v):
+    """model-tiers 值的合法字符集校验（与 resolve-models.sh::_valid_model_id 同一有界口径，
+    跨语言各自本地重实现——add-codex-host-support D5/D10：值只准 [A-Za-z0-9._-]、首字符字母
+    数字、非空，拒绝换行/控制字符/shell 元字符，防 eval 注入面的值经消费仓 config 回灌到
+    resolve-models.sh 的输出。"""
+    if not v:
+        return False
+    if not (v[0].isalnum() and v[0].isascii()):
+        return False
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    return all(c in allowed for c in v)
+
+
+def _strip_inline_comment(v):
+    """截去「空白 + `#`」起始的行内注释（近似 YAML 注释语法：`#` 前须有空白才算注释起始，
+    与 resolve-models.sh 的 `sed 's/[[:space:]]*#.*$//'` 同一口径）。"""
+    i = 0
+    while i < len(v):
+        if v[i] == "#" and (i == 0 or v[i - 1] in " \t"):
+            return v[:i].strip()
+        i += 1
+    return v.strip()
+
+
+def _parse_model_tiers_block(lines, start, end):
+    """扫顶层 `model-tiers:` 块 [start+1,end)，识别**机队分键**（`  claude:`/`  codex:` 2 空格
+    头 + `    strong:`/`mid:`/`light:` 4 空格叶子）与**扁平旧格式**（`  strong:`/`mid:`/`light:`
+    2 空格叶子，兼容读作 Claude 机队，见 ADR-8）两种写法——与 resolve-models.sh
+    ::_read_config_overrides 同一有界键路径口径（6 条：2 机队×3 档），各自本地重实现
+    （跨语言无法共享同一实现，MUST NOT 写通用 YAML 解析器，基准 5）。
+    返回 (entries, bad_subkeys)：
+      entries = {"claude.strong": "opus", "flat.mid": "sonnet", ...}（值为 strip 后原始文本，
+                 未做字符集校验——校验在调用侧做，以便按 fleet.tier 精确报 reason）
+      bad_subkeys = 越域键集合，两类：顶层二级键（既非 claude/codex 也非 strong/mid/light，如
+                 "weird"）+ 机队子块下的三级叶子键（如 "claude.bogus"）——config_lint 比
+                 resolve-models.sh 更严格（后者对未知叶子键静默跳过、best-effort 提取；本函数
+                 是 fail-closed 结构门，MUST 把两类越域键都亮出来）
+    """
+    entries = {}
+    bad = set()
+    fleet_ctx = None
+    for ln in lines[start + 1:end]:
+        s = ln.strip()
+        if not s or s.startswith("#"):
+            continue
+        if ln.startswith("    ") and not ln.startswith("     ") and ":" in s:
+            # 4-space：机队子块下的叶子键（仅在 fleet_ctx 已设时生效）
+            if fleet_ctx:
+                k, _, v = s.partition(":")
+                k = k.strip()
+                if k in TIER_ALLOWED_SUBKEYS:
+                    entries[f"{fleet_ctx}.{k}"] = _strip_inline_comment(v)
+                else:
+                    bad.add(f"{fleet_ctx}.{k}")
+            continue
+        if ln.startswith("  ") and not ln.startswith("   ") and ":" in s:
+            # 2-space：机队头（claude:/codex:，无值）或扁平叶子键（strong:/mid:/light:，有值）
+            k, _, v = s.partition(":")
+            k = k.strip()
+            v = _strip_inline_comment(v)
+            if k in TIER_FLEET_KEYS:
+                fleet_ctx = k
+                continue
+            fleet_ctx = None
+            if k in TIER_ALLOWED_SUBKEYS:
+                entries[f"flat.{k}"] = v
+            else:
+                bad.add(k)
+            continue
+        # 其它缩进/异常行——有界解析不认，静默跳过（同 resolve-models.sh 口径）
+    return entries, bad
 
 
 def _find_top_level_block(lines, key):
@@ -303,9 +377,11 @@ def _second_level_keys(lines, start, end):
 def lint_config(root):
     """校验 <root>/openspec/config.yaml 的结构，返回 reason 字符串列表（空 = 干净）。
     校验项：① 顶层 `schema:` 键存在 ② 顶层 `rules:` 块存在且含 proposal/specs/design/tasks
-    四子键（无条件必填） ③ 顶层 `model-tiers:`（若存在）子键 ⊆ {strong,mid,light}
-    ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false}。config.yaml 本身缺失/不可读
-    单独报一条 reason（不当 KeyError 崩）。"""
+    四子键（无条件必填） ③ 顶层 `model-tiers:`（若存在）——机队分键 `{claude,codex}.{strong,mid,
+    light}` 或扁平旧格式 `{strong,mid,light}`（ADR-8），二级键须 ⊆ {claude,codex,strong,mid,light}，
+    且叶子键的**值**须为合法模型 ID（add-codex-host-support D5：拒绝空值/非法字符，防 eval 注入面
+    经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false}。config.yaml
+    本身缺失/不可读单独报一条 reason（不当 KeyError 崩）。"""
     cfg_path = os.path.join(root, "openspec", "config.yaml")
     try:
         with open(cfg_path, encoding="utf-8") as f:
@@ -335,10 +411,14 @@ def lint_config(root):
     tiers_block = _find_top_level_block(lines, "model-tiers")  # 条件化：块整段缺失 → 跳过（放行）
     if tiers_block is not None:
         start, end = tiers_block
-        sub = _second_level_keys(lines, start, end)
-        bad = sorted(sub - TIER_ALLOWED_SUBKEYS)
+        entries, bad = _parse_model_tiers_block(lines, start, end)
         if bad:
-            reasons.append(f"model-tiers: 子键越域 {bad}（须 ⊆ {{strong,mid,light}}）")
+            reasons.append(
+                f"model-tiers: 子键越域 {sorted(bad)}"
+                f"（顶层须 ⊆ {{claude,codex,strong,mid,light}}，机队子块叶子键须 ⊆ {{strong,mid,light}}）")
+        bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_model_id(v)]
+        if bad_values:
+            reasons.append(f"model-tiers: 值非法模型ID {bad_values}（须为 [A-Za-z0-9._-]+，首字符字母数字）")
 
     metrics_block = _find_top_level_block(lines, "metrics")  # 条件化：块整段缺失 → 跳过（放行）
     if metrics_block is not None:

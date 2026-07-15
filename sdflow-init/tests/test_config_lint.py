@@ -12,6 +12,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
+
+from model_tiers_cases import CASES as MODEL_TIERS_CASES  # noqa: E402  共享畸形输入语料，见该文件 docstring
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 INIT_PY = Path(__file__).parent.parent / "scripts" / "init.py"
@@ -85,6 +88,95 @@ class TestConfigLintModelTiers:
         _write_config(tmp_path, VALID_RULES_BLOCK)
         r = _run_lint(tmp_path)
         assert r.returncode == 0, r.stderr
+
+
+class TestConfigLintModelTiersFleetKeyed:
+    """add-codex-host-support ADR-8：model-tiers 覆盖按机队分键 `{claude,codex}.{strong,mid,light}`，
+    扁平旧格式 `{strong,mid,light}` 兼容。"""
+
+    def test_nested_fleet_keyed_valid_passes(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  claude:
+    strong: some-claude-model
+    mid: another-claude-model
+  codex:
+    strong: some-codex-model
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode == 0, r.stderr
+
+    def test_flat_legacy_valid_passes(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  strong: legacy-model
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode == 0, r.stderr
+
+    def test_fleet_leaf_out_of_domain_subkey_nonzero(self, tmp_path):
+        """机队子块下的三级叶子键越域（如 claude.bogus）也须报错——config_lint 是 fail-closed
+        结构门，比 resolve-models.sh（对未知叶子键静默跳过、best-effort）更严格。"""
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  claude:
+    strong: ok-model
+    bogus: nope
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "claude.bogus" in r.stderr
+
+    def test_top_level_out_of_domain_subkey_with_fleet_header_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  claude:
+    strong: ok-model
+  weird:
+    strong: nope
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "weird" in r.stderr
+
+    def test_nested_invalid_model_id_value_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  claude:
+    strong: $(touch pwned)
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "claude.strong" in r.stderr
+
+    def test_flat_invalid_model_id_value_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  mid: `touch pwned`
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "flat.mid" in r.stderr
+
+    def test_empty_value_nonzero(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  codex:
+    light:
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "codex.light" in r.stderr
+
+
+class TestConfigLintModelTiersSharedFixture:
+    """跨工具一致性守（design D10）：本文件与 test_resolve_models.py 从同一份
+    `fixtures/model_tiers_cases.py` 语料驱动，断言 config_lint 侧的 accept/reject 判据。"""
+
+    def test_shared_cases_match_lint_expectation(self, tmp_path):
+        for case in MODEL_TIERS_CASES:
+            root = tmp_path / case["name"]
+            _write_config(root, VALID_RULES_BLOCK + case["yaml_block"])
+            r = _run_lint(root)
+            if case["lint_clean"]:
+                assert r.returncode == 0, f"{case['name']}: expected clean, got {r.stderr}"
+            else:
+                assert r.returncode != 0, f"{case['name']}: expected violation, got clean"
+                for substr in case["lint_reason_substrs"]:
+                    assert substr in r.stderr, f"{case['name']}: missing {substr!r} in {r.stderr}"
 
 
 class TestConfigLintMetrics:
