@@ -2,26 +2,54 @@
 # outside-voice.sh — 跨模型 outside-voice helper（自包含，零 gstack 内部依赖）
 #
 # ── 契约单一源（两 review SKILL 只引用本注释，不得转述细节）─────────────
+#   环境输入〔add-codex-host-support · GC-7/ADR-9〕：
+#     $SDFLOW_VOICE_RUNNER  "claude" | "codex" —— 目标 runner（当前宿主之外的另一个机队）。
+#                           来自调用方每轮 eval 一次宿主解析脚本后 export 的六变量之一；
+#                           本脚本 MUST NOT 自行调该宿主解析脚本重判宿主（同源约束，见 GC-7/ADR-9；
+#                           测试 test_resolve_models.py::TestOutsideVoiceDoesNotSelfResolve 机械锁）。
+#                           空/未设 = 宿主判不出（host=unknown）——preflight/exec 均 fail-loud
+#                           拒绝执行（exit 1 + stderr 明示），调用方 SHALL 在调用前已判
+#                           host=unknown 并跳过本次调用、落 reason_code="host-unknown"；
+#                           本脚本此处的检查是防调用方误用的第二道防线，非主控制点。
+#     $SDFLOW_VOICE_MODEL   claude 反向路径专用：-p --model 的取值。runner=claude 时必须非空，
+#                           否则同样 fail-loud（exit 1）。
 #   preflight
-#     stdout: "ready" | "not_installed" | "missing-deps"         exit 0
+#     stdout: "ready" | "not_installed" | "missing-deps"         exit 0（$SDFLOW_VOICE_RUNNER 非空时）
+#             探测目标 = $SDFLOW_VOICE_RUNNER 的 CLI（MUST NOT 硬编码 codex）
+#             "missing-deps" SHALL 由调用方映射为锚 reason_code="preflight-error"（D7）——
+#             本脚本 MUST NOT 自行改写该 stdout 值，映射是锚层/调用 SKILL 的事
+#             $SDFLOW_VOICE_RUNNER 为空 ⇒ 无 stdout，exit 1（fail-loud，host-unknown）
 #   render-prompt --context-file <f>
 #     stdout: 找漏框架 + 硬分隔的不可信上下文（超 200KB 保头尾截断）
 #     stderr: OV_TRUNCATED=true|false                            exit 0 | 3=secret-hit | 2=用法错/文件不存在或不可读
 #   exec --context-file <f> [--timeout <秒，默认 300>]
-#     stdout: codex 最终消息（仅此，经 --output-last-message 提取）
-#     stderr: OV_TRUNCATED 行；失败时 codex stderr 转发
-#     exit 0=成功 | 1=codex 报错/空输出/命令缺失/timeout 工具缺失 | 124=超时 | 3=secret-hit | 2=用法错/文件不存在或不可读
+#     stdout: 目标 runner（$SDFLOW_VOICE_RUNNER）的最终消息（仅此）
+#       codex 路径：经 --output-last-message 提取；claude 路径：-p --output-format text 直出
+#     stderr: OV_TRUNCATED 行；失败时 runner stderr 转发
+#     exit 0=成功 | 1=runner 报错/空输出/命令缺失/timeout 工具缺失/SDFLOW_VOICE_RUNNER 未设/
+#            SDFLOW_VOICE_MODEL 未设(claude)/未知 runner 值 | 124=超时 | 3=secret-hit |
+#            2=用法错/文件不存在或不可读
 #   version
-#     stdout: "outside-voice.sh 1.0.0"                           exit 0
-# ── 硬化要点〔design D2 spec-review-amendment〕──────────────────────────
-#   codex exec 固定注入: -C <repo_root> -s read-only --ephemeral
-#     --output-last-message <tmp>，prompt 经临时文件 `- < file` 喂入；
-#   timeout/gtimeout 用 -k 10（宽限期 10s 后 SIGKILL 兜底不退出的进程）；
+#     stdout: "outside-voice.sh 1.2.0"                           exit 0
+# ── 硬化要点〔design D2 spec-review-amendment · add-codex-host-support〕──────
+#   出境安全三件套（secret_scan / render_prompt 的 FRAME+三条通则+200KB 截断）对两条
+#   runner 路径一视同仁、单份共用，MUST NOT 另起炉灶组装 prompt——只有最终 exec 命令行
+#   一处按 runner 分叉：
+#     codex 固定注入: -C <repo_root> -s read-only --ephemeral --output-last-message <tmp>，
+#       prompt 经临时文件 `- < file` 喂入（内核级沙箱：seccomp/sandbox-exec 封写+网络）；
+#     claude 反向路径固定注入: -p --model "$SDFLOW_VOICE_MODEL" --output-format text
+#       --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>（只读全仓、
+#       应用层尽力对齐、对称 codex 的全仓只读——非内核级）。三旗齐全是安全承重墙：
+#       MUST NOT 砍成零工具 `--tools ""`、MUST NOT 加 Write/Bash/WebFetch 等非只读工具、
+#       MUST NOT 用 `--disallowedTools`/`--allowedTools`、MUST NOT 漏 `--strict-mcp-config`
+#       或 `--add-dir`。本约束只管跨模型 claude -p 反向路径，不改同族 fallback 子代理。
+#   timeout/gtimeout 用 -k 10（宽限期 10s 后 SIGKILL 兜底不退出的进程），两 runner 路径共用；
 #   timeout 无管道包裹、紧邻捕获 $?（防 124 经管道丢失）；
+#   secret_scan 命中时 stderr 只出规则类型+行号（D8 脱敏），MUST NOT 打印命中原行/匹配值；
 #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
 set -u
 
-OV_VERSION="outside-voice.sh 1.1.0"
+OV_VERSION="outside-voice.sh 1.2.0"
 
 # 本脚本所在目录（装好后 = ~/.sdflow/hack/）—— emit_frame 从这里 cat 两条通则。
 OV_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -45,11 +73,31 @@ usage() {
   exit 2
 }
 
-secret_scan() {  # $1=file；命中打印证据到 stderr 返回 1（防密钥经 context 出境——边界指令管不住 SKILL 主动喂）
-  local hits
-  hits=$(grep -nE 'AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|xox[baprs]-[0-9A-Za-z-]{10,}|sk-ant-[A-Za-z0-9-]{20,}|sk-[A-Za-z0-9]{32,}|eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}' "$1" | head -3)  # [impl-review-fix] Anthropic/OpenAI key + JWT
-  if [ -n "$hits" ]; then
-    printf 'secret-hit（拒发）:\n%s\n' "$hits" >&2
+secret_scan() {  # $1=file；命中只报"规则类型+行号"到 stderr（D8 脱敏：MUST NOT 打印命中
+                 # 整行/匹配值——防密钥经 context 出境，边界指令管不住 SKILL 主动喂），返回 1
+  local file="$1" hit=false entry name pattern lines
+  # 规则名:正则 —— 逐条独立探测，只取行号不取内容（grep 匹配的原文只在内部管道中
+  # 短暂经过、从不落进任何输出流，见下方 cut 丢弃内容列）
+  local rules=(
+    'aws-akid:AKIA[0-9A-Z]{16}'
+    'private-key:-----BEGIN [A-Z ]*PRIVATE KEY-----'
+    'github-pat:ghp_[A-Za-z0-9]{36}'
+    'slack-token:xox[baprs]-[0-9A-Za-z-]{10,}'
+    'anthropic-key:sk-ant-[A-Za-z0-9-]{20,}'
+    'openai-key:sk-[A-Za-z0-9]{32,}'
+    'jwt:eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}'
+  )
+  for entry in "${rules[@]}"; do
+    name="${entry%%:*}"
+    pattern="${entry#*:}"
+    # `--` 防「以 - 开头的正则」(如 private-key 规则) 被 grep 误当成选项解析 [impl-review-fix]
+    lines=$(grep -nE -- "$pattern" "$file" 2>/dev/null | head -3 | cut -d: -f1 | tr '\n' ',' | sed 's/,$//')
+    if [ -n "$lines" ]; then
+      hit=true
+      printf 'secret-hit（拒发）: 规则=%s 行=%s\n' "$name" "$lines" >&2
+    fi
+  done
+  if [ "$hit" = true ]; then
     return 1
   fi
   return 0
@@ -103,7 +151,23 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找�
 }
 
 do_exec() {  # $1=context file  $2=timeout 秒
-  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin
+  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner
+  runner="${SDFLOW_VOICE_RUNNER:-}"
+  if [ -z "$runner" ]; then
+    echo 'SDFLOW_VOICE_RUNNER 未设置（host=unknown，无法确定跨模型 runner）——不跑 voice；调用方 SHALL 落 reason_code="host-unknown" 并跳过本次调用' >&2
+    exit 1
+  fi
+  case "$runner" in
+    codex|claude) : ;;
+    *)
+      echo "未知 SDFLOW_VOICE_RUNNER: ${runner}（仅支持 codex|claude）" >&2
+      exit 1
+      ;;
+  esac
+  if [ "$runner" = claude ] && [ -z "${SDFLOW_VOICE_MODEL:-}" ]; then
+    echo "SDFLOW_VOICE_MODEL 未设置（claude 反向路径需要 --model 取值）" >&2
+    exit 1
+  fi
   # 预检——重定向会吞 render_prompt 内部报错，同 secret 预扫模式 [impl-review-fix]
   [ -f "$ctx" ] && [ -r "$ctx" ] || { echo "context file not found/unreadable: $ctx" >&2; exit 2; }
   ov_timeout_bin=$(resolve_timeout_bin)
@@ -118,20 +182,36 @@ do_exec() {  # $1=context file  $2=timeout 秒
   secret_scan "$ctx" || exit 3
   render_prompt "$ctx" > "$workdir/prompt.md" 2> "$workdir/render.meta"
   cat "$workdir/render.meta" >&2
-  "$ov_timeout_bin" -k 10 "$tmo" codex exec -C "$repo_root" -s read-only --ephemeral \
-    --output-last-message "$workdir/last-message.md" - \
-    < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log"
-  rc=$?
+  case "$runner" in
+    codex)
+      "$ov_timeout_bin" -k 10 "$tmo" codex exec -C "$repo_root" -s read-only --ephemeral \
+        --output-last-message "$workdir/last-message.md" - \
+        < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log"
+      rc=$?
+      ;;
+    claude)
+      # 三旗承重墙〔spec-review-r3 C4 · GC-5〕：--tools "Read,Grep,Glob"（只读工具集，无
+      # Write/Bash/WebFetch）+ --strict-mcp-config（隔离 ambient MCP）+ --add-dir <repo_root>
+      # （增量授权确保覆盖仓库、对称 codex 的 -C repo_root）。MUST NOT 改动这三旗——回归即红。
+      "$ov_timeout_bin" -k 10 "$tmo" claude -p --model "$SDFLOW_VOICE_MODEL" --output-format text \
+        --tools "Read,Grep,Glob" --strict-mcp-config --add-dir "$repo_root" \
+        < "$workdir/prompt.md" > "$workdir/last-message.md" 2> "$workdir/stderr.log"
+      rc=$?
+      # claude -p --output-format text 的 stdout 即最终消息本身（无需像 codex 那样另用
+      # --output-last-message 提取）；为让下方失败诊断的 tail 逻辑两路径共用，镜一份到 cli.log。
+      cp "$workdir/last-message.md" "$workdir/cli.log" 2>/dev/null || : > "$workdir/cli.log"
+      ;;
+  esac
   if [ "$rc" -eq 124 ]; then cat "$workdir/stderr.log" >&2; exit 124; fi
   if [ "$rc" -ne 0 ]; then
     cat "$workdir/stderr.log" >&2
     if [ -s "$workdir/last-message.md" ]; then
-      { echo "注意: codex 非零退出但已产出最终消息（按契约丢弃，防半成品）——前3行:"; head -3 "$workdir/last-message.md"; } >&2
+      { echo "注意: $runner 非零退出但已产出最终消息（按契约丢弃，防半成品）——前3行:"; head -3 "$workdir/last-message.md"; } >&2
     fi
     exit 1
   fi
   if [ ! -s "$workdir/last-message.md" ]; then
-    { echo "codex 最终消息为空（cli log 尾部）:"; tail -5 "$workdir/cli.log"; } >&2
+    { echo "$runner 最终消息为空（cli log 尾部）:"; tail -5 "$workdir/cli.log"; } >&2
     exit 1
   fi
   cat "$workdir/last-message.md"
@@ -141,7 +221,11 @@ cmd="${1:-}"
 [ $# -gt 0 ] && shift
 case "$cmd" in
   preflight)
-    if ! command -v codex >/dev/null 2>&1; then
+    if [ -z "${SDFLOW_VOICE_RUNNER:-}" ]; then
+      echo 'SDFLOW_VOICE_RUNNER 未设置（host=unknown，无法确定跨模型 runner）——不跑 voice；调用方 SHALL 落 reason_code="host-unknown" 并跳过本次调用' >&2
+      exit 1
+    fi
+    if ! command -v "$SDFLOW_VOICE_RUNNER" >/dev/null 2>&1; then
       echo not_installed
     elif [ -z "$(resolve_timeout_bin)" ]; then
       echo missing-deps
