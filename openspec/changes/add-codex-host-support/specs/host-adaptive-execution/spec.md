@@ -24,7 +24,7 @@
 
 ### Requirement: outside voice = 另一个机队的强档（跨机队不变式）
 
-outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的强档**：`SDFLOW_HOST=claude` ⇒ runner 为 Codex 机队强档；`SDFLOW_HOST=codex` ⇒ runner 为 Claude 机队强档（`claude -p --model <强档> --output-format text --tools "" --strict-mcp-config`，**零工具**只读非交互——只吃已扫 context、无运行时 Read 出境面，见「出境安全」需求）〔spec-review-r2 C4：由 `--tools "Read,Grep,Glob"` 改**零工具** `--tools ""`（首轮给 repo-read 工具 + `--add-dir` 的缓解「网络禁则无法外传」逻辑不成立——`claude -p` 本身联网，Read 内容随请求出境；零工具对称 codex 只发 context 的姿势）〕。
+outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的强档**：`SDFLOW_HOST=claude` ⇒ runner 为 Codex 机队强档；`SDFLOW_HOST=codex` ⇒ runner 为 Claude 机队强档（`claude -p --model <强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`，**只读全仓非交互**——对称 codex 的 `-C repo_root -s read-only`，见「出境安全」需求）〔spec-review-r3 C4：撤回 r2 零工具（其前提「codex 只发 context」实测为错——codex 是 `-C repo_root` 全仓只读），恢复对称：给 claude 只读工具集 + `--add-dir` 限定到仓库〕。
 
 `outside-voice.sh` MUST NOT 硬编码任一 runner——`preflight` SHALL 探测**目标 runner 的 CLI**（`command -v "$SDFLOW_VOICE_RUNNER"`），`exec` SHALL 按 runner 分叉。宿主为 `unknown` 时 SHALL **不跑 voice**（无从确定"另一个机队"），锚行记 `host="unknown"` + `reason_code="host-unknown"`。
 
@@ -34,7 +34,7 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 #### Scenario: Codex 宿主下 voice 走 Claude
 - **WHEN** `SDFLOW_HOST=codex` 且 `claude` CLI 可用
-- **THEN** `outside-voice.sh preflight` 返回 `ready`（探测的是 `claude`，不是 `codex`）；`exec` 调 `claude -p --tools "" --strict-mcp-config` 零工具只读非交互；锚行记 `host="codex" runner="claude" reason_code="ok"`〔spec-review-r2 D5：成功跨模型路径 `reason_code` 写固定哨兵 `ok`，非 `none`〕
+- **THEN** `outside-voice.sh preflight` 返回 `ready`（探测的是 `claude`，不是 `codex`）；`exec` 调 `claude -p --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>` 只读全仓非交互；锚行记 `host="codex" runner="claude" reason_code="ok"`〔spec-review-r2 D5：成功跨模型路径 `reason_code` 写固定哨兵 `ok`，非 `none`〕
 
 #### Scenario: Claude 宿主下 voice 走 Codex（现有行为不变）
 - **WHEN** `SDFLOW_HOST=claude` 且 `codex` CLI 可用
@@ -62,6 +62,12 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 「跨模型」判定 = 矩阵第一行成立。此校验 **MUST always-on、独立成函数、不接受 `metrics_on` 参数**（D11，照 `check_hr_tg` 先例）。
 
+**矩阵为跨工具单一源 SHALL 落成机读契约块，非「引用」口号〔spec-review-r3 C2-cross-tool〕**：`anchor_lint`（判自审）与 `outside_voice_guard`（判可复用）是**两个独立工具**，且 `outside_voice_guard.py` 有 **`MUST NOT import`** 边界（D5 铁律：跨模块口径本文件内重实现，防 fence 内示例锚被误算）——∴「引用同一矩阵」在机械上**做不到用共享函数**。矩阵 SHALL 作为 `lens-metric-contract.md` 的**机读块**（如 `legal-combo-matrix`，与 `lens-metric-enums` 同构）承载合法组合的单一权威定义；两个工具**各自 parse 该块 + 本地重实现判定逻辑**（承 D5「重实现非 import」），由一条**跨工具一致性测试**（golden：同一批 (host,runner,reason_code,findings) 输入喂两个工具，「跨模型」判定必一致）守住不漂移。**MUST NOT** 让两工具各自硬编码一份矩阵而无一致性测试守（那正是 C1 要杀的多处漂移）。
+
+#### Scenario: 矩阵机读块被两工具各自 parse 且一致性测试守
+- **WHEN** `anchor_lint` 与 `outside_voice_guard` 都需要「跨模型」判定
+- **THEN** 二者 SHALL 各自从 `lens-metric-contract.md` 的 `legal-combo-matrix` 机读块 parse 合法组合，本地重实现判定（`outside_voice_guard` 承 `MUST NOT import` 边界不 import `anchor_lint`）；一条跨工具 golden 测试 SHALL 断言二者对同一输入集的「跨模型」判定逐条一致，任一漂移即红
+
 #### Scenario: runner="none" 不被判为跨模型
 - **WHEN** 某 outside-voice 锚 `runner="none"`（无论 host 为何）
 - **THEN** 矩阵判定「跨模型」为**假**，MUST NOT 享跨模型豁免 / MUST NOT 被复用守卫认作跨模型段；且 SHALL 校验 `findings=0` 与 `reason_code ∈ {host-unknown,secret-hit,fallback-unavailable}`，否则报错（如 `runner="none" findings="5"` ⇒ 违规）
@@ -76,7 +82,7 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 理由：新增的 runner 意味着**新的数据出境端点**；任何"给该路径单独写一套 prompt 组装"的实现都会绕过扫描器，是安全回归。runner 之间的差异 SHALL 只体现在最终 `exec` 的命令行分叉一处。
 
-**只读姿势诚实边界（spec-review-r2 C4：反向路径零工具）**：codex 路径 `-s read-only --ephemeral` 是**内核级**沙箱（seccomp/sandbox-exec，封写 + 网络）；claude 路径 `--tools "" --strict-mcp-config` 是**零工具 + 应用层尽力对齐**，**非内核级**——可被 settings/hook/plugin 削弱。∴ 二者 **SHALL NOT 声称"对等"**，只声称「应用层尽力 + 残余非内核级」。**反向 `claude -p` SHALL 用 `--tools ""`（零工具，把全部内建工具移出可用集）+ `--strict-mcp-config`（隔离 ambient MCP），二者 SHALL 视为安全承重墙**，测试从单一契约片段断言 `--tools ""` 存在、回归即红。**首轮给 `Read/Grep/Glob` + `--add-dir` 的做法 SHALL 废除**：其缓解「网络禁则读到无法外传」逻辑不成立（`claude -p` 本身联网、Read 内容随请求出境；`secret_scan` 不扫运行时 Read 内容）。**零工具 ⇒ 无运行时 Read ⇒ 出境面 = 已扫 context**（与 codex 只发 context 对称，残余压到同级）。副作用（findings 质量非安全）：零工具下 voice 只依据 context、可能"幻觉读了代码"——如实登记。**范围**：本约束只管**跨模型 `claude -p` 反向路径**，不改同族 fallback 子代理（Codex 不可用时派的 fresh Claude 只读子代理与主审同信任级、本就该有工具）。
+**只读姿势诚实边界（spec-review-r3 C4：反向路径与 codex 对称的只读全仓）**：codex 路径 `-C repo_root -s read-only --ephemeral` 是**内核级**沙箱（seccomp/sandbox-exec，封写 + 网络），**且全仓只读可读**（FRAME 明请读仓库代码找漏，非"只发 context"）；claude 路径 `--tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>` 是**只读全仓 + 应用层尽力对齐**（可被 settings/hook/plugin 削弱），**非内核级**。∴ 二者 **SHALL NOT 声称"对等"**，只声称「应用层尽力 + 残余非内核级」，但**读全仓找漏的能力对称**。**反向 `claude -p` SHALL 三旗齐全：`--tools "Read,Grep,Glob"`（只读工具集，无 Write/Bash/WebFetch）+ `--strict-mcp-config`（隔离 ambient MCP）+ `--add-dir <repo_root>`（限定可读到仓库），三者 SHALL 视为安全承重墙**，测试从单一契约片段断言三旗齐全且工具集只读、回归即红。**r2 的零工具 `--tools ""` SHALL 废除**：其前提「codex 只发 context」实测为错（codex `-C repo_root` 全仓只读），零工具单边削弱了 claude voice 的检索能力（读不了 diff 外的调用点/类型定义）、且 FRAME「依据仓库代码本身」喂给零工具 claude 结构性做不到 → 加剧幻觉。**双边预存残余如实登记**：voice runner 读仓库内容→随请求出境到各自模型商（claude→Anthropic、codex→OpenAI），此面**两条路径同构、预先存在**，由 FRAME「不要读 .env/密钥」缓解、非铁桶、非内核级；round-2 挖的「网络禁则无法外传」论证错——那条批评对 codex 同样成立，故是双边残余而非单边砍工具的理由。**范围**：本约束只管**跨模型 `claude -p` 反向路径**，不改同族 fallback 子代理（Codex 不可用时派的 fresh Claude 只读子代理与主审同信任级、本就该有工具）。
 
 #### Scenario: secret 命中时两条路径都拒发（且不泄进日志）〔spec-review-r2 D8〕
 - **WHEN** context 文件命中 secret 模式（AWS / GitHub / Slack / Anthropic / OpenAI key / JWT），无论目标 runner 是 codex 还是 claude
@@ -90,9 +96,9 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 - **WHEN** `SDFLOW_HOST=codex`，向 `claude` 发起 voice
 - **THEN** prompt SHALL 由同一个 `render_prompt` 产出（含三条通则、UNTRUSTED CONTEXT 硬分隔、200KB 保头尾截断），MUST NOT 存在第二份 prompt 组装实现
 
-#### Scenario: 只读约束按 runner 落到对应机制（反向路径零工具）〔spec-review-r2 C4〕
+#### Scenario: 只读约束按 runner 落到对应机制（反向路径只读全仓，对称 codex）〔spec-review-r3 C4〕
 - **WHEN** 向 claude 发起跨模型 voice（`claude -p`）
-- **THEN** 命令行 SHALL 用 **`--tools ""`**（零工具，把全部内建工具移出可用集，无运行时 Read/Grep/Glob）**+ `--strict-mcp-config`**（隔离 ambient MCP）；**MUST NOT 给任何 repo-read 工具**（`--tools "Read…"`）、**MUST NOT 用 `--disallowedTools` denylist**（留 Bash/WebFetch 可外传）、**MUST NOT 用 `--allowedTools`**（配权限层、与 settings `permissions.allow` 合并可穿透）；出境面 = 已扫 context，与 codex 只发 context 对称；此形态为**应用层尽力对齐**（非声称与内核级沙箱对等）
+- **THEN** 命令行 SHALL 三旗齐全：**`--tools "Read,Grep,Glob"`**（只读工具集，无 Write/Bash/WebFetch）**+ `--strict-mcp-config`**（隔离 ambient MCP）**+ `--add-dir <repo_root>`**（限定可读到仓库根，对称 codex `-C repo_root`）；**MUST NOT 给 Write/Bash/WebFetch 等非只读工具**、**MUST NOT 用 `--tools ""` 零工具**（单边削弱检索、加剧幻觉）、**MUST NOT 用 `--disallowedTools` denylist**、**MUST NOT 用 `--allowedTools`**（与 settings `permissions.allow` 合并可穿透）；读全仓能力与 codex 对称；此形态为**应用层尽力对齐**（非声称与内核级沙箱对等）
 
 ### Requirement: 模型档位按机队分列，skill 引用变量不内联模型名
 
@@ -121,15 +127,19 @@ Codex 宿主下向 `spawn_agent` 显式指定 `model` SHALL 附理由「本工�
 
 编排 SKILL SHALL 在 fan-out / 调 `lens_metric_emit` / 落 v2 锚**之前**探测本仓 tools 是否已认识 v2 契约，陈旧则 fail-loud 降级——因 bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）**更新不原子**，存在「新 SKILL × 旧 tools」窗口，旧 tools 有两个同根罢工症状：旧 `lens_metric_emit.py` 不认 `--host`（argparse exit 2 → lens-metric 整段静默清零）；旧 `anchor_lint.py` 枚举无 `none`（`runner="none"` 锚 → out-of-enum 罢工）。
 
-探测判据 SHALL 为 emitter 认不认 `--host`（`--help` grep）+ anchor_lint 枚举含不含 `none`。**陈旧 ⇒ 整体降级为不落 v2 锚 + 响亮告警「tools 陈旧，请先跑 `sdflow-init update`」（fail-loud）**，MUST NOT 静默清零、MUST NOT 让旧 lint 撞 `none` 罢工。`lens_metric_emit.py` 侧 SHALL **仍**用 `parse_known_args` + 缺 `--host` 受控 fail-closed 作第二道兜底。
+**探测判据钉死（具体命令，非留白）〔spec-review-r3 C3-probe〕**：SHALL 为两条具体检测——① emitter 认不认 `--host`：`lens_metric_emit.py --help` 输出 grep `--host`；② anchor_lint 枚举含不含 `none`：读本仓 `lens-metric-contract.md` 的 `lens-metric-enums` 机读块、grep `runner:` 行是否含 `none`（与 emitter 侧 `--help` grep 同等具体度，MUST NOT 停留在"读契约块或探针"的模糊限定）。
 
-#### Scenario: 探到 tools 陈旧则 fail-loud 降级
-- **WHEN** 编排 SKILL 探测发现本仓 `lens_metric_emit.py` 不认 `--host` 或 `anchor_lint.py` 枚举无 `none`（消费仓 pull 新 bundle 未 `sdflow-init update`）
-- **THEN** SHALL 整体降级为不落 v2 锚 + 报告/终端**响亮提示 `sdflow-init update`**，MUST NOT 静默清零 lens-metric、MUST NOT 产出会让旧 lint 罢工的 `runner="none"` 锚
+**陈旧的处置 = fail-loud 硬停在落锚之前（不产出被 lint 的报告），非"产出无锚报告"〔spec-review-r3 C3-A/B：解 MANDATORY 冲突〕**：`anchor_lint` 的 outside-voice 锚是**无条件必查**（`MANDATORY`，`anchor_lint.py:148`）——∴ "陈旧则不落 v2 锚**但仍产出报告**"会撞 MANDATORY 阻塞、"落回 v1 旧锚（无 host）"又被读作 Claude 宿主 = Codex 轮次重新假绿。二者皆不可取。**正解**：探到陈旧 ⇒ 编排 SKILL 在**开始 fan-out / 落任何锚之前**硬停该评审步，**不产出待 lint 的报告**，终端/hand-off **响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」**（fail-loud、actionable、非假绿、非静默清零、不撞 MANDATORY、不落会让旧 lint 罢工的 `runner="none"` 锚）。
 
-#### Scenario: 旧 emitter 被 --host 调用时受控 fail-closed（工具侧第二道）
-- **WHEN** 新 SKILL 探测漏网、仍把 `--host` 传给旧 emitter
-- **THEN** emitter SHALL `parse_known_args` + 缺/多余参数受控 fail-closed（可读错误、非 argparse 崩栈），MUST NOT 默认填 `claude`
+**残余诚实登记（探测漏网窗口）〔spec-review-r3 C3-C〕**：SKILL 侧探测是**主守**。若探测被跳过/漏网（`metrics.enabled=false` 消费仓本就不调 emitter，此路径主要护 metrics-on 仓），旧 `lens_metric_emit.py` 撞 `--host` argparse 罢工、旧 `anchor_lint.py` 撞 `runner="none"` out-of-enum 罢工——**二者皆 fail-loud 罢工（非假绿）**，如实登记该残余窗口未被第二道机械覆盖（对比 emitter 侧：`parse_known_args` 兜底**只对新 emitter × 旧调用方成立**，对"已部署旧 emitter"结构上够不着，见下 Scenario）。
+
+#### Scenario: 探到 tools 陈旧则 fail-loud 硬停（不产出报告）
+- **WHEN** 编排 SKILL 探测发现本仓 `lens_metric_emit.py --help` 无 `--host` 或 `lens-metric-contract.md` 的 runner 枚举无 `none`（消费仓 pull 新 bundle 未 `sdflow-init update`）
+- **THEN** SHALL 在落任何 v2 锚之前**硬停该评审步、不产出待 lint 的报告**，终端/hand-off 响亮提示 `sdflow-init update`；MUST NOT 产出无锚报告（撞 MANDATORY）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零
+
+#### Scenario: 受控 fail-closed 只护「新 emitter × 旧调用方」，不护「旧 emitter」〔spec-review-r3 C3/D1 诚实拆分〕
+- **WHEN** 调用方（旧 SKILL）不传 `--host` 给**新** `lens_metric_emit.py`
+- **THEN** 新 emitter SHALL `parse_known_args` + 缺 `--host` 受控 fail-closed（可读错误、非 argparse 崩栈，且 `if extras: fail-closed`），MUST NOT 默认填 `claude`。**注**：此兜底**只对新 emitter 成立**；「新 SKILL × **已部署旧 emitter**」方向旧 emitter 代码不会因本 change 改变，**只能靠上方 SKILL 侧探测拦截**（parse_known_args 够不着旧文件），MUST NOT 声称此兜底覆盖后者
 
 ### Requirement: 子代理不可用时镜数如实降级（探针语义核验 + always-on 一致性 lint，逐镜留语义层）
 
@@ -138,6 +148,8 @@ Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`
 子代理确实不可用时，评审 SHALL **把 roster 缩到实际跑过的镜**并在报告显著标注「单镜降级」，MUST NOT 按计划的镜数照落 lens-metric 锚。
 
 **探针 = 语义核验（非机械门）+ always-on 一致性 lint（spec-review-amendment Q1，adr/0023 已降格）**：「fan-out 机制活着没」有信号、**但无可机械捕获路径**——探针（trivial 子代理看回不回哨兵）只能由**主 session 自己**调用观察、把 `subagents=` 写进锚，`anchor_lint` 读那行锚**无从核验它对应一次真 spawn**（经被监管方自报，§0.0 防伪一侧）。∴ 探针 SHALL 作**机制活着的语义核验**、MUST NOT 冒充机械门。`SDFLOW_HOST=codex` ⇒ **MUST 探**；`claude` ⇒ 免探恒 available；`unknown` ⇒ 不 fan-out。结果落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->`，该锚 **MUST 落进被 `anchor_lint` 校验的那份报告文件内**（D8-orig：落别处则 lint 看不见）；`host=codex` 的报告中该锚**必须在场**（缺锚不得绕过）。**`mirrors=` = 本轮实际 fan-out 镜清单**〔spec-review-r2 C2〕，由 SHALL 由 SKILL 在 fan-out 时直接落**、不经 emitter/lens-metric 管线、不读 `config.metrics`**，故 `metrics.enabled=false` 时也在场。
+
+**`mirrors=` 严格文法 + 缺字段 fail-closed〔spec-review-r3 C5-mirrors〕**（否则 C2 仍能诚实空转）：`fanout-capability` 锚 SHALL **每轮恰好一条**（重复锚 → fail-closed）；`mirrors=` 为 `host=codex` 报告的**必填字段**，取值文法 SHALL 为 **`—`（未 fan-out）XOR 非空的 `{domain,adversarial,grounding}` 逗号分隔子集**；`anchor_lint` 对 **缺 `mirrors=` / 空值 / 未知 token / 重复 token / 多条 capability 锚** SHALL **fail-closed 报错**，MUST NOT 把缺失/坏值静默过滤成空集（否则 `subagents="unavailable"` + 空 `mirrors` 又判 CLEAN、C2 空转复发）。
 
 `anchor_lint` SHALL 增一条 **always-on 一致性 lint**（**判据数据源亦独立于 `metrics.enabled`**，D7 + spec-review-r2 C2）：`subagents="unavailable"` 时，**`fanout-capability` 锚自身的 `mirrors=` 清单**中 `∈ {domain,adversarial,grounding}` 的去重计数 **MUST ≤ 1**，否则报错阻塞（违规类型 `dead-fanout-multi-mirror`）。**判据 MUST 读 `mirrors=`，MUST NOT 数 lens-metric 行**〔C2 纠正首轮致命洞：lens-metric 锚在生产端受 `metrics.enabled` 门控（默认消费仓 `metrics.enabled=false` ⇒ 零行 ⇒ lint 永判 CLEAN 空转）；`mirrors=` 由 SKILL 直接落、不受该门控〕。**它拦的是锚行自身的自相矛盾（诚实记录错误），不是伪造**——`mirrors=`/`subagents=` 仍是主 session 自报，写 `subagents="available"` 或只列 1 镜即绕过（无机械交叉核验，如实登记）；且是否触发仍受 `host` 自报信任边界约束（谎报 `host=claude` 则不要求该锚，与 ADR-1 同根、非本条新增）。此校验及其判据数据 MUST always-on，MUST 独立成函数、不接受 `metrics_on` 参数（D11）。
 
@@ -162,6 +174,10 @@ Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`
 #### Scenario: host=codex 报告缺 fanout-capability 锚则报错
 - **WHEN** `host="codex"`（可从 lens-metric/outside-voice 锚的 host 字段读到）的报告中**无** `sdflow:fanout-capability` 锚
 - **THEN** `anchor_lint` SHALL 报错——否则"不落锚"即可绕过一致性 lint
+
+#### Scenario: mirrors= 缺字段/坏值/多锚 fail-closed（防 C2 经空集空转）〔spec-review-r3 C5〕
+- **WHEN** `host=codex` 报告的 `fanout-capability` 锚**缺 `mirrors=`**、或 `mirrors=` 为空、或含未知/重复 token、或存在多于一条 `fanout-capability` 锚
+- **THEN** `anchor_lint` SHALL **fail-closed 报错**，MUST NOT 把缺失/坏值静默视作空集放行（否则 `subagents="unavailable"` + 空 `mirrors` 会再次被判 CLEAN、C2 空转复发）
 
 #### Scenario: 子代理不可用则缩 roster
 - **WHEN** 探针判 `subagents="unavailable"`，主 session 自行完成各镜工作

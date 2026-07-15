@@ -29,7 +29,7 @@
 - **THEN** 输出 `file-missing`
 
 #### Scenario: 三判全过可复用
-- **WHEN** mode=native 且产物不早于源文件 且 outside-voice 段可解析（`runner ≠ host`）且 findings>0
+- **WHEN** mode=native 且产物不早于源文件 且 outside-voice 段可解析（**矩阵判「跨模型」为真**：`host,runner∈{claude,codex}∧runner≠host∧reason_code="ok"`）且 findings>0
 - **THEN** 输出 `none`，退出码 0
 
 #### Scenario: 同族 fallback 段不得复用为跨模型 voice〔add-codex-host-support〕
@@ -41,5 +41,5 @@
 - **THEN** 矩阵判「跨模型」为假 ⇒ 输出 `same-family`、退出码非 0，回落自跑，MUST NOT 复用（无执行段无 findings、非第二意见）
 
 #### Scenario: v1 旧锚无 host 字段仍可复用〔add-codex-host-support〕
-- **WHEN** 产物锚行为 v1 格式（无 `host=`，`runner="codex"`）
-- **THEN** 读作 `host="claude"` ⇒ `runner ≠ host` 成立 ⇒ 三判其余全过时输出 `none` 可复用，MUST NOT 因缺字段罢工（向后兼容读，非 fail-closed）
+- **WHEN** 产物锚行为 v1 格式（无 `host=`，`runner="codex"`；v1 无 `reason_code`）
+- **THEN** 读作 `host="claude"` ⇒ 矩阵判「跨模型」为真（`runner=codex≠host=claude`；v1 无 reason_code 时**兼容读作 `ok`**——历史 v1 成功轮次无降级码即成功）⇒ 三判其余全过时输出 `none` 可复用，MUST NOT 因缺字段罢工（向后兼容读，非 fail-closed）

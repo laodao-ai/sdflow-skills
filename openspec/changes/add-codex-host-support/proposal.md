@@ -22,7 +22,7 @@
 ## What Changes
 
 - **新增 `resolve-models.sh`**（装进 `~/.sdflow/hack/`，与 `outside-voice.sh` / `checkpoint-commit.sh` 同列）：单一职责——判宿主 + 出机队档位映射。`eval` 出 `SDFLOW_HOST` / `SDFLOW_TIER_{STRONG,MID,LIGHT}` / `SDFLOW_VOICE_RUNNER` / `SDFLOW_VOICE_MODEL`。宿主判定靠**正信号**（Claude = `CLAUDECODE=1`，Codex = `CODEX_THREAD_ID=<uuid>`），**MUST NOT** 用"缺失即另一方"推断。
-- **`outside-voice.sh` 去 codex 硬编码**：runner 由 `resolve-models.sh` 决定；`preflight` 检的是**目标 runner 的 CLI**，不是"codex 装没装"。新增反向路径：Codex 宿主 → 调 `claude -p --model <强档> --output-format text --tools "" --strict-mcp-config`（**零工具**只读，只吃已扫 context、对称 codex；spec-review-r2 C4，实测 `--tools ""` 合法且零工具无法真读文件）。**secret_scan / FRAME（含三条通则）/ 200KB 截断三件套对两条出境路径一视同仁**——反向路径 MUST NOT 另起炉灶。
+- **`outside-voice.sh` 去 codex 硬编码**：runner 由 `resolve-models.sh` 决定；`preflight` 检的是**目标 runner 的 CLI**，不是"codex 装没装"。新增反向路径：Codex 宿主 → 调 `claude -p --model <强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`（**只读全仓**，对称 codex 的 `-C repo_root -s read-only`；spec-review-r3 C4：撤回 r2 零工具——其前提「codex 只发 context」实测为错）。**secret_scan / FRAME（含三条通则）/ 200KB 截断三件套对两条出境路径一视同仁**——反向路径 MUST NOT 另起炉灶。
 - **不变式落成机械可判：outside voice = 另一个机队的强档。** Claude 宿主 → Codex 的 Sol；Codex 宿主 → Claude 的 Opus。判不出宿主 ⇒ `SDFLOW_HOST=unknown` ⇒ **fail-loud**：voice 如实标降级，**宁可标 fallback，也 MUST NOT 冒充跨模型**。
 - **BREAKING（锚行 schema v2）**：`outside-voice` / `lens-metric` 两类锚行**新增 `host=` 字段**；`runner` 枚举 **= `{claude, codex, none}`**（机队家族 + `none`=无执行轮次，spec-review-r2 D3/D6）。**「跨模型性」从此由 anchor_lint 的合法组合矩阵机械判定**（`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`），不再靠枚举值或散落的 `runner≠host` 硬编码（后者被 `runner="none"` 击穿，spec-review-r2 C1）。`claude-fallback` **废弃**（旧锚向后兼容：读作 `host="claude", runner="claude"`）。
 - **Codex 子代理授权显式化**：`sdflow-init` 铺给消费项目的 `AGENTS.md` + 各评审 SKILL.md 写明"本工作流的 model-tiers 与多镜 fan-out 即 codex 要求的 clear task-specific reason"，并在 fan-out 前**机械核验子代理能力可用**——不可用则**报告如实降级为单镜**，MUST NOT 照落 roster 锚。
@@ -54,7 +54,7 @@
 
 | 级 | 需求 | 理由 |
 |---|---|---|
-| **P0** | 宿主判定（正信号 + fail-loud）· outside-voice 去 codex 硬编码 · 跨机队不变式机械守（`runner ≠ host`） | 直接杀「自审假绿」，是本 change 的立项理由 |
+| **P0** | 宿主判定（正信号 + fail-loud）· outside-voice 去 codex 硬编码 · 跨机队不变式机械守（**合法组合矩阵**判定跨模型，非裸 `runner≠host`——被 `runner="none"` 击穿，C1） | 直接杀「自审假绿」，是本 change 的立项理由 |
 | **P0** | 锚行 schema v2（`host=` + runner 枚举收缩）+ `anchor_lint` 校验 + 旧锚兼容 | 不变式的机械落点；没有它，P0 第一条无法被验证 |
 | **P0** | secret_scan / FRAME / 截断三件套覆盖反向出境路径 | TG-17 信任边界，新端点不能裸奔 |
 | **P1** | Codex 子代理授权 + 能力核验 + 如实降级 | 杀「7 镜假绿」；但即使降级为单镜，评审仍有价值（不阻断） |
@@ -100,7 +100,7 @@
 
 ## Compliance
 
-- **基准 1（机械化优先）**：宿主判定、档位映射、`runner ≠ host` 的跨模型性判定——**全部有确定性信号**（环境变量 / 锚行字段），一律归脚本 + `anchor_lint` 机械守。残余语义项：Q4 的"子代理真跑了"（信号存疑，design 须诚实划界）。
+- **基准 1（机械化优先）**：宿主判定、档位映射、跨模型性（**合法组合矩阵**判定，非裸 `runner≠host`——C1）——**全部有确定性信号**（环境变量 / 锚行字段），一律归脚本 + `anchor_lint` 机械守。残余语义项：Q4 的"子代理真跑了"（信号存疑，design 须诚实划界）。
 - **基准 2（目标态导向）**：本 change 的全部立项证据都是**目标态推演**（"Codex 宿主下会怎样"），而非现状统计——现状里**一次 Codex 宿主的评审都没跑过**，存量锚行里**一条 `host=` 都没有。这恰恰是必须做的理由，不是可以缓的理由。** MUST NOT 用"存量里没出现过"给目标松绑。
 - **基准 3（面治优先）**：`runner` 枚举出现在 6 个 spec + 3 个 tool + 2 个 SKILL.md + contract + 聚合器 + workflow-map（已实测清单见 Impact）——**一次扫全**，MUST NOT 只改被点穿的那一处。
 - **基准 4（一个 change 一个完整阶段结果）**：scope = "让工作流在 Codex 宿主下跑对"这一个完整能力。锚行 schema 改动虽大，但它是该能力的**机械落点**，拆出去则不变式无处可验。

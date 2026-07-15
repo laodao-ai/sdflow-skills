@@ -207,6 +207,30 @@
 
 > **lens-metric 度量锚**仍延后至设计门拍板最终化（SR-M）。`anchor_lint` 自检因 lens-metric 段有意延后而暂缓（非遗漏，与首轮口径一致）。`openspec validate --strict` 绿。
 
+## 三次审（轻量冷审 · 只审 r2 增量 · 2026-07-15）
+
+> **镜阵**：codex 跨模型 design-voice（审 r2 diff）+ claude 冷镜 ×2（增量闭合对抗 sonnet / 接地一致性 haiku）。**只审 r2 增量、不重审已定方向。**
+
+**总判定：r2 核心机制真闭合，但 r2 收尾自留 ~10 洞（多条高危）——本轮已 r3 修全，`openspec validate --strict` 绿。** 连续第三轮"返工引入洞"，这次轮到我；根因是我 r2 的核验太浅（把跨工具共享一笔带过、没读 codex 的真实调用旗、没给 mirrors= 定文法、sweep 漏扫 tasks/design）。
+
+- **C1 矩阵 / C2 mirrors= 核心确认真闭合**（mirror A 逐条坐实：矩阵穷尽 9 组合、引用传播、真解耦测试）。
+- **一条方向性纠错**：**C4-A** — r2 零工具的前提「codex 只发 context」**实测为错**（`outside-voice.sh:121` codex 实为 `-C repo_root -s read-only` 全仓只读，FRAME 明请读仓库代码）。r2 零工具单边削弱了 claude voice 检索能力 + 加剧幻觉。**r3 撤回零工具、恢复对称**（claude `--tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo>`），如实登记"两条路径都读仓库→出境模型商"是双边预存残余（FRAME 缓解）。用户已拍板同意。
+- **元观察**：haiku 接地镜判"7 项全一致、无漂移"——**假绿**（把 tasks 1.3 裸谓词当合法语境放过）。真洞是 codex 跨模型 voice + sonnet 镜抓的；弱档接地镜在需判断边界的一致性核验上不可靠。
+
+**r3 落点表（审计，2026-07-15 amend，`validate --strict` 绿）**：
+
+| r3 finding | 源 | 落点 |
+|---|---|---|
+| **C4-A** codex 实为全仓只读、r2 零工具前提错 → 恢复对称只读全仓 | mirror A-D + codex voice + 主审读码坐实 | design 安全表/C4 段重写/序列图/Context:16/Migration step0/二次审 note · host-adaptive 出境安全 Requirement+Scenario · spec-workflow Scenario · proposal · tasks 0.2/7.3/7.4 |
+| **C2-cross-tool** 矩阵跨工具共享机械做不到（guard MUST NOT import）→ 落契约机读块两工具各 parse + 一致性 golden | codex#2 + 读码坐实 | host-adaptive 矩阵 Requirement 加「机读块+golden」段+Scenario · 契约新增 `legal-combo-matrix` 块(scope面1/tasks1.1) · tasks 2.3/4.5 |
+| **C3-A/B/C** skew 降级撞 MANDATORY 锚 + runner=none 罢工无第二道 + 探测机制留白 → fail-loud 硬停(落锚前不产报告)+探测命令钉死+诚实拆分兜底 | codex#3 + mirror A-B/C + 读码(anchor_lint:148 MANDATORY) | host-adaptive skew Requirement 重写 + 3 Scenario · tasks 3.2b |
+| **C4-emitter** 旧 emitter 第二道兜底逻辑不成立(重犯二次审 D1 糊涂) | codex#4 | host-adaptive skew Scenario 诚实拆分「只护新 emitter×旧调用方」 |
+| **C5-mirrors** mirrors= 无严格文法/缺字段 fail-closed → C2 仍空转 | codex#5 | host-adaptive 一致性 lint Requirement 加严格文法段 + Scenario · tasks 2.5 |
+| **A-F** missing-deps→preflight-error 无落地任务 + F1b 探测信号错(preflight 经 stdout 非 exit 码) | mirror A-F + 读码(outside-voice.sh:6) | design 失败表 F1/F1b 修 · tasks 7.8 新增 |
+| **codex#1** host=unknown 普通镜 runner=unknown ∉ 枚举 | codex voice | lens-metric-emit roster 段 · workflow-metrics runner 枚举加 `unknown`(限普通镜) · tasks 1.1 |
+| **A-A/codex#6** 裸谓词残留(我 sweep 漏扫 tasks/design) | mirror A-A + codex#6 | tasks 1.3 · proposal:57/103 · design:23/144/319/340 · reuse-guard Scenario:32/45 |
+| **A-E** reason_code 8 值无契约机读源 | mirror A-E | 随 `legal-combo-matrix` 块承载(scope面1 登记) |
+
 ## 附录：首轮记录（2026-07-15，commit 4e88918 判定 → c9b8325 返工）
 
 > 首轮全文见 git 历史。核心：4 镜 + codex voice 判「不建议进 HARD-GATE、需返工」，证伪 grill 的 G1（探针非机械）/G2（--allowedTools 非 deny-by-default）/G5（码集漏 preflight-error），新挖 metrics 门控架空真实性守 / emitter 跨版本罢工 / eval 注入 / efficacy 押未验假设。收敛为 Q1–Q3 + D1–D10，用户拍板「都同意」，返工落地 c9b8325、`openspec validate` 绿。
