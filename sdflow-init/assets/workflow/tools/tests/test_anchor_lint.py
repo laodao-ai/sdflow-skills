@@ -30,12 +30,34 @@ def _write_catalog(dest_dir, members="TG-04, TG-16"):
     p.write_text(body, encoding="utf-8")
     return p
 
+
+# --- add-codex-host-support：v2 锚构造夹具 ---------------------------------------------------
+
+def _ov(**kw):
+    """outside-voice 锚构造器（矩阵测试用）。默认合法跨模型：host=claude runner=codex reason_code=ok。"""
+    base = dict(site="x", host="claude", runner="codex", reason_code="ok")
+    base.update(kw)
+    return "<!-- sdflow:outside-voice v1 " + " ".join(f'{k}="{v}"' for k, v in base.items()) + " -->"
+
+# 合法跨模型 outside-voice 锚（e2e 报告需一条 mandatory outside-voice 锚且不触矩阵违规时用）
+_OV_XM = _ov()
+
+def _fc(**kw):
+    """fanout-capability 锚构造器。默认 host=codex subagents=unavailable mirrors=domain。"""
+    base = dict(host="codex", subagents="unavailable", mirrors="domain")
+    base.update(kw)
+    return "<!-- sdflow:fanout-capability v1 " + " ".join(f'{k}="{v}"' for k, v in base.items()) + " -->"
+
 def test_load_enums_from_real_contract():
     al = _mod()
     e = al.load_enums(CONTRACT)
     assert e["layer"] == {"spec-review", "code-review"}
     assert e["lens"] == {"domain", "adversarial", "grounding", "history", "outside-voice", "broad"}
-    assert e["runner"] == {"claude", "codex", "claude-fallback"}
+    # add-codex-host-support：runner 加 none/unknown、废弃 claude-fallback；新增 host / reason_code 域（从契约块读）
+    assert e["runner"] == {"claude", "codex", "none", "unknown"}
+    assert e["host"] == {"claude", "codex", "unknown"}
+    assert e["reason_code"] == {"ok", "not-installed", "preflight-error", "timeout", "exec-error",
+                                "host-unknown", "secret-hit", "fallback-unavailable"}
     assert e["sev_re"].match("致1/高2/中0/低3")
     assert not e["sev_re"].match("致1/高2/中0")
 
@@ -113,7 +135,8 @@ def test_existence_min_required_rows(tmp_path):
 
 
 def _lm(**kw):
-    base = dict(layer="code-review", lens="domain", runner="claude",
+    # add-codex-host-support：base 含 host="claude"（v2 必填），普通镜 runner==host
+    base = dict(layer="code-review", lens="domain", host="claude", runner="claude",
                findings="2", 采纳="1", 裁掉="1", defer="0", 独立="0", sev="致0/高1/中0/低0")
     base.update(kw)
     return "<!-- sdflow:lens-metric v1 " + " ".join(f'{k}="{v}"' for k, v in base.items()) + " -->"
@@ -432,14 +455,14 @@ def test_catalog_bad_exit2_reason(tmp_path):
 
 def test_clean_report_exit0(tmp_path):
     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
-    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+    rpt = (_OV_XM + '\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
            '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root); assert r.returncode == 0, r.stderr
 
 def test_hr_tg_missing_declared_exit1(tmp_path):            # 完整报告但 hr-tg 缺 declared= → VIOLATION（端到端）
     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
-    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+    rpt = (_OV_XM + '\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
            '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root); assert r.returncode == 1, r.stderr
@@ -470,7 +493,7 @@ def test_f9_cli_malformed_csv_returncode1_valid_json(tmp_path):
     须 returncode==1（VIOLATION，非 2/ERROR）且 stdout 仍是合法 JSON（json.loads 不抛——collect-not-raise
     契约在 CLI 边界仍成立，不泄漏 traceback、不中断双输出），并含 kind=malformed-tg-csv。"""
     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
-    rpt = ('<!-- sdflow:outside-voice v1 site="x" -->\n'
+    rpt = (_OV_XM + '\n'
            '<!-- sdflow:hr-tg v1 hit="TG-04,,TG-16" declared="TG-04,TG-16" evidence="x" -->\n'
            '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
@@ -479,3 +502,288 @@ def test_f9_cli_malformed_csv_returncode1_valid_json(tmp_path):
     payload = json.loads(r.stdout)                            # 不抛 = F9 契约核心断言
     assert payload["result"] == "VIOLATION"
     assert any(x["kind"] == "malformed-tg-csv" for x in payload["violations"])
+
+
+# =========================================================================================
+# add-codex-host-support Task 2：host 必填 + 合法组合矩阵（自审红线）+ fan-out 一致性 lint
+#   + 普通镜行级校验 + 不判宿主边界锁
+# =========================================================================================
+
+# --- Step 1/2：REQUIRED_FIELDS 含 host；缺 host / host 越域 / runner 废弃值越域 -----------------
+
+def test_required_fields_includes_host():
+    al = _mod()
+    assert "host" in al.REQUIRED_FIELDS
+
+def test_lens_metric_missing_host_violation():
+    al = _mod()
+    anchor = '<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" runner="claude" -->'  # 缺 host
+    v = al.check_lens_metric(anchor, "code-review", _enums())
+    assert any(x["field"] == "host" and x["kind"] == "missing-field" for x in v)
+
+def test_lens_metric_host_out_of_enum():
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="mistral"), "code-review", _enums())
+    assert any(x["field"] == "host" and x["kind"] == "out-of-enum" for x in v)
+
+def test_lens_metric_runner_deprecated_claude_fallback_out_of_enum():
+    al = _mod()  # claude-fallback 已废弃、不在 runner 域 → out-of-enum
+    v = al.check_lens_metric(_lm(runner="claude-fallback"), "code-review", _enums())
+    assert any(x["field"] == "runner" and x["kind"] == "out-of-enum" for x in v)
+
+
+# --- Step 3/4：合法组合矩阵（🔴 自审红线单一源）绑到 outside-voice 锚 -----------------------------
+
+def _has(v, kind):
+    return any(x["kind"] == kind for x in v)
+
+def test_matrix_cross_model_legal():                        # ① 跨模型合法：host=claude runner=codex reason_code=ok
+    al = _mod()
+    assert al.check_legal_combo(_ov(host="claude", runner="codex", reason_code="ok") + "\n", _enums()) == []
+
+def test_matrix_same_family_legal():                        # ② 同族降级合法：runner==host + 降级码
+    al = _mod()
+    assert al.check_legal_combo(_ov(host="codex", runner="codex", reason_code="not-installed") + "\n", _enums()) == []
+
+def test_matrix_noexec_legal():                             # ③ 无执行合法：runner=none findings=0 host-unknown
+    al = _mod()
+    a = _ov(host="unknown", runner="none", reason_code="host-unknown", findings="0") + "\n"
+    assert al.check_legal_combo(a, _enums()) == []
+
+def test_matrix_noexec_secret_hit_legal():                  # ③ 无执行合法：host∈{claude,codex}∧secret-hit
+    al = _mod()
+    a = _ov(host="claude", runner="none", reason_code="secret-hit", findings="0") + "\n"
+    assert al.check_legal_combo(a, _enums()) == []
+
+def test_matrix_runner_none_with_findings_blocked():        # runner=none findings=5 → 拦
+    al = _mod()
+    a = _ov(host="claude", runner="none", reason_code="secret-hit", findings="5") + "\n"
+    assert _has(al.check_legal_combo(a, _enums()), "illegal-combo")
+
+def test_matrix_host_unknown_runner_claude_blocked():       # host=unknown runner=claude → 拦（catch-all）
+    al = _mod()
+    a = _ov(host="unknown", runner="claude", reason_code="ok") + "\n"
+    assert _has(al.check_legal_combo(a, _enums()), "illegal-combo")
+
+def test_matrix_self_review_runner_eq_host_reason_ok():     # 🔴 runner==host reason_code=ok → 自审
+    al = _mod()
+    a = _ov(host="claude", runner="claude", reason_code="ok") + "\n"
+    assert _has(al.check_legal_combo(a, _enums()), "self-review")
+
+def test_matrix_self_review_same_family_bad_code():         # runner==host 但 reason_code 非降级码（host-unknown）→ 自审
+    al = _mod()
+    a = _ov(host="codex", runner="codex", reason_code="host-unknown") + "\n"
+    assert _has(al.check_legal_combo(a, _enums()), "self-review")
+
+def test_matrix_catch_all_outside_voice_runner_unknown():   # 🔒 catch-all 显式回归锁：outside-voice runner=unknown → 拦
+    al = _mod()  # runner='unknown' 在共享 runner 枚举域内、第一层域校验放行，MUST 由矩阵 catch-all（显式 else）拦住
+    a = _ov(host="claude", runner="unknown", reason_code="ok") + "\n"
+    assert _has(al.check_legal_combo(a, _enums()), "illegal-combo")
+
+def test_matrix_cross_model_wrong_reason_code_blocked():    # runner≠host 但 reason_code≠ok → 拦
+    al = _mod()
+    a = _ov(host="claude", runner="codex", reason_code="timeout") + "\n"
+    assert _has(al.check_legal_combo(a, _enums()), "illegal-combo")
+
+def test_matrix_outside_voice_missing_reason_code():        # Step 3：outside-voice 锚缺 reason_code → missing-field
+    al = _mod()
+    a = '<!-- sdflow:outside-voice v1 site="x" host="claude" runner="codex" -->\n'
+    v = al.check_legal_combo(a, _enums())
+    assert any(x["field"] == "reason_code" and x["kind"] == "missing-field" for x in v)
+
+def test_matrix_bound_to_outside_voice_not_lens_metric():
+    """🔒 反例锁：F6 红线绑到 outside-voice 锚、非 lens-metric 锚。lens-metric 锚无 reason_code——
+    绑错会让红线读不到 reason_code 而静默永不触发=假绿。验：① 一条 runner==host 的 lens-metric 锚
+    （普通镜正常态）MUST NOT 被矩阵判自审（矩阵不碰 lens-metric 锚）；② 同样 runner==host 落在
+    outside-voice 锚上 MUST 被判自审——证明红线确实绑在 outside-voice 锚。"""
+    al = _mod()
+    lm = ('<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" host="claude" runner="claude" '
+          'site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->\n')
+    assert al.check_legal_combo(lm, _enums()) == []          # 矩阵忽略 lens-metric 锚
+    ov = _ov(host="claude", runner="claude", reason_code="ok") + "\n"
+    assert _has(al.check_legal_combo(ov, _enums()), "self-review")  # 绑在 outside-voice 锚 → 触发
+
+
+# --- Step 5：lens-metric 普通镜行级校验 -----------------------------------------------------
+
+def test_ordinary_mirror_runner_unknown_host_known_blocked():   # host=claude lens=domain runner=unknown → 拦
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="unknown"), "code-review", _enums())
+    assert _has(v, "ordinary-runner-host-mismatch")
+
+def test_ordinary_mirror_runner_unknown_host_unknown_ok():      # host=unknown lens=domain runner=unknown → 放行
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="unknown", lens="domain", runner="unknown"), "code-review", _enums())
+    assert not _has(v, "ordinary-runner-host-mismatch")
+
+def test_ordinary_mirror_runner_none_blocked():                # 普通镜 runner=none → 拦（none 仅 outside-voice 无执行）
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="none"), "code-review", _enums())
+    assert _has(v, "ordinary-runner-host-mismatch")
+
+def test_ordinary_mirror_runner_eq_host_ok():                  # host=codex lens=domain runner=codex → 放行
+    al = _mod()
+    v = al.check_lens_metric(_lm(layer="code-review", host="codex", lens="domain", runner="codex"), "code-review", _enums())
+    assert not _has(v, "ordinary-runner-host-mismatch")
+
+def test_outside_voice_lens_row_cross_model_not_flagged():     # lens=outside-voice 行 runner≠host 合法，不套普通镜规则
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="claude", lens="outside-voice", runner="codex", site="code-voice"),
+                             "code-review", _enums())
+    assert not _has(v, "ordinary-runner-host-mismatch")
+
+
+# --- Step 6：🔒 边界锁——anchor_lint 不判宿主（ADR-1），MUST NOT import/调 resolve-models.sh -------
+
+def test_anchor_lint_does_not_reference_resolve_models():
+    """ADR-1：宿主判定只在产出侧需要；anchor_lint 只校验锚行内部一致性（host/runner/reason_code 都写在锚里）。
+    MUST NOT import/调 resolve-models.sh（否则把宿主判定双实现进校验器，与 ADR-1 冲突）。
+    锁**代码**（剥注释后）——注释里为解释 ADR-1 而提及文件名不算违规。"""
+    code_only = "\n".join(ln.split("#", 1)[0] for ln in SCRIPT.read_text(encoding="utf-8").splitlines())
+    assert "resolve-models" not in code_only          # 无 shell-out 调宿主脚本
+    assert "resolve_models" not in code_only          # 无 python 双实现
+    assert "subprocess" not in code_only              # anchor_lint 纯解析、根本不起子进程（无处调宿主脚本）
+
+
+# --- Step 7：fan-out always-on 一致性 lint（读 mirrors=，MUST NOT 数 lens-metric 行）------------
+
+def test_fanout_unavailable_multi_mirror_blocked():            # unavailable + mirrors 列 3 镜 → dead-fanout-multi-mirror
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="domain,adversarial,grounding") + "\n"
+    assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
+
+def test_fanout_unavailable_single_mirror_ok():               # unavailable + 1 镜 → 放行
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="domain") + "\n"
+    assert al.check_fanout_consistency(r) == []
+
+def test_fanout_available_multi_mirror_ok():                  # available + N 镜 → 放行（残余留语义层，不拦偷懒自代）
+    al = _mod()
+    r = _fc(host="codex", subagents="available", mirrors="domain,adversarial,grounding") + "\n"
+    assert al.check_fanout_consistency(r) == []
+
+def test_fanout_mirrors_sentinel_ok():                        # mirrors="—"（未 fan-out）+ unavailable → 放行
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="—") + "\n"
+    assert al.check_fanout_consistency(r) == []
+
+def test_fanout_reads_mirrors_not_lens_metric_rows():
+    """🔒 C2 反例锁：判据 MUST 读 mirrors=、MUST NOT 数 lens-metric 行。构造 unavailable + mirrors 单镜
+    但报告里另有 3 条 domain/adversarial/grounding lens-metric 行——若误数 lens-metric 行会误报 >1，读 mirrors= 则放行。"""
+    al = _mod()
+    r = (_fc(host="codex", subagents="unavailable", mirrors="domain") + "\n"
+         + _lm(host="codex", lens="domain", runner="codex") + "\n"
+         + _lm(host="codex", lens="adversarial", runner="codex") + "\n"
+         + _lm(host="codex", lens="grounding", runner="codex") + "\n")
+    assert al.check_fanout_consistency(r) == []              # 只数 mirrors=（1 镜），不数 lens-metric 行
+
+# fail-closed 分支
+def test_fanout_subagents_empty_fail_closed():
+    al = _mod()
+    r = _fc(host="codex", subagents="", mirrors="domain") + "\n"
+    assert _has(al.check_fanout_consistency(r), "bad-subagents")
+
+def test_fanout_subagents_unknown_fail_closed():
+    al = _mod()
+    r = _fc(host="codex", subagents="maybe", mirrors="domain") + "\n"
+    assert _has(al.check_fanout_consistency(r), "bad-subagents")
+
+def test_fanout_subagents_missing_fail_closed():
+    al = _mod()
+    r = '<!-- sdflow:fanout-capability v1 host="codex" mirrors="domain" -->\n'
+    assert _has(al.check_fanout_consistency(r), "bad-subagents")
+
+def test_fanout_bad_subagents_not_bypassed_by_multi_mirror():
+    """🔒 r3-narrow #5：坏 subagents 值携多镜 MUST NOT 因不等于 'unavailable' 而绕过——须 fail-closed。"""
+    al = _mod()
+    r = _fc(host="codex", subagents="", mirrors="domain,adversarial,grounding") + "\n"
+    assert _has(al.check_fanout_consistency(r), "bad-subagents")
+
+def test_fanout_mirrors_missing_host_codex_fail_closed():
+    al = _mod()
+    r = '<!-- sdflow:fanout-capability v1 host="codex" subagents="unavailable" -->\n'
+    assert _has(al.check_fanout_consistency(r), "mirrors-missing")
+
+def test_fanout_mirrors_empty_fail_closed():
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="") + "\n"
+    assert _has(al.check_fanout_consistency(r), "mirrors-empty")
+
+def test_fanout_mirrors_unknown_token_fail_closed():
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="domain,bogus") + "\n"
+    assert _has(al.check_fanout_consistency(r), "mirrors-unknown-token")
+
+def test_fanout_mirrors_dup_token_fail_closed():
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="domain,domain") + "\n"
+    assert _has(al.check_fanout_consistency(r), "mirrors-dup-token")
+
+def test_fanout_duplicate_anchor_fail_closed():
+    al = _mod()
+    r = (_fc(host="codex", subagents="available", mirrors="domain") + "\n"
+         + _fc(host="codex", subagents="unavailable", mirrors="domain") + "\n")
+    assert _has(al.check_fanout_consistency(r), "duplicate-fanout-anchor")
+
+def test_fanout_host_mismatch_fail_closed():
+    al = _mod()  # capability 锚 host=claude 混入 host=codex 报告（outside-voice host=codex）
+    r = (_ov(host="codex", runner="claude", reason_code="ok") + "\n"
+         + _fc(host="claude", subagents="unavailable", mirrors="domain") + "\n")
+    assert _has(al.check_fanout_consistency(r), "fanout-host-mismatch")
+
+def test_fanout_host_codex_missing_anchor_blocked():
+    al = _mod()  # host=codex 报告（从 outside-voice host 读到）缺 fanout-capability 锚 → 报错
+    r = _ov(host="codex", runner="claude", reason_code="ok") + "\n"
+    assert _has(al.check_fanout_consistency(r), "missing-fanout-anchor")
+
+def test_fanout_host_claude_no_anchor_ok():                   # host=claude 免探、无 capability 锚合法
+    al = _mod()
+    r = _ov(host="claude", runner="codex", reason_code="ok") + "\n"
+    assert al.check_fanout_consistency(r) == []
+
+def test_fanout_kv_duplicate_key_fail_closed():
+    al = _mod()
+    r = '<!-- sdflow:fanout-capability v1 host="codex" host="claude" subagents="unavailable" mirrors="domain" -->\n'
+    assert _has(al.check_fanout_consistency(r), "dup-key")
+
+def test_fanout_in_fence_not_checked():                       # fence 内示例锚不校验
+    al = _mod()
+    r = 'real\n```\n' + _fc(host="codex", subagents="unavailable", mirrors="domain,adversarial") + '\n```\n'
+    assert al.check_fanout_consistency(r) == []
+
+
+# --- 解耦锁（metrics=false 时矩阵红线 + 一致性 lint 仍生效，端到端）------------------------------
+
+def test_matrix_self_review_blocks_when_metrics_off(tmp_path):
+    """🔒 解耦锁：metrics.enabled=false（默认消费仓、无 lens-metric 行）时，矩阵自审红线仍端到端拦截。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(host="claude", runner="claude", reason_code="ok") + "\n"   # 自审
+           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 1, r.stderr
+    assert any(x["kind"] == "self-review" for x in json.loads(r.stdout)["violations"])
+
+def test_fanout_dead_multi_mirror_blocks_when_metrics_off(tmp_path):
+    """🔒 解耦锁（C2）：metrics=false 且无 lens-metric 行时，一致性 lint 仍读 mirrors= 端到端拦截。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(host="codex", runner="claude", reason_code="ok") + "\n"    # host=codex 跨模型，合法
+           + _fc(host="codex", subagents="unavailable", mirrors="domain,adversarial,grounding") + "\n"
+           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 1, r.stderr
+    assert any(x["kind"] == "dead-fanout-multi-mirror" for x in json.loads(r.stdout)["violations"])
+
+def test_clean_v2_report_with_fanout_exit0(tmp_path):
+    """正例端到端：host=codex 合法跨模型 + fanout available 多镜 + mandatory 锚齐 → CLEAN。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(host="codex", runner="claude", reason_code="ok") + "\n"
+           + _fc(host="codex", subagents="available", mirrors="domain,adversarial,grounding") + "\n"
+           + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 0, r.stderr
