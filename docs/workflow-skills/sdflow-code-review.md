@@ -62,8 +62,8 @@ flowchart TD
 | 2前 | trivial_shape 机判豁免 | fan-out 前跑 `trivial_shape.py --base "$DIFF_BASE"`：**exit 0=EXEMPT**（diff 仅无逻辑面白名单形状——代码内注释 / README·CHANGELOG·docs·VERSION 等约定文档路径 / 仅新增 `tests/`；多镜结构上零产出）→ **免本步 fan-out**，报告 Step2 段注明豁免 + 判器 JSON `reason`（Step1 scope-drift 恒跑守卫伪装逻辑）；**1=NOT_EXEMPT**（有逻辑面 / 命中行为面路径 bundle·SKILL.md·workflow.md·ship_gate.py，即便纯 markdown）/ **2=ERROR** → 保守照常 fan-out；**判器缺失/不可执行视同 NOT_EXEMPT**（不静默免）。默认开、仅机判无逻辑面才关，非「高风险才跑」 |
 | 2 | 并行多镜 | 领域镜（CR-01~09 + domains）/ 对抗镜（证明运行期爆：竞态/泄漏/错误路径）/ 历史镜（git blame + 旧 review 意见）；linter/typechecker 能抓的不进镜 |
 | 2.5 | 跨模型第二意见 | **always** 跑 code-voice（不受清单约束、不占镜位）；「10 次后按采纳率复评降采样」条款已泛化到 per-(层,镜)、判据升采纳率+独立率双列，surfacing 由 `/sdflow-retro` 机械触发，砍/降采样人决（详见 SKILL.md 第五步「反馈回路」） |
-| 3 | 置信过滤 + 裁决 | 每条 0-100 **滤 <80**（可下放弱档打分）；**outside-voice 豁免**：runner=codex 跳过 <80 直通；**反静默压制**：<80 滤除也一行带过，不静默丢 |
-| 4 | 自动修/裁/defer | 能修自动修 `[impl-review-fix]`；≥2 方案按 **T10 三级**（有客观判据自动选/无则派对抗镜复核/复核不过 defer）；**裁决分桶**（codex/claude-fallback 各记采纳/裁掉/defer） |
+| 3 | 置信过滤 + 裁决 | 每条 0-100 **滤 <80**（可下放弱档打分）；**outside-voice 豁免**：被 `anchor_lint` 合法组合矩阵判「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，MUST NOT 自写 `runner≠host` 或按 runner 值硬编码——旧 `runner=codex` 判据在 Codex 宿主下恰是自审）的 findings 跳过 <80 直通；**反静默压制**：<80 滤除也一行带过，不静默丢 |
+| 4 | 自动修/裁/defer | 能修自动修 `[impl-review-fix]`；≥2 方案按 **T10 三级**（有客观判据自动选/无则派对抗镜复核/复核不过 defer）；**裁决分桶**（按 `site` 分：code-voice/hr-tg 各记采纳/裁掉/defer；`claude-fallback` 枚举值已废弃，同族 fallback 由 `runner==host` 表达） |
 | 5 | 出报告 + 收敛 | 度量锚经 `lens_metric_emit.py` **exit 0 才落**；`anchor_lint.py --layer code-review` 机验**四类 v1 锚**（非 0 即阻塞）；checkpoint；建议进 `/sdflow-done`——两道脚本门细节见下 |
 
 **Step5 两道脚本门细节**：

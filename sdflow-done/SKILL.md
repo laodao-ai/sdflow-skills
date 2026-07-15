@@ -123,6 +123,10 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 - **已真实完成的任务勾上** `- [x]`；**确实未做/部分做的保持 `- [ ]` 并补一句说明**（别为过 archive 假勾——保持记录诚实）。
 - 若整批确实完成，可 `sed -i '' 's/^- \[ \]/- [x]/g; s/^  - \[ \]/  - [x]/g'` 批量勾，再单独把未完成项改回。
 
+### 0.4 宿主/档位解析（每轮恰好一次，ADR-9 同源约束）〔host-adaptive-execution · 模型档位按机队分列〕
+
+`eval "$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）与 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已按 config.yaml 覆盖解析好的具体模型 id）。**下方各步「派发 Agent」的 `model:` 参数 MUST 取对应变量值，MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason** 一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
+
 ---
 
 ## 第一步：Verify（强档子 agent）
@@ -131,7 +135,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 >
 > **P3h 禁降档（阶段三去人类门后 verify = 唯一终门）**：铁律"带门禁 / 无人逐条复核的步别用弱档——假绿会放不完整的活过关"。verify 用强档 + 下方 prompt 的 **"Do Not Trust the Report" 冷启**，靠证据锚点硬约束堵假✅，不靠人盯。见 design §7.3.1 / adr/0001。
 
-派发 Agent（model: 按规则根 model-tiers.md 强档；config.yaml model-tiers 段可覆盖），prompt：
+派发 Agent（model: `$SDFLOW_TIER_STRONG`——第零步 0.4 已 eval 出的强档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
 
 ```
 你是 OpenSpec 验证助手。工作目录：{项目根目录}。
@@ -250,7 +254,7 @@ python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
 
 ⚠️ 归档**必须**用 `openspec archive` CLI（同步 delta→`openspec/specs/` + INDEX + 校验），**禁手动 `mv`**（漏 spec 同步）。
 
-派发 Agent（model: 按规则根 model-tiers.md 中档；config.yaml model-tiers 段可覆盖），prompt：
+派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
 
 ```
 你是 OpenSpec 归档助手。工作目录：{项目根目录}。语言中文。
@@ -305,7 +309,7 @@ MUST 段之后或行内。
 
 > 用弱档：本步纯机械（git add + 从 diff 生成 message），独立子代理无干扰、失败也就重生成 message。verify 用强档、archive 用中档是因它们是门禁/判断步（凭本步性质，非"统一"）。详见「模型选择」。
 
-派发 Agent（model: 按规则根 model-tiers.md 弱档；config.yaml model-tiers 段可覆盖），prompt：
+派发 Agent（model: `$SDFLOW_TIER_LIGHT`——第零步 0.4 已 eval 出的弱档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
 
 ```
 你是 Git 助手。工作目录：{项目根目录}。
@@ -400,7 +404,7 @@ sdflow-done 完成
 
 ## 模型选择（按本步性质，逐步定）
 
-> 档位与缺省见规则根 `model-tiers.md`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可覆盖映射）。
+> 档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步 0.4 同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。
 
 **关键前提**：本 skill 步骤**固定**（不是运行时动态路由），且每步**独立子代理**（各自上下文）。所以——
 - **混用 model 无干扰**：弱档-commit 与中档-verify 上下文隔离，互不污染；混用没有耦合代价。
@@ -410,9 +414,9 @@ sdflow-done 完成
 
 | 步 | 性质 | 档位 | 理由（本步自证） |
 |---|---|---|---|
-| verify | **唯一终门** + grep 代码判 PASS/FAIL | **强档** | 中档/弱档假 PASS = 放不完整活进归档；门不能省 |
-| archive | spec 同步 + 读代码核 delta | **中档** | judgment 活 |
-| commit | git add + 从 diff 生成 message | **弱档** | 纯机械；失败也就重生成 message；独立上下文无副作用 |
+| verify | **唯一终门** + grep 代码判 PASS/FAIL | **强档**（`$SDFLOW_TIER_STRONG`） | 中档/弱档假 PASS = 放不完整活进归档；门不能省 |
+| archive | spec 同步 + 读代码核 delta | **中档**（`$SDFLOW_TIER_MID`） | judgment 活 |
+| commit | git add + 从 diff 生成 message | **弱档**（`$SDFLOW_TIER_LIGHT`） | 纯机械；失败也就重生成 message；独立上下文无副作用 |
 
 注 **turn 数 > 单 token 价**：弱档在判断味的步上常多花 2-3× turn、总成本反高 → verify 用强档、archive 用中档不只为质量、也常更省。commit 机械、弱档不会 flail。
 

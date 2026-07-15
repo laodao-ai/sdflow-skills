@@ -101,6 +101,8 @@ description: >
 
 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
 2. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用评审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用评审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/spec-review.md`（方法论）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
+3. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：`eval "$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供下方「模型选择」节引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供下方「outside-voice helper 调用协议」引用）。**本轮全程只 eval 这一次**——后续锚行的 `host=`/`runner=` 与 `outside-voice.sh` 一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+4. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探两条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。两条均探到 ⇒ 正常进入第一步。
 
 ## 第一步：autoplan 子步（广审·原生执行，吃其 findings）
 
@@ -148,7 +150,7 @@ description: >
 - **对抗裁决**：对每条 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
 - **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由），供人类设计门复核"裁得对不对"。
 - **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。
-- **outside-voice findings 直通〔R4〕**：runner=codex 的 voice findings 与各镜同池对抗裁决；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
+- **outside-voice findings 直通〔R4〕**：被 `anchor_lint` 合法组合矩阵判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，非固定 `runner=codex`——Codex 宿主下跨模型 runner 恰是 `claude`）的 voice findings 与各镜同池对抗裁决；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
 - **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、第四步对应自检项跳过、**不调 emitter**（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按第四步「度量锚」描述构造 roster+findings 并调 `lens_metric_emit.py`（**采纳/裁掉/defer 为设计门拍板前的临时裁决，MUST 在拍板回写时最终确定，见〔SR-M〕**）。
 - **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调 `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/spec-review-report.md --layer spec-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚存在性 + lens-metric 字段/枚举/sev/layer==--layer/计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。**保留信任边界声明**：`findings=N` 与合并池实收数的**数值一致性**仍是主 session 信任边界、非机械可验——脚本不谎称保证数值正确。config `metrics.enabled` 关/无 metrics 块时 lens-metric 一类跳过（脚本内门控）。**此门只挡「同一会话内忘记跑这步」，挡不住「整段跳过本步」**（诚实拦截力）。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
@@ -170,7 +172,7 @@ description: >
 ## 第四步：产出
 
 - 写 `{change_dir}/spec-review-report.md`：**决策登记区**（自动决策 / 需拍板 / 已裁掉）+ 各镜 findings（带置信/严重度，低置信项一行带过、可审计不静默丢）+ 裁决。
-- **度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步）〔spec-review-amendment mlh-p4〕**：Step3 裁决后**构造** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/grounding/broad + outside-voice 每个调用过的 site）], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见契约 `lens-metric-contract.md` 的 `lens-metric-input-schema` 机读块——bundle 分发可达、消费仓亦可读；源仓另有 golden fixture 示范 `tools/tests/fixtures/lens_metric_input.json`，消费仓非 full 拷贝不含 `tests/`，以契约 schema 块为准）〔impl-review-fix mlh-p4：引用改指 bundle 可达契约块，原指 lens-metric-emit 能力块实不存在于 bundle〕→ 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer spec-review --input <构造的f>` → **exit 0 才**把其 stdout（逐镜 `<!-- sdflow:lens-metric v1 … -->` 行）落进报告本段 → 再由 Step3「锚行自检」跑 `anchor_lint` 自检；exit ≠0（fail-closed）→ 本段**不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。
+- **度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步）〔spec-review-amendment mlh-p4〕**：Step3 裁决后**构造** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/grounding/broad + outside-voice 每个调用过的 site）], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见契约 `lens-metric-contract.md` 的 `lens-metric-input-schema` 机读块——bundle 分发可达、消费仓亦可读；源仓另有 golden fixture 示范 `tools/tests/fixtures/lens_metric_input.json`，消费仓非 full 拷贝不含 `tests/`，以契约 schema 块为准）〔impl-review-fix mlh-p4：引用改指 bundle 可达契约块，原指 lens-metric-emit 能力块实不存在于 bundle〕→ 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer spec-review --host "$SDFLOW_HOST" --input <构造的f>`（`--host` 取第零步同一次 `resolve-models.sh` 导出值；roster 中非 outside-voice 普通镜行 `runner` MUST 等于 `--host`，outside-voice 行 `runner` 为跨模型判定所需值；emitter 缺 `--host` / `--host` 越域走受控 fail-closed）→ **exit 0 才**把其 stdout（逐镜 `<!-- sdflow:lens-metric v1 … -->` 行）落进报告本段 → 再由 Step3「锚行自检」跑 `anchor_lint` 自检；exit ≠0（fail-closed）→ 本段**不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。
   **保留残余信任边界声明**：分类正确性（某条 finding 该归哪个/哪些 lens）+ roster 完备性（是否漏报本轮实际跑过的行键）+ findings JSON 誊写准确（hits/verdict/sev 是否如实转录裁决结果）仍是主 session 信任边界，emitter 只保证「给定输入的确定性归约」，不保证输入本身对不对。
   字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）。
 - **反馈回路免责声明（与 sdflow-code-review 对称）〔impl-review-fix CF-补〕**：本 skill 只落锚，**不做聚合、
@@ -213,12 +215,12 @@ gate exit 3 时若拍板已发生，人工补此 frontmatter 块 = 显式越权�
 
 ## 模型选择（按本步性质，逐步定）
 
-档位与缺省见规则根 `model-tiers.md`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可覆盖映射）。
+档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队 + config.yaml 覆盖解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason**〔host-adaptive-execution · 模型档位按机队分列〕一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
 
 ```
-  主 session（协调/对抗裁决/决策登记/出报告）  强档 ← 这是门禁,弱档=假绿
-  领域镜 / 对抗镜（判断、对抗推理）             中档
-  接地镜（grep/读码核验，机械）                 弱档
+  主 session（协调/对抗裁决/决策登记/出报告）  强档 = $SDFLOW_TIER_STRONG ← 这是门禁,弱档=假绿
+  领域镜 / 对抗镜（判断、对抗推理）             中档 = $SDFLOW_TIER_MID
+  接地镜（grep/读码核验，机械）                 弱档 = $SDFLOW_TIER_LIGHT
 ```
 
 依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读码可下放弱档。
@@ -239,18 +241,20 @@ gate exit 3 时若拍板已发生，人工补此 frontmatter 块 = 显式越权�
 HELPER=~/.sdflow/hack/outside-voice.sh
 [ -x "$HELPER" ] 不成立 → 显式提示「outside-voice.sh 未安装——先跑 bash setup.sh」+ 直接派 fallback 子代理（不静默）
 版本核对：$HELPER version 输出与本 SKILL 预期主版本(1.x)不符 → 告警"helper 疑似陈旧，重跑 setup.sh"后继续
-preflight：仅精确匹配 "ready" 走 codex；"not_installed" 或任何畸形输出/非零退出 → fallback（reason_code=not-installed|preflight-error）
+$SDFLOW_HOST="unknown"（第零步 resolve-models.sh 判不出宿主）→ 不调用本 helper、不跑 voice；锚行 host="unknown" runner="none" reason_code="host-unknown"（ADR-7），报告显著标注本轮无跨模型第二意见
+以下分支仅在 $SDFLOW_HOST∈{claude,codex} 时适用；helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL，MUST NOT 自行重判宿主（ADR-9）：
+preflight：stdout 仅精确匹配 "ready" 走目标 runner（$SDFLOW_VOICE_RUNNER）；"not_installed" → fallback（reason_code="not-installed"）；"missing-deps" → fallback 且 MUST 映射锚 reason_code="preflight-error"（D7，MUST NOT 原样落 reason_code="missing-deps"——该值不在契约 reason_code 枚举内，会被 anchor_lint 矩阵判 illegal-combo）；任何畸形输出/非零退出 → fallback（reason_code="preflight-error"）
 context 构造（摘录规则定死，不现场发挥）：写 {change_dir}/.outside-voice/<site>-context.md（固定命名、下轮覆盖、不删，留调试证据）；该目录 MUST 在 .gitignore 内（防 checkpoint 的 git add -A 把全量 diff/敏感内容永久入库）
   site=design-voice → proposal「What Changes」+ design「Decisions」全文
   site=hr-tg       → 命中 TG 判据触发点 + 相关 diff hunk
 exec：$HELPER exec --context-file <f>
-  exit 0   → stdout 即 findings 进合并池；锚行 runner="codex"
-  exit 124 → fallback（reason_code=timeout）      exit 1 → fallback（reason_code=exec-error，stderr 摘要写锚行外正文）
-  exit 3   → 本次 voice 拒发不 fallback（reason_code=secret-hit；密钥既不出境也不进子代理 prompt）
-fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh **只读型** Claude 子代理（禁写/禁执行副作用）（同源同 prompt；框架已含范围收窄）；
-  无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 runner="claude-fallback"
-锚行（每调用位点一行，truncated 取 helper stderr 的 OV_TRUNCATED）：
-  <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" runner="codex|claude-fallback" reason_code="…" findings="N" truncated="true|false" -->
+  exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
+  exit 124 → fallback（reason_code="timeout"）      exit 1 → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
+  exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
+fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout,exec-error}）：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh **只读型**（与 $SDFLOW_HOST 同宿主）子代理（禁写/禁执行副作用）（同源同 prompt；框架已含范围收窄）；
+  无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_HOST"（同族——`claude-fallback` 枚举值已废弃，跨模型性是派生量，同族 fallback 由 runner==host 表达）
+锚行（每调用位点一行，truncated 取 helper stderr 的 OV_TRUNCATED；host/runner 恒取第零步同一次 resolve-models.sh 导出值，不重判）：
+  <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" host="claude|codex|unknown" runner="claude|codex|none" reason_code="ok|not-installed|preflight-error|timeout|exec-error|host-unknown|secret-hit|fallback-unavailable" findings="N" truncated="true|false" -->
 ```
 
 ## 注意

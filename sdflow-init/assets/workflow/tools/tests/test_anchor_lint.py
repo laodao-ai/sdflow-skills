@@ -545,6 +545,22 @@ def test_matrix_same_family_legal():                        # ② 同族降级�
     al = _mod()
     assert al.check_legal_combo(_ov(host="codex", runner="codex", reason_code="not-installed") + "\n", _enums()) == []
 
+def test_matrix_preflight_error_mapped_from_missing_deps_legal():
+    """task 8.6/D7（tasks 7.8 补测）：outside-voice.sh preflight stdout=`missing-deps` 由调用 SKILL
+    映射为锚 reason_code="preflight-error"（合法同族降级码集内）后 MUST 放行——这是「诚实同族 fallback」
+    路径，不得被矩阵拦。"""
+    al = _mod()
+    a = _ov(host="codex", runner="codex", reason_code="preflight-error") + "\n"
+    assert al.check_legal_combo(a, _enums()) == []
+
+def test_matrix_raw_missing_deps_reason_code_rejected():
+    """反例锁：`reason_code="missing-deps"` 原样落锚（未按 D7 映射为 preflight-error）MUST 被拒——
+    `missing-deps` 不在契约 reason_code 8 值域内，越域即报错，防止调用方漏映射而假绿放行。"""
+    al = _mod()
+    a = _ov(host="codex", runner="codex", reason_code="missing-deps") + "\n"
+    v = al.check_legal_combo(a, _enums())
+    assert any(x["field"] == "reason_code" and x["kind"] == "out-of-enum" for x in v)
+
 def test_matrix_noexec_legal():                             # ③ 无执行合法：runner=none findings=0 host-unknown
     al = _mod()
     a = _ov(host="unknown", runner="none", reason_code="host-unknown", findings="0") + "\n"

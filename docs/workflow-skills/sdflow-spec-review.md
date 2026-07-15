@@ -79,7 +79,7 @@ flowchart TD
 |---|---|---|
 | [`autoplan`](./gstack-autoplan.md) | 原生执行（进主 session） | Step1 广审；其 eng 镜与本 skill 多镜不重复 |
 | 领域/对抗/接地镜 | fresh-context 子代理 | 一条消息内全部派出，返回结构化 findings（问题/证据 file:line/置信/严重度/建议），**禁 AskUserQuestion** |
-| `outside-voice.sh` | 确定性脚本（退出码契约） | preflight `ready`→codex；exit0=findings（runner=codex）、exit124→fallback、exit3→拒发不 fallback（密钥）；畸形/非零→claude-fallback（只读子代理） |
+| `outside-voice.sh` | 确定性脚本（退出码契约） | runner 由 `resolve-models.sh` 判的宿主决定（Claude 宿主→codex，Codex 宿主→claude，MUST NOT 硬编码 codex）；preflight `ready`→目标 runner；exit0=findings（锚 `host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"`，跨模型）、exit124→fallback（`timeout`）、exit3→拒发不 fallback（`secret-hit`，密钥）；畸形/非零→同宿主只读子代理 fallback（锚 `runner==host`，`claude-fallback` 枚举值已废弃） |
 | `resolve-workflow.sh` | 脚本 | 解析规则根（本地 pin 或全局 canonical）；不硬编码 `openspec/workflow/` |
 | `anchor_lint.py` | 确定性脚本（退出码契约） | Step3 出报告后锚自检（`--layer spec-review --trigger-catalog $RULES_ROOT/trigger-catalog.md`，后者为 M2/M-new 前提、必需参数）：机验 4 类正文 v1 锚存在性 + lens-metric 字段/枚举；0=CLEAN、1=违规、2=fail-closed，**非 0 阻塞本步** |
 | `lens_metric_emit.py` | 确定性脚本（fail-closed） | Step4 度量锚 emitter（config `metrics.enabled` 门控，缺省/`false` 不调）；**exit 0 才**落其 stdout 进报告，非 0 不落、禁手拼锚行 |

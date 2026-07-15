@@ -125,6 +125,8 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 2. 确认代码已实现且在 feature 分支（`git branch --show-current`）。算 diff base：
    `git fetch origin <base> --quiet && DIFF_BASE=$(git merge-base origin/<base> HEAD)`。
 3. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用代码审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用代码审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/code-checklists/README.md`（架构/选用）、`$RULES_ROOT/code-checklists/code-review-base.md`（CR-01~09）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
+4. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：`eval "$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供下方「模型选择」节引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供下方「outside-voice helper 调用协议」引用）。**本轮全程只 eval 这一次**——后续锚行的 `host=`/`runner=` 与 `outside-voice.sh` 一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+5. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探两条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。两条均探到 ⇒ 正常进入第一步。
 
 ## 第一步：gstack/review 子步（并入·原生执行，scope-drift + 完成度）
 
@@ -169,7 +171,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
    折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
 2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
    明确滤除：CI 能抓的 / 纯 nitpick / 未改动行的既有问题 / 仅主观风格 / 已被注释显式抑制的。
-   **outside-voice 豁免〔R4·D8〕**：`runner=codex` 的 findings 跳过 <80 数值滤直通对抗裁决（跨模型自评不可比、异见不被同族标尺误杀）；`runner=claude-fallback` 属同族产物照过滤。
+   **outside-voice 豁免〔R4·D8，ADR-5/C1〕**：豁免判据 = 该条 finding 所属 outside-voice 锚被 `anchor_lint` **合法组合矩阵**判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`）——**MUST NOT 自写裸 `runner≠host`**（被 `runner="none"` 击穿）、**MUST NOT 按 runner 取值硬编码**（旧规则 `runner=codex` 在 Codex 宿主下恰是自审，是本条要杀的假绿点）。矩阵判「跨模型」为真的 findings 跳过 <80 数值滤直通对抗裁决（跨模型自评不可比、异见不被同族标尺误杀）；**其余一律照过同族置信滤**——含同族 fallback（`runner==host`，`claude-fallback` 枚举值已废弃）与无执行（`runner="none"`，findings 恒 0，豁免无意义）。
 3. **对抗裁决**：对每条存活 finding 判"是否真的运行期出问题"——对抗镜反驳 ≥ 多数成立则采信。
 4. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
    判"不成立"的连理由落入报告「已裁掉」区。<80 滤除项也**一行带过（可审计），不静默丢**（静默 = "全过了"的假象）。
@@ -195,7 +197,9 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 
 - 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账 + 度量锚）。
 - **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
-  构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --input <构造的f>` →
+  构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
+  （`--host` 取第零步同一次 `resolve-models.sh` 导出值；roster 中非 outside-voice 普通镜行 `runner` MUST 等于 `--host`；
+  emitter 缺 `--host` / `--host` 越域走受控 fail-closed）→
   **exit 0 才**把 stdout（逐镜 `<!-- sdflow:lens-metric v1 … -->` 行）落进「报告格式」度量锚段；exit ≠0（fail-closed）→ 本段
   **不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。**保留残余信任边界声明**：分类正确性 + roster 完备性 +
   findings JSON 誊写准确仍是主 session 信任边界，emitter 只保证「给定输入的确定性归约」。
@@ -231,18 +235,20 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 HELPER=~/.sdflow/hack/outside-voice.sh
 [ -x "$HELPER" ] 不成立 → 显式提示「outside-voice.sh 未安装——先跑 bash setup.sh」+ 直接派 fallback 子代理（不静默）
 版本核对：$HELPER version 输出与本 SKILL 预期主版本(1.x)不符 → 告警"helper 疑似陈旧，重跑 setup.sh"后继续
-preflight：仅精确匹配 "ready" 走 codex；"not_installed" 或任何畸形输出/非零退出 → fallback（reason_code=not-installed|preflight-error）
+$SDFLOW_HOST="unknown"（第零步 resolve-models.sh 判不出宿主）→ 不调用本 helper、不跑 voice；锚行 host="unknown" runner="none" reason_code="host-unknown"（ADR-7），报告显著标注本轮无跨模型第二意见
+以下分支仅在 $SDFLOW_HOST∈{claude,codex} 时适用；helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL，MUST NOT 自行重判宿主（ADR-9）：
+preflight：stdout 仅精确匹配 "ready" 走目标 runner（$SDFLOW_VOICE_RUNNER）；"not_installed" → fallback（reason_code="not-installed"）；"missing-deps" → fallback 且 MUST 映射锚 reason_code="preflight-error"（D7，MUST NOT 原样落 reason_code="missing-deps"——该值不在契约 reason_code 枚举内，会被 anchor_lint 矩阵判 illegal-combo）；任何畸形输出/非零退出 → fallback（reason_code="preflight-error"）
 context 构造（摘录规则定死，不现场发挥）：写 {change_dir}/.outside-voice/<site>-context.md（固定命名、下轮覆盖、不删，留调试证据）；该目录 MUST 在 .gitignore 内（防 checkpoint 的 git add -A 把全量 diff/敏感内容永久入库）
   site=code-voice → git diff $DIFF_BASE..HEAD 全量
   site=hr-tg      → 命中 TG 判据触发点 + 相关 diff hunk
 exec：$HELPER exec --context-file <f>
-  exit 0   → stdout 即 findings 进合并池；锚行 runner="codex"
-  exit 124 → fallback（reason_code=timeout）      exit 1 → fallback（reason_code=exec-error，stderr 摘要写锚行外正文）
-  exit 3   → 本次 voice 拒发不 fallback（reason_code=secret-hit；密钥既不出境也不进子代理 prompt）
-fallback：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh **只读型** Claude 子代理（禁写/禁执行副作用）（同源同 prompt；框架已含范围收窄）；
-  无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 runner="claude-fallback"
-锚行（每调用位点一行，truncated 取 helper stderr 的 OV_TRUNCATED）：
-  <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" runner="codex|claude-fallback" reason_code="…" findings="N" truncated="true|false" -->
+  exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
+  exit 124 → fallback（reason_code="timeout"）      exit 1 → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
+  exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
+fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout,exec-error}）：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh **只读型**（与 $SDFLOW_HOST 同宿主）子代理（禁写/禁执行副作用）（同源同 prompt；框架已含范围收窄）；
+  无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_HOST"（同族——`claude-fallback` 枚举值已废弃，跨模型性是派生量，同族 fallback 由 runner==host 表达）
+锚行（每调用位点一行，truncated 取 helper stderr 的 OV_TRUNCATED；host/runner 恒取第零步同一次 resolve-models.sh 导出值，不重判）：
+  <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" host="claude|codex|unknown" runner="claude|codex|none" reason_code="ok|not-installed|preflight-error|timeout|exec-error|host-unknown|secret-hit|fallback-unavailable" findings="N" truncated="true|false" -->
 ```
 
 ## 报告格式（code-review-report.md）
@@ -294,12 +300,12 @@ ship-gate:
 
 ## 模型选择（按本步性质，逐步定）
 
-档位与缺省见规则根 `model-tiers.md`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可覆盖映射）。
+档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队 + config.yaml 覆盖解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason**〔host-adaptive-execution · 模型档位按机队分列〕一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
 
 ```
-  主 session（裁决 / 自动裁 / 出报告）        强档 ← 这是门禁,弱档=假绿
-  领域镜 / 对抗镜（判断、对抗推理）           中档
-  历史镜 / 置信过滤（git blame/打分，机械）   弱档
+  主 session（裁决 / 自动裁 / 出报告）        强档 = $SDFLOW_TIER_STRONG ← 这是门禁,弱档=假绿
+  领域镜 / 对抗镜（判断、对抗推理）           中档 = $SDFLOW_TIER_MID
+  历史镜 / 置信过滤（git blame/打分，机械）   弱档 = $SDFLOW_TIER_LIGHT
 ```
 
 依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读 blame/打分可下放弱档。
