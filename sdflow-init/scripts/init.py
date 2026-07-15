@@ -296,38 +296,52 @@ def _parse_model_tiers_block(lines, start, end):
     2 空格叶子，兼容读作 Claude 机队，见 ADR-8）两种写法——与 resolve-models.sh
     ::_read_config_overrides 同一有界键路径口径（6 条：2 机队×3 档），各自本地重实现
     （跨语言无法共享同一实现，MUST NOT 写通用 YAML 解析器，基准 5）。
-    返回 (entries, bad_subkeys)：
+    返回 (entries, bad_subkeys, bad_headers)：
       entries = {"claude.strong": "opus", "flat.mid": "sonnet", ...}（值为 strip 后原始文本，
                  未做字符集校验——校验在调用侧做，以便按 fleet.tier 精确报 reason）
       bad_subkeys = 越域键集合，两类：顶层二级键（既非 claude/codex 也非 strong/mid/light，如
                  "weird"）+ 机队子块下的三级叶子键（如 "claude.bogus"）——config_lint 比
                  resolve-models.sh 更严格（后者对未知叶子键静默跳过、best-effort 提取；本函数
                  是 fail-closed 结构门，MUST 把两类越域键都亮出来）
+      bad_headers = 机队头带**非空尾随内容**的畸形行（如 `claude: rogue`——fleet 名当标量误用）。
+                 〔Task 6 复评 Critical〕这类行是 fleet 归属串扰的入口：resolver 遇它 reset fleet
+                 （不让 stale fleet 续命把后续叶子读进错机队），config_lint 必须**同步报违规**且
+                 **给出同一 fleet 归属**（fleet_ctx 归 None，后续叶子不归任何机队）——否则两解析器
+                 对同一输入 fleet 归属分叉（违 GC-6/D10）。纯注释头（`claude:  # x`，剥注释后值空）
+                 是合法 YAML 嵌套块头、非畸形，不入本集。
     """
     entries = {}
     bad = set()
+    bad_headers = []
     fleet_ctx = None
     for ln in lines[start + 1:end]:
         s = ln.strip()
         if not s or s.startswith("#"):
+            continue   # 空行 / 任意缩进的注释行 —— 保持 fleet_ctx 不变（同 resolve-models.sh）
+        n = len(ln) - len(ln.lstrip(" "))
+        if ":" not in s:
+            fleet_ctx = None   # 无冒号的畸形行 —— 有界解析不认，reset（同 resolver `" "*` reset）
             continue
-        if ln.startswith("    ") and not ln.startswith("     ") and ":" in s:
-            # 4-space：机队子块下的叶子键（仅在 fleet_ctx 已设时生效）
+        k, _, v = s.partition(":")
+        k = k.strip()
+        v = _strip_inline_comment(v)
+        if n >= 4:
+            # 4-space+ 缩进：机队子块下的叶子键（仅在 fleet_ctx 已设时生效）
             if fleet_ctx:
-                k, _, v = s.partition(":")
-                k = k.strip()
                 if k in TIER_ALLOWED_SUBKEYS:
-                    entries[f"{fleet_ctx}.{k}"] = _strip_inline_comment(v)
+                    entries[f"{fleet_ctx}.{k}"] = v
                 else:
                     bad.add(f"{fleet_ctx}.{k}")
             continue
-        if ln.startswith("  ") and not ln.startswith("   ") and ":" in s:
-            # 2-space：机队头（claude:/codex:，无值）或扁平叶子键（strong:/mid:/light:，有值）
-            k, _, v = s.partition(":")
-            k = k.strip()
-            v = _strip_inline_comment(v)
+        if n >= 2:
+            # 2-space 缩进：机队头（值须空）或扁平叶子键（strong/mid/light）
             if k in TIER_FLEET_KEYS:
-                fleet_ctx = k
+                if v:
+                    # `claude: rogue` —— fleet 名当标量误用，畸形。reset fleet 防串扰、报违规。
+                    bad_headers.append(f"{k}: {v}")
+                    fleet_ctx = None
+                else:
+                    fleet_ctx = k   # 空值（含纯注释头剥注释后为空）= 合法嵌套块头
                 continue
             fleet_ctx = None
             if k in TIER_ALLOWED_SUBKEYS:
@@ -335,8 +349,9 @@ def _parse_model_tiers_block(lines, start, end):
             else:
                 bad.add(k)
             continue
-        # 其它缩进/异常行——有界解析不认，静默跳过（同 resolve-models.sh 口径）
-    return entries, bad
+        # n < 2（1-space 等奇异缩进）——有界解析不认，reset（同 resolver `" "*` reset）
+        fleet_ctx = None
+    return entries, bad, bad_headers
 
 
 def _find_top_level_block(lines, key):
@@ -411,11 +426,17 @@ def lint_config(root):
     tiers_block = _find_top_level_block(lines, "model-tiers")  # 条件化：块整段缺失 → 跳过（放行）
     if tiers_block is not None:
         start, end = tiers_block
-        entries, bad = _parse_model_tiers_block(lines, start, end)
+        entries, bad, bad_headers = _parse_model_tiers_block(lines, start, end)
         if bad:
             reasons.append(
                 f"model-tiers: 子键越域 {sorted(bad)}"
                 f"（顶层须 ⊆ {{claude,codex,strong,mid,light}}，机队子块叶子键须 ⊆ {{strong,mid,light}}）")
+        if bad_headers:
+            # 〔Task 6 复评 Critical〕机队头带非空尾随内容（fleet 名当标量误用），是 fleet 归属
+            # 串扰入口——报违规，且解析侧已 reset fleet 与 resolver 同步归属（GC-6/D10）。
+            reasons.append(
+                f"model-tiers: 机队头带尾随内容 {sorted(bad_headers)}"
+                f"（`claude:`/`codex:` 须为空的嵌套块头，值另起 strong/mid/light 缩进行；纯注释头合法）")
         bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_model_id(v)]
         if bad_values:
             reasons.append(f"model-tiers: 值非法模型ID {bad_values}（须为 [A-Za-z0-9._-]+，首字符字母数字）")

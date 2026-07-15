@@ -314,6 +314,31 @@ class TestSharedMalformedFixtureConsistency:
                 assert not marker.exists(), f"{case['name']}: 注入被执行"
 
 
+class TestFleetHeaderTrailingContentCrosstalk:
+    """Task 6 复评 Critical（reviewer 对抗复现）：fleet header 带行内注释击穿精确匹配，
+    stale fleet 跨该行续命 ⇒ 后续叶子值被读进错误机队（opus 塞进 codex）。回归锁。"""
+
+    CROSSTALK_CONFIG = ("schema: spec-driven\nmodel-tiers:\n"
+                        "  codex:\n    strong: gpt-placeholder\n"
+                        "  claude:  # override block for claude fleet\n    strong: opus\n")
+
+    def test_opus_does_not_leak_into_codex_fleet(self, tmp_path):
+        """codex 宿主下，claude 头后注释的 `strong: opus` MUST NOT 归 codex——codex.strong 仍取
+        codex 段自己的 `gpt-placeholder` 覆盖（而非被 claude 块的 opus 串扰覆盖）。"""
+        root = make_bundle_repo(tmp_path)
+        write_config_yaml(root, self.CROSSTALK_CONFIG)
+        codex = parse_exports(run_resolve(root, {"CODEX_THREAD_ID": "x"}).stdout)
+        assert codex["SDFLOW_TIER_STRONG"] != "opus", "opus 泄进了 codex 机队（fleet 归属串扰）"
+        assert codex["SDFLOW_TIER_STRONG"] == "gpt-placeholder"
+
+    def test_opus_correctly_attributed_to_claude_fleet(self, tmp_path):
+        """claude 宿主下，注释后的 `strong: opus` 正确归 claude。"""
+        root = make_bundle_repo(tmp_path)
+        write_config_yaml(root, self.CROSSTALK_CONFIG)
+        claude = parse_exports(run_resolve(root, {"CLAUDECODE": "1"}).stdout)
+        assert claude["SDFLOW_TIER_STRONG"] == "opus"
+
+
 class TestOutsideVoiceDoesNotSelfResolve:
     """🔒 G6 同源锁（ADR-9）：outside-voice.sh MUST NOT 自行调 resolve-models.sh 重判宿主——
     只从环境读 $SDFLOW_VOICE_RUNNER，否则锚行 host 与 voice 实际 runner 可能不同源。"""

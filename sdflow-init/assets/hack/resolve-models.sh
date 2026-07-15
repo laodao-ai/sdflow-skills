@@ -110,7 +110,7 @@ OV_FLAT_STRONG=""; OV_FLAT_MID=""; OV_FLAT_LIGHT=""
 _read_config_overrides() {
   local cfg="$ROOT/openspec/config.yaml"
   [ -f "$cfg" ] || return 0
-  local in_block=0 fleet="" line key val
+  local in_block=0 fleet="" line key val trimmed
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%$'\r'}"
     line="$(printf '%s' "$line" | sed -e 's/[[:space:]]*$//')"
@@ -118,29 +118,20 @@ _read_config_overrides() {
       [ "$line" = "model-tiers:" ] && { in_block=1; fleet=""; }
       continue
     fi
-    case "$line" in
+    # 先剥一层：leading-space trim 后的内容（判空行/注释行，MUST NOT reset fleet——
+    # 块内空行/注释是合法的、不该打断 fleet 上下文）。
+    trimmed="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//')"
+    case "$trimmed" in
       ""|"#"*)
-        continue ;;
-      "  claude:")
-        fleet="claude"; continue ;;
-      "  codex:")
-        fleet="codex"; continue ;;
-      "  strong:"*|"  mid:"*|"  light:"*)
-        key="${line%%:*}"; key="${key#  }"
+        continue ;;   # 空行 / 任意缩进的注释行 —— 保持 fleet 不变
+    esac
+    case "$line" in
+      "    "*)
+        # 4-space 缩进 = 机队子块下的叶子键（须先于 2-space 通配匹配，否则被后者截胡）。
+        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
         val="${line#*:}"
         val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-        case "$key" in
-          strong) OV_FLAT_STRONG="$val" ;;
-          mid)    OV_FLAT_MID="$val" ;;
-          light)  OV_FLAT_LIGHT="$val" ;;
-        esac
-        fleet=""
-        continue ;;
-      "    strong:"*|"    mid:"*|"    light:"*)
         if [ -n "$fleet" ]; then
-          key="${line%%:*}"; key="${key#    }"
-          val="${line#*:}"
-          val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
           case "$fleet:$key" in
             claude:strong) OV_CLAUDE_STRONG="$val" ;;
             claude:mid)    OV_CLAUDE_MID="$val" ;;
@@ -151,9 +142,28 @@ _read_config_overrides() {
           esac
         fi
         continue ;;
+      "  "*)
+        # 2-space 缩进 = 机队头（claude:/codex:，值须空）或扁平叶子键（strong:/mid:/light:）。
+        # 〔Task 6 复评 Critical〕机队头匹配 MUST 容忍尾随注释（剥注释后值为空 = 合法块头），
+        # 且**非空尾随内容**（如 `claude: rogue`，fleet 名当标量误用）= 畸形 ⇒ reset fleet=""，
+        # 不让 stale fleet 跨该行续命把后续叶子读进错机队（opus 塞进 codex 的根因）。
+        # 与 config_lint（init.py::_parse_model_tiers_block）同口径：同输入同 fleet 归属（GC-6/D10）。
+        key="${line%%:*}"; key="$(printf '%s' "$key" | sed -e 's/^[[:space:]]*//')"
+        val="${line#*:}"
+        val="$(printf '%s' "$val" | sed -e 's/[[:space:]]*#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        case "$key" in
+          claude|codex)
+            if [ -z "$val" ]; then fleet="$key"; else fleet=""; fi ;;   # 空值=合法头；带值=畸形→reset
+          strong) OV_FLAT_STRONG="$val"; fleet="" ;;
+          mid)    OV_FLAT_MID="$val"; fleet="" ;;
+          light)  OV_FLAT_LIGHT="$val"; fleet="" ;;
+          *)      fleet="" ;;                                            # 未知 2-space 键 → reset
+        esac
+        continue ;;
       " "*|"	"*)
-        # 未识别的缩进行（未知子键/深缩进异常/注释）——有界解析不认，静默跳过。
-        # 结构级 fail-closed 校验是 config_lint（init.py lint_config）的职责，非本脚本。
+        # 其它缩进（3/5+ 空格等奇异缩进）——有界解析不认。reset fleet 防 stale 续命
+        # （option ①：遇未识别缩进行 MUST 重置，与上方带值机队头同一防线）。
+        fleet=""
         continue ;;
       *)
         in_block=0; fleet=""

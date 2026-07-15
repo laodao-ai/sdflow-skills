@@ -126,4 +126,75 @@ CASES = [
             dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
         ],
     ),
+    # ─── Task 6 复评 Critical：fleet header 带尾随注释/内容 → fleet 归属串扰 ─────────────
+    # reviewer 对抗复现：fleet header 行带行内注释击穿精确匹配，stale fleet 跨该行续命，
+    # 后续叶子值被读进错误机队（opus 塞进 codex）。两解析器须对同一输入给出同一 fleet 归属。
+    dict(
+        # Critical 原始复现：codex 块在前，claude 头带注释，strong: opus。
+        # opus MUST 归 claude、MUST NOT 泄进 codex（codex 回落缺省 gpt-5.6-sol）。
+        # 纯注释是合法 YAML（注释剥离后值为空 = 合法嵌套块头）⇒ 合法、CLEAN、两侧一致归 claude。
+        name="fleet_header_trailing_comment_claude",
+        yaml_block="""model-tiers:
+  codex:
+    strong: codex-real
+  claude:  # override block for claude fleet
+    strong: opus
+""",
+        lint_clean=True,
+        lint_reason_substrs=[],
+        resolver=[
+            dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
+            dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+        ],
+    ),
+    dict(
+        # 反向串扰：claude 块在前，codex 头带注释，strong: codex-real。
+        # codex-real MUST 归 codex、MUST NOT 泄进 claude（claude 用 claude-real）。
+        name="fleet_header_trailing_comment_codex_reverse",
+        yaml_block="""model-tiers:
+  claude:
+    strong: claude-real
+  codex:  # rogue comment on codex header
+    strong: codex-real
+""",
+        lint_clean=True,
+        lint_reason_substrs=[],
+        resolver=[
+            dict(host="claude", strong="claude-real", mid="sonnet", light="haiku"),
+            dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+        ],
+    ),
+    dict(
+        # 纯尾随内容（无注释）：`  claude: rogue` —— fleet 名当标量误用，是畸形。
+        # config_lint MUST 报违规；两侧 MUST NOT 把后续 strong 归给 claude（丢弃）。
+        # 用与缺省不同的 claude-leak 值以检出串扰：正确=丢弃 ⇒ claude host 回落缺省 opus。
+        name="fleet_header_trailing_content_rogue",
+        yaml_block="""model-tiers:
+  codex:
+    strong: codex-real
+  claude: rogue
+    strong: claude-leak
+""",
+        lint_clean=False,
+        lint_reason_substrs=["claude"],
+        resolver=[
+            dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
+            dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+        ],
+    ),
+    dict(
+        # 无前置合法块：注释 fleet 头是块内首条 entry（老 bug 下 fleet 起始为空 ⇒ 叶子丢弃）。
+        # 用 claude-first 检出：正确归 claude ⇒ claude host = claude-first。
+        name="fleet_header_comment_no_preceding_block",
+        yaml_block="""model-tiers:
+  claude:  # first entry, no prior fleet block
+    strong: claude-first
+""",
+        lint_clean=True,
+        lint_reason_substrs=[],
+        resolver=[
+            dict(host="claude", strong="claude-first", mid="sonnet", light="haiku"),
+            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+        ],
+    ),
 ]
