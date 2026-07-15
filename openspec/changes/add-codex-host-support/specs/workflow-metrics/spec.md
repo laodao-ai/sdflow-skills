@@ -4,7 +4,7 @@
 
 评审**价值** SHALL 以结构化锚行 `sdflow:lens-metric v1` 记录，一行对应一（层, 镜, **宿主**, runner, 轮）**五**元组〔add-codex-host-support：原四元组不含 host，导致 Codex 宿主的自审轮次与 Claude 宿主的真跨模型轮次**无法区分**〕，MUST NOT 以自由 prose 承载（否则跨 change 聚合须 parse 自由文本，措辞漂移即腐坏——ROADMAP adr/0006(b) 禁「prose 治 prose」）。契约字段与取值域 SHALL 由 `sdflow-init/assets/workflow/` 下的**单一权威规范**定义，各生产者 SKILL 引用而 MUST NOT 复制字段清单。
 
-字段：`layer`（`spec-review`|`code-review`）、`lens`（`domain`|`adversarial`|`grounding`|`history`|`outside-voice`|`broad`）、**`host`（`claude`|`codex`|`unknown`——谁在跑这次评审，由 `resolve-models.sh` 按正信号判定，见能力 `host-adaptive-execution`）**、`runner`（`claude`|`codex`——**谁执行了这个镜，只记机队家族**）、`site`（**可选消歧**：`code-voice`|`hr-tg`|`design-voice`|`—`，**仅 `outside-voice` 用、不进 `lens` enum**——消同轮多次 voice 调用的撞键，保 hr-tg 定向复核 vs 泛检信号区分〔SR-D 决策门 Q1=A〕）、`findings`（int≥0，去重前自报数）、`采纳`/`裁掉`/`defer`（int≥0）、`独立`（int≥0）、`sev`（`致N/高N/中N/低N`，仅采纳项）。〔grill-amendment：原含 `dur_s`，因无诚实数据源砍除，成本另立 T29——见 design ADR-3〕
+字段：`layer`（`spec-review`|`code-review`）、`lens`（`domain`|`adversarial`|`grounding`|`history`|`outside-voice`|`broad`）、**`host`（`claude`|`codex`|`unknown`——谁在跑这次评审，由 `resolve-models.sh` 按正信号判定，见能力 `host-adaptive-execution`）**、`runner`（`claude`|`codex`|`none`——**谁执行了这个镜，只记机队家族**；`none` = 该轮无执行〔spec-review-amendment D6：host-unknown/secret-hit 用之，伴 `findings=0`〕）、`site`（**可选消歧**：`code-voice`|`hr-tg`|`design-voice`|`—`，**仅 `outside-voice` 用、不进 `lens` enum**——消同轮多次 voice 调用的撞键，保 hr-tg 定向复核 vs 泛检信号区分〔SR-D 决策门 Q1=A〕）、`findings`（int≥0，去重前自报数）、`采纳`/`裁掉`/`defer`（int≥0）、`独立`（int≥0）、`sev`（`致N/高N/中N/低N`，仅采纳项）。〔grill-amendment：原含 `dur_s`，因无诚实数据源砍除，成本另立 T29——见 design ADR-3〕
 
 **「跨模型性」SHALL 为派生量 `runner ≠ host`，MUST NOT 编码进 `runner` 枚举值**〔add-codex-host-support〕。`claude-fallback` **枚举值废弃**——它把"跨模型性"藏进了枚举值，在 Codex 宿主下必然说谎（那里的 `codex` 值意味着自审，而非跨模型）。两个正交事实各占一个字段后：`lens="outside-voice" ∧ runner ≠ host` = 真跨模型第二意见；`lens="outside-voice" ∧ runner == host` = 同族 fallback（降级，如实标注）。
 
@@ -26,13 +26,13 @@
 - **WHEN** 出报告后机械核验发现某镜锚缺必填字段（如漏 `独立` 或**漏 `host`**），**或 `layer`/`lens`/`host`/`runner`/`sev` 取值不在枚举域/子格式内**（如 `lens=对抗镜1` 未折叠成 `adversarial`，或 `runner=claude-fallback` 用了已废弃的值）
 - **THEN** 本步 SHALL 报错阻塞（复用现有锚存在性自检机制扩一类，**含枚举域 + sev 子格式校验**），MUST NOT 静默放行
 
-#### Scenario: 自审锚行被自检阻塞〔add-codex-host-support〕
-- **WHEN** 某 `lens="outside-voice"` 锚行 `runner == host` 且 `reason_code ∉ {not-installed, timeout, exec-error}`（即非合法同族降级、却声称拿到了跨模型第二意见）
-- **THEN** `anchor_lint` SHALL 报错阻塞——`runner == host` 的 voice 依定义**不是**跨模型，MUST NOT 作为跨模型证据落账。**合法降级码集 SHALL 钉死为 `{not-installed, timeout, exec-error}`**〔grill G5：这是唯一区分「诚实同族 fallback」与「自审假绿」的谓词，MUST NOT 留实现裁量〕；`reason_code ∈ 该集` 的 `runner == host` 锚为合法同族 fallback，放行
+#### Scenario: 自审锚行被自检阻塞〔add-codex-host-support · spec-review-amendment D1/D2〕
+- **WHEN** 某 **`sdflow:outside-voice` 锚**（**非 lens-metric 锚**——只有 outside-voice 锚同时承载 `runner`/`host`/`reason_code`；绑到无 `reason_code` 的 lens-metric 锚会使红线静默永不触发）的 `runner == host` 且 `reason_code ∉ {not-installed, preflight-error, timeout, exec-error}`（即非合法同族降级、却声称拿到跨模型第二意见）
+- **THEN** `anchor_lint` SHALL 报错阻塞——`runner == host` 的 voice 依定义**不是**跨模型，MUST NOT 作为跨模型证据落账。**合法降级码集 SHALL 钉死为 `{not-installed, preflight-error, timeout, exec-error}`**〔D2：grill G5 初钉漏了 `preflight-error`（两 SKILL preflight 段定义、是产出 findings 的 `runner==host` 同族 fallback），漏它则诚实 preflight-error fallback 被误报自审=假红；实现期核 `missing-deps` 是否同类〕；`anchor_lint` SHALL **新增 outside-voice 锚的 KV 字段解析**（现状零字段解析）；此校验 **MUST always-on、不受 `metrics.enabled` 门控**（D7：读真实性信号）
 
-#### Scenario: fan-out 机制死却报多镜被下限红线阻塞〔add-codex-host-support · grill G1 · adr/0023〕
-- **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而 lens-metric 锚中 `lens ∈ {domain,adversarial,grounding}` 的去重行数 > 1
-- **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——fan-out 机制不可用时不可能产出多面独立 fan-out 镜，此矛盾即「报告 N 镜、实跑 1 镜」头号假绿的事前拦截
+#### Scenario: fan-out 机制死却报多镜被一致性 lint 阻塞（always-on）〔add-codex-host-support · spec-review-amendment Q1 · adr/0023〕
+- **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而 lens-metric 锚中 `lens ∈ {domain,adversarial,grounding}`（**按 `lens` 去重**）的行数 > 1
+- **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——这是**锚行自身的自相矛盾**（机制死却报多镜），**不是伪造拦截**（主 session 写 `subagents="available"` 即绕过）；此校验 **MUST always-on、与 `metrics.enabled` 解耦**（D7：否则默认消费仓 metrics=false 时空转，codex CV2）。MUST NOT 声称「头号假绿事前拦截」——只拦机制死变体，机制活+偷懒自代变体留语义层
 
 #### Scenario: 宿主分组可事后区分真跨模型与自审轮次〔add-codex-host-support〕
 - **WHEN** 复盘聚合器读取跨 change 的 lens-metric 锚

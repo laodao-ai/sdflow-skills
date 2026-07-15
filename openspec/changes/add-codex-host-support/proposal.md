@@ -13,7 +13,7 @@
 
 两个当场可复现的假绿：
 
-1. **outside voice 变成自审，而报告照写「跨模型」。** `outside-voice.sh` 把 codex 硬编码进了 preflight 与 exec（`sdflow-init/assets/hack/outside-voice.sh:146` = `command -v codex`；`:122` = `codex exec …`）。在 Codex 宿主下这段代码**照常返回 `ready`**——codex 当然装着——于是**调 codex 去审 codex 自己刚写的东西**。锚行照样落 `runner="codex"`，`outside_voice_guard.py:93` 照样认它是合法的 codex 段，报告照样声称拿到了"跨模型第二意见"。**「独立第二意见」这条不变式当场破产，且没有任何机制会发现。**
+1. **outside voice 变成自审，而报告照写「跨模型」。** `outside-voice.sh` 把 codex 硬编码进了 preflight 与 exec（`sdflow-init/assets/hack/outside-voice.sh:144` = `command -v codex`；`:121` = `codex exec …`）。在 Codex 宿主下这段代码**照常返回 `ready`**——codex 当然装着——于是**调 codex 去审 codex 自己刚写的东西**。锚行照样落 `runner="codex"`，`outside_voice_guard.py:93` 照样认它是合法的 codex 段，报告照样声称拿到了"跨模型第二意见"。**「独立第二意见」这条不变式当场破产，且没有任何机制会发现。**
 
 2. **多镜评审静默退化成单镜，而报告照写「7 镜」。** Codex 默认不派子代理（须由 AGENTS.md / skill 显式授权，官方明确"depth / thoroughness / research 都不构成授权"）。`sdflow-spec-review` / `sdflow-code-review` 的 fan-out 会安静地不发生，主 session 自己把各镜的活干一遍——而 `lens-metric` 锚行仍按 roster 逐镜落，`独立`/`采纳率` 全是自己给自己打的分。
 
@@ -44,9 +44,9 @@
 
 ## Success Metrics
 
-1. **自审不可能再静默发生**：在 Codex 宿主下跑一次 `outside-voice.sh preflight` + `exec`，runner 解析为 `claude`；若强行让 `runner == host`，`anchor_lint` **必须报错**（新增机械守，红线可复现）。
-2. **降级必留痕**：宿主判不出（两个正信号都无）时，锚行落 `host="unknown"` 且 voice 标 fallback；grep 归档报告可机械筛出所有降级轮次。
-3. **多镜不再空转**：Codex 宿主下子代理不可用时，报告中的镜数 = 实际跑过的镜数（roster 与实际 fan-out 一致），**不存在"报告 7 镜、实跑 1 镜"的轮次**。〔grill G1 / adr/0023：此条由**机械下限**兜——fan-out 前探针落 `sdflow:fanout-capability` 锚，`subagents="unavailable"` 时 anchor_lint 拦「fan-out 镜行数 >1」；残余「第 N 镜具体跑没跑」仍留语义层，见 design ADR-4〕
+1. **自审不可能再静默发生**：在 Codex 宿主下跑一次 `outside-voice.sh preflight` + `exec`，runner 解析为 `claude`；若强行让 `runner == host` 且非合法降级码，`anchor_lint`（读 outside-voice 锚、always-on）**必须报错**（红线可复现）。
+2. **降级必留痕**：宿主判不出（两个正信号都无）时，锚行落 `host="unknown" runner="none"` 且 voice 标 fallback；grep 归档报告可机械筛出所有降级轮次。
+3. **多镜空转的「机制死变体」被拦、「偷懒自代变体」留语义层（诚实限定）**：Codex 宿主下**探针判 `unavailable` 却报多面 fan-out 镜**的自相矛盾轮次，`anchor_lint` 一致性 lint（always-on、与 metrics 解耦）报错拦截；**但探针 `available` 后主 session 自代多镜（同症状）无机械守、留语义层**。〔spec-review Q1 / adr/0023：探针是**语义核验非机械门**（主 session 自报）——**MUST NOT 声称"报告 7 镜实跑 1 镜"整类已事前拦截**，只拦机制死变体的自相矛盾，见 design ADR-4〕
 4. **存量数据不丢**：`sdflow-retro` 对现有归档报告（含 `openspec/retro/report.md` 里已有的 `claude-fallback` 行）的聚合结果，改造前后**逐行一致**。
 5. 全量测试绿；`bash setup.sh` 两道门（`sync_principles --check` / `gen_workflow_guide --check`）保持绿。
 
@@ -116,7 +116,7 @@
 **修改（实测清单，`grep -rn` 得到，非估计）**
 | 面 | 文件 |
 |---|---|
-| helper | `sdflow-init/assets/hack/outside-voice.sh`（codex 硬编码 :122/:146）· `setup.sh` |
+| helper | `sdflow-init/assets/hack/outside-voice.sh`（codex 硬编码 :121/:144）· `setup.sh` |
 | 规则 bundle | `assets/workflow/model-tiers.md` · `assets/workflow/lens-metric-contract.md`（runner 枚举 :10/:22/:35/:48） |
 | 工具 | `assets/workflow/tools/{anchor_lint,lens_metric_emit,outside_voice_guard}.py`（+ 各自 tests · fixtures） |
 | SKILL | `sdflow-spec-review/SKILL.md`（:251/:253）· `sdflow-code-review/SKILL.md`（:172/:243/:245） |

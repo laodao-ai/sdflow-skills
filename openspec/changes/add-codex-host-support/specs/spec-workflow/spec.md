@@ -22,7 +22,7 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 
 **runner MUST 由宿主决定，MUST NOT 硬编码**〔add-codex-host-support〕：runner 恒为**当前宿主之外的另一个机队的强档**（Claude 宿主 → Codex；Codex 宿主 → Claude）。`preflight` MUST 探测**目标 runner 的 CLI**，而非固定探测 codex——固定探测 codex 会在 Codex 宿主下返回 ready 并导致 **codex 自审 codex**，是必须杜绝的假绿。是否启用由环境决定——目标 runner CLI 未安装即天然关停（工作层不设软 off-switch，〔grill-amendment Q3〕）；目标 runner 不可用（未装/未认证/报错/超时）时 MUST fallback 到同 prompt 的 fresh **同宿主**只读子代理，且该轮 `runner == host`（如实标为非跨模型）；宿主判不出（`host="unknown"`）时 MUST NOT 跑 voice（无从确定"另一个机队"）。一切失败均为 informational，MUST NOT 阻塞评审流程。
 
-报告 outside-voice 留痕 MUST 使用模板写死的 v1 机器锚行（严格 KV、按调用位点复数化、guard/runner 正交）：`<!-- sdflow:outside-voice v1 site="…" guard="…" host="claude|codex|unknown" runner="claude|codex" reason_code="…" findings="N" truncated="…" -->`〔add-codex-host-support：新增 `host=`；`runner` 枚举收缩为机队家族，**`claude-fallback` 废弃**——「跨模型性」自此为派生量 `runner ≠ host`，MUST NOT 再编码进枚举值〕（确定性机判，不押自然语言；人类原因文本在锚行外）〔grill-amendment Q5 + spec-review-amendment 文法 v1〕；评审收尾步 MUST 机械自检锚行存在，缺失即报错〔spec-review-amendment〕。
+报告 outside-voice 留痕 MUST 使用模板写死的 v1 机器锚行（严格 KV、按调用位点复数化、guard/runner 正交）：`<!-- sdflow:outside-voice v1 site="…" guard="…" host="claude|codex|unknown" runner="claude|codex|none" reason_code="…" findings="N" truncated="…" -->`〔add-codex-host-support：新增 `host=`；`runner` 枚举收缩为机队家族 + `none`（spec-review-amendment D6：无执行轮次如 host-unknown/secret-hit 用 `runner="none"`，MUST NOT 任选家族伪造"谁执行"），**`claude-fallback` 废弃**——「跨模型性」自此为派生量 `runner ≠ host`，MUST NOT 再编码进枚举值〕（确定性机判，不押自然语言；人类原因文本在锚行外）〔grill-amendment Q5 + spec-review-amendment 文法 v1〕；评审收尾步 MUST 机械自检锚行存在，缺失即报错〔spec-review-amendment〕。
 
 #### Scenario: Claude 宿主下跑跨模型 voice
 - **WHEN** sdflow-code-review 运行于 `host=claude` 且 codex preflight 返回 ready
@@ -30,7 +30,7 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 
 #### Scenario: Codex 宿主下跑跨模型 voice〔add-codex-host-support〕
 - **WHEN** sdflow-code-review 运行于 `host=codex` 且 `claude` CLI preflight 返回 ready
-- **THEN** 经**同一个** helper（同一 `render_prompt`/`secret_scan`/截断）调 `claude -p --model <Claude 强档> --output-format text --disallowedTools Write Edit NotebookEdit`，findings 进合并池，锚行记 `host="codex" runner="claude"`
+- **THEN** 经**同一个** helper（同一 `render_prompt`/`secret_scan`/截断）调 `claude -p --model <Claude 强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config`〔spec-review-amendment Q2：`--tools` 独占白名单 + MCP 隔离，非 `--disallowedTools`/`--allowedTools`；见能力 host-adaptive-execution「出境安全」〕，findings 进合并池，锚行记 `host="codex" runner="claude"`
 
 #### Scenario: 目标 runner 不可用回落同宿主子代理
 - **WHEN** preflight 返回 not_installed（目标 runner 的 CLI 未装）
@@ -46,7 +46,7 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 
 #### Scenario: 宿主判不出则不跑 voice〔add-codex-host-support〕
 - **WHEN** `CLAUDECODE` 与 `CODEX_THREAD_ID` 两个正信号皆无（或同时存在，信号冲突）
-- **THEN** 本轮 MUST NOT 跑 outside voice；锚行记 `host="unknown" reason_code="host-unknown"`；报告显著标注本轮无跨模型第二意见，MUST NOT 任选一个 runner 跑了充作跨模型
+- **THEN** 本轮 MUST NOT 跑 outside voice；锚行记 `host="unknown" runner="none" reason_code="host-unknown"`（D6）；报告显著标注本轮无跨模型第二意见，MUST NOT 任选一个 runner 跑了充作跨模型
 
 ### Requirement: outside-voice tension 不静默采纳
 

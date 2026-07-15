@@ -8,7 +8,9 @@
 > **镜阵**：对抗镜 ×3（fresh context 子代理）+ 接地镜 ×1 + **codex 跨模型 outside-voice**（design-voice，runner=codex≠host=claude，真跨模型）。广审（autoplan）**降级为 simulated**——autoplan 是 gstack plan-file 导向、不适配 OpenSpec 四件套；广度由 4 镜 + codex voice 覆盖，如实标注。
 > **栈**：Bash+Python+Markdown，不命中任何 stack 领域清单（backend-go/embedded/frontend），故无 stack 领域镜。
 
-## 总判定：⚠️ 不建议直接进设计 HARD-GATE，需一轮设计返工
+> **⏭ 更新（2026-07-15，返工已落地）**：Q1/Q2/Q3 三条拍板「都同意」（按推荐），D1–D10 一并 amend 完成，`openspec validate` 绿。下方 findings + 决策登记保留为审计记录；各条落点见文末「返工落点」。
+
+## 总判定（返工前）：⚠️ 不建议直接进设计 HARD-GATE，需一轮设计返工
 
 冷层证实：**本 change 的「防伪（no false-green）」层扎实、方向对；但 grill（作者自审）收敛的两条 headline 修复（G1 机械下限、G2 allowlist）技术上都站不住，G5 码集漏一个，还引入一处 spec 自我矛盾。** 更重的是，冷层挖出 4 条**作者从未触及**的新洞（metrics 门控架空真实性守、emitter 跨版本 argparse 罢工【实测】、eval 注入面、efficacy 押未验假设且验证排在 BREAKING 之后）。多条 finding 由 2–3 个独立源汇合，置信高。
 
@@ -109,6 +111,30 @@
 
 **本轮 lens-metric 锚延后至设计门拍板时最终化**（承 SKILL〔SR-M〕：采纳/裁掉随门后裁决重算）——因本报告结论是「需返工」、大量 finding 的 amend 去向取决于 Q1–Q3 拍板，此刻 pre-gate 计数无意义。返工 amend 后、拍板时补落并跑 `anchor_lint` 自检。（metrics.enabled=true 已确认，非因门控跳过。）
 
-## 收敛口
+## 收敛口（返工后）
 
-**不建议直接进 HARD-GATE。** 建议：先拍 Q1–Q3 三个方向 → 我按拍板 + D1–D10 做一轮设计返工（design/specs/tasks amend，标 `[spec-review-amendment]`）→ 返工后如收敛，再进设计门。**这一轮冷审证明了「作者不该独审自己的设计」：我 grill 判「成立、没咬」的 G1/G2/G5 三处，全被冷层纠正。**
+**返工已落地（Q1–Q3 拍板 + D1–D10），`openspec validate` 绿。** 这一轮冷审证明了「作者不该独审自己的设计」：我 grill 判「成立、没咬」的 G1/G2/G5 三处全被冷层纠正。
+
+**关于是否进设计 HARD-GATE 的建议**：本轮返工**改动很大**（探针机制降格、安全机制换旗、加 efficacy 前置门、10 条 D）——**改动量本身就是"再审一轮"的理由**。但我也不想陷入无限评审。判断留人：
+- **稳妥**：再跑一轮轻量 spec-review（只审本次 amend 的增量 + 交叉核 D1/D4/D5 的实现可行性），确认返工没引入新洞，再进门。
+- **提效**：直接进设计 HARD-GATE，把 D1–D10 的实现正确性留给**阶段四 code-review**（那里有冷层兜底），设计门只拍「方向对不对」。
+
+## 返工落点（审计）
+
+| 决策 | 落点 |
+|---|---|
+| Q1（探针降格） | design ADR-4 重写 · adr/0023 降格 · host-adaptive「子代理降级」需求重写 + 3 scenario · workflow-metrics fanout scenario · tasks 2.5/9.2/9.4 · proposal SM#3 · Compliance |
+| Q2（--tools） | design 安全表 + 铁律 · host-adaptive :27/只读 scenario/出境安全需求 · spec-workflow :33 scenario · tasks 7.3/7.4 · proposal SM#1 |
+| Q3（efficacy 前置门） | tasks 组 0（新）· design Migration step 0 + Risks · tasks 组 10 改端到端 |
+| D1（F6 绑 outside-voice 锚） | design F6 段 · host-adaptive 禁止自审 scenario · workflow-metrics 自审 scenario · tasks 2.2b/2.3 |
+| D2（码集补 preflight-error） | 同 D1 各处 · tasks 2.3 |
+| D3（denylist 清面） | 见 Q2（host-adaptive:27 + spec-workflow:33 已清） |
+| D4（emitter skew） | design ADR-3 重写为 (a)/(b) · lens-metric-emit fail-closed scenario + skew 注 · tasks 3.1/3.2/3.2b |
+| D5（eval 注入） | host-adaptive eval-safety scenario · design Risks · tasks 6.2d |
+| D6（runner=none） | design 数据模型 · workflow-metrics 字段 · spec-workflow 锚文法 + scenario · lens-metric-emit scenario · host-adaptive scenarios |
+| D7（真实性守解耦 metrics） | design ADR-4 · host-adaptive/workflow-metrics scenario（always-on）· tasks 2.3/2.5 |
+| D8（fanout 锚在 lint 文件） | design 数据模型 · host-adaptive scenario · tasks 2.5/9.4 |
+| D9（行号 + ADR-3 描述） | design Context 表 + ADR-3 · proposal :16/:119 |
+| D10（scope-check 补面） | design scope-check 表 面 10/11 |
+
+> **lens-metric 度量锚**仍延后至设计门拍板最终化（SR-M；返工中的临时裁决计数无意义）。`anchor_lint` 自检因 lens-metric 段有意延后而暂缓（非遗漏）。

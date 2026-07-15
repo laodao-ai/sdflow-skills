@@ -42,6 +42,12 @@ emitter SHALL 只做机械归约，MUST NOT 做去重（是否同一 finding）�
 - **WHEN** emitter 被调用（即视 metrics-on）而输入 `roster` 缺 `broad` 或 `outside-voice`（任一 site 的 outside-voice 行）
 - **THEN** emitter SHALL fail-closed 报明缺失（因 `anchor_lint` 的 `MIN_LENS_ROWS` 强制此二行存在，缺则输出必被拒），MUST NOT 产出会被 anchor_lint 拒的部分锚
 
-#### Scenario: 缺 --host 或取值越域则 fail-closed〔add-codex-host-support〕
+#### Scenario: 缺 --host 或取值越域则受控 fail-closed（非 argparse 崩）〔add-codex-host-support · spec-review-amendment D4〕
 - **WHEN** 调用方未传 `--host`，或传入 `claude|codex|unknown` 之外的值（含已废弃的 `claude-fallback`）
-- **THEN** emitter SHALL fail-closed 非零退出并报明原因，MUST NOT 默认填 `claude`（静默默认会把 Codex 宿主的轮次伪装成 Claude 宿主，正是本能力要杀的假绿）
+- **THEN** emitter SHALL **受控 fail-closed**（非零退出 + **可读错误消息报明原因**，MUST NOT 靠 argparse 的 `unrecognized/required` 崩栈——用 `parse_known_args` 或显式必填校验，使"缺 host"成为受控降级而非崩溃），MUST NOT 默认填 `claude`（静默默认会把 Codex 宿主的轮次伪装成 Claude 宿主，正是本能力要杀的假绿）
+
+#### Scenario: runner="none" 行合法（无执行轮次）〔spec-review-amendment D6〕
+- **WHEN** 某 roster 行键的 `runner="none"`（host-unknown/secret-hit 的无执行轮次）
+- **THEN** emitter SHALL 接受 `none` 为合法 runner 值并落行，该行 `findings/采纳/裁掉/defer/独立` 恒为 0；MUST NOT 判 `none` 越域
+
+> **跨版本 skew（D4，属 emitter 消费侧兼容，详见 design ADR-3-b）**：新 SKILL 传 `--host` 给**旧 emitter**（未 `sdflow-init update` 的陈旧窗口）会触发旧 emitter 的 argparse 罢工（exit 2）→ 整段 lens-metric 静默清零。此 skew 的兼容 SHALL 由 design ADR-3-b 选定策略处置（SKILL 探 emitter 能力 / 锁步升级 / 受控 fail-closed 三选一，推荐工具侧受控 fail-closed），**不在本能力（新 emitter）内单独解决**——但本能力的受控 fail-closed（上一 Scenario）是该策略的工具侧落点。
