@@ -107,6 +107,22 @@ def test_same_family_runner_eq_host(tmp_path):
     assert m.classify(rp, cd) == "same-family"
 
 
+# 🔴 F6 红线接线锁：self-review 子分支（runner==host ∧ reason_code="ok"，自审谎称成功）。
+# 与上面的 same-family 用降级码不同——本例走 classify_combo 的 self-review 分支，是本 change 的核心动机。
+# 该分支在 parse_codex_findings 归入 same_family_found ⇒ classify() 归约到 same-family（非可复用）。
+def test_self_review_reason_ok_same_family(tmp_path):
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("codex", "codex", "ok", findings=9))
+    assert m.classify(rp, cd) == "same-family"   # self-review 谎称成功 → 归 same-family、MUST NOT 复用
+
+
+def test_cli_self_review_reason_ok_exit_nonzero(tmp_path):
+    rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("codex", "codex", "ok", findings=9))
+    r = _run(rp, cd)
+    assert r.returncode != 0 and r.stdout.strip() == "same-family" and r.stdout.strip() != "none"
+
+
 def test_cli_same_family_exit_nonzero(tmp_path):
     rp, cd = _make_change(tmp_path, codex=False)
     _write_body(rp, _ov_anchor_v2("codex", "codex", "not-installed", findings=2))
