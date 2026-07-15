@@ -138,8 +138,8 @@
 |----|------|--------|
 | `step1-broad-review` | `mode` | `native` \| `simulated` |
 | `hr-tg` | `hit`, `declared`, `evidence` | `hit="TG-xx,…"` \| `"none"`（脚本重算 = `declared∩HR-TG`，M2）；`declared`=模型判定命中集（canonical，adr/0018 输入可见）；`evidence`=判据触发点（`hit≠none` 必填非空，M4） |
-| `outside-voice` | `site`,`guard`,`runner`,`reason_code`,`findings`,`truncated` | `runner` ∈ `codex`\|`claude-fallback`；`guard` ∈ none\|file-missing\|section-not-found\|zero-findings\|stale\|simulated-source；`truncated` ∈ true\|false |
-| `lens-metric` | `layer`,`lens`,`runner`,`site`,`findings`,`采纳`,`裁掉`,`defer`,`独立`,`sev` | 见下表（受 config `metrics.enabled` 门控） |
+| `outside-voice` | `site`,`guard`,`host`,`runner`,`reason_code`,`findings`,`truncated` | `host` ∈ `claude`\|`codex`\|`unknown`（谁在跑这次评审）；`runner` ∈ `claude`\|`codex`\|`none`（谁执行了这个镜；`claude-fallback` 已废弃——把跨模型性藏进枚举值，Codex 宿主下必然说谎）；`reason_code` ∈ `ok`\|`not-installed`\|`preflight-error`\|`timeout`\|`exec-error`\|`host-unknown`\|`secret-hit`\|`fallback-unavailable`（8 值域，仅本锚必填；成功跨模型固定哨兵 `ok`）；`guard` ∈ none\|file-missing\|section-not-found\|zero-findings\|stale\|simulated-source；`truncated` ∈ true\|false |
+| `lens-metric` | `layer`,`lens`,`host`,`runner`,`site`,`findings`,`采纳`,`裁掉`,`defer`,`独立`,`sev` | 见下表（受 config `metrics.enabled` 门控） |
 
 **lens-metric enum**（唯一源 = `lens-metric-contract.md`）：
 
@@ -147,7 +147,8 @@
 |------|--------|
 | `layer` | `spec-review` \| `code-review`（== `--layer`） |
 | `lens` | `domain` \| `adversarial` \| `grounding` \| `history` \| `outside-voice` \| `broad` |
-| `runner` | `claude` \| `codex` \| `claude-fallback` |
+| `host` | `claude` \| `codex` \| `unknown`（谁在跑这次评审，由 `resolve-models.sh` 按正信号判定；`unknown` = 两个正信号都无） |
+| `runner` | `claude` \| `codex` \| `none` \| `unknown`（谁执行了这个镜，只记机队家族；`none` = 该轮无执行〔MUST 伴 `findings=0`〕；`unknown` 仅合法于非-outside-voice 普通镜行 ∧ `host=unknown`；`claude-fallback` 已废弃） |
 | `site` | `code-voice` \| `hr-tg` \| `design-voice` \| `—`（仅 outside-voice 消歧，不入 lens enum） |
 | `findings`/`采纳`/`裁掉`/`defer`/`独立` | int ≥ 0（独立 = 唯一报过 ∧ 被采纳，折叠到 lens 后计） |
 | `sev` | `致N/高N/中N/低N`（四级定序，零也写 0，分隔恒 `/`，仅采纳项计入） |

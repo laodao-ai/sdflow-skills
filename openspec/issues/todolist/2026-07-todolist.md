@@ -152,6 +152,8 @@
 | T144 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） | 基础设施 | PROPOSED | 2026-07-12 17:16 | add-sdflow-architecture | add-sdflow-architecture |
 | T145 | `sdflow-roadmap` | 观察 description 追加 SAD 指路句后的触发精度（架构类查询是否误触 roadmap） | 可观测性 | PROPOSED | 2026-07-12 18:34 | add-sdflow-architecture | add-sdflow-architecture |
 | T146 | `sdflow-skills 工具族` | 扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥） | 代码质量 | PROPOSED | 2026-07-12 18:34 | add-sdflow-architecture | add-sdflow-architecture |
+| T147 | `openspec/workflow/` | openspec/workflow/ 下 v1 孤儿 debris：lens-metric-contract.md（无 host/reason_code）+ tools/anchor_lint.py（REQUIRED_FIELDS 缺 host）/lens_metric_emit.py（无 --host）/outside_voice_guard.py（:93 仍 runner!="codex" 裸判）均为 add-codex-host-support 改前的 v1 旧副本——非 pin 遮蔽（resolve-workflow.sh 因本地缺 workflow.md/spec-checklists/code-checklists 三个 pin 判据文件，判定非本地 pin，runtime 恒走全局 canonical ~/.sdflow/workflow）；待本仓自身跑 sdflow-init update 或手动清空该目录 | 基础设施 | OPEN | 2026-07-15 23:47 | - |  |
+| T148 | `tools/anchor_lint.py` | anchor_lint._FANOUT_MIRRORS={domain,adversarial,grounding} 缺 code-review 真名 history；现 code-review 借用 grounding token 记历史镜（不污染 retro：聚合只读 lens-metric 锚不读 fanout-capability，lens-metric 用真 lens=history）。正修 = _FANOUT_MIRRORS 加 history + 同步 spec.md/design.md 三处 SHALL 条款——触已过三轮收敛的 spec 文本，需另开 change 走 spec-review（非本 change fold 范围） | 代码质量 | OPEN | 2026-07-15 23:47 | - |  |
 
 ---
 

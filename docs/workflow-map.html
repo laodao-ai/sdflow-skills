@@ -552,15 +552,18 @@
         </div>
         <div class="card">
           <div class="card-h"><span class="file">outside-voice</span></div>
-          <div class="field"><span class="fkey">runner</span><span class="enum"><span>codex</span><span>claude-fallback</span></span></div>
+          <div class="field"><span class="fkey">host</span><span class="enum"><span>claude</span><span>codex</span><span>unknown</span></span></div>
+          <div class="field"><span class="fkey">runner</span><span class="enum"><span>claude</span><span>codex</span><span>none</span></span></div>
+          <div class="field"><span class="fkey">reason_code</span><span class="enum"><span>ok</span><span>not-installed</span><span>preflight-error</span><span>timeout</span><span>exec-error</span><span>host-unknown</span><span>secret-hit</span><span>fallback-unavailable</span></span></div>
           <div class="field"><span class="fkey">guard</span><span class="fval">none|file-missing|section-not-found|stale…</span></div>
-          <div class="field"><span class="fkey">site · reason_code · findings · truncated</span><span class="fval"></span></div>
+          <div class="field"><span class="fkey">site · findings · truncated</span><span class="fval"></span></div>
         </div>
         <div class="card wide">
           <div class="card-h"><span class="file">lens-metric</span><span class="by">受 config <code>metrics.enabled</code> 门控 · enum 单一源 = lens-metric-contract.md</span></div>
           <div class="field"><span class="fkey">layer</span><span class="enum"><span>spec-review</span><span>code-review</span></span></div>
           <div class="field"><span class="fkey">lens</span><span class="enum"><span>domain</span><span>adversarial</span><span>grounding</span><span>history</span><span>outside-voice</span><span>broad</span></span></div>
-          <div class="field"><span class="fkey">runner</span><span class="enum"><span>claude</span><span>codex</span><span>claude-fallback</span></span></div>
+          <div class="field"><span class="fkey">host</span><span class="enum"><span>claude</span><span>codex</span><span>unknown</span></span></div>
+          <div class="field"><span class="fkey">runner</span><span class="enum"><span>claude</span><span>codex</span><span>none</span><span>unknown</span></span></div>
           <div class="field"><span class="fkey">site</span><span class="enum"><span>code-voice</span><span>hr-tg</span><span>design-voice</span><span>—</span></span></div>
           <div class="field"><span class="fkey">findings · 采纳 · 裁掉 · defer · 独立</span><span class="fval">int ≥ 0（独立 = 唯一报过 ∧ 被采纳，折叠到 lens 后计）</span></div>
           <div class="field"><span class="fkey">sev</span><span class="fval">致N/高N/中N/低N（四级定序，零也写 0，分隔恒 <code>/</code>，仅采纳项计入）</span></div>

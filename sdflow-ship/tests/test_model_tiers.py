@@ -9,7 +9,13 @@ SKILLS = ["sdflow-ship/SKILL.md", "sdflow-done/SKILL.md",
 # [impl-review-fix] 裁决项9：\b 在中文语境下对 CJK/ASCII 边界失效（CJK 字符不算
 # word char，紧贴 ASCII 单词两侧仍会被 \b 判定为词边界），收紧为显式排除左右 ASCII
 # 字母的负向环视，堵住"档位词紧贴裸模型名"类残留不被 \b 误判为非边界从而漏检的口子。
-BARE = re.compile(r"(?<![A-Za-z])(opus|sonnet|haiku)(?![A-Za-z])", re.IGNORECASE)
+# [add-codex-host-support:task10 面治收口 Minor-1] 原正则只盖 Claude 机队名，漏 Codex
+# 机队名 gpt-5.6-{sol,terra,luna}（见 model-tiers.md 机读块 `codex.strong/mid/light`）——
+# 机队对称主题下机械锁只守半个域，扩正则覆盖两机队。
+BARE = re.compile(
+    r"(?<![A-Za-z])(opus|sonnet|haiku|gpt-5\.6-(?:sol|terra|luna))(?![A-Za-z])",
+    re.IGNORECASE,
+)
 
 def test_tiers_file_is_truth_source():
     t = TIERS.read_text(encoding="utf-8")
