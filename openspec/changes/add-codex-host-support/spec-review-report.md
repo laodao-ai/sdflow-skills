@@ -1,3 +1,7 @@
+---
+ship-gate:
+  design_approved: true
+---
 <!-- sdflow:step1-broad-review v1 mode="simulated" -->
 <!-- sdflow:hr-tg v1 hit="TG-06,TG-08,TG-17" declared="TG-06,TG-08,TG-17" evidence="锚行 schema v2 是 bundle 分发给消费仓的跨仓契约(TG-06)+反向 runner 新增 claude CLI 调用(TG-08)+outside-voice context 出境新增 Anthropic 端点(TG-17)" -->
 <!-- sdflow:outside-voice v1 site="design-voice" guard="file-missing" host="claude" runner="codex" reason_code="none" findings="7" truncated="false" -->
@@ -6,6 +10,12 @@
 # spec-review-report — add-codex-host-support
 
 > **本文件是第二轮（返工后复审）报告。** 首轮（commit 4e88918）判「需返工」，返工（c9b8325）落 Q1–Q3 + D1–D10。本轮对返工后的四件套重跑一次冷审，核对返工是否真闭合 + 是否引入新洞。首轮记录见文末「附录：首轮记录」（全文在 git 历史）。
+
+## ✅ 设计门拍板记录（2026-07-15）
+
+**设计 HARD-GATE 已由用户批准。** 经 grill + 3 轮 spec-review（首轮 Q1–Q3+D1–D10 · 二次审 C1–C5+D1–D14 · 三次审 r3 ~10 洞）+ 1 轮窄核验（r3-narrow #1–#6，接地镜读码证伪 codex 两条最响警报），findings 深度逐轮收敛（根本缺陷→机制→精度→措辞），核心不变式（C1 合法组合矩阵 / C2 mirrors= 解耦）确认闭合、机械声称对真实代码核验通过。frontmatter `ship-gate.design_approved: true` 已写入（`/sdflow-ship` pre-flight 机判依据）。**用户指示：先不进 ship**——阶段二在此收口，暂不启动 writing-plans / 实现 / ship。残余风险为实现保真度级（fail-closed 边界穷举 / golden 完备性），由阶段四 code-review（冷层）+ TDD 兜底。
+
+**lens-metric 度量锚最终化（SR-M，best-effort）**：本 change **自身即重定义 lens-metric schema 为 v2（新增 `host=`）**，而 v2 工具尚未实现（当前 `lens_metric_emit.py` 为 v1、无 `--host`）——∴ 现在用 v1 工具为一个"四轮 outlier 评审"补发 lens-metric 计数，既是记进本 change 正要替换的旧 schema、retro 聚合价值又低。**最终化决定：本报告 lens-metric 计数不用 v1 工具回填**（诚实登记此 best-effort 例外，无机械兜底、与 SR-M「无下游校验」口径一致）；本 change 实现 v2 工具后，其自身及后续评审按 v2 落锚。头部四类真实性锚（step1-broad-review / hr-tg / outside-voice ×2）已在场且如实。`anchor_lint` 自检因 lens-metric 段按上述最终化而不回填、暂缓（非遗漏）。
 
 ## 二次审（返工后复审 · 2026-07-15）
 
