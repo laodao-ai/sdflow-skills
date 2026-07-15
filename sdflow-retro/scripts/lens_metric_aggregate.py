@@ -113,18 +113,41 @@ def _int(v):
     return n, False
 
 
+def normalize_host_runner(r):
+    """v1→v2 双代兼容读（GC-9：聚合器是唯一读存量锚行的组件；design ADR-2/ADR-3
+    兼容读表；spec workflow-retro「聚合器双代兼容读锚行」）。MUST NOT rewrite 存量锚
+    ——只在读入内存的字典上归一化，不写回归档文件。
+    - `runner="claude-fallback"`（v1 已废弃枚举值） → `(host="claude", runner="claude")`
+      （历史上所有 fallback 均发生在 Claude 宿主）。
+    - 锚行无 `host` 字段（v1 通用形态） → `host="claude"`（历史上所有轮次均为
+      Claude 宿主，事实非假设）。
+    - 已含 `host` 的 v2 锚原样透传（不重映射）。
+    返回 (host, runner) 二元组。"""
+    runner = r.get("runner", "?")
+    if runner == "claude-fallback":
+        return "claude", "claude"
+    host = r.get("host") or "claude"
+    return host, runner
+
+
 def group_key(r):
-    """lens-metric 锚的分组键 (layer, lens, runner, site)——render_table 与
-    下游 surfacing 共用，杜绝两处手写归一化漂移（尤其 lens 空串→"?"）。"""
-    return (r.get("layer", "?"), r.get("lens", "") or "?",
-            r.get("runner", "?"), r.get("site", "—"))
+    """lens-metric 锚的分组键 (layer, lens, host, runner, site)〔add-codex-host-support:
+    task5 升维，插入 host〕——render_table 与下游 surfacing 共用，杜绝两处手写归一化
+    漂移（尤其 lens 空串→"?"）。host/runner 经 normalize_host_runner 双代兼容读，
+    故 v1 旧锚（无 host / runner="claude-fallback"）与 v2 新锚（host=claude|codex|
+    unknown）在此统一归一化，MUST NOT 混算——host 分组必须分开统计。"""
+    host, runner = normalize_host_runner(r)
+    return (r.get("layer", "?"), r.get("lens", "") or "?", host, runner, r.get("site", "—"))
 
 
 def render_table(rows, no_anchor, parse_failed=None):
-    """多列可排序描述性表（无合成分）。按 (layer,lens,runner,site) 分组
-    [impl-review-fix CF-1]（契约键含 runner——codex 与 claude-fallback 的
-    outside-voice 需分行，不可合并）：
-    出现轮数 · Σfindings · Σ采纳 · Σ裁掉 · Σdefer · Σ独立 · 采纳率 · 独立率 · flag。"""
+    """多列可排序描述性表（无合成分）。按 (layer,lens,host,runner,site) 分组
+    〔add-codex-host-support:task5 分组键升维加 host〕[impl-review-fix CF-1]
+    （契约键含 runner——codex 与 claude 的 outside-voice 需分行，不可合并）：
+    出现轮数 · Σfindings · Σ采纳 · Σ裁掉 · Σdefer · Σ独立 · 采纳率 · 独立率 · flag。
+    host/runner 经 group_key→normalize_host_runner 双代兼容读——v1 旧锚
+    （runner="claude-fallback"/无 host）与 v2 新锚统一归一化后才分组，故本函数
+    读到的 group key 恒是归一化后的值，不会再出现 "claude-fallback" 字面量。"""
     parse_failed = parse_failed or []
     grp = defaultdict(lambda: dict(轮=0, f=0, 采纳=0, 裁掉=0, defer=0, 独立=0,
                                     bad=False, num_bad=False))
@@ -147,10 +170,10 @@ def render_table(rows, no_anchor, parse_failed=None):
         g["独立"] += vals["独立"]
         g["bad"] = g["bad"] or bad
         g["num_bad"] = g["num_bad"] or num_bad
-    hdr = "| layer | lens | runner | site | 出现轮数 | Σfindings | Σ采纳 | Σ裁掉 | Σdefer | Σ独立 | 采纳率 | 独立率 | flag |"
-    sep = "|" + "---|" * 13
+    hdr = "| layer | lens | host | runner | site | 出现轮数 | Σfindings | Σ采纳 | Σ裁掉 | Σdefer | Σ独立 | 采纳率 | 独立率 | flag |"
+    sep = "|" + "---|" * 14
     lines = [hdr, sep]
-    for (layer, lens, runner, site), g in sorted(grp.items()):
+    for (layer, lens, host, runner, site), g in sorted(grp.items()):
         denom = g["采纳"] + g["裁掉"] + g["defer"]
         采纳率 = f"{g['采纳']/denom:.0%}" if denom else "—"
         独立率 = f"{g['独立']/g['f']:.0%}" if g["f"] else "—"
@@ -161,7 +184,7 @@ def render_table(rows, no_anchor, parse_failed=None):
             flags.append("⚠越域")
         if g["num_bad"]:
             flags.append("⚠数值非法")
-        lines.append(f"| {layer} | {lens} | {runner} | {site} | {g['轮']} | {g['f']} | {g['采纳']} | "
+        lines.append(f"| {layer} | {lens} | {host} | {runner} | {site} | {g['轮']} | {g['f']} | {g['采纳']} | "
                      f"{g['裁掉']} | {g['defer']} | {g['独立']} | {采纳率} | {独立率} | {' '.join(flags) or '—'} |")
     lines.append("")
     # [impl-review-fix CF-7] 「N 份」= 报告文件数（每 change 常含 spec/code 两份），

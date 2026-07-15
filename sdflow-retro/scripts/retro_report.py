@@ -321,10 +321,11 @@ def hr_tg_flags(info):
 
 
 def surfacing_counts(root):
-    """扫 archive 的 lens-metric 锚，按 (layer,lens,runner,site) 分组计「出现轮数」
-    （口径与 lens_metric_aggregate.render_table 同源——复用 group_key），返回
-    (counts, flagged, thr)。单一源：surfacing_block 的文本渲染与 build_report 顶部
-    「一览」卡片的待复评镜计数都从此取，杜绝两处各算一遍出现漂移。
+    """扫 archive 的 lens-metric 锚，按 (layer,lens,host,runner,site) 分组计「出现
+    轮数」〔add-codex-host-support:task5 升维加 host〕（口径与 lens_metric_aggregate.
+    render_table 同源——复用 group_key，含其双代兼容读），返回 (counts, flagged, thr)。
+    单一源：surfacing_block 的文本渲染与 build_report 顶部「一览」卡片的待复评镜
+    计数都从此取，杜绝两处各算一遍出现漂移。
     """
     archive_root = os.path.join(root, "openspec", "changes", "archive")
     counts = defaultdict(int)
@@ -340,19 +341,19 @@ def surfacing_counts(root):
 
 def surfacing_block(root):
     """D12：待复评镜 surfacing 机械契约。扫 archive 的 lens-metric 锚，
-    按 (layer,lens,runner,site) 分组计「出现轮数」（口径须与 lens_metric_aggregate.
-    render_table 一致——直接复用同一分组键，不重复定义）；轮数 ≥ 阈值
-    （`LMA.REVIEW_ROUNDS_THRESHOLD`，与 render_table 同源，文档不写死字面量）的镜
-    在报告顶部独立区块列出，固定前缀标记 `⚠️ 待复评:`（可机验，MUST NOT 仅用形容词）。
-    无命中也必须输出固定行——防止「长期无命中」被静默省略成死列（同 hr-tg 空箱同理，
-    grill-not-skippable 教训：跳过类判定不能不可见）。
+    按 (layer,lens,host,runner,site) 分组计「出现轮数」〔add-codex-host-support:task5
+    升维加 host〕（口径须与 lens_metric_aggregate.render_table 一致——直接复用同一
+    分组键，不重复定义）；轮数 ≥ 阈值（`LMA.REVIEW_ROUNDS_THRESHOLD`，与 render_table
+    同源，文档不写死字面量）的镜在报告顶部独立区块列出，固定前缀标记 `⚠️ 待复评:`
+    （可机验，MUST NOT 仅用形容词）。无命中也必须输出固定行——防止「长期无命中」被
+    静默省略成死列（同 hr-tg 空箱同理，grill-not-skippable 教训：跳过类判定不能不可见）。
     """
     counts, flagged, thr = surfacing_counts(root)
     if not flagged:
         return f"⚠️ 待复评: 无（所有镜出现轮数<{thr}）"
     lines = [f"⚠️ 待复评: 以下镜出现轮数≥{thr}、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:"]
-    for (layer, lens, runner, site), c in sorted(flagged):
-        lines.append(f"  - {lens}（layer={layer} runner={runner} site={site}，出现轮数 {c}）")
+    for (layer, lens, host, runner, site), c in sorted(flagged):
+        lines.append(f"  - {lens}（layer={layer} host={host} runner={runner} site={site}，出现轮数 {c}）")
     return "\n".join(lines)
 
 
@@ -388,8 +389,9 @@ def _fmt_dur(minutes):
 
 
 def _top_mirror(agg_rows):
-    """从原始锚行按聚合③同分组 (layer,lens,runner,site) 找 Σfindings 最大的一格。
-    与聚合③同口径（复用 LMA.group_key/_int），读者可在聚合③表逐行核对，不冒
+    """从原始锚行按聚合③同分组 (layer,lens,host,runner,site) 找 Σfindings 最大的
+    一格〔add-codex-host-support:task5 升维加 host〕。与聚合③同口径（复用
+    LMA.group_key/_int，含其双代兼容读），读者可在聚合③表逐行核对，不冒
     (layer,lens) 求和把 site="—" rollup 与 per-site 行双计的风险。
     返回 (label, findings, accept_rate_str) 或 None（无锚/全 0）。"""
     grp = defaultdict(lambda: {"f": 0, "采纳": 0, "裁掉": 0, "defer": 0})
@@ -401,13 +403,18 @@ def _top_mirror(agg_rows):
             g[dst] += v
     if not grp:
         return None
-    (layer, lens, runner, site), g = max(grp.items(), key=lambda kv: kv[1]["f"])
+    (layer, lens, host, runner, site), g = max(grp.items(), key=lambda kv: kv[1]["f"])
     if g["f"] <= 0:
         return None
     denom = g["采纳"] + g["裁掉"] + g["defer"]
     rate = f"{g['采纳'] / denom:.0%}" if denom else "—"
     label = f"{STAGE_LABELS.get(layer, layer)}{LENS_LABELS.get(lens, lens)}镜"
-    if runner not in ("claude", "?"):
+    # [add-codex-host-support:task5] host 分组分开呈现（GC-9）——Codex 宿主前缀标注
+    # （host≠claude 是本 change 新增的可能性，最值得显著呈现）；host=claude 时沿用
+    # 既有 runner 后缀（如 outside-voice codex，历史行为不变，测试兼容）。
+    if host not in ("claude", "?"):
+        label += f"（{host}宿主/{runner}）"
+    elif runner not in ("claude", "?"):
         label += f"（{runner}）"
     return label, g["f"], rate
 

@@ -122,8 +122,11 @@ def test_no_synthetic_score(tmp_path):
 
 
 def test_runner_distinguishes_outside_voice(tmp_path):
-    # [impl-review-fix CF-1] 契约键是 (layer,lens,runner,site,轮)——codex 与
-    # claude-fallback 是两个不同 runner，同 site 的 outside-voice 不可合并成一行。
+    # [impl-review-fix CF-1，add-codex-host-support:task5 更新] 契约键是
+    # (layer,lens,host,runner,site)——codex 与 claude-fallback（v1 已废弃枚举值，
+    # 兼容读作 host=claude,runner=claude）是两个不同分组，同 site 的 outside-voice
+    # 不可合并成一行。「claude-fallback」字面量本身经兼容读后不再出现于渲染表
+    # （被重映射为 "claude"，见 test_no_claude_fallback_enum_value_leaks_into_rendered_table）。
     _write(tmp_path, "c1",
            _a("outside-voice", 3, 2, 2, site="code-voice", runner="codex"),
            _a("outside-voice", 4, 1, 1, site="code-voice", runner="claude-fallback"))
@@ -131,7 +134,8 @@ def test_runner_distinguishes_outside_voice(tmp_path):
     table = lma.render_table(rows, no_anchor)
     lines = [l for l in table.splitlines() if "outside-voice" in l]
     assert len(lines) == 2  # 未被错误合并成一行
-    assert any("codex" in l for l in lines) and any("claude-fallback" in l for l in lines)
+    assert any("codex" in l for l in lines) and any("claude" in l for l in lines)
+    assert not any("claude-fallback" in l for l in lines)  # 已废弃枚举值不应字面残留
     # 真哨兵：各自独立的 Σfindings（3 与 4）都完整入表，不是合并后的 7
     assert any("| 3 |" in l for l in lines) and any("| 4 |" in l for l in lines)
 
@@ -327,6 +331,82 @@ def test_dual_parser_cross_assert():
     assert e["layer"] == block["layer"]
     assert e["lens"] == block["lens"]
     assert e["runner"] == block["runner"]
+
+
+# [add-codex-host-support task5] 聚合器双代兼容读锚行——分组键升 (layer,lens,host,
+# runner,site)，旧锚 runner="claude-fallback" 兼容读作 (host=claude,runner=claude)，
+# 无 host 字段兼容读作 host=claude（design ADR-2/ADR-3 兼容读表；spec workflow-retro
+# 「聚合器双代兼容读锚行」全 4 Scenario）。
+
+
+def test_group_key_is_five_tuple_with_host():
+    # 分组键升维：(layer,lens,host,runner,site)——新锚含 host 字段直接透传。
+    r = {"layer": "code-review", "lens": "outside-voice", "host": "codex",
+         "runner": "claude", "site": "code-voice"}
+    assert lma.group_key(r) == ("code-review", "outside-voice", "codex", "claude", "code-voice")
+
+
+def test_group_key_compat_claude_fallback_maps_to_host_claude_runner_claude():
+    # 兼容读规则①：runner="claude-fallback"（v1 废弃枚举值，无 host 字段）
+    # → (host="claude", runner="claude")——不静默丢行、不保留已废弃枚举值。
+    r = {"layer": "code-review", "lens": "outside-voice", "runner": "claude-fallback",
+         "site": "code-voice"}
+    assert lma.group_key(r) == ("code-review", "outside-voice", "claude", "claude", "code-voice")
+
+
+def test_group_key_compat_missing_host_defaults_to_claude():
+    # 兼容读规则②：v1 锚行无 host 字段（runner 非 claude-fallback，如 codex）
+    # → host="claude"（历史上所有轮次均为 Claude 宿主，事实非假设）。
+    r = {"layer": "code-review", "lens": "outside-voice", "runner": "codex", "site": "code-voice"}
+    assert lma.group_key(r) == ("code-review", "outside-voice", "claude", "codex", "code-voice")
+
+
+def test_render_table_has_host_column():
+    # render_table 表头须新增 host 列（新旧锚均可分组展示）。
+    _write_module = lma
+    rows = [lma.parse_anchor(_a("domain", 5, 3, 2))]
+    table = lma.render_table(rows, [])
+    assert "| layer | lens | host | runner | site |" in table
+
+
+def test_render_table_host_codex_row_rendered(tmp_path):
+    anchor = ('<!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" '
+              'host="codex" runner="claude" site="code-voice" findings="3" 采纳="2" '
+              '裁掉="0" defer="1" 独立="1" sev="致0/高2/中0/低0" -->')
+    _write(tmp_path, "c1", anchor)
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    lines = [l for l in table.splitlines() if "outside-voice" in l]
+    assert len(lines) == 1
+    assert "codex" in lines[0] and "claude" in lines[0]
+
+
+def test_mixed_v1_v2_anchors_group_separately_no_crash(tmp_path):
+    # 新旧锚混合仓：v1 (runner="claude-fallback"，无 host) 与 v2 (host="codex")
+    # 须各自正确分组，不因字段数不同 parse 失败、不混成一行。
+    v1_anchor = _a("outside-voice", 4, 1, 1, site="code-voice", runner="claude-fallback")
+    v2_anchor = ('<!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" '
+                 'host="codex" runner="claude" site="code-voice" findings="3" 采纳="2" '
+                 '裁掉="0" defer="1" 独立="1" sev="致0/高2/中0/低0" -->')
+    _write(tmp_path, "c1", v1_anchor, v2_anchor)
+    rows, no_anchor, parse_failed = lma.aggregate(tmp_path / "archive")
+    assert parse_failed == []
+    assert len(rows) == 2
+    table = lma.render_table(rows, no_anchor)
+    lines = [l for l in table.splitlines() if "outside-voice" in l]
+    assert len(lines) == 2  # 未被错误合并成一行
+    # v1 兼容读为 host=claude,runner=claude；v2 原样 host=codex,runner=claude
+    assert any("| code-review | outside-voice | claude | claude | code-voice |" in l for l in lines)
+    assert any("| code-review | outside-voice | codex | claude | code-voice |" in l for l in lines)
+
+
+def test_no_claude_fallback_enum_value_leaks_into_rendered_table(tmp_path):
+    # 兼容读须彻底替换掉已废弃枚举值——渲染表里不应再出现字面 "claude-fallback"
+    # （否则等于只加了 host 列、没有真正做兼容重映射）。
+    _write(tmp_path, "c1", _a("outside-voice", 4, 1, 1, site="code-voice", runner="claude-fallback"))
+    rows, no_anchor, _ = lma.aggregate(tmp_path / "archive")
+    table = lma.render_table(rows, no_anchor)
+    assert "claude-fallback" not in table
 
 
 def test_fence_core_cross_equivalence():

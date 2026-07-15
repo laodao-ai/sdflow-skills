@@ -361,6 +361,18 @@ def test_surfacing_block_flags_ge10(tmp_path):
     assert "出现轮数 10" in block
 
 
+def test_surfacing_block_shows_host_field(tmp_path):
+    # [add-codex-host-support:task5] surfacing_block 逐行须显式带 host= 字段
+    # （分组键升维，人复评时须看到是哪个宿主的镜频繁出现，不能只见 runner）。
+    for i in range(1, 11):
+        d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
+        d.mkdir(parents=True)
+        (d / "spec-review-report.md").write_text(
+            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n")
+    block = R.surfacing_block(str(tmp_path))
+    assert "host=claude" in block  # ANCHOR 无 host 字段 → 双代兼容读为 claude
+
+
 def test_surfacing_threshold_uses_shared_constant(tmp_path, monkeypatch):
     # T59 反证：surfacing_block 的 ≥10 阈值须引用 LMA.REVIEW_ROUNDS_THRESHOLD 同源常量，
     # 非本地硬编码 10。把常量临时降到 3、构造同键 3 轮，应触发 flag。
@@ -385,9 +397,11 @@ def test_build_report_includes_surfacing_block(tmp_path):
 
 def test_surfacing_groupkey_matches_render_table_on_empty_lens(tmp_path):
     # lens="" 的锚：surfacing 分组键须与 render_table 归一化一致(空串→"?")，否则漏报
+    # [add-codex-host-support:task5] 分组键升 (layer,lens,host,runner,site)；
+    # r 无 host 字段 → 双代兼容读为 host="claude"。
     import lens_metric_aggregate as LMA
     r = {"layer": "spec-review", "lens": "", "runner": "claude", "site": "—"}
-    assert LMA.group_key(r) == ("spec-review", "?", "claude", "—")
+    assert LMA.group_key(r) == ("spec-review", "?", "claude", "claude", "—")
     # 且 surfacing_block 对 10 份 lens="" 锚真能命中(不漏报)
     archive = tmp_path / "openspec/changes/archive"
     d = archive / "2026-01-01-x"
@@ -485,13 +499,32 @@ def test_semantic_summary_single_change():
 
 
 def test_top_mirror_runner_suffix_for_outside_voice():
-    # 非 claude runner（outside-voice codex）作 label 后缀，claude 不加后缀
+    # 非 claude runner（outside-voice codex）作 label 后缀，claude 不加后缀。
+    # _agg 构造的 dict 无 host 字段 → group_key 双代兼容读为 host="claude"，
+    # 故走 elif 分支（沿用旧 runner-only 后缀，非 host≠claude 的新前缀分支）。
     agg = [_agg("code-review", "outside-voice", "codex", "code-voice", 20, a=17, cut=2, defer=1, ind=8),
            _agg("code-review", "domain", "claude", "—", 5, a=5)]
     label, findings, rate = R._top_mirror(agg)
     assert label == "代码审外部声音镜（codex）"
     assert findings == 20
     assert rate == "85%"                     # 17/(17+2+1)
+
+
+def _agg_host(layer, lens, host, runner, site, f, a=0, cut=0, defer=0, ind=0):
+    d = _agg(layer, lens, runner, site, f, a, cut, defer, ind)
+    d["host"] = host
+    return d
+
+
+def test_top_mirror_host_codex_prefixed_label():
+    # [add-codex-host-support:task5] host="codex" 的 top mirror 须显著前缀标注宿主
+    # （GC-9 view-only 呈现——Codex 宿主轮次与 Claude 宿主轮次分开可见，不混算）。
+    agg = [_agg_host("code-review", "outside-voice", "codex", "claude", "code-voice",
+                      20, a=17, cut=2, defer=1, ind=8),
+           _agg("code-review", "domain", "claude", "—", 5, a=5)]
+    label, findings, rate = R._top_mirror(agg)
+    assert label == "代码审外部声音镜（codex宿主/claude）"
+    assert findings == 20
 
 
 def test_top_mirror_none_when_no_findings():
