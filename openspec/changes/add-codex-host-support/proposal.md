@@ -22,9 +22,9 @@
 ## What Changes
 
 - **新增 `resolve-models.sh`**（装进 `~/.sdflow/hack/`，与 `outside-voice.sh` / `checkpoint-commit.sh` 同列）：单一职责——判宿主 + 出机队档位映射。`eval` 出 `SDFLOW_HOST` / `SDFLOW_TIER_{STRONG,MID,LIGHT}` / `SDFLOW_VOICE_RUNNER` / `SDFLOW_VOICE_MODEL`。宿主判定靠**正信号**（Claude = `CLAUDECODE=1`，Codex = `CODEX_THREAD_ID=<uuid>`），**MUST NOT** 用"缺失即另一方"推断。
-- **`outside-voice.sh` 去 codex 硬编码**：runner 由 `resolve-models.sh` 决定；`preflight` 检的是**目标 runner 的 CLI**，不是"codex 装没装"。新增反向路径：Codex 宿主 → 调 `claude -p --model <强档> --output-format text --disallowedTools Write Edit NotebookEdit`（只读，已冒烟通过，5.8s）。**secret_scan / FRAME（含三条通则）/ 200KB 截断三件套对两条出境路径一视同仁**——反向路径 MUST NOT 另起炉灶。
+- **`outside-voice.sh` 去 codex 硬编码**：runner 由 `resolve-models.sh` 决定；`preflight` 检的是**目标 runner 的 CLI**，不是"codex 装没装"。新增反向路径：Codex 宿主 → 调 `claude -p --model <强档> --output-format text --tools "" --strict-mcp-config`（**零工具**只读，只吃已扫 context、对称 codex；spec-review-r2 C4，实测 `--tools ""` 合法且零工具无法真读文件）。**secret_scan / FRAME（含三条通则）/ 200KB 截断三件套对两条出境路径一视同仁**——反向路径 MUST NOT 另起炉灶。
 - **不变式落成机械可判：outside voice = 另一个机队的强档。** Claude 宿主 → Codex 的 Sol；Codex 宿主 → Claude 的 Opus。判不出宿主 ⇒ `SDFLOW_HOST=unknown` ⇒ **fail-loud**：voice 如实标降级，**宁可标 fallback，也 MUST NOT 冒充跨模型**。
-- **BREAKING（锚行 schema v2）**：`outside-voice` / `lens-metric` 两类锚行**新增 `host=` 字段**；`runner` 枚举**收缩为 `{claude, codex}`**（只记机队家族）。**「跨模型性」从此 = `runner ≠ host` 的机械判定**，不再靠枚举值硬编码。`claude-fallback` **废弃**（旧锚向后兼容：读作 `host="claude", runner="claude"`）。
+- **BREAKING（锚行 schema v2）**：`outside-voice` / `lens-metric` 两类锚行**新增 `host=` 字段**；`runner` 枚举 **= `{claude, codex, none}`**（机队家族 + `none`=无执行轮次，spec-review-r2 D3/D6）。**「跨模型性」从此由 anchor_lint 的合法组合矩阵机械判定**（`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`），不再靠枚举值或散落的 `runner≠host` 硬编码（后者被 `runner="none"` 击穿，spec-review-r2 C1）。`claude-fallback` **废弃**（旧锚向后兼容：读作 `host="claude", runner="claude"`）。
 - **Codex 子代理授权显式化**：`sdflow-init` 铺给消费项目的 `AGENTS.md` + 各评审 SKILL.md 写明"本工作流的 model-tiers 与多镜 fan-out 即 codex 要求的 clear task-specific reason"，并在 fan-out 前**机械核验子代理能力可用**——不可用则**报告如实降级为单镜**，MUST NOT 照落 roster 锚。
 - **`model-tiers.md` 从「canonical 缺省 = opus/sonnet/haiku」升为按机队分列**（Claude: opus/sonnet/haiku；Codex: gpt-5.6-sol/terra/luna），skill 一律引用变量、**MUST NOT 内联模型名**（现规则已有此条，但没有变量可引）。
 
@@ -37,7 +37,7 @@
 - `spec-workflow`: 跨模型 outside voice 的核心需求——runner 选择从"codex 写死"改为"另一机队强档"；fallback 语义与锚行文法随之改（`spec.md:516,524,567,582`）。
 - `workflow-metrics`: `lens-metric` 锚行字段集加 `host`，`runner` 枚举收缩（`spec.md:10`）。
 - `lens-metric-emit`: roster 行键 `(lens,runner,site)` → 需容纳 `host`；emitter 的 runner 枚举校验（`spec.md:11`）。
-- `outside-voice-reuse-guard`: 守卫判"是否真跨模型"的依据从 `runner == "codex"` 改为 `runner != host`（`outside_voice_guard.py:93` 是当前假绿的落点之一）。
+- `outside-voice-reuse-guard`: 守卫判"是否真跨模型"的依据从 `runner == "codex"` 改为**引用合法组合矩阵的「跨模型」判定**（`outside_voice_guard.py:93` 是当前假绿的落点之一；spec-review-r2 C1：不自写裸 `runner!=host`，否则 `runner="none"` 被误判可复用）。
 - `workflow-retro`: 聚合器（`lens_metric_aggregate.py`）读锚行时须同时吃 v1 旧锚与 v2 新锚，**MUST NOT 静默丢弃**任一代。
 
 > **不改 `determinism-guards`**（查证后排除）：该 spec 里的 `anchor_lint` 只是被 `config_lint` **引用作实现范式**（"follow `anchor_lint.py::read_metrics_enabled` 范式"），它不是 `anchor_lint` 行为的 owner——后者的需求落点在 `workflow-metrics` 的自检 Scenario。
@@ -73,7 +73,7 @@
 |---|---|---|
 | A1 | `CODEX_THREAD_ID` 在 Codex 所有运行形态下都存在（交互 / headless / spawned subagent） | 宿主误判为 `unknown` → 全程 fail-loud 降级。**不会假绿**，但 Codex 里 voice 永远拿不到跨模型意见。**须在 design 给出核验方法。** |
 | A2 | Codex 的 `spawn_agent` 在被 AGENTS.md 显式授权后**确实会派**子代理 | 「7 镜假绿」的修法失效——退路是 P1 的能力核验兜底（如实降级为单镜），故 A2 失效**不会退回假绿**，只是能力受限。 |
-| A3 | `claude -p` 的非交互调用在 Codex 的沙箱/权限模型下可用 | 反向 voice 全程 fallback。已冒烟通过（5.8s），但**未在真实 Codex 沙箱内验证**——须在 tasks 里排一条真机冒烟。 |
+| A3 | `claude -p` 的非交互调用在 Codex 的沙箱/权限模型下可用（**能发出网络请求并拿到 findings**） | 反向 voice 全程 fallback（贴诚实标签的同族自审）⇒ **Codex 主力形态（headless/CI）下 efficacy=0、本 change 目标未达成**〔spec-review-r2 C5/D14：登记力度对齐 design 🔴〕。若 Codex 封出境网络则 A3 恒失效，**须考虑显著缩 scope 到"仅交互 Codex"或补 headless 替代信号**。已在 Claude 宿主冒烟（5.8s），但**未在真实 Codex 沙箱内验证**——组 0 前置门真机验（人门守，非机械锁 C5）；**若走过场则 BREAKING 契约建在未验假设上**。 |
 | A4 | 三档模型名 `gpt-5.6-{sol,terra,luna}` 稳定 | 机队换血是常态（adr/0006(c) 已预见）——正因如此模型名只出现在 `model-tiers.md` 一处。 |
 
 ## 开放问题（TG-21）

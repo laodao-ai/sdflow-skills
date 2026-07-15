@@ -22,7 +22,7 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 
 **runner MUST 由宿主决定，MUST NOT 硬编码**〔add-codex-host-support〕：runner 恒为**当前宿主之外的另一个机队的强档**（Claude 宿主 → Codex；Codex 宿主 → Claude）。`preflight` MUST 探测**目标 runner 的 CLI**，而非固定探测 codex——固定探测 codex 会在 Codex 宿主下返回 ready 并导致 **codex 自审 codex**，是必须杜绝的假绿。是否启用由环境决定——目标 runner CLI 未安装即天然关停（工作层不设软 off-switch，〔grill-amendment Q3〕）；目标 runner 不可用（未装/未认证/报错/超时）时 MUST fallback 到同 prompt 的 fresh **同宿主**只读子代理，且该轮 `runner == host`（如实标为非跨模型）；宿主判不出（`host="unknown"`）时 MUST NOT 跑 voice（无从确定"另一个机队"）。一切失败均为 informational，MUST NOT 阻塞评审流程。
 
-报告 outside-voice 留痕 MUST 使用模板写死的 v1 机器锚行（严格 KV、按调用位点复数化、guard/runner 正交）：`<!-- sdflow:outside-voice v1 site="…" guard="…" host="claude|codex|unknown" runner="claude|codex|none" reason_code="…" findings="N" truncated="…" -->`〔add-codex-host-support：新增 `host=`；`runner` 枚举收缩为机队家族 + `none`（spec-review-amendment D6：无执行轮次如 host-unknown/secret-hit 用 `runner="none"`，MUST NOT 任选家族伪造"谁执行"），**`claude-fallback` 废弃**——「跨模型性」自此为派生量 `runner ≠ host`，MUST NOT 再编码进枚举值〕（确定性机判，不押自然语言；人类原因文本在锚行外）〔grill-amendment Q5 + spec-review-amendment 文法 v1〕；评审收尾步 MUST 机械自检锚行存在，缺失即报错〔spec-review-amendment〕。
+报告 outside-voice 留痕 MUST 使用模板写死的 v1 机器锚行（严格 KV、按调用位点复数化、guard/runner 正交）：`<!-- sdflow:outside-voice v1 site="…" guard="…" host="claude|codex|unknown" runner="claude|codex|none" reason_code="…" findings="N" truncated="…" -->`〔add-codex-host-support：新增 `host=`；`runner` 枚举收缩为机队家族 + `none`（spec-review-amendment D6：无执行轮次如 host-unknown/secret-hit 用 `runner="none"`，MUST NOT 任选家族伪造"谁执行"），**`claude-fallback` 废弃**——「跨模型性」自此为派生量、由 `host-adaptive-execution` 合法组合矩阵判定（`host,runner∈{claude,codex}∧runner≠host∧reason_code="ok"`），MUST NOT 再编码进枚举值、MUST NOT 简写为裸 `runner≠host`（被 `runner="none"` 击穿，spec-review-r2 C1）〕（确定性机判，不押自然语言；人类原因文本在锚行外）〔grill-amendment Q5 + spec-review-amendment 文法 v1〕；评审收尾步 MUST 机械自检锚行存在，缺失即报错〔spec-review-amendment〕。
 
 #### Scenario: Claude 宿主下跑跨模型 voice
 - **WHEN** sdflow-code-review 运行于 `host=claude` 且 codex preflight 返回 ready
@@ -30,7 +30,7 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 
 #### Scenario: Codex 宿主下跑跨模型 voice〔add-codex-host-support〕
 - **WHEN** sdflow-code-review 运行于 `host=codex` 且 `claude` CLI preflight 返回 ready
-- **THEN** 经**同一个** helper（同一 `render_prompt`/`secret_scan`/截断）调 `claude -p --model <Claude 强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config`〔spec-review-amendment Q2：`--tools` 独占白名单 + MCP 隔离，非 `--disallowedTools`/`--allowedTools`；见能力 host-adaptive-execution「出境安全」〕，findings 进合并池，锚行记 `host="codex" runner="claude"`
+- **THEN** 经**同一个** helper（同一 `render_prompt`/`secret_scan`/截断）调 `claude -p --model <Claude 强档> --output-format text --tools "" --strict-mcp-config`〔spec-review-r2 C4：**零工具**（只吃已扫 context、无运行时 Read 出境面，对称 codex），非 `--tools "Read,Grep,Glob"`/`--disallowedTools`/`--allowedTools`；见能力 host-adaptive-execution「出境安全」〕，findings 进合并池，锚行记 `host="codex" runner="claude" reason_code="ok"`
 
 #### Scenario: 目标 runner 不可用回落同宿主子代理
 - **WHEN** preflight 返回 not_installed（目标 runner 的 CLI 未装）
@@ -52,9 +52,9 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 
 outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdflow-spec-review 写入报告决策登记区（选项 + 推荐 + 两方视角 + **三面后果（系统 / 用户 / 开发循环）+ 主次判定**，设计 HARD-GATE 人一次性拍板）；sdflow-code-review 按 T10 三级协议自动裁决（有客观判据自动裁 / 无则派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist/todolist + hand-off）并**按三镜 + 主次记理由**，MUST NOT 以自评置信（"有把握"）为自动裁决唯一依据〔impl-review-fix F1/CV2〕。outside voice 的建议 MUST NOT 被静默自动采纳（不直接改代码/设计而不留痕）。
 
-**置信过滤豁免 SHALL 按「是否跨机队」判定，MUST NOT 按 runner 枚举值硬编码**〔add-codex-host-support〕：**`runner ≠ host`**（真跨模型）的 outside-voice findings MUST NOT 经自评置信阈值（<80）预过滤——跨模型自评不可比、异见易被同族标尺误杀——一律直通对抗裁决，被裁掉的连理由落报告「已裁掉」区〔grill-amendment Q4〕；**`runner == host`**（同族 fallback）的 findings 属同族产物，照过同族置信滤（豁免理由对其不成立）。
+**置信过滤豁免 SHALL 按合法组合矩阵的「跨模型」判定，MUST NOT 自写 `runner ≠ host` 或按 runner 枚举值硬编码**〔add-codex-host-support · spec-review-r2 C1〕：**矩阵判「跨模型」为真**（`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`）的 outside-voice findings MUST NOT 经自评置信阈值（<80）预过滤——跨模型自评不可比、异见易被同族标尺误杀——一律直通对抗裁决，被裁掉的连理由落报告「已裁掉」区〔grill-amendment Q4〕；**其余**（同族 fallback `runner==host`、**及无执行 `runner="none"`**）照过同族置信滤（豁免理由对其不成立；`runner="none"` 的 findings 恒 0、豁免无意义）。
 
-> 〔为何改判据〕旧规则写死 `runner=codex` 豁免——该值在 **Codex 宿主**下恰恰意味着**自审**，旧规则会给自审发放跨模型豁免。判据必须是关系式 `runner ≠ host`，不是枚举值。
+> 〔为何引用矩阵而非自写 `runner≠host`〕旧规则写死 `runner=codex` 豁免——该值在 Codex 宿主下恰恰是**自审**；而首轮改的 `runner ≠ host` 又被 `runner="none"` 击穿（`none≠host` 恒真 → 无执行轮被误豁免，spec-review-r2 C1）。∴ 判据 MUST 引用合法组合矩阵的单一「跨模型」判定，不在此重写关系式。
 
 #### Scenario: 设计侧分歧进决策登记区
 - **WHEN** outside voice 与 spec-review 主审对同一设计点结论相反

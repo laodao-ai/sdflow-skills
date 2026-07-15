@@ -7,7 +7,7 @@ lens-metric 锚的计数（`findings`/`采纳`/`裁掉`/`defer`/`独立` + `sev`
 emitter SHALL 接受 **`--host`** 参数（取值 `claude|codex|unknown`，由调用方从 `resolve-models.sh` 的 `SDFLOW_HOST` 传入），作为本轮所有行的 `host` **单一源**——**MUST NOT** 有 per-finding 或 per-roster-row 的 `host`〔add-codex-host-support：与 `--layer` 同构；一轮评审只有一个宿主，per-row host 会制造无意义的自相矛盾态〕。
 
 emitter 的**输入** SHALL 含两部分，字段名按契约权威 input schema（英文键名，取值中文）〔spec-review-amendment ADR-6〕：
-- ① `roster`：`(lens,runner,site)` **行键**列表，本轮跑过的每个行键各一条（含零-finding 行）；非 outside-voice 行 `site="—"` 且 `runner` 取当前 host（主审自己的机队），outside-voice 行显式带 `runner`∈{claude,codex} 与 `site`∈{code-voice,hr-tg,design-voice}。
+- ① `roster`：`(lens,runner,site)` **行键**列表，本轮跑过的每个行键各一条（含零-finding 行）；非 outside-voice 行 `site="—"` 且 `runner` 取当前 host（主审自己的机队），outside-voice 行显式带 `runner`∈{claude,codex,**none**}〔spec-review-r2 D4：含 `none`——host-unknown/secret-hit/fallback-unavailable 的无执行轮次；首轮此处漏 `none` 与同文件 `runner="none" 行合法` Scenario 自相矛盾〕 与 `site`∈{code-voice,hr-tg,design-voice}。
 - ② `findings`：每条携带 `hits`（命中行的引用列表，每 hit 带原始镜名 `raw` + outside-voice 命中时的 `runner`/`site`）、裁决 `verdict`∈{采纳,裁掉,defer}、严重度 `sev`∈{致,高,中,低}（`verdict==采纳` 时必填非空）。**无 per-finding `layer`、无 per-finding `host`**〔layer/host 均为 CLI 单一源〕。
 
 emitter SHALL 按 `lens-metric-contract.md` 的 **`lens-metric-fold` 机读块** 折叠每 hit 的 `raw`→canonical `lens`：`fold(raw)= raw if raw∈lens_enum（恒等 pass-through）; elif raw∈fold_map; else fail-closed`〔spec-review-amendment ADR-7〕，得行键 `(lens, host, runner, site|—)`；按**归属规则**（`findings/采纳/裁掉/defer` 每命中**行键**各记一次；`独立` 仅「去重行键集 size==1 ∧ 被采纳」时 +1）逐行键归约，**为 `roster` 中每个行键恒输出一行**字段齐全（含 `host`）、取值在域内、`sev` 子格式为 `致N/高N/中N/低N`（仅采纳项计入、零也写 0、分隔恒 `/`）的合规锚行。
@@ -45,9 +45,10 @@ emitter SHALL 只做机械归约，MUST NOT 做去重（是否同一 finding）�
 #### Scenario: 缺 --host 或取值越域则受控 fail-closed（非 argparse 崩）〔add-codex-host-support · spec-review-amendment D4〕
 - **WHEN** 调用方未传 `--host`，或传入 `claude|codex|unknown` 之外的值（含已废弃的 `claude-fallback`）
 - **THEN** emitter SHALL **受控 fail-closed**（非零退出 + **可读错误消息报明原因**，MUST NOT 靠 argparse 的 `unrecognized/required` 崩栈——用 `parse_known_args` 或显式必填校验，使"缺 host"成为受控降级而非崩溃），MUST NOT 默认填 `claude`（静默默认会把 Codex 宿主的轮次伪装成 Claude 宿主，正是本能力要杀的假绿）
+- **AND〔spec-review-r2 D12〕** 用 `parse_known_args` 时 SHALL 显式 `if extras: fail-closed`（报明多余/拼错参数），MUST NOT 静默吞未识别参数——否则 `--laye` 之类拼写错误被静默忽略、弱化参数防护
 
 #### Scenario: runner="none" 行合法（无执行轮次）〔spec-review-amendment D6〕
 - **WHEN** 某 roster 行键的 `runner="none"`（host-unknown/secret-hit 的无执行轮次）
 - **THEN** emitter SHALL 接受 `none` 为合法 runner 值并落行，该行 `findings/采纳/裁掉/defer/独立` 恒为 0；MUST NOT 判 `none` 越域
 
-> **跨版本 skew（D4，属 emitter 消费侧兼容，详见 design ADR-3-b）**：新 SKILL 传 `--host` 给**旧 emitter**（未 `sdflow-init update` 的陈旧窗口）会触发旧 emitter 的 argparse 罢工（exit 2）→ 整段 lens-metric 静默清零。此 skew 的兼容 SHALL 由 design ADR-3-b 选定策略处置（SKILL 探 emitter 能力 / 锁步升级 / 受控 fail-closed 三选一，推荐工具侧受控 fail-closed），**不在本能力（新 emitter）内单独解决**——但本能力的受控 fail-closed（上一 Scenario）是该策略的工具侧落点。
+> **跨版本 skew（D1/C3 统一策略，详见 design ADR-3）**：新 SKILL 传 `--host` 给**旧 emitter**（exit 2 清零）与旧 `anchor_lint` 拒 `runner="none"`（out-of-enum 罢工）是**同根**（bundle 内 SKILL 与 tools 更新不原子）。统一策略 = **编排 SKILL 落锚/调 emitter 前探 tools 能力，陈旧则 fail-loud 降级 + 提示 `sdflow-init update`**（见能力 host-adaptive-execution）；本能力的受控 fail-closed（上一 Scenario，含 D12 拒 extras）是该策略的**工具侧第二道兜底**，非唯一手段。

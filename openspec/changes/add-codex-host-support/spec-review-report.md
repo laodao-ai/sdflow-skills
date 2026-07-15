@@ -14,6 +14,8 @@
 > **outside-voice 补偿声明（guard=file-missing）**：无 `gstack-review.md`（本 change 未跑 autoplan），复用守卫返 `file-missing` ⇒ 自跑设计 outside-voice（design-voice + hr-tg 两切片）。**仅补偿 outside-voice 切片，广审其余镜（CEO/DX 视角）仍缺**——本轮由对抗/接地镜 + 领域 cross-model 覆盖。
 > **栈**：Bash+Python+Markdown，不命中任何 stack 领域清单（backend-go/embedded/frontend），故无 stack 领域镜。
 
+> **⏭ 更新（2026-07-15，二次审返工已落地）**：Q1–Q5 五条经用户拍板同意（含**方案自检修正**：C3+D1 合并统一 skew 探测、C5 撤回机械 marker 归人门——见下 Q5 更正），D1–D14 一并 amend 完成，`openspec validate --strict` 绿。下方 findings + 决策登记保留为审计记录；各条落点见文末「二次审返工落点」。
+
 ## 总判定（二次审）：⚠️ 仍不建议进设计 HARD-GATE，需一轮**聚焦返工**（比首轮近得多）
 
 **返工确实闭合了首轮的 Q1–Q3 + D1–D10**（对抗镜 A 逐条对码核对：探针降格措辞、`--tools`+`--strict-mcp-config` 换旗、efficacy 前置门组 0、F6 绑 outside-voice 锚 + 降级码集含 preflight-error、真实性守 always-on 解耦措辞、行号修正——在 host-adaptive-execution / workflow-metrics / spec-workflow 三份核心 spec 与对应 tasks 之间字面一致）。接地镜也**坐实了返工押的关键代码事实**：`--tools` / `--strict-mcp-config` / `--add-dir` 是真实 claude CLI 旗且 `--tools` 语义确为独占白名单（对抗镜 B 实测 `--tools` 下 Bash 不可用，Q2 换旗判断成立）；`lens_metric_emit --host` 实测 exit 2（ADR-3-b 的实测复现属实）；`:144`/`:121` 行号正确；`config_lint` 确只校验键不校验值（D5 前提成立）。
@@ -124,6 +126,8 @@
 - **三面后果**：系统——A 给本 change 最重风险配一个诚实机械锁；B 与既有流程一致、不引入 bespoke gate。用户——A 下 BREAKING 契约不会建在未验 efficacy 上；B 依赖评审人尽责。开发循环——A 落一个 marker + 断言（小）；B 零成本但留「走过场勾掉」的口子。
 - **主次判定**：**倾向 A，但承认它略超常规**（四件套流程本就人门为主，为单个 change 造机械 gate 有 scope 争议）。鉴于**契约不可逆 + 这是本 change 唯一 🔴 风险的唯一守门 + 证据可机械捕获**，A 的性价比成立。**留人拍板 A/B。** 若选 B，须在 proposal 显著登记「efficacy 未机械守、A1/A3 走过场则 BREAKING 建在未验假设上」。
 
+> **🔴 更正（拍板前方案自检抓到——本条推荐 A 是错的）**：「efficacy 证据可机械捕获」这句判断**重犯了 grill 时把自报信号当机械门的坑**。`.efficacy-gate-passed` marker 由主 session（LLM）写 ⇒ 「A1/A3 真的在**真** Codex 宿主验过」的捕获环节仍由被监管方把持，marker 里塞个真格式 uuid 也是自报，无可信捕获路径（同探针/§0.0）。∴ **撤回 A，改选 B（归人门纪律）**：A1/A3 由人在真 Codex 宿主验 + 回写四件套，设计 HARD-GATE + 冷审复核守，proposal 显著登记走过场风险，**MUST NOT 造假机械锁**。已按 B amend（design Migration step 0 / Risks / Compliance §0.0 三次同源教训 / proposal A3 行）。
+
 ---
 
 ## 自动决策（清晰、默认采纳，返工时一并 amend）
@@ -177,6 +181,31 @@
 - **为何仍需一轮而非直接放行**：C1/C2 由 4 源/3 源独立冷层收敛 + 对码坐实，置信极高；且讽刺地正是本 change「杀机械层防伪」命题在自己身上的复现——**在这个 change 上放过「看起来在防伪、实际没防」，等于否定它自己的立项理由**。
 
 ---
+
+## 二次审返工落点（审计，2026-07-15 amend）
+
+| 决策 | 落点 |
+|---|---|
+| **Q1**（C1 合法组合矩阵） | design 数据模型「合法组合矩阵」段 + 派生语义重写 · ADR-5 豁免引用矩阵 · F6 段（矩阵同族行子句 + 成功哨兵 ok）· 失败表 · scope-check 面 2 · host-adaptive「锚行合法组合矩阵」新 Requirement + 3 Scenario · workflow-metrics 自审 Scenario · spec-workflow 豁免 · outside-voice-reuse-guard 引用矩阵 + runner=none Scenario · tasks 2.3/4.3/4.4/8.3 |
+| **Q2**（C2 独立信号 mirrors=） | design 锚行 v2 加 `mirrors=` · ADR-4 一致性 lint 改读 mirrors= · Risks C2 行 · host-adaptive 子代理降级 Requirement + fan-out/解耦锁 Scenario · workflow-metrics fan-out Scenario · tasks 2.5/9.4 |
+| **Q3+D1**（C3 统一 skew 探测） | design ADR-3 重写（合并两症状 + 统一探测策略）· Risks skew 行 · host-adaptive「探 tools 能力」新 Requirement + 2 Scenario · lens-metric-emit skew 注 · tasks 3.2b/8.6 |
+| **Q4**（C4 零工具） | design Context:16 · 序列图 · 安全表只读约束/FS 边界行 · Q2 段重写 · 铁律 · host-adaptive 出境安全 Requirement + 只读约束 Scenario · spec-workflow Codex voice Scenario · proposal What Changes · tasks 0.2/7.3/7.4 |
+| **Q5**（efficacy 归人门，撤回机械 marker） | design Migration step 0 · Risks efficacy 行 · Compliance §0.0（三次同源教训）· proposal A3 行 · tasks 0.3 · 本报告 Q5 更正 |
+| **D2**（序列图旧旗） | design:115-116（并入 Q4） |
+| **D3**（proposal:27 枚举） | proposal What Changes BREAKING 行 |
+| **D4**（emit spec runner 域含 none） | lens-metric-emit spec:10 |
+| **D5**（成功哨兵 ok） | design F6 段 · host-adaptive 矩阵 + voice Scenario · workflow-metrics 自审 Scenario（并入 Q1） |
+| **D6**（none⇒findings=0） | 并入 Q1 矩阵 |
+| **D7**（missing-deps→preflight-error） | design F6 段 + 失败表 F1b · workflow-metrics 自审 Scenario |
+| **D8**（secret_scan stderr 脱敏） | host-adaptive secret 命中 Scenario · tasks 7.3/7.7 |
+| **D9**（fallback-unavailable） | design 失败表 F8 · host-adaptive 组合失败 Scenario · tasks（矩阵无执行码） |
+| **D10**（resolver config 解析共用） | design Compliance 基准5 + Risks eval 行 · host-adaptive eval Scenario · tasks 6.2d |
+| **D11**（F6 metrics=false 测试 + 独立函数） | design scope-check 面 2 · host-adaptive/workflow-metrics（独立成函数措辞）· tasks 2.3 |
+| **D12**（parse_known_args 拒 extras） | lens-metric-emit fail-closed Scenario · tasks 3.2 |
+| **D13**（host 伪造旁路证据） | 登记于 design ADR-4/Risks（有 ADR-1 张力，防御纵深，未强制——留人定） |
+| **D14**（失败表/冒烟标注/proposal A3 登记） | design 失败表 F1b · Context:16 · proposal A3 行 |
+
+> **lens-metric 度量锚**仍延后至设计门拍板最终化（SR-M）。`anchor_lint` 自检因 lens-metric 段有意延后而暂缓（非遗漏，与首轮口径一致）。`openspec validate --strict` 绿。
 
 ## 附录：首轮记录（2026-07-15，commit 4e88918 判定 → c9b8325 返工）
 
