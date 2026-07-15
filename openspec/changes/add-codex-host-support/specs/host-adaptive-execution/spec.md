@@ -24,7 +24,7 @@
 
 ### Requirement: outside voice = 另一个机队的强档（跨机队不变式）
 
-outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的强档**：`SDFLOW_HOST=claude` ⇒ runner 为 Codex 机队强档；`SDFLOW_HOST=codex` ⇒ runner 为 Claude 机队强档（`claude -p --model <强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`，**只读全仓非交互**——对称 codex 的 `-C repo_root -s read-only`，见「出境安全」需求）〔spec-review-r3 C4：撤回 r2 零工具（其前提「codex 只发 context」实测为错——codex 是 `-C repo_root` 全仓只读），恢复对称：给 claude 只读工具集 + `--add-dir` 限定到仓库〕。
+outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的强档**：`SDFLOW_HOST=claude` ⇒ runner 为 Codex 机队强档；`SDFLOW_HOST=codex` ⇒ runner 为 Claude 机队强档（`claude -p --model <强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`，**只读全仓非交互**——对称 codex 的 `-C repo_root -s read-only`，见「出境安全」需求）〔spec-review-r3 C4：撤回 r2 零工具（其前提「codex 只发 context」实测为错——codex 是 `-C repo_root` 全仓只读），恢复对称：给 claude 只读工具集 + `--add-dir` 增量授权确保覆盖仓库（非收窄边界，见「只读姿势诚实边界」）〕。
 
 `outside-voice.sh` MUST NOT 硬编码任一 runner——`preflight` SHALL 探测**目标 runner 的 CLI**（`command -v "$SDFLOW_VOICE_RUNNER"`），`exec` SHALL 按 runner 分叉。宿主为 `unknown` 时 SHALL **不跑 voice**（无从确定"另一个机队"），锚行记 `host="unknown"` + `reason_code="host-unknown"`。
 
@@ -62,11 +62,11 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 「跨模型」判定 = 矩阵第一行成立。此校验 **MUST always-on、独立成函数、不接受 `metrics_on` 参数**（D11，照 `check_hr_tg` 先例）。
 
-**矩阵为跨工具单一源 SHALL 落成机读契约块，非「引用」口号〔spec-review-r3 C2-cross-tool〕**：`anchor_lint`（判自审）与 `outside_voice_guard`（判可复用）是**两个独立工具**，且 `outside_voice_guard.py` 有 **`MUST NOT import`** 边界（D5 铁律：跨模块口径本文件内重实现，防 fence 内示例锚被误算）——∴「引用同一矩阵」在机械上**做不到用共享函数**。矩阵 SHALL 作为 `lens-metric-contract.md` 的**机读块**（如 `legal-combo-matrix`，与 `lens-metric-enums` 同构）承载合法组合的单一权威定义；两个工具**各自 parse 该块 + 本地重实现判定逻辑**（承 D5「重实现非 import」），由一条**跨工具一致性测试**（golden：同一批 (host,runner,reason_code,findings) 输入喂两个工具，「跨模型」判定必一致）守住不漂移。**MUST NOT** 让两工具各自硬编码一份矩阵而无一致性测试守（那正是 C1 要杀的多处漂移）。
+**矩阵为跨工具单一源：逻辑本地重实现 + 全笛卡尔 golden 守，非可 parse 的「同构 enums」块〔spec-review-r3 C2-cross-tool · r3-narrow 修正〕**：`anchor_lint`（判自审）与 `outside_voice_guard`（判可复用）是**两个独立工具**，且 `outside_voice_guard.py` 有 **`MUST NOT import`** 边界（D5 铁律：跨模块口径本文件内重实现）——∴「引用同一矩阵」做不到用共享函数。**且矩阵是关系式谓词**（`host∈{}∧runner∈{}∧runner≠host∧reason_code="ok"`、不等式、行内析取），**`lens-metric-enums` 那种平铺 `key: 逗号值` 块表达力装不下**（r3-narrow 冷层纠正 r3 初稿「与 enums 同构」的措辞错）。∴：**① 枚举域**（host/runner/reason_code 各自取值集）SHALL 由 `lens-metric-contract.md` 机读块承载（既有单一源，两工具各自读）；**② 矩阵的关系式判定逻辑**（三态分类 illegal/cross-model/same-family/no-exec）SHALL 由两工具**各自本地重实现**（承 D5「重实现非 import」，MUST NOT 硬凑一个表达力不足的可 parse 块）；**③ 防漂移靠强 golden**：一条跨工具 golden 测试 SHALL 对 **host×runner×reason_code×findings 全笛卡尔积**（含边界 + mutation：坏值/越域/缺字段）喂两工具，断言二者的**完整分类**（非仅「跨模型」布尔）逐条一致，任一漂移即红。**MUST NOT** 让 golden 只比有限输入的布尔值（那样两工具同源同错测不出，r3-narrow 冷层点名）。
 
-#### Scenario: 矩阵机读块被两工具各自 parse 且一致性测试守
-- **WHEN** `anchor_lint` 与 `outside_voice_guard` 都需要「跨模型」判定
-- **THEN** 二者 SHALL 各自从 `lens-metric-contract.md` 的 `legal-combo-matrix` 机读块 parse 合法组合，本地重实现判定（`outside_voice_guard` 承 `MUST NOT import` 边界不 import `anchor_lint`）；一条跨工具 golden 测试 SHALL 断言二者对同一输入集的「跨模型」判定逐条一致，任一漂移即红
+#### Scenario: 矩阵逻辑两工具各自重实现且全笛卡尔 golden 守
+- **WHEN** `anchor_lint` 与 `outside_voice_guard` 都需要合法组合分类
+- **THEN** 二者 SHALL 从契约机读块读**枚举域**、各自本地重实现**关系式分类逻辑**（`outside_voice_guard` 承 `MUST NOT import` 边界不 import `anchor_lint`）；一条 golden 测试 SHALL 对 host×runner×reason_code×findings 全笛卡尔积（含 mutation）断言二者**完整分类**逐条一致，MUST NOT 只比有限输入的布尔值
 
 #### Scenario: runner="none" 不被判为跨模型
 - **WHEN** 某 outside-voice 锚 `runner="none"`（无论 host 为何）
@@ -82,7 +82,7 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 理由：新增的 runner 意味着**新的数据出境端点**；任何"给该路径单独写一套 prompt 组装"的实现都会绕过扫描器，是安全回归。runner 之间的差异 SHALL 只体现在最终 `exec` 的命令行分叉一处。
 
-**只读姿势诚实边界（spec-review-r3 C4：反向路径与 codex 对称的只读全仓）**：codex 路径 `-C repo_root -s read-only --ephemeral` 是**内核级**沙箱（seccomp/sandbox-exec，封写 + 网络），**且全仓只读可读**（FRAME 明请读仓库代码找漏，非"只发 context"）；claude 路径 `--tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>` 是**只读全仓 + 应用层尽力对齐**（可被 settings/hook/plugin 削弱），**非内核级**。∴ 二者 **SHALL NOT 声称"对等"**，只声称「应用层尽力 + 残余非内核级」，但**读全仓找漏的能力对称**。**反向 `claude -p` SHALL 三旗齐全：`--tools "Read,Grep,Glob"`（只读工具集，无 Write/Bash/WebFetch）+ `--strict-mcp-config`（隔离 ambient MCP）+ `--add-dir <repo_root>`（限定可读到仓库），三者 SHALL 视为安全承重墙**，测试从单一契约片段断言三旗齐全且工具集只读、回归即红。**r2 的零工具 `--tools ""` SHALL 废除**：其前提「codex 只发 context」实测为错（codex `-C repo_root` 全仓只读），零工具单边削弱了 claude voice 的检索能力（读不了 diff 外的调用点/类型定义）、且 FRAME「依据仓库代码本身」喂给零工具 claude 结构性做不到 → 加剧幻觉。**双边预存残余如实登记**：voice runner 读仓库内容→随请求出境到各自模型商（claude→Anthropic、codex→OpenAI），此面**两条路径同构、预先存在**，由 FRAME「不要读 .env/密钥」缓解、非铁桶、非内核级；round-2 挖的「网络禁则无法外传」论证错——那条批评对 codex 同样成立，故是双边残余而非单边砍工具的理由。**范围**：本约束只管**跨模型 `claude -p` 反向路径**，不改同族 fallback 子代理（Codex 不可用时派的 fresh Claude 只读子代理与主审同信任级、本就该有工具）。
+**只读姿势诚实边界（spec-review-r3 C4：反向路径与 codex 对称的只读全仓）**：codex 路径 `-C repo_root -s read-only --ephemeral` 是**内核级**沙箱（seccomp/sandbox-exec，封写 + 网络），**且全仓只读可读**（FRAME 明请读仓库代码找漏，非"只发 context"）；claude 路径 `--tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>` 是**只读全仓 + 应用层尽力对齐**（可被 settings/hook/plugin 削弱），**非内核级**。∴ 二者 **SHALL NOT 声称"对等"**，只声称「应用层尽力 + 残余非内核级」，但**读全仓找漏的能力对称**。**反向 `claude -p` SHALL 三旗齐全：`--tools "Read,Grep,Glob"`（只读工具集，无 Write/Bash/WebFetch）+ `--strict-mcp-config`（隔离 ambient MCP）+ `--add-dir <repo_root>`（**增量授权**确保可读到整个仓库根——`--add-dir` 语义是"加可读目录"非"收窄边界"，但因 `repo_root` 由 `git rev-parse --show-toplevel` 从 cwd 反求、`cwd⊆repo_root`，故只补齐到仓库、不引入仓外目录，r3-narrow 已证），三者 SHALL 视为安全承重墙**，测试从单一契约片段断言三旗齐全且工具集只读、回归即红。**Read 无硬 FS 边界的诚实登记**：claude `Read` 可读仓外文件（如 `~/.ssh`/`.env`）——**codex `-s read-only` 同样可读任意文件**（其 sandbox 管的是 shell 命令写/网络，非文件读白名单，r3-narrow 实测 `codex exec --help`）；二者此面**同构**，均无硬 FS 读边界、均靠 FRAME「不要读 .env/密钥」缓解、非铁桶。**r2 的零工具 `--tools ""` SHALL 废除**：其前提「codex 只发 context」实测为错（codex `-C repo_root` 全仓只读），零工具单边削弱了 claude voice 的检索能力（读不了 diff 外的调用点/类型定义）、且 FRAME「依据仓库代码本身」喂给零工具 claude 结构性做不到 → 加剧幻觉。**双边预存残余如实登记**：voice runner 读仓库内容→随请求出境到各自模型商（claude→Anthropic、codex→OpenAI），此面**两条路径同构、预先存在**，由 FRAME「不要读 .env/密钥」缓解、非铁桶、非内核级；round-2 挖的「网络禁则无法外传」论证错——那条批评对 codex 同样成立，故是双边残余而非单边砍工具的理由。**范围**：本约束只管**跨模型 `claude -p` 反向路径**，不改同族 fallback 子代理（Codex 不可用时派的 fresh Claude 只读子代理与主审同信任级、本就该有工具）。
 
 #### Scenario: secret 命中时两条路径都拒发（且不泄进日志）〔spec-review-r2 D8〕
 - **WHEN** context 文件命中 secret 模式（AWS / GitHub / Slack / Anthropic / OpenAI key / JWT），无论目标 runner 是 codex 还是 claude
@@ -98,7 +98,7 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 #### Scenario: 只读约束按 runner 落到对应机制（反向路径只读全仓，对称 codex）〔spec-review-r3 C4〕
 - **WHEN** 向 claude 发起跨模型 voice（`claude -p`）
-- **THEN** 命令行 SHALL 三旗齐全：**`--tools "Read,Grep,Glob"`**（只读工具集，无 Write/Bash/WebFetch）**+ `--strict-mcp-config`**（隔离 ambient MCP）**+ `--add-dir <repo_root>`**（限定可读到仓库根，对称 codex `-C repo_root`）；**MUST NOT 给 Write/Bash/WebFetch 等非只读工具**、**MUST NOT 用 `--tools ""` 零工具**（单边削弱检索、加剧幻觉）、**MUST NOT 用 `--disallowedTools` denylist**、**MUST NOT 用 `--allowedTools`**（与 settings `permissions.allow` 合并可穿透）；读全仓能力与 codex 对称；此形态为**应用层尽力对齐**（非声称与内核级沙箱对等）
+- **THEN** 命令行 SHALL 三旗齐全：**`--tools "Read,Grep,Glob"`**（只读工具集，无 Write/Bash/WebFetch）**+ `--strict-mcp-config`**（隔离 ambient MCP）**+ `--add-dir <repo_root>`**（增量授权确保可读到仓库根，对称 codex `-C repo_root`；非"收窄边界"——见「只读姿势诚实边界」）；**MUST NOT 给 Write/Bash/WebFetch 等非只读工具**、**MUST NOT 用 `--tools ""` 零工具**（单边削弱检索、加剧幻觉）、**MUST NOT 用 `--disallowedTools` denylist**、**MUST NOT 用 `--allowedTools`**（与 settings `permissions.allow` 合并可穿透）；读全仓能力与 codex 对称；此形态为**应用层尽力对齐**（非声称与内核级沙箱对等）
 
 ### Requirement: 模型档位按机队分列，skill 引用变量不内联模型名
 
@@ -149,7 +149,7 @@ Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`
 
 **探针 = 语义核验（非机械门）+ always-on 一致性 lint（spec-review-amendment Q1，adr/0023 已降格）**：「fan-out 机制活着没」有信号、**但无可机械捕获路径**——探针（trivial 子代理看回不回哨兵）只能由**主 session 自己**调用观察、把 `subagents=` 写进锚，`anchor_lint` 读那行锚**无从核验它对应一次真 spawn**（经被监管方自报，§0.0 防伪一侧）。∴ 探针 SHALL 作**机制活着的语义核验**、MUST NOT 冒充机械门。`SDFLOW_HOST=codex` ⇒ **MUST 探**；`claude` ⇒ 免探恒 available；`unknown` ⇒ 不 fan-out。结果落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->`，该锚 **MUST 落进被 `anchor_lint` 校验的那份报告文件内**（D8-orig：落别处则 lint 看不见）；`host=codex` 的报告中该锚**必须在场**（缺锚不得绕过）。**`mirrors=` = 本轮实际 fan-out 镜清单**〔spec-review-r2 C2〕，由 SHALL 由 SKILL 在 fan-out 时直接落**、不经 emitter/lens-metric 管线、不读 `config.metrics`**，故 `metrics.enabled=false` 时也在场。
 
-**`mirrors=` 严格文法 + 缺字段 fail-closed〔spec-review-r3 C5-mirrors〕**（否则 C2 仍能诚实空转）：`fanout-capability` 锚 SHALL **每轮恰好一条**（重复锚 → fail-closed）；`mirrors=` 为 `host=codex` 报告的**必填字段**，取值文法 SHALL 为 **`—`（未 fan-out）XOR 非空的 `{domain,adversarial,grounding}` 逗号分隔子集**；`anchor_lint` 对 **缺 `mirrors=` / 空值 / 未知 token / 重复 token / 多条 capability 锚** SHALL **fail-closed 报错**，MUST NOT 把缺失/坏值静默过滤成空集（否则 `subagents="unavailable"` + 空 `mirrors` 又判 CLEAN、C2 空转复发）。
+**`fanout-capability` 锚严格文法 + 缺字段 fail-closed〔spec-review-r3 C5-mirrors · r3-narrow #5〕**（否则 C2 仍能诚实空转）：`fanout-capability` 锚 SHALL **每轮恰好一条**（重复锚 / 重复 KV → fail-closed）；**`subagents=` SHALL 必填且严格 ∈ `{available,unavailable}`**——**`subagents=""` / 未知值 / 缺字段 SHALL fail-closed 报错，MUST NOT 视作"非 unavailable"而放行**（否则坏 `subagents` 值携多镜绕过一致性 lint 的 `unavailable` 分支，r3-narrow #5）；**capability 锚的 `host=` SHALL 与报告 outside-voice/lens-metric 锚的 `host=` 唯一一致**，否则 fail-closed（防 `host="claude"` capability 锚混入 Codex 报告只为满足"锚存在"）；`mirrors=` 为 `host=codex` 报告的**必填字段**，取值文法 SHALL 为 **`—`（未 fan-out）XOR 非空的 `{domain,adversarial,grounding}` 逗号分隔子集**；`anchor_lint` 对 **缺 `mirrors=` / 空值 / 未知 token / 重复 token** SHALL **fail-closed 报错**，MUST NOT 把缺失/坏值静默过滤成空集（否则 `subagents="unavailable"` + 空 `mirrors` 又判 CLEAN、C2 空转复发）。
 
 `anchor_lint` SHALL 增一条 **always-on 一致性 lint**（**判据数据源亦独立于 `metrics.enabled`**，D7 + spec-review-r2 C2）：`subagents="unavailable"` 时，**`fanout-capability` 锚自身的 `mirrors=` 清单**中 `∈ {domain,adversarial,grounding}` 的去重计数 **MUST ≤ 1**，否则报错阻塞（违规类型 `dead-fanout-multi-mirror`）。**判据 MUST 读 `mirrors=`，MUST NOT 数 lens-metric 行**〔C2 纠正首轮致命洞：lens-metric 锚在生产端受 `metrics.enabled` 门控（默认消费仓 `metrics.enabled=false` ⇒ 零行 ⇒ lint 永判 CLEAN 空转）；`mirrors=` 由 SKILL 直接落、不受该门控〕。**它拦的是锚行自身的自相矛盾（诚实记录错误），不是伪造**——`mirrors=`/`subagents=` 仍是主 session 自报，写 `subagents="available"` 或只列 1 镜即绕过（无机械交叉核验，如实登记）；且是否触发仍受 `host` 自报信任边界约束（谎报 `host=claude` 则不要求该锚，与 ADR-1 同根、非本条新增）。此校验及其判据数据 MUST always-on，MUST 独立成函数、不接受 `metrics_on` 参数（D11）。
 

@@ -231,6 +231,23 @@
 | **A-A/codex#6** 裸谓词残留(我 sweep 漏扫 tasks/design) | mirror A-A + codex#6 | tasks 1.3 · proposal:57/103 · design:23/144/319/340 · reuse-guard Scenario:32/45 |
 | **A-E** reason_code 8 值无契约机读源 | mirror A-E | 随 `legal-combo-matrix` 块承载(scope面1 登记) |
 
+## 四次审（r3 窄核验 · 只审 r3 新增机制 · 2026-07-15）
+
+> **镜阵**：codex 跨模型 voice + sonnet 冷镜（只喂 r3 diff）。**接地 sonnet 镜读码证伪/降级了 codex 的两条最响警报**——codex 判"C4 --add-dir 承重墙不成立(high)"→镜读码证 `repo_root` 由 cwd 反求、`cwd⊆repo_root`，--add-dir 只补齐到仓库不引入仓外，**降为措辞小修**；codex 判"skew 探测假阴性(critical)"→镜读 `init.py:160` 证契约与 tools **原子配对拷贝**、不独立漂移，**证伪**。
+
+**总判定：r3 机制站得住，剩下是补文档/补测试级小修（无需再大返工），已一并修完 · `validate --strict` 绿。** 到此 = grill + 3 轮 spec-review + 1 轮窄核验，findings 深度已从"根本设计缺陷"→"机制级"→"精度级"→"措辞/测试覆盖"，**收敛到设计门底**。
+
+**r3-narrow 落点（已 amend）**：
+| finding | 判定 | 落点 |
+|---|---|---|
+| **#3** legal-combo-matrix「同构 enums」装不下关系式谓词（唯一实质设计缺口，两源汇合） | 修 | 矩阵关系式逻辑改「两工具各自本地重实现（D5）+ 全笛卡尔 golden（比完整分类非仅布尔）」，契约块只承载枚举域；host-adaptive 矩阵 Requirement + Scenario 重写 · tasks 1.1/2.3/4.5 · scope 面1 |
+| **#2b** tasks 3.2b 仍写「降级不落锚非罢工」与 spec:132「fail-loud 硬停不产报告」冲突 | 修 | tasks 3.2b 对齐 spec |
+| **#1** `--add-dir` 是增量授权非「限定」（措辞，镜降级为低） | 修措辞 | C4 五处「限定」→「增量授权确保覆盖」+ 登记「claude Read 与 codex read-only 均无硬 FS 读边界、FRAME 缓解」 |
+| **#5** `subagents=` 无严格域校验 + capability host 未要求 == 报告 host | 修 | fanout-capability 严格文法段加 subagents∈{available,unavailable}必填 + host 一致 fail-closed · tasks 2.5 |
+| **#6** lens-metric 普通镜行无行级组合校验（unknown 跨行污染靠 catch-all 无显式测试） | 修 | tasks 2.3 补 outside-voice runner=unknown→拦 + 新增 2.3b 普通镜行级校验 |
+| **#4** guard `codex#N` prose 标签计数旁路 | 补核任务 | tasks 4.6：复用资格 MUST 要求矩阵 cross-model 锚，codex#N 计数不单独构成可复用 |
+| codex#2(a) 探测假阴性 · #1 承重墙不成立 | **证伪/降级**（sonnet 读码） | 无需改（探测代理有效、--add-dir 实践安全） |
+
 ## 附录：首轮记录（2026-07-15，commit 4e88918 判定 → c9b8325 返工）
 
 > 首轮全文见 git 历史。核心：4 镜 + codex voice 判「不建议进 HARD-GATE、需返工」，证伪 grill 的 G1（探针非机械）/G2（--allowedTools 非 deny-by-default）/G5（码集漏 preflight-error），新挖 metrics 门控架空真实性守 / emitter 跨版本罢工 / eval 注入 / efficacy 押未验假设。收敛为 Q1–Q3 + D1–D10，用户拍板「都同意」，返工落地 c9b8325、`openspec validate` 绿。

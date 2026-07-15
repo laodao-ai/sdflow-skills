@@ -30,7 +30,7 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 
 #### Scenario: Codex 宿主下跑跨模型 voice〔add-codex-host-support〕
 - **WHEN** sdflow-code-review 运行于 `host=codex` 且 `claude` CLI preflight 返回 ready
-- **THEN** 经**同一个** helper（同一 `render_prompt`/`secret_scan`/截断）调 `claude -p --model <Claude 强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`〔spec-review-r3 C4：**只读全仓**（对称 codex `-C repo_root -s read-only`），三旗齐全（只读工具集 + MCP 隔离 + 限定仓库目录）；非零工具、非 `--disallowedTools`/`--allowedTools`；见能力 host-adaptive-execution「出境安全」〕，findings 进合并池，锚行记 `host="codex" runner="claude" reason_code="ok"`
+- **THEN** 经**同一个** helper（同一 `render_prompt`/`secret_scan`/截断）调 `claude -p --model <Claude 强档> --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`〔spec-review-r3 C4：**只读全仓**（对称 codex `-C repo_root -s read-only`），三旗齐全（只读工具集 + MCP 隔离 + `--add-dir` 增量授权确保覆盖仓库）；非零工具、非 `--disallowedTools`/`--allowedTools`；见能力 host-adaptive-execution「出境安全」〕，findings 进合并池，锚行记 `host="codex" runner="claude" reason_code="ok"`
 
 #### Scenario: 目标 runner 不可用回落同宿主子代理
 - **WHEN** preflight 返回 not_installed（目标 runner 的 CLI 未装）
