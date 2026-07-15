@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """outside_voice_guard — 确定性 outside-voice 复用守卫（mlh-p4·T80）。
 读一份 spec-review 的 outside-voice 产物（gstack-review.md）+ 一个 change 目录，
-按三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）按序归约出**唯一** reason_code（六枚举）。
+按三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）按序归约出**唯一** reason_code（七枚举，
+add-codex-host-support 新增 `same-family`：同族 fallback / 无执行段均不得复用）。
 纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 fail-closed all-or-nothing。
 新鲜度用源文件 fs-mtime 直比〔spec-review Q-C：撤销 grill 的 git 反转、纯 fs-mtime〕，
-排除评审产物自身（gstack-review.md / spec-review-report.md / .outside-voice/）。承 4.C lens_metric_emit 形态。"""
+排除评审产物自身（gstack-review.md / spec-review-report.md / .outside-voice/）。承 4.C lens_metric_emit 形态。
+add-codex-host-support：结构判改为引用「合法组合矩阵」的跨模型判定（`classify_combo`，本地重实现，
+MUST NOT import anchor_lint——GC-2 边界锁），与 anchor_lint 的同名函数由全笛卡尔 golden 测试互相守一致
+（tests/test_outside_voice_guard.py Step 5）。"""
 import argparse, re, sys
 from pathlib import Path
 
 EXIT_OK, EXIT_FAIL = 0, 1
-REASON_CODES = ("none", "file-missing", "section-not-found",
-                "zero-findings", "stale", "simulated-source")   # 本地常量豁免（ADR-11：输入独有、不写进锚、不跨模块共享）
+REASON_CODES = ("none", "file-missing", "section-not-found", "zero-findings", "stale",
+                 "simulated-source", "same-family")             # 本地常量豁免（ADR-11：输入独有、不写进锚、不跨模块共享）
 VALID_MODES = ("native", "simulated")                           # step1-broad-review 锚 mode 枚举（我们的锚，严格 fail-closed）
 SOURCE_FILES = ("proposal.md", "design.md", "tasks.md")         # + specs/** 递归；评审产物自身不在此列（inclusion allowlist 天然排除）
 
@@ -24,6 +28,41 @@ _FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')                 # CommonMark fen
 class EmitError(Exception):
     """坏输入 fail-closed（我们的锚缺失/mode 非枚举/单一源不可读；区别于外部 codex 段的 best-effort 降级）。"""
     pass
+
+
+# =========================================================================================
+# add-codex-host-support：合法组合矩阵——「跨模型」判定的本地重实现（GC-2：MUST NOT import anchor_lint，
+# 关系式判定逻辑本文件内重实现；契约块只承载枚举域，不承载这些关系式谓词，见 lens-metric-contract.md
+# 「跨模型性」段）。逻辑与 anchor_lint.classify_combo **逐条同构**——由全笛卡尔 golden 测试
+# （tests/test_outside_voice_guard.py Step 5）互相守一致，任一漂移即红。
+# =========================================================================================
+
+_DOWNGRADE_CODES = frozenset({"not-installed", "preflight-error", "timeout", "exec-error"})  # 同族 fallback 降级码集
+_NOEXEC_KNOWN_CODES = frozenset({"secret-hit", "fallback-unavailable"})                      # 无执行 · host∈{claude,codex}
+_DUOS = frozenset({"claude", "codex"})                                                        # 两个真机队（谈跨模型的前提）
+
+
+def classify_combo(host, runner, reason_code, findings):
+    """把 (host, runner, reason_code, findings) 分类为**完整**类别（本地重实现，逻辑与
+    anchor_lint.classify_combo 逐条同构）：
+      'cross-model'  合法跨模型第二意见：host,runner∈{claude,codex} ∧ runner≠host ∧ reason_code='ok'
+      'same-family'  合法同族降级：runner==host ∧ reason_code∈降级码集
+      'no-exec'      合法无执行：runner='none' ∧ findings==0 ∧ (host='unknown'∧rc='host-unknown' ∨ host∈{claude,codex}∧rc∈{secret-hit,fallback-unavailable})
+      'self-review'  runner==host ∧ reason_code∉降级码集（同族行子句被违反）
+      'illegal'      其余一切非法组合（catch-all）
+    findings 为已解析的 int（不可解析/缺失 → None）。"""
+    if runner == "none":
+        if findings == 0 and (
+            (host == "unknown" and reason_code == "host-unknown")
+            or (host in _DUOS and reason_code in _NOEXEC_KNOWN_CODES)
+        ):
+            return "no-exec"
+        return "illegal"
+    if host in _DUOS and runner in _DUOS:
+        if runner == host:
+            return "same-family" if reason_code in _DOWNGRADE_CODES else "self-review"
+        return "cross-model" if reason_code == "ok" else "illegal"
+    return "illegal"
 
 
 def _fence_outside_lines(text):
@@ -83,25 +122,48 @@ def source_max_mtime(change_dir):
 
 
 def parse_codex_findings(text):
-    """best-effort 解析 codex findings 计数。返回 int（含 0）；解析不出任何 codex 段 → None（→ section-not-found）。
-    codex 段外部所有（adr/0002:21），格式漂移不崩溃、fail-closed 到 None。
-    仅匹配 fence 外锚 / codex#N 标签——fence 内的文档示例锚不得计入 findings（否则 outside-voice 层被静默当有效复用跳过，违 adr/0018）。"""
+    """best-effort 解析可复用的 outside-voice findings 计数。返回三态之一：
+      int（含 0）           — 至少一条锚被合法组合矩阵分类为 `cross-model`；值为这些锚 findings 之和
+                              （某条 cross-model 锚自身 findings 属性畸形/缺失时，退而用 codex#N prose
+                              标签计数补位——次选 findings 计数，前提是 cross-model 锚已确立复用合法性）
+      "same-family"（字符串哨兵） — 无 cross-model 锚，但存在 ≥1 条被矩阵分类为 same-family/no-exec/
+                              self-review 的锚（同族 fallback / 无执行 / 自审——均非跨模型第二意见）
+      None                  — 无任何可分类锚（含仅 illegal 锚被 best-effort 跳过、仅 codex#N prose 标签
+                              无锚佐证）→ section-not-found。**prose 标签单独 MUST NOT 构成可复用资格**
+                              （add-codex-host-support Step 6：labels 不再是"无锚也能复用"的旁路）。
+    `host`/`reason_code` 缺失字段按 v1 兼容读（GC-9：MUST NOT 因缺字段 fail-closed 罢工，旧产物依然可复用）：
+    无 `host=` → `host="claude"`；无 `reason_code=` → `reason_code="ok"`。
+    仅匹配 fence 外锚/标签——fence 内的文档示例锚不得计入（否则 outside-voice 层被静默当有效复用跳过，违 adr/0018）。"""
     text = _fence_outside_text(text)
-    total = None
+    cross_total = None            # 已确认的 cross-model 锚 findings 之和
+    saw_cross_model = False       # 是否存在 cross-model 锚（即便其自身 findings 属性畸形）
+    same_family_found = False     # 是否存在 same-family/no-exec/self-review 锚（非跨模型，但可辨识的合法态）
     for m in _OV_ANCHOR_RE.finditer(text):
         attrs = dict(_ATTR_RE.findall(m.group(1)))
-        if attrs.get("runner") != "codex":               # 仅 runner=codex 计入（claude-fallback 不算 codex 段）
-            continue
+        runner = attrs.get("runner")
+        if runner is None:
+            continue                                      # runner 缺失：无从分类，best-effort 跳过
+        host = attrs.get("host", "claude")                # v1 兼容：无 host= → claude（GC-9）
+        reason_code = attrs.get("reason_code", "ok")       # v1 兼容：无 reason_code= → ok（GC-9）
         raw = attrs.get("findings")
-        if raw is None or not raw.isdigit():
-            continue                                      # 畸形 findings 属性：跳过（best-effort）
-        total = (total or 0) + int(raw)
-    if total is not None:
-        return total
-    labels = set(_CODEX_LABEL_RE.findall(text))           # 次选：adr/0002 codex#N 标签
-    if labels:
-        return len(labels)
-    return None
+        findings_val = int(raw) if (raw is not None and raw.isdigit()) else None
+        cat = classify_combo(host, runner, reason_code, findings_val)
+        if cat == "cross-model":
+            saw_cross_model = True
+            if findings_val is not None:
+                cross_total = (cross_total or 0) + findings_val
+        elif cat in ("same-family", "no-exec", "self-review"):
+            same_family_found = True                       # illegal 不计入任何一侧（畸形/垃圾，best-effort 跳过）
+    if cross_total is not None:
+        return cross_total
+    if saw_cross_model:
+        labels = set(_CODEX_LABEL_RE.findall(text))        # 次选：cross-model 锚自身 findings 畸形，标签补计数
+        if labels:
+            return len(labels)
+        return None
+    if same_family_found:
+        return "same-family"
+    return None                                             # 无锚/仅 illegal 锚/仅 prose 标签 → section-not-found
 
 
 def classify(review_path, change_dir):
@@ -121,10 +183,12 @@ def classify(review_path, change_dir):
     # ②新鲜度（fs-mtime 直比；产物早于源文件最大 mtime → stale。此处才需 change_dir）
     if review_path.stat().st_mtime < source_max_mtime(change_dir):
         return "stale"
-    # ③结构（codex 段可解析否 / 条数）
+    # ③结构（矩阵判「跨模型」可解析否 / 条数；same-family = 同族 fallback / 无执行段，MUST NOT 复用）
     n = parse_codex_findings(text)
     if n is None:
         return "section-not-found"
+    if n == "same-family":
+        return "same-family"
     if n == 0:
         return "zero-findings"
     return "none"

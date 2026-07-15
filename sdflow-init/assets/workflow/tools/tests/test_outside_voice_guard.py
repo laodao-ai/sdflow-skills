@@ -4,10 +4,18 @@ import pytest
 
 TOOLS = Path(__file__).resolve().parent.parent
 SCRIPT = TOOLS / "outside_voice_guard.py"
+ANCHOR_LINT_SCRIPT = TOOLS / "anchor_lint.py"
 
 
 def _mod():
     spec = importlib.util.spec_from_file_location("outside_voice_guard", SCRIPT)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+
+
+def _anchor_lint_mod():
+    """测试文件专属：同时 import 两工具做跨工具 golden 对比（GC-2 只锁生产代码 outside_voice_guard.py
+    本身 MUST NOT import anchor_lint，测试文件不受此限）。"""
+    spec = importlib.util.spec_from_file_location("anchor_lint", ANCHOR_LINT_SCRIPT)
     m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
 
 
@@ -72,11 +80,114 @@ def test_file_missing(tmp_path):
     assert m.classify(rp, cd) == "file-missing"
 
 
-def test_reason_codes_are_six_enum():
+def test_reason_codes_are_seven_enum():
     m = _mod()
     assert set(m.REASON_CODES) == {
-        "none", "file-missing", "section-not-found", "zero-findings", "stale", "simulated-source"}
-    assert len(m.REASON_CODES) == 6
+        "none", "file-missing", "section-not-found", "zero-findings", "stale",
+        "simulated-source", "same-family"}
+    assert len(m.REASON_CODES) == 7
+
+
+# --- Step 1（TDD）：runner==host（同族）⇒ same-family，MUST NOT 复用 ---
+
+def _ov_anchor_v2(host, runner, reason_code, findings=1, site="design-voice"):
+    return (f'<!-- sdflow:outside-voice v1 site="{site}" guard="none" host="{host}" '
+            f'runner="{runner}" reason_code="{reason_code}" findings="{findings}" truncated="false" -->')
+
+
+def _write_body(rp, anchor_line, mode="native", extra_body=""):
+    body = _mode_anchor(mode) + "\n# review\n" + extra_body + "\n" + anchor_line + "\n"
+    rp.write_text(body, encoding="utf-8")
+    os.utime(rp, (2_000_000, 2_000_000))
+
+
+def test_same_family_runner_eq_host(tmp_path):
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("codex", "codex", "not-installed", findings=2))
+    assert m.classify(rp, cd) == "same-family"
+
+
+def test_cli_same_family_exit_nonzero(tmp_path):
+    rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("codex", "codex", "not-installed", findings=2))
+    r = _run(rp, cd)
+    assert r.returncode != 0 and r.stdout.strip() == "same-family"
+
+
+# --- Step 2（TDD）：v1 旧锚（无 host=，无 reason_code=）⇒ 读作 host="claude" ⇒ 可复用，MUST NOT 罢工 ---
+
+def test_v1_legacy_anchor_no_host_reusable(tmp_path):
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    v1_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+                 'runner="codex" findings="3" truncated="false" -->')
+    _write_body(rp, v1_anchor)
+    assert m.classify(rp, cd) == "none"
+
+
+def test_v1_legacy_anchor_zero_findings(tmp_path):
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    v1_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+                 'runner="codex" findings="0" truncated="false" -->')
+    _write_body(rp, v1_anchor)
+    assert m.classify(rp, cd) == "zero-findings"
+
+
+# --- Step 4（TDD）：runner="none" 段（无执行）⇒ same-family，不复用（防 none≠host 误判，C1） ---
+
+def test_runner_none_no_exec_same_family(tmp_path):
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("codex", "none", "secret-hit", findings=0))
+    assert m.classify(rp, cd) == "same-family"
+
+
+def test_runner_none_host_unknown_same_family(tmp_path):
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("unknown", "none", "host-unknown", findings=0))
+    assert m.classify(rp, cd) == "same-family"
+
+
+def test_cli_runner_none_exit_nonzero(tmp_path):
+    rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("codex", "none", "fallback-unavailable", findings=0))
+    r = _run(rp, cd)
+    assert r.returncode != 0 and r.stdout.strip() == "same-family"
+
+
+# --- Step 6（TDD）：codex#N prose 标签旁路核——标签单独 MUST NOT 构成"可复用"资格 ---
+
+def test_prose_label_alone_insufficient_no_anchor(tmp_path):
+    """无锚，仅 codex#N prose 标签 ⇒ 拒复用（不得单独构成可复用资格）。"""
+    m = _mod(); rp, cd = _make_change(
+        tmp_path, codex=False, extra_body="- codex#1 finding a\n")
+    result = m.classify(rp, cd)
+    assert result != "none"
+    assert result == "section-not-found"
+
+
+def test_prose_label_alone_insufficient_illegal_anchor(tmp_path):
+    """非法锚（claude-fallback，illegal，best-effort 跳过）+ codex#1 prose 标签 ⇒ 拒复用。"""
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor(3, runner="claude-fallback"), extra_body="- codex#1 finding a\n")
+    result = m.classify(rp, cd)
+    assert result != "none"
+    assert result == "section-not-found"
+
+
+def test_prose_label_alone_insufficient_runner_none_anchor(tmp_path):
+    """runner="none" 锚（无执行）+ codex#1 prose 标签 ⇒ 拒复用（same-family，非 none）。"""
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    _write_body(rp, _ov_anchor_v2("codex", "none", "secret-hit", findings=0),
+                extra_body="- codex#1 finding a\n")
+    result = m.classify(rp, cd)
+    assert result != "none"
+    assert result == "same-family"
+
+
+def test_codex_hash_label_fallback(tmp_path):
+    """标签单独不再构成复用资格（Step 6 收紧）——无 outside-voice 锚时 codex#N 标签不再豁免为 reusable。"""
+    m = _mod(); rp, cd = _make_change(
+        tmp_path, codex=False, extra_body="- codex#1 finding a\n- codex#2 finding b\n")
+    assert m.classify(rp, cd) == "section-not-found"
 
 
 # --- 坏输入 fail-closed（EmitError；非静默产码掩盖损坏）---
@@ -140,11 +251,7 @@ def test_specs_file_counts_as_source_stale(tmp_path):
 
 
 # --- codex 段 best-effort 解析 ---
-
-def test_codex_hash_label_fallback(tmp_path):
-    m = _mod(); rp, cd = _make_change(
-        tmp_path, codex=False, extra_body="- codex#1 finding a\n- codex#2 finding b\n")
-    assert m.classify(rp, cd) == "none"               # 2 个 codex#N 标签 → findings>0
+# （test_codex_hash_label_fallback 已移至 Step 6 段——标签单独不再构成复用资格，见上方）
 
 
 def test_malformed_codex_findings_section_not_found(tmp_path):
@@ -239,3 +346,34 @@ def test_cli_file_missing(tmp_path):
     rp, cd = _make_change(tmp_path); rp.unlink()
     r = _run(rp, cd)
     assert r.returncode != 0 and r.stdout.strip() == "file-missing"
+
+
+# --- Step 5（TDD）🔒 矩阵跨工具全笛卡尔 golden ---
+# guard 的 classify_combo 是本地重实现（GC-2：生产代码 MUST NOT import anchor_lint）；本测试文件
+# 同时 import 两工具，对 host×runner×reason_code×findings 全笛卡尔积（含边界+mutation：越域/缺字段/
+# 坏值）逐条比较两工具的**完整分类**（cross-model/same-family/no-exec/self-review/illegal，非仅
+# 「可复用」布尔——同源同错测不出，见 r3-narrow #3），任一漂移即红。
+
+def test_matrix_cross_tool_golden_full_cartesian():
+    guard = _mod()
+    al = _anchor_lint_mod()
+    enums = al.load_enums()                     # 枚举域单一源：契约块 lens-metric-enums（非脚本内复制清单）
+    hosts = sorted(enums["host"]) + ["bogus-host", None]                 # 越域 + 缺失/坏值 mutation
+    runners = sorted(enums["runner"]) + ["bogus-runner", None]
+    reason_codes = sorted(enums["reason_code"]) + ["bogus-reason", None]
+    findings_domain = [0, 1, 5, None]            # 边界(0) + 正常(1/5) + 缺失/坏值(None)
+
+    mismatches = []
+    categories_seen = set()
+    for host in hosts:
+        for runner in runners:
+            for reason_code in reason_codes:
+                for findings in findings_domain:
+                    a = al.classify_combo(host, runner, reason_code, findings)
+                    b = guard.classify_combo(host, runner, reason_code, findings)
+                    categories_seen.add(a)
+                    if a != b:
+                        mismatches.append((host, runner, reason_code, findings, a, b))
+    assert mismatches == [], f"矩阵分类跨工具漂移（前 20 条）: {mismatches[:20]}"
+    # 全笛卡尔积须真正覆盖全部 5 类完整分类，防测试域退化成只测到部分分支（假绿）
+    assert categories_seen == {"cross-model", "same-family", "no-exec", "self-review", "illegal"}
