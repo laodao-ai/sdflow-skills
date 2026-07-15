@@ -463,7 +463,15 @@ def check_legal_combo(report_text, enums):
         if anchor_prefix(ln) != "outside-voice":
             continue
         anchor = ln.strip()[:80]
-        kv = parse_kv(ln)
+        # 🔴 严格解析 + 重复键 fail-closed（镜像 check_fanout_consistency）。parse_kv 末值胜会把
+        # `runner="claude" … runner="codex"` 的**自审**（first-value=claude）误读为**跨模型放行**（last-value=codex），
+        # 且 sdflow-retro 读 first-value、本脚本读 last-value → 同一锚两工具判定分裂。任何重复键 → dup-key
+        # 违规并**在 classify_combo 之前跳过分类**（continue），MUST NOT 让末值胜的 kv 进矩阵。
+        kv, dup = parse_kv_strict(ln)
+        for dk in dup:
+            v.append({"anchor": anchor, "field": dk, "kind": "dup-key"})
+        if dup:
+            continue
         missing = [f for f in OUTSIDE_VOICE_REQUIRED_FIELDS if f not in kv]
         for f in missing:
             v.append({"anchor": anchor, "field": f, "kind": "missing-field"})
@@ -533,7 +541,17 @@ def check_fanout_consistency(report_text):
                 report_hosts.add(h)
         elif name == "fanout-capability":
             cap_anchors.append(ln)
-    report_host = next(iter(report_hosts)) if len(report_hosts) == 1 else None
+    # Minor #2 fail-closed：同一轮评审只有一个宿主（per-row host 单一源不变式，见 spec lens-metric-emit
+    # 「--host 单一源、无 per-row host」）。报告出现 ≥2 个**不同的非-unknown** host = 真冲突 → 硬停。
+    # 否则原 `len(report_hosts)==1 else None` 会让 report_host 塌成 None，missing-fanout-anchor /
+    # fanout-host-mismatch 静默失效（畸形/伪造多 host 报告借此把 host=codex 缺锚偷渡过关）。
+    # 去 unknown 后取真 host：{codex,unknown} 之类残余不冲突，但 report_host 仍取真 host（codex 仍要求探针锚）。
+    real_hosts = {h for h in report_hosts if h != "unknown"}
+    if len(real_hosts) > 1:
+        v.append({"anchor": "report", "field": "host", "kind": "conflicting-report-host"})
+        return v
+    report_host = (next(iter(real_hosts)) if len(real_hosts) == 1
+                   else next(iter(report_hosts)) if len(report_hosts) == 1 else None)
     if len(cap_anchors) > 1:                             # 每轮恰好一条
         v.append({"anchor": "fanout-capability", "kind": "duplicate-fanout-anchor"})
         return v

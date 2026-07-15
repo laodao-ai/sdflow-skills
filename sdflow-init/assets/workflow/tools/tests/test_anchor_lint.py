@@ -604,6 +604,30 @@ def test_matrix_bound_to_outside_voice_not_lens_metric():
     assert _has(al.check_legal_combo(ov, _enums()), "self-review")  # 绑在 outside-voice 锚 → 触发
 
 
+def test_matrix_dup_key_fail_closed_not_reclassified_as_cross_model():
+    """🔴 红线 fail-open 锁（Important #1）：重复 runner= 键 MUST NOT 让 parse_kv 末值胜把自审翻成跨模型放行。
+    锚 host=claude runner=claude reason_code=ok runner=codex —— first-value(runner=claude)=自审、
+    last-value(runner=codex)=跨模型。严格解析须报 dup-key 且 fail-closed（在 classify_combo 之前跳过分类），
+    NOT clean（v 非空），MUST NOT 被误判为合法跨模型放行（clean）。"""
+    al = _mod()
+    a = ('<!-- sdflow:outside-voice v1 site="x" host="claude" runner="claude" '
+         'reason_code="ok" runner="codex" -->\n')
+    v = al.check_legal_combo(a, _enums())
+    assert _has(v, "dup-key") and v != []               # 报 dup-key、NOT clean
+    assert any(x["field"] == "runner" and x["kind"] == "dup-key" for x in v)
+    # 因 dup 时 continue 跳过分类 → 不产生 self-review/illegal-combo（重复键先 fail-closed，末值胜 kv 不进矩阵）
+    assert not _has(v, "self-review") and not _has(v, "illegal-combo")
+
+
+def test_matrix_single_key_still_classifies_after_strict_parse():
+    """对照：改 parse_kv_strict 后正常单键锚仍正确分类——自审仍判 self-review、跨模型仍 clean、无 dup-key。"""
+    al = _mod()
+    v_self = al.check_legal_combo(_ov(host="claude", runner="claude", reason_code="ok") + "\n", _enums())
+    assert _has(v_self, "self-review") and not _has(v_self, "dup-key")
+    v_xm = al.check_legal_combo(_ov(host="claude", runner="codex", reason_code="ok") + "\n", _enums())
+    assert v_xm == []                                   # 合法跨模型仍 clean
+
+
 # --- Step 5：lens-metric 普通镜行级校验 -----------------------------------------------------
 
 def test_ordinary_mirror_runner_unknown_host_known_blocked():   # host=claude lens=domain runner=unknown → 拦
@@ -745,6 +769,28 @@ def test_fanout_kv_duplicate_key_fail_closed():
     al = _mod()
     r = '<!-- sdflow:fanout-capability v1 host="codex" host="claude" subagents="unavailable" mirrors="domain" -->\n'
     assert _has(al.check_fanout_consistency(r), "dup-key")
+
+def test_fanout_conflicting_report_host_fail_closed():
+    """🔒 Minor #2：报告含 ≥2 个不同真 host（outside-voice host=codex + host=claude）→ 原 report_host
+    塌成 None，missing-fanout-anchor / host-mismatch 静默失效。须 fail-closed 报 conflicting-report-host。
+    此处**无** fanout-capability 锚——若不硬停，host=codex 缺探针锚会被 report_host=None 偷渡放行。"""
+    al = _mod()
+    r = (_ov(host="codex", runner="claude", reason_code="ok") + "\n"
+         + _ov(host="claude", runner="codex", reason_code="ok") + "\n")
+    v = al.check_fanout_consistency(r)
+    assert _has(v, "conflicting-report-host")
+    assert not _has(v, "missing-fanout-anchor")         # 硬停在前，不再走缺锚判定（避免双噪声）
+
+def test_fanout_unknown_mixed_single_real_host_not_conflict():
+    """对照：unknown 与单一真 host 混合非冲突（去 unknown 后仅 1 个真 host=codex）→ 不报 conflicting-report-host，
+    且 report_host 仍取真 host（codex），探针锚在场且一致 → 全程 clean。"""
+    al = _mod()
+    r = (_ov(host="codex", runner="claude", reason_code="ok") + "\n"
+         + _lm(host="unknown", lens="domain", runner="unknown") + "\n"
+         + _fc(host="codex", subagents="unavailable", mirrors="domain") + "\n")
+    v = al.check_fanout_consistency(r)
+    assert not _has(v, "conflicting-report-host")
+    assert v == []
 
 def test_fanout_in_fence_not_checked():                       # fence 内示例锚不校验
     al = _mod()
