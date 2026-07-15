@@ -179,6 +179,54 @@ class TestConfigLintModelTiersSharedFixture:
                     assert substr in r.stderr, f"{case['name']}: missing {substr!r} in {r.stderr}"
 
 
+class TestConfigLintLeafMissingColonNoPoison:
+    """Task 6 复评 r2 Important：叶子层漏冒号笔误 MUST NOT 毒化整个 fleet 块——后续合法叶子
+    仍须被 attribute + validate（fail-closed 结构门不被一个笔误整段静默放行）。"""
+
+    def test_missing_colon_does_not_poison_following_leaf_validation(self, tmp_path):
+        """漏冒号 strong 行之后的 `mid: <非法值>` MUST 被校验到——证明 fleet_ctx 未被毒化成 None。
+        若毒化（老 bug），mid 从不 attribute ⇒ 非法值静默放行 ⇒ stderr 无 claude.mid。"""
+        _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+  claude:
+    strong opus
+    mid: bad$value
+""")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "claude.mid" in r.stderr, f"漏冒号毒化了后续 mid 叶子的校验: {r.stderr}"
+
+
+class TestParseModelTiersBlockAttribution:
+    """白盒锁（直测 `_parse_model_tiers_block` 的 entries 归属）——config_lint 只对外报违规
+    存在性，无法从 CLI 侧观察「后续叶子归给了哪个 fleet」。这两条直测 entries dict，锁住两处
+    与 resolver 同口径的关键 reset/sustain 行为（防未来重构悄悄回归、成无测试锁的死码）。"""
+
+    @staticmethod
+    def _parse(yaml_block):
+        import init  # scripts/ 已在 sys.path（本文件顶部 line 14）
+        lines = (VALID_RULES_BLOCK + yaml_block).splitlines()
+        blk = init._find_top_level_block(lines, "model-tiers")
+        return init._parse_model_tiers_block(lines, *blk)
+
+    def test_missing_colon_leaf_sustains_fleet_attribution(self):
+        """漏冒号叶子后的合法叶子仍归当前 fleet（entries 含 claude.mid），fleet_ctx 未被毒化。"""
+        entries, bad, bad_headers = self._parse(
+            "model-tiers:\n  claude:\n    strong opus\n    mid: sonnet-real\n")
+        assert entries.get("claude.mid") == "sonnet-real", entries
+        # 漏冒号那行被记 bad（config_lint 更严格），但不清空后续归属
+        assert any("strong opus" in b for b in bad), bad
+
+    def test_trailing_content_header_resets_fleet_no_crosstalk(self):
+        """`claude: rogue`（带值畸形头）后的叶子 MUST NOT 归前一个 fleet（codex）——reset 生效。
+        锁住 bad_headers 分支的 fleet_ctx=None（防其成无测试的死码/串扰回归）。"""
+        entries, bad, bad_headers = self._parse(
+            "model-tiers:\n  codex:\n    strong: codex-real\n  claude: rogue\n    strong: claude-leak\n")
+        assert entries.get("codex.strong") == "codex-real", entries
+        # claude-leak MUST NOT 覆盖 codex.strong（若 reset 缺失，stale codex fleet 会把它读进 codex）
+        assert entries.get("codex.strong") != "claude-leak", entries
+        assert any("claude: rogue" in h for h in bad_headers), bad_headers
+
+
 class TestConfigLintMetrics:
     def test_metrics_enabled_non_bool_nonzero(self, tmp_path):
         _write_config(tmp_path, VALID_RULES_BLOCK + """metrics:

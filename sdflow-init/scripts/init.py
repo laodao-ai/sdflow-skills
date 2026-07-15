@@ -296,6 +296,14 @@ def _parse_model_tiers_block(lines, start, end):
     2 空格叶子，兼容读作 Claude 机队，见 ADR-8）两种写法——与 resolve-models.sh
     ::_read_config_overrides 同一有界键路径口径（6 条：2 机队×3 档），各自本地重实现
     （跨语言无法共享同一实现，MUST NOT 写通用 YAML 解析器，基准 5）。
+
+    **fleet_ctx（当前机队上下文）的 reset 按缩进层级逐层对齐 resolver**〔Task 6 复评 r2〕：
+    - 空行 / 任意缩进注释行 ⇒ 不 reset（块内合法留白，不该打断 fleet）。
+    - 4-space 叶子行（含**漏冒号笔误** / 越域 key）⇒ 记 bad 但 **fleet_ctx 保持不变**——对齐
+      resolver 4-space 分支「未匹配 key 只跳该行、fleet 不变」。**MUST NOT 无条件 reset**（那会把
+      整块后续合法叶子毒化成不再 attribute/validate，与 resolver 分歧、fail-closed 门被笔误静默放行）。
+    - 2-space 行漏冒号 / 未知键 ⇒ reset（resolver 此层落 `*) fleet=""`）。
+    - n<2 奇异缩进 ⇒ reset（resolver `" "*` 分支）。
     返回 (entries, bad_subkeys, bad_headers)：
       entries = {"claude.strong": "opus", "flat.mid": "sonnet", ...}（值为 strip 后原始文本，
                  未做字符集校验——校验在调用侧做，以便按 fleet.tier 精确报 reason）
@@ -318,23 +326,38 @@ def _parse_model_tiers_block(lines, start, end):
         s = ln.strip()
         if not s or s.startswith("#"):
             continue   # 空行 / 任意缩进的注释行 —— 保持 fleet_ctx 不变（同 resolve-models.sh）
+        # 缺冒号（漏冒号笔误等）**按缩进层级分别对齐 resolver**，MUST NOT 一个无条件 reset 盖掉所有层级
+        # 〔Task 6 复评 r2〕：resolver 4-space 叶子分支对未匹配 key 只跳该行、fleet 不变；2-space 与
+        # 更浅缩进分支才 reset。此前的「`":" not in s` 无条件 reset」会把整块后续合法叶子毒化成不再
+        # attribute/validate（与 resolver 分歧、fail-closed 门被一个笔误静默放行）。
         n = len(ln) - len(ln.lstrip(" "))
-        if ":" not in s:
-            fleet_ctx = None   # 无冒号的畸形行 —— 有界解析不认，reset（同 resolver `" "*` reset）
-            continue
-        k, _, v = s.partition(":")
-        k = k.strip()
-        v = _strip_inline_comment(v)
+        has_colon = ":" in s
         if n >= 4:
-            # 4-space+ 缩进：机队子块下的叶子键（仅在 fleet_ctx 已设时生效）
+            # 4-space+ 缩进：机队子块下的叶子键（仅在 fleet_ctx 已设时生效）。
+            # 漏冒号 / 越域 key ⇒ 记 bad（config_lint 比 resolver 更严格，既定不对称），
+            # 但 **fleet_ctx 保持不变**（对齐 resolver 4-space 分支：未匹配 key 只跳该行）。
             if fleet_ctx:
-                if k in TIER_ALLOWED_SUBKEYS:
-                    entries[f"{fleet_ctx}.{k}"] = v
+                if has_colon:
+                    k, _, v = s.partition(":")
+                    k = k.strip()
+                    v = _strip_inline_comment(v)
+                    if k in TIER_ALLOWED_SUBKEYS:
+                        entries[f"{fleet_ctx}.{k}"] = v
+                    else:
+                        bad.add(f"{fleet_ctx}.{k}")
                 else:
-                    bad.add(f"{fleet_ctx}.{k}")
+                    bad.add(f"{fleet_ctx}.{s}")   # 漏冒号叶子——结构违规，但不毒化 fleet
             continue
         if n >= 2:
-            # 2-space 缩进：机队头（值须空）或扁平叶子键（strong/mid/light）
+            # 2-space 缩进：机队头（值须空）/ 扁平叶子键 / 未知键。
+            # 漏冒号（如 `strong opus`、`claude`）在 resolver 此层落 `*) fleet=""` reset ⇒ 本层 reset。
+            if not has_colon:
+                fleet_ctx = None
+                bad.add(s)
+                continue
+            k, _, v = s.partition(":")
+            k = k.strip()
+            v = _strip_inline_comment(v)
             if k in TIER_FLEET_KEYS:
                 if v:
                     # `claude: rogue` —— fleet 名当标量误用，畸形。reset fleet 防串扰、报违规。
@@ -349,7 +372,7 @@ def _parse_model_tiers_block(lines, start, end):
             else:
                 bad.add(k)
             continue
-        # n < 2（1-space 等奇异缩进）——有界解析不认，reset（同 resolver `" "*` reset）
+        # n < 2（1-space 等奇异缩进）——有界解析不认，reset（对齐 resolver `" "*` 分支的 reset）
         fleet_ctx = None
     return entries, bad, bad_headers
 

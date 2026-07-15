@@ -197,4 +197,26 @@ CASES = [
             dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
         ],
     ),
+    # ─── Task 6 复评 r2 Important：叶子层漏冒号笔误 MUST NOT 毒化整个 fleet 块 ─────────────
+    # 一行叶子漏冒号（人类笔误），后续同块合法叶子 MUST 仍归当前 fleet（resolver 4-space 分支
+    # 对未匹配 key 只跳那一行、fleet 不变）。老 fix 里 init.py 对无冒号行**无条件 reset fleet_ctx**，
+    # 把整块后续叶子毒化（fleet_ctx=None ⇒ 后续叶子不再 attribute/validate）⇒ 与 resolver 分歧、
+    # config_lint 结构门被笔误整段静默放行。
+    dict(
+        name="leaf_missing_colon_sustains_fleet",
+        yaml_block="""model-tiers:
+  claude:
+    strong opus
+    mid: sonnet-real
+""",
+        # config_lint 比 resolver 更严格（既定不对称，见 out-of-domain 叶子键先例）：漏冒号叶子
+        # 记进 bad 报违规；但 fleet_ctx MUST 保持 ⇒ 后续 `mid: sonnet-real` 仍归 claude 并被校验。
+        lint_clean=False,
+        lint_reason_substrs=["strong opus"],
+        resolver=[
+            # claude host：strong 那行漏冒号被跳过 ⇒ strong 回落缺省 opus；mid 沿用 claude ⇒ sonnet-real
+            dict(host="claude", strong="opus", mid="sonnet-real", light="haiku"),
+            dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+        ],
+    ),
 ]
