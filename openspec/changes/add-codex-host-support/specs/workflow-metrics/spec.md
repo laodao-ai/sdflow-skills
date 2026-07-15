@@ -27,8 +27,12 @@
 - **THEN** 本步 SHALL 报错阻塞（复用现有锚存在性自检机制扩一类，**含枚举域 + sev 子格式校验**），MUST NOT 静默放行
 
 #### Scenario: 自审锚行被自检阻塞〔add-codex-host-support〕
-- **WHEN** 某 `lens="outside-voice"` 锚行的 `runner == host` 却未标降级 `reason_code`（即声称拿到了跨模型第二意见）
-- **THEN** `anchor_lint` SHALL 报错阻塞——`runner == host` 的 voice 依定义**不是**跨模型，MUST NOT 作为跨模型证据落账
+- **WHEN** 某 `lens="outside-voice"` 锚行 `runner == host` 且 `reason_code ∉ {not-installed, timeout, exec-error}`（即非合法同族降级、却声称拿到了跨模型第二意见）
+- **THEN** `anchor_lint` SHALL 报错阻塞——`runner == host` 的 voice 依定义**不是**跨模型，MUST NOT 作为跨模型证据落账。**合法降级码集 SHALL 钉死为 `{not-installed, timeout, exec-error}`**〔grill G5：这是唯一区分「诚实同族 fallback」与「自审假绿」的谓词，MUST NOT 留实现裁量〕；`reason_code ∈ 该集` 的 `runner == host` 锚为合法同族 fallback，放行
+
+#### Scenario: fan-out 机制死却报多镜被下限红线阻塞〔add-codex-host-support · grill G1 · adr/0023〕
+- **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而 lens-metric 锚中 `lens ∈ {domain,adversarial,grounding}` 的去重行数 > 1
+- **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——fan-out 机制不可用时不可能产出多面独立 fan-out 镜，此矛盾即「报告 N 镜、实跑 1 镜」头号假绿的事前拦截
 
 #### Scenario: 宿主分组可事后区分真跨模型与自审轮次〔add-codex-host-support〕
 - **WHEN** 复盘聚合器读取跨 change 的 lens-metric 锚

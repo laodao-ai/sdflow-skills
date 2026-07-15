@@ -2,7 +2,7 @@
 
 ### Requirement: 模型档位映射（model-tiers）
 
-模型档位定义、职责清单与 canonical 缺省 MUST 以 workflow bundle 规则文件 **`model-tiers.md`** 为单一真相源（经 resolver 全局解析；强档=verify/对抗裁决/final 终审；中档=领域镜/生成/实现；弱档=纯机械步）〔grill-amendment：推翻"config 段真相源 + SKILL 内联缺省×4"——多处 copy 漂移面〕。**档位映射 MUST 按机队分列**〔add-codex-host-support〕：Claude 机队缺省 opus/sonnet/haiku、Codex 机队缺省 gpt-5.6-sol/gpt-5.6-terra/gpt-5.6-luna（机队锚定，adr/0006(c)——档位是相对执行机队的相对词，不绑单一产品线）。**当前机队 MUST 由 `resolve-models.sh` 按宿主正信号判定**（见能力 `host-adaptive-execution`），编排 skill MUST 引用其导出的 `SDFLOW_TIER_*` 变量。消费仓 `config.yaml` 的 `model-tiers` 段 MUST 仅作可选 per-repo **覆盖**；编排 skill（sdflow-ship/done/spec-review/code-review）的模型选择 MUST 以一句引用指向规则文件与覆盖段，MUST NOT 内联具体模型名。
+模型档位定义、职责清单与 canonical 缺省 MUST 以 workflow bundle 规则文件 **`model-tiers.md`** 为单一真相源（经 resolver 全局解析；强档=verify/对抗裁决/final 终审；中档=领域镜/生成/实现；弱档=纯机械步）〔grill-amendment：推翻"config 段真相源 + SKILL 内联缺省×4"——多处 copy 漂移面〕。**档位映射 MUST 按机队分列**〔add-codex-host-support〕：Claude 机队缺省 opus/sonnet/haiku、Codex 机队缺省 gpt-5.6-sol/gpt-5.6-terra/gpt-5.6-luna（机队锚定，adr/0006(c)——档位是相对执行机队的相对词，不绑单一产品线）。**当前机队 MUST 由 `resolve-models.sh` 按宿主正信号判定**（见能力 `host-adaptive-execution`），编排 skill MUST 引用其导出的 `SDFLOW_TIER_*` 变量。消费仓 `config.yaml` 的 `model-tiers` 段 MUST 仅作可选 per-repo **覆盖**，且 **MUST 按机队分键**〔add-codex-host-support · grill G4 · adr/0024〕：`model-tiers.{claude,codex}.{strong,mid,light}`，`resolve-models.sh` 按当前机队读对应段、无该段回落机队缺省；**扁平旧格式**（`model-tiers.strong: …`）MUST 兼容读作 **Claude 机队**覆盖（历史事实：存量覆盖皆写于 Claude-only 时期），MUST NOT 罢工、MUST NOT 在 Codex 宿主下把 Claude 机队的模型名（如 opus）用于 Codex 机队子代理。编排 skill（sdflow-ship/done/spec-review/code-review）的模型选择 MUST 以一句引用指向规则文件与覆盖段，MUST NOT 内联具体模型名。
 
 #### Scenario: 消费仓无覆盖段用 canonical 缺省
 - **WHEN** 消费仓 config.yaml 无 model-tiers 段，跑任一编排 skill

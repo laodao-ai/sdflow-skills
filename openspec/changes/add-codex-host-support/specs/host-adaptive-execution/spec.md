@@ -28,6 +28,8 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 `outside-voice.sh` MUST NOT 硬编码任一 runner——`preflight` SHALL 探测**目标 runner 的 CLI**（`command -v "$SDFLOW_VOICE_RUNNER"`），`exec` SHALL 按 runner 分叉。宿主为 `unknown` 时 SHALL **不跑 voice**（无从确定"另一个机队"），锚行记 `host="unknown"` + `reason_code="host-unknown"`。
 
+**宿主每轮判定一次、voice runner 与锚 host 同源（ADR-9）**：编排 SKILL 每轮 eval 一次 `resolve-models.sh` 并 export 六变量；`outside-voice.sh` SHALL **只从环境读 `$SDFLOW_VOICE_RUNNER`**，**MUST NOT 自行调 `resolve-models.sh` 重判宿主**——否则锚行的 `host`（emitter `--host`）与 voice 实际 `runner` 可能不同源。
+
 **MUST NOT** 在任何情况下让 outside voice 与主审同机队而仍声称跨模型——**宁可标降级 fallback，也 MUST NOT 冒充跨模型**。
 
 #### Scenario: Codex 宿主下 voice 走 Claude
@@ -64,9 +66,9 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 - **WHEN** `SDFLOW_HOST=codex`，向 `claude` 发起 voice
 - **THEN** prompt SHALL 由同一个 `render_prompt` 产出（含三条通则、UNTRUSTED CONTEXT 硬分隔、200KB 保头尾截断），MUST NOT 存在第二份 prompt 组装实现
 
-#### Scenario: 只读约束按 runner 落到对应机制
+#### Scenario: 只读约束按 runner 落到对应机制（allowlist deny-by-default）
 - **WHEN** 向 claude 发起 voice
-- **THEN** 命令行 SHALL 含 `--disallowedTools Write Edit NotebookEdit`（等价于 codex 路径的 `-s read-only --ephemeral`），确保 voice 无写副作用
+- **THEN** 命令行 SHALL 用 **allowlist**（`--allowedTools Read Grep Glob` 等最小只读集，deny-by-default），与 codex 路径的 `-s read-only --ephemeral` 沙箱姿势**对等**；**MUST NOT 用 denylist `--disallowedTools Write Edit NotebookEdit`**——denylist 会留着 Bash/WebFetch/WebSearch，未受信 context 可经其写盘或外传（secret_scan 只认已知模式、拦不住任意外传），是安全回归
 
 ### Requirement: 模型档位按机队分列，skill 引用变量不内联模型名
 
@@ -78,25 +80,43 @@ Codex 宿主下向 `spawn_agent` 显式指定 `model` SHALL 附理由「本工�
 - **WHEN** `sdflow-done` 的 verify 步（强档）分别在 Claude 宿主与 Codex 宿主运行
 - **THEN** 前者取 Claude 机队强档、后者取 Codex 机队强档；两者 MUST NOT 降档到中/弱档（verify 是唯一终门）
 
-#### Scenario: 消费仓覆盖段仍生效
-- **WHEN** 消费仓 `config.yaml` 的 `model-tiers` 段提供 per-repo 覆盖
-- **THEN** 覆盖优先于 `model-tiers.md` 的机队缺省；无覆盖时用机队缺省，MUST NOT 报错
+#### Scenario: 消费仓覆盖段按机队分键生效〔grill G4〕
+- **WHEN** 消费仓 `config.yaml` 的 `model-tiers.codex` 段提供 per-repo 覆盖，且当前 `SDFLOW_HOST=codex`
+- **THEN** 该 codex 段覆盖优先于 `model-tiers.md` 的 Codex 机队缺省；无 codex 段时用 Codex 机队缺省，MUST NOT 报错、MUST NOT 落到 claude 段
 
-### Requirement: 子代理不可用时镜数如实降级（语义层，无机械守）
+#### Scenario: 扁平旧格式覆盖兼容读作 Claude 机队〔grill G4〕
+- **WHEN** 消费仓 `config.yaml` 是扁平旧格式 `model-tiers.strong: <某 Claude 模型>`（无机队分键）
+- **THEN** 在 Claude 宿主下 SHALL 读作 Claude 机队覆盖并生效；在 Codex 宿主下该扁平覆盖 SHALL NOT 生效（回落 Codex 机队缺省），MUST NOT 把其中的 Claude 模型名用于 Codex 子代理
+
+### Requirement: 子代理不可用时镜数如实降级（机制活着有机械下限，逐镜留语义层）
 
 Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`sdflow-init` 铺给消费项目的 AGENTS.md 段与两个评审 SKILL SHALL 显式声明该授权。
 
 子代理确实不可用时，评审 SHALL **把 roster 缩到实际跑过的镜**并在报告显著标注「单镜降级」，MUST NOT 按计划的镜数照落 lens-metric 锚。
 
-**诚实边界（§0.0）**：「某个镜是否真的作为独立子代理跑过」**没有确定性信号**——主 session 自报，无外部可验证据。∴ 本要求**归语义层**，MUST NOT 声称有机械保证。机械层能提供的**仅是事后可发现性**：`host` 字段进 lens-metric 锚 ⇒ 复盘可按 host 分组，Codex 宿主轮次若「独立率」异常（自审必然高度重合），数据会露出来。
+**机械下限（有确定性信号 ⇒ 机械守，adr/0023）**：「fan-out 机制活着没」**有**确定性信号——fan-out 前派一个 trivial 探针子代理、看它是否回哨兵值（让工具自己回答）。`SDFLOW_HOST=codex` ⇒ **MUST 探**；`SDFLOW_HOST=claude` ⇒ Task tool 是核心、免探针恒 available；`unknown` ⇒ 不 fan-out。探针结果 SHALL 落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" -->`（每轮一行）。`anchor_lint` SHALL 增一条红线：`subagents="unavailable"` 时，lens-metric 锚中 `lens ∈ {domain,adversarial,grounding}`（fan-out 镜集）的**去重行数 MUST ≤ 1**，否则报错阻塞——机制死却报多面独立 fan-out 镜是矛盾，这道下限把「报告 7 镜、实跑 1 镜」的头号假绿从事后可发现变为**事前拦截**。
+
+**残余诚实边界（§0.0，无信号 ⇒ 语义层）**：探针为 available 之后，「某个镜是否真的作为独立子代理跑过」**没有确定性信号**——主 session 自报、可谎报某镜独立跑过而实际自代。∴ **这一半残余归语义层**，MUST NOT 声称有机械保证；机械层能提供的**仅是事后可发现性**：`host` 进 lens-metric 锚 ⇒ 复盘按 host 分组，Codex 宿主轮次若独立率异常（自审高度重合）数据会露出来。**下限是门、残余是残余，MUST NOT 把残余说成有门、也 MUST NOT 把下限说成没门。**
 
 #### Scenario: 授权声明存在
 - **WHEN** `sdflow-init` 在消费项目铺设 AGENTS.md
 - **THEN** 该文件 SHALL 含 Codex 子代理授权段，明示多镜 fan-out 与 model-tiers 构成 codex 要求的 task-specific reason
 
+#### Scenario: Codex 宿主 fan-out 前探能力并落锚
+- **WHEN** `SDFLOW_HOST=codex` 且评审即将 fan-out
+- **THEN** SHALL 先派 trivial 探针子代理判定能力，落 `sdflow:fanout-capability` 锚（`subagents="available"` 或 `"unavailable"`）；`SDFLOW_HOST=claude` 时免探针、锚记 `subagents="available"`
+
+#### Scenario: 机制死却报多镜被红线拦截（机械下限）
+- **WHEN** `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而 lens-metric 锚中 `lens ∈ {domain,adversarial,grounding}` 的去重行数 > 1
+- **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——机制不可用时不可能有多面独立 fan-out 镜，此为矛盾
+
 #### Scenario: 子代理不可用则缩 roster
-- **WHEN** Codex 宿主下评审的 fan-out 无法派出子代理，主 session 自行完成各镜工作
-- **THEN** 报告 SHALL 显著标注「单镜降级（子代理不可用）」，lens-metric 的 roster SHALL 只含实际跑过的行键，MUST NOT 为未独立跑过的镜落锚
+- **WHEN** 探针判 `subagents="unavailable"`，主 session 自行完成各镜工作
+- **THEN** 报告 SHALL 显著标注「单镜降级（子代理不可用）」，lens-metric 的 roster SHALL 只含实际跑过的行键（fan-out 镜集 ≤ 1 行），MUST NOT 为未独立跑过的镜落锚
+
+#### Scenario: 探针 available 后的逐镜谎报无机械守（残余语义层）
+- **WHEN** 探针判 `subagents="available"`，但主 session 实际未派某镜而在锚中为其落了独立行
+- **THEN** 机械层 **SHALL NOT** 保证发现（无确定性信号）；仅能经事后 `host` 分组的独立率异常供人复评——本条 MUST NOT 被实现为一道机械门（避免硬造假机械）
 
 #### Scenario: 降级可事后经 host 分组发现
 - **WHEN** 复盘聚合器按 `(layer, lens, host, runner, site)` 分组

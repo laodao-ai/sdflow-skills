@@ -15,8 +15,9 @@
 
 - [ ] 2.1 TDD：`test_anchor_lint.py` 加用例——`REQUIRED_FIELDS` 含 `host`；缺 `host` 判 missing-field；`host` 越域判 out-of-enum；`runner="claude-fallback"` 判 out-of-enum（已废弃）〔workflow-metrics · 锚字段缺失或取值越域被自检阻塞〕
 - [ ] 2.2 实现：`anchor_lint.py` 的 `REQUIRED_FIELDS` 加 `host`，枚举校验加 `host`（枚举仍从契约机读块读，**MUST NOT 在脚本内复制清单**）〔workflow-metrics〕
-- [ ] 2.3 TDD + 实现：**自审红线**——`lens="outside-voice" ∧ runner == host` 且未标降级 `reason_code` ⇒ 报错阻塞（新违规类型 `self-review`）〔host-adaptive-execution · 禁止自审；workflow-metrics · 自审锚行被自检阻塞〕
+- [ ] 2.3 TDD + 实现：**自审红线**——`lens="outside-voice" ∧ runner == host ∧ reason_code ∉ {not-installed,timeout,exec-error}` ⇒ 报错阻塞（新违规类型 `self-review`）。**降级码集 MUST 钉死为 `{not-installed,timeout,exec-error}`**〔grill-amendment G5：这是唯一区分「诚实同族 fallback」与「自审假绿」的谓词，MUST NOT 留实现裁量〕；测试覆盖：三个合法降级码各放行 1 例 + `reason_code=none`/缺失各拦 1 例〔host-adaptive-execution · 禁止自审；workflow-metrics · 自审锚行被自检阻塞〕
 - [ ] 2.4 核验 `anchor_lint` **不判宿主**（ADR-1）：它只读锚行自身的 `host`/`runner` 字段做内部一致性校验，MUST NOT import 或调用 `resolve-models.sh`——加一条测试锁死此边界〔host-adaptive-execution〕
+- [ ] 2.5 TDD + 实现：**fan-out 机制下限红线**〔grill-amendment G1 / adr/0023〕——`anchor_lint` 读会话级 `sdflow:fanout-capability` 锚；`subagents="unavailable"` 时，lens-metric 锚里 `lens ∈ {domain,adversarial,grounding}` 的**去重行数 >1 ⇒ 报错阻塞**（新违规类型 `dead-fanout-multi-mirror`）。测试：unavailable+3 fan-out 行 → 拦；unavailable+1 行 → 放行；available+N 行 → 放行（残余逐镜谎报不在机械守范围，注释注明）〔host-adaptive-execution · 子代理不可用时镜数如实降级〕
 
 ## 3. 产出工具（lens_metric_emit）
 
@@ -43,20 +44,23 @@
 
 - [ ] 6.1 TDD：`sdflow-init/tests/test_resolve_models.py` —— `CLAUDECODE=1` ⇒ `HOST=claude`；`CODEX_THREAD_ID=<uuid>` ⇒ `HOST=codex`；两者皆无 ⇒ `HOST=unknown` + stderr 明示；**两者同时存在 ⇒ `unknown` + 信号冲突告警**（MUST NOT 静默取其一）〔host-adaptive-execution · 宿主判定靠正信号〕
 - [ ] 6.2 实现 `sdflow-init/assets/hack/resolve-models.sh`：纯 shell（ADR-1：校验侧不需要宿主判定，故无需 Python 双实现）；`eval` 导出六个变量；档位表从 `model-tiers.md` 读，**MUST NOT 内联模型名**〔host-adaptive-execution · 模型档位按机队分列〕
+- [ ] 6.2b TDD + 实现：**覆盖按机队分键读**〔grill-amendment G4 / adr/0024〕——`config.yaml` 的 `model-tiers.{claude,codex}.{strong,mid,light}` 按当前机队读；**扁平旧格式**（`model-tiers.strong: …`）兼容读作 **Claude 机队**覆盖，MUST NOT 罢工；无当前机队段回落机队缺省。测试：分键格式读对应段 / 扁平格式在 claude 宿主生效、在 codex 宿主**不生效**（回落 codex 缺省，不把 opus 塞给 codex）〔host-adaptive-execution · 消费仓覆盖段仍生效；spec-workflow · 模型档位映射〕
+- [ ] 6.2c 同步 `config.template.yaml` 示例为分键格式 + `test_config_lint.py` 认识分键与扁平两种〔host-adaptive-execution〕
 - [ ] 6.3 `setup.sh` 装 `resolve-models.sh` 进 `~/.sdflow/hack/` + 测试守（**dogfood 盲区**：`skill-principles.md` 曾因 setup 只拷 `*.sh` 而漏装、仓内测试全绿——本条测试 MUST 验**安装路径**，不是仓内路径）〔host-adaptive-execution〕
+- [ ] 6.4 **G6 同源锁**〔grill-amendment G6 / ADR-9〕：`resolve-models.sh` 每轮 eval 一次导出六变量供 SKILL export；`outside-voice.sh` **只从环境读 `$SDFLOW_VOICE_RUNNER`、MUST NOT 自调 `resolve-models.sh` 重判宿主**——加测试断言 `outside-voice.sh` 不含对 `resolve-models.sh` 的调用〔host-adaptive-execution · outside voice = 另一个机队的强档〕
 
 ## 7. outside-voice 去硬编码（安全面，改动最敏感）
 
 - [ ] 7.1 TDD：`test_outside_voice.py` 加用例——`preflight` 探测的是 `$SDFLOW_VOICE_RUNNER` 的 CLI，**不是固定的 codex**；`HOST=codex` 时探 `claude`〔host-adaptive-execution · outside voice = 另一个机队的强档〕
 - [ ] 7.2 实现：`outside-voice.sh` 的 `preflight` / `do_exec` 按 runner 分叉；**`secret_scan` / `render_prompt`（FRAME + 三条通则）/ 200KB 截断保持单份共用**，只有最终 exec 命令行一处分叉〔host-adaptive-execution · 出境安全三件套对两条路径一视同仁〕
-- [ ] 7.3 TDD：**安全回归锁**——加测试断言反向路径（claude）走的是同一个 `secret_scan` 与同一个 `render_prompt`；secret 命中时**两条路径都 exit 3 拒发且不 fallback**〔host-adaptive-execution · secret 命中时两条路径都拒发〕
-- [ ] 7.4 实现反向 runner 调用：`claude -p --model "$SDFLOW_VOICE_MODEL" --output-format text --disallowedTools Write Edit NotebookEdit`（只读约束等价于 codex 的 `-s read-only --ephemeral`）〔host-adaptive-execution · 只读约束按 runner 落到对应机制〕
+- [ ] 7.3 TDD：**安全回归锁**——加测试断言反向路径（claude）走的是同一个 `secret_scan` 与同一个 `render_prompt`；secret 命中时**两条路径都 exit 3 拒发且不 fallback**；**且断言 claude exec 行是 allowlist（含 `--allowedTools`、不含 denylist 形态）**〔grill-amendment G2：防实现漂移回 denylist〕〔host-adaptive-execution · secret 命中时两条路径都拒发〕
+- [ ] 7.4 实现反向 runner 调用：`claude -p --model "$SDFLOW_VOICE_MODEL" --output-format text` + **allowlist deny-by-default**：`--allowedTools Read Grep Glob`（实现期核对 claude CLI 确切只读工具名）〔grill-amendment G2：**MUST NOT 用 `--disallowedTools Write Edit NotebookEdit` denylist**——它留着 Bash/WebFetch/WebSearch，未受信 context 可经其写盘/外传；须与 codex `-s read-only --ephemeral` 的 deny-by-default 沙箱姿势对齐〕〔host-adaptive-execution · 只读约束按 runner 落到对应机制〕
 - [ ] 7.5 实现 `HOST=unknown` ⇒ **不跑 voice** + `reason_code="host-unknown"`（fail-loud，MUST NOT 任选 runner 充作跨模型）〔host-adaptive-execution · 宿主 unknown 则不跑 voice〕
 - [ ] 7.6 `outside-voice.sh` 版本号升至 1.2.0；头部契约注释同步（它是两个 review SKILL 引用的契约单一源）
 
 ## 8. 规则与 SKILL
 
-- [ ] 8.1 改 `assets/workflow/model-tiers.md`：档位表按机队分列（Claude: opus/sonnet/haiku；Codex: gpt-5.6-sol/terra/luna）〔host-adaptive-execution · 模型档位按机队分列；spec-workflow · 模型档位映射〕
+- [ ] 8.1 改 `assets/workflow/model-tiers.md`：档位表按机队分列（Claude: opus/sonnet/haiku；Codex: gpt-5.6-sol/terra/luna）+ 覆盖段注记改为**按机队分键**（`model-tiers.{claude,codex}.*`，扁平旧格式兼容读作 Claude 机队，见 adr/0024）〔grill-amendment G4；host-adaptive-execution · 模型档位按机队分列；spec-workflow · 模型档位映射〕
 - [ ] 8.2 改 `sdflow-spec-review/SKILL.md`：锚行文法（加 `host=`）· outside-voice 调用协议引用 `resolve-models.sh` · lens-metric roster 构造带 `--host`〔spec-workflow · 跨模型 outside voice〕
 - [ ] 8.3 改 `sdflow-code-review/SKILL.md`：同 8.2 + **置信豁免规则改判据**——`runner ≠ host` 豁免 <80 数值滤、`runner == host` 照过滤（`SKILL.md:172` 是旧假绿点）〔spec-workflow · outside-voice tension 不静默采纳〕
 - [ ] 8.4 各编排 SKILL（ship/done/spec-review/code-review）的模型选择改引用 `SDFLOW_TIER_*` 变量，**MUST NOT 内联模型名**〔spec-workflow · 模型档位映射〕
@@ -65,8 +69,9 @@
 ## 9. 消费项目铺设（Codex 子代理授权）
 
 - [ ] 9.1 `sdflow-init/assets/snippets/claude-section.md` + AGENTS.md 段加 **Codex 子代理授权声明**（多镜 fan-out + model-tiers 构成 codex 要求的显式授权）〔host-adaptive-execution · 授权声明存在〕
-- [ ] 9.2 SKILL 写明「子代理不可用 ⇒ MUST 缩 roster 到实跑的镜 + 报告显著标注单镜降级」，并**如实登记该条无机械守**（ADR-4 诚实边界，MUST NOT 冒充成门）〔host-adaptive-execution · 子代理不可用则缩 roster〕
+- [ ] 9.2 SKILL 写明「子代理不可用 ⇒ MUST 缩 roster 到实跑的镜 + 报告显著标注单镜降级」；**登记诚实边界**〔grill-amendment G1：机制活着没**有**机械下限（9.4 探针 + 2.5 红线）；残余「第 N 镜具体跑没跑」无机械守——两者诚实分开，MUST NOT 把残余也说成有门、也 MUST NOT 把下限也说成没门〕〔host-adaptive-execution · 子代理不可用则缩 roster〕
 - [ ] 9.3 `sdflow-init/tests/` 加守卫：铺设产物含授权段（机验存在性）
+- [ ] 9.4 SKILL fan-out 前跑**能力探针**〔grill-amendment G1 / adr/0023〕：`host=codex` ⇒ 派 trivial 探针子代理（回哨兵值=available）；`host=claude` ⇒ 免探针恒 available；落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="…" -->`。探针为 unavailable ⇒ SKILL MUST 缩 roster 到单镜（否则 2.5 红线拦）〔host-adaptive-execution · 子代理不可用时镜数如实降级〕
 
 ## 10. 真机核验（假设 A1/A3 的证伪窗口）
 
@@ -104,8 +109,13 @@
   anchor_lint         锚行校验               │  ✅  │      │           │
     ├ host 必填 / 枚举                       │ 2.1  │      │           │
     ├ claude-fallback 判越域（已废弃）       │ 2.1  │      │           │
-    ├ 🔴 自审红线 runner==host               │ 2.3  │      │           │ 10.3
+    ├ 🔴 自审红线 runner==host（降级码集钉死）│ 2.3  │      │           │ 10.3
+    ├ 🔴 fan-out 下限红线 机制死却报多镜      │ 2.5  │      │           │ 10.3
     └ 🔒 不判宿主（ADR-1 边界锁）            │ 2.4  │      │           │
+  ────────────────────────────────────────── │      │      │           │
+  fan-out 能力探针     机制下限（G1）        │      │  ✅  │           │
+    ├ host=codex → 探针落 available/unavail  │ 9.4  │      │           │ 10.3
+    └ host=claude → 免探针恒 available       │ 9.4  │      │           │
   ────────────────────────────────────────── │      │      │           │
   lens_metric_emit    行键升维               │  ✅  │      │  golden   │
     ├ --host 必填 / fail-closed              │ 3.1  │      │           │
@@ -128,4 +138,4 @@
 
 **图例**：🔒 = 边界锁（防实现漂移回旧行为）· 🔴 = 本 change 的核心红线（自审）· 🔁 = 回归基线（存量数据零丢失）· ⚠️ = 已知 dogfood 盲区
 
-**覆盖缺口（诚实登记）**：`host-adaptive-execution` 的「子代理不可用时镜数如实降级」**无自动化测试**——ADR-4 已论证其无确定性信号，归语义层（靠 SKILL 指令 + 人读报告 + 事后 host 分组可发现性）。**MUST NOT 为它硬造一个假机械测试。**
+**覆盖缺口（诚实登记，grill 后精化）**：「子代理不可用时镜数如实降级」拆两半——① **「fan-out 机制活着没」有机械下限**（探针 9.4 + 红线 2.5 有自动化测试，拦「机制死却报多镜」的头号假绿）；② **残余「第 N 镜具体跑没跑」无确定性信号**（ADR-4/adr/0023），归语义层（靠 SKILL 指令 + 人读报告 + 事后 host 分组可发现性），**无自动化测试**。**MUST NOT 为 ② 硬造假机械测试，也 MUST NOT 因 ② 无测试而漏掉 ① 的下限测试。**

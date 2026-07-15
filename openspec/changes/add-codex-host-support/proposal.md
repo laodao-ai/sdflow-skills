@@ -46,7 +46,7 @@
 
 1. **自审不可能再静默发生**：在 Codex 宿主下跑一次 `outside-voice.sh preflight` + `exec`，runner 解析为 `claude`；若强行让 `runner == host`，`anchor_lint` **必须报错**（新增机械守，红线可复现）。
 2. **降级必留痕**：宿主判不出（两个正信号都无）时，锚行落 `host="unknown"` 且 voice 标 fallback；grep 归档报告可机械筛出所有降级轮次。
-3. **多镜不再空转**：Codex 宿主下子代理不可用时，报告中的镜数 = 实际跑过的镜数（roster 与实际 fan-out 一致），**不存在"报告 7 镜、实跑 1 镜"的轮次**。
+3. **多镜不再空转**：Codex 宿主下子代理不可用时，报告中的镜数 = 实际跑过的镜数（roster 与实际 fan-out 一致），**不存在"报告 7 镜、实跑 1 镜"的轮次**。〔grill G1 / adr/0023：此条由**机械下限**兜——fan-out 前探针落 `sdflow:fanout-capability` 锚，`subagents="unavailable"` 时 anchor_lint 拦「fan-out 镜行数 >1」；残余「第 N 镜具体跑没跑」仍留语义层，见 design ADR-4〕
 4. **存量数据不丢**：`sdflow-retro` 对现有归档报告（含 `openspec/retro/report.md` 里已有的 `claude-fallback` 行）的聚合结果，改造前后**逐行一致**。
 5. 全量测试绿；`bash setup.sh` 两道门（`sync_principles --check` / `gen_workflow_guide --check`）保持绿。
 

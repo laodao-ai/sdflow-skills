@@ -80,6 +80,14 @@ _Avoid_: 把"状态文件"当省事方案（它是漂移源）；把自然语言
 workflow 的能力目标按**实际执行机队**（opus / sonnet / gpt-5.5 等多家族混编）的最弱可靠档设定，**不按开发 workflow 时恰好在用的更强模型**。两条派生：①规则文件里"强/弱模型"一律是**相对机队的档位词**（强档跑 verify / 对抗裁决 / final 终审；中档跑领域镜 / 生成；弱档只跑纯机械步），"档位→模型"映射在消费仓 `config.yaml`；②凡机械 prose 协议（路径解析、回落链、步末固定动作）MUST 脚本化 / 结构化——弱档模型跑 prose 协议的典型失效 = **静默跳步**，与反静默守卫正面冲突且无痕迹。见 `adr/0006`。
 _Avoid_: 用"强模型"指某个具体产品名（档位相对机队，机队会换血）；把脚本化当可选优化（在本工作流是硬约束，是「机械活交脚本、模型只做判断」的升格）
 
+**宿主 (Host)**:
+跑这套工作流的 agent 运行时——目前两个：**Claude Code**（正信号 `CLAUDECODE=1`）与 **Codex**（正信号 `CODEX_THREAD_ID` 非空）。宿主决定**用哪个机队**（Claude Code → Claude 机队；Codex → Codex 机队）——∴「宿主」与「机队」不是同义词：宿主是"谁在跑"，机队是"用哪族模型"，宿主到机队是一对一映射。判定 MUST 靠**正信号**、两个都无 ⇒ `unknown`（fail-loud），**MUST NOT 用"缺失即另一方"推断**（CI / 裸终端会误判，制造新假绿）。由 `resolve-models.sh` 单点判定。见 `add-codex-host-support`、能力 `host-adaptive-execution`。
+_Avoid_: 把"宿主"与"机队"混用（前者是运行时、后者是模型族）；"缺失即 Codex"式的负信号推断
+
+**自审 (Self-review)**:
+outside voice 与主审**同机队**却仍被当作"跨模型第二意见"落账的假绿——`lens="outside-voice" ∧ runner == host` 却未标降级 `reason_code`。它是 `add-codex-host-support` 要杀的头号病：Codex 宿主下 `outside-voice.sh` 若硬编码 codex，就成了 codex 审 codex。「跨模型性」是**派生量** `runner ≠ host`，`anchor_lint` 对声称跨模型的自审锚**报错阻塞**（红线）。区别于**同族 fallback**（`runner == host` 但如实标了降级 `reason_code`，合法可见）。
+_Avoid_: 把同族 fallback 也叫自审（后者如实标降级、不冒充跨模型，是合法降级不是假绿）
+
 **机器锚行 (Machine Anchor Line)**:
 评审/报告产物里由 SKILL 模板**逐字规定**的 HTML 注释行（如 `<!-- outside-voice: mode=… -->`），承载状态留痕的机判形态——「盘面即状态」在报告层的实例：叙述随模型写、锚行不许改，Success Metrics 与度量回路只 grep 锚行。区别于**证据锚点**：锚行记「这一层本次跑成什么形态」，锚点证「这一条 ✅ 凭什么成立」。
 _Avoid_: 拿自然语言结论行当机判契约（措辞属概率空间，ship grill 实证正则全 miss）
