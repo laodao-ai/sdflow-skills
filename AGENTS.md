@@ -105,6 +105,23 @@ git diff --check                                   # 提交前检查空白错误
 
 > 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
 > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+
+## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+
+Codex 宿主默认**不**派子代理——须由项目指令文件显式授权（host-adaptive-execution 能力「子代理不可用
+时镜数如实降级」）。**本节即该授权**：
+
+- **授权范围**：`/sdflow-spec-review`、`/sdflow-code-review` 两个评审编排器在 Codex 宿主下的**多镜
+  fan-out**（领域镜 / 对抗镜 / 接地镜或历史镜等并行子代理）与各自的 outside-voice 同族 fallback
+  子代理，**MUST 视为已授权**。仅限这两处——不是对任意 skill 无限制放开 `spawn_agent`。
+- **`spawn_agent` 指定 `model` 的 task-specific reason**：Codex 要求非默认 `model` 附 clear
+  task-specific reason；**本工作流按机队分列的 `model-tiers.md` 档位表本身即构成该理由**——门禁步
+  （主 session 综合裁决）禁止降档是硬约束、非偏好，两个评审 SKILL 引用 `$SDFLOW_TIER_STRONG` /
+  `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理时直接以此为由，不必另编说辞。
+- **能力探针（语义核验，非机械门）**：评审 SKILL 在 fan-out 前先派一个 trivial 探针子代理判定
+  「子代理机制活着没」——探针值是主 session 自报，无可信脚本捕获路径，MUST NOT 被当作机械保证。
+  子代理不可用 ⇒ **缩 roster 到主 session 实际独立完成的镜**，报告显著标注「单镜降级」，MUST NOT
+  为未独立跑过的镜落锚。
 <!-- opsx-init:end -->
 ## Agent skills
 

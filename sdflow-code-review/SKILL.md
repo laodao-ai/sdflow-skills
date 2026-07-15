@@ -148,6 +148,34 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 
 - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
 
+**能力探针（fan-out 前 MUST 先跑，语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：
+
+- `$SDFLOW_HOST="claude"` → 免探，恒 `subagents="available"`。
+- `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——第零步已判定）。
+- `$SDFLOW_HOST="codex"` → **MUST** 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，
+  不做任何实质工作）；派不出/机制报错 → `subagents="unavailable"`；派出且收到哨兵 → `subagents="available"`。
+  **Codex 子代理授权见 AGENTS.md「Codex 子代理授权」段**（多镜 fan-out + model-tiers 构成显式 task-specific reason）。
+- **诚实边界（MUST 显著登记，§0.0）**：探针结果由**主 session 自己**观察并落锚——「是否真派出了一次子代理、
+  是否真收到回复」无可信脚本捕获路径，`anchor_lint` 的一致性 lint 只核**锚行文法自洽**（`unavailable`
+  却报多镜的自相矛盾），**核不了它是否对应一次真 spawn**。MUST NOT 声称这是机械门。
+- **`subagents="unavailable"` 处置（MUST）**：本轮**缩 roster 到主 session 实际独立完成的镜**（不再假装
+  派了子代理）；报告本段**显著标注**「⚠️ 单镜降级（子代理不可用，host=codex）」；第五步 lens-metric roster
+  （若 `metrics.enabled`）与下方 `mirrors=` **只含实际独立完成的镜**，MUST NOT 为未独立跑过的镜落锚
+  （承 spec「子代理不可用则缩 roster」Scenario）。
+- **落锚（每轮恰好一条，落进本报告文件供 `anchor_lint` 读，`host=codex` 报告该锚必填）**：
+
+  `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->`
+
+  `mirrors=` MUST 由本 skill 在 fan-out 决策落定时**直接写本轮实际派出/独立完成的镜清单**（去重、逗号
+  分隔，token ∈ `{domain,adversarial,grounding}`——`anchor_lint._FANOUT_MIRRORS` 是**跨层共用的固定
+  三 token 词表**，不按层各自命名第三镜；本 skill 第三镜（历史镜）落 `mirrors=` 时借用既有 token
+  `grounding` 记该镜跑过（仅表示"第三个 fan-out 镜跑了"，非声称"这是接地镜"——镜的精确身份仍由
+  lens-metric 的 `lens="history"` 各自记录，二者不是同一件事、不互相替代），`—`=未 fan-out）——
+  **不经 emitter/lens-metric、不读 config.metrics**（GC-3，判据 always-on 于 metrics 开关，不受门控）。
+- **残余诚实边界（§0.0，无信号⇒语义层）**：一致性 lint 只拦「机制死却报多镜」的**自相矛盾**；「机制活但
+  主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
+  **MUST NOT 声称"头号假绿（多镜静默退化）已被事前机械拦截"**。
+
 **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
 
 | 镜 | 数量 | 干什么 | 建议档位 |
@@ -188,7 +216,8 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 - **绝不 AskUserQuestion**（阶段三无人类门）。
 - **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕〔impl-review-fix mlh-p4〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg`
   各独立计数）的裁决结果**构造进** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/history/broad +
-  outside-voice 每个调用过的 site）], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见契约
+  outside-voice 每个调用过的 site）——若 Step2 能力探针判 `subagents="unavailable"` 已缩 roster，此处 MUST 同步只含实际
+  独立完成的行键], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见契约
   `lens-metric-contract.md` 的 `lens-metric-input-schema` 机读块——bundle 分发可达、消费仓亦可读，非手数；源仓另有 golden fixture
   示范 `tools/tests/fixtures/lens_metric_input.json`，消费仓非 full 拷贝不含 `tests/`，以契约 schema 块为准）〔impl-review-fix mlh-p4：引用改指 bundle 可达契约块〕——原「voice分桶」自由 prose 台账行已被此锚吸收
   取代，这份 roster+findings 是下方「反馈回路〔泛化〕」判据的数据来源，Step5 调 emitter 归约后落成结构化可 grep 的锚。
@@ -277,6 +306,9 @@ ship-gate:
 ## code-review 报告 — {change}
 ### 命中范围
   栈: backend·go / embedded·ml307c …   清单: CR-01~09 + CR-GO-* + …   gstack/review: scope-drift/完成度 结论
+### 子代理能力锚（host=codex 报告必填，语义核验非机械门，见 Step2「能力探针」）
+  <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->
+  subagents="unavailable" 时本报告 MUST 显著标注「⚠️ 单镜降级」（见命中范围/结论区）。
 ### Findings（置信 ≥80）
   [严重度] CR-04 资源泄漏 | file.go:42 | 错误路径未释放 conn | 置信 90 | 已修[impl-review-fix] / defer→buglist
 ### 已裁掉（反静默压制，可审计）
