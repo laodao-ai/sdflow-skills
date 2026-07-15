@@ -12,8 +12,12 @@ _SITE_BAD = re.compile(r'["\n\r]|-->|=')        # site 注入字符（C7）
 _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')
 
 
-_OV_RUNNER_DOMAIN = frozenset({"claude", "codex", "none"})   # add-codex-host-support：outside-voice 行 runner 域收紧
+_OV_RUNNER_DOMAIN = frozenset({"claude", "codex", "none"})   # add-codex-host-support：outside-voice **行**(roster row) runner 域收紧
 # （契约「跨模型性」段：outside-voice 锚 runner 恒 ∈{claude,codex,none}，不取 unknown——unknown 只属非-ov 普通镜行）
+# roster 行的 "none" 表示"该轮无执行"（合法、必伴 findings=0）——但 hit 代表**实际报出的 finding**，只有 voice
+# 真跑过才可能存在 hit，故 hit 级 runner 域 MUST NOT 含 "none"（复评 Critical：两处语义不同，不可共用同一常量，
+# 否则 runner="none" 的 hit 会被接受、把零执行行的 findings/采纳/独立 顶到非零，破 spec「runner="none" 行恒全零」不变量）。
+_OV_HIT_RUNNER_DOMAIN = frozenset({"claude", "codex"})        # add-codex-host-support fix：hit 级收紧，排除 "none"
 
 
 class EmitError(Exception):
@@ -81,7 +85,8 @@ def fold_hit(hit, host, enums, fold_map):
     恒等 pass-through；未知 raw fail-closed（不塞 broad）。
     非 outside-voice：runner 取当前 --host（主审自己的机队；host="unknown" 时 runner 同为 "unknown"，
     契约「unknown 仅合法于非-ov 普通镜行且 host=unknown」）；
-    outside-voice：runner 显式来自 hit，域收紧至 {claude,codex,none}（不取 unknown——矩阵约束，契约「跨模型性」段）。"""
+    outside-voice：runner 显式来自 hit，域收紧至 {claude,codex}（既不取 unknown——矩阵约束，契约「跨模型性」段；
+    也不取 none——hit 蕴含 voice 真跑过，"none"=无执行只对 roster 行合法，复评 Critical fix）。"""
     if not isinstance(hit, dict) or "raw" not in hit or not isinstance(hit["raw"], str):
         raise EmitError(f"hit 缺 raw/raw 非字符串: {hit!r}")
     raw = hit["raw"]
@@ -97,8 +102,11 @@ def fold_hit(hit, host, enums, fold_map):
             raise EmitError(f"outside-voice hit 缺 runner/site: {hit!r}")
         if not isinstance(runner, str) or not isinstance(site, str):
             raise EmitError(f"outside-voice hit runner/site 非字符串: {hit!r}")
-        if runner not in _OV_RUNNER_DOMAIN:
-            raise EmitError(f"outside-voice hit runner 越域(须∈{sorted(_OV_RUNNER_DOMAIN)}): {runner!r}")
+        if runner not in _OV_HIT_RUNNER_DOMAIN:
+            raise EmitError(
+                f"outside-voice hit runner 越域(须∈{sorted(_OV_HIT_RUNNER_DOMAIN)}): {runner!r}"
+                f"——hit 不该 runner=\"none\"，hit 蕴含该 voice 真跑过（\"none\"=无执行只对 roster 行合法）"
+            )
     else:
         runner, site = host, "—"                     # add-codex-host-support：非-ov runner 取当前 host（GC-8）
     if runner not in enums["runner"]:
@@ -170,11 +178,14 @@ def reduce(roster, findings, layer, host, enums, fold_map):
                 counts[k]["sev"][sev] += 1
         if len(keyset) == 1 and verdict == "采纳":
             counts[next(iter(keyset))]["独立"] += 1
-    # 4) sev 不变量：Σsev == 采纳
-    # 同函数内自防御（防未来重构打破采纳/sev 锁步），当前结构下不可达、非跨模块校验
+    # 4) sev 不变量：Σsev == 采纳；runner="none" 行恒零执行不变量
+    # 同函数内自防御（防未来重构打破锁步），当前结构下均不可达（fold_hit 已 fail-closed 拦 hit runner=none）、
+    # 非跨模块校验——防御纵深：若未来 fold_hit 收紧被误改回，此处仍兜底拦住 runner=none 行累积非零计数（复评 Critical fix）。
     for k, c in counts.items():
         if sum(c["sev"].values()) != c["采纳"]:
             raise EmitError(f"sev rollup 不变量破: {k} Σsev≠采纳")
+        if k[2] == "none" and c["findings"] != 0:
+            raise EmitError(f"runner=\"none\" 行不变量破（该行本应零执行 findings=0）: {k} findings={c['findings']}")
     # 5) emit（确定序 = 行键排序）
     lines = []
     for k in sorted(roster_keys):
@@ -205,14 +216,16 @@ def main(argv=None):
         return EXIT_FAIL
     contract = args.contract or str(Path(__file__).resolve().parent.parent / "lens-metric-contract.md")
     try:
-        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
-        enums = load_enums(contract)
+        # 复评 Minor fix：--host 校验须先于读 --input（更根本的缺失 MUST 先报，避免用户误把注意力
+        # 花在一个"文件坏了"的次要错误上，而忽略了真正缺的 --host）。
         if args.host is None:                               # D4：缺 --host 受控 fail-closed，MUST NOT 默认填 claude
             raise EmitError(
                 "缺少 --host 参数（须显式传 claude|codex|unknown 之一；"
                 "无默认值——静默默认会把 Codex 宿主的轮次伪装成 Claude 宿主）")
+        enums = load_enums(contract)
         if args.host not in enums["host"]:                  # D4：越域（含已废弃 claude-fallback）fail-closed
             raise EmitError(f"--host 取值越域: {args.host!r}（须 ∈ {sorted(enums['host'])}）")
+        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
         fold_map = load_fold(contract, enums)
         if not isinstance(data, dict) or "roster" not in data or "findings" not in data:
             raise EmitError("输入缺 roster/findings 顶层键")

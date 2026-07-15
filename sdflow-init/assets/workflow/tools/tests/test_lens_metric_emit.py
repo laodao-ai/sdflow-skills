@@ -73,11 +73,13 @@ def test_fold_hit_outside_voice_needs_runner_site():
         ("outside-voice","claude","codex","hr-tg")            # host=claude(主审)、runner=codex(跨模型 voice)
     with pytest.raises(m.EmitError): m.fold_hit({"raw":"codex"}, "claude", e, f)      # 缺 runner/site
 
-def test_fold_hit_ov_runner_none_legal():
-    # D6：outside-voice 行 runner="none"（无执行轮次）合法，不属"越域"
+def test_fold_hit_ov_runner_none_fail_closed():
+    # 复评 Critical fix：hit 级 runner="none" MUST fail-closed（NOT legal）——"none"=无执行只对 roster 行合法，
+    # hit 代表实际报出的 finding，蕴含该 voice 真跑过，不可能 runner=none。
+    # （此前 test_fold_hit_ov_runner_none_legal 把这条锁成了"合法"，方向锁反了，本次改正断言方向。）
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
-    assert m.fold_hit({"raw":"codex","runner":"none","site":"hr-tg"}, "unknown", e, f) == \
-        ("outside-voice","unknown","none","hr-tg")
+    with pytest.raises(m.EmitError):
+        m.fold_hit({"raw":"codex","runner":"none","site":"hr-tg"}, "unknown", e, f)
 
 def test_fold_hit_ov_runner_unknown_fail_closed():
     # outside-voice 行 runner 域收紧至 {claude,codex,none}，不取 unknown（矩阵约束，契约「跨模型性」段）
@@ -251,6 +253,17 @@ def test_reduce_ov_roster_runner_unknown_fail_closed():
               {"lens":"outside-voice","runner":"unknown","site":"hr-tg"}]
     with pytest.raises(m.EmitError):
         m.reduce(roster, [], "spec-review", "unknown", e, f)
+
+def test_reduce_ov_hit_runner_none_fail_closed_not_counted():
+    # 复评 Critical repro：roster 有合法 (outside-voice,none,hr-tg) 零执行行 + 一条 hits runner="none" 的
+    # verdict=采纳 finding——修前会被 fold_hit 接受、折进该零执行行，把它的 findings/采纳/独立 顶到非零，
+    # 破 spec「runner="none" 行恒全零」不变量。修后 MUST fail-closed（NOT 产出 findings="1"）。
+    m, e, f = _ef()
+    roster = [{"lens":"broad","runner":"unknown","site":"—"},
+              {"lens":"outside-voice","runner":"none","site":"hr-tg"}]
+    findings = [{"hits":[{"raw":"codex","runner":"none","site":"hr-tg"}], "verdict":"采纳","sev":"高"}]
+    with pytest.raises(m.EmitError):
+        m.reduce(roster, findings, "spec-review", "unknown", e, f)
 
 def test_reduce_host_unknown_ordinary_runner_unknown_emits():
     # codex#1：host=unknown 时普通镜行 runner 如实为 unknown（非崩、非默认 claude）

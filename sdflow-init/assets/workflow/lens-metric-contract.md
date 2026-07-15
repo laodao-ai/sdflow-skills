@@ -79,7 +79,8 @@ gstack-adv: broad
 }
 ```
 > 约束（emitter fail-closed 强制）：① roster 每个 `(lens,runner,site)` 行键各一条（含零-finding 行）；
-> 非 outside-voice 行 MUST `runner="claude" site="—"`。② finding `hits` 非空；`verdict=采纳` 时 `sev` 必填非空、
+> 非 outside-voice 普通镜行 MUST `runner==host`（本轮宿主/主审机队，取自 `--host`；`host="unknown"` 时该行
+> `runner` 同为 `"unknown"`）、`site="—"`。② finding `hits` 非空；`verdict=采纳` 时 `sev` 必填非空、
 > 其余 verdict 若带 sev 也须合法级。③ **无 per-finding `layer`**——锚 layer 单一源 = `--layer`。
 > ④ 所有字段类型 MUST 为字符串（非字符串 fail-closed，非静默）。
 
