@@ -271,6 +271,7 @@ context 构造（摘录规则定死，不现场发挥）：写 {change_dir}/.out
   site=code-voice → git diff $DIFF_BASE..HEAD 全量
   site=hr-tg      → 命中 TG 判据触发点 + 相关 diff hunk
 exec：$HELPER exec --context-file <f>
+  ⏱ **外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 默认 300s + 10s grace）——调本命令时 MUST 把**外层 Bash/shell 工具超时设为 ≥330000ms**（= helper 内部 `--timeout` + 30s 余量），MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。若显式传 `--timeout <s>` 覆盖内部值，外层同步给 ≥(s+30)s。**指令层约束**（外层超时由调用方设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
   exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
   exit 124 → fallback（reason_code="timeout"）      exit 1 → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
   exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）

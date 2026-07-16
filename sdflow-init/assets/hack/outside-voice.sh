@@ -23,6 +23,9 @@
 #     stdout: 找漏框架 + 硬分隔的不可信上下文（超 200KB 保头尾截断）
 #     stderr: OV_TRUNCATED=true|false                            exit 0 | 3=secret-hit | 2=用法错/文件不存在或不可读
 #   exec --context-file <f> [--timeout <秒，默认 300>]
+#     ⏱ 调用方 MUST 给**外层进程超时** ≥ (--timeout + 30)s（默认即 ≥330s）：本命令内部
+#       `timeout -k 10 <--timeout>` 最迟 (--timeout+10)s 收；外层短于此会在内部正常运行时
+#       误杀 → 假超时 + 重跑浪费。外层超时由调用方设，helper 无法机械强制（指令层约束）。
 #     stdout: 目标 runner（$SDFLOW_VOICE_RUNNER）的最终消息（仅此）
 #       codex 路径：经 --output-last-message 提取；claude 路径：-p --output-format text 直出
 #     stderr: OV_TRUNCATED 行；失败时 runner stderr 转发
