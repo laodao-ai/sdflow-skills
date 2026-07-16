@@ -1,3 +1,8 @@
+---
+ship-gate:
+  design_approved: true
+---
+
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 <!-- sdflow:fanout-capability v1 host="codex" subagents="available" mirrors="adversarial,grounding" -->
 <!-- sdflow:hr-tg v1 hit="TG-06,TG-16,TG-26" declared="TG-05,TG-06,TG-10,TG-11,TG-13,TG-14,TG-15,TG-16,TG-18,TG-19,TG-20,TG-21,TG-23,TG-26" evidence="proposal 触发判定命中三脚本共享契约、单次解析性能与并发写入时序" -->
@@ -5,10 +10,12 @@
 # Spec Review Report — mlh-p6-recorder-frontmatter
 
 > `[spec-review-amendment]` 2026-07-16。阶段二连续评审：autoplan 广审 → 对抗镜×3 + 接地镜×1 → HR-TG outside voice → 主 session 合并裁决。对象为 `proposal.md`、`design.md`、两份 delta spec、`tasks.md`、ADR-0025、CONTEXT 术语与真实 recorder/init 代码。
+>
+> 设计门已于 2026-07-17 拍板批准：Q1=A、Q2=A、Q3=A、Q4=A。
 
 ## 结论
 
-**建议进入设计 HARD-GATE，但不能把 grill 版本原样批准。** 多镜发现 15 组有效缺口，其中 11 组是无需偏好判断的技术闭合，已直接回灌；4 组涉及新架构/支持边界，已按调研后的推荐方案预写入文档，须在本报告设计门一次确认。
+**设计 HARD-GATE 已通过。** 多镜发现 15 组有效缺口，其中 11 组无需偏好判断的技术闭合已直接回灌；4 组新架构/支持边界决策均采用报告推荐 A，已完成门后最终裁决。
 
 没有待用户代查的事实问题。当前仍是设计文档修订，未实施 recorder 代码。
 
@@ -38,11 +45,11 @@
 | D10 | 删除不存在的 `batch query` 假接口，锁清单写实际 `batch lint/add/set-status/rename` | `issues.py --help` 与 parser 只有这四个入口 | design、SW-RI-2、tasks 3.3 |
 | D11 | rename 中与 retag 无关的 legacy nonfatal problems 回显但不阻断；任何判定/写/派生失败非零 | 与默认 reindex 语义对齐，同时删除真正的 warning-only 假成功 | D4、SW-RI-3、tasks 4.4 |
 
-### 需拍板（推荐已写入文档，未批准前仍为 Proposed）
+### 已拍板（Q1–Q4 均采用推荐 A）
 
 #### Q1 — batch rename 的一次读取实现协议
 
-**推荐 A：`issues.py::read_rename_snapshot()` 直接一次 binary read/parse 两池 dated files。** 它保留 raw bytes/spans/model，retag 和 reindex 复用同一 snapshot；整个 rename 每 dated file read/parse=1、per-pool `scan --json`=0。
+**已批准 A：`issues.py::read_rename_snapshot()` 直接一次 binary read/parse 两池 dated files。** 它保留 raw bytes/spans/model，retag 和 reindex 复用同一 snapshot；整个 rename 每 dated file read/parse=1、per-pool `scan --json`=0。
 
 - 系统后果：真正满足 T66 与 bytes splice；代价是 issues.py 也要具备 legacy/overlay parser 行为。
 - 用户后果：CLI 不变，rename 更确定；不会因 text 二读规范化 BOM/EOL/sibling bytes。
@@ -52,7 +59,7 @@
 
 #### Q2 — rename retry provenance
 
-**推荐 A：registry-first，并在 target `batches.md` entry 写 machine-owned `重命名自: old`。** 首次先严格预检，再原子改 registry + provenance，随后 retag/reindex；只有 provenance 精确匹配时允许 source 缺失的 retry。
+**已批准 A：registry-first，并在 target `batches.md` entry 写 machine-owned `重命名自: old`。** 首次先严格预检，再原子改 registry + provenance，随后 retag/reindex；只有 provenance 精确匹配时允许 source 缺失的 retry。
 
 - 系统后果：所有 crash cut 可区分；未知 source、预存 orphan 不会被误吸收。代价是 batches grammar 多一条 generated field。
 - 用户后果：仍重跑原命令，无 `--resume`；Git 中多一条可读审计来源。
@@ -62,7 +69,7 @@
 
 #### Q3 — stale/partial lock 恢复
 
-**推荐 A：不新增自动 `lock recover`，使用 fix-directed manual break-glass。** metadata 完整时显示 repo/PID/command/start；空白/部分 metadata 时明确要求先停止该 repo 全部 recorder owner/participants，再删精确 lock path并重跑。
+**已批准 A：不新增自动 `lock recover`，使用 fix-directed manual break-glass。** metadata 完整时显示 repo/PID/command/start；空白/部分 metadata 时明确要求先停止该 repo 全部 recorder owner/participants，再删精确 lock path并重跑。
 
 - 系统后果：不把 PID/file existence 伪装成 liveness lease；代价是 crash 后权威读写会阻塞到人工处理。
 - 用户后果：恢复步骤更长但不误杀活锁；错误文案可直接复制。
@@ -72,7 +79,7 @@
 
 #### Q4 — 平台与 durability 支持矩阵
 
-**推荐 A：macOS/Linux 本地 filesystem 为自动 release gate；Windows 本地盘为必须 smoke 的兼容目标；network FS 与 power-loss durability 明确 unsupported/non-goal。**
+**已批准 A：macOS/Linux 本地 filesystem 为自动 release gate；Windows 本地盘为必须 smoke 的兼容目标；network FS 与 power-loss durability 明确 unsupported/non-goal。**
 
 - 系统后果：保证层级与实际原语一致；POSIX mode bits 不误投射到 Windows。
 - 用户后果：Windows 有明确 smoke 证据；NFS/SMB/FUSE 用户不会被“跨平台原子”误导。
@@ -144,16 +151,16 @@ Autoplan design-voice 同样为 Claude timeout → Codex fallback，返回 valid
 - pure legacy `A007` 首次 mutation 后对外变为 `A7`；旧表 bytes 保留，升级说明必须提示这一可见 canonicalization。
 - Windows 只以 local-disk smoke 承诺；network FS 与断电 durability 明确不支持，避免把未验证层级包装成跨平台保证。
 
-## Lens metrics（pre-gate 草稿）
+## Lens metrics（设计门最终值）
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="codex" runner="codex" site="—" findings="8" 采纳="8" 裁掉="0" defer="0" 独立="5" sev="致0/高8/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="codex" runner="codex" site="—" findings="14" 采纳="8" 裁掉="4" defer="2" 独立="4" sev="致0/高5/中3/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="codex" runner="codex" site="—" findings="6" 采纳="5" 裁掉="0" defer="1" 独立="3" sev="致0/高3/中2/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="codex" runner="codex" site="—" findings="14" 采纳="10" 裁掉="4" defer="0" 独立="5" sev="致0/高6/中4/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="codex" runner="codex" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="3" sev="致0/高3/中3/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="codex" runner="codex" site="design-voice" findings="3" 采纳="2" 裁掉="1" defer="0" 独立="2" sev="致0/高2/中0/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="codex" runner="codex" site="hr-tg" findings="3" 采纳="3" 裁掉="0" defer="0" 独立="1" sev="致0/高2/中1/低0" -->
 
-计数归约由 emitter 完成；finding 分类、roster 完备与誊写仍是主 session 信任边界。本 skill 只落锚，不聚合/复评；跨 change 反馈由 `sdflow-retro` 负责。设计门若翻改 Q1–Q4，拍板回写时须同步重算这些 pre-gate 草稿锚。
+计数归约由 emitter 完成；Q1–Q4 拍板后，原 `defer` 已按最终裁决转为 `采纳`。finding 分类、roster 完备与誊写仍是主 session 信任边界。本 skill 只落锚，不聚合/复评；跨 change 反馈由 `sdflow-retro` 负责。
 
-## HARD-GATE 建议
+## HARD-GATE 结论
 
-**建议按 Q1=A、Q2=A、Q3=A、Q4=A 批准。** 批准后主 session 才会在本报告首部写 `ship-gate.design_approved: true`，补人读拍板记录并最终化 lens metrics；随后下一步才是 writing-plans / 实现计划。
+**已按 Q1=A、Q2=A、Q3=A、Q4=A 批准。** 本报告首部已写 `ship-gate.design_approved: true`，人读拍板记录与 lens metrics 已同步最终化；下一步进入 writing-plans / 实现计划。
