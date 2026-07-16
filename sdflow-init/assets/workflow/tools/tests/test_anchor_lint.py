@@ -673,6 +673,42 @@ def test_outside_voice_lens_row_cross_model_not_flagged():     # lens=outside-vo
     assert not _has(v, "ordinary-runner-host-mismatch")
 
 
+# 🔴 B1 回归：outside-voice lens-metric 行此前**完全脱离**校验（check_lens_metric 显式 lens!="outside-voice" 才校）
+# → 手写/emitter-bypass 的三类矛盾锚被放行、经 aggregator 汇入 retro 价值表。面治覆盖 OV 行完整不变量集：
+#   ① runner="none"（无执行）⇒ findings MUST=0；② host="unknown"（无 voice 目标）⇒ runner MUST="none"；
+#   ③ OV 行 runner 域收紧 ∈{claude,codex,none}，MUST NOT="unknown"（unknown 只属非-ov 普通镜行，契约「跨模型性」段）。
+def test_ov_lens_row_runner_none_nonzero_findings_blocked():   # ① runner=none 却 findings>0 → 拦
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="codex", lens="outside-voice", runner="none", findings="5", site="code-voice"),
+                             "code-review", _enums())
+    assert _has(v, "ov-runner-none-nonzero-findings")
+
+def test_ov_lens_row_unknown_host_runner_not_none_blocked():   # ② host=unknown 却 runner≠none → 拦
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="unknown", lens="outside-voice", runner="claude", findings="0", site="code-voice"),
+                             "code-review", _enums())
+    assert _has(v, "ov-unknown-host-runner")
+
+def test_ov_lens_row_runner_unknown_blocked():                 # ③ OV 行 runner=unknown（越 OV 域）→ 拦
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="unknown", lens="outside-voice", runner="unknown", findings="0", site="code-voice"),
+                             "code-review", _enums())
+    assert _has(v, "ov-runner-unknown")
+
+def test_ov_lens_row_no_exec_legal_clean():                    # 合法无执行 OV 行：host=unknown runner=none findings=0 → clean
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="unknown", lens="outside-voice", runner="none", findings="0",
+                                 采纳="0", 裁掉="0", 独立="0", sev="致0/高0/中0/低0", site="code-voice"),
+                             "code-review", _enums())
+    assert v == []
+
+def test_ov_lens_row_same_family_fallback_legal_clean():       # 合法同族 fallback OV 行：host=claude runner=claude → clean
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="claude", lens="outside-voice", runner="claude", findings="2", site="code-voice"),
+                             "code-review", _enums())
+    assert v == []
+
+
 # --- Step 6：🔒 边界锁——anchor_lint 不判宿主（ADR-1），MUST NOT import/调 resolve-models.sh -------
 
 def test_anchor_lint_does_not_reference_resolve_models():

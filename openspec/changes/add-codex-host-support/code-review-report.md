@@ -29,8 +29,9 @@ ship-gate:
 **[高] A1 · 反向 claude 出境路径无真读围栏 + 无输出侧 secret_scan** | `sdflow-init/assets/hack/outside-voice.sh:41-45,196-198` | **镜实测复现**
 三旗墙的 `--add-dir <repo_root>` 对 Read **零约束**——实测 `claude -p --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo>` 能读仓外文件（`~/.ssh`/`~/.aws` 等），去掉 `--add-dir` 结果相同（它只是"项目目录"提示、非访问围栏）；而 codex `-s read-only` 内核沙箱**真拒**仓外读。∴ 注释「对称 codex 全仓只读」**不实**（两路径不对称，codex 有硬边界、claude 反向路径没有）；唯一防线是 FRAME 软注入防御（3/3 payload 在 haiku 上暂扛住、但概率性单点）；且 `secret_scan` **只扫入境 context、不扫 runner 回传 stdout** → 注入成功可原样 exfil。`--tools` 挡 Write/Bash/网络这部分是真的。**→ 一半可修（补输出侧 secret_scan + 修注释措辞）、一半是设计决策待你拍板（是否补真围栏 permission-mode/sandbox，或如实接受软防线不对称）。**
 
-**[高] B1 · `lens="outside-voice"` 的 lens-metric 行脱离矩阵校验 + 决策记录漂移** | `anchor_lint.py:623`（check_lens_metric 明确 `lens_v != "outside-voice"` 跳过）| **结构+CLI 核实**
-`check_legal_combo` 只绑 `sdflow:outside-voice` 锚（因 lens-metric 锚无 reason_code，D1 合理）；但 `check_lens_metric` 的行级校验又**显式排除 lens="outside-voice" 行** ⇒ 该行的 `runner="none"⇒findings=0`、`host="unknown"⇒runner="none"` 两个不变量**无任何校验**。手写/emitter-bypass 的 `lens="outside-voice" runner="none" findings="5"`、`host="unknown" runner="claude"` 锚会被放行，经 aggregator 汇入 retro 价值表。emitter 侧强制该不变量，∴ 仅 emitter-bypass 可达——但按③目标态非"现状少见"。**决策记录漂移**：spec-review-report.md:152/208 + design.md:78/95 明写 D6 收敛为"lens-metric 锚 + outside-voice 锚**均查**"，实现窄化为"只 outside-voice 锚"未回改记录。**→ 可修（check_lens_metric 补一条不依赖 reason_code 的窄校验）+ 决策记录订正（design-writeback，done 阶段）。**
+**[高] B1 · `lens="outside-voice"` 的 lens-metric 行脱离矩阵校验 + 决策记录漂移** | `anchor_lint.py:623`（check_lens_metric 明确 `lens_v != "outside-voice"` 跳过）| **结构+CLI 核实** · **✅ 代码半已修[impl-review-fix]**
+`check_legal_combo` 只绑 `sdflow:outside-voice` 锚（因 lens-metric 锚无 reason_code，D1 合理）；但 `check_lens_metric` 的行级校验又**显式排除 lens="outside-voice" 行** ⇒ 该行的 `runner="none"⇒findings=0`、`host="unknown"⇒runner="none"` 两个不变量**无任何校验**。手写/emitter-bypass 的 `lens="outside-voice" runner="none" findings="5"`、`host="unknown" runner="claude"` 锚会被放行，经 aggregator 汇入 retro 价值表。emitter 侧强制该不变量，∴ 仅 emitter-bypass 可达——但按③目标态非"现状少见"。**决策记录漂移**：spec-review-report.md:152/208 + design.md:78/95 明写 D6 收敛为"lens-metric 锚 + outside-voice 锚**均查**"，实现窄化为"只 outside-voice 锚"未回改记录。
+**→ ✅ 代码半已修[impl-review-fix]（TDD·面治）**：`check_lens_metric` 补 OV 行 elif 分支，覆盖 OV 行**完整**不变量集 3 条（①runner="none"⇒findings=0 `ov-runner-none-nonzero-findings`；②host="unknown"⇒runner="none" `ov-unknown-host-runner`；③OV 行 runner∈{claude,codex,none} 不含 unknown `ov-runner-unknown`），纯结构判定不依赖 reason_code、与 emitter `_OV_RUNNER_DOMAIN`/零执行不变量对齐；补 5 测试（3 违规+2 合法回归）；全仓 1423 passed。**剩：决策记录订正（design-writeback，done 阶段）**——正文现已实现"OV lens-metric 行亦查其结构不变量"，与 D6"均查"意图对齐，done 阶段把 design/spec-review-report 的措辞回改到位。
 
 **[高] V1 · 两评审 SKILL `eval "$(resolve-models.sh)"` 前无 unset + 无校验** | `sdflow-spec-review/SKILL.md:104` · `sdflow-code-review/SKILL.md:104` | **确认**
 `eval "$(resolve-models.sh …)"` 前既不 `unset SDFLOW_*`，也不校验脚本存在/exit-code/六变量完整。shell 中命令替换失败后 `eval ""` 返回 0，同 shell 内**上一轮的 `SDFLOW_HOST`/`SDFLOW_VOICE_RUNNER` 会原样保留** → resolver 缺失/失败时复用旧宿主假绿（CI/skew 窗口高发）。而 `update` 明确不装 hack 脚本（须 setup.sh）。**→ 可修（SKILL prose：eval 前 unset 六变量 + 校验 resolver 可执行 + 捕获 exit + 验六变量非空，任一失败在 fan-out/落锚前 fail-loud 硬停）。**
@@ -62,9 +63,9 @@ config_lint 只校验字符集，`model-tiers.codex.strong: opus` 完全合法�
 - 历史镜：无重蹈旧坑（task2/3/4/6 各 fix 针对不同边界、无循环修复/回滚）。
 
 ### 修复 / defer 台账
-- **已修[impl-review-fix]**：**C1** guard codex#N 旁路 fail-open（TDD：删 prose 补位 fallback + 2 回归测试；全仓 1418 passed，commit 见 checkpoint(impl-review-fix:C1)）。
-- **裁决权交人（剩余 3 高危）**：安全决策（A1）+ 设计记录漂移（B1/V3/V4/V5，改四件套触设计门失鲜、须 done 阶段写回）+ 代码 fail-open 修复各需谨慎 TDD（本 change 历史上修复反复引入新 fail-open，Task2/3/6 均是）。按 option B 本就 STOP 在 done 前 → 见收敛口。
-- **建议可修（objective，剩 6 项）**：A1 输出侧 secret_scan + 注释订正 · B1 check_lens_metric 补窄校验 · V1 SKILL eval 加固 · V2 F8 分支 · D1 test 引号 · B2 SKILL host=。
+- **已修[impl-review-fix]**：**C1** guard codex#N 旁路 fail-open（TDD：删 prose 补位 fallback + 2 回归测试）· **B1 代码半** check_lens_metric 补 OV 行 3 不变量校验（TDD·面治，5 测试）。全仓 1423 passed。
+- **裁决权交人（剩余高危）**：A1 安全决策 + 设计记录漂移（B1 剩余决策记录订正 / V3/V4/V5，改四件套触设计门失鲜、须 done 阶段写回）+ 代码 fail-open 修复各需谨慎 TDD（本 change 历史上修复反复引入新 fail-open，Task2/3/6 均是）。按 option B 本就 STOP 在 done 前 → 见收敛口。
+- **建议可修（objective，剩 5 项）**：A1 输出侧 secret_scan + 注释订正 · V1 SKILL eval 加固 · V2 F8 分支 · D1 test 引号 · B2 SKILL host=。
 - **建议 defer（design-writeback，done 阶段随 A1/A3 真值一并写回，勿实现期改四件套）**：A1 沙箱不对称登记订正（design 安全表 + r3「两路径均无硬FS读边界」与实测 codex 有沙箱矛盾）· B1 决策记录"均查"订正 · V3 compat"v1 无 reason_code"订正 · V4 ADR-0024 措辞 · V5 ADR-6"真跑一次"措辞。
 - **建议 todolist**：C2 metrics dup-key 收紧 · V5 preflight 真探针（若选补而非订正）。
 

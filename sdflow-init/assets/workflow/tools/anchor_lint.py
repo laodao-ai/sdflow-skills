@@ -626,6 +626,21 @@ def check_lens_metric(report_text, cli_layer, enums):
             expected = "unknown" if host_v == "unknown" else (host_v if host_v in _DUOS else None)
             if expected is not None and runner_v != expected:
                 v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ordinary-runner-host-mismatch"})
+        # add-codex-host-support（B1）：outside-voice lens-metric 行的 runner≠host（跨模型）合法，故不套普通镜规则——
+        # 但仍有三条结构不变量 MUST 守（此前完全脱离校验 ⇒ 手写/emitter-bypass 的矛盾锚汇入 retro 价值表）。
+        # 不依赖 reason_code（lens-metric 锚无该字段），纯结构判定，与 emitter 侧 _OV_RUNNER_DOMAIN/零执行不变量对齐：
+        elif lens_v == "outside-voice" and "host" in kv and "runner" in kv:
+            host_v, runner_v = kv["host"], kv["runner"]
+            findings_v = kv.get("findings")
+            # ③ OV 行 runner 域收紧 ∈{claude,codex,none}，MUST NOT="unknown"（unknown 只属非-ov 普通镜行，契约「跨模型性」段）
+            if runner_v == "unknown":
+                v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ov-runner-unknown"})
+            # ② host="unknown"（本轮无 voice 目标）⇒ runner MUST="none"
+            if host_v == "unknown" and runner_v != "none":
+                v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ov-unknown-host-runner"})
+            # ① runner="none"（无执行）⇒ findings MUST=0（findings 非法值已由 not-nonneg-int 另报，此处只判合法正数）
+            if runner_v == "none" and _NONNEG_INT.match(findings_v or "") and findings_v != "0":
+                v.append({"anchor": ln.strip()[:80], "field": "findings", "kind": "ov-runner-none-nonzero-findings"})
     return v
 
 
