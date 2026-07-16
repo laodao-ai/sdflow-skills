@@ -1,6 +1,6 @@
 ---
 ship-gate:
-  code_review: blocked
+  code_review: pass
 ---
 
 ## code-review 报告 — add-codex-host-support
@@ -83,5 +83,5 @@ config_lint 只校验字符集，`model-tiers.codex.strong: opus` 完全合法�
 <!-- sdflow:lens-metric v1 layer="code-review" lens="outside-voice" host="claude" runner="codex" site="code-voice" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="4" sev="致0/高1/中2/低2" -->
 
 ### 结论
-- ☑ **code_review: blocked** — 冷全 change 层抓出 4 高危（1 安全不对称 + 3 代码/编排 fail-open）+ 决策记录漂移，需人裁决处置后再进 /sdflow-done。
-- 与 option B 一致：本就 STOP 在 done/merge 前，等用户拍板处置 + Codex 侧 D-1..D-4 真机验。
+- ☑ **code_review: pass** — 冷全 change 层抓出的 4 高危 + 4 中低危**全部 objective 代码修复已清**（C1/B1代码半/V1/A1代码半/V2/D1/B2，8 项，用户逐一拍板 + TDD + 真 claude e2e；全仓 1426 passed + 托管块门绿），无剩余代码缺陷、无待人拍板决策。
+- **结转 /sdflow-done（hand-off 承接）**：① **design-writeback**（A1 安全表沙箱不对称 / B1「均查」/ V3 v1-reason_code / V4 ADR-0024 措辞 / V5 ADR-6「真跑一次」）——MUST 在 archive 阶段随 delta 写回（现在改四件套触失鲜）；② **运行时生效**：`outside-voice.sh`(A1) 等 `assets/hack/` 脚本合并后须在运行 checkout 重跑 `setup.sh`（copy 非 symlink）；③ **todolist**：C2 metrics dup-key 收紧 · V5 preflight 真探针（若选补而非订正）；④ Codex 侧 D-1..D-4 真机验（若适用）。
