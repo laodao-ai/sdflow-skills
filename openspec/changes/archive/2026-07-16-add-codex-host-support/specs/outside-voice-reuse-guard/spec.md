@@ -40,6 +40,7 @@
 - **WHEN** 产物中 outside-voice 段 `runner="none"`（host-unknown/secret-hit/fallback-unavailable 的无执行轮次，`none≠host` 会满足首轮 `runner≠host` 误判）
 - **THEN** 矩阵判「跨模型」为假 ⇒ 输出 `same-family`、退出码非 0，回落自跑，MUST NOT 复用（无执行段无 findings、非第二意见）
 
-#### Scenario: v1 旧锚无 host 字段仍可复用〔add-codex-host-support〕
-- **WHEN** 产物锚行为 v1 格式（无 `host=`，`runner="codex"`；v1 无 `reason_code`）
-- **THEN** 读作 `host="claude"` ⇒ 矩阵判「跨模型」为真（`runner=codex≠host=claude`；v1 无 reason_code 时**兼容读作 `ok`**——历史 v1 成功轮次无降级码即成功）⇒ 三判其余全过时输出 `none` 可复用，MUST NOT 因缺字段罢工（向后兼容读，非 fail-closed）
+#### Scenario: v1 旧锚缺 host 字段不因缺字段罢工（向后兼容读）〔add-codex-host-support；code-review V3 据实订正〕
+- **WHEN** 产物锚行为 v1 格式（无 `host=`，`runner="codex"`）
+- **THEN** 读作 `host="claude"`，MUST NOT 因缺 `host=` 字段罢工（向后兼容读，非 fail-closed）
+- **事实订正（V3，实测归档语料）**：原 Scenario 假设「v1 **无** `reason_code` 字段 ⇒ 兼容读作 `ok` ⇒ 可复用」——**与实况不符**：真实归档 v1 outside-voice 锚**带** `reason_code`（实测 `reason_code="none"` ×35 / `""` ×30 / `native-run` 等非枚举值），非"无字段"。guard `attrs.get("reason_code","ok")` 仅在**字段缺失**时补 `ok`；v1 锚字段**存在但值=none/""**（≠`ok`）时按存在值读 ⇒ 矩阵判非 cross-model（`reason_code≠ok`）⇒ **保守判不可复用、回落重跑 voice**。∴ 真 v1 codex 产物**不会被复用**（与原「v1 仍可复用」措辞出入），但方向**安全**（宁重跑不假复用）。运行期影响有界：done 不重 lint 旧报告、aggregator 只读 lens-metric 锚不读此 reason_code。（可选后续增强：让 guard 把 v1 `reason_code∈{none,""}` 兼容读作 `ok` 以恢复复用——记 todolist，非本 change）

@@ -211,6 +211,8 @@
 
 `command -v "$SDFLOW_VOICE_RUNNER"` + 真跑一次。**MUST NOT** 解析 CLI 版本字符串去猜能力（基准 5）。
 
+> **实现现状订正（add-codex-host-support code-review V5，据实登记）**：`outside-voice.sh` 的 `preflight` **实际只做 `command -v` + timeout 工具存在性检查，未落地「真跑一次」**——CLI 未认证 / 模型无效 / 参数不支持等运行期失效仍返回 `ready`，漏到 `exec` 阶段才暴露、归 `exec-error`。此 ADR 的「真跑一次」是**目标态、尚未实现**；补低成本真探针已记 **todolist T150**（非本 change scope）。当前失效方向安全（漏到 exec 仍 fail-loud、不假绿），仅"早发现"承诺未兑现。
+
 ### ADR-7：判不出宿主 ⇒ `host="unknown"` + **fail-loud 降级**，MUST NOT 猜
 
 两个正信号都不存在（第三方宿主 / CI / 裸终端）：

@@ -28,6 +28,7 @@
 | 名称 | 文件 | 主题 |
 |---|---|---|
 | `spec-workflow` | [specs/spec-workflow/spec.md](./specs/spec-workflow/spec.md) | spec 工作流三阶段（设计评审/代码评审/收尾归档）连续化的规范性行为：fresh 子代理替代 `/clear`、评审决策登记区、无人类门连续跑到 merge、verify 证据锚点、checkpoint 提交、bundle 权威源改动 |
+| `host-adaptive-execution` | [specs/host-adaptive-execution/spec.md](./specs/host-adaptive-execution/spec.md) | 工作流跨 Claude/Codex 双宿主适配：`resolve-models.sh` 靠正信号判宿主（`CLAUDECODE=1`/`CODEX_THREAD_ID` 非空，两者皆无 fail-loud 落 `unknown`、不猜测）；outside voice 恒为另一机队强档（反向 `claude -p` 四旗只读全仓承重墙对称 codex）；`anchor_lint` 合法组合矩阵（跨模型/同族 fallback/无执行）为「跨模型性」唯一单一源，两工具各自重实现 + 全笛卡尔 golden 守漂移；出境安全三件套（secret_scan/FRAME/200KB 截断）两路径共用同一实现；模型档位按机队分列（`SDFLOW_TIER_*` 变量，eval 注入防护）；tools 陈旧探测 fail-loud 硬停在落锚之前；Codex 子代理不可用探针语义核验 + always-on 一致性 lint 缩 roster |
 | `workflow-metrics` | [specs/workflow-metrics/spec.md](./specs/workflow-metrics/spec.md) | 评审价值度量回路：`lens-metric v1` 结构化锚（layer/lens/runner/site 四元组）+ 只读可重生聚合（`sdflow-retro/scripts/lens_metric_aggregate.py`）+ per-镜数据驱动反馈，砍镜/降采样由人决不自动 |
 | `lens-metric-emit` | [specs/lens-metric-emit/spec.md](./specs/lens-metric-emit/spec.md) | `lens_metric_emit.py`：从结构化 findings + 行键 roster 确定性归约出合规 `lens-metric` 锚行（折叠/归属/独立/sev-rollup 机械化，去重/裁决/定级仍归模型）；坏输入 fail-closed all-or-nothing，契约枚举/折叠单一源读取，不 import ship_gate/lens_metric_aggregate |
 | `workflow-retro` | [specs/workflow-retro/spec.md](./specs/workflow-retro/spec.md) | `sdflow-retro` 只读再生全项目 change 成本×价值复盘：change 边界靠提交路径检测（非 tag 格式）、时间维仅到阶段级并诚实标注含人决策时间、价值维扫 active+archive 两源合并 spec/code 双报告锚、N≥10 待复评镜机械显著呈现、供数不供裁决 |

@@ -30,7 +30,7 @@
 #            SDFLOW_VOICE_MODEL 未设(claude)/未知 runner 值 | 124=超时 | 3=secret-hit |
 #            2=用法错/文件不存在或不可读
 #   version
-#     stdout: "outside-voice.sh 1.2.0"                           exit 0
+#     stdout: "outside-voice.sh 1.3.0"                           exit 0
 # ── 硬化要点〔design D2 spec-review-amendment · add-codex-host-support〕──────
 #   出境安全三件套（secret_scan / render_prompt 的 FRAME+三条通则+200KB 截断）对两条
 #   runner 路径一视同仁、单份共用，MUST NOT 另起炉灶组装 prompt——只有最终 exec 命令行
@@ -39,9 +39,9 @@
 #       prompt 经临时文件 `- < file` 喂入（内核级沙箱：seccomp/sandbox-exec 封写+网络）；
 #     claude 反向路径固定注入: -p --model "$SDFLOW_VOICE_MODEL" --output-format text
 #       --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root> --settings <读围栏>。
-#       ⚠ 与 codex 【不对称】（如实登记，A1）：codex `-s read-only` 是内核沙箱（seccomp/sandbox-exec）
-#       的【正向】读边界（只准仓内、其余全拒）；claude 侧只有【应用层负向】读边界——`--settings`
-#       permissions.deny 挡凭证库路径（列出的拒读、未列的仍可读，见 OV_CLAUDE_READ_FENCE 注释）。
+#       claude 侧读边界 = 【应用层负向】——`--settings` permissions.deny 挡凭证库路径（列出的拒读、
+#       未列的仍可读，见 OV_CLAUDE_READ_FENCE 注释）。⚠ 与 codex 的对称性【未定·未真机验】（A1）：
+#       codex `-s read-only` 内核沙箱封写/网络确定，但是否也限【读】未在真 Codex 宿主实测 → 待验批。
 #       `--add-dir` 是增量授权提示、【非】访问围栏（Read 无它也读全盘）。∴ 出境侧 secret_scan 兜底
 #       （回传含密钥即拒发）。四旗齐全是安全承重墙：MUST NOT 砍成零工具 `--tools ""`、MUST NOT 加
 #       Write/Bash/WebFetch 等非只读工具、MUST NOT 用 `--disallowedTools`/`--allowedTools`、
@@ -57,12 +57,15 @@ OV_VERSION="outside-voice.sh 1.3.0"
 
 # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
 # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
-#   本机 2.1.211 实测有效），【非内核级】——不同于 codex `-s read-only` 的 seccomp/sandbox-exec
-#   内核沙箱。它是【负向枚举】（列出的凭证库拒读、未列的仍可读），非 codex 那种「只准仓内、其余全拒」
-#   的正向边界（Claude Code 原生做不出正向 allowlist：deny//** 会连仓内一起拦、dontAsk 不 auto-deny
-#   未列项，均实测证伪）。真正的正向边界只能靠外层容器/OS 沙箱，但那会连 claude 自身运行时读路径
-#   一起 jail、需内核层 enumerate-allow，代价不匹配。∴ 这里做「明显赃物硬拦」+ 出境 secret_scan 兜底
-#   （见 exec 末尾），双层应用防御；对 codex 内核沙箱【不对称】是如实接受的权衡。
+#   本机 2.1.211 实测有效），【非内核级】。它是【负向枚举】（列出的凭证库拒读、未列的仍可读）——
+#   Claude Code 原生做不出正向 allowlist（deny//** 会连仓内一起拦、dontAsk 不 auto-deny 未列项，
+#   均实测证伪）；真正的正向边界只能靠外层容器/OS 沙箱，但那会连 claude 自身运行时读路径一起 jail、
+#   需内核层 enumerate-allow，代价不匹配。∴ 这里做「明显赃物硬拦」+ 出境 secret_scan 兜底
+#   （见 exec 末尾），双层应用防御。
+# ⚠ 对 codex 侧的对称性【未定】（code-review A1，未真机验）：codex `-s read-only` 用 seccomp/
+#   sandbox-exec 内核沙箱封【写/网络】是确定的，但它是否也把【读】限在仓内 = 未在真 Codex 宿主实测
+#   （spec 原断言"codex 可读任意"依据 --help 文本、code-review 反断言"codex 真拒仓外读"亦未实测）——
+#   归入 A1/A3 Codex-host 待验批（见 hand-off）。故此处只声称 claude 侧补了应用层读围栏，不断言两路径对称/不对称。
 # 模式选清晰在仓外的凭证库（低仓内重叠风险）；MUST NOT 加 `~/` / `//Users/**` 这类会连仓（仓常在 home 下）
 # 一起拦的宽前缀。回归即红（test_exec_claude_reverse_path_three_flags_golden 锁 .ssh/.aws/id_rsa 存在）。
 OV_CLAUDE_READ_FENCE='{"permissions":{"deny":["Read(//**/.ssh/**)","Read(//**/.aws/**)","Read(//**/.gnupg/**)","Read(//**/.config/gcloud/**)","Read(//**/.kube/config)","Read(//**/.docker/config.json)","Read(//**/.netrc)","Read(//**/id_rsa*)","Read(//**/id_ed25519*)","Read(~/.claude/**)","Read(~/.sdflow/**)"]}}'
