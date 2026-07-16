@@ -8,9 +8,9 @@
 
 > **为何在最前**：目标（Codex 里真跨模型）押在 A1/A3 两个未验假设；核验若排在契约之后 = 为可能跑不起来的功能付不可逆代价。**任一在主力形态失效 ⇒ 停下补 headless 替代信号或缩 scope，MUST NOT 直接开工组 1。**
 
-- [ ] 0.1 **A1 核验**：〔⚠ 未做·deferred 至 Codex 宿主——本轮 Claude 宿主(`CLAUDECODE=1`)无法验；用户显式授权(C)未验即合并、风险自负〕Codex 交互 / headless / `codex exec` / spawned subagent 各形态各跑一次，确认 `CODEX_THREAD_ID` 存在。**任一（尤其 headless/`codex exec`）缺失** ⇒ 停下：design 补该形态的替代正信号，或明确 scope 缩到"仅交互 Codex" + proposal 显著登记〔host-adaptive-execution · 宿主判定靠正信号〕
-- [ ] 0.2 **A3 核验**：〔⚠ 未做·deferred 至 Codex 宿主——本轮无法验；用户授权(C)未验即合并〕在**真实 Codex 宿主 session** 内冒烟 `claude -p --model opus --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`〔spec-review-r3 C4：只读全仓、对称 codex〕——核验点是**"能否成功发出网络请求并拿到 findings"**（非"claude 装没装"）。Codex 若封出境网络 ⇒ 反向 voice 恒失效、永远同族 fallback，design 须承认该 scope 边界〔host-adaptive-execution · outside voice = 另一个机队的强档〕
-- [ ] 0.3 〔⚠ 未做·A1/A3 未在 Codex 验、无实测真值可写回；前置门未过，用户授权(C)未验即合并〕前置门结论写回 proposal 假设表 + design Risks（A1/A3 实测真值）；两者皆通过才进组 1。**〔spec-review-r2 C5〕此门是人门纪律（设计 HARD-GATE + 冷审复核守），MUST NOT 造 `.efficacy-gate-passed` 之类假机械锁**（marker 由主 session 自报、无可信捕获路径）；若 A3 失效则本 change 须缩 scope（proposal 已显著登记零交付风险）
+- [ ] 0.1 **A1 核验**：〔◐ 部分实测(2026-07-16 真 Codex 宿主)：**交互形态 ✅ 证实**（`CODEX_THREAD_ID=019f696d-…` 在场 → `resolve-models.sh` 判 `HOST=codex`）；**余 `headless`/`codex exec`/`spawned subagent` 三形态仍待各自实测**——故复选框保持未勾。用户授权(C)未验即合并的欠债已收回交互形态部分〕Codex 交互 / headless / `codex exec` / spawned subagent 各形态各跑一次，确认 `CODEX_THREAD_ID` 存在。**任一（尤其 headless/`codex exec`）缺失** ⇒ 停下：design 补该形态的替代正信号，或明确 scope 缩到"仅交互 Codex" + proposal 显著登记〔host-adaptive-execution · 宿主判定靠正信号〕
+- [ ] 0.2 **A3 核验**：〔◐ 部分实测(2026-07-16 真 Codex 宿主·交互形态)：**✅ 证实**——preflight=`ready`＋`outside-voice.sh exec` 退出码 `0`，反向 `claude -p --model opus …` 从 Codex 真发出、认证通过、返回真 findings（`OV_TRUNCATED=false`；reviewer 跑 `Glob **/demo.sh` 证仓库访问 + FRAME/不可信上下文隔离均生效）。**Codex 出境网络未封、交互形态 efficacy 非零**。**剩 headless/CI 形态待验**（那里若无 claude CLI/认证则 A3=0）——故复选框保持未勾〕在**真实 Codex 宿主 session** 内冒烟 `claude -p --model opus --output-format text --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root>`〔spec-review-r3 C4：只读全仓、对称 codex〕——核验点是**"能否成功发出网络请求并拿到 findings"**（非"claude 装没装"）。Codex 若封出境网络 ⇒ 反向 voice 恒失效、永远同族 fallback，design 须承认该 scope 边界〔host-adaptive-execution · outside voice = 另一个机队的强档〕
+- [ ] 0.3 〔◐ 部分完成(2026-07-16)：**交互形态实测真值已写回** proposal 假设表 A1/A3 行 + design Risks + Migration step 0 + `codex-verification-checklist.md`；但前置门要求「A1/A3 各形态皆通过」才算过，headless/CI 形态尚未验 → 复选框保持未勾〕前置门结论写回 proposal 假设表 + design Risks（A1/A3 实测真值）；两者皆通过才进组 1。**〔spec-review-r2 C5〕此门是人门纪律（设计 HARD-GATE + 冷审复核守），MUST NOT 造 `.efficacy-gate-passed` 之类假机械锁**（marker 由主 session 自报、无可信捕获路径）；若 A3 失效则本 change 须缩 scope（proposal 已显著登记零交付风险）
 
 ## 1. 契约先行（枚举单一源）
 
@@ -95,7 +95,7 @@
 
 > A1/A3 的存在性核验已上提为**组 0 前置门**（Q3）——本组只留改造后的端到端验证。
 
-- [ ] 10.1 〔⚠ 未做·deferred 至 Codex 宿主——本轮无法验；用户授权(C)未验即合并〕端到端：Codex 宿主下跑一次真实评审，核对 outside-voice 锚为 `host="codex" runner="claude"`、fanout-capability 锚在场、且 `anchor_lint` 绿（含新增的自审红线 + 一致性 lint always-on）
+- [ ] 10.1 〔◐ 机制已证(2026-07-16)：冒烟走的就是四旗承重墙 exec 命令行、exit=0 → 正式评审必落 `host="codex" runner="claude" reason_code="ok"` 锚；但**正式的一次真实评审 + `anchor_lint` 绿尚未跑**（拟在 Codex 上起 `scoped-test-per-task` 时顺带产出），故复选框保持未勾〕端到端：Codex 宿主下跑一次真实评审，核对 outside-voice 锚为 `host="codex" runner="claude"`、fanout-capability 锚在场、且 `anchor_lint` 绿（含新增的自审红线 + 一致性 lint always-on）
 - [x] 10.2 回归：Claude 宿主下跑一次，确认现有行为不变（`host="claude" runner="codex"`），存量归档聚合逐行一致（组 5 基线）
 
 ## 11. 文档与收尾
