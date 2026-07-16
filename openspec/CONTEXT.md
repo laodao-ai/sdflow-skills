@@ -216,6 +216,42 @@ _Avoid_: 把「层」当**测试类型分类法**（「vitest 算 unit 还是 in
 **`已实现` / `人工` 两词已废弃**：`已实现` 实指「有脚手架」（其定义只要求泳道 ≥ `scaffolded` = 写了但**没验**）⇒ 用户读到「集成测试：已实现」会以为它跑得起来，**这个词在装**；`人工` 与泳道的 `executor: human` **双写**。
 _Avoid_: 手写层状态（它是投影，手写即可伪造可漂移）；用「已实现」描述一个从未跑绿的层。
 
+**共享 frontmatter envelope (Shared Frontmatter Envelope)** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+Markdown 文件 byte 0（可紧随 UTF-8 BOM）的 frontmatter block 是多个 metadata producer 共用的**容器**，不是任一工具的私产；正文中的 `---` 不算 envelope。每个 producer 只拥有一个唯一顶层 namespace；recorder 的所有权边界是 `sdflow-issues` 整棵子树，内部使用短键 `schema/pool/mode/items`。读取时只校验自有子树，写入时只做 byte-level splice，namespace 外 BOM/EOL/正文按 opaque bytes 原样保留；重复 namespace、编码或边界无法无歧义定位则 fail-closed、不写盘。
+_Avoid_: recorder 重渲染整个 envelope；把内部键展平为多个 `sdflow-issues-*` 顶层键；让多个工具共同拥有 `sdflow:` 父树。
+
+**canonical Unicode string** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+recorder 索引 string 的值域是 Unicode scalar values，不含孤立 surrogate。普通 Unicode 用 UTF-8/`ensure_ascii=False` 人读输出；YAML 视作换行的 NEL/LS/PS 必须定向 JSON escape，parser 还原原 code point；不得做 NFC/NFKC normalization。由此“一 item 一物理行”与逐 code-point round-trip 同时成立。
+_Avoid_: 全量 `ensure_ascii=True` 牺牲 diff 可读性；raw NEL/LS/PS 破坏行模型；让孤立 surrogate 到 UTF-8 encode 才裸崩。
+
+**canonical recorder ID** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+新写形态是 `[A-Z][1-9]\d*`，默认 bug=`B`、todo=`T`，公开的单字母自定义 prefix 保留。语义身份是 `(uppercase prefix, decimal integer)`，不含 pool，因此 `A007` 与 `A7` 同号异形、bug `A7` 与 todo `A7` 跨池重复；分配/查重必须锁内读两池全集。
+_Avoid_: 把 pool 偷加进 identity 导致同一 CLI ID 歧义；只扫当前池分配自定义 prefix；为简化实现静默删除 `--prefix` 兼容契约。
+
+**canonical recorder render** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+同一 v1 model 只有一种 recorder namespace bytes：顶层/对象字段固定顺序，items 按 semantic ID 排序，optional 空值只用 JSON null，空 map 只用 `items: {}`。reader 可容忍 item 物理乱序，writer 在自有子树内收敛；parse→render→parse 语义等价，render→render byte-identical。
+_Avoid_: 保留插入顺序导致同盘面多字节形态；用空串与 null 双表意；为 canonicalize 重写 namespace 外 bytes。
+
+**锁 owner / participant (Lock Owner / Participant)** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+仓级 `.recorder.lock` 是 **exclusive snapshot lock**。独立权威读或复合 mutation 只有一个 **owner**：创建 lock；只读持有到 immutable snapshot materialize、输出前释放，mutation 持有到最后一次 replace；最终都以 token 核验后释放。owner 启动的 scan/mutating 子进程是 **participant**：凭继承的 capability token 校验并加入现有锁域，不重复抢锁、不得释放。token 只表达本次锁所有权，不是用户 API；缺失/不匹配不能绕过互斥。它是 cooperative boundary，不阻止编辑器/手工脚本/Git 绕过。
+_Avoid_: 只锁 writer 让 scan 读到多文件中间态；父子都 acquire 导致自锁；各子步分别加锁留下并发插入窗口；用前后存在性检查代替 reader acquire；提供无条件 `--no-lock`；owner 不核 token 就 unlink。
+
+**display title —— canonical summary 的单行投影** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+recorder prose block 的 `## {ID}: ...` 中，冒号后文本只供人扫读，不承担 identity 或机器状态。显式 `title` 必须是安全单行；缺省时把 canonical `summary` 的连续空白折叠成一个空格得到 display title。完整 summary 保存在 frontmatter，并逐行加 blockquote 前缀做人读展示；blockquote 不反解析，避免形成第二真相源。
+_Avoid_: 因 heading 限制拒绝 canonical summary 的换行；把 raw 多行 summary 拼进 heading；让 block parser 依赖 display title。
+
+**marker-framed prose block** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+canonical/overlay item 的人读详情由 `sdflow-issue-block:start/end id=...` HTML comment 独占行成对定界；marker 是 block identity 的唯一机械边界，heading、`---` 与正文均不参与定位。marker 必须同 ID、不可嵌套/重复；精确 marker grammar 是保留语法，renderer escape 用户内容中的同形独占行。legacy block 才沿用 heading heuristic；首次 promotion 对唯一可判旧 block 只套外围 marker、内部 bytes 不变，之后永久按 marker 定位。
+_Avoid_: 新格式继续按 `---`/`## ID:` 猜边界；为保护 heuristic 拒绝合法 Markdown；让 marker 内 prose 成为状态真相源。
+
+**mode-structure invariant** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+frontmatter `mode` 是 writer 产生、reader 与文档物理形态互证的迁移声明：canonical 必须无 recorder legacy 总览区域，overlay 必须恰有一个，namespace-less legacy 也必须恰有一个。mismatch fatal，不能靠改 enum 隐藏 items，也不能由 reader 自动修 mode。
+_Avoid_: 把 mode 当无需证据的行为开关；纯靠表存在性推导而删除显式迁移态；mismatch 时自动删表/改 mode。
+
+**阶段可识别的幂等恢复 (Phase-recognizable Idempotent Recovery)** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+非事务多文件 mutation 不靠 rollback 或 journal，而从 canonical 盘面识别「未开始 / 部分主写 / 主写完成待派生 / 已收敛」阶段，同一原命令可继续完成。成功边界覆盖主数据与承诺同步的派生状态；只要仍需恢复就必须 non-zero，不能 warning-only 假成功。状态同时像两个合法阶段时 fail-closed，禁止把 retry 偷换成 merge。
+_Avoid_: 写完 batch key、reindex 失败却 exit 0；重跑因 source 已改名而永远失败；自动 rollback 引入补偿失败；为可由盘面判定的阶段再建 stale journal。
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。
