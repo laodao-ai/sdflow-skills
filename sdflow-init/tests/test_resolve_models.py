@@ -10,6 +10,7 @@ SDFLOW_HOST / SDFLOW_TIER_{STRONG,MID,LIGHT} / SDFLOW_VOICE_RUNNER / SDFLOW_VOIC
 Run: python3 -m pytest sdflow-init/tests/test_resolve_models.py -v
 """
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -74,7 +75,7 @@ def eval_resolve(root, env_overrides=None, no_sdflow_home=True, cwd=None):
     env.pop("CODEX_THREAD_ID", None)
     if env_overrides:
         env.update(env_overrides)
-    script = f'eval "$(bash {SCRIPT} --root {root})"; ' \
+    script = f'eval "$(bash {shlex.quote(str(SCRIPT))} --root {shlex.quote(str(root))})"; ' \
              f'echo "SDFLOW_HOST=$SDFLOW_HOST"; echo "SDFLOW_TIER_STRONG=$SDFLOW_TIER_STRONG"; ' \
              f'echo "SDFLOW_TIER_MID=$SDFLOW_TIER_MID"; echo "SDFLOW_TIER_LIGHT=$SDFLOW_TIER_LIGHT"; ' \
              f'echo "SDFLOW_VOICE_RUNNER=$SDFLOW_VOICE_RUNNER"; echo "SDFLOW_VOICE_MODEL=$SDFLOW_VOICE_MODEL"'
@@ -282,6 +283,17 @@ class TestEvalInjectionHardening:
         r = run_resolve(root, {"CLAUDECODE": "1"})
         assert "export SDFLOW_HOST=claude" in r.stdout
         assert "export SDFLOW_TIER_STRONG=opus" in r.stdout
+
+    # 🔴 D1：eval_resolve 的 f-string 插值 `{SCRIPT}`/`{root}` 未加引号 → root 含空格被 bash word-split
+    # 拆成多参、脚本 arg 解析报 unknown arg 而静默错解。恰在 eval 注入测试套件里自身不加引号（讽刺面）。
+    def test_root_with_space_not_word_split(self, tmp_path):
+        spaced = tmp_path / "dir with space"
+        spaced.mkdir()
+        root = make_bundle_repo(spaced)
+        r = eval_resolve(root, {"CLAUDECODE": "1"})
+        assert "unknown arg" not in r.stderr, "root 含空格被 word-split（f-string 插值未加引号）"
+        assert "SDFLOW_HOST=claude" in r.stdout          # eval 真跑成、导出生效
+        assert "SDFLOW_TIER_STRONG=opus" in r.stdout
 
 
 class TestSharedMalformedFixtureConsistency:

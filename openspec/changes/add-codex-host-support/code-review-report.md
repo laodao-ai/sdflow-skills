@@ -38,7 +38,7 @@ ship-gate:
 **→ ✅ 已修[impl-review-fix]（方案 A，两 SKILL 对称）**：eval 改为带防护四步次序——**(a)** 先 `unset` 六变量清脏（eval 失败只得空值、不复用上轮脏值）；**(b)** `[ -x resolve-models.sh ]` 预检（复用第零步 resolve-workflow 预检 idiom），缺失 fail-loud 硬停；**(c)** 捕获退出码再 eval，非 0 硬停 + 转发 stderr；**(d)** eval 后校验 `$SDFLOW_HOST`∈{claude,codex,unknown}且非空、host≠unknown 时三档位非空，任一不满足在 fan-out/emitter/落锚前 fail-loud 硬停。**空值 MUST NOT 回落当 host=unknown**（工具没装 ≠ 判不出宿主，防假绿）。诚实边界如实标注（eval 要 export 进主 session shell ∴ 天然是指令非机械门）。托管块一致性门 + hack 11 tests 绿。
 
 **[中] V2 · `fallback-unavailable`(F8) 枚举存在但两 SKILL 无产生它的控制流** | 两 SKILL fallback 段 | **确认**（对抗镜B 旁支同证，对称非漂移）
-spec `host-adaptive-execution:91` 要求"同族 fallback 子代理也起不来 ⇒ `runner="none" findings=0 reason_code="fallback-unavailable"`"，但两 SKILL fallback 段都直接规定 `runner="$SDFLOW_HOST"`（假定派发成功），无失败分支。Codex 宿主 + 目标 CLI 缺 + 子代理也起不来才可达。**→ 可修（两 SKILL 补 F8 分支）。**
+spec `host-adaptive-execution:91` 要求"同族 fallback 子代理也起不来 ⇒ `runner="none" findings=0 reason_code="fallback-unavailable"`"，但两 SKILL fallback 段都直接规定 `runner="$SDFLOW_HOST"`（假定派发成功），无失败分支。Codex 宿主 + 目标 CLI 缺 + 子代理也起不来才可达。**→ ✅ 已修[impl-review-fix]（两 SKILL 对称）**：fallback 段补 F8 分支——fallback 只读子代理本身派不出 → 锚行 `host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"`（no-exec 合法态）。
 
 **[中] V5 · ADR-6 preflight「真跑一次」实现只 `command -v`** | `design.md:210` vs `outside-voice.sh` preflight | **确认**
 ADR-6 明写 `command -v` + **真跑一次**；实现只 `command -v` + timeout 工具检查，CLI 未认证/模型无效/参数不支持仍返回 `ready`，失效漏到 exec 阶段归 exec-error。**→ 待拍板：补低成本真探针 vs 订正 ADR「真跑一次」措辞（design-writeback）。**
@@ -50,10 +50,10 @@ ADR-6 明写 `command -v` + **真跑一次**；实现只 `command -v` + timeout 
 config_lint 只校验字符集，`model-tiers.codex.strong: opus` 完全合法。schema 挡的是**扁平** `strong: opus` 误用于 codex，非**显式** `codex.strong: opus`。设计已知否决模型名白名单（漂移面），残余是已接受权衡，但 ADR「结构性杜绝/不再可能」措辞过头。**→ defer（ADR 措辞订正 = design-writeback）。**
 
 **[低] D1 · test_resolve_models.py `eval_resolve()` f-string 未加引号插值** | `sdflow-init/tests/test_resolve_models.py:77-82` | 领域镜
-`{SCRIPT}`/`{root}` 未引号直接拼进 `bash -c` 串；非攻击面（tmp_path 由 pytest 生成），但恰在 eval 注入测试套件里自身不加引号、tmp_path 含空格会静默错解。**→ 可修（`shlex.quote` 或加引号）。**
+`{SCRIPT}`/`{root}` 未引号直接拼进 `bash -c` 串；非攻击面（tmp_path 由 pytest 生成），但恰在 eval 注入测试套件里自身不加引号、tmp_path 含空格会静默错解。**→ ✅ 已修[impl-review-fix]（TDD）**：`shlex.quote` 引号化 `{SCRIPT}`/`{root}`；补含空格 root 回归测试（RED 复现 `unknown arg: with` word-split）。
 
 **[低] B2 · code-review SKILL:322 lens-metric 锚示例缺 `host=`** | `sdflow-code-review/SKILL.md:322` | 对抗镜B
-报告格式模板示范锚缺 `host=`，与契约单一源 + emitter 实际输出不一致（字面照抄会被 anchor_lint 报 missing-field）；正文已明写"MUST NOT 手拼"缓解。**→ 可修（补 host=）。**
+报告格式模板示范锚缺 `host=`，与契约单一源 + emitter 实际输出不一致（字面照抄会被 anchor_lint 报 missing-field）；正文已明写"MUST NOT 手拼"缓解。**→ ✅ 已修[impl-review-fix]**：模板锚补 `host="…"`（按 emitter 字段序 layer→lens→host→runner→site）。
 
 **[低] C2 · init.py lint_config `metrics.enabled` 重复键无告警** | `sdflow-init/scripts/init.py:470-478` | 对抗镜C
 `enabled: true`+`false` 并存时 valid 恒 True；anchor_lint 取首值。当前单消费者无跨工具分歧，未如 `parse_kv_strict` 那样收紧。**→ defer todolist（潜在一致性盲点）。**
@@ -64,9 +64,9 @@ config_lint 只校验字符集，`model-tiers.codex.strong: opus` 完全合法�
 - 历史镜：无重蹈旧坑（task2/3/4/6 各 fix 针对不同边界、无循环修复/回滚）。
 
 ### 修复 / defer 台账
-- **已修[impl-review-fix]**：**C1** guard codex#N 旁路 fail-open（TDD：删 prose 补位 fallback + 2 回归测试）· **B1 代码半** check_lens_metric 补 OV 行 3 不变量校验（TDD·面治，5 测试）· **V1** 两评审 SKILL eval 带防护四步次序（unset + 预检 + 捕获 exit + 校验 fail-loud）。全仓 1423 passed + 托管块门绿。
+- **已修[impl-review-fix]（7 项）**：**C1** guard codex#N 旁路 fail-open（TDD）· **B1 代码半** check_lens_metric 补 OV 行 3 不变量校验（TDD·面治）· **V1** 两评审 SKILL eval 带防护四步次序 · **V2** 两 SKILL 补 F8 分支 · **D1** test 引号（TDD）· **B2** SKILL 模板锚补 host=。全仓 1424 passed + 托管块门绿。
 - **裁决权交人（剩余高危）**：A1 安全决策 + 设计记录漂移（B1 剩余决策记录订正 / V3/V4/V5，改四件套触设计门失鲜、须 done 阶段写回）+ 代码 fail-open 修复各需谨慎 TDD（本 change 历史上修复反复引入新 fail-open，Task2/3/6 均是）。按 option B 本就 STOP 在 done 前 → 见收敛口。
-- **建议可修（objective，剩 4 项）**：A1 输出侧 secret_scan + 注释订正 · V2 F8 分支 · D1 test 引号 · B2 SKILL host=。
+- **建议可修均已清**；**剩 A1**（半可修半需拍板：输出侧 secret_scan 可修 + 是否补真围栏待定）。
 - **建议 defer（design-writeback，done 阶段随 A1/A3 真值一并写回，勿实现期改四件套）**：A1 沙箱不对称登记订正（design 安全表 + r3「两路径均无硬FS读边界」与实测 codex 有沙箱矛盾）· B1 决策记录"均查"订正 · V3 compat"v1 无 reason_code"订正 · V4 ADR-0024 措辞 · V5 ADR-6"真跑一次"措辞。
 - **建议 todolist**：C2 metrics dup-key 收紧 · V5 preflight 真探针（若选补而非订正）。
 
