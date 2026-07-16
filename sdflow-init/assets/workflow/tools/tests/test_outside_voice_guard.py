@@ -277,6 +277,27 @@ def test_malformed_codex_findings_section_not_found(tmp_path):
     assert m.classify(rp, cd) == "section-not-found"  # 畸形 findings → best-effort fail-closed
 
 
+# 🔴 C1 回归：cross-model 锚 findings 畸形 + 正文含 codex#N prose ⇒ 拒复用（section-not-found）。
+# 旧 fail-open：findings 不可解析时退去全文扫无关 codex#N prose 标签补计数当可复用 ⇒ 正文一句
+# "codex#1" 即静默判可复用、跳过重跑跨模型评审（击穿 guard 防假复用的唯一职责）。prose 标签单独
+# MUST NOT 构成复用资格（Step 6 已定），本例锁"畸形 cross-model findings + prose"这个未覆盖组合。
+def test_malformed_cross_model_findings_with_prose_label_not_reusable(tmp_path):
+    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+    bad_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+                  'runner="codex" reason_code="ok" findings="oops" truncated="false" -->')  # host 缺省=claude ⇒ cross-model
+    _write_body(rp, bad_anchor, extra_body="- 参考 codex#1 与 codex#2 的结论\n")
+    assert m.classify(rp, cd) == "section-not-found"
+
+
+def test_cli_malformed_cross_model_findings_with_prose_exit_nonzero(tmp_path):
+    rp, cd = _make_change(tmp_path, codex=False)
+    bad_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+                  'runner="codex" reason_code="ok" findings="oops" truncated="false" -->')
+    _write_body(rp, bad_anchor, extra_body="- 参考 codex#1 与 codex#2 的结论\n")
+    r = _run(rp, cd)
+    assert r.returncode != 0 and r.stdout.strip() == "section-not-found" and r.stdout.strip() != "none"
+
+
 def test_claude_fallback_runner_not_codex(tmp_path):
     m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
     body = _mode_anchor("native") + "\n" + _ov_anchor(3, runner="claude-fallback") + "\n"

@@ -21,7 +21,6 @@ SOURCE_FILES = ("proposal.md", "design.md", "tasks.md")         # + specs/** 递
 _S1_RE = re.compile(r'<!--\s*sdflow:step1-broad-review\s+v1\b(.*?)-->')
 _OV_ANCHOR_RE = re.compile(r'<!--\s*sdflow:outside-voice\s+v1\b(.*?)-->')
 _ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
-_CODEX_LABEL_RE = re.compile(r'\bcodex#(\d+)\b')                 # adr/0002 codex#N 标签约定（次选解析路径）
 _FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')                 # CommonMark fence：0-3 空格缩进 + ≥3 同字符 marker
 
 
@@ -123,20 +122,21 @@ def source_max_mtime(change_dir):
 
 def parse_codex_findings(text):
     """best-effort 解析可复用的 outside-voice findings 计数。返回三态之一：
-      int（含 0）           — 至少一条锚被合法组合矩阵分类为 `cross-model`；值为这些锚 findings 之和
-                              （某条 cross-model 锚自身 findings 属性畸形/缺失时，退而用 codex#N prose
-                              标签计数补位——次选 findings 计数，前提是 cross-model 锚已确立复用合法性）
-      "same-family"（字符串哨兵） — 无 cross-model 锚，但存在 ≥1 条被矩阵分类为 same-family/no-exec/
-                              self-review 的锚（同族 fallback / 无执行 / 自审——均非跨模型第二意见）
-      None                  — 无任何可分类锚（含仅 illegal 锚被 best-effort 跳过、仅 codex#N prose 标签
-                              无锚佐证）→ section-not-found。**prose 标签单独 MUST NOT 构成可复用资格**
-                              （add-codex-host-support Step 6：labels 不再是"无锚也能复用"的旁路）。
+      int（含 0）           — 至少一条 cross-model 锚且其 findings 可解析；值为这些**可解析** findings 之和。
+                              cross-model 锚 findings 畸形/缺失（不可解析）⇒ 不贡献计数（C1：MUST NOT 退去
+                              扫无关 codex#N prose 标签补位——那会把正文一句 "codex#1" 当可复用、静默跳过
+                              重跑跨模型评审、击穿本 guard 防假复用的唯一职责）；若无任何可解析 cross-model
+                              findings ⇒ 落 None（不复用、回落重跑）。
+      "same-family"（字符串哨兵） — 无可复用 cross-model findings，但存在 ≥1 条被矩阵分类为 same-family/
+                              no-exec/self-review 的锚（同族 fallback / 无执行 / 自审——均非跨模型第二意见）
+      None                  — 无任何可复用信号（无锚 / 仅 illegal 锚 best-effort 跳过 / cross-model 锚 findings
+                              全畸形 / 仅 codex#N prose 标签）→ section-not-found。**prose 标签 MUST NOT 构成
+                              可复用资格**（add-codex-host-support Step 6+C1：labels 不再是任何复用路径的旁路）。
     `host`/`reason_code` 缺失字段按 v1 兼容读（GC-9：MUST NOT 因缺字段 fail-closed 罢工，旧产物依然可复用）：
     无 `host=` → `host="claude"`；无 `reason_code=` → `reason_code="ok"`。
-    仅匹配 fence 外锚/标签——fence 内的文档示例锚不得计入（否则 outside-voice 层被静默当有效复用跳过，违 adr/0018）。"""
+    仅匹配 fence 外锚——fence 内的文档示例锚不得计入（否则 outside-voice 层被静默当有效复用跳过，违 adr/0018）。"""
     text = _fence_outside_text(text)
-    cross_total = None            # 已确认的 cross-model 锚 findings 之和
-    saw_cross_model = False       # 是否存在 cross-model 锚（即便其自身 findings 属性畸形）
+    cross_total = None            # 已确认的可解析 cross-model 锚 findings 之和（无则保持 None）
     same_family_found = False     # 是否存在 same-family/no-exec/self-review 锚（非跨模型，但可辨识的合法态）
     for m in _OV_ANCHOR_RE.finditer(text):
         attrs = dict(_ATTR_RE.findall(m.group(1)))
@@ -149,21 +149,15 @@ def parse_codex_findings(text):
         findings_val = int(raw) if (raw is not None and raw.isdigit()) else None
         cat = classify_combo(host, runner, reason_code, findings_val)
         if cat == "cross-model":
-            saw_cross_model = True
-            if findings_val is not None:
+            if findings_val is not None:                   # findings 畸形的 cross-model 锚不贡献计数（C1：不复用、回落）
                 cross_total = (cross_total or 0) + findings_val
         elif cat in ("same-family", "no-exec", "self-review"):
             same_family_found = True                       # illegal 不计入任何一侧（畸形/垃圾，best-effort 跳过）
     if cross_total is not None:
         return cross_total
-    if saw_cross_model:
-        labels = set(_CODEX_LABEL_RE.findall(text))        # 次选：cross-model 锚自身 findings 畸形，标签补计数
-        if labels:
-            return len(labels)
-        return None
     if same_family_found:
         return "same-family"
-    return None                                             # 无锚/仅 illegal 锚/仅 prose 标签 → section-not-found
+    return None                                             # 无锚/仅 illegal 锚/findings 畸形/仅 prose 标签 → section-not-found
 
 
 def classify(review_path, change_dir):
