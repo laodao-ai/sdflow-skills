@@ -26,8 +26,14 @@ ship-gate:
 当某条 outside-voice 锚被 `classify_combo` 判为 cross-model 但**该锚自身 `findings=` 缺失/畸形**时，`parse_codex_findings` 退而**全文扫任意 `codex#\d+` 记号**当次选 findings 计数。而 `codex#N` 是本仓 commit/design 高频引用惯例（本 change commit log 就有"codex#N 旁路核"）→ 真实报告正文一句"参考 codex#1"+ 一条 findings 畸形的 cross-model 锚 ⇒ guard 静默判"可复用"、**跳过重跑真跨模型评审**，击穿该模块唯一职责（防假复用）。现有测试盲区：只测了"无锚+标签"与"畸形 findings+无标签"，未测二者组合。
 **→ ✅ 已修[impl-review-fix]（TDD）**：删除 `parse_codex_findings` 的 codex#N prose 补位 fallback（连带删 `_CODEX_LABEL_RE` 常量、`saw_cross_model` 变量），findings 畸形的 cross-model 锚不再退去扫无关 prose 补计数 → 归 `section-not-found` → 回落重跑（安全），与 Step 6「prose 标签 MUST NOT 构成复用资格」方向彻底一致。补 2 回归测试锁死"畸形 cross-model findings + codex#N prose"组合；全仓 1418 passed。
 
-**[高] A1 · 反向 claude 出境路径无真读围栏 + 无输出侧 secret_scan** | `sdflow-init/assets/hack/outside-voice.sh:41-45,196-198` | **镜实测复现**
-三旗墙的 `--add-dir <repo_root>` 对 Read **零约束**——实测 `claude -p --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo>` 能读仓外文件（`~/.ssh`/`~/.aws` 等），去掉 `--add-dir` 结果相同（它只是"项目目录"提示、非访问围栏）；而 codex `-s read-only` 内核沙箱**真拒**仓外读。∴ 注释「对称 codex 全仓只读」**不实**（两路径不对称，codex 有硬边界、claude 反向路径没有）；唯一防线是 FRAME 软注入防御（3/3 payload 在 haiku 上暂扛住、但概率性单点）；且 `secret_scan` **只扫入境 context、不扫 runner 回传 stdout** → 注入成功可原样 exfil。`--tools` 挡 Write/Bash/网络这部分是真的。**→ 一半可修（补输出侧 secret_scan + 修注释措辞）、一半是设计决策待你拍板（是否补真围栏 permission-mode/sandbox，或如实接受软防线不对称）。**
+**[高] A1 · 反向 claude 出境路径无真读围栏 + 无输出侧 secret_scan** | `sdflow-init/assets/hack/outside-voice.sh` | **镜实测复现** · **✅ 代码半已修[impl-review-fix]（方案 a）**
+三旗墙的 `--add-dir <repo_root>` 对 Read **零约束**——实测 `claude -p --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo>` 能读仓外文件（`~/.ssh`/`~/.aws` 等），去掉 `--add-dir` 结果相同（它只是"项目目录"提示、非访问围栏）；而 codex `-s read-only` 内核沙箱**真拒**仓外读。∴ 注释「对称 codex 全仓只读」**不实**（两路径不对称，codex 有硬边界、claude 反向路径没有）；唯一防线是 FRAME 软注入防御（3/3 payload 在 haiku 上暂扛住、但概率性单点）；且 `secret_scan` **只扫入境 context、不扫 runner 回传 stdout** → 注入成功可原样 exfil。`--tools` 挡 Write/Bash/网络这部分是真的。
+**→ ✅ 代码半已修[impl-review-fix]（方案 a，用户拍板；TDD + 真 claude 端到端验证）**：
+① **读围栏承重墙第四旗** `--settings <OV_CLAUDE_READ_FENCE>`（permissions.deny 挡 .ssh/.aws/.gnupg/gcloud/kube/docker/netrc/id_rsa*/id_ed25519*/~/.claude/~/.sdflow）——本机 2.1.211 实测 Read 工具执行前硬拦（`.ssh/notes.txt` 中性内容→BLOCKED）、模型绕不过；完整 JSON 经脚本插入真 claude 秒回不挂起。
+② **出境侧 secret_scan**：`cat` 前扫 runner 回传 last-message.md，含密钥形状→拒发 exit 3（两 runner 路径共用 emit 点，一处兜底）。
+③ **注释订正**：header + inline 注释如实登记「codex 内核正向边界 vs claude 应用层负向边界」不对称、`--add-dir` 非围栏；版本 1.2.0→1.3.0。
+调研实证（用户已知）：Claude Code 原生**做不出正向 allowlist**（deny//** 连仓内一起拦、dontAsk 不 auto-deny 未列项，均实测证伪）；真正向边界只能靠外层容器（会 jail 掉 claude 自身运行时、需内核 enumerate-allow，代价不匹配）→ ∴ 取「负向枚举硬拦明显赃物 + 出境 secret_scan 兜底」双层应用防御，对 codex 内核沙箱不对称是如实接受的权衡。
+**剩：design-writeback（done 阶段）**——design 安全表 r3「两路径均无硬FS读边界」与实测 codex 有沙箱矛盾，done 阶段订正。
 
 **[高] B1 · `lens="outside-voice"` 的 lens-metric 行脱离矩阵校验 + 决策记录漂移** | `anchor_lint.py:623`（check_lens_metric 明确 `lens_v != "outside-voice"` 跳过）| **结构+CLI 核实** · **✅ 代码半已修[impl-review-fix]**
 `check_legal_combo` 只绑 `sdflow:outside-voice` 锚（因 lens-metric 锚无 reason_code，D1 合理）；但 `check_lens_metric` 的行级校验又**显式排除 lens="outside-voice" 行** ⇒ 该行的 `runner="none"⇒findings=0`、`host="unknown"⇒runner="none"` 两个不变量**无任何校验**。手写/emitter-bypass 的 `lens="outside-voice" runner="none" findings="5"`、`host="unknown" runner="claude"` 锚会被放行，经 aggregator 汇入 retro 价值表。emitter 侧强制该不变量，∴ 仅 emitter-bypass 可达——但按③目标态非"现状少见"。**决策记录漂移**：spec-review-report.md:152/208 + design.md:78/95 明写 D6 收敛为"lens-metric 锚 + outside-voice 锚**均查**"，实现窄化为"只 outside-voice 锚"未回改记录。
@@ -64,9 +70,8 @@ config_lint 只校验字符集，`model-tiers.codex.strong: opus` 完全合法�
 - 历史镜：无重蹈旧坑（task2/3/4/6 各 fix 针对不同边界、无循环修复/回滚）。
 
 ### 修复 / defer 台账
-- **已修[impl-review-fix]（7 项）**：**C1** guard codex#N 旁路 fail-open（TDD）· **B1 代码半** check_lens_metric 补 OV 行 3 不变量校验（TDD·面治）· **V1** 两评审 SKILL eval 带防护四步次序 · **V2** 两 SKILL 补 F8 分支 · **D1** test 引号（TDD）· **B2** SKILL 模板锚补 host=。全仓 1424 passed + 托管块门绿。
-- **裁决权交人（剩余高危）**：A1 安全决策 + 设计记录漂移（B1 剩余决策记录订正 / V3/V4/V5，改四件套触设计门失鲜、须 done 阶段写回）+ 代码 fail-open 修复各需谨慎 TDD（本 change 历史上修复反复引入新 fail-open，Task2/3/6 均是）。按 option B 本就 STOP 在 done 前 → 见收敛口。
-- **建议可修均已清**；**剩 A1**（半可修半需拍板：输出侧 secret_scan 可修 + 是否补真围栏待定）。
+- **已修[impl-review-fix]（8 项，全部 objective 代码修复已清）**：**C1** guard codex#N 旁路 fail-open（TDD）· **B1 代码半** check_lens_metric 补 OV 行 3 不变量校验（TDD·面治）· **V1** 两评审 SKILL eval 带防护四步次序 · **A1 代码半** claude 读围栏第四旗 + 出境 secret_scan + 注释订正（方案 a，TDD + 真 claude e2e）· **V2** 两 SKILL 补 F8 分支 · **D1** test 引号（TDD）· **B2** SKILL 模板锚补 host=。全仓 1426 passed + 托管块门绿。
+- **仅剩 design-writeback（done 阶段，改四件套触设计门失鲜，MUST 在 archive 阶段随 delta 写回）**：无剩余 objective 代码修复、无待人拍板决策。
 - **建议 defer（design-writeback，done 阶段随 A1/A3 真值一并写回，勿实现期改四件套）**：A1 沙箱不对称登记订正（design 安全表 + r3「两路径均无硬FS读边界」与实测 codex 有沙箱矛盾）· B1 决策记录"均查"订正 · V3 compat"v1 无 reason_code"订正 · V4 ADR-0024 措辞 · V5 ADR-6"真跑一次"措辞。
 - **建议 todolist**：C2 metrics dup-key 收紧 · V5 preflight 真探针（若选补而非订正）。
 

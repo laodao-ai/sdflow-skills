@@ -80,6 +80,7 @@ def make_fake_codex(tmp_path, mode="ok", with_timeout=True):
           hang)  sleep 30 ;;
           empty) exit 0 ;;
           err_with_output) echo "transient error" >&2; [ -n "$out" ] && printf 'FAKE_PARTIAL\\n' > "$out"; exit 1 ;;
+          secret_output) [ -n "$out" ] && printf 'finding: leaked AKIA%s\\n' AAAAAAAAAAAAAAAA > "$out"; exit 0 ;;
         esac
         """))
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
@@ -120,6 +121,7 @@ def make_fake_claude(tmp_path, mode="ok", with_timeout=True):
           hang)  sleep 30 ;;
           empty) exit 0 ;;
           err_with_output) echo "transient error" >&2; printf 'CLAUDE_PARTIAL\\n'; exit 1 ;;
+          secret_output) printf 'finding: leaked AKIA%s\\n' AAAAAAAAAAAAAAAA; exit 0 ;;
         esac
         """))
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
@@ -137,8 +139,8 @@ def path_without_codex():
 def test_version():
     r = run(["version"])
     assert r.returncode == 0
-    # 1.2.0：outside-voice.sh 去 codex 硬编码，按 $SDFLOW_VOICE_RUNNER 分叉（add-codex-host-support）。
-    assert r.stdout.strip() == "outside-voice.sh 1.2.0"
+    # 1.3.0：A1 反向 claude 路径补应用层读围栏（--settings permissions.deny）+ 输出侧 secret_scan。
+    assert r.stdout.strip() == "outside-voice.sh 1.3.0"
 
 
 # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────
@@ -271,6 +273,31 @@ def test_exec_secret_hit_exit3(tmp_path):
     r = run(["exec", "--context-file", str(ctx)],
             env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex"})
     assert r.returncode == 3
+    assert "secret-hit" in r.stderr
+
+
+# ── A1: 输出侧 secret_scan —— runner 回传 findings 含密钥形状 → 拦下、exit 3、不进 findings 通道 ──
+# （防注入成功后经【返回通道】exfil：入境 secret_scan 只扫 context，出境不扫 = 原样带出）
+def test_exec_output_side_secret_scan_codex_exit3(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")   # context 干净，密钥来自 runner 回传
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                 "FAKE_CODEX_MODE": "secret_output"})
+    assert r.returncode == 3
+    assert "AKIA" not in r.stdout            # 密钥 MUST NOT 进 findings 通道
+    assert "secret-hit" in r.stderr
+
+
+def test_exec_output_side_secret_scan_claude_exit3(tmp_path):
+    bin_dir = make_fake_claude(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}",
+                 "SDFLOW_VOICE_RUNNER": "claude", "SDFLOW_VOICE_MODEL": "x",
+                 "FAKE_CLAUDE_MODE": "secret_output"})
+    assert r.returncode == 3
+    assert "AKIA" not in r.stdout
     assert "secret-hit" in r.stderr
 
 
@@ -491,7 +518,7 @@ def test_exec_claude_reverse_path_three_flags_golden(tmp_path):
     assert r.returncode == 0
     argv = args_file.read_text().splitlines()
 
-    # 正向：三旗齐全且取值正确
+    # 正向：四旗齐全且取值正确（三旗 + A1 读围栏 --settings）
     assert "--tools" in argv
     assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob"
     assert "--strict-mcp-config" in argv
@@ -502,6 +529,12 @@ def test_exec_claude_reverse_path_three_flags_golden(tmp_path):
     assert argv[argv.index("--model") + 1] == "claude-strong-placeholder"
     assert "--output-format" in argv
     assert argv[argv.index("--output-format") + 1] == "text"
+    # A1 第四旗：--settings 读围栏（permissions.deny 挡凭证库路径，应用层读边界）
+    assert "--settings" in argv, "A1 读围栏缺失：反向路径 MUST 带 --settings permissions.deny"
+    fence = argv[argv.index("--settings") + 1]
+    assert '"deny"' in fence
+    for pat in (".ssh", ".aws", "id_rsa"):
+        assert pat in fence, f"读围栏缺凭证库模式 {pat}"
 
     # 负向：MUST NOT 出现非只读工具 / 零工具 / denylist / allowlist
     joined = " ".join(argv)
