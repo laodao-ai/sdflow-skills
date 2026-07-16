@@ -77,6 +77,8 @@ sdflow-issues:
 
 **物理格式规则** `[grill-amendment]`：frontmatter envelope 只有在 opener `---` 位于 byte 0，或紧随 UTF-8 BOM 时才成立；opener/closer 必须各自独占一行，不扫描正文寻找“第一个像 frontmatter 的 block”。该 envelope 由多个工具共享；recorder 只拥有唯一、无引号的顶层 `sdflow-issues:` namespace 及其完整子树，`schema/pool/mode/items` 不展开成多个带前缀的顶层键，也不提升为多工具共管的 `sdflow:` 父树。reader 只严格校验 recorder 子树，把其它顶层条目视为外部所有的 opaque 内容；writer 以 UTF-8 bytes 定位并只插入或替换 recorder 子树，必须逐字节保留 envelope 中其余键、注释、空行、顺序、标量样式、BOM、原有 EOL 与正文。namespace 缺失时按 legacy 文件处理；namespace 在场但重复，或 envelope 边界无法被窄 scanner 无歧义定位，整文件 fatal 且不得写盘；recorder 子树的缩进/tab/JSON/字段/枚举/版本任一非法同样 fatal，MUST NOT 回退 legacy 表。writer 固定 recorder 子树字段顺序、紧凑 JSON，并在写前从内存对象重新校验。
 
+`[spec-review-amendment]` “opaque”只描述**所有权与保真**，不等于接受任意 YAML。v1 scanner 对整个共享 envelope 使用一份可执行 lexical profile：顶层 entry 只能以 column 0 的无引号 ASCII key `[A-Za-z0-9][A-Za-z0-9_-]*:` 开始；其后同一物理行可有值/注释，后续 value bytes 必须为空行、column-0 注释，或至少一个 ASCII space 缩进的 continuation，tab 一律拒绝。column-0 空行/注释属于 producer-neutral separator，永不并入 recorder span；`sdflow-issues` 自有 span 则必须完全符合 canonical 子树，不接受内部空行/注释。scanner 以“下一条合法 column-0 entry 或 closer”结束前一 entry，因此可逐字节跳过外部 producer 的 indented block scalar、quoted scalar 与多行 flow value，但不解释其语义。顶层 quoted/explicit/complex key、顶层 sequence、directive、`...`、未缩进 continuation、跨行 flow value 回到 column 0、tab 或任何无法按该规则分段的形态均 fail-closed；形似 `"sdflow-issues"`、`'sdflow-issues'`、`? sdflow-issues` 或在 key/colon 周围变体的 ownership 也按歧义拒绝。外部 producer 可在 profile 内使用任意 opaque value bytes；超出 profile 的代价是 recorder 拒绝读写，而不是猜边界或引入完整 YAML parser。
+
 `[grill-amendment]` canonical string domain 是 Unicode scalar values：任何字段中的孤立 UTF-16 surrogate `U+D800..U+DFFF` 必须在 render/write 前按 ID+field fail-closed。JSON renderer 保持 `ensure_ascii=False` 以便普通 Unicode 人读，但把 YAML line-break code points U+0085/U+2028/U+2029 定向输出为 `\u0085`/`\u2028`/`\u2029`；stdlib JSON 继续转义 CR/LF/tab/C0。parser 拒绝 recorder 子树里的 raw NEL/LS/PS，接受 escaped form 并还原原 code point。不得做 NFC/NFKC normalization，parse→render→parse 保持原始 code points。
 
 `[grill-amendment]` 已有 envelope 中新渲染的 recorder 子树沿用 opener 的 LF 或 CRLF；替换时只允许自有子树内部规范化。legacy 文件没有 envelope 时，在 BOM 后或 byte 0 插入，新 envelope 沿用正文首个可识别 LF/CRLF，无 EOL 时使用 LF；新建 canonical 文件固定 UTF-8、无 BOM、LF。UTF-16 BOM、非法 UTF-8、lone CR、opener/closer 缺失换行或 EOL 无法安全判定均 fail-closed，原 bytes 不变。
@@ -84,15 +86,15 @@ sdflow-issues:
 ### Lifecycle
 
 1. **Create**：目标 dated 文件不存在时，建立 `mode: canonical` 空索引；`add` 在锁内分配 ID、插入索引，并按 pool/payload 语义追加 prose 块（bug 必有，todo 轻量项可无）。目标文件是 legacy 时，建立/更新 `mode: overlay`，新 item 只进 frontmatter，不加表行。
-2. **Read**：`[grill-amendment]` 先验证 format invariant：canonical 必须不存在 recorder legacy 状态总览区域；overlay 必须恰有一个该区域；namespace 缺失的 legacy 也必须恰有一个该区域。mode 与物理形态 mismatch fatal，MUST NOT 通过 enum 手改隐藏 items。通过后 canonical 只读 frontmatter；纯 legacy 只读表；overlay 读 frontmatter + legacy 表并合并，同文件同 ID 时 frontmatter 显式 shadow legacy snapshot。overlay 区域内坏 row 仍进入既有 arity/problems 分层，区域本身缺失/重复则不是普通 problem。
-3. **Update**：canonical/overlay item 原位更新 frontmatter。更新纯 legacy item 时，先从表行构造完整 v1 item 写入 overlay；`[grill-amendment]` 若存在唯一且边界可判的 legacy prose block，只在其前后插入同 ID start/end marker，块内 bytes 不变，再执行状态/批次变更并把历史追加到 end marker 前。legacy todo 无 block 时创建 marker-framed minimal block；legacy bug 缺块、同 ID 多块或边界有歧义时 mutation fail-closed。历史表行与旧属性表不改，后者视为 snapshot，不再参与状态一致性判定；promotion 完成后该 item 永久只按 marker 定位。
-4. **Aggregate**：`scan --json` 输出 shape 不变；`issues.py` 只消费合并后的 canonical snapshot。
+2. **Read**：`[grill-amendment]` 先验证 format invariant：canonical 必须不存在 recorder legacy 状态总览区域；overlay 必须恰有一个该区域；namespace 缺失的 legacy 也必须恰有一个该区域。mode 与物理形态 mismatch fatal，MUST NOT 通过 enum 手改隐藏 items。通过后 canonical 只读 frontmatter；纯 legacy 只读表；overlay 读 frontmatter + legacy 表并按 semantic ID 合并，同文件同 semantic ID 时 frontmatter 显式 shadow legacy snapshot。`[spec-review-amendment]` relation validation 按 effective owner 分区：frontmatter-owned ID 只校验 strict schema + canonical marker 关系，不再进入 legacy 表↔块/status 双写检查；未 promotion legacy ID 继续旧规则；marker 同时归属两个 semantic ID、marker-only legacy、同 semantic key 多个 frontmatter key或跨文件/跨 pool 重复均 fatal。overlay 区域内坏 row 仍进入既有 arity/problems 分层，区域本身缺失/重复则不是普通 problem。
+3. **Update**：canonical/overlay item 原位更新 frontmatter。更新纯 legacy item 时，先从表行构造完整 v1 item写入 overlay；`[grill-amendment]` 若存在唯一且边界可判的 legacy prose block，只在其前后插入同 semantic ID 的 canonical start/end marker，块内 bytes 不变，再执行状态/批次变更并把历史追加到 end marker 前。`[spec-review-amendment]` promotion 前必须扫描候选 legacy block：内部任一独占行命中精确 marker grammar 即在写 frontmatter/外围 marker 前 fail-closed，避免原样保留后制造嵌套/错配新格式。legacy todo 无 block 时创建 marker-framed minimal block；legacy bug 缺块、同 ID 多块、预存 marker 或边界有歧义时 mutation fail-closed。历史表行与旧属性表不改，后者视为 snapshot，不再参与状态一致性判定；promotion 完成后该 item 永久只按 marker 定位。
+4. **Aggregate**：`scan --json` 输出 shape 不变；`issues.py` 只消费合并后的 canonical snapshot。`[spec-review-amendment]` 跨脚本 JSON envelope 是 fail-closed contract：bug 顶层必须精确含 list `bugs` 与 list `problems`，todo 必须精确含 list `items` 与 list `problems`；每个 item 必须含 pool 对应的全部 index 字段及 `id/file`，类型和值域与 recorder schema 一致。坏 JSON、缺键、错误类型、缺 `file` 或未知必需字段组合均在写 INDEX/batches 前 non-zero，MUST NOT 用 `.get(..., [])` 把协议漂移静默解释为空池。
 5. **Archive/Delete**：本 change 不新增删除动作；Git 历史继续承担审计与回滚。终态 item 仍留原文件，INDEX 只生成摘要。
 
 ### ID semantics
 
-- `[grill-amendment]` 新写 ID 统一允许 `[A-Z][1-9]\d*`；bug 默认 prefix=`B`、todo 默认 prefix=`T`，公开的单字母自定义 `--prefix` 保持兼容。prefix 只接受一个 ASCII 大写字母，小写、多字母、空串均在业务读取/写盘前拒绝。
-- ID semantic key 是 `(uppercase prefix, decimal integer)`，不包含 pool；legacy reader 可读取既有 `[A-Z]\d+` 语料并计算该 key，`A007` 与 `A7` 视为冲突并 fail-closed 报出两个位置，不静默挑一个。
+- `[grill-amendment]` `[spec-review-amendment]` 新写 ID 统一允许 ASCII `[A-Z][1-9][0-9]*`；bug 默认 prefix=`B`、todo 默认 prefix=`T`，公开的单字母自定义 `--prefix` 保持兼容。prefix 只接受一个 ASCII 大写字母，小写、多字母、空串均在业务读取/写盘前拒绝；matcher 必须使用 ASCII 字节/字符类或 `re.ASCII`，不得让 Python `\d` 接受 Arabic-Indic/fullwidth 等 Unicode decimal digit。
+- ID semantic key 是 `(uppercase ASCII prefix, decimal integer)`，不包含 pool；legacy reader 可读取既有 ASCII `[A-Z][0-9]+` 语料并保留 raw spelling 作为位置证据，`A007` 与 `A7` 视为冲突并 fail-closed 报出两个位置，不静默挑一个。`[spec-review-amendment]` 孤立 `A007` mutation 允许把 raw spelling 作为既有 legacy alias 定位，但 promotion 的 frontmatter key、外围 marker 与成功结果一律写 canonical `A7`；同文件 shadow 按 semantic key，不按字面 ID。pure legacy scan 在未触碰前仍返回 raw ID；promotion 后 scan 返回 canonical ID。若盘面不存在对应 raw legacy row，则用户输入的非 canonical ID 仍拒绝。
 - ID 在 bug+todo 两池仓级全局唯一；bug `A1` 与 todo `A1` 冲突。自定义 prefix 的 `next-id`、自动 add 与显式 ID 查重必须在同一 snapshot lock 内读取两池全集，MUST NOT 只扫当前 pool。
 - 新写与显式 ID 必须是 canonical spelling；`next-id` 只作建议展示，不保留号码，真正分配/查重必须在 `add` 新锁事务内完成。
 
@@ -217,6 +219,8 @@ Operator verifies owner is gone, then removes the documented lock path and retri
 
 **Decision**：把文件起点（可在 UTF-8 BOM 后）的 frontmatter block 视为共享 envelope；recorder 的唯一写权限边界是顶层 `sdflow-issues` 子树。`sdflow-issues` 本身就是 namespace 前缀：内部保持短键 `schema/pool/mode/items`。reader 不替其它工具校验未知顶层内容；writer 以 byte-level 窄 scanner 定位 recorder 子树并做局部 splice，namespace 之外逐字节保留。重复 namespace、非标准拼写造成的所有权歧义或无法确定 splice 边界时 fail-closed，原文件不变。`[grill-amendment]` 正文中的 `---` 永不被提升为 envelope；BOM 与既有 EOL 属外部 bytes，不因 recorder mutation 被规范化。
 
+`[spec-review-amendment]` shared envelope 的兼容协议同时包含**格式所有权 + 写协调**：任何目标态 producer 若会 mutation 同一 dated recorder 文档，即使只改 sibling namespace，也必须在任何 discovery/read 前加入同一 repository `.recorder.lock` owner/participant 域，并持有到其全文件 atomic replace 完成；否则不属于受支持的 cooperative producer。仅做 byte splice 不能避免“双方各从旧快照 replace、后写覆盖先写”。writer 在 replace 前还比较 target identity/bytes fingerprint 与锁内原 snapshot，发现绕协议变化则冲突失败、由调用者从最新 bytes 重试；这只是缩窄非 cooperative 风险，fingerprint 终检后的 race 仍无 OS 级 CAS。验收用一个 fake sibling producer 与 recorder 做双向 barrier，成功结果必须保留两个 namespace 的更新；非 cooperative 外部 writer 不承诺阻止 lost update。
+
 | Candidate | 所有权边界 | 组合性 | 代价 |
 |---|---|---|---|
 | **单一顶层 `sdflow-issues` 子树（选定）** | 一棵子树，清晰可验 | 可与 `ship-gate` 等 namespace 共存 | 需窄 scanner、局部 splice 与保真 fixture |
@@ -224,11 +228,11 @@ Operator verifies owner is gone, then removes the documented lock path and retri
 | 共用 `sdflow:` 父树再放 `issues:` | 多工具共同改写 `sdflow` 子树 | 表面整齐，实际把冲突下移一层 | 每个工具都需解析并保留兄弟子树 |
 | recorder 独占整个 frontmatter | 最简单 | 排斥其它 metadata producer | 会为一次 recorder mutation 删除或拒绝无关元数据 |
 
-**主次判定**：目标态会有多个 metadata producer，所有权清晰与无损组合优先于 renderer 简单。代价由 fail-closed scanner 和 byte-preservation 测试承担，MUST NOT 通过接管整个 envelope 转嫁给其它工具。
+**主次判定**：目标态会有多个 metadata producer，所有权清晰、共享写协调与无损组合优先于 renderer 简单。代价由 fail-closed scanner、共享 lock contract 和 byte-preservation/barrier 测试承担，MUST NOT 通过接管整个 envelope 或假设 sibling 永不并发来转嫁给其它工具。
 
 ### D2 — Legacy table frozen; mutable items promoted into same-file overlay
 
-**Decision**：旧表永不再写。对旧 item 的任何 mutation 都把其完整当前索引提升进同文件 `mode: overlay`；frontmatter 对同文件同 ID 优先。新 item 落到已存在 legacy dated 文件时也写 overlay。legacy 表与旧属性表成为只读 snapshot，状态历史 prose 继续 append。`[grill-amendment]` promotion 同时把可唯一定位的旧 prose block 原位套入 marker，内部 bytes 不重渲染；无块 todo 新建 minimal marker block，坏/歧义 bug block 拒绝 mutation。
+**Decision**：旧表永不再写。对旧 item 的任何 mutation 都把其完整当前索引提升进同文件 `mode: overlay`；frontmatter 对同文件同 semantic ID 优先。新 item 落到已存在 legacy dated 文件时也写 overlay。legacy 表与旧属性表成为只读 snapshot，状态历史 prose 继续 append。`[grill-amendment]` promotion 同时把可唯一定位的旧 prose block 原位套入 marker，内部 bytes 不重渲染；`[spec-review-amendment]` block 内已有精确 marker 或 ownership 歧义时写前拒绝；无块 todo 新建 minimal marker block，坏/歧义 bug block 拒绝 mutation。
 
 `[grill-amendment]` `mode` 是 writer 产生、reader 互证的迁移状态，不是用户输入：新文件由 writer 设 canonical，检测到唯一 legacy 总览区域的既有文件才设 overlay。canonical+legacy 区域、overlay+区域缺失/重复都 fatal，不自动改 mode、不自动删表。
 
@@ -243,11 +247,15 @@ Operator verifies owner is gone, then removes the documented lock path and retri
 
 ### D3 — One repository-wide fail-fast lock
 
-**Decision** `[grill-amendment]`：planned helper `recorder_lock(root, command)` 用 `O_CREAT|O_EXCL` 获取 `openspec/issues/.recorder.lock`，它是仓级 **exclusive snapshot lock**，不是仅保护 writer。顶层权威 snapshot/read-modify-write CLI 是 lock **owner**；只读命令从第一次业务文件读取持有到全部输入已读取、解析、校验并固化成不再访问文件的内存 snapshot，随后先释放、再格式化/打印，MUST NOT 因慢 stdout 延长锁；mutation 从第一次业务读取持有到最后一次 `os.replace` 完成。范围至少包含 bug/todo `scan`、`next-id`、add/set-status/triage，以及 issues 的 reindex/sweep、batch query/mutation/rename。owner 生成高熵 capability token，锁文件记录 PID、命令、开始时间与 token；复合命令启动的 scan 或 mutating 子进程通过专用环境变量继承 token，校验它与当前锁文件一致后作为 **participant** 加入同一锁域，不重复 acquire、不得 release。锁冲突立即非零退出，不等待、不自动偷锁；错误信息打印 owner 与安全恢复步骤但不得泄露 token。`next-id` 持锁只保证计算时 snapshot 一致，释放后仍是 advisory、绝不构成 reservation。
+**Decision** `[grill-amendment]`：planned helper `recorder_lock(root, command)` 用 `O_CREAT|O_EXCL` 获取 `openspec/issues/.recorder.lock`，它是仓级 **exclusive snapshot lock**，不是仅保护 writer。顶层权威 snapshot/read-modify-write CLI 是 lock **owner**；`[spec-review-amendment]` 除纯参数校验与 `repo_root` 解析外，owner 必须在任何会影响结果的 glob/list/exists/stat/open 之前 acquire，participant 必须先校验 token；只读命令持有到全部输入已发现、读取、解析、校验并固化成不再访问文件的内存 snapshot，随后先释放、再格式化/打印，MUST NOT 因慢 stdout 延长锁；mutation 持有到最后一次 `os.replace` 完成。范围至少包含 bug/todo `scan`、`next-id`、add/set-status/triage，以及 issues 的 reindex/sweep、`batch lint/add/set-status/rename`。owner 生成高熵 capability token，锁文件记录 repo、PID、命令、开始时间与 token；复合命令启动的 scan 或 mutating 子进程通过专用环境变量继承 token，校验它与当前锁文件一致后作为 **participant** 加入同一锁域，不重复 acquire、不得 release。锁冲突立即非零退出，不等待、不自动偷锁；错误信息打印 owner 与安全恢复步骤但不得泄露 token。`next-id` 持锁只保证计算时 snapshot 一致，释放后仍是 advisory、绝不构成 reservation。
 
-`O_EXCL` 成功即代表锁已占用，即使竞争者恰好读到 owner metadata 尚未写完，也只能报告“owner metadata unavailable/initializing”，MUST NOT 当成 stale 或空锁继续。owner 用已打开的独占 FD 写完整 metadata 并按需 `fsync`；退出 `finally` 释放前重新读取并核对 token，只能 unlink 自己仍拥有的锁。若锁文件被人工删除并被另一 writer 重建，旧 owner 必须保留新锁并报告 ownership lost。
+`O_EXCL` 成功即代表锁已占用，即使竞争者恰好读到 owner metadata 尚未写完，也只能报告“owner metadata unavailable/initializing”，MUST NOT 当成 stale 或空锁继续。owner 用已打开的独占 FD 写完整 metadata；退出 `finally` 释放前对已打开 FD 记录的 `(st_dev, st_ino)`（Windows 无稳定 inode 时用可用 file identity）与路径当前 identity、token 做 best-effort 终检，发现不一致则保留当前路径并报告 ownership lost。`[spec-review-amendment]` 普通 path API 不提供 compare-and-unlink：终检与 unlink 之间若有绕协议外部进程删除并重建同一路径，仍存在不可消除的 TOCTOU；“绝不误删替代锁”只在 cooperative participants 不替换活锁的边界内成立，文档/测试不得把人工竞态宣称为机械保证。
 
-`[grill-amendment]` 该锁是 cooperative boundary：只约束采用 recorder 协议的 CLI，不能阻止编辑器、手工脚本或 Git 绕过锁修改文件，文档与错误提示不得宣称 OS 级强制隔离。为避免运行中 lock 被 dirty-tree/checkpoint 收入版本，`sdflow-init` SHALL 新增 canonical runtime-ignore snippet，并在 init/update 时幂等合并根 `.gitignore` 的 `/openspec/issues/.recorder.lock`；本仓同步 dogfood 该条目。当前仓内尚无此 canonical ignore 资产，故本 change 必须显式新增，不能假设已有生成规则。
+`[spec-review-amendment]` participant capability 允许**受控转发**而非只限一层：已验证 participant 仅可把同一个 token 原样传给 allowlist 内、同 repo、属于当前复合命令调用图的 recorder 子进程（例如 `sweep → reindex → bug/todo scan`）；不得生成新 token。启动其它 subprocess 时必须显式从 child env 剥离 token。缺失/不匹配、跨 repo、非 allowlist 子命令或越级委派均按独立顶层调用 acquire/fail-closed。token 仍不是对同 OS 用户的安全边界，只是 cooperative ownership capability。
+
+`[spec-review-amendment]` 不新增会暗示安全性的自动 `lock recover`/TTL。metadata 完整时，固定诊断使用 `ERROR: <problem>; cause: <cause>; fix: <steps>`，显示 repo/lock path/PID/command/start/metadata state，并要求停止 owner 及其已知 participants、按平台核验无该 repo recorder 进程、删除**精确** lock path、重跑原命令。若 crash 发生在 `O_EXCL` 与 metadata 完成之间，owner 无法验证；诊断必须明确这是 break-glass：先停止该 repo 的全部 recorder 进程再删，MUST NOT 只凭空 metadata/PID 猜 stale。代价是 crash 后所有权威读写会阻塞到人工恢复。
+
+`[grill-amendment]` 该锁是 cooperative boundary：只约束采用 recorder 协议的 CLI，不能阻止编辑器、手工脚本或 Git 绕过锁修改文件，文档与错误提示不得宣称 OS 级强制隔离。为避免运行中 lock 被 dirty-tree/checkpoint 收入版本，`sdflow-init` SHALL 新增 canonical runtime-ignore snippet，并在 init/update 时幂等合并根 `.gitignore` 的 `/openspec/issues/.recorder.lock`；本仓同步 dogfood 该条目。`[spec-review-amendment]` 真相源固定为 `sdflow-init/assets/snippets/runtime-gitignore.txt`；`sdflow-init/scripts/init.py::run()` 在 init/update 两路均调用 planned `merge_runtime_gitignore(root, snippet)`，仅在缺项时追加完整行、已有一条时 byte-noop、重复时 fail-closed 不擅删用户行，且除必要尾随换行外保留原 `.gitignore` bytes。当前仓内尚无此 canonical ignore 资产/merge path，故本 change 必须显式新增，不能假设已有生成规则。
 
 | Candidate | 系统镜 | 用户镜 | 开发循环镜 |
 |---|---|---|---|
@@ -269,21 +277,23 @@ Operator verifies owner is gone, then removes the documented lock path and retri
 
 **主次判定**：系统镜主导——正确性优先于极低频 writer 并行吞吐。当前方案代价是 crash 后可能留下 stale lock；不自动按 TTL 删除，避免误杀仍在运行的慢操作。
 
+`[spec-review-amendment]` 支持边界：自动化保证以本地 POSIX filesystem（macOS/Linux）为 release gate，mode-bit 保留只在 POSIX 有意义；Windows 本地盘为必须 smoke 的兼容目标，sharing violation 等平台错误须 fail-loud 且不破坏旧文件；NFS/SMB/FUSE 等远程/用户态 filesystem 不保证 `O_EXCL`/`os.replace` 的同等语义，明确 unsupported。process exception/kill 前后的 replace 原子性在范围内；未对文件与父目录执行完整 fsync protocol，故 power-loss durability 不在本 change 承诺内。
+
 ### D4 — Parse once and pass updated snapshot through batch rename
 
-`parse_recorder_document()` 每文件一次读取即产出 `items + blocks + problems + format`；`cmd_scan` 不再分别重复 split/arity/row parse。`cmd_batch_rename()` 只调用一次 `read_pool()`，retag 时同步修改这份内存 items，随后调用接受 `items` 参数的 reindex 核心，禁止再次扫描两池。多文件 rename 不声称跨文件事务，但 `[grill-amendment]` 必须把 dated files、batch key、INDEX 与 batches 派生状态全部收敛才可 exit 0；任一写入/reindex 失败均非零，并提示以原 `batch rename old new` 重试。
+`parse_recorder_document()` 每文件一次读取即产出 `items + blocks + problems + format`；`cmd_scan` 不再分别重复 split/arity/row parse。`[spec-review-amendment]` `cmd_batch_rename()` 不先以 recorder `scan --json` 读取、再由 `issues.py` 二次打开同一 dated 文件；它用 `issues.py` 自包含的 `read_rename_snapshot()` 直接一次 binary read/parse 两池 dated files，snapshot 同时携带 raw bytes、spans、effective items、problems 与 per-file model。retag 在内存 model 上完成，再以同一 raw buffer splice；随后把 updated items 传给 reindex 核心，整个 rename 对每个 dated 文件 read=1/parse=1，per-pool `scan --json` 调用=0。代价是 issues.py 也必须镜像 legacy/overlay 读规则并纳入 parity/contract fixtures；其它独立 reindex/sweep 仍可消费 recorder CLI。多文件 rename 不声称跨文件事务，但 `[grill-amendment]` 必须把 dated files、batch key、INDEX 与 batches 派生状态全部收敛才可 exit 0；任一写入/reindex 失败均非零，并提示以原 `batch rename old new` 重试。
 
-rename 重试在持锁 snapshot 上按盘面识别阶段，不引入 journal：
+`[spec-review-amendment]` 仅凭 old/new 盘面无法区分真实重试与“source 误输但 target 已存在”，也无法区分 partial retag 与预存 orphan new tag；因此改为**registry-first + registry-embedded provenance**，不建 sidecar journal：首次执行在验证 `old` 存在、`new` 不存在且无 `new` orphan item 后，先原子把 registry header 改为 `new`，并在该 entry 写/替换 machine-owned generated line `重命名自: old`；再 retag dated files，最后以 updated snapshot 写 INDEX/同步 batches。该 provenance 永久保留到下次 rename 时替换为新的直接来源，既是审计证据也是 retry gate。
 
-| Registry state | Item state | Action |
+| Registry/provenance state | Item state | Action |
 |---|---|---|
-| `old` 存在、`new` 不存在 | 全 old 或 old/new 混合 | retag 仍为 old 的 item，改 registry，再 reindex |
-| `old` 不存在、`new` 存在 | 无 old item | 视为 rename 主写已完成，补跑 reindex 后成功 |
+| `old` 存在、`new` 不存在 | 无 `new` orphan；old member 可为 0..N | 首次执行：原子 rename registry + 写 `重命名自: old`，再 retag/reindex |
+| `old` 不存在、`new` 存在，且 `new` entry 精确记录 `重命名自: old` | 全 old / old-new 混合 / 全 new | 合法 retry：只 retag 仍为 old 的 item，随后 reindex；全 new 也须补派生输出 |
+| `old` 不存在、`new` 存在，但 provenance 缺失/不匹配 | 任意 | fatal；不能证明是本次 rename，未知 source 仍非零 |
 | `old` 与 `new` 都存在 | 任意 | fatal；禁止把 retry 偷换成 batch merge |
-| `old` 不存在、`new` 存在 | 仍有 old item | fatal；不符合本命令的正常写序，报告冲突盘面 |
 | `old` 与 `new` 都不存在 | 任意 | fatal；source batch 不存在 |
 
-不做自动 rollback：跨多个 dated files 与两个派生文件的补偿写也会失败，反而产生第二恢复协议。盘面已足以区分正常阶段，故不增加 transaction journal/stale-journal 真相源。
+不做自动 rollback：跨多个 dated files 与两个派生文件的补偿写也会失败，反而产生第二恢复协议。`重命名自:` 只是 target registry entry 的 machine-owned provenance，不承载 item 当前态；恢复仍以持锁 snapshot 为真相。`[spec-review-amendment]` rename 中遇到与 retag 无关的 legacy 非致命 problems，沿用默认 reindex 语义：回显但不因其单独失败；任何影响 item/batch 判定的 fatal problem、写入失败或派生输出失败均 non-zero，禁止 warning-only success。
 
 ### D5 — Prose is descriptive, index is the only mutable machine state
 
@@ -310,12 +320,14 @@ blockquote 是 canonical summary 的人读投影，不是第二真相源；reade
 
 遵守跨 skill 自包含边界：三个脚本不互相 import 内部 helper。`atomic_write`、`repo_root`、planned `recorder_lock`、frontmatter parser/renderer 等真共享逻辑纳入 AST 等价守卫；`parse_table_rows` 作为 bug/todo legacy 读半场保留，不得用于新写。实现完成时按真实函数 inventory 更新测试 roster，删除 `_reject_cell_unsafe` 的强制存在断言。
 
+`[spec-review-amendment]` `issues.py` 的 direct rename snapshot 使 legacy/document parse 规则成为三向共享行为，而不是“当前函数恰好同名”才比较；mirror roster 与 golden contract 必须覆盖 `read_rename_snapshot` 所依赖的 legacy region、semantic-ID、overlay merge、marker relation 与 JSON consumer validator。其它 reindex/sweep 仍通过 CLI/JSON 解耦，生产脚本之间继续零 import。
+
 ## NFRs（TG-16/TG-26）
 
 | NFR | Target | Verification |
 |---|---|---|
 | 文件解析次数 | 单次 `scan` 每 dated 文件 read=1、document parse=1 | mock/open call-count tests |
-| rename 池扫描 | 一次 `batch rename` 每 pool 的 `scan --json` 调用 ≤1 | subprocess call-count test |
+| rename 池扫描 | `[spec-review-amendment]` 一次 `batch rename` 每 pool 的 `scan --json` 调用 =0；由 direct bytes snapshot 覆盖 | subprocess call-count test |
 | ID 并发唯一性 | 20 个并发 `add` 尝试后：成功记录 ID 全唯一、失败均为显式 lock conflict、0 lost write | multiprocessing/subprocess stress test |
 | snapshot 隔离 `[grill-amendment]` | 成功的独立 scan/next-id 不与 writer 重叠；复合命令 participant 读共享 owner 时点 | reader-vs-writer barrier + participant tests |
 | lock 可运维性 `[grill-amendment]` | 只读锁不覆盖输出；运行时 lock 永不进入 Git；错误不夸大 cooperative 边界 | blocked-stdout test + init/update ignore idempotence |
@@ -324,6 +336,11 @@ blockquote 是 canonical summary 的人读投影，不是第二真相源；reade
 | 确定性渲染 `[grill-amendment]` | 同一 model 的 render→render byte-identical；items semantic sort、字段/null canonical | golden bytes + permutation tests |
 | 兼容性 | 当前全部历史 fixture dual-read 后关键字段与 legacy-only parser baseline 逐项相等 | corpus snapshot comparison |
 | 错误可见性 | namespace 在场的每类坏输入均 non-zero + stderr 含 path/reason；0 silent fallback | negative matrix tests |
+| 可操作诊断 `[spec-review-amendment]` | 所有新增失败 stderr 使用 `ERROR: problem; cause: cause; fix: steps`，成功/JSON stdout 不混入诊断；rename/stale-lock 给可复制原命令 | exact stderr/stdout contract tests |
+| sibling producer 协调 `[spec-review-amendment]` | 两个遵守共享 envelope 协议的 namespace writer 不 lost update；外部绕锁写明确不保证 | cross-producer reader/writer barrier |
+| rename dated I/O `[spec-review-amendment]` | 整个 rename 每 dated 文件 binary read=1、parse=1，per-pool `scan --json`=0 | open/subprocess call-count + raw-span preservation |
+| 平台边界 `[spec-review-amendment]` | POSIX local FS 自动门；Windows local FS smoke；network FS 与 power-loss durability 明确不承诺 | POSIX suite + Windows runner smoke + docs assertion |
+| consumer protocol `[spec-review-amendment]` | scan JSON 缺/错任一 required key/type/file 时 0 写 INDEX/batches | contract corruption matrix |
 
 ## Failure Modes and Observability（TG-15）
 
@@ -335,16 +352,18 @@ blockquote 是 canonical summary 的人读投影，不是第二真相源；reade
 | 同 ID 跨文件/跨 pool 或 canonical spelling 冲突 | fatal，禁止 reindex/写入 | stderr 列出两处位置、pool 与 canonical key |
 | 新 marker 缺失/孤儿/重复/错配/嵌套 `[grill-amendment]` | bug 缺块或任一坏 marker 计入 `problems`；todo 无 block 合法 | 默认可见，`--strict` 非零；不回退 heading heuristic |
 | lock 已存在 | 写命令在读盘前失败 | stderr 打印 lock path、PID/command/time 与恢复指引 |
-| 进程 crash 留 stale lock | 后续写 fail-fast，不自动删除 | lock 文件本身 + 明确人工核验/删除指引 |
+| 进程 crash 留 stale/partial lock | 后续权威读写 fail-fast，不自动删除 | fix-directed owner 诊断；partial metadata 走“停该 repo 全部 recorder 后删精确路径”break-glass |
+| release 前 ownership changed `[spec-review-amendment]` | identity/token 终检不符则保留；终检后的外部替换 race 明示不在 cooperative 保证内 | ownership-lost diagnostic + residual-boundary test/doc |
 | temp write/replace 失败 | 原文件保持不变；异常上抛 | non-zero + target path；finally 清临时文件 |
 | batch rename 中途跨文件或 reindex 失败 `[grill-amendment]` | 已改文件保留，锁释放；原命令按 registry+items 阶段盘面恢复 | stderr 点名失败位置并提示重跑，命令非零；完全收敛前不得 exit 0 |
+| scan JSON protocol drift `[spec-review-amendment]` | consumer fail-closed，不把缺键当空池 | stderr 点名 producer/key/type；INDEX/batches bytes 不变 |
 
 ## Migration Plan
 
 1. 先用失败测试固定 v1 parser/renderer、legacy/canonical/overlay merge、坏 namespace fail-closed；加入 dual-reader，但保留旧 writer。
 2. 加仓级 lock 与 canonical ID 校验，覆盖全部 mutating entry；此时存储输出仍可保持旧格式。
 3. 切换 `add`/`set-status`/`triage` 到 frontmatter writer：新文件 canonical，已有 legacy 文件 overlay；CLI/JSON 输出不变。
-4. 切换 `issues.py batch rename` 到 overlay/canonical retag，并让 reindex 复用 updated snapshot，闭合 T66。
+4. `[spec-review-amendment]` 切换 `issues.py batch rename` 到 direct bytes `read_rename_snapshot()`，registry-first 写 `重命名自:` provenance，再对 overlay/canonical/legacy model retag并让 reindex复用 updated snapshot，闭合 T66 与全 crash-cut retry。
 5. 删除新写侧 `_reject_cell_unsafe`、表行 renderer/insert/update 与新格式状态双写；保留 `parse_table_rows` 仅作 legacy read，更新 mirror roster/docstrings/tests。
 6. Dogfood：在本 change 收尾时用新 writer 把 T85/T66/T67/T146 的状态更新写成当前 legacy todolist 文件的 overlay，跑 `scan --json`、`reindex --strict` 与全量 pytest。
 7. 更新 roadmap/task-log/issues 状态与后继 ADR，明确 `adr/0010` 的 reject+defer 已由本 change 兑现并 supersede。
@@ -353,7 +372,7 @@ blockquote 是 canonical summary 的人读投影，不是第二真相源；reade
 
 ## Open Questions
 
-无阻塞开放问题：proposal OQ1→D2、OQ2→数据模型/D1、OQ3→D3、OQ4→D1 均已收敛。实现中若发现仓外 consumer 直接解析 Markdown 表，按 proposal A1 作为兼容性 blocker 登记并回到设计门，不静默加双写。
+proposal OQ1→D2、OQ2→数据模型/D1、OQ3→D3、OQ4→D1 的事实问题均已收敛。`[spec-review-amendment]` 多镜审新增的 direct rename snapshot、registry provenance、shared document lock、平台支持与 manual break-glass 已按推荐写入，但在 `spec-review-report.md` 设计 HARD-GATE 批准前仍是 Proposed 决策，不得视为已获用户授权。实现中若发现仓外 consumer 直接解析 Markdown 表，按 proposal A1 作为兼容性 blocker 登记并回到设计门，不静默加双写。
 
 ## Compliance
 
