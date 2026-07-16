@@ -33,8 +33,9 @@ ship-gate:
 `check_legal_combo` 只绑 `sdflow:outside-voice` 锚（因 lens-metric 锚无 reason_code，D1 合理）；但 `check_lens_metric` 的行级校验又**显式排除 lens="outside-voice" 行** ⇒ 该行的 `runner="none"⇒findings=0`、`host="unknown"⇒runner="none"` 两个不变量**无任何校验**。手写/emitter-bypass 的 `lens="outside-voice" runner="none" findings="5"`、`host="unknown" runner="claude"` 锚会被放行，经 aggregator 汇入 retro 价值表。emitter 侧强制该不变量，∴ 仅 emitter-bypass 可达——但按③目标态非"现状少见"。**决策记录漂移**：spec-review-report.md:152/208 + design.md:78/95 明写 D6 收敛为"lens-metric 锚 + outside-voice 锚**均查**"，实现窄化为"只 outside-voice 锚"未回改记录。
 **→ ✅ 代码半已修[impl-review-fix]（TDD·面治）**：`check_lens_metric` 补 OV 行 elif 分支，覆盖 OV 行**完整**不变量集 3 条（①runner="none"⇒findings=0 `ov-runner-none-nonzero-findings`；②host="unknown"⇒runner="none" `ov-unknown-host-runner`；③OV 行 runner∈{claude,codex,none} 不含 unknown `ov-runner-unknown`），纯结构判定不依赖 reason_code、与 emitter `_OV_RUNNER_DOMAIN`/零执行不变量对齐；补 5 测试（3 违规+2 合法回归）；全仓 1423 passed。**剩：决策记录订正（design-writeback，done 阶段）**——正文现已实现"OV lens-metric 行亦查其结构不变量"，与 D6"均查"意图对齐，done 阶段把 design/spec-review-report 的措辞回改到位。
 
-**[高] V1 · 两评审 SKILL `eval "$(resolve-models.sh)"` 前无 unset + 无校验** | `sdflow-spec-review/SKILL.md:104` · `sdflow-code-review/SKILL.md:104` | **确认**
-`eval "$(resolve-models.sh …)"` 前既不 `unset SDFLOW_*`，也不校验脚本存在/exit-code/六变量完整。shell 中命令替换失败后 `eval ""` 返回 0，同 shell 内**上一轮的 `SDFLOW_HOST`/`SDFLOW_VOICE_RUNNER` 会原样保留** → resolver 缺失/失败时复用旧宿主假绿（CI/skew 窗口高发）。而 `update` 明确不装 hack 脚本（须 setup.sh）。**→ 可修（SKILL prose：eval 前 unset 六变量 + 校验 resolver 可执行 + 捕获 exit + 验六变量非空，任一失败在 fan-out/落锚前 fail-loud 硬停）。**
+**[高] V1 · 两评审 SKILL `eval "$(resolve-models.sh)"` 前无 unset + 无校验** | `sdflow-spec-review/SKILL.md:104` · `sdflow-code-review/SKILL.md:128` | **确认** · **✅ 已修[impl-review-fix]**
+`eval "$(resolve-models.sh …)"` 前既不 `unset SDFLOW_*`，也不校验脚本存在/exit-code/六变量完整。shell 中命令替换失败后 `eval ""` 返回 0，同 shell 内**上一轮的 `SDFLOW_HOST`/`SDFLOW_VOICE_RUNNER` 会原样保留** → resolver 缺失/失败时复用旧宿主假绿（CI/skew 窗口高发）。而 `update` 明确不装 hack 脚本（须 setup.sh）。
+**→ ✅ 已修[impl-review-fix]（方案 A，两 SKILL 对称）**：eval 改为带防护四步次序——**(a)** 先 `unset` 六变量清脏（eval 失败只得空值、不复用上轮脏值）；**(b)** `[ -x resolve-models.sh ]` 预检（复用第零步 resolve-workflow 预检 idiom），缺失 fail-loud 硬停；**(c)** 捕获退出码再 eval，非 0 硬停 + 转发 stderr；**(d)** eval 后校验 `$SDFLOW_HOST`∈{claude,codex,unknown}且非空、host≠unknown 时三档位非空，任一不满足在 fan-out/emitter/落锚前 fail-loud 硬停。**空值 MUST NOT 回落当 host=unknown**（工具没装 ≠ 判不出宿主，防假绿）。诚实边界如实标注（eval 要 export 进主 session shell ∴ 天然是指令非机械门）。托管块一致性门 + hack 11 tests 绿。
 
 **[中] V2 · `fallback-unavailable`(F8) 枚举存在但两 SKILL 无产生它的控制流** | 两 SKILL fallback 段 | **确认**（对抗镜B 旁支同证，对称非漂移）
 spec `host-adaptive-execution:91` 要求"同族 fallback 子代理也起不来 ⇒ `runner="none" findings=0 reason_code="fallback-unavailable"`"，但两 SKILL fallback 段都直接规定 `runner="$SDFLOW_HOST"`（假定派发成功），无失败分支。Codex 宿主 + 目标 CLI 缺 + 子代理也起不来才可达。**→ 可修（两 SKILL 补 F8 分支）。**
@@ -63,9 +64,9 @@ config_lint 只校验字符集，`model-tiers.codex.strong: opus` 完全合法�
 - 历史镜：无重蹈旧坑（task2/3/4/6 各 fix 针对不同边界、无循环修复/回滚）。
 
 ### 修复 / defer 台账
-- **已修[impl-review-fix]**：**C1** guard codex#N 旁路 fail-open（TDD：删 prose 补位 fallback + 2 回归测试）· **B1 代码半** check_lens_metric 补 OV 行 3 不变量校验（TDD·面治，5 测试）。全仓 1423 passed。
+- **已修[impl-review-fix]**：**C1** guard codex#N 旁路 fail-open（TDD：删 prose 补位 fallback + 2 回归测试）· **B1 代码半** check_lens_metric 补 OV 行 3 不变量校验（TDD·面治，5 测试）· **V1** 两评审 SKILL eval 带防护四步次序（unset + 预检 + 捕获 exit + 校验 fail-loud）。全仓 1423 passed + 托管块门绿。
 - **裁决权交人（剩余高危）**：A1 安全决策 + 设计记录漂移（B1 剩余决策记录订正 / V3/V4/V5，改四件套触设计门失鲜、须 done 阶段写回）+ 代码 fail-open 修复各需谨慎 TDD（本 change 历史上修复反复引入新 fail-open，Task2/3/6 均是）。按 option B 本就 STOP 在 done 前 → 见收敛口。
-- **建议可修（objective，剩 5 项）**：A1 输出侧 secret_scan + 注释订正 · V1 SKILL eval 加固 · V2 F8 分支 · D1 test 引号 · B2 SKILL host=。
+- **建议可修（objective，剩 4 项）**：A1 输出侧 secret_scan + 注释订正 · V2 F8 分支 · D1 test 引号 · B2 SKILL host=。
 - **建议 defer（design-writeback，done 阶段随 A1/A3 真值一并写回，勿实现期改四件套）**：A1 沙箱不对称登记订正（design 安全表 + r3「两路径均无硬FS读边界」与实测 codex 有沙箱矛盾）· B1 决策记录"均查"订正 · V3 compat"v1 无 reason_code"订正 · V4 ADR-0024 措辞 · V5 ADR-6"真跑一次"措辞。
 - **建议 todolist**：C2 metrics dup-key 收紧 · V5 preflight 真探针（若选补而非订正）。
 
