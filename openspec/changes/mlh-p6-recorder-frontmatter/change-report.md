@@ -202,19 +202,19 @@ retag_rename_snapshot（内存更新 canonical / overlay / legacy promotion）
 - Task 1–4 均经过独立 Standards + Spec 双轴评审并在修复后 PASS。
 - Task 5 首轮发现的 Windows delegation fixture、corpus 自证、公开 SKILL 旧合同均已修复；复审确认只剩 actual Windows 执行证据。
 
-### 尚未通过
+### 收尾门（两项均已达成）
 
-1. **Actual Windows local-disk smoke 未执行。**
-   - 测试与 `.github/workflows/windows-recorder-smoke.yml` 已就绪。
-   - 当前只有 macOS 上的两个 skip，没有 `windows-latest` run URL、commit 与无 skip 的 `2 passed`。
-   - 因此 Windows acquire/conflict/participant/replace/cleanup + setup copy 仍是 release blocker。
+1. **Actual Windows local-disk smoke——已通过（曾为 release blocker，现已解决）。**
+   - `windows-latest` runner（真本地盘 `C:\Users\runneradmin\...`）→ `2 passed in 20.73s` 无 skip：run [29568476168](https://github.com/laodao-ai/sdflow-skills/actions/runs/29568476168)、commit `ba004e1`。
+   - recorder lock acquire/conflict/participant/replace/cleanup 与 setup copy 均在真 Windows 通过。
+   - 收尾途中真 Windows 暴露两处**测试层**问题（`bash` 解析到 System32 的 WSL launcher 无 distro；subprocess text 模式未指定 utf-8 致读线程解码 setup.sh 的 UTF-8 输出崩），已一并修复——非 recorder/setup.sh 代码 bug。
 
 2. **全仓 warnings-as-errors 门——已 fold 清零（曾为缺口，现已解决）。**
    - 结果：修 4 个 pre-existing 未关闭文件站点后，全仓 `pytest -W error` → `1619 passed, 2 skipped`（2 skip = Windows-only）。
    - 站点枚举、引入 commit 与归属决策见下「成因溯源与 fold 清零」子节；执行见 tasks 7.5。
    - 决策 = 修站点 fold 进本 Change、全仓机械守卫另开 hardening change（todolist T155）。
 
-最终 [verify-report.md](verify-report.md) 因**仅剩的 Windows actual smoke 项**判定 `FAIL`（warning 门已 fold 清零），所以本 Change 尚未执行 hand-off、archive、spec 主线同步、默认分支 merge 或 push。
+[verify-report.md](verify-report.md) 现判定 **PASS**（warning 门 fold 清零 + Windows 门取得真 runner `2 passed` 锚），逐需求核对全 ✅，可执行 hand-off → archive → spec 主线同步 → 默认分支 merge。
 
 ### 全仓 `-W error` 门：成因溯源与 fold 清零（pre-existing，非本 Change 引入）
 
@@ -275,21 +275,16 @@ retag_rename_snapshot（内存更新 canonical / overlay / legacy promotion）
 | Task 2：semantic ID + snapshot lock | ✅ 完成 | 双轴 PASS |
 | Task 3：frontmatter writer + overlay promotion | ✅ 完成 | 双轴 PASS |
 | Task 4：snapshot rename + provenance recovery | ✅ 完成 | 双轴 PASS |
-| Task 5：cleanup/dogfood/docs | 🟡 本地完成 | 本地三项 review gap 已修；Windows actual 未执行 |
-| `sdflow-done` Verify | ❌ FAIL | 仅剩 Windows actual 门未取得执行锚；全仓 `-W error` 门已 fold 清零（`1619 passed, 2 skipped`） |
-| Archive / merge / push | ⏸ 未执行 | Verify 失败后按串行门禁停止 |
+| Task 5：cleanup/dogfood/docs | ✅ 完成 | 本地 review gap 已修；Windows actual smoke 已在真 runner 通过 |
+| `sdflow-done` Verify | ✅ PASS | 两门均达成：warning 门 `1619 passed, 2 skipped`；Windows 门 run 29568476168 `2 passed`（见 verify-report） |
+| Archive / merge / push | ⏸ 待执行 | Verify 已 PASS，可跑 `sdflow-done` 走 hand-off → archive → ff merge |
 
 ## 八、下一步
 
 1. ~~修复 `sdflow-maintain`/`sdflow-architecture` 未关闭文件 warning~~ **已完成**（tasks 7.5 fold 修 4 站点，全仓 `pytest -W error` → `1619 passed, 2 skipped`）。全仓机械守卫另开 hardening change（todolist T155）。
-2. 将固定 commit 推到可触发 GitHub Actions 的分支，在 `windows-latest` 执行：
-
-   ```powershell
-   py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error
-   ```
-
-3. 保存 run URL、commit、runner 和无 skip 的 `2 passed` 结果。
-4. 重新运行 `$sdflow-done mlh-p6-recorder-frontmatter`，通过 Verify 后再生成 hand-off、归档、同步主 specs 并 ff merge。
+2. ~~在 `windows-latest` 执行 Windows smoke 并保存 run 锚~~ **已完成**：run [29568476168](https://github.com/laodao-ai/sdflow-skills/actions/runs/29568476168)、commit `ba004e1` → `2 passed` 无 skip（收尾途中修 `bash`→WSL、subprocess utf-8 两处测试层问题）。
+3. **待执行**：跑 `$sdflow-done mlh-p6-recorder-frontmatter` 走正式 Verify（strong model 冷启动复核）→ hand-off（含 issues sweep，把 T153/T154 标 DONE）→ archive（delta spec 同步进 `openspec/specs`）→ ff merge 到默认分支。
+4. **后续**：另开 hardening change 落 T155（全仓 `-W error` 常态化 CI 守卫）。
 
 ## 九、关键资料
 
