@@ -157,6 +157,7 @@
 | T149 | `sdflow-init/scripts/init.py` | lint_config 对 metrics.enabled 重复键无告警(true+false并存时valid恒True,anchor_lint取首值);未如parse_kv_strict收紧,潜在一致性盲点 | 代码质量 | PROPOSED | 2026-07-16 11:25 | add-codex-host-support | add-codex-host-support |
 | T150 | `sdflow-init/assets/hack/outside-voice.sh` | preflight 只 command-v + timeout 检查,未按 ADR-6「真跑一次」补低成本真探针(CLI未认证/模型无效/参数不支持仍返回ready,失效漏到exec归exec-error) | 功能增强 | PROPOSED | 2026-07-16 11:25 | add-codex-host-support | add-codex-host-support |
 | T151 | `sdflow-buglist/tests/test_mirror_consistency.py` | 扩展 recorder three-way parity guard，覆盖共享 lock 常量与 RecorderLockState/RecorderLockError 类型定义 | 代码质量 | OPEN | 2026-07-17 11:08 | mlh-p6-recorder-frontmatter |  |
+| T152 | `openspec/changes/mlh-p6-recorder-frontmatter/impl-reports` | 规范实现报告的 git diff --check 记录：机械 review package 含原样 trailing whitespace 时显式写 exclude 命令与范围 | 代码质量 | OPEN | 2026-07-17 11:23 | mlh-p6-recorder-frontmatter |  |
 
 ---
 
