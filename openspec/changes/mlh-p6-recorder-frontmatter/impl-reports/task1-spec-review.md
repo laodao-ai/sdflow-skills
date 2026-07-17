@@ -31,3 +31,27 @@
 - `read_recorder_document()` 把 `; file: ...` 追加在 `fix` 之后，偏离批准的严格三段式；建议把 path 放入 problem/cause 内。见 `sdflow-buglist/scripts/buglist.py:321-327`。
 
 修复 Critical/Important 并补最小反例后，Task 1 才可 PASS。
+
+## Third re-review — HEAD `9a770dd`
+
+结论：**FAIL**。
+
+第二轮 Critical 已修：canonical prose 普通表不再生成 ghost item；fenced `## 状态总览` 不再误判 legacy region。`parse_recorder_document()` 现直接产出 `effective_items/effective_occurrences/problems`，`cmd_scan()` 只消费该 snapshot；effective merge/relation/problems 下沉已闭合。三向 AST roster也已覆盖 `_legacy_table_sections`、marker、legacy row 与 effective snapshot helpers。定向验证：`29 passed`。
+
+### Critical
+
+无。
+
+### Important
+
+1. **合法 external same-line opaque value 仍被误杀。** `_find_recorder_span()` 对任何 column-0 行，只要 value 中出现 `sdflow-issues` 且整行不以 `sdflow-issues:` 开头就报 ownership ambiguity。最小复现 `other-tool: sdflow-issues is prose` 仍 fatal；批准 lexical profile 明确允许 external entry 在同一物理行携带任意 opaque value bytes。新增测试只覆盖 indented block value，未覆盖 same-line value。见 `sdflow-buglist/scripts/buglist.py:220-224`（三份镜像）、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:336-343`。
+
+2. **三向 pure-legacy/overlay golden 仍未落地。** 当前唯一三 recorder behavior golden 只比较 canonical renderer/model/marker；没有用同一 pure-legacy 与 overlay fixture 比较三份 parser 的 `effective_items/problems`。AST 等价是必要守卫，但不能替代 `DG-RI-1` 明确要求的三态 behavior golden。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-251`、`sdflow-buglist/tests/test_mirror_consistency.py:64-73`。
+
+3. **批准的坏输入矩阵仍未闭合。** 新增测试只补 ghost row、fenced region、indented opaque mention；marker 缺对/错配/嵌套/重复、lone CR/非法 UTF-8、surrogate、`change/batch=""`、裸 `items:`、缺字段/错型/枚举越域等仍无对应目标态回归证据。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:150-226,365-381`。
+
+### Minor
+
+- `read_recorder_document()` 的 path 已移入 `ERROR:` problem 段，第二轮三段式偏差已修复。
+
+完成以上 Important 后，Task 1 才可 PASS。

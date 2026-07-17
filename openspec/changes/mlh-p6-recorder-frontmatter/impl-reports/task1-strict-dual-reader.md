@@ -17,7 +17,8 @@
 - 绿：`uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py` → `13 passed`。
 - 首轮双轴审抓到 semantic alias shadow、跨文件重复 fatal、ownership 变体、legacy 区域误识别、真实 parse-count 与 path 诊断缺口；均已补实现与对抗回归。
 - 第二轮双轴审继续击穿 canonical prose ghost row、fenced 状态表 false region 与外部 opaque value 误杀；已将 fence-aware 状态总览识别、effective merge/relation/problems 全部下沉到单次 document parser，并补三向 parity。
-- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `288 passed`。
+- 第三轮 Standards 通过；Spec 继续指出 external same-line opaque value 与 behavior/bad-input golden 不足。ownership 判定已收窄到顶层 key 形态，并补 pure-legacy/overlay 三向 effective snapshot、marker、encoding/EOL、surrogate、字段/枚举矩阵。
+- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `298 passed`。
 - dogfood scan：bug `7 items / 0 problems`；todo `150 items / 0 problems`。
 - `git diff --check` → PASS。
 
@@ -28,4 +29,4 @@
 
 ## Concerns
 
-reviewer 报告保留每轮问题与复核结论；第二轮缺口修复后等待第三轮 re-review。Task 2–4 承接 writer/lock/rename，不作为本票假通过依据。
+reviewer 报告保留每轮问题与复核结论；第三轮 Spec 缺口修复后等待最终 re-review。Task 2–4 承接 writer/lock/rename，不作为本票假通过依据。

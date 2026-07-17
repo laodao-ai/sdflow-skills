@@ -343,6 +343,93 @@ def test_external_opaque_value_may_mention_recorder_namespace():
     assert parsed["effective_items"] == {}
 
 
+def test_external_same_line_value_may_mention_recorder_namespace():
+    namespace = TODO.render_recorder_namespace(
+        {"schema": 1, "pool": "todo", "mode": "canonical", "items": {}}
+    )
+    raw = b"---\nother-tool: sdflow-issues is prose\n" + namespace + b"---\n"
+    for module in (BUG, TODO, ISSUES):
+        assert module.parse_recorder_document(raw, "todo")["effective_items"] == {}
+
+
+def test_three_recorders_match_pure_legacy_and_overlay_behavior():
+    legacy = (_legacy_table("bug", "A007") + "\n---\n\n## A007: old\n\n| 状态 | OPEN |\n").encode()
+    snapshots = [module.parse_recorder_document(legacy, "bug") for module in (BUG, TODO, ISSUES)]
+    assert [snapshot["effective_items"] for snapshot in snapshots] == [snapshots[0]["effective_items"]] * 3
+    assert [snapshot["problems"] for snapshot in snapshots] == [[]] * 3
+
+    item = {
+        "module": "flow", "summary": "canonical", "type": "代码质量", "status": "OPEN",
+        "time": "2026-07-17 10:00", "change": None, "batch": None,
+    }
+    namespace = TODO.render_recorder_namespace(
+        {"schema": 1, "pool": "todo", "mode": "overlay", "items": {"A7": item}}
+    )
+    overlay = b"---\n" + namespace + b"---\n" + _legacy_table("todo", "A007").encode()
+    snapshots = [module.parse_recorder_document(overlay, "todo") for module in (BUG, TODO, ISSUES)]
+    assert [snapshot["effective_items"] for snapshot in snapshots] == [{"A7": item}] * 3
+    assert [snapshot["effective_occurrences"] for snapshot in snapshots] == [[(("A", 7), "A7")]] * 3
+    assert [snapshot["problems"] for snapshot in snapshots] == [[]] * 3
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("<!-- sdflow-issue-block:start id=B1 -->\n", "marker 缺 end"),
+        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B2 -->\n", "marker ID 错配"),
+        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:start id=B2 -->\n", "marker 嵌套"),
+        ("<!-- sdflow-issue-block:end id=B1 -->\n", "orphan end marker"),
+        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B1 -->\n<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B1 -->\n", "marker block 重复"),
+    ],
+)
+def test_marker_corruption_is_observable_in_parser_snapshot(body, expected):
+    item = {
+        "module": "core", "summary": "marker", "priority": "P2", "status": "OPEN",
+        "time": "2026-07-17 10:00", "change": None, "batch": None,
+    }
+    namespace = BUG.render_recorder_namespace(
+        {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
+    )
+    snapshot = BUG.parse_recorder_document(b"---\n" + namespace + b"---\n" + body.encode(), "bug")
+    assert any(expected in problem for problem in snapshot["problems"])
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"# invalid \xff\n",
+        b"# lone\rreturn\n",
+    ],
+)
+def test_invalid_utf8_and_lone_cr_are_fatal(raw):
+    with pytest.raises(ValueError, match="encoding|EOL"):
+        BUG.parse_recorder_document(raw, "bug")
+
+
+def test_surrogate_empty_required_and_enum_drift_are_fatal():
+    base = {
+        "module": "core", "summary": "valid", "priority": "P2", "status": "OPEN",
+        "time": "2026-07-17 10:00", "change": None, "batch": None,
+    }
+    for mutation, expected in [
+        ({"summary": "bad\ud800"}, "surrogate"),
+        ({"module": " \t"}, "required string"),
+        ({"priority": "PX"}, "枚举越域"),
+        ({"status": "DONE"}, "枚举越域"),
+    ]:
+        item = {**base, **mutation}
+        with pytest.raises(ValueError, match=expected):
+            BUG.render_recorder_namespace(
+                {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
+            )
+    missing = dict(base)
+    missing.pop("batch")
+    with pytest.raises(ValueError, match="字段集合"):
+        BUG.render_recorder_namespace(
+            {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": missing}}
+        )
+
+
 def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, capsys):
     directory = tmp_path / "openspec/issues/buglist"
     directory.mkdir(parents=True)

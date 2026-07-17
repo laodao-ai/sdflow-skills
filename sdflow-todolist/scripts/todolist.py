@@ -217,15 +217,15 @@ def _find_recorder_span(envelope, eol):
         line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
         if b"\t" in line:
             _frontmatter_error("shared envelope lexical profile 非法", "tab")
-        if (not line.startswith((b" ", b"#")) and b"sdflow-issues" in line
-                and not line.startswith(b"sdflow-issues:")):
-            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
         if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
             _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
         match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
         if match:
             starts.append((index, offset, match.group(1).decode("ascii")))
             active_entry = True
+        elif (not line.startswith((b" ", b"#")) and re.match(
+                rb"^(?:['\"]sdflow-issues['\"]|\?\s*sdflow-issues|sdflow-issues\s+:)", line)):
+            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
         elif line.startswith(b" ") and not active_entry:
             _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
         elif line and not line.startswith((b" ", b"#")):
