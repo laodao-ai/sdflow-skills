@@ -26,11 +26,11 @@ impl-pipeline: tickets
 
 从行为级 fixture 和失败矩阵起步，交付可同时读取 canonical、overlay 与 pure-legacy 文档的严格 reader，以及唯一、确定性的 frontmatter renderer。新 reader 必须一次 binary read/parse 完成格式识别、索引合并、block relation 与诊断；坏 namespace 必须在任何旧表 fallback 或写盘前 fail-closed，同时保持旧 writer 可用，建立后续迁移的回滚安全底座。
 
-- [ ] canonical、overlay、pure-legacy 三类 fixture 覆盖同文件 shadow、Unicode/多行/管道符 round-trip、共享 envelope byte 保真和 block 注入边界。
-- [ ] canonical renderer 的字段顺序、semantic ID 排序、null/empty-map、Unicode scalar 与 LF/CRLF/BOM 规则具有 golden bytes，并满足 parse/render 幂等。
-- [ ] schema、lexical profile、编码/EOL、namespace/ID/JSON 重复、mode/物理结构不一致等坏输入全部 non-zero，诊断可定位且原 bytes 不变。
-- [ ] scan 对每个 dated 文档只有一次 binary read 和一次 document parse，legacy arity/problem 语义与 CLI/JSON shape 保持兼容。
-- [ ] dual-reader 的共享机械 helper 在三个自包含 recorder 间由显式 parity/golden 契约守护。
+- [x] canonical、overlay、pure-legacy 三类 fixture 覆盖同文件 shadow、Unicode/多行/管道符 round-trip、共享 envelope byte 保真和 block 注入边界。
+- [x] canonical renderer 的字段顺序、semantic ID 排序、null/empty-map、Unicode scalar 与 LF/CRLF/BOM 规则具有 golden bytes，并满足 parse/render 幂等。
+- [x] schema、lexical profile、编码/EOL、namespace/ID/JSON 重复、mode/物理结构不一致等坏输入全部 non-zero，诊断可定位且原 bytes 不变。
+- [x] scan 对每个 dated 文档只有一次 binary read 和一次 document parse，legacy arity/problem 语义与 CLI/JSON shape 保持兼容。
+- [x] dual-reader 的共享机械 helper 在三个自包含 recorder 间由显式 parity/golden 契约守护。
 
 ### Task 2: 仓级 semantic ID 与 exclusive snapshot lock
 
