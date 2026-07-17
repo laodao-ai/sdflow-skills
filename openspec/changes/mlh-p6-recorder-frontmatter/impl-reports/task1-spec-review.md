@@ -1,27 +1,33 @@
 # Task 1 Spec Review — strict dual-reader
 
-结论：**FAIL**
+## 首轮审查（保留）
 
-审查基准：`SW-RI-1`、`SW-RI-4`、`DG-RI-1`，以及 `superpowers-plan.md` Task 1。测试通过不能替代下列目标态缺口。
+结论：**FAIL**。
 
-## Critical
+- Critical：overlay shadow 按 literal ID；跨文件重复 ID 未 fail-closed。
+- Important：fatal diagnostic 缺 path；真实 `scan` 未由单次 document parse 承载；三 recorder parity/golden 不完整；坏输入矩阵不足。
+- Minor：实现报告错误声称 literal shadow 符合目标态。
 
-1. **overlay shadow 仍按 literal ID，而不是 semantic ID。** `shadowed` 与 `legacy_owned` 都直接用字符串集合判断；legacy `A007` 与 frontmatter `A7` 会同时进入输出，且重复汇总也按 raw string 分桶。目标态要求同文件按 `(ASCII prefix, decimal integer)` 合并并由 frontmatter 唯一 shadow legacy snapshot。见 `sdflow-buglist/scripts/buglist.py:875-876,899-900,934-945`、`sdflow-todolist/scripts/todolist.py:852-853,873-874,899-909`。
+## Re-review — HEAD `42bcd2a`
 
-2. **跨文件重复 ID 没有 fail-closed。** 重复只被追加到 `problems`，随后 `scan --json` 仍正常打印 payload 并 exit 0；`SW-RI-4` 明确要求跨文件语义重复无论 strict 与否都致命且不得生成新 snapshot。见 `sdflow-buglist/scripts/buglist.py:933-957`、`sdflow-todolist/scripts/todolist.py:898-926`。
+结论：**FAIL**。
 
-## Important
+首轮两项 Critical 已修：overlay 现按 semantic key shadow，跨文件 semantic duplicate 现 fatal；path diagnostic 与真实 parser call-count 已补，三向 helper roster也扩大。定向验证 `27 passed`，但目标态仍有以下阻断项。
 
-1. **fatal diagnostics 缺文件定位。** `read_recorder_document()` 未捕获并补充 `path`，parser 生成的 schema/encoding/lexical 错误也不携带路径，顶层仅原样打印异常；不满足“涉及文件时必须带定位”。新增测试同样只断言 reason，从未断言 path。见 `sdflow-buglist/scripts/buglist.py:276-303,1038-1042`、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:135-150`。
+### Critical
 
-2. **单次 document parse 的产物合同未实现。** `parse_recorder_document()` 只返回 body/model/span；`cmd_scan()` 随后再次分别执行 `split_sections`、table parse、legacy block parse、marker parse、merge 与 relation validation。Task 1 要求一次 document parse 直接产出 format/items/blocks/problems；现有计数测试只直接测 `read_recorder_document()` 的一次 `open`，没有覆盖真实 `scan` 或 `parse_recorder_document` 调用次数。见 `sdflow-buglist/scripts/buglist.py:276-303,858-930`、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:153-168`。
+1. **canonical 文档仍会把自由 prose 中任意 `| ID |` 表提升成 legacy 索引。** `parse_recorder_document()` 无论 format 都调用 `split_sections/parse_table_rows`，`cmd_scan()` 也无论 format 都把 `rows` 放入 `legacy_owned` 并输出。最小复现：canonical `B1` marker 内放一个 8 列示例表行 `B99`，parser 返回 `rows=['B99']`，scan 会把 `B99` 当 item。目标态要求 canonical 只读 frontmatter，且自由 prose 不制造机器索引。见 `sdflow-buglist/scripts/buglist.py:309-317,928-960`、`sdflow-todolist/scripts/todolist.py:287-295,902-925`。新增测试只放了 2 列表并仅断言 exit 0，未断言 payload/problems，因而漏检：`sdflow-buglist/tests/test_frontmatter_dual_reader.py:290-311`。
 
-3. **三 recorder parity/golden 未覆盖实际 dual-reader 行为。** `issues.py` 只有基础 namespace helpers；semantic overlay merge、legacy region、marker relation 没有三向实现或 canonical/pure-legacy/overlay golden equivalence，`marker_block_ranges` 也未进入三向守卫。当前 AST equality 只能证明复制的低层函数相同，不能证明三个 recorder 的 effective items/problems 一致。见 `sdflow-buglist/tests/test_mirror_consistency.py:62-76`、`sdflow-issues/scripts/issues.py:64-315`。`⚠️ cannot-verify-from-diff`：后续 Task 4 的 `read_rename_snapshot()` 尚不在本 diff，不能为本 Task 1 验收兜底。
+### Important
 
-4. **坏输入与 golden fixture 矩阵不足。** 现有 13-case 文件未覆盖重复 namespace/JSON key/ID、缺字段与类型/枚举越域、raw NEL/LS/PS、lone CR/非法 UTF-8、overlay 区域重复、marker 缺对/错配/嵌套/重复、semantic alias shadow、跨文件 fatal、真实 scan 的 read/parse 计数及三 recorder golden parity；因此报告中的“严格失败矩阵/三 recorder parity”没有可审计证据。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:1-222`。
+1. **shared-envelope ownership 检测过宽，拒绝合法 opaque 外部值。** `_find_recorder_span()` 只要任意行包含字节串 `sdflow-issues` 且不是以 `sdflow-issues:` 开头就 fatal；合法的 `other: sdflow-issues is text`、space-indented value、甚至 column-0 comment 都被误判 ownership ambiguity。lexical profile 明确允许这些外部 bytes。见 `sdflow-buglist/scripts/buglist.py:215-229`（三份镜像）。
 
-## Minor
+2. **一次 document parse 产物合同仍只部分闭合。** table/block 切分已移入 parser，但 semantic merge、effective owner partition、relation validation 与最终 problems 仍在 `cmd_scan()` 二次编排；parser 未产出目标要求的 `items + blocks + problems + format`。见 `sdflow-buglist/scripts/buglist.py:286-318,891-960`。
 
-- 实现报告写“overlay 同文件 literal ID 由 frontmatter shadow”，这本身暴露了与批准目标态 semantic ID shadow 的偏差；`Concerns: 无` 不成立。见 `openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md:8,27-29`。
+3. **三 recorder golden 与坏矩阵仍不完整。** 新 golden 仅比较 canonical model/marker；没有对三份 recorder 比较 pure-legacy/overlay 的 effective items/problems。marker 缺对/错配/嵌套/重复、lone CR/非法 UTF-8、surrogate、null/empty-map/缺字段/枚举越域等批准矩阵仍无对应新增证据。`⚠️ cannot-verify-from-diff`：后续 Task 4 的 effective snapshot 尚未实现，不能为 Task 1 假通过。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-349`。
 
-Task 1 必须修复 Critical/Important 并补齐对应回归证据后才能 PASS。
+### Minor
+
+- `read_recorder_document()` 把 `; file: ...` 追加在 `fix` 之后，偏离批准的严格三段式；建议把 path 放入 problem/cause 内。见 `sdflow-buglist/scripts/buglist.py:321-327`。
+
+修复 Critical/Important 并补最小反例后，Task 1 才可 PASS。

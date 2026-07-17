@@ -225,7 +225,10 @@ def _find_recorder_span(envelope, eol):
         line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
         if b"\t" in line:
             _frontmatter_error("shared envelope lexical profile 非法", "tab")
-        if b"sdflow-issues" in line and not line.startswith(b"sdflow-issues:"):
+        if (not line.startswith((b" ", b"#")) and b"sdflow-issues" in line
+                and not line.startswith(b"sdflow-issues:")):
+            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
+        if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
             _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
         match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
         if match:
@@ -287,26 +290,47 @@ def _parse_recorder_namespace(namespace, eol):
 
 
 def _legacy_table_region_count(body):
-    pattern = r"(?m)^##[ \t]+状态总览[^\r\n]*(?:\r?\n[ \t]*){1,3}\|[ \t]*ID[ \t]*\|".encode("utf-8")
-    return len(re.findall(pattern, body))
+    return len(_legacy_table_sections(body.decode("utf-8").splitlines(keepends=True)))
 
 
 def split_sections(lines):
     """返回 (head_end_idx, table_rows_range, body_start_idx)。
     head_end = 状态总览表分隔行后的位置；表行在 [rows_start, rows_end)。"""
-    table_hdr = None
-    for i, ln in enumerate(lines):
-        if re.match(r"\|\s*ID\s*\|", ln):
-            table_hdr = i
+    sections = _legacy_table_sections(lines)
+    return sections[0] if sections else None
+
+
+def _legacy_table_sections(lines):
+    sections = []
+    fence = None
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        marker = re.match(r"^(```+|~~~+)", stripped)
+        if marker:
+            token = marker.group(1)[0]
+            if fence is None:
+                fence = token
+            elif token == fence:
+                fence = None
+            continue
+        if fence is not None or not re.match(r"^##\s+状态总览(?:\s|（|$)", line):
+            continue
+        table_hdr = None
+        for candidate in range(index + 1, min(len(lines), index + 6)):
+            candidate_line = lines[candidate]
+            if not candidate_line.strip() or candidate_line.lstrip().startswith("<!--"):
+                continue
+            if re.match(r"\|\s*ID\s*\|", candidate_line):
+                table_hdr = candidate
             break
-    if table_hdr is None:
-        return None
-    sep = table_hdr + 1  # |----|----|
-    rows_start = sep + 1
-    rows_end = rows_start
-    while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
-        rows_end += 1
-    return {"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end}
+        if table_hdr is None:
+            continue
+        rows_start = table_hdr + 2
+        rows_end = rows_start
+        while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
+            rows_end += 1
+        sections.append({"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end})
+    return sections
 
 
 def parse_table_rows(lines, sec):
@@ -370,6 +394,94 @@ def marker_block_ranges(lines):
     return ranges, problems
 
 
+def _legacy_item_from_row(item_id, info, pool):
+    cells = info["cells"]
+    specific_field = RECORDER_POOL_CONFIG[pool][0]
+    return {
+        "module": cells[1],
+        "summary": cells[2],
+        specific_field: cells[3],
+        "status": cells[4],
+        "time": cells[5] if len(cells) > 5 else None,
+        "change": cells[6] if len(cells) > 6 and cells[6] != "-" else None,
+        "batch": cells[7] if len(cells) > 7 and cells[7] else None,
+    }
+
+
+def _build_effective_snapshot(result, expected_pool):
+    lines = result["lines"]
+    section = result["section"]
+    rows = result["rows"]
+    legacy_blocks = result["legacy_blocks"]
+    marker_blocks = result["marker_blocks"]
+    frontmatter_items = result["model"]["items"] if result["model"] else {}
+    frontmatter_keys = {_legacy_semantic_id_key(item_id) for item_id in frontmatter_items}
+    problems = list(result["marker_problems"])
+    raw_ids = []
+    if section:
+        for index in range(section["rows_start"], section["rows_end"]):
+            cells = [cell.strip() for cell in lines[index].strip().strip("|").split("|")]
+            raw_id = cells[0] if cells else "?"
+            raw_ids.append(raw_id)
+            if len(cells) not in (7, 8):
+                problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
+    occurrences = [
+        (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
+        for raw_id in raw_ids
+        if _legacy_semantic_id_key(raw_id) not in frontmatter_keys
+    ]
+    occurrences.extend((_legacy_semantic_id_key(item_id), item_id) for item_id in frontmatter_items)
+    by_key = {}
+    for semantic_key, raw_id in occurrences:
+        by_key.setdefault(semantic_key, []).append(raw_id)
+    duplicates = {key: ids for key, ids in by_key.items() if len(ids) > 1}
+    if duplicates:
+        key, ids = sorted(duplicates.items(), key=lambda entry: str(entry[0]))[0]
+        _frontmatter_error("semantic ID 重复", f"key={key} ids={','.join(ids)}")
+    if result["format"] == "legacy":
+        for item_id in marker_blocks:
+            problems.append(f"marker-only legacy：{item_id}")
+    else:
+        if expected_pool == "bug":
+            for item_id in frontmatter_items:
+                if item_id not in marker_blocks:
+                    problems.append(f"frontmatter 有 {item_id} 但缺 marker block")
+        for item_id in marker_blocks:
+            if item_id not in frontmatter_items:
+                problems.append(f"marker block 有 {item_id} 但缺 frontmatter item")
+    legacy_owned = {
+        item_id: info for item_id, info in rows.items()
+        if _legacy_semantic_id_key(item_id) not in frontmatter_keys
+    }
+    for item_id in legacy_owned:
+        if expected_pool == "bug" and item_id not in legacy_blocks:
+            problems.append(f"表有 {item_id} 但缺详细块")
+    for item_id in legacy_blocks:
+        if item_id not in rows and result["format"] == "legacy":
+            problems.append(f"块有 {item_id} 但缺总览表行")
+    for item_id, info in legacy_owned.items():
+        if item_id not in legacy_blocks:
+            continue
+        start, end = legacy_blocks[item_id]
+        block_status = next((match.group(1) for line in lines[start:end]
+                             if (match := re.match(r"\|\s*状态\s*\|\s*(\w+)", line))), None)
+        if block_status and block_status != info["cells"][4]:
+            problems.append(
+                f"{item_id} 状态不一致（表={info['cells'][4]} 块={block_status}）"
+            )
+    effective_items = {
+        item_id: _legacy_item_from_row(item_id, info, expected_pool)
+        for item_id, info in legacy_owned.items()
+    }
+    effective_items.update(frontmatter_items)
+    result.update({
+        "effective_items": effective_items,
+        "effective_occurrences": occurrences,
+        "problems": problems,
+    })
+    return result
+
+
 def parse_recorder_document(raw, expected_pool):
     if not isinstance(raw, bytes):
         _frontmatter_error("document 输入非法", "必须是 bytes")
@@ -402,7 +514,7 @@ def parse_recorder_document(raw, expected_pool):
         "legacy_blocks": block_ranges(lines),
     })
     result["marker_blocks"], result["marker_problems"] = marker_block_ranges(lines)
-    return result
+    return _build_effective_snapshot(result, expected_pool)
 
 
 def read_recorder_document(path, expected_pool):
@@ -411,7 +523,9 @@ def read_recorder_document(path, expected_pool):
             raw = stream.read()
         return parse_recorder_document(raw, expected_pool)
     except ValueError as exc:
-        raise ValueError(f"{exc}; file: {path}") from None
+        message = str(exc)
+        detail = message[len("ERROR: "):] if message.startswith("ERROR: ") else message
+        raise ValueError(f"ERROR: file={path}: {detail}") from None
 
 
 def atomic_write(path, text):

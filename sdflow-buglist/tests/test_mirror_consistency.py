@@ -68,7 +68,8 @@ THREE_WAY = [
     "_legacy_semantic_id_key",
     "_split_envelope", "_find_recorder_span", "_parse_recorder_namespace",
     "_legacy_table_region_count", "parse_recorder_document", "read_recorder_document",
-    "split_sections", "parse_table_rows", "block_ranges", "marker_block_ranges",
+    "split_sections", "_legacy_table_sections", "parse_table_rows", "block_ranges",
+    "marker_block_ranges", "_legacy_item_from_row", "_build_effective_snapshot",
 ]
 
 # 只在 buglist.py / todolist.py 两份之间镜像的表/块解析 helper（issues.py 不含，

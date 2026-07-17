@@ -309,6 +309,38 @@ def test_canonical_prose_table_example_is_not_legacy_region(tmp_path):
     )
     result = _run(BUG_PATH, tmp_path, "scan", "--json")
     assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert [item["id"] for item in payload["bugs"]] == ["B1"]
+    assert payload["problems"] == []
+
+
+def test_fenced_status_table_example_is_not_legacy_region(tmp_path):
+    directory = tmp_path / "openspec/issues/todolist"
+    directory.mkdir(parents=True)
+    item = {
+        "module": "flow", "summary": "fenced", "type": "代码质量", "status": "OPEN",
+        "time": "2026-07-17 10:00", "change": None, "batch": None,
+    }
+    namespace = TODO.render_recorder_namespace(
+        {"schema": 1, "pool": "todo", "mode": "canonical", "items": {"T1": item}}
+    )
+    body = "```markdown\n## 状态总览\n\n| ID | 模块 | 摘要 | 属性 | 状态 | 时间 | Change | 批次 |\n```\n"
+    (directory / "2026-07-todolist.md").write_bytes(b"---\n" + namespace + b"---\n" + body.encode())
+    result = _run(TODO_PATH, tmp_path, "scan", "--json")
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert [entry["id"] for entry in payload["items"]] == ["T1"]
+    assert payload["problems"] == []
+
+
+def test_external_opaque_value_may_mention_recorder_namespace():
+    namespace = TODO.render_recorder_namespace(
+        {"schema": 1, "pool": "todo", "mode": "canonical", "items": {}}
+    )
+    raw = b"---\nother-tool: |\n  prose mentions sdflow-issues: safely\n" + namespace + b"---\n"
+    parsed = TODO.parse_recorder_document(raw, "todo")
+    assert parsed["format"] == "canonical"
+    assert parsed["effective_items"] == {}
 
 
 def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, capsys):
