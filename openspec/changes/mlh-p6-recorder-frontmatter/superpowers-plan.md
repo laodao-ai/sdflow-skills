@@ -65,11 +65,11 @@ impl-pipeline: tickets
 
 交付可恢复的跨池 batch rename：直接构造两池一次性 bytes snapshot，在内存 retag 后复用同一 updated snapshot 生成派生索引；registry provenance 区分首次执行、合法重试与未知 source。consumer 协议漂移、frontmatter/ID fatal 或任何写失败都必须在完全收敛前 non-zero，非致命 legacy problems 继续保持默认可观测语义。
 
-- [ ] rename 每个 dated 文档 read/parse 各一次、每池 recorder scan 调用为零，reindex 不重新读取两池。
-- [ ] registry-first provenance 与 old/new item 状态矩阵覆盖首次执行、全 old、混合、全 new retry、orphan、双 key 与未知 source。
-- [ ] canonical/overlay/legacy retag 永不 patch 历史表 row，BOM/CRLF/外部 namespace bytes 在自有 span 外保持不变。
-- [ ] scan JSON 坏 JSON、缺键、错型、缺 file 或枚举漂移在覆盖 INDEX/batches 前 fail-closed。
-- [ ] registry、dated 文档、INDEX 与 batches 各阶段 fault injection 均给出 stage/原命令恢复信息，完全收敛前不得 warning-only success。
+- [x] rename 每个 dated 文档 read/parse 各一次、每池 recorder scan 调用为零，reindex 不重新读取两池。
+- [x] registry-first provenance 与 old/new item 状态矩阵覆盖首次执行、全 old、混合、全 new retry、orphan、双 key 与未知 source。
+- [x] canonical/overlay/legacy retag 永不 patch 历史表 row，BOM/CRLF/外部 namespace bytes 在自有 span 外保持不变。
+- [x] scan JSON 坏 JSON、缺键、错型、缺 file 或枚举漂移在覆盖 INDEX/batches 前 fail-closed。
+- [x] registry、dated 文档、INDEX 与 batches 各阶段 fault injection 均给出 stage/原命令恢复信息，完全收敛前不得 warning-only success。
 
 ### Task 5: 移除 legacy 写半场并完成交付对账
 
