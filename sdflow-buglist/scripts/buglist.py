@@ -18,14 +18,18 @@ skill `sdflow-buglist` 的执行核心。把"判断"留给模型（现象 vs 根
 """
 
 import argparse
+from contextlib import contextmanager, redirect_stdout
 import datetime
 import glob
+import io
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
+import time
 
 
 def atomic_write(path, text):
@@ -56,7 +60,7 @@ def atomic_write(path, text):
 STATUS_CODES = ["OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX", "BLOCKED"]
 PRIORITIES = ["P0", "P1", "P2", "P3", "P4"]
 DEFAULT_PREFIX = "B"
-ID_RE = re.compile(r"\b([A-Z])(\d+)\b")
+ID_RE = re.compile(r"\b([A-Z])([0-9]+)\b", re.ASCII)
 CANONICAL_ID_RE = re.compile(r"^[A-Z][1-9][0-9]*$", re.ASCII)
 UTF8_BOM = b"\xef\xbb\xbf"
 RECORDER_POOL_CONFIG = {
@@ -64,6 +68,177 @@ RECORDER_POOL_CONFIG = {
     "todo": ("type", {"性能优化", "可观测性", "代码质量", "功能增强", "基础设施"},
              {"OPEN", "PROPOSED", "DONE", "WONTDO"}),
 }
+
+RECORDER_LOCK_ENV = "SDFLOW_RECORDER_LOCK_TOKEN"
+_ACTIVE_RECORDER_TOKEN = None
+RECORDER_PARTICIPANT_ALLOWLIST = {
+    "scan", "next-id", "add", "set-status", "triage", "reindex", "sweep",
+    "batch-lint", "batch-add", "batch-set-status", "batch-rename",
+}
+
+
+class RecorderLockError(ValueError):
+    pass
+
+
+class RecorderLockState:
+    def __init__(self, path, token, participant=False, identity=None):
+        self.path = path
+        self.token = token
+        self.participant = participant
+        self.identity = identity
+
+
+def canonical_id(value):
+    if not isinstance(value, str) or not CANONICAL_ID_RE.fullmatch(value):
+        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: expected [A-Z][1-9][0-9]*; fix: use e.g. A7")
+    return value
+
+
+def semantic_id_key(value, allow_legacy=False):
+    pattern = r"([A-Z])([0-9]+)" if allow_legacy else r"([A-Z])([1-9][0-9]*)"
+    match = re.fullmatch(pattern, value, re.ASCII) if isinstance(value, str) else None
+    if not match:
+        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: invalid semantic ID; fix: use one ASCII uppercase prefix and ASCII digits")
+    return match.group(1), int(match.group(2))
+
+
+def validate_prefix(prefix):
+    if not isinstance(prefix, str) or not re.fullmatch(r"[A-Z]", prefix, re.ASCII):
+        raise ValueError(f"ERROR: prefix is not one ASCII uppercase letter: {prefix!r}; cause: invalid prefix; fix: use A-Z")
+    return prefix
+
+
+def _lock_path(root):
+    return os.path.join(os.path.realpath(os.fspath(root)), "openspec", "issues", ".recorder.lock")
+
+
+def _read_lock_metadata(path):
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read()
+        value = json.loads(raw.decode("utf-8"))
+        required = {"repo", "pid", "command", "started", "token"}
+        return value if isinstance(value, dict) and required <= set(value) else None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+
+
+def _lock_conflict(path, metadata=None):
+    if metadata:
+        owner = f"pid={metadata.get('pid')} command={metadata.get('command')} started={metadata.get('started')}"
+        cause = f"lock occupied by {owner}"
+    else:
+        cause = "lock occupied; owner metadata unavailable/initializing"
+    return RecorderLockError(
+        f"ERROR: recorder lock occupied at {path}; cause: {cause}; fix: stop all recorder processes for this repo, remove exactly {path}, then retry"
+    )
+
+
+def validate_recorder_participant(root, token, command):
+    root = os.path.realpath(os.fspath(root))
+    path = _lock_path(root)
+    if command not in RECORDER_PARTICIPANT_ALLOWLIST:
+        raise RecorderLockError(f"ERROR: participant command not allowlisted: {command}; cause: delegation denied; fix: invoke it as a top-level owner")
+    metadata = _read_lock_metadata(path)
+    if not metadata or metadata.get("repo") != root or not secrets.compare_digest(str(metadata.get("token", "")), str(token)):
+        raise RecorderLockError(f"ERROR: invalid recorder participant for {path}; cause: missing, forged, expired, or cross-repo token; fix: invoke as a top-level owner")
+    return RecorderLockState(path, token, participant=True)
+
+
+@contextmanager
+def recorder_lock(root, command):
+    root = os.path.realpath(os.fspath(root))
+    inherited = os.environ.get(RECORDER_LOCK_ENV)
+    if inherited:
+        try:
+            participant = validate_recorder_participant(root, inherited, command)
+        except RecorderLockError:
+            participant = None
+        if participant is not None:
+            yield participant
+            return
+    path = _lock_path(root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    token = secrets.token_hex(32)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise _lock_conflict(path, _read_lock_metadata(path))
+    state = None
+    try:
+        stat = os.fstat(fd)
+        state = RecorderLockState(path, token, identity=(stat.st_dev, stat.st_ino))
+        metadata = {"repo": root, "pid": os.getpid(), "command": command, "started": time.time(), "token": token}
+        os.write(fd, json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+        os.fsync(fd)
+        os.close(fd)
+        fd = None
+        yield state
+    finally:
+        if 'fd' in locals() and fd is not None:
+            os.close(fd)
+        if state is not None:
+            current = _read_lock_metadata(path)
+            try:
+                path_stat = os.stat(path)
+                identity = (path_stat.st_dev, path_stat.st_ino)
+            except FileNotFoundError:
+                identity = None
+            owns = current is not None and identity == state.identity and secrets.compare_digest(str(current.get("token", "")), token)
+            if owns:
+                os.unlink(path)
+            elif os.path.exists(path):
+                raise RecorderLockError(f"ERROR: recorder lock ownership lost at {path}; cause: identity/token changed; fix: preserve the replacement lock and inspect its owner")
+
+
+def read_repository_snapshot(root):
+    root = os.path.realpath(os.fspath(root))
+    pools = {
+        "bug": ("openspec/issues/buglist/*.md", "openspec/buglists/*.md"),
+        "todo": ("openspec/issues/todolist/*.md", "openspec/todolists/*.md"),
+    }
+    snapshot = []
+    seen_paths = set()
+    for pool, patterns in pools.items():
+        for pattern in patterns:
+            for path in sorted(glob.glob(os.path.join(root, pattern))):
+                real = os.path.realpath(path)
+                if real in seen_paths:
+                    continue
+                seen_paths.add(real)
+                document = read_recorder_document(path, pool)
+                rel = os.path.relpath(path, root)
+                snapshot.append((pool, path, rel, document))
+    return snapshot
+
+
+def repository_semantic_occurrences(root, snapshot=None):
+    snapshot = read_repository_snapshot(root) if snapshot is None else snapshot
+    occurrences = []
+    for pool, _path, rel, document in snapshot:
+        occurrences.extend((key, raw_id, pool, rel) for key, raw_id in document["effective_occurrences"])
+    by_key = {}
+    for key, raw_id, pool, rel in occurrences:
+        by_key.setdefault(key, []).append((raw_id, pool, rel))
+    duplicates = {key: places for key, places in by_key.items() if len(places) > 1}
+    if duplicates:
+        key, places = sorted(duplicates.items())[0]
+        rendered = ", ".join(f"{raw}@{pool}:{rel}" for raw, pool, rel in places)
+        raise ValueError(f"ERROR: semantic ID 重复; cause: repository semantic ID conflict {key}: {rendered}; fix: resolve all aliases/pools before retry")
+    return by_key
+
+
+def recorder_child_env(command, token=None):
+    if token is None:
+        token = _ACTIVE_RECORDER_TOKEN
+    env = dict(os.environ)
+    env.pop(RECORDER_LOCK_ENV, None)
+    if token:
+        if command not in RECORDER_PARTICIPANT_ALLOWLIST:
+            raise RecorderLockError(f"ERROR: child command not allowlisted: {command}; cause: token forwarding denied; fix: run without participant capability")
+        env[RECORDER_LOCK_ENV] = token
+    return env
 
 
 def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
@@ -340,6 +515,7 @@ def repo_root(start="."):
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             cwd=start, capture_output=True, text=True, check=True,
+            env=recorder_child_env("git", token=False),
         )
         return out.stdout.strip()
     except Exception:
@@ -366,6 +542,7 @@ def detect_change(root):
         out = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=root, capture_output=True, text=True, check=True,
+            env=recorder_child_env("git", token=False),
         )
         branch = out.stdout.strip()
     except Exception:
@@ -463,7 +640,7 @@ def list_files(root):
         if os.path.isdir(d):
             files = [
                 os.path.join(d, f) for f in os.listdir(d)
-                if re.match(r"\d{4}-\d{2}-\d{2}-buglist\.md$", f)
+                if re.match(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-buglist\.md$", f, re.ASCII)
             ]
             out += sorted(files)  # 各目录内部按文件名（=日期）排序
     return out
@@ -506,7 +683,7 @@ def _ids_in_files(paths, prefix=None):
         with open(path, encoding="utf-8") as f:
             for line in f:
                 # 只认状态总览表里的行（以 | 开头且第二列是 ID）
-                m = re.match(r"\|\s*([A-Z]\d+)\s*\|", line)
+                m = re.match(r"\|\s*([A-Z][0-9]+)\s*\|", line, re.ASCII)
                 if m:
                     pid = m.group(1)
                     if prefix is None or pid.startswith(prefix):
@@ -518,9 +695,13 @@ def all_ids(root, prefix=None):
     return _ids_in_files(list_files(root), prefix)
 
 
-def next_id(root, prefix=DEFAULT_PREFIX):
-    nums = [int(ID_RE.match(i).group(2)) for i in all_ids(root) if ID_RE.match(i)]
+def next_id(root, prefix=DEFAULT_PREFIX, semantic=None):
+    prefix = validate_prefix(prefix)
+    semantic = repository_semantic_occurrences(root) if semantic is None else semantic
+    nums = [number for (item_prefix, number) in semantic if item_prefix == prefix]
     n = (max(nums) + 1) if nums else 1
+    while (prefix, n) in semantic:
+        n += 1
     return f"{prefix}{n}"
 
 
@@ -597,13 +778,13 @@ def block_ranges(lines):
     out = {}
     starts = []
     for i, ln in enumerate(lines):
-        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
+        m = re.match(r"##\s+([A-Z][0-9]+)\s*:", ln, re.ASCII)
         if m:
             starts.append((i, m.group(1)))
     for idx, (i, bid) in enumerate(starts):
         end = len(lines)
         for j in range(i + 1, len(lines)):
-            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
+            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", lines[j], re.ASCII):
                 end = j
                 break
         out[bid] = (i, end)
@@ -675,6 +856,9 @@ def _build_effective_snapshot(result, expected_pool):
             raw_ids.append(raw_id)
             if len(cells) not in (7, 8):
                 problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
+    invalid_ids = [raw_id for raw_id in raw_ids if _legacy_semantic_id_key(raw_id) is None]
+    if invalid_ids:
+        _frontmatter_error("non-ASCII ID", repr(invalid_ids[0]))
     occurrences = [
         (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
         for raw_id in raw_ids
@@ -796,7 +980,10 @@ def cmd_add(args):
         _die(f"状态码非法：{status}")
 
     date = today_str(args.date)
-    bid = data.get("id") or next_id(root, args.prefix)
+    validate_prefix(args.prefix)
+    semantic = repository_semantic_occurrences(root)
+    explicit_id = data.get("id") is not None
+    bid = canonical_id(data["id"]) if explicit_id else next_id(root, args.prefix, semantic)
     # OV-3 守卫：显式传 id 时才校验（next_id 自动生成的号必然合法、必然不重，不需要重复查）。
     # 语法用单字母前缀 `[A-Z]\d+` 全量 fullmatch——不能借用带 `\b` 的 ID_RE.fullmatch，那个模式对
     # "B1" 这类无内部单词边界缺口的整串会拒绝匹配（\b 在两端本就满足，但 fullmatch 要求
@@ -809,11 +996,9 @@ def cmd_add(args):
     # 破坏 _die 的 ERROR: 契约，须在此优雅拒绝。
     # 查重用 all_ids(root)：此刻新文件/新行还未落盘（ensure_file 在下面），all_ids 看到的是
     # 落盘前的既有全集，不会把本次正在 add 的 id 算进去，语义正确。
-    if data.get("id"):
-        if not (isinstance(bid, str) and re.fullmatch(r"[A-Z]\d+", bid)):
-            _die(f"显式 id 语法非法（应形如 B12，单字母前缀）：{bid!r}")
-        if bid in all_ids(root):
-            _die(f"显式 id 与既有重复（会静默丢行）：{bid}")
+    if explicit_id and semantic_id_key(bid) in semantic:
+        places = semantic[semantic_id_key(bid)]
+        _die(f"显式 id 与仓级既有 semantic ID 重复：{bid} at {places}")
     time_str = args.time or datetime.datetime.now().strftime("%H:%M")
     change = data.get("change") or detect_change(root)
 
@@ -995,9 +1180,11 @@ def cmd_scan(args):
     # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数，同时覆盖同文件内
     # 重复与跨文件重复两种情形。
     raw_id_locations = []  # [(semantic_key, raw_id, rel_path), ...]
-    for path in list_files(root):
-        document = read_recorder_document(path, "bug")
-        rel = os.path.relpath(path, root)
+    snapshot = read_repository_snapshot(root)
+    repository_semantic_occurrences(root, snapshot)
+    for pool, path, rel, document in snapshot:
+        if pool != "bug":
+            continue
         problems.extend(f"{rel}: {problem}" for problem in document["problems"])
         for bid, item in document["effective_items"].items():
             bugs.append({"id": bid, **item, "file": rel})
@@ -1111,7 +1298,15 @@ def main():
 
     args = p.parse_args()
     try:
-        args.func(args)
+        if hasattr(args, "prefix"):
+            validate_prefix(args.prefix)
+        args.root = repo_root(args.root)
+        output = io.StringIO()
+        with recorder_lock(args.root, args.cmd), redirect_stdout(output):
+            if args.cmd in {"set-status", "triage"}:
+                repository_semantic_occurrences(args.root)
+            args.func(args)
+        sys.stdout.write(output.getvalue())
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(2) from None

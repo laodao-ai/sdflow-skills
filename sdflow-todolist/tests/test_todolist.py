@@ -530,17 +530,18 @@ class TestDualRead:
         _write_dated_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", ["T1"])
         assert id_conflicts(str(tmp_path)) == []
 
-    def test_next_id_cli_warns_stderr_on_conflict_but_does_not_block(self, tmp_path):
+    def test_next_id_cli_fails_closed_on_semantic_conflict(self, tmp_path):
         _write_dated_file(tmp_path / "openspec" / "todolists", "2026-01", ["T1"])
         _write_dated_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", ["T1"])
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "next-id"],
             capture_output=True, text=True,
         )
-        assert proc.returncode == 0, proc.stderr
-        assert proc.stdout.strip() == "T2"
+        assert proc.returncode != 0
+        assert proc.stdout == ""
         assert "WARNING" in proc.stderr
         assert "T1" in proc.stderr
+        assert "repository semantic ID conflict" in proc.stderr
 
     def test_next_id_cli_silent_when_no_conflict(self, tmp_path):
         _write_dated_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", ["T1"])

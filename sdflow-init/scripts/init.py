@@ -86,6 +86,39 @@ HOOKS = [
 RETIRED_HOOKS = ["change-review-stub.py"]
 
 
+def merge_runtime_gitignore(root, snippet):
+    """Merge runtime-only ignore entries without rewriting user bytes."""
+    if isinstance(snippet, str):
+        snippet = snippet.encode("utf-8")
+    entries = [line for line in snippet.splitlines() if line]
+    if not entries or any(b"\r" in line or b"\n" in line for line in entries):
+        raise ValueError("runtime gitignore snippet 非法")
+    path = os.path.join(root, ".gitignore")
+    try:
+        with open(path, "rb") as handle:
+            original = handle.read()
+    except FileNotFoundError:
+        original = b""
+    lines = original.splitlines()
+    missing = []
+    for entry in entries:
+        count = sum(line == entry for line in lines)
+        if count > 1:
+            raise ValueError(f"runtime gitignore 条目重复，拒绝擅删用户内容：{entry.decode('utf-8')}")
+        if count == 0:
+            missing.append(entry)
+    if not missing:
+        return "已有（byte-noop）"
+    merged = original
+    if merged and not merged.endswith((b"\n", b"\r")):
+        merged += b"\n"
+    merged += b"".join(entry + b"\n" for entry in missing)
+    os.makedirs(root, exist_ok=True)
+    with open(path, "wb") as handle:
+        handle.write(merged)
+    return "追加 " + " ".join(entry.decode("utf-8") for entry in missing)
+
+
 # ── 标记区块幂等注入 ─────────────────────────────────────────
 
 def inject(path, start, end, content, header=""):
@@ -781,6 +814,11 @@ def run(root, mode, dev=False):
         cstat, cmsg = handle_config(root, mode)
         report.append(f"config.yaml：{cmsg}")
 
+        runtime_snippet = os.path.join(SNIPPETS, "runtime-gitignore.txt")
+        with open(runtime_snippet, "rb") as handle:
+            runtime_action = merge_runtime_gitignore(root, handle.read())
+        report.append(f".gitignore runtime：{runtime_action}")
+
         # INDEX.md 托管区块
         idx = os.path.join(osroot, "INDEX.md")
         a = inject(idx, *MARK_IDX, read_snippet("index-section.md"),
@@ -794,7 +832,7 @@ def run(root, mode, dev=False):
             a = inject(p, *MARK_DOC, sec,
                        header=f"# {fn.split('.')[0]}\n\n本文件为项目级 AI 指令。")
             report.append(f"{fn}：{a}")
-    except (OSError, shutil.Error) as e:
+    except (OSError, shutil.Error, ValueError) as e:
         _die(f"文件系统操作失败：{e}")
 
     print(f"✓ sdflow-init {mode} 完成 @ {os.path.abspath(root)}\n")

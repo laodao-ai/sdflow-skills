@@ -34,22 +34,27 @@ per-type 脚本。
   - `atomic_write`：与 buglist.py/todolist.py 同款原子写 helper，供落盘
     `issues/INDEX.md`/`issues/batches.md`/dated 文件（rename 同步）用。
 
-**并发假设边界（D8）**：本脚本假定单机单进程串行调用，不加锁、不做文件锁/乐观锁/CAS。
-umbrella 设计认定"并发/共享可变状态"属 TG-26，但 TG-26 要 Phase C 才落地；Phase B（本
-脚本所在阶段）显式声明串行假设、不实现锁——真需要并发调用本脚本，留给后续 change 补锁。
-调用方（skill / CI / sdflow-done sweep 步）需自行保证不并发调用本脚本，也不与
-buglist.py/todolist.py 的写操作并发交叉。
+**并发边界**：所有权威读写使用 `openspec/issues/.recorder.lock` 的 repository-wide
+exclusive snapshot lock。顶层命令是 owner，复合命令仅向同 repo allowlist recorder
+子进程转发高熵 token；participant 校验后加入同一锁域而不重复 acquire/release。锁是
+cooperative protocol，不阻止编辑器、Git 或绕协议脚本；network/userspace FS 不受支持，
+process-crash 后遗留锁必须按错误给出的精确路径人工 break-glass，禁止 TTL 自动偷锁。
 
 用法见 `python issues.py --help`。
 """
 
 import argparse
+from contextlib import contextmanager, redirect_stdout
+import glob
+import io
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
+import time
 
 
 # ── 兄弟脚本定位 ─────────────────────────────────────────────────────────────
@@ -72,6 +77,177 @@ RECORDER_POOL_CONFIG = {
     "todo": ("type", {"性能优化", "可观测性", "代码质量", "功能增强", "基础设施"},
              {"OPEN", "PROPOSED", "DONE", "WONTDO"}),
 }
+
+RECORDER_LOCK_ENV = "SDFLOW_RECORDER_LOCK_TOKEN"
+_ACTIVE_RECORDER_TOKEN = None
+RECORDER_PARTICIPANT_ALLOWLIST = {
+    "scan", "next-id", "add", "set-status", "triage", "reindex", "sweep",
+    "batch-lint", "batch-add", "batch-set-status", "batch-rename",
+}
+
+
+class RecorderLockError(ValueError):
+    pass
+
+
+class RecorderLockState:
+    def __init__(self, path, token, participant=False, identity=None):
+        self.path = path
+        self.token = token
+        self.participant = participant
+        self.identity = identity
+
+
+def canonical_id(value):
+    if not isinstance(value, str) or not CANONICAL_ID_RE.fullmatch(value):
+        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: expected [A-Z][1-9][0-9]*; fix: use e.g. A7")
+    return value
+
+
+def semantic_id_key(value, allow_legacy=False):
+    pattern = r"([A-Z])([0-9]+)" if allow_legacy else r"([A-Z])([1-9][0-9]*)"
+    match = re.fullmatch(pattern, value, re.ASCII) if isinstance(value, str) else None
+    if not match:
+        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: invalid semantic ID; fix: use one ASCII uppercase prefix and ASCII digits")
+    return match.group(1), int(match.group(2))
+
+
+def validate_prefix(prefix):
+    if not isinstance(prefix, str) or not re.fullmatch(r"[A-Z]", prefix, re.ASCII):
+        raise ValueError(f"ERROR: prefix is not one ASCII uppercase letter: {prefix!r}; cause: invalid prefix; fix: use A-Z")
+    return prefix
+
+
+def _lock_path(root):
+    return os.path.join(os.path.realpath(os.fspath(root)), "openspec", "issues", ".recorder.lock")
+
+
+def _read_lock_metadata(path):
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read()
+        value = json.loads(raw.decode("utf-8"))
+        required = {"repo", "pid", "command", "started", "token"}
+        return value if isinstance(value, dict) and required <= set(value) else None
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+
+
+def _lock_conflict(path, metadata=None):
+    if metadata:
+        owner = f"pid={metadata.get('pid')} command={metadata.get('command')} started={metadata.get('started')}"
+        cause = f"lock occupied by {owner}"
+    else:
+        cause = "lock occupied; owner metadata unavailable/initializing"
+    return RecorderLockError(
+        f"ERROR: recorder lock occupied at {path}; cause: {cause}; fix: stop all recorder processes for this repo, remove exactly {path}, then retry"
+    )
+
+
+def validate_recorder_participant(root, token, command):
+    root = os.path.realpath(os.fspath(root))
+    path = _lock_path(root)
+    if command not in RECORDER_PARTICIPANT_ALLOWLIST:
+        raise RecorderLockError(f"ERROR: participant command not allowlisted: {command}; cause: delegation denied; fix: invoke it as a top-level owner")
+    metadata = _read_lock_metadata(path)
+    if not metadata or metadata.get("repo") != root or not secrets.compare_digest(str(metadata.get("token", "")), str(token)):
+        raise RecorderLockError(f"ERROR: invalid recorder participant for {path}; cause: missing, forged, expired, or cross-repo token; fix: invoke as a top-level owner")
+    return RecorderLockState(path, token, participant=True)
+
+
+@contextmanager
+def recorder_lock(root, command):
+    root = os.path.realpath(os.fspath(root))
+    inherited = os.environ.get(RECORDER_LOCK_ENV)
+    if inherited:
+        try:
+            participant = validate_recorder_participant(root, inherited, command)
+        except RecorderLockError:
+            participant = None
+        if participant is not None:
+            yield participant
+            return
+    path = _lock_path(root)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    token = secrets.token_hex(32)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise _lock_conflict(path, _read_lock_metadata(path))
+    state = None
+    try:
+        stat = os.fstat(fd)
+        state = RecorderLockState(path, token, identity=(stat.st_dev, stat.st_ino))
+        metadata = {"repo": root, "pid": os.getpid(), "command": command, "started": time.time(), "token": token}
+        os.write(fd, json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+        os.fsync(fd)
+        os.close(fd)
+        fd = None
+        yield state
+    finally:
+        if 'fd' in locals() and fd is not None:
+            os.close(fd)
+        if state is not None:
+            current = _read_lock_metadata(path)
+            try:
+                path_stat = os.stat(path)
+                identity = (path_stat.st_dev, path_stat.st_ino)
+            except FileNotFoundError:
+                identity = None
+            owns = current is not None and identity == state.identity and secrets.compare_digest(str(current.get("token", "")), token)
+            if owns:
+                os.unlink(path)
+            elif os.path.exists(path):
+                raise RecorderLockError(f"ERROR: recorder lock ownership lost at {path}; cause: identity/token changed; fix: preserve the replacement lock and inspect its owner")
+
+
+def read_repository_snapshot(root):
+    root = os.path.realpath(os.fspath(root))
+    pools = {
+        "bug": ("openspec/issues/buglist/*.md", "openspec/buglists/*.md"),
+        "todo": ("openspec/issues/todolist/*.md", "openspec/todolists/*.md"),
+    }
+    snapshot = []
+    seen_paths = set()
+    for pool, patterns in pools.items():
+        for pattern in patterns:
+            for path in sorted(glob.glob(os.path.join(root, pattern))):
+                real = os.path.realpath(path)
+                if real in seen_paths:
+                    continue
+                seen_paths.add(real)
+                document = read_recorder_document(path, pool)
+                rel = os.path.relpath(path, root)
+                snapshot.append((pool, path, rel, document))
+    return snapshot
+
+
+def repository_semantic_occurrences(root, snapshot=None):
+    snapshot = read_repository_snapshot(root) if snapshot is None else snapshot
+    occurrences = []
+    for pool, _path, rel, document in snapshot:
+        occurrences.extend((key, raw_id, pool, rel) for key, raw_id in document["effective_occurrences"])
+    by_key = {}
+    for key, raw_id, pool, rel in occurrences:
+        by_key.setdefault(key, []).append((raw_id, pool, rel))
+    duplicates = {key: places for key, places in by_key.items() if len(places) > 1}
+    if duplicates:
+        key, places = sorted(duplicates.items())[0]
+        rendered = ", ".join(f"{raw}@{pool}:{rel}" for raw, pool, rel in places)
+        raise ValueError(f"ERROR: semantic ID 重复; cause: repository semantic ID conflict {key}: {rendered}; fix: resolve all aliases/pools before retry")
+    return by_key
+
+
+def recorder_child_env(command, token=None):
+    if token is None:
+        token = _ACTIVE_RECORDER_TOKEN
+    env = dict(os.environ)
+    env.pop(RECORDER_LOCK_ENV, None)
+    if token:
+        if command not in RECORDER_PARTICIPANT_ALLOWLIST:
+            raise RecorderLockError(f"ERROR: child command not allowlisted: {command}; cause: token forwarding denied; fix: run without participant capability")
+        env[RECORDER_LOCK_ENV] = token
+    return env
 
 
 def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
@@ -349,13 +525,13 @@ def block_ranges(lines):
     out = {}
     starts = []
     for i, ln in enumerate(lines):
-        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
+        m = re.match(r"##\s+([A-Z][0-9]+)\s*:", ln, re.ASCII)
         if m:
             starts.append((i, m.group(1)))
     for idx, (i, bid) in enumerate(starts):
         end = len(lines)
         for j in range(i + 1, len(lines)):
-            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
+            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", lines[j], re.ASCII):
                 end = j
                 break
         out[bid] = (i, end)
@@ -427,6 +603,9 @@ def _build_effective_snapshot(result, expected_pool):
             raw_ids.append(raw_id)
             if len(cells) not in (7, 8):
                 problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
+    invalid_ids = [raw_id for raw_id in raw_ids if _legacy_semantic_id_key(raw_id) is None]
+    if invalid_ids:
+        _frontmatter_error("non-ASCII ID", repr(invalid_ids[0]))
     occurrences = [
         (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
         for raw_id in raw_ids
@@ -575,6 +754,7 @@ def repo_root(start="."):
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             cwd=start, capture_output=True, text=True, check=True,
+            env=recorder_child_env("git", token=False),
         )
         return out.stdout.strip()
     except Exception:
@@ -602,11 +782,16 @@ def _scan_pool(script, root, pool, problems_out=None):
     行为与改动前一致）——只有显式传入列表的调用方（`cmd_reindex`）才会拿到这份信号，不
     改变 `read_pool`/`_scan_pool` 对既有调用方（如 `cmd_batch_rename`）的返回值形状。
     """
+    kwargs = {"capture_output": True, "text": True}
+    if _ACTIVE_RECORDER_TOKEN:
+        kwargs["env"] = recorder_child_env("scan")
     proc = subprocess.run(
         [sys.executable, script, "--root", str(root), "scan", "--json"],
-        capture_output=True, text=True,
+        **kwargs,
     )
     if proc.returncode != 0:
+        if "repository semantic ID conflict" in proc.stderr:
+            raise CrossPoolIDConflict(proc.stderr.strip())
         raise RuntimeError(
             f"{os.path.basename(script)} scan --json 失败（exit={proc.returncode}）：{proc.stderr}"
         )
@@ -654,10 +839,8 @@ def read_pool(root, problems_out=None):
     `problems`（透传见 `_scan_pool`）。默认 `None`，返回值形状与改动前完全一致——
     `cmd_batch_rename` 等既有调用方无需改动。
 
-    **并发假设边界（D8）**：本函数只读、不加锁。dated 文件本身靠 buglist.py/todolist.py
-    的 atomic_write 保证不会读到半截内容，但两次 `scan --json` 子进程调用之间没有任何
-    快照隔离——如果调用期间另一进程正并发 add/set-status，两池读到的"时刻"不保证一致。
-    Phase B 显式假定单机单进程串行调用，不处理这类竞态（同模块 docstring D8）。
+    调用方必须已经是 recorder lock owner/participant；两个 scan 子进程校验同一 token，
+    因而 join 对应同一个没有外部合规 writer 穿越的 repository snapshot。
     """
     items = (
         _scan_pool(BUGLIST_SCRIPT, root, "bug", problems_out)
@@ -1394,7 +1577,7 @@ def _retag_items_in_dated_files(root, items, old_key, new_key):
             file_lines = f.readlines()
         wanted = {it["id"]: it for it in its}
         for i, line in enumerate(file_lines):
-            m = re.match(r"\|\s*([A-Z]\d+)\s*\|", line)
+            m = re.match(r"\|\s*([A-Z][0-9]+)\s*\|", line, re.ASCII)
             if not m or m.group(1) not in wanted:
                 continue
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
@@ -1517,7 +1700,7 @@ def cmd_sweep(args):
         proc = subprocess.run(
             [sys.executable, script, "--root", root, "scan",
              "--change", change, "--open-ungrouped", "--json"],
-            capture_output=True, text=True,
+            capture_output=True, text=True, env=recorder_child_env("scan"),
         )
         if proc.returncode != 0:
             _die(f"sweep: {pool} scan 失败 (rc={proc.returncode}): {proc.stderr.strip()}")
@@ -1534,7 +1717,7 @@ def cmd_sweep(args):
             tp = subprocess.run(
                 [sys.executable, script, "--root", root, "triage",
                  "--id", iid, "--批次", change],
-                capture_output=True, text=True,
+                capture_output=True, text=True, env=recorder_child_env("triage"),
             )
             if tp.returncode != 0:
                 _die(
@@ -1553,14 +1736,14 @@ def cmd_sweep(args):
     ba = subprocess.run(
         [sys.executable, __file__, "--root", root, "batch", "add",
          change, "--if-exists", "skip"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, env=recorder_child_env("batch-add"),
     )
     if ba.returncode != 0:
         _die(f"sweep: batch add 失败 (rc={ba.returncode}): {ba.stderr.strip()}")
 
     ri = subprocess.run(
         [sys.executable, __file__, "--root", root, "reindex"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, env=recorder_child_env("reindex"),
     )
     if ri.returncode != 0:
         _die(f"sweep: reindex 失败 (rc={ri.returncode}): {ri.stderr.strip()}")
@@ -1574,6 +1757,7 @@ def cmd_sweep(args):
 
 
 def main():
+    global _ACTIVE_RECORDER_TOKEN
     p = argparse.ArgumentParser(
         description="共享 issues 层：跨 bug+todo 的 reindex / batch"
     )
@@ -1631,7 +1815,19 @@ def main():
     sw.set_defaults(func=cmd_sweep)
 
     args = p.parse_args()
-    args.func(args)
+    command = f"batch-{args.batch_action}" if args.cmd == "batch" else args.cmd
+    try:
+        args.root = repo_root(args.root)
+        output = io.StringIO()
+        with recorder_lock(args.root, command) as lock_state, redirect_stdout(output):
+            args._recorder_token = lock_state.token
+            _ACTIVE_RECORDER_TOKEN = lock_state.token
+            args.func(args)
+            _ACTIVE_RECORDER_TOKEN = None
+        sys.stdout.write(output.getvalue())
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(2) from None
 
 
 if __name__ == "__main__":
