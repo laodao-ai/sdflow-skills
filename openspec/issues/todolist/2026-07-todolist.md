@@ -12,6 +12,7 @@ sdflow-issues:
     T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"DONE","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
     T154: {"module":"sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py","summary":"actual Windows local-disk smoke 未执行验证（SW-RI-2 recorder lock 兼容目标，deferred）","type":"基础设施","status":"DONE","time":"2026-07-17 16:14","change":"mlh-p6-recorder-frontmatter","batch":null}
     T155: {"module":".github/workflows/（全仓 -W error CI 门）","summary":"全仓 pytest -W error 常态化为持久 CI 守卫（防未来再引入未关闭文件/ResourceWarning 类存量债）","type":"基础设施","status":"OPEN","time":"2026-07-17 16:22","change":"mlh-p6-recorder-frontmatter","batch":null}
+    T156: {"module":"sdflow-devenv（配 CI 载体层：SKILL.md + references/testing-framework.md）","summary":"sdflow-devenv 配 CI 的 P2 决策示范清一色 GitHub Actions、且未显式化「硬门/软门」降级边界——对「不管什么项目都能配」的承诺留了平台假设漏洞（用 workflow 的消费仓不一定在 GitHub）","type":"功能增强","status":"OPEN","time":"2026-07-17 19:53","change":"-","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1534,3 +1535,14 @@ sdflow-issues:
 > 更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义
 > 2026-07 状态：OPEN → DONE（commit 27b77a7 (mlh-p6 fold): cmd_triage docstring 改为 frontmatter 批次/promotion/marker 语义）
 <!-- sdflow-issue-block:end id=T153 -->
+
+<!-- sdflow-issue-block:start id=T156 -->
+## T156: sdflow-devenv 配 CI 的 P2 决策示范清一色 GitHub Actions、且未显式化「硬门/软门」降级边界——对「不管什么项目都能配」的承诺留了平台假设漏洞（用 workflow 的消费仓不一定在 GitHub）
+> sdflow-devenv 配 CI 的 P2 决策示范清一色 GitHub Actions、且未显式化「硬门/软门」降级边界——对「不管什么项目都能配」的承诺留了平台假设漏洞（用 workflow 的消费仓不一定在 GitHub）
+
+**动机**：sdflow-devenv 承诺「不管什么项目都能配 CI」（SKILL.md:3），地基本身已对——testing-framework.md:159-160 已确立「CI 只调本地同一条命令」＝平台无关；environments-template.md:253 亦承认「无 CI/纯本地门禁」为合法态。缺的不是原则而是两处：① 配 CI 的 P2 决策示范清一色 GitHub Actions（SKILL.md:29、references/testing-framework.md:84），无 GitLab/Gitea/自建 server/纯本地 hook 的对应模板 → 把模型与用户默认往 GitHub 引，下游非 GitHub 项目落不了地；② 未显式化「拦截强度分层」，用户会误以为门到处焊死、实则纯客户端 hook 可 --no-verify 绕过。
+
+**思路**：另开独立增强（能力级，走自己的设计门，不并入 mlh-p6 / 本仓 T155）。两处补齐：(a) CI 载体模板按 git remote 探测分流——github→.github/workflows、gitlab→.gitlab-ci.yml、gitea/forgejo→.gitea/workflows、都不是/纯本地→pre-push hook 兜底；各载体只调 repo 内单一命令入口（make ci 或 hack/ci-check.sh），跑什么（如全仓 pytest -W error）是唯一真相源、载体只是薄适配（承 testing-framework.md:160）。(b) 把「拦截强度分层」写进 P2 决策清单并诚实标降级：平台原生 CI required-check / 服务端 pre-receive = 硬门（fail-closed，绕不过）；客户端 pre-push = 软门（可 --no-verify 绕，靠自觉+review 兜）；无 = 手动（sdflow-done verify 跑一次）。
+
+**备注**：来源=mlh-p6 收尾「建全仓 -W error CI 门」设计问答的平台无关化延伸；用户拍板 (a)——本仓 T155 先走 GitHub Actions，本项留待 sdflow-devenv 独立增强。关联本仓 CI 门 T155。锚：sdflow-devenv/SKILL.md:3/:29、references/testing-framework.md:84/:159-160、references/environments-template.md:253/:283。
+<!-- sdflow-issue-block:end id=T156 -->

@@ -27,6 +27,28 @@ ship-gate:
 | Task `7.3` 全仓 `pytest -W error` | fold 修 4 个 pre-existing 未关闭文件站点后 `uv run --with pytest pytest -W error` → `1619 passed, 2 skipped in 75.41s`（2 skip = Windows-only）；`openspec validate mlh-p6-recorder-frontmatter --strict --no-interactive` → valid，`git diff --check` → 0 | ✅ 验证门达成 |
 | Task `7.4` known-consumer smoke + actual Windows smoke | known-consumer：`test_upgraded_install_known_consumer_smoke` 已在定向套件通过；actual Windows：`windows-latest` run 29568476168（commit `ba004e1`）→ `2 passed` 无 skip | ✅ 实现 |
 
+## 本轮独立复跑（2026-07-17，Do-Not-Trust 冷核）
+
+不信任已有报告措辞，用 `/usr/bin/python3 -m pytest`（pytest 8.4.2）在 macOS 本机独立实跑，计数与上文完全一致：
+
+| 命令 | 真实结果 |
+|---|---|
+| `pytest sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error -q` | `445 passed, 2 skipped in 25.08s` |
+| `pytest -W error -q`（全仓） | `1619 passed, 2 skipped in 74.00s` |
+| `openspec validate mlh-p6-recorder-frontmatter --strict --no-interactive` | `Change 'mlh-p6-recorder-frontmatter' is valid` |
+| `git diff --check` | exit 0（干净） |
+| 7.2 source grep：`import yaml` / 跨 recorder import / `_reject_cell_unsafe` 活引用 | 三项均为空（无命中） |
+
+代码锚点独立抽验（非仅看复选框）：
+- `recorder_lock` 三份镜像均用 `os.O_WRONLY | os.O_CREAT | os.O_EXCL`（`issues.py:203`）——SW-RI-2 exclusive lock 落地。
+- 20 进程并发 add 断言 ID 唯一 + 失败均报 `recorder lock occupied` + 最终 scan 集合 == 成功集（`test_task2_semantic_lock.py:95-116`），非空转。
+- rename snapshot 断言每 dated file `reads==1`/`parses==1`（`test_task4_rename_snapshot.py:638-639`）——SW-RI-3 单次解析落地。
+- `validate_scan_envelope` 缺键/错型/缺 file 一律 `raise`，无 `.get(..., [])` 兜底（`issues.py:1164-1180`）——SW-RI-1/3 consumer fail-closed 落地。
+- 7.5 fold：`maintain_scan.py:184/:245` 已 `with open`、`test_maintain_scan.py:224` 已 `with open`、`test_sad_scaffold.py` 并发 Popen 已 `communicate()` drain——`-W error` 门下无未关闭文件残留。
+- Windows smoke skip 由 `pytest.mark.skipif(sys.platform != "win32")` 门控，文件头明确「非 Windows 主机 skip，MUST NOT 当 Windows 证据」；CI 锚 commit `ba004e1` 经 `git log` 确认存在。macOS 上的 2 skip 属合法诚实边界。
+
+DG-RI-1 命名说明（非缺口）：spec planned 名 `_canonical_id_key` 落地为 `canonical_id`+`semantic_id_key`、`_find_item_file` 落地为 `_find_item_document`，均已在 mirror THREE_WAY/TWO_WAY roster 内受守，requirement 意图（canonical-ID-key helper 三向守护）完全兑现。
+
 ## 核心缺口
 
 1. ~~**actual Windows local-disk runner 尚未执行。**~~ **（已解决——已取得真 Windows PASS 锚。）** `windows-latest` runner（本地盘 `C:\Users\runneradmin\...`）执行 → `2 passed in 20.73s` 无 skip：run [29568476168](https://github.com/laodao-ai/sdflow-skills/actions/runs/29568476168)、commit `ba004e1`。recorder lock acquire/conflict/participant/replace/cleanup 与 setup copy 均在真 Windows 通过。收尾途中真 Windows 暴露两处**测试层**问题（`bash` 解析到 System32 的 WSL launcher 无 distro、subprocess text 模式未指定 utf-8 致读线程解码崩）已一并修复——**非 recorder/setup.sh 代码 bug**。
