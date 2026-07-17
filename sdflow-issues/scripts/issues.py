@@ -897,6 +897,18 @@ def _legacy_block_range(document, raw_id):
 
 def _reject_target_document_problems(document, target_ids):
     """Fail closed on target marker/ownership relations before any registry write."""
+    if document["pool"] == "bug":
+        frontmatter_keys = {
+            _legacy_semantic_id_key(item_id)
+            for item_id in (document["model"]["items"] if document["model"] else {})
+        }
+        # A pure-legacy promotion candidate owns its heading block.  Inspect it
+        # before the document-wide structural summary so a preexisting complete
+        # or partial marker cannot hide the target ID and collision line behind
+        # a generic ``marker-only legacy`` diagnostic.
+        for raw_id in target_ids:
+            if _legacy_semantic_id_key(raw_id) not in frontmatter_keys:
+                _legacy_block_range(document, raw_id)
     structural = [
         problem for problem in document["problems"]
         if "marker" in problem or "frontmatter" in problem
@@ -906,14 +918,6 @@ def _reject_target_document_problems(document, target_ids):
             f"ERROR: file={document['path']} marker/ownership 结构非法; "
             f"cause: {structural[0]}; fix: repair the target relation, then rerun the original batch rename command"
         )
-    if document["pool"] == "bug":
-        frontmatter_keys = {
-            _legacy_semantic_id_key(item_id)
-            for item_id in (document["model"]["items"] if document["model"] else {})
-        }
-        for raw_id in target_ids:
-            if _legacy_semantic_id_key(raw_id) not in frontmatter_keys:
-                _legacy_block_range(document, raw_id)
 
 
 def _reject_ambiguous_legacy_rows(snapshot, old_key, new_key):
@@ -933,10 +937,26 @@ def _reject_ambiguous_legacy_rows(snapshot, old_key, new_key):
             if _legacy_semantic_id_key(raw_id) in frontmatter_keys:
                 continue
             if len(cells) not in (7, 8):
-                if old_key in cells or new_key in cells or len(cells) < 7:
+                # A row with more than eight cells is only demonstrably a
+                # harmless trailing-cell extension when the canonical first
+                # eight positions independently validate.  If enum/status are
+                # shifted (the characteristic middle-cell insertion), the
+                # apparent batch cell is not trustworthy even when neither
+                # rename key appears literally anywhere in the row.
+                harmless_trailing = (
+                    len(cells) > 8
+                    and _legacy_semantic_id_key(raw_id) is not None
+                    and bool(cells[1].strip())
+                    and bool(cells[2].strip())
+                    and cells[3] in specific_values
+                    and cells[4] in status_values
+                    and old_key not in cells[8:]
+                    and new_key not in cells[8:]
+                )
+                if not harmless_trailing:
                     raise ValueError(
                         f"ERROR: file={document['path']} legacy row batch truth ambiguous; "
-                        f"cause: id={raw_id} line={index + 1} arity={len(cells)} affects {old_key!r}/{new_key!r}; "
+                        f"cause: id={raw_id} line={index + 1} arity={len(cells)} cannot prove batch truth for {old_key!r}/{new_key!r}; "
                         "fix: repair the legacy row arity, then rerun the original batch rename command"
                     )
                 continue
@@ -999,13 +1019,18 @@ def retag_rename_snapshot(snapshot, old_key, new_key):
     for document in snapshot["documents"]:
         record = dict(document)
         original_items = original_by_file.get(document["file"], {})
+        relation_target_ids = [
+            item_id for item_id, item in original_items.items()
+            if item.get("batch") in {old_key, new_key}
+        ]
         target_ids = [item_id for item_id, item in original_items.items() if item.get("batch") == old_key]
+        if relation_target_ids:
+            _reject_target_document_problems(document, relation_target_ids)
         if not target_ids:
             record["rendered"] = document["raw"]
             updated_items.extend(dict(item) for item in original_items.values())
             updated_documents.append(record)
             continue
-        _reject_target_document_problems(document, target_ids)
         old_model = document["model"]
         model = {
             "schema": 1,
@@ -1159,10 +1184,15 @@ def validate_scan_envelope(payload, pool):
         if not isinstance(item, dict) or not required <= set(item):
             missing = sorted(required - set(item)) if isinstance(item, dict) else sorted(required)
             raise ValueError(f"ERROR: scan item[{index}] 字段非法; cause: missing={missing}; fix: repair/reinstall the recorder producer and retry")
+        if not isinstance(item["id"], str):
+            raise ValueError(
+                f"ERROR: scan item[{index}].id 类型非法; cause: expected string, got {type(item['id']).__name__}; "
+                "fix: repair/reinstall the recorder producer and retry"
+            )
         semantic_key = _legacy_semantic_id_key(item["id"])
         if semantic_key is None or semantic_key[1] < 1:
             raise ValueError(
-                f"ERROR: scan item[{index}].ID 非法; cause: expected one ASCII uppercase prefix and positive ASCII digits, got {item['id']!r}; "
+                f"ERROR: scan item[{index}].id 非法; cause: expected ID with one ASCII uppercase prefix and positive ASCII digits, got {item['id']!r}; "
                 "fix: repair/reinstall the recorder producer and retry"
             )
         for field in ("module", "summary", "time", "file", specific_field, "status"):

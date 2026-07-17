@@ -80,6 +80,21 @@ def test_validate_scan_envelope_rejects_non_ascii_or_malformed_legacy_id(bad_id)
         )
 
 
+@pytest.mark.parametrize("bad_id", [None, 7, [], {}])
+def test_validate_scan_envelope_rejects_non_string_id_with_controlled_diagnostic(bad_id):
+    with pytest.raises(ValueError) as exc_info:
+        validate_scan_envelope(
+            json.dumps({"bugs": [_valid_bug_item(id=bad_id)], "problems": []}), "bug"
+        )
+
+    diagnostic = str(exc_info.value)
+    assert diagnostic.startswith("ERROR: ")
+    assert "scan item[0].id" in diagnostic
+    assert "; cause:" in diagnostic
+    assert "; fix:" in diagnostic
+    assert "Traceback" not in diagnostic
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [("module", "   "), ("summary", "\t\n"), ("change", ""), ("batch", "")],
@@ -127,6 +142,41 @@ def test_reindex_consumer_drift_preserves_existing_index_and_batches(tmp_path, m
     with pytest.raises(ValueError):
         _reindex_core(str(tmp_path))
 
+    assert index.read_bytes() == b"old-index\n"
+    assert batches.read_bytes() == b"old-batches\n"
+
+
+@pytest.mark.parametrize("bad_id", [None, 7, [], {}])
+def test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes(
+    tmp_path, monkeypatch, capsys, bad_id
+):
+    issues_dir = tmp_path / "openspec" / "issues"
+    issues_dir.mkdir(parents=True)
+    index = issues_dir / "INDEX.md"
+    batches = issues_dir / "batches.md"
+    index.write_bytes(b"old-index\n")
+    batches.write_bytes(b"old-batches\n")
+
+    class Proc:
+        returncode = 0
+        stdout = json.dumps({"bugs": [_valid_bug_item(id=bad_id)], "problems": []})
+        stderr = ""
+
+    monkeypatch.setattr(issues_mod.subprocess, "run", lambda *_args, **_kwargs: Proc())
+    monkeypatch.setattr(
+        sys, "argv", ["issues.py", "--root", str(tmp_path), "reindex"]
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        issues_mod.main()
+
+    diagnostic = capsys.readouterr().err
+    assert exc_info.value.code == 2
+    assert diagnostic.startswith("ERROR: ")
+    assert "scan item[0].id" in diagnostic
+    assert "; cause:" in diagnostic
+    assert "; fix:" in diagnostic
+    assert "Traceback" not in diagnostic
     assert index.read_bytes() == b"old-index\n"
     assert batches.read_bytes() == b"old-batches\n"
 
@@ -267,7 +317,7 @@ def test_classify_batch_rename_rejects_ambiguous_or_orphan_state(registry, item_
         classify_batch_rename(registry, items, "batch-old", "batch-new")
 
 
-def _legacy_bug_bytes(eol=b"\n", bom=b""):
+def _legacy_bug_bytes(eol=b"\n", bom=b"", batch="batch-old"):
     lines = [
         "# Bugs",
         "",
@@ -275,7 +325,7 @@ def _legacy_bug_bytes(eol=b"\n", bom=b""):
         "",
         "| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |",
         "|----|------|----------|--------|------|------|------------|------|",
-        "| B1 | core | old | P2 | OPEN | 10:00 | chg | batch-old |",
+        f"| B1 | core | old | P2 | OPEN | 10:00 | chg | {batch} |",
         "",
         "## B1: old",
         "",
@@ -319,6 +369,23 @@ def _write_preflight_state(root, dated_path, raw):
     }
 
 
+def _rename_cli(root):
+    return subprocess.run(
+        [
+            sys.executable,
+            str(Path(issues_mod.__file__)),
+            "--root",
+            str(root),
+            "batch",
+            "rename",
+            "batch-old",
+            "batch-new",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+
 @pytest.mark.parametrize("shape", ["canonical-missing-marker", "overlay-missing-marker", "legacy-marker-collision", "legacy-duplicate-candidate"])
 def test_batch_rename_preflight_rejects_unsafe_target_before_any_write(tmp_path, shape):
     path = tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md"
@@ -352,6 +419,103 @@ def test_batch_rename_preflight_rejects_unsafe_target_before_any_write(tmp_path,
     assert (tmp_path / "openspec" / "issues" / "batches.md").read_bytes() == before["registry"]
     assert path.read_bytes() == before["dated"]
     assert (tmp_path / "openspec" / "issues" / "INDEX.md").read_bytes() == before["INDEX"]
+
+
+@pytest.mark.parametrize(
+    "marker_bytes",
+    [
+        (
+            b"<!-- sdflow-issue-block:start id=B9 -->\n"
+            b"inside\n"
+            b"<!-- sdflow-issue-block:end id=B9 -->\n"
+        ),
+        b"<!-- sdflow-issue-block:start id=B9 -->\n",
+    ],
+    ids=["complete", "partial"],
+)
+def test_pure_legacy_marker_collision_cli_names_target_file_line_and_preserves_bytes(
+    tmp_path, marker_bytes
+):
+    path = tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md"
+    raw = _legacy_bug_bytes().replace(
+        b"**\xe7\x8e\xb0\xe8\xb1\xa1**\xef\xbc\x9akeep | unicode \xe9\x9b\xaa\n",
+        marker_bytes
+        + b"**\xe7\x8e\xb0\xe8\xb1\xa1**\xef\xbc\x9akeep | unicode \xe9\x9b\xaa\n",
+    )
+    before = _write_preflight_state(tmp_path, path, raw)
+
+    proc = _rename_cli(tmp_path)
+
+    assert proc.returncode == 2
+    assert "Traceback" not in proc.stderr
+    assert "stage=preflight" in proc.stderr
+    assert str(path) in proc.stderr
+    assert "id=B1" in proc.stderr
+    assert "line=" in proc.stderr
+    assert "batch rename batch-old batch-new" in proc.stderr
+    assert (tmp_path / "openspec" / "issues" / "batches.md").read_bytes() == before["registry"]
+    assert path.read_bytes() == before["dated"]
+    assert (tmp_path / "openspec" / "issues" / "INDEX.md").read_bytes() == before["INDEX"]
+
+
+@pytest.mark.parametrize("retry_shape", ["all-new", "mixed"])
+@pytest.mark.parametrize("target_shape", ["canonical", "overlay", "pure-legacy"])
+def test_provenance_retry_preflights_new_side_owned_target_relations_before_write(
+    tmp_path, retry_shape, target_shape
+):
+    issues_dir = tmp_path / "openspec" / "issues"
+    issues_dir.mkdir(parents=True)
+    batches = issues_dir / "batches.md"
+    index = issues_dir / "INDEX.md"
+    batches.write_text(
+        "# registry\n\n### batch-new — title\n重命名自: batch-old\n状态: PLANNED\n"
+        "成员: (生成)\n优先级: P2\n计划: x\n",
+        encoding="utf-8",
+    )
+    index.write_bytes(b"old-index\n")
+    path = issues_dir / "buglist" / "2026-01-01-buglist.md"
+    path.parent.mkdir(parents=True)
+    item = _valid_bug_item(batch="batch-new")
+    item.pop("id")
+    item.pop("file")
+    if target_shape == "canonical":
+        raw = _canonical_document("bug", "B1", item).replace(
+            b"<!-- sdflow-issue-block:start id=B1 -->\n## B1: fixture\n"
+            b"<!-- sdflow-issue-block:end id=B1 -->\n",
+            b"## B1: fixture\n",
+        )
+    elif target_shape == "overlay":
+        raw = _overlay_document("bug", "B1", item, _legacy_bug_bytes(batch="batch-new"))
+    else:
+        raw = _legacy_bug_bytes(batch="batch-new").replace(
+            b"**\xe7\x8e\xb0\xe8\xb1\xa1**\xef\xbc\x9akeep | unicode \xe9\x9b\xaa\n",
+            b"<!-- sdflow-issue-block:start id=B9 -->\n"
+            b"**\xe7\x8e\xb0\xe8\xb1\xa1**\xef\xbc\x9akeep | unicode \xe9\x9b\xaa\n",
+        )
+    path.write_bytes(raw)
+    other_path = None
+    if retry_shape == "mixed":
+        other = _valid_bug_item(batch="batch-old")
+        other.pop("id")
+        other.pop("file")
+        other_path = issues_dir / "buglist" / "2026-01-02-buglist.md"
+        other_path.write_bytes(_canonical_document("bug", "B2", other))
+    before = {
+        "registry": batches.read_bytes(),
+        "dated": path.read_bytes(),
+        "other": other_path.read_bytes() if other_path else None,
+        "INDEX": index.read_bytes(),
+    }
+
+    proc = _rename_cli(tmp_path)
+
+    assert proc.returncode == 2
+    assert "stage=preflight" in proc.stderr
+    assert "batch rename batch-old batch-new" in proc.stderr
+    assert batches.read_bytes() == before["registry"]
+    assert path.read_bytes() == before["dated"]
+    assert (other_path.read_bytes() if other_path else None) == before["other"]
+    assert index.read_bytes() == before["INDEX"]
 
 
 def test_retag_rename_snapshot_promotes_legacy_without_patching_table_and_preserves_envelope(tmp_path):
@@ -512,6 +676,8 @@ def test_overlay_shadowed_malformed_legacy_row_does_not_override_frontmatter_bat
     [
         ("| B1 | core | old | injected | P2 | OPEN | 10:00 | chg | batch-old |", True),
         ("| B1 | core | old | injected | P2 | OPEN | 10:00 | chg | batch-new |", True),
+        ("| B1 | core | old | injected | P2 | OPEN | 10:00 | chg | other |", True),
+        ("| B1 | core | old | P2 | OPEN | 10:00 | chg | other | batch-old |", True),
         ("| B1 | core | old | P2 | OPEN | 10:00 | chg | other | trailing |", False),
     ],
 )
@@ -535,6 +701,26 @@ def test_batch_rename_legacy_arity_classification_is_target_aware(tmp_path, caps
         captured = capsys.readouterr()
         assert "arity" in captured.err
         assert path.read_bytes() == before["dated"]
+
+
+def test_batch_rename_cli_rejects_unprovable_middle_cell_before_registry_write(tmp_path):
+    raw = _legacy_bug_bytes().replace(
+        b"| B1 | core | old | P2 | OPEN | 10:00 | chg | batch-old |",
+        b"| B1 | core | old | injected | P2 | OPEN | 10:00 | chg | other |",
+    )
+    path = tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md"
+    before = _write_preflight_state(tmp_path, path, raw)
+
+    proc = _rename_cli(tmp_path)
+
+    assert proc.returncode == 2
+    assert "Traceback" not in proc.stderr
+    assert "stage=preflight" in proc.stderr
+    assert "legacy row" in proc.stderr
+    assert "batch rename batch-old batch-new" in proc.stderr
+    assert (tmp_path / "openspec" / "issues" / "batches.md").read_bytes() == before["registry"]
+    assert path.read_bytes() == before["dated"]
+    assert (tmp_path / "openspec" / "issues" / "INDEX.md").read_bytes() == before["INDEX"]
 
 
 def test_reindex_core_uses_supplied_snapshot_without_rescanning(tmp_path, monkeypatch):
@@ -617,10 +803,13 @@ def test_batch_rename_retry_converges_all_old_mixed_and_all_new(tmp_path, item_b
         bug.pop("file")
         _write_canonical(tmp_path, "bug", f"2026-01-0{index}-buglist.md", f"B{index}", bug)
 
-    issues_mod.cmd_batch_rename(
-        types.SimpleNamespace(root=str(tmp_path), old="batch-old", new="batch-new")
-    )
+    first = _rename_cli(tmp_path)
+    second = _rename_cli(tmp_path)
 
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert json.loads(first.stdout)["mode"] == "retry"
+    assert json.loads(second.stdout)["mode"] == "retry"
     snapshot = read_rename_snapshot(str(tmp_path))
     assert {item["batch"] for item in snapshot["items"]} == {"batch-new"}
     assert "批次：batch-new" in (issues_dir / "INDEX.md").read_text(encoding="utf-8")

@@ -1089,7 +1089,7 @@ class TestBatchRenameAutoReindexProblemsEcho:
             "| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |\n"
             "|----|------|----------|--------|------|------|------------|------|\n"
             "| B1 | `foo.c:1` | fixture | P2 | OPEN | 10:00 | x | old-batch |\n"
-            "| B2 | `foo.c:1` | A | B 都坏了 | P2 | OPEN | 10:00 | x | |\n"
+            "| B2 | `foo.c:1` | unrelated | P2 | OPEN | 10:00 | x | other-batch | trailing |\n"
             "\n## B1: fixture\n\n**现象**：target block is valid\n"
         )
         (dir_path / "2026-01-01-buglist.md").write_text(content, encoding="utf-8")
