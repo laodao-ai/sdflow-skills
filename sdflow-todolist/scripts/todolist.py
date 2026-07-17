@@ -1497,7 +1497,7 @@ def _render_scan(snapshot, args):
         for p in problems:
             print("  - " + p)
     else:
-        print("\n✓ 表↔块一致")
+        print("\n✓ frontmatter/marker/legacy 关系一致")
 
 
 def cmd_scan(args):

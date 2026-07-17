@@ -7,7 +7,7 @@ skill `sdflow-buglist` 的执行核心。把"判断"留给模型（现象 vs 根
   - 今日文件/目录定位与 canonical frontmatter 创建
   - legacy 表只读、按访问 promotion 到同文件 overlay
   - 状态回写的门禁（FIXED 必须有根因 + 证据；WONTFIX 必须有理由）
-  - 扫描列表 + 表↔块一致性自检
+  - 扫描列表 + frontmatter/marker/legacy 关系自检
 
 文件布局（约定，自包含，不依赖外部 rule）：
   <root>/openspec/issues/buglist/YYYY-MM-DD-buglist.md
@@ -1517,7 +1517,7 @@ def _render_scan(snapshot, args):
         for p in problems:
             print("  - " + p)
     else:
-        print("\n✓ 表↔块一致")
+        print("\n✓ frontmatter/marker/legacy 关系一致")
 
 
 def cmd_scan(args):

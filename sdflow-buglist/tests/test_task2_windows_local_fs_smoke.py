@@ -37,10 +37,20 @@ def test_windows_local_disk_acquire_conflict_replace_cleanup(tmp_path, monkeypat
 
     with recorder.recorder_lock(tmp_path, "reindex") as owner:
         assert lock_path.exists()
-        participant_env = recorder.recorder_child_env("scan", owner.token)
-        monkeypatch.setattr(os, "environ", participant_env)
-        participant = recorder.validate_recorder_participant(tmp_path, owner.token, "scan")
+        previous_token = recorder._ACTIVE_RECORDER_TOKEN
+        previous_chain = recorder._ACTIVE_RECORDER_CHAIN
+        try:
+            recorder._ACTIVE_RECORDER_TOKEN = owner.token
+            recorder._ACTIVE_RECORDER_CHAIN = owner.chain
+            participant_env = recorder.recorder_child_env("scan", owner.token)
+        finally:
+            recorder._ACTIVE_RECORDER_TOKEN = previous_token
+            recorder._ACTIVE_RECORDER_CHAIN = previous_chain
+        with monkeypatch.context() as participant_patch:
+            participant_patch.setattr(os, "environ", participant_env)
+            participant = recorder.validate_recorder_participant(tmp_path, owner.token, "scan")
         assert participant.participant and participant.token == owner.token
+        assert participant.chain == ("reindex", "scan")
         with pytest.raises(recorder.RecorderLockError, match="lock occupied"):
             with recorder.recorder_lock(tmp_path, "add"):
                 pass

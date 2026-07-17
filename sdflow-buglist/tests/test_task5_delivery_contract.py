@@ -5,8 +5,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
+
+import pytest
 
 
 ROOT = Path(__file__).parents[2]
@@ -59,33 +62,104 @@ def test_recorders_stay_self_contained_without_yaml_or_cross_skill_imports():
         assert not any(name.startswith("sdflow_") or name.startswith("sdflow-") for name in imports)
 
 
-def test_repository_legacy_corpus_matches_dual_reader_item_by_item():
-    """Compare every legacy row with the effective dual-reader projection.
+def _reference_legacy_rows(path, pool):
+    """Project frozen Markdown rows without calling any recorder parser."""
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    headings = [index for index, line in enumerate(lines) if re.fullmatch(r"##\s+状态总览", line)]
+    assert len(headings) == 1, f"{path}: expected one legacy overview"
+    header = next(
+        index
+        for index in range(headings[0] + 1, min(len(lines), headings[0] + 7))
+        if re.match(r"\|\s*ID\s*\|", lines[index])
+    )
+    rows = {}
+    for line in lines[header + 2:]:
+        if not line.startswith("|"):
+            break
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        assert len(cells) == 8, f"{path}:{line}"
+        item_id = cells[0]
+        assert item_id not in rows, f"{path}: duplicate legacy ID {item_id}"
+        rows[item_id] = {
+            "module": cells[1],
+            "summary": cells[2],
+            "priority" if pool == "bug" else "type": cells[3],
+            "status": cells[4],
+            "time": cells[5] or None,
+            "change": None if cells[6] == "-" else cells[6],
+            "batch": cells[7] or None,
+        }
+    assert rows, f"{path}: frozen legacy table must not be empty"
+    return rows
 
-    This intentionally derives the corpus at runtime; it never freezes a
-    repository-wide item count that would become stale as the issue pool grows.
-    Overlay items are compared to their frozen row only when not shadowed.
-    """
+
+DOGFOOD_OVERLAY_DELTAS = {
+    "T2": {},
+    "T66": {"status": ("PROPOSED", "DONE")},
+    "T67": {"status": ("PROPOSED", "DONE")},
+    "T85": {"status": ("PROPOSED", "DONE")},
+    "T146": {"status": ("PROPOSED", "DONE")},
+}
+
+
+def test_repository_legacy_corpus_matches_independent_projection_item_by_item():
+    """Compare every frozen legacy row with the new dual-reader projection."""
     fields_by_pool = {
         "bug": (BUG, ROOT / "openspec/issues/buglist", "priority"),
         "todo": (TODO, ROOT / "openspec/issues/todolist", "type"),
     }
-    compared = []
+    compared = set()
+    shadowed = set()
     for pool, (module, directory, specific) in fields_by_pool.items():
         for path in sorted(directory.glob("*.md")):
+            baseline = _reference_legacy_rows(path, pool)
             document = module.read_recorder_document(str(path), pool)
             effective = document["effective_items"]
             owned = set(document["model"]["items"]) if document["model"] else set()
-            for raw_id, row in document["rows"].items():
-                canonical = module._canonical_from_key(module._legacy_semantic_id_key(raw_id))
-                if canonical in owned:
-                    continue
-                item = effective[raw_id]
-                expected = module._legacy_item_from_row(raw_id, row, pool)
+            for item_id, expected in baseline.items():
+                item = effective[item_id]
+                if item_id in owned:
+                    shadowed.add(item_id)
+                    deltas = DOGFOOD_OVERLAY_DELTAS[item_id]
+                else:
+                    deltas = {}
                 for field in ("module", "summary", specific, "status", "time", "change", "batch"):
-                    assert item[field] == expected[field], f"{path}:{raw_id}:{field}"
-                compared.append((path, raw_id))
-    assert compared, "dogfood corpus must contain at least one unpromoted legacy item"
+                    baseline_value, effective_value = expected[field], item[field]
+                    if field in deltas:
+                        assert (baseline_value, effective_value) == deltas[field], f"{path}:{item_id}:{field}"
+                    else:
+                        assert effective_value == baseline_value, f"{path}:{item_id}:{field}"
+                compared.add((pool, path.name, item_id))
+    assert compared, "dogfood corpus must contain frozen legacy rows"
+    assert shadowed == set(DOGFOOD_OVERLAY_DELTAS)
+
+
+def test_reindex_to_scan_delegation_contract_runs_before_windows_smoke(tmp_path, monkeypatch):
+    (tmp_path / "openspec/issues").mkdir(parents=True)
+    with BUG.recorder_lock(tmp_path, "reindex") as owner:
+        previous_token = BUG._ACTIVE_RECORDER_TOKEN
+        previous_chain = BUG._ACTIVE_RECORDER_CHAIN
+        try:
+            BUG._ACTIVE_RECORDER_TOKEN = owner.token
+            BUG._ACTIVE_RECORDER_CHAIN = owner.chain
+            participant_env = BUG.recorder_child_env("scan")
+        finally:
+            BUG._ACTIVE_RECORDER_TOKEN = previous_token
+            BUG._ACTIVE_RECORDER_CHAIN = previous_chain
+        with monkeypatch.context() as participant_patch:
+            participant_patch.setattr(os, "environ", participant_env)
+            participant = BUG.validate_recorder_participant(tmp_path, owner.token, "scan")
+        assert participant.participant
+        assert participant.chain == ("reindex", "scan")
+
+
+def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
+    workflow = (ROOT / ".github/workflows/windows-recorder-smoke.yml").read_text(encoding="utf-8")
+    for trigger in ("push:", "pull_request:", "workflow_dispatch:"):
+        assert trigger in workflow
+    assert "branches:" not in workflow
+    assert "runs-on: windows-latest" in workflow
+    assert "py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
 
 
 def test_delivery_docs_name_operational_boundaries():
@@ -112,6 +186,21 @@ def test_delivery_docs_name_operational_boundaries():
     ):
         assert phrase in contract
     assert "状态：**Accepted**" in adr
+
+
+def test_delivery_docs_and_human_scan_output_reject_retired_contracts():
+    issues_skill = (ROOT / "sdflow-issues/SKILL.md").read_text(encoding="utf-8")
+    for retired in (
+        "需要自己把\n  \"报错信息含'已存在'\" 当成幂等成功处理",
+        "与 `batch rename` 的 warn-only 不同",
+        "并发安全未焊接",
+        "调用方 MUST 串行（D6）",
+    ):
+        assert retired not in issues_skill
+    for path in (BUG_PATH, TODO_PATH):
+        source = path.read_text(encoding="utf-8")
+        assert "✓ 表↔块一致" not in source
+        assert "✓ frontmatter/marker/legacy 关系一致" in source
 
 
 def test_upgraded_install_known_consumer_smoke(tmp_path):
