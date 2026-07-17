@@ -1,6 +1,6 @@
 # Task 1 Standards Review — strict dual-reader
 
-结论：**PASS（HEAD `6c4f0f9`，最终 re-review）**
+结论：**PASS（HEAD `86d72ba`，最终短复核）**
 
 ## 轮次审计
 
@@ -28,6 +28,11 @@
 - `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-468`：三向矩阵现覆盖 canonical golden、pure legacy、overlay semantic shadow、effective occurrences/problems、marker corruption、encoding/EOL、surrogate、字段集合与枚举。
 - 三 recorder 定向全套 `298 passed`，无 warning。
 
+### 最终短复核 — PASS
+
+- `sdflow-buglist/scripts/buglist.py:265-280`（三份镜像）：`items:` 后无 item 行时立即 fail-closed，明确要求 canonical `items: {}`；非空 items 分支与既有 schema/renderer 行为未改变。
+- `sdflow-buglist/tests/test_frontmatter_dual_reader.py:433-439`：同一裸 `items:` fixture 对 buglist/todolist/issues 三份 parser 均断言拒绝；三向 AST guard 同时通过。
+
 ## Critical
 
 无。
@@ -46,4 +51,5 @@
 - parser-direct parity：buglist/todolist/issues 对 canonical prose、fenced overview、opaque sibling、overlay `A007→A7` 的 effective snapshot 相等。
 - `uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py sdflow-buglist/tests/test_mirror_consistency.py` → `29 passed`。
 - `uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `298 passed`。
+- 最终短复核：裸 `items:` 三向 reject + three-way mirror → `2 passed`。
 - backend/embedded domain checklist：无命中，未作领域清单假通过。

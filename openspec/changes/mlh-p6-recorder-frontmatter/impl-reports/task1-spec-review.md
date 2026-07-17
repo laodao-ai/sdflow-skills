@@ -84,3 +84,32 @@
 - 最小反例：canonical namespace 以裸 `  items:` 结束，`parse_recorder_document()` 错误接受为 canonical empty model。
 
 修复该 Important 并加入三向 fail-closed 回归后，Task 1 才可 PASS。
+
+## Closure re-review — HEAD `86d72ba`
+
+结论：**PASS**。
+
+唯一剩余 Important 已闭合：
+
+- 裸 `items:` 在 buglist/todolist/issues 三份 parser 中均 fatal，错误明确要求使用 `items: {}`。
+- `items: {}` 在三份 parser 中均正常解析为 canonical empty map。
+- 新增三向回归 `test_bare_items_is_not_an_empty_map_alias`。
+
+### Critical
+
+无。
+
+### Important
+
+无。
+
+### Minor
+
+无。
+
+### Verification
+
+- 独立最小复现：bare × 3 均 fatal；empty-map × 3 均 parse success。
+- `uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py sdflow-buglist/tests/test_mirror_consistency.py -W error` → `40 passed`。
+
+Task 1 的 strict dual-reader、canonical renderer、fail-closed、single-read/parse 与三 recorder parity/golden 验收通过。

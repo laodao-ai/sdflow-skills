@@ -1,9 +1,9 @@
 diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md
 new file mode 100644
-index 0000000..8da4329
+index 0000000..80f3fcd
 --- /dev/null
 +++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,86 @@
 +# Task 1 Spec Review — strict dual-reader
 +
 +## 首轮审查（保留）
@@ -61,15 +61,44 @@ index 0000000..8da4329
 +- `read_recorder_document()` 的 path 已移入 `ERROR:` problem 段，第二轮三段式偏差已修复。
 +
 +完成以上 Important 后，Task 1 才可 PASS。
++
++## Final re-review — HEAD `6c4f0f9`
++
++结论：**FAIL**。
++
++第三轮三项 Important 复核：
++
++- **已修复**：external same-line opaque value 可包含 `sdflow-issues`；三份 recorder 均通过同一 fixture。
++- **已修复**：新增 pure-legacy/overlay 三向 `effective_items/effective_occurrences/problems` behavior golden。
++- **仍未闭合**：bad-input matrix 新增 marker、invalid UTF-8/lone CR、surrogate、required/enum/missing-field 回归，但裸 `items:` 仍被实现接受。
++
++### Critical
++
++无。
++
++### Important
++
++1. **reader 把非法裸 `items:` 当作空 map。** `_parse_recorder_namespace()` 进入 `lines[4] == "  items:"` 分支后，即使没有任何 item 行，也令 `items={}` 并通过 model validation。批准合同规定空 map 唯一写作/读取 `items: {}`，裸 `items:` 必须 fail-closed。独立复现返回 `{'items': {}}`，没有抛错；新增矩阵也未覆盖该例。见 `sdflow-buglist/scripts/buglist.py:269-281`（三份镜像）、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:409-430`。
++
++### Minor
++
++无。
++
++### Verification
++
++- 定向套件：`39 passed`。
++- 最小反例：canonical namespace 以裸 `  items:` 结束，`parse_recorder_document()` 错误接受为 canonical empty model。
++
++修复该 Important 并加入三向 fail-closed 回归后，Task 1 才可 PASS。
 diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md
 new file mode 100644
-index 0000000..7a087ad
+index 0000000..8521b73
 --- /dev/null
 +++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,49 @@
 +# Task 1 Standards Review — strict dual-reader
 +
-+结论：**PASS（HEAD `9a770dd`，第三轮 re-review）**
++结论：**PASS（HEAD `6c4f0f9`，最终 re-review）**
 +
 +## 轮次审计
 +
@@ -91,6 +120,12 @@ index 0000000..7a087ad
 +- `sdflow-buglist/scripts/buglist.py:209-249`：ownership 检查收窄到 column-0 变体与 orphan indented owner；合法 external indented opaque value 可含 `sdflow-issues` 文本。
 +- `sdflow-buglist/scripts/buglist.py:659-730`（三份镜像）：parser 直接生成 `effective_items/effective_occurrences/problems`；canonical prose、fenced overview、opaque sibling、overlay semantic alias 的三 recorder snapshot 完全一致。
 +
++### 最终轮 — PASS
++
++- `sdflow-buglist/scripts/buglist.py:209-249`（三份镜像）：ownership 判定进一步收窄到顶层 quoted/explicit/key-colon 变体与无 owner 的 indented 变体；external same-line value、indented opaque value 和 comment 中的普通文本不再误杀，原 fail-closed ownership 样例仍保持 fatal。
++- `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-468`：三向矩阵现覆盖 canonical golden、pure legacy、overlay semantic shadow、effective occurrences/problems、marker corruption、encoding/EOL、surrogate、字段集合与枚举。
++- 三 recorder 定向全套 `298 passed`，无 warning。
++
 +## Critical
 +
 +无。
@@ -108,13 +143,14 @@ index 0000000..7a087ad
 +- 第二轮三个对抗样例逐项复现：8-column prose 仅返回 frontmatter `B1`、`problems=[]`；fenced 状态表示例不再触发 mode mismatch；external opaque mention 正常解析。
 +- parser-direct parity：buglist/todolist/issues 对 canonical prose、fenced overview、opaque sibling、overlay `A007→A7` 的 effective snapshot 相等。
 +- `uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py sdflow-buglist/tests/test_mirror_consistency.py` → `29 passed`。
++- `uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `298 passed`。
 +- backend/embedded domain checklist：无命中，未作领域清单假通过。
 diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md
 new file mode 100644
-index 0000000..fd0be05
+index 0000000..bef2e1d
 --- /dev/null
 +++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,33 @@
 +# Task 1 Implementation Report — strict dual-reader
 +
 +状态：DONE
@@ -135,7 +171,8 @@ index 0000000..fd0be05
 +- 首轮双轴审抓到 semantic alias shadow、跨文件重复 fatal、ownership 变体、legacy 区域误识别、真实 parse-count 与 path 诊断缺口；均已补实现与对抗回归。
 +- 第二轮双轴审继续击穿 canonical prose ghost row、fenced 状态表 false region 与外部 opaque value 误杀；已将 fence-aware 状态总览识别、effective merge/relation/problems 全部下沉到单次 document parser，并补三向 parity。
 +- 第三轮 Standards 通过；Spec 继续指出 external same-line opaque value 与 behavior/bad-input golden 不足。ownership 判定已收窄到顶层 key 形态，并补 pure-legacy/overlay 三向 effective snapshot、marker、encoding/EOL、surrogate、字段/枚举矩阵。
-+- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `298 passed`。
++- 最终 Spec 短审发现裸 `items:` 被误当 empty map；parser 已钉死空 map 只允许 `items: {}`，三向回归在场。
++- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `299 passed`。
 +- dogfood scan：bug `7 items / 0 problems`；todo `150 items / 0 problems`。
 +- `git diff --check` → PASS。
 +
@@ -148,10 +185,10 @@ index 0000000..fd0be05
 +
 +reviewer 报告保留每轮问题与复核结论；第三轮 Spec 缺口修复后等待最终 re-review。Task 2–4 承接 writer/lock/rename，不作为本票假通过依据。
 diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
-index 63c1409..b0d6204 100644
+index 63c1409..d4e1332 100644
 --- a/sdflow-buglist/scripts/buglist.py
 +++ b/sdflow-buglist/scripts/buglist.py
-@@ -57,6 +57,278 @@ STATUS_CODES = ["OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX
+@@ -57,6 +57,280 @@ STATUS_CODES = ["OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX
  PRIORITIES = ["P0", "P1", "P2", "P3", "P4"]
  DEFAULT_PREFIX = "B"
  ID_RE = re.compile(r"\b([A-Z])(\d+)\b")
@@ -365,6 +402,8 @@ index 63c1409..b0d6204 100644
 +            _frontmatter_error("recorder items 非法", "empty map 后存在额外内容")
 +        items = {}
 +    elif lines[4] == "  items:":
++        if len(lines) == 5:
++            _frontmatter_error("recorder items 非法", "空 map 必须写 items: {}，裸 items: 禁止")
 +        items = {}
 +        for line in lines[5:]:
 +            match = re.fullmatch(r"    ([A-Z][1-9][0-9]*): (\{.*\})", line)
@@ -430,7 +469,7 @@ index 63c1409..b0d6204 100644
 
 
  # ── 路径与文件 ───────────────────────────────────────────────────────────────
-@@ -272,19 +544,41 @@ def id_conflicts(root):
+@@ -272,19 +546,41 @@ def id_conflicts(root):
  def split_sections(lines):
      """返回 (head_end_idx, table_rows_range, body_start_idx)。
      head_end = 状态总览表分隔行后的位置；表行在 [rows_start, rows_end)。"""
@@ -484,7 +523,7 @@ index 63c1409..b0d6204 100644
 
 
  def parse_table_rows(lines, sec):
-@@ -314,6 +608,128 @@ def block_ranges(lines):
+@@ -314,6 +610,128 @@ def block_ranges(lines):
      return out
 
 
@@ -613,7 +652,7 @@ index 63c1409..b0d6204 100644
  def _find_row_file(root, item_id):
      """定位含 item_id 的状态总览表行所在的 dated 文件（T5：从 `cmd_set_status`/
      `cmd_triage` 抽出——两处遍历 `list_files` 找含该 ID 表行的逻辑逐字相同）。
-@@ -576,79 +992,27 @@ def cmd_scan(args):
+@@ -576,79 +994,27 @@ def cmd_scan(args):
      # （例如 2026-01-01-buglist.md 与 2026-01-02-buglist.md 都出现 B1）。改为收集
      # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数，同时覆盖同文件内
      # 重复与跨文件重复两种情形。
@@ -709,7 +748,7 @@ index 63c1409..b0d6204 100644
 
      if args.status:
          bugs = [b for b in bugs if b["status"] == args.status]
-@@ -744,7 +1108,11 @@ def main():
+@@ -744,7 +1110,11 @@ def main():
      s.set_defaults(func=cmd_scan)
 
      args = p.parse_args()
@@ -785,10 +824,10 @@ index 95b463a..e82737b 100644
  def _write_mixed_file(dir_path, date, rows):
 diff --git a/sdflow-buglist/tests/test_frontmatter_dual_reader.py b/sdflow-buglist/tests/test_frontmatter_dual_reader.py
 new file mode 100644
-index 0000000..0fa71a3
+index 0000000..623a7bb
 --- /dev/null
 +++ b/sdflow-buglist/tests/test_frontmatter_dual_reader.py
-@@ -0,0 +1,468 @@
+@@ -0,0 +1,475 @@
 +import importlib.util
 +import json
 +import subprocess
@@ -1221,6 +1260,13 @@ index 0000000..0fa71a3
 +        )
 +
 +
++def test_bare_items_is_not_an_empty_map_alias():
++    raw = b"---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items:\n---\n"
++    for module in (BUG, TODO, ISSUES):
++        with pytest.raises(ValueError, match=r"items: \{\}"):
++            module.parse_recorder_document(raw, "bug")
++
++
 +def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, capsys):
 +    directory = tmp_path / "openspec/issues/buglist"
 +    directory.mkdir(parents=True)
@@ -1324,10 +1370,10 @@ index 9f0a425..7228df9 100644
      """helper 删除证伪（spec 需求① scenario·L1）：比对代码必须用直接属性访问
      `getattr(m, f)`——上面 `test_three_way_mirror_consistency` / `test_two_way_mirror_consistency`
 diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
-index 285b9db..5fbc18a 100644
+index 285b9db..7c51385 100644
 --- a/sdflow-issues/scripts/issues.py
 +++ b/sdflow-issues/scripts/issues.py
-@@ -64,6 +64,469 @@ SKILLS_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+@@ -64,6 +64,471 @@ SKILLS_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
  BUGLIST_SCRIPT = os.path.join(SKILLS_ROOT, "sdflow-buglist", "scripts", "buglist.py")
  TODOLIST_SCRIPT = os.path.join(SKILLS_ROOT, "sdflow-todolist", "scripts", "todolist.py")
 
@@ -1542,6 +1588,8 @@ index 285b9db..5fbc18a 100644
 +            _frontmatter_error("recorder items 非法", "empty map 后存在额外内容")
 +        items = {}
 +    elif lines[4] == "  items:":
++        if len(lines) == 5:
++            _frontmatter_error("recorder items 非法", "空 map 必须写 items: {}，裸 items: 禁止")
 +        items = {}
 +        for line in lines[5:]:
 +            match = re.fullmatch(r"    ([A-Z][1-9][0-9]*): (\{.*\})", line)
@@ -1798,10 +1846,10 @@ index 285b9db..5fbc18a 100644
  def atomic_write(path, text):
      """原子写：同目录临时文件写完整内容 → os.replace 原子换入。
 diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
-index 2c21445..111a58a 100644
+index 2c21445..bed2a42 100644
 --- a/sdflow-todolist/scripts/todolist.py
 +++ b/sdflow-todolist/scripts/todolist.py
-@@ -57,6 +57,278 @@ STATUS_CODES = ["OPEN", "PROPOSED", "DONE", "WONTDO"]
+@@ -57,6 +57,280 @@ STATUS_CODES = ["OPEN", "PROPOSED", "DONE", "WONTDO"]
  TYPE_TAGS = ["性能优化", "可观测性", "代码质量", "功能增强", "基础设施"]
  DEFAULT_PREFIX = "T"
  ID_RE = re.compile(r"\b([A-Z])(\d+)\b")
@@ -2015,6 +2063,8 @@ index 2c21445..111a58a 100644
 +            _frontmatter_error("recorder items 非法", "empty map 后存在额外内容")
 +        items = {}
 +    elif lines[4] == "  items:":
++        if len(lines) == 5:
++            _frontmatter_error("recorder items 非法", "空 map 必须写 items: {}，裸 items: 禁止")
 +        items = {}
 +        for line in lines[5:]:
 +            match = re.fullmatch(r"    ([A-Z][1-9][0-9]*): (\{.*\})", line)
@@ -2080,7 +2130,7 @@ index 2c21445..111a58a 100644
 
 
  # ── 路径与文件 ───────────────────────────────────────────────────────────────
-@@ -262,19 +534,41 @@ def id_conflicts(root):
+@@ -262,19 +536,41 @@ def id_conflicts(root):
  # ── 表 / 块 解析 ─────────────────────────────────────────────────────────────
 
  def split_sections(lines):
@@ -2134,7 +2184,7 @@ index 2c21445..111a58a 100644
 
 
  def parse_table_rows(lines, sec):
-@@ -303,6 +597,128 @@ def block_ranges(lines):
+@@ -303,6 +599,128 @@ def block_ranges(lines):
      return out
 
 
@@ -2263,7 +2313,7 @@ index 2c21445..111a58a 100644
  def _find_row_file(root, item_id):
      """定位含 item_id 的状态总览表行所在的月度文件（T5：从 `cmd_set_status`/
      `cmd_triage` 抽出——两处遍历 `list_files` 找含该 ID 表行的逻辑逐字相同，
-@@ -554,68 +970,27 @@ def cmd_scan(args):
+@@ -554,68 +972,27 @@ def cmd_scan(args):
      # 此前 Counter 在下面循环体内逐文件重建，只测得出单文件内重复，漏检跨文件同 ID
      # （例如 2026-01-todolist.md 与 2026-02-todolist.md 都出现 T1）。改为收集
      # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数。
@@ -2348,7 +2398,7 @@ index 2c21445..111a58a 100644
 
      if args.status:
          items = [b for b in items if b["status"] == args.status]
-@@ -708,7 +1083,11 @@ def main():
+@@ -708,7 +1085,11 @@ def main():
      s.set_defaults(func=cmd_scan)
 
      args = p.parse_args()
