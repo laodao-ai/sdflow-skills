@@ -28,3 +28,66 @@ def test_merge_runtime_gitignore_rejects_duplicate_without_mutation(tmp_path):
     with pytest.raises(ValueError, match="重复"):
         INIT.merge_runtime_gitignore(tmp_path, ENTRY)
     assert target.read_bytes() == original
+
+
+def test_merge_runtime_gitignore_write_and_replace_faults_preserve_original(tmp_path, monkeypatch):
+    target = tmp_path / ".gitignore"
+    original = b"# user\nkeep/**\n"
+    target.write_bytes(original)
+
+    real_fdopen = INIT.os.fdopen
+
+    class BrokenWriter:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def write(self, _data):
+            raise OSError("write fault")
+
+    monkeypatch.setattr(INIT.os, "fdopen", lambda fd, mode: (INIT.os.close(fd), BrokenWriter())[1])
+    with pytest.raises(OSError, match="write fault"):
+        INIT.merge_runtime_gitignore(tmp_path, ENTRY)
+    assert target.read_bytes() == original
+    assert not list(tmp_path.glob("*.tmp"))
+
+    monkeypatch.setattr(INIT.os, "fdopen", real_fdopen)
+    monkeypatch.setattr(INIT.os, "replace", lambda *_args: (_ for _ in ()).throw(OSError("replace fault")))
+    with pytest.raises(OSError, match="replace fault"):
+        INIT.merge_runtime_gitignore(tmp_path, ENTRY)
+    assert target.read_bytes() == original
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_merge_runtime_gitignore_local_filesystem_replace_contract(tmp_path):
+    target = tmp_path / ".gitignore"
+    target.write_bytes(b"user\n")
+    INIT.merge_runtime_gitignore(tmp_path, ENTRY)
+    assert target.read_bytes() == b"user\n" + ENTRY
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_merge_runtime_gitignore_replaces_only_after_temp_handle_closed(tmp_path, monkeypatch):
+    """Windows-compatible local-FS contract: replace sees a closed temp handle.
+
+    The current release gate runs on macOS/Linux local FS; Windows local-disk CI can
+    execute this same test without POSIX mode-bit assertions. Network/user-space FS
+    and power-loss durability remain outside this contract.
+    """
+    target = tmp_path / ".gitignore"
+    target.write_bytes(b"user\n")
+    real_replace = INIT.os.replace
+    observed = []
+
+    def checked_replace(source, destination):
+        probe = INIT.os.open(source, INIT.os.O_RDWR)
+        INIT.os.close(probe)
+        observed.append((source, destination))
+        real_replace(source, destination)
+
+    monkeypatch.setattr(INIT.os, "replace", checked_replace)
+    INIT.merge_runtime_gitignore(tmp_path, ENTRY)
+    assert len(observed) == 1
+    assert target.read_bytes() == b"user\n" + ENTRY

@@ -70,10 +70,17 @@ RECORDER_POOL_CONFIG = {
 }
 
 RECORDER_LOCK_ENV = "SDFLOW_RECORDER_LOCK_TOKEN"
+RECORDER_DELEGATION_CHAIN_ENV = "SDFLOW_RECORDER_DELEGATION_CHAIN"
 _ACTIVE_RECORDER_TOKEN = None
+_ACTIVE_RECORDER_CHAIN = None
 RECORDER_PARTICIPANT_ALLOWLIST = {
     "scan", "next-id", "add", "set-status", "triage", "reindex", "sweep",
     "batch-lint", "batch-add", "batch-set-status", "batch-rename",
+}
+RECORDER_DELEGATION_GRAPH = {
+    "sweep": {"scan", "triage", "batch-add", "reindex"},
+    "reindex": {"scan"},
+    "batch-rename": {"scan"},
 }
 
 
@@ -82,11 +89,12 @@ class RecorderLockError(ValueError):
 
 
 class RecorderLockState:
-    def __init__(self, path, token, participant=False, identity=None):
+    def __init__(self, path, token, participant=False, identity=None, chain=()):
         self.path = path
         self.token = token
         self.participant = participant
         self.identity = identity
+        self.chain = tuple(chain)
 
 
 def canonical_id(value):
@@ -143,21 +151,39 @@ def validate_recorder_participant(root, token, command):
     metadata = _read_lock_metadata(path)
     if not metadata or metadata.get("repo") != root or not secrets.compare_digest(str(metadata.get("token", "")), str(token)):
         raise RecorderLockError(f"ERROR: invalid recorder participant for {path}; cause: missing, forged, expired, or cross-repo token; fix: invoke as a top-level owner")
-    return RecorderLockState(path, token, participant=True)
+    try:
+        chain_value = json.loads(os.environ.get(RECORDER_DELEGATION_CHAIN_ENV, ""))
+    except json.JSONDecodeError:
+        chain_value = None
+    if not isinstance(chain_value, list) or len(chain_value) < 2 or any(not isinstance(item, str) for item in chain_value):
+        raise RecorderLockError("ERROR: recorder delegation chain missing or malformed; cause: participant capability is incomplete; fix: invoke through an allowlisted recorder parent")
+    chain = tuple(chain_value)
+    if chain[0] != metadata.get("command") or chain[-1] != command:
+        raise RecorderLockError("ERROR: recorder delegation chain mismatch; cause: owner/child command does not match capability; fix: invoke through the current composite command graph")
+    for parent, child in zip(chain, chain[1:]):
+        if child not in RECORDER_DELEGATION_GRAPH.get(parent, set()):
+            raise RecorderLockError(f"ERROR: recorder delegation denied: {parent} -> {child}; cause: edge is outside the current composite call graph; fix: invoke the child as a top-level owner")
+    return RecorderLockState(path, token, participant=True, chain=chain)
+
+
+def _write_all(fd, data):
+    view = memoryview(data)
+    offset = 0
+    while offset < len(view):
+        written = os.write(fd, view[offset:])
+        if written <= 0:
+            raise OSError("recorder lock metadata write made no progress")
+        offset += written
 
 
 @contextmanager
 def recorder_lock(root, command):
     root = os.path.realpath(os.fspath(root))
-    inherited = os.environ.get(RECORDER_LOCK_ENV)
-    if inherited:
-        try:
-            participant = validate_recorder_participant(root, inherited, command)
-        except RecorderLockError:
-            participant = None
-        if participant is not None:
-            yield participant
-            return
+    if RECORDER_LOCK_ENV in os.environ:
+        inherited = os.environ.get(RECORDER_LOCK_ENV, "")
+        participant = validate_recorder_participant(root, inherited, command)
+        yield participant
+        return
     path = _lock_path(root)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     token = secrets.token_hex(32)
@@ -166,30 +192,40 @@ def recorder_lock(root, command):
     except FileExistsError:
         raise _lock_conflict(path, _read_lock_metadata(path))
     state = None
+    metadata_published = False
     try:
         stat = os.fstat(fd)
-        state = RecorderLockState(path, token, identity=(stat.st_dev, stat.st_ino))
+        state = RecorderLockState(path, token, identity=(stat.st_dev, stat.st_ino), chain=(command,))
         metadata = {"repo": root, "pid": os.getpid(), "command": command, "started": time.time(), "token": token}
-        os.write(fd, json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+        _write_all(fd, json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode("utf-8"))
         os.fsync(fd)
         os.close(fd)
         fd = None
+        metadata_published = True
         yield state
     finally:
-        if 'fd' in locals() and fd is not None:
-            os.close(fd)
+        active_error = sys.exc_info()[0] is not None
+        close_error = None
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError as exc:
+                close_error = exc
         if state is not None:
-            current = _read_lock_metadata(path)
             try:
                 path_stat = os.stat(path)
                 identity = (path_stat.st_dev, path_stat.st_ino)
             except FileNotFoundError:
                 identity = None
-            owns = current is not None and identity == state.identity and secrets.compare_digest(str(current.get("token", "")), token)
-            if owns:
+            current = _read_lock_metadata(path) if metadata_published else None
+            owns_identity = identity == state.identity
+            owns_token = current is not None and secrets.compare_digest(str(current.get("token", "")), token)
+            if owns_identity and (not metadata_published or owns_token):
                 os.unlink(path)
-            elif os.path.exists(path):
+            elif identity is not None:
                 raise RecorderLockError(f"ERROR: recorder lock ownership lost at {path}; cause: identity/token changed; fix: preserve the replacement lock and inspect its owner")
+        if close_error is not None and not active_error:
+            raise close_error
 
 
 def read_repository_snapshot(root):
@@ -234,10 +270,16 @@ def recorder_child_env(command, token=None):
         token = _ACTIVE_RECORDER_TOKEN
     env = dict(os.environ)
     env.pop(RECORDER_LOCK_ENV, None)
+    env.pop(RECORDER_DELEGATION_CHAIN_ENV, None)
     if token:
         if command not in RECORDER_PARTICIPANT_ALLOWLIST:
             raise RecorderLockError(f"ERROR: child command not allowlisted: {command}; cause: token forwarding denied; fix: run without participant capability")
+        chain = _ACTIVE_RECORDER_CHAIN
+        if not chain or command not in RECORDER_DELEGATION_GRAPH.get(chain[-1], set()):
+            parent = chain[-1] if chain else "<missing>"
+            raise RecorderLockError(f"ERROR: recorder delegation denied: {parent} -> {command}; cause: edge is outside the current composite call graph; fix: invoke the child as a top-level owner")
         env[RECORDER_LOCK_ENV] = token
+        env[RECORDER_DELEGATION_CHAIN_ENV] = json.dumps([*chain, command], separators=(",", ":"))
     return env
 
 
@@ -922,15 +964,32 @@ def _find_row_file(root, item_id):
 
 
 def cmd_next_id(args):
+    _render_next_id(_next_id_snapshot(args))
+
+
+def _next_id_snapshot(args):
     root = repo_root(args.root)
     conflicts = id_conflicts(root)
+    try:
+        value = next_id(root, args.prefix)
+        error = None
+    except ValueError as exc:
+        value = None
+        error = exc
+    return conflicts, value, error
+
+
+def _render_next_id(snapshot):
+    conflicts, value, error = snapshot
     if conflicts:
         print(
             f"WARNING: 检测到跨路径 ID 冲突（新 openspec/issues/todolist/ 与旧 openspec/todolists/ "
             f"都存在）：{', '.join(conflicts)}——建议尽快把旧路径数据迁移到新路径",
             file=sys.stderr,
         )
-    print(next_id(root, args.prefix))
+    if error is not None:
+        raise error
+    print(value)
 
 
 # ── add ──────────────────────────────────────────────────────────────────────
@@ -1149,7 +1208,7 @@ def cmd_triage(args):
 
 # ── scan ─────────────────────────────────────────────────────────────────────
 
-def cmd_scan(args):
+def _scan_snapshot(args):
     root = repo_root(args.root)
     items, problems = [], []
     # [impl-review-fix] FIX-2（CV-1+A-F2 双镜 PoC，镜像 buglist.py）：重复 ID 检测必须是
@@ -1194,8 +1253,14 @@ def cmd_scan(args):
         # 终态是 DONE/WONTDO，不能硬套 buglist 的 5 值非终态集。
         nonterminal = set(STATUS_CODES) - {"DONE", "WONTDO"}
         items = [b for b in items if b["status"] in nonterminal and not b.get("batch")]
+    return {"items": tuple(items), "problems": tuple(problems)}
+
+
+def _render_scan(snapshot, args):
+    items = snapshot["items"]
+    problems = snapshot["problems"]
     if args.json:
-        print(json.dumps({"items": items, "problems": problems}, ensure_ascii=False, indent=2))
+        print(json.dumps({"items": list(items), "problems": list(problems)}, ensure_ascii=False, indent=2))
         return
     if not items:
         print("（无匹配 TODO）")
@@ -1207,6 +1272,10 @@ def cmd_scan(args):
             print("  - " + p)
     else:
         print("\n✓ 表↔块一致")
+
+
+def cmd_scan(args):
+    _render_scan(_scan_snapshot(args), args)
 
 
 # ── 工具 ─────────────────────────────────────────────────────────────────────
@@ -1276,12 +1345,20 @@ def main():
         if hasattr(args, "prefix"):
             validate_prefix(args.prefix)
         args.root = repo_root(args.root)
-        output = io.StringIO()
-        with recorder_lock(args.root, args.cmd), redirect_stdout(output):
-            if args.cmd in {"set-status", "triage"}:
-                repository_semantic_occurrences(args.root)
-            args.func(args)
-        sys.stdout.write(output.getvalue())
+        if args.cmd in {"scan", "next-id"}:
+            with recorder_lock(args.root, args.cmd):
+                snapshot = _scan_snapshot(args) if args.cmd == "scan" else _next_id_snapshot(args)
+            if args.cmd == "scan":
+                _render_scan(snapshot, args)
+            else:
+                _render_next_id(snapshot)
+        else:
+            output = io.StringIO()
+            with recorder_lock(args.root, args.cmd), redirect_stdout(output):
+                if args.cmd in {"set-status", "triage"}:
+                    repository_semantic_occurrences(args.root)
+                args.func(args)
+            sys.stdout.write(output.getvalue())
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(2) from None

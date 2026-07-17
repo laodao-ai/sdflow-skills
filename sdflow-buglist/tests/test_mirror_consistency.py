@@ -65,7 +65,7 @@ THREE_WAY = [
     "atomic_write", "repo_root", "_reject_cell_unsafe",
     "canonical_id", "semantic_id_key", "validate_prefix", "_lock_path",
     "_read_lock_metadata", "_lock_conflict", "validate_recorder_participant",
-    "recorder_lock", "read_repository_snapshot", "repository_semantic_occurrences",
+    "_write_all", "recorder_lock", "read_repository_snapshot", "repository_semantic_occurrences",
     "recorder_child_env",
     "_frontmatter_error", "_validate_unicode_scalar", "_json_object_no_duplicates",
     "_validated_recorder_model", "_id_semantic_sort", "render_recorder_namespace",

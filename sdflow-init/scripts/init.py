@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 探测 3.6+ 才喂）：
 # 整模块编译先于任何语句执行，f-string 在 py<3.6 上是解析期 SyntaxError——模块内加
@@ -114,8 +115,23 @@ def merge_runtime_gitignore(root, snippet):
         merged += b"\n"
     merged += b"".join(entry + b"\n" for entry in missing)
     os.makedirs(root, exist_ok=True)
-    with open(path, "wb") as handle:
-        handle.write(merged)
+    fd, tmp = tempfile.mkstemp(dir=root, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            written = handle.write(merged)
+            if written != len(merged):
+                raise OSError("runtime gitignore write was incomplete")
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            mode = os.stat(path).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
     return "追加 " + " ".join(entry.decode("utf-8") for entry in missing)
 
 
