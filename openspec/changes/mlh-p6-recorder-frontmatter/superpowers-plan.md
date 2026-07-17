@@ -52,11 +52,11 @@ impl-pipeline: tickets
 
 把所有新建与 mutation 行为切换到 frontmatter：新文件产生 canonical 索引，历史文件按访问建立 overlay，legacy item promotion 原位包裹唯一可判 prose block。新格式 prose 只保留人读内容和追加历史，不再复制可变机器状态；任何旧表、外部 namespace 或 marker 歧义都不得被猜测性改写。
 
-- [ ] add 在新文件写 canonical、在 legacy 文件写 overlay，索引字段允许管道符、换行与 Unicode，CLI/JSON 输出兼容。
-- [ ] status/triage 对 legacy item 完整 promotion，旧表、旧属性表和既有 prose bytes 保持不变，后续 mutation 只按 canonical marker 定位。
-- [ ] marker 缺对、错 ID、嵌套、重复、预存碰撞及 legacy bug block 歧义均写前拒绝；todo 无块时可确定性创建 minimal block。
-- [ ] display title、summary blockquote、用户 marker escape 与 line-safety 行为阻断 Markdown 注入而不重新限制合法多行索引值。
-- [ ] 新 writer 已彻底停止写总览表 row 或双写 status/batch，同时 dual-reader 仍能读取所有已产生形态。
+- [x] add 在新文件写 canonical、在 legacy 文件写 overlay，索引字段允许管道符、换行与 Unicode，CLI/JSON 输出兼容。
+- [x] status/triage 对 legacy item 完整 promotion，旧表、旧属性表和既有 prose bytes 保持不变，后续 mutation 只按 canonical marker 定位。
+- [x] marker 缺对、错 ID、嵌套、重复、预存碰撞及 legacy bug block 歧义均写前拒绝；todo 无块时可确定性创建 minimal block。
+- [x] display title、summary blockquote、用户 marker escape 与 line-safety 行为阻断 Markdown 注入而不重新限制合法多行索引值。
+- [x] 新 writer 已彻底停止写总览表 row 或双写 status/batch，同时 dual-reader 仍能读取所有已产生形态。
 
 ### Task 4: 单次 snapshot 的 batch rename 与 fail-closed reindex
 
