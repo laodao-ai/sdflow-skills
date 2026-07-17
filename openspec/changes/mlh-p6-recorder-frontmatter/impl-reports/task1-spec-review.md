@@ -55,3 +55,32 @@
 - `read_recorder_document()` 的 path 已移入 `ERROR:` problem 段，第二轮三段式偏差已修复。
 
 完成以上 Important 后，Task 1 才可 PASS。
+
+## Final re-review — HEAD `6c4f0f9`
+
+结论：**FAIL**。
+
+第三轮三项 Important 复核：
+
+- **已修复**：external same-line opaque value 可包含 `sdflow-issues`；三份 recorder 均通过同一 fixture。
+- **已修复**：新增 pure-legacy/overlay 三向 `effective_items/effective_occurrences/problems` behavior golden。
+- **仍未闭合**：bad-input matrix 新增 marker、invalid UTF-8/lone CR、surrogate、required/enum/missing-field 回归，但裸 `items:` 仍被实现接受。
+
+### Critical
+
+无。
+
+### Important
+
+1. **reader 把非法裸 `items:` 当作空 map。** `_parse_recorder_namespace()` 进入 `lines[4] == "  items:"` 分支后，即使没有任何 item 行，也令 `items={}` 并通过 model validation。批准合同规定空 map 唯一写作/读取 `items: {}`，裸 `items:` 必须 fail-closed。独立复现返回 `{'items': {}}`，没有抛错；新增矩阵也未覆盖该例。见 `sdflow-buglist/scripts/buglist.py:269-281`（三份镜像）、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:409-430`。
+
+### Minor
+
+无。
+
+### Verification
+
+- 定向套件：`39 passed`。
+- 最小反例：canonical namespace 以裸 `  items:` 结束，`parse_recorder_document()` 错误接受为 canonical empty model。
+
+修复该 Important 并加入三向 fail-closed 回归后，Task 1 才可 PASS。

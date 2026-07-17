@@ -1,9 +1,9 @@
 diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md
 new file mode 100644
-index 0000000..f5e73cf
+index 0000000..8da4329
 --- /dev/null
 +++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,57 @@
 +# Task 1 Spec Review — strict dual-reader
 +
 +## 首轮审查（保留）
@@ -37,53 +37,84 @@ index 0000000..f5e73cf
 +- `read_recorder_document()` 把 `; file: ...` 追加在 `fix` 之后，偏离批准的严格三段式；建议把 path 放入 problem/cause 内。见 `sdflow-buglist/scripts/buglist.py:321-327`。
 +
 +修复 Critical/Important 并补最小反例后，Task 1 才可 PASS。
++
++## Third re-review — HEAD `9a770dd`
++
++结论：**FAIL**。
++
++第二轮 Critical 已修：canonical prose 普通表不再生成 ghost item；fenced `## 状态总览` 不再误判 legacy region。`parse_recorder_document()` 现直接产出 `effective_items/effective_occurrences/problems`，`cmd_scan()` 只消费该 snapshot；effective merge/relation/problems 下沉已闭合。三向 AST roster也已覆盖 `_legacy_table_sections`、marker、legacy row 与 effective snapshot helpers。定向验证：`29 passed`。
++
++### Critical
++
++无。
++
++### Important
++
++1. **合法 external same-line opaque value 仍被误杀。** `_find_recorder_span()` 对任何 column-0 行，只要 value 中出现 `sdflow-issues` 且整行不以 `sdflow-issues:` 开头就报 ownership ambiguity。最小复现 `other-tool: sdflow-issues is prose` 仍 fatal；批准 lexical profile 明确允许 external entry 在同一物理行携带任意 opaque value bytes。新增测试只覆盖 indented block value，未覆盖 same-line value。见 `sdflow-buglist/scripts/buglist.py:220-224`（三份镜像）、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:336-343`。
++
++2. **三向 pure-legacy/overlay golden 仍未落地。** 当前唯一三 recorder behavior golden 只比较 canonical renderer/model/marker；没有用同一 pure-legacy 与 overlay fixture 比较三份 parser 的 `effective_items/problems`。AST 等价是必要守卫，但不能替代 `DG-RI-1` 明确要求的三态 behavior golden。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-251`、`sdflow-buglist/tests/test_mirror_consistency.py:64-73`。
++
++3. **批准的坏输入矩阵仍未闭合。** 新增测试只补 ghost row、fenced region、indented opaque mention；marker 缺对/错配/嵌套/重复、lone CR/非法 UTF-8、surrogate、`change/batch=""`、裸 `items:`、缺字段/错型/枚举越域等仍无对应目标态回归证据。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:150-226,365-381`。
++
++### Minor
++
++- `read_recorder_document()` 的 path 已移入 `ERROR:` problem 段，第二轮三段式偏差已修复。
++
++完成以上 Important 后，Task 1 才可 PASS。
 diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md
 new file mode 100644
-index 0000000..62b29c3
+index 0000000..7a087ad
 --- /dev/null
 +++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,42 @@
 +# Task 1 Standards Review — strict dual-reader
 +
-+结论：**FAIL（HEAD `42bcd2a` re-review）**
++结论：**PASS（HEAD `9a770dd`，第三轮 re-review）**
 +
-+## 首轮问题与复核结论
++## 轮次审计
 +
-+| 首轮问题 | re-review |
-+|---|---|
-+| overlay `A007/A7` 按 literal shadow | **已修复**：按 semantic key shadow；对抗 fixture 只返回 `A7` |
-+| 跨文件 semantic duplicate 非 fatal | **已修复**：`A007@file1 + A7@file2` non-zero，stdout 为空并列出位置 |
-+| indented ownership 变体回退 legacy | **已修复原例**：`  sdflow-issues:` fatal |
-+| 任意 prose table 被计作 legacy region | **部分修复，仍有 Critical/Important，见下** |
-+| scan 未形成单次 document parse | **已修复**：一次 `parse_recorder_document` 返回 rows/blocks/markers，真实 scan 计数=1 |
-+| fatal diagnostic 缺 path | **已修复**：stderr 带 dated file path |
-+| 三 recorder parity/golden 不足 | **已修复核心证据**：三向 AST roster 与 renderer/parser golden 已覆盖 |
++### 第一轮 — FAIL
++
++- Critical：overlay `A007/A7` 按 literal shadow，产生两个 effective item。
++- Important：indented ownership 变体回退 legacy；prose table 被误计 legacy region；scan 未收敛为一次 document parse；fatal diagnostic 缺 path。
++- Minor：坏输入矩阵与三 recorder parity/golden 不足。
++
++### 第二轮 — FAIL
++
++- 第一轮 semantic shadow、跨文件 fatal、原 ownership 变体、parse-count、path diagnostic 与三向 parity 已闭合。
++- Critical：canonical prose 的 8-column 示例表仍被解析为 ghost machine item。
++- Important：fenced `## 状态总览` false fatal；external opaque value 提及 `sdflow-issues` false fatal。
++
++### 第三轮 — PASS
++
++- `sdflow-buglist/scripts/buglist.py:284-320,544-581,659-730`：legacy region 由 fence-aware、heading-bound `_legacy_table_sections()` 判定；canonical prose 不再进入 legacy rows/effective snapshot。
++- `sdflow-buglist/scripts/buglist.py:209-249`：ownership 检查收窄到 column-0 变体与 orphan indented owner；合法 external indented opaque value 可含 `sdflow-issues` 文本。
++- `sdflow-buglist/scripts/buglist.py:659-730`（三份镜像）：parser 直接生成 `effective_items/effective_occurrences/problems`；canonical prose、fenced overview、opaque sibling、overlay semantic alias 的三 recorder snapshot 完全一致。
 +
 +## Critical
 +
-+1. `sdflow-buglist/scripts/buglist.py:309-317,883-929`（三份 parser/两份 scan 镜像）canonical 仍无条件运行 `split_sections()`；而 `split_sections()` 只找正文首个 `| ID |`，不验证 `## 状态总览`，也不按 format 禁止 legacy merge。实测 canonical marker prose 内放一个合法 8-column 示例表，会把 prose row `X1` 输出成第二个机器 item（exit 0），直接违反“新 item 索引仅 frontmatter / canonical 只读 frontmatter”。
++无。
 +
 +## Important
 +
-+1. `sdflow-buglist/scripts/buglist.py:281-306` 的 legacy-region regex 不识别 Markdown fence。实测 canonical marker prose 的 fenced 示例中包含 `## 状态总览` + `| ID |` 时，被误判为 `mode-structure mismatch` fatal；详情 prose 按目标态可自由包含 heading/table/fence。
-+
-+2. `sdflow-buglist/scripts/buglist.py:209-229`（三份镜像）用 `b"sdflow-issues" in line` 判 ownership 歧义，越过了顶层 key 边界。合法外部 entry 的 indented block value 或 comment 只要提到文字 `sdflow-issues` 就被拒绝；实测 `other: |` 下的 `documentation mentions sdflow-issues` fatal，违反 namespace 外 opaque bytes 合同。
++无。
 +
 +## Minor
 +
-+1. `sdflow-buglist/tests/test_frontmatter_dual_reader.py:290-312` 的 prose-table 回归只断言 returncode=0，未断言输出 items/problems；因此实际 ghost item/arity problem 没有拉红。fenced overview 与外部 opaque token 也无回归。
++无。
 +
 +## Verification
 +
-+- `uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py sdflow-buglist/tests/test_mirror_consistency.py` → `27 passed`。
-+- 独立复现：canonical prose 产出 ghost `X1`；fenced overview false fatal；合法 external opaque token false fatal。
++- 第二轮三个对抗样例逐项复现：8-column prose 仅返回 frontmatter `B1`、`problems=[]`；fenced 状态表示例不再触发 mode mismatch；external opaque mention 正常解析。
++- parser-direct parity：buglist/todolist/issues 对 canonical prose、fenced overview、opaque sibling、overlay `A007→A7` 的 effective snapshot 相等。
++- `uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py sdflow-buglist/tests/test_mirror_consistency.py` → `29 passed`。
 +- backend/embedded domain checklist：无命中，未作领域清单假通过。
 diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md
 new file mode 100644
-index 0000000..63af661
+index 0000000..fd0be05
 --- /dev/null
 +++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,32 @@
 +# Task 1 Implementation Report — strict dual-reader
 +
 +状态：DONE
@@ -103,7 +134,8 @@ index 0000000..63af661
 +- 绿：`uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py` → `13 passed`。
 +- 首轮双轴审抓到 semantic alias shadow、跨文件重复 fatal、ownership 变体、legacy 区域误识别、真实 parse-count 与 path 诊断缺口；均已补实现与对抗回归。
 +- 第二轮双轴审继续击穿 canonical prose ghost row、fenced 状态表 false region 与外部 opaque value 误杀；已将 fence-aware 状态总览识别、effective merge/relation/problems 全部下沉到单次 document parser，并补三向 parity。
-+- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `288 passed`。
++- 第三轮 Standards 通过；Spec 继续指出 external same-line opaque value 与 behavior/bad-input golden 不足。ownership 判定已收窄到顶层 key 形态，并补 pure-legacy/overlay 三向 effective snapshot、marker、encoding/EOL、surrogate、字段/枚举矩阵。
++- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `298 passed`。
 +- dogfood scan：bug `7 items / 0 problems`；todo `150 items / 0 problems`。
 +- `git diff --check` → PASS。
 +
@@ -114,9 +146,9 @@ index 0000000..63af661
 +
 +## Concerns
 +
-+reviewer 报告保留每轮问题与复核结论；第二轮缺口修复后等待第三轮 re-review。Task 2–4 承接 writer/lock/rename，不作为本票假通过依据。
++reviewer 报告保留每轮问题与复核结论；第三轮 Spec 缺口修复后等待最终 re-review。Task 2–4 承接 writer/lock/rename，不作为本票假通过依据。
 diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
-index 63c1409..ea81924 100644
+index 63c1409..b0d6204 100644
 --- a/sdflow-buglist/scripts/buglist.py
 +++ b/sdflow-buglist/scripts/buglist.py
 @@ -57,6 +57,278 @@ STATUS_CODES = ["OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX
@@ -283,15 +315,15 @@ index 63c1409..ea81924 100644
 +        line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
 +        if b"\t" in line:
 +            _frontmatter_error("shared envelope lexical profile 非法", "tab")
-+        if (not line.startswith((b" ", b"#")) and b"sdflow-issues" in line
-+                and not line.startswith(b"sdflow-issues:")):
-+            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
 +            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
 +        if match:
 +            starts.append((index, offset, match.group(1).decode("ascii")))
 +            active_entry = True
++        elif (not line.startswith((b" ", b"#")) and re.match(
++                rb"^(?:['\"]sdflow-issues['\"]|\?\s*sdflow-issues|sdflow-issues\s+:)", line)):
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        elif line.startswith(b" ") and not active_entry:
 +            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
 +        elif line and not line.startswith((b" ", b"#")):
@@ -753,10 +785,10 @@ index 95b463a..e82737b 100644
  def _write_mixed_file(dir_path, date, rows):
 diff --git a/sdflow-buglist/tests/test_frontmatter_dual_reader.py b/sdflow-buglist/tests/test_frontmatter_dual_reader.py
 new file mode 100644
-index 0000000..1a24b8d
+index 0000000..0fa71a3
 --- /dev/null
 +++ b/sdflow-buglist/tests/test_frontmatter_dual_reader.py
-@@ -0,0 +1,381 @@
+@@ -0,0 +1,468 @@
 +import importlib.util
 +import json
 +import subprocess
@@ -1102,6 +1134,93 @@ index 0000000..1a24b8d
 +    assert parsed["effective_items"] == {}
 +
 +
++def test_external_same_line_value_may_mention_recorder_namespace():
++    namespace = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "canonical", "items": {}}
++    )
++    raw = b"---\nother-tool: sdflow-issues is prose\n" + namespace + b"---\n"
++    for module in (BUG, TODO, ISSUES):
++        assert module.parse_recorder_document(raw, "todo")["effective_items"] == {}
++
++
++def test_three_recorders_match_pure_legacy_and_overlay_behavior():
++    legacy = (_legacy_table("bug", "A007") + "\n---\n\n## A007: old\n\n| 状态 | OPEN |\n").encode()
++    snapshots = [module.parse_recorder_document(legacy, "bug") for module in (BUG, TODO, ISSUES)]
++    assert [snapshot["effective_items"] for snapshot in snapshots] == [snapshots[0]["effective_items"]] * 3
++    assert [snapshot["problems"] for snapshot in snapshots] == [[]] * 3
++
++    item = {
++        "module": "flow", "summary": "canonical", "type": "代码质量", "status": "OPEN",
++        "time": "2026-07-17 10:00", "change": None, "batch": None,
++    }
++    namespace = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "overlay", "items": {"A7": item}}
++    )
++    overlay = b"---\n" + namespace + b"---\n" + _legacy_table("todo", "A007").encode()
++    snapshots = [module.parse_recorder_document(overlay, "todo") for module in (BUG, TODO, ISSUES)]
++    assert [snapshot["effective_items"] for snapshot in snapshots] == [{"A7": item}] * 3
++    assert [snapshot["effective_occurrences"] for snapshot in snapshots] == [[(("A", 7), "A7")]] * 3
++    assert [snapshot["problems"] for snapshot in snapshots] == [[]] * 3
++
++
++@pytest.mark.parametrize(
++    ("body", "expected"),
++    [
++        ("<!-- sdflow-issue-block:start id=B1 -->\n", "marker 缺 end"),
++        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B2 -->\n", "marker ID 错配"),
++        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:start id=B2 -->\n", "marker 嵌套"),
++        ("<!-- sdflow-issue-block:end id=B1 -->\n", "orphan end marker"),
++        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B1 -->\n<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B1 -->\n", "marker block 重复"),
++    ],
++)
++def test_marker_corruption_is_observable_in_parser_snapshot(body, expected):
++    item = {
++        "module": "core", "summary": "marker", "priority": "P2", "status": "OPEN",
++        "time": "2026-07-17 10:00", "change": None, "batch": None,
++    }
++    namespace = BUG.render_recorder_namespace(
++        {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
++    )
++    snapshot = BUG.parse_recorder_document(b"---\n" + namespace + b"---\n" + body.encode(), "bug")
++    assert any(expected in problem for problem in snapshot["problems"])
++
++
++@pytest.mark.parametrize(
++    "raw",
++    [
++        b"# invalid \xff\n",
++        b"# lone\rreturn\n",
++    ],
++)
++def test_invalid_utf8_and_lone_cr_are_fatal(raw):
++    with pytest.raises(ValueError, match="encoding|EOL"):
++        BUG.parse_recorder_document(raw, "bug")
++
++
++def test_surrogate_empty_required_and_enum_drift_are_fatal():
++    base = {
++        "module": "core", "summary": "valid", "priority": "P2", "status": "OPEN",
++        "time": "2026-07-17 10:00", "change": None, "batch": None,
++    }
++    for mutation, expected in [
++        ({"summary": "bad\ud800"}, "surrogate"),
++        ({"module": " \t"}, "required string"),
++        ({"priority": "PX"}, "枚举越域"),
++        ({"status": "DONE"}, "枚举越域"),
++    ]:
++        item = {**base, **mutation}
++        with pytest.raises(ValueError, match=expected):
++            BUG.render_recorder_namespace(
++                {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
++            )
++    missing = dict(base)
++    missing.pop("batch")
++    with pytest.raises(ValueError, match="字段集合"):
++        BUG.render_recorder_namespace(
++            {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": missing}}
++        )
++
++
 +def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, capsys):
 +    directory = tmp_path / "openspec/issues/buglist"
 +    directory.mkdir(parents=True)
@@ -1205,7 +1324,7 @@ index 9f0a425..7228df9 100644
      """helper 删除证伪（spec 需求① scenario·L1）：比对代码必须用直接属性访问
      `getattr(m, f)`——上面 `test_three_way_mirror_consistency` / `test_two_way_mirror_consistency`
 diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
-index 285b9db..e2f201e 100644
+index 285b9db..5fbc18a 100644
 --- a/sdflow-issues/scripts/issues.py
 +++ b/sdflow-issues/scripts/issues.py
 @@ -64,6 +64,469 @@ SKILLS_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
@@ -1373,15 +1492,15 @@ index 285b9db..e2f201e 100644
 +        line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
 +        if b"\t" in line:
 +            _frontmatter_error("shared envelope lexical profile 非法", "tab")
-+        if (not line.startswith((b" ", b"#")) and b"sdflow-issues" in line
-+                and not line.startswith(b"sdflow-issues:")):
-+            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
 +            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
 +        if match:
 +            starts.append((index, offset, match.group(1).decode("ascii")))
 +            active_entry = True
++        elif (not line.startswith((b" ", b"#")) and re.match(
++                rb"^(?:['\"]sdflow-issues['\"]|\?\s*sdflow-issues|sdflow-issues\s+:)", line)):
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        elif line.startswith(b" ") and not active_entry:
 +            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
 +        elif line and not line.startswith((b" ", b"#")):
@@ -1679,7 +1798,7 @@ index 285b9db..e2f201e 100644
  def atomic_write(path, text):
      """原子写：同目录临时文件写完整内容 → os.replace 原子换入。
 diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
-index 2c21445..3a070e1 100644
+index 2c21445..111a58a 100644
 --- a/sdflow-todolist/scripts/todolist.py
 +++ b/sdflow-todolist/scripts/todolist.py
 @@ -57,6 +57,278 @@ STATUS_CODES = ["OPEN", "PROPOSED", "DONE", "WONTDO"]
@@ -1846,15 +1965,15 @@ index 2c21445..3a070e1 100644
 +        line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
 +        if b"\t" in line:
 +            _frontmatter_error("shared envelope lexical profile 非法", "tab")
-+        if (not line.startswith((b" ", b"#")) and b"sdflow-issues" in line
-+                and not line.startswith(b"sdflow-issues:")):
-+            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
 +            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
 +        if match:
 +            starts.append((index, offset, match.group(1).decode("ascii")))
 +            active_entry = True
++        elif (not line.startswith((b" ", b"#")) and re.match(
++                rb"^(?:['\"]sdflow-issues['\"]|\?\s*sdflow-issues|sdflow-issues\s+:)", line)):
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
 +        elif line.startswith(b" ") and not active_entry:
 +            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
 +        elif line and not line.startswith((b" ", b"#")):

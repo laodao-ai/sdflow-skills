@@ -267,6 +267,8 @@ def _parse_recorder_namespace(namespace, eol):
             _frontmatter_error("recorder items 非法", "empty map 后存在额外内容")
         items = {}
     elif lines[4] == "  items:":
+        if len(lines) == 5:
+            _frontmatter_error("recorder items 非法", "空 map 必须写 items: {}，裸 items: 禁止")
         items = {}
         for line in lines[5:]:
             match = re.fullmatch(r"    ([A-Z][1-9][0-9]*): (\{.*\})", line)

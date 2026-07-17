@@ -430,6 +430,13 @@ def test_surrogate_empty_required_and_enum_drift_are_fatal():
         )
 
 
+def test_bare_items_is_not_an_empty_map_alias():
+    raw = b"---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items:\n---\n"
+    for module in (BUG, TODO, ISSUES):
+        with pytest.raises(ValueError, match=r"items: \{\}"):
+            module.parse_recorder_document(raw, "bug")
+
+
 def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, capsys):
     directory = tmp_path / "openspec/issues/buglist"
     directory.mkdir(parents=True)
