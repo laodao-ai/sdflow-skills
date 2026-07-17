@@ -25,12 +25,10 @@ per-type 脚本。
     三个子命令（Q2 grill-amendment）。`batches.md` 是**半手维护**注册表（Q3 字段级
     grammar）——`状态:`/`成员:` 是生成行（reindex/`batch set-status` 维护），
     `优先级:`/`计划:` 及其它是人写行，**解析/写入绝不覆写人写行**，只精确 patch
-    目标生成行。`成员:` 行的内容同步（拿 item 池当 ground truth 填充）由 Task 11 的
-    reindex 负责（见上），本任务的 `add` 只把它建成空占位、`set-status`/`rename` 都
-    不碰它。`rename` 额外要把 item 池（bug+todo 两池）里所有 `批次==old` 的项同步改成
-    `new`——直接精确 patch 对应 dated 文件的批次列（表末列 `cells[7]`），不经由
-    per-type 脚本的 `triage` 子命令，因为 `triage` 有"未分诊开放态→PROPOSED"的状态
-    推进副作用，rename 只该改标签本身、不该顺带推状态。
+    目标生成行。`成员:` 行的内容同步（拿 item 池当 ground truth 填充）由 reindex 负责。
+    `rename` 直接构造两池一次性 bytes snapshot，registry-first 写 `重命名自:` provenance，
+    再以 canonical/overlay frontmatter retag；legacy table 永久只读。updated snapshot 直接
+    传给 reindex，整个 rename 不调用 recorder `scan --json`、不重复读取 dated files。
   - `atomic_write`：与 buglist.py/todolist.py 同款原子写 helper，供落盘
     `issues/INDEX.md`/`issues/batches.md`/dated 文件（rename 同步）用。
 
@@ -51,6 +49,7 @@ import json
 import os
 import re
 import secrets
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -762,6 +761,168 @@ def read_recorder_document(path, expected_pool):
         raise ValueError(f"ERROR: file={path}: {detail}") from None
 
 
+def read_rename_snapshot(root, instrumentation=None):
+    """Directly materialize the two-pool bytes snapshot used by batch rename.
+
+    Every dated document is opened once and parsed once.  The returned document
+    records retain the original bytes and parser spans/model so a caller can
+    retag in memory and splice only the recorder namespace.
+    """
+    root = os.path.realpath(os.fspath(root))
+    counters = instrumentation if instrumentation is not None else {"reads": {}, "parses": {}}
+    counters.setdefault("reads", {})
+    counters.setdefault("parses", {})
+    pools = {
+        "bug": ("openspec/issues/buglist/*.md", "openspec/buglists/*.md"),
+        "todo": ("openspec/issues/todolist/*.md", "openspec/todolists/*.md"),
+    }
+    documents = []
+    items = []
+    problems = []
+    semantic_occurrences = {}
+    seen_paths = set()
+    for pool, patterns in pools.items():
+        for pattern in patterns:
+            for path in sorted(glob.glob(os.path.join(root, pattern))):
+                real = os.path.realpath(path)
+                if real in seen_paths:
+                    continue
+                seen_paths.add(real)
+                rel = os.path.relpath(path, root)
+                try:
+                    with open(path, "rb") as stream:
+                        raw = stream.read()
+                    counters["reads"][rel] = counters["reads"].get(rel, 0) + 1
+                    document = parse_recorder_document(raw, pool)
+                    counters["parses"][rel] = counters["parses"].get(rel, 0) + 1
+                except (OSError, ValueError) as exc:
+                    message = str(exc)
+                    detail = message[len("ERROR: "):] if message.startswith("ERROR: ") else message
+                    raise ValueError(f"ERROR: file={path}: {detail}") from None
+                record = dict(document)
+                record.update({"pool": pool, "path": path, "file": rel})
+                documents.append(record)
+                problems.extend(f"{pool}:{rel}: {problem}" for problem in document["problems"])
+                for item_id, original in document["effective_items"].items():
+                    item = dict(original)
+                    item.update({"id": item_id, "pool": pool, "file": rel})
+                    items.append(item)
+                    key = _legacy_semantic_id_key(item_id)
+                    semantic_occurrences.setdefault(key, []).append((item_id, pool, rel))
+    duplicates = {key: values for key, values in semantic_occurrences.items() if len(values) > 1}
+    if duplicates:
+        key, values = sorted(duplicates.items(), key=lambda pair: str(pair[0]))[0]
+        rendered = ", ".join(f"{raw}@{pool}:{rel}" for raw, pool, rel in values)
+        raise ValueError(f"ERROR: semantic ID 重复; cause: repository semantic ID conflict {key}: {rendered}; fix: resolve all aliases/pools before retry")
+    return {"root": root, "documents": documents, "items": items, "problems": problems}
+
+
+def _render_recorder_document(document, model, body):
+    eol = document["eol"]
+    namespace = render_recorder_namespace(model, eol)
+    envelope = document["envelope"]
+    if envelope is None:
+        return document["bom"] + b"---" + eol + namespace + b"---" + eol + body
+    span = document["namespace_span"]
+    if span is None:
+        separator = b"" if not envelope or envelope.endswith(eol) else eol
+        envelope = envelope + separator + namespace
+    else:
+        envelope = envelope[:span[0]] + namespace + envelope[span[1]:]
+    return document["bom"] + b"---" + eol + envelope + b"---" + eol + body
+
+
+def _body_with_legacy_bug_markers(document, targets):
+    """Wrap promoted legacy bug blocks without rewriting their bytes."""
+    insertions = {}
+    line_offsets = [0]
+    for line in document["lines"]:
+        line_offsets.append(line_offsets[-1] + len(line.encode("utf-8")))
+    ranges = []
+    for raw_id, canonical in targets:
+        if raw_id not in document["legacy_blocks"]:
+            raise ValueError(
+                f"ERROR: file={document['path']} rename target legacy block missing; "
+                f"cause: id={raw_id}; fix: repair the target block, then rerun the original batch rename command"
+            )
+        start, end = document["legacy_blocks"][raw_id]
+        ranges.append((start, end, canonical))
+    for start, end, canonical in sorted(ranges):
+        insertions.setdefault(line_offsets[start], []).append(
+            f"<!-- sdflow-issue-block:start id={canonical} -->".encode("utf-8") + document["eol"]
+        )
+        insertions.setdefault(line_offsets[end], []).append(
+            f"<!-- sdflow-issue-block:end id={canonical} -->".encode("utf-8") + document["eol"]
+        )
+    body = document["body"]
+    rendered = []
+    cursor = 0
+    for offset in sorted(insertions):
+        rendered.append(body[cursor:offset])
+        rendered.extend(insertions[offset])
+        cursor = offset
+    rendered.append(body[cursor:])
+    return b"".join(rendered)
+
+
+def retag_rename_snapshot(snapshot, old_key, new_key):
+    """Return an updated in-memory snapshot and per-document rendered bytes."""
+    updated_documents = []
+    updated_items = []
+    original_by_file = {}
+    for item in snapshot["items"]:
+        original_by_file.setdefault(item["file"], {})[item["id"]] = item
+    for document in snapshot["documents"]:
+        record = dict(document)
+        original_items = original_by_file.get(document["file"], {})
+        target_ids = [item_id for item_id, item in original_items.items() if item.get("batch") == old_key]
+        if not target_ids:
+            record["rendered"] = document["raw"]
+            updated_items.extend(dict(item) for item in original_items.values())
+            updated_documents.append(record)
+            continue
+        old_model = document["model"]
+        model = {
+            "schema": 1,
+            "pool": document["pool"],
+            "mode": "overlay" if old_model is None else old_model["mode"],
+            "items": {key: dict(value) for key, value in (old_model["items"].items() if old_model else ())},
+        }
+        frontmatter_keys = {_legacy_semantic_id_key(item_id) for item_id in model["items"]}
+        marker_targets = []
+        effective = {item_id: dict(item) for item_id, item in original_items.items()}
+        for raw_id in target_ids:
+            key = _legacy_semantic_id_key(raw_id)
+            canonical = f"{key[0]}{key[1]}"
+            promoted_item = effective.pop(raw_id)
+            promoted_item["id"] = canonical
+            promoted_item["batch"] = new_key
+            effective[canonical] = promoted_item
+            promoted = dict(promoted_item)
+            promoted.pop("id", None)
+            promoted.pop("pool", None)
+            promoted.pop("file", None)
+            model["items"][canonical] = promoted
+            if document["pool"] == "bug" and key not in frontmatter_keys:
+                marker_targets.append((raw_id, canonical))
+        body = _body_with_legacy_bug_markers(document, marker_targets) if marker_targets else document["body"]
+        model = _validated_recorder_model(model)
+        rendered = _render_recorder_document(document, model, body)
+        record.update({"model": model, "body": body, "effective_items": {
+            item_id: {key: value for key, value in item.items() if key not in {"id", "pool", "file"}}
+            for item_id, item in effective.items()
+        }})
+        record.update({"pool": document["pool"], "path": document["path"], "file": document["file"], "rendered": rendered})
+        updated_items.extend(effective.values())
+        updated_documents.append(record)
+    return {
+        "root": snapshot["root"],
+        "documents": updated_documents,
+        "items": updated_items,
+        "problems": list(snapshot["problems"]),
+    }
+
+
 def atomic_write(path, text):
     """原子写：同目录临时文件写完整内容 → os.replace 原子换入。
     中途任何异常（含 os.replace 本身失败）都不会截断/损坏原文件——旧内容原样保留，
@@ -839,6 +1000,50 @@ class CrossPoolIDConflict(RuntimeError):
     """D9 防护网触发：同一 ID 同时出现在 bug 池与 todo 池。"""
 
 
+class ReindexStageError(RuntimeError):
+    def __init__(self, stage, cause):
+        super().__init__(str(cause))
+        self.stage = stage
+        self.cause = cause
+
+
+def validate_scan_envelope(payload, pool):
+    """Validate the standalone recorder ``scan --json`` consumer contract."""
+    if pool not in RECORDER_POOL_CONFIG:
+        raise ValueError(f"ERROR: scan envelope pool 非法: {pool!r}; cause: unknown consumer pool; fix: use bug or todo")
+    try:
+        data = json.loads(payload)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"ERROR: scan JSON 非法; cause: {exc}; fix: repair/reinstall the recorder producer and retry") from None
+    if not isinstance(data, dict):
+        raise ValueError("ERROR: scan envelope 非法; cause: top-level must be object; fix: repair/reinstall the recorder producer and retry")
+    items_key = "bugs" if pool == "bug" else "items"
+    if items_key not in data or not isinstance(data[items_key], list):
+        raise ValueError(f"ERROR: scan envelope {items_key} 非法; cause: required list missing or wrong type; fix: repair/reinstall the recorder producer and retry")
+    if "problems" not in data or not isinstance(data["problems"], list):
+        raise ValueError("ERROR: scan envelope problems 非法; cause: required list missing or wrong type; fix: repair/reinstall the recorder producer and retry")
+    if any(not isinstance(problem, str) for problem in data["problems"]):
+        raise ValueError("ERROR: scan envelope problems 非法; cause: every problem must be string; fix: repair/reinstall the recorder producer and retry")
+    specific_field, specific_values, status_values = RECORDER_POOL_CONFIG[pool]
+    required = {"id", "module", "summary", specific_field, "status", "time", "change", "batch", "file"}
+    for index, item in enumerate(data[items_key]):
+        if not isinstance(item, dict) or not required <= set(item):
+            missing = sorted(required - set(item)) if isinstance(item, dict) else sorted(required)
+            raise ValueError(f"ERROR: scan item[{index}] 字段非法; cause: missing={missing}; fix: repair/reinstall the recorder producer and retry")
+        canonical_id(item["id"])
+        for field in ("module", "summary", "time", "file", specific_field, "status"):
+            if not isinstance(item[field], str) or (field == "file" and not item[field]):
+                raise ValueError(f"ERROR: scan item[{index}].{field} 类型非法; cause: required non-empty string for file and string otherwise; fix: repair/reinstall the recorder producer and retry")
+        for field in ("change", "batch"):
+            if item[field] is not None and not isinstance(item[field], str):
+                raise ValueError(f"ERROR: scan item[{index}].{field} 类型非法; cause: expected string or null; fix: repair/reinstall the recorder producer and retry")
+        if item[specific_field] not in specific_values:
+            raise ValueError(f"ERROR: scan item[{index}].{specific_field} 枚举漂移; cause: {item[specific_field]!r}; fix: repair/reinstall the recorder producer and retry")
+        if item["status"] not in status_values:
+            raise ValueError(f"ERROR: scan item[{index}].status 枚举漂移; cause: {item['status']!r}; fix: repair/reinstall the recorder producer and retry")
+    return data[items_key], data["problems"]
+
+
 # ── 跨池 read ────────────────────────────────────────────────────────────────
 
 def _scan_pool(script, root, pool, problems_out=None):
@@ -869,12 +1074,11 @@ def _scan_pool(script, root, pool, problems_out=None):
         raise RuntimeError(
             f"{os.path.basename(script)} scan --json 失败（exit={proc.returncode}）：{proc.stderr}"
         )
-    data = json.loads(proc.stdout)
+    raw_items, scan_problems = validate_scan_envelope(proc.stdout, pool)
     if problems_out is not None:
-        problems_out.extend(data.get("problems") or [])
+        problems_out.extend(scan_problems)
     # buglist.py 输出键是 "bugs"，todolist.py 输出键是 "items"（两脚本各自的命名，
     # 不统一——brief 明确提醒过这个坑，这里按 pool 分别取对应键）。
-    raw_items = data.get("bugs" if pool == "bug" else "items") or []
     out = []
     for item in raw_items:
         merged = dict(item)
@@ -1035,8 +1239,8 @@ def _reject_cell_unsafe(value, field):
     """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
     MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。
     与 buglist.py / todolist.py 的同名函数逐字同款（三脚本各自独立、不互相 import，
-    见模块 docstring "子进程解耦"）。挂在 `_retag_items_in_dated_files`（`batch rename`
-    的跨池同步写路径，写 cells[7]）入口，守的是 `new_key` 原始参数。"""
+    见模块 docstring "子进程解耦"）。当前只用于仍写 Markdown 单行结构的 batch registry
+    字段；dated recorder frontmatter writer 不再使用这条 table-cell guard。"""
     if value is None:
         return
     if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
@@ -1082,7 +1286,7 @@ def _reject_batch_key_unsafe(key):
         )
 
 
-def _reindex_core(root):
+def _reindex_core(root, snapshot=None):
     """reindex 核心逻辑（无 CLI 层退出码/文案语义）：`read_pool`（内含 D9 跨池 ID 冲突
     检测，冲突即抛 `CrossPoolIDConflict`；子进程失败抛 `RuntimeError`——本函数**不捕获、
     直接向上抛**，退出码/报错文案由调用方决定）→ `generate_index_md` 纯函数重建全文 →
@@ -1096,15 +1300,25 @@ def _reindex_core(root):
     两个调用方：
       - `cmd_reindex`（CLI `reindex` 子命令）：捕获 `RuntimeError` 走 `_die`（exit 1），
         并按 `--strict` 决定 problems 是否收紧退出码。
-      - `cmd_batch_rename` 的 auto-reindex（Task 7，T4）：捕获任意异常只 warn，不 `_die`——
-        rename 本体的写盘已在调用本函数之前完成，reindex 失败不该反噬成 rename 失败假象。
+      - `cmd_batch_rename`：传入 direct updated snapshot；INDEX/batches 任一失败均由调用方
+        以 stage + 原命令恢复信息 fail-closed，直到全部派生输出收敛才允许成功。
     """
-    problems = []
-    items = read_pool(root, problems)
+    if snapshot is None:
+        problems = []
+        items = read_pool(root, problems)
+    else:
+        items = list(snapshot["items"])
+        problems = list(snapshot.get("problems", []))
     content = generate_index_md(items)
     index_path = os.path.join(root, "openspec", "issues", "INDEX.md")
-    atomic_write(index_path, content)
-    sync_batches_md(root, items)
+    try:
+        atomic_write(index_path, content)
+    except Exception as exc:
+        raise ReindexStageError("INDEX", exc) from None
+    try:
+        sync_batches_md(root, items)
+    except Exception as exc:
+        raise ReindexStageError("batches", exc) from None
     return items, problems
 
 
@@ -1184,6 +1398,7 @@ _BATCH_HEADER_RE = re.compile(r"^### (?P<key>.+?) — (?P<title>.+?)\s*$")
 _BATCH_STATUS_LINE_RE = re.compile(r"^状态[:：]\s*(.*)$")
 _BATCH_MEMBERS_LINE_RE = re.compile(r"^成员[:：]\s*(.*)$")
 _BATCH_WARN_LINE_RE = re.compile(r"^⚠️ 不一致:.*$")
+_BATCH_RENAMED_FROM_LINE_RE = re.compile(r"^重命名自:\s*(.*)$")
 
 BATCHES_MD_HEADER = (
     "# Issues 批次注册表\n"
@@ -1264,6 +1479,75 @@ def _find_batch_entry_range(lines, key):
 
 def _batch_entry_exists(lines, key):
     return _find_batch_entry_range(lines, key) is not None
+
+
+def _batch_registry(lines):
+    _preamble, entries = _split_batches_entries(lines) if lines else ([], [])
+    registry = {}
+    for key, entry_lines in entries:
+        if key in registry:
+            raise ValueError(f"ERROR: batches registry key 重复; cause: key={key}; fix: remove the duplicate header, then rerun the original command")
+        provenance = []
+        for line in entry_lines[1:]:
+            match = _BATCH_RENAMED_FROM_LINE_RE.fullmatch(line.rstrip("\n"))
+            if match:
+                provenance.append(match.group(1))
+        if len(provenance) > 1:
+            raise ValueError(f"ERROR: batches registry provenance 重复; cause: key={key}; fix: retain exactly one machine-owned 重命名自 line, then retry")
+        registry[key] = {"renamed_from": provenance[0] if provenance else None}
+    return registry
+
+
+def _rename_registry_lines(lines, old_key, new_key):
+    rendered = list(lines)
+    rng = _find_batch_entry_range(rendered, old_key)
+    if rng is None:
+        raise ValueError(f"ERROR: rename source batch 不存在; cause: old={old_key}; fix: verify the key and rerun the original command")
+    header_idx, end_idx = rng
+    match = _BATCH_HEADER_RE.match(rendered[header_idx].rstrip("\n"))
+    rendered[header_idx] = f"### {new_key} — {match.group('title')}\n"
+    provenance_indexes = [
+        index for index in range(header_idx + 1, end_idx)
+        if _BATCH_RENAMED_FROM_LINE_RE.fullmatch(rendered[index].rstrip("\n"))
+    ]
+    if len(provenance_indexes) > 1:
+        raise ValueError(f"ERROR: batches registry provenance 重复; cause: key={old_key}; fix: retain exactly one machine-owned 重命名自 line, then retry")
+    line = f"重命名自: {old_key}\n"
+    if provenance_indexes:
+        rendered[provenance_indexes[0]] = line
+    else:
+        rendered.insert(header_idx + 1, line)
+    return rendered
+
+
+def classify_batch_rename(registry, items, old_key, new_key):
+    """Classify a registry-first rename as a first run or a proven retry."""
+    old_exists = old_key in registry
+    new_exists = new_key in registry
+    if old_exists and new_exists:
+        raise ValueError(f"ERROR: rename registry 双 key 同时存在; cause: old={old_key} new={new_key}; fix: resolve the registry conflict, then rerun the original command")
+    if old_exists:
+        orphan_ids = [item.get("id", "?") for item in items if item.get("batch") == new_key]
+        if orphan_ids:
+            raise ValueError(f"ERROR: rename target orphan items; cause: new={new_key} referenced before registry rename by {','.join(orphan_ids)}; fix: repair orphan tags, then rerun the original command")
+        return "first"
+    if not new_exists:
+        raise ValueError(f"ERROR: rename source batch 不存在; cause: old={old_key} new={new_key}; fix: check the source key and rerun the original command")
+    provenance = registry[new_key].get("renamed_from") if isinstance(registry[new_key], dict) else None
+    if provenance != old_key:
+        raise ValueError(f"ERROR: rename unknown source; cause: target={new_key} provenance={provenance!r} expected={old_key!r}; fix: do not absorb this target; verify the original command and registry provenance")
+    return "retry"
+
+
+def _rename_recovery_error(stage, root, old_key, new_key, cause):
+    command = " ".join(shlex.quote(part) for part in (
+        sys.executable, os.path.abspath(__file__), "--root", root,
+        "batch", "rename", old_key, new_key,
+    ))
+    return ValueError(
+        f"ERROR: batch rename stage={stage} failed; cause: {cause}; "
+        f"fix: rerun the original command to converge: {command}"
+    )
 
 
 # ── reindex → batches.md 状态同步（Task 11） ─────────────────────────────────
@@ -1643,119 +1927,57 @@ def cmd_batch_set_status(args):
     ))
 
 
-def _retag_items_in_dated_files(root, items, old_key, new_key):
-    """rename 的跨池同步半：把 `items`（`read_pool` 结果）里所有 `批次==old_key` 的项，
-    在其各自 dated 文件里的批次列（表末列 `cells[7]`）精确改成 `new_key`。
-
-    刻意不走 per-type 脚本的 `triage` 子命令：`triage` 除了写批次列，还会把「未分诊
-    开放态」item 的状态顺带推进到 PROPOSED（见 buglist.py/todolist.py `cmd_triage`）——
-    这是 rename 意料外的副作用（rename 只该改标签本身）。所以这里直接对 dated 文件的
-    批次列做精确 patch（design §五允许的"直接改 dated 文件的批次列"路径），只改这一列，
-    该行其它列 + 文件其它内容原样保留。
-
-    每个受影响文件只读一次、原地改完全部命中行、写一次（`atomic_write`）——不会对同一
-    文件重复打开写入。返回 `[{"pool", "id", "file"}, ...]`（改动了哪些项，供调用方汇报/测试）。
-    """
-    _reject_cell_unsafe(new_key, "new_key")
-    targets = [it for it in items if it.get("batch") == old_key]
-    by_file = {}
-    for it in targets:
-        rel_file = it.get("file")
-        if not rel_file:
-            continue  # 理论上 scan --json 每项都带 file；防御式跳过缺失的
-        by_file.setdefault(rel_file, []).append(it)
-
-    changed = []
-    for rel_file, its in by_file.items():
-        full_path = os.path.join(root, rel_file)
-        with open(full_path, encoding="utf-8") as f:
-            file_lines = f.readlines()
-        wanted = {it["id"]: it for it in its}
-        for i, line in enumerate(file_lines):
-            m = re.match(r"\|\s*([A-Z][0-9]+)\s*\|", line, re.ASCII)
-            if not m or m.group(1) not in wanted:
-                continue
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            while len(cells) < 8:  # 旧格式（无批次列）行防御式补齐，不越界写 cells[7]
-                cells.append("")
-            cells[7] = new_key
-            file_lines[i] = "| " + " | ".join(cells) + " |\n"
-            changed.append({"pool": wanted[m.group(1)]["pool"], "id": m.group(1), "file": rel_file})
-        atomic_write(full_path, "".join(file_lines))
-    return changed
-
-
 def cmd_batch_rename(args):
-    """`batch rename {old} {new}`：改条目 key（`old`→`new`，标题文本不变）+ 同步 item 池
-    （bug+todo 两池）里所有 `批次==old` 的 tag 一并改成 `new`（Q2：人真开 cleanup change
-    用不同名时用这个命令，不做跨 change 主题聚类合并）。
-
-    执行顺序（刻意）：先校验 batches.md 里 old 存在、new 不与既有条目撞号（不做静默合并）
-    → 再 `read_pool`（这一步可能因跨池 ID 冲突/子进程失败抛错）→ 只有 `read_pool` 成功后
-    才开始真正写盘：先改 dated 文件（item 池），最后才改 `batches.md` 的 key。这样任何一步
-    失败都不会把 `batches.md` 改成指向一个内容对不上的新 key；`read_pool` 失败时更是连一个
-    字节都不落盘。多文件写入本身无跨文件事务（D6 已知边界，靠"重跑收敛"），但至少不会因为
-    校验类失败留下半吊子状态。
-
-    auto-reindex（Task 7，T4）：以上写盘全部成功后，自动调 `_reindex_core` 刷新
-    `issues/INDEX.md`（否则 INDEX 会滞留旧 key，要等下一次显式 reindex 才刷新，中间是
-    一段静默陈旧态）。**reindex 失败只吞成 stderr 警告**、**rename 本体仍 exit 0**——
-    rename 该做的写盘已经全部完成，不该让 reindex 这个"顺带刷新"步骤的失败反噬成 rename
-    失败假象。rename 写盘前失败（上面的校验类 `_die`）仍不会走到这一步、不会触发 reindex。
-
-    [impl-review-fix] FIX-4（领域 F2 + 对抗 B-F1 PoC）：此前 `try: _reindex_core(root)`
-    丢弃返回的 `(items, problems)`——reindex 成功但两池 `scan --json` 测出 problems
-    非空时，rename 完全不吐这个信号（静默蒸发，换个入口就能复现 T1 那类"reindex
-    problems 被丢弃"腐蚀）。现在解包并用 `_echo_problems` 回显。同时 `except` 分支的
-    警告文案此前无条件断言"INDEX 未刷新"——但 `_reindex_core` 内部是先
-    `atomic_write` INDEX.md、再 `sync_batches_md`，若失败发生在后者，INDEX 其实已经
-    刷新成功，"INDEX 未刷新"这句话不准。文案改为不断言具体哪个文件的状态，只如实说
-    "reindex 失败，可能已部分刷新，请手动重跑 reindex 收敛"。
-    """
+    """Registry-first, retryable, direct-snapshot cross-pool batch rename."""
     root = repo_root(args.root)
     old_key, new_key = args.old, args.new
     _reject_batch_key_unsafe(new_key)
+    if old_key == new_key:
+        raise ValueError("ERROR: batch rename source 与 target 相同; cause: no rename can be proven; fix: choose a different target key")
 
     path = batches_md_path(root)
     lines = _read_batches_lines(path)
-    rng = _find_batch_entry_range(lines, old_key)
-    if rng is None:
-        _die(f"未找到批次 key：{old_key}")
-    if old_key != new_key and _batch_entry_exists(lines, new_key):
-        _die(f"批次 key 已存在，rename 不做合并：{new_key}")
-
     try:
-        items = read_pool(root)
-    except RuntimeError as e:
-        _die(str(e))
-        return  # pragma: no cover（_die 已 sys.exit(1)，此行只安抚静态分析）
+        registry = _batch_registry(lines)
+        snapshot = read_rename_snapshot(root)
+        state = classify_batch_rename(registry, snapshot["items"], old_key, new_key)
+        updated = retag_rename_snapshot(snapshot, old_key, new_key)
+    except Exception as exc:
+        if isinstance(exc, ValueError) and str(exc).startswith("ERROR: batch rename stage="):
+            raise
+        raise _rename_recovery_error("preflight", root, old_key, new_key, exc) from None
 
-    changed = _retag_items_in_dated_files(root, items, old_key, new_key)
+    if state == "first":
+        try:
+            atomic_write(path, "".join(_rename_registry_lines(lines, old_key, new_key)))
+        except Exception as exc:
+            raise _rename_recovery_error("registry", root, old_key, new_key, exc) from None
 
-    header_idx, _end_idx = rng
-    header_line = lines[header_idx].rstrip("\n")
-    title = _BATCH_HEADER_RE.match(header_line).group("title")
-    lines[header_idx] = f"### {new_key} — {title}\n"
-    atomic_write(path, "".join(lines))
-
-    print(json.dumps(
-        {"old_key": old_key, "new_key": new_key, "items_changed": len(changed)}, ensure_ascii=False
-    ))
-
-    try:
-        items, problems = _reindex_core(root)
-    except Exception as e:
-        # [impl-review-fix] FIX-4：不断言 INDEX/batches.md 具体处于哪个状态——失败可能
-        # 发生在 `atomic_write` INDEX.md 之前（两者都未刷新），也可能发生在其后的
-        # `sync_batches_md`（INDEX 已刷新、只有 batches.md 未同步），旧文案"INDEX 未
-        # 刷新"对后一种情况是错的。
-        print(
-            f"batch rename: rename 已生效，但 reindex 失败（INDEX/batches.md 可能已"
-            f"部分刷新），请手动重跑 reindex：{e}",
-            file=sys.stderr,
+    changed = 0
+    for before, after in zip(snapshot["documents"], updated["documents"]):
+        if after["rendered"] == before["raw"]:
+            continue
+        changed += sum(
+            1 for item in snapshot["items"]
+            if item["file"] == before["file"] and item.get("batch") == old_key
         )
-    else:
-        _echo_problems(problems)
+        try:
+            atomic_write_bytes(after["path"], after["rendered"])
+        except Exception as exc:
+            stage = f"dated:{after['file']}"
+            raise _rename_recovery_error(stage, root, old_key, new_key, exc) from None
+
+    try:
+        _items, problems = _reindex_core(root, snapshot=updated)
+    except ReindexStageError as exc:
+        raise _rename_recovery_error(exc.stage, root, old_key, new_key, exc.cause) from None
+    except Exception as exc:
+        raise _rename_recovery_error("reindex", root, old_key, new_key, exc) from None
+    _echo_problems(problems)
+    print(json.dumps(
+        {"old_key": old_key, "new_key": new_key, "items_changed": changed, "mode": state},
+        ensure_ascii=False,
+    ))
 
 
 # ── sweep（Task 1，roadmap 阶段 1）────────────────────────────────────────────

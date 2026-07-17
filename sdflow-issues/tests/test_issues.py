@@ -870,7 +870,8 @@ class TestBatchRename:
         _run_batch(tmp_path, ["rename", "old-batch", "new-batch"])
         content = _read_batches(tmp_path)
         assert "### new-batch — 清理项" in content
-        assert "old-batch" not in content
+        assert "### old-batch —" not in content
+        assert "重命名自: old-batch" in content
         assert "优先级: P1" in content
         assert "计划: 一句范围" in content
 
@@ -888,8 +889,8 @@ class TestBatchRename:
             encoding="utf-8")
         b1_line = next(l for l in text.splitlines() if l.strip().startswith("| B1"))
         b2_line = next(l for l in text.splitlines() if l.strip().startswith("| B2"))
-        assert "new-batch" in b1_line
-        assert "old-batch" not in b1_line
+        assert "old-batch" in b1_line  # frozen legacy snapshot 永不 patch
+        assert _item_batch(tmp_path, "B1") == "new-batch"  # overlay 是当前值
         assert "other-batch" in b2_line  # 不同批次的项不受影响
 
     def test_rename_syncs_item_batch_tag_in_todo_pool(self, tmp_path):
@@ -904,7 +905,8 @@ class TestBatchRename:
         text = (tmp_path / "openspec" / "issues" / "todolist" / "2026-01-todolist.md").read_text(
             encoding="utf-8")
         t1_line = next(l for l in text.splitlines() if l.strip().startswith("| T1"))
-        assert "new-batch" in t1_line
+        assert "old-batch" in t1_line  # frozen legacy snapshot 永不 patch
+        assert _item_batch(tmp_path, "T1") == "new-batch"
 
     def test_rename_syncs_across_both_pools_in_one_call(self, tmp_path):
         _write_batches_md(tmp_path, [
@@ -922,8 +924,10 @@ class TestBatchRename:
             encoding="utf-8")
         todo_text = (tmp_path / "openspec" / "issues" / "todolist" / "2026-01-todolist.md").read_text(
             encoding="utf-8")
-        assert "new-batch" in next(l for l in bug_text.splitlines() if l.strip().startswith("| B1"))
-        assert "new-batch" in next(l for l in todo_text.splitlines() if l.strip().startswith("| T1"))
+        assert "old-batch" in next(l for l in bug_text.splitlines() if l.strip().startswith("| B1"))
+        assert "old-batch" in next(l for l in todo_text.splitlines() if l.strip().startswith("| T1"))
+        assert _item_batch(tmp_path, "B1") == "new-batch"
+        assert _item_batch(tmp_path, "T1") == "new-batch"
 
     def test_rename_does_not_flip_item_status(self, tmp_path):
         """rename 只改批次 tag，不该像 triage 那样顺带把未分诊开放态推成 PROPOSED——
@@ -960,9 +964,8 @@ class TestBatchRename:
         assert "### b — B" in content
 
     def test_batch_rename_rejects_pipe_in_new_key(self, tmp_path):
-        """C1 BLOCKER 补漏：rename 把 new_key 写进跨池 item 的总览管道表 cells[7]
-        （`_retag_items_in_dated_files`），同款守卫必须覆盖 add 之外的这条写路径。
-        含 `|` 的 new_key 应 fail-closed，且已有成员行的 cells[7] 不被腐蚀。"""
+        """batch key 仍写 Markdown registry header，含 `|` 必须在任何 registry/frontmatter
+        写盘前 fail-closed；legacy row 作为 frozen snapshot 保持不变。"""
         _write_batches_md(tmp_path, [
             "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
             "优先级: P1\n", "计划: x\n",
@@ -1017,11 +1020,8 @@ class TestBatchRename:
 
 
 class TestBatchRenameAutoReindex:
-    """Task 7（T4）：`batch rename` 成功写盘后自动调 reindex 刷新 issues/INDEX.md——
-    此前 rename 只改 batches.md + dated 文件的批次列，INDEX.md 要等下次显式 reindex
-    才会反映新 key，中间是一段静默陈旧态。auto-reindex 异常吞掉只 warn（"rename 已
-    生效，INDEX 未刷新，请手动 reindex"）、rename 本体仍 exit 0——不让 reindex 失败
-    反噬成 rename 失败假象。"""
+    """`batch rename` 必须复用 updated snapshot 刷新 INDEX/batches；完全收敛前任何
+    reindex failure 都 non-zero，并携带原命令恢复信息。"""
 
     def test_batch_rename_auto_reindex_refreshes_index(self, tmp_path):
         _write_batches_md(tmp_path, [
@@ -1039,15 +1039,10 @@ class TestBatchRenameAutoReindex:
         assert "| B1 |" in content
         assert "批次：old-batch" not in content
 
-    def test_batch_rename_reindex_failure_warns_but_exit0(self, tmp_path, monkeypatch, capsys):
-        """构造 reindex 核心异常（monkeypatch `_reindex_core`）：rename 本体（batches.md
-        header 改名 + dated 文件批次列同步）已在 reindex 调用之前写盘完成，reindex 失败
-        只应吞成 stderr 警告，不应让整个 rename 调用以非 0 退出或抛未捕获异常。
-
-        [impl-review-fix] FIX-4：警告文案不再断言"INDEX 未刷新"——`_reindex_core` 内部
-        先写 INDEX.md、再同步 batches.md，失败若发生在后半段，INDEX 其实已经刷新成功，
-        旧文案对这种情况是错的。只断言文案如实指向"reindex 失败，需要手动重跑"，不
-        断言具体哪个文件的状态。"""
+    def test_batch_rename_reindex_failure_is_nonzero_with_recovery_command(
+        self, tmp_path, monkeypatch
+    ):
+        """完全收敛前 reindex failure 必须 fail-closed，并给原命令恢复信息。"""
         _write_batches_md(tmp_path, [
             "### old-batch — 清理项\n", "状态: PLANNED\n", "成员: (生成)\n",
             "优先级: P1\n", "计划: x\n",
@@ -1056,18 +1051,17 @@ class TestBatchRenameAutoReindex:
             {"id": "B1", "status": "OPEN", "change": "x", "batch": "old-batch"},
         ])
 
-        def boom(root):
+        def boom(root, snapshot=None):
             raise RuntimeError("simulated reindex failure")
 
         monkeypatch.setattr(issues_mod, "_reindex_core", boom)
 
         args = types.SimpleNamespace(root=str(tmp_path), old="old-batch", new="new-batch")
-        issues_mod.cmd_batch_rename(args)  # 不应抛异常 / 不应 SystemExit(非0)
-
-        captured = capsys.readouterr()
-        assert "reindex 失败" in captured.err
-        assert "手动" in captured.err
-        assert "INDEX 未刷新" not in captured.err  # 不再对具体文件状态做不实断言
+        with pytest.raises(ValueError) as exc_info:
+            issues_mod.cmd_batch_rename(args)
+        diagnostic = str(exc_info.value)
+        assert "stage=reindex" in diagnostic
+        assert "batch rename old-batch new-batch" in diagnostic
 
         # rename 本体已生效（写盘发生在 reindex 调用之前）
         content = _read_batches(tmp_path)
@@ -1096,6 +1090,7 @@ class TestBatchRenameAutoReindexProblemsEcho:
             "|----|------|----------|--------|------|------|------------|------|\n"
             "| B1 | `foo.c:1` | fixture | P2 | OPEN | 10:00 | x | old-batch |\n"
             "| B2 | `foo.c:1` | A | B 都坏了 | P2 | OPEN | 10:00 | x | |\n"
+            "\n## B1: fixture\n\n**现象**：target block is valid\n"
         )
         (dir_path / "2026-01-01-buglist.md").write_text(content, encoding="utf-8")
 
