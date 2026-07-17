@@ -39,11 +39,11 @@ impl-pipeline: tickets
 
 交付跨 bug/todo 两池统一的 canonical ID 语义和仓级 exclusive snapshot lock。所有权威读、分配、查重、复合命令 participant 与最终原子替换必须落在同一 cooperative 锁域；冲突、partial metadata、stale lock、token 越权与平台差异都要 fail-loud，且运行时锁不会进入 Git。
 
-- [ ] 新写 ID 仅接受 canonical ASCII spelling，自定义 prefix 兼容，legacy alias promotion 与跨池语义冲突有确定行为。
-- [ ] scan/next-id/add/status/triage/reindex/sweep/batch 命令覆盖 owner/participant 锁协议，影响结果的 discovery/read 均发生在锁内。
-- [ ] token 只向同 repo allowlist recorder 子进程受控转发，非 allowlist、跨 repo、伪造、过期和越级委派均在业务读写前拒绝。
-- [ ] 20 进程并发 add、reader/writer barrier、fault injection、ownership-lost 与 break-glass 场景证明无重复成功 ID、无 lost write、无静默偷锁。
-- [ ] init/update 对运行时 lock ignore 的合并幂等、保留用户 bytes，dogfood 仓盘面恰有一条对应 ignore。
+- [x] 新写 ID 仅接受 canonical ASCII spelling，自定义 prefix 兼容，legacy alias promotion 与跨池语义冲突有确定行为。
+- [x] scan/next-id/add/status/triage/reindex/sweep/batch 命令覆盖 owner/participant 锁协议，影响结果的 discovery/read 均发生在锁内。
+- [x] token 只向同 repo allowlist recorder 子进程受控转发，非 allowlist、跨 repo、伪造、过期和越级委派均在业务读写前拒绝。
+- [x] 20 进程并发 add、reader/writer barrier、fault injection、ownership-lost 与 break-glass 场景证明无重复成功 ID、无 lost write、无静默偷锁。
+- [x] init/update 对运行时 lock ignore 的合并幂等、保留用户 bytes，dogfood 仓盘面恰有一条对应 ignore。
 
 ### Task 3: 新写 frontmatter、overlay promotion 与 marker prose
 
