@@ -35,7 +35,7 @@ ship-gate:
 ## Minor 缺口
 
 - ~~`cmd_triage` docstring 仍描述“写表格批次列”~~ **（已解决，本 change fold 改掉）**：两 recorder 镜像的 `cmd_triage` docstring（`buglist.py:1401`/`todolist.py:1370`）已改为描述 frontmatter 批次写入、legacy promotion 与 marker history 语义（对应 todolist `T153`）。
-- `T154`（actual Windows smoke）**已完成**：windows-latest run 29568476168 `2 passed`，done 阶段可标 DONE（evidence=run URL / commit `ba004e1`）。`T155`（全仓 `-W error` 常态化 CI 守卫）仍 OPEN，另开 hardening change 起点。
+- `T153`（docstring fold）与 `T154`（Windows smoke）**已标 DONE**（reindex 已同步 INDEX）：T153 evidence=commit `27b77a7`；T154 evidence=windows-latest run 29568476168 / commit `ba004e1` `2 passed`。`T155`（全仓 `-W error` 常态化 CI 守卫）保持 OPEN，另开 hardening change 起点。
 - 已登记的 `T151`（镜像守卫扩常量/类型定义）与 `T152`（review-package diff-check 记录口径）属于守卫/流程强化，不是 delta spec 的核心功能缺失。
 
 PASS：两个收尾门均达成——warning 门 `1619 passed, 2 skipped`（4 站点未关闭文件 fold 清零）；Windows 门 windows-latest run 29568476168 `2 passed` 无 skip。逐需求核对全 ✅，可 hand-off → archive → merge。

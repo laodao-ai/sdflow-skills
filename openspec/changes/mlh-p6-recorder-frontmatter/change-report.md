@@ -283,7 +283,7 @@ retag_rename_snapshot（内存更新 canonical / overlay / legacy promotion）
 
 1. ~~修复 `sdflow-maintain`/`sdflow-architecture` 未关闭文件 warning~~ **已完成**（tasks 7.5 fold 修 4 站点，全仓 `pytest -W error` → `1619 passed, 2 skipped`）。全仓机械守卫另开 hardening change（todolist T155）。
 2. ~~在 `windows-latest` 执行 Windows smoke 并保存 run 锚~~ **已完成**：run [29568476168](https://github.com/laodao-ai/sdflow-skills/actions/runs/29568476168)、commit `ba004e1` → `2 passed` 无 skip（收尾途中修 `bash`→WSL、subprocess utf-8 两处测试层问题）。
-3. **待执行**：跑 `$sdflow-done mlh-p6-recorder-frontmatter` 走正式 Verify（strong model 冷启动复核）→ hand-off（含 issues sweep，把 T153/T154 标 DONE）→ archive（delta spec 同步进 `openspec/specs`）→ ff merge 到默认分支。
+3. **待执行**：跑 `$sdflow-done mlh-p6-recorder-frontmatter` 走正式 Verify（strong model 冷启动复核）→ hand-off（issues sweep；T153/T154 已标 DONE + reindex 已刷新，sweep 处理其余 OPEN）→ archive（delta spec 同步进 `openspec/specs`）→ ff merge 到默认分支。
 4. **后续**：另开 hardening change 落 T155（全仓 `-W error` 常态化 CI 守卫）。
 
 ## 九、关键资料

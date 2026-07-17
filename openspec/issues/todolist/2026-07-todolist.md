@@ -9,8 +9,8 @@ sdflow-issues:
     T67: {"module":"`cmd_add id 校验(buglist/todolist)`","summary":"显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)","type":"代码质量","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
     T85: {"module":"`roadmap mechanical-layer-hardening / recorder`","summary":"P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块","type":"基础设施","status":"DONE","time":"2026-07-08 15:55","change":null,"batch":"mlh-p4-target-state"}
     T146: {"module":"`sdflow-skills 工具族`","summary":"扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）","type":"代码质量","status":"DONE","time":"2026-07-12 18:34","change":"add-sdflow-architecture","batch":"add-sdflow-architecture"}
-    T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"OPEN","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
-    T154: {"module":"sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py","summary":"actual Windows local-disk smoke 未执行验证（SW-RI-2 recorder lock 兼容目标，deferred）","type":"基础设施","status":"OPEN","time":"2026-07-17 16:14","change":"mlh-p6-recorder-frontmatter","batch":null}
+    T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"DONE","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
+    T154: {"module":"sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py","summary":"actual Windows local-disk smoke 未执行验证（SW-RI-2 recorder lock 兼容目标，deferred）","type":"基础设施","status":"DONE","time":"2026-07-17 16:14","change":"mlh-p6-recorder-frontmatter","batch":null}
     T155: {"module":".github/workflows/（全仓 -W error CI 门）","summary":"全仓 pytest -W error 常态化为持久 CI 守卫（防未来再引入未关闭文件/ResourceWarning 类存量债）","type":"基础设施","status":"OPEN","time":"2026-07-17 16:22","change":"mlh-p6-recorder-frontmatter","batch":null}
 ---
 # 2026-07 TODO
@@ -1513,6 +1513,7 @@ sdflow-issues:
 **思路**：在真 Windows 本地盘跑 `py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error` 取无 skip 的 pass 锚；推荐走 GitHub Actions windows-latest（.github/workflows/windows-recorder-smoke.yml 已就绪，push branch 触发即可拿 run URL/commit/log）
 
 **备注**：关联 change 显式传，勿让脚本误挂到其它活跃 change；取到 run URL 后回填 verify-report 并重跑 sdflow-done verify
+> 2026-07 状态：OPEN → DONE（windows-latest run 29568476168 / commit ba004e1: 2 passed 无 skip）
 <!-- sdflow-issue-block:end id=T154 -->
 
 <!-- sdflow-issue-block:start id=T155 -->
@@ -1527,3 +1528,9 @@ sdflow-issues:
 
 **备注**：本条为 mlh-p6 收尾 fold 决策的 B 半（A 半=修 4 站点已 fold 进 mlh-p6 tasks 7.5）；本条明确不 fold、另开 change。change 字段填 mlh-p6 仅表 provenance（冒出地），不表示属于 mlh-p6 scope。
 <!-- sdflow-issue-block:end id=T155 -->
+
+<!-- sdflow-issue-block:start id=T153 -->
+## T153: 更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义
+> 更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义
+> 2026-07 状态：OPEN → DONE（commit 27b77a7 (mlh-p6 fold): cmd_triage docstring 改为 frontmatter 批次/promotion/marker 语义）
+<!-- sdflow-issue-block:end id=T153 -->

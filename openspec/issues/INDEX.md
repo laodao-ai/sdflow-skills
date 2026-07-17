@@ -237,10 +237,10 @@
 | T148 | todo | OPEN | - |
 | T151 | todo | OPEN | mlh-p6-recorder-frontmatter |
 | T152 | todo | OPEN | mlh-p6-recorder-frontmatter |
-| T153 | todo | OPEN | mlh-p6-recorder-frontmatter |
+| T155 | todo | OPEN | mlh-p6-recorder-frontmatter |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 
-- 共 55 项已闭合（bug: 6，todo: 49）
+- 共 57 项已闭合（bug: 6，todo: 51）
