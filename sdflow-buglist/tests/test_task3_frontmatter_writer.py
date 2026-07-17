@@ -271,7 +271,10 @@ def test_legacy_promotion_rejects_preexisting_marker_collision_without_writing(t
 
     assert proc.returncode != 0
     assert proc.stdout == ""
-    assert "marker" in proc.stderr
+    assert str(path) in proc.stderr
+    assert "marker collision" in proc.stderr
+    assert "id=B1" in proc.stderr
+    assert "line=" in proc.stderr
     assert path.read_bytes() == raw
 
 
@@ -438,7 +441,10 @@ def test_legacy_promotion_rejects_trailing_space_marker_collision_without_writin
     path.write_bytes(raw)
     proc = _run(BUG_SCRIPT, tmp_path, "set-status", "--id", "B1", "--to", "VERIFIED")
     assert proc.returncode != 0
-    assert "marker" in proc.stderr
+    assert str(path) in proc.stderr
+    assert "marker collision" in proc.stderr
+    assert "id=B1" in proc.stderr
+    assert "line=" in proc.stderr
     assert path.read_bytes() == raw
 
 

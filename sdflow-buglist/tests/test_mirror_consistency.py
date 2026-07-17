@@ -95,7 +95,8 @@ TWO_WAY = [
     "_canonical_document", "_render_recorder_document",
     "_display_title", "_summary_blockquote", "_escape_user_markers",
     "_canonical_from_key", "_find_item_document", "_legacy_block_range",
-    "_splice_body_lines", "_reject_document_mutation", "_promotion_insertions",
+    "_splice_body_lines", "_reject_document_mutation", "_preflight_target_legacy_block",
+    "_promotion_insertions",
     "_validated_rendered_mutation",
 ]
 

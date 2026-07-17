@@ -1116,6 +1116,16 @@ def _reject_document_mutation(document, path):
         )
 
 
+def _preflight_target_legacy_block(document, raw_id, path):
+    canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
+    if document["model"] and canonical in document["model"]["items"]:
+        return
+    candidates = [raw for raw in document["legacy_blocks"]
+                  if _legacy_semantic_id_key(raw) == _legacy_semantic_id_key(raw_id)]
+    if candidates:
+        _legacy_block_range(document, raw_id, path)
+
+
 def _promotion_insertions(document, raw_id, canonical, path, item, history, require_block):
     eol = document["eol"]
     candidates = [raw for raw in document["legacy_blocks"]
@@ -1300,6 +1310,7 @@ def cmd_set_status(args):
     _reject_line_unsafe(args.month, "month")
 
     path, document, raw_id, item = _find_item_document(root, args.id, "todo")
+    _preflight_target_legacy_block(document, raw_id, path)
     _reject_document_mutation(document, path)
     canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
 
@@ -1373,6 +1384,7 @@ def cmd_triage(args):
     batch = getattr(args, "批次")
 
     path, document, raw_id, item = _find_item_document(root, args.id, "todo")
+    _preflight_target_legacy_block(document, raw_id, path)
     _reject_document_mutation(document, path)
     canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
     old_status = item["status"]
