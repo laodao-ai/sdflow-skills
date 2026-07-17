@@ -220,6 +220,10 @@ _Avoid_: 手写层状态（它是投影，手写即可伪造可漂移）；用�
 Markdown 文件 byte 0（可紧随 UTF-8 BOM）的 frontmatter block 是多个 metadata producer 共用的**容器**，不是任一工具的私产；正文中的 `---` 不算 envelope。每个 producer 只拥有一个唯一顶层 namespace；recorder 的所有权边界是 `sdflow-issues` 整棵子树，内部使用短键 `schema/pool/mode/items`。读取只校验自有子树、写入只 splice 自有 span；“opaque”仅指 sibling 所有权/bytes 保真，整个 envelope 仍须满足 v1 lexical profile（column-0 plain ASCII key + 缩进 continuation），超出 profile fail-closed。所有合规 producer 因整文件 replace 共享同一 dated-document lock，不能“namespace 分家、锁也分家”后互相 lost update。
 _Avoid_: recorder 重渲染整个 envelope；把内部键展平为多个 `sdflow-issues-*` 顶层键；让多个工具共同拥有 `sdflow:` 父树。
 
+**recorder durability boundary** 〔`adr/0025` · mlh-p6-recorder-frontmatter，Accepted〕:
+exclusive snapshot lock 保证 cooperative recorder 在本地 POSIX filesystem 串行，并以 Windows 本地盘 smoke 维持兼容；network FS、完整 power-loss durability、非 cooperative writer 的 TOCTOU 不在承诺内。process crash 留下空白/partial metadata lock 时的 break-glass 是：先停该 repo 全部 recorder，删除错误给出的精确 lock path，再重跑原命令；禁止 TTL/自动偷锁。
+_Avoid_: 把 lock 当安全边界或跨网络 lease；把非 Windows host 的 skip 写成 Windows PASS；无条件删 `.recorder.lock`。
+
 **canonical Unicode string** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
 recorder 索引 string 的值域是 Unicode scalar values，不含孤立 surrogate。普通 Unicode 用 UTF-8/`ensure_ascii=False` 人读输出；YAML 视作换行的 NEL/LS/PS 必须定向 JSON escape，parser 还原原 code point；不得做 NFC/NFKC normalization。由此“一 item 一物理行”与逐 code-point round-trip 同时成立。
 _Avoid_: 全量 `ensure_ascii=True` 牺牲 diff 可读性；raw NEL/LS/PS 破坏行模型；让孤立 surrogate 到 UTF-8 encode 才裸崩。

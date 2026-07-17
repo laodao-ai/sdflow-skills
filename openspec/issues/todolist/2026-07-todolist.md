@@ -4,6 +4,11 @@ sdflow-issues:
   pool: todo
   mode: overlay
   items:
+    T2: {"module":"`recorder`","summary":"字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）","type":"代码质量","status":"DONE","time":"2026-07-03 00:26","change":"issues-pool-batch-mgmt","batch":"issues-pool-hardening"}
+    T66: {"module":"`cmd_scan(buglist/todolist) + cmd_batch_rename(issues)`","summary":"recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化","type":"性能优化","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
+    T67: {"module":"`cmd_add id 校验(buglist/todolist)`","summary":"显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)","type":"代码质量","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
+    T85: {"module":"`roadmap mechanical-layer-hardening / recorder`","summary":"P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块","type":"基础设施","status":"DONE","time":"2026-07-08 15:55","change":null,"batch":"mlh-p4-target-state"}
+    T146: {"module":"`sdflow-skills 工具族`","summary":"扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）","type":"代码质量","status":"DONE","time":"2026-07-12 18:34","change":"add-sdflow-architecture","batch":"add-sdflow-architecture"}
     T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"OPEN","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
 ---
 # 2026-07 TODO
@@ -988,6 +993,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T2 -->
 ## T2: 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）
 
 | 属性 | 值 |
@@ -998,6 +1004,8 @@ sdflow-issues:
 
 > 2026-07 状态：PROPOSED → DONE（issues-pool-hardening 实现(SDD 10任务+code-review 6 fix), 全仓552 passed）
 
+> 2026-07 状态：DONE → DONE（mlh-p6-recorder-frontmatter（根治兑现））
+<!-- sdflow-issue-block:end id=T2 -->
 ---
 
 ## T3: 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移）
@@ -1397,6 +1405,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T146 -->
 ## T146: 扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）
 
 | 属性 | 值 |
@@ -1411,6 +1420,8 @@ sdflow-issues:
 
 **备注**：老债非本 change 引入，per fold-vs-defer 判据合规 defer
 
+> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
+<!-- sdflow-issue-block:end id=T146 -->
 ---
 
 ## T79: P4·4.B maintain INDEX↔文件系统 set-diff 只读报告脚本化(+CLAUDE.md 过时引用+bundle 陈旧告警)；归哪组/是否修留人。纯机械集合求差、每次 maintain 都跑、dogfood 可测——目标态该做
@@ -1470,3 +1481,21 @@ sdflow-issues:
 | 状态 | DONE |
 
 > 2026-07 状态：OPEN → DONE（change add-codex-host-support; canonical tools sync 2026-07-16）
+
+<!-- sdflow-issue-block:start id=T85 -->
+## T85: P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块
+> P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块
+> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
+<!-- sdflow-issue-block:end id=T85 -->
+
+<!-- sdflow-issue-block:start id=T66 -->
+## T66: recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化
+> recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化
+> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
+<!-- sdflow-issue-block:end id=T66 -->
+
+<!-- sdflow-issue-block:start id=T67 -->
+## T67: 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)
+> 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)
+> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
+<!-- sdflow-issue-block:end id=T67 -->

@@ -1518,21 +1518,12 @@ def _die(msg):
     sys.exit(1)
 
 
-def _reject_cell_unsafe(value, field):
-    """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
-    MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。"""
-    if value is None:
-        return
-    if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
-        _die(f"字段 {field} 含非法字符（| 或换行），会破坏总览表列对齐：{value!r}")
-
-
 def main():
     p = argparse.ArgumentParser(description="自动记录/回写/扫描 todolist")
     p.add_argument("--root", default=".", help="仓库根（默认自动探测 git 根）")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("next-id", help="打印下一个全局 ID")
+    s = sub.add_parser("next-id", help="打印两池 snapshot 的下一个全局 ID（advisory，不预留）")
     s.add_argument("--prefix", default=DEFAULT_PREFIX)
     s.set_defaults(func=cmd_next_id)
 

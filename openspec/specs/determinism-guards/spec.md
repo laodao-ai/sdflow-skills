@@ -5,10 +5,10 @@ TBD - created by archiving change mlh-p3-determ-guards. Update Purpose after arc
 ## Requirements
 ### Requirement: recorder 镜像 helper 由「剥 docstring 后 AST 等价」一致性测试守护
 
-三份 recorder（`buglist.py`/`todolist.py`/`issues.py`）各自内联持有的共享 helper MUST 由**剥函数 docstring 后 `ast.dump` 相等**的断言守护其**行为**不漂移，按实测拓扑分组：3 向组（`atomic_write`/`repo_root`/`_reject_cell_unsafe`，3 个）三份 AST 等价、2 向组（`detect_change`/`normalize_doc_paths`/`auto_default_doc`/`split_sections`/`parse_table_rows`/`block_ranges`/`_ids_in_files`/`_find_row_file`/`_id_sort_key`/`validate_doc_paths`/`all_ids`/`next_id`/`_die`/`_load_json`，共 14 个）buglist↔todolist AST 等价（3+14=17 个 helper 受本守卫覆盖）。**注**：TWO_WAY 组自代码审查 [impl-review-fix] F3 起由最初审计的 8 个扩至 14 个——冷审 + codex 独立复现发现 `_id_sort_key`/`validate_doc_paths`/`all_ids`/`next_id`/`_die`/`_load_json` 这 6 个同样在 buglist/todolist 两处逐字同款、却此前未纳入覆盖范围，遗漏会让它们能悄悄改动而不拉红；`_die` 虽三份都存在，但其三向等价性未经核验，故只补进 TWO_WAY、不扩大 THREE_WAY。契约锁**行为等价层非字面层**（grill 实测证伪「逐字同款」前提）：docstring/注释差异合法（按 recorder 语境分化，如 issues 记录内联原因），**不**算漂移；逻辑分叉（AST 不等）才报红。测试 MUST NOT 抽公共模块或跨 recorder import（守 D4 隔离）。
+三份 recorder（`buglist.py`/`todolist.py`/`issues.py`）各自内联持有的共享 helper MUST 由**剥函数 docstring 后 `ast.dump` 相等**的断言守护其**行为**不漂移。roster 以 `sdflow-buglist/tests/test_mirror_consistency.py` 为当前可执行单一源，覆盖 frontmatter bytes/parser/renderer、semantic ID、snapshot lock 与 legacy read/promotion helpers；已退役的新写 table guard `_reject_cell_unsafe` MUST NOT 留在 roster 或三脚本。`issues.py` 为 `batches.md` 保留独立命名的 `_reject_batch_line_unsafe`，不冒充 recorder table helper。契约锁**行为等价层非字面层**：docstring/注释差异合法，逻辑分叉（AST 不等）才报红。测试 MUST NOT 抽公共模块或跨 recorder import（守 D4 隔离）。
 
 #### Scenario: 3 向 helper 逻辑分叉
-- **WHEN** `atomic_write`/`repo_root`/`_reject_cell_unsafe` 任一在三份中剥 docstring 后 AST 不等
+- **WHEN** 当前 executable THREE_WAY roster 任一 helper 在三份中剥 docstring 后 AST 不等
 - **THEN** 一致性测试断言失败（红），失败信息指明漂移的 helper 名与不一致的 recorder
 
 #### Scenario: 2 向 helper 逻辑分叉
@@ -98,4 +98,3 @@ TBD - created by archiving change mlh-p3-determ-guards. Update Purpose after arc
 #### Scenario: 守卫不引入新 import 耦合
 - **WHEN** 一致性测试运行
 - **THEN** 它经 importlib 从各脚本独立加载读源码，不建立 recorder 间的 import 依赖，不破 D4 隔离
-

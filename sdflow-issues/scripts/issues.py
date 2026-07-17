@@ -1420,12 +1420,11 @@ def _die(msg):
     sys.exit(1)
 
 
-def _reject_cell_unsafe(value, field):
-    """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
-    MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。
-    与 buglist.py / todolist.py 的同名函数逐字同款（三脚本各自独立、不互相 import，
-    见模块 docstring "子进程解耦"）。当前只用于仍写 Markdown 单行结构的 batch registry
-    字段；dated recorder frontmatter writer 不再使用这条 table-cell guard。"""
+def _reject_batch_line_unsafe(value, field):
+    """`batches.md` 单行字段守卫；不是 legacy recorder table writer。
+
+    batch registry 仍是 Markdown 单行协议，因此拒绝 ASCII pipe 与换行；dated recorder
+    frontmatter writer 不调用本 helper。"""
     if value is None:
         return
     if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
@@ -1444,7 +1443,7 @@ def _reject_line_unsafe(value, field):
 
 def _reject_batch_key_unsafe(key):
     """batches.md header slug 守卫（OV-2）：header 行是 `### {key} — {title}`
-    （`_BATCH_HEADER_RE`，em dash U+2014 前后各一空格作分隔符）。`_reject_cell_unsafe`
+    （`_BATCH_HEADER_RE`，em dash U+2014 前后各一空格作分隔符）。`_reject_batch_line_unsafe`
     只挡 `|`/换行——不够，因为 key 本身若含 ` — ` 分隔符，会被 `_BATCH_HEADER_RE` 的
     非贪婪匹配切坏：例如 key="a — b" 写成 header 后，解析出的 key 变成 "a"、
     title 变成 "b"，原始完整 key 从此在 batches.md 里再也匹配不到——`_find_batch_entry_range`
@@ -1463,7 +1462,7 @@ def _reject_batch_key_unsafe(key):
     读不回来的僵尸条目。必须在做首尾空白比较之前，先单独拒绝空/纯空白 key。"""
     if not str(key).strip():
         _die(f"batch key 不可为空/纯空白（会写出解析不回来的僵尸 header）：{key!r}")
-    _reject_cell_unsafe(key, "batch key")
+    _reject_batch_line_unsafe(key, "batch key")
     if " — " in str(key) or str(key) != str(key).strip():
         _die(
             "batch key 非法（含 ' — ' em dash 分隔符，或首尾有空白），会破坏 "
@@ -2034,13 +2033,13 @@ def cmd_batch_add(args):
     """
     root = repo_root(args.root)
     _reject_batch_key_unsafe(args.key)
-    _reject_cell_unsafe(args.title, "title")
+    _reject_batch_line_unsafe(args.title, "title")
     # [impl-review-fix] FIX-5（CV-2 codex PoC）：优先级/计划此前原样写进
     # `f"优先级: {priority}\n"`/`f"计划: {plan}\n"` 单行，未挂守卫——含换行的值能在
     # batches.md 里注入一整条伪造的 `### … — …` header 行，被 `_BATCH_HEADER_RE` 当成
     # 一个新批次条目解析出来。挂在原始入口参数（写盘前）上，拒 `|`/换行。
-    _reject_cell_unsafe(getattr(args, "优先级"), "优先级")
-    _reject_cell_unsafe(getattr(args, "计划"), "计划")
+    _reject_batch_line_unsafe(getattr(args, "优先级"), "优先级")
+    _reject_batch_line_unsafe(getattr(args, "计划"), "计划")
     path = batches_md_path(root)
     lines = _read_batches_lines(path)
     if _batch_entry_exists(lines, args.key):
@@ -2177,7 +2176,7 @@ def cmd_sweep(args):
     （= 源==X ∧ 非终态 ∧ 批次空，D3）→ 逐项 `triage --id --批次 X`（查 returncode，
     非零即 fail-closed 报点位，D4/D5）→ 0 命中直接返回，不建僵尸批次条目
     （[impl-review-fix] FIX-2）→ `batch add X --if-exists skip`（D2 幂等）→
-    `reindex`（末步也 fail-closed，区别于 rename 的 warn-only，D4）。
+    `reindex`（末步也 fail-closed；rename 同样以 provenance + 原命令重跑契约 fail-closed，D4）。
 
     [impl-review-fix] FIX-5：`--change` 首尾若有空白，此前被静默 `.strip()` 后当合法
     change 使用（例如 `" chg"` 悄悄变成 `"chg"`）——但配套文档承诺"含空白即拒"，静默
@@ -2293,7 +2292,10 @@ def main():
     ss.add_argument("status", choices=BATCH_STATUSES)
     ss.set_defaults(func=cmd_batch_set_status)
 
-    sr = batch_sub.add_parser("rename", help="改批次 key + 同步 item 池（bug+todo 两池）批次 tag")
+    sr = batch_sub.add_parser(
+        "rename",
+        help="registry-first 改批次 key + snapshot retag/reindex；失败后重跑原命令收敛",
+    )
     sr.add_argument("old")
     sr.add_argument("new")
     sr.set_defaults(func=cmd_batch_rename)

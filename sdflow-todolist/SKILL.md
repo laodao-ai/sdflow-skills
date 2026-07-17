@@ -5,7 +5,7 @@ description: >
   （每月一文件，全局唯一 T-ID），并支持状态回写（OPEN→PROPOSED→DONE…）与扫描列表。**只要冒出一个
   "以后可以改进 / 这里能优化 / 这是个技术债 / 记个 TODO / 加进待办池"的想法，或用户说"记一下这个优化、
   这个改进想法存一下、标记 Txx 已完成、列一下待办"，就用本 skill**——别手动拼 Markdown，交给脚本保证
-  T-ID 不撞号、轻量项只记一行、DONE 必带关联 change/commit。注意：这是攒"没坏但可以更好"的池子，
+  T-ID 不撞号、轻量项只写一个 frontmatter item、DONE 必带关联 change/commit。注意：这是攒"没坏但可以更好"的池子，
   已确认的 bug（坏了的东西）该用 sdflow-buglist 而不是本 skill。本 skill 自包含整套 todolist 约定，
   是该约定的唯一真相源。Trigger with /sdflow-todolist。
 ---
@@ -91,7 +91,7 @@ todolist 是**优化/技术债/改进**的收集池（没坏但能更好），�
 > **和 buglist 的分工**：buglist 记**已确认的缺陷**（坏了，需根因+修复）；todolist 记**改进想法**
 > （没坏，按价值/成本排，不紧迫）。发现的是 bug → 用 `sdflow-buglist`；是"可以更好" → 用本 skill。
 
-> **为什么要脚本**：T-ID 全局唯一、表↔块一致、DONE 必带关联 change——手工易错。脚本兜住这些，
+> **为什么要脚本**：两池 ID 语义唯一、frontmatter↔marker 关系一致、DONE 必带关联 change——手工易错。脚本兜住这些，
 > 模型专注判断：这值不值得记、归哪个类型、要不要写动机/思路。
 
 脚本：[scripts/todolist.py](scripts/todolist.py)（`python scripts/todolist.py --help`）。
@@ -112,11 +112,11 @@ todolist 是**优化/技术债/改进**的收集池（没坏但能更好），�
 ### 1. 记录新 TODO（add）
 
 先判断（模型的活）：这值得记吗？归哪个**类型**？需不需要写动机/思路？然后交给脚本——
-它定位当月文件（缺则建）、扫描全局最大 T-ID 自增、写总览表行；**只有给了动机/思路/备注才建详细块**
-（轻量优先，简单项就一行）。
+它定位当月文件（缺则建）、在仓级 snapshot lock 内扫描两池并分配 ID、写 canonical frontmatter item；
+**只有给了动机/思路/备注才建 marker block**；轻量项只有 frontmatter item，不建 prose block。
 
 ```bash
-# 简单项：只记一行，不建块
+# 简单项：只写一个 frontmatter item，不建 prose block
 echo '{"module":"meter_collect.c","summary":"温度采样改 DMA 批量读取","type":"性能优化","project":"smartrelay-4g"}' \
   | python scripts/todolist.py add
 
@@ -138,7 +138,7 @@ echo '{
 - **关联Change**（`change` 字段，可选）：不传时脚本自动探测——优先取 `openspec/changes/` 下唯一未归档
   目录名，找不到再退化到当前 git branch 名（去掉 `feat/`/`fix/` 等前缀）；**多个 change 并行时脚本
   探测不到，这时模型应结合当前 session 上下文判断这个 TODO 是在哪个 change 里冒出来的，显式传
-  `change` 字段覆盖**。轻量项（不建块）也照样记这两个字段——它们进总览表，不进块。
+  `change` 字段覆盖**。轻量项的字段同样进入 frontmatter，不复制到 prose。
 - **关联文档**（`doc` 字段，可选，string 或 list[string]）：记录时如果这个改进想法关联某个 openspec
   文档（design/proposal/rule 等），尽量把该文档路径填进 `doc` 字段——填对格式后在 review 工具里能直接
   点开。路径不带 `openspec/` 前缀也会被自动补上；写进详细块的 **关联文档** 行（多个路径用「、」分隔）。
@@ -146,8 +146,8 @@ echo '{
   不传 `doc` 时，若能从 `change` 探测到 `design.md`/`proposal.md`（含已归档的 `changes/archive/*-{change}/`，
   且归档目录唯一不歧义），会尝试自动带上——但这个 auto-default 结果**只用来丰富一个本来就会建的块**
   （因为写了动机/思路/备注，或显式传了 `doc`），它自己不会单独触发建块：轻量项（无动机/思路/备注、
-  无显式 `doc`）即便 `change` 恰好探测到了文档，仍然只记一行、不建块——不然一个随手记的轻量 TODO
-  会因为当时恰好有个 change 在跑而被悄悄升级成带块的项，破坏"轻量项只记一行"的默认体验。
+  无显式 `doc`）即便 `change` 恰好探测到了文档，仍然只写 frontmatter item、不建块——不然一个随手记的轻量 TODO
+  会因为当时恰好有个 change 在跑而被悄悄升级成带块的项，破坏"轻量项无 prose"的默认体验。
 
 ```bash
 # 带显式关联文档：即使没写动机/思路，也会建块只为承载 doc 行
@@ -166,8 +166,8 @@ python scripts/todolist.py set-status --id T7 --to WONTDO   --reason "ROI 太低
 - **DONE 门禁**：必须 `--evidence`（关联的 change 名或 commit）——挡住"只标完成、不留线索"。
 - **WONTDO 门禁**：必须 `--reason`，理由留痕。
 - 状态码：`OPEN PROPOSED DONE WONTDO`。
-- 机制：更新总览表状态列；**有详细块**则同步块状态 + 追加历史行；**无块但有证据/理由**则补一个
-  最小块留痕（保证 DONE/WONTDO 的关联线索不丢）。
+- 机制：只更新 frontmatter 状态并在 marker block 追加历史；legacy item 首次触碰时提升为 same-file
+  overlay，旧表 bytes 不变。DONE/WONTDO 的证据/理由只作追加式人读留痕。
 
 ### 3. 扫描 / 盘点（scan）
 
@@ -178,7 +178,7 @@ python scripts/todolist.py scan --type 性能优化       # 按类型筛
 python scripts/todolist.py scan --json               # 机器可读
 ```
 
-末尾自动做**表↔块一致性自检**（块缺表行、状态对不上都会报；块本身可选，不报"缺块"）。
+末尾自动做 **frontmatter/marker/未提升 legacy 表**关系自检。
 
 ## 约定速查（本 skill 即真相源）
 
@@ -191,7 +191,8 @@ python scripts/todolist.py scan --json               # 机器可读
 
 **本池**：`openspec/issues/todolist/YYYY-MM-todolist.md`，每月一个，当月所有 TODO 追加进去。
 过渡期兼容旧路径 `openspec/todolists/`——`next-id`/`scan`/`set-status`/`triage` 全部
-**dual-read**（新旧两个目录都扫，取并集 max+1 分配 ID，避免撞号）；**新记录只写新路径**。
+**dual-read**（新旧两个目录都扫）；**新记录只写新路径的 canonical frontmatter**。自定义 prefix 的
+`next-id`/自动 add/显式 ID 查重都在同一仓级 exclusive snapshot lock 内读取 bug+todo 两池全集。
 跨新旧路径撞同一 ID 会在 `next-id` 时打 WARNING，提示尽快把旧数据迁移到新路径。
 
 **跨两池共享文件**（不是 todolist 私有，owner 是 `sdflow-issues/scripts/issues.py`；
@@ -209,13 +210,14 @@ sdflow-buglist 依赖同一份，见其 SKILL.md 对应段）：
 
 | 维度 | 落点 | 可变性 | 含义 |
 |---|---|---|---|
-| 源change（关联Change） | 状态总览表「关联Change」列 | **不可变**（provenance） | 在哪个 change 里冒出来的 |
-| 批次 | 状态总览表**末列**「批次」 | 可变 | 被哪个「清理 change」包走去做（批次 key = 清理 change 名） |
-| status | 状态总览表「状态」列（+ 详细块「状态」行，若有块） | 生命周期 | 见下方状态词表；**回归干净**——批次信息不塞进 status 字面量 |
+| 源change（关联Change） | frontmatter item `change` | **不可变**（provenance） | 在哪个 change 里冒出来的 |
+| 批次 | frontmatter item `batch` | 可变 | 被哪个「清理 change」包走去做（批次 key = 清理 change 名） |
+| status | frontmatter item `status` | 生命周期 | 见下方状态词表；marker prose 只追加历史，不是状态真相源 |
 
-**结构现为 8 列**：`ID / 模块 / 描述 / 类型 / 状态 / 时间 / 关联Change / 批次`
-（「批次」是表**末列**，Phase B 新加；旧文件无此列的行按 `len(cells)>N` 防御式解析，读到空即可，
-不报错）。时间、关联Change、批次 **只记在总览表**，轻量项（无详细块）照样有，不进详细块。
+新写结构是 shared frontmatter envelope 下唯一 `sdflow-issues` namespace（短键
+`schema/pool/mode/items`）；新文件 `mode=canonical`。历史 8 列表永久只读，活跃 legacy item 首次 mutation
+以 `mode=overlay` shadow 旧 row，旧表与旧 block 内部 bytes 不改。reader 在 namespace 在场但损坏时
+fail-closed，只有 namespace 不存在才回退 legacy parser。
 
 **类型标签**
 
@@ -262,8 +264,8 @@ sdflow-buglist 依赖同一份，见其 SKILL.md 对应段）：
   两条生成行（按上面「批次完成判据」）。
 - `batch add / set-status / rename`——`issues/batches.md` 注册表操作：`add` 新建 `PLANNED`
   条目（成员空）；`set-status` 只改状态生成行；`rename` 改批次 key + 同步两池里所有该批次成员的
-  批次 tag（含 auto-reindex——写盘成功后自动跑一次 `reindex` 刷新 INDEX，失败只 stderr 警告，
-  `rename` 本体仍 exit 0，调用方无需再手动补 reindex）。批次生命周期
+  批次 tag；rename 先写 registry provenance `重命名自:`，复用每池单次 direct-bytes snapshot 更新 dated/INDEX/batches。
+  任一步失败均 non-zero 并提示**重跑原命令**，全 old/混合/全 new retry 均可收敛。批次生命周期
   `PLANNED → IN_PROGRESS → DONE`（`PLANNED→IN_PROGRESS` 由人在真正开
   cleanup change 时手动 `set-status`；`→DONE` 通常由 reindex 按完成判据被动同步——人也可以用
   `set-status` 直接标，reindex 不会越权纠正，只在状态和成员终态不一致时追加 `⚠️` 警告）。
@@ -293,17 +295,16 @@ reindex **只精确 patch 生成行**，绝不覆写人写行；发现「人写 
 改回或补完成员状态。批次 tag 指向 `batches.md` 里不存在的 key（orphan）也只报警、不静默生成
 ghost 条目。
 
-### B(bug) / T(todo) 前缀跨池互斥〔D9，显式规范条款〕
+### ID 两池语义唯一〔ADR-0025〕
 
-**bug 池用 `B` 前缀、todo 池用 `T` 前缀，两池 ID 空间必须互斥、禁止跨池撞号**——`add` 不传
-`--prefix` 时天然遵守各自默认前缀；若显式传自定义 `--prefix`/`id`，模型必须自行保证不会分配出
-与另一池已用 ID 相同的字面量。`issues.py reindex` 跨池 join 时会跑 `cross_pool_id_conflicts`
-校验，检测到同一 ID 同时出现在两池即报错中止、**不静默 join**——但这只是防护网，规范本身要求
-从记录源头就不产生撞号，不能指望靠防护网兜底成为常态操作。
+默认 bug=`B`、todo=`T`，公开的单字母自定义 `--prefix` 保留。ID semantic key 是
+`(uppercase ASCII prefix, decimal integer)` 且不含 pool，因此 `A007`/`A7` 及 bug/todo 的 `A7`
+均冲突。`next-id`、自动 add 与显式 ID 查重必须在同一 snapshot lock 内读两池全集；`reindex`
+仍作 fail-closed 防护网，但不承担事后修复。
 
 ### 铁律（脚本守住大半）
 
-① T-ID 全局唯一（自增，dual-read 跨新旧路径取并集 max）；② 轻量优先——简单项只一行，要说明
+① ID 在 bug+todo 两池语义全局唯一；② 轻量优先——简单项只写 frontmatter item，要说明
 动机/思路才建块；③ DONE 必带关联 change/commit（门禁）；④ 实施走 change——todolist 只是收集池，
 真做时通过 OpenSpec change 落地，不在此直接改代码；⑤ 状态追加式、不删历史；⑥ `issues/INDEX.md`
 只生成禁手改（issues.py 兜底无条件覆盖重建）；⑦ B/T 前缀跨池互斥（D9，见上，issues.py reindex

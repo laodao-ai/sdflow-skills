@@ -20,7 +20,6 @@
 | T143 | todo | PROPOSED | add-sdflow-architecture |
 | T144 | todo | PROPOSED | add-sdflow-architecture |
 | T145 | todo | PROPOSED | add-sdflow-architecture |
-| T146 | todo | PROPOSED | add-sdflow-architecture |
 
 ### 批次：cross-model-outside-voice
 
@@ -52,13 +51,6 @@
 | T86 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 | T87 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 | T88 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
-
-### 批次：issues-pool-hardening
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T66 | todo | PROPOSED | issues-pool-hardening |
-| T67 | todo | PROPOSED | issues-pool-hardening |
 
 ### 批次：matt-workflow-integration
 
@@ -131,7 +123,6 @@
 |----|------|--------|------------|
 | T83 | todo | PROPOSED | - |
 | T84 | todo | PROPOSED | - |
-| T85 | todo | PROPOSED | - |
 
 ### 批次：opt-cost
 
@@ -244,9 +235,12 @@
 | T141 | todo | OPEN | - |
 | T142 | todo | OPEN | - |
 | T148 | todo | OPEN | - |
+| T151 | todo | OPEN | mlh-p6-recorder-frontmatter |
+| T152 | todo | OPEN | mlh-p6-recorder-frontmatter |
+| T153 | todo | OPEN | mlh-p6-recorder-frontmatter |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 
-- 共 51 项已闭合（bug: 6，todo: 45）
+- 共 55 项已闭合（bug: 6，todo: 49）

@@ -62,7 +62,7 @@ def _ast_no_doc(fn):
 # 各自内联一份）。mlh-p6 起 frontmatter document mechanics 升为三向共享契约；dated
 # 文件业务 scan/write 编排仍按 pool 留在各自脚本，纯 bytes/parser/renderer 必须机械等价。
 THREE_WAY = [
-    "atomic_write", "atomic_write_bytes", "repo_root", "_reject_cell_unsafe", "_reject_line_unsafe",
+    "atomic_write", "atomic_write_bytes", "repo_root", "_reject_line_unsafe",
     "canonical_id", "semantic_id_key", "validate_prefix", "_lock_path",
     "_read_lock_metadata", "_lock_conflict", "validate_recorder_participant",
     "_write_all", "recorder_lock", "read_repository_snapshot", "repository_semantic_occurrences",

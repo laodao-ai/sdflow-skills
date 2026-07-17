@@ -707,7 +707,7 @@ class TestBatchAddKeyEmptyGuard:
 class TestBatchAddCellSafety:
     """[impl-review-fix] FIX-5（CV-2 codex PoC）：`cmd_batch_add` 把 优先级/计划 原样
     写进 `f"优先级: {priority}\\n"`/`f"计划: {plan}\\n"` 单行，此前未挂
-    `_reject_cell_unsafe`——含换行的值能在 batches.md 里注入一整条伪造的
+    batch line guard——含换行的值能在 batches.md 里注入一整条伪造的
     `### … — …` header 行，被 `_BATCH_HEADER_RE` 当成新批次条目解析出来。"""
 
     def test_batch_add_rejects_newline_in_priority(self, tmp_path):

@@ -1,15 +1,15 @@
 # workflow 机械层固化 实施路线图
 
-> 版本：v2（2026-07-16，完成态对账）
+> 版本：v3（2026-07-17，P6 交付对账）
 >
 > 相关文档（全部位于 `openspec/roadmaps/mechanical-layer-hardening/`）：
 > - 需求综述：`requirements.md` · 整体设计：`design.md` · 任务日志：`task-log.md`
 
 ## 概览
 
-两腿六阶段。**Leg 1（脚本化）主干已交付**，仅 4.A/4.D.3 等 embedded producer 契约。**Leg 2（去字符串化）**的阶段 5 已交付；阶段 6（S2 recorder 索引）端态与前置均已确定，是下一结构性端点。
+两腿六阶段。**Leg 1（脚本化）主干已交付**，仅 4.A/4.D.3 等 embedded producer 契约。**Leg 2（去字符串化）P5/P6 均已交付**：recorder 新写机器索引已进入 versioned frontmatter，历史表冻结为 dual-read/promotion 半场。
 
-> **进度里程碑（2026-07-16）**：Leg 1 P1/P2/P3 全交付，Leg 2 P5 gate 锚→frontmatter 及尾巴已清结。P4 ★组也已全部交付：4.C `lens_metric_emit`（`bd7c05f`）、4.B `maintain_scan`（`569d393`）、4.D.1/2/4 reason-code validators（`6326115`）。仅 4.A/4.D.3 因 embedded producer 契约未就绪而正当等待。**下一结构性端点是 P6 recorder 索引→frontmatter（T85）**；其端态 A 与历史表只读 dual-read 约束均已确定，可单开 change 进入设计。
+> **进度里程碑（2026-07-17）**：P6 change `mlh-p6-recorder-frontmatter` 已兑现端态 A：Shared Frontmatter Envelope、same-file overlay、marker prose、两池 semantic ID、exclusive snapshot lock 与 provenance-backed rename retry 落地；T85/T66/T67/T146 经真实 recorder 命令提升为 overlay 并置 DONE，T2 保持 DONE 且记录根治兑现。仅 4.A/4.D.3 因 embedded producer 契约未就绪而正当等待。
 
 | 阶段 | 腿 | 里程碑 | 就绪度 |
 |---|---|---|---|
@@ -18,7 +18,7 @@
 | **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | ✅ **已交付**（a6a2adc，change `mlh-p3-determ-guards`；冷审 F5 守卫覆盖 8→14 helper） |
 | **P4** · 编排 SKILL 机械步下沉 | Leg 1 | 4.A-4.D.4 按目标态逐项脚本化 | ✅ **★组已交付**（4.C `bd7c05f`；4.B `569d393`；4.D.1/2/4 `6326115`）；◐ 4.A/4.D.3 等 embedded 契约 |
 | **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` **live 解析半场**、正文提及不误判、归档 dual-read 永久保留 | ✅ **已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`；spec-review 六镜拦 1致命+3高 / impl-review 抓 2 真 bug；662 passed·dogfood CLEAN） |
-| **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发（写侧）+ 新数据可查询基底 | ▶ **下一结构性端点**（端态 A 已定；历史表只读 dual-read；T85） |
+| **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发（写侧）+ 新数据可查询基底 | ✅ **已交付**（change `mlh-p6-recorder-frontmatter`；T85/T66/T67/T146 DONE） |
 
 > 每阶段开独立 OpenSpec 变更（`implement-mechanical-layer-hardening-pN-<theme>`），归档后进下一个。
 > **并行 caveat**：阶段 1（issues.py）与阶段 3 的 recorder 部分、阶段 5 的 producer SKILL 部分**改文件集不同可并行**；但阶段 2（anchor-lint 触 spec-review/code-review SKILL）与阶段 4 的 P7/P8（同触两审 SKILL）、阶段 5（S1 也改 producer SKILL）**若同期改 SKILL.md 须串行**，开并行前先核文件集是否相交。
@@ -182,7 +182,7 @@
 
 ---
 
-## 阶段 6 · 家族② recorder 索引 → frontmatter（Leg 2，下一结构性端点）
+## 阶段 6 · 家族② recorder 索引 → frontmatter（Leg 2，已交付）
 
 ### 前置条件
 - [x] ~~**ROI 触发器满足**（被动，不主动排期）：「recorder 持续出腐蚀 bug」**或**「想在数据上建工具」（ADR 0010 已决 defer 判据）~~ — **已被端态复核取代（2026-07-08）**：不再等 ROI 触发器，改以「根治 + 达成目标」目标态判据直接选定端态 A（见下方 ✅ 端态决策块）。ADR 0010 原「defer/触发才起」= 快照妥协、本次推翻。可查询基底原是触发器②、现降为 A 的附赠而非前置。
@@ -197,13 +197,13 @@
 - recorder 索引层（ID/module/summary/priority/status/time/change/batch）从 markdown 总览表位置切列迁 YAML frontmatter 索引 + prose 块；腐蚀类蒸发 + 删 recorder ~40 处/文件表解析与双写一致机械。
 
 ### 子任务
-- [ ] 端态 A 已定，实现时单独 explore/design（复用 P5 fail-closed YAML + dual-read 范式；约束①历史文档不迁、仅新写走 frontmatter，届时按当时实况细化，不在本 roadmap 展开）。
+- [x] change `mlh-p6-recorder-frontmatter` 完成设计、实现与交付对账；新写走 canonical frontmatter，历史文档不批量迁移，活跃 legacy item 按访问 promotion 为 same-file overlay。
 
 ### 验收标准
-- [ ] 新写记录字段含 `|`/换行的腐蚀类结构上不可能（YAML 转义）；写侧 `_reject_cell_unsafe`/`_render_item_table`/双写表半场删除；历史表 dual-read 冻结只读正确识别（同 P5 归档读半场）；LLM 写坏 frontmatter → fail-closed 不静默。
+- [x] 新写记录字段含 `|`/换行可无损 round-trip；写侧 `_reject_cell_unsafe`/`_render_item_table`/双写表半场删除；历史表 dual-read/promotion 冻结只读；frontmatter 坏数据 fail-closed；仓级 snapshot lock 与 rename retry 收敛已覆盖。
 
 ### 交付物
-- 待单开 T85/P6 change 交付。
+- ADR-0025（Accepted）、三 recorder 自包含实现与镜像守卫、consumer/Windows smoke contract、历史 corpus 对账和 T85/T66/T67/T146 dogfood overlay。
 
 ---
 

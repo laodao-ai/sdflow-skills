@@ -1,6 +1,6 @@
 # 0025 · recorder 机器索引迁入 versioned frontmatter：共享 namespace、same-file overlay、marker prose 与仓级 snapshot lock
 
-> 状态：**Proposed**（2026-07-16，`mlh-p6-recorder-frontmatter` grill 收敛时立）`[grill-amendment]`；同日经多镜设计审补 lexical/profile、shared document lock、rename provenance 与恢复边界 `[spec-review-amendment]`——待该 change ship 后升 Accepted。
+> 状态：**Accepted**（2026-07-17，`mlh-p6-recorder-frontmatter` 实现与交付对账完成）；2026-07-16 grill 收敛时立 `[grill-amendment]`，同日经多镜设计审补 lexical/profile、shared document lock、rename provenance 与恢复边界 `[spec-review-amendment]`。
 > 关联：`openspec/changes/mlh-p6-recorder-frontmatter/{proposal,design,tasks}.md` · `adr/0010`（本 ADR supersede 其新写决策）· CONTEXT「共享 frontmatter envelope」「canonical recorder render」「marker-framed prose block」「锁 owner / participant」。
 
 ## Context
@@ -21,6 +21,8 @@ mechanical-layer-hardening P6 现在兑现该 defer。目标态不仅要“换�
 ### 1. 机器索引使用唯一顶层 `sdflow-issues` namespace
 
 dated Markdown 文件在 byte 0（允许前置 UTF-8 BOM）的 frontmatter 是共享 envelope。recorder 只拥有唯一、无引号的顶层 `sdflow-issues` 子树；内部 v1 固定为 `schema/pool/mode/items`，item value 是单行 JSON object。
+
+本 ADR 将该协议命名为 **Shared Frontmatter Envelope**；它是 producer-neutral 容器，不是 YAML 库接口。
 
 - reader 只严格校验 recorder 子树；其它顶层 namespace 按 opaque bytes 处理。
 - writer 以单次 binary read + byte spans 只 splice 自有子树，namespace 外 BOM/EOL/注释/顺序/正文逐字节保留。
@@ -66,7 +68,7 @@ dated Markdown 文件在 byte 0（允许前置 UTF-8 BOM）的 frontmatter 是�
 
 `[spec-review-amendment]` `.recorder.lock` 同时是 dated-document mutation lock：任何合规 metadata producer 即使只写 sibling namespace，也必须加入同一协议。namespace 所有权仍各自独立，但整文件 replace 的协调不能各用各锁；绕锁 producer 的并发 lost update 明确不在 guarantee 内，不以额外 reread/fingerprint 伪造跨平台 CAS。
 
-支持边界固定为本地 POSIX filesystem 自动门、Windows 本地盘兼容 smoke；POSIX mode bits 不外推到 Windows，network FS 与完整 power-loss durability 不承诺。runtime ignore 真相源固定 `sdflow-init/assets/snippets/runtime-gitignore.txt`，由 `init.py` init/update 两路幂等合并。
+支持边界固定为本地 POSIX filesystem 自动门、Windows 本地盘兼容 smoke；POSIX mode bits 不外推到 Windows，network FS 与完整 power-loss durability 不承诺。release 的 identity/token 终检与 unlink 之间仍有非 cooperative TOCTOU residual。process crash 的人工恢复是 break-glass：先停该 repo 全部 recorder，删除报错给出的精确 lock path，再重跑原命令。runtime ignore 真相源固定 `sdflow-init/assets/snippets/runtime-gitignore.txt`，由 `init.py` init/update 两路幂等合并。
 
 ### 5. batch rename 非事务，但必须有 provenance、同命令恢复
 

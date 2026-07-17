@@ -77,6 +77,14 @@ bash setup.sh
   `hack/` 不会被当 skill）。
   - **Unix**：绝对路径 symlink —— 改源即时生效，仅新增/删 skill 后才需重跑。
   - **Windows**：复制目录 + 写 `.sdflow-skills` 标记文件用于更新检测（名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属并可刷新）。
+
+### Recorder 存储契约
+
+`sdflow-buglist`、`sdflow-todolist` 与 `sdflow-issues` 共享 versioned **Shared Frontmatter Envelope**：
+新 item 的机器索引只写 `sdflow-issues` namespace，历史 Markdown 总览表永久只读；首次修改历史 item
+会在同文件生成 overlay，保留旧表 bytes。三者用仓级 exclusive snapshot lock 串行权威读写，batch
+rename 以 registry provenance 支持重跑原命令收敛。完整契约、POSIX/Windows 本地盘、network FS、
+power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md`。
   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
 - **spec 工作流 bundle 的权威源**：`sdflow-init/assets/workflow/` 是铺给其他项目的
   `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `sdflow-init update`

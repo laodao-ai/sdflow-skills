@@ -3,10 +3,10 @@
 > 半手维护：`状态:`/`成员:` 由 `issues.py`（reindex / `batch set-status`）维护，其余字段（`优先级:`/`计划:` 等）人工填写——reindex/batch 只精确 patch 生成行，绝不覆写人写行（Q3）。
 
 ### issues-pool-hardening — issues-pool-batch-mgmt
-状态: PLANNED
+状态: DONE
 成员: (生成) T1, T2, T3, T4, T5, T66, T67
 优先级: P2
-计划: issues.py/recorder 健壮性：problems 回显·含｜字段转义防列腐蚀·终态集跨脚本守卫测试·batch 幂等选项·_find_row_file 抽取去重
+计划: ✅ T66/T67 由 mlh-p6-recorder-frontmatter 根治兑现：scan/rename snapshot 复用 + ID semantic uniqueness；其余 issues.py/recorder 健壮性已闭合。
 
 ### minimize-repo-footprint — minimize-repo-footprint
 状态: PLANNED
@@ -138,7 +138,7 @@
 状态: PLANNED
 成员: (生成) T78, T79, T80, T81, T82, T83, T84, T85
 优先级: P1（P4 ★组已交付；T85=P6 端态 A 为下一结构性端点；T83/T84 等 embedded producer 契约）
-计划: ✅ T78(4.C lens-metric emit，bd7c05f)、T79(4.B maintain scan，569d393)、T80/T81/T82(4.D.1/2/4 reason-code validators，6326115) 已交付；下一步单开 T85（P6 recorder 索引迁 frontmatter，历史表只读 dual-read）；T83/T84 待 embedded producer 契约就绪后实施。
+计划: ✅ T78-T82 已交付；T85 由 mlh-p6-recorder-frontmatter 交付（versioned frontmatter + 历史表只读 dual-read/promotion）；T83/T84 待 embedded producer 契约就绪后实施。
 
 ### implement-mechanical-layer-hardening-p4-lens-metric-emit — implement-mechanical-layer-hardening-p4-lens-metric-emit
 状态: PLANNED
@@ -204,7 +204,7 @@
 状态: PLANNED
 成员: (生成) T143, T144, T145, T146
 优先级: P3
-计划: SAD 后续增强：frozen-diff/ADR lint、跨语言 schema、触发精度观测与 recorder 并发锁方案统一。
+计划: SAD 后续增强：frozen-diff/ADR lint、跨语言 schema、触发精度观测；T146 recorder 仓级 snapshot lock 已由 mlh-p6-recorder-frontmatter 兑现。
 
 ### add-codex-host-support — add-codex-host-support
 状态: PLANNED
