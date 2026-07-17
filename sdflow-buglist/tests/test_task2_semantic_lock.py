@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import subprocess
@@ -16,6 +17,36 @@ def load(name, relative):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _snapshot_barrier_worker(root, command, ready, release, suffix=None):
+    """Spawn-safe cooperative reader/writer used by true cross-process barriers."""
+    module = load(f"barrier_{command}_{os.getpid()}", "sdflow-buglist/scripts/buglist.py")
+    target = Path(root) / "shared.md"
+    with module.recorder_lock(root, command):
+        snapshot = target.read_text(encoding="utf-8")
+        ready.set()
+        if not release.wait(15):
+            raise RuntimeError("barrier release timeout")
+        if suffix is not None:
+            module.atomic_write(target, snapshot + suffix)
+
+
+def _producer_barrier_worker(root, suffix, ready, release, result_path):
+    """Fake sibling producer: report conflict or the exact bytes read after acquire."""
+    module = load(f"producer_{suffix}_{os.getpid()}", "sdflow-buglist/scripts/buglist.py")
+    target = Path(root) / "dated.md"
+    try:
+        with module.recorder_lock(root, "add"):
+            snapshot = target.read_text(encoding="utf-8")
+            Path(result_path).write_text("acquired\n" + snapshot, encoding="utf-8")
+            ready.set()
+            if not release.wait(15):
+                raise RuntimeError("producer release timeout")
+            module.atomic_write(target, snapshot + suffix)
+    except module.RecorderLockError as exc:
+        Path(result_path).write_text("conflict\n" + str(exc), encoding="utf-8")
+        ready.set()
 
 
 @pytest.mark.parametrize("relative", [
@@ -142,17 +173,31 @@ def test_lock_metadata_publish_faults_cleanup_own_inode(tmp_path, monkeypatch, f
     assert not lock.exists()
 
 
-def test_invalid_participant_env_cannot_upgrade_to_owner(tmp_path):
-    script = ROOT / "sdflow-buglist/scripts/buglist.py"
+@pytest.mark.parametrize("relative,args", [
+    ("sdflow-buglist/scripts/buglist.py", ["scan", "--json"]),
+    ("sdflow-todolist/scripts/todolist.py", ["scan", "--json"]),
+    ("sdflow-issues/scripts/issues.py", ["reindex"]),
+])
+def test_invalid_participant_env_falls_back_to_owner_or_conflict(relative, args, tmp_path):
+    script = ROOT / relative
     env = dict(os.environ)
     env["SDFLOW_RECORDER_LOCK_TOKEN"] = "expired"
-    proc = subprocess.run(
-        [sys.executable, str(script), "--root", str(tmp_path), "scan", "--json"],
+    env["SDFLOW_RECORDER_DELEGATION_CHAIN"] = json.dumps(["sweep", "scan"])
+    owner = subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), *args],
         capture_output=True, text=True, env=env,
     )
-    assert proc.returncode != 0
-    assert "invalid recorder participant" in proc.stderr
+    assert owner.returncode == 0, owner.stderr
     assert not (tmp_path / "openspec/issues/.recorder.lock").exists()
+
+    lock_module = load("invalid_env_lock", "sdflow-buglist/scripts/buglist.py")
+    with lock_module.recorder_lock(tmp_path, "add"):
+        conflict = subprocess.run(
+            [sys.executable, str(script), "--root", str(tmp_path), *args],
+            capture_output=True, text=True, env=env,
+        )
+    assert conflict.returncode != 0
+    assert "recorder lock occupied" in conflict.stderr
 
 
 @pytest.mark.parametrize("relative", [
@@ -235,13 +280,54 @@ def test_blocked_stdout_write_starts_after_lock_release(tmp_path, monkeypatch):
     assert all(not held for _value, held in writes)
 
 
-def test_reader_writer_barrier_is_bidirectional(tmp_path):
-    module = load("barrier_lock", "sdflow-buglist/scripts/buglist.py")
-    for owner_command, contender_command in (("scan", "add"), ("add", "scan")):
-        with module.recorder_lock(tmp_path, owner_command):
-            with pytest.raises(module.RecorderLockError, match="lock occupied"):
-                with module.recorder_lock(tmp_path, contender_command):
-                    pass
+def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
+    ctx = multiprocessing.get_context("spawn")
+    script = ROOT / "sdflow-buglist/scripts/buglist.py"
+    payload = tmp_path / "bug.json"
+    payload.write_text(json.dumps({"module": "m", "summary": "barrier", "priority": "P2", "phenomenon": "x"}))
+    shared = tmp_path / "shared.md"
+    shared.write_text("base\n", encoding="utf-8")
+
+    ready = ctx.Event()
+    release = ctx.Event()
+    reader = ctx.Process(target=_snapshot_barrier_worker, args=(str(tmp_path), "scan", ready, release))
+    reader.start()
+    assert ready.wait(15)
+    writer_conflict = subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(payload)],
+        capture_output=True, text=True,
+    )
+    assert writer_conflict.returncode != 0
+    assert "recorder lock occupied" in writer_conflict.stderr
+    release.set()
+    reader.join(15)
+    assert reader.exitcode == 0
+    writer_after_release = subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(payload)],
+        capture_output=True, text=True,
+    )
+    assert writer_after_release.returncode == 0, writer_after_release.stderr
+
+    ready = ctx.Event()
+    release = ctx.Event()
+    writer = ctx.Process(target=_snapshot_barrier_worker, args=(str(tmp_path), "add", ready, release, "writer\n"))
+    writer.start()
+    assert ready.wait(15)
+    reader_conflict = subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "scan", "--json"],
+        capture_output=True, text=True,
+    )
+    assert reader_conflict.returncode != 0
+    assert "recorder lock occupied" in reader_conflict.stderr
+    release.set()
+    writer.join(15)
+    assert writer.exitcode == 0
+    reader_after_release = subprocess.run(
+        [sys.executable, str(script), "--root", str(tmp_path), "scan", "--json"],
+        capture_output=True, text=True,
+    )
+    assert reader_after_release.returncode == 0, reader_after_release.stderr
+    assert shared.read_text(encoding="utf-8") == "base\nwriter\n"
 
 
 def test_next_id_release_does_not_reserve_number(tmp_path):
@@ -269,19 +355,50 @@ def test_next_id_release_does_not_reserve_number(tmp_path):
     assert "semantic ID" in loser.stderr
 
 
-def test_two_cooperative_namespace_producers_preserve_latest_document(tmp_path):
-    module = load("document_lock", "sdflow-buglist/scripts/buglist.py")
+def test_two_cooperative_namespace_producers_use_cross_process_barrier(tmp_path):
+    ctx = multiprocessing.get_context("spawn")
     target = tmp_path / "dated.md"
     target.write_text("---\nbase: 1\n---\n")
-    with module.recorder_lock(tmp_path, "add"):
-        first = target.read_text() + "producer-a: 1\n"
-        with pytest.raises(module.RecorderLockError, match="lock occupied"):
-            with module.recorder_lock(tmp_path, "scan"):
-                pass
-        module.atomic_write(target, first)
-    with module.recorder_lock(tmp_path, "add"):
-        second = target.read_text() + "producer-b: 1\n"
-        module.atomic_write(target, second)
+    ready_a, release_a = ctx.Event(), ctx.Event()
+    result_a = tmp_path / "producer-a.result"
+    producer_a = ctx.Process(
+        target=_producer_barrier_worker,
+        args=(str(tmp_path), "producer-a: 1\n", ready_a, release_a, str(result_a)),
+    )
+    producer_a.start()
+    assert ready_a.wait(15)
+
+    ready_conflict, release_conflict = ctx.Event(), ctx.Event()
+    release_conflict.set()
+    result_conflict = tmp_path / "producer-b-conflict.result"
+    producer_b_conflict = ctx.Process(
+        target=_producer_barrier_worker,
+        args=(str(tmp_path), "producer-b: 1\n", ready_conflict, release_conflict, str(result_conflict)),
+    )
+    producer_b_conflict.start()
+    assert ready_conflict.wait(15)
+    producer_b_conflict.join(15)
+    assert producer_b_conflict.exitcode == 0
+    assert result_conflict.read_text(encoding="utf-8").startswith("conflict\n")
+
+    release_a.set()
+    producer_a.join(15)
+    assert producer_a.exitcode == 0
+
+    ready_b, release_b = ctx.Event(), ctx.Event()
+    release_b.set()
+    result_b = tmp_path / "producer-b.result"
+    producer_b = ctx.Process(
+        target=_producer_barrier_worker,
+        args=(str(tmp_path), "producer-b: 1\n", ready_b, release_b, str(result_b)),
+    )
+    producer_b.start()
+    assert ready_b.wait(15)
+    producer_b.join(15)
+    assert producer_b.exitcode == 0
+    observed_b = result_b.read_text(encoding="utf-8")
+    assert observed_b.startswith("acquired\n")
+    assert "producer-a: 1\n" in observed_b
     assert target.read_text().endswith("producer-a: 1\nproducer-b: 1\n")
 
 

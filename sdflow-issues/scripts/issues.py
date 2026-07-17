@@ -190,9 +190,13 @@ def recorder_lock(root, command):
     root = os.path.realpath(os.fspath(root))
     if RECORDER_LOCK_ENV in os.environ:
         inherited = os.environ.get(RECORDER_LOCK_ENV, "")
-        participant = validate_recorder_participant(root, inherited, command)
-        yield participant
-        return
+        try:
+            participant = validate_recorder_participant(root, inherited, command)
+        except RecorderLockError:
+            participant = None
+        if participant is not None:
+            yield participant
+            return
     path = _lock_path(root)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     token = secrets.token_hex(32)
