@@ -73,7 +73,7 @@ THREE_WAY = [
     "_split_envelope", "_find_recorder_span", "_parse_recorder_namespace",
     "_legacy_table_region_count", "parse_recorder_document", "read_recorder_document",
     "split_sections", "_legacy_table_sections", "parse_table_rows", "block_ranges",
-    "marker_block_ranges", "_legacy_item_from_row", "_build_effective_snapshot",
+    "_match_marker_line", "marker_block_ranges", "_legacy_item_from_row", "_build_effective_snapshot",
 ]
 
 # 只在 buglist.py / todolist.py 两份之间镜像的表/块解析 helper（issues.py 不含，
@@ -95,7 +95,8 @@ TWO_WAY = [
     "_canonical_document", "_render_recorder_document",
     "_display_title", "_summary_blockquote", "_escape_user_markers",
     "_canonical_from_key", "_find_item_document", "_legacy_block_range",
-    "_splice_body_lines",
+    "_splice_body_lines", "_reject_document_mutation", "_promotion_insertions",
+    "_validated_rendered_mutation",
 ]
 
 
@@ -183,8 +184,10 @@ def test_frontmatter_constant_consistency():
     assert BUG.CANONICAL_ID_RE.flags == TODO.CANONICAL_ID_RE.flags == ISS.CANONICAL_ID_RE.flags
     assert BUG.UTF8_BOM == TODO.UTF8_BOM == ISS.UTF8_BOM
     assert BUG.RECORDER_POOL_CONFIG == TODO.RECORDER_POOL_CONFIG == ISS.RECORDER_POOL_CONFIG
-    assert BUG._RESERVED_MARKER_LINE_RE.pattern == TODO._RESERVED_MARKER_LINE_RE.pattern
-    assert BUG._RESERVED_MARKER_LINE_RE.flags == TODO._RESERVED_MARKER_LINE_RE.flags
+    assert BUG._ISSUE_MARKER_LINE_RE.pattern == TODO._ISSUE_MARKER_LINE_RE.pattern
+    assert BUG._ISSUE_MARKER_LINE_RE.pattern == ISS._ISSUE_MARKER_LINE_RE.pattern
+    assert BUG._ISSUE_MARKER_LINE_RE.flags == TODO._ISSUE_MARKER_LINE_RE.flags
+    assert BUG._ISSUE_MARKER_LINE_RE.flags == ISS._ISSUE_MARKER_LINE_RE.flags
 
 
 def test_helper_deletion_is_not_silently_swallowed():

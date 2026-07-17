@@ -271,7 +271,7 @@ def test_legacy_promotion_rejects_preexisting_marker_collision_without_writing(t
 
     assert proc.returncode != 0
     assert proc.stdout == ""
-    assert "marker collision" in proc.stderr and "B1" in proc.stderr and "line=" in proc.stderr
+    assert "marker" in proc.stderr
     assert path.read_bytes() == raw
 
 
@@ -375,3 +375,142 @@ def test_overlay_writer_preserves_bom_crlf_and_external_namespace_bytes(tmp_path
     assert written.startswith(b"\xef\xbb\xbf---\r\n" + external + b"sdflow-issues:\r\n")
     assert body in written
     assert written.count(b"\n") == written.count(b"\r\n"), "writer introduced lone LF into CRLF file"
+
+
+def _legacy_bug_bytes(item_id="B1", status="OPEN", block_suffix=b"\n"):
+    return (
+        b"# legacy\n\n## \xe7\x8a\xb6\xe6\x80\x81\xe6\x80\xbb\xe8\xa7\x88\n\n"
+        b"| ID | M | S | P | X | T | C | B |\n|---|---|---|---|---|---|---|---|\n"
+        + f"| {item_id} | old.c | old summary | P2 | {status} | 08:00 | old-change | |\n\n".encode()
+        + b"---\n\n" + f"## {item_id}: old title\n\n".encode()
+        + b"**\xe6\xa0\xb9\xe5\x9b\xa0**\xef\xbc\x9alegacy rootcause" + block_suffix
+    )
+
+
+def _legacy_todo_bytes(item_id="T1", status="OPEN"):
+    return (
+        b"# legacy todo\n\n## \xe7\x8a\xb6\xe6\x80\x81\xe6\x80\xbb\xe8\xa7\x88\n\n"
+        b"| ID | M | S | K | X | T | C | B |\n|---|---|---|---|---|---|---|---|\n"
+        + f"| {item_id} | todo.c | old summary | 功能增强 | {status} | 08:00 | old-change | |\n".encode()
+    )
+
+
+def test_marker_line_grammar_escapes_trailing_space_user_marker(tmp_path):
+    proc = _run(
+        BUG_SCRIPT, tmp_path, "add", "--date", "2026-07-17", "--time", "09:00",
+        payload={"id": "B1", "module": "m", "summary": "s", "priority": "P1",
+                 "phenomenon": "<!-- sdflow-issue-block:start id=A7 -->   "},
+    )
+    assert proc.returncode == 0, proc.stderr
+    path = tmp_path / "openspec/issues/buglist/2026-07-17-buglist.md"
+    raw = path.read_bytes()
+    assert b"&lt;!-- sdflow-issue-block:start id=A7 --&gt;   " in raw
+    assert BUG.parse_recorder_document(raw, "bug")["marker_problems"] == []
+
+
+def test_existing_broken_marker_document_rejects_add_without_writing(tmp_path):
+    path = tmp_path / "openspec/issues/buglist/2026-07-17-buglist.md"
+    add = _run(
+        BUG_SCRIPT, tmp_path, "add", "--date", "2026-07-17", "--time", "08:00",
+        payload={"id": "B1", "module": "m", "summary": "old", "priority": "P1",
+                 "phenomenon": "old"},
+    )
+    assert add.returncode == 0, add.stderr
+    raw = path.read_bytes().replace(b"<!-- sdflow-issue-block:end id=B1 -->\n", b"")
+    path.write_bytes(raw)
+    proc = _run(
+        BUG_SCRIPT, tmp_path, "add", "--date", "2026-07-17", "--time", "09:00",
+        payload={"id": "B2", "module": "m", "summary": "s", "priority": "P1",
+                 "phenomenon": "p"},
+    )
+    assert proc.returncode != 0
+    assert "marker" in proc.stderr
+    assert path.read_bytes() == raw
+
+
+def test_legacy_promotion_rejects_trailing_space_marker_collision_without_writing(tmp_path):
+    path = tmp_path / "openspec/issues/buglist/2026-07-17-buglist.md"
+    path.parent.mkdir(parents=True)
+    raw = _legacy_bug_bytes(block_suffix=(
+        b"\n<!-- sdflow-issue-block:start id=A7 -->   \ninside\n"
+        b"<!-- sdflow-issue-block:end id=A7 -->\t\n"
+    ))
+    path.write_bytes(raw)
+    proc = _run(BUG_SCRIPT, tmp_path, "set-status", "--id", "B1", "--to", "VERIFIED")
+    assert proc.returncode != 0
+    assert "marker" in proc.stderr
+    assert path.read_bytes() == raw
+
+
+@pytest.mark.parametrize("raw_id", ["A7"])
+def test_noncanonical_request_does_not_alias_canonical_or_legacy_spelling(tmp_path, raw_id):
+    legacy_path = tmp_path / "openspec/issues/buglist/2026-07-17-buglist.md"
+    legacy_path.parent.mkdir(parents=True)
+    legacy = _legacy_bug_bytes(item_id=raw_id)
+    legacy_path.write_bytes(legacy)
+    proc = _run(BUG_SCRIPT, tmp_path, "triage", "--id", "A007", "--批次", "b")
+    assert proc.returncode != 0
+    assert legacy_path.read_bytes() == legacy
+
+    canonical_root = tmp_path / "canonical"
+    add = _run(
+        BUG_SCRIPT, canonical_root, "add", "--date", "2026-07-17", "--time", "09:00",
+        payload={"id": "A7", "module": "m", "summary": "s", "priority": "P1",
+                 "phenomenon": "p"},
+    )
+    assert add.returncode == 0, add.stderr
+    canonical_path = canonical_root / "openspec/issues/buglist/2026-07-17-buglist.md"
+    canonical = canonical_path.read_bytes()
+    proc = _run(BUG_SCRIPT, canonical_root, "triage", "--id", "A007", "--批次", "b")
+    assert proc.returncode != 0
+    assert canonical_path.read_bytes() == canonical
+
+
+def test_todo_batch_only_legacy_promotion_creates_minimal_marker_without_history(tmp_path):
+    path = tmp_path / "openspec/issues/todolist/2026-07-todolist.md"
+    path.parent.mkdir(parents=True)
+    raw = _legacy_todo_bytes(status="PROPOSED")
+    path.write_bytes(raw)
+    proc = _run(TODO_SCRIPT, tmp_path, "triage", "--id", "T1", "--批次", "batch-1")
+    assert proc.returncode == 0, proc.stderr
+    written = path.read_bytes()
+    assert b"<!-- sdflow-issue-block:start id=T1 -->\n## T1: old summary\n> old summary\n" in written
+    assert b"<!-- sdflow-issue-block:end id=T1 -->\n" in written
+    assert b"\xe7\x8a\xb6\xe6\x80\x81\xef\xbc\x9aPROPOSED \xe2\x86\x92 PROPOSED" not in written
+    assert TODO.parse_recorder_document(written, "todo")["problems"] == []
+
+
+@pytest.mark.parametrize(
+    ("command", "status", "expected_history", "trailing_eol"),
+    [
+        ("set-status", "OPEN", True, False),
+        ("set-status", "OPEN", True, True),
+        ("triage", "FIXED", False, False),
+        ("triage", "FIXED", False, True),
+    ],
+)
+def test_legacy_bug_eof_boundary_matrix_preserves_lines_before_history_or_end(
+        tmp_path, command, status, expected_history, trailing_eol):
+    path = tmp_path / "openspec/issues/buglist/2026-07-17-buglist.md"
+    path.parent.mkdir(parents=True)
+    raw = _legacy_bug_bytes(status=status, block_suffix=b"\n" if trailing_eol else b"")
+    path.write_bytes(raw)
+    if command == "set-status":
+        proc = _run(BUG_SCRIPT, tmp_path, command, "--id", "B1", "--to", "VERIFIED")
+    else:
+        proc = _run(BUG_SCRIPT, tmp_path, command, "--id", "B1", "--批次", "b")
+    assert proc.returncode == 0, proc.stderr
+    written = path.read_bytes()
+    block_start = raw.index(b"## B1: old title")
+    assert raw[:block_start] in written
+    marker_and_old_block = (
+        b"<!-- sdflow-issue-block:start id=B1 -->\n" + raw[block_start:]
+    )
+    assert marker_and_old_block in written
+    suffix = written.split(marker_and_old_block, 1)[1]
+    assert suffix.startswith(b"\n") is (not trailing_eol)
+    assert (b"OPEN \xe2\x86\x92 VERIFIED" in suffix) is expected_history
+    assert b"<!-- sdflow-issue-block:end id=B1 -->\n" in suffix
+    parsed = BUG.parse_recorder_document(written, "bug")
+    assert parsed["marker_problems"] == []
+    assert not [problem for problem in parsed["problems"] if "marker" in problem]

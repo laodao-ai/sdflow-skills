@@ -749,16 +749,11 @@ def _summary_blockquote(summary):
     return "\n".join(f"> {line}" for line in re.split(r"\r\n|\r|\n", summary))
 
 
-_RESERVED_MARKER_LINE_RE = re.compile(
-    r"^<!-- sdflow-issue-block:(?:start|end) id=[A-Z][1-9][0-9]* -->$", re.ASCII
-)
-
-
 def _escape_user_markers(value):
     lines = re.split(r"\r\n|\r|\n", str(value))
     return "\n".join(
         line.replace("<!--", "&lt;!--").replace("-->", "--&gt;")
-        if _RESERVED_MARKER_LINE_RE.fullmatch(line) else line
+        if _match_marker_line(line) else line
         for line in lines
     )
 
@@ -895,25 +890,31 @@ def block_ranges(lines):
     return out
 
 
+_ISSUE_MARKER_LINE_RE = re.compile(
+    r"^<!-- sdflow-issue-block:(start|end) id=([A-Z][1-9][0-9]*) -->[ \t]*$", re.ASCII
+)
+
+
+def _match_marker_line(line):
+    return _ISSUE_MARKER_LINE_RE.fullmatch(line.rstrip("\r\n"))
+
+
 def marker_block_ranges(lines):
     """解析新格式成对 marker；返回 (ranges, problems)，不回退 heading heuristic。"""
-    start_re = re.compile(r"^<!-- sdflow-issue-block:start id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
-    end_re = re.compile(r"^<!-- sdflow-issue-block:end id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
     ranges, problems = {}, []
     active = None
     for index, line in enumerate(lines):
-        start = start_re.match(line)
-        end = end_re.match(line)
-        if start:
-            item_id = start.group(1)
+        marker = _match_marker_line(line)
+        if marker and marker.group(1) == "start":
+            item_id = marker.group(2)
             if active is not None:
                 problems.append(f"marker 嵌套：{active[0]} → {item_id}（line {index + 1}）")
             elif item_id in ranges:
                 problems.append(f"marker block 重复：{item_id}（line {index + 1}）")
             else:
                 active = (item_id, index)
-        elif end:
-            item_id = end.group(1)
+        elif marker:
+            item_id = marker.group(2)
             if active is None:
                 problems.append(f"orphan end marker：{item_id}（line {index + 1}）")
             elif active[0] != item_id:
@@ -1042,6 +1043,8 @@ def _canonical_from_key(key):
 
 def _find_item_document(root, requested_id, pool):
     key = semantic_id_key(requested_id, allow_legacy=True)
+    canonical = _canonical_from_key(key)
+    noncanonical_request = requested_id != canonical
     found = []
     snapshot = read_repository_snapshot(root)
     repository_semantic_occurrences(root, snapshot)
@@ -1050,6 +1053,11 @@ def _find_item_document(root, requested_id, pool):
             continue
         for raw_id, item in document["effective_items"].items():
             if _legacy_semantic_id_key(raw_id) == key:
+                if noncanonical_request and not (
+                        raw_id == requested_id
+                        and raw_id in document["rows"]
+                        and not (document["model"] and canonical in document["model"]["items"])):
+                    continue
                 found.append((candidate, document, raw_id, dict(item)))
     if not found:
         _die(f"未找到 ID：{requested_id}")
@@ -1079,7 +1087,7 @@ def _legacy_block_range(document, raw_id, path):
             end = index
             break
     for index in range(start, end):
-        if _RESERVED_MARKER_LINE_RE.fullmatch(document["lines"][index].rstrip("\r\n")):
+        if _match_marker_line(document["lines"][index]):
             _frontmatter_error(
                 f"file={path} legacy marker collision",
                 f"id={raw_id} line={index + 1}",
@@ -1095,6 +1103,58 @@ def _splice_body_lines(document, insertions):
         rendered.append(line.encode("utf-8"))
     rendered.extend(insertions.get(len(document["lines"]), ()))
     return b"".join(rendered)
+
+
+def _reject_document_mutation(document, path):
+    structural = [
+        problem for problem in document["problems"]
+        if "marker" in problem or "frontmatter" in problem
+    ]
+    if structural:
+        _frontmatter_error(
+            f"file={path} marker/ownership 结构非法", structural[0], "修正结构后重试",
+        )
+
+
+def _promotion_insertions(document, raw_id, canonical, path, item, history, require_block):
+    eol = document["eol"]
+    candidates = [raw for raw in document["legacy_blocks"]
+                  if _legacy_semantic_id_key(raw) == _legacy_semantic_id_key(raw_id)]
+    if candidates or require_block:
+        b_start, b_end = _legacy_block_range(document, raw_id, path)
+        boundary = ()
+        if b_end and not document["lines"][b_end - 1].endswith(("\n", "\r")):
+            boundary = (eol,)
+        return {
+            b_start: (f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol,),
+            b_end: (*boundary, *history,
+                    f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol),
+        }
+    minimal = (
+        eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
+        + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
+        + _summary_blockquote(item["summary"]).encode("utf-8") + eol
+        + b"".join(history)
+        + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
+    )
+    return {len(document["lines"]): (minimal,)}
+
+
+def _validated_rendered_mutation(rendered, pool, canonical, require_marker, path):
+    candidate = parse_recorder_document(rendered, pool)
+    structural = [
+        problem for problem in candidate["problems"]
+        if "marker" in problem or "frontmatter" in problem
+    ]
+    if canonical not in candidate["model"]["items"]:
+        structural.append(f"frontmatter item 缺失：{canonical}")
+    if require_marker and canonical not in candidate["marker_blocks"]:
+        structural.append(f"marker block 缺失：{canonical}")
+    if structural:
+        _frontmatter_error(
+            f"file={path} rendered candidate 关系自检失败", structural[0], "拒绝写入并修正渲染逻辑",
+        )
+    return rendered
 
 
 def cmd_next_id(args):
@@ -1181,6 +1241,7 @@ def cmd_add(args):
     if os.path.exists(path):
         document = next(document for pool, candidate, _rel, document in snapshot
                         if pool == "todo" and os.path.realpath(candidate) == os.path.realpath(path))
+        _reject_document_mutation(document, path)
         model = dict(document["model"] or {
             "schema": 1, "pool": "todo", "mode": "overlay", "items": {},
         })
@@ -1195,6 +1256,7 @@ def cmd_add(args):
             body += block.encode("utf-8")
         model = {"schema": 1, "pool": "todo", "mode": "canonical", "items": {tid: item}}
         rendered = _canonical_document(model, body)
+    rendered = _validated_rendered_mutation(rendered, "todo", tid, bool(block), path)
     atomic_write_bytes(path, rendered)
     print(json.dumps({"id": tid, "file": os.path.relpath(path, root), "status": status,
                       "block": bool(block), "time": time_str, "change": change or None},
@@ -1238,11 +1300,7 @@ def cmd_set_status(args):
     _reject_line_unsafe(args.month, "month")
 
     path, document, raw_id, item = _find_item_document(root, args.id, "todo")
-    if document["marker_problems"]:
-        _frontmatter_error(
-            f"file={path} marker 结构非法", document["marker_problems"][0],
-            "修正 marker 后重试",
-        )
+    _reject_document_mutation(document, path)
     canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
 
     # 门禁
@@ -1265,23 +1323,9 @@ def cmd_set_status(args):
     insertions = {}
     frontmatter_owned = bool(document["model"] and canonical in document["model"]["items"])
     if not frontmatter_owned:
-        candidates = [raw for raw in document["legacy_blocks"]
-                      if _legacy_semantic_id_key(raw) == _legacy_semantic_id_key(raw_id)]
-        if candidates:
-            b_start, b_end = _legacy_block_range(document, raw_id, path)
-            insertions = {
-                b_start: (f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol,),
-                b_end: (history, f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol),
-            }
-        else:
-            minimal = (
-                eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
-                + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
-                + _summary_blockquote(item["summary"]).encode("utf-8") + eol
-                + history
-                + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
-            )
-            insertions = {len(document["lines"]): (minimal,)}
+        insertions = _promotion_insertions(
+            document, raw_id, canonical, path, item, (history,), False,
+        )
     elif canonical in document["marker_blocks"]:
         _b_start, b_end = document["marker_blocks"][canonical]
         insertions = {b_end - 1: (history,)}
@@ -1295,7 +1339,10 @@ def cmd_set_status(args):
         )
         insertions = {len(document["lines"]): (minimal,)}
     body = _splice_body_lines(document, insertions)
-    atomic_write_bytes(path, _render_recorder_document(document, model, body))
+    rendered = _render_recorder_document(document, model, body)
+    atomic_write_bytes(path, _validated_rendered_mutation(
+        rendered, "todo", canonical, True, path,
+    ))
     print(json.dumps({"id": canonical, "old": old, "new": new,
                       "file": os.path.relpath(path, root)}, ensure_ascii=False))
 
@@ -1326,11 +1373,7 @@ def cmd_triage(args):
     batch = getattr(args, "批次")
 
     path, document, raw_id, item = _find_item_document(root, args.id, "todo")
-    if document["marker_problems"]:
-        _frontmatter_error(
-            f"file={path} marker 结构非法", document["marker_problems"][0],
-            "修正 marker 后重试",
-        )
+    _reject_document_mutation(document, path)
     canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
     old_status = item["status"]
     open_untriaged = set(STATUS_CODES) - {"DONE", "WONTDO", "PROPOSED"}
@@ -1350,25 +1393,9 @@ def cmd_triage(args):
         )
     frontmatter_owned = bool(document["model"] and canonical in document["model"]["items"])
     if not frontmatter_owned:
-        candidates = [raw for raw in document["legacy_blocks"]
-                      if _legacy_semantic_id_key(raw) == _legacy_semantic_id_key(raw_id)]
-        if candidates:
-            b_start, b_end = _legacy_block_range(document, raw_id, path)
-            insertions = {
-                b_start: (f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol,),
-                b_end: (*history, f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol),
-            }
-        elif history:
-            minimal = (
-                eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
-                + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
-                + _summary_blockquote(item["summary"]).encode("utf-8") + eol
-                + b"".join(history)
-                + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
-            )
-            insertions = {len(document["lines"]): (minimal,)}
-        else:
-            insertions = {}
+        insertions = _promotion_insertions(
+            document, raw_id, canonical, path, item, history, False,
+        )
     elif canonical in document["marker_blocks"]:
         _b_start, b_end = document["marker_blocks"][canonical]
         insertions = {b_end - 1: history} if history else {}
@@ -1384,7 +1411,11 @@ def cmd_triage(args):
     else:
         insertions = {}
     body = _splice_body_lines(document, insertions)
-    atomic_write_bytes(path, _render_recorder_document(document, model, body))
+    rendered = _render_recorder_document(document, model, body)
+    require_marker = not frontmatter_owned or canonical in document["marker_blocks"] or bool(history)
+    atomic_write_bytes(path, _validated_rendered_mutation(
+        rendered, "todo", canonical, require_marker, path,
+    ))
     print(json.dumps({"id": canonical, "old_status": old_status, "new_status": new_status,
                       "batch": batch, "file": os.path.relpath(path, root)}, ensure_ascii=False))
 

@@ -584,25 +584,31 @@ def block_ranges(lines):
     return out
 
 
+_ISSUE_MARKER_LINE_RE = re.compile(
+    r"^<!-- sdflow-issue-block:(start|end) id=([A-Z][1-9][0-9]*) -->[ \t]*$", re.ASCII
+)
+
+
+def _match_marker_line(line):
+    return _ISSUE_MARKER_LINE_RE.fullmatch(line.rstrip("\r\n"))
+
+
 def marker_block_ranges(lines):
     """解析新格式成对 marker；返回 (ranges, problems)，不回退 heading heuristic。"""
-    start_re = re.compile(r"^<!-- sdflow-issue-block:start id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
-    end_re = re.compile(r"^<!-- sdflow-issue-block:end id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
     ranges, problems = {}, []
     active = None
     for index, line in enumerate(lines):
-        start = start_re.match(line)
-        end = end_re.match(line)
-        if start:
-            item_id = start.group(1)
+        marker = _match_marker_line(line)
+        if marker and marker.group(1) == "start":
+            item_id = marker.group(2)
             if active is not None:
                 problems.append(f"marker 嵌套：{active[0]} → {item_id}（line {index + 1}）")
             elif item_id in ranges:
                 problems.append(f"marker block 重复：{item_id}（line {index + 1}）")
             else:
                 active = (item_id, index)
-        elif end:
-            item_id = end.group(1)
+        elif marker:
+            item_id = marker.group(2)
             if active is None:
                 problems.append(f"orphan end marker：{item_id}（line {index + 1}）")
             elif active[0] != item_id:

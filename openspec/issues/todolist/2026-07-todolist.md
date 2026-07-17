@@ -1,3 +1,11 @@
+---
+sdflow-issues:
+  schema: 1
+  pool: todo
+  mode: overlay
+  items:
+    T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"OPEN","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
+---
 # 2026-07 TODO
 
 > 项目：<未注明>
