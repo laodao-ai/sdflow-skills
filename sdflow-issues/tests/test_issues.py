@@ -516,6 +516,9 @@ class TestReindexProblemsEcho:
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
         ])
+        fixture = tmp_path / "openspec/issues/buglist/2026-01-01-buglist.md"
+        fixture.write_text(fixture.read_text(encoding="utf-8").split("\n---\n", 1)[0] + "\n",
+                           encoding="utf-8")
 
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
@@ -532,6 +535,9 @@ class TestReindexProblemsEcho:
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
         ])
+        fixture = tmp_path / "openspec/issues/buglist/2026-01-01-buglist.md"
+        fixture.write_text(fixture.read_text(encoding="utf-8").split("\n---\n", 1)[0] + "\n",
+                           encoding="utf-8")
 
         # 无 --strict：exit 0（沿用默认口径）
         proc_default = subprocess.run(
@@ -1883,6 +1889,13 @@ def _write_bug_file(root, date, rows):
             f"| {r['id']} | `foo.c:1` | fixture | P2 | {r['status']} | 10:00 | "
             f"{r.get('change') or '-'} | {r.get('batch', '')} |\n"
         )
+    for r in rows:
+        lines.extend([
+            f"\n---\n\n## {r['id']}: fixture\n\n",
+            "| 属性 | 值 |\n|------|------|\n",
+            f"| 状态 | {r['status']} |\n\n",
+            "**根因**：fixture rootcause\n",
+        ])
     (dir_path / f"{date}-buglist.md").write_text("".join(lines), encoding="utf-8")
 
 
@@ -1968,9 +1981,18 @@ def _item_cells(root, item_id):
 
 
 def _item_status(root, item_id):
-    return _item_cells(root, item_id)[4]
+    return _scan_item(root, item_id)["status"]
 
 
 def _item_batch(root, item_id):
-    cells = _item_cells(root, item_id)
-    return cells[7] if len(cells) > 7 else ""
+    return _scan_item(root, item_id).get("batch") or ""
+
+
+def _scan_item(root, item_id):
+    module = buglist_mod if item_id.startswith("B") else todolist_mod
+    pool = "bug" if item_id.startswith("B") else "todo"
+    for path in module.list_files(str(root)):
+        document = module.read_recorder_document(path, pool)
+        if item_id in document["effective_items"]:
+            return {"id": item_id, **document["effective_items"][item_id]}
+    raise AssertionError(f"item {item_id} 未在 recorder snapshot 中找到")

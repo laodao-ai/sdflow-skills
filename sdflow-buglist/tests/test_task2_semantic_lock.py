@@ -411,7 +411,9 @@ def test_real_sweep_reindex_scan_nested_delegation(tmp_path):
         "## 状态总览\n\n"
         "| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |\n"
         "|----|------|----------|--------|------|------|------------|------|\n"
-        "| B1 | `m` | nested | P2 | OPEN | 10:00 | nested-change |  |\n"
+        "| B1 | `m` | nested | P2 | OPEN | 10:00 | nested-change |  |\n\n"
+        "---\n\n## B1: nested\n\n| 属性 | 值 |\n|------|------|\n"
+        "| 状态 | OPEN |\n\n**根因**：fixture rootcause\n"
     )
     script = ROOT / "sdflow-issues/scripts/issues.py"
     proc = subprocess.run(
@@ -433,7 +435,7 @@ def test_cli_writer_fault_releases_lock_and_preserves_target(tmp_path, monkeypat
     def fail_write(_path, _text):
         raise OSError("writer fault")
 
-    monkeypatch.setattr(module, "atomic_write", fail_write)
+    monkeypatch.setattr(module, "atomic_write_bytes", fail_write)
     monkeypatch.setattr(sys, "argv", [
         "buglist", "--root", str(tmp_path), "add", "--json", str(payload),
         "--date", "2026-01-01",

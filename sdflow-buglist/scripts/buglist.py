@@ -4,17 +4,17 @@
 skill `sdflow-buglist` 的执行核心。把"判断"留给模型（现象 vs 根因、定优先级、
 是否值得记录），把"确定性且易错"的部分交给本脚本：
   - 全局 ID 扫描自增（跨文件不撞号）
-  - 今日文件/目录定位与创建（缺则建 + 写头部）
-  - 状态总览表 ↔ 详细块 的双写一致（增、改都两处同步）
+  - 今日文件/目录定位与 canonical frontmatter 创建
+  - legacy 表只读、按访问 promotion 到同文件 overlay
   - 状态回写的门禁（FIXED 必须有根因 + 证据；WONTFIX 必须有理由）
   - 扫描列表 + 表↔块一致性自检
 
 文件布局（约定，自包含，不依赖外部 rule）：
   <root>/openspec/issues/buglist/YYYY-MM-DD-buglist.md
-  结构 = 头部元信息 → ## 状态总览（表）→ 各 bug 的 --- 分隔详细块
+  结构 = versioned frontmatter 索引 → marker-framed 人读详情/历史；历史表只读兼容
 
-用法见 `python buglist.py --help`。所有写操作都是追加式，不删历史；落盘经 atomic_write
-（tempfile 同目录 + os.replace），中途异常不会截断原文件。
+用法见 `python buglist.py --help`。dated 文件落盘经 bytes atomic replace；新 writer 不写
+Markdown 总览表或可变 status/batch prose 副本。
 """
 
 import argparse
@@ -47,6 +47,27 @@ def atomic_write(path, text):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
+        try:
+            mode = os.stat(path).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def atomic_write_bytes(path, data):
+    """原子替换 dated recorder bytes，且保持既有 POSIX mode bits。"""
+    if not isinstance(data, bytes):
+        raise TypeError("atomic_write_bytes data must be bytes")
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
         try:
             mode = os.stat(path).st_mode & 0o777
         except FileNotFoundError:
@@ -518,7 +539,7 @@ def parse_recorder_document(raw, expected_pool):
         if count != 1:
             _frontmatter_error("legacy 总览区域非法", f"count={count}")
         result = {"format": "legacy", "model": None, "raw": raw, "body": body,
-                  "eol": eol, "bom": bom, "namespace_span": None}
+                  "eol": eol, "bom": bom, "envelope": envelope, "namespace_span": None}
     else:
         start, end = span
         namespace = envelope[start:end]
@@ -530,7 +551,8 @@ def parse_recorder_document(raw, expected_pool):
         if count != expected_count:
             _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
         result = {"format": model["mode"], "model": model, "raw": raw, "body": body,
-                  "eol": eol, "bom": bom, "namespace_span": (start, end)}
+                  "eol": eol, "bom": bom, "envelope": envelope,
+                  "namespace_span": (start, end)}
     lines = body.decode("utf-8").splitlines(keepends=True)
     section = split_sections(lines)
     result.update({
@@ -706,19 +728,91 @@ HEADER_TMPL = """# {date} Buglist
 
 > 来源：{source}
 > 创建日期：{date}
-
-## 状态总览
-
-| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |
-|----|------|----------|--------|------|------|------------|------|
 """
 
 
 def ensure_file(root, date, source):
     path = file_for_date(root, date)
-    if not os.path.exists(path):
-        atomic_write(path, HEADER_TMPL.format(date=date, source=source or "<未注明>"))
     return path
+
+
+def _reject_line_unsafe(value, field):
+    if value is None:
+        return
+    if any(char in str(value) for char in ("\r", "\n", "\0")):
+        _frontmatter_error(
+            f"字段 {field} 非法", f"CR/LF/NUL 不能写入 Markdown 单行结构：{value!r}",
+            f"为 {field} 提供不含 CR/LF/NUL 的单行值后重试",
+        )
+
+
+def _display_title(summary, title=None):
+    if title is not None:
+        _reject_line_unsafe(title, "title")
+        return str(title)
+    return re.sub(r"\s+", " ", summary).strip()
+
+
+def _summary_blockquote(summary):
+    return "\n".join(f"> {line}" for line in re.split(r"\r\n|\r|\n", summary))
+
+
+_RESERVED_MARKER_LINE_RE = re.compile(
+    r"^<!-- sdflow-issue-block:(?:start|end) id=[A-Z][1-9][0-9]* -->$", re.ASCII
+)
+
+
+def _escape_user_markers(value):
+    lines = re.split(r"\r\n|\r|\n", str(value))
+    return "\n".join(
+        line.replace("<!--", "&lt;!--").replace("-->", "--&gt;")
+        if _RESERVED_MARKER_LINE_RE.fullmatch(line) else line
+        for line in lines
+    )
+
+
+def _new_bug_block(item_id, data, docs, eol=b"\n"):
+    title = _display_title(data["summary"], data.get("title"))
+    body = f"\n<!-- sdflow-issue-block:start id={item_id} -->\n"
+    body += f"## {item_id}: {title}\n"
+    body += _summary_blockquote(data["summary"]) + "\n"
+    doc_block = render_doc_block(docs)
+    if doc_block:
+        body += doc_block
+    body += f"\n**现象**：{_escape_user_markers(data['phenomenon'])}\n"
+    body += f"\n**根因**：{_escape_user_markers(data.get('rootcause', '').strip() or '<待分析>')}\n"
+    body += f"\n**修复方案**：\n{_escape_user_markers(_as_list(data.get('fix')))}\n"
+    body += f"\n**影响范围**：{_escape_user_markers(data.get('impact', '<待评估>'))}\n"
+    for key, value in (data.get("optional") or {}).items():
+        body += f"\n**{_escape_user_markers(key)}**：{_escape_user_markers(value)}\n"
+    body += f"<!-- sdflow-issue-block:end id={item_id} -->\n"
+    return body.encode("utf-8").replace(b"\n", eol)
+
+
+def _new_bug_body(date, source, item_id, data, docs):
+    source = source or "<未注明>"
+    _reject_line_unsafe(source, "source")
+    body = HEADER_TMPL.format(date=date, source=source)
+    return body.encode("utf-8") + _new_bug_block(item_id, data, docs)
+
+
+def _canonical_document(model, body, eol=b"\n"):
+    return b"---" + eol + render_recorder_namespace(model, eol) + b"---" + eol + body
+
+
+def _render_recorder_document(document, model, body):
+    eol = document["eol"]
+    namespace = render_recorder_namespace(model, eol)
+    envelope = document["envelope"]
+    if envelope is None:
+        return document["bom"] + b"---" + eol + namespace + b"---" + eol + body
+    span = document["namespace_span"]
+    if span is None:
+        separator = b"" if not envelope or envelope.endswith(eol) else eol
+        envelope = envelope + separator + namespace
+    else:
+        envelope = envelope[:span[0]] + namespace + envelope[span[1]:]
+    return document["bom"] + b"---" + eol + envelope + b"---" + eol + body
 
 
 # ── ID 扫描 ──────────────────────────────────────────────────────────────────
@@ -977,6 +1071,67 @@ def _find_row_file(root, item_id):
     _die(f"未找到 ID：{item_id}")
 
 
+def _canonical_from_key(key):
+    return f"{key[0]}{key[1]}"
+
+
+def _find_item_document(root, requested_id, pool):
+    key = semantic_id_key(requested_id, allow_legacy=True)
+    found = []
+    snapshot = read_repository_snapshot(root)
+    repository_semantic_occurrences(root, snapshot)
+    for candidate_pool, candidate, _rel, document in snapshot:
+        if candidate_pool != pool:
+            continue
+        for raw_id, item in document["effective_items"].items():
+            if _legacy_semantic_id_key(raw_id) == key:
+                found.append((candidate, document, raw_id, dict(item)))
+    if not found:
+        _die(f"未找到 ID：{requested_id}")
+    if len(found) != 1:
+        _die(f"ID 定位歧义：{requested_id}（命中 {len(found)} 处）")
+    return found[0]
+
+
+def _legacy_block_range(document, raw_id, path):
+    starts = []
+    key = _legacy_semantic_id_key(raw_id)
+    for index, line in enumerate(document["lines"]):
+        match = re.match(r"##\s+([A-Z][0-9]+)\s*:", line, re.ASCII)
+        if match and _legacy_semantic_id_key(match.group(1)) == key:
+            starts.append(index)
+    if len(starts) != 1:
+        _frontmatter_error(
+            f"file={path} legacy block 无法安全包裹",
+            f"id={raw_id} candidates={len(starts)}",
+            "修正为唯一 legacy block 后重试",
+        )
+    start = starts[0]
+    end = len(document["lines"])
+    for index in range(start + 1, len(document["lines"])):
+        line = document["lines"][index]
+        if line.strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", line, re.ASCII):
+            end = index
+            break
+    for index in range(start, end):
+        if _RESERVED_MARKER_LINE_RE.fullmatch(document["lines"][index].rstrip("\r\n")):
+            _frontmatter_error(
+                f"file={path} legacy marker collision",
+                f"id={raw_id} line={index + 1}",
+                "删除或转义候选块内预存 marker 后重试",
+            )
+    return start, end
+
+
+def _splice_body_lines(document, insertions):
+    rendered = []
+    for index, line in enumerate(document["lines"]):
+        rendered.extend(insertions.get(index, ()))
+        rendered.append(line.encode("utf-8"))
+    rendered.extend(insertions.get(len(document["lines"]), ()))
+    return b"".join(rendered)
+
+
 def cmd_next_id(args):
     _render_next_id(_next_id_snapshot(args))
 
@@ -1044,7 +1199,8 @@ def cmd_add(args):
 
     date = today_str(args.date)
     validate_prefix(args.prefix)
-    semantic = repository_semantic_occurrences(root)
+    snapshot = read_repository_snapshot(root)
+    semantic = repository_semantic_occurrences(root, snapshot)
     explicit_id = data.get("id") is not None
     bid = canonical_id(data["id"]) if explicit_id else next_id(root, args.prefix, semantic)
     # OV-3 守卫：显式传 id 时才校验（next_id 自动生成的号必然合法、必然不重，不需要重复查）。
@@ -1065,54 +1221,35 @@ def cmd_add(args):
     time_str = args.time or datetime.datetime.now().strftime("%H:%M")
     change = data.get("change") or detect_change(root)
 
-    # T2 守卫：挂原始用户参数（写盘前），不是 join 后的行字符串——顺序上必须在
-    # ensure_file（会落盘建头部文件）之前，拒绝时不留任何新文件/新行残留。
-    _reject_cell_unsafe(data["module"], "module")
-    _reject_cell_unsafe(data["summary"], "summary")
-    _reject_cell_unsafe(change, "change")
-    _reject_cell_unsafe(data.get("batch"), "batch")
-    _reject_cell_unsafe(time_str, "time")
-    # [impl-review-fix] FIX-6（C7 amendment + 领域镜 F4）：title 会原样拼进块头
-    # `## {id}: {title}`（BLOCK_TMPL），source 会原样拼进新建文件头部 `> 来源：{source}`
-    # 行（HEADER_TMPL，仅当日文件不存在时才建）——两者此前都没挂守卫，含换行会分别腐蚀
-    # block_ranges() 的块头正则、污染文件头结构。挂在 ensure_file（首次落盘点）之前，
-    # 与上面几个字段同一批 fail-closed，拒绝时不留任何新文件/新行残留。
-    _reject_cell_unsafe(data.get("title"), "title")
-    _reject_cell_unsafe(data.get("source"), "source")
-
-    path = ensure_file(root, date, data.get("source"))
+    _reject_line_unsafe(data.get("title"), "title")
+    _reject_line_unsafe(data.get("source"), "source")
 
     docs = normalize_doc_paths(data.get("doc"))
     if not docs:
         docs = auto_default_doc(root, change)  # 显式 doc 优先；仅在为空时才尝试自动关联
     validate_doc_paths(root, docs)
 
-    with open(path, encoding="utf-8") as f:
-        lines = f.readlines()
-    sec = split_sections(lines)
-    if sec is None:
-        _die("文件结构异常：找不到状态总览表")
-
-    row = (f"| {bid} | `{data['module']}` | {data['summary']} | {data['priority']} | "
-           f"{status} | {time_str} | {change or '-'} | {data.get('batch', '')} |\n")
-    lines.insert(sec["rows_end"], row)
-
-    block = BLOCK_TMPL.format(
-        id=bid, title=data.get("title") or data["summary"],
-        module=data["module"], priority=data["priority"], status=status,
-        doc_block=render_doc_block(docs),
-        phenomenon=data["phenomenon"],
-        rootcause=data.get("rootcause", "").strip() or "<待分析>",
-        fix=_as_list(data.get("fix")), impact=data.get("impact", "<待评估>"),
-    )
-    extra = data.get("optional") or {}
-    for k, v in extra.items():
-        block += f"\n**{k}**：{v}\n"
-    if not block.endswith("\n"):
-        block += "\n"
-    lines.append(block)
-
-    atomic_write(path, "".join(lines))
+    path = ensure_file(root, date, data.get("source"))
+    item = {
+        "module": data["module"], "summary": data["summary"], "priority": data["priority"],
+        "status": status, "time": time_str, "change": change or None,
+        "batch": data.get("batch") or None,
+    }
+    if os.path.exists(path):
+        document = next(document for pool, candidate, _rel, document in snapshot
+                        if pool == "bug" and os.path.realpath(candidate) == os.path.realpath(path))
+        model = dict(document["model"] or {
+            "schema": 1, "pool": "bug", "mode": "overlay", "items": {},
+        })
+        model["items"] = dict(model["items"])
+        model["items"][bid] = item
+        body = document["body"] + _new_bug_block(bid, data, docs, document["eol"])
+        rendered = _render_recorder_document(document, model, body)
+    else:
+        model = {"schema": 1, "pool": "bug", "mode": "canonical", "items": {bid: item}}
+        body = _new_bug_body(date, data.get("source"), bid, data, docs)
+        rendered = _canonical_document(model, body)
+    atomic_write_bytes(path, rendered)
     print(json.dumps({"id": bid, "file": os.path.relpath(path, root), "status": status,
                       "time": time_str, "change": change or None}, ensure_ascii=False))
 
@@ -1125,54 +1262,57 @@ def cmd_set_status(args):
     if new not in STATUS_CODES:
         _die(f"状态码非法：{new}")
 
-    # [impl-review-fix] FIX-1（A-F1 PoC）：evidence/reason/date 会被原样拼进历史行
-    # `> {date} 状态：{old} → {new}（{note}）`，此前未挂守卫——含换行的 reason/evidence
-    # （例如引用一段 markdown、恰好含独立的 `---` 行）会被下面 `block_ranges()` 在注入点
-    # 截断真实块，`scan` 返回 `problems: []` 完全测不出（静默腐蚀）。挂在写盘前的原始
-    # 入口参数上，拒 `|`/换行即可同时杀死块注入和静默截断两个 PoC——两者都要求
-    # reason/evidence/date 含换行。
-    _reject_cell_unsafe(args.evidence, "evidence")
-    _reject_cell_unsafe(args.reason, "reason")
-    _reject_cell_unsafe(args.date, "date")
+    _reject_line_unsafe(args.evidence, "evidence")
+    _reject_line_unsafe(args.reason, "reason")
+    _reject_line_unsafe(args.date, "date")
 
-    path, lines, sec, rows = _find_row_file(root, args.id)
-
-    old = rows[args.id]["cells"][4]
-    blocks = block_ranges(lines)
-    if args.id not in blocks:
-        _die(f"找到表行但缺详细块：{args.id}（表↔块不一致，请先修）")
-    b_start, b_end = blocks[args.id]
+    path, document, raw_id, item = _find_item_document(root, args.id, "bug")
+    if document["marker_problems"]:
+        _frontmatter_error(
+            f"file={path} marker 结构非法", document["marker_problems"][0],
+            "修正 marker 后重试",
+        )
+    canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
+    old = item["status"]
+    frontmatter_owned = bool(document["model"] and canonical in document["model"]["items"])
+    if not frontmatter_owned:
+        b_start, b_end = _legacy_block_range(document, raw_id, path)
+    else:
+        if canonical not in document["marker_blocks"]:
+            _frontmatter_error(
+                f"file={path} marker block 缺失", f"id={canonical}", "修正 marker 后重试",
+            )
+        b_start, b_end = document["marker_blocks"][canonical]
 
     # 门禁
     if new == "FIXED":
         if not args.evidence:
             _die("置为 FIXED 必须提供 --evidence（commit hash 或 change 名）")
-        if not _has_rootcause(lines, b_start, b_end):
+        if not _has_rootcause(document["lines"], b_start, b_end):
             _die("置为 FIXED 前必须先补全『根因』（当前为空/占位符）")
     if new == "WONTFIX" and not args.reason:
         _die("置为 WONTFIX 必须提供 --reason（不修的理由）")
 
-    # 1) 更新状态总览表的状态列
-    cells = rows[args.id]["cells"]
-    cells[4] = new
-    lines[rows[args.id]["line"]] = "| " + " | ".join(cells) + " |\n"
-
-    # 2) 更新详细块属性表的『状态』行
-    for i in range(b_start, b_end):
-        if re.match(r"\|\s*状态\s*\|", lines[i]):
-            lines[i] = f"| 状态 | {new} |\n"
-            break
-
-    # 3) 追加状态变更历史（append-only，不删旧）
     note = args.evidence or args.reason or ""
-    hist = f"> {today_str(args.date)} 状态：{old} → {new}" + (f"（{note}）" if note else "") + "\n"
-    insert_at = b_end
-    while insert_at > b_start and lines[insert_at - 1].strip() == "":
-        insert_at -= 1
-    lines.insert(insert_at, hist)
-
-    atomic_write(path, "".join(lines))
-    print(json.dumps({"id": args.id, "old": old, "new": new,
+    hist = f"> {today_str(args.date)} 状态：{old} → {new}" + (f"（{note}）" if note else "")
+    eol = document["eol"]
+    history = hist.encode("utf-8") + eol
+    item["status"] = new
+    model = dict(document["model"] or {
+        "schema": 1, "pool": "bug", "mode": "overlay", "items": {},
+    })
+    model["items"] = dict(model["items"])
+    model["items"][canonical] = item
+    if not frontmatter_owned:
+        insertions = {
+            b_start: (f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol,),
+            b_end: (history, f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol),
+        }
+    else:
+        insertions = {b_end - 1: (history,)}
+    body = _splice_body_lines(document, insertions)
+    atomic_write_bytes(path, _render_recorder_document(document, model, body))
+    print(json.dumps({"id": canonical, "old": old, "new": new,
                       "file": os.path.relpath(path, root)}, ensure_ascii=False))
 
 
@@ -1202,31 +1342,46 @@ def cmd_triage(args):
     root = repo_root(args.root)
     batch = getattr(args, "批次")
 
-    path, lines, sec, rows = _find_row_file(root, args.id)
-
-    cells = rows[args.id]["cells"]
-    old_status = cells[4]
+    path, document, raw_id, item = _find_item_document(root, args.id, "bug")
+    if document["marker_problems"]:
+        _frontmatter_error(
+            f"file={path} marker 结构非法", document["marker_problems"][0],
+            "修正 marker 后重试",
+        )
+    canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
+    old_status = item["status"]
     open_untriaged = set(STATUS_CODES) - {"FIXED", "WONTFIX", "PROPOSED"}
     new_status = "PROPOSED" if old_status in open_untriaged else old_status
-
-    _reject_cell_unsafe(batch, "batch")
-    cells[4] = new_status
-    while len(cells) < 8:  # 旧格式（无批次列）行防御式补齐，不越界写 cells[7]
-        cells.append("")
-    cells[7] = batch
-    lines[rows[args.id]["line"]] = "| " + " | ".join(cells) + " |\n"
-
+    item["status"] = new_status
+    item["batch"] = batch or None
+    model = dict(document["model"] or {
+        "schema": 1, "pool": "bug", "mode": "overlay", "items": {},
+    })
+    model["items"] = dict(model["items"])
+    model["items"][canonical] = item
+    eol = document["eol"]
+    history = ()
     if new_status != old_status:
-        blocks = block_ranges(lines)
-        if args.id in blocks:
-            b_start, b_end = blocks[args.id]
-            for i in range(b_start, b_end):
-                if re.match(r"\|\s*状态\s*\|", lines[i]):
-                    lines[i] = f"| 状态 | {new_status} |\n"
-                    break
-
-    atomic_write(path, "".join(lines))
-    print(json.dumps({"id": args.id, "old_status": old_status, "new_status": new_status,
+        history = (
+            f"> {today_str()} 状态：{old_status} → {new_status}".encode("utf-8") + eol,
+        )
+    frontmatter_owned = bool(document["model"] and canonical in document["model"]["items"])
+    if not frontmatter_owned:
+        b_start, b_end = _legacy_block_range(document, raw_id, path)
+        insertions = {
+            b_start: (f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol,),
+            b_end: (*history, f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol),
+        }
+    else:
+        if canonical not in document["marker_blocks"]:
+            _frontmatter_error(
+                f"file={path} marker block 缺失", f"id={canonical}", "修正 marker 后重试",
+            )
+        _b_start, b_end = document["marker_blocks"][canonical]
+        insertions = {b_end - 1: history} if history else {}
+    body = _splice_body_lines(document, insertions)
+    atomic_write_bytes(path, _render_recorder_document(document, model, body))
+    print(json.dumps({"id": canonical, "old_status": old_status, "new_status": new_status,
                       "batch": batch, "file": os.path.relpath(path, root)}, ensure_ascii=False))
 
 
@@ -1347,7 +1502,7 @@ def main():
     s.add_argument("--time", help="覆盖记录时间 HH:MM（默认当前时刻）")
     s.set_defaults(func=cmd_add)
 
-    s = sub.add_parser("set-status", help="回写状态（双写 + 门禁 + 追加历史）")
+    s = sub.add_parser("set-status", help="更新 frontmatter 状态（门禁 + 追加历史）")
     s.add_argument("--id", required=True)
     s.add_argument("--to", required=True, help="目标状态码")
     s.add_argument("--evidence", help="commit hash / change 名（FIXED 必填）")
@@ -1360,7 +1515,7 @@ def main():
     s.add_argument("--批次", dest="批次", required=True, help="批次名（清理 change 名）")
     s.set_defaults(func=cmd_triage)
 
-    s = sub.add_parser("scan", help="列出 bug + 表↔块一致性自检")
+    s = sub.add_parser("scan", help="列出 bug + dual-reader/marker 一致性自检")
     s.add_argument("--status", help="按状态码过滤")
     s.add_argument("--change", help="按关联 change（来源）过滤")
     s.add_argument("--批次", dest="批次", help="按批次过滤")
@@ -1384,8 +1539,6 @@ def main():
         else:
             output = io.StringIO()
             with recorder_lock(args.root, args.cmd), redirect_stdout(output):
-                if args.cmd in {"set-status", "triage"}:
-                    repository_semantic_occurrences(args.root)
                 args.func(args)
             sys.stdout.write(output.getvalue())
     except ValueError as exc:

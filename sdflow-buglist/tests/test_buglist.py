@@ -165,15 +165,12 @@ class TestAutoDefaultDoc:
 
 class TestBatchColumn:
     def test_add_writes_批次_column_at_end(self, tmp_path):
-        payload = base_payload()
+        payload = base_payload(batch="batch-1")
         proc = run_add(tmp_path, payload)
         assert proc.returncode == 0, proc.stderr
         content = _buglist_content(tmp_path)
-        header = [l for l in content.splitlines() if l.startswith("| ID |")][0]
-        assert header.rstrip().endswith("| 批次 |")
-        row = [l for l in content.splitlines() if l.startswith("| B1 ")][0]
-        cells = [c.strip() for c in row.strip().strip("|").split("|")]
-        assert len(cells) == 8 and cells[7] == ""
+        assert '"batch":"batch-1"' in content
+        assert "| ID |" not in content and "| B1 |" not in content
 
     def test_scan_old_7col_file_batch_none(self, tmp_path):
         """旧格式（无批次列，7 列）文件 scan 不报错，batch 读为 None（I8 向后兼容）。"""
@@ -211,20 +208,9 @@ class TestBatchColumn:
         assert result["problems"] == []
 
     def test_scan_reads_batch_when_present(self, tmp_path):
-        payload = base_payload()
+        payload = base_payload(batch="batch-1")
         proc = run_add(tmp_path, payload)
         assert proc.returncode == 0, proc.stderr
-        # 手动把批次列写入刚新增的行（cmd_add 默认留空）
-        path = tmp_path / "openspec" / "issues" / "buglist"
-        files = list(path.glob("*-buglist.md"))
-        content = files[0].read_text(encoding="utf-8")
-        lines = content.splitlines(keepends=True)
-        for i, ln in enumerate(lines):
-            if ln.startswith("| B1 "):
-                cells = [c.strip() for c in ln.strip().strip("|").split("|")]
-                cells[7] = "batch-1"
-                lines[i] = "| " + " | ".join(cells) + " |\n"
-        files[0].write_text("".join(lines), encoding="utf-8")
         scan_proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "scan", "--json"],
             capture_output=True, text=True,
@@ -236,31 +222,21 @@ class TestBatchColumn:
 
 
 class TestCellSafety:
-    """T2：状态总览表按 `|` 切列，字段值含 ASCII `|` 或换行会破坏列对齐（静默腐蚀）。
-    cmd_add 入口必须在写盘前 fail-closed 拒绝——不能只在 `" | ".join(cells)` 拼接后的
-    行字符串上检测（那时 `|` 已被 split 消费，测不出用户传入的原始违规字符，是假覆盖）。"""
+    """frontmatter JSON 索引允许 pipe/换行；Markdown 单行结构仍 fail-closed。"""
 
-    def test_add_rejects_pipe_in_summary(self, tmp_path):
+    def test_add_round_trips_pipe_in_summary(self, tmp_path):
         payload = base_payload(summary="A | B 都坏了")
         proc = run_add(tmp_path, payload)
-        assert proc.returncode != 0
-        assert "ERROR" in proc.stderr
-        d = tmp_path / "openspec" / "issues" / "buglist"
-        if d.exists():
-            for f in d.glob("*-buglist.md"):
-                assert "A | B" not in f.read_text(encoding="utf-8")
+        assert proc.returncode == 0, proc.stderr
+        assert _scan_json(tmp_path, [])["bugs"][0]["summary"] == "A | B 都坏了"
 
-    def test_add_rejects_newline_in_module(self, tmp_path):
+    def test_add_round_trips_newline_in_module(self, tmp_path):
         payload = base_payload(module="foo.c:1\n| EVIL | ROW |")
         proc = run_add(tmp_path, payload)
-        assert proc.returncode != 0
-        assert "ERROR" in proc.stderr
-        d = tmp_path / "openspec" / "issues" / "buglist"
-        if d.exists():
-            for f in d.glob("*-buglist.md"):
-                assert "EVIL" not in f.read_text(encoding="utf-8")
+        assert proc.returncode == 0, proc.stderr
+        assert _scan_json(tmp_path, [])["bugs"][0]["module"] == "foo.c:1\n| EVIL | ROW |"
 
-    def test_triage_rejects_pipe_in_batch(self, tmp_path):
+    def test_triage_round_trips_pipe_in_batch(self, tmp_path):
         """C1 BLOCKER 补漏：triage 也把批次写进总览管道表 cells[7]，同款守卫必须覆盖，
         不能只在 add 入口挡。传入含 `|` 的批次值应 fail-closed，且该行 cells[7] 不被腐蚀。"""
         _write_mixed_file(tmp_path / "openspec" / "issues" / "buglist", "2026-01-01", [
@@ -271,10 +247,11 @@ class TestCellSafety:
              "--id", "B1", "--批次", "evil|key"],
             capture_output=True, text=True,
         )
-        assert proc.returncode != 0
-        assert "ERROR" in proc.stderr
+        assert proc.returncode == 0, proc.stderr
+        assert _scan_json(tmp_path, [])["bugs"][0]["batch"] == "evil|key"
         content = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(encoding="utf-8")
-        assert "evil|key" not in content
+        assert '"batch":"evil|key"' in content
+        assert "| B1 | `foo.c:1` | fixture | P2 | OPEN | 10:00 | x |  |" in content
 
     def test_add_rejects_newline_in_title(self, tmp_path):
         """[impl-review-fix] FIX-6（C7 amendment + 领域镜 F4）：显式 title 会原样拼进块头
@@ -327,7 +304,7 @@ class TestExplicitIdGuard:
         assert proc2.returncode != 0
         assert "ERROR" in proc2.stderr
         content = _buglist_content(tmp_path)
-        assert content.count("| B1 ") == 1
+        assert content.count("    B1: ") == 1
 
     def test_add_rejects_multiletter_prefix_id(self, tmp_path):
         """代码库 ID 识别（`_ids_in_files` 的 `\\| *([A-Z]\\d+) *\\|`、`ID_RE = \\b([A-Z])(\\d+)\\b`）
@@ -655,7 +632,8 @@ class TestTriage:
         result = _triage(tmp_path, "B1", "clear-foo")
         assert result["new_status"] == "PROPOSED"
         content = _buglist_content(tmp_path)
-        assert "| 状态 | PROPOSED |" in content
+        assert '"status":"PROPOSED"' in content
+        assert "| 状态 | PROPOSED |" not in content
         scanned = _scan_json(tmp_path, [])
         assert scanned["problems"] == []
 
@@ -698,7 +676,8 @@ class TestSetStatus:
         assert result["old"] == "OPEN"
         assert result["new"] == "WONTFIX"
         content = _buglist_content(tmp_path)
-        assert "| 状态 | WONTFIX |" in content
+        assert '"status":"WONTFIX"' in content
+        assert "| 状态 | WONTFIX |" not in content
         assert "不复现，不值得修" in content
         scanned = _scan_json(tmp_path, [])
         assert scanned["problems"] == []
@@ -712,7 +691,8 @@ class TestSetStatus:
         assert result["old"] == "OPEN"
         assert result["new"] == "IN_PROGRESS"
         content = _buglist_content(tmp_path)
-        assert "| 状态 | IN_PROGRESS |" in content
+        assert '"status":"IN_PROGRESS"' in content
+        assert "| 状态 | IN_PROGRESS |" not in content
         scanned = _scan_json(tmp_path, [])
         assert scanned["problems"] == []
 
@@ -733,12 +713,12 @@ class TestSetStatusCellSafety:
         assert "ERROR" in result.stderr
         assert _buglist_content(tmp_path) == before
 
-    def test_set_status_rejects_pipe_in_reason(self, tmp_path):
+    def test_set_status_allows_pipe_in_reason(self, tmp_path):
         proc = run_add(tmp_path, base_payload())
         assert proc.returncode == 0, proc.stderr
         result = _set_status_raw(tmp_path, "B1", "WONTFIX", "--reason", "a | b")
-        assert result.returncode != 0
-        assert "ERROR" in result.stderr
+        assert result.returncode == 0, result.stderr
+        assert "a | b" in _buglist_content(tmp_path)
 
     def test_set_status_rejects_newline_in_evidence(self, tmp_path):
         proc = run_add(tmp_path, base_payload())
@@ -840,6 +820,13 @@ def _write_mixed_file(dir_path, date, rows):
             f"| {r['id']} | `foo.c:1` | fixture | P2 | {r['status']} | 10:00 | "
             f"{r.get('change') or '-'} | {r.get('batch', '')} |\n"
         )
+    for r in rows:
+        lines.extend([
+            f"\n---\n\n## {r['id']}: fixture\n\n",
+            "| 属性 | 值 |\n|------|------|\n",
+            f"| 状态 | {r['status']} |\n\n",
+            "**根因**：fixture rootcause\n",
+        ])
     (dir_path / f"{date}-buglist.md").write_text("".join(lines), encoding="utf-8")
 
 

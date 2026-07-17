@@ -719,7 +719,7 @@ def parse_recorder_document(raw, expected_pool):
         if count != 1:
             _frontmatter_error("legacy 总览区域非法", f"count={count}")
         result = {"format": "legacy", "model": None, "raw": raw, "body": body,
-                  "eol": eol, "bom": bom, "namespace_span": None}
+                  "eol": eol, "bom": bom, "envelope": envelope, "namespace_span": None}
     else:
         start, end = span
         namespace = envelope[start:end]
@@ -731,7 +731,8 @@ def parse_recorder_document(raw, expected_pool):
         if count != expected_count:
             _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
         result = {"format": model["mode"], "model": model, "raw": raw, "body": body,
-                  "eol": eol, "bom": bom, "namespace_span": (start, end)}
+                  "eol": eol, "bom": bom, "envelope": envelope,
+                  "namespace_span": (start, end)}
     lines = body.decode("utf-8").splitlines(keepends=True)
     section = split_sections(lines)
     result.update({
@@ -773,6 +774,27 @@ def atomic_write(path, text):
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
+        try:
+            mode = os.stat(path).st_mode & 0o777
+        except FileNotFoundError:
+            mode = 0o644
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def atomic_write_bytes(path, data):
+    """原子替换 dated recorder bytes，且保持既有 POSIX mode bits。"""
+    if not isinstance(data, bytes):
+        raise TypeError("atomic_write_bytes data must be bytes")
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
         try:
             mode = os.stat(path).st_mode & 0o777
         except FileNotFoundError:
@@ -1013,6 +1035,16 @@ def _reject_cell_unsafe(value, field):
         return
     if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
         _die(f"字段 {field} 含非法字符（| 或换行），会破坏总览表列对齐：{value!r}")
+
+
+def _reject_line_unsafe(value, field):
+    if value is None:
+        return
+    if any(char in str(value) for char in ("\r", "\n", "\0")):
+        _frontmatter_error(
+            f"字段 {field} 非法", f"CR/LF/NUL 不能写入 Markdown 单行结构：{value!r}",
+            f"为 {field} 提供不含 CR/LF/NUL 的单行值后重试",
+        )
 
 
 def _reject_batch_key_unsafe(key):

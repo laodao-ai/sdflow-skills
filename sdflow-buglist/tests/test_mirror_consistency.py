@@ -62,7 +62,7 @@ def _ast_no_doc(fn):
 # 各自内联一份）。mlh-p6 起 frontmatter document mechanics 升为三向共享契约；dated
 # 文件业务 scan/write 编排仍按 pool 留在各自脚本，纯 bytes/parser/renderer 必须机械等价。
 THREE_WAY = [
-    "atomic_write", "repo_root", "_reject_cell_unsafe",
+    "atomic_write", "atomic_write_bytes", "repo_root", "_reject_cell_unsafe", "_reject_line_unsafe",
     "canonical_id", "semantic_id_key", "validate_prefix", "_lock_path",
     "_read_lock_metadata", "_lock_conflict", "validate_recorder_participant",
     "_write_all", "recorder_lock", "read_repository_snapshot", "repository_semantic_occurrences",
@@ -92,6 +92,10 @@ TWO_WAY = [
     "_ids_in_files", "_find_row_file",
     "_id_sort_key", "validate_doc_paths", "all_ids",
     "next_id", "_die", "_load_json",
+    "_canonical_document", "_render_recorder_document",
+    "_display_title", "_summary_blockquote", "_escape_user_markers",
+    "_canonical_from_key", "_find_item_document", "_legacy_block_range",
+    "_splice_body_lines",
 ]
 
 
@@ -179,6 +183,8 @@ def test_frontmatter_constant_consistency():
     assert BUG.CANONICAL_ID_RE.flags == TODO.CANONICAL_ID_RE.flags == ISS.CANONICAL_ID_RE.flags
     assert BUG.UTF8_BOM == TODO.UTF8_BOM == ISS.UTF8_BOM
     assert BUG.RECORDER_POOL_CONFIG == TODO.RECORDER_POOL_CONFIG == ISS.RECORDER_POOL_CONFIG
+    assert BUG._RESERVED_MARKER_LINE_RE.pattern == TODO._RESERVED_MARKER_LINE_RE.pattern
+    assert BUG._RESERVED_MARKER_LINE_RE.flags == TODO._RESERVED_MARKER_LINE_RE.flags
 
 
 def test_helper_deletion_is_not_silently_swallowed():
