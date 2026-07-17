@@ -1,6 +1,6 @@
 # workflow 成本优化 实施路线图
 
-> 版本：v4（2026-07-07，进度同步：**P4（批次策略）已交付并归档**——change `batch-triage-strategy` merged `725caf3`；剩 P2/P3 待做）
+> 版本：v5（2026-07-16，完成态对账：P2 核心随 `add-codex-host-support` 交付；token 验收与 P2b 仍待闭合）
 > 版本：v3（2026-07-06，P0 基线收口：`sdflow-retro` 18-change 实测 → P2 墙钟杠杆证伪、重定位 token play、Leg3 提为墙钟主杠杆、砍镜闸门定案）
 > 版本：v2（2026-07-06，吸收 plan-eng-review 交叉审：codex 冷审 30 条去重后 9 组采纳）
 >
@@ -17,7 +17,7 @@
 |---|---|---|---|
 | **P1** · code-review 无逻辑面白名单免 Step2 | Leg 1 | —（已交付） | ✅ 三类形状免多镜 + 反误免可测（trivial_shape.py + 34 测试，已 merge） |
 | **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | ✅ **已收口**（`sdflow-retro` 全 18-change 聚合 + 收益门槛定案，见下「阶段 0」+ requirements §5）；照妖镜结论：spec-review 43%（人类门主导）、code-review 5%、**P2 墙钟证伪→改 token play** |
-| **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | `model-tiers.md` 升 3档×运行时矩阵、SKILL fan-out **报档位不写死模型**、机械镜实降 light（**主收益=省 token**，墙钟**不回归**即可，见 D11）、fail-closed；含 P2b 后台小尾巴 |
+| **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | ◐ **核心已交付**（`add-codex-host-support` / `a09afb0`）：双机队矩阵、resolver、两审档位注入与 fail-closed；待 token/墙钟验收证据 + P2b 后台小尾巴 |
 | **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
 | **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | —（已交付） | ✅ consolidation-plan 重划 + 大扫除批 3 硬 MUST + 聚合上限 + issue 级 Leg1 路径守卫（change `batch-triage-strategy` merged `725caf3`；规则**本仓-local**、发布 deferred，见阶段 4 状态段） |
 
@@ -78,6 +78,10 @@ P0 基线（判机械镜是否在关键路径、验收有基准）。
 
 ### 目标
 把 `model-tiers.md` 从**单列 3 档**（只有 canonical 缺省）升成 **`档位 × 运行时` 矩阵**，并让 SKILL fan-out **报档位、不写死模型名**——机械镜实降到 light 档（**主收益 = 省 token**；墙钟**不回归**即可，P0 基线证伪其墙钟杠杆，见 D11），judgment 镜/裁决/门禁不动。
+
+### 状态（2026-07-16 对账）
+
+**核心实现已交付，阶段尚未验收闭合。** `add-codex-host-support` 已落双机队 `model-tiers`、`resolve-models.sh`、两评审 SKILL 的档位解析/注入与无法判宿主时 fail-loud；归档 commit 为 `a09afb0`。尚缺两类证据：①机械镜实际 token/轮下降且墙钟不回归的基线对比；②仅 spec-review→设计门段的 P2b 非阻塞 fan-out。二者闭合或显式 defer 后，P2 才可标完成并进入 P3。
 
 > **explore 挖出的真相（2026-07-06）**：机械镜（接地/历史）在 `model-tiers.md` 里**早已映射到 light**，但**无任何脚本强制**——SKILL fan-out 不带 per-镜 `model=`，Agent 子代理**继承父 session（opus）**。故"文档说 light、实际大概率跑 opus"。P2 的真实内容**不是"引入快档"，是把 advisory 档位变成强制落地**（顺带把 opus→light 的 token 省下来，这比墙钟收益更实在）。
 
@@ -173,7 +177,7 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 
 ```
   P1 (Leg1) ✅ 已交付
-  P0 (Leg2 基线/照妖镜) ──┬──▶ P2 (档位矩阵强制落地 + 机械镜降档, 含 P2b 后台小尾巴, fail-closed)
+  P0 (Leg2 基线/照妖镜) ──┬──▶ P2 (核心已交付；待 token/墙钟验收 + P2b)
                           │          │
                           │          ▼
                           └──▶ P3 (接地镜流水线, P2 后更稳)
@@ -184,4 +188,4 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 - **P2/P3 同改两评审 SKILL.md → MUST 串行**（并行 caveat #29）。
 - P4 触及 `consolidation-plan.md`/`ff-generation-constraints.md`，与 P2/P3 文件互斥 → 可与之并行。
 
-**建议次序（v4 更新，P4 已交付）：~~P4~~ ✅ 已归档 → 余 P2（档位矩阵，主收益 token）先做 → P3（流水线，调度复杂度最高，压后）**。原 v3 建议「P4 ＋ P2 并行」中的 **P4 已由 `batch-triage-strategy` 独立交付**（P0 数据把 Leg3 从「随时可做的轻策略层」提为「墙钟主杠杆」，故先落）；剩 P2/P3 走 Leg2 串行区——P2 先（档位矩阵 + 观测在手），P3 压后（先有 P2 观测/矩阵再进串行调度区，交叉审 #30）。**注意 P2/P3 同改两评审 SKILL.md，MUST 串行。**
+**建议次序（v5）：先闭合 P2 的 token/墙钟验收证据，并对 P2b 作实现或显式 defer；随后再开 P3。** P2/P3 同改两评审 SKILL.md，MUST 串行；在 P2 仍为部分完成时直接开 P3，会混淆收益归因与回归定位。

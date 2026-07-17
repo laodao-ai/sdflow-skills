@@ -23,6 +23,12 @@
 代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-01~09 + domains）。
 说明类（可删不影响执行）：[workflow/reference/](./workflow/reference/)。
 <!-- opsx-init:rules:end -->
+### 设计规则
+
+| 名称 | 文件 | 主题 |
+|---|---|---|
+| `doc-authoring` | [rules/doc-authoring.md](./rules/doc-authoring.md) | DOC-1：设计与决策文档正文只保留当前最终态；被否决方案、演进史和元教训移入附录，避免历史噪声误导后续实现与评审。 |
+
 ### spec-workflow
 
 | 名称 | 文件 | 主题 |

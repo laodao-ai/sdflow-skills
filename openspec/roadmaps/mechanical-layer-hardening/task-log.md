@@ -56,6 +56,15 @@
 
 <!-- 日志条目从这里开始，最新的放最上面 -->
 
+## 2026-07-16
+
+### [阶段 4 / 完成态对账] P4 ★组全部交付，P6 成为下一结构性端点
+- **状态**: ✅ 完成态对账
+- **实际耗时**: N/A（本条只做归档证据回写）
+- **交付证据**: 4.C `lens_metric_emit` → `bd7c05f`；4.B `maintain_scan` → `569d393`；4.D.1/2/4 reason-code validators → `6326115`。对应 T78-T82 均已回写 DONE。
+- **未完成边界**: 4.A `log_check`（T83）与 4.D.3 常量/TAG 收割（T84）仍等真实 embedded producer 契约，不以本仓当前缺样本否定目标态。
+- **下一步**: 单开 T85/P6 recorder 索引→frontmatter change；端态 A、历史表只读 dual-read 与 fail-closed YAML 范式均已确定。
+
 ## 2026-07-08
 
 ### [阶段 4 / 任务 4.C] lens_metric_emit 确定性归约器交付（SHIPPED + ARCHIVED，merge `bd7c05f`）

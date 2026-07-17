@@ -1,24 +1,24 @@
 # workflow 机械层固化 实施路线图
 
-> 版本：v1（2026-07-07）
+> 版本：v2（2026-07-16，完成态对账）
 >
 > 相关文档（全部位于 `openspec/roadmaps/mechanical-layer-hardening/`）：
 > - 需求综述：`requirements.md` · 整体设计：`design.md` · 任务日志：`task-log.md`
 
 ## 概览
 
-两腿六阶段。**Leg 1（脚本化）先行**——就绪、高 ROI、低爆炸半径，阶段 1-4 各自独立可交付、可并行（除共享文件外）。**Leg 2（去字符串化）就绪度分级**——阶段 5（S1 gate 锚）就绪但前置 ROI 评估门 + 高仪式；阶段 6（S2 recorder 索引）**north-star 不排期**，ROI 触发才起。
+两腿六阶段。**Leg 1（脚本化）主干已交付**，仅 4.A/4.D.3 等 embedded producer 契约。**Leg 2（去字符串化）**的阶段 5 已交付；阶段 6（S2 recorder 索引）端态与前置均已确定，是下一结构性端点。
 
-> **进度里程碑（2026-07-08）**：**Leg 1 高 ROI 三阶段 P1/P2/P3 全交付**（sweep / anchor-lint / determ-guards）+ **Leg 2 P5 gate 锚→frontmatter 已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`）+ **P5 尾巴 T74/T75 已清结**（change `mlh-p5-parser-cleanup`，merge `007b00d`：parser 首行 `---` 无闭合改判 absent + `unterminated` 死类别退役 + live inline 死符号删除）——机械层「脚本化」主干 + 「去字符串化」家族① 均已立且尾巴清尽。**P4（编排步下沉）已启**——4.C `lens_metric_emit` ✅ 已交付（change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge `bd7c05f`：手数信任边界机械化 + adr/0012 + 8源×2冷审），余 ★4 项（4.B/4.D.1/2/4）+ ◐2 项（4.A/4.D.3 待 embedded 契约）+ Leg 2 P6（recorder 索引，端态 A 压轴）。**目标态重评（2026-07-08）**：P4 从「按需 0/7」翻为「★5 项该做未做（4.C/4.B/4.D.1/2/4）+ ◐2 项该做待 embedded 契约（4.A/4.D.3）」，判据锚目标态非现状快照；P6 从「north-star 不排期」经端态复核**拍板 = 端态 A**（根治：迁 frontmatter 使 `｜` 腐蚀类结构上不可能；否决 B 治标；约束①历史不迁使成本≈P5 dual-read；压轴排 ★P4 后）——详见各阶段前置的目标态重评订正块 + 建议批次 todolist `mlh-p4-target-state`。
+> **进度里程碑（2026-07-16）**：Leg 1 P1/P2/P3 全交付，Leg 2 P5 gate 锚→frontmatter 及尾巴已清结。P4 ★组也已全部交付：4.C `lens_metric_emit`（`bd7c05f`）、4.B `maintain_scan`（`569d393`）、4.D.1/2/4 reason-code validators（`6326115`）。仅 4.A/4.D.3 因 embedded producer 契约未就绪而正当等待。**下一结构性端点是 P6 recorder 索引→frontmatter（T85）**；其端态 A 与历史表只读 dual-read 约束均已确定，可单开 change 进入设计。
 
 | 阶段 | 腿 | 里程碑 | 就绪度 |
 |---|---|---|---|
 | **P1** · `issues.py sweep --change X` | Leg 1 | done sweep 4 步手循环 → 一个原子子命令 | ✅ **已交付**（ca66d60） |
 | **P2** · anchor-lint 产出侧校验器 | Leg 1 | 每轮 review 手 grep+肉眼核 enum → 机验门 | ✅ **已交付**（e43460c） |
 | **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | ✅ **已交付**（a6a2adc，change `mlh-p3-determ-guards`；冷审 F5 守卫覆盖 8→14 helper） |
-| **P4** · 编排 SKILL 机械步下沉 | Leg 1 | 4.A-4.D.4 按目标态逐项脚本化 | 🔄 **进行中**（4.C ✅ 已交付 `bd7c05f`；余 ★4 项 4.B/4.D.1/2/4 + ◐2 项待 embedded 契约；批次 `mlh-p4-target-state`） |
+| **P4** · 编排 SKILL 机械步下沉 | Leg 1 | 4.A-4.D.4 按目标态逐项脚本化 | ✅ **★组已交付**（4.C `bd7c05f`；4.B `569d393`；4.D.1/2/4 `6326115`）；◐ 4.A/4.D.3 等 embedded 契约 |
 | **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` **live 解析半场**、正文提及不误判、归档 dual-read 永久保留 | ✅ **已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`；spec-review 六镜拦 1致命+3高 / impl-review 抓 2 真 bug；662 passed·dogfood CLEAN） |
-| **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发（写侧）+ 新数据可查询基底 | **端态 A 已定**（根治；约束①使成本≈P5 dual-read；压轴排 P4 后；T85） |
+| **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发（写侧）+ 新数据可查询基底 | ▶ **下一结构性端点**（端态 A 已定；历史表只读 dual-read；T85） |
 
 > 每阶段开独立 OpenSpec 变更（`implement-mechanical-layer-hardening-pN-<theme>`），归档后进下一个。
 > **并行 caveat**：阶段 1（issues.py）与阶段 3 的 recorder 部分、阶段 5 的 producer SKILL 部分**改文件集不同可并行**；但阶段 2（anchor-lint 触 spec-review/code-review SKILL）与阶段 4 的 P7/P8（同触两审 SKILL）、阶段 5（S1 也改 producer SKILL）**若同期改 SKILL.md 须串行**，开并行前先核文件集是否相交。
@@ -108,7 +108,7 @@
 ## 阶段 4 · 编排 SKILL 机械步下沉（Leg 1）
 
 > **⚠️ 目标态重评订正（2026-07-08，用户拍板）**：原「中 ROI 按痛点做子集 / 不追求全做 / 起手重评哪些当下真痛」的口径**是拿现状快照（现在痛不痛）反推目标不该做——已否决**。开发阶段应锚**目标态**（requirements §1.3 愿景「机械活归脚本，模型不再手 grep/手数/手循环」+ adr/0006 硬约束「凡机械 prose 协议 MUST 脚本化」）判「该做未做 / 可不做」。据此重评：P4 从「按需 0/7」翻成——
-> - **★ 该做未做**（目标态该做，原被快照压住）：4.C `lens_metric_emit`（**最高**，直闭 §1.2 痛点#2「手数信任边界」）· 4.B `maintain_scan`（纯机械 set-diff、每次 maintain 都跑）· 4.D.1 · 4.D.2 · 4.D.4。
+> - **★ 已交付**：4.C `lens_metric_emit` · 4.B `maintain_scan` · 4.D.1 · 4.D.2 · 4.D.4。
 > - **◐ 该做·正当排后**（**producer 契约就绪度**，非痛感）：4.A `log_check` · 4.D.3——本仓无 embedded producer 契约可 dogfood，待真实 embedded 消费仓需求再起手。
 > - 建议批次 = todolist `mlh-p4-target-state`（T78-T84；`openspec/issues/batches.md`）。排序判据 = 目标态 + producer 就绪度，**不是当下痛点**。
 
@@ -124,21 +124,21 @@
 #### 4.A `log_check.py`（P5）
 - [ ] 4.A.1 embedded-test-sop 模式 B：`log_check.py --log serial.log --rules *-log-checks.yaml` 解释器（时间窗 + `must_contain`/`must_not_contain`/`must_contain_before` + severity rollup），输出同款 PASS/FAIL 报告；保留 yaml 标「需人眼」的平台侧项给模型。
 #### 4.B `maintain_scan.py`（P6）
-- [ ] 4.B.1 maintain INDEX↔文件系统 set-diff + CLAUDE.md 过时引用 + bundle 陈旧告警只读报告；保留「新 spec 归哪组 / 是否修复」给模型/人。
+- [x] 4.B.1 maintain INDEX↔文件系统 set-diff + CLAUDE.md 过时引用 + bundle 陈旧告警只读报告；保留「新 spec 归哪组 / 是否修复」给模型/人。〔✅ `mlh-p4-maintain-scan`，`569d393`〕
 #### 4.C `lens_metric_emit.py`（P7）
-- [x] 4.C.1 吃结构化 findings（每条带命中镜集 + 裁决 + sev）→ 归约出格式/字段/enum 正确的 lens-metric 锚行 + 计数；把「数值一致性信任边界」从手数收敛成脚本归约；保留去重 + 对抗裁决给模型。〔✅ 已交付，change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge `bd7c05f`：`lens_metric_emit.py` 186 行 stdlib + 契约 fold/input-schema 机读块 + 四方单一源守卫 + 两审 SKILL 落锚步；adr/0012；spec-review 8 源/code-review 8 源冷审 F1 高危订正；39+100 passed·dogfood CLEAN。详见 task-log。**issues 池闭环**：目标态重评批 `mlh-p4-target-state` 的 T78（=本 4.C）已回填 DONE（evidence `bd7c05f`，2026-07-09 对账）——该批 ★ 组余 T79(4.B)/T80/T81/T82(4.D.1/2/4)〕
+- [x] 4.C.1 吃结构化 findings（每条带命中镜集 + 裁决 + sev）→ 归约出格式/字段/enum 正确的 lens-metric 锚行 + 计数；把「数值一致性信任边界」从手数收敛成脚本归约；保留去重 + 对抗裁决给模型。〔✅ 已交付，change `implement-mechanical-layer-hardening-p4-lens-metric-emit`，merge `bd7c05f`：`lens_metric_emit.py` 186 行 stdlib + 契约 fold/input-schema 机读块 + 四方单一源守卫 + 两审 SKILL 落锚步；adr/0012；spec-review 8 源/code-review 8 源冷审 F1 高危订正；39+100 passed·dogfood CLEAN。详见 task-log。目标态重评批的 T78-T82 均已闭合。〕
 #### 4.D 小校验器组（P8）
-- [ ] 4.D.1 outside-voice 复用守卫（锚 mode + 时间戳 + 结构三判 → reason_code 退出码）。
-- [ ] 4.D.2 HR-TG 交集判定（TG 集 ∩ HR-TG 子集 → hit 列表/none + 规范锚串，清单从 trigger-catalog 单一源读；`tg02_hit` 已有先例）。
+- [x] 4.D.1 outside-voice 复用守卫（锚 mode + 时间戳 + 结构三判 → reason_code 退出码）。〔✅ `mlh-p4-reason-code-validators`，`6326115`〕
+- [x] 4.D.2 HR-TG 交集判定（TG 集 ∩ HR-TG 子集 → hit 列表/none + 规范锚串，清单从 trigger-catalog 单一源读；`tg02_hit` 已有先例）。〔✅ `mlh-p4-reason-code-validators`，`6326115`〕
 - [ ] 4.D.3 SOP 模式 A 源码常量/TAG 收割（正则 emit 常量表 name/值/来源:行）。
-- [ ] 4.D.4 roadmap Review 处置对账（parse task-log「Review 处置」小节，断言无「未处置」状态）。
+- [x] 4.D.4 roadmap Review 处置对账（parse task-log「Review 处置」小节，断言无「未处置」状态）。〔✅ `mlh-p4-reason-code-validators`，`6326115`〕
 
 ### 验收标准
-- [ ] 所做子项各有脚本 + 测试；判断部分显式保留；fail-closed。
-- [ ] 未做的子项在 task-log 留「本轮不做 + 理由」痕迹（不静默漏）；理由须是**目标态口径**（如「4.A/4.D.3：缺 embedded producer 契约、待就绪」），**不得**用「当下不痛」这类现状快照口径搪塞。
+- [x] 所做子项各有脚本 + 测试；判断部分显式保留；fail-closed。
+- [x] 未做的子项在 task-log 留「本轮不做 + 理由」痕迹（不静默漏）；4.A/4.D.3 的理由是 embedded producer 契约未就绪。
 
 ### 交付物
-- 按痛点选定的中 ROI 脚本子集 + 测试。
+- ★组五项脚本与测试均已交付；◐组两项等待 embedded producer 契约。
 
 ---
 
@@ -182,7 +182,7 @@
 
 ---
 
-## 阶段 6 · 家族② recorder 索引 → frontmatter（Leg 2，north-star 不排期）
+## 阶段 6 · 家族② recorder 索引 → frontmatter（Leg 2，下一结构性端点）
 
 ### 前置条件
 - [x] ~~**ROI 触发器满足**（被动，不主动排期）：「recorder 持续出腐蚀 bug」**或**「想在数据上建工具」（ADR 0010 已决 defer 判据）~~ — **已被端态复核取代（2026-07-08）**：不再等 ROI 触发器，改以「根治 + 达成目标」目标态判据直接选定端态 A（见下方 ✅ 端态决策块）。ADR 0010 原「defer/触发才起」= 快照妥协、本次推翻。可查询基底原是触发器②、现降为 A 的附赠而非前置。
@@ -191,7 +191,7 @@
 > - **端态 A（选定，迁 frontmatter）**：YAML 原生转义 `｜`/换行 → `｜` 腐蚀类**结构上不可能（治本）**，不是被拦住。删**写侧**机器（`_reject_cell_unsafe` 腐蚀守卫 + `_render_item_table` + 双写的表半场）。**约束①「历史文档不迁」使成本骤降**——变成 P5 gate-frontmatter 已 ship 的成熟范式：新写 frontmatter + 历史表 dual-read 永久冻结只读、**零数据改写**。历史读 `parse_table_rows` 冻结保留（同 P5 归档读半场）。
 > - **端态 B（否决，reject-over-restructure）**：写入即 fail-closed 拒 `｜`/换行——**治标**：脆弱表基底不变、永久架守卫；且守卫只守脚本写，**人手编辑数据文件塞 `｜` 直接绕过**（arity 检测仅兜列数变化）。ADR 0010 原选此 = 快照妥协，本次目标态复核推翻。
 > - **判据落定**：用户要「根治」→ B 按定义治标出局（永久守一个没修好的基底）；「删整类解析机器」从非能 100% 兑现的字面目标（frontmatter 仍解析、历史读半场永久保留），**根治的真实达成 = 「未来腐蚀结构上不可能」，A 100% 达成**。
-> - **排期**：A 是全 roadmap 最大 change（改 3 recorder 写路径 + consumer dual-read 读 + 重写测试套），**压轴排 ★ P4 之后**（4.C 等 ROI 更清晰、隔离项先做）；落地复用 P5 的 fail-closed YAML + dual-read 范式。
+> - **排期**：A 是全 roadmap 最大 change（改 3 recorder 写路径 + consumer dual-read 读 + 重写测试套）；★P4 已于 2026-07-16 对账确认交付，前置已满足。落地复用 P5 的 fail-closed YAML + dual-read 范式。
 
 ### 目标
 - recorder 索引层（ID/module/summary/priority/status/time/change/batch）从 markdown 总览表位置切列迁 YAML frontmatter 索引 + prose 块；腐蚀类蒸发 + 删 recorder ~40 处/文件表解析与双写一致机械。
@@ -203,7 +203,7 @@
 - [ ] 新写记录字段含 `|`/换行的腐蚀类结构上不可能（YAML 转义）；写侧 `_reject_cell_unsafe`/`_render_item_table`/双写表半场删除；历史表 dual-read 冻结只读正确识别（同 P5 归档读半场）；LLM 写坏 frontmatter → fail-closed 不静默。
 
 ### 交付物
-- （north-star，触发后交付）
+- 待单开 T85/P6 change 交付。
 
 ---
 
@@ -220,7 +220,7 @@ Leg 1（脚本化，先行、多数可并行）
 Leg 2（去字符串化，就绪度分级）
   P5 家族① gate 锚 → frontmatter ◀── 前置：ROI门 + 核铺设路径 + P2 就绪
                     │
-  P6 家族② recorder 索引 → frontmatter ◀── north-star，ROI 触发才起（不排期）
+  P6 家族② recorder 索引 → frontmatter ◀── 下一结构性端点（端态/前置已定）
 
 并行红线：凡同期改同一 SKILL.md（P2/P4'/P5 都可能触两审或 producer SKILL）→ 串行；改文件集不相交才并行。
 ```
@@ -234,7 +234,7 @@ Leg 2（去字符串化，就绪度分级）
 | 阶段 3 | 3.A（镜像测试）/ 3.B（config·batch lint） | 各是；可合批 |
 | 阶段 4 | 4.A-4.D（P5-P8） | 每子项各一次；按痛点取子集 |
 | 阶段 5 | 5.A/5.B/5.C（迁移+dual-read+**仅退役 live 解析半场**） | 一次大 change（高仪式；退役只删 live 侧、归档读永久保留，冷审 F2） |
-| 阶段 6 | north-star | 触发后另 explore |
+| 阶段 6 | 大型结构变更 | 单开 T85/P6 change |
 
 ## 附录 C · 未来 OpenSpec 变更映射
 
@@ -245,7 +245,7 @@ Leg 2（去字符串化，就绪度分级）
 | 阶段 3 | `implement-mechanical-layer-hardening-p3-determ-guards` | recorder skills 自包含 + config schema |
 | 阶段 4 | `implement-mechanical-layer-hardening-p4-<子项>` | 各 skill 自包含 |
 | 阶段 5 | `implement-mechanical-layer-hardening-p5-gate-frontmatter` | spec-workflow（ship-gate 锚契约 MODIFIED） |
-| 阶段 6 | （north-star，触发后命名） | recorder skills 自包含 |
+| 阶段 6 | 待单开 T85/P6 change | recorder skills 自包含 |
 
 每个实施变更的 proposal 引用本 `roadmap.md` 对应阶段作背景，design 复用 `design.md`，规范增量扩展 `openspec/specs/spec-workflow` 或各 recorder skill 自包含约定。
 

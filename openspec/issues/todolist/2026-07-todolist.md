@@ -63,14 +63,14 @@
 | T55 | `lens_metric_aggregate.py` | 聚合器易用性/健壮性观察(code-review X3/X4 defer,低危):glob 空表 vs archive 不存在无法区分;转义引号 site 值截断产生多余分组行(site 不校验已契约注明) | 代码质量 | PROPOSED | 2026-07-06 02:36 | workflow-metrics-loop | workflow-metrics-loop |
 | T56 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 | 代码质量 | OPEN | 2026-07-06 13:44 | adaptive-workflow-routing |  |
 | T57 | `workflow/model-tiers` | 档位矩阵新增「升级档」（更高档，延后） | 功能增强 | OPEN | 2026-07-06 15:24 | main |  |
-| T58 | `sdflow-retro/lens_metric_aggregate` | fence-aware 只支持反引号 fence，不支持 CommonMark ~~~ tilde fence | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
-| T59 | `sdflow-retro/retro_report+lens_metric_aggregate` | ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量 | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
-| T60 | `sdflow-retro/retro_report` | _run_git 不检查 returncode，git 失败与真无提交不可区分 | 可观测性 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
-| T61 | `sdflow-retro/retro_report` | build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导 | 代码质量 | PROPOSED | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T58 | `sdflow-retro/lens_metric_aggregate` | fence-aware 只支持反引号 fence，不支持 CommonMark ~~~ tilde fence | 代码质量 | DONE | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T59 | `sdflow-retro/retro_report+lens_metric_aggregate` | ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量 | 代码质量 | DONE | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T60 | `sdflow-retro/retro_report` | _run_git 不检查 returncode，git 失败与真无提交不可区分 | 可观测性 | DONE | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
+| T61 | `sdflow-retro/retro_report` | build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导 | 代码质量 | DONE | 2026-07-06 20:16 | sdflow-retro | sdflow-retro |
 | T62 | `sdflow-retro/retro_report._run_git` | T60 留痕在系统性 git 损坏下无节流放大：seed_mass_shas 对每个 sha 调 _run_git，仓库整体损坏时每 commit rc≠0 各写一行 stderr，O(commits) 无去重无节流。低危(仅真故障下噪声非虚警;view-only不中断)。改法:同一 subcmd 失败去重,或 seed 循环 per-sha 失败聚合成一条 | 可观测性 | PROPOSED | 2026-07-06 21:08 | sdflow-retro-cleanup | sdflow-retro-cleanup |
 | T63 | `sdflow-init/scripts/init.py:inject/_find_all_marker_lines` | inject 多块收敛须 fence-aware + start/end 配对校验（naive collapse 已回退） | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
 | T64 | `sdflow-init/scripts/init.py:_atomic_write_settings` | settings.json 原子写 tmp 改唯一名（tempfile.mkstemp）关闭无锁降级路径撕裂 | 代码质量 | PROPOSED | 2026-07-06 22:32 | sdflow-init-hardening | sdflow-init-hardening |
-| T65 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` | gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类 | 基础设施 | OPEN | 2026-07-07 09:34 | main |  |
+| T65 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` | gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类 | 基础设施 | DONE | 2026-07-07 09:34 | main |  |
 | T66 | `cmd_scan(buglist/todolist) + cmd_batch_rename(issues)` | recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化 | 性能优化 | PROPOSED | 2026-07-07 13:03 | issues-pool-hardening | issues-pool-hardening |
 | T67 | `cmd_add id 校验(buglist/todolist)` | 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55) | 代码质量 | PROPOSED | 2026-07-07 13:03 | issues-pool-hardening | issues-pool-hardening |
 | T68 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 | 代码质量 | PROPOSED | 2026-07-07 16:57 | mlh-p2-anchor-lint | mlh-p2-anchor-lint |
@@ -79,15 +79,15 @@
 | T71 | `test_mirror_consistency.py` | _ast_no_doc 对剥 docstring 后空体函数坍塌：两个仅含 docstring 的同名 stub AST 相等→理论假过（当前 11+6 helper 均有真逻辑不可利用，加固可标记空体） | 代码质量 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
 | T72 | `issues.py batch lint` | batch 条目整行缺失 优先级:/计划: 字段（非空值而是整行删除）当前不校验（实现有意窄化到值语法层，对抗A确认为文档化边界）——考虑补结构完整性校验抓手改腐坏 | 功能增强 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
 | T73 | `anchor_lint.py + init.py config-lint` | metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定 | 功能增强 | PROPOSED | 2026-07-07 20:30 | mlh-p3-determ-guards | mlh-p3-determ-guards |
-| T74 | `sdflow-ship` | ship_gate parser 裸---首行(无闭合)误判 unterminated 致 UNKNOWN | 代码质量 | PROPOSED | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
-| T75 | `sdflow-ship` | ship_gate 清理 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_* | 代码质量 | PROPOSED | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
+| T74 | `sdflow-ship` | ship_gate parser 裸---首行(无闭合)误判 unterminated 致 UNKNOWN | 代码质量 | DONE | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
+| T75 | `sdflow-ship` | ship_gate 清理 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_* | 代码质量 | DONE | 2026-07-08 00:34 | mlh-p5-gate-frontmatter | mlh-p5-gate-frontmatter |
 | T76 | `ship_gate.py archived_verify_state` | 归档杂交盲区硬化后续（设计门已接受净负、登记为已知盲区）：冷代码审对抗镜给出比「仅手工伪造」更锋利的可达性论证——迁移半成品编辑残留独占行 inline PASS 锚、自指文档独占行引用（呼应 gate-substring-dogfood 自指坑）；建议未来加**非语义** lint/监控扫「归档 verify-report 首行 --- 无闭合」形态告警（不改 parser 语义、不重开设计门 adr/0004），据此复评「给归档侧特殊 fail-safe」ROI（design L121 当前选①绝） | 基础设施 | WONTDO | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
 | T77 | `openspec/specs/spec-workflow spec.md` | 「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留） | 代码质量 | OPEN | 2026-07-08 13:10 | mlh-p5-parser-cleanup | mechanical-layer-hardening |
 | T78 | `sdflow-code-review/spec-review SKILL + lens_metric_emit.py(新)` | P4·4.C lens-metric 数值一致性从模型手数下沉为脚本归约：吃已判结构化 findings(带命中镜集+裁决+sev)→机械归约计数+锚行；去重/对抗裁决留模型。闭合 requirements §1.2 痛点#2『手数信任边界』、adr/0006 硬约束——目标态该做(原按快照压为按需,已翻案) | 代码质量 | DONE | 2026-07-08 15:55 | - | mlh-p4-target-state |
-| T79 | `sdflow-maintain + maintain_scan.py(新)` | P4·4.B maintain INDEX↔文件系统 set-diff 只读报告脚本化(+CLAUDE.md 过时引用+bundle 陈旧告警)；归哪组/是否修留人。纯机械集合求差、每次 maintain 都跑、dogfood 可测——目标态该做 | 代码质量 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
-| T80 | `两审 outside-voice 小校验器(新)` | P4·4.D.1 outside-voice 复用守卫脚本化：锚 mode+时间戳+结构三判→reason_code 退出码 | 代码质量 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
-| T81 | `两审 HR-TG 小校验器(新)` | P4·4.D.2 HR-TG 交集判定脚本化：TG 集∩HR-TG 子集→hit 列表/none+规范锚串，清单从 trigger-catalog 单一源读(tg02_hit 先例) | 代码质量 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
-| T82 | `roadmap 对账小校验器(新)` | P4·4.D.4 roadmap task-log『Review 处置』对账脚本化：parse 小节断言无『未处置』状态 | 可观测性 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T79 | `sdflow-maintain + maintain_scan.py(新)` | P4·4.B maintain INDEX↔文件系统 set-diff 只读报告脚本化(+CLAUDE.md 过时引用+bundle 陈旧告警)；归哪组/是否修留人。纯机械集合求差、每次 maintain 都跑、dogfood 可测——目标态该做 | 代码质量 | DONE | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T80 | `两审 outside-voice 小校验器(新)` | P4·4.D.1 outside-voice 复用守卫脚本化：锚 mode+时间戳+结构三判→reason_code 退出码 | 代码质量 | DONE | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T81 | `两审 HR-TG 小校验器(新)` | P4·4.D.2 HR-TG 交集判定脚本化：TG 集∩HR-TG 子集→hit 列表/none+规范锚串，清单从 trigger-catalog 单一源读(tg02_hit 先例) | 代码质量 | DONE | 2026-07-08 15:55 | - | mlh-p4-target-state |
+| T82 | `roadmap 对账小校验器(新)` | P4·4.D.4 roadmap task-log『Review 处置』对账脚本化：parse 小节断言无『未处置』状态 | 可观测性 | DONE | 2026-07-08 15:55 | - | mlh-p4-target-state |
 | T83 | `embedded-test-sop + log_check.py(新)` | P4·4.A 串口日志规则判定脚本化：时间窗+must_contain/not/before+severity rollup 输出 PASS/FAIL，平台需人眼项留模型。目标态该做,正当排后——本仓无 embedded producer 契约可 dogfood,待真实 embedded 消费仓需求(producer 契约就绪度,非痛感) | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
 | T84 | `embedded-test-sop SOP模式A 小校验器(新)` | P4·4.D.3 SOP 模式A 源码常量/TAG 收割脚本化：正则 emit 常量表 name/值/来源:行。同 embedded 排后 | 功能增强 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
 | T85 | `roadmap mechanical-layer-hardening / recorder` | P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块 | 基础设施 | PROPOSED | 2026-07-08 15:55 | - | mlh-p4-target-state |
@@ -152,7 +152,7 @@
 | T144 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） | 基础设施 | PROPOSED | 2026-07-12 17:16 | add-sdflow-architecture | add-sdflow-architecture |
 | T145 | `sdflow-roadmap` | 观察 description 追加 SAD 指路句后的触发精度（架构类查询是否误触 roadmap） | 可观测性 | PROPOSED | 2026-07-12 18:34 | add-sdflow-architecture | add-sdflow-architecture |
 | T146 | `sdflow-skills 工具族` | 扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥） | 代码质量 | PROPOSED | 2026-07-12 18:34 | add-sdflow-architecture | add-sdflow-architecture |
-| T147 | `openspec/workflow/` | openspec/workflow/ 下 v1 孤儿 debris：lens-metric-contract.md（无 host/reason_code）+ tools/anchor_lint.py（REQUIRED_FIELDS 缺 host）/lens_metric_emit.py（无 --host）/outside_voice_guard.py（:93 仍 runner!="codex" 裸判）均为 add-codex-host-support 改前的 v1 旧副本——非 pin 遮蔽（resolve-workflow.sh 因本地缺 workflow.md/spec-checklists/code-checklists 三个 pin 判据文件，判定非本地 pin，runtime 恒走全局 canonical ~/.sdflow/workflow）；待本仓自身跑 sdflow-init update 或手动清空该目录 | 基础设施 | OPEN | 2026-07-15 23:47 | - |  |
+| T147 | `openspec/workflow/` | openspec/workflow/ 下 v1 孤儿 debris：lens-metric-contract.md（无 host/reason_code）+ tools/anchor_lint.py（REQUIRED_FIELDS 缺 host）/lens_metric_emit.py（无 --host）/outside_voice_guard.py（:93 仍 runner!="codex" 裸判）均为 add-codex-host-support 改前的 v1 旧副本——非 pin 遮蔽（resolve-workflow.sh 因本地缺 workflow.md/spec-checklists/code-checklists 三个 pin 判据文件，判定非本地 pin，runtime 恒走全局 canonical ~/.sdflow/workflow）；待本仓自身跑 sdflow-init update 或手动清空该目录 | 基础设施 | DONE | 2026-07-15 23:47 | - |  |
 | T148 | `tools/anchor_lint.py` | anchor_lint._FANOUT_MIRRORS={domain,adversarial,grounding} 缺 code-review 真名 history；现 code-review 借用 grounding token 记历史镜（不污染 retro：聚合只读 lens-metric 锚不读 fanout-capability，lens-metric 用真 lens=history）。正修 = _FANOUT_MIRRORS 加 history + 同步 spec.md/design.md 三处 SHALL 条款——触已过三轮收敛的 spec 文本，需另开 change 走 spec-review（非本 change fold 范围） | 代码质量 | OPEN | 2026-07-15 23:47 | - |  |
 | T149 | `sdflow-init/scripts/init.py` | lint_config 对 metrics.enabled 重复键无告警(true+false并存时valid恒True,anchor_lint取首值);未如parse_kv_strict收紧,潜在一致性盲点 | 代码质量 | PROPOSED | 2026-07-16 11:25 | add-codex-host-support | add-codex-host-support |
 | T150 | `sdflow-init/assets/hack/outside-voice.sh` | preflight 只 command-v + timeout 检查,未按 ADR-6「真跑一次」补低成本真探针(CLI未认证/模型无效/参数不支持仍返回ready,失效漏到exec归exec-error) | 功能增强 | PROPOSED | 2026-07-16 11:25 | add-codex-host-support | add-codex-host-support |
@@ -867,7 +867,7 @@
 |------|------|
 | 模块 | `sdflow-retro/lens_metric_aggregate` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 
@@ -876,6 +876,7 @@
 **思路**：记录 fence marker 字符+长度，闭合要求同字符且长度足够；补 ~~~ 回归测试。retro 复用 parse_report 故连带受益
 
 **备注**：defer 自 sdflow-retro code-review；既有既存问题非本 change 回归
+> 2026-07 状态：PROPOSED → DONE（change sdflow-retro-cleanup; commit 094aeca）
 
 ---
 
@@ -885,7 +886,7 @@
 |------|------|
 | 模块 | `sdflow-retro/retro_report+lens_metric_aggregate` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 
@@ -894,6 +895,7 @@
 **思路**：抽共享常量如 REVIEW_WINDOW=10 到 lens_metric_aggregate，两处引用
 
 **备注**：低危 defer 自 sdflow-retro code-review
+> 2026-07 状态：PROPOSED → DONE（change sdflow-retro-cleanup; commit 1bea68b）
 
 ---
 
@@ -903,7 +905,7 @@
 |------|------|
 | 模块 | `sdflow-retro/retro_report` |
 | 类型 | 可观测性 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 
@@ -912,6 +914,7 @@
 **思路**：可选：检查 returncode 非 0 时区分标记边界解析失败原因(git-error vs no-commits)，或至少 stderr 留痕
 
 **备注**：低危 design-accepted defer 自 sdflow-retro code-review
+> 2026-07 状态：PROPOSED → DONE（change sdflow-retro-cleanup; commit 4e71708）
 
 ---
 
@@ -921,7 +924,7 @@
 |------|------|
 | 模块 | `sdflow-retro/retro_report` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/sdflow-retro/design.md`
 
@@ -930,6 +933,7 @@
 **思路**：改注释诚实说明，或改用 os.path.isdir 显式判空分支语义更直白
 
 **备注**：极低危 defer 自 sdflow-retro code-review
+> 2026-07 状态：PROPOSED → DONE（change sdflow-retro-cleanup; commit 9c2c72e）
 
 ---
 
@@ -951,13 +955,14 @@
 |------|------|
 | 模块 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` |
 | 类型 | 基础设施 |
-| 状态 | OPEN |
+| 状态 | DONE |
 
 **动机**：B4/B5 同根：ship-gate 状态锚（design-approved/verify=PASS|FAIL/code-review=pass|blocked）inline 嵌在报告正文，逼 gate 用 fence-aware+独占行+line-scoped 一整套解析去区分『真标记 vs 正文提及』。B5 的聚合不变量补丁是在旧架构里绕过，非根治。状态若在 frontmatter（结构化数据），正文再怎么提及锚串都不会被误当标记，整类 bug 从根消失，且可删掉那套解析机器。
 
 **思路**：scope 严格收窄到家族①（gate 状态判据）——家族③逐条 inline tag（[impl-review-fix]/〔TG-N〕/task<N>/item ID，位置相关）和家族④模版槽位占位（<待填>等）明确留 inline，不搬。须评估三处风险：①bundle 爆炸半径（ship_gate.py+报告模版+生产者 SKILL.md 全在 assets/workflow/ 铺下游 → 改权威源+sdflow-init update 回灌所有消费仓，高仪式单开 change，行为面路径硬排除、绝不 fold/sweep）；②LLM 产报告写坏 YAML → safe_load 抛的兜底策略（比缺 inline 锚更糙的失败面）；③57 篇归档报告是 inline 锚 → gate/corpus 的兼容窗口/dual-read。
 
 **备注**：够格作为 workflow-cost-optimization roadmap 的一个阶段（与『评审机器复杂度』直接相关）。动机证据=buglist B4/B5。别在清理惯性里反应式开工——正式评估 ROI（inline 锚这套是否会反复出同类 bug）后再决定做不做。
+> 2026-07 状态：OPEN → DONE（changes mlh-p5-gate-frontmatter + mlh-p5-parser-cleanup）
 
 ---
 
@@ -1059,11 +1064,12 @@
 |------|------|
 | 模块 | `sdflow-ship` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/mlh-p5-gate-frontmatter/design.md`
 
 **备注**：code-review defer(A2,方向安全): 报告以裸 --- 开头且全文无第二个 --- 时 parse_ship_gate_frontmatter 判 unterminated→live UNKNOWN(6)误崩干净无锚报告。当前语料不触发(均以#开头)。未来鲁棒性:首行---无闭合判 absent 而非 bad。
+> 2026-07 状态：PROPOSED → DONE（change mlh-p5-parser-cleanup; commit e1b03a6）
 
 ---
 
@@ -1073,11 +1079,12 @@
 |------|------|
 | 模块 | `sdflow-ship` |
 | 类型 | 代码质量 |
-| 状态 | PROPOSED |
+| 状态 | DONE |
 
 **关联文档**：`openspec/changes/mlh-p5-gate-frontmatter/design.md`
 
 **备注**：code-review defer(fallback-F2): Task6 退役只从 decide() 摘调用,函数本体+ANCHOR_DESIGN/ANCHOR_CR_PASS/ANCHOR_CR_BLOCKED 成 test-referenced 孤儿。ANCHOR_VERIFY_PASS/FAIL 仍被 archived_verify_state 真用勿删。另开 cleanup 删死函数+测试。
+> 2026-07 状态：PROPOSED → DONE（change mlh-p5-parser-cleanup; commit b472642）
 
 ---
 
@@ -1393,3 +1400,63 @@
 **动机**：code-review T10 对抗复核确认老债与新 skill 同模式；sad_scaffold 已修（ce9b037 B8），姊妹脚本待统一
 
 **备注**：老债非本 change 引入，per fold-vs-defer 判据合规 defer
+
+---
+
+## T79: P4·4.B maintain INDEX↔文件系统 set-diff 只读报告脚本化(+CLAUDE.md 过时引用+bundle 陈旧告警)；归哪组/是否修留人。纯机械集合求差、每次 maintain 都跑、dogfood 可测——目标态该做
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `sdflow-maintain + maintain_scan.py(新)` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（change mlh-p4-maintain-scan）
+
+---
+
+## T80: P4·4.D.1 outside-voice 复用守卫脚本化：锚 mode+时间戳+结构三判→reason_code 退出码
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `两审 outside-voice 小校验器(新)` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（change mlh-p4-reason-code-validators）
+
+---
+
+## T81: P4·4.D.2 HR-TG 交集判定脚本化：TG 集∩HR-TG 子集→hit 列表/none+规范锚串，清单从 trigger-catalog 单一源读(tg02_hit 先例)
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `两审 HR-TG 小校验器(新)` |
+| 类型 | 代码质量 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（change mlh-p4-reason-code-validators）
+
+---
+
+## T82: P4·4.D.4 roadmap task-log『Review 处置』对账脚本化：parse 小节断言无『未处置』状态
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `roadmap 对账小校验器(新)` |
+| 类型 | 可观测性 |
+| 状态 | DONE |
+
+> 2026-07 状态：PROPOSED → DONE（change mlh-p4-reason-code-validators）
+
+---
+
+## T147: openspec/workflow/ 下 v1 孤儿 debris：lens-metric-contract.md（无 host/reason_code）+ tools/anchor_lint.py（REQUIRED_FIELDS 缺 host）/lens_metric_emit.py（无 --host）/outside_voice_guard.py（:93 仍 runner!="codex" 裸判）均为 add-codex-host-support 改前的 v1 旧副本——非 pin 遮蔽（resolve-workflow.sh 因本地缺 workflow.md/spec-checklists/code-checklists 三个 pin 判据文件，判定非本地 pin，runtime 恒走全局 canonical ~/.sdflow/workflow）；待本仓自身跑 sdflow-init update 或手动清空该目录
+
+| 属性 | 值 |
+|------|------|
+| 模块 | `openspec/workflow/` |
+| 类型 | 基础设施 |
+| 状态 | DONE |
+
+> 2026-07 状态：OPEN → DONE（change add-codex-host-support; canonical tools sync 2026-07-16）
