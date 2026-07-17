@@ -105,8 +105,12 @@ def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
     env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), SDFLOW_HOME=str(home / ".sdflow"))
 
     for _ in range(2):
+        # setup.sh 输出含 UTF-8 非 ASCII（⚠/✓/→/中文）；Windows subprocess text 模式默认走
+        # locale 编码（cp1252）会在读管道线程里解码崩 → stdout=None。显式 utf-8 + replace 兜底。
         result = subprocess.run(
-            [_git_bash(), str(ROOT / "setup.sh")], env=env, text=True, capture_output=True, timeout=120
+            [_git_bash(), str(ROOT / "setup.sh")], env=env,
+            text=True, encoding="utf-8", errors="replace",
+            capture_output=True, timeout=120,
         )
         assert result.returncode == 0, result.stderr
         assert "mode: copy (Windows)" in result.stdout
