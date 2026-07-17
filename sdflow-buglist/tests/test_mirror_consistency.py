@@ -59,10 +59,15 @@ def _ast_no_doc(fn):
 
 
 # 3 份 recorder（buglist/todolist/issues）都各自持有的 helper（D4 红线：不互相 import，
-# 各自内联一份）。issues.py 不含表解析类 helper（它不直接读写 dated 文件的表/块结构，
-# 只经子进程调用 buglist.py/todolist.py 的 `scan --json`），故这些 helper 只在
-# buglist/todolist 两份之间镜像，见下面 TWO_WAY。
-THREE_WAY = ["atomic_write", "repo_root", "_reject_cell_unsafe"]
+# 各自内联一份）。mlh-p6 起 frontmatter document mechanics 升为三向共享契约；dated
+# 文件业务 scan/write 编排仍按 pool 留在各自脚本，纯 bytes/parser/renderer 必须机械等价。
+THREE_WAY = [
+    "atomic_write", "repo_root", "_reject_cell_unsafe",
+    "_frontmatter_error", "_validate_unicode_scalar", "_json_object_no_duplicates",
+    "_validated_recorder_model", "_id_semantic_sort", "render_recorder_namespace",
+    "_split_envelope", "_find_recorder_span", "_parse_recorder_namespace",
+    "_legacy_table_region_count", "parse_recorder_document", "read_recorder_document",
+]
 
 # 只在 buglist.py / todolist.py 两份之间镜像的表/块解析 helper（issues.py 不含，
 # 断言范围明确不含 issues——见模块 docstring）。
@@ -118,12 +123,13 @@ def test_docstring_diff_ok():
     """现存三份 helper 的 docstring 本就互不相同（例如 issues.atomic_write 比 buglist/
     todolist 多一段"与…同名函数逐字同款"的子进程解耦注记）——一致性测试仍应通过，因为
     守的是行为（AST），不是字面（含 docstring 的源码文本）。"""
+    textually_different = []
     for name in THREE_WAY:
         bug_src = textwrap.dedent(inspect.getsource(getattr(BUG, name)))
         iss_src = textwrap.dedent(inspect.getsource(getattr(ISS, name)))
-        assert inspect.getdoc(getattr(BUG, name)) != inspect.getdoc(getattr(ISS, name)) or (
-            bug_src != iss_src
-        ), f"helper {name!r} 预期 docstring/源码文本存在差异（用于验证本测试确实容忍字面差异）"
+        if inspect.getdoc(getattr(BUG, name)) != inspect.getdoc(getattr(ISS, name)) or bug_src != iss_src:
+            textually_different.append(name)
+    assert textually_different, "至少一个三向 helper 应保留合法 docstring/源码文本差异"
     # 即便字面不同，_ast_no_doc 比对必须仍然通过（不因 docstring 差异假红）。
     for name in THREE_WAY:
         assert _ast_no_doc(getattr(BUG, name)) == _ast_no_doc(getattr(ISS, name))
@@ -160,6 +166,13 @@ def test_priorities_constant_consistency():
     拉红，不依赖 AST 函数体解析路径。
     """
     assert BUG.PRIORITIES == ISS.PRIORITIES
+
+
+def test_frontmatter_constant_consistency():
+    assert BUG.CANONICAL_ID_RE.pattern == TODO.CANONICAL_ID_RE.pattern == ISS.CANONICAL_ID_RE.pattern
+    assert BUG.CANONICAL_ID_RE.flags == TODO.CANONICAL_ID_RE.flags == ISS.CANONICAL_ID_RE.flags
+    assert BUG.UTF8_BOM == TODO.UTF8_BOM == ISS.UTF8_BOM
+    assert BUG.RECORDER_POOL_CONFIG == TODO.RECORDER_POOL_CONFIG == ISS.RECORDER_POOL_CONFIG
 
 
 def test_helper_deletion_is_not_silently_swallowed():

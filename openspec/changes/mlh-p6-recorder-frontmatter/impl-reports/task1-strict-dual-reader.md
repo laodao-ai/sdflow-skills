@@ -1,0 +1,29 @@
+# Task 1 Implementation Report — strict dual-reader
+
+状态：DONE
+
+## 交付
+
+- 三个 recorder 各自内联同一组严格 frontmatter document helpers：Unicode scalar/JSON duplicate-key 校验、canonical renderer、共享 envelope scanner、bytes parser 与单次 binary read 入口；生产脚本之间仍无 import。
+- bug/todo `scan --json` 已按文件一次 binary read/parse 分流 canonical、overlay、pure-legacy：frontmatter owner 不再进入 legacy 状态双写检查，overlay 同文件 literal ID 由 frontmatter shadow，legacy owner 保持原 arity/block/status 问题语义。
+- 新格式 bug block 只认成对 canonical marker；todo 轻量项允许无 block。marker 缺对、错配、嵌套、重复与 orphan 均可观察，且不回退 heading heuristic。
+- namespace 在场时严格校验 schema/pool/mode/items、canonical ID、字段集合/类型/枚举、shared-envelope lexical profile、encoding/EOL 与 mode/legacy-region 物理互证；失败统一输出 `ERROR: ...; cause: ...; fix: ...`，JSON stdout 保持空且原文件不变。
+- canonical renderer 固定 semantic ID 顺序、pool-specific 字段顺序、null/empty-map、普通 Unicode 人读输出与 NEL/LS/PS 定向 escape；render/parse/render byte-identical。
+- mirror consistency roster 已扩到三向 frontmatter helpers，并单独锁定 regexp/BOM/pool config 常量一致性。
+
+## TDD 与验证
+
+- 红：首个 renderer/round-trip 测试先因 `render_recorder_namespace` 缺失失败。
+- 绿：`uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py` → `13 passed`。
+- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `274 passed`（新增后最终计数会随 13-case 文件纳入保持全绿）。
+- dogfood scan：bug `7 items / 0 problems`；todo `150 items / 0 problems`。
+- `git diff --check` → PASS。
+
+## 风险与边界
+
+- 本 ticket 保留旧 writer，符合 dual-reader-first rollback 顺序；frontmatter splice/new writer、lock、canonical-ID mutation 与 direct rename snapshot 分别由后续 Task 2–4 承接。
+- shared envelope 仅接受 design 批准的窄 lexical profile；超出 profile 的合法 YAML 也会 fail-closed，这是目标契约而非兼容缺陷。
+
+## Concerns
+
+无。
