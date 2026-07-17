@@ -840,12 +840,7 @@ def _body_with_legacy_bug_markers(document, targets):
         line_offsets.append(line_offsets[-1] + len(line.encode("utf-8")))
     ranges = []
     for raw_id, canonical in targets:
-        if raw_id not in document["legacy_blocks"]:
-            raise ValueError(
-                f"ERROR: file={document['path']} rename target legacy block missing; "
-                f"cause: id={raw_id}; fix: repair the target block, then rerun the original batch rename command"
-            )
-        start, end = document["legacy_blocks"][raw_id]
+        start, end = _legacy_block_range(document, raw_id)
         ranges.append((start, end, canonical))
     for start, end, canonical in sorted(ranges):
         insertions.setdefault(line_offsets[start], []).append(
@@ -865,8 +860,137 @@ def _body_with_legacy_bug_markers(document, targets):
     return b"".join(rendered)
 
 
+def _canonical_from_legacy_key(key):
+    return f"{key[0]}{key[1]}"
+
+
+def _legacy_block_range(document, raw_id):
+    """Resolve exactly one semantic legacy block and reject marker collisions."""
+    semantic_key = _legacy_semantic_id_key(raw_id)
+    starts = []
+    for index, line in enumerate(document["lines"]):
+        match = re.match(r"##\s+([A-Z][0-9]+)\s*:", line, re.ASCII)
+        if match and _legacy_semantic_id_key(match.group(1)) == semantic_key:
+            starts.append(index)
+    if len(starts) != 1:
+        raise ValueError(
+            f"ERROR: file={document['path']} legacy block 无法安全包裹; "
+            f"cause: id={raw_id} candidates={len(starts)}; "
+            "fix: repair to exactly one legacy block, then rerun the original batch rename command"
+        )
+    start = starts[0]
+    end = len(document["lines"])
+    for index in range(start + 1, len(document["lines"])):
+        line = document["lines"][index]
+        if line.strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", line, re.ASCII):
+            end = index
+            break
+    for index in range(start, end):
+        if _match_marker_line(document["lines"][index]):
+            raise ValueError(
+                f"ERROR: file={document['path']} legacy marker collision; "
+                f"cause: id={raw_id} line={index + 1}; "
+                "fix: remove or escape the preexisting marker, then rerun the original batch rename command"
+            )
+    return start, end
+
+
+def _reject_target_document_problems(document, target_ids):
+    """Fail closed on target marker/ownership relations before any registry write."""
+    structural = [
+        problem for problem in document["problems"]
+        if "marker" in problem or "frontmatter" in problem
+    ]
+    if structural:
+        raise ValueError(
+            f"ERROR: file={document['path']} marker/ownership 结构非法; "
+            f"cause: {structural[0]}; fix: repair the target relation, then rerun the original batch rename command"
+        )
+    if document["pool"] == "bug":
+        frontmatter_keys = {
+            _legacy_semantic_id_key(item_id)
+            for item_id in (document["model"]["items"] if document["model"] else {})
+        }
+        for raw_id in target_ids:
+            if _legacy_semantic_id_key(raw_id) not in frontmatter_keys:
+                _legacy_block_range(document, raw_id)
+
+
+def _reject_ambiguous_legacy_rows(snapshot, old_key, new_key):
+    """Reject rows that cannot prove old/new batch truth; retain unrelated warnings."""
+    for document in snapshot["documents"]:
+        section = document["section"]
+        if not section:
+            continue
+        specific_field, specific_values, status_values = RECORDER_POOL_CONFIG[document["pool"]]
+        frontmatter_keys = {
+            _legacy_semantic_id_key(item_id)
+            for item_id in (document["model"]["items"] if document["model"] else {})
+        }
+        for index in range(section["rows_start"], section["rows_end"]):
+            cells = [cell.strip() for cell in document["lines"][index].strip().strip("|").split("|")]
+            raw_id = cells[0] if cells else "?"
+            if _legacy_semantic_id_key(raw_id) in frontmatter_keys:
+                continue
+            if len(cells) not in (7, 8):
+                if old_key in cells or new_key in cells or len(cells) < 7:
+                    raise ValueError(
+                        f"ERROR: file={document['path']} legacy row batch truth ambiguous; "
+                        f"cause: id={raw_id} line={index + 1} arity={len(cells)} affects {old_key!r}/{new_key!r}; "
+                        "fix: repair the legacy row arity, then rerun the original batch rename command"
+                    )
+                continue
+            if _legacy_semantic_id_key(raw_id) is None:
+                raise ValueError(
+                    f"ERROR: file={document['path']} legacy row ID invalid; cause: id={raw_id!r} line={index + 1}; "
+                    "fix: repair the ASCII semantic ID, then rerun the original batch rename command"
+                )
+            if not cells[1].strip() or not cells[2].strip():
+                raise ValueError(
+                    f"ERROR: file={document['path']} legacy row required field empty; cause: id={raw_id} line={index + 1}; "
+                    "fix: repair module/summary, then rerun the original batch rename command"
+                )
+            if cells[3] not in specific_values or cells[4] not in status_values:
+                raise ValueError(
+                    f"ERROR: file={document['path']} legacy row enum invalid; "
+                    f"cause: id={raw_id} line={index + 1} {specific_field}={cells[3]!r} status={cells[4]!r}; "
+                    "fix: repair the legacy enum, then rerun the original batch rename command"
+                )
+
+
+def _validate_rendered_rename_relation(document, model, body, canonical_ids):
+    """Validate the already-parsed mutation components without a second document parse."""
+    try:
+        lines = body.decode("utf-8").splitlines(keepends=True)
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"ERROR: file={document['path']} rendered candidate encoding invalid; cause: {exc}; "
+            "fix: repair the target bytes, then rerun the original batch rename command"
+        ) from None
+    marker_blocks, structural = marker_block_ranges(lines)
+    if document["pool"] == "bug":
+        for item_id in model["items"]:
+            if item_id not in marker_blocks:
+                structural.append(f"frontmatter item lacks marker block: {item_id}")
+    for item_id in marker_blocks:
+        if item_id not in model["items"]:
+            structural.append(f"marker block lacks frontmatter item: {item_id}")
+    for canonical in canonical_ids:
+        if canonical not in model["items"]:
+            structural.append(f"frontmatter item missing: {canonical}")
+        if document["pool"] == "bug" and canonical not in marker_blocks:
+            structural.append(f"marker block missing: {canonical}")
+    if structural:
+        raise ValueError(
+            f"ERROR: file={document['path']} rendered candidate relation invalid; "
+            f"cause: {structural[0]}; fix: repair the target relation, then rerun the original batch rename command"
+        )
+    return body
+
+
 def retag_rename_snapshot(snapshot, old_key, new_key):
     """Return an updated in-memory snapshot and per-document rendered bytes."""
+    _reject_ambiguous_legacy_rows(snapshot, old_key, new_key)
     updated_documents = []
     updated_items = []
     original_by_file = {}
@@ -881,6 +1005,7 @@ def retag_rename_snapshot(snapshot, old_key, new_key):
             updated_items.extend(dict(item) for item in original_items.values())
             updated_documents.append(record)
             continue
+        _reject_target_document_problems(document, target_ids)
         old_model = document["model"]
         model = {
             "schema": 1,
@@ -893,7 +1018,7 @@ def retag_rename_snapshot(snapshot, old_key, new_key):
         effective = {item_id: dict(item) for item_id, item in original_items.items()}
         for raw_id in target_ids:
             key = _legacy_semantic_id_key(raw_id)
-            canonical = f"{key[0]}{key[1]}"
+            canonical = _canonical_from_legacy_key(key)
             promoted_item = effective.pop(raw_id)
             promoted_item["id"] = canonical
             promoted_item["batch"] = new_key
@@ -907,6 +1032,10 @@ def retag_rename_snapshot(snapshot, old_key, new_key):
                 marker_targets.append((raw_id, canonical))
         body = _body_with_legacy_bug_markers(document, marker_targets) if marker_targets else document["body"]
         model = _validated_recorder_model(model)
+        _validate_rendered_rename_relation(
+            document, model, body,
+            [_canonical_from_legacy_key(_legacy_semantic_id_key(item_id)) for item_id in target_ids],
+        )
         rendered = _render_recorder_document(document, model, body)
         record.update({"model": model, "body": body, "effective_items": {
             item_id: {key: value for key, value in item.items() if key not in {"id", "pool", "file"}}
@@ -1030,13 +1159,39 @@ def validate_scan_envelope(payload, pool):
         if not isinstance(item, dict) or not required <= set(item):
             missing = sorted(required - set(item)) if isinstance(item, dict) else sorted(required)
             raise ValueError(f"ERROR: scan item[{index}] 字段非法; cause: missing={missing}; fix: repair/reinstall the recorder producer and retry")
-        canonical_id(item["id"])
+        semantic_key = _legacy_semantic_id_key(item["id"])
+        if semantic_key is None or semantic_key[1] < 1:
+            raise ValueError(
+                f"ERROR: scan item[{index}].ID 非法; cause: expected one ASCII uppercase prefix and positive ASCII digits, got {item['id']!r}; "
+                "fix: repair/reinstall the recorder producer and retry"
+            )
         for field in ("module", "summary", "time", "file", specific_field, "status"):
             if not isinstance(item[field], str) or (field == "file" and not item[field]):
                 raise ValueError(f"ERROR: scan item[{index}].{field} 类型非法; cause: required non-empty string for file and string otherwise; fix: repair/reinstall the recorder producer and retry")
+            try:
+                _validate_unicode_scalar(item[field], field, item["id"])
+            except ValueError as exc:
+                raise ValueError(
+                    f"ERROR: scan item[{index}].{field} 值域非法; cause: {exc}; "
+                    "fix: repair/reinstall the recorder producer and retry"
+                ) from None
+        for field in ("module", "summary"):
+            if not item[field].strip():
+                raise ValueError(
+                    f"ERROR: scan item[{index}].{field} 值域非法; cause: required string must contain a non-whitespace scalar; "
+                    "fix: repair/reinstall the recorder producer and retry"
+                )
         for field in ("change", "batch"):
-            if item[field] is not None and not isinstance(item[field], str):
-                raise ValueError(f"ERROR: scan item[{index}].{field} 类型非法; cause: expected string or null; fix: repair/reinstall the recorder producer and retry")
+            if item[field] is not None and (not isinstance(item[field], str) or item[field] == ""):
+                raise ValueError(f"ERROR: scan item[{index}].{field} 类型非法; cause: expected non-empty string or null; fix: repair/reinstall the recorder producer and retry")
+            if item[field] is not None:
+                try:
+                    _validate_unicode_scalar(item[field], field, item["id"])
+                except ValueError as exc:
+                    raise ValueError(
+                        f"ERROR: scan item[{index}].{field} 值域非法; cause: {exc}; "
+                        "fix: repair/reinstall the recorder producer and retry"
+                    ) from None
         if item[specific_field] not in specific_values:
             raise ValueError(f"ERROR: scan item[{index}].{specific_field} 枚举漂移; cause: {item[specific_field]!r}; fix: repair/reinstall the recorder producer and retry")
         if item["status"] not in status_values:
