@@ -11,6 +11,7 @@ The test deliberately fails when the runner provides a UNC/network temp path.
 import importlib.util
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -19,6 +20,33 @@ import pytest
 
 pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="requires actual Windows local disk")
 ROOT = Path(__file__).parents[2]
+
+
+def _git_bash():
+    """定位 Git for Windows 的 bash，跳过 WSL 的 System32\\bash.exe。
+
+    GitHub windows-latest 上裸 "bash" 会解析到 C:\\Windows\\System32\\bash.exe
+    （WSL 启动器，未装 distro），无法执行 setup.sh，只会打印 "no installed
+    distributions ... <Distro>' to install." 后 exit 1。优先从 git 可执行文件所在的
+    Git 安装树推导 git-bash，再退到已知安装路径。找不到即显式报错，不静默回落 WSL。
+    """
+    git = shutil.which("git")
+    if git:
+        git_root = Path(git).resolve().parent.parent  # ...\Git\cmd\git.exe -> ...\Git
+        for rel in ("bin/bash.exe", "usr/bin/bash.exe"):
+            candidate = git_root / rel
+            if candidate.is_file():
+                return str(candidate)
+    for candidate in (
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ):
+        if os.path.isfile(candidate):
+            return candidate
+    raise RuntimeError(
+        "git-bash 未找到；System32 的 WSL bash 无法执行 setup.sh。请安装 Git for Windows。"
+    )
 
 
 def _load(name, relative):
@@ -78,7 +106,7 @@ def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
 
     for _ in range(2):
         result = subprocess.run(
-            ["bash", str(ROOT / "setup.sh")], env=env, text=True, capture_output=True, timeout=120
+            [_git_bash(), str(ROOT / "setup.sh")], env=env, text=True, capture_output=True, timeout=120
         )
         assert result.returncode == 0, result.stderr
         assert "mode: copy (Windows)" in result.stdout
