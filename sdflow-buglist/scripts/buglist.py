@@ -1401,14 +1401,17 @@ def _has_rootcause(lines, start, end):
 def cmd_triage(args):
     """给指定 item 赋批次 + 把状态从『未分诊开放态』推进到 PROPOSED（幂等，D7）。
 
-    定位 item：复用 set-status 的查找逻辑（遍历 list_files 找含该 ID 的表行）。
+    定位 item：复用 set-status 的 dual-read 查找（frontmatter overlay/canonical 优先，
+    legacy 表行兜底），返回该 item 的 document 与 semantic ID。
     状态处理（推导自 STATUS_CODES，不硬编码字面集合，镜像 cmd_scan 的 nonterminal 推导）：
       - 未分诊开放态 = STATUS_CODES 减 {PROPOSED} 减终态{FIXED, WONTFIX}
         （即 OPEN/VERIFIED/IN_PROGRESS/BLOCKED）→ 置 PROPOSED。
       - 已是 PROPOSED → 不改状态（no-op，幂等）。
       - 已是终态（FIXED/WONTFIX）→ 不改状态（不把终态倒回 PROPOSED）。
-    批次列（表行末列，第 8 列 / cells[7]）无条件写入，与 status 是否变化无关；
-    旧格式行（无批次列）先补齐到 8 列再写，不越界。不报错（除 ID 未找到，沿用 set-status 的门禁）。
+    批次写入 frontmatter：无条件把 item 的 `batch` 字段写成目标批次（batch 或 None），
+    与 status 是否变化无关；legacy item 先 promotion 建 overlay，canonical/overlay 原位
+    更新——绝不再 patch 旧 Markdown 表行。状态变化时向该 item 的 marker block 追加一条历史行。
+    不报错（除 ID 未找到，沿用 set-status 的门禁）。
     """
     root = repo_root(args.root)
     batch = getattr(args, "批次")

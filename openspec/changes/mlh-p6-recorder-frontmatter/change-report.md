@@ -209,12 +209,62 @@ retag_rename_snapshot（内存更新 canonical / overlay / legacy promotion）
    - 当前只有 macOS 上的两个 skip，没有 `windows-latest` run URL、commit 与无 skip 的 `2 passed`。
    - 因此 Windows acquire/conflict/participant/replace/cleanup + setup copy 仍是 release blocker。
 
-2. **全仓 warnings-as-errors 门未通过。**
-   - 当前结果：`38 failed, 1581 passed, 2 skipped`。
-   - 37 项来自 `sdflow-maintain` 未关闭文件的 `ResourceWarning`，1 项来自 `sdflow-architecture` 未关闭 subprocess pipe。
-   - 这些路径不属于本 Change 的 recorder 修改，普通全仓测试全绿，但仓库级 `-W error` 门仍未满足。
+2. **全仓 warnings-as-errors 门——已 fold 清零（曾为缺口，现已解决）。**
+   - 结果：修 4 个 pre-existing 未关闭文件站点后，全仓 `pytest -W error` → `1619 passed, 2 skipped`（2 skip = Windows-only）。
+   - 站点枚举、引入 commit 与归属决策见下「成因溯源与 fold 清零」子节；执行见 tasks 7.5。
+   - 决策 = 修站点 fold 进本 Change、全仓机械守卫另开 hardening change（todolist T155）。
 
-最终 [verify-report.md](verify-report.md) 因上述两项判定 `FAIL`，所以本 Change 尚未执行 hand-off、archive、spec 主线同步、默认分支 merge 或 push。
+最终 [verify-report.md](verify-report.md) 因**仅剩的 Windows actual smoke 项**判定 `FAIL`（warning 门已 fold 清零），所以本 Change 尚未执行 hand-off、archive、spec 主线同步、默认分支 merge 或 push。
+
+### 全仓 `-W error` 门：成因溯源与 fold 清零（pre-existing，非本 Change 引入）
+
+三个待修站点全部是存量缺陷，由更早的 Change 引入，早于本 Change 分支点
+（merge-base 7fd59e6，2026-07-16 14:08）：
+
+| 站点 | 引入 commit | 时间 | 引入的 Change |
+|---|---|---|---|
+| `maintain_scan.py:244` 裸 `open().read()` | a32e91e7 | 2026-07-09 | mlh-p4-maintain-scan |
+| `maintain_scan.py:184` 裸 `open().read()` | 10254c16 | 2026-07-09 | mlh-p4-maintain-scan |
+| `test_maintain_scan.py:224` 裸 `open(...,"w").write()` | 56c77d1 | 2026-07-09 | mlh-p4-maintain-scan |
+| `test_sad_scaffold.py:525` Popen 不 drain | ce9b037c | 2026-07-12 | add-sdflow-architecture |
+
+（verify-report 原记「37 全在 :244」不准：不仅 `maintain_scan.py` 读侧 :184/:244 两处，
+`test_maintain_scan.py:224` 还有一处测试侧 `open(...,"w")` 裸写——**同一「未关闭文件」面既有读也有写**。
+该第 4 站点是 fold 修完前 3 处后跑全仓 `-W error` 才由工具自己暴露的：解析 Python 表达式是无界语法面，
+正则手搓会漏（实测漏掉嵌套括号的 :224），故站点一律以 `-W error` 权威枚举，非正则清点。）
+
+为什么之前没发现——从没有任何门照过它：
+
+- 历史所有 Change 的 `-W error` 只挂各自 scope 的定向套件，全仓一律普通 pytest；
+  引入缺陷的两个 Change 自己 verify 也没跑 `-W error`。7-09 至今无任何 Change
+  对 sdflow-maintain 跑过 `-W error`。
+- 本 Change tasks 7.3 是本仓第一次把 `-W error` 挂到全仓 1600+ 级别，
+  因而是第一个「看见」这些潜伏 7 天存量债的 Change。
+- 次要放大（非主因）：python 3.14.6 + pytest 9.1.1 对 unclosed file 捕获更严。
+
+成因时间线：
+
+```text
+7-08 done-roadmap-writeback  全仓 -W error → 762 passed 0 warning ✅（缺陷尚未引入）
+7-09 mlh-p4-maintain-scan    引入 maintain_scan.py:184/:244 裸 open().read()  ← 缺陷诞生
+7-12 add-sdflow-architecture 引入 test_sad_scaffold.py:525 Popen 不 drain    ← 缺陷诞生
+7-14 add-sdflow-devenv       全仓普通 pytest 1260 ✅（不加 -W error，照不到）
+7-16 add-codex-host-support  全仓普通 pytest 1426 ✅（不加 -W error，照不到）
+7-16+ 本 Change mlh-p6       tasks 7.3 首次全仓 -W error → 38 failed          ← 债第一次被照出
+```
+
+定性：pre-existing 是事实，但不构成「绕过」理由——本 Change 是第一个立全仓 -W error
+门、因而第一个看见此债的 Change。按目标态（warning 清零）应面治根治。
+
+**归属决策（已定）**：拆两半——
+
+- **修 4 站点 → fold 进本 Change**：它们是本 Change tasks 7.3 亲手立的门的完成条件（门下的债，
+  不清不绿）；4 处均纯机械低风险（`with` / `communicate()`），另开一次完整 workflow 循环的固定
+  成本远大于修复本身。已于 tasks 7.5 完成，全仓 `-W error` → `1619 passed, 2 skipped`。
+- **全仓机械守卫（把全仓 `-W error` 常态化为持久 CI 门）→ 另开 hardening change**：本仓
+  `.github/workflows/` 现仅有 Windows smoke、无任何全仓 pytest CI，「常态化 `-W error`」是从零
+  新增 CI 基础设施 + 一致性面治理，够一个独立完整阶段结果，且需设计（触发 / matrix / 覆盖范围）——
+  fold 进本 Change 会把 recorder 迁移膨胀成两个不相干功能。已登记 todolist `T155` 作为其起点。
 
 ## 七、交付状态
 
@@ -226,12 +276,12 @@ retag_rename_snapshot（内存更新 canonical / overlay / legacy promotion）
 | Task 3：frontmatter writer + overlay promotion | ✅ 完成 | 双轴 PASS |
 | Task 4：snapshot rename + provenance recovery | ✅ 完成 | 双轴 PASS |
 | Task 5：cleanup/dogfood/docs | 🟡 本地完成 | 本地三项 review gap 已修；Windows actual 未执行 |
-| `sdflow-done` Verify | ❌ FAIL | Windows actual + 全仓 `-W error` 两个门未通过 |
+| `sdflow-done` Verify | ❌ FAIL | 仅剩 Windows actual 门未取得执行锚；全仓 `-W error` 门已 fold 清零（`1619 passed, 2 skipped`） |
 | Archive / merge / push | ⏸ 未执行 | Verify 失败后按串行门禁停止 |
 
 ## 八、下一步
 
-1. 修复 `sdflow-maintain` 的 37 个未关闭文件 warning 和 `sdflow-architecture` 的 1 个未关闭 pipe warning，使全仓 `pytest -W error` 通过。
+1. ~~修复 `sdflow-maintain`/`sdflow-architecture` 未关闭文件 warning~~ **已完成**（tasks 7.5 fold 修 4 站点，全仓 `pytest -W error` → `1619 passed, 2 skipped`）。全仓机械守卫另开 hardening change（todolist T155）。
 2. 将固定 commit 推到可触发 GitHub Actions 的分支，在 `windows-latest` 执行：
 
    ```powershell

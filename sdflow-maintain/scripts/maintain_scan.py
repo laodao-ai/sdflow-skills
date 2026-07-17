@@ -181,7 +181,8 @@ def scan_claude_refs(root, fs_specs, fs_rules):
     hits = []
     for path in _iter_claude_files(root):
         try:
-            text = open(path, encoding="utf-8").read()
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
         except (OSError, UnicodeDecodeError) as e:
             raise MaintainScanError(f"CLAUDE.md 不可读: {path}: {e}")
         in_fence = False
@@ -241,7 +242,8 @@ def _read_index(root):
     if not os.path.isfile(p):
         raise MaintainScanError("openspec/INDEX.md 缺失")
     try:
-        return open(p, encoding="utf-8").read()
+        with open(p, encoding="utf-8") as f:
+            return f.read()
     except (OSError, UnicodeDecodeError) as e:
         raise MaintainScanError(f"INDEX.md 不可读: {e}")
 
