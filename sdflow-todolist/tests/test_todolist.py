@@ -390,8 +390,10 @@ class TestScanDuplicateId:
             {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
             {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
         ])
-        result = _scan_json(tmp_path, [])
-        assert any("重复" in p and "T1" in p for p in result["problems"])
+        proc = _scan_proc(tmp_path, [])
+        assert proc.returncode != 0
+        assert proc.stdout == ""
+        assert "semantic ID 重复" in proc.stderr and "T1" in proc.stderr
 
 
 class TestScanRowArity:
@@ -781,8 +783,9 @@ class TestScanDuplicateIdCrossFile:
         _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", [
             {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
         ])
-        result = _scan_json(tmp_path, [])
-        assert any("重复" in p and "T1" in p for p in result["problems"])
+        proc = _scan_proc(tmp_path, [])
+        assert proc.returncode != 0
+        assert "semantic ID 重复" in proc.stderr and "T1" in proc.stderr
 
     def test_scan_still_reports_duplicate_id_within_single_file(self, tmp_path):
         """回归：单文件内重复检测（既有覆盖）不因改成全池维度而失效。"""
@@ -790,8 +793,9 @@ class TestScanDuplicateIdCrossFile:
             {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
             {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
         ])
-        result = _scan_json(tmp_path, [])
-        assert any("重复" in p and "T1" in p for p in result["problems"])
+        proc = _scan_proc(tmp_path, [])
+        assert proc.returncode != 0
+        assert "semantic ID 重复" in proc.stderr and "T1" in proc.stderr
 
 
 def _set_status(root, item_id, to, *extra_args):
@@ -818,12 +822,16 @@ def _triage(root, item_id, batch):
 
 
 def _scan_json(root, extra_args):
-    proc = subprocess.run(
+    proc = _scan_proc(root, extra_args)
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+def _scan_proc(root, extra_args):
+    return subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "scan", "--json", *extra_args],
         capture_output=True, text=True,
     )
-    assert proc.returncode == 0, proc.stderr
-    return json.loads(proc.stdout)
 
 
 def _write_mixed_file(dir_path, month, rows):

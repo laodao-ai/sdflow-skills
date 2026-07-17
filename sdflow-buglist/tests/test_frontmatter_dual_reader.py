@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,6 +11,7 @@ import pytest
 REPO_ROOT = Path(__file__).parents[2]
 BUG_PATH = REPO_ROOT / "sdflow-buglist" / "scripts" / "buglist.py"
 TODO_PATH = REPO_ROOT / "sdflow-todolist" / "scripts" / "todolist.py"
+ISSUES_PATH = REPO_ROOT / "sdflow-issues" / "scripts" / "issues.py"
 
 
 def _load(name, path):
@@ -21,6 +23,7 @@ def _load(name, path):
 
 BUG = _load("_frontmatter_buglist", BUG_PATH)
 TODO = _load("_frontmatter_todolist", TODO_PATH)
+ISSUES = _load("_frontmatter_issues", ISSUES_PATH)
 
 
 def _run(script, root, *args):
@@ -149,7 +152,7 @@ def test_scan_dual_reads_canonical_overlay_and_legacy(tmp_path):
     [
         (b"---\nsdflow-issues:\n  schema: 2\n  pool: bug\n  mode: canonical\n  items: {}\n---\n", "schema"),
         (b"---\nsdflow-issues:\n  schema: 1\n  pool: todo\n  mode: canonical\n  items: {}\n---\n", "pool/path"),
-        (b"---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items: {}\n---\n| ID | x |\n", "mode-structure"),
+        ("---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items: {}\n---\n## 状态总览\n\n| ID | x |\n".encode(), "mode-structure"),
         (b"---\n\"sdflow-issues\": {}\n---\n" + _legacy_table("bug", "B1").encode(), "ownership"),
         (b"\xff\xfe---\x00", "encoding"),
     ],
@@ -164,6 +167,7 @@ def test_bad_namespace_is_fail_closed_without_json_stdout(tmp_path, raw, reason)
     assert result.stdout == ""
     assert "ERROR:" in result.stderr and "cause:" in result.stderr and "fix:" in result.stderr
     assert reason in result.stderr
+    assert str(target) in result.stderr
     assert target.read_bytes() == before
 
 
@@ -220,3 +224,126 @@ def test_shared_envelope_rejects_ambiguous_external_lexical_forms(external):
     raw = b"---\n" + external + b"---\n" + _legacy_table("todo", "T1").encode()
     with pytest.raises(ValueError, match="lexical profile"):
         TODO.parse_recorder_document(raw, "todo")
+
+
+def test_three_recorders_share_canonical_golden_behavior():
+    model = {
+        "schema": 1,
+        "pool": "bug",
+        "mode": "canonical",
+        "items": {
+            "A2": {
+                "module": "core",
+                "summary": "same|bytes\nnext",
+                "priority": "P2",
+                "status": "OPEN",
+                "time": "2026-07-17 10:00",
+                "change": None,
+                "batch": None,
+            }
+        },
+    }
+    rendered = [module.render_recorder_namespace(model) for module in (BUG, TODO, ISSUES)]
+    assert rendered[0] == rendered[1] == rendered[2]
+    raw = b"---\n" + rendered[0] + b"---\n<!-- sdflow-issue-block:start id=A2 -->\n<!-- sdflow-issue-block:end id=A2 -->\n"
+    snapshots = [module.parse_recorder_document(raw, "bug") for module in (BUG, TODO, ISSUES)]
+    assert [snapshot["model"] for snapshot in snapshots] == [model, model, model]
+    assert [snapshot["marker_blocks"] for snapshot in snapshots] == [{"A2": (0, 2)}] * 3
+
+
+def test_overlay_shadows_legacy_alias_by_semantic_id(tmp_path):
+    target = tmp_path / "openspec/issues/todolist/2026-07-todolist.md"
+    target.parent.mkdir(parents=True)
+    table = _legacy_table("todo", "A007", "legacy alias")
+    item = {
+        "module": "flow",
+        "summary": "canonical owner",
+        "type": "代码质量",
+        "status": "OPEN",
+        "time": "2026-07-17 12:00",
+        "change": None,
+        "batch": None,
+    }
+    namespace = TODO.render_recorder_namespace(
+        {"schema": 1, "pool": "todo", "mode": "overlay", "items": {"A7": item}}
+    )
+    target.write_bytes(b"---\n" + namespace + b"---\n" + table.encode())
+    result = _run(TODO_PATH, tmp_path, "scan", "--json")
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["items"] == [{"id": "A7", **item, "file": "openspec/issues/todolist/2026-07-todolist.md"}]
+    assert payload["problems"] == []
+
+
+def test_cross_file_semantic_duplicate_is_fatal(tmp_path):
+    directory = tmp_path / "openspec/issues/buglist"
+    directory.mkdir(parents=True)
+    (directory / "2026-07-16-buglist.md").write_text(_legacy_table("bug", "A007"), encoding="utf-8")
+    (directory / "2026-07-17-buglist.md").write_text(_legacy_table("bug", "A7"), encoding="utf-8")
+    result = _run(BUG_PATH, tmp_path, "scan", "--json")
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "semantic ID 重复" in result.stderr
+    assert "A007@" in result.stderr and "A7@" in result.stderr
+
+
+def test_canonical_prose_table_example_is_not_legacy_region(tmp_path):
+    directory = tmp_path / "openspec/issues/buglist"
+    directory.mkdir(parents=True)
+    item = {
+        "module": "core",
+        "summary": "example",
+        "priority": "P2",
+        "status": "OPEN",
+        "time": "2026-07-17 10:00",
+        "change": None,
+        "batch": None,
+    }
+    namespace = BUG.render_recorder_namespace(
+        {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
+    )
+    (directory / "2026-07-17-buglist.md").write_bytes(
+        b"---\n" + namespace + b"---\n"
+        b"<!-- sdflow-issue-block:start id=B1 -->\n| ID | prose |\n|---|---|\n| fake | ok |\n"
+        b"<!-- sdflow-issue-block:end id=B1 -->\n"
+    )
+    result = _run(BUG_PATH, tmp_path, "scan", "--json")
+    assert result.returncode == 0, result.stderr
+
+
+def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, capsys):
+    directory = tmp_path / "openspec/issues/buglist"
+    directory.mkdir(parents=True)
+    (directory / "2026-07-17-buglist.md").write_text(_legacy_table("bug", "B1"), encoding="utf-8")
+    original = BUG.parse_recorder_document
+    calls = []
+
+    def counted(raw, pool):
+        calls.append(pool)
+        return original(raw, pool)
+
+    monkeypatch.setattr(BUG, "parse_recorder_document", counted)
+    BUG.cmd_scan(SimpleNamespace(
+        root=str(tmp_path), status=None, change=None, 批次=None, open_ungrouped=False, json=True,
+    ))
+    assert calls == ["bug"]
+    json.loads(capsys.readouterr().out)
+
+
+def test_indented_namespace_ownership_variant_is_fatal():
+    raw = b"---\n  sdflow-issues:\n---\n" + _legacy_table("bug", "B1").encode()
+    with pytest.raises(ValueError, match="ownership"):
+        BUG.parse_recorder_document(raw, "bug")
+
+
+def test_duplicate_json_key_and_raw_unicode_line_break_are_fatal():
+    duplicate = (
+        b"---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items:\n"
+        b'    B1: {"module":"x","module":"y","summary":"z","priority":"P2","status":"OPEN","time":"t","change":null,"batch":null}\n'
+        b"---\n"
+    )
+    with pytest.raises(ValueError, match="JSON key 重复"):
+        BUG.parse_recorder_document(duplicate, "bug")
+    raw_line_break = duplicate.replace(b'"module":"x","module":"y"', '"module":"x\u2028y"'.encode())
+    with pytest.raises(ValueError, match="raw Unicode line break"):
+        BUG.parse_recorder_document(raw_line_break, "bug")

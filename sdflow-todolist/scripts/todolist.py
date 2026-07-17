@@ -152,6 +152,11 @@ def _id_semantic_sort(item_id):
     return item_id[0], int(item_id[1:])
 
 
+def _legacy_semantic_id_key(item_id):
+    match = re.fullmatch(r"([A-Z])([0-9]+)", item_id, re.ASCII)
+    return (match.group(1), int(match.group(2))) if match else None
+
+
 def render_recorder_namespace(model, eol=b"\n"):
     if eol not in {b"\n", b"\r\n"}:
         _frontmatter_error("EOL 非法", repr(eol))
@@ -207,15 +212,19 @@ def _find_recorder_span(envelope, eol):
     lines = envelope.splitlines(keepends=True)
     starts = []
     offset = 0
+    active_entry = False
     for index, raw_line in enumerate(lines):
         line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
         if b"\t" in line:
             _frontmatter_error("shared envelope lexical profile 非法", "tab")
-        if line.startswith((b"'sdflow-issues", b'"sdflow-issues', b"? sdflow-issues")):
+        if b"sdflow-issues" in line and not line.startswith(b"sdflow-issues:"):
             _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
         match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
         if match:
             starts.append((index, offset, match.group(1).decode("ascii")))
+            active_entry = True
+        elif line.startswith(b" ") and not active_entry:
+            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
         elif line and not line.startswith((b" ", b"#")):
             _frontmatter_error("shared envelope lexical profile 非法", line.decode("utf-8", "replace"))
         offset += len(raw_line)
@@ -270,7 +279,8 @@ def _parse_recorder_namespace(namespace, eol):
 
 
 def _legacy_table_region_count(body):
-    return len(re.findall(rb"(?m)^\|\s*ID\s*\|", body))
+    pattern = r"(?m)^##[ \t]+状态总览[^\r\n]*(?:\r?\n[ \t]*){1,3}\|[ \t]*ID[ \t]*\|".encode("utf-8")
+    return len(re.findall(pattern, body))
 
 
 def parse_recorder_document(raw, expected_pool):
@@ -282,25 +292,39 @@ def parse_recorder_document(raw, expected_pool):
         count = _legacy_table_region_count(body)
         if count != 1:
             _frontmatter_error("legacy 总览区域非法", f"count={count}")
-        return {"format": "legacy", "model": None, "raw": raw, "body": body,
-                "eol": eol, "bom": bom, "namespace_span": None}
-    start, end = span
-    namespace = envelope[start:end]
-    model = _parse_recorder_namespace(namespace, eol)
-    if model["pool"] != expected_pool:
-        _frontmatter_error("recorder pool/path 不符", f"expected={expected_pool} actual={model['pool']}")
-    count = _legacy_table_region_count(body)
-    expected_count = 0 if model["mode"] == "canonical" else 1
-    if count != expected_count:
-        _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
-    return {"format": model["mode"], "model": model, "raw": raw, "body": body,
-            "eol": eol, "bom": bom, "namespace_span": (start, end)}
+        result = {"format": "legacy", "model": None, "raw": raw, "body": body,
+                  "eol": eol, "bom": bom, "namespace_span": None}
+    else:
+        start, end = span
+        namespace = envelope[start:end]
+        model = _parse_recorder_namespace(namespace, eol)
+        if model["pool"] != expected_pool:
+            _frontmatter_error("recorder pool/path 不符", f"expected={expected_pool} actual={model['pool']}")
+        count = _legacy_table_region_count(body)
+        expected_count = 0 if model["mode"] == "canonical" else 1
+        if count != expected_count:
+            _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
+        result = {"format": model["mode"], "model": model, "raw": raw, "body": body,
+                  "eol": eol, "bom": bom, "namespace_span": (start, end)}
+    lines = body.decode("utf-8").splitlines(keepends=True)
+    section = split_sections(lines)
+    result.update({
+        "lines": lines,
+        "section": section,
+        "rows": parse_table_rows(lines, section) if section else {},
+        "legacy_blocks": block_ranges(lines),
+    })
+    result["marker_blocks"], result["marker_problems"] = marker_block_ranges(lines)
+    return result
 
 
 def read_recorder_document(path, expected_pool):
-    with open(path, "rb") as stream:
-        raw = stream.read()
-    return parse_recorder_document(raw, expected_pool)
+    try:
+        with open(path, "rb") as stream:
+            raw = stream.read()
+        return parse_recorder_document(raw, expected_pool)
+    except ValueError as exc:
+        raise ValueError(f"{exc}; file: {path}") from None
 
 
 # ── 路径与文件 ───────────────────────────────────────────────────────────────
@@ -832,15 +856,18 @@ def cmd_scan(args):
     # 此前 Counter 在下面循环体内逐文件重建，只测得出单文件内重复，漏检跨文件同 ID
     # （例如 2026-01-todolist.md 与 2026-02-todolist.md 都出现 T1）。改为收集
     # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数。
-    raw_id_locations = []  # [(id, rel_path), ...]，按遍历顺序累积，不逐文件清空
+    raw_id_locations = []  # [(semantic_key, raw_id, rel_path), ...]
     for path in list_files(root):
         document = read_recorder_document(path, "todo")
-        lines = document["body"].decode("utf-8").splitlines(keepends=True)
-        sec = split_sections(lines)
-        rows = parse_table_rows(lines, sec) if sec else {}
-        legacy_blocks = block_ranges(lines)
-        marker_blocks, marker_problems = marker_block_ranges(lines)
+        lines = document["lines"]
+        sec = document["section"]
+        rows = document["rows"]
+        legacy_blocks = document["legacy_blocks"]
+        marker_blocks = document["marker_blocks"]
+        marker_problems = document["marker_problems"]
         rel = os.path.relpath(path, root)
+        frontmatter_items = document["model"]["items"] if document["model"] else {}
+        frontmatter_keys = {_legacy_semantic_id_key(item_id) for item_id in frontmatter_items}
         # OV-3：重复 ID 检测（镜像 buglist.py）——必须在 parse_table_rows 已经按 ID 建 dict
         # 丢行之前、从原始表行里数，否则重复的那一行早被静默吞掉，dict 视角里只剩 1 个 ID。
         # 这里只收集，真正的计数在主循环结束后跨全部文件统一做（避免漏检跨文件重复）。
@@ -849,8 +876,11 @@ def cmd_scan(args):
                 lines[i].strip().strip("|").split("|", 1)[0].strip()
                 for i in range(sec["rows_start"], sec["rows_end"])
             ]
-            shadowed = set(document["model"]["items"]) if document["model"] else set()
-            raw_id_locations.extend((rid, rel) for rid in raw_ids if rid not in shadowed)
+            raw_id_locations.extend(
+                (_legacy_semantic_id_key(rid) or ("raw", rid), rid, rel)
+                for rid in raw_ids
+                if _legacy_semantic_id_key(rid) not in frontmatter_keys
+            )
         # OV-1：行 arity 检测（镜像 buglist.py）——无块坏行（如描述含裸 `|`）会把某数据行
         # 拆成多于/少于标准列数的 cells，`parse_table_rows` 只要求 `len(cells) >= 5` 就照单
         # 按固定列位读，列错位不会自己报错——必须显式核对每一原始数据行的列数，标准 8 列
@@ -863,7 +893,6 @@ def cmd_scan(args):
                     problems.append(
                         f"{rel}: {rid} 行 arity 异常：{len(cells_raw)} 列（应 8/7）"
                     )
-        frontmatter_items = document["model"]["items"] if document["model"] else {}
         if document["format"] != "legacy":
             problems.extend(f"{rel}: {problem}" for problem in marker_problems)
             # todo 轻量项允许没有 prose block；有 marker 时必须归属 frontmatter item。
@@ -871,7 +900,7 @@ def cmd_scan(args):
                 if item_id not in frontmatter_items:
                     problems.append(f"{rel}: marker block 有 {item_id} 但缺 frontmatter item")
         legacy_owned = {item_id: info for item_id, info in rows.items()
-                        if item_id not in frontmatter_items}
+                        if _legacy_semantic_id_key(item_id) not in frontmatter_keys}
         # legacy 块若存在必须有对应 legacy owner（todo 详情块可选）。
         for bid in legacy_blocks:
             if bid not in rows and document["format"] == "legacy":
@@ -893,21 +922,17 @@ def cmd_scan(args):
                           "file": rel})
         for bid, item in frontmatter_items.items():
             items.append({"id": bid, **item, "file": rel})
-            raw_id_locations.append((bid, rel))
+            raw_id_locations.append((_legacy_semantic_id_key(bid), bid, rel))
 
     # [impl-review-fix] FIX-2：全池维度统一计数重复 ID（覆盖同文件内重复 + 跨文件重复）。
     dup_locations = {}
-    for rid, rel in raw_id_locations:
-        dup_locations.setdefault(rid, []).append(rel)
-    for dup_id in sorted(rid for rid, locs in dup_locations.items() if len(locs) > 1):
-        locs = dup_locations[dup_id]
-        if len(set(locs)) == 1:
-            problems.append(f"{locs[0]}: 重复 ID：{dup_id}（parse_table_rows 会静默丢行）")
-        else:
-            problems.append(
-                f"跨文件重复 ID：{dup_id}（出现于：{', '.join(sorted(set(locs)))}——"
-                "ID 应全池唯一）"
-            )
+    for semantic_key, raw_id, rel in raw_id_locations:
+        dup_locations.setdefault(semantic_key, []).append((raw_id, rel))
+    duplicates = {key: locations for key, locations in dup_locations.items() if len(locations) > 1}
+    if duplicates:
+        key, locations = sorted(duplicates.items(), key=lambda entry: str(entry[0]))[0]
+        rendered = ", ".join(f"{raw_id}@{rel}" for raw_id, rel in locations)
+        _frontmatter_error("semantic ID 重复", f"key={key} locations={rendered}")
 
     if args.status:
         items = [b for b in items if b["status"] == args.status]

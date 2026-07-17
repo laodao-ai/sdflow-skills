@@ -65,8 +65,10 @@ THREE_WAY = [
     "atomic_write", "repo_root", "_reject_cell_unsafe",
     "_frontmatter_error", "_validate_unicode_scalar", "_json_object_no_duplicates",
     "_validated_recorder_model", "_id_semantic_sort", "render_recorder_namespace",
+    "_legacy_semantic_id_key",
     "_split_envelope", "_find_recorder_span", "_parse_recorder_namespace",
     "_legacy_table_region_count", "parse_recorder_document", "read_recorder_document",
+    "split_sections", "parse_table_rows", "block_ranges", "marker_block_ranges",
 ]
 
 # 只在 buglist.py / todolist.py 两份之间镜像的表/块解析 helper（issues.py 不含，
@@ -82,7 +84,6 @@ THREE_WAY = [
 # 断言范围，留给后续专门核验。
 TWO_WAY = [
     "detect_change", "normalize_doc_paths", "auto_default_doc",
-    "split_sections", "parse_table_rows", "block_ranges",
     "_ids_in_files", "_find_row_file",
     "_id_sort_key", "validate_doc_paths", "all_ids",
     "next_id", "_die", "_load_json",

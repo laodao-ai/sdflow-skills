@@ -160,6 +160,11 @@ def _id_semantic_sort(item_id):
     return item_id[0], int(item_id[1:])
 
 
+def _legacy_semantic_id_key(item_id):
+    match = re.fullmatch(r"([A-Z])([0-9]+)", item_id, re.ASCII)
+    return (match.group(1), int(match.group(2))) if match else None
+
+
 def render_recorder_namespace(model, eol=b"\n"):
     if eol not in {b"\n", b"\r\n"}:
         _frontmatter_error("EOL 非法", repr(eol))
@@ -215,15 +220,19 @@ def _find_recorder_span(envelope, eol):
     lines = envelope.splitlines(keepends=True)
     starts = []
     offset = 0
+    active_entry = False
     for index, raw_line in enumerate(lines):
         line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
         if b"\t" in line:
             _frontmatter_error("shared envelope lexical profile 非法", "tab")
-        if line.startswith((b"'sdflow-issues", b'"sdflow-issues', b"? sdflow-issues")):
+        if b"sdflow-issues" in line and not line.startswith(b"sdflow-issues:"):
             _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
         match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
         if match:
             starts.append((index, offset, match.group(1).decode("ascii")))
+            active_entry = True
+        elif line.startswith(b" ") and not active_entry:
+            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
         elif line and not line.startswith((b" ", b"#")):
             _frontmatter_error("shared envelope lexical profile 非法", line.decode("utf-8", "replace"))
         offset += len(raw_line)
@@ -278,7 +287,87 @@ def _parse_recorder_namespace(namespace, eol):
 
 
 def _legacy_table_region_count(body):
-    return len(re.findall(rb"(?m)^\|\s*ID\s*\|", body))
+    pattern = r"(?m)^##[ \t]+状态总览[^\r\n]*(?:\r?\n[ \t]*){1,3}\|[ \t]*ID[ \t]*\|".encode("utf-8")
+    return len(re.findall(pattern, body))
+
+
+def split_sections(lines):
+    """返回 (head_end_idx, table_rows_range, body_start_idx)。
+    head_end = 状态总览表分隔行后的位置；表行在 [rows_start, rows_end)。"""
+    table_hdr = None
+    for i, ln in enumerate(lines):
+        if re.match(r"\|\s*ID\s*\|", ln):
+            table_hdr = i
+            break
+    if table_hdr is None:
+        return None
+    sep = table_hdr + 1  # |----|----|
+    rows_start = sep + 1
+    rows_end = rows_start
+    while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
+        rows_end += 1
+    return {"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end}
+
+
+def parse_table_rows(lines, sec):
+    rows = {}
+    for i in range(sec["rows_start"], sec["rows_end"]):
+        cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+        if len(cells) >= 5:
+            rows[cells[0]] = {"line": i, "cells": cells}
+    return rows
+
+
+def block_ranges(lines):
+    """返回 {id: (start, end)}，块从 '## {id}:' 到下一个 '---'/'## ' 或 EOF。"""
+    out = {}
+    starts = []
+    for i, ln in enumerate(lines):
+        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
+        if m:
+            starts.append((i, m.group(1)))
+    for idx, (i, bid) in enumerate(starts):
+        end = len(lines)
+        for j in range(i + 1, len(lines)):
+            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
+                end = j
+                break
+        out[bid] = (i, end)
+    return out
+
+
+def marker_block_ranges(lines):
+    """解析新格式成对 marker；返回 (ranges, problems)，不回退 heading heuristic。"""
+    start_re = re.compile(r"^<!-- sdflow-issue-block:start id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
+    end_re = re.compile(r"^<!-- sdflow-issue-block:end id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
+    ranges, problems = {}, []
+    active = None
+    for index, line in enumerate(lines):
+        start = start_re.match(line)
+        end = end_re.match(line)
+        if start:
+            item_id = start.group(1)
+            if active is not None:
+                problems.append(f"marker 嵌套：{active[0]} → {item_id}（line {index + 1}）")
+            elif item_id in ranges:
+                problems.append(f"marker block 重复：{item_id}（line {index + 1}）")
+            else:
+                active = (item_id, index)
+        elif end:
+            item_id = end.group(1)
+            if active is None:
+                problems.append(f"orphan end marker：{item_id}（line {index + 1}）")
+            elif active[0] != item_id:
+                problems.append(
+                    f"marker ID 错配：start={active[0]} end={item_id}（line {index + 1}）"
+                )
+                active = None
+            else:
+                ranges[item_id] = (active[1], index + 1)
+                active = None
+    if active is not None:
+        problems.append(f"marker 缺 end：{active[0]}（line {active[1] + 1}）")
+    return ranges, problems
 
 
 def parse_recorder_document(raw, expected_pool):
@@ -290,25 +379,39 @@ def parse_recorder_document(raw, expected_pool):
         count = _legacy_table_region_count(body)
         if count != 1:
             _frontmatter_error("legacy 总览区域非法", f"count={count}")
-        return {"format": "legacy", "model": None, "raw": raw, "body": body,
-                "eol": eol, "bom": bom, "namespace_span": None}
-    start, end = span
-    namespace = envelope[start:end]
-    model = _parse_recorder_namespace(namespace, eol)
-    if model["pool"] != expected_pool:
-        _frontmatter_error("recorder pool/path 不符", f"expected={expected_pool} actual={model['pool']}")
-    count = _legacy_table_region_count(body)
-    expected_count = 0 if model["mode"] == "canonical" else 1
-    if count != expected_count:
-        _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
-    return {"format": model["mode"], "model": model, "raw": raw, "body": body,
-            "eol": eol, "bom": bom, "namespace_span": (start, end)}
+        result = {"format": "legacy", "model": None, "raw": raw, "body": body,
+                  "eol": eol, "bom": bom, "namespace_span": None}
+    else:
+        start, end = span
+        namespace = envelope[start:end]
+        model = _parse_recorder_namespace(namespace, eol)
+        if model["pool"] != expected_pool:
+            _frontmatter_error("recorder pool/path 不符", f"expected={expected_pool} actual={model['pool']}")
+        count = _legacy_table_region_count(body)
+        expected_count = 0 if model["mode"] == "canonical" else 1
+        if count != expected_count:
+            _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
+        result = {"format": model["mode"], "model": model, "raw": raw, "body": body,
+                  "eol": eol, "bom": bom, "namespace_span": (start, end)}
+    lines = body.decode("utf-8").splitlines(keepends=True)
+    section = split_sections(lines)
+    result.update({
+        "lines": lines,
+        "section": section,
+        "rows": parse_table_rows(lines, section) if section else {},
+        "legacy_blocks": block_ranges(lines),
+    })
+    result["marker_blocks"], result["marker_problems"] = marker_block_ranges(lines)
+    return result
 
 
 def read_recorder_document(path, expected_pool):
-    with open(path, "rb") as stream:
-        raw = stream.read()
-    return parse_recorder_document(raw, expected_pool)
+    try:
+        with open(path, "rb") as stream:
+            raw = stream.read()
+        return parse_recorder_document(raw, expected_pool)
+    except ValueError as exc:
+        raise ValueError(f"{exc}; file: {path}") from None
 
 
 def atomic_write(path, text):
