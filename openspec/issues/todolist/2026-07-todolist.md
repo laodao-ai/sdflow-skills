@@ -26,6 +26,8 @@ sdflow-issues:
     T167: {"module":"openspec/changes/async-outside-voice","summary":"【archive 阶段 MUST 做】四件套仍描述旧协议（裸哨兵/单条件 async），与代码审后的实现不自洽——delta spec 必须同步","type":"代码质量","status":"OPEN","time":"2026-07-18 20:24","change":"async-outside-voice","batch":null}
     T168: {"module":"sdflow-spec-review","summary":"async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner","type":"基础设施","status":"OPEN","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":null}
     T169: {"module":"openspec/changes","summary":"done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)","type":"代码质量","status":"OPEN","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T170: {"module":"sdflow-issues+buglist+todolist","summary":"recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）","type":"基础设施","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T171: {"module":"sdflow-spec-review+code-review","summary":"R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题","type":"可观测性","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
 ---
 # 2026-07 TODO
 
