@@ -22,7 +22,11 @@ recorder 各池脚本（`buglist.py` / `todolist.py`）产出的 `problems` 诊�
 
 `scan --json` 的输出 **SHALL** 以**新增**字段承载阻断集，`problems` 字段自身的类型与内容 **MUST NOT** 改变（既有消费者零影响）。
 
-消费方读到**缺少该字段**的 `scan --json` 输出时，**MUST** 将全部 `problems` 视为阻断级（fail-closed）。
+消费方读到**缺少该字段**的 `scan --json` 输出时，**MUST** 生成一个**独立的阻断 sentinel**，其成立**与 `problems` 是否为空无关**；同时将全部 `problems` 视为阻断级（fail-closed）。
+
+`[spec-review-amendment]` 初版只写「将全部 `problems` 视为阻断」——滞后 producer 完全不认识新盘面格式时可同时产出**空 items + 空 problems + 无该字段**，此时该规则作用在空集上、阻断集仍为空 ⇒ **放行**。∴ 缺席本身必须独立成阻断项。
+
+**字段整体缺席** 与 **明确的空阻断集** **MUST 可区分**：前者是「产出方不认识该字段」⇒ 阻断；后者是「已判定无阻断项」⇒ 放行。
 
 **MUST NOT** 把「字段缺席」解释为「无阻断项」——缺席的成因是产出方不认识该字段（版本滞后），此时它对自身读取完整性的判断力恰恰最弱。
 
@@ -30,6 +34,11 @@ recorder 各池脚本（`buglist.py` / `todolist.py`）产出的 `problems` 诊�
 
 - **WHEN** 消费方收到的 `scan --json` 不含阻断集字段，且 `problems` 非空
 - **THEN** 全部 `problems` 按阻断处置，命令非零退出
+
+#### Scenario: 缺席字段 + 空 problems 仍阻断
+
+- **WHEN** `scan --json` 同时满足：items 为空、`problems` 为空、且不含阻断集字段
+- **THEN** 命令仍非零退出且零写盘（缺席 sentinel 独立成立）
 
 #### Scenario: 既有消费者不受影响
 
@@ -49,7 +58,9 @@ recorder 各池脚本（`buglist.py` / `todolist.py`）产出的 `problems` 诊�
 
 **写盘类**路径的阻断判定 **MUST** 前置于**任何**写盘动作（承 `adr/0022`）。
 
-两条路径的完整性判据 **MUST** 抽成**单一函数**共用，**MUST NOT** 各写一套（否则必然漂移；承 `adr/0011`）。
+两条路径的完整性判据 **MUST** 发同一套**机器可读 diagnostic code**，并由**同一份 conformance fixtures** 机械核验三个 producer/parser 对同一畸形输入吐出相同码。
+
+**MUST NOT** 要求两路调用同一个 Python 函数——`_scan_pool` 走 subprocess 正是为避免跨 skill import（`adr/0025`：三份 helper 物理复制、维护成本由 fixtures 与 parity 承担）。「同一函数」照字面落地只能引入被禁的跨 skill 运行时耦合，或**各写两份却伪称同源**（后者测不出漂移）。**同源的是契约，不是函数体。**
 
 #### Scenario: reindex 在阻断下零写盘
 
@@ -61,10 +72,12 @@ recorder 各池脚本（`buglist.py` / `todolist.py`）产出的 `problems` 诊�
 - **WHEN** `read_rename_snapshot` 解析出的盘面触发完整性阻断
 - **THEN** 命令在 `retag` 与任何 `atomic_write` **之前**非零退出；批次注册表与全部 dated 文档字节均未变
 
-#### Scenario: 两条路径判据同源
+#### Scenario: 三方对同一畸形输入吐出相同 diagnostic code
 
-- **WHEN** 检视实现
-- **THEN** subprocess 路径与 in-process 路径调用的是**同一个**完整性判定函数
+- **WHEN** 把同一份 conformance fixture（含各类畸形盘面）分别喂给 `buglist.py`、`todolist.py` 与 `issues.py` 的 in-process parser
+- **THEN** 三方产出的 diagnostic code 集合相同；任一方偏离即非零退出
+
+> 本 Scenario 取代初版的「WHEN 检视实现 THEN 调用同一个函数」`[spec-review-amendment]`——那个 WHEN **不是运行时可触发条件**，只能靠人读代码，属伪机械门（与 R7 初版同病）。
 
 #### Scenario: 不读两池的命令有依据地排除
 

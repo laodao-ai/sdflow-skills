@@ -24,6 +24,8 @@ sdflow-issues:
     T165: {"module":"openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段","summary":"R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动","type":"基础设施","status":"OPEN","time":"2026-07-18 19:35","change":"async-outside-voice","batch":null}
     T166: {"module":"hack/check_async_branch_parity.py","summary":"end marker 边界未与 start 侧对称硬化；且尝试硬化时遇到无法解释的 extract 行为矛盾，需专门查","type":"代码质量","status":"OPEN","time":"2026-07-18 20:15","change":"async-outside-voice","batch":null}
     T167: {"module":"openspec/changes/async-outside-voice","summary":"【archive 阶段 MUST 做】四件套仍描述旧协议（裸哨兵/单条件 async），与代码审后的实现不自洽——delta spec 必须同步","type":"代码质量","status":"OPEN","time":"2026-07-18 20:24","change":"async-outside-voice","batch":null}
+    T168: {"module":"sdflow-spec-review","summary":"async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner","type":"基础设施","status":"OPEN","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T169: {"module":"openspec/changes","summary":"done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)","type":"代码质量","status":"OPEN","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":null}
 ---
 # 2026-07 TODO
 

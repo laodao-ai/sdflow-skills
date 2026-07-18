@@ -49,7 +49,7 @@
          └── cmd_batch_rename（**但见路径 ②：它先写盘、后到这里**）
 
    ── 路径 ②：in-process 解析（**无 JSON 字段，缺席即阻断在此完全失效**）─────────
-     cmd_batch_rename ──► read_rename_snapshot ──► retag
+     cmd_batch_rename ──► read_rename_snapshot ──► classify_batch_rename(纯读) ──► retag_rename_snapshot
                           └─► atomic_write(registry)      ← 写盘 ①
                           └─► atomic_write_bytes(dated)   ← 写盘 ②
                           └─► _reindex_core               ← 阻断判定**才**发生（太晚）
@@ -138,14 +138,39 @@
 
 **第 3 条是本设计的枢纽**，它一条办三件事：老 sibling 没这个字段 ⇒ 全阻断 ⇒ **版本偏斜被同一机制接住**（初版要造的那道门，功能在这里自然长出来）；新 sibling ⇒ 精确分级；第三方只读 `problems` ⇒ 零影响。**向后兼容与保守处置在这里指向同一个方向，不需要在两者之间权衡。**
 
+🔴 **但初版的「缺席 ⇒ 全部 problems 视为阻断」有个洞 〔spec-review-amendment · hr-tg high〕**：若滞后 producer 同时产出 **空 items + 空 problems + 无该字段**（它完全不认识新盘面格式时的典型形态），「全部 problems 视为阻断」作用在空集上 ⇒ 阻断集仍为空 ⇒ **放行**。
+**修正**：**字段缺席本身即生成一个独立的 blocker sentinel**，与 `problems` 是否为空**无关**。测试 MUST 含 `items=[] ∧ problems=[] ∧ 字段缺席` 的零写盘用例。
+
+**字段形状（初版未定义，12 处提及无一处给形状 〔领域镜 medium〕）**——两个池脚本各自实现前 MUST 定死，否则必然各起各的名、造出新漂移面：
+
+```
+scan --json 输出新增：
+  "blocking": [ {"code": "E-DROP-MARKER-ONLY", "id": "B12", "detail": "…"}, … ]
+```
+- `code` 取自 D5′ 的 diagnostic code taxonomy（稳定机器码，**不是**散文）；
+- `problems` 字段**类型与内容一字不动**（既有消费者零影响）；
+- **字段整体缺席** ≠ `"blocking": []`——前者是「产出方不认识该字段」⇒ sentinel 阻断，后者是「明确无阻断项」⇒ 放行。**二者 MUST 可区分**。
+
 **切分判据（承 `adr/0018` 铁律 (d)）**：**该信号是否污染本次输出的完整性**，而非严重程度感受。
 
-| 诊断 | 含义 | 归类 |
-|---|---|---|
-| `块有 X 但缺总览表行` | 可能漏读条目 | **阻断** |
-| `frontmatter 有 X 但缺 marker block` | 同上 | **阻断** |
-| `X 行 arity 异常：N 列` | 读全了，某行脏 | 告警 |
-| `marker block 重复：X` | 读全了，某条脏 | 告警 |
+🔴 **初版分类表方向写反，且漏掉真正会丢条目的那条 〔spec-review-amendment · design-voice critical〕**。返修依据（实测 `buglist.py` `_build_effective_snapshot` 与诊断产生处）：
+
+- `_build_effective_snapshot` **无条件纳入 `frontmatter_items`** ⇒ frontmatter 是真相源；
+- 诊断按 `result["format"]` **分两套**：`legacy` 出 `marker-only legacy` / `块有 X 但缺总览表行`；**canonical / overlay（= 目标态）出的是另一对**；
+- ⇒ 我拿**本次事故现象（legacy 路径的诊断）**去定义**目标态**的阻断判据，正是通则③ 的反面：**目标态下 `块有 X 但缺总览表行` 根本不会产生**。
+
+**修正后的分类表**（按「该条目会不会从 `effective_items` 里消失」定，不按名字像不像严重）：
+
+| 诊断 | 产生条件 | 条目会丢吗 | 归类 |
+|---|---|---|---|
+| `marker block 有 X 但缺 frontmatter item` | canonical/overlay | **会**（不在 frontmatter ⇒ 不被纳入） | 🔴 **阻断** |
+| `marker-only legacy：X` | legacy | **会**（无表行、无 frontmatter） | 🔴 **阻断** |
+| `块有 X 但缺总览表行` | **仅** legacy | 会 | 🔴 **阻断**（目标态不产生，留作迁移期兜底） |
+| `X 行 arity 异常：N 列` | 任意 | **会/错位** —— `parse_table_rows` 只要 `len(cells) >= 5` 就收，随后按**固定下标**读 `status/change/batch`；缺列/多 `|` 会错位，令 `sweep --change` **漏项** | 🔴 **阻断**〔hr-tg high，初版误归告警〕 |
+| `frontmatter 有 X 但缺 marker block` | canonical/overlay | **不会**（frontmatter 已纳入，只是缺人读的 prose 块） | 告警 |
+| `marker block 重复：X` / `marker 嵌套` / `orphan end marker` | 任意 | 不会（结构脏但条目在） | 告警 |
+
+🔴 **实现期 MUST 逐条重审，不得照抄本表**：判据是「顺着 `effective_items` 的实际纳入路径走一遍，这条诊断对应的条目会不会掉出去」。**MUST NOT** 凭诊断措辞的严重感归类——初版就是这么错的。
 
 **前向保护不重复造**：`buglist.py` 的 `_validated_recorder_model()` 已对 `schema != 1` fail-closed（schema 升 2 时旧脚本硬停）。本 change 只给它补**回归锁 + 变异验证**——它是承重的却没有测试锁。
 
@@ -166,7 +191,40 @@
 
 ### D5 — 阻断判定前置于 discovery / 写盘（承 `adr/0022`）
 
-`reindex` 现状是**先算后覆盖**；判定若落在计算之后，仍可能在报错前已经写盘。∴ **MUST** 前置到任何 discovery / stat / open 之前——与 `adr/0025` 对 lock owner 的「必须在所有 result-affecting discovery 前 acquire」同款纪律。
+`reindex` 现状是**先算后覆盖**；判定若落在计算之后，仍可能在报错前已经写盘。
+
+🔴 **初版措辞逻辑上不可实现，已更正 〔spec-review-amendment · design-voice high〕**：初版写「MUST 前置到任何 discovery / stat / open 之前」——**阻断集只能在打开并解析盘面之后才产生**，不可能早于 open。我把 `adr/0025` 对 **lock 获取**的纪律错误复用到了**数据校验**上；两者不是一回事。
+
+**正确口径**：**完成同一把锁内的快照读取、取得阻断集之后，在任何 `render` / `retag` / `atomic_write` 之前判定**。测试锚点是**阻断时零写盘**，不是「判定发生得多早」。
+
+### D8 — sweep 的两个新洞（本 change 自己造的）〔spec-review-amendment〕
+
+**D8a — 按池写盘，第二池的阻断拦不住第一池 〔hr-tg high〕**：`cmd_sweep` 现状是 `for pool: scan → 逐项 triage(写盘) → 下一池`。第一池 triage 已落盘后才扫第二池 ⇒ 第二池的阻断**来不及**阻止第一池的写入。
+**改法**：两阶段——**先扫完两池、汇总阻断集、确认可放行**，再统一 triage。测试 MUST 含「第二池阻断 ⇒ 两池 dated 文件、`batches.md`、`INDEX.md` **全部字节未变**」。
+
+**D8b — 阻断后重跑会静默漏掉 `reindex` 〔对抗镜 A critical，本 change 严格默认自己造的〕**：
+
+```
+第1轮  triage 全部打上 batch=X（已写盘）→ batch add 成功 → reindex 因【与本次无关】的既存问题阻断退出
+第2轮  scan --open-ungrouped 的 `not b.get("batch")` 把已 tag 项全滤掉 → tagged==[]
+       → 命中既有 FIX-2 早退 `if not tagged: return` → 不跑 batch add、不跑 reindex → exit 0
+```
+⇒ 第 1 轮写进 `batches.md` 的批次条目**永远等不到同步进 `INDEX.md`**，而 `/sdflow-done` 见 exit 0 即认为分诊完成。**这与本 change 要根治的病灶同型，只是换了触发路径，且只在新机制生效后才出现。**
+**改法**：`reindex` 的触发判据 **MUST NOT** 是「本轮 `tagged` 是否非空」。改为：**只要该 change 在 `batches.md` 里存在条目，`sweep` 就无条件跑终步 `reindex`**（保守、幂等、零额外状态）。
+
+### D9 — 写侧存在同款洞，面治必须扫到 〔spec-review-amendment · 对抗镜 C high〕
+
+**面治漏了写侧。** `cmd_add` / `cmd_set_status` / `cmd_triage` 三个高频写操作在写前调 `_reject_document_mutation`，其判据是**对同一份自由散文 `problems` 做子串匹配**：
+
+```python
+structural = [p for p in document["problems"] if "marker" in p or "frontmatter" in p]
+```
+
+实测反例：`'块有 B10 但缺总览表行'` → `False` ⇒ **放行写入**——往一个可能正在漏读条目的文件里继续追加新 item。
+
+🔴 **双重讽刺，MUST 记牢**：① 我一直在治「读残缺时别写盘」，而**写侧本来就有一套更老、判据完全不同的放行逻辑**，四件套初版全文零提及；② 这正是我在 tasks 3.7 明令禁止的「消费方用子串还原分级」的**存量实例**——**我禁了未来，没看见现在**。
+
+**改法**：`_reject_document_mutation`（及同族 `_validated_rendered_mutation`）**MUST** 改用与 D3 同一套结构化分级，**MUST NOT** 保留子串匹配。这条**补 task，不只登记残余**——它是「承诺 vs 实得」差距的主要来源（读路径已堵、写路径仍开）。
 
 ### D5′ — 路径 ② (`batch rename`) 须另立机制 〔gstack-amendment · 广审 critical〕
 
@@ -181,7 +239,14 @@ read_rename_snapshot → retag → atomic_write(registry) → atomic_write_bytes
 
 **做法**：`read_rename_snapshot` 完成解析后、**在 `retag` 与任何 `atomic_write` 之前**，就地对 snapshot 做同款完整性判定（复用与 `buglist.py` 分级**同一判据**：可能漏读 ⇒ 阻断），非空即 fail-closed 退出，零写盘。
 
-🔴 **判据 MUST 与路径 ① 同源**：两条路径若各写一套「什么算读残缺」，必然漂移——这正是本仓 `adr/0011`（共用解析核心的返回语义按消费方各自定）要人**逐调用方验证**的原因。实现期 MUST 把判据抽成单一函数供两路调用，**MUST NOT** 各写各的。
+🔴 **「抽成单一函数」与本仓架构冲突，已改判 〔spec-review-amendment · design-voice + 对抗镜 B 双命中〕**：初版要求两路调同一个函数。但 `_scan_pool` 的 docstring 明写走 subprocess 就是为了**避免跨 skill import**、让三个 skill 各自独立演进（`adr/0025`：三份 helper 继续物理复制）。照字面落地只有两条路：**引入被禁的跨 skill runtime 耦合**，或**各写两份却伪称同源**——后者更坏（测不出漂移，`assert fn_a is fn_b` 这类身份核验根本写不出来）。
+
+**改判为**：同源的不是**函数**，是**契约**——
+1. 建立**机器可读的 diagnostic code taxonomy**（稳定码，如 `E-DROP-*` / `W-DIRTY-*`），三个 producer/parser 各自实现但**发同一套码**；
+2. 用**同一份 conformance fixtures** 跑三方，任一方对同一畸形输入吐出不同码即红——**这才是能机械测出漂移的东西**，且不违反自包含架构；
+3. taxonomy 与 fixtures 是**单一源**，放 bundle 权威源随 `sdflow-init update` 分发。
+
+**MUST NOT** 保留 spec 里那条 WHEN 写「检视实现」的 Scenario——它不是运行时可触发条件，只能靠人读代码，属**伪机械门**（同 R7 的病）。
 
 **残余（显式登记）**：`issues.py` 自持的第三份 parser 若本身滞后（不认 frontmatter），路径 ② 与 ③ 无任何防线——**本 change 不覆盖该面**，见 Risks。
 
@@ -189,10 +254,17 @@ read_rename_snapshot → retag → atomic_write(registry) → atomic_write_bytes
 
 既有承诺是「非原子、fail-closed、**重跑收敛**」。但阻断类失败**重跑不收敛**——盘面失配不会因再跑一次而消失，会**永久卡死 done 的收尾步**，在 `/sdflow-ship` 全自动链上表现为无限重试。
 
+🔴 **`2` 这个码已被占用，初版分配不安全 〔spec-review-amendment · 对抗镜 B critical〕**：`issues.py` `main()` 有 `except ValueError → SystemExit(2)`，而 `RecorderLockError(ValueError)` **就是并发锁冲突**（`.recorder.lock` 已存在即抛）。锁冲突是**典型瞬时、重跑即好**的场景，若沿用初版语义，`/sdflow-done` 会把「等一秒就好」硬停成「需人工介入」——**新契约反而制造一类新的错误停机**。
+
+**返修后的码位分配**（先证明码位空闲，再赋语义）：
+
 | 失败类 | 退出码 | 语义 | 调用方 |
 |---|---|---|---|
 | 半途失败（triage / batch add 挂） | `1` | 重跑可收敛 | 自动重跑 |
-| 阻断集非空 | `2` | **重跑无用** | **停下上抛，不重试** |
+| **并发锁冲突**（既有 `RecorderLockError`） | `2`（**既有占用，不动**） | **瞬时，重跑可收敛** | 自动重跑 |
+| 阻断集非空 | **`4`**（新取空闲码） | **重跑无用** | **停下上抛，不重试** |
+
+**实现期 MUST 先跑一遍码位盘点**：把 `issues.py` 全部 `SystemExit` / `_die` / 未捕获异常路径的实际退出码列出来，确认所选码**当前无人占用**，再落地。**MUST NOT** 凭「2 看起来没被用」直接赋义——这次就是这么差点错的。
 
 exit 2 的 stderr **MUST** 明说「重跑无用」+ 列全阻断明细 + 给两条出路（修盘面 / 显式逃生口）。
 
@@ -220,7 +292,16 @@ exit 2 的 stderr **MUST** 明说「重跑无用」+ 列全阻断明细 + 给两
 
 **代价**：要动 `outside-voice.sh`（本就在改）+ 两层 SKILL 的 sidecar 读取约定。**收益**：门从"核模型自洽"升级为"核事实"。
 
-**若实现期证明 sidecar 落不下来**（如 async 分支下 helper 与 `.rc` 写入时序冲突）⇒ **MUST 把 R7 如实降级为语义层约定**（报告写声明、无机械核），**MUST NOT** 保留一个只核模型自洽的门却称其为机械门。
+🔴 **sidecar 还缺身份与生命周期契约，光说「落 sidecar」不够 〔spec-review-amendment · hr-tg + design-voice 双命中 high〕**：run 目录是**per-run 不可变、永久保留、可并发多轮**的（本轮就因重试产生了两个 run-id）。而报告锚行只有 `site=`、**没有 run-id**，`anchor_lint` 的入参也只有 report/layer/catalog/root ⇒ **它根本不知道该读哪个 run 的 sidecar**。用「最新目录」在并发或重跑时会**串轮**，门照样假绿。
+
+**补齐契约（缺一不可）**：
+1. **provenance**：报告落一条受校验的 run-id 锚（或给 `anchor_lint --voice-run-dir`），把「本报告对应哪一次 voice」变成机器可读；
+2. **路径固定**：sidecar 恒为 `<run-dir>/<site>.truncated`，与 `.rc` 同目录同命名法；
+3. **fail-closed 三态**：缺失 / 重复 / 站点不匹配**一律判红**，MUST NOT 猜；
+4. **覆盖两条执行路径**：`exec` 与 **fallback 的 `render-prompt`**（同族降级路径今天根本不产生 sidecar，初版漏了）；
+5. **reuse 分支**：`design-voice` 走 reuse-guard 复用时**本轮没有 helper sidecar** ⇒ MUST 为该分支定义独立的来源证明，MUST NOT 让它落进「sidecar 缺失 ⇒ 判红」而误杀。
+
+**若实现期证明这套契约落不下来** ⇒ **MUST 把 R7 如实降级为语义层约定**（报告写声明、无机械核），**MUST NOT** 保留一个只核模型自洽的门却称其为机械门。
 
 **明确不做**：分块多轮送、动态调 `OV_MAX_CONTEXT_BYTES`、按内容智能裁剪——那些是「让截断变聪明」，是另一个 change。**这一刀只解决「截断了要说出来」。**
 
