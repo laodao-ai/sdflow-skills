@@ -28,6 +28,7 @@ sdflow-issues:
     T169: {"module":"openspec/changes","summary":"done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)","type":"代码质量","status":"OPEN","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":null}
     T170: {"module":"sdflow-issues+buglist+todolist","summary":"recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）","type":"基础设施","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
     T171: {"module":"sdflow-spec-review+code-review","summary":"R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题","type":"可观测性","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T172: {"module":"openspec/workflow/lens-metric","summary":"lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献","type":"可观测性","status":"OPEN","time":"2026-07-19 00:33","change":"fix-mechanical-layer-silent-failures","batch":null}
 ---
 # 2026-07 TODO
 
