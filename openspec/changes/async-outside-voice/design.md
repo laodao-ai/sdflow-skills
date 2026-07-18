@@ -44,9 +44,9 @@
 - **弃**：① 人工 scope-check 表（低于本仓 `一致性机械化优先` 基准 adr/0006(b)「凡机械 prose MUST 脚本化」——人工守正是该被脚本化的机械 prose）；② 现在就抽单一源运行时注入（SKILL 是独立 symlink 目录、无运行时 include 机制，抽取要新建机制 = 越 scope）。
 - **理由**：两 SKILL 本就各有一份 helper 协议（既有重复），本 change 循既有形态最小改动。async 两分支必须逐字一致，否则一个宿主路径静默行为分叉（load-bearing 正确性）——∴ 用机械等值门一次封死漂移面（面治优先于点补），而非再添一份靠人守。等值门属「async 正确落地」的一部分（related + 低成本 → fold）；长期全抽取（单一源注入）超 scope，留 Open Q3 todo（tasks §5.2）。
 
-### ADR-6〔grill-amendment〕：ship 路径下 code-review 跑在主 session，A2 由构造成立（非实测欠债）
-- **事实**（读码，非记忆）：sdflow-ship 是主 session 编排器（`SKILL.md` line 96「本 skill 自身…**不直接派子代理**」；line 101 tickets 路径「ship 主 session inline 执行」），`RUN_CODE_REVIEW→/sdflow-code-review` 为主 session inline skill 调用。code-review 随即 fan-out 自己的镜子代理，但 `outside-voice.sh exec` 是**主 session 的 Bash 调用**——与 A1 spike 已证 run_in_background 存活的上下文同一。
-- **推论**：原 Open Q2 前提（code-review 可能作子代理跑、run_in_background 未必可用）在当前目标态**不成立**，Q2 从「impl 实测欠债」降级为「读码已解」。task 1.3 的 run_in_background 自探**保留**，作用改为兜底「未来 ship 若改为子代理派发 code-review」的目标态漂移（自探不可用→降级同步、报告标注，不假绿）——∴ 无论调用上下文如何演化，机制都 fail-safe。
+### ADR-6〔grill-amendment; spec-review-amendment(F-E)〕：ship 路径下 code-review 跑在主 session，A2 强论证（非逐字实证）+ 自探是实际防线
+- **证据强度校正〔spec-review F-E，三镜独立收敛〕**：ship line 101「主 session inline 执行」**绑在 `sdflow-implement mode=tickets-plan`**、**非** `RUN_CODE_REVIEW→/sdflow-code-review`（后者链序里是裸跳转、无 inline/子代理注记，接地镜 + 对抗镜2 + 广审 B2 独立核实）。∴「code-review 主 session 内联跑」的结论**成立**，但靠 line 96「本 skill 自身…不直接派子代理」+ line 80「meta-orchestrator：chain 现有 skill、不取代」两条**通用**陈述推出（ship 不 spawn 子代理 ⇒ 它 chain 的 /sdflow-code-review 在主 session 内联加载），**不是**一句逐字直接证据钉死。
+- **推论（措辞降级）**：Q2 从「读码**已解**」改为「读码**强提示**，A2 大概率成立」——task 1.3/2.1 的 run_in_background 自探**不是「兜底未来漂移」的冗余保险，而是当前验证 A2 的实际防线**：无论 code-review 调用上下文如何演化（当前主 session、或未来若改子代理派发），自探不可用→降级同步、报告标注、不假绿——机制 fail-safe。
 
 ## 序列图（TG-10）：async dispatch / collect 流（Claude 宿主）
 
