@@ -29,6 +29,8 @@ sdflow-issues:
     T170: {"module":"sdflow-issues+buglist+todolist","summary":"recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）","type":"基础设施","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
     T171: {"module":"sdflow-spec-review+code-review","summary":"R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题","type":"可观测性","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
     T172: {"module":"openspec/workflow/lens-metric","summary":"lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献","type":"可观测性","status":"OPEN","time":"2026-07-19 00:33","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T173: {"module":"sdflow-init/assets/hack/outside-voice.sh","summary":"ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷）","type":"代码质量","status":"OPEN","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T174: {"module":"sdflow-init/tests/test_outside_voice.py","summary":"fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错","type":"代码质量","status":"OPEN","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":null}
 ---
 # 2026-07 TODO
 
