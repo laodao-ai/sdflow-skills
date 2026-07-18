@@ -101,6 +101,49 @@ def _reference_legacy_rows(path, pool):
     return rows
 
 
+def _reference_canonical_rows(path, pool):
+    """Project frontmatter items without calling any recorder parser.
+
+    与 `_reference_legacy_rows` 对偶：legacy 文件的独立投影对象是 `## 状态总览` 表，
+    canonical 文件的独立投影对象是 frontmatter 的 `items:` 块。目标态下新建文件全部是
+    canonical（`buglist.py:1320`）⇒ 若 canonical 分支没有独立投影，本测试的覆盖面会随
+    时间归零（存量 legacy 文件不再新增）。本函数用最朴素的逐行 + json.loads 重实现，
+    刻意不 import recorder 的任何解析函数，保持「独立对拍」的语义。
+
+    返回 None 表示本文件没有 canonical frontmatter（即 legacy-only 文件）。
+    """
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    end = next((index for index in range(1, len(lines)) if lines[index].strip() == "---"), None)
+    assert end is not None, f"{path}: unterminated frontmatter"
+    front = lines[1:end]
+    assert front and front[0].strip() == "sdflow-issues:", f"{path}: unexpected frontmatter root"
+    assert f"pool: {pool}" in "\n".join(front), f"{path}: frontmatter pool mismatch"
+    items_at = next((index for index, line in enumerate(front)
+                     if re.fullmatch(r"\s+items:", line)), None)
+    if items_at is None:
+        return None
+    rows = {}
+    for line in front[items_at + 1:]:
+        match = re.fullmatch(r"\s+([A-Z]\d+): (\{.*\})", line)
+        if not match:
+            break
+        item_id, payload = match.group(1), json.loads(match.group(2))
+        assert item_id not in rows, f"{path}: duplicate canonical ID {item_id}"
+        rows[item_id] = {
+            "module": payload["module"],
+            "summary": payload["summary"],
+            "priority" if pool == "bug" else "type": payload["priority" if pool == "bug" else "type"],
+            "status": payload["status"],
+            "time": payload.get("time") or None,
+            "change": payload.get("change") or None,
+            "batch": payload.get("batch") or None,
+        }
+    assert rows, f"{path}: canonical items block must not be empty"
+    return rows
+
+
 DOGFOOD_OVERLAY_DELTAS = {
     "T2": {},
     "T66": {"status": ("PROPOSED", "DONE")},
@@ -117,11 +160,24 @@ def test_repository_legacy_corpus_matches_independent_projection_item_by_item():
         "todo": (TODO, ROOT / "openspec/issues/todolist", "type"),
     }
     compared = set()
+    canonical_compared = set()
     shadowed = set()
     for pool, (module, directory, specific) in fields_by_pool.items():
         for path in sorted(directory.glob("*.md")):
             baseline = _reference_legacy_rows(path, pool)
-            if baseline is None:        # canonical-only 文件：无 legacy 表可对拍，跳过
+            if baseline is None:
+                # canonical-only 文件：没有 legacy 表可对拍，改用 frontmatter 的独立投影对拍。
+                # MUST NOT 直接 continue —— 目标态下新文件全是 canonical，continue 会让本测试
+                # 的覆盖面随时间归零（这正是它自己诊断出的 dogfood 盲区的镜像）。
+                canonical_baseline = _reference_canonical_rows(path, pool)
+                assert canonical_baseline is not None, f"{path}: neither legacy table nor canonical items"
+                document = module.read_recorder_document(str(path), pool)
+                effective = document["effective_items"]
+                for item_id, expected in canonical_baseline.items():
+                    item = effective[item_id]
+                    for field in ("module", "summary", specific, "status", "time", "change", "batch"):
+                        assert item[field] == expected[field], f"{path}:{item_id}:{field}"
+                    canonical_compared.add((pool, path.name, item_id))
                 continue
             document = module.read_recorder_document(str(path), pool)
             effective = document["effective_items"]
@@ -141,6 +197,7 @@ def test_repository_legacy_corpus_matches_independent_projection_item_by_item():
                         assert effective_value == baseline_value, f"{path}:{item_id}:{field}"
                 compared.add((pool, path.name, item_id))
     assert compared, "dogfood corpus must contain frozen legacy rows"
+    assert canonical_compared, "dogfood corpus must contain canonical items to project"
     assert shadowed == set(DOGFOOD_OVERLAY_DELTAS)
 
 

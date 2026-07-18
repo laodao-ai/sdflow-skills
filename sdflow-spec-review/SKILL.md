@@ -318,6 +318,9 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     🔴 **正向 barrier 语义**：某 dispatch 站点在 Step3 时**尚无终态退出码**（仍 RUNNING）⇒ MUST **让出轮次、等该后台任务的完成/超时通知**后再继续（通知由 harness 推送，这既非长 sleep 也非轮询）。
       **MUST NOT** 单次长 sleep 等待、**MUST NOT** 自造轮询循环。
       **`reason_code="timeout"` 只允许由实际观测到的 `exit 124` 产生**——**MUST NOT** 在未收到该站点终态通知前落 `timeout`。早退假 timeout 把「慢但会成功」的 voice 假降级，正是本机制要消灭的失效模式；且它**逃得过 per-site 站点集核**（该站点仍在集合内、照样判绿），∴ 本条是唯一防线。
+    🔴 **barrier 的执行位：MUST 在主 session，MUST NOT 委派子代理**：本 barrier 的「让出轮次等通知」以及各站点的 collect，MUST 由**主 session 自己**执行——**MUST NOT** 把等待/取回动作交给任何子代理，也 MUST NOT 在子代理内 dispatch 后由外层跨轮次接手。
+      依据（2026-07-18 实测，两侧都有正面证据）：**子代理上下文的轮次终结会连带回收该上下文在飞的后台任务**——一次观测中该上下文 3 个在飞任务同时被 SIGTERM，**无 envelope、无完成通知** ⇒ 等待方既拿不到退出码、也永远等不到那条通知；而**主 session 让出轮次转空闲不触发回收**——心跳探针 702s 跑满、exit 0、ppid 全程稳定无 reparent、并跨过 600000ms 外层上限。
+      ∴ dispatch 与 collect MUST 同在主 session：子代理内派出的后台任务只允许在**该子代理自己的轮次内**取回，MUST NOT 跨其轮次边界等待。
     **安全（MUST）**：collect **只取「结构化退出码 + exit 0 时的 stdout findings」**。helper 在 exit≠0 时把 runner **原始 stderr + 未扫描的 final-message 前 3 行**写 stderr，该段**绕过出境 `secret_scan`**（既有缺口），而后台化把它落进了 harness 托管的后台任务输出文件（新持久化载体）⇒ **MUST NOT 把后台文件里的原始 stderr 当 findings 采信**，只允许摘要写进锚行外正文。
   **⑦ 退出码 → 去向 / reason_code（两分支同一张表，无遗漏；未知码 MUST NOT 读作 ok）**：
     exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）

@@ -20,6 +20,8 @@ sdflow-issues:
     T161: {"module":"sdflow-spec-review + sdflow-code-review","summary":"等值门只覆盖 marker 段；圈外 preflight/fallback/锚行段两层也高度相似但漂了不会红","type":"基础设施","status":"OPEN","time":"2026-07-18 18:01","change":"async-outside-voice","batch":null}
     T162: {"module":"sdflow-spec-review / sdflow-code-review（outside-voice 调度层）","summary":"Codex 宿主方向的跨模型 voice efficacy=0：架构性无法离开关键路径，待 codex deferred_executor 稳定或外部 claude daemon 方案再议","type":"功能增强","status":"OPEN","time":"2026-07-18 18:46","change":"async-outside-voice","batch":null}
     T163: {"module":"sdflow-spec-review / sdflow-code-review + hack/check_async_branch_parity.py","summary":"async host 调度段的 DRY 全抽取：把 marker 段抽成单一源注入两 SKILL，替代当前「两份副本 + 机械等值门」","type":"代码质量","status":"OPEN","time":"2026-07-18 18:46","change":"async-outside-voice","batch":null}
+    T164: {"module":"sdflow-spec-review / sdflow-code-review 的 async 调度段 ④ 命令形态（context 路径拼接）","summary":"outside-voice exec 的 --context-file 路径直接拼进 shell 命令且未加引号：路径含空格/shell 元字符时会参数拆分或执行非预期命令（跨模型 voice 独立提出，Task 5 报告 §10 第 2 条，本票未处理）","type":"基础设施","status":"OPEN","time":"2026-07-18 19:34","change":"async-outside-voice","batch":null}
+    T165: {"module":"openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段","summary":"R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动","type":"基础设施","status":"OPEN","time":"2026-07-18 19:35","change":"async-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
