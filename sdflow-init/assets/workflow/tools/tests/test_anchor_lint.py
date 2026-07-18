@@ -936,6 +936,17 @@ def test_ds_declared_fewer_than_actual_is_red():
     assert any(x["kind"] == "declared-not-expected" for x in v)
 
 
+def test_ds_declared_empty_string_is_red():
+    """declared="" （合法空串→空集）MUST 判红：空集永不等于期望集（该层恒有一个 base 站点）。
+
+    行为本已 fail-closed，此处锁死，防后续把空串误当「本层无需站点」的合法豁免。
+    """
+    rpt = _ov(site="design-voice") + "\n" + _HR_TG_EMPTY + "\n" + _ds("") + "\n"
+    v = _dsv(rpt, layer="spec-review")
+    assert any(x["kind"] == "declared-not-expected" for x in v)
+    assert any(x["kind"] == "site-unexpected-anchor" for x in v)
+
+
 def test_ds_declared_shrink_and_drop_anchor_still_red():
     """🔴 反规避：模型同时缩 declared 又不落锚（两边自洽）——公式重算仍判红，不放行。"""
     rpt = _ov(site="design-voice") + "\n" + _HR_TG_HIT + "\n" + _ds("design-voice") + "\n"

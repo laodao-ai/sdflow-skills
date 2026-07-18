@@ -554,7 +554,7 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
     裸 grep 必自指假阳，且形成 fence 口径二源）。"""
     v = []
     # ① 实落站点集：fence 外 outside-voice 锚的 site=
-    actual, seen_sites = set(), []
+    actual = set()
     for ln in fence_outside_lines(report_text):
         if anchor_prefix(ln) != "outside-voice":
             continue
@@ -567,9 +567,8 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
             v.append({"anchor": anchor, "field": "site", "kind": "missing-field"})
             continue
         site = kv["site"]
-        if site in seen_sites:                               # set 会吞掉歧义，显式拦
+        if site in actual:              # 重复站点锚显式拦——直接查 actual，不另存一份 list
             v.append({"anchor": anchor, "field": "site", "kind": "duplicate-site-anchor"})
-        seen_sites.append(site)
         actual.add(site)
     # ② declared-sites 锚（缺失/非唯一一律 fail-closed，MUST NOT 静默放行或取首）
     ds = [ln.strip() for ln in fence_outside_lines(report_text) if anchor_prefix(ln) == "declared-sites"]
@@ -605,6 +604,10 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
     expected = {_LAYER_BASE_SITE[layer]} | ({"hr-tg"} if hit_nonempty else set())
     if set(declared) != expected:
         # 🔴 反规避：只比 declared vs 实落 会被「同时缩 declared 又不落锚」两边自洽绕过；本条锚公式。
+        # ⚠️ 强度边界（勿高估）：本条只在 hr-tg 锚的 `declared=` 可信时成立——该字段的**正确性**
+        # 是 S1 语义残余（无确定性信号，adr/0018；`check_hr_tg` 只守其内部自洽）。∴ hr-tg
+        # `declared=` 漏报真实命中的 TG + 不落 hr-tg 站点锚，仍可两边自洽通过本门。这是设计
+        # 已登记的诚实边界，不是本门的漏洞——但读者 MUST NOT 把本条读成「无条件反规避」。
         v.append({"anchor": anchor, "field": "declared", "kind": "declared-not-expected",
                   "detail": f"declared={sorted(set(declared))} expected={sorted(expected)}"})
     # ④ declared ↔ 实落站点集比对（本票核心：并发 2 站点漏收一个 → site-missing-anchor）
