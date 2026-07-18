@@ -108,9 +108,9 @@ code-review 层获得与 spec-review 逐字对齐的 host 分支、站点记账�
 
 - [x] 核 outside-voice 脚本、合法组合矩阵、出境安全三件套零改动（diff 为空）
 - [x] 锚契约全笛卡尔回归与 change 前逐条一致
-- [ ] 真实评审 smoke：voice 锚 reason_code 为 ok，非 timeout
-- [ ] smoke 记录每站点派发/终态通知/落锚三时刻并确认单调
-- [ ] smoke 记录 fan-out 墙钟与 voice 完成时刻，校准「重叠非叠加」
+- [x] 真实评审 smoke：voice 锚 reason_code 为 ok，非 timeout
+- [x] smoke 记录每站点派发/终态通知/落锚三时刻并确认单调
+- [x] smoke 记录 fan-out 墙钟与 voice 完成时刻，校准「重叠非叠加」
 - [x] 降级 smoke：后台能力不可用时回落同步、报告标注、外层超时实参 ≥330000ms、voice 正常完成
 - [x] 错误路径 smoke：voice 非零退出时 collect 只取结构化状态，不采信后台文件原始 stderr
 - [x] harness 后台输出文件的 TTL/权限/清理归属已实测记录，未定项显式登记
