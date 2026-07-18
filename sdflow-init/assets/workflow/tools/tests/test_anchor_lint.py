@@ -1079,9 +1079,15 @@ def test_ds_reuses_fence_outside_lines_no_bare_grep():
 def test_ds_self_referential_real_report_no_false_positive():
     """🔴 自指测试：拿本 change 自己的 spec-review-report.md（真实文件，正文在讨论锚格式）跑，
     补上应有的 declared-sites 锚 + 围栏内模版锚后 MUST 零违规（裸 grep 实现必在此假阳）。"""
-    real = Path(__file__).resolve().parents[5] / "openspec/changes/async-outside-voice/spec-review-report.md"
+    # 归档后 active 路径消失 ⇒ 回落到 archive/ 找同名报告，否则本用例会在归档当天起【永久跳过】、
+    # 自指覆盖面静默归零（与它自己要防的 dogfood 盲区同型）。
+    root = Path(__file__).resolve().parents[5]
+    real = root / "openspec/changes/async-outside-voice/spec-review-report.md"
     if not real.exists():
-        pytest.skip(f"真实报告不在预期路径: {real}")
+        cands = sorted(root.glob("openspec/changes/archive/*-async-outside-voice/spec-review-report.md"))
+        real = cands[-1] if cands else real
+    if not real.exists():
+        pytest.skip(f"真实报告不在 active 也不在 archive: {real}")
     text = real.read_text(encoding="utf-8")
     # 该报告 hr-tg 锚 hit=TG-09,TG-17,TG-26 ⇒ HR-TG∩≠∅；实落 site=design-voice + hr-tg
     subset = {"TG-09", "TG-17", "TG-26"}
