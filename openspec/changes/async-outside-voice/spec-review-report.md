@@ -5,20 +5,20 @@
 <!-- sdflow:hr-tg v1 hit="TG-09,TG-17,TG-26" declared="TG-09,TG-17,TG-26" evidence="async 多 voice+镜后台并发(TG-26)、voice 单站点状态机(TG-09)、出境 scan/承重墙不变承重声明(TG-17)" -->
 <!-- sdflow:outside-voice v1 site="design-voice" guard="simulated-source" host="claude" runner="codex" reason_code="ok" findings="5" truncated="false" -->
 <!-- sdflow:outside-voice v1 site="hr-tg" guard="none" host="claude" runner="codex" reason_code="ok" findings="5" truncated="false" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="11" 采纳="11" 裁掉="0" defer="0" 独立="0" sev="致0/高4/中5/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="17" 采纳="17" 裁掉="0" defer="0" 独立="6" sev="致1/高7/中6/低3" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致0/高2/中2/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="0" sev="致0/高2/中3/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="2" 采纳="2" 裁掉="0" defer="0" 独立="0" sev="致0/高1/中0/低1" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="5" 采纳="3" 裁掉="2" defer="0" 独立="1" sev="致0/高1/中1/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="0" sev="致0/高3/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致0/高3/中3/低0" -->
 
 ## 收敛口（决定性）
 
-**不建议进设计 HARD-GATE。需一轮设计返修（把下列高危落进 design/tasks），再复审。**
+**建议进设计 HARD-GATE。** 返修轮（5 高危 + 8 自动决策）与**接缝冷复审轮**（1 致 + 3 高 + 2 中，见下「接缝冷复审」节）均已落盘四件套，`openspec validate --strict` + `anchor_lint` 双绿；余项为**已登记的 impl 期残余**（F-L/F-O/F-J），不阻塞设计门。
 
-方向对（Claude 宿主 async off-critical-path 是正解）。**原阻塞级 F-A 的「900s 够不着」半已被 spike 证伪**〔2026-07-18 边界 spike：`run_in_background` 后台任务跑满 **660s、跨过 600000ms 外层上限、exit 0**、ppid 全程 11092 稳定不 reparent——600ms 上限**不管**后台、900s 可达、harness 托管生命周期实证〕→ **F-A 降为高危**（剩「collect 通知模型 + exit code 传输」的设计精度，与 900s 数值无关，非机制重塑）。当前 = **0 阻塞 + 5 高危 + 7 中低**：机制可行，返修 = 把精度/分支/机械化缺口落进正文，非重做地基。dogfood 附记：两 codex voice 经 `run_in_background` 跑到完成、reason_code=ok（但均 <600s，未压到 900s 真实负载——见 F-L）。
+方向对（Claude 宿主 async off-critical-path 是正解）。**原阻塞级 F-A 的「900s 够不着」半已被 spike 证伪**〔2026-07-18 边界 spike：`run_in_background` 后台任务跑满 **660s、跨过 600000ms 外层上限、exit 0**、ppid 全程 11092 稳定不 reparent——600ms 上限**不管**后台、900s 可达、harness 托管生命周期实证〕→ **F-A 降为高危**（剩「collect 通知模型 + exit code 传输」的设计精度，与 900s 数值无关，非机制重塑）。当前 = **0 阻塞 + 5 高危 + 7 中低**：机制可行，返修 = 把精度/分支/机械化缺口落进正文，非重做地基。〔以上为**主审轮**计数；**接缝冷复审轮**另 +1 致 +3 高 +2 中 +1 低（G1–G7），亦已全部落盘——见下「接缝冷复审」节〕dogfood 附记：两 codex voice 经 `run_in_background` 跑到完成、reason_code=ok（但均 <600s，未压到 900s 真实负载——见 F-L）。
 
-**roster**（host=claude · opus/sonnet/haiku · subagents=available）：Step1 冷广审(simulated) + 领域镜 + 对抗镜×2 + 接地镜 + 跨模型 voice×2（design-voice/hr-tg，均 codex，均 reason_code=ok）。收敛度高（15 条合并 findings，仅 2 条单镜独占），跨模型 voice 独立贡献显著（hr-tg 独占 1 条 CRITICAL + 与 design-voice 共同锁定阻塞项）。
+**roster**（host=claude · opus/sonnet/haiku · subagents=available）：Step1 冷广审(simulated) + 领域镜 + 对抗镜×2 + 接地镜 + 跨模型 voice×2（design-voice/hr-tg，均 codex，均 reason_code=ok）。收敛度高（15 条合并 findings，仅 2 条单镜独占），跨模型 voice 独立贡献显著（hr-tg 独占 1 条 CRITICAL + 与 design-voice 共同锁定阻塞项）。**接缝冷复审轮**另派 2 个冷镜（对抗组合镜 + 机械一致性镜，均 fresh context、不重跑 voice），产出 9 条**全部单镜独占**——`lens-metric` 锚已随之最终化（对抗镜 `独立` 0→6、sev 首现 `致1`）。
 
 ---
 
@@ -54,6 +54,8 @@
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+> **拍板状态更新（2026-07-18）**：**Q2/Q3/Q4 已由用户拍板**（「都同意」）并于返修轮全部落盘——Q2→async-only 900s 执行模式矩阵；Q3→**fold** per-site 机械核（其 declared 定义随后经接缝轮 G1 校正）；Q4→marker 文本 + `check_async_branch_parity.py` 列进 tasks §2.2。上框保留原始登记形态供审计，**当前无未决拍板项**。
+>
 > 反静默压制：本轮无「裁掉」项。唯一被推翻的是**对抗镜2 自己的 1d 论断**（「render_prompt 一次性读入、TOCTOU 已闭」）——主审读码核定 **hr-tg 的 HV1 才对**（scan@L153 与 cat@L164 是对 live 文件的两次独立读，窗口窄但真实存在），故 F-G 判**成立**、非裁掉。
 
 ---
@@ -116,4 +118,26 @@
 
 ## 与既有工件
 
-Step1 广审 `gstack-review.md`（B1-B7，commit 5116c7a）已入本报告合并池。**本报告 findings 尚未回灌 design/tasks**（除 F-E 的 ADR-6 引文已 [spec-review-amendment] 修正）——F-A 阻塞项可能重塑机制（若 run_in_background 不豁免 600s 上限，天花板/collect 都要改），故其余 amendment 留返修轮、待 Q1-Q4 拍板后一并落，避免在待重塑的机制上做局部优化（DOC-1 + 基准）。
+Step1 广审 `gstack-review.md`（B1-B7，commit 5116c7a）已入本报告合并池。**本报告 findings 已全部回灌 design/tasks/specs/proposal**：F-A~F-O 于返修轮落（标 `[spec-review-amendment]`），G1~G7 于接缝冷复审轮落（标 `[seam-review-amendment]`）。回灌顺序遵「先等 F-A 定论再改」的纪律——F-A 的机制重塑风险经 660s 边界 spike 排除后，才一并落 amendment，避免在待重塑机制上做局部优化（DOC-1 + 基准）。
+
+## 接缝冷复审（返修轮之后的独立冷层，2026-07-18）
+
+**为何加这一轮**：返修轮动了核心机制（collect 模型 / 超时矩阵 / per-site 核），而「返工在接缝处引入新洞」是本仓实证教训。派 **2 个 fresh-context 冷镜**只盯返修接缝（非全 roster、不重跑 voice）：①机械一致性镜（跨 4 文件穷举比对数值/枚举矩阵）②对抗组合镜（接地真实脚本，打 5 处目标态接缝）。
+
+**产出 1 致 + 3 高 + 2 中 + 1 低，全部采纳落盘**：
+
+| # | 严重度 | 问题 | 接地证据 |
+|---|---|---|---|
+| **G1** | **致** | `declared-sites` 定义为「应 **dispatch** 站点集」⇒ **在最常见路径上假红**：复用态 `design-voice` 未派**却落锚**；`code-voice` 是 always ⇒ 每轮 code-review 必假红；`guard=` 语义站点相关不可承重 | 归档 **44 条** `site="design-voice" guard="none"`；`sdflow-code-review/SKILL.md` 第二步半 C3·R1 |
+| **G2** | 高 | EXEC_EXIT「取末行」**不是自保证机制**：`outside-voice.sh:247` 逐字节透传且**不保尾换行** ⇒ 与正文粘连；本 change 自指 ⇒ voice 正文必含 `EXEC_EXIT=` 字样 | `outside-voice.sh:247`；全仓 EXEC_EXIT **零实现**（纯 prose）；同型 = `gate-substring-detection-dogfood` |
+| **G3** | 高 | barrier **只有禁令、无正向语义**：禁 sleep 禁轮询，但站点仍 RUNNING 时怎么办未写 ⇒ 实现期可能早退落假 `timeout`；**且该假绿逃过 per-site 站点集核** | ADR-3 判据「在手或按退出码降级」对 RUNNING 态皆不满足 |
+| **G4** | 高 | 新核若走独立裸 grep ⇒ 与 `anchor_lint` 的 fence 口径漂移，吃进正文模版/示例锚 → **自指假阳** | `anchor_lint.py` 8 处一致用 `fence_outside_lines` |
+| **G5** | 中 | per-run context 路径只写裸 `<run-id>/…` **未钉父目录** ⇒ 落到 `.outside-voice/` 外则 gitignore 不覆盖；且两 SKILL 现行 context 构造行**未列为改动点** | `.gitignore:19` = `**/.outside-voice/`（递归覆盖，钉在其下即安全） |
+| **G6** | 中 | `proposal.md` Open Q1 是返修轮**漏改的陈旧分支**（仍写「轮询」「900s 无 async-only 限定」「按现有 exit-code 分支」），与同文件 What Changes 自相矛盾 | `proposal.md:47` vs `:10`；design 侧同条已更新 |
+| **G7** | 低 | ① 我在 `9697dda` 写的「additive **站点无关**存在核」措辞不成立（该核按层区分期望站点集）② §4.3 未断言降级路径外层超时实参真 ≥330000ms | 见 G1；`SKILL:276` 自承外层无法机械强制 |
+
+**判为「不是洞」的 2 条（反静默压制，连理由登记）**：
+- **降级 sync 外层超时漏设**（疑似 B）：**不成立**——内外两半在 `spec.md:22-24`、`tasks §1.1`、`§3.3` 三处齐备，且自探是 **dispatch 前的前置分叉**、不存在「中途从 async 回落」的窗口，≥330s 由既有同步协议条款继承。仅残余「无断言」→ 已并入 G7。
+- **F-C 后门耦合矩阵**（疑似 E）：**不成立**——declared 的输入来自 `outside_voice_guard.py` / `hr_tg_intersect.py` 两个独立脚本，比对侧只读锚的 `site=`（`anchor_lint` 明确不校验该字段）⇒ 与合法组合矩阵无数据往来。仅「additive/站点无关」措辞需撤回 → 已并入 G7。
+
+**🔴 本轮最重要的元教训（记入，因为犯错的是主审自己）**：G1 之所以逃过前一轮**全 6 镜 + 2 跨模型 voice**，是因为本 change 自己的 dogfood 跑恰好是 `guard="simulated-source"`（自跑）+ hr-tg 已派 = **declared 与实落恰好相等**的那唯一一种配置。**「现在能跑」被当成了「是对的」——基准③（目标态导向）的教科书案例。** 这也是「冷层承重、不可优化掉」的又一次实证：热主 session 刚做完返修、对自己的产物最没有距离感。

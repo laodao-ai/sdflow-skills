@@ -25,7 +25,7 @@
 
 ### Requirement: async dispatch 不改变锚契约与诚实降级
 
-async dispatch SHALL 是**纯执行时机**的改变——锚行契约、`reason_code` 枚举、`anchor_lint` 合法组合矩阵、`outside-voice.sh` 出境安全三件套 MUST 逐字不变；collect SHALL **通知驱动（非轮询）**、按**结构化退出码 envelope** 分支，voice 未按天花板完成 / 退出码未知 / task lookup 失败时 SHALL 保守诚实降级（同族 fallback），MUST NOT 假绿。
+async dispatch SHALL 是**纯执行时机**的改变——锚行契约、`reason_code` 枚举、`anchor_lint` 合法组合矩阵、`outside-voice.sh` 出境安全三件套 MUST 逐字不变；collect SHALL **通知驱动（非轮询）**、按**结构化退出码 envelope** 分支，voice 未按天花板完成 / 退出码未知 / task lookup 失败时 SHALL 保守诚实降级（同族 fallback），MUST NOT 假绿；barrier 时站点仍 RUNNING SHALL 让出轮次等终态通知，`reason_code="timeout"` SHALL **只由实际观测到的 `exit 124`** 产生。
 
 #### Scenario: 锚契约与矩阵不变
 - **WHEN** 本 change 落地后跑 `anchor_lint` 的 host×runner×reason_code×findings 全笛卡尔 golden
@@ -39,9 +39,26 @@ async dispatch SHALL 是**纯执行时机**的改变——锚行契约、`reason
 - **WHEN** 后台 voice 已 dispatch 但评审中止 / 未 collect
 - **THEN** 该站点 SHALL 无 `reason_code="ok"` 锚（读作 voice 缺席），MUST NOT 因"起过一次"而假绿
 
+#### Scenario: barrier 时站点仍 RUNNING 不得早退落 timeout
+- **WHEN** Step3 barrier 时某 dispatch 站点尚无终态退出码（后台 voice 仍在跑、未撞天花板）
+- **THEN** 主 session SHALL 让出轮次等待该任务的完成/超时通知，MUST NOT 落 `reason_code="timeout"`；`timeout` SHALL 只由实际观测到的 `exit 124` 产生——早退假 timeout 会把「慢但会成功」的 voice 降级（即本 change 要消灭的 efficacy=0），且该假绿**逃过 per-site 站点集核**（站点仍在集合内）
+
+#### Scenario: 退出码 envelope 不可被 voice 正文伪造
+- **WHEN** voice 的 stdout 正文含 `EXEC_EXIT=` 样式文本（本 change 自指场景下必然出现），或 runner 回传的 last-message **无尾换行**（`outside-voice.sh:247` 逐字节透传、不补换行）
+- **THEN** 退出码 SHALL 取自 wrapper 以 `printf '\n<哨兵>%s\n'` **强制前置换行**发出的**唯一哨兵行**、按**整行锚定**匹配；扫到 **0 行或 ≥2 行 SHALL 判 `exec-error`**（≥2 行 = voice 注入的确定性信号），MUST NOT 从 voice 正文推断退出码
+
 #### Scenario: per-site 完整性机械可审（并发多站点漏收）
 - **WHEN** Claude 宿主同轮并发 dispatch 2 个站点（design-voice + hr-tg），其一 dispatch 后未 collect、另一正常落锚
-- **THEN** 机械核 SHALL 报错（`declared` 应 dispatch 站点集 ≠ 实落 `outside-voice` 锚站点集）——MUST NOT 因 anchor_lint 家族级门（"outside-voice" 有 ≥1 行即过）而判 CLEAN，使「漏收」与「合法不派」机械可区分
+- **THEN** 机械核 SHALL 报错（`declared` 应**有锚**站点集 ≠ 实落 `outside-voice` 锚站点集）——MUST NOT 因 anchor_lint 家族级门（"outside-voice" 有 ≥1 行即过）而判 CLEAN，使「漏收」与「合法不派」机械可区分
+
+#### Scenario: 复用态 MUST NOT 假红（declared 按「应有锚」而非「应 dispatch」）
+- **WHEN** spec-review 复用 autoplan 的 codex voice（reuse-guard `reason_code=none` ⇒ **未** dispatch `design-voice`，但报告仍落 `site="design-voice"` 锚——归档实证 44 条）
+- **THEN** 机械核 SHALL 判 CLEAN：`declared` SHALL 含 `design-voice`（该层**恒有锚**站点），MUST NOT 定义为「应 dispatch 的站点集」（否则在最常见路径上假红）；同理 `code-voice`（code-review，always）SHALL 恒在 declared 内
+- **AND** 机械核 SHALL NOT 解析 `guard=` 字段——其语义**站点相关**（`design-voice` 上 `none`=复用·未派，`hr-tg` 上 `none`=填充值·已派），拿它承重即引入 site 特判
+
+#### Scenario: 机械核不得自指假阳（fence 口径单一源）
+- **WHEN** 报告正文含模版或示例锚行（讨论锚格式的 change 报告本身即是）
+- **THEN** 机械核 SHALL 复用 `anchor_lint.py` 的 `fence_outside_lines` 口径统计真锚，MUST NOT 另起裸 grep 解析路径（否则模版/示例锚被计入 → 自指假阳，且形成 fence 口径二源）
 
 #### Scenario: 错误路径未扫描 stderr 不当 findings
 - **WHEN** 后台 voice `exit≠0`（helper 把未过出境 scan 的 runner stderr 写 stderr、落进 harness 后台输出文件）

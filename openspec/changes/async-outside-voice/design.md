@@ -34,7 +34,14 @@
 ### ADR-3〔grill; spec-review-amendment(F-A,F-B,F-D)〕：async 天花板 = 调大 `--timeout`（**仅 async 分支**）；collect 是**通知驱动 barrier**（非轮询）；按**结构化**退出码分支
 - **天花板（F-B 执行模式矩阵）**：`--timeout` 是 caller flag（脚本不改）。**仅 `$SDFLOW_HOST=claude` 的 async 分支**用 config 默认 **900s**——backgrounding 解除外层阻塞压力，**spike 实证**（2026-07-18：后台任务跑满 660s、跨过 Bash 外层 600000ms 上限、exit 0、ppid 稳定不 reparent）天花板可达。**Codex 同步分支 + claude 自探失败降级同步分支**保留 **300s 内层 / 外层 ≥330s**（这两条仍同步阻塞，套 900s 会假超时、或不再是「同步现状」）。始终机械满足 **外层 ≥ 内层+30s**。900s 是「worst-case 愿等多久」的 max-耐心天花板、非 T_voice 估计（任务方差大、单发无意义），做成 `config.yaml` 键（默认 900s，仓库可覆盖）。
 - **collect 是通知驱动（F-A，非「轮询」）**：本 harness 的 `run_in_background` 是**完成推送通知**（"you will be notified — do not poll"；长 sleep 被 block），**不是**可主动轮询的状态查询。∴ dispatch 记 `站点↔task_id`；完成通知**异步到达**（可能早于 Step3）→ 主 session 接住即暂存该站点结果；Step3 是 **barrier**：每个「实际 dispatch 过的站点」结果 MUST 已在手（已 collect）或已按退出码降级，**MUST NOT** 单次长 sleep 等待、MUST NOT 自造轮询循环。
-- **退出码结构化传输（F-D）**：按 helper 退出码分支（`0`=ok / `124`=timeout / `1`=exec-error / `3`=secret-hit / **`2`=用法错·context 不可读→并入 exec-error**，reason_code 枚举不新增）。退出码 MUST 由**可信结构化 envelope** 取得（后台命令末行固定 `EXEC_EXIT=<rc>`、与 voice 正文分隔），**MUST NOT** 从 voice 正文推断。**未知/丢失退出码 / task lookup 失败 → 保守 `exec-error` 降级**，MUST NOT 读作 `ok`。
+  **正向 barrier 语义〔seam-review-amendment G3〕**：Step3 时某 dispatch 站点若**尚无终态退出码**（仍 RUNNING），MUST **让出轮次、等该后台任务的完成/超时通知**——这既非长 sleep 也非轮询循环（通知由 harness 推送）。**`reason_code="timeout"` 只允许由实际观测到的 `exit 124` 产生**：MUST NOT 在未收到该站点终态通知前落 `timeout`。否则把「慢但会成功」的 voice 假降级 = **正是本 change 要消灭的 efficacy=0**；且该假绿**逃过 per-site 核**（站点仍在集合内、判绿，见并发节「已知不覆盖」）⇒ 唯一防线就是本条正向规则 + `tasks §4.1` 的三时刻单调锚。
+- **退出码结构化传输（F-D）**：按 helper 退出码分支（`0`=ok / `124`=timeout / `1`=exec-error / `3`=secret-hit / **`2`=用法错·context 不可读→并入 exec-error**，reason_code 枚举不新增）。退出码 MUST 由**可信结构化 envelope** 取得，**MUST NOT** 从 voice 正文推断。
+  **「取末行」不自保证 ⇒ envelope 三条 MUST 同时成立〔seam-review-amendment G2〕**：`outside-voice.sh:247` 的 `cat "$workdir/last-message.md"` **逐字节透传模型自由文本、且不保证尾换行**（上游 `claude -p` 直出与 codex `--output-last-message` 提取均不保证）⇒ 朴素 `…; echo "EXEC_EXIT=$?"` 会与 voice 正文末行**粘成同一物理行**（严格锚定→0 命中→把**成功** voice 假降级；宽松 grep→可能取到正文里的**伪造值**）。且本 change **自指**：审它的 voice 正文必然出现 `EXEC_EXIT=` 字样（`gate-substring-detection-dogfood` 同型陷阱）。∴
+  ① wrapper **强制前置换行 + 唯一哨兵**：`printf '\n<<<SDFLOW_EXEC_EXIT>>>%s\n' "$rc"`——用 `printf '\n…'` 而非 `echo`，把「上游有无尾换行」的不确定性彻底消掉；
+  ② parse **整行锚定**：`^<<<SDFLOW_EXEC_EXIT>>>([0-9]+)$`；
+  ③ **多重匹配即篡改**：wrapper 恒发且只发一行 ⇒ 扫到 **0 行或 ≥2 行 → `exec-error`**（≥2 行正是 voice 注入了一行的**确定性信号**）。
+  ⇒ 此三条把「不可伪造」从 prose 承诺变成**机械可判**；缺任一条，「MUST NOT 从正文推断」就没有兑现手段。
+  **未知/丢失退出码 / task lookup 失败 → 保守 `exec-error` 降级**，MUST NOT 读作 `ok`。
 - **弃**：① 新造 dispatch/collect 子命令+jobdir（多余，ADR-1）；② Step3 到「镜子跑完+小 grace」即回落同族（否：早回落把长尾还给 efficacy=0，max 耐心=天花板）；③ 900s 套同步分支（F-B：假超时/毁同步现状）。
 - **理由**：voice 与 fan-out 镜重叠 ⇒ 多数任务镜子跑完前就绪（免费），慢任务落长尾多等（「慢但真」，整轮墙钟 ≈天花板，但 collect 靠通知/暂存非单条长 Bash ∴ 无 ≥330s 单次阻塞）。锚 reason_code 契约完全不变；不假绿。
 
@@ -88,19 +95,27 @@
 ## 并发与共享状态访问策略（TG-26）
 
 Claude 宿主并发实体：`design-voice` voice + `hr-tg` voice + N 个 fan-out 镜子代理，全后台/并行。
-- **context 文件**：按站点固定命名（`.outside-voice/design-voice-context.md` / `hr-tg-context.md`，SKILL line 272-274），站点间**不共写** → 无竞争。
+- **context 文件**：per-run 不可变路径 `.outside-voice/<run-id>/<site>-context.md`（见下「孤儿/泄漏」F-G），站点间**不共写**、轮次间**不覆盖** → 无竞争。
 - **后台输出**：harness `run_in_background` 每任务独立输出文件 → 任务间不共写。
 - **report 写**：单一主 session 在 Step3 顺序 collect + merge → 无并发写 report。
 
 ∴ **无数据竞争**：并发实体各写各的、汇聚点（Step3 主 session）单线程。**新增面 = 主 session 记账「站点↔task_id」映射**（model-driven 记账易错）——SKILL 指令 MUST 显式列该映射；**且 dispatch 时把 task_id 追加落盘**（写该站点 context 目录 manifest，F-I），使「是否真派发过」有落盘证据、脱离纯记忆。
 
-**per-site 完整性机械核〔spec-review-amendment F-C·Q3 fold·基准①〕**：两个 dispatch 门控条件（reuse-guard `reason_code≠none`、HR-TG∩≠∅）在 Step1/2 **机械可算** ⇒「本轮应 dispatch 的站点集」是确定信号。anchor_lint 家族级门（"outside-voice" 有 ≥1 行即过、不核 per-site，`anchor_lint.py:154/595`）放过「并发 2 站点漏收一个」→ 返修轮 **fold 一个轻量机械核**：报告落 `declared-sites` 集（承 hr-tg 锚 `declared=` 先例 adr/0018），核「declared 应 dispatch 站点集 == 实落 `sdflow:outside-voice` 锚站点集」，不等即红（**additive 存在核**——独立小脚本 或 anchor_lint 附加校验，**MUST NOT 触碰 host/runner/reason_code 合法组合矩阵**，∴ 与「不改矩阵」Non-Goal 不冲突）。「无锚=缺席」的诚实由此**机械可审**、非纯 prose 兜底。
+**per-site 完整性机械核〔spec-review-amendment F-C·Q3 fold·基准①〕〔seam-review-amendment G1/G4/G7〕**：anchor_lint 家族级门（"outside-voice" 有 ≥1 行即过、不核 per-site，`anchor_lint.py:154/595`）放过「并发 2 站点漏收一个」→ fold 一个轻量机械核：报告落 `declared-sites` 集（承 hr-tg 锚 `declared=` 先例 adr/0018），核「declared == 实落 `sdflow:outside-voice` 锚站点集」，不等即红。「无锚=缺席」的诚实由此**机械可审**、非纯 prose 兜底。
 
-**dispatch 门控与条件性**：后台 voice 数**不定（0/1/2）**，记账/机械核按「实际 dispatch 过的站点」：
-- `design-voice`（spec-review）前置门控于 reuse-guard：仅 `reason_code≠none`（autoplan voice 不可复用）才 dispatch；可复用则整体不派。
+- **declared = 该层「恒有锚站点」∪「条件站点（条件成立时）」**：spec-review = `{design-voice}` ∪ `{hr-tg | HR-TG∩≠∅}`；code-review = `{code-voice}` ∪ `{hr-tg | HR-TG∩≠∅}`。
+  **MUST NOT 定义为「应 dispatch 的站点集」**——`design-voice` 在**复用态**（reuse-guard `reason_code=none`，未 dispatch）**照样落锚**（归档实证 44 条 `site="design-voice" guard="none"`），按 dispatch 定义会在**最常见路径上假红**；`code-voice` 是 always（`sdflow-code-review/SKILL.md` 第二步半 C3·R1），按 dispatch 定义则**每轮 code-review 必假红**。
+  ∴ 公式**唯一动态输入 = HR-TG∩**（`hr_tg_intersect.py` 出）；**MUST NOT 解析 `guard=`**——该字段语义**站点相关**（`design-voice` 上 `none`=复用·未派，`hr-tg` 上 `none`=填充值·已派），拿它承重即引入 site 特判。
+  ⇒ 两层 declared 站点集**不同** ∴ 该计算 MUST 留在等值门 marker **外**（与 §2.2「站点枚举留 marker 外」本就一致，零额外代价）。
+- **实现约束**：**MUST 复用 `anchor_lint.py` 的 `fence_outside_lines` 口径**（该文件 8 处一致用它剔围栏行），**MUST NOT 另起裸 grep 解析路径**——报告正文含模版/示例锚（本 change 报告自身即在讨论锚格式），裸 grep 必**自指假阳**。∴ **优先实现为 `anchor_lint` 附加校验、而非独立脚本**（兼避 fence 口径二源）。
+- **诚实边界**：该核**读锚的 `site=` 字段**做 per-层站点期望比对，**不修改** host/runner/reason_code 合法组合矩阵 ⇒ 与「不改矩阵」Non-Goal 不冲突。它**按层区分期望站点集，并非站点无关**。
+- **已知不覆盖**：该核比对**站点集合**、不核 `reason_code` 新鲜度 ⇒ **抓不到「barrier 早退产生的假 timeout」**（站点仍在集合内、判绿）。该失效模式由 ADR-3 的**正向 barrier 语义**（`timeout` 只允许由实测 exit 124 产生）+ `tasks §4.1` 三时刻单调锚守。
+
+**dispatch 门控与条件性**：后台 voice 数**不定（0/1/2）**——**task_id 记账**按「实际 dispatch 过的站点」，而 **per-site 机械核**按「应**有锚**的站点集」〔seam-review-amendment G1：两者**不是同一个集合**，复用态即分岔点〕：
+- `design-voice`（spec-review）**dispatch** 前置门控于 reuse-guard：仅 `reason_code≠none`（autoplan voice 不可复用）才 dispatch；可复用则**不派、但仍落锚**（复用 autoplan 的 codex voice 结果）⇒ ∴ 它恒在「应有锚站点集」内、却不恒在「实际 dispatch 站点集」内。
 - `hr-tg`（两 SKILL）条件触发（仅 HR-TG∩≠∅）；`code-voice`（code-review）always。
 
-**孤儿/泄漏〔spec-review-amendment F-G/F-H/HV5〕**：① **context 用 per-run 不可变路径** `<run-id>/<site>-context.md`（弃固定名+下轮覆盖）——闭掉「上轮孤儿 voice 未读完、下轮重写同路径」跨会话 TOCTOU（`outside-voice.sh` 的 scan@L153 与 cat@L164 是对 live 文件两次独立读，HV1 实证；per-run 路径令 scan+render 恒对同一快照）。② 评审中止：`run_in_background` 由 harness 托管（spike 证 **ppid 稳定、非 nohup-reparent-PID1**）→ 进程或跑完或被 harness 回收，无锚=缺席。但 `outside-voice.sh` 的 `trap … EXIT` **不含 INT/TERM**（L202）→ SIGKILL 泄漏 workdir（含全量 prompt.md）在 /tmp，900s 天花板三倍化该窗——**既有缺口、async 放大**，记 Cost、不改脚本（Non-Goal）。③ 孤儿跑完未 collect = 完整 token 浪费（记 Cost）。
+**孤儿/泄漏〔spec-review-amendment F-G/F-H/HV5〕**：① **context 用 per-run 不可变路径** `.outside-voice/<run-id>/<site>-context.md`〔seam-review-amendment G5：**父目录 MUST 仍在 `.outside-voice/` 下**——`.gitignore:19` 的 `**/.outside-voice/` 递归覆盖该层级；落到该目录外则 checkpoint 的 `git add -A` 会把全量 diff / 敏感 context 永久入库，正是该 gitignore 条款要防的〕（弃固定名+下轮覆盖）——闭掉「上轮孤儿 voice 未读完、下轮重写同路径」跨会话 TOCTOU（`outside-voice.sh` 的 scan@L153 与 cat@L164 是对 live 文件两次独立读，HV1 实证；per-run 路径令 scan+render 恒对同一快照）。② 评审中止：`run_in_background` 由 harness 托管（spike 证 **ppid 稳定、非 nohup-reparent-PID1**）→ 进程或跑完或被 harness 回收，无锚=缺席。但 `outside-voice.sh` 的 `trap … EXIT` **不含 INT/TERM**（L202）→ SIGKILL 泄漏 workdir（含全量 prompt.md）在 /tmp，900s 天花板三倍化该窗——**既有缺口、async 放大**，记 Cost、不改脚本（Non-Goal）。③ 孤儿跑完未 collect = 完整 token 浪费（记 Cost）。
 
 ## Security（TG-17）
 
@@ -135,12 +150,12 @@ Claude 宿主并发实体：`design-voice` voice + `hr-tg` voice + N 个 fan-out
 
 ## Open Questions
 
-grill + spec-review（2026-07-18）均收敛，无未决：
+grill + spec-review + 接缝冷复审（2026-07-18）均收敛，无未决：
 1. collect 天花板 → **已决 + spike 证**：async-only 900s（spike 证后台跨 600000ms 上限可达）；Codex/降级同步保留 300s（ADR-3 F-B 矩阵）。
 2. run_in_background@ship → **已解（措辞校正 F-E）**：读码强提示 code-review 主 session inline、1.3 自探是实际防线（ADR-6）。
 3. DRY → **已决**：两份副本 + 机械等值门（ADR-5）；`--apply` 单一源注入留 todo（tasks §5.2）。
-4. collect 机制（F-A）→ **已决**：通知驱动 barrier、非轮询；退出码结构化 envelope（ADR-3）。
-5. per-site 完整性（F-C）→ **已决 fold**：declared-sites 机械核（并发节）。
+4. collect 机制（F-A）→ **已决**：通知驱动 barrier、非轮询；RUNNING 态 MUST 让出轮次等通知、`timeout` 只由实测 exit 124 产生（G3）；退出码走**哨兵 envelope 三条**（前置换行 + 整行锚定 + 0/≥2 行即篡改，G2）——见 ADR-3。
+5. per-site 完整性（F-C）→ **已决 fold**：declared-sites 机械核，declared = 该层「**应有锚**站点集」（**非**「应 dispatch 集」）、复用 `fence_outside_lines` 口径（G1/G4，并发节）。
 6. 安全错误路径 stderr（DV4）→ **已登记+缓解**：collect 不采信后台文件原始 stderr；harness 输出文件 TTL 残余待 impl 验（Security 节 F-L）。
 
 ## Compliance

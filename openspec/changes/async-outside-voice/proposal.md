@@ -23,7 +23,7 @@
 - **改**：`sdflow-spec-review/SKILL.md` + `sdflow-code-review/SKILL.md` 的「outside-voice helper 调用协议」节（编排层，纯 Markdown）。
 - **不改**：`sdflow-init/assets/hack/outside-voice.sh`（契约脚本 + 四旗承重墙）、`anchor_lint`/`outside_voice_guard`/`lens_metric_emit`（锚契约不变）。
 - **新机制**：仓内首次使用 harness `run_in_background`（此前无先例）。
-- **新增**：`hack/check_async_branch_parity.py` + `hack/tests/`（async 段字节等值机械门，ADR-5/F-O）、`setup.sh` 挂该检查；**per-site declared-sites 机械核**（补 anchor_lint 家族级盲区，F-C）；**per-run 不可变 context 路径**（F-G）；collect 天花板 config 键（async 900s / sync 300s，**SKILL 直读 config.yaml** 沿 metrics.enabled 先例 + 正整数校验，F-B/F-N/F-F）。
+- **新增**：`hack/check_async_branch_parity.py` + `hack/tests/`（async 段字节等值机械门，ADR-5/F-O）、`setup.sh` 挂该检查；**per-site declared-sites 机械核**（补 anchor_lint 家族级盲区，F-C；declared = 该层「**应有锚**站点集」非「应 dispatch 集」，**优先实现为 `anchor_lint` 附加校验**并复用其 `fence_outside_lines` 口径，G1/G4）；**per-run 不可变 context 路径** `.outside-voice/<run-id>/<site>-context.md`（F-G，父目录须留在 `.outside-voice/` 下以承既有 gitignore 覆盖，G5）；collect 天花板 config 键（async 900s / sync 300s，**SKILL 直读 config.yaml** 沿 metrics.enabled 先例 + 正整数校验，F-B/F-N/F-F）。
 - **并发面（TG-26）**：Claude 宿主下多个 voice（design-voice、hr-tg）+ fan-out 镜后台并发；共享状态按站点分文件（`.outside-voice/<site>-context.md`）+ 按任务分后台输出，collect/merge 在单一主 session Step3——需 design 显式论证无数据竞争。
 
 ## Success Metrics
@@ -44,7 +44,7 @@
 ## Open Questions
 
 （TG-21，负责人/截止在 grill/spec-review 收敛）
-1. **collect barrier 语义**〔grill 已决，见 design ADR-3〕：deadline = 调大既有 `--timeout` 天花板（config 默认 900s、脚本不改），Step3 轮询到 voice 终止、按现有 exit-code 分支；不新造 deadline 机制、不设 early-grace 回落（early 回落把长尾还给 efficacy=0）。
+1. **collect barrier 语义**〔grill 已决 + spec-review/接缝复审校正，见 design ADR-3〕：deadline = 调大既有 `--timeout` 天花板（**仅 async 分支** config 默认 900s、Codex/降级同步保留 300s（F-B）、脚本不改）；Step3 以**通知驱动 barrier**（**非轮询**，F-A）collect、按**结构化哨兵 envelope** 取退出码分支（G2），站点仍 RUNNING 则让出轮次等终态通知、`timeout` 只由**实测 exit 124** 产生（G3）；不新造 deadline 机制、不设 early-grace 回落（early 回落把长尾还给 efficacy=0）。
 2. **run_in_background 在 ship 路径可用性**〔grill 已解，见 design ADR-6〕：读 ship 机制——ship 是主 session 编排器（line 96「不直接派子代理」）、`RUN_CODE_REVIEW→/sdflow-code-review` 为主 session inline 调用，code-review 跑在主 session（其 fan-out 镜才是子代理），∴ voice exec = 主 session Bash 调用 = A1 spike 已证 run_in_background 存活的同一上下文（**F-E 校正**：line 101 那句 inline 绑的是 tickets-plan、非 `RUN_CODE_REVIEW`，结论靠 line 96/80 通用陈述推出）。∴ 读码**强提示**、A2 大概率成立；task 1.3 自探是**当前验证 A2 的实际防线**（非兜底冗余），不假绿。
 3. **DRY**〔grill 已决，见 design ADR-5〕：两份副本 + **机械等值门**（marker + `hack/` 字节等值检查，沿用 sync_principles idiom）守一致；长期全抽取（单一源注入）超 scope，留 todo（tasks §5.2）。
 
