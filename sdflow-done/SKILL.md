@@ -216,7 +216,7 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change
 
 **必须显式传 `--change {本change}`（D4）**——不靠 `detect_change` 猜；sweep 内部即用该值扫描 `--open-ungrouped`（非终态 ∧ 批次空）、逐项 triage 进同一批次、`batch add --if-exists skip`、末尾 `reindex`。**hand-off 引用该批次**：上面「三段内容」第 2 段写批次号 `{change_name}`（指向 `openspec/issues/batches.md` 对应条目 + `openspec/issues/INDEX.md`），不再逐条罗列裸 ID。
 
-**执行纪律（D6）**：调用方 MUST 串行跑本步、勿与手动 triage 交叉——sweep 写窗口比单条命令更长（N 次 triage 写 + batch add + reindex），并发安全未焊接（归 TG-26/Phase C）。
+**执行纪律（D6）**：宜串行跑本步、勿与手动 triage 交叉——sweep 写窗口比单条命令更长（N 次 triage 写 + batch add + reindex）；此为操作建议、非防腐坏硬约束：并发安全由仓级 `recorder_lock` 保证——sweep 作 lock owner 持锁、其子步（triage / batch add / reindex）作 participant 加入同一锁域，并发的独立命令 fail-closed 拒锁（`lock occupied`）而非交叉腐坏〔mlh-p6 T146〕。
 
 **失败语义（非原子、fail-closed、重跑收敛）**：sweep 不是真原子——任一子步（scan/triage/batch add/reindex）非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/哪个 pool/已 tag 的 id 列表），不静默继续；已 tag 项在重跑时被「批次空」过滤天然排除，故半途失败后**直接重跑同一条命令即可收敛到完成**，无需手工回滚。
 
