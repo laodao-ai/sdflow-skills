@@ -95,7 +95,7 @@
 
 > A1/A3 的存在性核验已上提为**组 0 前置门**（Q3）——本组只留改造后的端到端验证。
 
-- [ ] 10.1 〔◐ 机制已证(2026-07-16)：冒烟走的就是四旗承重墙 exec 命令行、exit=0 → 正式评审必落 `host="codex" runner="claude" reason_code="ok"` 锚；但**正式的一次真实评审 + `anchor_lint` 绿尚未跑**（拟在 Codex 上起 `scoped-test-per-task` 时顺带产出），故复选框保持未勾〕端到端：Codex 宿主下跑一次真实评审，核对 outside-voice 锚为 `host="codex" runner="claude"`、fanout-capability 锚在场、且 `anchor_lint` 绿（含新增的自审红线 + 一致性 lint always-on）
+- [ ] 10.1 〔◐ 机制已证(2026-07-16)：冒烟走的就是四旗承重墙 exec 命令行、exit=0 → 正式评审必落 `host="codex" runner="claude" reason_code="ok"` 锚；但**正式的一次真实评审 + `anchor_lint` 绿尚未跑**（拟在 Codex 上起 `scoped-test-per-task` 时顺带产出），故复选框保持未勾〕〔勘误 2026-07-17：正式真实评审已在 mlh-p6 spec-review 跑完——机械层 ✅（host=codex 锚落盘、`anchor_lint` 判合法降级不假绿），但 efficacy 层未达（3/3 outside-voice 300s timeout、降级同族 codex 看 codex）。根因=同步 `claude -p` 推理时长 >300s；机制改动方向=exec 改异步（规划中）。详见本目录 `codex-e2e-efficacy-report.md`〕端到端：Codex 宿主下跑一次真实评审，核对 outside-voice 锚为 `host="codex" runner="claude"`、fanout-capability 锚在场、且 `anchor_lint` 绿（含新增的自审红线 + 一致性 lint always-on）
 - [x] 10.2 回归：Claude 宿主下跑一次，确认现有行为不变（`host="claude" runner="codex"`），存量归档聚合逐行一致（组 5 基线）
 
 ## 11. 文档与收尾
