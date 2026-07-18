@@ -20,7 +20,6 @@
 | T143 | todo | PROPOSED | add-sdflow-architecture |
 | T144 | todo | PROPOSED | add-sdflow-architecture |
 | T145 | todo | PROPOSED | add-sdflow-architecture |
-| T146 | todo | PROPOSED | add-sdflow-architecture |
 
 ### 批次：cross-model-outside-voice
 
@@ -52,13 +51,6 @@
 | T86 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 | T87 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 | T88 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
-
-### 批次：issues-pool-hardening
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T66 | todo | PROPOSED | issues-pool-hardening |
-| T67 | todo | PROPOSED | issues-pool-hardening |
 
 ### 批次：matt-workflow-integration
 
@@ -129,20 +121,8 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T79 | todo | PROPOSED | - |
-| T80 | todo | PROPOSED | - |
-| T81 | todo | PROPOSED | - |
-| T82 | todo | PROPOSED | - |
 | T83 | todo | PROPOSED | - |
 | T84 | todo | PROPOSED | - |
-| T85 | todo | PROPOSED | - |
-
-### 批次：mlh-p5-gate-frontmatter
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T74 | todo | PROPOSED | mlh-p5-gate-frontmatter |
-| T75 | todo | PROPOSED | mlh-p5-gate-frontmatter |
 
 ### 批次：opt-cost
 
@@ -230,15 +210,6 @@
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
-### 批次：sdflow-retro
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T58 | todo | PROPOSED | sdflow-retro |
-| T59 | todo | PROPOSED | sdflow-retro |
-| T60 | todo | PROPOSED | sdflow-retro |
-| T61 | todo | PROPOSED | sdflow-retro |
-
 ### 批次：sdflow-retro-cleanup
 
 | ID | Pool | Status | 关联Change |
@@ -263,12 +234,13 @@
 | T135 | todo | OPEN | - |
 | T141 | todo | OPEN | - |
 | T142 | todo | OPEN | - |
-| T147 | todo | OPEN | - |
 | T148 | todo | OPEN | - |
+| T151 | todo | OPEN | mlh-p6-recorder-frontmatter |
+| T152 | todo | OPEN | mlh-p6-recorder-frontmatter |
+| T155 | todo | OPEN | mlh-p6-recorder-frontmatter |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
-| T65 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 
-- 共 39 项已闭合（bug: 6，todo: 33）
+- 共 57 项已闭合（bug: 6，todo: 51）

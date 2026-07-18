@@ -56,6 +56,24 @@
 
 <!-- 日志条目从这里开始，最新的放最上面 -->
 
+## 2026-07-17
+
+### [阶段 6 / P6] recorder machine index → versioned frontmatter 交付
+- **状态**: ✅ 完成（change `mlh-p6-recorder-frontmatter`）
+- **交付物**: Shared Frontmatter Envelope、canonical/overlay dual-reader、marker-framed prose、bug+todo 两池 semantic ID 唯一、exclusive snapshot/document lock、registry-first batch rename provenance 与 fail-closed retry。
+- **迁移证据**: 仓内全量历史 corpus 按运行时枚举逐 item 对账关键字段，不固化动态总数；T85/T66/T67/T146 由真实 `todolist.py set-status` 提升为 overlay 并置 DONE，旧总览表 bytes 保持不变，`reindex --strict` 收敛。T2 保持 DONE，并追加 `mlh-p6-recorder-frontmatter（根治兑现）` 证据。
+- **边界**: 本地 POSIX 自动验证；Windows 本地盘由可运行 smoke contract 覆盖，network FS、完整 power-loss durability 与非 cooperative writer TOCTOU 不承诺；process-crash lock 走人工 break-glass。
+- **后续**: 仅 4.A/4.D.3 等 embedded producer 契约项继续等待真实 producer；不以当前缺样本缩小目标态。
+
+## 2026-07-16
+
+### [阶段 4 / 完成态对账] P4 ★组全部交付，P6 成为下一结构性端点
+- **状态**: ✅ 完成态对账
+- **实际耗时**: N/A（本条只做归档证据回写）
+- **交付证据**: 4.C `lens_metric_emit` → `bd7c05f`；4.B `maintain_scan` → `569d393`；4.D.1/2/4 reason-code validators → `6326115`。对应 T78-T82 均已回写 DONE。
+- **未完成边界**: 4.A `log_check`（T83）与 4.D.3 常量/TAG 收割（T84）仍等真实 embedded producer 契约，不以本仓当前缺样本否定目标态。
+- **下一步**: 单开 T85/P6 recorder 索引→frontmatter change；端态 A、历史表只读 dual-read 与 fail-closed YAML 范式均已确定。
+
 ## 2026-07-08
 
 ### [阶段 4 / 任务 4.C] lens_metric_emit 确定性归约器交付（SHIPPED + ARCHIVED，merge `bd7c05f`）

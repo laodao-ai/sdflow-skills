@@ -3,10 +3,10 @@
 > 半手维护：`状态:`/`成员:` 由 `issues.py`（reindex / `batch set-status`）维护，其余字段（`优先级:`/`计划:` 等）人工填写——reindex/batch 只精确 patch 生成行，绝不覆写人写行（Q3）。
 
 ### issues-pool-hardening — issues-pool-batch-mgmt
-状态: PLANNED
+状态: DONE
 成员: (生成) T1, T2, T3, T4, T5, T66, T67
 优先级: P2
-计划: issues.py/recorder 健壮性：problems 回显·含｜字段转义防列腐蚀·终态集跨脚本守卫测试·batch 幂等选项·_find_row_file 抽取去重
+计划: ✅ T66/T67 由 mlh-p6-recorder-frontmatter 根治兑现：scan/rename snapshot 复用 + ID semantic uniqueness；其余 issues.py/recorder 健壮性已闭合。
 
 ### minimize-repo-footprint — minimize-repo-footprint
 状态: PLANNED
@@ -99,10 +99,10 @@
 计划: workflow 度量基建：T29 成本度量（checkpoint 时间戳+各编排 skill 报告）+ T54 grill amendment 存活率度量（后续独立评估，口径/数据源待定）
 
 ### sdflow-retro — sdflow-retro
-状态: PLANNED
+状态: DONE
 成员: (生成) T58, T59, T60, T61
-优先级: P3
-计划: retro 脚本硬化残差（defer 自 sdflow-retro，非阻塞）：T58 tilde `~~~` fence 支持·T59 待复评阈值 10 硬编码两处提共享常量·T60 _run_git returncode 检查（区分 git 失败 vs 真无提交）·T61 死 except 清理 + 注释订正。
+优先级: —（已闭合）
+计划: 已由 `sdflow-retro-cleanup` 完成：T58 tilde fence、T59 阈值常量、T60 git returncode 留痕、T61 死 except 清理。
 
 ### sdflow-retro-cleanup — sdflow-retro-cleanup
 状态: PLANNED
@@ -123,10 +123,10 @@
 计划: 确定性守卫边缘残差（defer，多为文档化边界/理论假过）：T70 config_lint tab 缩进子键隐形→越域非法子键 fail-open（边缘 YAML）·T71 _ast_no_doc 对剥 docstring 后空体函数坍塌理论假过（当前 helper 均有真逻辑不可利用）·T72 batch lint 整行缺 优先级:/计划: 字段不校验（值语法层有意窄化）·T73 metrics.enabled 两校验器均拒绝合法行内注释（一致的有意严格，若容忍须两处同步改，设计级决定）。
 
 ### mlh-p5-gate-frontmatter — mlh-p5-gate-frontmatter
-状态: PLANNED
+状态: DONE
 成员: (生成) T74, T75
-优先级: P3
-计划: ship_gate parser 健壮性 + 死代码清理（defer 自 mlh-p5-gate-frontmatter，非阻塞）：T74 裸 `---` 首行无闭合误判 unterminated 致 UNKNOWN·T75 清 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_*。择期单开 cleanup change。
+优先级: —（已闭合）
+计划: 已由 `mlh-p5-parser-cleanup` 完成：T74 parser 首行裸 `---` 处理与 T75 live inline 死代码清理。
 
 ### mechanical-layer-hardening — 机械层固化（adr/0006：脚本化 + 去字符串化）
 状态: PLANNED
@@ -137,8 +137,8 @@
 ### mlh-p4-target-state — mechanical-layer-hardening P4/P6 目标态重评
 状态: PLANNED
 成员: (生成) T78, T79, T80, T81, T82, T83, T84, T85
-优先级: P1（4.B 最高〔4.C 已交付〕· 4.D.* 次 · 4.A/4.D.3 待 embedded 契约 · T85=P6 端态 A 已定·压轴排 P4 后）
-计划: 目标态重评 P4 脚本化候选 + P6 端态决策。✅已交付:T78(4.C lens-metric 手数归约,闭合 §1.2 痛点#2 —— change implement-mechanical-layer-hardening-p4-lens-metric-emit / bd7c05f);★该做未做〔explore 拍板 A·2 change：① T79(4.B maintain set-diff)块头单开 · ② T80/T81/T82(4.D.1/2/4 小守卫)三合一;4.B 先〕;◐该做待 embedded 契约:T83(4.A log_check)·T84(4.D.3);端态已定:T85(P6=端态 A 迁 frontmatter 根治,否决 B 治标;约束①历史不迁使成本≈P5 dual-read;压轴排 P4 后)。判据=目标态(§1.3+adr/0006)+根治,非现状快照
+优先级: P1（P4 ★组已交付；T85=P6 端态 A 为下一结构性端点；T83/T84 等 embedded producer 契约）
+计划: ✅ T78-T82 已交付；T85 由 mlh-p6-recorder-frontmatter 交付（versioned frontmatter + 历史表只读 dual-read/promotion）；T83/T84 待 embedded producer 契约就绪后实施。
 
 ### implement-mechanical-layer-hardening-p4-lens-metric-emit — implement-mechanical-layer-hardening-p4-lens-metric-emit
 状态: PLANNED
@@ -155,8 +155,8 @@
 ### mlh-p4-maintain-scan — mlh-p4-maintain-scan
 状态: PLANNED
 成员: (生成) T93, T94, T95, T96
-优先级: <待填>
-计划: <待填>
+优先级: P3
+计划: maintain-scan 低风险硬化：三份 RULE_MARKERS 跨语言漂移、告警文案复述、测试缺依赖降级与非 kebab 命名漏报。
 
 ### opt-p0 — 工作流优化 P0 速赢（成本+门体验）
 状态: PLANNED
@@ -185,30 +185,29 @@
 ### matt-workflow-integration — matt-workflow-integration
 状态: PLANNED
 成员: (生成) T118, T120, T125, T126, T127, T128
-优先级: <待填>
-计划: <待填>
+优先级: P2
+计划: tickets/主流程衔接增强：受限并行 frontier、expand-contract、子代理文件交接、wayfinder→ff 契约、grill 瘦跑与 receipt 来源可诊断性。
 
 ### rebuild-sdflow-roadmap-v2 — rebuild-sdflow-roadmap-v2
 状态: PLANNED
 成员: (生成) T129, T130, T131
-优先级: <待填>
-计划: <待填>
+优先级: P2
+计划: roadmap v2 收尾：迁移两份存量 requirements、修正 bundle 三件套术语，并把 wayfinder 缺装探测改为双宿主口径。
 
 ### mlh-p4-reason-code-validators — mlh-p4-reason-code-validators
 状态: PLANNED
 成员: (生成) T136, T137, T138, T139, T140
-优先级: <待填>
-计划: <待填>
+优先级: P2
+计划: reason-code validator 后续硬化：HR-TG 交叉复算与严格 token、outside-voice 重复锚拒绝、旧 hr-tg 锚兼容；T137 已闭合。
 
 ### add-sdflow-architecture — add-sdflow-architecture
 状态: PLANNED
 成员: (生成) T143, T144, T145, T146
-优先级: <待填>
-计划: <待填>
+优先级: P3
+计划: SAD 后续增强：frozen-diff/ADR lint、跨语言 schema、触发精度观测；T146 recorder 仓级 snapshot lock 已由 mlh-p6-recorder-frontmatter 兑现。
 
 ### add-codex-host-support — add-codex-host-support
 状态: PLANNED
 成员: (生成) T149, T150
-优先级: <待填>
-计划: <待填>
-
+优先级: P2
+计划: Codex host 支持收尾：config-lint 拒 metrics.enabled 重复键，并为 outside-voice preflight 增加低成本真实认证/模型探针。

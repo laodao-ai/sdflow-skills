@@ -152,23 +152,21 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch add {cha
 # 批次进入实施阶段（人工权限，reindex 只会把它推到 DONE，不会推 PLANNED→IN_PROGRESS）
 python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch set-status {change_name} IN_PROGRESS
 
-# 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并，new key 已存在会报错；
-# 成功后自动 reindex 刷新 INDEX）
+# 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并；
+# 任一阶段失败均 non-zero，修正故障后重跑原命令）
 python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {old_key} {new_key}
 ```
 
 - `batch add` 对已存在的 key 是**报错**而非静默 no-op（`_die`）——add 是"新建"语义，撞号
-  多半是误操作；调用方（如 `sdflow-done` sweep 步）如果只是想确保批次存在，需要自己把
-  "报错信息含'已存在'" 当成幂等成功处理，脚本本身不做这层语义转换。
+  多半是误操作；需要 ensure 语义的自动化调用方必须显式传 `--if-exists skip`。`sweep` 固定使用
+  该选项，撞号时由脚本按幂等成功处理，调用方不得解析错误文案猜测结果。
 - `batch rename` 刻意不复用 per-type 脚本的 `triage` 子命令改批次列，因为 `triage` 会顺带
   把"未分诊开放态"状态推进到 `PROPOSED`——`rename` 只该改标签本身，不该有这个（状态推进的）
   副作用。
-- `batch rename` 写盘（dated 文件 tag + `batches.md` key）全部成功后会**自动跑一次
-  `reindex`** 刷新 `issues/INDEX.md`（Task 7）——调用方不需要再手动补一次 reindex；`reindex`
-  失败只吞成 stderr 警告（"rename 已生效，INDEX 未刷新，请手动 reindex"），`rename` 本体仍
-  exit 0，不因这个"顺带刷新"步骤的失败反噬成 rename 失败假象。**因此 `rename` 现在不是无副
-  作用操作**：它明确会触发一次 INDEX 重建，与上一条"不该有的副作用"（triage 顺带推进状态）
-  是两回事，不要混为一谈。
+- `batch rename` 先在 registry 写 target + machine-owned `重命名自: old` provenance，再用每池一次
+  direct-bytes snapshot retag dated items，最后由同一更新后 snapshot 写 INDEX/batches。任一阶段未收敛
+  均 non-zero，并报告阶段、原始命令与“重跑原命令”；同一命令可从全 old、混合或全 new 盘面继续。
+  无 provenance 的 `old missing/new exists` 仍 fail-closed，不吸收 orphan。
 
 ### 3. `sweep --change X`——一键分诊本 change 未分批非终态项（sdflow-done §2.1 的一行封装）〔impl-review-fix：措辞订正，非"原子"〕
 
@@ -192,11 +190,11 @@ CLI（不直调 `cmd_*`），对外只暴露一个单一入口（**非原子**�
 - **非原子、fail-closed、重跑收敛**：sweep 不是真原子——scan/逐项 triage/batch add/reindex
   任一子步非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/哪个 pool/已 tag 的
   id 列表）；已 tag 项因「批次空」过滤在重跑时天然被排除，故半途失败后**直接重跑同一条命令
-  即可收敛**，不需要手工回滚。reindex 失败也判整体失败（与 `batch rename` 的 warn-only 不同
-  ——sweep 语义是"一次分诊闭环"，INDEX 未刷新即闭环未完成）。
-- **调用方 MUST 串行（D6）**：写窗口比 `reindex`/`batch` 单条命令更长（N 次 triage 写 + batch
-  add + reindex），并发安全未焊接（同 D8 边界，见下）；调用方（`sdflow-done` §2.1）不得与手动
-  triage 交叉执行。
+  即可收敛**，不需要手工回滚。reindex 失败也判整体失败；INDEX 未刷新即闭环未完成。
+- **exclusive owner + participant 委派**：`sweep` 顶层持有仓级 snapshot lock，scan/triage/
+  batch-add/reindex 子命令只沿 allowlist delegation chain 作为 participant 进入同一锁域；其他
+  cooperative recorder 命令在整个写窗口 fail-closed 冲突退出。token 不是安全边界，非 cooperative
+  writer 仍属明确不承诺的 TOCTOU 边界。
 - 孤儿项（源 = `""`）不归 sweep 管，仍由独立的 `scan --open-ungrouped` 兜底工作流处理。
 
 ## `--root` 与 git 根
@@ -210,8 +208,10 @@ rev-parse --show-toplevel`），非 git 仓库时退化为 `os.path.abspath(--ro
 
 ## 注意
 
-- **并发假设边界（D8）**：本脚本假定单机单进程串行调用，不加锁。调用方（skill / CI /
-  `sdflow-done` sweep 步）需自行保证不并发调用本脚本，也不与 `buglist.py`/`todolist.py`
-  的写操作并发交叉。
+- **并发与耐久边界**：三 recorder 的权威读/写共用 `openspec/issues/.recorder.lock` exclusive snapshot
+  lock；owner/participant token 只协调 cooperative CLI，不是安全边界。支持本地 POSIX 自动门与
+  Windows 本地盘 smoke；network FS、完整 power-loss durability 及非 cooperative writer 的 TOCTOU
+  不承诺。process crash 留锁时先停该 repo 全部 recorder，再删除错误中给出的精确 lock path，随后
+  重跑原命令（break-glass）；不提供 TTL/自动偷锁。
 - 模型的核心价值在**判断该不该建/改批次**（是否真的要开一个清理 change、批次范围怎么定），
   不是拼命令——命令本身是确定性操作，交给脚本。

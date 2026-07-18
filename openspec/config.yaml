@@ -61,9 +61,7 @@ rules:
 # impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
 # 缺省请勿填（缺失/非法值一律 superpowers 旧管线）；仅在新出 ticket 时刻读一次，
 # 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
-# impl-pipeline: tickets  # 【已撤回 2026-07-11，T137】翻键 blast radius：mlh-p4 已由 plan marker 自锁，
-#   全局翻键实误路由 scoped-test-per-task 及所有未来 change；本仓尚未找到合适 tickets 样本（Phase A 样本#2 未定），
-#   故撤回缺省 superpowers。找到「3+ 独立切片 + 依赖拓扑」的单一能力样本时再翻键（scope 定管线，非 config 反向绑）。
+impl-pipeline: tickets
 
 # 评审价值度量（lens-metric）开关：源仓 dogfood 高频，默认开
 metrics:

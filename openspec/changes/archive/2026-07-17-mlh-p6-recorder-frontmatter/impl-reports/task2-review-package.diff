@@ -1,0 +1,1374 @@
+diff --git a/.gitignore b/.gitignore
+index afb9c76..7bb75d2 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -23,3 +23,4 @@ node_modules/
+ __pycache__/
+ *.pyc
+ .pytest_cache/
++/openspec/issues/.recorder.lock
+diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task2-semantic-id-lock.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task2-semantic-id-lock.md
+new file mode 100644
+index 0000000..5081610
+--- /dev/null
++++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task2-semantic-id-lock.md
+@@ -0,0 +1,33 @@
++# Task 2 — semantic ID 与 repository snapshot lock 实现报告
++
++状态：DONE
++
++## 范围与结论
++
++- 三个 recorder 脚本各自内联、AST 等价地实现 canonical ASCII ID、semantic key、repository snapshot discovery、`O_CREAT|O_EXCL` lock、participant token 校验、owner identity/token 终检与受控 child env；生产脚本之间未新增跨 import。
++- bug/todo `scan` 以单次 repository snapshot 读取两池 dated 文件；`next-id`、自动/显式 `add` 在同一锁域使用同一 semantic inventory。自定义单字母 ASCII prefix 保留，`A007`/`A7`、Unicode digits 与跨池复用均 fail-closed。
++- bug/todo `scan/next-id/add/set-status/triage` 与 issues `reindex/sweep/batch lint/add/set-status/rename` 的 CLI dispatch 全部在仓级 exclusive lock 内；stdout 先捕获为内存结果，释放 lock 后才写出，慢 consumer 不延长锁域。
++- issues 复合命令只给 allowlist recorder child 转发同 repo token；participant 校验后不二次 acquire/release。非 allowlist child env 剥离 token；伪造、过期、cross-repo、partial metadata 与 ownership-lost 均 fail-loud，错误不输出 token且给出精确 break-glass 路径。
++- 新增 canonical `sdflow-init/assets/snippets/runtime-gitignore.txt` 与 `merge_runtime_gitignore()`；init/update 共用的 `run()` 路径幂等合并，重复条目 fail-closed、其它用户 bytes 保留。本仓 `.gitignore` 对应条目恰一条。
++
++## TDD 与故障验收
++
++- 先落 `test_task2_semantic_lock.py` 红测；初次运行 `4 failed`（缺 canonical/lock helper），实现后转绿。
++- 新增 20 个并发进程 `add --prefix A`：所有成功 ID 唯一；竞争失败均明确为 `recorder lock occupied`；无正常路径 lock 残留。
++- 覆盖 owner/participant、伪造 token、cross-repo、非 allowlist、partial metadata 初始化窗口、replacement lock ownership-lost 与 replacement lock 保留。
++- 既有 atomic-write 定向套件继续覆盖 temp write/chmod/replace 异常时旧 bytes/mode 保持与 tmp 清理；本任务未削弱原原子替换协议。
++- runtime ignore 覆盖 CRLF 用户 bytes、二次调用 byte-noop、重复条目拒绝且文件不变。
++
++## 验证
++
++- `uv run --with pytest pytest -q sdflow-buglist/tests/test_task2_semantic_lock.py -W error`：`7 passed`。
++- `uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ sdflow-init/tests/test_runtime_gitignore.py -W error`：见本次实现终检，全部通过。
++- `python3 -m py_compile sdflow-buglist/scripts/buglist.py sdflow-todolist/scripts/todolist.py sdflow-issues/scripts/issues.py sdflow-init/scripts/init.py`：PASS。
++- `git diff --check`：PASS。
++- dogfood/asset 精确行检查：两处各 `1` 条 `/openspec/issues/.recorder.lock`。
++
++## 边界
++
++- lock 是 cooperative protocol；不阻止编辑器、Git 或绕协议 producer。普通 path API 的 identity/token 终检与 unlink 之间仍有非 cooperative TOCTOU residual。
++- local filesystem 是本实现保证边界；network/userspace FS 不承诺。`os.replace` 未扩展为完整 file+directory fsync，power-loss durability 不在本任务承诺内。
++- legacy alias 的最终 frontmatter/marker promotion 由后续 Task 3 writer 落盘；本任务已焊死 semantic 定位、冲突与 canonical 新写前置条件。
+diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
+index d4e1332..aeef270 100644
+--- a/sdflow-buglist/scripts/buglist.py
++++ b/sdflow-buglist/scripts/buglist.py
+@@ -18,14 +18,18 @@ skill `sdflow-buglist` 的执行核心。把"判断"留给模型（现象 vs 根
+ """
+ 
+ import argparse
++from contextlib import contextmanager, redirect_stdout
+ import datetime
+ import glob
++import io
+ import json
+ import os
+ import re
++import secrets
+ import subprocess
+ import sys
+ import tempfile
++import time
+ 
+ 
+ def atomic_write(path, text):
+@@ -56,7 +60,7 @@ def atomic_write(path, text):
+ STATUS_CODES = ["OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX", "BLOCKED"]
+ PRIORITIES = ["P0", "P1", "P2", "P3", "P4"]
+ DEFAULT_PREFIX = "B"
+-ID_RE = re.compile(r"\b([A-Z])(\d+)\b")
++ID_RE = re.compile(r"\b([A-Z])([0-9]+)\b", re.ASCII)
+ CANONICAL_ID_RE = re.compile(r"^[A-Z][1-9][0-9]*$", re.ASCII)
+ UTF8_BOM = b"\xef\xbb\xbf"
+ RECORDER_POOL_CONFIG = {
+@@ -65,6 +69,177 @@ RECORDER_POOL_CONFIG = {
+              {"OPEN", "PROPOSED", "DONE", "WONTDO"}),
+ }
+ 
++RECORDER_LOCK_ENV = "SDFLOW_RECORDER_LOCK_TOKEN"
++_ACTIVE_RECORDER_TOKEN = None
++RECORDER_PARTICIPANT_ALLOWLIST = {
++    "scan", "next-id", "add", "set-status", "triage", "reindex", "sweep",
++    "batch-lint", "batch-add", "batch-set-status", "batch-rename",
++}
++
++
++class RecorderLockError(ValueError):
++    pass
++
++
++class RecorderLockState:
++    def __init__(self, path, token, participant=False, identity=None):
++        self.path = path
++        self.token = token
++        self.participant = participant
++        self.identity = identity
++
++
++def canonical_id(value):
++    if not isinstance(value, str) or not CANONICAL_ID_RE.fullmatch(value):
++        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: expected [A-Z][1-9][0-9]*; fix: use e.g. A7")
++    return value
++
++
++def semantic_id_key(value, allow_legacy=False):
++    pattern = r"([A-Z])([0-9]+)" if allow_legacy else r"([A-Z])([1-9][0-9]*)"
++    match = re.fullmatch(pattern, value, re.ASCII) if isinstance(value, str) else None
++    if not match:
++        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: invalid semantic ID; fix: use one ASCII uppercase prefix and ASCII digits")
++    return match.group(1), int(match.group(2))
++
++
++def validate_prefix(prefix):
++    if not isinstance(prefix, str) or not re.fullmatch(r"[A-Z]", prefix, re.ASCII):
++        raise ValueError(f"ERROR: prefix is not one ASCII uppercase letter: {prefix!r}; cause: invalid prefix; fix: use A-Z")
++    return prefix
++
++
++def _lock_path(root):
++    return os.path.join(os.path.realpath(os.fspath(root)), "openspec", "issues", ".recorder.lock")
++
++
++def _read_lock_metadata(path):
++    try:
++        with open(path, "rb") as handle:
++            raw = handle.read()
++        value = json.loads(raw.decode("utf-8"))
++        required = {"repo", "pid", "command", "started", "token"}
++        return value if isinstance(value, dict) and required <= set(value) else None
++    except (OSError, UnicodeError, json.JSONDecodeError):
++        return None
++
++
++def _lock_conflict(path, metadata=None):
++    if metadata:
++        owner = f"pid={metadata.get('pid')} command={metadata.get('command')} started={metadata.get('started')}"
++        cause = f"lock occupied by {owner}"
++    else:
++        cause = "lock occupied; owner metadata unavailable/initializing"
++    return RecorderLockError(
++        f"ERROR: recorder lock occupied at {path}; cause: {cause}; fix: stop all recorder processes for this repo, remove exactly {path}, then retry"
++    )
++
++
++def validate_recorder_participant(root, token, command):
++    root = os.path.realpath(os.fspath(root))
++    path = _lock_path(root)
++    if command not in RECORDER_PARTICIPANT_ALLOWLIST:
++        raise RecorderLockError(f"ERROR: participant command not allowlisted: {command}; cause: delegation denied; fix: invoke it as a top-level owner")
++    metadata = _read_lock_metadata(path)
++    if not metadata or metadata.get("repo") != root or not secrets.compare_digest(str(metadata.get("token", "")), str(token)):
++        raise RecorderLockError(f"ERROR: invalid recorder participant for {path}; cause: missing, forged, expired, or cross-repo token; fix: invoke as a top-level owner")
++    return RecorderLockState(path, token, participant=True)
++
++
++@contextmanager
++def recorder_lock(root, command):
++    root = os.path.realpath(os.fspath(root))
++    inherited = os.environ.get(RECORDER_LOCK_ENV)
++    if inherited:
++        try:
++            participant = validate_recorder_participant(root, inherited, command)
++        except RecorderLockError:
++            participant = None
++        if participant is not None:
++            yield participant
++            return
++    path = _lock_path(root)
++    os.makedirs(os.path.dirname(path), exist_ok=True)
++    token = secrets.token_hex(32)
++    try:
++        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
++    except FileExistsError:
++        raise _lock_conflict(path, _read_lock_metadata(path))
++    state = None
++    try:
++        stat = os.fstat(fd)
++        state = RecorderLockState(path, token, identity=(stat.st_dev, stat.st_ino))
++        metadata = {"repo": root, "pid": os.getpid(), "command": command, "started": time.time(), "token": token}
++        os.write(fd, json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode("utf-8"))
++        os.fsync(fd)
++        os.close(fd)
++        fd = None
++        yield state
++    finally:
++        if 'fd' in locals() and fd is not None:
++            os.close(fd)
++        if state is not None:
++            current = _read_lock_metadata(path)
++            try:
++                path_stat = os.stat(path)
++                identity = (path_stat.st_dev, path_stat.st_ino)
++            except FileNotFoundError:
++                identity = None
++            owns = current is not None and identity == state.identity and secrets.compare_digest(str(current.get("token", "")), token)
++            if owns:
++                os.unlink(path)
++            elif os.path.exists(path):
++                raise RecorderLockError(f"ERROR: recorder lock ownership lost at {path}; cause: identity/token changed; fix: preserve the replacement lock and inspect its owner")
++
++
++def read_repository_snapshot(root):
++    root = os.path.realpath(os.fspath(root))
++    pools = {
++        "bug": ("openspec/issues/buglist/*.md", "openspec/buglists/*.md"),
++        "todo": ("openspec/issues/todolist/*.md", "openspec/todolists/*.md"),
++    }
++    snapshot = []
++    seen_paths = set()
++    for pool, patterns in pools.items():
++        for pattern in patterns:
++            for path in sorted(glob.glob(os.path.join(root, pattern))):
++                real = os.path.realpath(path)
++                if real in seen_paths:
++                    continue
++                seen_paths.add(real)
++                document = read_recorder_document(path, pool)
++                rel = os.path.relpath(path, root)
++                snapshot.append((pool, path, rel, document))
++    return snapshot
++
++
++def repository_semantic_occurrences(root, snapshot=None):
++    snapshot = read_repository_snapshot(root) if snapshot is None else snapshot
++    occurrences = []
++    for pool, _path, rel, document in snapshot:
++        occurrences.extend((key, raw_id, pool, rel) for key, raw_id in document["effective_occurrences"])
++    by_key = {}
++    for key, raw_id, pool, rel in occurrences:
++        by_key.setdefault(key, []).append((raw_id, pool, rel))
++    duplicates = {key: places for key, places in by_key.items() if len(places) > 1}
++    if duplicates:
++        key, places = sorted(duplicates.items())[0]
++        rendered = ", ".join(f"{raw}@{pool}:{rel}" for raw, pool, rel in places)
++        raise ValueError(f"ERROR: semantic ID 重复; cause: repository semantic ID conflict {key}: {rendered}; fix: resolve all aliases/pools before retry")
++    return by_key
++
++
++def recorder_child_env(command, token=None):
++    if token is None:
++        token = _ACTIVE_RECORDER_TOKEN
++    env = dict(os.environ)
++    env.pop(RECORDER_LOCK_ENV, None)
++    if token:
++        if command not in RECORDER_PARTICIPANT_ALLOWLIST:
++            raise RecorderLockError(f"ERROR: child command not allowlisted: {command}; cause: token forwarding denied; fix: run without participant capability")
++        env[RECORDER_LOCK_ENV] = token
++    return env
++
+ 
+ def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
+     raise ValueError(f"ERROR: {problem}; cause: {cause}; fix: {fix}")
+@@ -340,6 +515,7 @@ def repo_root(start="."):
+         out = subprocess.run(
+             ["git", "rev-parse", "--show-toplevel"],
+             cwd=start, capture_output=True, text=True, check=True,
++            env=recorder_child_env("git", token=False),
+         )
+         return out.stdout.strip()
+     except Exception:
+@@ -366,6 +542,7 @@ def detect_change(root):
+         out = subprocess.run(
+             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+             cwd=root, capture_output=True, text=True, check=True,
++            env=recorder_child_env("git", token=False),
+         )
+         branch = out.stdout.strip()
+     except Exception:
+@@ -463,7 +640,7 @@ def list_files(root):
+         if os.path.isdir(d):
+             files = [
+                 os.path.join(d, f) for f in os.listdir(d)
+-                if re.match(r"\d{4}-\d{2}-\d{2}-buglist\.md$", f)
++                if re.match(r"[0-9]{4}-[0-9]{2}-[0-9]{2}-buglist\.md$", f, re.ASCII)
+             ]
+             out += sorted(files)  # 各目录内部按文件名（=日期）排序
+     return out
+@@ -506,7 +683,7 @@ def _ids_in_files(paths, prefix=None):
+         with open(path, encoding="utf-8") as f:
+             for line in f:
+                 # 只认状态总览表里的行（以 | 开头且第二列是 ID）
+-                m = re.match(r"\|\s*([A-Z]\d+)\s*\|", line)
++                m = re.match(r"\|\s*([A-Z][0-9]+)\s*\|", line, re.ASCII)
+                 if m:
+                     pid = m.group(1)
+                     if prefix is None or pid.startswith(prefix):
+@@ -518,9 +695,13 @@ def all_ids(root, prefix=None):
+     return _ids_in_files(list_files(root), prefix)
+ 
+ 
+-def next_id(root, prefix=DEFAULT_PREFIX):
+-    nums = [int(ID_RE.match(i).group(2)) for i in all_ids(root) if ID_RE.match(i)]
++def next_id(root, prefix=DEFAULT_PREFIX, semantic=None):
++    prefix = validate_prefix(prefix)
++    semantic = repository_semantic_occurrences(root) if semantic is None else semantic
++    nums = [number for (item_prefix, number) in semantic if item_prefix == prefix]
+     n = (max(nums) + 1) if nums else 1
++    while (prefix, n) in semantic:
++        n += 1
+     return f"{prefix}{n}"
+ 
+ 
+@@ -597,13 +778,13 @@ def block_ranges(lines):
+     out = {}
+     starts = []
+     for i, ln in enumerate(lines):
+-        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
++        m = re.match(r"##\s+([A-Z][0-9]+)\s*:", ln, re.ASCII)
+         if m:
+             starts.append((i, m.group(1)))
+     for idx, (i, bid) in enumerate(starts):
+         end = len(lines)
+         for j in range(i + 1, len(lines)):
+-            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
++            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", lines[j], re.ASCII):
+                 end = j
+                 break
+         out[bid] = (i, end)
+@@ -675,6 +856,9 @@ def _build_effective_snapshot(result, expected_pool):
+             raw_ids.append(raw_id)
+             if len(cells) not in (7, 8):
+                 problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
++    invalid_ids = [raw_id for raw_id in raw_ids if _legacy_semantic_id_key(raw_id) is None]
++    if invalid_ids:
++        _frontmatter_error("non-ASCII ID", repr(invalid_ids[0]))
+     occurrences = [
+         (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
+         for raw_id in raw_ids
+@@ -796,7 +980,10 @@ def cmd_add(args):
+         _die(f"状态码非法：{status}")
+ 
+     date = today_str(args.date)
+-    bid = data.get("id") or next_id(root, args.prefix)
++    validate_prefix(args.prefix)
++    semantic = repository_semantic_occurrences(root)
++    explicit_id = data.get("id") is not None
++    bid = canonical_id(data["id"]) if explicit_id else next_id(root, args.prefix, semantic)
+     # OV-3 守卫：显式传 id 时才校验（next_id 自动生成的号必然合法、必然不重，不需要重复查）。
+     # 语法用单字母前缀 `[A-Z]\d+` 全量 fullmatch——不能借用带 `\b` 的 ID_RE.fullmatch，那个模式对
+     # "B1" 这类无内部单词边界缺口的整串会拒绝匹配（\b 在两端本就满足，但 fullmatch 要求
+@@ -809,11 +996,9 @@ def cmd_add(args):
+     # 破坏 _die 的 ERROR: 契约，须在此优雅拒绝。
+     # 查重用 all_ids(root)：此刻新文件/新行还未落盘（ensure_file 在下面），all_ids 看到的是
+     # 落盘前的既有全集，不会把本次正在 add 的 id 算进去，语义正确。
+-    if data.get("id"):
+-        if not (isinstance(bid, str) and re.fullmatch(r"[A-Z]\d+", bid)):
+-            _die(f"显式 id 语法非法（应形如 B12，单字母前缀）：{bid!r}")
+-        if bid in all_ids(root):
+-            _die(f"显式 id 与既有重复（会静默丢行）：{bid}")
++    if explicit_id and semantic_id_key(bid) in semantic:
++        places = semantic[semantic_id_key(bid)]
++        _die(f"显式 id 与仓级既有 semantic ID 重复：{bid} at {places}")
+     time_str = args.time or datetime.datetime.now().strftime("%H:%M")
+     change = data.get("change") or detect_change(root)
+ 
+@@ -995,9 +1180,11 @@ def cmd_scan(args):
+     # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数，同时覆盖同文件内
+     # 重复与跨文件重复两种情形。
+     raw_id_locations = []  # [(semantic_key, raw_id, rel_path), ...]
+-    for path in list_files(root):
+-        document = read_recorder_document(path, "bug")
+-        rel = os.path.relpath(path, root)
++    snapshot = read_repository_snapshot(root)
++    repository_semantic_occurrences(root, snapshot)
++    for pool, path, rel, document in snapshot:
++        if pool != "bug":
++            continue
+         problems.extend(f"{rel}: {problem}" for problem in document["problems"])
+         for bid, item in document["effective_items"].items():
+             bugs.append({"id": bid, **item, "file": rel})
+@@ -1111,7 +1298,15 @@ def main():
+ 
+     args = p.parse_args()
+     try:
+-        args.func(args)
++        if hasattr(args, "prefix"):
++            validate_prefix(args.prefix)
++        args.root = repo_root(args.root)
++        output = io.StringIO()
++        with recorder_lock(args.root, args.cmd), redirect_stdout(output):
++            if args.cmd in {"set-status", "triage"}:
++                repository_semantic_occurrences(args.root)
++            args.func(args)
++        sys.stdout.write(output.getvalue())
+     except ValueError as exc:
+         print(str(exc), file=sys.stderr)
+         raise SystemExit(2) from None
+diff --git a/sdflow-buglist/tests/test_buglist.py b/sdflow-buglist/tests/test_buglist.py
+index e82737b..1fbc8dd 100644
+--- a/sdflow-buglist/tests/test_buglist.py
++++ b/sdflow-buglist/tests/test_buglist.py
+@@ -497,17 +497,18 @@ class TestDualRead:
+         _write_dated_file(tmp_path / "openspec" / "issues" / "buglist", "2026-01-02", ["B1"])
+         assert id_conflicts(str(tmp_path)) == []
+ 
+-    def test_next_id_cli_warns_stderr_on_conflict_but_does_not_block(self, tmp_path):
++    def test_next_id_cli_fails_closed_on_semantic_conflict(self, tmp_path):
+         _write_dated_file(tmp_path / "openspec" / "buglists", "2026-01-01", ["B1"])
+         _write_dated_file(tmp_path / "openspec" / "issues" / "buglist", "2026-01-02", ["B1"])
+         proc = subprocess.run(
+             [sys.executable, SCRIPT, "--root", str(tmp_path), "next-id"],
+             capture_output=True, text=True,
+         )
+-        assert proc.returncode == 0, proc.stderr
+-        assert proc.stdout.strip() == "B2"
++        assert proc.returncode != 0
++        assert proc.stdout == ""
+         assert "WARNING" in proc.stderr
+         assert "B1" in proc.stderr
++        assert "repository semantic ID conflict" in proc.stderr
+ 
+     def test_next_id_cli_silent_when_no_conflict(self, tmp_path):
+         _write_dated_file(tmp_path / "openspec" / "issues" / "buglist", "2026-01-02", ["B1"])
+diff --git a/sdflow-buglist/tests/test_mirror_consistency.py b/sdflow-buglist/tests/test_mirror_consistency.py
+index 7228df9..c8bcb8e 100644
+--- a/sdflow-buglist/tests/test_mirror_consistency.py
++++ b/sdflow-buglist/tests/test_mirror_consistency.py
+@@ -63,6 +63,10 @@ def _ast_no_doc(fn):
+ # 文件业务 scan/write 编排仍按 pool 留在各自脚本，纯 bytes/parser/renderer 必须机械等价。
+ THREE_WAY = [
+     "atomic_write", "repo_root", "_reject_cell_unsafe",
++    "canonical_id", "semantic_id_key", "validate_prefix", "_lock_path",
++    "_read_lock_metadata", "_lock_conflict", "validate_recorder_participant",
++    "recorder_lock", "read_repository_snapshot", "repository_semantic_occurrences",
++    "recorder_child_env",
+     "_frontmatter_error", "_validate_unicode_scalar", "_json_object_no_duplicates",
+     "_validated_recorder_model", "_id_semantic_sort", "render_recorder_namespace",
+     "_legacy_semantic_id_key",
+diff --git a/sdflow-buglist/tests/test_task2_semantic_lock.py b/sdflow-buglist/tests/test_task2_semantic_lock.py
+new file mode 100644
+index 0000000..2e41338
+--- /dev/null
++++ b/sdflow-buglist/tests/test_task2_semantic_lock.py
+@@ -0,0 +1,102 @@
++import importlib.util
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++import pytest
++
++
++ROOT = Path(__file__).parents[2]
++
++
++def load(name, relative):
++    spec = importlib.util.spec_from_file_location(name, ROOT / relative)
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++@pytest.mark.parametrize("relative", [
++    "sdflow-buglist/scripts/buglist.py",
++    "sdflow-todolist/scripts/todolist.py",
++    "sdflow-issues/scripts/issues.py",
++])
++def test_canonical_id_rejects_alias_and_unicode_digits(relative):
++    module = load(relative.replace("/", "_"), relative)
++    assert module.canonical_id("A7") == "A7"
++    for invalid in ("A007", "A1٢", "A1２", "AA7", "a7"):
++        with pytest.raises(ValueError, match="canonical ASCII"):
++            module.canonical_id(invalid)
++
++
++def test_repository_lock_is_exclusive_and_token_safe(tmp_path):
++    module = load("bug_lock", "sdflow-buglist/scripts/buglist.py")
++    root = tmp_path
++    (root / "openspec/issues").mkdir(parents=True)
++    with module.recorder_lock(root, "scan") as owner:
++        with pytest.raises(module.RecorderLockError, match="lock occupied"):
++            with module.recorder_lock(root, "add"):
++                pass
++        participant = module.validate_recorder_participant(root, owner.token, "scan")
++        assert participant.token == owner.token
++        with pytest.raises(module.RecorderLockError):
++            module.validate_recorder_participant(root, "forged", "scan")
++        with pytest.raises(module.RecorderLockError, match="not allowlisted"):
++            module.validate_recorder_participant(root, owner.token, "shell")
++        other = tmp_path / "other"
++        (other / "openspec/issues").mkdir(parents=True)
++        with pytest.raises(module.RecorderLockError, match="cross-repo"):
++            module.validate_recorder_participant(other, owner.token, "scan")
++        assert module.RECORDER_LOCK_ENV in module.recorder_child_env("scan", owner.token)
++        assert module.RECORDER_LOCK_ENV not in module.recorder_child_env("git", token=False)
++    assert not (root / "openspec/issues/.recorder.lock").exists()
++
++
++def test_twenty_process_adds_are_unique_or_fail_loud(tmp_path):
++    script = ROOT / "sdflow-buglist/scripts/buglist.py"
++    payload = tmp_path / "bug.json"
++    payload.write_text(json.dumps({
++        "module": "lock", "summary": "race", "priority": "P2", "phenomenon": "race",
++    }))
++    command = [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(payload), "--prefix", "A"]
++    processes = [subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(20)]
++    results = [process.communicate(timeout=20) + (process.returncode,) for process in processes]
++    successful = [json.loads(stdout)["id"] for stdout, _stderr, code in results if code == 0]
++    failures = [stderr for _stdout, stderr, code in results if code != 0]
++    assert successful
++    assert len(successful) == len(set(successful))
++    assert all("recorder lock occupied" in stderr for stderr in failures)
++    assert not (tmp_path / "openspec/issues/.recorder.lock").exists()
++
++
++def test_partial_lock_and_ownership_lost_are_fail_closed(tmp_path):
++    module = load("bug_lock_faults", "sdflow-buglist/scripts/buglist.py")
++    lock = tmp_path / "openspec/issues/.recorder.lock"
++    lock.parent.mkdir(parents=True)
++    lock.write_bytes(b"")
++    with pytest.raises(module.RecorderLockError, match="metadata unavailable"):
++        with module.recorder_lock(tmp_path, "scan"):
++            pass
++    lock.unlink()
++    replacement = {"repo": os.path.realpath(tmp_path), "pid": 999, "command": "add", "started": 0, "token": "replacement"}
++    with pytest.raises(module.RecorderLockError, match="ownership lost"):
++        with module.recorder_lock(tmp_path, "scan"):
++            lock.unlink()
++            lock.write_text(json.dumps(replacement))
++    assert json.loads(lock.read_text())["token"] == "replacement"
++
++
++def test_custom_prefix_is_repository_wide_across_pools(tmp_path):
++    bug_script = ROOT / "sdflow-buglist/scripts/buglist.py"
++    todo_script = ROOT / "sdflow-todolist/scripts/todolist.py"
++    bug = tmp_path / "bug.json"
++    todo = tmp_path / "todo.json"
++    bug.write_text(json.dumps({"id": "A1", "module": "m", "summary": "bug", "priority": "P2", "phenomenon": "x"}))
++    todo.write_text(json.dumps({"id": "A1", "module": "m", "summary": "todo", "type": "代码质量"}))
++    first = subprocess.run([sys.executable, bug_script, "--root", tmp_path, "add", "--json", bug], capture_output=True, text=True)
++    assert first.returncode == 0, first.stderr
++    second = subprocess.run([sys.executable, todo_script, "--root", tmp_path, "add", "--json", todo], capture_output=True, text=True)
++    assert second.returncode != 0
++    assert "仓级既有 semantic ID 重复" in second.stderr
+diff --git a/sdflow-init/assets/snippets/runtime-gitignore.txt b/sdflow-init/assets/snippets/runtime-gitignore.txt
+new file mode 100644
+index 0000000..4ffa234
+--- /dev/null
++++ b/sdflow-init/assets/snippets/runtime-gitignore.txt
+@@ -0,0 +1 @@
++/openspec/issues/.recorder.lock
+diff --git a/sdflow-init/scripts/init.py b/sdflow-init/scripts/init.py
+index 3c5a90d..0696886 100644
+--- a/sdflow-init/scripts/init.py
++++ b/sdflow-init/scripts/init.py
+@@ -86,6 +86,39 @@ HOOKS = [
+ RETIRED_HOOKS = ["change-review-stub.py"]
+ 
+ 
++def merge_runtime_gitignore(root, snippet):
++    """Merge runtime-only ignore entries without rewriting user bytes."""
++    if isinstance(snippet, str):
++        snippet = snippet.encode("utf-8")
++    entries = [line for line in snippet.splitlines() if line]
++    if not entries or any(b"\r" in line or b"\n" in line for line in entries):
++        raise ValueError("runtime gitignore snippet 非法")
++    path = os.path.join(root, ".gitignore")
++    try:
++        with open(path, "rb") as handle:
++            original = handle.read()
++    except FileNotFoundError:
++        original = b""
++    lines = original.splitlines()
++    missing = []
++    for entry in entries:
++        count = sum(line == entry for line in lines)
++        if count > 1:
++            raise ValueError(f"runtime gitignore 条目重复，拒绝擅删用户内容：{entry.decode('utf-8')}")
++        if count == 0:
++            missing.append(entry)
++    if not missing:
++        return "已有（byte-noop）"
++    merged = original
++    if merged and not merged.endswith((b"\n", b"\r")):
++        merged += b"\n"
++    merged += b"".join(entry + b"\n" for entry in missing)
++    os.makedirs(root, exist_ok=True)
++    with open(path, "wb") as handle:
++        handle.write(merged)
++    return "追加 " + " ".join(entry.decode("utf-8") for entry in missing)
++
++
+ # ── 标记区块幂等注入 ─────────────────────────────────────────
+ 
+ def inject(path, start, end, content, header=""):
+@@ -781,6 +814,11 @@ def run(root, mode, dev=False):
+         cstat, cmsg = handle_config(root, mode)
+         report.append(f"config.yaml：{cmsg}")
+ 
++        runtime_snippet = os.path.join(SNIPPETS, "runtime-gitignore.txt")
++        with open(runtime_snippet, "rb") as handle:
++            runtime_action = merge_runtime_gitignore(root, handle.read())
++        report.append(f".gitignore runtime：{runtime_action}")
++
+         # INDEX.md 托管区块
+         idx = os.path.join(osroot, "INDEX.md")
+         a = inject(idx, *MARK_IDX, read_snippet("index-section.md"),
+@@ -794,7 +832,7 @@ def run(root, mode, dev=False):
+             a = inject(p, *MARK_DOC, sec,
+                        header=f"# {fn.split('.')[0]}\n\n本文件为项目级 AI 指令。")
+             report.append(f"{fn}：{a}")
+-    except (OSError, shutil.Error) as e:
++    except (OSError, shutil.Error, ValueError) as e:
+         _die(f"文件系统操作失败：{e}")
+ 
+     print(f"✓ sdflow-init {mode} 完成 @ {os.path.abspath(root)}\n")
+diff --git a/sdflow-init/tests/test_runtime_gitignore.py b/sdflow-init/tests/test_runtime_gitignore.py
+new file mode 100644
+index 0000000..71e6e70
+--- /dev/null
++++ b/sdflow-init/tests/test_runtime_gitignore.py
+@@ -0,0 +1,30 @@
++import importlib.util
++from pathlib import Path
++
++import pytest
++
++
++SCRIPT = Path(__file__).parents[1] / "scripts/init.py"
++SPEC = importlib.util.spec_from_file_location("sdflow_init_runtime", SCRIPT)
++INIT = importlib.util.module_from_spec(SPEC)
++SPEC.loader.exec_module(INIT)
++ENTRY = b"/openspec/issues/.recorder.lock\n"
++
++
++def test_merge_runtime_gitignore_is_idempotent_and_preserves_bytes(tmp_path):
++    target = tmp_path / ".gitignore"
++    target.write_bytes(b"# user\r\ncustom/*\r\n")
++    INIT.merge_runtime_gitignore(tmp_path, ENTRY)
++    once = target.read_bytes()
++    assert once == b"# user\r\ncustom/*\r\n/openspec/issues/.recorder.lock\n"
++    INIT.merge_runtime_gitignore(tmp_path, ENTRY)
++    assert target.read_bytes() == once
++
++
++def test_merge_runtime_gitignore_rejects_duplicate_without_mutation(tmp_path):
++    target = tmp_path / ".gitignore"
++    original = ENTRY + b"keep\n" + ENTRY
++    target.write_bytes(original)
++    with pytest.raises(ValueError, match="重复"):
++        INIT.merge_runtime_gitignore(tmp_path, ENTRY)
++    assert target.read_bytes() == original
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index 7c51385..26fe2dd 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -34,22 +34,27 @@ per-type 脚本。
+   - `atomic_write`：与 buglist.py/todolist.py 同款原子写 helper，供落盘
+     `issues/INDEX.md`/`issues/batches.md`/dated 文件（rename 同步）用。
+ 
+-**并发假设边界（D8）**：本脚本假定单机单进程串行调用，不加锁、不做文件锁/乐观锁/CAS。
+-umbrella 设计认定"并发/共享可变状态"属 TG-26，但 TG-26 要 Phase C 才落地；Phase B（本
+-脚本所在阶段）显式声明串行假设、不实现锁——真需要并发调用本脚本，留给后续 change 补锁。
+-调用方（skill / CI / sdflow-done sweep 步）需自行保证不并发调用本脚本，也不与
+-buglist.py/todolist.py 的写操作并发交叉。
++**并发边界**：所有权威读写使用 `openspec/issues/.recorder.lock` 的 repository-wide
++exclusive snapshot lock。顶层命令是 owner，复合命令仅向同 repo allowlist recorder
++子进程转发高熵 token；participant 校验后加入同一锁域而不重复 acquire/release。锁是
++cooperative protocol，不阻止编辑器、Git 或绕协议脚本；network/userspace FS 不受支持，
++process-crash 后遗留锁必须按错误给出的精确路径人工 break-glass，禁止 TTL 自动偷锁。
+ 
+ 用法见 `python issues.py --help`。
+ """
+ 
+ import argparse
++from contextlib import contextmanager, redirect_stdout
++import glob
++import io
+ import json
+ import os
+ import re
++import secrets
+ import subprocess
+ import sys
+ import tempfile
++import time
+ 
+ 
+ # ── 兄弟脚本定位 ─────────────────────────────────────────────────────────────
+@@ -73,6 +78,177 @@ RECORDER_POOL_CONFIG = {
+              {"OPEN", "PROPOSED", "DONE", "WONTDO"}),
+ }
+ 
++RECORDER_LOCK_ENV = "SDFLOW_RECORDER_LOCK_TOKEN"
++_ACTIVE_RECORDER_TOKEN = None
++RECORDER_PARTICIPANT_ALLOWLIST = {
++    "scan", "next-id", "add", "set-status", "triage", "reindex", "sweep",
++    "batch-lint", "batch-add", "batch-set-status", "batch-rename",
++}
++
++
++class RecorderLockError(ValueError):
++    pass
++
++
++class RecorderLockState:
++    def __init__(self, path, token, participant=False, identity=None):
++        self.path = path
++        self.token = token
++        self.participant = participant
++        self.identity = identity
++
++
++def canonical_id(value):
++    if not isinstance(value, str) or not CANONICAL_ID_RE.fullmatch(value):
++        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: expected [A-Z][1-9][0-9]*; fix: use e.g. A7")
++    return value
++
++
++def semantic_id_key(value, allow_legacy=False):
++    pattern = r"([A-Z])([0-9]+)" if allow_legacy else r"([A-Z])([1-9][0-9]*)"
++    match = re.fullmatch(pattern, value, re.ASCII) if isinstance(value, str) else None
++    if not match:
++        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: invalid semantic ID; fix: use one ASCII uppercase prefix and ASCII digits")
++    return match.group(1), int(match.group(2))
++
++
++def validate_prefix(prefix):
++    if not isinstance(prefix, str) or not re.fullmatch(r"[A-Z]", prefix, re.ASCII):
++        raise ValueError(f"ERROR: prefix is not one ASCII uppercase letter: {prefix!r}; cause: invalid prefix; fix: use A-Z")
++    return prefix
++
++
++def _lock_path(root):
++    return os.path.join(os.path.realpath(os.fspath(root)), "openspec", "issues", ".recorder.lock")
++
++
++def _read_lock_metadata(path):
++    try:
++        with open(path, "rb") as handle:
++            raw = handle.read()
++        value = json.loads(raw.decode("utf-8"))
++        required = {"repo", "pid", "command", "started", "token"}
++        return value if isinstance(value, dict) and required <= set(value) else None
++    except (OSError, UnicodeError, json.JSONDecodeError):
++        return None
++
++
++def _lock_conflict(path, metadata=None):
++    if metadata:
++        owner = f"pid={metadata.get('pid')} command={metadata.get('command')} started={metadata.get('started')}"
++        cause = f"lock occupied by {owner}"
++    else:
++        cause = "lock occupied; owner metadata unavailable/initializing"
++    return RecorderLockError(
++        f"ERROR: recorder lock occupied at {path}; cause: {cause}; fix: stop all recorder processes for this repo, remove exactly {path}, then retry"
++    )
++
++
++def validate_recorder_participant(root, token, command):
++    root = os.path.realpath(os.fspath(root))
++    path = _lock_path(root)
++    if command not in RECORDER_PARTICIPANT_ALLOWLIST:
++        raise RecorderLockError(f"ERROR: participant command not allowlisted: {command}; cause: delegation denied; fix: invoke it as a top-level owner")
++    metadata = _read_lock_metadata(path)
++    if not metadata or metadata.get("repo") != root or not secrets.compare_digest(str(metadata.get("token", "")), str(token)):
++        raise RecorderLockError(f"ERROR: invalid recorder participant for {path}; cause: missing, forged, expired, or cross-repo token; fix: invoke as a top-level owner")
++    return RecorderLockState(path, token, participant=True)
++
++
++@contextmanager
++def recorder_lock(root, command):
++    root = os.path.realpath(os.fspath(root))
++    inherited = os.environ.get(RECORDER_LOCK_ENV)
++    if inherited:
++        try:
++            participant = validate_recorder_participant(root, inherited, command)
++        except RecorderLockError:
++            participant = None
++        if participant is not None:
++            yield participant
++            return
++    path = _lock_path(root)
++    os.makedirs(os.path.dirname(path), exist_ok=True)
++    token = secrets.token_hex(32)
++    try:
++        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
++    except FileExistsError:
++        raise _lock_conflict(path, _read_lock_metadata(path))
++    state = None
++    try:
++        stat = os.fstat(fd)
++        state = RecorderLockState(path, token, identity=(stat.st_dev, stat.st_ino))
++        metadata = {"repo": root, "pid": os.getpid(), "command": command, "started": time.time(), "token": token}
++        os.write(fd, json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode("utf-8"))
++        os.fsync(fd)
++        os.close(fd)
++        fd = None
++        yield state
++    finally:
++        if 'fd' in locals() and fd is not None:
++            os.close(fd)
++        if state is not None:
++            current = _read_lock_metadata(path)
++            try:
++                path_stat = os.stat(path)
++                identity = (path_stat.st_dev, path_stat.st_ino)
++            except FileNotFoundError:
++                identity = None
++            owns = current is not None and identity == state.identity and secrets.compare_digest(str(current.get("token", "")), token)
++            if owns:
++                os.unlink(path)
++            elif os.path.exists(path):
++                raise RecorderLockError(f"ERROR: recorder lock ownership lost at {path}; cause: identity/token changed; fix: preserve the replacement lock and inspect its owner")
++
++
++def read_repository_snapshot(root):
++    root = os.path.realpath(os.fspath(root))
++    pools = {
++        "bug": ("openspec/issues/buglist/*.md", "openspec/buglists/*.md"),
++        "todo": ("openspec/issues/todolist/*.md", "openspec/todolists/*.md"),
++    }
++    snapshot = []
++    seen_paths = set()
++    for pool, patterns in pools.items():
++        for pattern in patterns:
++            for path in sorted(glob.glob(os.path.join(root, pattern))):
++                real = os.path.realpath(path)
++                if real in seen_paths:
++                    continue
++                seen_paths.add(real)
++                document = read_recorder_document(path, pool)
++                rel = os.path.relpath(path, root)
++                snapshot.append((pool, path, rel, document))
++    return snapshot
++
++
++def repository_semantic_occurrences(root, snapshot=None):
++    snapshot = read_repository_snapshot(root) if snapshot is None else snapshot
++    occurrences = []
++    for pool, _path, rel, document in snapshot:
++        occurrences.extend((key, raw_id, pool, rel) for key, raw_id in document["effective_occurrences"])
++    by_key = {}
++    for key, raw_id, pool, rel in occurrences:
++        by_key.setdefault(key, []).append((raw_id, pool, rel))
++    duplicates = {key: places for key, places in by_key.items() if len(places) > 1}
++    if duplicates:
++        key, places = sorted(duplicates.items())[0]
++        rendered = ", ".join(f"{raw}@{pool}:{rel}" for raw, pool, rel in places)
++        raise ValueError(f"ERROR: semantic ID 重复; cause: repository semantic ID conflict {key}: {rendered}; fix: resolve all aliases/pools before retry")
++    return by_key
++
++
++def recorder_child_env(command, token=None):
++    if token is None:
++        token = _ACTIVE_RECORDER_TOKEN
++    env = dict(os.environ)
++    env.pop(RECORDER_LOCK_ENV, None)
++    if token:
++        if command not in RECORDER_PARTICIPANT_ALLOWLIST:
++            raise RecorderLockError(f"ERROR: child command not allowlisted: {command}; cause: token forwarding denied; fix: run without participant capability")
++        env[RECORDER_LOCK_ENV] = token
++    return env
++
+ 
+ def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
+     raise ValueError(f"ERROR: {problem}; cause: {cause}; fix: {fix}")
+@@ -349,13 +525,13 @@ def block_ranges(lines):
+     out = {}
+     starts = []
+     for i, ln in enumerate(lines):
+-        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
++        m = re.match(r"##\s+([A-Z][0-9]+)\s*:", ln, re.ASCII)
+         if m:
+             starts.append((i, m.group(1)))
+     for idx, (i, bid) in enumerate(starts):
+         end = len(lines)
+         for j in range(i + 1, len(lines)):
+-            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
++            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", lines[j], re.ASCII):
+                 end = j
+                 break
+         out[bid] = (i, end)
+@@ -427,6 +603,9 @@ def _build_effective_snapshot(result, expected_pool):
+             raw_ids.append(raw_id)
+             if len(cells) not in (7, 8):
+                 problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
++    invalid_ids = [raw_id for raw_id in raw_ids if _legacy_semantic_id_key(raw_id) is None]
++    if invalid_ids:
++        _frontmatter_error("non-ASCII ID", repr(invalid_ids[0]))
+     occurrences = [
+         (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
+         for raw_id in raw_ids
+@@ -575,6 +754,7 @@ def repo_root(start="."):
+         out = subprocess.run(
+             ["git", "rev-parse", "--show-toplevel"],
+             cwd=start, capture_output=True, text=True, check=True,
++            env=recorder_child_env("git", token=False),
+         )
+         return out.stdout.strip()
+     except Exception:
+@@ -602,11 +782,16 @@ def _scan_pool(script, root, pool, problems_out=None):
+     行为与改动前一致）——只有显式传入列表的调用方（`cmd_reindex`）才会拿到这份信号，不
+     改变 `read_pool`/`_scan_pool` 对既有调用方（如 `cmd_batch_rename`）的返回值形状。
+     """
++    kwargs = {"capture_output": True, "text": True}
++    if _ACTIVE_RECORDER_TOKEN:
++        kwargs["env"] = recorder_child_env("scan")
+     proc = subprocess.run(
+         [sys.executable, script, "--root", str(root), "scan", "--json"],
+-        capture_output=True, text=True,
++        **kwargs,
+     )
+     if proc.returncode != 0:
++        if "repository semantic ID conflict" in proc.stderr:
++            raise CrossPoolIDConflict(proc.stderr.strip())
+         raise RuntimeError(
+             f"{os.path.basename(script)} scan --json 失败（exit={proc.returncode}）：{proc.stderr}"
+         )
+@@ -654,10 +839,8 @@ def read_pool(root, problems_out=None):
+     `problems`（透传见 `_scan_pool`）。默认 `None`，返回值形状与改动前完全一致——
+     `cmd_batch_rename` 等既有调用方无需改动。
+ 
+-    **并发假设边界（D8）**：本函数只读、不加锁。dated 文件本身靠 buglist.py/todolist.py
+-    的 atomic_write 保证不会读到半截内容，但两次 `scan --json` 子进程调用之间没有任何
+-    快照隔离——如果调用期间另一进程正并发 add/set-status，两池读到的"时刻"不保证一致。
+-    Phase B 显式假定单机单进程串行调用，不处理这类竞态（同模块 docstring D8）。
++    调用方必须已经是 recorder lock owner/participant；两个 scan 子进程校验同一 token，
++    因而 join 对应同一个没有外部合规 writer 穿越的 repository snapshot。
+     """
+     items = (
+         _scan_pool(BUGLIST_SCRIPT, root, "bug", problems_out)
+@@ -1394,7 +1577,7 @@ def _retag_items_in_dated_files(root, items, old_key, new_key):
+             file_lines = f.readlines()
+         wanted = {it["id"]: it for it in its}
+         for i, line in enumerate(file_lines):
+-            m = re.match(r"\|\s*([A-Z]\d+)\s*\|", line)
++            m = re.match(r"\|\s*([A-Z][0-9]+)\s*\|", line, re.ASCII)
+             if not m or m.group(1) not in wanted:
+                 continue
+             cells = [c.strip() for c in line.strip().strip("|").split("|")]
+@@ -1517,7 +1700,7 @@ def cmd_sweep(args):
+         proc = subprocess.run(
+             [sys.executable, script, "--root", root, "scan",
+              "--change", change, "--open-ungrouped", "--json"],
+-            capture_output=True, text=True,
++            capture_output=True, text=True, env=recorder_child_env("scan"),
+         )
+         if proc.returncode != 0:
+             _die(f"sweep: {pool} scan 失败 (rc={proc.returncode}): {proc.stderr.strip()}")
+@@ -1534,7 +1717,7 @@ def cmd_sweep(args):
+             tp = subprocess.run(
+                 [sys.executable, script, "--root", root, "triage",
+                  "--id", iid, "--批次", change],
+-                capture_output=True, text=True,
++                capture_output=True, text=True, env=recorder_child_env("triage"),
+             )
+             if tp.returncode != 0:
+                 _die(
+@@ -1553,14 +1736,14 @@ def cmd_sweep(args):
+     ba = subprocess.run(
+         [sys.executable, __file__, "--root", root, "batch", "add",
+          change, "--if-exists", "skip"],
+-        capture_output=True, text=True,
++        capture_output=True, text=True, env=recorder_child_env("batch-add"),
+     )
+     if ba.returncode != 0:
+         _die(f"sweep: batch add 失败 (rc={ba.returncode}): {ba.stderr.strip()}")
+ 
+     ri = subprocess.run(
+         [sys.executable, __file__, "--root", root, "reindex"],
+-        capture_output=True, text=True,
++        capture_output=True, text=True, env=recorder_child_env("reindex"),
+     )
+     if ri.returncode != 0:
+         _die(f"sweep: reindex 失败 (rc={ri.returncode}): {ri.stderr.strip()}")
+@@ -1574,6 +1757,7 @@ def cmd_sweep(args):
+ 
+ 
+ def main():
++    global _ACTIVE_RECORDER_TOKEN
+     p = argparse.ArgumentParser(
+         description="共享 issues 层：跨 bug+todo 的 reindex / batch"
+     )
+@@ -1631,7 +1815,19 @@ def main():
+     sw.set_defaults(func=cmd_sweep)
+ 
+     args = p.parse_args()
+-    args.func(args)
++    command = f"batch-{args.batch_action}" if args.cmd == "batch" else args.cmd
++    try:
++        args.root = repo_root(args.root)
++        output = io.StringIO()
++        with recorder_lock(args.root, command) as lock_state, redirect_stdout(output):
++            args._recorder_token = lock_state.token
++            _ACTIVE_RECORDER_TOKEN = lock_state.token
++            args.func(args)
++            _ACTIVE_RECORDER_TOKEN = None
++        sys.stdout.write(output.getvalue())
++    except ValueError as exc:
++        print(str(exc), file=sys.stderr)
++        raise SystemExit(2) from None
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
+index bed2a42..35b7d7f 100644
+--- a/sdflow-todolist/scripts/todolist.py
++++ b/sdflow-todolist/scripts/todolist.py
+@@ -18,14 +18,18 @@ skill `sdflow-todolist` 的执行核心。收集优化想法/技术债/改进等
+ """
+ 
+ import argparse
++from contextlib import contextmanager, redirect_stdout
+ import datetime
+ import glob
++import io
+ import json
+ import os
+ import re
++import secrets
+ import subprocess
+ import sys
+ import tempfile
++import time
+ 
+ 
+ def atomic_write(path, text):
+@@ -56,7 +60,7 @@ def atomic_write(path, text):
+ STATUS_CODES = ["OPEN", "PROPOSED", "DONE", "WONTDO"]
+ TYPE_TAGS = ["性能优化", "可观测性", "代码质量", "功能增强", "基础设施"]
+ DEFAULT_PREFIX = "T"
+-ID_RE = re.compile(r"\b([A-Z])(\d+)\b")
++ID_RE = re.compile(r"\b([A-Z])([0-9]+)\b", re.ASCII)
+ CANONICAL_ID_RE = re.compile(r"^[A-Z][1-9][0-9]*$", re.ASCII)
+ UTF8_BOM = b"\xef\xbb\xbf"
+ RECORDER_POOL_CONFIG = {
+@@ -65,6 +69,177 @@ RECORDER_POOL_CONFIG = {
+     "todo": ("type", set(TYPE_TAGS), set(STATUS_CODES)),
+ }
+ 
++RECORDER_LOCK_ENV = "SDFLOW_RECORDER_LOCK_TOKEN"
++_ACTIVE_RECORDER_TOKEN = None
++RECORDER_PARTICIPANT_ALLOWLIST = {
++    "scan", "next-id", "add", "set-status", "triage", "reindex", "sweep",
++    "batch-lint", "batch-add", "batch-set-status", "batch-rename",
++}
++
++
++class RecorderLockError(ValueError):
++    pass
++
++
++class RecorderLockState:
++    def __init__(self, path, token, participant=False, identity=None):
++        self.path = path
++        self.token = token
++        self.participant = participant
++        self.identity = identity
++
++
++def canonical_id(value):
++    if not isinstance(value, str) or not CANONICAL_ID_RE.fullmatch(value):
++        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: expected [A-Z][1-9][0-9]*; fix: use e.g. A7")
++    return value
++
++
++def semantic_id_key(value, allow_legacy=False):
++    pattern = r"([A-Z])([0-9]+)" if allow_legacy else r"([A-Z])([1-9][0-9]*)"
++    match = re.fullmatch(pattern, value, re.ASCII) if isinstance(value, str) else None
++    if not match:
++        raise ValueError(f"ERROR: ID is not canonical ASCII spelling: {value!r}; cause: invalid semantic ID; fix: use one ASCII uppercase prefix and ASCII digits")
++    return match.group(1), int(match.group(2))
++
++
++def validate_prefix(prefix):
++    if not isinstance(prefix, str) or not re.fullmatch(r"[A-Z]", prefix, re.ASCII):
++        raise ValueError(f"ERROR: prefix is not one ASCII uppercase letter: {prefix!r}; cause: invalid prefix; fix: use A-Z")
++    return prefix
++
++
++def _lock_path(root):
++    return os.path.join(os.path.realpath(os.fspath(root)), "openspec", "issues", ".recorder.lock")
++
++
++def _read_lock_metadata(path):
++    try:
++        with open(path, "rb") as handle:
++            raw = handle.read()
++        value = json.loads(raw.decode("utf-8"))
++        required = {"repo", "pid", "command", "started", "token"}
++        return value if isinstance(value, dict) and required <= set(value) else None
++    except (OSError, UnicodeError, json.JSONDecodeError):
++        return None
++
++
++def _lock_conflict(path, metadata=None):
++    if metadata:
++        owner = f"pid={metadata.get('pid')} command={metadata.get('command')} started={metadata.get('started')}"
++        cause = f"lock occupied by {owner}"
++    else:
++        cause = "lock occupied; owner metadata unavailable/initializing"
++    return RecorderLockError(
++        f"ERROR: recorder lock occupied at {path}; cause: {cause}; fix: stop all recorder processes for this repo, remove exactly {path}, then retry"
++    )
++
++
++def validate_recorder_participant(root, token, command):
++    root = os.path.realpath(os.fspath(root))
++    path = _lock_path(root)
++    if command not in RECORDER_PARTICIPANT_ALLOWLIST:
++        raise RecorderLockError(f"ERROR: participant command not allowlisted: {command}; cause: delegation denied; fix: invoke it as a top-level owner")
++    metadata = _read_lock_metadata(path)
++    if not metadata or metadata.get("repo") != root or not secrets.compare_digest(str(metadata.get("token", "")), str(token)):
++        raise RecorderLockError(f"ERROR: invalid recorder participant for {path}; cause: missing, forged, expired, or cross-repo token; fix: invoke as a top-level owner")
++    return RecorderLockState(path, token, participant=True)
++
++
++@contextmanager
++def recorder_lock(root, command):
++    root = os.path.realpath(os.fspath(root))
++    inherited = os.environ.get(RECORDER_LOCK_ENV)
++    if inherited:
++        try:
++            participant = validate_recorder_participant(root, inherited, command)
++        except RecorderLockError:
++            participant = None
++        if participant is not None:
++            yield participant
++            return
++    path = _lock_path(root)
++    os.makedirs(os.path.dirname(path), exist_ok=True)
++    token = secrets.token_hex(32)
++    try:
++        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
++    except FileExistsError:
++        raise _lock_conflict(path, _read_lock_metadata(path))
++    state = None
++    try:
++        stat = os.fstat(fd)
++        state = RecorderLockState(path, token, identity=(stat.st_dev, stat.st_ino))
++        metadata = {"repo": root, "pid": os.getpid(), "command": command, "started": time.time(), "token": token}
++        os.write(fd, json.dumps(metadata, sort_keys=True, separators=(",", ":")).encode("utf-8"))
++        os.fsync(fd)
++        os.close(fd)
++        fd = None
++        yield state
++    finally:
++        if 'fd' in locals() and fd is not None:
++            os.close(fd)
++        if state is not None:
++            current = _read_lock_metadata(path)
++            try:
++                path_stat = os.stat(path)
++                identity = (path_stat.st_dev, path_stat.st_ino)
++            except FileNotFoundError:
++                identity = None
++            owns = current is not None and identity == state.identity and secrets.compare_digest(str(current.get("token", "")), token)
++            if owns:
++                os.unlink(path)
++            elif os.path.exists(path):
++                raise RecorderLockError(f"ERROR: recorder lock ownership lost at {path}; cause: identity/token changed; fix: preserve the replacement lock and inspect its owner")
++
++
++def read_repository_snapshot(root):
++    root = os.path.realpath(os.fspath(root))
++    pools = {
++        "bug": ("openspec/issues/buglist/*.md", "openspec/buglists/*.md"),
++        "todo": ("openspec/issues/todolist/*.md", "openspec/todolists/*.md"),
++    }
++    snapshot = []
++    seen_paths = set()
++    for pool, patterns in pools.items():
++        for pattern in patterns:
++            for path in sorted(glob.glob(os.path.join(root, pattern))):
++                real = os.path.realpath(path)
++                if real in seen_paths:
++                    continue
++                seen_paths.add(real)
++                document = read_recorder_document(path, pool)
++                rel = os.path.relpath(path, root)
++                snapshot.append((pool, path, rel, document))
++    return snapshot
++
++
++def repository_semantic_occurrences(root, snapshot=None):
++    snapshot = read_repository_snapshot(root) if snapshot is None else snapshot
++    occurrences = []
++    for pool, _path, rel, document in snapshot:
++        occurrences.extend((key, raw_id, pool, rel) for key, raw_id in document["effective_occurrences"])
++    by_key = {}
++    for key, raw_id, pool, rel in occurrences:
++        by_key.setdefault(key, []).append((raw_id, pool, rel))
++    duplicates = {key: places for key, places in by_key.items() if len(places) > 1}
++    if duplicates:
++        key, places = sorted(duplicates.items())[0]
++        rendered = ", ".join(f"{raw}@{pool}:{rel}" for raw, pool, rel in places)
++        raise ValueError(f"ERROR: semantic ID 重复; cause: repository semantic ID conflict {key}: {rendered}; fix: resolve all aliases/pools before retry")
++    return by_key
++
++
++def recorder_child_env(command, token=None):
++    if token is None:
++        token = _ACTIVE_RECORDER_TOKEN
++    env = dict(os.environ)
++    env.pop(RECORDER_LOCK_ENV, None)
++    if token:
++        if command not in RECORDER_PARTICIPANT_ALLOWLIST:
++            raise RecorderLockError(f"ERROR: child command not allowlisted: {command}; cause: token forwarding denied; fix: run without participant capability")
++        env[RECORDER_LOCK_ENV] = token
++    return env
++
+ 
+ def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
+     raise ValueError(f"ERROR: {problem}; cause: {cause}; fix: {fix}")
+@@ -340,6 +515,7 @@ def repo_root(start="."):
+         out = subprocess.run(
+             ["git", "rev-parse", "--show-toplevel"],
+             cwd=start, capture_output=True, text=True, check=True,
++            env=recorder_child_env("git", token=False),
+         )
+         return out.stdout.strip()
+     except Exception:
+@@ -366,6 +542,7 @@ def detect_change(root):
+         out = subprocess.run(
+             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+             cwd=root, capture_output=True, text=True, check=True,
++            env=recorder_child_env("git", token=False),
+         )
+         branch = out.stdout.strip()
+     except Exception:
+@@ -456,7 +633,7 @@ def list_files(root):
+         if os.path.isdir(d):
+             files = [
+                 os.path.join(d, f) for f in os.listdir(d)
+-                if re.match(r"\d{4}-\d{2}-todolist\.md$", f)
++                if re.match(r"[0-9]{4}-[0-9]{2}-todolist\.md$", f, re.ASCII)
+             ]
+             out += sorted(files)  # 各目录内部按文件名（=月份）排序
+     return out
+@@ -498,7 +675,7 @@ def _ids_in_files(paths, prefix=None):
+         with open(path, encoding="utf-8") as f:
+             for line in f:
+                 # 只认状态总览表里的行（以 | 开头且第二列是 ID）
+-                m = re.match(r"\|\s*([A-Z]\d+)\s*\|", line)
++                m = re.match(r"\|\s*([A-Z][0-9]+)\s*\|", line, re.ASCII)
+                 if m:
+                     pid = m.group(1)
+                     if prefix is None or pid.startswith(prefix):
+@@ -510,9 +687,13 @@ def all_ids(root, prefix=None):
+     return _ids_in_files(list_files(root), prefix)
+ 
+ 
+-def next_id(root, prefix=DEFAULT_PREFIX):
+-    nums = [int(ID_RE.match(i).group(2)) for i in all_ids(root) if ID_RE.match(i)]
++def next_id(root, prefix=DEFAULT_PREFIX, semantic=None):
++    prefix = validate_prefix(prefix)
++    semantic = repository_semantic_occurrences(root) if semantic is None else semantic
++    nums = [number for (item_prefix, number) in semantic if item_prefix == prefix]
+     n = (max(nums) + 1) if nums else 1
++    while (prefix, n) in semantic:
++        n += 1
+     return f"{prefix}{n}"
+ 
+ 
+@@ -586,13 +767,13 @@ def block_ranges(lines):
+     out = {}
+     starts = []
+     for i, ln in enumerate(lines):
+-        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
++        m = re.match(r"##\s+([A-Z][0-9]+)\s*:", ln, re.ASCII)
+         if m:
+             starts.append((i, m.group(1)))
+     for idx, (i, bid) in enumerate(starts):
+         end = len(lines)
+         for j in range(i + 1, len(lines)):
+-            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
++            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", lines[j], re.ASCII):
+                 end = j
+                 break
+         out[bid] = (i, end)
+@@ -664,6 +845,9 @@ def _build_effective_snapshot(result, expected_pool):
+             raw_ids.append(raw_id)
+             if len(cells) not in (7, 8):
+                 problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
++    invalid_ids = [raw_id for raw_id in raw_ids if _legacy_semantic_id_key(raw_id) is None]
++    if invalid_ids:
++        _frontmatter_error("non-ASCII ID", repr(invalid_ids[0]))
+     occurrences = [
+         (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
+         for raw_id in raw_ids
+@@ -764,7 +948,10 @@ def cmd_add(args):
+         _die(f"状态码非法：{status}")
+ 
+     month = this_month(args.month)
+-    tid = data.get("id") or next_id(root, args.prefix)
++    validate_prefix(args.prefix)
++    semantic = repository_semantic_occurrences(root)
++    explicit_id = data.get("id") is not None
++    tid = canonical_id(data["id"]) if explicit_id else next_id(root, args.prefix, semantic)
+     # OV-3 守卫（镜像 buglist.py）：显式传 id 时才校验（next_id 自动生成的号必然合法、必然
+     # 不重，不需要重复查）。语法用单字母前缀 `[A-Z]\d+` 全量 fullmatch，不借用带 `\b` 的 ID_RE。
+     # 必须是单字母前缀（不是 `[A-Z]+\d+`）：代码库对 ID 的识别全部只认单字母——
+@@ -775,11 +962,9 @@ def cmd_add(args):
+     # 破坏 _die 的 ERROR: 契约，须在此优雅拒绝。
+     # 查重用 all_ids(root)：此刻新文件/新行还未落盘（ensure_file 在下面），all_ids 看到的是
+     # 落盘前的既有全集，不会把本次正在 add 的 id 算进去，语义正确。
+-    if data.get("id"):
+-        if not (isinstance(tid, str) and re.fullmatch(r"[A-Z]\d+", tid)):
+-            _die(f"显式 id 语法非法（应形如 T12，单字母前缀）：{tid!r}")
+-        if tid in all_ids(root):
+-            _die(f"显式 id 与既有重复（会静默丢行）：{tid}")
++    if explicit_id and semantic_id_key(tid) in semantic:
++        places = semantic[semantic_id_key(tid)]
++        _die(f"显式 id 与仓级既有 semantic ID 重复：{tid} at {places}")
+     time_str = args.time or datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+     change = data.get("change") or detect_change(root)
+ 
+@@ -973,9 +1158,11 @@ def cmd_scan(args):
+     # （例如 2026-01-todolist.md 与 2026-02-todolist.md 都出现 T1）。改为收集
+     # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数。
+     raw_id_locations = []  # [(semantic_key, raw_id, rel_path), ...]
+-    for path in list_files(root):
+-        document = read_recorder_document(path, "todo")
+-        rel = os.path.relpath(path, root)
++    snapshot = read_repository_snapshot(root)
++    repository_semantic_occurrences(root, snapshot)
++    for pool, path, rel, document in snapshot:
++        if pool != "todo":
++            continue
+         problems.extend(f"{rel}: {problem}" for problem in document["problems"])
+         for bid, item in document["effective_items"].items():
+             items.append({"id": bid, **item, "file": rel})
+@@ -1086,7 +1273,15 @@ def main():
+ 
+     args = p.parse_args()
+     try:
+-        args.func(args)
++        if hasattr(args, "prefix"):
++            validate_prefix(args.prefix)
++        args.root = repo_root(args.root)
++        output = io.StringIO()
++        with recorder_lock(args.root, args.cmd), redirect_stdout(output):
++            if args.cmd in {"set-status", "triage"}:
++                repository_semantic_occurrences(args.root)
++            args.func(args)
++        sys.stdout.write(output.getvalue())
+     except ValueError as exc:
+         print(str(exc), file=sys.stderr)
+         raise SystemExit(2) from None
+diff --git a/sdflow-todolist/tests/test_todolist.py b/sdflow-todolist/tests/test_todolist.py
+index 465ca1f..6030f41 100644
+--- a/sdflow-todolist/tests/test_todolist.py
++++ b/sdflow-todolist/tests/test_todolist.py
+@@ -530,17 +530,18 @@ class TestDualRead:
+         _write_dated_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", ["T1"])
+         assert id_conflicts(str(tmp_path)) == []
+ 
+-    def test_next_id_cli_warns_stderr_on_conflict_but_does_not_block(self, tmp_path):
++    def test_next_id_cli_fails_closed_on_semantic_conflict(self, tmp_path):
+         _write_dated_file(tmp_path / "openspec" / "todolists", "2026-01", ["T1"])
+         _write_dated_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", ["T1"])
+         proc = subprocess.run(
+             [sys.executable, SCRIPT, "--root", str(tmp_path), "next-id"],
+             capture_output=True, text=True,
+         )
+-        assert proc.returncode == 0, proc.stderr
+-        assert proc.stdout.strip() == "T2"
++        assert proc.returncode != 0
++        assert proc.stdout == ""
+         assert "WARNING" in proc.stderr
+         assert "T1" in proc.stderr
++        assert "repository semantic ID conflict" in proc.stderr
+ 
+     def test_next_id_cli_silent_when_no_conflict(self, tmp_path):
+         _write_dated_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", ["T1"])

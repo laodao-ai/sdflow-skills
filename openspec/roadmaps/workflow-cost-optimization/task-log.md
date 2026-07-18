@@ -11,6 +11,15 @@
 
 ---
 
+## 2026-07-16
+
+### [阶段 2 / 完成态对账] P2 核心交付，验收与后台尾部未闭合
+- **状态**: ⚠️ 部分完成（承载 change `add-codex-host-support`，archive + merge `a09afb0`）
+- **实际耗时**: N/A（本条只做归档证据回写）
+- **已交付**: 双机队 `model-tiers`、`resolve-models.sh` 正信号宿主判定、两评审 SKILL 档位解析/注入、unknown/failure 的 fail-loud，以及 config 覆盖与测试。
+- **未闭合**: 机械镜 token/轮下降与墙钟不回归尚无对 P0 基线的验收记录；P2b 仅 spec-review→设计门段的非阻塞 fan-out 尚未实施或显式 defer。
+- **下一步**: 先补验收证据并处置 P2b；P2 完整闭合后再进入 P3 接地镜流水线。
+
 ## 2026-07-07
 
 ### [阶段 4] 批次策略交付并归档（进度同步补记）

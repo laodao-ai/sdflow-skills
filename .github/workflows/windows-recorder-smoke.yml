@@ -1,0 +1,33 @@
+name: Windows recorder smoke
+
+on:
+  push:
+    paths:
+      - ".github/workflows/windows-recorder-smoke.yml"
+      - "setup.sh"
+      - "sdflow-buglist/**"
+      - "sdflow-todolist/**"
+      - "sdflow-issues/**"
+      - "sdflow-init/scripts/init.py"
+  pull_request:
+    paths:
+      - ".github/workflows/windows-recorder-smoke.yml"
+      - "setup.sh"
+      - "sdflow-buglist/**"
+      - "sdflow-todolist/**"
+      - "sdflow-issues/**"
+      - "sdflow-init/scripts/init.py"
+  workflow_dispatch:
+
+jobs:
+  windows-recorder-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: py -m pip install pytest
+      - name: Run actual Windows local-disk recorder smoke
+        run: py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error

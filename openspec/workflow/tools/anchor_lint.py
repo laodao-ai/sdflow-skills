@@ -15,13 +15,16 @@ ANCHOR_PREFIXES = {
     "<!-- sdflow:hr-tg v1": "hr-tg",
     "<!-- sdflow:step1-broad-review v1": "step1-broad-review",
     "<!-- sdflow:lens-metric v1": "lens-metric",
+    "<!-- sdflow:fanout-capability v1": "fanout-capability",   # add-codex-host-support：会话级探针锚，always-on 一致性 lint 判据源
 }
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')                    # 受限 kv：key="value"
 _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')               # CommonMark fence：0-3 空格 + ≥3 marker
 _ENUM_BLOCK = re.compile(r'^ {0,3}(`{3,}|~{3,})lens-metric-enums\s*$')  # 机读块开启行
 
 COUNT_FIELDS = ("findings", "采纳", "裁掉", "defer", "独立")
-REQUIRED_FIELDS = ("layer", "lens", "runner", "findings", "采纳", "裁掉", "defer", "独立", "sev")
+# add-codex-host-support：REQUIRED_FIELDS 插入 host（v2 锚行键升维；缺 host → 无从区分自审 vs 跨模型轮次）。
+# site 仍不入必检（CF-补2：任意值合法、不纳越域自检）。
+REQUIRED_FIELDS = ("layer", "lens", "host", "runner", "findings", "采纳", "裁掉", "defer", "独立", "sev")
 
 
 class EnumsError(Exception):
@@ -61,13 +64,16 @@ def load_enums(contract_path=None):
             kv[k.strip()] = v.strip()
     layer = {x.strip() for x in kv.get("layer", "").split(",") if x.strip()}
     lens = {x.strip() for x in kv.get("lens", "").split(",") if x.strip()}
+    host = {x.strip() for x in kv.get("host", "").split(",") if x.strip()}          # add-codex-host-support
     runner = {x.strip() for x in kv.get("runner", "").split(",") if x.strip()}
+    reason_code = {x.strip() for x in kv.get("reason_code", "").split(",") if x.strip()}  # add-codex-host-support
     sev_fmt = kv.get("sev-format", "").strip()              # 致N/高N/中N/低N
-    if not (layer and lens and runner and sev_fmt):
+    if not (layer and lens and host and runner and reason_code and sev_fmt):
         raise EnumsError(f"lens-metric-enums 块解析空/缺项: {p}")
     # 由 sev-format 模板生成正则：N → \d+，其余字面
     sev_re = re.compile("^" + re.escape(sev_fmt).replace("N", r"\d+") + "$")
-    return {"layer": layer, "lens": lens, "runner": runner, "sev_re": sev_re}
+    return {"layer": layer, "lens": lens, "host": host, "runner": runner,
+            "reason_code": reason_code, "sev_re": sev_re}
 
 
 def fence_outside_lines(text):
@@ -404,6 +410,186 @@ def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
 _NONNEG_INT = re.compile(r'^\d+$')
 
 
+# =========================================================================================
+# add-codex-host-support：合法组合矩阵（🔴 自审红线单一源）+ fan-out 一致性 lint（读 mirrors=）
+# 两者 always-on、各自独立成函数、MUST NOT 接受 metrics_on 参数（照 check_hr_tg 先例，D11）——读真实性
+# 信号非价值度量，与 metrics.enabled 解耦。枚举域从契约机读块读（load_enums），关系式判定逻辑本地重实现
+# （GC-2：平铺 enums 块装不下 runner≠host/findings=0 等关系式谓词；outside_voice_guard 各自重实现，全笛卡尔
+# golden 守一致，见 tasks 2.3/4.5）。**MUST NOT import/调 resolve-models.sh（ADR-1：anchor_lint 不判宿主，
+# 只校验锚行自身内部一致性——host/runner/reason_code 都写在锚行里）。**
+# =========================================================================================
+
+OUTSIDE_VOICE_REQUIRED_FIELDS = ("host", "runner", "reason_code")  # D1：outside-voice 锚新增 KV 解析，reason_code 该锚必填
+_DOWNGRADE_CODES = frozenset({"not-installed", "preflight-error", "timeout", "exec-error"})  # D2 同族 fallback 降级码集（钉死，含 preflight-error）
+_NOEXEC_KNOWN_CODES = frozenset({"secret-hit", "fallback-unavailable"})                      # 无执行 · host∈{claude,codex}
+_DUOS = frozenset({"claude", "codex"})                                                        # 两个真机队（谈跨模型的前提）
+
+
+def classify_combo(host, runner, reason_code, findings):
+    """把 outside-voice 锚的 (host, runner, reason_code, findings) 分类为**完整**类别（非仅「跨模型」布尔）：
+      'cross-model'  合法跨模型第二意见：host,runner∈{claude,codex} ∧ runner≠host ∧ reason_code='ok'
+      'same-family'  合法同族降级：runner==host ∧ reason_code∈降级码集
+      'no-exec'      合法无执行：runner='none' ∧ findings==0 ∧ (host='unknown'∧rc='host-unknown' ∨ host∈{claude,codex}∧rc∈{secret-hit,fallback-unavailable})
+      'self-review'  🔴 F6 红线：runner==host ∧ reason_code∉降级码集（同族行子句被违反，非并列规则）
+      'illegal'      其余一切非法组合（catch-all；含 runner='unknown' 等在共享枚举域内却非法者）
+    findings 为已解析的 int（不可解析/缺失 → None，no-exec 分支因 findings!=0 落 illegal，fail-closed）。
+    **关系式逻辑本地重实现**（GC-2），供 anchor_lint 判自审 / outside_voice_guard 判可复用共用（各自重实现 + golden 守）。"""
+    if runner == "none":
+        # 无执行行：runner='none' 一律**非跨模型**（堵 C1：none≠host 恒真会把无执行误判跨模型）
+        if findings == 0 and (
+            (host == "unknown" and reason_code == "host-unknown")
+            or (host in _DUOS and reason_code in _NOEXEC_KNOWN_CODES)
+        ):
+            return "no-exec"
+        return "illegal"
+    if host in _DUOS and runner in _DUOS:
+        if runner == host:
+            # 同族行：唯一分野是 reason_code 是否属降级码集；否则即自审假绿（F6）
+            return "same-family" if reason_code in _DOWNGRADE_CODES else "self-review"
+        # runner≠host 且双方均真机队 → 唯一合法「第二意见」须 reason_code='ok'
+        return "cross-model" if reason_code == "ok" else "illegal"
+    return "illegal"                                    # catch-all（显式 else，防 if/elif 漏 else 放行 runner='unknown' 等）
+
+
+def check_legal_combo(report_text, enums):
+    """🔴 合法组合矩阵 = 自审红线单一源（always-on，不接受 metrics_on）。**绑定到 `sdflow:outside-voice` 锚**
+    （非 lens-metric 锚——lens-metric 锚无 reason_code，绑错会让红线静默永不触发=假绿，D1）。
+    对每条 fence 外 outside-voice 锚：① 校验 host/runner/reason_code 必填（现状仅记存在性、零字段解析）；
+    ② 域校验（host/runner/reason_code 越域 → out-of-enum）；③ classify_combo 分类，self-review/illegal 报错。
+    诚实边界：矩阵只判**锚行自身内部一致性**（锚里的字段是否自洽），堵不住伪造（写 reason_code='ok' 谎称跨模型
+    仍过——无 host 真伪的机械信号，语义残余）。"""
+    v = []
+    for ln in fence_outside_lines(report_text):
+        if anchor_prefix(ln) != "outside-voice":
+            continue
+        anchor = ln.strip()[:80]
+        # 🔴 严格解析 + 重复键 fail-closed（镜像 check_fanout_consistency）。parse_kv 末值胜会把
+        # `runner="claude" … runner="codex"` 的**自审**（first-value=claude）误读为**跨模型放行**（last-value=codex），
+        # 且 sdflow-retro 读 first-value、本脚本读 last-value → 同一锚两工具判定分裂。任何重复键 → dup-key
+        # 违规并**在 classify_combo 之前跳过分类**（continue），MUST NOT 让末值胜的 kv 进矩阵。
+        kv, dup = parse_kv_strict(ln)
+        for dk in dup:
+            v.append({"anchor": anchor, "field": dk, "kind": "dup-key"})
+        if dup:
+            continue
+        missing = [f for f in OUTSIDE_VOICE_REQUIRED_FIELDS if f not in kv]
+        for f in missing:
+            v.append({"anchor": anchor, "field": f, "kind": "missing-field"})
+        # 域校验（与 check_lens_metric 同口径）——runner='unknown' 虽在共享枚举域内、仍由下方矩阵 catch-all 拦
+        if "host" in kv and kv["host"] not in enums["host"]:
+            v.append({"anchor": anchor, "field": "host", "kind": "out-of-enum"})
+        if "runner" in kv and kv["runner"] not in enums["runner"]:
+            v.append({"anchor": anchor, "field": "runner", "kind": "out-of-enum"})
+        if "reason_code" in kv and kv["reason_code"] not in enums["reason_code"]:
+            v.append({"anchor": anchor, "field": "reason_code", "kind": "out-of-enum"})
+        if missing:
+            continue                                    # 字段不全无从分类，避免与 missing-field 双重噪声
+        findings_raw = kv.get("findings")
+        findings_val = int(findings_raw) if (findings_raw is not None and _NONNEG_INT.match(findings_raw)) else None
+        cat = classify_combo(kv["host"], kv["runner"], kv["reason_code"], findings_val)
+        if cat == "self-review":                        # 🔴 F6 红线
+            v.append({"anchor": anchor, "field": "runner", "kind": "self-review"})
+        elif cat == "illegal":
+            v.append({"anchor": anchor, "field": "runner", "kind": "illegal-combo"})
+    return v
+
+
+_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
+_SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
+_MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
+
+
+def _parse_mirrors(raw):
+    """严格文法解析 `mirrors=`：返回 (tokens, err)。tokens 为去重后合法子集（`—` → 空 list 哨兵）；
+    err ∈ {'missing','empty','empty-token','unknown-token','dup-token'} 或 None。fail-closed：MUST NOT 把
+    缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。"""
+    if raw is None:
+        return None, "missing"
+    s = raw.strip()
+    if s == _MIRRORS_SENTINEL:
+        return [], None                                  # 未 fan-out，合法空
+    if s == "":
+        return None, "empty"
+    tokens = [t.strip() for t in s.split(",")]
+    for t in tokens:
+        if t == "":
+            return None, "empty-token"
+        if t not in _FANOUT_MIRRORS:
+            return None, "unknown-token"
+    if len(tokens) != len(set(tokens)):
+        return None, "dup-token"
+    return tokens, None
+
+
+def check_fanout_consistency(report_text):
+    """🔴 fan-out always-on 一致性 lint（不接受 metrics_on）。**判据读 `sdflow:fanout-capability` 锚的
+    `mirrors=`，MUST NOT 数 lens-metric 行**（C2：lens-metric 受 metrics 门控、默认消费仓零行 → 空转）。
+    subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
+    严格文法 fail-closed：重复锚 / 重复 KV / subagents 空·未知·缺 / capability host 与报告 host 不一致 /
+    mirrors 缺·空·未知 token·重复 token / host=codex 报告缺该锚 → 报错。
+    诚实边界：只拦「机制死却报多镜」的**自相矛盾**，MUST NOT 声称拦住伪造——mirrors=/subagents= 仍主 session
+    自报，写 available 或只列 1 镜即绕过（无机械交叉核验，残余留语义层）；且是否触发受 host 自报信任边界约束
+    （谎报 host=claude 则不要求该锚，与 ADR-1 同根）。"""
+    v = []
+    outside = list(fence_outside_lines(report_text))
+    report_hosts, cap_anchors = set(), []
+    for ln in outside:
+        name = anchor_prefix(ln)
+        if name in ("outside-voice", "lens-metric"):
+            h = parse_kv(ln).get("host")
+            if h:
+                report_hosts.add(h)
+        elif name == "fanout-capability":
+            cap_anchors.append(ln)
+    # Minor #2 fail-closed：同一轮评审只有一个宿主（per-row host 单一源不变式，见 spec lens-metric-emit
+    # 「--host 单一源、无 per-row host」）。报告出现 ≥2 个**不同的非-unknown** host = 真冲突 → 硬停。
+    # 否则原 `len(report_hosts)==1 else None` 会让 report_host 塌成 None，missing-fanout-anchor /
+    # fanout-host-mismatch 静默失效（畸形/伪造多 host 报告借此把 host=codex 缺锚偷渡过关）。
+    # 去 unknown 后取真 host：{codex,unknown} 之类残余不冲突，但 report_host 仍取真 host（codex 仍要求探针锚）。
+    real_hosts = {h for h in report_hosts if h != "unknown"}
+    if len(real_hosts) > 1:
+        v.append({"anchor": "report", "field": "host", "kind": "conflicting-report-host"})
+        return v
+    report_host = (next(iter(real_hosts)) if len(real_hosts) == 1
+                   else next(iter(report_hosts)) if len(report_hosts) == 1 else None)
+    if len(cap_anchors) > 1:                             # 每轮恰好一条
+        v.append({"anchor": "fanout-capability", "kind": "duplicate-fanout-anchor"})
+        return v
+    if not cap_anchors:
+        if report_host == "codex":                      # host=codex 缺锚不得绕过
+            v.append({"anchor": "fanout-capability", "kind": "missing-fanout-anchor"})
+        return v
+    ln = cap_anchors[0]
+    anchor = ln.strip()[:80]
+    kv, dup = parse_kv_strict(ln)
+    for dk in dup:
+        v.append({"anchor": anchor, "field": dk, "kind": "dup-key"})
+    if dup:
+        return v                                        # 重复 KV → fail-closed（末值胜歧义）
+    cap_host = kv.get("host")
+    if cap_host is None:
+        v.append({"anchor": anchor, "field": "host", "kind": "missing-field"})
+    elif report_host is not None and cap_host != report_host:
+        v.append({"anchor": anchor, "field": "host", "kind": "fanout-host-mismatch"})
+    sub = kv.get("subagents")
+    if sub not in _SUBAGENTS_VALUES:                    # 必填且严格 ∈{available,unavailable}；空/未知/缺 → fail-closed
+        v.append({"anchor": anchor, "field": "subagents", "kind": "bad-subagents"})
+        return v
+    effective_host = cap_host or report_host
+    mirrors_raw = kv.get("mirrors")
+    if mirrors_raw is None:
+        if effective_host == "codex":                   # host=codex 报告 mirrors= 必填
+            v.append({"anchor": anchor, "field": "mirrors", "kind": "mirrors-missing"})
+        return v                                        # host≠codex 无 mirrors：免探，无从跑镜数 lint
+    tokens, err = _parse_mirrors(mirrors_raw)
+    if err:
+        v.append({"anchor": anchor, "field": "mirrors", "kind": f"mirrors-{err}"})
+        return v                                        # fail-closed，不静默滤成空集
+    if sub == "unavailable" and len(set(tokens) & _FANOUT_MIRRORS) > 1:
+        v.append({"anchor": anchor, "kind": "dead-fanout-multi-mirror"})
+    return v
+
+
 def check_lens_metric(report_text, cli_layer, enums):
     """校验 fence 外真 lens-metric 锚的字段完整性/枚举归属/layer==--layer/sev 子格式/五计数 int≥0。
     `site` 字段 MUST NOT 校验（契约 CF-补2，任意值合法）。数值一致性（findings vs 实收数）不校验（脚本不兜）。"""
@@ -421,6 +607,8 @@ def check_lens_metric(report_text, cli_layer, enums):
             v.append({"anchor": ln.strip()[:80], "field": "layer", "kind": "layer-ne-cli"})
         if "lens" in kv and kv["lens"] not in enums["lens"]:  # [impl-review-fix] F1
             v.append({"anchor": ln.strip()[:80], "field": "lens", "kind": "out-of-enum"})
+        if "host" in kv and kv["host"] not in enums["host"]:  # add-codex-host-support：host 越域
+            v.append({"anchor": ln.strip()[:80], "field": "host", "kind": "out-of-enum"})
         if "runner" in kv and kv["runner"] not in enums["runner"]:  # [impl-review-fix] F1
             v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "out-of-enum"})
         if "sev" in kv and not enums["sev_re"].match(kv["sev"]):  # [impl-review-fix] F1
@@ -428,6 +616,31 @@ def check_lens_metric(report_text, cli_layer, enums):
         for cf in COUNT_FIELDS:
             if cf in kv and not _NONNEG_INT.match(kv[cf]):
                 v.append({"anchor": ln.strip()[:80], "field": cf, "kind": "not-nonneg-int"})
+        # add-codex-host-support（Step 5）：普通镜（非-outside-voice）行 runner 与 host 绑定——
+        # host∈{claude,codex} ⇒ 普通镜在本机跑，runner MUST==host（∴ 普通镜 MUST NOT runner='none'/跨机队/unknown）；
+        # host='unknown' ⇒ runner MUST=='unknown'（契约：unknown 仅合法于非-outside-voice 普通镜行 ∧ host=unknown）。
+        # outside-voice lens-metric 行的跨模型 runner≠host 是合法的，∴ 只校验非-outside-voice 行。site 不校验（CF-补2）。
+        lens_v = kv.get("lens")
+        if lens_v and lens_v != "outside-voice" and "host" in kv and "runner" in kv:
+            host_v, runner_v = kv["host"], kv["runner"]
+            expected = "unknown" if host_v == "unknown" else (host_v if host_v in _DUOS else None)
+            if expected is not None and runner_v != expected:
+                v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ordinary-runner-host-mismatch"})
+        # add-codex-host-support（B1）：outside-voice lens-metric 行的 runner≠host（跨模型）合法，故不套普通镜规则——
+        # 但仍有三条结构不变量 MUST 守（此前完全脱离校验 ⇒ 手写/emitter-bypass 的矛盾锚汇入 retro 价值表）。
+        # 不依赖 reason_code（lens-metric 锚无该字段），纯结构判定，与 emitter 侧 _OV_RUNNER_DOMAIN/零执行不变量对齐：
+        elif lens_v == "outside-voice" and "host" in kv and "runner" in kv:
+            host_v, runner_v = kv["host"], kv["runner"]
+            findings_v = kv.get("findings")
+            # ③ OV 行 runner 域收紧 ∈{claude,codex,none}，MUST NOT="unknown"（unknown 只属非-ov 普通镜行，契约「跨模型性」段）
+            if runner_v == "unknown":
+                v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ov-runner-unknown"})
+            # ② host="unknown"（本轮无 voice 目标）⇒ runner MUST="none"
+            if host_v == "unknown" and runner_v != "none":
+                v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ov-unknown-host-runner"})
+            # ① runner="none"（无执行）⇒ findings MUST=0（findings 非法值已由 not-nonneg-int 另报，此处只判合法正数）
+            if runner_v == "none" and _NONNEG_INT.match(findings_v or "") and findings_v != "0":
+                v.append({"anchor": ln.strip()[:80], "field": "findings", "kind": "ov-runner-none-nonzero-findings"})
     return v
 
 
@@ -470,6 +683,10 @@ def main(argv=None):
     # 4) 校验
     violations = check_existence(report_text, args.layer, metrics_on)
     violations += check_hr_tg(report_text, hr_tg_subset, all_tg_set)  # hr-tg 恒必有锚，字段校验不受 metrics 门控
+    # add-codex-host-support：矩阵（自审红线）+ fan-out 一致性 lint always-on——读真实性信号，与 metrics 解耦，
+    # 不受 metrics_on 门控（判据源 outside-voice/fanout-capability 锚由 SKILL 直接落、不经 emitter/lens-metric）。
+    violations += check_legal_combo(report_text, enums)
+    violations += check_fanout_consistency(report_text)
     if metrics_on:
         violations += check_lens_metric(report_text, args.layer, enums)
     if violations:

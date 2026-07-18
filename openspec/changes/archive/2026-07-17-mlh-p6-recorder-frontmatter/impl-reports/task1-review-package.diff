@@ -1,0 +1,2474 @@
+diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md
+new file mode 100644
+index 0000000..80f3fcd
+--- /dev/null
++++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-spec-review.md
+@@ -0,0 +1,86 @@
++# Task 1 Spec Review — strict dual-reader
++
++## 首轮审查（保留）
++
++结论：**FAIL**。
++
++- Critical：overlay shadow 按 literal ID；跨文件重复 ID 未 fail-closed。
++- Important：fatal diagnostic 缺 path；真实 `scan` 未由单次 document parse 承载；三 recorder parity/golden 不完整；坏输入矩阵不足。
++- Minor：实现报告错误声称 literal shadow 符合目标态。
++
++## Re-review — HEAD `42bcd2a`
++
++结论：**FAIL**。
++
++首轮两项 Critical 已修：overlay 现按 semantic key shadow，跨文件 semantic duplicate 现 fatal；path diagnostic 与真实 parser call-count 已补，三向 helper roster也扩大。定向验证 `27 passed`，但目标态仍有以下阻断项。
++
++### Critical
++
++1. **canonical 文档仍会把自由 prose 中任意 `| ID |` 表提升成 legacy 索引。** `parse_recorder_document()` 无论 format 都调用 `split_sections/parse_table_rows`，`cmd_scan()` 也无论 format 都把 `rows` 放入 `legacy_owned` 并输出。最小复现：canonical `B1` marker 内放一个 8 列示例表行 `B99`，parser 返回 `rows=['B99']`，scan 会把 `B99` 当 item。目标态要求 canonical 只读 frontmatter，且自由 prose 不制造机器索引。见 `sdflow-buglist/scripts/buglist.py:309-317,928-960`、`sdflow-todolist/scripts/todolist.py:287-295,902-925`。新增测试只放了 2 列表并仅断言 exit 0，未断言 payload/problems，因而漏检：`sdflow-buglist/tests/test_frontmatter_dual_reader.py:290-311`。
++
++### Important
++
++1. **shared-envelope ownership 检测过宽，拒绝合法 opaque 外部值。** `_find_recorder_span()` 只要任意行包含字节串 `sdflow-issues` 且不是以 `sdflow-issues:` 开头就 fatal；合法的 `other: sdflow-issues is text`、space-indented value、甚至 column-0 comment 都被误判 ownership ambiguity。lexical profile 明确允许这些外部 bytes。见 `sdflow-buglist/scripts/buglist.py:215-229`（三份镜像）。
++
++2. **一次 document parse 产物合同仍只部分闭合。** table/block 切分已移入 parser，但 semantic merge、effective owner partition、relation validation 与最终 problems 仍在 `cmd_scan()` 二次编排；parser 未产出目标要求的 `items + blocks + problems + format`。见 `sdflow-buglist/scripts/buglist.py:286-318,891-960`。
++
++3. **三 recorder golden 与坏矩阵仍不完整。** 新 golden 仅比较 canonical model/marker；没有对三份 recorder 比较 pure-legacy/overlay 的 effective items/problems。marker 缺对/错配/嵌套/重复、lone CR/非法 UTF-8、surrogate、null/empty-map/缺字段/枚举越域等批准矩阵仍无对应新增证据。`⚠️ cannot-verify-from-diff`：后续 Task 4 的 effective snapshot 尚未实现，不能为 Task 1 假通过。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-349`。
++
++### Minor
++
++- `read_recorder_document()` 把 `; file: ...` 追加在 `fix` 之后，偏离批准的严格三段式；建议把 path 放入 problem/cause 内。见 `sdflow-buglist/scripts/buglist.py:321-327`。
++
++修复 Critical/Important 并补最小反例后，Task 1 才可 PASS。
++
++## Third re-review — HEAD `9a770dd`
++
++结论：**FAIL**。
++
++第二轮 Critical 已修：canonical prose 普通表不再生成 ghost item；fenced `## 状态总览` 不再误判 legacy region。`parse_recorder_document()` 现直接产出 `effective_items/effective_occurrences/problems`，`cmd_scan()` 只消费该 snapshot；effective merge/relation/problems 下沉已闭合。三向 AST roster也已覆盖 `_legacy_table_sections`、marker、legacy row 与 effective snapshot helpers。定向验证：`29 passed`。
++
++### Critical
++
++无。
++
++### Important
++
++1. **合法 external same-line opaque value 仍被误杀。** `_find_recorder_span()` 对任何 column-0 行，只要 value 中出现 `sdflow-issues` 且整行不以 `sdflow-issues:` 开头就报 ownership ambiguity。最小复现 `other-tool: sdflow-issues is prose` 仍 fatal；批准 lexical profile 明确允许 external entry 在同一物理行携带任意 opaque value bytes。新增测试只覆盖 indented block value，未覆盖 same-line value。见 `sdflow-buglist/scripts/buglist.py:220-224`（三份镜像）、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:336-343`。
++
++2. **三向 pure-legacy/overlay golden 仍未落地。** 当前唯一三 recorder behavior golden 只比较 canonical renderer/model/marker；没有用同一 pure-legacy 与 overlay fixture 比较三份 parser 的 `effective_items/problems`。AST 等价是必要守卫，但不能替代 `DG-RI-1` 明确要求的三态 behavior golden。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-251`、`sdflow-buglist/tests/test_mirror_consistency.py:64-73`。
++
++3. **批准的坏输入矩阵仍未闭合。** 新增测试只补 ghost row、fenced region、indented opaque mention；marker 缺对/错配/嵌套/重复、lone CR/非法 UTF-8、surrogate、`change/batch=""`、裸 `items:`、缺字段/错型/枚举越域等仍无对应目标态回归证据。见 `sdflow-buglist/tests/test_frontmatter_dual_reader.py:150-226,365-381`。
++
++### Minor
++
++- `read_recorder_document()` 的 path 已移入 `ERROR:` problem 段，第二轮三段式偏差已修复。
++
++完成以上 Important 后，Task 1 才可 PASS。
++
++## Final re-review — HEAD `6c4f0f9`
++
++结论：**FAIL**。
++
++第三轮三项 Important 复核：
++
++- **已修复**：external same-line opaque value 可包含 `sdflow-issues`；三份 recorder 均通过同一 fixture。
++- **已修复**：新增 pure-legacy/overlay 三向 `effective_items/effective_occurrences/problems` behavior golden。
++- **仍未闭合**：bad-input matrix 新增 marker、invalid UTF-8/lone CR、surrogate、required/enum/missing-field 回归，但裸 `items:` 仍被实现接受。
++
++### Critical
++
++无。
++
++### Important
++
++1. **reader 把非法裸 `items:` 当作空 map。** `_parse_recorder_namespace()` 进入 `lines[4] == "  items:"` 分支后，即使没有任何 item 行，也令 `items={}` 并通过 model validation。批准合同规定空 map 唯一写作/读取 `items: {}`，裸 `items:` 必须 fail-closed。独立复现返回 `{'items': {}}`，没有抛错；新增矩阵也未覆盖该例。见 `sdflow-buglist/scripts/buglist.py:269-281`（三份镜像）、`sdflow-buglist/tests/test_frontmatter_dual_reader.py:409-430`。
++
++### Minor
++
++无。
++
++### Verification
++
++- 定向套件：`39 passed`。
++- 最小反例：canonical namespace 以裸 `  items:` 结束，`parse_recorder_document()` 错误接受为 canonical empty model。
++
++修复该 Important 并加入三向 fail-closed 回归后，Task 1 才可 PASS。
+diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md
+new file mode 100644
+index 0000000..8521b73
+--- /dev/null
++++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-standards-review.md
+@@ -0,0 +1,49 @@
++# Task 1 Standards Review — strict dual-reader
++
++结论：**PASS（HEAD `6c4f0f9`，最终 re-review）**
++
++## 轮次审计
++
++### 第一轮 — FAIL
++
++- Critical：overlay `A007/A7` 按 literal shadow，产生两个 effective item。
++- Important：indented ownership 变体回退 legacy；prose table 被误计 legacy region；scan 未收敛为一次 document parse；fatal diagnostic 缺 path。
++- Minor：坏输入矩阵与三 recorder parity/golden 不足。
++
++### 第二轮 — FAIL
++
++- 第一轮 semantic shadow、跨文件 fatal、原 ownership 变体、parse-count、path diagnostic 与三向 parity 已闭合。
++- Critical：canonical prose 的 8-column 示例表仍被解析为 ghost machine item。
++- Important：fenced `## 状态总览` false fatal；external opaque value 提及 `sdflow-issues` false fatal。
++
++### 第三轮 — PASS
++
++- `sdflow-buglist/scripts/buglist.py:284-320,544-581,659-730`：legacy region 由 fence-aware、heading-bound `_legacy_table_sections()` 判定；canonical prose 不再进入 legacy rows/effective snapshot。
++- `sdflow-buglist/scripts/buglist.py:209-249`：ownership 检查收窄到 column-0 变体与 orphan indented owner；合法 external indented opaque value 可含 `sdflow-issues` 文本。
++- `sdflow-buglist/scripts/buglist.py:659-730`（三份镜像）：parser 直接生成 `effective_items/effective_occurrences/problems`；canonical prose、fenced overview、opaque sibling、overlay semantic alias 的三 recorder snapshot 完全一致。
++
++### 最终轮 — PASS
++
++- `sdflow-buglist/scripts/buglist.py:209-249`（三份镜像）：ownership 判定进一步收窄到顶层 quoted/explicit/key-colon 变体与无 owner 的 indented 变体；external same-line value、indented opaque value 和 comment 中的普通文本不再误杀，原 fail-closed ownership 样例仍保持 fatal。
++- `sdflow-buglist/tests/test_frontmatter_dual_reader.py:229-468`：三向矩阵现覆盖 canonical golden、pure legacy、overlay semantic shadow、effective occurrences/problems、marker corruption、encoding/EOL、surrogate、字段集合与枚举。
++- 三 recorder 定向全套 `298 passed`，无 warning。
++
++## Critical
++
++无。
++
++## Important
++
++无。
++
++## Minor
++
++无。
++
++## Verification
++
++- 第二轮三个对抗样例逐项复现：8-column prose 仅返回 frontmatter `B1`、`problems=[]`；fenced 状态表示例不再触发 mode mismatch；external opaque mention 正常解析。
++- parser-direct parity：buglist/todolist/issues 对 canonical prose、fenced overview、opaque sibling、overlay `A007→A7` 的 effective snapshot 相等。
++- `uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py sdflow-buglist/tests/test_mirror_consistency.py` → `29 passed`。
++- `uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `298 passed`。
++- backend/embedded domain checklist：无命中，未作领域清单假通过。
+diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md
+new file mode 100644
+index 0000000..bef2e1d
+--- /dev/null
++++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task1-strict-dual-reader.md
+@@ -0,0 +1,33 @@
++# Task 1 Implementation Report — strict dual-reader
++
++状态：DONE
++
++## 交付
++
++- 三个 recorder 各自内联同一组严格 frontmatter document helpers：Unicode scalar/JSON duplicate-key 校验、canonical renderer、共享 envelope scanner、bytes parser 与单次 binary read 入口；生产脚本之间仍无 import。
++- bug/todo `scan --json` 已按文件一次 binary read/parse 分流 canonical、overlay、pure-legacy：frontmatter owner 不再进入 legacy 状态双写检查，overlay 同文件按 `(ASCII prefix, decimal integer)` semantic key shadow legacy alias，legacy owner 保持原 arity/block/status 问题语义。
++- 新格式 bug block 只认成对 canonical marker；todo 轻量项允许无 block。marker 缺对、错配、嵌套、重复与 orphan 均可观察，且不回退 heading heuristic。
++- namespace 在场时严格校验 schema/pool/mode/items、canonical ID、字段集合/类型/枚举、shared-envelope lexical profile、encoding/EOL 与 mode/legacy-region 物理互证；失败统一输出 `ERROR: ...; cause: ...; fix: ...`，JSON stdout 保持空且原文件不变。
++- canonical renderer 固定 semantic ID 顺序、pool-specific 字段顺序、null/empty-map、普通 Unicode 人读输出与 NEL/LS/PS 定向 escape；render/parse/render byte-identical。
++- mirror consistency roster 已扩到三向 frontmatter helpers，并单独锁定 regexp/BOM/pool config 常量一致性。
++
++## TDD 与验证
++
++- 红：首个 renderer/round-trip 测试先因 `render_recorder_namespace` 缺失失败。
++- 绿：`uv run --with pytest pytest -q sdflow-buglist/tests/test_frontmatter_dual_reader.py` → `13 passed`。
++- 首轮双轴审抓到 semantic alias shadow、跨文件重复 fatal、ownership 变体、legacy 区域误识别、真实 parse-count 与 path 诊断缺口；均已补实现与对抗回归。
++- 第二轮双轴审继续击穿 canonical prose ghost row、fenced 状态表 false region 与外部 opaque value 误杀；已将 fence-aware 状态总览识别、effective merge/relation/problems 全部下沉到单次 document parser，并补三向 parity。
++- 第三轮 Standards 通过；Spec 继续指出 external same-line opaque value 与 behavior/bad-input golden 不足。ownership 判定已收窄到顶层 key 形态，并补 pure-legacy/overlay 三向 effective snapshot、marker、encoding/EOL、surrogate、字段/枚举矩阵。
++- 最终 Spec 短审发现裸 `items:` 被误当 empty map；parser 已钉死空 map 只允许 `items: {}`，三向回归在场。
++- 回归：`uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `299 passed`。
++- dogfood scan：bug `7 items / 0 problems`；todo `150 items / 0 problems`。
++- `git diff --check` → PASS。
++
++## 风险与边界
++
++- 本 ticket 保留旧 writer，符合 dual-reader-first rollback 顺序；frontmatter splice/new writer、lock、canonical-ID mutation 与 direct rename snapshot 分别由后续 Task 2–4 承接。
++- shared envelope 仅接受 design 批准的窄 lexical profile；超出 profile 的合法 YAML 也会 fail-closed，这是目标契约而非兼容缺陷。
++
++## Concerns
++
++reviewer 报告保留每轮问题与复核结论；第三轮 Spec 缺口修复后等待最终 re-review。Task 2–4 承接 writer/lock/rename，不作为本票假通过依据。
+diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
+index 63c1409..d4e1332 100644
+--- a/sdflow-buglist/scripts/buglist.py
++++ b/sdflow-buglist/scripts/buglist.py
+@@ -57,6 +57,280 @@ STATUS_CODES = ["OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX
+ PRIORITIES = ["P0", "P1", "P2", "P3", "P4"]
+ DEFAULT_PREFIX = "B"
+ ID_RE = re.compile(r"\b([A-Z])(\d+)\b")
++CANONICAL_ID_RE = re.compile(r"^[A-Z][1-9][0-9]*$", re.ASCII)
++UTF8_BOM = b"\xef\xbb\xbf"
++RECORDER_POOL_CONFIG = {
++    "bug": ("priority", set(PRIORITIES), set(STATUS_CODES)),
++    "todo": ("type", {"性能优化", "可观测性", "代码质量", "功能增强", "基础设施"},
++             {"OPEN", "PROPOSED", "DONE", "WONTDO"}),
++}
++
++
++def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
++    raise ValueError(f"ERROR: {problem}; cause: {cause}; fix: {fix}")
++
++
++def _validate_unicode_scalar(value, field, item_id="?"):
++    if not isinstance(value, str):
++        _frontmatter_error(f"{item_id}.{field} 类型非法", "必须是 string")
++    for char in value:
++        codepoint = ord(char)
++        if 0xD800 <= codepoint <= 0xDFFF:
++            _frontmatter_error(
++                f"{item_id}.{field} 含孤立 surrogate U+{codepoint:04X}",
++                "索引只接受 Unicode scalar values",
++            )
++
++
++def _json_object_no_duplicates(text, item_id):
++    def pairs_hook(pairs):
++        result = {}
++        for key, value in pairs:
++            if key in result:
++                _frontmatter_error(f"{item_id} JSON key 重复", key)
++            result[key] = value
++        return result
++
++    try:
++        value = json.loads(text, object_pairs_hook=pairs_hook)
++    except json.JSONDecodeError as exc:
++        _frontmatter_error(f"{item_id} JSON 非法", str(exc))
++    if not isinstance(value, dict):
++        _frontmatter_error(f"{item_id} item 非法", "必须是 JSON object")
++    return value
++
++
++def _validated_recorder_model(model, normalize_empty=False):
++    if not isinstance(model, dict) or set(model) != {"schema", "pool", "mode", "items"}:
++        _frontmatter_error("recorder schema 非法", "顶层必须精确包含 schema/pool/mode/items")
++    if type(model["schema"]) is not int or model["schema"] != 1:
++        _frontmatter_error("recorder schema 非法", f"仅支持 schema=1，收到 {model['schema']!r}")
++    pool = model["pool"]
++    if pool not in RECORDER_POOL_CONFIG:
++        _frontmatter_error("recorder pool 非法", repr(pool))
++    if model["mode"] not in {"canonical", "overlay"}:
++        _frontmatter_error("recorder mode 非法", repr(model["mode"]))
++    if not isinstance(model["items"], dict):
++        _frontmatter_error("recorder items 非法", "必须是 map")
++    specific_field, specific_values, status_values = RECORDER_POOL_CONFIG[pool]
++    fields = {"module", "summary", specific_field, "status", "time", "change", "batch"}
++    normalized = {"schema": 1, "pool": pool, "mode": model["mode"], "items": {}}
++    semantic_ids = set()
++    for item_id, original in model["items"].items():
++        if not isinstance(item_id, str) or not CANONICAL_ID_RE.fullmatch(item_id):
++            _frontmatter_error(f"ID 非 canonical ASCII spelling", repr(item_id))
++        semantic_key = (item_id[0], int(item_id[1:]))
++        if semantic_key in semantic_ids:
++            _frontmatter_error("semantic ID 重复", item_id)
++        semantic_ids.add(semantic_key)
++        if not isinstance(original, dict) or set(original) != fields:
++            got = sorted(original) if isinstance(original, dict) else type(original).__name__
++            _frontmatter_error(f"{item_id} 字段集合非法", f"expected={sorted(fields)} got={got}")
++        item = dict(original)
++        for field in ("module", "summary", "time"):
++            _validate_unicode_scalar(item[field], field, item_id)
++        if not item["module"].strip() or not item["summary"].strip():
++            _frontmatter_error(f"{item_id} required string 为空", "module/summary 必须含非空白 scalar")
++        for field in ("change", "batch"):
++            if normalize_empty and item[field] == "":
++                item[field] = None
++            if item[field] is not None:
++                _validate_unicode_scalar(item[field], field, item_id)
++                if item[field] == "":
++                    _frontmatter_error(f"{item_id}.{field} 非 canonical empty", "必须写 JSON null")
++        _validate_unicode_scalar(item[specific_field], specific_field, item_id)
++        _validate_unicode_scalar(item["status"], "status", item_id)
++        if item[specific_field] not in specific_values:
++            _frontmatter_error(f"{item_id}.{specific_field} 枚举越域", repr(item[specific_field]))
++        if item["status"] not in status_values:
++            _frontmatter_error(f"{item_id}.status 枚举越域", repr(item["status"]))
++        normalized["items"][item_id] = item
++    return normalized
++
++
++def _id_semantic_sort(item_id):
++    return item_id[0], int(item_id[1:])
++
++
++def _legacy_semantic_id_key(item_id):
++    match = re.fullmatch(r"([A-Z])([0-9]+)", item_id, re.ASCII)
++    return (match.group(1), int(match.group(2))) if match else None
++
++
++def render_recorder_namespace(model, eol=b"\n"):
++    if eol not in {b"\n", b"\r\n"}:
++        _frontmatter_error("EOL 非法", repr(eol))
++    model = _validated_recorder_model(model, normalize_empty=True)
++    specific_field = RECORDER_POOL_CONFIG[model["pool"]][0]
++    order = ("module", "summary", specific_field, "status", "time", "change", "batch")
++    lines = [
++        "sdflow-issues:",
++        "  schema: 1",
++        f"  pool: {model['pool']}",
++        f"  mode: {model['mode']}",
++    ]
++    if not model["items"]:
++        lines.append("  items: {}")
++    else:
++        lines.append("  items:")
++        for item_id in sorted(model["items"], key=_id_semantic_sort):
++            item = model["items"][item_id]
++            ordered = {field: item[field] for field in order}
++            payload = json.dumps(ordered, ensure_ascii=False, separators=(",", ":"))
++            payload = payload.replace("\u0085", "\\u0085").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
++            lines.append(f"    {item_id}: {payload}")
++    return eol.join(line.encode("utf-8") for line in lines) + eol
++
++
++def _split_envelope(raw):
++    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
++        _frontmatter_error("encoding 非法", "UTF-16 BOM 不受支持")
++    bom = UTF8_BOM if raw.startswith(UTF8_BOM) else b""
++    content = raw[len(bom):]
++    if b"\r" in content.replace(b"\r\n", b""):
++        _frontmatter_error("EOL 非法", "发现 lone CR")
++    try:
++        content.decode("utf-8")
++    except UnicodeDecodeError as exc:
++        _frontmatter_error("encoding 非法", str(exc))
++    if not content.startswith(b"---\n") and not content.startswith(b"---\r\n"):
++        return bom, None, raw[len(bom):], b"\r\n" if b"\r\n" in content else b"\n"
++    eol = b"\r\n" if content.startswith(b"---\r\n") else b"\n"
++    marker = eol + b"---" + eol
++    close = content.find(marker, 3)
++    if close < 0:
++        _frontmatter_error("frontmatter envelope 非法", "closer 缺失或无行终止")
++    start = 3 + len(eol)
++    envelope = content[start:close + len(eol)]
++    body = content[close + len(marker):]
++    return bom, envelope, body, eol
++
++
++def _find_recorder_span(envelope, eol):
++    if envelope is None:
++        return None
++    lines = envelope.splitlines(keepends=True)
++    starts = []
++    offset = 0
++    active_entry = False
++    for index, raw_line in enumerate(lines):
++        line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
++        if b"\t" in line:
++            _frontmatter_error("shared envelope lexical profile 非法", "tab")
++        if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
++        match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
++        if match:
++            starts.append((index, offset, match.group(1).decode("ascii")))
++            active_entry = True
++        elif (not line.startswith((b" ", b"#")) and re.match(
++                rb"^(?:['\"]sdflow-issues['\"]|\?\s*sdflow-issues|sdflow-issues\s+:)", line)):
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
++        elif line.startswith(b" ") and not active_entry:
++            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
++        elif line and not line.startswith((b" ", b"#")):
++            _frontmatter_error("shared envelope lexical profile 非法", line.decode("utf-8", "replace"))
++        offset += len(raw_line)
++    recorder = [entry for entry in starts if entry[2] == "sdflow-issues"]
++    if len(recorder) > 1:
++        _frontmatter_error("namespace 重复", "sdflow-issues")
++    if not recorder:
++        return None
++    _, start, _ = recorder[0]
++    following = [entry[1] for entry in starts if entry[1] > start]
++    end = min(following) if following else len(envelope)
++    while end > start:
++        previous_start = envelope.rfind(eol, start, end - len(eol))
++        previous_start = start if previous_start < 0 else previous_start + len(eol)
++        previous = envelope[previous_start:end]
++        if previous.strip() and not previous.lstrip().startswith(b"#"):
++            break
++        end = previous_start
++    return start, end
++
++
++def _parse_recorder_namespace(namespace, eol):
++    if any(char in namespace.decode("utf-8") for char in ("\u0085", "\u2028", "\u2029")):
++        _frontmatter_error("recorder namespace 含 raw Unicode line break", "必须使用 JSON escape")
++    lines = namespace.decode("utf-8").splitlines()
++    if len(lines) < 5 or lines[0] != "sdflow-issues:":
++        _frontmatter_error("recorder namespace 非法", "header/字段不完整")
++    expected_prefixes = ("  schema: ", "  pool: ", "  mode: ")
++    if any(not lines[index + 1].startswith(prefix) for index, prefix in enumerate(expected_prefixes)):
++        _frontmatter_error("recorder namespace 非 canonical", "schema/pool/mode 顺序或缩进错误")
++    if lines[1] != "  schema: 1":
++        _frontmatter_error("recorder schema 非法", lines[1])
++    pool = lines[2][len("  pool: "):]
++    mode = lines[3][len("  mode: "):]
++    if lines[4] == "  items: {}":
++        if len(lines) != 5:
++            _frontmatter_error("recorder items 非法", "empty map 后存在额外内容")
++        items = {}
++    elif lines[4] == "  items:":
++        if len(lines) == 5:
++            _frontmatter_error("recorder items 非法", "空 map 必须写 items: {}，裸 items: 禁止")
++        items = {}
++        for line in lines[5:]:
++            match = re.fullmatch(r"    ([A-Z][1-9][0-9]*): (\{.*\})", line)
++            if not match:
++                _frontmatter_error("recorder item 行非法", line)
++            item_id = match.group(1)
++            if item_id in items:
++                _frontmatter_error("recorder ID 重复", item_id)
++            items[item_id] = _json_object_no_duplicates(match.group(2), item_id)
++    else:
++        _frontmatter_error("recorder items 非法", "必须是 items: 或 items: {}")
++    return _validated_recorder_model({"schema": 1, "pool": pool, "mode": mode, "items": items})
++
++
++def _legacy_table_region_count(body):
++    return len(_legacy_table_sections(body.decode("utf-8").splitlines(keepends=True)))
++
++
++def parse_recorder_document(raw, expected_pool):
++    if not isinstance(raw, bytes):
++        _frontmatter_error("document 输入非法", "必须是 bytes")
++    bom, envelope, body, eol = _split_envelope(raw)
++    span = _find_recorder_span(envelope, eol)
++    if span is None:
++        count = _legacy_table_region_count(body)
++        if count != 1:
++            _frontmatter_error("legacy 总览区域非法", f"count={count}")
++        result = {"format": "legacy", "model": None, "raw": raw, "body": body,
++                  "eol": eol, "bom": bom, "namespace_span": None}
++    else:
++        start, end = span
++        namespace = envelope[start:end]
++        model = _parse_recorder_namespace(namespace, eol)
++        if model["pool"] != expected_pool:
++            _frontmatter_error("recorder pool/path 不符", f"expected={expected_pool} actual={model['pool']}")
++        count = _legacy_table_region_count(body)
++        expected_count = 0 if model["mode"] == "canonical" else 1
++        if count != expected_count:
++            _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
++        result = {"format": model["mode"], "model": model, "raw": raw, "body": body,
++                  "eol": eol, "bom": bom, "namespace_span": (start, end)}
++    lines = body.decode("utf-8").splitlines(keepends=True)
++    section = split_sections(lines)
++    result.update({
++        "lines": lines,
++        "section": section,
++        "rows": parse_table_rows(lines, section) if section else {},
++        "legacy_blocks": block_ranges(lines),
++    })
++    result["marker_blocks"], result["marker_problems"] = marker_block_ranges(lines)
++    return _build_effective_snapshot(result, expected_pool)
++
++
++def read_recorder_document(path, expected_pool):
++    try:
++        with open(path, "rb") as stream:
++            raw = stream.read()
++        return parse_recorder_document(raw, expected_pool)
++    except ValueError as exc:
++        message = str(exc)
++        detail = message[len("ERROR: "):] if message.startswith("ERROR: ") else message
++        raise ValueError(f"ERROR: file={path}: {detail}") from None
+
+
+ # ── 路径与文件 ───────────────────────────────────────────────────────────────
+@@ -272,19 +546,41 @@ def id_conflicts(root):
+ def split_sections(lines):
+     """返回 (head_end_idx, table_rows_range, body_start_idx)。
+     head_end = 状态总览表分隔行后的位置；表行在 [rows_start, rows_end)。"""
+-    table_hdr = None
+-    for i, ln in enumerate(lines):
+-        if re.match(r"\|\s*ID\s*\|", ln):
+-            table_hdr = i
++    sections = _legacy_table_sections(lines)
++    return sections[0] if sections else None
++
++
++def _legacy_table_sections(lines):
++    sections = []
++    fence = None
++    for index, line in enumerate(lines):
++        stripped = line.strip()
++        marker = re.match(r"^(```+|~~~+)", stripped)
++        if marker:
++            token = marker.group(1)[0]
++            if fence is None:
++                fence = token
++            elif token == fence:
++                fence = None
++            continue
++        if fence is not None or not re.match(r"^##\s+状态总览(?:\s|（|$)", line):
++            continue
++        table_hdr = None
++        for candidate in range(index + 1, min(len(lines), index + 6)):
++            candidate_line = lines[candidate]
++            if not candidate_line.strip() or candidate_line.lstrip().startswith("<!--"):
++                continue
++            if re.match(r"\|\s*ID\s*\|", candidate_line):
++                table_hdr = candidate
+             break
+-    if table_hdr is None:
+-        return None
+-    sep = table_hdr + 1  # |----|----|
+-    rows_start = sep + 1
+-    rows_end = rows_start
+-    while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
+-        rows_end += 1
+-    return {"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end}
++        if table_hdr is None:
++            continue
++        rows_start = table_hdr + 2
++        rows_end = rows_start
++        while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
++            rows_end += 1
++        sections.append({"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end})
++    return sections
+
+
+ def parse_table_rows(lines, sec):
+@@ -314,6 +610,128 @@ def block_ranges(lines):
+     return out
+
+
++def marker_block_ranges(lines):
++    """解析新格式成对 marker；返回 (ranges, problems)，不回退 heading heuristic。"""
++    start_re = re.compile(r"^<!-- sdflow-issue-block:start id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
++    end_re = re.compile(r"^<!-- sdflow-issue-block:end id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
++    ranges, problems = {}, []
++    active = None
++    for index, line in enumerate(lines):
++        start = start_re.match(line)
++        end = end_re.match(line)
++        if start:
++            item_id = start.group(1)
++            if active is not None:
++                problems.append(f"marker 嵌套：{active[0]} → {item_id}（line {index + 1}）")
++            elif item_id in ranges:
++                problems.append(f"marker block 重复：{item_id}（line {index + 1}）")
++            else:
++                active = (item_id, index)
++        elif end:
++            item_id = end.group(1)
++            if active is None:
++                problems.append(f"orphan end marker：{item_id}（line {index + 1}）")
++            elif active[0] != item_id:
++                problems.append(
++                    f"marker ID 错配：start={active[0]} end={item_id}（line {index + 1}）"
++                )
++                active = None
++            else:
++                ranges[item_id] = (active[1], index + 1)
++                active = None
++    if active is not None:
++        problems.append(f"marker 缺 end：{active[0]}（line {active[1] + 1}）")
++    return ranges, problems
++
++
++def _legacy_item_from_row(item_id, info, pool):
++    cells = info["cells"]
++    specific_field = RECORDER_POOL_CONFIG[pool][0]
++    return {
++        "module": cells[1],
++        "summary": cells[2],
++        specific_field: cells[3],
++        "status": cells[4],
++        "time": cells[5] if len(cells) > 5 else None,
++        "change": cells[6] if len(cells) > 6 and cells[6] != "-" else None,
++        "batch": cells[7] if len(cells) > 7 and cells[7] else None,
++    }
++
++
++def _build_effective_snapshot(result, expected_pool):
++    lines = result["lines"]
++    section = result["section"]
++    rows = result["rows"]
++    legacy_blocks = result["legacy_blocks"]
++    marker_blocks = result["marker_blocks"]
++    frontmatter_items = result["model"]["items"] if result["model"] else {}
++    frontmatter_keys = {_legacy_semantic_id_key(item_id) for item_id in frontmatter_items}
++    problems = list(result["marker_problems"])
++    raw_ids = []
++    if section:
++        for index in range(section["rows_start"], section["rows_end"]):
++            cells = [cell.strip() for cell in lines[index].strip().strip("|").split("|")]
++            raw_id = cells[0] if cells else "?"
++            raw_ids.append(raw_id)
++            if len(cells) not in (7, 8):
++                problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
++    occurrences = [
++        (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
++        for raw_id in raw_ids
++        if _legacy_semantic_id_key(raw_id) not in frontmatter_keys
++    ]
++    occurrences.extend((_legacy_semantic_id_key(item_id), item_id) for item_id in frontmatter_items)
++    by_key = {}
++    for semantic_key, raw_id in occurrences:
++        by_key.setdefault(semantic_key, []).append(raw_id)
++    duplicates = {key: ids for key, ids in by_key.items() if len(ids) > 1}
++    if duplicates:
++        key, ids = sorted(duplicates.items(), key=lambda entry: str(entry[0]))[0]
++        _frontmatter_error("semantic ID 重复", f"key={key} ids={','.join(ids)}")
++    if result["format"] == "legacy":
++        for item_id in marker_blocks:
++            problems.append(f"marker-only legacy：{item_id}")
++    else:
++        if expected_pool == "bug":
++            for item_id in frontmatter_items:
++                if item_id not in marker_blocks:
++                    problems.append(f"frontmatter 有 {item_id} 但缺 marker block")
++        for item_id in marker_blocks:
++            if item_id not in frontmatter_items:
++                problems.append(f"marker block 有 {item_id} 但缺 frontmatter item")
++    legacy_owned = {
++        item_id: info for item_id, info in rows.items()
++        if _legacy_semantic_id_key(item_id) not in frontmatter_keys
++    }
++    for item_id in legacy_owned:
++        if expected_pool == "bug" and item_id not in legacy_blocks:
++            problems.append(f"表有 {item_id} 但缺详细块")
++    for item_id in legacy_blocks:
++        if item_id not in rows and result["format"] == "legacy":
++            problems.append(f"块有 {item_id} 但缺总览表行")
++    for item_id, info in legacy_owned.items():
++        if item_id not in legacy_blocks:
++            continue
++        start, end = legacy_blocks[item_id]
++        block_status = next((match.group(1) for line in lines[start:end]
++                             if (match := re.match(r"\|\s*状态\s*\|\s*(\w+)", line))), None)
++        if block_status and block_status != info["cells"][4]:
++            problems.append(
++                f"{item_id} 状态不一致（表={info['cells'][4]} 块={block_status}）"
++            )
++    effective_items = {
++        item_id: _legacy_item_from_row(item_id, info, expected_pool)
++        for item_id, info in legacy_owned.items()
++    }
++    effective_items.update(frontmatter_items)
++    result.update({
++        "effective_items": effective_items,
++        "effective_occurrences": occurrences,
++        "problems": problems,
++    })
++    return result
++
++
+ def _find_row_file(root, item_id):
+     """定位含 item_id 的状态总览表行所在的 dated 文件（T5：从 `cmd_set_status`/
+     `cmd_triage` 抽出——两处遍历 `list_files` 找含该 ID 表行的逻辑逐字相同）。
+@@ -576,79 +994,27 @@ def cmd_scan(args):
+     # （例如 2026-01-01-buglist.md 与 2026-01-02-buglist.md 都出现 B1）。改为收集
+     # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数，同时覆盖同文件内
+     # 重复与跨文件重复两种情形。
+-    raw_id_locations = []  # [(id, rel_path), ...]，按遍历顺序累积，不逐文件清空
++    raw_id_locations = []  # [(semantic_key, raw_id, rel_path), ...]
+     for path in list_files(root):
+-        with open(path, encoding="utf-8") as f:
+-            lines = f.readlines()
+-        sec = split_sections(lines)
+-        rows = parse_table_rows(lines, sec) if sec else {}
+-        blocks = block_ranges(lines)
++        document = read_recorder_document(path, "bug")
+         rel = os.path.relpath(path, root)
+-        # OV-3：重复 ID 检测——必须在 parse_table_rows 已经按 ID 建 dict 丢行之前、
+-        # 从原始表行里数，否则重复的那一行早被静默吞掉，dict 视角里只剩 1 个 ID，测不出来。
+-        # 这里只收集，不在本文件视角内就下结论——真正的计数在主循环结束后跨全部文件统一做
+-        # （见下方 raw_id_locations 汇总），避免漏检跨文件重复。
+-        if sec:
+-            raw_ids = [
+-                lines[i].strip().strip("|").split("|", 1)[0].strip()
+-                for i in range(sec["rows_start"], sec["rows_end"])
+-            ]
+-            raw_id_locations.extend((rid, rel) for rid in raw_ids)
+-        # OV-1：行 arity 检测——无块坏行（如 summary 含裸 `|`）会把某数据行拆成多于/少于
+-        # 标准列数的 cells，`parse_table_rows` 只要求 `len(cells) >= 5` 就照单按固定列位
+-        # 读（module=cells[1]/summary=cells[2]/.../batch=cells[7]），列错位不会自己报错——
+-        # 必须在这里显式核对每一原始数据行的列数，标准 8 列（新格式，含批次列）/7 列
+-        # （旧格式，无批次列）之外的一律判定 arity 异常。
+-        if sec:
+-            for i in range(sec["rows_start"], sec["rows_end"]):
+-                cells_raw = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+-                if len(cells_raw) not in (7, 8):
+-                    rid = cells_raw[0] if cells_raw else "?"
+-                    problems.append(
+-                        f"{rel}: {rid} 行 arity 异常：{len(cells_raw)} 列（应 8/7）"
+-                    )
+-        # 一致性：表↔块
+-        for bid in rows:
+-            if bid not in blocks:
+-                problems.append(f"{rel}: 表有 {bid} 但缺详细块")
+-        for bid in blocks:
+-            if bid not in rows:
+-                problems.append(f"{rel}: 块有 {bid} 但缺总览表行")
+-        # 状态一致性
+-        for bid, info in rows.items():
+-            if bid in blocks:
+-                bs, be = blocks[bid]
+-                block_status = None
+-                for i in range(bs, be):
+-                    m = re.match(r"\|\s*状态\s*\|\s*(\w+)", lines[i])
+-                    if m:
+-                        block_status = m.group(1)
+-                        break
+-                if block_status and block_status != info["cells"][4]:
+-                    problems.append(
+-                        f"{rel}: {bid} 状态不一致（表={info['cells'][4]} 块={block_status}）")
+-        for bid, info in rows.items():
+-            c = info["cells"]
+-            bugs.append({"id": bid, "module": c[1], "summary": c[2],
+-                         "priority": c[3], "status": c[4],
+-                         "time": c[5] if len(c) > 5 else None,
+-                         "change": c[6] if len(c) > 6 and c[6] != "-" else None,
+-                         "batch": c[7] if len(c) > 7 and c[7] else None,
+-                         "file": rel})
++        problems.extend(f"{rel}: {problem}" for problem in document["problems"])
++        for bid, item in document["effective_items"].items():
++            bugs.append({"id": bid, **item, "file": rel})
++        raw_id_locations.extend(
++            (semantic_key, raw_id, rel)
++            for semantic_key, raw_id in document["effective_occurrences"]
++        )
+
+     # [impl-review-fix] FIX-2：全池维度统一计数重复 ID（覆盖同文件内重复 + 跨文件重复）。
+     dup_locations = {}
+-    for rid, rel in raw_id_locations:
+-        dup_locations.setdefault(rid, []).append(rel)
+-    for dup_id in sorted(rid for rid, locs in dup_locations.items() if len(locs) > 1):
+-        locs = dup_locations[dup_id]
+-        if len(set(locs)) == 1:
+-            problems.append(f"{locs[0]}: 重复 ID：{dup_id}（parse_table_rows 会静默丢行）")
+-        else:
+-            problems.append(
+-                f"跨文件重复 ID：{dup_id}（出现于：{', '.join(sorted(set(locs)))}——"
+-                "ID 应全池唯一）"
+-            )
++    for semantic_key, raw_id, rel in raw_id_locations:
++        dup_locations.setdefault(semantic_key, []).append((raw_id, rel))
++    duplicates = {key: locations for key, locations in dup_locations.items() if len(locations) > 1}
++    if duplicates:
++        key, locations = sorted(duplicates.items(), key=lambda entry: str(entry[0]))[0]
++        rendered = ", ".join(f"{raw_id}@{rel}" for raw_id, rel in locations)
++        _frontmatter_error("semantic ID 重复", f"key={key} locations={rendered}")
+
+     if args.status:
+         bugs = [b for b in bugs if b["status"] == args.status]
+@@ -744,7 +1110,11 @@ def main():
+     s.set_defaults(func=cmd_scan)
+
+     args = p.parse_args()
+-    args.func(args)
++    try:
++        args.func(args)
++    except ValueError as exc:
++        print(str(exc), file=sys.stderr)
++        raise SystemExit(2) from None
+
+
+ if __name__ == "__main__":
+diff --git a/sdflow-buglist/tests/test_buglist.py b/sdflow-buglist/tests/test_buglist.py
+index 95b463a..e82737b 100644
+--- a/sdflow-buglist/tests/test_buglist.py
++++ b/sdflow-buglist/tests/test_buglist.py
+@@ -361,8 +361,10 @@ class TestScanDuplicateId:
+             {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+             {"id": "B1", "status": "OPEN", "change": "y", "batch": ""},
+         ])
+-        result = _scan_json(tmp_path, [])
+-        assert any("重复" in p and "B1" in p for p in result["problems"])
++        proc = _scan_proc(tmp_path, [])
++        assert proc.returncode != 0
++        assert proc.stdout == ""
++        assert "semantic ID 重复" in proc.stderr and "B1" in proc.stderr
+
+
+ class TestScanRowArity:
+@@ -769,8 +771,9 @@ class TestScanDuplicateIdCrossFile:
+         _write_mixed_file(tmp_path / "openspec" / "issues" / "buglist", "2026-01-02", [
+             {"id": "B1", "status": "OPEN", "change": "y", "batch": ""},
+         ])
+-        result = _scan_json(tmp_path, [])
+-        assert any("重复" in p and "B1" in p for p in result["problems"])
++        proc = _scan_proc(tmp_path, [])
++        assert proc.returncode != 0
++        assert "semantic ID 重复" in proc.stderr and "B1" in proc.stderr
+
+     def test_scan_still_reports_duplicate_id_within_single_file(self, tmp_path):
+         """回归：单文件内重复检测（既有覆盖）不因改成全池维度而失效。"""
+@@ -778,8 +781,9 @@ class TestScanDuplicateIdCrossFile:
+             {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+             {"id": "B1", "status": "OPEN", "change": "y", "batch": ""},
+         ])
+-        result = _scan_json(tmp_path, [])
+-        assert any("重复" in p and "B1" in p for p in result["problems"])
++        proc = _scan_proc(tmp_path, [])
++        assert proc.returncode != 0
++        assert "semantic ID 重复" in proc.stderr and "B1" in proc.stderr
+
+
+ def _set_status(root, bug_id, to, *extra_args):
+@@ -806,12 +810,16 @@ def _triage(root, bug_id, batch):
+
+
+ def _scan_json(root, extra_args):
+-    proc = subprocess.run(
++    proc = _scan_proc(root, extra_args)
++    assert proc.returncode == 0, proc.stderr
++    return json.loads(proc.stdout)
++
++
++def _scan_proc(root, extra_args):
++    return subprocess.run(
+         [sys.executable, SCRIPT, "--root", str(root), "scan", "--json", *extra_args],
+         capture_output=True, text=True,
+     )
+-    assert proc.returncode == 0, proc.stderr
+-    return json.loads(proc.stdout)
+
+
+ def _write_mixed_file(dir_path, date, rows):
+diff --git a/sdflow-buglist/tests/test_frontmatter_dual_reader.py b/sdflow-buglist/tests/test_frontmatter_dual_reader.py
+new file mode 100644
+index 0000000..623a7bb
+--- /dev/null
++++ b/sdflow-buglist/tests/test_frontmatter_dual_reader.py
+@@ -0,0 +1,475 @@
++import importlib.util
++import json
++import subprocess
++import sys
++from pathlib import Path
++from types import SimpleNamespace
++
++import pytest
++
++
++REPO_ROOT = Path(__file__).parents[2]
++BUG_PATH = REPO_ROOT / "sdflow-buglist" / "scripts" / "buglist.py"
++TODO_PATH = REPO_ROOT / "sdflow-todolist" / "scripts" / "todolist.py"
++ISSUES_PATH = REPO_ROOT / "sdflow-issues" / "scripts" / "issues.py"
++
++
++def _load(name, path):
++    spec = importlib.util.spec_from_file_location(name, path)
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++BUG = _load("_frontmatter_buglist", BUG_PATH)
++TODO = _load("_frontmatter_todolist", TODO_PATH)
++ISSUES = _load("_frontmatter_issues", ISSUES_PATH)
++
++
++def _run(script, root, *args):
++    return subprocess.run(
++        [sys.executable, str(script), "--root", str(root), *args],
++        text=True,
++        capture_output=True,
++    )
++
++
++def _legacy_table(pool, item_id, summary="旧摘要"):
++    specific = "P2" if pool == "bug" else "性能优化"
++    return (
++        "# legacy\n\n## 状态总览\n\n"
++        "| ID | 模块 | 摘要 | 属性 | 状态 | 时间 | Change | 批次 |\n"
++        "|---|---|---|---|---|---|---|---|\n"
++        f"| {item_id} | core | {summary} | {specific} | OPEN | 2026-07-17 10:00 | - | |\n"
++    )
++
++
++def test_canonical_renderer_has_unique_golden_bytes_and_round_trips_unicode():
++    model = {
++        "schema": 1,
++        "pool": "todo",
++        "mode": "canonical",
++        "items": {
++            "A10": {
++                "module": "后端",
++                "summary": "十|行\n下一行\u2028尾",
++                "type": "性能优化",
++                "status": "OPEN",
++                "time": "2026-07-17 10:00",
++                "change": "mlh-p6",
++                "batch": "",
++            },
++            "A2": {
++                "module": " 前端 ",
++                "summary": "二\u0085行",
++                "type": "性能优化",
++                "status": "OPEN",
++                "time": "2026-07-17 09:00",
++                "change": None,
++                "batch": None,
++            },
++        },
++    }
++    expected = (
++        b"sdflow-issues:\n"
++        b"  schema: 1\n"
++        b"  pool: todo\n"
++        b"  mode: canonical\n"
++        b"  items:\n"
++        b'    A2: {"module":" \xe5\x89\x8d\xe7\xab\xaf ","summary":"\xe4\xba\x8c\\u0085\xe8\xa1\x8c",'
++        b'"type":"\xe6\x80\xa7\xe8\x83\xbd\xe4\xbc\x98\xe5\x8c\x96","status":"OPEN","time":"2026-07-17 09:00",'
++        b'"change":null,"batch":null}\n'
++        b'    A10: {"module":"\xe5\x90\x8e\xe7\xab\xaf","summary":"\xe5\x8d\x81|\xe8\xa1\x8c\\n\xe4\xb8\x8b\xe4\xb8\x80\xe8\xa1\x8c\\u2028\xe5\xb0\xbe",'
++        b'"type":"\xe6\x80\xa7\xe8\x83\xbd\xe4\xbc\x98\xe5\x8c\x96","status":"OPEN","time":"2026-07-17 10:00",'
++        b'"change":"mlh-p6","batch":null}\n'
++    )
++
++    rendered = TODO.render_recorder_namespace(model, b"\n")
++    assert rendered == expected
++
++    raw = b"---\n" + rendered + b"---\n# Todo\n"
++    parsed = TODO.parse_recorder_document(raw, expected_pool="todo")
++    assert parsed["format"] == "canonical"
++    assert parsed["model"]["items"]["A10"]["summary"] == "十|行\n下一行\u2028尾"
++    assert TODO.render_recorder_namespace(parsed["model"], parsed["eol"]) == expected
++
++
++def test_scan_dual_reads_canonical_overlay_and_legacy(tmp_path):
++    bug_dir = tmp_path / "openspec/issues/buglist"
++    bug_dir.mkdir(parents=True)
++    bug_item = {
++        "module": "core",
++        "summary": "新|摘要\n第二行",
++        "priority": "P1",
++        "status": "OPEN",
++        "time": "2026-07-17 11:00",
++        "change": None,
++        "batch": None,
++    }
++    namespace = BUG.render_recorder_namespace(
++        {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B2": bug_item}}
++    )
++    (bug_dir / "2026-07-17-buglist.md").write_bytes(
++        b"---\n" + namespace + b"---\n"
++        b"<!-- sdflow-issue-block:start id=B2 -->\n## B2: display\n"
++        b"<!-- sdflow-issue-block:end id=B2 -->\n"
++    )
++    legacy = _legacy_table("bug", "B1") + "\n---\n\n## B1: old\n\n| 状态 | OPEN |\n"
++    (bug_dir / "2026-07-16-buglist.md").write_text(legacy, encoding="utf-8")
++
++    result = _run(BUG_PATH, tmp_path, "scan", "--json")
++    assert result.returncode == 0, result.stderr
++    payload = json.loads(result.stdout)
++    assert {item["id"] for item in payload["bugs"]} == {"B1", "B2"}
++    assert next(item for item in payload["bugs"] if item["id"] == "B2")["summary"] == "新|摘要\n第二行"
++    assert payload["problems"] == []
++
++    todo_dir = tmp_path / "openspec/issues/todolist"
++    todo_dir.mkdir(parents=True)
++    table = _legacy_table("todo", "T1", "legacy snapshot")
++    todo_item = {
++        "module": "flow",
++        "summary": "frontmatter wins",
++        "type": "代码质量",
++        "status": "PROPOSED",
++        "time": "2026-07-17 12:00",
++        "change": "mlh-p6",
++        "batch": None,
++    }
++    overlay = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "overlay", "items": {"T1": todo_item}}
++    )
++    (todo_dir / "2026-07-todolist.md").write_bytes(b"---\n" + overlay + b"---\n" + table.encode())
++    result = _run(TODO_PATH, tmp_path, "scan", "--json")
++    assert result.returncode == 0, result.stderr
++    payload = json.loads(result.stdout)
++    assert payload["items"] == [{"id": "T1", **todo_item, "file": "openspec/issues/todolist/2026-07-todolist.md"}]
++    assert payload["problems"] == []
++
++
++@pytest.mark.parametrize(
++    ("raw", "reason"),
++    [
++        (b"---\nsdflow-issues:\n  schema: 2\n  pool: bug\n  mode: canonical\n  items: {}\n---\n", "schema"),
++        (b"---\nsdflow-issues:\n  schema: 1\n  pool: todo\n  mode: canonical\n  items: {}\n---\n", "pool/path"),
++        ("---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items: {}\n---\n## 状态总览\n\n| ID | x |\n".encode(), "mode-structure"),
++        (b"---\n\"sdflow-issues\": {}\n---\n" + _legacy_table("bug", "B1").encode(), "ownership"),
++        (b"\xff\xfe---\x00", "encoding"),
++    ],
++)
++def test_bad_namespace_is_fail_closed_without_json_stdout(tmp_path, raw, reason):
++    target = tmp_path / "openspec/issues/buglist/2026-07-17-buglist.md"
++    target.parent.mkdir(parents=True)
++    target.write_bytes(raw)
++    before = target.read_bytes()
++    result = _run(BUG_PATH, tmp_path, "scan", "--json")
++    assert result.returncode != 0
++    assert result.stdout == ""
++    assert "ERROR:" in result.stderr and "cause:" in result.stderr and "fix:" in result.stderr
++    assert reason in result.stderr
++    assert str(target) in result.stderr
++    assert target.read_bytes() == before
++
++
++def test_read_recorder_document_opens_dated_file_once(tmp_path, monkeypatch):
++    target = tmp_path / "2026-07-17-buglist.md"
++    target.write_text(_legacy_table("bug", "B1"), encoding="utf-8")
++    original_open = open
++    calls = []
++
++    def counted_open(path, *args, **kwargs):
++        if str(path) == str(target):
++            calls.append(args[0] if args else kwargs.get("mode", "r"))
++        return original_open(path, *args, **kwargs)
++
++    monkeypatch.setattr("builtins.open", counted_open)
++    document = BUG.read_recorder_document(str(target), "bug")
++    assert document["format"] == "legacy"
++    assert calls == ["rb"]
++
++
++def test_shared_envelope_bom_crlf_and_external_namespace_are_preserved():
++    model = {
++        "schema": 1,
++        "pool": "todo",
++        "mode": "canonical",
++        "items": {},
++    }
++    namespace = TODO.render_recorder_namespace(model, b"\r\n")
++    raw = (
++        b"\xef\xbb\xbf---\r\n"
++        b"other-tool: |\r\n  opaque: yes\r\n  --- stays opaque\r\n"
++        + namespace
++        + b"# producer-neutral separator\r\n\r\n---\r\n# body\r\n"
++    )
++    parsed = TODO.parse_recorder_document(raw, "todo")
++    assert parsed["format"] == "canonical"
++    assert parsed["bom"] == b"\xef\xbb\xbf"
++    assert parsed["eol"] == b"\r\n"
++    assert parsed["raw"] == raw
++    assert parsed["body"] == b"# body\r\n"
++    assert TODO.render_recorder_namespace(parsed["model"], parsed["eol"]) == namespace
++
++
++@pytest.mark.parametrize(
++    "external",
++    [
++        b"other:\tbad\n",
++        b"- top-level-sequence\n",
++        b"%YAML 1.2\n",
++        b"plain\n",
++    ],
++)
++def test_shared_envelope_rejects_ambiguous_external_lexical_forms(external):
++    raw = b"---\n" + external + b"---\n" + _legacy_table("todo", "T1").encode()
++    with pytest.raises(ValueError, match="lexical profile"):
++        TODO.parse_recorder_document(raw, "todo")
++
++
++def test_three_recorders_share_canonical_golden_behavior():
++    model = {
++        "schema": 1,
++        "pool": "bug",
++        "mode": "canonical",
++        "items": {
++            "A2": {
++                "module": "core",
++                "summary": "same|bytes\nnext",
++                "priority": "P2",
++                "status": "OPEN",
++                "time": "2026-07-17 10:00",
++                "change": None,
++                "batch": None,
++            }
++        },
++    }
++    rendered = [module.render_recorder_namespace(model) for module in (BUG, TODO, ISSUES)]
++    assert rendered[0] == rendered[1] == rendered[2]
++    raw = b"---\n" + rendered[0] + b"---\n<!-- sdflow-issue-block:start id=A2 -->\n<!-- sdflow-issue-block:end id=A2 -->\n"
++    snapshots = [module.parse_recorder_document(raw, "bug") for module in (BUG, TODO, ISSUES)]
++    assert [snapshot["model"] for snapshot in snapshots] == [model, model, model]
++    assert [snapshot["marker_blocks"] for snapshot in snapshots] == [{"A2": (0, 2)}] * 3
++
++
++def test_overlay_shadows_legacy_alias_by_semantic_id(tmp_path):
++    target = tmp_path / "openspec/issues/todolist/2026-07-todolist.md"
++    target.parent.mkdir(parents=True)
++    table = _legacy_table("todo", "A007", "legacy alias")
++    item = {
++        "module": "flow",
++        "summary": "canonical owner",
++        "type": "代码质量",
++        "status": "OPEN",
++        "time": "2026-07-17 12:00",
++        "change": None,
++        "batch": None,
++    }
++    namespace = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "overlay", "items": {"A7": item}}
++    )
++    target.write_bytes(b"---\n" + namespace + b"---\n" + table.encode())
++    result = _run(TODO_PATH, tmp_path, "scan", "--json")
++    assert result.returncode == 0, result.stderr
++    payload = json.loads(result.stdout)
++    assert payload["items"] == [{"id": "A7", **item, "file": "openspec/issues/todolist/2026-07-todolist.md"}]
++    assert payload["problems"] == []
++
++
++def test_cross_file_semantic_duplicate_is_fatal(tmp_path):
++    directory = tmp_path / "openspec/issues/buglist"
++    directory.mkdir(parents=True)
++    (directory / "2026-07-16-buglist.md").write_text(_legacy_table("bug", "A007"), encoding="utf-8")
++    (directory / "2026-07-17-buglist.md").write_text(_legacy_table("bug", "A7"), encoding="utf-8")
++    result = _run(BUG_PATH, tmp_path, "scan", "--json")
++    assert result.returncode != 0
++    assert result.stdout == ""
++    assert "semantic ID 重复" in result.stderr
++    assert "A007@" in result.stderr and "A7@" in result.stderr
++
++
++def test_canonical_prose_table_example_is_not_legacy_region(tmp_path):
++    directory = tmp_path / "openspec/issues/buglist"
++    directory.mkdir(parents=True)
++    item = {
++        "module": "core",
++        "summary": "example",
++        "priority": "P2",
++        "status": "OPEN",
++        "time": "2026-07-17 10:00",
++        "change": None,
++        "batch": None,
++    }
++    namespace = BUG.render_recorder_namespace(
++        {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
++    )
++    (directory / "2026-07-17-buglist.md").write_bytes(
++        b"---\n" + namespace + b"---\n"
++        b"<!-- sdflow-issue-block:start id=B1 -->\n| ID | prose |\n|---|---|\n| fake | ok |\n"
++        b"<!-- sdflow-issue-block:end id=B1 -->\n"
++    )
++    result = _run(BUG_PATH, tmp_path, "scan", "--json")
++    assert result.returncode == 0, result.stderr
++    payload = json.loads(result.stdout)
++    assert [item["id"] for item in payload["bugs"]] == ["B1"]
++    assert payload["problems"] == []
++
++
++def test_fenced_status_table_example_is_not_legacy_region(tmp_path):
++    directory = tmp_path / "openspec/issues/todolist"
++    directory.mkdir(parents=True)
++    item = {
++        "module": "flow", "summary": "fenced", "type": "代码质量", "status": "OPEN",
++        "time": "2026-07-17 10:00", "change": None, "batch": None,
++    }
++    namespace = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "canonical", "items": {"T1": item}}
++    )
++    body = "```markdown\n## 状态总览\n\n| ID | 模块 | 摘要 | 属性 | 状态 | 时间 | Change | 批次 |\n```\n"
++    (directory / "2026-07-todolist.md").write_bytes(b"---\n" + namespace + b"---\n" + body.encode())
++    result = _run(TODO_PATH, tmp_path, "scan", "--json")
++    assert result.returncode == 0, result.stderr
++    payload = json.loads(result.stdout)
++    assert [entry["id"] for entry in payload["items"]] == ["T1"]
++    assert payload["problems"] == []
++
++
++def test_external_opaque_value_may_mention_recorder_namespace():
++    namespace = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "canonical", "items": {}}
++    )
++    raw = b"---\nother-tool: |\n  prose mentions sdflow-issues: safely\n" + namespace + b"---\n"
++    parsed = TODO.parse_recorder_document(raw, "todo")
++    assert parsed["format"] == "canonical"
++    assert parsed["effective_items"] == {}
++
++
++def test_external_same_line_value_may_mention_recorder_namespace():
++    namespace = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "canonical", "items": {}}
++    )
++    raw = b"---\nother-tool: sdflow-issues is prose\n" + namespace + b"---\n"
++    for module in (BUG, TODO, ISSUES):
++        assert module.parse_recorder_document(raw, "todo")["effective_items"] == {}
++
++
++def test_three_recorders_match_pure_legacy_and_overlay_behavior():
++    legacy = (_legacy_table("bug", "A007") + "\n---\n\n## A007: old\n\n| 状态 | OPEN |\n").encode()
++    snapshots = [module.parse_recorder_document(legacy, "bug") for module in (BUG, TODO, ISSUES)]
++    assert [snapshot["effective_items"] for snapshot in snapshots] == [snapshots[0]["effective_items"]] * 3
++    assert [snapshot["problems"] for snapshot in snapshots] == [[]] * 3
++
++    item = {
++        "module": "flow", "summary": "canonical", "type": "代码质量", "status": "OPEN",
++        "time": "2026-07-17 10:00", "change": None, "batch": None,
++    }
++    namespace = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "overlay", "items": {"A7": item}}
++    )
++    overlay = b"---\n" + namespace + b"---\n" + _legacy_table("todo", "A007").encode()
++    snapshots = [module.parse_recorder_document(overlay, "todo") for module in (BUG, TODO, ISSUES)]
++    assert [snapshot["effective_items"] for snapshot in snapshots] == [{"A7": item}] * 3
++    assert [snapshot["effective_occurrences"] for snapshot in snapshots] == [[(("A", 7), "A7")]] * 3
++    assert [snapshot["problems"] for snapshot in snapshots] == [[]] * 3
++
++
++@pytest.mark.parametrize(
++    ("body", "expected"),
++    [
++        ("<!-- sdflow-issue-block:start id=B1 -->\n", "marker 缺 end"),
++        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B2 -->\n", "marker ID 错配"),
++        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:start id=B2 -->\n", "marker 嵌套"),
++        ("<!-- sdflow-issue-block:end id=B1 -->\n", "orphan end marker"),
++        ("<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B1 -->\n<!-- sdflow-issue-block:start id=B1 -->\n<!-- sdflow-issue-block:end id=B1 -->\n", "marker block 重复"),
++    ],
++)
++def test_marker_corruption_is_observable_in_parser_snapshot(body, expected):
++    item = {
++        "module": "core", "summary": "marker", "priority": "P2", "status": "OPEN",
++        "time": "2026-07-17 10:00", "change": None, "batch": None,
++    }
++    namespace = BUG.render_recorder_namespace(
++        {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
++    )
++    snapshot = BUG.parse_recorder_document(b"---\n" + namespace + b"---\n" + body.encode(), "bug")
++    assert any(expected in problem for problem in snapshot["problems"])
++
++
++@pytest.mark.parametrize(
++    "raw",
++    [
++        b"# invalid \xff\n",
++        b"# lone\rreturn\n",
++    ],
++)
++def test_invalid_utf8_and_lone_cr_are_fatal(raw):
++    with pytest.raises(ValueError, match="encoding|EOL"):
++        BUG.parse_recorder_document(raw, "bug")
++
++
++def test_surrogate_empty_required_and_enum_drift_are_fatal():
++    base = {
++        "module": "core", "summary": "valid", "priority": "P2", "status": "OPEN",
++        "time": "2026-07-17 10:00", "change": None, "batch": None,
++    }
++    for mutation, expected in [
++        ({"summary": "bad\ud800"}, "surrogate"),
++        ({"module": " \t"}, "required string"),
++        ({"priority": "PX"}, "枚举越域"),
++        ({"status": "DONE"}, "枚举越域"),
++    ]:
++        item = {**base, **mutation}
++        with pytest.raises(ValueError, match=expected):
++            BUG.render_recorder_namespace(
++                {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
++            )
++    missing = dict(base)
++    missing.pop("batch")
++    with pytest.raises(ValueError, match="字段集合"):
++        BUG.render_recorder_namespace(
++            {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": missing}}
++        )
++
++
++def test_bare_items_is_not_an_empty_map_alias():
++    raw = b"---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items:\n---\n"
++    for module in (BUG, TODO, ISSUES):
++        with pytest.raises(ValueError, match=r"items: \{\}"):
++            module.parse_recorder_document(raw, "bug")
++
++
++def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, capsys):
++    directory = tmp_path / "openspec/issues/buglist"
++    directory.mkdir(parents=True)
++    (directory / "2026-07-17-buglist.md").write_text(_legacy_table("bug", "B1"), encoding="utf-8")
++    original = BUG.parse_recorder_document
++    calls = []
++
++    def counted(raw, pool):
++        calls.append(pool)
++        return original(raw, pool)
++
++    monkeypatch.setattr(BUG, "parse_recorder_document", counted)
++    BUG.cmd_scan(SimpleNamespace(
++        root=str(tmp_path), status=None, change=None, 批次=None, open_ungrouped=False, json=True,
++    ))
++    assert calls == ["bug"]
++    json.loads(capsys.readouterr().out)
++
++
++def test_indented_namespace_ownership_variant_is_fatal():
++    raw = b"---\n  sdflow-issues:\n---\n" + _legacy_table("bug", "B1").encode()
++    with pytest.raises(ValueError, match="ownership"):
++        BUG.parse_recorder_document(raw, "bug")
++
++
++def test_duplicate_json_key_and_raw_unicode_line_break_are_fatal():
++    duplicate = (
++        b"---\nsdflow-issues:\n  schema: 1\n  pool: bug\n  mode: canonical\n  items:\n"
++        b'    B1: {"module":"x","module":"y","summary":"z","priority":"P2","status":"OPEN","time":"t","change":null,"batch":null}\n'
++        b"---\n"
++    )
++    with pytest.raises(ValueError, match="JSON key 重复"):
++        BUG.parse_recorder_document(duplicate, "bug")
++    raw_line_break = duplicate.replace(b'"module":"x","module":"y"', '"module":"x\u2028y"'.encode())
++    with pytest.raises(ValueError, match="raw Unicode line break"):
++        BUG.parse_recorder_document(raw_line_break, "bug")
+diff --git a/sdflow-buglist/tests/test_mirror_consistency.py b/sdflow-buglist/tests/test_mirror_consistency.py
+index 9f0a425..7228df9 100644
+--- a/sdflow-buglist/tests/test_mirror_consistency.py
++++ b/sdflow-buglist/tests/test_mirror_consistency.py
+@@ -59,10 +59,18 @@ def _ast_no_doc(fn):
+
+
+ # 3 份 recorder（buglist/todolist/issues）都各自持有的 helper（D4 红线：不互相 import，
+-# 各自内联一份）。issues.py 不含表解析类 helper（它不直接读写 dated 文件的表/块结构，
+-# 只经子进程调用 buglist.py/todolist.py 的 `scan --json`），故这些 helper 只在
+-# buglist/todolist 两份之间镜像，见下面 TWO_WAY。
+-THREE_WAY = ["atomic_write", "repo_root", "_reject_cell_unsafe"]
++# 各自内联一份）。mlh-p6 起 frontmatter document mechanics 升为三向共享契约；dated
++# 文件业务 scan/write 编排仍按 pool 留在各自脚本，纯 bytes/parser/renderer 必须机械等价。
++THREE_WAY = [
++    "atomic_write", "repo_root", "_reject_cell_unsafe",
++    "_frontmatter_error", "_validate_unicode_scalar", "_json_object_no_duplicates",
++    "_validated_recorder_model", "_id_semantic_sort", "render_recorder_namespace",
++    "_legacy_semantic_id_key",
++    "_split_envelope", "_find_recorder_span", "_parse_recorder_namespace",
++    "_legacy_table_region_count", "parse_recorder_document", "read_recorder_document",
++    "split_sections", "_legacy_table_sections", "parse_table_rows", "block_ranges",
++    "marker_block_ranges", "_legacy_item_from_row", "_build_effective_snapshot",
++]
+
+ # 只在 buglist.py / todolist.py 两份之间镜像的表/块解析 helper（issues.py 不含，
+ # 断言范围明确不含 issues——见模块 docstring）。
+@@ -77,7 +85,6 @@ THREE_WAY = ["atomic_write", "repo_root", "_reject_cell_unsafe"]
+ # 断言范围，留给后续专门核验。
+ TWO_WAY = [
+     "detect_change", "normalize_doc_paths", "auto_default_doc",
+-    "split_sections", "parse_table_rows", "block_ranges",
+     "_ids_in_files", "_find_row_file",
+     "_id_sort_key", "validate_doc_paths", "all_ids",
+     "next_id", "_die", "_load_json",
+@@ -118,12 +125,13 @@ def test_docstring_diff_ok():
+     """现存三份 helper 的 docstring 本就互不相同（例如 issues.atomic_write 比 buglist/
+     todolist 多一段"与…同名函数逐字同款"的子进程解耦注记）——一致性测试仍应通过，因为
+     守的是行为（AST），不是字面（含 docstring 的源码文本）。"""
++    textually_different = []
+     for name in THREE_WAY:
+         bug_src = textwrap.dedent(inspect.getsource(getattr(BUG, name)))
+         iss_src = textwrap.dedent(inspect.getsource(getattr(ISS, name)))
+-        assert inspect.getdoc(getattr(BUG, name)) != inspect.getdoc(getattr(ISS, name)) or (
+-            bug_src != iss_src
+-        ), f"helper {name!r} 预期 docstring/源码文本存在差异（用于验证本测试确实容忍字面差异）"
++        if inspect.getdoc(getattr(BUG, name)) != inspect.getdoc(getattr(ISS, name)) or bug_src != iss_src:
++            textually_different.append(name)
++    assert textually_different, "至少一个三向 helper 应保留合法 docstring/源码文本差异"
+     # 即便字面不同，_ast_no_doc 比对必须仍然通过（不因 docstring 差异假红）。
+     for name in THREE_WAY:
+         assert _ast_no_doc(getattr(BUG, name)) == _ast_no_doc(getattr(ISS, name))
+@@ -162,6 +170,13 @@ def test_priorities_constant_consistency():
+     assert BUG.PRIORITIES == ISS.PRIORITIES
+
+
++def test_frontmatter_constant_consistency():
++    assert BUG.CANONICAL_ID_RE.pattern == TODO.CANONICAL_ID_RE.pattern == ISS.CANONICAL_ID_RE.pattern
++    assert BUG.CANONICAL_ID_RE.flags == TODO.CANONICAL_ID_RE.flags == ISS.CANONICAL_ID_RE.flags
++    assert BUG.UTF8_BOM == TODO.UTF8_BOM == ISS.UTF8_BOM
++    assert BUG.RECORDER_POOL_CONFIG == TODO.RECORDER_POOL_CONFIG == ISS.RECORDER_POOL_CONFIG
++
++
+ def test_helper_deletion_is_not_silently_swallowed():
+     """helper 删除证伪（spec 需求① scenario·L1）：比对代码必须用直接属性访问
+     `getattr(m, f)`——上面 `test_three_way_mirror_consistency` / `test_two_way_mirror_consistency`
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index 285b9db..7c51385 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -64,6 +64,471 @@ SKILLS_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
+ BUGLIST_SCRIPT = os.path.join(SKILLS_ROOT, "sdflow-buglist", "scripts", "buglist.py")
+ TODOLIST_SCRIPT = os.path.join(SKILLS_ROOT, "sdflow-todolist", "scripts", "todolist.py")
+
++CANONICAL_ID_RE = re.compile(r"^[A-Z][1-9][0-9]*$", re.ASCII)
++UTF8_BOM = b"\xef\xbb\xbf"
++RECORDER_POOL_CONFIG = {
++    "bug": ("priority", {"P0", "P1", "P2", "P3", "P4"},
++            {"OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX", "BLOCKED"}),
++    "todo": ("type", {"性能优化", "可观测性", "代码质量", "功能增强", "基础设施"},
++             {"OPEN", "PROPOSED", "DONE", "WONTDO"}),
++}
++
++
++def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
++    raise ValueError(f"ERROR: {problem}; cause: {cause}; fix: {fix}")
++
++
++def _validate_unicode_scalar(value, field, item_id="?"):
++    if not isinstance(value, str):
++        _frontmatter_error(f"{item_id}.{field} 类型非法", "必须是 string")
++    for char in value:
++        codepoint = ord(char)
++        if 0xD800 <= codepoint <= 0xDFFF:
++            _frontmatter_error(
++                f"{item_id}.{field} 含孤立 surrogate U+{codepoint:04X}",
++                "索引只接受 Unicode scalar values",
++            )
++
++
++def _json_object_no_duplicates(text, item_id):
++    def pairs_hook(pairs):
++        result = {}
++        for key, value in pairs:
++            if key in result:
++                _frontmatter_error(f"{item_id} JSON key 重复", key)
++            result[key] = value
++        return result
++
++    try:
++        value = json.loads(text, object_pairs_hook=pairs_hook)
++    except json.JSONDecodeError as exc:
++        _frontmatter_error(f"{item_id} JSON 非法", str(exc))
++    if not isinstance(value, dict):
++        _frontmatter_error(f"{item_id} item 非法", "必须是 JSON object")
++    return value
++
++
++def _validated_recorder_model(model, normalize_empty=False):
++    if not isinstance(model, dict) or set(model) != {"schema", "pool", "mode", "items"}:
++        _frontmatter_error("recorder schema 非法", "顶层必须精确包含 schema/pool/mode/items")
++    if type(model["schema"]) is not int or model["schema"] != 1:
++        _frontmatter_error("recorder schema 非法", f"仅支持 schema=1，收到 {model['schema']!r}")
++    pool = model["pool"]
++    if pool not in RECORDER_POOL_CONFIG:
++        _frontmatter_error("recorder pool 非法", repr(pool))
++    if model["mode"] not in {"canonical", "overlay"}:
++        _frontmatter_error("recorder mode 非法", repr(model["mode"]))
++    if not isinstance(model["items"], dict):
++        _frontmatter_error("recorder items 非法", "必须是 map")
++    specific_field, specific_values, status_values = RECORDER_POOL_CONFIG[pool]
++    fields = {"module", "summary", specific_field, "status", "time", "change", "batch"}
++    normalized = {"schema": 1, "pool": pool, "mode": model["mode"], "items": {}}
++    semantic_ids = set()
++    for item_id, original in model["items"].items():
++        if not isinstance(item_id, str) or not CANONICAL_ID_RE.fullmatch(item_id):
++            _frontmatter_error(f"ID 非 canonical ASCII spelling", repr(item_id))
++        semantic_key = (item_id[0], int(item_id[1:]))
++        if semantic_key in semantic_ids:
++            _frontmatter_error("semantic ID 重复", item_id)
++        semantic_ids.add(semantic_key)
++        if not isinstance(original, dict) or set(original) != fields:
++            got = sorted(original) if isinstance(original, dict) else type(original).__name__
++            _frontmatter_error(f"{item_id} 字段集合非法", f"expected={sorted(fields)} got={got}")
++        item = dict(original)
++        for field in ("module", "summary", "time"):
++            _validate_unicode_scalar(item[field], field, item_id)
++        if not item["module"].strip() or not item["summary"].strip():
++            _frontmatter_error(f"{item_id} required string 为空", "module/summary 必须含非空白 scalar")
++        for field in ("change", "batch"):
++            if normalize_empty and item[field] == "":
++                item[field] = None
++            if item[field] is not None:
++                _validate_unicode_scalar(item[field], field, item_id)
++                if item[field] == "":
++                    _frontmatter_error(f"{item_id}.{field} 非 canonical empty", "必须写 JSON null")
++        _validate_unicode_scalar(item[specific_field], specific_field, item_id)
++        _validate_unicode_scalar(item["status"], "status", item_id)
++        if item[specific_field] not in specific_values:
++            _frontmatter_error(f"{item_id}.{specific_field} 枚举越域", repr(item[specific_field]))
++        if item["status"] not in status_values:
++            _frontmatter_error(f"{item_id}.status 枚举越域", repr(item["status"]))
++        normalized["items"][item_id] = item
++    return normalized
++
++
++def _id_semantic_sort(item_id):
++    return item_id[0], int(item_id[1:])
++
++
++def _legacy_semantic_id_key(item_id):
++    match = re.fullmatch(r"([A-Z])([0-9]+)", item_id, re.ASCII)
++    return (match.group(1), int(match.group(2))) if match else None
++
++
++def render_recorder_namespace(model, eol=b"\n"):
++    if eol not in {b"\n", b"\r\n"}:
++        _frontmatter_error("EOL 非法", repr(eol))
++    model = _validated_recorder_model(model, normalize_empty=True)
++    specific_field = RECORDER_POOL_CONFIG[model["pool"]][0]
++    order = ("module", "summary", specific_field, "status", "time", "change", "batch")
++    lines = [
++        "sdflow-issues:",
++        "  schema: 1",
++        f"  pool: {model['pool']}",
++        f"  mode: {model['mode']}",
++    ]
++    if not model["items"]:
++        lines.append("  items: {}")
++    else:
++        lines.append("  items:")
++        for item_id in sorted(model["items"], key=_id_semantic_sort):
++            item = model["items"][item_id]
++            ordered = {field: item[field] for field in order}
++            payload = json.dumps(ordered, ensure_ascii=False, separators=(",", ":"))
++            payload = payload.replace("\u0085", "\\u0085").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
++            lines.append(f"    {item_id}: {payload}")
++    return eol.join(line.encode("utf-8") for line in lines) + eol
++
++
++def _split_envelope(raw):
++    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
++        _frontmatter_error("encoding 非法", "UTF-16 BOM 不受支持")
++    bom = UTF8_BOM if raw.startswith(UTF8_BOM) else b""
++    content = raw[len(bom):]
++    if b"\r" in content.replace(b"\r\n", b""):
++        _frontmatter_error("EOL 非法", "发现 lone CR")
++    try:
++        content.decode("utf-8")
++    except UnicodeDecodeError as exc:
++        _frontmatter_error("encoding 非法", str(exc))
++    if not content.startswith(b"---\n") and not content.startswith(b"---\r\n"):
++        return bom, None, raw[len(bom):], b"\r\n" if b"\r\n" in content else b"\n"
++    eol = b"\r\n" if content.startswith(b"---\r\n") else b"\n"
++    marker = eol + b"---" + eol
++    close = content.find(marker, 3)
++    if close < 0:
++        _frontmatter_error("frontmatter envelope 非法", "closer 缺失或无行终止")
++    start = 3 + len(eol)
++    envelope = content[start:close + len(eol)]
++    body = content[close + len(marker):]
++    return bom, envelope, body, eol
++
++
++def _find_recorder_span(envelope, eol):
++    if envelope is None:
++        return None
++    lines = envelope.splitlines(keepends=True)
++    starts = []
++    offset = 0
++    active_entry = False
++    for index, raw_line in enumerate(lines):
++        line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
++        if b"\t" in line:
++            _frontmatter_error("shared envelope lexical profile 非法", "tab")
++        if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
++        match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
++        if match:
++            starts.append((index, offset, match.group(1).decode("ascii")))
++            active_entry = True
++        elif (not line.startswith((b" ", b"#")) and re.match(
++                rb"^(?:['\"]sdflow-issues['\"]|\?\s*sdflow-issues|sdflow-issues\s+:)", line)):
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
++        elif line.startswith(b" ") and not active_entry:
++            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
++        elif line and not line.startswith((b" ", b"#")):
++            _frontmatter_error("shared envelope lexical profile 非法", line.decode("utf-8", "replace"))
++        offset += len(raw_line)
++    recorder = [entry for entry in starts if entry[2] == "sdflow-issues"]
++    if len(recorder) > 1:
++        _frontmatter_error("namespace 重复", "sdflow-issues")
++    if not recorder:
++        return None
++    _, start, _ = recorder[0]
++    following = [entry[1] for entry in starts if entry[1] > start]
++    end = min(following) if following else len(envelope)
++    while end > start:
++        previous_start = envelope.rfind(eol, start, end - len(eol))
++        previous_start = start if previous_start < 0 else previous_start + len(eol)
++        previous = envelope[previous_start:end]
++        if previous.strip() and not previous.lstrip().startswith(b"#"):
++            break
++        end = previous_start
++    return start, end
++
++
++def _parse_recorder_namespace(namespace, eol):
++    if any(char in namespace.decode("utf-8") for char in ("\u0085", "\u2028", "\u2029")):
++        _frontmatter_error("recorder namespace 含 raw Unicode line break", "必须使用 JSON escape")
++    lines = namespace.decode("utf-8").splitlines()
++    if len(lines) < 5 or lines[0] != "sdflow-issues:":
++        _frontmatter_error("recorder namespace 非法", "header/字段不完整")
++    expected_prefixes = ("  schema: ", "  pool: ", "  mode: ")
++    if any(not lines[index + 1].startswith(prefix) for index, prefix in enumerate(expected_prefixes)):
++        _frontmatter_error("recorder namespace 非 canonical", "schema/pool/mode 顺序或缩进错误")
++    if lines[1] != "  schema: 1":
++        _frontmatter_error("recorder schema 非法", lines[1])
++    pool = lines[2][len("  pool: "):]
++    mode = lines[3][len("  mode: "):]
++    if lines[4] == "  items: {}":
++        if len(lines) != 5:
++            _frontmatter_error("recorder items 非法", "empty map 后存在额外内容")
++        items = {}
++    elif lines[4] == "  items:":
++        if len(lines) == 5:
++            _frontmatter_error("recorder items 非法", "空 map 必须写 items: {}，裸 items: 禁止")
++        items = {}
++        for line in lines[5:]:
++            match = re.fullmatch(r"    ([A-Z][1-9][0-9]*): (\{.*\})", line)
++            if not match:
++                _frontmatter_error("recorder item 行非法", line)
++            item_id = match.group(1)
++            if item_id in items:
++                _frontmatter_error("recorder ID 重复", item_id)
++            items[item_id] = _json_object_no_duplicates(match.group(2), item_id)
++    else:
++        _frontmatter_error("recorder items 非法", "必须是 items: 或 items: {}")
++    return _validated_recorder_model({"schema": 1, "pool": pool, "mode": mode, "items": items})
++
++
++def _legacy_table_region_count(body):
++    return len(_legacy_table_sections(body.decode("utf-8").splitlines(keepends=True)))
++
++
++def split_sections(lines):
++    """返回 (head_end_idx, table_rows_range, body_start_idx)。
++    head_end = 状态总览表分隔行后的位置；表行在 [rows_start, rows_end)。"""
++    sections = _legacy_table_sections(lines)
++    return sections[0] if sections else None
++
++
++def _legacy_table_sections(lines):
++    sections = []
++    fence = None
++    for index, line in enumerate(lines):
++        stripped = line.strip()
++        marker = re.match(r"^(```+|~~~+)", stripped)
++        if marker:
++            token = marker.group(1)[0]
++            if fence is None:
++                fence = token
++            elif token == fence:
++                fence = None
++            continue
++        if fence is not None or not re.match(r"^##\s+状态总览(?:\s|（|$)", line):
++            continue
++        table_hdr = None
++        for candidate in range(index + 1, min(len(lines), index + 6)):
++            candidate_line = lines[candidate]
++            if not candidate_line.strip() or candidate_line.lstrip().startswith("<!--"):
++                continue
++            if re.match(r"\|\s*ID\s*\|", candidate_line):
++                table_hdr = candidate
++            break
++        if table_hdr is None:
++            continue
++        rows_start = table_hdr + 2
++        rows_end = rows_start
++        while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
++            rows_end += 1
++        sections.append({"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end})
++    return sections
++
++
++def parse_table_rows(lines, sec):
++    rows = {}
++    for i in range(sec["rows_start"], sec["rows_end"]):
++        cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
++        if len(cells) >= 5:
++            rows[cells[0]] = {"line": i, "cells": cells}
++    return rows
++
++
++def block_ranges(lines):
++    """返回 {id: (start, end)}，块从 '## {id}:' 到下一个 '---'/'## ' 或 EOF。"""
++    out = {}
++    starts = []
++    for i, ln in enumerate(lines):
++        m = re.match(r"##\s+([A-Z]\d+)\s*:", ln)
++        if m:
++            starts.append((i, m.group(1)))
++    for idx, (i, bid) in enumerate(starts):
++        end = len(lines)
++        for j in range(i + 1, len(lines)):
++            if lines[j].strip() == "---" or re.match(r"##\s+[A-Z]\d+\s*:", lines[j]):
++                end = j
++                break
++        out[bid] = (i, end)
++    return out
++
++
++def marker_block_ranges(lines):
++    """解析新格式成对 marker；返回 (ranges, problems)，不回退 heading heuristic。"""
++    start_re = re.compile(r"^<!-- sdflow-issue-block:start id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
++    end_re = re.compile(r"^<!-- sdflow-issue-block:end id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
++    ranges, problems = {}, []
++    active = None
++    for index, line in enumerate(lines):
++        start = start_re.match(line)
++        end = end_re.match(line)
++        if start:
++            item_id = start.group(1)
++            if active is not None:
++                problems.append(f"marker 嵌套：{active[0]} → {item_id}（line {index + 1}）")
++            elif item_id in ranges:
++                problems.append(f"marker block 重复：{item_id}（line {index + 1}）")
++            else:
++                active = (item_id, index)
++        elif end:
++            item_id = end.group(1)
++            if active is None:
++                problems.append(f"orphan end marker：{item_id}（line {index + 1}）")
++            elif active[0] != item_id:
++                problems.append(
++                    f"marker ID 错配：start={active[0]} end={item_id}（line {index + 1}）"
++                )
++                active = None
++            else:
++                ranges[item_id] = (active[1], index + 1)
++                active = None
++    if active is not None:
++        problems.append(f"marker 缺 end：{active[0]}（line {active[1] + 1}）")
++    return ranges, problems
++
++
++def _legacy_item_from_row(item_id, info, pool):
++    cells = info["cells"]
++    specific_field = RECORDER_POOL_CONFIG[pool][0]
++    return {
++        "module": cells[1],
++        "summary": cells[2],
++        specific_field: cells[3],
++        "status": cells[4],
++        "time": cells[5] if len(cells) > 5 else None,
++        "change": cells[6] if len(cells) > 6 and cells[6] != "-" else None,
++        "batch": cells[7] if len(cells) > 7 and cells[7] else None,
++    }
++
++
++def _build_effective_snapshot(result, expected_pool):
++    lines = result["lines"]
++    section = result["section"]
++    rows = result["rows"]
++    legacy_blocks = result["legacy_blocks"]
++    marker_blocks = result["marker_blocks"]
++    frontmatter_items = result["model"]["items"] if result["model"] else {}
++    frontmatter_keys = {_legacy_semantic_id_key(item_id) for item_id in frontmatter_items}
++    problems = list(result["marker_problems"])
++    raw_ids = []
++    if section:
++        for index in range(section["rows_start"], section["rows_end"]):
++            cells = [cell.strip() for cell in lines[index].strip().strip("|").split("|")]
++            raw_id = cells[0] if cells else "?"
++            raw_ids.append(raw_id)
++            if len(cells) not in (7, 8):
++                problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
++    occurrences = [
++        (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
++        for raw_id in raw_ids
++        if _legacy_semantic_id_key(raw_id) not in frontmatter_keys
++    ]
++    occurrences.extend((_legacy_semantic_id_key(item_id), item_id) for item_id in frontmatter_items)
++    by_key = {}
++    for semantic_key, raw_id in occurrences:
++        by_key.setdefault(semantic_key, []).append(raw_id)
++    duplicates = {key: ids for key, ids in by_key.items() if len(ids) > 1}
++    if duplicates:
++        key, ids = sorted(duplicates.items(), key=lambda entry: str(entry[0]))[0]
++        _frontmatter_error("semantic ID 重复", f"key={key} ids={','.join(ids)}")
++    if result["format"] == "legacy":
++        for item_id in marker_blocks:
++            problems.append(f"marker-only legacy：{item_id}")
++    else:
++        if expected_pool == "bug":
++            for item_id in frontmatter_items:
++                if item_id not in marker_blocks:
++                    problems.append(f"frontmatter 有 {item_id} 但缺 marker block")
++        for item_id in marker_blocks:
++            if item_id not in frontmatter_items:
++                problems.append(f"marker block 有 {item_id} 但缺 frontmatter item")
++    legacy_owned = {
++        item_id: info for item_id, info in rows.items()
++        if _legacy_semantic_id_key(item_id) not in frontmatter_keys
++    }
++    for item_id in legacy_owned:
++        if expected_pool == "bug" and item_id not in legacy_blocks:
++            problems.append(f"表有 {item_id} 但缺详细块")
++    for item_id in legacy_blocks:
++        if item_id not in rows and result["format"] == "legacy":
++            problems.append(f"块有 {item_id} 但缺总览表行")
++    for item_id, info in legacy_owned.items():
++        if item_id not in legacy_blocks:
++            continue
++        start, end = legacy_blocks[item_id]
++        block_status = next((match.group(1) for line in lines[start:end]
++                             if (match := re.match(r"\|\s*状态\s*\|\s*(\w+)", line))), None)
++        if block_status and block_status != info["cells"][4]:
++            problems.append(
++                f"{item_id} 状态不一致（表={info['cells'][4]} 块={block_status}）"
++            )
++    effective_items = {
++        item_id: _legacy_item_from_row(item_id, info, expected_pool)
++        for item_id, info in legacy_owned.items()
++    }
++    effective_items.update(frontmatter_items)
++    result.update({
++        "effective_items": effective_items,
++        "effective_occurrences": occurrences,
++        "problems": problems,
++    })
++    return result
++
++
++def parse_recorder_document(raw, expected_pool):
++    if not isinstance(raw, bytes):
++        _frontmatter_error("document 输入非法", "必须是 bytes")
++    bom, envelope, body, eol = _split_envelope(raw)
++    span = _find_recorder_span(envelope, eol)
++    if span is None:
++        count = _legacy_table_region_count(body)
++        if count != 1:
++            _frontmatter_error("legacy 总览区域非法", f"count={count}")
++        result = {"format": "legacy", "model": None, "raw": raw, "body": body,
++                  "eol": eol, "bom": bom, "namespace_span": None}
++    else:
++        start, end = span
++        namespace = envelope[start:end]
++        model = _parse_recorder_namespace(namespace, eol)
++        if model["pool"] != expected_pool:
++            _frontmatter_error("recorder pool/path 不符", f"expected={expected_pool} actual={model['pool']}")
++        count = _legacy_table_region_count(body)
++        expected_count = 0 if model["mode"] == "canonical" else 1
++        if count != expected_count:
++            _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
++        result = {"format": model["mode"], "model": model, "raw": raw, "body": body,
++                  "eol": eol, "bom": bom, "namespace_span": (start, end)}
++    lines = body.decode("utf-8").splitlines(keepends=True)
++    section = split_sections(lines)
++    result.update({
++        "lines": lines,
++        "section": section,
++        "rows": parse_table_rows(lines, section) if section else {},
++        "legacy_blocks": block_ranges(lines),
++    })
++    result["marker_blocks"], result["marker_problems"] = marker_block_ranges(lines)
++    return _build_effective_snapshot(result, expected_pool)
++
++
++def read_recorder_document(path, expected_pool):
++    try:
++        with open(path, "rb") as stream:
++            raw = stream.read()
++        return parse_recorder_document(raw, expected_pool)
++    except ValueError as exc:
++        message = str(exc)
++        detail = message[len("ERROR: "):] if message.startswith("ERROR: ") else message
++        raise ValueError(f"ERROR: file={path}: {detail}") from None
++
+
+ def atomic_write(path, text):
+     """原子写：同目录临时文件写完整内容 → os.replace 原子换入。
+diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
+index 2c21445..bed2a42 100644
+--- a/sdflow-todolist/scripts/todolist.py
++++ b/sdflow-todolist/scripts/todolist.py
+@@ -57,6 +57,280 @@ STATUS_CODES = ["OPEN", "PROPOSED", "DONE", "WONTDO"]
+ TYPE_TAGS = ["性能优化", "可观测性", "代码质量", "功能增强", "基础设施"]
+ DEFAULT_PREFIX = "T"
+ ID_RE = re.compile(r"\b([A-Z])(\d+)\b")
++CANONICAL_ID_RE = re.compile(r"^[A-Z][1-9][0-9]*$", re.ASCII)
++UTF8_BOM = b"\xef\xbb\xbf"
++RECORDER_POOL_CONFIG = {
++    "bug": ("priority", {"P0", "P1", "P2", "P3", "P4"},
++            {"OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX", "BLOCKED"}),
++    "todo": ("type", set(TYPE_TAGS), set(STATUS_CODES)),
++}
++
++
++def _frontmatter_error(problem, cause, fix="修正 recorder frontmatter 后重试"):
++    raise ValueError(f"ERROR: {problem}; cause: {cause}; fix: {fix}")
++
++
++def _validate_unicode_scalar(value, field, item_id="?"):
++    if not isinstance(value, str):
++        _frontmatter_error(f"{item_id}.{field} 类型非法", "必须是 string")
++    for char in value:
++        codepoint = ord(char)
++        if 0xD800 <= codepoint <= 0xDFFF:
++            _frontmatter_error(
++                f"{item_id}.{field} 含孤立 surrogate U+{codepoint:04X}",
++                "索引只接受 Unicode scalar values",
++            )
++
++
++def _json_object_no_duplicates(text, item_id):
++    def pairs_hook(pairs):
++        result = {}
++        for key, value in pairs:
++            if key in result:
++                _frontmatter_error(f"{item_id} JSON key 重复", key)
++            result[key] = value
++        return result
++
++    try:
++        value = json.loads(text, object_pairs_hook=pairs_hook)
++    except json.JSONDecodeError as exc:
++        _frontmatter_error(f"{item_id} JSON 非法", str(exc))
++    if not isinstance(value, dict):
++        _frontmatter_error(f"{item_id} item 非法", "必须是 JSON object")
++    return value
++
++
++def _validated_recorder_model(model, normalize_empty=False):
++    if not isinstance(model, dict) or set(model) != {"schema", "pool", "mode", "items"}:
++        _frontmatter_error("recorder schema 非法", "顶层必须精确包含 schema/pool/mode/items")
++    if type(model["schema"]) is not int or model["schema"] != 1:
++        _frontmatter_error("recorder schema 非法", f"仅支持 schema=1，收到 {model['schema']!r}")
++    pool = model["pool"]
++    if pool not in RECORDER_POOL_CONFIG:
++        _frontmatter_error("recorder pool 非法", repr(pool))
++    if model["mode"] not in {"canonical", "overlay"}:
++        _frontmatter_error("recorder mode 非法", repr(model["mode"]))
++    if not isinstance(model["items"], dict):
++        _frontmatter_error("recorder items 非法", "必须是 map")
++    specific_field, specific_values, status_values = RECORDER_POOL_CONFIG[pool]
++    fields = {"module", "summary", specific_field, "status", "time", "change", "batch"}
++    normalized = {"schema": 1, "pool": pool, "mode": model["mode"], "items": {}}
++    semantic_ids = set()
++    for item_id, original in model["items"].items():
++        if not isinstance(item_id, str) or not CANONICAL_ID_RE.fullmatch(item_id):
++            _frontmatter_error(f"ID 非 canonical ASCII spelling", repr(item_id))
++        semantic_key = (item_id[0], int(item_id[1:]))
++        if semantic_key in semantic_ids:
++            _frontmatter_error("semantic ID 重复", item_id)
++        semantic_ids.add(semantic_key)
++        if not isinstance(original, dict) or set(original) != fields:
++            got = sorted(original) if isinstance(original, dict) else type(original).__name__
++            _frontmatter_error(f"{item_id} 字段集合非法", f"expected={sorted(fields)} got={got}")
++        item = dict(original)
++        for field in ("module", "summary", "time"):
++            _validate_unicode_scalar(item[field], field, item_id)
++        if not item["module"].strip() or not item["summary"].strip():
++            _frontmatter_error(f"{item_id} required string 为空", "module/summary 必须含非空白 scalar")
++        for field in ("change", "batch"):
++            if normalize_empty and item[field] == "":
++                item[field] = None
++            if item[field] is not None:
++                _validate_unicode_scalar(item[field], field, item_id)
++                if item[field] == "":
++                    _frontmatter_error(f"{item_id}.{field} 非 canonical empty", "必须写 JSON null")
++        _validate_unicode_scalar(item[specific_field], specific_field, item_id)
++        _validate_unicode_scalar(item["status"], "status", item_id)
++        if item[specific_field] not in specific_values:
++            _frontmatter_error(f"{item_id}.{specific_field} 枚举越域", repr(item[specific_field]))
++        if item["status"] not in status_values:
++            _frontmatter_error(f"{item_id}.status 枚举越域", repr(item["status"]))
++        normalized["items"][item_id] = item
++    return normalized
++
++
++def _id_semantic_sort(item_id):
++    return item_id[0], int(item_id[1:])
++
++
++def _legacy_semantic_id_key(item_id):
++    match = re.fullmatch(r"([A-Z])([0-9]+)", item_id, re.ASCII)
++    return (match.group(1), int(match.group(2))) if match else None
++
++
++def render_recorder_namespace(model, eol=b"\n"):
++    if eol not in {b"\n", b"\r\n"}:
++        _frontmatter_error("EOL 非法", repr(eol))
++    model = _validated_recorder_model(model, normalize_empty=True)
++    specific_field = RECORDER_POOL_CONFIG[model["pool"]][0]
++    order = ("module", "summary", specific_field, "status", "time", "change", "batch")
++    lines = [
++        "sdflow-issues:",
++        "  schema: 1",
++        f"  pool: {model['pool']}",
++        f"  mode: {model['mode']}",
++    ]
++    if not model["items"]:
++        lines.append("  items: {}")
++    else:
++        lines.append("  items:")
++        for item_id in sorted(model["items"], key=_id_semantic_sort):
++            item = model["items"][item_id]
++            ordered = {field: item[field] for field in order}
++            payload = json.dumps(ordered, ensure_ascii=False, separators=(",", ":"))
++            payload = payload.replace("\u0085", "\\u0085").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
++            lines.append(f"    {item_id}: {payload}")
++    return eol.join(line.encode("utf-8") for line in lines) + eol
++
++
++def _split_envelope(raw):
++    if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
++        _frontmatter_error("encoding 非法", "UTF-16 BOM 不受支持")
++    bom = UTF8_BOM if raw.startswith(UTF8_BOM) else b""
++    content = raw[len(bom):]
++    if b"\r" in content.replace(b"\r\n", b""):
++        _frontmatter_error("EOL 非法", "发现 lone CR")
++    try:
++        content.decode("utf-8")
++    except UnicodeDecodeError as exc:
++        _frontmatter_error("encoding 非法", str(exc))
++    if not content.startswith(b"---\n") and not content.startswith(b"---\r\n"):
++        return bom, None, raw[len(bom):], b"\r\n" if b"\r\n" in content else b"\n"
++    eol = b"\r\n" if content.startswith(b"---\r\n") else b"\n"
++    marker = eol + b"---" + eol
++    close = content.find(marker, 3)
++    if close < 0:
++        _frontmatter_error("frontmatter envelope 非法", "closer 缺失或无行终止")
++    start = 3 + len(eol)
++    envelope = content[start:close + len(eol)]
++    body = content[close + len(marker):]
++    return bom, envelope, body, eol
++
++
++def _find_recorder_span(envelope, eol):
++    if envelope is None:
++        return None
++    lines = envelope.splitlines(keepends=True)
++    starts = []
++    offset = 0
++    active_entry = False
++    for index, raw_line in enumerate(lines):
++        line = raw_line[:-len(eol)] if raw_line.endswith(eol) else raw_line
++        if b"\t" in line:
++            _frontmatter_error("shared envelope lexical profile 非法", "tab")
++        if line.startswith(b" ") and not active_entry and b"sdflow-issues" in line:
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
++        match = re.match(rb"^([A-Za-z0-9][A-Za-z0-9_-]*):(.*)$", line)
++        if match:
++            starts.append((index, offset, match.group(1).decode("ascii")))
++            active_entry = True
++        elif (not line.startswith((b" ", b"#")) and re.match(
++                rb"^(?:['\"]sdflow-issues['\"]|\?\s*sdflow-issues|sdflow-issues\s+:)", line)):
++            _frontmatter_error("namespace ownership 歧义", line.decode("utf-8", "replace"))
++        elif line.startswith(b" ") and not active_entry:
++            _frontmatter_error("shared envelope lexical profile 非法", "orphan indented continuation")
++        elif line and not line.startswith((b" ", b"#")):
++            _frontmatter_error("shared envelope lexical profile 非法", line.decode("utf-8", "replace"))
++        offset += len(raw_line)
++    recorder = [entry for entry in starts if entry[2] == "sdflow-issues"]
++    if len(recorder) > 1:
++        _frontmatter_error("namespace 重复", "sdflow-issues")
++    if not recorder:
++        return None
++    _, start, _ = recorder[0]
++    following = [entry[1] for entry in starts if entry[1] > start]
++    end = min(following) if following else len(envelope)
++    while end > start:
++        previous_start = envelope.rfind(eol, start, end - len(eol))
++        previous_start = start if previous_start < 0 else previous_start + len(eol)
++        previous = envelope[previous_start:end]
++        if previous.strip() and not previous.lstrip().startswith(b"#"):
++            break
++        end = previous_start
++    return start, end
++
++
++def _parse_recorder_namespace(namespace, eol):
++    if any(char in namespace.decode("utf-8") for char in ("\u0085", "\u2028", "\u2029")):
++        _frontmatter_error("recorder namespace 含 raw Unicode line break", "必须使用 JSON escape")
++    lines = namespace.decode("utf-8").splitlines()
++    if len(lines) < 5 or lines[0] != "sdflow-issues:":
++        _frontmatter_error("recorder namespace 非法", "header/字段不完整")
++    expected_prefixes = ("  schema: ", "  pool: ", "  mode: ")
++    if any(not lines[index + 1].startswith(prefix) for index, prefix in enumerate(expected_prefixes)):
++        _frontmatter_error("recorder namespace 非 canonical", "schema/pool/mode 顺序或缩进错误")
++    if lines[1] != "  schema: 1":
++        _frontmatter_error("recorder schema 非法", lines[1])
++    pool = lines[2][len("  pool: "):]
++    mode = lines[3][len("  mode: "):]
++    if lines[4] == "  items: {}":
++        if len(lines) != 5:
++            _frontmatter_error("recorder items 非法", "empty map 后存在额外内容")
++        items = {}
++    elif lines[4] == "  items:":
++        if len(lines) == 5:
++            _frontmatter_error("recorder items 非法", "空 map 必须写 items: {}，裸 items: 禁止")
++        items = {}
++        for line in lines[5:]:
++            match = re.fullmatch(r"    ([A-Z][1-9][0-9]*): (\{.*\})", line)
++            if not match:
++                _frontmatter_error("recorder item 行非法", line)
++            item_id = match.group(1)
++            if item_id in items:
++                _frontmatter_error("recorder ID 重复", item_id)
++            items[item_id] = _json_object_no_duplicates(match.group(2), item_id)
++    else:
++        _frontmatter_error("recorder items 非法", "必须是 items: 或 items: {}")
++    return _validated_recorder_model({"schema": 1, "pool": pool, "mode": mode, "items": items})
++
++
++def _legacy_table_region_count(body):
++    return len(_legacy_table_sections(body.decode("utf-8").splitlines(keepends=True)))
++
++
++def parse_recorder_document(raw, expected_pool):
++    if not isinstance(raw, bytes):
++        _frontmatter_error("document 输入非法", "必须是 bytes")
++    bom, envelope, body, eol = _split_envelope(raw)
++    span = _find_recorder_span(envelope, eol)
++    if span is None:
++        count = _legacy_table_region_count(body)
++        if count != 1:
++            _frontmatter_error("legacy 总览区域非法", f"count={count}")
++        result = {"format": "legacy", "model": None, "raw": raw, "body": body,
++                  "eol": eol, "bom": bom, "namespace_span": None}
++    else:
++        start, end = span
++        namespace = envelope[start:end]
++        model = _parse_recorder_namespace(namespace, eol)
++        if model["pool"] != expected_pool:
++            _frontmatter_error("recorder pool/path 不符", f"expected={expected_pool} actual={model['pool']}")
++        count = _legacy_table_region_count(body)
++        expected_count = 0 if model["mode"] == "canonical" else 1
++        if count != expected_count:
++            _frontmatter_error("mode-structure mismatch", f"mode={model['mode']} legacy_regions={count}")
++        result = {"format": model["mode"], "model": model, "raw": raw, "body": body,
++                  "eol": eol, "bom": bom, "namespace_span": (start, end)}
++    lines = body.decode("utf-8").splitlines(keepends=True)
++    section = split_sections(lines)
++    result.update({
++        "lines": lines,
++        "section": section,
++        "rows": parse_table_rows(lines, section) if section else {},
++        "legacy_blocks": block_ranges(lines),
++    })
++    result["marker_blocks"], result["marker_problems"] = marker_block_ranges(lines)
++    return _build_effective_snapshot(result, expected_pool)
++
++
++def read_recorder_document(path, expected_pool):
++    try:
++        with open(path, "rb") as stream:
++            raw = stream.read()
++        return parse_recorder_document(raw, expected_pool)
++    except ValueError as exc:
++        message = str(exc)
++        detail = message[len("ERROR: "):] if message.startswith("ERROR: ") else message
++        raise ValueError(f"ERROR: file={path}: {detail}") from None
+
+
+ # ── 路径与文件 ───────────────────────────────────────────────────────────────
+@@ -262,19 +536,41 @@ def id_conflicts(root):
+ # ── 表 / 块 解析 ─────────────────────────────────────────────────────────────
+
+ def split_sections(lines):
+-    table_hdr = None
+-    for i, ln in enumerate(lines):
+-        if re.match(r"\|\s*ID\s*\|", ln):
+-            table_hdr = i
++    sections = _legacy_table_sections(lines)
++    return sections[0] if sections else None
++
++
++def _legacy_table_sections(lines):
++    sections = []
++    fence = None
++    for index, line in enumerate(lines):
++        stripped = line.strip()
++        marker = re.match(r"^(```+|~~~+)", stripped)
++        if marker:
++            token = marker.group(1)[0]
++            if fence is None:
++                fence = token
++            elif token == fence:
++                fence = None
++            continue
++        if fence is not None or not re.match(r"^##\s+状态总览(?:\s|（|$)", line):
++            continue
++        table_hdr = None
++        for candidate in range(index + 1, min(len(lines), index + 6)):
++            candidate_line = lines[candidate]
++            if not candidate_line.strip() or candidate_line.lstrip().startswith("<!--"):
++                continue
++            if re.match(r"\|\s*ID\s*\|", candidate_line):
++                table_hdr = candidate
+             break
+-    if table_hdr is None:
+-        return None
+-    sep = table_hdr + 1  # |----|----|
+-    rows_start = sep + 1
+-    rows_end = rows_start
+-    while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
+-        rows_end += 1
+-    return {"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end}
++        if table_hdr is None:
++            continue
++        rows_start = table_hdr + 2
++        rows_end = rows_start
++        while rows_end < len(lines) and lines[rows_end].lstrip().startswith("|"):
++            rows_end += 1
++        sections.append({"table_hdr": table_hdr, "rows_start": rows_start, "rows_end": rows_end})
++    return sections
+
+
+ def parse_table_rows(lines, sec):
+@@ -303,6 +599,128 @@ def block_ranges(lines):
+     return out
+
+
++def marker_block_ranges(lines):
++    """解析新格式成对 marker；返回 (ranges, problems)，不回退 heading heuristic。"""
++    start_re = re.compile(r"^<!-- sdflow-issue-block:start id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
++    end_re = re.compile(r"^<!-- sdflow-issue-block:end id=([A-Z][1-9][0-9]*) -->\s*$", re.ASCII)
++    ranges, problems = {}, []
++    active = None
++    for index, line in enumerate(lines):
++        start = start_re.match(line)
++        end = end_re.match(line)
++        if start:
++            item_id = start.group(1)
++            if active is not None:
++                problems.append(f"marker 嵌套：{active[0]} → {item_id}（line {index + 1}）")
++            elif item_id in ranges:
++                problems.append(f"marker block 重复：{item_id}（line {index + 1}）")
++            else:
++                active = (item_id, index)
++        elif end:
++            item_id = end.group(1)
++            if active is None:
++                problems.append(f"orphan end marker：{item_id}（line {index + 1}）")
++            elif active[0] != item_id:
++                problems.append(
++                    f"marker ID 错配：start={active[0]} end={item_id}（line {index + 1}）"
++                )
++                active = None
++            else:
++                ranges[item_id] = (active[1], index + 1)
++                active = None
++    if active is not None:
++        problems.append(f"marker 缺 end：{active[0]}（line {active[1] + 1}）")
++    return ranges, problems
++
++
++def _legacy_item_from_row(item_id, info, pool):
++    cells = info["cells"]
++    specific_field = RECORDER_POOL_CONFIG[pool][0]
++    return {
++        "module": cells[1],
++        "summary": cells[2],
++        specific_field: cells[3],
++        "status": cells[4],
++        "time": cells[5] if len(cells) > 5 else None,
++        "change": cells[6] if len(cells) > 6 and cells[6] != "-" else None,
++        "batch": cells[7] if len(cells) > 7 and cells[7] else None,
++    }
++
++
++def _build_effective_snapshot(result, expected_pool):
++    lines = result["lines"]
++    section = result["section"]
++    rows = result["rows"]
++    legacy_blocks = result["legacy_blocks"]
++    marker_blocks = result["marker_blocks"]
++    frontmatter_items = result["model"]["items"] if result["model"] else {}
++    frontmatter_keys = {_legacy_semantic_id_key(item_id) for item_id in frontmatter_items}
++    problems = list(result["marker_problems"])
++    raw_ids = []
++    if section:
++        for index in range(section["rows_start"], section["rows_end"]):
++            cells = [cell.strip() for cell in lines[index].strip().strip("|").split("|")]
++            raw_id = cells[0] if cells else "?"
++            raw_ids.append(raw_id)
++            if len(cells) not in (7, 8):
++                problems.append(f"{raw_id} 行 arity 异常：{len(cells)} 列（应 8/7）")
++    occurrences = [
++        (_legacy_semantic_id_key(raw_id) or ("raw", raw_id), raw_id)
++        for raw_id in raw_ids
++        if _legacy_semantic_id_key(raw_id) not in frontmatter_keys
++    ]
++    occurrences.extend((_legacy_semantic_id_key(item_id), item_id) for item_id in frontmatter_items)
++    by_key = {}
++    for semantic_key, raw_id in occurrences:
++        by_key.setdefault(semantic_key, []).append(raw_id)
++    duplicates = {key: ids for key, ids in by_key.items() if len(ids) > 1}
++    if duplicates:
++        key, ids = sorted(duplicates.items(), key=lambda entry: str(entry[0]))[0]
++        _frontmatter_error("semantic ID 重复", f"key={key} ids={','.join(ids)}")
++    if result["format"] == "legacy":
++        for item_id in marker_blocks:
++            problems.append(f"marker-only legacy：{item_id}")
++    else:
++        if expected_pool == "bug":
++            for item_id in frontmatter_items:
++                if item_id not in marker_blocks:
++                    problems.append(f"frontmatter 有 {item_id} 但缺 marker block")
++        for item_id in marker_blocks:
++            if item_id not in frontmatter_items:
++                problems.append(f"marker block 有 {item_id} 但缺 frontmatter item")
++    legacy_owned = {
++        item_id: info for item_id, info in rows.items()
++        if _legacy_semantic_id_key(item_id) not in frontmatter_keys
++    }
++    for item_id in legacy_owned:
++        if expected_pool == "bug" and item_id not in legacy_blocks:
++            problems.append(f"表有 {item_id} 但缺详细块")
++    for item_id in legacy_blocks:
++        if item_id not in rows and result["format"] == "legacy":
++            problems.append(f"块有 {item_id} 但缺总览表行")
++    for item_id, info in legacy_owned.items():
++        if item_id not in legacy_blocks:
++            continue
++        start, end = legacy_blocks[item_id]
++        block_status = next((match.group(1) for line in lines[start:end]
++                             if (match := re.match(r"\|\s*状态\s*\|\s*(\w+)", line))), None)
++        if block_status and block_status != info["cells"][4]:
++            problems.append(
++                f"{item_id} 状态不一致（表={info['cells'][4]} 块={block_status}）"
++            )
++    effective_items = {
++        item_id: _legacy_item_from_row(item_id, info, expected_pool)
++        for item_id, info in legacy_owned.items()
++    }
++    effective_items.update(frontmatter_items)
++    result.update({
++        "effective_items": effective_items,
++        "effective_occurrences": occurrences,
++        "problems": problems,
++    })
++    return result
++
++
+ def _find_row_file(root, item_id):
+     """定位含 item_id 的状态总览表行所在的月度文件（T5：从 `cmd_set_status`/
+     `cmd_triage` 抽出——两处遍历 `list_files` 找含该 ID 表行的逻辑逐字相同，
+@@ -554,68 +972,27 @@ def cmd_scan(args):
+     # 此前 Counter 在下面循环体内逐文件重建，只测得出单文件内重复，漏检跨文件同 ID
+     # （例如 2026-01-todolist.md 与 2026-02-todolist.md 都出现 T1）。改为收集
+     # `(id, 所在文件)` 全量列表、循环结束后统一在全池维度计数。
+-    raw_id_locations = []  # [(id, rel_path), ...]，按遍历顺序累积，不逐文件清空
++    raw_id_locations = []  # [(semantic_key, raw_id, rel_path), ...]
+     for path in list_files(root):
+-        with open(path, encoding="utf-8") as f:
+-            lines = f.readlines()
+-        sec = split_sections(lines)
+-        rows = parse_table_rows(lines, sec) if sec else {}
+-        blocks = block_ranges(lines)
++        document = read_recorder_document(path, "todo")
+         rel = os.path.relpath(path, root)
+-        # OV-3：重复 ID 检测（镜像 buglist.py）——必须在 parse_table_rows 已经按 ID 建 dict
+-        # 丢行之前、从原始表行里数，否则重复的那一行早被静默吞掉，dict 视角里只剩 1 个 ID。
+-        # 这里只收集，真正的计数在主循环结束后跨全部文件统一做（避免漏检跨文件重复）。
+-        if sec:
+-            raw_ids = [
+-                lines[i].strip().strip("|").split("|", 1)[0].strip()
+-                for i in range(sec["rows_start"], sec["rows_end"])
+-            ]
+-            raw_id_locations.extend((rid, rel) for rid in raw_ids)
+-        # OV-1：行 arity 检测（镜像 buglist.py）——无块坏行（如描述含裸 `|`）会把某数据行
+-        # 拆成多于/少于标准列数的 cells，`parse_table_rows` 只要求 `len(cells) >= 5` 就照单
+-        # 按固定列位读，列错位不会自己报错——必须显式核对每一原始数据行的列数，标准 8 列
+-        # （新格式，含批次列）/7 列（旧格式，无批次列）之外的一律判定 arity 异常。
+-        if sec:
+-            for i in range(sec["rows_start"], sec["rows_end"]):
+-                cells_raw = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+-                if len(cells_raw) not in (7, 8):
+-                    rid = cells_raw[0] if cells_raw else "?"
+-                    problems.append(
+-                        f"{rel}: {rid} 行 arity 异常：{len(cells_raw)} 列（应 8/7）"
+-                    )
+-        # 块若存在必须有对应表行（块可选，故只单向查）
+-        for bid in blocks:
+-            if bid not in rows:
+-                problems.append(f"{rel}: 块有 {bid} 但缺总览表行")
+-        # 状态一致性（仅对有块的项）
+-        for bid, info in rows.items():
+-            if bid in blocks:
+-                bs, be = blocks[bid]
+-                bstatus = next((m.group(1) for i in range(bs, be)
+-                                if (m := re.match(r"\|\s*状态\s*\|\s*(\w+)", lines[i]))), None)
+-                if bstatus and bstatus != info["cells"][4]:
+-                    problems.append(f"{rel}: {bid} 状态不一致（表={info['cells'][4]} 块={bstatus}）")
+-            c = info["cells"]
+-            items.append({"id": bid, "module": c[1], "summary": c[2],
+-                          "type": c[3], "status": c[4],
+-                          "time": c[5] if len(c) > 5 else None,
+-                          "change": c[6] if len(c) > 6 and c[6] != "-" else None,
+-                          "batch": c[7] if len(c) > 7 and c[7] else None,
+-                          "file": rel})
++        problems.extend(f"{rel}: {problem}" for problem in document["problems"])
++        for bid, item in document["effective_items"].items():
++            items.append({"id": bid, **item, "file": rel})
++        raw_id_locations.extend(
++            (semantic_key, raw_id, rel)
++            for semantic_key, raw_id in document["effective_occurrences"]
++        )
+
+     # [impl-review-fix] FIX-2：全池维度统一计数重复 ID（覆盖同文件内重复 + 跨文件重复）。
+     dup_locations = {}
+-    for rid, rel in raw_id_locations:
+-        dup_locations.setdefault(rid, []).append(rel)
+-    for dup_id in sorted(rid for rid, locs in dup_locations.items() if len(locs) > 1):
+-        locs = dup_locations[dup_id]
+-        if len(set(locs)) == 1:
+-            problems.append(f"{locs[0]}: 重复 ID：{dup_id}（parse_table_rows 会静默丢行）")
+-        else:
+-            problems.append(
+-                f"跨文件重复 ID：{dup_id}（出现于：{', '.join(sorted(set(locs)))}——"
+-                "ID 应全池唯一）"
+-            )
++    for semantic_key, raw_id, rel in raw_id_locations:
++        dup_locations.setdefault(semantic_key, []).append((raw_id, rel))
++    duplicates = {key: locations for key, locations in dup_locations.items() if len(locations) > 1}
++    if duplicates:
++        key, locations = sorted(duplicates.items(), key=lambda entry: str(entry[0]))[0]
++        rendered = ", ".join(f"{raw_id}@{rel}" for raw_id, rel in locations)
++        _frontmatter_error("semantic ID 重复", f"key={key} locations={rendered}")
+
+     if args.status:
+         items = [b for b in items if b["status"] == args.status]
+@@ -708,7 +1085,11 @@ def main():
+     s.set_defaults(func=cmd_scan)
+
+     args = p.parse_args()
+-    args.func(args)
++    try:
++        args.func(args)
++    except ValueError as exc:
++        print(str(exc), file=sys.stderr)
++        raise SystemExit(2) from None
+
+
+ if __name__ == "__main__":
+diff --git a/sdflow-todolist/tests/test_todolist.py b/sdflow-todolist/tests/test_todolist.py
+index 54bd3b0..465ca1f 100644
+--- a/sdflow-todolist/tests/test_todolist.py
++++ b/sdflow-todolist/tests/test_todolist.py
+@@ -390,8 +390,10 @@ class TestScanDuplicateId:
+             {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+             {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
+         ])
+-        result = _scan_json(tmp_path, [])
+-        assert any("重复" in p and "T1" in p for p in result["problems"])
++        proc = _scan_proc(tmp_path, [])
++        assert proc.returncode != 0
++        assert proc.stdout == ""
++        assert "semantic ID 重复" in proc.stderr and "T1" in proc.stderr
+
+
+ class TestScanRowArity:
+@@ -781,8 +783,9 @@ class TestScanDuplicateIdCrossFile:
+         _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-02", [
+             {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
+         ])
+-        result = _scan_json(tmp_path, [])
+-        assert any("重复" in p and "T1" in p for p in result["problems"])
++        proc = _scan_proc(tmp_path, [])
++        assert proc.returncode != 0
++        assert "semantic ID 重复" in proc.stderr and "T1" in proc.stderr
+
+     def test_scan_still_reports_duplicate_id_within_single_file(self, tmp_path):
+         """回归：单文件内重复检测（既有覆盖）不因改成全池维度而失效。"""
+@@ -790,8 +793,9 @@ class TestScanDuplicateIdCrossFile:
+             {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+             {"id": "T1", "status": "OPEN", "change": "y", "batch": ""},
+         ])
+-        result = _scan_json(tmp_path, [])
+-        assert any("重复" in p and "T1" in p for p in result["problems"])
++        proc = _scan_proc(tmp_path, [])
++        assert proc.returncode != 0
++        assert "semantic ID 重复" in proc.stderr and "T1" in proc.stderr
+
+
+ def _set_status(root, item_id, to, *extra_args):
+@@ -818,12 +822,16 @@ def _triage(root, item_id, batch):
+
+
+ def _scan_json(root, extra_args):
+-    proc = subprocess.run(
++    proc = _scan_proc(root, extra_args)
++    assert proc.returncode == 0, proc.stderr
++    return json.loads(proc.stdout)
++
++
++def _scan_proc(root, extra_args):
++    return subprocess.run(
+         [sys.executable, SCRIPT, "--root", str(root), "scan", "--json", *extra_args],
+         capture_output=True, text=True,
+     )
+-    assert proc.returncode == 0, proc.stderr
+-    return json.loads(proc.stdout)
+
+
+ def _write_mixed_file(dir_path, month, rows):

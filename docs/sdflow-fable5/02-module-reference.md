@@ -226,7 +226,7 @@ flowchart LR
 - ID 全局唯一自增（dual-read 新旧目录取并集）；
 - 总览表 ↔ 详细块双写一致（set-status 三步同步：表状态列 + 块状态行 + 追加历史）；
 - 终态门禁：FIXED 必带 evidence+根因、WONTFIX 必带理由（bug 池）；DONE 必带关联 change/commit（todo 池）；
-- 写时注入守卫 `_reject_cell_unsafe`（拒 `|`/换行——防 markdown 表列错位静默腐蚀，adr/0010）；
+- recorder 新写索引使用 versioned frontmatter，`_reject_cell_unsafe` 已退役；`batches.md` 单行 registry 仍由独立 batch line guard 防 header/字段注入（ADR-0025）；
 - fence-aware 解析 + scan 一致性自检（表↔块缺失/状态不一致/跨文件重复 ID）。
 
 **issues.py 的编排层不变量**：跨池 read 走 subprocess CLI 不 import（解耦）；INDEX **禁读旧 INDEX** 全量确定性重建（幂等，D3/D7）；batches.md 只 patch `状态:`/`成员:` 生成行、绝不覆写人写行；完成判据=成员≥1 且全终态（0 成员显式排除防 vacuous-truth 假 DONE）；人标 DONE 但成员未全终态 → 只追加 `⚠️ 不一致` 不越权纠正。

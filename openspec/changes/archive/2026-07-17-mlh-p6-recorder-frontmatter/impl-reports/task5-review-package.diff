@@ -1,0 +1,1132 @@
+diff --git a/README.md b/README.md
+index ac5898a..7bce700 100644
+--- a/README.md
++++ b/README.md
+@@ -77,6 +77,14 @@ bash setup.sh
+   `hack/` 不会被当 skill）。
+   - **Unix**：绝对路径 symlink —— 改源即时生效，仅新增/删 skill 后才需重跑。
+   - **Windows**：复制目录 + 写 `.sdflow-skills` 标记文件用于更新检测（名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属并可刷新）。
++
++### Recorder 存储契约
++
++`sdflow-buglist`、`sdflow-todolist` 与 `sdflow-issues` 共享 versioned **Shared Frontmatter Envelope**：
++新 item 的机器索引只写 `sdflow-issues` namespace，历史 Markdown 总览表永久只读；首次修改历史 item
++会在同文件生成 overlay，保留旧表 bytes。三者用仓级 exclusive snapshot lock 串行权威读写，batch
++rename 以 registry provenance 支持重跑原命令收敛。完整契约、POSIX/Windows 本地盘、network FS、
++power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md`。
+   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
+ - **spec 工作流 bundle 的权威源**：`sdflow-init/assets/workflow/` 是铺给其他项目的
+   `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `sdflow-init update`
+diff --git a/docs/sdflow-fable5/02-module-reference.md b/docs/sdflow-fable5/02-module-reference.md
+index 5189b74..12a1776 100644
+--- a/docs/sdflow-fable5/02-module-reference.md
++++ b/docs/sdflow-fable5/02-module-reference.md
+@@ -226,7 +226,7 @@ flowchart LR
+ - ID 全局唯一自增（dual-read 新旧目录取并集）；
+ - 总览表 ↔ 详细块双写一致（set-status 三步同步：表状态列 + 块状态行 + 追加历史）；
+ - 终态门禁：FIXED 必带 evidence+根因、WONTFIX 必带理由（bug 池）；DONE 必带关联 change/commit（todo 池）；
+-- 写时注入守卫 `_reject_cell_unsafe`（拒 `|`/换行——防 markdown 表列错位静默腐蚀，adr/0010）；
++- recorder 新写索引使用 versioned frontmatter，`_reject_cell_unsafe` 已退役；`batches.md` 单行 registry 仍由独立 batch line guard 防 header/字段注入（ADR-0025）；
+ - fence-aware 解析 + scan 一致性自检（表↔块缺失/状态不一致/跨文件重复 ID）。
+ 
+ **issues.py 的编排层不变量**：跨池 read 走 subprocess CLI 不 import（解耦）；INDEX **禁读旧 INDEX** 全量确定性重建（幂等，D3/D7）；batches.md 只 patch `状态:`/`成员:` 生成行、绝不覆写人写行；完成判据=成员≥1 且全终态（0 成员显式排除防 vacuous-truth 假 DONE）；人标 DONE 但成员未全终态 → 只追加 `⚠️ 不一致` 不越权纠正。
+diff --git a/openspec/CONTEXT.md b/openspec/CONTEXT.md
+index 6b09919..ca324c1 100644
+--- a/openspec/CONTEXT.md
++++ b/openspec/CONTEXT.md
+@@ -220,6 +220,10 @@ _Avoid_: 手写层状态（它是投影，手写即可伪造可漂移）；用
+ Markdown 文件 byte 0（可紧随 UTF-8 BOM）的 frontmatter block 是多个 metadata producer 共用的**容器**，不是任一工具的私产；正文中的 `---` 不算 envelope。每个 producer 只拥有一个唯一顶层 namespace；recorder 的所有权边界是 `sdflow-issues` 整棵子树，内部使用短键 `schema/pool/mode/items`。读取只校验自有子树、写入只 splice 自有 span；“opaque”仅指 sibling 所有权/bytes 保真，整个 envelope 仍须满足 v1 lexical profile（column-0 plain ASCII key + 缩进 continuation），超出 profile fail-closed。所有合规 producer 因整文件 replace 共享同一 dated-document lock，不能“namespace 分家、锁也分家”后互相 lost update。
+ _Avoid_: recorder 重渲染整个 envelope；把内部键展平为多个 `sdflow-issues-*` 顶层键；让多个工具共同拥有 `sdflow:` 父树。
+ 
++**recorder durability boundary** 〔`adr/0025` · mlh-p6-recorder-frontmatter，Accepted〕:
++exclusive snapshot lock 保证 cooperative recorder 在本地 POSIX filesystem 串行，并以 Windows 本地盘 smoke 维持兼容；network FS、完整 power-loss durability、非 cooperative writer 的 TOCTOU 不在承诺内。process crash 留下空白/partial metadata lock 时的 break-glass 是：先停该 repo 全部 recorder，删除错误给出的精确 lock path，再重跑原命令；禁止 TTL/自动偷锁。
++_Avoid_: 把 lock 当安全边界或跨网络 lease；把非 Windows host 的 skip 写成 Windows PASS；无条件删 `.recorder.lock`。
++
+ **canonical Unicode string** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+ recorder 索引 string 的值域是 Unicode scalar values，不含孤立 surrogate。普通 Unicode 用 UTF-8/`ensure_ascii=False` 人读输出；YAML 视作换行的 NEL/LS/PS 必须定向 JSON escape，parser 还原原 code point；不得做 NFC/NFKC normalization。由此“一 item 一物理行”与逐 code-point round-trip 同时成立。
+ _Avoid_: 全量 `ensure_ascii=True` 牺牲 diff 可读性；raw NEL/LS/PS 破坏行模型；让孤立 surrogate 到 UTF-8 encode 才裸崩。
+diff --git a/openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md b/openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md
+index 09dbaa4..f60ee91 100644
+--- a/openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md
++++ b/openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md
+@@ -1,6 +1,6 @@
+ # 0025 · recorder 机器索引迁入 versioned frontmatter：共享 namespace、same-file overlay、marker prose 与仓级 snapshot lock
+ 
+-> 状态：**Proposed**（2026-07-16，`mlh-p6-recorder-frontmatter` grill 收敛时立）`[grill-amendment]`；同日经多镜设计审补 lexical/profile、shared document lock、rename provenance 与恢复边界 `[spec-review-amendment]`——待该 change ship 后升 Accepted。
++> 状态：**Accepted**（2026-07-17，`mlh-p6-recorder-frontmatter` 实现与交付对账完成）；2026-07-16 grill 收敛时立 `[grill-amendment]`，同日经多镜设计审补 lexical/profile、shared document lock、rename provenance 与恢复边界 `[spec-review-amendment]`。
+ > 关联：`openspec/changes/mlh-p6-recorder-frontmatter/{proposal,design,tasks}.md` · `adr/0010`（本 ADR supersede 其新写决策）· CONTEXT「共享 frontmatter envelope」「canonical recorder render」「marker-framed prose block」「锁 owner / participant」。
+ 
+ ## Context
+@@ -22,6 +22,8 @@ mechanical-layer-hardening P6 现在兑现该 defer。目标态不仅要“换
+ 
+ dated Markdown 文件在 byte 0（允许前置 UTF-8 BOM）的 frontmatter 是共享 envelope。recorder 只拥有唯一、无引号的顶层 `sdflow-issues` 子树；内部 v1 固定为 `schema/pool/mode/items`，item value 是单行 JSON object。
+ 
++本 ADR 将该协议命名为 **Shared Frontmatter Envelope**；它是 producer-neutral 容器，不是 YAML 库接口。
++
+ - reader 只严格校验 recorder 子树；其它顶层 namespace 按 opaque bytes 处理。
+ - writer 以单次 binary read + byte spans 只 splice 自有子树，namespace 外 BOM/EOL/注释/顺序/正文逐字节保留。
+ - dated 文件使用 `atomic_write_bytes`；完全生成的 INDEX/batches 继续使用 text `atomic_write`。
+@@ -66,7 +68,7 @@ dated Markdown 文件在 byte 0（允许前置 UTF-8 BOM）的 frontmatter 是
+ 
+ `[spec-review-amendment]` `.recorder.lock` 同时是 dated-document mutation lock：任何合规 metadata producer 即使只写 sibling namespace，也必须加入同一协议。namespace 所有权仍各自独立，但整文件 replace 的协调不能各用各锁；绕锁 producer 的并发 lost update 明确不在 guarantee 内，不以额外 reread/fingerprint 伪造跨平台 CAS。
+ 
+-支持边界固定为本地 POSIX filesystem 自动门、Windows 本地盘兼容 smoke；POSIX mode bits 不外推到 Windows，network FS 与完整 power-loss durability 不承诺。runtime ignore 真相源固定 `sdflow-init/assets/snippets/runtime-gitignore.txt`，由 `init.py` init/update 两路幂等合并。
++支持边界固定为本地 POSIX filesystem 自动门、Windows 本地盘兼容 smoke；POSIX mode bits 不外推到 Windows，network FS 与完整 power-loss durability 不承诺。release 的 identity/token 终检与 unlink 之间仍有非 cooperative TOCTOU residual。process crash 的人工恢复是 break-glass：先停该 repo 全部 recorder，删除报错给出的精确 lock path，再重跑原命令。runtime ignore 真相源固定 `sdflow-init/assets/snippets/runtime-gitignore.txt`，由 `init.py` init/update 两路幂等合并。
+ 
+ ### 5. batch rename 非事务，但必须有 provenance、同命令恢复
+ 
+diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task5-delivery-reconciliation.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task5-delivery-reconciliation.md
+new file mode 100644
+index 0000000..51ac6fe
+--- /dev/null
++++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task5-delivery-reconciliation.md
+@@ -0,0 +1,77 @@
++# Task 5 实现报告：移除 legacy 写半场并完成交付对账
++
++## 结论
++
++Task 5 除“实际 Windows runner 执行结果”外已完成。Windows smoke 的可运行 contract 已覆盖
++acquire/conflict/participant/replace/cleanup 与 setup copy/refresh，但当前授权范围内没有可达的
++Windows runner；本报告不把 macOS 的两项 skip 或模拟执行写成 Windows PASS。
++
++## 实现与文档
++
++- 三脚本删除 `_reject_cell_unsafe` 定义；mirror roster 同步移除。`issues.py` 对 `batches.md` 的窄单行
++  验证改名为 `_reject_batch_line_unsafe`，避免与退役的 legacy table writer 混淆。legacy
++  `split_sections` / `parse_table_rows` / `_legacy_item_from_row` 只保留 dual-read 与 promotion 用途；
++  batch registry 语法未改变。
++- 新增 `test_task5_delivery_contract.py`：锁定无 legacy row writer、无 YAML/跨 recorder import、动态
++  corpus 逐 item 对账、交付文档关键词与 upgraded installed-path consumer smoke。
++- Windows contract 扩为 owner→participant delegation，并真实执行 `setup.sh` 两次验证 Windows copy、
++  marker 与刷新后脚本 bytes。
++- 更新 README、三 SKILL、ADR-0025、CONTEXT：Shared Frontmatter Envelope、overlay precedence、
++  semantic ID、exclusive snapshot/document lock、rename provenance/retry，以及 POSIX/Windows 本地盘、
++  network FS、power-loss、TOCTOU、break-glass 边界。ADR-0025 升 `Accepted`。
++
++## 历史 corpus 与 dogfood
++
++- baseline 测试运行时枚举仓内全部 buglist/todolist dated 文档；对每个未被 overlay shadow 的 legacy
++  row，逐 item 比较 `module/summary/priority|type/status/time/change/batch` 与 dual-reader effective
++  projection。测试不固化动态 item 总数。
++- 通过真实命令执行：
++
++  ```bash
++  python3 sdflow-todolist/scripts/todolist.py --root . set-status --id T85  --to DONE --evidence mlh-p6-recorder-frontmatter
++  python3 sdflow-todolist/scripts/todolist.py --root . set-status --id T66  --to DONE --evidence mlh-p6-recorder-frontmatter
++  python3 sdflow-todolist/scripts/todolist.py --root . set-status --id T67  --to DONE --evidence mlh-p6-recorder-frontmatter
++  python3 sdflow-todolist/scripts/todolist.py --root . set-status --id T146 --to DONE --evidence mlh-p6-recorder-frontmatter
++  python3 sdflow-todolist/scripts/todolist.py --root . set-status --id T2 --to DONE --evidence "mlh-p6-recorder-frontmatter（根治兑现）"
++  python3 sdflow-issues/scripts/issues.py --root . reindex --strict
++  ```
++
++- 结果：2026-07 todolist 为 `mode=overlay`；T85/T66/T67/T146/T2 的当前 effective status 均为
++  `DONE`，T2 保持 DONE 并新增根治兑现历史；旧 legacy 总览 table region 与 Task 5 base
++  `933066d` 的对应 bytes 相等。`reindex --strict` exit 0，INDEX 当前为 open 105 / closed 55。
++- mechanical-layer-hardening roadmap/task-log、issues batches/index 已回写交付状态；原 provenance
++  `change` 与 batch 不被迁移篡改，关联本 change 的兑现证据落在追加历史与交付记录。
++
++## 验证
++
++| 命令 | 结果 |
++|---|---|
++| `pytest sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error`（经 `uv run --with pytest`） | `442 passed, 2 skipped`；skip 均为 actual-Windows-only contract |
++| `pytest sdflow-buglist/tests/test_mirror_consistency.py -W error` | `7 passed` |
++| Task 5 delivery contract（dogfood 后重跑） | `5 passed` |
++| source grep | 三脚本无 `_reject_cell_unsafe`，无 YAML/跨 recorder import；legacy parser/promotion helper 与独立 batch line guard 保留 |
++| full `pytest` | `1616 passed, 2 skipped`，exit 0 |
++| full `pytest -W error` | `38 failed, 1578 passed, 2 skipped`：精确保持既知基线，`sdflow-maintain` 37 个 unclosed-file ResourceWarning + `sdflow-architecture` 1 个 subprocess pipe ResourceWarning；无 Task 5 新 failure |
++| `openspec validate mlh-p6-recorder-frontmatter --strict --no-interactive` | valid，exit 0 |
++| `git diff --check` | exit 0 |
++| `python3 hack/sync_principles.py --check` | 20 个投放面一致 |
++| upgraded installed-path consumer smoke | legacy + canonical bug、overlay todo 的 scan JSON、`reindex --strict`、empty sweep、INDEX/batches contract 均通过 |
++
++## 唯一未闭合项：实际 Windows runner
++
++穷尽证据（2026-07-17）：
++
++- 当前宿主 `Darwin arm64`；`docker`、`podman`、`wine`、`pwsh`、`powershell`、QEMU 均不可用。
++- `gh` 已认证且有 `repo/workflow` scope，但 `gh workflow list --all` 与 `gh run list` 均为空。
++- GitHub API 返回本仓 `actions/runners.total_count=0`、`actions/workflows.total_count=0`。
++- ship 契约禁止本阶段自行 push；创建 workflow 并 push 会扩大授权范围，因此未执行。
++
++在有 Windows local-disk runner 且代码可达后，精确命令为：
++
++```powershell
++py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error
++```
++
++期望 2 passed：第一项覆盖 local-drive acquire/conflict/participant/replace/cleanup，第二项覆盖
++`setup.sh` copy/owned-marker/refresh。UNC/network temp path 会主动失败；network FS 与完整 power-loss
++durability 保持非承诺。
+diff --git a/openspec/issues/INDEX.md b/openspec/issues/INDEX.md
+index e9ff782..5c155c6 100644
+--- a/openspec/issues/INDEX.md
++++ b/openspec/issues/INDEX.md
+@@ -20,7 +20,6 @@
+ | T143 | todo | PROPOSED | add-sdflow-architecture |
+ | T144 | todo | PROPOSED | add-sdflow-architecture |
+ | T145 | todo | PROPOSED | add-sdflow-architecture |
+-| T146 | todo | PROPOSED | add-sdflow-architecture |
+ 
+ ### 批次：cross-model-outside-voice
+ 
+@@ -53,13 +52,6 @@
+ | T87 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
+ | T88 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
+ 
+-### 批次：issues-pool-hardening
+-
+-| ID | Pool | Status | 关联Change |
+-|----|------|--------|------------|
+-| T66 | todo | PROPOSED | issues-pool-hardening |
+-| T67 | todo | PROPOSED | issues-pool-hardening |
+-
+ ### 批次：matt-workflow-integration
+ 
+ | ID | Pool | Status | 关联Change |
+@@ -131,7 +123,6 @@
+ |----|------|--------|------------|
+ | T83 | todo | PROPOSED | - |
+ | T84 | todo | PROPOSED | - |
+-| T85 | todo | PROPOSED | - |
+ 
+ ### 批次：opt-cost
+ 
+@@ -244,9 +235,12 @@
+ | T141 | todo | OPEN | - |
+ | T142 | todo | OPEN | - |
+ | T148 | todo | OPEN | - |
++| T151 | todo | OPEN | mlh-p6-recorder-frontmatter |
++| T152 | todo | OPEN | mlh-p6-recorder-frontmatter |
++| T153 | todo | OPEN | mlh-p6-recorder-frontmatter |
+ | T56 | todo | OPEN | adaptive-workflow-routing |
+ | T57 | todo | OPEN | main |
+ 
+ ## 已闭合（终态）摘要
+ 
+-- 共 51 项已闭合（bug: 6，todo: 45）
++- 共 55 项已闭合（bug: 6，todo: 49）
+diff --git a/openspec/issues/batches.md b/openspec/issues/batches.md
+index efa248b..0a55566 100644
+--- a/openspec/issues/batches.md
++++ b/openspec/issues/batches.md
+@@ -3,10 +3,10 @@
+ > 半手维护：`状态:`/`成员:` 由 `issues.py`（reindex / `batch set-status`）维护，其余字段（`优先级:`/`计划:` 等）人工填写——reindex/batch 只精确 patch 生成行，绝不覆写人写行（Q3）。
+ 
+ ### issues-pool-hardening — issues-pool-batch-mgmt
+-状态: PLANNED
++状态: DONE
+ 成员: (生成) T1, T2, T3, T4, T5, T66, T67
+ 优先级: P2
+-计划: issues.py/recorder 健壮性：problems 回显·含｜字段转义防列腐蚀·终态集跨脚本守卫测试·batch 幂等选项·_find_row_file 抽取去重
++计划: ✅ T66/T67 由 mlh-p6-recorder-frontmatter 根治兑现：scan/rename snapshot 复用 + ID semantic uniqueness；其余 issues.py/recorder 健壮性已闭合。
+ 
+ ### minimize-repo-footprint — minimize-repo-footprint
+ 状态: PLANNED
+@@ -138,7 +138,7 @@
+ 状态: PLANNED
+ 成员: (生成) T78, T79, T80, T81, T82, T83, T84, T85
+ 优先级: P1（P4 ★组已交付；T85=P6 端态 A 为下一结构性端点；T83/T84 等 embedded producer 契约）
+-计划: ✅ T78(4.C lens-metric emit，bd7c05f)、T79(4.B maintain scan，569d393)、T80/T81/T82(4.D.1/2/4 reason-code validators，6326115) 已交付；下一步单开 T85（P6 recorder 索引迁 frontmatter，历史表只读 dual-read）；T83/T84 待 embedded producer 契约就绪后实施。
++计划: ✅ T78-T82 已交付；T85 由 mlh-p6-recorder-frontmatter 交付（versioned frontmatter + 历史表只读 dual-read/promotion）；T83/T84 待 embedded producer 契约就绪后实施。
+ 
+ ### implement-mechanical-layer-hardening-p4-lens-metric-emit — implement-mechanical-layer-hardening-p4-lens-metric-emit
+ 状态: PLANNED
+@@ -204,7 +204,7 @@
+ 状态: PLANNED
+ 成员: (生成) T143, T144, T145, T146
+ 优先级: P3
+-计划: SAD 后续增强：frozen-diff/ADR lint、跨语言 schema、触发精度观测与 recorder 并发锁方案统一。
++计划: SAD 后续增强：frozen-diff/ADR lint、跨语言 schema、触发精度观测；T146 recorder 仓级 snapshot lock 已由 mlh-p6-recorder-frontmatter 兑现。
+ 
+ ### add-codex-host-support — add-codex-host-support
+ 状态: PLANNED
+diff --git a/openspec/issues/todolist/2026-07-todolist.md b/openspec/issues/todolist/2026-07-todolist.md
+index cbdd468..fee48da 100644
+--- a/openspec/issues/todolist/2026-07-todolist.md
++++ b/openspec/issues/todolist/2026-07-todolist.md
+@@ -4,6 +4,11 @@ sdflow-issues:
+   pool: todo
+   mode: overlay
+   items:
++    T2: {"module":"`recorder`","summary":"字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）","type":"代码质量","status":"DONE","time":"2026-07-03 00:26","change":"issues-pool-batch-mgmt","batch":"issues-pool-hardening"}
++    T66: {"module":"`cmd_scan(buglist/todolist) + cmd_batch_rename(issues)`","summary":"recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化","type":"性能优化","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
++    T67: {"module":"`cmd_add id 校验(buglist/todolist)`","summary":"显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)","type":"代码质量","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
++    T85: {"module":"`roadmap mechanical-layer-hardening / recorder`","summary":"P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块","type":"基础设施","status":"DONE","time":"2026-07-08 15:55","change":null,"batch":"mlh-p4-target-state"}
++    T146: {"module":"`sdflow-skills 工具族`","summary":"扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）","type":"代码质量","status":"DONE","time":"2026-07-12 18:34","change":"add-sdflow-architecture","batch":"add-sdflow-architecture"}
+     T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"OPEN","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
+ ---
+ # 2026-07 TODO
+@@ -988,6 +993,7 @@ sdflow-issues:
+ 
+ ---
+ 
++<!-- sdflow-issue-block:start id=T2 -->
+ ## T2: 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）
+ 
+ | 属性 | 值 |
+@@ -998,6 +1004,8 @@ sdflow-issues:
+ 
+ > 2026-07 状态：PROPOSED → DONE（issues-pool-hardening 实现(SDD 10任务+code-review 6 fix), 全仓552 passed）
+ 
++> 2026-07 状态：DONE → DONE（mlh-p6-recorder-frontmatter（根治兑现））
++<!-- sdflow-issue-block:end id=T2 -->
+ ---
+ 
+ ## T3: 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移）
+@@ -1397,6 +1405,7 @@ sdflow-issues:
+ 
+ ---
+ 
++<!-- sdflow-issue-block:start id=T146 -->
+ ## T146: 扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）
+ 
+ | 属性 | 值 |
+@@ -1411,6 +1420,8 @@ sdflow-issues:
+ 
+ **备注**：老债非本 change 引入，per fold-vs-defer 判据合规 defer
+ 
++> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
++<!-- sdflow-issue-block:end id=T146 -->
+ ---
+ 
+ ## T79: P4·4.B maintain INDEX↔文件系统 set-diff 只读报告脚本化(+CLAUDE.md 过时引用+bundle 陈旧告警)；归哪组/是否修留人。纯机械集合求差、每次 maintain 都跑、dogfood 可测——目标态该做
+@@ -1470,3 +1481,21 @@ sdflow-issues:
+ | 状态 | DONE |
+ 
+ > 2026-07 状态：OPEN → DONE（change add-codex-host-support; canonical tools sync 2026-07-16）
++
++<!-- sdflow-issue-block:start id=T85 -->
++## T85: P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块
++> P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块
++> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
++<!-- sdflow-issue-block:end id=T85 -->
++
++<!-- sdflow-issue-block:start id=T66 -->
++## T66: recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化
++> recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化
++> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
++<!-- sdflow-issue-block:end id=T66 -->
++
++<!-- sdflow-issue-block:start id=T67 -->
++## T67: 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)
++> 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)
++> 2026-07 状态：PROPOSED → DONE（mlh-p6-recorder-frontmatter）
++<!-- sdflow-issue-block:end id=T67 -->
+diff --git a/openspec/roadmaps/mechanical-layer-hardening/roadmap.md b/openspec/roadmaps/mechanical-layer-hardening/roadmap.md
+index cf0c23b..d50d30d 100644
+--- a/openspec/roadmaps/mechanical-layer-hardening/roadmap.md
++++ b/openspec/roadmaps/mechanical-layer-hardening/roadmap.md
+@@ -1,15 +1,15 @@
+ # workflow 机械层固化 实施路线图
+ 
+-> 版本：v2（2026-07-16，完成态对账）
++> 版本：v3（2026-07-17，P6 交付对账）
+ >
+ > 相关文档（全部位于 `openspec/roadmaps/mechanical-layer-hardening/`）：
+ > - 需求综述：`requirements.md` · 整体设计：`design.md` · 任务日志：`task-log.md`
+ 
+ ## 概览
+ 
+-两腿六阶段。**Leg 1（脚本化）主干已交付**，仅 4.A/4.D.3 等 embedded producer 契约。**Leg 2（去字符串化）**的阶段 5 已交付；阶段 6（S2 recorder 索引）端态与前置均已确定，是下一结构性端点。
++两腿六阶段。**Leg 1（脚本化）主干已交付**，仅 4.A/4.D.3 等 embedded producer 契约。**Leg 2（去字符串化）P5/P6 均已交付**：recorder 新写机器索引已进入 versioned frontmatter，历史表冻结为 dual-read/promotion 半场。
+ 
+-> **进度里程碑（2026-07-16）**：Leg 1 P1/P2/P3 全交付，Leg 2 P5 gate 锚→frontmatter 及尾巴已清结。P4 ★组也已全部交付：4.C `lens_metric_emit`（`bd7c05f`）、4.B `maintain_scan`（`569d393`）、4.D.1/2/4 reason-code validators（`6326115`）。仅 4.A/4.D.3 因 embedded producer 契约未就绪而正当等待。**下一结构性端点是 P6 recorder 索引→frontmatter（T85）**；其端态 A 与历史表只读 dual-read 约束均已确定，可单开 change 进入设计。
++> **进度里程碑（2026-07-17）**：P6 change `mlh-p6-recorder-frontmatter` 已兑现端态 A：Shared Frontmatter Envelope、same-file overlay、marker prose、两池 semantic ID、exclusive snapshot lock 与 provenance-backed rename retry 落地；T85/T66/T67/T146 经真实 recorder 命令提升为 overlay 并置 DONE，T2 保持 DONE 且记录根治兑现。仅 4.A/4.D.3 因 embedded producer 契约未就绪而正当等待。
+ 
+ | 阶段 | 腿 | 里程碑 | 就绪度 |
+ |---|---|---|---|
+@@ -18,7 +18,7 @@
+ | **P3** · 确定性守卫补全 | Leg 1 | recorder 镜像一致性测试 + config/batches lint | ✅ **已交付**（a6a2adc，change `mlh-p3-determ-guards`；冷审 F5 守卫覆盖 8→14 helper） |
+ | **P4** · 编排 SKILL 机械步下沉 | Leg 1 | 4.A-4.D.4 按目标态逐项脚本化 | ✅ **★组已交付**（4.C `bd7c05f`；4.B `569d393`；4.D.1/2/4 `6326115`）；◐ 4.A/4.D.3 等 embedded 契约 |
+ | **P5** · 家族① gate 锚 → frontmatter | Leg 2 | 删 `_line_scoped_hits` **live 解析半场**、正文提及不误判、归档 dual-read 永久保留 | ✅ **已交付**（change `mlh-p5-gate-frontmatter`，merge `1b069a7`；spec-review 六镜拦 1致命+3高 / impl-review 抓 2 真 bug；662 passed·dogfood CLEAN） |
+-| **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发（写侧）+ 新数据可查询基底 | ▶ **下一结构性端点**（端态 A 已定；历史表只读 dual-read；T85） |
++| **P6** · 家族② recorder 索引 → frontmatter | Leg 2 | 腐蚀蒸发（写侧）+ 新数据可查询基底 | ✅ **已交付**（change `mlh-p6-recorder-frontmatter`；T85/T66/T67/T146 DONE） |
+ 
+ > 每阶段开独立 OpenSpec 变更（`implement-mechanical-layer-hardening-pN-<theme>`），归档后进下一个。
+ > **并行 caveat**：阶段 1（issues.py）与阶段 3 的 recorder 部分、阶段 5 的 producer SKILL 部分**改文件集不同可并行**；但阶段 2（anchor-lint 触 spec-review/code-review SKILL）与阶段 4 的 P7/P8（同触两审 SKILL）、阶段 5（S1 也改 producer SKILL）**若同期改 SKILL.md 须串行**，开并行前先核文件集是否相交。
+@@ -182,7 +182,7 @@
+ 
+ ---
+ 
+-## 阶段 6 · 家族② recorder 索引 → frontmatter（Leg 2，下一结构性端点）
++## 阶段 6 · 家族② recorder 索引 → frontmatter（Leg 2，已交付）
+ 
+ ### 前置条件
+ - [x] ~~**ROI 触发器满足**（被动，不主动排期）：「recorder 持续出腐蚀 bug」**或**「想在数据上建工具」（ADR 0010 已决 defer 判据）~~ — **已被端态复核取代（2026-07-08）**：不再等 ROI 触发器，改以「根治 + 达成目标」目标态判据直接选定端态 A（见下方 ✅ 端态决策块）。ADR 0010 原「defer/触发才起」= 快照妥协、本次推翻。可查询基底原是触发器②、现降为 A 的附赠而非前置。
+@@ -197,13 +197,13 @@
+ - recorder 索引层（ID/module/summary/priority/status/time/change/batch）从 markdown 总览表位置切列迁 YAML frontmatter 索引 + prose 块；腐蚀类蒸发 + 删 recorder ~40 处/文件表解析与双写一致机械。
+ 
+ ### 子任务
+-- [ ] 端态 A 已定，实现时单独 explore/design（复用 P5 fail-closed YAML + dual-read 范式；约束①历史文档不迁、仅新写走 frontmatter，届时按当时实况细化，不在本 roadmap 展开）。
++- [x] change `mlh-p6-recorder-frontmatter` 完成设计、实现与交付对账；新写走 canonical frontmatter，历史文档不批量迁移，活跃 legacy item 按访问 promotion 为 same-file overlay。
+ 
+ ### 验收标准
+-- [ ] 新写记录字段含 `|`/换行的腐蚀类结构上不可能（YAML 转义）；写侧 `_reject_cell_unsafe`/`_render_item_table`/双写表半场删除；历史表 dual-read 冻结只读正确识别（同 P5 归档读半场）；LLM 写坏 frontmatter → fail-closed 不静默。
++- [x] 新写记录字段含 `|`/换行可无损 round-trip；写侧 `_reject_cell_unsafe`/`_render_item_table`/双写表半场删除；历史表 dual-read/promotion 冻结只读；frontmatter 坏数据 fail-closed；仓级 snapshot lock 与 rename retry 收敛已覆盖。
+ 
+ ### 交付物
+-- 待单开 T85/P6 change 交付。
++- ADR-0025（Accepted）、三 recorder 自包含实现与镜像守卫、consumer/Windows smoke contract、历史 corpus 对账和 T85/T66/T67/T146 dogfood overlay。
+ 
+ ---
+ 
+diff --git a/openspec/roadmaps/mechanical-layer-hardening/task-log.md b/openspec/roadmaps/mechanical-layer-hardening/task-log.md
+index 8f83d74..4328f86 100644
+--- a/openspec/roadmaps/mechanical-layer-hardening/task-log.md
++++ b/openspec/roadmaps/mechanical-layer-hardening/task-log.md
+@@ -56,6 +56,15 @@
+ 
+ <!-- 日志条目从这里开始，最新的放最上面 -->
+ 
++## 2026-07-17
++
++### [阶段 6 / P6] recorder machine index → versioned frontmatter 交付
++- **状态**: ✅ 完成（change `mlh-p6-recorder-frontmatter`）
++- **交付物**: Shared Frontmatter Envelope、canonical/overlay dual-reader、marker-framed prose、bug+todo 两池 semantic ID 唯一、exclusive snapshot/document lock、registry-first batch rename provenance 与 fail-closed retry。
++- **迁移证据**: 仓内全量历史 corpus 按运行时枚举逐 item 对账关键字段，不固化动态总数；T85/T66/T67/T146 由真实 `todolist.py set-status` 提升为 overlay 并置 DONE，旧总览表 bytes 保持不变，`reindex --strict` 收敛。T2 保持 DONE，并追加 `mlh-p6-recorder-frontmatter（根治兑现）` 证据。
++- **边界**: 本地 POSIX 自动验证；Windows 本地盘由可运行 smoke contract 覆盖，network FS、完整 power-loss durability 与非 cooperative writer TOCTOU 不承诺；process-crash lock 走人工 break-glass。
++- **后续**: 仅 4.A/4.D.3 等 embedded producer 契约项继续等待真实 producer；不以当前缺样本缩小目标态。
++
+ ## 2026-07-16
+ 
+ ### [阶段 4 / 完成态对账] P4 ★组全部交付，P6 成为下一结构性端点
+diff --git a/openspec/specs/determinism-guards/spec.md b/openspec/specs/determinism-guards/spec.md
+index d0a9390..f2a273c 100644
+--- a/openspec/specs/determinism-guards/spec.md
++++ b/openspec/specs/determinism-guards/spec.md
+@@ -5,10 +5,10 @@ TBD - created by archiving change mlh-p3-determ-guards. Update Purpose after arc
+ ## Requirements
+ ### Requirement: recorder 镜像 helper 由「剥 docstring 后 AST 等价」一致性测试守护
+ 
+-三份 recorder（`buglist.py`/`todolist.py`/`issues.py`）各自内联持有的共享 helper MUST 由**剥函数 docstring 后 `ast.dump` 相等**的断言守护其**行为**不漂移，按实测拓扑分组：3 向组（`atomic_write`/`repo_root`/`_reject_cell_unsafe`，3 个）三份 AST 等价、2 向组（`detect_change`/`normalize_doc_paths`/`auto_default_doc`/`split_sections`/`parse_table_rows`/`block_ranges`/`_ids_in_files`/`_find_row_file`/`_id_sort_key`/`validate_doc_paths`/`all_ids`/`next_id`/`_die`/`_load_json`，共 14 个）buglist↔todolist AST 等价（3+14=17 个 helper 受本守卫覆盖）。**注**：TWO_WAY 组自代码审查 [impl-review-fix] F3 起由最初审计的 8 个扩至 14 个——冷审 + codex 独立复现发现 `_id_sort_key`/`validate_doc_paths`/`all_ids`/`next_id`/`_die`/`_load_json` 这 6 个同样在 buglist/todolist 两处逐字同款、却此前未纳入覆盖范围，遗漏会让它们能悄悄改动而不拉红；`_die` 虽三份都存在，但其三向等价性未经核验，故只补进 TWO_WAY、不扩大 THREE_WAY。契约锁**行为等价层非字面层**（grill 实测证伪「逐字同款」前提）：docstring/注释差异合法（按 recorder 语境分化，如 issues 记录内联原因），**不**算漂移；逻辑分叉（AST 不等）才报红。测试 MUST NOT 抽公共模块或跨 recorder import（守 D4 隔离）。
++三份 recorder（`buglist.py`/`todolist.py`/`issues.py`）各自内联持有的共享 helper MUST 由**剥函数 docstring 后 `ast.dump` 相等**的断言守护其**行为**不漂移。roster 以 `sdflow-buglist/tests/test_mirror_consistency.py` 为当前可执行单一源，覆盖 frontmatter bytes/parser/renderer、semantic ID、snapshot lock 与 legacy read/promotion helpers；已退役的新写 table guard `_reject_cell_unsafe` MUST NOT 留在 roster 或三脚本。`issues.py` 为 `batches.md` 保留独立命名的 `_reject_batch_line_unsafe`，不冒充 recorder table helper。契约锁**行为等价层非字面层**：docstring/注释差异合法，逻辑分叉（AST 不等）才报红。测试 MUST NOT 抽公共模块或跨 recorder import（守 D4 隔离）。
+ 
+ #### Scenario: 3 向 helper 逻辑分叉
+-- **WHEN** `atomic_write`/`repo_root`/`_reject_cell_unsafe` 任一在三份中剥 docstring 后 AST 不等
++- **WHEN** 当前 executable THREE_WAY roster 任一 helper 在三份中剥 docstring 后 AST 不等
+ - **THEN** 一致性测试断言失败（红），失败信息指明漂移的 helper 名与不一致的 recorder
+ 
+ #### Scenario: 2 向 helper 逻辑分叉
+@@ -98,4 +98,3 @@ TBD - created by archiving change mlh-p3-determ-guards. Update Purpose after arc
+ #### Scenario: 守卫不引入新 import 耦合
+ - **WHEN** 一致性测试运行
+ - **THEN** 它经 importlib 从各脚本独立加载读源码，不建立 recorder 间的 import 依赖，不破 D4 隔离
+-
+diff --git a/sdflow-buglist/SKILL.md b/sdflow-buglist/SKILL.md
+index 9583e33..2b95d13 100644
+--- a/sdflow-buglist/SKILL.md
++++ b/sdflow-buglist/SKILL.md
+@@ -4,8 +4,8 @@ description: >
+   自动把发现的 bug 记录进 openspec/issues/buglist/YYYY-MM-DD-buglist.md（每天一文件，全局唯一 ID），
+   并支持状态回写（OPEN→VERIFIED→FIXED…）与扫描列表。**只要在烧板验证、日志分析、代码审查、
+   调试中发现了 bug 或缺陷，或用户说"记一下这个 bug / 这个问题记到 buglist / 标记 Bxx 已修 /
+-  列一下还没修的 bug"，就用本 skill**——不要手动拼 Markdown 表格和详细块，交给脚本保证 ID 不撞号、
+-  状态总览表与详细块双写一致、FIXED 必带根因和证据。本 skill 自包含整套 buglist 约定，是该约定的
++  列一下还没修的 bug"，就用本 skill**——不要手动拼机器索引和详细块，交给脚本保证 ID 不撞号、
++  versioned frontmatter 与 marker block 一致、FIXED 必带根因和证据。本 skill 自包含整套 buglist 约定，是该约定的
+   唯一真相源。Trigger with /sdflow-buglist。
+ ---
+ 
+@@ -86,8 +86,8 @@ description: >
+ 把"发现 bug → 落档 → 跟踪状态"这条易错的机械流程交给脚本兜底，模型只做判断。
+ **本 skill 自包含整套约定**（不依赖任何外部 rule 文件）。
+ 
+-> **为什么要脚本**：ID 全局唯一、状态总览表 ↔ 详细块 双写一致、FIXED 门禁——
+-> 这些手工做极易出错（撞号、改了表忘了块、FIXED 却没写根因）。脚本把它们变成确定性操作，
++> **为什么要脚本**：两池 ID 语义唯一、frontmatter ↔ marker 关系一致、FIXED 门禁——
++> 这些手工做极易出错（撞号、破坏 shared envelope、FIXED 却没写根因）。脚本把它们变成确定性操作，
+ > 模型省下来的注意力用在真正需要判断的地方：这是不是真 bug、现象 vs 根因、定几级。
+ 
+ 脚本：[scripts/buglist.py](scripts/buglist.py)（`python scripts/buglist.py --help`）。
+@@ -108,7 +108,7 @@ description: >
+ 
+ 先判断（模型的活）：这是不是真 bug？**现象**（外在可观察）与**根因**（代码层因果）分开；
+ 定**优先级**。然后把结构化内容交给脚本——它负责定位今日文件（缺则建目录+头部）、
+-扫描全局最大 ID 自增、把"总览表一行 + 详细块"一次写齐。
++在仓级 snapshot lock 内扫描两池并分配 ID，把 canonical frontmatter item + marker block 一次写齐。
+ 
+ ```bash
+ echo '{
+@@ -137,16 +137,16 @@ echo '{
+ - **关联文档**（`doc` 字段，可选，string 或 list[string]）：记录时如果这个 bug 关联某个 openspec 文档
+   （design/proposal/rule 等），尽量把该文档路径填进 `doc` 字段——填对格式后在 review 工具里能直接点开。
+   路径不带 `openspec/` 前缀也会被自动补上；写进详细块的 **关联文档** 行（多个路径用「、」分隔），
+-  不会出现在总览表里。路径不存在只警告不阻断。不传时，若能从 `change` 探测到
++  不会写入机器索引以外的可变副本。路径不存在只警告不阻断。不传时，若能从 `change` 探测到
+   `design.md`/`proposal.md`（含已归档的 `changes/archive/*-{change}/`），会自动带上。
+ - 脚本回 `{"id","file","status","time","change"}`——把分到的 ID 告诉用户。
+ 
+-**摘要 vs 标题**：表里 `summary` 一句话讲现象（不是根因）；详细块标题默认取 summary，
++**摘要 vs 标题**：frontmatter 的 `summary` 讲现象（不是根因），可含 `|`、换行和 Unicode；详细块标题默认取其单行投影，
+ 要不同可加 `"title"`。需要额外字段（触发路径/时序/前置条件/验证方式）放 `"optional": {...}`。
+ 
+ ### 2. 回写状态（set-status）
+ 
+-状态变更**双写**（总览表 + 详细块属性）并**追加一条历史**（不删旧状态）。带门禁：
++状态变更只更新 frontmatter 机器索引，并在 marker block **追加一条人读历史**（不写可变状态副本）。legacy item 首次触碰时 same-file promotion 为 overlay，旧表 bytes 不变。带门禁：
+ 
+ ```bash
+ python scripts/buglist.py set-status --id B17 --to FIXED --evidence "commit a1b2c3d"
+@@ -167,7 +167,7 @@ python scripts/buglist.py scan --status OPEN   # 只看未修
+ python scripts/buglist.py scan --json          # 机器可读
+ ```
+ 
+-末尾自动做**表↔块一致性自检**（缺块/缺行/状态对不上都会报）。盘点或交接前先跑一次。
++末尾自动做 **frontmatter/marker/未提升 legacy 表**关系自检。盘点或交接前先跑一次。
+ 
+ ## 约定速查（本 skill 即真相源）
+ 
+@@ -180,7 +180,8 @@ python scripts/buglist.py scan --json          # 机器可读
+ 
+ **本池**：`openspec/issues/buglist/YYYY-MM-DD-buglist.md`，每天一个，当天所有 bug 追加进去，
+ 不拆分。过渡期兼容旧路径 `openspec/buglists/`——`next-id`/`scan`/`set-status`/`triage` 全部
+-**dual-read**（新旧两个目录都扫，取并集 max+1 分配 ID，避免撞号）；**新记录只写新路径**。
++**dual-read**（新旧两个目录都扫）；**新记录只写新路径的 canonical frontmatter**。自定义 prefix 的
++`next-id`/自动 add/显式 ID 查重都在同一仓级 exclusive snapshot lock 内读取 bug+todo 两池全集。
+ 跨新旧路径撞同一 ID 会在 `next-id` 时打 WARNING，提示尽快把旧数据迁移到新路径。
+ 
+ **跨两池共享文件**（不是 buglist 私有，owner 是 `sdflow-issues/scripts/issues.py`；
+@@ -198,13 +199,14 @@ sdflow-todolist 依赖同一份，见其 SKILL.md 对应段）：
+ 
+ | 维度 | 落点 | 可变性 | 含义 |
+ |---|---|---|---|
+-| 源change（关联Change） | 状态总览表「关联Change」列 | **不可变**（provenance） | 在哪个 change 里发现的 |
+-| 批次 | 状态总览表**末列**「批次」 | 可变 | 被哪个「清理 change」包走去修（批次 key = 清理 change 名） |
+-| status | 状态总览表「状态」列 + 详细块「状态」行 | 生命周期 | 见下方状态词表；**回归干净**——批次信息不塞进 status 字面量 |
++| 源change（关联Change） | frontmatter item `change` | **不可变**（provenance） | 在哪个 change 里发现的 |
++| 批次 | frontmatter item `batch` | 可变 | 被哪个「清理 change」包走去修（批次 key = 清理 change 名） |
++| status | frontmatter item `status` | 生命周期 | 见下方状态词表；marker prose 只追加历史，不是状态真相源 |
+ 
+-**结构现为 8 列**：`ID / 模块 / 问题摘要 / 优先级 / 状态 / 时间 / 关联Change / 批次`
+-（「批次」是表**末列**，Phase B 新加；旧文件无此列的行按 `len(cells)>N` 防御式解析，读到空即可，
+-不报错）。时间、关联Change、批次 **只记在总览表**，不进详细块。
++新写结构是 shared frontmatter envelope 下唯一 `sdflow-issues` namespace（短键
++`schema/pool/mode/items`）；新文件 `mode=canonical`。历史 8 列表永久只读，活跃 legacy item 首次 mutation
++以 `mode=overlay` shadow 旧 row，旧表与旧 block 内部 bytes 不改。reader 在 namespace 在场但损坏时
++fail-closed，只有 namespace 不存在才回退 legacy parser。
+ 
+ **优先级**
+ 
+@@ -252,8 +254,8 @@ sdflow-todolist 依赖同一份，见其 SKILL.md 对应段）：
+   两条生成行（按上面「批次完成判据」）。
+ - `batch add / set-status / rename`——`issues/batches.md` 注册表操作：`add` 新建 `PLANNED`
+   条目（成员空）；`set-status` 只改状态生成行；`rename` 改批次 key + 同步两池里所有该批次成员的
+-  批次 tag（含 auto-reindex——写盘成功后自动跑一次 `reindex` 刷新 INDEX，失败只 stderr 警告，
+-  `rename` 本体仍 exit 0，调用方无需再手动补 reindex）。批次生命周期
++  批次 tag；rename 先写 registry provenance `重命名自:`，复用每池单次 direct-bytes snapshot 更新 dated/INDEX/batches。
++  任一步失败均 non-zero 并提示**重跑原命令**，全 old/混合/全 new retry 均可收敛。批次生命周期
+   `PLANNED → IN_PROGRESS → DONE`（`PLANNED→IN_PROGRESS` 由人在真正开
+   cleanup change 时手动 `set-status`；`→DONE` 通常由 reindex 按完成判据被动同步——人也可以用
+   `set-status` 直接标，reindex 不会越权纠正，只在状态和成员终态不一致时追加 `⚠️` 警告）。
+@@ -283,20 +285,19 @@ reindex **只精确 patch 生成行**，绝不覆写人写行；发现「人写
+ 改回或补完成员状态。批次 tag 指向 `batches.md` 里不存在的 key（orphan）也只报警、不静默生成
+ ghost 条目。
+ 
+-### B(bug) / T(todo) 前缀跨池互斥〔D9，显式规范条款〕
++### ID 两池语义唯一〔ADR-0025〕
+ 
+-**bug 池用 `B` 前缀、todo 池用 `T` 前缀，两池 ID 空间必须互斥、禁止跨池撞号**——`add` 不传
+-`--prefix` 时天然遵守各自默认前缀；若显式传自定义 `--prefix`/`id`，模型必须自行保证不会分配出
+-与另一池已用 ID 相同的字面量。`issues.py reindex` 跨池 join 时会跑 `cross_pool_id_conflicts`
+-校验，检测到同一 ID 同时出现在两池即报错中止、**不静默 join**——但这只是防护网，规范本身要求
+-从记录源头就不产生撞号，不能指望靠防护网兜底成为常态操作。
++默认 bug=`B`、todo=`T`，公开的单字母自定义 `--prefix` 保留。ID semantic key 是
++`(uppercase ASCII prefix, decimal integer)` 且不含 pool，因此 `A007`/`A7` 及 bug/todo 的 `A7`
++均冲突。`next-id`、自动 add 与显式 ID 查重必须在同一 snapshot lock 内读两池全集；`reindex`
++仍作 fail-closed 防护网，但不承担事后修复。
+ 
+ ### 铁律（脚本已替你守住大半）
+ 
+-① ID 全局唯一（脚本自增，dual-read 跨新旧路径取并集 max）；② 表 ↔ 块双写一致（脚本双写）；
++① ID 在 bug+todo 两池语义全局唯一；② frontmatter 是机器真相源，legacy 表永久只读；
+ ③ 状态追加式、不删历史（脚本追加历史行）；④ FIXED 必带根因 + 证据（脚本门禁）；
+-⑤ 清单先行——表和块同时落（脚本一次写齐）；⑥ `issues/INDEX.md` 只生成禁手改（issues.py 兜底
+-无条件覆盖重建）；⑦ B/T 前缀跨池互斥（D9，见上，issues.py reindex 兜底检测）。
++⑤ 机器索引只写 frontmatter，marker prose 不反解析；⑥ `issues/INDEX.md` 只生成禁手改（issues.py 兜底
++无条件覆盖重建）；⑦ semantic ID 两池唯一（见上，issues.py reindex 再兜底）。
+ 
+ ## 注意
+ 
+diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
+index ff8c1d4..f24322e 100644
+--- a/sdflow-buglist/scripts/buglist.py
++++ b/sdflow-buglist/scripts/buglist.py
+@@ -1546,21 +1546,12 @@ def _die(msg):
+     sys.exit(1)
+ 
+ 
+-def _reject_cell_unsafe(value, field):
+-    """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
+-    MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。"""
+-    if value is None:
+-        return
+-    if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
+-        _die(f"字段 {field} 含非法字符（| 或换行），会破坏总览表列对齐：{value!r}")
+-
+-
+ def main():
+     p = argparse.ArgumentParser(description="自动记录/回写/扫描 buglist")
+     p.add_argument("--root", default=".", help="仓库根（默认自动探测 git 根）")
+     sub = p.add_subparsers(dest="cmd", required=True)
+ 
+-    s = sub.add_parser("next-id", help="打印下一个全局 ID")
++    s = sub.add_parser("next-id", help="打印两池 snapshot 的下一个全局 ID（advisory，不预留）")
+     s.add_argument("--prefix", default=DEFAULT_PREFIX)
+     s.set_defaults(func=cmd_next_id)
+ 
+diff --git a/sdflow-buglist/tests/test_mirror_consistency.py b/sdflow-buglist/tests/test_mirror_consistency.py
+index 1868e25..6c5bd03 100644
+--- a/sdflow-buglist/tests/test_mirror_consistency.py
++++ b/sdflow-buglist/tests/test_mirror_consistency.py
+@@ -62,7 +62,7 @@ def _ast_no_doc(fn):
+ # 各自内联一份）。mlh-p6 起 frontmatter document mechanics 升为三向共享契约；dated
+ # 文件业务 scan/write 编排仍按 pool 留在各自脚本，纯 bytes/parser/renderer 必须机械等价。
+ THREE_WAY = [
+-    "atomic_write", "atomic_write_bytes", "repo_root", "_reject_cell_unsafe", "_reject_line_unsafe",
++    "atomic_write", "atomic_write_bytes", "repo_root", "_reject_line_unsafe",
+     "canonical_id", "semantic_id_key", "validate_prefix", "_lock_path",
+     "_read_lock_metadata", "_lock_conflict", "validate_recorder_participant",
+     "_write_all", "recorder_lock", "read_repository_snapshot", "repository_semantic_occurrences",
+diff --git a/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py b/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
+index 6482737..77931fa 100644
+--- a/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
++++ b/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
+@@ -11,6 +11,7 @@ The test deliberately fails when the runner provides a UNC/network temp path.
+ import importlib.util
+ import os
+ from pathlib import Path
++import subprocess
+ import sys
+ 
+ import pytest
+@@ -34,8 +35,12 @@ def test_windows_local_disk_acquire_conflict_replace_cleanup(tmp_path, monkeypat
+     init = _load("windows_init", "sdflow-init/scripts/init.py")
+     lock_path = tmp_path / "openspec/issues/.recorder.lock"
+ 
+-    with recorder.recorder_lock(tmp_path, "scan"):
++    with recorder.recorder_lock(tmp_path, "reindex") as owner:
+         assert lock_path.exists()
++        participant_env = recorder.recorder_child_env("scan", owner.token)
++        monkeypatch.setattr(os, "environ", participant_env)
++        participant = recorder.validate_recorder_participant(tmp_path, owner.token, "scan")
++        assert participant.participant and participant.token == owner.token
+         with pytest.raises(recorder.RecorderLockError, match="lock occupied"):
+             with recorder.recorder_lock(tmp_path, "add"):
+                 pass
+@@ -53,3 +58,25 @@ def test_windows_local_disk_acquire_conflict_replace_cleanup(tmp_path, monkeypat
+         init.merge_runtime_gitignore(tmp_path, b"/another-runtime-entry\n")
+     assert target.read_bytes() == stable
+     assert not list(tmp_path.glob("*.tmp"))
++
++
++def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
++    assert sys.platform == "win32"
++    home = tmp_path / "home"
++    home.mkdir()
++    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), SDFLOW_HOME=str(home / ".sdflow"))
++
++    for _ in range(2):
++        result = subprocess.run(
++            ["bash", str(ROOT / "setup.sh")], env=env, text=True, capture_output=True, timeout=120
++        )
++        assert result.returncode == 0, result.stderr
++        assert "mode: copy (Windows)" in result.stdout
++
++    for host in (".claude", ".codex"):
++        installed = home / host / "skills" / "sdflow-buglist"
++        assert installed.is_dir() and not installed.is_symlink()
++        assert (installed / ".sdflow-skills").is_file()
++        assert (installed / "scripts/buglist.py").read_bytes() == (
++            ROOT / "sdflow-buglist/scripts/buglist.py"
++        ).read_bytes()
+diff --git a/sdflow-buglist/tests/test_task5_delivery_contract.py b/sdflow-buglist/tests/test_task5_delivery_contract.py
+new file mode 100644
+index 0000000..2203ce2
+--- /dev/null
++++ b/sdflow-buglist/tests/test_task5_delivery_contract.py
+@@ -0,0 +1,188 @@
++"""mlh-p6 Task 5 delivery/cleanup contracts."""
++
++import ast
++import importlib.util
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++
++ROOT = Path(__file__).parents[2]
++BUG_PATH = ROOT / "sdflow-buglist/scripts/buglist.py"
++TODO_PATH = ROOT / "sdflow-todolist/scripts/todolist.py"
++ISSUES_PATH = ROOT / "sdflow-issues/scripts/issues.py"
++
++
++def _load(name, path):
++    spec = importlib.util.spec_from_file_location(name, path)
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++BUG = _load("_task5_bug", BUG_PATH)
++TODO = _load("_task5_todo", TODO_PATH)
++
++
++def test_legacy_table_is_read_promotion_only_and_cell_guard_left_batch_only():
++    bug_source = BUG_PATH.read_text(encoding="utf-8")
++    todo_source = TODO_PATH.read_text(encoding="utf-8")
++    issues_source = ISSUES_PATH.read_text(encoding="utf-8")
++
++    assert "def _reject_cell_unsafe" not in bug_source
++    assert "def _reject_cell_unsafe" not in todo_source
++    assert "def _reject_cell_unsafe" not in issues_source
++    assert "def _reject_batch_line_unsafe" in issues_source
++
++    # Legacy cells are still parsed for dual-read/promotion, but no writer may
++    # assign through a parsed row or render a new recorder overview table.
++    for source in (bug_source, todo_source):
++        assert "parse_table_rows" in source
++        assert "_legacy_item_from_row" in source
++        assert "_render_item_table" not in source
++        assert "rows[item_id][" not in source
++        assert "rows[raw_id][" not in source
++
++
++def test_recorders_stay_self_contained_without_yaml_or_cross_skill_imports():
++    for path in (BUG_PATH, TODO_PATH, ISSUES_PATH):
++        tree = ast.parse(path.read_text(encoding="utf-8"))
++        imports = []
++        for node in ast.walk(tree):
++            if isinstance(node, ast.Import):
++                imports.extend(alias.name for alias in node.names)
++            elif isinstance(node, ast.ImportFrom) and node.module:
++                imports.append(node.module)
++        assert not any(name in {"yaml", "ruamel", "ruamel.yaml"} for name in imports)
++        assert not any(name.startswith("sdflow_") or name.startswith("sdflow-") for name in imports)
++
++
++def test_repository_legacy_corpus_matches_dual_reader_item_by_item():
++    """Compare every legacy row with the effective dual-reader projection.
++
++    This intentionally derives the corpus at runtime; it never freezes a
++    repository-wide item count that would become stale as the issue pool grows.
++    Overlay items are compared to their frozen row only when not shadowed.
++    """
++    fields_by_pool = {
++        "bug": (BUG, ROOT / "openspec/issues/buglist", "priority"),
++        "todo": (TODO, ROOT / "openspec/issues/todolist", "type"),
++    }
++    compared = []
++    for pool, (module, directory, specific) in fields_by_pool.items():
++        for path in sorted(directory.glob("*.md")):
++            document = module.read_recorder_document(str(path), pool)
++            effective = document["effective_items"]
++            owned = set(document["model"]["items"]) if document["model"] else set()
++            for raw_id, row in document["rows"].items():
++                canonical = module._canonical_from_key(module._legacy_semantic_id_key(raw_id))
++                if canonical in owned:
++                    continue
++                item = effective[raw_id]
++                expected = module._legacy_item_from_row(raw_id, row, pool)
++                for field in ("module", "summary", specific, "status", "time", "change", "batch"):
++                    assert item[field] == expected[field], f"{path}:{raw_id}:{field}"
++                compared.append((path, raw_id))
++    assert compared, "dogfood corpus must contain at least one unpromoted legacy item"
++
++
++def test_delivery_docs_name_operational_boundaries():
++    adr = (ROOT / "openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md").read_text(encoding="utf-8")
++    context = (ROOT / "openspec/CONTEXT.md").read_text(encoding="utf-8")
++    skills = "\n".join(
++        (ROOT / relative).read_text(encoding="utf-8")
++        for relative in (
++            "sdflow-buglist/SKILL.md",
++            "sdflow-todolist/SKILL.md",
++            "sdflow-issues/SKILL.md",
++        )
++    )
++    contract = adr + context + skills
++    for phrase in (
++        "Shared Frontmatter Envelope",
++        "snapshot lock",
++        "重跑原命令",
++        "Windows 本地盘",
++        "network FS",
++        "power-loss",
++        "TOCTOU",
++        "break-glass",
++    ):
++        assert phrase in contract
++    assert "状态：**Accepted**" in adr
++
++
++def test_upgraded_install_known_consumer_smoke(tmp_path):
++    """Exercise installed paths, not repository script paths."""
++    home = tmp_path / "home"
++    consumer = tmp_path / "consumer"
++    home.mkdir()
++    (consumer / "openspec/issues/buglist").mkdir(parents=True)
++    (consumer / "openspec/issues/todolist").mkdir(parents=True)
++    (consumer / "openspec/issues/batches.md").write_text("# batches\n", encoding="utf-8")
++    env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
++    setup = subprocess.run(["bash", str(ROOT / "setup.sh")], env=env, text=True, capture_output=True)
++    assert setup.returncode == 0, setup.stderr
++
++    legacy_bug = (
++        "# bugs\n\n## 状态总览\n\n"
++        "| ID | 模块 | 摘要 | 优先级 | 状态 | 时间 | Change | 批次 |\n"
++        "|---|---|---|---|---|---|---|---|\n"
++        "| B1 | core | old | P2 | OPEN | 10:00 | - | |\n\n"
++        "---\n\n## B1: old\n\n| 状态 | OPEN |\n"
++    )
++    (consumer / "openspec/issues/buglist/2026-07-16-buglist.md").write_text(legacy_bug, encoding="utf-8")
++    canonical_item = {
++        "module": "core", "summary": "new|line\n二", "priority": "P1", "status": "OPEN",
++        "time": "11:00", "change": None, "batch": None,
++    }
++    ns = BUG.render_recorder_namespace(
++        {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B2": canonical_item}}
++    )
++    (consumer / "openspec/issues/buglist/2026-07-17-buglist.md").write_bytes(
++        b"---\n" + ns + b"---\n<!-- sdflow-issue-block:start id=B2 -->\n"
++        b"## B2: new\n<!-- sdflow-issue-block:end id=B2 -->\n"
++    )
++    legacy_todo = (
++        "# todos\n\n## 状态总览\n\n"
++        "| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |\n"
++        "|---|---|---|---|---|---|---|---|\n"
++        "| T1 | flow | old | 代码质量 | OPEN | 2026-07-17 10:00 | - | |\n"
++    )
++    overlay_item = {
++        "module": "flow", "summary": "overlay wins", "type": "代码质量", "status": "PROPOSED",
++        "time": "2026-07-17 10:00", "change": "prior", "batch": None,
++    }
++    ns = TODO.render_recorder_namespace(
++        {"schema": 1, "pool": "todo", "mode": "overlay", "items": {"T1": overlay_item}}
++    )
++    (consumer / "openspec/issues/todolist/2026-07-todolist.md").write_bytes(
++        b"---\n" + ns + b"---\n" + legacy_todo.encode()
++    )
++
++    installed = home / ".codex/skills"
++
++    def run(relative, *args):
++        return subprocess.run(
++            [sys.executable, str(installed / relative), "--root", str(consumer), *args],
++            env=env, text=True, capture_output=True,
++        )
++
++    bug = run("sdflow-buglist/scripts/buglist.py", "scan", "--json")
++    todo = run("sdflow-todolist/scripts/todolist.py", "scan", "--json")
++    assert bug.returncode == todo.returncode == 0, bug.stderr + todo.stderr
++    bug_payload, todo_payload = json.loads(bug.stdout), json.loads(todo.stdout)
++    assert set(bug_payload) == {"bugs", "problems"}
++    assert {item["id"] for item in bug_payload["bugs"]} == {"B1", "B2"}
++    assert set(todo_payload) == {"items", "problems"}
++    assert todo_payload["items"][0]["summary"] == "overlay wins"
++
++    reindex = run("sdflow-issues/scripts/issues.py", "reindex", "--strict")
++    sweep = run("sdflow-issues/scripts/issues.py", "sweep", "--change", "consumer-empty")
++    assert reindex.returncode == sweep.returncode == 0, reindex.stderr + sweep.stderr
++    index = (consumer / "openspec/issues/INDEX.md").read_text(encoding="utf-8")
++    assert index.startswith("<!-- GENERATED by issues.py reindex — DO NOT EDIT -->")
++    assert all(item_id in index for item_id in ("B1", "B2", "T1"))
++    assert (consumer / "openspec/issues/batches.md").read_text(encoding="utf-8") == "# batches\n"
+diff --git a/sdflow-issues/SKILL.md b/sdflow-issues/SKILL.md
+index 9586d27..96ce55d 100644
+--- a/sdflow-issues/SKILL.md
++++ b/sdflow-issues/SKILL.md
+@@ -163,12 +163,10 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {
+ - `batch rename` 刻意不复用 per-type 脚本的 `triage` 子命令改批次列，因为 `triage` 会顺带
+   把"未分诊开放态"状态推进到 `PROPOSED`——`rename` 只该改标签本身，不该有这个（状态推进的）
+   副作用。
+-- `batch rename` 写盘（dated 文件 tag + `batches.md` key）全部成功后会**自动跑一次
+-  `reindex`** 刷新 `issues/INDEX.md`（Task 7）——调用方不需要再手动补一次 reindex；`reindex`
+-  失败只吞成 stderr 警告（"rename 已生效，INDEX 未刷新，请手动 reindex"），`rename` 本体仍
+-  exit 0，不因这个"顺带刷新"步骤的失败反噬成 rename 失败假象。**因此 `rename` 现在不是无副
+-  作用操作**：它明确会触发一次 INDEX 重建，与上一条"不该有的副作用"（triage 顺带推进状态）
+-  是两回事，不要混为一谈。
++- `batch rename` 先在 registry 写 target + machine-owned `重命名自: old` provenance，再用每池一次
++  direct-bytes snapshot retag dated items，最后由同一更新后 snapshot 写 INDEX/batches。任一阶段未收敛
++  均 non-zero，并报告阶段、原始命令与“重跑原命令”；同一命令可从全 old、混合或全 new 盘面继续。
++  无 provenance 的 `old missing/new exists` 仍 fail-closed，不吸收 orphan。
+ 
+ ### 3. `sweep --change X`——一键分诊本 change 未分批非终态项（sdflow-done §2.1 的一行封装）〔impl-review-fix：措辞订正，非"原子"〕
+ 
+@@ -210,8 +208,10 @@ rev-parse --show-toplevel`），非 git 仓库时退化为 `os.path.abspath(--ro
+ 
+ ## 注意
+ 
+-- **并发假设边界（D8）**：本脚本假定单机单进程串行调用，不加锁。调用方（skill / CI /
+-  `sdflow-done` sweep 步）需自行保证不并发调用本脚本，也不与 `buglist.py`/`todolist.py`
+-  的写操作并发交叉。
++- **并发与耐久边界**：三 recorder 的权威读/写共用 `openspec/issues/.recorder.lock` exclusive snapshot
++  lock；owner/participant token 只协调 cooperative CLI，不是安全边界。支持本地 POSIX 自动门与
++  Windows 本地盘 smoke；network FS、完整 power-loss durability 及非 cooperative writer 的 TOCTOU
++  不承诺。process crash 留锁时先停该 repo 全部 recorder，再删除错误中给出的精确 lock path，随后
++  重跑原命令（break-glass）；不提供 TTL/自动偷锁。
+ - 模型的核心价值在**判断该不该建/改批次**（是否真的要开一个清理 change、批次范围怎么定），
+   不是拼命令——命令本身是确定性操作，交给脚本。
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index e014fb6..6250c37 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -1420,12 +1420,11 @@ def _die(msg):
+     sys.exit(1)
+ 
+ 
+-def _reject_cell_unsafe(value, field):
+-    """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
+-    MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。
+-    与 buglist.py / todolist.py 的同名函数逐字同款（三脚本各自独立、不互相 import，
+-    见模块 docstring "子进程解耦"）。当前只用于仍写 Markdown 单行结构的 batch registry
+-    字段；dated recorder frontmatter writer 不再使用这条 table-cell guard。"""
++def _reject_batch_line_unsafe(value, field):
++    """`batches.md` 单行字段守卫；不是 legacy recorder table writer。
++
++    batch registry 仍是 Markdown 单行协议，因此拒绝 ASCII pipe 与换行；dated recorder
++    frontmatter writer 不调用本 helper。"""
+     if value is None:
+         return
+     if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
+@@ -1444,7 +1443,7 @@ def _reject_line_unsafe(value, field):
+ 
+ def _reject_batch_key_unsafe(key):
+     """batches.md header slug 守卫（OV-2）：header 行是 `### {key} — {title}`
+-    （`_BATCH_HEADER_RE`，em dash U+2014 前后各一空格作分隔符）。`_reject_cell_unsafe`
++    （`_BATCH_HEADER_RE`，em dash U+2014 前后各一空格作分隔符）。`_reject_batch_line_unsafe`
+     只挡 `|`/换行——不够，因为 key 本身若含 ` — ` 分隔符，会被 `_BATCH_HEADER_RE` 的
+     非贪婪匹配切坏：例如 key="a — b" 写成 header 后，解析出的 key 变成 "a"、
+     title 变成 "b"，原始完整 key 从此在 batches.md 里再也匹配不到——`_find_batch_entry_range`
+@@ -1463,7 +1462,7 @@ def _reject_batch_key_unsafe(key):
+     读不回来的僵尸条目。必须在做首尾空白比较之前，先单独拒绝空/纯空白 key。"""
+     if not str(key).strip():
+         _die(f"batch key 不可为空/纯空白（会写出解析不回来的僵尸 header）：{key!r}")
+-    _reject_cell_unsafe(key, "batch key")
++    _reject_batch_line_unsafe(key, "batch key")
+     if " — " in str(key) or str(key) != str(key).strip():
+         _die(
+             "batch key 非法（含 ' — ' em dash 分隔符，或首尾有空白），会破坏 "
+@@ -2034,13 +2033,13 @@ def cmd_batch_add(args):
+     """
+     root = repo_root(args.root)
+     _reject_batch_key_unsafe(args.key)
+-    _reject_cell_unsafe(args.title, "title")
++    _reject_batch_line_unsafe(args.title, "title")
+     # [impl-review-fix] FIX-5（CV-2 codex PoC）：优先级/计划此前原样写进
+     # `f"优先级: {priority}\n"`/`f"计划: {plan}\n"` 单行，未挂守卫——含换行的值能在
+     # batches.md 里注入一整条伪造的 `### … — …` header 行，被 `_BATCH_HEADER_RE` 当成
+     # 一个新批次条目解析出来。挂在原始入口参数（写盘前）上，拒 `|`/换行。
+-    _reject_cell_unsafe(getattr(args, "优先级"), "优先级")
+-    _reject_cell_unsafe(getattr(args, "计划"), "计划")
++    _reject_batch_line_unsafe(getattr(args, "优先级"), "优先级")
++    _reject_batch_line_unsafe(getattr(args, "计划"), "计划")
+     path = batches_md_path(root)
+     lines = _read_batches_lines(path)
+     if _batch_entry_exists(lines, args.key):
+@@ -2177,7 +2176,7 @@ def cmd_sweep(args):
+     （= 源==X ∧ 非终态 ∧ 批次空，D3）→ 逐项 `triage --id --批次 X`（查 returncode，
+     非零即 fail-closed 报点位，D4/D5）→ 0 命中直接返回，不建僵尸批次条目
+     （[impl-review-fix] FIX-2）→ `batch add X --if-exists skip`（D2 幂等）→
+-    `reindex`（末步也 fail-closed，区别于 rename 的 warn-only，D4）。
++    `reindex`（末步也 fail-closed；rename 同样以 provenance + 原命令重跑契约 fail-closed，D4）。
+ 
+     [impl-review-fix] FIX-5：`--change` 首尾若有空白，此前被静默 `.strip()` 后当合法
+     change 使用（例如 `" chg"` 悄悄变成 `"chg"`）——但配套文档承诺"含空白即拒"，静默
+@@ -2293,7 +2292,10 @@ def main():
+     ss.add_argument("status", choices=BATCH_STATUSES)
+     ss.set_defaults(func=cmd_batch_set_status)
+ 
+-    sr = batch_sub.add_parser("rename", help="改批次 key + 同步 item 池（bug+todo 两池）批次 tag")
++    sr = batch_sub.add_parser(
++        "rename",
++        help="registry-first 改批次 key + snapshot retag/reindex；失败后重跑原命令收敛",
++    )
+     sr.add_argument("old")
+     sr.add_argument("new")
+     sr.set_defaults(func=cmd_batch_rename)
+diff --git a/sdflow-issues/tests/test_issues.py b/sdflow-issues/tests/test_issues.py
+index ace294e..af89cf5 100644
+--- a/sdflow-issues/tests/test_issues.py
++++ b/sdflow-issues/tests/test_issues.py
+@@ -707,7 +707,7 @@ class TestBatchAddKeyEmptyGuard:
+ class TestBatchAddCellSafety:
+     """[impl-review-fix] FIX-5（CV-2 codex PoC）：`cmd_batch_add` 把 优先级/计划 原样
+     写进 `f"优先级: {priority}\\n"`/`f"计划: {plan}\\n"` 单行，此前未挂
+-    `_reject_cell_unsafe`——含换行的值能在 batches.md 里注入一整条伪造的
++    batch line guard——含换行的值能在 batches.md 里注入一整条伪造的
+     `### … — …` header 行，被 `_BATCH_HEADER_RE` 当成新批次条目解析出来。"""
+ 
+     def test_batch_add_rejects_newline_in_priority(self, tmp_path):
+diff --git a/sdflow-todolist/SKILL.md b/sdflow-todolist/SKILL.md
+index 4d62d39..6b88c58 100644
+--- a/sdflow-todolist/SKILL.md
++++ b/sdflow-todolist/SKILL.md
+@@ -5,7 +5,7 @@ description: >
+   （每月一文件，全局唯一 T-ID），并支持状态回写（OPEN→PROPOSED→DONE…）与扫描列表。**只要冒出一个
+   "以后可以改进 / 这里能优化 / 这是个技术债 / 记个 TODO / 加进待办池"的想法，或用户说"记一下这个优化、
+   这个改进想法存一下、标记 Txx 已完成、列一下待办"，就用本 skill**——别手动拼 Markdown，交给脚本保证
+-  T-ID 不撞号、轻量项只记一行、DONE 必带关联 change/commit。注意：这是攒"没坏但可以更好"的池子，
++  T-ID 不撞号、轻量项只写一个 frontmatter item、DONE 必带关联 change/commit。注意：这是攒"没坏但可以更好"的池子，
+   已确认的 bug（坏了的东西）该用 sdflow-buglist 而不是本 skill。本 skill 自包含整套 todolist 约定，
+   是该约定的唯一真相源。Trigger with /sdflow-todolist。
+ ---
+@@ -91,7 +91,7 @@ todolist 是**优化/技术债/改进**的收集池（没坏但能更好），
+ > **和 buglist 的分工**：buglist 记**已确认的缺陷**（坏了，需根因+修复）；todolist 记**改进想法**
+ > （没坏，按价值/成本排，不紧迫）。发现的是 bug → 用 `sdflow-buglist`；是"可以更好" → 用本 skill。
+ 
+-> **为什么要脚本**：T-ID 全局唯一、表↔块一致、DONE 必带关联 change——手工易错。脚本兜住这些，
++> **为什么要脚本**：两池 ID 语义唯一、frontmatter↔marker 关系一致、DONE 必带关联 change——手工易错。脚本兜住这些，
+ > 模型专注判断：这值不值得记、归哪个类型、要不要写动机/思路。
+ 
+ 脚本：[scripts/todolist.py](scripts/todolist.py)（`python scripts/todolist.py --help`）。
+@@ -112,11 +112,11 @@ todolist 是**优化/技术债/改进**的收集池（没坏但能更好），
+ ### 1. 记录新 TODO（add）
+ 
+ 先判断（模型的活）：这值得记吗？归哪个**类型**？需不需要写动机/思路？然后交给脚本——
+-它定位当月文件（缺则建）、扫描全局最大 T-ID 自增、写总览表行；**只有给了动机/思路/备注才建详细块**
+-（轻量优先，简单项就一行）。
++它定位当月文件（缺则建）、在仓级 snapshot lock 内扫描两池并分配 ID、写 canonical frontmatter item；
++**只有给了动机/思路/备注才建 marker block**；轻量项只有 frontmatter item，不建 prose block。
+ 
+ ```bash
+-# 简单项：只记一行，不建块
++# 简单项：只写一个 frontmatter item，不建 prose block
+ echo '{"module":"meter_collect.c","summary":"温度采样改 DMA 批量读取","type":"性能优化","project":"smartrelay-4g"}' \
+   | python scripts/todolist.py add
+ 
+@@ -138,7 +138,7 @@ echo '{
+ - **关联Change**（`change` 字段，可选）：不传时脚本自动探测——优先取 `openspec/changes/` 下唯一未归档
+   目录名，找不到再退化到当前 git branch 名（去掉 `feat/`/`fix/` 等前缀）；**多个 change 并行时脚本
+   探测不到，这时模型应结合当前 session 上下文判断这个 TODO 是在哪个 change 里冒出来的，显式传
+-  `change` 字段覆盖**。轻量项（不建块）也照样记这两个字段——它们进总览表，不进块。
++  `change` 字段覆盖**。轻量项的字段同样进入 frontmatter，不复制到 prose。
+ - **关联文档**（`doc` 字段，可选，string 或 list[string]）：记录时如果这个改进想法关联某个 openspec
+   文档（design/proposal/rule 等），尽量把该文档路径填进 `doc` 字段——填对格式后在 review 工具里能直接
+   点开。路径不带 `openspec/` 前缀也会被自动补上；写进详细块的 **关联文档** 行（多个路径用「、」分隔）。
+@@ -146,8 +146,8 @@ echo '{
+   不传 `doc` 时，若能从 `change` 探测到 `design.md`/`proposal.md`（含已归档的 `changes/archive/*-{change}/`，
+   且归档目录唯一不歧义），会尝试自动带上——但这个 auto-default 结果**只用来丰富一个本来就会建的块**
+   （因为写了动机/思路/备注，或显式传了 `doc`），它自己不会单独触发建块：轻量项（无动机/思路/备注、
+-  无显式 `doc`）即便 `change` 恰好探测到了文档，仍然只记一行、不建块——不然一个随手记的轻量 TODO
+-  会因为当时恰好有个 change 在跑而被悄悄升级成带块的项，破坏"轻量项只记一行"的默认体验。
++  无显式 `doc`）即便 `change` 恰好探测到了文档，仍然只写 frontmatter item、不建块——不然一个随手记的轻量 TODO
++  会因为当时恰好有个 change 在跑而被悄悄升级成带块的项，破坏"轻量项无 prose"的默认体验。
+ 
+ ```bash
+ # 带显式关联文档：即使没写动机/思路，也会建块只为承载 doc 行
+@@ -166,8 +166,8 @@ python scripts/todolist.py set-status --id T7 --to WONTDO   --reason "ROI 太低
+ - **DONE 门禁**：必须 `--evidence`（关联的 change 名或 commit）——挡住"只标完成、不留线索"。
+ - **WONTDO 门禁**：必须 `--reason`，理由留痕。
+ - 状态码：`OPEN PROPOSED DONE WONTDO`。
+-- 机制：更新总览表状态列；**有详细块**则同步块状态 + 追加历史行；**无块但有证据/理由**则补一个
+-  最小块留痕（保证 DONE/WONTDO 的关联线索不丢）。
++- 机制：只更新 frontmatter 状态并在 marker block 追加历史；legacy item 首次触碰时提升为 same-file
++  overlay，旧表 bytes 不变。DONE/WONTDO 的证据/理由只作追加式人读留痕。
+ 
+ ### 3. 扫描 / 盘点（scan）
+ 
+@@ -178,7 +178,7 @@ python scripts/todolist.py scan --type 性能优化       # 按类型筛
+ python scripts/todolist.py scan --json               # 机器可读
+ ```
+ 
+-末尾自动做**表↔块一致性自检**（块缺表行、状态对不上都会报；块本身可选，不报"缺块"）。
++末尾自动做 **frontmatter/marker/未提升 legacy 表**关系自检。
+ 
+ ## 约定速查（本 skill 即真相源）
+ 
+@@ -191,7 +191,8 @@ python scripts/todolist.py scan --json               # 机器可读
+ 
+ **本池**：`openspec/issues/todolist/YYYY-MM-todolist.md`，每月一个，当月所有 TODO 追加进去。
+ 过渡期兼容旧路径 `openspec/todolists/`——`next-id`/`scan`/`set-status`/`triage` 全部
+-**dual-read**（新旧两个目录都扫，取并集 max+1 分配 ID，避免撞号）；**新记录只写新路径**。
++**dual-read**（新旧两个目录都扫）；**新记录只写新路径的 canonical frontmatter**。自定义 prefix 的
++`next-id`/自动 add/显式 ID 查重都在同一仓级 exclusive snapshot lock 内读取 bug+todo 两池全集。
+ 跨新旧路径撞同一 ID 会在 `next-id` 时打 WARNING，提示尽快把旧数据迁移到新路径。
+ 
+ **跨两池共享文件**（不是 todolist 私有，owner 是 `sdflow-issues/scripts/issues.py`；
+@@ -209,13 +210,14 @@ sdflow-buglist 依赖同一份，见其 SKILL.md 对应段）：
+ 
+ | 维度 | 落点 | 可变性 | 含义 |
+ |---|---|---|---|
+-| 源change（关联Change） | 状态总览表「关联Change」列 | **不可变**（provenance） | 在哪个 change 里冒出来的 |
+-| 批次 | 状态总览表**末列**「批次」 | 可变 | 被哪个「清理 change」包走去做（批次 key = 清理 change 名） |
+-| status | 状态总览表「状态」列（+ 详细块「状态」行，若有块） | 生命周期 | 见下方状态词表；**回归干净**——批次信息不塞进 status 字面量 |
++| 源change（关联Change） | frontmatter item `change` | **不可变**（provenance） | 在哪个 change 里冒出来的 |
++| 批次 | frontmatter item `batch` | 可变 | 被哪个「清理 change」包走去做（批次 key = 清理 change 名） |
++| status | frontmatter item `status` | 生命周期 | 见下方状态词表；marker prose 只追加历史，不是状态真相源 |
+ 
+-**结构现为 8 列**：`ID / 模块 / 描述 / 类型 / 状态 / 时间 / 关联Change / 批次`
+-（「批次」是表**末列**，Phase B 新加；旧文件无此列的行按 `len(cells)>N` 防御式解析，读到空即可，
+-不报错）。时间、关联Change、批次 **只记在总览表**，轻量项（无详细块）照样有，不进详细块。
++新写结构是 shared frontmatter envelope 下唯一 `sdflow-issues` namespace（短键
++`schema/pool/mode/items`）；新文件 `mode=canonical`。历史 8 列表永久只读，活跃 legacy item 首次 mutation
++以 `mode=overlay` shadow 旧 row，旧表与旧 block 内部 bytes 不改。reader 在 namespace 在场但损坏时
++fail-closed，只有 namespace 不存在才回退 legacy parser。
+ 
+ **类型标签**
+ 
+@@ -262,8 +264,8 @@ sdflow-buglist 依赖同一份，见其 SKILL.md 对应段）：
+   两条生成行（按上面「批次完成判据」）。
+ - `batch add / set-status / rename`——`issues/batches.md` 注册表操作：`add` 新建 `PLANNED`
+   条目（成员空）；`set-status` 只改状态生成行；`rename` 改批次 key + 同步两池里所有该批次成员的
+-  批次 tag（含 auto-reindex——写盘成功后自动跑一次 `reindex` 刷新 INDEX，失败只 stderr 警告，
+-  `rename` 本体仍 exit 0，调用方无需再手动补 reindex）。批次生命周期
++  批次 tag；rename 先写 registry provenance `重命名自:`，复用每池单次 direct-bytes snapshot 更新 dated/INDEX/batches。
++  任一步失败均 non-zero 并提示**重跑原命令**，全 old/混合/全 new retry 均可收敛。批次生命周期
+   `PLANNED → IN_PROGRESS → DONE`（`PLANNED→IN_PROGRESS` 由人在真正开
+   cleanup change 时手动 `set-status`；`→DONE` 通常由 reindex 按完成判据被动同步——人也可以用
+   `set-status` 直接标，reindex 不会越权纠正，只在状态和成员终态不一致时追加 `⚠️` 警告）。
+@@ -293,17 +295,16 @@ reindex **只精确 patch 生成行**，绝不覆写人写行；发现「人写
+ 改回或补完成员状态。批次 tag 指向 `batches.md` 里不存在的 key（orphan）也只报警、不静默生成
+ ghost 条目。
+ 
+-### B(bug) / T(todo) 前缀跨池互斥〔D9，显式规范条款〕
++### ID 两池语义唯一〔ADR-0025〕
+ 
+-**bug 池用 `B` 前缀、todo 池用 `T` 前缀，两池 ID 空间必须互斥、禁止跨池撞号**——`add` 不传
+-`--prefix` 时天然遵守各自默认前缀；若显式传自定义 `--prefix`/`id`，模型必须自行保证不会分配出
+-与另一池已用 ID 相同的字面量。`issues.py reindex` 跨池 join 时会跑 `cross_pool_id_conflicts`
+-校验，检测到同一 ID 同时出现在两池即报错中止、**不静默 join**——但这只是防护网，规范本身要求
+-从记录源头就不产生撞号，不能指望靠防护网兜底成为常态操作。
++默认 bug=`B`、todo=`T`，公开的单字母自定义 `--prefix` 保留。ID semantic key 是
++`(uppercase ASCII prefix, decimal integer)` 且不含 pool，因此 `A007`/`A7` 及 bug/todo 的 `A7`
++均冲突。`next-id`、自动 add 与显式 ID 查重必须在同一 snapshot lock 内读两池全集；`reindex`
++仍作 fail-closed 防护网，但不承担事后修复。
+ 
+ ### 铁律（脚本守住大半）
+ 
+-① T-ID 全局唯一（自增，dual-read 跨新旧路径取并集 max）；② 轻量优先——简单项只一行，要说明
++① ID 在 bug+todo 两池语义全局唯一；② 轻量优先——简单项只写 frontmatter item，要说明
+ 动机/思路才建块；③ DONE 必带关联 change/commit（门禁）；④ 实施走 change——todolist 只是收集池，
+ 真做时通过 OpenSpec change 落地，不在此直接改代码；⑤ 状态追加式、不删历史；⑥ `issues/INDEX.md`
+ 只生成禁手改（issues.py 兜底无条件覆盖重建）；⑦ B/T 前缀跨池互斥（D9，见上，issues.py reindex
+diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
+index 006af88..27e0bad 100644
+--- a/sdflow-todolist/scripts/todolist.py
++++ b/sdflow-todolist/scripts/todolist.py
+@@ -1518,21 +1518,12 @@ def _die(msg):
+     sys.exit(1)
+ 
+ 
+-def _reject_cell_unsafe(value, field):
+-    """总览管道表字段 fail-closed 守卫：含 ASCII | 或换行即拒（防列错位/行截断腐蚀盘面）。
+-    MUST 用于各命令入口的原始用户参数，勿用于 " | ".join(cells) 行拼接 sink。"""
+-    if value is None:
+-        return
+-    if "|" in str(value) or "\n" in str(value) or "\r" in str(value):
+-        _die(f"字段 {field} 含非法字符（| 或换行），会破坏总览表列对齐：{value!r}")
+-
+-
+ def main():
+     p = argparse.ArgumentParser(description="自动记录/回写/扫描 todolist")
+     p.add_argument("--root", default=".", help="仓库根（默认自动探测 git 根）")
+     sub = p.add_subparsers(dest="cmd", required=True)
+ 
+-    s = sub.add_parser("next-id", help="打印下一个全局 ID")
++    s = sub.add_parser("next-id", help="打印两池 snapshot 的下一个全局 ID（advisory，不预留）")
+     s.add_argument("--prefix", default=DEFAULT_PREFIX)
+     s.set_defaults(func=cmd_next_id)
+ 

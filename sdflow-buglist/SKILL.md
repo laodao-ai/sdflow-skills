@@ -4,8 +4,8 @@ description: >
   自动把发现的 bug 记录进 openspec/issues/buglist/YYYY-MM-DD-buglist.md（每天一文件，全局唯一 ID），
   并支持状态回写（OPEN→VERIFIED→FIXED…）与扫描列表。**只要在烧板验证、日志分析、代码审查、
   调试中发现了 bug 或缺陷，或用户说"记一下这个 bug / 这个问题记到 buglist / 标记 Bxx 已修 /
-  列一下还没修的 bug"，就用本 skill**——不要手动拼 Markdown 表格和详细块，交给脚本保证 ID 不撞号、
-  状态总览表与详细块双写一致、FIXED 必带根因和证据。本 skill 自包含整套 buglist 约定，是该约定的
+  列一下还没修的 bug"，就用本 skill**——不要手动拼机器索引和详细块，交给脚本保证 ID 不撞号、
+  versioned frontmatter 与 marker block 一致、FIXED 必带根因和证据。本 skill 自包含整套 buglist 约定，是该约定的
   唯一真相源。Trigger with /sdflow-buglist。
 ---
 
@@ -86,8 +86,8 @@ description: >
 把"发现 bug → 落档 → 跟踪状态"这条易错的机械流程交给脚本兜底，模型只做判断。
 **本 skill 自包含整套约定**（不依赖任何外部 rule 文件）。
 
-> **为什么要脚本**：ID 全局唯一、状态总览表 ↔ 详细块 双写一致、FIXED 门禁——
-> 这些手工做极易出错（撞号、改了表忘了块、FIXED 却没写根因）。脚本把它们变成确定性操作，
+> **为什么要脚本**：两池 ID 语义唯一、frontmatter ↔ marker 关系一致、FIXED 门禁——
+> 这些手工做极易出错（撞号、破坏 shared envelope、FIXED 却没写根因）。脚本把它们变成确定性操作，
 > 模型省下来的注意力用在真正需要判断的地方：这是不是真 bug、现象 vs 根因、定几级。
 
 脚本：[scripts/buglist.py](scripts/buglist.py)（`python scripts/buglist.py --help`）。
@@ -108,7 +108,7 @@ description: >
 
 先判断（模型的活）：这是不是真 bug？**现象**（外在可观察）与**根因**（代码层因果）分开；
 定**优先级**。然后把结构化内容交给脚本——它负责定位今日文件（缺则建目录+头部）、
-扫描全局最大 ID 自增、把"总览表一行 + 详细块"一次写齐。
+在仓级 snapshot lock 内扫描两池并分配 ID，把 canonical frontmatter item + marker block 一次写齐。
 
 ```bash
 echo '{
@@ -137,16 +137,16 @@ echo '{
 - **关联文档**（`doc` 字段，可选，string 或 list[string]）：记录时如果这个 bug 关联某个 openspec 文档
   （design/proposal/rule 等），尽量把该文档路径填进 `doc` 字段——填对格式后在 review 工具里能直接点开。
   路径不带 `openspec/` 前缀也会被自动补上；写进详细块的 **关联文档** 行（多个路径用「、」分隔），
-  不会出现在总览表里。路径不存在只警告不阻断。不传时，若能从 `change` 探测到
+  不会写入机器索引以外的可变副本。路径不存在只警告不阻断。不传时，若能从 `change` 探测到
   `design.md`/`proposal.md`（含已归档的 `changes/archive/*-{change}/`），会自动带上。
 - 脚本回 `{"id","file","status","time","change"}`——把分到的 ID 告诉用户。
 
-**摘要 vs 标题**：表里 `summary` 一句话讲现象（不是根因）；详细块标题默认取 summary，
+**摘要 vs 标题**：frontmatter 的 `summary` 讲现象（不是根因），可含 `|`、换行和 Unicode；详细块标题默认取其单行投影，
 要不同可加 `"title"`。需要额外字段（触发路径/时序/前置条件/验证方式）放 `"optional": {...}`。
 
 ### 2. 回写状态（set-status）
 
-状态变更**双写**（总览表 + 详细块属性）并**追加一条历史**（不删旧状态）。带门禁：
+状态变更只更新 frontmatter 机器索引，并在 marker block **追加一条人读历史**（不写可变状态副本）。legacy item 首次触碰时 same-file promotion 为 overlay，旧表 bytes 不变。带门禁：
 
 ```bash
 python scripts/buglist.py set-status --id B17 --to FIXED --evidence "commit a1b2c3d"
@@ -167,7 +167,7 @@ python scripts/buglist.py scan --status OPEN   # 只看未修
 python scripts/buglist.py scan --json          # 机器可读
 ```
 
-末尾自动做**表↔块一致性自检**（缺块/缺行/状态对不上都会报）。盘点或交接前先跑一次。
+末尾自动做 **frontmatter/marker/未提升 legacy 表**关系自检。盘点或交接前先跑一次。
 
 ## 约定速查（本 skill 即真相源）
 
@@ -180,7 +180,8 @@ python scripts/buglist.py scan --json          # 机器可读
 
 **本池**：`openspec/issues/buglist/YYYY-MM-DD-buglist.md`，每天一个，当天所有 bug 追加进去，
 不拆分。过渡期兼容旧路径 `openspec/buglists/`——`next-id`/`scan`/`set-status`/`triage` 全部
-**dual-read**（新旧两个目录都扫，取并集 max+1 分配 ID，避免撞号）；**新记录只写新路径**。
+**dual-read**（新旧两个目录都扫）；**新记录只写新路径的 canonical frontmatter**。自定义 prefix 的
+`next-id`/自动 add/显式 ID 查重都在同一仓级 exclusive snapshot lock 内读取 bug+todo 两池全集。
 跨新旧路径撞同一 ID 会在 `next-id` 时打 WARNING，提示尽快把旧数据迁移到新路径。
 
 **跨两池共享文件**（不是 buglist 私有，owner 是 `sdflow-issues/scripts/issues.py`；
@@ -198,13 +199,14 @@ sdflow-todolist 依赖同一份，见其 SKILL.md 对应段）：
 
 | 维度 | 落点 | 可变性 | 含义 |
 |---|---|---|---|
-| 源change（关联Change） | 状态总览表「关联Change」列 | **不可变**（provenance） | 在哪个 change 里发现的 |
-| 批次 | 状态总览表**末列**「批次」 | 可变 | 被哪个「清理 change」包走去修（批次 key = 清理 change 名） |
-| status | 状态总览表「状态」列 + 详细块「状态」行 | 生命周期 | 见下方状态词表；**回归干净**——批次信息不塞进 status 字面量 |
+| 源change（关联Change） | frontmatter item `change` | **不可变**（provenance） | 在哪个 change 里发现的 |
+| 批次 | frontmatter item `batch` | 可变 | 被哪个「清理 change」包走去修（批次 key = 清理 change 名） |
+| status | frontmatter item `status` | 生命周期 | 见下方状态词表；marker prose 只追加历史，不是状态真相源 |
 
-**结构现为 8 列**：`ID / 模块 / 问题摘要 / 优先级 / 状态 / 时间 / 关联Change / 批次`
-（「批次」是表**末列**，Phase B 新加；旧文件无此列的行按 `len(cells)>N` 防御式解析，读到空即可，
-不报错）。时间、关联Change、批次 **只记在总览表**，不进详细块。
+新写结构是 shared frontmatter envelope 下唯一 `sdflow-issues` namespace（短键
+`schema/pool/mode/items`）；新文件 `mode=canonical`。历史 8 列表永久只读，活跃 legacy item 首次 mutation
+以 `mode=overlay` shadow 旧 row，旧表与旧 block 内部 bytes 不改。reader 在 namespace 在场但损坏时
+fail-closed，只有 namespace 不存在才回退 legacy parser。
 
 **优先级**
 
@@ -252,8 +254,8 @@ sdflow-todolist 依赖同一份，见其 SKILL.md 对应段）：
   两条生成行（按上面「批次完成判据」）。
 - `batch add / set-status / rename`——`issues/batches.md` 注册表操作：`add` 新建 `PLANNED`
   条目（成员空）；`set-status` 只改状态生成行；`rename` 改批次 key + 同步两池里所有该批次成员的
-  批次 tag（含 auto-reindex——写盘成功后自动跑一次 `reindex` 刷新 INDEX，失败只 stderr 警告，
-  `rename` 本体仍 exit 0，调用方无需再手动补 reindex）。批次生命周期
+  批次 tag；rename 先写 registry provenance `重命名自:`，复用每池单次 direct-bytes snapshot 更新 dated/INDEX/batches。
+  任一步失败均 non-zero 并提示**重跑原命令**，全 old/混合/全 new retry 均可收敛。批次生命周期
   `PLANNED → IN_PROGRESS → DONE`（`PLANNED→IN_PROGRESS` 由人在真正开
   cleanup change 时手动 `set-status`；`→DONE` 通常由 reindex 按完成判据被动同步——人也可以用
   `set-status` 直接标，reindex 不会越权纠正，只在状态和成员终态不一致时追加 `⚠️` 警告）。
@@ -283,20 +285,19 @@ reindex **只精确 patch 生成行**，绝不覆写人写行；发现「人写 
 改回或补完成员状态。批次 tag 指向 `batches.md` 里不存在的 key（orphan）也只报警、不静默生成
 ghost 条目。
 
-### B(bug) / T(todo) 前缀跨池互斥〔D9，显式规范条款〕
+### ID 两池语义唯一〔ADR-0025〕
 
-**bug 池用 `B` 前缀、todo 池用 `T` 前缀，两池 ID 空间必须互斥、禁止跨池撞号**——`add` 不传
-`--prefix` 时天然遵守各自默认前缀；若显式传自定义 `--prefix`/`id`，模型必须自行保证不会分配出
-与另一池已用 ID 相同的字面量。`issues.py reindex` 跨池 join 时会跑 `cross_pool_id_conflicts`
-校验，检测到同一 ID 同时出现在两池即报错中止、**不静默 join**——但这只是防护网，规范本身要求
-从记录源头就不产生撞号，不能指望靠防护网兜底成为常态操作。
+默认 bug=`B`、todo=`T`，公开的单字母自定义 `--prefix` 保留。ID semantic key 是
+`(uppercase ASCII prefix, decimal integer)` 且不含 pool，因此 `A007`/`A7` 及 bug/todo 的 `A7`
+均冲突。`next-id`、自动 add 与显式 ID 查重必须在同一 snapshot lock 内读两池全集；`reindex`
+仍作 fail-closed 防护网，但不承担事后修复。
 
 ### 铁律（脚本已替你守住大半）
 
-① ID 全局唯一（脚本自增，dual-read 跨新旧路径取并集 max）；② 表 ↔ 块双写一致（脚本双写）；
+① ID 在 bug+todo 两池语义全局唯一；② frontmatter 是机器真相源，legacy 表永久只读；
 ③ 状态追加式、不删历史（脚本追加历史行）；④ FIXED 必带根因 + 证据（脚本门禁）；
-⑤ 清单先行——表和块同时落（脚本一次写齐）；⑥ `issues/INDEX.md` 只生成禁手改（issues.py 兜底
-无条件覆盖重建）；⑦ B/T 前缀跨池互斥（D9，见上，issues.py reindex 兜底检测）。
+⑤ 机器索引只写 frontmatter，marker prose 不反解析；⑥ `issues/INDEX.md` 只生成禁手改（issues.py 兜底
+无条件覆盖重建）；⑦ semantic ID 两池唯一（见上，issues.py reindex 再兜底）。
 
 ## 注意
 

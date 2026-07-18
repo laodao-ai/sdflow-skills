@@ -1,0 +1,1 @@
+/openspec/issues/.recorder.lock

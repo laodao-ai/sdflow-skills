@@ -1,0 +1,342 @@
+diff --git a/.github/workflows/windows-recorder-smoke.yml b/.github/workflows/windows-recorder-smoke.yml
+new file mode 100644
+index 0000000..50046dc
+--- /dev/null
++++ b/.github/workflows/windows-recorder-smoke.yml
+@@ -0,0 +1,33 @@
++name: Windows recorder smoke
++
++on:
++  push:
++    paths:
++      - ".github/workflows/windows-recorder-smoke.yml"
++      - "setup.sh"
++      - "sdflow-buglist/**"
++      - "sdflow-todolist/**"
++      - "sdflow-issues/**"
++      - "sdflow-init/scripts/init.py"
++  pull_request:
++    paths:
++      - ".github/workflows/windows-recorder-smoke.yml"
++      - "setup.sh"
++      - "sdflow-buglist/**"
++      - "sdflow-todolist/**"
++      - "sdflow-issues/**"
++      - "sdflow-init/scripts/init.py"
++  workflow_dispatch:
++
++jobs:
++  windows-recorder-smoke:
++    runs-on: windows-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-python@v5
++        with:
++          python-version: "3.12"
++      - name: Install pytest
++        run: py -m pip install pytest
++      - name: Run actual Windows local-disk recorder smoke
++        run: py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error
+diff --git a/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task5-delivery-reconciliation-fix1.md b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task5-delivery-reconciliation-fix1.md
+new file mode 100644
+index 0000000..b957cea
+--- /dev/null
++++ b/openspec/changes/mlh-p6-recorder-frontmatter/impl-reports/task5-delivery-reconciliation-fix1.md
+@@ -0,0 +1,34 @@
++# Task 5 delivery reconciliation — fix 1
++
++## Scope
++
++修复 Task 5 双轴评审的本地可修项 I1、I3、I4，并为 I2 落盘可由 push/PR/手动触发的 actual Windows workflow；未修改固定评审报告或 `task5-review-package.diff`。
++
++## Red → green
++
++- 首轮定向：`2 failed, 6 passed, 2 skipped`。red 为缺失 Windows workflow 与 `sdflow-issues/SKILL.md` 仍含退役合同；两项 skip 是 actual-Windows-only，未用作通过证据。
++- Windows smoke 现在按生产复合入口建立并恢复 `_ACTIVE_RECORDER_TOKEN` / `_ACTIVE_RECORDER_CHAIN`，验证 `reindex → scan` allowlist participant chain；同一通用前半段另由 POSIX 测试执行，避免 Windows 文件在 delegation setup 处假阻塞。
++- corpus 对账改为 test-side 独立 Markdown table projection：不调用 `parse_table_rows`、`_legacy_item_from_row` 或其他 production legacy parser。动态枚举当前 7 个 bug rows + 152 个 todo rows，逐 item 比较全部关键字段；T2/T66/T67/T85/T146 均纳入显式 overlay 模型，其中 T66/T67/T85/T146 只允许 `PROPOSED → DONE`，T2 不允许字段 delta。
++- `sdflow-issues/SKILL.md` 统一为显式 `--if-exists skip`、rename 任一阶段 fail-closed + provenance-backed 原命令重跑、sweep exclusive owner + allowlist participant；删除 warn-only、调用方解析错误字符串及“并发安全未焊接”旧合同。
++- bug/todo 人读 scan 成功提示改为 `frontmatter/marker/legacy 关系一致`。
++- 新增 `.github/workflows/windows-recorder-smoke.yml`：branch-agnostic `push` / `pull_request` / `workflow_dispatch`，`windows-latest` 上安装 Python/pytest 并精确执行 actual smoke。
++
++## Verification
++
++- `uv run --with pytest pytest -q sdflow-buglist/tests/test_task5_delivery_contract.py sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error` → `8 passed, 2 skipped`（skip 仅 actual Windows）。
++- `uv run --with pytest pytest -q sdflow-buglist/tests/ sdflow-todolist/tests/ sdflow-issues/tests/ -W error` → `445 passed, 2 skipped`。
++- `uv run --with pytest pytest -qq` → exit 0；`1621 tests collected`，进度终止于 100%，其中 `2 skipped` 为 actual-Windows-only，故普通 full 为 `1619 passed, 2 skipped`。
++- `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/windows-recorder-smoke.yml")'` → YAML syntax PASS。
++- `openspec validate mlh-p6-recorder-frontmatter --strict --no-interactive` → valid。
++- `python3 hack/sync_principles.py --check` → 20 个投放面一致。
++- `git diff --check` 与新增 workflow 的 `git diff --no-index --check` → PASS。
++
++## Windows actual status
++
++actual Windows local-disk smoke **仍未执行**。本次没有 push 权限，且当前 Darwin 宿主没有 Windows 执行层；因此不得把本地 `2 skipped` 或 workflow 静态校验记为 tasks 7.4 PASS。当前 feature branch 一旦获准 push，相关路径触发 workflow；闭环证据仍须固定 commit 上执行：
++
++```text
++py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error
++```
++
++并保存 `2 passed`、无 skip 的 runner/commit/命令/结果。
+diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
+index f24322e..7d4b143 100644
+--- a/sdflow-buglist/scripts/buglist.py
++++ b/sdflow-buglist/scripts/buglist.py
+@@ -7,7 +7,7 @@ skill `sdflow-buglist` 的执行核心。把"判断"留给模型（现象 vs 根
+   - 今日文件/目录定位与 canonical frontmatter 创建
+   - legacy 表只读、按访问 promotion 到同文件 overlay
+   - 状态回写的门禁（FIXED 必须有根因 + 证据；WONTFIX 必须有理由）
+-  - 扫描列表 + 表↔块一致性自检
++  - 扫描列表 + frontmatter/marker/legacy 关系自检
+ 
+ 文件布局（约定，自包含，不依赖外部 rule）：
+   <root>/openspec/issues/buglist/YYYY-MM-DD-buglist.md
+@@ -1517,7 +1517,7 @@ def _render_scan(snapshot, args):
+         for p in problems:
+             print("  - " + p)
+     else:
+-        print("\n✓ 表↔块一致")
++        print("\n✓ frontmatter/marker/legacy 关系一致")
+ 
+ 
+ def cmd_scan(args):
+diff --git a/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py b/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
+index 77931fa..5fb925d 100644
+--- a/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
++++ b/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
+@@ -37,10 +37,20 @@ def test_windows_local_disk_acquire_conflict_replace_cleanup(tmp_path, monkeypat
+ 
+     with recorder.recorder_lock(tmp_path, "reindex") as owner:
+         assert lock_path.exists()
+-        participant_env = recorder.recorder_child_env("scan", owner.token)
+-        monkeypatch.setattr(os, "environ", participant_env)
+-        participant = recorder.validate_recorder_participant(tmp_path, owner.token, "scan")
++        previous_token = recorder._ACTIVE_RECORDER_TOKEN
++        previous_chain = recorder._ACTIVE_RECORDER_CHAIN
++        try:
++            recorder._ACTIVE_RECORDER_TOKEN = owner.token
++            recorder._ACTIVE_RECORDER_CHAIN = owner.chain
++            participant_env = recorder.recorder_child_env("scan", owner.token)
++        finally:
++            recorder._ACTIVE_RECORDER_TOKEN = previous_token
++            recorder._ACTIVE_RECORDER_CHAIN = previous_chain
++        with monkeypatch.context() as participant_patch:
++            participant_patch.setattr(os, "environ", participant_env)
++            participant = recorder.validate_recorder_participant(tmp_path, owner.token, "scan")
+         assert participant.participant and participant.token == owner.token
++        assert participant.chain == ("reindex", "scan")
+         with pytest.raises(recorder.RecorderLockError, match="lock occupied"):
+             with recorder.recorder_lock(tmp_path, "add"):
+                 pass
+diff --git a/sdflow-buglist/tests/test_task5_delivery_contract.py b/sdflow-buglist/tests/test_task5_delivery_contract.py
+index 2203ce2..34a07c5 100644
+--- a/sdflow-buglist/tests/test_task5_delivery_contract.py
++++ b/sdflow-buglist/tests/test_task5_delivery_contract.py
+@@ -5,9 +5,12 @@ import importlib.util
+ import json
+ import os
+ from pathlib import Path
++import re
+ import subprocess
+ import sys
+ 
++import pytest
++
+ 
+ ROOT = Path(__file__).parents[2]
+ BUG_PATH = ROOT / "sdflow-buglist/scripts/buglist.py"
+@@ -59,33 +62,104 @@ def test_recorders_stay_self_contained_without_yaml_or_cross_skill_imports():
+         assert not any(name.startswith("sdflow_") or name.startswith("sdflow-") for name in imports)
+ 
+ 
+-def test_repository_legacy_corpus_matches_dual_reader_item_by_item():
+-    """Compare every legacy row with the effective dual-reader projection.
++def _reference_legacy_rows(path, pool):
++    """Project frozen Markdown rows without calling any recorder parser."""
++    lines = path.read_text(encoding="utf-8-sig").splitlines()
++    headings = [index for index, line in enumerate(lines) if re.fullmatch(r"##\s+状态总览", line)]
++    assert len(headings) == 1, f"{path}: expected one legacy overview"
++    header = next(
++        index
++        for index in range(headings[0] + 1, min(len(lines), headings[0] + 7))
++        if re.match(r"\|\s*ID\s*\|", lines[index])
++    )
++    rows = {}
++    for line in lines[header + 2:]:
++        if not line.startswith("|"):
++            break
++        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
++        assert len(cells) == 8, f"{path}:{line}"
++        item_id = cells[0]
++        assert item_id not in rows, f"{path}: duplicate legacy ID {item_id}"
++        rows[item_id] = {
++            "module": cells[1],
++            "summary": cells[2],
++            "priority" if pool == "bug" else "type": cells[3],
++            "status": cells[4],
++            "time": cells[5] or None,
++            "change": None if cells[6] == "-" else cells[6],
++            "batch": cells[7] or None,
++        }
++    assert rows, f"{path}: frozen legacy table must not be empty"
++    return rows
++
++
++DOGFOOD_OVERLAY_DELTAS = {
++    "T2": {},
++    "T66": {"status": ("PROPOSED", "DONE")},
++    "T67": {"status": ("PROPOSED", "DONE")},
++    "T85": {"status": ("PROPOSED", "DONE")},
++    "T146": {"status": ("PROPOSED", "DONE")},
++}
++
+ 
+-    This intentionally derives the corpus at runtime; it never freezes a
+-    repository-wide item count that would become stale as the issue pool grows.
+-    Overlay items are compared to their frozen row only when not shadowed.
+-    """
++def test_repository_legacy_corpus_matches_independent_projection_item_by_item():
++    """Compare every frozen legacy row with the new dual-reader projection."""
+     fields_by_pool = {
+         "bug": (BUG, ROOT / "openspec/issues/buglist", "priority"),
+         "todo": (TODO, ROOT / "openspec/issues/todolist", "type"),
+     }
+-    compared = []
++    compared = set()
++    shadowed = set()
+     for pool, (module, directory, specific) in fields_by_pool.items():
+         for path in sorted(directory.glob("*.md")):
++            baseline = _reference_legacy_rows(path, pool)
+             document = module.read_recorder_document(str(path), pool)
+             effective = document["effective_items"]
+             owned = set(document["model"]["items"]) if document["model"] else set()
+-            for raw_id, row in document["rows"].items():
+-                canonical = module._canonical_from_key(module._legacy_semantic_id_key(raw_id))
+-                if canonical in owned:
+-                    continue
+-                item = effective[raw_id]
+-                expected = module._legacy_item_from_row(raw_id, row, pool)
++            for item_id, expected in baseline.items():
++                item = effective[item_id]
++                if item_id in owned:
++                    shadowed.add(item_id)
++                    deltas = DOGFOOD_OVERLAY_DELTAS[item_id]
++                else:
++                    deltas = {}
+                 for field in ("module", "summary", specific, "status", "time", "change", "batch"):
+-                    assert item[field] == expected[field], f"{path}:{raw_id}:{field}"
+-                compared.append((path, raw_id))
+-    assert compared, "dogfood corpus must contain at least one unpromoted legacy item"
++                    baseline_value, effective_value = expected[field], item[field]
++                    if field in deltas:
++                        assert (baseline_value, effective_value) == deltas[field], f"{path}:{item_id}:{field}"
++                    else:
++                        assert effective_value == baseline_value, f"{path}:{item_id}:{field}"
++                compared.add((pool, path.name, item_id))
++    assert compared, "dogfood corpus must contain frozen legacy rows"
++    assert shadowed == set(DOGFOOD_OVERLAY_DELTAS)
++
++
++def test_reindex_to_scan_delegation_contract_runs_before_windows_smoke(tmp_path, monkeypatch):
++    (tmp_path / "openspec/issues").mkdir(parents=True)
++    with BUG.recorder_lock(tmp_path, "reindex") as owner:
++        previous_token = BUG._ACTIVE_RECORDER_TOKEN
++        previous_chain = BUG._ACTIVE_RECORDER_CHAIN
++        try:
++            BUG._ACTIVE_RECORDER_TOKEN = owner.token
++            BUG._ACTIVE_RECORDER_CHAIN = owner.chain
++            participant_env = BUG.recorder_child_env("scan")
++        finally:
++            BUG._ACTIVE_RECORDER_TOKEN = previous_token
++            BUG._ACTIVE_RECORDER_CHAIN = previous_chain
++        with monkeypatch.context() as participant_patch:
++            participant_patch.setattr(os, "environ", participant_env)
++            participant = BUG.validate_recorder_participant(tmp_path, owner.token, "scan")
++        assert participant.participant
++        assert participant.chain == ("reindex", "scan")
++
++
++def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
++    workflow = (ROOT / ".github/workflows/windows-recorder-smoke.yml").read_text(encoding="utf-8")
++    for trigger in ("push:", "pull_request:", "workflow_dispatch:"):
++        assert trigger in workflow
++    assert "branches:" not in workflow
++    assert "runs-on: windows-latest" in workflow
++    assert "py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
+ 
+ 
+ def test_delivery_docs_name_operational_boundaries():
+@@ -114,6 +188,21 @@ def test_delivery_docs_name_operational_boundaries():
+     assert "状态：**Accepted**" in adr
+ 
+ 
++def test_delivery_docs_and_human_scan_output_reject_retired_contracts():
++    issues_skill = (ROOT / "sdflow-issues/SKILL.md").read_text(encoding="utf-8")
++    for retired in (
++        "需要自己把\n  \"报错信息含'已存在'\" 当成幂等成功处理",
++        "与 `batch rename` 的 warn-only 不同",
++        "并发安全未焊接",
++        "调用方 MUST 串行（D6）",
++    ):
++        assert retired not in issues_skill
++    for path in (BUG_PATH, TODO_PATH):
++        source = path.read_text(encoding="utf-8")
++        assert "✓ 表↔块一致" not in source
++        assert "✓ frontmatter/marker/legacy 关系一致" in source
++
++
+ def test_upgraded_install_known_consumer_smoke(tmp_path):
+     """Exercise installed paths, not repository script paths."""
+     home = tmp_path / "home"
+diff --git a/sdflow-issues/SKILL.md b/sdflow-issues/SKILL.md
+index 96ce55d..9323164 100644
+--- a/sdflow-issues/SKILL.md
++++ b/sdflow-issues/SKILL.md
+@@ -152,14 +152,14 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch add {cha
+ # 批次进入实施阶段（人工权限，reindex 只会把它推到 DONE，不会推 PLANNED→IN_PROGRESS）
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch set-status {change_name} IN_PROGRESS
+ 
+-# 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并，new key 已存在会报错；
+-# 成功后自动 reindex 刷新 INDEX）
++# 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并；
++# 任一阶段失败均 non-zero，修正故障后重跑原命令）
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {old_key} {new_key}
+ ```
+ 
+ - `batch add` 对已存在的 key 是**报错**而非静默 no-op（`_die`）——add 是"新建"语义，撞号
+-  多半是误操作；调用方（如 `sdflow-done` sweep 步）如果只是想确保批次存在，需要自己把
+-  "报错信息含'已存在'" 当成幂等成功处理，脚本本身不做这层语义转换。
++  多半是误操作；需要 ensure 语义的自动化调用方必须显式传 `--if-exists skip`。`sweep` 固定使用
++  该选项，撞号时由脚本按幂等成功处理，调用方不得解析错误文案猜测结果。
+ - `batch rename` 刻意不复用 per-type 脚本的 `triage` 子命令改批次列，因为 `triage` 会顺带
+   把"未分诊开放态"状态推进到 `PROPOSED`——`rename` 只该改标签本身，不该有这个（状态推进的）
+   副作用。
+@@ -190,11 +190,11 @@ CLI（不直调 `cmd_*`），对外只暴露一个单一入口（**非原子**
+ - **非原子、fail-closed、重跑收敛**：sweep 不是真原子——scan/逐项 triage/batch add/reindex
+   任一子步非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/哪个 pool/已 tag 的
+   id 列表）；已 tag 项因「批次空」过滤在重跑时天然被排除，故半途失败后**直接重跑同一条命令
+-  即可收敛**，不需要手工回滚。reindex 失败也判整体失败（与 `batch rename` 的 warn-only 不同
+-  ——sweep 语义是"一次分诊闭环"，INDEX 未刷新即闭环未完成）。
+-- **调用方 MUST 串行（D6）**：写窗口比 `reindex`/`batch` 单条命令更长（N 次 triage 写 + batch
+-  add + reindex），并发安全未焊接（同 D8 边界，见下）；调用方（`sdflow-done` §2.1）不得与手动
+-  triage 交叉执行。
++  即可收敛**，不需要手工回滚。reindex 失败也判整体失败；INDEX 未刷新即闭环未完成。
++- **exclusive owner + participant 委派**：`sweep` 顶层持有仓级 snapshot lock，scan/triage/
++  batch-add/reindex 子命令只沿 allowlist delegation chain 作为 participant 进入同一锁域；其他
++  cooperative recorder 命令在整个写窗口 fail-closed 冲突退出。token 不是安全边界，非 cooperative
++  writer 仍属明确不承诺的 TOCTOU 边界。
+ - 孤儿项（源 = `""`）不归 sweep 管，仍由独立的 `scan --open-ungrouped` 兜底工作流处理。
+ 
+ ## `--root` 与 git 根
+diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
+index 27e0bad..6a4dec3 100644
+--- a/sdflow-todolist/scripts/todolist.py
++++ b/sdflow-todolist/scripts/todolist.py
+@@ -1497,7 +1497,7 @@ def _render_scan(snapshot, args):
+         for p in problems:
+             print("  - " + p)
+     else:
+-        print("\n✓ 表↔块一致")
++        print("\n✓ frontmatter/marker/legacy 关系一致")
+ 
+ 
+ def cmd_scan(args):

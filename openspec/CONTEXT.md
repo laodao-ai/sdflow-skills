@@ -216,6 +216,48 @@ _Avoid_: 把「层」当**测试类型分类法**（「vitest 算 unit 还是 in
 **`已实现` / `人工` 两词已废弃**：`已实现` 实指「有脚手架」（其定义只要求泳道 ≥ `scaffolded` = 写了但**没验**）⇒ 用户读到「集成测试：已实现」会以为它跑得起来，**这个词在装**；`人工` 与泳道的 `executor: human` **双写**。
 _Avoid_: 手写层状态（它是投影，手写即可伪造可漂移）；用「已实现」描述一个从未跑绿的层。
 
+**共享 frontmatter envelope (Shared Frontmatter Envelope)** 〔grill/spec-review · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]` `[spec-review-amendment]`:
+Markdown 文件 byte 0（可紧随 UTF-8 BOM）的 frontmatter block 是多个 metadata producer 共用的**容器**，不是任一工具的私产；正文中的 `---` 不算 envelope。每个 producer 只拥有一个唯一顶层 namespace；recorder 的所有权边界是 `sdflow-issues` 整棵子树，内部使用短键 `schema/pool/mode/items`。读取只校验自有子树、写入只 splice 自有 span；“opaque”仅指 sibling 所有权/bytes 保真，整个 envelope 仍须满足 v1 lexical profile（column-0 plain ASCII key + 缩进 continuation），超出 profile fail-closed。所有合规 producer 因整文件 replace 共享同一 dated-document lock，不能“namespace 分家、锁也分家”后互相 lost update。
+_Avoid_: recorder 重渲染整个 envelope；把内部键展平为多个 `sdflow-issues-*` 顶层键；让多个工具共同拥有 `sdflow:` 父树。
+
+**recorder durability boundary** 〔`adr/0025` · mlh-p6-recorder-frontmatter，Accepted〕:
+exclusive snapshot lock 保证 cooperative recorder 在本地 POSIX filesystem 串行，并以 Windows 本地盘 smoke 维持兼容；network FS、完整 power-loss durability、非 cooperative writer 的 TOCTOU 不在承诺内。process crash 留下空白/partial metadata lock 时的 break-glass 是：先停该 repo 全部 recorder，删除错误给出的精确 lock path，再重跑原命令；禁止 TTL/自动偷锁。
+_Avoid_: 把 lock 当安全边界或跨网络 lease；把非 Windows host 的 skip 写成 Windows PASS；无条件删 `.recorder.lock`。
+
+**canonical Unicode string** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+recorder 索引 string 的值域是 Unicode scalar values，不含孤立 surrogate。普通 Unicode 用 UTF-8/`ensure_ascii=False` 人读输出；YAML 视作换行的 NEL/LS/PS 必须定向 JSON escape，parser 还原原 code point；不得做 NFC/NFKC normalization。由此“一 item 一物理行”与逐 code-point round-trip 同时成立。
+_Avoid_: 全量 `ensure_ascii=True` 牺牲 diff 可读性；raw NEL/LS/PS 破坏行模型；让孤立 surrogate 到 UTF-8 encode 才裸崩。
+
+**canonical recorder ID** 〔grill/spec-review · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]` `[spec-review-amendment]`:
+新写形态是 ASCII `[A-Z][1-9][0-9]*`，默认 bug=`B`、todo=`T`，公开的单字母自定义 prefix 保留；Unicode `\d` 不是本 grammar。语义身份是 `(uppercase ASCII prefix, decimal integer)`，不含 pool，因此 `A007` 与 `A7` 同号异形、bug `A7` 与 todo `A7` 跨池重复；分配/查重必须锁内读两池全集。孤立 legacy raw `A007` 仅作定位 alias，promotion key/marker/结果 canonicalize 为 `A7`，旧 bytes 不改。
+_Avoid_: 把 pool 偷加进 identity 导致同一 CLI ID 歧义；只扫当前池分配自定义 prefix；为简化实现静默删除 `--prefix` 兼容契约。
+
+**canonical recorder render** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+同一 v1 model 只有一种 recorder namespace bytes：顶层/对象字段固定顺序，items 按 semantic ID 排序，optional 空值只用 JSON null，空 map 只用 `items: {}`。reader 可容忍 item 物理乱序，writer 在自有子树内收敛；parse→render→parse 语义等价，render→render byte-identical。
+_Avoid_: 保留插入顺序导致同盘面多字节形态；用空串与 null 双表意；为 canonicalize 重写 namespace 外 bytes。
+
+**锁 owner / participant (Lock Owner / Participant)** 〔grill/spec-review · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]` `[spec-review-amendment]`:
+仓级 `.recorder.lock` 是 **exclusive snapshot + dated-document mutation lock**。独立权威读或复合 mutation 只有一个 **owner**：在 result-affecting discovery 前创建 lock；只读持有到 immutable snapshot materialize、输出前释放，mutation 持有到最后一次 replace。owner 启动的 recorder 子进程是 **participant**：凭同 repo capability token 校验加入，不重复抢锁/释放；已验证 participant 可仅向 allowlist recorder child 原样转发，其他 child env 剥离。token 不是安全边界；release identity/token 终检也不是原子 compare-and-unlink。所有合规 sibling producer 共享此锁；编辑器/手工脚本/Git 绕过仍是 cooperative residual。
+空白/partial metadata lock 无法核验单一 owner，恢复必须先停该 repo 全部 recorder，再删除精确路径；不提供 TTL/仅凭 PID 的自动 recover。
+_Avoid_: 只锁 writer 让 scan 读到多文件中间态；父子都 acquire 导致自锁；各子步分别加锁留下并发插入窗口；用前后存在性检查代替 reader acquire；提供无条件 `--no-lock`；owner 不核 token 就 unlink。
+
+**display title —— canonical summary 的单行投影** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+recorder prose block 的 `## {ID}: ...` 中，冒号后文本只供人扫读，不承担 identity 或机器状态。显式 `title` 必须是安全单行；缺省时把 canonical `summary` 的连续空白折叠成一个空格得到 display title。完整 summary 保存在 frontmatter，并逐行加 blockquote 前缀做人读展示；blockquote 不反解析，避免形成第二真相源。
+_Avoid_: 因 heading 限制拒绝 canonical summary 的换行；把 raw 多行 summary 拼进 heading；让 block parser 依赖 display title。
+
+**marker-framed prose block** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+canonical/overlay item 的人读详情由 `sdflow-issue-block:start/end id=...` HTML comment 独占行成对定界；marker 是 block identity 的唯一机械边界，heading、`---` 与正文均不参与定位。marker 必须同 ID、不可嵌套/重复；精确 marker grammar 是保留语法，renderer escape 用户内容中的同形独占行。legacy block 才沿用 heading heuristic；首次 promotion 对唯一可判旧 block 只套外围 marker、内部 bytes 不变，之后永久按 marker 定位。
+`[spec-review-amendment]` 候选 legacy block 内若已存在精确 marker 独占行，promotion 必须写前拒绝，不能为保留内部 bytes 而包出嵌套/错配 marker。
+_Avoid_: 新格式继续按 `---`/`## ID:` 猜边界；为保护 heuristic 拒绝合法 Markdown；让 marker 内 prose 成为状态真相源。
+
+**mode-structure invariant** 〔grill · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]`:
+frontmatter `mode` 是 writer 产生、reader 与文档物理形态互证的迁移声明：canonical 必须无 recorder legacy 总览区域，overlay 必须恰有一个，namespace-less legacy 也必须恰有一个。mismatch fatal，不能靠改 enum 隐藏 items，也不能由 reader 自动修 mode。
+_Avoid_: 把 mode 当无需证据的行为开关；纯靠表存在性推导而删除显式迁移态；mismatch 时自动删表/改 mode。
+
+**有 provenance 的幂等恢复 (Provenance-backed Idempotent Recovery)** 〔grill/spec-review · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]` `[spec-review-amendment]`:
+非事务 batch rename 不做 rollback/sidecar journal，但也不再声称裸 old/new 盘面能证明 retry。首次执行先 registry-first 原子改 header，并在 target entry 写 machine-owned `重命名自: old`；再 retag dated files/写派生输出。source 已消失时，只有该 provenance 精确匹配才允许同命令从全 old/混合/全 new items 继续。成功边界覆盖主数据与派生状态；未收敛 non-zero，无 provenance 的相同盘面仍按未知 source fail-closed。
+_Avoid_: 把“target 恰好存在”误判为 retry success；把预存 orphan 吸进新 batch；写失败 warning-only exit 0；用独立 stale journal/补偿 rollback 建第二恢复协议。
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。

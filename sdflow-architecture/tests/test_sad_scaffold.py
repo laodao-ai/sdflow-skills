@@ -527,7 +527,11 @@ def test_b8_concurrent_adr_new_unique_numbers(tmp_path):
                  "--title", f"T{i}", "--slug", f"s{i}"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=tmp_path)
              for i in range(6)]
-    rcs = [p.wait() for p in procs]
+    # 先全部并发启动，再逐个 communicate 收割：drain + close PIPE，避免 ResourceWarning
+    rcs = []
+    for p in procs:
+        p.communicate()
+        rcs.append(p.returncode)
     assert all(rc == 0 for rc in rcs), f"部分进程失败: {rcs}"
     names = sorted(p.name for p in (repo / "openspec" / "adr").glob("*.md"))
     nums = [n[:4] for n in names]
