@@ -45,3 +45,26 @@
 
 - **WHEN** 父进程被 `SIGKILL` 强杀
 - **THEN** 孤儿 runner 可能存活；该情形在设计文档中作为**已知残余边界**明确记录，实现 **不**声称已处理
+
+### Requirement: 截断过的 voice 必须声明其覆盖面残缺
+
+当某次 outside-voice 调用的锚行记录 `truncated="true"` 时，该 voice 在评审报告中的 findings 段 **MUST** 携带覆盖面声明（本镜基于截断上下文、中段未见），且该声明的存在性 **SHALL** 由 `anchor_lint` 机械核验。
+
+**MUST NOT** 把截断过的 voice 与完整 voice 在报告中呈现为等价——前者无法对被挖掉的中段作任何断言，把它的 findings 当作全量覆盖是**覆盖面撒谎**，与退出码撒谎同族。
+
+**边界**：本需求只要求「截断了要说出来」。分块多轮送、动态调整上限、按内容智能裁剪均**不在**本需求范围内。
+
+#### Scenario: 截断时报告必带覆盖声明
+
+- **WHEN** 某 outside-voice 站点的锚行为 `truncated="true"`
+- **THEN** `anchor_lint` 在该报告中找不到对应的覆盖面声明时判违规、非零退出
+
+#### Scenario: 未截断时不强加声明
+
+- **WHEN** 锚行为 `truncated="false"`
+- **THEN** `anchor_lint` 不要求覆盖面声明，报告无该句亦判通过
+
+#### Scenario: 锚行字段与合法组合矩阵不变
+
+- **WHEN** 本需求落地后运行既有锚行校验
+- **THEN** `truncated` 及其余锚行字段的取值域、`anchor_lint` 的合法组合矩阵均与改动前一致（本需求只**新增**一条存在性核验，不改契约）

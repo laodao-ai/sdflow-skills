@@ -258,6 +258,14 @@ _Avoid_: 把 mode 当无需证据的行为开关；纯靠表存在性推导而�
 非事务 batch rename 不做 rollback/sidecar journal，但也不再声称裸 old/new 盘面能证明 retry。首次执行先 registry-first 原子改 header，并在 target entry 写 machine-owned `重命名自: old`；再 retag dated files/写派生输出。source 已消失时，只有该 provenance 精确匹配才允许同命令从全 old/混合/全 new items 继续。成功边界覆盖主数据与派生状态；未收敛 non-zero，无 provenance 的相同盘面仍按未知 source fail-closed。
 _Avoid_: 把“target 恰好存在”误判为 retry success；把预存 orphan 吸进新 batch；写失败 warning-only exit 0；用独立 stale journal/补偿 rollback 建第二恢复协议。
 
+**读取完整性诊断 / 阻断集 (Read-completeness Diagnostic / Blocking Set)** 〔grill · fix-mechanical-layer-silent-failures · `adr/0018` 铁律 (d)，设计期〕 `[grill-amendment]`:
+工具自查产生的诊断项按**是否污染本次输出的完整性**二分，而非按严重程度感受：「可能漏读了条目」（块有 X 但缺总览表行）⇒ **阻断集**，MUST 非零退出且零写盘；「读全了但某条脏」（重复 ID、行 arity 异常）⇒ 仅告警。分级 MUST 在**产生处**判定并以 additive 字段承载，**字段缺席 ⇒ 全部按阻断**（fail-closed）——缺席的成因是产出方版本滞后，而那恰是它对自身读取完整性判断力最弱的时候。缺席语义因此同时承担向后兼容与保守处置，二者同向、无需权衡。
+_Avoid_: 让消费方正则匹配诊断散文还原分级（无界语法面手搓解析器）；把「字段缺席」读作「无阻断项」；把「动作做完了」当成功判据（`reindex` 曾据此 exit 0 并把 INDEX 从 122 项覆盖成 108 项）。
+
+**恒绿门 (Perma-green Gate)** 〔grill · fix-mechanical-layer-silent-failures，设计期〕 `[grill-amendment]`:
+一道在它本该拦住的故障上**结构性必然为绿**的机械门——比没有门更坏，因为它让人相信该面已被守住。识别法：**把门放进它要防的那次真实故障里跑一遍**，若判绿则该门问错了轴。实证：初版设计的「`issues.py` 派子进程前校验 sibling 版本」——sibling 恒由 `SKILLS_ROOT`（本脚本位置上两级）解析 ⇒ 永远同 checkout ⇒ 二者永不相对偏斜；真实故障里两个都是旧的，握手「你 1 我 1」一致放行。真正的偏斜轴是**脚本 ↔ 盘面数据**，不是脚本 ↔ 脚本。
+_Avoid_: 凭「这个量看起来像版本/校验和/探针」就当机械保证（同族见「有信号 ≠ 有可机械捕获路径」）；预置一个默认关闭的严格开关当防护（`reindex --strict` 已存在且零消费者，它的存在反而让错误默认值获得免责）。
+
 ## Flagged ambiguities
 
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。

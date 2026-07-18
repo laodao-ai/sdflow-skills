@@ -15,6 +15,12 @@
 | `problems` 非空**只回显、显式不收紧退出码** | `issues.py` `cmd_sweep` 内 `[impl-review-fix] FIX-1` 注释原话 |
 | `tagged` 为空直接 `return`（0 命中当合法幂等态） | `issues.py` `cmd_sweep` 内 `[impl-review-fix] FIX-2` |
 | 共用取数路径 | `issues.py`：`_scan_pool` → `read_pool` → `_reindex_core` → `cmd_reindex` / `cmd_batch_rename` 等 |
+| `problems_out` **默认 None ⇒ 诊断默认被丢弃**，只有 `cmd_reindex` 显式传 | `issues.py` `_scan_pool` / `read_pool` docstring 原话 |
+| `reindex --strict` **已存在且零消费者**（「本 change 内无消费者主动传它」） | `issues.py` `cmd_reindex` docstring 原话；全仓 grep 无调用 |
+| `problems` 是**自由散文字符串列表**（`f"marker 嵌套：…"` 等） | `buglist.py` 各 `problems.append(...)` 点 |
+| sibling 恒解析到**同一 checkout**（两个入口实测） | `SKILLS_ROOT` = 本脚本位置上两级 |
+| `truncated=` 落锚但**全仓零消费者** | grep 仅命中两层 SKILL.md 的锚行模板 |
+| 未知退出码有 catch-all → `exec-error` | 两层 SKILL.md async 段第 ⑦ 条 |
 | frontmatter **数据** schema 常量 = `1` | `buglist.py`：`model["schema"] != 1` 校验 |
 | `buglist.py` 现有子命令 | `next-id, add, set-status, triage, scan`（**无版本自报入口**） |
 
@@ -33,35 +39,36 @@
         │      │            _reindex_core                                            │
         │      │                   │                                                 │
         │      └───────────┬───────┘                                                 │
-        │              read_pool ──► _scan_pool ──►【★ 握手闸门落这里 ★】             │
+        │              read_pool ──► _scan_pool ──►【★ 阻断集在这里收集并下发 ★】      │
         └───────────────────────────────┬─────────────────────────────────────────────┘
                                         │ subprocess（按自身文件位置定位 sibling）
                         ┌───────────────┴───────────────┐
                   buglist.py                       todolist.py
-                （版本自报入口 + scan）           （版本自报入口 + scan）
+              （诊断在产生处分级）              （诊断在产生处分级）
 
-   ⚠ 偏斜面：~/.claude/skills/sdflow-issues ─symlink─► 运行 checkout（可滞后于开发 checkout）
+   ⚠ 真正的偏斜面：脚本 ↔ 盘面数据（不是脚本 ↔ 脚本——sibling 恒同 checkout）
 ```
 
-**闸门位置是本设计的核心判断**：落在 `_scan_pool`（唯一的派子进程点）⇒ `sweep` / `reindex` / `batch rename` / `batch add` / `set-status` / `lint` **一次全保**。落在 `cmd_sweep` 里就是点补，会重演「修完 sweep、reindex 照瞎」（基准 ③ 面治）。
+**收集点位置是本设计的核心判断**：落在 `_scan_pool`（唯一的派子进程点）⇒ `sweep` / `reindex` / `batch rename` / `batch add` / `set-status` / `lint` **一次全保**。落在 `cmd_sweep` 里就是点补，会重演「修完 sweep、reindex 照瞎」（基准 ③ 面治）。
 
-## 握手时序（写盘类子命令）
+**现状对照**：`_scan_pool(script, root, pool, problems_out=None)` 的 `problems_out` **默认 None**，注释写明「只有显式传入列表的调用方（`cmd_reindex`）才会拿到这份信号」⇒ **6 个调用方里只有 2 个看得见诊断**，其余连告警都没有。这不是"漏了一处"，是取数层默认丢弃诊断。
+
+## 阻断判定时序（写盘类子命令）
 
 ```
  caller            issues.py            buglist.py / todolist.py        盘面
    │                   │                          │                      │
    │─ reindex ────────►│                          │                      │
-   │                   │─ 版本自报 ──────────────►│                      │
-   │                   │◄─ 支持的 frontmatter ────│                      │
-   │                   │   schema 上限 (int)       │                      │
-   │            ┌──────┴──────┐                                          │
-   │            │ < 预期 或    │  ── 非零退出 + 可执行指令 ──────────────►│ 字节未变 ✅
-   │            │ 入口不存在   │     （MUST 前置于任何 discovery/写盘）    │
-   │            └──────┬──────┘                                          │
-   │                   │ ≥ 预期                                           │
    │                   │─ scan --json ───────────►│                      │
    │                   │◄─ items + problems ──────│                      │
+   │                   │   + 阻断集（可能缺席）      │                      │
+   │            ┌──────┴──────────────┐                                  │
+   │            │ 阻断集非空，或        │ ── exit≠0 + 出路 ───────────────►│ 字节未变 ✅
+   │            │ 字段缺席(⇒全阻断)     │   （MUST 前置于任何 discovery/写盘）│
+   │            └──────┬──────────────┘                                  │
+   │                   │ 阻断集为空                                        │
    │                   │─ 计算 → 写盘 ───────────────────────────────────►│
+   │                   │  （若经逃生口放行 ⇒ INDEX banner 增记留疤）        │
 ```
 
 ## Decisions〔TG-23 · ADR 记录〕
@@ -98,25 +105,73 @@
 
 **🔴 诚实边界（MUST NOT 声称根治）**：父进程被 **SIGKILL** 时 trap 不可执行，实测孤儿**仍存活**。shell 层无解。文档与实现 **MUST** 显式登记该残余，**MUST NOT** 写成「已消除孤儿」。
 
-### D3 — 握手信号：sibling 自报「能读的 frontmatter schema 上限」，而非脚本版本号
+### D3 — 诊断信号在产生处分级，additive 字段承载，缺席即阻断 〔grill 收敛，取代初版握手方案〕
 
-**为什么不用脚本版本 / git SHA**：版本号与「能不能读懂这份盘面」只是相关、不是**因果**；一旦分叉或本地改动就失真。
+**初版方案（sibling 版本握手）已被实测证伪，记录于此防重提**：sibling 恒由 `SKILLS_ROOT`（本脚本位置上两级）解析 ⇒ **永远同 checkout** ⇒ 二者永不相对偏斜。真实故障里两个都是旧的，握手一致放行——**那是一道在它本该拦住的故障上恒绿的门**。真正的偏斜轴是**脚本 ↔ 盘面数据**。
 
-**为什么不直接复用现成的 `schema=1` 常量**：那是**数据** schema（frontmatter 里写的那个 `1`），描述的是**盘面**；握手要问的是**脚本的能力**——「你读得懂 schema=1 的 frontmatter 吗」。两者是不同范畴，混用会造出一个**看起来像机械门、实则问错问题**的假绿（`signal-exists-not-equal-mechanical-capture` 同族坑）。
+**改判后的做法**：
 
-**做法**：`buglist.py` / `todolist.py` 各加只读入口，输出其**支持的 frontmatter schema 上限**（整数）。`issues.py` 要求 `≥ 1`。
+1. **分级落产生处**：`problems.append(...)` 的同一位置就知道这条属于「可能没读全」还是「读全了但某条脏」，直接分类。**MUST NOT 由消费方正则匹配散文文本还原**——那是无界语法面手搓解析器（基准 ⑤），且三脚本措辞各自演进必然漂移，正是「每轮 review 补一个新分支」的警号。
+2. **additive 承载**：新增阻断集字段，`problems` 字段本身不动 ⇒ 只读 `problems` 的既有消费者零影响。
+3. **缺席 ⇒ 全部阻断**（fail-closed）。
 
-**语义自然正确**：滞后版本根本没有 frontmatter 解析能力（实测 `grep -c overlay`：开发版 **7** / 运行版 **0**）⇒ 它**连这个入口都没有** ⇒ 调用即报错 ⇒ 按失配处置（已写进 spec 的第三个 Scenario）。**不存在「旧脚本误报支持」的路径**——这正是选这个信号的价值。
+**第 3 条是本设计的枢纽**，它一条办三件事：老 sibling 没这个字段 ⇒ 全阻断 ⇒ **版本偏斜被同一机制接住**（初版要造的那道门，功能在这里自然长出来）；新 sibling ⇒ 精确分级；第三方只读 `problems` ⇒ 零影响。**向后兼容与保守处置在这里指向同一个方向，不需要在两者之间权衡。**
 
-### D4 — 反静默红线取 `problems` 非空，不取 `tagged == 0`
+**切分判据（承 `adr/0018` 铁律 (d)）**：**该信号是否污染本次输出的完整性**，而非严重程度感受。
 
-`tagged == 0` **是合法幂等态**（重跑时本就无未分诊项），拿它当红线会把正常重跑判红。`problems` 非空才是「两套投影失配」的确定性信号。缺省严格，**MAY** 留显式逃生口（`--allow-problems`），逃生时 stderr 仍完整记录。
+| 诊断 | 含义 | 归类 |
+|---|---|---|
+| `块有 X 但缺总览表行` | 可能漏读条目 | **阻断** |
+| `frontmatter 有 X 但缺 marker block` | 同上 | **阻断** |
+| `X 行 arity 异常：N 列` | 读全了，某行脏 | 告警 |
+| `marker block 重复：X` | 读全了，某条脏 | 告警 |
 
-> 现状注释写着「不收紧退出码（更强的 enforcement 是延后的 roadmap T2.5）」——本 change **提前兑现该 defer**，因为已实证它正是损害放大器。这是「以目标态为准」，不是「因为原计划延后所以继续延后」。
+**前向保护不重复造**：`buglist.py` 的 `_validated_recorder_model()` 已对 `schema != 1` fail-closed（schema 升 2 时旧脚本硬停）。本 change 只给它补**回归锁 + 变异验证**——它是承重的却没有测试锁。
 
-### D5 — 闸门前置于 discovery / 写盘（承 `adr/0022`）
+### D4 — 严格是默认值；逃生口留疤、禁环境化、禁自动传
 
-`reindex` 现状是**先算后覆盖**；握手若落在计算之后，仍可能在报错前已经写盘。∴ 校验 **MUST** 前置到任何 discovery / stat / open 之前——与 `adr/0025` 对 lock owner 的「必须在所有 result-affecting discovery 前 acquire」同款纪律。
+红线取**阻断集非空**，不取 `tagged == 0`（后者是合法幂等态，拿它当红线会把正常重跑判红）。
+
+**默认必须翻转，理由是实证而非偏好**：现状注释写着「默认仍 exit 0——reindex 本身该做的事已经做完」，而 `--strict` **已存在且零消费者**。**一个没人传的开关，等于给错误的默认值发了一张免责声明。** 实测后果：INDEX 从 122 项塌成 108 项、B9–B12 蒸发，exit 0。
+
+∴ 逃生口的设计标准不是「存不存在」而是「**用了留不留痕**」，三条约束缺一不可：
+
+1. **产物带疤**：放行时 `INDEX.md` 头部 banner 增记一行（N 条阻断被放行、索引可能不完整）——**妥协随产物进 git**，下一个读 INDEX 的人一眼看见，而不是只在某次终端输出里闪过；
+2. **禁环境化**：只认显式 CLI 参数，**MUST NOT** 支持 config / 环境变量——逃生口的真正死法是被写进配置后全仓永久生效、之后没人记得门还在；
+3. **禁自动传**：`/sdflow-done` sweep 子步 **MUST NOT** 自动传。
+
+**为什么不干脆不给**：手工编辑过的老仓可能长期存在合法的表↔块失配 ⇒ `reindex` 被**永久楔死**、INDEX 再也重建不了，还会逼人去手改带 `DO NOT EDIT` banner 的生成文件。那比给逃生口更糟。
+
+### D5 — 阻断判定前置于 discovery / 写盘（承 `adr/0022`）
+
+`reindex` 现状是**先算后覆盖**；判定若落在计算之后，仍可能在报错前已经写盘。∴ **MUST** 前置到任何 discovery / stat / open 之前——与 `adr/0025` 对 lock owner 的「必须在所有 result-affecting discovery 前 acquire」同款纪律。
+
+### D6 — sweep 退出码分两类，补全而非推翻既有契约
+
+既有承诺是「非原子、fail-closed、**重跑收敛**」。但阻断类失败**重跑不收敛**——盘面失配不会因再跑一次而消失，会**永久卡死 done 的收尾步**，在 `/sdflow-ship` 全自动链上表现为无限重试。
+
+| 失败类 | 退出码 | 语义 | 调用方 |
+|---|---|---|---|
+| 半途失败（triage / batch add 挂） | `1` | 重跑可收敛 | 自动重跑 |
+| 阻断集非空 | `2` | **重跑无用** | **停下上抛，不重试** |
+
+exit 2 的 stderr **MUST** 明说「重跑无用」+ 列全阻断明细 + 给两条出路（修盘面 / 显式逃生口）。
+
+**这是补全不是推翻**：既有契约描述的是**写操作幂等性**，本就没覆盖「输入数据有问题」这一类。`/sdflow-done` SKILL.md 的失败语义段须同步补一句 `[grill-amendment]`。
+
+**全自动链遇 exit 2 硬停，MUST NOT 跳过 sweep 继续推进**——跳过等于丢失 defer 分诊，那正是本次事故本身。
+
+### D7 — 截断过的 voice 必须声明覆盖面残缺 〔grill fold〕
+
+`truncated=` 已经在落锚，但**全仓零消费者**（实测：只在两层 SKILL.md 的锚行模板里出现，无任何读取方）。于是：voice 拿到一份**中间被挖掉**的 diff，照常评审、照常输出 findings，报告照常收录、照常计入镜位——**没有任何地方说过「这面镜子只看了两头」**。
+
+这与退出码撒谎同族，只是换到**覆盖面**维度；且与上一个 change 修掉的 `declared` 站点集漏核是同一种病。
+
+**关键**：**R1 会让这条路径更常成功**。今天超长中文 context 是 rc=1 吵闹地失败；修完之后它会**安静地成功，基于残缺证据**。∴ R1 与 R7 必须同批做——只做 R1 是把病灶做得更隐蔽。
+
+**做法（最小一刀）**：`truncated="true"` ⇒ 该 voice 的 findings 段必带覆盖声明，`anchor_lint` 机械核存在性。锚行是确定性信号、报告文本可 grep ⇒ 属基准 ① 该机械化的面，不留语义层。
+
+**明确不做**：分块多轮送、动态调 `OV_MAX_CONTEXT_BYTES`、按内容智能裁剪——那些是「让截断变聪明」，是另一个 change。**这一刀只解决「截断了要说出来」。**
 
 ## 失败模式表〔TG-08 · BASE-06〕
 
@@ -127,18 +182,21 @@
 | F3 | runner 超时 | `timeout` 返回 124 | 原样透传，落 `reason_code="timeout"` | 124 |
 | F4 | 父进程 SIGTERM/INT/HUP | trap | 杀 runner + 清 workdir | 143（TERM 惯例） |
 | F5 | 父进程 **SIGKILL** | **不可检测** | **残余：孤儿存活**，显式登记不掩盖 | — |
-| F6 | sibling 版本滞后 / 无自报入口 | 握手预检 | fail-closed，零写盘 + 可执行指令 | 非零 |
+| F6 | 阻断集字段缺席（产出方滞后） | JSON 缺字段 | **全部 problems 按阻断**，零写盘 | 非零（sweep 为 `2`） |
 | F7 | sibling 脚本文件不存在 | 路径预检（既有） | 沿用既有 `_die` | 非零 |
-| F8 | scan 返回 `problems` 非空 | JSON `problems` 字段 | 非零退出（除非显式逃生口） | 非零 |
-| F9 | 握手通过但 scan 仍失败 | `proc.returncode` | 沿用既有 `_die` | 非零 |
+| F8 | 阻断集非空 | JSON 阻断集字段 | 非零退出、零写盘（除非显式逃生口 ⇒ 放行但 INDEX 留疤） | 非零（sweep 为 `2`） |
+| F9 | scan 子进程本身失败 | `proc.returncode` | 沿用既有 `_die` | 非零（sweep 为 `1`） |
+| F10 | 仅瑕疵类诊断（不进阻断集） | JSON `problems` 非空、阻断集空 | 回显 stderr，正常完成 | 0 |
+| F11 | `truncated="true"` 但报告无覆盖声明 | `anchor_lint` | 判违规 | 非零 |
 
-**F4 的退出码 143 需登记**：现有 outside-voice 契约 `reason_code` 枚举中**无对应值**。本 change **不新增枚举**（Non-Goal）——143 只在「父进程被信号回收」时出现，此时**调用方自身也已死**，无人落锚，故不构成锚契约缺口。**该推理 MUST 在实现期复核**：若发现存在「父活着但 helper 收到 TERM」的路径，则此假设被证伪，须回头议枚举。
+**F4 的退出码 143 已查明无需新增枚举**：async 段第 ⑦ 条已有 catch-all——「其余一切情形（未知码 / `.rc` 缺席或内容不匹配 …）→ **保守** fallback（`reason_code="exec-error"`）；**MUST NOT 读作 `ok`**」。且 helper 被 TERM 时 `printf '%s' "$?" > <site>.rc` 本就没机会执行 ⇒ `.rc` 缺席 ⇒ 本来就走 exec-error。**B10 的修复是锚语义中性的**：它改变的只是孤儿 runner 不再白烧至内层超时（design open question Q2 就此关闭）。
 
 ## 可观测性〔TG-08 · BASE-11〕
 
 - **B9**：截断时 stderr 已有 `OV_TRUNCATED=true`（既有）。**新增**：回扫实际丢弃的字节数，便于事后判断截断是否吃掉了有效内容。
 - **B10**：清理路径 stderr 记一行「已终止 runner PID N」，让「父被回收」在日志里可见，而非静默消失。
-- **B11**：失配时 stderr **MUST** 同时给出**期望值、实得值、sibling 的解析路径**——只说「版本不匹配」不 actionable；给出路径才能让人一眼看出「哦我调的是运行 checkout」。
+- **B11/B12**：阻断时 stderr **MUST** 给出**阻断明细全列 + 涉及文件路径 + 两条出路**（修盘面 / 显式逃生口），sweep 另加「重跑无用」字样。只说「有 problems」不 actionable；给出文件路径才能让人一眼看出是哪个池、哪一份盘面。
+- **逃生口留疤**：`INDEX.md` 头部 banner 增记的那行**进版本库**——这是本设计里唯一进入产物的可观测性，也是唯一一条在人不看终端时仍然有效的。
 
 ## 安全与数据保护〔TG-17 · BASE-28〕
 
@@ -150,9 +208,11 @@
 ## Risks / Trade-offs
 
 - **[A1 未闭：Linux 侧截断行为未实测]** → 缓解：CI 泳道跑切点扫描测试（`mechanical-gates.yml` 已是 ubuntu-latest）。**不接受「macOS 绿就算过」**——`windows-ci-bash-subprocess-traps` 就是这么被咬的。
-- **[fail-closed 卡住自动链路]** → 缓解：错误信息必须 actionable（升级 + `setup.sh` 两条命令）；且 `/sdflow-done` 的 sweep 子步契约本就是「非原子、fail-closed、重跑收敛」，硬停与之相容。**须在实现期通读全部调用点确认**（假设 A3）。
-- **[存量含 legacy 不一致的仓开始变红]** → 接受：本就该修；且 `--allow-problems` 提供知情放行。
-- **[改 `assets/hack/` 后忘记跑 `setup.sh`]** → 这正是本 change R2 要机械化的那类偏斜；但 **`outside-voice.sh` 自身不在握手保护范围内**（它是 shell、不走 recorder 取数路径）⇒ **残余风险，显式登记**。
+- **[fail-closed 卡住自动链路]** → 缓解：exit 2 与 exit 1 分开，调用方对 2 停下上抛而非无限重试（D6）；错误信息必须 actionable。**须在实现期通读全部调用点确认**（假设 A3）。
+- **[存量含 legacy 不一致的仓开始变红]** → 接受：本就该修；`--allow-problems` 提供知情放行，代价是 INDEX 带疤。
+- **[逃生口被滥用成常态]** → 缓解三条约束（留疤 / 禁环境化 / 禁自动传）。**残余**：人仍可每次手敲；但每次都会在 git 里留下一行，**可事后审计**——这是可见成本而非机械门（`adr/0021` 同款定位），**MUST NOT 宣称已杜绝**。
+- **[改 `assets/hack/` 后忘记跑 `setup.sh`]** → **`outside-voice.sh` 不在任何本 change 机制的保护范围内**（它是 shell、不走 recorder 取数路径，也没有诊断信号通道）⇒ **残余风险，显式登记**。本 change **不**声称覆盖它。
+- **[旧脚本已出厂，无法回溯加保护]** → **不可缓解，显式登记**：已发布的滞后脚本不知道 frontmatter 存在，任何前向机制都救不了它自己。唯一防线是它**自己喊出来的 `problems`** 被新消费方按阻断处置——即「缺席即阻断」那一条。**MUST NOT 把本 change 描述为「版本偏斜已被机械杜绝」。**
 - **[SIGKILL 孤儿]** → 无缓解，见 D2 诚实边界。
 
 ## Migration Plan
@@ -166,21 +226,27 @@
 
 | # | 切片 | Blocked-by | 覆盖 |
 |---|---|---|---|
-| 1 | 截断字符边界安全 + 切点扫描测试 | none | R1 |
+| 1 | 截断字符边界安全 + 切点扫描测试 + 变异验证 | none | R1 |
 | 2 | runner 子进程生命周期 + SIGTERM 验尸测试 | none | R4 |
-| 3 | sibling 版本自报入口（两个被调脚本） | none | R2 前半 |
-| 4 | `_scan_pool` 握手闸门 + 逐调用方偏斜断言 | 3 | R2 后半、R5 |
-| 5 | `problems` 非空 ⇒ 非零退出 + 逃生口 | none | R3 |
-| 6 | Linux CI 泳道覆盖（闭 A1） | 1 | A1 |
+| 3 | 诊断产生处分级 + additive 阻断集字段（两个池脚本） | none | R2 |
+| 4 | `_scan_pool` 收集下发 + 缺席即阻断 + 逐调用方断言 + `reindex` 零写盘断言 | 3 | R2、R5 |
+| 5 | 严格默认 + exit 1/2 分类 + 逃生口三约束 + INDEX banner | 4 | R3、R6 |
+| 6 | `truncated="true"` ⇒ 覆盖声明 + `anchor_lint` 存在性核 | none | R7 |
+| 7 | `/sdflow-done` §2.1 与 `/sdflow-ship` 链序认识 exit 2 | 5 | R6 |
+| 8 | Linux CI 泳道 + `setup.sh` + 全套件 + parity 门 | 1,2 | A1 |
 
-1/2 与 3/4/5 分属两个文件族，无耦合，可并行；4 依赖 3。
+1/2/6 与 3/4/5/7 分属两个文件族，无耦合可并行；族内 3→4→5→7 严格串行。
 
 ## Open Questions〔TG-21〕
 
-| # | 问题 | 负责人 | 截止 |
-|---|---|---|---|
-| Q1 | `--allow-problems` 逃生口是否真有使用场景？若无，缺省严格且**不提供**逃生口更干净（少一个假绿入口） | 实现期，读完全部调用点后定 | Task 5 前 |
-| Q2 | 143 退出码是否需要进 `reason_code` 枚举（见失败模式表 F4 的待复核假设） | 实现期复核 | Task 2 前 |
+*（grill 已全部关闭，保留结论供追溯）*
+
+| # | 问题 | 结论 |
+|---|---|---|
+| Q1 | `--allow-problems` 逃生口给不给？ | **给，但加三条约束**（产物留疤 / 禁环境化 / 禁自动传）。不给会楔死有合法历史失配的老仓，并逼人手改 `DO NOT EDIT` 生成文件 |
+| Q2 | 143 是否需进 `reason_code` 枚举？ | **不需要**。async 段已有未知码 catch-all → `exec-error`；且 helper 被 TERM 时 `.rc` 本就缺席，走同一条路。B10 锚语义中性 |
+| Q3 | sibling 版本握手要不要做？ | **不做**，实测证伪（sibling 恒同 checkout ⇒ 门恒绿）。功能由「阻断集字段缺席 ⇒ 全阻断」自然覆盖 |
+| Q4 | 分级判据落 `adr/0018` 还是新开 ADR？ | **落 0018 新增铁律 (d)**——同一命题在「信号强度」维度的细化，新开会让主题裂成两处 |
 
 ## Compliance
 
