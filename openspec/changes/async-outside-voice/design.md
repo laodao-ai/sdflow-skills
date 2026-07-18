@@ -94,7 +94,7 @@ Claude 宿主并发实体：`design-voice` voice + `hr-tg` voice + N 个 fan-out
 
 ∴ **无数据竞争**：并发实体各写各的、汇聚点（Step3 主 session）单线程。**新增面 = 主 session 记账「站点↔task_id」映射**（model-driven 记账易错）——SKILL 指令 MUST 显式列该映射；**且 dispatch 时把 task_id 追加落盘**（写该站点 context 目录 manifest，F-I），使「是否真派发过」有落盘证据、脱离纯记忆。
 
-**per-site 完整性机械核〔spec-review-amendment F-C·Q3 fold·基准①〕**：两个 dispatch 门控条件（reuse-guard `reason_code≠none`、HR-TG∩≠∅）在 Step1/2 **机械可算** ⇒「本轮应 dispatch 的站点集」是确定信号。anchor_lint 家族级门（"outside-voice" 有 ≥1 行即过、不核 per-site，`anchor_lint.py:154/595`）放过「并发 2 站点漏收一个」→ 返修轮 **fold 一个轻量机械核**：报告落 `declared-sites` 集（承 hr-tg 锚 `declared=` 先例 adr/0018），核「declared 应 dispatch 站点集 == 实落 `sdflow:outside-voice` 锚站点集」，不等即红。「无锚=缺席」的诚实由此**机械可审**、非纯 prose 兜底。
+**per-site 完整性机械核〔spec-review-amendment F-C·Q3 fold·基准①〕**：两个 dispatch 门控条件（reuse-guard `reason_code≠none`、HR-TG∩≠∅）在 Step1/2 **机械可算** ⇒「本轮应 dispatch 的站点集」是确定信号。anchor_lint 家族级门（"outside-voice" 有 ≥1 行即过、不核 per-site，`anchor_lint.py:154/595`）放过「并发 2 站点漏收一个」→ 返修轮 **fold 一个轻量机械核**：报告落 `declared-sites` 集（承 hr-tg 锚 `declared=` 先例 adr/0018），核「declared 应 dispatch 站点集 == 实落 `sdflow:outside-voice` 锚站点集」，不等即红（**additive 存在核**——独立小脚本 或 anchor_lint 附加校验，**MUST NOT 触碰 host/runner/reason_code 合法组合矩阵**，∴ 与「不改矩阵」Non-Goal 不冲突）。「无锚=缺席」的诚实由此**机械可审**、非纯 prose 兜底。
 
 **dispatch 门控与条件性**：后台 voice 数**不定（0/1/2）**，记账/机械核按「实际 dispatch 过的站点」：
 - `design-voice`（spec-review）前置门控于 reuse-guard：仅 `reason_code≠none`（autoplan voice 不可复用）才 dispatch；可复用则整体不派。
