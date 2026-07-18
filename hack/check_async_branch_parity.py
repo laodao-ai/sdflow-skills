@@ -38,8 +38,15 @@ SITES = [
     "sdflow-code-review/SKILL.md",
 ]
 
-START_LINE_PREFIX = "<!-- sdflow:async-branch:start"
+# 尾随空格是 token 边界：没有它，`<!-- sdflow:async-branch:startX ... -->` 这类
+# 相邻 token 会被误认作 start（有界语法面 ∴ 边界要写死）。
+START_LINE_PREFIX = "<!-- sdflow:async-branch:start "
 END_LINE = "<!-- sdflow:async-branch:end -->"
+
+
+def _is_start(line):
+    """start 行 = 前缀（含 token 边界空格）+ 本行内闭合 `-->`。"""
+    return line.startswith(START_LINE_PREFIX) and line.rstrip().endswith("-->")
 
 # 圈内不许出现的字样（前提 (1)）—— 出现即说明这段被写死到了某一侧的语境里。
 FORBIDDEN_IN_INTERIOR = [
@@ -61,7 +68,7 @@ def extract(path):
     """
     lines = Path(path).read_text(encoding="utf-8").splitlines(keepends=True)
 
-    starts = [i for i, l in enumerate(lines) if l.startswith(START_LINE_PREFIX)]
+    starts = [i for i, l in enumerate(lines) if _is_start(l)]
     ends = [i for i, l in enumerate(lines) if l.startswith(END_LINE)]
 
     if len(starts) != 1 or len(ends) != 1:
@@ -72,6 +79,16 @@ def extract(path):
         raise MarkerError(f"{path}: end marker 出现在 start 之前")
 
     return "".join(lines[starts[0]:ends[0] + 1])
+
+
+def interior(seg):
+    """→ marker 段【去掉首尾 marker 行】后的正文。
+
+    「段是否为空」的判据 MUST 落在正文上：整段永远含两行 marker，
+    拿整段判空恒为假 —— 那是个永远不会触发的守卫（= 不存在的守卫）。
+    """
+    lines = seg.splitlines(keepends=True)
+    return "".join(lines[1:-1])
 
 
 def compare(paths):
@@ -85,8 +102,8 @@ def compare(paths):
             return 1
 
     ref_path, ref = segments[0]
-    if not ref.strip():
-        print(f"[async-branch-parity] FAIL: {ref_path} 的 marker 段为空",
+    if not interior(ref).strip():
+        print(f"[async-branch-parity] FAIL: {ref_path} 的 marker 段正文为空",
               file=sys.stderr)
         return 1
 

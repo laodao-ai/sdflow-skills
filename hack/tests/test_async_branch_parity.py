@@ -15,6 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import check_async_branch_parity as P  # noqa: E402
 
@@ -44,9 +46,12 @@ def test_both_sites_carry_the_markers():
 
 
 def test_interior_is_non_empty():
-    """段内不是空的 —— 防「把内容删光换个空绿」。"""
+    """段内正文不是空的 —— 防「把内容删光换个空绿」。
+
+    判据落在【去掉 marker 行后的正文】上：整段恒含两行 marker，拿整段判空恒真。
+    """
     for rel in P.SITES:
-        assert P.extract(REPO / rel).strip(), rel
+        assert P.interior(P.extract(REPO / rel)).strip(), rel
 
 
 def test_interior_names_no_review_skill():
@@ -116,10 +121,77 @@ def test_two_marker_pairs_is_red(tmp_path):
     assert P.compare([a, b]) == 1
 
 
+def test_end_before_start_raises(tmp_path):
+    """end 在 start 之前 → MUST 抛 MarkerError（而不是「碰巧因为段不等而红」）。
+
+    直接打在 extract 上：走 compare 时「返回空段 ∴ 不等 ∴ 红」会掩盖守卫被删。
+    """
+    b = _bare(tmp_path, "b.md", f"{P.END_LINE}\nx\n{P.START_LINE_PREFIX} x -->\n")
+    with pytest.raises(P.MarkerError):
+        P.extract(b)
+
+
 def test_end_before_start_is_red(tmp_path):
     a = _write(tmp_path, "a.md", "x\n")
     b = _bare(tmp_path, "b.md", f"{P.END_LINE}\nx\n{P.START_LINE_PREFIX} x -->\n")
     assert P.compare([a, b]) == 1
+
+
+# ── 合成用例：圈内站点名（FORBIDDEN_IN_INTERIOR）────────────────────────────
+
+@pytest.mark.parametrize("bad", P.FORBIDDEN_IN_INTERIOR)
+def test_forbidden_token_in_interior_is_red(tmp_path, bad):
+    """两侧内容【完全相同】但段内写死了某一侧的语境 → 仍 MUST 红。
+
+    等值门本身拦不住这种（两边一样嘛），靠 FORBIDDEN_IN_INTERIOR 那条分支。
+    ∴ 用例必须走 compare()，否则那条分支从未被执行（真仓恰好干净）。
+    """
+    body = f"派给 {bad} 处理\n"
+    a = _write(tmp_path, "a.md", body)
+    b = _write(tmp_path, "b.md", body)
+    assert P.compare([a, b]) == 1
+
+
+def test_clean_interior_with_neutral_wording_is_green(tmp_path):
+    """对照组：改写成「另一评审 SKILL」即绿 —— 证上条红的原因就是那个 token。"""
+    body = "派给另一评审 SKILL 处理\n"
+    a = _write(tmp_path, "a.md", body)
+    b = _write(tmp_path, "b.md", body)
+    assert P.compare([a, b]) == 0
+
+
+# ── 合成用例：空段 ─────────────────────────────────────────────────────────
+
+def test_empty_interior_is_red(tmp_path):
+    """两侧 marker 都在、正文都被删光 → 「都空 ∴ 都一致」MUST NOT 判绿。"""
+    a = _write(tmp_path, "a.md", "")
+    b = _write(tmp_path, "b.md", "")
+    assert P.compare([a, b]) == 1
+
+
+def test_whitespace_only_interior_is_red(tmp_path):
+    """只剩空白也算空 —— 别用一行空格绕过。"""
+    a = _write(tmp_path, "a.md", "   \n\n")
+    b = _write(tmp_path, "b.md", "   \n\n")
+    assert P.compare([a, b]) == 1
+
+
+# ── start marker token 边界 ────────────────────────────────────────────────
+
+def test_start_prefix_requires_token_boundary(tmp_path):
+    """`...:startX -->` 不是 start —— 无 token 边界会误认相邻 token。"""
+    b = _bare(tmp_path, "b.md",
+              f"<!-- sdflow:async-branch:startX -->\nx\n{P.END_LINE}\n")
+    with pytest.raises(P.MarkerError):
+        P.extract(b)
+
+
+def test_start_line_must_close_on_same_line(tmp_path):
+    """start 行本行内必须闭合 `-->` —— 半截行不算 marker。"""
+    b = _bare(tmp_path, "b.md",
+              f"{P.START_LINE_PREFIX}未闭合\nx\n{P.END_LINE}\n")
+    with pytest.raises(P.MarkerError):
+        P.extract(b)
 
 
 def test_extract_raises_on_malformed(tmp_path):
