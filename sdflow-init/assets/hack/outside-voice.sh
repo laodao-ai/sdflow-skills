@@ -36,9 +36,26 @@
 #     ⏱ 调用方 MUST 给**外层进程超时** ≥ (--timeout + 30)s（默认即 ≥330s）：本命令内部
 #       `timeout -k 10 <--timeout>` 最迟 (--timeout+10)s 收；外层短于此会在内部正常运行时
 #       误杀 → 假超时 + 重跑浪费。外层超时由调用方设，helper 无法机械强制（指令层约束）。
+#     🔪 子进程生命周期〔fix-mechanical-layer-silent-failures R2 · design D2〕：
+#       runner 后台启动 + 记 PID + wait 取码；收到 INT/TERM/HUP 或任何 EXIT 时，清理函数
+#       先 kill -TERM 该 PID、宽限后 kill -KILL 兜底，再删 workdir。∴ 本 helper 被回收后
+#       runner 不再 reparent 到 PID 1 继续烧 API 额度。杀 timeout 会连带杀掉它自建进程组内的
+#       孙进程（实测 TERM 后 timeout/中间脚本/内层命令三层全灭）⇒ 无需自管进程组。
+#       🔴 诚实边界（MUST NOT 声称根治）——三条残余，性质相同、均为 shell 层不可干净消除：
+#         (a) **本 helper 进程自身被 SIGKILL(-9) 时 trap 根本不会执行**，runner 子进程【仍会
+#             存活并 reparent 到 PID 1】。孤儿问题在 SIGKILL 下【未被消除】。
+#         (b) **PID 记录窗口**：`<runner> ... &` 与 `OV_RUNNER_PID=$!` 之间落信号时，pending trap
+#             可能带【空 PID】执行 ⇒ 该次 runner 逃逸成孤儿。赋值不可与 `&` 原子化。
+#         (c) **PID 清零窗口**：`wait` 返回与 `OV_RUNNER_PID=""` 之间落信号时，清理会对一个
+#             【已回收、可能已被系统复用】的 PID 开火（kill -0 通过 ⇒ 误杀无关进程）。
+#       三者要覆盖都须由调用方在更外层（进程组 / cgroup / 容器）回收。本 helper 只保证
+#       「可捕获信号 + 正常退出」两类路径，且窗口外的绝大多数时刻正确。
 #     stdout: 目标 runner（$SDFLOW_VOICE_RUNNER）的最终消息（仅此）
 #       codex 路径：经 --output-last-message 提取；claude 路径：-p --output-format text 直出
-#     stderr: OV_TRUNCATED 行；失败时 runner stderr 转发
+#     stderr: OV_TRUNCATED 行；失败时 runner stderr 转发；被信号回收时【额外】一/两行
+#             纯字面清理痕迹（只含信号名与 runner PID，MUST NOT 含 context 正文——该内容
+#             未经出境扫描）。调用方按【子串命中】取 OV_TRUNCATED，不假定它是 stderr 末行
+#             （既有失败分支的 runner stderr 转发本就排在其后）。
 #     exit 0=成功 | 1=runner 报错/空输出/命令缺失/timeout 工具缺失/SDFLOW_VOICE_RUNNER 未设/
 #            SDFLOW_VOICE_MODEL 未设(claude)/未知 runner 值 | 124=超时 | 3=secret-hit |
 #            2=用法错/文件不存在或不可读
@@ -224,7 +241,8 @@ utf8_tail_skip() {  # $1=file $2=尾段字节数 → stdout: 需从尾段【开�
   echo "$skip"
 }
 
-render_prompt() {  # $1=context file → stdout 完整 prompt；stderr 末行 OV_TRUNCATED=
+render_prompt() {  # $1=context file → stdout 完整 prompt；stderr 含 OV_TRUNCATED= 一行
+                   # （调用方按【子串命中】取，MUST NOT 假定它是 stderr 末行——见头部契约 :52）
   local ctx="$1" size truncated=false
   [ -f "$ctx" ] && [ -r "$ctx" ] || { echo "context file not found/unreadable: $ctx" >&2; exit 2; }
   secret_scan "$ctx" || exit 3
@@ -279,6 +297,51 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找�
   command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true
 }
 
+# ── 子进程生命周期〔R2 · design D2〕──────────────────────────────────────────
+# 病根不是「trap 没跑」——实测 bash 的 EXIT trap 在 SIGTERM 下确实执行（workdir 被清了），
+# 但 runner 是【前台】跑的 `timeout ...`，父死后它 reparent 到 PID 1 继续跑满内层超时、
+# 继续烧 API 调用额度。∴ 病根是【trap 里没有子 PID 可杀】。
+# 修法：runner 改后台 + 记 PID，清理时先 TERM 该 PID、宽限后 KILL 兜底，再删 workdir。
+#
+# 为什么不用 setsid + kill -- -PGID：`setsid` 在 macOS(Darwin 25) 【不存在】；且 GNU timeout
+# 自建进程组并转发信号——实测 TERM 掉 timeout 后，timeout / 中间脚本 / 内层 sleep 三层同 pgid
+# 全灭 ⇒ 自管进程组收益为零。
+#
+# 🔴 残余（MUST NOT 声称根治），三条并列、性质相同（详见头部契约 exec 段）：
+#   (a) 父进程被 SIGKILL 时 trap 不可执行 ⇒ 孤儿仍存活；
+#   (b) `&` 与 `OV_RUNNER_PID=$!` 之间落信号 ⇒ trap 拿到空 PID，该次 runner 逃逸；
+#   (c) `wait` 返回与 `OV_RUNNER_PID=""` 之间落信号 ⇒ 对已回收（可能已复用）的 PID 开火。
+# 三者都是 shell 层不可干净消除的窗口，【只登记、不声称已解决】。
+OV_WORKDIR=""
+OV_RUNNER_PID=""
+
+ov_cleanup() {  # $1=触发来源标签（EXIT|INT|TERM|HUP），仅用于 stderr 痕迹
+  local src="${1:-EXIT}" i=0
+  if [ -n "$OV_RUNNER_PID" ] && kill -0 "$OV_RUNNER_PID" 2>/dev/null; then
+    # 可观测性：让「父被回收」在日志里看得见，而不是静默消失。
+    # MUST 只含信号名 + PID —— MUST NOT 含 context 正文（未经出境扫描）。
+    # 🔴 `${src}` 的花括号是【语义性】的，不是风格：macOS 自带 bash 3.2 扫变量名时不是
+    #   multibyte-aware，`$src，` 会把全角逗号的首字节 0xEF 吞进标识符 ⇒ set -u 下当场
+    #   `src\xef: unbound variable` 罢工。凡「$变量 紧跟 CJK 标点」一律 MUST 用 ${}。
+    echo "outside-voice: 收到 ${src}，终止 runner 子进程 PID=${OV_RUNNER_PID}" >&2
+    kill -TERM "$OV_RUNNER_PID" 2>/dev/null
+    # 宽限 ~1s 等它自己收摊（kill -0 在 bash 异步 reap 后即失败）
+    while [ "$i" -lt 10 ] && kill -0 "$OV_RUNNER_PID" 2>/dev/null; do
+      sleep 0.1
+      i=$(( i + 1 ))
+    done
+    if kill -0 "$OV_RUNNER_PID" 2>/dev/null; then
+      kill -KILL "$OV_RUNNER_PID" 2>/dev/null
+      echo "outside-voice: runner PID=${OV_RUNNER_PID} 未响应 TERM，已 SIGKILL 兜底" >&2
+    fi
+  fi
+  OV_RUNNER_PID=""   # 幂等：信号 trap 里的 exit 会再触发 EXIT trap，别对回收后的 PID 二次开火
+  if [ -n "$OV_WORKDIR" ]; then
+    rm -rf "$OV_WORKDIR"
+    OV_WORKDIR=""
+  fi
+}
+
 do_exec() {  # $1=context file  $2=timeout 秒
   local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner
   runner="${SDFLOW_VOICE_RUNNER:-}"
@@ -306,7 +369,16 @@ do_exec() {  # $1=context file  $2=timeout 秒
   fi
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$PWD"
   workdir=$(mktemp -d "${TMPDIR:-/tmp}/outside-voice.XXXXXX") || { echo "mktemp 失败: ${TMPDIR:-/tmp} 不可写" >&2; exit 1; }
-  trap "rm -rf '$workdir'" EXIT
+  # 走【全局】OV_WORKDIR 而非把 $workdir 展进 trap 字符串：清理函数还要读 OV_RUNNER_PID，
+  # 而 do_exec 的 local 在 EXIT trap 触发时（函数已返回）不可见 ⇒ 生命周期状态一律放全局。
+  OV_WORKDIR="$workdir"
+  # 覆盖可捕获的三个回收信号 + 正常退出。信号 trap 里显式 exit 128+signum（保持 shell 惯例，
+  # 且不 exit 的话 bash 会在 handler 返回后继续往下跑）；该 exit 会再触发 EXIT trap，
+  # ov_cleanup 幂等 ⇒ 不会二次开火。
+  trap 'ov_cleanup EXIT' EXIT
+  trap 'ov_cleanup INT;  exit 130' INT
+  trap 'ov_cleanup TERM; exit 143' TERM
+  trap 'ov_cleanup HUP;  exit 129' HUP
   # 预扫：让 secret 证据落真实 stderr（重定向会吞 render_prompt 内部的报告——review fix）
   secret_scan "$ctx" || exit 3
   # 子壳隔离〔N1〕：render_prompt 内部的 fail-loud 分支是 `exit`（不可读 / size 取不到 / secret 命中）。
@@ -322,10 +394,20 @@ do_exec() {  # $1=context file  $2=timeout 秒
   if [ "$rc" -ne 0 ]; then exit "$rc"; fi
   case "$runner" in
     codex)
+      # 后台 + wait〔R2〕：前台跑时父被回收 ⇒ 本进程死、timeout 却 reparent 到 PID 1 跑满
+      # 内层超时。后台化后 $! 拿得到 PID，ov_cleanup 才有东西可杀。stdin 已显式重定向
+      # （后台任务在无 job control 的壳里 stdin 默认 /dev/null，不显式给就读不到 prompt）。
       "$ov_timeout_bin" -k 10 "$tmo" codex exec -C "$repo_root" -s read-only --ephemeral \
         --output-last-message "$workdir/last-message.md" - \
-        < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log"
+        < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log" &
+      OV_RUNNER_PID=$!   # ⚠ 残余(b)：`&` 与本行之间落信号 ⇒ trap 拿到空 PID，该次 runner 逃逸
+      # `wait` 原样透传退出码：124(超时) / 0 / 其他非零一律不改写。脚本【无 set -e】
+      # （只有 set -u）⇒ 非零返回不会误中止。
+      wait "$OV_RUNNER_PID"
       rc=$?
+      # 已收尸：别让 EXIT trap 对一个可能被系统复用的 PID 开火。
+      # ⚠ 残余(c)：`wait` 返回与本行之间落信号 ⇒ 仍会对该已回收 PID 开火。窗口不可消除。
+      OV_RUNNER_PID=""
       ;;
     claude)
       # 四旗承重墙〔spec-review-r3 C4 · GC-5 · A1〕：--tools "Read,Grep,Glob"（只读工具集，无
@@ -337,8 +419,12 @@ do_exec() {  # $1=context file  $2=timeout 秒
       "$ov_timeout_bin" -k 10 "$tmo" claude -p --model "$SDFLOW_VOICE_MODEL" --output-format text \
         --tools "Read,Grep,Glob" --strict-mcp-config --add-dir "$repo_root" \
         --settings "$OV_CLAUDE_READ_FENCE" \
-        < "$workdir/prompt.md" > "$workdir/last-message.md" 2> "$workdir/stderr.log"
+        < "$workdir/prompt.md" > "$workdir/last-message.md" 2> "$workdir/stderr.log" &
+      OV_RUNNER_PID=$!   # 同 codex 路径〔R2〕：后台 + wait，让 ov_cleanup 有 PID 可杀
+                         # ⚠ 残余(b) 同上：`&` 与本行之间落信号 ⇒ 空 PID，该次 runner 逃逸
+      wait "$OV_RUNNER_PID"
       rc=$?
+      OV_RUNNER_PID=""   # ⚠ 残余(c) 同上：wait 返回与本行之间落信号 ⇒ 对已回收 PID 开火
       # claude -p --output-format text 的 stdout 即最终消息本身（无需像 codex 那样另用
       # --output-last-message 提取）；为让下方失败诊断的 tail 逻辑两路径共用，镜一份到 cli.log。
       cp "$workdir/last-message.md" "$workdir/cli.log" 2>/dev/null || : > "$workdir/cli.log"

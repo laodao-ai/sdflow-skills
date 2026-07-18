@@ -38,12 +38,21 @@ def _write_fake_timeout(bin_dir):
         cat > "$stdin_tmp"
         "$@" < "$stdin_tmp" &
         pid=$!
-        sleep_pid=""
-        (sleep "$sec"; kill -9 "$pid" 2>/dev/null) &
-        sleep_pid=$!
+        # 看门狗用【短 sleep 轮询】而非 `(sleep "$sec"; kill ...)`：后者被下面的
+        # `kill -9 "$sleep_pid"` 收走时只死【子壳】，里面那个 `sleep $sec` 会 reparent
+        # 到 PID 1 活满 $sec 秒（默认 --timeout=300 ⇒ 每跑一次全量测试就在开发机上
+        # 留一串 `sleep 300` 孤儿，实测 12 个/轮）。改成轮询后：命令一结束轮询即自然退出，
+        # 且被强杀时最多残留一个 0.1s 的 sleep。
+        watchdog_pid=""
+        ( i=0; lim=$(( sec * 10 ))
+          while [ "$i" -lt "$lim" ] && kill -0 "$pid" 2>/dev/null; do
+            sleep 0.1; i=$(( i + 1 ))
+          done
+          kill -9 "$pid" 2>/dev/null ) &
+        watchdog_pid=$!
         wait "$pid" 2>/dev/null
         rc=$?
-        kill -9 "$sleep_pid" 2>/dev/null
+        kill -9 "$watchdog_pid" 2>/dev/null
         rm -f "$stdin_tmp"
         [ "$rc" -eq 137 ] && exit 124  # killed by -9, treat as timeout
         exit "$rc"

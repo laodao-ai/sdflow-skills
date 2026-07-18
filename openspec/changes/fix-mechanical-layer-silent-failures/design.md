@@ -52,7 +52,15 @@
 
 **143 无需新增枚举**〔广审核实〕：两层 SKILL 的 async 段第 ⑦ 条已有 catch-all——「其余一切情形（未知码 / `.rc` 缺席或内容不匹配 …）→ **保守** fallback（`reason_code="exec-error"`）」。且 helper 被 TERM 时 `printf '%s' "$?" > <site>.rc` 本就没机会执行 ⇒ `.rc` 缺席 ⇒ 本来就走 exec-error。**B10 的修复是锚语义中性的**，改变的只是孤儿不再白烧至内层超时。
 
-**🔴 诚实边界（MUST NOT 声称根治）**：父进程被 **SIGKILL** 时 trap 不可执行，实测孤儿**仍存活**。shell 层无解。文档与实现 **MUST** 显式登记该残余。
+**🔴 诚实边界（MUST NOT 声称根治）** — **三条残余并列**，性质相同：都是 shell 层**不可干净消除**的窗口，只登记、不声称已解决（adr/0018）。文档与实现 **MUST** 显式登记：
+
+| # | 残余 | 成因 | 后果 |
+|---|---|---|---|
+| **(a)** | 父进程被 **SIGKILL** | trap 在 `-9` 下根本不执行 | 孤儿**仍存活**（实测） |
+| **(b)** | **PID 记录窗口**：`<runner> … &` 与 `OV_RUNNER_PID=$!` 之间 | 后台启动与 `$!` 赋值**不可原子化** | pending trap 带**空 PID** 执行 ⇒ 该次 runner **逃逸成孤儿** |
+| **(c)** | **PID 清零窗口**：`wait` 返回与 `OV_RUNNER_PID=""` 之间 | `wait` 返回与清零**不可原子化** | 对**已回收、可能已被系统复用**的 PID 开火（`kill -0` 会通过）⇒ 可能误杀无关进程 |
+
+三者要覆盖都须由调用方在**更外层**（进程组 / cgroup / 容器）回收——与 (a) 的处置完全一致。本 helper 只保证「可捕获信号 + 正常退出」两类路径，且**窗口外的绝大多数时刻正确**。
 
 ## 失败模式表〔TG-08 · BASE-06〕
 
@@ -62,7 +70,9 @@
 | F2 | `od` 不可用 | 命令预检 | **fail-loud**：报缺依赖（同既有 `timeout` 缺失路径） | 非零 |
 | F3 | runner 超时 | `timeout` 返回 124 | 原样透传，落 `reason_code="timeout"` | 124 |
 | F4 | 父进程 SIGINT / SIGTERM / SIGHUP | trap | 杀 runner + 清 workdir | 143（TERM 惯例；调用方侧 `.rc` 缺席 ⇒ catch-all → `exec-error`） |
-| F5 | 父进程 **SIGKILL** | **不可检测** | **残余：孤儿存活**，显式登记不掩盖 | — |
+| F5 | 父进程 **SIGKILL** | **不可检测** | **残余(a)：孤儿存活**，显式登记不掩盖 | — |
+| F6 | 信号落在 `&` 与 `OV_RUNNER_PID=$!` 之间 | **不可检测** | **残余(b)：空 PID ⇒ 该次 runner 逃逸**，显式登记 | 128+signum |
+| F7 | 信号落在 `wait` 返回与 `OV_RUNNER_PID=""` 之间 | **不可检测** | **残余(c)：对已回收/可能已复用的 PID 开火**，显式登记 | 128+signum |
 
 ## 可观测性〔TG-08 · BASE-11〕
 
@@ -78,7 +88,7 @@
 ## Risks / Trade-offs
 
 - **[A1 未闭：Linux 侧截断行为未实测]** → 缓解：CI 泳道跑切点扫描测试（`mechanical-gates.yml` 已是 ubuntu-latest）。**不接受「macOS 绿就算过」**——`windows-ci-bash-subprocess-traps` 就是这么被咬的。
-- **[SIGKILL 孤儿]** → 无缓解，见 D2 诚实边界。
+- **[SIGKILL 孤儿 (a) · PID 记录窗口 (b) · PID 清零窗口 (c)]** → 均**无缓解**，见 D2 诚实边界三条表。要覆盖须调用方在更外层（进程组 / cgroup / 容器）回收。
 - **[改 `assets/hack/` 后忘记跑 `setup.sh`]** → **显式登记**：`outside-voice.sh` 不在任何机械保护范围内（它是 shell、不走 recorder 取数路径）。本 change **不**声称覆盖它。
 
 ## Migration Plan
