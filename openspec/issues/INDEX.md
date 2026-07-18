@@ -227,7 +227,12 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
+| B10 | bug | VERIFIED | async-outside-voice |
+| B11 | bug | VERIFIED | async-outside-voice |
+| B12 | bug | OPEN | fix-mechanical-layer-silent-failures |
 | B7 | bug | OPEN | - |
+| B8 | bug | VERIFIED | async-outside-voice |
+| B9 | bug | VERIFIED | async-outside-voice |
 | T132 | todo | OPEN | - |
 | T133 | todo | OPEN | - |
 | T134 | todo | OPEN | - |
@@ -238,6 +243,18 @@
 | T151 | todo | OPEN | mlh-p6-recorder-frontmatter |
 | T152 | todo | OPEN | mlh-p6-recorder-frontmatter |
 | T155 | todo | OPEN | mlh-p6-recorder-frontmatter |
+| T156 | todo | OPEN | - |
+| T157 | todo | OPEN | async-outside-voice |
+| T158 | todo | OPEN | async-outside-voice |
+| T159 | todo | OPEN | async-outside-voice |
+| T160 | todo | OPEN | async-outside-voice |
+| T161 | todo | OPEN | async-outside-voice |
+| T162 | todo | OPEN | async-outside-voice |
+| T163 | todo | OPEN | async-outside-voice |
+| T164 | todo | OPEN | async-outside-voice |
+| T165 | todo | OPEN | async-outside-voice |
+| T166 | todo | OPEN | async-outside-voice |
+| T167 | todo | OPEN | async-outside-voice |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
