@@ -531,7 +531,10 @@ def _hr_tg_intersect_nonempty(report_text, hr_tg_subset):
     """从报告里**唯一**一条 fence 外 hr-tg 锚重算 HR-TG∩ 是否非空（= declared ∩ HR-TG 子集 ≠ ∅）。
     重算而非读 hit=：hit 的内部一致性由 check_hr_tg 的 M2 独立守，此处走同一确定性口径不引二源。
     返回 (nonempty, err)；算不出一律 fail-closed 返回 err（MUST NOT 猜期望集）。"""
-    anchors = [ln.strip() for ln in fence_outside_lines(report_text) if anchor_prefix(ln) == "hr-tg"]
+    # 识别口径 MUST 与 check_hr_tg 同源（_HR_TG_ANCHOR_FULL_RE 整行严格边界）——
+    # 用 anchor_prefix 会形成第二识别源：今日两条路径对畸形锚都红、无假绿，但那是巧合不是保证。
+    anchors = [ln.strip() for ln in fence_outside_lines(report_text)
+               if _HR_TG_ANCHOR_FULL_RE.match(ln.strip())]
     if len(anchors) != 1:
         return None, ("hr-tg 锚缺失" if not anchors else f"hr-tg 锚非唯一（{len(anchors)} 条）")
     kv, dup = parse_kv_strict(anchors[0])
@@ -589,8 +592,10 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
         return v
     try:
         declared = _parse_site_csv(kv["declared"])
-    except EmitError:
-        v.append({"anchor": anchor, "field": "declared", "kind": "malformed-site-csv"})
+    except EmitError as e:
+        # 保留 _parse_site_csv 区分的两种原因（空 cell / 域外站点记号），别吞成一句笼统的 malformed
+        v.append({"anchor": anchor, "field": "declared", "kind": "malformed-site-csv",
+                  "detail": str(e)})
         return v
     if len(declared) != len(set(declared)):
         v.append({"anchor": anchor, "field": "declared", "kind": "declared-sites-duplicate"})

@@ -22,6 +22,8 @@ sdflow-issues:
     T163: {"module":"sdflow-spec-review / sdflow-code-review + hack/check_async_branch_parity.py","summary":"async host 调度段的 DRY 全抽取：把 marker 段抽成单一源注入两 SKILL，替代当前「两份副本 + 机械等值门」","type":"代码质量","status":"OPEN","time":"2026-07-18 18:46","change":"async-outside-voice","batch":null}
     T164: {"module":"sdflow-spec-review / sdflow-code-review 的 async 调度段 ④ 命令形态（context 路径拼接）","summary":"outside-voice exec 的 --context-file 路径直接拼进 shell 命令且未加引号：路径含空格/shell 元字符时会参数拆分或执行非预期命令（跨模型 voice 独立提出，Task 5 报告 §10 第 2 条，本票未处理）","type":"基础设施","status":"OPEN","time":"2026-07-18 19:34","change":"async-outside-voice","batch":null}
     T165: {"module":"openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段","summary":"R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动","type":"基础设施","status":"OPEN","time":"2026-07-18 19:35","change":"async-outside-voice","batch":null}
+    T166: {"module":"hack/check_async_branch_parity.py","summary":"end marker 边界未与 start 侧对称硬化；且尝试硬化时遇到无法解释的 extract 行为矛盾，需专门查","type":"代码质量","status":"OPEN","time":"2026-07-18 20:15","change":"async-outside-voice","batch":null}
+    T167: {"module":"openspec/changes/async-outside-voice","summary":"【archive 阶段 MUST 做】四件套仍描述旧协议（裸哨兵/单条件 async），与代码审后的实现不自洽——delta spec 必须同步","type":"代码质量","status":"OPEN","time":"2026-07-18 20:24","change":"async-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 

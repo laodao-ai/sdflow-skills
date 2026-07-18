@@ -1,0 +1,32 @@
+name: Mechanical gates
+
+# 本仓的机械门在 setup.sh 里是 warn-only（不中断安装，沿 sync_principles 既有 idiom），
+# 唯一硬拦是 pytest —— 而 pytest 是否被跑取决于开发者本地是否装了它、用哪个 python3。
+# ∴ 目标态下必须有一条 CI 泳道把这些门真正跑起来，否则「机械等值门一次封死漂移面」
+# 这个承诺在多数路径上不成立（冷代码审 E3 实证：CI 此前只跑一个 Windows smoke 文件）。
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: python -m pip install pytest
+
+      # 三道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
+      - name: Gate — async 调度段两处字节等值（ADR-5）
+        run: python hack/check_async_branch_parity.py
+
+      - name: Gate — 三条通则托管块与真相源一致
+        run: python hack/sync_principles.py --check
+
+      - name: Full test suite
+        run: python -m pytest -q

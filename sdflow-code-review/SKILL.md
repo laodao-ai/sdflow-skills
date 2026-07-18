@@ -291,23 +291,30 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     `$SDFLOW_HOST≠"claude"` → 不自探，直接走 sync 分支。
     `$SDFLOW_HOST="claude"` → 用 run_in_background 派一条 trivial 命令（如 `printf PROBE_OK`）：拿得到后台任务标识**且**取得回 `PROBE_OK` → `background="available"`；派不出 / 机制报错 / 取不回哨兵 → `background="unavailable"`。
     `background="unavailable"` ⇒ **降级走 sync 分支**，且报告本段 MUST 显著标注「⚠️ voice 同步降级（后台能力不可用，host=claude）」——**MUST NOT 假装 async 成功**、MUST NOT 因此跳过 voice、MUST NOT 因此改动锚行契约。
+    🔴 **探针对「轮次终结回收」结构性失明 ⇒ 必须再加一个正交条件**：探针在**同一轮次内**发哨兵并当场取回，而回收发生在**轮次终结时** ⇒ 在子代理上下文里探针**必然**报 `available`，随后长任务照样被吞（envelope 0 行 → `exec-error` → 同族 fallback = efficacy=0 复发，且伪装成 helper 故障）。∴ 走 async 的条件是**两个**、缺一即 sync：
+      · `background="available"`（探针过），**且**
+      · **本 SKILL 确证运行在主 session**（非子代理上下文）。**无法确证 ⇒ MUST 走 sync 降级**，报告标注「⚠️ voice 同步降级（无法确证主 session 上下文）」。
+    依据（实证，非推断）：主 session 起的后台任务跨多次让出轮次转空闲**702s 跑满、exit 0、ppid 全程稳定**；而子代理上下文的在飞任务在轮次终结时被整体 SIGTERM 回收。**探针补不上这个洞**——它测的是「能否后台化」，被吞发生在「轮次怎么结束」。
   **③ 执行模式矩阵（F-B；三行始终满足「外层 ≥ 内层+30s」）**：
     🔴 **内层秒数一律代入十进制字面值**（如 `900` / `300`）——**MUST NOT 写 `$VOICE_TIMEOUT` 之类 shell 变量**：harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空（同 ④ 的 `$HELPER` 条款、同 context 构造节的 run-id 条款）。下表 `<VOICE_TIMEOUT>` 是**占位符**，指 ① 解析出的那个数。
     | 分支 | 条件 | 内层 `--timeout` | 外层 Bash 工具超时 |
-    | async | host=claude ∧ `background="available"` | `<VOICE_TIMEOUT>`（默认 900） | 不适用——dispatch 调用 <1s 即返回；后台任务**不受 Bash 工具超时约束**（spike 实证 2026-07-18：后台跑满 660s、跨过 600000ms 上限、exit 0、ppid 稳定）⇒ 有效外层无界 ≥ 内层+30s。**MUST NOT** 因它"是长命令"就给 dispatch 调用设长超时 |
+    | async | host=claude ∧ `background="available"` ∧ **主 session 已确证** | `<VOICE_TIMEOUT>`（默认 900） | 不适用——dispatch 调用 <1s 即返回；后台任务**不受 Bash 工具超时约束**（spike 实证 2026-07-18：后台跑满 660s、跨过 600000ms 上限、exit 0、ppid 稳定）⇒ 有效外层无界 ≥ 内层+30s。**MUST NOT** 因它"是长命令"就给 dispatch 调用设长超时 |
     | sync | host=codex | `300` | ≥330000ms |
-    | sync（降级） | host=claude ∧ `background="unavailable"` | `300` | ≥330000ms |
+    | sync（降级） | host=claude ∧（`background="unavailable"` **或 主 session 未能确证**）| `300` | ≥330000ms |
     ⏱ **sync 两行的外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 300s + 10s grace）——MUST 把外层 Bash/shell 工具超时设为 **≥330000ms**，MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。**指令层约束**（外层超时由调用方逐调用设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
   **④ 命令形态（两分支共用同一哨兵 envelope）**：整条命令 MUST 逐字为——
-    `~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file <f>; rc=$?; printf '\n<<<SDFLOW_EXEC_EXIT>>>%s\n' "$rc"`
+    `~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file <f>; printf '%s' "$?" > {run-dir}/<site>.rc`
+    🔴 **退出码 MUST 走 runner 写不了的 sidecar，MUST NOT 走 stdout 哨兵**：`{run-dir}` 代入 context 构造节的字面 run 目录，`<site>` 为本站点名。
+    **为什么不能用 stdout 里的哨兵串**（含带 run-id nonce 的版本，均已废弃）：runner 被授予**仓库读取能力**（claude 侧 `--tools "Read,Grep,Glob"`、codex 侧 read-only sandbox 内可读仓库）⇒ 它**无需猜** nonce，枚举 `.outside-voice/` 目录即可得；进程列表亦可能暴露含 nonce 的祖先命令。∴ 把认证建立在「模型读得到的字符串」上是无效的——**stdout 是模型能写的通道，任何写在那里的退出码都可被顶替**（wrapper 被回收未发时，正文里伪造的那行会成为唯一来源 ⇒ 被杀的运行拿到 `ok` 信用）。
+    sidecar 之所以可信：四旗承重墙只给 runner **只读**工具集、无 Write/Bash ⇒ 它**写不了**该文件。且「文件缺席」本身是有意义的信号（任务被回收 ⇒ `printf` 从未执行 ⇒ 无 `.rc`）。
     （`<T>` 代入本分支内层秒数的**字面值**，`<f>` 代入 context 文件**字面路径**；**MUST 代入 `~/.sdflow/hack/outside-voice.sh` 字面路径、MUST NOT 写 `$HELPER`**——harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空）
     async 分支：该命令**以 run_in_background 派出**，立刻记下返回的后台任务标识（见 ⑧）；sync 分支：前台跑，当场即得退出码。
     🔴 **为什么是 `printf '\n…'` 而不是 `echo`**：helper 末尾 `cat last-message.md` **逐字节透传模型自由文本、且不保证尾换行** ⇒ 朴素 `echo` 会与 voice 正文末行**粘成同一物理行**（实测：整行锚定 0 命中 → 把**成功**的 voice 假降级）。强制前置换行把这层不确定性彻底消掉。
   **⑤ 退出码 MUST 从哨兵 envelope 取，MUST NOT 从 voice 正文推断（F-D）**：
-    在该命令输出上做**整行锚定**扫描 `^<<<SDFLOW_EXEC_EXIT>>>([0-9]+)$`，数命中行数：
-      **恰好 1 行** → 取其捕获组为退出码，进 ⑦。
-      **0 行 或 ≥2 行 → `exec-error`**（wrapper 恒发且只发一行 ⇒ ≥2 行正是 voice 正文注入了一行的**确定性信号**；审「讨论本机制自身」的 change 时 voice 正文必然出现该字样，此判据即为此而设）。
-    **MUST NOT** 用宽松 grep / 子串匹配 / 取末行代替整行锚定。
+    读 `{run-dir}/<site>.rc` 的内容：
+      **文件存在且内容匹配 `^[0-9]+$`** → 该数即退出码，进 ⑦。
+      **文件不存在 / 内容不匹配 / 读取失败 → `exec-error`**（任务被回收时 `printf` 从未执行 ⇒ 无文件，这是诚实降级而非假绿）。
+    **MUST NOT** 从 voice 正文（stdout）里解析退出码——无论用哨兵串、整行锚定还是子串匹配：**stdout 是 runner 能写的通道**，那里的任何退出码都不可信（见 ④ 的威胁模型）。
   **⑥ 通知驱动 collect @Step3 barrier（F-A；async 分支专属，sync 分支当场就有退出码）**：
     本 harness 的 run_in_background 是**完成推送通知**（"you will be notified — do not poll"），**不是**可主动查询的状态接口 ⇒
       · dispatch 时 MUST 就地记「**站点 ↔ 后台任务标识**」映射（见 ⑧），并按 context 构造节把该 task_id 追加落盘 `dispatch-manifest.tsv`；
