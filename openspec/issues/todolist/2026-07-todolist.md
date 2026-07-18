@@ -15,6 +15,7 @@ sdflow-issues:
     T156: {"module":"sdflow-devenv（配 CI 载体层：SKILL.md + references/testing-framework.md）","summary":"sdflow-devenv 配 CI 的 P2 决策示范清一色 GitHub Actions、且未显式化「硬门/软门」降级边界——对「不管什么项目都能配」的承诺留了平台假设漏洞（用 workflow 的消费仓不一定在 GitHub）","type":"功能增强","status":"OPEN","time":"2026-07-17 19:53","change":"-","batch":null}
     T157: {"module":"openspec/changes/async-outside-voice","summary":"proposal.md:27 仍写旧 .outside-voice/<site>-context.md 形态，与 design/tasks 的 per-run 口径分叉；实现期改四件套触设计门失鲜，须在 archive 阶段一并校正","type":"代码质量","status":"OPEN","time":"2026-07-18 17:08","change":"async-outside-voice","batch":null}
     T158: {"module":"sdflow-spec-review + sdflow-code-review","summary":"run-id 新鲜度可机械化：manifest 存在性是确定性信号，宜加 anchor_lint 家族核而非永久留诚实边界","type":"基础设施","status":"OPEN","time":"2026-07-18 17:08","change":"async-outside-voice","batch":null}
+    T159: {"module":"sdflow-spec-review + sdflow-code-review","summary":"协议节 HELPER=~/.sdflow/hack/outside-voice.sh 同属「shell 变量不跨调用存活」失效类，宜改字面路径","type":"代码质量","status":"OPEN","time":"2026-07-18 17:30","change":"async-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 

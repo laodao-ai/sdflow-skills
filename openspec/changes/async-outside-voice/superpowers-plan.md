@@ -52,10 +52,10 @@ impl-pipeline: tickets
 
 本票是后续 async 编排的地基（dispatch 需要稳定的 per-run context 与落盘证据），故先行。
 
-- [ ] 两层评审流程的 context 构造均改为 per-run 不可变路径，且父目录仍在 `.outside-voice/` 下
-- [ ] 现行「固定命名、下轮覆盖」的构造说明已被完全取代，仓内无残留旧口径
-- [ ] dispatch 发生时，站点与后台任务标识被追加落盘到该运行目录的 manifest
-- [ ] 该路径确认被既有 gitignore 递归覆盖（实测：新建该路径下文件后 `git status` 不出现）
+- [x] 两层评审流程的 context 构造均改为 per-run 不可变路径，且父目录仍在 `.outside-voice/` 下
+- [x] 现行「固定命名、下轮覆盖」的构造说明已被完全取代，仓内无残留旧口径
+- [x] dispatch 发生时，站点与后台任务标识被追加落盘到该运行目录的 manifest
+- [x] 该路径确认被既有 gitignore 递归覆盖（实测：新建该路径下文件后 `git status` 不出现）
 
 ### Task 2: spec-review 层 host-adaptive async dispatch/collect
 
