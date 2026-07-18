@@ -230,4 +230,8 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$REPO_DIR/hack/sync_principles.py
   if ! python3 "$REPO_DIR/hack/gen_workflow_guide.py" --check; then
     echo "  ⚠️ 修：python3 hack/gen_workflow_guide.py --write"
   fi
+  # 两个评审 SKILL 的 async host 调度段必须逐字节相同 —— 漂了 = 一个宿主路径静默行为分叉
+  if ! python3 "$REPO_DIR/hack/check_async_branch_parity.py"; then
+    echo "  ⚠️ async host 调度段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
+  fi
 fi

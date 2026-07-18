@@ -195,6 +195,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 
 ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
 
+0. 🔴 **进汇总去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的汇总去重。
 1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
    折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
 2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
@@ -280,11 +281,56 @@ context 构造（摘录规则定死，不现场发挥）：本轮**起手先占�
   `<task_id>`：后台派发填该后台任务标识；同步 exec 填字面 `sync`。「是否真派发过某站点」以本文件为准，MUST NOT 靠会话记忆
   site=code-voice → git diff $DIFF_BASE..HEAD 全量
   site=hr-tg      → 命中 TG 判据触发点 + 相关 diff hunk
-exec：$HELPER exec --context-file <f>
-  ⏱ **外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 默认 300s + 10s grace）——调本命令时 MUST 把**外层 Bash/shell 工具超时设为 ≥330000ms**（= helper 内部 `--timeout` + 30s 余量），MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。若显式传 `--timeout <s>` 覆盖内部值，外层同步给 ≥(s+30)s。**指令层约束**（外层超时由调用方设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
-  exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
-  exit 124 → fallback（reason_code="timeout"）      exit 1 → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
-  exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
+<!-- sdflow:async-branch:start —— 站点无关的 host 调度段。与另一评审 SKILL 的同名 marker 段 MUST 字节相同（hack/check_async_branch_parity.py 机械守）。站点枚举 / context 构造 / reuse-guard 门控 / declared-sites 计算 MUST 留在本 marker 之外 -->
+exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在此重判宿主**，ADR-4）
+  **① 内层超时 `<VOICE_TIMEOUT>` 取值（config.yaml 直读，沿 `metrics.enabled` 先例；MUST NOT 走 resolver——两 SKILL 同法，否则等值门红）**：
+    读仓根 `openspec/config.yaml` 的 `outside-voice.async-timeout-seconds`；**仅 async 分支用它**，sync / 降级分支恒 `300`。
+    校验：MUST 为**正整数**（纯十进制数字串，无小数点 / 无单位后缀 / 无正负号 / 无空白）且 `1 ≤ v ≤ 3600`（`3600` = 理智上界——helper 内层 `timeout -k 10` 自身无上限，误配成 `86400` 会把一轮评审永久挂住；3600 远高于 900 默认，留足调宽空间）。
+    缺键 / 缺 config 文件 / 读失败 / 非整 / `0` / 负数 / 越界 → **一律回落默认 `900`**（fail-safe 恒生效：**MUST NOT fail-closed 罢工**、**MUST NOT 传 `--timeout 0`**——那会取消 helper 的「≤天花板必终止」保证）。
+  **② 后台能力自探（dispatch 前 MUST 先跑；语义核验非机械门。这是验证「本调用上下文真能后台化」的实际防线，不是冗余保险，ADR-6）**：
+    `$SDFLOW_HOST≠"claude"` → 不自探，直接走 sync 分支。
+    `$SDFLOW_HOST="claude"` → 用 run_in_background 派一条 trivial 命令（如 `printf PROBE_OK`）：拿得到后台任务标识**且**取得回 `PROBE_OK` → `background="available"`；派不出 / 机制报错 / 取不回哨兵 → `background="unavailable"`。
+    `background="unavailable"` ⇒ **降级走 sync 分支**，且报告本段 MUST 显著标注「⚠️ voice 同步降级（后台能力不可用，host=claude）」——**MUST NOT 假装 async 成功**、MUST NOT 因此跳过 voice、MUST NOT 因此改动锚行契约。
+  **③ 执行模式矩阵（F-B；三行始终满足「外层 ≥ 内层+30s」）**：
+    🔴 **内层秒数一律代入十进制字面值**（如 `900` / `300`）——**MUST NOT 写 `$VOICE_TIMEOUT` 之类 shell 变量**：harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空（同 ④ 的 `$HELPER` 条款、同 context 构造节的 run-id 条款）。下表 `<VOICE_TIMEOUT>` 是**占位符**，指 ① 解析出的那个数。
+    | 分支 | 条件 | 内层 `--timeout` | 外层 Bash 工具超时 |
+    | async | host=claude ∧ `background="available"` | `<VOICE_TIMEOUT>`（默认 900） | 不适用——dispatch 调用 <1s 即返回；后台任务**不受 Bash 工具超时约束**（spike 实证 2026-07-18：后台跑满 660s、跨过 600000ms 上限、exit 0、ppid 稳定）⇒ 有效外层无界 ≥ 内层+30s。**MUST NOT** 因它"是长命令"就给 dispatch 调用设长超时 |
+    | sync | host=codex | `300` | ≥330000ms |
+    | sync（降级） | host=claude ∧ `background="unavailable"` | `300` | ≥330000ms |
+    ⏱ **sync 两行的外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 300s + 10s grace）——MUST 把外层 Bash/shell 工具超时设为 **≥330000ms**，MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。**指令层约束**（外层超时由调用方逐调用设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
+  **④ 命令形态（两分支共用同一哨兵 envelope）**：整条命令 MUST 逐字为——
+    `~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file <f>; rc=$?; printf '\n<<<SDFLOW_EXEC_EXIT>>>%s\n' "$rc"`
+    （`<T>` 代入本分支内层秒数的**字面值**，`<f>` 代入 context 文件**字面路径**；**MUST 代入 `~/.sdflow/hack/outside-voice.sh` 字面路径、MUST NOT 写 `$HELPER`**——harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空）
+    async 分支：该命令**以 run_in_background 派出**，立刻记下返回的后台任务标识（见 ⑧）；sync 分支：前台跑，当场即得退出码。
+    🔴 **为什么是 `printf '\n…'` 而不是 `echo`**：helper 末尾 `cat last-message.md` **逐字节透传模型自由文本、且不保证尾换行** ⇒ 朴素 `echo` 会与 voice 正文末行**粘成同一物理行**（实测：整行锚定 0 命中 → 把**成功**的 voice 假降级）。强制前置换行把这层不确定性彻底消掉。
+  **⑤ 退出码 MUST 从哨兵 envelope 取，MUST NOT 从 voice 正文推断（F-D）**：
+    在该命令输出上做**整行锚定**扫描 `^<<<SDFLOW_EXEC_EXIT>>>([0-9]+)$`，数命中行数：
+      **恰好 1 行** → 取其捕获组为退出码，进 ⑦。
+      **0 行 或 ≥2 行 → `exec-error`**（wrapper 恒发且只发一行 ⇒ ≥2 行正是 voice 正文注入了一行的**确定性信号**；审「讨论本机制自身」的 change 时 voice 正文必然出现该字样，此判据即为此而设）。
+    **MUST NOT** 用宽松 grep / 子串匹配 / 取末行代替整行锚定。
+  **⑥ 通知驱动 collect @Step3 barrier（F-A；async 分支专属，sync 分支当场就有退出码）**：
+    本 harness 的 run_in_background 是**完成推送通知**（"you will be notified — do not poll"），**不是**可主动查询的状态接口 ⇒
+      · dispatch 时 MUST 就地记「**站点 ↔ 后台任务标识**」映射（见 ⑧），并按 context 构造节把该 task_id 追加落盘 `dispatch-manifest.tsv`；
+      · 完成通知**异步到达**（可能早于 Step3）→ 收到即**暂存该站点的输出与退出码**，MUST NOT 丢弃；
+      · **Step3 是 barrier**：每个**实际 dispatch 过的**站点，其结果 MUST 已在手、或已按 ⑦ 降级完毕，才可进综合裁决。
+    🔴 **正向 barrier 语义**：某 dispatch 站点在 Step3 时**尚无终态退出码**（仍 RUNNING）⇒ MUST **让出轮次、等该后台任务的完成/超时通知**后再继续（通知由 harness 推送，这既非长 sleep 也非轮询）。
+      **MUST NOT** 单次长 sleep 等待、**MUST NOT** 自造轮询循环。
+      **`reason_code="timeout"` 只允许由实际观测到的 `exit 124` 产生**——**MUST NOT** 在未收到该站点终态通知前落 `timeout`。早退假 timeout 把「慢但会成功」的 voice 假降级，正是本机制要消灭的失效模式；且它**逃得过 per-site 站点集核**（该站点仍在集合内、照样判绿），∴ 本条是唯一防线。
+    **安全（MUST）**：collect **只取「结构化退出码 + exit 0 时的 stdout findings」**。helper 在 exit≠0 时把 runner **原始 stderr + 未扫描的 final-message 前 3 行**写 stderr，该段**绕过出境 `secret_scan`**（既有缺口），而后台化把它落进了 harness 托管的后台任务输出文件（新持久化载体）⇒ **MUST NOT 把后台文件里的原始 stderr 当 findings 采信**，只允许摘要写进锚行外正文。
+  **⑦ 退出码 → 去向 / reason_code（两分支同一张表，无遗漏；未知码 MUST NOT 读作 ok）**：
+    exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
+    exit 124 → fallback（reason_code="timeout"）——**仅当真观测到 124**，见 ⑥ 正向 barrier 语义
+    exit 1   → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
+    exit 2   → 用法错 / context 不可读 → fallback（reason_code="exec-error"；`2` 不在 reason_code 枚举内，**并入 exec-error**，枚举不新增）
+    exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
+    其余一切情形（未知码 / envelope 0 行或 ≥2 行 / 后台任务标识查不到 / 输出取不回）→ **保守** fallback（reason_code="exec-error"）；**MUST NOT 读作 `ok`**、MUST NOT 静默丢该站点、MUST NOT 落零锚
+  **⑧ 站点 ↔ 后台任务标识记账（MUST 在指令执行中显式维护此表；model-driven 记账易错，故既落盘又逐站点取）**：
+    | 站点 | 本轮是否 dispatch | 后台任务标识 |
+    | <逐个填本轮涉及的站点> | 是 / 否（否则附未派原因） | `<task_id>` 或字面 `sync` |
+    · 本表的集合 = **实际 dispatch 过的站点**（后台 voice 数不定 0/1/2）——**它与「应有锚的站点集」不是同一个集合**（门控/复用态可以不派却仍落锚），二者 MUST NOT 混用。
+    · collect 时 MUST **按本表逐站点取**（不靠"好像都回来了"的整体印象），每站点各自独立走 ⑤ 与 ⑦。
+    · 「是否真派发过某站点」以 `dispatch-manifest.tsv` 为准，MUST NOT 靠会话记忆。
+<!-- sdflow:async-branch:end -->
 fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout,exec-error}）：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh **只读型**（与 $SDFLOW_HOST 同宿主）子代理（禁写/禁执行副作用）（同源同 prompt；框架已含范围收窄）；
   无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_HOST"（同族——`claude-fallback` 枚举值已废弃，跨模型性是派生量，同族 fallback 由 runner==host 表达）
   **F8（同族 fallback 也起不来）**：若该 fallback 只读子代理**本身也派不出**（spawn 失败/机制报错）→ 无同族降级可用 → 锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（host-adaptive-execution spec：同族 fallback 也起不来 ⇒ 无执行段、非自审；runner="none" 恒 findings=0，anchor_lint 矩阵判 no-exec 合法）
