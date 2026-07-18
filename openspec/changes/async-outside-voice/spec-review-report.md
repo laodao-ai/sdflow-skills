@@ -5,18 +5,18 @@
 <!-- sdflow:hr-tg v1 hit="TG-09,TG-17,TG-26" declared="TG-09,TG-17,TG-26" evidence="async 多 voice+镜后台并发(TG-26)、voice 单站点状态机(TG-09)、出境 scan/承重墙不变承重声明(TG-17)" -->
 <!-- sdflow:outside-voice v1 site="design-voice" guard="simulated-source" host="claude" runner="codex" reason_code="ok" findings="5" truncated="false" -->
 <!-- sdflow:outside-voice v1 site="hr-tg" guard="none" host="claude" runner="codex" reason_code="ok" findings="5" truncated="false" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="11" 采纳="11" 裁掉="0" defer="0" 独立="0" sev="致1/高3/中5/低2" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致1/高1/中2/低2" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="0" sev="致1/高1/中3/低1" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="11" 采纳="11" 裁掉="0" defer="0" 独立="0" sev="致0/高4/中5/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致0/高2/中2/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="0" sev="致0/高2/中3/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="2" 采纳="2" 裁掉="0" defer="0" 独立="0" sev="致0/高1/中0/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="0" sev="致1/高2/中2/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="0" sev="致0/高3/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致0/高3/中3/低0" -->
 
 ## 收敛口（决定性）
 
-**不建议进设计 HARD-GATE。需一轮设计返修（含一次实测 spike），再复审。**
+**不建议进设计 HARD-GATE。需一轮设计返修（把下列高危落进 design/tasks），再复审。**
 
-方向对（Claude 宿主 async off-critical-path 是正解，且本轮 dogfood 已实证两个 codex voice 经 `run_in_background` **跑到完成**、reason_code=ok），但**核心机制从未对齐本 harness 的真实契约**——1 条阻塞级 + 4 条高危，逐条见下。这不是「打磨」，是「机制需返修 + 实测验证」。
+方向对（Claude 宿主 async off-critical-path 是正解）。**原阻塞级 F-A 的「900s 够不着」半已被 spike 证伪**〔2026-07-18 边界 spike：`run_in_background` 后台任务跑满 **660s、跨过 600000ms 外层上限、exit 0**、ppid 全程 11092 稳定不 reparent——600ms 上限**不管**后台、900s 可达、harness 托管生命周期实证〕→ **F-A 降为高危**（剩「collect 通知模型 + exit code 传输」的设计精度，与 900s 数值无关，非机制重塑）。当前 = **0 阻塞 + 5 高危 + 7 中低**：机制可行，返修 = 把精度/分支/机械化缺口落进正文，非重做地基。dogfood 附记：两 codex voice 经 `run_in_background` 跑到完成、reason_code=ok（但均 <600s，未压到 900s 真实负载——见 F-L）。
 
 **roster**（host=claude · opus/sonnet/haiku · subagents=available）：Step1 冷广审(simulated) + 领域镜 + 对抗镜×2 + 接地镜 + 跨模型 voice×2（design-voice/hr-tg，均 codex，均 reason_code=ok）。收敛度高（15 条合并 findings，仅 2 条单镜独占），跨模型 voice 独立贡献显著（hr-tg 独占 1 条 CRITICAL + 与 design-voice 共同锁定阻塞项）。
 
@@ -26,10 +26,9 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ [需拍板] Q1  阻塞级 F-A：collect 机制建立在错误的 harness 心智模型 │
-│              上（run_in_background 是通知驱动、非「轮询」）+ 900s   │
-│              内层撞 Bash 外层 600000ms 硬上限 → 900s 天花板可能永   │
-│              远够不着（原 bug 换位复现）。**必须先 spike 实测**     │
+│ [已决/spike] Q1  F-A「900s 够不着」半已 spike 证伪（后台跑满 660s │
+│              跨 600000ms 上限、exit 0）→ 900s 可达。剩「collect 通  │
+│              知模型 + exit code 传输」= 设计精度、返修轮落，非拍板  │
 │ [需拍板] Q2  F-B：900s 只该用于 Claude async；Codex sync + claude- │
 │              降级同步「第三态」的 --timeout/外层超时配对未定义      │
 │ [需拍板] Q3  F-C：anchor_lint 家族级、不核 per-site → 并发 2 站点  │
@@ -61,14 +60,14 @@
 
 ## Findings（按严重度，已合并去重；标注收敛镜 + 主审核定）
 
-### 🔴 阻塞级
+### 🟠 高危 F-A（原阻塞级 → spike 证伪「900s 够不着」半 → 降级）
 
-**F-A — collect 机制对齐了错误的 harness 契约（通知驱动 vs 轮询）+ 900s 撞 600000ms 外层硬上限**
+**F-A — collect 机制对齐了错误的 harness 契约（通知驱动 vs 轮询）+ exit code 传输未定义**（「900s 撞 600000ms」半已 spike 证伪）
 〔对抗镜1 · 领域镜 · 广审B1 · design-voice DV1/DV3 收敛；主审实测核定〕
 - **通知非轮询**：本 harness 的 `run_in_background` 是**完成通知驱动**（"you will be notified when it completes — do not poll"；"long leading sleep blocked"）——**主审本轮亲历实证**：4 子代理 + 2 voice 完成都是 push 通知、从未轮询。design 通篇「Step3 轮询到终止」（ADR-3/序列图/tasks §3.1）是错的心智模型；且通知可能在 Step1/2 就到达（谁接？）或 Step3 时仍未到（无阻塞等待原语 → 模型自造轮询 → 成本暴涨）。design 零着墨这个「异步到达 vs 同步 checkpoint」错位。
 - **600000ms 硬上限**：Bash 工具外层 timeout **上限 600000ms、缺省 120000ms**（主审工具 schema 核实）。内层 900s 需外层 ≥930000ms > 600000ms。若外层上限对 `run_in_background` 也生效（到期杀底层进程、只是不阻塞 turn）→ **900s 天花板永远够不着**，600s 先杀 = 本 change 要消灭的「外层杀内层」bug 从 330s 挪到 600s，不是修复。本轮 dogfood 两 voice 都 <600s 完成 → **无法证伪也无法证实** 900s 量级能否存活。
 - **exit code 传输**（DV3）：collect 要按 0/1/3/124 分支，但 `run_in_background` 给的是**输出 + 完成信号**，退出码如何**可靠**取得未定义——主审本轮是靠 `echo EXEC_EXIT=$?` 塞进 stdout 文本才拿到，正是「从正文 parse 退出码」的脆法。
-- **裁决**：CONFIRMED 阻塞。返修前 MUST spike 实测：① `run_in_background` 是否豁免 600000ms 外层上限、能否存活到 900s；② collect 落成通知驱动的具体工具调用序列；③ 退出码可靠传输（结构化 envelope，非正文 parse）。若不豁免 → async 天花板须 ≤600s（可能不够真实负载）或换机制。
+- **裁决**：① **已 spike 证伪**〔2026-07-18：后台任务跑满 660s、跨 600000ms 上限、exit 0、ppid 稳定不 reparent〕→ 600ms 上限不管后台、900s 可达、harness 托管生命周期成立。② + ③ **仍立**（与 900s 数值无关）：collect 须重写为通知驱动的具体工具调用序列（主审本轮亲历——6 后台活全是 push 通知、零轮询）；退出码须结构化 envelope 可靠传输、非正文 parse。∴ F-A 降**高危**：机制可行，剩设计精度，返修轮落，不再需要 gate 前 spike。
 
 ### 🟠 高危（返修轮 MUST 逐条处理）
 
