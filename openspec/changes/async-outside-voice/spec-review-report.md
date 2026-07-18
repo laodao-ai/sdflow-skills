@@ -1,3 +1,8 @@
+---
+ship-gate:
+  design_approved: true
+---
+
 # spec-review-report · async-outside-voice
 
 <!-- sdflow:fanout-capability v1 host="claude" subagents="available" mirrors="domain,adversarial,grounding" -->
@@ -13,6 +18,10 @@
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="1" sev="致0/高3/中3/低0" -->
 
 ## 收敛口（决定性）
+
+> ✅ **设计 HARD-GATE 已拍板批准，2026-07-18**（用户批准；机判锚见文件头 `ship-gate.design_approved` frontmatter）。
+> 门后无翻改：所有 findings 的 `采纳`/`裁掉` 去向与门前一致 ⇒ `lens-metric` 锚已是最终值（〔SR-M〕无需重算）。
+> 下一步 = `/sdflow-ship` 驱动阶段三（实现 → 代码审 → verify → archive → merge）。
 
 **建议进设计 HARD-GATE。** 返修轮（5 高危 + 8 自动决策）与**接缝冷复审轮**（1 致 + 3 高 + 2 中，见下「接缝冷复审」节）均已落盘四件套，`openspec validate --strict` + `anchor_lint` 双绿；余项为**已登记的 impl 期残余**（F-L/F-O/F-J），不阻塞设计门。
 
