@@ -64,14 +64,14 @@ impl-pipeline: tickets
 
 在 Claude 宿主下，spec-review 的 outside-voice 调用离开关键路径：context 就绪即后台派发，主 session 继续跑 fan-out 镜与其余评审工作；到 Step3 以 barrier 形式收口——每个实际派发过的站点结果要么已在手，要么已按结构化退出码降级。收口靠 harness 的完成通知驱动，不轮询、不长 sleep；站点若仍无终态退出码，让出轮次等通知，绝不提前落 timeout。退出码经不可伪造的哨兵 envelope 取得，而非从 voice 正文推断。Codex 宿主与「后台能力自探失败」两条路径保持同步现状与原有超时口径。超时天花板可按仓覆盖，非法值一律回落默认而非罢工。
 
-- [ ] Claude 宿主路径 voice 后台派发、主 session 无 ≥330s 单次阻塞调用
-- [ ] 站点↔后台任务标识映射在指令中显式列出，collect 按站点逐一取
-- [ ] Step3 barrier 语义落定：RUNNING 站点让出轮次等通知，timeout 只由实测 exit 124 产生
-- [ ] 退出码走哨兵 envelope 三条（强制前置换行 / 整行锚定 / 0 或 ≥2 行判 exec-error）
-- [ ] 退出码 0/124/1/2/3 与未知·丢失码各自的降级去向与 reason_code 对应无遗漏，未知码不读作 ok
-- [ ] 后台能力自探存在；不可用即降级同步并在报告显式标注，不假装 async 成功
-- [ ] async 分支天花板默认 900s、同步与降级分支 300s，外层恒 ≥ 内层+30s
-- [ ] 天花板可经仓配置覆盖，正整数与上界校验齐备，非法值回落默认而非 fail-closed
+- [x] Claude 宿主路径 voice 后台派发、主 session 无 ≥330s 单次阻塞调用
+- [x] 站点↔后台任务标识映射在指令中显式列出，collect 按站点逐一取
+- [x] Step3 barrier 语义落定：RUNNING 站点让出轮次等通知，timeout 只由实测 exit 124 产生
+- [x] 退出码走哨兵 envelope 三条（强制前置换行 / 整行锚定 / 0 或 ≥2 行判 exec-error）
+- [x] 退出码 0/124/1/2/3 与未知·丢失码各自的降级去向与 reason_code 对应无遗漏，未知码不读作 ok
+- [x] 后台能力自探存在；不可用即降级同步并在报告显式标注，不假装 async 成功
+- [x] async 分支天花板默认 900s、同步与降级分支 300s，外层恒 ≥ 内层+30s
+- [x] 天花板可经仓配置覆盖，正整数与上界校验齐备，非法值回落默认而非 fail-closed
 
 ### Task 3: code-review 层同款分支 + 机械等值门
 
