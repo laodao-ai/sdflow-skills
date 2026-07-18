@@ -4,7 +4,7 @@
 
 编排评审 SKILL 调用 `outside-voice.sh exec` 的 **dispatch 模式 SHALL 按 `$SDFLOW_HOST` 自适应**（读 Step0 已解析值、MUST NOT 重判宿主，ADR-9 同源），使跨模型 voice 在真实评审负载下不被外层超时杀：
 
-- **`$SDFLOW_HOST=claude`**：SHALL 将 voice exec 派为 **off-critical-path 后台执行**（harness `run_in_background`），dispatch 秒返、主 session 继续其余评审工作，综合阶段（Step3）以**通知驱动 barrier** collect（完成推送异步到达即暂存，非轮询）；voice SHALL 得以跑到完成，MUST NOT 被外层 Bash 超时杀。**内层 `--timeout` 天花板仅此 async 分支** SHALL 由 sync 默认 300s 调大（config 默认 900s、caller flag、脚本不改；spike 证后台跨 Bash 外层 600000ms 上限可达）——**Codex 同步分支与 claude 自探失败降级同步分支保留 sync 300s 天花板 / 外层 ≥330s**，始终外层 ≥ 内层+30s。
+- **`$SDFLOW_HOST=claude` ∧ 后台能力自探通过 ∧ 主 session 已确证**：SHALL 将 voice exec 派为 **off-critical-path 后台执行**（harness `run_in_background`；三个条件缺一即走 sync 分支），dispatch 秒返、主 session 继续其余评审工作，综合阶段（Step3）以**通知驱动 barrier** collect（完成推送异步到达即暂存，非轮询）；voice SHALL 得以跑到完成，MUST NOT 被外层 Bash 超时杀。**内层 `--timeout` 天花板仅此 async 分支** SHALL 由 sync 默认 300s 调大（config 默认 900s、caller flag、脚本不改；spike 证后台跨 Bash 外层 600000ms 上限可达）——**Codex 同步分支与 claude 自探失败降级同步分支保留 sync 300s 天花板 / 外层 ≥330s**，始终外层 ≥ 内层+30s。
 - **`$SDFLOW_HOST=codex`**：SHALL 保持**同步执行**（外层超时 ≥330s）——Codex 宿主下后台进程在 shell 命令返回时被 sandbox 域回收，off-critical-path 架构性不可行；超时按既有语义降级。
 
 #### Scenario: Claude 宿主 voice 跑到完成、efficacy 非零
@@ -19,8 +19,8 @@
 - **WHEN** `$SDFLOW_HOST=codex` 派 voice
 - **THEN** SHALL 同步执行（外层超时 ≥330s），MUST NOT 尝试后台化；超时（exit 124）→ 既有同族 fallback（`reason_code="timeout"`）
 
-#### Scenario: run_in_background 不可用则降级同步（保留 sync 天花板）
-- **WHEN** `$SDFLOW_HOST=claude` 但当前执行上下文无 `run_in_background` 能力（自探失败）
+#### Scenario: 后台能力不可用【或无法确证主 session】则降级同步（保留 sync 天花板）
+- **WHEN** `$SDFLOW_HOST=claude` 但当前执行上下文无 `run_in_background` 能力（自探失败），**或无法确证本次执行位于主 session**（子代理上下文在轮次终结时会整体回收在飞的后台任务，而自探对该模式结构性失明——它在同轮次内取回哨兵，故必报可用）
 - **THEN** SHALL 降级回同步执行、**用 sync 300s 天花板 + 外层 ≥330s**（MUST NOT 沿用 async 900s——否则外层 330s 会假超时杀正常降级 voice），报告显式标注降级，MUST NOT 假装 async 成功、MUST NOT 静默失败
 
 ### Requirement: async dispatch 不改变锚契约与诚实降级
@@ -43,9 +43,10 @@ async dispatch SHALL 是**纯执行时机**的改变——锚行契约、`reason
 - **WHEN** Step3 barrier 时某 dispatch 站点尚无终态退出码（后台 voice 仍在跑、未撞天花板）
 - **THEN** 主 session SHALL 让出轮次等待该任务的完成/超时通知，MUST NOT 落 `reason_code="timeout"`；`timeout` SHALL 只由实际观测到的 `exit 124` 产生——早退假 timeout 会把「慢但会成功」的 voice 降级（即本 change 要消灭的 efficacy=0），且该假绿**逃过 per-site 站点集核**（站点仍在集合内）
 
-#### Scenario: 退出码 envelope 不可被 voice 正文伪造
-- **WHEN** voice 的 stdout 正文含 `EXEC_EXIT=` 样式文本（本 change 自指场景下必然出现），或 runner 回传的 last-message **无尾换行**（`outside-voice.sh:247` 逐字节透传、不补换行）
-- **THEN** 退出码 SHALL 取自 wrapper 以 `printf '\n<哨兵>%s\n'` **强制前置换行**发出的**唯一哨兵行**、按**整行锚定**匹配；扫到 **0 行或 ≥2 行 SHALL 判 `exec-error`**（≥2 行 = voice 注入的确定性信号），MUST NOT 从 voice 正文推断退出码
+#### Scenario: 退出码不可被 runner 伪造（经 runner 不可写的通道取得）
+- **WHEN** voice 的 stdout 正文含退出码样式文本（本 change 自指场景下必然出现），或 wrapper 未能发出该文本（后台任务在轮次终结时被回收 ⇒ 写 stdout 的那步从未执行）
+- **THEN** 退出码 SHALL 取自 **runner 不可写的旁路通道**（wrapper 在 runner 结束后写入 run 目录的 `<site>.rc` sidecar，主 session 独立读取）；**该通道之所以可信，是因为四旗承重墙只授予 runner 只读工具集（无 Write / 无 Bash）**。文件缺席 / 内容不匹配 `^[0-9]+$` / 读取失败 SHALL 判 `exec-error`（诚实降级）。
+- **MUST NOT** 从 voice 的 stdout 推断退出码——无论用哨兵串、整行锚定还是子串匹配：**stdout 是 runner 能写的通道**。亦 **MUST NOT** 把「随机 run-id 拼进哨兵」当作认证——runner 被授予仓库读取能力，可枚举 `.outside-voice/` 直接取得该值，认证不能建立在模型读得到的字符串上。
 
 #### Scenario: per-site 完整性机械可审（并发多站点漏收）
 - **WHEN** Claude 宿主同轮并发 dispatch 2 个站点（design-voice + hr-tg），其一 dispatch 后未 collect、另一正常落锚

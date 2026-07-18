@@ -293,7 +293,7 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     `$SDFLOW_HOST≠"claude"` → 不自探，直接走 sync 分支。
     `$SDFLOW_HOST="claude"` → 用 run_in_background 派一条 trivial 命令（如 `printf PROBE_OK`）：拿得到后台任务标识**且**取得回 `PROBE_OK` → `background="available"`；派不出 / 机制报错 / 取不回哨兵 → `background="unavailable"`。
     `background="unavailable"` ⇒ **降级走 sync 分支**，且报告本段 MUST 显著标注「⚠️ voice 同步降级（后台能力不可用，host=claude）」——**MUST NOT 假装 async 成功**、MUST NOT 因此跳过 voice、MUST NOT 因此改动锚行契约。
-    🔴 **探针对「轮次终结回收」结构性失明 ⇒ 必须再加一个正交条件**：探针在**同一轮次内**发哨兵并当场取回，而回收发生在**轮次终结时** ⇒ 在子代理上下文里探针**必然**报 `available`，随后长任务照样被吞（envelope 0 行 → `exec-error` → 同族 fallback = efficacy=0 复发，且伪装成 helper 故障）。∴ 走 async 的条件是**两个**、缺一即 sync：
+    🔴 **探针对「轮次终结回收」结构性失明 ⇒ 必须再加一个正交条件**：探针在**同一轮次内**发哨兵并当场取回，而回收发生在**轮次终结时** ⇒ 在子代理上下文里探针**必然**报 `available`，随后长任务照样被吞（`.rc` 缺席 → `exec-error` → 同族 fallback = efficacy=0 复发，且伪装成 helper 故障）。∴ 走 async 的条件是**两个**、缺一即 sync：
       · `background="available"`（探针过），**且**
       · **本 SKILL 确证运行在主 session**（非子代理上下文）。**无法确证 ⇒ MUST 走 sync 降级**，报告标注「⚠️ voice 同步降级（无法确证主 session 上下文）」。
     依据（实证，非推断）：主 session 起的后台任务跨多次让出轮次转空闲**702s 跑满、exit 0、ppid 全程稳定**；而子代理上下文的在飞任务在轮次终结时被整体 SIGTERM 回收。**探针补不上这个洞**——它测的是「能否后台化」，被吞发生在「轮次怎么结束」。
@@ -311,7 +311,6 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     sidecar 之所以可信：四旗承重墙只给 runner **只读**工具集、无 Write/Bash ⇒ 它**写不了**该文件。且「文件缺席」本身是有意义的信号（任务被回收 ⇒ `printf` 从未执行 ⇒ 无 `.rc`）。
     （`<T>` 代入本分支内层秒数的**字面值**，`<f>` 代入 context 文件**字面路径**；**MUST 代入 `~/.sdflow/hack/outside-voice.sh` 字面路径、MUST NOT 写 `$HELPER`**——harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空）
     async 分支：该命令**以 run_in_background 派出**，立刻记下返回的后台任务标识（见 ⑧）；sync 分支：前台跑，当场即得退出码。
-    🔴 **为什么是 `printf '\n…'` 而不是 `echo`**：helper 末尾 `cat last-message.md` **逐字节透传模型自由文本、且不保证尾换行** ⇒ 朴素 `echo` 会与 voice 正文末行**粘成同一物理行**（实测：整行锚定 0 命中 → 把**成功**的 voice 假降级）。强制前置换行把这层不确定性彻底消掉。
   **⑤ 退出码 MUST 从哨兵 envelope 取，MUST NOT 从 voice 正文推断（F-D）**：
     读 `{run-dir}/<site>.rc` 的内容：
       **文件存在且内容匹配 `^[0-9]+$`** → 该数即退出码，进 ⑦。
@@ -336,7 +335,7 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     exit 1   → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
     exit 2   → 用法错 / context 不可读 → fallback（reason_code="exec-error"；`2` 不在 reason_code 枚举内，**并入 exec-error**，枚举不新增）
     exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
-    其余一切情形（未知码 / envelope 0 行或 ≥2 行 / 后台任务标识查不到 / 输出取不回）→ **保守** fallback（reason_code="exec-error"）；**MUST NOT 读作 `ok`**、MUST NOT 静默丢该站点、MUST NOT 落零锚
+    其余一切情形（未知码 / `.rc` 缺席或内容不匹配 / 后台任务标识查不到 / 输出取不回）→ **保守** fallback（reason_code="exec-error"）；**MUST NOT 读作 `ok`**、MUST NOT 静默丢该站点、MUST NOT 落零锚
   **⑧ 站点 ↔ 后台任务标识记账（MUST 在指令执行中显式维护此表；model-driven 记账易错，故既落盘又逐站点取）**：
     | 站点 | 本轮是否 dispatch | 后台任务标识 |
     | <逐个填本轮涉及的站点> | 是 / 否（否则附未派原因） | `<task_id>` 或字面 `sync` |

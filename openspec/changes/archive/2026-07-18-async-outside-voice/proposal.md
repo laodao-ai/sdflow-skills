@@ -24,7 +24,7 @@
 - **不改**：`sdflow-init/assets/hack/outside-voice.sh`（契约脚本 + 四旗承重墙）、`anchor_lint`/`outside_voice_guard`/`lens_metric_emit`（锚契约不变）。
 - **新机制**：仓内首次使用 harness `run_in_background`（此前无先例）。
 - **新增**：`hack/check_async_branch_parity.py` + `hack/tests/`（async 段字节等值机械门，ADR-5/F-O）、`setup.sh` 挂该检查；**per-site declared-sites 机械核**（补 anchor_lint 家族级盲区，F-C；declared = 该层「**应有锚**站点集」非「应 dispatch 集」，**优先实现为 `anchor_lint` 附加校验**并复用其 `fence_outside_lines` 口径，G1/G4）；**per-run 不可变 context 路径** `.outside-voice/<run-id>/<site>-context.md`（F-G，父目录须留在 `.outside-voice/` 下以承既有 gitignore 覆盖，G5）；collect 天花板 config 键（async 900s / sync 300s，**SKILL 直读 config.yaml** 沿 metrics.enabled 先例 + 正整数校验，F-B/F-N/F-F）。
-- **并发面（TG-26）**：Claude 宿主下多个 voice（design-voice、hr-tg）+ fan-out 镜后台并发；共享状态按站点分文件（`.outside-voice/<site>-context.md`）+ 按任务分后台输出，collect/merge 在单一主 session Step3——需 design 显式论证无数据竞争。
+- **并发面（TG-26）**：Claude 宿主下多个 voice（design-voice、hr-tg）+ fan-out 镜后台并发；共享状态按 per-run 目录 + 站点分文件（`.outside-voice/<run-id>/<site>-context.md`，run 目录由 `mktemp -d` 原子占坑）+ 按任务分后台输出，collect/merge 在单一主 session Step3——需 design 显式论证无数据竞争。
 
 ## Success Metrics
 
