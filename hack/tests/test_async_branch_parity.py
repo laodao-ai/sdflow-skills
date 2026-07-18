@@ -61,7 +61,7 @@ def test_interior_names_no_review_skill():
     """
     for rel in P.SITES:
         interior = P.extract(REPO / rel)
-        for bad in P.FORBIDDEN_IN_INTERIOR:
+        for bad in P.FORBIDDEN_IN_SEGMENT:
             assert bad not in interior, f"{rel} 段内出现 {bad}"
 
 
@@ -137,13 +137,13 @@ def test_end_before_start_is_red(tmp_path):
     assert P.compare([a, b]) == 1
 
 
-# ── 合成用例：圈内站点名（FORBIDDEN_IN_INTERIOR）────────────────────────────
+# ── 合成用例：圈内站点名（FORBIDDEN_IN_SEGMENT）────────────────────────────
 
-@pytest.mark.parametrize("bad", P.FORBIDDEN_IN_INTERIOR)
+@pytest.mark.parametrize("bad", P.FORBIDDEN_IN_SEGMENT)
 def test_forbidden_token_in_interior_is_red(tmp_path, bad):
     """两侧内容【完全相同】但段内写死了某一侧的语境 → 仍 MUST 红。
 
-    等值门本身拦不住这种（两边一样嘛），靠 FORBIDDEN_IN_INTERIOR 那条分支。
+    等值门本身拦不住这种（两边一样嘛），靠 FORBIDDEN_IN_SEGMENT 那条分支。
     ∴ 用例必须走 compare()，否则那条分支从未被执行（真仓恰好干净）。
     """
     body = f"派给 {bad} 处理\n"

@@ -1,0 +1,507 @@
+diff --git a/hack/check_async_branch_parity.py b/hack/check_async_branch_parity.py
+new file mode 100644
+index 0000000..d4e70ed
+--- /dev/null
++++ b/hack/check_async_branch_parity.py
+@@ -0,0 +1,138 @@
++"""断言两个评审 SKILL 的 async host 调度段【逐字节相同】。
++
++【守什么】
++sdflow-spec-review / sdflow-code-review 各有一段 host 调度逻辑（内层超时解析、
++后台能力自探、执行模式矩阵、哨兵 envelope、退出码判读、collect barrier、站点记账）。
++这段是【站点无关】的 —— 两处必须逐字一致，否则一个宿主路径静默行为分叉
++（如一侧早退落 timeout、另一侧不落），而这是 load-bearing 的正确性。
++∴ 用 marker 圈定 + 机械等值门，一次封死漂移面（CLAUDE.md 基准 1 + 面治优先于点补）。
++
++【圈外留什么】
++站点枚举 / context 构造 / reuse-guard 门控 / declared-sites 计算 —— 两层这些部分
++本就应当不同，圈进来会逼出假一致。
++
++【圈内的两条隐含前提（显式记下，别做暗默假设）】
++  (1) 圈内 MUST NOT 出现任一评审 SKILL 的文件名 / skill 名 —— 同一串字节要在两处
++      【各自语义正确】，指代对方一律写「另一评审 SKILL」。本脚本机械守（FORBIDDEN_IN_INTERIOR）。
++  (2) 段内出现的 `Step3` 在两侧都成立，是因为 sdflow-spec-review 与 sdflow-code-review
++      的第三步【恰好同为「合并 / 裁决 barrier」】（code-review 第三步 = 置信过滤 + 综合 +
++      对抗裁决，其「第二步半」已写「findings 进 Step3 合并池」）。
++      🔴 这是站点无关性的【跨文件前提】—— 若将来任一侧重编步号（第三步不再是合并 barrier），
++      本段即失效，必须同时重写两侧，而不是只改一侧再来放宽本门。
++
++【语法面（基准 5：无界不手搓）】
++只认两个 marker token，单行字面量匹配 —— 有界，∴ 可手写。
++MUST NOT 演化成「解析 Markdown 结构」。
++
++用法：
++    python3 hack/check_async_branch_parity.py            # 查仓内两处（CI / pytest / setup.sh）
++    python3 hack/check_async_branch_parity.py A.md B.md  # 查指定文件（测试用）
++"""
++import sys
++from pathlib import Path
++
++REPO = Path(__file__).resolve().parent.parent
++
++SITES = [
++    "sdflow-spec-review/SKILL.md",
++    "sdflow-code-review/SKILL.md",
++]
++
++START_LINE_PREFIX = "<!-- sdflow:async-branch:start"
++END_LINE = "<!-- sdflow:async-branch:end -->"
++
++# 圈内不许出现的字样（前提 (1)）—— 出现即说明这段被写死到了某一侧的语境里。
++FORBIDDEN_IN_INTERIOR = [
++    "sdflow-spec-review",
++    "sdflow-code-review",
++    "spec-review-report",
++    "code-review-report",
++]
++
++
++class MarkerError(Exception):
++    """marker 形态畸形 —— 明确报错，MUST NOT 静默放行（缺 marker ≠ 一致）。"""
++
++
++def extract(path):
++    """→ marker 段文本（含 start 行与 end 行本身）。
++
++    start 行自身也参与比对：它承载「圈内该放什么」的口径，漂了同样是漂。
++    """
++    lines = Path(path).read_text(encoding="utf-8").splitlines(keepends=True)
++
++    starts = [i for i, l in enumerate(lines) if l.startswith(START_LINE_PREFIX)]
++    ends = [i for i, l in enumerate(lines) if l.startswith(END_LINE)]
++
++    if len(starts) != 1 or len(ends) != 1:
++        raise MarkerError(
++            f"{path}: 期望恰好 1 对 async-branch marker，实得 "
++            f"start={len(starts)} end={len(ends)}")
++    if ends[0] < starts[0]:
++        raise MarkerError(f"{path}: end marker 出现在 start 之前")
++
++    return "".join(lines[starts[0]:ends[0] + 1])
++
++
++def compare(paths):
++    """→ 0 绿 / 1 红。红时把原因写 stderr。"""
++    segments = []
++    for p in paths:
++        try:
++            segments.append((p, extract(p)))
++        except MarkerError as e:
++            print(f"[async-branch-parity] FAIL: {e}", file=sys.stderr)
++            return 1
++
++    ref_path, ref = segments[0]
++    if not ref.strip():
++        print(f"[async-branch-parity] FAIL: {ref_path} 的 marker 段为空",
++              file=sys.stderr)
++        return 1
++
++    rc = 0
++    for p, seg in segments[1:]:
++        if seg != ref:
++            print(f"[async-branch-parity] FAIL: async host 调度段已漂移 —— "
++                  f"{ref_path} 与 {p} 不逐字节相同", file=sys.stderr)
++            _print_first_diff(ref, seg)
++            rc = 1
++
++    for p, seg in segments:
++        for bad in FORBIDDEN_IN_INTERIOR:
++            if bad in seg:
++                print(f"[async-branch-parity] FAIL: {p} 的 marker 段内出现 "
++                      f"「{bad}」——圈内 MUST 站点无关，指代对方写「另一评审 SKILL」",
++                      file=sys.stderr)
++                rc = 1
++
++    if rc == 0:
++        print(f"[async-branch-parity] ✅ {len(segments)} 处 async host 调度段逐字节一致")
++    else:
++        print("   修：以一侧为准，把整段（含 marker 行）原样复制到另一侧", file=sys.stderr)
++    return rc
++
++
++def _print_first_diff(a, b):
++    la, lb = a.splitlines(), b.splitlines()
++    for i in range(max(len(la), len(lb))):
++        x = la[i] if i < len(la) else "<段已结束>"
++        y = lb[i] if i < len(lb) else "<段已结束>"
++        if x != y:
++            print(f"   首个不同在段内第 {i + 1} 行：", file=sys.stderr)
++            print(f"     A: {x}", file=sys.stderr)
++            print(f"     B: {y}", file=sys.stderr)
++            return
++
++
++def main(argv=None):
++    argv = list(sys.argv[1:] if argv is None else argv)
++    paths = [Path(a) for a in argv] if argv else [REPO / s for s in SITES]
++    if len(paths) < 2:
++        print("[async-branch-parity] FAIL: 至少需要两个比对面", file=sys.stderr)
++        return 1
++    return compare(paths)
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/hack/tests/test_async_branch_parity.py b/hack/tests/test_async_branch_parity.py
+new file mode 100644
+index 0000000..920f95c
+--- /dev/null
++++ b/hack/tests/test_async_branch_parity.py
+@@ -0,0 +1,156 @@
++"""守两个评审 SKILL 的 async host 调度段【逐字节相同】。
++
++【为什么需要这个测试】
++async 分支被【复制】进 sdflow-spec-review / sdflow-code-review 两个 SKILL.md。
++两份若漂 —— 一个宿主路径会静默行为分叉（退出码判读 / barrier 语义 / 降级口径不一致），
++而这是 load-bearing 的正确性，不是风格问题。
++—— CLAUDE.md 基准 1：能用「可固化规则 + 脚本」保证的一致性，MUST 机械化。
++   复制是必要的（两个 SKILL 是独立分发单元），但复制【不能靠手】。
++
++【语法面】
++只认两个 marker token（start / end），单行字面量匹配，有界（基准 5）。
++MUST NOT 演化成「解析 Markdown 结构」。
++"""
++import subprocess
++import sys
++from pathlib import Path
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++import check_async_branch_parity as P  # noqa: E402
++
++REPO = Path(__file__).resolve().parents[2]
++
++
++def _write(tmp_path, name, interior, *, start=P.START_LINE_PREFIX + " x -->",
++           end=P.END_LINE):
++    p = tmp_path / name
++    p.write_text(f"head\n{start}\n{interior}{end}\nfoot\n", encoding="utf-8")
++    return p
++
++
++# ── 真仓状态 ────────────────────────────────────────────────────────────────
++
++def test_repo_sites_are_byte_identical():
++    """⭐ 两个评审 SKILL 的 marker 段逐字节一致 —— 漂了就红。"""
++    assert P.main([]) == 0
++
++
++def test_both_sites_carry_the_markers():
++    """两处 marker 都真的存在（不是「都没有 ∴ 都一致」的空绿）。"""
++    for rel in P.SITES:
++        text = (REPO / rel).read_text(encoding="utf-8")
++        assert P.START_LINE_PREFIX in text, rel
++        assert P.END_LINE in text, rel
++
++
++def test_interior_is_non_empty():
++    """段内不是空的 —— 防「把内容删光换个空绿」。"""
++    for rel in P.SITES:
++        assert P.extract(REPO / rel).strip(), rel
++
++
++def test_interior_names_no_review_skill():
++    """圈内 MUST NOT 出现任一评审 SKILL 的文件名 / skill 名（Task 2 约定）。
++
++    同一串字节要在两处【各自语义正确】，∴ 指代对方一律写「另一评审 SKILL」。
++    """
++    for rel in P.SITES:
++        interior = P.extract(REPO / rel)
++        for bad in P.FORBIDDEN_IN_INTERIOR:
++            assert bad not in interior, f"{rel} 段内出现 {bad}"
++
++
++# ── 漂移检测 ────────────────────────────────────────────────────────────────
++
++def test_one_byte_difference_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "line one\nline two\n")
++    b = _write(tmp_path, "b.md", "line one\nline twO\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_identical_is_green(tmp_path):
++    a = _write(tmp_path, "a.md", "line one\nline two\n")
++    b = _write(tmp_path, "b.md", "line one\nline two\n")
++    assert P.compare([a, b]) == 0
++
++
++def test_marker_line_text_drift_is_red(tmp_path):
++    """marker 起始行自身的文字也参与比对 —— 它承载「圈内放什么」的口径。"""
++    a = _write(tmp_path, "a.md", "x\n", start=P.START_LINE_PREFIX + " AAA -->")
++    b = _write(tmp_path, "b.md", "x\n", start=P.START_LINE_PREFIX + " BBB -->")
++    assert P.compare([a, b]) == 1
++
++
++# ── marker 形态错误：各自明确报错，MUST NOT 静默放行 ────────────────────────
++
++def _bare(tmp_path, name, body):
++    p = tmp_path / name
++    p.write_text(body, encoding="utf-8")
++    return p
++
++
++def test_missing_markers_entirely_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", "no markers here\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_start_without_end_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", f"{P.START_LINE_PREFIX} x -->\nx\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_end_without_start_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", f"x\n{P.END_LINE}\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_two_marker_pairs_is_red(tmp_path):
++    """出现两对 marker → 报错，MUST NOT 取第一对静默放行。"""
++    a = _write(tmp_path, "a.md", "x\n")
++    dup = (f"{P.START_LINE_PREFIX} x -->\nx\n{P.END_LINE}\n"
++           f"{P.START_LINE_PREFIX} x -->\nx\n{P.END_LINE}\n")
++    b = _bare(tmp_path, "b.md", dup)
++    assert P.compare([a, b]) == 1
++
++
++def test_end_before_start_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", f"{P.END_LINE}\nx\n{P.START_LINE_PREFIX} x -->\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_extract_raises_on_malformed(tmp_path):
++    b = _bare(tmp_path, "b.md", "nothing\n")
++    try:
++        P.extract(b)
++    except P.MarkerError:
++        return
++    raise AssertionError("畸形 marker 必须抛 MarkerError，不得静默返回")
++
++
++# ── CLI 契约 ───────────────────────────────────────────────────────────────
++
++def test_cli_exits_nonzero_on_drift(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _write(tmp_path, "b.md", "y\n")
++    r = subprocess.run(
++        [sys.executable, str(REPO / "hack" / "check_async_branch_parity.py"),
++         str(a), str(b)],
++        capture_output=True, text=True, encoding="utf-8")
++    assert r.returncode != 0
++
++
++def test_cli_exits_zero_on_repo():
++    r = subprocess.run(
++        [sys.executable, str(REPO / "hack" / "check_async_branch_parity.py")],
++        capture_output=True, text=True, encoding="utf-8")
++    assert r.returncode == 0, r.stdout + r.stderr
++
++
++def test_setup_sh_runs_the_gate():
++    """门必须真被跑到 —— 「存在但没人跑的门」= 不存在的门。"""
++    assert "check_async_branch_parity.py" in (REPO / "setup.sh").read_text(
++        encoding="utf-8")
+diff --git a/openspec/changes/async-outside-voice/impl-reports/task3-parity-gate.md b/openspec/changes/async-outside-voice/impl-reports/task3-parity-gate.md
+new file mode 100644
+index 0000000..226d324
+--- /dev/null
++++ b/openspec/changes/async-outside-voice/impl-reports/task3-parity-gate.md
+@@ -0,0 +1,108 @@
++# Task 3 实施报告：code-review 层同款分支 + 机械等值门
++
++**R-ID**: R1 · **Blocked-by**: 2（已完成）
++**改动面**：`sdflow-code-review/SKILL.md`、`hack/check_async_branch_parity.py`（新增）、
++`hack/tests/test_async_branch_parity.py`（新增）、`setup.sh`
++
++---
++
++## 做了什么
++
++1. **搬运**：把 `sdflow-spec-review/SKILL.md` 的 `sdflow:async-branch` marker 段（含两条 marker 行本身，5528 字节）
++   **原样字节复制**替换 `sdflow-code-review/SKILL.md` 原有的 5 行同步 exec 块
++   （`exec：$HELPER exec --context-file <f>` + 外层超时条款 + exit 0/124/1/3 四行）。
++   搬运用脚本做（读 → 写），不是手抄，∴ 不存在手抄漂移。
++2. **圈外未动**：code-review 的站点枚举（`site=code-voice` / `site=hr-tg`）、context 构造、
++   preflight、fallback、锚行段一律保持原样——两层这些部分本就应当不同。
++3. **Step3 barrier**：code-review 第三步新增第 0 条（与 spec-review 第三步同款措辞，站点相关措辞按本层调整为「汇总去重」）：
++   进汇总去重前 MUST 先完成 collect barrier，逐站点取，RUNNING 站点让出轮次等通知、MUST NOT 早退落 `timeout`。
++4. **等值门**：新增 `hack/check_async_branch_parity.py`，比对两处 marker 段字节（含 marker 行），
++   并机械守「圈内 MUST NOT 出现任一评审 SKILL 的文件名 / skill 名 / 报告名」（Task 2 约定）。
++5. **挂门**：`setup.sh` 三条通则门之后追加一条（与 `sync_principles.py --check` / `gen_workflow_guide.py --check` 同 idiom）；
++   `hack/tests/test_async_branch_parity.py` 16 个用例进仓内 pytest 套件。
++
++### 隐含前提已显式落盘（ticket 第 3 条要求）
++
++`check_async_branch_parity.py` 模块 docstring 记下两条：
++- **(1)** 圈内站点无关约定（脚本机械守）。
++- **(2)** 🔴 段内 `Step3` ×4 处在两侧都成立，**前提是两个评审 SKILL 的第三步恰好同为「合并 / 裁决 barrier」**；
++  若将来任一侧重编步号即失效，必须同时重写两侧，**而不是只改一侧再来放宽本门**。
++
++---
++
++## 验收证据
++
++### ① code-review 层分支与 spec-review 逐字对齐（站点无关部分）
++
++```
++$ /usr/bin/python3 hack/check_async_branch_parity.py
++[async-branch-parity] ✅ 2 处 async host 调度段逐字节一致
++rc=0
++```
++
++### ② 两层 async host 调度段被 marker 成对圈定，圈内仅站点无关逻辑
++
++`sdflow-spec-review/SKILL.md:286,335` 与 `sdflow-code-review/SKILL.md:284,333` 各一对 marker。
++圈内内容 = ①内层超时解析 ②后台能力自探 ③执行模式矩阵 ④命令形态 ⑤哨兵 envelope ⑥collect barrier
++⑦退出码→reason_code 表 ⑧站点↔任务标识记账——全部站点无关。
++`test_interior_names_no_review_skill` 机械守圈内不出现 `sdflow-spec-review` / `sdflow-code-review` /
++`spec-review-report` / `code-review-report`。
++
++### ③ 新增等值校验断言两段字节相同，不同则非零退出
++
++真仓一字节漂移实验（把 async 行的 `默认 900` 改成 `默认 901`，跑完已还原）：
++
++```
++[async-branch-parity] FAIL: async host 调度段已漂移 —— …/sdflow-spec-review/SKILL.md 与 …/sdflow-code-review/SKILL.md 不逐字节相同
++   首个不同在段内第 14 行：
++     A:     | async | … | `<VOICE_TIMEOUT>`（默认 900） | …
++     B:     | async | … | `<VOICE_TIMEOUT>`（默认 901） | …
++   修：以一侧为准，把整段（含 marker 行）原样复制到另一侧
++rc=1
++（还原后）[async-branch-parity] ✅ 2 处 async host 调度段逐字节一致 · restored rc=0
++```
++
++marker 形态错误各自明确报错（`MarkerError`，MUST NOT 静默放行），测试逐项覆盖：
++缺 marker、有 start 无 end、有 end 无 start、两对 marker、end 在 start 之前、段为空、marker 行文字漂移。
++
++### ④ 该校验挂进安装脚本与仓内测试套件
++
++```
++$ grep -n check_async_branch_parity setup.sh
++  # 两个评审 SKILL 的 async host 调度段必须逐字节相同 —— 漂了 = 一个宿主路径静默行为分叉
++  if ! python3 "$REPO_DIR/hack/check_async_branch_parity.py"; then
++$ bash -n setup.sh && echo OK   → setup.sh syntax OK
++```
++
++`test_setup_sh_runs_the_gate` 机械守这条挂载存在（「存在但没人跑的门 = 不存在的门」）。
++
++### ⑤ 首次跑确认绿
++
++```
++$ /usr/bin/python3 -m pytest hack/tests/test_async_branch_parity.py -q
++16 passed in 0.05s
++
++$ /usr/bin/python3 -m pytest -q
++1635 passed, 2 skipped in 72.85s        （基线 1619 → +16）
++
++$ /usr/bin/python3 hack/sync_principles.py --check
++[sync_principles] ✅ 20 个投放面全部与真相源一致
++```
++
++**TDD 次序留痕**：先写 `hack/tests/test_async_branch_parity.py` → 跑得
++`ModuleNotFoundError: No module named 'check_async_branch_parity'`（红）→ 再写脚本 → 绿。
++
++---
++
++## 遗留 concerns
++
++1. **`--check` 无 `--apply`（ADR-5 已知次优，非本票遗漏）**：本脚本只报漂、不回填，
++   修法是「以一侧为准整段原样复制」（错误输出已直接给出该指引）。`--apply` 式单一源运行时注入是 DRY todo，
++   ADR-5 明确判为越 scope，本票不做。
++2. **`setup.sh` 未在本机实跑**：本仓是开发 checkout，跑 `setup.sh` 会把 `~/.claude/skills` 指向开发版
++   （CLAUDE.md 的 dev/runtime checkout 纪律）。∴ 只做了 `bash -n` 语法核 + 脚本单独实跑 + 测试守挂载存在，
++   未做 setup.sh 端到端实跑。
++3. **前提 (2) 是跨文件的语义前提，无机械守**：「两侧第三步同为合并 barrier」这件事没有确定性信号可捕获
++   （机械/语义切分线判据：有无确定性信号），∴ 落成 docstring 里的显式注记 + 本报告，是合法的语义残余，不是漏做的机械门。
++4. **等值门比对的是 marker 段，不覆盖圈外**：圈外的 preflight / fallback / 锚行段两层目前也高度相似，
++   但按 ADR-5 刻意不圈（站点相关成分混杂），漂了不会红——这是设计选择，非缺陷。
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index bf5d172..74b58d5 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -195,6 +195,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**
+ 
+ ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
+ 
++0. 🔴 **进汇总去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的汇总去重。
+ 1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
+    折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
+ 2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
+@@ -280,11 +281,56 @@ context 构造（摘录规则定死，不现场发挥）：本轮**起手先占
+   `<task_id>`：后台派发填该后台任务标识；同步 exec 填字面 `sync`。「是否真派发过某站点」以本文件为准，MUST NOT 靠会话记忆
+   site=code-voice → git diff $DIFF_BASE..HEAD 全量
+   site=hr-tg      → 命中 TG 判据触发点 + 相关 diff hunk
+-exec：$HELPER exec --context-file <f>
+-  ⏱ **外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 默认 300s + 10s grace）——调本命令时 MUST 把**外层 Bash/shell 工具超时设为 ≥330000ms**（= helper 内部 `--timeout` + 30s 余量），MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。若显式传 `--timeout <s>` 覆盖内部值，外层同步给 ≥(s+30)s。**指令层约束**（外层超时由调用方设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
+-  exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
+-  exit 124 → fallback（reason_code="timeout"）      exit 1 → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
+-  exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
++<!-- sdflow:async-branch:start —— 站点无关的 host 调度段。与另一评审 SKILL 的同名 marker 段 MUST 字节相同（hack/check_async_branch_parity.py 机械守）。站点枚举 / context 构造 / reuse-guard 门控 / declared-sites 计算 MUST 留在本 marker 之外 -->
++exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在此重判宿主**，ADR-4）
++  **① 内层超时 `<VOICE_TIMEOUT>` 取值（config.yaml 直读，沿 `metrics.enabled` 先例；MUST NOT 走 resolver——两 SKILL 同法，否则等值门红）**：
++    读仓根 `openspec/config.yaml` 的 `outside-voice.async-timeout-seconds`；**仅 async 分支用它**，sync / 降级分支恒 `300`。
++    校验：MUST 为**正整数**（纯十进制数字串，无小数点 / 无单位后缀 / 无正负号 / 无空白）且 `1 ≤ v ≤ 3600`（`3600` = 理智上界——helper 内层 `timeout -k 10` 自身无上限，误配成 `86400` 会把一轮评审永久挂住；3600 远高于 900 默认，留足调宽空间）。
++    缺键 / 缺 config 文件 / 读失败 / 非整 / `0` / 负数 / 越界 → **一律回落默认 `900`**（fail-safe 恒生效：**MUST NOT fail-closed 罢工**、**MUST NOT 传 `--timeout 0`**——那会取消 helper 的「≤天花板必终止」保证）。
++  **② 后台能力自探（dispatch 前 MUST 先跑；语义核验非机械门。这是验证「本调用上下文真能后台化」的实际防线，不是冗余保险，ADR-6）**：
++    `$SDFLOW_HOST≠"claude"` → 不自探，直接走 sync 分支。
++    `$SDFLOW_HOST="claude"` → 用 run_in_background 派一条 trivial 命令（如 `printf PROBE_OK`）：拿得到后台任务标识**且**取得回 `PROBE_OK` → `background="available"`；派不出 / 机制报错 / 取不回哨兵 → `background="unavailable"`。
++    `background="unavailable"` ⇒ **降级走 sync 分支**，且报告本段 MUST 显著标注「⚠️ voice 同步降级（后台能力不可用，host=claude）」——**MUST NOT 假装 async 成功**、MUST NOT 因此跳过 voice、MUST NOT 因此改动锚行契约。
++  **③ 执行模式矩阵（F-B；三行始终满足「外层 ≥ 内层+30s」）**：
++    🔴 **内层秒数一律代入十进制字面值**（如 `900` / `300`）——**MUST NOT 写 `$VOICE_TIMEOUT` 之类 shell 变量**：harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空（同 ④ 的 `$HELPER` 条款、同 context 构造节的 run-id 条款）。下表 `<VOICE_TIMEOUT>` 是**占位符**，指 ① 解析出的那个数。
++    | 分支 | 条件 | 内层 `--timeout` | 外层 Bash 工具超时 |
++    | async | host=claude ∧ `background="available"` | `<VOICE_TIMEOUT>`（默认 900） | 不适用——dispatch 调用 <1s 即返回；后台任务**不受 Bash 工具超时约束**（spike 实证 2026-07-18：后台跑满 660s、跨过 600000ms 上限、exit 0、ppid 稳定）⇒ 有效外层无界 ≥ 内层+30s。**MUST NOT** 因它"是长命令"就给 dispatch 调用设长超时 |
++    | sync | host=codex | `300` | ≥330000ms |
++    | sync（降级） | host=claude ∧ `background="unavailable"` | `300` | ≥330000ms |
++    ⏱ **sync 两行的外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 300s + 10s grace）——MUST 把外层 Bash/shell 工具超时设为 **≥330000ms**，MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。**指令层约束**（外层超时由调用方逐调用设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
++  **④ 命令形态（两分支共用同一哨兵 envelope）**：整条命令 MUST 逐字为——
++    `~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file <f>; rc=$?; printf '\n<<<SDFLOW_EXEC_EXIT>>>%s\n' "$rc"`
++    （`<T>` 代入本分支内层秒数的**字面值**，`<f>` 代入 context 文件**字面路径**；**MUST 代入 `~/.sdflow/hack/outside-voice.sh` 字面路径、MUST NOT 写 `$HELPER`**——harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空）
++    async 分支：该命令**以 run_in_background 派出**，立刻记下返回的后台任务标识（见 ⑧）；sync 分支：前台跑，当场即得退出码。
++    🔴 **为什么是 `printf '\n…'` 而不是 `echo`**：helper 末尾 `cat last-message.md` **逐字节透传模型自由文本、且不保证尾换行** ⇒ 朴素 `echo` 会与 voice 正文末行**粘成同一物理行**（实测：整行锚定 0 命中 → 把**成功**的 voice 假降级）。强制前置换行把这层不确定性彻底消掉。
++  **⑤ 退出码 MUST 从哨兵 envelope 取，MUST NOT 从 voice 正文推断（F-D）**：
++    在该命令输出上做**整行锚定**扫描 `^<<<SDFLOW_EXEC_EXIT>>>([0-9]+)$`，数命中行数：
++      **恰好 1 行** → 取其捕获组为退出码，进 ⑦。
++      **0 行 或 ≥2 行 → `exec-error`**（wrapper 恒发且只发一行 ⇒ ≥2 行正是 voice 正文注入了一行的**确定性信号**；审「讨论本机制自身」的 change 时 voice 正文必然出现该字样，此判据即为此而设）。
++    **MUST NOT** 用宽松 grep / 子串匹配 / 取末行代替整行锚定。
++  **⑥ 通知驱动 collect @Step3 barrier（F-A；async 分支专属，sync 分支当场就有退出码）**：
++    本 harness 的 run_in_background 是**完成推送通知**（"you will be notified — do not poll"），**不是**可主动查询的状态接口 ⇒
++      · dispatch 时 MUST 就地记「**站点 ↔ 后台任务标识**」映射（见 ⑧），并按 context 构造节把该 task_id 追加落盘 `dispatch-manifest.tsv`；
++      · 完成通知**异步到达**（可能早于 Step3）→ 收到即**暂存该站点的输出与退出码**，MUST NOT 丢弃；
++      · **Step3 是 barrier**：每个**实际 dispatch 过的**站点，其结果 MUST 已在手、或已按 ⑦ 降级完毕，才可进综合裁决。
++    🔴 **正向 barrier 语义**：某 dispatch 站点在 Step3 时**尚无终态退出码**（仍 RUNNING）⇒ MUST **让出轮次、等该后台任务的完成/超时通知**后再继续（通知由 harness 推送，这既非长 sleep 也非轮询）。
++      **MUST NOT** 单次长 sleep 等待、**MUST NOT** 自造轮询循环。
++      **`reason_code="timeout"` 只允许由实际观测到的 `exit 124` 产生**——**MUST NOT** 在未收到该站点终态通知前落 `timeout`。早退假 timeout 把「慢但会成功」的 voice 假降级，正是本机制要消灭的失效模式；且它**逃得过 per-site 站点集核**（该站点仍在集合内、照样判绿），∴ 本条是唯一防线。
++    **安全（MUST）**：collect **只取「结构化退出码 + exit 0 时的 stdout findings」**。helper 在 exit≠0 时把 runner **原始 stderr + 未扫描的 final-message 前 3 行**写 stderr，该段**绕过出境 `secret_scan`**（既有缺口），而后台化把它落进了 harness 托管的后台任务输出文件（新持久化载体）⇒ **MUST NOT 把后台文件里的原始 stderr 当 findings 采信**，只允许摘要写进锚行外正文。
++  **⑦ 退出码 → 去向 / reason_code（两分支同一张表，无遗漏；未知码 MUST NOT 读作 ok）**：
++    exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
++    exit 124 → fallback（reason_code="timeout"）——**仅当真观测到 124**，见 ⑥ 正向 barrier 语义
++    exit 1   → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
++    exit 2   → 用法错 / context 不可读 → fallback（reason_code="exec-error"；`2` 不在 reason_code 枚举内，**并入 exec-error**，枚举不新增）
++    exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
++    其余一切情形（未知码 / envelope 0 行或 ≥2 行 / 后台任务标识查不到 / 输出取不回）→ **保守** fallback（reason_code="exec-error"）；**MUST NOT 读作 `ok`**、MUST NOT 静默丢该站点、MUST NOT 落零锚
++  **⑧ 站点 ↔ 后台任务标识记账（MUST 在指令执行中显式维护此表；model-driven 记账易错，故既落盘又逐站点取）**：
++    | 站点 | 本轮是否 dispatch | 后台任务标识 |
++    | <逐个填本轮涉及的站点> | 是 / 否（否则附未派原因） | `<task_id>` 或字面 `sync` |
++    · 本表的集合 = **实际 dispatch 过的站点**（后台 voice 数不定 0/1/2）——**它与「应有锚的站点集」不是同一个集合**（门控/复用态可以不派却仍落锚），二者 MUST NOT 混用。
++    · collect 时 MUST **按本表逐站点取**（不靠"好像都回来了"的整体印象），每站点各自独立走 ⑤ 与 ⑦。
++    · 「是否真派发过某站点」以 `dispatch-manifest.tsv` 为准，MUST NOT 靠会话记忆。
++<!-- sdflow:async-branch:end -->
+ fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout,exec-error}）：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh **只读型**（与 $SDFLOW_HOST 同宿主）子代理（禁写/禁执行副作用）（同源同 prompt；框架已含范围收窄）；
+   无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_HOST"（同族——`claude-fallback` 枚举值已废弃，跨模型性是派生量，同族 fallback 由 runner==host 表达）
+   **F8（同族 fallback 也起不来）**：若该 fallback 只读子代理**本身也派不出**（spawn 失败/机制报错）→ 无同族降级可用 → 锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（host-adaptive-execution spec：同族 fallback 也起不来 ⇒ 无执行段、非自审；runner="none" 恒 findings=0，anchor_lint 矩阵判 no-exec 合法）
+diff --git a/setup.sh b/setup.sh
+index 6995cdf..a9f3604 100644
+--- a/setup.sh
++++ b/setup.sh
+@@ -230,4 +230,8 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$REPO_DIR/hack/sync_principles.py
+   if ! python3 "$REPO_DIR/hack/gen_workflow_guide.py" --check; then
+     echo "  ⚠️ 修：python3 hack/gen_workflow_guide.py --write"
+   fi
++  # 两个评审 SKILL 的 async host 调度段必须逐字节相同 —— 漂了 = 一个宿主路径静默行为分叉
++  if ! python3 "$REPO_DIR/hack/check_async_branch_parity.py"; then
++    echo "  ⚠️ async host 调度段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
++  fi
+ fi

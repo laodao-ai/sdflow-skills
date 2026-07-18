@@ -13,7 +13,8 @@ sdflow-spec-review / sdflow-code-review 各有一段 host 调度逻辑（内层�
 
 【圈内的两条隐含前提（显式记下，别做暗默假设）】
   (1) 圈内 MUST NOT 出现任一评审 SKILL 的文件名 / skill 名 —— 同一串字节要在两处
-      【各自语义正确】，指代对方一律写「另一评审 SKILL」。本脚本机械守（FORBIDDEN_IN_INTERIOR）。
+      【各自语义正确】，指代对方一律写「另一评审 SKILL」。本脚本机械守（FORBIDDEN_IN_SEGMENT
+      —— 查【整段含两行 marker】，因为 start 行本身也参与比对、同样不许写死到某一侧）。
   (2) 段内出现的 `Step3` 在两侧都成立，是因为 sdflow-spec-review 与 sdflow-code-review
       的第三步【恰好同为「合并 / 裁决 barrier」】（code-review 第三步 = 置信过滤 + 综合 +
       对抗裁决，其「第二步半」已写「findings 进 Step3 合并池」）。
@@ -49,7 +50,7 @@ def _is_start(line):
     return line.startswith(START_LINE_PREFIX) and line.rstrip().endswith("-->")
 
 # 圈内不许出现的字样（前提 (1)）—— 出现即说明这段被写死到了某一侧的语境里。
-FORBIDDEN_IN_INTERIOR = [
+FORBIDDEN_IN_SEGMENT = [
     "sdflow-spec-review",
     "sdflow-code-review",
     "spec-review-report",
@@ -102,12 +103,18 @@ def compare(paths):
             return 1
 
     ref_path, ref = segments[0]
-    if not interior(ref).strip():
-        print(f"[async-branch-parity] FAIL: {ref_path} 的 marker 段正文为空",
-              file=sys.stderr)
-        return 1
-
     rc = 0
+
+    # 空段判据逐段施加，不只查 segments[0]：当前两站点场景下字节等值已能兜住
+    # （B 空而 A 非空必红），但站点数若变成 1 或 ≥3，只查 ref 就会漏。
+    for p, seg in segments:
+        if not interior(seg).strip():
+            print(f"[async-branch-parity] FAIL: {p} 的 marker 段正文为空",
+                  file=sys.stderr)
+            rc = 1
+    if rc:
+        return rc
+
     for p, seg in segments[1:]:
         if seg != ref:
             print(f"[async-branch-parity] FAIL: async host 调度段已漂移 —— "
@@ -116,7 +123,7 @@ def compare(paths):
             rc = 1
 
     for p, seg in segments:
-        for bad in FORBIDDEN_IN_INTERIOR:
+        for bad in FORBIDDEN_IN_SEGMENT:
             if bad in seg:
                 print(f"[async-branch-parity] FAIL: {p} 的 marker 段内出现 "
                       f"「{bad}」——圈内 MUST 站点无关，指代对方写「另一评审 SKILL」",
