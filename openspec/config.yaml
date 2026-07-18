@@ -68,8 +68,7 @@ metrics:
   enabled: true
 
 # outside-voice（可选覆盖段）——async 分支内层 --timeout 天花板，单位秒。
-# 缺省请勿填（缺键即用默认 900）。仅 $SDFLOW_HOST=claude 的 async 分支读它；
-# codex 同步分支与 claude 后台能力自探失败的降级同步分支恒 300、不受本键影响。
-# 校验：正整数且 1 ≤ v ≤ 3600；0/负/非整/越界/读失败一律回落 900（fail-safe，不 fail-closed）。
+# 缺省请勿填。取值域 / 校验 / 回落规则的单一源 = sdflow-spec-review/SKILL.md
+# 「outside-voice helper 调用协议」节 ①（此处不复述数值与规则，避免第二份 prose 源）。
 # outside-voice:
 #   async-timeout-seconds: 900
