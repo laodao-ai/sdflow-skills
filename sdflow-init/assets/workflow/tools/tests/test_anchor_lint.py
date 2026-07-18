@@ -35,7 +35,8 @@ def _write_catalog(dest_dir, members="TG-04, TG-16"):
 
 def _ov(**kw):
     """outside-voice 锚构造器（矩阵测试用）。默认合法跨模型：host=claude runner=codex reason_code=ok。"""
-    base = dict(site="x", host="claude", runner="codex", reason_code="ok")
+    # async-outside-voice §3.5：site 默认取 code-voice（e2e 夹具多为 code-review 层，per-site 核按层比对期望集）
+    base = dict(site="code-voice", host="claude", runner="codex", reason_code="ok")
     base.update(kw)
     return "<!-- sdflow:outside-voice v1 " + " ".join(f'{k}="{v}"' for k, v in base.items()) + " -->"
 
@@ -456,7 +457,8 @@ def test_catalog_bad_exit2_reason(tmp_path):
 def test_clean_report_exit0(tmp_path):
     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
     rpt = (_OV_XM + '\n<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
-           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           '<!-- sdflow:declared-sites v1 declared="code-voice" -->\n')
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root); assert r.returncode == 0, r.stderr
 
@@ -881,7 +883,224 @@ def test_clean_v2_report_with_fanout_exit0(tmp_path):
     rpt = (_ov(host="codex", runner="claude", reason_code="ok") + "\n"
            + _fc(host="codex", subagents="available", mirrors="domain,adversarial,grounding") + "\n"
            + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
-           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           '<!-- sdflow:declared-sites v1 declared="code-voice" -->\n')
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 0, r.stderr
+
+
+# --- async-outside-voice §3.5（F-C）：declared-sites per-site 完整性机械核 -----------------
+# 家族级门（"outside-voice" 有 ≥1 行即过）放过「并发 2 站点漏收一个」。本组测 per-site 核：
+# declared-sites 锚声明「本层应有锚站点集」，脚本重算期望集（layer + HR-TG∩）并与实落 site= 集比对。
+
+def _ds(declared):
+    return f'<!-- sdflow:declared-sites v1 declared="{declared}" -->'
+
+_HR_TG_EMPTY = '<!-- sdflow:hr-tg v1 hit="none" declared="" -->'
+# HR-TG∩≠∅（TG-04 在 _HR_TG_SUBSET 内）
+_HR_TG_HIT = '<!-- sdflow:hr-tg v1 hit="TG-04" declared="TG-04" evidence="x" -->'
+
+
+def _dsv(report, layer="code-review", subset=None):
+    al = _mod()
+    return al.check_declared_sites(report, layer, subset if subset is not None else _HR_TG_SUBSET)
+
+
+def test_ds_ok_code_review_no_hrtg():
+    """正例：code-review + HR-TG∩=∅ → 期望 {code-voice}，declared 与实落均相符 → 零违规。"""
+    rpt = _ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n" + _ds("code-voice") + "\n"
+    assert _dsv(rpt) == []
+
+
+def test_ds_ok_spec_review_with_hrtg():
+    """正例：spec-review + HR-TG∩≠∅ → 期望 {design-voice,hr-tg}，两锚俱在 → 零违规。"""
+    rpt = (_ov(site="design-voice") + "\n" + _ov(site="hr-tg") + "\n"
+           + _HR_TG_HIT + "\n" + _ds("design-voice,hr-tg") + "\n")
+    assert _dsv(rpt, layer="spec-review") == []
+
+
+def test_ds_declared_more_than_actual_is_red():
+    """🔴 本票核心失效模式：并发 2 站点漏收一个——declared 有 hr-tg 但报告无该锚 → site-missing-anchor。"""
+    rpt = _ov(site="design-voice") + "\n" + _HR_TG_HIT + "\n" + _ds("design-voice,hr-tg") + "\n"
+    v = _dsv(rpt, layer="spec-review")
+    assert any(x["kind"] == "site-missing-anchor" and x["detail"] == "hr-tg" for x in v)
+
+
+def test_ds_declared_fewer_than_actual_is_red():
+    """declared 少一个站点（实落多一条锚）→ site-unexpected-anchor；且缩水的 declared 同时违反公式。"""
+    rpt = (_ov(site="design-voice") + "\n" + _ov(site="hr-tg") + "\n"
+           + _HR_TG_HIT + "\n" + _ds("design-voice") + "\n")
+    v = _dsv(rpt, layer="spec-review")
+    assert any(x["kind"] == "site-unexpected-anchor" and x["detail"] == "hr-tg" for x in v)
+    assert any(x["kind"] == "declared-not-expected" for x in v)
+
+
+def test_ds_declared_shrink_and_drop_anchor_still_red():
+    """🔴 反规避：模型同时缩 declared 又不落锚（两边自洽）——公式重算仍判红，不放行。"""
+    rpt = _ov(site="design-voice") + "\n" + _HR_TG_HIT + "\n" + _ds("design-voice") + "\n"
+    v = _dsv(rpt, layer="spec-review")
+    assert [x["kind"] for x in v] == ["declared-not-expected"]
+
+
+def test_ds_layer_base_site_is_layer_specific():
+    """按层区分：code-review 层 declared 写 design-voice → declared-not-expected（站点集非站点无关）。"""
+    rpt = _ov(site="design-voice") + "\n" + _HR_TG_EMPTY + "\n" + _ds("design-voice") + "\n"
+    v = _dsv(rpt, layer="code-review")
+    assert any(x["kind"] == "declared-not-expected" for x in v)
+
+
+def test_ds_reuse_state_design_voice_no_dispatch_still_green():
+    """🔴 G1：复用态 design-voice（guard=none、未 dispatch）照样落锚 → 期望集按「应有锚」定义，判绿。
+    若按「应 dispatch 集」定义，此最常见路径会假红。"""
+    rpt = (_ov(site="design-voice", guard="none", host="claude", runner="codex", reason_code="ok") + "\n"
+           + _HR_TG_EMPTY + "\n" + _ds("design-voice") + "\n")
+    assert _dsv(rpt, layer="spec-review") == []
+
+
+def test_ds_missing_anchor_is_violation_not_silent_pass():
+    """declared-sites 锚缺失 MUST NOT 静默放行（否则整个门可由省略绕过）。"""
+    rpt = _ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n"
+    v = _dsv(rpt)
+    assert any(x["kind"] == "missing-declared-sites" for x in v)
+
+
+def test_ds_multiple_anchors_fail_closed():
+    """≥2 条 declared-sites 锚 → fail-closed，MUST NOT 静默取首。"""
+    rpt = (_ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n"
+           + _ds("code-voice") + "\n" + _ds("code-voice,hr-tg") + "\n")
+    v = _dsv(rpt)
+    assert any(x["kind"] == "multi-declared-sites" for x in v)
+
+
+def test_ds_missing_declared_field():
+    rpt = (_ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n"
+           + '<!-- sdflow:declared-sites v1 -->' + "\n")
+    v = _dsv(rpt)
+    assert any(x["kind"] == "missing-field" and x["field"] == "declared" for x in v)
+
+
+def test_ds_dup_key_fail_closed():
+    """重复 declared= → dup-key 且不进比对（镜像 check_legal_combo 的末值胜防线）。"""
+    rpt = (_ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n"
+           + '<!-- sdflow:declared-sites v1 declared="code-voice" declared="code-voice,hr-tg" -->' + "\n")
+    v = _dsv(rpt)
+    assert any(x["kind"] == "dup-key" and x["field"] == "declared" for x in v)
+
+
+def test_ds_malformed_site_csv():
+    """域外站点记号 / 空 cell → malformed-site-csv（fail-closed，不宽松抽取）。"""
+    for bad in ("code-voice,bogus-site", "code-voice,,hr-tg", ",code-voice"):
+        rpt = _ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n" + _ds(bad) + "\n"
+        v = _dsv(rpt)
+        assert any(x["kind"] == "malformed-site-csv" for x in v), bad
+
+
+def test_ds_duplicate_and_order():
+    rpt = _ov(site="code-voice") + "\n" + _ov(site="hr-tg") + "\n" + _HR_TG_HIT + "\n"
+    v_dup = _dsv(rpt + _ds("code-voice,code-voice,hr-tg") + "\n")
+    assert any(x["kind"] == "declared-sites-duplicate" for x in v_dup)
+    v_ord = _dsv(rpt + _ds("hr-tg,code-voice") + "\n")
+    assert any(x["kind"] == "declared-sites-not-canonical-order" for x in v_ord)
+
+
+def test_ds_outside_voice_missing_site_field():
+    """outside-voice 锚缺 site= → 无从归站点，报 missing-field（矩阵必填字段集未被修改）。"""
+    al = _mod()
+    ov_nosite = '<!-- sdflow:outside-voice v1 host="claude" runner="codex" reason_code="ok" -->'
+    rpt = ov_nosite + "\n" + _HR_TG_EMPTY + "\n" + _ds("code-voice") + "\n"
+    v = _dsv(rpt)
+    assert any(x["kind"] == "missing-field" and x["field"] == "site" for x in v)
+    assert al.OUTSIDE_VOICE_REQUIRED_FIELDS == ("host", "runner", "reason_code")   # 矩阵必填集未动
+
+
+def test_ds_duplicate_site_anchors():
+    """同站点两条 outside-voice 锚 → duplicate-site-anchor（集合会吞掉歧义，须显式拦）。"""
+    rpt = (_ov(site="code-voice") + "\n" + _ov(site="code-voice") + "\n"
+           + _HR_TG_EMPTY + "\n" + _ds("code-voice") + "\n")
+    v = _dsv(rpt)
+    assert any(x["kind"] == "duplicate-site-anchor" for x in v)
+
+
+def test_ds_hr_tg_unresolved_fail_closed():
+    """HR-TG∩ 算不出（hr-tg 锚缺失 / 非唯一 / declared 畸形）→ hr-tg-unresolved，MUST NOT 猜期望集。"""
+    base = _ov(site="code-voice") + "\n" + _ds("code-voice") + "\n"
+    assert any(x["kind"] == "hr-tg-unresolved" for x in _dsv(base))                       # 缺
+    assert any(x["kind"] == "hr-tg-unresolved"
+               for x in _dsv(base + _HR_TG_EMPTY + "\n" + _HR_TG_HIT + "\n"))             # 非唯一
+    assert any(x["kind"] == "hr-tg-unresolved"
+               for x in _dsv(base + '<!-- sdflow:hr-tg v1 hit="none" declared="TG-,x" -->' + "\n"))
+
+
+def test_ds_fenced_template_anchors_no_false_positive():
+    """🔴 G4 核心：报告正文围栏内的模版/示例锚（本 change 报告自身即在讨论锚格式）MUST NOT 被计入。
+    围栏内放「相反的」declared-sites + 多余 outside-voice 模版锚，真锚在围栏外 → 仍判绿。"""
+    rpt = (
+        "# 报告\n\n"
+        "锚模版如下：\n\n"
+        "```\n"
+        + _ov(site="design-voice") + "\n"
+        + _ov(site="hr-tg") + "\n"
+        + _ds("design-voice,hr-tg") + "\n"
+        + '<!-- sdflow:hr-tg v1 hit="TG-04" declared="TG-04" evidence="示例" -->' + "\n"
+        "```\n\n"
+        "~~~\n" + _ov(site="hr-tg") + "\n~~~\n\n"
+        + _ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n" + _ds("code-voice") + "\n"
+    )
+    assert _dsv(rpt) == []
+
+
+def test_ds_reuses_fence_outside_lines_no_bare_grep():
+    """实现须复用本文件既有 fence 口径：给 fence_outside_lines 打桩（只放行第一行）后，
+    check_declared_sites 的可见行随之变化 → 证明它走的是该函数、而非另起裸 grep 解析路径。"""
+    al = _mod()
+    rpt = _ov(site="code-voice") + "\n" + _HR_TG_EMPTY + "\n" + _ds("code-voice") + "\n"
+    assert al.check_declared_sites(rpt, "code-review", _HR_TG_SUBSET) == []
+    orig = al.fence_outside_lines
+    al.fence_outside_lines = lambda text: iter(text.splitlines()[:1])
+    try:
+        v = al.check_declared_sites(rpt, "code-review", _HR_TG_SUBSET)
+    finally:
+        al.fence_outside_lines = orig
+    assert any(x["kind"] == "missing-declared-sites" for x in v)
+
+
+def test_ds_self_referential_real_report_no_false_positive():
+    """🔴 自指测试：拿本 change 自己的 spec-review-report.md（真实文件，正文在讨论锚格式）跑，
+    补上应有的 declared-sites 锚 + 围栏内模版锚后 MUST 零违规（裸 grep 实现必在此假阳）。"""
+    real = Path(__file__).resolve().parents[5] / "openspec/changes/async-outside-voice/spec-review-report.md"
+    if not real.exists():
+        pytest.skip(f"真实报告不在预期路径: {real}")
+    text = real.read_text(encoding="utf-8")
+    # 该报告 hr-tg 锚 hit=TG-09,TG-17,TG-26 ⇒ HR-TG∩≠∅；实落 site=design-voice + hr-tg
+    subset = {"TG-09", "TG-17", "TG-26"}
+    augmented = (text + "\n" + _ds("design-voice,hr-tg") + "\n\n"
+                 + "```\n" + _ov(site="code-voice") + "\n" + _ds("code-voice") + "\n```\n")
+    al = _mod()
+    v = al.check_declared_sites(augmented, "spec-review", subset)
+    assert v == [], v
+
+
+def test_ds_cli_end_to_end_violation(tmp_path):
+    """端到端：main() 接入 per-site 核——漏收一个站点 → returncode 1 + JSON 含 site-missing-anchor。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(site="code-voice") + "\n"
+           + '<!-- sdflow:hr-tg v1 hit="TG-04" declared="TG-04" evidence="x" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           + _ds("code-voice,hr-tg") + "\n")
+    rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+    r = _run(rpt_path, "code-review", root)
+    assert r.returncode == 1, r.stderr
+    assert any(x["kind"] == "site-missing-anchor" for x in json.loads(r.stdout)["violations"])
+
+
+def test_ds_cli_end_to_end_clean(tmp_path):
+    """端到端正例：站点集自洽 → CLEAN（exit 0）。"""
+    root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+    rpt = (_ov(site="code-voice") + "\n" + _ov(site="hr-tg") + "\n"
+           + '<!-- sdflow:hr-tg v1 hit="TG-04" declared="TG-04" evidence="x" -->\n'
+           '<!-- sdflow:step1-broad-review v1 mode="native" -->\n'
+           + _ds("code-voice,hr-tg") + "\n")
     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
     r = _run(rpt_path, "code-review", root)
     assert r.returncode == 0, r.stderr

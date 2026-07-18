@@ -16,6 +16,7 @@ ANCHOR_PREFIXES = {
     "<!-- sdflow:step1-broad-review v1": "step1-broad-review",
     "<!-- sdflow:lens-metric v1": "lens-metric",
     "<!-- sdflow:fanout-capability v1": "fanout-capability",   # add-codex-host-support：会话级探针锚，always-on 一致性 lint 判据源
+    "<!-- sdflow:declared-sites v1": "declared-sites",         # async-outside-voice：本层「应有锚站点集」声明，per-site 完整性核判据源
 }
 _KV = re.compile(r'([^\s=]+)="([^"]*)"')                    # 受限 kv：key="value"
 _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')               # CommonMark fence：0-3 空格 + ≥3 marker
@@ -494,6 +495,126 @@ def check_legal_combo(report_text, enums):
     return v
 
 
+# --- async-outside-voice §3.5（F-C·G1/G4/G7）：declared-sites per-site 完整性机械核 -------------
+# 家族级门（check_existence：报告有 ≥1 条 outside-voice 锚即过）不核 per-site ⇒ 放过「并发 2 站点
+# 漏收一个」。本核补该盲区：报告落 `sdflow:declared-sites` 锚声明本层「**应有锚**站点集」，脚本
+# ① 按公式重算期望集与之比对、② 与实落 `site=` 集比对，任一不等即红。
+#
+# 期望集 = 该层「恒有锚站点」∪「条件站点（条件成立时）」：
+#   spec-review = {design-voice} ∪ {hr-tg | HR-TG∩≠∅}；code-review = {code-voice} ∪ {hr-tg | HR-TG∩≠∅}
+# 🔴 MUST NOT 定义为「应 **dispatch** 的站点集」：design-voice 在复用态（reuse-guard reason_code=none、
+#    未 dispatch）照样落锚，code-voice 是 always ⇒ 按 dispatch 定义会在最常见路径上假红。
+# 🔴 MUST NOT 解析 `guard=`：该字段语义**站点相关**（design-voice 上 none=复用未派、hr-tg 上 none=
+#    填充值已派），拿它承重即引入 site 特判。∴ 唯一动态输入 = HR-TG∩。
+# 诚实边界：本核只读 `site=` 做站点集比对，**不修改** host/runner/reason_code 合法组合矩阵；
+#   且只比对**集合**、不核 reason_code 新鲜度 ⇒ 抓不到「barrier 早退产生的假 timeout」（站点仍在
+#   集合内、判绿）——该失效模式由 SKILL 侧正向 barrier 语义（timeout 只允许由实测 exit124 产生）守。
+_LAYER_BASE_SITE = {"spec-review": "design-voice", "code-review": "code-voice"}
+_SITE_VOCAB = frozenset({"design-voice", "code-voice", "hr-tg"})
+
+
+def _parse_site_csv(raw):
+    """CSV → site token 列表（同 _parse_tg_csv 口径：仅原始空串=空集；空 cell / 域外站点记号 → EmitError，
+    调用侧就地转 violation，不外抛）。站点词表有界（三个）∴ 可枚举校验，非无界语法手搓。"""
+    if raw == "":
+        return []
+    tokens = [t.strip() for t in raw.split(",")]
+    for t in tokens:
+        if t == "":
+            raise EmitError(f"site CSV 含空 cell（前后/连续逗号），仅空串表空集: {raw!r}")
+        if t not in _SITE_VOCAB:
+            raise EmitError(f"site CSV 含域外站点记号（须 ∈ {sorted(_SITE_VOCAB)}）: {t!r}")
+    return tokens
+
+
+def _hr_tg_intersect_nonempty(report_text, hr_tg_subset):
+    """从报告里**唯一**一条 fence 外 hr-tg 锚重算 HR-TG∩ 是否非空（= declared ∩ HR-TG 子集 ≠ ∅）。
+    重算而非读 hit=：hit 的内部一致性由 check_hr_tg 的 M2 独立守，此处走同一确定性口径不引二源。
+    返回 (nonempty, err)；算不出一律 fail-closed 返回 err（MUST NOT 猜期望集）。"""
+    anchors = [ln.strip() for ln in fence_outside_lines(report_text) if anchor_prefix(ln) == "hr-tg"]
+    if len(anchors) != 1:
+        return None, ("hr-tg 锚缺失" if not anchors else f"hr-tg 锚非唯一（{len(anchors)} 条）")
+    kv, dup = parse_kv_strict(anchors[0])
+    if "declared" in dup:
+        return None, "hr-tg 锚 declared= 重复键"
+    if "declared" not in kv:
+        return None, "hr-tg 锚缺 declared="
+    if kv["declared"].strip() == "none":                     # F1 sentinel：空集须 ""，"none" 字面不可解析
+        return None, 'hr-tg 锚 declared="none" 字面（空集应写 ""）'
+    try:
+        declared = _parse_tg_csv(kv["declared"])
+    except EmitError as e:
+        return None, f"hr-tg 锚 declared= 畸形: {e}"
+    return bool({t for t in declared if t in hr_tg_subset}), None
+
+
+def check_declared_sites(report_text, layer, hr_tg_subset):
+    """per-site 完整性核（always-on，不受 metrics 门控——判据源锚由 SKILL 直接落）。
+    fence 口径复用本文件 `fence_outside_lines`（MUST NOT 另起裸 grep：报告正文含模版/示例锚，
+    裸 grep 必自指假阳，且形成 fence 口径二源）。"""
+    v = []
+    # ① 实落站点集：fence 外 outside-voice 锚的 site=
+    actual, seen_sites = set(), []
+    for ln in fence_outside_lines(report_text):
+        if anchor_prefix(ln) != "outside-voice":
+            continue
+        anchor = ln.strip()[:80]
+        kv, dup = parse_kv_strict(ln)
+        if "site" in dup:                                    # 末值胜会让漏收站点被另一处 site= 顶替
+            v.append({"anchor": anchor, "field": "site", "kind": "dup-key"})
+            continue
+        if "site" not in kv:
+            v.append({"anchor": anchor, "field": "site", "kind": "missing-field"})
+            continue
+        site = kv["site"]
+        if site in seen_sites:                               # set 会吞掉歧义，显式拦
+            v.append({"anchor": anchor, "field": "site", "kind": "duplicate-site-anchor"})
+        seen_sites.append(site)
+        actual.add(site)
+    # ② declared-sites 锚（缺失/非唯一一律 fail-closed，MUST NOT 静默放行或取首）
+    ds = [ln.strip() for ln in fence_outside_lines(report_text) if anchor_prefix(ln) == "declared-sites"]
+    if not ds:
+        v.append({"kind": "missing-declared-sites", "detail": "报告须落 sdflow:declared-sites 锚"})
+        return v
+    if len(ds) > 1:
+        v.append({"kind": "multi-declared-sites", "detail": f"{len(ds)} 条 declared-sites 锚"})
+        return v
+    anchor = ds[0][:80]
+    kv, dup = parse_kv_strict(ds[0])
+    for dk in dup:
+        v.append({"anchor": anchor, "field": dk, "kind": "dup-key"})
+    if dup:
+        return v
+    if "declared" not in kv:
+        v.append({"anchor": anchor, "field": "declared", "kind": "missing-field"})
+        return v
+    try:
+        declared = _parse_site_csv(kv["declared"])
+    except EmitError:
+        v.append({"anchor": anchor, "field": "declared", "kind": "malformed-site-csv"})
+        return v
+    if len(declared) != len(set(declared)):
+        v.append({"anchor": anchor, "field": "declared", "kind": "declared-sites-duplicate"})
+    elif declared != sorted(declared):                       # canonical = 字典序（站点非数值 token）
+        v.append({"anchor": anchor, "field": "declared", "kind": "declared-sites-not-canonical-order"})
+    # ③ 公式重算期望集（唯一动态输入 = HR-TG∩）
+    hit_nonempty, err = _hr_tg_intersect_nonempty(report_text, hr_tg_subset)
+    if err is not None:
+        v.append({"kind": "hr-tg-unresolved", "detail": err})
+        return v
+    expected = {_LAYER_BASE_SITE[layer]} | ({"hr-tg"} if hit_nonempty else set())
+    if set(declared) != expected:
+        # 🔴 反规避：只比 declared vs 实落 会被「同时缩 declared 又不落锚」两边自洽绕过；本条锚公式。
+        v.append({"anchor": anchor, "field": "declared", "kind": "declared-not-expected",
+                  "detail": f"declared={sorted(set(declared))} expected={sorted(expected)}"})
+    # ④ declared ↔ 实落站点集比对（本票核心：并发 2 站点漏收一个 → site-missing-anchor）
+    for s in sorted(set(declared) - actual):
+        v.append({"kind": "site-missing-anchor", "detail": s})
+    for s in sorted(actual - set(declared)):
+        v.append({"kind": "site-unexpected-anchor", "detail": s})
+    return v
+
+
 _FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
 _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
 _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
@@ -687,6 +808,8 @@ def main(argv=None):
     # 不受 metrics_on 门控（判据源 outside-voice/fanout-capability 锚由 SKILL 直接落、不经 emitter/lens-metric）。
     violations += check_legal_combo(report_text, enums)
     violations += check_fanout_consistency(report_text)
+    # async-outside-voice §3.5：per-site 完整性核 always-on（同上，判据源锚由 SKILL 直接落、不经 emitter）
+    violations += check_declared_sites(report_text, args.layer, hr_tg_subset)
     if metrics_on:
         violations += check_lens_metric(report_text, args.layer, enums)
     if violations:

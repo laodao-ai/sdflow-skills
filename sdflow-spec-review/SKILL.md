@@ -340,6 +340,15 @@ fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout
   <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" host="claude|codex|unknown" runner="claude|codex|none" reason_code="ok|not-installed|preflight-error|timeout|exec-error|host-unknown|secret-hit|fallback-unavailable" findings="N" truncated="true|false" -->
 ```
 
+**per-site 完整性声明〔async-outside-voice §3.5·F-C〕**（**本段留 `sdflow:async-branch` marker 外**——两层的站点集不同，放进等值门内会永红）：报告 MUST 落**恰好一条** `declared-sites` 锚，声明**本层「应有锚」的站点集** = `{design-voice}` ∪ `{hr-tg | HR-TG∩≠∅}`（HR-TG∩ 取第二步 `hr_tg_intersect.py` 的判定，是本公式**唯一动态输入**）。逗号分隔、字典序、无重复：
+
+  `<!-- sdflow:declared-sites v1 declared="design-voice,hr-tg" -->`（HR-TG∩=∅ 时 → `declared="design-voice"`）
+
+- 🔴 **是「应有锚」集、不是「应 dispatch」集**：`design-voice` 在 reuse-guard 复用态（未派、`guard="none"`）**照样落锚** ⇒ 它**恒在**本集合内。本集合与上文「站点↔task_id 记账表」（＝**实际 dispatch 过**的站点集）**不是同一个集合**，MUST NOT 混用。
+- 🔴 **MUST NOT 拿 `guard=` 当本集合的判据**——该字段语义**站点相关**（`design-voice` 上 `none`=复用未派、`hr-tg` 上 `none`=填充值已派）。
+- **机械核**：`anchor_lint.py` 的 `check_declared_sites` 同时比对「declared == 公式重算期望集」与「declared == 报告实落 `site=` 集」，任一不等即 VIOLATION——补上家族级门（有 ≥1 条 outside-voice 锚即过）的 per-site 盲区，**并发 2 站点漏收一个不再被判 CLEAN**。锚缺失 / ≥2 条 / 缺 `declared=` 一律 fail-closed。
+- 🔴 **漏收某站点 MUST NOT 靠删 declared 抹平**：期望集由公式独立重算，declared 与实落一起缩水仍判红。
+
 ## 注意
 
 - **只做 prevention 焊不住的残差**（T/S 项交给 config/lint，不重扫）。
