@@ -80,11 +80,11 @@ impl-pipeline: tickets
 
 code-review 层获得与 spec-review 逐字对齐的 host 分支、站点记账与自探降级。两层的 host 调度段（站点无关部分）被 marker 圈定，并由一个新增的机械校验断言两段字节相同——漂移当场红，而非靠人工比对。该校验挂进安装脚本与仓内测试套件，日常跑得到。站点枚举、context 构造、reuse-guard 门控与 declared-sites 计算留在圈外，因为两层这些部分本就应当不同。
 
-- [ ] code-review 层分支与 spec-review 逐字对齐（站点无关部分）
-- [ ] 两层 async host 调度段被 marker 成对圈定，圈内仅站点无关逻辑
-- [ ] 新增等值校验断言两段字节相同，不同则非零退出
-- [ ] 该校验挂进安装脚本与仓内测试套件
-- [ ] 首次跑确认绿
+- [x] code-review 层分支与 spec-review 逐字对齐（站点无关部分）
+- [x] 两层 async host 调度段被 marker 成对圈定，圈内仅站点无关逻辑
+- [x] 新增等值校验断言两段字节相同，不同则非零退出
+- [x] 该校验挂进安装脚本与仓内测试套件
+- [x] 首次跑确认绿
 
 ### Task 4: declared-sites per-site 完整性机械核
 
