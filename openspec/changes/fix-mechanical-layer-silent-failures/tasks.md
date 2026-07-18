@@ -45,7 +45,7 @@
 - [ ] 4.2 【R2】**缺席 ⇒ 全部 `problems` 视为阻断**（fail-closed）；**MUST NOT** 解释为「无阻断项」
 - [ ] 4.3 【R5】【D5】路径 ① 判定前置于任何 discovery / stat / open（承 `adr/0022`）
 - [ ] 4.4 【R5】【D5′】**路径 ② 另立机制**：`read_rename_snapshot` 解析后、`retag` 与任何 `atomic_write` **之前**就地判完整性，非空即 fail-closed 零写盘
-- [ ] 4.5 【R5】【D5′】路径 ①② 的完整性判据 **MUST 抽成单一函数共用**，MUST NOT 各写一套（防漂移，承 `adr/0011`）
+- [ ] 4.5 【R5】【D5′】路径 ①② 的完整性判据 **MUST 发同一套 diagnostic code**（实现见 3.10 的 taxonomy + conformance fixtures），**MUST NOT 要求两路调用同一个 Python 函数**——那与 `_scan_pool` 走 subprocess 避免跨 skill import 的既有架构冲突〔spec-review-amendment · **接缝复审 critical**：本条原文与 3.10 / design D5′ / spec 字面对立，是返修未传导到派生任务的典型接缝洞〕
 - [ ] 4.6 【R5】测试（**逐调用方各一条**，只覆盖真读两池的）：`sweep` / `reindex` / `batch rename` 在阻断下各自断言非零退出
 - [ ] 4.7 【R5】测试：`reindex` 阻断断言 **`INDEX.md` 与 `batches.md` 字节均未变**（B12 核心）
 - [ ] 4.8 【R5】测试：**`batch rename` 阻断断言 registry 与 dated 文档字节均未变**（D5′ 核心——现状是写盘先于判定）
