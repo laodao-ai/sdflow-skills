@@ -2,20 +2,22 @@
 
 ## 1. spec-review SKILL：host-adaptive async 分支
 
-- [ ] 1.1 `sdflow-spec-review/SKILL.md` 的「outside-voice helper 调用协议」节（line 263），exec 步加 `$SDFLOW_HOST` 分支：`claude` = `run_in_background` dispatch（@Step1 design-voice / @Step2 hr-tg 各 context 就绪即派）+ Step3 collect；`codex` = 同步现状（外层 ≥330s）。**[R1]**
+- [ ] 1.1 `sdflow-spec-review/SKILL.md`「outside-voice helper 调用协议」节（line 263），exec 步加 `$SDFLOW_HOST` 分支：`claude` async = `run_in_background` dispatch（@Step1 design-voice / @Step2 hr-tg 各 context 就绪即派，**内层 --timeout 900s、外层不设 ≥330s**）+ **通知驱动 collect@Step3 barrier**（完成推送异步到达即暂存，非轮询、非单次长 sleep，F-A）；`codex` sync + `claude` 自探失败降级 sync = 同步现状（**内层 300s、外层 ≥330s**）。始终外层 ≥ 内层+30s（F-B 矩阵、ADR-3）。**[R1]**
 - [ ] 1.2 dispatch 时 SHALL 显式记「站点↔task_id」映射（**按实际 dispatch 过的站点**——design-voice 前置门控于 reuse-guard、hr-tg 条件于 HR-TG∩≠∅，故后台 voice 数不定 0/1/2；见 design 并发节），collect 时按站点逐一取（防 model-driven 记账漏收）。**[R1]**
 - [ ] 1.3 补 `run_in_background` 能力自探：不可用 → 降级回同步 + 报告显式标注，MUST NOT 假装 async 成功。**[R1]**
 
 ## 2. code-review SKILL：同款分支（scope-check 逐字对齐）
 
 - [ ] 2.1 `sdflow-code-review/SKILL.md` 的「outside-voice helper 调用协议」节（line 261）加与 §1 逐字对齐的 host 分支 + 站点↔task_id 记账 + 自探降级。**[R1]**
-- [ ] 2.2 **机械等值门**（ADR-5，替代人工 scope-check）：① 两 SKILL 的 async host 调度段用 `<!-- sdflow:async-branch:start/end -->` marker 圈定——段内**只写站点无关的 host 调度逻辑**（claude=run_in_background dispatch/collect、codex=同步、自探降级、collect 轮询到终止按 exit-code 分支），**站点枚举/context 构造留 marker 外**，∴ 两段可字节相同；② 写 `hack/check_async_branch_parity.py`（沿用 `sync_principles.py` idiom）断言两段字节相同、坏则非零退出；③ 挂进 `setup.sh` + `hack/tests/`；④ 首次跑确认绿。**[R1]**
+- [ ] 2.2 **机械等值门**（ADR-5，替代人工 scope-check）：① 两 SKILL 的 async host 调度段用 `<!-- sdflow:async-branch:start/end -->` marker 圈定——段内**只写站点无关的 host 调度逻辑**（claude=run_in_background dispatch、codex=同步、自探降级、**通知驱动 collect barrier 按结构化退出码分支**——含 exit2→exec-error、未知/丢失码→exec-error，F-A/F-D），**站点枚举/context 构造/reuse-guard 门控留 marker 外**，∴ 两段可字节相同（领域镜已核当前即字节同、除 site= 行，F-O 可行）；② 写 `hack/check_async_branch_parity.py`（沿用 `sync_principles.py` idiom）断言两段字节相同、坏则非零退出；③ 挂进 `setup.sh` + `hack/tests/`；④ 首次跑确认绿。**[R1]**
 
 ## 3. 锚契约与诚实降级守护
 
-- [ ] 3.1 两 SKILL 写入 collect 语义：Step3 轮询到 voice 终止（≤`--timeout` 天花板 = 脚本自杀点），exit124→既有同族 fallback、锚 `reason_code="timeout"`，MUST NOT 假绿、MUST NOT 落零锚。**[R2]**
+- [ ] 3.1 两 SKILL 写 collect 语义（**通知驱动 barrier、非轮询**，F-A）：完成推送异步到达即暂存该站点；Step3 每 dispatch 站点结果 MUST 在手或按**结构化退出码**降级（0=ok / 124=timeout / 1·2·未知/丢失=exec-error / 3=secret-hit）；退出码由后台命令末行 `EXEC_EXIT=<rc>` envelope 取、**MUST NOT 从 voice 正文推断**（F-D）；MUST NOT 单次长 sleep、MUST NOT 假绿、MUST NOT 落零锚。**[R2]**
 - [ ] 3.2 diff 核 `outside-voice.sh` / `anchor_lint` 合法组合矩阵 / 出境安全三件套**零改动**（四旗承重墙、secret_scan、FRAME、200KB 截断逐字不变）。**[R2]**
-- [ ] 3.3 collect 天花板可配：SKILL exec 传 `--timeout <值>`，默认 **900s**；per-repo 覆盖走 config.yaml 键——读取路径（resolve-* 导出 vs SKILL 直读 config）impl 定，**默认值 fail-safe 恒生效**（config 缺失/读失败 → 900s，MUST NOT fail-closed）。**[R1]**
+- [ ] 3.3 天花板可配 + 校验（F-B/F-N/F-F）：**async 分支** exec 传 `--timeout` 默认 **900s**、**sync/降级分支** 默认 **300s**（外层各自 ≥内层+30s）；per-repo 覆盖走 **config.yaml 键、SKILL 直读**（沿 `metrics.enabled` 先例 spec-review L179 / code-review L206，**不走 resolver**——两 SKILL 同法否则等值门红）；值 MUST 校验**正整数 + harness 上界**，0/负/非整/越界/读失败 → 回落默认（fail-safe 恒生效，MUST NOT fail-closed、MUST NOT 用 `--timeout 0`）。**[R1]**
+- [ ] 3.4 context 用 **per-run 不可变路径** `<run-id>/<site>-context.md`（弃固定名+下轮覆盖）闭 HV1 跨会话 TOCTOU（scan/render 恒对同一快照）；dispatch 时 task_id 追加落盘该目录 manifest（F-I 审计证据，「是否真派发」脱离纯记忆）。**[R1]**
+- [ ] 3.5 **per-site 完整性机械核**（F-C·Q3 fold·基准①）：报告落 `declared-sites` 集（应 dispatch 站点，据 reuse-guard `reason_code≠none` + HR-TG∩≠∅ 机械算），加机械核「declared == 实落 `sdflow:outside-voice` 锚站点集」不等即红（承 hr-tg `declared=` 先例 adr/0018；补 `anchor_lint.py:154/595` 家族级门的 per-site 盲区 → 并发 2 站点漏收不再判 CLEAN）。**[R2]**
 
 ## 4. 验证（测试覆盖）— TG-18
 
@@ -27,10 +29,11 @@
 | 锚契约 / anchor_lint 矩阵不变 | 机械回归（既有全笛卡尔 golden） | R2 |
 | run_in_background 不可用降级 | 模拟 smoke | R1 |
 
-- [ ] 4.1 smoke：Claude 宿主跑一次真实评审，观察 voice 锚 `reason_code="ok"`（非 `timeout`）、主 session 无 ≥330s 单次阻塞 Bash 调用。**[R1]**
+- [ ] 4.1 smoke（F-J 加严）：Claude 宿主跑一次真实评审——① voice 锚 `reason_code="ok"`（非 timeout）；② 主 session 无 ≥330s 单次阻塞 Bash 调用 **且 collect 不靠轮询循环/长 sleep**（约束调用次数）；③ **刻意构造 voice 时长逼近 900s 场景**（压真实负载验后台过 600000ms 上限存活——A1 方向已由 660s 边界 spike 证，此处压真载非侥幸 <600s）；④ 记录 Step2 fan-out 墙钟 vs voice 完成时刻（校准「重叠非叠加」）。**[R1]**
 - [ ] 4.2 回归：跑 `anchor_lint` 的 host×runner×reason_code×findings 全笛卡尔 golden，确认与 change 前逐条一致。**[R2]**
 - [ ] 4.3 降级路径：模拟/构造 `run_in_background` 不可用，确认降级回同步 + 报告标注、不假绿。**[R1]**
 - [ ] 4.4 〔grill 降级〕Open Q2 已由读码解（ADR-6：ship line 96/101 → code-review 主 session inline，run_in_background 同 A1 上下文）；本项改为**验证 §1.3/2.1 自探降级分支本身可跑**（构造 run_in_background 不可用场景 → 确认降级回同步 + 报告标注），不再需要「ship 路径实测」。**[R1]**
+- [ ] 4.5 安全错误路径（DV4/HV2/F-L）：构造 voice `exit≠0`（timeout/exec-error），核 collect **只取 exit0 stdout findings + 结构化状态、不把后台文件原始 stderr 当 findings 采信**；核 harness 后台输出文件 TTL/权限/清理归属（记实测捕获语义，残余则显式登记）。**[R2]**
 
 ## 5. 收尾（scope 外记账，不在本 change 实现）
 
