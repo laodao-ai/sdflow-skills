@@ -140,7 +140,8 @@ def test_version():
     r = run(["version"])
     assert r.returncode == 0
     # 1.3.0：A1 反向 claude 路径补应用层读围栏（--settings permissions.deny）+ 输出侧 secret_scan。
-    assert r.stdout.strip() == "outside-voice.sh 1.3.0"
+    # 1.4.0：R1 截断 UTF-8 字符边界回扫（头/尾段各自合法）+ stderr 丢弃字节计数（观测性）。
+    assert r.stdout.strip() == "outside-voice.sh 1.4.0"
 
 
 # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────
