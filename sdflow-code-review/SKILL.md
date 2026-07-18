@@ -268,13 +268,14 @@ $SDFLOW_HOST="unknown"（第零步 resolve-models.sh 判不出宿主）→ 不�
 以下分支仅在 $SDFLOW_HOST∈{claude,codex} 时适用；helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL，MUST NOT 自行重判宿主（ADR-9）：
 preflight：stdout 仅精确匹配 "ready" 走目标 runner（$SDFLOW_VOICE_RUNNER）；"not_installed" → fallback（reason_code="not-installed"）；"missing-deps" → fallback 且 MUST 映射锚 reason_code="preflight-error"（D7，MUST NOT 原样落 reason_code="missing-deps"——该值不在契约 reason_code 枚举内，会被 anchor_lint 矩阵判 illegal-combo）；任何畸形输出/非零退出 → fallback（reason_code="preflight-error"）
 context 构造（摘录规则定死，不现场发挥）：本轮**起手先占一个 run 目录**，本轮所有站点共用、定后不再变；context 写 {change_dir}/.outside-voice/<run-id>/<site>-context.md
-  **run-id 生成 + 占坑（唯一性交给 OS 判，不靠自觉）**：MUST 逐字跑下面这段——run-id 含时间戳**外加 PID + 随机位**（秒级时间戳单独不足以分开同秒起的两轮并行评审），且 run 目录用 **`mkdir` 不带 `-p`** 建（父目录 `.outside-voice/` 才用 `mkdir -p`）：目录已存在 ⇒ `mkdir` 非零退出 ⇒ **换新 run-id 重试**，绝不复用。**`-p` 会把「已存在」变成静默成功，正是这里要的失败**，故 run 目录那一层 MUST NOT 加 `-p`。
+  **run-id 生成 + 占坑（唯一性交给 OS 判，不靠自觉）**：MUST 逐字跑下面这两条——`mktemp -d` **原子地建目录并保证唯一**，唯一性由它负责，不靠时间戳精度、不靠自觉。前缀带 UTC 时间戳只为人读排序；后缀 `XXXXXX` 由 `mktemp` 填随机位，故**同秒起的两轮并行评审也必得不同目录**。
     `mkdir -p {change_dir}/.outside-voice`
-    `until RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"; mkdir "{change_dir}/.outside-voice/$RUN_ID" 2>/dev/null; do :; done`
+    `RUN_DIR="$(mktemp -d "{change_dir}/.outside-voice/$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")"`
+  **MUST NOT 自己拼 run-id 再 `mkdir`**（手拼要么撞名、要么退化成 `$RANDOM`/`od` 这类不可移植写法，还得自造重试循环与上界）——`mktemp -d` 一条就把唯一性、原子性、失败非零退出全给了；父目录不可写 / 磁盘满时它非零退出且错误直接浮出，此时 MUST 显式停、MUST NOT 继续跑 voice。后续所有站点路径一律基于 `$RUN_DIR` 拼，run-id 即 `basename "$RUN_DIR"`
   **per-run 不可变**：同一 run-id 下每站点只写一次，写完不改不删（留调试证据）；后续轮次一律换新 run-id，**MUST NOT 复用或覆盖既有 run 目录**（helper 的入境扫描与渲染是对该文件的两次独立读——不可变路径令二者恒对同一快照，闭掉「上轮 voice 尚未读完、下轮重写同一路径」的跨会话 TOCTOU；`mkdir` 占坑令「run-id 是否真每轮换新」由 OS 判定，而非诚实边界）
   **父目录 MUST 仍在 {change_dir}/.outside-voice/ 下**：`.gitignore` 的 `**/.outside-voice/` 递归覆盖该层级；落到该目录之外 = checkpoint 的 `git add -A` 把全量 diff / 敏感 context 永久入库，正是该条款要防的
   **dispatch manifest（落盘审计证据，F-I）**：每次实际发起 voice 时**追加**一行到 {change_dir}/.outside-voice/<run-id>/dispatch-manifest.tsv——MUST 逐字用下面这条 `printf`（`printf` 把 `\t` 解释成真制表符；MUST NOT 手拼字符串或用 `echo`，那会落成字面 `\t`），时间戳格式与 run-id 同为 `%Y%m%dT%H%M%SZ`：
-    `printf '%s\t%s\t%s\n' "<site>" "<task_id>" "$(date -u +%Y%m%dT%H%M%SZ)" >> "{change_dir}/.outside-voice/$RUN_ID/dispatch-manifest.tsv"`
+    `printf '%s\t%s\t%s\n' "<site>" "<task_id>" "$(date -u +%Y%m%dT%H%M%SZ)" >> "$RUN_DIR/dispatch-manifest.tsv"`
   `<task_id>`：后台派发填该后台任务标识；同步 exec 填字面 `sync`。「是否真派发过某站点」以本文件为准，MUST NOT 靠会话记忆
   site=code-voice → git diff $DIFF_BASE..HEAD 全量
   site=hr-tg      → 命中 TG 判据触发点 + 相关 diff hunk
