@@ -47,7 +47,11 @@ reindex：已重建 INDEX.md（open 108 项，已闭合 51 项）   exit=0
   - **`problems` 在产生处分级**：新增 additive 的阻断集字段，判据 = 该诊断是否表示「本次读取可能不完整」；**缺字段 ⇒ 全部视为阻断**（fail-closed）；
   - **严格是默认值**：阻断集非空即非零退出；逃生口须**在 INDEX 产物里留疤**、禁环境化、禁自动传；
   - **退出码分两类**：`1` = 重跑可收敛（既有语义），`2` = 重跑无用须人介入；调用方对 `2` 硬停不重试。
-- **面治而非点补**（基准 ③）：阻断集在**共用取数入口** `read_pool` / `_scan_pool` 收集并传给全部调用方，一次覆盖 `sweep`/`reindex`/`batch rename`/`batch add`/`set-status`/`lint`，**不只补 sweep 一处**（现状：多数调用方连 `problems` 都收不到）。
+- **面治而非点补**（基准 ③），但**面的形状经广审实测重定**〔gstack-amendment · critical〕：初版断言「6 个调用方经共用入口 ⇒ 一次全保」**是虚构的**。实测三条路径：
+  - **路径 ①**（subprocess `scan --json`，有 JSON 边界）= `sweep` / `reindex` / `rename` 后半 → additive 字段 + 缺席即阻断，枢纽机制成立；
+  - **路径 ②**（`read_rename_snapshot`，**in-process 解析、无字段可缺席**，且**写盘先于判定**）= `rename` 前半 → **须另立机制**；
+  - **路径 ③**（只读 `batches.md`，根本不碰两池）= `lint` / `batch add` / `set-status` → **不适用，不该为它们写阻断断言**。
+  🔴 路径 ③ 那三个原本被写进「逐调用方阻断断言」——**那会是三条写不出真断言的假绿**，已删。（本 change 正是为消灭假绿而开。）
 - **B9 连带 — 截断过的 voice 必须声明覆盖面残缺**（grill fold）：`truncated="true"` 时报告必带覆盖声明，`anchor_lint` 机械核。**不做这条，B9 的修复会把一个吵闹的失败改造成一个安静的假成功**（残缺证据上的自信评审）。
 
 ### 被 grill 推翻的初版设计（保留记录，防后人重提）
@@ -91,7 +95,8 @@ sibling 恒定来自**同一个 checkout**，二者永不相对偏斜；真实�
 1. **跨模型 voice 在超长中文 context 下的成功率** — 基准：>200KB 中文 context 时 rc=1 必失败（实测 1/1） → 目标：**rc=0 且锚行 `reason_code="ok"`** — 度量：用本仓真实中文 diff 造 >200KB context 跑一次 `outside-voice.sh exec`，记 rc 与锚行；另加切点扫描测试（连续偏移全覆盖，两半均 `decode('utf-8')` 通过）。
 2. **孤儿 runner 进程数** — 基准：SIGTERM 后残留 1 个 reparent 到 PID1 的 runner（实测） → 目标：**0** — 度量：起脚本 → 外部 SIGTERM → `ps` 验尸须为空。
 3. **读取残缺时的失败可见性** — 基准：旧脚本 + `reindex` ⇒ **exit 0 且 INDEX 被残缺集合覆盖**（实测：open 122→108、已闭合 57→51、B9–B12 消失） → 目标：**非零退出、零写盘、stderr 给出可执行出路** — 度量：用滞后版脚本（阻断集字段缺席）跑 `sweep`/`reindex`，断言退出码非零且 `INDEX.md` 字节未变。
-4. **阻断信号的调用方覆盖率** — 基准：6 个取数调用方中仅 **2** 个（`sweep`、`reindex`）能看到 `problems`，其余传 `None` 连告警都没有 → 目标：**6/6 全部收到阻断集并据以判退** — 度量：逐调用方各一条阻断场景断言（`adr/0011`）。
+4. **阻断信号的调用方覆盖率** 〔gstack-amendment：分母按实测拓扑更正，原「6/6」是虚构面〕 — 基准：**真正读两池的 3 个**调用方（`sweep`、`reindex`、`batch rename`）中仅 **2** 个能看到 `problems`，且 `rename` 的写盘**先于**判定 → 目标：**3/3 全部据阻断集判退，且 `rename` 零写盘** — 度量：逐调用方各一条阻断断言 + `rename` 的 registry/dated 文档字节未变断言（`adr/0011`）。
+   *路径 ③（`lint`/`batch add`/`set-status`）不读两池，**有依据地排除**，不计入分母。*
 
 ## Non-Goals〔D-3，每条附可证伪假设〕
 

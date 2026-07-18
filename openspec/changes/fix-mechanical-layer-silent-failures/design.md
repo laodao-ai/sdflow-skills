@@ -38,20 +38,41 @@
         │      │            └──────┬───────┴─────────────────┴──────────────┘        │
         │      │            _reindex_core                                            │
         │      │                   │                                                 │
-        │      └───────────┬───────┘                                                 │
-        │              read_pool ──► _scan_pool ──►【★ 阻断集在这里收集并下发 ★】      │
-        └───────────────────────────────┬─────────────────────────────────────────────┘
-                                        │ subprocess（按自身文件位置定位 sibling）
-                        ┌───────────────┴───────────────┐
-                  buglist.py                       todolist.py
-              （诊断在产生处分级）              （诊断在产生处分级）
+〔gstack-amendment · 初版此图为**虚构拓扑**，经广审 critical 打穿后按实测重画〕
 
-   ⚠ 真正的偏斜面：脚本 ↔ 盘面数据（不是脚本 ↔ 脚本——sibling 恒同 checkout）
+```
+   ── 路径 ①：subprocess scan（有 JSON 字段，可承载 additive 阻断集）──────────────
+     cmd_sweep ──── 自己 subprocess 解析 `scan --json`（不经 read_pool）
+     _reindex_core ── read_pool ──► _scan_pool ──► subprocess buglist.py / todolist.py
+         ▲                                             （诊断在产生处分级）
+         ├── cmd_reindex
+         └── cmd_batch_rename（**但见路径 ②：它先写盘、后到这里**）
+
+   ── 路径 ②：in-process 解析（**无 JSON 字段，缺席即阻断在此完全失效**）─────────
+     cmd_batch_rename ──► read_rename_snapshot ──► retag
+                          └─► atomic_write(registry)      ← 写盘 ①
+                          └─► atomic_write_bytes(dated)   ← 写盘 ②
+                          └─► _reindex_core               ← 阻断判定**才**发生（太晚）
+
+   ── 路径 ③：只读 batches.md，根本不碰两池 ─────────────────────────────────
+     cmd_batch_lint ──► _batch_lint_snapshot
+     cmd_batch_add / cmd_batch_set_status ──► _read_batches_lines
+
+   ⚠ 偏斜面：脚本 ↔ 盘面数据（不是脚本 ↔ 脚本——sibling 恒同 checkout）
+   ⚠ 第三份 parser：`issues.py` 自持 recorder parser（`:298-511`），路径 ② 用它，**不在任何防线内**
 ```
 
-**收集点位置是本设计的核心判断**：落在 `_scan_pool`（唯一的派子进程点）⇒ `sweep` / `reindex` / `batch rename` / `batch add` / `set-status` / `lint` **一次全保**。落在 `cmd_sweep` 里就是点补，会重演「修完 sweep、reindex 照瞎」（基准 ③ 面治）。
+**初版断言「6 个调用方经共用入口 ⇒ 一次全保」是虚构的**，实测拓扑如上。据此重定：
 
-**现状对照**：`_scan_pool(script, root, pool, problems_out=None)` 的 `problems_out` **默认 None**，注释写明「只有显式传入列表的调用方（`cmd_reindex`）才会拿到这份信号」⇒ **6 个调用方里只有 2 个看得见诊断**，其余连告警都没有。这不是"漏了一处"，是取数层默认丢弃诊断。
+| 路径 | 调用方 | 阻断机制 | 说明 |
+|---|---|---|---|
+| ① | `sweep`、`reindex`、`rename`(后半) | **additive 字段 + 缺席即阻断** | 有 JSON 边界，枢纽机制成立 |
+| ② | `rename`(前半) | **须另立机制**（见 D5′） | in-process、无字段可缺席；且**写盘先于判定** |
+| ③ | `lint`、`batch add`、`set-status` | **不适用** | 不读两池 ⇒ 无「读残缺」风险，**不该为它们写阻断断言** |
+
+🔴 **路径 ③ 的三个调用方原本被写进 tasks 4.4 的「逐调用方阻断断言」——那会是三条写不出真断言的假绿。已删。**（讽刺：本 change 正是为消灭假绿而开。）
+
+**现状对照（仍成立）**：`_scan_pool(script, root, pool, problems_out=None)` 的 `problems_out` **默认 None**，注释写明「只有显式传入列表的调用方（`cmd_reindex`）才会拿到这份信号」⇒ 路径 ① 上 `rename` 拿不到诊断。这不是"漏了一处"，是取数层默认丢弃诊断。
 
 ## 阻断判定时序（写盘类子命令）
 
@@ -86,7 +107,7 @@
 | 备选 | 结论 |
 |---|---|
 | `iconv -f UTF-8 -t UTF-8 -c` | **部分证伪**。macOS 实测：尾部序列不完整的**头段** `rc=1` + stderr `unexpected end of file; the last character is incomplete.`（stdout 仍合法）⇒ 必须显式吞 rc 与 stderr，否则在日志里制造假故障。且**本机无 GNU iconv、无容器可验** ⇒ GNU 侧一致性**未验证** = 跨平台风险，这是不选它的决定性理由 |
-| `python3 -c … .decode('utf-8','ignore')` | 实测两半均正确。**唯一缺点**：给 helper 新增 python3 运行时依赖（该脚本目前零 python3 依赖）。**保留为干净次选** |
+| `python3 -c … .decode('utf-8','ignore')` | 实测两半均正确。**唯一缺点**：给 helper 新增 python3 运行时依赖。〔gstack-amendment · 广审 medium：措辞修正——helper 的调用方本就是**跑 python 脚本的 skill 链**，∴ 这是**偏好而非硬约束**，MUST NOT 写成技术证伪。若 bash 版在实现期显出维护成本，切 python3 是正当的〕**保留为干净次选** |
 | `perl -Mopen=std,:utf8` | macOS 系统 perl 上 `rc=255`（`Unknown PerlIO layer class 'std'`）。可写对，但既然要调外部解释器，不如 python3 |
 
 **边界（MUST）**：只认 UTF-8，**MUST NOT** 演化成编码检测 / 嗅探——那是无界面，正是基准 ⑤ 的警号（「每轮 review 都在同一个函数里补一个新分支」）。
@@ -136,7 +157,8 @@
 
 ∴ 逃生口的设计标准不是「存不存在」而是「**用了留不留痕**」，三条约束缺一不可：
 
-1. **产物带疤**：放行时 `INDEX.md` 头部 banner 增记一行（N 条阻断被放行、索引可能不完整）——**妥协随产物进 git**，下一个读 INDEX 的人一眼看见，而不是只在某次终端输出里闪过；
+1. **产物带疤**：放行时 `INDEX.md` 头部 banner 增记一行（N 条阻断被放行、索引可能不完整）——**妥协随产物进 git**，下一个读 INDEX 的人一眼看见，而不是只在某次终端输出里闪过。
+   🔴 **适用面受限 〔gstack-amendment · 广审 high〕**：banner 由 `INDEX_BANNER` 生成，**只有写 INDEX 的命令有这个载体**（`reindex`，及经它的 `sweep`/`rename`）。`lint`/`batch add`/`set-status` 走路径 ③、不读两池，本就不产生阻断 ⇒ 无此问题。**spec 的「放行留痕」Scenario MUST 限定适用调用方**，MUST NOT 写成对所有命令成立——那会是一条永远测不出来的空要求；
 2. **禁环境化**：只认显式 CLI 参数，**MUST NOT** 支持 config / 环境变量——逃生口的真正死法是被写进配置后全仓永久生效、之后没人记得门还在；
 3. **禁自动传**：`/sdflow-done` sweep 子步 **MUST NOT** 自动传。
 
@@ -145,6 +167,23 @@
 ### D5 — 阻断判定前置于 discovery / 写盘（承 `adr/0022`）
 
 `reindex` 现状是**先算后覆盖**；判定若落在计算之后，仍可能在报错前已经写盘。∴ **MUST** 前置到任何 discovery / stat / open 之前——与 `adr/0025` 对 lock owner 的「必须在所有 result-affecting discovery 前 acquire」同款纪律。
+
+### D5′ — 路径 ② (`batch rename`) 须另立机制 〔gstack-amendment · 广审 critical〕
+
+**D5 在 rename 路径上直接不成立**，实测调用序：
+
+```
+read_rename_snapshot → retag → atomic_write(registry) → atomic_write_bytes(dated) → _reindex_core
+                                └── 写盘已发生 ──┘          └── 阻断判定在这之后才跑（太晚）
+```
+
+且该路径是 **in-process 解析**（`issues.py` 自持的第三份 recorder parser，`:298-511`），**没有 JSON 边界** ⇒ 「additive 字段 + 缺席即阻断」这个枢纽机制**在此完全失效**——不存在"可缺席的字段"。
+
+**做法**：`read_rename_snapshot` 完成解析后、**在 `retag` 与任何 `atomic_write` 之前**，就地对 snapshot 做同款完整性判定（复用与 `buglist.py` 分级**同一判据**：可能漏读 ⇒ 阻断），非空即 fail-closed 退出，零写盘。
+
+🔴 **判据 MUST 与路径 ① 同源**：两条路径若各写一套「什么算读残缺」，必然漂移——这正是本仓 `adr/0011`（共用解析核心的返回语义按消费方各自定）要人**逐调用方验证**的原因。实现期 MUST 把判据抽成单一函数供两路调用，**MUST NOT** 各写各的。
+
+**残余（显式登记）**：`issues.py` 自持的第三份 parser 若本身滞后（不认 frontmatter），路径 ② 与 ③ 无任何防线——**本 change 不覆盖该面**，见 Risks。
 
 ### D6 — sweep 退出码分两类，补全而非推翻既有契约
 
@@ -159,7 +198,11 @@ exit 2 的 stderr **MUST** 明说「重跑无用」+ 列全阻断明细 + 给两
 
 **这是补全不是推翻**：既有契约描述的是**写操作幂等性**，本就没覆盖「输入数据有问题」这一类。`/sdflow-done` SKILL.md 的失败语义段须同步补一句 `[grill-amendment]`。
 
+🔴 **exit 2 现状会被 sweep 自己压平 〔gstack-amendment · 广审 medium〕**：`cmd_sweep` 调子进程 `reindex` 后只判 `if ri.returncode != 0: _die(...)`，而 `_die` 恒 exit 1 ⇒ **子进程的 2 到不了调用方**。∴ 实现 MUST 显式**透传 2**（同理 `batch add` 子调用），MUST NOT 依赖现有 `_die` 路径。
+
 **全自动链遇 exit 2 硬停，MUST NOT 跳过 sweep 继续推进**——跳过等于丢失 defer 分诊，那正是本次事故本身。
+
+🔴 **落点修正 〔gstack-amendment · 广审 medium〕**：`sdflow-ship/SKILL.md` 全文 grep `sweep` = **0**（实测）——ship 不直接调 sweep，它经 `/sdflow-done` 链序。∴ exit 2 语义**只落 `sdflow-done/SKILL.md`**；改 ship 是无效编辑，已从 tasks 删除。
 
 ### D7 — 截断过的 voice 必须声明覆盖面残缺 〔grill fold〕
 
@@ -169,7 +212,15 @@ exit 2 的 stderr **MUST** 明说「重跑无用」+ 列全阻断明细 + 给两
 
 **关键**：**R1 会让这条路径更常成功**。今天超长中文 context 是 rc=1 吵闹地失败；修完之后它会**安静地成功，基于残缺证据**。∴ R1 与 R7 必须同批做——只做 R1 是把病灶做得更隐蔽。
 
-**做法（最小一刀）**：`truncated="true"` ⇒ 该 voice 的 findings 段必带覆盖声明，`anchor_lint` 机械核存在性。锚行是确定性信号、报告文本可 grep ⇒ 属基准 ① 该机械化的面，不留语义层。
+**🔴 初版做法的机械性是假的 〔gstack-amendment · 广审 high〕**：初版写「锚行是确定性信号 ⇒ 属基准 ① 该机械化的面」。**错。** 两层 SKILL.md 明写「`truncated` 取 helper stderr 的 `OV_TRUNCATED`」——helper 只把它**写 stderr**，落进锚行那一步是**主 session 模型抄写**的。∴ `anchor_lint` 核「锚行说 true ⇒ 报告有声明」只是在核**模型自己写的两句话彼此自洽**；模型把 `truncated="false"` 抄错（或省事写 false），门**恒绿**。
+
+这正是本仓已登记的坑：**有信号 ≠ 有可机械捕获路径**（`adr/0018` 同族；捕获环节由被监管方把持就不是机械门）。我在设计里把它当机械门写，是同一个错误的复发。
+
+**改后做法**：把捕获权从模型手里拿走——**helper 侧把 truncated 落成 per-site sidecar**（复用已有的 `.rc` sidecar 形态：runner 只读、写不了），`anchor_lint` 核 **sidecar ↔ 锚行一致** + 「sidecar 为 true ⇒ 报告有覆盖声明」。这才是机械门。
+
+**代价**：要动 `outside-voice.sh`（本就在改）+ 两层 SKILL 的 sidecar 读取约定。**收益**：门从"核模型自洽"升级为"核事实"。
+
+**若实现期证明 sidecar 落不下来**（如 async 分支下 helper 与 `.rc` 写入时序冲突）⇒ **MUST 把 R7 如实降级为语义层约定**（报告写声明、无机械核），**MUST NOT** 保留一个只核模型自洽的门却称其为机械门。
 
 **明确不做**：分块多轮送、动态调 `OV_MAX_CONTEXT_BYTES`、按内容智能裁剪——那些是「让截断变聪明」，是另一个 change。**这一刀只解决「截断了要说出来」。**
 
@@ -213,6 +264,10 @@ exit 2 的 stderr **MUST** 明说「重跑无用」+ 列全阻断明细 + 给两
 - **[逃生口被滥用成常态]** → 缓解三条约束（留疤 / 禁环境化 / 禁自动传）。**残余**：人仍可每次手敲；但每次都会在 git 里留下一行，**可事后审计**——这是可见成本而非机械门（`adr/0021` 同款定位），**MUST NOT 宣称已杜绝**。
 - **[改 `assets/hack/` 后忘记跑 `setup.sh`]** → **`outside-voice.sh` 不在任何本 change 机制的保护范围内**（它是 shell、不走 recorder 取数路径，也没有诊断信号通道）⇒ **残余风险，显式登记**。本 change **不**声称覆盖它。
 - **[旧脚本已出厂，无法回溯加保护]** → **不可缓解，显式登记**：已发布的滞后脚本不知道 frontmatter 存在，任何前向机制都救不了它自己。唯一防线是它**自己喊出来的 `problems`** 被新消费方按阻断处置——即「缺席即阻断」那一条。**MUST NOT 把本 change 描述为「版本偏斜已被机械杜绝」。**
+- **[🔴 本 change 救不了本次事故本身 〔gstack-amendment · 广审 medium〕]** → 本次事故是 **consumer + producer 双旧**（`/sdflow-done` 调运行 checkout 的 `~/.claude/skills/sdflow-issues/…`，那份 `issues.py` 与 `buglist.py` 同旧）⇒ **新逻辑根本不在场**，「缺席即阻断」需要新 `issues.py` 才生效。
+  **唯一能覆盖双旧场景的动作 = 让「跑的是哪一份」变可见**：`sweep` / `reindex` 起手打印**所调脚本的绝对路径 + 版本戳**（近零成本，且旧版本也能被人一眼认出）。已纳入 tasks。
+  **诚实边界**：这是**可见成本**（`adr/0021`）、**不是机械门**——旧脚本不会打印版本戳，能看见的前提是至少有一端已升级。**MUST NOT 声称它拦得住双旧。**
+- **[`issues.py` 自持第三份 parser 〔gstack-amendment · 广审 high〕]** → 路径 ②/③ 用的是 `issues.py:298-511` 自己的 recorder parser。该 parser 若滞后（不认 frontmatter），这两条路径**无任何防线**。**本 change 不覆盖该面，显式登记为残余**——覆盖它需要把三份 parser 的版本能力统一暴露，属另一个 change。
 - **[SIGKILL 孤儿]** → 无缓解，见 D2 诚实边界。
 
 ## Migration Plan

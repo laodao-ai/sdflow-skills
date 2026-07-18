@@ -11,7 +11,7 @@
 - [ ] 1.4 【R1】测试：连续切点扫描——混合 ASCII / 3 字节 CJK / 4 字节 emoji 语料，覆盖区间内每个偏移，断言**头尾两段分别**以严格模式解码 UTF-8 成功
 - [ ] 1.5 【R1】测试：纯 ASCII 语料丢弃 0 字节（不引入无谓损耗）
 - [ ] 1.6 【R1】**变异验证**：把回扫改成恒返回 0，1.4 必须转红——否则该测试不承重
-- [ ] 1.7 【安全复核】核对 `secret_scan` 确在截断**之前**扫整个 context 文件；若次序相反则属出境安全回归，停下重议
+- [x] 1.7 【安全复核】〔gstack-amendment · **广审已定论，不留实现期**（通则①）〕`outside-voice.sh:153` 的 `secret_scan "$ctx"` 在 `:158` 截断分支**之前**扫整个文件，`do_exec:204` 另有预扫 ⇒ **无出境安全回归**，截断改动不缩小密钥扫描覆盖面
 
 ## 2. runner 子进程生命周期（R4 · B10）
 
@@ -35,19 +35,28 @@
 
 ## 4. 收集下发 + 缺席即阻断 + 面治覆盖（R2 · R5）
 
-- [ ] 4.1 【R5】`_scan_pool` / `read_pool` 收集阻断集并**默认下发**给全部调用方（改掉 `problems_out=None` 默认丢弃）
+> 〔gstack-amendment · 广审 critical〕拓扑经实测重定：**路径 ①**（subprocess scan，有 JSON 边界）= `sweep`/`reindex`/`rename` 后半；**路径 ②**（in-process，无字段可缺席、且写盘先于判定）= `rename` 前半；**路径 ③**（只读 `batches.md`，不碰两池）= `lint`/`batch add`/`set-status`。
+> 🔴 **原 4.4 要求给路径 ③ 三个调用方写「阻断断言」——它们根本不读两池，那会是三条写不出真断言的假绿。已删。**
+
+- [ ] 4.1 【R5】路径 ①：`_scan_pool` / `read_pool` 收集阻断集并**默认下发**（改掉 `problems_out=None` 默认丢弃）
 - [ ] 4.2 【R2】**缺席 ⇒ 全部 `problems` 视为阻断**（fail-closed）；**MUST NOT** 解释为「无阻断项」
-- [ ] 4.3 【R5】【D5】判定前置于任何 discovery / stat / open —— 写盘类须在动盘面前就关门（承 `adr/0022`）
-- [ ] 4.4 【R5】测试（**逐调用方各一条**，承 `adr/0011`）：`sweep` / `reindex` / `batch rename` / `batch add` / `set-status` / `lint` 在阻断下各自断言非零退出
-- [ ] 4.5 【R5】测试：`reindex` 阻断场景断言 **`INDEX.md` 与 `batches.md` 字节均未变**（B12 的核心）
-- [ ] 4.6 【R2】测试：**字段缺席**场景（模拟滞后产出方）断言全部按阻断处置
-- [ ] 4.7 【R2】测试：阻断集为空时行为**完全无变化**（退出码 / stdout JSON 形状 / 写盘结果）
-- [ ] 4.8 【R5】**变异验证**：把判定改为恒放行，4.4/4.5/4.6 必须转红
+- [ ] 4.3 【R5】【D5】路径 ① 判定前置于任何 discovery / stat / open（承 `adr/0022`）
+- [ ] 4.4 【R5】【D5′】**路径 ② 另立机制**：`read_rename_snapshot` 解析后、`retag` 与任何 `atomic_write` **之前**就地判完整性，非空即 fail-closed 零写盘
+- [ ] 4.5 【R5】【D5′】路径 ①② 的完整性判据 **MUST 抽成单一函数共用**，MUST NOT 各写一套（防漂移，承 `adr/0011`）
+- [ ] 4.6 【R5】测试（**逐调用方各一条**，只覆盖真读两池的）：`sweep` / `reindex` / `batch rename` 在阻断下各自断言非零退出
+- [ ] 4.7 【R5】测试：`reindex` 阻断断言 **`INDEX.md` 与 `batches.md` 字节均未变**（B12 核心）
+- [ ] 4.8 【R5】测试：**`batch rename` 阻断断言 registry 与 dated 文档字节均未变**（D5′ 核心——现状是写盘先于判定）
+- [ ] 4.9 【R2】测试：**字段缺席**场景（模拟滞后产出方）断言全部按阻断处置
+- [ ] 4.10 【R2】测试：阻断集为空时行为无变化——〔gstack-amendment〕**在真实仓盘面上跑**（原「造干净 fixture」不承重：fixture 刻意造干净必绿），**接受它可能红**并当作真实信号
+- [ ] 4.11 【R5】**变异验证**：把判定改为恒放行，4.6/4.7/4.8/4.9 必须转红
+- [ ] 4.12 【路径 ③ 显式不做】记录判定：`lint`/`batch add`/`set-status` 不读两池 ⇒ 无「读残缺」风险 ⇒ **不写阻断断言**。此为**有依据的排除**，非遗漏
 
 ## 5. 严格默认 + 退出码分类 + 逃生口（R3 · R6）
 
 - [ ] 5.1 【R3】阻断集非空 ⇒ 非零退出，**默认开**（翻转 `cmd_reindex` 的 `--strict` 默认；红线取阻断集非空，**不取 `tagged == 0`**）
 - [ ] 5.2 【R6】`sweep` 退出码分两类：`1` = 重跑可收敛（既有语义不变），`2` = 重跑无用须人介入
+- [ ] 5.2b 【R6】〔gstack-amendment〕**显式透传子进程的 2**：现状 `cmd_sweep` 调 `reindex`/`batch add` 后只判 `!= 0` → `_die`（恒 exit 1）⇒ **2 被压平**。MUST 改为按子进程实际退出码分流，MUST NOT 走既有 `_die` 路径
+- [ ] 5.2c 【DX·可见成本】〔gstack-amendment〕`sweep`/`reindex` 起手打印**所调脚本绝对路径 + 版本戳**——这是唯一能让「consumer+producer 双旧」场景变可见的动作（本 change 其余机制在双旧下**不在场**）。**登记为可见成本非机械门**（`adr/0021`）
 - [ ] 5.3 【R6】exit 2 的 stderr 含「重跑无用」字样 + 阻断明细全列 + 涉及文件路径 + 两条出路
 - [ ] 5.4 【R3】逃生口三约束：① 放行时 `INDEX.md` 头部 banner 增记「N 条阻断被放行、索引可能不完整」；② **仅认显式 CLI**，MUST NOT 支持 config / 环境变量；③ `/sdflow-done` sweep 子步 MUST NOT 自动传
 - [ ] 5.5 【R3】【A3】通读 `/sdflow-done` §2.1 全部调用点，确认 exit 1/2 分治与其「非原子、fail-closed、重跑收敛」契约相容；不相容则停下重议
@@ -58,8 +67,10 @@
 
 ## 6. 截断覆盖面诚实（R7 · grill fold）
 
-- [ ] 6.1 【R7】两层评审 SKILL.md 报告格式段：`truncated="true"` ⇒ 该 voice findings 段必带覆盖声明
-- [ ] 6.2 【R7】`anchor_lint` 加存在性核：`truncated="true"` 而报告无对应声明 ⇒ 判违规非零退出
+- [ ] 6.0 【R7】〔gstack-amendment · 广审 high〕**先把捕获权从模型手里拿走**：`outside-voice.sh` 把 truncated 落成 **per-site sidecar**（复用 `.rc` 形态，runner 只读写不了）。原设计把「模型抄写进锚行的值」当确定性信号，是**假机械门**
+- [ ] 6.1 【R7】两层评审 SKILL.md 报告格式段：sidecar 为 true ⇒ 该 voice findings 段必带覆盖声明
+- [ ] 6.2 【R7】`anchor_lint` 核**两件事**：① sidecar ↔ 锚行 `truncated=` **一致**（防抄错/省事写 false）；② sidecar 为 true 而报告无声明 ⇒ 判违规非零退出
+- [ ] 6.2b 【R7】**降级条款**：若实现期证明 sidecar 落不下来（如 async 分支写入时序冲突）⇒ **MUST 把 R7 如实降级为语义层约定**（报告写声明、无机械核），**MUST NOT** 保留只核模型自洽的门却称其机械门
 - [ ] 6.3 【R7】`openspec/workflow/tools/anchor_lint.py` 与 `sdflow-init/assets/workflow/tools/anchor_lint.py` **保持字节一致**（bundle 权威源纪律）
 - [ ] 6.4 【R7】测试：truncated=true 缺声明判红 / 有声明判绿 / truncated=false 不强加声明
 - [ ] 6.5 【R7】**跑 `hack/check_async_branch_parity.py`** 确认未碰两层 SKILL 的 async 字节等值 marker 段
@@ -68,7 +79,7 @@
 ## 7. 调用方认识 exit 2（R6）
 
 - [ ] 7.1 【R6】`sdflow-done/SKILL.md` §2.1 失败语义段补 exit 1/2 分治，标 `[grill-amendment]`
-- [ ] 7.2 【R6】`sdflow-ship/SKILL.md` 链序：exit 2 **不进重试循环**、硬停上抛；**MUST NOT** 跳过 sweep 继续推进
+- [ ] ~~7.2 `sdflow-ship/SKILL.md` 链序~~ 〔gstack-amendment · **删**〕实测 `grep -c sweep sdflow-ship/SKILL.md` = **0**——ship 不直接调 sweep，经 `/sdflow-done` 链序。改它是无效编辑
 - [ ] 7.3 【R6】跑 `hack/sync_principles.py --check` 确认 SKILL.md 改动未碰托管区块
 
 ## 8. 跨平台闭环与收尾（A1）

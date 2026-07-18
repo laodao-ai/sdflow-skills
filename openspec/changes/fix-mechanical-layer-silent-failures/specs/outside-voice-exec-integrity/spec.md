@@ -48,7 +48,13 @@
 
 ### Requirement: 截断过的 voice 必须声明其覆盖面残缺
 
-当某次 outside-voice 调用的锚行记录 `truncated="true"` 时，该 voice 在评审报告中的 findings 段 **MUST** 携带覆盖面声明（本镜基于截断上下文、中段未见），且该声明的存在性 **SHALL** 由 `anchor_lint` 机械核验。
+helper **SHALL** 把本次调用是否截断落成 **runner 写不了的 sidecar**（复用退出码 sidecar 的形态与信任模型）；当该 sidecar 指示已截断时，该 voice 在评审报告中的 findings 段 **MUST** 携带覆盖面声明（本镜基于截断上下文、中段未见）。
+
+`anchor_lint` **SHALL** 机械核验两件事：① sidecar 与锚行 `truncated=` **取值一致**；② sidecar 指示已截断时报告存在覆盖面声明。
+
+🔴 **捕获权 MUST NOT 留在被监管方手里** `[gstack-amendment]`：锚行的 `truncated=` 由主 session **抄写**自 helper stderr，**不是**机械捕获的事实。仅核「锚行说 true ⇒ 报告有声明」只是在核模型自己写的两句话彼此自洽——抄错或省事写 `false` 即恒绿。∴ 判据 **MUST** 锚在 sidecar（helper 落盘、runner 只读）上，**MUST NOT** 仅锚在锚行上。
+
+**降级条款**：若 sidecar 在某分支落不下来，本需求 **MUST** 如实降级为语义层约定（报告写声明、无机械核），**MUST NOT** 保留一个只核模型自洽的检查却称其为机械门。
 
 **MUST NOT** 把截断过的 voice 与完整 voice 在报告中呈现为等价——前者无法对被挖掉的中段作任何断言，把它的 findings 当作全量覆盖是**覆盖面撒谎**，与退出码撒谎同族。
 
@@ -56,12 +62,17 @@
 
 #### Scenario: 截断时报告必带覆盖声明
 
-- **WHEN** 某 outside-voice 站点的锚行为 `truncated="true"`
+- **WHEN** 某 outside-voice 站点的 sidecar 指示已截断
 - **THEN** `anchor_lint` 在该报告中找不到对应的覆盖面声明时判违规、非零退出
+
+#### Scenario: 锚行与 sidecar 不一致即判违规
+
+- **WHEN** sidecar 指示已截断，而报告锚行写的是 `truncated="false"`
+- **THEN** `anchor_lint` 判违规、非零退出（这正是「模型抄写」这条捕获链要防的失效）
 
 #### Scenario: 未截断时不强加声明
 
-- **WHEN** 锚行为 `truncated="false"`
+- **WHEN** sidecar 指示未截断且锚行为 `truncated="false"`
 - **THEN** `anchor_lint` 不要求覆盖面声明，报告无该句亦判通过
 
 #### Scenario: 锚行字段与合法组合矩阵不变

@@ -17,10 +17,12 @@
 - **WHEN** 取数产生非空阻断集，调用方未传任何开关
 - **THEN** 命令非零退出
 
-#### Scenario: 放行留痕
+#### Scenario: 放行留痕（限写 INDEX 的命令）
 
-- **WHEN** 调用方显式传入逃生口并完成重建
+- **WHEN** 调用方显式传入逃生口并完成 `INDEX.md` 重建
 - **THEN** 命令以 0 退出，且生成的 `INDEX.md` 头部 banner 含被放行的阻断项计数与「索引可能不完整」的声明
+
+> 适用面 `[gstack-amendment]`：banner 是 `INDEX.md` 的生成物，**只有写 INDEX 的命令**（`reindex`，及经它的 `sweep`/`batch rename`）具备该载体。不读两池的命令本就不产生阻断，无此场景。本 Scenario **MUST NOT** 被解读为「所有命令放行都留痕」。
 
 #### Scenario: 逃生口不可环境化
 

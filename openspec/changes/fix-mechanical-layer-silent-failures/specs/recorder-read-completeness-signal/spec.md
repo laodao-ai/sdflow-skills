@@ -36,18 +36,37 @@ recorder 各池脚本（`buglist.py` / `todolist.py`）产出的 `problems` 诊�
 - **WHEN** 只读取 `problems` 字段的既有消费者解析新版 `scan --json`
 - **THEN** 其读到的 `problems` 类型与内容与改动前一致，解析不失败
 
-### Requirement: 阻断判定覆盖全部取数调用方
+### Requirement: 阻断判定覆盖每一条真正读两池的取数路径
 
-阻断集 **SHALL** 在**共用取数入口**被收集并向全部调用方传递，**MUST NOT** 仅对个别子命令收集（现状：多数调用方传空、连诊断都看不到）。
+阻断判定 **SHALL** 覆盖**每一条真正读取两池数据的路径**，**MUST NOT** 仅对个别子命令收集。
 
-受覆盖的调用方 **MUST** 至少包含：`sweep`、`reindex`、`batch rename`、`batch add`、`set-status`、`lint`。**写盘类**调用方的阻断判定 **MUST** 前置于任何写盘动作（承 `adr/0022`）。
+受覆盖路径 **MUST** 包含：
 
-#### Scenario: 写盘类调用方在阻断下零写盘
+- **subprocess `scan --json` 路径**（`sweep`、`reindex`、`batch rename` 后半）——经 additive 阻断集字段承载；
+- **in-process snapshot 路径**（`batch rename` 前半）——**无 JSON 字段可缺席**，**MUST** 另立判定（见下）。
+
+**只读批次注册表、不读两池的命令**（`batch lint`、`batch add`、`set-status`）**不在本需求范围内**——它们不存在「读残缺」风险。为其编写阻断断言 **MUST NOT** 被视为覆盖度，那是无法写出真断言的假绿。
+
+**写盘类**路径的阻断判定 **MUST** 前置于**任何**写盘动作（承 `adr/0022`）。
+
+两条路径的完整性判据 **MUST** 抽成**单一函数**共用，**MUST NOT** 各写一套（否则必然漂移；承 `adr/0011`）。
+
+#### Scenario: reindex 在阻断下零写盘
 
 - **WHEN** 取数产生非空阻断集，随后执行 `reindex`
 - **THEN** 命令非零退出，且 `INDEX.md` 与 `batches.md` 字节均未变
 
-#### Scenario: 每个调用方各自验证
+#### Scenario: batch rename 在阻断下零写盘
+
+- **WHEN** `read_rename_snapshot` 解析出的盘面触发完整性阻断
+- **THEN** 命令在 `retag` 与任何 `atomic_write` **之前**非零退出；批次注册表与全部 dated 文档字节均未变
+
+#### Scenario: 两条路径判据同源
+
+- **WHEN** 检视实现
+- **THEN** subprocess 路径与 in-process 路径调用的是**同一个**完整性判定函数
+
+#### Scenario: 不读两池的命令有依据地排除
 
 - **WHEN** 为本需求编写测试
-- **THEN** 上述每个调用方**各有**一条阻断场景断言（承 `adr/0011`：共用解析核心的返回语义按消费方各自定），**MUST NOT** 仅测一条路径即宣称覆盖
+- **THEN** 真正读两池的每条路径**各有**一条阻断断言；`batch lint` / `batch add` / `set-status` **不**编写阻断断言，且该排除在文档中附有依据（不读两池）
