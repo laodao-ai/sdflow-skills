@@ -18,6 +18,8 @@ sdflow-issues:
     T159: {"module":"sdflow-spec-review + sdflow-code-review","summary":"协议节 HELPER=~/.sdflow/hack/outside-voice.sh 同属「shell 变量不跨调用存活」失效类，宜改字面路径","type":"代码质量","status":"OPEN","time":"2026-07-18 17:30","change":"async-outside-voice","batch":null}
     T160: {"module":"openspec/changes/async-outside-voice","summary":"3600 上界依据应回写 design ADR-3 免二源；DOC-1 理由入 SKILL 正文一条待设计门拍板","type":"代码质量","status":"OPEN","time":"2026-07-18 17:43","change":"async-outside-voice","batch":null}
     T161: {"module":"sdflow-spec-review + sdflow-code-review","summary":"等值门只覆盖 marker 段；圈外 preflight/fallback/锚行段两层也高度相似但漂了不会红","type":"基础设施","status":"OPEN","time":"2026-07-18 18:01","change":"async-outside-voice","batch":null}
+    T162: {"module":"sdflow-spec-review / sdflow-code-review（outside-voice 调度层）","summary":"Codex 宿主方向的跨模型 voice efficacy=0：架构性无法离开关键路径，待 codex deferred_executor 稳定或外部 claude daemon 方案再议","type":"功能增强","status":"OPEN","time":"2026-07-18 18:46","change":"async-outside-voice","batch":null}
+    T163: {"module":"sdflow-spec-review / sdflow-code-review + hack/check_async_branch_parity.py","summary":"async host 调度段的 DRY 全抽取：把 marker 段抽成单一源注入两 SKILL，替代当前「两份副本 + 机械等值门」","type":"代码质量","status":"OPEN","time":"2026-07-18 18:46","change":"async-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1551,3 +1553,25 @@ sdflow-issues:
 
 **备注**：来源=mlh-p6 收尾「建全仓 -W error CI 门」设计问答的平台无关化延伸；用户拍板 (a)——本仓 T155 先走 GitHub Actions，本项留待 sdflow-devenv 独立增强。关联本仓 CI 门 T155。锚：sdflow-devenv/SKILL.md:3/:29、references/testing-framework.md:84/:159-160、references/environments-template.md:253/:283。
 <!-- sdflow-issue-block:end id=T156 -->
+
+<!-- sdflow-issue-block:start id=T162 -->
+## T162: Codex 宿主方向的跨模型 voice efficacy=0：架构性无法离开关键路径，待 codex deferred_executor 稳定或外部 claude daemon 方案再议
+> Codex 宿主方向的跨模型 voice efficacy=0：架构性无法离开关键路径，待 codex deferred_executor 稳定或外部 claude daemon 方案再议
+
+**关联文档**：`openspec/changes/async-outside-voice/design.md`
+
+**动机**：本 change 的 async 化只在 Claude 宿主成立（run_in_background 为 harness 原语）。Codex 宿主每条 shell 命令返回即回收该命令 spawn 的一切进程（nohup+setsid 皆秒死，spike 实证），无生产级后台原语 ⇒ Codex 方向的长跨模型 voice 架构性无法离开关键路径，只能同步阻塞 300s。add-codex-host-support 归档实测亦显示反向 claude -p outside-voice 在真实负载（300s + 10KB context）下全 timeout 回落同族、efficacy=0。∴ Codex 宿主上 outside-voice 的实际价值当前为零，但机制仍在跑、仍在花 300s。
+
+**备注**：来源=async-outside-voice tasks.md §5.1（scope 外记账）。关联记忆锚：codex-reaps-spawned-processes-per-command、codex-a3-efficacy-real-load-timeout。本 change 已在 design Non-Goal 显式排除该项。
+<!-- sdflow-issue-block:end id=T162 -->
+
+<!-- sdflow-issue-block:start id=T163 -->
+## T163: async host 调度段的 DRY 全抽取：把 marker 段抽成单一源注入两 SKILL，替代当前「两份副本 + 机械等值门」
+> async host 调度段的 DRY 全抽取：把 marker 段抽成单一源注入两 SKILL，替代当前「两份副本 + 机械等值门」
+
+**关联文档**：`openspec/changes/async-outside-voice/design.md`
+
+**动机**：本 change §2.2 落的是「两份字节相同的副本 + check_async_branch_parity.py 机械等值门」——漂移会被当场拦红（已实证绿），故正确性已守住。但仍是两份副本：改一处必须同步改另一处，改动成本 ×2，且新增第三个消费方（如未来 codex 分支、或第三个评审层）时成本线性增长。等值门只保证「两份一致」，不消除「有两份」。
+
+**备注**：来源=async-outside-voice tasks.md §5.2（明示超本 change scope、另立 change）。当前等值门已守漂移 ⇒ 本项是成本优化而非正确性修复，优先级可低。锚：hack/check_async_branch_parity.py、hack/sync_principles.py（idiom 先例）、两 SKILL 的 sdflow:async-branch marker。
+<!-- sdflow-issue-block:end id=T163 -->

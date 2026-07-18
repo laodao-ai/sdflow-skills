@@ -63,9 +63,17 @@ def test_recorders_stay_self_contained_without_yaml_or_cross_skill_imports():
 
 
 def _reference_legacy_rows(path, pool):
-    """Project frozen Markdown rows without calling any recorder parser."""
+    """Project frozen Markdown rows without calling any recorder parser.
+
+    返回 None 表示「本文件没有 legacy 总览表可投影」——即 canonical-only 文件（写入方对
+    mode=canonical 的自检就是 `expected_count = 0`，见 buglist.py:550）。本函数只负责
+    legacy 表的独立投影，canonical-only 文件没有可投影对象，由调用方跳过；**不是放宽校验**：
+    legacy 文件仍必须恰好 1 个总览表、表体仍必须非空。
+    """
     lines = path.read_text(encoding="utf-8-sig").splitlines()
     headings = [index for index, line in enumerate(lines) if re.fullmatch(r"##\s+状态总览", line)]
+    if not headings:
+        return None
     assert len(headings) == 1, f"{path}: expected one legacy overview"
     header = next(
         index
@@ -113,6 +121,8 @@ def test_repository_legacy_corpus_matches_independent_projection_item_by_item():
     for pool, (module, directory, specific) in fields_by_pool.items():
         for path in sorted(directory.glob("*.md")):
             baseline = _reference_legacy_rows(path, pool)
+            if baseline is None:        # canonical-only 文件：无 legacy 表可对拍，跳过
+                continue
             document = module.read_recorder_document(str(path), pool)
             effective = document["effective_items"]
             owned = set(document["model"]["items"]) if document["model"] else set()
