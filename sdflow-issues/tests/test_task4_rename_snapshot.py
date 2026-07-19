@@ -22,30 +22,8 @@ BUGLIST_SCRIPT = str(Path(__file__).parents[2] / "sdflow-buglist" / "scripts" / 
 TODOLIST_SCRIPT = str(Path(__file__).parents[2] / "sdflow-todolist" / "scripts" / "todolist.py")
 
 
-def _is_recorder_scan(command):
-    """命令是否为 recorder 的 `scan` 子进程（`[python, <script>, --root, R, scan, ...]`）。"""
-    return isinstance(command, (list, tuple)) and len(command) > 1 and "scan" in command
-
-
-def _scan_only_run(handler):
-    """构造一个**按 argv 分派**的 `subprocess.run` 替身：只拦 recorder 的 `scan`
-    子进程，其余子进程（尤其 `repo_root` 的 `git rev-parse --show-toplevel`）
-    **透传真实行为**。
-
-    为什么 MUST NOT 整体替换 `issues_mod.subprocess.run`：整体替换会连带劫持被测
-    函数之外的一切子进程调用，其中包括 `repo_root` 的 git 探测——于是 git 会"返回"
-    测试注入的 JSON 载荷，root 解析在形状校验处先崩。此时用例看似通过（派生字节确实
-    没变），但那是因为 reindex 根本没访问过目标目录，而不是因为派生字节被保护住了。
-    这正是本 change 要消灭的假绿形态。
-    """
-    real_run = issues_mod.subprocess.run
-
-    def run(command, *args, **kwargs):
-        if _is_recorder_scan(command):
-            return handler(command)
-        return real_run(command, *args, **kwargs)
-
-    return run
+# 分派型补桩的单一源在 `conftest.py`（`scan_only_run` fixture）——为什么 MUST NOT
+# 整体替换 `issues_mod.subprocess.run`（假绿机理），见该模块的 docstring。
 
 
 def _valid_bug_item(**overrides):
@@ -151,7 +129,9 @@ def test_validate_scan_envelope_rejects_noncanonical_empty_values(pool, field, v
         json.dumps({"bugs": [_valid_bug_item(status="NEW_ENUM")], "problems": []}),
     ],
 )
-def test_reindex_consumer_drift_preserves_existing_index_and_batches(tmp_path, monkeypatch, payload):
+def test_reindex_consumer_drift_preserves_existing_index_and_batches(
+    tmp_path, monkeypatch, scan_only_run, payload
+):
     issues_dir = tmp_path / "openspec" / "issues"
     issues_dir.mkdir(parents=True)
     index = issues_dir / "INDEX.md"
@@ -164,7 +144,7 @@ def test_reindex_consumer_drift_preserves_existing_index_and_batches(tmp_path, m
         stdout = payload
         stderr = ""
 
-    monkeypatch.setattr(issues_mod.subprocess, "run", _scan_only_run(lambda _command: Proc()))
+    monkeypatch.setattr(issues_mod.subprocess, "run", scan_only_run(lambda _command: Proc()))
 
     with pytest.raises(ValueError):
         _reindex_core(str(tmp_path))
@@ -175,7 +155,7 @@ def test_reindex_consumer_drift_preserves_existing_index_and_batches(tmp_path, m
 
 @pytest.mark.parametrize("bad_id", [None, 7, [], {}])
 def test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes(
-    tmp_path, monkeypatch, capsys, bad_id
+    tmp_path, monkeypatch, capsys, scan_only_run, bad_id
 ):
     issues_dir = tmp_path / "openspec" / "issues"
     issues_dir.mkdir(parents=True)
@@ -191,8 +171,8 @@ def test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes(
 
     # 按 argv 分派：只拦 recorder 的 scan，`git rev-parse` 透传 ⇒ root 真解析到
     # tmp_path，reindex 真正作用于临时目录。整体替换会让本用例退化成假绿（见
-    # `_scan_only_run` 的 docstring）。
-    monkeypatch.setattr(issues_mod.subprocess, "run", _scan_only_run(lambda _command: Proc()))
+    # `conftest.make_dispatch_run` 的 docstring）。
+    monkeypatch.setattr(issues_mod.subprocess, "run", scan_only_run(lambda _command: Proc()))
     monkeypatch.setattr(
         sys, "argv", ["issues.py", "--root", str(tmp_path), "reindex"]
     )
@@ -222,7 +202,7 @@ def test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes(
 )
 @pytest.mark.parametrize("bad_pool", ["bug", "todo"])
 def test_reindex_rejects_schema_value_drift_from_each_pool_before_derived_writes(
-    tmp_path, monkeypatch, bad_pool, field, value
+    tmp_path, monkeypatch, scan_only_run, bad_pool, field, value
 ):
     issues_dir = tmp_path / "openspec" / "issues"
     issues_dir.mkdir(parents=True)
@@ -250,7 +230,7 @@ def test_reindex_rejects_schema_value_drift_from_each_pool_before_derived_writes
             return Proc(json.dumps({"bugs": [bug], "problems": []}))
         return Proc(json.dumps({"items": [todo], "problems": []}))
 
-    monkeypatch.setattr(issues_mod.subprocess, "run", _scan_only_run(scan))
+    monkeypatch.setattr(issues_mod.subprocess, "run", scan_only_run(scan))
 
     with pytest.raises(ValueError, match=field):
         _reindex_core(str(tmp_path))
@@ -279,7 +259,9 @@ def _write_canonical(root, pool, filename, item_id, item):
     return path
 
 
-def test_read_rename_snapshot_reads_and_parses_each_dated_file_once(tmp_path, monkeypatch):
+def test_read_rename_snapshot_reads_and_parses_each_dated_file_once(
+    tmp_path, monkeypatch, scan_only_run
+):
     bug = _valid_bug_item()
     bug.pop("id")
     bug.pop("file")
@@ -301,7 +283,7 @@ def test_read_rename_snapshot_reads_and_parses_each_dated_file_once(tmp_path, mo
 
     # 只对 recorder scan 断言"不得被调用"（这就是本用例的断言本体）；其余子进程
     # （如 repo_root 的 git 探测）透传，避免劫持被测函数之外的调用。
-    monkeypatch.setattr(issues_mod.subprocess, "run", _scan_only_run(no_recorder_scan))
+    monkeypatch.setattr(issues_mod.subprocess, "run", scan_only_run(no_recorder_scan))
     snapshot = read_rename_snapshot(str(tmp_path), instrumentation=instrumentation)
 
     assert {item["id"] for item in snapshot["items"]} == {"B1", "T1"}

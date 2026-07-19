@@ -398,23 +398,19 @@ class TestReadPoolSubprocessFailure:
     非零退出码时，read_pool 必须抛 RuntimeError（不静默吞掉、不返回半截 join 结果）。"""
 
     def test_read_pool_raises_runtime_error_when_subprocess_exits_nonzero(
-        self, tmp_path, monkeypatch
+        self, tmp_path, monkeypatch, scan_only_run
     ):
         class _FakeProc:
             returncode = 1
             stdout = ""
             stderr = "simulated subprocess failure"
 
-        real_run = subprocess.run
-
-        # 按 argv 分派：只拦 recorder 的 scan 子进程，其余（含 repo_root 的
-        # `git rev-parse`）透传真实行为——整体替换会连带劫持被测函数之外的调用。
-        def fake_run(cmd, **kwargs):
-            if "scan" in cmd:
-                return _FakeProc()
-            return real_run(cmd, **kwargs)
-
-        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        # 按 argv 分派（单一源见 conftest）：只拦 recorder 的 scan 子进程，其余
+        # （含 repo_root 的 `git rev-parse`）透传真实行为——整体替换会连带劫持被测
+        # 函数之外的调用，用例退化为假绿。
+        monkeypatch.setattr(
+            issues_mod.subprocess, "run", scan_only_run(lambda _command: _FakeProc())
+        )
 
         with pytest.raises(RuntimeError) as exc_info:
             read_pool(str(tmp_path))
@@ -1596,25 +1592,24 @@ class TestSweep:
         assert _item_batch(tmp_path, "B1") == ""  # 未被误纳
         assert not _batches_path(tmp_path).exists()  # 未曾写盘
 
-    def test_sweep_scan_fail_closed(self, tmp_path, monkeypatch, capsys):
+    def test_sweep_scan_fail_closed(
+        self, tmp_path, monkeypatch, capsys, dispatch_run, argv_contains
+    ):
         """[impl-review-fix] FIX-4：scan 子进程非零退出 → sweep 整体非零退出，stderr
         报明 pool/步；此前完全没测过这个分支。此时还没跑到 triage，不应有任何写盘。"""
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "chg-scan", "batch": ""},
         ])
-        real_run = subprocess.run
-
         class _FakeFailProc:
             returncode = 1
             stdout = ""
             stderr = "simulated scan failure"
 
-        def fake_run(cmd, **kwargs):
-            if "scan" in cmd:
-                return _FakeFailProc()
-            return real_run(cmd, **kwargs)
-
-        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            issues_mod.subprocess,
+            "run",
+            dispatch_run(argv_contains("scan"), lambda _command: _FakeFailProc()),
+        )
 
         args = types.SimpleNamespace(root=str(tmp_path), change="chg-scan")
         with pytest.raises(SystemExit) as exc_info:
@@ -1628,26 +1623,25 @@ class TestSweep:
         assert _item_batch(tmp_path, "B1") == ""  # 未被 tag，scan 就已失败
         assert not _batches_path(tmp_path).exists()  # 完全没写盘
 
-    def test_sweep_batch_add_fail_closed(self, tmp_path, monkeypatch, capsys):
+    def test_sweep_batch_add_fail_closed(
+        self, tmp_path, monkeypatch, capsys, dispatch_run, argv_contains
+    ):
         """[impl-review-fix] FIX-4：batch add 子进程非零退出 → sweep 整体非零退出，
         stderr 报明 batch add 步；此时 triage 已成功落盘（tag 已写），但 batches.md
         未建成——此前完全没测过这个分支。"""
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "chg-ba", "batch": ""},
         ])
-        real_run = subprocess.run
-
         class _FakeFailProc:
             returncode = 1
             stdout = ""
             stderr = "simulated batch add failure"
 
-        def fake_run(cmd, **kwargs):
-            if "batch" in cmd and "add" in cmd:
-                return _FakeFailProc()
-            return real_run(cmd, **kwargs)
-
-        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            issues_mod.subprocess,
+            "run",
+            dispatch_run(argv_contains("batch", "add"), lambda _command: _FakeFailProc()),
+        )
 
         args = types.SimpleNamespace(root=str(tmp_path), change="chg-ba")
         with pytest.raises(SystemExit) as exc_info:
@@ -1660,26 +1654,25 @@ class TestSweep:
         assert _item_batch(tmp_path, "B1") == "chg-ba"  # triage 已成功落盘
         assert not _batches_path(tmp_path).exists()  # batch add 未成功，未建成
 
-    def test_sweep_triage_fail_closed(self, tmp_path, monkeypatch, capsys):
+    def test_sweep_triage_fail_closed(
+        self, tmp_path, monkeypatch, capsys, dispatch_run, argv_contains
+    ):
         """逐项 triage 第 i 项非零退出 → sweep 整体非零退出，stderr 报明失败点位
         （pool/id/已 tag 的 id 列表）；前面已成功的项保持已 tag。"""
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "chg-f", "batch": ""},
             {"id": "B2", "status": "OPEN", "change": "chg-f", "batch": ""},
         ])
-        real_run = subprocess.run
-
         class _FakeFailProc:
             returncode = 1
             stdout = ""
             stderr = "simulated triage failure"
 
-        def fake_run(cmd, **kwargs):
-            if "triage" in cmd and "B2" in cmd:
-                return _FakeFailProc()
-            return real_run(cmd, **kwargs)
-
-        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            issues_mod.subprocess,
+            "run",
+            dispatch_run(argv_contains("triage", "B2"), lambda _command: _FakeFailProc()),
+        )
 
         args = types.SimpleNamespace(root=str(tmp_path), change="chg-f")
         with pytest.raises(SystemExit) as exc_info:
@@ -1695,26 +1688,23 @@ class TestSweep:
         assert _item_batch(tmp_path, "B2") == ""  # 失败项未被 tag
         assert not _batches_path(tmp_path).exists()  # 还没跑到 batch add 步
 
-    def test_sweep_rerun_converges(self, tmp_path, monkeypatch):
+    def test_sweep_rerun_converges(self, tmp_path, monkeypatch, dispatch_run, argv_contains):
         """部分失败（B2 triage 注入失败）后移除注入重跑：全部收敛 tag，batches.md
         建成、INDEX 刷新；已 tag 项（B1）不受重跑影响（幂等）。"""
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "chg-g", "batch": ""},
             {"id": "B2", "status": "OPEN", "change": "chg-g", "batch": ""},
         ])
-        real_run = subprocess.run
-
         class _FakeFailProc:
             returncode = 1
             stdout = ""
             stderr = "simulated triage failure"
 
-        def fake_run(cmd, **kwargs):
-            if "triage" in cmd and "B2" in cmd:
-                return _FakeFailProc()
-            return real_run(cmd, **kwargs)
-
-        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            issues_mod.subprocess,
+            "run",
+            dispatch_run(argv_contains("triage", "B2"), lambda _command: _FakeFailProc()),
+        )
         args = types.SimpleNamespace(root=str(tmp_path), change="chg-g")
         with pytest.raises(SystemExit):
             issues_mod.cmd_sweep(args)
@@ -1733,7 +1723,9 @@ class TestSweep:
         assert "### chg-g —" in _read_batches(tmp_path)
         assert "chg-g" in _read_index(tmp_path)
 
-    def test_sweep_reindex_fail_closed(self, tmp_path, monkeypatch, capsys):
+    def test_sweep_reindex_fail_closed(
+        self, tmp_path, monkeypatch, capsys, dispatch_run, argv_contains
+    ):
         """末步 reindex 非零退出也判 sweep 整体失败（fail-closed，区别 rename 的
         warn-only）；此时 triage/batch add 均已成功落盘。
 
@@ -1746,19 +1738,16 @@ class TestSweep:
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "chg-h", "batch": ""},
         ])
-        real_run = subprocess.run
-
         class _FakeFailProc:
             returncode = 1
             stdout = ""
             stderr = "boom"
 
-        def fake_run(cmd, **kwargs):
-            if "reindex" in cmd:
-                return _FakeFailProc()
-            return real_run(cmd, **kwargs)
-
-        monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
+        monkeypatch.setattr(
+            issues_mod.subprocess,
+            "run",
+            dispatch_run(argv_contains("reindex"), lambda _command: _FakeFailProc()),
+        )
         args = types.SimpleNamespace(root=str(tmp_path), change="chg-h")
         with pytest.raises(SystemExit) as exc_info:
             issues_mod.cmd_sweep(args)
