@@ -48,20 +48,31 @@
 
 **退出码无回归**：`wait` 后 `rc=124`（超时）/ `0` / 其他非零码**原样透传**；后台化后 stdin/stdout 重定向照常。**与 shell 选项相容**〔广审核实〕：脚本只有 `set -u`、**无 `set -e`** ⇒ `wait` 返回非零不会误中止。
 
-**备选**：`setsid` + `kill -- -PGID` —— **证伪**：`setsid` 在 macOS（Darwin 25）**不存在**（Linux util-linux 才有）；且上条实测表明 timeout 已自建进程组、信号转发足够，**收益为零**。
+**备选**：`setsid` + `kill -- -PGID` —— **证伪**：`setsid` 在 macOS（Darwin 25）**不存在**（Linux util-linux 才有）；且上条实测表明 timeout 已自建进程组、信号转发足够，**收益为零**（此处指 TERM 阶段；KILL 升级阶段的收益见 D2.1）。
 
 **143 无需新增枚举**〔广审核实〕：两层 SKILL 的 async 段第 ⑦ 条已有 catch-all——「其余一切情形（未知码 / `.rc` 缺席或内容不匹配 …）→ **保守** fallback（`reason_code="exec-error"`）」。且 helper 被 TERM 时 `printf '%s' "$?" > <site>.rc` 本就没机会执行 ⇒ `.rc` 缺席 ⇒ 本来就走 exec-error。**B10 的修复是锚语义中性的**，改变的只是孤儿不再白烧至内层超时。
 
-**🔴 诚实边界（MUST NOT 声称根治）** — **四条残余并列**，性质相同：都是 shell 层**不可干净消除**的窗口/语义空隙，只登记、不声称已解决（adr/0018）。文档与实现 **MUST** 显式登记：
+### D2.1 — 组级 KILL 升级：治愈残余(d)（runner 忽略 TERM 后子树逃逸）〔fix-mechanical-layer-silent-failures 根治，1.4.2〕
+
+**上一轮（F-新2）实测坐实的根因**：`OV_RUNNER_PID` 记的是 **`timeout` 自身**的 PID，不是 runner 的 PID。`ov_cleanup` 的 KILL 升级只对这一个 PID 发 SIGKILL——不可捕获、瞬间生效，`timeout` 来不及跑到它自己那条「向子进程组转发 KILL」的 `-k 10` 升级逻辑 ⇒ runner 若 `trap '' TERM` 忽略终止信号，其子孙进程逃逸成孤儿（手工探针 + pytest 实测复现，见 F-新2 / `task3-cross-platform-fix1.md`）。
+
+**修法（已实测验证，见 impl-report `task3-cross-platform-fix2.md`）**：GNU `timeout` 会 `setpgid` 把自己放进**独立进程组**，且该组的 **PGID 恒等于 `timeout` 自己的 PID**（即 `OV_RUNNER_PID`）、**不等于**脚本自身的 PGID。∴ 把 KILL 升级步的目标从「单个 PID」改成「负号进程组」（`kill -KILL -"$OV_RUNNER_PID"`），SIGKILL 直接打穿整棵子树，不再依赖 `timeout` 来不及跑完的组内转发。这不是 D2 已证伪的「主动 `setsid` 建组」——而是**借用** `timeout` 本来就会自建的那个既有组，只在升级步、且守卫通过时才对它下手。
+
+**实测（macOS，手工探针 + pytest 双证）**：`timeout pid=X pgid=X`（组长，且 ≠ 脚本自身 PGID）；对忽略 TERM 的 runner，组级 KILL 后 runner 与孙进程**均已死亡**（此前单 PID KILL 下二者均存活，见 F-新2）。**Linux 侧本轮未实测**，由 CI 泳道（`mechanical-gates.yml`，ubuntu-latest）判定，同 D1 的 A1 分工——不接受「macOS 绿就算过」。
+
+**🔴 自杀风险守卫（MUST）**：`kill -KILL -"$PID"` 前 MUST 同时满足：① 目标确实是组长（`ps -o pgid= -p "$PID"` 取到的值 == `$PID` 本身）；② 该 PGID 不等于脚本自身的 PGID（`ps -o pgid= -p $$`）。任一不满足（含 PGID 取不到）一律退回既有单 PID `kill -KILL "$PID"`，**MUST NOT 猜**。实现见 `_ov_group_kill_decision`（纯判定函数，`_ov_pgid_of` 取值）。
+
+**守卫自身的诚实边界（新增，与(a)(b)(c)那类不可消除的时序窗口性质不同，是刻意的保守退化）**：守卫不通过时退回单 PID KILL——对「runner 未忽略 TERM」的绝大多数场景无影响（TERM 阶段本就已把子树带走，见上方实测）；仅在「runner 主动忽略 TERM **且** 组信号守卫两条件之一不满足（如 `timeout` 实现不是 GNU/未 `setpgid`）」的交集场景，会退回旧行为（子树可能仍逃逸）。降级时 stderr 打印 `OV_GROUP_KILL_DEGRADED=1 reason=<pgid-unavailable|not-leader|own-group> pid=<PID> target_pgid=<val> own_pgid=<val>`（结构化字段，MUST NOT 含 context 正文，同 `OV_UTF8_BACKSCAN_UNAVAILABLE=1` 规格），使该退化路径对外可见、不再是零信号静默降级。
+
+**🔴 诚实边界（MUST NOT 声称根治）** — 以下**三条残余并列**，性质相同：都是 shell 层**不可干净消除**的窗口，只登记、不声称已解决（adr/0018）。文档与实现 **MUST** 显式登记：
 
 | # | 残余 | 成因 | 后果 |
 |---|---|---|---|
 | **(a)** | 父进程被 **SIGKILL** | trap 在 `-9` 下根本不执行 | 孤儿**仍存活**（实测） |
 | **(b)** | **PID 记录窗口**：`<runner> … &` 与 `OV_RUNNER_PID=$!` 之间 | 后台启动与 `$!` 赋值**不可原子化** | pending trap 带**空 PID** 执行 ⇒ 该次 runner **逃逸成孤儿** |
 | **(c)** | **PID 清零窗口**：`wait` 返回与 `OV_RUNNER_PID=""` 之间 | `wait` 返回与清零**不可原子化** | 对**已回收、可能已被系统复用**的 PID 开火（`kill -0` 会通过）⇒ 可能误杀无关进程 |
-| **(d)**〔fix-mechanical-layer-silent-failures F-新2，实测复现，非推断〕 | **runner 主动忽略 TERM** | `OV_RUNNER_PID` 记的是 **`timeout` 自身**的 PID，不是 runner 的 PID。`ov_cleanup` 先对该 PID 发 TERM——`timeout` 转发给子进程组，但 runner 若 `trap '' TERM` 忽略，不为所动；`timeout` 自己的 `-k 10` 升级窗口长达 10s，而 `ov_cleanup` 只宽限约 1s 就直接对 `$OV_RUNNER_PID`（即 timeout 本身）发 **SIGKILL**——SIGKILL 瞬间杀死 timeout，**来不及**让 timeout 跑到它自己那条「向子进程组转发 KILL」的升级逻辑 | runner 与其子孙进程**仍存活**、reparent 到 PID 1（手工探针 + pytest 均实测复现：`test_runner_ignoring_term_survives_kill_escalation_documented_residual`） |
 
-四者要覆盖都须由调用方在**更外层**（进程组 / cgroup / 容器）回收，或未来 change 把 (d) 的信号目标从「单个 PID」改成「进程组」——**本 change 不做该修复**（补测试缺口而非扩大修复面）。本 helper 只保证「可捕获信号 + 正常退出」两类路径，且**窗口外的绝大多数时刻正确**。
+三者要覆盖都须由调用方在**更外层**（进程组 / cgroup / 容器）回收。本 helper 只保证「可捕获信号 + 正常退出」两类路径，且**窗口外的绝大多数时刻正确**。**MUST NOT** 因为 D2.1 治好了 (d) 就顺手声称孤儿问题已彻底根治——(a)(b)(c) 依然是真实、无解的残余。
 
 ## 失败模式表〔TG-08 · BASE-06〕
 
@@ -74,7 +85,7 @@
 | F5 | 父进程 **SIGKILL** | **不可检测** | **残余(a)：孤儿存活**，显式登记不掩盖 | — |
 | F6 | 信号落在 `&` 与 `OV_RUNNER_PID=$!` 之间 | **不可检测** | **残余(b)：空 PID ⇒ 该次 runner 逃逸**，显式登记 | 128+signum |
 | F7 | 信号落在 `wait` 返回与 `OV_RUNNER_PID=""` 之间 | **不可检测** | **残余(c)：对已回收/可能已复用的 PID 开火**，显式登记 | 128+signum |
-| F8 | runner 主动 `trap '' TERM` 忽略终止信号 | pytest 实测（`test_runner_ignoring_term_survives_kill_escalation_documented_residual`） | **残余(d)：子树存活**——`ov_cleanup` 的 KILL 兜底只打 `timeout` 单 PID，抢在 `timeout` 自己的 `-k 10` 组级升级前把它杀死，显式登记不掩盖 | 143（父侧退出码不变；子树是否死亡与父侧退出码无关） |
+| F8 | runner 主动 `trap '' TERM` 忽略终止信号 | pytest 实测（`test_runner_ignoring_term_dies_under_group_kill_escalation`） | **已治〔D2.1〕**：`ov_cleanup` 的 KILL 升级在守卫通过时改投递目标为负号进程组，子树随 `timeout` 一并灭失；守卫未通过时退回单 PID KILL 并打 `OV_GROUP_KILL_DEGRADED=1` 哨兵，不再是零信号静默降级 | 143（父侧退出码不变） |
 
 ## 可观测性〔TG-08 · BASE-11〕
 
@@ -90,7 +101,8 @@
 ## Risks / Trade-offs
 
 - **[A1 未闭：Linux 侧截断行为未实测]** → 缓解：CI 泳道跑切点扫描测试（`mechanical-gates.yml` 已是 ubuntu-latest）。**不接受「macOS 绿就算过」**——`windows-ci-bash-subprocess-traps` 就是这么被咬的。
-- **[SIGKILL 孤儿 (a) · PID 记录窗口 (b) · PID 清零窗口 (c) · runner 忽略 TERM (d)]** → 均**无缓解**，见 D2 诚实边界四条表。要覆盖须调用方在更外层（进程组 / cgroup / 容器）回收，或未来 change 把 (d) 的信号目标改成进程组（本 change 不做）。
+- **[SIGKILL 孤儿 (a) · PID 记录窗口 (b) · PID 清零窗口 (c)]** → 均**无缓解**，见 D2 诚实边界三条表。要覆盖须调用方在更外层（进程组 / cgroup / 容器）回收。
+- **[组级 KILL 守卫的退化路径〔D2.1〕]** → 缓解：`OV_GROUP_KILL_DEGRADED=1` 结构化 stderr 哨兵使降级可观测；**MUST NOT** 声称该守卫覆盖所有 `timeout` 实现——非 GNU / 未 `setpgid` 的 `timeout` 会触发 `reason=not-leader` 降级，此时仍退回原有的单 PID 行为（旧残余(d)在该交集场景下未变化）。
 - **[改 `assets/hack/` 后忘记跑 `setup.sh`]** → **显式登记**：`outside-voice.sh` 不在任何机械保护范围内（它是 shell、不走 recorder 取数路径）。本 change **不**声称覆盖它。
 
 ## Migration Plan

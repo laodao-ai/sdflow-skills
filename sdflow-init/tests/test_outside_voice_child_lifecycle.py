@@ -217,56 +217,55 @@ def _make_env_runner_ignores_term(tmp_path, pidfile: Path):
 
 
 @needs_real_timeout
-def test_runner_ignoring_term_survives_kill_escalation_documented_residual(tmp_path, bash_bin):
-    """⭐〔F-新2〕假 runner 显式忽略 TERM 时，实测子树【存活】——这是一个真实、此前
-    从未被验证过的残余，MUST NOT 被静默接受，已显式登记进 design.md D2 残余表第 (d) 条
-    （见 test_term_ignoring_residual_is_documented_in_design 的机械锁）。
+def test_runner_ignoring_term_dies_under_group_kill_escalation(tmp_path, bash_bin):
+    """⭐〔fix-mechanical-layer-silent-failures D2.1 · 根治 F-新2 残余(d)〕假 runner 显式
+    忽略 TERM 时，组级 KILL 升级后子树【必须灭亡】——这条此前锁的是"子树存活"的残余
+    （见旧名 `test_runner_ignoring_term_survives_kill_escalation_documented_residual`），
+    根治后翻转为"子树已灭"，机械锁 design.md D2.1 记录的修复确实生效，不是纸面声明。
 
-    【为什么会存活 —— 已用手工探针实测复现，非猜测】
-    `OV_RUNNER_PID` 记的是【`timeout` 自身】的 PID（`"$ov_timeout_bin" ... codex ... &`
-    之后 `$!`），不是 runner 的 PID。`ov_cleanup` 先对 `$OV_RUNNER_PID`（timeout）发
-    TERM——timeout 收到后会转发给子进程组，但子进程主动 trap 忽略，不为所动；
-    timeout 自己的 `-k 10` 升级窗口长达 10s，而 `ov_cleanup` 只等约 1s 就直接对
-    `$OV_RUNNER_PID`（timeout 本身）发 SIGKILL——SIGKILL 不可捕获，timeout 被瞬间
-    杀死，【来不及】跑到它自己那条会向子进程组转发 KILL 的升级逻辑。
-    ⇒ runner 与其孙进程都不在 `$OV_RUNNER_PID` 之下（我们只杀了 timeout 这一个 PID，
-    不是负 PID/进程组），二者 reparent 到 PID 1 继续存活。
+    【旧病因回顾 —— 已用手工探针实测复现，非猜测】
+    `OV_RUNNER_PID` 记的是【`timeout` 自身】的 PID，不是 runner 的 PID。旧版 `ov_cleanup`
+    只对这一个 PID 发 SIGKILL——不可捕获、瞬间生效，timeout 来不及跑到它自己那条会向
+    子进程组转发 KILL 的 `-k 10` 升级逻辑 ⇒ runner 若 `trap '' TERM` 忽略，子树逃逸成孤儿。
 
-    【诚实边界，不是待修复项】本用例只锁定「这是真的、且已如实记录」，不代表本次
-    change 要修——修复需要改变 ov_cleanup 的信号投递目标（如改发进程组）或延长/去掉
-    我们自己的抢跑升级窗口，超出「补测试缺口」的既定范围，留给后续 change。
+    【修法】GNU timeout 会 setpgid 把自己放进独立进程组，且该组 PGID 恒等于 timeout
+    自己的 PID。`ov_cleanup` 现在在组级 KILL 守卫（`_ov_group_kill_decision`）通过时，
+    把 KILL 目标从单个 PID 改成负号进程组（`kill -KILL -"$OV_RUNNER_PID"`），一次性
+    打穿整棵子树。真 GNU timeout 场景下守卫恒判定为 "group"（详见
+    test_group_kill_decision_* 系列对守卫本身的单元覆盖）。
     """
     pidfile = tmp_path / "pids-ignore-term"
     env, ctx = _make_env_runner_ignores_term(tmp_path, pidfile)
     rc, err, runner_pid, grandchild_pid = _run_until_killed(
         HELPER, env, ctx, signal.SIGTERM, tmp_path, pidfile, bash_bin
     )
-    try:
-        assert _alive(runner_pid) or _alive(grandchild_pid), (
-            "残余 (d) 未复现：runner 忽略 TERM 时子树竟然被灭了 —— 若这是真的行为改进，"
-            "须先证实（不同平台 timeout 语义可能不同），再回头把 design.md 的 (d) 条改成"
-            "已解决，MUST NOT 只改这条断言"
-        )
-    finally:
-        # 本用例故意验证的就是"会留下孤儿"——自己收拾干净，别污染开发机/CI
-        for pid in (grandchild_pid, runner_pid):
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
+    assert not _alive(runner_pid), (
+        f"残余(d)复发：runner 忽略 TERM 后 PID={runner_pid} 仍存活——组级 KILL 升级失效"
+    )
+    assert not _alive(grandchild_pid), (
+        f"残余(d)复发：runner 的孙进程 PID={grandchild_pid} 仍存活——组级 KILL 未打穿子树"
+    )
+    assert "OV_GROUP_KILL_DEGRADED" not in err, (
+        f"真 GNU timeout 场景下守卫不应降级，出现降级说明守卫判定有误: {err!r}"
+    )
 
 
-def test_term_ignoring_residual_is_documented_in_design():
-    """机械锁：design.md 的 D2 残余表 MUST 含第 (d) 条（runner 忽略 TERM 时子树存活），
-    且全文 MUST NOT 出现越界断言——与 test_sigkill_residue_is_documented_not_claimed_solved
-    同形（那条锁脚本注释，这条锁 design.md）。
+def test_group_kill_fix_is_documented_in_design_without_overclaiming():
+    """机械锁：design.md MUST 记录残余(d)已由组级 KILL 升级〔D2.1〕治愈（含守卫本身的
+    退化路径哨兵 `OV_GROUP_KILL_DEGRADED`），且 MUST 仍保留 (a)(b)(c) 三条真·残余
+    ——不得因为治好了 (d) 就顺手声称孤儿问题已彻底根治。与
+    test_sigkill_residue_is_documented_not_claimed_solved 同形（那条锁脚本注释，
+    这条锁 design.md），取代旧的 test_term_ignoring_residual_is_documented_in_design
+    （旧版锁"仍是残余"，根治后该断言不再成立，已按此文件顶部注释指引翻转/替换）。
     """
     design = (REPO / "openspec" / "changes" / "fix-mechanical-layer-silent-failures"
                / "design.md").read_text(encoding="utf-8")
-    assert "(d)" in design, "design.md 的 D2 残余表未见第 (d) 条（runner 忽略 TERM 残余）"
-    assert "忽略" in design and "TERM" in design, (
-        "design.md 未见「runner 忽略 TERM」这条残余的具体描述"
+    assert "D2.1" in design, "design.md 未见 D2.1 小节（组级 KILL 升级修复记录）"
+    assert "OV_GROUP_KILL_DEGRADED" in design, (
+        "design.md 未见组级 KILL 守卫退化路径的哨兵说明"
     )
+    for tag in ("(a)", "(b)", "(c)"):
+        assert tag in design, f"design.md 的 D2 残余表须仍保留 {tag}（真·残余，不可因治好(d)而移除）"
     for overclaim in ("已消除孤儿", "孤儿已消除", "已根治", "彻底解决", "完全避免孤儿"):
         assert overclaim not in design, f"design.md 越界断言（不得声称根治）: {overclaim}"
 
@@ -300,9 +299,15 @@ def test_mutation_no_op_cleanup_leaves_an_orphan(tmp_path, bash_bin):
     """
     mutant = tmp_path / "outside-voice-mutant.sh"
     src = HELPER.read_text(encoding="utf-8")
-    # 只摘掉 ov_cleanup 的杀子进程动作，保留删 workdir —— 精确还原「trap 里没有子 PID 可杀」的原病
+    # 只摘掉 ov_cleanup 的杀子进程动作，保留删 workdir —— 精确还原「trap 里没有子 PID 可杀」的原病。
+    # 〔D2.1〕KILL 升级步现有两条literal（组级 kill -KILL "-$PID" / 退回单 PID kill -KILL "$PID"）
+    # ——真 GNU timeout 场景下守卫恒判定 "group"，走的是前者，两条都须摘掉，否则组级分支
+    # 未被摘除、变异体仍会灭掉子树，测试就测不出"清理逻辑是否真的承重"。
     mutated = src.replace(
         'kill -TERM "$OV_RUNNER_PID" 2>/dev/null',
+        ': # MUTANT: kill 摘除',
+    ).replace(
+        'kill -KILL "-$OV_RUNNER_PID" 2>/dev/null',
         ': # MUTANT: kill 摘除',
     ).replace(
         'kill -KILL "$OV_RUNNER_PID" 2>/dev/null',
@@ -328,6 +333,149 @@ def test_mutation_no_op_cleanup_leaves_an_orphan(tmp_path, bash_bin):
                 os.kill(pid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
                 pass
+
+
+# ── 组级 KILL 守卫：自杀风险测试〔fix-mechanical-layer-silent-failures D2.1〕──────────
+#
+# 根治残余(d) 的手段是把 KILL 升级步的目标从「单个 PID」改成「负号进程组」——这是本次
+# 修复里唯一有"打到脚本自己"风险的动作。`_ov_group_kill_decision` 是这道守卫的判定核心，
+# 两个条件（① 目标是组长、② 该组≠脚本自己的组）缺一都必须退回单 PID kill、MUST NOT 猜。
+# 下面用 `_OV_TEST_LIB_ONLY=1` 直接 source 驱动该纯函数（同 test_outside_voice_utf8.py 的
+# 接缝手法），用构造好的字符串输入覆盖两个守卫条件各自的降级分支，不依赖真实进程编排——
+# 判定逻辑本身是纯函数，没必要（也不该）用脆弱的真实进程时序去测它。
+
+def _source_and_run_lib(snippet: str, cwd: Path, helper: Path = HELPER):
+    """在 source 态直接驱动 outside-voice.sh 内部函数（不派发命令）。"""
+    script = f"_OV_TEST_LIB_ONLY=1 . {helper!s}\n{snippet}\n"
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                          cwd=str(cwd), timeout=30)
+
+
+def test_group_kill_decision_is_group_when_target_is_a_leader_of_a_foreign_group(tmp_path):
+    """正例：目标是独立组长（PGID==自身PID）且该组≠脚本自己的组 ⇒ 才允许组级 KILL。"""
+    r = _source_and_run_lib('_ov_group_kill_decision 500 500 700', tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "group", r.stdout
+
+
+def test_group_kill_decision_degrades_when_target_is_not_a_group_leader(tmp_path):
+    """⭐ 自杀风险守卫条件① —— 目标 PGID != 目标 PID（不是组长）⇒ 该 PGID 大概率就是
+    【脚本自己所在的组】（子进程默认继承父的 pgid，除非自己 setpgid）；发组信号会打到
+    脚本自己身上。MUST 退回单 PID kill，MUST NOT 猜。
+    """
+    r = _source_and_run_lib('_ov_group_kill_decision 500 999 700', tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "single:not-leader", r.stdout
+
+
+def test_group_kill_decision_degrades_when_target_group_equals_own_group(tmp_path):
+    """⭐ 自杀风险守卫条件② —— 目标 PGID 恰好等于脚本自己的 PGID（即便目标本身是"组长"，
+    双重确认防条件①在极端场景，如 PID 复用巧合，失手）。这是本次修复里【最大的自杀风险
+    点】：若漏了这一条，`kill -KILL -"$PID"` 会把脚本自己所在的整个进程组一并打掉。
+    """
+    r = _source_and_run_lib('_ov_group_kill_decision 500 500 500', tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "single:own-group", r.stdout
+
+
+def test_group_kill_decision_degrades_when_pgid_unavailable(tmp_path):
+    """PGID 取不到（ps 失败 / 权限突变等，函数按约定输出空串）⇒ MUST NOT 猜，退回单 PID。"""
+    r = _source_and_run_lib('_ov_group_kill_decision 500 "" 700', tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "single:pgid-unavailable", r.stdout
+    r2 = _source_and_run_lib('_ov_group_kill_decision 500 500 ""', tmp_path)
+    assert r2.returncode == 0, r2.stderr
+    assert r2.stdout.strip() == "single:pgid-unavailable", r2.stdout
+
+
+def test_pgid_of_reads_a_real_process_group_not_mocked(tmp_path):
+    """`_ov_pgid_of` 对真实 PID（本进程自己的 `$$`）取值必须是非空数字——走真实 `ps`，
+    不 mock，证明守卫吃到的输入本身是可信的，不只是判定逻辑本身正确。
+    """
+    r = _source_and_run_lib('_ov_pgid_of $$', tmp_path)
+    assert r.returncode == 0, r.stderr
+    got = r.stdout.strip()
+    assert got != "" and got.isdigit(), f"取不到自身 PGID 或非数字: {got!r}"
+
+
+def _make_env_broken_timeout(tmp_path, pidfile: Path):
+    """PATH 前置一个【不 setpgid】的假 `timeout`（模拟非 GNU / busybox 等不隔离进程组的
+    timeout 实现，`exec` 直接接管、不 fork）+ 忽略 TERM 的假 runner。非交互 bash 默认关
+    job control，背景任务不会自动获得新 pgid ⇒ 该场景下目标进程组【就是】脚本自己所在的
+    那个组——这正是守卫要拦住的真实场景（而不只是构造的字符串输入）。
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    fake_timeout = bin_dir / "timeout"
+    # 吃掉 `-k <N> <tmo>` 三个参数，其余原样 exec 接管（不 fork、不 setpgid）。
+    fake_timeout.write_text(textwrap.dedent("""\
+        #!/usr/bin/env bash
+        shift 3
+        exec "$@"
+        """))
+    fake_timeout.chmod(fake_timeout.stat().st_mode | stat.S_IEXEC)
+
+    fake_runner = bin_dir / "codex"
+    fake_runner.write_text(textwrap.dedent(f"""\
+        #!/usr/bin/env bash
+        trap '' TERM
+        cat >/dev/null
+        sleep 300 &
+        child=$!
+        printf '%s %s\\n' "$$" "$child" > "{pidfile}"
+        wait "$child"
+        """))
+    fake_runner.chmod(fake_runner.stat().st_mode | stat.S_IEXEC)
+
+    ctx = tmp_path / "ctx.md"
+    ctx.write_text("context body\nmore\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["SDFLOW_VOICE_RUNNER"] = "codex"
+    env.pop("SDFLOW_VOICE_MODEL", None)
+    return env, ctx
+
+
+def test_group_kill_guard_degrades_instead_of_self_harm_when_timeout_shares_own_group(tmp_path, bash_bin):
+    """⭐ 端到端自杀风险佐证：`timeout` 实现不隔离进程组（如某些非 GNU timeout）时，目标
+    进程组其实就是 helper 自己所在的组——守卫必须判定降级（reason=not-leader）并退回单
+    PID KILL，MUST NOT 对这个组发负号 PID 信号。
+
+    安全隔离〔防自伤〕：本用例故意构造"目标组==脚本自己的组"这一真实场景，正是守卫要防
+    的自杀路径。为避免守卫万一有 bug 时殃及本次 pytest 会话/开发机 shell，helper 本身用
+    `start_new_session=True` 起在独立会话/进程组里——真出事也只灭这一颗独立子树，不会
+    带走跑测试的这个进程。
+
+    判据：stderr 必须出现 `OV_GROUP_KILL_DEGRADED=1 reason=not-leader`（降级真的发生，
+    不是巧合绿），且 helper 自己以 TERM 惯例退出码 143 干净收尾（没有被自己发的信号误杀）。
+    """
+    pidfile = tmp_path / "pids-broken-timeout"
+    env, ctx = _make_env_broken_timeout(tmp_path, pidfile)
+    proc = subprocess.Popen(
+        [bash_bin, str(HELPER), "exec", "--context-file", str(ctx), "--timeout", "300"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=str(tmp_path),
+        start_new_session=True,
+    )
+    try:
+        runner_pid, grandchild_pid = _await_pids(pidfile, proc)
+        proc.send_signal(signal.SIGTERM)
+        out, err = proc.communicate(timeout=60)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
+    assert "OV_GROUP_KILL_DEGRADED=1" in err and "reason=not-leader" in err, (
+        f"守卫未按预期降级 —— rc={proc.returncode} err={err!r}"
+    )
+    assert proc.returncode == 143, (
+        f"helper 自身未干净退出（疑似被自己发的组信号误杀）: rc={proc.returncode} err={err!r}"
+    )
+    for pid in (runner_pid, grandchild_pid):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
 
 
 # ── 退出码无回归 ────────────────────────────────────────────────────────────

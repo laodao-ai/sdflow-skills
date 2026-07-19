@@ -41,11 +41,18 @@
 #     ⏱ 调用方 MUST 给**外层进程超时** ≥ (--timeout + 30)s（默认即 ≥330s）：本命令内部
 #       `timeout -k 10 <--timeout>` 最迟 (--timeout+10)s 收；外层短于此会在内部正常运行时
 #       误杀 → 假超时 + 重跑浪费。外层超时由调用方设，helper 无法机械强制（指令层约束）。
-#     🔪 子进程生命周期〔fix-mechanical-layer-silent-failures R2 · design D2〕：
+#     🔪 子进程生命周期〔fix-mechanical-layer-silent-failures R2 · design D2/D2.1〕：
 #       runner 后台启动 + 记 PID + wait 取码；收到 INT/TERM/HUP 或任何 EXIT 时，清理函数
 #       先 kill -TERM 该 PID、宽限后 kill -KILL 兜底，再删 workdir。∴ 本 helper 被回收后
 #       runner 不再 reparent 到 PID 1 继续烧 API 额度。杀 timeout 会连带杀掉它自建进程组内的
 #       孙进程（实测 TERM 后 timeout/中间脚本/内层命令三层全灭）⇒ 无需自管进程组。
+#       KILL 兜底升级步〔D2.1 · 1.4.2〕改投递目标为负号进程组（`kill -KILL -"$PID"`）——
+#       当且仅当组级 KILL 守卫（见 `_ov_group_kill_decision`）判定目标确实是独立组长、且
+#       该组≠脚本自己的组，才发组信号；任一条件不满足（含 PGID 取不到）一律退回单 PID
+#       kill，并在 stderr 打 `OV_GROUP_KILL_DEGRADED=1 reason=... pid=... target_pgid=...
+#       own_pgid=...`（结构化字段，MUST NOT 含 context 正文）使降级可见。此举根治了
+#       「runner 主动 trap '' TERM 忽略终止信号时子树逃逸」的残余（此前 design D2 残余表
+#       第 (d) 条，见 design.md D2.1）。
 #       🔴 诚实边界（MUST NOT 声称根治）——三条残余，性质相同、均为 shell 层不可干净消除：
 #         (a) **本 helper 进程自身被 SIGKILL(-9) 时 trap 根本不会执行**，runner 子进程【仍会
 #             存活并 reparent 到 PID 1】。孤儿问题在 SIGKILL 下【未被消除】。
@@ -59,13 +66,14 @@
 #       codex 路径：经 --output-last-message 提取；claude 路径：-p --output-format text 直出
 #     stderr: OV_TRUNCATED 行；失败时 runner stderr 转发；被信号回收时【额外】一/两行
 #             纯字面清理痕迹（只含信号名与 runner PID，MUST NOT 含 context 正文——该内容
-#             未经出境扫描）。调用方按【子串命中】取 OV_TRUNCATED，不假定它是 stderr 末行
-#             （既有失败分支的 runner stderr 转发本就排在其后）。
+#             未经出境扫描）；组级 KILL 守卫降级时【额外】一行 OV_GROUP_KILL_DEGRADED=1
+#             （同上，仅字段无正文）。调用方按【子串命中】取 OV_TRUNCATED，不假定它是
+#             stderr 末行（既有失败分支的 runner stderr 转发本就排在其后）。
 #     exit 0=成功 | 1=runner 报错/空输出/命令缺失/timeout 工具缺失/SDFLOW_VOICE_RUNNER 未设/
 #            SDFLOW_VOICE_MODEL 未设(claude)/未知 runner 值 | 124=超时 | 3=secret-hit |
 #            2=用法错/文件不存在或不可读
 #   version
-#     stdout: "outside-voice.sh 1.4.1"                           exit 0
+#     stdout: "outside-voice.sh 1.4.2"                           exit 0
 # ── 硬化要点〔design D2 spec-review-amendment · add-codex-host-support〕──────
 #   出境安全三件套（secret_scan / render_prompt 的 FRAME+三条通则+200KB 截断）对两条
 #   runner 路径一视同仁、单份共用，MUST NOT 另起炉灶组装 prompt——只有最终 exec 命令行
@@ -88,7 +96,7 @@
 #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
 set -u
 
-OV_VERSION="outside-voice.sh 1.4.1"
+OV_VERSION="outside-voice.sh 1.4.2"
 
 # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
 # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
@@ -327,21 +335,71 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找�
   command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true
 }
 
+# ── 组级 KILL 守卫〔fix-mechanical-layer-silent-failures 残余(d) 根治 · design D2.1〕──
+# 根因：`OV_RUNNER_PID` 记的是 timeout 自身的 PID。旧版 KILL 升级只对这一个 PID 发
+# SIGKILL——不可捕获、瞬间生效，timeout 来不及跑到它自己那条「向子进程组转发 KILL」的
+# `-k 10` 升级逻辑 ⇒ runner 若 `trap '' TERM` 忽略终止信号，其子孙进程逃逸成孤儿。
+#
+# 修法（已实测验证，见 impl-report task3-cross-platform-fix2）：GNU timeout 会 setpgid
+# 把自己放进【独立进程组】，且该组 PGID 恒等于 timeout 自己的 PID。∴ 把 KILL 升级步的
+# 目标从「单个 PID」改成「负号进程组」（`kill -KILL -"$PID"`），信号直接打穿整棵子树，
+# 不再依赖 timeout 来不及跑完的组内转发。
+#
+# 🔴 MUST NOT 无条件发组信号（自杀风险）：调用方 MUST 先用 `_ov_group_kill_decision`
+# 判定，仅 "group" 才可发负号 PID；任何 "single:*" 结果一律退回既有单 PID kill，MUST NOT 猜。
+_ov_pgid_of() {  # $1=PID → stdout: PGID（十进制字符串，已去除前导空白）；
+                 # 取不到/非数字（ps 不可用、PID 已不存在等）→ 空串，MUST NOT 猜
+  local pid="$1" out
+  out=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]')
+  case "$out" in
+    ''|*[!0-9]*) echo "" ;;
+    *) echo "$out" ;;
+  esac
+}
+
+_ov_group_kill_decision() {  # $1=目标PID $2=目标PGID(可空) $3=脚本自身PGID(可空)
+                             # → stdout: "group" | "single:<reason>"
+                             # reason ∈ pgid-unavailable|not-leader|own-group
+  local target_pid="$1" target_pgid="$2" own_pgid="$3"
+  # 守卫①连同 PGID 取不到：无法判定，MUST NOT 猜 ⇒ 退回单 PID
+  if [ -z "$target_pgid" ] || [ -z "$own_pgid" ]; then
+    echo "single:pgid-unavailable"; return
+  fi
+  # 守卫①：目标必须是【组长】本身（其 PGID == 自己的 PID）。不是组长 ⇒ 该 PGID 大概率
+  # 就是【脚本自己所在的组】（子进程默认继承父的 pgid，除非自己 setpgid）——发组信号
+  # 会打到脚本自己身上。
+  if [ "$target_pgid" != "$target_pid" ]; then
+    echo "single:not-leader"; return
+  fi
+  # 守卫②：该 PGID 不能等于脚本自身的 PGID —— 双重确认，防守卫①在极端场景（PID 复用
+  # 巧合）失手。
+  if [ "$target_pgid" = "$own_pgid" ]; then
+    echo "single:own-group"; return
+  fi
+  echo "group"
+}
+
 # ── 子进程生命周期〔R2 · design D2〕──────────────────────────────────────────
 # 病根不是「trap 没跑」——实测 bash 的 EXIT trap 在 SIGTERM 下确实执行（workdir 被清了），
 # 但 runner 是【前台】跑的 `timeout ...`，父死后它 reparent 到 PID 1 继续跑满内层超时、
 # 继续烧 API 调用额度。∴ 病根是【trap 里没有子 PID 可杀】。
 # 修法：runner 改后台 + 记 PID，清理时先 TERM 该 PID、宽限后 KILL 兜底，再删 workdir。
 #
-# 为什么不用 setsid + kill -- -PGID：`setsid` 在 macOS(Darwin 25) 【不存在】；且 GNU timeout
-# 自建进程组并转发信号——实测 TERM 掉 timeout 后，timeout / 中间脚本 / 内层 sleep 三层同 pgid
-# 全灭 ⇒ 自管进程组收益为零。
+# 为什么不用 setsid + kill -- -PGID 主动建组：`setsid` 在 macOS(Darwin 25) 【不存在】；且
+# GNU timeout 自建进程组并转发信号——实测 TERM 掉 timeout 后，timeout / 中间脚本 / 内层
+# sleep 三层同 pgid 全灭 ⇒ TERM 阶段自管进程组收益为零。
+# 〔D2.1 · 1.4.2 更新〕但 KILL 兜底升级步不同：SIGKILL 不可捕获，timeout 来不及转发给它
+# 自己那个组 ⇒ 若 runner 忽略 TERM，单 PID KILL 打不穿子树（详见下方 `_ov_group_kill_decision`
+# 与 `ov_cleanup`）。修法**不是**主动 setsid 建组，而是【借用】timeout 本来就会 setpgid 出的
+# 那个既有组——只在升级步、且守卫通过时才对它发负号 PID。
 #
 # 🔴 残余（MUST NOT 声称根治），三条并列、性质相同（详见头部契约 exec 段）：
 #   (a) 父进程被 SIGKILL 时 trap 不可执行 ⇒ 孤儿仍存活；
 #   (b) `&` 与 `OV_RUNNER_PID=$!` 之间落信号 ⇒ trap 拿到空 PID，该次 runner 逃逸；
 #   (c) `wait` 返回与 `OV_RUNNER_PID=""` 之间落信号 ⇒ 对已回收（可能已复用）的 PID 开火。
 # 三者都是 shell 层不可干净消除的窗口，【只登记、不声称已解决】。
+# （原第 (d) 条「runner 忽略 TERM 致子树逃逸」已由本文件 1.4.2 的组级 KILL 守卫治愈，
+# 不再列入本残余表；其自身的退化边界见上方 `_ov_group_kill_decision` 注释与 design.md D2.1。）
 OV_WORKDIR=""
 OV_RUNNER_PID=""
 
@@ -361,7 +419,21 @@ ov_cleanup() {  # $1=触发来源标签（EXIT|INT|TERM|HUP），仅用于 stder
       i=$(( i + 1 ))
     done
     if kill -0 "$OV_RUNNER_PID" 2>/dev/null; then
-      kill -KILL "$OV_RUNNER_PID" 2>/dev/null
+      # 组级 KILL 守卫〔D2.1〕：仅在「目标是独立组长 且 该组≠脚本自己的组」时才把信号
+      # 升级为负号进程组（穿透 runner 忽略 TERM 时逃逸的子树）；任一条件不满足一律退回
+      # 既有单 PID kill，MUST NOT 猜。
+      local ov_target_pgid ov_own_pgid ov_kill_decision
+      ov_target_pgid=$(_ov_pgid_of "$OV_RUNNER_PID")
+      ov_own_pgid=$(_ov_pgid_of "$$")
+      ov_kill_decision=$(_ov_group_kill_decision "$OV_RUNNER_PID" "$ov_target_pgid" "$ov_own_pgid")
+      if [ "$ov_kill_decision" = "group" ]; then
+        kill -KILL "-$OV_RUNNER_PID" 2>/dev/null
+      else
+        # 可观测性：降级路径 MUST 对外可见（同 OV_UTF8_BACKSCAN_UNAVAILABLE=1 规格）——
+        # 只写结构化字段（PID/PGID/原因标识），MUST NOT 含 context 正文。
+        echo "OV_GROUP_KILL_DEGRADED=1 reason=${ov_kill_decision#single:} pid=${OV_RUNNER_PID} target_pgid=${ov_target_pgid:-unknown} own_pgid=${ov_own_pgid:-unknown}" >&2
+        kill -KILL "$OV_RUNNER_PID" 2>/dev/null
+      fi
       echo "outside-voice: runner PID=${OV_RUNNER_PID} 未响应 TERM，已 SIGKILL 兜底" >&2
     fi
   fi

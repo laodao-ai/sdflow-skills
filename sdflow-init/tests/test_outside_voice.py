@@ -152,7 +152,10 @@ def test_version():
     # 1.4.0：R1 截断 UTF-8 字符边界回扫（头/尾段各自合法）+ stderr 丢弃字节计数（观测性）。
     # 1.4.1：F-新1 修复 —— utf8_head_trim/utf8_tail_skip 取字节失败时不再静默 echo 0，
     #   改输出空串，使 OV_UTF8_BACKSCAN_UNAVAILABLE=1 哨兵行真正可达（此前是死代码）。
-    assert r.stdout.strip() == "outside-voice.sh 1.4.1"
+    # 1.4.2：D2.1 根治残余(d) —— ov_cleanup 的 KILL 升级步在组级 KILL 守卫通过时改投递
+    #   目标为负号进程组，穿透 runner 忽略 TERM 时逃逸的子树；守卫未通过时退回单 PID
+    #   KILL 并打 OV_GROUP_KILL_DEGRADED=1 哨兵。
+    assert r.stdout.strip() == "outside-voice.sh 1.4.2"
 
 
 # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────
