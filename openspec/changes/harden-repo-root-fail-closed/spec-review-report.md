@@ -1,3 +1,8 @@
+---
+ship-gate:
+  design_approved: true
+---
+
 # 设计评审报告 — harden-repo-root-fail-closed
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
@@ -8,12 +13,15 @@
 <!-- sdflow:outside-voice v1 site="hr-tg" guard="none" host="claude" runner="codex" reason_code="ok" findings="5" truncated="false" -->
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="7" 采纳="5" 裁掉="2" defer="0" 独立="5" sev="致1/高0/中1/低3" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="10" 采纳="7" 裁掉="1" defer="2" 独立="4" sev="致1/高1/中5/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="10" 采纳="9" 裁掉="1" defer="0" 独立="4" sev="致1/高1/中5/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="3" 采纳="3" 裁掉="0" defer="0" 独立="1" sev="致0/高0/中3/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="8" 采纳="7" 裁掉="0" defer="1" 独立="5" sev="致3/高2/中1/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="3" sev="致2/高2/中0/低0" -->
 
 ## 结论（先说）
+
+> **⚠️ 本节及以下正文为评审当时（返修前）的原始结论，保留原文供审计——MUST NOT 据此判断当前状态。
+> 返修已三轮完成、设计门已于 2026-07-19 拍板批准，最终状态见文末「拍板记录（设计 HARD-GATE）」。**
 
 **不建议直接进设计 HARD-GATE。** 这份设计的核心机制需要一轮实质性返修，不是补几句话。
 
@@ -181,8 +189,46 @@ CEO E2：`sdflow-ship/scripts/ship_gate.py:837` 是同款反模式的第 4 处�
 
 ## 收敛口
 
+> **本段是评审当时（返修前）的结论，保留原文供审计。返修已完成、设计门已拍板，最终状态见下方「拍板记录」。**
+
 **建议：不进 HARD-GATE，先做一轮设计返修。**
 
 返修范围 = Q1（四条 critical 合并重画信任边界）+ D1–D6（自动决策，直接改）+ Q3/Q4 待你拍板。
 Q2 已归属 T170（下一步工作），但它对本次返修留下一条硬约束：`repo_root` 最终形态须**抽取友好**。
 返修完成后**建议重跑一次轻量冷复审，只盯返修接缝**——依据：返工在接缝处引入新洞是本仓的高发模式（扩枚举不回改派生判据 / 解耦只解耦函数不解耦输入数据 / 期望集定义取错范畴）。
+
+---
+
+## 拍板记录（设计 HARD-GATE）
+
+**设计门已拍板批准，2026-07-19。** 机判锚见本文件头部 frontmatter 的 `ship-gate.design_approved: true`。
+
+### 拍板时的决策去向
+
+| # | 状态 | 去向 |
+|---|---|---|
+| **Q1** 信任边界重画 | **已闭合**（非门上拍板，由返修完成） | 三轮返修落地：ADR-2 改「证明身份而非校验形状」、祖先校验立为主防线、ADR-5 单点解析、ADR-6 函数局部常量、ADR-7 起点取 `os.getcwd()`。四条 critical 全部有对应 spec Scenario + tasks 用例 |
+| **Q2** 镜像手工同步 | **已归属 T170** | 顺序：本 change → T170。本次留硬约束「`repo_root` 抽取友好」（Success Metric 6） |
+| **Q3** Windows 覆盖 | **批准（按推荐）** | 加正向回归进 Windows 泳道 → tasks 4.6。design Open Questions 同时显式登记该未验证跨平台假设（双保险，非二选一） |
+| **Q4** `ship_gate.py` 第 4 个消费点 | **批准（按推荐）** | 不改代码，Non-Goals 以**安全论证**排除（前置 `--git-dir` 兜底 + 全文件无 `makedirs`），连同 `init.py` 一并；程序性理由已删除 |
+| **D1–D6** 自动决策 | **默认采纳，门上未覆盖** | 全部已落四件套 |
+| **X1–X3** 已裁掉 | **裁决维持** | 门上复核裁掉理由，未翻案 |
+| **F1/F2/F3/F4** defer | **维持 defer** | T170 · T180 · buglist ×2 |
+
+### 三轮返修的收敛轨迹
+
+```
+grill        → 打掉 ADR 里的逻辑漏洞（假二选一 / 自我掩盖 / 假绿）
+spec-review  → 打掉「我根本没想到要问的问题」（根的身份？输入可信吗？两次解析同一个仓吗？）
+冷复审接缝   → 打掉「修的时候新引入的」（判据复制粘贴 / 静默弱化验证 / 新常量落进旧盲区）
+```
+
+第三轮 11 条中 8 条为本次返修**自身引入或遗留**——「返工在接缝处引入新洞」的又一次实测。
+11 条中**无一条是「方案错了」**，全为精度问题 ⇒ 收敛信号明确，不再开第四轮。
+
+### 已知未验证面（进阶段三时携带）
+
+- **Windows**：`ntpath.isabs` / `normcase`+`commonpath` 在盘符·大小写·UNC 下的行为、`realpath` 对 SUBST —— 本地 macOS 照不到，由 tasks 4.6 的 Windows 泳道兜。
+- **Task 0 前置**：仓根 4 棵垃圾目录树**仍在**（当前作为「坏值被具现」的活证据锚）；**MUST 最先删**，否则后续 `isdir` 判据在被污染环境下得到的绿不可信。
+
+**下一步**：`/sdflow-ship` 进阶段三。
