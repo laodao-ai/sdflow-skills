@@ -342,6 +342,63 @@ def test_symlinked_start_resolves_to_real_root(tmp_path):
     assert repo_root(str(link)) == os.path.realpath(str(repo))
 
 
+# ── ①b 起点归一化：判据 = 「与非 symlink / 无 `..` 的等价起点结果一致」 ──────────
+#
+# 步骤①b 把起点归一化为绝对路径（回落分支 fail-closed 的承载点）。归一化改变了**传给
+# git 的 cwd 字面量**，因此 symlink 起点与含 `..` 起点这两类形态 MUST 有专属锚：判据是
+# 「结果与直接用真实路径进入完全一致」，**不是**「没抛异常」——后者对着一个错误的仓根
+# 也能绿。symlink 一律用 tmp_path 下真建，MUST NOT mock os.path.realpath / isdir / isabs。
+
+def test_symlinked_repo_root_start_matches_real_path_result(tmp_path):
+    """起点是指向仓根本身的 symlink ⇒ 结果与直接从真实仓根进入一致。"""
+    repo = _init_repo(tmp_path / "repo")
+    link = tmp_path / "link-to-repo"
+    link.symlink_to(repo, target_is_directory=True)
+
+    assert repo_root(str(link)) == repo_root(str(repo))
+    assert repo_root(str(link)) == os.path.realpath(str(repo))
+
+
+def test_dotdot_in_start_matches_real_path_result(tmp_path):
+    """起点含 `..`（`<repo>/sub/..`）⇒ 结果与直接传 `<repo>` 一致。"""
+    repo = _init_repo(tmp_path / "repo")
+    (repo / "sub").mkdir()
+
+    assert repo_root(str(repo / "sub" / "..")) == repo_root(str(repo))
+    assert repo_root(str(repo / "sub" / "..")) == os.path.realpath(str(repo))
+
+
+def test_symlinked_start_with_subdir_matches_real_path_result(tmp_path):
+    """起点是 `symlink/子目录` ⇒ 结果与直接从真实子目录进入一致。"""
+    repo = _init_repo(tmp_path / "repo")
+    (repo / "sub").mkdir()
+    link = tmp_path / "link-to-repo"
+    link.symlink_to(repo, target_is_directory=True)
+
+    assert repo_root(str(link / "sub")) == repo_root(str(repo / "sub"))
+    assert repo_root(str(link / "sub")) == os.path.realpath(str(repo))
+
+
+def test_dotdot_after_symlinked_dir_follows_kernel_not_lexical(tmp_path):
+    """`symlink-to-subdir/..` —— **lexical 归一化与内核语义在此分叉**。
+
+    `link -> <repo>/sub` 时，内核解析 `link/..` = `<repo>`（symlink 目标的父目录），
+    而 `os.path.normpath` 是**纯字面**运算，给出 `<tmp>`（link 自身的父目录）——两者指向
+    完全不同的目录。∴ 步骤①b MUST NOT 对起点做 lexical 归一化：起点只需被抬成**绝对
+    路径**（回落分支不再触 cwd 即达成 fail-closed），路径语义一律交给内核与
+    `os.path.realpath` 解释。删掉这条约束会让本用例返回 `<tmp>`（一个非仓库目录，经回落
+    分支返回）而不是仓根 —— 静默指向错误的可写根。
+    """
+    repo = _init_repo(tmp_path / "repo")
+    sub = repo / "sub"
+    sub.mkdir()
+    link = tmp_path / "link-to-sub"
+    link.symlink_to(sub, target_is_directory=True)
+
+    assert repo_root(str(link) + os.sep + "..") == repo_root(str(repo))
+    assert repo_root(str(link) + os.sep + "..") == os.path.realpath(str(repo))
+
+
 def test_linked_worktree_dot_git_is_a_file(tmp_path):
     """linked worktree 下 `top/.git` 是**文件**——marker 判定 MUST 用 exists 而非 isdir。"""
     repo = _init_repo(tmp_path / "repo")

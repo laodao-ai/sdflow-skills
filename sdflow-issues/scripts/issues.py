@@ -1181,7 +1181,11 @@ def repo_root(start=None):
                 "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
             ) from None
         start = cwd if start is None else os.path.join(cwd, start)
-    start = os.path.normpath(start)
+    # 起点到此**恒为绝对路径**，这就是回落分支 fail-closed 所需的全部性质。
+    # MUST NOT 在此做 lexical 归一化（os.path.normpath）：它是纯字面运算，对
+    # `symlink-to-subdir/..` 会给出 symlink 自身的父目录，而内核解析的是 symlink
+    # **目标**的父目录——两者是不同的目录，归一化会让 git 在错误的 cwd 下探测、
+    # 静默返回一个错误的可写根。路径语义一律交给内核与步骤⑤的 os.path.realpath 解释。
     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
     env = recorder_child_env("git", token=False)
     for name in [

@@ -49,7 +49,8 @@ FileNotFoundError: [Errno 2] No such file or directory
                 "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
             ) from None
         start = cwd if start is None else os.path.join(cwd, start)
-    start = os.path.normpath(start)
+    # 起点到此恒为绝对路径——这就是回落分支 fail-closed 所需的全部性质。
+    # 不做 lexical 归一化，路径语义交给内核与步骤⑤的 realpath（见 fix2 报告 N2）。
 ```
 
 回落分支随之变成**结构上不可能抛**：
@@ -69,8 +70,11 @@ FileNotFoundError: [Errno 2] No such file or directory
 1. **可观测契约完全一致** —— 三份脚本实测均为 `exit 2` + `ERROR:/cause:/fix:` 三段式诊断 + stderr 无 Traceback。
 2. **就地包 try 会产生一条无法做变异确认的死分支** —— 归一化之后 `abspath` 对绝对路径是恒等映射、
    永不触 cwd，那个 `except` 永远走不到。写一条「删掉它也不会变红」的守护，直接违反 PV 规则 5 的精神。
-3. **结构硬约束** 要求「`try` 只包 `subprocess.run`」。就地包 try 会在函数里引入第二个 `try`；
-   前移方案把守护放在 git 调用之前，`subprocess.run` 那个 `try` 的形状原样不动
+3. **结构硬约束是「`try` 只包 `subprocess.run`」，不是「全函数单 try」。** 本函数有且仅有两个 `try`：
+   裹 `subprocess.run` 的那个（约束正文），以及裹 `os.getcwd()` 的那个（首轮即已登记的**必要偏离**——
+   求起点这一步没有无异常的替代写法；本轮只把它的 catch 从 `FileNotFoundError` 扩到 `OSError`，
+   见下方 CF-4）。**就地包 try 会成为第三个**，且它裹的是 `abspath` 这条**已被证明不可能抛**的路径
+   ⇒ 纯增一条无从辩护的偏离。前移方案则让 `subprocess.run` 那个 `try` 的形状原样不动
    （只捕 `OSError`/`CalledProcessError`、`TimeoutExpired` 单独 `raise`、无 `except Exception`）。
 
 **代价/残余风险**：保护点与失效点不再同处一行。若日后有人把步骤①b 的归一化删掉或后移到 git 调用之后，
