@@ -73,7 +73,10 @@ Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Window
 
 ### 运行测试
 
-没有根级 pytest 配置——测试各 skill **自包含**在 `<skill>/tests/`，用 pytest 直接跑：
+测试各 skill **自包含**在 `<skill>/tests/`；仓根另有**两个**根级 pytest 文件，只承载全仓通用的
+cwd 副作用断言——`conftest.py`（断言本体）+ `pytest.ini`（把 rootdir 钉在仓根，否则从仓外跑时
+conftest 收集止于塌缩后的 rootdir、断言静默失效）。**两者缺一即失效，别只留其一**；也 MUST NOT
+往它们塞其他共享配置。用 pytest 直接跑：
 
 ```bash
 pytest                                                  # 发现并运行全部 test_*.py
@@ -131,6 +134,8 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
     （`docs/sad/*`、change 四件套、`adr/*`、`SKILL.md`…）。判据：**「只有读过上一版的人才需要的句子，不属于正文」**。
     代价实证：`07` 的正文塞满考古层 ⇒ **四轮评审 18 镜全在废弃分支里做优化，无一看见起手式错了**——
     考古层给了错误方向一层虚假的正当性。
+  - **`premise-verification.md`（无文档级编号，引用写路径 + 内部「规则 N」）** — 写断言之前先验证
+    它依赖的外部事实。一切 proposal / design / specs / tasks / 评审报告 / impl-report 适用。
 - **`openspec/roadmaps/{name}/`** — 项目级 roadmap 文档包（长期真相源，`sdflow-roadmap` 铺设）：
   design/roadmap/task-log 三件套 + 可选 memo，直写落盘、不经 `plan-{topic}` change 壳；比单次 change
   更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。roadmap 类 wayfinding 落

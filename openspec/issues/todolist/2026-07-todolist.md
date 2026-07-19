@@ -38,6 +38,8 @@ sdflow-issues:
     T179: {"module":"sdflow-done / sdflow-ship","summary":"archive 步骤可能打断测试，而其后无人重跑全套件 —— gate 判 SHIPPED 时 main 实际是红的","type":"基础设施","status":"OPEN","time":"2026-07-19 13:47","change":"main","batch":null}
     T180: {"module":"sdflow-todolist/scripts/todolist.py + sdflow-buglist/scripts/buglist.py","summary":"recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块","type":"功能增强","status":"OPEN","time":"2026-07-19 17:20","change":"harden-repo-root-fail-closed","batch":null}
     T181: {"module":"recorder/repo_root","summary":"repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入）","type":"代码质量","status":"OPEN","time":"2026-07-19 21:36","change":"harden-repo-root-fail-closed","batch":null}
+    T182: {"module":"recorder/repo_root","summary":"repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）","type":"基础设施","status":"OPEN","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":null}
+    T183: {"module":"recorder/repo_root","summary":"repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed","type":"代码质量","status":"OPEN","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1695,3 +1697,21 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **思路**：加一个 append-note/amend 子命令：--id 定位既存 item，把一段 prose 追加进其 marker block（无块则建块），保持 frontmatter item 不动、ID 不新增。门禁沿用现有 marker 一致性校验。三份 recorder 里 buglist/todolist 同款（两向组），需同步实现。注意与 T170 本身的关系：若 T170 先落地（canonical 源 + vendoring），本条实现只需写一处。
 <!-- sdflow-issue-block:end id=T180 -->
+
+<!-- sdflow-issue-block:start id=T182 -->
+## T182: repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）
+> repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）
+
+**关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
+
+**备注**：三份 recorder 的 repo_root 步骤③用 subprocess.run(capture_output=True) 读 `git rev-parse --show-toplevel`，输出量无上限。PATH 上被替换的 git（或被篡改的 wrapper）吐 GB 级 stdout 时，内存在步骤④形状校验执行**之前**就已被吃掉。定性：DoS 面而非正确性面——所有身份判据仍然成立，timeout=30 已限住时间窗。不在本 change 内修的理由：改成 Popen + 定量读（读满 N 字节即断流 + 判定）会把一个 3 行调用变成一段带缓冲/EOF/僵尸进程回收的手写循环，且须三份同步、进 AST 镜像 roster——复杂度与该面的可利用性不成比例。来源：design Non-Goals；codex X10 后半。
+<!-- sdflow-issue-block:end id=T182 -->
+
+<!-- sdflow-issue-block:start id=T183 -->
+## T183: repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed
+> repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed
+
+**关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
+
+**备注**：步骤①的 os.path.isdir(start) 与步骤③的 subprocess.run(cwd=start) 之间有竞态窗口。窗口内 start 被外部删除 ⇒ subprocess.run 抛 FileNotFoundError（OSError 子类）⇒ 被步骤③的 except (OSError, CalledProcessError) 接住、走**回落分支**返回 os.path.abspath(start)，而不是受控 ValueError。属既有回落语义的边角：spec 未对该窗口提出要求，且回落值经步骤①b 归一化后恒为绝对路径（不再触 cwd）。修法方向（若将来要收口）：回落前复查 isdir(start)，不存在则改抛 ValueError——须先确认与 spec「git 命令失败即回落」的措辞不冲突，故是设计级决定而非就地改。来源：carry-forward CF-7（Task 2 implementer Concern 5）。
+<!-- sdflow-issue-block:end id=T183 -->
