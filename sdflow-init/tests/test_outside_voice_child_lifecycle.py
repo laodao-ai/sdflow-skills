@@ -45,6 +45,37 @@ HELPER = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
 
 CONTEXT_PROBE = "UNIQUE_CONTEXT_BODY_中文正文_MUST_NOT_LEAK"
 
+_CHANGE = "fix-mechanical-layer-silent-failures"
+
+
+def _read_design_doc() -> str:
+    """读本 change 的 design.md —— **活跃期与归档后都要读得到**〔impl-review-fix〕。
+
+    🔴 **为什么不能写死活跃路径**（这是踩过的坑，不是预防性洁癖）：
+    下面两条是**诚实性机械门**（锁住「MUST NOT 声称孤儿已根治」「(a)(b)(c) 三条真残余不得移除」
+    「67% 残余 MUST NOT 与 (a)(b)(c) 混同/弱化」）。它们原本硬编码
+    `openspec/changes/<change>/design.md`——而 `openspec archive` 会把整个 change 目录搬进
+    `openspec/changes/archive/<date>-<change>/`。**结果是 change 一归档，这两道门当场
+    `FileNotFoundError` 转红**（实测：merge 到 main 后 `2 failed`）。
+
+    **这种失效方式格外坏**：门不是"判红"而是"崩掉"，且崩在 change 已经合并之后——
+    最省事的"修法"是把测试删掉，而那正好把诚实性锁一并删掉，无人再守。
+    ∴ 路径解析 MUST 覆盖归档态；找不到才是真红。
+    """
+    active = REPO / "openspec" / "changes" / _CHANGE / "design.md"
+    if active.exists():
+        return active.read_text(encoding="utf-8")
+    archived = sorted(
+        (REPO / "openspec" / "changes" / "archive").glob(f"*-{_CHANGE}/design.md")
+    )
+    assert archived, (
+        f"既未在活跃目录、也未在 archive/ 下找到 {_CHANGE} 的 design.md——"
+        "诚实性机械门失去了它要守的文档。若该 change 被有意删除，请连同本门一起显式移除并说明理由，"
+        "MUST NOT 只删测试留文档、也 MUST NOT 只删文档留测试。"
+    )
+    # 多个同名归档（重复归档/改名）取最新一份；正常情况下只有一份。
+    return archived[-1].read_text(encoding="utf-8")
+
 TIMEOUT_BIN = shutil.which("timeout") or shutil.which("gtimeout")
 needs_real_timeout = pytest.mark.skipif(
     TIMEOUT_BIN is None,
@@ -259,8 +290,7 @@ def test_group_kill_fix_is_documented_in_design_without_overclaiming():
     这条锁 design.md），取代旧的 test_term_ignoring_residual_is_documented_in_design
     （旧版锁"仍是残余"，根治后该断言不再成立，已按此文件顶部注释指引翻转/替换）。
     """
-    design = (REPO / "openspec" / "changes" / "fix-mechanical-layer-silent-failures"
-               / "design.md").read_text(encoding="utf-8")
+    design = _read_design_doc()
     assert "D2.1" in design, "design.md 未见 D2.1 小节（组级 KILL 升级修复记录）"
     assert "OV_GROUP_KILL_DEGRADED" in design, (
         "design.md 未见组级 KILL 守卫退化路径的哨兵说明"
@@ -276,8 +306,7 @@ def test_signal_storm_residual_is_documented_as_distinct_from_a_b_c():
     整体击穿 trap 机制"这条残余（(d*)/D2.2），且措辞 MUST 与 (a)(b)(c) 划清性质差异
     （窄时序缝 vs 整条机制失效）、MUST NOT 声称本轮已修、MUST 保留实测复现率数字。
     """
-    design = (REPO / "openspec" / "changes" / "fix-mechanical-layer-silent-failures"
-               / "design.md").read_text(encoding="utf-8")
+    design = _read_design_doc()
     assert "D2.2" in design, "design.md 未见 D2.2 小节（混合高频信号风暴残余登记）"
     assert "67%" in design or "67" in design, "design.md 未见实测复现率数字"
     assert "0/10" in design, "design.md 未见对照组（单一信号类型不复现）结论"
