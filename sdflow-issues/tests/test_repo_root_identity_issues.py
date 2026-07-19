@@ -459,3 +459,82 @@ def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
 
     assert "超时" in str(exc.value)
     assert repo_root.__name__ == "repo_root"
+
+
+# ── CLI 级 fail-closed 锚（Task 2 双轴审 C1 / C2） ──────────────────────────────
+
+def test_cli_with_deleted_process_cwd_exits_two_without_traceback(tmp_path):
+    """C1：cwd 在运行期被删除时，**经 CLI 调用**必须 exit 2 + 受控诊断，MUST NOT 吐 Traceback。
+
+    这是回落分支的裸 `OSError` 逃逸缺陷的真实复现路径：cwd 被删 ⇒ `git rev-parse` 以 128
+    退出 ⇒ 落回落分支 ⇒ `os.path.abspath(".")` 内部调 `os.getcwd()` 自己抛
+    `FileNotFoundError` ⇒ 逃出 `repo_root` ⇒ 调用方只 `except ValueError` 接不住 ⇒
+    RC=1 + Traceback。修复后起点在步骤①b 就归一化为绝对路径，回落分支再也碰不到 cwd。
+
+    **本用例 MUST 走真子进程 CLI**：函数层用例证明不了退出码与 stderr 形态。
+    """
+    doomed = tmp_path / "doomed"
+    doomed.mkdir()
+    program = (
+        "import os, subprocess, sys\n"
+        "os.chdir(sys.argv[2])\n"
+        "os.rmdir(sys.argv[2])\n"
+        "proc = subprocess.run([sys.executable, sys.argv[1], %r],\n"
+        "                      capture_output=True, text=True)\n"
+        "sys.stdout.write('RC:%%d\\n' %% proc.returncode)\n"
+        "sys.stdout.write('ERR:' + proc.stderr.replace('\\n', '<NL>') + '\\n')\n"
+    ) % ('reindex',)
+    outer = subprocess.run(
+        [sys.executable, "-c", program, SCRIPT, str(doomed)],
+        capture_output=True, text=True, cwd=str(tmp_path),
+    )
+
+    assert outer.returncode == 0, outer.stderr
+    assert "RC:2" in outer.stdout, outer.stdout
+    err_line = [l for l in outer.stdout.splitlines() if l.startswith("ERR:")][0]
+    assert "Traceback" not in err_line, err_line
+    assert "ERROR: 无法确定仓根探测起点" in err_line, err_line
+    assert "cause:" in err_line and "fix:" in err_line, err_line
+
+
+def test_getcwd_permission_error_is_controlled_too(monkeypatch):
+    """CF-4：`os.getcwd()` 在父目录权限被撤时抛 `PermissionError`——与 `FileNotFoundError`
+    同属 `OSError`，同样会裸逃。守护 MUST 捕 `OSError` 而非只捕 `FileNotFoundError`。
+
+    这里 mock 的是 `os.getcwd`（外部环境行为），**不是** `os.path.isabs` / `isdir` /
+    `realpath`（判据本身）——后者才是方法论红线禁止的。
+    """
+    def denied():
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(rec_mod.os, "getcwd", denied)
+
+    with pytest.raises(ValueError) as exc:
+        repo_root()
+
+    assert str(exc.value).startswith("ERROR: ")
+    assert "无法确定仓根探测起点" in str(exc.value)
+
+
+def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
+    """C2：spec 要求「坏仓根 → 经 CLI 调用时 exit 2、诊断落 stderr」的**独立绿锚**。
+
+    走的是 `--root` 指向不存在目录这条**现在就能触发**的路径，不依赖任何当前为红的用例。
+    退出码 2 在本 CLI 上并非坏仓根独有（坏 scan id 也是 2）⇒ MUST 同时断言 stderr 的
+    具体诊断内容，MUST NOT 仅凭退出码判定通过。
+    """
+    missing = tmp_path / "no-such-root"
+
+    proc = subprocess.run(
+        [sys.executable, SCRIPT, "--root", str(missing), 'reindex'],
+        capture_output=True, text=True, cwd=str(tmp_path),
+    )
+
+    assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
+    assert "Traceback" not in proc.stderr, proc.stderr
+    assert proc.stderr.startswith("ERROR: "), proc.stderr
+    assert "仓根探测起点不是既存目录" in proc.stderr, proc.stderr
+    assert "cause:" in proc.stderr and "fix:" in proc.stderr, proc.stderr
+    assert repr(str(missing))[1:-1] in proc.stderr, "被拒值应出现在诊断里"
+    assert not missing.exists(), "被拒的仓根 MUST NOT 被下游 makedirs 静默具现"
+    assert _entries(tmp_path) == [], "被拒路径下不该留下任何产物"

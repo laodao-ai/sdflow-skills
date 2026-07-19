@@ -1159,20 +1159,29 @@ def repo_root(start=None):
     discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
     # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
     # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
-    if start is None:
-        try:
-            start = os.getcwd()
-        except FileNotFoundError:
-            raise ValueError(
-                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
-                "fix: 切换到一个既存目录后重试，或显式指定 --root"
-            ) from None
-    elif not os.path.isdir(start):
+    if start is not None and not os.path.isdir(start):
         raise ValueError(
             "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
             + "; cause: 显式指定的起点路径不存在或不是目录; "
             "fix: 指定一个既存目录作为起点"
         )
+    # ①b 起点归一化为绝对路径——**本步同时替回落分支承担 fail-closed**。
+    # start=None、或 start 是相对路径（如 argparse 默认值 "."）时都会触到 os.getcwd()，
+    # 而 cwd 在运行期被删除 / 其父目录权限被撤时 os.getcwd() 抛 OSError
+    # （FileNotFoundError 与 PermissionError 同族）。MUST 捕 OSError 而非只捕
+    # FileNotFoundError：裸 OSError 逃出本函数 ⇒ 调用方的 `except ValueError` 接不住
+    # ⇒ stderr 吐 Traceback、退出码 1，正是本函数要消灭的形态。
+    # 归一化之后 start 恒为绝对路径 ⇒ 步骤③的回落分支再也碰不到 cwd、结构上不可能抛。
+    if start is None or not os.path.isabs(start):
+        try:
+            cwd = os.getcwd()
+        except OSError:
+            raise ValueError(
+                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在或不可访问; "
+                "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+            ) from None
+        start = cwd if start is None else os.path.join(cwd, start)
+    start = os.path.normpath(start)
     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
     env = recorder_child_env("git", token=False)
     for name in [
@@ -1194,6 +1203,9 @@ def repo_root(start=None):
             "fix: 确认仓库所在文件系统可用，或显式指定 --root"
         ) from None
     except (OSError, subprocess.CalledProcessError):
+        # start 已在步骤①b 归一化为绝对路径 ⇒ 本行不再触 os.getcwd()，结构上不可能抛
+        # OSError。这是本回落分支 fail-closed 的方式：**消除抛点**，而不是再包一层 try
+        # （多一层 try 只会多一条无法做变异确认的死分支）。
         return os.path.abspath(start)
     # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
     top = out.stdout.rstrip("\r\n")

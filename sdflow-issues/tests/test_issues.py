@@ -333,7 +333,9 @@ class TestRepoRoot:
         assert Path(result).resolve() == repo.resolve()
 
     def test_falls_back_to_abspath_when_git_command_raises(self, tmp_path, monkeypatch):
-        def boom(cmd, cwd=None, capture_output=True, text=True, check=True):
+        # `**kwargs`：repo_root 现在还会传 env= / timeout=，写死签名会 TypeError。
+        # 只补桩签名，不改被测行为（回落分支仍应返回 abspath(start)）。
+        def boom(cmd, **kwargs):
             raise subprocess.CalledProcessError(128, cmd)
 
         monkeypatch.setattr(issues_mod.subprocess, "run", boom)

@@ -51,3 +51,90 @@ Requirement 主体是**仓根单一份 `conftest.py` 的 autouse fixture 机械�
 
 **Task 6 登记 buglist 时的动作**：如实写「触发条件未完全定位，已知一次全量跑未复现」，
 **MUST NOT** 照抄「全量跑必红」这个已被证伪的描述。
+
+---
+
+## CF-4 → Task 3：`--root` 默认改 `None` 会**激活**一条裸 `OSError` 逃逸路径
+
+**来源**：Task 2 · Standards 轴 · Minor（目标态导向发现）
+
+**内容**：`repo_root` 步骤① 的 `start is None` 分支只捕 `FileNotFoundError`：
+
+```python
+try:
+    start = os.getcwd()
+except FileNotFoundError:
+    raise ValueError(...) from None
+```
+
+`PermissionError`（父目录权限被撤）是 `OSError` 的另一子类，会**裸着逃出 `repo_root`**；
+而三份 `main()` 只 `except ValueError` ⇒ 输出 **Traceback**，直接击穿 spec 的
+「stderr MUST NOT 含 Traceback」承诺。
+
+**当前不可达 ≠ 不用管**：argparse `--root` 默认仍是 `"."`，`start is None` 分支走不到。
+**Task 3 落 tasks 1.2c（默认改 `None`）的那一刻，它就变成活路径。**
+
+**⇒ Task 3 MUST 在改 argparse 默认值的同一票内，把该 except 扩为 `OSError`**（三份同步），
+并补一条负例。**MUST NOT** 以「现在触发不到」为由留到以后——那是拿现状反驳目标（通则③）。
+
+---
+
+## CF-5 → Task 3：tasks 1.3c 的 **CLI 层**断言待回补
+
+**来源**：Task 2 · implementer Concern 2
+
+**内容**：Task 2 只做到**函数层**（子进程直调 `repo_root()`）验证「cwd 被删 → 受控失败」。
+CLI 层断言（`exit 2` + stderr 无 `Traceback`）走不到，因为 CLI 要进 `start=None` 分支的前提
+正是 tasks 1.2c 的 argparse 默认值改 `None`——当前默认 `"."` ⇒ CLI 下 cwd 被删走的是
+**显式起点分支**，测的不是目标 Scenario。
+
+**⇒ Task 3 落 1.2c 后 MUST 回补这条 CLI 级断言**，否则该 Scenario 只有半条覆盖。
+注意它与 CF-4 是**同一个分支被激活**带来的两件事，一并做。
+
+---
+
+## CF-6 → Task 6（tasks 4.6 Windows 泳道）：`commonpath` 跨盘符的可观测性降级
+
+**来源**：Task 2 · implementer Concern 3
+
+**内容**：祖先校验第⑤步用 `os.path.commonpath`（依 ADR-2 written decision 原样）。
+**Windows 跨盘符**下 `commonpath` 会**自行抛 `ValueError("Paths don't have the same drive")`**。
+
+- **行为仍正确**：`main()` 的 `except ValueError` 照样接住 → exit 2 + stderr，无 traceback ⇒ fail-closed 成立。
+- **但可观测性降级**：该 `ValueError` 来自 stdlib，消息**不带** recorder 的 `ERROR: …; cause: …; fix: …` 格式。
+
+**Windows 泳道 MUST 实测这一条**，**MUST NOT 用「理论上大概率能过」结案**（PV 规则 1）。
+备选方案 `PurePath.is_relative_to`（spec 明列的另一选项，跨盘符返回 `False` 而非抛异常）
+是对 ADR-2 written decision 的偏离，**若实测确认降级不可接受，须走设计门而非就地改**。
+
+---
+
+## CF-7 →（登记备查，本 change 不处置）`isdir` 的 TOCTOU 窗口
+
+**来源**：Task 2 · implementer Concern 5
+
+**内容**：步骤① `isdir(start)` 与步骤③ `subprocess.run(cwd=start)` 之间存在竞态窗口。
+窗口内 start 被删 ⇒ `subprocess.run` 抛 `FileNotFoundError`（`OSError`）⇒ 落**回落分支**
+返回 `abspath(start)`，而非 fail-closed。
+
+属既有回落语义的边角，**spec 未要求处置**，Task 2 不擅自扩 scope 的判断正确。
+Task 6 收尾时**记 todolist**（显式带 `change` 字段），不在本 change 内修。
+
+---
+
+## CF-8 →（无自动化锚，如实登记）`timeout=30` 的数值本身未被覆盖
+
+**来源**：Task 2 · implementer Concern 4
+
+**内容**：超时验证拆成两条——契约层（断言 `ValueError` + 不回落 + `subprocess.run` 确收正数
+`timeout` kwarg）+ 真 PATH 注入 shim（`exec /bin/sleep 120`，外层 timeout 收窄到 1s 观察真实
+`TimeoutExpired` 路径）。**未覆盖的残余 = 「30 这个数值本身」**，因为真等满 30s 会让每次跑
+套件多 30s 墙钟。
+
+这是**诚实的覆盖边界声明，非缺陷**。Task 6 收尾时在报告中如实呈现，
+**MUST NOT** 宣称「超时面已全覆盖」。
+
+> **踩坑记录（值得留档）**：该 shim 首版写 `sleep 120` 且把 `PATH` **整个替换**成 shim 目录
+> ⇒ 连 `sleep` 本身都找不到、shell 退 127、走成**回落分支**、测试报 "DID NOT RAISE"。
+> 改为 `exec /bin/sleep 120` + `PATH` **前置**（而非替换）才真的挂住。
+> **若当时不查原因直接改断言，就会得到一个「测超时」但实际测的是「命令不存在」的假绿。**
