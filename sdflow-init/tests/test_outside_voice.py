@@ -155,7 +155,13 @@ def test_version():
     # 1.4.2：D2.1 根治残余(d) —— ov_cleanup 的 KILL 升级步在组级 KILL 守卫通过时改投递
     #   目标为负号进程组，穿透 runner 忽略 TERM 时逃逸的子树；守卫未通过时退回单 PID
     #   KILL 并打 OV_GROUP_KILL_DEGRADED=1 哨兵。
-    assert r.stdout.strip() == "outside-voice.sh 1.4.2"
+    # 1.4.3：code-review-fix1 —— M1 回扫不可用改 fail-loud（design F2，不再兜底继续截断）；
+    #   M2 _ov_bytes_at/_ov_read_bytes_strict 核验 od 真实返回码 + 收到字节数/取值范围；
+    #   M3 render_prompt 关键写入逐项核验返回码 + do_exec 侧磁盘写满兜底诊断；
+    #   M4 kill 兜底复探目标是否真死、失败打 OV_KILL_FAILED=1，MUST NOT 谎报成功；
+    #   M5 ov_cleanup 入口屏蔽 INT/TERM/HUP + 原子快照 PID，杜绝等待期重入；
+    #   M6 trap 安装合并为一次调用，收窄 OV_WORKDIR 赋值后到 trap 装完前的裸窗口。
+    assert r.stdout.strip() == "outside-voice.sh 1.4.3"
 
 
 # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────

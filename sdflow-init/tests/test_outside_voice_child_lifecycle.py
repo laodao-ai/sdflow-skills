@@ -28,6 +28,7 @@ bash **5.x**——两者语义有实打实的差异（本轮就撞到一个：3.
 （多数 Linux 发行版把 bash 装在 /usr/bin）**skip 而非 fail**。
 """
 import os
+import random
 import re
 import shutil
 import signal
@@ -270,6 +271,156 @@ def test_group_kill_fix_is_documented_in_design_without_overclaiming():
         assert overclaim not in design, f"design.md 越界断言（不得声称根治）: {overclaim}"
 
 
+def test_signal_storm_residual_is_documented_as_distinct_from_a_b_c():
+    """机械锁〔R1 · code-review-fix1〕：design.md MUST 登记"高频×多类型混合信号风暴可
+    整体击穿 trap 机制"这条残余（(d*)/D2.2），且措辞 MUST 与 (a)(b)(c) 划清性质差异
+    （窄时序缝 vs 整条机制失效）、MUST NOT 声称本轮已修、MUST 保留实测复现率数字。
+    """
+    design = (REPO / "openspec" / "changes" / "fix-mechanical-layer-silent-failures"
+               / "design.md").read_text(encoding="utf-8")
+    assert "D2.2" in design, "design.md 未见 D2.2 小节（混合高频信号风暴残余登记）"
+    assert "67%" in design or "67" in design, "design.md 未见实测复现率数字"
+    assert "0/10" in design, "design.md 未见对照组（单一信号类型不复现）结论"
+    assert "20–150ms" in design or "20-150ms" in design, "design.md 未见触发条件的时间参数"
+    for overclaim in ("已消除孤儿", "孤儿已消除", "已根治", "彻底解决", "完全避免孤儿", "本轮已修", "已一并解决"):
+        assert overclaim not in design, f"design.md 对 (d*) 越界断言: {overclaim}"
+
+
+# ── code-review-fix1 R2：固化「混合高频信号风暴可击穿 trap 机制」的当前真实行为 ────────
+#
+# 用意【不是】断言这个行为是对的——恰恰相反：它锁的是"这个缺陷在当前实现下依然存在、
+# 依然可复现"，防止未来有人（或自己）拿"没人报过 / 没在 CI 见过"当理由，误判"这条可以
+# 不用管"（R1 的修法方向属设计级决策，本轮 MUST NOT 修，见 design.md D2.2）。
+#
+# 【统计性质】67% 是概率性观测，不是确定性契约——本用例因此不断言精确复现率，只断言
+# 「N 次试验里至少复现一次」：N=15（贴合原始复现规模）时，若真实复现率 ≈67%，
+# 0 次复现的概率 ≈ 0.33^15 ≈ 8×10⁻⁸，在本机环境下基本不会误报红；若这条设计级修复
+# 未来真的落地、复现率降到 0，本用例会稳定转红——那不是 flaky，是「请去核实 D2.2
+# 是否已通过某个后续 change 解决，解决了就更新 design.md 与本用例，而不是删掉」。
+
+
+def _fire_mixed_signal_storm(proc, duration_s=3.0, interval_range=(0.02, 0.15)):
+    """3 秒内以 20–150ms 随机间隔交替发送 TERM/INT/HUP，直到进程退出或时间耗尽。"""
+    sigs = [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]
+    deadline = time.time() + duration_s
+    i = 0
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            break
+        try:
+            proc.send_signal(sigs[i % 3])
+        except ProcessLookupError:
+            break
+        i += 1
+        time.sleep(random.uniform(*interval_range))
+
+
+def _run_one_storm_trial(tmp_path, idx, bash_bin):
+    """单次试验：起 helper、等 runner 落盘、打信号风暴、收尸。
+
+    返回 (symptom_occurred, orphaned, runner_pid, grandchild_pid)。
+    - symptom_occurred = helper 被信号【默认处置】直接终止（Python 侧 returncode 为负）
+      ——这是"trap 完全没跑"的最强证据：连 ov_cleanup 自己 `exit 12x` 的收尾都没执行到，
+      那本该由它执行的清理自然也没有发生。
+    - orphaned = 验尸时点（调用方收尸之前）runner/孙进程是否仍存活——【必须在调用方对
+      leaked_pids 做强制 SIGKILL 收尸之前读取】，否则这个标志永远读到 False（收尸本身
+      会把"是否曾经是孤儿"这个证据抹掉）。
+    """
+    pidfile = tmp_path / f"pids-storm-{idx}"
+    env, ctx = _make_env(tmp_path, pidfile)
+    proc = subprocess.Popen(
+        [bash_bin, str(HELPER), "exec", "--context-file", str(ctx), "--timeout", "300"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=str(tmp_path),
+    )
+    try:
+        runner_pid, grandchild_pid = _await_pids(pidfile, proc)
+        _fire_mixed_signal_storm(proc)
+        try:
+            proc.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate(timeout=15)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate()
+    # 给内核/父进程回收留一点时间再验尸（同 `_run_until_killed` 的既有做法）。
+    deadline = time.time() + 3.0
+    while time.time() < deadline and (_alive(runner_pid) or _alive(grandchild_pid)):
+        time.sleep(0.1)
+    symptom = proc.returncode is not None and proc.returncode < 0
+    orphaned = _alive(runner_pid) or _alive(grandchild_pid)
+    return symptom, orphaned, runner_pid, grandchild_pid
+
+
+@needs_real_timeout
+def test_mixed_high_frequency_signal_storm_can_defeat_trap_mechanism(tmp_path, bash_bin):
+    """⭐〔R2 · code-review-fix1〕固化 D2.2 登记的现象：3 秒内以 20–150ms 随机间隔交替发
+    TERM/INT/HUP，命中时 trap 机制被整体击穿（helper 被信号默认处置直接终止、无
+    ov_cleanup 痕迹、runner 与孙进程留下孤儿）。命中时额外核验这些特征，坐实"确实是
+    D2.2 描述的那种失效"，不是随便一次非零退出就算数。
+
+    这条 MUST NOT 被"修"到全绿——M4/M5/M6 都不针对这条（design.md D2.2 明确修法属设计级
+    决策，本 change 范围外）。它存在的意义是"诚实标注现状"，不是"验收标准"。
+
+    〔环境依赖性 · 已实测记录〕复现率对执行环境高度敏感：在本次改动的验证环境（Claude
+    Code Bash 工具的沙箱子进程）里，用本文件同款驱动（Python `subprocess.send_signal`）
+    与一个独立的纯 shell `kill` 循环两种方式，分别对【当前已修复代码】与【改动前的
+    1.4.2 原始代码】各跑 30 次，外加一次把发送频率推到"无 sleep、~4000 次信号/2 秒"的
+    极端压力测试（15 次），三组合计 105 次试验、**0 次复现**——即使针对完全未受本轮改动
+    触碰的原始代码也复现不出来。这说明 67% 这个数字**对驱动信号的执行环境高度敏感**
+    （很可能是调用方 shell/终端的进程组与作业控制语义、而非 bash 版本本身的差异）；
+    D2.2 的登记本身不依赖这条能在本机复现（残余的存在性由代码结构 + 对抗镜的原始实测
+    佐证，不因换一台机器测不出来就消失）。
+
+    ∴ 本用例把"多次试验里一次都没复现"处理成【skip】而非【fail】——避免在复现率本征
+    为环境相关的场景下把测试钉死成"总是红"（那样只会诱导后人删掉它，而不是排查环境）。
+    命中时才会真正执行断言，此时断言从"发生过一次"升级为"发生的确实是 D2.2 描述的那种
+    整体失效"。
+
+    自行清理：无论试验命中与否，每轮试验后都会验尸并在最终 finally 里强制收尸残留进程，
+    不污染开发机。
+    """
+    N = 15
+    hit_count = 0
+    orphaned_hit_count = 0
+    leaked_pids = []
+    try:
+        for idx in range(N):
+            symptom, orphaned, runner_pid, grandchild_pid = _run_one_storm_trial(
+                tmp_path, idx, bash_bin
+            )
+            if symptom:
+                hit_count += 1
+                if orphaned:
+                    orphaned_hit_count += 1
+            if orphaned:
+                leaked_pids.extend([runner_pid, grandchild_pid])
+    finally:
+        for pid in leaked_pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+    if hit_count == 0:
+        pytest.skip(
+            f"{N} 次高频混合信号风暴本轮一次都没复现（复现率环境敏感，见本用例 docstring 的"
+            "105 次跨方法/跨代码版本实测记录）——这不代表 D2.2 登记的残余已消失，"
+            "MUST NOT 因为本用例经常 skip 就删除它或去 design.md 撤销该登记；"
+            "若要核实残余是否仍存在，请在不同执行环境（如真实终端而非沙箱子进程）下复测。"
+        )
+
+    # 命中：至少一次试验里，helper 被信号默认处置直接终止 ⇒ runner/孙进程理应留下孤儿
+    # （trap 完全没跑，ov_cleanup 自然也没机会去 TERM/KILL 它们）——这是区分"真的是
+    # D2.2 描述的整体失效"与"巧合命中了别的非零退出路径"的关键佐证。
+    assert orphaned_hit_count >= 1, (
+        f"命中 {hit_count} 次「helper 被信号默认处置终止」，但没有一次留下孤儿——"
+        "可能是清理最终仍然发生（比如信号风暴只是延迟了 trap，不是击穿了它），"
+        "不完全符合 D2.2 描述的「trap 整体没跑、孤儿存活」特征，需要复核 D2.2 的措辞是否精确"
+    )
+
+
 @needs_real_timeout
 def test_cleanup_logs_the_terminated_runner_pid_without_context_body(tmp_path, bash_bin):
     """⭐ 清理路径在 stderr 留下可见痕迹（信号名 + 被终止的 PID），且不含 context 正文。
@@ -303,14 +454,16 @@ def test_mutation_no_op_cleanup_leaves_an_orphan(tmp_path, bash_bin):
     # 〔D2.1〕KILL 升级步现有两条literal（组级 kill -KILL "-$PID" / 退回单 PID kill -KILL "$PID"）
     # ——真 GNU timeout 场景下守卫恒判定 "group"，走的是前者，两条都须摘掉，否则组级分支
     # 未被摘除、变异体仍会灭掉子树，测试就测不出"清理逻辑是否真的承重"。
+    # 〔code-review-fix1 M5〕ov_cleanup 内部把 OV_RUNNER_PID 原子快照进局部变量
+    # `runner_pid` 后立即清空全局——三条 kill 语句作用的是这个局部快照，字面量随之改名。
     mutated = src.replace(
-        'kill -TERM "$OV_RUNNER_PID" 2>/dev/null',
+        'kill -TERM "$runner_pid" 2>/dev/null',
         ': # MUTANT: kill 摘除',
     ).replace(
-        'kill -KILL "-$OV_RUNNER_PID" 2>/dev/null',
+        'kill -KILL "-$runner_pid" 2>/dev/null',
         ': # MUTANT: kill 摘除',
     ).replace(
-        'kill -KILL "$OV_RUNNER_PID" 2>/dev/null',
+        'kill -KILL "$runner_pid" 2>/dev/null',
         ': # MUTANT: kill 摘除',
     )
     assert mutated != src, "变异未生效 —— 源里的 kill 语句形态变了，本测试已失效，须同步更新"
@@ -553,6 +706,216 @@ def test_other_nonzero_exit_code_still_maps_to_one(tmp_path, bash_bin):
     assert r.returncode == 1, (r.returncode, r.stdout[:200], r.stderr[:400])
     assert "runner boom" in r.stderr, r.stderr
     assert "HALF_BAKED" not in r.stdout, f"半成品泄漏进 stdout: {r.stdout[:200]!r}"
+
+
+# ── code-review-fix1 M4：kill 兜底必须复探目标是否真的消失，MUST NOT 谎报成功 ────────
+#
+# 病灶：旧版 `kill -KILL ... 2>/dev/null` 后【无条件】打印"已 SIGKILL 兜底"——kill 的
+# 返回码只反映"信号是否被内核接受投递"，不代表目标真的死了（竞态/权限/平台语义差异）。
+# 修法：kill 后再复探（kill -0），失败/仍存活 ⇒ 打结构化 OV_KILL_FAILED=1，MUST NOT
+# 打印成功措辞（伪造成功证据，adr/0018）。
+
+
+def test_ov_cleanup_reports_kill_failed_when_target_survives_kill(tmp_path):
+    """⭐〔M4〕mock 掉 `kill` 使其对目标 PID 的 -TERM/-KILL 全部"报告成功但不做任何事"
+    （kill -0 探活则透传给真正的 kill，如实反映目标存活）——精确复现"信号已投递、但
+    目标就是没死"的场景。ov_cleanup MUST 打 OV_KILL_FAILED=1，MUST NOT 打印
+    "已 SIGKILL 兜底"这类成功措辞。
+
+    用一个真实存在、测试自己控制生死的长命进程（`sleep 300`）作为目标，全程不依赖
+    mock 掉的 kill 真的能杀死它——它活到测试自己在 finally 里用真 SIGKILL 收尾为止。
+    """
+    real_target = subprocess.Popen(["sleep", "300"])
+    kill_stub = (
+        'kill() {\n'
+        '  if [ "$1" = "-0" ]; then command kill "$@"; return $?; fi\n'
+        '  return 0\n'
+        '}\n'
+    )
+    try:
+        script = (
+            f'_OV_TEST_LIB_ONLY=1 . {HELPER!s}\n'
+            + kill_stub
+            + f'OV_RUNNER_PID={real_target.pid}\nOV_WORKDIR=""\nov_cleanup TEST\n'
+        )
+        r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+        assert r.returncode == 0, r.stderr
+        assert f"OV_KILL_FAILED=1 pid={real_target.pid}" in r.stderr, r.stderr
+        assert "已 SIGKILL 兜底" not in r.stderr, (
+            f"M4 复发：kill 从未真正终止目标，却仍打印了成功措辞: {r.stderr!r}"
+        )
+        assert real_target.poll() is None, "目标不该真的被杀掉——mock 的 kill 应为纯空操作"
+
+        # 变异对照：还原成旧版"kill 后无条件宣称已兜底"（不复探）——同一个仍存活的目标、
+        # 同样的 kill mock 下，旧逻辑会谎报成功。复用同一个 real_target（它全程没被真正
+        # 杀掉，两次调用互不干扰）。
+        mutant_cleanup = (
+            'ov_cleanup() {\n'
+            '  local src="${1:-EXIT}" i=0\n'
+            '  local runner_pid="$OV_RUNNER_PID"\n'
+            '  OV_RUNNER_PID=""\n'
+            '  if [ -n "$runner_pid" ] && kill -0 "$runner_pid" 2>/dev/null; then\n'
+            '    kill -TERM "$runner_pid" 2>/dev/null\n'
+            '    while [ "$i" -lt 3 ] && kill -0 "$runner_pid" 2>/dev/null; do sleep 0.05; i=$(( i + 1 )); done\n'
+            '    if kill -0 "$runner_pid" 2>/dev/null; then\n'
+            '      kill -KILL "$runner_pid" 2>/dev/null\n'
+            '      echo "outside-voice: runner PID=${runner_pid} 未响应 TERM，已 SIGKILL 兜底" >&2\n'
+            '    fi\n'
+            '  fi\n'
+            '}\n'
+        )
+        mutant_script = (
+            f'_OV_TEST_LIB_ONLY=1 . {HELPER!s}\n'
+            + kill_stub
+            + mutant_cleanup
+            + f'OV_RUNNER_PID={real_target.pid}\nOV_WORKDIR=""\nov_cleanup TEST\n'
+        )
+        r2 = subprocess.run(["bash", "-c", mutant_script], capture_output=True, text=True, timeout=30)
+        assert r2.returncode == 0, r2.stderr
+        assert "已 SIGKILL 兜底" in r2.stderr, (
+            "变异体（旧版不复探）在同样场景下竟然没有谎报成功——"
+            f"说明本用例没有真正锁定 M4 这条修复点: {r2.stderr!r}"
+        )
+        assert "OV_KILL_FAILED" not in r2.stderr
+    finally:
+        real_target.kill()
+        real_target.wait(timeout=10)
+
+
+# ── code-review-fix1 M5：ov_cleanup 重入加固——入口屏蔽信号 + 原子快照 PID ────────────
+#
+# 病灶：INT/TERM/HUP 三个 trap 全程激活且都调 `ov_cleanup`，清理内含 ~1s 等待循环、
+# `OV_RUNNER_PID` 到最后才清空 ⇒ 第二种信号可嵌套进入，对同一（或已复用）PID 再发一次
+# 组级 KILL。修法：清理入口立即 `trap '' INT TERM HUP`，并原子式把全局 PID 移入局部变量、
+# 立刻清空全局，下游全部操作基于局部快照。
+
+
+def test_ov_cleanup_masks_int_term_hup_immediately_on_entry(tmp_path):
+    """⭐〔M5〕`ov_cleanup` 函数体的【第一条可执行语句】必须是屏蔽 INT/TERM/HUP——机械锁
+    源码结构（True 版 shell 无法在纯黑盒层面证明"没有第二个信号能在等待循环期间插进来"，
+    但可以锁"屏蔽发生在等待循环之前"这个必要条件，并用变异验证证明它确实被这段源码承重）。
+    """
+    src = HELPER.read_text(encoding="utf-8")
+    cleanup_start = src.index("ov_cleanup() {")
+    # 函数体的头几行内必须出现屏蔽语句，且要在【等待循环】（`while ... kill -0`）之前。
+    wait_loop_idx = src.index("while [ \"$i\" -lt 10 ]", cleanup_start)
+    mask_idx = src.index("trap '' INT TERM HUP", cleanup_start)
+    assert cleanup_start < mask_idx < wait_loop_idx, (
+        "M5 复发：屏蔽信号的 `trap '' INT TERM HUP` 不在 ov_cleanup 函数体开头/等待循环之前"
+    )
+
+
+def test_ov_cleanup_snapshots_pid_and_clears_global_before_existence_check(tmp_path):
+    """⭐〔M5〕结构锁：`local runner_pid="$OV_RUNNER_PID"` 与紧随其后的 `OV_RUNNER_PID=""`
+    必须出现在【信号屏蔽之后、kill -0 存活判定之前】，且函数体内此后的全部操作都必须
+    作用于局部快照 `runner_pid`，不再触碰 `$OV_RUNNER_PID`——否则"原子快照"就是一句
+    空话（全局变量仍在被后续代码读写，达不到"理论重入读到空 PID"的效果）。
+
+    〔为什么是结构锁，不是并发黑盒测试〕bash 的 `cmd &` 后台化会 fork 出独立子 shell，
+    子 shell 内对变量的赋值天然不会传播回父 shell——想在同一进程内真正制造"清理进行到
+    一半时并发读一次全局变量"的时序，需要更复杂的多线程/信号交错手段且极易 flaky。
+    这里改用确定性信号：变量读写顺序在源码里是【静态的】（有确定性信号 ⇒ 机械判定，
+    CLAUDE.md 基准①），直接锁文本顺序，比脆弱的时序黑盒测试更可靠。
+    """
+    src = HELPER.read_text(encoding="utf-8")
+    start = src.index("ov_cleanup() {")
+    end = src.index("\ndo_exec() {", start)
+    body = src[start:end]
+
+    mask_idx = body.index("trap '' INT TERM HUP")
+    snapshot_idx = body.index('local runner_pid="$OV_RUNNER_PID"')
+    clear_idx = body.index('OV_RUNNER_PID=""')
+    exist_check_idx = body.index('kill -0 "$runner_pid" 2>/dev/null; then')
+    assert mask_idx < snapshot_idx < clear_idx < exist_check_idx, (
+        "M5 复发：屏蔽 → 快照 → 清空全局 → 存活判定 的顺序被打乱"
+    )
+    assert clear_idx - snapshot_idx < 40, (
+        "M5：快照与清空全局之间不该插入其它逻辑（原子性诉求），实测间隔过大，请复核"
+    )
+    # 函数体内此后（清空全局之后）不得再出现对 $OV_RUNNER_PID 的裸读写——否则"快照"是假的。
+    after_clear = body[clear_idx + len('OV_RUNNER_PID=""'):]
+    assert "$OV_RUNNER_PID" not in after_clear, (
+        f"M5 复发：清空全局后函数体仍读写 $OV_RUNNER_PID，快照未被真正使用: "
+        f"{after_clear[:200]!r}"
+    )
+
+    # 变异对照：构造一段"旧式"函数体（清空全局后仍继续用 $OV_RUNNER_PID 发 kill），
+    # 证明上面最后一条断言确实会抓到这种回退，不是摆设。
+    old_style_body = (
+        'ov_cleanup() {\n'
+        '  local src="${1:-EXIT}" i=0\n'
+        "  trap '' INT TERM HUP\n"
+        '  local runner_pid="$OV_RUNNER_PID"\n'
+        '  OV_RUNNER_PID=""\n'
+        '  if [ -n "$runner_pid" ] && kill -0 "$runner_pid" 2>/dev/null; then\n'
+        '    kill -TERM "$OV_RUNNER_PID" 2>/dev/null\n'  # 回退：清空后仍读旧全局（此时已是空串，会静默失效）
+        '  fi\n'
+        '}\n'
+    )
+    old_clear_idx = old_style_body.index('OV_RUNNER_PID=""')
+    old_after_clear = old_style_body[old_clear_idx + len('OV_RUNNER_PID=""'):]
+    assert "$OV_RUNNER_PID" in old_after_clear, (
+        "变异构造本身有误——'旧式'样例里应该含有清空后仍读写全局变量的回退用法"
+    )
+
+
+# ── code-review-fix1 M6：trap 安装合并为一次调用，收窄 OV_WORKDIR 赋值后的裸窗口 ──────
+
+
+def test_trap_installation_is_a_single_combined_call_before_the_specific_ones(tmp_path):
+    """⭐〔M6〕`OV_WORKDIR="$workdir"` 赋值后，MUST 先有【一次】覆盖全部四个信号的合并
+    trap 调用，再是四条具体的独立 trap 语句——顺序错了就没有收窄窗口。
+    """
+    src = HELPER.read_text(encoding="utf-8")
+    workdir_idx = src.index('OV_WORKDIR="$workdir"')
+    combined_idx = src.index("trap 'ov_cleanup SIGNAL; exit 1' EXIT INT TERM HUP", workdir_idx)
+    specific_exit_idx = src.index("trap 'ov_cleanup EXIT' EXIT", workdir_idx)
+    assert workdir_idx < combined_idx < specific_exit_idx, (
+        "M6 复发：合并 trap 调用不在 OV_WORKDIR 赋值之后、具体四条 trap 之前"
+    )
+
+
+@needs_real_timeout
+def test_combined_trap_fallback_still_cleans_up_workdir(tmp_path, bash_bin):
+    """⭐〔M6〕变异验证的另一面：即便【只有】合并兜底 trap 生效（模拟信号恰好落在合并
+    trap 装完、具体四条 trap 覆写之前那个残余窗口——用一个变异体删掉四条具体 trap，只留
+    合并兜底那一条），收到信号后 workdir 仍必须被清理、进程仍必须以非零码退出，而不是
+    走 shell 默认处置留下泄漏的 workdir。这证明合并 trap 本身是真的在【承重】，不是摆设。
+    """
+    mutant = tmp_path / "outside-voice-mutant-m6.sh"
+    src = HELPER.read_text(encoding="utf-8")
+    marker = (
+        "  trap 'ov_cleanup EXIT' EXIT\n"
+        "  trap 'ov_cleanup INT;  exit 130' INT\n"
+        "  trap 'ov_cleanup TERM; exit 143' TERM\n"
+        "  trap 'ov_cleanup HUP;  exit 129' HUP\n"
+    )
+    assert marker in src, "源码结构已变，本变异验证需要同步更新"
+    mutated = src.replace(marker, "")  # 只留合并兜底 trap，四条具体 trap 摘除
+    assert mutated != src
+    mutant.write_text(mutated, encoding="utf-8")
+    mutant.chmod(0o755)
+
+    pidfile = tmp_path / "pids-m6-mutant"
+    env, ctx = _make_env(tmp_path, pidfile)
+    rc, err, runner_pid, grandchild_pid = _run_until_killed(
+        mutant, env, ctx, signal.SIGTERM, tmp_path, pidfile, bash_bin
+    )
+    try:
+        # 合并兜底 handler 是 `ov_cleanup SIGNAL; exit 1`——非 shell 默认处置，进程应以
+        # exit 1（而非被信号杀死的负returncode）收尾，且清理仍应生效（runner 子树不残留）。
+        assert rc == 1, (
+            f"M6 复发：只剩合并兜底 trap 时未按预期以 exit 1 收尾（rc={rc}），"
+            "可能是合并 trap 完全没生效、走了 shell 默认处置"
+        )
+        assert not _alive(runner_pid), "合并兜底 trap 生效但 runner 仍存活——清理未执行"
+        assert not _alive(grandchild_pid), "合并兜底 trap 生效但孙进程仍存活——清理未执行"
+    finally:
+        for pid in (grandchild_pid, runner_pid):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
 
 
 # ── 诚实边界：SIGKILL 残余显式登记 ──────────────────────────────────────────

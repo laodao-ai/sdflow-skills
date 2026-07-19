@@ -12,7 +12,19 @@ on:
 
 jobs:
   gates:
-    runs-on: ubuntu-latest
+    # 🔴 两条泳道，**bash 版本是分泳道的理由**〔code-review 对抗镜 C〕：
+    # macOS runner 自带 bash **3.2**（GPLv2 末版），ubuntu 是 bash 5.x。本仓有一类缺陷
+    # 【只在 3.2 上罢工】——3.2 扫变量名不是 multibyte-aware，`"$var，"` 会把全角标点首字节
+    # 吞进标识符，`set -u` 下当场 unbound variable（实测撞过：罢工点在 kill 之前 ⇒ 整个清理
+    # 逻辑一次都不执行、孤儿照跑）。`test_hack_shell_multibyte_guard.py` 是**静态正则代理**，
+    # 对【已知形态】无假阴性，但挡不住一种不匹配该正则的新罢工形态 ⇒ 只有 ubuntu 泳道时，
+    # 真实 3.2 运行时行为从未被跑过，而静态门的存在会制造「已机械覆盖」的错觉。
+    # 同理：`timeout`/`gtimeout` 缺失分支在 ubuntu 上恒 skip（自带 coreutils），只有 macOS 跑得到。
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -12,6 +12,8 @@ MUST NOT 演化成编码检测/嗅探。非 UTF-8 字节的行为断言在
 test_non_utf8_lead_bytes_follow_utf8_semantics_not_sniffing。
 """
 import os
+import platform
+import shutil
 import subprocess
 import textwrap
 from pathlib import Path
@@ -305,29 +307,42 @@ def test_render_prompt_size_read_failure_is_fail_loud_not_silent_full_dump(tmp_p
 
 
 def test_backscan_fallback_emits_visible_marker(tmp_path):
-    """〔S3〕回扫值取不到而兜底成 0（= 退回按字节切）MUST 对外可见。
+    """〔S3 · 契约在 code-review-fix1 M1 已变〕回扫值取不到 MUST 对外可见【且不再兜底继续
+    产出 prompt】。
 
-    OV_UTF8_BACKSCAN_DROPPED=0 与「纯 ASCII 本就无需回扫」不可区分 ⇒ 无额外标记就是零信号
-    静默降级，方向与本 change 论点相反。标记只含固定字面，不含 context 正文。
+    旧契约（1.4.2 及以前）：回扫取不到时兜底成 0（= 退回按字节切）、打一行哨兵、仍
+    exit 0 继续产出 prompt。code-review-fix1 M1 判定这仍是"做不到却假装做成了"（design.md
+    F2 明确 od 不可用须 fail-loud、非零退出）——现在改为：回扫不可用 ⇒ 不产出 prompt、
+    不启动 runner、非零退出（此处用 exit 1），哨兵行 OV_UTF8_BACKSCAN_UNAVAILABLE=1 仍打印
+    （只是伴随失败，不再伴随"降级后继续"）。
     """
     ctx = tmp_path / "ctx.md"
     ctx.write_bytes(MIXED)
     env_prefix = f'export OV_MAX_CONTEXT_BYTES=100\n'
 
-    # 正常路径：标记 MUST NOT 出现
+    # 正常路径：标记 MUST NOT 出现，exit 0，正常产出 prompt
     ok = _source_and_run(env_prefix + f'render_prompt "{ctx}" >/dev/null', tmp_path)
+    assert ok.returncode == 0, ok.stderr
     assert "OV_UTF8_BACKSCAN_DROPPED=" in ok.stderr, ok.stderr
     assert "OV_UTF8_BACKSCAN_UNAVAILABLE" not in ok.stderr, ok.stderr
 
-    # 降级路径：两个回扫函数返回空 ⇒ 标记 MUST 出现
+    # 降级路径：两个回扫函数返回空 ⇒ fail-loud（M1）：非零退出、不产出 prompt、标记 MUST 出现，
+    # OV_UTF8_BACKSCAN_DROPPED/OV_TRUNCATED 等"继续截断"分支的输出 MUST NOT 出现
+    # （render_prompt 在写出任何内容前就已 exit）。
     broken = _source_and_run(
         env_prefix
         + "utf8_head_trim() { echo ''; }\nutf8_tail_skip() { echo ''; }\n"
         + f'render_prompt "{ctx}" >/dev/null',
         tmp_path,
     )
+    assert broken.returncode != 0, broken.stderr
     assert "OV_UTF8_BACKSCAN_UNAVAILABLE=1" in broken.stderr, broken.stderr
-    assert "OV_UTF8_BACKSCAN_DROPPED=0" in broken.stderr, broken.stderr
+    assert "OV_UTF8_BACKSCAN_DROPPED=" not in broken.stderr, (
+        f"M1 复发：回扫不可用却仍打印了'继续截断'分支的输出: {broken.stderr!r}"
+    )
+    assert "OV_TRUNCATED=" not in broken.stderr, (
+        f"M1 复发：回扫不可用却仍走到了正常结束路径: {broken.stderr!r}"
+    )
     for probe in ("hello ASCII", "更多中文", "😀"):
         assert probe not in broken.stderr, f"stderr 泄漏 context 正文: {probe}"
 
@@ -378,16 +393,21 @@ def test_tail_skip_reports_failure_not_zero_when_byte_read_fails(tmp_path):
 
 
 def test_render_prompt_real_od_failure_reports_backscan_unavailable(tmp_path):
-    """⭐〔F-新1〕端到端、不 mock 任何 outside-voice.sh 函数：PATH 里塞一个真会失败的
-    `od` 可执行文件（模拟"未安装/权限突变/资源耗尽/沙箱瞬时故障"），走完整
-    render_prompt 截断路径，MUST 打印 OV_UTF8_BACKSCAN_UNAVAILABLE=1。
+    """⭐〔F-新1 · 契约在 code-review-fix1 M1 已变〕端到端、不 mock 任何 outside-voice.sh
+    函数：PATH 里塞一个真会失败的 `od` 可执行文件（模拟"未安装/权限突变/资源耗尽/沙箱
+    瞬时故障"），走完整 render_prompt 截断路径，MUST 打印 OV_UTF8_BACKSCAN_UNAVAILABLE=1
+    【且非零退出、不产出任何 prompt】——design.md F2：od 不可用须 fail-loud，MUST NOT
+    兜底继续产出可能含非法字节的 prompt（旧版在此仍 exit 0 继续截断，被 code-review-fix1
+    M1 判定为「做不到却假装做成了」的同类失效，与本 change 主题同形）。
 
     这是比 test_backscan_fallback_emits_visible_marker（mock 函数）更强的证据：证明
     「od 真的挂了」这条路径能被 render_prompt 的守卫正确接住，而不只是"守卫逻辑本身
     没问题、但从没被真故障触发过"。
 
     变异验证：把 utf8_head_trim/utf8_tail_skip 的"bytes 为空/got=0 ⇒ echo ''"分支
-    还原成旧版"echo 0"（即撤销本次修复）后，本用例转红——已实跑验证，见 impl-report。
+    还原成旧版"echo 0"（即撤销 F-新1 修复）后，本用例转红——已实跑验证，见 impl-report。
+    再变异：把 M1 的 fail-loud（`exit 1`）还原成旧版"兜底 htrim=0/tskip=0 继续产出"，
+    本用例的 returncode/stdout 断言同样转红——见 code-review-fix1 报告里的变异验证记录。
     """
     ctx = _write(tmp_path, "mixed.md", MIXED)
     shim = tmp_path / "shim"
@@ -403,7 +423,12 @@ def test_render_prompt_real_od_failure_reports_backscan_unavailable(tmp_path):
         ["bash", str(HELPER), "render-prompt", "--context-file", str(ctx)],
         capture_output=True, env=env, timeout=30,
     )
-    assert r.returncode == 0, r.stderr
+    assert r.returncode != 0, (
+        f"M1 复发：od 真实失败却仍 exit 0（design.md F2 要求 fail-loud 非零退出）: {r.stderr!r}"
+    )
+    assert r.stdout == b"", (
+        f"M1 复发：回扫不可用却仍产出了 prompt 内容: {r.stdout[:200]!r}"
+    )
     err = r.stderr.decode("utf-8")
     assert "OV_UTF8_BACKSCAN_UNAVAILABLE=1" in err, (
         f"真实 od 失败没有被识别为失败（F-新1 复发）: {err!r}"
@@ -452,3 +477,246 @@ def test_exec_render_failure_still_reaches_stderr(tmp_path):
     # 回灌的是 render.meta，MUST NOT 夹带 context 正文（未经出境扫描）
     for probe in ("hello ASCII", "更多中文", "😀"):
         assert probe not in r.stderr, f"stderr 泄漏 context 正文: {probe}"
+
+
+# ── code-review-fix1 M2：_ov_bytes_at / _ov_read_bytes_strict 核验真实 od 返回码 + 数量 ──
+#
+# 病灶：`od ... | tr -s ' ' '\n' | grep -v '^$'` 的 `$?` 只反映管道【末端】grep 的返回码；
+# od 半途失败（吐了一半再报错）时，grep 对"已吐出的部分"仍能正常匹配、返回 0 ⇒ 调用方
+# 把【部分结果】误当【完整结果】。修法：先用命令替换单独捕获 od 自身的返回码，再对捕获
+# 到的文本做格式化；并新增 `_ov_read_bytes_strict` 核验收到的字节数严格等于请求数、且
+# 每项在 0..255。
+
+
+def test_ov_bytes_at_propagates_real_od_exit_code_not_pipeline_tail(tmp_path):
+    """〔M2〕`_ov_bytes_at` 的返回码 MUST 是 od 自身的返回码，不是管道末端 tr/grep 的返回码。
+
+    塞一个真会"先吐点数据、再非零退出"的 `od` 影子二进制，直接验证返回码。
+    """
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "od").write_text("#!/bin/sh\necho ' 65 66'\nexit 1\n")
+    (shim / "od").chmod(0o755)
+    ctx = tmp_path / "ctx.md"
+    ctx.write_bytes(b"hello world")
+    env = os.environ.copy()
+    env["PATH"] = f"{shim}{os.pathsep}{env['PATH']}"
+    script = f'_OV_TEST_LIB_ONLY=1 . {HELPER!s}\n_ov_bytes_at "{ctx}" 0 3\necho "RC=$?"\n'
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert "RC=1" in r.stdout, (
+        f"M2 复发：od 已非零退出，_ov_bytes_at 却报告成功(RC != 1): {r.stdout!r}"
+    )
+
+    # 变异对照：还原成旧版"直接把 od 接进管道、返回码来自管道尾端"的实现（用功能等价的
+    # 替身函数在 source 之后覆盖，不依赖对正文做脆弱的精确字符串匹配），同样输入下应变回
+    # RC=0 —— 证明这条断言真的由"单独捕获 od 返回码"这个修复点承重。
+    mutant_script = (
+        f'_OV_TEST_LIB_ONLY=1 . {HELPER!s}\n'
+        "_ov_bytes_at() { od -An -tu1 -j \"$2\" -N \"$3\" \"$1\" 2>/dev/null | tr -s ' ' '\\n' | grep -v '^$'; }\n"
+        f'_ov_bytes_at "{ctx}" 0 3\necho "RC=$?"\n'
+    )
+    r2 = subprocess.run(["bash", "-c", mutant_script], capture_output=True, text=True, env=env, timeout=30)
+    assert r2.returncode == 0, r2.stderr
+    assert "RC=0" in r2.stdout, (
+        "变异体（旧管道实现）竟然也报告失败——说明本用例未真正锁定"
+        f"「返回码来自管道尾端」这条修复点: {r2.stdout!r}"
+    )
+
+
+def test_ov_read_bytes_strict_rejects_partial_output_even_when_producer_reports_success(tmp_path):
+    """〔M2〕即便 `_ov_bytes_at`（od）本身以 rc=0 退出，只要实际吐出的字节数与请求的
+    count 不符，`_ov_read_bytes_strict` MUST 判定失败——不能只凭"完全为空"才算失败
+    （旧版 utf8_head_trim/utf8_tail_skip 正是这么判的：只查 `${#bytes[@]} -eq 0`），那样
+    "od 吐了一半又提前收尾但自己 rc=0"这种半成品会被当成完整合法结果使用。
+    """
+    ctx = tmp_path / "ctx.md"
+    ctx.write_bytes(b"hello world")
+    script = f"""
+    _OV_TEST_LIB_ONLY=1 . {HELPER!s}
+    _ov_bytes_at() {{ printf '104\\n101\\n'; return 0; }}  # 请求 3 个，只给 2 个，且自称成功
+    _ov_read_bytes_strict "{ctx}" 0 3
+    echo "RC=$?"
+    """
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert "RC=1" in r.stdout, f"M2 复发：字节数与请求不符仍被判定成功: {r.stdout!r}"
+
+    # 变异对照：重现旧判据（只查"完全为空"，不核对数量）——同样输入下应报告成功，
+    # 证明上面的断言确实由「数量核验」这个新增修复点承重，不是巧合绿。
+    mutant_script = f"""
+    _OV_TEST_LIB_ONLY=1 . {HELPER!s}
+    _ov_bytes_at() {{ printf '104\\n101\\n'; return 0; }}
+    _ov_read_bytes_strict_old() {{
+      local file="$1" offset="$2" count="$3" raw b
+      raw=$(_ov_bytes_at "$file" "$offset" "$count") || return 1
+      local -a bytes=()
+      while IFS= read -r b; do [ -n "$b" ] && bytes+=("$b"); done <<< "$raw"
+      if [ "${{#bytes[@]}}" -eq 0 ]; then return 1; fi
+      printf '%s\\n' "${{bytes[@]}}"
+      return 0
+    }}
+    _ov_read_bytes_strict_old "{ctx}" 0 3
+    echo "RC=$?"
+    """
+    r2 = subprocess.run(["bash", "-c", mutant_script], capture_output=True, text=True, timeout=30)
+    assert r2.returncode == 0, r2.stderr
+    assert "RC=0" in r2.stdout, (
+        "旧判据（只查完全为空）对本用例的部分输出竟然也报告失败——"
+        f"说明本用例没有真正锁定「数量核验」这条修复点: {r2.stdout!r}"
+    )
+
+
+def test_ov_read_bytes_strict_rejects_out_of_range_values(tmp_path):
+    """〔M2〕收到的字节值须严格落在 0..255；出现非法值（非数字/越界）MUST 判定失败。"""
+    ctx = tmp_path / "ctx.md"
+    ctx.write_bytes(b"abc")
+    script = f"""
+    _OV_TEST_LIB_ONLY=1 . {HELPER!s}
+    _ov_bytes_at() {{ printf '65\\n999\\n67\\n'; return 0; }}  # 999 越界
+    _ov_read_bytes_strict "{ctx}" 0 3
+    echo "RC=$?"
+    """
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert "RC=1" in r.stdout, f"越界字节值未被拒绝: {r.stdout!r}"
+
+
+# ── code-review-fix1 M3：do_exec 侧「render.meta 因磁盘写满而为空」的不依赖磁盘兜底诊断 ──
+#
+# 对抗镜 B 的原始复现手法：把 workdir 所在的 TMPDIR 指向一个填满的小容量卷，render_prompt
+# 子壳内的全部写入（含它自己的 stderr 重定向目标 render.meta）静默失败 ⇒ do_exec 事后
+# `cat render.meta >&2` 读到空文件、转发等于没转发，操作者只看到 rc≠0 + 全空 stdout/stderr。
+# 这里用 macOS `hdiutil` 建一个几 MB 的 ramdisk、精确填到只剩几 KB 可用空间来真实复现该
+# 场景（而不是 mock），验证 do_exec 新增的"不经过 workdir 磁盘路径、直写真实 stderr"的
+# 兜底诊断行确实出现。非 Darwin / 无 hdiutil 权限的环境显式 skip（同 bash_bin 矩阵的
+# "缺失即可见 skip"原则），不静默变成"这条用例形同虚设"。
+
+
+def _make_tiny_full_ramdisk(tmp_path):
+    """建一个 ~2MB 的 HFS ramdisk 并精确填到仅剩 ~4KB 可用空间。返回挂载点路径；
+    任何一步失败（无 hdiutil 权限、非 Darwin 等）⇒ pytest.skip，不让基础设施问题
+    伪装成"修复失效"。
+    """
+    if platform.system() != "Darwin" or shutil.which("hdiutil") is None:
+        pytest.skip("M3 磁盘写满复现依赖 macOS hdiutil ramdisk，本平台不适用")
+    mount_point = tmp_path / "ov_ramdisk"
+    mount_point.mkdir()
+    try:
+        dev = subprocess.run(
+            ["hdiutil", "attach", "-nomount", "ram://4096"],
+            capture_output=True, text=True, timeout=30, check=True,
+        ).stdout.split()[0]
+        subprocess.run(["newfs_hfs", dev], capture_output=True, text=True, timeout=30, check=True)
+        subprocess.run(["mount", "-t", "hfs", dev, str(mount_point)],
+                        capture_output=True, text=True, timeout=30, check=True)
+    except Exception as e:  # noqa: BLE001 — 基础设施探测失败一律 skip，不当测试失败
+        pytest.skip(f"M3 ramdisk 建立失败（环境不支持，非本次修复问题）: {e}")
+
+    def _fill_to(target_free_bytes):
+        st = os.statvfs(str(mount_point))
+        avail = st.f_bavail * st.f_frsize
+        fill = avail - target_free_bytes
+        if fill > 0:
+            with open(mount_point / "filler.bin", "wb") as f:
+                f.write(b"0" * fill)
+
+    return dev, mount_point, _fill_to
+
+
+def _detach_ramdisk(dev, mount_point=None):
+    """卸载 + 弹出 ramdisk——自行清理，不残留挂载点/设备节点污染开发机。
+
+    实测〔macOS〕：新挂载的卷会被 Spotlight（mds/fseventsd）短暂持有，此时
+    `hdiutil detach`（含 `-force`）与 `diskutil unmountDisk force` 都可能【回报成功
+    却实际仍挂载】——只有对【挂载点路径】用 `umount -f` 才能可靠摘下文件系统，之后
+    `hdiutil detach -force` 才能真正弹出设备节点。三级递进兜底，最大化清理成功率，
+    任何一步失败都不让异常向上抛（清理函数本身不该成为测试失败的新来源）。
+    """
+    if mount_point is not None:
+        subprocess.run(["umount", "-f", str(mount_point)], capture_output=True, text=True, timeout=30)
+    r = subprocess.run(["hdiutil", "detach", dev], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        subprocess.run(["hdiutil", "detach", dev, "-force"], capture_output=True, text=True, timeout=30)
+
+
+def _build_m3_mutant(tmp_path):
+    """把 do_exec 里"render.meta 为空时的兜底诊断"那段摘掉，还原成旧版"只转发
+    render.meta"三行。返回变异体脚本路径。"""
+    src = HELPER.read_text(encoding="utf-8")
+    mutant_marker = 'if [ ! -s "$workdir/render.meta" ]; then'
+    assert mutant_marker in src, "源码结构已变，本变异验证需要同步更新"
+    import re as _re
+    mutated = _re.sub(
+        r'  if \[ "\$rc" -ne 0 \]; then\n(?:.*\n)*?    exit "\$rc"\n  fi\n',
+        '  if [ "$rc" -ne 0 ]; then exit "$rc"; fi\n',
+        src,
+        count=1,
+    )
+    assert mutated != src, "变异未生效——do_exec 结构已变，须同步更新本用例"
+    mutant = tmp_path / "outside-voice-mutant-m3.sh"
+    mutant.write_text(mutated, encoding="utf-8")
+    mutant.chmod(0o755)
+    return mutant
+
+
+def _run_disk_full_scenario(script_path, tmp_path, subdir_name):
+    """在一块全新的、精确填到只剩几 KB 可用空间的 ramdisk 上跑一次
+    `script_path exec --context-file ...`，返回 subprocess.CompletedProcess。
+    每次调用都用【全新】ramdisk（不复用/不二次填充同一块），规避"建目录 + 删目录"
+    反复churn 在小容量 HFS 卷上造成的可用空间碎片化漂移（实测：同一块 2MB ramdisk
+    连续两次填到同一目标字节数，第二次 `mktemp -d` 会因元数据开销提前失败）。
+    """
+    sub = tmp_path / subdir_name
+    sub.mkdir()
+    dev, mount_point, fill_to = _make_tiny_full_ramdisk(sub)
+    try:
+        fill_to(8000)  # 精确留几 KB——mkdtemp 能建目录，但完整 prompt(~5KB)写不下
+        ctx = tmp_path / "ctx.md"
+        if not ctx.exists():
+            ctx.write_text("diff content for M3 disk-full test\n")
+        bin_dir = tmp_path / "bin"
+        if not bin_dir.exists():
+            bin_dir.mkdir()
+            fake_codex = bin_dir / "codex"
+            fake_codex.write_text("#!/usr/bin/env bash\ncat >/dev/null\nexit 0\n")
+            fake_codex.chmod(0o755)
+
+        env = os.environ.copy()
+        env["TMPDIR"] = str(mount_point)
+        env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+        env["SDFLOW_VOICE_RUNNER"] = "codex"
+        env.pop("SDFLOW_VOICE_MODEL", None)
+
+        return subprocess.run(
+            ["bash", str(script_path), "exec", "--context-file", str(ctx)],
+            capture_output=True, env=env, timeout=30,
+        )
+    finally:
+        _detach_ramdisk(dev, mount_point)
+
+
+@pytest.mark.skipif(not _have_timeout_bin(), reason="需要 timeout/gtimeout（do_exec 前置退出）")
+def test_exec_disk_full_render_meta_gets_unconditional_stderr_diagnostic(tmp_path):
+    """⭐〔M3〕workdir 所在磁盘写满 ⇒ render.meta 本身写入失败为空 ⇒ do_exec MUST 仍在真实
+    stderr 上留一条不依赖该磁盘的诊断行（"非零退出 ⇒ stderr 必有可辨识原因"）。
+
+    变异验证：把 do_exec 里"render.meta 为空时的兜底诊断"那段去掉（还原成旧版"读到啥转发
+    啥"），在【另一块独立的、同样精确填满的】ramdisk 上跑同一场景，stderr 应变回全空。
+    """
+    r = _run_disk_full_scenario(HELPER, tmp_path, "ramdisk-real")
+    assert r.returncode != 0, "磁盘写满场景下 exec 竟然报告成功"
+    assert r.stdout == b"", r.stdout[:200]
+    assert r.stderr.strip() != b"", (
+        "M3 复发：磁盘写满导致 render.meta 为空，stderr 又变回全空——"
+        "不依赖磁盘的兜底诊断没有生效"
+    )
+    assert b"render_prompt" in r.stderr and b"rc=" in r.stderr, r.stderr
+
+    mutant = _build_m3_mutant(tmp_path)
+    r2 = _run_disk_full_scenario(mutant, tmp_path, "ramdisk-mutant")
+    assert r2.returncode != 0
+    assert r2.stderr.strip() == b"", (
+        "变异体（旧版无条件兜底诊断）在同一类满盘场景下 stderr 竟然不是空的——"
+        f"说明本用例没有真正锁定 M3 这条修复点: {r2.stderr!r}"
+    )
