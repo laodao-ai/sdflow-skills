@@ -354,12 +354,6 @@ cwd 被外部删除
 | 控制字符伪造多行日志 | stdout 含 `\n`/`\r`/ANSI escape 时可伪造出多行诊断 | 全部转义为 `\n` 等字面 |
 | 字符 vs 字节混淆 | 「80 字节」在 Python 切片语义下其实是字符 | 转义后二者一致 |
 
-MUST NOT 写入 stdout：recorder 的 stdout 是机器可读契约（`scan --json` 的消费方会解析它）。
-
-**退出码可区分性**：坏 root 与坏 scan id 都产生 exit 2 ⇒ 相关测试 MUST 断言 stderr 的具体
-诊断内容，MUST NOT 仅凭退出码判定通过（否则「在更早的关口崩了」会被误判为「测中了目标」——
-本变更修复的假绿正是这个形状）。
-
 **诊断内容的取舍**：不携带 `start`、git 可执行文件路径、生效的 `GIT_*` 变量名——这些能提升可
 诊断性，但 recorder 的 stderr **不过出境 `secret_scan`**（其 scope 限定在 outside-voice 的跨模型
 prompt 出境路径），而本变更是**新增**的信息暴露面（修复前完全静默）。被拒值本身已是定位所必需
@@ -437,7 +431,7 @@ MUST NOT 写入 stdout：recorder 的 stdout 是机器可读契约（`scan --jso
 
 - **BASE-06 失败模式表**：见上「失败模式表」节（TG-08 命中）。
 - **BASE-11 可观测性**：见上「可观测性」节（TG-08 命中）。
-- **BASE-12 决策记录**：ADR-1 / ADR-2 / ADR-3 / ADR-4（TG-23 命中）。
+- **BASE-12 决策记录**：ADR-1 / ADR-2 / ADR-3 / ADR-4 / ADR-5 / ADR-6 / ADR-7（TG-23 命中）。
 - **BASE-14 假设列表**：见 proposal「假设」节，4 条均已验证。
 - **DOC-1 正文即最终态**：本文不含演进史；PoC 描述属当前事实证据，非考古层。
 - **PV 规则 2「引用即打开」**：本文所有 `file:line`（`issues.py:200/1093/1114/1132-1150`、
