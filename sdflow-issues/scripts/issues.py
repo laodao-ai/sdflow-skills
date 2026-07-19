@@ -1133,13 +1133,15 @@ def repo_root(start=None):
     """探测并**证明**起点所属 git 仓库的根；非 git 仓库（或 git 命令失败）退化为
     `os.path.abspath(start)`。
 
-    与 buglist.py / todolist.py 的同名函数逐字同款（Phase B 3 个脚本各自独立、不互相
-    import，故各自内联一份，见模块 docstring "子进程解耦"）。修复 Critical fix carry-over：
-    本脚本此前 4 个 cmd_* 直接用裸 `args.root`（默认 "."）拼路径，不像 buglist.py/todolist.py
-    那样探测 git 根——从非仓库根的子目录调用时会把 `openspec/issues/...` 错误地写到 cwd 而非
-    git 根，三脚本定位从此不一致。所有 cmd_* 现在统一先 `root = repo_root(args.root)` 再拼
-    路径；`read_pool` 调 buglist.py/todolist.py 子进程时也把这个已 resolve 的 root 传下去
-    （`--root`），保证跨三脚本落到同一个目录。
+    与 buglist.py / todolist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
+    故各自内联一份，见模块 docstring "子进程解耦"）。
+
+    **单点解析（ADR-5）**：本函数在一个进程内 MUST 只被调用一次——`main()` 调它并把结果
+    写回 `args.root`，其余 `cmd_*` / `_*_snapshot` 一律直接用 `root = args.root`，
+    MUST NOT 再调本函数。理由不是省一次子进程：本函数的校验逐次独立，两次解析之间目标若
+    失去 `.git`，第二次会静默爬升到外层祖先仓库（两次都 rc=0、都过全部校验），于是锁建在
+    一个根、数据写进另一个根。子进程以 `--root <已解析值>` 拉起时会各自再解析一次——
+    「一次」的边界是**进程**，不是逻辑命令。
 
     契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
     返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
@@ -1626,7 +1628,7 @@ def cmd_reindex(args):
     problems 才让本次调用以非 0 退出，供想要强门禁的调用方（如 CI）选择性收紧。
     `--strict` 目前是预置接口，本 change 内无消费者主动传它。
     """
-    root = repo_root(args.root)
+    root = args.root
     try:
         items, problems = _reindex_core(root)
     except RuntimeError as e:
@@ -2083,7 +2085,7 @@ def cmd_batch_lint(args):
 
 
 def _batch_lint_snapshot(args):
-    root = repo_root(args.root)
+    root = args.root
     path = batches_md_path(root)
     if not os.path.exists(path):
         return {"error": f"batches.md 不存在，无法校验：{path}", "problems": (), "count": 0}
@@ -2125,7 +2127,7 @@ def cmd_batch_add(args):
     "相等"判据在语义上就是死胡同——占位符从不代表"用户确认过的空值"）。忽略字段是
     这条 opt-in 分支的声明语义，不是缺陷；不想忽略字段就不要传 `--if-exists skip`。
     """
-    root = repo_root(args.root)
+    root = args.root
     _reject_batch_key_unsafe(args.key)
     _reject_batch_line_unsafe(args.title, "title")
     # [impl-review-fix] FIX-5（CV-2 codex PoC）：优先级/计划此前原样写进
@@ -2173,7 +2175,7 @@ def cmd_batch_set_status(args):
     """`batch set-status {key} {S}`：只改该条目的 `状态:` 生成行，绝不动人写行（Q3）
     或 `成员:` 生成行（那是 reindex/Task 11 的职责，本命令不碰）。
     """
-    root = repo_root(args.root)
+    root = args.root
     if args.status not in BATCH_STATUSES:
         _die(f"批次状态非法：{args.status}（应为 {'/'.join(BATCH_STATUSES)}）")
 
@@ -2207,7 +2209,7 @@ def cmd_batch_set_status(args):
 
 def cmd_batch_rename(args):
     """Registry-first, retryable, direct-snapshot cross-pool batch rename."""
-    root = repo_root(args.root)
+    root = args.root
     old_key, new_key = args.old, args.new
     _reject_batch_key_unsafe(new_key)
     if old_key == new_key:
@@ -2277,7 +2279,7 @@ def cmd_sweep(args):
     纠正违反契约、也让调用方误以为原始参数被原样接受。改为：先比较原始参数与其 strip
     结果是否相同，不同则 fail-closed（先于任何写盘），不再静默改写用户输入。
     """
-    root = repo_root(args.root)
+    root = args.root
     raw_change = args.change or ""
     # [impl-review-fix] FIX-5：首尾空白 fail-closed，不静默 strip 后放行。
     if raw_change != raw_change.strip():
@@ -2356,7 +2358,10 @@ def main():
     p = argparse.ArgumentParser(
         description="共享 issues 层：跨 bug+todo 的 reindex / batch"
     )
-    p.add_argument("--root", default=".", help="目标项目根（存 openspec/issues/... 的仓库）")
+    # 默认 None 而非 "."：区分「未指定 → repo_root 用 os.getcwd() 探测」与「显式指定 →
+    # 先过 os.path.isdir 起点校验」。os.path.isdir(".") 在 cwd 被删除后仍返回 True，
+    # 用 "." 当默认值等于让未指定路径绕过起点校验（ADR-7）。
+    p.add_argument("--root", default=None, help="目标项目根（存 openspec/issues/... 的仓库；默认自动探测 git 根）")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("reindex", help="重建 issues/INDEX.md（open×批次板）+ 同步 issues/batches.md 状态")

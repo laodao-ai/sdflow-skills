@@ -585,6 +585,13 @@ def repo_root(start=None):
     与 issues.py / todolist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
     故各自内联一份）。
 
+    **单点解析（ADR-5）**：本函数在一个进程内 MUST 只被调用一次——`main()` 调它并把结果
+    写回 `args.root`，其余 `cmd_*` / `_*_snapshot` 一律直接用 `root = args.root`，
+    MUST NOT 再调本函数。理由不是省一次子进程：本函数的校验逐次独立，两次解析之间目标若
+    失去 `.git`，第二次会静默爬升到外层祖先仓库（两次都 rc=0、都过全部校验），于是锁建在
+    一个根、数据写进另一个根。子进程以 `--root <已解析值>` 拉起时会各自再解析一次——
+    「一次」的边界是**进程**，不是逻辑命令。
+
     契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
     返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
     起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
@@ -1304,7 +1311,7 @@ def cmd_next_id(args):
 
 
 def _next_id_snapshot(args):
-    root = repo_root(args.root)
+    root = args.root
     conflicts = id_conflicts(root)
     try:
         value = next_id(root, args.prefix)
@@ -1353,7 +1360,7 @@ BLOCK_TMPL = """
 
 
 def cmd_add(args):
-    root = repo_root(args.root)
+    root = args.root
     data = _load_json(args.json)
     for req in ("module", "summary", "priority", "phenomenon"):
         if not data.get(req):
@@ -1426,7 +1433,7 @@ def cmd_add(args):
 # ── set-status ───────────────────────────────────────────────────────────────
 
 def cmd_set_status(args):
-    root = repo_root(args.root)
+    root = args.root
     new = args.to
     if new not in STATUS_CODES:
         _die(f"状态码非法：{new}")
@@ -1510,7 +1517,7 @@ def cmd_triage(args):
     更新——绝不再 patch 旧 Markdown 表行。状态变化时向该 item 的 marker block 追加一条历史行。
     不报错（除 ID 未找到，沿用 set-status 的门禁）。
     """
-    root = repo_root(args.root)
+    root = args.root
     batch = getattr(args, "批次")
 
     path, document, raw_id, item = _find_item_document(root, args.id, "bug")
@@ -1557,7 +1564,7 @@ def cmd_triage(args):
 # ── scan ─────────────────────────────────────────────────────────────────────
 
 def _scan_snapshot(args):
-    root = repo_root(args.root)
+    root = args.root
     bugs = []
     problems = []
     # [impl-review-fix] FIX-2（CV-1+A-F2 双镜 PoC）：重复 ID 检测必须是全池（跨全部
@@ -1648,7 +1655,10 @@ def _die(msg):
 
 def main():
     p = argparse.ArgumentParser(description="自动记录/回写/扫描 buglist")
-    p.add_argument("--root", default=".", help="仓库根（默认自动探测 git 根）")
+    # 默认 None 而非 "."：区分「未指定 → repo_root 用 os.getcwd() 探测」与「显式指定 →
+    # 先过 os.path.isdir 起点校验」。os.path.isdir(".") 在 cwd 被删除后仍返回 True，
+    # 用 "." 当默认值等于让未指定路径绕过起点校验（ADR-7）。
+    p.add_argument("--root", default=None, help="仓库根（默认自动探测 git 根）")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("next-id", help="打印两池 snapshot 的下一个全局 ID（advisory，不预留）")
