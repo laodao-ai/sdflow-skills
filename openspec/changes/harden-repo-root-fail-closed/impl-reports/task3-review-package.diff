@@ -1,0 +1,1029 @@
+diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task3-single-point-resolution.md b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task3-single-point-resolution.md
+new file mode 100644
+index 0000000..a5b989f
+--- /dev/null
++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task3-single-point-resolution.md
+@@ -0,0 +1,300 @@
++# Task 3 — 单点解析：仓根在一次调用内只解析一次（R2）
++
++**Blocked-by**: 2 · **起点 HEAD**: 6bc3feb · **pytest**: `/usr/bin/python3 -m pytest`
++
++---
++
++## 1. 做了什么
++
++| tasks | 内容 | 落点 |
++|---|---|---|
++| 1.2 | 删 16 处 `cmd_*` / `_*_snapshot` 内的 `root = repo_root(args.root)` → `root = args.root` | 三份 recorder |
++| 1.2b | `repo_root` docstring 改为最终态（ADR-5 单点解析），三份同步 | 三份 recorder |
++| 1.2c | `--root` argparse 默认值 `"."` → `None` + 理由注释 | 三份 recorder |
++| 1.9 补强 | 「未指定 vs 显式指定」两条路径可区分的 CLI 级用例 | 三份 tests |
++| 1.11 | 跨进程重解析锚定用例（**当前 `xfail(strict=True)`，见 §5**） | 三份 tests |
++| 静态断言 | `repo_root(` Call 节点数 + 归属函数、`--root` 默认值，均用 `ast.walk` | 三份 tests |
++
++新增测试 9 条（每份 recorder 3 条），全套件 passed 1851 → 1860。
++
++---
++
++## 2. AST Call 节点数实测（tasks 1.2 的判据）
++
++手段 `ast.walk` 数 `ast.Call` 且 `func` 为 `Name('repo_root')`——**未用 grep**（grep 会把
++`def repo_root(` 与 docstring 字面量算进来）。
++
++**改造前（HEAD 6bc3feb）**：
++
++```
++sdflow-issues/scripts/issues.py     7  [1629, 2086, 2128, 2176, 2210, 2280, 2418]
++sdflow-buglist/scripts/buglist.py   6  [1307, 1356, 1429, 1513, 1560, 1691]
++sdflow-todolist/scripts/todolist.py 6  [1272, 1299, 1400, 1484, 1539, 1665]
++TOTAL 19
++```
++
++**改造后**：
++
++```
++sdflow-issues/scripts/issues.py     1  [2423]
++sdflow-buglist/scripts/buglist.py   1  [1701]
++sdflow-todolist/scripts/todolist.py 1  [1675]
++TOTAL 3
++```
++
++删掉的 16 处所在函数（改造前 AST 归属实测）：
++
++- `issues.py`：`cmd_reindex` · `_batch_lint_snapshot` · `cmd_batch_add` · `cmd_batch_set_status` · `cmd_batch_rename` · `cmd_sweep`
++- `buglist.py`：`_next_id_snapshot` · `cmd_add` · `cmd_set_status` · `cmd_triage` · `_scan_snapshot`
++- `todolist.py`：同 buglist 五处
++
++剩余 3 处全部归属 `main()`，由测试
++`test_repo_root_is_resolved_once_per_process_and_only_in_main` 机械守（每份断言
++`len(calls) == 1` 且 `owners == ["main"]`，合计即 3）。
++
++---
++
++## 3. 验收框逐条证据
++
++### ☑ 命令函数内 `repo_root` 调用归零；全脚本 19 → 3，手段 `ast.walk`
++
++见 §2。守护用例三份各一。
++
++### ☑ `--root` 未指定与显式指定两条路径行为可区分
++
++- 机械层：`test_root_argparse_default_is_none`（三份）——AST 取 `add_argument("--root", …)`
++  的 `default` 关键字，断言恰有一个且为 `Constant(None)`。
++- 行为层：`test_unspecified_root_probes_cwd_while_explicit_root_is_validated`（三份）——
++  **同一个 cwd**（仓库的嵌套子目录）下跑两次：
++  - 未指定 → exit 0，`repo/openspec/issues` 被创建、`nested/openspec` 未被创建（走 `os.getcwd()` 探测到仓根）；
++  - `--root <不存在路径>` → exit 2 + stderr 含 `仓根探测起点不是既存目录` + 该路径未被具现（走 `isdir` 起点校验，在调 git 之前）。
++
++  两条断言的是**不同的可观测结果**，不是同一条路径的两种写法。**未仅凭退出码判定**
++  （坏 root 与坏 scan id 都是 exit 2）。
++
++### ☑ `repo_root` docstring 与新架构一致
++
++三份旧 docstring 描述的是「所有 cmd_* 现在统一先 `root = repo_root(args.root)` 再拼路径」，
++ADR-5 后失真。三份改为同一段最终态表述：单点解析、`main()` 解析后写回 `args.root`、
++其余一律 `root = args.root`、「一次」的边界是**进程**。
++
++`issues.py` 的旧 docstring 另有一整段「Critical fix carry-over」考古层（描述 4 个 cmd_*
++此前直接用裸 `args.root` 的历史），按 **DOC-1（正文即最终态）**一并删除——它正是「只有读过
++上一版的人才需要的句子」。三份 docstring 现已同文（差异仅同名脚本互指的两个文件名）。
++
++### ☐ 跨进程锚定用例存在 —— **用例已落，但断言当前为 `xfail(strict=True)`**
++
++见 §5。这是本票唯一未闭合的验收框，且**不是可就地修复的实现疏漏，而是 design ADR-5 的一条
++事实性假定被实测证伪**。
++
++---
++
++## 4. CF-4 / CF-5 的处置
++
++### CF-4（`--root` 默认改 `None` 会激活裸 `OSError` 逃逸路径）——**核实为「Task 2 已做掉」，本票无需再改**
++
++按票面要求自行 AST/读码核实，**未采信 carry-forward 的描述**。当前三份的实际状态：
++
++```
++sdflow-issues/scripts/issues.py:1180        except OSError:
++sdflow-buglist/scripts/buglist.py:628       except OSError:
++sdflow-todolist/scripts/todolist.py:628     except OSError:
++```
++
++即 `repo_root` 步骤①b 捕的已经是 `OSError`（`FileNotFoundError` 与 `PermissionError` 同族全覆盖），
++Task 2 的 fix1 已扩过。carry-forward CF-4 写的「目前只捕 `FileNotFoundError`」是**登记时的快照**，
++在 Task 2 fix1 之后已过期。
++
++负例也已存在且三份齐备：`test_getcwd_permission_error_is_controlled_too`（mock `os.getcwd`
++抛 `PermissionError`，断言得到受控 `ValueError`）。该用例 mock 的是**外部环境行为**，
++不是 `isabs`/`isdir`/`realpath` 判据本身，符合方法论红线。
++
++⇒ **本票未改这条 except**，改了反而是无意义扰动。结论有实测支撑，非「以现在触发不到为由不做」。
++
++### CF-5（tasks 1.3c 的 CLI 层断言待回补）——**已闭合**
++
++CLI 级用例 `test_cli_with_deleted_process_cwd_exits_two_without_traceback` 三份齐备
++（Task 2 已落），断言：真子进程跑 CLI → `RC:2` + stderr 不含 `Traceback` + 含
++`ERROR: 无法确定仓根探测起点` + `cause:` / `fix:`。**1.2c 落地后它才真正走到目标分支**：
++
++| 链条 | 机械锚 |
++|---|---|
++| CLI 未指定 `--root` ⇒ `args.root is None` | `test_root_argparse_default_is_none`（AST 断言 default 为 `None`） |
++| `repo_root(None)` 在 cwd 被删时受控失败 | `test_deleted_process_cwd_yields_controlled_failure`（函数层，直调 `repo_root()` 无参） |
++| 该失败经 CLI 出口 ⇒ exit 2 + 无 Traceback | `test_cli_with_deleted_process_cwd_exits_two_without_traceback`（真子进程） |
++
++三链各有独立机械锚，合起来覆盖 Scenario「进程当前工作目录在运行期被删除」的 CLI 面。
++
++**未踩票面点名的坑**：`issues.py` 没有 `scan` 子命令。三份 CLI 用例各用自己真实的子命令
++（buglist/todolist → `scan`，issues → `reindex`，实测确认 `issues.py` 的既有用例本来就用
++`reindex`），且一律断言 stderr 的具体诊断内容而非只看退出码。
++
++---
++
++## 5. 🔴 主要发现：R2 Scenario「子进程解析出不同的根时响亮失败」**当前不成立**
++
++### 5.1 实测复现（三份 recorder 一致）
++
++构造 = spec 明写的场景：outer 是仓、inner 是 outer 内的嵌套仓；父进程在 inner 上持锁并以
++`--root <inner>` 拉起子进程；两次解析之间 inner 失去 `.git`。
++
++```
++buglist   rc 0 | outer/openspec 被创建: True | stderr: (空)
++todolist  rc 0 | outer/openspec 被创建: True | stderr: (空)
++issues    rc 0 | outer/openspec 被创建: True | stderr: (空)
++```
++
++以 `buglist add` 做的第一轮 spike 更直接：子进程 **rc=0 并把新 bug 条目写进了 outer**
++（`outer/openspec/issues/buglist/2026-07-19-buglist.md`），stdout 正常返回 `{"id": "B1", ...}`。
++**这正是本 change 开篇要消灭的「静默写错目录」，只是走的是跨进程这条边。**
++
++### 5.2 根因：兜底机制不在假定的位置
++
++design ADR-5 与 spec R2 都写：
++
++> 子进程若解析出不同的根，其 `_lock_path` 处无锁文件 ⇒ `RecorderLockError` 响亮失败
++
++`validate_recorder_participant` **确实**会抛 `RecorderLockError`。但 `recorder_lock` 把它吞掉了：
++
++- `sdflow-issues/scripts/issues.py:194`
++- `sdflow-buglist/scripts/buglist.py:207`
++- `sdflow-todolist/scripts/todolist.py:207`
++
++```python
++try:
++    participant = validate_recorder_participant(root, inherited, command)
++except RecorderLockError:
++    participant = None          # ← 吞掉，回落 owner 模式
++if participant is not None:
++    ...
++path = _lock_path(root)
++os.makedirs(os.path.dirname(path), exist_ok=True)   # ← 在**错误的根**上具现
++```
++
++同根场景下这个洞看不见：回落 owner 后 `O_EXCL` 撞上父进程的锁 → `recorder lock occupied` →
++响亮失败。**「响亮」是同根这一巧合带来的，不是绑定校验带来的。** 一旦根发生分裂，
++锁路径也随之分裂，`O_EXCL` 不再冲突 ⇒ 静默成为 owner。
++
++### 5.3 为什么 Task 3 不就地修
++
++修法只能是给锁协议加 **owner-root 绑定**（父进程把已解析的根随 token 一起下传，子进程比对
++不一致即响亮失败）。而**任何让「participant 校验失败 ⇒ 响亮失败」的改法都会撞上既有契约测试**
++`sdflow-buglist/tests/test_task2_semantic_lock.py::test_invalid_participant_env_falls_back_to_owner_or_conflict`
++——它显式断言「坏 participant env ⇒ 回落 owner ⇒ exit 0」，且三份 recorder 参数化覆盖。
++
++实测证据（§6 变异 2）：把那三行 `except` 去掉后，1.11 锚定用例 XPASS，
++**同时** `test_invalid_participant_env_falls_back_to_owner_or_conflict[buglist]` 变红。
++两条契约**在当前协议下无法同时成立**——区分二者所需的信号（父进程的根）根本没被传下来。
++
++⇒ 这是 **design 层面的事实性假定被证伪**，不是实现疏漏。修它要动 recorder 锁协议
++（`recorder_child_env` + `recorder_lock` + 三份 `main()` + AST 镜像 + 另一个 change 的 spec），
++属**设计门议题**。票面禁止碰 `design.md` / `specs/`（ship gate 设计门失鲜），故本票
++**如实登记 + 落机械锚**，不擅自改协议、更不删弱那条既有契约。
++
++### 5.4 落的是什么锚
++
++`test_child_resolving_a_different_root_must_fail_loudly`（三份各一），断言**按 spec 的要求写**
++（子进程 MUST 非 0 退出 + outer 下 MUST NOT 出现 `openspec/`），标
++`@pytest.mark.xfail(strict=True)` 并在 reason 里写明缺口、根因、冲突对象与「为何不就地改」。
++
++选 `xfail(strict=True)` 而非「断言现状（rc==0）」：后者是**把 bug 写成契约**，等于给缺口发合格证。
++strict xfail 的性质是——**缺口一旦被堵上，用例 XPASS → strict 判红 → 强制有人回来删标记**，
++是活的机械锚，不是注释。
++
++用例内含**前提核验**：`assert repo_root(str(inner)) == realpath(outer)`——若哪天 `repo_root`
++的行为变了、子进程不再解析出不同的根，这条会先炸，避免用例悄悄退化成「测了个别的东西」
++（对照 CF-8 的 `sleep` shim 踩坑：不查原因改断言 ⇒ 得到一个测错东西的假绿）。
++
++---
++
++## 6. 变异确认实测（PV 规则 5）
++
++### 变异 1 — 单点解析守护
++
++把 `buglist.cmd_add` 的 `root = args.root` 改回 `root = repo_root(args.root)`：
++
++```
++FAILED sdflow-buglist/tests/test_repo_root_identity_buglist.py::test_repo_root_is_resolved_once_per_process_and_only_in_main
++E   +  where 2 = len([<ast.Call object at 0x1089fd550>, <ast.Call object at 0x108a7a880>])
++1 failed in 0.03s
++```
++
++还原后绿。⇒ 守护是活的。
++
++> ⚠️ 过程事故（已修复，如实登记）：还原该变异时我用了
++> `git checkout sdflow-buglist/scripts/buglist.py`，把 buglist.py 上**本票的全部改动**
++> （5 处删除 + docstring + argparse 默认值）一并回退了。当场 `git status` 发现并按原样重做，
++> 重做后 AST 计数（1/1/1，TOTAL 3）与镜像一致性测试均复核通过。
++> **教训**：变异确认的还原手段 MUST 是「精确逆操作或文件级备份还原」，
++> **MUST NOT 用 `git checkout <path>`**——它还原到的是 HEAD，不是变异前。
++> 变异 2 即改用 `cp` 备份还原。
++
++### 变异 2 — 跨进程锚定守护（票面点名的那一条）
++
++按票面要求本应「削弱 `validate_recorder_participant` 的绑定校验 → 用例必须变红」。
++**该手段在此不可分辨**：削弱绑定后，子进程在 outer 处仍读不到锁 metadata（那里本来就没有锁
++文件），validate 照样失败、照样被 `recorder_lock` 吞掉 ⇒ 用例仍是 xfail，观察不到差别。
++**这本身就是 §5.2 结论的独立佐证：绑定校验不是这条路径上的承重件，吞异常的那三行才是。**
++
++故改做**反向变异**（把缺口补上，验证锚会不会跳）——去掉 `recorder_lock` 里吞异常的三行：
++
++```
++FAILED sdflow-buglist/tests/test_repo_root_identity_buglist.py::test_child_resolving_a_different_root_must_fail_loudly
++[XPASS(strict)] R2 Scenario「子进程解析出不同的根时响亮失败」当前**不成立**…
++1 failed in 0.13s
++```
++
++同一变异态下，既有契约测试的反应：
++
++```
++FAILED sdflow-buglist/tests/test_task2_semantic_lock.py::test_invalid_participant_env_falls_back_to_owner_or_conflict[sdflow-buglist/scripts/buglist.py-args0]
++1 failed, 2 passed in 0.30s
++```
++
++还原后：
++
++```
++3 passed, 1 xfailed in 0.57s
++```
++
++⇒ 锚是活的（缺口一堵就跳红）；且 §5.3 的「两条契约互斥」是**实测结论，不是推断**。
++
++---
++
++## 7. 全套件结果
++
++```
++4 failed, 1860 passed, 3 skipped, 3 xfailed in 109.26s
++```
++
++- **红数 4，与接手时一致**，全部是
++  `sdflow-issues/tests/test_task4_rename_snapshot.py::test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[…]`
++  的 4 个参数化用例（CF-1，Task 4 的面级 mock 改造范围）。**未动**这 4 个用例，也未动
++  CF-1 点名的 12 个 blanket mock 站点。
++- passed 1851 → 1860（+9 = 三份 × 3 条新用例）。
++- xfailed 0 → 3（§5 的跨进程锚定，三份各一）。
++- 镜像一致性：`sdflow-buglist/tests/test_mirror_consistency.py` **7 passed**，
++  `repo_root` 三向 AST 等价仍绿（tasks 1.10）。
++- 仓根 `find . -maxdepth 1 -name '{*'` **无输出**，Task 2 切断的再生链未复发。
++
++---
++
++## 8. Concerns
++
++1. **🔴 R2 Scenario 3 未闭环（§5）**——需在设计门决策：是给锁协议加 owner-root 绑定
++   （代价：改 `recorder_child_env` + `recorder_lock` + 三份 `main()` + AST 镜像，且须重写
++   `test_invalid_participant_env_falls_back_to_owner_or_conflict` 的口径），还是修订 spec R2
++   对该 Scenario 的表述。**MUST NOT 靠删掉那条 xfail 用例「解决」。**
++   Task 6 收口时 MUST NOT 因 1.2 / 1.2b 两框已勾就把 R2 读成已闭环。
++
++2. **`cmd_*` 现在无条件信任 `args.root`**——绕过 `main()` 直调 `cmd_*` 的测试若传相对路径或
++   未校验路径，不再有 `repo_root` 兜底。design ADR-5 已核实存量调用传的都是绝对 `tmp_path`，
++   本轮全套件也未暴露此类回归。但这是**目标态下的新契约**（「`args.root` 已被校验」是
++   `cmd_*` 的前置条件），值得在后续新增测试时留意——目前无机械守护。
++
++3. **`--root` 默认值改 `None` 的对外可见面**：CLI 行为等价（`repo_root(".")` 与
++   `repo_root(None)` 只在 cwd 被删/不可访问时分叉，且分叉方向正是本 change 要的 fail-closed）。
++   未发现仓内有依赖 `args.root == "."` 字面值的消费者。
++
++4. **CF-4 的 carry-forward 描述已过期**——Task 2 fix1 修掉后未回写 carry-forward.md。
++   本报告 §4 已给出实测现状；Task 6 汇总时**别照抄** CF-4 的原文当作待办。
+diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
+index 4d6f4b8..6f21bb9 100644
+--- a/sdflow-buglist/scripts/buglist.py
++++ b/sdflow-buglist/scripts/buglist.py
+@@ -585,6 +585,13 @@ def repo_root(start=None):
+     与 issues.py / todolist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
+     故各自内联一份）。
+ 
++    **单点解析（ADR-5）**：本函数在一个进程内 MUST 只被调用一次——`main()` 调它并把结果
++    写回 `args.root`，其余 `cmd_*` / `_*_snapshot` 一律直接用 `root = args.root`，
++    MUST NOT 再调本函数。理由不是省一次子进程：本函数的校验逐次独立，两次解析之间目标若
++    失去 `.git`，第二次会静默爬升到外层祖先仓库（两次都 rc=0、都过全部校验），于是锁建在
++    一个根、数据写进另一个根。子进程以 `--root <已解析值>` 拉起时会各自再解析一次——
++    「一次」的边界是**进程**，不是逻辑命令。
++
+     契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
+     返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
+     起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
+@@ -1304,7 +1311,7 @@ def cmd_next_id(args):
+ 
+ 
+ def _next_id_snapshot(args):
+-    root = repo_root(args.root)
++    root = args.root
+     conflicts = id_conflicts(root)
+     try:
+         value = next_id(root, args.prefix)
+@@ -1353,7 +1360,7 @@ BLOCK_TMPL = """
+ 
+ 
+ def cmd_add(args):
+-    root = repo_root(args.root)
++    root = args.root
+     data = _load_json(args.json)
+     for req in ("module", "summary", "priority", "phenomenon"):
+         if not data.get(req):
+@@ -1426,7 +1433,7 @@ def cmd_add(args):
+ # ── set-status ───────────────────────────────────────────────────────────────
+ 
+ def cmd_set_status(args):
+-    root = repo_root(args.root)
++    root = args.root
+     new = args.to
+     if new not in STATUS_CODES:
+         _die(f"状态码非法：{new}")
+@@ -1510,7 +1517,7 @@ def cmd_triage(args):
+     更新——绝不再 patch 旧 Markdown 表行。状态变化时向该 item 的 marker block 追加一条历史行。
+     不报错（除 ID 未找到，沿用 set-status 的门禁）。
+     """
+-    root = repo_root(args.root)
++    root = args.root
+     batch = getattr(args, "批次")
+ 
+     path, document, raw_id, item = _find_item_document(root, args.id, "bug")
+@@ -1557,7 +1564,7 @@ def cmd_triage(args):
+ # ── scan ─────────────────────────────────────────────────────────────────────
+ 
+ def _scan_snapshot(args):
+-    root = repo_root(args.root)
++    root = args.root
+     bugs = []
+     problems = []
+     # [impl-review-fix] FIX-2（CV-1+A-F2 双镜 PoC）：重复 ID 检测必须是全池（跨全部
+@@ -1648,7 +1655,10 @@ def _die(msg):
+ 
+ def main():
+     p = argparse.ArgumentParser(description="自动记录/回写/扫描 buglist")
+-    p.add_argument("--root", default=".", help="仓库根（默认自动探测 git 根）")
++    # 默认 None 而非 "."：区分「未指定 → repo_root 用 os.getcwd() 探测」与「显式指定 →
++    # 先过 os.path.isdir 起点校验」。os.path.isdir(".") 在 cwd 被删除后仍返回 True，
++    # 用 "." 当默认值等于让未指定路径绕过起点校验（ADR-7）。
++    p.add_argument("--root", default=None, help="仓库根（默认自动探测 git 根）")
+     sub = p.add_subparsers(dest="cmd", required=True)
+ 
+     s = sub.add_parser("next-id", help="打印两池 snapshot 的下一个全局 ID（advisory，不预留）")
+diff --git a/sdflow-buglist/tests/test_repo_root_identity_buglist.py b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
+index d576b20..bd7b2e7 100644
+--- a/sdflow-buglist/tests/test_repo_root_identity_buglist.py
++++ b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
+@@ -14,6 +14,8 @@ D4 红线禁止互相 import，故测试也各自一份）。
+ Run with: python3 -m pytest sdflow-buglist/tests/test_repo_root_identity_buglist.py -v
+ """
+ 
++import ast
++import json
+ import os
+ import subprocess
+ import sys
+@@ -27,6 +29,10 @@ from buglist import repo_root
+ 
+ SCRIPT = str(Path(__file__).parent.parent / "scripts" / "buglist.py")
+ 
++# 单点解析用例（Task 3）用的子命令：本 recorder 上一条读路径 + 一条合法委派边。
++SINGLE_POINT_CMD = ["scan", "--json"]
++SINGLE_POINT_CHILD_COMMAND = "scan"
++
+ # 仓库/工作树发现类变量——测试前一律清空，确保用例断言的是 repo_root 自身的判据，
+ # 而不是宿主环境残留（CI 的 git hook 场景会真的导出它们）。
+ GIT_DISCOVERY_ENV = (
+@@ -595,3 +601,135 @@ def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
+     assert repr(str(missing))[1:-1] in proc.stderr, "被拒值应出现在诊断里"
+     assert not missing.exists(), "被拒的仓根 MUST NOT 被下游 makedirs 静默具现"
+     assert _entries(tmp_path) == [], "被拒路径下不该留下任何产物"
++
++
++# ── ADR-5 单点解析（change harden-repo-root-fail-closed · Task 3 · R2） ─────────
++
++def _repo_root_calls(node):
++    """数 `repo_root(...)` 的 **Call 节点**。
++
++    MUST NOT 用 grep 代替：`def repo_root(` 与 docstring 里的字面量都会被文本匹配算进来
++    （本脚本的 docstring 就含 `root = args.root` 一类字样），得到假红或脆件偏移量。
++    """
++    return [n for n in ast.walk(node)
++            if isinstance(n, ast.Call)
++            and isinstance(n.func, ast.Name)
++            and n.func.id == "repo_root"]
++
++
++def _script_ast():
++    return ast.parse(Path(SCRIPT).read_text(encoding="utf-8"))
++
++
++def test_repo_root_is_resolved_once_per_process_and_only_in_main():
++    """R2：仓根在单次调用（边界=进程）内只解析一次。
++
++    本脚本全文 MUST 只剩 1 个 `repo_root(` Call 节点，且它 MUST 位于 `main()`——
++    三份 recorder 合计 3 个（改造前 19 个）。`cmd_*` / `_*_snapshot` 一律直接消费
++    `args.root`。理由见 ADR-5：两次解析之间目标若失去 `.git`，第二次会静默爬升到外层
++    祖先仓库，于是锁建在一个根、数据写进另一个根。
++    """
++    tree = _script_ast()
++    calls = _repo_root_calls(tree)
++    assert len(calls) == 1, [c.lineno for c in calls]
++
++    owners = sorted(fn.name for fn in ast.walk(tree)
++                    if isinstance(fn, ast.FunctionDef) and _repo_root_calls(fn))
++    assert owners == ["main"], owners
++
++
++def test_root_argparse_default_is_none():
++    """1.2c：`--root` 默认值 MUST 是 `None`，不是 `"."`。
++
++    默认 `"."` 时未指定路径走的是「显式起点」分支，而 `os.path.isdir(".")` 在 cwd 被删除后
++    仍返回 `True` ⇒ 起点校验形同虚设（ADR-7）。默认 `None` 才让 `repo_root` 走 `os.getcwd()`。
++    """
++    defaults = [kw.value
++                for call in ast.walk(_script_ast())
++                if isinstance(call, ast.Call)
++                and getattr(call.func, "attr", None) == "add_argument"
++                and call.args
++                and isinstance(call.args[0], ast.Constant)
++                and call.args[0].value == "--root"
++                for kw in call.keywords if kw.arg == "default"]
++
++    assert len(defaults) == 1, defaults
++    assert isinstance(defaults[0], ast.Constant), ast.dump(defaults[0])
++    assert defaults[0].value is None
++
++
++def test_unspecified_root_probes_cwd_while_explicit_root_is_validated(tmp_path):
++    """1.2c 的行为面：未指定与显式指定是**两条可区分的路径**。
++
++    同一个 cwd 下：未指定 → `os.getcwd()` 探测 → 落到 cwd 所属仓根；
++    显式指定一个不存在的路径 → 起点校验在调 git **之前**拦下 → exit 2。
++    仅凭退出码不足以判定（坏 scan id 也是 exit 2）⇒ 同时断言 stderr 的具体诊断。
++    """
++    repo = _init_repo(tmp_path / "repo")
++    nested = repo / "a" / "b"
++    nested.mkdir(parents=True)
++
++    probed = subprocess.run(
++        [sys.executable, SCRIPT, *SINGLE_POINT_CMD],
++        capture_output=True, text=True, cwd=str(nested),
++    )
++    assert probed.returncode == 0, probed.stderr
++    assert (repo / "openspec" / "issues").exists(), "未指定 --root 应落到 cwd 所属仓根"
++    assert not (nested / "openspec").exists(), "MUST NOT 落到 cwd 自身"
++
++    missing = tmp_path / "no-such-root"
++    explicit = subprocess.run(
++        [sys.executable, SCRIPT, "--root", str(missing), *SINGLE_POINT_CMD],
++        capture_output=True, text=True, cwd=str(nested),
++    )
++    assert explicit.returncode == 2, (explicit.returncode, explicit.stderr)
++    assert "Traceback" not in explicit.stderr, explicit.stderr
++    assert "仓根探测起点不是既存目录" in explicit.stderr, explicit.stderr
++    assert not missing.exists(), "被拒的起点 MUST NOT 被具现"
++
++
++@pytest.mark.xfail(strict=True, reason=(
++    "R2 Scenario「子进程解析出不同的根时响亮失败」当前**不成立**（实测三份 recorder 一致）。"
++    "design ADR-5 假定 validate_recorder_participant 的 path/token 绑定会兜底，但 "
++    "recorder_lock 在它抛 RecorderLockError 时 `except RecorderLockError: participant = None` "
++    "吞掉异常、回落为 owner 模式 ⇒ 子进程在自己解析出的**外层根**上新建锁、makedirs、rc=0。"
++    "堵这个洞须给锁协议增加 owner-root 绑定（把父进程已解析的根随 token 一起下传），"
++    "而那会与既有契约测试 test_invalid_participant_env_falls_back_to_owner_or_conflict "
++    "（显式断言坏 participant env 回落 owner + exit 0）直接冲突 ⇒ 属设计门议题，"
++    "Task 3 不就地改协议。本用例是该缺口的机械锚：绑定一旦补上它会 XPASS，"
++    "strict 模式当场变红，强制回来删掉本标记。"
++))
++def test_child_resolving_a_different_root_must_fail_loudly(tmp_path):
++    """1.11：跨进程二次解析的兜底锚定。
++
++    构造：outer 是仓、inner 是 outer 里的嵌套仓。父进程在 inner 上持锁并以
++    `--root <inner>` 拉起子进程；两次解析之间 inner 失去 `.git` ⇒ 子进程的
++    `repo_root(inner)` 沿目录树上爬、静默返回 **outer**（rc=0、过全部身份校验）。
++
++    此时子进程 MUST 响亮失败，MUST NOT 在 outer 上落任何东西。
++    """
++    outer = _init_repo(tmp_path / "outer")
++    inner = _init_repo(outer / "proj")
++
++    with rec_mod.recorder_lock(str(inner), "sweep") as owner:
++        subprocess.run(["rm", "-rf", str(inner / ".git")], check=True)
++
++        # 前提核验：子进程这一次解析确实爬到了 outer（否则本用例测的不是目标场景）
++        assert os.path.realpath(repo_root(str(inner))) == os.path.realpath(str(outer))
++
++        env = dict(os.environ)
++        env[rec_mod.RECORDER_LOCK_ENV] = owner.token
++        env[rec_mod.RECORDER_DELEGATION_CHAIN_ENV] = json.dumps(
++            ["sweep", SINGLE_POINT_CHILD_COMMAND]
++        )
++        child = subprocess.run(
++            [sys.executable, SCRIPT, "--root", str(inner), *SINGLE_POINT_CMD],
++            capture_output=True, text=True, env=env, cwd=str(tmp_path),
++        )
++
++    assert child.returncode != 0, (
++        "子进程解析出不同的根却静默成功: rc=%d stdout=%r" % (child.returncode, child.stdout)
++    )
++    assert not (outer / "openspec").exists(), (
++        "MUST NOT 在自行解析出的外层根上具现任何目录"
++    )
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index 943ad77..c223487 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -1133,13 +1133,15 @@ def repo_root(start=None):
+     """探测并**证明**起点所属 git 仓库的根；非 git 仓库（或 git 命令失败）退化为
+     `os.path.abspath(start)`。
+ 
+-    与 buglist.py / todolist.py 的同名函数逐字同款（Phase B 3 个脚本各自独立、不互相
+-    import，故各自内联一份，见模块 docstring "子进程解耦"）。修复 Critical fix carry-over：
+-    本脚本此前 4 个 cmd_* 直接用裸 `args.root`（默认 "."）拼路径，不像 buglist.py/todolist.py
+-    那样探测 git 根——从非仓库根的子目录调用时会把 `openspec/issues/...` 错误地写到 cwd 而非
+-    git 根，三脚本定位从此不一致。所有 cmd_* 现在统一先 `root = repo_root(args.root)` 再拼
+-    路径；`read_pool` 调 buglist.py/todolist.py 子进程时也把这个已 resolve 的 root 传下去
+-    （`--root`），保证跨三脚本落到同一个目录。
++    与 buglist.py / todolist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
++    故各自内联一份，见模块 docstring "子进程解耦"）。
++
++    **单点解析（ADR-5）**：本函数在一个进程内 MUST 只被调用一次——`main()` 调它并把结果
++    写回 `args.root`，其余 `cmd_*` / `_*_snapshot` 一律直接用 `root = args.root`，
++    MUST NOT 再调本函数。理由不是省一次子进程：本函数的校验逐次独立，两次解析之间目标若
++    失去 `.git`，第二次会静默爬升到外层祖先仓库（两次都 rc=0、都过全部校验），于是锁建在
++    一个根、数据写进另一个根。子进程以 `--root <已解析值>` 拉起时会各自再解析一次——
++    「一次」的边界是**进程**，不是逻辑命令。
+ 
+     契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
+     返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
+@@ -1626,7 +1628,7 @@ def cmd_reindex(args):
+     problems 才让本次调用以非 0 退出，供想要强门禁的调用方（如 CI）选择性收紧。
+     `--strict` 目前是预置接口，本 change 内无消费者主动传它。
+     """
+-    root = repo_root(args.root)
++    root = args.root
+     try:
+         items, problems = _reindex_core(root)
+     except RuntimeError as e:
+@@ -2083,7 +2085,7 @@ def cmd_batch_lint(args):
+ 
+ 
+ def _batch_lint_snapshot(args):
+-    root = repo_root(args.root)
++    root = args.root
+     path = batches_md_path(root)
+     if not os.path.exists(path):
+         return {"error": f"batches.md 不存在，无法校验：{path}", "problems": (), "count": 0}
+@@ -2125,7 +2127,7 @@ def cmd_batch_add(args):
+     "相等"判据在语义上就是死胡同——占位符从不代表"用户确认过的空值"）。忽略字段是
+     这条 opt-in 分支的声明语义，不是缺陷；不想忽略字段就不要传 `--if-exists skip`。
+     """
+-    root = repo_root(args.root)
++    root = args.root
+     _reject_batch_key_unsafe(args.key)
+     _reject_batch_line_unsafe(args.title, "title")
+     # [impl-review-fix] FIX-5（CV-2 codex PoC）：优先级/计划此前原样写进
+@@ -2173,7 +2175,7 @@ def cmd_batch_set_status(args):
+     """`batch set-status {key} {S}`：只改该条目的 `状态:` 生成行，绝不动人写行（Q3）
+     或 `成员:` 生成行（那是 reindex/Task 11 的职责，本命令不碰）。
+     """
+-    root = repo_root(args.root)
++    root = args.root
+     if args.status not in BATCH_STATUSES:
+         _die(f"批次状态非法：{args.status}（应为 {'/'.join(BATCH_STATUSES)}）")
+ 
+@@ -2207,7 +2209,7 @@ def cmd_batch_set_status(args):
+ 
+ def cmd_batch_rename(args):
+     """Registry-first, retryable, direct-snapshot cross-pool batch rename."""
+-    root = repo_root(args.root)
++    root = args.root
+     old_key, new_key = args.old, args.new
+     _reject_batch_key_unsafe(new_key)
+     if old_key == new_key:
+@@ -2277,7 +2279,7 @@ def cmd_sweep(args):
+     纠正违反契约、也让调用方误以为原始参数被原样接受。改为：先比较原始参数与其 strip
+     结果是否相同，不同则 fail-closed（先于任何写盘），不再静默改写用户输入。
+     """
+-    root = repo_root(args.root)
++    root = args.root
+     raw_change = args.change or ""
+     # [impl-review-fix] FIX-5：首尾空白 fail-closed，不静默 strip 后放行。
+     if raw_change != raw_change.strip():
+@@ -2356,7 +2358,10 @@ def main():
+     p = argparse.ArgumentParser(
+         description="共享 issues 层：跨 bug+todo 的 reindex / batch"
+     )
+-    p.add_argument("--root", default=".", help="目标项目根（存 openspec/issues/... 的仓库）")
++    # 默认 None 而非 "."：区分「未指定 → repo_root 用 os.getcwd() 探测」与「显式指定 →
++    # 先过 os.path.isdir 起点校验」。os.path.isdir(".") 在 cwd 被删除后仍返回 True，
++    # 用 "." 当默认值等于让未指定路径绕过起点校验（ADR-7）。
++    p.add_argument("--root", default=None, help="目标项目根（存 openspec/issues/... 的仓库；默认自动探测 git 根）")
+     sub = p.add_subparsers(dest="cmd", required=True)
+ 
+     s = sub.add_parser("reindex", help="重建 issues/INDEX.md（open×批次板）+ 同步 issues/batches.md 状态")
+diff --git a/sdflow-issues/tests/test_repo_root_identity_issues.py b/sdflow-issues/tests/test_repo_root_identity_issues.py
+index 1f26074..1ec4fb2 100644
+--- a/sdflow-issues/tests/test_repo_root_identity_issues.py
++++ b/sdflow-issues/tests/test_repo_root_identity_issues.py
+@@ -14,6 +14,8 @@ D4 红线禁止互相 import，故测试也各自一份）。
+ Run with: python3 -m pytest sdflow-issues/tests/test_repo_root_identity_issues.py -v
+ """
+ 
++import ast
++import json
+ import os
+ import subprocess
+ import sys
+@@ -27,6 +29,10 @@ from issues import repo_root
+ 
+ SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
+ 
++# 单点解析用例（Task 3）用的子命令：本 recorder 上一条读路径 + 一条合法委派边。
++SINGLE_POINT_CMD = ["reindex"]
++SINGLE_POINT_CHILD_COMMAND = "reindex"
++
+ # 仓库/工作树发现类变量——测试前一律清空，确保用例断言的是 repo_root 自身的判据，
+ # 而不是宿主环境残留（CI 的 git hook 场景会真的导出它们）。
+ GIT_DISCOVERY_ENV = (
+@@ -595,3 +601,135 @@ def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
+     assert repr(str(missing))[1:-1] in proc.stderr, "被拒值应出现在诊断里"
+     assert not missing.exists(), "被拒的仓根 MUST NOT 被下游 makedirs 静默具现"
+     assert _entries(tmp_path) == [], "被拒路径下不该留下任何产物"
++
++
++# ── ADR-5 单点解析（change harden-repo-root-fail-closed · Task 3 · R2） ─────────
++
++def _repo_root_calls(node):
++    """数 `repo_root(...)` 的 **Call 节点**。
++
++    MUST NOT 用 grep 代替：`def repo_root(` 与 docstring 里的字面量都会被文本匹配算进来
++    （本脚本的 docstring 就含 `root = args.root` 一类字样），得到假红或脆件偏移量。
++    """
++    return [n for n in ast.walk(node)
++            if isinstance(n, ast.Call)
++            and isinstance(n.func, ast.Name)
++            and n.func.id == "repo_root"]
++
++
++def _script_ast():
++    return ast.parse(Path(SCRIPT).read_text(encoding="utf-8"))
++
++
++def test_repo_root_is_resolved_once_per_process_and_only_in_main():
++    """R2：仓根在单次调用（边界=进程）内只解析一次。
++
++    本脚本全文 MUST 只剩 1 个 `repo_root(` Call 节点，且它 MUST 位于 `main()`——
++    三份 recorder 合计 3 个（改造前 19 个）。`cmd_*` / `_*_snapshot` 一律直接消费
++    `args.root`。理由见 ADR-5：两次解析之间目标若失去 `.git`，第二次会静默爬升到外层
++    祖先仓库，于是锁建在一个根、数据写进另一个根。
++    """
++    tree = _script_ast()
++    calls = _repo_root_calls(tree)
++    assert len(calls) == 1, [c.lineno for c in calls]
++
++    owners = sorted(fn.name for fn in ast.walk(tree)
++                    if isinstance(fn, ast.FunctionDef) and _repo_root_calls(fn))
++    assert owners == ["main"], owners
++
++
++def test_root_argparse_default_is_none():
++    """1.2c：`--root` 默认值 MUST 是 `None`，不是 `"."`。
++
++    默认 `"."` 时未指定路径走的是「显式起点」分支，而 `os.path.isdir(".")` 在 cwd 被删除后
++    仍返回 `True` ⇒ 起点校验形同虚设（ADR-7）。默认 `None` 才让 `repo_root` 走 `os.getcwd()`。
++    """
++    defaults = [kw.value
++                for call in ast.walk(_script_ast())
++                if isinstance(call, ast.Call)
++                and getattr(call.func, "attr", None) == "add_argument"
++                and call.args
++                and isinstance(call.args[0], ast.Constant)
++                and call.args[0].value == "--root"
++                for kw in call.keywords if kw.arg == "default"]
++
++    assert len(defaults) == 1, defaults
++    assert isinstance(defaults[0], ast.Constant), ast.dump(defaults[0])
++    assert defaults[0].value is None
++
++
++def test_unspecified_root_probes_cwd_while_explicit_root_is_validated(tmp_path):
++    """1.2c 的行为面：未指定与显式指定是**两条可区分的路径**。
++
++    同一个 cwd 下：未指定 → `os.getcwd()` 探测 → 落到 cwd 所属仓根；
++    显式指定一个不存在的路径 → 起点校验在调 git **之前**拦下 → exit 2。
++    仅凭退出码不足以判定（坏 scan id 也是 exit 2）⇒ 同时断言 stderr 的具体诊断。
++    """
++    repo = _init_repo(tmp_path / "repo")
++    nested = repo / "a" / "b"
++    nested.mkdir(parents=True)
++
++    probed = subprocess.run(
++        [sys.executable, SCRIPT, *SINGLE_POINT_CMD],
++        capture_output=True, text=True, cwd=str(nested),
++    )
++    assert probed.returncode == 0, probed.stderr
++    assert (repo / "openspec" / "issues").exists(), "未指定 --root 应落到 cwd 所属仓根"
++    assert not (nested / "openspec").exists(), "MUST NOT 落到 cwd 自身"
++
++    missing = tmp_path / "no-such-root"
++    explicit = subprocess.run(
++        [sys.executable, SCRIPT, "--root", str(missing), *SINGLE_POINT_CMD],
++        capture_output=True, text=True, cwd=str(nested),
++    )
++    assert explicit.returncode == 2, (explicit.returncode, explicit.stderr)
++    assert "Traceback" not in explicit.stderr, explicit.stderr
++    assert "仓根探测起点不是既存目录" in explicit.stderr, explicit.stderr
++    assert not missing.exists(), "被拒的起点 MUST NOT 被具现"
++
++
++@pytest.mark.xfail(strict=True, reason=(
++    "R2 Scenario「子进程解析出不同的根时响亮失败」当前**不成立**（实测三份 recorder 一致）。"
++    "design ADR-5 假定 validate_recorder_participant 的 path/token 绑定会兜底，但 "
++    "recorder_lock 在它抛 RecorderLockError 时 `except RecorderLockError: participant = None` "
++    "吞掉异常、回落为 owner 模式 ⇒ 子进程在自己解析出的**外层根**上新建锁、makedirs、rc=0。"
++    "堵这个洞须给锁协议增加 owner-root 绑定（把父进程已解析的根随 token 一起下传），"
++    "而那会与既有契约测试 test_invalid_participant_env_falls_back_to_owner_or_conflict "
++    "（显式断言坏 participant env 回落 owner + exit 0）直接冲突 ⇒ 属设计门议题，"
++    "Task 3 不就地改协议。本用例是该缺口的机械锚：绑定一旦补上它会 XPASS，"
++    "strict 模式当场变红，强制回来删掉本标记。"
++))
++def test_child_resolving_a_different_root_must_fail_loudly(tmp_path):
++    """1.11：跨进程二次解析的兜底锚定。
++
++    构造：outer 是仓、inner 是 outer 里的嵌套仓。父进程在 inner 上持锁并以
++    `--root <inner>` 拉起子进程；两次解析之间 inner 失去 `.git` ⇒ 子进程的
++    `repo_root(inner)` 沿目录树上爬、静默返回 **outer**（rc=0、过全部身份校验）。
++
++    此时子进程 MUST 响亮失败，MUST NOT 在 outer 上落任何东西。
++    """
++    outer = _init_repo(tmp_path / "outer")
++    inner = _init_repo(outer / "proj")
++
++    with rec_mod.recorder_lock(str(inner), "sweep") as owner:
++        subprocess.run(["rm", "-rf", str(inner / ".git")], check=True)
++
++        # 前提核验：子进程这一次解析确实爬到了 outer（否则本用例测的不是目标场景）
++        assert os.path.realpath(repo_root(str(inner))) == os.path.realpath(str(outer))
++
++        env = dict(os.environ)
++        env[rec_mod.RECORDER_LOCK_ENV] = owner.token
++        env[rec_mod.RECORDER_DELEGATION_CHAIN_ENV] = json.dumps(
++            ["sweep", SINGLE_POINT_CHILD_COMMAND]
++        )
++        child = subprocess.run(
++            [sys.executable, SCRIPT, "--root", str(inner), *SINGLE_POINT_CMD],
++            capture_output=True, text=True, env=env, cwd=str(tmp_path),
++        )
++
++    assert child.returncode != 0, (
++        "子进程解析出不同的根却静默成功: rc=%d stdout=%r" % (child.returncode, child.stdout)
++    )
++    assert not (outer / "openspec").exists(), (
++        "MUST NOT 在自行解析出的外层根上具现任何目录"
++    )
+diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
+index 304ef14..2a7ce9b 100644
+--- a/sdflow-todolist/scripts/todolist.py
++++ b/sdflow-todolist/scripts/todolist.py
+@@ -585,6 +585,13 @@ def repo_root(start=None):
+     与 issues.py / buglist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
+     故各自内联一份）。
+ 
++    **单点解析（ADR-5）**：本函数在一个进程内 MUST 只被调用一次——`main()` 调它并把结果
++    写回 `args.root`，其余 `cmd_*` / `_*_snapshot` 一律直接用 `root = args.root`，
++    MUST NOT 再调本函数。理由不是省一次子进程：本函数的校验逐次独立，两次解析之间目标若
++    失去 `.git`，第二次会静默爬升到外层祖先仓库（两次都 rc=0、都过全部校验），于是锁建在
++    一个根、数据写进另一个根。子进程以 `--root <已解析值>` 拉起时会各自再解析一次——
++    「一次」的边界是**进程**，不是逻辑命令。
++
+     契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
+     返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
+     起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
+@@ -1269,7 +1276,7 @@ def cmd_next_id(args):
+ 
+ 
+ def _next_id_snapshot(args):
+-    root = repo_root(args.root)
++    root = args.root
+     conflicts = id_conflicts(root)
+     try:
+         value = next_id(root, args.prefix)
+@@ -1296,7 +1303,7 @@ def _render_next_id(snapshot):
+ # ── add ──────────────────────────────────────────────────────────────────────
+ 
+ def cmd_add(args):
+-    root = repo_root(args.root)
++    root = args.root
+     data = _load_json(args.json)
+     for req in ("module", "summary", "type"):
+         if not data.get(req):
+@@ -1397,7 +1404,7 @@ def _build_block(tid, data, status, docs=None, explicit_docs=None):
+ # ── set-status ───────────────────────────────────────────────────────────────
+ 
+ def cmd_set_status(args):
+-    root = repo_root(args.root)
++    root = args.root
+     new = args.to
+     if new not in STATUS_CODES:
+         _die(f"状态码非法：{new}")
+@@ -1481,7 +1488,7 @@ def cmd_triage(args):
+     建 minimal block 承载历史；状态无变化则不建块。
+     不报错（除 ID 未找到，沿用 set-status 的门禁）。
+     """
+-    root = repo_root(args.root)
++    root = args.root
+     batch = getattr(args, "批次")
+ 
+     path, document, raw_id, item = _find_item_document(root, args.id, "todo")
+@@ -1536,7 +1543,7 @@ def cmd_triage(args):
+ # ── scan ─────────────────────────────────────────────────────────────────────
+ 
+ def _scan_snapshot(args):
+-    root = repo_root(args.root)
++    root = args.root
+     items, problems = [], []
+     # [impl-review-fix] FIX-2（CV-1+A-F2 双镜 PoC，镜像 buglist.py）：重复 ID 检测必须是
+     # 全池（跨全部 dated 文件）唯一性检查——T-ID 语义上应全局唯一，不只是"单文件内不重复"。
+@@ -1621,7 +1628,10 @@ def _die(msg):
+ 
+ def main():
+     p = argparse.ArgumentParser(description="自动记录/回写/扫描 todolist")
+-    p.add_argument("--root", default=".", help="仓库根（默认自动探测 git 根）")
++    # 默认 None 而非 "."：区分「未指定 → repo_root 用 os.getcwd() 探测」与「显式指定 →
++    # 先过 os.path.isdir 起点校验」。os.path.isdir(".") 在 cwd 被删除后仍返回 True，
++    # 用 "." 当默认值等于让未指定路径绕过起点校验（ADR-7）。
++    p.add_argument("--root", default=None, help="仓库根（默认自动探测 git 根）")
+     sub = p.add_subparsers(dest="cmd", required=True)
+ 
+     s = sub.add_parser("next-id", help="打印两池 snapshot 的下一个全局 ID（advisory，不预留）")
+diff --git a/sdflow-todolist/tests/test_repo_root_identity_todolist.py b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
+index 054d5e8..3ff99a0 100644
+--- a/sdflow-todolist/tests/test_repo_root_identity_todolist.py
++++ b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
+@@ -14,6 +14,8 @@ D4 红线禁止互相 import，故测试也各自一份）。
+ Run with: python3 -m pytest sdflow-todolist/tests/test_repo_root_identity_todolist.py -v
+ """
+ 
++import ast
++import json
+ import os
+ import subprocess
+ import sys
+@@ -27,6 +29,10 @@ from todolist import repo_root
+ 
+ SCRIPT = str(Path(__file__).parent.parent / "scripts" / "todolist.py")
+ 
++# 单点解析用例（Task 3）用的子命令：本 recorder 上一条读路径 + 一条合法委派边。
++SINGLE_POINT_CMD = ["scan", "--json"]
++SINGLE_POINT_CHILD_COMMAND = "scan"
++
+ # 仓库/工作树发现类变量——测试前一律清空，确保用例断言的是 repo_root 自身的判据，
+ # 而不是宿主环境残留（CI 的 git hook 场景会真的导出它们）。
+ GIT_DISCOVERY_ENV = (
+@@ -595,3 +601,135 @@ def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
+     assert repr(str(missing))[1:-1] in proc.stderr, "被拒值应出现在诊断里"
+     assert not missing.exists(), "被拒的仓根 MUST NOT 被下游 makedirs 静默具现"
+     assert _entries(tmp_path) == [], "被拒路径下不该留下任何产物"
++
++
++# ── ADR-5 单点解析（change harden-repo-root-fail-closed · Task 3 · R2） ─────────
++
++def _repo_root_calls(node):
++    """数 `repo_root(...)` 的 **Call 节点**。
++
++    MUST NOT 用 grep 代替：`def repo_root(` 与 docstring 里的字面量都会被文本匹配算进来
++    （本脚本的 docstring 就含 `root = args.root` 一类字样），得到假红或脆件偏移量。
++    """
++    return [n for n in ast.walk(node)
++            if isinstance(n, ast.Call)
++            and isinstance(n.func, ast.Name)
++            and n.func.id == "repo_root"]
++
++
++def _script_ast():
++    return ast.parse(Path(SCRIPT).read_text(encoding="utf-8"))
++
++
++def test_repo_root_is_resolved_once_per_process_and_only_in_main():
++    """R2：仓根在单次调用（边界=进程）内只解析一次。
++
++    本脚本全文 MUST 只剩 1 个 `repo_root(` Call 节点，且它 MUST 位于 `main()`——
++    三份 recorder 合计 3 个（改造前 19 个）。`cmd_*` / `_*_snapshot` 一律直接消费
++    `args.root`。理由见 ADR-5：两次解析之间目标若失去 `.git`，第二次会静默爬升到外层
++    祖先仓库，于是锁建在一个根、数据写进另一个根。
++    """
++    tree = _script_ast()
++    calls = _repo_root_calls(tree)
++    assert len(calls) == 1, [c.lineno for c in calls]
++
++    owners = sorted(fn.name for fn in ast.walk(tree)
++                    if isinstance(fn, ast.FunctionDef) and _repo_root_calls(fn))
++    assert owners == ["main"], owners
++
++
++def test_root_argparse_default_is_none():
++    """1.2c：`--root` 默认值 MUST 是 `None`，不是 `"."`。
++
++    默认 `"."` 时未指定路径走的是「显式起点」分支，而 `os.path.isdir(".")` 在 cwd 被删除后
++    仍返回 `True` ⇒ 起点校验形同虚设（ADR-7）。默认 `None` 才让 `repo_root` 走 `os.getcwd()`。
++    """
++    defaults = [kw.value
++                for call in ast.walk(_script_ast())
++                if isinstance(call, ast.Call)
++                and getattr(call.func, "attr", None) == "add_argument"
++                and call.args
++                and isinstance(call.args[0], ast.Constant)
++                and call.args[0].value == "--root"
++                for kw in call.keywords if kw.arg == "default"]
++
++    assert len(defaults) == 1, defaults
++    assert isinstance(defaults[0], ast.Constant), ast.dump(defaults[0])
++    assert defaults[0].value is None
++
++
++def test_unspecified_root_probes_cwd_while_explicit_root_is_validated(tmp_path):
++    """1.2c 的行为面：未指定与显式指定是**两条可区分的路径**。
++
++    同一个 cwd 下：未指定 → `os.getcwd()` 探测 → 落到 cwd 所属仓根；
++    显式指定一个不存在的路径 → 起点校验在调 git **之前**拦下 → exit 2。
++    仅凭退出码不足以判定（坏 scan id 也是 exit 2）⇒ 同时断言 stderr 的具体诊断。
++    """
++    repo = _init_repo(tmp_path / "repo")
++    nested = repo / "a" / "b"
++    nested.mkdir(parents=True)
++
++    probed = subprocess.run(
++        [sys.executable, SCRIPT, *SINGLE_POINT_CMD],
++        capture_output=True, text=True, cwd=str(nested),
++    )
++    assert probed.returncode == 0, probed.stderr
++    assert (repo / "openspec" / "issues").exists(), "未指定 --root 应落到 cwd 所属仓根"
++    assert not (nested / "openspec").exists(), "MUST NOT 落到 cwd 自身"
++
++    missing = tmp_path / "no-such-root"
++    explicit = subprocess.run(
++        [sys.executable, SCRIPT, "--root", str(missing), *SINGLE_POINT_CMD],
++        capture_output=True, text=True, cwd=str(nested),
++    )
++    assert explicit.returncode == 2, (explicit.returncode, explicit.stderr)
++    assert "Traceback" not in explicit.stderr, explicit.stderr
++    assert "仓根探测起点不是既存目录" in explicit.stderr, explicit.stderr
++    assert not missing.exists(), "被拒的起点 MUST NOT 被具现"
++
++
++@pytest.mark.xfail(strict=True, reason=(
++    "R2 Scenario「子进程解析出不同的根时响亮失败」当前**不成立**（实测三份 recorder 一致）。"
++    "design ADR-5 假定 validate_recorder_participant 的 path/token 绑定会兜底，但 "
++    "recorder_lock 在它抛 RecorderLockError 时 `except RecorderLockError: participant = None` "
++    "吞掉异常、回落为 owner 模式 ⇒ 子进程在自己解析出的**外层根**上新建锁、makedirs、rc=0。"
++    "堵这个洞须给锁协议增加 owner-root 绑定（把父进程已解析的根随 token 一起下传），"
++    "而那会与既有契约测试 test_invalid_participant_env_falls_back_to_owner_or_conflict "
++    "（显式断言坏 participant env 回落 owner + exit 0）直接冲突 ⇒ 属设计门议题，"
++    "Task 3 不就地改协议。本用例是该缺口的机械锚：绑定一旦补上它会 XPASS，"
++    "strict 模式当场变红，强制回来删掉本标记。"
++))
++def test_child_resolving_a_different_root_must_fail_loudly(tmp_path):
++    """1.11：跨进程二次解析的兜底锚定。
++
++    构造：outer 是仓、inner 是 outer 里的嵌套仓。父进程在 inner 上持锁并以
++    `--root <inner>` 拉起子进程；两次解析之间 inner 失去 `.git` ⇒ 子进程的
++    `repo_root(inner)` 沿目录树上爬、静默返回 **outer**（rc=0、过全部身份校验）。
++
++    此时子进程 MUST 响亮失败，MUST NOT 在 outer 上落任何东西。
++    """
++    outer = _init_repo(tmp_path / "outer")
++    inner = _init_repo(outer / "proj")
++
++    with rec_mod.recorder_lock(str(inner), "sweep") as owner:
++        subprocess.run(["rm", "-rf", str(inner / ".git")], check=True)
++
++        # 前提核验：子进程这一次解析确实爬到了 outer（否则本用例测的不是目标场景）
++        assert os.path.realpath(repo_root(str(inner))) == os.path.realpath(str(outer))
++
++        env = dict(os.environ)
++        env[rec_mod.RECORDER_LOCK_ENV] = owner.token
++        env[rec_mod.RECORDER_DELEGATION_CHAIN_ENV] = json.dumps(
++            ["sweep", SINGLE_POINT_CHILD_COMMAND]
++        )
++        child = subprocess.run(
++            [sys.executable, SCRIPT, "--root", str(inner), *SINGLE_POINT_CMD],
++            capture_output=True, text=True, env=env, cwd=str(tmp_path),
++        )
++
++    assert child.returncode != 0, (
++        "子进程解析出不同的根却静默成功: rc=%d stdout=%r" % (child.returncode, child.stdout)
++    )
++    assert not (outer / "openspec").exists(), (
++        "MUST NOT 在自行解析出的外层根上具现任何目录"
++    )
