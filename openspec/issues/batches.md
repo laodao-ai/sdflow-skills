@@ -218,3 +218,9 @@
 优先级: <待填>
 计划: <待填>
 
+### harden-repo-root-fail-closed — harden-repo-root-fail-closed
+状态: PLANNED
+成员: (生成) B15, B16, B17, B18, T180, T181, T182, T183, T184, T185
+优先级: <待填>
+计划: <待填>
+

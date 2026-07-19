@@ -63,6 +63,21 @@
 | T51 | todo | PROPOSED | gate-checkpoint-hardening |
 | T52 | todo | PROPOSED | gate-checkpoint-hardening |
 
+### 批次：harden-repo-root-fail-closed
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| B15 | bug | PROPOSED | harden-repo-root-fail-closed |
+| B16 | bug | PROPOSED | harden-repo-root-fail-closed |
+| B17 | bug | PROPOSED | harden-repo-root-fail-closed |
+| B18 | bug | PROPOSED | harden-repo-root-fail-closed |
+| T180 | todo | PROPOSED | harden-repo-root-fail-closed |
+| T181 | todo | PROPOSED | harden-repo-root-fail-closed |
+| T182 | todo | PROPOSED | harden-repo-root-fail-closed |
+| T183 | todo | PROPOSED | harden-repo-root-fail-closed |
+| T184 | todo | PROPOSED | harden-repo-root-fail-closed |
+| T185 | todo | PROPOSED | harden-repo-root-fail-closed |
+
 ### 批次：implement-mechanical-layer-hardening-p4-lens-metric-emit
 
 | ID | Pool | Status | 关联Change |
@@ -274,7 +289,6 @@
 | T166 | todo | OPEN | async-outside-voice |
 | T167 | todo | OPEN | async-outside-voice |
 | T179 | todo | OPEN | main |
-| T180 | todo | OPEN | harden-repo-root-fail-closed |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 

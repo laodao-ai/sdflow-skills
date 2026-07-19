@@ -36,12 +36,12 @@ sdflow-issues:
     T177: {"module":"sdflow-buglist","summary":"buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守","type":"代码质量","status":"PROPOSED","time":"2026-07-19 12:09","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T178: {"module":"outside-voice","summary":"M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败","type":"基础设施","status":"PROPOSED","time":"2026-07-19 13:28","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T179: {"module":"sdflow-done / sdflow-ship","summary":"archive 步骤可能打断测试，而其后无人重跑全套件 —— gate 判 SHIPPED 时 main 实际是红的","type":"基础设施","status":"OPEN","time":"2026-07-19 13:47","change":"main","batch":null}
-    T180: {"module":"sdflow-todolist/scripts/todolist.py + sdflow-buglist/scripts/buglist.py","summary":"recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块","type":"功能增强","status":"OPEN","time":"2026-07-19 17:20","change":"harden-repo-root-fail-closed","batch":null}
-    T181: {"module":"recorder/repo_root","summary":"repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入）","type":"代码质量","status":"OPEN","time":"2026-07-19 21:36","change":"harden-repo-root-fail-closed","batch":null}
-    T182: {"module":"recorder/repo_root","summary":"repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）","type":"基础设施","status":"OPEN","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":null}
-    T183: {"module":"recorder/repo_root","summary":"repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed","type":"代码质量","status":"OPEN","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":null}
-    T184: {"module":"workflow/outside-voice","summary":"两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval \"$(~/.sdflow/hack/resolve-models.sh --root ...)\" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。","type":"基础设施","status":"OPEN","time":"2026-07-19 23:27","change":"harden-repo-root-fail-closed","batch":null}
-    T185: {"module":"recorder/repo_root","summary":"repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice","type":"可观测性","status":"OPEN","time":"2026-07-20 00:31","change":"harden-repo-root-fail-closed","batch":null}
+    T180: {"module":"sdflow-todolist/scripts/todolist.py + sdflow-buglist/scripts/buglist.py","summary":"recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块","type":"功能增强","status":"PROPOSED","time":"2026-07-19 17:20","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
+    T181: {"module":"recorder/repo_root","summary":"repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入）","type":"代码质量","status":"PROPOSED","time":"2026-07-19 21:36","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
+    T182: {"module":"recorder/repo_root","summary":"repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）","type":"基础设施","status":"PROPOSED","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
+    T183: {"module":"recorder/repo_root","summary":"repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed","type":"代码质量","status":"PROPOSED","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
+    T184: {"module":"workflow/outside-voice","summary":"两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval \"$(~/.sdflow/hack/resolve-models.sh --root ...)\" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。","type":"基础设施","status":"PROPOSED","time":"2026-07-19 23:27","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
+    T185: {"module":"recorder/repo_root","summary":"repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice","type":"可观测性","status":"PROPOSED","time":"2026-07-20 00:31","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
 ---
 # 2026-07 TODO
 
@@ -1698,6 +1698,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：T170 的详细块原本只有一句重复 summary。2026-07-19 的 spec-review 拿到了硬证据（61 个 helper 实数、sync_principles.py 可复用模式、顺序决定），想补进 T170 供下一步动手的人用，却发现无可用命令：add 分配新 ID 会造成碎片化、set-status 只接受状态转换（同状态转换无意义且会污染历史行）。最终只能手工编辑 prose 块 + 跑 scan 自检兜底。
 
 **思路**：加一个 append-note/amend 子命令：--id 定位既存 item，把一段 prose 追加进其 marker block（无块则建块），保持 frontmatter item 不动、ID 不新增。门禁沿用现有 marker 一致性校验。三份 recorder 里 buglist/todolist 同款（两向组），需同步实现。注意与 T170 本身的关系：若 T170 先落地（canonical 源 + vendoring），本条实现只需写一处。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T180 -->
 
 <!-- sdflow-issue-block:start id=T182 -->
@@ -1707,6 +1708,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
 
 **备注**：三份 recorder 的 repo_root 步骤③用 subprocess.run(capture_output=True) 读 `git rev-parse --show-toplevel`，输出量无上限。PATH 上被替换的 git（或被篡改的 wrapper）吐 GB 级 stdout 时，内存在步骤④形状校验执行**之前**就已被吃掉。定性：DoS 面而非正确性面——所有身份判据仍然成立，timeout=30 已限住时间窗。不在本 change 内修的理由：改成 Popen + 定量读（读满 N 字节即断流 + 判定）会把一个 3 行调用变成一段带缓冲/EOF/僵尸进程回收的手写循环，且须三份同步、进 AST 镜像 roster——复杂度与该面的可利用性不成比例。来源：design Non-Goals；codex X10 后半。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T182 -->
 
 <!-- sdflow-issue-block:start id=T183 -->
@@ -1716,4 +1718,23 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
 
 **备注**：步骤①的 os.path.isdir(start) 与步骤③的 subprocess.run(cwd=start) 之间有竞态窗口。窗口内 start 被外部删除 ⇒ subprocess.run 抛 FileNotFoundError（OSError 子类）⇒ 被步骤③的 except (OSError, CalledProcessError) 接住、走**回落分支**返回 os.path.abspath(start)，而不是受控 ValueError。属既有回落语义的边角：spec 未对该窗口提出要求，且回落值经步骤①b 归一化后恒为绝对路径（不再触 cwd）。修法方向（若将来要收口）：回落前复查 isdir(start)，不存在则改抛 ValueError——须先确认与 spec「git 命令失败即回落」的措辞不冲突，故是设计级决定而非就地改。来源：carry-forward CF-7（Task 2 implementer Concern 5）。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T183 -->
+
+<!-- sdflow-issue-block:start id=T181 -->
+## T181: repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入）
+> repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入）
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T181 -->
+
+<!-- sdflow-issue-block:start id=T184 -->
+## T184: 两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval "$(~/.sdflow/hack/resolve-models.sh --root ...)" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。
+> 两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval "$(~/.sdflow/hack/resolve-models.sh --root ...)" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T184 -->
+
+<!-- sdflow-issue-block:start id=T185 -->
+## T185: repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice
+> repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T185 -->
