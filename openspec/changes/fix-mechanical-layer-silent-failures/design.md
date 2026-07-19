@@ -52,15 +52,16 @@
 
 **143 无需新增枚举**〔广审核实〕：两层 SKILL 的 async 段第 ⑦ 条已有 catch-all——「其余一切情形（未知码 / `.rc` 缺席或内容不匹配 …）→ **保守** fallback（`reason_code="exec-error"`）」。且 helper 被 TERM 时 `printf '%s' "$?" > <site>.rc` 本就没机会执行 ⇒ `.rc` 缺席 ⇒ 本来就走 exec-error。**B10 的修复是锚语义中性的**，改变的只是孤儿不再白烧至内层超时。
 
-**🔴 诚实边界（MUST NOT 声称根治）** — **三条残余并列**，性质相同：都是 shell 层**不可干净消除**的窗口，只登记、不声称已解决（adr/0018）。文档与实现 **MUST** 显式登记：
+**🔴 诚实边界（MUST NOT 声称根治）** — **四条残余并列**，性质相同：都是 shell 层**不可干净消除**的窗口/语义空隙，只登记、不声称已解决（adr/0018）。文档与实现 **MUST** 显式登记：
 
 | # | 残余 | 成因 | 后果 |
 |---|---|---|---|
 | **(a)** | 父进程被 **SIGKILL** | trap 在 `-9` 下根本不执行 | 孤儿**仍存活**（实测） |
 | **(b)** | **PID 记录窗口**：`<runner> … &` 与 `OV_RUNNER_PID=$!` 之间 | 后台启动与 `$!` 赋值**不可原子化** | pending trap 带**空 PID** 执行 ⇒ 该次 runner **逃逸成孤儿** |
 | **(c)** | **PID 清零窗口**：`wait` 返回与 `OV_RUNNER_PID=""` 之间 | `wait` 返回与清零**不可原子化** | 对**已回收、可能已被系统复用**的 PID 开火（`kill -0` 会通过）⇒ 可能误杀无关进程 |
+| **(d)**〔fix-mechanical-layer-silent-failures F-新2，实测复现，非推断〕 | **runner 主动忽略 TERM** | `OV_RUNNER_PID` 记的是 **`timeout` 自身**的 PID，不是 runner 的 PID。`ov_cleanup` 先对该 PID 发 TERM——`timeout` 转发给子进程组，但 runner 若 `trap '' TERM` 忽略，不为所动；`timeout` 自己的 `-k 10` 升级窗口长达 10s，而 `ov_cleanup` 只宽限约 1s 就直接对 `$OV_RUNNER_PID`（即 timeout 本身）发 **SIGKILL**——SIGKILL 瞬间杀死 timeout，**来不及**让 timeout 跑到它自己那条「向子进程组转发 KILL」的升级逻辑 | runner 与其子孙进程**仍存活**、reparent 到 PID 1（手工探针 + pytest 均实测复现：`test_runner_ignoring_term_survives_kill_escalation_documented_residual`） |
 
-三者要覆盖都须由调用方在**更外层**（进程组 / cgroup / 容器）回收——与 (a) 的处置完全一致。本 helper 只保证「可捕获信号 + 正常退出」两类路径，且**窗口外的绝大多数时刻正确**。
+四者要覆盖都须由调用方在**更外层**（进程组 / cgroup / 容器）回收，或未来 change 把 (d) 的信号目标从「单个 PID」改成「进程组」——**本 change 不做该修复**（补测试缺口而非扩大修复面）。本 helper 只保证「可捕获信号 + 正常退出」两类路径，且**窗口外的绝大多数时刻正确**。
 
 ## 失败模式表〔TG-08 · BASE-06〕
 
@@ -73,6 +74,7 @@
 | F5 | 父进程 **SIGKILL** | **不可检测** | **残余(a)：孤儿存活**，显式登记不掩盖 | — |
 | F6 | 信号落在 `&` 与 `OV_RUNNER_PID=$!` 之间 | **不可检测** | **残余(b)：空 PID ⇒ 该次 runner 逃逸**，显式登记 | 128+signum |
 | F7 | 信号落在 `wait` 返回与 `OV_RUNNER_PID=""` 之间 | **不可检测** | **残余(c)：对已回收/可能已复用的 PID 开火**，显式登记 | 128+signum |
+| F8 | runner 主动 `trap '' TERM` 忽略终止信号 | pytest 实测（`test_runner_ignoring_term_survives_kill_escalation_documented_residual`） | **残余(d)：子树存活**——`ov_cleanup` 的 KILL 兜底只打 `timeout` 单 PID，抢在 `timeout` 自己的 `-k 10` 组级升级前把它杀死，显式登记不掩盖 | 143（父侧退出码不变；子树是否死亡与父侧退出码无关） |
 
 ## 可观测性〔TG-08 · BASE-11〕
 
@@ -88,7 +90,7 @@
 ## Risks / Trade-offs
 
 - **[A1 未闭：Linux 侧截断行为未实测]** → 缓解：CI 泳道跑切点扫描测试（`mechanical-gates.yml` 已是 ubuntu-latest）。**不接受「macOS 绿就算过」**——`windows-ci-bash-subprocess-traps` 就是这么被咬的。
-- **[SIGKILL 孤儿 (a) · PID 记录窗口 (b) · PID 清零窗口 (c)]** → 均**无缓解**，见 D2 诚实边界三条表。要覆盖须调用方在更外层（进程组 / cgroup / 容器）回收。
+- **[SIGKILL 孤儿 (a) · PID 记录窗口 (b) · PID 清零窗口 (c) · runner 忽略 TERM (d)]** → 均**无缓解**，见 D2 诚实边界四条表。要覆盖须调用方在更外层（进程组 / cgroup / 容器）回收，或未来 change 把 (d) 的信号目标改成进程组（本 change 不做）。
 - **[改 `assets/hack/` 后忘记跑 `setup.sh`]** → **显式登记**：`outside-voice.sh` 不在任何机械保护范围内（它是 shell、不走 recorder 取数路径）。本 change **不**声称覆盖它。
 
 ## Migration Plan

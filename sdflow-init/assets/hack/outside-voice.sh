@@ -28,6 +28,11 @@
 #             回扫值取不到而兜底成 0（= 退回按字节切）时【再多一行】纯字面标记（S3）：
 #               OV_UTF8_BACKSCAN_UNAVAILABLE=1
 #               —— 无它则「兜底成 0」与「纯 ASCII 无需回扫」在外部不可区分（零信号静默降级）
+#               〔1.4.1 · fix-mechanical-layer-silent-failures F-新1〕本行此前是【死代码】：
+#               utf8_head_trim/utf8_tail_skip 内部取字节失败（od/wc 不可用等）时也 echo 0，
+#               与「合法结论 0」同形，此行永远不触发。已修：两函数取字节失败时输出空串，
+#               该哨兵行现在才会在真失败时打印。行为契约（stdout/stderr 格式、exit code）不变，
+#               仅内部实现从"声称有该信号"变成"确实产出该信号"。
 #             context 大小读不出（不可读 / -r 检查后的 TOCTOU 权限变化）⇒ exit 2（S2，
 #             MUST NOT 兜底成 0：那会静默走非截断分支把超限 context 全量送出）
 #             截断保头尾各半，切点经 UTF-8 边界回扫 ⇒ 头段/尾段【各自】都是合法 UTF-8
@@ -60,7 +65,7 @@
 #            SDFLOW_VOICE_MODEL 未设(claude)/未知 runner 值 | 124=超时 | 3=secret-hit |
 #            2=用法错/文件不存在或不可读
 #   version
-#     stdout: "outside-voice.sh 1.4.0"                           exit 0
+#     stdout: "outside-voice.sh 1.4.1"                           exit 0
 # ── 硬化要点〔design D2 spec-review-amendment · add-codex-host-support〕──────
 #   出境安全三件套（secret_scan / render_prompt 的 FRAME+三条通则+200KB 截断）对两条
 #   runner 路径一视同仁、单份共用，MUST NOT 另起炉灶组装 prompt——只有最终 exec 命令行
@@ -83,7 +88,7 @@
 #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
 set -u
 
-OV_VERSION="outside-voice.sh 1.4.0"
+OV_VERSION="outside-voice.sh 1.4.1"
 
 # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
 # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
@@ -196,13 +201,24 @@ _ov_is_cont() {  # $1=十进制字节值 → 0=是 UTF-8 continuation 字节（0
   [ "$1" -ge 128 ] && [ "$1" -le 191 ]
 }
 
-utf8_head_trim() {  # $1=file $2=头段字节数 → stdout: 需从头段【末尾】丢弃的字节数
+utf8_head_trim() {  # $1=file $2=头段字节数 → stdout: 需从头段【末尾】丢弃的字节数；
+                    # 取字节失败（od 不可用/权限突变/资源耗尽）时输出【空串】——MUST NOT 与
+                    # 「合法结论 0」同形（fix-mechanical-layer-silent-failures F-新1）
   local file="$1" n="$2" start cnt i b len avail
   [ "$n" -le 0 ] && { echo 0; return; }
   if [ "$n" -gt 4 ]; then start=$(( n - 4 )); else start=0; fi
   cnt=$(( n - start ))
   local -a bytes=()
   while read -r b; do bytes+=("$b"); done < <(_ov_bytes_at "$file" "$start" "$cnt")
+  # 🔴 F-新1 修复：走到这里 cnt 恒 >0（上方已排除 n<=0，且 start 必在文件范围内——本函数
+  # 只在截断分支、即 size > OV_MAX_CONTEXT_BYTES 时被调用，头段字节数远小于文件大小）⇒
+  # od 正常工作时 bytes 数组【不可能为空】。为空 = _ov_bytes_at（od）本身失败，
+  # MUST NOT 落回 echo 0（那与「末 4 字节全是 continuation」的合法 0 结论不可区分，
+  # 即 S3 原病复发）——输出空串，让下游既有 case 守卫（render_prompt 处）判定为失败。
+  if [ "${#bytes[@]}" -eq 0 ]; then
+    echo ""
+    return
+  fi
   # 从末尾回扫找最近的「起始字节」（非 continuation：不在 0x80-0xBF = 128-191）
   for (( i = ${#bytes[@]} - 1; i >= 0; i-- )); do
     b=${bytes[i]}
@@ -217,27 +233,37 @@ utf8_head_trim() {  # $1=file $2=头段字节数 → stdout: 需从头段【末�
     if [ "$avail" -lt "$len" ]; then echo "$avail"; else echo 0; fi
     return
   done
-  echo 0   # 末 4 字节全是 continuation ⇒ 输入本就非合法 UTF-8 → 不动
+  echo 0   # 末 4 字节全是 continuation ⇒ 输入本就非合法 UTF-8 → 不动（bytes 非空，正常场景）
 }
 
-utf8_tail_skip() {  # $1=file $2=尾段字节数 → stdout: 需从尾段【开头】跳过的字节数
+utf8_tail_skip() {  # $1=file $2=尾段字节数 → stdout: 需从尾段【开头】跳过的字节数；
+                    # 取失败（wc/od 不可用等）时输出【空串】，理由同 utf8_head_trim（F-新1）
   # 尾段起点必落在原文件的某个字节上；跳掉开头的 continuation 字节后，下一个必是完整
   # 序列的起始字节（其后续字节在文件里原封不动）∴ 只需数前导 continuation，最多 3 个。
-  local file="$1" n="$2" size start cnt b skip=0
+  local file="$1" n="$2" size start cnt b skip=0 got=0
   [ "$n" -le 0 ] && { echo 0; return; }
   # `2>/dev/null`〔M3〕：stderr 是被 SKILL.md 解析的【契约通道】（truncated 取 helper stderr 的
-  # OV_TRUNCATED），裸重定向失败信息混进去会污染该通道 ⇒ 吞掉 + 拿不到大小就回退 0（不动）。
+  # OV_TRUNCATED），裸重定向失败信息混进去会污染该通道 ⇒ 吞掉，不在这里报错。
   # 🔴 重定向顺序是【语义性】的，不是风格〔S1〕：bash 从左到右处理重定向，写成
   #   `wc -c < "$file" 2>/dev/null` 时 `< "$file"` 先执行、失败信息由 shell 自身打到【尚未被
   #   重定向】的 stderr（实测 chmod 000 下 `bash: ...: Permission denied` 原样进契约通道）。
   #   ∴ `2>/dev/null` MUST 排在 `< "$file"` 【之前】。
   size=$(wc -c 2>/dev/null < "$file" | tr -d ' ')
-  case "${size:-}" in ''|*[!0-9]*) echo 0; return ;; esac
+  # 🔴 F-新1 同形修复：`wc -c` 失败（权限突变/资源耗尽等）时【不再】回落 echo 0——旧版把
+  # 「取不到大小」和「取到大小、结论就是不用跳」混成同一个 0，外部零信号不可区分（S3 原病的
+  # 第二个实例，就在同一个函数里）。改输出空串，交由下游既有 case 守卫判定为失败。
+  case "${size:-}" in ''|*[!0-9]*) echo ""; return ;; esac
   start=$(( size - n )); [ "$start" -lt 0 ] && start=0
   if [ "$n" -lt 3 ]; then cnt="$n"; else cnt=3; fi
   while read -r b; do
+    got=$(( got + 1 ))
     if _ov_is_cont "$b"; then skip=$(( skip + 1 )); else break; fi
   done < <(_ov_bytes_at "$file" "$start" "$cnt")
+  # cnt 恒 >=1（上方已排除 n<=0）⇒ od 正常时至少拿到 1 字节；got=0 = _ov_bytes_at（od）失败。
+  if [ "$got" -eq 0 ]; then
+    echo ""
+    return
+  fi
   echo "$skip"
 }
 
@@ -273,6 +299,10 @@ render_prompt() {  # $1=context file → stdout 完整 prompt；stderr 含 OV_TR
     # 🔴 兜底 = 静默退回 R1 原病〔S3〕：htrim/tskip 取不到时按 0 走 = 按【字节】切，正是本 change
     #   要治的那个失效；而 OV_UTF8_BACKSCAN_DROPPED=0 与「纯 ASCII 本就无需回扫」不可区分 ⇒ 外部
     #   零信号。∴ 兜底时【额外】打一行纯字面标记（无 context 正文，不违出境约束），使该路径可见。
+    #   〔F-新1〕此处的 case 守卫此前是【死分支】——utf8_head_trim/utf8_tail_skip 内部旧实现
+    #   在 od/wc 失败时也是 echo 0（把「取字节失败」和「合法结论 0」混同），永远落不进
+    #   `''|*[!0-9]*` 分支。两函数已改为失败时输出空串（见函数定义处注释），该守卫现在才是
+    #   活路径——真正接住失败、置 backscan_ok=false、驱动下方哨兵行打印。
     local backscan_ok=true
     case "$htrim" in ''|*[!0-9]*) htrim=0; backscan_ok=false ;; esac
     case "$tskip" in ''|*[!0-9]*) tskip=0; backscan_ok=false ;; esac

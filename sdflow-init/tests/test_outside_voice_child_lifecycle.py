@@ -185,6 +185,92 @@ def test_runner_subtree_dies_when_parent_is_signalled(tmp_path, sig, name, bash_
     )
 
 
+def _make_env_runner_ignores_term(tmp_path, pidfile: Path):
+    """同 `_make_env`，但假 runner 显式 `trap '' TERM` 忽略 TERM。
+
+    〔F-新2 · fix-mechanical-layer-silent-failures〕`_make_env` 的假 runner 从不忽略
+    TERM，∴「runner 主动忽略 SIGTERM 时，ov_cleanup 的 KILL 兜底 / timeout -k 升级
+    能不能真的灭掉整棵子树」这条路径从未被验证过——这里补上。
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    fake = bin_dir / "codex"
+    fake.write_text(textwrap.dedent(f"""\
+        #!/usr/bin/env bash
+        trap '' TERM             # 主动忽略 TERM —— 本用例要验的就是这条路径
+        cat >/dev/null
+        sleep 300 &
+        child=$!
+        printf '%s %s\\n' "$$" "$child" > "{pidfile}"
+        wait "$child"
+        """))
+    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+
+    ctx = tmp_path / "ctx.md"
+    ctx.write_text(f"context body\n{CONTEXT_PROBE}\nmore\n", encoding="utf-8")
+
+    env = os.environ.copy()
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["SDFLOW_VOICE_RUNNER"] = "codex"
+    env.pop("SDFLOW_VOICE_MODEL", None)
+    return env, ctx
+
+
+@needs_real_timeout
+def test_runner_ignoring_term_survives_kill_escalation_documented_residual(tmp_path, bash_bin):
+    """⭐〔F-新2〕假 runner 显式忽略 TERM 时，实测子树【存活】——这是一个真实、此前
+    从未被验证过的残余，MUST NOT 被静默接受，已显式登记进 design.md D2 残余表第 (d) 条
+    （见 test_term_ignoring_residual_is_documented_in_design 的机械锁）。
+
+    【为什么会存活 —— 已用手工探针实测复现，非猜测】
+    `OV_RUNNER_PID` 记的是【`timeout` 自身】的 PID（`"$ov_timeout_bin" ... codex ... &`
+    之后 `$!`），不是 runner 的 PID。`ov_cleanup` 先对 `$OV_RUNNER_PID`（timeout）发
+    TERM——timeout 收到后会转发给子进程组，但子进程主动 trap 忽略，不为所动；
+    timeout 自己的 `-k 10` 升级窗口长达 10s，而 `ov_cleanup` 只等约 1s 就直接对
+    `$OV_RUNNER_PID`（timeout 本身）发 SIGKILL——SIGKILL 不可捕获，timeout 被瞬间
+    杀死，【来不及】跑到它自己那条会向子进程组转发 KILL 的升级逻辑。
+    ⇒ runner 与其孙进程都不在 `$OV_RUNNER_PID` 之下（我们只杀了 timeout 这一个 PID，
+    不是负 PID/进程组），二者 reparent 到 PID 1 继续存活。
+
+    【诚实边界，不是待修复项】本用例只锁定「这是真的、且已如实记录」，不代表本次
+    change 要修——修复需要改变 ov_cleanup 的信号投递目标（如改发进程组）或延长/去掉
+    我们自己的抢跑升级窗口，超出「补测试缺口」的既定范围，留给后续 change。
+    """
+    pidfile = tmp_path / "pids-ignore-term"
+    env, ctx = _make_env_runner_ignores_term(tmp_path, pidfile)
+    rc, err, runner_pid, grandchild_pid = _run_until_killed(
+        HELPER, env, ctx, signal.SIGTERM, tmp_path, pidfile, bash_bin
+    )
+    try:
+        assert _alive(runner_pid) or _alive(grandchild_pid), (
+            "残余 (d) 未复现：runner 忽略 TERM 时子树竟然被灭了 —— 若这是真的行为改进，"
+            "须先证实（不同平台 timeout 语义可能不同），再回头把 design.md 的 (d) 条改成"
+            "已解决，MUST NOT 只改这条断言"
+        )
+    finally:
+        # 本用例故意验证的就是"会留下孤儿"——自己收拾干净，别污染开发机/CI
+        for pid in (grandchild_pid, runner_pid):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+
+def test_term_ignoring_residual_is_documented_in_design():
+    """机械锁：design.md 的 D2 残余表 MUST 含第 (d) 条（runner 忽略 TERM 时子树存活），
+    且全文 MUST NOT 出现越界断言——与 test_sigkill_residue_is_documented_not_claimed_solved
+    同形（那条锁脚本注释，这条锁 design.md）。
+    """
+    design = (REPO / "openspec" / "changes" / "fix-mechanical-layer-silent-failures"
+               / "design.md").read_text(encoding="utf-8")
+    assert "(d)" in design, "design.md 的 D2 残余表未见第 (d) 条（runner 忽略 TERM 残余）"
+    assert "忽略" in design and "TERM" in design, (
+        "design.md 未见「runner 忽略 TERM」这条残余的具体描述"
+    )
+    for overclaim in ("已消除孤儿", "孤儿已消除", "已根治", "彻底解决", "完全避免孤儿"):
+        assert overclaim not in design, f"design.md 越界断言（不得声称根治）: {overclaim}"
+
+
 @needs_real_timeout
 def test_cleanup_logs_the_terminated_runner_pid_without_context_body(tmp_path, bash_bin):
     """⭐ 清理路径在 stderr 留下可见痕迹（信号名 + 被终止的 PID），且不含 context 正文。

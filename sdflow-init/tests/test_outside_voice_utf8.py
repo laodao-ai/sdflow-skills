@@ -269,6 +269,10 @@ def test_tail_skip_unreadable_file_does_not_pollute_stderr_contract(tmp_path):
     bash 从左到右处理重定向：写成 `wc -c < "$f" 2>/dev/null` 时 `< "$f"` 先失败，报错由
     shell 自身打到【尚未被重定向】的 stderr ⇒ `bash: ...: Permission denied` 原样进契约通道。
     变异验证：把源里的顺序换回去，本用例即红。
+
+    〔F-新1〕stdout 断言从 "0" 改为 ""：`wc -c` 失败（这里由 chmod 000 触发）与「合法结论
+    不用跳过」此前同形（旧实现均落 echo 0）——那正是 F-新1 的病灶之一。修复后取字节失败
+    统一输出空串，见 test_tail_skip_reports_failure_not_zero_when_wc_fails 的专项覆盖。
     """
     f = tmp_path / "noperm.txt"
     f.write_bytes(b"hello world")
@@ -278,7 +282,9 @@ def test_tail_skip_unreadable_file_does_not_pollute_stderr_contract(tmp_path):
     finally:
         f.chmod(0o644)
     assert r.stderr == "", f"契约通道被污染: {r.stderr!r}"
-    assert r.stdout.strip() == "0", r.stdout
+    assert r.stdout.strip() == "", (
+        f"wc 失败时不得输出'0'（与合法结论同形，F-新1 复发）: {r.stdout!r}"
+    )
 
 
 def test_render_prompt_size_read_failure_is_fail_loud_not_silent_full_dump(tmp_path):
@@ -324,6 +330,86 @@ def test_backscan_fallback_emits_visible_marker(tmp_path):
     assert "OV_UTF8_BACKSCAN_DROPPED=0" in broken.stderr, broken.stderr
     for probe in ("hello ASCII", "更多中文", "😀"):
         assert probe not in broken.stderr, f"stderr 泄漏 context 正文: {probe}"
+
+
+# ── F-新1：取字节失败 MUST NOT 与「合法结论 0」同形 ─────────────────────────
+#
+# 病灶：`_ov_bytes_at`（依赖 `od`）失败时无输出、不报错；`utf8_head_trim`/`utf8_tail_skip`
+# 旧实现在"一个字节都没拿到"时落回 `echo 0`——与「回扫算出来的合法结论就是 0」同形，
+# 上面 test_backscan_fallback_emits_visible_marker 的 case 守卫因此是【死分支】：它靠
+# mock 掉两个函数本身（直接 `echo ''`）来验证守卫逻辑，从没验证过这两个函数在【真实
+# 取字节失败】时到底会不会真的输出空串。这里补上——不 mock 函数本身，只让它们的
+# 依赖（`_ov_bytes_at` / `wc`）失败，走真实代码路径。
+
+
+def test_head_trim_reports_failure_not_zero_when_byte_read_fails(tmp_path):
+    """〔F-新1〕`_ov_bytes_at` 失败（模拟 od 不可用）时 `utf8_head_trim` MUST 输出空串，
+    MUST NOT 输出 "0"（那与"末 4 字节全是 continuation ⇒ 不动"的合法结论不可区分）。
+
+    只覆盖 `_ov_bytes_at`（真实故障点），不碰 `utf8_head_trim` 自身 —— 走的是它内部
+    「bytes 数组为空」那条真实分支，不是靠 mock 顶层函数蒙混过关。
+    """
+    corpus = _write(tmp_path, "mixed.md", MIXED)
+    r = _source_and_run(
+        '_ov_bytes_at() { return 1; }\n'  # 模拟 od 失败：无输出、非零退出
+        f'utf8_head_trim "{corpus}" 4',
+        tmp_path,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "", (
+        f"取字节失败时不得输出'{r.stdout.strip()}'（与合法结论 0 同形，F-新1 复发）"
+    )
+
+
+def test_tail_skip_reports_failure_not_zero_when_byte_read_fails(tmp_path):
+    """〔F-新1〕同上，覆盖 `utf8_tail_skip` 的对称分支：`wc` 正常（拿到 size）但
+    `_ov_bytes_at` 失败 ⇒ MUST 输出空串，MUST NOT 输出 "0"。
+    """
+    corpus = _write(tmp_path, "mixed.md", MIXED)
+    r = _source_and_run(
+        '_ov_bytes_at() { return 1; }\n'
+        f'utf8_tail_skip "{corpus}" 4',
+        tmp_path,
+    )
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "", (
+        f"取字节失败时不得输出'{r.stdout.strip()}'（与合法结论 0 同形，F-新1 复发）"
+    )
+
+
+def test_render_prompt_real_od_failure_reports_backscan_unavailable(tmp_path):
+    """⭐〔F-新1〕端到端、不 mock 任何 outside-voice.sh 函数：PATH 里塞一个真会失败的
+    `od` 可执行文件（模拟"未安装/权限突变/资源耗尽/沙箱瞬时故障"），走完整
+    render_prompt 截断路径，MUST 打印 OV_UTF8_BACKSCAN_UNAVAILABLE=1。
+
+    这是比 test_backscan_fallback_emits_visible_marker（mock 函数）更强的证据：证明
+    「od 真的挂了」这条路径能被 render_prompt 的守卫正确接住，而不只是"守卫逻辑本身
+    没问题、但从没被真故障触发过"。
+
+    变异验证：把 utf8_head_trim/utf8_tail_skip 的"bytes 为空/got=0 ⇒ echo ''"分支
+    还原成旧版"echo 0"（即撤销本次修复）后，本用例转红——已实跑验证，见 impl-report。
+    """
+    ctx = _write(tmp_path, "mixed.md", MIXED)
+    shim = tmp_path / "shim"
+    shim.mkdir()
+    (shim / "od").write_text("#!/bin/sh\nexit 1\n")
+    (shim / "od").chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{shim}{os.pathsep}{env['PATH']}"
+    env["OV_MAX_CONTEXT_BYTES"] = "100"
+    env.pop("SDFLOW_VOICE_RUNNER", None)
+    env.pop("SDFLOW_VOICE_MODEL", None)
+    r = subprocess.run(
+        ["bash", str(HELPER), "render-prompt", "--context-file", str(ctx)],
+        capture_output=True, env=env, timeout=30,
+    )
+    assert r.returncode == 0, r.stderr
+    err = r.stderr.decode("utf-8")
+    assert "OV_UTF8_BACKSCAN_UNAVAILABLE=1" in err, (
+        f"真实 od 失败没有被识别为失败（F-新1 复发）: {err!r}"
+    )
+    for probe in ("hello ASCII", "更多中文", "😀"):
+        assert probe not in err, f"stderr 泄漏 context 正文: {probe}"
 
 
 def _have_timeout_bin() -> bool:
