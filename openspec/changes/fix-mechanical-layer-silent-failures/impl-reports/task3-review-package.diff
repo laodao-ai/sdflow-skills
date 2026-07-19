@@ -1,0 +1,636 @@
+diff --git a/sdflow-init/assets/hack/outside-voice.sh b/sdflow-init/assets/hack/outside-voice.sh
+index 5e6219b..b4eed04 100755
+--- a/sdflow-init/assets/hack/outside-voice.sh
++++ b/sdflow-init/assets/hack/outside-voice.sh
+@@ -28,6 +28,11 @@
+ #             回扫值取不到而兜底成 0（= 退回按字节切）时【再多一行】纯字面标记（S3）：
+ #               OV_UTF8_BACKSCAN_UNAVAILABLE=1
+ #               —— 无它则「兜底成 0」与「纯 ASCII 无需回扫」在外部不可区分（零信号静默降级）
++#               〔1.4.1 · fix-mechanical-layer-silent-failures F-新1〕本行此前是【死代码】：
++#               utf8_head_trim/utf8_tail_skip 内部取字节失败（od/wc 不可用等）时也 echo 0，
++#               与「合法结论 0」同形，此行永远不触发。已修：两函数取字节失败时输出空串，
++#               该哨兵行现在才会在真失败时打印。行为契约（stdout/stderr 格式、exit code）不变，
++#               仅内部实现从"声称有该信号"变成"确实产出该信号"。
+ #             context 大小读不出（不可读 / -r 检查后的 TOCTOU 权限变化）⇒ exit 2（S2，
+ #             MUST NOT 兜底成 0：那会静默走非截断分支把超限 context 全量送出）
+ #             截断保头尾各半，切点经 UTF-8 边界回扫 ⇒ 头段/尾段【各自】都是合法 UTF-8
+@@ -36,11 +41,18 @@
+ #     ⏱ 调用方 MUST 给**外层进程超时** ≥ (--timeout + 30)s（默认即 ≥330s）：本命令内部
+ #       `timeout -k 10 <--timeout>` 最迟 (--timeout+10)s 收；外层短于此会在内部正常运行时
+ #       误杀 → 假超时 + 重跑浪费。外层超时由调用方设，helper 无法机械强制（指令层约束）。
+-#     🔪 子进程生命周期〔fix-mechanical-layer-silent-failures R2 · design D2〕：
++#     🔪 子进程生命周期〔fix-mechanical-layer-silent-failures R2 · design D2/D2.1〕：
+ #       runner 后台启动 + 记 PID + wait 取码；收到 INT/TERM/HUP 或任何 EXIT 时，清理函数
+ #       先 kill -TERM 该 PID、宽限后 kill -KILL 兜底，再删 workdir。∴ 本 helper 被回收后
+ #       runner 不再 reparent 到 PID 1 继续烧 API 额度。杀 timeout 会连带杀掉它自建进程组内的
+ #       孙进程（实测 TERM 后 timeout/中间脚本/内层命令三层全灭）⇒ 无需自管进程组。
++#       KILL 兜底升级步〔D2.1 · 1.4.2〕改投递目标为负号进程组（`kill -KILL -"$PID"`）——
++#       当且仅当组级 KILL 守卫（见 `_ov_group_kill_decision`）判定目标确实是独立组长、且
++#       该组≠脚本自己的组，才发组信号；任一条件不满足（含 PGID 取不到）一律退回单 PID
++#       kill，并在 stderr 打 `OV_GROUP_KILL_DEGRADED=1 reason=... pid=... target_pgid=...
++#       own_pgid=...`（结构化字段，MUST NOT 含 context 正文）使降级可见。此举根治了
++#       「runner 主动 trap '' TERM 忽略终止信号时子树逃逸」的残余（此前 design D2 残余表
++#       第 (d) 条，见 design.md D2.1）。
+ #       🔴 诚实边界（MUST NOT 声称根治）——三条残余，性质相同、均为 shell 层不可干净消除：
+ #         (a) **本 helper 进程自身被 SIGKILL(-9) 时 trap 根本不会执行**，runner 子进程【仍会
+ #             存活并 reparent 到 PID 1】。孤儿问题在 SIGKILL 下【未被消除】。
+@@ -54,13 +66,14 @@
+ #       codex 路径：经 --output-last-message 提取；claude 路径：-p --output-format text 直出
+ #     stderr: OV_TRUNCATED 行；失败时 runner stderr 转发；被信号回收时【额外】一/两行
+ #             纯字面清理痕迹（只含信号名与 runner PID，MUST NOT 含 context 正文——该内容
+-#             未经出境扫描）。调用方按【子串命中】取 OV_TRUNCATED，不假定它是 stderr 末行
+-#             （既有失败分支的 runner stderr 转发本就排在其后）。
++#             未经出境扫描）；组级 KILL 守卫降级时【额外】一行 OV_GROUP_KILL_DEGRADED=1
++#             （同上，仅字段无正文）。调用方按【子串命中】取 OV_TRUNCATED，不假定它是
++#             stderr 末行（既有失败分支的 runner stderr 转发本就排在其后）。
+ #     exit 0=成功 | 1=runner 报错/空输出/命令缺失/timeout 工具缺失/SDFLOW_VOICE_RUNNER 未设/
+ #            SDFLOW_VOICE_MODEL 未设(claude)/未知 runner 值 | 124=超时 | 3=secret-hit |
+ #            2=用法错/文件不存在或不可读
+ #   version
+-#     stdout: "outside-voice.sh 1.4.0"                           exit 0
++#     stdout: "outside-voice.sh 1.4.2"                           exit 0
+ # ── 硬化要点〔design D2 spec-review-amendment · add-codex-host-support〕──────
+ #   出境安全三件套（secret_scan / render_prompt 的 FRAME+三条通则+200KB 截断）对两条
+ #   runner 路径一视同仁、单份共用，MUST NOT 另起炉灶组装 prompt——只有最终 exec 命令行
+@@ -83,7 +96,7 @@
+ #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
+ set -u
+ 
+-OV_VERSION="outside-voice.sh 1.4.0"
++OV_VERSION="outside-voice.sh 1.4.2"
+ 
+ # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
+ # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
+@@ -196,13 +209,24 @@ _ov_is_cont() {  # $1=十进制字节值 → 0=是 UTF-8 continuation 字节（0
+   [ "$1" -ge 128 ] && [ "$1" -le 191 ]
+ }
+ 
+-utf8_head_trim() {  # $1=file $2=头段字节数 → stdout: 需从头段【末尾】丢弃的字节数
++utf8_head_trim() {  # $1=file $2=头段字节数 → stdout: 需从头段【末尾】丢弃的字节数；
++                    # 取字节失败（od 不可用/权限突变/资源耗尽）时输出【空串】——MUST NOT 与
++                    # 「合法结论 0」同形（fix-mechanical-layer-silent-failures F-新1）
+   local file="$1" n="$2" start cnt i b len avail
+   [ "$n" -le 0 ] && { echo 0; return; }
+   if [ "$n" -gt 4 ]; then start=$(( n - 4 )); else start=0; fi
+   cnt=$(( n - start ))
+   local -a bytes=()
+   while read -r b; do bytes+=("$b"); done < <(_ov_bytes_at "$file" "$start" "$cnt")
++  # 🔴 F-新1 修复：走到这里 cnt 恒 >0（上方已排除 n<=0，且 start 必在文件范围内——本函数
++  # 只在截断分支、即 size > OV_MAX_CONTEXT_BYTES 时被调用，头段字节数远小于文件大小）⇒
++  # od 正常工作时 bytes 数组【不可能为空】。为空 = _ov_bytes_at（od）本身失败，
++  # MUST NOT 落回 echo 0（那与「末 4 字节全是 continuation」的合法 0 结论不可区分，
++  # 即 S3 原病复发）——输出空串，让下游既有 case 守卫（render_prompt 处）判定为失败。
++  if [ "${#bytes[@]}" -eq 0 ]; then
++    echo ""
++    return
++  fi
+   # 从末尾回扫找最近的「起始字节」（非 continuation：不在 0x80-0xBF = 128-191）
+   for (( i = ${#bytes[@]} - 1; i >= 0; i-- )); do
+     b=${bytes[i]}
+@@ -217,27 +241,37 @@ utf8_head_trim() {  # $1=file $2=头段字节数 → stdout: 需从头段【末
+     if [ "$avail" -lt "$len" ]; then echo "$avail"; else echo 0; fi
+     return
+   done
+-  echo 0   # 末 4 字节全是 continuation ⇒ 输入本就非合法 UTF-8 → 不动
++  echo 0   # 末 4 字节全是 continuation ⇒ 输入本就非合法 UTF-8 → 不动（bytes 非空，正常场景）
+ }
+ 
+-utf8_tail_skip() {  # $1=file $2=尾段字节数 → stdout: 需从尾段【开头】跳过的字节数
++utf8_tail_skip() {  # $1=file $2=尾段字节数 → stdout: 需从尾段【开头】跳过的字节数；
++                    # 取失败（wc/od 不可用等）时输出【空串】，理由同 utf8_head_trim（F-新1）
+   # 尾段起点必落在原文件的某个字节上；跳掉开头的 continuation 字节后，下一个必是完整
+   # 序列的起始字节（其后续字节在文件里原封不动）∴ 只需数前导 continuation，最多 3 个。
+-  local file="$1" n="$2" size start cnt b skip=0
++  local file="$1" n="$2" size start cnt b skip=0 got=0
+   [ "$n" -le 0 ] && { echo 0; return; }
+   # `2>/dev/null`〔M3〕：stderr 是被 SKILL.md 解析的【契约通道】（truncated 取 helper stderr 的
+-  # OV_TRUNCATED），裸重定向失败信息混进去会污染该通道 ⇒ 吞掉 + 拿不到大小就回退 0（不动）。
++  # OV_TRUNCATED），裸重定向失败信息混进去会污染该通道 ⇒ 吞掉，不在这里报错。
+   # 🔴 重定向顺序是【语义性】的，不是风格〔S1〕：bash 从左到右处理重定向，写成
+   #   `wc -c < "$file" 2>/dev/null` 时 `< "$file"` 先执行、失败信息由 shell 自身打到【尚未被
+   #   重定向】的 stderr（实测 chmod 000 下 `bash: ...: Permission denied` 原样进契约通道）。
+   #   ∴ `2>/dev/null` MUST 排在 `< "$file"` 【之前】。
+   size=$(wc -c 2>/dev/null < "$file" | tr -d ' ')
+-  case "${size:-}" in ''|*[!0-9]*) echo 0; return ;; esac
++  # 🔴 F-新1 同形修复：`wc -c` 失败（权限突变/资源耗尽等）时【不再】回落 echo 0——旧版把
++  # 「取不到大小」和「取到大小、结论就是不用跳」混成同一个 0，外部零信号不可区分（S3 原病的
++  # 第二个实例，就在同一个函数里）。改输出空串，交由下游既有 case 守卫判定为失败。
++  case "${size:-}" in ''|*[!0-9]*) echo ""; return ;; esac
+   start=$(( size - n )); [ "$start" -lt 0 ] && start=0
+   if [ "$n" -lt 3 ]; then cnt="$n"; else cnt=3; fi
+   while read -r b; do
++    got=$(( got + 1 ))
+     if _ov_is_cont "$b"; then skip=$(( skip + 1 )); else break; fi
+   done < <(_ov_bytes_at "$file" "$start" "$cnt")
++  # cnt 恒 >=1（上方已排除 n<=0）⇒ od 正常时至少拿到 1 字节；got=0 = _ov_bytes_at（od）失败。
++  if [ "$got" -eq 0 ]; then
++    echo ""
++    return
++  fi
+   echo "$skip"
+ }
+ 
+@@ -273,6 +307,10 @@ render_prompt() {  # $1=context file → stdout 完整 prompt；stderr 含 OV_TR
+     # 🔴 兜底 = 静默退回 R1 原病〔S3〕：htrim/tskip 取不到时按 0 走 = 按【字节】切，正是本 change
+     #   要治的那个失效；而 OV_UTF8_BACKSCAN_DROPPED=0 与「纯 ASCII 本就无需回扫」不可区分 ⇒ 外部
+     #   零信号。∴ 兜底时【额外】打一行纯字面标记（无 context 正文，不违出境约束），使该路径可见。
++    #   〔F-新1〕此处的 case 守卫此前是【死分支】——utf8_head_trim/utf8_tail_skip 内部旧实现
++    #   在 od/wc 失败时也是 echo 0（把「取字节失败」和「合法结论 0」混同），永远落不进
++    #   `''|*[!0-9]*` 分支。两函数已改为失败时输出空串（见函数定义处注释），该守卫现在才是
++    #   活路径——真正接住失败、置 backscan_ok=false、驱动下方哨兵行打印。
+     local backscan_ok=true
+     case "$htrim" in ''|*[!0-9]*) htrim=0; backscan_ok=false ;; esac
+     case "$tskip" in ''|*[!0-9]*) tskip=0; backscan_ok=false ;; esac
+@@ -297,21 +335,71 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找
+   command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true
+ }
+ 
++# ── 组级 KILL 守卫〔fix-mechanical-layer-silent-failures 残余(d) 根治 · design D2.1〕──
++# 根因：`OV_RUNNER_PID` 记的是 timeout 自身的 PID。旧版 KILL 升级只对这一个 PID 发
++# SIGKILL——不可捕获、瞬间生效，timeout 来不及跑到它自己那条「向子进程组转发 KILL」的
++# `-k 10` 升级逻辑 ⇒ runner 若 `trap '' TERM` 忽略终止信号，其子孙进程逃逸成孤儿。
++#
++# 修法（已实测验证，见 impl-report task3-cross-platform-fix2）：GNU timeout 会 setpgid
++# 把自己放进【独立进程组】，且该组 PGID 恒等于 timeout 自己的 PID。∴ 把 KILL 升级步的
++# 目标从「单个 PID」改成「负号进程组」（`kill -KILL -"$PID"`），信号直接打穿整棵子树，
++# 不再依赖 timeout 来不及跑完的组内转发。
++#
++# 🔴 MUST NOT 无条件发组信号（自杀风险）：调用方 MUST 先用 `_ov_group_kill_decision`
++# 判定，仅 "group" 才可发负号 PID；任何 "single:*" 结果一律退回既有单 PID kill，MUST NOT 猜。
++_ov_pgid_of() {  # $1=PID → stdout: PGID（十进制字符串，已去除前导空白）；
++                 # 取不到/非数字（ps 不可用、PID 已不存在等）→ 空串，MUST NOT 猜
++  local pid="$1" out
++  out=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d '[:space:]')
++  case "$out" in
++    ''|*[!0-9]*) echo "" ;;
++    *) echo "$out" ;;
++  esac
++}
++
++_ov_group_kill_decision() {  # $1=目标PID $2=目标PGID(可空) $3=脚本自身PGID(可空)
++                             # → stdout: "group" | "single:<reason>"
++                             # reason ∈ pgid-unavailable|not-leader|own-group
++  local target_pid="$1" target_pgid="$2" own_pgid="$3"
++  # 守卫①连同 PGID 取不到：无法判定，MUST NOT 猜 ⇒ 退回单 PID
++  if [ -z "$target_pgid" ] || [ -z "$own_pgid" ]; then
++    echo "single:pgid-unavailable"; return
++  fi
++  # 守卫①：目标必须是【组长】本身（其 PGID == 自己的 PID）。不是组长 ⇒ 该 PGID 大概率
++  # 就是【脚本自己所在的组】（子进程默认继承父的 pgid，除非自己 setpgid）——发组信号
++  # 会打到脚本自己身上。
++  if [ "$target_pgid" != "$target_pid" ]; then
++    echo "single:not-leader"; return
++  fi
++  # 守卫②：该 PGID 不能等于脚本自身的 PGID —— 双重确认，防守卫①在极端场景（PID 复用
++  # 巧合）失手。
++  if [ "$target_pgid" = "$own_pgid" ]; then
++    echo "single:own-group"; return
++  fi
++  echo "group"
++}
++
+ # ── 子进程生命周期〔R2 · design D2〕──────────────────────────────────────────
+ # 病根不是「trap 没跑」——实测 bash 的 EXIT trap 在 SIGTERM 下确实执行（workdir 被清了），
+ # 但 runner 是【前台】跑的 `timeout ...`，父死后它 reparent 到 PID 1 继续跑满内层超时、
+ # 继续烧 API 调用额度。∴ 病根是【trap 里没有子 PID 可杀】。
+ # 修法：runner 改后台 + 记 PID，清理时先 TERM 该 PID、宽限后 KILL 兜底，再删 workdir。
+ #
+-# 为什么不用 setsid + kill -- -PGID：`setsid` 在 macOS(Darwin 25) 【不存在】；且 GNU timeout
+-# 自建进程组并转发信号——实测 TERM 掉 timeout 后，timeout / 中间脚本 / 内层 sleep 三层同 pgid
+-# 全灭 ⇒ 自管进程组收益为零。
++# 为什么不用 setsid + kill -- -PGID 主动建组：`setsid` 在 macOS(Darwin 25) 【不存在】；且
++# GNU timeout 自建进程组并转发信号——实测 TERM 掉 timeout 后，timeout / 中间脚本 / 内层
++# sleep 三层同 pgid 全灭 ⇒ TERM 阶段自管进程组收益为零。
++# 〔D2.1 · 1.4.2 更新〕但 KILL 兜底升级步不同：SIGKILL 不可捕获，timeout 来不及转发给它
++# 自己那个组 ⇒ 若 runner 忽略 TERM，单 PID KILL 打不穿子树（详见下方 `_ov_group_kill_decision`
++# 与 `ov_cleanup`）。修法**不是**主动 setsid 建组，而是【借用】timeout 本来就会 setpgid 出的
++# 那个既有组——只在升级步、且守卫通过时才对它发负号 PID。
+ #
+ # 🔴 残余（MUST NOT 声称根治），三条并列、性质相同（详见头部契约 exec 段）：
+ #   (a) 父进程被 SIGKILL 时 trap 不可执行 ⇒ 孤儿仍存活；
+ #   (b) `&` 与 `OV_RUNNER_PID=$!` 之间落信号 ⇒ trap 拿到空 PID，该次 runner 逃逸；
+ #   (c) `wait` 返回与 `OV_RUNNER_PID=""` 之间落信号 ⇒ 对已回收（可能已复用）的 PID 开火。
+ # 三者都是 shell 层不可干净消除的窗口，【只登记、不声称已解决】。
++# （原第 (d) 条「runner 忽略 TERM 致子树逃逸」已由本文件 1.4.2 的组级 KILL 守卫治愈，
++# 不再列入本残余表；其自身的退化边界见上方 `_ov_group_kill_decision` 注释与 design.md D2.1。）
+ OV_WORKDIR=""
+ OV_RUNNER_PID=""
+ 
+@@ -331,7 +419,21 @@ ov_cleanup() {  # $1=触发来源标签（EXIT|INT|TERM|HUP），仅用于 stder
+       i=$(( i + 1 ))
+     done
+     if kill -0 "$OV_RUNNER_PID" 2>/dev/null; then
+-      kill -KILL "$OV_RUNNER_PID" 2>/dev/null
++      # 组级 KILL 守卫〔D2.1〕：仅在「目标是独立组长 且 该组≠脚本自己的组」时才把信号
++      # 升级为负号进程组（穿透 runner 忽略 TERM 时逃逸的子树）；任一条件不满足一律退回
++      # 既有单 PID kill，MUST NOT 猜。
++      local ov_target_pgid ov_own_pgid ov_kill_decision
++      ov_target_pgid=$(_ov_pgid_of "$OV_RUNNER_PID")
++      ov_own_pgid=$(_ov_pgid_of "$$")
++      ov_kill_decision=$(_ov_group_kill_decision "$OV_RUNNER_PID" "$ov_target_pgid" "$ov_own_pgid")
++      if [ "$ov_kill_decision" = "group" ]; then
++        kill -KILL "-$OV_RUNNER_PID" 2>/dev/null
++      else
++        # 可观测性：降级路径 MUST 对外可见（同 OV_UTF8_BACKSCAN_UNAVAILABLE=1 规格）——
++        # 只写结构化字段（PID/PGID/原因标识），MUST NOT 含 context 正文。
++        echo "OV_GROUP_KILL_DEGRADED=1 reason=${ov_kill_decision#single:} pid=${OV_RUNNER_PID} target_pgid=${ov_target_pgid:-unknown} own_pgid=${ov_own_pgid:-unknown}" >&2
++        kill -KILL "$OV_RUNNER_PID" 2>/dev/null
++      fi
+       echo "outside-voice: runner PID=${OV_RUNNER_PID} 未响应 TERM，已 SIGKILL 兜底" >&2
+     fi
+   fi
+diff --git a/sdflow-init/tests/test_outside_voice.py b/sdflow-init/tests/test_outside_voice.py
+index 58e7fb8..388fed0 100644
+--- a/sdflow-init/tests/test_outside_voice.py
++++ b/sdflow-init/tests/test_outside_voice.py
+@@ -150,7 +150,12 @@ def test_version():
+     assert r.returncode == 0
+     # 1.3.0：A1 反向 claude 路径补应用层读围栏（--settings permissions.deny）+ 输出侧 secret_scan。
+     # 1.4.0：R1 截断 UTF-8 字符边界回扫（头/尾段各自合法）+ stderr 丢弃字节计数（观测性）。
+-    assert r.stdout.strip() == "outside-voice.sh 1.4.0"
++    # 1.4.1：F-新1 修复 —— utf8_head_trim/utf8_tail_skip 取字节失败时不再静默 echo 0，
++    #   改输出空串，使 OV_UTF8_BACKSCAN_UNAVAILABLE=1 哨兵行真正可达（此前是死代码）。
++    # 1.4.2：D2.1 根治残余(d) —— ov_cleanup 的 KILL 升级步在组级 KILL 守卫通过时改投递
++    #   目标为负号进程组，穿透 runner 忽略 TERM 时逃逸的子树；守卫未通过时退回单 PID
++    #   KILL 并打 OV_GROUP_KILL_DEGRADED=1 哨兵。
++    assert r.stdout.strip() == "outside-voice.sh 1.4.2"
+ 
+ 
+ # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────
+diff --git a/sdflow-init/tests/test_outside_voice_child_lifecycle.py b/sdflow-init/tests/test_outside_voice_child_lifecycle.py
+index 6d85a10..41b1710 100644
+--- a/sdflow-init/tests/test_outside_voice_child_lifecycle.py
++++ b/sdflow-init/tests/test_outside_voice_child_lifecycle.py
+@@ -185,6 +185,91 @@ def test_runner_subtree_dies_when_parent_is_signalled(tmp_path, sig, name, bash_
+     )
+ 
+ 
++def _make_env_runner_ignores_term(tmp_path, pidfile: Path):
++    """同 `_make_env`，但假 runner 显式 `trap '' TERM` 忽略 TERM。
++
++    〔F-新2 · fix-mechanical-layer-silent-failures〕`_make_env` 的假 runner 从不忽略
++    TERM，∴「runner 主动忽略 SIGTERM 时，ov_cleanup 的 KILL 兜底 / timeout -k 升级
++    能不能真的灭掉整棵子树」这条路径从未被验证过——这里补上。
++    """
++    bin_dir = tmp_path / "bin"
++    bin_dir.mkdir(exist_ok=True)
++    fake = bin_dir / "codex"
++    fake.write_text(textwrap.dedent(f"""\
++        #!/usr/bin/env bash
++        trap '' TERM             # 主动忽略 TERM —— 本用例要验的就是这条路径
++        cat >/dev/null
++        sleep 300 &
++        child=$!
++        printf '%s %s\\n' "$$" "$child" > "{pidfile}"
++        wait "$child"
++        """))
++    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
++
++    ctx = tmp_path / "ctx.md"
++    ctx.write_text(f"context body\n{CONTEXT_PROBE}\nmore\n", encoding="utf-8")
++
++    env = os.environ.copy()
++    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
++    env["SDFLOW_VOICE_RUNNER"] = "codex"
++    env.pop("SDFLOW_VOICE_MODEL", None)
++    return env, ctx
++
++
++@needs_real_timeout
++def test_runner_ignoring_term_dies_under_group_kill_escalation(tmp_path, bash_bin):
++    """⭐〔fix-mechanical-layer-silent-failures D2.1 · 根治 F-新2 残余(d)〕假 runner 显式
++    忽略 TERM 时，组级 KILL 升级后子树【必须灭亡】——这条此前锁的是"子树存活"的残余
++    （见旧名 `test_runner_ignoring_term_survives_kill_escalation_documented_residual`），
++    根治后翻转为"子树已灭"，机械锁 design.md D2.1 记录的修复确实生效，不是纸面声明。
++
++    【旧病因回顾 —— 已用手工探针实测复现，非猜测】
++    `OV_RUNNER_PID` 记的是【`timeout` 自身】的 PID，不是 runner 的 PID。旧版 `ov_cleanup`
++    只对这一个 PID 发 SIGKILL——不可捕获、瞬间生效，timeout 来不及跑到它自己那条会向
++    子进程组转发 KILL 的 `-k 10` 升级逻辑 ⇒ runner 若 `trap '' TERM` 忽略，子树逃逸成孤儿。
++
++    【修法】GNU timeout 会 setpgid 把自己放进独立进程组，且该组 PGID 恒等于 timeout
++    自己的 PID。`ov_cleanup` 现在在组级 KILL 守卫（`_ov_group_kill_decision`）通过时，
++    把 KILL 目标从单个 PID 改成负号进程组（`kill -KILL -"$OV_RUNNER_PID"`），一次性
++    打穿整棵子树。真 GNU timeout 场景下守卫恒判定为 "group"（详见
++    test_group_kill_decision_* 系列对守卫本身的单元覆盖）。
++    """
++    pidfile = tmp_path / "pids-ignore-term"
++    env, ctx = _make_env_runner_ignores_term(tmp_path, pidfile)
++    rc, err, runner_pid, grandchild_pid = _run_until_killed(
++        HELPER, env, ctx, signal.SIGTERM, tmp_path, pidfile, bash_bin
++    )
++    assert not _alive(runner_pid), (
++        f"残余(d)复发：runner 忽略 TERM 后 PID={runner_pid} 仍存活——组级 KILL 升级失效"
++    )
++    assert not _alive(grandchild_pid), (
++        f"残余(d)复发：runner 的孙进程 PID={grandchild_pid} 仍存活——组级 KILL 未打穿子树"
++    )
++    assert "OV_GROUP_KILL_DEGRADED" not in err, (
++        f"真 GNU timeout 场景下守卫不应降级，出现降级说明守卫判定有误: {err!r}"
++    )
++
++
++def test_group_kill_fix_is_documented_in_design_without_overclaiming():
++    """机械锁：design.md MUST 记录残余(d)已由组级 KILL 升级〔D2.1〕治愈（含守卫本身的
++    退化路径哨兵 `OV_GROUP_KILL_DEGRADED`），且 MUST 仍保留 (a)(b)(c) 三条真·残余
++    ——不得因为治好了 (d) 就顺手声称孤儿问题已彻底根治。与
++    test_sigkill_residue_is_documented_not_claimed_solved 同形（那条锁脚本注释，
++    这条锁 design.md），取代旧的 test_term_ignoring_residual_is_documented_in_design
++    （旧版锁"仍是残余"，根治后该断言不再成立，已按此文件顶部注释指引翻转/替换）。
++    """
++    design = (REPO / "openspec" / "changes" / "fix-mechanical-layer-silent-failures"
++               / "design.md").read_text(encoding="utf-8")
++    assert "D2.1" in design, "design.md 未见 D2.1 小节（组级 KILL 升级修复记录）"
++    assert "OV_GROUP_KILL_DEGRADED" in design, (
++        "design.md 未见组级 KILL 守卫退化路径的哨兵说明"
++    )
++    for tag in ("(a)", "(b)", "(c)"):
++        assert tag in design, f"design.md 的 D2 残余表须仍保留 {tag}（真·残余，不可因治好(d)而移除）"
++    for overclaim in ("已消除孤儿", "孤儿已消除", "已根治", "彻底解决", "完全避免孤儿"):
++        assert overclaim not in design, f"design.md 越界断言（不得声称根治）: {overclaim}"
++
++
+ @needs_real_timeout
+ def test_cleanup_logs_the_terminated_runner_pid_without_context_body(tmp_path, bash_bin):
+     """⭐ 清理路径在 stderr 留下可见痕迹（信号名 + 被终止的 PID），且不含 context 正文。
+@@ -214,10 +299,16 @@ def test_mutation_no_op_cleanup_leaves_an_orphan(tmp_path, bash_bin):
+     """
+     mutant = tmp_path / "outside-voice-mutant.sh"
+     src = HELPER.read_text(encoding="utf-8")
+-    # 只摘掉 ov_cleanup 的杀子进程动作，保留删 workdir —— 精确还原「trap 里没有子 PID 可杀」的原病
++    # 只摘掉 ov_cleanup 的杀子进程动作，保留删 workdir —— 精确还原「trap 里没有子 PID 可杀」的原病。
++    # 〔D2.1〕KILL 升级步现有两条literal（组级 kill -KILL "-$PID" / 退回单 PID kill -KILL "$PID"）
++    # ——真 GNU timeout 场景下守卫恒判定 "group"，走的是前者，两条都须摘掉，否则组级分支
++    # 未被摘除、变异体仍会灭掉子树，测试就测不出"清理逻辑是否真的承重"。
+     mutated = src.replace(
+         'kill -TERM "$OV_RUNNER_PID" 2>/dev/null',
+         ': # MUTANT: kill 摘除',
++    ).replace(
++        'kill -KILL "-$OV_RUNNER_PID" 2>/dev/null',
++        ': # MUTANT: kill 摘除',
+     ).replace(
+         'kill -KILL "$OV_RUNNER_PID" 2>/dev/null',
+         ': # MUTANT: kill 摘除',
+@@ -244,6 +335,149 @@ def test_mutation_no_op_cleanup_leaves_an_orphan(tmp_path, bash_bin):
+                 pass
+ 
+ 
++# ── 组级 KILL 守卫：自杀风险测试〔fix-mechanical-layer-silent-failures D2.1〕──────────
++#
++# 根治残余(d) 的手段是把 KILL 升级步的目标从「单个 PID」改成「负号进程组」——这是本次
++# 修复里唯一有"打到脚本自己"风险的动作。`_ov_group_kill_decision` 是这道守卫的判定核心，
++# 两个条件（① 目标是组长、② 该组≠脚本自己的组）缺一都必须退回单 PID kill、MUST NOT 猜。
++# 下面用 `_OV_TEST_LIB_ONLY=1` 直接 source 驱动该纯函数（同 test_outside_voice_utf8.py 的
++# 接缝手法），用构造好的字符串输入覆盖两个守卫条件各自的降级分支，不依赖真实进程编排——
++# 判定逻辑本身是纯函数，没必要（也不该）用脆弱的真实进程时序去测它。
++
++def _source_and_run_lib(snippet: str, cwd: Path, helper: Path = HELPER):
++    """在 source 态直接驱动 outside-voice.sh 内部函数（不派发命令）。"""
++    script = f"_OV_TEST_LIB_ONLY=1 . {helper!s}\n{snippet}\n"
++    return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
++                          cwd=str(cwd), timeout=30)
++
++
++def test_group_kill_decision_is_group_when_target_is_a_leader_of_a_foreign_group(tmp_path):
++    """正例：目标是独立组长（PGID==自身PID）且该组≠脚本自己的组 ⇒ 才允许组级 KILL。"""
++    r = _source_and_run_lib('_ov_group_kill_decision 500 500 700', tmp_path)
++    assert r.returncode == 0, r.stderr
++    assert r.stdout.strip() == "group", r.stdout
++
++
++def test_group_kill_decision_degrades_when_target_is_not_a_group_leader(tmp_path):
++    """⭐ 自杀风险守卫条件① —— 目标 PGID != 目标 PID（不是组长）⇒ 该 PGID 大概率就是
++    【脚本自己所在的组】（子进程默认继承父的 pgid，除非自己 setpgid）；发组信号会打到
++    脚本自己身上。MUST 退回单 PID kill，MUST NOT 猜。
++    """
++    r = _source_and_run_lib('_ov_group_kill_decision 500 999 700', tmp_path)
++    assert r.returncode == 0, r.stderr
++    assert r.stdout.strip() == "single:not-leader", r.stdout
++
++
++def test_group_kill_decision_degrades_when_target_group_equals_own_group(tmp_path):
++    """⭐ 自杀风险守卫条件② —— 目标 PGID 恰好等于脚本自己的 PGID（即便目标本身是"组长"，
++    双重确认防条件①在极端场景，如 PID 复用巧合，失手）。这是本次修复里【最大的自杀风险
++    点】：若漏了这一条，`kill -KILL -"$PID"` 会把脚本自己所在的整个进程组一并打掉。
++    """
++    r = _source_and_run_lib('_ov_group_kill_decision 500 500 500', tmp_path)
++    assert r.returncode == 0, r.stderr
++    assert r.stdout.strip() == "single:own-group", r.stdout
++
++
++def test_group_kill_decision_degrades_when_pgid_unavailable(tmp_path):
++    """PGID 取不到（ps 失败 / 权限突变等，函数按约定输出空串）⇒ MUST NOT 猜，退回单 PID。"""
++    r = _source_and_run_lib('_ov_group_kill_decision 500 "" 700', tmp_path)
++    assert r.returncode == 0, r.stderr
++    assert r.stdout.strip() == "single:pgid-unavailable", r.stdout
++    r2 = _source_and_run_lib('_ov_group_kill_decision 500 500 ""', tmp_path)
++    assert r2.returncode == 0, r2.stderr
++    assert r2.stdout.strip() == "single:pgid-unavailable", r2.stdout
++
++
++def test_pgid_of_reads_a_real_process_group_not_mocked(tmp_path):
++    """`_ov_pgid_of` 对真实 PID（本进程自己的 `$$`）取值必须是非空数字——走真实 `ps`，
++    不 mock，证明守卫吃到的输入本身是可信的，不只是判定逻辑本身正确。
++    """
++    r = _source_and_run_lib('_ov_pgid_of $$', tmp_path)
++    assert r.returncode == 0, r.stderr
++    got = r.stdout.strip()
++    assert got != "" and got.isdigit(), f"取不到自身 PGID 或非数字: {got!r}"
++
++
++def _make_env_broken_timeout(tmp_path, pidfile: Path):
++    """PATH 前置一个【不 setpgid】的假 `timeout`（模拟非 GNU / busybox 等不隔离进程组的
++    timeout 实现，`exec` 直接接管、不 fork）+ 忽略 TERM 的假 runner。非交互 bash 默认关
++    job control，背景任务不会自动获得新 pgid ⇒ 该场景下目标进程组【就是】脚本自己所在的
++    那个组——这正是守卫要拦住的真实场景（而不只是构造的字符串输入）。
++    """
++    bin_dir = tmp_path / "bin"
++    bin_dir.mkdir(exist_ok=True)
++    fake_timeout = bin_dir / "timeout"
++    # 吃掉 `-k <N> <tmo>` 三个参数，其余原样 exec 接管（不 fork、不 setpgid）。
++    fake_timeout.write_text(textwrap.dedent("""\
++        #!/usr/bin/env bash
++        shift 3
++        exec "$@"
++        """))
++    fake_timeout.chmod(fake_timeout.stat().st_mode | stat.S_IEXEC)
++
++    fake_runner = bin_dir / "codex"
++    fake_runner.write_text(textwrap.dedent(f"""\
++        #!/usr/bin/env bash
++        trap '' TERM
++        cat >/dev/null
++        sleep 300 &
++        child=$!
++        printf '%s %s\\n' "$$" "$child" > "{pidfile}"
++        wait "$child"
++        """))
++    fake_runner.chmod(fake_runner.stat().st_mode | stat.S_IEXEC)
++
++    ctx = tmp_path / "ctx.md"
++    ctx.write_text("context body\nmore\n", encoding="utf-8")
++
++    env = os.environ.copy()
++    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
++    env["SDFLOW_VOICE_RUNNER"] = "codex"
++    env.pop("SDFLOW_VOICE_MODEL", None)
++    return env, ctx
++
++
++def test_group_kill_guard_degrades_instead_of_self_harm_when_timeout_shares_own_group(tmp_path, bash_bin):
++    """⭐ 端到端自杀风险佐证：`timeout` 实现不隔离进程组（如某些非 GNU timeout）时，目标
++    进程组其实就是 helper 自己所在的组——守卫必须判定降级（reason=not-leader）并退回单
++    PID KILL，MUST NOT 对这个组发负号 PID 信号。
++
++    安全隔离〔防自伤〕：本用例故意构造"目标组==脚本自己的组"这一真实场景，正是守卫要防
++    的自杀路径。为避免守卫万一有 bug 时殃及本次 pytest 会话/开发机 shell，helper 本身用
++    `start_new_session=True` 起在独立会话/进程组里——真出事也只灭这一颗独立子树，不会
++    带走跑测试的这个进程。
++
++    判据：stderr 必须出现 `OV_GROUP_KILL_DEGRADED=1 reason=not-leader`（降级真的发生，
++    不是巧合绿），且 helper 自己以 TERM 惯例退出码 143 干净收尾（没有被自己发的信号误杀）。
++    """
++    pidfile = tmp_path / "pids-broken-timeout"
++    env, ctx = _make_env_broken_timeout(tmp_path, pidfile)
++    proc = subprocess.Popen(
++        [bash_bin, str(HELPER), "exec", "--context-file", str(ctx), "--timeout", "300"],
++        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=str(tmp_path),
++        start_new_session=True,
++    )
++    try:
++        runner_pid, grandchild_pid = _await_pids(pidfile, proc)
++        proc.send_signal(signal.SIGTERM)
++        out, err = proc.communicate(timeout=60)
++    finally:
++        if proc.poll() is None:
++            proc.kill()
++            proc.communicate()
++    assert "OV_GROUP_KILL_DEGRADED=1" in err and "reason=not-leader" in err, (
++        f"守卫未按预期降级 —— rc={proc.returncode} err={err!r}"
++    )
++    assert proc.returncode == 143, (
++        f"helper 自身未干净退出（疑似被自己发的组信号误杀）: rc={proc.returncode} err={err!r}"
++    )
++    for pid in (runner_pid, grandchild_pid):
++        try:
++            os.kill(pid, signal.SIGKILL)
++        except (ProcessLookupError, PermissionError):
++            pass
++
++
+ # ── 退出码无回归 ────────────────────────────────────────────────────────────
+ #
+ # 后台 + wait 改造的最大风险是把 rc 弄丢/弄错（wait 的返回语义与前台不同）。
+diff --git a/sdflow-init/tests/test_outside_voice_utf8.py b/sdflow-init/tests/test_outside_voice_utf8.py
+index bdc7637..171798e 100644
+--- a/sdflow-init/tests/test_outside_voice_utf8.py
++++ b/sdflow-init/tests/test_outside_voice_utf8.py
+@@ -269,6 +269,10 @@ def test_tail_skip_unreadable_file_does_not_pollute_stderr_contract(tmp_path):
+     bash 从左到右处理重定向：写成 `wc -c < "$f" 2>/dev/null` 时 `< "$f"` 先失败，报错由
+     shell 自身打到【尚未被重定向】的 stderr ⇒ `bash: ...: Permission denied` 原样进契约通道。
+     变异验证：把源里的顺序换回去，本用例即红。
++
++    〔F-新1〕stdout 断言从 "0" 改为 ""：`wc -c` 失败（这里由 chmod 000 触发）与「合法结论
++    不用跳过」此前同形（旧实现均落 echo 0）——那正是 F-新1 的病灶之一。修复后取字节失败
++    统一输出空串，见 test_tail_skip_reports_failure_not_zero_when_wc_fails 的专项覆盖。
+     """
+     f = tmp_path / "noperm.txt"
+     f.write_bytes(b"hello world")
+@@ -278,7 +282,9 @@ def test_tail_skip_unreadable_file_does_not_pollute_stderr_contract(tmp_path):
+     finally:
+         f.chmod(0o644)
+     assert r.stderr == "", f"契约通道被污染: {r.stderr!r}"
+-    assert r.stdout.strip() == "0", r.stdout
++    assert r.stdout.strip() == "", (
++        f"wc 失败时不得输出'0'（与合法结论同形，F-新1 复发）: {r.stdout!r}"
++    )
+ 
+ 
+ def test_render_prompt_size_read_failure_is_fail_loud_not_silent_full_dump(tmp_path):
+@@ -326,6 +332,86 @@ def test_backscan_fallback_emits_visible_marker(tmp_path):
+         assert probe not in broken.stderr, f"stderr 泄漏 context 正文: {probe}"
+ 
+ 
++# ── F-新1：取字节失败 MUST NOT 与「合法结论 0」同形 ─────────────────────────
++#
++# 病灶：`_ov_bytes_at`（依赖 `od`）失败时无输出、不报错；`utf8_head_trim`/`utf8_tail_skip`
++# 旧实现在"一个字节都没拿到"时落回 `echo 0`——与「回扫算出来的合法结论就是 0」同形，
++# 上面 test_backscan_fallback_emits_visible_marker 的 case 守卫因此是【死分支】：它靠
++# mock 掉两个函数本身（直接 `echo ''`）来验证守卫逻辑，从没验证过这两个函数在【真实
++# 取字节失败】时到底会不会真的输出空串。这里补上——不 mock 函数本身，只让它们的
++# 依赖（`_ov_bytes_at` / `wc`）失败，走真实代码路径。
++
++
++def test_head_trim_reports_failure_not_zero_when_byte_read_fails(tmp_path):
++    """〔F-新1〕`_ov_bytes_at` 失败（模拟 od 不可用）时 `utf8_head_trim` MUST 输出空串，
++    MUST NOT 输出 "0"（那与"末 4 字节全是 continuation ⇒ 不动"的合法结论不可区分）。
++
++    只覆盖 `_ov_bytes_at`（真实故障点），不碰 `utf8_head_trim` 自身 —— 走的是它内部
++    「bytes 数组为空」那条真实分支，不是靠 mock 顶层函数蒙混过关。
++    """
++    corpus = _write(tmp_path, "mixed.md", MIXED)
++    r = _source_and_run(
++        '_ov_bytes_at() { return 1; }\n'  # 模拟 od 失败：无输出、非零退出
++        f'utf8_head_trim "{corpus}" 4',
++        tmp_path,
++    )
++    assert r.returncode == 0, r.stderr
++    assert r.stdout.strip() == "", (
++        f"取字节失败时不得输出'{r.stdout.strip()}'（与合法结论 0 同形，F-新1 复发）"
++    )
++
++
++def test_tail_skip_reports_failure_not_zero_when_byte_read_fails(tmp_path):
++    """〔F-新1〕同上，覆盖 `utf8_tail_skip` 的对称分支：`wc` 正常（拿到 size）但
++    `_ov_bytes_at` 失败 ⇒ MUST 输出空串，MUST NOT 输出 "0"。
++    """
++    corpus = _write(tmp_path, "mixed.md", MIXED)
++    r = _source_and_run(
++        '_ov_bytes_at() { return 1; }\n'
++        f'utf8_tail_skip "{corpus}" 4',
++        tmp_path,
++    )
++    assert r.returncode == 0, r.stderr
++    assert r.stdout.strip() == "", (
++        f"取字节失败时不得输出'{r.stdout.strip()}'（与合法结论 0 同形，F-新1 复发）"
++    )
++
++
++def test_render_prompt_real_od_failure_reports_backscan_unavailable(tmp_path):
++    """⭐〔F-新1〕端到端、不 mock 任何 outside-voice.sh 函数：PATH 里塞一个真会失败的
++    `od` 可执行文件（模拟"未安装/权限突变/资源耗尽/沙箱瞬时故障"），走完整
++    render_prompt 截断路径，MUST 打印 OV_UTF8_BACKSCAN_UNAVAILABLE=1。
++
++    这是比 test_backscan_fallback_emits_visible_marker（mock 函数）更强的证据：证明
++    「od 真的挂了」这条路径能被 render_prompt 的守卫正确接住，而不只是"守卫逻辑本身
++    没问题、但从没被真故障触发过"。
++
++    变异验证：把 utf8_head_trim/utf8_tail_skip 的"bytes 为空/got=0 ⇒ echo ''"分支
++    还原成旧版"echo 0"（即撤销本次修复）后，本用例转红——已实跑验证，见 impl-report。
++    """
++    ctx = _write(tmp_path, "mixed.md", MIXED)
++    shim = tmp_path / "shim"
++    shim.mkdir()
++    (shim / "od").write_text("#!/bin/sh\nexit 1\n")
++    (shim / "od").chmod(0o755)
++    env = os.environ.copy()
++    env["PATH"] = f"{shim}{os.pathsep}{env['PATH']}"
++    env["OV_MAX_CONTEXT_BYTES"] = "100"
++    env.pop("SDFLOW_VOICE_RUNNER", None)
++    env.pop("SDFLOW_VOICE_MODEL", None)
++    r = subprocess.run(
++        ["bash", str(HELPER), "render-prompt", "--context-file", str(ctx)],
++        capture_output=True, env=env, timeout=30,
++    )
++    assert r.returncode == 0, r.stderr
++    err = r.stderr.decode("utf-8")
++    assert "OV_UTF8_BACKSCAN_UNAVAILABLE=1" in err, (
++        f"真实 od 失败没有被识别为失败（F-新1 复发）: {err!r}"
++    )
++    for probe in ("hello ASCII", "更多中文", "😀"):
++        assert probe not in err, f"stderr 泄漏 context 正文: {probe}"
++
++
+ def _have_timeout_bin() -> bool:
+     import shutil
+ 
