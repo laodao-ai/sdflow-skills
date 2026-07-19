@@ -405,8 +405,14 @@ class TestReadPoolSubprocessFailure:
             stdout = ""
             stderr = "simulated subprocess failure"
 
-        def fake_run(cmd, capture_output=True, text=True):
-            return _FakeProc()
+        real_run = subprocess.run
+
+        # 按 argv 分派：只拦 recorder 的 scan 子进程，其余（含 repo_root 的
+        # `git rev-parse`）透传真实行为——整体替换会连带劫持被测函数之外的调用。
+        def fake_run(cmd, **kwargs):
+            if "scan" in cmd:
+                return _FakeProc()
+            return real_run(cmd, **kwargs)
 
         monkeypatch.setattr(issues_mod.subprocess, "run", fake_run)
 
