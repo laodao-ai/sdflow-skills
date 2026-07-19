@@ -156,3 +156,19 @@ Task 5 双轴审确认的 **spec/design 与实现的落差**——**全部是「
 
 > **共同性质**：这些不是「实现没做到」，而是**实现在执行过程中把设计的一条隐含前提证伪了**，
 > 文档尚未追上。**MUST NOT** 在收尾时把它们描述成「已全部达成」。
+
+### CF-9 补充（Task 6 双轴审新增）
+
+| # | 落差 | 处置 |
+|---|---|---|
+| **f** | **回写项 (a) 有一个隐式依赖未被点出**：Task 6 新增的 Windows 用例 `_second_drive_probe` 在**盘符根**建目录（`tmp_path` 之外），与**现行** `spec.md:157-158` 字面的「一切落盘物 MUST 位于 `tmp_path`」相抵 | 回写 (a) 时 MUST 一并说明：收窄到「禁止新增 cwd 顶层条目」之后，该 probe 才不违规。**(a) 不是纯措辞订正，它有既存用例依赖** |
+| **g** | `outside-voice.sh` 排除论证的**残余分类偏轻** | 报告归为纯「质量面 / evidence 相关性失效」，但坏值会把只读 agent 引到**另一棵树**取证，而出境 `secret_scan` 按 B13 在失败通道上 fail-open ⇒ 兼有**机密性邻接**面。**不改排除结论**（`repo_root` 不扩大读面，codex `-s read-only` 本就可读全盘），仅须在 Non-Goals 措辞补一句 |
+
+### ⚠️ 全套件数字不是确定性锚（Task 6 双轴审实测）
+
+`1870 passed / 9 skipped` 与 `1871 passed / 8 skipped` **两种结果都会出现**——
+浮动源是 `test_outside_voice_child_lifecycle.py:436`（信号风暴复现率环境敏感，用例 docstring 自陈）。
+
+**恒定量**：`passed + skipped == 1879`、`failed == 0`、`xfailed == 3`。
+
+⇒ **MUST NOT 把「1870/9」写成机械锚**（那会造出一个每隔几轮就假红的门）。要锚就锚上面三个恒定量。

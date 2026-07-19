@@ -1,0 +1,457 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 9610b6d..100d670 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -73,7 +73,10 @@ Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Window
+ 
+ ### 运行测试
+ 
+-没有根级 pytest 配置——测试各 skill **自包含**在 `<skill>/tests/`，用 pytest 直接跑：
++测试各 skill **自包含**在 `<skill>/tests/`；仓根另有**两个**根级 pytest 文件，只承载全仓通用的
++cwd 副作用断言——`conftest.py`（断言本体）+ `pytest.ini`（把 rootdir 钉在仓根，否则从仓外跑时
++conftest 收集止于塌缩后的 rootdir、断言静默失效）。**两者缺一即失效，别只留其一**；也 MUST NOT
++往它们塞其他共享配置。用 pytest 直接跑：
+ 
+ ```bash
+ pytest                                                  # 发现并运行全部 test_*.py
+@@ -131,6 +134,8 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
+     （`docs/sad/*`、change 四件套、`adr/*`、`SKILL.md`…）。判据：**「只有读过上一版的人才需要的句子，不属于正文」**。
+     代价实证：`07` 的正文塞满考古层 ⇒ **四轮评审 18 镜全在废弃分支里做优化，无一看见起手式错了**——
+     考古层给了错误方向一层虚假的正当性。
++  - **`premise-verification.md`（无文档级编号，引用写路径 + 内部「规则 N」）** — 写断言之前先验证
++    它依赖的外部事实。一切 proposal / design / specs / tasks / 评审报告 / impl-report 适用。
+ - **`openspec/roadmaps/{name}/`** — 项目级 roadmap 文档包（长期真相源，`sdflow-roadmap` 铺设）：
+   design/roadmap/task-log 三件套 + 可选 memo，直写落盘、不经 `plan-{topic}` change 壳；比单次 change
+   更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。roadmap 类 wayfinding 落
+diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task6-surface-closure.md b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task6-surface-closure.md
+new file mode 100644
+index 0000000..c388bb2
+--- /dev/null
++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task6-surface-closure.md
+@@ -0,0 +1,186 @@
++# Task 6 — 面治闭环与收尾
++
++**Ticket**：Task 6（Blocked-by 2,3,4,5）· **R-ID**：R1 / R4（收敛验证）
++**约束**：未碰 `scripts/`（三份 AST 镜像保持相等）；未碰 `proposal.md` / `design.md` / `tasks.md` / `specs/`。
++
++---
++
++## 1. 面治扫描（tasks 4.7）—— 实测重跑，非核对自洽
++
++**执行的命令（不限扩展名，非 `--include` 版）**：
++
++```
++grep -rln "show-toplevel" . | grep -v "^./.git/" | grep -v "/tests/" | grep -v "^./openspec/changes/"
++```
++
++**为什么用不限扩展名版**：tasks 4.7 写的 `--include="*.py" --include="*.sh"` 本身就是一个前提
++（「可执行面只有 py 和 sh」）。不限扩展名跑一遍才验得了它。
++
++**结果**：命中 **8 处可执行面**（与 tasks 4.7 实测的 8 处一致），另有 **6 处 `SKILL.md` + 2 处
++`openspec/specs/*/spec.md` + 1 处 `docs/superpowers/plans/*.md`** 的散文提及。散文提及**零可执行性**
++（无解析、无路径拼接、无进程调用），不构成面。⇒ **不限扩展名相对 `--include` 版无新增可执行面**，
++tasks 4.7 的口径经此确认成立（此前是未验证的前提）。
++
++### 逐处裁定
++
++| # | 站点 | 裁定 | 理由（安全论证） |
++|---|---|---|---|
++| 1 | `sdflow-buglist/scripts/buglist.py` | **纳入**（已改） | recorder，`root` 直通 `makedirs` |
++| 2 | `sdflow-todolist/scripts/todolist.py` | **纳入**（已改） | 同上 |
++| 3 | `sdflow-issues/scripts/issues.py` | **纳入**（已改） | 同上 |
++| 4 | `sdflow-init/scripts/init.py:543 _git_root_or_dot` | **排除** | **sink 只读**：唯一消费者 `init.py:883` → `cmd_config_lint(root)` → `lint_config(root)`，该函数对 `<root>/openspec/config.yaml` 只做 `open(..., encoding="utf-8").read()`（`init.py:472-481`），全路径**无任何目录创建/写入**。坏值的最坏后果 = 读到别的仓的 config 并报 lint reason，**不落盘**。另有前置兜底：`except (OSError, CalledProcessError) → "."`，且 `top` 为空时也回落 `"."` ⇒ 不会把空串当根拼路径。 |
++| 5 | `sdflow-ship/scripts/ship_gate.py:836-837` | **排除** | **sink 只读**：全文件 `grep -nE 'mkdir\|makedirs\|open\(\|write_text\|write_bytes\|shutil\.\|os\.remove\|unlink\|rmtree'` **零命中**（实测）——它是自称「只读盘面判官」的判官脚本，`root` 只用于拼读路径与 `emit()` 到 stdout。坏值最坏后果 = 对错误的 change 目录做判定并给出错误 verdict（可观测、不静默落盘）。 |
++| 6 | `sdflow-init/assets/hack/resolve-workflow.sh:26` | **排除** | **无目录创建**：`$ROOT` 唯一 sink 是 `LOCAL="$ROOT/openspec/workflow"`（:38），随后全是 `[ -f ]` / `[ -d ]` / `ls -A` 只读探测。**有前置兜底**：`git … \|\| pwd \|\| true`，空值时 :27-30 显式 `exit 64` 并要求 `--root`（cwd 已删场景 fail-closed，不静默取 `.`）。 |
++| 7 | `sdflow-init/assets/hack/resolve-models.sh:42` | **排除** | **无目录创建**：`$ROOT` 两个 sink——`resolve-workflow.sh --root "$ROOT"`（:68，转交给 #6，性质同上）与 `cfg="$ROOT/openspec/config.yaml"`（:111，只读）。写操作零命中。空值兜底为 `ROOT="."`（:43）。 |
++| 8 | `sdflow-init/assets/hack/outside-voice.sh:587` | **排除，但论证独立** | 见下（**MUST NOT 套用 #4-#7 的「只读拼路径」模板**） |
++
++### #8 `outside-voice.sh` 的单独论证（值域与 #4-#7 不同）
++
++`repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || repo_root="$PWD"`（:587，**无任何校验**），
++两个 sink 都不是「拼路径读文件」，而是**把该值交给一个外部 agent 进程当工作域**：
++
++- **codex 路径**（:639）：`codex exec -C "$repo_root" -s read-only --ephemeral`
++  `-C` 设的是子进程 cwd。**写边界由 `-s read-only` 提供，与 `$repo_root` 的取值正交**——
++  沙箱是 read-only，`-C` 指到哪里都写不进去。voice 的一切产物落 `mktemp -d` 出来的 `$workdir`
++  （:588），**从不写 `$repo_root`**。
++- **claude 路径**（:659）：`--tools "Read,Grep,Glob" --strict-mcp-config --add-dir "$repo_root" --settings <读围栏>`
++  该文件 :656-657 的实测注释明确记载：**`--add-dir` 是增量授权提示、不是访问围栏**（Read 无它也读全盘）；
++  真正的写边界是 `--tools` 只给 `Read,Grep,Glob`（**无 Write / Bash / WebFetch**），真正的读边界是
++  `--settings` 的 `permissions.deny`。**两条边界都不以 `$repo_root` 为参数** ⇒ 坏值改不动它们。
++
++**⇒ 排除理由（安全论证，非程序性）**：本站点的两个 sink 在**工具权限层**就是只写不进 / 只读受限的，
++写能力不由 `$repo_root` 的正确性决定。recorder 的危险来自「坏值 → `makedirs` → 数据写进错误的树」，
++该因果链在此**结构上不存在**。
++
++**诚实的残余（MUST 一并登记，不得当成"已闭环"）**：
++
++1. 该值**确实未经校验**（无形状/祖先/marker 校验）。坏值的后果类别是
++   **evidence 相关性失效**——outside voice 在错误的树上取证 ⇒ 该次 voice efficacy 趋零，
++   属**质量面**、非**数据完整性面**。可观测（voice 输出明显不着边际），非静默数据损坏。
++2. 回落 `"$PWD"` 与 recorder 的 `abspath(start)` 同类，恒为绝对路径，不引入新面。
++3. `-C` 指向的目录若在调用瞬间消失 ⇒ `codex exec` 自身非零退出 ⇒ 走既有失败通道，非安全问题。
++
++> 🔴 **须在设计门回写 `proposal.md` Non-Goals**：以上 #4–#8 五处的裁定与理由（尤其 #8 的独立论证）
++> 目前只存在于本报告。本票**不能改 proposal**（ship gate 设计门失鲜）。
++
++---
++
++## 2. Windows 泳道（tasks 4.6 / CF-6）
++
++**先查了 workflow 再动手**：`.github/workflows/windows-recorder-smoke.yml` 的 `paths` 精确匹配
++`sdflow-buglist/**`、`sdflow-todolist/**`、`sdflow-issues/**`、`sdflow-init/scripts/init.py`，
++但 `run:` 只跑**一个文件**：`sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error`。
++⇒ 新用例**必须落进这个文件**才会在 Windows 真跑。已落入该文件（+5 个用例）。
++
++| 用例 | 覆盖 | 类型 |
++|---|---|---|
++| `test_windows_repo_root_positive_regression` | 真实 git 仓库下不抛异常；仓根起点 / 子目录起点 / **盘符大小写翻转**起点三种姿势解析到同一根 | 正向回归（design Open Questions 前两问的实测答案：`isabs("C:\…")`、`normcase`+`commonpath`） |
++| `test_windows_repo_root_rejects_nonexistent_start` | 起点不存在 ⇒ 调 git 前受控 `ValueError` + 三段式消息 + **该路径未被创建** | 负例① |
++| `test_windows_repo_root_rejects_core_worktree_redirect` | `core.worktree` on-disk 重定向 ⇒ 祖先校验拦下；目标目录零产物。含**前提核验**（先真跑 git 确认重定向确实生效，不假设） | 负例②（主防线） |
++| `test_windows_commonpath_cross_drive_raises_without_recorder_format` | **CF-6 判据层，无条件跑**：`os.path.commonpath` 跨盘符自抛 `ValueError`，消息**不带** `ERROR:/cause:/fix:` 三段式 | 负例③（可观测性降级钉桩） |
++| `test_windows_repo_root_cross_drive_redirect_is_fail_closed` | **CF-6 端到端**：`core.worktree` 指向另一盘符 ⇒ 仍 `ValueError` fail-closed、目标零产物 | 负例④（需第二个可写盘符，否则诚实 skip） |
++
++### 🔴 诚实的验证边界（MUST NOT 读成"已验证"）
++
++- 本机是 **macOS**。这 5 个用例在本地 **`7 skipped`**（模块级 `skipif(sys.platform != "win32")`）。
++  **我没有在 Windows 上跑过任何一条。** 已验证的只有：**收集通过**（pytest 成功 import 该模块
++  ⇒ 语法与 import 正确）+ 三条平台中立的构造配方（`_init_repo` / `core.worktree` 重定向 /
++  前提核验探针）**已在 macOS 上由 `test_repo_root_identity_buglist.py` 的同款用例证明可跑通**。
++- **只能由 CI 的 Windows runner 验证的部分**：① `isabs`/`normcase`/`realpath` 对盘符路径的真实行为；
++  ② `git init` + `core.worktree` 在 Git for Windows 下是否同样重定向 toplevel（用例内已写**前提核验断言**，
++  若前提不成立会以「前提不成立」文案红，不会假绿）；③ 跨盘符端到端路径。
++- **CF-6 的处理方式**：端到端用例需要 runner 上真有第二个可写盘符，**没有就 skip**——但同一事实
++  由**无条件运行**的判据层用例（`commonpath` 跨盘符）钉住，**不存在「全 skip ⇒ 零覆盖」的窗口**。
++  这条按 PV 规则 1 办：**不用「理论上大概率能过」结案**，而是把不可构造的部分降到可无条件构造的判据层。
++- **结论口径**：Windows 覆盖**已写好、未验证**。下一次 push 触发 `windows-recorder-smoke.yml` 才产生证据。
++  在那之前 MUST NOT 声称 Windows 泳道已通过。
++
++### CF-6 的降级结论（实现层含义，不改代码）
++
++跨盘符时步骤⑤抛的是 **stdlib 的** `ValueError` ⇒ `main()` 的 `except ValueError` 照样接住
++（`buglist.py:1714-1716`：打 stderr + `SystemExit(2)`）⇒ **fail-closed 成立、无 traceback**；
++但消息不带 recorder 三段式 ⇒ **可观测性降级**。ADR-2 的 written decision 是 `commonpath`，
++备选 `PurePath.is_relative_to`（跨盘符返回 `False` 而非抛）是**对 written decision 的偏离**，
++**MUST 走设计门，不在本票就地改**。已用测试把当前行为钉死：将来若换实现，该用例当场变红。
++
++---
++
++## 3. `CLAUDE.md` 两处改动
++
++- **4.3（proposal P2）**：在 `openspec/rules/` 段 `DOC-1` 条目下方新增
++  `premise-verification.md` 指针。只写路径 + 一句适用面，**未复制规则文本**。
++  🔴 **如实报告**：该文件**没有文档级编号**——H1 是「# 前提验证规则（写断言之前先落地）」，
++  对照 `doc-authoring.md:1` 的「# DOC-1：…」自带前缀；全仓 `grep "PV-"` 除本 change 外零命中
++  （与 `gstack-review.md:70` D1 的判断一致）。**故未自造编号**，登记写作
++  「（无文档级编号，引用写路径 + 内部「规则 N」）」。**建议设计门拍板**是否给它补一个
++  `PV-1` 式 H1 前缀——那是改 `openspec/rules/` 的独立动作，不属本票。
++- **4.4（CF-9d）**：把「没有根级 pytest 配置——测试各 skill **自包含**」改为**两文件**表述：
++  `conftest.py`（断言本体）+ `pytest.ini`（把 rootdir 钉在仓根，否则 conftest 收集止于塌缩后的
++  rootdir、断言静默失效），并写明**缺一即失效**、MUST NOT 塞其他配置。
++
++---
++
++## 4. defer 登记（均显式带 `change` 字段，脚本回执确认）
++
++先跑了两池 `scan` 确认无重复（B15 是「跨进程根分裂」、T181 是「回落返回 lexical abspath」，
++均与本次三条不同）。用的是**本仓 `sdflow-*/scripts/` 下的脚本**，非 `~/.claude/skills` symlink。
++
++| ID | 池 | 内容 | 备注 |
++|---|---|---|---|
++| **B16** | buglist P3 | `test_exec_claude_reverse_path_three_flags_golden` 间歇性失败 | **按 CF-3 如实写「触发条件未定位」**：原记的「全量跑必红 / 单独跑绿」已被 Task 1（1753 passed / 0 failed）与 Task 6（1870 passed / 0 failed）两次全量跑**证伪**。已写入下一步排查建议（捕获失败时的用例序 + 断言差异）。**未照抄已证伪的描述。** |
++| **T182** | todolist 基础设施 | `repo_root` 不限制 git stdout 读取量的 DoS 面 | tasks 4.8 / design Non-Goals / codex X10 后半 |
++| **T183** | todolist 代码质量 | `isdir(start)` 与 `subprocess.run(cwd=start)` 之间的 TOCTOU 窗口 ⇒ 落回落分支而非 fail-closed | **CF-7**；含修法方向与「须先确认与 spec 回落措辞是否冲突」的定性 |
++
++---
++
++## 5. 回归确认（实测输出）
++
++| 项 | 命令 | 结果 |
++|---|---|---|
++| 4.9 全仓无回归 | `/usr/bin/python3 -m pytest -q` | **1870 passed, 9 skipped, 3 xfailed** in 115.38s |
++| — xfail 锚 | 同上 | **3 xfailed 原样保留**（Task 3 的 R2 缺口锚，未动） |
++| — skipped 增量 | 同上 | 4 → **9**：+5 恰为本票新增的 Windows-only 用例（macOS 上模块级 skip），**无其他用例被静默跳过** |
++| 4.1 垃圾树未再生 | `find . -maxdepth 1 -name '{*'`（全套件跑完后） | **无输出** |
++| 4.2 干净临时目录 | `cd $(mktemp -d) && pytest <abs>/sdflow-issues/tests/` | **253 passed, 1 xfailed**；该目录 `ls -A \| wc -l` = **0** |
++
++---
++
++## 6. 诚实边界（MUST NOT 读成"全覆盖"）
++
++1. **CF-8**：`timeout=30` 的**数值本身无自动化锚**——真等满 30s 会给每次跑套件加 30s 墙钟，
++   代价不可接受。已覆盖的是契约层（`ValueError` + 不回落 + `subprocess.run` 确收正数 `timeout`）
++   与真 PATH 注入 shim（外层 timeout 收窄到 1s）。**MUST NOT 宣称「超时面已全覆盖」。**
++2. **Windows 泳道未验证**（见 §2 边界段）——写好了，没跑过。
++3. **CF-2**：R4 的达成锚在 **Task 5**（仓根 `conftest.py` + `pytest.ini` 的机械保证），
++   **不在 Task 1**（Task 1 清的是 R4 被违反后的历史产物）。本票的 4.1 / 4.2 是 R4 的
++   **收敛验证**，不是 R4 的达成本身。
++4. **#8 `outside-voice.sh` 的 `$repo_root` 仍未经校验**——排除是基于「sink 无写能力」，
++   不是基于「值是对的」。质量面残余（voice 在错树取证）已如实记在 §1。
++5. 面治扫描证明的是「**`show-toplevel` 这个字面量**的全部出现处已裁定」。**其他求仓根的姿势**
++   （如 `--git-dir`、向上找 `.git`、`Path(__file__).parents[N]`）不在本次扫描口径内，未被排除。
++
++---
++
++## 7. 🔴 须在设计门回写四件套的完整清单（CF-9 + 本票新发现）
++
++> 四件套在设计门拍板后冻结（改动触发 `ship_gate` 失鲜 REFUSE_START），故一律汇总到此、一次性回写。
++
++**承自 CF-9（Task 5 双轴审确认，全部是「实现对、文档措辞旧」）**：
++
++| # | 文件 | 落差 | 回写动作 |
++|---|---|---|---|
++| a | `spec.md:157-158` | 仍写「一切落盘物 MUST 位于 `tmp_path`」，而 design **D6 已收窄**为「禁止新增 cwd **顶层条目**」，决议没落到 spec 正文 ⇒ spec 目前宣称了实现不覆盖的东西 | 正文改到 D6 的收窄口径 |
++| b | `spec.md:160` + ADR-3 标题/决策 + `tasks.md 3.1` | 均写「**autouse fixture**」，实现用的是 `pytest_runtest_{setup,call,teardown}` **hook wrapper**（理由：autouse fixture 的 teardown 异常会被记成「passed + teardown error」，摘要行写 `1 passed`，泄漏降级成脚注 ⇒ 照字面实现反而制造假绿） | 三处措辞改 hook wrapper + 记录「为什么不是 autouse fixture」 |
++| c | ADR-3 覆盖机制 | 「仓根一份天然覆盖」**漏了前置条件**：conftest 收集止于 `confcutdir`（默认 = rootdir），本仓此前无 ini ⇒ 从仓外跑 rootdir 塌缩、仓根 conftest 不被收集（双向变异实证） | 补 `confcutdir` 前置条件；**「代价」段从一个根级文件改为两个**（`conftest.py` + `pytest.ini`，缺一即失效） |
++| d | `tasks.md 4.4` | 「没有根级 pytest 配置」被新增的 `pytest.ini` 正面证伪 | **本票已按两文件口径执行完毕**（见 §3）；tasks 正文待回写 |
++| e | ADR-3 基线 | 自称「**12 个** skill + hack 均 0 残留」，实测是 **11 个**（10 skill + hack；`sdflow-retro` 无 `tests/`） | 订正为 11 |
++
++**本票新增**：
++
++| # | 文件 | 内容 |
++|---|---|---|
++| f | `proposal.md` Non-Goals | 写入 §1 的 **8 处扫描结果 + #4–#8 五处排除的安全论证**，其中 **#8 `outside-voice.sh` MUST 保留为独立论证段**（工具权限层无写能力），**MUST NOT 与 #4–#7 的「只读拼路径」豁免合并成一条模板** |
++| g | `proposal.md` Non-Goals | 补记 §6.5 的**扫描口径边界**：本次只穷举了 `show-toplevel` 字面量，其他求根姿势未裁定 |
++| h | `tasks.md 4.3` / `proposal.md` P2 | 「登记**编号** + 路径」按字面不可执行——`premise-verification.md` 无文档级编号（`gstack-review.md:70` D1 已指出）。本票已改为「路径 + 内部规则 N」登记。**待拍板**：是否给该 rules 文件补 `PV-1` 式 H1 前缀（改 `openspec/rules/`，独立动作） |
++| i | ADR-2 / `spec.md` 祖先校验段 | 补记 **CF-6 的可观测性降级**：跨盘符时 `commonpath` 自抛 stdlib `ValueError`，行为 fail-closed 但消息不带三段式。当前保留 `commonpath`（written decision），已用测试钉死；若将来换 `PurePath.is_relative_to` 须走设计门 |
++| j | design「测试覆盖图」 | 补 Windows 泳道 5 条用例；并**如实标注其证据状态 = 待 CI Windows runner**，MUST NOT 直接标 ✅ |
+diff --git a/openspec/issues/buglist/2026-07-19-buglist.md b/openspec/issues/buglist/2026-07-19-buglist.md
+index a9939f7..6e49833 100644
+--- a/openspec/issues/buglist/2026-07-19-buglist.md
++++ b/openspec/issues/buglist/2026-07-19-buglist.md
+@@ -7,6 +7,7 @@ sdflow-issues:
+     B13: {"module":"outside-voice","summary":"outside-voice.sh 失败通道绕过出境 secret_scan（三洞并存）","priority":"P1","status":"PROPOSED","time":"11:53","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+     B14: {"module":"outside-voice","summary":"高频×多类型混合信号风暴可整体击穿 bash trap 机制，孤儿必然产生（实测 67%）","priority":"P1","status":"PROPOSED","time":"11:53","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+     B15: {"module":"recorder/lock","summary":"跨进程根分裂时 recorder_lock 静默写进错误的仓根（spec R2 Scenario 3 的 MUST 当前不成立）","priority":"P1","status":"OPEN","time":"21:59","change":"harden-repo-root-fail-closed","batch":null}
++    B16: {"module":"sdflow-init/tests/test_outside_voice.py","summary":"test_exec_claude_reverse_path_three_flags_golden 间歇性 FAILED，触发条件未定位（原记的「全量跑必红」已被多轮实测证伪）","priority":"P3","status":"OPEN","time":"23:10","change":"harden-repo-root-fail-closed","batch":null}
+ ---
+ # 2026-07-19 Buglist
+ 
+@@ -114,3 +115,19 @@ helper 被信号的**默认处置**直接终止（`returncode` 为负 = 被信
+ 
+ **影响范围**：<待评估>
+ <!-- sdflow-issue-block:end id=B15 -->
++
++<!-- sdflow-issue-block:start id=B16 -->
++## B16: test_exec_claude_reverse_path_three_flags_golden 间歇性 FAILED，触发条件未定位（原记的「全量跑必红」已被多轮实测证伪）
++> test_exec_claude_reverse_path_three_flags_golden 间歇性 FAILED，触发条件未定位（原记的「全量跑必红」已被多轮实测证伪）
++
++**关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
++
++**现象**：该用例曾被记为「全量跑 FAILED / 单独跑 PASSED」的 order-dependent 缺陷（proposal Non-Goals + tasks 4.5）。但 harden-repo-root-fail-closed 实现期的多轮全量 pytest 中它**时红时不红**：Task 1 的全量跑（1753 passed / 0 failed）与 Task 6 的全量跑（1870 passed / 0 failed）均未复现。⇒ **真实触发条件比记录的窄，且尚未定位**——可能与并发、机器负载、或更早某个特定用例的残留状态相关，但均未被证实。MUST NOT 按「全量跑必红」排查。复现前的下一步建议：捕获一次失败时的完整 -p no:randomly 用例序 + 失败断言差异，再据此缩窄到最小复现集。
++
++**根因**：<待分析>
++
++**修复方案**：
++- <待补充>
++
++**影响范围**：<待评估>
++<!-- sdflow-issue-block:end id=B16 -->
+diff --git a/openspec/issues/todolist/2026-07-todolist.md b/openspec/issues/todolist/2026-07-todolist.md
+index 76be46d..3ecab1a 100644
+--- a/openspec/issues/todolist/2026-07-todolist.md
++++ b/openspec/issues/todolist/2026-07-todolist.md
+@@ -38,6 +38,8 @@ sdflow-issues:
+     T179: {"module":"sdflow-done / sdflow-ship","summary":"archive 步骤可能打断测试，而其后无人重跑全套件 —— gate 判 SHIPPED 时 main 实际是红的","type":"基础设施","status":"OPEN","time":"2026-07-19 13:47","change":"main","batch":null}
+     T180: {"module":"sdflow-todolist/scripts/todolist.py + sdflow-buglist/scripts/buglist.py","summary":"recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块","type":"功能增强","status":"OPEN","time":"2026-07-19 17:20","change":"harden-repo-root-fail-closed","batch":null}
+     T181: {"module":"recorder/repo_root","summary":"repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入）","type":"代码质量","status":"OPEN","time":"2026-07-19 21:36","change":"harden-repo-root-fail-closed","batch":null}
++    T182: {"module":"recorder/repo_root","summary":"repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）","type":"基础设施","status":"OPEN","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":null}
++    T183: {"module":"recorder/repo_root","summary":"repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed","type":"代码质量","status":"OPEN","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":null}
+ ---
+ # 2026-07 TODO
+ 
+@@ -1695,3 +1697,21 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring
+ 
+ **思路**：加一个 append-note/amend 子命令：--id 定位既存 item，把一段 prose 追加进其 marker block（无块则建块），保持 frontmatter item 不动、ID 不新增。门禁沿用现有 marker 一致性校验。三份 recorder 里 buglist/todolist 同款（两向组），需同步实现。注意与 T170 本身的关系：若 T170 先落地（canonical 源 + vendoring），本条实现只需写一处。
+ <!-- sdflow-issue-block:end id=T180 -->
++
++<!-- sdflow-issue-block:start id=T182 -->
++## T182: repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）
++> repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面）
++
++**关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
++
++**备注**：三份 recorder 的 repo_root 步骤③用 subprocess.run(capture_output=True) 读 `git rev-parse --show-toplevel`，输出量无上限。PATH 上被替换的 git（或被篡改的 wrapper）吐 GB 级 stdout 时，内存在步骤④形状校验执行**之前**就已被吃掉。定性：DoS 面而非正确性面——所有身份判据仍然成立，timeout=30 已限住时间窗。不在本 change 内修的理由：改成 Popen + 定量读（读满 N 字节即断流 + 判定）会把一个 3 行调用变成一段带缓冲/EOF/僵尸进程回收的手写循环，且须三份同步、进 AST 镜像 roster——复杂度与该面的可利用性不成比例。来源：design Non-Goals；codex X10 后半。
++<!-- sdflow-issue-block:end id=T182 -->
++
++<!-- sdflow-issue-block:start id=T183 -->
++## T183: repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed
++> repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed
++
++**关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
++
++**备注**：步骤①的 os.path.isdir(start) 与步骤③的 subprocess.run(cwd=start) 之间有竞态窗口。窗口内 start 被外部删除 ⇒ subprocess.run 抛 FileNotFoundError（OSError 子类）⇒ 被步骤③的 except (OSError, CalledProcessError) 接住、走**回落分支**返回 os.path.abspath(start)，而不是受控 ValueError。属既有回落语义的边角：spec 未对该窗口提出要求，且回落值经步骤①b 归一化后恒为绝对路径（不再触 cwd）。修法方向（若将来要收口）：回落前复查 isdir(start)，不存在则改抛 ValueError——须先确认与 spec「git 命令失败即回落」的措辞不冲突，故是设计级决定而非就地改。来源：carry-forward CF-7（Task 2 implementer Concern 5）。
++<!-- sdflow-issue-block:end id=T183 -->
+diff --git a/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py b/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
+index 3cb715c..d75be08 100644
+--- a/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
++++ b/sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py
+@@ -122,3 +122,168 @@ def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
+         assert (installed / "scripts/buglist.py").read_bytes() == (
+             ROOT / "sdflow-buglist/scripts/buglist.py"
+         ).read_bytes()
++
++
++# ── repo_root 的 Windows 泳道覆盖（change harden-repo-root-fail-closed · tasks 4.6 / CF-6） ──
++#
++# 为什么这些用例落在**本文件**而不是 test_repo_root_identity_buglist.py：
++# `windows-recorder-smoke.yml` 只跑本文件，主矩阵 `mechanical-gates.yml` 只有 ubuntu/macos
++# ⇒ repo_root 的六步判据（isabs 对 "C:\\…" / normcase 对盘符与大小写 / commonpath 跨盘符 /
++# realpath 对 SUBST）此前**从未在 Windows 上真跑过**。本文件此前的两个用例直传 tmp_path 给
++# recorder_lock，绕开 repo_root。
++
++_GIT_DISCOVERY_ENV = (
++    "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++    "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++    "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++)
++
++
++@pytest.fixture
++def _clean_git_env(monkeypatch):
++    """清空仓库/工作树发现类变量，确保断言的是 repo_root 自身的判据而非宿主残留。"""
++    for name in _GIT_DISCOVERY_ENV:
++        monkeypatch.delenv(name, raising=False)
++    for name in list(os.environ):
++        if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
++            monkeypatch.delenv(name, raising=False)
++
++
++def _repo_root_fn():
++    return _load("buglist_win_repo_root", "sdflow-buglist/scripts/buglist.py").repo_root
++
++
++def _git(*args, cwd):
++    return subprocess.run(
++        ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True,
++    )
++
++
++def _init_repo(path):
++    path.mkdir(parents=True, exist_ok=True)
++    _git("init", "-q", cwd=path)
++    return path
++
++
++def test_windows_repo_root_positive_regression(tmp_path, _clean_git_env):
++    """正向回归：真实 git 仓库下 repo_root 不抛异常，且仓根/子目录起点都解析到同一个根。
++
++    这条同时是 design Open Questions 前两问的实测答案——`os.path.isabs("C:\\…")` 与
++    `normcase` + `commonpath` 在盘符与大小写下的行为，全部经由真实调用而非推理确认。
++    """
++    assert sys.platform == "win32"
++    repo_root = _repo_root_fn()
++    repo = _init_repo(tmp_path / "repo")
++    sub = repo / "pkg" / "mod"
++    sub.mkdir(parents=True)
++
++    expected = os.path.realpath(str(repo))
++    assert repo_root(str(repo)) == expected
++    assert repo_root(str(sub)) == expected, "子目录起点 MUST 解析到同一个仓根"
++
++    # 大小写不敏感的盘符路径同样必须过（normcase 的实测锚，非推理）。
++    swapped = str(repo)
++    swapped = swapped[0].swapcase() + swapped[1:]
++    assert repo_root(swapped) == expected
++
++
++def test_windows_repo_root_rejects_nonexistent_start(tmp_path, _clean_git_env):
++    """负例①：起点不是既存目录 ⇒ 在调 git 之前受控 ValueError，且该路径 MUST NOT 被创建。"""
++    assert sys.platform == "win32"
++    repo_root = _repo_root_fn()
++    missing = tmp_path / "no-such-start"
++
++    with pytest.raises(ValueError) as exc:
++        repo_root(str(missing))
++
++    message = str(exc.value)
++    assert "仓根探测起点不是既存目录" in message
++    assert message.startswith("ERROR: ") and "; cause: " in message and "; fix: " in message
++    assert not missing.exists(), "被拒起点 MUST NOT 在校验过程中被具现"
++
++
++def test_windows_repo_root_rejects_core_worktree_redirect(tmp_path, _clean_git_env):
++    """负例②（主防线）：`core.worktree` on-disk 重定向到起点之外 ⇒ 祖先校验拦下。
++
++    这条在 Windows 上真跑 `realpath` + `normcase` + `commonpath` 三件组合——同盘符路径，
++    故走的是 commonpath 的正常返回路径（跨盘符降级另见下一条 CF-6 用例）。
++    """
++    assert sys.platform == "win32"
++    repo_root = _repo_root_fn()
++    repo = _init_repo(tmp_path / "repo")
++    outside = tmp_path / "outside"
++    outside.mkdir()
++    _git("config", "core.worktree", str(outside), cwd=repo)
++
++    # 前提核验：不假设，真跑一遍确认 git 确实 rc=0 且返回那个仓外目录。
++    probe = subprocess.run(
++        ["git", "rev-parse", "--show-toplevel"],
++        cwd=str(repo), capture_output=True, text=True,
++        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
++    )
++    assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
++    assert Path(probe.stdout.strip()).resolve() == outside.resolve(), (
++        f"前提不成立：core.worktree 未重定向 toplevel，实得 {probe.stdout!r}"
++    )
++
++    with pytest.raises(ValueError) as exc:
++        repo_root(str(repo))
++
++    assert "不包含探测起点" in str(exc.value)
++    assert list(outside.iterdir()) == [], "仓外目录 MUST NOT 出现任何产物"
++    assert not (outside / "openspec").exists()
++
++
++def test_windows_commonpath_cross_drive_raises_without_recorder_format():
++    """CF-6（判据层，无条件运行）：跨盘符时 `os.path.commonpath` **自行**抛 ValueError。
++
++    后果：repo_root 步骤⑤在跨盘符输入下抛的是 **stdlib 的** ValueError ⇒ 行为仍 fail-closed
++    （`main()` 的 `except ValueError` 照样接住 → exit 2、无 traceback），但消息**不带** recorder
++    的 `ERROR: …; cause: …; fix: …` 三段式 ⇒ **可观测性降级**。本用例把这一事实钉成机械锚，
++    将来若换 `PurePath.is_relative_to`（跨盘符返回 False 而非抛异常）会当场变红、逼走设计门。
++    """
++    assert sys.platform == "win32"
++    with pytest.raises(ValueError) as exc:
++        os.path.commonpath([os.path.normcase(r"C:\alpha"), os.path.normcase(r"D:\beta")])
++    message = str(exc.value)
++    assert not message.startswith("ERROR: "), "若 stdlib 消息形态变了，须重新评估降级结论"
++    assert "cause:" not in message and "fix:" not in message
++
++
++def _second_drive_probe():
++    """返回一个位于**非 tmp 盘符**的可写探针目录；找不到返回 None（用例据此诚实 skip）。"""
++    primary = os.path.splitdrive(os.path.abspath(os.sep))[0].upper()
++    for letter in "DEFGHIJ":
++        drive = f"{letter}:"
++        if drive == primary or not os.path.isdir(drive + os.sep):
++            continue
++        probe = Path(drive + os.sep) / f"sdflow-cf6-{os.getpid()}"
++        try:
++            probe.mkdir()
++        except OSError:
++            continue
++        return probe
++    return None
++
++
++def test_windows_repo_root_cross_drive_redirect_is_fail_closed(tmp_path, _clean_git_env):
++    """CF-6（端到端）：core.worktree 指向**另一个盘符** ⇒ 仍 fail-closed，但消息降级。
++
++    需要 runner 上真有第二个可写盘符；没有就诚实 skip —— 上一条判据层用例无条件覆盖同一事实。
++    """
++    assert sys.platform == "win32"
++    probe = _second_drive_probe()
++    if probe is None:
++        pytest.skip("runner 上没有第二个可写盘符，跨盘符端到端路径无法构造")
++    try:
++        repo_root = _repo_root_fn()
++        repo = _init_repo(tmp_path / "repo")
++        assert os.path.splitdrive(str(repo))[0].upper() != os.path.splitdrive(str(probe))[0].upper()
++        _git("config", "core.worktree", str(probe), cwd=repo)
++
++        with pytest.raises(ValueError):
++            repo_root(str(repo))
++
++        assert list(probe.iterdir()) == [], "跨盘符重定向目标 MUST NOT 出现任何产物"
++    finally:
++        shutil.rmtree(probe, ignore_errors=True)

@@ -199,17 +199,17 @@ MUST NOT 写入 stdout：recorder 的 stdout 是机器可读契约（`scan --jso
 内部自洽、验不了漏扫（本轮冷复审正是这样抓到 4→8 的）。其中 `outside-voice.sh` 把仓根传给
 `codex exec -C … --add-dir …`，**值域与「只读拼路径」不同，MUST 单独论证，不得套用豁免模板**。
 
-- [ ] 重跑扫描确认命中处数，逐处给出纳入/排除理由，排除理由是**安全论证**（sink 只读 / 无目录
+- [x] 重跑扫描确认命中处数，逐处给出纳入/排除理由，排除理由是**安全论证**（sink 只读 / 无目录
       创建 / 有前置兜底），**不是**「不属 roster」这种程序性理由
-- [ ] Windows 泳道真实覆盖 `repo_root`：正向回归（真实 git 仓库下不抛异常）+ 至少一条负例。
+- [x] ⚠️ **有条件达成（未在 Windows 真跑）** Windows 泳道真实覆盖 `repo_root`：正向回归（真实 git 仓库下不抛异常）+ 至少一条负例。
       现状是该泳道只跑直传临时目录的用例、**绕开 `repo_root`**，主矩阵只有 ubuntu/macos ⇒
       新判据从未在 Windows 真跑过。design Open Questions 的三条（盘符 `isabs`、
       `normcase`+`commonpath` 在大小写/UNC 下的行为、`realpath` 对 SUBST）全部未实测
-- [ ] `CLAUDE.md` 登记 `premise-verification.md` 的编号 + 路径指针（**只写编号 + 路径，
+- [x] `CLAUDE.md` 登记 `premise-verification.md` 的编号 + 路径指针（**只写编号 + 路径，
       MUST NOT 复制规则文本**）
-- [ ] `CLAUDE.md`「运行测试」段同步：「没有根级 pytest 配置」一句已被 Task 5 证伪，
+- [x] `CLAUDE.md`「运行测试」段同步：「没有根级 pytest 配置」一句已被 Task 5 证伪，
       改为如实描述（不改即为本变更自己制造的文档漂移）
-- [ ] 垃圾目录树**未再生**（Task 1 删的是存量，本条验证的是「修完之后不会重新长出来」）
-- [ ] 两条 defer 如实登记（`outside_voice` 用例的 order-dependent 失败 → buglist；
+- [x] 垃圾目录树**未再生**（Task 1 删的是存量，本条验证的是「修完之后不会重新长出来」）
+- [x] 两条 defer 如实登记（`outside_voice` 用例的 order-dependent 失败 → buglist；
       git stdout 无界读入的 DoS 面 → todolist），登记时**显式带 `change` 字段**
-- [ ] 全仓 `pytest` 无回归
+- [x] 全仓 `pytest` 无回归
