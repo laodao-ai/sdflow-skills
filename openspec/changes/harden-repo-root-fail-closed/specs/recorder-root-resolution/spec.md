@@ -8,8 +8,12 @@ MUST NOT 把 `git rev-parse --show-toplevel` 的 stdout 直接当仓根返回，
 
 **校验序列**（按序，任一不满足即 fail-closed）：
 
-1. **起点可信性**：`start` MUST 是既存目录，否则抛 `ValueError`。此校验 MUST 在调用 git **之前**
-   完成——显式传入的 `--root` 与自动探测的起点同等对待。
+1. **起点可信性**：MUST 在调用 git **之前**完成。
+   - `start` 未指定（`--root` 默认 `None`）：起点 MUST 由 `os.getcwd()` 求得；其
+     `FileNotFoundError`（进程 cwd 已被删除）MUST 转为受控 `ValueError`。
+     **MUST NOT 用 `os.path.isdir(".")` 代替**——cwd 被删除后它仍返回 `True`，校验形同虚设，
+     而随后的 `os.path.abspath(".")` 会在回落分支内部抛 `FileNotFoundError` 并裸传播成 traceback。
+   - `start` 显式传入：MUST 通过 `os.path.isdir(start)`，否则抛 `ValueError`。
 2. **环境净化**：调用 git 前 MUST 从子进程环境剔除仓库/工作树发现类变量：`GIT_DIR`、
    `GIT_WORK_TREE`、`GIT_COMMON_DIR`、`GIT_CEILING_DIRECTORIES`、`GIT_INDEX_FILE`、
    `GIT_DISCOVERY_ACROSS_FILESYSTEM`、`GIT_CONFIG_COUNT`、`GIT_CONFIG_GLOBAL`、
@@ -66,6 +70,12 @@ bare repo、`.git/` 目录内）是**正常场景**，MUST 返回 `os.path.abspa
 - **THEN** `repo_root(start)` 在调用 git **之前**抛 `ValueError`
 - **AND** 该路径 MUST NOT 被创建
 
+#### Scenario: 进程当前工作目录在运行期被删除
+- **WHEN** 未指定 `--root`，且进程的 cwd 在调用前已被外部删除
+      （此时 `os.path.isdir(".")` 仍返回 `True`，而 `os.getcwd()` 抛 `FileNotFoundError`）
+- **THEN** `repo_root()` 抛受控 `ValueError`，CLI 层表现为 exit 2 + stderr 诊断
+- **AND** stderr MUST NOT 含 `Traceback`
+
 #### Scenario: git 探测超时
 - **WHEN** `git rev-parse --show-toplevel` 超过设定的 timeout 未返回（如仓库位于失联的网络文件系统）
 - **THEN** `repo_root(start)` 抛 `ValueError`，MUST NOT 回落——超时不等于「不在仓库里」，
@@ -100,8 +110,14 @@ bare repo、`.git/` 目录内）是**正常场景**，MUST 返回 `os.path.abspa
 
 ### Requirement: 仓根在单次调用内只解析一次
 
-recorder 的每次 CLI 调用 MUST 只解析一次仓根。`main()` 解析后写回 `args.root`，其余
+recorder 的每个**进程**MUST 只解析一次仓根。`main()` 解析后写回 `args.root`，其余
 `cmd_*` 函数 MUST 直接使用该已验证值，MUST NOT 再次调用 `repo_root()`。
+
+**边界定义**：本要求的作用域是**进程**，不是逻辑命令。`_scan_pool` / `cmd_sweep` 以
+`--root <已解析值>` 拉起的子进程，其自身 `main()` 仍会解析一次——跨进程看是「每进程一次」。
+该跨进程二次解析的风险由 `validate_recorder_participant` 的 path/token 绑定兜底
+（子进程若解析出不同的根，其 `_lock_path` 处无锁文件 ⇒ `RecorderLockError` 响亮失败），
+**此依赖 MUST 有测试锚定**，不得因「看起来与 token 校验重复」而被简化掉。
 
 **理由不是省一次子进程**：`repo_root()` 的校验是**逐次独立**的，不保证两次解析得到同一个仓。
 `git rev-parse --show-toplevel` 会沿目录树向上搜索，若两次解析之间目标目录失去自己的 `.git`
@@ -114,8 +130,13 @@ rc=0、都通过全部校验，但锁建在一个根上、数据写进另一个�
 - **AND** 三份 recorder 的 `cmd_*` 函数体内 MUST NOT 出现 `repo_root(` 调用
 
 #### Scenario: 锁与写入锚定同一个根
-- **WHEN** 一次 `reindex` / `batch` 类命令在持锁期间执行写入
+- **WHEN** 一次 `reindex` / `batch` 类命令在**同一进程内**持锁期间执行写入
 - **THEN** `recorder_lock` 记录的 `repo` 与实际写入路径 MUST 源自同一次解析结果
+
+#### Scenario: 子进程解析出不同的根时响亮失败
+- **WHEN** 父进程持锁并以 `--root` 拉起子进程，而子进程重解析得到**不同**的根
+      （两次解析之间目标失去 `.git`）
+- **THEN** 子进程 MUST 以 `RecorderLockError` 失败，MUST NOT 静默写入其自行解析出的根
 
 ### Requirement: fail-closed 校验在三份 recorder 间逐字一致
 

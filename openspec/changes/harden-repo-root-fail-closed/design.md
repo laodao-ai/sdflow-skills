@@ -41,9 +41,16 @@ repo_root(start)
 **Non-Goals:**
 - 不重构镜像机制——已登记 **T170**（下一步工作，与 B11/B12 同 batch）。本次仍手工三改，但
   `repo_root` 最终形态须**抽取友好**（消息用通用文案、不含脚本名），使 T170 落地时是纯搬运。
-- 不动 `sdflow-init/scripts/init.py:543` 的 `_git_root_or_dot()`：其消费点只读（`lint_config`
-  拼路径读 config.yaml，包在 `except (OSError, UnicodeDecodeError)`）、**全文件无 `os.makedirs`**
-  ⇒ 坏根只会产生一条 lint 提示，不会具现目录。**这是安全论证，不是「不属 roster」的程序性理由。**
+- 不动 `sdflow-init/scripts/init.py:543` 的 `_git_root_or_dot()`：**其唯一消费链
+  （`cmd_config_lint` → `lint_config`）不含 `os.makedirs`**，只读 config.yaml 且包在
+  `except (OSError, UnicodeDecodeError)` 里 ⇒ 坏根只产生一条 lint 提示，不具现目录。
+  （该文件另有 4 处 `os.makedirs`，走 `init`/`update`/`retire-hooks` 三个 mode 的
+  `args.root` 路径，与 `_git_root_or_dot()` 不相交——**故不可表述为「全文件无 makedirs」**。）
+  **这是安全论证，不是「不属 roster」的程序性理由。**
+- 不给 `detect_change()`（`buglist.py:596-613` / `todolist.py` 同款）加同款加固：它内部有一次
+  结构相同的 `git rev-parse --abbrev-ref HEAD` 子进程调用，**同样面临网络 FS 挂死的无限阻塞**，
+  但其返回值只用作 provenance 字段（change 名），**不参与任何路径拼接、不进写入根** ⇒ 坏值的
+  后果是「记错了来源 change」而非「写错目录」。**已记 todo**，与 T170 同批处理。
 - 不动 `sdflow-ship/scripts/ship_gate.py:837`（同款反模式第 4 处）：其 `decide()` 开头即有
   `git rev-parse --git-dir` 前置兜底，坏根会安全落 `UNKNOWN`；全文件亦无 `makedirs`。
 - 不在 helper 内做进程终止（`sys.exit` / `_die`）——抛异常交调用方处置，见 ADR-4。
@@ -172,6 +179,16 @@ call#1 的根，而 `cmd_batch_add`/`set_status`/`rename` 在第二次解析后*
 选单点解析而非身份比对：**二次解析本来就是冗余的**（`main()` 已把结果写回 `args.root`），
 删掉它是减法；加身份比对是往一个不该存在的调用上再加机制。
 
+🔴 **「单次调用」的边界 = 进程，不是逻辑命令。** `_scan_pool` / `cmd_sweep` 会以 `--root <已解析值>`
+拉起 `buglist.py` / `todolist.py` 子进程，子进程自己的 `main()` **仍会对该值再跑一次 `repo_root()`**。
+跨进程看仍是「每进程各一次」，Success Metric 3 的「全脚本仅剩 3 处」正是按此计数。
+
+跨进程二次解析的风险**由另一套机制兜底**：子进程重解析若得到不同的根，它拼出的 `_lock_path(root)`
+处不存在锁文件 ⇒ `validate_recorder_participant` 走 `RecorderLockError` 响亮失败，而非静默写入。
+**这层依赖是有意为之，此处显式登记**——将来若有人「简化」`validate_recorder_participant` 的
+path/token 绑定（觉得两道校验重复），跨进程静默写错目录的风险会在没有任何 ADR-5 提示的情况下
+重新出现。tasks 1.11 为此加锚定测试。
+
 **代价**：16 处各改一行。副作用已核实——几个绕过 `main()` 直调 `cmd_*` 的测试传的都是真实存在
 的 `tmp_path`（已是绝对路径），改后 `root = args.root` 行为等价。
 
@@ -202,7 +219,50 @@ git）。**真正会导出它们的是 git hook**——submodule 中的 hook 会
 git 2.6.3 起会导出 `GIT_WORK_TREE`。recorder 作为可分发 skill 会跑在任意消费项目里，hook 场景
 真实存在 ⇒ 环境净化是必需项而非可选项。
 
-**代价**：清单需随 git 演进维护（缓解：祖先校验兜底，见 ADR-2）。
+🔴 **黑名单 MUST 写成 `repo_root` 函数体内的局部常量，MUST NOT 写成模块级常量。**
+`test_mirror_consistency` 的三向 AST 比较**只 `getattr` roster 里的函数对象**，从不检查模块级
+常量的**值**——一个 `Name` 节点只表示「引用了这个名字」，不携带绑定值。实测：三份现存的
+`RECORDER_PARTICIPANT_ALLOWLIST` / `RECORDER_LOCK_ENV` 等模块级常量目前值相同，**纯属人肉维护
+的巧合，零机械守护**。若黑名单按最自然的风格写成模块级常量，它会**完全落进既有安全网的盲区**，
+三份漏一个变量名或 typo 时 `determinism-guards` 不会红——而「静默漂移」正是本 change 要铲除的
+类别，不能在修它的同时原样复刻一份。
+
+**这条约束同时是 T170 的前置**：若黑名单是模块级常量而 T170 只把 `repo_root` 函数体抽进
+canonical 源，该常量的三向一致性将**永久**失去镜像保护。写在函数体内则随函数一起搬走。
+
+**净化加在哪一层**：加在 `repo_root` 内部（局部），**不改 `recorder_child_env`**。后者是三向镜像
+helper，另有两类调用方——`detect_change` 的 git 调用、跨进程 token 转发（`_scan_pool`/`cmd_sweep`
+共 6 处）——在那里剔 `GIT_*` 会顺带改变它们的行为，而本次没有为这些消费点准备任何验证。
+`detect_change` 的同类风险另行处置，见 Non-Goals。
+
+**代价**：清单需随 git 演进维护（缓解：祖先校验对**可指向任意目录**的那类攻击兜底，见 ADR-2；
+但对 `GIT_DISCOVERY_ACROSS_FILESYSTEM` 无兜底，见失败模式表⚠️）。
+
+### ADR-7：起点解析用 `os.getcwd()`，`--root` 默认值改 `None`
+
+**决策**：三份 argparse 的 `--root` 默认值从 `"."` 改为 `None`；`repo_root(start=None)` 时以
+`os.getcwd()` 求起点（其 `FileNotFoundError` 转为受控 `ValueError`），显式传入时才走
+`os.path.isdir(start)` 校验。
+
+**备选**：保持 `default="."`，起点校验用 `os.path.isdir(".")`。
+
+**理由**：**`os.path.isdir(".")` 在进程 cwd 被删除后仍返回 `True`**（实测，POSIX 通用行为），
+而 `os.path.abspath(".")` 与 `os.getcwd()` 此时抛 `FileNotFoundError`。备选方案的连锁后果：
+
+```
+cwd 被外部删除
+  → isdir(".") 误判通过（起点校验形同虚设）
+  → git 以非 0 退出 → 落入「正常场景」回落分支
+  → return os.path.abspath(start) 自身抛 FileNotFoundError
+  → 该异常在 except 块内部抛出，不被同一 except (OSError, ...) 捕获
+  → 裸传播 → main() 的 except ValueError 接不住 → 裸 traceback
+```
+
+这正是本 change 通篇要消灭的失败形状，只是触发条件换成了「cwd 被删除」。用 `os.getcwd()` 求
+起点则**立即**抛出、就地转成受控 `ValueError`，缺口从源头消失。
+
+**代价**：三份 argparse 定义各改一行；`repo_root` 的签名语义从「默认当前目录」变为「默认自动
+探测」（行为等价，但把「未指定」与「显式指定 `.`」区分开了——后者仍走 `isdir` 校验）。
 
 ### ADR-4：坏 root 抛 `ValueError`，不在 helper 内 `sys.exit`
 
@@ -256,15 +316,29 @@ git 2.6.3 起会导出 `GIT_WORK_TREE`。recorder 作为可分发 skill 会跑�
 | **`--root` 指向不存在/非目录** | 回落 `abspath(start)` → **下游 makedirs 具现该坏路径** | `ValueError` → exit 2 | 起点可信性（调 git 前） |
 | **`core.worktree` on-disk 重定向** | **静默写进仓外目录** | `ValueError` → exit 2 | **祖先校验（唯一防线）** |
 | `GIT_DIR`/`GIT_WORK_TREE` 重定向 | **静默写进另一个仓** | 正常返回真实根 | 环境净化 + 祖先校验兜底 |
-| `GIT_DISCOVERY_ACROSS_FILESYSTEM` 越过挂载点 | 可能取到上层另一个仓 | 正常返回真实根 | 环境净化 + 祖先校验兜底 |
+| `GIT_DISCOVERY_ACROSS_FILESYSTEM` 越过挂载点 | 可能取到上层另一个仓 | 正常返回真实根 | **环境净化（唯一防线）**——见下方⚠️ |
 | git rc=0，stdout 为空 / 非绝对 / 非目录 | **静默建垃圾目录树** | `ValueError` → exit 2 | 形状校验 |
 | 坏值恰好命中 cwd 下同名目录 | 静默放行 | `ValueError` | `isabs`（形状校验） |
 | 未知选项致 stdout 多行（rc=0） | 首行垃圾被当根 | `ValueError` → exit 2 | 形状校验（首行非绝对路径） |
 | 路径末尾含合法空格/Tab | `strip()` 截短 → 可能命中另一目录 | 保留 | `rstrip("\r\n")` |
-| **git 挂死（网络 FS 失联）** | **无限阻塞，不失败不可观测** | `ValueError` → exit 2 | `timeout=30` + 超时不回落 |
+| **git 挂死（网络 FS 失联）** | **无限阻塞，不失败不可观测** | `ValueError` → exit 2 | `timeout=30`（**单次调用的界，非命令级预算**——见下方⏱） |
+| **进程 cwd 在运行期被删除** | 起点校验被 `isdir(".")` 绕过 → 回落分支的 `abspath` 自身抛 `FileNotFoundError` → **裸 traceback** | `ValueError` → exit 2 | 起点解析用 `os.getcwd()` 而非 `isdir(".")`（ADR-7） |
 | **两次解析间仓身份漂移** | 锁与写入分裂到两个根 | 不可能发生 | **单点解析（ADR-5）** |
 | git rc=0，合法且通过身份校验 | 返回该目录 | 不变 | — |
 | 调用方注入的 `subprocess.run` 被 mock 污染（测试） | **静默建垃圾目录树** | `ValueError` → exit 2 | 形状 + 祖先校验 |
+
+⚠️ **祖先校验对 `GIT_DISCOVERY_ACROSS_FILESYSTEM` 结构性无效，不是「兜底」**：git 向上搜索
+发现的任何 `.git` 所在目录，**按发现机制本身必然是 start 的文件系统祖先** ⇒ `commonpath` 恒成立。
+该变量只影响「搜多远」，不影响「结果是不是祖先」。与之相对，`core.worktree` / `GIT_DIR` /
+`GIT_WORK_TREE` 可指向**任意**目录，祖先校验对它们才是真防线。
+**⇒ MUST NOT 因「反正有祖先校验兜底」而把它从环境净化清单中移除**——那会让缺口静默回归，
+且没有任何测试会红。
+
+⏱ **`timeout=30` 是单次 `repo_root()` 调用的界，不是命令级预算**：`cmd_sweep` 等命令会级联拉起
+多个子进程（2 次 `scan` + 每命中项 1 次 `triage` + 1 次 `batch-add` + 1 次 `reindex`，后者内部又
+拉 2 次 `scan`），每个子进程各自跑一次带 `timeout` 的 `repo_root()`。底层 FS 挂死时最坏总耗时
+≈ `(4 + N) × 30s`，随命中项数线性增长。这是可接受的（最终仍会失败退出，非无限阻塞），但
+**MUST NOT 把失败模式表读成「30s 封顶」**。
 
 ## 可观测性（TG-08）
 
@@ -316,8 +390,18 @@ MUST NOT 写入 stdout：recorder 的 stdout 是机器可读契约（`scan --jso
   paranoia」——一次「简化重构」就能让缺口静默回归。
   **缓解**：ADR-2 明写其主防线地位 + tasks 1.4 的 `core.worktree` 回归测试（删掉判据即变红）。
 - **[env 剔除清单随 git 演进失效]** 新版 git 可能引入新的发现类变量。
-  **缓解**：祖先校验兜底（对 `core.worktree` 已实证有效）；清单失效只降级为「纵深防御少一层」，
-  不构成缺口。
+  **缓解**：祖先校验对**可指向任意目录**的那类攻击兜底（`core.worktree` 已实证）；但对
+  `GIT_DISCOVERY_ACROSS_FILESYSTEM` 这类「只能返回祖先」的攻击面**无兜底**，清单是唯一防线
+  （见失败模式表⚠️）。
+- **[`cmd_*` 直调绕过全部校验]** ADR-5 后，六步校验**只在 `main()` 入口成立**；而绕过 `main()`
+  直调 `cmd_*` 是本仓测试套件自身认可的合法形态（`test_issues.py` / `test_task4_rename_snapshot.py`
+  / `test_frontmatter_dual_reader.py` 共 9 处）。若未来有编程式调用方直调并传入未校验的
+  `args.root`，六步校验一步都不会执行。
+  **缓解**：显式登记该契约——`cmd_*` **信任调用方已校验 `args.root`**，只有经 `main()` CLI 入口
+  才有此保证。新增非 CLI 调用路径时须自行保证。（当前全部直调点传的都是 `str(tmp_path)`，已核实。）
+- **[新增模块级常量逃出镜像守护]** AST 三向比较只覆盖 roster 内的**函数体**，不比较模块级常量的
+  **值**。
+  **缓解**：ADR-6 强制黑名单写在函数体内（局部常量），随函数一起被守护、也随函数被 T170 搬走。
 - **[修完假绿测试后覆盖仍不足]** 修好 root 解析后，该测试才第一次真正执行 reindex 的写入路径，
   可能暴露此前从未被执行过的分支。
   **缓解**：Success Metric 2 用变异验证兜底（故意写入 → 必须变红）；若修复后出现新失败，
@@ -357,7 +441,9 @@ MUST NOT 写入 stdout：recorder 的 stdout 是机器可读契约（`scan --jso
 - **BASE-14 假设列表**：见 proposal「假设」节，4 条均已验证。
 - **DOC-1 正文即最终态**：本文不含演进史；PoC 描述属当前事实证据，非考古层。
 - **PV 规则 2「引用即打开」**：本文所有 `file:line`（`issues.py:200/1093/1114/1132-1150`、
-  `determinism-guards/spec.md:8`、`init.py:543`）均在本次会话中真实打开或 grep 确认。
+  `determinism-guards/spec.md:8`、`init.py:543`、`ship_gate.py:837`）均在本次会话中真实打开或
+  grep 确认。**第三轮冷复审订正**：`init.py` 的「全文件无 makedirs」表述过度概括（实为 4 处，
+  但与目标消费链不相交），已改为按消费链表述。
 - **PV 规则 5「正反双向」**：三份 `repo_root` 剥 docstring 后 `ast.dump` 相等，经现场跑
   `test_mirror_consistency.py` 确认（**不记具体 dump 长度**——该值随 Python 版本变化，
   3.9 与 3.14 下各不相同，不构成稳定锚）。

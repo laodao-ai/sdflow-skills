@@ -56,8 +56,11 @@ helper roster，由「剥 docstring 后 `ast.dump` 相等」的一致性测试�
 - 三份 recorder 各自的 `repo_root` 负例测试（新增）
 - determinism-guards 的 AST 等价测试（须保持绿）
 
-**同款反模式的全仓扫描**（`grep -rn "show-toplevel"` 命中 4 处，逐处论证见 Non-Goals）：
-三份 recorder（本次修）· `init.py:543` · `ship_gate.py:837`（后两处**有安全论证的排除**，非遗漏）。
+**同款反模式的全仓扫描**（`grep -rln "show-toplevel" --include="*.py" --include="*.sh"`，
+排除 `.git/`/`tests/`/`openspec/changes/` 后**实测命中 8 个文件**，逐处论证见 Non-Goals）：
+三份 recorder（本次修）· `init.py:543` · `ship_gate.py:837` · `assets/hack/resolve-models.sh` ·
+`resolve-workflow.sh` · `outside-voice.sh`（后五处**有安全论证的排除**，非遗漏）。
+⚠️ 早期版本此处写「4 处」且只枚举了 `.py`——**漏扫三个 shell 脚本**，由第三轮冷复审抓出。
 
 **技术栈**：Python 脚本 + pytest，不命中 backend / embedded / frontend 任一领域清单。
 
@@ -67,7 +70,9 @@ helper roster，由「剥 docstring 后 `ast.dump` 相等」的一致性测试�
    情况下，`.git/config` 里的 `core.worktree` 重定向 MUST 被拒绝；**删掉祖先校验该测试必须变红**
    （实现后跑一次变异确认）。这是整套判据里唯一能拦 on-disk 重定向的一环。
 2. **fail-closed 覆盖全部输入面**：形状负例（非绝对/不存在/空/空白/末尾空格/多行）、起点负例
-   （坏 `--root` 在调 git 前被拦）、超时负例，三份各有测试且**不产生任何目录**。
+   （坏 `--root` 在调 git 前被拦；**cwd 被删除时得到受控 `ValueError` 而非裸 traceback**）、
+   **环境净化负例**（`GIT_DIR`/`GIT_WORK_TREE` 重定向后仍返回真实根）、超时负例——三份各有
+   测试且**不产生任何目录**。
 3. **单点解析**：三份 `cmd_*` 函数体内 `repo_root(` 出现 **0** 次，全脚本仅剩 3 处调用。
 4. **假绿被消除**（变异验证）：故意让 reindex 写入 `tmp_path` 时，
    `test_reindex_cli_non_string_id_...` MUST 变红。当前它恒绿，正是假绿的判据。
@@ -81,9 +86,12 @@ helper roster，由「剥 docstring 后 `ast.dump` 相等」的一致性测试�
 
 - **不重构三份 recorder 的重复结构**：已登记 **T170**（下一步工作，与 B11/B12 同 batch）。本次
   仍手工三改，但 `repo_root` 须保持**抽取友好**，使 T170 落地时是纯搬运。
-- **不给 `init.py:543` 的 `_git_root_or_dot()` 加同款校验**：其消费点只读（`lint_config` 拼路径
-  读 config.yaml，包在 `except (OSError, UnicodeDecodeError)`）、**全文件无 `os.makedirs`** ⇒
-  坏根只产生一条 lint 提示，不具现目录。**这是安全论证，不是「不属 roster」的程序性理由。**
+- **不给 `init.py:543` 的 `_git_root_or_dot()` 加同款校验**：**其唯一消费链
+  （`cmd_config_lint` → `lint_config`）不含 `os.makedirs`**，只读 config.yaml 且包在
+  `except (OSError, UnicodeDecodeError)` 里 ⇒ 坏根只产生一条 lint 提示，不具现目录。
+  （该文件另有 4 处 `os.makedirs`，走 `init`/`update`/`retire-hooks` 的 `args.root` 路径，
+  与 `_git_root_or_dot()` 不相交——故不可表述为「全文件无 makedirs」。）
+  **这是安全论证，不是「不属 roster」的程序性理由。**
 - **不动 `ship_gate.py:837`**：其 `decide()` 开头即有 `git rev-parse --git-dir` 前置兜底，坏根
   安全落 `UNKNOWN`；全文件亦无 `makedirs`。
 - **不限制 git stdout 读取量**：DoS 面而非正确性面，`timeout` 已限时间窗，改 `Popen`+定量读复杂度

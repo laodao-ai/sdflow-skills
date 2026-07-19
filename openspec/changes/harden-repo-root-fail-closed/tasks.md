@@ -16,20 +16,46 @@
       `ValueError` 会被自己的 except 接住，fail-closed 归零）。禁 `except Exception`。
       诊断消息用 `ascii(value)[:N]`，禁字节截断；MUST NOT 在 helper 内 `sys.exit`；
       MUST NOT 写 stdout；**raise 消息 MUST 是通用文案，不含脚本名/`__file__`**
-      （否则 AST 镜像守护当场变红，且破坏 T170 的抽取友好）
+      （否则 AST 镜像守护当场变红，且破坏 T170 的抽取友好）。
+      🔴 **env 剔除清单 MUST 写成 `repo_root` 函数体内的局部常量，MUST NOT 写成模块级常量**
+      ——AST 三向比较只覆盖 roster 内的函数体，不比较模块级常量的**值**（实测：现存
+      `RECORDER_PARTICIPANT_ALLOWLIST` 等三份值相同纯属人肉巧合、零机械守护）。
+      写成模块级 = 新引入的东西直接落进既有安全网盲区（ADR-6）。
+      🔴 **起点求法**：`start=None` → `os.getcwd()`（`FileNotFoundError` 转受控 `ValueError`）；
+      显式传入 → `os.path.isdir(start)`。**MUST NOT 用 `os.path.isdir(".")`**（ADR-7）
       〔Req: 仓根解析证明根的身份；三份逐字一致；ADR-1/2/4/6〕
       - `sdflow-issues/scripts/issues.py:1132-1150`
       - `sdflow-buglist/scripts/buglist.py:581-590`
       - `sdflow-todolist/scripts/todolist.py:581-590`
 - [ ] 1.2 **单点解析**（ADR-5）：删除 16 处 `cmd_*` 内的 `root = repo_root(args.root)`，
-      改为 `root = args.root`。改后 grep 断言：三份的 `cmd_*` 函数体内 `repo_root(` 出现 0 次，
-      全脚本仅剩 3 处调用（三份 `main()` 各一）
+      改为 `root = args.root`。断言手段 **MUST 用 `ast.walk` 统计 Call 节点**，
+      **MUST NOT 用 grep**——grep 会把 `def repo_root(` 与 docstring 里的字面量一并算入
+      （现存 docstring 就含 `` `root = repo_root(args.root)` `` 字样），得到假红或脆件偏移量。
+      期望：Call 节点从 **19** 降到 **3**（三份 `main()` 各一）
       〔Req: 仓根在单次调用内只解析一次〕
+- [ ] 1.2b **同步更新 `repo_root` 的 docstring**：现文描述的是旧架构
+      （「所有 cmd_* 现在统一先 `root = repo_root(args.root)` 再拼路径」），ADR-5 后失真。
+      三份同步改（docstring 被 `_ast_no_doc` 剥离，不影响镜像守护，但**它是给人读的真相源**）
+      〔ADR-5；DOC-1 正文即最终态〕
+- [ ] 1.2c **`--root` argparse 默认值改 `None`**（三份各一处：`issues.py:2265` /
+      `buglist.py:1554` / `todolist.py:1527`），区分「未指定→`os.getcwd()` 探测」与
+      「显式指定→`isdir` 校验」
+      〔Req: Scenario「进程当前工作目录在运行期被删除」；ADR-7〕
 - [ ] 1.3 三份各加**形状校验负例**：git rc=0 但 stdout 为「非绝对路径 / 绝对但不存在 /
       空串 / 纯空白 / 末尾含空格致截短后命中另一目录 / 多行」时抛 `ValueError`，
       **且断言该值对应路径未被创建**。用 `tmp_path` 构造真实路径，
       MUST NOT mock `os.path.isabs`/`isdir`/`realpath`——mock 掉判据本身等于没测
       〔Req: 仓根解析证明根的身份〕
+- [ ] 1.3b **cwd 不变性双态实测**（恢复被返修弱化掉的验证方式）：「坏值恰好命中 cwd 下既存目录」
+      这一用例 MUST **在仓内 cwd 与仓外 cwd 各跑一次，断言结果一致**。
+      理由：spec Scenario 明写「该行为与进程的当前工作目录无关」，而这条断言唯一可信的验证手段
+      就是双态对照跑——与 Task 0「污染环境里得到的绿不可信」同一纪律，标准须统一
+      〔Req: Scenario「坏值恰好匹配 cwd 下的既存目录」〕
+- [ ] 1.3c **cwd 被删除负例**：进程 cwd 在调用前被外部删除后调 `repo_root()`（未指定 root），
+      断言得到受控 `ValueError`、CLI 层 exit 2、stderr **不含 `Traceback`**。
+      实测依据：`os.path.isdir(".")` 此时仍返回 `True`，而 `os.getcwd()`/`abspath(".")` 抛
+      `FileNotFoundError`
+      〔Req: Scenario「进程当前工作目录在运行期被删除」；ADR-7〕
 - [ ] 1.4 🔴 **`core.worktree` 回归测试（主防线用例，三份各一）**：真建一个仓，
       `git config core.worktree <仓外目录>`，**清空所有 `GIT_*` 环境变量**后调 `repo_root`——
       MUST 抛 `ValueError`，且那个仓外目录下 MUST NOT 出现任何 `openspec/`。
@@ -58,6 +84,12 @@
       > 不再需要 fake git —— 这是把「起点校验」提到 git 之前的附带收益
 - [ ] 1.10 跑 determinism-guards 的 recorder 镜像一致性测试，确认 `repo_root` 三向 AST 等价仍绿
       〔Req: fail-closed 校验在三份 recorder 间逐字一致〕
+- [ ] 1.11 **跨进程二次解析的兜底锚定测试**：构造「父进程持锁 → 子进程重解析得到不同根」，
+      断言子进程以 `RecorderLockError` 响亮失败而非静默写入。
+      **这条锚定的是一个隐含依赖**——ADR-5 的「单次解析」边界是进程，跨进程风险靠
+      `validate_recorder_participant` 的 path/token 绑定兜底；无此测试，将来「简化」该校验
+      会让跨进程静默写错目录无声回归
+      〔Req: Scenario「子进程解析出不同的根时响亮失败」；ADR-5〕
 
 ## 2. 假绿测试修复
 
@@ -112,11 +144,17 @@
       Windows 真跑过。design Open Questions 的三条（`isabs("C:/…")`、`normcase`+`commonpath`
       在盘符/大小写/UNC 下的行为、`realpath` 对 SUBST）全部未实测
       〔design Open Questions；DX D2〕
-- [ ] 4.7 **〔Q4 按推荐落，可在设计门覆盖〕面治闭环**：Non-Goals 里 `init.py:543` 与
-      `ship_gate.py:837` 的排除理由已改为**安全论证**（sink 只读 / 无 makedirs / 有前置兜底），
-      本条只需最终核对一次全仓 `grep -rn "show-toplevel"` 的命中数与 Non-Goals 讨论的处数一致，
-      确保「已扫过全仓同款反模式」不再是未坐实的隐含承诺
-      〔CEO E2/E3；CLAUDE.md 基准 3「面治优先于点补」〕
+- [ ] 4.7 **〔Q4 按推荐落，可在设计门覆盖〕面治闭环**：全仓扫描 **MUST 不限扩展名**
+      （`grep -rln "show-toplevel" --include="*.py" --include="*.sh"`，排除 `.git/`、`tests/`、
+      `openspec/changes/`），**实测命中 8 处而非早期写的 4 处**——除三份 recorder + `init.py`
+      + `ship_gate.py` 外，还有三个 shell 脚本：`assets/hack/resolve-models.sh`、
+      `resolve-workflow.sh`、`outside-voice.sh`。逐条给出纳入/排除理由并写进 Non-Goals：
+      前两者把 `$ROOT` 拼进只读路径（`cfg="$ROOT/openspec/config.yaml"`）可援引与 `init.py`
+      同款豁免；**`outside-voice.sh` 把 `$repo_root` 传给 `codex exec -C … --add-dir …`，
+      值域与「只读拼路径」不同，MUST 单独论证，不得套用模板**。
+      ⚠️ 验证手段 MUST 是「重跑扫描」而非「核对与 Non-Goals 处数自洽」——后者只验内部自洽，
+      验不了漏扫（本轮冷复审正是这样抓到 4→8 的）
+      〔CEO E2/E3；冷复审镜 A finding 3.2；CLAUDE.md 基准 3〕
 - [ ] 4.8 记 todo：`repo_root` 不限制 git stdout 读取量（`capture_output=True` 无界读入，
       坏 wrapper 吐超大输出可在校验前耗内存）——DoS 面而非正确性面，`timeout=30` 已限时间窗，
       改 `Popen`+定量读复杂度不成比例
@@ -131,11 +169,15 @@
 | `GIT_DIR`/`GIT_WORK_TREE` 重定向 | 单元（两层防御各自独立） | 1.5 | 根身份 · env Scenario |
 | `repo_root` 形状负例（非绝对/不存在/空/空白/末尾空格/多行） | 单元（负例 ×6 值） | 三份各一 · 1.3 | 根身份（形状层） |
 | 起点非既存目录（坏 `--root`） | 单元（调 git 前拦截） | 1.7 | 起点不是既存目录 |
+| **进程 cwd 被删除**（`isdir(".")` 仍 True） | 单元（负例） | **1.3c** | cwd 在运行期被删除 |
+| cwd 不变性（仓内/仓外双态） | 单元（**双态对照跑**） | **1.3b** | 坏值恰好匹配 cwd 既存目录 |
+| **跨进程重解析 → RecorderLockError** | 集成（父子进程） | **1.11** | 子进程解析出不同根时响亮失败 |
 | git 探测超时 | 单元（fake git 注入） | 1.8 | git 探测超时 |
 | linked worktree / submodule（`.git` 是文件） | 单元（正向回归） | 1.6 | linked worktree 与 submodule |
 | symlink 起点 / 子目录起点 | 单元（正向回归） | 1.6 | git 返回合法仓根 |
 | 非 git 仓库 / bare repo / `.git/` 内 → 回落 | 单元 + CLI exit 0 | 1.6 | git 命令失败 |
-| **`cmd_*` 内 `repo_root(` 出现 0 次** | 静态断言（grep） | **1.2** | 仓根只解析一次 |
+| **`cmd_*` 内 `repo_root(` 出现 0 次** | 静态断言（**`ast.walk` Call 节点，非 grep**） | **1.2** | 仓根只解析一次 |
+| `--root` 默认值为 `None` | 静态（三份各一处） | 1.2c | cwd 在运行期被删除 |
 | 坏 root 经 CLI → exit 2 + stderr 非 traceback | 集成（CLI 真跑） | 1.9 | 抛出点在异常出口内 |
 | 三份 `repo_root` AST 等价 | 一致性（既有） | determinism-guards · 1.10 | 三份逐字一致 |
 | 单份漂移被拦截 | 一致性（**既有通用机制**） | `test_logic_drift_is_caught`（跨 change，非本次新增） | 三份逐字一致 · 负向 Scenario |
@@ -148,8 +190,8 @@
 
 | Requirement | 覆盖任务 |
 |---|---|
-| 仓根解析证明根的身份（含形状/祖先/marker/起点/超时） | 1.1, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9 |
-| 仓根在单次调用内只解析一次 | 1.2 |
+| 仓根解析证明根的身份（含形状/祖先/marker/起点/超时/cwd 删除） | 1.1, 1.2c, 1.3, 1.3b, 1.3c, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9 |
+| 仓根在单次调用内只解析一次（边界=进程） | 1.2, 1.2b, 1.11 |
 | fail-closed 校验在三份 recorder 间逐字一致 | 1.1, 1.10（负向见既有 `test_logic_drift_is_caught`） |
 | 测试套件不得在当前工作目录留下副作用 | 0.1, 0.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2 |
 | 坏 root 下的 reindex 不得静默通过派生字节校验 | 2.1, 2.2, 2.3, 2.4 |
