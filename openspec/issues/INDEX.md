@@ -266,6 +266,7 @@
 | T174 | todo | OPEN | fix-mechanical-layer-silent-failures |
 | T175 | todo | OPEN | fix-mechanical-layer-silent-failures |
 | T176 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T177 | todo | OPEN | fix-mechanical-layer-silent-failures |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 

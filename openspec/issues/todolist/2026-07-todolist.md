@@ -33,6 +33,7 @@ sdflow-issues:
     T174: {"module":"sdflow-init/tests/test_outside_voice.py","summary":"fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错","type":"代码质量","status":"OPEN","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":null}
     T175: {"module":"sdflow-spec-review / sdflow-code-review","summary":"两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑","type":"基础设施","status":"OPEN","time":"2026-07-19 11:59","change":"fix-mechanical-layer-silent-failures","batch":null}
     T176: {"module":"outside-voice","summary":"outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时","type":"代码质量","status":"OPEN","time":"2026-07-19 12:00","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T177: {"module":"sdflow-buglist","summary":"buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守","type":"代码质量","status":"OPEN","time":"2026-07-19 12:09","change":"fix-mechanical-layer-silent-failures","batch":null}
 ---
 # 2026-07 TODO
 
