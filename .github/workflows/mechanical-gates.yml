@@ -33,6 +33,16 @@ jobs:
       - name: Install pytest
         run: python -m pip install pytest
 
+      # 🔴 macOS runner **不自带 GNU coreutils** ⇒ 无 `timeout`/`gtimeout`。
+      # 没有它，`test_outside_voice_child_lifecycle.py` 的 11 条用例全部 skip
+      # （skip 理由：「需要真 timeout/gtimeout——假 stub 自己也会 background，验不出进程组级联」）——
+      # 而**那 11 条正是本泳道存在的理由**（在真 bash 3.2 上验进程组回收）。
+      # 不装 = 泳道绿但承诺没兑现，即本仓 fix-mechanical-layer-silent-failures 所治的同形病。
+      # 实证：首次加本泳道时 macos 报 1741 passed/15 skipped vs ubuntu 1749/7，差的 8 条即此。
+      - name: Install coreutils (macOS only — 提供 gtimeout)
+        if: runner.os == 'macOS'
+        run: brew install coreutils
+
       # 三道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
       - name: Gate — async 调度段两处字节等值（ADR-5）
         run: python hack/check_async_branch_parity.py
