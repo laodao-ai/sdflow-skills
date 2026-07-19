@@ -2,19 +2,35 @@
 
 ### Requirement: recorder 仓根解析对外部进程输出 fail-closed
 
-recorder 的 `repo_root(start)` MUST 按「git 是否履行契约」分流处理，MUST NOT 把
-`git rev-parse --show-toplevel` 的 stdout 直接当仓根返回：
+recorder 的 `repo_root(start)` MUST 在把任何值当作可写仓根返回之前，证明它是**起点所属仓库的根**；
+MUST NOT 把 `git rev-parse --show-toplevel` 的 stdout 直接当仓根返回，MUST NOT 仅凭路径形状
+（非空 / 绝对 / 是目录）放行。
 
-- **git 抛异常或以非 0 退出**（非 git 仓库、git 不可用）——正常场景，MUST 返回
-  `os.path.abspath(start)`。
-- **git 以 rc=0 退出且 stdout 非空、`os.path.isabs` 与 `os.path.isdir` 均为真**——
-  MUST 返回该路径。
-- **git 以 rc=0 退出但 stdout 为空或非绝对路径或非既存目录**——git 违反自身契约，
-  MUST 抛 `ValueError`（由三份 `main()` 既有的 `except ValueError` 出口转为 stderr 诊断
-  + exit code 2），MUST NOT 退化回落。
+**校验序列**（按序，任一不满足即 fail-closed）：
 
-绝对路径校验 MUST 与目录校验**同时**成立：`os.path.isdir` 对相对路径按当前工作目录解析，
-单用它会让「恰好在 cwd 下存在同名目录」的坏值通过校验。
+1. **起点可信性**：`start` MUST 是既存目录，否则抛 `ValueError`。此校验 MUST 在调用 git **之前**
+   完成——显式传入的 `--root` 与自动探测的起点同等对待。
+2. **环境净化**：调用 git 前 MUST 从子进程环境剔除仓库/工作树发现类变量：`GIT_DIR`、
+   `GIT_WORK_TREE`、`GIT_COMMON_DIR`、`GIT_CEILING_DIRECTORIES`、`GIT_INDEX_FILE`、
+   `GIT_DISCOVERY_ACROSS_FILESYSTEM`、`GIT_CONFIG_COUNT`、`GIT_CONFIG_GLOBAL`、
+   `GIT_CONFIG_SYSTEM`，以及前缀 `GIT_CONFIG_KEY_*` / `GIT_CONFIG_VALUE_*`。
+   MUST NOT 改为「剔除所有 `GIT_*` + 白名单」——`GIT_EXEC_PATH` 等执行类变量必须保留。
+3. **形状校验**：stdout 以 `rstrip("\r\n")` 只剥行结束符（MUST NOT 用 `strip()`——会删掉路径
+   末尾的合法空格），结果 MUST 非空、`os.path.isabs`、`os.path.isdir`。
+4. **祖先校验（主防线）**：`os.path.normcase(os.path.realpath(start))` MUST 位于
+   `os.path.normcase(os.path.realpath(top))` 之内（相等或在其下）。比较 MUST 按**路径组件**
+   进行（`os.path.commonpath` 或 `Path.is_relative_to`），MUST NOT 用裸字符串前缀匹配。
+5. **worktree marker**：`top/.git` MUST 存在。判定 MUST 用 `os.path.exists` 而非
+   `os.path.isdir`——linked worktree 与 submodule 下 `.git` 是**文件**。
+
+**祖先校验（第 4 步）是主防线，环境净化（第 2 步）是纵深防御**：`core.worktree` 是写在
+`.git/config` 里的 **on-disk** 重定向，剔除环境变量对它零效果，而形状校验（第 3 步）会放行——
+删除第 4 步会让该缺口静默回归。
+
+**回落 vs fail-closed 的分界**：git 抛 `OSError` 或以非 0 退出（非 git 仓库、git 不可用、
+bare repo、`.git/` 目录内）是**正常场景**，MUST 返回 `os.path.abspath(start)`；其余一切
+（超时、rc=0 但校验不过）MUST 抛 `ValueError`，由三份 `main()` 既有的 `except ValueError`
+出口转为 stderr 诊断 + exit code 2，MUST NOT 退化回落。
 
 校验失败 MUST NOT 产生任何目录或文件，MUST NOT 以该值为前缀拼接任何写入路径。
 
@@ -22,9 +38,38 @@ recorder 的 `repo_root(start)` MUST 按「git 是否履行契约」分流处理
 `sdflow-buglist/scripts/buglist.py`、`sdflow-todolist/scripts/todolist.py`。
 
 #### Scenario: git 返回合法仓根
-- **WHEN** `git rev-parse --show-toplevel` 以 rc=0 返回一个存在的绝对路径目录
-- **THEN** `repo_root(start)` 返回该路径（strip 尾部换行后）
+- **WHEN** `git rev-parse --show-toplevel` 以 rc=0 返回一个存在的绝对路径目录，且它是 `start` 的祖先或等于 `start`
+- **THEN** `repo_root(start)` 返回其 `realpath`
 - **AND** 行为与本变更前一致
+
+#### Scenario: core.worktree 在 .git/config 中重定向工作树（主防线用例）
+- **WHEN** 仓库的 `.git/config` 含 `core.worktree = <仓外的既存目录>`，且进程环境中**没有任何**
+      `GIT_*` 变量
+- **THEN** `git rev-parse --show-toplevel` 以 rc=0 返回那个仓外目录，且它通过非空/`isabs`/`isdir`
+      三项形状校验
+- **AND** `repo_root(start)` 仍 MUST 抛 `ValueError`——由祖先校验拦截
+- **AND** 该仓外目录下 MUST NOT 被创建任何 `openspec/` 目录或文件
+
+#### Scenario: GIT_DIR / GIT_WORK_TREE 环境变量重定向
+- **WHEN** 进程环境设置 `GIT_DIR` 与 `GIT_WORK_TREE` 指向另一个仓库
+- **THEN** 环境净化使 git 忽略它们并返回真实仓根，`repo_root(start)` 正常返回
+- **AND** 即便环境净化被绕过（例如将来新增未被剔除的等价变量），祖先校验仍 MUST 拦截指向仓外的结果
+
+#### Scenario: linked worktree 与 submodule
+- **WHEN** `start` 位于 `git worktree add` 创建的 linked worktree 内，或位于 submodule 内
+      （两种情况下 `top/.git` 均为**文件**而非目录）
+- **THEN** `repo_root(start)` 正常返回该 worktree / submodule 自己的根
+- **AND** MUST NOT 因 `.git` 不是目录而误判失败
+
+#### Scenario: 起点不是既存目录
+- **WHEN** 显式传入的 `--root` 指向不存在的路径或非目录
+- **THEN** `repo_root(start)` 在调用 git **之前**抛 `ValueError`
+- **AND** 该路径 MUST NOT 被创建
+
+#### Scenario: git 探测超时
+- **WHEN** `git rev-parse --show-toplevel` 超过设定的 timeout 未返回（如仓库位于失联的网络文件系统）
+- **THEN** `repo_root(start)` 抛 `ValueError`，MUST NOT 回落——超时不等于「不在仓库里」，
+      回落会把数据写到错误位置
 
 #### Scenario: git 返回非目录字符串
 - **WHEN** `git rev-parse --show-toplevel` 以 rc=0 返回一个不是既存目录的字符串
@@ -52,6 +97,25 @@ recorder 的 `repo_root(start)` MUST 按「git 是否履行契约」分流处理
 - **WHEN** 三份 recorder 的 `main()` 执行 `args.root = repo_root(args.root)`
 - **THEN** 该调用位于捕获 `ValueError` 的 try 块内，异常被转为 stderr 诊断 + exit 2，
       而非裸 traceback
+
+### Requirement: 仓根在单次调用内只解析一次
+
+recorder 的每次 CLI 调用 MUST 只解析一次仓根。`main()` 解析后写回 `args.root`，其余
+`cmd_*` 函数 MUST 直接使用该已验证值，MUST NOT 再次调用 `repo_root()`。
+
+**理由不是省一次子进程**：`repo_root()` 的校验是**逐次独立**的，不保证两次解析得到同一个仓。
+`git rev-parse --show-toplevel` 会沿目录树向上搜索，若两次解析之间目标目录失去自己的 `.git`
+（`git worktree prune` / 误删 / fixture 清理），第二次会静默爬升到**外层祖先仓库**——两次都
+rc=0、都通过全部校验，但锁建在一个根上、数据写进另一个根。
+
+#### Scenario: cmd_* 不再自行解析
+- **WHEN** 任一 `cmd_*` 函数需要仓根
+- **THEN** 它直接读取 `args.root`（已由 `main()` 解析并校验）
+- **AND** 三份 recorder 的 `cmd_*` 函数体内 MUST NOT 出现 `repo_root(` 调用
+
+#### Scenario: 锁与写入锚定同一个根
+- **WHEN** 一次 `reindex` / `batch` 类命令在持锁期间执行写入
+- **THEN** `recorder_lock` 记录的 `repo` 与实际写入路径 MUST 源自同一次解析结果
 
 ### Requirement: fail-closed 校验在三份 recorder 间逐字一致
 

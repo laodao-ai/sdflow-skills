@@ -13,10 +13,12 @@
 
 ## What Changes
 
-- `repo_root()` 按「git 是否履行契约」**分流**：git 失败（非 git 仓库等正常场景）保持回落
-  `abspath(start)`；git rc=0 但输出不是**既存的绝对路径目录**则抛 `ValueError`，经三份 `main()`
-  既有出口转为 stderr 诊断 + exit 2，**不再静默回落**。三份 recorder **同步修改**（见 Impact
-  的镜像约束）。
+- `repo_root()` 重写为**证明根的身份**而非校验路径形状：起点可信性（含显式 `--root`）→ 环境净化
+  → 调 git → 形状校验 → **祖先校验（主防线）** → worktree marker。git 失败（非 git 仓库等正常
+  场景）保持回落 `abspath(start)`；其余一切抛 `ValueError`，经三份 `main()` 既有出口转为 stderr
+  诊断 + exit 2。三份 recorder **同步修改**。
+- **仓根在单次调用内只解析一次**：删除 16 处 `cmd_*` 内的二次解析（本就冗余），消除「锁建在一个
+  根、数据写进另一个根」的可能。
 - 修复 `test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes` 的假绿：
   让 root 解析不受 mock 污染，使 `preserves_derived_bytes` 这一半承诺真正被验证。
 - 新增 **cwd 泄漏回归断言**：测试套件跑完后当前工作目录 MUST 无新增条目。
@@ -28,9 +30,10 @@
 ## Capabilities
 
 ### New Capabilities
-- `recorder-root-resolution`: recorder 仓根解析的 fail-closed 契约——外部进程输出在被当作
-  可写根之前 MUST 通过「绝对路径 + 既存目录」校验；git 未履行契约（rc=0 却给出坏值）时
-  MUST 抛异常响亮失败，MUST NOT 静默回落；仅「非 git 仓库」这类正常场景才回落。
+- `recorder-root-resolution`: recorder 仓根解析的信任边界——任何值在被当作可写根之前 MUST 被
+  证明是**起点所属仓库的根**（形状 + 祖先 + worktree marker），起点本身（含显式 `--root`）亦须
+  先经校验；配置被污染时 MUST 抛异常响亮失败，MUST NOT 静默回落；仓根在单次调用内 MUST 只解析
+  一次。仅「非 git 仓库」这类正常场景才回落。
 
 ### Modified Capabilities
 <!-- 无。`determinism-guards` 的 roster 已含 `repo_root`，本次三份同步修改后 AST 三向等价
@@ -38,10 +41,11 @@
 
 ## Impact
 
-**受影响代码**（三处 MUST 同步，非可选）：
-- `sdflow-issues/scripts/issues.py:1143-1148`
-- `sdflow-buglist/scripts/buglist.py:588`
-- `sdflow-todolist/scripts/todolist.py:588`
+**受影响代码**：
+- `repo_root` 本体三处 MUST 同步（非可选）：`issues.py:1132-1150` · `buglist.py:581-590` ·
+  `todolist.py:581-590`
+- **二次解析点 16 处**删除（ADR-5）：`issues.py` 6 处 + `buglist.py` 5 处 + `todolist.py` 5 处
+  （`ast.walk` 精确统计：全仓 `repo_root` 调用共 **19** 处，减去三份 `main()` 各一 = 16）
 
 **镜像约束**：`openspec/specs/determinism-guards/spec.md` 已把 `repo_root` 列入三向镜像
 helper roster，由「剥 docstring 后 `ast.dump` 相等」的一致性测试守护。⇒ 只改一份会让该守护
@@ -52,28 +56,42 @@ helper roster，由「剥 docstring 后 `ast.dump` 相等」的一致性测试�
 - 三份 recorder 各自的 `repo_root` 负例测试（新增）
 - determinism-guards 的 AST 等价测试（须保持绿）
 
-**不影响**：`sdflow-init/scripts/init.py:553` 的 `_git_root_or_dot()` 不属镜像 roster，
-本次不动（其已有空值兜底，缺 isdir 校验一并见 Non-Goals）。
+**同款反模式的全仓扫描**（`grep -rn "show-toplevel"` 命中 4 处，逐处论证见 Non-Goals）：
+三份 recorder（本次修）· `init.py:543` · `ship_gate.py:837`（后两处**有安全论证的排除**，非遗漏）。
 
 **技术栈**：Python 脚本 + pytest，不命中 backend / embedded / frontend 任一领域清单。
 
 ## Success Metrics
 
-1. **fail-closed 生效**：三份 `repo_root` 各有负例测试——喂入「非绝对路径 / 绝对但不存在 /
-   空 / 纯空白」时抛 `ValueError`（CLI 级表现为 exit 2 + stderr 诊断），且**不产生任何目录**；
-   其中「坏值恰好命中 cwd 下同名目录」的用例在仓内/仓外两种 cwd 下结果一致。
-2. **假绿被消除**（变异验证）：故意让 reindex 写入 `tmp_path` 时，
+1. **主防线可证伪**：`core.worktree` 回归测试存在且有效——在**完全没有 `GIT_*` 环境变量**的
+   情况下，`.git/config` 里的 `core.worktree` 重定向 MUST 被拒绝；**删掉祖先校验该测试必须变红**
+   （实现后跑一次变异确认）。这是整套判据里唯一能拦 on-disk 重定向的一环。
+2. **fail-closed 覆盖全部输入面**：形状负例（非绝对/不存在/空/空白/末尾空格/多行）、起点负例
+   （坏 `--root` 在调 git 前被拦）、超时负例，三份各有测试且**不产生任何目录**。
+3. **单点解析**：三份 `cmd_*` 函数体内 `repo_root(` 出现 **0** 次，全脚本仅剩 3 处调用。
+4. **假绿被消除**（变异验证）：故意让 reindex 写入 `tmp_path` 时，
    `test_reindex_cli_non_string_id_...` MUST 变红。当前它恒绿，正是假绿的判据。
-3. **零 cwd 残留**：仓内**任一** skill 的套件在干净临时目录跑完，该目录条目数 = 0——由仓根
+5. **零 cwd 残留**：仓内**任一** skill 的套件在干净临时目录跑完，该目录条目数 = 0——由仓根
    单一份 `conftest.py` 的 autouse fixture 机械保证（机械可验）。
-4. **镜像守护仍绿**：determinism-guards 的 AST 三向等价测试通过。
-5. **仓根干净**：4 棵垃圾目录树清除，且重跑全套件不再生成。
+6. **镜像守护仍绿**：determinism-guards 的 AST 三向等价测试通过，且 `repo_root` 保持**抽取友好**
+   （消息用通用文案、不含脚本名）供 T170 纯搬运。
+7. **仓根干净**：4 棵垃圾目录树清除，且重跑全套件不再生成。
 
 ## Non-Goals
 
-- **不重构三份 recorder 的重复结构**：镜像是 `determinism-guards` 明文要求的设计（skill 自包含
-  + D4 隔离），本次只加固共享 helper 的输入校验，不动镜像机制本身。
-- **不给 `init.py:_git_root_or_dot()` 加同款校验**：它不属镜像 roster，是独立一件事。
+- **不重构三份 recorder 的重复结构**：已登记 **T170**（下一步工作，与 B11/B12 同 batch）。本次
+  仍手工三改，但 `repo_root` 须保持**抽取友好**，使 T170 落地时是纯搬运。
+- **不给 `init.py:543` 的 `_git_root_or_dot()` 加同款校验**：其消费点只读（`lint_config` 拼路径
+  读 config.yaml，包在 `except (OSError, UnicodeDecodeError)`）、**全文件无 `os.makedirs`** ⇒
+  坏根只产生一条 lint 提示，不具现目录。**这是安全论证，不是「不属 roster」的程序性理由。**
+- **不动 `ship_gate.py:837`**：其 `decide()` 开头即有 `git rev-parse --git-dir` 前置兜底，坏根
+  安全落 `UNKNOWN`；全文件亦无 `makedirs`。
+- **不限制 git stdout 读取量**：DoS 面而非正确性面，`timeout` 已限时间窗，改 `Popen`+定量读复杂度
+  不成比例。
+- **不加 `--path-format=absolute`**：git <2.31 不识别时**不报错**而是回显进 stdout 首行且 rc=0
+  （实测），会让老 git 用户直接不可用。
+- **不支持 Windows SUBST 盘符**（`--show-toplevel` 换 `--show-cdup` 才能绕，但 cdup 在 `.git/`
+  内静默返回空串，更不安全）。
 - **不修 `sdflow-init/tests/test_outside_voice.py::test_exec_claude_reverse_path_three_flags_golden`**
   的 order-dependent 失败（全量跑红、单独跑绿）——不相干缺陷，另记 buglist。
 - **不为 cwd 泄漏断言建独立扫描脚本 / CI 门**：一份仓根 `conftest.py` 的 autouse fixture 即
@@ -83,7 +101,8 @@ helper roster，由「剥 docstring 后 `ast.dump` 相等」的一致性测试�
 
 | 优先级 | 需求 | 依据 |
 |---|---|---|
-| **P0** | 三份 `repo_root` fail-closed 校验 | 本体缺陷；下游三处 `makedirs` 无条件信任 |
+| **P0** | `repo_root` 身份校验重写（形状 + 祖先 + marker + 起点） | 本体缺陷；祖先校验是 `core.worktree` 的唯一防线 |
+| **P0** | 单点解析（删 16 处二次解析） | 锁与写入可分裂到两个根，实测可复现 |
 | **P0** | 假绿测试修复 | 同一缺陷的另一半；当前 `preserves_derived_bytes` 未被验证 |
 | **P1** | cwd 泄漏回归断言 | 回归防护；本次靠肉眼扫 IDE 侧栏才发现 |
 | **P0** | 清理 4 棵垃圾目录树 | **前置条件**：残留会让 isdir 判据被绕过，污染环境下的验证不可信 |
@@ -93,10 +112,13 @@ helper roster，由「剥 docstring 后 `ast.dump` 相等」的一致性测试�
 
 | 假设 | 验证状态 | 失效影响 |
 |---|---|---|
-| 生产环境不会触发这条路径 | ✅ 已实测：`check=True`，bare repo 下 `git rev-parse --show-toplevel` 返 rc=128 走异常分支，非「rc=0 + 坏 stdout」 | 若某 git wrapper／企业包装脚本往 stdout 多吐一行，则静默建垃圾树 —— **这正是本次要堵的目标态缺口** |
+| ~~生产环境不会触发这条路径~~ | ❌ **已推翻**（本轮 spec-review）：`core.worktree` 写在 `.git/config` 即可 rc=0 返回仓外目录（无需任何环境变量，实测）；`GIT_DIR`/`GIT_WORK_TREE` 亦实测可重定向；`git rev-parse` 对未知选项回显且 rc=0。bare repo rc=128 走回落这一条仍成立 | 原假设曾被用来弱化风险，现予订正 |
 | 仅 `sdflow-issues` 泄漏 cwd | ✅ 已实测：12 个 skill + hack 各自干净目录跑一遍，其余 0 残留 | 若他处也泄漏，回归断言的覆盖面需扩大 |
 | `repo_root` 三份逐字一致 | ✅ 已查 `determinism-guards/spec.md:8` roster + AST 等价守护 | 若守护实际未覆盖，则三份可能已漂移，需先对齐再改 |
-| 加「isabs + isdir」校验不破坏既有调用方 | ✅ 已查：三份共 14 个调用点形态一致（`root = repo_root(args.root)` → 拼 `openspec/issues/...`），且 `abspath(start)` 回落分支既有（非 git 仓库时走它）；无调用方依赖「返回不存在的路径再自建」 | 若存在此类调用方，会被 fail-closed 拦下 |
+| 校验升级不破坏既有调用方 | ✅ 已查：`ast.walk` 精确统计**19** 处调用（非早期误写的 14），除三份 `main()` 入口外 16 处均为 `root = repo_root(args.root)` 形态，ADR-5 直接删除；`abspath(start)` 回落分支既有 | 若存在依赖「返回不存在路径再自建」的调用方，会被 fail-closed 拦下 |
+| 判据在 macOS + git 2.50.1 下正确 | ✅ 已实测 10 场景全过：普通仓/子目录/linked worktree/submodule/symlink/`GIT_DIR` 攻击/`core.worktree` 攻击/非 git/bare/起点不存在 | — |
+| 环境净化不打破 CI | ✅ 已查：GitHub Actions（含 `actions/checkout`）与 GitLab Runner 均不导出 git 原生 `GIT_DIR`/`GIT_WORK_TREE`；真正导出它们的是 **git hook**（submodule hook 导出 `GIT_DIR`/`GIT_INDEX_FILE`，git 2.6.3 起导出 `GIT_WORK_TREE`）⇒ 净化是必需项 | 若某 CI 依赖 `GIT_DIR` 指向非标准位置，recorder 会改为按真实仓根工作 |
+| **判据在 Windows 上成立** | ⚠️ **未实测**（本地 macOS 照不到）：`isabs("C:/…")`、`normcase`+`commonpath` 在盘符/大小写/UNC 下的行为、`realpath` 对 SUBST | 若不成立，Windows 用户的正常调用会从「能跑」变成 exit 2 硬失败 ⇒ 见 tasks 4.6 |
 
 ## Compliance
 

@@ -9,33 +9,54 @@
 
 ## 1. repo_root 分流校验（三份同步）
 
-- [ ] 1.1 三份 recorder 的 `repo_root` **同一提交内**逐字同步改为三分支：
-      git 抛异常/rc≠0 → `return os.path.abspath(start)`（不变）；
-      `top = out.stdout.strip()` 且 `top and os.path.isabs(top) and os.path.isdir(top)` →
-      `return top`；否则 `raise ValueError(...)`（消息含被拒值截断 80 字节 + `cause:` + `fix:`）。
-      MUST NOT 在 helper 内 `sys.exit`，MUST NOT 写 stdout
-      〔Req: recorder 仓根解析对外部进程输出 fail-closed / 三份逐字一致；ADR-1、ADR-2、ADR-4〕
+- [ ] 1.1 三份 recorder 的 `repo_root` **同一提交内**同步重写为「起点校验 → 环境净化 →
+      调 git → 形状校验 → 祖先校验 → marker 校验」六步（完整判据见 spec Requirement 1）。
+      结构硬约束：**`try` 只包 `subprocess.run`**，只捕 `OSError`/`CalledProcessError` 走回落，
+      `TimeoutExpired` 单独 `raise`；**一切校验与 `raise` 位于 try 之外**（否则新抛的
+      `ValueError` 会被自己的 except 接住，fail-closed 归零）。禁 `except Exception`。
+      诊断消息用 `ascii(value)[:N]`，禁字节截断；MUST NOT 在 helper 内 `sys.exit`；
+      MUST NOT 写 stdout；**raise 消息 MUST 是通用文案，不含脚本名/`__file__`**
+      （否则 AST 镜像守护当场变红，且破坏 T170 的抽取友好）
+      〔Req: 仓根解析证明根的身份；三份逐字一致；ADR-1/2/4/6〕
       - `sdflow-issues/scripts/issues.py:1132-1150`
       - `sdflow-buglist/scripts/buglist.py:581-590`
       - `sdflow-todolist/scripts/todolist.py:581-590`
-- [ ] 1.2 三份各加负例测试：git rc=0 但 stdout 为「非绝对路径 / 绝对但不存在 / 空串 / 纯空白」
-      时抛 `ValueError`，**且断言该值对应路径未被创建**（用 `tmp_path` 构造真实存在/不存在的
-      路径，MUST NOT mock `os.path.isabs` / `os.path.isdir`——mock 掉判据本身等于没测）
-      〔Req: recorder 仓根解析对外部进程输出 fail-closed；design Risks「isdir 引入 IO」〕
-- [ ] 1.3 **cwd 不变性测试**：坏值为「在 cwd 下恰好存在的相对路径」时仍抛 `ValueError`；
-      同一用例在仓内 cwd 与仓外 cwd 下结果一致
-      〔Req: Scenario「坏值恰好匹配 cwd 下的既存目录」；ADR-2 的实测反例〕
-- [ ] 1.4 正向回归：git 返回合法绝对目录时行为不变；git 抛异常/非 0 退出时回落不变；
-      非 git 仓库下 CLI 命令仍 exit 0 正常完成
-      〔Req: Scenario「git 返回合法仓根」「git 命令失败」〕
-- [ ] 1.5 **调用点契约测试（CLI 真跑，三份各一条）**：以子进程真跑
-      `python <script> --root <坏根> <cmd>`，断言 `exit == 2` 且 stderr **不含** `Traceback`
-      且含诊断关键字。MUST NOT 用 AST/源码扫描去判断「调用点是否在 try 内」——
-      那是语法结构问题，手搓判断会掉进「嵌套 try / 装饰器 / 多重 except」的补丁循环
-      （基准 5）；让 Python 自己回答异常有没有被接住
-      （`issues.py:2324` / `buglist.py:1594` / `todolist.py:1568`）
-      〔Req: Scenario「抛出点在调用方的异常出口内」；ADR-4 代价缓解〕
-- [ ] 1.6 跑 determinism-guards 的 recorder 镜像一致性测试，确认 `repo_root` 三向 AST 等价仍绿
+- [ ] 1.2 **单点解析**（ADR-5）：删除 16 处 `cmd_*` 内的 `root = repo_root(args.root)`，
+      改为 `root = args.root`。改后 grep 断言：三份的 `cmd_*` 函数体内 `repo_root(` 出现 0 次，
+      全脚本仅剩 3 处调用（三份 `main()` 各一）
+      〔Req: 仓根在单次调用内只解析一次〕
+- [ ] 1.3 三份各加**形状校验负例**：git rc=0 但 stdout 为「非绝对路径 / 绝对但不存在 /
+      空串 / 纯空白 / 末尾含空格致截短后命中另一目录 / 多行」时抛 `ValueError`，
+      **且断言该值对应路径未被创建**。用 `tmp_path` 构造真实路径，
+      MUST NOT mock `os.path.isabs`/`isdir`/`realpath`——mock 掉判据本身等于没测
+      〔Req: 仓根解析证明根的身份〕
+- [ ] 1.4 🔴 **`core.worktree` 回归测试（主防线用例，三份各一）**：真建一个仓，
+      `git config core.worktree <仓外目录>`，**清空所有 `GIT_*` 环境变量**后调 `repo_root`——
+      MUST 抛 `ValueError`，且那个仓外目录下 MUST NOT 出现任何 `openspec/`。
+      **这条测试是祖先校验存在的唯一证明**：删掉祖先校验它必须变红（实现后跑一次变异确认）
+      〔Req: Scenario「core.worktree 在 .git/config 中重定向工作树」；ADR-2〕
+- [ ] 1.5 **环境重定向测试**：设 `GIT_DIR`+`GIT_WORK_TREE` 指向另一仓 → 环境净化后正常返回
+      真实根；再单独验证「即使不净化，祖先校验也拦得住」（证明两层防御各自独立有效）
+      〔Req: Scenario「GIT_DIR / GIT_WORK_TREE 环境变量重定向」；ADR-6〕
+- [ ] 1.6 **边缘场景正向回归**：linked worktree（`.git` 是文件）、submodule（同）、
+      symlink 起点、子目录起点 → 均正常返回；非 git 仓库 / bare repo / `.git/` 目录内 →
+      回落 `abspath(start)`，CLI 仍 exit 0
+      〔Req: Scenario「linked worktree 与 submodule」「git 命令失败」〕
+      > 骨架可直接取自本轮 spec-review 的实测探针（10 场景全过，见报告「Q1 调研」段）
+- [ ] 1.7 **起点校验测试**：`--root` 指向不存在的路径 / 非目录文件 → 在调 git **之前**抛
+      `ValueError`，且该路径 MUST NOT 被创建
+      〔Req: Scenario「起点不是既存目录」〕
+- [ ] 1.8 **超时测试**：注入一个不返回的 fake git（PATH 注入 `sleep` 包装），确认
+      `TimeoutExpired` → `ValueError` → exit 2，**MUST NOT 回落**
+      〔Req: Scenario「git 探测超时」；ADR-1〕
+- [ ] 1.9 **CLI 级调用点契约测试（真跑，三份各一）**：以子进程真跑
+      `python <script> --root <不存在的路径> <cmd>`，断言 `exit == 2` 且 stderr **不含**
+      `Traceback` 且含诊断关键字。MUST NOT 用 AST/源码扫描判断「调用点是否在 try 内」——
+      那是语法结构问题，手搓判断会掉进补丁循环（基准 5）；让 Python 自己回答
+      〔Req: Scenario「抛出点在调用方的异常出口内」；ADR-4〕
+      > 注意：**坏 `--root` 现在能触发目标分支了**（起点校验先于 git 调用），
+      > 不再需要 fake git —— 这是把「起点校验」提到 git 之前的附带收益
+- [ ] 1.10 跑 determinism-guards 的 recorder 镜像一致性测试，确认 `repo_root` 三向 AST 等价仍绿
       〔Req: fail-closed 校验在三份 recorder 间逐字一致〕
 
 ## 2. 假绿测试修复
@@ -83,19 +104,41 @@
 - [ ] 4.5 记 buglist：`sdflow-init/tests/test_outside_voice.py::test_exec_claude_reverse_path_three_flags_golden`
       全量跑 FAILED / 单独跑 PASSED（order-dependent 或负载敏感），显式传 `change` 字段
       〔proposal Non-Goals〕
-- [ ] 4.6 全仓跑一遍 `pytest`，确认无回归
+- [ ] 4.6 **〔Q3 按推荐落，可在设计门覆盖〕Windows 泳道覆盖**：把 `repo_root` 的正向回归
+      （真实 git 仓库下不抛异常）+ 至少一条负例，追加进 `windows-recorder-smoke.yml` 覆盖的
+      测试文件。**依据**：该 workflow 的 `paths` 精确匹配本 change 改的三个目录，却只跑
+      `test_task2_windows_local_fs_smoke.py`——该文件直传 `tmp_path` 给 `recorder_lock`，
+      **绕开 `repo_root`**；主矩阵 `mechanical-gates.yml` 只有 ubuntu/macos ⇒ 新判据从未在
+      Windows 真跑过。design Open Questions 的三条（`isabs("C:/…")`、`normcase`+`commonpath`
+      在盘符/大小写/UNC 下的行为、`realpath` 对 SUBST）全部未实测
+      〔design Open Questions；DX D2〕
+- [ ] 4.7 **〔Q4 按推荐落，可在设计门覆盖〕面治闭环**：Non-Goals 里 `init.py:543` 与
+      `ship_gate.py:837` 的排除理由已改为**安全论证**（sink 只读 / 无 makedirs / 有前置兜底），
+      本条只需最终核对一次全仓 `grep -rn "show-toplevel"` 的命中数与 Non-Goals 讨论的处数一致，
+      确保「已扫过全仓同款反模式」不再是未坐实的隐含承诺
+      〔CEO E2/E3；CLAUDE.md 基准 3「面治优先于点补」〕
+- [ ] 4.8 记 todo：`repo_root` 不限制 git stdout 读取量（`capture_output=True` 无界读入，
+      坏 wrapper 吐超大输出可在校验前耗内存）——DoS 面而非正确性面，`timeout=30` 已限时间窗，
+      改 `Popen`+定量读复杂度不成比例
+      〔design Non-Goals；codex X10 后半〕
+- [ ] 4.9 全仓跑一遍 `pytest`，确认无回归
 
 ## 测试覆盖图（TG-18）
 
 | code path | 测试类型 | 落点 | 对应 Requirement |
 |---|---|---|---|
-| `repo_root` git rc=0 + 合法绝对目录 | 单元（正向） | 三份各一 · 1.4 | fail-closed 解析 |
-| `repo_root` git rc=0 + 非绝对/绝对不存在/空/空白 | 单元（负例 ×4 值） | 三份各一 · 1.2 | fail-closed 解析 |
-| `repo_root` 坏值命中 cwd 同名目录 | 单元（**cwd 不变性**） | 1.3 | 坏值恰好匹配 cwd 既存目录 |
-| `repo_root` git 异常/非 0 退出 | 单元（回归） | 三份各一 · 1.4 | fail-closed 解析 |
-| 非 git 仓库下 CLI 仍 exit 0 | 集成（CLI） | 1.4 | fail-closed 解析 |
-| 坏 root 经 CLI → exit 2 + stderr 非 traceback | 集成（调用点契约） | 1.5 | 抛出点在异常出口内 |
-| 三份 `repo_root` AST 等价 | 一致性（既有） | determinism-guards · 1.6 | 三份逐字一致 |
+| **`core.worktree` on-disk 重定向** | 单元（**主防线**，删判据即红） | 三份各一 · **1.4** | 根身份 · core.worktree Scenario |
+| `GIT_DIR`/`GIT_WORK_TREE` 重定向 | 单元（两层防御各自独立） | 1.5 | 根身份 · env Scenario |
+| `repo_root` 形状负例（非绝对/不存在/空/空白/末尾空格/多行） | 单元（负例 ×6 值） | 三份各一 · 1.3 | 根身份（形状层） |
+| 起点非既存目录（坏 `--root`） | 单元（调 git 前拦截） | 1.7 | 起点不是既存目录 |
+| git 探测超时 | 单元（fake git 注入） | 1.8 | git 探测超时 |
+| linked worktree / submodule（`.git` 是文件） | 单元（正向回归） | 1.6 | linked worktree 与 submodule |
+| symlink 起点 / 子目录起点 | 单元（正向回归） | 1.6 | git 返回合法仓根 |
+| 非 git 仓库 / bare repo / `.git/` 内 → 回落 | 单元 + CLI exit 0 | 1.6 | git 命令失败 |
+| **`cmd_*` 内 `repo_root(` 出现 0 次** | 静态断言（grep） | **1.2** | 仓根只解析一次 |
+| 坏 root 经 CLI → exit 2 + stderr 非 traceback | 集成（CLI 真跑） | 1.9 | 抛出点在异常出口内 |
+| 三份 `repo_root` AST 等价 | 一致性（既有） | determinism-guards · 1.10 | 三份逐字一致 |
+| 单份漂移被拦截 | 一致性（**既有通用机制**） | `test_logic_drift_is_caught`（跨 change，非本次新增） | 三份逐字一致 · 负向 Scenario |
 | `reindex` 坏 scan id → exit 2 + 派生字节不变 | 集成（CLI） | 2.1 / 2.3 | reindex 不得假绿 |
 | `reindex` 写入 `tmp_path` → 测试必红 | **变异验证** | 2.2 | reindex 不得假绿 |
 | 任意用例的 cwd 副作用 | autouse fixture | 3.1 / 3.2 | 测试套件无 cwd 副作用 |
@@ -105,8 +148,9 @@
 
 | Requirement | 覆盖任务 |
 |---|---|
-| recorder 仓根解析对外部进程输出 fail-closed | 1.1, 1.2, 1.3, 1.4, 1.5 |
-| fail-closed 校验在三份 recorder 间逐字一致 | 1.1, 1.6 |
+| 仓根解析证明根的身份（含形状/祖先/marker/起点/超时） | 1.1, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9 |
+| 仓根在单次调用内只解析一次 | 1.2 |
+| fail-closed 校验在三份 recorder 间逐字一致 | 1.1, 1.10（负向见既有 `test_logic_drift_is_caught`） |
 | 测试套件不得在当前工作目录留下副作用 | 0.1, 0.2, 2.3, 3.1, 3.2, 3.3, 4.1, 4.2 |
 | 坏 root 下的 reindex 不得静默通过派生字节校验 | 2.1, 2.2, 2.3, 2.4 |
 
