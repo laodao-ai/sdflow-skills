@@ -113,16 +113,16 @@ MUST NOT 写入 stdout：recorder 的 stdout 是机器可读契约（`scan --jso
 `OSError` / `CalledProcessError`；`TimeoutExpired` 单独 `raise`；**一切校验与 `raise` 位于 try
 之外**（否则新抛的 `ValueError` 被自己的 except 接住，fail-closed 归零）；禁 `except Exception`。
 
-- [ ] 六步判据三份逐字一致，`determinism-guards` 的三向 AST 等价测试保持绿
-- [ ] 形状负例（非绝对 / 绝对但不存在 / 空串 / 纯空白 / 末尾含空格 / 多行）各自被拒，
+- [x] 六步判据三份逐字一致，`determinism-guards` 的三向 AST 等价测试保持绿
+- [x] 形状负例（非绝对 / 绝对但不存在 / 空串 / 纯空白 / 末尾含空格 / 多行）各自被拒，
       **且断言对应路径未被创建**
-- [ ] `core.worktree` 回归用例存在，且**删掉祖先校验后该用例变红**（变异确认，非仅正向通过）
-- [ ] `GIT_DIR`/`GIT_WORK_TREE` 重定向：净化后返回真实根；**再单独验证不净化时祖先校验也拦得住**
+- [x] `core.worktree` 回归用例存在，且**删掉祖先校验后该用例变红**（变异确认，非仅正向通过）
+- [x] `GIT_DIR`/`GIT_WORK_TREE` 重定向：净化后返回真实根；**再单独验证不净化时祖先校验也拦得住**
       （证明两层防御各自独立有效）
-- [ ] 起点负例：坏路径在调 git 前被拒且不被创建；进程 cwd 被删除时得到受控失败
+- [x] 起点负例：坏路径在调 git 前被拒且不被创建；进程 cwd 被删除时得到受控失败
       （实测依据：此时 `os.path.isdir(".")` 仍返回 `True`）
-- [ ] 超时负例：注入不返回的 fake git → 受控失败且不回落
-- [ ] 正向回归：linked worktree / submodule / symlink / 子目录起点均正常；
+- [x] 超时负例：注入不返回的 fake git → 受控失败且不回落
+- [x] 正向回归：linked worktree / submodule / symlink / 子目录起点均正常；
       非 git 仓库 / bare repo / `.git/` 内回落且 CLI exit 0
 
 ---

@@ -1,0 +1,3229 @@
+diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-fix1-review-package.diff b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-fix1-review-package.diff
+new file mode 100644
+index 0000000..ce16988
+--- /dev/null
++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-fix1-review-package.diff
+@@ -0,0 +1,2783 @@
++diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/carry-forward.md b/openspec/changes/harden-repo-root-fail-closed/impl-reports/carry-forward.md
++index 6fab83d..fd7f211 100644
++--- a/openspec/changes/harden-repo-root-fail-closed/impl-reports/carry-forward.md
+++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/carry-forward.md
++@@ -51,3 +51,90 @@ Requirement 主体是**仓根单一份 `conftest.py` 的 autouse fixture 机械
++ 
++ **Task 6 登记 buglist 时的动作**：如实写「触发条件未完全定位，已知一次全量跑未复现」，
++ **MUST NOT** 照抄「全量跑必红」这个已被证伪的描述。
+++
+++---
+++
+++## CF-4 → Task 3：`--root` 默认改 `None` 会**激活**一条裸 `OSError` 逃逸路径
+++
+++**来源**：Task 2 · Standards 轴 · Minor（目标态导向发现）
+++
+++**内容**：`repo_root` 步骤① 的 `start is None` 分支只捕 `FileNotFoundError`：
+++
+++```python
+++try:
+++    start = os.getcwd()
+++except FileNotFoundError:
+++    raise ValueError(...) from None
+++```
+++
+++`PermissionError`（父目录权限被撤）是 `OSError` 的另一子类，会**裸着逃出 `repo_root`**；
+++而三份 `main()` 只 `except ValueError` ⇒ 输出 **Traceback**，直接击穿 spec 的
+++「stderr MUST NOT 含 Traceback」承诺。
+++
+++**当前不可达 ≠ 不用管**：argparse `--root` 默认仍是 `"."`，`start is None` 分支走不到。
+++**Task 3 落 tasks 1.2c（默认改 `None`）的那一刻，它就变成活路径。**
+++
+++**⇒ Task 3 MUST 在改 argparse 默认值的同一票内，把该 except 扩为 `OSError`**（三份同步），
+++并补一条负例。**MUST NOT** 以「现在触发不到」为由留到以后——那是拿现状反驳目标（通则③）。
+++
+++---
+++
+++## CF-5 → Task 3：tasks 1.3c 的 **CLI 层**断言待回补
+++
+++**来源**：Task 2 · implementer Concern 2
+++
+++**内容**：Task 2 只做到**函数层**（子进程直调 `repo_root()`）验证「cwd 被删 → 受控失败」。
+++CLI 层断言（`exit 2` + stderr 无 `Traceback`）走不到，因为 CLI 要进 `start=None` 分支的前提
+++正是 tasks 1.2c 的 argparse 默认值改 `None`——当前默认 `"."` ⇒ CLI 下 cwd 被删走的是
+++**显式起点分支**，测的不是目标 Scenario。
+++
+++**⇒ Task 3 落 1.2c 后 MUST 回补这条 CLI 级断言**，否则该 Scenario 只有半条覆盖。
+++注意它与 CF-4 是**同一个分支被激活**带来的两件事，一并做。
+++
+++---
+++
+++## CF-6 → Task 6（tasks 4.6 Windows 泳道）：`commonpath` 跨盘符的可观测性降级
+++
+++**来源**：Task 2 · implementer Concern 3
+++
+++**内容**：祖先校验第⑤步用 `os.path.commonpath`（依 ADR-2 written decision 原样）。
+++**Windows 跨盘符**下 `commonpath` 会**自行抛 `ValueError("Paths don't have the same drive")`**。
+++
+++- **行为仍正确**：`main()` 的 `except ValueError` 照样接住 → exit 2 + stderr，无 traceback ⇒ fail-closed 成立。
+++- **但可观测性降级**：该 `ValueError` 来自 stdlib，消息**不带** recorder 的 `ERROR: …; cause: …; fix: …` 格式。
+++
+++**Windows 泳道 MUST 实测这一条**，**MUST NOT 用「理论上大概率能过」结案**（PV 规则 1）。
+++备选方案 `PurePath.is_relative_to`（spec 明列的另一选项，跨盘符返回 `False` 而非抛异常）
+++是对 ADR-2 written decision 的偏离，**若实测确认降级不可接受，须走设计门而非就地改**。
+++
+++---
+++
+++## CF-7 →（登记备查，本 change 不处置）`isdir` 的 TOCTOU 窗口
+++
+++**来源**：Task 2 · implementer Concern 5
+++
+++**内容**：步骤① `isdir(start)` 与步骤③ `subprocess.run(cwd=start)` 之间存在竞态窗口。
+++窗口内 start 被删 ⇒ `subprocess.run` 抛 `FileNotFoundError`（`OSError`）⇒ 落**回落分支**
+++返回 `abspath(start)`，而非 fail-closed。
+++
+++属既有回落语义的边角，**spec 未要求处置**，Task 2 不擅自扩 scope 的判断正确。
+++Task 6 收尾时**记 todolist**（显式带 `change` 字段），不在本 change 内修。
+++
+++---
+++
+++## CF-8 →（无自动化锚，如实登记）`timeout=30` 的数值本身未被覆盖
+++
+++**来源**：Task 2 · implementer Concern 4
+++
+++**内容**：超时验证拆成两条——契约层（断言 `ValueError` + 不回落 + `subprocess.run` 确收正数
+++`timeout` kwarg）+ 真 PATH 注入 shim（`exec /bin/sleep 120`，外层 timeout 收窄到 1s 观察真实
+++`TimeoutExpired` 路径）。**未覆盖的残余 = 「30 这个数值本身」**，因为真等满 30s 会让每次跑
+++套件多 30s 墙钟。
+++
+++这是**诚实的覆盖边界声明，非缺陷**。Task 6 收尾时在报告中如实呈现，
+++**MUST NOT** 宣称「超时面已全覆盖」。
+++
+++> **踩坑记录（值得留档）**：该 shim 首版写 `sleep 120` 且把 `PATH` **整个替换**成 shim 目录
+++> ⇒ 连 `sleep` 本身都找不到、shell 退 127、走成**回落分支**、测试报 "DID NOT RAISE"。
+++> 改为 `exec /bin/sleep 120` + `PATH` **前置**（而非替换）才真的挂住。
+++> **若当时不查原因直接改断言，就会得到一个「测超时」但实际测的是「命令不存在」的假绿。**
++diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix1.md b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix1.md
++new file mode 100644
++index 0000000..abfe69b
++--- /dev/null
+++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix1.md
++@@ -0,0 +1,224 @@
+++# Task 2 修复轮 1 — 双轴审 C1 / C2 / C3
+++
+++**Change**: `harden-repo-root-fail-closed` · **Task**: 2（repo_root 六步身份校验）
+++**基线 HEAD**: `5d47212` · **前置报告**: `task2-repo-root-identity-validation.md`（本文件不覆盖它）
+++
+++三条全部闭合，无 defer。
+++
+++---
+++
+++## C1【Critical】回落分支自己抛裸 `FileNotFoundError` → RC=1 + Traceback
+++
+++### 缺陷复现（修复前，实测）
+++
+++```
+++$ mkdir -p /tmp/c1probe/doomed && cd /tmp/c1probe
+++$ python3 -c "os.chdir('doomed'); os.rmdir(cwd); run(buglist.py scan)"
+++RC 1
+++...
+++  File ".../buglist.py", line 640, in repo_root
+++    return os.path.abspath(start)
+++  File ".../posixpath.py", line 379, in abspath
+++    cwd = os.getcwd()
+++FileNotFoundError: [Errno 2] No such file or directory
+++```
+++
+++链条确认与评审意见一致：cwd 被删 → `subprocess.run(cwd=start)` 让 git 以 128 退出 →
+++落**回落分支** → `os.path.abspath(".")` 内部调 `os.getcwd()` **自己抛** `FileNotFoundError`
+++→ 逃出 `repo_root` → `main()` 只 `except ValueError` 接不住 → 裸 Traceback + RC=1。
+++
+++**抛点在 `repo_root` 自己 owns 的回落分支里，与 argparse 默认值无关** ⇒ 本票闭合，未 defer 到 Task 3。
+++
+++### 修法：消除抛点，而不是再包一层 try
+++
+++首轮的步骤① 只在 `start is None` 时求 cwd；`start` 为**相对路径**（argparse 默认 `"."`）时
+++`start` 一路带着相对性走到回落分支，由 `abspath` 在那里才去触 cwd。修法是把「触 cwd」这件事
+++**全部前移并收敛到步骤①b 的单一守护点**：
+++
+++```python
+++    # ① 起点可信性（显式起点的存在性拒绝，保持原判据）
+++    if start is not None and not os.path.isdir(start):
+++        raise ValueError("ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200] + ...)
+++    # ①b 起点归一化为绝对路径——**本步同时替回落分支承担 fail-closed**
+++    if start is None or not os.path.isabs(start):
+++        try:
+++            cwd = os.getcwd()
+++        except OSError:                     # ← CF-4 一并扩为 OSError
+++            raise ValueError(
+++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在或不可访问; "
+++                "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+++            ) from None
+++        start = cwd if start is None else os.path.join(cwd, start)
+++    start = os.path.normpath(start)
+++```
+++
+++回落分支随之变成**结构上不可能抛**：
+++
+++```python
+++    except (OSError, subprocess.CalledProcessError):
+++        # start 已在步骤①b 归一化为绝对路径 ⇒ 本行不再触 os.getcwd()，结构上不可能抛
+++        # OSError。这是本回落分支 fail-closed 的方式：**消除抛点**，而不是再包一层 try。
+++        return os.path.abspath(start)
+++```
+++
+++#### ⚠️ 与评审建议的一处偏离（显式登记，请复审确认）
+++
+++评审原话是「`os.path.abspath(start)` 的 `OSError` 转成受控 `ValueError`」，即**在回落分支就地包一层 try**。
+++我改为**在上游消除抛点**，理由三条：
+++
+++1. **可观测契约完全一致** —— 三份脚本实测均为 `exit 2` + `ERROR:/cause:/fix:` 三段式诊断 + stderr 无 Traceback。
+++2. **就地包 try 会产生一条无法做变异确认的死分支** —— 归一化之后 `abspath` 对绝对路径是恒等映射、
+++   永不触 cwd，那个 `except` 永远走不到。写一条「删掉它也不会变红」的守护，直接违反 PV 规则 5 的精神。
+++3. **结构硬约束** 要求「`try` 只包 `subprocess.run`」。就地包 try 会在函数里引入第二个 `try`；
+++   前移方案把守护放在 git 调用之前，`subprocess.run` 那个 `try` 的形状原样不动
+++   （只捕 `OSError`/`CalledProcessError`、`TimeoutExpired` 单独 `raise`、无 `except Exception`）。
+++
+++**代价/残余风险**：保护点与失效点不再同处一行。若日后有人把步骤①b 的归一化删掉或后移到 git 调用之后，
+++回落分支会静默回归。**该风险已被机械覆盖**——见下方变异确认②，删掉①b 时新增的 CLI 用例立刻复现
+++原始 `RC:1 + FileNotFoundError`。
+++
+++### 顺带 fold：CF-4（Standards 轴 Minor）
+++
+++首轮步骤① 只捕 `FileNotFoundError`；`PermissionError`（父目录 r/x 权限被撤）同属 `OSError`、会同样裸逃。
+++已随上文一并扩为 `except OSError`。两条是同一族缺陷（裸 `OSError` 逃逸击穿「stderr 无 Traceback」承诺），
+++同一票修掉，未留给 Task 3。
+++
+++### 新增验证（三份各一，共 6 例）
+++
+++| 用例 | 层级 | 断言 |
+++|---|---|---|
+++| `test_cli_with_deleted_process_cwd_exits_two_without_traceback` | **CLI 真子进程** | `RC == 2` · stderr 无 `Traceback` · 含 `ERROR: 无法确定仓根探测起点` · 含 `cause:`/`fix:` |
+++| `test_getcwd_permission_error_is_controlled_too` | 函数层 | `PermissionError` → 受控 `ValueError`（CF-4 守护） |
+++
+++`test_getcwd_permission_error_is_controlled_too` mock 的是 `os.getcwd`（**外部环境行为**），
+++**不是** `os.path.isabs`/`isdir`/`realpath`（判据本身）—— 未触碰方法论红线。
+++
+++---
+++
+++## C2【Important】「经 CLI 调用 exit 2」缺自动化绿锚
+++
+++首轮 81 例全在函数层；唯一覆盖 CLI 半条的 4 个用例当前是红的（Task 4 的 mock 面）⇒ **绿锚压在红用例上 = 没有锚**。
+++
+++新增 `test_cli_bad_root_exits_two_with_diagnostic_on_stderr`（三份各一），走
+++**`--root` 指向不存在目录**这条现在就能触发的路径，**不依赖 Task 4 的红用例转绿**：
+++
+++```python
+++    proc = subprocess.run([sys.executable, SCRIPT, "--root", str(missing), SUBCMD], ...)
+++    assert proc.returncode == 2
+++    assert "Traceback" not in proc.stderr
+++    assert proc.stderr.startswith("ERROR: ")
+++    assert "仓根探测起点不是既存目录" in proc.stderr        # ← 退出码不可区分 ⇒ 必须断言诊断内容
+++    assert "cause:" in proc.stderr and "fix:" in proc.stderr
+++    assert repr(str(missing))[1:-1] in proc.stderr          # 被拒值出现在诊断里
+++    assert not missing.exists()                              # 坏路径 MUST NOT 被 makedirs 具现
+++    assert _entries(tmp_path) == []
+++```
+++
+++遵守「退出码可区分性」约束：坏 root 与坏 scan id 都产生 exit 2 ⇒ 用例**同时断言 stderr 的具体诊断内容**，
+++未仅凭退出码判定通过。
+++
+++---
+++
+++## C3【Minor】fold 判据不一致
+++
+++`sdflow-issues/tests/test_issues.py::TestRepoRoot::test_falls_back_to_abspath_when_git_command_raises`
+++的红只是桩签名缺 `env=`/`timeout=`，与已 fold 的 `test_task3_frontmatter_writer[A7]` 同属
+++「本票签名变更直接触发」。判据统一 ⇒ 一并 fold：
+++
+++```python
+++-        def boom(cmd, cwd=None, capture_output=True, text=True, check=True):
++++        # `**kwargs`：repo_root 现在还会传 env= / timeout=，写死签名会 TypeError。
++++        # 只补桩签名，不改被测行为（回落分支仍应返回 abspath(start)）。
++++        def boom(cmd, **kwargs):
+++             raise subprocess.CalledProcessError(128, cmd)
+++```
+++
+++**只补桩签名，未改被测行为**（断言仍为 `result == os.path.abspath(str(tmp_path))`，原样保留）。
+++
+++---
+++
+++## 变异确认（PV 规则 5）— 两次实际输出
+++
+++### 变异① C2 守护：拆掉步骤① 的起点存在性拒绝
+++
+++```
+++MUTATED: 拆掉步骤① 起点存在性拒绝  (`if start is not None and not os.path.isdir(start):` → `if False:`)
+++
+++E       AssertionError: (0, '（无匹配 bug）\n\n✓ frontmatter/marker/legacy 关系一致\n', '')
+++E       assert 0 == 2
+++E        +  where 0 = CompletedProcess(args=[..., '--root', '.../no-such-root', 'scan'],
+++E                                      returncode=0, stdout='（无匹配 bug）\n...', stderr='').returncode
+++1 failed in 0.07s
+++```
+++
+++⇒ 无守护时 CLI 对着一个**不存在的仓根静默 exit 0**，正是 spec 要消灭的 fail-open。新锚有效。
+++
+++### 变异② C1 守护：删掉步骤①b 归一化 + `OSError` 守护
+++
+++把①b 整段退回首轮形态（`if start is None: start = os.getcwd()`，无 try）：
+++
+++```
+++MUTATED: 删掉①b 归一化 + OSError 守护
+++
+++FAILED ...::test_deleted_process_cwd_yields_controlled_failure
+++FAILED ...::test_cli_with_deleted_process_cwd_exits_two_without_traceback
+++FAILED ...::test_getcwd_permission_error_is_controlled_too
+++3 failed, 27 passed in 2.23s
+++```
+++
+++CLI 用例的失败详情**逐字复现了 C1 的原始缺陷形态**：
+++
+++```
+++E       AssertionError: RC:1
+++E         ERR:Traceback (most recent call last):<NL>
+++E           File ".../buglist.py", line 630, in repo_root<NL>    out = subprocess.run(<NL>
+++E           ...subprocess.CalledProcessError: ... returned non-zero exit status 128.<NL>
+++E         During handling of the above exception, another exception occurred:<NL>
+++E         Traceback (most recent call last):<NL>
+++E           File ".../buglist.py", line 1677, in main<NL>    args.root = repo_root(args.root)<NL>
+++E           File ".../buglist.py", line 644, in repo_root<NL>    return os.path.abspath(start)<NL>
+++E           File ".../posixpath.py", line 379, in abspath<NL>    cwd = os.getcwd()<NL>
+++E         FileNotFoundError: [Errno 2] No such file or directory<NL>
+++```
+++
+++⇒ 「删掉它就变红」成立，且红的形态 = 缺陷的形态。变异后已还原，还原后 `37 passed`。
+++
+++> 两次变异均只在 `sdflow-buglist/scripts/buglist.py` 上做（改前 `cp` 备份、改后 `cp` 还原），
+++> 未污染另两份；还原后三向 AST 镜像一致性重跑为绿。
+++
+++---
+++
+++## 三份同步 / 镜像一致性
+++
+++三份 `repo_root` 的改动由**同一个 patch 脚本注入**（非手抄），三处 old-string 各断言
+++`count == 1` 后整体替换。`test_mirror_consistency.py` **7 passed**——剥 docstring 后
+++`ast.dump` 三向等价保持绿。黑名单仍是**函数体内局部常量**（未改动，也未上移为模块级）。
+++祖先校验（步骤⑤）与环境净化清单（步骤②）**一字未动**，`GIT_DISCOVERY_ACROSS_FILESYSTEM` 仍在净化清单内。
+++
+++## 全套件前后对比
+++
+++| | failed | passed | skipped |
+++|---|---|---|---|
+++| 修复前（HEAD `5d47212`） | **5** | 1829 | 3 |
+++| 修复后 | **4** | 1839 | 3 |
+++
+++`+10 passed / -1 failed` 的构成：**新增 9 例**（三份 recorder × 3 个新用例）+ **C3 fold 令 1 个红转绿**。
+++三个 identity 测试文件由 81 → **90 passed**。
+++
+++修复后剩余 4 个红，全部是 `test_task4_rename_snapshot.py::test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[None|7|bad_id2|bad_id3]`
+++—— 坏 root / 坏 scan id 的**退出码可区分性**，属 Task 4 的面级 argv 分派 scope，**本票未动那 4 个用例、也未动 CF-1 的任何 mock 站点**。
+++C3 那一个红（`test_falls_back_to_abspath_when_git_command_raises`）已按判据一致性 fold 转绿，5 → 4 与评审预期吻合。
+++
+++## 垃圾树再生链
+++
+++全套件跑完后检查仓根：**0 个 `{` 开头目录**，无回归。
+++
+++## 新发现
+++
+++1. **`issues.py` 无 `scan` 子命令**（其子命令为 `reindex` / `batch` / `sweep`）。
+++   复现 C1 时对 `issues.py` 跑 `scan` 会先被 argparse 拒掉（exit 2），**看起来像已修复**——
+++   这是一个会伪造绿的坑。三份的 CLI 级用例已按各自真实子命令参数化（buglist/todolist = `scan`，issues = `reindex`），
+++   `issues.py` 的 C1 修复已用 `reindex` 独立实测确认（`RC 2 | Traceback False`）。
+++2. **C1 的真实触发条件比评审描述更宽**：不止「cwd 被删」，任何**相对起点 + cwd 不可用**都会走到该抛点
+++   （含 `PermissionError`，即 CF-4）。①b 的归一化把这一整族一次覆盖，而非只补 cwd-被删这一个点
+++   （面治优先于点补）。
++diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-review-package.diff b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-review-package.diff
++new file mode 100644
++index 0000000..8db1b73
++--- /dev/null
+++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-review-package.diff
++@@ -0,0 +1,2017 @@
+++diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation.md b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation.md
+++new file mode 100644
+++index 0000000..0f04870
+++--- /dev/null
++++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation.md
+++@@ -0,0 +1,275 @@
++++# Task 2 — `repo_root` 六步身份校验（三份同步）
++++
++++**R-ID**：R1（仓根解析证明根的身份）· R3（三份逐字一致）
++++**tasks 覆盖**：1.1 / 1.3 / 1.3b / 1.3c / 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.10
++++**未碰**（属 Task 3/4）：1.2 / 1.2b / 1.2c / 1.9 / 1.11 / 2.x
++++
++++---
++++
++++## 1. 做了什么
++++
++++### 实现（三份同步，同一提交）
++++
++++- `sdflow-issues/scripts/issues.py`
++++- `sdflow-buglist/scripts/buglist.py`
++++- `sdflow-todolist/scripts/todolist.py`
++++
++++三份 `repo_root` 的**函数体逐字节同款**（由脚本从 issues.py 抽体后注入另两份生成，非手抄），
++++docstring 各自不同（合法漂移，被 `_ast_no_doc` 剥离）。签名 `repo_root(start=".")` →
++++`repo_root(start=None)`。
++++
++++### 测试（三份各一，共 27 × 3 = 81 例）
++++
++++- `sdflow-issues/tests/test_repo_root_identity_issues.py`
++++- `sdflow-buglist/tests/test_repo_root_identity_buglist.py`
++++- `sdflow-todolist/tests/test_repo_root_identity_todolist.py`
++++
++++> 文件名带 skill 后缀：本仓 `tests/` 无 `__init__.py`，同名 basename 会让 pytest
++++> 收集期 `import file mismatch` 直接报错（实测），既有惯例本就是全仓唯一 basename。
++++
++++### 附带修复（fold，非 defer）
++++
++++`sdflow-buglist/tests/test_task3_frontmatter_writer.py::test_noncanonical_request_does_not_alias_canonical_or_legacy_spelling[A7]`
++++——详见 §5。
++++
++++---
++++
++++## 2. 六步判据的最终形态
++++
++++```
++++① 起点可信性  start is None → os.getcwd()（FileNotFoundError → 受控 ValueError）
++++              start 显式    → os.path.isdir(start)，否则 ValueError
++++② 环境净化    从 recorder_child_env("git", token=False) 的副本中剔除
++++              9 个具名变量 + GIT_CONFIG_KEY_* / GIT_CONFIG_VALUE_* 两个前缀族
++++③ 调 git      try 只包 subprocess.run(..., env=env, timeout=30)
++++                except TimeoutExpired          → raise ValueError（不回落）
++++                except (OSError, CalledProcessError) → return abspath(start)（回落）
++++④ 形状校验    top = stdout.rstrip("\r\n")；非空 ∧ isabs ∧ isdir
++++⑤ 祖先校验    commonpath([normcase(realpath(start)), normcase(realpath(top))])
++++              == normcase(realpath(top))                        ← 主防线
++++⑥ marker      os.path.exists(join(realpath(top), ".git"))       ← exists 而非 isdir
++++返回          os.path.realpath(top)
++++```
++++
++++### 结构硬约束的落实
++++
++++| 约束 | 落实情况 |
++++|---|---|
++++| `try` 只包 `subprocess.run` | ✅ 该 try 的 body 只有一条 `subprocess.run(...)` 赋值 |
++++| 只捕 `OSError` / `CalledProcessError` | ✅ |
++++| `TimeoutExpired` 单独 `raise` | ✅ 且置于两个 except 之前（它不是 `OSError` 子类，顺序上仍显式前置以防未来误改） |
++++| 一切校验与 `raise` 在 try 之外 | ✅ ④⑤⑥ 全在 try 之后 |
++++| 禁 `except Exception` | ✅ 全函数无 |
++++| 黑名单为**函数体内局部常量** | ✅ `discovery_env` / `discovery_env_prefixes` 是局部变量，随函数进 AST 三向比较、也随函数被 T170 搬走 |
++++| 不在 helper 内 `sys.exit` | ✅ |
++++| 不写 stdout | ✅ |
++++| `raise` 消息通用、不含脚本名 / `__file__` | ✅（三份消息逐字相同，故 AST 等价才成立） |
++++| 被拒值用 `ascii(value)[:N]` | ✅ N=200，三处被拒值全部经 `ascii()` |
++++| 诊断格式 `ERROR: …; cause: …; fix: …` | ✅ 五条消息全部同款 |
++++
++++### ⚠️ 对「try 只包 subprocess.run」的一处**必要偏离**（显式登记，非疏忽）
++++
++++步骤①在 `start is None` 分支里有第二个 `try`：
++++
++++```python
++++try:
++++    start = os.getcwd()
++++except FileNotFoundError:
++++    raise ValueError("ERROR: 无法确定仓根探测起点; ...") from None
++++```
++++
++++**为什么不违反该约束的意图**：约束的理由是「否则新抛的 `ValueError` 会被自己的 except 接住，
++++fail-closed 归零」。这个 except 只捕 `FileNotFoundError`，**结构上不可能接住任何 `ValueError`**。
++++
++++**为什么无法消除**：spec 明文要求 `os.getcwd()` 的 `FileNotFoundError` 转为受控 `ValueError`，
++++而 `os.getcwd()` 没有非异常的探测形式；唯一的无 try 写法 `os.path.isdir(".")` 被 spec 与 ADR-7
++++**显式禁止**（cwd 被删后它仍返回 `True`）。
++++
++++---
++++
++++## 3. 每个验收框的证据
++++
++++| 验收框 | 证据 |
++++|---|---|
++++| 六步判据三份逐字一致，`determinism-guards` 三向 AST 等价保持绿 | `pytest sdflow-buglist/tests/test_mirror_consistency.py` → **7 passed**（`repo_root` 在 `THREE_WAY` roster 内） |
++++| 形状负例各自被拒 + 断言路径未被创建 | `test_shape_negatives_are_rejected`（6 参数：空串 / 纯空白 / `\n` / `relative/path` / `./relative` / 不存在的绝对路径）+ `test_multiline_stdout_is_rejected` + `test_trailing_space_is_preserved_not_stripped`；每例断言 `_entries(repo) == [".git"]` 且目标路径 `not exists` |
++++| `core.worktree` 回归用例存在 **且删掉祖先校验后变红** | `test_core_worktree_redirect_is_rejected`；变异确认见 §4 |
++++| `GIT_DIR`/`GIT_WORK_TREE`：净化后返回真实根 + 不净化时祖先校验独立拦得住 | `test_git_dir_and_work_tree_env_are_sanitized`（第一层）+ `test_ancestor_check_independently_catches_unsanitized_env`（第二层）；两条各有独立变异确认，见 §4 |
++++| 起点负例：调 git 前被拒且不被创建 | `test_missing_start_directory_is_rejected_before_calling_git` / `..._file_as_start_...` / `..._empty_string_...`——三例都用 `_forbid_subprocess()` 把 `subprocess.run` 换成**抛 AssertionError** 的桩：git 一旦被调用，测试立即以「git 不该被调用」失败。这是「先于调 git」的机械证明，不是时序推测 |
++++| 进程 cwd 被删除 → 受控失败 | `test_deleted_process_cwd_yields_controlled_failure`：子进程内 `chdir` → `rmdir` → 先断言 `os.path.isdir('.') is True`（前提核验，锚 ADR-7 的实测依据）→ 调 `repo_root()` → 断言 `CONTROLLED:ERROR: 无法确定仓根探测起点` 且 stderr 无 `Traceback` |
++++| 超时负例：受控失败且不回落 | `test_timeout_raises_and_does_not_fall_back`（断言 `ValueError` + `subprocess.run` **确实收到了正数 `timeout` kwarg**）+ `test_timeout_with_real_hanging_git`（PATH 注入真实 `sleep` shim，让 subprocess 自己触发 `TimeoutExpired`） |
++++| 正向回归 | `test_returns_root_from_nested_subdirectory` / `test_symlinked_start_resolves_to_real_root` / `test_linked_worktree_dot_git_is_a_file` / `test_submodule_dot_git_is_a_file` / `test_falls_back_outside_any_git_repo` / `test_bare_repo_falls_back` / `test_inside_dot_git_directory_falls_back` / `test_cli_still_exits_zero_outside_any_git_repo`（CLI 真跑，issues=`reindex`、buglist/todolist=`scan`，断言 exit 0 且 stderr 无 `Traceback`） |
++++| 1.3b cwd 不变性**双态**对照 | `test_bad_relative_value_rejected_regardless_of_cwd`：同一坏值 `"lure"` 在「cwd 下确有 `lure/` 目录」与「cwd 下没有」两个 cwd 各跑一次，断言两次结论**相同**，并断言仓外 cwd 目录仍为空 |
++++
++++**方法论合规**：全部 81 例**无一** mock `os.path.isabs` / `isdir` / `realpath`。被替换的只有
++++两类外部依赖行为——git 的 stdout 内容、git 的挂死；判据本身一律走真实文件系统。
++++linked worktree / submodule 两例先断言 `.git` 真的是**文件**（前提核验），再断言返回值。
++++
++++---
++++
++++## 4. 变异确认（PV 规则 5 · 两次实际输出）
++++
++++### 变异 ①：删除祖先校验（第⑤步 → `pass`）
++++
++++```
++++=== MUTANT RUN (祖先校验被删除) ===
++++E           Failed: DID NOT RAISE <class 'ValueError'>
++++FAILED ...::test_core_worktree_redirect_is_rejected
++++FAILED ...::test_ancestor_check_independently_catches_unsanitized_env
++++2 failed, 25 deselected in 0.14s
++++```
++++
++++```
++++=== RESTORED RUN ===
++++..                                                                       [100%]
++++2 passed, 25 deselected in 0.12s
++++```
++++
++++⇒ 祖先校验的存在被两条用例独立证明；删掉它，`core.worktree` 缺口静默回归的路径当场变红。
++++
++++### 变异 ②：删除环境净化（第②步 → `pass`）
++++
++++```
++++=== MUTATION 2: 删除环境净化 ===
++++E  ValueError: ERROR: git 返回的仓根不包含探测起点: '.../test_git_dir_and_work_tree_env0/other';
++++   cause: 工作树被 core.worktree 或环境变量重定向到起点之外; ...
++++FAILED ...::test_git_dir_and_work_tree_env_are_sanitized
++++1 failed, 1 passed, 25 deselected in 0.18s
++++```
++++
++++恢复后 `34 passed`（mirror + 全量 identity 套件）。
++++
++++⇒ **两层防御各自独立有效**已被机械证明：删掉净化 → 净化用例红（且红在祖先校验上，正好实证
++++design 表格里「`GIT_DIR` 两层都能拦」那一格）；删掉祖先校验 → `core.worktree` 用例红
++++（净化对它零效果，实证「唯一防线」）。
++++
++++> 变异期间原文件已 `cp` 备份并逐次还原，两次还原后均跑绿再继续。
++++
++++---
++++
++++## 5. 12 个 mock 站点的实际表现与判断
++++
++++**结论：12 个里 5 个变红，7 个仍绿——且 7 个的绿经核对是「真绿」，不是退出码碰撞。**
++++按 dispatch 要求，**一个 mock 站点都没有改**（Task 4 scope）。
++++
++++### 变红的 5 个（全部在 `sdflow-issues/tests/`）
++++
++++| 站点 | 用例 | 红在哪 / 为什么 |
++++|---|---|---|
++++| `test_issues.py:339` | `TestRepoRoot::test_falls_back_to_abspath_when_git_command_raises` | 桩签名是 `boom(cmd, cwd=None, capture_output=True, text=True, check=True)`——新实现多传了 `env=` 与 `timeout=` ⇒ `TypeError`。旧代码的 `except Exception` 把它一并吞掉、走回落，**测试是靠这个吞咽通过的**；except 收窄后 `TypeError` 裸传播。⚠️ 这条本身就是一个被 `except Exception` 掩盖的假绿 |
++++| `test_task4_rename_snapshot.py:165` ×4 参数 | `test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[None/7/bad_id2/bad_id3]` | `assert "scan item[0].id" in diagnostic` 失败，实得 `ERROR: git 返回的仓根不可用: '{"bugs": [{"id": {}, ...`。**这正是本 change 开篇断言的假绿被当场证伪**：该用例此前「preserves_derived_bytes」成立的真实原因是 reindex 全程没访问 `tmp_path`（root 被解析成那段 JSON），而不是派生字节受保护 |
++++
++++> 🔴 这 4 个用例现在报的是**坏 root**、不是**坏 scan id**——两者都 exit 2，但 stderr 可区分，
++++> 断言正是靠 `scan item[0].id` 把它们分开的。**这条断言救了这次判断**，也正是 spec
++++> 「拒绝理由必须可区分」要求的形状。修复归 Task 4（tasks 2.1，按 CF-1 做**面级** argv 分派）。
++++
++++### 仍绿的 7 个——逐个核对，不当作通过信号
++++
++++按 dispatch 要求真读了 ≥2 个（实际读了 4 个），判断如下：
++++
++++| 站点 | 判断 |
++++|---|---|
++++| `test_task4_rename_snapshot.py:140` | **真绿**。调的是 `_reindex_core(str(tmp_path))`，**不经 `main()`** ⇒ 全程不调 `repo_root`。且断言是 `pytest.raises(ValueError)` + 派生字节不变，`tmp_path` 真实存在，写入路径真实生效 |
++++| `test_task4_rename_snapshot.py:218` | **真绿**，同上（`_reindex_core` 直调），且 `pytest.raises(ValueError, match=field)` 带内容匹配，不是裸退出码 |
++++| `test_issues.py:409` | **真绿**。直调 `read_pool(str(tmp_path))`，与 `repo_root` 无交集；断言 `"simulated subprocess failure" in str(exc)`，有内容锚 |
++++| `test_issues.py:1609` | **真绿**，且**这就是 CF-1 推荐的目标形态**：桩已按 argv 分派（`if "scan" in cmd: ...; return real_run(cmd, **kwargs)`），非 scan 的调用透传真实行为；且直调 `cmd_sweep(args)` 不经 `main()`。**Task 4 做面级改造时可直接以它为样板** |
++++| `test_task4_rename_snapshot.py:267/773`、`test_issues.py:1642/1674/1709/1753` | 未逐条精读，但全部是「直调 `cmd_*` / `_reindex_core`、不经 `main()`」或「argv 分派 + 透传」两种形态之一 —— 与上面四条同族。**列为 Task 4 复核项，不由本票背书** |
++++
++++> 结论要点：**「不经 `main()`」是这 7 个仍绿的共同原因**，不是「加固没生效」，也不是退出码碰撞。
++++> `repo_root` 只在 `main()` 入口被调用（这与 ADR-5 登记的契约一致：`cmd_*` 信任调用方已校验 `args.root`）。
++++
++++---
++++
++++## 6. 附带修复（fold）：`test_task3_frontmatter_writer.py[A7]`
++++
++++**不属 12 个 mock 站点**，是我这一票的加固**直接触发**的第 6 个红。
++++
++++- **现象**：`assert add.returncode == 0` 失败（该行是 `test_noncanonical_request_does_not_alias_canonical_or_legacy_spelling`
++++  的第二段，`canonical_root = tmp_path / "canonical"` **从未 mkdir**）。
++++- **根因**：该用例依赖的是旧的宽松行为——`--root` 指向不存在的目录时回落 `abspath(start)`，
++++  再由下游 `os.makedirs` 把它**静默具现**出来。**这正是 design 失败模式表里
++++  「`--root` 指向不存在/非目录 → 下游 makedirs 具现该坏路径」那一行要消灭的行为。**
++++- **判断**：不是加固写错了，是**测试编码了被废止的契约**（③ 目标态导向：不能拿它反推目标缩水）。
++++- **处置**：给 `canonical_root` 补一行 `mkdir()` + 三行 why 注释指向 spec。**未改任何被测代码。**
++++- **前后对照**：改前 `git stash` 到本票之前的树上跑该文件 → `21 passed`（证明确是本票引入，
++++  非既有 flake、非 order-dependent——单独跑也红）；改后 `21 passed`。
++++
++++---
++++
++++## 7. 全套件结果
++++
++++| 轮次 | 结果 |
++++|---|---|
++++| 加固后首轮（未 fold A7） | `6 failed, 1827 passed, 4 skipped in 121.51s` |
++++| fold A7 后终轮 | 见下方「终轮」 |
++++
++++**终轮**：`5 failed, 1829 passed, 3 skipped in 116.89s`。
++++（skipped 4→3 是既有的负载/环境敏感项，与本票判据无关：本票新增的 81 例中只有
++++`test_timeout_with_real_hanging_git` 带 skip 条件，且仅在 `win32` 触发，本机不触发。）
++++5 个 failed **全部**是 §5 表列的 12-mock-site 红，**全部属 Task 4 scope**，本票未动：
++++
++++```
++++FAILED sdflow-issues/tests/test_issues.py::TestRepoRoot::test_falls_back_to_abspath_when_git_command_raises
++++FAILED sdflow-issues/tests/test_task4_rename_snapshot.py::test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[None]
++++FAILED sdflow-issues/tests/test_task4_rename_snapshot.py::test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[7]
++++FAILED sdflow-issues/tests/test_task4_rename_snapshot.py::test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[bad_id2]
++++FAILED sdflow-issues/tests/test_task4_rename_snapshot.py::test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[bad_id3]
++++```
++++
++++CF-3 相关：`test_exec_claude_reverse_path_three_flags_golden` 本轮两次全量跑**均未失败**
++++（与 Task 1 的观察一致，进一步收窄「全量跑必红」这个已被证伪的描述）。
++++
++++---
++++
++++## 8. 🟢 垃圾树是否仍再生 —— **不再生**（本票最重要的正向证据）
++++
++++```
++++PRE  junk: 0
++++（全套件 1832 例跑完）
++++POST junk: <无输出>
++++```
++++
++++两轮全量跑（fold 前 + fold 后）**跑完仓根均 0 棵 `{` 开头目录**，无需任何清理动作。
++++
++++**且拿到了因果链的直接证据**，不只是「没看见」：变红的 4 个 `..._preserves_derived_bytes`
++++用例，stderr 实得
++++
++++```
++++ERROR: git 返回的仓根不可用: '{"bugs": [{"id": {}, "module": "core", ...
++++```
++++
++++——那段被当成仓根的 JSON **原本就是长出 4 棵垃圾树的那个值**，现在它在形状校验（第④步）
++++被拦下、`ValueError` 抛出、`makedirs` 根本没被走到。**再生链是被判据切断的，不是碰巧没触发。**
++++
++++---
++++
++++## 9. Concerns（交后续票 / 双轴审）
++++
++++1. **【交 Task 4，非本票可修】** 5 个红全部落在 12-mock-site 面上。**MUST NOT 通过弱化
++++   `repo_root` 让它们变绿**——其中 4 个的红恰恰是本 change 立项时断言的假绿被证伪。
++++   `test_issues.py:1609` 可直接当面级 argv 分派的样板。
++++2. **【交 Task 3】** tasks 1.3c 的 **CLI 层**断言（`exit 2` + stderr 无 `Traceback`）本票只做到
++++   **函数层**（子进程直调 `repo_root()`）。原因：CLI 路径要走到 `start=None` 分支，前提是
++++   argparse `--root` 默认值改 `None`（tasks **1.2c**，属 Task 3）；当前默认仍是 `"."` ⇒
++++   CLI 下 cwd 被删时走的是显式起点分支。**Task 3 落 1.2c 后，MUST 回补这条 CLI 级断言**，
++++   否则该 Scenario 只有半条覆盖。
++++3. **【Windows · 交 tasks 4.6】** 第⑤步用 `os.path.commonpath`（依 ADR-2 的代码原样）。
++++   在 **Windows 跨盘符**下 `commonpath` 会自行抛 `ValueError("Paths don't have the same drive")`。
++++   行为上仍是 fail-closed（`main()` 的 `except ValueError` 照样接住 → exit 2 + stderr，无 traceback），
++++   但**诊断消息不带 `ERROR: …; cause: …; fix:` 格式**，可观测性降级。
++++   本地 macOS 照不到，**MUST NOT 用「理论上大概率能过」结案**（design Open Questions Q3 同款）。
++++   备选：改 `PurePath.is_relative_to`（spec 明列的另一选项，跨盘符返回 `False` 而非抛异常）
++++   ——但那是对 ADR-2 written decision 的偏离，留给设计门/Windows 泳道拍板。
++++4. **【测试机制的一处诚实降级】** tasks 1.8 建议「PATH 注入 `sleep` 包装」验超时。真等满
++++   `timeout=30` 会让每次跑套件多 30s 墙钟，不可接受。故拆成两条：
++++   `test_timeout_raises_and_does_not_fall_back` 断言**契约**（`ValueError` + 不回落 +
++++   `subprocess.run` 确实收到正数 `timeout` kwarg）；`test_timeout_with_real_hanging_git` 做
++++   **真 PATH 注入**（`/bin/sleep 120` shim）但把外层 `timeout` 收窄到 1s 来观察真实
++++   `TimeoutExpired` 路径。**未被覆盖的残余 = 「30 这个数值本身」**，无自动化锚。
++++   （踩坑记录：shim 首版写 `sleep 120` 且把 `PATH` 整个替换成 shim 目录 ⇒ `sleep` 也找不到、
++++   shell 退 127 走成回落分支、测试「DID NOT RAISE」。改为 `exec /bin/sleep 120` + `PATH` **前置**
++++   而非替换后才真的挂住。这条如果没查、直接改断言，就会变成又一个假绿。）
++++5. **【`isdir` 的 TOCTOU】** 第①步 `isdir(start)` 与第③步 `subprocess.run(cwd=start)` 之间存在
++++   竞态窗口。窗口内 start 被删 ⇒ `subprocess.run` 抛 `FileNotFoundError`（`OSError`）⇒
++++   落**回落分支**返回 `abspath(start)`，而非 fail-closed。属既有回落语义的边角，
++++   未在 spec 中被要求处置，**不擅自扩大 scope**，登记备查。
+++diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
+++index 80d4d6e..96a2ffb 100644
+++--- a/sdflow-buglist/scripts/buglist.py
++++++ b/sdflow-buglist/scripts/buglist.py
+++@@ -578,16 +578,95 @@ def read_recorder_document(path, expected_pool):
+++ 
+++ # ── 路径与文件 ───────────────────────────────────────────────────────────────
+++ 
+++-def repo_root(start="."):
++++def repo_root(start=None):
++++    """探测并**证明**起点所属 git 仓库的根；非 git 仓库（或 git 命令失败）退化为
++++    `os.path.abspath(start)`。
++++
++++    与 issues.py / todolist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
++++    故各自内联一份）。
++++
++++    契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
++++    返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
++++    起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
++++    任一步不满足即 `raise ValueError`。唯一的回落分支是「git 抛 OSError 或以非 0 退出」
++++    （非 git 仓库 / git 不可用 / bare repo / `.git/` 目录内等正常场景）。超时**不回落**。
++++    """
++++    # 环境净化清单（ADR-6）：MUST 保持为函数体内的局部常量。三向 AST 镜像守护只比较
++++    # roster 内的**函数体**，模块级常量的值不在其覆盖范围内——写成模块级常量等于把这份
++++    # 清单放进既有安全网的盲区，三份漏一项或拼错都不会拉红。
++++    discovery_env = (
++++        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++++        "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++++        "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++++    )
++++    discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
++++    # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
++++    # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
++++    if start is None:
++++        try:
++++            start = os.getcwd()
++++        except FileNotFoundError:
++++            raise ValueError(
++++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
++++                "fix: 切换到一个既存目录后重试，或显式指定 --root"
++++            ) from None
++++    elif not os.path.isdir(start):
++++        raise ValueError(
++++            "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
++++            + "; cause: 显式指定的起点路径不存在或不是目录; "
++++            "fix: 指定一个既存目录作为起点"
++++        )
++++    # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
++++    env = recorder_child_env("git", token=False)
++++    for name in [
++++        n for n in env
++++        if n in discovery_env or n.startswith(discovery_env_prefixes)
++++    ]:
++++        env.pop(name, None)
++++    # ③ 调 git——try 只包 subprocess.run，一切校验与 raise 都在 try 之外，
++++    # 否则新抛的 ValueError 会被本函数自己的 except 接住，fail-closed 归零。
+++     try:
+++         out = subprocess.run(
+++             ["git", "rev-parse", "--show-toplevel"],
+++             cwd=start, capture_output=True, text=True, check=True,
+++-            env=recorder_child_env("git", token=False),
++++            env=env, timeout=30,
+++         )
+++-        return out.stdout.strip()
+++-    except Exception:
++++    except subprocess.TimeoutExpired:
++++        raise ValueError(
++++            "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 30 秒内未返回; "
++++            "fix: 确认仓库所在文件系统可用，或显式指定 --root"
++++        ) from None
++++    except (OSError, subprocess.CalledProcessError):
+++         return os.path.abspath(start)
++++    # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
++++    top = out.stdout.rstrip("\r\n")
++++    if not top or not os.path.isabs(top) or not os.path.isdir(top):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根不可用: " + ascii(top)[:200]
++++            + "; cause: git rev-parse --show-toplevel 的输出不是既存的绝对路径目录; "
++++            "fix: 检查 git 配置与调用环境是否被污染，或显式指定一个既存目录作为 --root"
++++        )
++++    # ⑤ 祖先校验（主防线）：按路径组件比较，不用裸字符串前缀匹配。这是唯一能拦住
++++    # core.worktree（写在 .git/config 里的 on-disk 重定向）的判据——环境净化对它零效果，
++++    # 形状校验会放行。删掉本步 = 该缺口静默回归（ADR-2）。
++++    top_real = os.path.realpath(top)
++++    start_real = os.path.realpath(start)
++++    if os.path.commonpath([
++++        os.path.normcase(start_real), os.path.normcase(top_real),
++++    ]) != os.path.normcase(top_real):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根不包含探测起点: " + ascii(top)[:200]
++++            + "; cause: 工作树被 core.worktree 或环境变量重定向到起点之外; "
++++            "fix: 清除 .git/config 的 core.worktree 与 GIT_* 重定向后重试"
++++        )
++++    # ⑥ worktree marker：用 exists 而非 isdir——linked worktree 与 submodule 下 .git 是文件。
++++    if not os.path.exists(os.path.join(top_real, ".git")):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根缺少 .git: " + ascii(top)[:200]
++++            + "; cause: 该目录不带 worktree marker，不是一个仓库根; "
++++            "fix: 检查 git 配置与调用环境是否被污染，或显式指定 --root"
++++        )
++++    return top_real
+++ 
+++ 
+++ BRANCH_PREFIX_RE = re.compile(r"^[a-z]+/")
+++diff --git a/sdflow-buglist/tests/test_repo_root_identity_buglist.py b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
+++new file mode 100644
+++index 0000000..f4c9433
+++--- /dev/null
++++++ b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
+++@@ -0,0 +1,461 @@
++++"""repo_root 六步身份校验（change harden-repo-root-fail-closed · Task 2）。
++++
++++被测契约：`repo_root(start=None|str) -> str`，在把任何值当作可写仓根返回之前，必须证明
++++它是**起点所属仓库的根**；任一判据不满足即 `raise ValueError`。唯一的回落分支是
++++「git 抛 OSError 或以非 0 退出」（非 git 仓库 / bare repo / `.git/` 目录内等正常场景）。
++++
++++本文件与 sdflow-issues/tests · sdflow-todolist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
++++D4 红线禁止互相 import，故测试也各自一份）。
++++
++++方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
++++`isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
++++外部依赖行为外，一切都用 `tmp_path` 下真实存在/不存在的路径构造。
++++
++++Run with: python3 -m pytest sdflow-buglist/tests/test_repo_root_identity_buglist.py -v
++++"""
++++
++++import os
++++import subprocess
++++import sys
++++from pathlib import Path
++++
++++import pytest
++++
++++sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
++++import buglist as rec_mod
++++from buglist import repo_root
++++
++++SCRIPT = str(Path(__file__).parent.parent / "scripts" / "buglist.py")
++++
++++# 仓库/工作树发现类变量——测试前一律清空，确保用例断言的是 repo_root 自身的判据，
++++# 而不是宿主环境残留（CI 的 git hook 场景会真的导出它们）。
++++GIT_DISCOVERY_ENV = (
++++    "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++++    "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++++    "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++++)
++++
++++
++++@pytest.fixture(autouse=True)
++++def _clean_git_env(monkeypatch):
++++    for name in GIT_DISCOVERY_ENV:
++++        monkeypatch.delenv(name, raising=False)
++++    for name in list(os.environ):
++++        if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
++++            monkeypatch.delenv(name, raising=False)
++++
++++
++++def _git(*args, cwd):
++++    return subprocess.run(
++++        ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True,
++++    )
++++
++++
++++def _init_repo(path):
++++    path.mkdir(parents=True, exist_ok=True)
++++    _git("init", "-q", cwd=path)
++++    _git("config", "user.email", "t@example.com", cwd=path)
++++    _git("config", "user.name", "t", cwd=path)
++++    return path
++++
++++
++++def _commit_empty(path):
++++    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=path)
++++
++++
++++def _fake_git_stdout(monkeypatch, stdout):
++++    """把 git 的 **stdout 内容**换掉（rc=0），其余一切判据仍走真实文件系统。
++++
++++    只替换外部依赖的输出，不碰 `os.path.*` 判据——后者正是被测对象。
++++    """
++++    calls = []
++++
++++    def fake_run(cmd, **kwargs):
++++        calls.append((cmd, kwargs))
++++        return subprocess.CompletedProcess(cmd, 0, stdout, "")
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", fake_run)
++++    return calls
++++
++++
++++def _forbid_subprocess(monkeypatch):
++++    """任何子进程调用都判定为失败——用于证明「起点校验发生在调 git 之前」。"""
++++
++++    def boom(cmd, **kwargs):
++++        raise AssertionError(f"git 不该被调用，但收到了: {cmd!r}")
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", boom)
++++
++++
++++def _entries(path):
++++    return sorted(p.name for p in Path(path).iterdir())
++++
++++
++++# ── ① 起点可信性（调 git 之前） ──────────────────────────────────────────────
++++
++++def test_missing_start_directory_is_rejected_before_calling_git(tmp_path, monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    missing = tmp_path / "no-such-dir"
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(missing))
++++
++++    assert "起点不是既存目录" in str(exc.value)
++++    assert str(exc.value).startswith("ERROR: ")
++++    assert not missing.exists(), "被拒的起点路径 MUST NOT 被创建"
++++    assert _entries(tmp_path) == []
++++
++++
++++def test_file_as_start_is_rejected_before_calling_git(tmp_path, monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    target = tmp_path / "a-file.txt"
++++    target.write_text("x", encoding="utf-8")
++++
++++    with pytest.raises(ValueError):
++++        repo_root(str(target))
++++
++++    assert target.is_file(), "普通文件不该被改成目录"
++++    assert _entries(tmp_path) == ["a-file.txt"]
++++
++++
++++def test_empty_string_start_is_rejected_before_calling_git(monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    with pytest.raises(ValueError):
++++        repo_root("")
++++
++++
++++def test_deleted_process_cwd_yields_controlled_failure(tmp_path):
++++    """进程 cwd 在运行期被删除（ADR-7）。
++++
++++    实测依据：此时 `os.path.isdir(".")` 仍返回 `True`，而 `os.getcwd()` 抛
++++    `FileNotFoundError` —— 所以起点 MUST 走 `os.getcwd()`。本用例在子进程里做
++++    （删除自身 cwd 会污染 pytest 进程），断言拿到受控 `ValueError` 而非裸 traceback。
++++    """
++++    doomed = tmp_path / "doomed"
++++    doomed.mkdir()
++++    program = (
++++        "import os, sys\n"
++++        "sys.path.insert(0, sys.argv[1])\n"
++++        "from buglist import repo_root\n"
++++        "os.chdir(sys.argv[2])\n"
++++        "os.rmdir(sys.argv[2])\n"
++++        "assert os.path.isdir('.') is True, 'premise: isdir(\\'.\\') 仍为 True'\n"
++++        "try:\n"
++++        "    repo_root()\n"
++++        "except ValueError as exc:\n"
++++        "    print('CONTROLLED:' + str(exc))\n"
++++        "    sys.exit(0)\n"
++++        "sys.exit('repo_root 未受控失败')\n"
++++    )
++++    proc = subprocess.run(
++++        [sys.executable, "-c", program,
++++         str(Path(SCRIPT).parent), str(doomed)],
++++        capture_output=True, text=True, cwd=str(tmp_path),
++++    )
++++
++++    assert proc.returncode == 0, proc.stderr
++++    assert "CONTROLLED:ERROR: 无法确定仓根探测起点" in proc.stdout
++++    assert "Traceback" not in proc.stderr
++++
++++
++++# ── ③ 形状校验 ──────────────────────────────────────────────────────────────
++++
++++@pytest.mark.parametrize("bad", [
++++    "",
++++    "   ",
++++    "\n",
++++    "relative/path",
++++    "./relative",
++++    "/definitely/not/here/at/all",
++++])
++++def test_shape_negatives_are_rejected(tmp_path, monkeypatch, bad):
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, bad)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++    assert not (tmp_path / "relative").exists()
++++    assert not (repo / "relative").exists()
++++    assert _entries(repo) == [".git"]
++++
++++
++++def test_multiline_stdout_is_rejected(tmp_path, monkeypatch):
++++    """`git rev-parse` 对未知选项不报错、原样回显再继续（rc=0）⇒ stdout 变多行、
++++    首行是垃圾。整段多行文本不是既存目录，形状校验拦下。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, f"--bogus-option\n{repo}\n")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++
++++
++++def test_trailing_space_is_preserved_not_stripped(tmp_path, monkeypatch):
++++    """`rstrip("\\r\\n")` 只剥行结束符：末尾的合法空格 MUST 保留。
++++
++++    若改用 `strip()`，`"<repo> "` 会被截短成一个**真实存在**的目录而静默放行——
++++    本用例正是那条判据的守卫：被拒值里必须还带着那个空格。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, str(repo) + " \n")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++    assert repr(str(repo) + " ")[1:-1] in str(exc.value), "被拒值应原样保留末尾空格"
++++
++++
++++def test_rejected_value_is_ascii_escaped(tmp_path, monkeypatch):
++++    """诊断里的被拒值用 `ascii(value)[:N]` 生成：多字节不卡边界、控制字符不伪造多行。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, "a" * 78 + "雪茄\tX")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    message = str(exc.value)
++++    # 被拒值段落 MUST 是 ascii() 的产物：原始的多字节字符与制表符都不得原样出现，
++++    # 否则说明走的是字节截断（会在多字节边界抛 UnicodeDecodeError，fail-closed 自身先崩）。
++++    assert "雪茄" not in message, "被拒值 MUST 经 ascii() 转义，不得原样嵌入多字节字符"
++++    assert "\t" not in message, "控制字符 MUST 被转义，不得原样嵌入"
++++    assert "\\u96ea" in message or "\\x" in message, f"被拒值应为 ascii() 转义形式: {message}"
++++    assert message.count("\n") == 0, "诊断 MUST 是单行，控制字符不得伪造多行日志"
++++
++++
++++def test_bad_relative_value_rejected_regardless_of_cwd(tmp_path, monkeypatch):
++++    """「坏值恰好命中 cwd 下的既存目录」—— `isabs` 拦下，且**与 cwd 无关**。
++++
++++    双态对照跑（tasks 1.3b）：在「坏值能被 cwd 解析成真实目录」的 cwd 与「解析不到」的
++++    cwd 各跑一次，断言两次结果一致。单态跑无法证伪「结论其实依赖 cwd」。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    (repo / "lure").mkdir()
++++    outside = tmp_path / "outside"
++++    outside.mkdir()
++++
++++    results = {}
++++    for label, cwd in (("cwd 内有同名目录", repo), ("cwd 内无同名目录", outside)):
++++        monkeypatch.chdir(cwd)
++++        assert (Path(cwd) / "lure").is_dir() == (label == "cwd 内有同名目录")
++++        _fake_git_stdout(monkeypatch, "lure")
++++        with pytest.raises(ValueError) as exc:
++++            repo_root(str(repo))
++++        results[label] = "仓根不可用" in str(exc.value)
++++
++++    assert results == {"cwd 内有同名目录": True, "cwd 内无同名目录": True}
++++    assert _entries(outside) == [], "被拒值 MUST NOT 在任何 cwd 下具现出目录"
++++
++++
++++# ── ④ 祖先校验（主防线） ────────────────────────────────────────────────────
++++
++++def test_core_worktree_redirect_is_rejected(tmp_path):
++++    """主防线用例（ADR-2）：`core.worktree` 是写在 `.git/config` 里的 **on-disk**
++++    重定向，环境净化对它零效果、形状校验会放行——**祖先校验是唯一防线**。
++++
++++    删掉祖先校验，本用例必须变红（变异确认见 impl-report）。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    outside = tmp_path / "outside"
++++    outside.mkdir()
++++    _git("config", "core.worktree", str(outside), cwd=repo)
++++
++++    # 前提核验：不假设，真跑一遍确认 git 确实 rc=0 返回那个仓外目录。
++++    probe = subprocess.run(
++++        ["git", "rev-parse", "--show-toplevel"],
++++        cwd=str(repo), capture_output=True, text=True,
++++        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
++++    )
++++    assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
++++    assert Path(probe.stdout.strip()).resolve() == outside.resolve(), (
++++        f"前提不成立：core.worktree 未重定向 toplevel，实得 {probe.stdout!r}"
++++    )
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "不包含探测起点" in str(exc.value)
++++    assert _entries(outside) == [], "仓外目录 MUST NOT 出现任何 openspec/ 产物"
++++    assert not (outside / "openspec").exists()
++++
++++
++++def test_git_dir_and_work_tree_env_are_sanitized(tmp_path, monkeypatch):
++++    """第一层防御：环境净化后 git 忽略 GIT_DIR/GIT_WORK_TREE，返回真实仓根。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    other = _init_repo(tmp_path / "other")
++++    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
++++    monkeypatch.setenv("GIT_WORK_TREE", str(other))
++++
++++    assert repo_root(str(repo)) == os.path.realpath(str(repo))
++++
++++
++++def test_ancestor_check_independently_catches_unsanitized_env(tmp_path, monkeypatch):
++++    """第二层防御独立有效：即便环境净化被绕过（将来新增未被剔除的等价变量），
++++    祖先校验仍拦得住。
++++
++++    做法：先用**未净化**的环境真跑一次 git，拿到它会返回的 top（= 另一个仓）；
++++    再把该值当作 git 的输出喂给 `repo_root`，断言祖先校验把它拒了。
++++    这样两层防御各自被独立证明，而不是靠「另一层反正会兜住」。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    other = _init_repo(tmp_path / "other")
++++    polluted = dict(os.environ)
++++    polluted["GIT_DIR"] = str(other / ".git")
++++    polluted["GIT_WORK_TREE"] = str(other)
++++    probe = subprocess.run(
++++        ["git", "rev-parse", "--show-toplevel"],
++++        cwd=str(repo), capture_output=True, text=True, env=polluted,
++++    )
++++    assert probe.returncode == 0, probe.stderr
++++    leaked = probe.stdout.rstrip("\r\n")
++++    assert Path(leaked).resolve() == other.resolve(), (
++++        f"前提不成立：未净化环境下 git 未被重定向，实得 {leaked!r}"
++++    )
++++
++++    _fake_git_stdout(monkeypatch, leaked)
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "不包含探测起点" in str(exc.value)
++++
++++
++++# ── ⑤ worktree marker + 正向回归 ────────────────────────────────────────────
++++
++++def test_returns_root_from_nested_subdirectory(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    sub = repo / "a" / "b"
++++    sub.mkdir(parents=True)
++++
++++    assert repo_root(str(sub)) == os.path.realpath(str(repo))
++++
++++
++++def test_symlinked_start_resolves_to_real_root(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    sub = repo / "pkg"
++++    sub.mkdir()
++++    link = tmp_path / "link-to-pkg"
++++    link.symlink_to(sub, target_is_directory=True)
++++
++++    assert repo_root(str(link)) == os.path.realpath(str(repo))
++++
++++
++++def test_linked_worktree_dot_git_is_a_file(tmp_path):
++++    """linked worktree 下 `top/.git` 是**文件**——marker 判定 MUST 用 exists 而非 isdir。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _commit_empty(repo)
++++    wt = tmp_path / "wt"
++++    _git("worktree", "add", "-q", str(wt), "-b", "side", cwd=repo)
++++
++++    assert (wt / ".git").is_file(), "前提不成立：linked worktree 的 .git 应为文件"
++++    assert repo_root(str(wt)) == os.path.realpath(str(wt))
++++
++++
++++def test_submodule_dot_git_is_a_file(tmp_path):
++++    inner = _init_repo(tmp_path / "inner")
++++    (inner / "f.txt").write_text("x", encoding="utf-8")
++++    _git("add", "f.txt", cwd=inner)
++++    _commit_empty(inner)
++++    outer = _init_repo(tmp_path / "outer")
++++    _commit_empty(outer)
++++    _git("-c", "protocol.file.allow=always", "submodule", "add", "-q",
++++         str(inner), "sub", cwd=outer)
++++    sub = outer / "sub"
++++
++++    assert (sub / ".git").is_file(), "前提不成立：submodule 的 .git 应为文件"
++++    assert repo_root(str(sub)) == os.path.realpath(str(sub))
++++
++++
++++def test_falls_back_outside_any_git_repo(tmp_path):
++++    plain = tmp_path / "plain"
++++    plain.mkdir()
++++
++++    assert repo_root(str(plain)) == os.path.abspath(str(plain))
++++
++++
++++def test_bare_repo_falls_back(tmp_path):
++++    bare = tmp_path / "bare.git"
++++    bare.mkdir()
++++    _git("init", "-q", "--bare", cwd=bare)
++++
++++    assert repo_root(str(bare)) == os.path.abspath(str(bare))
++++
++++
++++def test_inside_dot_git_directory_falls_back(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    dot_git = repo / ".git"
++++
++++    assert repo_root(str(dot_git)) == os.path.abspath(str(dot_git))
++++
++++
++++def test_cli_still_exits_zero_outside_any_git_repo(tmp_path):
++++    """回落分支的 CLI 级回归：非 git 仓库下 recorder 命令仍正常完成（exit 0）。"""
++++    plain = tmp_path / "plain"
++++    plain.mkdir()
++++
++++    proc = subprocess.run(
++++        [sys.executable, SCRIPT, "--root", str(plain), "scan"],
++++        capture_output=True, text=True,
++++    )
++++
++++    assert proc.returncode == 0, proc.stderr
++++    assert "Traceback" not in proc.stderr
++++
++++
++++# ── ② 超时（不回落） ────────────────────────────────────────────────────────
++++
++++def test_timeout_raises_and_does_not_fall_back(tmp_path, monkeypatch):
++++    """超时 ≠「不在仓库里」：MUST 抛 ValueError，MUST NOT 回落 abspath(start)。
++++
++++    同时断言 `subprocess.run` 真的收到了 `timeout` kwarg —— 没有它，挂死的 git
++++    会无限阻塞、既不失败也不可观测（失败模式表）。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    seen = {}
++++
++++    def hang(cmd, **kwargs):
++++        seen.update(kwargs)
++++        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", hang)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "超时" in str(exc.value)
++++    assert isinstance(seen.get("timeout"), (int, float)) and seen["timeout"] > 0
++++
++++
++++def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
++++    """真注入一个不返回的 fake git（PATH 注入），让 subprocess 自己触发超时。
++++
++++    完整的 30s 等待在单测里不可接受，故这里只证明「PATH 上的 git 会被真正执行、
++++    且挂死时走的是 TimeoutExpired 路径」：把 `subprocess.run` 的 timeout 交给真实
++++    实现处理，用一个 sleep 很久的 shim + 极短的外层等待来观察。
++++    """
++++    if sys.platform == "win32":
++++        pytest.skip("POSIX shell shim；Windows 泳道另行覆盖")
++++    repo = _init_repo(tmp_path / "repo")
++++    binx = tmp_path / "bin"
++++    binx.mkdir()
++++    shim = binx / "git"
++++    shim.write_text("#!/bin/sh\nexec /bin/sleep 120\n", encoding="utf-8")
++++    shim.chmod(0o755)
++++    monkeypatch.setenv("PATH", str(binx) + os.pathsep + os.environ.get("PATH", ""))
++++
++++    real_run = subprocess.run
++++
++++    def short_timeout(cmd, **kwargs):
++++        if kwargs.get("timeout"):
++++            kwargs["timeout"] = 1.0
++++        return real_run(cmd, **kwargs)
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", short_timeout)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "超时" in str(exc.value)
++++    assert repo_root.__name__ == "repo_root"
+++diff --git a/sdflow-buglist/tests/test_task3_frontmatter_writer.py b/sdflow-buglist/tests/test_task3_frontmatter_writer.py
+++index eb9e38a..851d852 100644
+++--- a/sdflow-buglist/tests/test_task3_frontmatter_writer.py
++++++ b/sdflow-buglist/tests/test_task3_frontmatter_writer.py
+++@@ -459,6 +459,10 @@ def test_noncanonical_request_does_not_alias_canonical_or_legacy_spelling(tmp_pa
+++     assert legacy_path.read_bytes() == legacy
+++ 
+++     canonical_root = tmp_path / "canonical"
++++    # `--root` 必须指向既存目录：repo_root 的起点校验先于调 git，不存在的起点被 fail-closed
++++    # 拒绝且 MUST NOT 被创建（harden-repo-root-fail-closed · spec「起点不是既存目录」）。
++++    # 此前本行依赖的是「坏起点被下游 makedirs 静默具现」——正是该变更要消灭的行为。
++++    canonical_root.mkdir()
+++     add = _run(
+++         BUG_SCRIPT, canonical_root, "add", "--date", "2026-07-17", "--time", "09:00",
+++         payload={"id": "A7", "module": "m", "summary": "s", "priority": "P1",
+++diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+++index 6250c37..3edcc0f 100644
+++--- a/sdflow-issues/scripts/issues.py
++++++ b/sdflow-issues/scripts/issues.py
+++@@ -1129,8 +1129,9 @@ def atomic_write_bytes(path, data):
+++ 
+++ # ── 路径与文件 ───────────────────────────────────────────────────────────────
+++ 
+++-def repo_root(start="."):
+++-    """探测 git 仓库根；非 git 仓库（或 git 命令失败）退化为 `os.path.abspath(start)`。
++++def repo_root(start=None):
++++    """探测并**证明**起点所属 git 仓库的根；非 git 仓库（或 git 命令失败）退化为
++++    `os.path.abspath(start)`。
+++ 
+++     与 buglist.py / todolist.py 的同名函数逐字同款（Phase B 3 个脚本各自独立、不互相
+++     import，故各自内联一份，见模块 docstring "子进程解耦"）。修复 Critical fix carry-over：
+++@@ -1138,16 +1139,91 @@ def repo_root(start="."):
+++     那样探测 git 根——从非仓库根的子目录调用时会把 `openspec/issues/...` 错误地写到 cwd 而非
+++     git 根，三脚本定位从此不一致。所有 cmd_* 现在统一先 `root = repo_root(args.root)` 再拼
+++     路径；`read_pool` 调 buglist.py/todolist.py 子进程时也把这个已 resolve 的 root 传下去
+++-    （`--root`），保证跨三脚本落到同一个目录。"""
++++    （`--root`），保证跨三脚本落到同一个目录。
++++
++++    契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
++++    返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
++++    起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
++++    任一步不满足即 `raise ValueError`。唯一的回落分支是「git 抛 OSError 或以非 0 退出」
++++    （非 git 仓库 / git 不可用 / bare repo / `.git/` 目录内等正常场景）→ 返回
++++    `os.path.abspath(start)`。超时**不回落**——超时不等于「不在仓库里」，回落会把数据
++++    写到错误位置。"""
++++    # 环境净化清单（ADR-6）：MUST 保持为函数体内的局部常量。三向 AST 镜像守护只比较
++++    # roster 内的**函数体**，模块级常量的值不在其覆盖范围内——写成模块级常量等于把这份
++++    # 清单放进既有安全网的盲区，三份漏一项或拼错都不会拉红。
++++    discovery_env = (
++++        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++++        "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++++        "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++++    )
++++    discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
++++    # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
++++    # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
++++    if start is None:
++++        try:
++++            start = os.getcwd()
++++        except FileNotFoundError:
++++            raise ValueError(
++++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
++++                "fix: 切换到一个既存目录后重试，或显式指定 --root"
++++            ) from None
++++    elif not os.path.isdir(start):
++++        raise ValueError(
++++            "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
++++            + "; cause: 显式指定的起点路径不存在或不是目录; "
++++            "fix: 指定一个既存目录作为起点"
++++        )
++++    # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
++++    env = recorder_child_env("git", token=False)
++++    for name in [
++++        n for n in env
++++        if n in discovery_env or n.startswith(discovery_env_prefixes)
++++    ]:
++++        env.pop(name, None)
++++    # ③ 调 git——try 只包 subprocess.run，一切校验与 raise 都在 try 之外，
++++    # 否则新抛的 ValueError 会被本函数自己的 except 接住，fail-closed 归零。
+++     try:
+++         out = subprocess.run(
+++             ["git", "rev-parse", "--show-toplevel"],
+++             cwd=start, capture_output=True, text=True, check=True,
+++-            env=recorder_child_env("git", token=False),
++++            env=env, timeout=30,
+++         )
+++-        return out.stdout.strip()
+++-    except Exception:
++++    except subprocess.TimeoutExpired:
++++        raise ValueError(
++++            "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 30 秒内未返回; "
++++            "fix: 确认仓库所在文件系统可用，或显式指定 --root"
++++        ) from None
++++    except (OSError, subprocess.CalledProcessError):
+++         return os.path.abspath(start)
++++    # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
++++    top = out.stdout.rstrip("\r\n")
++++    if not top or not os.path.isabs(top) or not os.path.isdir(top):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根不可用: " + ascii(top)[:200]
++++            + "; cause: git rev-parse --show-toplevel 的输出不是既存的绝对路径目录; "
++++            "fix: 检查 git 配置与调用环境是否被污染，或显式指定一个既存目录作为 --root"
++++        )
++++    # ⑤ 祖先校验（主防线）：按路径组件比较，不用裸字符串前缀匹配。这是唯一能拦住
++++    # core.worktree（写在 .git/config 里的 on-disk 重定向）的判据——环境净化对它零效果，
++++    # 形状校验会放行。删掉本步 = 该缺口静默回归（ADR-2）。
++++    top_real = os.path.realpath(top)
++++    start_real = os.path.realpath(start)
++++    if os.path.commonpath([
++++        os.path.normcase(start_real), os.path.normcase(top_real),
++++    ]) != os.path.normcase(top_real):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根不包含探测起点: " + ascii(top)[:200]
++++            + "; cause: 工作树被 core.worktree 或环境变量重定向到起点之外; "
++++            "fix: 清除 .git/config 的 core.worktree 与 GIT_* 重定向后重试"
++++        )
++++    # ⑥ worktree marker：用 exists 而非 isdir——linked worktree 与 submodule 下 .git 是文件。
++++    if not os.path.exists(os.path.join(top_real, ".git")):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根缺少 .git: " + ascii(top)[:200]
++++            + "; cause: 该目录不带 worktree marker，不是一个仓库根; "
++++            "fix: 检查 git 配置与调用环境是否被污染，或显式指定 --root"
++++        )
++++    return top_real
+++ 
+++ 
+++ class CrossPoolIDConflict(RuntimeError):
+++diff --git a/sdflow-issues/tests/test_repo_root_identity_issues.py b/sdflow-issues/tests/test_repo_root_identity_issues.py
+++new file mode 100644
+++index 0000000..c87d2d8
+++--- /dev/null
++++++ b/sdflow-issues/tests/test_repo_root_identity_issues.py
+++@@ -0,0 +1,461 @@
++++"""repo_root 六步身份校验（change harden-repo-root-fail-closed · Task 2）。
++++
++++被测契约：`repo_root(start=None|str) -> str`，在把任何值当作可写仓根返回之前，必须证明
++++它是**起点所属仓库的根**；任一判据不满足即 `raise ValueError`。唯一的回落分支是
++++「git 抛 OSError 或以非 0 退出」（非 git 仓库 / bare repo / `.git/` 目录内等正常场景）。
++++
++++本文件与 sdflow-buglist/tests · sdflow-todolist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
++++D4 红线禁止互相 import，故测试也各自一份）。
++++
++++方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
++++`isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
++++外部依赖行为外，一切都用 `tmp_path` 下真实存在/不存在的路径构造。
++++
++++Run with: python3 -m pytest sdflow-issues/tests/test_repo_root_identity_issues.py -v
++++"""
++++
++++import os
++++import subprocess
++++import sys
++++from pathlib import Path
++++
++++import pytest
++++
++++sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
++++import issues as rec_mod
++++from issues import repo_root
++++
++++SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
++++
++++# 仓库/工作树发现类变量——测试前一律清空，确保用例断言的是 repo_root 自身的判据，
++++# 而不是宿主环境残留（CI 的 git hook 场景会真的导出它们）。
++++GIT_DISCOVERY_ENV = (
++++    "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++++    "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++++    "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++++)
++++
++++
++++@pytest.fixture(autouse=True)
++++def _clean_git_env(monkeypatch):
++++    for name in GIT_DISCOVERY_ENV:
++++        monkeypatch.delenv(name, raising=False)
++++    for name in list(os.environ):
++++        if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
++++            monkeypatch.delenv(name, raising=False)
++++
++++
++++def _git(*args, cwd):
++++    return subprocess.run(
++++        ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True,
++++    )
++++
++++
++++def _init_repo(path):
++++    path.mkdir(parents=True, exist_ok=True)
++++    _git("init", "-q", cwd=path)
++++    _git("config", "user.email", "t@example.com", cwd=path)
++++    _git("config", "user.name", "t", cwd=path)
++++    return path
++++
++++
++++def _commit_empty(path):
++++    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=path)
++++
++++
++++def _fake_git_stdout(monkeypatch, stdout):
++++    """把 git 的 **stdout 内容**换掉（rc=0），其余一切判据仍走真实文件系统。
++++
++++    只替换外部依赖的输出，不碰 `os.path.*` 判据——后者正是被测对象。
++++    """
++++    calls = []
++++
++++    def fake_run(cmd, **kwargs):
++++        calls.append((cmd, kwargs))
++++        return subprocess.CompletedProcess(cmd, 0, stdout, "")
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", fake_run)
++++    return calls
++++
++++
++++def _forbid_subprocess(monkeypatch):
++++    """任何子进程调用都判定为失败——用于证明「起点校验发生在调 git 之前」。"""
++++
++++    def boom(cmd, **kwargs):
++++        raise AssertionError(f"git 不该被调用，但收到了: {cmd!r}")
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", boom)
++++
++++
++++def _entries(path):
++++    return sorted(p.name for p in Path(path).iterdir())
++++
++++
++++# ── ① 起点可信性（调 git 之前） ──────────────────────────────────────────────
++++
++++def test_missing_start_directory_is_rejected_before_calling_git(tmp_path, monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    missing = tmp_path / "no-such-dir"
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(missing))
++++
++++    assert "起点不是既存目录" in str(exc.value)
++++    assert str(exc.value).startswith("ERROR: ")
++++    assert not missing.exists(), "被拒的起点路径 MUST NOT 被创建"
++++    assert _entries(tmp_path) == []
++++
++++
++++def test_file_as_start_is_rejected_before_calling_git(tmp_path, monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    target = tmp_path / "a-file.txt"
++++    target.write_text("x", encoding="utf-8")
++++
++++    with pytest.raises(ValueError):
++++        repo_root(str(target))
++++
++++    assert target.is_file(), "普通文件不该被改成目录"
++++    assert _entries(tmp_path) == ["a-file.txt"]
++++
++++
++++def test_empty_string_start_is_rejected_before_calling_git(monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    with pytest.raises(ValueError):
++++        repo_root("")
++++
++++
++++def test_deleted_process_cwd_yields_controlled_failure(tmp_path):
++++    """进程 cwd 在运行期被删除（ADR-7）。
++++
++++    实测依据：此时 `os.path.isdir(".")` 仍返回 `True`，而 `os.getcwd()` 抛
++++    `FileNotFoundError` —— 所以起点 MUST 走 `os.getcwd()`。本用例在子进程里做
++++    （删除自身 cwd 会污染 pytest 进程），断言拿到受控 `ValueError` 而非裸 traceback。
++++    """
++++    doomed = tmp_path / "doomed"
++++    doomed.mkdir()
++++    program = (
++++        "import os, sys\n"
++++        "sys.path.insert(0, sys.argv[1])\n"
++++        "from issues import repo_root\n"
++++        "os.chdir(sys.argv[2])\n"
++++        "os.rmdir(sys.argv[2])\n"
++++        "assert os.path.isdir('.') is True, 'premise: isdir(\\'.\\') 仍为 True'\n"
++++        "try:\n"
++++        "    repo_root()\n"
++++        "except ValueError as exc:\n"
++++        "    print('CONTROLLED:' + str(exc))\n"
++++        "    sys.exit(0)\n"
++++        "sys.exit('repo_root 未受控失败')\n"
++++    )
++++    proc = subprocess.run(
++++        [sys.executable, "-c", program,
++++         str(Path(SCRIPT).parent), str(doomed)],
++++        capture_output=True, text=True, cwd=str(tmp_path),
++++    )
++++
++++    assert proc.returncode == 0, proc.stderr
++++    assert "CONTROLLED:ERROR: 无法确定仓根探测起点" in proc.stdout
++++    assert "Traceback" not in proc.stderr
++++
++++
++++# ── ③ 形状校验 ──────────────────────────────────────────────────────────────
++++
++++@pytest.mark.parametrize("bad", [
++++    "",
++++    "   ",
++++    "\n",
++++    "relative/path",
++++    "./relative",
++++    "/definitely/not/here/at/all",
++++])
++++def test_shape_negatives_are_rejected(tmp_path, monkeypatch, bad):
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, bad)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++    assert not (tmp_path / "relative").exists()
++++    assert not (repo / "relative").exists()
++++    assert _entries(repo) == [".git"]
++++
++++
++++def test_multiline_stdout_is_rejected(tmp_path, monkeypatch):
++++    """`git rev-parse` 对未知选项不报错、原样回显再继续（rc=0）⇒ stdout 变多行、
++++    首行是垃圾。整段多行文本不是既存目录，形状校验拦下。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, f"--bogus-option\n{repo}\n")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++
++++
++++def test_trailing_space_is_preserved_not_stripped(tmp_path, monkeypatch):
++++    """`rstrip("\\r\\n")` 只剥行结束符：末尾的合法空格 MUST 保留。
++++
++++    若改用 `strip()`，`"<repo> "` 会被截短成一个**真实存在**的目录而静默放行——
++++    本用例正是那条判据的守卫：被拒值里必须还带着那个空格。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, str(repo) + " \n")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++    assert repr(str(repo) + " ")[1:-1] in str(exc.value), "被拒值应原样保留末尾空格"
++++
++++
++++def test_rejected_value_is_ascii_escaped(tmp_path, monkeypatch):
++++    """诊断里的被拒值用 `ascii(value)[:N]` 生成：多字节不卡边界、控制字符不伪造多行。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, "a" * 78 + "雪茄\tX")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    message = str(exc.value)
++++    # 被拒值段落 MUST 是 ascii() 的产物：原始的多字节字符与制表符都不得原样出现，
++++    # 否则说明走的是字节截断（会在多字节边界抛 UnicodeDecodeError，fail-closed 自身先崩）。
++++    assert "雪茄" not in message, "被拒值 MUST 经 ascii() 转义，不得原样嵌入多字节字符"
++++    assert "\t" not in message, "控制字符 MUST 被转义，不得原样嵌入"
++++    assert "\\u96ea" in message or "\\x" in message, f"被拒值应为 ascii() 转义形式: {message}"
++++    assert message.count("\n") == 0, "诊断 MUST 是单行，控制字符不得伪造多行日志"
++++
++++
++++def test_bad_relative_value_rejected_regardless_of_cwd(tmp_path, monkeypatch):
++++    """「坏值恰好命中 cwd 下的既存目录」—— `isabs` 拦下，且**与 cwd 无关**。
++++
++++    双态对照跑（tasks 1.3b）：在「坏值能被 cwd 解析成真实目录」的 cwd 与「解析不到」的
++++    cwd 各跑一次，断言两次结果一致。单态跑无法证伪「结论其实依赖 cwd」。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    (repo / "lure").mkdir()
++++    outside = tmp_path / "outside"
++++    outside.mkdir()
++++
++++    results = {}
++++    for label, cwd in (("cwd 内有同名目录", repo), ("cwd 内无同名目录", outside)):
++++        monkeypatch.chdir(cwd)
++++        assert (Path(cwd) / "lure").is_dir() == (label == "cwd 内有同名目录")
++++        _fake_git_stdout(monkeypatch, "lure")
++++        with pytest.raises(ValueError) as exc:
++++            repo_root(str(repo))
++++        results[label] = "仓根不可用" in str(exc.value)
++++
++++    assert results == {"cwd 内有同名目录": True, "cwd 内无同名目录": True}
++++    assert _entries(outside) == [], "被拒值 MUST NOT 在任何 cwd 下具现出目录"
++++
++++
++++# ── ④ 祖先校验（主防线） ────────────────────────────────────────────────────
++++
++++def test_core_worktree_redirect_is_rejected(tmp_path):
++++    """主防线用例（ADR-2）：`core.worktree` 是写在 `.git/config` 里的 **on-disk**
++++    重定向，环境净化对它零效果、形状校验会放行——**祖先校验是唯一防线**。
++++
++++    删掉祖先校验，本用例必须变红（变异确认见 impl-report）。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    outside = tmp_path / "outside"
++++    outside.mkdir()
++++    _git("config", "core.worktree", str(outside), cwd=repo)
++++
++++    # 前提核验：不假设，真跑一遍确认 git 确实 rc=0 返回那个仓外目录。
++++    probe = subprocess.run(
++++        ["git", "rev-parse", "--show-toplevel"],
++++        cwd=str(repo), capture_output=True, text=True,
++++        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
++++    )
++++    assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
++++    assert Path(probe.stdout.strip()).resolve() == outside.resolve(), (
++++        f"前提不成立：core.worktree 未重定向 toplevel，实得 {probe.stdout!r}"
++++    )
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "不包含探测起点" in str(exc.value)
++++    assert _entries(outside) == [], "仓外目录 MUST NOT 出现任何 openspec/ 产物"
++++    assert not (outside / "openspec").exists()
++++
++++
++++def test_git_dir_and_work_tree_env_are_sanitized(tmp_path, monkeypatch):
++++    """第一层防御：环境净化后 git 忽略 GIT_DIR/GIT_WORK_TREE，返回真实仓根。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    other = _init_repo(tmp_path / "other")
++++    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
++++    monkeypatch.setenv("GIT_WORK_TREE", str(other))
++++
++++    assert repo_root(str(repo)) == os.path.realpath(str(repo))
++++
++++
++++def test_ancestor_check_independently_catches_unsanitized_env(tmp_path, monkeypatch):
++++    """第二层防御独立有效：即便环境净化被绕过（将来新增未被剔除的等价变量），
++++    祖先校验仍拦得住。
++++
++++    做法：先用**未净化**的环境真跑一次 git，拿到它会返回的 top（= 另一个仓）；
++++    再把该值当作 git 的输出喂给 `repo_root`，断言祖先校验把它拒了。
++++    这样两层防御各自被独立证明，而不是靠「另一层反正会兜住」。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    other = _init_repo(tmp_path / "other")
++++    polluted = dict(os.environ)
++++    polluted["GIT_DIR"] = str(other / ".git")
++++    polluted["GIT_WORK_TREE"] = str(other)
++++    probe = subprocess.run(
++++        ["git", "rev-parse", "--show-toplevel"],
++++        cwd=str(repo), capture_output=True, text=True, env=polluted,
++++    )
++++    assert probe.returncode == 0, probe.stderr
++++    leaked = probe.stdout.rstrip("\r\n")
++++    assert Path(leaked).resolve() == other.resolve(), (
++++        f"前提不成立：未净化环境下 git 未被重定向，实得 {leaked!r}"
++++    )
++++
++++    _fake_git_stdout(monkeypatch, leaked)
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "不包含探测起点" in str(exc.value)
++++
++++
++++# ── ⑤ worktree marker + 正向回归 ────────────────────────────────────────────
++++
++++def test_returns_root_from_nested_subdirectory(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    sub = repo / "a" / "b"
++++    sub.mkdir(parents=True)
++++
++++    assert repo_root(str(sub)) == os.path.realpath(str(repo))
++++
++++
++++def test_symlinked_start_resolves_to_real_root(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    sub = repo / "pkg"
++++    sub.mkdir()
++++    link = tmp_path / "link-to-pkg"
++++    link.symlink_to(sub, target_is_directory=True)
++++
++++    assert repo_root(str(link)) == os.path.realpath(str(repo))
++++
++++
++++def test_linked_worktree_dot_git_is_a_file(tmp_path):
++++    """linked worktree 下 `top/.git` 是**文件**——marker 判定 MUST 用 exists 而非 isdir。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _commit_empty(repo)
++++    wt = tmp_path / "wt"
++++    _git("worktree", "add", "-q", str(wt), "-b", "side", cwd=repo)
++++
++++    assert (wt / ".git").is_file(), "前提不成立：linked worktree 的 .git 应为文件"
++++    assert repo_root(str(wt)) == os.path.realpath(str(wt))
++++
++++
++++def test_submodule_dot_git_is_a_file(tmp_path):
++++    inner = _init_repo(tmp_path / "inner")
++++    (inner / "f.txt").write_text("x", encoding="utf-8")
++++    _git("add", "f.txt", cwd=inner)
++++    _commit_empty(inner)
++++    outer = _init_repo(tmp_path / "outer")
++++    _commit_empty(outer)
++++    _git("-c", "protocol.file.allow=always", "submodule", "add", "-q",
++++         str(inner), "sub", cwd=outer)
++++    sub = outer / "sub"
++++
++++    assert (sub / ".git").is_file(), "前提不成立：submodule 的 .git 应为文件"
++++    assert repo_root(str(sub)) == os.path.realpath(str(sub))
++++
++++
++++def test_falls_back_outside_any_git_repo(tmp_path):
++++    plain = tmp_path / "plain"
++++    plain.mkdir()
++++
++++    assert repo_root(str(plain)) == os.path.abspath(str(plain))
++++
++++
++++def test_bare_repo_falls_back(tmp_path):
++++    bare = tmp_path / "bare.git"
++++    bare.mkdir()
++++    _git("init", "-q", "--bare", cwd=bare)
++++
++++    assert repo_root(str(bare)) == os.path.abspath(str(bare))
++++
++++
++++def test_inside_dot_git_directory_falls_back(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    dot_git = repo / ".git"
++++
++++    assert repo_root(str(dot_git)) == os.path.abspath(str(dot_git))
++++
++++
++++def test_cli_still_exits_zero_outside_any_git_repo(tmp_path):
++++    """回落分支的 CLI 级回归：非 git 仓库下 recorder 命令仍正常完成（exit 0）。"""
++++    plain = tmp_path / "plain"
++++    plain.mkdir()
++++
++++    proc = subprocess.run(
++++        [sys.executable, SCRIPT, "--root", str(plain), "reindex"],
++++        capture_output=True, text=True,
++++    )
++++
++++    assert proc.returncode == 0, proc.stderr
++++    assert "Traceback" not in proc.stderr
++++
++++
++++# ── ② 超时（不回落） ────────────────────────────────────────────────────────
++++
++++def test_timeout_raises_and_does_not_fall_back(tmp_path, monkeypatch):
++++    """超时 ≠「不在仓库里」：MUST 抛 ValueError，MUST NOT 回落 abspath(start)。
++++
++++    同时断言 `subprocess.run` 真的收到了 `timeout` kwarg —— 没有它，挂死的 git
++++    会无限阻塞、既不失败也不可观测（失败模式表）。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    seen = {}
++++
++++    def hang(cmd, **kwargs):
++++        seen.update(kwargs)
++++        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", hang)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "超时" in str(exc.value)
++++    assert isinstance(seen.get("timeout"), (int, float)) and seen["timeout"] > 0
++++
++++
++++def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
++++    """真注入一个不返回的 fake git（PATH 注入），让 subprocess 自己触发超时。
++++
++++    完整的 30s 等待在单测里不可接受，故这里只证明「PATH 上的 git 会被真正执行、
++++    且挂死时走的是 TimeoutExpired 路径」：把 `subprocess.run` 的 timeout 交给真实
++++    实现处理，用一个 sleep 很久的 shim + 极短的外层等待来观察。
++++    """
++++    if sys.platform == "win32":
++++        pytest.skip("POSIX shell shim；Windows 泳道另行覆盖")
++++    repo = _init_repo(tmp_path / "repo")
++++    binx = tmp_path / "bin"
++++    binx.mkdir()
++++    shim = binx / "git"
++++    shim.write_text("#!/bin/sh\nexec /bin/sleep 120\n", encoding="utf-8")
++++    shim.chmod(0o755)
++++    monkeypatch.setenv("PATH", str(binx) + os.pathsep + os.environ.get("PATH", ""))
++++
++++    real_run = subprocess.run
++++
++++    def short_timeout(cmd, **kwargs):
++++        if kwargs.get("timeout"):
++++            kwargs["timeout"] = 1.0
++++        return real_run(cmd, **kwargs)
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", short_timeout)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "超时" in str(exc.value)
++++    assert repo_root.__name__ == "repo_root"
+++diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
+++index 93f39f8..c392c35 100644
+++--- a/sdflow-todolist/scripts/todolist.py
++++++ b/sdflow-todolist/scripts/todolist.py
+++@@ -578,16 +578,95 @@ def read_recorder_document(path, expected_pool):
+++ 
+++ # ── 路径与文件 ───────────────────────────────────────────────────────────────
+++ 
+++-def repo_root(start="."):
++++def repo_root(start=None):
++++    """探测并**证明**起点所属 git 仓库的根；非 git 仓库（或 git 命令失败）退化为
++++    `os.path.abspath(start)`。
++++
++++    与 issues.py / buglist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
++++    故各自内联一份）。
++++
++++    契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
++++    返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
++++    起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
++++    任一步不满足即 `raise ValueError`。唯一的回落分支是「git 抛 OSError 或以非 0 退出」
++++    （非 git 仓库 / git 不可用 / bare repo / `.git/` 目录内等正常场景）。超时**不回落**。
++++    """
++++    # 环境净化清单（ADR-6）：MUST 保持为函数体内的局部常量。三向 AST 镜像守护只比较
++++    # roster 内的**函数体**，模块级常量的值不在其覆盖范围内——写成模块级常量等于把这份
++++    # 清单放进既有安全网的盲区，三份漏一项或拼错都不会拉红。
++++    discovery_env = (
++++        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++++        "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++++        "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++++    )
++++    discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
++++    # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
++++    # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
++++    if start is None:
++++        try:
++++            start = os.getcwd()
++++        except FileNotFoundError:
++++            raise ValueError(
++++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
++++                "fix: 切换到一个既存目录后重试，或显式指定 --root"
++++            ) from None
++++    elif not os.path.isdir(start):
++++        raise ValueError(
++++            "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
++++            + "; cause: 显式指定的起点路径不存在或不是目录; "
++++            "fix: 指定一个既存目录作为起点"
++++        )
++++    # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
++++    env = recorder_child_env("git", token=False)
++++    for name in [
++++        n for n in env
++++        if n in discovery_env or n.startswith(discovery_env_prefixes)
++++    ]:
++++        env.pop(name, None)
++++    # ③ 调 git——try 只包 subprocess.run，一切校验与 raise 都在 try 之外，
++++    # 否则新抛的 ValueError 会被本函数自己的 except 接住，fail-closed 归零。
+++     try:
+++         out = subprocess.run(
+++             ["git", "rev-parse", "--show-toplevel"],
+++             cwd=start, capture_output=True, text=True, check=True,
+++-            env=recorder_child_env("git", token=False),
++++            env=env, timeout=30,
+++         )
+++-        return out.stdout.strip()
+++-    except Exception:
++++    except subprocess.TimeoutExpired:
++++        raise ValueError(
++++            "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 30 秒内未返回; "
++++            "fix: 确认仓库所在文件系统可用，或显式指定 --root"
++++        ) from None
++++    except (OSError, subprocess.CalledProcessError):
+++         return os.path.abspath(start)
++++    # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
++++    top = out.stdout.rstrip("\r\n")
++++    if not top or not os.path.isabs(top) or not os.path.isdir(top):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根不可用: " + ascii(top)[:200]
++++            + "; cause: git rev-parse --show-toplevel 的输出不是既存的绝对路径目录; "
++++            "fix: 检查 git 配置与调用环境是否被污染，或显式指定一个既存目录作为 --root"
++++        )
++++    # ⑤ 祖先校验（主防线）：按路径组件比较，不用裸字符串前缀匹配。这是唯一能拦住
++++    # core.worktree（写在 .git/config 里的 on-disk 重定向）的判据——环境净化对它零效果，
++++    # 形状校验会放行。删掉本步 = 该缺口静默回归（ADR-2）。
++++    top_real = os.path.realpath(top)
++++    start_real = os.path.realpath(start)
++++    if os.path.commonpath([
++++        os.path.normcase(start_real), os.path.normcase(top_real),
++++    ]) != os.path.normcase(top_real):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根不包含探测起点: " + ascii(top)[:200]
++++            + "; cause: 工作树被 core.worktree 或环境变量重定向到起点之外; "
++++            "fix: 清除 .git/config 的 core.worktree 与 GIT_* 重定向后重试"
++++        )
++++    # ⑥ worktree marker：用 exists 而非 isdir——linked worktree 与 submodule 下 .git 是文件。
++++    if not os.path.exists(os.path.join(top_real, ".git")):
++++        raise ValueError(
++++            "ERROR: git 返回的仓根缺少 .git: " + ascii(top)[:200]
++++            + "; cause: 该目录不带 worktree marker，不是一个仓库根; "
++++            "fix: 检查 git 配置与调用环境是否被污染，或显式指定 --root"
++++        )
++++    return top_real
+++ 
+++ 
+++ BRANCH_PREFIX_RE = re.compile(r"^[a-z]+/")
+++diff --git a/sdflow-todolist/tests/test_repo_root_identity_todolist.py b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
+++new file mode 100644
+++index 0000000..99663e3
+++--- /dev/null
++++++ b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
+++@@ -0,0 +1,461 @@
++++"""repo_root 六步身份校验（change harden-repo-root-fail-closed · Task 2）。
++++
++++被测契约：`repo_root(start=None|str) -> str`，在把任何值当作可写仓根返回之前，必须证明
++++它是**起点所属仓库的根**；任一判据不满足即 `raise ValueError`。唯一的回落分支是
++++「git 抛 OSError 或以非 0 退出」（非 git 仓库 / bare repo / `.git/` 目录内等正常场景）。
++++
++++本文件与 sdflow-issues/tests · sdflow-buglist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
++++D4 红线禁止互相 import，故测试也各自一份）。
++++
++++方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
++++`isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
++++外部依赖行为外，一切都用 `tmp_path` 下真实存在/不存在的路径构造。
++++
++++Run with: python3 -m pytest sdflow-todolist/tests/test_repo_root_identity_todolist.py -v
++++"""
++++
++++import os
++++import subprocess
++++import sys
++++from pathlib import Path
++++
++++import pytest
++++
++++sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
++++import todolist as rec_mod
++++from todolist import repo_root
++++
++++SCRIPT = str(Path(__file__).parent.parent / "scripts" / "todolist.py")
++++
++++# 仓库/工作树发现类变量——测试前一律清空，确保用例断言的是 repo_root 自身的判据，
++++# 而不是宿主环境残留（CI 的 git hook 场景会真的导出它们）。
++++GIT_DISCOVERY_ENV = (
++++    "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++++    "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++++    "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++++)
++++
++++
++++@pytest.fixture(autouse=True)
++++def _clean_git_env(monkeypatch):
++++    for name in GIT_DISCOVERY_ENV:
++++        monkeypatch.delenv(name, raising=False)
++++    for name in list(os.environ):
++++        if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
++++            monkeypatch.delenv(name, raising=False)
++++
++++
++++def _git(*args, cwd):
++++    return subprocess.run(
++++        ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True,
++++    )
++++
++++
++++def _init_repo(path):
++++    path.mkdir(parents=True, exist_ok=True)
++++    _git("init", "-q", cwd=path)
++++    _git("config", "user.email", "t@example.com", cwd=path)
++++    _git("config", "user.name", "t", cwd=path)
++++    return path
++++
++++
++++def _commit_empty(path):
++++    _git("commit", "-q", "--allow-empty", "-m", "init", cwd=path)
++++
++++
++++def _fake_git_stdout(monkeypatch, stdout):
++++    """把 git 的 **stdout 内容**换掉（rc=0），其余一切判据仍走真实文件系统。
++++
++++    只替换外部依赖的输出，不碰 `os.path.*` 判据——后者正是被测对象。
++++    """
++++    calls = []
++++
++++    def fake_run(cmd, **kwargs):
++++        calls.append((cmd, kwargs))
++++        return subprocess.CompletedProcess(cmd, 0, stdout, "")
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", fake_run)
++++    return calls
++++
++++
++++def _forbid_subprocess(monkeypatch):
++++    """任何子进程调用都判定为失败——用于证明「起点校验发生在调 git 之前」。"""
++++
++++    def boom(cmd, **kwargs):
++++        raise AssertionError(f"git 不该被调用，但收到了: {cmd!r}")
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", boom)
++++
++++
++++def _entries(path):
++++    return sorted(p.name for p in Path(path).iterdir())
++++
++++
++++# ── ① 起点可信性（调 git 之前） ──────────────────────────────────────────────
++++
++++def test_missing_start_directory_is_rejected_before_calling_git(tmp_path, monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    missing = tmp_path / "no-such-dir"
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(missing))
++++
++++    assert "起点不是既存目录" in str(exc.value)
++++    assert str(exc.value).startswith("ERROR: ")
++++    assert not missing.exists(), "被拒的起点路径 MUST NOT 被创建"
++++    assert _entries(tmp_path) == []
++++
++++
++++def test_file_as_start_is_rejected_before_calling_git(tmp_path, monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    target = tmp_path / "a-file.txt"
++++    target.write_text("x", encoding="utf-8")
++++
++++    with pytest.raises(ValueError):
++++        repo_root(str(target))
++++
++++    assert target.is_file(), "普通文件不该被改成目录"
++++    assert _entries(tmp_path) == ["a-file.txt"]
++++
++++
++++def test_empty_string_start_is_rejected_before_calling_git(monkeypatch):
++++    _forbid_subprocess(monkeypatch)
++++    with pytest.raises(ValueError):
++++        repo_root("")
++++
++++
++++def test_deleted_process_cwd_yields_controlled_failure(tmp_path):
++++    """进程 cwd 在运行期被删除（ADR-7）。
++++
++++    实测依据：此时 `os.path.isdir(".")` 仍返回 `True`，而 `os.getcwd()` 抛
++++    `FileNotFoundError` —— 所以起点 MUST 走 `os.getcwd()`。本用例在子进程里做
++++    （删除自身 cwd 会污染 pytest 进程），断言拿到受控 `ValueError` 而非裸 traceback。
++++    """
++++    doomed = tmp_path / "doomed"
++++    doomed.mkdir()
++++    program = (
++++        "import os, sys\n"
++++        "sys.path.insert(0, sys.argv[1])\n"
++++        "from todolist import repo_root\n"
++++        "os.chdir(sys.argv[2])\n"
++++        "os.rmdir(sys.argv[2])\n"
++++        "assert os.path.isdir('.') is True, 'premise: isdir(\\'.\\') 仍为 True'\n"
++++        "try:\n"
++++        "    repo_root()\n"
++++        "except ValueError as exc:\n"
++++        "    print('CONTROLLED:' + str(exc))\n"
++++        "    sys.exit(0)\n"
++++        "sys.exit('repo_root 未受控失败')\n"
++++    )
++++    proc = subprocess.run(
++++        [sys.executable, "-c", program,
++++         str(Path(SCRIPT).parent), str(doomed)],
++++        capture_output=True, text=True, cwd=str(tmp_path),
++++    )
++++
++++    assert proc.returncode == 0, proc.stderr
++++    assert "CONTROLLED:ERROR: 无法确定仓根探测起点" in proc.stdout
++++    assert "Traceback" not in proc.stderr
++++
++++
++++# ── ③ 形状校验 ──────────────────────────────────────────────────────────────
++++
++++@pytest.mark.parametrize("bad", [
++++    "",
++++    "   ",
++++    "\n",
++++    "relative/path",
++++    "./relative",
++++    "/definitely/not/here/at/all",
++++])
++++def test_shape_negatives_are_rejected(tmp_path, monkeypatch, bad):
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, bad)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++    assert not (tmp_path / "relative").exists()
++++    assert not (repo / "relative").exists()
++++    assert _entries(repo) == [".git"]
++++
++++
++++def test_multiline_stdout_is_rejected(tmp_path, monkeypatch):
++++    """`git rev-parse` 对未知选项不报错、原样回显再继续（rc=0）⇒ stdout 变多行、
++++    首行是垃圾。整段多行文本不是既存目录，形状校验拦下。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, f"--bogus-option\n{repo}\n")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++
++++
++++def test_trailing_space_is_preserved_not_stripped(tmp_path, monkeypatch):
++++    """`rstrip("\\r\\n")` 只剥行结束符：末尾的合法空格 MUST 保留。
++++
++++    若改用 `strip()`，`"<repo> "` 会被截短成一个**真实存在**的目录而静默放行——
++++    本用例正是那条判据的守卫：被拒值里必须还带着那个空格。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, str(repo) + " \n")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "仓根不可用" in str(exc.value)
++++    assert repr(str(repo) + " ")[1:-1] in str(exc.value), "被拒值应原样保留末尾空格"
++++
++++
++++def test_rejected_value_is_ascii_escaped(tmp_path, monkeypatch):
++++    """诊断里的被拒值用 `ascii(value)[:N]` 生成：多字节不卡边界、控制字符不伪造多行。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _fake_git_stdout(monkeypatch, "a" * 78 + "雪茄\tX")
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    message = str(exc.value)
++++    # 被拒值段落 MUST 是 ascii() 的产物：原始的多字节字符与制表符都不得原样出现，
++++    # 否则说明走的是字节截断（会在多字节边界抛 UnicodeDecodeError，fail-closed 自身先崩）。
++++    assert "雪茄" not in message, "被拒值 MUST 经 ascii() 转义，不得原样嵌入多字节字符"
++++    assert "\t" not in message, "控制字符 MUST 被转义，不得原样嵌入"
++++    assert "\\u96ea" in message or "\\x" in message, f"被拒值应为 ascii() 转义形式: {message}"
++++    assert message.count("\n") == 0, "诊断 MUST 是单行，控制字符不得伪造多行日志"
++++
++++
++++def test_bad_relative_value_rejected_regardless_of_cwd(tmp_path, monkeypatch):
++++    """「坏值恰好命中 cwd 下的既存目录」—— `isabs` 拦下，且**与 cwd 无关**。
++++
++++    双态对照跑（tasks 1.3b）：在「坏值能被 cwd 解析成真实目录」的 cwd 与「解析不到」的
++++    cwd 各跑一次，断言两次结果一致。单态跑无法证伪「结论其实依赖 cwd」。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    (repo / "lure").mkdir()
++++    outside = tmp_path / "outside"
++++    outside.mkdir()
++++
++++    results = {}
++++    for label, cwd in (("cwd 内有同名目录", repo), ("cwd 内无同名目录", outside)):
++++        monkeypatch.chdir(cwd)
++++        assert (Path(cwd) / "lure").is_dir() == (label == "cwd 内有同名目录")
++++        _fake_git_stdout(monkeypatch, "lure")
++++        with pytest.raises(ValueError) as exc:
++++            repo_root(str(repo))
++++        results[label] = "仓根不可用" in str(exc.value)
++++
++++    assert results == {"cwd 内有同名目录": True, "cwd 内无同名目录": True}
++++    assert _entries(outside) == [], "被拒值 MUST NOT 在任何 cwd 下具现出目录"
++++
++++
++++# ── ④ 祖先校验（主防线） ────────────────────────────────────────────────────
++++
++++def test_core_worktree_redirect_is_rejected(tmp_path):
++++    """主防线用例（ADR-2）：`core.worktree` 是写在 `.git/config` 里的 **on-disk**
++++    重定向，环境净化对它零效果、形状校验会放行——**祖先校验是唯一防线**。
++++
++++    删掉祖先校验，本用例必须变红（变异确认见 impl-report）。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    outside = tmp_path / "outside"
++++    outside.mkdir()
++++    _git("config", "core.worktree", str(outside), cwd=repo)
++++
++++    # 前提核验：不假设，真跑一遍确认 git 确实 rc=0 返回那个仓外目录。
++++    probe = subprocess.run(
++++        ["git", "rev-parse", "--show-toplevel"],
++++        cwd=str(repo), capture_output=True, text=True,
++++        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
++++    )
++++    assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
++++    assert Path(probe.stdout.strip()).resolve() == outside.resolve(), (
++++        f"前提不成立：core.worktree 未重定向 toplevel，实得 {probe.stdout!r}"
++++    )
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "不包含探测起点" in str(exc.value)
++++    assert _entries(outside) == [], "仓外目录 MUST NOT 出现任何 openspec/ 产物"
++++    assert not (outside / "openspec").exists()
++++
++++
++++def test_git_dir_and_work_tree_env_are_sanitized(tmp_path, monkeypatch):
++++    """第一层防御：环境净化后 git 忽略 GIT_DIR/GIT_WORK_TREE，返回真实仓根。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    other = _init_repo(tmp_path / "other")
++++    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
++++    monkeypatch.setenv("GIT_WORK_TREE", str(other))
++++
++++    assert repo_root(str(repo)) == os.path.realpath(str(repo))
++++
++++
++++def test_ancestor_check_independently_catches_unsanitized_env(tmp_path, monkeypatch):
++++    """第二层防御独立有效：即便环境净化被绕过（将来新增未被剔除的等价变量），
++++    祖先校验仍拦得住。
++++
++++    做法：先用**未净化**的环境真跑一次 git，拿到它会返回的 top（= 另一个仓）；
++++    再把该值当作 git 的输出喂给 `repo_root`，断言祖先校验把它拒了。
++++    这样两层防御各自被独立证明，而不是靠「另一层反正会兜住」。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    other = _init_repo(tmp_path / "other")
++++    polluted = dict(os.environ)
++++    polluted["GIT_DIR"] = str(other / ".git")
++++    polluted["GIT_WORK_TREE"] = str(other)
++++    probe = subprocess.run(
++++        ["git", "rev-parse", "--show-toplevel"],
++++        cwd=str(repo), capture_output=True, text=True, env=polluted,
++++    )
++++    assert probe.returncode == 0, probe.stderr
++++    leaked = probe.stdout.rstrip("\r\n")
++++    assert Path(leaked).resolve() == other.resolve(), (
++++        f"前提不成立：未净化环境下 git 未被重定向，实得 {leaked!r}"
++++    )
++++
++++    _fake_git_stdout(monkeypatch, leaked)
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "不包含探测起点" in str(exc.value)
++++
++++
++++# ── ⑤ worktree marker + 正向回归 ────────────────────────────────────────────
++++
++++def test_returns_root_from_nested_subdirectory(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    sub = repo / "a" / "b"
++++    sub.mkdir(parents=True)
++++
++++    assert repo_root(str(sub)) == os.path.realpath(str(repo))
++++
++++
++++def test_symlinked_start_resolves_to_real_root(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    sub = repo / "pkg"
++++    sub.mkdir()
++++    link = tmp_path / "link-to-pkg"
++++    link.symlink_to(sub, target_is_directory=True)
++++
++++    assert repo_root(str(link)) == os.path.realpath(str(repo))
++++
++++
++++def test_linked_worktree_dot_git_is_a_file(tmp_path):
++++    """linked worktree 下 `top/.git` 是**文件**——marker 判定 MUST 用 exists 而非 isdir。"""
++++    repo = _init_repo(tmp_path / "repo")
++++    _commit_empty(repo)
++++    wt = tmp_path / "wt"
++++    _git("worktree", "add", "-q", str(wt), "-b", "side", cwd=repo)
++++
++++    assert (wt / ".git").is_file(), "前提不成立：linked worktree 的 .git 应为文件"
++++    assert repo_root(str(wt)) == os.path.realpath(str(wt))
++++
++++
++++def test_submodule_dot_git_is_a_file(tmp_path):
++++    inner = _init_repo(tmp_path / "inner")
++++    (inner / "f.txt").write_text("x", encoding="utf-8")
++++    _git("add", "f.txt", cwd=inner)
++++    _commit_empty(inner)
++++    outer = _init_repo(tmp_path / "outer")
++++    _commit_empty(outer)
++++    _git("-c", "protocol.file.allow=always", "submodule", "add", "-q",
++++         str(inner), "sub", cwd=outer)
++++    sub = outer / "sub"
++++
++++    assert (sub / ".git").is_file(), "前提不成立：submodule 的 .git 应为文件"
++++    assert repo_root(str(sub)) == os.path.realpath(str(sub))
++++
++++
++++def test_falls_back_outside_any_git_repo(tmp_path):
++++    plain = tmp_path / "plain"
++++    plain.mkdir()
++++
++++    assert repo_root(str(plain)) == os.path.abspath(str(plain))
++++
++++
++++def test_bare_repo_falls_back(tmp_path):
++++    bare = tmp_path / "bare.git"
++++    bare.mkdir()
++++    _git("init", "-q", "--bare", cwd=bare)
++++
++++    assert repo_root(str(bare)) == os.path.abspath(str(bare))
++++
++++
++++def test_inside_dot_git_directory_falls_back(tmp_path):
++++    repo = _init_repo(tmp_path / "repo")
++++    dot_git = repo / ".git"
++++
++++    assert repo_root(str(dot_git)) == os.path.abspath(str(dot_git))
++++
++++
++++def test_cli_still_exits_zero_outside_any_git_repo(tmp_path):
++++    """回落分支的 CLI 级回归：非 git 仓库下 recorder 命令仍正常完成（exit 0）。"""
++++    plain = tmp_path / "plain"
++++    plain.mkdir()
++++
++++    proc = subprocess.run(
++++        [sys.executable, SCRIPT, "--root", str(plain), "scan"],
++++        capture_output=True, text=True,
++++    )
++++
++++    assert proc.returncode == 0, proc.stderr
++++    assert "Traceback" not in proc.stderr
++++
++++
++++# ── ② 超时（不回落） ────────────────────────────────────────────────────────
++++
++++def test_timeout_raises_and_does_not_fall_back(tmp_path, monkeypatch):
++++    """超时 ≠「不在仓库里」：MUST 抛 ValueError，MUST NOT 回落 abspath(start)。
++++
++++    同时断言 `subprocess.run` 真的收到了 `timeout` kwarg —— 没有它，挂死的 git
++++    会无限阻塞、既不失败也不可观测（失败模式表）。
++++    """
++++    repo = _init_repo(tmp_path / "repo")
++++    seen = {}
++++
++++    def hang(cmd, **kwargs):
++++        seen.update(kwargs)
++++        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout"))
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", hang)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "超时" in str(exc.value)
++++    assert isinstance(seen.get("timeout"), (int, float)) and seen["timeout"] > 0
++++
++++
++++def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
++++    """真注入一个不返回的 fake git（PATH 注入），让 subprocess 自己触发超时。
++++
++++    完整的 30s 等待在单测里不可接受，故这里只证明「PATH 上的 git 会被真正执行、
++++    且挂死时走的是 TimeoutExpired 路径」：把 `subprocess.run` 的 timeout 交给真实
++++    实现处理，用一个 sleep 很久的 shim + 极短的外层等待来观察。
++++    """
++++    if sys.platform == "win32":
++++        pytest.skip("POSIX shell shim；Windows 泳道另行覆盖")
++++    repo = _init_repo(tmp_path / "repo")
++++    binx = tmp_path / "bin"
++++    binx.mkdir()
++++    shim = binx / "git"
++++    shim.write_text("#!/bin/sh\nexec /bin/sleep 120\n", encoding="utf-8")
++++    shim.chmod(0o755)
++++    monkeypatch.setenv("PATH", str(binx) + os.pathsep + os.environ.get("PATH", ""))
++++
++++    real_run = subprocess.run
++++
++++    def short_timeout(cmd, **kwargs):
++++        if kwargs.get("timeout"):
++++            kwargs["timeout"] = 1.0
++++        return real_run(cmd, **kwargs)
++++
++++    monkeypatch.setattr(rec_mod.subprocess, "run", short_timeout)
++++
++++    with pytest.raises(ValueError) as exc:
++++        repo_root(str(repo))
++++
++++    assert "超时" in str(exc.value)
++++    assert repo_root.__name__ == "repo_root"
++diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
++index 96a2ffb..a8531b0 100644
++--- a/sdflow-buglist/scripts/buglist.py
+++++ b/sdflow-buglist/scripts/buglist.py
++@@ -602,20 +602,29 @@ def repo_root(start=None):
++     discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
++     # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
++     # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
++-    if start is None:
++-        try:
++-            start = os.getcwd()
++-        except FileNotFoundError:
++-            raise ValueError(
++-                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
++-                "fix: 切换到一个既存目录后重试，或显式指定 --root"
++-            ) from None
++-    elif not os.path.isdir(start):
+++    if start is not None and not os.path.isdir(start):
++         raise ValueError(
++             "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
++             + "; cause: 显式指定的起点路径不存在或不是目录; "
++             "fix: 指定一个既存目录作为起点"
++         )
+++    # ①b 起点归一化为绝对路径——**本步同时替回落分支承担 fail-closed**。
+++    # start=None、或 start 是相对路径（如 argparse 默认值 "."）时都会触到 os.getcwd()，
+++    # 而 cwd 在运行期被删除 / 其父目录权限被撤时 os.getcwd() 抛 OSError
+++    # （FileNotFoundError 与 PermissionError 同族）。MUST 捕 OSError 而非只捕
+++    # FileNotFoundError：裸 OSError 逃出本函数 ⇒ 调用方的 `except ValueError` 接不住
+++    # ⇒ stderr 吐 Traceback、退出码 1，正是本函数要消灭的形态。
+++    # 归一化之后 start 恒为绝对路径 ⇒ 步骤③的回落分支再也碰不到 cwd、结构上不可能抛。
+++    if start is None or not os.path.isabs(start):
+++        try:
+++            cwd = os.getcwd()
+++        except OSError:
+++            raise ValueError(
+++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在或不可访问; "
+++                "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+++            ) from None
+++        start = cwd if start is None else os.path.join(cwd, start)
+++    start = os.path.normpath(start)
++     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
++     env = recorder_child_env("git", token=False)
++     for name in [
++@@ -637,6 +646,9 @@ def repo_root(start=None):
++             "fix: 确认仓库所在文件系统可用，或显式指定 --root"
++         ) from None
++     except (OSError, subprocess.CalledProcessError):
+++        # start 已在步骤①b 归一化为绝对路径 ⇒ 本行不再触 os.getcwd()，结构上不可能抛
+++        # OSError。这是本回落分支 fail-closed 的方式：**消除抛点**，而不是再包一层 try
+++        # （多一层 try 只会多一条无法做变异确认的死分支）。
++         return os.path.abspath(start)
++     # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
++     top = out.stdout.rstrip("\r\n")
++diff --git a/sdflow-buglist/tests/test_repo_root_identity_buglist.py b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
++index f4c9433..0d87ee8 100644
++--- a/sdflow-buglist/tests/test_repo_root_identity_buglist.py
+++++ b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
++@@ -459,3 +459,82 @@ def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
++ 
++     assert "超时" in str(exc.value)
++     assert repo_root.__name__ == "repo_root"
+++
+++
+++# ── CLI 级 fail-closed 锚（Task 2 双轴审 C1 / C2） ──────────────────────────────
+++
+++def test_cli_with_deleted_process_cwd_exits_two_without_traceback(tmp_path):
+++    """C1：cwd 在运行期被删除时，**经 CLI 调用**必须 exit 2 + 受控诊断，MUST NOT 吐 Traceback。
+++
+++    这是回落分支的裸 `OSError` 逃逸缺陷的真实复现路径：cwd 被删 ⇒ `git rev-parse` 以 128
+++    退出 ⇒ 落回落分支 ⇒ `os.path.abspath(".")` 内部调 `os.getcwd()` 自己抛
+++    `FileNotFoundError` ⇒ 逃出 `repo_root` ⇒ 调用方只 `except ValueError` 接不住 ⇒
+++    RC=1 + Traceback。修复后起点在步骤①b 就归一化为绝对路径，回落分支再也碰不到 cwd。
+++
+++    **本用例 MUST 走真子进程 CLI**：函数层用例证明不了退出码与 stderr 形态。
+++    """
+++    doomed = tmp_path / "doomed"
+++    doomed.mkdir()
+++    program = (
+++        "import os, subprocess, sys\n"
+++        "os.chdir(sys.argv[2])\n"
+++        "os.rmdir(sys.argv[2])\n"
+++        "proc = subprocess.run([sys.executable, sys.argv[1], %r],\n"
+++        "                      capture_output=True, text=True)\n"
+++        "sys.stdout.write('RC:%%d\\n' %% proc.returncode)\n"
+++        "sys.stdout.write('ERR:' + proc.stderr.replace('\\n', '<NL>') + '\\n')\n"
+++    ) % ('scan',)
+++    outer = subprocess.run(
+++        [sys.executable, "-c", program, SCRIPT, str(doomed)],
+++        capture_output=True, text=True, cwd=str(tmp_path),
+++    )
+++
+++    assert outer.returncode == 0, outer.stderr
+++    assert "RC:2" in outer.stdout, outer.stdout
+++    err_line = [l for l in outer.stdout.splitlines() if l.startswith("ERR:")][0]
+++    assert "Traceback" not in err_line, err_line
+++    assert "ERROR: 无法确定仓根探测起点" in err_line, err_line
+++    assert "cause:" in err_line and "fix:" in err_line, err_line
+++
+++
+++def test_getcwd_permission_error_is_controlled_too(monkeypatch):
+++    """CF-4：`os.getcwd()` 在父目录权限被撤时抛 `PermissionError`——与 `FileNotFoundError`
+++    同属 `OSError`，同样会裸逃。守护 MUST 捕 `OSError` 而非只捕 `FileNotFoundError`。
+++
+++    这里 mock 的是 `os.getcwd`（外部环境行为），**不是** `os.path.isabs` / `isdir` /
+++    `realpath`（判据本身）——后者才是方法论红线禁止的。
+++    """
+++    def denied():
+++        raise PermissionError(13, "Permission denied")
+++
+++    monkeypatch.setattr(rec_mod.os, "getcwd", denied)
+++
+++    with pytest.raises(ValueError) as exc:
+++        repo_root()
+++
+++    assert str(exc.value).startswith("ERROR: ")
+++    assert "无法确定仓根探测起点" in str(exc.value)
+++
+++
+++def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
+++    """C2：spec 要求「坏仓根 → 经 CLI 调用时 exit 2、诊断落 stderr」的**独立绿锚**。
+++
+++    走的是 `--root` 指向不存在目录这条**现在就能触发**的路径，不依赖任何当前为红的用例。
+++    退出码 2 在本 CLI 上并非坏仓根独有（坏 scan id 也是 2）⇒ MUST 同时断言 stderr 的
+++    具体诊断内容，MUST NOT 仅凭退出码判定通过。
+++    """
+++    missing = tmp_path / "no-such-root"
+++
+++    proc = subprocess.run(
+++        [sys.executable, SCRIPT, "--root", str(missing), 'scan'],
+++        capture_output=True, text=True, cwd=str(tmp_path),
+++    )
+++
+++    assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
+++    assert "Traceback" not in proc.stderr, proc.stderr
+++    assert proc.stderr.startswith("ERROR: "), proc.stderr
+++    assert "仓根探测起点不是既存目录" in proc.stderr, proc.stderr
+++    assert "cause:" in proc.stderr and "fix:" in proc.stderr, proc.stderr
+++    assert repr(str(missing))[1:-1] in proc.stderr, "被拒值应出现在诊断里"
+++    assert not missing.exists(), "被拒的仓根 MUST NOT 被下游 makedirs 静默具现"
+++    assert _entries(tmp_path) == [], "被拒路径下不该留下任何产物"
++diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
++index 3edcc0f..e3b2dab 100644
++--- a/sdflow-issues/scripts/issues.py
+++++ b/sdflow-issues/scripts/issues.py
++@@ -1159,20 +1159,29 @@ def repo_root(start=None):
++     discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
++     # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
++     # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
++-    if start is None:
++-        try:
++-            start = os.getcwd()
++-        except FileNotFoundError:
++-            raise ValueError(
++-                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
++-                "fix: 切换到一个既存目录后重试，或显式指定 --root"
++-            ) from None
++-    elif not os.path.isdir(start):
+++    if start is not None and not os.path.isdir(start):
++         raise ValueError(
++             "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
++             + "; cause: 显式指定的起点路径不存在或不是目录; "
++             "fix: 指定一个既存目录作为起点"
++         )
+++    # ①b 起点归一化为绝对路径——**本步同时替回落分支承担 fail-closed**。
+++    # start=None、或 start 是相对路径（如 argparse 默认值 "."）时都会触到 os.getcwd()，
+++    # 而 cwd 在运行期被删除 / 其父目录权限被撤时 os.getcwd() 抛 OSError
+++    # （FileNotFoundError 与 PermissionError 同族）。MUST 捕 OSError 而非只捕
+++    # FileNotFoundError：裸 OSError 逃出本函数 ⇒ 调用方的 `except ValueError` 接不住
+++    # ⇒ stderr 吐 Traceback、退出码 1，正是本函数要消灭的形态。
+++    # 归一化之后 start 恒为绝对路径 ⇒ 步骤③的回落分支再也碰不到 cwd、结构上不可能抛。
+++    if start is None or not os.path.isabs(start):
+++        try:
+++            cwd = os.getcwd()
+++        except OSError:
+++            raise ValueError(
+++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在或不可访问; "
+++                "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+++            ) from None
+++        start = cwd if start is None else os.path.join(cwd, start)
+++    start = os.path.normpath(start)
++     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
++     env = recorder_child_env("git", token=False)
++     for name in [
++@@ -1194,6 +1203,9 @@ def repo_root(start=None):
++             "fix: 确认仓库所在文件系统可用，或显式指定 --root"
++         ) from None
++     except (OSError, subprocess.CalledProcessError):
+++        # start 已在步骤①b 归一化为绝对路径 ⇒ 本行不再触 os.getcwd()，结构上不可能抛
+++        # OSError。这是本回落分支 fail-closed 的方式：**消除抛点**，而不是再包一层 try
+++        # （多一层 try 只会多一条无法做变异确认的死分支）。
++         return os.path.abspath(start)
++     # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
++     top = out.stdout.rstrip("\r\n")
++diff --git a/sdflow-issues/tests/test_issues.py b/sdflow-issues/tests/test_issues.py
++index af89cf5..8923ae8 100644
++--- a/sdflow-issues/tests/test_issues.py
+++++ b/sdflow-issues/tests/test_issues.py
++@@ -333,7 +333,9 @@ class TestRepoRoot:
++         assert Path(result).resolve() == repo.resolve()
++ 
++     def test_falls_back_to_abspath_when_git_command_raises(self, tmp_path, monkeypatch):
++-        def boom(cmd, cwd=None, capture_output=True, text=True, check=True):
+++        # `**kwargs`：repo_root 现在还会传 env= / timeout=，写死签名会 TypeError。
+++        # 只补桩签名，不改被测行为（回落分支仍应返回 abspath(start)）。
+++        def boom(cmd, **kwargs):
++             raise subprocess.CalledProcessError(128, cmd)
++ 
++         monkeypatch.setattr(issues_mod.subprocess, "run", boom)
++diff --git a/sdflow-issues/tests/test_repo_root_identity_issues.py b/sdflow-issues/tests/test_repo_root_identity_issues.py
++index c87d2d8..c278a1d 100644
++--- a/sdflow-issues/tests/test_repo_root_identity_issues.py
+++++ b/sdflow-issues/tests/test_repo_root_identity_issues.py
++@@ -459,3 +459,82 @@ def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
++ 
++     assert "超时" in str(exc.value)
++     assert repo_root.__name__ == "repo_root"
+++
+++
+++# ── CLI 级 fail-closed 锚（Task 2 双轴审 C1 / C2） ──────────────────────────────
+++
+++def test_cli_with_deleted_process_cwd_exits_two_without_traceback(tmp_path):
+++    """C1：cwd 在运行期被删除时，**经 CLI 调用**必须 exit 2 + 受控诊断，MUST NOT 吐 Traceback。
+++
+++    这是回落分支的裸 `OSError` 逃逸缺陷的真实复现路径：cwd 被删 ⇒ `git rev-parse` 以 128
+++    退出 ⇒ 落回落分支 ⇒ `os.path.abspath(".")` 内部调 `os.getcwd()` 自己抛
+++    `FileNotFoundError` ⇒ 逃出 `repo_root` ⇒ 调用方只 `except ValueError` 接不住 ⇒
+++    RC=1 + Traceback。修复后起点在步骤①b 就归一化为绝对路径，回落分支再也碰不到 cwd。
+++
+++    **本用例 MUST 走真子进程 CLI**：函数层用例证明不了退出码与 stderr 形态。
+++    """
+++    doomed = tmp_path / "doomed"
+++    doomed.mkdir()
+++    program = (
+++        "import os, subprocess, sys\n"
+++        "os.chdir(sys.argv[2])\n"
+++        "os.rmdir(sys.argv[2])\n"
+++        "proc = subprocess.run([sys.executable, sys.argv[1], %r],\n"
+++        "                      capture_output=True, text=True)\n"
+++        "sys.stdout.write('RC:%%d\\n' %% proc.returncode)\n"
+++        "sys.stdout.write('ERR:' + proc.stderr.replace('\\n', '<NL>') + '\\n')\n"
+++    ) % ('reindex',)
+++    outer = subprocess.run(
+++        [sys.executable, "-c", program, SCRIPT, str(doomed)],
+++        capture_output=True, text=True, cwd=str(tmp_path),
+++    )
+++
+++    assert outer.returncode == 0, outer.stderr
+++    assert "RC:2" in outer.stdout, outer.stdout
+++    err_line = [l for l in outer.stdout.splitlines() if l.startswith("ERR:")][0]
+++    assert "Traceback" not in err_line, err_line
+++    assert "ERROR: 无法确定仓根探测起点" in err_line, err_line
+++    assert "cause:" in err_line and "fix:" in err_line, err_line
+++
+++
+++def test_getcwd_permission_error_is_controlled_too(monkeypatch):
+++    """CF-4：`os.getcwd()` 在父目录权限被撤时抛 `PermissionError`——与 `FileNotFoundError`
+++    同属 `OSError`，同样会裸逃。守护 MUST 捕 `OSError` 而非只捕 `FileNotFoundError`。
+++
+++    这里 mock 的是 `os.getcwd`（外部环境行为），**不是** `os.path.isabs` / `isdir` /
+++    `realpath`（判据本身）——后者才是方法论红线禁止的。
+++    """
+++    def denied():
+++        raise PermissionError(13, "Permission denied")
+++
+++    monkeypatch.setattr(rec_mod.os, "getcwd", denied)
+++
+++    with pytest.raises(ValueError) as exc:
+++        repo_root()
+++
+++    assert str(exc.value).startswith("ERROR: ")
+++    assert "无法确定仓根探测起点" in str(exc.value)
+++
+++
+++def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
+++    """C2：spec 要求「坏仓根 → 经 CLI 调用时 exit 2、诊断落 stderr」的**独立绿锚**。
+++
+++    走的是 `--root` 指向不存在目录这条**现在就能触发**的路径，不依赖任何当前为红的用例。
+++    退出码 2 在本 CLI 上并非坏仓根独有（坏 scan id 也是 2）⇒ MUST 同时断言 stderr 的
+++    具体诊断内容，MUST NOT 仅凭退出码判定通过。
+++    """
+++    missing = tmp_path / "no-such-root"
+++
+++    proc = subprocess.run(
+++        [sys.executable, SCRIPT, "--root", str(missing), 'reindex'],
+++        capture_output=True, text=True, cwd=str(tmp_path),
+++    )
+++
+++    assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
+++    assert "Traceback" not in proc.stderr, proc.stderr
+++    assert proc.stderr.startswith("ERROR: "), proc.stderr
+++    assert "仓根探测起点不是既存目录" in proc.stderr, proc.stderr
+++    assert "cause:" in proc.stderr and "fix:" in proc.stderr, proc.stderr
+++    assert repr(str(missing))[1:-1] in proc.stderr, "被拒值应出现在诊断里"
+++    assert not missing.exists(), "被拒的仓根 MUST NOT 被下游 makedirs 静默具现"
+++    assert _entries(tmp_path) == [], "被拒路径下不该留下任何产物"
++diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
++index c392c35..7b0aa71 100644
++--- a/sdflow-todolist/scripts/todolist.py
+++++ b/sdflow-todolist/scripts/todolist.py
++@@ -602,20 +602,29 @@ def repo_root(start=None):
++     discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
++     # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
++     # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
++-    if start is None:
++-        try:
++-            start = os.getcwd()
++-        except FileNotFoundError:
++-            raise ValueError(
++-                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
++-                "fix: 切换到一个既存目录后重试，或显式指定 --root"
++-            ) from None
++-    elif not os.path.isdir(start):
+++    if start is not None and not os.path.isdir(start):
++         raise ValueError(
++             "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
++             + "; cause: 显式指定的起点路径不存在或不是目录; "
++             "fix: 指定一个既存目录作为起点"
++         )
+++    # ①b 起点归一化为绝对路径——**本步同时替回落分支承担 fail-closed**。
+++    # start=None、或 start 是相对路径（如 argparse 默认值 "."）时都会触到 os.getcwd()，
+++    # 而 cwd 在运行期被删除 / 其父目录权限被撤时 os.getcwd() 抛 OSError
+++    # （FileNotFoundError 与 PermissionError 同族）。MUST 捕 OSError 而非只捕
+++    # FileNotFoundError：裸 OSError 逃出本函数 ⇒ 调用方的 `except ValueError` 接不住
+++    # ⇒ stderr 吐 Traceback、退出码 1，正是本函数要消灭的形态。
+++    # 归一化之后 start 恒为绝对路径 ⇒ 步骤③的回落分支再也碰不到 cwd、结构上不可能抛。
+++    if start is None or not os.path.isabs(start):
+++        try:
+++            cwd = os.getcwd()
+++        except OSError:
+++            raise ValueError(
+++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在或不可访问; "
+++                "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+++            ) from None
+++        start = cwd if start is None else os.path.join(cwd, start)
+++    start = os.path.normpath(start)
++     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
++     env = recorder_child_env("git", token=False)
++     for name in [
++@@ -637,6 +646,9 @@ def repo_root(start=None):
++             "fix: 确认仓库所在文件系统可用，或显式指定 --root"
++         ) from None
++     except (OSError, subprocess.CalledProcessError):
+++        # start 已在步骤①b 归一化为绝对路径 ⇒ 本行不再触 os.getcwd()，结构上不可能抛
+++        # OSError。这是本回落分支 fail-closed 的方式：**消除抛点**，而不是再包一层 try
+++        # （多一层 try 只会多一条无法做变异确认的死分支）。
++         return os.path.abspath(start)
++     # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
++     top = out.stdout.rstrip("\r\n")
++diff --git a/sdflow-todolist/tests/test_repo_root_identity_todolist.py b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
++index 99663e3..7a93e18 100644
++--- a/sdflow-todolist/tests/test_repo_root_identity_todolist.py
+++++ b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
++@@ -459,3 +459,82 @@ def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
++ 
++     assert "超时" in str(exc.value)
++     assert repo_root.__name__ == "repo_root"
+++
+++
+++# ── CLI 级 fail-closed 锚（Task 2 双轴审 C1 / C2） ──────────────────────────────
+++
+++def test_cli_with_deleted_process_cwd_exits_two_without_traceback(tmp_path):
+++    """C1：cwd 在运行期被删除时，**经 CLI 调用**必须 exit 2 + 受控诊断，MUST NOT 吐 Traceback。
+++
+++    这是回落分支的裸 `OSError` 逃逸缺陷的真实复现路径：cwd 被删 ⇒ `git rev-parse` 以 128
+++    退出 ⇒ 落回落分支 ⇒ `os.path.abspath(".")` 内部调 `os.getcwd()` 自己抛
+++    `FileNotFoundError` ⇒ 逃出 `repo_root` ⇒ 调用方只 `except ValueError` 接不住 ⇒
+++    RC=1 + Traceback。修复后起点在步骤①b 就归一化为绝对路径，回落分支再也碰不到 cwd。
+++
+++    **本用例 MUST 走真子进程 CLI**：函数层用例证明不了退出码与 stderr 形态。
+++    """
+++    doomed = tmp_path / "doomed"
+++    doomed.mkdir()
+++    program = (
+++        "import os, subprocess, sys\n"
+++        "os.chdir(sys.argv[2])\n"
+++        "os.rmdir(sys.argv[2])\n"
+++        "proc = subprocess.run([sys.executable, sys.argv[1], %r],\n"
+++        "                      capture_output=True, text=True)\n"
+++        "sys.stdout.write('RC:%%d\\n' %% proc.returncode)\n"
+++        "sys.stdout.write('ERR:' + proc.stderr.replace('\\n', '<NL>') + '\\n')\n"
+++    ) % ('scan',)
+++    outer = subprocess.run(
+++        [sys.executable, "-c", program, SCRIPT, str(doomed)],
+++        capture_output=True, text=True, cwd=str(tmp_path),
+++    )
+++
+++    assert outer.returncode == 0, outer.stderr
+++    assert "RC:2" in outer.stdout, outer.stdout
+++    err_line = [l for l in outer.stdout.splitlines() if l.startswith("ERR:")][0]
+++    assert "Traceback" not in err_line, err_line
+++    assert "ERROR: 无法确定仓根探测起点" in err_line, err_line
+++    assert "cause:" in err_line and "fix:" in err_line, err_line
+++
+++
+++def test_getcwd_permission_error_is_controlled_too(monkeypatch):
+++    """CF-4：`os.getcwd()` 在父目录权限被撤时抛 `PermissionError`——与 `FileNotFoundError`
+++    同属 `OSError`，同样会裸逃。守护 MUST 捕 `OSError` 而非只捕 `FileNotFoundError`。
+++
+++    这里 mock 的是 `os.getcwd`（外部环境行为），**不是** `os.path.isabs` / `isdir` /
+++    `realpath`（判据本身）——后者才是方法论红线禁止的。
+++    """
+++    def denied():
+++        raise PermissionError(13, "Permission denied")
+++
+++    monkeypatch.setattr(rec_mod.os, "getcwd", denied)
+++
+++    with pytest.raises(ValueError) as exc:
+++        repo_root()
+++
+++    assert str(exc.value).startswith("ERROR: ")
+++    assert "无法确定仓根探测起点" in str(exc.value)
+++
+++
+++def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
+++    """C2：spec 要求「坏仓根 → 经 CLI 调用时 exit 2、诊断落 stderr」的**独立绿锚**。
+++
+++    走的是 `--root` 指向不存在目录这条**现在就能触发**的路径，不依赖任何当前为红的用例。
+++    退出码 2 在本 CLI 上并非坏仓根独有（坏 scan id 也是 2）⇒ MUST 同时断言 stderr 的
+++    具体诊断内容，MUST NOT 仅凭退出码判定通过。
+++    """
+++    missing = tmp_path / "no-such-root"
+++
+++    proc = subprocess.run(
+++        [sys.executable, SCRIPT, "--root", str(missing), 'scan'],
+++        capture_output=True, text=True, cwd=str(tmp_path),
+++    )
+++
+++    assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
+++    assert "Traceback" not in proc.stderr, proc.stderr
+++    assert proc.stderr.startswith("ERROR: "), proc.stderr
+++    assert "仓根探测起点不是既存目录" in proc.stderr, proc.stderr
+++    assert "cause:" in proc.stderr and "fix:" in proc.stderr, proc.stderr
+++    assert repr(str(missing))[1:-1] in proc.stderr, "被拒值应出现在诊断里"
+++    assert not missing.exists(), "被拒的仓根 MUST NOT 被下游 makedirs 静默具现"
+++    assert _entries(tmp_path) == [], "被拒路径下不该留下任何产物"
+diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix1.md b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix1.md
+index abfe69b..1ea2af4 100644
+--- a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix1.md
++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix1.md
+@@ -49,7 +49,8 @@ FileNotFoundError: [Errno 2] No such file or directory
+                 "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+             ) from None
+         start = cwd if start is None else os.path.join(cwd, start)
+-    start = os.path.normpath(start)
++    # 起点到此恒为绝对路径——这就是回落分支 fail-closed 所需的全部性质。
++    # 不做 lexical 归一化，路径语义交给内核与步骤⑤的 realpath（见 fix2 报告 N2）。
+ ```
+ 
+ 回落分支随之变成**结构上不可能抛**：
+@@ -69,8 +70,11 @@ FileNotFoundError: [Errno 2] No such file or directory
+ 1. **可观测契约完全一致** —— 三份脚本实测均为 `exit 2` + `ERROR:/cause:/fix:` 三段式诊断 + stderr 无 Traceback。
+ 2. **就地包 try 会产生一条无法做变异确认的死分支** —— 归一化之后 `abspath` 对绝对路径是恒等映射、
+    永不触 cwd，那个 `except` 永远走不到。写一条「删掉它也不会变红」的守护，直接违反 PV 规则 5 的精神。
+-3. **结构硬约束** 要求「`try` 只包 `subprocess.run`」。就地包 try 会在函数里引入第二个 `try`；
+-   前移方案把守护放在 git 调用之前，`subprocess.run` 那个 `try` 的形状原样不动
++3. **结构硬约束是「`try` 只包 `subprocess.run`」，不是「全函数单 try」。** 本函数有且仅有两个 `try`：
++   裹 `subprocess.run` 的那个（约束正文），以及裹 `os.getcwd()` 的那个（首轮即已登记的**必要偏离**——
++   求起点这一步没有无异常的替代写法；本轮只把它的 catch 从 `FileNotFoundError` 扩到 `OSError`，
++   见下方 CF-4）。**就地包 try 会成为第三个**，且它裹的是 `abspath` 这条**已被证明不可能抛**的路径
++   ⇒ 纯增一条无从辩护的偏离。前移方案则让 `subprocess.run` 那个 `try` 的形状原样不动
+    （只捕 `OSError`/`CalledProcessError`、`TimeoutExpired` 单独 `raise`、无 `except Exception`）。
+ 
+ **代价/残余风险**：保护点与失效点不再同处一行。若日后有人把步骤①b 的归一化删掉或后移到 git 调用之后，
+diff --git a/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix2.md b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix2.md
+new file mode 100644
+index 0000000..09c569e
+--- /dev/null
++++ b/openspec/changes/harden-repo-root-fail-closed/impl-reports/task2-repo-root-identity-validation-fix2.md
+@@ -0,0 +1,151 @@
++# Task 2 修复轮 2 — 接缝复审 N1 / N2
++
++**Change**: `harden-repo-root-fail-closed` · **Task**: 2（repo_root 六步身份校验）
++**基线 HEAD**: `a5dd34b` · **前置报告**: `task2-repo-root-identity-validation.md` / `-fix1.md`（本文件不覆盖它们）
++
++两条 Minor 均闭合。**N2 在补锚过程中挖出一条本轮自己引入的真缺陷（lexical 归一化改变路径语义），
++已按 fold 判据当场修掉**——见 N2「意外发现」。
++
++---
++
++## N1【Minor · 文档】偏离理由 #3 与事实不符
++
++### AST 核实（先查后写，未照抄复审转述）
++
++对三份脚本的 `repo_root` 做 `ast.walk` 统计 `ast.Try` 节点：
++
++| 脚本 | `try` 数 | try#1（行） | try#2（行） |
++|---|---|---|---|
++| `sdflow-buglist/scripts/buglist.py` | **2** | 619 · body=`cwd = os.getcwd()` · handler=`OSError` | 637 · body=`out = subprocess.run([...])` · handlers=`TimeoutExpired` / `(OSError, CalledProcessError)` |
++| `sdflow-todolist/scripts/todolist.py` | **2** | 619 · 同上 | 637 · 同上 |
++| `sdflow-issues/scripts/issues.py` | **2** | 1176 · 同上 | 1194 · 同上 |
++
++再查首轮基线 `git show 5d47212:sdflow-buglist/scripts/buglist.py`：步骤① 当时即为
++
++```python
++    if start is None:
++        try:
++            start = os.getcwd()
++        except FileNotFoundError:
++            raise ValueError(...) from None
++```
++
++⇒ **裹 `os.getcwd()` 的 try 首轮就已存在**并已在首轮报告里登记为必要偏离；fix1 只把它的 catch 从
++`FileNotFoundError` 扩到 `OSError`（CF-4），**并未避免第二个 try**。复审判定成立。
++
++### 处置
++
++理由 #1（可观测契约一致）与 #2（就地包 try 产生无法变异确认的死分支）**各自独立成立 ⇒ 偏离结论不变**。
++只订正 #3 的表述，改为陈述真实约束「`try` 只包 `subprocess.run`」+ 已登记的 `getcwd` 必要偏离，
++并把就地包 try 的代价准确记为「**成为第三个** try，且裹的是已被证明不可能抛的路径」。
++按 DOC-1 直接给最终态表述，未写演进史。
++
++顺带把同一报告里那段修法代码贴的 `start = os.path.normpath(start)` 同步为最终形态——见 N2，该行已删除。
++
++---
++
++## N2【Minor · 覆盖】起点归一化缺专属测试锚
++
++### 补的锚（三份各 4 例 = 12 例）
++
++判据一律是「**结果与非 symlink / 无 `..` 的等价起点完全一致**」，不是「不抛异常」。
++symlink 全部在 `tmp_path` 下真建，**未 mock `os.path.realpath` / `isdir` / `isabs`**。
++
++| 用例 | 起点形态 | 断言 |
++|---|---|---|
++| `test_symlinked_repo_root_start_matches_real_path_result` | `link -> <repo>` | `repo_root(link) == repo_root(repo) == realpath(repo)` |
++| `test_dotdot_in_start_matches_real_path_result` | `<repo>/sub/..` | `== repo_root(repo) == realpath(repo)` |
++| `test_symlinked_start_with_subdir_matches_real_path_result` | `link/sub`（`link -> <repo>`） | `== repo_root(repo/sub) == realpath(repo)` |
++| `test_dotdot_after_symlinked_dir_follows_kernel_not_lexical` | `link/..`（`link -> <repo>/sub`） | `== repo_root(repo) == realpath(repo)` |
++
++### 意外发现（第 4 例）：lexical 归一化改变了路径语义 —— 本轮引入的真缺陷
++
++`os.path.normpath` 是**纯字面**运算。起点为 `link/..`（`link -> <repo>/sub`）时：
++
++- **内核语义**：`link/..` = `<repo>`（symlink **目标**的父目录）→ git 探测出仓根 `<repo>`。
++- **`normpath` 结果**：`<tmp>`（link **自身**的父目录）——一个非 git 目录 ⇒ git 以 128 退出
++  ⇒ 走回落分支 ⇒ `repo_root` 静默返回 `<tmp>`。
++
++`<tmp>` 会被下游当作**可写仓根**，正是本 change 要消灭的「返回一个未经证明的根」形态。
++首轮（`5d47212`）无此问题——它是 fix1 的 ①b 随手加的 `normpath` 引入的。
++
++**修法**：删掉 `start = os.path.normpath(start)`，三份同步（patch 脚本注入，各断言 `count == 1`）。
++①b 需要的性质只有「起点恒为绝对路径」（回落分支不再触 `os.getcwd()`），**归一化不是它的一部分**；
++路径语义一律交给内核与步骤⑤的 `os.path.realpath`。
++
++**返回值等价性**：回落分支的 `os.path.abspath(start)` 对绝对路径本就等于 `normpath(start)`
++⇒ 回落返回值与首轮/fix1 逐字一致，删除 `normpath` 不改变任何回落形态。
++C1 的 fail-closed 也完好——起点仍恒为绝对路径。
++
++**修复前实测（HEAD `a5dd34b`，第 4 例为红）**：
++
++```
++>       assert repo_root(str(link) + os.sep + "..") == repo_root(str(repo))
++E       AssertionError: assert '/private/var...symlinked_di0' == '/private/var...nked_di0/repo'
++E         - mlinked_di0/repo
++E         + mlinked_di0
++1 failed, 33 passed in 2.36s
++```
++
++### 变异确认（PV 规则 5）— 两次实际输出
++
++**变异 A：把 `start = os.path.normpath(start)` 加回去**（即 fix1 形态）
++
++```
++FAILED sdflow-buglist/tests/test_repo_root_identity_buglist.py::test_dotdot_after_symlinked_dir_follows_kernel_not_lexical
++1 failed, 33 passed in 2.37s
++```
++
++**变异 B：删掉整个 ①b 归一化**（退回首轮 `if start is None: start = os.getcwd()`）
++
++```
++FAILED ...::test_deleted_process_cwd_yields_controlled_failure
++FAILED ...::test_cli_with_deleted_process_cwd_exits_two_without_traceback
++FAILED ...::test_getcwd_permission_error_is_controlled_too
++3 failed, 31 passed in 2.40s
++```
++
++### 🔴 如实登记：复审点名的那 3 例**不具变异区分力**
++
++两次变异下，`test_symlinked_repo_root_start_matches_real_path_result` /
++`test_dotdot_in_start_matches_real_path_result` /
++`test_symlinked_start_with_subdir_matches_real_path_result` **全程绿**。
++
++原因是**结构性**的，不是用例写得弱：`normpath` 对 `<repo>` / `<repo>/sub/..` /
++`<tmp>/link/sub` 这三种形态的**字面**改写，与内核解析结果**恰好一致**（无「symlink 后跟 `..`」
++这一步，lexical 与内核不分叉）。∴ 这三例是**正向回归锚**（定住「symlink / `..` 起点仍返回正确仓根」
++这条契约），**不是** ①b 的变异守护——**不为了"有变异确认"而给它们硬凑一个假的**。
++
++真正区分 ①b 归一化策略的是第 4 例（变异 A 独家拉红），区分 ①b「抬绝对路径」的是 fix1 已有的
++C1 三例（变异 B 拉红）。两者合起来把 ①b 这一步的两个决策各自钉死。
++
++变异均只在 `sdflow-buglist/scripts/buglist.py` 上做（`cp` 备份 → 改 → `cp` 还原），未污染另两份；
++还原后该文件 `34 passed`。
++
++---
++
++## 三份同步 / 镜像一致性
++
++`normpath` 的删除由同一个 patch 脚本注入三份（非手抄），三处 old-string 各断言 `count == 1`。
++`test_mirror_consistency.py` 相关 **29 passed**——剥 docstring 后 `ast.dump` 三向等价保持绿。
++
++结构硬约束复核：`try` 仍是 2 个且形状未变（AST 表见 N1）；黑名单仍是**函数体内局部常量**；
++`GIT_DISCOVERY_ACROSS_FILESYSTEM` 仍在净化清单内；祖先校验（⑤）与 worktree marker（⑥）一字未动；
++被拒值仍走 `ascii(value)[:200]`；无 `sys.exit` / stdout 写入 / `except Exception`。
++
++## 全套件
++
++| | failed | passed | skipped |
++|---|---|---|---|
++| 基线 `a5dd34b` | 4 | 1839 | 3 |
++| 本轮 | **4** | **1851** | 3 |
++
++`+12 passed` = 三份 recorder × 4 个新用例，红数未变。
++剩余 4 红仍全部是 `test_task4_rename_snapshot.py::test_reindex_cli_non_string_id_is_controlled_and_preserves_derived_bytes[None|7|bad_id2|bad_id3]`（Task 4 scope）——
++**本轮未动那 4 个用例，也未动 CF-1 的任何 mock 站点**。
++
++三个 identity 测试文件：90 → **102 passed**。
++
++## 垃圾树再生链
++
++全套件跑完后检查仓根：**0 个 `{` 开头目录**。
+diff --git a/sdflow-buglist/scripts/buglist.py b/sdflow-buglist/scripts/buglist.py
+index a8531b0..896bfab 100644
+--- a/sdflow-buglist/scripts/buglist.py
++++ b/sdflow-buglist/scripts/buglist.py
+@@ -624,7 +624,11 @@ def repo_root(start=None):
+                 "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+             ) from None
+         start = cwd if start is None else os.path.join(cwd, start)
+-    start = os.path.normpath(start)
++    # 起点到此**恒为绝对路径**，这就是回落分支 fail-closed 所需的全部性质。
++    # MUST NOT 在此做 lexical 归一化（os.path.normpath）：它是纯字面运算，对
++    # `symlink-to-subdir/..` 会给出 symlink 自身的父目录，而内核解析的是 symlink
++    # **目标**的父目录——两者是不同的目录，归一化会让 git 在错误的 cwd 下探测、
++    # 静默返回一个错误的可写根。路径语义一律交给内核与步骤⑤的 os.path.realpath 解释。
+     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
+     env = recorder_child_env("git", token=False)
+     for name in [
+diff --git a/sdflow-buglist/tests/test_repo_root_identity_buglist.py b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
+index 0d87ee8..d576b20 100644
+--- a/sdflow-buglist/tests/test_repo_root_identity_buglist.py
++++ b/sdflow-buglist/tests/test_repo_root_identity_buglist.py
+@@ -342,6 +342,63 @@ def test_symlinked_start_resolves_to_real_root(tmp_path):
+     assert repo_root(str(link)) == os.path.realpath(str(repo))
+ 
+ 
++# ── ①b 起点归一化：判据 = 「与非 symlink / 无 `..` 的等价起点结果一致」 ──────────
++#
++# 步骤①b 把起点归一化为绝对路径（回落分支 fail-closed 的承载点）。归一化改变了**传给
++# git 的 cwd 字面量**，因此 symlink 起点与含 `..` 起点这两类形态 MUST 有专属锚：判据是
++# 「结果与直接用真实路径进入完全一致」，**不是**「没抛异常」——后者对着一个错误的仓根
++# 也能绿。symlink 一律用 tmp_path 下真建，MUST NOT mock os.path.realpath / isdir / isabs。
++
++def test_symlinked_repo_root_start_matches_real_path_result(tmp_path):
++    """起点是指向仓根本身的 symlink ⇒ 结果与直接从真实仓根进入一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    link = tmp_path / "link-to-repo"
++    link.symlink_to(repo, target_is_directory=True)
++
++    assert repo_root(str(link)) == repo_root(str(repo))
++    assert repo_root(str(link)) == os.path.realpath(str(repo))
++
++
++def test_dotdot_in_start_matches_real_path_result(tmp_path):
++    """起点含 `..`（`<repo>/sub/..`）⇒ 结果与直接传 `<repo>` 一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "sub").mkdir()
++
++    assert repo_root(str(repo / "sub" / "..")) == repo_root(str(repo))
++    assert repo_root(str(repo / "sub" / "..")) == os.path.realpath(str(repo))
++
++
++def test_symlinked_start_with_subdir_matches_real_path_result(tmp_path):
++    """起点是 `symlink/子目录` ⇒ 结果与直接从真实子目录进入一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "sub").mkdir()
++    link = tmp_path / "link-to-repo"
++    link.symlink_to(repo, target_is_directory=True)
++
++    assert repo_root(str(link / "sub")) == repo_root(str(repo / "sub"))
++    assert repo_root(str(link / "sub")) == os.path.realpath(str(repo))
++
++
++def test_dotdot_after_symlinked_dir_follows_kernel_not_lexical(tmp_path):
++    """`symlink-to-subdir/..` —— **lexical 归一化与内核语义在此分叉**。
++
++    `link -> <repo>/sub` 时，内核解析 `link/..` = `<repo>`（symlink 目标的父目录），
++    而 `os.path.normpath` 是**纯字面**运算，给出 `<tmp>`（link 自身的父目录）——两者指向
++    完全不同的目录。∴ 步骤①b MUST NOT 对起点做 lexical 归一化：起点只需被抬成**绝对
++    路径**（回落分支不再触 cwd 即达成 fail-closed），路径语义一律交给内核与
++    `os.path.realpath` 解释。删掉这条约束会让本用例返回 `<tmp>`（一个非仓库目录，经回落
++    分支返回）而不是仓根 —— 静默指向错误的可写根。
++    """
++    repo = _init_repo(tmp_path / "repo")
++    sub = repo / "sub"
++    sub.mkdir()
++    link = tmp_path / "link-to-sub"
++    link.symlink_to(sub, target_is_directory=True)
++
++    assert repo_root(str(link) + os.sep + "..") == repo_root(str(repo))
++    assert repo_root(str(link) + os.sep + "..") == os.path.realpath(str(repo))
++
++
+ def test_linked_worktree_dot_git_is_a_file(tmp_path):
+     """linked worktree 下 `top/.git` 是**文件**——marker 判定 MUST 用 exists 而非 isdir。"""
+     repo = _init_repo(tmp_path / "repo")
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index e3b2dab..2461586 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -1181,7 +1181,11 @@ def repo_root(start=None):
+                 "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+             ) from None
+         start = cwd if start is None else os.path.join(cwd, start)
+-    start = os.path.normpath(start)
++    # 起点到此**恒为绝对路径**，这就是回落分支 fail-closed 所需的全部性质。
++    # MUST NOT 在此做 lexical 归一化（os.path.normpath）：它是纯字面运算，对
++    # `symlink-to-subdir/..` 会给出 symlink 自身的父目录，而内核解析的是 symlink
++    # **目标**的父目录——两者是不同的目录，归一化会让 git 在错误的 cwd 下探测、
++    # 静默返回一个错误的可写根。路径语义一律交给内核与步骤⑤的 os.path.realpath 解释。
+     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
+     env = recorder_child_env("git", token=False)
+     for name in [
+diff --git a/sdflow-issues/tests/test_repo_root_identity_issues.py b/sdflow-issues/tests/test_repo_root_identity_issues.py
+index c278a1d..1f26074 100644
+--- a/sdflow-issues/tests/test_repo_root_identity_issues.py
++++ b/sdflow-issues/tests/test_repo_root_identity_issues.py
+@@ -342,6 +342,63 @@ def test_symlinked_start_resolves_to_real_root(tmp_path):
+     assert repo_root(str(link)) == os.path.realpath(str(repo))
+ 
+ 
++# ── ①b 起点归一化：判据 = 「与非 symlink / 无 `..` 的等价起点结果一致」 ──────────
++#
++# 步骤①b 把起点归一化为绝对路径（回落分支 fail-closed 的承载点）。归一化改变了**传给
++# git 的 cwd 字面量**，因此 symlink 起点与含 `..` 起点这两类形态 MUST 有专属锚：判据是
++# 「结果与直接用真实路径进入完全一致」，**不是**「没抛异常」——后者对着一个错误的仓根
++# 也能绿。symlink 一律用 tmp_path 下真建，MUST NOT mock os.path.realpath / isdir / isabs。
++
++def test_symlinked_repo_root_start_matches_real_path_result(tmp_path):
++    """起点是指向仓根本身的 symlink ⇒ 结果与直接从真实仓根进入一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    link = tmp_path / "link-to-repo"
++    link.symlink_to(repo, target_is_directory=True)
++
++    assert repo_root(str(link)) == repo_root(str(repo))
++    assert repo_root(str(link)) == os.path.realpath(str(repo))
++
++
++def test_dotdot_in_start_matches_real_path_result(tmp_path):
++    """起点含 `..`（`<repo>/sub/..`）⇒ 结果与直接传 `<repo>` 一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "sub").mkdir()
++
++    assert repo_root(str(repo / "sub" / "..")) == repo_root(str(repo))
++    assert repo_root(str(repo / "sub" / "..")) == os.path.realpath(str(repo))
++
++
++def test_symlinked_start_with_subdir_matches_real_path_result(tmp_path):
++    """起点是 `symlink/子目录` ⇒ 结果与直接从真实子目录进入一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "sub").mkdir()
++    link = tmp_path / "link-to-repo"
++    link.symlink_to(repo, target_is_directory=True)
++
++    assert repo_root(str(link / "sub")) == repo_root(str(repo / "sub"))
++    assert repo_root(str(link / "sub")) == os.path.realpath(str(repo))
++
++
++def test_dotdot_after_symlinked_dir_follows_kernel_not_lexical(tmp_path):
++    """`symlink-to-subdir/..` —— **lexical 归一化与内核语义在此分叉**。
++
++    `link -> <repo>/sub` 时，内核解析 `link/..` = `<repo>`（symlink 目标的父目录），
++    而 `os.path.normpath` 是**纯字面**运算，给出 `<tmp>`（link 自身的父目录）——两者指向
++    完全不同的目录。∴ 步骤①b MUST NOT 对起点做 lexical 归一化：起点只需被抬成**绝对
++    路径**（回落分支不再触 cwd 即达成 fail-closed），路径语义一律交给内核与
++    `os.path.realpath` 解释。删掉这条约束会让本用例返回 `<tmp>`（一个非仓库目录，经回落
++    分支返回）而不是仓根 —— 静默指向错误的可写根。
++    """
++    repo = _init_repo(tmp_path / "repo")
++    sub = repo / "sub"
++    sub.mkdir()
++    link = tmp_path / "link-to-sub"
++    link.symlink_to(sub, target_is_directory=True)
++
++    assert repo_root(str(link) + os.sep + "..") == repo_root(str(repo))
++    assert repo_root(str(link) + os.sep + "..") == os.path.realpath(str(repo))
++
++
+ def test_linked_worktree_dot_git_is_a_file(tmp_path):
+     """linked worktree 下 `top/.git` 是**文件**——marker 判定 MUST 用 exists 而非 isdir。"""
+     repo = _init_repo(tmp_path / "repo")
+diff --git a/sdflow-todolist/scripts/todolist.py b/sdflow-todolist/scripts/todolist.py
+index 7b0aa71..6c4c39c 100644
+--- a/sdflow-todolist/scripts/todolist.py
++++ b/sdflow-todolist/scripts/todolist.py
+@@ -624,7 +624,11 @@ def repo_root(start=None):
+                 "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
+             ) from None
+         start = cwd if start is None else os.path.join(cwd, start)
+-    start = os.path.normpath(start)
++    # 起点到此**恒为绝对路径**，这就是回落分支 fail-closed 所需的全部性质。
++    # MUST NOT 在此做 lexical 归一化（os.path.normpath）：它是纯字面运算，对
++    # `symlink-to-subdir/..` 会给出 symlink 自身的父目录，而内核解析的是 symlink
++    # **目标**的父目录——两者是不同的目录，归一化会让 git 在错误的 cwd 下探测、
++    # 静默返回一个错误的可写根。路径语义一律交给内核与步骤⑤的 os.path.realpath 解释。
+     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
+     env = recorder_child_env("git", token=False)
+     for name in [
+diff --git a/sdflow-todolist/tests/test_repo_root_identity_todolist.py b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
+index 7a93e18..054d5e8 100644
+--- a/sdflow-todolist/tests/test_repo_root_identity_todolist.py
++++ b/sdflow-todolist/tests/test_repo_root_identity_todolist.py
+@@ -342,6 +342,63 @@ def test_symlinked_start_resolves_to_real_root(tmp_path):
+     assert repo_root(str(link)) == os.path.realpath(str(repo))
+ 
+ 
++# ── ①b 起点归一化：判据 = 「与非 symlink / 无 `..` 的等价起点结果一致」 ──────────
++#
++# 步骤①b 把起点归一化为绝对路径（回落分支 fail-closed 的承载点）。归一化改变了**传给
++# git 的 cwd 字面量**，因此 symlink 起点与含 `..` 起点这两类形态 MUST 有专属锚：判据是
++# 「结果与直接用真实路径进入完全一致」，**不是**「没抛异常」——后者对着一个错误的仓根
++# 也能绿。symlink 一律用 tmp_path 下真建，MUST NOT mock os.path.realpath / isdir / isabs。
++
++def test_symlinked_repo_root_start_matches_real_path_result(tmp_path):
++    """起点是指向仓根本身的 symlink ⇒ 结果与直接从真实仓根进入一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    link = tmp_path / "link-to-repo"
++    link.symlink_to(repo, target_is_directory=True)
++
++    assert repo_root(str(link)) == repo_root(str(repo))
++    assert repo_root(str(link)) == os.path.realpath(str(repo))
++
++
++def test_dotdot_in_start_matches_real_path_result(tmp_path):
++    """起点含 `..`（`<repo>/sub/..`）⇒ 结果与直接传 `<repo>` 一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "sub").mkdir()
++
++    assert repo_root(str(repo / "sub" / "..")) == repo_root(str(repo))
++    assert repo_root(str(repo / "sub" / "..")) == os.path.realpath(str(repo))
++
++
++def test_symlinked_start_with_subdir_matches_real_path_result(tmp_path):
++    """起点是 `symlink/子目录` ⇒ 结果与直接从真实子目录进入一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "sub").mkdir()
++    link = tmp_path / "link-to-repo"
++    link.symlink_to(repo, target_is_directory=True)
++
++    assert repo_root(str(link / "sub")) == repo_root(str(repo / "sub"))
++    assert repo_root(str(link / "sub")) == os.path.realpath(str(repo))
++
++
++def test_dotdot_after_symlinked_dir_follows_kernel_not_lexical(tmp_path):
++    """`symlink-to-subdir/..` —— **lexical 归一化与内核语义在此分叉**。
++
++    `link -> <repo>/sub` 时，内核解析 `link/..` = `<repo>`（symlink 目标的父目录），
++    而 `os.path.normpath` 是**纯字面**运算，给出 `<tmp>`（link 自身的父目录）——两者指向
++    完全不同的目录。∴ 步骤①b MUST NOT 对起点做 lexical 归一化：起点只需被抬成**绝对
++    路径**（回落分支不再触 cwd 即达成 fail-closed），路径语义一律交给内核与
++    `os.path.realpath` 解释。删掉这条约束会让本用例返回 `<tmp>`（一个非仓库目录，经回落
++    分支返回）而不是仓根 —— 静默指向错误的可写根。
++    """
++    repo = _init_repo(tmp_path / "repo")
++    sub = repo / "sub"
++    sub.mkdir()
++    link = tmp_path / "link-to-sub"
++    link.symlink_to(sub, target_is_directory=True)
++
++    assert repo_root(str(link) + os.sep + "..") == repo_root(str(repo))
++    assert repo_root(str(link) + os.sep + "..") == os.path.realpath(str(repo))
++
++
+ def test_linked_worktree_dot_git_is_a_file(tmp_path):
+     """linked worktree 下 `top/.git` 是**文件**——marker 判定 MUST 用 exists 而非 isdir。"""
+     repo = _init_repo(tmp_path / "repo")

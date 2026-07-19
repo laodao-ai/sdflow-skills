@@ -629,6 +629,8 @@ def repo_root(start=None):
     # `symlink-to-subdir/..` 会给出 symlink 自身的父目录，而内核解析的是 symlink
     # **目标**的父目录——两者是不同的目录，归一化会让 git 在错误的 cwd 下探测、
     # 静默返回一个错误的可写根。路径语义一律交给内核与步骤⑤的 os.path.realpath 解释。
+    # 边界：回落分支的返回值除外——spec 明文约定回落 MUST 返回 os.path.abspath(start)，
+    # 而 abspath 同样是 lexical，故回落值可能 != git 实际探测的目录。改它须先改 spec。
     # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
     env = recorder_child_env("git", token=False)
     for name in [

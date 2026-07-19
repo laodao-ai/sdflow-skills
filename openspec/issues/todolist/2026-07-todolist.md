@@ -37,6 +37,7 @@ sdflow-issues:
     T178: {"module":"outside-voice","summary":"M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败","type":"基础设施","status":"PROPOSED","time":"2026-07-19 13:28","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T179: {"module":"sdflow-done / sdflow-ship","summary":"archive 步骤可能打断测试，而其后无人重跑全套件 —— gate 判 SHIPPED 时 main 实际是红的","type":"基础设施","status":"OPEN","time":"2026-07-19 13:47","change":"main","batch":null}
     T180: {"module":"sdflow-todolist/scripts/todolist.py + sdflow-buglist/scripts/buglist.py","summary":"recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块","type":"功能增强","status":"OPEN","time":"2026-07-19 17:20","change":"harden-repo-root-fail-closed","batch":null}
+    T181: {"module":"recorder/repo_root","summary":"repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入）","type":"代码质量","status":"OPEN","time":"2026-07-19 21:36","change":"harden-repo-root-fail-closed","batch":null}
 ---
 # 2026-07 TODO
 
