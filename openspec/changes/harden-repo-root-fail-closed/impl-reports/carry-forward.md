@@ -138,3 +138,21 @@ Task 6 收尾时**记 todolist**（显式带 `change` 字段），不在本 chan
 > ⇒ 连 `sleep` 本身都找不到、shell 退 127、走成**回落分支**、测试报 "DID NOT RAISE"。
 > 改为 `exec /bin/sleep 120` + `PATH` **前置**（而非替换）才真的挂住。
 > **若当时不查原因直接改断言，就会得到一个「测超时」但实际测的是「命令不存在」的假绿。**
+
+---
+
+## CF-9 → **设计门**（四件套需修订，本 change 实现期禁改）
+
+Task 5 双轴审确认的 **spec/design 与实现的落差**——**全部是「实现对、文档措辞旧」，不是实现错**。
+四件套在设计门拍板后被冻结（改动即触发 `ship_gate` 失鲜 REFUSE_START），故一律留到设计门一次性回写。
+
+| # | 落差 | 事实 | 处置 |
+|---|---|---|---|
+| **a** | `spec.md:157-158` 仍写「测试产生的**一切落盘物** MUST 位于 `tmp_path`」 | design **D6 已决议**收窄为「禁止新增 cwd **顶层条目**」，决议**没落到 spec 正文** ⇒ **spec 目前宣称了实现不覆盖的东西** | 回写 spec 正文到 D6 的收窄口径 |
+| **b** | `spec.md:160` + **ADR-3 标题/决策** + `tasks.md 3.1` 均写「由仓根单一份 conftest 的 **autouse fixture** 机械保证」 | 实现用的是 `pytest_runtest_{setup,call,teardown}` **hook wrapper**。理由充分且技术上更优——**autouse fixture 的 teardown 抛异常会被记成「passed + teardown error」，摘要行写 `1 passed`，泄漏降级成脚注**；照 spec 字面实现反而制造假绿 | 回写三处措辞为 hook wrapper，并记录「为什么不是 autouse fixture」 |
+| **c** | **ADR-3 的覆盖机制表述失准**：写「pytest 沿祖先目录收集 conftest ⇒ 仓根一份天然覆盖」 | **漏了前置条件**：conftest 收集止于 `confcutdir`，其默认值 = `rootdir`。本仓此前无 ini ⇒ 从仓外跑 `pytest /abs/<skill>/tests/` 时 rootdir 塌缩、**仓根 conftest 根本不被收集**。双向变异实证：无 `pytest.ini` 时注入泄漏 `1 passed`（假绿），有则 `1 failed` | ADR-3 补 `confcutdir` 前置条件；**「代价」段从一个根级文件改为两个**（`conftest.py` + `pytest.ini`，**缺一即失效**） |
+| **d** | `tasks.md 4.4` 要改的 CLAUDE.md 那句「没有根级 pytest 配置」 | 被新增的 `pytest.ini` **正面证伪**，且改法要扩到**两个**根级文件 | Task 6 执行 4.4 时按两文件表述 |
+| **e** | ADR-3 自称基线「**12 个** skill + hack 各自跑完均 0 残留」 | 实测是 **11 个**（10 skill + hack；`sdflow-retro` 无 `tests/`）。plan 的 Task 5 验收框沿用了这个错数 | 订正为 11 |
+
+> **共同性质**：这些不是「实现没做到」，而是**实现在执行过程中把设计的一条隐含前提证伪了**，
+> 文档尚未追上。**MUST NOT** 在收尾时把它们描述成「已全部达成」。
