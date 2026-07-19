@@ -108,6 +108,123 @@ return out.stdout.strip()          # ← 无任何校验，直接采信
 `test_reindex_cli_non_string_id_...` 会改为撞诊断而非 makedirs。
 **Task 2+ 完成后建议复跑一次全量 pytest 并复查仓根 brace 条目数 = 0，作为 R4 的收口证据。**
 
+## 再生—清理循环的机械锚（fix 轮次 1）
+
+「跑 pytest → 再生 4 棵 → 带守卫删除 → 归零」这条循环，此前只有散文描述、无逐步输出留痕，
+以致「复核 count = 0」与「全量 pytest 后 4 棵原样重现」在同一份报告里并存而无法自洽。
+本节补齐该循环的完整机械锚：命令与输出**原样粘贴**，cwd 恒为仓根
+`/Users/cheneyzhao/Documents/04-sdflow-skills`。
+
+### a. 起始计数（应为 0）
+
+```
+$ /usr/bin/python3 -c "
+import os
+e=sorted(x for x in os.listdir('.') if x.startswith('{'))
+print('count =', len(e))
+for x in e: print(repr(x))
+"
+count = 0
+```
+
+### b. 触发再生（单文件即足以触发，无需全量）
+
+```
+$ pwd && /usr/bin/python3 -m pytest sdflow-issues/tests/test_task4_rename_snapshot.py -q
+/Users/cheneyzhao/Documents/04-sdflow-skills/
+........................................................................ [ 79%]
+...................                                                      [100%]
+91 passed in 1.31s
+```
+
+**91 passed / 0 failed** —— 用例全绿，污染是**绿测试的副作用**，不伴随任何失败信号。
+
+### c. 再生后列举（4 棵 + 首棵完整 walk 树）
+
+```
+$ /usr/bin/python3 -c "
+import os
+e=sorted(x for x in os.listdir('.') if x.startswith('{'))
+print('count =', len(e))
+for x in e:
+    print(repr(x))
+print('--- full find tree of entry[0] ---')
+for root,dirs,files in os.walk(e[0]):
+    print(repr(root), 'dirs=',dirs, 'files=',files)
+tot_d=tot_f=0
+for x in e:
+    for root,dirs,files in os.walk(x):
+        tot_d+=len(dirs); tot_f+=len(files)
+print('total subdirs =', tot_d, 'total regular files =', tot_f)
+"
+count = 4
+'{"bugs": [{"id": 7, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec'
+'{"bugs": [{"id": [], "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec'
+'{"bugs": [{"id": null, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec'
+'{"bugs": [{"id": {}, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec'
+--- full find tree of entry[0] ---
+'{"bugs": [{"id": 7, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec' dirs= ['issues'] files= []
+'{"bugs": [{"id": 7, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec/issues' dirs= ['buglist'] files= []
+'{"bugs": [{"id": 7, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec/issues/buglist' dirs= ['2026-01-01-buglist.md"}], "problems": []}'] files= []
+'{"bugs": [{"id": 7, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec/issues/buglist/2026-01-01-buglist.md"}], "problems": []}' dirs= ['openspec'] files= []
+'{"bugs": [{"id": 7, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec/issues/buglist/2026-01-01-buglist.md"}], "problems": []}/openspec' dirs= ['issues'] files= []
+'{"bugs": [{"id": 7, "module": "core", "summary": "summary", "priority": "P2", "status": "OPEN", "time": "10:00", "change": "chg", "batch": "batch-old", "file": "openspec/issues/buglist/2026-01-01-buglist.md"}], "problems": []}/openspec/issues' dirs= [] files= []
+total subdirs = 20 total regular files = 0
+```
+
+完整 walk 树坐实形态：JSON payload 内的 `/` 被当作路径分隔符，`.../buglist/2026-01-01-buglist.md"}], "problems": []}`
+这一段又被重新当成目录名继续下钻出 `openspec/issues` —— 即 `repo_root` 返回的整段 JSON
+被 `recorder_lock` 当作**文件系统写入根**。**20 子目录 / 0 普通文件**，与首轮完全同形。
+
+### d. 带守卫删除（Python `shutil.rmtree`，五道断言全过才删）
+
+```
+$ /usr/bin/python3 -c "
+import os, shutil, subprocess
+root = os.path.realpath('.')
+expected = os.path.realpath('/Users/cheneyzhao/Documents/04-sdflow-skills')
+assert root == expected, ('cwd not repo root', root)
+e = sorted(x for x in os.listdir('.') if x.startswith('{'))
+assert len(e) == 4, ('count != 4', len(e))
+for x in e:
+    assert os.path.isdir(x) and not os.path.islink(x), ('not a plain dir', x)
+    assert os.path.dirname(os.path.realpath(x)) == root, ('parent escaped repo root', x)
+    nf = sum(len(files) for _,_,files in os.walk(x))
+    assert nf == 0, ('tree contains regular files', x, nf)
+print('all 4 guards passed for all 4 trees')
+for x in e:
+    shutil.rmtree(x)
+    print('rmtree OK:', repr(x[:40]) + '...')
+"
+all 4 guards passed for all 4 trees
+rmtree OK: '{"bugs": [{"id": 7, "module": "core", "s'...
+rmtree OK: '{"bugs": [{"id": [], "module": "core", "'...
+rmtree OK: '{"bugs": [{"id": null, "module": "core",'...
+rmtree OK: '{"bugs": [{"id": {}, "module": "core", "'...
+```
+
+### e+f. 删除后计数归零 + git 无跟踪文件受影响
+
+```
+$ /usr/bin/python3 -c "
+import os
+e=sorted(x for x in os.listdir('.') if x.startswith('{'))
+print('count =', len(e))
+" && echo '--- git status --porcelain ---' && git status --porcelain
+count = 0
+--- git status --porcelain ---
+?? openspec/changes/harden-repo-root-fail-closed/impl-reports/task1-review-package.diff
+```
+
+`git status` 唯一条目是本 change 自己的评审包 diff（本轮工作产物，随 commit 入库），
+**无任何跟踪文件被删除动作影响**。
+
+### 这条循环说明的事
+
+再生**不是一次性的历史事故，而是确定性可复现的**：同一份带守卫删除在同一天内执行了两次
+（首轮 + 本轮），中间只隔一次 pytest。**只要 `repo_root` 仍无条件采信 `git` stdout，
+「仓根干净」就只能是时点属性、不可能是持久属性。** 这正是 Task 2 的靶心。
+
 ## Concerns
 
 1. **基线的时效性**：当前仓根干净，但**这是一个会被下一次 `pytest` 破坏的干净**。
@@ -117,10 +234,21 @@ return out.stdout.strip()          # ← 无任何校验，直接采信
    会连带劫持被测函数之外的所有子进程调用（此处即 `repo_root` 的 `git`）。
    即便 `repo_root` 加固后不再 makedirs，这个 mock 仍会让 `repo_root` 走进 fail-closed 分支。
    Task 2+ 改动该用例时需一并考虑（建议按 argv 分派、只拦 recorder scan 那一次调用）。
-3. **pytest 解释器不唯一**：仓根默认 `python3` 无 pytest。若 CI/他人用默认 `python3`
-   会直接 `No module named pytest`。本次以 `/usr/bin/python3` 为准。
+3. **pytest 解释器不唯一（风险仅限本地开发者，CI 不受影响）**：仓根默认 `python3`
+   （`~/.local/bin/python3`）无 pytest 模块，用它直跑会 `No module named pytest`；
+   本次以 `/usr/bin/python3`（pytest 8.4.2）为准。
+   **CI 两条泳道都显式装 pytest，故不在此风险面内**——
+   `.github/workflows/mechanical-gates.yml:34`（`python -m pip install pytest`，
+   ubuntu-latest + macos-latest 矩阵）与
+   `.github/workflows/windows-recorder-smoke.yml:31`（`py -m pip install pytest`）。
+   ⇒ 该风险的实际范围 = **本地开发者用默认 `python3` 直跑**的场景。
 
 ## 验收对照
 
-- [x] 仓根不再有以 `{` 开头的目录条目（复核 `count = 0`）
-- [x] 删除动作在提交历史中可见（列举 → 删除 → 复核三步留痕，本报告随 commit 入库）
+- [x] **【时点性达标】** 仓根以 `{` 开头的目录条目 `count = 0`
+      —— 最近一次核验见「再生—清理循环的机械锚（fix 轮次 1）」步骤 e。
+      **成立条件：自该次清理后未在仓根跑过 pytest。** 任何一次仓根 pytest 都会立刻使本条失效
+      （4 棵树确定性再生，见步骤 b–c）。本条**不可读作「仓根已永久干净」**。
+      **「不再再生」的永久性达标不属于 Task 1**：它由 Task 6 收口，前置是 Task 2 对
+      `repo_root` 的 fail-closed 加固（绝对路径 + `isdir` + 祖先校验）。
+- [x] 删除动作在提交历史中可见（列举 → 删除 → 复核三步留痕，两轮均逐步留痕，本报告随 commit 入库）
