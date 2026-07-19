@@ -578,16 +578,95 @@ def read_recorder_document(path, expected_pool):
 
 # ── 路径与文件 ───────────────────────────────────────────────────────────────
 
-def repo_root(start="."):
+def repo_root(start=None):
+    """探测并**证明**起点所属 git 仓库的根；非 git 仓库（或 git 命令失败）退化为
+    `os.path.abspath(start)`。
+
+    与 issues.py / buglist.py 的同名函数逐字同款（3 个脚本各自独立、不互相 import，
+    故各自内联一份）。
+
+    契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
+    返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
+    起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
+    任一步不满足即 `raise ValueError`。唯一的回落分支是「git 抛 OSError 或以非 0 退出」
+    （非 git 仓库 / git 不可用 / bare repo / `.git/` 目录内等正常场景）。超时**不回落**。
+    """
+    # 环境净化清单（ADR-6）：MUST 保持为函数体内的局部常量。三向 AST 镜像守护只比较
+    # roster 内的**函数体**，模块级常量的值不在其覆盖范围内——写成模块级常量等于把这份
+    # 清单放进既有安全网的盲区，三份漏一项或拼错都不会拉红。
+    discovery_env = (
+        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
+        "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+        "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
+    )
+    discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
+    # ① 起点可信性——MUST 在调 git 之前完成。未指定时用 os.getcwd() 求起点：
+    # os.path.isdir(".") 在 cwd 被删除后仍返回 True，用它校验形同虚设（ADR-7）。
+    if start is None:
+        try:
+            start = os.getcwd()
+        except FileNotFoundError:
+            raise ValueError(
+                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在; "
+                "fix: 切换到一个既存目录后重试，或显式指定 --root"
+            ) from None
+    elif not os.path.isdir(start):
+        raise ValueError(
+            "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
+            + "; cause: 显式指定的起点路径不存在或不是目录; "
+            "fix: 指定一个既存目录作为起点"
+        )
+    # ② 环境净化：剔除仓库/工作树发现类变量（保留 GIT_EXEC_PATH 等执行类变量）。
+    env = recorder_child_env("git", token=False)
+    for name in [
+        n for n in env
+        if n in discovery_env or n.startswith(discovery_env_prefixes)
+    ]:
+        env.pop(name, None)
+    # ③ 调 git——try 只包 subprocess.run，一切校验与 raise 都在 try 之外，
+    # 否则新抛的 ValueError 会被本函数自己的 except 接住，fail-closed 归零。
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             cwd=start, capture_output=True, text=True, check=True,
-            env=recorder_child_env("git", token=False),
+            env=env, timeout=30,
         )
-        return out.stdout.strip()
-    except Exception:
+    except subprocess.TimeoutExpired:
+        raise ValueError(
+            "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 30 秒内未返回; "
+            "fix: 确认仓库所在文件系统可用，或显式指定 --root"
+        ) from None
+    except (OSError, subprocess.CalledProcessError):
         return os.path.abspath(start)
+    # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
+    top = out.stdout.rstrip("\r\n")
+    if not top or not os.path.isabs(top) or not os.path.isdir(top):
+        raise ValueError(
+            "ERROR: git 返回的仓根不可用: " + ascii(top)[:200]
+            + "; cause: git rev-parse --show-toplevel 的输出不是既存的绝对路径目录; "
+            "fix: 检查 git 配置与调用环境是否被污染，或显式指定一个既存目录作为 --root"
+        )
+    # ⑤ 祖先校验（主防线）：按路径组件比较，不用裸字符串前缀匹配。这是唯一能拦住
+    # core.worktree（写在 .git/config 里的 on-disk 重定向）的判据——环境净化对它零效果，
+    # 形状校验会放行。删掉本步 = 该缺口静默回归（ADR-2）。
+    top_real = os.path.realpath(top)
+    start_real = os.path.realpath(start)
+    if os.path.commonpath([
+        os.path.normcase(start_real), os.path.normcase(top_real),
+    ]) != os.path.normcase(top_real):
+        raise ValueError(
+            "ERROR: git 返回的仓根不包含探测起点: " + ascii(top)[:200]
+            + "; cause: 工作树被 core.worktree 或环境变量重定向到起点之外; "
+            "fix: 清除 .git/config 的 core.worktree 与 GIT_* 重定向后重试"
+        )
+    # ⑥ worktree marker：用 exists 而非 isdir——linked worktree 与 submodule 下 .git 是文件。
+    if not os.path.exists(os.path.join(top_real, ".git")):
+        raise ValueError(
+            "ERROR: git 返回的仓根缺少 .git: " + ascii(top)[:200]
+            + "; cause: 该目录不带 worktree marker，不是一个仓库根; "
+            "fix: 检查 git 配置与调用环境是否被污染，或显式指定 --root"
+        )
+    return top_real
 
 
 BRANCH_PREFIX_RE = re.compile(r"^[a-z]+/")

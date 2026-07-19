@@ -459,6 +459,10 @@ def test_noncanonical_request_does_not_alias_canonical_or_legacy_spelling(tmp_pa
     assert legacy_path.read_bytes() == legacy
 
     canonical_root = tmp_path / "canonical"
+    # `--root` 必须指向既存目录：repo_root 的起点校验先于调 git，不存在的起点被 fail-closed
+    # 拒绝且 MUST NOT 被创建（harden-repo-root-fail-closed · spec「起点不是既存目录」）。
+    # 此前本行依赖的是「坏起点被下游 makedirs 静默具现」——正是该变更要消灭的行为。
+    canonical_root.mkdir()
     add = _run(
         BUG_SCRIPT, canonical_root, "add", "--date", "2026-07-17", "--time", "09:00",
         payload={"id": "A7", "module": "m", "summary": "s", "priority": "P1",
