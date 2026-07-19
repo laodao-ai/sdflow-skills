@@ -110,10 +110,8 @@ return out.stdout.strip()          # ← 无任何校验，直接采信
 
 ## 再生—清理循环的机械锚（fix 轮次 1）
 
-「跑 pytest → 再生 4 棵 → 带守卫删除 → 归零」这条循环，此前只有散文描述、无逐步输出留痕，
-以致「复核 count = 0」与「全量 pytest 后 4 棵原样重现」在同一份报告里并存而无法自洽。
-本节补齐该循环的完整机械锚：命令与输出**原样粘贴**，cwd 恒为仓根
-`/Users/cheneyzhao/Documents/04-sdflow-skills`。
+本节是「跑 pytest → 再生 4 棵 → 带守卫删除 → 归零」这条循环的原样命令与输出留痕。
+cwd 恒为仓根 `/Users/cheneyzhao/Documents/04-sdflow-skills`。
 
 ### a. 起始计数（应为 0）
 
