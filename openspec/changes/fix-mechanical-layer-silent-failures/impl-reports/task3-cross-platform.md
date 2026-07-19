@@ -12,13 +12,21 @@
 
 ## 验收标准逐条
 
-### ⚠️ 1. Linux CI 泳道纳入切点扫描与进程验尸（**部分达成**，非 ✅）
+### ✅ 1. Linux CI 泳道纳入切点扫描与进程验尸（**已在真 ubuntu runner 上闭合**）
 
-> **〔Spec 轴 F1 更正〕**：本条原标 `✅`，与正文自己写的诚实边界自相矛盾——ticket 的字面验收是
-> 「两者**在 ubuntu 上绿**」，而分支从未 push、`gh run list --branch feat/fix-mechanical-layer-silent-failures`
-> 返回空 ⇒ **真 runner 一次都没跑过这两个新测试文件**。结构性覆盖属实（裸 `pytest` 无路径限制，
-> 本地 `--collect-only` 命中 66 条），但「机制正确」不等于「已在 Linux 上绿」。
-> **合并前 MUST push 一次让 ubuntu runner 真跑**，届时本条才可改判 ✅。
+> **〔更正轨迹，保留不删〕** 本条曾标 `✅`（凭「CI 跑裸 pytest，结构性已覆盖」），经 Spec 轴 F1
+> 指出与正文自己写的诚实边界自相矛盾——ticket 的字面验收是「两者**在 ubuntu 上绿**」，而当时
+> 分支从未 push、`gh run list` 返回空 ⇒ 真 runner 一次都没跑过。遂改判 `⚠️部分`，经人拍板 push 后闭合。
+
+**机验证据锚点**：
+
+| 事实 | 锚点 |
+|---|---|
+| ubuntu-latest 泳道通过 | run `29670246148` → `conclusion=success`；加 `-rs` 后复跑 run `29670376668` → `success` |
+| 全套件在 Linux 上的结果 | `1740 passed, 5 skipped in 96.75s` |
+| 两个新测试文件**确实跑了**（非静默 skip） | 5 条 skip **全部枚举**：`test_task2_windows_local_fs_smoke.py:59/101`（需真实 Windows 磁盘）+ `test_outside_voice.py:456/469/479`（`timeout` 在 PATH ⇒ missing-deps 分支不可触发）。**无一条来自 `test_outside_voice_utf8.py` / `test_outside_voice_child_lifecycle.py`**，且零 failure ⇒ 两文件全部用例在 ubuntu 上 passed |
+
+**顺带修的机制缺口**：CI 原为裸 `python -m pytest -q`，**不打印 skip 理由** ⇒ 「本地 1743 passed / CI 1740 passed + 5 skipped」这种差异只能靠数数猜是哪几条。已加 `-rs`（`.github/workflows/mechanical-gates.yml`），使跨平台 skip 逐条可见——**「泳道绿但用例没跑」正是本 change 所治病症的 CI 版本**，不该在验证本 change 的泳道上留着。
 
 `.github/workflows/mechanical-gates.yml`（`runs-on: ubuntu-latest`）的 `Full test suite` 步骤是
 `python -m pytest -q`（无路径限制），从仓根递归发现全部 `test_*.py`。本地验证：

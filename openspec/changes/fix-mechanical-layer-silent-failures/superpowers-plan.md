@@ -104,8 +104,8 @@ runner 的退出码语义不因此改变：正常完成的 0、超时的 124、�
 
 用一段真实的超长中文 context 端到端跑一次，坐实 Success Metric 1 的度量——记录 rc 与锚行 `reason_code`。
 
-- [ ] Linux CI 泳道纳入 Task 1 的切点扫描与 Task 2 的进程验尸，两者在 ubuntu 上绿
-- [ ] 开发 checkout 已重跑安装流程，测到的是新脚本而非旧拷贝
-- [ ] 全套件 pytest 绿
-- [ ] async marker 段字节等值 parity 门通过（未触碰两层 SKILL 的 async 段）
-- [ ] 以真实中文 diff 造 >200KB context 实跑一次 `outside-voice.sh exec`，记录 rc 与锚行 `reason_code`
+- [x] Linux CI 泳道纳入 Task 1 的切点扫描与 Task 2 的进程验尸，两者在 ubuntu 上绿
+- [x] 开发 checkout 已重跑安装流程，测到的是新脚本而非旧拷贝
+- [x] 全套件 pytest 绿
+- [x] async marker 段字节等值 parity 门通过（未触碰两层 SKILL 的 async 段）
+- [x] 以真实中文 diff 造 >200KB context 实跑一次 `outside-voice.sh exec`，记录 rc 与锚行 `reason_code`
