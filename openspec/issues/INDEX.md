@@ -230,6 +230,8 @@
 | B10 | bug | VERIFIED | async-outside-voice |
 | B11 | bug | VERIFIED | async-outside-voice |
 | B12 | bug | OPEN | fix-mechanical-layer-silent-failures |
+| B13 | bug | OPEN | fix-mechanical-layer-silent-failures |
+| B14 | bug | OPEN | fix-mechanical-layer-silent-failures |
 | B7 | bug | OPEN | - |
 | B8 | bug | VERIFIED | async-outside-voice |
 | B9 | bug | VERIFIED | async-outside-voice |
@@ -255,6 +257,15 @@
 | T165 | todo | OPEN | async-outside-voice |
 | T166 | todo | OPEN | async-outside-voice |
 | T167 | todo | OPEN | async-outside-voice |
+| T168 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T169 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T170 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T171 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T172 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T173 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T174 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T175 | todo | OPEN | fix-mechanical-layer-silent-failures |
+| T176 | todo | OPEN | fix-mechanical-layer-silent-failures |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
