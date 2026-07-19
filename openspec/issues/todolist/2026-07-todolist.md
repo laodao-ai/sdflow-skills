@@ -34,6 +34,7 @@ sdflow-issues:
     T175: {"module":"sdflow-spec-review / sdflow-code-review","summary":"两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑","type":"基础设施","status":"OPEN","time":"2026-07-19 11:59","change":"fix-mechanical-layer-silent-failures","batch":null}
     T176: {"module":"outside-voice","summary":"outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时","type":"代码质量","status":"OPEN","time":"2026-07-19 12:00","change":"fix-mechanical-layer-silent-failures","batch":null}
     T177: {"module":"sdflow-buglist","summary":"buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守","type":"代码质量","status":"OPEN","time":"2026-07-19 12:09","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T178: {"module":"outside-voice","summary":"M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败","type":"基础设施","status":"OPEN","time":"2026-07-19 13:28","change":"fix-mechanical-layer-silent-failures","batch":null}
 ---
 # 2026-07 TODO
 

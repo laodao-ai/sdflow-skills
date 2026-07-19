@@ -765,6 +765,32 @@ def _run_disk_full_scenario(script_path, tmp_path, subdir_name):
         _detach_ramdisk(dev, mount_point)
 
 
+# 🔴 **本地专属，CI 不跑**〔code-review 熔断后拍板：方案 B，2026-07-19〕
+#
+# **为什么**：本用例要物理填满一块真 ramdisk，**恰好卡在「`mktemp` 建得了目录、但 prompt 写不进去」
+# 那个字节窗口**里——窗口位置取决于文件系统块大小、分配粒度与 runner 镜像，是**环境依赖面**。
+# 在 macOS CI runner 上连挂三轮，每轮换一种失败姿势：
+#   ① 失败点位与本机不同（`mktemp` 挂 vs `render_prompt` 挂）；
+#   ② ramdisk 太满 ⇒ `mktemp` 直接失败 ⇒ **变异体与修复版不可区分、变异验证失效**；
+#   ③ 块级自适应校准后又留多了 ⇒ render 成功、失败下移到 runner 阶段 ⇒ 变异体打出另一条诊断。
+# 三轮三种姿势 = CLAUDE.md 基准⑤ 的警号（「每轮都在同一处补一个新分支 ⇒ 这东西本来就不该这么做」）。
+# 靠调参数在跨平台上收敛不了，∴ 停止调参，改为**本地专属**。
+#
+# 🔴 **这不是「关掉一条碍事的测试」——它在本机是真承重的**：压测 100 次 = 91 通过 / 9 诚实 skip / 0 失败，
+# 且其变异验证（把 M3 的兜底诊断还原成旧版「读到啥转发啥」⇒ stderr 必须全空）在本机成立。
+# **MUST NOT 因为它不在 CI 跑就删除它**，也 MUST NOT 把变异断言改松来换绿。
+#
+# ⚠️ **诚实登记的缺口**：M3（磁盘写满 ⇒ 仍须有不依赖磁盘的 stderr 诊断）**在 CI 上无人看守**，
+# 只由开发循环的本机跑兜底。长期正解是给脚本加可注入 workdir 的测试接缝、用 `chmod 500` 让写入
+# 以 EACCES 确定性失败（与 ENOSPC 同一段代码路径），已记 todolist——那要动产品代码加第二个测试接缝
+# （第一个 `_OV_TEST_LIB_ONLY` 曾泄漏进执行态致静默 exit 0），**不该在收尾阶段顺手做**。
+@pytest.mark.skipif(
+    os.environ.get("CI") == "true",
+    reason=(
+        "本地专属：物理 ramdisk 满盘窗口是环境依赖面，CI runner 上不可靠（见上方注释）。"
+        "M3 的锁由开发循环本机跑承担——MUST NOT 因常被 CI skip 就删除本用例。"
+    ),
+)
 @pytest.mark.skipif(not _have_timeout_bin(), reason="需要 timeout/gtimeout（do_exec 前置退出）")
 def test_exec_disk_full_render_meta_gets_unconditional_stderr_diagnostic(tmp_path):
     """⭐〔M3〕workdir 所在磁盘写满 ⇒ render.meta 本身写入失败为空 ⇒ do_exec MUST 仍在真实
