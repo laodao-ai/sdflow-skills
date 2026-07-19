@@ -594,9 +594,23 @@ def test_ov_read_bytes_strict_rejects_out_of_range_values(tmp_path):
 
 
 def _make_tiny_full_ramdisk(tmp_path):
-    """建一个 ~2MB 的 HFS ramdisk 并精确填到仅剩 ~4KB 可用空间。返回挂载点路径；
+    """建一个 ~2MB 的 HFS ramdisk，返回 (dev, mount_point)。精确填到"仅剩几 KB"这件事
+    改由 `_calibrate_min_free_blocks`（块粒度自适应探测）负责——见该函数注释。
     任何一步失败（无 hdiutil 权限、非 Darwin 等）⇒ pytest.skip，不让基础设施问题
     伪装成"修复失效"。
+
+    [impl-review-fix] 分配块大小显式定为 512（`newfs_hfs -b 512`），不用默认 4096：
+    默认 4096 的块粒度和本场景要卡的目标写入量（render_prompt 完整 prompt ~5KB）
+    是同一数量级——`workdir` 一次性触发的 catalog b-tree 扩容开销（约一整个分配块）
+    与"留出的余量"挤在同一个块里，1 块之差就能把"mkdir 刚好够、写不下 prompt"
+    翻成"mkdir 都不够"或"prompt 也写得下"，本机压测证实两种翻车都真实发生
+    （29673453574 是前者；本地重跑 30 次曾 1 次撞见 do_exec 重定向 open() 本身因
+    0 剩余块而失败于"No space left on device"，比 render 阶段更早——那是后者的
+    变体）。缩到 512（HFS+ 允许的最小值，仅有"非最优"警告，无功能损失，catalog/
+    extent b-tree 节点大小仍是 4096，一次性开销不变但用 8 倍精细的单位计量）后，
+    同一开销相对目标写入量的粒度误差从 ~80%（4096/5146）降到 ~10%（512/5146），
+    本地压测 30/30 稳定复现"mkdir 成功、render.meta 与 prompt.md 都能 open()、
+    完整 prompt 写不下"。
     """
     if platform.system() != "Darwin" or shutil.which("hdiutil") is None:
         pytest.skip("M3 磁盘写满复现依赖 macOS hdiutil ramdisk，本平台不适用")
@@ -607,21 +621,65 @@ def _make_tiny_full_ramdisk(tmp_path):
             ["hdiutil", "attach", "-nomount", "ram://4096"],
             capture_output=True, text=True, timeout=30, check=True,
         ).stdout.split()[0]
-        subprocess.run(["newfs_hfs", dev], capture_output=True, text=True, timeout=30, check=True)
+        subprocess.run(["newfs_hfs", "-b", "512", dev],
+                        capture_output=True, text=True, timeout=30, check=True)
         subprocess.run(["mount", "-t", "hfs", dev, str(mount_point)],
                         capture_output=True, text=True, timeout=30, check=True)
     except Exception as e:  # noqa: BLE001 — 基础设施探测失败一律 skip，不当测试失败
         pytest.skip(f"M3 ramdisk 建立失败（环境不支持，非本次修复问题）: {e}")
 
-    def _fill_to(target_free_bytes):
-        st = os.statvfs(str(mount_point))
-        avail = st.f_bavail * st.f_frsize
-        fill = avail - target_free_bytes
-        if fill > 0:
-            with open(mount_point / "filler.bin", "wb") as f:
-                f.write(b"0" * fill)
+    return dev, mount_point
 
-    return dev, mount_point, _fill_to
+
+def _fill_leaving_blocks(mount_point, n_blocks):
+    """把 mount_point 精确填到只剩 n_blocks 个【分配块】（`st.f_frsize`）可用——按块
+    对齐，不用任意字节数。
+
+    [impl-review-fix] 根因〔CI run 29673453574，macos-latest〕：旧版用固定字节数
+    （如 8000）当目标可用空间。`os.statvfs` 报告的可用空间在实际发生分配块级别的
+    quantization——本机实测同一个字节目标在填盘后实际落地的可用空间是 4096 或 8192
+    这类整块数，具体落在哪个块边界取决于该 macOS 版本 / newfs_hfs 参数下 catalog
+    元数据的初始开销（"Used" 基线），这个基线在不同 runner 上不同 ⇒ 同一个字节数在
+    开发机上恰好落在"够 mkdir、不够写 5KB prompt"的那个块，在 CI runner 上却落在
+    "连 mkdir 都不够"的块。与其继续赌一个字节数，不如直接以块为单位表达目标——
+    彻底消除这类字节/块边界不对齐的漂移。
+    """
+    st = os.statvfs(str(mount_point))
+    block = st.f_frsize
+    avail = st.f_bavail * block
+    target = n_blocks * block
+    filler = mount_point / "filler.bin"
+    if filler.exists():
+        filler.unlink()
+    fill = avail - target
+    if fill > 0:
+        with open(filler, "wb") as f:
+            f.write(b"0" * fill)
+
+
+def _calibrate_min_free_blocks(mount_point, max_blocks=8):
+    """[impl-review-fix] 自适应探测：在【这一块全新 ramdisk】上，建一个目录最少要留几个
+    分配块可用空间——不猜一个字节数，让文件系统自己回答（基准 5：无界底层开销不手搓）。
+
+    从 1 块开始尝试建目录，失败就把可用空间加大到 2 块、3 块……直到成功或触到
+    max_blocks 上限。成功后把探测用的目录删掉（把这部分空间还给可用池）——此时
+    mount_point 上剩余的可用空间恰好等于"让一次 mkdir 成功所需的最小块数"，且
+    catalog b-tree 该做的一次性扩容已经在探测过程中做过（扩容是粘性的，不会随
+    rmdir 缩回去），所以随后真实脚本自己的 `mktemp -d` 只会比探测更宽松，不会更紧。
+
+    返回找到的块数；探测到 max_blocks 仍不够 ⇒ 返回 None，由调用方判定"本环境这次
+    建不起前提"并 skip（而不是让 mkdir 本身失败混进被测流程、假冒成"复现了 M3"）。
+    """
+    for n in range(1, max_blocks + 1):
+        _fill_leaving_blocks(mount_point, n)
+        probe = mount_point / "probe_dir"
+        try:
+            probe.mkdir()
+        except OSError:
+            continue
+        probe.rmdir()
+        return n
+    return None
 
 
 def _detach_ramdisk(dev, mount_point=None):
@@ -661,17 +719,28 @@ def _build_m3_mutant(tmp_path):
 
 
 def _run_disk_full_scenario(script_path, tmp_path, subdir_name):
-    """在一块全新的、精确填到只剩几 KB 可用空间的 ramdisk 上跑一次
+    """在一块全新的、精确填到只剩几个分配块可用空间的 ramdisk 上跑一次
     `script_path exec --context-file ...`，返回 subprocess.CompletedProcess。
     每次调用都用【全新】ramdisk（不复用/不二次填充同一块），规避"建目录 + 删目录"
     反复churn 在小容量 HFS 卷上造成的可用空间碎片化漂移（实测：同一块 2MB ramdisk
     连续两次填到同一目标字节数，第二次 `mktemp -d` 会因元数据开销提前失败）。
+
+    [impl-review-fix] 可用空间目标由 `_calibrate_min_free_blocks` 自适应探测（块粒度），
+    不再赌一个写死的字节数——探测不出（本环境元数据开销超出探测上限）⇒ 直接
+    `pytest.skip`，不让"建前提本身失败"混进被测流程假冒成"复现了 M3"。
     """
     sub = tmp_path / subdir_name
     sub.mkdir()
-    dev, mount_point, fill_to = _make_tiny_full_ramdisk(sub)
+    dev, mount_point = _make_tiny_full_ramdisk(sub)
     try:
-        fill_to(8000)  # 精确留几 KB——mkdtemp 能建目录，但完整 prompt(~5KB)写不下
+        n_blocks = _calibrate_min_free_blocks(mount_point)
+        if n_blocks is None:
+            pytest.skip(
+                "M3 磁盘写满场景：探测了 8 个分配块仍无法在本环境的 ramdisk 上建出一个"
+                "目录（文件系统元数据开销超出探测上限）——本次未能建立『磁盘在 render "
+                "阶段耗尽』的前提，未验证 M3；这不代表 M3 已失效，MUST NOT 因为本用例"
+                "常 skip 就删掉它"
+            )
         ctx = tmp_path / "ctx.md"
         if not ctx.exists():
             ctx.write_text("diff content for M3 disk-full test\n")
@@ -705,6 +774,31 @@ def test_exec_disk_full_render_meta_gets_unconditional_stderr_diagnostic(tmp_pat
     啥"），在【另一块独立的、同样精确填满的】ramdisk 上跑同一场景，stderr 应变回全空。
     """
     r = _run_disk_full_scenario(HELPER, tmp_path, "ramdisk-real")
+    # [impl-review-fix] 块级自适应校准（见 _calibrate_min_free_blocks）已经把"mkdtemp 建
+    # workdir、do_exec 打开 prompt.md/render.meta 两个重定向目标"都校准到几乎必然成立；
+    # 这里仍留一道兜底探测——万一在某个环境里，这些【由 shell 自己在差异化代码之前就完成
+    # 的步骤】（workdir 创建 / 打开重定向目标 / 子壳内某条命令的 write()）仍先于 M3 那段
+    # 差异化代码而失败，产出的是 shell/coreutils 自己的原生诊断（"mktemp 失败:"、
+    # "No space left on device" 等），这类噪声在【真实版与变异版之间完全相同】
+    # （变异只摘掉了 do_exec 里"render.meta 为空时"那段兜底 echo，不动这些更早的代码）——
+    # 意味着本次跑法根本没有走到能区分"有兜底/无兜底"的那段代码，继续断言毫无意义，
+    # 应该响亮 skip 而不是把"建前提失败"误判成"验证通过"（本地压测 40 次曾撞见 2 次：
+    # 一次是 do_exec 重定向本身 open() 失败于 0 剩余空间，一次是子壳内 printf 的 write()
+    # 失败、错误直接漏到真实 stderr）。
+    def _shell_level_enospc_noise(stderr):
+        for marker in (b"mktemp \xe5\xa4\xb1\xe8\xb4\xa5:", b"No space left on device"):
+            if marker in stderr:
+                return marker
+        return None
+
+    _noise = _shell_level_enospc_noise(r.stderr)
+    if _noise is not None:
+        pytest.skip(
+            "M3 磁盘写满场景：本环境即便经过块级自适应校准，仍在真正走到 M3 差异化代码之前"
+            f"就撞见 shell/coreutils 自己的满盘原生诊断（含 {_noise!r}）——本次未能建立"
+            "『磁盘在 render 阶段耗尽、且仅由 render_prompt 自身诊断』的前提，未验证 M3；"
+            f"这不代表 M3 已失效，MUST NOT 因为本用例常 skip 就删掉它。stderr={r.stderr!r}"
+        )
     assert r.returncode != 0, "磁盘写满场景下 exec 竟然报告成功"
     assert r.stdout == b"", r.stdout[:200]
     assert r.stderr.strip() != b"", (
@@ -726,6 +820,18 @@ def test_exec_disk_full_render_meta_gets_unconditional_stderr_diagnostic(tmp_pat
 
     mutant = _build_m3_mutant(tmp_path)
     r2 = _run_disk_full_scenario(mutant, tmp_path, "ramdisk-mutant")
+    _noise2 = _shell_level_enospc_noise(r2.stderr)
+    if _noise2 is not None:
+        # 变异体与真实版共享 workdir 创建 / 重定向打开 / 子壳内命令这些【更早】的代码
+        # （变异只摘掉了 do_exec 里"render.meta 为空时"那段兜底 echo）——若两者在这些
+        # 更早的位置都撞见同一条 shell/coreutils 原生诊断，本次的差异化验证无效：两个
+        # 变体产出同一条与 M3 无关的噪声，根本没有走到能区分「有兜底/无兜底」的那段代码。
+        pytest.skip(
+            "M3 磁盘写满场景：变异体这一次独立的 ramdisk 上，在走到 M3 差异化代码之前就"
+            f"撞见 shell/coreutils 自己的满盘原生诊断（含 {_noise2!r}）——本次未能建立可"
+            "区分 M3 修复点的前提，未验证 M3；这不代表 M3 已失效，MUST NOT 因为本用例常"
+            f" skip 就删掉它。stderr={r2.stderr!r}"
+        )
     assert r2.returncode != 0
     assert r2.stderr.strip() == b"", (
         "变异体（旧版无条件兜底诊断）在同一类满盘场景下 stderr 竟然不是空的——"
