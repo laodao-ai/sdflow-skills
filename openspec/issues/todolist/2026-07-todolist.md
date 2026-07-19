@@ -35,6 +35,7 @@ sdflow-issues:
     T176: {"module":"outside-voice","summary":"outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时","type":"代码质量","status":"PROPOSED","time":"2026-07-19 12:00","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T177: {"module":"sdflow-buglist","summary":"buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守","type":"代码质量","status":"PROPOSED","time":"2026-07-19 12:09","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T178: {"module":"outside-voice","summary":"M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败","type":"基础设施","status":"PROPOSED","time":"2026-07-19 13:28","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T179: {"module":"sdflow-done / sdflow-ship","summary":"archive 步骤可能打断测试，而其后无人重跑全套件 —— gate 判 SHIPPED 时 main 实际是红的","type":"基础设施","status":"OPEN","time":"2026-07-19 13:47","change":"main","batch":null}
 ---
 # 2026-07 TODO
 
