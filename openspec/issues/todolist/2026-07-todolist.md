@@ -24,17 +24,17 @@ sdflow-issues:
     T165: {"module":"openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段","summary":"R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动","type":"基础设施","status":"OPEN","time":"2026-07-18 19:35","change":"async-outside-voice","batch":null}
     T166: {"module":"hack/check_async_branch_parity.py","summary":"end marker 边界未与 start 侧对称硬化；且尝试硬化时遇到无法解释的 extract 行为矛盾，需专门查","type":"代码质量","status":"OPEN","time":"2026-07-18 20:15","change":"async-outside-voice","batch":null}
     T167: {"module":"openspec/changes/async-outside-voice","summary":"【archive 阶段 MUST 做】四件套仍描述旧协议（裸哨兵/单条件 async），与代码审后的实现不自洽——delta spec 必须同步","type":"代码质量","status":"OPEN","time":"2026-07-18 20:24","change":"async-outside-voice","batch":null}
-    T168: {"module":"sdflow-spec-review","summary":"async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner","type":"基础设施","status":"OPEN","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T169: {"module":"openspec/changes","summary":"done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)","type":"代码质量","status":"OPEN","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T170: {"module":"sdflow-issues+buglist+todolist","summary":"recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）","type":"基础设施","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T171: {"module":"sdflow-spec-review+code-review","summary":"R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题","type":"可观测性","status":"OPEN","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T172: {"module":"openspec/workflow/lens-metric","summary":"lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献","type":"可观测性","status":"OPEN","time":"2026-07-19 00:33","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T173: {"module":"sdflow-init/assets/hack/outside-voice.sh","summary":"ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷）","type":"代码质量","status":"OPEN","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T174: {"module":"sdflow-init/tests/test_outside_voice.py","summary":"fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错","type":"代码质量","status":"OPEN","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T175: {"module":"sdflow-spec-review / sdflow-code-review","summary":"两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑","type":"基础设施","status":"OPEN","time":"2026-07-19 11:59","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T176: {"module":"outside-voice","summary":"outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时","type":"代码质量","status":"OPEN","time":"2026-07-19 12:00","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T177: {"module":"sdflow-buglist","summary":"buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守","type":"代码质量","status":"OPEN","time":"2026-07-19 12:09","change":"fix-mechanical-layer-silent-failures","batch":null}
-    T178: {"module":"outside-voice","summary":"M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败","type":"基础设施","status":"OPEN","time":"2026-07-19 13:28","change":"fix-mechanical-layer-silent-failures","batch":null}
+    T168: {"module":"sdflow-spec-review","summary":"async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner","type":"基础设施","status":"PROPOSED","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T169: {"module":"openspec/changes","summary":"done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)","type":"代码质量","status":"PROPOSED","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T170: {"module":"sdflow-issues+buglist+todolist","summary":"recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）","type":"基础设施","status":"PROPOSED","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T171: {"module":"sdflow-spec-review+code-review","summary":"R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题","type":"可观测性","status":"PROPOSED","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T172: {"module":"openspec/workflow/lens-metric","summary":"lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献","type":"可观测性","status":"PROPOSED","time":"2026-07-19 00:33","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T173: {"module":"sdflow-init/assets/hack/outside-voice.sh","summary":"ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷）","type":"代码质量","status":"PROPOSED","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T174: {"module":"sdflow-init/tests/test_outside_voice.py","summary":"fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错","type":"代码质量","status":"PROPOSED","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T175: {"module":"sdflow-spec-review / sdflow-code-review","summary":"两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑","type":"基础设施","status":"PROPOSED","time":"2026-07-19 11:59","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T176: {"module":"outside-voice","summary":"outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时","type":"代码质量","status":"PROPOSED","time":"2026-07-19 12:00","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T177: {"module":"sdflow-buglist","summary":"buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守","type":"代码质量","status":"PROPOSED","time":"2026-07-19 12:09","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T178: {"module":"outside-voice","summary":"M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败","type":"基础设施","status":"PROPOSED","time":"2026-07-19 13:28","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
 ---
 # 2026-07 TODO
 
@@ -1590,3 +1590,69 @@ sdflow-issues:
 
 **备注**：来源=async-outside-voice tasks.md §5.2（明示超本 change scope、另立 change）。当前等值门已守漂移 ⇒ 本项是成本优化而非正确性修复，优先级可低。锚：hack/check_async_branch_parity.py、hack/sync_principles.py（idiom 先例）、两 SKILL 的 sdflow:async-branch marker。
 <!-- sdflow-issue-block:end id=T163 -->
+
+<!-- sdflow-issue-block:start id=T168 -->
+## T168: async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner
+> async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T168 -->
+
+<!-- sdflow-issue-block:start id=T169 -->
+## T169: done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)
+> done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T169 -->
+
+<!-- sdflow-issue-block:start id=T170 -->
+## T170: recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）
+> recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T170 -->
+
+<!-- sdflow-issue-block:start id=T171 -->
+## T171: R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题
+> R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T171 -->
+
+<!-- sdflow-issue-block:start id=T172 -->
+## T172: lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献
+> lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T172 -->
+
+<!-- sdflow-issue-block:start id=T173 -->
+## T173: ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷）
+> ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷）
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T173 -->
+
+<!-- sdflow-issue-block:start id=T174 -->
+## T174: fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错
+> fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T174 -->
+
+<!-- sdflow-issue-block:start id=T175 -->
+## T175: 两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑
+> 两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T175 -->
+
+<!-- sdflow-issue-block:start id=T176 -->
+## T176: outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时
+> outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T176 -->
+
+<!-- sdflow-issue-block:start id=T177 -->
+## T177: buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守
+> buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T177 -->
+
+<!-- sdflow-issue-block:start id=T178 -->
+## T178: M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败
+> M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T178 -->

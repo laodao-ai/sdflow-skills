@@ -211,3 +211,10 @@
 成员: (生成) T149, T150
 优先级: P2
 计划: Codex host 支持收尾：config-lint 拒 metrics.enabled 重复键，并为 outside-voice preflight 增加低成本真实认证/模型探针。
+
+### fix-mechanical-layer-silent-failures — fix-mechanical-layer-silent-failures
+状态: PLANNED
+成员: (生成) B12, B13, B14, T168, T169, T170, T171, T172, T173, T174, T175, T176, T177, T178
+优先级: <待填>
+计划: <待填>
+

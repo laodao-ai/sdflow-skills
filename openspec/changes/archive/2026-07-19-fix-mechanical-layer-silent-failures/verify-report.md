@@ -47,7 +47,7 @@ ship-gate:
 
 | 任务 | 锚点 | 状态 |
 |---|---|---|
-| 3.1 `mechanical-gates.yml` 纳入 1.4/2.4 测试，闭 Linux 缺口 | `.github/workflows/mechanical-gates.yml:24-25` matrix `[ubuntu-latest, macos-latest]` + `:47 python -m pytest -q -rs`（全套件，含两个新文件）；实绿 CI run **29670376668**（ubuntu+macos，success，`gh run list` 已核） | ✅ |
+| 3.1 `mechanical-gates.yml` 纳入 1.4/2.4 测试，闭 Linux 缺口 | `.github/workflows/mechanical-gates.yml:24-25` matrix `[ubuntu-latest, macos-latest]` + `:47 python -m pytest -q -rs`（全套件，含两个新文件）；实绿 CI run **29674903570**（ubuntu-latest + macos-latest 双 job 均 success；macOS 1752 passed/4 skipped、ubuntu 1749/7）。〔**verify 自纠**：本报告初版锚的是 run `29670376668`，经编排层复核该 run **只有单个 `gates` job**——macOS 矩阵是其后的 commit `497727e` 才加入且当时未推送 ⇒ **macOS 泳道那时一次都没跑过**，原锚属假 ✅，已按实际重跑的 run 更正〕 | ✅ |
 | 3.2 开发 checkout 跑 `setup.sh` | `diff sdflow-init/assets/hack/outside-voice.sh ~/.sdflow/hack/outside-voice.sh` 本轮实跑 → **无差异**（拷贝已刷新） | ✅ |
 | 3.3 全套件 pytest 绿 | 本轮实跑 `1753 passed, 3 skipped` | ✅ |
 | 3.4 `check_async_branch_parity.py` 绿（Non-Goal 守卫） | 本轮实跑 rc=0，`✅ 2 处 async host 调度段逐字节一致` | ✅ |
@@ -59,7 +59,7 @@ ship-gate:
 
 **达成。** 证据分两层：
 - **本轮独立实跑**（不依赖任何已有报告）：260KB 真实中文 context 经 `render_prompt` 截断，产出 prompt 严格 UTF-8 解码通过、rc=0、回扫仅多丢 3 字节。这是「runner 报 `input is not valid UTF-8`」这条因果链的**根**被切断的直接证据。
-- **机械回归**：`test_every_cut_offset_yields_two_valid_utf8_halves`（全切点 0 失败）+ 变异体转红（`test_mutation_constant_zero_backscan_turns_the_scan_red`）证明该断言承重；ubuntu+macos 两条 CI 泳道实绿（run 29670376668）闭 A1。
+- **机械回归**：`test_every_cut_offset_yields_two_valid_utf8_halves`（全切点 0 失败）+ 变异体转红（`test_mutation_constant_zero_backscan_turns_the_scan_red`）证明该断言承重；ubuntu+macos 两条 CI 泳道实绿（run **29674903570**，见上方自纠注）闭 A1。
 
 ### Metric 2 — 孤儿 runner 进程数，目标 0
 
@@ -98,4 +98,4 @@ ship-gate:
   **⚠ 硬要求**：B13 是 **P1 安全项且两个独立镜判 critical**，hand-off **MUST 点名**，**MUST NOT** 随归档静默沉底；建议尽快开一个专门 change（与 B14 的设计级 change 可分可合）。
 - **3.5 的端到端 codex 调用未本轮重跑**（真实模型调用有成本）。其 rc/`reason_code` 锚来自 `impl-reports/task3-cross-platform.md:94-116`。**可接受**：该链路的**因果根**（prompt 字节合法性）已由本轮独立实跑 + 全切点扫描测试双重坐实。
 
-PASS —— tasks.md 18 条逐条有可机验锚点（源码行 + 测试名 + 实跑输出 + CI run 29670376668），全套件 1753 passed，两条机械门绿，Metric 1 本轮独立复现达成；Metric 2 在单信号与「runner 忽略 TERM」两条路径达成，混合信号风暴路径**不达成但登记诚实、不属 spec Scenario 覆盖面、修法属设计级**，故判已登记残余而非核心缺口；B13 defer 有 Non-Goal 与 scope 双重正当性，但须在 hand-off 显式点名。
+PASS —— tasks.md 18 条逐条有可机验锚点（源码行 + 测试名 + 实跑输出 + CI run 29674903570），全套件 1753 passed，两条机械门绿，Metric 1 本轮独立复现达成；Metric 2 在单信号与「runner 忽略 TERM」两条路径达成，混合信号风暴路径**不达成但登记诚实、不属 spec Scenario 覆盖面、修法属设计级**，故判已登记残余而非核心缺口；B13 defer 有 Non-Goal 与 scope 双重正当性，但须在 hand-off 显式点名。
