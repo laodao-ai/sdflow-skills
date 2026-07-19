@@ -1144,12 +1144,22 @@ def repo_root(start=None):
     「一次」的边界是**进程**，不是逻辑命令。
 
     契约（本函数可能抛异常，调用方 MUST 在捕获 `ValueError` 的 try 内调用）：
-    返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的根**。六步判据依次为
-    起点可信性 → 环境净化 → 调 git → 形状校验 → 祖先校验 → worktree marker；
-    任一步不满足即 `raise ValueError`。唯一的回落分支是「git 抛 OSError 或以非 0 退出」
-    （非 git 仓库 / git 不可用 / bare repo / `.git/` 目录内等正常场景）→ 返回
-    `os.path.abspath(start)`。超时**不回落**——超时不等于「不在仓库里」，回落会把数据
-    写到错误位置。"""
+    返回值在被当作可写仓根之前，必须被证明是**起点所属仓库的【最近】仓库的根**。判据依次为
+    起点可信性 → 环境净化 → 调 git → 最近 marker 上溯 → git 失败裁决 → 形状校验 →
+    祖先校验 → worktree marker → 最近根一致；任一步不满足即 `raise ValueError`。
+
+    **回落的判据是「上溯一层 `.git` 都没找到」，不是「git 退出码非 0」。**
+    旧契约把整个非 0 退出归为回落，并把它枚举成「非 git 仓库 / git 不可用 / bare repo /
+    `.git/` 目录内」——**该枚举不完备，正是 fail-open 的成因**：`safe.directory`
+    （dubious ownership）、损坏的 `.git/config` 等同样以 128 退出，而进程**确实在仓内**，
+    回落会把数据写进仓库子目录。故：git 失败且上溯**找得到** marker ⇒ `raise`；
+    只有**一层都找不到**（真·非 git 仓库 / bare repo / git 不可用）才回落
+    `os.path.abspath(start)`。超时同样**不回落**——超时不等于「不在仓库里」。
+
+    最近根一致判据（末步）堵的是另一个方向：git 成功、且返回值确是起点的祖先，但那是**外层
+    祖先仓库**（`core.worktree` 指向祖先仓 / PATH 上的 fake git 返回外层仓）——祖先校验与
+    worktree marker 会双双放行。要求「上溯找到的第一个 marker 所在目录」**严格等于**
+    git 返回的根，才能证明它是**最近**的那个仓根。"""
     # 环境净化清单（ADR-6）：MUST 保持为函数体内的局部常量。三向 AST 镜像守护只比较
     # roster 内的**函数体**，模块级常量的值不在其覆盖范围内——写成模块级常量等于把这份
     # 清单放进既有安全网的盲区，三份漏一项或拼错都不会拉红。
@@ -1199,23 +1209,63 @@ def repo_root(start=None):
         env.pop(name, None)
     # ③ 调 git——try 只包 subprocess.run，一切校验与 raise 都在 try 之外，
     # 否则新抛的 ValueError 会被本函数自己的 except 接住，fail-closed 归零。
+    # git_timeout：本调用是纯本地元数据查询（正常毫秒级），30 秒是「文件系统卡死 / 网络
+    # 文件系统挂起」的判定线，不是性能预算——留足慢盘余量，又不至于把用户无限期挂住。
+    # MUST 保持为函数体内的局部常量（同 discovery_env 的理由：模块级常量的**值**不在
+    # 三向 AST 镜像守护的覆盖范围内）。
+    git_timeout = 30
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             cwd=start, capture_output=True, text=True, check=True,
-            env=env, timeout=30,
+            env=env, timeout=git_timeout,
         )
     except subprocess.TimeoutExpired:
         raise ValueError(
-            "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 30 秒内未返回; "
+            "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 "
+            + str(git_timeout) + " 秒内未返回; "
             "fix: 确认仓库所在文件系统可用，或显式指定 --root"
         ) from None
     except (OSError, subprocess.CalledProcessError):
+        # MUST NOT 在此 return/raise：判据一律在 try 之外做（步骤⑤），否则新抛的
+        # ValueError 会被本函数自己的 except 接住。这里只记录「git 没给出答案」。
+        out = None
+    # ④ 最近仓根 marker 上溯——**独立于 git 的第二信源**。从起点逐级向上找第一个带 `.git`
+    # 的目录。用 os.path.exists 而非 isdir：linked worktree 与 submodule 的 `.git` 是
+    # **文件**不是目录，用 isdir 会把这两类合法仓库判成「不在仓里」。
+    # 本步 MUST NOT 去 parse git 的 stderr 文案（无界、多语言、随 git 版本变——基准 5）；
+    # 只用确定性的文件系统信号。
+    start_real = os.path.realpath(start)
+    marker_dir = None
+    probe = start_real
+    while True:
+        if os.path.exists(os.path.join(probe, ".git")):
+            marker_dir = probe
+            break
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    # ⑤ git 失败裁决：**「在仓里」与「git 拒绝作答」同时成立 ⇒ fail-closed**。
+    # 目标态下这条分支最高频的触发面不是「配置写坏」，而是 `detected dubious ownership`
+    # （safe.directory）——容器 / CI / 共享 checkout 里 git **常态性**以 128 拒答，而进程
+    # 确实在仓内。旧实现把整个非 0 退出归为回落 ⇒ 返回起点自身（往往是仓库子目录）⇒
+    # 下游 makedirs 在仓内造出第二套 openspec/issues/，或落到 ~ 下静默建树。
+    # 一层 marker 都没找到（真·非 git 仓库 / bare repo / git 不可用）才允许回落。
+    if out is None:
+        if marker_dir is not None:
+            raise ValueError(
+                "ERROR: 起点位于 git 仓库内但 git 拒绝作答: " + ascii(start_real)[:200]
+                + "; cause: 上溯找到 .git marker，而 git rev-parse --show-toplevel 以非 0 退出"
+                "（dubious ownership / 配置损坏 / git 不可用等）; "
+                "fix: 修复 git 配置后重试（如 git config --global --add safe.directory <仓根>），"
+                "或显式指定 --root"
+            )
         # start 已在步骤①b 归一化为绝对路径 ⇒ 本行不再触 os.getcwd()，结构上不可能抛
         # OSError。这是本回落分支 fail-closed 的方式：**消除抛点**，而不是再包一层 try
         # （多一层 try 只会多一条无法做变异确认的死分支）。
         return os.path.abspath(start)
-    # ④ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
+    # ⑥ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
     top = out.stdout.rstrip("\r\n")
     if not top or not os.path.isabs(top) or not os.path.isdir(top):
         raise ValueError(
@@ -1223,25 +1273,51 @@ def repo_root(start=None):
             + "; cause: git rev-parse --show-toplevel 的输出不是既存的绝对路径目录; "
             "fix: 检查 git 配置与调用环境是否被污染，或显式指定一个既存目录作为 --root"
         )
-    # ⑤ 祖先校验（主防线）：按路径组件比较，不用裸字符串前缀匹配。这是唯一能拦住
-    # core.worktree（写在 .git/config 里的 on-disk 重定向）的判据——环境净化对它零效果，
-    # 形状校验会放行。删掉本步 = 该缺口静默回归（ADR-2）。
+    # ⑦ 祖先校验（主防线）：按路径组件比较，不用裸字符串前缀匹配。这是唯一能拦住
+    # core.worktree（写在 .git/config 里的 on-disk 重定向）指向**旁系**目录的判据——
+    # 环境净化对它零效果，形状校验会放行。删掉本步 = 该缺口静默回归（ADR-2）。
     top_real = os.path.realpath(top)
-    start_real = os.path.realpath(start)
-    if os.path.commonpath([
-        os.path.normcase(start_real), os.path.normcase(top_real),
-    ]) != os.path.normcase(top_real):
+    try:
+        common = os.path.commonpath([
+            os.path.normcase(start_real), os.path.normcase(top_real),
+        ])
+    except ValueError:
+        # commonpath 对「没有公共根」的两条路径自己抛裸 ValueError（Windows 跨盘符：
+        # C:\repo 与 D:\elsewhere）。裸 ValueError 能被调用方接住、但不带
+        # ERROR/cause/fix 三元组，诊断质量断崖。就地重抛为同款三元组。
+        # 本 try 是**已登记的必要偏离**（同步骤①b 裹 os.getcwd() 那处）：try 体内只有
+        # 一个表达式、且不含本函数自己的 raise，不会重演「自己的 ValueError 被自己接住」。
+        raise ValueError(
+            "ERROR: 无法比较 git 返回的仓根与探测起点: " + ascii(top)[:200]
+            + "; cause: 两者不在同一个路径根下（如 Windows 跨盘符），无公共前缀可比; "
+            "fix: 确认 git 配置未把工作树重定向到另一个盘符，或显式指定 --root"
+        ) from None
+    if common != os.path.normcase(top_real):
         raise ValueError(
             "ERROR: git 返回的仓根不包含探测起点: " + ascii(top)[:200]
             + "; cause: 工作树被 core.worktree 或环境变量重定向到起点之外; "
             "fix: 清除 .git/config 的 core.worktree 与 GIT_* 重定向后重试"
         )
-    # ⑥ worktree marker：用 exists 而非 isdir——linked worktree 与 submodule 下 .git 是文件。
+    # ⑧ worktree marker：用 exists 而非 isdir——linked worktree 与 submodule 下 .git 是文件。
+    # MUST 排在⑨之前：⑨ 只有在 top_real 自带 marker 时才可能通过，两步顺序颠倒会让本步
+    # 变成死代码（重定向到**非仓库**目录的诊断随之丢失）。
     if not os.path.exists(os.path.join(top_real, ".git")):
         raise ValueError(
             "ERROR: git 返回的仓根缺少 .git: " + ascii(top)[:200]
             + "; cause: 该目录不带 worktree marker，不是一个仓库根; "
             "fix: 检查 git 配置与调用环境是否被污染，或显式指定 --root"
+        )
+    # ⑨ 最近根一致：git 返回的根 MUST **严格等于**步骤④上溯到的第一个 marker 目录。
+    # ⑦⑧ 只证明了「top 是 start 的祖先」且「top 是个仓库根」——**外层祖先仓库两条全过**
+    # （core.worktree 指向祖先仓 / PATH 上的 fake git 返回外层仓），于是 recorder 把数据
+    # 写进外层仓库。只有本步能证明它是**最近**的那个仓根。删掉本步 = 该缺口静默回归。
+    if os.path.normcase(marker_dir) != os.path.normcase(top_real):
+        raise ValueError(
+            "ERROR: git 返回的仓根不是起点所属的最近仓库: " + ascii(top)[:200]
+            + "; cause: 自起点上溯遇到的第一个 .git 位于 " + ascii(marker_dir)[:200]
+            + "，git 却返回了更外层的仓库（core.worktree 指向祖先仓 / git 被替换）; "
+            "fix: 清除 .git/config 的 core.worktree 重定向、确认 PATH 上的 git 未被替换，"
+            "或显式指定 --root"
         )
     return top_real
 

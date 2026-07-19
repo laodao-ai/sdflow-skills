@@ -30,8 +30,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # pytest>=8 是硬下限：仓根 conftest.py 用 `@pytest.hookimpl(wrapper=True)`（8+ 才有）。
+      # 裸 `pip install pytest` 今天恰好装到 8.x，但那是**当下 PyPI 的最新版碰巧满足**，
+      # 不是约束——pin 住下限，别让 CI 的绿依赖于时点。与 pytest.ini 的 minversion 成对。
       - name: Install pytest
-        run: python -m pip install pytest
+        run: python -m pip install "pytest>=8"
 
       # 🔴 macOS runner **不自带 GNU coreutils** ⇒ 无 `timeout`/`gtimeout`。
       # 没有它，`test_outside_voice_child_lifecycle.py` 的 11 条用例全部 skip

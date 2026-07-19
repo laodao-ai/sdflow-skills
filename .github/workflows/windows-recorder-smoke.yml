@@ -27,7 +27,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # pytest>=8 是硬下限：仓根 conftest.py 用 `@pytest.hookimpl(wrapper=True)`（8+ 才有）。
+      # 与 pytest.ini 的 minversion 成对——见 mechanical-gates.yml 同处注释。
       - name: Install pytest
-        run: py -m pip install pytest
+        run: py -m pip install "pytest>=8"
       - name: Run actual Windows local-disk recorder smoke
         run: py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error

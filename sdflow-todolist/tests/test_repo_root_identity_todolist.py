@@ -1,8 +1,13 @@
-"""repo_root 六步身份校验（change harden-repo-root-fail-closed · Task 2）。
+"""repo_root 身份校验（change harden-repo-root-fail-closed · Task 2 + cr-fix1）。
 
 被测契约：`repo_root(start=None|str) -> str`，在把任何值当作可写仓根返回之前，必须证明
-它是**起点所属仓库的根**；任一判据不满足即 `raise ValueError`。唯一的回落分支是
-「git 抛 OSError 或以非 0 退出」（非 git 仓库 / bare repo / `.git/` 目录内等正常场景）。
+它是**起点所属【最近】仓库的根**；任一判据不满足即 `raise ValueError`。
+
+**回落的判据是「自起点上溯一层 `.git` 都没找到」，不是「git 退出码非 0」**（cr-fix1）：
+`safe.directory`（dubious ownership）/ 损坏的 `.git/config` / `.git/` 目录内起点同样以
+128 退出，而进程**确实在仓内** —— 那些场景 MUST fail-closed，只有真·非 git 仓库、
+bare repo、git 不可用才回落。「最近」二字同样是 cr-fix1 加的：祖先校验 + worktree marker
+对**外层祖先仓库**（core.worktree 指祖先仓 / PATH 上的 fake git）双双放行。
 
 本文件与 sdflow-issues/tests · sdflow-buglist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
 D4 红线禁止互相 import，故测试也各自一份）。
@@ -446,11 +451,186 @@ def test_bare_repo_falls_back(tmp_path):
     assert repo_root(str(bare)) == os.path.abspath(str(bare))
 
 
-def test_inside_dot_git_directory_falls_back(tmp_path):
+def test_inside_dot_git_directory_fails_closed(tmp_path):
+    """`.git/` 内部起点 MUST fail-closed —— **旧行为回落返回 `.git` 自身**。
+
+    git 在此以 128 退出（"this operation must be run in a work tree"），旧实现把整个
+    非 0 退出归为回落 ⇒ 返回 `<repo>/.git` ⇒ 下游 makedirs 在 **git 的内部目录**里建出
+    `.git/openspec/issues/`。上溯一层即找到 `<repo>/.git` marker ⇒「在仓里 + git 拒答」
+    ⇒ raise。行为变更已登记进 impl-report 的「须在设计门回写 spec」条目。
+    """
     repo = _init_repo(tmp_path / "repo")
     dot_git = repo / ".git"
 
-    assert repo_root(str(dot_git)) == os.path.abspath(str(dot_git))
+    with pytest.raises(ValueError) as exc:
+        repo_root(str(dot_git))
+
+    assert "git 拒绝作答" in str(exc.value)
+    assert not (dot_git / "openspec").exists()
+
+
+# ── ⑤ git 拒答但起点在仓内（fail-closed，非回落） ──────────────────────────
+
+def test_git_refusing_inside_repo_fails_closed(tmp_path):
+    """**缺陷 B**：git 以非 0 退出 ≠「不在仓库里」。
+
+    目标态下本分支最高频的触发面是 `detected dubious ownership`（`safe.directory`）——
+    容器 / CI / 共享 checkout 里 git **常态性**以 128 拒答，而进程确实在仓内。此处用
+    损坏的 `.git/config` 构造同一形态（rc=128 + 起点在仓内），MUST NOT 解析 stderr 文案
+    （无界、多语言、随版本变——基准 5），只用文件系统信号判定。
+
+    旧实现返回 `<repo>/sub`（**仓库子目录**）⇒ 下游在仓内造出第二套 openspec/issues/。
+    删掉「marker_dir is not None ⇒ raise」这一步，本用例必须变红。
+    """
+    repo = _init_repo(tmp_path / "repo")
+    sub = repo / "sub"
+    sub.mkdir()
+    (repo / ".git" / "config").write_text("[core\nbroken", encoding="utf-8")
+
+    # 前提核验：不假设，真跑一遍确认 git 确实以非 0 退出。
+    probe = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=str(sub), capture_output=True, text=True,
+        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+    )
+    assert probe.returncode != 0, f"前提不成立：git 未拒答（rc={probe.returncode}）"
+
+    with pytest.raises(ValueError) as exc:
+        repo_root(str(sub))
+
+    assert "git 拒绝作答" in str(exc.value)
+    assert _entries(sub) == [], "仓库子目录 MUST NOT 出现任何 openspec/ 产物"
+
+
+def test_cross_drive_commonpath_gets_diagnostic_triplet(tmp_path, monkeypatch):
+    """F3：`os.path.commonpath` 对「没有公共根」的两条路径**自己抛裸 ValueError**
+    （Windows 跨盘符：`C:\\repo` vs `D:\\elsewhere`）。裸 ValueError 能被调用方接住，
+    但不带 `ERROR/cause/fix` 三元组，诊断质量断崖。
+
+    该条件在 POSIX 上**结构性不可达**（两条路径都是绝对路径，必有 `/` 为公共前缀），
+    故这里注入 commonpath 的抛出行为——注入的是**环境条件**（与 `_fake_git_stdout`
+    注入 git 输出同性质），不是被测判据本身；`isabs`/`isdir`/`realpath` 一概未 mock。
+    """
+    repo = _init_repo(tmp_path / "repo")
+
+    def boom(paths):
+        raise ValueError("Paths don't have the same drive")
+
+    monkeypatch.setattr(rec_mod.os.path, "commonpath", boom)
+
+    with pytest.raises(ValueError) as exc:
+        repo_root(str(repo))
+
+    message = str(exc.value)
+    assert message.startswith("ERROR: ")
+    assert "; cause: " in message and "; fix: " in message
+    assert "无法比较" in message
+
+
+def test_git_refusing_outside_any_repo_still_falls_back(tmp_path):
+    """回落判据的另一半：一层 marker 都找不到 ⇒ 仍正常回落（真·非 git 仓库）。
+
+    与上一条成对——证明新判据是「上溯找不到 marker」而**不是**「git 退出码非 0」，
+    没有把合法回落面一起 fail-closed 掉。
+    """
+    plain = tmp_path / "plain"
+    plain.mkdir()
+
+    assert repo_root(str(plain)) == os.path.abspath(str(plain))
+
+
+# ── ⑨ 最近根一致（外层祖先仓库） ────────────────────────────────────────────
+
+def test_core_worktree_redirect_to_ancestor_repo_is_rejected(tmp_path):
+    """**缺陷 A**：`core.worktree` 指向**外层祖先仓库**时，祖先校验与 worktree marker
+    **双双放行**——outer 确是 inner 的祖先，且 outer/.git 确实存在。
+
+    既有 core.worktree 用例只覆盖重定向到**兄弟**目录（祖先校验能拦），本用例覆盖
+    重定向到**祖先仓库**（祖先校验拦不住）。只有「最近根一致」能证明 git 返回的不是
+    起点所属的那个仓。删掉步骤⑨，本用例必须变红。
+    """
+    outer = _init_repo(tmp_path / "outer")
+    inner = _init_repo(outer / "proj")
+    _git("config", "core.worktree", str(outer.resolve()), cwd=inner)
+
+    # 前提核验：git 确实 rc=0 且返回了外层仓库（四项旧判据全过）。
+    probe = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=str(inner), capture_output=True, text=True,
+        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+    )
+    assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
+    assert Path(probe.stdout.strip()).resolve() == outer.resolve(), (
+        f"前提不成立：未重定向到祖先仓，实得 {probe.stdout!r}"
+    )
+
+    with pytest.raises(ValueError) as exc:
+        repo_root(str(inner))
+
+    assert "最近仓库" in str(exc.value)
+    assert not (outer / "openspec").exists(), "外层仓库 MUST NOT 出现任何 openspec/ 产物"
+
+
+def test_fake_git_on_path_returning_outer_repo_is_rejected(tmp_path, monkeypatch):
+    """同形变体：PATH 上被替换的 git（rc=0）返回**外层祖先仓库**。
+
+    与 core.worktree 指祖先仓同一形状——四项旧判据全过。证明步骤⑨拦的是「git 的答案
+    不是最近仓根」这个**性质**，而不是 core.worktree 这一种成因。
+    """
+    outer = _init_repo(tmp_path / "outer")
+    inner = _init_repo(outer / "inner")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "git"
+    fake.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "rev-parse" ]; then echo "%s"; exit 0; fi\n'
+        'exec /usr/bin/git "$@"\n' % outer.resolve(),
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ["PATH"])
+
+    with pytest.raises(ValueError) as exc:
+        repo_root(str(inner))
+
+    assert "最近仓库" in str(exc.value)
+    assert not (outer / "openspec").exists()
+
+
+# ── ⑨ 最近根一致：合法场景 MUST NOT 被误伤 ────────────────────────────────
+
+def test_nested_inner_repo_resolves_to_inner(tmp_path):
+    """嵌套仓库的**正常**情形（outer 与 inner 都是仓、无 core.worktree）：
+    从 inner 起 MUST 返回 inner —— 新判据 MUST NOT 把它一起拒掉。"""
+    outer = _init_repo(tmp_path / "outer")
+    inner = _init_repo(outer / "inner")
+
+    assert repo_root(str(inner)) == os.path.realpath(str(inner))
+
+
+def test_linked_worktree_resolves_to_worktree(tmp_path):
+    """linked worktree 的 `.git` 是**文件**不是目录：上溯用 `exists` 而非 `isdir`。
+    把步骤④的 `os.path.exists` 改成 `os.path.isdir`，本用例必须变红。"""
+    repo = _init_repo(tmp_path / "repo")
+    _commit_empty(repo)
+    wt = tmp_path / "wt"
+    _git("worktree", "add", "-q", str(wt), "-b", "wtbr", cwd=repo)
+    assert (wt / ".git").is_file(), "前提不成立：linked worktree 的 .git 不是文件"
+
+    assert repo_root(str(wt)) == os.path.realpath(str(wt))
+
+
+def test_repo_subdir_and_symlink_start_resolve_to_repo_root(tmp_path):
+    """仓库子目录起点 与 symlink 起点：两者都 MUST 解析到同一个真实仓根。"""
+    repo = _init_repo(tmp_path / "repo")
+    sub = repo / "a" / "b"
+    sub.mkdir(parents=True)
+    link = tmp_path / "link-to-sub"
+    link.symlink_to(sub)
+
+    assert repo_root(str(sub)) == os.path.realpath(str(repo))
+    assert repo_root(str(link)) == os.path.realpath(str(repo))
 
 
 def test_cli_still_exits_zero_outside_any_git_repo(tmp_path):
