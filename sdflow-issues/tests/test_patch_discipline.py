@@ -90,12 +90,21 @@ def _iter_run_patch_sites(path):
             continue
         if not (isinstance(func.value, ast.Name) and func.value.id == "monkeypatch"):
             continue
-        if len(node.args) != 3:
-            continue
-        target, attr, value = node.args
-        if not (isinstance(attr, ast.Constant) and attr.value == "run"):
-            continue
-        if _module_of(target) != "subprocess":
+        # monkeypatch.setattr 有两种合法调用形式，两种都必须认——只认三参形式会让
+        # 门 A 对 pytest 惯用的 2 参字符串形式完全失明（实测：变异后 7 passed 不红）。
+        if len(node.args) == 3:
+            target, attr, value = node.args
+            if not (isinstance(attr, ast.Constant) and attr.value == "run"):
+                continue
+            if _module_of(target) != "subprocess":
+                continue
+        elif len(node.args) == 2:
+            target, value = node.args
+            if not (isinstance(target, ast.Constant) and isinstance(target.value, str)):
+                continue
+            if not target.value.endswith("subprocess.run"):
+                continue
+        else:
             continue
         yield node.lineno, enclosing(node.lineno), value
 

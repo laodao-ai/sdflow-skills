@@ -35,6 +35,11 @@ def is_recorder_scan(command):
 
 def argv_contains(*tokens):
     """构造判据：argv 同时含全部 `tokens`（如 `argv_contains("batch", "add")`）。"""
+    # 空 tokens 会让 `all([])` 恒真 ⇒ 分派静默退化成整体替换，而门 A/门 B 都看不见
+    # （它们只检查调用形状与工厂本体，不检查判据的取值）。这正是本 change 要消灭的
+    # 退化形态，故在构造期就拒绝，不留作"语义残余"。
+    if not tokens:
+        raise ValueError("argv_contains() 需至少一个 token：空判据恒真，等价于整体替换")
 
     def predicate(command):
         if not isinstance(command, (list, tuple)):

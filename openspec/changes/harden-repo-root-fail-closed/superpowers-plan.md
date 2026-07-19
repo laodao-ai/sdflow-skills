@@ -162,12 +162,12 @@ MUST NOT 写入 stdout：recorder 的 stdout 是机器可读契约（`scan --jso
 `preserves_derived_bytes` 断言之所以成立，是因为 reindex 全程没碰过临时目录，而非派生字节真被
 保护住了。修复后该断言真正被验证。
 
-- [ ] root 解析不再受该用例的全局 `subprocess.run` mock 污染，reindex 真正作用于临时目录
-- [ ] **变异验证**：故意让 reindex 向临时目录的派生文件写入 → 该测试**变红**；恢复后变绿
+- [x] root 解析不再受该用例的全局 `subprocess.run` mock 污染，reindex 真正作用于临时目录
+- [x] **变异验证**：故意让 reindex 向临时目录的派生文件写入 → 该测试**变红**；恢复后变绿
       （当前它对该变异恒绿，正是假绿判据）
-- [ ] 断言集完整：退出码 + **stderr 含可区分的具体诊断**（坏 root 与坏 scan id 都是 exit 2，
+- [x] 断言集完整：退出码 + **stderr 含可区分的具体诊断**（坏 root 与坏 scan id 都是 exit 2，
       仅凭退出码判定 = 复刻同一类假绿）+ 派生字节不变 + cwd 无新增条目
-- [ ] 修复后若暴露此前从未执行过的 reindex 分支失败 → **当场 fold 修掉，不 defer**
+- [x] 修复后若暴露此前从未执行过的 reindex 分支失败 → **当场 fold 修掉，不 defer**
 
 ---
 
