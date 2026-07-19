@@ -36,6 +36,7 @@ sdflow-issues:
     T177: {"module":"sdflow-buglist","summary":"buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守","type":"代码质量","status":"PROPOSED","time":"2026-07-19 12:09","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T178: {"module":"outside-voice","summary":"M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败","type":"基础设施","status":"PROPOSED","time":"2026-07-19 13:28","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T179: {"module":"sdflow-done / sdflow-ship","summary":"archive 步骤可能打断测试，而其后无人重跑全套件 —— gate 判 SHIPPED 时 main 实际是红的","type":"基础设施","status":"OPEN","time":"2026-07-19 13:47","change":"main","batch":null}
+    T180: {"module":"sdflow-todolist/scripts/todolist.py + sdflow-buglist/scripts/buglist.py","summary":"recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块","type":"功能增强","status":"OPEN","time":"2026-07-19 17:20","change":"harden-repo-root-fail-closed","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1608,6 +1609,31 @@ sdflow-issues:
 ## T170: recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）
 > recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）
 > 2026-07 状态：OPEN → PROPOSED
+
+**规模（2026-07-19 实测）**：`test_mirror_consistency.py` 的 roster 是
+**37 个三向 + 24 个两向 = 61 个 helper**，分散在三份共 5545 行的脚本里
+（issues.py 2345 / buglist.py 1613 / todolist.py 1587）。AST 等价 guard
+**只能发现漂移、不能消除漂移源**——每次改一个共享 helper 都是「手工改三处 → 跑测试确认没改漏」。
+
+**仓内已有可复用的正解模式**：`hack/sync_principles.py` 就是「单一真相源 + 机械注入 marker 区块
++ `--check` 门禁（setup.sh 每次跑）」，已在 17 个 SKILL.md 上跑通。T170 相当于把同一模式从
+Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 进三个脚本 → CI check。
+这样仍满足 skill 自包含 + adr/0025 的「不建立运行时 import」约束，但消除手工三改。
+
+**新鲜痛感（本条的动手依据）**：`harden-repo-root-fail-closed` 的 Task 1.1 第一句就是
+「三份 recorder 的 `repo_root` **同一提交内逐字同步改**」——本次只动 1 个 helper，成本尚可；
+但 codex 跨模型评审在该 change 的设计审中把这条独立标为 **high**：
+「六个月后继续出现『三份同步改 + 三套测试』会很愚蠢」。
+
+**顺序决定（2026-07-19，人拍板）**：先做 `harden-repo-root-fail-closed`（其 4 条 critical 含
+**实测可触发**的跨仓写入——`GIT_DIR`/`GIT_WORK_TREE` 两个环境变量即可让校验放行），再做 T170。
+安全缺陷不等结构改造。为降低返工，该 change 的 `repo_root` 最终形态 MUST 保持
+**抽取友好**：不引入任何脚本专属分支（raise 消息用通用文案、不含脚本名/`__file__`），
+使 T170 落地时是纯搬运而非二次改写。
+
+**关联**：B11（sweep 对 canonical/overlay 视而不见，P1 VERIFIED）· B12（版本偏斜下 reindex
+覆盖权威 INDEX 且 exit 0，P1）· adr/0025（本条是其「三个自包含脚本各写一份」决策的推翻候选）·
+`harden-repo-root-fail-closed/spec-review-report.md` 的 Q2。
 <!-- sdflow-issue-block:end id=T170 -->
 
 <!-- sdflow-issue-block:start id=T171 -->
@@ -1657,3 +1683,14 @@ sdflow-issues:
 > M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T178 -->
+
+<!-- sdflow-issue-block:start id=T180 -->
+## T180: recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块
+> recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块
+
+**关联文档**：`openspec/changes/harden-repo-root-fail-closed/design.md`
+
+**动机**：T170 的详细块原本只有一句重复 summary。2026-07-19 的 spec-review 拿到了硬证据（61 个 helper 实数、sync_principles.py 可复用模式、顺序决定），想补进 T170 供下一步动手的人用，却发现无可用命令：add 分配新 ID 会造成碎片化、set-status 只接受状态转换（同状态转换无意义且会污染历史行）。最终只能手工编辑 prose 块 + 跑 scan 自检兜底。
+
+**思路**：加一个 append-note/amend 子命令：--id 定位既存 item，把一段 prose 追加进其 marker block（无块则建块），保持 frontmatter item 不动、ID 不新增。门禁沿用现有 marker 一致性校验。三份 recorder 里 buglist/todolist 同款（两向组），需同步实现。注意与 T170 本身的关系：若 T170 先落地（canonical 源 + vendoring），本条实现只需写一处。
+<!-- sdflow-issue-block:end id=T180 -->
