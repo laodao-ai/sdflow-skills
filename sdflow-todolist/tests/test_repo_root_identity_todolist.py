@@ -801,6 +801,51 @@ def _script_ast():
     return ast.parse(Path(SCRIPT).read_text(encoding="utf-8"))
 
 
+def test_diagnostics_never_recommend_explicit_root(request):
+    """诊断的 `fix:` MUST NOT 把「显式指定 --root」当修复手段（cr-fix2 · F5）。
+
+    **理由是结构性的**：`repo_root` 对显式起点与默认起点走的是**同一条**探测路径——
+    步骤③ 不因 `start` 的来源而分叉。∴ 超时 / 坏输出 / marker 缺失 / 最近根不一致这些
+    诊断建议用户「改传 --root」时，用户照做只会**原样撞上同一个错误**，而真正的故障面
+    （文件系统挂起、PATH 上的 git wrapper、core.worktree 重定向）一个都没被指出来。
+    误导性指引比没有指引更贵：它把人送上一条注定失败的路。
+
+    机械判据：剥掉 docstring 后，`repo_root` 函数体内的字符串常量一律 MUST NOT 含
+    `--root`（docstring 里描述子进程 `--root <已解析值>` 的传参协议是合法的，故排除）。
+    这条守的是**整片诊断面**，不是当场被点穿的那一处 —— 新增诊断分支若照抄旧措辞，
+    本用例当场判红。
+    """
+    fn = next(
+        (n for n in ast.walk(_script_ast())
+         if isinstance(n, ast.FunctionDef) and n.name == "repo_root"),
+        None,
+    )
+    assert fn is not None, "脚本里找不到 repo_root —— 选择器失效"
+
+    body = fn.body
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]  # docstring 讲的是子进程传参协议，不是给用户的 fix: 指引
+
+    offenders = [
+        (node.lineno, node.value)
+        for stmt in body
+        for node in ast.walk(stmt)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and "--root" in node.value
+    ]
+    assert not offenders, (
+        "诊断把 --root 当修复手段，但显式 --root 仍走同一次 git 探测 ⇒ 用户照做会拿到"
+        "一模一样的错误。请改成针对文件系统 / git wrapper / core.worktree 的可执行排查"
+        "步骤。违规字符串：%r" % (offenders,)
+    )
+
+
 def test_repo_root_is_resolved_once_per_process_and_only_in_main():
     """R2：仓根在单次调用（边界=进程）内只解析一次。
 
@@ -868,6 +913,24 @@ def test_unspecified_root_probes_cwd_while_explicit_root_is_validated(tmp_path):
     assert not missing.exists(), "被拒的起点 MUST NOT 被具现"
 
 
+def test_child_root_drift_premise_climbs_to_outer(tmp_path):
+    """R2 缺口锚（下一个用例）的**前提**核验 —— 刻意**不带 xfail**。
+
+    前提 = 「inner 失去 `.git` 之后，`repo_root(inner)` 确实静默上爬到 outer」。
+    它若不成立，下一个用例构造的根本不是目标场景、锚也就不再锚住任何东西。
+    而把这条断言放在 xfail 用例体内时**失败也是绿**（计入 xfail），失效永远无声；
+    提到这里，前提一烂当场判红。
+    """
+    outer = _init_repo(tmp_path / "outer")
+    inner = _init_repo(outer / "proj")
+    subprocess.run(["rm", "-rf", str(inner / ".git")], check=True)
+
+    assert not (inner / ".git").exists(), "前提构造失败：inner/.git 未被删除"
+    assert os.path.realpath(repo_root(str(inner))) == os.path.realpath(str(outer)), (
+        "repo_root 不再从失去 .git 的 inner 上爬到 outer —— R2 缺口锚的前提已不成立"
+    )
+
+
 @pytest.mark.xfail(strict=True, reason=(
     "R2 Scenario「子进程解析出不同的根时响亮失败」当前**不成立**（实测三份 recorder 一致）。"
     "design ADR-5 假定 validate_recorder_participant 的 path/token 绑定会兜底，但 "
@@ -894,8 +957,11 @@ def test_child_resolving_a_different_root_must_fail_loudly(tmp_path):
     with rec_mod.recorder_lock(str(inner), "sweep") as owner:
         subprocess.run(["rm", "-rf", str(inner / ".git")], check=True)
 
-        # 前提核验：子进程这一次解析确实爬到了 outer（否则本用例测的不是目标场景）
-        assert os.path.realpath(repo_root(str(inner))) == os.path.realpath(str(outer))
+        # 前提核验**不在这里**——已提到 xfail 之外的
+        # test_child_root_drift_premise_climbs_to_outer。写在本函数体内的断言会被
+        # xfail 吞成绿：前提烂掉（_init_repo 变形 / rm -rf 失败 / repo_root 不再上爬）时
+        # 断言失败 → 计入 xfail → XFAIL 摘要照旧打印 R2 说明，锚已空壳却无人知道。
+        # 实测：本函数体首行插 `assert False` ⇒ `1 xfailed`（绿）。
 
         env = dict(os.environ)
         env[rec_mod.RECORDER_LOCK_ENV] = owner.token
@@ -912,4 +978,88 @@ def test_child_resolving_a_different_root_must_fail_loudly(tmp_path):
     )
     assert not (outer / "openspec").exists(), (
         "MUST NOT 在自行解析出的外层根上具现任何目录"
+    )
+
+
+# ── ⑥ 解码：git stdout 不可解码时 MUST 走受控失败路径 ──────────────────────
+
+def test_undecodable_git_stdout_fails_closed_with_controlled_diagnosis(
+    tmp_path, monkeypatch
+):
+    """PATH 上的 git 吐出**不可解码字节**（POSIX 路径是任意字节串，非 UTF-8 文件名合法）。
+
+    MUST 得到带 ERROR/cause/fix 三元组的 **ValueError 本尊**。
+
+    变异：把步骤③的 bytes 捕获改回 `text=True`，`subprocess.run` 在读管道时就抛
+    `UnicodeDecodeError` —— 它是 ValueError 的**子类**，`pytest.raises(ValueError)`
+    照样接住，∴ 这里 MUST 断言**精确类型**，否则变异不可区分。届时诊断三元组消失；
+    Windows 上同样成因会让读管道**线程**崩掉、`out.stdout` 变成 None ⇒ `.rstrip` 抛
+    AttributeError（连 ValueError 都不是）⇒ 调用方 `except ValueError` 接不住 ⇒ 裸
+    Traceback，正是本 change 要消灭的形态。
+    """
+    if sys.platform == "win32":
+        pytest.skip("POSIX shell shim；Windows 泳道另行覆盖")
+    repo = _init_repo(tmp_path / "repo")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "git"
+    fake.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"rev-parse\" ]; then printf '/tmp/\\377\\376bad\\n'; exit 0; fi\n"
+        'exec /usr/bin/git "$@"\n',
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ.get("PATH", ""))
+
+    with pytest.raises(ValueError) as exc:
+        repo_root(str(repo))
+
+    assert type(exc.value) is ValueError, (
+        "抛的是 %s —— 解码失败逃出了受控失败路径（诊断三元组随之丢失）"
+        % type(exc.value).__name__
+    )
+    msg = str(exc.value)
+    assert msg.startswith("ERROR:"), msg
+    assert "cause:" in msg and "fix:" in msg, msg
+
+
+# ── 守护存活自检：rootdir 被更深处的 ini 抢走 ⇒ 仓根 conftest 出局 ─────────
+
+def test_repo_root_guards_are_actually_loaded(request):
+    """守护必须能回答「我现在活着吗」，否则它的失效永远无声。
+
+    仓根 `conftest.py` 的 cwd 泄漏断言只在被 pytest **收集到**时才生效，而收集止于
+    confcutdir（默认 = rootdir）。rootdir = 「参数公共祖先向上找到的**第一个** inifile」，
+    **先命中者胜**：任一 skill 目录下出现 pytest 配置段（`pyproject.toml` 的
+    `[tool.pytest.ini_options]` / `tox.ini` 的 `[pytest]` / `pytest.ini`），以该 skill
+    为参数跑测试时 rootdir 就塌到那里，仓根 `pytest.ini` 与 `conftest.py` 双双出局，
+    cwd 泄漏断言**静默失效**（实测：泄漏探针 `1 passed`）。
+    仓根 `pytest.ini` 的注释只论证了「**无** ini 时 rootdir 塌缩」，不覆盖本形态。
+
+    本仓当前 0 个 `pyproject.toml` 只是**现状**、不是保证 —— 任一 skill 将来加
+    ruff / mypy / 打包配置就会踩，且无声。
+
+    覆盖边界（诚实登记）：本自检随三份 recorder 的测试文件分发 ⇒ `pytest <recorder>/tests/`
+    这类按 skill 的调用姿势有守；**其余 skill 的 `tests/` 下若出现 ini，以那个 skill 为
+    参数单跑时仍无自检**（自检只能落在退化场景里仍被收集的地方，即叶子；集中式落点在
+    rootdir 被抢时同样出局，结构上做不到）。全量 `pytest`（参数公共祖先 = 仓根）不受
+    影响 —— 仓根 `pytest.ini` 先被命中。
+    """
+    repo = Path(__file__).resolve().parent.parent.parent
+    config = request.config
+
+    assert Path(config.rootpath) == repo, (
+        "pytest rootdir=%s，不是仓根 %s —— 多半是某个更深的目录出现了 pytest 配置段抢走了 "
+        "rootdir；此时 confcutdir 同步塌陷，仓根 conftest.py 的 cwd 泄漏断言已经不生效了。"
+        % (config.rootpath, repo)
+    )
+
+    root_conftest = str(repo / "conftest.py")
+    assert config.pluginmanager.has_plugin(root_conftest), (
+        "仓根 conftest.py 未被注册为插件 —— cwd 泄漏断言此刻是空的"
+    )
+    plugin = config.pluginmanager.get_plugin(root_conftest)
+    assert hasattr(plugin, "pytest_runtest_call"), (
+        "仓根 conftest 已加载，但承载 cwd 泄漏断言的 pytest_runtest_call 钩子不见了"
     )

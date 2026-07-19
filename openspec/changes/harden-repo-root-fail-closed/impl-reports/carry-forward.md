@@ -169,6 +169,10 @@ Task 5 双轴审确认的 **spec/design 与实现的落差**——**全部是「
 `1870 passed / 9 skipped` 与 `1871 passed / 8 skipped` **两种结果都会出现**——
 浮动源是 `test_outside_voice_child_lifecycle.py:436`（信号风暴复现率环境敏感，用例 docstring 自陈）。
 
-**恒定量**：`passed + skipped == 1879`、`failed == 0`、`xfailed == 3`。
+**恒定量**：`failed == 0`、`xfailed == 3`。
+
+⚠️ **`passed + skipped` 的总数会随本 change 自己新增用例而变**——登记时是 `1879`，代码审 fix 轮次
+新增 24 例后为 `1903`。**它不是恒定量，MUST NOT 当锚**（把它写死 = 造一个必然假红的门）。
+要锚就只锚 `failed == 0` 与 `xfailed == 3`。
 
 ⇒ **MUST NOT 把「1870/9」写成机械锚**（那会造出一个每隔几轮就假红的门）。要锚就锚上面三个恒定量。

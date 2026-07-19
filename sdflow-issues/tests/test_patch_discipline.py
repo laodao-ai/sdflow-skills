@@ -25,9 +25,20 @@ docstring 用散文守着**——将来有人把分派工厂「简化」回整�
 **守不住**（如实登记，不假装全覆盖）：
 - 判据函数本身写错（如 `argv_contains()` 空 tokens ⇒ 恒真 ⇒ 等价整体替换）——
   这是**语义**正确性，无确定性信号，留给用例自身的断言与评审。
-- 绕开 `monkeypatch.setattr` 的补桩路径（直接赋 `issues_mod.subprocess.run = …`、
+- 绕开 `.setattr` 的补桩路径（直接赋 `issues_mod.subprocess.run = …`、
   `unittest.mock.patch`）——目前本目录零使用；门 A 不覆盖，新引入需扩门。
 - 白名单条目的理由是否仍然成立（人读注记，非机械信号）。
+
+**接收器判据为什么不认名字**（cr-fix2）：门 A 曾要求接收器是名字字面量 `monkeypatch`
+（`func.value.id == "monkeypatch"`），于是对 `MonkeyPatch` 的**别名形式**完全失明——
+`mp = monkeypatch` / `pytest.MonkeyPatch()` / `with pytest.MonkeyPatch.context() as mp`
+写出来的 `mp.setattr(...)` 一律不进扫描，无条件替身畅通无阻（实测：退化站点写成
+`mp.setattr(issues_mod.subprocess, "run", lambda *a, **k: scan(a[0]))` 后两道门 7 passed
+全绿）。而这三种形式**本身就是** `monkeypatch.setattr`，上面的能力边界里却没登记这个洞
+⇒ 读者会以为已覆盖。∴ 判据放宽为「**任意** `<expr>.setattr`，且实参指向 `subprocess.run`」：
+`.setattr(<…>.subprocess, "run", …)` / `.setattr("<…>.subprocess.run", …)` 这个**形状**
+已足够判别，不必绑定变量名。`test_gate_a_sees_monkeypatch_aliases` 把三种别名形式
+钉成自检语料。
 """
 
 import ast
@@ -70,8 +81,14 @@ def _module_of(node):
 
 
 def _iter_run_patch_sites(path):
-    """产出 (lineno, 最内层 def 名, 第三实参节点) —— 所有 subprocess.run 补桩站点。"""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
+    """产出 (lineno, 最内层 def 名, 值节点) —— `path` 里所有 subprocess.run 补桩站点。"""
+    return _iter_run_patch_sites_in_source(path.read_text(encoding="utf-8"))
+
+
+def _iter_run_patch_sites_in_source(source):
+    """同上，但吃源码串 —— 让门 A 的选择器本身可被自检用例直接喂样例（`ast` 只认源码，
+    从文件读还是从串读没有语义差别，∴ 自检不必往 tests/ 里落一堆诱饵文件）。"""
+    tree = ast.parse(source)
     scope = []  # (def 名, end_lineno) 栈，用词法包含关系定位最内层 def
 
     def enclosing(lineno):
@@ -88,8 +105,10 @@ def _iter_run_patch_sites(path):
         func = node.func
         if not (isinstance(func, ast.Attribute) and func.attr == "setattr"):
             continue
-        if not (isinstance(func.value, ast.Name) and func.value.id == "monkeypatch"):
-            continue
+        # 接收器**刻意不判名字**（cat 模块 docstring「接收器判据为什么不认名字」）：
+        # 认 `monkeypatch` 字面量会对 mp = monkeypatch / MonkeyPatch() /
+        # MonkeyPatch.context() 三种别名形式全盲。下面的实参判据（目标模块名为
+        # subprocess、属性为 "run"）已足够把 `.setattr` 收窄到补桩站点。
         # monkeypatch.setattr 有两种合法调用形式，两种都必须认——只认三参形式会让
         # 门 A 对 pytest 惯用的 2 参字符串形式完全失明（实测：变异后 7 passed 不红）。
         if len(node.args) == 3:
@@ -111,6 +130,59 @@ def _iter_run_patch_sites(path):
 
 def _test_files():
     return sorted(p for p in TESTS_DIR.glob("test_*.py"))
+
+
+#: 门 A 自检语料：接收器**不叫** `monkeypatch` 的合法 MonkeyPatch 用法。
+#: 每条都是一个「无条件替身」的退化站点 —— 门 A MUST 看得见它们，且 MUST NOT 把裸
+#: lambda 误认成工厂调用。判据一旦退回按名字认接收器，本组用例全红。
+GATE_A_ALIAS_SAMPLES = {
+    "别名绑定 mp = monkeypatch": (
+        "def test_x(monkeypatch):\n"
+        "    mp = monkeypatch\n"
+        '    mp.setattr(issues_mod.subprocess, "run", lambda *a, **k: None)\n'
+    ),
+    "直接实例化 pytest.MonkeyPatch()": (
+        "def test_x():\n"
+        "    mp = pytest.MonkeyPatch()\n"
+        '    mp.setattr(issues_mod.subprocess, "run", lambda *a, **k: None)\n'
+    ),
+    "上下文管理器 MonkeyPatch.context()": (
+        "def test_x():\n"
+        "    with pytest.MonkeyPatch.context() as mp:\n"
+        '        mp.setattr(issues_mod.subprocess, "run", lambda *a, **k: None)\n'
+    ),
+    "别名 + 2 参字符串形式": (
+        "def test_x():\n"
+        "    with pytest.MonkeyPatch.context() as mp:\n"
+        '        mp.setattr("issues.subprocess.run", lambda *a, **k: None)\n'
+    ),
+}
+
+
+@pytest.mark.parametrize("label", sorted(GATE_A_ALIAS_SAMPLES))
+def test_gate_a_sees_monkeypatch_aliases(label):
+    """自检：接收器不叫 `monkeypatch` 时，门 A 仍然看得见该补桩站点。
+
+    这是能力边界的**机械**兑现——docstring 声称门 A 覆盖 `monkeypatch.setattr`，
+    而别名形式本身就是它；不钉住这一条，声称与实际会静默背离（实测退化路径：
+    两道门 7 passed、本文件 91 passed 全绿，替身却已经无条件劫持 repo_root 的 git）。
+    """
+    sites = list(_iter_run_patch_sites_in_source(GATE_A_ALIAS_SAMPLES[label]))
+
+    assert len(sites) == 1, (
+        "%s：扫到 %d 个站点（期望 1）—— 门 A 对该别名形式失明，"
+        "无条件替身可绕过整条纪律" % (label, len(sites))
+    )
+    _, owner, value = sites[0]
+    assert owner == "test_x", (label, owner)
+    is_factory_call = (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id in DISPATCH_FACTORIES
+    )
+    assert not is_factory_call, (
+        "%s：样例是裸 lambda，MUST NOT 被认成分派工厂调用（否则门 A 判为合规）" % label
+    )
 
 
 def test_patch_sites_exist_at_all():

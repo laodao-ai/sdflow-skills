@@ -664,14 +664,16 @@ def repo_root(start=None):
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            cwd=start, capture_output=True, text=True, check=True,
+            # MUST NOT 加 text=True —— 见步骤⑥的解码注记（bytes 捕获是刻意的）。
+            cwd=start, capture_output=True, check=True,
             env=env, timeout=git_timeout,
         )
     except subprocess.TimeoutExpired:
         raise ValueError(
             "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 "
             + str(git_timeout) + " 秒内未返回; "
-            "fix: 确认仓库所在文件系统可用，或显式指定 --root"
+            "fix: 确认该目录所在文件系统未挂起（网络盘/自动挂载卷最常见），"
+            "再在该目录手动跑 git rev-parse --show-toplevel 看是否同样卡住"
         ) from None
     except (OSError, subprocess.CalledProcessError):
         # MUST NOT 在此 return/raise：判据一律在 try 之外做（步骤⑤），否则新抛的
@@ -705,20 +707,35 @@ def repo_root(start=None):
                 "ERROR: 起点位于 git 仓库内但 git 拒绝作答: " + ascii(start_real)[:200]
                 + "; cause: 上溯找到 .git marker，而 git rev-parse --show-toplevel 以非 0 退出"
                 "（dubious ownership / 配置损坏 / git 不可用等）; "
-                "fix: 修复 git 配置后重试（如 git config --global --add safe.directory <仓根>），"
-                "或显式指定 --root"
+                "fix: 在该目录手动跑 git rev-parse --show-toplevel 看完整报错；"
+                "若是 dubious ownership 则 git config --global --add safe.directory <仓根>"
             )
         # start 已在步骤①b 归一化为绝对路径 ⇒ 本行不再触 os.getcwd()，结构上不可能抛
         # OSError。这是本回落分支 fail-closed 的方式：**消除抛点**，而不是再包一层 try
         # （多一层 try 只会多一条无法做变异确认的死分支）。
         return os.path.abspath(start)
-    # ⑥ 形状校验：rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
-    top = out.stdout.rstrip("\r\n")
+    # ⑥ 解码 + 形状校验。**MUST NOT 用 text=True**：那等于「locale 编码 + strict」，
+    # 而 git 返回的是**文件系统路径**，其字节不保证能被 locale 编码解出——
+    #   ① POSIX 下路径是任意字节串，非 UTF-8 文件名是合法存在的；
+    #   ② Windows 上 locale 常态是 cp1252、而 git/setup 的输出是 UTF-8，实测会在
+    #      subprocess 读管道的**线程**里解码崩 ⇒ `out.stdout` 变成 None ⇒ 本行 `.rstrip`
+    #      抛 AttributeError（**不是** ValueError）⇒ 调用方的 `except ValueError` 接不住
+    #      ⇒ stderr 吐裸 Traceback，正是本函数要消灭的形态。
+    # ∴ 以 bytes 捕获，再用 os.fsdecode 解码：它就是 CPython「字节 ↔ 路径」的标准转换
+    # （文件系统编码 + surrogateescape），不可解码字节被保成 surrogate 而**不抛异常**；
+    # 随后 os.path.isdir 用同一编码往回编、得到原始字节，路径不存在 ⇒ 自然落进下面的
+    # fail-closed 分支，拿到带 ERROR/cause/fix 三元组的受控诊断。
+    # 写 sys.getfilesystemencoding() + errors="surrogateescape" 与之等价，但那是把
+    # fsdecode 的定义抄一遍、平白多一个漂移面。
+    # 注：os.fsdecode 对 str 入参原样返回 ⇒ 注入 str stdout 的替身用例不受影响。
+    # rstrip 只剥行结束符，strip() 会删掉路径末尾的合法空格。
+    top = os.fsdecode(out.stdout).rstrip("\r\n")
     if not top or not os.path.isabs(top) or not os.path.isdir(top):
         raise ValueError(
             "ERROR: git 返回的仓根不可用: " + ascii(top)[:200]
             + "; cause: git rev-parse --show-toplevel 的输出不是既存的绝对路径目录; "
-            "fix: 检查 git 配置与调用环境是否被污染，或显式指定一个既存目录作为 --root"
+            "fix: 在该起点手动跑 git rev-parse --show-toplevel 比对输出，"
+            "并用 which -a git 确认 PATH 上的 git 未被 wrapper 替换"
         )
     # ⑦ 祖先校验（主防线）：按路径组件比较，不用裸字符串前缀匹配。这是唯一能拦住
     # core.worktree（写在 .git/config 里的 on-disk 重定向）指向**旁系**目录的判据——
@@ -737,7 +754,8 @@ def repo_root(start=None):
         raise ValueError(
             "ERROR: 无法比较 git 返回的仓根与探测起点: " + ascii(top)[:200]
             + "; cause: 两者不在同一个路径根下（如 Windows 跨盘符），无公共前缀可比; "
-            "fix: 确认 git 配置未把工作树重定向到另一个盘符，或显式指定 --root"
+            "fix: 检查 .git/config 的 core.worktree 是否把工作树指到了另一个盘符，"
+            "并清除 GIT_WORK_TREE / GIT_DIR 等重定向后重试"
         ) from None
     if common != os.path.normcase(top_real):
         raise ValueError(
@@ -752,7 +770,8 @@ def repo_root(start=None):
         raise ValueError(
             "ERROR: git 返回的仓根缺少 .git: " + ascii(top)[:200]
             + "; cause: 该目录不带 worktree marker，不是一个仓库根; "
-            "fix: 检查 git 配置与调用环境是否被污染，或显式指定 --root"
+            "fix: 确认 .git/config 的 core.worktree 未指向非仓库目录，"
+            "并用 which -a git 确认 PATH 上的 git 未被 wrapper 替换"
         )
     # ⑨ 最近根一致：git 返回的根 MUST **严格等于**步骤④上溯到的第一个 marker 目录。
     # ⑦⑧ 只证明了「top 是 start 的祖先」且「top 是个仓库根」——**外层祖先仓库两条全过**
@@ -763,8 +782,8 @@ def repo_root(start=None):
             "ERROR: git 返回的仓根不是起点所属的最近仓库: " + ascii(top)[:200]
             + "; cause: 自起点上溯遇到的第一个 .git 位于 " + ascii(marker_dir)[:200]
             + "，git 却返回了更外层的仓库（core.worktree 指向祖先仓 / git 被替换）; "
-            "fix: 清除 .git/config 的 core.worktree 重定向、确认 PATH 上的 git 未被替换，"
-            "或显式指定 --root"
+            "fix: 清除 .git/config 的 core.worktree 重定向，"
+            "并用 which -a git 确认 PATH 上的 git 未被 wrapper 替换"
         )
     return top_real
 
