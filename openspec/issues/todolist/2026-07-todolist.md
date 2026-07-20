@@ -56,6 +56,8 @@ sdflow-issues:
     T197: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"annotated tag OID 经 ^{commit} peel 被接受，spec 措辞是「是 commit 对象」","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
     T198: {"module":"openspec/changes/harden-gate-git-layer","summary":"tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
     T199: {"module":"CLAUDE.md / 开发环境","summary":"CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest","type":"基础设施","status":"OPEN","time":"2026-07-21 01:09","change":"harden-gate-git-layer","batch":null}
+    T200: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验","type":"代码质量","status":"OPEN","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":null}
+    T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":null}
 ---
 # 2026-07 TODO
 
