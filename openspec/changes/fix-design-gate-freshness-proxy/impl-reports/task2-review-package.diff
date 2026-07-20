@@ -1,0 +1,318 @@
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index bb58c29..ac7c444 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -307,23 +307,72 @@ def blob_pair(root, parent, sha, path):
+     return True, before, after
+ 
+ 
++CHECKBOX_BYTES_RE = re.compile(rb"^\s*-\s+\[([ xX])\]")   # CHECKBOX_RE 的字节版，口径逐字相同
++
++
++def _normalize_checkbox_lines(raw):
++    """原始字节 → 勾选框标记归一化后的行列表；围栏未闭合返回 None（调用方保守）。
++
++    [Task2] 归一化**只**把 task-list 行首那一个标记里的 ` `/`x`/`X` 换成 ` `：
++    - 行首锚定（CHECKBOX_BYTES_RE），故表格单元格、行内反引号、散文字面量、
++      以及同一行第二个之后的标记**一律不动**；
++    - fenced code block 内的行不参与（口径同 _line_scoped_hits/_parse_plan：
++      line.lstrip().startswith("```") 翻转）；
++    - 缩进 / 空白 / 其余字符逐字节保留——MUST NOT strip、MUST NOT 解码转换。
++
++    切行用 split(b"\\n") 而非 splitlines()：后者还会在 \\r 处切开，CRLF↔LF
++    差异会被抹平；前者把 CR 留在行尾，行尾与末尾换行的增删都保持可区分。
++    """
++    lines = raw.split(b"\n")
++    out = []
++    in_fence = False
++    for line in lines:
++        if line.lstrip().startswith(b"```"):
++            in_fence = not in_fence
++            out.append(line)
++            continue
++        if in_fence:
++            out.append(line)
++            continue
++        m = CHECKBOX_BYTES_RE.match(line)
++        if m:
++            i = m.start(1)
++            line = line[:i] + b" " + line[i + 1:]
++        out.append(line)
++    if in_fence:
++        return None                        # 围栏未闭合 ⇒ 「哪些行在 fence 内」不可信
++    return out
++
++
+ def _tasks_content_exempt(before, after):
+     """前后两版 tasks.md 原始字节 → 是否属于「零设计信息量」的改动，可豁免失鲜。
+ 
+-    🔴 [Task1] **判据尚未接入**，恒 False ⇒ 一律照判失鲜。Task2 在此实现勾选框归一化
+-    行级等值比较（MUST 限于行级等值，MUST NOT 语义 diff / 解析 markdown 结构）。
++    [Task2 · ADR-1 求值口径] 判据 = **勾选框标记归一化后逐行等值**，仅此一种形态。
++    MUST NOT 做语义 diff、MUST NOT 解析 markdown 结构、MUST NOT 把豁免面扩到勾选框
++    以外的任何差异（措辞 / 格式化 / 错别字一律照判失鲜）。
++
++    🔴 比较**按行号位置对齐**（zip），MUST NOT 用 LCS / difflib：LCS 下纯行重排的
++    删除行与插入行逐字节相同，会被判等值而放行。行数不等 ⇒ 直接判不等值。
++
+     抽成独立函数是为了把「保守回落」与「等值判据」分成两个可各自证伪的面：
+     上游 design_frame_exempt 的每道回落分支都能在本函数被替身为恒 True 时单独证伪。
+     """
+-    return False
++    nb = _normalize_checkbox_lines(before)
++    na = _normalize_checkbox_lines(after)
++    if nb is None or na is None:
++        return False                       # 围栏未闭合 ⇒ 保守
++    if len(nb) != len(na):
++        return False                       # 行数变化（段落增删 / 末尾换行增删）⇒ 失鲜
++    return all(x == y for x, y in zip(nb, na))
+ 
+ 
+ def design_frame_exempt(root, sha, frame_files, base):
+     """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
+ 
+-    🔴 [Task1] **本票不引入任何豁免**——能力就位（能区分监视集内路径集、能取到前后两版
+-    原始字节、能识别不合格形态），但因 _tasks_content_exempt 恒 False 而恒返回 False，
+-    对外可观察行为与接入前逐字一致。Task2 只需实现 _tasks_content_exempt。
++    [Task2] 豁免资格三连，缺一即失鲜：① 帧内**落在 design 监视集内**的路径集恰为
++    {tasks.md}（🔴 不是整个 commit 的文件列表——checkpoint 走 `git add -A`，真实完成
++    提交必然打包源码；按整 commit 求值 ⇒ 豁免永不触发）② 形态是普通内容修改
++    ③ 勾选框归一化后逐行等值。merge 提交须**对每个 parent** 都成立。
+     """
+     if design_watched_subs(frame_files, base) != {"tasks.md"}:
+         return False                       # 帧内还触及其他监视路径 ⇒ 照判失鲜
+@@ -336,7 +385,7 @@ def design_frame_exempt(root, sha, frame_files, base):
+         if not ok:
+             return False                   # 取不到 / 形态不合格 ⇒ 保守
+         if not _tasks_content_exempt(before, after):
+-            return False                   # [Task1] 判据未接入，恒走此支 ⇒ 行为不变
++            return False                   # 勾选框以外的改动 ⇒ 照判失鲜
+     return True
+ 
+ 
+diff --git a/sdflow-ship/tests/test_gate_freshness.py b/sdflow-ship/tests/test_gate_freshness.py
+index 2e6a5c9..76a5ab2 100644
+--- a/sdflow-ship/tests/test_gate_freshness.py
++++ b/sdflow-ship/tests/test_gate_freshness.py
+@@ -202,6 +202,16 @@ def _write_tasks(repo, data, name="tasks.md"):
+     p.write_bytes(data)
+     return p
+ 
++def _reanchor(repo, d):
++    """把 design-approved 锚推到 HEAD（重提交 spec-review-report.md，它不在监视集内）。
++
++    端到端用例必需：`_seed_tasks` 里**新建** tasks.md 的那一提交本身落在锚之后的窗口内，
++    而「新建」形态不合格 ⇒ 该帧照判失鲜，会先于待测的翻转帧触发，把用例的结论理由换掉。
++    """
++    (d / "spec-review-report.md").write_text(
++        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告 v2\n", encoding="utf-8")
++    commit_all(repo, "re-approve design")
++
+ def _seed_tasks(repo, data=b"### Task 1: A\n- [ ] s\n"):
+     """建一个已有 tasks.md 的 change，返回 (change_dir, 该提交 sha)。"""
+     d = approved_change(repo, plan=PLAN2)
+@@ -426,16 +436,15 @@ def test_br6_guard_no_no_merges_or_first_parent_in_design_scope():
+     assert "%H" in body            # 反向：sha 确实被 format 携带（能力在场）
+ 
+ 
+-# ── ⑥ 本票不变量：能力就位，但对外行为逐字未变（一律照判失鲜）─────────────
++# ── ⑥ 帧级豁免：纯勾选框翻转成立，其余一律保守 ─────────────────────────
+ 
+-def test_design_frame_exempt_never_exempts_in_task1(repo):
+-    # 最贴近目标态的形态：纯勾选翻转、帧内监视路径恰为 {tasks.md}
+-    # —— Task1 仍 MUST 返回 False（判据未接入）
++def test_design_frame_exempt_true_on_pure_checkbox_flip(repo):
++    # 最贴近目标态的形态：纯勾选翻转、帧内监视路径恰为 {tasks.md}、同帧还带源码
+     _, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
+     commit_all(repo, "flip checkbox only")
+     assert _sg.design_frame_exempt(
+-        repo, _head(repo), [TASKS_REL, "src.py"], BASE) is False
++        repo, _head(repo), [TASKS_REL, "src.py"], BASE) is True
+ 
+ def _always_exempt(monkeypatch):
+     """把 Task2 的等值判据替身为「恒可豁免」——只有这样，上游各道保守回落分支
+@@ -515,25 +524,31 @@ def test_design_frame_exempt_false_when_other_watched_path_touched(repo):
+     assert _sg.design_frame_exempt(
+         repo, _head(repo), [TASKS_REL, BASE + "design.md"], BASE) is False
+ 
+-def test_tasks_only_checkbox_flip_still_stale(repo):
+-    # 对外可观察行为不变：只翻勾选框、只触及 tasks.md ⇒ 仍 REFUSE_START
++def test_tasks_only_checkbox_flip_not_stale(repo):
++    # 端到端正例：只翻勾选框、帧内监视集恰为 {tasks.md} ⇒ 不再 REFUSE_START
+     d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _reanchor(repo, d)
+     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
+     commit_all(repo, "docs: 勾选回填")
+     code, js, _h = run_gate(repo)
+-    assert code == 3 and js["verdict"] == "REFUSE_START"
++    assert js["verdict"] != "REFUSE_START"
+ 
+-def test_tasks_flip_plus_source_code_still_stale(repo):
+-    # `git add -A` 打包形态（勾选 tasks.md + 仓库别处源码）⇒ Task1 仍照判失鲜
+-    _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++def test_tasks_flip_plus_source_code_not_stale(repo):
++    # 🔴 主用例：`git add -A` 打包形态（勾选 tasks.md + 仓库别处源码）⇒ 仍豁免。
++    # 若把「只触及 tasks.md」按整个 commit 的文件列表求值，豁免在真实世界永不触发，
++    # 而其余全部用例照样通过——本条是该错误的唯一钉子。
++    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _reanchor(repo, d)
+     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
+     (repo / "src.py").write_text("# impl\n", encoding="utf-8")
+     commit_all(repo, "docs: 勾选回填 + 实现")
+     code, js, _h = run_gate(repo)
+-    assert code == 3 and js["verdict"] == "REFUSE_START"
++    assert js["verdict"] != "REFUSE_START"
+ 
+-def test_merge_commit_touching_tasks_still_stale(repo):
+-    _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++def test_merge_commit_pure_flip_not_stale(repo):
++    # merge 帧：相对每个 parent 都只是勾选框翻转 ⇒ 豁免（BR-6 逐 parent 求值）
++    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _reanchor(repo, d)
+     _git(repo, "checkout", "-q", "-b", "side")
+     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
+     commit_all(repo, "side flip")
+@@ -542,7 +557,7 @@ def test_merge_commit_touching_tasks_still_stale(repo):
+     commit_all(repo, "main edit")
+     _git(repo, "merge", "--no-ff", "-q", "-m", "merge side", "side")
+     code, js, _h = run_gate(repo)
+-    assert code == 3 and js["verdict"] == "REFUSE_START"
++    assert js["verdict"] != "REFUSE_START"
+ 
+ def test_frame_sha_parsed_from_subject_with_spaces_and_colons(repo):
+     # 〔1.1b〕分隔符须无歧义：subject 含空格与冒号时 sha 仍可正确切出
+@@ -555,3 +570,133 @@ def test_frame_sha_parsed_from_subject_with_spaces_and_colons(repo):
+     sha_field, _, subject = frame.split("\n")[0].partition("\x1f")
+     assert sha_field == expect
+     assert subject == "docs(scope): 带空格 与: 冒号的 subject"
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# [fix-design-gate-freshness-proxy Task2] 纯勾选框翻转不再撞门
++#
++# 判据 = 勾选框标记归一化后**逐行等值**（位置对齐，禁 LCS）。归一化只动
++# task-list 行首那一个标记，且 fenced code block 内不参与。其余一切差异形态
++# （措辞 / 空白 / 行尾 / 段落增删 / 行重排 / 字面量里的方括号）照判失鲜。
++# ══════════════════════════════════════════════════════════════════════════
++
++E = _sg._tasks_content_exempt
++
++
++# ── ⑦a 正例：勾选框翻转（含反向、大写、缩进/空白原样保留）─────────────────
++
++def test_content_exempt_forward_flip():
++    assert E(b"### Task 1: A\n- [ ] s\n", b"### Task 1: A\n- [x] s\n") is True
++
++def test_content_exempt_reverse_flip_is_symmetric():
++    # 归一化对称：[x] 翻回 [ ] 同样豁免
++    assert E(b"- [x] s\n", b"- [ ] s\n") is True
++
++def test_content_exempt_uppercase_marker():
++    assert E(b"- [ ] s\n", b"- [X] s\n") is True
++
++def test_content_exempt_multi_line_partial_flip():
++    before = b"### Task 1: A\n- [ ] a\n- [ ] b\n### Task 2: B\n- [ ] c\n"
++    after  = b"### Task 1: A\n- [x] a\n- [ ] b\n### Task 2: B\n- [x] c\n"
++    assert E(before, after) is True
++
++def test_content_exempt_preserves_indent_and_spacing():
++    # 归一化只替换标记本身：缩进、标记后空白、行内其余字符一律不触碰。
++    # 两版缩进不同（其余全同）⇒ 必须失鲜——若归一化顺手 strip 了空白就会假绿。
++    assert E(b"  - [ ] s\n", b"    - [x] s\n") is False
++    # 反向：缩进一致时，带缩进的勾选行照样能豁免（不是靠「有缩进就拒」蒙对的）
++    assert E(b"  - [ ] s\n", b"  - [x] s\n") is True
++
++
++# ── ⑦b 负例：勾选框以外的一切差异 ───────────────────────────────────────
++
++def test_content_stale_on_fenced_code_block_flip():
++    # fence 内的 `- [ ]` 是代码/示例，不是任务状态 ⇒ 不参与归一化 ⇒ 失鲜
++    before = b"# T\n\n```\n- [ ] sample\n```\n"
++    after  = b"# T\n\n```\n- [x] sample\n```\n"
++    assert E(before, after) is False
++
++def test_content_stale_on_table_and_inline_code_literals():
++    # 表格单元格 / 行内反引号里的标记：非行首 task marker ⇒ 不归一化 ⇒ 失鲜
++    assert E(b"| a | [ ] |\n", b"| a | [x] |\n") is False
++    assert E(b"\xe8\xaf\xb4\xe6\x98\x8e `[ ]` \xe6\xa0\xbc\xe5\xbc\x8f\n",
++             b"\xe8\xaf\xb4\xe6\x98\x8e `[x]` \xe6\xa0\xbc\xe5\xbc\x8f\n") is False
++
++def test_content_stale_on_prose_literal_marker():
++    assert E(b"before [ ] after\n", b"before [x] after\n") is False
++
++def test_content_stale_when_second_marker_on_same_line_flips_back():
++    # 🔴 行首锚定的判别性构造：行首 task marker 正向翻、同行文档字面量反向翻。
++    # 若归一化改成「全行替换所有标记」，两版会被抹成同一串 ⇒ 假绿放行。
++    before = b"- [ ] \xe5\x86\x99 `[x]` \xe5\x88\xb0\xe6\x96\x87\xe6\xa1\xa3\n"
++    after  = b"- [x] \xe5\x86\x99 `[ ]` \xe5\x88\xb0\xe6\x96\x87\xe6\xa1\xa3\n"
++    assert E(before, after) is False
++
++def test_content_stale_on_pure_line_reorder():
++    # 🔴 零字符改动的纯行重排：LCS/difflib 下删除行与插入行逐字节相同 ⇒ 会被判等值。
++    # 判据 MUST 按行号位置对齐比较。
++    before = b"- [ ] a\n- [x] b\n"
++    after  = b"- [x] b\n- [ ] a\n"
++    assert sorted(before.split(b"\n")) == sorted(after.split(b"\n"))   # 前提：多重集相同
++    assert E(before, after) is False
++
++def test_content_stale_on_flip_plus_same_line_wording():
++    assert E(b"- [ ] \xe5\x86\x99\xe6\x96\x87\xe6\xa1\xa3\n",
++             b"- [x] \xe5\x86\x99\xe6\x96\x87\xe6\xa1\xa3\xef\xbc\x88\xe6\x94\xb9\xef\xbc\x89\n") is False
++
++def test_content_stale_on_flip_plus_task_section_added():
++    before = b"### Task 1: A\n- [ ] a\n"
++    after  = b"### Task 1: A\n- [x] a\n### Task 2: B\n- [ ] b\n"
++    assert E(before, after) is False
++
++def test_content_stale_on_flip_plus_task_section_removed():
++    before = b"### Task 1: A\n- [ ] a\n### Task 2: B\n- [ ] b\n"
++    after  = b"### Task 1: A\n- [x] a\n"
++    assert E(before, after) is False
++
++def test_content_stale_on_whitespace_only_change():
++    assert E(b"- [ ] s\n", b"- [ ]  s\n") is False
++    assert E(b"### Task 1: A\n", b"###  Task 1: A\n") is False
++
++def test_content_stale_on_crlf_and_trailing_newline_and_edge_whitespace():
++    assert E(b"- [ ] s\n", b"- [ ] s\r\n") is False        # 行尾
++    assert E(b"- [ ] s\n", b"- [ ] s") is False            # 末尾换行删除
++    assert E(b"- [ ] s\n", b"- [ ] s\n\n") is False        # 末尾换行新增
++    assert E(b"- [ ] s\n", b"  - [ ] s\n   ") is False     # 首尾空白
++
++def test_content_stale_on_line_count_change_alone():
++    assert E(b"- [ ] a\n- [ ] b\n", b"- [ ] a\n") is False
++
++def test_content_exempt_conservative_on_unbalanced_fence():
++    # 围栏未闭合 ⇒ 「哪些行在 fence 内」不可信 ⇒ 保守判失鲜（同 _line_scoped_hits 口径）
++    assert E(b"```\n- [ ] s\n", b"```\n- [x] s\n") is False
++
++
++# ── ⑦c 端到端：豁免只在监视集恰为 {tasks.md} 时成立 ─────────────────────
++
++def test_e2e_flip_plus_design_edit_still_stale(repo):
++    # 同一提交既纯勾选 tasks.md、又改 design.md ⇒ 照判失鲜（豁免资格三连之一）
++    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _reanchor(repo, d)
++    _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
++    (d / "design.md").write_text("# design changed\n", encoding="utf-8")
++    commit_all(repo, "docs: 勾选 + 改设计")
++    code, js, _h = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START"
++
++def test_e2e_tasks_wording_change_still_stale(repo):
++    # 勾选框以外的 tasks.md 改动（措辞）⇒ 照判失鲜
++    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _reanchor(repo, d)
++    _write_tasks(repo, b"### Task 1: A\n- [ ] s2\n")
++    commit_all(repo, "docs: 改任务措辞")
++    code, js, _h = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START"
++
++def test_e2e_br7_impl_review_subject_exemption_intact(repo):
++    # BR-7 精确式 subject 豁免逐字不受本票影响：改的是 design.md（内容豁免够不着）
++    d = approved_change(repo, plan=PLAN2)
++    (d / "design.md").write_text("v1\n", encoding="utf-8")
++    commit_all(repo, "checkpoint(impl-review): 收尾修订")
++    _, js, _h = run_gate(repo)
++    assert js["verdict"] != "REFUSE_START"

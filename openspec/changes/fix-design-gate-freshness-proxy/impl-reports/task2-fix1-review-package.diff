@@ -1,0 +1,692 @@
+diff --git a/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task2-checkbox-exemption-fix1.md b/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task2-checkbox-exemption-fix1.md
+new file mode 100644
+index 0000000..45c25ca
+--- /dev/null
++++ b/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task2-checkbox-exemption-fix1.md
+@@ -0,0 +1,115 @@
++# Task 2 修复轮 fix1 — 双轴审 FAIL 的 2 Important + 4 Minor 全修
++
++上游：`98dc7c5`（Task 2 实现）+ `9015c1e`（首轮报告）。本轮**不覆盖**首轮报告，只在其 M-E 行做订正（M3）。
++改动严格限于 ticket 列出的条目：`code` 域失鲜判据、BR-7 精确式 subject 豁免**逐字未动**；
++未引入 `--no-merges` / `--first-parent`；归一化仍只认行首复选框标记这一个词法。
++
++---
++
++## Important-1 — `~~~` 围栏漏识 ⇒ 假阳放行（**面治**）
++
++### 病灶
++
++仓内 fence 追踪惯用法 `line.lstrip().startswith("```")` 被**手抄 4 处**，全部只认 ``` ：
++
++| 调用点 | 旧口径失效方向 |
++|---|---|
++| `_normalize_checkbox_lines`（勾选框豁免） | **fail-open** — `~~~` 块内实质改动被当块外纯勾选翻转 ⇒ 放行未批准的设计改动 |
++| `_line_scoped_hits`（归档 verify 锚读） | **假 SHIPPED** — `~~~` 块内的示例锚被当真锚计入 |
++| `_parse_plan`（plan 复选框/Task 标题） | **假 ✅** — `~~~` 块内伪 `[x]` 计入完成、伪 `### Task N:` 误判重号 |
++| `tg02_hit`（TG-02 头部声明区） | 假 RUN_SOP — `~~~` 块内示例声明串被计入 |
++
++复现（修前）：`_tasks_content_exempt(b"~~~\n- [ ] s\n~~~\n", b"~~~\n- [x] s\n~~~\n")` → **True**（放行）。
++
++### 修法（单一源 + CommonMark 有界词法）
++
++`ship_gate.py` 新增**唯一**围栏识别源，四处调用点全部改调它，无一保留手抄：
++
++- `fence_delim(line: str) -> (char, count, tail) | None`
++- `fence_delim_bytes(line: bytes)` — **只做形态转换**（`decode("latin-1")` 字节保序、零信息损失）后委派给
++  `fence_delim`。**不是手抄副本，是同一份实现的两个入口** ⇒ 结构上不可能口径分叉；
++  另有 `test_fence_delim_bytes_delegates_to_str_single_source` 机械守这条委派关系。
++- `FenceTracker` — 逐行状态机，`feed(line)` 返回「本行是否是围栏行本身」，`inside` 表示块内，EOF 时
++  `inside` 即 unbalanced。
++
++口径按 CommonMark **有界**词法写全（CLAUDE.md 基准 5 明列 fence 变体为「有界 ⇒ 可手写解析」正面例子）：
++开启符 = 行首（去 ASCII 空白）连续 **≥3** 个同种 `` ` `` 或 `~`；闭合符须**同种** + 长度 **≥** 开启符 +
++其后只余空白。故 ``` 关不掉 `~~~`（反之亦然）、三 backtick 关不掉四 backtick 开的块、带 info string 的行
++不能当闭合符。**MUST NOT 由此扩到 markdown 其它结构**（表格 / 嵌套列表 / 引用块 = 无界面）——已在
++模块头注释与 helper 注释两处写死这条边界。
++
++模块头注释里那条「`~~~` 围栏不特判、方向=安全侧假阴」的旧承诺已删改为新口径（该承诺本身在勾选框
++豁免落地后已**不成立**——它的失效方向变成了 fail-open；ticket 通则 ③：不拿「现有口径本来就这样」辩护）。
++
++### 行为变化方向
++
++更多东西被认作「在围栏内」⇒ 归档读更易 `none`/`unbalanced`、plan 解析更易 `UNKNOWN`、豁免更易判失鲜
++——**一律 fail-safe**。**既有 217 条 sdflow-ship 用例、仓根全套件零转红**（见下）。
++
++### 每个调用点各自举证（不只测一处）
++
++| 调用点 | 新增用例（文件） |
++|---|---|
++| `_normalize_checkbox_lines` / `_tasks_content_exempt` | `test_gate_freshness.py`：`test_content_stale_on_tilde_fenced_code_block_flip`（🔴 Important-1 复现钉）、`..._four_backtick_fenced_flip`、`..._tilde_fence_with_info_string`、`test_content_exempt_conservative_on_unbalanced_tilde_fence`、`..._when_cross_type_fence_cannot_close`、`..._when_shorter_fence_cannot_close`、`test_normalize_still_works_outside_tilde_fence`（反向证：不是「见 ~ 就全拒」蒙对的） |
++| `_line_scoped_hits` | `test_gate_anchor_scope.py`：`test_line_scoped_tilde_fence_hides_anchor`、`..._four_backtick_fence_hides_anchor`、`..._tilde_fence_not_closed_by_backticks`、`..._short_fence_cannot_close_longer_one`、`..._info_string_line_is_not_a_closer`、`test_fence_delim_bytes_delegates_to_str_single_source` |
++| `_parse_plan` + `tg02_hit` | `test_gate_impl_progress.py`：`test_t34_tilde_fenced_checkbox_not_counted`、`..._tilde_task_header_in_fence_not_counted`、`test_t34_unclosed_tilde_fence_unknown`、`test_t34_backtick_cannot_close_tilde_fence`、`test_tg02_tilde_fenced_example_in_header_not_hit`、`test_tg02_tilde_fenced_heading_in_header_still_hits` |
++
++---
++
++## Important-2 — `CHECKBOX_BYTES_RE` 手抄副本无机械守 + 注释不准确
++
++- **改为单一源派生**：新增 `CHECKBOX_RE_PATTERN = r"^\s*-\s+\[([ xX])\]"`；
++  `CHECKBOX_BYTES_RE = re.compile(CHECKBOX_RE_PATTERN.encode())`、`CHECKBOX_RE = re.compile(CHECKBOX_RE_PATTERN)`。
++- **机械守**：`test_checkbox_re_bytes_derived_from_single_source` 断言
++  `CHECKBOX_BYTES_RE.pattern == CHECKBOX_RE.pattern.encode()` 且 `CHECKBOX_RE.pattern == CHECKBOX_RE_PATTERN`。
++- **注释订正**（删掉不准确的「口径逐字相同」）：写清 `\s` 在 str 模式认 Unicode 空白（NBSP U+00A0）、
++  bytes 模式**只认 ASCII**（tab 认、NBSP 不认）；差异方向 = bytes 侧**少归一化** ⇒ NBSP 缩进的复选框行
++  翻转不被豁免 ⇒ 判失鲜 ⇒ **保守，可接受**。该差异由
++  `test_checkbox_str_vs_bytes_nbsp_divergence_is_conservative` 机械锚住（含 tab 对照 + 端到端 `E(...) is False`）。
++
++---
++
++## Minor
++
++- **M1**（`test_gate_freshness.py` 三条端到端正例）：`verdict != "REFUSE_START"` → **`code == 0 and verdict == "CONTINUE_IMPL"`**
++  （实测真值）。旧弱断言下 `UNKNOWN(6)`（门崩了）也满足，会被读成「门放行了」。
++  涉及 `test_tasks_only_checkbox_flip_not_stale`、`test_tasks_flip_plus_source_code_not_stale`、`test_merge_commit_pure_flip_not_stale`。
++- **M2**（`test_merge_commit_pure_flip_not_stale` 注释名不副实）：注释改为说实话——该用例**没有**验到
++  「merge 帧逐 parent 求值」（merge 提交自身不改 tasks.md ⇒ 其帧 `subs` 为空被直接跳过，真正被求值的是
++  side 分支上那个单 parent 普通提交）；逐 parent 的判别性用例是 `test_exempt_requires_every_parent_of_a_merge`。
++  保留本例的理由（守 merge 拓扑不致端到端误判失鲜）也一并写进注释。**只改注释，未改断言语义**
++  （断言按 M1 强化为确切值）。
++- **M3**（首轮报告 M-E 变异描述过弱）：在 `task2-checkbox-exemption.md` 加订正表，**两种构造各实跑一次**：
++  `ratio() == 1.0` → **238 passed，零区分力**；收集非 equal 区块比较**删除行/插入行多重集** → **1 failed**
++  （`test_content_stale_on_pure_line_reorder`）。结论写死：只有多重集形态对这道守护有判别力。
++
++---
++
++## 变异验证（全部实跑，输出如实记录）
++
++基线：`/usr/bin/python3 -m pytest sdflow-ship/tests/ -q` → **238 passed**。
++
++| # | 变异 | 结果 | 转红用例 |
++|---|---|---|---|
++| **M1** | 删 `~~~` 支持（`_FENCE_CHARS = ("`",)`） | ✅ **10 failed, 228 passed** | `test_line_scoped_tilde_fence_hides_anchor`, `test_line_scoped_tilde_fence_not_closed_by_backticks`, `test_content_stale_on_tilde_fenced_code_block_flip`, `test_content_stale_on_tilde_fence_with_info_string`, `test_content_exempt_conservative_on_unbalanced_tilde_fence`, `test_t34_tilde_fenced_checkbox_not_counted`, `test_t34_tilde_task_header_in_fence_not_counted`, `test_t34_unclosed_tilde_fence_unknown`, `test_tg02_tilde_fenced_example_in_header_not_hit`, `test_tg02_tilde_fenced_heading_in_header_still_hits` —— **三个调用点各自独立转红**（freshness / anchor-scope / impl-progress 三个文件都在内） |
++| **M2** | 闭合符不校验同种/长度/尾部（`if ch == och and n >= on and not tail.strip():` → `if True:`） | ✅ **6 failed, 232 passed** | `test_line_scoped_tilde_fence_not_closed_by_backticks`, `test_line_scoped_short_fence_cannot_close_longer_one`, `test_line_scoped_info_string_line_is_not_a_closer`, `test_content_exempt_conservative_when_cross_type_fence_cannot_close`, `test_content_exempt_conservative_when_shorter_fence_cannot_close`, `test_t34_backtick_cannot_close_tilde_fence` |
++| **M3** | `CHECKBOX_BYTES_RE` 改回手抄副本并微漂口径（`-\s*\[` 代替 `-\s+\[`） | ✅ **1 failed, 237 passed** | `test_checkbox_re_bytes_derived_from_single_source` |
++| **M4** | 位置对齐改 LCS（多重集形态，见 M3 订正表） | ✅ **1 failed, 237 passed** | `test_content_stale_on_pure_line_reorder` |
++| **M4′** | 同上但用 `ratio() == 1.0` | ❌ **238 passed（零区分力）** | —— 反面对照，已写入首轮报告订正表 |
++
++每次变异后均 `cp /tmp/sg.bak` 还原并复跑确认回到 238 passed。
++
++## 全套件结果
++
++- `/usr/bin/python3 -m pytest sdflow-ship/tests/ -q` — **238 passed**（首轮 217 → 本轮 +21）
++- 仓根 `/usr/bin/python3 -m pytest -q` — **1985 passed, 8 skipped, 3 xfailed**（125.04s），零 failure
++  （首轮 1964 → +21）。**无任何既有用例转红**，未改动任何既有断言以迁就（M1 是**加强**断言，不是放宽）。
++
++## 残留 / 诚实边界
++
++- 本轮把 fence 词法收敛到 CommonMark 的**有界**子集（fence 类型 + 长度 + 尾部空白）。CommonMark 里
++  「开启符前最多 3 空格缩进」这条**未实现**——沿用仓内既有的「无限量 ASCII 空白 lstrip」，方向是
++  **更容易认作围栏 ⇒ 更保守**（fail-safe），且与四个调用点修前行为一致。刻意不动，避免把有界修补
++  扩成 markdown 结构解析。
++- `_line_scoped_hits` 对 `~~~` 块的处理是**隐藏锚**（更易判 `none`），归档侧从「假 SHIPPED」翻成
++  「判定不能」——符合 ADR-5「宁可判定不能也不假阳」。
+diff --git a/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task2-checkbox-exemption.md b/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task2-checkbox-exemption.md
+new file mode 100644
+index 0000000..8f5cf43
+--- /dev/null
++++ b/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task2-checkbox-exemption.md
+@@ -0,0 +1,133 @@
++# Task 2 impl-report — 纯勾选框翻转不再撞门
++
++**R-ID:** SW-1 · **文件:** `sdflow-ship/scripts/ship_gate.py` / `sdflow-ship/tests/test_gate_freshness.py`
++
++## 做了什么
++
++把 Task 1 留下的占位 `_tasks_content_exempt(before, after)`（恒 `False`）实现掉——这是本 change 的 P0
++交付，也是 Task 2 唯一需要动的判据面。上游 `design_frame_exempt` 的编排、`blob_pair` 的读取保真、
++`design_watched_subs` 的监视集单一源、BR-6 逐 parent 求值**逐字未动**。
++
++新增两个函数：
++
++| 函数 | 职责 |
++|---|---|
++| `CHECKBOX_BYTES_RE` | `CHECKBOX_RE`（`^\s*-\s+\[([ xX])\]`）的字节版，口径逐字相同 |
++| `_normalize_checkbox_lines(raw)` | 原始字节 → 归一化后的**行列表**；围栏未闭合返回 `None` |
++| `_tasks_content_exempt(before, after)` | 两侧归一化 → 行数相等 → **按行号位置对齐**逐行等值 |
++
++**判据形状**（design.md ADR-1 求值口径）：
++
++- **归一化只替换标记本身**：`CHECKBOX_BYTES_RE.match(line)` 命中后，用 `m.start(1)` 定位那**一个**
++  字符，`line[:i] + b" " + line[i+1:]`。缩进、标记后空白、行内其余字符逐字节保留。
++- **行首锚定**：正则 `^` 锚定 ⇒ 表格单元格、行内反引号、散文字面量、以及同一行**第二个之后**的
++  标记一律不动。
++- **fence 感知**：`line.lstrip().startswith(b"```")` 翻转 `in_fence`——**复用仓内既有口径**
++  （`_line_scoped_hits` / `_parse_plan` 同一行），未另造一套。fence 内的行原样入列。
++- **围栏未闭合 ⇒ 返回 `None` ⇒ 调用方判失鲜**：EOF 时 `in_fence` 仍为真，则「哪些行在 fence 内」
++  本身不可信，保守方向。
++- **切行用 `split(b"\n")` 而非 `splitlines()`**：后者还在 `\r` 处切开，CRLF↔LF 会被抹平。前者把 CR
++  留在行尾，行尾差异与末尾换行增删都保持可区分。
++- **🔴 位置对齐，禁 LCS**：`len` 不等直接 False，其余 `all(x == y for x, y in zip(nb, na))`。
++  MUST NOT 用 `difflib`——LCS 下纯行重排的删除行与插入行逐字节相同，会被判等值而放行。
++
++## 关键实现选择及理由
++
++| 选择 | 理由 |
++|---|---|
++| **全程在 bytes 上做，不解码** | 判据的输入是 `blob_pair` 的原始字节（Task 1 为此专门建了 `run_git_bytes`）。任何 `.decode()` 都可能在非 UTF-8 tasks.md 上抛异常或替换成 U+FFFD 使两版趋同——那正是 Task 1 花力气堵掉的假等值面，判据端不能从后门放回来。 |
++| **`m.start(1)` 单字符替换，而非 `re.sub` 整体重写** | `re.sub` 需要重构造整行，容易顺手规范化空白；单字符切片替换在结构上不可能碰到标记以外的字节。 |
++| **归一化统一成 `[ ]`（而非 `[x]`）** | 任意一侧都可以，只要对称。`[X]` 与 `[x]` 同归一 ⇒ 大小写变体也算纯翻转。 |
++| **围栏未闭合返回 `None` 而非 `False`** | `None`/行列表两种返回类型让「不可信」与「归一化结果」在类型上就分开，调用方不会把空列表误当合法结果。 |
++| **不引入 `difflib` / 不做 markdown 结构解析** | design.md Compliance 明文禁止；且这是基准 5 的典型无界语法面——一旦开始解析 markdown 结构，就进了「每轮 review 补一个新语法分支」的补丁循环。行级等值是有界的。 |
++
++**Non-Goals 遵守**：未做任何内容感知豁免（措辞/注释/格式化一律照判失鲜）；`code` 域逐字未动；
++BR-7 精确式 subject 豁免逐字未动（`test_e2e_br7_impl_review_subject_exemption_intact` 机械守，
++本票不定义它与内容豁免的优先级——那是 Task 3）。
++
++## 测试
++
++新增 21 条用例（`sdflow-ship/tests/test_gate_freshness.py` 第 ⑦ 节 + 第 ⑥ 节改写），
++`E = _sg._tasks_content_exempt` 为单元入口。
++
++### 行为翻转的既有用例（Task 1 的「行为不变」锚，本票按设计翻转）
++
++| 旧名（Task 1 期望失鲜） | 新名（Task 2 期望豁免） |
++|---|---|
++| `test_design_frame_exempt_never_exempts_in_task1` | `test_design_frame_exempt_true_on_pure_checkbox_flip` |
++| `test_tasks_only_checkbox_flip_still_stale` | `test_tasks_only_checkbox_flip_not_stale` |
++| `test_tasks_flip_plus_source_code_still_stale` | 🔴 `test_tasks_flip_plus_source_code_not_stale`（主用例） |
++| `test_merge_commit_touching_tasks_still_stale` | `test_merge_commit_pure_flip_not_stale` |
++
++### 每条验收标准的证据锚点
++
++| 验收标准 | 锚点 |
++|---|---|
++| 正例：监视集内只触及 tasks.md、只翻勾选 ⇒ 不失鲜 | `test_tasks_only_checkbox_flip_not_stale`、`test_design_frame_exempt_true_on_pure_checkbox_flip`、`test_content_exempt_forward_flip`、`test_content_exempt_multi_line_partial_flip` |
++| 🔴 正例（主用例）：同帧既纯勾选 tasks.md、又改仓库别处源码 ⇒ 不失鲜 | `test_tasks_flip_plus_source_code_not_stale`（`git add -A` 打包形态） |
++| 正例：`[x]` 翻回 `[ ]`（反向）⇒ 不失鲜 | `test_content_exempt_reverse_flip_is_symmetric`；大写变体 `test_content_exempt_uppercase_marker` |
++| 归一化仅替换标记本身，不触碰缩进/空白/其余字符 | `test_content_exempt_preserves_indent_and_spacing`（**双向断言**：缩进不同 ⇒ False；缩进相同 ⇒ True，排除「有缩进就拒」蒙对） |
++| 归一化锚定行首；fence 内不参与 | `test_content_stale_on_fenced_code_block_flip`、`test_content_stale_when_second_marker_on_same_line_flips_back` |
++| 负例：fence 内翻转 ⇒ 失鲜 | `test_content_stale_on_fenced_code_block_flip`；围栏未闭合 `test_content_exempt_conservative_on_unbalanced_fence` |
++| 负例：表格 / 行内反引号 / 散文字面量 ⇒ 失鲜 | `test_content_stale_on_table_and_inline_code_literals`、`test_content_stale_on_prose_literal_marker` |
++| 负例：同行多标记，task marker 与文档字面量反向翻转 ⇒ 失鲜 | 🔴 `test_content_stale_when_second_marker_on_same_line_flips_back`（判别性构造：全行替换下两版会被抹成同一串） |
++| 负例：纯行重排（零字符改动）⇒ 失鲜 | 🔴 `test_content_stale_on_pure_line_reorder`（含前提校准断言 `sorted(before.split) == sorted(after.split)`，确证多重集相同、差异纯为顺序） |
++| 负例：勾选框 + 同行措辞 ⇒ 失鲜 | `test_content_stale_on_flip_plus_same_line_wording`、端到端 `test_e2e_tasks_wording_change_still_stale` |
++| 负例：勾选框 + 新增/删除任务段 ⇒ 失鲜 | `test_content_stale_on_flip_plus_task_section_added`、`..._removed`、`test_content_stale_on_line_count_change_alone` |
++| 负例：只改缩进 / 空白 ⇒ 失鲜 | `test_content_stale_on_whitespace_only_change` |
++| 负例：CRLF↔LF、末尾换行增删、首尾空白 ⇒ 失鲜 | `test_content_stale_on_crlf_and_trailing_newline_and_edge_whitespace`（四条各自独立断言） |
++| 负例：同帧触及 tasks.md（纯勾选）+ design.md ⇒ 失鲜 | `test_e2e_flip_plus_design_edit_still_stale`（端到端 exit 3 / REFUSE_START）+ 既有 `test_design_frame_exempt_false_when_other_watched_path_touched` |
++| BR-7 精确式 subject 豁免未被弄坏 | `test_e2e_br7_impl_review_subject_exemption_intact` + 既有 `test_impl_review_exempt_bare_and_colon` / `..._evil_suffix_stale` / `..._fix_variant_stale` 全绿 |
++
++### fixture 修正：`_reanchor`
++
++端到端正例最初**全部红**，理由不是判据错，而是 fixture 的窗口边界：`_seed_tasks` 里**新建**
++tasks.md 的那一提交本身落在 design 锚之后的窗口内，而「新建」形态不合格 ⇒ 该帧先于待测的翻转帧
++触发失鲜，把用例的通过/失败理由整个换掉。新增 helper `_reanchor(repo, d)`（重提交
++`spec-review-report.md`——它不在 design 监视集内）把锚推到 HEAD，让窗口内只剩待测帧。
++这是前提校准，不是放宽断言：修正后 M-A/M-B 变异仍能把这几条打红（见下表），说明区分力在。
++
++## 变异验证实际执行记录
++
++逐条**实际执行**（改源 → 跑 `test_gate_freshness.py` → 记录转红用例 → `git checkout` 还原）。
++🔴 前置教训：首轮做变异时实现尚未 commit，`git checkout --` 把实现本身一并回滚，导致 M-B 的
++观测被污染（unit 用例陪红）。改为**先 commit 实现再变异**后重跑，下表为重跑后的干净结果。
++
++| 变异 | 结果 | 转红用例 |
++|---|---|---|
++| **M-A** 删内容判据（`_tasks_content_exempt` 恒 `False`） | ✅ 9 failed | `test_design_frame_exempt_true_on_pure_checkbox_flip`, `test_tasks_only_checkbox_flip_not_stale`, `test_tasks_flip_plus_source_code_not_stale`, `test_merge_commit_pure_flip_not_stale`, `test_content_exempt_forward_flip`, `..._reverse_flip_is_symmetric`, `..._uppercase_marker`, `..._multi_line_partial_flip`, `..._preserves_indent_and_spacing` |
++| **M-B** 删监视集限定，改按**整 commit 文件列表**求值（`set(frame_files) != {base+"tasks.md"}`） | ✅ 4 failed | 🔴 **`test_tasks_flip_plus_source_code_not_stale`**（ticket 点名的那颗钉子）, `test_design_frame_exempt_true_on_pure_checkbox_flip`, `test_tasks_only_checkbox_flip_not_stale`, `test_merge_commit_pure_flip_not_stale` |
++| **M-C** 删 fence 感知（去掉围栏翻转与 in_fence 跳过 + 去掉未闭合回落） | ✅ 2 failed | `test_content_stale_on_fenced_code_block_flip`, `test_content_exempt_conservative_on_unbalanced_fence` |
++| **M-D** 删行首锚定（改 `line.replace(b"[x]", b"[ ]")` 全行替换） | ✅ 3 failed | `test_content_stale_on_table_and_inline_code_literals`, `test_content_stale_on_prose_literal_marker`, `test_content_stale_when_second_marker_on_same_line_flips_back` |
++| **M-E** 位置对齐改 LCS（🔴 构造敏感，唯一有判别力的形态 = `difflib.SequenceMatcher` 收集非 equal 区块后**比较删除行/插入行多重集**；详见下方订正表） | ✅ 1 failed | `test_content_stale_on_pure_line_reorder`（报错行直呈 `True = E(b'- [ ] a\n- [x] b\n', b'- [x] b\n- [ ] a\n')`——即 LCS 下重排被判等值放行） |
++
++**〔fix1 M3 订正〕M-E 的构造敏感，原描述过弱、易被读成「随便换个 difflib 写法都能转红」。
++实测（fix1 轮复跑，两种构造各跑一次全 sdflow-ship 套件）：**
++
++| M-E 构造 | 结果 | 说明 |
++|---|---|---|
++| `return difflib.SequenceMatcher(None, nb, na).ratio() == 1.0` | ❌ **238 passed，不转红** | ratio() 只是相似度；重排两版 ratio < 1.0 ⇒ 仍返回 False（判失鲜）⇒ 与正确实现同结论，**零区分力** |
++| 收集非 equal 区块的**删除行/插入行多重集**并比较：<br>`for tag,i1,i2,j1,j2 in SequenceMatcher(None,nb,na).get_opcodes(): if tag!="equal": dels+=nb[i1:i2]; ins+=na[j1:j2]`<br>`return sorted(dels)==sorted(ins)` | ✅ **1 failed** | 这才复现 LCS 误判机制（「删除行与插入行逐字节相同」）⇒ `test_content_stale_on_pure_line_reorder` 转红，报错行直呈 `True = E(b'- [ ] a\n- [x] b\n', b'- [x] b\n- [ ] a\n')` |
++
++**结论：只有多重集形态对「位置对齐 vs LCS」这道守护有判别力。** 记录在此：不为凑数放宽变异，
++构造不对就换构造；也不许拿无区分力的构造冒充「变异已验」。
++
++## 全套件结果
++
++- `pytest sdflow-ship/tests/` — **217 passed**（Task 1 收尾 197 → 本票 +20）
++- 仓根 `/usr/bin/python3 -m pytest` 全套件 — **1964 passed, 8 skipped, 3 xfailed**（123.60s），零 failure（Task 1 收尾 1944 → 本票 +20）
++- 每次变异还原后均复跑确认回绿
++
++## Concerns
++
++1. **`test_merge_commit_pure_flip_not_stale` 的区分力主要落在 side 分支的普通提交上。**
++   `git log --name-only` 对 merge 提交默认不列文件，故 merge 帧的 `subs` 为空、直接跳过；真正被判定的
++   是被逐一枚举的 side 提交（BR-6 承诺的「merge 内部提交逐一枚举」正是如此）。**「merge 提交本身
++   逐 parent 求值」这条路径在端到端层仍只由 Task 1 的 `test_exempt_requires_every_parent_of_a_merge`
++   （带替身）覆盖**，本票未新增不带替身的端到端 merge-frame 用例——显式登记，不冒充有守。
++2. **围栏未闭合的保守回落是本票自加的**（ticket 未列）。方向与全篇一致（看不清 ⇒ 失鲜），且有
++   `test_content_exempt_conservative_on_unbalanced_fence` + M-C 变异守着；但它扩大了「判失鲜」的
++   面，若下游发现 tasks.md 常态带未闭合围栏，会表现为豁免不生效。
++3. **判据不看行的语义角色。** 一行若同时是 task marker 又承载设计信息（例如把 `- [ ] 做 A` 改成
++   `- [x] 做 A`，而「做 A」这条任务的含义在别处被重定义），判据看不见——这是 design.md Non-Goals
++   明确划走的语义面，正解是 `checkpoint(impl-review)` subject 声明式豁免，非本票范围。
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index ac7c444..5875f96 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -95,8 +95,11 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
+     多行 HTML 注释内嵌锚不解析：不判断锚是否落在更大的 `<!-- ... -->` 多行注释块「内部」被
+         整体注释掉——模板锚本身即单行注释，独占一行等值已足；多行嵌套锚属人为构造，归
+         「显式越权同权级」（git 留痕可审计）；
+-    `~~~` 围栏 / 带语言标签围栏（如 ```python）导致的围栏识别误判不特判——仅认 ``` 前缀翻转，
+-        非本仓现实语料出现的变体不收，且方向 = 安全侧假阴（漏判不覆盖 ≠ 假阳）。
++    〔fix1 Important-1〕fenced code block 的围栏识别收敛到**单一源** `fence_delim`（str）+
++        `fence_delim_bytes`（bytes 委派），口径按 CommonMark 的**有界**词法写全：开启符 =
++        连续 ≥3 个同种 `` ` `` 或 `~`；闭合符须**同种**且长度 ≥ 开启符、其后仅空白。故
++        `~~~` 块与四 backtick 块内的内容一律不可见，`~~~` 不能被 ``` 关掉（反之亦然）。
++        MUST NOT 由此扩到 markdown 其它结构（表格/嵌套列表/引用块）——那是无界面，禁手搓。
+     〔mlh-p5 Q4；Task6 退役 live inline 后收敛〕live 读**只认 frontmatter**：好 frontmatter
+         判定后不看正文任何 inline 锚，absent 亦不回退 inline（正文残留 inline 锚被完全忽略，
+         无假过风险，B4/B5 根治）。归档读 dual-read 侧仍保留旧语义：好 frontmatter 判定后不再
+@@ -307,7 +310,85 @@ def blob_pair(root, parent, sha, path):
+     return True, before, after
+ 
+ 
+-CHECKBOX_BYTES_RE = re.compile(rb"^\s*-\s+\[([ xX])\]")   # CHECKBOX_RE 的字节版，口径逐字相同
++# ────────────────────────────── fenced code block 围栏识别（单一源） ──────────────────────────
++# [fix1 Important-1] 本仓四个 fence 追踪点（_normalize_checkbox_lines / _line_scoped_hits /
++# tg02_hit / _parse_plan）**全部**经由下面这一组函数 + FenceTracker 判定围栏，MUST NOT 再各自
++# 手抄 `line.lstrip().startswith("```")`——旧手抄口径只认 ``` ⇒ `~~~` 块内的实质改动被当成
++# 「块外普通行」，在勾选框豁免侧是 fail-open（放行未批准的设计改动），在归档锚读侧是假 SHIPPED。
++#
++# 口径 = CommonMark fenced code block 的**有界**词法（数得完，故可手写；见 CLAUDE.md 基准 5）：
++#   开启符：行首（去 ASCII 空白后）连续 ≥3 个同种字符，`` ` `` 或 `~`；
++#   闭合符：与开启符**同种**、长度 **≥** 开启符长度、其后只余空白（故 ```` ``` ```` 关不掉
++#           `~~~`，三 backtick 也关不掉四 backtick 开的块）；
++#   info string（如 ```python）只出现在开启行，不影响识别。
++# MUST NOT 在此之上再解析 markdown 的其它结构（表格 / 嵌套列表 / 引用块）——那是无界语法面。
++_ASCII_WS = " \t\v\f\r\n"
++_FENCE_CHARS = ("`", "~")
++
++
++def fence_delim(line):
++    """一行 str → 围栏符 (char, count, tail) 或 None（不是围栏形状）。
++
++    tail = 围栏字符游程之后的剩余内容（判闭合时须 strip 后为空）。
++    """
++    s = line.lstrip(_ASCII_WS)
++    if not s or s[0] not in _FENCE_CHARS:
++        return None
++    ch = s[0]
++    n = len(s) - len(s.lstrip(ch))
++    if n < 3:
++        return None
++    return ch, n, s[n:]
++
++
++def fence_delim_bytes(line):
++    """一行 bytes → 同 `fence_delim`。**单一源就是 `fence_delim`**——本函数只做形态转换。
++
++    latin-1 是字节保序映射：任意字节都能解码、且 ASCII 区语义不变 ⇒ 转换零信息损失，
++    两个形态不可能口径分叉（不是手抄副本，是同一份实现的两个入口）。
++    """
++    return fence_delim(line.decode("latin-1"))
++
++
++class FenceTracker:
++    """逐行喂入的围栏状态机。`inside` = 当前行是否落在 fenced code block 内部。
++
++    `feed(line)` 返回该行是否**是围栏行本身**（开启或闭合）；围栏行既不在块内也不是普通内容，
++    各调用点按自己的语义决定保留还是丢弃。EOF 时 `inside` 为真 = 围栏未闭合（调用方保守）。
++    """
++
++    def __init__(self):
++        self.open = None                   # None=块外；(char, count)=块内，记开启符
++
++    @property
++    def inside(self):
++        return self.open is not None
++
++    def feed(self, line, is_bytes=False):
++        d = fence_delim_bytes(line) if is_bytes else fence_delim(line)
++        if d is None:
++            return False
++        ch, n, tail = d
++        if self.open is None:
++            self.open = (ch, n)            # 开启：任意 info string 均可
++            return True
++        och, on = self.open
++        if ch == och and n >= on and not tail.strip():
++            self.open = None               # 闭合：同种 + 不短于开启符 + 尾部只余空白
++            return True
++        return False                       # 块内出现的异种/过短围栏形状 ⇒ 只是普通内容行
++
++
++# [fix1 Important-2] 行锚定复选框的**单一源**：str 版 CHECKBOX_RE（见下文 _parse_plan 处）与
++# bytes 版 CHECKBOX_BYTES_RE 都从这一个 pattern 串派生，MUST NOT 再手抄字节副本（口径分叉即
++# 下一个 bug）。test_checkbox_re_bytes_derived_from_single_source 机械守这条派生关系。
++#
++# ⚠️ 两个形态**并非行为逐字相同**——`\s` 在 str 模式下认 Unicode 空白（NBSP U+00A0 等），
++# 在 bytes 模式下**只认 ASCII 空白**（tab 认、NBSP 不认）。故 NBSP 缩进的复选框行：
++# CHECKBOX_RE 认（plan 解析把它当复选框），CHECKBOX_BYTES_RE 不认（勾选框归一化不动它）。
++# 该差异的方向 = bytes 侧**少归一化** ⇒ 这类行的翻转不被豁免 ⇒ 判失鲜 ⇒ **保守**，可接受。
++CHECKBOX_RE_PATTERN = r"^\s*-\s+\[([ xX])\]"
++CHECKBOX_BYTES_RE = re.compile(CHECKBOX_RE_PATTERN.encode())
+ 
+ 
+ def _normalize_checkbox_lines(raw):
+@@ -316,8 +397,8 @@ def _normalize_checkbox_lines(raw):
+     [Task2] 归一化**只**把 task-list 行首那一个标记里的 ` `/`x`/`X` 换成 ` `：
+     - 行首锚定（CHECKBOX_BYTES_RE），故表格单元格、行内反引号、散文字面量、
+       以及同一行第二个之后的标记**一律不动**；
+-    - fenced code block 内的行不参与（口径同 _line_scoped_hits/_parse_plan：
+-      line.lstrip().startswith("```") 翻转）；
++    - fenced code block 内的行不参与（口径同 _line_scoped_hits/_parse_plan——四处共用
++      单一源 fence_delim/FenceTracker，`` ``` `` 与 `~~~` 两族围栏均识别）；
+     - 缩进 / 空白 / 其余字符逐字节保留——MUST NOT strip、MUST NOT 解码转换。
+ 
+     切行用 split(b"\\n") 而非 splitlines()：后者还会在 \\r 处切开，CRLF↔LF
+@@ -325,21 +406,17 @@ def _normalize_checkbox_lines(raw):
+     """
+     lines = raw.split(b"\n")
+     out = []
+-    in_fence = False
++    fence = FenceTracker()
+     for line in lines:
+-        if line.lstrip().startswith(b"```"):
+-            in_fence = not in_fence
+-            out.append(line)
+-            continue
+-        if in_fence:
+-            out.append(line)
++        if fence.feed(line, is_bytes=True) or fence.inside:
++            out.append(line)               # 围栏行本身 / 块内行：逐字节原样保留，不归一化
+             continue
+         m = CHECKBOX_BYTES_RE.match(line)
+         if m:
+             i = m.start(1)
+             line = line[:i] + b" " + line[i + 1:]
+         out.append(line)
+-    if in_fence:
++    if fence.inside:
+         return None                        # 围栏未闭合 ⇒ 「哪些行在 fence 内」不可信
+     return out
+ 
+@@ -442,20 +519,17 @@ def _line_scoped_hits(text, candidates):
+     [impl-review-fix FIX-5；T75] 现役唯一调用方 = archived_verify_state（归档 dual-read 兜底旧
+     inline）；live decide() 侧的 inline 读半场已随 Task6 迁 frontmatter 退役，其专属读点函数
+     随 T75 一并删除（不再留孤儿）。fence 翻转口径同 _parse_plan
+-    （line.lstrip().startswith("```")）。"""
++    （共用单一源 fence_delim/FenceTracker，``` 与 ~~~ 两族均识别）。"""
+     cand = set(candidates)
+     hit = set()
+-    in_fence = False
++    fence = FenceTracker()
+     for line in text.splitlines():
+-        if line.lstrip().startswith("```"):
+-            in_fence = not in_fence
+-            continue
+-        if in_fence:
++        if fence.feed(line) or fence.inside:
+             continue
+         s = line.strip()
+         if s in cand:
+             hit.add(s)
+-    return [a for a in candidates if a in hit], in_fence
++    return [a for a in candidates if a in hit], fence.inside
+ 
+ 
+ # [mlh-p5] frontmatter 状态解析（手写 stdlib，不 import yaml——保零依赖不变量）。
+@@ -679,12 +753,9 @@ def tg02_hit(cdir):
+     # [impl-review-fix] 头部声明区检测须 fence-aware（对齐 _line_scoped_hits/_parse_plan 口径）+ 声明行匹配：
+     # ①fenced 块（```）内的 `## ` 不算头部边界、内容不计（对抗镜1 假阴/假阳）；
+     # ②只认 strip 后以「〔TG」起始的声明行（排除「技术栈…均不命中」描述行/反引号提及，codex OV-code-2）。
+-    in_fence = False
++    fence = FenceTracker()
+     for line in text.splitlines():
+-        if line.lstrip().startswith("```"):
+-            in_fence = not in_fence
+-            continue
+-        if in_fence:
++        if fence.feed(line) or fence.inside:
+             continue
+         if line.startswith("## "):   # 真 H2 标题（非 fence 内）= 头部区结束
+             break
+@@ -753,7 +824,7 @@ def done_task_ids(root, sha, change):
+ # MUST 共享**同一个全文 fence 状态**（单遍 _parse_plan）——旧版"先切段、每段各自重置 in_fence"
+ # 会让悬空/跨段围栏泄漏（段内未闭合 ``` 吞掉真实未勾项 → 假✅）、且标题正则对围栏无感知
+ # （fenced 示例标题被当真 task/误判重号）。二者统一到一次带 fence 状态的整文扫描。
+-CHECKBOX_RE = re.compile(r"^\s*-\s+\[([ xX])\]")   # 行锚定复选框（非全文子串）
++CHECKBOX_RE = re.compile(CHECKBOX_RE_PATTERN)   # 行锚定复选框（非全文子串）；单一源见上文常量
+ 
+ 
+ def _parse_plan(text):
+@@ -765,12 +836,9 @@ def _parse_plan(text):
+     boxes_by_task = {}
+     any_checkbox = False
+     cur = None
+-    in_fence = False
++    fence = FenceTracker()
+     for line in text.splitlines():
+-        if line.lstrip().startswith("```"):
+-            in_fence = not in_fence
+-            continue
+-        if in_fence:
++        if fence.feed(line) or fence.inside:
+             continue
+         tm = TASK_TITLE_RE.match(line)
+         if tm:
+@@ -783,7 +851,7 @@ def _parse_plan(text):
+             any_checkbox = True
+             if cur is not None:   # 前言段（首个 Task 前）的框不归任何 task，忽略
+                 boxes_by_task[cur].append(cm.group(1) in ("x", "X"))
+-    return task_order, boxes_by_task, any_checkbox, in_fence
++    return task_order, boxes_by_task, any_checkbox, fence.inside
+ 
+ 
+ def checkbox_done_ids(plan):
+diff --git a/sdflow-ship/tests/test_gate_anchor_scope.py b/sdflow-ship/tests/test_gate_anchor_scope.py
+index f73ea51..47a95aa 100644
+--- a/sdflow-ship/tests/test_gate_anchor_scope.py
++++ b/sdflow-ship/tests/test_gate_anchor_scope.py
+@@ -135,3 +135,44 @@ def test_contract_live_frontmatter_corpus_fields():
+         covered.add(field)
+     # 聚合断言：三个 gate 关键字段各至少一枚举值经 frontmatter 承载被识别（不依赖任一 inline 锚常量）
+     assert covered == set(_sg.FIELD_ENUMS), "live frontmatter 语料聚合未覆盖全部 gate 字段"
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# [fix1 Important-1] fence 单一源：`~~~` 围栏与四 backtick 围栏
++# 调用点 = _line_scoped_hits（归档 verify 锚读）。旧口径只认 ```，`~~~` 块内的
++# 锚会被当成块外真锚计入 ⇒ 归档侧假 SHIPPED。
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_line_scoped_tilde_fence_hides_anchor():
++    hits, unbalanced = _sg._line_scoped_hits(f"~~~\n{VPASS}\n~~~\n", [VPASS, VFAIL])
++    assert hits == [] and unbalanced is False
++
++
++def test_line_scoped_four_backtick_fence_hides_anchor():
++    hits, unbalanced = _sg._line_scoped_hits(f"````\n{VPASS}\n````\n", [VPASS, VFAIL])
++    assert hits == [] and unbalanced is False
++
++
++def test_line_scoped_tilde_fence_not_closed_by_backticks():
++    # 异种围栏关不掉：``` 不闭合 ~~~ ⇒ EOF 时仍在块内 ⇒ unbalanced（保守）
++    hits, unbalanced = _sg._line_scoped_hits(f"~~~\n{VPASS}\n```\n", [VPASS, VFAIL])
++    assert hits == [] and unbalanced is True
++
++
++def test_line_scoped_short_fence_cannot_close_longer_one():
++    # 三 backtick 关不掉四 backtick 开的块（闭合符须 ≥ 开启符长度）
++    hits, unbalanced = _sg._line_scoped_hits(f"````\n{VPASS}\n```\n", [VPASS, VFAIL])
++    assert hits == [] and unbalanced is True
++
++
++def test_line_scoped_info_string_line_is_not_a_closer():
++    # 带 info string 的行不能当闭合符（尾部非空白）⇒ 整块仍未闭合
++    hits, unbalanced = _sg._line_scoped_hits(f"```\n{VPASS}\n```python\n", [VPASS, VFAIL])
++    assert hits == [] and unbalanced is True
++
++
++def test_fence_delim_bytes_delegates_to_str_single_source():
++    # 单一源机械守：bytes 入口只做形态转换，任意字节序列两侧判定必须一致
++    for s in ["```", "~~~~", "  ```python", "``", "text", "\t~~~ ", "```\xa0"]:
++        assert _sg.fence_delim_bytes(s.encode("utf-8")) == _sg.fence_delim(
++            s.encode("utf-8").decode("latin-1"))
+diff --git a/sdflow-ship/tests/test_gate_freshness.py b/sdflow-ship/tests/test_gate_freshness.py
+index 76a5ab2..7aa668b 100644
+--- a/sdflow-ship/tests/test_gate_freshness.py
++++ b/sdflow-ship/tests/test_gate_freshness.py
+@@ -531,7 +531,9 @@ def test_tasks_only_checkbox_flip_not_stale(repo):
+     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
+     commit_all(repo, "docs: 勾选回填")
+     code, js, _h = run_gate(repo)
+-    assert js["verdict"] != "REFUSE_START"
++    # [fix1 M1] 断确切值，MUST NOT 用 `!= "REFUSE_START"`——UNKNOWN(6) 等异常出口
++    # 也满足弱断言，会把"门崩了"读成"门放行了"。
++    assert code == 0 and js["verdict"] == "CONTINUE_IMPL"
+ 
+ def test_tasks_flip_plus_source_code_not_stale(repo):
+     # 🔴 主用例：`git add -A` 打包形态（勾选 tasks.md + 仓库别处源码）⇒ 仍豁免。
+@@ -543,10 +545,15 @@ def test_tasks_flip_plus_source_code_not_stale(repo):
+     (repo / "src.py").write_text("# impl\n", encoding="utf-8")
+     commit_all(repo, "docs: 勾选回填 + 实现")
+     code, js, _h = run_gate(repo)
+-    assert js["verdict"] != "REFUSE_START"
++    assert code == 0 and js["verdict"] == "CONTINUE_IMPL"        # [fix1 M1] 断确切值
+ 
+ def test_merge_commit_pure_flip_not_stale(repo):
+-    # merge 帧：相对每个 parent 都只是勾选框翻转 ⇒ 豁免（BR-6 逐 parent 求值）
++    # merge 场景**整体**不撞门。
++    # ⚠️ [fix1 M2] 名不副实澄清：本例并**没有**验到「merge 帧逐 parent 求值」——
++    # merge 提交自身不改 tasks.md，其帧的 --name-only 为空 ⇒ subs 为空 ⇒ 直接跳过，
++    # 真正被求值的是 side 分支上那个普通提交（单 parent）。逐 parent 求值的判别性用例
++    # 是 test_exempt_requires_every_parent_of_a_merge（函数级，构造 merge 自身改 tasks.md）。
++    # 此处保留是为守「merge 拓扑不会让端到端整体误判失鲜」。
+     d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+     _reanchor(repo, d)
+     _git(repo, "checkout", "-q", "-b", "side")
+@@ -557,7 +564,7 @@ def test_merge_commit_pure_flip_not_stale(repo):
+     commit_all(repo, "main edit")
+     _git(repo, "merge", "--no-ff", "-q", "-m", "merge side", "side")
+     code, js, _h = run_gate(repo)
+-    assert js["verdict"] != "REFUSE_START"
++    assert code == 0 and js["verdict"] == "CONTINUE_IMPL"        # [fix1 M1] 断确切值
+ 
+ def test_frame_sha_parsed_from_subject_with_spaces_and_colons(repo):
+     # 〔1.1b〕分隔符须无歧义：subject 含空格与冒号时 sha 仍可正确切出
+@@ -700,3 +707,56 @@ def test_e2e_br7_impl_review_subject_exemption_intact(repo):
+     commit_all(repo, "checkpoint(impl-review): 收尾修订")
+     _, js, _h = run_gate(repo)
+     assert js["verdict"] != "REFUSE_START"
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# [fix1 Important-1] 勾选框归一化的 fence 口径：`~~~` / 四 backtick 围栏
++#
++# 旧口径只认 ```：`~~~` 块内 task-list 形状行的**实质改动**被当成块外普通勾选翻转
++# ⇒ 豁免误开（fail-open，放行未批准的设计改动）。修法 = 四个 fence 追踪点收敛到
++# 单一源 fence_delim/FenceTracker，口径按 CommonMark 有界词法写全。
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_content_stale_on_tilde_fenced_code_block_flip():
++    # 🔴 Important-1 复现钉：删掉 `~~~` 支持 ⇒ 本例转红（返回 True = 假阳放行）
++    assert E(b"~~~\n- [ ] s\n~~~\n", b"~~~\n- [x] s\n~~~\n") is False
++
++def test_content_stale_on_four_backtick_fenced_flip():
++    assert E(b"````\n- [ ] s\n````\n", b"````\n- [x] s\n````\n") is False
++
++def test_content_stale_on_tilde_fence_with_info_string():
++    assert E(b"~~~python\n- [ ] s\n~~~\n", b"~~~python\n- [x] s\n~~~\n") is False
++
++def test_content_exempt_conservative_on_unbalanced_tilde_fence():
++    # `~~~` 未闭合 ⇒ 保守判失鲜（同 ``` 口径）
++    assert E(b"~~~\n- [ ] s\n", b"~~~\n- [x] s\n") is False
++
++def test_content_exempt_conservative_when_cross_type_fence_cannot_close():
++    # 异种围栏关不掉：~~~ 开、``` 关不上 ⇒ EOF 仍在块内 ⇒ 保守
++    assert _sg._normalize_checkbox_lines(b"~~~\n- [ ] s\n```\n") is None
++
++def test_content_exempt_conservative_when_shorter_fence_cannot_close():
++    # 闭合符须 ≥ 开启符长度：``` 关不掉 ```` 开的块
++    assert _sg._normalize_checkbox_lines(b"````\n- [ ] s\n```\n") is None
++
++def test_normalize_still_works_outside_tilde_fence():
++    # 反向证：`~~~` 块外的真勾选行照常归一化（不是靠「见 ~ 就全拒」蒙对的）
++    assert E(b"~~~\ncode\n~~~\n- [ ] s\n", b"~~~\ncode\n~~~\n- [x] s\n") is True
++
++
++# ── [fix1 Important-2] CHECKBOX_RE / CHECKBOX_BYTES_RE 单一源机械守 ──────────
++
++def test_checkbox_re_bytes_derived_from_single_source():
++    # 把「口径同源」从注释变成门：手抄一份字节副本并改口径 ⇒ 本例转红
++    assert _sg.CHECKBOX_BYTES_RE.pattern == _sg.CHECKBOX_RE.pattern.encode()
++    assert _sg.CHECKBOX_RE.pattern == _sg.CHECKBOX_RE_PATTERN
++
++def test_checkbox_str_vs_bytes_nbsp_divergence_is_conservative():
++    # 注释订正的机械锚：`\s` 在 str 模式认 Unicode 空白、bytes 模式只认 ASCII。
++    # NBSP 缩进行 ⇒ str 版认、bytes 版不认 ⇒ 该行不被归一化 ⇒ 判失鲜（保守方向）。
++    nbsp = " - [ ] s"
++    assert _sg.CHECKBOX_RE.match(nbsp) is not None
++    assert _sg.CHECKBOX_BYTES_RE.match(nbsp.encode("utf-8")) is None
++    assert _sg.CHECKBOX_RE.match("\t- [ ] s") is not None
++    assert _sg.CHECKBOX_BYTES_RE.match(b"\t- [ ] s") is not None
++    assert E(" - [ ] s\n".encode(), " - [x] s\n".encode()) is False
+diff --git a/sdflow-ship/tests/test_gate_impl_progress.py b/sdflow-ship/tests/test_gate_impl_progress.py
+index b538aea..0cd74a7 100644
+--- a/sdflow-ship/tests/test_gate_impl_progress.py
++++ b/sdflow-ship/tests/test_gate_impl_progress.py
+@@ -290,3 +290,64 @@ def test_tg02_header_descriptive_mention_not_hit(tmp_path):
+         "# p\n说明：正例形如 `〔TG-02：`\n〔TG-25：契约〕\n## Real\n正文\n",
+         encoding="utf-8")
+     assert _sg.tg02_hit(d) is False
++
++
++# ══════════════════════════════════════════════════════════════════════════
++# [fix1 Important-1] fence 单一源在 plan 解析侧（_parse_plan）与 tg02_hit 侧的独立举证。
++# 旧口径只认 ```，`~~~` 块内的伪复选框/伪 Task 标题会被当真 ⇒ 假✅ / 误判重号。
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_t34_tilde_fenced_checkbox_not_counted(repo):
++    # `~~~` 代码块内的伪 [x]：不计入 ⇒ task1 未完成 ⇒ CONTINUE_IMPL（旧口径此处假✅齐）
++    plan = ("### Task 1: A\n实现说明\n~~~\n- [x] 代码块里的示例，不是真勾\n~~~\n"
++            "### Task 2: B\n- [x] real\n")
++    approved_change(repo, plan=plan)
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
++
++
++def test_t34_tilde_task_header_in_fence_not_counted(repo):
++    # `~~~` 块内的 `### Task 1:` 示例标题不算 task、不误判重号
++    plan = ("### Task 1: 真实任务\n- [x] done\n模板示例:\n~~~\n### Task 1: <替换标题>\n"
++            "- [ ] <替换>\n~~~\n### Task 2: B\n- [x] d\n")
++    approved_change(repo, plan=plan)
++    commit_all(repo, "checkpoint(task1-a): A")
++    commit_all(repo, "checkpoint(task2-b): B")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "RUN_CODE_REVIEW"
++
++
++def test_t34_unclosed_tilde_fence_unknown(repo):
++    # `~~~` 悬空围栏 ⇒ 全文 fence 不平衡 ⇒ UNKNOWN(fail-safe)，与 ``` 同口径
++    plan = ("### Task 1: A\n- [x] done1\n~~~\n- [ ] 真实未完成(被悬空fence吞)\n"
++            "### Task 2: B\n- [x] done2\n")
++    approved_change(repo, plan=plan)
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++
++
++def test_t34_backtick_cannot_close_tilde_fence(repo):
++    # 异种围栏关不掉：~~~ 开、``` 试图闭合 ⇒ 仍未闭合 ⇒ UNKNOWN
++    plan = ("### Task 1: A\n- [x] done1\n~~~\n- [ ] 未完成\n```\n"
++            "### Task 2: B\n- [x] done2\n")
++    approved_change(repo, plan=plan)
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++
++
++def test_tg02_tilde_fenced_example_in_header_not_hit(tmp_path):
++    """头部区 `~~~` 围栏内的 〔TG-02 示例不得命中（旧口径只认 ``` ⇒ 假 RUN_SOP）。"""
++    d = mkchange(tmp_path, "demo")
++    d.joinpath("proposal.md").write_text(
++        "# p\n~~~\n〔TG-02：嵌入式〕\n~~~\n〔TG-25：契约〕\n## Real\n正文\n",
++        encoding="utf-8")
++    assert _sg.tg02_hit(d) is False
++
++
++def test_tg02_tilde_fenced_heading_in_header_still_hits(tmp_path):
++    """`~~~` 围栏内的 `## Example` 不算头部边界 ⇒ 围栏后的真声明行仍须命中。"""
++    d = mkchange(tmp_path, "demo")
++    d.joinpath("proposal.md").write_text(
++        "# p\n~~~\n## Example\n~~~\n〔TG-02：嵌入式固件变更〕\n## Real Section\n正文\n",
++        encoding="utf-8")
++    assert _sg.tg02_hit(d) is True
