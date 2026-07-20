@@ -61,6 +61,8 @@ sdflow-issues:
     T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":null}
     T203: {"module":"sdflow-ship/tests + CI 配置","summary":"门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立","type":"基础设施","status":"OPEN","time":"2026-07-21 03:41","change":"harden-gate-git-layer","batch":null}
     T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"OPEN","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":null}
+    T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"OPEN","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":null}
+    T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"OPEN","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":null}
 ---
 # 2026-07 TODO
 
