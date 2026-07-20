@@ -1,6 +1,7 @@
 ---
 ship-gate:
   design_approved: true
+  reviewed_sha: edefe35ce73bbd9bb08b5182f90cf1c2936fcff8
 ---
 
 # spec-review-report — harden-gate-git-layer（第二轮 · 设计重写后）
@@ -352,6 +353,18 @@ BASE-17 把 `CONTEXT.md` 术语条目补进 proposal Impact；BASE-19 补一张�
 | **Q3** | **登记 + 人读约束**（Migration Plan 补一句：回滚前 MUST 人工核验在途 change 阶段） | design.md Migration Plan |
 
 窄复核（`edefe35`）已跑，3 条真发现（1 致 2 高）全部返修落盘；机械门（`openspec validate`、通则 sync、覆盖图双向一致、退役簇闭包）全绿。**本记录本身即 ADR-7(b) 的首次实践**：被审四件套已于 `5f54da0` / `edefe35` 单独提交，∴ 此刻写入的锚指向已包含全部批准内容的提交。
+
+### 🔁 `reviewed_sha` 补录（自举，Task 1 落地后）
+
+拍板发生时（`e249db1`，2026-07-21）`reviewed_sha` 这个字段**还不存在**——它正是本 change 的 Task 1 才引入的。Task 1 落地后 gate 立刻对本 change 自己判 `UNKNOWN(6) / anchor-missing`，属 design.md Migration Plan 第 3 条预见的迁移态，非缺陷。
+
+**补录值 = `edefe35ce73bbd9bb08b5182f90cf1c2936fcff8`**（`edefe35`，窄复核返修的最后一次提交，即拍板时被批准的那份盘面）。依 ADR-1「锚记的是**被批准的盘面**，不是写报告的时刻」——`edefe35` 是四件套最后一次实质改动的落点，`e249db1` 只是把拍板结论写进本报告 frontmatter。
+
+**选值无判断空间（机械已证）**：`edefe35` / `e249db1` / 当时 `HEAD` 三处的 `path→oid` 映射**逐字节全等**——
+`design.md` `c28d3ee…`、`proposal.md` `8990083…`、`specs/spec-workflow/spec.md` `100b87d…`、`tasks.md` `c270b34…`，
+∴ 取三者中任一，比较结论完全相同，不存在选错致假失鲜/假新鲜的风险。
+
+补录动作**不构成新的批准决定**——拍板已于 `e249db1` 发生并有正文记录，本次只是把「当时批准的是哪份盘面」这一既成事实机械落锚。按 ADR-7(b) 单独提交。
 
 ### ⚠️ 〔SR-M〕lens-metric 门后重算 —— 本轮**未执行**，诚实登记
 
