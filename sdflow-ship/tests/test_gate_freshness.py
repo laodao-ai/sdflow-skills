@@ -1,6 +1,8 @@
 import subprocess, sys
 from pathlib import Path
 
+import pytest
+
 from conftest import commit_all, mkchange
 from test_gate_preflight import run_gate
 from test_gate_impl_progress import approved_change, PLAN2, _sg
@@ -760,3 +762,136 @@ def test_checkbox_str_vs_bytes_nbsp_divergence_is_conservative():
     assert _sg.CHECKBOX_RE.match("\t- [ ] s") is not None
     assert _sg.CHECKBOX_BYTES_RE.match(b"\t- [ ] s") is not None
     assert E(" - [ ] s\n".encode(), " - [x] s\n".encode()) is False
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [fix-design-gate-freshness-proxy Task3] 两条豁免通道的优先级唯一解（SW-1）
+#
+# 通道 A（subject 精确式，BR-7）：subject == "checkpoint(impl-review)" 或以
+#   "checkpoint(impl-review):" 起首 ⇒ **在读取任何 blob 之前**短路豁免。
+# 通道 B（内容判据，Task2）：其余任何 subject——包括 BR-7 要拒的变体形态、空
+#   subject、普通 subject——都可凭「勾选框归一化后逐行等值」获得豁免。
+#
+# 🔴 BR-7 的语义 = 「变体**不因 subject** 获豁免」，**不是**「变体必然失鲜」。
+#   变体 subject + 纯勾选内容走通道 B 豁免是正确的：豁免面取自内容本身，
+#   不取自被监管方书写的 subject（∴ 伪造 subject 拿不到任何额外豁免面）。
+#   既有 BR-7 回归用例（evil 尾串 / impl-review-fix 变体）改的都是 design.md
+#   ——落在通道 B 的适用面之外（帧内监视路径集 ≠ {tasks.md}），故不受影响。
+# ══════════════════════════════════════════════════════════════════════════
+
+_ANCHOR_REL = BASE + "spec-review-report.md"
+
+_PURE_FLIP = b"### Task 1: A\n- [x] s\n"          # 纯勾选翻转
+_SEMANTIC = b"### Task 1: A retitled\n- [ ] s\n"  # 勾选框以外的语义改动（标题措辞）
+
+
+def _stale_after(repo, subject, after, empty_subject=False):
+    """建 change → 重锚 → 以给定 subject 提交 tasks.md 的给定新内容 → 返回是否失鲜。
+
+    帧内落在 design 监视集的路径恰为 {tasks.md}（另带一份源码，贴 `git add -A`
+    的真实形态），故通道 A 不命中时判定完全由通道 B 的内容判据决定。
+    """
+    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+    _reanchor(repo, d)
+    _write_tasks(repo, after)
+    (repo / "src.py").write_text("# impl\n", encoding="utf-8")
+    if empty_subject:
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "--allow-empty-message", "-m", "")
+    else:
+        commit_all(repo, subject)
+    stale, _fresh = _sg.is_stale(repo, _ANCHOR_REL, "design", "demo")
+    return stale
+
+
+# ── ⑧a 真值表 8 格：{精确 / 变体 / 空 / 普通} subject × {纯勾选 / 语义改动} ──
+
+def test_tt_exact_subject_pure_flip_exempt(repo):
+    assert _stale_after(repo, "checkpoint(impl-review): 勾选回填", _PURE_FLIP) is False
+
+def test_tt_exact_subject_semantic_exempt_by_subject(repo):
+    # 通道 A 独有的格：内容是语义改动，仍豁免——BR-7 既有语义，本 change 不动它。
+    assert _stale_after(repo, "checkpoint(impl-review)", _SEMANTIC) is False
+
+def test_tt_variant_subject_pure_flip_exempt_via_content(repo):
+    # 🔴 判别性最强的一格：变体 subject 拿不到通道 A，但内容是纯勾选 ⇒ 经通道 B 豁免。
+    assert _stale_after(repo, "checkpoint(impl-review)evil", _PURE_FLIP) is False
+
+def test_tt_variant_subject_semantic_stale(repo):
+    # 变体 subject + 语义改动 ⇒ 两条通道都不给 ⇒ 失鲜（BR-7 的杀伤面完好）。
+    assert _stale_after(repo, "checkpoint(impl-review)evil", _SEMANTIC) is True
+
+def test_tt_empty_subject_pure_flip_exempt_via_content(repo):
+    assert _stale_after(repo, None, _PURE_FLIP, empty_subject=True) is False
+
+def test_tt_empty_subject_semantic_stale(repo):
+    assert _stale_after(repo, None, _SEMANTIC, empty_subject=True) is True
+
+def test_tt_plain_subject_pure_flip_exempt_via_content(repo):
+    assert _stale_after(repo, "docs: 勾选回填", _PURE_FLIP) is False
+
+def test_tt_plain_subject_semantic_stale(repo):
+    assert _stale_after(repo, "docs: 手动改设计", _SEMANTIC) is True
+
+
+# ── ⑧b 短路次序：精确 subject MUST 在读取任何 blob **之前**判定 ─────────────
+
+def test_exact_subject_short_circuits_before_any_blob_read(repo, monkeypatch):
+    """通道 A 短路发生在读取之前——把 blob_pair 替身为「一调用即爆」，精确 subject
+    帧仍须判不失鲜。
+
+    这不只是效率：短路保证精确 subject 帧的判定**不受任何读取失败 / 形态不合格的
+    影响**。若次序颠倒（先读内容再看 subject），本例会在 blob_pair 处抛异常而红。
+    """
+    calls = []
+
+    def exploding_blob_pair(*a, **k):
+        calls.append(a)
+        raise AssertionError("blob_pair 在精确 subject 短路之前被调用（次序错）")
+
+    monkeypatch.setattr(_sg, "blob_pair", exploding_blob_pair)
+    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+    _reanchor(repo, d)
+    _write_tasks(repo, _SEMANTIC)
+    commit_all(repo, "checkpoint(impl-review): 收尾修订")
+    assert _sg.is_stale(repo, _ANCHOR_REL, "design", "demo") == (False, "fresh")
+    assert calls == []                      # 一次都没读
+
+
+def test_non_exact_subject_does_reach_blob_read(repo, monkeypatch):
+    """反向证：上例的绿不是靠「blob_pair 从来不被调用」蒙对的——非精确 subject 下
+    它**必须**被调到（否则短路用例失去判别力，变成恒真断言）。"""
+    calls = []
+    real = _sg.blob_pair
+    monkeypatch.setattr(_sg, "blob_pair",
+                        lambda *a, **k: (calls.append(a), real(*a, **k))[1])
+    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+    _reanchor(repo, d)
+    _write_tasks(repo, _PURE_FLIP)
+    commit_all(repo, "docs: 勾选回填")
+    assert _sg.is_stale(repo, _ANCHOR_REL, "design", "demo") == (False, "fresh")
+    assert len(calls) == 1
+
+
+# ── ⑧c 豁免面不由被监管方书写的声明单独决定 ──────────────────────────────
+
+@pytest.mark.parametrize("subject", [
+    "docs: 随手一提交",
+    "checkpoint(impl-review)evil",           # 伪装成豁免形态（BR-7 要拒的尾串垃圾）
+    "checkpoint(impl-review-fix): 改设计",   # 另一种伪装变体
+    "feat!: 完全无关的 subject",
+])
+def test_content_channel_verdict_independent_of_subject(repo, subject):
+    """同一份语义改动，subject 换成任意花样（含伪装成豁免形态的变体）⇒ 判定恒为失鲜。
+
+    被监管方能书写的只有 subject；通道 B 的判据取自内容本身，故伪装拿不到任何
+    额外豁免面。与 ⑧a 的 `*_pure_flip_exempt_via_content` 三格互为正反两面。"""
+    assert _stale_after(repo, subject, _SEMANTIC) is True
+
+
+def test_content_criterion_takes_only_content(repo):
+    """机械锚：内容判据的入参只有前后两版内容——无 subject、无路径、无文件存在性。
+
+    将来若有人往判据里塞 subject / 路径（把豁免面交回给被监管方书写的声明），本例转红。"""
+    import inspect
+    assert list(inspect.signature(_sg._tasks_content_exempt).parameters) == ["before", "after"]

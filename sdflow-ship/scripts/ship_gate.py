@@ -493,6 +493,17 @@ def is_stale(root, rel, scope, change):
             frame_sha, _, subject = lines[0].partition("\x1f")
             # [spec-review-amendment BR-7] 精确式：裸 checkpoint(impl-review) 或带冒号描述；
             # 裸 startswith 闭合前缀仍收 `checkpoint(impl-review)evil` 尾串垃圾，故用精确式。
+            #
+            # [Task3 · SW-1] 🔴 两条豁免通道的优先级：本判定 MUST 留在此处——即**读取任何
+            # blob 之前**短路。次序是硬要求，不只是效率：短路保证精确 subject 帧的判定
+            # 不受任何读取失败 / 形态不合格的影响。MUST NOT 把内容读取挪到它前面。
+            #
+            # BR-7 的语义 = 「变体**不因 subject** 获豁免」，**不是**「变体必然失鲜」：
+            # 落到下面的任何 subject（BR-7 要拒的变体、空 subject、普通 subject）都仍
+            # **可以**凭内容判据（勾选框归一化后逐行等值）获豁免。这不是放松 BR-7——
+            # 豁免面取自内容本身，∴ 被监管方书写 subject 拿不到任何额外豁免面。
+            # 真值表 8 格（{精确/变体/空/普通} × {纯勾选/语义改动}）逐格锁在
+            # test_gate_freshness.py ⑧a；短路次序锁在 ⑧b。
             if subject == "checkpoint(impl-review)" or subject.startswith("checkpoint(impl-review):"):
                 continue                      # 阶段三合法尾流修订，豁免不失鲜
             # [impl-review-fix F1] 监视集成员判据**只有一处**——`design_watched_subs`。
