@@ -252,6 +252,23 @@ dispatch prompt 必含：
 - **🔴 本 SKILL.md 顶部的「三条通则」区块全文**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——
   子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。漏带 ⇒ implementer 眼前只有现状代码，
   **必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。**双轴审的两个 reviewer 子代理同样必带。**
+- **🔴 信号权威表**（必填槽，**原文携带**，非可省的 prose 叮嘱）——子代理是 fresh context，
+  **未声明即等同未约束**。正面陈述归属（不是禁令清单：禁令只挡列举到的那一种越界形态，
+  权威表挡的是整个范畴）：
+
+  | 范畴 | 权威在哪 | 谁写 |
+  |---|---|---|
+  | **本票完成信号** | ① `superpowers-plan.md` 里该 `### Task N:` 段的验收复选框（全勾即计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
+  | **本票工作产物** | 实现代码、测试、`{change_dir}/impl-reports/task<N>-<slug>.md` | implementer 自己写 |
+  | **设计意图（需求 / 设计 / 规格 / 任务清单）** | `proposal.md` · `design.md` · `specs/` · `tasks.md` | **设计阶段已定稿，实现期不是它们的作者**——发现设计有问题走 `NEEDS_CONTEXT` / `BLOCKED` 上抛编排层，由编排层裁决，**不自行改盘** |
+
+  > 这两行归属**与设计门实际消费的判据一一对应**：`ship_gate.py` 的完成集 = checkpoint 标签通道
+  > （窗口 `[plan 首次提交 sha, HEAD]` **闭区间**内、命名空间精确等于本 change 的 `TAG_RE` 命中）
+  > **∪** 复选框通道（`_parse_plan` fence-aware 按 `### Task <n>:` 分段绑定、段内全勾）；
+  > 设计工件那一行对应 gate 的 design 域失鲜监视集（`proposal` / `design` / `tasks.md` / `specs/`）。
+  > **MUST NOT** 在表里声明 gate 并不读取的信号源（如 ledger 文件、返回值里的口头「done」）——
+  > 声明了 gate 也不认，只会诱导 implementer 把完成信号写到无人消费的地方。
+
 - 契约：TDD at pre-agreed seams（matt tdd 语义：先与实现者对齐测试的公共接口边界，再红→绿）、
   定期跑 typecheck、结束前跑一次全套件；
 - **完成信号后置双写时序**：implementer **实现期提交 MUST NOT 带 `task<N>-` 完成标签**——普通
@@ -333,6 +350,15 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 > **🔴 两个评审子代理的 prompt（以及 implementer / fix 子代理的 prompt）MUST 原文携带本 SKILL.md 顶部的「三条通则」区块**
 > （`sdflow:principles` 从 start 到 end，整段复制，不转述、不摘要）——**子代理是 fresh context，看不见本 SKILL.md**。
 > **Spec 轴尤其吃通则 ③**：它的判据是「**ticket 声明的目标态**做到没有」，**不是**「现有代码本来就是这样，那就算了」。
+>
+> **🔴 fix 子代理的 dispatch prompt 同样 MUST 原文携带上文「每 ticket 派 fresh implementer」节的
+> 信号权威表**——fix 轮次同为 fresh context，其完成信号与设计工件的权威归属与首轮完全一致
+> （fix 也 MUST NOT 自行勾框 / 打完成标签 / 改四件套）。
+
+**权威表缺席不得静默降级**：若因 SKILL 裁剪、模板漂移或上下文预算取舍导致某次 dispatch 未携带
+信号权威表，**MUST 显式停并报告缺失**，**MUST NOT** 以「设计门（`ship_gate.py`）已经兜住失鲜后果」
+为由默默放行——gate 的监视集分流只消解**失鲜误判**，并不阻止 implementer 写脏设计工件；
+本约束与 gate 侧的失鲜判据**各自独立成立**，任一方在场都不使另一方可省。
 
 - **Standards 轴**：仓内文档化标准 + Fowler smell 基线（同 matt code-review 语义），**且**把
   `code-checklists/domains/<命中栈>`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析取得规则根）
