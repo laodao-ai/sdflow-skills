@@ -42,6 +42,7 @@ sdflow-issues:
     T183: {"module":"recorder/repo_root","summary":"repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed","type":"代码质量","status":"PROPOSED","time":"2026-07-19 23:10","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
     T184: {"module":"workflow/outside-voice","summary":"两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval \"$(~/.sdflow/hack/resolve-models.sh --root ...)\" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。","type":"基础设施","status":"PROPOSED","time":"2026-07-19 23:27","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
     T185: {"module":"recorder/repo_root","summary":"repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice","type":"可观测性","status":"PROPOSED","time":"2026-07-20 00:31","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
+    T186: {"module":"sdflow-ship/ship_gate.py","summary":"merge 帧在 live 路径取不到文件列表 → design 域逐 parent 豁免分支不可达（evil-merge 面）","type":"代码质量","status":"OPEN","time":"2026-07-20 14:17","change":"fix-design-gate-freshness-proxy","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1738,3 +1739,16 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 > repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T185 -->
+
+<!-- sdflow-issue-block:start id=T186 -->
+## T186: merge 帧在 live 路径取不到文件列表 → design 域逐 parent 豁免分支不可达（evil-merge 面）
+> merge 帧在 live 路径取不到文件列表 → design 域逐 parent 豁免分支不可达（evil-merge 面）
+
+**关联文档**：`openspec/changes/fix-design-gate-freshness-proxy/design.md`
+
+**动机**：Task1 Spec 轴评审实测：git log --name-only 对 merge 提交默认不输出 diff，merge 帧只有 sha+subject 无文件行 ⇒ is_stale 的 tasks_touched 对 merge 帧恒 False ⇒ design_frame_exempt 的逐 parent 分支从 is_stale 不可达，仅单测层覆盖。属既有行为（evil merge 单改 design.md 今天也不判失鲜），非本 change 引入。
+
+**思路**：MUST NOT 在此处补 --diff-merges——会扩大 BR-6 护栏面（头注释承诺 merge 内部提交逐一枚举，改 diff-merges 会改变 merge 场景失鲜语义）。建议 Task2 打开勾选框豁免后，先复核 evil-merge 面的真实暴露度再定修法。
+
+**备注**：Task1 双轴审 Spec 轴 Minor，评审方自己建议不在本票修。
+<!-- sdflow-issue-block:end id=T186 -->

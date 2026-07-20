@@ -1,0 +1,656 @@
+diff --git a/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task1-content-visibility.md b/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task1-content-visibility.md
+new file mode 100644
+index 0000000..ad10fd3
+--- /dev/null
++++ b/openspec/changes/fix-design-gate-freshness-proxy/impl-reports/task1-content-visibility.md
+@@ -0,0 +1,91 @@
++# Task 1 impl-report — 设计门能看见内容，且看不清时一律保守判失鲜
++
++**R-ID:** SW-1 · **文件:** `sdflow-ship/scripts/ship_gate.py` / `sdflow-ship/tests/test_gate_freshness.py`
++
++## 做了什么
++
++给 `is_stale(scope="design")` 装上两项它此前没有的能力，并把「看不清」的方向一律钉死在**判失鲜**一侧：
++
++1. **区分「本帧落在 design 域监视集内的触及路径集」与该提交的完整文件列表**——新增纯函数
++   `design_watched_subs(frame_files, base)`。
++2. **取到指定提交前后两版 `tasks.md` 的原始字节**——新增 `run_git_bytes`（原始字节读取）
++   + `tasks_blob_pair`（前后两版 + 形态资格 + 双侧 rc 检查）+ `commit_parents`（逐 parent）。
++3. `git log` format 由 `%x00%s` 扩为 `%x00%H%x1f%s`，让每帧携带自身 sha（无 sha 就取不到 blob）。
++
++**本票不引入任何豁免。** `design_frame_exempt` 的判据入口 `_tasks_content_exempt(before, after)`
++在本票恒返回 `False`，因此对外可观察行为与本票之前**逐字一致**——一切情形仍照判失鲜。
++
++## 关键设计选择及理由
++
++| 选择 | 理由 |
++|---|---|
++| **`cat-file blob` 而非 `show`** 读前后两版 | `show` 的输出受 smudge/textconv 过滤器影响，同一 blob 在不同 config 下可读出不同字节；`cat-file blob` 是 object 原始字节。实测本机全局 `core.autocrlf=input` 会在 **commit 时**清掉 CRLF（那发生在 blob 生成前，读取端无从补救）——但读取端本身必须零转换。 |
++| **`run_git_bytes` 全新一条路径，不复用 `run_git`/`run_git_rc`** | 后两者 `text=True` + `errors="replace"` + `.strip()`，四者各自可造假等值（吞首尾空白、吞末尾换行、CRLF↔LF 不可分辨、非 UTF-8 → U+FFFD 后两版趋同）。变异 M12 实证：把读取换回文本路径 ⇒ 两条保真用例转红。 |
++| **形态资格闸门**（`_plain_modification_from_raw`） | 新建/删除/改名/复制/类型变更/仅权限位这些形态下，前后两版 blob 字节**可能完全相同**（chmod、regular↔symlink），纯字节等值会把真实的状态位变更读成「没实质改动」。 |
++| **把 raw 行解析抽成纯函数** | 首轮变异验证发现 `status == "M"` 与行形校验在 git 驱动的用例下**杀不掉**（被 mode 相等 + 双侧 rc 两道先兜住）——不是「不需要」，是「不可证伪」。抽成纯函数后对合成 raw 行直测，两条分支各自有了红。这是本票唯一一次结构调整，动机即 PV 规则 5 的可证伪性。 |
++| **把 Task2 判据抽成 `_tasks_content_exempt` 独立函数** | 同上：Task1 恒 False 会把上游三道保守回落分支全遮住（删掉也没人红）。有了这个替身点，测试可把它 stub 成恒 True，逐条证伪回落分支。Task2 只需实现这一个函数。 |
++| **`is_stale` 沿用逐文件 return-True 结构**〔1.1a〕 | 仅 `sub == "tasks.md"` 走单独分支延后到帧末判定；「帧内监视集路径集是否恰为 `{tasks.md}`」由控制流建立，未重构成帧级两遍预扫描。 |
++| **`\x1f` 作 sha/subject 分隔符** | subject 可含空格与冒号；`%H` 长度随 sha1/sha256 变，定长切片不安全。 |
++| **`--no-renames`** | 让改名分解成 A+D，不依赖仓库级 `diff.renames` config（确定性）。 |
++
++**BR-6 护栏逐字不动**：design 域遍历未引入 `--no-merges` / `--first-parent`；merge 提交下「前版」
++相对**每个** parent 各自定义（`commit_parents` 返回全部 parent，`design_frame_exempt` 逐 parent 求值）。
++机械守：`test_br6_guard_no_no_merges_or_first_parent_in_design_scope`（扫代码行、跳过注释——
++护栏注释本身就写着这两个 flag 名）。
++
++## 每条验收标准的证据锚点
++
++| 验收标准 | 锚点 |
++|---|---|
++| 能求出「监视集内触及路径集」，与完整文件列表是两个量 | `design_watched_subs` (ship_gate.py:234) · `test_watched_subs_is_not_the_full_file_list`、`test_watched_subs_collects_all_watched_members` |
++| 能取到前后两版原始字节，读取保真 | `run_git_bytes` (ship_gate.py:222) · `tasks_blob_pair` (ship_gate.py:290) · `test_blob_pair_returns_raw_bytes_verbatim`（首尾空白 + 末尾换行 + CRLF + `\xff\xfe` 非 UTF-8 逐字节相等）、`test_blob_pair_preserves_crlf_and_trailing_newline_difference` |
++| 返回状态显式检查；任一侧失败 ⇒ 判失鲜，不依赖空值相等 | `tasks_blob_pair` 的 `rc_before != 0 or rc_after != 0` · `test_blob_pair_rc_failure_on_both_sides_is_not_equal_bytes`（显式断言不得返回 `(True, b"", b"")`）、`test_blob_pair_rc_failure_on_one_side_is_conservative` |
++| 前版不存在（该提交中新建）⇒ 判失鲜 | `test_blob_pair_added_in_this_commit_is_conservative`、`test_exempt_conservative_when_added_in_this_commit` |
++| 后版不存在（删除 / 迁走）⇒ 判失鲜 | `test_blob_pair_deleted_in_this_commit_is_conservative`、`test_blob_pair_renamed_away_is_conservative` |
++| 非普通内容修改（重命名/复制/类型变更/仅权限位）⇒ 判失鲜 | `_plain_modification_from_raw` (ship_gate.py:262) · `test_blob_pair_chmod_only_is_conservative`（含前提校准断言：chmod 确被 git 记录，否则本例失去区分力）、`test_blob_pair_type_change_to_symlink_is_conservative`、`test_raw_line_rejects_non_modification_statuses`、`test_raw_line_rejects_mode_only_change`、`test_raw_line_rejects_malformed_shapes` |
++| merge 下前版相对每个 parent 各自定义，未引入 `--no-merges`/`--first-parent` | `commit_parents` (ship_gate.py:250) · `test_commit_parents_enumerates_every_parent_of_a_merge`、`test_exempt_requires_every_parent_of_a_merge`（**判别性构造**：merge 相对 first parent 合格、相对 second parent 不合格，含两条前提校准断言）、`test_br6_guard_no_no_merges_or_first_parent_in_design_scope` |
++| 既有全部失鲜用例逐字保持绿，本票不改变任何判定 | 既有 164 条全绿（无一条被改写）· 新增行为不变用例：`test_tasks_only_checkbox_flip_still_stale`、`test_tasks_flip_plus_source_code_still_stale`（`git add -A` 打包形态）、`test_merge_commit_touching_tasks_still_stale`、`test_design_frame_exempt_never_exempts_in_task1` |
++
++## 变异验证实际执行记录
++
++机械执行（脚本逐条改源 → 跑 `test_gate_freshness.py` 全文件 → 还原），**15/15 全部转红**：
++
++| 变异 | 转红用例 |
++|---|---|
++| M1 删两侧 rc 显式检查 | `test_blob_pair_rc_failure_on_both_sides_is_not_equal_bytes`, `..._on_one_side_...` |
++| M2 删整个形态闸门 | `..._chmod_only_...`, `..._type_change_to_symlink_...`, `test_exempt_conservative_when_form_disqualified` |
++| M3b 只删 mode 相等（留 status==M） | `..._chmod_only_...`, `test_raw_line_rejects_mode_only_change`, `test_exempt_conservative_when_form_disqualified` |
++| M4c 只删 status==M（留 mode 相等） | `test_raw_line_rejects_non_modification_statuses` |
++| M10 删「以 `:` 起始」行形校验 | `test_raw_line_rejects_malformed_shapes` |
++| M10b 删字段数校验 | `test_raw_line_rejects_malformed_shapes` |
++| M11 删 rc/空输出回落 | `test_plain_content_modification_false_when_path_untouched` |
++| M5 `commit_parents` 只留 first parent | `test_commit_parents_enumerates_every_parent_of_a_merge`, `test_exempt_requires_every_parent_of_a_merge` |
++| M5b `commit_parents` 解析失败不回落 None | `test_commit_parents_unresolvable_sha_is_none` |
++| M6 `design_watched_subs` 退化为完整文件列表 | `test_watched_subs_is_not_the_full_file_list` |
++| M7 exempt 去掉「监视集恰为 {tasks.md}」限定 | `test_exempt_conservative_when_other_watched_path_touched_even_if_content_ok` |
++| M7b exempt 去掉根提交 / None parents 回落 | `test_exempt_conservative_on_root_commit`, `..._on_unresolvable_sha` |
++| M7c exempt 去掉 pair 不合格回落 | `test_exempt_conservative_when_form_disqualified`, `..._when_added_in_this_commit`, `test_exempt_requires_every_parent_of_a_merge` |
++| M8 format 不携带 `%H` | `test_impl_review_exempt_bare_and_colon`, `test_br6_guard_...` |
++| M12 读取改走 text 路径（`.strip()` + `errors="replace"`） | `test_blob_pair_returns_raw_bytes_verbatim`, `..._preserves_crlf_...` |
++
++首轮 M4c/M10/M7/M7b/M7c 曾**不转红**（被上游闸门遮蔽 / 被 Task1 恒 False 遮蔽）——这直接驱动了
++上表两处结构选择（抽纯函数 + 抽判据函数），而非放宽变异标准。
++
++## 全套件结果
++
++- `pytest sdflow-ship/tests/` — **47 passed**（本文件；全 ship 套件 `sdflow-ship/tests/` 164 → **197 passed**，新增 33 条，无既有用例被改写）
++- 仓根 `/usr/bin/python3 -m pytest` 全套件 — **1944 passed, 8 skipped, 3 xfailed**（125.62s），零 failure、零新增 warning
++- `python3 -m py_compile sdflow-ship/scripts/ship_gate.py` — 通过
++
++## Concerns
++
++1. **`--no-renames` 这道保障不可证伪。** 移除它没有任何用例转红：路径限定 + 双侧 rc 检查已把改名
++   兜在 False 一侧。保留它是为了不依赖仓库级 `diff.renames` config（确定性），但它目前是
++   defense-in-depth 而非独立承重——显式登记，不冒充有守。
++2. **CRLF 归一化发生在 commit 时，读取端无从补救。** 本机全局 `core.autocrlf=input` 下，CRLF 在
++   blob 生成前就被清成 LF，两版 blob 根本不含 CR。这不影响本票的判定方向（保真读取仍是必须的，
++   否则 `autocrlf=false` 的消费仓会被吞掉差异），但意味着「CRLF 差异」在部分消费仓天然不可见。
++   两条保真用例已显式钉 `core.autocrlf=false`，并在注释里写明前提校准的理由。
++3. **`design_frame_exempt` 恒 False 期间，其内部分支只靠 monkeypatch 替身证伪。** 这是 Task1
++   「能力先行、判据后接」形态的固有代价。Task2 接上 `_tasks_content_exempt` 后，这些分支会同时
++   拿到端到端（`run_gate`）层面的红，届时建议补一轮不带替身的端到端负例。
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index 0700cf9..5c28f50 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -219,6 +219,127 @@ def report_last_sha(root, rel):
+ DESIGN_WATCHED_NAMES = ("proposal.md", "design.md", "tasks.md")   # D9〔design.md 决策源〕四件套
+ 
+ 
++def run_git_bytes(root, *args):
++    """保真读取：返回 (returncode, stdout **原始字节**)。
++
++    [fix-design-gate-freshness-proxy Task1 · tasks 1.1d] MUST NOT 复用 run_git/run_git_rc——
++    那条路径 text=True + errors="replace" + .strip()，四者各自可造假等值：
++    吞首尾空白、吞末尾换行、CRLF↔LF 不可分辨、非 UTF-8 字节被替换成 U+FFFD 后两版趋同。
++    本函数只做 subprocess 原样取字节，解码与归一化留给调用方按判据自行决定。
++    """
++    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args], capture_output=True)
++    return r.returncode, r.stdout
++
++
++def design_watched_subs(frame_files, base):
++    """帧内**落在 design 域监视集内**的触及路径集（相对 change 目录）。
++
++    [Task1] 这与「该提交的完整文件列表」是两个不同的量：checkpoint 走 `git add -A`，
++    真实提交必然打包源码；按整 commit 求值 ⇒ 任何以此为前提的判据永不触发。
++    """
++    subs = set()
++    for f in frame_files:
++        if not f or not f.startswith(base):
++            continue
++        sub = f[len(base):]
++        if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
++            subs.add(sub)
++    return subs
++
++
++def commit_parents(root, sha):
++    """该提交的 parent sha 列表。根提交 → []；解析失败 → None。
++
++    [Task1 · BR-6 护栏] merge 提交下「前版」相对**每个** parent 各自定义——
++    调用方须逐 parent 求值，MUST NOT 只看 first parent。
++    """
++    rc, out = run_git_rc(root, "rev-list", "--parents", "-n", "1", sha)
++    if rc != 0 or not out:
++        return None
++    return out.split()[1:]
++
++
++def _plain_modification_from_raw(line):
++    """`git diff --raw` 单行 → 该行是否表示**普通内容修改**。纯函数（可对合成行直接测）。
++
++    行形：`:<srcmode> <dstmode> <srcsha> <dstsha> <status>\\t<path>`
++    [Task1] 新建(A)/删除(D)/改名(R)/复制(C)/类型变更(T)/仅权限位(mode 变) 一律 False——
++    此类形态下前后两版 blob 字节可能**完全相同**（chmod、regular↔symlink），拿字节等值
++    当「没实质改动」会放行真实的状态位变更。
++    """
++    if not line.startswith(":"):
++        return False                       # 非 raw 行形 ⇒ 下面的定位全不可信，保守
++    fields = line.split("\t", 1)[0].split()
++    if len(fields) < 5:
++        return False
++    src_mode, dst_mode, status = fields[0][1:], fields[1], fields[4]
++    return status == "M" and src_mode == dst_mode
++
++
++def _plain_content_modification(root, parent, sha, path):
++    """该提交相对某 parent 对 path 的变更是否为普通内容修改。
++
++    --no-renames：让改名分解成 A+D，不依赖 diff.renames 的仓库级 config（确定性）。
++    """
++    rc, out = run_git_rc(root, "diff", "--raw", "--no-renames", parent, sha, "--", path)
++    if rc != 0 or not out:
++        return False                       # 取不到 / 该 parent 侧未触及此路径 ⇒ 保守
++    return _plain_modification_from_raw(out.splitlines()[0])
++
++
++def tasks_blob_pair(root, parent, sha, path):
++    """取该提交相对某 parent 的前后两版 blob 原始字节。
++
++    返回 (ok, before_bytes, after_bytes)。**ok=False ⇒ 调用方 MUST 保守判失鲜**——
++    取不到、读不准、形态不合格一律归此侧，绝不因读取失败而放行。
++
++    [tasks 1.1c] 两侧读取各自显式判 returncode，MUST NOT 依赖空串巧合：
++    双侧失败会得 b"" == b"" ⇒ 判等值 ⇒ 放行真实设计改动（假绿方向）。
++    """
++    if not _plain_content_modification(root, parent, sha, path):
++        return False, b"", b""
++    # 用 cat-file blob 而非 show：前者输出 object 的**原始字节**，绕开 smudge/textconv
++    # 等工作树转换；show 的输出受这些过滤器影响，同一 blob 在不同 config 下可读出不同字节。
++    rc_before, before = run_git_bytes(root, "cat-file", "blob", f"{parent}:{path}")
++    rc_after, after = run_git_bytes(root, "cat-file", "blob", f"{sha}:{path}")
++    if rc_before != 0 or rc_after != 0:
++        return False, b"", b""
++    return True, before, after
++
++
++def _tasks_content_exempt(before, after):
++    """前后两版 tasks.md 原始字节 → 是否属于「零设计信息量」的改动，可豁免失鲜。
++
++    🔴 [Task1] **判据尚未接入**，恒 False ⇒ 一律照判失鲜。Task2 在此实现勾选框归一化
++    行级等值比较（MUST 限于行级等值，MUST NOT 语义 diff / 解析 markdown 结构）。
++    抽成独立函数是为了把「保守回落」与「等值判据」分成两个可各自证伪的面：
++    上游 design_frame_exempt 的每道回落分支都能在本函数被替身为恒 True 时单独证伪。
++    """
++    return False
++
++
++def design_frame_exempt(root, sha, frame_files, base):
++    """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
++
++    🔴 [Task1] **本票不引入任何豁免**——能力就位（能区分监视集内路径集、能取到前后两版
++    原始字节、能识别不合格形态），但因 _tasks_content_exempt 恒 False 而恒返回 False，
++    对外可观察行为与接入前逐字一致。Task2 只需实现 _tasks_content_exempt。
++    """
++    if design_watched_subs(frame_files, base) != {"tasks.md"}:
++        return False                       # 帧内还触及其他监视路径 ⇒ 照判失鲜
++    parents = commit_parents(root, sha)
++    if not parents:
++        return False                       # 根提交 / parent 解析失败 ⇒ 保守
++    path = base + "tasks.md"
++    for parent in parents:                 # merge：与**每个** parent 各自成立才算
++        ok, before, after = tasks_blob_pair(root, parent, sha, path)
++        if not ok:
++            return False                   # 取不到 / 形态不合格 ⇒ 保守
++        if not _tasks_content_exempt(before, after):
++            return False                   # [Task1] 判据未接入，恒走此支 ⇒ 行为不变
++    return True
++
++
+ def is_stale(root, rel, scope, change):
+     """D9 分域〔Q1=B/Q3=A〕。scope: 'design'|'code'。返回 (stale, freshness)。
+ 
+@@ -232,26 +353,36 @@ def is_stale(root, rel, scope, change):
+     base = f"openspec/changes/{change}/"
+     if scope == "design":
+         # [spec-review-amendment B2] 带 subject 分帧遍历，checkpoint(impl-review) 精确式豁免。
+-        # 帧形（--format=%x00%s --name-only）：`\x00<subject>\n\n<file>\n<file>…`，按 \x00 切帧，
+-        # 帧首行=subject、余非空行=触及文件。MUST NOT 加 --no-merges/--first-parent〔BR-6 护栏〕
++        # 帧形（--format=%x00%H%x1f%s --name-only）：`\x00<sha>\x1f<subject>\n\n<file>…`，
++        # 按 \x00 切帧，帧首行= sha + \x1f + subject、余非空行=触及文件。
++        # [Task1 · tasks 1.1b] format 携带 %H：不带 sha 就取不到该提交前后两版 blob。
++        # 分隔符用 \x1f（unit separator）而非空格/冒号——subject 可含空格与冒号，须无歧义。
++        # MUST NOT 加 --no-merges/--first-parent〔BR-6 护栏〕
+         # ——头注释承诺 merge 内部提交逐一枚举不漏检；--no-merges 会改变 merge 场景失鲜语义。
+-        out = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=%x00%s")
++        out = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=%x00%H%x1f%s")
+         for frame in out.split("\x00"):
+             if not frame:
+                 continue
+             lines = frame.split("\n")
+-            subject = lines[0]
++            frame_sha, _, subject = lines[0].partition("\x1f")
+             # [spec-review-amendment BR-7] 精确式：裸 checkpoint(impl-review) 或带冒号描述；
+             # 裸 startswith 闭合前缀仍收 `checkpoint(impl-review)evil` 尾串垃圾，故用精确式。
+             if subject == "checkpoint(impl-review)" or subject.startswith("checkpoint(impl-review):"):
+                 continue                      # 阶段三合法尾流修订，豁免不失鲜
++            # [tasks 1.1a] 沿用逐文件 return-True 结构，仅 tasks.md 走单独分支（延后到帧末
++            # 判定——「帧内监视集路径集是否恰为 {tasks.md}」由控制流建立）。
++            tasks_touched = False
+             for f in lines[1:]:
+                 if not f:
+                     continue
+                 if f.startswith(base):
+                     sub = f[len(base):]
+-                    if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
++                    if sub == "tasks.md":
++                        tasks_touched = True
++                    elif sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
+                         return True, "stale"
++            if tasks_touched and not design_frame_exempt(root, frame_sha, lines[1:], base):
++                return True, "stale"
+         return False, "fresh"
+     # scope == "code"：行为逐字不变（无 subject、无豁免、无 --no-merges）
+     files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
+diff --git a/sdflow-ship/tests/test_gate_freshness.py b/sdflow-ship/tests/test_gate_freshness.py
+index 1c7eb42..0092a6f 100644
+--- a/sdflow-ship/tests/test_gate_freshness.py
++++ b/sdflow-ship/tests/test_gate_freshness.py
+@@ -1,8 +1,14 @@
++import subprocess, sys
++from pathlib import Path
++
+ from conftest import commit_all, mkchange
+ from test_gate_preflight import run_gate
+-from test_gate_impl_progress import approved_change, PLAN2
++from test_gate_impl_progress import approved_change, PLAN2, _sg
+ from test_gate_tail import impl_done
+ 
++BASE = "openspec/changes/demo/"
++TASKS_REL = BASE + "tasks.md"
++
+ def tail_ok(repo):
+     # [mlh-p5 Task5] live 迁 frontmatter（原 inline 双锚，产出的 gate verdict 不变）
+     d = impl_done(repo)
+@@ -174,3 +180,364 @@ def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
+     assert code == 5 and js["verdict"] == "VERIFY_FAIL"
+     assert js.get("cr_freshness") == "stale"
+     assert "code-review 结论亦已陈旧" in js["reason"]
++
++# ══════════════════════════════════════════════════════════════════════════
++# [fix-design-gate-freshness-proxy Task1] 设计门内容可见性 + 保守回落
++#
++# 本票**不引入任何豁免**：交付「判定有能力看见内容」这件能力本身，以及看不清时
++# 一律判失鲜的保守方向。对外可观察行为与本票之前逐字一致（既有用例全绿即证）。
++# ══════════════════════════════════════════════════════════════════════════
++
++def _git(root, *args, check=True):
++    return subprocess.run(["git", "-C", str(root), *args],
++                          check=check, capture_output=True, text=True)
++
++def _head(repo):
++    return _git(repo, "rev-parse", "HEAD").stdout.strip()
++
++def _write_tasks(repo, data, name="tasks.md"):
++    """原始字节写入 change 目录下的文件（不经文本层，保真测试用）。"""
++    p = repo / "openspec" / "changes" / "demo" / name
++    p.parent.mkdir(parents=True, exist_ok=True)
++    p.write_bytes(data)
++    return p
++
++def _seed_tasks(repo, data=b"### Task 1: A\n- [ ] s\n"):
++    """建一个已有 tasks.md 的 change，返回 (change_dir, 该提交 sha)。"""
++    d = approved_change(repo, plan=PLAN2)
++    _write_tasks(repo, data)
++    commit_all(repo, "seed tasks.md")
++    return d, _head(repo)
++
++
++# ── ① 「监视集内触及路径集」与「提交完整文件列表」是两个量 ──────────────
++
++def test_watched_subs_is_not_the_full_file_list():
++    frame_files = [
++        "src/app.py",                       # 仓库别处源码（git add -A 必然打包）
++        "README.md",
++        BASE + "tasks.md",
++        BASE + "verify-report.md",          # change 目录内、但不在 design 监视集
++        "openspec/changes/other/design.md", # 别的 change
++    ]
++    assert _sg.design_watched_subs(frame_files, BASE) == {"tasks.md"}
++    # 与完整文件列表是两个不同的量——后者含 5 项，前者只 1 项
++    assert len(frame_files) == 5
++
++def test_watched_subs_collects_all_watched_members():
++    frame_files = [BASE + n for n in ("tasks.md", "design.md", "proposal.md",
++                                      "specs/foo/spec.md")] + ["src/a.py"]
++    assert _sg.design_watched_subs(frame_files, BASE) == {
++        "tasks.md", "design.md", "proposal.md", "specs/foo/spec.md"}
++
++
++# ── ② 能取到前后两版原始字节，且读取保真 ────────────────────────────────
++
++def test_blob_pair_returns_raw_bytes_verbatim(repo):
++    # 首尾空白 / 末尾换行 / CRLF / 非 UTF-8 字节：四者各自可造假等值，必须原样保真。
++    # 前提校准：本机全局 core.autocrlf=input 会在 **commit 时**把 CRLF 清成 LF（blob 里
++    # 根本不存在 CR）——那样 CRLF 维度失去区分力。目标态下消费仓两种 config 都存在，
++    # 故这里显式钉 false，让 CRLF 真进 blob，才测得出「读取端是否保真」。
++    _git(repo, "config", "core.autocrlf", "false")
++    before = b"  \r\n### Task 1: A\r\n- [ ] s \xff\xfe\r\n   "
++    after  = b"  \r\n### Task 1: A\r\n- [x] s \xff\xfe\r\n   "
++    _, parent = _seed_tasks(repo, before)
++    _write_tasks(repo, after)
++    commit_all(repo, "flip")
++    sha = _head(repo)
++    ok, got_b, got_a = _sg.tasks_blob_pair(repo, parent, sha, TASKS_REL)
++    assert ok is True
++    assert got_b == before and got_a == after      # 逐字节等于写入的原始内容
++    assert isinstance(got_b, bytes) and isinstance(got_a, bytes)
++
++def test_blob_pair_preserves_crlf_and_trailing_newline_difference(repo):
++    # 仅行尾 / 末尾换行不同 ⇒ 两版字节必须可区分（若走 .strip()/文本解码就会趋同）
++    _git(repo, "config", "core.autocrlf", "false")   # 同上：让 CRLF 真进 blob
++    _, parent = _seed_tasks(repo, b"- [ ] s\n")
++    _write_tasks(repo, b"- [ ] s\r\n")
++    commit_all(repo, "crlf")
++    ok, b0, a0 = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
++    assert ok and b0 != a0
++
++
++# ── ③ 返回状态被显式检查；任一侧失败 ⇒ 保守（不得依赖空值恰好相等）────────
++
++def test_blob_pair_rc_failure_on_both_sides_is_not_equal_bytes(repo, monkeypatch):
++    # 直击 1.1c：绕过形态闸门后，双侧 git show 都失败 ⇒ MUST 返回 ok=False，
++    # MUST NOT 返回 (True, b"", b"")——那会被下游读成「两版等值」⇒ 放行真实设计改动。
++    _, parent = _seed_tasks(repo)
++    commit_all(repo, "noop")
++    monkeypatch.setattr(_sg, "_plain_content_modification", lambda *a, **k: True)
++    ok, b0, a0 = _sg.tasks_blob_pair(repo, parent, _head(repo),
++                                     BASE + "does-not-exist.md")
++    assert ok is False
++    assert not (ok and b0 == a0)
++
++def test_blob_pair_rc_failure_on_one_side_is_conservative(repo, monkeypatch):
++    _, parent = _seed_tasks(repo)
++    _write_tasks(repo, b"- [x] s\n")
++    commit_all(repo, "flip")
++    sha = _head(repo)
++    monkeypatch.setattr(_sg, "_plain_content_modification", lambda *a, **k: True)
++    real = _sg.run_git_bytes
++    def one_side_fails(root, *args):
++        if args and args[-1].startswith(parent):     # 前版侧失败
++            return 128, b""
++        return real(root, *args)
++    monkeypatch.setattr(_sg, "run_git_bytes", one_side_fails)
++    ok, _, _ = _sg.tasks_blob_pair(repo, parent, sha, TASKS_REL)
++    assert ok is False
++
++
++# ── ④ 形态不合格一律保守（前版不存在 / 后版不存在 / 非普通内容修改）────────
++
++def test_blob_pair_added_in_this_commit_is_conservative(repo):
++    # 前版不存在（该提交中新建 tasks.md）⇒ 判失鲜
++    approved_change(repo, plan=PLAN2)
++    parent = _head(repo)
++    _write_tasks(repo, b"- [ ] s\n")
++    commit_all(repo, "add tasks.md")
++    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
++    assert ok is False
++
++def test_blob_pair_deleted_in_this_commit_is_conservative(repo):
++    # 后版不存在（该提交中删除）⇒ 判失鲜
++    d, parent = _seed_tasks(repo)
++    (d / "tasks.md").unlink()
++    commit_all(repo, "delete tasks.md")
++    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
++    assert ok is False
++
++def test_blob_pair_renamed_away_is_conservative(repo):
++    # git mv 迁走（后版取不到）⇒ 判失鲜
++    _, parent = _seed_tasks(repo)
++    _git(repo, "mv", TASKS_REL, BASE + "tasks-renamed.md")
++    commit_all(repo, "rename tasks.md")
++    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
++    assert ok is False
++
++def test_blob_pair_chmod_only_is_conservative(repo):
++    # 仅权限位变更：前后两版 blob 字节**完全相同**，纯内容判据会误判「无实质改动」
++    d, parent = _seed_tasks(repo)
++    (d / "tasks.md").chmod(0o755)
++    commit_all(repo, "chmod +x tasks.md")
++    sha = _head(repo)
++    raw = _git(repo, "diff", "--raw", parent, sha, "--", TASKS_REL).stdout
++    assert raw.strip(), "前提校准：chmod 未被 git 记录（core.fileMode 关？）本例失去区分力"
++    ok, _, _ = _sg.tasks_blob_pair(repo, parent, sha, TASKS_REL)
++    assert ok is False
++
++def test_blob_pair_type_change_to_symlink_is_conservative(repo):
++    # regular ↔ symlink 类型变更 ⇒ 判失鲜
++    d, parent = _seed_tasks(repo, b"- [ ] s\n")
++    (d / "target.md").write_bytes(b"- [ ] s\n")
++    (d / "tasks.md").unlink()
++    (d / "tasks.md").symlink_to("target.md")
++    commit_all(repo, "tasks.md → symlink")
++    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
++    assert ok is False
++
++def test_plain_content_modification_true_only_for_real_edit(repo):
++    _, parent = _seed_tasks(repo)
++    _write_tasks(repo, b"- [x] s\n")
++    commit_all(repo, "edit")
++    assert _sg._plain_content_modification(repo, parent, _head(repo), TASKS_REL) is True
++
++def test_raw_line_plain_modification_true_for_content_edit():
++    assert _sg._plain_modification_from_raw(
++        ":100644 100644 aaaaaaa bbbbbbb M\topenspec/changes/demo/tasks.md") is True
++
++def test_raw_line_rejects_non_modification_statuses():
++    # 合成 raw 行直测 status 闸门——A/D/R/C/T 各自可在真实 git 下出现，
++    # 但其中几种在「路径限定 + --no-renames」下会被 rc/mode 两道先兜住，
++    # 光靠 git 驱动的用例杀不掉这一分支，故对纯函数直测（PV 规则 5 可证伪性）
++    for status in ("A", "D", "T", "R100", "C90", "U", "X"):
++        line = f":100644 100644 aaaaaaa bbbbbbb {status}\tp/tasks.md"
++        assert _sg._plain_modification_from_raw(line) is False, status
++
++def test_raw_line_rejects_mode_only_change():
++    assert _sg._plain_modification_from_raw(
++        ":100644 100755 aaaaaaa aaaaaaa M\tp/tasks.md") is False
++    assert _sg._plain_modification_from_raw(
++        ":100644 120000 aaaaaaa bbbbbbb M\tp/tasks.md") is False
++
++def test_raw_line_rejects_malformed_shapes():
++    for line in ("", "100644 100644 a b M\tp", "not a raw line",
++                 ":100644 100644 a b\tp", ":100644\tp",
++                 # 字段齐、模式位「相等」、状态 M，唯独不以 : 起始 ⇒ 不是 raw 行形，
++                 # 少了行形闸门就会被当成合法普通修改（此例专杀该分支）
++                 "X100644 100644 aaaaaaa bbbbbbb M\tp/tasks.md"):
++        assert _sg._plain_modification_from_raw(line) is False, repr(line)
++
++def test_plain_content_modification_false_when_path_untouched(repo):
++    _, parent = _seed_tasks(repo)
++    (repo / "src.py").write_text("x\n", encoding="utf-8")
++    commit_all(repo, "unrelated")
++    assert _sg._plain_content_modification(repo, parent, _head(repo), TASKS_REL) is False
++
++
++# ── ⑤ merge：「前版」相对每个 parent 各自定义；BR-6 护栏逐字不动 ───────────
++
++def test_commit_parents_enumerates_every_parent_of_a_merge(repo):
++    _seed_tasks(repo)
++    main_tip = _head(repo)
++    _git(repo, "checkout", "-q", "-b", "side")
++    _write_tasks(repo, b"- [ ] side\n")
++    commit_all(repo, "side edit")
++    side_tip = _head(repo)
++    _git(repo, "checkout", "-q", "main")
++    (repo / "m.txt").write_text("m\n", encoding="utf-8")
++    commit_all(repo, "main edit")
++    main_tip2 = _head(repo)
++    _git(repo, "merge", "--no-ff", "-q", "-m", "merge side", "side")
++    parents = _sg.commit_parents(repo, _head(repo))
++    assert set(parents) == {main_tip2, side_tip}      # 每个 parent 都在，非只 first-parent
++    assert main_tip not in parents
++
++def test_commit_parents_root_commit_is_empty(repo):
++    (repo / "a.txt").write_text("a\n", encoding="utf-8")
++    commit_all(repo, "root")
++    assert _sg.commit_parents(repo, _head(repo)) == []
++
++def test_commit_parents_unresolvable_sha_is_none(repo):
++    (repo / "a.txt").write_text("a\n", encoding="utf-8")
++    commit_all(repo, "root")
++    assert _sg.commit_parents(repo, "0" * 40) is None
++
++def test_br6_guard_no_no_merges_or_first_parent_in_design_scope():
++    # 〔BR-6 护栏逐字不动〕design 域遍历 MUST NOT 引入 --no-merges / --first-parent
++    src = (Path(_sg.__file__)).read_text(encoding="utf-8")
++    design_branch = src.split('if scope == "design":', 1)[1].split(
++        '# scope == "code"', 1)[0]
++    # 只看代码行——护栏注释本身就写着这两个 flag 名，连注释一起扫会永远假红
++    code_lines = [ln for ln in design_branch.splitlines()
++                  if not ln.lstrip().startswith("#")]
++    body = "\n".join(code_lines)
++    assert "--no-merges" not in body
++    assert "--first-parent" not in body
++    assert "%H" in body            # 反向：sha 确实被 format 携带（能力在场）
++
++
++# ── ⑥ 本票不变量：能力就位，但对外行为逐字未变（一律照判失鲜）─────────────
++
++def test_design_frame_exempt_never_exempts_in_task1(repo):
++    # 最贴近目标态的形态：纯勾选翻转、帧内监视路径恰为 {tasks.md}
++    # —— Task1 仍 MUST 返回 False（判据未接入）
++    _, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
++    commit_all(repo, "flip checkbox only")
++    assert _sg.design_frame_exempt(
++        repo, _head(repo), [TASKS_REL, "src.py"], BASE) is False
++
++def _always_exempt(monkeypatch):
++    """把 Task2 的等值判据替身为「恒可豁免」——只有这样，上游各道保守回落分支
++    才各自可证伪（否则 Task1 的恒 False 会把它们全遮住，删掉也没人红）。"""
++    monkeypatch.setattr(_sg, "_tasks_content_exempt", lambda b, a: True)
++
++def test_exempt_conservative_when_other_watched_path_touched_even_if_content_ok(repo, monkeypatch):
++    d, _ = _seed_tasks(repo)
++    (d / "design.md").write_text("v2\n", encoding="utf-8")
++    _write_tasks(repo, b"- [x] s\n")
++    commit_all(repo, "tasks + design")
++    _always_exempt(monkeypatch)
++    assert _sg.design_frame_exempt(
++        repo, _head(repo), [TASKS_REL, BASE + "design.md"], BASE) is False
++
++def test_exempt_conservative_on_root_commit(repo, monkeypatch):
++    _write_tasks(repo, b"- [ ] s\n")
++    commit_all(repo, "root commit creating tasks.md")
++    _always_exempt(monkeypatch)
++    assert _sg.design_frame_exempt(repo, _head(repo), [TASKS_REL], BASE) is False
++
++def test_exempt_conservative_on_unresolvable_sha(repo, monkeypatch):
++    _seed_tasks(repo)
++    _always_exempt(monkeypatch)
++    assert _sg.design_frame_exempt(repo, "0" * 40, [TASKS_REL], BASE) is False
++
++def test_exempt_conservative_when_form_disqualified(repo, monkeypatch):
++    # 仅 chmod（两版 blob 字节完全相同、内容判据必说「等值」）⇒ 形态闸门 MUST 先拦下
++    d, _ = _seed_tasks(repo)
++    (d / "tasks.md").chmod(0o755)
++    commit_all(repo, "chmod only")
++    _always_exempt(monkeypatch)
++    assert _sg.design_frame_exempt(repo, _head(repo), [TASKS_REL], BASE) is False
++
++def test_exempt_conservative_when_added_in_this_commit(repo, monkeypatch):
++    approved_change(repo, plan=PLAN2)
++    _write_tasks(repo, b"- [x] s\n")
++    commit_all(repo, "add tasks.md")
++    _always_exempt(monkeypatch)
++    assert _sg.design_frame_exempt(repo, _head(repo), [TASKS_REL], BASE) is False
++
++def test_exempt_requires_every_parent_of_a_merge(repo, monkeypatch):
++    # 🔴 判别性构造：merge 相对 **first parent** 合格（普通内容修改 v1→v2），相对
++    # **second parent** 不合格（该侧根本没有 tasks.md ⇒ 新建 A）。只看 first parent
++    # 的实现会在此放行；逐 parent 求值才拦得住。
++    approved_change(repo, plan=PLAN2)          # C0：尚无 tasks.md
++    _git(repo, "branch", "side")               # side 从 C0 分出
++    _write_tasks(repo, b"- [ ] s\n")
++    commit_all(repo, "main: tasks.md v1")      # M1（first parent）
++    _git(repo, "checkout", "-q", "side")
++    (repo / "side.txt").write_text("s\n", encoding="utf-8")
++    commit_all(repo, "side: unrelated")        # S（second parent，无 tasks.md）
++    _git(repo, "checkout", "-q", "main")
++    _git(repo, "merge", "--no-ff", "--no-commit", "-q", "side", check=False)
++    _write_tasks(repo, b"- [x] s\n")           # merge 提交自身改 tasks.md → vs M1 是 M
++    commit_all(repo, "merge side")
++    sha = _head(repo)
++    parents = _sg.commit_parents(repo, sha)
++    assert len(parents) == 2                   # 前提校准：确实是 merge 提交
++    # 前提校准：first parent 侧确实合格 —— 否则本例退化，测不出「逐 parent」
++    assert _sg._plain_content_modification(repo, parents[0], sha, TASKS_REL) is True
++    assert _sg._plain_content_modification(repo, parents[1], sha, TASKS_REL) is False
++    _always_exempt(monkeypatch)
++    assert _sg.design_frame_exempt(repo, sha, [TASKS_REL], BASE) is False
++
++def test_design_frame_exempt_false_when_other_watched_path_touched(repo):
++    d, _ = _seed_tasks(repo)
++    (d / "design.md").write_text("v2\n", encoding="utf-8")
++    _write_tasks(repo, b"- [x] s\n")
++    commit_all(repo, "tasks + design")
++    assert _sg.design_frame_exempt(
++        repo, _head(repo), [TASKS_REL, BASE + "design.md"], BASE) is False
++
++def test_tasks_only_checkbox_flip_still_stale(repo):
++    # 对外可观察行为不变：只翻勾选框、只触及 tasks.md ⇒ 仍 REFUSE_START
++    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
++    commit_all(repo, "docs: 勾选回填")
++    code, js, _h = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START"
++
++def test_tasks_flip_plus_source_code_still_stale(repo):
++    # `git add -A` 打包形态（勾选 tasks.md + 仓库别处源码）⇒ Task1 仍照判失鲜
++    _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
++    (repo / "src.py").write_text("# impl\n", encoding="utf-8")
++    commit_all(repo, "docs: 勾选回填 + 实现")
++    code, js, _h = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START"
++
++def test_merge_commit_touching_tasks_still_stale(repo):
++    _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
++    _git(repo, "checkout", "-q", "-b", "side")
++    _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
++    commit_all(repo, "side flip")
++    _git(repo, "checkout", "-q", "main")
++    (repo / "m.txt").write_text("m\n", encoding="utf-8")
++    commit_all(repo, "main edit")
++    _git(repo, "merge", "--no-ff", "-q", "-m", "merge side", "side")
++    code, js, _h = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START"
++
++def test_frame_sha_parsed_from_subject_with_spaces_and_colons(repo):
++    # 〔1.1b〕分隔符须无歧义：subject 含空格与冒号时 sha 仍可正确切出
++    d, _ = _seed_tasks(repo)
++    (d / "design.md").write_text("v2\n", encoding="utf-8")
++    commit_all(repo, "docs(scope): 带空格 与: 冒号的 subject")
++    expect = _head(repo)
++    out = _sg.run_git(repo, "log", "-1", "--name-only", "--format=%x00%H%x1f%s")
++    frame = [f for f in out.split("\x00") if f][0]
++    sha_field, _, subject = frame.split("\n")[0].partition("\x1f")
++    assert sha_field == expect
++    assert subject == "docs(scope): 带空格 与: 冒号的 subject"
