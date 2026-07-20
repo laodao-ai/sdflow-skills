@@ -1,45 +1,45 @@
 ## ADDED Requirements
 
-### Requirement: 失鲜判定的机械层只承诺召回，精确率由语义层分诊
+### Requirement: 判据 MUST 只在其保护的风险真实存在的阶段求值
 
-失鲜判定的机械层 MUST 保证「被审内容发生任何实质改动都不漏判」，MUST NOT 为提高精确率而引入从 git 管道推断路径变更的机制。误报由语义层（主 session 读 diff 判断）分诊。
+失鲜判据 MUST 只在其保护的风险真实存在的阶段求值，MUST NOT 全阶段求值后再为「合法 churn 阶段」补造豁免或逃生口。
 
-机械层 MUST NOT 使用下列任一方式判定「被审内容是否改变」：`git log --name-only`、`git diff-tree -m`、`git diff-tree --cc`、负向 pathspec。这些方式已累计产出十个实测复现的缺陷（详见 `openspec/adr/0026`），且互为解药兼病灶、可被外部 config/env 翻转。
+design 域失鲜保护的风险是「照着一份已经变了的设计继续建」——该风险只在实现期存在。∴ design 域失鲜 MUST 只在阶段三起手至实现完成期间求值；进入代码审后 MUST NOT 再求值。
 
-机械层 MUST 改为**直接比较内容**：design 域按固定监视清单逐文件比较字节；code 域比较**顶层树条目**（排除 `openspec` 条目后），MUST NOT 比较整棵树的 sha。
+阶段判定 MUST 在失鲜判定**之前**完成。二者无循环依赖：阶段只取决于盘面上存在哪些产物，不取决于失鲜结论。
+
+#### Scenario: 代码审期与 done 期不求值 design 域失鲜
+
+- **WHEN** 流程已进入代码审期或 done 期，此时对四件套的修订发生（如 `[impl-review-fix]` 修订，或 verify 的 design adherence 检查判定「revise design.md to match reality」）
+- **THEN** gate MUST NOT 因该修订判 design 域失鲜——这些修订是工作流明文允许的动作
+- **AND** MUST 有用例锁死此方向
+
+#### Scenario: 实现期无逃生口
+
+- **WHEN** 在实现窗口内，design 域监视集内容与锚版本不等值（且差异不止于复选框状态）
+- **THEN** gate MUST 判失鲜，且 MUST NOT 提供任何「分诊后重锚」「按 commit subject 豁免」之类的旁路
+- **AND** 实现窗口内**无合法的四件套实质修订流程**（实现只读 `design.md`，撞问题走 halt 上抛）⇒ 该判定不会误拦合法动作
+- **AND** MUST 有用例
+
+### Requirement: 失鲜判定 MUST 直接比较内容，MUST NOT 从 git 管道推断路径变更
+
+机械层 MUST NOT 使用下列任一方式判定「被审内容是否改变」：`git log --name-only`、`git diff-tree -m`、`git diff-tree --cc`、负向 pathspec、整棵树的 sha。这些方式已累计产出实测复现的缺陷（详见 `openspec/adr/0026`），且互为解药兼病灶、可被外部 config/env 翻转。
+
+机械层 MUST 改为直接比较内容：design 域按固定监视清单逐文件比较字节；code 域比较 `git ls-tree` 的顶层条目（排除 `openspec` 条目后）。
+
+复选框豁免 MUST 常开、按**内容**切，MUST NOT 按阶段切——`tasks.md` 复选框的写入方是不受阶段约束的自由行为，按阶段切会立即产生假失鲜。
 
 #### Scenario: 实现期不得让设计门失鲜
 
 - **WHEN** 设计门拍板后进入实现期，提交改动源码文件，并把 `superpowers-plan.md` 中该 ticket 的验收复选框由 `- [ ]` 勾成 `- [x]`
 - **THEN** gate MUST 判 design 域 fresh——源码与 `superpowers-plan.md` 均不在 design 域监视集内
-- **AND** 该场景 MUST 有用例。**监视集是承重的**：任何令实现期提交使设计门失鲜的实现（如裸 `reviewed_sha == HEAD` 比较）MUST 判为不合格
+- **AND** **监视集是承重的**：任何令实现期提交使设计门失鲜的实现（如裸 `reviewed_sha == HEAD` 比较）MUST 判为不合格
 
-### Requirement: 失鲜判据按阶段定义，豁免只在其合法 churn 发生的阶段生效
+#### Scenario: `tasks.md` 纯复选框翻转不失鲜（任何阶段）
 
-失鲜判据 MUST 按 gate 判定的**阶段**选取；design 域的豁免 MUST NOT 常开，各自只在其合法 churn 实际发生的那个阶段生效。
-
-阶段与判据的对应 MUST 为：
-
-| 阶段 | 对 design 监视集的合法 churn | 判据 | 语义逃生口 |
-|---|---|---|---|
-| 实现期 | 无 | 四件套字节等值 | **MUST NOT 存在** |
-| 代码审期 | `[impl-review-fix]` 对四件套的修订 | 四件套字节等值 | 允许（分诊 + 重锚留痕） |
-| done 期 | `tasks.md` 复选框对账 | 四件套字节等值，`tasks.md` 经复选框归一化 | **MUST NOT 存在** |
-
-阶段判定 MUST 在失鲜判定**之前**完成。二者无循环依赖：阶段只取决于盘面上存在哪些产物，不取决于失鲜结论。
-
-#### Scenario: 复选框归一化只在 done 期生效
-
-- **WHEN** 在**非 done** 阶段，`tasks.md` 的内容差异仅为复选框状态翻转
-- **THEN** gate MUST 判失鲜——复选框归一化 MUST NOT 在该阶段生效（该阶段没有任何合法流程会翻转 `tasks.md` 复选框）
-- **AND** 在 **done** 阶段的同一输入 MUST 判 fresh
-- **AND** 两个方向 MUST 各有用例
-
-#### Scenario: 实现期与 done 期无语义逃生口
-
-- **WHEN** 在实现期或 done 期，design 域监视集内容与锚版本不等值（且非 done 期的复选框差异）
-- **THEN** gate MUST 判失鲜，且 MUST NOT 提供「分诊后重锚」的通路——这两个阶段没有合法的四件套修订流程
-- **AND** 仅在**代码审期**，分诊 + 重锚 MAY 被采用
+- **WHEN** `tasks.md` 的内容差异在复选框标记归一化后逐行等值
+- **THEN** gate MUST 判 fresh，且该豁免 MUST 与当前处于哪个阶段无关
+- **AND** 差异超出复选框状态时 MUST 照常判失鲜
 
 #### Scenario: 合并把已批准产物换回锚前旧内容
 
@@ -49,17 +49,9 @@
 
 #### Scenario: `openspec/` 内的记账不得让 code 域失鲜
 
-- **WHEN** 代码审通过后，正常收尾流程写入 `verify-report.md`、或 archive 把 change 目录移入 `openspec/changes/archive/`——即改动**全部落在 `openspec/` 之内**
+- **WHEN** 代码审通过后，正常收尾流程写入 `verify-report.md`、或 archive 把 change 目录移入 `openspec/changes/archive/`——即改动全部落在 `openspec/` 之内
 - **THEN** gate MUST 判 code 域 fresh
 - **AND** 该域的比较粒度 MUST 能排除 `openspec/`：整棵树的 sha 比较 **MUST NOT** 被采用——它在上述正常流程的第一步即假阳（已实测）
-- **AND** MUST 有用例钉死此方向
-
-#### Scenario: 语义分诊须留痕且默认 fail-closed
-
-- **WHEN** **在代码审期**，机械层判失鲜，而主 session 判定该差异无实质影响（如 `[impl-review-fix]` 修订）
-- **THEN** 主 session MAY 把锚重锚到当前 HEAD，但 MUST 在报告中同时写下重锚理由
-- **AND** 未执行重锚时 MUST 维持失鲜结论——机械层 MUST NOT 因「可能会被判为无害」而放行
-- **AND** 本条 MUST NOT 被表述为机械门：分诊由被监管方执行，无可信脚本捕获路径，属显式登记的残余面
 
 ### Requirement: 评审锚 MUST 由 producer 记录，MUST NOT 从提交历史反推
 
