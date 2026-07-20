@@ -1,0 +1,322 @@
+diff --git a/openspec/changes/harden-gate-git-layer/impl-reports/task4-eval-window.md b/openspec/changes/harden-gate-git-layer/impl-reports/task4-eval-window.md
+new file mode 100644
+index 0000000..d0d64b1
+--- /dev/null
++++ b/openspec/changes/harden-gate-git-layer/impl-reports/task4-eval-window.md
+@@ -0,0 +1,111 @@
++# Task 4 · design 域失鲜只在实现窗口内求值，三个入口分别接入
++
++**R-ID:** R1 · **Blocked-by:** 3 · **范围:** tasks 2.5 / 2.6 / 2.7 + 测试 5.3a–d
++**不做:** code 域顶层条目比较（Task 5）、评审 SKILL 时序与文档收尾（Task 6）
++
++## 消掉的中间态
++
++Task 3 落地后 design 域仍**全阶段求值**，且 BR-7 subject 豁免已随帧遍历退役
++⇒ **代码审期修订四件套会被判失鲜**（其 impl-report 已登记）。本票即来消掉它。
++
++## 做了什么
++
++### 2.5 控制流重排（`ship_gate.py`）
++
++design 域失鲜原在 `decide()` 的 pre-flight 段**无条件求值**（旧 `:1263`，在 step 5.5 之前）。
++现改为两个新函数构成的**单一实现点**：
++
++- `guard_design_freshness(root, change, report)` —— 求值 + stale 时 `REFUSE_START`；fresh 直接返回。
++- `emit_windowed(root, change, report, verdict, ...)` —— 先过闸门、再 emit 本分支判定。
++
++旧位置**有意留空**并留注释：任何把检查加回该位置的改动都等于取消窗口限定（G4 变异即此形态）。
++
++**为什么不能走「step 7 之后加一次检查」的捷径**（Compliance 明写、design ADR-3 明写）：
++`RUN_SOP`(step 5.5) 与 `RUN_PLAN`(step 6) 在到达 step 7 之前就 `emit()`，而 `emit()` 内部是
++`sys.exit()` —— 硬 early-return ⇒ 两条路径**完全逃出检查**，方向 fail-open。
++
++### 2.6 三个入口各自接入
++
++| 入口 | 调用点 | 用例 |
++|---|---|---|
++| `RUN_SOP` | step 5.5，TG-02 命中且 sop 产物缺 | 5.3a |
++| `RUN_PLAN` | step 6，`superpowers-plan.md` 缺 | 5.3b |
++| `CONTINUE_IMPL` | step 7，`plan_ids ⊄ done` | 5.3c |
++
++窗口右边界 = **代码审报告出现**（非「最后一个任务打勾」）—— 以 design.md 为准，未自行推导。
++
++### 2.7 失鲜诊断带出锚值 + 可执行差异命令〔ADR-4〕
++
++- `emit` 的 `extra` 增 `reviewed_sha=<sha>`（撞门者不必先翻报告 frontmatter 抄）。
++- reason 尾部拼 `核对差异：git diff <sha> HEAD -- <design_pathspecs 全集>`，可直接复制执行。
++- 路径来源是 `design_pathspecs()` 这一**既有单一源**，与判定本体同源（不另立清单，防漂移）。
++- **不与「MUST NOT 为凑诊断保留枚举通路」冲突**：`reviewed_sha` 是**录下来的常量**，
++  读出来打印零推断成本；被禁的是从 git 管道**反推**触发点（`_stale_trigger_hint`，Task 3 已退役）。
++
++## 测试（新增 5 个，全经 `run_gate` 子进程 = `main()`/`decide()` 公共入口）
++
++落 `sdflow-ship/tests/test_gate_freshness.py`：
++
++| 编号 | 用例 | 断言 |
++|---|---|---|
++| 5.3a | `test_window_run_sop_evaluates_design_freshness` | 前提校准走 RUN_SOP → 改 design.md → `REFUSE_START`(3) |
++| 5.3b | `test_window_run_plan_evaluates_design_freshness` | 同上，RUN_PLAN 分支 |
++| 5.3c | `test_window_continue_impl_evaluates_design_freshness` | 同上，CONTINUE_IMPL 分支 |
++| 5.3d | `test_window_closed_during_code_review` | 窗口外（plan 全勾、无 cr 报告）改四件套 ⇒ 仍 `RUN_CODE_REVIEW` |
++| 5.3d | `test_window_closed_during_wrapup` | 收尾期（cr+verify 均有结论）改四件套 ⇒ 仍 `RUN_VERIFY`，且不触 `RERUN_STALE` |
++
++5.3a–c 共用 `_assert_windowed_refusal`，除 verdict/exit code 外另断言
++`js["reviewed_sha"] == 锚` 与 `git diff <锚> HEAD -- ` 出现在 reason、且**监视集每个成员都在命令里**。
++
++**三组独立性是构造出来的、不是假设的**：三个用例各自只穿过一个入口分支——
++5.3a（tg02 命中 + 无 sop）够不着 RUN_PLAN/CONTINUE_IMPL；5.3b（tg02 不命中 + 无 plan）跳过 SOP 分支；
++5.3c（有 plan + 有未完成任务）跳过前两者。变异结果（下表 G1–G3）实测确认。
++
++## 变异证明（按守卫计数）
++
++harness 落 scratchpad（一次性），每个变异体**先过 `ast.parse` 确认能运行**再跑测试
++—— 防上一票踩过的「多行布尔里删一行产生 SyntaxError、变红只是语法错误、零判别力」。
++全部变异用**语义替换**（换调用/加调用/删参数），无一处依赖删行。
++
++| # | 守卫 | 变异手段 | 变红用例 | 判别力 |
++|---|---|---|---|---|
++| G1 | `RUN_SOP` 入口接入 | `emit_windowed(...)` → `emit(...)` | **仅** `..._run_sop_...` | ✅ 单点 |
++| G2 | `RUN_PLAN` 入口接入 | 同上 | **仅** `..._run_plan_...` | ✅ 单点 |
++| G3 | `CONTINUE_IMPL` 入口接入 | 同上 | **仅** `..._continue_impl_...` | ✅ 单点 |
++| G4 | 窗口限定本身 | 在旧位置加回无条件 `guard_design_freshness(...)` | `..._closed_during_code_review` + `..._closed_during_wrapup` | ✅ 恰两条 |
++| G5 | 锚值可见〔ADR-4〕 | 从 `emit` 删 `reviewed_sha=sha` | 5.3a/b/c 三条 | ✅ |
++| G6 | 差异命令〔2.7〕 | reason 的 `核对差异：git diff …` 换空串 | 5.3a/b/c 三条 | ✅ |
++| G0 | 对照（不变异） | — | 无 | ✅ 基线绿 |
++
++G1–G3 各自只红一条 = **「三分支各自接入、各自无旁路」被证成**，而非「三个一起红或一个都不红」
++（后者说明期望集取错范畴，Task 2 踩过）。
++G4 只红窗口外两条、不动 G1–G3 的三条 = 窗口的**两个方向都有守卫**（内不漏、外不误拦）。
++
++**MUST NOT 以「用例存在且为绿」充当证明** —— 以上七行全部实际跑过，输出见执行记录。
++
++## 回归
++
++- `sdflow-ship/tests/` = **317 → 322 passed**（新增 5 条，零既有用例失败、零删除）。
++- 仓根全套件 = `2074 passed, 9 skipped, 3 xfailed`。基线为 `2070 passed, 8 skipped, 3 xfailed`
++  ⇒ passed+skipped 由 2078 增至 2083，**恰好 +5 = 本票新增用例数**；passed/skipped 的
++  1 例位移是 `sdflow-init` 那条 ramdisk 满盘用例的环境敏感浮动（基线说明已注明 8/9 间浮动），与本票无关。
++
++## Compliance 自查（本票相关条目）
++
++- ✅ design 域失鲜**只在实现窗口内**求值，且**分别覆盖** `RUN_SOP`/`RUN_PLAN`/`CONTINUE_IMPL` 三分支；
++  **未**走「只在 step 7 后加一次检查」的捷径（G4 反向证明该形态会被测出）。
++- ✅ **未**引入语义分诊层或任何重锚逃生口 —— 窗口内不设旁路，撞门正解是重审。
++- ✅ `emit` 输出 `reviewed_sha`；**未**为凑诊断保留任何路径枚举通路。
++- ✅ 新增用例全经公共入口（`run_gate` 子进程 → `main()` → `decide()` → `is_stale`），无直调内部 helper。
++- ✅ 每条新增守卫各附一次「删掉即变红」的变异证明，且变异体经语法校验确认可运行。
++- ✅ `ship_gate.py` 保持零第三方依赖；本票新增路径的退出码只取 `3`（`REFUSE_START`），在契约集内。
++- ✅ 监视集未动（Task 3 的 `is_stale` 原样复用），实现期改源码 / 勾 plan 复选框仍不失鲜
++  （既有 `test_design_anchor_survives_impl_commits` 等用例继续绿）。
++
++## 遗留 / 交棒
++
++- **行为收紧已生效**：实现期「边写边改设计纠偏」今后撞 `REFUSE_START`（design ADR-3 明写为有意为之）。
++  tasks 6.4③ 要求在 hand-off 显式登记，属 Task 6 范围，本票未做。
++- **窗口右边界的间隙**（「实现刚完成」与「代码审进行中」盘面不可区分）是 design 已登记的残余面，
++  本票未试图关闭 —— 关它需引入新盘面信号，与本 change 的简化方向相悖。
++- tasks 6.2（`sdflow-ship/SKILL.md` 补窗口行为边界一句）依赖本票行为，属 Task 6。
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index 0bb4f6d..c015431 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -981,6 +981,51 @@ def emit(verdict, exit_code, next_step, reason, **extra):
+     sys.exit(exit_code)
+ 
+ 
++# [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5/2.6/2.7] 求值窗口的**唯一**实现点。
++#
++# 🔴 为什么是「窗口内 emit 的包装」而不是「step 7 之后加一次检查」：
++# `RUN_SOP`(step 5.5) / `RUN_PLAN`(step 6) 两条路径在到达 step 7 之前就 `emit()`，而 `emit()`
++# 内部是 `sys.exit()` —— 硬 early-return。把检查放在 step 7 之后，这两条路径**完全逃出检查**，
++# 方向 fail-open（正是本 change 要治的那类洞）。∴ 检查 MUST 挂在**三个分支各自的 emit 之前**。
++#
++# 反向的捷径同样错：把检查留在 step 5.5 之前（= 旧实现 `:1263` 的位置）等于没做窗口限定——
++# 代码审期/收尾期修订四件套（全仓 14 个历史提交、`opsx:verify` step 7 明文允许）会被误拦。
++#
++# 窗口 = `RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL` 三个「进入实现期」的判定。窗口右边界是
++# 「代码审报告出现」而非「最后一个任务打勾」——代码审过程中本来就会改代码与文档。
++def guard_design_freshness(root, change, report):
++    """窗口内求值 design 域失鲜；stale ⇒ `REFUSE_START` 并**带出锚值**〔ADR-4〕。
++
++    fresh 或不失鲜 ⇒ 原样返回，由调用方继续 emit 它自己的判定。
++    """
++    rel = str(report.relative_to(root))
++    design_stale, _freshness = is_stale(root, rel, "design", change)
++    if not design_stale:
++        return
++    # [ADR-4] 锚值 MUST 可见：撞门者不必先去翻报告 frontmatter 抄 sha。
++    # `reviewed_sha` 是**录下来的常量**，读出来打印零推断成本 ⇒ 与「MUST NOT 为凑诊断
++    # 保留路径枚举通路」不冲突（那条禁的是从 git 管道**反推**触发点）。
++    sha = read_reviewed_sha(root, rel)
++    paths = " ".join(design_pathspecs(f"openspec/changes/{change}/"))
++    # 默认处置**只**推荐重跑设计门——MUST NOT 在此提 `checkpoint(impl-review)`：
++    # 该 subject 豁免已随帧比较退役，写进指引等于教撞门者做一件不起作用的事。
++    emit("REFUSE_START", EXIT_REFUSE, None,
++         "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
++         "（重跑 sdflow-spec-review 后重新拍板补锚）。"
++         f"核对差异：git diff {sha} HEAD -- {paths}",
++         reviewed_sha=sha)
++
++
++def emit_windowed(root, change, report, verdict, exit_code, next_step, reason, **extra):
++    """求值窗口内的 `emit`：先过 design 域失鲜闸门，再 emit 本分支的判定。
++
++    三个入口（`RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL`）**各自**调用本函数 —— 这是
++    「三分支各自接入、各自无旁路」的实现形态：拆掉任何**一处**的包装，只有该分支的用例变红。
++    """
++    guard_design_freshness(root, change, report)
++    emit(verdict, exit_code, next_step, reason, **extra)
++
++
+ # [harden-gate-git-layer Task3 · ADR-4 · tasks 2.8] `_stale_trigger_hint` / `StaleResult.trigger`
+ # 已随帧比较整簇退役：触发点诊断原本**依附于帧遍历**（要 sha + subject），帧遍历没了之后，
+ # 为凑齐这段诊断而保留一条枚举通路，等于把刚砍掉的推断面从后门放回来。且该能力在 code 域
+@@ -1260,15 +1305,10 @@ def decide(root, change):
+              "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
+              "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）"
+              + _unclosed_frontmatter_hint(report))
+-    design_stale, _design_freshness = is_stale(
+-        root, str(report.relative_to(root)), "design", change)
+-    if design_stale:
+-        # 默认处置**只**推荐重跑设计门——MUST NOT 在此提 `checkpoint(impl-review)`：
+-        # 该 subject 豁免已随帧比较退役，写进指引等于教撞门者做一件不起作用的事。
+-        # [Task3] 结构化触发点随帧遍历退役（ADR-4）；锚值可见性由 Task4 的 emit 补 `reviewed_sha`。
+-        emit("REFUSE_START", EXIT_REFUSE, None,
+-             "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
+-             "（重跑 sdflow-spec-review 后重新拍板补锚）")
++    # [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5] **求值窗口**：design 域失鲜原本在此处
++    # 无条件全阶段求值。现改为只在三个「进入实现期」的分支各自 emit 之前求值
++    # （`emit_windowed` 单一实现点）——判据只在它保护的风险真实存在的阶段求值。
++    # 这里**有意留空**：任何把检查加回本位置的改动都等于取消窗口限定（见 emit_windowed 头注释）。
+     # ── verify 冲突锚早检（坏 frontmatter → UNKNOWN，保步序早停）──
+     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：坏 frontmatter（含重复
+     # verify 键=冲突的等价形态 duplicate-key）→ live_ship_gate_state 内 UNKNOWN(6) emit 早停；
+@@ -1281,13 +1321,17 @@ def decide(root, change):
+     sop_note = ""
+     if tg02_hit(cdir):
+         if not (cdir / f"{change}-sop.md").is_file():
+-            emit("RUN_SOP", EXIT_OK, "embedded-test-sop", "TG-02 命中且 sop 产物缺")
++            # [Task4 · tasks 2.6] 窗口入口①
++            emit_windowed(root, change, report,
++                          "RUN_SOP", EXIT_OK, "embedded-test-sop", "TG-02 命中且 sop 产物缺")
+     else:
+         sop_note = "SKIP_SOP(非嵌入式不触发); "
+     # ── step 6/7：plan 与完成判据〔Q2 窗口主锚〕──────────────────
+     plan = cdir / "superpowers-plan.md"
+     if not plan.is_file():
+-        emit("RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
++        # [Task4 · tasks 2.6] 窗口入口②
++        emit_windowed(root, change, report,
++                      "RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
+     # [impl-review-fix CR-F1] 未闭合 fenced code block（悬空 ```）→ 悬空围栏会吞掉真实
+     # 未勾项与 Task 标题（假✅/漏 task）→ plan 无法可靠解析 → fail-safe UNKNOWN（先于其余判据）。
+     if plan_unbalanced_fence(plan):
+@@ -1313,9 +1357,11 @@ def decide(root, change):
+         # 双通道皆不可判：plan 未提交（checkpoint 空）且全 plan 无复选框（辅通道空判）
+         if not sha and not plan_has_any_checkbox(plan):
+             emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
+-        emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
+-             f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
+-             done_tasks=sorted(done_in_plan, key=int))
++        # [Task4 · tasks 2.6] 窗口入口③
++        emit_windowed(root, change, report,
++                      "CONTINUE_IMPL", EXIT_OK, "subagent-dev",
++                      f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
++                      done_tasks=sorted(done_in_plan, key=int))
+     # ── step 8：code-review 门 ─────────────────────────────────
+     cr = cdir / "code-review-report.md"
+     if not cr.is_file():
+diff --git a/sdflow-ship/tests/test_gate_freshness.py b/sdflow-ship/tests/test_gate_freshness.py
+index c6b27ae..8f32c0d 100644
+--- a/sdflow-ship/tests/test_gate_freshness.py
++++ b/sdflow-ship/tests/test_gate_freshness.py
+@@ -1124,3 +1124,89 @@ def test_repo_fixture_pins_byte_and_mode_semantics(repo, key, want):
+     got = subprocess.run(["git", "-C", str(repo), "config", "--get", key],
+                          capture_output=True, text=True).stdout.strip()
+     assert got == want, f"{key}={got!r}，基座未钉死（期望 {want!r}）"
++
++
++# ══ [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5/2.6/2.7 · 测试 5.3a–d] 求值窗口 ══
++#
++# 判据只在它保护的风险真实存在的阶段求值：design 域失鲜保护的是「照着一份已经变了的设计
++# 继续建」，该风险**只在实现期存在**。∴ 三个「进入实现期」的入口 MUST 各自求值（5.3a–c），
++# 窗口之外（代码审期 / 收尾期）MUST NOT 求值（5.3d）。
++#
++# 🔴 **三组 MUST 各自独立**：三个用例分别只穿过一个入口分支——
++#   5.3a：tg02 命中 + 无 sop ⇒ 只到 RUN_SOP 就 emit，够不着 RUN_PLAN / CONTINUE_IMPL
++#   5.3b：tg02 不命中 + 无 plan ⇒ 跳过 SOP 分支，只到 RUN_PLAN
++#   5.3c：有 plan + 有未完成任务 ⇒ 跳过前两者，只到 CONTINUE_IMPL
++# ∴ 拆掉任一入口的 `emit_windowed` 包装，**只有对应的那一个用例变红**（变异独立性已实测，
++# 结果见 impl-reports/task4-eval-window.md）。写成共享同一条触发路径的三个用例会「三个一起
++# 红或一个都不红」，那样的「三组独立」是假的（期望集取错范畴）。
++
++def _anchor_of(d):
++    """从 spec-review-report.md 的 frontmatter 读出锚（= gate 会拿来比的那个 sha）。"""
++    for line in (d / "spec-review-report.md").read_text(encoding="utf-8").splitlines():
++        if line.strip().startswith("reviewed_sha:"):
++            return line.split(":", 1)[1].strip()
++    raise AssertionError("报告里没有 reviewed_sha 锚")
++
++def _revise_design(d, repo, text="# 拍板后改了设计\n"):
++    (d / "design.md").write_text(text, encoding="utf-8")
++    commit_all(repo, "revise design artifacts")
++
++def _assert_windowed_refusal(repo, d):
++    """窗口内失鲜的共同断言：REFUSE_START(3) + 锚值可见 + 可直接执行的差异比较命令〔ADR-4 / 2.7〕。"""
++    code, js, _h = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START", js
++    sha = _anchor_of(d)
++    assert js["reviewed_sha"] == sha, "锚值 MUST 出现在 emit 的 extra 里（撞门者不必去翻 frontmatter）"
++    assert f"git diff {sha} HEAD -- " in js["reason"], js["reason"]
++    # 命令 MUST 覆盖整个监视集（否则「一条命令即得」不成立）
++    for p in _sg.design_pathspecs(BASE):
++        assert p in js["reason"], f"差异命令漏了监视集成员 {p}"
++
++# ── 5.3a RUN_SOP 分支 ────────────────────────────────────────────────
++
++def test_window_run_sop_evaluates_design_freshness(repo):
++    d = approved_change(repo, tg02=True)          # 无 sop 产物 ⇒ 判定停在 RUN_SOP
++    assert run_gate(repo)[1]["verdict"] == "RUN_SOP"   # 前提校准：确实走这条分支
++    _revise_design(d, repo)
++    _assert_windowed_refusal(repo, d)
++
++# ── 5.3b RUN_PLAN 分支 ───────────────────────────────────────────────
++
++def test_window_run_plan_evaluates_design_freshness(repo):
++    d = approved_change(repo, tg02=False)         # 无 plan ⇒ 判定停在 RUN_PLAN
++    assert run_gate(repo)[1]["verdict"] == "RUN_PLAN"
++    _revise_design(d, repo)
++    _assert_windowed_refusal(repo, d)
++
++# ── 5.3c CONTINUE_IMPL 分支 ──────────────────────────────────────────
++
++def test_window_continue_impl_evaluates_design_freshness(repo):
++    d = approved_change(repo, plan=PLAN2)         # plan 在、任务未完 ⇒ CONTINUE_IMPL
++    assert run_gate(repo)[1]["verdict"] == "CONTINUE_IMPL"
++    _revise_design(d, repo)
++    _assert_windowed_refusal(repo, d)
++
++# ── 5.3d 窗口之外：代码审期 / 收尾期修订四件套 MUST NOT 判 design 失鲜 ──
++
++def test_window_closed_during_code_review(repo):
++    """代码审期修订四件套 ⇒ 不判 design 失鲜。
++
++    全仓 14 个 `checkpoint(impl-review)` 提交改过四件套，`opsx:verify` step 7 亦明文允许
++    「revise design.md to match reality」⇒ 全阶段求值会把这 14 类情形全部误拦，产出纯噪声。
++    """
++    d = impl_done(repo)                            # plan 全勾、无 cr 报告 ⇒ 窗口右边界之外
++    assert run_gate(repo)[1]["verdict"] == "RUN_CODE_REVIEW"
++    _revise_design(d, repo)
++    code, js, _h = run_gate(repo)
++    assert js["verdict"] != "REFUSE_START", f"窗口外仍判 design 失鲜：{js}"
++    assert code == 0 and js["verdict"] == "RUN_CODE_REVIEW", js
++
++def test_window_closed_during_wrapup(repo):
++    """收尾期（cr + verify 均已出结论）修订四件套 ⇒ 不判 design 失鲜。"""
++    d = tail_ok(repo)
++    assert run_gate(repo)[1]["verdict"] == "RUN_VERIFY"
++    _revise_design(d, repo)
++    code, js, _h = run_gate(repo)
++    assert js["verdict"] != "REFUSE_START", f"窗口外仍判 design 失鲜：{js}"
++    # 四件套是 openspec/ 内路径 ⇒ code 域顶层条目不变 ⇒ 也不该触 RERUN_STALE
++    assert code == 0 and js["verdict"] == "RUN_VERIFY", js
