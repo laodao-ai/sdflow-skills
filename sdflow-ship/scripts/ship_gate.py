@@ -287,7 +287,7 @@ def _plain_content_modification(root, parent, sha, path):
     return _plain_modification_from_raw(out.splitlines()[0])
 
 
-def tasks_blob_pair(root, parent, sha, path):
+def blob_pair(root, parent, sha, path):
     """取该提交相对某 parent 的前后两版 blob 原始字节。
 
     返回 (ok, before_bytes, after_bytes)。**ok=False ⇒ 调用方 MUST 保守判失鲜**——
@@ -332,7 +332,7 @@ def design_frame_exempt(root, sha, frame_files, base):
         return False                       # 根提交 / parent 解析失败 ⇒ 保守
     path = base + "tasks.md"
     for parent in parents:                 # merge：与**每个** parent 各自成立才算
-        ok, before, after = tasks_blob_pair(root, parent, sha, path)
+        ok, before, after = blob_pair(root, parent, sha, path)
         if not ok:
             return False                   # 取不到 / 形态不合格 ⇒ 保守
         if not _tasks_content_exempt(before, after):
@@ -369,19 +369,14 @@ def is_stale(root, rel, scope, change):
             # 裸 startswith 闭合前缀仍收 `checkpoint(impl-review)evil` 尾串垃圾，故用精确式。
             if subject == "checkpoint(impl-review)" or subject.startswith("checkpoint(impl-review):"):
                 continue                      # 阶段三合法尾流修订，豁免不失鲜
-            # [tasks 1.1a] 沿用逐文件 return-True 结构，仅 tasks.md 走单独分支（延后到帧末
-            # 判定——「帧内监视集路径集是否恰为 {tasks.md}」由控制流建立）。
-            tasks_touched = False
-            for f in lines[1:]:
-                if not f:
-                    continue
-                if f.startswith(base):
-                    sub = f[len(base):]
-                    if sub == "tasks.md":
-                        tasks_touched = True
-                    elif sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
-                        return True, "stale"
-            if tasks_touched and not design_frame_exempt(root, frame_sha, lines[1:], base):
+            # [impl-review-fix F1] 监视集成员判据**只有一处**——`design_watched_subs`。
+            # 此处 MUST NOT 再内联一份 `sub in DESIGN_WATCHED_NAMES or ...`：两份判据
+            # 将来只改一处时，design_frame_exempt 会把「帧内路径集」误算成 {tasks.md}
+            # ⇒ 豁免误开（fail-open）。新增一类监视路径只改 design_watched_subs 即可。
+            subs = design_watched_subs(lines[1:], base)
+            if subs - {"tasks.md"}:
+                return True, "stale"          # 帧内触及 tasks.md 以外的监视路径 ⇒ 失鲜
+            if subs and not design_frame_exempt(root, frame_sha, lines[1:], base):
                 return True, "stale"
         return False, "fresh"
     # scope == "code"：行为逐字不变（无 subject、无豁免、无 --no-merges）

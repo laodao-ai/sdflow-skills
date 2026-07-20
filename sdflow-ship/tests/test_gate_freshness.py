@@ -245,7 +245,7 @@ def test_blob_pair_returns_raw_bytes_verbatim(repo):
     _write_tasks(repo, after)
     commit_all(repo, "flip")
     sha = _head(repo)
-    ok, got_b, got_a = _sg.tasks_blob_pair(repo, parent, sha, TASKS_REL)
+    ok, got_b, got_a = _sg.blob_pair(repo, parent, sha, TASKS_REL)
     assert ok is True
     assert got_b == before and got_a == after      # 逐字节等于写入的原始内容
     assert isinstance(got_b, bytes) and isinstance(got_a, bytes)
@@ -256,7 +256,7 @@ def test_blob_pair_preserves_crlf_and_trailing_newline_difference(repo):
     _, parent = _seed_tasks(repo, b"- [ ] s\n")
     _write_tasks(repo, b"- [ ] s\r\n")
     commit_all(repo, "crlf")
-    ok, b0, a0 = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
+    ok, b0, a0 = _sg.blob_pair(repo, parent, _head(repo), TASKS_REL)
     assert ok and b0 != a0
 
 
@@ -268,7 +268,7 @@ def test_blob_pair_rc_failure_on_both_sides_is_not_equal_bytes(repo, monkeypatch
     _, parent = _seed_tasks(repo)
     commit_all(repo, "noop")
     monkeypatch.setattr(_sg, "_plain_content_modification", lambda *a, **k: True)
-    ok, b0, a0 = _sg.tasks_blob_pair(repo, parent, _head(repo),
+    ok, b0, a0 = _sg.blob_pair(repo, parent, _head(repo),
                                      BASE + "does-not-exist.md")
     assert ok is False
     assert not (ok and b0 == a0)
@@ -285,7 +285,7 @@ def test_blob_pair_rc_failure_on_one_side_is_conservative(repo, monkeypatch):
             return 128, b""
         return real(root, *args)
     monkeypatch.setattr(_sg, "run_git_bytes", one_side_fails)
-    ok, _, _ = _sg.tasks_blob_pair(repo, parent, sha, TASKS_REL)
+    ok, _, _ = _sg.blob_pair(repo, parent, sha, TASKS_REL)
     assert ok is False
 
 
@@ -297,7 +297,7 @@ def test_blob_pair_added_in_this_commit_is_conservative(repo):
     parent = _head(repo)
     _write_tasks(repo, b"- [ ] s\n")
     commit_all(repo, "add tasks.md")
-    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
+    ok, _, _ = _sg.blob_pair(repo, parent, _head(repo), TASKS_REL)
     assert ok is False
 
 def test_blob_pair_deleted_in_this_commit_is_conservative(repo):
@@ -305,7 +305,7 @@ def test_blob_pair_deleted_in_this_commit_is_conservative(repo):
     d, parent = _seed_tasks(repo)
     (d / "tasks.md").unlink()
     commit_all(repo, "delete tasks.md")
-    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
+    ok, _, _ = _sg.blob_pair(repo, parent, _head(repo), TASKS_REL)
     assert ok is False
 
 def test_blob_pair_renamed_away_is_conservative(repo):
@@ -313,7 +313,7 @@ def test_blob_pair_renamed_away_is_conservative(repo):
     _, parent = _seed_tasks(repo)
     _git(repo, "mv", TASKS_REL, BASE + "tasks-renamed.md")
     commit_all(repo, "rename tasks.md")
-    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
+    ok, _, _ = _sg.blob_pair(repo, parent, _head(repo), TASKS_REL)
     assert ok is False
 
 def test_blob_pair_chmod_only_is_conservative(repo):
@@ -324,7 +324,7 @@ def test_blob_pair_chmod_only_is_conservative(repo):
     sha = _head(repo)
     raw = _git(repo, "diff", "--raw", parent, sha, "--", TASKS_REL).stdout
     assert raw.strip(), "前提校准：chmod 未被 git 记录（core.fileMode 关？）本例失去区分力"
-    ok, _, _ = _sg.tasks_blob_pair(repo, parent, sha, TASKS_REL)
+    ok, _, _ = _sg.blob_pair(repo, parent, sha, TASKS_REL)
     assert ok is False
 
 def test_blob_pair_type_change_to_symlink_is_conservative(repo):
@@ -334,7 +334,15 @@ def test_blob_pair_type_change_to_symlink_is_conservative(repo):
     (d / "tasks.md").unlink()
     (d / "tasks.md").symlink_to("target.md")
     commit_all(repo, "tasks.md → symlink")
-    ok, _, _ = _sg.tasks_blob_pair(repo, parent, _head(repo), TASKS_REL)
+    sha = _head(repo)
+    # [impl-review-fix F3] 前提校准：core.symlinks=false 时 git 把 symlink 记成普通文件
+    # 内容变更（dstmode 仍 100644、status M）⇒ 本例退化成「普通内容修改」，照样绿但
+    # 通过理由变了、类型变更这条分支静默失守。故显式断言 git 真把它记成了类型变更。
+    raw = _git(repo, "diff", "--raw", parent, sha, "--", TASKS_REL).stdout
+    fields = raw.split("\t", 1)[0].split()
+    assert len(fields) >= 5 and (fields[1] == "120000" or fields[4].startswith("T")), \
+        f"前提校准：symlink 未被记为类型变更（core.symlinks 关？）本例失去区分力：{raw!r}"
+    ok, _, _ = _sg.blob_pair(repo, parent, sha, TASKS_REL)
     assert ok is False
 
 def test_plain_content_modification_true_only_for_real_edit(repo):
@@ -456,11 +464,17 @@ def test_exempt_conservative_on_unresolvable_sha(repo, monkeypatch):
 
 def test_exempt_conservative_when_form_disqualified(repo, monkeypatch):
     # 仅 chmod（两版 blob 字节完全相同、内容判据必说「等值」）⇒ 形态闸门 MUST 先拦下
-    d, _ = _seed_tasks(repo)
+    d, parent = _seed_tasks(repo)
     (d / "tasks.md").chmod(0o755)
     commit_all(repo, "chmod only")
+    sha = _head(repo)
+    # [impl-review-fix F2] 前提校准（同 test_blob_pair_chmod_only_is_conservative）：
+    # core.fileMode=false 时 chmod 不入 git ⇒ 该提交对 tasks.md 根本无变更，用例会因
+    # 「路径未触及」而绿、而非因形态闸门拦下——通过理由变了，形态分支静默失守。
+    raw = _git(repo, "diff", "--raw", parent, sha, "--", TASKS_REL).stdout
+    assert raw.strip(), "前提校准：chmod 未被 git 记录（core.fileMode 关？）本例失去区分力"
     _always_exempt(monkeypatch)
-    assert _sg.design_frame_exempt(repo, _head(repo), [TASKS_REL], BASE) is False
+    assert _sg.design_frame_exempt(repo, sha, [TASKS_REL], BASE) is False
 
 def test_exempt_conservative_when_added_in_this_commit(repo, monkeypatch):
     approved_change(repo, plan=PLAN2)
