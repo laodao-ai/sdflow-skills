@@ -237,9 +237,14 @@ def _git_env():
       · MUST NOT 改用 `-c i18n.logOutputEncoding=UTF-8 -c log.showSignature=false` 之类的
         **逐项覆盖**：那是点名已知 knob，与本函数剔除面选全前缀的理由同构地错（config 键集
         只会增长，点名 = 承诺「不再新增能改变输出的配置项」）。整片禁读才是面治。
-      · 未封 repo-local `.git/config`：那是被判仓自身的一部分（越权改它 git 留痕可审计），
-        不属「外部环境态」。判定不因它改变仍由 `test_verdict_is_identical_under_polluted_git_env`
-        机械守住。
+      · **未封 repo-local `.git/config`——理由是能力等价，不是「有别的东西守着」。**
+        能写 `.git/config` 的人，同样能写 `.git/objects` / `.git/refs`，或直接
+        `git commit --amend` 伪造 subject——所需权限 ≤ 已足以击穿本 gate 的权限，
+        ∴ 被判仓按构造就在信任边界内，封它无净收益（且 env 层无干净关法）。
+        🔴 **此项无机械覆盖，是登记在案的残余**：`.git/config` 置
+        `i18n.logOutputEncoding=GBK` 确实能翻转判定输入（实测 subject 变乱码）。
+        MUST NOT 声称它被 `test_verdict_is_identical_under_polluted_git_env` 守住——
+        那条只污染 `diff.ignoreSubmodules` 这一个良性 knob，覆盖不到本面。
 
     [fix1 M1] **与先例的差异登记**：`sdflow-buglist/scripts/buglist.py::repo_root`（:613-618）
     只剔 discovery 类（`GIT_DIR`/`GIT_WORK_TREE`/`GIT_CONFIG_*`…）并**刻意保留执行类**

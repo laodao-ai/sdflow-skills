@@ -9,9 +9,9 @@
 - 「git 不可用」用**真实**手段构造（PATH 里没有 git / git 不可执行），不靠打桩；
   超时另有真实 fake-git 端到端用例（POSIX），跨平台的三组独立验证走注入。
 """
+import ast
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,8 +24,12 @@ from test_gate_impl_progress import approved_change, PLAN2, _sg
 GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
 CONTRACT_EXITS = {0, 3, 4, 5, 6}
 
-# [fix1 M2] 起子进程的整片写法（非只 subprocess.run）——单出口守卫按此面数。
-SPAWN_RE = re.compile(r"subprocess\.(?:run|Popen|call|check_call|check_output)\(|os\.system\(")
+# [fix1 M2 / fix2] 起子进程的整片写法（非只 subprocess.run）——单出口守卫按此面数。
+# 以 `模块.属性` 的限定名匹配 ast.Call 节点，故注释/字符串里的同名写法不计入。
+_SPAWN_CALLS = frozenset({
+    "subprocess.run", "subprocess.Popen", "subprocess.call",
+    "subprocess.check_call", "subprocess.check_output", "os.system",
+})
 
 HELPERS = [
     ("run_git", lambda root: _sg.run_git(root, "rev-parse", "HEAD")),
@@ -358,6 +362,20 @@ def test_all_git_calls_go_through_the_single_hardened_entry():
     # = 一条没被加固的通路。允许出现的只有 `_git_run` 内那一处。
     # [fix1 M2] 只数 `subprocess.run(` 是点补：`Popen` / `call` / `check_output` / `os.system`
     # 同样能起子进程且同样绕过加固，面治 MUST 一次覆盖整片写法。
+    #
+    # [fix2] **用 ast 而非正则**（CLAUDE.md 基准 5「让工具自己回答」）：正则扫的是源码
+    # 文本，注释与字符串里的写法照样计数——本文件的 docstring 里就有 4 处提到
+    # `subprocess`，是活雷（实测往 ship_gate.py 加一行注释 `MUST NOT 用
+    # subprocess.check_output(...)` 即可让本守卫无故变红）。Python 的语法有官方
+    # parser，调它即可零解析、零误伤地只数**真实调用节点**。
     src = GATE.read_text(encoding="utf-8")
-    spawns = SPAWN_RE.findall(src)
-    assert spawns == ["subprocess.run("], f"存在绕过 _git_run 的裸子进程调用点：{spawns}"
+    spawns = []
+    for node in ast.walk(ast.parse(src)):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+            qualified = f"{f.value.id}.{f.attr}"
+            if qualified in _SPAWN_CALLS:
+                spawns.append(qualified)
+    assert spawns == ["subprocess.run"], f"存在绕过 _git_run 的裸子进程调用点：{spawns}"
