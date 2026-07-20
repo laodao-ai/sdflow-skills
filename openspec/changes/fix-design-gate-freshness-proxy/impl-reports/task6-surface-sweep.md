@@ -178,11 +178,17 @@ CommonMark 里空白**承载语义**：缩进决定列表嵌套层级与缩进�
 
 ## 5. 遗留 / 交棒
 
-1. **Task4 已登记的 spec 冲突仍未解**（见 `task4-stale-diagnostics.md` 尾）：
-   `specs/spec-workflow/spec.md` 的 `Scenario: 失鲜 REFUSE_START 须携带触发点与处置指引` 仍写着
-   「MUST 提 `checkpoint(impl-review)` 通道」，与实现（MUST NOT 提）正面冲突。实现期改 `specs/`
-   会触设计门失鲜，故本票同样不改。**须由 `/sdflow-done` 的 delta 对码核验步或人工在 archive 前
-   处理。** 本票只做二次显著登记，不擅自变更。
+1. ~~**Task4 已登记的 spec 冲突仍未解**~~ 〔impl-review-fix：**本条系过时误述，已订正**〕
+   本票原文称 `specs/spec-workflow/spec.md` 的 `Scenario: 失鲜 REFUSE_START 须携带触发点与处置指引`
+   「仍写着 MUST 提 `checkpoint(impl-review)` 通道」——**该冲突早在 commit `e2d7f80` 已修复**
+   （经 `checkpoint(impl-review)` 声明通道提交，正是该豁免的正确用法：事前、受控、用在会触发
+   失鲜的那个提交自身上）。当前 spec:138 写的是「默认处置指引 MUST 只推荐重跑设计门一条；
+   `checkpoint(impl-review)` MUST NOT 出现在默认处置指引中」，与实现一致。
+   `tasks.md:16` 的同类残留亦已于 `d02b03d` 一并清除，四件套已全文复扫、零违规。
+
+   **本条误述的成因值得记一笔**：本票照抄了 `task4-stale-diagnostics.md` 尾部**当时**的登记，
+   未核当前盘面——正是本 change 反复踩的「自述不可当证据」面。**交棒给 done 时 MUST NOT
+   把本条当作待处理项。**
 2. **F8 watch item**：将来若引入任何回写四件套的机械 producer，须**另开 change 重评 §1.2 全表**，
    MUST NOT 顺手扩 `_tasks_content_exempt`。
 3. `task2-checkbox-exemption.md` Concern 1（不带替身的端到端 merge-frame 用例缺口）本票未动——
