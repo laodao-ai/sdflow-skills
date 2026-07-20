@@ -420,142 +420,77 @@ def run_git_bytes(root, *args):
     return r.returncode, r.stdout
 
 
-def design_watched_subs(frame_files, base):
-    """帧内**落在 design 域监视集内**的触及路径集（相对 change 目录）。
+DESIGN_WATCHED_SUBTREE = "specs/"      # 监视集里唯一的子树（其余三项是固定文件名）
 
-    [Task1] 这与「该提交的完整文件列表」是两个不同的量：checkpoint 走 `git add -A`，
-    真实提交必然打包源码；按整 commit 求值 ⇒ 任何以此为前提的判据永不触发。
+
+def design_pathspecs(base):
+    """design 域监视集的 pathspec 列表（供 `ls-tree -- <pathspec>...`）。
+
+    [harden-gate-git-layer Task3 · tasks 2.1] 单一源：监视集成员判据只此一处。
+    `tasks.md` **也在其中**——它的存在性判定由此统一走 `ls-tree` 的干净语义
+    （rc=0+不在结果里 = 缺失），而不是交给 `git show` 的 rc=128（与仓损坏不可区分）。
     """
-    subs = set()
-    for f in frame_files:
-        if not f or not f.startswith(base):
-            continue
-        sub = f[len(base):]
-        if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
-            subs.add(sub)
-    return subs
+    return [base + n for n in DESIGN_WATCHED_NAMES] + [base + DESIGN_WATCHED_SUBTREE]
 
 
-def frame_touched_paths(root, sha):
-    """该提交触及的路径列表；**读不到/形态看不清 → None**（调用方 MUST 保守判失鲜）。
+def ls_tree_map(root, ref, pathspecs):
+    """`git ls-tree -r -z <ref> -- <pathspecs>` → `{path_bytes: (mode, type, oid)}`。
 
-    [impl-review-fix F1] 取代旧的 `git log --name-only`。旧协议有三个 fail-open 洞，
-    同属一个面（枚举协议），故一次扫全：
+    [harden-gate-git-layer Task3 · ADR-2 · tasks 2.1/2.1b/2.4] 判据本体的取数口径。
 
-      F1-a **merge 提交恒空**：`git log --name-only` 不带 -m/--cc 时对 merge commit
-        **不输出任何文件** ⇒ 上游 `if not subs: continue` 在触及豁免判据**之前**就跳过
-        整帧 ⇒ evil-merge（改动只存在于 merge 自身 resolve 出的树、两 parent 都没碰）
-        对 design 域整体判 fresh。且 Task1 的逐 parent 校验在生产路径上成了死代码。
-      F1-b **rename 检测吞源路径**：默认开 rename 检测，`git mv tasks.md x.md` 只输出
-        目标路径 ⇒ 监视集看不到源 `tasks.md` ⇒ 跳过整帧判 fresh（直接违反本 change 的
-        delta spec「`git mv` 迁走 ⇒ 失鲜」）。
-      F1-c **文本行协议承载文件名**：含换行/Tab 的路径按行切会拆碎、且被 C-quote 包裹
-        ⇒ 逃出 `startswith(base)` 监视集。
+    **`-z` MUST NOT 省略**：它不只是换分隔符——**它同时关闭 git 默认的路径 C-quote**，
+    而 C-quote 正是本 change 缺陷 6（控制字符 / 非 ASCII 路径被弄花后逃出监视集）的成因。
+    省掉 `-z` ⇒ 新代码路径原样踩回该缺陷。
 
-    ⇒ 协议改为 `git diff-tree -m -r --raw --no-renames -z --root`：
-      `-m`          merge 输出**相对每个 parent** 的 diff（补 F1-a）；
-      `--no-renames` 改名分解成 A+D，源路径与目标路径**都**进枚举（补 F1-b）；
-      `-z`          NUL 分隔的原始路径，零引号零转义（补 F1-c）；
-      `--root`      根提交也能枚举出文件（否则空集 ⇒ 又一处静默跳过）。
+    **解析口径**（`ls-tree -z` 的输出格式有界、良定义，∴ 可正确手写解析，不撞基准 5）：
+    按 `\\0` 切记录，每条记录按**首个 `\\t`** 切分为 `<mode> <type> <oid>` 与 path；
+    **path 部分保持原始字节，不解码、不反转义**（解码会让不同字节序列在 U+FFFD 处趋同）。
 
-    🔴 **与 BR-6 护栏的关系**（防后人误读）：BR-6 禁的是 `--no-merges` / `--first-parent`
-    ——那两个开关会**少枚举提交**。`-m` 是**多输出** merge 的 per-parent diff，不删任何
-    提交、不改变遍历的提交集合，与 BR-6「merge 内部提交逐一枚举不漏检」方向一致。
+    **rc≠0 = 真读失败** ⇒ `GateIndeterminate`（仓损坏 / 权限 / ref 不可达）。
+    **rc=0 + 某路径不在结果里 = 合法的「缺失」信号**，由调用方按「映射不等 ⇒ stale」处理，
+    **MUST NOT** 混作读取失败——二者是不同的事，前者可判（判 stale），后者不可判。
     """
-    rc, out = run_git_rc(root, "diff-tree", "-m", "-r", "--raw", "--no-renames",
-                         "-z", "--no-commit-id", "--root", sha)
+    rc, out = run_git_bytes(root, "ls-tree", "-r", "-z", ref, "--", *pathspecs)
     if rc != 0:
-        return None
-    toks = out.split("\0")
-    paths, i = [], 0
-    while i < len(toks):
-        meta = toks[i]
-        if not meta:
-            i += 1                         # 末尾 NUL 切出的空 token
-            continue
-        if not meta.startswith(":") or i + 1 >= len(toks):
-            return None                    # 协议外形态 ⇒ 看不清 ⇒ 保守
-        paths.append(toks[i + 1])
-        i += 2
-    return paths
+        raise GateIndeterminate(
+            f"git ls-tree 读 {ref} 的监视集失败（rc={rc}）——仓损坏 / 权限 / ref 不可达",
+            CAUSE_READ_FAILED)
+    entries = {}
+    for record in out.split(b"\0"):
+        if not record:
+            continue                       # 末尾 NUL 切出的空 token
+        meta, sep, path = record.partition(b"\t")
+        fields = meta.split()
+        if not sep or len(fields) != 3:
+            # 协议外形态 ⇒ 看不清 ⇒ 不可判（MUST NOT 当空集：空集会与另一侧比出假等值）
+            raise GateIndeterminate(
+                f"git ls-tree 输出形态不可解析（ref={ref}）", CAUSE_READ_FAILED)
+        entries[path] = tuple(fields)
+    return entries
 
 
-def commit_parents(root, sha):
-    """该提交的 parent sha 列表。根提交 → []；解析失败 → None。
+def read_blob_bytes(root, ref, path, label):
+    """取 `<ref>:<path>` 的 blob 原始字节。rc≠0 ⇒ `GateIndeterminate`。
 
-    [Task1 · BR-6 护栏] merge 提交下「前版」相对**每个** parent 各自定义——
-    调用方须逐 parent 求值，MUST NOT 只看 first parent。
+    [harden-gate-git-layer Task3 · tasks 2.2/2.4] **调用前提**：`ls_tree_map` 已确认该路径
+    在该 ref 下存在。∴ 此处的 rc≠0 恒为**真读失败**（仓损坏 / 权限），可以放心映射成
+    不可判——存在性判定 MUST NOT 落到这里（对「路径不存在」与「仓损坏」它返回同一个
+    rc=128，机械上不可区分，会让「文件被删」的诊断误导撞门者去查仓完整性）。
+
+    用 `cat-file blob` 而非 `show`：前者输出 object 的**原始字节**，绕开 textconv /
+    smudge 等工作树转换；`show` 的输出受这些 config 影响，同一 blob 在不同 config 下
+    可读出不同字节 ⇒ 判定输入重新变成外部可控（违反 ADR-6）。二者对本函数的**契约面**
+    （rc=0 取字节 / rc≠0 不可判）完全一致，∴ 这是同契约下的更安全取法。
+
+    **MUST NOT** 把失败折成 `b""`：两侧都失败会比出 `b"" == b""` ⇒ 判等值 ⇒ 放行真实
+    设计改动（design.md「读失败 ≠ 内容为空」的头号自噬风险，与缺陷 3/10 同一失效模式）。
     """
-    rc, out = run_git_rc(root, "rev-list", "--parents", "-n", "1", sha)
-    if rc != 0 or not out:
-        return None
-    return out.split()[1:]
-
-
-def _plain_modification_from_raw(line):
-    """`git diff --raw` 单行 → 该行是否表示**普通内容修改**。纯函数（可对合成行直接测）。
-
-    行形：`:<srcmode> <dstmode> <srcsha> <dstsha> <status>\\t<path>`
-    [Task1] 新建(A)/删除(D)/改名(R)/复制(C)/类型变更(T)/仅权限位(mode 变) 一律 False——
-    此类形态下前后两版 blob 字节可能**完全相同**（chmod、regular↔symlink），拿字节等值
-    当「没实质改动」会放行真实的状态位变更。
-    """
-    if not line.startswith(":"):
-        return False                       # 非 raw 行形 ⇒ 下面的定位全不可信，保守
-    fields = line.split("\t", 1)[0].split()
-    if len(fields) < 5:
-        return False
-    src_mode, dst_mode, status = fields[0][1:], fields[1], fields[4]
-    return status == "M" and src_mode == dst_mode
-
-
-def _parent_path_status(root, parent, sha, path):
-    """该提交相对某 parent 对 path 的变更形态。四态：
-
-        "unchanged" — 该 parent 侧与本提交在此路径上**逐字节同一** blob（无改动可审）
-        "plain"     — 普通内容修改（status=M 且 mode 不变）
-        "unfit"     — 形态不合格（A/D/R/C/T 或仅权限位变更）
-        "error"     — git 读取失败 ⇒ 看不清
-
-    [impl-review-fix F1] 从旧的二值 `_plain_content_modification` 拆开。旧版把
-    "unchanged" 与 "unfit"/"error" 一起折叠成 False ⇒ 一旦 merge 帧被真正枚举出来
-    （F1-a 修复后），「side 分支改了 tasks.md、main 侧没改」这类**普通 merge** 会因
-    「相对 side parent 无改动」被误判 shape-unfit ⇒ 假失鲜。unchanged 的正确语义 =
-    该 parent 侧**没有引入任何设计改动**，与豁免判定无关，跳过即可。
-
-    --no-renames：让改名分解成 A+D，不依赖 diff.renames 的仓库级 config（确定性）。
-    """
-    rc, out = run_git_rc(root, "diff", "--raw", "--no-renames", parent, sha, "--", path)
+    rc, raw = run_git_bytes(root, "cat-file", "blob", f"{ref}:{path}")
     if rc != 0:
-        return "error"
-    if not out:
-        return "unchanged"
-    return "plain" if _plain_modification_from_raw(out.splitlines()[0]) else "unfit"
-
-
-def _plain_content_modification(root, parent, sha, path):
-    """`_parent_path_status` 的 bool 视图（单一源）：仅 "plain" 为真。"""
-    return _parent_path_status(root, parent, sha, path) == "plain"
-
-
-def blob_pair(root, parent, sha, path):
-    """取该提交相对某 parent 的前后两版 blob 原始字节。
-
-    返回 (ok, before_bytes, after_bytes)。**ok=False ⇒ 调用方 MUST 保守判失鲜**——
-    取不到、读不准、形态不合格一律归此侧，绝不因读取失败而放行。
-
-    [tasks 1.1c] 两侧读取各自显式判 returncode，MUST NOT 依赖空串巧合：
-    双侧失败会得 b"" == b"" ⇒ 判等值 ⇒ 放行真实设计改动（假绿方向）。
-    """
-    if not _plain_content_modification(root, parent, sha, path):
-        return False, b"", b""
-    # 用 cat-file blob 而非 show：前者输出 object 的**原始字节**，绕开 smudge/textconv
-    # 等工作树转换；show 的输出受这些过滤器影响，同一 blob 在不同 config 下可读出不同字节。
-    rc_before, before = run_git_bytes(root, "cat-file", "blob", f"{parent}:{path}")
-    rc_after, after = run_git_bytes(root, "cat-file", "blob", f"{sha}:{path}")
-    if rc_before != 0 or rc_after != 0:
-        return False, b"", b""
-    return True, before, after
+        raise GateIndeterminate(
+            f"读 {label} 的 {path}@{ref} 内容失败（rc={rc}）——该路径已确认存在，"
+            "故此为真读失败（仓损坏 / 权限）", CAUSE_READ_FAILED)
+    return raw
 
 
 # ────────────────────────────── fenced code block 围栏识别（单一源） ──────────────────────────
@@ -753,8 +688,11 @@ def _tasks_content_exempt(before, after):
     🔴 比较**按行号位置对齐**（zip），MUST NOT 用 LCS / difflib：LCS 下纯行重排的
     删除行与插入行逐字节相同，会被判等值而放行。行数不等 ⇒ 直接判不等值。
 
-    抽成独立函数是为了把「保守回落」与「等值判据」分成两个可各自证伪的面：
-    上游 design_frame_exempt 的每道回落分支都能在本函数被替身为恒 True 时单独证伪。
+    [harden-gate-git-layer Task3 · tasks 2.9] **保留复用**：帧比较整簇退役后，本函数与
+    `_normalize_checkbox_lines` / `DESIGN_WATCHED_NAMES` 是仅有的三处保留件。现役调用点 =
+    `is_stale` 的 design 分支（映射差异仅在 tasks.md 且两侧 mode/type 相同时的唯一豁免闸门）。
+    🔴 承重升格已登记（design.md 残余面 T189）：旧设计里它只是众多判据之一，新设计下它是
+    design 域**唯一**的放行闸门。
     """
     nb = _normalize_checkbox_lines(before)
     na = _normalize_checkbox_lines(after)
@@ -765,96 +703,8 @@ def _tasks_content_exempt(before, after):
     return all(x == y for x, y in zip(nb, na))
 
 
-# [Task4 · SW-1] 失鲜分类原因的**枚举全集**（机读取值）与人读标签。四条各对应
-# 判据里一条**实际存在**的保守回落分支——不是凭空归类，改分支必须同步改这里。
-STALE_CATEGORIES = {
-    "mixed-paths": "帧内触及 tasks.md 以外的设计工件",
-    "content-changed": "tasks.md 出现勾选框以外的改动",
-    "blob-unreadable": "tasks.md 前后两版内容读取失败",
-    "shape-unfit": "tasks.md 变更形态不合格（新建/删除/改名/类型或权限位变更，或根提交）",
-    # [impl-review-fix F2] 枚举本身失败（git log / diff-tree 非零退出或输出形态看不清）。
-    # 它不是"某帧不豁免"，而是"盘面读不清" ⇒ 按方向铁律一律判失鲜。
-    "frame-enum-failed": "提交枚举失败（git 读取错误或输出形态不可解析）",
-}
-
-
-def design_frame_exempt_reason(root, sha, frame_files, base):
-    """该帧不豁免的**分类原因**；豁免则返回 None。取值 ∈ STALE_CATEGORIES 的键。
-
-    [Task4] 纯诊断细分：判定本身（豁免 / 不豁免）与 Task2 逐字相同——本函数只是把
-    「为什么不豁免」这个此前被丢弃的信息留下来。MUST NOT 借分类之名改变任何一格判定。
-
-    [Task2] 豁免资格三连，缺一即失鲜：① 帧内**落在 design 监视集内**的路径集恰为
-    {tasks.md}（🔴 不是整个 commit 的文件列表——checkpoint 走 `git add -A`，真实完成
-    提交必然打包源码；按整 commit 求值 ⇒ 豁免永不触发）② 形态是普通内容修改
-    ③ 勾选框归一化后逐行等值。merge 提交须**对每个 parent** 都成立。
-    """
-    if design_watched_subs(frame_files, base) != {"tasks.md"}:
-        return "mixed-paths"               # 帧内还触及其他监视路径 ⇒ 照判失鲜
-    parents = commit_parents(root, sha)
-    if not parents:
-        return "shape-unfit"               # 根提交 / parent 解析失败 ⇒ 保守
-    path = base + "tasks.md"
-    for parent in parents:                 # merge：与**每个** parent 各自成立才算
-        # [impl-review-fix F1] 形态先分四态再决策：unchanged ⇒ 该 parent 侧无改动可审，
-        # 跳过（MUST NOT 当 shape-unfit——那会把普通 merge 全判失鲜）；error/unfit ⇒ 保守。
-        st = _parent_path_status(root, parent, sha, path)
-        if st == "unchanged":
-            continue
-        if st == "error":
-            return "blob-unreadable"
-        if st == "unfit":
-            return "shape-unfit"
-        ok, before, after = blob_pair(root, parent, sha, path)
-        if not ok:
-            return "blob-unreadable"       # blob 读取失败（形态已确认 plain）
-        if not _tasks_content_exempt(before, after):
-            return "content-changed"       # 勾选框以外的改动 ⇒ 照判失鲜
-    return None
-
-
-def design_frame_exempt(root, sha, frame_files, base):
-    """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
-
-    判据本体在 design_frame_exempt_reason——本函数是它的 bool 视图（单一源）。
-
-    〔impl-review-fix〕**测试专用**：Task4 拆出 _reason 变体后，生产路径（is_stale）
-    只调 _reason（它要拿分类原因填诊断触发点），本函数已无生产调用者，仅供只关心
-    「豁不豁免」而不关心「为什么」的用例读。保留是因为那批用例读它更直白；
-    MUST NOT 据此以为它在热路径上——改判据一律改 _reason，本函数自动跟随。
-    """
-    return design_frame_exempt_reason(root, sha, frame_files, base) is None
-
-
-class StaleResult(tuple):
-    """(stale, freshness) + 结构化触发点 trigger（**纯诊断**，不参与判定）。
-
-    [Task4] 刻意做成 2-tuple 的子类、而非 3 字段 NamedTuple：既有调用点与用例都按
-    `stale, freshness = is_stale(...)` 解包、按 `== (False, "fresh")` 等值比较。
-    触发点是**附加**诊断物，MUST NOT 改变判定值本身的形状，否则本票（纯诊断）就
-    从后门改了既有契约。
-
-    trigger: None（无触发点：不失鲜，或 code 域——其行为逐字不变）或 dict
-             {sha: 短 sha, subject: commit subject, paths: 排序后的触发路径列表,
-              category: STALE_CATEGORIES 的键}
-    """
-
-    def __new__(cls, stale, freshness, trigger=None):
-        obj = super().__new__(cls, (stale, freshness))
-        obj.trigger = trigger
-        return obj
-
-    @property
-    def stale(self):
-        return self[0]
-
-    @property
-    def freshness(self):
-        return self[1]
-
-
 def is_stale(root, rel, scope, change):
-    """D9 分域〔Q1=B/Q3=A〕。scope: 'design'|'code'。返回 StaleResult（二元组兼容）。
+    """D9 分域〔Q1=B/Q3=A〕。scope: 'design'|'code'。返回 `(stale, freshness)` 二元组。
 
     design 域仅盯本 change 四件套路径（proposal/design/tasks.md 与 specs/）——
     不可套用整个 openspec/changes/{change}/：该目录还装着 cr/verify/hand-off 等
@@ -863,79 +713,49 @@ def is_stale(root, rel, scope, change):
     # [harden-gate-git-layer Task1 · ADR-1] 锚 = 报告自己录下的 `reviewed_sha`（被批准的盘面），
     # 不再从 `git log -1 -- <report>` 反推「写报告的时刻」。缺失 / 非法 / 不解析为 commit ⇒
     # `GateIndeterminate` 上抛（→ UNKNOWN(6)），**MUST NOT** 回退旧锚、MUST NOT 静默判 fresh。
-    # 原「报告从未提交 → freshness=uncommitted」分支随之消失：锚是录下来的常量，报告有没有
-    # 进过提交与「被批准的是哪个盘面」无关（未提交的报告照样带得出有效锚）。
     sha = read_reviewed_sha(root, rel)
     base = f"openspec/changes/{change}/"
     if scope == "design":
-        # [spec-review-amendment B2] 带 subject 分帧遍历，checkpoint(impl-review) 精确式豁免。
-        # [impl-review-fix F1] 分帧与「帧内触及路径」拆成两跳：本跳只取 (sha, subject)
-        # 列表，路径由 frame_touched_paths 逐帧取（协议不同、不能塞进同一次 log：`-z`
-        # 的 NUL 与 --format 的帧分隔符会互相污染）。subject 保证单行 ⇒ 按行切无歧义。
-        # [Task1 · tasks 1.1b] format 携带 %H：不带 sha 就取不到该提交前后两版 blob。
-        # 分隔符用 \x1f（unit separator）而非空格/冒号——subject 可含空格与冒号，须无歧义。
-        # MUST NOT 加 --no-merges/--first-parent〔BR-6 护栏〕
-        # ——头注释承诺 merge 内部提交逐一枚举不漏检；--no-merges 会改变 merge 场景失鲜语义。
-        # [impl-review-fix F2] 枚举**显式判 returncode**：run_git 把非零退出折叠成空串
-        # ⇒ 零帧 ⇒ 旧路径 return (False,"fresh") = 枚举失败被当成"没有可疑提交"（fail-open）。
-        rc_log, out = run_git_rc(root, "log", f"{sha}..HEAD", "--format=%H%x1f%s")
-        if rc_log != 0:
-            return StaleResult(True, "stale", {
-                "sha": "-", "subject": "", "paths": [],
-                "category": "frame-enum-failed",
-            })
-        for frame in out.splitlines():
-            if not frame:
-                continue
-            frame_sha, _, subject = frame.partition("\x1f")
-            # [spec-review-amendment BR-7] 精确式：裸 checkpoint(impl-review) 或带冒号描述；
-            # 裸 startswith 闭合前缀仍收 `checkpoint(impl-review)evil` 尾串垃圾，故用精确式。
-            #
-            # [Task3 · SW-1] 🔴 两条豁免通道的优先级：本判定 MUST 留在此处——即**读取任何
-            # blob 之前**短路。次序是硬要求，不只是效率：短路保证精确 subject 帧的判定
-            # 不受任何读取失败 / 形态不合格的影响。MUST NOT 把内容读取挪到它前面。
-            #
-            # BR-7 的语义 = 「变体**不因 subject** 获豁免」，**不是**「变体必然失鲜」：
-            # 落到下面的任何 subject（BR-7 要拒的变体、空 subject、普通 subject）都仍
-            # **可以**凭内容判据（勾选框归一化后逐行等值）获豁免。这不是放松 BR-7——
-            # 豁免面取自内容本身，∴ 被监管方书写 subject 拿不到任何额外豁免面。
-            # 真值表 8 格（{精确/变体/空/普通} × {纯勾选/语义改动}）逐格锁在
-            # test_gate_freshness.py ⑧a；短路次序锁在 ⑧b。
-            if subject == "checkpoint(impl-review)" or subject.startswith("checkpoint(impl-review):"):
-                continue                      # 阶段三合法尾流修订，豁免不失鲜
-            # [impl-review-fix F1] 监视集成员判据**只有一处**——`design_watched_subs`。
-            # 此处 MUST NOT 再内联一份 `sub in DESIGN_WATCHED_NAMES or ...`：两份判据
-            # 将来只改一处时，design_frame_exempt 会把「帧内路径集」误算成 {tasks.md}
-            # ⇒ 豁免误开（fail-open）。新增一类监视路径只改 design_watched_subs 即可。
-            # [impl-review-fix F1/F2] 帧内触及路径：取不到 ⇒ 保守判失鲜，MUST NOT 当空集
-            # （空集会走下面的 `continue` 静默跳过整帧 = fail-open）。
-            frame_files = frame_touched_paths(root, frame_sha)
-            if frame_files is None:
-                return StaleResult(True, "stale", {
-                    "sha": frame_sha[:7], "subject": subject, "paths": [],
-                    "category": "frame-enum-failed",
-                })
-            subs = design_watched_subs(frame_files, base)
-            if not subs:
-                continue                      # 本帧未触及任何监视路径 ⇒ 与设计门无关
-            # [Task4 · SW-1] 触发点诊断：判定沿用 Task2/Task3 的分支，只是把「为什么」
-            # 留下来交给 emit。分类原因取自 design_frame_exempt_reason 的**实际分支**
-            # （单一源），MUST NOT 在此另拼一套归类。
-            reason = design_frame_exempt_reason(root, frame_sha, frame_files, base)
-            if reason is not None:
-                return StaleResult(True, "stale", {
-                    "sha": frame_sha[:7],
-                    "subject": subject,
-                    "paths": sorted(subs),
-                    "category": reason,
-                })
-        return StaleResult(False, "fresh")
-    # scope == "code"：行为逐字不变（无 subject、无豁免、无 --no-merges、无触发点诊断）
+        # [harden-gate-git-layer Task3 · ADR-2 · tasks 2.1/2.2] **比内容，不枚举路径**：
+        # 把锚与 HEAD 两侧的被审内容直接摆在一起比。比较单位 = `path → (mode, type, oid)`
+        # 映射，∴ **新增 / 删除 / 改名 / 修改 / mode 变更 / 类型变更天然全覆盖**，
+        # 且不需要另做双侧并集（映射比较本身就是并集语义）。
+        #
+        # 🔴 这取代的是「顺着 git 管道推断哪些路径动过」的整簇帧比较（design.md 缺陷 1–8 同源）。
+        # MUST NOT 为凑诊断 / 兼容旧行为把任何路径枚举通路加回来——那是把刚砍掉的推断面
+        # 从后门放回来（ADR-4）。
+        specs = design_pathspecs(base)
+        anchor_map = ls_tree_map(root, sha, specs)
+        head_map = ls_tree_map(root, "HEAD", specs)
+        if anchor_map == head_map:
+            return False, "fresh"          # 映射完全相等 ⇒ fresh，**0 次内容读取**
+        # 唯一豁免：任务清单的**纯复选框翻转**。〔ADR-3〕勾选框的写入方是 agent 的自由行为、
+        # 不是流程契约，∴ 该豁免 **MUST 常开、按内容切**——**MUST NOT 按阶段切**
+        # （按阶段切会让非该阶段的正常勾选立刻假失鲜，前序 change 已实测证伪）。
+        diff = {p for p in set(anchor_map) | set(head_map)
+                if anchor_map.get(p) != head_map.get(p)}
+        tasks_path = (base + "tasks.md").encode("utf-8")
+        before_entry, after_entry = anchor_map.get(tasks_path), head_map.get(tasks_path)
+        if (diff == {tasks_path}
+                and before_entry is not None and after_entry is not None
+                and before_entry[:2] == after_entry[:2]):
+            # 两侧均存在（单侧缺失 = 被删 / rename 出监视集 ⇒ 落下面的 stale，**不是**读失败）
+            # 且 mode/type 相同（仅 oid 变 = 纯内容改动）⇒ 才值得取字节判豁免。
+            # mode/type 变了却内容相同（chmod / regular↔symlink）⇒ 字节判据必说「等值」，
+            # ∴ MUST 先在这里拦掉，否则状态位变更被静默放行。
+            rel_tasks = base + "tasks.md"
+            before = read_blob_bytes(root, sha, rel_tasks, "锚侧")
+            after = read_blob_bytes(root, "HEAD", rel_tasks, "HEAD 侧")
+            if _tasks_content_exempt(before, after):
+                return False, "fresh"
+        return True, "stale"
+    # scope == "code"：行为逐字不变（Task5 改顶层条目比较）
     files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
     for f in filter(None, files.splitlines()):
         if not f.startswith("openspec/"):
-            return StaleResult(True, "stale")
-    return StaleResult(False, "fresh")
+            return True, "stale"
+    return False, "fresh"
+
 
 
 def _line_scoped_hits(text, candidates):
@@ -1139,17 +959,12 @@ def emit(verdict, exit_code, next_step, reason, **extra):
     sys.exit(exit_code)
 
 
-def _stale_trigger_hint(trigger):
-    """结构化触发点 → 人读串。与 JSON `stale_trigger` **同一数据源**（两侧不各拼各的）。
-
-    [Task4] 纯诊断串：无触发点返回空串（拼接后文案逐字不变）。
-    """
-    if not trigger:
-        return ""
-    paths = "、".join(trigger["paths"]) or "(无)"
-    label = STALE_CATEGORIES.get(trigger["category"], trigger["category"])
-    return (f"；触发点：提交 {trigger['sha']} \"{trigger['subject']}\" "
-            f"触及 {paths}（{label}）")
+# [harden-gate-git-layer Task3 · ADR-4 · tasks 2.8] `_stale_trigger_hint` / `StaleResult.trigger`
+# 已随帧比较整簇退役：触发点诊断原本**依附于帧遍历**（要 sha + subject），帧遍历没了之后，
+# 为凑齐这段诊断而保留一条枚举通路，等于把刚砍掉的推断面从后门放回来。且该能力在 code 域
+# 从未真正接通过（两个 code 域调用点本就二元解包丢弃 trigger）。
+# 取代者 = `emit` 输出 `reviewed_sha`（录下来的常量，打印零推断成本）+ reason 拼出可执行的
+# `git diff <reviewed_sha> HEAD -- …`（Task4 接入）。
 
 
 # [mlh-p5 Task2/D3；Task6 退役 live inline] live 读点分流：frontmatter 有效→state；坏→UNKNOWN(6)；
@@ -1423,17 +1238,15 @@ def decide(root, change):
              "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
              "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）"
              + _unclosed_frontmatter_hint(report))
-    design_res = is_stale(root, str(report.relative_to(root)), "design", change)
-    if design_res.stale:
-        # [Task4 · SW-1] 纯诊断：附结构化触发点（人读串 + JSON `stale_trigger` 同源，
-        # 见 _stale_trigger_hint）。默认处置**只**推荐重跑设计门——MUST NOT 在此提
-        # `checkpoint(impl-review)`：豁免逐提交求值，已触发失鲜的那个提交不会因**后补**
-        # 一个 checkpoint 提交而被追溯赦免，写进指引等于教撞门者做一件不起作用的事。
-        extra = {"stale_trigger": design_res.trigger} if design_res.trigger else {}
+    design_stale, _design_freshness = is_stale(
+        root, str(report.relative_to(root)), "design", change)
+    if design_stale:
+        # 默认处置**只**推荐重跑设计门——MUST NOT 在此提 `checkpoint(impl-review)`：
+        # 该 subject 豁免已随帧比较退役，写进指引等于教撞门者做一件不起作用的事。
+        # [Task3] 结构化触发点随帧遍历退役（ADR-4）；锚值可见性由 Task4 的 emit 补 `reviewed_sha`。
         emit("REFUSE_START", EXIT_REFUSE, None,
              "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
-             "（重跑 sdflow-spec-review 后重新拍板补锚）"
-             + _stale_trigger_hint(design_res.trigger), **extra)
+             "（重跑 sdflow-spec-review 后重新拍板补锚）")
     # ── verify 冲突锚早检（坏 frontmatter → UNKNOWN，保步序早停）──
     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：坏 frontmatter（含重复
     # verify 键=冲突的等价形态 duplicate-key）→ live_ship_gate_state 内 UNKNOWN(6) emit 早停；
