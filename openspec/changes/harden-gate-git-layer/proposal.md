@@ -1,47 +1,64 @@
 ## Why
 
-`ship_gate.py` 判定「评审结论是否已失鲜」时，靠调 `git` 枚举锚提交之后的改动。**这一层调用有四个已复现的缺陷，其中三个是 fail-open**——门在该拦的时候放行。
+`ship_gate.py` 判定「评审结论是否已失鲜」时，长期从 git 管道信号**推断**「被审过的内容变了没有」。一轮 grill + 一轮多镜设计审（4 镜 + 广审双声 + 2 站点跨模型 voice）在这条推断链上累计挖出**八个缺陷，全部实测复现**：
 
-`fix-design-gate-freshness-proxy` 已把 **design 域**的枚举协议换成 `git diff-tree -m -r --raw --no-renames -z --root`；**code 域一行未动**，仍是老协议 `git log --name-only`，同一批洞原样留存。这不是"还差最后一个 case"，是**同一片面只治了一半**。
+| # | 缺陷 | 方向 |
+|---|---|---|
+| 1 | `git log --name-only` 对 merge 提交不输出路径 ⇒ 整帧跳过 | fail-open |
+| 2 | rename detection 默认开，源路径逃出监视集 | fail-open |
+| 3 | 非零退出被折叠成空串 ⇒ 零帧 ⇒ 等价「无可疑提交」 | fail-open |
+| 4 | `-m` 逐 parent 输出，parent2 常早于锚 ⇒ 重报锚前历史 | 假阳（例行 merge 即误拦） |
+| 5 | `--cc` 只报「相对所有 parent 都不同」者 ⇒ 合并结果等于某 parent 时隐身 | fail-open |
+| 6 | 控制字符路径被 C-quote 弄花，前缀判定失准 | 两域方向相反 |
+| 7 | `diff.ignoreSubmodules=all` ⇒ 未审 submodule bump 判 fresh | fail-open |
+| 8 | `GIT_ICASE_PATHSPECS=1` ⇒ 负向 pathspec 误排除真实代码目录 | fail-open |
 
-〔grill-amendment〕grill 期实测又揪出**第五个缺陷，且它在 design 域已经上线**：`-m` 输出 merge 相对**每个 parent** 的 diff，而 parent2 通常**早于锚提交** ⇒ 整条分支在锚**之前**的工作被当成「本帧触及路径」重报 ⇒ **例行「把 main 合进 feature 分支」即误判失鲜**。实测：侧支只碰 `openspec/changes/c/notes.md`、锚后四件套一字未动，design 域仍判 `stale` → `REFUSE_START`。正解 `--cc`（只报相对**所有** parent 都不同的文件 = merge 自身引入的内容）。同一原语面 ⇒ 按基准 4 fold 进本 change，不另开循环。
+**外加两个不在枚举链上、但同属失鲜判定的 fail-open**：
 
-同一轮 grill 推翻了本 change 的起手式：**「两域共用一份枚举实现」被当成目标写进了 Goals，但两域问的不是同一个问题**——design 域要 per-commit 判豁免（必须逐帧），code 域只要「现在的树 vs 被审过的树」（状态比较，与拓扑无关）。决策与实证落 `openspec/adr/0026`。
+| # | 缺陷 | 证据 |
+|---|---|---|
+| 9 | **锚点可被无声前移** — `report_last_sha` = 「最后一次触碰报告**路径**的提交」，任何后续触碰（一个空行、一次 CI reformat）都把锚推到未审改动之后 | 实测：后门提交 + 一个无关的报告排版提交 ⇒ 判 fresh |
+| 10 | **锚获取本身 fail-open** — `run_git` 非零退出折成 `''`，`is_stale` 判 `(False,'uncommitted')` = fresh | 实测：非 git 目录下返回 `(False,'uncommitted')` |
+
+**这不是十个 bug，是同一根因的十张脸**：拿 git 管道当「内容是否改变」的代理。4 与 5 互为解药兼病灶（`-m` 修假阳造假阴，`--cc` 修假阴造假阳），7 与 8 只需一个 config / 一个环境变量就能翻转判定。**在枚举面上补不完**——正是 `CLAUDE.md` 基准 5 点名的补丁螺旋。
+
+∴ 本 change **不修补推断链，改掉推断本身**：录锚 + 直接比内容。决策与实证落 `openspec/adr/0026`。
 
 触发 TG：**TG-17**（HR-TG）· TG-14 · TG-18 · TG-19 · TG-22 · TG-23。
 
 ## What Changes
 
-### P0 — code 域失鲜判据的 fail-open（安全面）
+### 机械层只保**召回**，精确率交语义层
 
-〔grill-amendment〕**按消费方要回答的问题选原语，MUST NOT 为「统一」而统一**（adr/0026）：
+机械层承诺「任何实质改动都不漏」，**不承诺不误报**；误报由主 session 读 diff 分诊，**分诊结论 MUST 落盘留痕**。
 
-- **code 域改用累积 diff** `git diff --raw --no-renames -z <锚> HEAD`——它问的是「现在的树和被审过的那棵，在 `openspec/` 之外有没有差别」，是状态比较，零豁免、零 subject 判断、与提交拓扑无关，一次调用答完。三个 fail-open 由此**结构性关闭**（merge 拓扑不参与、rename 天然分解成 A+D、失败只剩一个 rc）。
-- **design 域保留逐帧**（BR-7 是 per-commit subject 判断，必须逐帧），但 `-m` 换 `--cc`，修上线中的假阳。
-- **MUST NOT 把 design 的补丁照抄进 code 域**——两域谓词方向相反（design = 命中白名单才管；code = 不在 `openspec/` 下就管），逐条判方向的结论见下表。
+### P0 — 录锚，取代「从最后触碰反推」
 
-| 老协议缺陷 | design 域 | code 域（本次） |
-|---|---|---|
-| merge 提交不产 diff | 🔴→✅ 已修 | 🔴 **fail-open**，已复现 |
-| rename 只报目标路径 | 🔴→✅ 已修 | 🔴 **fail-open**，已复现（仅「码→`openspec/`」方向） |
-| 枚举失败折成空串 | 🔴→✅ 已修 | 🔴 **fail-open** |
-| **`-m` 过报锚前历史** | 🔴 **fail-closed 假阳，已上线** 〔本次 fold，改 `--cc`〕 | 🟢 不适用（累积 diff 无帧） |
-| 控制字符路径被 C-quote | ✅ `-z` 后正确解析 | 🔄 **方向反转**：`-z` 后判 fresh，**这是正解**（详下） |
+- 三个评审 producer（`/sdflow-spec-review`、`/sdflow-code-review`、`/sdflow-done`）在报告 frontmatter 写 `reviewed_sha: <当时 HEAD>`。
+- gate reader 读它：**缺失 / 格式非法 / 对象不存在 ⇒ fail-closed**（`UNKNOWN(6)`）。**MUST NOT 在缺字段时静默回退旧的可移动锚**——回退 = 缺陷 9 原样存活。
+- 缺陷 9、10 由此消失。
 
-**控制字符那格 MUST 读完再实现**〔grill-amendment〕：初稿把 code 域现状的 fail-closed 当成「本就正确、MUST NOT 改动」。实测证伪——那个 fail-closed 是**字符串被 C-quote 弄花的意外产物**（`'"openspec/…'` 带前导引号 ⇒ 前缀不匹配 ⇒ 判失鲜），不是有原则的保守。`-z` 输出原始字节、引号不存在，路径正确解析为 `openspec/…` ⇒ 判 fresh，**而文件确实在 `openspec/` 下，豁免它才对**。此反转是 `-z` 的属性，**与选哪个原语无关**（帧枚举走 `-z` 一样反转）。
+### P0 — 直接比内容，取代路径枚举
 
-### P1 — git 调用的失败路径脱离契约
+- **design 域**（监视集是固定清单）：`proposal.md`/`design.md`/`tasks.md` 逐个 `git show <锚>:<path>` 与 HEAD 比字节；`specs/` 子树经 `ls-tree -r -z` 枚举后同样逐个比；`tasks.md` 比之前过既有的 `_normalize_checkbox_lines`。
+- **code 域**（监视集列不出固定清单）：整树 sha 比较，不等即交语义分诊。
+- 缺陷 1/2/4/5/6/7/8 由此**整类消失**（不枚举路径、不调 diff 做判定）。
 
-- `run_git` / `run_git_rc` / `run_git_bytes` 统一捕获 `FileNotFoundError`，映射到 `UNKNOWN(6)`。
-- 同三个函数补 `timeout`，超时同样映射到 `UNKNOWN(6)`。
+> 🔴 **砍的是枚举，不是监视集。** 监视集（只盯四件套 / 只盯非 `openspec/`）是**承重的**——它才是「实现期改源码不该让设计门失鲜」的来源。裸 `reviewed_sha == HEAD` 已实测证伪：实现期每个 ticket 都勾 `tasks.md`、每个提交都动 HEAD ⇒ 设计门从实现的第一个提交起永远失鲜，等于把 `fix-design-gate-freshness-proxy` 修的缺陷退回去。
 
-### P2 — code 域撞门无诊断
+### P1 — git 调用失败落进退出码契约
 
-- code 域失鲜时返回裸 `(True, 'stale')`，撞门者拿不到任何线索。补触发点诊断（哪个 commit、哪些路径、哪一类），与 design 域已有的能力对齐。
+- `run_git` / `run_git_rc` / `run_git_bytes` 统一捕获 `OSError`（含 `FileNotFoundError`、`PermissionError`、无效可执行格式）与 `subprocess.TimeoutExpired`，映射 `UNKNOWN(6)`。
+- 三处补 `timeout`。
+- 子进程**清理 `GIT_*` 环境变量**（实测 `ls-tree` 在 `GIT_ICASE_PATHSPECS=1` 下 fatal 罢工）。
 
-### 验证要求（贯穿全部三级）
+### 退役
 
-每条新增守卫 MUST 附**变异证明**：删掉该守卫 ⇒ 对应用例变红。上一轮的 rename 用例只直接调 `blob_pair`、没走 `is_stale`，因此**在真实洞存在的情况下仍是绿的**——这是本项要求的直接实证来源，不是形式主义。
+BR-7（`checkpoint(impl-review)` subject 豁免）、`frame_touched_paths`、帧遍历、`design_frame_exempt_reason`、触发点诊断管道。BR-7 承载的政策（阶段三 impl-review 修订可改设计产物而不作废设计门）**迁入语义层**：主 session 读真实 diff 判断，重锚 + 写理由。
+
+### 验证要求（贯穿全部）
+
+每条新增守卫 MUST 附**变异证明**：删掉该守卫 ⇒ 对应用例变红。上一轮的 rename 用例只直接调 `blob_pair`、没走 `is_stale`，因此**在真实洞存在的情况下仍是绿的**——这是本项要求的直接实证来源。
 
 ## Capabilities
 
@@ -51,46 +68,46 @@
 
 ### Modified Capabilities
 
-- `spec-workflow`: 失鲜判定的枚举协议要求从 design 域推广为**两域统一**；新增 code 域 fail-open 的禁止性要求、git 调用失败的退出码契约、code 域诊断要求。
+- `spec-workflow`: 失鲜判定由「从 git 管道推断路径变更」改为「录锚 + 直接比内容」；新增 `reviewed_sha` 的 producer/reader 契约、机械召回与语义精确的切分、语义重锚的留痕要求、git 调用失败的退出码契约。
 
 ## Impact
 
-- **代码**：`sdflow-ship/scripts/ship_gate.py`（`run_git*` 系列、`is_stale` 的 code 分支、帧枚举 helper）
-- **测试**：`sdflow-ship/tests/test_gate_freshness.py`（新增 code 域三个 fail-open 用例 + 各自变异证明）
-- **行为变更**：此前被判 `fresh` 而放行的三类盘面，今后判 `stale` → `REFUSE_START`。**这是修复不是回归**，但在途 change 若正处于这三类盘面之一，升级后会撞门并需重跑代码审。
-- **消费方**：本仓为 toolkit 源仓，改动经 push → 各仓 `/sdflow-upgrade` 后生效。
-- **不影响**：design 域判定逐字不变（本次只抽共用源，不改其语义）。
+- **代码**：`sdflow-ship/scripts/ship_gate.py`（`is_stale` 两分支重写、`run_git*` 系列、锚获取；退役帧遍历与 BR-7）
+- **SKILL**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` 的报告模板各加一行 `reviewed_sha`；`sdflow-ship` 加语义重锚协议
+- **测试**：`sdflow-ship/tests/test_gate_freshness.py`（BR-7 真值表 8 格随 BR-7 退役；新增内容比较与录锚用例）
+- **行为变更**：① 此前被误判 fresh 的盘面今后判 stale（**修复**）；② 此前被例行 merge 误拦的盘面今后判 fresh（**修复**）；③ impl-review 修订设计产物今后须语义判 + 重锚（**流程变更**）
+- **迁移**：存量 active 报告无 `reviewed_sha` ⇒ fail-closed ⇒ 须重审一次。在途的只有本 change 自己
+- **消费方**：本仓为 toolkit 源仓，改动经 push → 各仓 `/sdflow-upgrade` 后生效
 
 ## 需求优先级〔BASE-23 · TG-19〕
 
 | 级 | 项 | 依据 |
 |---|---|---|
-| **P0** | code 域三个 fail-open | 安全面：代码审拍板后的源码改动可绕过二次审查随档 ship。已复现 |
-| **P0** | design 域 `-m` 过报假阳 → `--cc`〔grill-amendment〕 | 可用性面但同属安全原语：例行 merge 即误判 `REFUSE_START`，已上线、已复现。同一原语面 ⇒ fold（基准 4） |
-| **P1** | `FileNotFoundError` + `timeout` → `UNKNOWN(6)` | 可用性面：退出码脱离契约集致链序误判语义；无 timeout 致 gate 无限阻塞。已复现/已核实 |
-| **P2** | code 域触发点诊断 | DX 面：不影响判定正确性，只影响撞门后能不能自救 |
+| **P0** | 录锚（缺陷 9、10） | 安全面：锚可被无声前移 / 读不到 git 就放行。缺陷 9 存在时，其余修复的威胁模型**一行都不成立** |
+| **P0** | 直接比内容（缺陷 1–8） | 安全面 + 可用性面：五个 fail-open + 一个假阳。已全部复现 |
+| **P1** | git 调用失败落契约 + `GIT_*` 清理 | 可用性面：退出码脱离契约集致链序误判；无 timeout 致无限阻塞；env 致无故罢工 |
 
-P0 是本 change 的存在理由；P1 与 P0 同处 git 调用层，分开做要付两遍 workflow 循环成本，故合并（基准 4）。P2 是同面的顺手补齐（基准 3）。
+P0 两项同处 `is_stale` 同一函数、同一片面，分开做要付两遍 workflow 循环成本，故合并（基准 4）。P1 动的是同一批 `run_git*`，同理。
 
 ## 假设列表〔BASE-14 · TG-22〕
 
 | # | 假设 | 已验证？ | 若不成立 |
 |---|---|---|---|
-| A1 | code 域 evil-merge 与 rename 两洞真实存在 | ✅ 本地构造仓复现，真调 `is_stale` 返回 `(False,'fresh')` | — |
-| A2 | git 缺失时 gate 退出码为 1、脱离契约集 | ✅ `PATH=/nonexistent` 实测 exit=1 | — |
-| A3 | `run_git*` 三处 `subprocess.run` 均无 `timeout` | ✅ 源码核实，零 `timeout=` | — |
-| ~~A4~~ | ~~控制字符路径在 code 域是 fail-closed（不必改）~~ | ❌ **grill 实测证伪** — 见上表「控制字符」格。老 fail-closed 系 C-quote 弄花字符串所致；`-z` 后判 fresh 才是正解。**Requirement 2 已按新方向重写** | — |
-| A5 | 失鲜判定只有 design/code 两个 scope | ✅ 但**消费方是三个不是两个**〔grill-amendment，初稿写「无第三消费方」有误〕：`:1214` design（spec-review-report）、`:1291` code（code-review-report）、`:1311` code（**verify-report**）。承 adr/0011「MUST grep 列全调用点、不得凭记忆枚举」 | 三消费方同谓词，修法一致；但**测试覆盖不一致**（见 A7） |
-| A6 | design 域语义在换 `--cc` 后，除「例行 merge 不再假阳」外逐字不变 | ❌ **待实现期以现有 design 域全部用例回归证明**〔grill-amendment：口径由「抽共用源后逐字不变」改为「除假阳修复外不变」——`--cc` 是行为修复，不是等价重构〕 | 若另有语义变动则须回滚重做 |
-| A7 | code 域现存测试覆盖 | ✅ **仅 1 个用例**（`test_gate_freshness.py:996`），且用的是第三个消费方 `verify-report` ⇒ **`code-review-report` 那条路径今天零覆盖**〔grill-amendment〕 | — 改写爆炸半径近乎零，但须为 `code-review-report` 补首个用例 |
-| A8 | 累积 diff 对「改了又改回去」判 fresh、对 amend 成孤儿的锚判 fresh | ✅ 实测。二者均为**正确**（树等值 ⇒ 无新内容会被 ship；改报告错别字不该要求重跑代码审），但**是行为变更、非等价重构** | 若判错则须回退到范围语义 |
+| A1 | 缺陷 1–10 均真实存在 | ✅ 全部本地 fixture 复现，多数经真 `is_stale` 求值 | — |
+| A2 | 实现期提交不触及 design 域监视集 ⇒ 内容比较保持 fresh | ✅ 实测：改源码 + 勾复选框后 `design.md` 内容等值 | 若不成立则设计门实现期常失鲜，方案不可用 |
+| A3 | `_normalize_checkbox_lines` 可直接复用且已是 bytes 口径 | ✅ 源码核实（`ship_gate.py:537`，`raw.split(b"\n")`） | 需另写归一化 |
+| A4 | 失鲜判定有两个 scope、**三个消费方** | ✅ `:1214` design / `:1291` code(code-review-report) / `:1311` code(verify-report)。承 `adr/0011`「MUST grep 列全调用点」 | — |
+| A5 | code 域现存测试仅 1 例且走 `verify-report` ⇒ `code-review-report` 零覆盖 | ✅ 核实（`test_gate_freshness.py:989`） | — |
+| A6 | 内容比较对敌意 config/env 稳定 | ✅ 实测 `git show` 在 `diff.ignoreSubmodules=all` + `GIT_ICASE_PATHSPECS=1` 下如实返回 | — |
+| A7 | `ls-tree` 在 `GIT_ICASE_PATHSPECS=1` 下 fatal（非静默错答） | ✅ 实测 `fatal: pathspec magic not supported` | 若静默错答则为 fail-open，须改用其他枚举 |
+| A8 | 退役 BR-7 后，其政策可由语义层承载 | ❌ **待实现期验证**：需确认 impl-review 修订四件套的实际频率与分诊成本 | 若频率过高则须回补一条机械豁免 |
 
 ## 开放问题
 
-无。`timeout` 具体秒数属实现期可判项（有客观判据：现有 git 调用均为本地元数据查询，量级明确），走 T10 ①。
+无。
 
 ## Non-Goals
 
-- **T189**（`_normalize_checkbox_lines` 口径反转为白名单）——属**内容豁免面**，与本次的 **git 枚举面**是两片面。混进来会让本 change 同时动两个不相干的判据，违反「一个 change 一个完整阶段结果」。
+- **T189**（`_normalize_checkbox_lines` 口径反转为白名单）——它在本方案里成为 design 域内容比较的**核心依赖**，须在 design.md 残余面显式登记其耦合，但口径反转本身属独立面，不在本次。
 - **B18**（`maintain_scan.py` 的 `find_repo_root`）——属仓根解析面。
-- 不改 design 域的任何判定语义（含 BR-7 subject 豁免、内容豁免、其优先级）。
+- **全仓 git 调用安全面盘点**（另有约 8 个脚本存在同类无 timeout / 无异常捕获）——gate 是仅有的两道质量门，风险等级高于记录类脚本，本次只做 gate（基准 4：不为「顺手」把不相关的面拖进来）。
