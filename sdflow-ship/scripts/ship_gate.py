@@ -57,14 +57,12 @@ verdict × exit × next 契约表:
     标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
 
 D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-layer ADR-1/2/3；决策与实证 openspec/adr/0026〕:
-    取代旧「反推锚 + 帧枚举推断路径变更 + 全阶段求值」整套——十个管道缺陷同源于「拿 git 管道当代理」，
-    整类随判据更换消失（proposal「Why」清单）。锚一律取报告自录的 `reviewed_sha`〔ADR-1〕：
-    缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6) fail-closed，MUST NOT 回退任何反推锚（旧
-    `report_last_sha` 及「报告从未提交 → uncommitted」语义一并退役——锚是录下来的常量，报告有没有
-    进过提交与「被批准的是哪个盘面」无关）。
+    锚一律取报告自录的 `reviewed_sha`〔ADR-1〕：缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6)
+    fail-closed，MUST NOT 回退任何反推式锚——锚是录下来的常量，报告有没有进过提交与「被批准
+    的是哪个盘面」无关。
     design（design_approved 锚）〔ADR-2 比内容〕: 对锚与 HEAD **各跑一次**
         `git ls-tree -r -z <ref> -- proposal.md design.md tasks.md specs/`，比 `path→(mode,type,oid)`
-        映射（新增 / 删除 / rename / 改内容天然全覆盖，无需双侧并集）。映射全等 ⇒ fresh（0 次 git show）；
+        映射（新增 / 删除 / rename / 改内容天然全覆盖，无需双侧并集）。映射全等 ⇒ fresh（0 次内容读取）；
         差异**仅在 tasks.md 且两侧均存在** ⇒ 取两侧字节过 `_tasks_content_exempt`（纯勾选框翻转豁免——
         归一化后逐行等值；**常开、按内容切、不按阶段切**，勾选框写入方是 agent 自由行为非 SKILL 契约）；
         其余任何差异（含 tasks.md 单侧缺失，属合法「缺失」信号，MUST NOT 混作读失败）⇒ stale。
@@ -79,7 +77,8 @@ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-lay
         （done 写 verify 报告即假阳）、MUST NOT 用负向 pathspec（继承 GIT_ICASE_PATHSPECS，实测证伪）。
         verify=FAIL 陈旧优先于 code-review 陈旧（保重验不因陈旧 CR 卡死）。
     「读失败 ≠ 内容为空」〔ADR-4·自噬风险〕: 内容比较 MUST 显式判 returncode，MUST NOT 让两次失败
-        读比较相等；`git show` 仅在 ls-tree 已确认双侧均存在时调用，其 rc≠0 恒为真读失败 → UNKNOWN(6)。
+        读比较相等；内容读原语（design 域 tasks.md 走 `cat-file blob`=`read_blob_bytes`；归档 verify
+        走 `git show`）仅在存在性已确认双侧均存在时调用，其 rc≠0 恒为真读失败 → UNKNOWN(6)。
 
 已知不覆盖（接受并记录）:
     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
