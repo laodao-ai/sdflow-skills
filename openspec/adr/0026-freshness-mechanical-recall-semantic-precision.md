@@ -2,7 +2,7 @@
 
 `ship_gate.py` 的失鲜判定要回答「评审结论是否已被后续提交作废」。历史实现一律是**从 git 管道信号推断**「被审过的内容变了没有」：`git log --name-only` → `git diff-tree -m` → `--cc`。
 
-一轮 grill + 一轮多镜设计审（4 镜 + 广审双声 + 2 站点跨模型 voice）在这条推断链上累计挖出**八个**缺陷，全部实测复现：
+一轮 grill + 一轮多镜设计审（4 镜 + 广审双声 + 2 站点跨模型 voice）在这条推断链上累计挖出**八个**缺陷，全部实测复现（另有两个不在推断链上、但同属失鲜判定的 fail-open——锚点可被无声前移、锚获取本身折叠错误为空——合计十个，见 `harden-gate-git-layer/proposal.md`）：
 
 | # | 缺陷 | 方向 |
 |---|---|---|
@@ -21,7 +21,7 @@
 
 - **锚**：评审时把当时的 HEAD sha 写进报告 frontmatter（`reviewed_sha`）。锚是**记录的**，不是从「最后一次触碰报告路径的提交」反推的。
 - **design 域**：监视集是**固定清单**（`proposal.md`/`design.md`/`tasks.md` + `specs/` 子树）⇒ 逐文件 `git show <锚>:<path>` 与 HEAD 比字节；`tasks.md` 比之前过 `_normalize_checkbox_lines`。
-- **code 域**：监视集是「除 `openspec/` 外的一切」，列不出固定清单 ⇒ 退用**整树 sha 比较**，不等即交语义分诊。
+- **code 域**：监视集是「除 `openspec/` 外的一切」，列不出固定清单 ⇒ 比较 `git ls-tree`（浅层）的**顶层条目**、排除 `openspec` 条目后求等值。**MUST NOT 用整棵树的 sha**——实测 done 写 `verify-report.md` 即改变整树 sha，在正常流程第一步就假阳。
 
 **判据 MUST 按阶段定义，豁免各归其位**：gate 是线性阶段机，两个 code 域检查**已经是「位置即阶段」**（`:1291` 在代码审阶段之后才可达，`:1311` 在 done 之后）；design 域是唯一阶段无关的检查（`:1214`，在阶段判定之前），也正是豁免堆得最厚的那个——**一个检查要同时容忍三个阶段的合法 churn，必然长出一堆豁免**。据此：
 
