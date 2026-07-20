@@ -443,8 +443,21 @@ def _tasks_content_exempt(before, after):
     return all(x == y for x, y in zip(nb, na))
 
 
-def design_frame_exempt(root, sha, frame_files, base):
-    """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
+# [Task4 · SW-1] 失鲜分类原因的**枚举全集**（机读取值）与人读标签。四条各对应
+# 判据里一条**实际存在**的保守回落分支——不是凭空归类，改分支必须同步改这里。
+STALE_CATEGORIES = {
+    "mixed-paths": "帧内触及 tasks.md 以外的设计工件",
+    "content-changed": "tasks.md 出现勾选框以外的改动",
+    "blob-unreadable": "tasks.md 前后两版内容读取失败",
+    "shape-unfit": "tasks.md 变更形态不合格（新建/删除/改名/类型或权限位变更，或根提交）",
+}
+
+
+def design_frame_exempt_reason(root, sha, frame_files, base):
+    """该帧不豁免的**分类原因**；豁免则返回 None。取值 ∈ STALE_CATEGORIES 的键。
+
+    [Task4] 纯诊断细分：判定本身（豁免 / 不豁免）与 Task2 逐字相同——本函数只是把
+    「为什么不豁免」这个此前被丢弃的信息留下来。MUST NOT 借分类之名改变任何一格判定。
 
     [Task2] 豁免资格三连，缺一即失鲜：① 帧内**落在 design 监视集内**的路径集恰为
     {tasks.md}（🔴 不是整个 commit 的文件列表——checkpoint 走 `git add -A`，真实完成
@@ -452,22 +465,61 @@ def design_frame_exempt(root, sha, frame_files, base):
     ③ 勾选框归一化后逐行等值。merge 提交须**对每个 parent** 都成立。
     """
     if design_watched_subs(frame_files, base) != {"tasks.md"}:
-        return False                       # 帧内还触及其他监视路径 ⇒ 照判失鲜
+        return "mixed-paths"               # 帧内还触及其他监视路径 ⇒ 照判失鲜
     parents = commit_parents(root, sha)
     if not parents:
-        return False                       # 根提交 / parent 解析失败 ⇒ 保守
+        return "shape-unfit"               # 根提交 / parent 解析失败 ⇒ 保守
     path = base + "tasks.md"
     for parent in parents:                 # merge：与**每个** parent 各自成立才算
         ok, before, after = blob_pair(root, parent, sha, path)
         if not ok:
-            return False                   # 取不到 / 形态不合格 ⇒ 保守
+            # 取不到 / 形态不合格 ⇒ 保守。二者判定相同、诊断不同：形态闸门只在
+            # 失败侧再问一次（诊断路径，不进热路径），故不改判定也不多花常态开销。
+            return ("blob-unreadable"
+                    if _plain_content_modification(root, parent, sha, path)
+                    else "shape-unfit")
         if not _tasks_content_exempt(before, after):
-            return False                   # 勾选框以外的改动 ⇒ 照判失鲜
-    return True
+            return "content-changed"       # 勾选框以外的改动 ⇒ 照判失鲜
+    return None
+
+
+def design_frame_exempt(root, sha, frame_files, base):
+    """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
+
+    判据本体在 design_frame_exempt_reason——本函数是它的 bool 视图（单一源）。
+    """
+    return design_frame_exempt_reason(root, sha, frame_files, base) is None
+
+
+class StaleResult(tuple):
+    """(stale, freshness) + 结构化触发点 trigger（**纯诊断**，不参与判定）。
+
+    [Task4] 刻意做成 2-tuple 的子类、而非 3 字段 NamedTuple：既有调用点与用例都按
+    `stale, freshness = is_stale(...)` 解包、按 `== (False, "fresh")` 等值比较。
+    触发点是**附加**诊断物，MUST NOT 改变判定值本身的形状，否则本票（纯诊断）就
+    从后门改了既有契约。
+
+    trigger: None（无触发点：不失鲜，或 code 域——其行为逐字不变）或 dict
+             {sha: 短 sha, subject: commit subject, paths: 排序后的触发路径列表,
+              category: STALE_CATEGORIES 的键}
+    """
+
+    def __new__(cls, stale, freshness, trigger=None):
+        obj = super().__new__(cls, (stale, freshness))
+        obj.trigger = trigger
+        return obj
+
+    @property
+    def stale(self):
+        return self[0]
+
+    @property
+    def freshness(self):
+        return self[1]
 
 
 def is_stale(root, rel, scope, change):
-    """D9 分域〔Q1=B/Q3=A〕。scope: 'design'|'code'。返回 (stale, freshness)。
+    """D9 分域〔Q1=B/Q3=A〕。scope: 'design'|'code'。返回 StaleResult（二元组兼容）。
 
     design 域仅盯本 change 四件套路径（proposal/design/tasks.md 与 specs/）——
     不可套用整个 openspec/changes/{change}/：该目录还装着 cr/verify/hand-off 等
@@ -475,7 +527,7 @@ def is_stale(root, rel, scope, change):
     """
     sha = report_last_sha(root, rel)
     if not sha:
-        return False, "uncommitted"          # Q3=A：人机同权，手写产物合法
+        return StaleResult(False, "uncommitted")   # Q3=A：人机同权，手写产物合法
     base = f"openspec/changes/{change}/"
     if scope == "design":
         # [spec-review-amendment B2] 带 subject 分帧遍历，checkpoint(impl-review) 精确式豁免。
@@ -511,17 +563,26 @@ def is_stale(root, rel, scope, change):
             # 将来只改一处时，design_frame_exempt 会把「帧内路径集」误算成 {tasks.md}
             # ⇒ 豁免误开（fail-open）。新增一类监视路径只改 design_watched_subs 即可。
             subs = design_watched_subs(lines[1:], base)
-            if subs - {"tasks.md"}:
-                return True, "stale"          # 帧内触及 tasks.md 以外的监视路径 ⇒ 失鲜
-            if subs and not design_frame_exempt(root, frame_sha, lines[1:], base):
-                return True, "stale"
-        return False, "fresh"
-    # scope == "code"：行为逐字不变（无 subject、无豁免、无 --no-merges）
+            if not subs:
+                continue                      # 本帧未触及任何监视路径 ⇒ 与设计门无关
+            # [Task4 · SW-1] 触发点诊断：判定沿用 Task2/Task3 的分支，只是把「为什么」
+            # 留下来交给 emit。分类原因取自 design_frame_exempt_reason 的**实际分支**
+            # （单一源），MUST NOT 在此另拼一套归类。
+            reason = design_frame_exempt_reason(root, frame_sha, lines[1:], base)
+            if reason is not None:
+                return StaleResult(True, "stale", {
+                    "sha": frame_sha[:7],
+                    "subject": subject,
+                    "paths": sorted(subs),
+                    "category": reason,
+                })
+        return StaleResult(False, "fresh")
+    # scope == "code"：行为逐字不变（无 subject、无豁免、无 --no-merges、无触发点诊断）
     files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
     for f in filter(None, files.splitlines()):
         if not f.startswith("openspec/"):
-            return True, "stale"
-    return False, "fresh"
+            return StaleResult(True, "stale")
+    return StaleResult(False, "fresh")
 
 
 def _line_scoped_hits(text, candidates):
@@ -694,6 +755,19 @@ def emit(verdict, exit_code, next_step, reason, **extra):
     print(json.dumps({"verdict": verdict, "next": next_step,
                       "reason": reason, **extra}, ensure_ascii=False))
     sys.exit(exit_code)
+
+
+def _stale_trigger_hint(trigger):
+    """结构化触发点 → 人读串。与 JSON `stale_trigger` **同一数据源**（两侧不各拼各的）。
+
+    [Task4] 纯诊断串：无触发点返回空串（拼接后文案逐字不变）。
+    """
+    if not trigger:
+        return ""
+    paths = "、".join(trigger["paths"]) or "(无)"
+    label = STALE_CATEGORIES.get(trigger["category"], trigger["category"])
+    return (f"；触发点：提交 {trigger['sha']} \"{trigger['subject']}\" "
+            f"触及 {paths}（{label}）")
 
 
 # [mlh-p5 Task2/D3；Task6 退役 live inline] live 读点分流：frontmatter 有效→state；坏→UNKNOWN(6)；
@@ -957,12 +1031,17 @@ def decide(root, change):
              "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
              "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）"
              + _unclosed_frontmatter_hint(report))
-    design_stale, _design_fresh = is_stale(
-        root, str(report.relative_to(root)), "design", change)
-    if design_stale:
+    design_res = is_stale(root, str(report.relative_to(root)), "design", change)
+    if design_res.stale:
+        # [Task4 · SW-1] 纯诊断：附结构化触发点（人读串 + JSON `stale_trigger` 同源，
+        # 见 _stale_trigger_hint）。默认处置**只**推荐重跑设计门——MUST NOT 在此提
+        # `checkpoint(impl-review)`：豁免逐提交求值，已触发失鲜的那个提交不会因**后补**
+        # 一个 checkpoint 提交而被追溯赦免，写进指引等于教撞门者做一件不起作用的事。
+        extra = {"stale_trigger": design_res.trigger} if design_res.trigger else {}
         emit("REFUSE_START", EXIT_REFUSE, None,
              "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
-             "（重跑 sdflow-spec-review 后重新拍板补锚）")
+             "（重跑 sdflow-spec-review 后重新拍板补锚）"
+             + _stale_trigger_hint(design_res.trigger), **extra)
     # ── verify 冲突锚早检（坏 frontmatter → UNKNOWN，保步序早停）──
     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：坏 frontmatter（含重复
     # verify 键=冲突的等价形态 duplicate-key）→ live_ship_gate_state 内 UNKNOWN(6) emit 早停；

@@ -895,3 +895,114 @@ def test_content_criterion_takes_only_content(repo):
     将来若有人往判据里塞 subject / 路径（把豁免面交回给被监管方书写的声明），本例转红。"""
     import inspect
     assert list(inspect.signature(_sg._tasks_content_exempt).parameters) == ["before", "after"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [fix-design-gate-freshness-proxy Task4] 撞门者被告知撞在哪、下一步做什么（SW-1）
+#
+# 失鲜 REFUSE_START 须携带**结构化**触发点（短 sha / subject / 触发路径 / 分类
+# 原因），人读与机读两侧同源同步。**纯诊断**：不参与判定、不改退出码、不改任何
+# 既有判定结论——本节所有断言都只看输出内容，verdict/exit code 由前面各节锁死。
+#
+# 🔴 默认处置只推荐「重跑设计门」一条。`checkpoint(impl-review)` MUST NOT 出现在
+#   默认处置指引里：它是显式越权口，且**对撞门者根本无效**——豁免逐提交求值，已经
+#   触发失鲜的那个提交不会因为**后补**一个 `checkpoint(impl-review)` 提交而被追溯
+#   赦免。写进指引 = 教人去做一件不起作用的事。
+# ══════════════════════════════════════════════════════════════════════════
+
+def _stale_gate(repo, subject, mutate):
+    """建 change → 重锚 → mutate(change_dir) 改动 → 以 subject 提交 → 跑 gate。
+
+    返回 run_gate 的 (code, js, human)。同帧另带一份源码，贴 `git add -A` 的真实形态。
+    """
+    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+    _reanchor(repo, d)
+    mutate(d)
+    (repo / "src.py").write_text("# impl\n", encoding="utf-8")
+    commit_all(repo, subject)
+    return run_gate(repo)
+
+
+def _mutate_design(d):
+    (d / "design.md").write_text("v2 手动改的设计\n", encoding="utf-8")
+
+
+# ── ⑨a 四条分类原因各自可达，且 sha/subject/路径逐字对得上 ────────────────
+
+def test_stale_trigger_category_mixed_paths(repo):
+    subject = "docs: 手动改设计"
+    code, js, human = _stale_gate(repo, subject, _mutate_design)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    t = js["stale_trigger"]
+    assert t["category"] == "mixed-paths"
+    assert t["subject"] == subject
+    assert t["sha"] == _head(repo)[:7]
+    assert "design.md" in t["paths"] and "tasks.md" not in t["paths"]
+    # 人读侧同源：短 sha / subject / 路径三者都在
+    assert t["sha"] in human and subject in human and "design.md" in human
+
+
+def test_stale_trigger_category_content_changed(repo):
+    # 帧内监视路径恰为 {tasks.md}，但改的是勾选框以外的内容 ⇒ 内容判据不给豁免
+    subject = "docs: 改 task 标题"
+    code, js, _ = _stale_gate(repo, subject, lambda d: _write_tasks(repo, _SEMANTIC))
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    t = js["stale_trigger"]
+    assert t["category"] == "content-changed"
+    assert t["paths"] == ["tasks.md"] and t["subject"] == subject
+
+
+def test_stale_trigger_category_shape_unfit(repo):
+    # 删除 tasks.md：形态闸门（非普通内容修改）先于内容判据拦下
+    subject = "chore: 删掉 tasks.md"
+    code, js, _ = _stale_gate(repo, subject,
+                              lambda d: (d / "tasks.md").unlink())
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    assert js["stale_trigger"]["category"] == "shape-unfit"
+
+
+def test_stale_trigger_category_blob_unreadable(repo, monkeypatch):
+    # 形态合格（普通内容修改）但前后版 blob 读取失败 ⇒ 与 shape-unfit 分开归类
+    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+    _reanchor(repo, d)
+    _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
+    commit_all(repo, "docs: 勾选回填")
+    monkeypatch.setattr(_sg, "run_git_bytes", lambda root, *a: (128, b""))
+    res = _sg.is_stale(repo, _ANCHOR_REL, "design", "demo")
+    assert res == (True, "stale")
+    assert res.trigger["category"] == "blob-unreadable"
+    assert res.trigger["paths"] == ["tasks.md"]
+
+
+# ── ⑨b 默认处置指引：只推荐重跑设计门，不提 checkpoint(impl-review) ────────
+
+def test_default_disposition_recommends_rerun_design_gate_only(repo):
+    _, js, human = _stale_gate(repo, "docs: 手动改设计", _mutate_design)
+    assert "sdflow-spec-review" in js["reason"]          # 唯一推荐动作
+    # 🔴 硬要求：显式越权口 MUST NOT 出现在默认处置指引里（对撞门者无效，教人白做）
+    assert "checkpoint(impl-review)" not in js["reason"]
+    assert "checkpoint(impl-review)" not in human
+
+
+# ── ⑨c 纯诊断：不改任何既有判定结论，且 code 域取值逐字不变 ────────────────
+
+def test_code_domain_freshness_string_unchanged_and_no_trigger(repo):
+    """`code` 域的新鲜度取值字符串逐字不变（下游读点依赖它），且不携触发点。"""
+    tail_ok(repo)
+    touch_code(repo)
+    _, js, _ = run_gate(repo)
+    assert js["verdict"] == "RERUN_STALE" and js["freshness"] == "stale"
+    assert "stale_trigger" not in js
+    res = _sg.is_stale(repo, BASE + "verify-report.md", "code", "demo")
+    assert res == (True, "stale") and res.trigger is None
+
+
+def test_is_stale_result_stays_two_tuple_compatible(repo):
+    """结构化返回 MUST 保持 (stale, freshness) 的二元组形状——既有调用点与用例
+    都按二元组解包 / 等值比较，触发点是**附加**诊断物，不改判定值的形状。"""
+    d, _ = _seed_tasks(repo)
+    _reanchor(repo, d)
+    res = _sg.is_stale(repo, _ANCHOR_REL, "design", "demo")
+    stale, freshness = res                              # 解包仍是二元
+    assert (stale, freshness) == (False, "fresh") and res == (False, "fresh")
+    assert res.stale is False and res.freshness == "fresh" and res.trigger is None
