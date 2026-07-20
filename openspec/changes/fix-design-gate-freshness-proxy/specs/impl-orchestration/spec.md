@@ -6,7 +6,7 @@
 
 声明 SHALL 为正面陈述（列出权威归属），MUST NOT 仅写成禁令清单——禁令只挡列举到的那一种越界，权威表挡的是整个范畴。
 
-本要求的适用面 SHALL 限于本仓自有的 `sdflow-implement`；第三方实现 skill（superpowers `subagent-driven-development`、matt `implement`）不受本要求约束，故本要求 MUST NOT 被当作设计门失鲜问题的唯一防线（机械防线在 `spec-workflow` 的监视集角色分流）。
+本要求的适用面 SHALL 限于本仓自有的 `sdflow-implement`；第三方实现 skill（superpowers `subagent-driven-development`、matt `implement`）不受本要求约束，故本要求 MUST NOT 被当作设计门失鲜问题的唯一防线（机械防线在 `spec-workflow` 的设计门新鲜度内容判据）。
 
 #### Scenario: dispatch prompt 含信号权威表
 

@@ -1,10 +1,14 @@
-## 1. 判据角色分流（P0，`ship_gate.py`）
+## 1. 勾选框翻转豁免（P0，`ship_gate.py`）〔spec-review-amendment：原「角色分流」经双 CEO 镜证伪，改为内容等值判据〕
 
-- [ ] 1.1 在 `is_stale()` 的 design 分支内，对 `sub == "tasks.md"` 追加 plan 存在性判定；plan 存在 ⇒ 不判失鲜，plan 不存在 ⇒ 照判失鲜
-- [ ] 1.2 plan 路径构造 MUST 复用完成判据侧同一来源（不另写路径拼接），避免两处口径漂移
-- [ ] 1.3 确认 `proposal.md` / `design.md` / `specs/` 分支逐字未改（diff 自审）
-- [ ] 1.4 确认判据只做存在性检查，无任何文件内容读取 / diff（Compliance 硬条款）
-- [ ] 1.5 脚本头注释「已知不覆盖」段补一条：手写 plan 令 `tasks.md` 改动追溯获豁免属显式越权同权级〔grill-amendment〕
+- [ ] 1.1 在 `is_stale()` 的 design 分支内：帧内**落在 design 域监视集内**的触及路径集 == `{tasks.md}` 时（🔴 **不是**整个 commit 的文件列表——checkpoint 走 `git add -A`，真实完成提交必然打包源码；按整 commit 求值会让豁免永不触发、P0 白做〔spec-review-amendment，Eng 镜 3.1〕），取该提交前后两版 `tasks.md` 内容做勾选框归一化行级等值比较；等值 ⇒ 不判失鲜，否则照判
+- [ ] 1.1a 实现形态：沿用现有**逐文件 return-True** 结构，仅对 `sub == "tasks.md"` 单独分支（等值则 `continue`），MUST NOT 重构成帧级两遍预扫描〔Eng 镜 1〕
+- [ ] 1.1b 扩展 `git log` format 携带 commit sha（现为 `--format=%x00%s`，无 `%H` ⇒ 取不到 blob，是 P0 可实现的前提），分隔符 MUST 无歧义（subject 可含空格/冒号）〔Eng 镜 1〕
+- [ ] 1.1c 前后两版内容读取 MUST 用 `run_git_rc` 显式判 returncode；任一侧 rc≠0 ⇒ **直接保守判失鲜**，MUST NOT 依赖 `run_git` 的空串巧合不等（双侧失败会得 `"" == ""` ⇒ 判等值 ⇒ **放行真实设计改动**）〔Eng 镜 2.2〕
+- [ ] 1.1d 读取 MUST 保真：MUST NOT 复用会 `.strip()` / `text=True` 的路径（吞首尾空白、末尾换行、CRLF、非 UTF-8 字节，四者各自可造假等值）〔codex Eng 5 + Eng 镜 2.2〕
+- [ ] 1.2 归一化 MUST 仅替换 `[ ]` / `[x]` / `[X]` 标记本身，MUST NOT 触碰缩进 / 空白 / 其余字符
+- [ ] 1.3 前版取不到（该提交中新建 `tasks.md`）⇒ **保守判失鲜**
+- [ ] 1.4 确认 `proposal.md` / `design.md` / `specs/` 分支逐字未改；确认既有 `checkpoint(impl-review)` 精确式豁免逐字未改
+- [ ] 1.5 确认无语义 diff、无 markdown 结构解析、不依赖工作树状态（Compliance 硬条款）
 
 ## 2. 失鲜诊断指引（P1，`ship_gate.py`）
 
@@ -20,13 +24,29 @@
 
 ## 4. 测试
 
-- [ ] 4.1 新增正例：plan 存在 + 提交触及 `tasks.md` ⇒ 不失鲜
-- [ ] 4.2 新增负例：plan 不存在 + 提交触及 `tasks.md` ⇒ 失鲜
-- [ ] 4.3 新增负例：plan 存在 + 提交触及 `design.md` ⇒ 仍失鲜（分流未误伤邻近路径）
-- [ ] 4.4 新增负例：plan 存在 + 同一提交同时触及 `tasks.md` 与 `design.md` ⇒ 失鲜
+- [ ] 4.1 正例：提交只触及 `tasks.md`、只翻勾选框 ⇒ 不失鲜
+- [ ] 4.2 负例：勾选框 + 同行措辞改动 ⇒ 失鲜
+- [ ] 4.3 负例：勾选框 + 新增一个 `### Task N+1:` 段（范围扩大）⇒ 失鲜
+- [ ] 4.4 负例：同一提交同时触及 `tasks.md`（纯勾选）与 `design.md` ⇒ 失鲜
+- [ ] 4.4a 负例：只改缩进 / 空白（无勾选框变化）⇒ 失鲜（归一化未过宽）
+- [ ] 4.4b 负例：`tasks.md` 在该提交中新建（无前版）⇒ 保守判失鲜
+- [ ] 4.4c 负例：删除一个 `### Task N:` 段 ⇒ 失鲜
+- [ ] 4.4d 正例：勾选框由 `[x]` 翻回 `[ ]`（反向）⇒ 不失鲜（归一化对称）
+- [ ] 4.4e 🔴 **正例（最贴近真实故障）**：同一提交既纯勾选 `tasks.md`、又改仓库别处源码（`git add -A` 打包形态）⇒ **不失鲜**。**缺此例则「按整 commit 文件列表求值」的错误实现全绿通过、而豁免在真实世界永不触发**〔Eng 镜 3.1 + design-voice〕
+- [ ] 4.4f 负例：fenced code block 内的 `[ ]`↔`[x]` 翻转 ⇒ 失鲜（fence-aware）
+- [ ] 4.4g 负例：表格 / 行内反引号 / 散文字面量中的 `[ ]`↔`[x]` ⇒ 失鲜（锚定到 task-list 行首）
+- [ ] 4.4h 负例：同一行含多个标记，task marker 与文档字面量反向翻转 ⇒ 失鲜
+- [ ] 4.4i 负例：纯行重排（零字符改动）⇒ 失鲜（位置对齐，非 LCS）
+- [ ] 4.4j 负例：CRLF↔LF、末尾换行增删、首尾空白 ⇒ 失鲜（保真读取）
+- [ ] 4.4k 负例：`tasks.md` 被删除 / `git mv` 迁走（后版取不到）⇒ 失鲜
+- [ ] 4.4l 负例：仅 `chmod` / regular↔symlink（blob 内容完全相同）⇒ 失鲜（状态位资格）
+- [ ] 4.4m 负例：merge 提交内触及 `tasks.md` ⇒ 与**每个** parent 归一化等值才豁免，否则失鲜
+- [ ] 4.4n 真值表：`精确 / 变体 / 空 / 普通 subject` × `纯勾选 / 语义改动` 共 8 格，逐格锁定优先级（subject 精确匹配 MUST 在读 blob 前短路）
+- [ ] 4.4o 负例：非 UTF-8 字节 ⇒ 不得被解码替换吞掉差异
+- [ ] 4.4p 回归锁定：code 域 JSON 的 `freshness` 取值不因 P1 结构化返回而变
 - [ ] 4.5 回归：既有豁免用例全绿（`test_impl_review_exempt_bare_and_colon` / `test_impl_review_evil_suffix_stale` / `test_impl_review_fix_variant_stale` / `test_interleaved_impl_review_and_normal_stale`）
 - [ ] 4.6 新增：失鲜 reason 含触发文件路径与处置提示的断言
-- [ ] 4.7 **变异验证**：删掉 1.1 的分流分支 ⇒ 4.1 转红；删掉 2.1 的 reason 增强 ⇒ 4.6 转红（PV 规则 5，每道新守护须证「删掉会红」）
+- [ ] 4.7 **变异验证**（PV 规则 5，每道新守护须证「删掉会红」）：删 1.1 内容判据 ⇒ 4.1 红；删 1.1 的监视集限定（改按整 commit 求值）⇒ **4.4e 红**；删归一化锚定（改无锚定子串替换）⇒ 4.4f/4.4g 红；删 fence 感知 ⇒ 4.4f 红；改位置对齐为 LCS ⇒ 4.4i 红；删 1.1c 的 rc 检查（回落 `run_git` 空串）⇒ 需构造双侧失败用例转红；删状态位资格 ⇒ 4.4l 红；删 2.1 reason 增强 ⇒ 4.6 红
 - [ ] 4.8 跑全套件确认无新增 failure / warning
 
 ### 测试覆盖图〔TG-18〕

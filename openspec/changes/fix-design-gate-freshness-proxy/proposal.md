@@ -2,25 +2,24 @@
 
 `ship_gate.py` 的设计门新鲜度判据用**路径**作为「设计内容变了」的代理信号：只要有非 `checkpoint(impl-review)` subject 的提交触及 `proposal.md` / `design.md` / `tasks.md` / `specs/`，即判拍板失鲜 → `REFUSE_START`。
 
-该代理是**过近似**。实现管线在每完成一个任务时更新 `tasks.md` 的完成度复选框——superpowers（`subagent-driven-development`）与 matt（`sdflow-implement` tickets）**两条管线皆然**。于是：
+该代理是**过近似**：阶段三期间对 `tasks.md` 完成度复选框的更新**零设计内容**，却与真实设计改动共用同一条路径判据，一律判失鲜 → `REFUSE_START` → 停，等人批。
 
-```
-task1 done → 更新 tasks.md → gate → REFUSE_START → 停，等人批
-task2 done → 更新 tasks.md → gate → REFUSE_START → 停，等人批
-...
-```
+**已证实的事故形态**〔spec-review-amendment，原叙事经核实修正〕：
+- **本仓已发生**：`openspec/issues/buglist/2026-07-04-buglist.md` 的 B2——`tasks.md` 勾选回填触发假失鲜（已用 `checkpoint(impl-review)` subject 豁免修复，即本条代理过近似的**第一次**点补）。
+- **消费项目报出**：阶段三运行中反复撞 `REFUSE_START`。
+- **写入方不是 SKILL 契约**：经核实 `sdflow-implement` 与 superpowers `subagent-driven-development` **均不写** `tasks.md`（详见假设 A1′）。实际写入来自 **agent 的自由行为**与 `sdflow-done` §0.3 的批量对账。
 
-**阶段三「过设计门后一口气跑到 merge、无人类门」的承诺（adr/0004 红线）被反转成每任务一道人类门。** 该缺陷由消费项目在使用 workflow 时报出，非本仓自测发现——消费仓每次阶段三运行都撞。
+**这恰恰提高了紧迫性而非降低**：写入方既然不受任何 SKILL 契约约束，prose 禁令结构上防不住，**机械判据是唯一防线**。撞门频度取决于 agent 行为而非固定管线，故本 change **不宣称**「每任务一撞 / 每消费仓必撞」的确定频率——但每一次撞击都在反转阶段三「过设计门后一口气跑到 merge、无人类门」的承诺（adr/0004 红线）。
 
 而 `tasks.md` 的复选框状态对 gate 是**零信息量**：完成判据只读 `superpowers-plan.md` 的复选框与 checkpoint 标签（`ship_gate.py` `_parse_plan` / 完成判据窗口），`tasks.md` 仅作为设计内容的代理出现在 `DESIGN_WATCHED_NAMES` 中。
 
 ## What Changes
 
-- **`tasks.md` 在 `superpowers-plan.md` 存在后退出 design 域监视集**（P0）。判据 = plan 文件存在性，纯存在性检查，零内容读取、零解析。plan 落盘即意味着完成信号权威已转移，`tasks.md` 此后不再承载任何被消费的权威。`proposal.md` / `design.md` / `specs/` 监视口径**逐字不变**。
+- **只豁免「纯勾选框状态翻转」这一个已证零信息量的改动形态**（P0）〔spec-review-amendment，原方案「按角色分流」经双 CEO 镜证伪，见 design ADR-1〕。提交只触及 `tasks.md`、且前后两版差异行在勾选框标记归一化后逐行等值 ⇒ 不失鲜；其余一切照判。**监视集保持固定四件套不变**，豁免面精确等于已证零信息量的集合。
 - **`REFUSE_START` 失鲜 reason 补可操作指引**（P1）：报出触发失鲜的 commit 与文件，并给出两条分支处置（完成度更新 vs 真实设计变更）。诊断改善，**不改判据**。
 - **`sdflow-implement` dispatch 契约补「信号权威表」**（P2）：正面陈述完成信号与设计工件的归属。仅对本仓自有 skill 有效——第三方实现 skill（superpowers / matt）不受此约束，故此项**不能作为主修法**。
 
-**非 BREAKING**：判据只会从「失鲜」转向「新鲜」，不会让原本新鲜的判成失鲜；已归档 change 不重放 gate。
+**这是一次门禁放松（guardrail relaxation），不是兼容性补丁**〔spec-review-amendment，CEO 镜纠正〕。原文以「只会从失鲜转向新鲜」论证「非 BREAKING」——**方向搞反了**：对一道门而言，**扩大准入面本身就是安全语义变更**。故 P0 的豁免面 MUST 精确等于已证零信息量的集合，且每一寸扩张都须独立举证。
 
 ### 需求优先级〔BASE-23〕
 
@@ -38,13 +37,13 @@ task2 done → 更新 tasks.md → gate → REFUSE_START → 停，等人批
 
 ### Modified Capabilities
 
-- `spec-workflow`: 设计门新鲜度判据新增角色分流——`superpowers-plan.md` 存在时 `tasks.md` 退出 design 域监视集；失鲜 `REFUSE_START` 的 reason 须携带触发点与处置指引。
+- `spec-workflow`: 设计门新鲜度判据由**纯路径代理**改为**内容判据**——提交若只触及 design 域监视集内的 `tasks.md` 且内容差异仅为勾选框状态，则不失鲜；失鲜 `REFUSE_START` 的 reason 须携带触发点与处置指引。
 - `impl-orchestration`: `sdflow-implement` 的 implementer dispatch 契约须携带完成信号与设计工件的权威归属声明。
 
 ## Impact
 
 - `sdflow-ship/scripts/ship_gate.py` — `is_stale()` design 分支 + `REFUSE_START` emit 点
-- `sdflow-ship/tests/` — 失鲜判据用例（新增角色分流正反例；既有 `checkpoint(impl-review)` 豁免用例须保持绿）
+- `sdflow-ship/tests/` — 失鲜判据用例（新增内容判据正反例；既有 `checkpoint(impl-review)` 豁免用例须保持绿）
 - `sdflow-implement/SKILL.md` — dispatch 契约段
 - 分发：经 `setup.sh` 软链到 `~/.claude/skills` / `~/.codex/skills`，消费仓跑 `/sdflow-upgrade` 后生效
 
@@ -56,6 +55,7 @@ task2 done → 更新 tasks.md → gate → REFUSE_START → 停，等人批
 
 | # | 假设 | 依据 | 若不成立 |
 |---|---|---|---|
-| A1 | superpowers 与 matt 两条实现管线均在每任务完成时更新 `tasks.md` 复选框 | 消费项目实地报告 | 若仅其一，P0 仍成立（判据不依赖谁在改），但发生频度评估需下调 |
+| A1 | ~~两条实现管线均在每任务完成时更新 `tasks.md` 复选框~~ **已证伪，修订如下**〔spec-review-amendment〕 | — | — |
+| A1′ | `tasks.md` 的勾选框会在阶段三被写入，写入方**不是** SKILL 契约而是 **agent 的自由行为** | 已核实：`sdflow-implement/SKILL.md:142` **只读** `tasks.md`（全文无写操作，完成信号写 `superpowers-plan.md`）；superpowers `subagent-driven-development` 通篇无 `tasks.md`；本仓唯一文档化的写入方是 `sdflow-done` §0.3 的**一次性批量对账**。外部消费项目报告的「每任务一撞」叙事**未能在本仓管线代码中找到对应**。**但同类事故本仓已发生过**：`openspec/issues/buglist/2026-07-04-buglist.md:48-56`（B2，`tasks.md` 勾选回填触发假失鲜，已 FIXED） | P0 仍成立且**更该做**——正因写入方是不受契约约束的自由行为，prose 禁令（P2）结构上防不住，机械判据是唯一防线 |
 | A2 | `tasks.md` 的复选框状态不被 gate 的完成判据消费 | 已核 `ship_gate.py`：完成判据只读 `superpowers-plan.md` + checkpoint 标签 | 已验证，非待验假设 |
 | A3 | `superpowers-plan.md` 存在 ⇒ 完成信号权威已转移 | `ship_gate.py` 完成判据窗口以 plan 首次提交 sha 为起点 | 已验证，非待验假设 |
