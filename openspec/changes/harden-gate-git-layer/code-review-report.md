@@ -1,6 +1,7 @@
 ---
 ship-gate:
   code_review: pass
+  reviewed_sha: bc748bc684a7dbcd083bfdaeb4bd11219f696a59
 ---
 
 ## code-review 报告 — harden-gate-git-layer
