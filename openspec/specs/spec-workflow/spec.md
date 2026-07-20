@@ -426,7 +426,48 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist�
 
 #### Scenario: design-approved 不因实现提交失鲜〔spec-review-amendment 设计门拍板 Q1=B〕
 - **WHEN** 设计门拍板（frontmatter `design_approved: true`）已落，实现期产生大量触及 `openspec/` 之外路径的提交（正常实现活动）
-- **THEN** gate MUST 保持 design-approved 有效（新鲜度按结论分域：该结论仅当其后存在触及本 change 四件套路径的提交才失鲜须重审），MUST NOT 因实现提交判其陈旧而 REFUSE_START（防实现期链自锁）
+- **THEN** gate MUST 保持 design-approved 有效（新鲜度按结论分域：该结论仅当其后存在触及本 change **design 域监视集**路径的提交才失鲜须重审；监视集为固定四件套，其内 `tasks.md` 的豁免条件由下方「纯勾选框翻转不失鲜」Scenario 组定义），MUST NOT 因实现提交判其陈旧而 REFUSE_START（防实现期链自锁）
+
+#### Scenario: 纯勾选框翻转不失鲜〔spec-review-amendment〕
+
+design 域监视集 SHALL 保持固定四件套不变。豁免 SHALL 仅覆盖**已证对 gate 零信息量**的唯一改动形态——`tasks.md` 的完成度复选框状态翻转。
+
+- **WHEN** 设计门拍板已落，其后某提交**落在 design 域监视集内的触及路径集恰为 `{tasks.md}`**（该提交同时触及监视集**之外**的路径——源码、`impl-reports/` 等——**不影响**豁免资格；checkpoint 走 `git add -A`，真实完成提交必然打包源码，按整 commit 文件列表求值会令豁免永不触发），且 `tasks.md` 前后两版在勾选框状态归一化后**逐行等值**
+- **THEN** gate MUST NOT 因该提交判 design-approved 失鲜
+- **AND** 归一化 MUST **锚定到 task-list 行首语法位置**（复用既有 `CHECKBOX_RE` 口径），且 MUST **fence-aware**（fenced code block 内的标记不参与归一化，复用 `_line_scoped_hits` 的 fence 口径）——无锚定的整行子串替换会把表格、行内反引号、引用块、散文字面量里的 `[ ]` / `[x]` 一并归一化，令豁免面远超「完成度复选框」集合
+- **AND** 比较 MUST 按**行位置**对齐（如 `zip`），MUST NOT 使用基于 LCS / diff 算法的行匹配——LCS 下纯行重排会把「删除行与插入行逐字节相同」判成等值，令任务顺序 / 依赖的实质变更直通
+- **AND** 判定 MUST 保真读取：MUST NOT 复用会 `.strip()` / `text=True` 的 helper（吞首尾空白、末尾换行、CRLF、非 UTF-8 字节，四者各自可造假等值）；两侧内容读取 MUST 显式检查 returncode，任一侧失败 ⇒ **保守判失鲜**（双侧失败会得 `"" == ""` ⇒ 判等值 ⇒ 放行真实设计改动）
+- **AND** MUST NOT 做语义 diff、MUST NOT 因上述 fence 锚定要求而扩展成完整 markdown 解析（fence 开合是单 boolean toggle，非解析器）
+- **AND** 判定 MUST 逐提交独立求值，MUST NOT 依赖工作树状态或任何跨提交状态（承既有「新鲜度 committed-only」口径）
+
+#### Scenario: 勾选框以外的一切 tasks.md 改动照判失鲜〔spec-review-amendment〕
+
+- **WHEN** 某提交触及 `tasks.md`，且满足下列任一：① 勾选框标记之外的任何字符变化（措辞 / 缩进 / 空白 / 格式化 / 错别字）；② 新增或删除 `### Task <n>:` 段；③ 行的重排或移动；④ fenced code block / 表格 / 行内反引号 / 散文中的 `[ ]` `[x]` 字面量变化；⑤ 同一提交还触及 `proposal.md` / `design.md` / `specs/` 中任一路径；⑥ 前版或后版取不到（该提交中**新建**、**删除**或 `git mv` **迁走** `tasks.md`）；⑦ 该路径的 git 变更状态不是普通内容修改（rename / copy / 类型变更 / mode 变更——`chmod` 或 regular↔symlink 可令 blob 内容完全相同而被误判为「纯勾选」）
+- **THEN** gate MUST 照判 design-approved 失鲜 → `REFUSE_START`
+- **AND** 情形 ⑥⑦ MUST **保守判失鲜**——MUST NOT 因取不到某一版、或因内容恰好相同而当作等值放行；资格判定 MUST 读取 git raw 状态位与 mode，MUST NOT 仅凭 `--name-only` 的路径列表
+
+#### Scenario: 内容豁免与既有 subject 豁免的优先级〔spec-review-amendment〕
+
+内容豁免独立于 subject，与既有 BR-7「变体照判失鲜」存在判定重叠（如 `checkpoint(impl-review)evil` + 纯勾选提交），SHALL 由下述优先级消歧：
+
+- **WHEN** 某帧同时可被「精确式 `checkpoint(impl-review)` subject 豁免」与「内容豁免」评估
+- **THEN** 判定顺序 MUST 为：① subject 精确匹配 ⇒ **无条件豁免该帧**（既有语义逐字不变，MUST 在读取任何 blob **之前**短路）；② 否则进入内容豁免评估——**任何** subject（含 `checkpoint(impl-review)evil` 等变体）均可凭严格的纯勾选内容判据获豁免；③ 二者皆不满足 ⇒ 失鲜
+- **AND** BR-7 的既有表述 MUST 理解为「变体**不因 subject** 获豁免」，MUST NOT 理解为「变体必然失鲜」——后者与本 Scenario 冲突且无唯一解
+- **AND** MUST 有覆盖 `精确 / 变体 / 空 / 普通 subject × 纯勾选 / 语义改动` 的真值表测试
+
+#### Scenario: 豁免面 MUST NOT 由被监管方书写的声明决定〔spec-review-amendment〕
+
+- **WHEN** 设计判据在「内容等值」与「被监管方可书写的声明」（commit subject、某文件是否存在、工作树状态）之间取舍
+- **THEN** 豁免判据 MUST 取自被比较的内容本身；MUST NOT 以 `superpowers-plan.md` 的存在性、或除既有 `checkpoint(impl-review)` 精确式之外的任何 subject 形态，作为 `tasks.md` 豁免的判据
+- **AND** 既有 `checkpoint(impl-review)` 精确式 subject 豁免（BR-7）MUST 逐字保留、不受本条影响
+
+#### Scenario: 失鲜 REFUSE_START 须携带触发点与处置指引
+
+- **WHEN** gate 因 design 域失鲜而 emit `REFUSE_START`
+- **THEN** reason MUST 指明**触发失鲜的提交与文件**（至少一条 `<commit subject 或 sha>` + `<路径>`），并 MUST 携带**分类原因**（混合路径 / 非勾选框变化 / 前后版缺失 / 状态不合格，取值以判据实际分支为准）；MUST NOT 只输出「结论陈旧」而不指明触发点
+- **AND** 机读输出 MUST 与人读文案**同源**（同一份触发点数据的两个视图），MUST NOT 各自拼装而允许单侧漂移
+- **AND** 默认处置指引 MUST 只推荐**重跑设计门**一条；`checkpoint(impl-review)` **MUST NOT** 出现在默认处置指引中〔spec-review-amendment 设计门拍板；impl-review-fix：本条原文与 ADR-2 改写后的口径冲突，系 spec-review 期改写 ADR-2 未扫残留引用所致，此处对齐〕——两条理由：① 它是**显式越权口**（让任意四件套语义改动不经二次批准随档 ship，`ship_gate.py` 头注释已声明为「已知不覆盖」），写进常规建议会把例外变成默认工作流；② 🔴 **它对撞门者无效**——豁免逐提交求值，已经触发失鲜的那个提交**不会**因为后补一个 `checkpoint(impl-review)` 提交而被追溯赦免，写进指引等于教人做一件不起作用的事。其正确定位是**事前、受控的 impl-review 提交协议**（用在会触发失鲜的那个提交自身上），只在该协议文档中说明
+- **AND** 该指引 MUST 为纯诊断输出，MUST NOT 改变退出码或失鲜判据本身
 
 #### Scenario: 阶段三合法尾流修订不失鲜〔B2〕
 - **WHEN** 设计门拍板已落，其后 sdflow-code-review 按工作流对 design.md/tasks.md 打 `[impl-review-fix]` 补丁并以 commit subject 闭合字面前缀 `checkpoint(impl-review)`（含右括号）提交（触及四件套路径）

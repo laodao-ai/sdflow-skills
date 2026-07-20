@@ -37,6 +37,18 @@
 | T91 | todo | PROPOSED | done-roadmap-writeback |
 | T92 | todo | PROPOSED | done-roadmap-writeback |
 
+### 批次：fix-design-gate-freshness-proxy
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| B19 | bug | PROPOSED | fix-design-gate-freshness-proxy |
+| B20 | bug | PROPOSED | fix-design-gate-freshness-proxy |
+| T187 | todo | PROPOSED | fix-design-gate-freshness-proxy |
+| T188 | todo | PROPOSED | fix-design-gate-freshness-proxy |
+| T189 | todo | PROPOSED | fix-design-gate-freshness-proxy |
+| T190 | todo | PROPOSED | fix-design-gate-freshness-proxy |
+| T191 | todo | PROPOSED | fix-design-gate-freshness-proxy |
+
 ### 批次：fix-mechanical-layer-silent-failures
 
 | ID | Pool | Status | 关联Change |
@@ -294,4 +306,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 57 项已闭合（bug: 6，todo: 51）
+- 共 58 项已闭合（bug: 6，todo: 52）
