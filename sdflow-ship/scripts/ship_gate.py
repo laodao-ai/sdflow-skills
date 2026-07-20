@@ -77,11 +77,11 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
 
 已知不覆盖（接受并记录）:
     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
-    提交遍历不加 --first-parent（merge 内部提交逐一枚举）；
         〔impl-review-fix F1，已修〕原「evil-merge 漏检」（仅存在于 merge commit 自身、
-        两 parent 都没碰过的改动，因 --name-only 不产 merge diff）已随 design 域枚举协议
-        换成 `diff-tree -m -r --raw --no-renames -z --root` 修复；**code 域仍走 --name-only**
-        （本轮判据逐字不动），故 code 域的 evil-merge 漏检**依旧存在**，登记待后续；
+        两 parent 都没碰过的改动，因 --name-only 不产 merge diff）：design 域已随枚举协议
+        换成内容映射比较修复；code 域〔harden-gate-git-layer Task5〕已由 --name-only 提交遍历
+        改为**锚 vs HEAD 顶层条目映射比较**（`ls-tree` 非递归、排除 openspec），比的是两个树的
+        终态而非 diff ⇒ evil-merge 引入的源码改动经顶层 tree oid 反映、不再漏检（两域同源修复）；
     非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）；
     伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
         （显式越权同权级，git 留痕可审计）；
@@ -444,10 +444,15 @@ def design_pathspecs(base):
     return [base + n for n in DESIGN_WATCHED_NAMES] + [base + DESIGN_WATCHED_SUBTREE]
 
 
-def ls_tree_map(root, ref, pathspecs):
-    """`git ls-tree -r -z <ref> -- <pathspecs>` → `{path_bytes: (mode, type, oid)}`。
+def ls_tree_map(root, ref, pathspecs=(), recursive=True):
+    """`git ls-tree [-r] -z <ref> -- <pathspecs>` → `{path_bytes: (mode, type, oid)}`。
 
-    [harden-gate-git-layer Task3 · ADR-2 · tasks 2.1/2.1b/2.4] 判据本体的取数口径。
+    [harden-gate-git-layer Task3 · ADR-2 · tasks 2.1/2.1b/2.4] 判据本体的取数口径。两域共用:
+      - **design 域**（`recursive=True` + 监视集 pathspecs）：递归展开到每个 blob。
+      - **code 域**〔Task5 · tasks 2.3〕（`recursive=False` + 无 pathspecs）：取**仓库顶层
+        条目**的浅层快照。tree 条目 oid 递归摘要整棵子树 ⇒ 深层源码改动经其顶层 tree oid
+        反映，无需 `-r`。调用方在 Python 侧按条目名排除 `openspec` 后求等值，**MUST NOT**
+        用负向 pathspec `':!openspec'`（继承 `GIT_ICASE_PATHSPECS`，已实测证伪）。
 
     **`-z` MUST NOT 省略**：它不只是换分隔符——**它同时关闭 git 默认的路径 C-quote**，
     而 C-quote 正是本 change 缺陷 6（控制字符 / 非 ASCII 路径被弄花后逃出监视集）的成因。
@@ -461,7 +466,8 @@ def ls_tree_map(root, ref, pathspecs):
     **rc=0 + 某路径不在结果里 = 合法的「缺失」信号**，由调用方按「映射不等 ⇒ stale」处理，
     **MUST NOT** 混作读取失败——二者是不同的事，前者可判（判 stale），后者不可判。
     """
-    rc, out = run_git_bytes(root, "ls-tree", "-r", "-z", ref, "--", *pathspecs)
+    flags = ("-r", "-z") if recursive else ("-z",)
+    rc, out = run_git_bytes(root, "ls-tree", *flags, ref, "--", *pathspecs)
     if rc != 0:
         raise GateIndeterminate(
             f"git ls-tree 读 {ref} 的监视集失败（rc={rc}）——仓损坏 / 权限 / ref 不可达",
@@ -782,12 +788,29 @@ def is_stale(root, rel, scope, change):
             if _tasks_content_exempt(before, after):
                 return False, "fresh"
         return True, "stale"
-    # scope == "code"：行为逐字不变（Task5 改顶层条目比较）
-    files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
-    for f in filter(None, files.splitlines()):
-        if not f.startswith("openspec/"):
-            return True, "stale"
-    return False, "fresh"
+    # scope == "code"
+    # [harden-gate-git-layer Task5 · ADR-2 · tasks 2.3] 比**仓库顶层条目的浅层快照**——
+    # 锚与 HEAD 各取一次非递归 `ls-tree`，得 `path→(mode,type,oid)` 顶层映射，排除 `openspec`
+    # 记账条目后求等值。相等 ⇒ fresh，不等 ⇒ stale。tree 条目 oid 递归摘要整棵子树 ⇒
+    # 顶层某目录内任意深度的源码改动都会翻转其顶层 tree oid ⇒ 被捕获（无需 `-r`）。
+    #
+    # 收益（design.md 威胁模型两行 · 本判据唯一正面收益）：
+    #   ① 代码审后经 merge 提交 resolve 引入的源码改动 ⇒ 该源码所属顶层条目 oid 变 ⇒ stale。
+    #   ② `git mv` 把源码搬进 `openspec/` ⇒ 源路径所属顶层条目（或顶层源文件本身）消失/变化
+    #      ⇒ 映射不等 ⇒ stale（迁入的目标在 openspec 内、被排除，但**离开源顶层这一侧**仍暴露）。
+    #
+    # 🔴 **MUST NOT 用整棵树的 sha**：done 写 `verify-report.md`（在 openspec/ 内）即改变整树
+    #   sha ⇒ 正常收尾流程第一步就假阳判失鲜（已实测证伪）。∴ 排除 openspec 后按剩余顶层条目比。
+    # 🔴 **MUST NOT 用负向 pathspec** `':!openspec'`：继承外部可控的 `GIT_ICASE_PATHSPECS`
+    #   （已实测证伪）。排除在 Python 侧按条目名做（`p != b"openspec"`），git pathspec 语义不参与。
+    # rc≠0 由 `ls_tree_map` 抛 `GateIndeterminate`（→ UNKNOWN(6)），读失败不折成空集假等值。
+    anchor_top = ls_tree_map(root, sha, recursive=False)
+    head_top = ls_tree_map(root, "HEAD", recursive=False)
+    anchor_code = {p: v for p, v in anchor_top.items() if p != b"openspec"}
+    head_code = {p: v for p, v in head_top.items() if p != b"openspec"}
+    if anchor_code == head_code:
+        return False, "fresh"
+    return True, "stale"
 
 
 

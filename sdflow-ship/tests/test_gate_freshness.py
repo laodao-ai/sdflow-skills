@@ -1210,3 +1210,150 @@ def test_window_closed_during_wrapup(repo):
     assert js["verdict"] != "REFUSE_START", f"窗口外仍判 design 失鲜：{js}"
     # 四件套是 openspec/ 内路径 ⇒ code 域顶层条目不变 ⇒ 也不该触 RERUN_STALE
     assert code == 0 and js["verdict"] == "RUN_VERIFY", js
+
+
+# ══ [harden-gate-git-layer Task5 · ADR-2 · tasks 2.3 · 测试 5.11a/5.11b/5.12] code 域 ══
+#
+# 判据 = 锚与 HEAD 各跑一次**非递归** `git ls-tree`，取**仓库顶层条目**的浅层快照
+# （`path→(mode,type,oid)` 映射），排除 `openspec` 记账条目后求等值。相等 ⇒ fresh，不等 ⇒ stale。
+# tree 条目的 oid 递归摘要整棵子树 ⇒ 顶层某目录内任意深度的源码改动都翻转其顶层 tree oid、被捕获。
+#
+# 🔴 本节全部经 **is_stale 公共入口 / run_gate 端到端**求值（MUST NOT 只直调内部 helper）。
+#   两个消费方各有覆盖：`code-review-report`（5.11a e2e，next=sdflow-code-review）与
+#   `verify-report`（5.11b e2e，next=sdflow-done）各自走一次 stale 路径。
+#
+# 收益证明（5.11a/5.11b）= 本域改判据**唯一的正面收益**：merge 引入的源码改动、把源码 git mv
+#   进记账目录，都不再从判定逃逸。各附「删掉守卫即变红」的变异证明（见 impl-report）。
+# ══════════════════════════════════════════════════════════════════════════
+
+_CR_REL = BASE + "code-review-report.md"
+_VF_REL = BASE + "verify-report.md"
+
+
+def _code_stale(repo, rel):
+    """经公共入口求 code 域失鲜（rel = 两个消费方之一的报告相对路径）。"""
+    return _sg.is_stale(repo, rel, "code", "demo")
+
+
+def _anchor_code_reports(repo, d, sha, verify="PASS"):
+    """写 code-review-report + verify-report，`reviewed_sha` 指向 sha（被代码审/验证批准的
+    盘面），并提交。verify 取 PASS（e2e 走 code-review-report 消费方）或 FAIL（走 verify-report
+    消费方——verify=FAIL 时 step8 的 cr-stale 让位、判定落到 step9 的 verify 读点）。"""
+    (d / "code-review-report.md").write_text(
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {sha}\n---\n# 代码审报告\n",
+        encoding="utf-8")
+    (d / "verify-report.md").write_text(
+        f"---\nship-gate:\n  verify: {verify}\n  reviewed_sha: {sha}\n---\n# 验证报告\n",
+        encoding="utf-8")
+    commit_all(repo, "code/verify 报告锚基线")
+
+
+def _evil_merge_toplevel(repo, mutate, msg="evil merge resolve 出顶层源码"):
+    """两个 parent 都**只碰 openspec/**（不引入顶层源码），merge 提交自身 resolve 出顶层改动。
+
+    ∴ 顶层源码改动**仅存在于 merge 树**——旧 `--name-only` 提交遍历对 merge 不产 diff 会
+    整帧漏掉（design.md 登记的「code 域 evil-merge 漏检」）；顶层条目映射比较只看锚与 HEAD
+    两端的树、对拓扑完全不敏感 ⇒ 必抓。这是 5.11a 相对旧实现的判别性收益。
+    """
+    _git(repo, "checkout", "-q", "-b", "side")
+    (repo / "openspec" / "changes" / "demo" / "note-side.md").write_text("s\n", encoding="utf-8")
+    commit_all(repo, "side: 仅 openspec 记账")
+    _git(repo, "checkout", "-q", "main")
+    (repo / "openspec" / "changes" / "demo" / "note-main.md").write_text("m\n", encoding="utf-8")
+    commit_all(repo, "main: 仅 openspec 记账")
+    _git(repo, "merge", "--no-ff", "-q", "-m", msg, "side")
+    mutate()
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "--amend", "--no-edit")
+    parents = _git(repo, "rev-list", "--parents", "-n", "1", "HEAD").stdout.split()
+    assert len(parents) == 3, "构造失败：应为双 parent 的 merge 提交"
+
+
+# ── 5.11a：代码审后经 merge 提交 resolve 引入源码改动 ⇒ stale ─────────────────
+
+def test_code_domain_merge_introduces_source_change_is_stale(repo):
+    """[5.11a] merge 提交自身 resolve 出顶层源码 `resolved.py`（两 parent 都没有它）⇒
+    该源码从未过代码审 ⇒ code 域必须判失鲜。经 `code-review-report` 消费方端到端求值。
+
+    变异证明（G1 · 收益守卫）：把 code 分支改成恒 `return False, "fresh"` ⇒ 本例转红。"""
+    d = impl_done(repo)
+    baseline = head_sha(repo)                 # 代码审通过的基线（尚无顶层源码）
+    _anchor_code_reports(repo, d, baseline, verify="PASS")
+    _evil_merge_toplevel(
+        repo, lambda: (repo / "resolved.py").write_text("# merge 里冒出来的源码\n", encoding="utf-8"))
+    # 公共入口：code-review-report 消费方判 stale
+    assert _code_stale(repo, _CR_REL) == (True, "stale")
+    # 端到端：cr 消费方 → RERUN_STALE 重审（next=sdflow-code-review）
+    code, js, _h = run_gate(repo)
+    assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-code-review", js
+    assert js["freshness"] == "stale"
+
+
+# ── 5.11b：把源码改名迁进记账目录 ⇒ stale ────────────────────────────────────
+
+def test_code_domain_git_mv_source_into_openspec_is_stale(repo):
+    """[5.11b] `git mv` 把顶层源码 `src.py` 搬进 `openspec/`（记账目录）⇒ 顶层条目 `src.py`
+    消失、映射不等 ⇒ 失鲜。迁入的目标落在被排除的 openspec 内，但**离开源顶层这一侧**仍暴露。
+    经 `verify-report` 消费方端到端求值（verify=FAIL ⇒ 判定落到 step9 的 verify 读点）。
+
+    变异证明（G1 · 收益守卫）：把 code 分支改成恒 `return False, "fresh"` ⇒ 本例转红。"""
+    d = impl_done(repo)
+    (repo / "src.py").write_text("# 已过代码审的顶层源码\n", encoding="utf-8")
+    commit_all(repo, "seed 顶层源码进基线")
+    baseline = head_sha(repo)
+    _anchor_code_reports(repo, d, baseline, verify="FAIL")
+    _git(repo, "mv", "src.py", BASE + "stashed-src.py")     # 源码搬进记账目录
+    commit_all(repo, "chore: 把源码 git mv 进 openspec")
+    # 公共入口：verify-report 消费方判 stale
+    assert _code_stale(repo, _VF_REL) == (True, "stale")
+    # 端到端：verify 消费方 → RERUN_STALE（next=sdflow-done）
+    code, js, _h = run_gate(repo)
+    assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done", js
+    assert js["freshness"] == "stale"
+
+
+# ── 5.12：记账目录内部正常写入仍判新鲜 + 两个消费方各经公共入口求值 ────────────
+
+def test_code_domain_openspec_accounting_writes_stay_fresh(repo):
+    """[5.12] 排除 `openspec` 条目后，记账目录内部的一切正常写入都不动其余顶层条目 ⇒ fresh。
+    覆盖两类记账写：① 写 verify-report（`_anchor_code_reports` 那一次提交本身即是）
+    ② 归档移动目录（openspec 内部重排：新建 archive 子目录 + 落副本）。
+    两个消费方（`code-review-report` / `verify-report`）各经 is_stale 公共入口求 fresh。
+
+    变异证明：
+      · G2（排除 openspec 条目）：不排除 ⇒ 记账写改了 openspec 顶层 tree oid ⇒ 映射不等 ⇒
+        本例转红（误判 stale）。
+      · G3（`recursive=False` 浅层）：改 `recursive=True` ⇒ openspec 子树内的文件以
+        `openspec/...` 路径逐条进映射、不被 `!= b"openspec"` 排除 ⇒ 记账写即失鲜 ⇒ 本例转红。"""
+    d = impl_done(repo)
+    (repo / "src.py").write_text("# 顶层源码（证明排除后仍有非空顶层可比）\n", encoding="utf-8")
+    commit_all(repo, "seed 顶层源码")
+    baseline = head_sha(repo)
+    _anchor_code_reports(repo, d, baseline, verify="PASS")   # 记账写①：落 cr/verify 报告
+    # 记账写②：模拟归档移动目录（openspec 内部重排）+ hand-off
+    (d / "hand-off.md").write_text("交接\n", encoding="utf-8")
+    arch = repo / "openspec" / "changes" / "archive" / "2026-07-21-demo"
+    arch.mkdir(parents=True)
+    (arch / "proposal.md").write_text("归档副本\n", encoding="utf-8")
+    commit_all(repo, "openspec 记账：hand-off + 归档目录")
+    # 两个消费方各经公共入口求值，均 fresh（openspec 顶层 tree 变了但被排除，src.py 未动）
+    assert _code_stale(repo, _CR_REL) == (False, "fresh")
+    assert _code_stale(repo, _VF_REL) == (False, "fresh")
+
+
+def test_code_domain_excludes_openspec_by_entry_name_not_pathspec(repo):
+    """[tasks 2.3 机械守] 排除口径 = Python 侧按顶层条目名 `!= b"openspec"`，**非**负向
+    pathspec。锚与 HEAD 顶层映射只差一个 `openspec` 条目时 ⇒ 排除后等值 ⇒ fresh；
+    同一构造若换成整树 sha 或不排除 openspec 则会误判 stale（这两条错误路径 design.md 已实测证伪）。"""
+    d = impl_done(repo)
+    (repo / "src.py").write_text("# v1\n", encoding="utf-8")
+    commit_all(repo, "seed 顶层源码")
+    baseline = head_sha(repo)
+    _anchor_code_reports(repo, d, baseline, verify="PASS")
+    # 锚与 HEAD 的顶层映射：src.py 两侧同 oid，唯 openspec 条目 oid 不同（报告写入所致）
+    anchor_top = _sg.ls_tree_map(repo, baseline, recursive=False)
+    head_top = _sg.ls_tree_map(repo, "HEAD", recursive=False)
+    assert anchor_top[b"openspec"] != head_top[b"openspec"], "前提校准：openspec 顶层 tree 确实变了"
+    assert anchor_top[b"src.py"] == head_top[b"src.py"], "前提校准：src.py 未动"
+    # 排除 openspec 后两侧等值 ⇒ fresh（是 openspec 条目的变化被排除掉，不是整树相等）
+    assert _code_stale(repo, _CR_REL) == (False, "fresh")
