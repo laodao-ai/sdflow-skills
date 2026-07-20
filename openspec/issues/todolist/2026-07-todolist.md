@@ -57,8 +57,8 @@ sdflow-issues:
     T198: {"module":"openspec/changes/harden-gate-git-layer","summary":"tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T199: {"module":"CLAUDE.md / 开发环境","summary":"CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest","type":"基础设施","status":"PROPOSED","time":"2026-07-21 01:09","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T200: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验","type":"代码质量","status":"PROPOSED","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
-    T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"PROPOSED","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
-    T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"PROPOSED","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"DONE","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"DONE","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T203: {"module":"sdflow-ship/tests + CI 配置","summary":"门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立","type":"基础设施","status":"PROPOSED","time":"2026-07-21 03:41","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"PROPOSED","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
@@ -1902,12 +1902,14 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 ## T201: 实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐
 > 实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-07 状态：PROPOSED → DONE（360fdc3 archive 同步：主 spec 6 类 cause 拆分 anchor-invalid/unresolvable）
 <!-- sdflow-issue-block:end id=T201 -->
 
 <!-- sdflow-issue-block:start id=T202 -->
 ## T202: Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐
 > Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-07 状态：PROPOSED → DONE（360fdc3 archive 同步：主 spec 写入 cat-file blob + mode/type/blob 闸门场景）
 <!-- sdflow-issue-block:end id=T202 -->
 
 <!-- sdflow-issue-block:start id=T203 -->
