@@ -81,6 +81,11 @@ def test_syntactically_invalid_anchor_is_unknown(repo, bad, why):
     commit_all(repo, "spec-review report (bad anchor)")
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN", f"{why} 竟未被拦下"
+    # [fix1 · F2] 只断 code==6 太弱：missing / unresolvable 两组都断了 cause_category，独缺本组，
+    # 于是「生产路径拿到的是通用坏-frontmatter 措辞、无 anchor-invalid 专属诊断」（F1）从这里漏过去。
+    # anchor-invalid 原本唯一的强断言在直调内部 helper 的用例里——正是本文件开头口径要防的假绿形态。
+    assert js["cause_category"] == "anchor-invalid", f"{why} 未走 anchor-invalid 专属诊断"
+    assert "40 位小写 hex" in js["reason"], f"{why} 缺该类专属可行动措辞"
 
 
 @pytest.mark.parametrize("bad,why", BAD_SYNTAX, ids=[c[0][:12] for c in BAD_SYNTAX])

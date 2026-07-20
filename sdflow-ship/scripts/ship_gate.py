@@ -1059,6 +1059,16 @@ def _stale_trigger_hint(trigger):
 # （越域/重复键/坏语法/类型不符→UNKNOWN，歧义须人裁、防 exit0 重跑死循环）。
 def _fail_closed_on_bad(err, label):
     field, cat = err
+    # [harden-gate-git-layer Task1 fix1 · F1] 锚字段自身语法非法 ⇒ 走 ANCHOR_INVALID 专属诊断。
+    # 背景：三个 live 读点都先经 live_ship_gate_state，坏 frontmatter 在此就 emit 了通用 UNKNOWN，
+    # 于是 read_reviewed_sha 里的 CAUSE_ANCHOR_INVALID 分支在生产路径上永不执行——撞门者拿到的是
+    # 「坏 frontmatter」这句通用话，没有 cause_category、没有「订正为完整 commit OID」的指引，
+    # 直接违反 Compliance「五类失败原因各给可行动诊断」。抛 GateIndeterminate 由 main() 唯一映射点
+    # 统一转 UNKNOWN(6)+cause_category（MUST NOT 在此自行 emit，否则退出码映射散成多处）。
+    if field == "reviewed_sha":
+        raise GateIndeterminate(
+            f"{label} 报告的 ship-gate frontmatter 中 reviewed_sha 值非法（类别={cat}）",
+            CAUSE_ANCHOR_INVALID)
     emit("UNKNOWN", EXIT_UNKNOWN, None,
          f"{label} frontmatter 坏（字段={field} 类别={cat}）→ fail-closed 无有效状态，请人工修复")  # D12 reason 点名 field+category
 

@@ -21,14 +21,67 @@ PRODUCER_FRONTMATTER = [
 # [harden-gate-git-layer Task1 · tasks 1.4] 三个 producer 的锚字段模板 MUST 逐字对齐
 # design.md ADR-1 的 YAML 示例：字段名、挂载层级（顶层 `ship-gate:` 的**直接子键**，与结论
 # 字段同层）、示例值形态。某处写成独立顶层键或改了字段名 ⇒ 该 producer 的锚永远读不到。
-ADR1_ANCHOR_LINE = "reviewed_sha: 0123456789abcdef0123456789abcdef01234567"
+#
+# [fix1 · F3-minor] 该行 MUST 从 design.md 的 ADR-1 YAML 示例**抽取**，不硬编码——「逐字对齐
+# ADR-1」这句承诺的单一源就是 ADR-1 本身。硬编码时 ADR-1 改了示例值/字段名，本文件不会变红，
+# 三个模板照旧对齐着一份已不存在的规格。
+CHANGE_NAME = "harden-gate-git-layer"
+
+
+def _design_md_path():
+    """定位本 change 的 design.md——active 与 archive 两处都找（归档后路径会搬走）。
+
+    写死 active 路径正是本仓踩过的坑：archive 之后机械门当场 FileNotFoundError 崩掉。
+    """
+    candidates = [REPO / "openspec" / "changes" / CHANGE_NAME / "design.md"]
+    candidates += sorted(
+        (REPO / "openspec" / "changes" / "archive").glob(f"*{CHANGE_NAME}*/design.md"))
+    for p in candidates:
+        if p.is_file():
+            return p
+    raise AssertionError(
+        f"未找到 {CHANGE_NAME} 的 design.md（active 与 archive 均无）——锚行单一源丢失")
+
+
+def _adr1_anchor_line():
+    """抽 design.md ADR-1 节内 YAML 示例块里的 `reviewed_sha:` 裸行。
+
+    有界解析（基准 5）：Markdown 章节标题 + ``` 围栏，形态数得完，故可手写。
+    """
+    lines = _design_md_path().read_text(encoding="utf-8").splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip().startswith("### ADR-1")), None)
+    assert start is not None, "design.md 找不到 `### ADR-1` 节（锚行单一源丢失）"
+    end = next((i for i in range(start + 1, len(lines))
+                if lines[i].startswith("### ")), len(lines))
+    hits = [ln.strip() for ln in lines[start:end] if ln.strip().startswith("reviewed_sha:")]
+    assert len(hits) == 1, \
+        f"design.md ADR-1 节内 `reviewed_sha:` 示例行须恰好一条，实得 {len(hits)} 条：{hits}"
+    return hits[0]
+
+
+ADR1_ANCHOR_LINE = _adr1_anchor_line()
 
 
 def test_producer_templates_declare_reviewed_sha_verbatim():
-    for rel, _field, _value_lines in PRODUCER_FRONTMATTER:
-        lines = [ln.strip() for ln in (REPO / rel).read_text(encoding="utf-8").splitlines()]
-        assert ADR1_ANCHOR_LINE in lines, \
-            f"{rel} 模板缺锚字段裸行 {ADR1_ANCHOR_LINE!r}（与 design.md ADR-1 示例逐字对齐）"
+    # [fix1 · F3] 粒度 MUST 是**每个结论模板块**，不是「每文件出现过一次即可」。
+    # 原实现只查文件级存在性 ⇒ 5 个结论模板块里，`verify: FAIL` 与 `code_review: blocked`
+    # 两块（正是 FAIL/blocked 半场）删掉锚行也全绿——评审方实做变异证实。
+    # 后果不是纸面的：负面结论块少了 reviewed_sha，producer 照模板落盘就写不出锚，
+    # reader 侧 anchor-missing → UNKNOWN(6)，负面半场整个走不通。
+    for rel, _field, value_lines in PRODUCER_FRONTMATTER:
+        text = (REPO / rel).read_text(encoding="utf-8")
+        blocks = _extract_frontmatter_blocks(text)
+        for value_line in value_lines:
+            matching = [b for b in blocks if value_line in b]
+            assert matching, \
+                f"{rel} 未找到声明 {value_line!r} 的 frontmatter 模板块"
+            for block in matching:
+                block_lines = [ln.strip() for ln in block.splitlines()]
+                assert ADR1_ANCHOR_LINE in block_lines, (
+                    f"{rel} 声明 {value_line!r} 的模板块内缺锚字段裸行 {ADR1_ANCHOR_LINE!r}"
+                    f"（与 design.md ADR-1 示例逐字对齐；锚 MUST 与结论字段同块同次落盘）"
+                    f"\n--- 抽取的原始块 ---\n{block}"
+                )
 
 
 def test_producer_anchor_is_direct_child_of_ship_gate():
