@@ -5,7 +5,7 @@
 | scope | 消费方（调用点） | 锚 | 监视集 |
 |---|---|---|---|
 | `design` | `:1214` spec-review-report | `design_approved` | 四件套 + `specs/`（**固定清单**） |
-| `code` | `:1291` code-review-report | `code_review` | `openspec/` 之外的一切（**列不出清单**） |
+| `code` | `:1291` code-review-report | `code_review` | `openspec/` 之外的一切（**列不出清单** ⇒ 比顶层条目） |
 | `code` | `:1311` verify-report | `verify` | 同上 |
 
 历史实现一律**从 git 管道推断**「被审内容变了没有」。grill + 多镜设计审在这条推断链上累计挖出**十个缺陷、全部实测复现**（清单见 proposal「Why」）。其中两对互为解药兼病灶、两个只需外部 config/env 即可翻转判定 ⇒ 在枚举面上补不完。
@@ -93,12 +93,13 @@
 
 | 谁 | 怎么做 | 修复前 | 修复后 |
 |---|---|---|---|
-| 走正常流程的开发者/agent | 代码审后在 merge 提交里 resolve 出源码改动 | 🔴 判 fresh | ✅ 树 sha 不等 → stale |
-| 同上 | `git mv` 把源码迁进 `openspec/` | 🔴 判 fresh | ✅ 树 sha 不等 → stale |
+| 走正常流程的开发者/agent | 代码审后在 merge 提交里 resolve 出源码改动 | 🔴 判 fresh | ✅ 顶层条目不等 → stale |
+| 同上 | `git mv` 把源码迁进 `openspec/` | 🔴 判 fresh | ✅ 源路径所属顶层条目不等 → stale |
 | 同上 | 合并时把已批准产物换回锚前的旧草稿 | 🔴 判 fresh（`--cc`）/ ✅（`-m`） | ✅ 内容不等 → stale（构造性，不依赖拓扑） |
 | 任何后续提交者（**无需恶意**） | 顺带碰一下报告文件（空行 / CI reformat）⇒ 锚前移，埋掉锚前的未审改动 | 🔴 判 fresh | ✅ 锚是记录值，推不动 |
 | 环境异常（非攻击者） | git 调用失败 / 配置或环境变量异常 | 🔴 判 fresh | ✅ fail-closed → `UNKNOWN(6)` |
 | 无（假阳面） | 设计门拍板后例行合并 main | 🔴 假判 stale，卡死正常流程 | ✅ 内容未变 → fresh |
+| 无（假阳面） | done 写 `verify-report.md` / archive 移目录（纯 `openspec/` 记账） | — | ✅ 其余顶层条目未变 → fresh（**整树 sha 会在此假阳，已实测**） |
 
 **残余面（显式登记，本次不覆盖）**：
 

@@ -20,6 +20,13 @@
 - **THEN** gate MUST 判失鲜——内容比较不依赖提交拓扑，锚与 HEAD 的字节不等即成立
 - **AND** MUST 有用例，且 MUST 经 `is_stale` 公共入口求值
 
+#### Scenario: `openspec/` 内的记账不得让 code 域失鲜
+
+- **WHEN** 代码审通过后，正常收尾流程写入 `verify-report.md`、或 archive 把 change 目录移入 `openspec/changes/archive/`——即改动**全部落在 `openspec/` 之内**
+- **THEN** gate MUST 判 code 域 fresh
+- **AND** 该域的比较粒度 MUST 能排除 `openspec/`：整棵树的 sha 比较 **MUST NOT** 被采用——它在上述正常流程的第一步即假阳（已实测）
+- **AND** MUST 有用例钉死此方向
+
 #### Scenario: 语义分诊须留痕且默认 fail-closed
 
 - **WHEN** 机械层判失鲜，而主 session 判定该差异无实质影响（如 `[impl-review-fix]` 修订）

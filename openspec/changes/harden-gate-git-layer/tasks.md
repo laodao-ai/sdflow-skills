@@ -9,7 +9,7 @@
 
 - [ ] 2.1 design 域：固定清单 `proposal.md`/`design.md`/`tasks.md` 逐个 `git show <锚>:<path>` 与 HEAD 比字节；`specs/` 子树经 `ls-tree -r -z` 枚举后同样逐个比
 - [ ] 2.2 `tasks.md` 比较前过既有 `_normalize_checkbox_lines`（已是 bytes 口径，直接复用）
-- [ ] 2.3 code 域：整树 sha 比较（`<锚>^{tree}` vs `HEAD^{tree}`），不等即失鲜
+- [ ] 2.3 code 域：`git ls-tree <锚>` 与 `git ls-tree HEAD` 各一次（**浅层、不递归**），去掉 `openspec` 条目后比较，不等即失鲜。**MUST NOT 用整树 sha**——实测 done 写 `verify-report.md` 即改变整树 sha ⇒ 正常流程假阳
 - [ ] 2.4 **读失败与内容为空显式区分**：每次 `git show` / `ls-tree` 显式判 returncode，任一失败 → `GateIndeterminate`。**MUST NOT** 让两次失败读比较相等
 - [ ] 2.5 退役 `frame_touched_paths`、帧遍历、`design_frame_exempt_reason`、BR-7 subject 短路、`_stale_trigger_hint` 与 `StaleResult.trigger`
 - [ ] 2.6 `sdflow-ship` SKILL 加语义重锚协议：撞失鲜 → 读 `reviewed_sha..HEAD` diff 判断 → 若无实质影响则重锚并**在报告写理由**；不重锚即维持失鲜
@@ -31,6 +31,7 @@
 - [ ] 4.6 `GIT_ICASE_PATHSPECS=1` 与 `diff.ignoreSubmodules=all` 环境下，判定结论与干净环境一致
 - [ ] 4.7 `OSError` 三个 helper **各自**验证（`main()` 首次调用失败即退出，单一端到端用例只覆盖一个）；`TimeoutExpired` 同理
 - [ ] 4.8 code 域两个消费方各有覆盖（`code-review-report` 今天零覆盖；`verify-report` 是现存唯一用例）
+- [ ] 4.8b **code 域不得被 `openspec/` 记账打假阳**：done 写 `verify-report.md`、archive 移目录 ⇒ 仍 fresh（**整树 sha 实现会在此变红，这正是本用例要钉死的**）
 - [ ] 4.9 **变异证明**：逐条删除 4.1–4.8 各自守护的守卫，确认对应用例变红，结果逐条落 impl-report。**MUST NOT** 以「用例存在且为绿」充当证明
 - [ ] 4.10 **删除既有用例须逐条说明**：BR-7 真值表 8 格、帧遍历相关、触发点诊断相关用例随其机制退役，impl-report 逐条写明「删哪条 / 对应哪个退役机制」。**MUST NOT** 静默删测试
 - [ ] 4.11 全套件回归（仓根 `pytest`），并在 merge 后于 `main` 上再跑一次
@@ -45,7 +46,7 @@
 ```
                     ┌────────────── is_stale 公共入口 ──────────────┐
                     │                                               │
-            scope=design（固定清单比内容）              scope=code（整树 sha）
+        scope=design（固定清单比内容）        scope=code（顶层条目去 openspec）
                     │                                               │
     ┌───────────────┼───────────────┐              ┌────────────────┼──────────────┐
   监视集保住     锚前旧内容      读失败≠空          两消费方各覆盖        读失败≠空

@@ -41,7 +41,7 @@
 ### P0 — 直接比内容，取代路径枚举
 
 - **design 域**（监视集是固定清单）：`proposal.md`/`design.md`/`tasks.md` 逐个 `git show <锚>:<path>` 与 HEAD 比字节；`specs/` 子树经 `ls-tree -r -z` 枚举后同样逐个比；`tasks.md` 比之前过既有的 `_normalize_checkbox_lines`。
-- **code 域**（监视集列不出固定清单）：整树 sha 比较，不等即交语义分诊。
+- **code 域**（监视集列不出固定清单）：`git ls-tree <锚>` 与 HEAD 各取一次**顶层条目**，去掉 `openspec` 那一行后比较，不等即失鲜。任何 `openspec/` 之外的改动都会改变某个顶层条目的 sha ⇒ 召回完整；而 `openspec/` 内的记账（写 verify 报告、archive 移目录）不影响其余顶层条目 ⇒ 不假阳。
 - 缺陷 1/2/4/5/6/7/8 由此**整类消失**（不枚举路径、不调 diff 做判定）。
 
 > 🔴 **砍的是枚举，不是监视集。** 监视集（只盯四件套 / 只盯非 `openspec/`）是**承重的**——它才是「实现期改源码不该让设计门失鲜」的来源。裸 `reviewed_sha == HEAD` 已实测证伪：实现期每个 ticket 都勾 `tasks.md`、每个提交都动 HEAD ⇒ 设计门从实现的第一个提交起永远失鲜，等于把 `fix-design-gate-freshness-proxy` 修的缺陷退回去。
