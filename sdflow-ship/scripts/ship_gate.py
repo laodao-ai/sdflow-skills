@@ -981,6 +981,51 @@ def emit(verdict, exit_code, next_step, reason, **extra):
     sys.exit(exit_code)
 
 
+# [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5/2.6/2.7] 求值窗口的**唯一**实现点。
+#
+# 🔴 为什么是「窗口内 emit 的包装」而不是「step 7 之后加一次检查」：
+# `RUN_SOP`(step 5.5) / `RUN_PLAN`(step 6) 两条路径在到达 step 7 之前就 `emit()`，而 `emit()`
+# 内部是 `sys.exit()` —— 硬 early-return。把检查放在 step 7 之后，这两条路径**完全逃出检查**，
+# 方向 fail-open（正是本 change 要治的那类洞）。∴ 检查 MUST 挂在**三个分支各自的 emit 之前**。
+#
+# 反向的捷径同样错：把检查留在 step 5.5 之前（= 旧实现 `:1263` 的位置）等于没做窗口限定——
+# 代码审期/收尾期修订四件套（全仓 14 个历史提交、`opsx:verify` step 7 明文允许）会被误拦。
+#
+# 窗口 = `RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL` 三个「进入实现期」的判定。窗口右边界是
+# 「代码审报告出现」而非「最后一个任务打勾」——代码审过程中本来就会改代码与文档。
+def guard_design_freshness(root, change, report):
+    """窗口内求值 design 域失鲜；stale ⇒ `REFUSE_START` 并**带出锚值**〔ADR-4〕。
+
+    fresh 或不失鲜 ⇒ 原样返回，由调用方继续 emit 它自己的判定。
+    """
+    rel = str(report.relative_to(root))
+    design_stale, _freshness = is_stale(root, rel, "design", change)
+    if not design_stale:
+        return
+    # [ADR-4] 锚值 MUST 可见：撞门者不必先去翻报告 frontmatter 抄 sha。
+    # `reviewed_sha` 是**录下来的常量**，读出来打印零推断成本 ⇒ 与「MUST NOT 为凑诊断
+    # 保留路径枚举通路」不冲突（那条禁的是从 git 管道**反推**触发点）。
+    sha = read_reviewed_sha(root, rel)
+    paths = " ".join(design_pathspecs(f"openspec/changes/{change}/"))
+    # 默认处置**只**推荐重跑设计门——MUST NOT 在此提 `checkpoint(impl-review)`：
+    # 该 subject 豁免已随帧比较退役，写进指引等于教撞门者做一件不起作用的事。
+    emit("REFUSE_START", EXIT_REFUSE, None,
+         "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
+         "（重跑 sdflow-spec-review 后重新拍板补锚）。"
+         f"核对差异：git diff {sha} HEAD -- {paths}",
+         reviewed_sha=sha)
+
+
+def emit_windowed(root, change, report, verdict, exit_code, next_step, reason, **extra):
+    """求值窗口内的 `emit`：先过 design 域失鲜闸门，再 emit 本分支的判定。
+
+    三个入口（`RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL`）**各自**调用本函数 —— 这是
+    「三分支各自接入、各自无旁路」的实现形态：拆掉任何**一处**的包装，只有该分支的用例变红。
+    """
+    guard_design_freshness(root, change, report)
+    emit(verdict, exit_code, next_step, reason, **extra)
+
+
 # [harden-gate-git-layer Task3 · ADR-4 · tasks 2.8] `_stale_trigger_hint` / `StaleResult.trigger`
 # 已随帧比较整簇退役：触发点诊断原本**依附于帧遍历**（要 sha + subject），帧遍历没了之后，
 # 为凑齐这段诊断而保留一条枚举通路，等于把刚砍掉的推断面从后门放回来。且该能力在 code 域
@@ -1260,15 +1305,10 @@ def decide(root, change):
              "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
              "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）"
              + _unclosed_frontmatter_hint(report))
-    design_stale, _design_freshness = is_stale(
-        root, str(report.relative_to(root)), "design", change)
-    if design_stale:
-        # 默认处置**只**推荐重跑设计门——MUST NOT 在此提 `checkpoint(impl-review)`：
-        # 该 subject 豁免已随帧比较退役，写进指引等于教撞门者做一件不起作用的事。
-        # [Task3] 结构化触发点随帧遍历退役（ADR-4）；锚值可见性由 Task4 的 emit 补 `reviewed_sha`。
-        emit("REFUSE_START", EXIT_REFUSE, None,
-             "design-approved 之后四件套被改动 → 拍板失鲜，改设计须重审"
-             "（重跑 sdflow-spec-review 后重新拍板补锚）")
+    # [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5] **求值窗口**：design 域失鲜原本在此处
+    # 无条件全阶段求值。现改为只在三个「进入实现期」的分支各自 emit 之前求值
+    # （`emit_windowed` 单一实现点）——判据只在它保护的风险真实存在的阶段求值。
+    # 这里**有意留空**：任何把检查加回本位置的改动都等于取消窗口限定（见 emit_windowed 头注释）。
     # ── verify 冲突锚早检（坏 frontmatter → UNKNOWN，保步序早停）──
     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：坏 frontmatter（含重复
     # verify 键=冲突的等价形态 duplicate-key）→ live_ship_gate_state 内 UNKNOWN(6) emit 早停；
@@ -1281,13 +1321,17 @@ def decide(root, change):
     sop_note = ""
     if tg02_hit(cdir):
         if not (cdir / f"{change}-sop.md").is_file():
-            emit("RUN_SOP", EXIT_OK, "embedded-test-sop", "TG-02 命中且 sop 产物缺")
+            # [Task4 · tasks 2.6] 窗口入口①
+            emit_windowed(root, change, report,
+                          "RUN_SOP", EXIT_OK, "embedded-test-sop", "TG-02 命中且 sop 产物缺")
     else:
         sop_note = "SKIP_SOP(非嵌入式不触发); "
     # ── step 6/7：plan 与完成判据〔Q2 窗口主锚〕──────────────────
     plan = cdir / "superpowers-plan.md"
     if not plan.is_file():
-        emit("RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
+        # [Task4 · tasks 2.6] 窗口入口②
+        emit_windowed(root, change, report,
+                      "RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
     # [impl-review-fix CR-F1] 未闭合 fenced code block（悬空 ```）→ 悬空围栏会吞掉真实
     # 未勾项与 Task 标题（假✅/漏 task）→ plan 无法可靠解析 → fail-safe UNKNOWN（先于其余判据）。
     if plan_unbalanced_fence(plan):
@@ -1313,9 +1357,11 @@ def decide(root, change):
         # 双通道皆不可判：plan 未提交（checkpoint 空）且全 plan 无复选框（辅通道空判）
         if not sha and not plan_has_any_checkbox(plan):
             emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
-        emit("CONTINUE_IMPL", EXIT_OK, "subagent-dev",
-             f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
-             done_tasks=sorted(done_in_plan, key=int))
+        # [Task4 · tasks 2.6] 窗口入口③
+        emit_windowed(root, change, report,
+                      "CONTINUE_IMPL", EXIT_OK, "subagent-dev",
+                      f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
+                      done_tasks=sorted(done_in_plan, key=int))
     # ── step 8：code-review 门 ─────────────────────────────────
     cr = cdir / "code-review-report.md"
     if not cr.is_file():
