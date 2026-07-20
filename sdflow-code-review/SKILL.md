@@ -225,52 +225,64 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 
 ## 第五步：产出 + 收敛口
 
-- 写 `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区 + 裁决 + 修复/defer 台账 + 度量锚）。
-- **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
-  构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
-  （`--host` 取第零步同一次 `resolve-models.sh` 导出值；roster 中非 outside-voice 普通镜行 `runner` MUST 等于 `--host`；
-  emitter 缺 `--host` / `--host` 越域走受控 fail-closed）→
-  **exit 0 才**把 stdout（逐镜 `<!-- sdflow:lens-metric v1 … -->` 行）落进「报告格式」度量锚段；exit ≠0（fail-closed）→ 本段
-  **不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。**保留残余信任边界声明**：分类正确性 + roster 完备性 +
-  findings JSON 誊写准确仍是主 session 信任边界，emitter 只保证「给定输入的确定性归约」。
-- **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调
-  `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——
-  退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚（Step1
-  broad-review / hr-tg / outside-voice / **lens-metric**）存在性 + lens-metric 字段/枚举/sev/layer==--layer/
-  计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。
-  **此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `design-approved` 锚由 `ship_gate.py` 外部
-  拦截不同）——诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"。
-  **保留信任边界声明**：数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）**是主 session 信任
-  边界、非机械可验**，脚本 MUST NOT 谎称能机械保证数值正确。
-  **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
-  **旁路声明**：lens-metric 锚缺失/取值违规仅拦报告完整性，**MUST NOT** 反向改写已裁决 findings 的采纳结论
-  或本轮「建议进 /sdflow-done」结论。
-- **反馈回路〔泛化，workflow-metrics-loop ADR-5〕**：原「outside-voice 累计 10 次后按采纳率复评降采样为
-  HR-only」条款**泛化到 per-(层,镜)**——本 skill 落的每条 `lens-metric` 锚（domain/adversarial/history/
-  outside-voice(各 site)/broad 均适用，非仅 outside-voice）都是该判据的原始数据；判据本身升级为**采纳率 +
-  独立率双列**（单看采纳率会误留"高采纳但全冗余"的镜，独立率才是砍镜依据；两率定义/归属见规则根
-  `lens-metric-contract.md`）。**本 skill 不做聚合、不做复评判断、不主动 surfacing**——聚合与「出现轮数≥10」
-  的机械显著提示由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；
-  是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
-  不含评审架构本身的取舍）。
-- 修复代码，改动处标 `[impl-review-fix]`。
-- **checkpoint 提交 — 两段时序〔harden-gate-git-layer ADR-7(a)，1.6/1.6b〕**：`reviewed_sha` 记的是「**被代码审放行的那份源码盘面**」，
-  而自动修复**改的正是源码盘面**。若把修复与报告塞进**同一次**提交，锚只能取到写报告时的 HEAD（= 修复**前**），
-  修复一落盘、源码顶层条目即变 ⇒ **code 域相对自己刚写下的锚立刻失鲜**，每轮有自动修复的代码审都当场自锁。
-  ∴ 分**两次**提交：
-  1. **先单独提交自动修复**（仅源码 + `[impl-review-fix]` 标记）：
-     `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审自动修复"`。
-     **无自动修复时跳过本步**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，同样自洽）。
-  2. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 上一步的修复提交（或无修复时的被审基线），
-     即报告 frontmatter 的 `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是写报告的时刻」）。
-  3. **再单独提交报告**（report-only）：
-     `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审报告"`。
-     🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑第 3 步**前** MUST 先
-     `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
-     否则第 1 步之后残留的、与本轮修复无关的改动会被卷进 report commit。若有残留 ⇒ 先处置（提交或撤回）再落报告。
-  **该两段时序在本设计下天然可行（已实测）**：code 域比较**排除 `openspec` 顶层条目**，而报告落在 `openspec/` 内
-  ⇒ report-only 提交不改任何非 openspec 顶层条目 ⇒ 不触发 code 域失鲜。
-- **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
+🔴 **执行顺序 MUST 按下方编号，不是按小标题在文档里出现的先后**〔impl-review-fix F4〕：
+若照旧措辞的书写顺序执行（第一条就是「写报告」，「两段提交」在后面才出现），报告会在
+两段提交的第 1 段（`checkpoint-commit.sh` 的 `git add -A`）之前就已落在工作树——于是「仅
+源码」的第 1 段提交会把报告文件、连同任何其它无关残留改动一并卷入，而 `git status
+--porcelain` 工作树检查此前只挂在第 3 段提交前，为时已晚。以下按**实际应执行的顺序**重排：
+
+1. **工作树洁净检查（在提交自动修复之前先做一次）**：`git status --porcelain` 确认工作树
+   干净或只剩本轮要修的源码——有与本轮无关的残留改动就先处置（提交或撤回），否则下一步
+   `git add -A` 会把它们一并卷进「仅源码」的修复提交。
+2. **修复代码**，改动处标 `[impl-review-fix]`。
+3. **checkpoint 提交（第一段，仅源码）〔harden-gate-git-layer ADR-7(a)，1.6/1.6b〕**：
+   `reviewed_sha` 记的是「**被代码审放行的那份源码盘面**」，而自动修复**改的正是源码盘面**——
+   若把修复与报告塞进**同一次**提交，锚只能取到写报告时的 HEAD（= 修复**前**），修复一落盘、
+   源码顶层条目即变 ⇒ **code 域相对自己刚写下的锚立刻失鲜**，每轮有自动修复的代码审都当场
+   自锁。
+   `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审自动修复"`。
+   **无自动修复时跳过本步**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，同样自洽）。
+4. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 上一步的修复提交（或无修复时的被审
+   基线），即报告 frontmatter 的 `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是
+   写报告的时刻」）。**报告写盘 MUST 在本步之后、下一步之前**——第 3 步的「仅源码」承诺要
+   成立，报告文件在第 3 步提交那一刻就不能已经存在于工作树。
+5. **写报告** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区
+   + 裁决 + 修复/defer 台账 + 度量锚），frontmatter 带上一步取得的 `reviewed_sha`：
+   - **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
+     构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
+     （`--host` 取第零步同一次 `resolve-models.sh` 导出值；roster 中非 outside-voice 普通镜行 `runner` MUST 等于 `--host`；
+     emitter 缺 `--host` / `--host` 越域走受控 fail-closed）→
+     **exit 0 才**把 stdout（逐镜 `<!-- sdflow:lens-metric v1 … -->` 行）落进「报告格式」度量锚段；exit ≠0（fail-closed）→ 本段
+     **不落**、报告注明 emitter 报错原因，MUST NOT 手拼锚行顶替。**保留残余信任边界声明**：分类正确性 + roster 完备性 +
+     findings JSON 誊写准确仍是主 session 信任边界，emitter 只保证「给定输入的确定性归约」。
+   - **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调
+     `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/code-review-report.md --layer code-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——
+     退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚（Step1
+     broad-review / hr-tg / outside-voice / **lens-metric**）存在性 + lens-metric 字段/枚举/sev/layer==--layer/
+     计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。
+     **此自检由同一执行落锚的主 session 自行运行、非独立外部门**（与 `design-approved` 锚由 `ship_gate.py` 外部
+     拦截不同）——诚实反映其拦截力：只挡"同一会话内忘记跑这步"，挡不住"整段跳过本步"。
+     **保留信任边界声明**：数值一致性（`findings`/`采纳`/`独立`等是否与合并池实收数吻合）**是主 session 信任
+     边界、非机械可验**，脚本 MUST NOT 谎称能机械保证数值正确。
+     **config 门控**：`metrics.enabled` 为缺省/`false` 时，lens-metric 一类（含此自检）整体跳过（不落锚不阻塞）。
+     **旁路声明**：lens-metric 锚缺失/取值违规仅拦报告完整性，**MUST NOT** 反向改写已裁决 findings 的采纳结论
+     或本轮「建议进 /sdflow-done」结论。
+   - **反馈回路〔泛化，workflow-metrics-loop ADR-5〕**：原「outside-voice 累计 10 次后按采纳率复评降采样为
+     HR-only」条款**泛化到 per-(层,镜)**——本 skill 落的每条 `lens-metric` 锚（domain/adversarial/history/
+     outside-voice(各 site)/broad 均适用，非仅 outside-voice）都是该判据的原始数据；判据本身升级为**采纳率 +
+     独立率双列**（单看采纳率会误留"高采纳但全冗余"的镜，独立率才是砍镜依据；两率定义/归属见规则根
+     `lens-metric-contract.md`）。**本 skill 不做聚合、不做复评判断、不主动 surfacing**——聚合与「出现轮数≥10」
+     的机械显著提示由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；
+     是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
+     不含评审架构本身的取舍）。
+6. **checkpoint 提交（第二段，report-only）**：
+   🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑本步**前** MUST 先
+   `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
+   否则第 3 步之后残留的、与本轮修复无关的改动会被卷进 report commit。若有残留 ⇒ 先处置（提交或撤回）再落报告。
+   `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审报告"`。
+   **该两段时序在本设计下天然可行（已实测）**：code 域比较**排除 `openspec` 顶层条目**，而报告落在 `openspec/` 内
+   ⇒ report-only 提交不改任何非 openspec 顶层条目 ⇒ 不触发 code 域失鲜。
+7. **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
 
 ---
 

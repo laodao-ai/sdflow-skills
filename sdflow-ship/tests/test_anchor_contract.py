@@ -249,16 +249,10 @@ def test_no_import_yaml():
                 "ship_gate.py 引入了 from yaml import ...，违反零依赖不变量"
 
 
-CR_SKILL = "sdflow-code-review/SKILL.md"
-
-
-def test_impl_review_exemption_token_bound_to_code_review_step():
-    # [spec-review-amendment BR-5] 豁免 token 与 code-review step 名双向钉死。
-    # gate 的 is_stale design 域精确式豁免 `checkpoint(impl-review)`；该 subject 由
-    # sdflow-code-review 调 checkpoint-commit.sh 的 step 名 `impl-review` 产生。两者
-    # 必须一致——step 改名则豁免静默失配（B2 假 REFUSE 重现且无痕），此测试届时变红报警。
-    gate = GATE.read_text(encoding="utf-8")
-    cr = (REPO / CR_SKILL).read_text(encoding="utf-8")
-    assert 'checkpoint(impl-review)' in gate, "gate 缺 impl-review 豁免 token（B2 豁免逻辑被删？）"
-    assert 'checkpoint-commit.sh impl-review' in cr, \
-        "sdflow-code-review 的 checkpoint step 名与 gate 豁免 token 失配（B2 会静默回归假 REFUSE）"
+# [impl-review-fix F1] `test_impl_review_exemption_token_bound_to_code_review_step` 删除：
+# 原意是守 gate 的 design 域 `checkpoint(impl-review)` subject 精确豁免与 code-review
+# checkpoint step 名双向钉死（B2）。该 subject 豁免已随 Task3 枚举协议整体退役——design 域
+# 现比锚与 HEAD 的 ls-tree 内容，不再核验 commit subject。退役后该测试的
+# `assert 'checkpoint(impl-review)' in gate` 只命中头注释里描述退役历史的 prose 文字，不再
+# 守任何功能不变量（机制已删、断言仍绿 = 假守卫）。见头注释「已知不覆盖」区 impl-review-fix F1
+# 条目与 harden-gate-git-layer design.md ADR-2（design 域比内容协议）。

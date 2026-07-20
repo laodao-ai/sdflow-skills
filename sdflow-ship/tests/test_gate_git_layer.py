@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import commit_all, mkchange
+from conftest import commit_all, mkchange, head_sha, write_report
 from test_gate_impl_progress import approved_change, PLAN2, _sg
 
 GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
@@ -379,3 +379,52 @@ def test_all_git_calls_go_through_the_single_hardened_entry():
             if qualified in _SPAWN_CALLS:
                 spawns.append(qualified)
     assert spawns == ["subprocess.run"], f"存在绕过 _git_run 的裸子进程调用点：{spawns}"
+
+
+# ── impl-review-fix F3：报告文件 read_text 的 OSError 面 ───────────────────
+# `read_reviewed_sha` / `live_ship_gate_state` / `_unclosed_frontmatter_hint` 三个报告读点
+# 此前只捕获语法/语义级坏形态（坏 frontmatter / 缺字段 / 锚不可解析），不捕获
+# `path.read_text()` 自身抛出的裸 `OSError`（权限不足 / TOCTOU：is_file() 确认存在之后、
+# 真正读取之前文件被删或改权限）——与 Task2 已修的 `UnicodeEncodeError` 逸出同类，逸出后
+# 退出码落在契约集 `{0,3,4,5,6}` 之外。chmod 000 构造真实 `PermissionError`（POSIX 语义，
+# root 下权限位不拦读，故 root/非 POSIX 一并 skip）。
+
+def _skip_if_root_or_non_posix():
+    if os.name != "posix":
+        pytest.skip("chmod 权限位语义仅 POSIX 成立")
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("running as root — permission bits don't block reads")
+
+
+def test_read_reviewed_sha_maps_permission_error_to_read_failed(repo):
+    # 单元级：直接测 `read_reviewed_sha`——`is_file()` 判真之后，读取本体撞 PermissionError。
+    _skip_if_root_or_non_posix()
+    d = approved_change(repo, plan=PLAN2)
+    report = d / "spec-review-report.md"     # approved_change 已落盘并提交的报告
+    report.chmod(0o000)
+    try:
+        with pytest.raises(_sg.GateIndeterminate) as ei:
+            _sg.read_reviewed_sha(repo, str(report.relative_to(repo)))
+    finally:
+        report.chmod(0o644)                  # 复原：交还可读可删状态，不依赖 tmp_path 清理兜底
+    assert ei.value.category == _sg.CAUSE_READ_FAILED, \
+        "PermissionError 未被 read_reviewed_sha 收敛为 CAUSE_READ_FAILED"
+
+
+def test_unreadable_code_review_report_stays_in_contract(repo):
+    # 端到端（真跑 main()）：`live_ship_gate_state` 读 code-review-report.md 时撞权限错误，
+    # 退出码 MUST NOT 逸出成 Python 默认的 1。
+    _skip_if_root_or_non_posix()
+    d = approved_change(repo, plan=PLAN2)
+    commit_all(repo, "checkpoint(task1-a): A")
+    commit_all(repo, "checkpoint(task2-b): B")
+    cr = write_report(d, "code-review-report.md", head_sha(repo),
+                       body="# 代码审报告\n", code_review="pass")
+    commit_all(repo, "cr")
+    cr.chmod(0o000)
+    try:
+        code, js, _err = run_gate_env(repo)
+    finally:
+        cr.chmod(0o644)
+    assert code in CONTRACT_EXITS, f"不可读报告导致退出码 {code} 逸出契约集"
+    assert code == _sg.EXIT_UNKNOWN and js["cause_category"] == "read-failed", js

@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess, sys
 from pathlib import Path
 
@@ -27,23 +28,35 @@ def touch_code(repo, name="src.py"):
     commit_all(repo, "code change")
 
 def test_stale_pass_reruns_not_ship(repo):
-    tail_ok(repo)
+    d = tail_ok(repo)
+    # code-review-report.md 落盘的 reviewed_sha 锚是「报告写盘时的 HEAD」（tail_ok 内部先写文件
+    # 再提交），非「tail_ok 返回后的当前 HEAD」（那已是 "reports" 提交本身）——故不用 head_sha(repo)，
+    # 直接从已提交文件内容里读回真正写进去的锚值，避免用错时序的假通过。
+    anchor_sha = re.search(r"reviewed_sha: (\S+)",
+                           (d / "code-review-report.md").read_text(encoding="utf-8")).group(1)
     touch_code(repo)             # 报告后有 openspec/ 外提交
     _, js, _ = run_gate(repo)
     assert js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-code-review"
     assert js["freshness"] == "stale"  # [impl-review-fix] 裁决项7：freshness 键锚定
+    # [impl-review-fix F2] ADR-4：三处 stale 的 emit 都须带 reviewed_sha；此前 code 域漏带。
+    assert js["reviewed_sha"] == anchor_sha, \
+        "code 域 RERUN_STALE 须带该报告自己的 reviewed_sha 锚（ADR-4），不是当前 HEAD"
 
 def test_stale_fail_reruns_not_exit5(repo):
     d = impl_done(repo)
+    anchor_sha = head_sha(repo)   # verify-report.md 的 reviewed_sha 锚（写报告时的 HEAD）
     # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {anchor_sha}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {anchor_sha}\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "reports")
     touch_code(repo)             # FAIL 之后修了代码 → 重验不卡死
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done"
+    # [impl-review-fix F2] ADR-4：verify 域 RERUN_STALE 同须带 reviewed_sha。
+    assert js["reviewed_sha"] == anchor_sha, \
+        "verify 域 RERUN_STALE 须带该报告自己的 reviewed_sha 锚（ADR-4），不是当前 HEAD"
 
 def test_unclosed_verify_frontmatter_keeps_structural_hint(repo):
     # [impl-review-fix OV-2 → harden-gate-git-layer Task1 重新设计] 原用例名

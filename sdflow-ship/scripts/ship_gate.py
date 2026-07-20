@@ -23,6 +23,13 @@ ship-gate frontmatter 字段（下划线命名，防与旧 inline 锚字面连�
         字段同层（顶层 `ship-gate:` 的直接子键）。语义 = 「**被批准的是哪一份盘面**」，不是
         「写报告的时刻」；失鲜判定以它为唯一真相源，缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6)
         fail-closed，**MUST NOT** 回退任何反推式锚（旧 `report_last_sha` 已退役）。
+        〔impl-review-fix F1〕此校验对 code / verify 两域**无条件**成立——`decide()` 每次经过
+        对应分支都会调 `is_stale` 求值。对 design 域（spec-review-report.md）**不是普遍保证，
+        只是窗口内保证**：`is_stale` 唯一由 `emit_windowed`/`guard_design_freshness` 在 RUN_SOP /
+        RUN_PLAN / CONTINUE_IMPL 三入口各自 emit 前调用（ADR-3 限定求值窗口）；窗口关闭后
+        （code-review-report.md 出现起）design 报告即便整份缺 `reviewed_sha` 也不再被读取或
+        校验，可正常随 SHIPPED 判定过门。「窗口右边界间隙」（见下文已知不覆盖条目）内，连
+        `reviewed_sha` 字段存不存在都不在窗口外检查。
 
 inline 锚行字面集（grep -F 语义，零正则；Task6 后**仅归档读半场**用于旧归档兜底，live 不再读；三 SKILL 新产出报告不再落）:
     <!-- ship-gate: design-approved -->        spec-review-report.md（旧格式）
@@ -95,16 +102,22 @@ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-lay
     〔harden-gate-git-layer 残余面·design ADR-3〕**窗口右边界间隙**：「实现刚完成」与「代码审进行中」
         盘面不可区分（都是 plan 全勾 + 无 cr 报告）⇒ 该间隙内的四件套改动不被 design 域求值。纯盘面
         判据关不上（要关须加新盘面信号，与本 change 简化方向相悖）；第二层由代码审 scope-drift 检查
-        （模型判断、非机械门）兜，此处不吹成已兜住；
+        （模型判断、非机械门）兜，此处不吹成已兜住；〔impl-review-fix F1〕该间隙内**连
+        `reviewed_sha` 字段存不存在都不在窗口外检查**——`is_stale` 根本不被调用，缺锚 /
+        坏锚同样不产生 UNKNOWN，不止「四件套改动不被求值」这一层；
     〔harden-gate-git-layer 残余面·T189 耦合与承重升格〕`_normalize_checkbox_lines` 在旧设计里只是
         众多判据之一，新设计下**是 design 域唯一的内容豁免闸门**（比内容 + 单一豁免）；而它自己登记着
         基准 5 警号（T189：勾选框归一化口径应从黑名单反转为白名单）。承重升格而口径缺陷未修，显式登记、
         本次不 fold（独立面，见 todolist T189）；
     非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）；
-    伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
-        （显式越权同权级，git 留痕可审计）；
-    经 impl-review 豁免的四件套编辑不经二次批准即随档 ship（安全边界=约定级「仅装饰性
-        改动」，gate 不做 hunk 分析；若某次措辞修正实际改动设计语义会静默 merge，设计门 Q2 接受）；
+    〔impl-review-fix F1，已随 Task3 枚举协议退役〕原 `checkpoint(impl-review)` subject 精确
+        豁免——旧设计里帧遍历按 commit subject 匹配、伪造/手工该 subject 可绕过失鲜——已随
+        design 域整体换成 ls-tree 内容映射比较而彻底删除：现 design 域**不读、不核验任何
+        commit subject**，只比锚与 HEAD 的内容映射，故此绕过面已不存在。唯一残余内容豁免是
+        `_tasks_content_exempt`（tasks.md 纯勾选框翻转，见上条 T189 登记），与生产者是谁、
+        subject 是什么无关。经该豁免的勾选框翻转不经二次批准即随档 ship（安全边界=约定级
+        「仅装饰性改动」，gate 不做 hunk 分析；若某次勾选框行之外的编辑被误判入豁免范围会
+        静默 merge，设计门 Q2 接受）；
     精确同名 change 历史归档过（archive 有真同名旧档 + 已并 base + 带 verify=PASS 锚）而新一轮
         同名 change 尚未建 active 目录时，D3 短路按旧档报 SHIPPED——change 重名属反模式，接受〔B3〕；
     〔ship-gate-hardening-2 T32〕命名空间隔离对**裸格式污染方**不免疫：stacking（feat/A 上再建
@@ -382,6 +395,22 @@ def archived_verify_state(root, ref, archive_dir):
 # reader 只读不推。**MUST NOT** 在锚缺失/非法时回退本函数或任何反推式锚（Compliance 硬约束）。
 
 
+# [impl-review-fix F3] 报告文件内容读取的**单一出口**：`is_file()` 已确认存在之后再读，
+# 中间仍有两个外部可控失败面——① 权限不足（PermissionError）② TOCTOU（is_file() 与
+# read_text() 之间文件被删）——两者都是裸 `OSError` 子类，不捕获则逸出成 Python 默认退出码 1，
+# 落在契约集 `{0,3,4,5,6}` 之外（与 Task2 已修的 `UnicodeEncodeError` 逸出同类；`errors="replace"`
+# 已堵住解码面，但没堵读取本身的面）。三个报告读点（`read_reviewed_sha` / `live_ship_gate_state` /
+# `_unclosed_frontmatter_hint`）面治式统一走本出口，防「新增一个报告读点忘了包」。
+# MUST NOT 用 `except Exception`：那会把编程错误一并吞成 UNKNOWN（同 `is_stale` 里同款约束）。
+def _read_report_text(path, label):
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise GateIndeterminate(
+            f"{label} 读取失败（{type(exc).__name__}: {exc}）——仓损坏 / 权限不足 / "
+            "文件在存在性确认后被删（TOCTOU）", CAUSE_READ_FAILED)
+
+
 def read_reviewed_sha(root, rel):
     """读报告 frontmatter 的 `reviewed_sha` 锚（语义级校验）。返回 40 位 OID 字符串。
 
@@ -399,7 +428,7 @@ def read_reviewed_sha(root, rel):
     if not path.is_file():
         raise GateIndeterminate(
             f"报告 {rel} 读不到（文件不存在），无从取 reviewed_sha 锚", CAUSE_ANCHOR_MISSING)
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = _read_report_text(path, f"报告 {rel}")
     state, err = parse_ship_gate_frontmatter(text)
     if err is not None:
         field, cat = err
@@ -1114,7 +1143,7 @@ def live_ship_gate_state(path, label):
     单核（防漂移，D4；归档侧仍 dual-read inline，live 侧不）。"""
     if not path.is_file():
         return None
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = _read_report_text(path, f"{label} 报告文件")   # [impl-review-fix F3]
     state, err = parse_ship_gate_frontmatter(text)
     if err is not None:
         _fail_closed_on_bad(err, label)      # 坏永不回退，直接 fail-closed（emit 不返回）
@@ -1128,10 +1157,14 @@ def _unclosed_frontmatter_hint(path):
     报告首行为 '---' 但全文无第二个 '---'（首块不闭合，parse 判 absent）→ 返回结构提示串
     供 emit reason 追加。纯诊断——MUST NOT 改 parse 返回签名、MUST NOT 改 verdict/退出码、
     MUST NOT 探测意图（≠candidate②）。文件不存在 / 首行非 '---' / 已闭合 → 返回 ''（无提示）。
-    与 parse 首块判据同口径（去 BOM、strip 后等值、只认第 2 行起首个 '---'），防诊断与解析漂移。"""
+    与 parse 首块判据同口径（去 BOM、strip 后等值、只认第 2 行起首个 '---'），防诊断与解析漂移。
+    [impl-review-fix F3] 「MUST NOT 改 verdict/退出码」约束的是**读取成功后**的正常路径；
+    读取本身失败（TOCTOU：调用方早前 `live_ship_gate_state` 已确认过 is_file()，此处二次读取
+    间隙文件被删/改权限）时，与其它报告读点一致 fail-closed 到 UNKNOWN(6)，好过让裸 OSError
+    逸出成契约外的退出码 1——这不是本函数在"判定"什么，只是不重复制造一个新的逸出口。"""
     if not path.is_file():
         return ""
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = _read_report_text(path, f"报告 {path.name}")
     if text.startswith("﻿"):
         text = text[1:]
     lines = text.splitlines()
@@ -1448,8 +1481,15 @@ def decide(root, change):
         vp_front = live_ship_gate_state(vf_peek, "verify")
         verify_already_failed = vp_front is not None and vp_front.get("verify") == "FAIL"
         if not verify_already_failed:
+            # [impl-review-fix F2] ADR-4：三处 stale 的 emit 都须带 reviewed_sha（补锚值是必要
+            # 组成，不是可选优化）——此前只有 design 域（guard_design_freshness）带了，code/verify
+            # 两域漏带。`is_stale` 内部已读过一次该报告的锚，这里复用同一 `read_reviewed_sha`
+            # 再读一次取值（与 design 域 guard_design_freshness 同一模式，非新造路径），
+            # 让撞门者不必先翻报告 frontmatter 抄 sha 就能核对具体差异。
+            cr_sha = read_reviewed_sha(root, str(cr.relative_to(root)))
             emit("RERUN_STALE", EXIT_OK, "sdflow-code-review",
-                 "code-review 结论后存在 openspec/ 外提交 → 结论陈旧，重审", freshness=cr_fresh)
+                 "code-review 结论后存在 openspec/ 外提交 → 结论陈旧，重审", freshness=cr_fresh,
+                 reviewed_sha=cr_sha)
         # verify 已 FAIL：本轮不在此处抢跳，但把 cr 陈旧状态记下，
         # 传给 step9 的 VERIFY_FAIL 输出（〔任务4 fix 轮 F1〕，避免陈旧信息在此处丢失）。
         cr_stale_note = "（注意：code-review 结论亦已陈旧，修复后需重跑代码审）"
@@ -1476,9 +1516,11 @@ def decide(root, change):
              + _unclosed_frontmatter_hint(vf))
     v_stale, v_fresh = is_stale(root, str(vf.relative_to(root)), "code", change)
     if v_stale:
+        # [impl-review-fix F2] 同上：ADR-4 要求 verify 域 RERUN_STALE 同带 reviewed_sha。
+        v_sha = read_reviewed_sha(root, str(vf.relative_to(root)))
         emit("RERUN_STALE", EXIT_OK, "sdflow-done",
              "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）",
-             freshness=v_fresh)
+             freshness=v_fresh, reviewed_sha=v_sha)
     if v_state == "neg":
         reason = "verify FAIL：停并上抛缺口清单（报告内）"
         extra = {}
@@ -1526,7 +1568,11 @@ def main(argv=None):
     p.add_argument("--root", default=None)
     a = p.parse_args(argv)
     # [harden-gate-git-layer Task1 · tasks 3.6] `GateIndeterminate` → UNKNOWN(6) 的**唯一**映射点，
-    # 且捕获范围是 **main() 整个函数体**（判定不能可发生在任何一步，不只锚读取那一步）。
+    # 〔impl-review-fix F1〕捕获范围是**判定逻辑**（仓根解析 + `decide()`），不是 main() 整个函数体：
+    # 上一行 `p.parse_args(argv)` 在 try 之外——`--change` 缺失等用法错误会以 `SystemExit(2)`
+    # 逸出契约集 {0,3,4,5,6}，这是**有意**的：argparse 用法错误是「调用方没按契约调用」，不是
+    # 「gate 判不出」，两者语义不同，MUST NOT 把 parse_args 塞进 try 让 SystemExit 也走 UNKNOWN(6)
+    # ——那会把「你调错了」伪装成「我判不出」，掩盖真正的调用方错误。
     # [Task2] `--root` 缺省时的仓根解析**本身就是一次 git 调用** ⇒ MUST 在 try 内：
     # 放在 try 外时「git 不在 PATH」这条最常见的失败会从第一行就逸出成退出码 1，
     # 恰好绕过为它准备的整套诊断（守卫写了、但主路径够不着 = 假绿的经典形态）。
