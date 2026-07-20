@@ -68,29 +68,43 @@ def test_producer_templates_declare_reviewed_sha_verbatim():
     # 两块（正是 FAIL/blocked 半场）删掉锚行也全绿——评审方实做变异证实。
     # 后果不是纸面的：负面结论块少了 reviewed_sha，producer 照模板落盘就写不出锚，
     # reader 侧 anchor-missing → UNKNOWN(6)，负面半场整个走不通。
+    #
+    # [fix2] 遍历范畴 MUST 是 `_extract_frontmatter_blocks` 抽出的**全部块**，不是硬编码的
+    # PRODUCER_FRONTMATTER.value_lines。上一版按 value_lines 反查块，粒度只降到「每已知枚举
+    # 值」——将来 producer 新增一个结论块（如 `design_approved: false`，它是 FIELD_ENUMS 里
+    # 合法的目标态取值）而漏写锚行，仍然全绿，原样重演刚修掉的那个 bug。
+    # 两层检查互补，缺一不可：
+    #   (A) 全块遍历——**任何**块都不许漏锚（覆盖将来新增的块）；
+    #   (B) value_lines 存在性——5 个已知结论块必须都在场（防某块被整体删掉而静默缩面）。
     for rel, _field, value_lines in PRODUCER_FRONTMATTER:
         text = (REPO / rel).read_text(encoding="utf-8")
         blocks = _extract_frontmatter_blocks(text)
+        assert blocks, f"{rel} 未找到任何 ---/ship-gate:/--- 字面模板块（结构被整体改写？）"
+        # (A) 全块遍历
+        for block in blocks:
+            block_lines = [ln.strip() for ln in block.splitlines()]
+            assert ADR1_ANCHOR_LINE in block_lines, (
+                f"{rel} 存在缺锚字段裸行 {ADR1_ANCHOR_LINE!r} 的 ship-gate 模板块"
+                f"（与 design.md ADR-1 示例逐字对齐；锚 MUST 与结论字段同块同次落盘）"
+                f"\n--- 抽取的原始块 ---\n{block}"
+            )
+        # (B) 已知结论块存在性
         for value_line in value_lines:
-            matching = [b for b in blocks if value_line in b]
-            assert matching, \
+            assert any(value_line in b for b in blocks), \
                 f"{rel} 未找到声明 {value_line!r} 的 frontmatter 模板块"
-            for block in matching:
-                block_lines = [ln.strip() for ln in block.splitlines()]
-                assert ADR1_ANCHOR_LINE in block_lines, (
-                    f"{rel} 声明 {value_line!r} 的模板块内缺锚字段裸行 {ADR1_ANCHOR_LINE!r}"
-                    f"（与 design.md ADR-1 示例逐字对齐；锚 MUST 与结论字段同块同次落盘）"
-                    f"\n--- 抽取的原始块 ---\n{block}"
-                )
 
 
 def test_producer_anchor_is_direct_child_of_ship_gate():
     # 列敏感验证：抽真实字节的模板块喂 parser——锚若被挂成独立顶层键 / 嵌套更深一层，
     # parse 解不出 reviewed_sha，本断言变红。
+    #
+    # [fix2] MUST NOT 按「含锚」过滤块。旧版 `if ADR1_ANCHOR_LINE in b` 让本用例的覆盖面
+    # 随守卫放宽而静默缩小：一个漏锚的块会被过滤掉、从而两个用例都不管它。改为遍历全部块，
+    # 与上面的全块守卫同范畴。
     for rel, field, value_lines in PRODUCER_FRONTMATTER:
         text = (REPO / rel).read_text(encoding="utf-8")
-        blocks = [b for b in _extract_frontmatter_blocks(text) if ADR1_ANCHOR_LINE in b]
-        assert blocks, f"{rel} 未找到含锚字段的 frontmatter 模板块"
+        blocks = _extract_frontmatter_blocks(text)
+        assert blocks, f"{rel} 未找到 ship-gate frontmatter 模板块"
         for block in blocks:
             state, err = ship_gate.parse_ship_gate_frontmatter(block)
             assert err is None, f"{rel} 含锚模板块解析出错: {err}\n{block}"

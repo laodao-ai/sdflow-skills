@@ -1,0 +1,1274 @@
+diff --git a/openspec/changes/harden-gate-git-layer/impl-reports/task1-reviewed-sha-anchor.md b/openspec/changes/harden-gate-git-layer/impl-reports/task1-reviewed-sha-anchor.md
+new file mode 100644
+index 0000000..f2a56f5
+--- /dev/null
++++ b/openspec/changes/harden-gate-git-layer/impl-reports/task1-reviewed-sha-anchor.md
+@@ -0,0 +1,139 @@
++# Task 1 — 评审锚成为门禁的唯一真相源，缺失即拒绝放行
++
++**R-ID**: R3 ｜ **范围**: tasks 1.1–1.4、1.9、4.1、4.2 ｜ **状态**: DONE_WITH_CONCERNS
++
++## 1. 做了什么
++
++### 1.1 解析器：有限枚举 → 「字段 → 校验函数」（tasks 1.1/1.2）
++
++`FIELD_ENUMS` 容不下「任意 40 位 hex」——直接加字段会让每个真 sha 判 `out-of-domain`（新锚永远读不到）。
++新增 `FIELD_VALIDATORS` 作为「本 schema 认识哪些字段」的单一注册表：三个枚举字段由
++`_enum_validator(FIELD_ENUMS[f])` 生成，`reviewed_sha` 挂 `_is_full_oid`。`FIELD_ENUMS` 保留为
++枚举字段的数据源（producer 模板契约测试仍按它比对定义域）。
++
++**语法级校验落在纯文本函数内**（`_is_full_oid`，`ship_gate.py:829-841`）：完整 40 位**小写** hex；
++拒缩写 SHA、`HEAD`、ref 名、大写、39/41 位、非 hex 字符。不依赖 `root`、不调 git ⇒ live 读与
++归档 git-show 文本读共用同一核心。
++
++### 1.2 语义级：`read_reviewed_sha(root, rel)`（task 1.3）
++
++`ship_gate.py:246-283`。读报告 frontmatter → `git cat-file -e <sha>^{commit}`。
++`^{commit}` 后缀是承重项：它使指向 **blob / tree** 的锚同样落进 `rc≠0`。
++四种形态各抛 `GateIndeterminate`，category 各不相同（`anchor-missing` / `anchor-invalid` /
++`anchor-unresolvable`），**无任何回退分支**。
++
++### 1.3 `GateIndeterminate` + `main()` 唯一映射点（tasks 3.5/3.6 的本票半场）
++
++`ship_gate.py:159-186` 定义异常与六个 `CAUSE_*` 常量（含 Task 2 将接入的 `git-unavailable` /
++`git-timeout` / `read-failed`，先把 category 空间开出来，避免后续票再动映射点）。
++`main()` 以 `try/except` 包住 `decide()` **整个函数体**，按 `_INDETERMINATE_ADVICE` 表拼
++各自可行动的诊断，JSON 额外带 `cause_category` 供机械消费。
++
++### 1.4 三个 producer 模板落锚（task 1.4）
++
++`sdflow-spec-review/SKILL.md` / `sdflow-done/SKILL.md`（PASS + FAIL 两模板）/
++`sdflow-code-review/SKILL.md`（pass + blocked 两模板）各加
++`reviewed_sha: 0123456789abcdef0123456789abcdef01234567`，**顶层 `ship-gate:` 的直接子键**，
++与 design.md ADR-1 的 YAML 示例逐字一致。三处均补语义句「锚记的是被批准的盘面，不是写报告的时刻」
++与「MUST 与结论字段在同一次文件写入中落盘」。
++
++### 1.5 反推锚退役（task 1.9）
++
++删除 `report_last_sha`；`is_stale` 的锚源改为 `read_reviewed_sha`。仓内无调用点残留（机械断言见 §3）。
++原「报告从未提交 → `freshness=uncommitted`」分支随之消失（见 §4 决策 D2）。
++
++### 1.6 测试基座：两段 / 三段提交模型（tasks 4.1/4.1b/4.2）
++
++`conftest.py` 新增 `head_sha` / `sg_frontmatter` / `write_report`。
++`approved_change` 改为：①四件套落盘提交 → ②可选 `revise=` 二次修订提交 → ③读 HEAD、写携锚报告、单独提交。
++`anchor=` 参数可取 `"head"`（默认）/ `"pre-revision"`（表达 ADR-7(b) 自锁）/ `None`（缺锚负例）/ 显式 sha。
++`impl_done` / `tail_ok` 经 `approved_change` 继承该模型；44 处调用点全部跑通（§3 全套件）。
++
++## 2. 逐条验收标准的证据锚点
++
++| 验收标准 | 证据 |
++|---|---|
++| 报告 frontmatter 能承载 40 位 OID 且与结论字段同层 | `test_gate_reviewed_sha.py::test_syntax_layer_accepts_full_lowercase_oid`（同块解出两字段）；`test_anchor_contract.py::test_producer_anchor_is_direct_child_of_ship_gate` |
++| 缺失 / 格式非法 / 对象不存在 / 非 commit 四形态各得 UNKNOWN(6)，诊断能分辨 | `test_missing_anchor_is_unknown_and_names_the_field`（category=`anchor-missing`）· `test_syntactically_invalid_anchor_is_unknown`（7 参数）· `test_anchor_object_absent_is_unknown`（category=`anchor-unresolvable`，reason 含「force-push」）· `test_anchor_pointing_at_non_commit_object_is_unknown[blob/tree]`；诊断互异性 `test_indeterminate_reasons_are_mutually_distinguishable` |
++| 「结论在、锚缺」中间态同样 UNKNOWN(6) 且点名锚 | `test_missing_anchor_is_unknown_and_names_the_field`（`design_approved: true` 在场，断言 reason 含 `reviewed_sha`） |
++| 三模板写出锚字段、与设计示例逐字一致 | `test_anchor_contract.py::test_producer_templates_declare_reviewed_sha_verbatim`（裸行等值 `ADR1_ANCHOR_LINE`） |
++| 反推式旧锚退役、无调用点 | `test_inferred_anchor_helper_is_gone`（`hasattr` + 源码 grep `report_last_sha(`）；行为面 `test_touching_the_report_does_not_move_the_anchor` |
++| 共享 fixture 支持两段提交、44 处调用点跑通 | `test_fixture_two_stage_model_puts_artifacts_before_report` · `test_fixture_third_stage_models_pre_approval_revision` · `test_fixture_third_stage_can_express_adr7b_selflock`；全套件 `2071 passed, 8 skipped, 3 xfailed`（仓根 `pytest`） |
++| 每条新增守卫附变异证明 | §3 全表 |
++
++两个 code 域消费方各自覆盖（Compliance 硬要求）：
++`test_code_review_report_missing_anchor_is_unknown` / `test_verify_report_missing_anchor_is_unknown`。
++
++## 3. 变异证明（逐条实做：改源 → 跑全套件 → 记红 → 还原）
++
++口径 = **按守卫计数**。每行都是真的把那行代码删掉/改反后跑出来的，不是「用例存在且为绿」。
++基线 = `318 passed`（`sdflow-ship/tests/`）。
++
++| # | 守卫 | 变异手法 | 结果 | 变红用例 |
++|---|---|---|---|---|
++| G1 | `_is_full_oid` 长度 == 40 | 去掉长度判据 | 3 failed | `test_syntax_layer_lives_in_the_pure_text_parser[0123456 / 39位 / 41位]` |
++| G2 | `_is_full_oid` 字符集 ⊆ 小写 hex | 去掉字符集判据 | 2 failed / 316 passed | 同上 `[大写 / g开头]` |
++| G3 | `FIELD_VALIDATORS["reviewed_sha"]` 注册 | 删注册行（字段被当外来 metadata 忽略） | **109 failed** / 209 passed | `test_reviewed_sha_registered_in_validators`、`test_producer_anchor_is_direct_child_of_ship_gate` + 全部经锚求值的链路 |
++| G4 | `read_reviewed_sha` 缺字段 fail-closed | 换成 `state.get(...,"")` | 4 failed / 314 passed | `test_missing_anchor_is_unknown_and_names_the_field`、`test_semantic_layer_raises_typed_payload[None]`、两个 code 域消费方用例 |
++| G5 | `cat-file` 的 `^{commit}` 后缀 | 去掉后缀（只验对象存在） | 2 failed / 316 passed | `test_anchor_pointing_at_non_commit_object_is_unknown[blob]` / `[tree]` |
++| G6 | 对象存在性校验整段 | `if rc != 0:` → `if False:` | 4 failed / 314 passed | `test_anchor_object_absent_is_unknown` + blob/tree 两条 + typed payload |
++| G7 | `main()` 的 `GateIndeterminate → UNKNOWN(6)` 映射 | 拆掉 try/except | 7 failed / 311 passed | 全部 CLI 层锚用例（退出码逸出契约集 → 变红） |
++| G8 | 锚源 = 录锚（反推锚已退役） | **复活** `git log -1 --format=%H -- <report>` 作锚 | 9 failed / 309 passed | 含 `test_touching_the_report_does_not_move_the_anchor` |
++| G9 | verify 读点「先定结论、再求失鲜」次序 | 把 `is_stale` 挪回 `v_state` 判定之前 | 5 failed / 313 passed | `test_unclosed_verify_frontmatter_keeps_structural_hint`、`test_verify_report_no_anchor_in_progress` 等 |
++| G10 | fixture 两段提交模型 | 删掉第一段 `commit_all` | **122 failed** / 196 passed | `test_fixture_two_stage_model_puts_artifacts_before_report` 起全链 |
++| G11 | producer 模板锚字段 | 从 `sdflow-spec-review` 模板删掉锚行 | 2 failed / 316 passed | `test_producer_templates_declare_reviewed_sha_verbatim`、`test_producer_anchor_is_direct_child_of_ship_gate` |
++
++**G8 的手段与其余不同源（tasks 5.5 明文要求登记）**：新实现里没有「反推逻辑」可删——
++删掉它就没有锚了。故变异手法改为**以旧实现为参照物**：把 `report_last_sha` 的表达式塞回锚位，
++观察 `test_touching_the_report_does_not_move_the_anchor` 变红。这条用例的盘面是「拍板 → 偷改
++design.md → 有人给报告补个空行」：旧锚会前移到排版提交、埋掉未审改动判 fresh，新锚推不动。
++
++**G1/G2 的覆盖形状值得记一笔**：这两个变异**只**让 parser 层用例变红，CLI 层的
++`test_syntactically_invalid_anchor_is_unknown` 仍绿——因为缩写 SHA / 非法 hex 走到语义层后
++`cat-file` 照样失败，仍是 UNKNOWN(6)。这正是 ADR-1 坚持「两层校验 MUST 显式分层」的实证：
++端到端结论相同，但**层归属**只有层内用例证得出来。若只写 CLI 用例，语法层被整层删掉都不会变红。
++
++## 4. 遇到的问题与决策
++
++**D1 · `GateIndeterminate` 提前到本票落地**（原挂 tasks 3.5/3.6，属 Task 2）。
++理由：本票的四个 fail-closed 形态没有它就落不了地；把映射点先建好且 category 空间一次开全
++（含 Task 2 的三类），Task 2 只需在三个 git helper 里 `raise`，不必回头改 `main()`。
++
++**D2 · 退役 `freshness=uncommitted` 语义**（对应既有用例 `test_uncommitted_report_is_fresh`，
++属 5.15b「需重新设计等价用例」，非纯删除）。
++该语义是**反推锚的产物**：旧实现推不出锚时只好特判。新锚是录下来的常量，与报告是否进过提交无关。
++Q3=A「人机同权、手写产物合法」的实质**保住了**——手写报告不被拒，只是同样要落锚。
++用例改名为 `test_uncommitted_report_still_evaluated_by_its_own_anchor`，断言未提交报告携有效锚时
++正常求值判 `fresh`，且**不**因「没进过提交」被判缺锚。
++
++**D3 · verify 读点次序改为「先定结论、再求失鲜」**（对应既有用例
++`test_stale_unclosed_verify_appends_hint`，同属 5.15b）。
++起因：`reviewed_sha` 与结论字段**同一次写入落盘**（ADR-1），∴「报告在但无结论」这一合法中间态
++本就没有锚可读。若仍先跑 `is_stale`，该态会被判「缺锚 → UNKNOWN(6)」，把正常的
++`STEP_IN_PROGRESS` 变成判定不能。改后与 **code-review 读点次序一致**（那边本来就是先定结论）。
++原 OV-2 关心的承诺——「未闭合 frontmatter 的结构提示不被吞掉」——由 `STEP_IN_PROGRESS`
++分支自带的 `_unclosed_frontmatter_hint` 承载，用例改名为
++`test_unclosed_verify_frontmatter_keeps_structural_hint` 并**加强**了断言（新增
++`"陈旧" not in reason`——无有效结论的报告不该被称「结论陈旧」，这恰是 OV-2 的本意）。
++随之删除 step 9 尾部一处**变成死代码**的重复 `v_state is None` 分支（纯删除）。
++
++**D4 · `_is_full_oid` 只认小写**。三个 producer 的锚一律取自 `git rev-parse`（恒小写），
++单一规范形使诊断无歧义；人手写出大写时 fail-closed 且诊断点名规则。方向安全。
++
++**未越界**：1.5/1.6/1.6b/1.7/1.7b/1.8（评审 SKILL 的提交时序与流程纪律）、比内容与求值窗口
++（Task 3/4）、code 域顶层条目比较（Task 5）、git 调用层容错（Task 2）均未动。
++1.4 中只写了「锚是什么、取值怎么来、须与结论同写」，两段提交时序留给 Task 6。
++
++## 5. Concerns
++
++1. 🔴 **本仓自身的 `harden-gate-git-layer/spec-review-report.md` 缺 `reviewed_sha`** —— 本 change
++   一旦生效，对**它自己**跑 gate 会 `UNKNOWN(6) / anchor-missing`（design.md Migration Plan 第 3 条
++   已预见：「在途的只有本 change 自己」）。补锚 = 执行**拍板回写**，是编排层/人的动作，且锚必须指向
++   「设计门拍板时被批准的那个盘面」（`e249db1 gate(design): …` 前后），implementer 不应自行选定 ⇒
++   **未自行写入，显式上抛**。建议编排层在本 change 收尾前补，锚取 `e249db1`（或其父，视拍板时四件套
++   落盘位置而定，需人核对 `git log`）。
++2. **SHA-256 object-format 仓被判非法**：`_is_full_oid` 按 design.md ADR-1 写死 40 位；
++   sha256 仓的 64 位 OID 会走 `anchor-invalid`。方向 fail-closed 安全，但对该形态的仓是硬阻断。
++   design 未提及此面，此处显式登记，不自行放宽（放宽属改设计）。
++3. **`is_stale` 内部仍是旧的帧枚举实现**，本票只换了锚源。design.md ADR-2 的「比内容」在 Task 3/4
++   落地；在那之前，锚正确但比较手段仍是被判定为有缺陷的那一套（不构成回归，属分票推进的中间态）。
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index b4b262b..212a314 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -366,6 +366,7 @@ MUST 在文件**最顶端**（prepend，非追加末尾）写：
+ ---
+ ship-gate:
+   code_review: pass
++  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+ ---
+ ```
+ 或
+@@ -373,10 +374,15 @@ ship-gate:
+ ---
+ ship-gate:
+   code_review: blocked
++  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+ ---
+ ```
+ 
+ ——`code_review` 字段二选一（`pass`/`blocked`，下划线字段名、小写值），/sdflow-ship 读此 frontmatter 机判。
++**`reviewed_sha` = 被审的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD` 的完整
++40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。语义是「**本次代码审
++放行的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「放行之后源码有没有被改」。
++MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
+ 若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。头部之后紧接下方正文（含人读结论行，不可省略）：
+ 
+ ```
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index 041eed7..a42f1b0 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -156,6 +156,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
+ ---
+ ship-gate:
+   verify: PASS
++  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+ ---
+ 
+      或
+@@ -163,9 +164,14 @@ ship-gate:
+ ---
+ ship-gate:
+   verify: FAIL
++  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+ ---
+ 
+      ——`verify` 字段二选一（`PASS`/`FAIL`，大写、非布尔），/sdflow-ship 读此 frontmatter 机判。
++     **`reviewed_sha` = 被验证的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD`
++     的完整 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。
++     语义是「**verify 结论覆盖的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「验证之后
++     源码有没有被改」。MUST 与 `verify` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
+      若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。
+    - 标题 + 日期 + change 名
+    - **结论**：PASS / FAIL（人读结论行，紧跟标题下方，供人阅读；frontmatter 已是机判锚，此行不可省略）
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index 038528a..d8c5df5 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -15,10 +15,14 @@
+         优先（新归档）；absent（迁移前旧归档，永久保留）→ 回退 inline；坏 frontmatter → fail-safe
+         判无 pass（归档不可变、无人可修，不回退 inline 掩盖假 SHIPPED）。
+ 
+-ship-gate frontmatter 字段（三字段，下划线命名，防与旧 inline 锚字面连字符漂移，取值域见 FIELD_ENUMS）:
++ship-gate frontmatter 字段（下划线命名，防与旧 inline 锚字面连字符漂移；校验见 FIELD_VALIDATORS）:
+     design_approved: true|false   spec-review-report.md（sdflow-spec-review 拍板回写，头部 prepend）
+     verify: PASS|FAIL             verify-report.md（sdflow-done verify 模板，头部 prepend）
+     code_review: pass|blocked     code-review-report.md（sdflow-code-review 模板，头部 prepend）
++    reviewed_sha: <40 位 hex>     三个报告**各自**必带〔harden-gate-git-layer ADR-1〕，与结论
++        字段同层（顶层 `ship-gate:` 的直接子键）。语义 = 「**被批准的是哪一份盘面**」，不是
++        「写报告的时刻」；失鲜判定以它为唯一真相源，缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6)
++        fail-closed，**MUST NOT** 回退任何反推式锚（旧 `report_last_sha` 已退役）。
+ 
+ inline 锚行字面集（grep -F 语义，零正则；Task6 后**仅归档读半场**用于旧归档兜底，live 不再读；三 SKILL 新产出报告不再落）:
+     <!-- ship-gate: design-approved -->        spec-review-report.md（旧格式）
+@@ -67,7 +71,9 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
+         （merge 逐 parent、改名分解 A+D、NUL 原始路径）；枚举失败 ⇒ 判失鲜（F2）
+     verify / code-review: 其后触及 openspec/ 之外路径的提交 → 陈旧
+         （verify=FAIL 陈旧优先于 code-review 陈旧判定，保重验不因陈旧 CR 卡死）
+-    报告从未提交: fresh（freshness=uncommitted，人机同权）
++    锚一律取报告自录的 `reviewed_sha`〔harden-gate-git-layer ADR-1〕；原「报告从未提交 →
++        freshness=uncommitted」语义随反推锚一并退役——锚是录下来的常量，报告有没有进过提交
++        与「被批准的是哪个盘面」无关（未提交的报告照样带得出有效锚）。
+ 
+ 已知不覆盖（接受并记录）:
+     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
+@@ -156,6 +162,31 @@ ALL_ANCHORS = [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL]
+ EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN = 0, 3, 4, 5, 6
+ 
+ 
++# [harden-gate-git-layer Task1 · ADR-1/3.5] 判定不能的结构化信号。
++# 复用仓内 `_fail_closed_on_bad` 的 (cause, category) 二元组模式：category 供 main() 机械分派，
++# cause 供人读。**唯一映射点在 main()** —— 抛出方 MUST NOT 自行 emit/exit，否则退出码映射
++# 会散成多处、各处措辞漂移（design.md「五类原因各给可行动诊断」的前提是单一映射点）。
++CAUSE_GIT_UNAVAILABLE = "git-unavailable"     # git 不在 PATH / 不可执行（Task2 接入）
++CAUSE_GIT_TIMEOUT = "git-timeout"             # 调用超时（Task2 接入）
++CAUSE_ANCHOR_MISSING = "anchor-missing"       # reviewed_sha 字段缺失（含报告本身读不到）
++CAUSE_ANCHOR_INVALID = "anchor-invalid"       # reviewed_sha 语法非法（缩写 SHA / HEAD / 坏 hex）
++CAUSE_ANCHOR_UNRESOLVABLE = "anchor-unresolvable"   # 对象不存在 / 不是 commit（blob/tree）
++CAUSE_READ_FAILED = "read-failed"             # 仓损坏 / 权限（Task3/4 接入）
++
++
++class GateIndeterminate(Exception):
++    """判定不能 → main() 统一映射 UNKNOWN(6)。
++
++    cause: 人读原因串（含具体字段值 / 路径，供撞门者直接行动）
++    category: 上列 CAUSE_* 之一，main() 按它选可行动诊断（MUST NOT 用一句「git 调用失败」打天下）
++    """
++
++    def __init__(self, cause, category):
++        super().__init__(f"[{category}] {cause}")
++        self.cause = cause
++        self.category = category
++
++
+ # [impl-review-fix] git 调用统一注入两道加固（对抗镜 Adv-A + 正确性/历史镜 F1）：
+ #   ① -c core.quotePath=false：git 默认把非 ASCII 路径 C-quote（八进制+首尾引号），
+ #      裸 f.startswith(base)/startswith("openspec/") 对中文文件名路径全失配 → design 域假鲜
+@@ -231,8 +262,49 @@ def archived_verify_state(root, ref, archive_dir):
+     return "pass" if has_pass else "none"
+ 
+ 
+-def report_last_sha(root, rel):
+-    return run_git(root, "log", "-1", "--format=%H", "--", rel)
++# [harden-gate-git-layer Task1 · tasks 1.9] `report_last_sha`（`git log -1 -- <report>` 反推锚）
++# 已退役：任何后续提交顺带碰一下报告文件（空行 / CI reformat / 措辞回填）都会把锚无声前移，
++# 埋掉锚前的未审改动，且该提交无需改动任何结论字段（design.md 缺陷 9）。
++# 取代者 = 下方 `read_reviewed_sha`：producer 落结论时把「被批准的盘面」录进 frontmatter，
++# reader 只读不推。**MUST NOT** 在锚缺失/非法时回退本函数或任何反推式锚（Compliance 硬约束）。
++
++
++def read_reviewed_sha(root, rel):
++    """读报告 frontmatter 的 `reviewed_sha` 锚（语义级校验）。返回 40 位 OID 字符串。
++
++    [harden-gate-git-layer Task1 · ADR-1 · tasks 1.3] 两层校验显式分层：
++      - **语法级**在纯文本函数 `parse_ship_gate_frontmatter`（`_is_full_oid`）——40 位 hex，
++        拒缩写 SHA / `HEAD` / 坏 SHA。live 读与归档 git-show 文本读共用同一核心。
++      - **语义级**在本函数（需 `root` 才做得了）：`git cat-file -e <sha>^{commit}` 确认该对象
++        **存在且是 commit**——`^{commit}` 后缀使指向 blob / tree 的锚同样落进 rc≠0。
++
++    四种形态各抛 `GateIndeterminate`（→ main() 映射 UNKNOWN(6)），category 各不相同以便
++    诊断点名具体是哪一种：字段缺失 / 语法非法 / 对象不存在或非 commit。
++    **MUST NOT** 在任一形态下回退 `report_last_sha` 或任何反推式锚。
++    """
++    path = root / rel
++    if not path.is_file():
++        raise GateIndeterminate(
++            f"报告 {rel} 读不到（文件不存在），无从取 reviewed_sha 锚", CAUSE_ANCHOR_MISSING)
++    text = path.read_text(encoding="utf-8", errors="replace")
++    state, err = parse_ship_gate_frontmatter(text)
++    if err is not None:
++        field, cat = err
++        # 语法级校验不过（含 reviewed_sha 自身 out-of-domain，也含同块内其它字段的坏形态——
++        # 坏块整体不可信，MUST NOT 从坏块里挑一个字段出来采信）。
++        raise GateIndeterminate(
++            f"报告 {rel} 的 ship-gate frontmatter 坏（字段={field} 类别={cat}）",
++            CAUSE_ANCHOR_INVALID)
++    if "reviewed_sha" not in state:
++        raise GateIndeterminate(
++            f"报告 {rel} 的 ship-gate frontmatter 缺 reviewed_sha 字段", CAUSE_ANCHOR_MISSING)
++    sha = state["reviewed_sha"]
++    rc, _ = run_git_rc(root, "cat-file", "-e", f"{sha}^{{commit}}")
++    if rc != 0:
++        raise GateIndeterminate(
++            f"报告 {rel} 的 reviewed_sha={sha} 在本仓解析不到 commit 对象"
++            "（对象不存在，或指向 blob/tree 而非 commit）", CAUSE_ANCHOR_UNRESOLVABLE)
++    return sha
+ 
+ 
+ DESIGN_WATCHED_NAMES = ("proposal.md", "design.md", "tasks.md")   # D9〔design.md 决策源〕四件套
+@@ -690,9 +762,12 @@ def is_stale(root, rel, scope, change):
+     不可套用整个 openspec/changes/{change}/：该目录还装着 cr/verify/hand-off 等
+     正常尾流产物，套用整目录会让收尾提交把 design-approved 误判陈旧（链自锁）。
+     """
+-    sha = report_last_sha(root, rel)
+-    if not sha:
+-        return StaleResult(False, "uncommitted")   # Q3=A：人机同权，手写产物合法
++    # [harden-gate-git-layer Task1 · ADR-1] 锚 = 报告自己录下的 `reviewed_sha`（被批准的盘面），
++    # 不再从 `git log -1 -- <report>` 反推「写报告的时刻」。缺失 / 非法 / 不解析为 commit ⇒
++    # `GateIndeterminate` 上抛（→ UNKNOWN(6)），**MUST NOT** 回退旧锚、MUST NOT 静默判 fresh。
++    # 原「报告从未提交 → freshness=uncommitted」分支随之消失：锚是录下来的常量，报告有没有
++    # 进过提交与「被批准的是哪个盘面」无关（未提交的报告照样带得出有效锚）。
++    sha = read_reviewed_sha(root, rel)
+     base = f"openspec/changes/{change}/"
+     if scope == "design":
+         # [spec-review-amendment B2] 带 subject 分帧遍历，checkpoint(impl-review) 精确式豁免。
+@@ -792,17 +867,46 @@ FIELD_ENUMS = {
+     "code_review": ("pass", "blocked"),
+ }
+ 
++# [harden-gate-git-layer Task1 · tasks 1.1/1.2] 字段校验从「有限枚举」升级为「字段 → 校验函数」。
++# 理由：`reviewed_sha` 的值域是「任意 40 位 hex」，装不进 FIELD_ENUMS 的元组——直接往
++# FIELD_ENUMS 加字段会让每个真 sha 都判 out-of-domain（= 新锚永远读不到）。
++# FIELD_ENUMS 保留为枚举字段的数据源（三 producer 模板契约测试仍按它比对定义域）。
++_FULL_OID_CHARS = frozenset("0123456789abcdef")
++
++
++def _is_full_oid(val):
++    """完整 40 位小写 hex OID。
++
++    拒：缩写 SHA（长度不足）、`HEAD` 及一切符号式 revision、大写 / 非 hex 字符。
++    只认小写是有意的单一规范形——三个 producer 的锚一律取自 `git rev-parse`（恒小写），
++    人手写出别的形态时宁可 fail-closed 报「格式非法」，也不留两种字面表示同一锚。
++    ⚠ 40 位 = SHA-1 仓形态；SHA-256 object-format 仓（64 位 OID）会被判非法（design.md
++    ADR-1 明文取 40 位，此处照办，作为已知边界登记在 impl-report Concerns）。
++    """
++    return isinstance(val, str) and len(val) == 40 and set(val) <= _FULL_OID_CHARS
++
++
++def _enum_validator(allowed):
++    def check(val):
++        return val in allowed
++    return check
++
++
++# 「本 schema 认识哪些字段」的单一注册表（parse 用它判 field 是否本 schema、并做值校验）。
++FIELD_VALIDATORS = {field: _enum_validator(vals) for field, vals in FIELD_ENUMS.items()}
++FIELD_VALIDATORS["reviewed_sha"] = _is_full_oid
++
+ 
+ def parse_ship_gate_frontmatter(text):
+     """解析报告 frontmatter 的 ship-gate 状态。返回 (state, error)：
+-      state: {field: value}（已枚举校验）；{} = absent（无 frontmatter / 无 ship-gate 键）
++      state: {field: value}（已过 FIELD_VALIDATORS 校验）；{} = absent（无 frontmatter / 无 ship-gate 键）
+       error: None（干净）或 (field|'frontmatter', category)
+              category ∈ duplicate-key|out-of-domain|bad-type|tab-indent
+     D2 只认文件首块：首行须 '---'（去 BOM）；正文 --- 横线不参与。
+     D3 坏≠无：absent(state={},error=None) vs 坏(error!=None) 由调用方分流退出码。
+     D5 重复键→duplicate-key（枚举全部同名键计数，非取最后一个）。
+     [impl-review-fix FIX-1] 只认 ship-gate 直接子键（首个非空子行的缩进层级）；深于该层级的行
+-    是嵌套子树，跳过不扫（不参与 FIELD_ENUMS 匹配）——杜绝 `note:` 下嵌套 design_approved 假过门。
++    是嵌套子树，跳过不扫（不参与 FIELD_VALIDATORS 匹配）——杜绝 `note:` 下嵌套 design_approved 假过门。
+     [impl-review-fix FIX-2] 顶层 `ship-gate:` 后带非空内容（内联标量/inline map）→ bad-type（非
+     absent），防归档路径把它当 absent 回退 inline 造成假 SHIPPED。
+     [impl-review-fix FIX-3] 支持 YAML `#` 注释：块内独占注释行整行跳过；值行尾部 ` #` 注释剥离。"""
+@@ -846,7 +950,7 @@ def parse_ship_gate_frontmatter(text):
+         return {}, ("ship-gate", "bad-type")
+     # 收集 ship-gate: 下方缩进的 field: value（下一个 0 缩进非空行为界）。
+     # [impl-review-fix FIX-1] 只认 ship-gate 直接子键：首个非空子行的缩进 = 直接子键层级；
+-    # 缩进深于该层级的行是嵌套子树，跳过不扫（不参与 FIELD_ENUMS 匹配，杜绝嵌套字段假过门）。
++    # 缩进深于该层级的行是嵌套子树，跳过不扫（不参与 FIELD_VALIDATORS 匹配，杜绝嵌套字段假过门）。
+     start = header_idx + 1
+     state, seen = {}, {}
+     direct_indent = None
+@@ -873,7 +977,7 @@ def parse_ship_gate_frontmatter(text):
+         field = field.strip()
+         # [impl-review-fix FIX-3b] 值行尾部 # 注释在枚举比对前剥离（enum 值均不含 #，安全）
+         raw = raw.split(" #", 1)[0].strip()
+-        if field not in FIELD_ENUMS:
++        if field not in FIELD_VALIDATORS:
+             continue                         # 非本 schema 字段（外来 metadata），忽略
+         seen[field] = seen.get(field, 0) + 1
+         if seen[field] > 1:
+@@ -881,7 +985,7 @@ def parse_ship_gate_frontmatter(text):
+         val = _coerce_ship_gate_value(field, raw)
+         if val is _BAD_TYPE:
+             return {}, (field, "bad-type")
+-        if val not in FIELD_ENUMS[field]:
++        if not FIELD_VALIDATORS[field](val):
+             return {}, (field, "out-of-domain")
+         state[field] = val
+     return state, None
+@@ -1308,7 +1412,6 @@ def decide(root, change):
+     vf = cdir / "verify-report.md"
+     if not vf.is_file():
+         emit("RUN_VERIFY", EXIT_OK, "sdflow-done", "进入收尾（verify→hand-off→archive→merge）")
+-    v_stale, v_fresh = is_stale(root, str(vf.relative_to(root)), "code", change)
+     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：verify 优先（PASS→'pos'/
+     # FAIL→'neg'）；坏→UNKNOWN(6) 已在 verify 早检 emit；absent→None→STEP_IN_PROGRESS（无锚语义）。
+     vf_front = live_ship_gate_state(vf, "verify")
+@@ -1317,13 +1420,19 @@ def decide(root, change):
+         v_state = "pos" if vv == "PASS" else "neg" if vv == "FAIL" else None
+     else:
+         v_state = None                           # absent → 无锚 → STEP_IN_PROGRESS
++    # [harden-gate-git-layer Task1 · ADR-1] 无结论 ⇒ 不求失鲜：`reviewed_sha` 与结论字段
++    # **同一次写入落盘**，故「报告在但无结论」这一合法中间态本就没有锚可读——若仍先跑 is_stale，
++    # 该态会被判「缺锚 → UNKNOWN(6)」，把一个正常的 STEP_IN_PROGRESS 变成判定不能。
++    # 次序改为与上方 code-review 读点一致（先定结论、再求失鲜）。原 OV-2 关心的「未闭合结构
++    # 提示不被 stale 分支吞掉」由下面 STEP_IN_PROGRESS 分支自带的 hint 承载，语义不丢。
++    if v_state is None:
++        emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-done",
++             "verify-report.md 在但无锚行 → 该步进行中，重跑"
++             + _unclosed_frontmatter_hint(vf))
++    v_stale, v_fresh = is_stale(root, str(vf.relative_to(root)), "code", change)
+     if v_stale:
+-        # [impl-review-fix OV-2] verify 读点 stale 判定先于 absent 分支（L~812）——若报告同时是
+-        # 「首行 --- 无闭合」absent 态，stale 会先 emit 而吞掉未闭合结构提示、且「结论陈旧」措辞对
+-        # 无有效结论的报告失准。附加纯结构提示（非空才追加，同三读点口径），不改 verdict/退出码/next。
+         emit("RERUN_STALE", EXIT_OK, "sdflow-done",
+-             "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）"
+-             + _unclosed_frontmatter_hint(vf),
++             "verify 结论后存在 openspec/ 外提交 → 结论陈旧（FAIL 修复后重验不卡死 / PASS 不背书新代码）",
+              freshness=v_fresh)
+     if v_state == "neg":
+         reason = "verify FAIL：停并上抛缺口清单（报告内）"
+@@ -1332,10 +1441,6 @@ def decide(root, change):
+             reason += cr_stale_note
+             extra["cr_freshness"] = "stale"
+         emit("VERIFY_FAIL", EXIT_VFAIL, None, reason, **extra)
+-    if v_state is None:
+-        emit("STEP_IN_PROGRESS", EXIT_OK, "sdflow-done",
+-             "verify-report.md 在但无锚行 → 该步进行中，重跑"
+-             + _unclosed_frontmatter_hint(vf))
+     # ── final：active 存在 + verify PASS → 收尾未完（绝不 SHIPPED）─────
+     # [spec-review-amendment H1/HRTG-1] active 目录仍在 = archive 尚未发生（真 archive 移走
+     # active）→ 本态至多「待收尾」。真 SHIPPED（归档后）由 decide 开头的 D3 短路识别
+@@ -1347,6 +1452,27 @@ def decide(root, change):
+          "归档后 SHIPPED 由 gate 短路识别）", freshness=v_fresh)
+ 
+ 
++# [harden-gate-git-layer Task1 · tasks 3.6 · design.md 五行表] 每类原因给**各自可行动**的补救动作。
++# MUST NOT 用一句「git 调用失败」打天下——五者的补救动作完全不同，而 UNKNOWN 在 /sdflow-ship
++# 链序里的处置正是「停并转述 reason」，reason 空洞 = 撞门者被裸退出码打发。
++_INDETERMINATE_ADVICE = {
++    CAUSE_GIT_UNAVAILABLE: "git 不在 PATH 或不可执行 → 检查环境、安装 git 后重跑",
++    CAUSE_GIT_TIMEOUT: "git 调用超时（>30s）→ 检查磁盘或网络文件系统是否挂起",
++    CAUSE_ANCHOR_MISSING: "该报告产出于本次门禁硬化之前（无 reviewed_sha 锚）"
++                          " → 重跑对应评审补锚（结论字段与 reviewed_sha 须同一次写入落盘）",
++    CAUSE_ANCHOR_INVALID: "reviewed_sha 不是完整 40 位小写 hex（缩写 SHA / HEAD / 坏值均不接受）"
++                          " → 人工订正为被批准盘面的完整 commit OID",
++    CAUSE_ANCHOR_UNRESOLVABLE: "reviewed_sha 在本仓解析不到 commit 对象"
++                               " → 可能 force-push 改写了历史，需人工排查该锚指向何处",
++    CAUSE_READ_FAILED: "读取失败（仓损坏 / 权限）→ 检查仓完整性",
++}
++
++
++def _indeterminate_reason(exc):
++    advice = _INDETERMINATE_ADVICE.get(exc.category, "原因未分类 → 人工排查")
++    return f"判定不能：{exc.cause}。{advice}"
++
++
+ def main(argv=None):
+     p = argparse.ArgumentParser(description="sdflow-ship 盘面判官（只读）")
+     p.add_argument("--change", required=True)
+@@ -1354,7 +1480,13 @@ def main(argv=None):
+     a = p.parse_args(argv)
+     root = Path(a.root) if a.root else Path(
+         run_git(Path.cwd(), "rev-parse", "--show-toplevel") or Path.cwd())
+-    decide(root, a.change)
++    # [harden-gate-git-layer Task1 · tasks 3.6] `GateIndeterminate` → UNKNOWN(6) 的**唯一**映射点，
++    # 且捕获范围是 decide 的整个函数体（判定不能可发生在任何一步，不只锚读取那一步）。
++    try:
++        decide(root, a.change)
++    except GateIndeterminate as exc:
++        emit("UNKNOWN", EXIT_UNKNOWN, None, _indeterminate_reason(exc),
++             cause_category=exc.category)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/sdflow-ship/tests/conftest.py b/sdflow-ship/tests/conftest.py
+index faf0ea3..12f2fd0 100644
+--- a/sdflow-ship/tests/conftest.py
++++ b/sdflow-ship/tests/conftest.py
+@@ -22,3 +22,33 @@ def mkchange(root, name="demo"):
+     d = root / "openspec" / "changes" / name
+     d.mkdir(parents=True, exist_ok=True)
+     return d
++
++# ── [harden-gate-git-layer Task1 · tasks 4.1] 录锚模型的测试基座 ────────────────
++# 旧 fixture 一次 commit_all 把「报告」与「它审查的对象」放进同一个根提交 ⇒ 结构上不存在
++# 先于报告的盘面可供落锚。新模型要求报告 frontmatter 带 reviewed_sha，故 fixture MUST 能
++# 表达「四件套先落盘 → 读出 sha → 报告后落盘」的两段提交。
++
++def head_sha(root):
++    out = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
++                         check=True, capture_output=True, text=True)
++    return out.stdout.strip()
++
++def sg_frontmatter(sha=None, **fields):
++    """构造报告头部 ship-gate frontmatter 文本。
++
++    sha=None 时**不写** reviewed_sha 字段（供「缺锚」负例用）。字段顺序 = 结论字段在前、
++    锚在后，与三个 producer 模板逐字对齐（顶层 `ship-gate:` 列 0，字段缩进 2 空格）。
++    """
++    lines = ["---", "ship-gate:"]
++    for k, v in fields.items():
++        lines.append(f"  {k}: {v}")
++    if sha is not None:
++        lines.append(f"  reviewed_sha: {sha}")
++    lines.append("---")
++    return "\n".join(lines) + "\n"
++
++def write_report(d, name, sha=None, body=None, **fields):
++    """写一份带锚的报告（不提交）。返回该文件路径。"""
++    body = body if body is not None else f"# {name}\n"
++    (d / name).write_text(sg_frontmatter(sha, **fields) + body, encoding="utf-8")
++    return d / name
+diff --git a/sdflow-ship/tests/test_anchor_contract.py b/sdflow-ship/tests/test_anchor_contract.py
+index 5927c68..0f19be4 100644
+--- a/sdflow-ship/tests/test_anchor_contract.py
++++ b/sdflow-ship/tests/test_anchor_contract.py
+@@ -18,6 +18,42 @@ PRODUCER_FRONTMATTER = [
+ ]
+ 
+ 
++# [harden-gate-git-layer Task1 · tasks 1.4] 三个 producer 的锚字段模板 MUST 逐字对齐
++# design.md ADR-1 的 YAML 示例：字段名、挂载层级（顶层 `ship-gate:` 的**直接子键**，与结论
++# 字段同层）、示例值形态。某处写成独立顶层键或改了字段名 ⇒ 该 producer 的锚永远读不到。
++ADR1_ANCHOR_LINE = "reviewed_sha: 0123456789abcdef0123456789abcdef01234567"
++
++
++def test_producer_templates_declare_reviewed_sha_verbatim():
++    for rel, _field, _value_lines in PRODUCER_FRONTMATTER:
++        lines = [ln.strip() for ln in (REPO / rel).read_text(encoding="utf-8").splitlines()]
++        assert ADR1_ANCHOR_LINE in lines, \
++            f"{rel} 模板缺锚字段裸行 {ADR1_ANCHOR_LINE!r}（与 design.md ADR-1 示例逐字对齐）"
++
++
++def test_producer_anchor_is_direct_child_of_ship_gate():
++    # 列敏感验证：抽真实字节的模板块喂 parser——锚若被挂成独立顶层键 / 嵌套更深一层，
++    # parse 解不出 reviewed_sha，本断言变红。
++    for rel, field, value_lines in PRODUCER_FRONTMATTER:
++        text = (REPO / rel).read_text(encoding="utf-8")
++        blocks = [b for b in _extract_frontmatter_blocks(text) if ADR1_ANCHOR_LINE in b]
++        assert blocks, f"{rel} 未找到含锚字段的 frontmatter 模板块"
++        for block in blocks:
++            state, err = ship_gate.parse_ship_gate_frontmatter(block)
++            assert err is None, f"{rel} 含锚模板块解析出错: {err}\n{block}"
++            assert "reviewed_sha" in state, \
++                f"{rel} 锚字段未被解析出（挂载层级错？须是顶层 ship-gate: 的直接子键）\n{block}"
++            assert field in state, \
++                f"{rel} 锚与结论字段 {field!r} 须同层同块（ADR-1：同一次写入落盘）\n{block}"
++
++
++def test_reviewed_sha_registered_in_validators():
++    assert "reviewed_sha" in ship_gate.FIELD_VALIDATORS, \
++        "解析器未注册 reviewed_sha —— producer 写了也读不到（新锚永远读不到）"
++    assert "reviewed_sha" not in ship_gate.FIELD_ENUMS, \
++        "reviewed_sha 的值域是任意 40 位 hex，不该塞进有限枚举表"
++
++
+ def test_producer_frontmatter_fields():
+     # 字段名 ∈ FIELD_ENUMS（精确下划线，非连字符）+ 三 SKILL 模板确实各自声明了该字段。
+     # 注：本测试对每行 .strip() 后比对——这是有意的粗筛（"字段是否被提及"），**不**覆盖列 0
+diff --git a/sdflow-ship/tests/test_frontmatter_live_read.py b/sdflow-ship/tests/test_frontmatter_live_read.py
+index ec21ccf..cae5399 100644
+--- a/sdflow-ship/tests/test_frontmatter_live_read.py
++++ b/sdflow-ship/tests/test_frontmatter_live_read.py
+@@ -2,7 +2,7 @@
+ # 坏→UNKNOWN(6) 不回退；absent（无 frontmatter / 无 ship-gate 键）→ 既有无锚语义（不回退 inline，
+ # 正文残留 inline 锚被完全忽略）。归档读半场仍 dual-read inline（永久，见 test_gate_anchor_scope）。
+ # 沿用 test_gate_*.py 的 fixture 构造法：写 openspec/changes/{c}/ 报告 + 跑 decide，断言退出码/verdict。
+-from conftest import commit_all, mkchange
++from conftest import commit_all, mkchange, head_sha, write_report
+ from test_gate_preflight import run_gate
+ from test_gate_tail import impl_done
+ 
+@@ -11,9 +11,9 @@ def test_live_verify_frontmatter_pass(repo):
+     # verify-report frontmatter verify: PASS → 走 frontmatter 读出 PASS → 正常推进（RUN_VERIFY 收尾）
+     d = impl_done(repo)
+     d.joinpath("code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     d.joinpath("verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+     commit_all(repo, "cr+verify")
+     code, js, _ = run_gate(repo)
+     assert code == 0 and js["verdict"] == "RUN_VERIFY"
+@@ -26,7 +26,7 @@ def test_live_verify_inline_retired_absent(repo):
+     # 这是 D1 退役的直接对照：同一 fixture 在 Task2 判 VERIFY_FAIL(5)，Task6 判 STEP_IN_PROGRESS(0)。
+     d = impl_done(repo)
+     d.joinpath("code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     d.joinpath("verify-report.md").write_text(
+         "<!-- ship-gate: verify=FAIL -->\n", encoding="utf-8")
+     commit_all(repo, "cr+verify")
+@@ -54,7 +54,7 @@ def test_live_verify_bad_no_fallback(repo):
+     # UNKNOWN，断言证明坏 frontmatter 不被 inline 兜底、正文 inline 锚不被读。
+     d = impl_done(repo)
+     d.joinpath("code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     d.joinpath("verify-report.md").write_text(
+         "---\nship-gate:\n  verify: MAYBE\n---\n<!-- ship-gate: verify=PASS -->\n",
+         encoding="utf-8")
+@@ -70,7 +70,7 @@ def test_live_verify_body_mention_immune(repo):
+     # absent → live 只读 frontmatter，正文提及不命中 → STEP_IN_PROGRESS（非误读 PASS 推进）。
+     d = impl_done(repo)
+     d.joinpath("code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     d.joinpath("verify-report.md").write_text(
+         "# 验证报告\n正文提及 ship-gate: verify: PASS 但这不是 frontmatter\n",
+         encoding="utf-8")
+@@ -144,10 +144,11 @@ def test_live_body_mention_immune_code_review(repo):
+ def test_live_design_approved_frontmatter(repo):
+     # spec-review-report frontmatter design_approved: true（无 inline 锚）→ 过设计门 → plan 缺 RUN_PLAN
+     d = mkchange(repo)
+-    d.joinpath("spec-review-report.md").write_text(
+-        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", encoding="utf-8")
+     d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+-    commit_all(repo, "seed")
++    commit_all(repo, "seed")          # [harden-gate-git-layer Task1] 先有盘面才锚得住
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report")
+     code, js, _ = run_gate(repo)
+     assert code == 0 and js["verdict"] == "RUN_PLAN"   # 过设计门（frontmatter）→ plan 缺
+ 
+@@ -169,7 +170,7 @@ def test_live_dup_key_unknown(repo):
+     # 重复 verify 键 → duplicate-key → UNKNOWN(6)（verify 早检拦下，不取最后一个）
+     d = impl_done(repo)
+     d.joinpath("code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     d.joinpath("verify-report.md").write_text(
+         "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n", encoding="utf-8")
+     commit_all(repo, "cr+verify")
+@@ -210,7 +211,7 @@ def test_live_unclosed_verify_step_in_progress_with_hint(repo):
+     # **不 UNKNOWN(6)**（坐实无闭合首块不再硬崩），reason 含结构提示。
+     d = impl_done(repo)
+     d.joinpath("code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     d.joinpath("verify-report.md").write_text(UNCLOSED, encoding="utf-8")
+     commit_all(repo, "verify-unclosed")
+     code, js, _ = run_gate(repo)
+diff --git a/sdflow-ship/tests/test_gate_freshness.py b/sdflow-ship/tests/test_gate_freshness.py
+index 59b7ab0..be3555f 100644
+--- a/sdflow-ship/tests/test_gate_freshness.py
++++ b/sdflow-ship/tests/test_gate_freshness.py
+@@ -3,7 +3,7 @@ from pathlib import Path
+ 
+ import pytest
+ 
+-from conftest import commit_all, mkchange
++from conftest import commit_all, mkchange, head_sha, write_report
+ from test_gate_preflight import run_gate
+ from test_gate_impl_progress import approved_change, PLAN2, _sg
+ from test_gate_tail import impl_done
+@@ -15,9 +15,9 @@ def tail_ok(repo):
+     # [mlh-p5 Task5] live 迁 frontmatter（原 inline 双锚，产出的 gate verdict 不变）
+     d = impl_done(repo)
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     (d / "verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+     commit_all(repo, "reports")
+     return d
+ 
+@@ -36,31 +36,35 @@ def test_stale_fail_reruns_not_exit5(repo):
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     (d / "verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+     commit_all(repo, "reports")
+     touch_code(repo)             # FAIL 之后修了代码 → 重验不卡死
+     code, js, _ = run_gate(repo)
+     assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done"
+ 
+-def test_stale_unclosed_verify_appends_hint(repo):
+-    # [impl-review-fix OV-2] verify 读点 stale 分支（next=sdflow-done）在 verify-report 首行 ---
+-    # 无闭合(absent) 时追加纯结构提示：避免把无有效结论的报告误称「结论陈旧」且吞掉未闭合诊断。
+-    # 该分支仅在「code-review 新鲜 ∧ verify 陈旧」窄边界可达——否则 code-review stale 分支
+-    # (next=sdflow-code-review) 先触发。故 fixture 须把 code-review-report 提交在外部改动之后
+-    # （cr 新鲜），verify-report 提交在其前（verify 因后续外部提交而陈旧）。verdict/退出码/next 不变。
++def test_unclosed_verify_frontmatter_keeps_structural_hint(repo):
++    # [impl-review-fix OV-2 → harden-gate-git-layer Task1 重新设计] 原用例名
++    # test_stale_unclosed_verify_appends_hint，断言 verdict=RERUN_STALE 且 reason 含结构提示。
++    # **承载的安全承诺不变**：verify-report 首行 --- 无闭合（parse 判 absent、无有效结论）时，
++    # 「未见闭合」这条结构诊断 MUST NOT 被其它分支吞掉。
++    # 变的是它落在哪个 verdict 上：新模型下 `reviewed_sha` 与结论字段同一次写入落盘，
++    # ∴「无有效结论」⇒ 本就没有锚可读，若仍先求失鲜就会把这个合法中间态判成缺锚 UNKNOWN(6)。
++    # gate 遂改为「先定结论、再求失鲜」（与 code-review 读点次序一致）⇒ 该形态落 STEP_IN_PROGRESS，
++    # 结构提示由该分支自带的 hint 承载。措辞「结论陈旧」也不再被误加到无结论的报告上（OV-2 本意）。
+     d = impl_done(repo)
+     (d / "verify-report.md").write_text(
+         "---\nship-gate:\n  verify: PASS\n无闭合横线，正文继续\n", encoding="utf-8")   # 首块无闭合 → absent
+     commit_all(repo, "verify report (unclosed)")
+     touch_code(repo)             # 外部提交 → 使 verify-report 陈旧
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     commit_all(repo, "code-review report after external change → cr 新鲜")
+     code, js, _ = run_gate(repo)
+-    assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done"
+-    assert "未见闭合" in js["reason"]   # 结构提示未被 stale 分支吞掉
++    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS" and js["next"] == "sdflow-done"
++    assert "未见闭合" in js["reason"]   # 结构提示未被任何先行分支吞掉（本用例的承重点）
++    assert "陈旧" not in js["reason"]   # 无有效结论的报告不该被称「结论陈旧」（OV-2 本意）
+ 
+ def test_design_anchor_survives_impl_commits(repo):
+     # Q1=B 断言①：实现提交不令 design-approved 失鲜
+@@ -77,29 +81,30 @@ def test_design_anchor_stale_on_design_edit(repo):
+     code, js, _ = run_gate(repo)
+     assert code == 3 and "重审" in js["reason"]
+ 
+-def test_uncommitted_report_is_fresh(repo):
+-    # Q3=A：报告从未提交 → fresh + freshness=uncommitted
+-    # [impl-review-fix] 裁决项7：原用 tail_ok() 先提交过 verify-report.md 再工作区覆盖，
+-    # git log 仍能找到该路径的历史 sha，实测得到 freshness="fresh" 而非 "uncommitted"
+-    # （report_last_sha 只看提交历史，不看工作区）——与本用例名/注释意图（报告从未
+-    # 提交过）不符。改为让 verify-report.md 全程不进任何 commit，才是真正的
+-    # "never committed" 路径（sha 为空 → freshness=uncommitted）。
++def test_uncommitted_report_still_evaluated_by_its_own_anchor(repo):
++    # [harden-gate-git-layer Task1 · ADR-1] 原用例名 test_uncommitted_report_is_fresh，
++    # 断言 freshness == "uncommitted"。该语义随**反推锚**一并退役：旧实现只能从
++    # `git log -1 -- <report>` 反推锚，报告没进过提交 ⇒ 推不出锚 ⇒ 只好特判 uncommitted。
++    # 新实现的锚是报告自己录下的 `reviewed_sha`，**与报告有没有进过提交无关**——未提交的
++    # 报告照样带得出有效锚，照常参与失鲜求值（Q3=A「人机同权、手写产物合法」由此保住：
++    # 手写报告不被拒，只是同样要落锚）。故本用例改为验「未提交的报告仍经其自录锚正常求值」。
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter（未提交语义靠"从未进 commit"承载，与锚承载格式无关）
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     (d / "hand-off.md").write_text("x", encoding="utf-8")
+     arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
+     arch.mkdir(parents=True); (arch / "p.md").write_text("a", encoding="utf-8")
+     commit_all(repo, "tail without verify report")
+     # verify-report.md 只写盘，从未进入任何提交
+     (d / "verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: PASS\n---\n新一轮手写\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n新一轮手写\n", encoding="utf-8")
+     code, js, _ = run_gate(repo)
+-    # 〔H1〕active 存在 → RUN_VERIFY（非 SHIPPED）；本用例主张仍是 freshness=uncommitted
+-    # （report_last_sha 空 → 人机同权），验其经 final RUN_VERIFY 携带 freshness 无误
++    # 〔H1〕active 存在 → RUN_VERIFY（非 SHIPPED）。未提交的 verify-report 携带指向当前
++    # HEAD 的有效锚 ⇒ 正常求值、判 fresh（而非旧的特判 "uncommitted"），且**不**因
++    # 「没进过提交」被判缺锚 UNKNOWN——人机同权保住。
+     assert code == 0 and js["verdict"] == "RUN_VERIFY"
+-    assert js["freshness"] == "uncommitted"
++    assert js["freshness"] == "fresh"
+ 
+ def test_openspec_only_commits_keep_fresh(repo):
+     d = tail_ok(repo)
+@@ -172,11 +177,11 @@ def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     commit_all(repo, "cr alone")
+     touch_code(repo)             # 触及 src.py → cr 变陈旧
+     (d / "verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+     commit_all(repo, "verify alone")   # verify 本身新鲜（其后无提交）
+     code, js, _ = run_gate(repo)
+     assert code == 5 and js["verdict"] == "VERIFY_FAIL"
+@@ -211,7 +216,7 @@ def _reanchor(repo, d):
+     而「新建」形态不合格 ⇒ 该帧照判失鲜，会先于待测的翻转帧触发，把用例的结论理由换掉。
+     """
+     (d / "spec-review-report.md").write_text(
+-        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告 v2\n", encoding="utf-8")
++        f"---\nship-gate:\n  design_approved: true\n  reviewed_sha: {head_sha(repo)}\n---\n# 设计审报告 v2\n", encoding="utf-8")
+     commit_all(repo, "re-approve design")
+ 
+ def _seed_tasks(repo, data=b"### Task 1: A\n- [ ] s\n"):
+diff --git a/sdflow-ship/tests/test_gate_impl_progress.py b/sdflow-ship/tests/test_gate_impl_progress.py
+index 2128269..6a88628 100644
+--- a/sdflow-ship/tests/test_gate_impl_progress.py
++++ b/sdflow-ship/tests/test_gate_impl_progress.py
+@@ -1,6 +1,6 @@
+ import subprocess, sys, json
+ from pathlib import Path
+-from conftest import commit_all, mkchange
++from conftest import commit_all, mkchange, head_sha, write_report
+ from test_gate_preflight import run_gate
+ 
+ # Load ship_gate module for direct function testing
+@@ -11,20 +11,32 @@ import ship_gate as _sg
+ 
+ PLAN2 = "### Task 1: A\n- [ ] s\n### Task 2: B\n- [ ] s\n"
+ 
+-def approved_change(repo, plan=None, sop=False, tg02=False):
+-    # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）：
+-    # 本 helper 是多文件共用的高杠杆基座（tail/freshness/frontmatter_live_read 均经此链路），
+-    # 迁移后 design_ok 判定改走 frontmatter 路径，gate verdict 不变（design_approved=true 恒真）。
++def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor="head"):
++    # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）。
++    # [harden-gate-git-layer Task1 · tasks 4.1/4.1b] 迁**两段提交模型**：报告 frontmatter 现须带
++    # `reviewed_sha`（被批准的盘面），而旧单次 commit_all 让报告与其审查对象同属根提交 ⇒ 结构上
++    # 没有先于报告的盘面可填。分段：
++    #   ① 四件套（+ 可选 plan/sop）落盘提交 → 这就是「被批准的盘面」
++    #   ② 可选第三段〔4.1b〕revise=callable(d)：拍板前二次修订，单独提交（ADR-7(b) 场景）
++    #   ③ 读出 HEAD → 写携带该 sha 的 spec-review-report → 单独提交
++    # anchor: "head"（默认，锚指被批准盘面）｜"pre-revision"（锚指修订**之前**的提交，用于
++    #   验 ADR-7(b) 自锁：拍板刚完成即失鲜）｜None（不写 reviewed_sha，缺锚负例）｜显式 sha 串。
+     d = mkchange(repo)
+-    (d / "spec-review-report.md").write_text(
+-        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", encoding="utf-8")
+     prop = "# p\n〔TG-02：嵌入式〕\n" if tg02 else "# p\n〔TG-01：工具链〕\n"
+     (d / "proposal.md").write_text(prop, encoding="utf-8")
+     if sop:
+         (d / "demo-sop.md").write_text("sop\n", encoding="utf-8")
+     if plan is not None:
+         (d / "superpowers-plan.md").write_text(plan, encoding="utf-8")
+-    commit_all(repo, "seed change")
++    commit_all(repo, "seed change artifacts")      # ① 被批准的盘面
++    pre_revision = head_sha(repo)
++    if revise is not None:                          # ② 拍板前二次修订（单独落盘）
++        revise(d)
++        commit_all(repo, "pre-approval revision")
++    sha = {"head": head_sha(repo), "pre-revision": pre_revision}.get(anchor, anchor)
++    write_report(d, "spec-review-report.md", sha,
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (approved)")   # ③ 报告单独提交
+     return d
+ 
+ def test_tg02_hit_sop_missing(repo):
+@@ -98,12 +110,13 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
+ def test_plan_task1_same_commit_counts(repo):
+     # 〔B1 闭区间〕plan 与 checkpoint(task1-) 同 commit（checkpoint add -A 携带未提交 plan）
+     # → task1 锚在窗口起点 sha 自身，排他窗口会漏数；闭区间须计入
++    # [harden-gate-git-layer Task1 · tasks 4.1] 两段提交：四件套先落盘 → 报告携锚后落盘
+     d = mkchange(repo)
+-    # [mlh-p5 Task5] live 迁 frontmatter（同上 helper 理由）
+-    (d / "spec-review-report.md").write_text(
+-        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", encoding="utf-8")
+     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+-    commit_all(repo, "seed change")           # approved base，无 plan
++    commit_all(repo, "seed change artifacts")     # 被批准的盘面（无 plan）
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (approved)")
+     (d / "superpowers-plan.md").write_text(PLAN2, encoding="utf-8")
+     commit_all(repo, "checkpoint(task1-foo): plan+task1 同 commit")  # plan 首次提交 == task1 锚
+     commit_all(repo, "checkpoint(task2-bar): B")
+diff --git a/sdflow-ship/tests/test_gate_preflight.py b/sdflow-ship/tests/test_gate_preflight.py
+index 0865fef..cafbbe5 100644
+--- a/sdflow-ship/tests/test_gate_preflight.py
++++ b/sdflow-ship/tests/test_gate_preflight.py
+@@ -1,6 +1,6 @@
+ import json, subprocess, sys
+ from pathlib import Path
+-from conftest import commit_all, mkchange
++from conftest import commit_all, mkchange, head_sha, write_report
+ 
+ GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
+ 
+@@ -26,10 +26,12 @@ def test_refuse_when_anchor_missing(repo):
+ 
+ def test_pass_gate_when_anchor_present(repo):
+     # [mlh-p5 Task5] live 迁 frontmatter（原 inline design-approved 锚）
++    # [harden-gate-git-layer Task1] 两段提交：先有盘面可锚，报告才写得出 reviewed_sha
+     d = mkchange(repo)
+-    (d / "spec-review-report.md").write_text(
+-        "---\nship-gate:\n  design_approved: true\n---\n# 报告\n", encoding="utf-8")
+     commit_all(repo, "seed")
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 报告\n", design_approved="true")
++    commit_all(repo, "spec-review report")
+     code, js, human = run_gate(repo)
+     assert code == 0 and js["verdict"] != "REFUSE_START"
+     assert human.startswith("[ship-gate]")  # D2 首行人读
+@@ -42,12 +44,13 @@ def test_verify_conflict_anchors_unknown(repo):
+     # test_live_dup_key_unknown 覆盖重叠，属有意——两处分别锚 preflight 早检入口与
+     # frontmatter 解析器本身，双证据不算冗余）。
+     d = mkchange(repo)
+-    (d / "spec-review-report.md").write_text(
+-        "---\nship-gate:\n  design_approved: true\n---\n# 报告\n", encoding="utf-8")
++    commit_all(repo, "seed")
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 报告\n", design_approved="true")
+     (d / "verify-report.md").write_text(
+         "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n# 验证报告\n",
+         encoding="utf-8")
+-    commit_all(repo, "seed")
++    commit_all(repo, "reports")
+     code, js, _ = run_gate(repo)
+     assert code == 6 and js["verdict"] == "UNKNOWN"
+     assert "verify" in js["reason"]
+@@ -60,10 +63,11 @@ def test_gbk_report_no_crash(repo):
+     # （parse_ship_gate_frontmatter 内 read_text errors="replace"）上验证，
+     # Task 6 退役 inline 读点后此覆盖仍有效。
+     d = mkchange(repo)
+-    body = (b"---\nship-gate:\n  design_approved: true\n---\n"
+-            + "设计门拍板".encode("gbk") + b"\n")
+-    (d / "spec-review-report.md").write_bytes(body)
+     commit_all(repo, "seed")
++    head = f"---\nship-gate:\n  design_approved: true\n  reviewed_sha: {head_sha(repo)}\n---\n"
++    (d / "spec-review-report.md").write_bytes(
++        head.encode("ascii") + "设计门拍板".encode("gbk") + b"\n")
++    commit_all(repo, "spec-review report")
+     code, js, _ = run_gate(repo)
+     assert code in (0, 3, 4, 5, 6)  # 合法退出码集合，排除 traceback 导致的 1
+     assert "verdict" in js and js["verdict"]  # 正常给出 verdict（未因解码异常崩溃）
+diff --git a/sdflow-ship/tests/test_gate_reviewed_sha.py b/sdflow-ship/tests/test_gate_reviewed_sha.py
+new file mode 100644
+index 0000000..6a83f8e
+--- /dev/null
++++ b/sdflow-ship/tests/test_gate_reviewed_sha.py
+@@ -0,0 +1,251 @@
++"""[harden-gate-git-layer Task1 · ADR-1] 录锚层：`reviewed_sha` 是失鲜判定的唯一真相源。
++
++覆盖 tasks 5.6a（缺失）/ 5.6b（格式非法）/ 5.6c（对象不存在或非 commit）/ 5.6d（结论在锚缺），
++外加两层校验的分层证据（语法级留在纯文本 parser、语义级在 read_reviewed_sha）与「反推锚已退役」。
++
++口径：退出码类断言一律经 CLI 公共入口（`main()`）求值，不调内部 helper——
++`fix-design-gate-freshness-proxy` 的 rename 用例即栽在「只调内部 helper，真洞存在时仍绿」。
++"""
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++from conftest import commit_all, mkchange, head_sha, write_report, sg_frontmatter
++from test_gate_preflight import run_gate
++from test_gate_impl_progress import approved_change, PLAN2, _sg
++
++GOOD_SHA = "0123456789abcdef0123456789abcdef01234567"   # 语法合法、语义上本仓解析不到
++
++
++def _git(repo, *args):
++    return subprocess.run(["git", "-C", str(repo), *args],
++                          check=True, capture_output=True, text=True).stdout.strip()
++
++
++def _seeded(repo):
++    """建一个「四件套已落盘提交」的仓，返回 (change 目录, 被批准盘面的 sha)。"""
++    d = mkchange(repo)
++    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
++    (d / "design.md").write_text("# d\n", encoding="utf-8")
++    commit_all(repo, "seed change artifacts")
++    return d, head_sha(repo)
++
++
++# ── 5.6a / 5.6d：锚缺失 ───────────────────────────────────────────────────
++
++def test_missing_anchor_is_unknown_and_names_the_field(repo):
++    # 5.6d：结论字段在（design_approved: true）、锚字段缺 → UNKNOWN(6)，诊断点名缺的是 reviewed_sha。
++    d, _sha = _seeded(repo)
++    write_report(d, "spec-review-report.md", None,       # sha=None ⇒ 不写 reviewed_sha
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (no anchor)")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert "reviewed_sha" in js["reason"]
++    assert js["cause_category"] == "anchor-missing"
++
++
++def test_missing_anchor_does_not_fall_back_to_inferred_anchor(repo):
++    # 5.6a 的承重半场：缺锚 MUST NOT 回退反推式锚。旧实现（report_last_sha）在这个盘面上
++    # 能推出锚、判 fresh 并放行到 RUN_PLAN；新实现 MUST 是 UNKNOWN(6)。
++    d, _sha = _seeded(repo)
++    write_report(d, "spec-review-report.md", None,
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (no anchor)")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] not in ("RUN_PLAN", "RUN_SOP", "CONTINUE_IMPL"), \
++        "缺锚竟被放行——存在回退到反推锚（或静默判 fresh）的通路"
++    assert code == 6
++
++
++# ── 5.6b：语法级非法 ──────────────────────────────────────────────────────
++
++BAD_SYNTAX = [
++    ("0123456", "缩写 SHA"),
++    ("HEAD", "符号式 revision"),
++    ("refs/heads/main", "ref 名"),
++    ("0123456789ABCDEF0123456789ABCDEF01234567", "大写 hex（非单一规范形）"),
++    ("0123456789abcdef0123456789abcdef0123456", "39 位（差一位）"),
++    ("0123456789abcdef0123456789abcdef012345678", "41 位（多一位）"),
++    ("g123456789abcdef0123456789abcdef01234567", "含非 hex 字符"),
++]
++
++
++@pytest.mark.parametrize("bad,why", BAD_SYNTAX, ids=[c[0][:12] for c in BAD_SYNTAX])
++def test_syntactically_invalid_anchor_is_unknown(repo, bad, why):
++    d, _sha = _seeded(repo)
++    write_report(d, "spec-review-report.md", bad,
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (bad anchor)")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN", f"{why} 竟未被拦下"
++
++
++@pytest.mark.parametrize("bad,why", BAD_SYNTAX, ids=[c[0][:12] for c in BAD_SYNTAX])
++def test_syntax_layer_lives_in_the_pure_text_parser(bad, why):
++    # 分层证据①：语法级校验 MUST 在纯文本函数里完成（live 读与归档 git-show 文本读共用），
++    # 不依赖 root / git 调用。坏值 → (field, 'out-of-domain')。
++    state, err = _sg.parse_ship_gate_frontmatter(
++        sg_frontmatter(bad, design_approved="true"))
++    assert state == {} and err == ("reviewed_sha", "out-of-domain"), f"{why} 未在语法层被拒"
++
++
++def test_syntax_layer_accepts_full_lowercase_oid():
++    state, err = _sg.parse_ship_gate_frontmatter(
++        sg_frontmatter(GOOD_SHA, design_approved="true"))
++    assert err is None and state["reviewed_sha"] == GOOD_SHA
++    assert state["design_approved"] is True          # 与结论字段同层、同块解析出来
++
++
++# ── 5.6c：语义级——对象不存在 / 不是 commit ───────────────────────────────
++
++def test_anchor_object_absent_is_unknown(repo):
++    d, _sha = _seeded(repo)
++    write_report(d, "spec-review-report.md", GOOD_SHA,   # 语法合法，本仓无此对象
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (dangling anchor)")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert js["cause_category"] == "anchor-unresolvable"
++    assert "force-push" in js["reason"]               # 该类的专属可行动措辞
++
++
++@pytest.mark.parametrize("kind", ["blob", "tree"])
++def test_anchor_pointing_at_non_commit_object_is_unknown(repo, kind):
++    # 语法级放行（是真 40 位 OID）、语义级 MUST 拦下：`^{commit}` 后缀使 blob/tree 落进 rc≠0。
++    d, _sha = _seeded(repo)
++    if kind == "blob":
++        oid = _git(repo, "hash-object", "-w", str(d / "proposal.md"))
++    else:
++        oid = _git(repo, "rev-parse", "HEAD^{tree}")
++    assert len(oid) == 40
++    write_report(d, "spec-review-report.md", oid,
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, f"spec-review report ({kind} anchor)")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert js["cause_category"] == "anchor-unresolvable"
++
++
++def test_semantic_layer_reads_valid_anchor(repo):
++    # 分层证据②：语义级在 read_reviewed_sha（需 root，做 git 调用）。正例返回锚本身。
++    d, sha = _seeded(repo)
++    write_report(d, "spec-review-report.md", sha,
++                 body="# 设计审报告\n", design_approved="true")
++    rel = "openspec/changes/demo/spec-review-report.md"
++    assert _sg.read_reviewed_sha(repo, rel) == sha
++
++
++@pytest.mark.parametrize("anchor,category", [
++    (None, "anchor-missing"),
++    ("HEAD", "anchor-invalid"),
++    (GOOD_SHA, "anchor-unresolvable"),
++])
++def test_semantic_layer_raises_typed_payload(repo, anchor, category):
++    # GateIndeterminate MUST 携带结构化 payload：category 供 main() 机械分派，三类各不相同。
++    d, _sha = _seeded(repo)
++    write_report(d, "spec-review-report.md", anchor,
++                 body="# 设计审报告\n", design_approved="true")
++    rel = "openspec/changes/demo/spec-review-report.md"
++    with pytest.raises(_sg.GateIndeterminate) as ei:
++        _sg.read_reviewed_sha(repo, rel)
++    assert ei.value.category == category
++
++
++def test_indeterminate_reasons_are_mutually_distinguishable():
++    # 五类原因各给**各自可行动**的诊断——MUST NOT 用一句「git 调用失败」打天下。
++    reasons = {c: _sg._indeterminate_reason(_sg.GateIndeterminate("x", c))
++               for c in _sg._INDETERMINATE_ADVICE}
++    assert len(set(reasons.values())) == len(reasons), "存在两类原因给出同一句诊断"
++    assert len(reasons) >= 5
++
++
++# ── code 域两个消费方各自覆盖（Compliance：两个消费方 MUST 各有覆盖）──────────
++
++def test_code_review_report_missing_anchor_is_unknown(repo):
++    from test_gate_tail import impl_done
++    d = impl_done(repo)
++    write_report(d, "code-review-report.md", None,
++                 body="# 代码审报告\n", code_review="pass")
++    commit_all(repo, "cr report (no anchor)")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN" and js["cause_category"] == "anchor-missing"
++
++
++def test_verify_report_missing_anchor_is_unknown(repo):
++    from test_gate_tail import impl_done
++    d = impl_done(repo)
++    write_report(d, "code-review-report.md", head_sha(repo),
++                 body="# 代码审报告\n", code_review="pass")
++    write_report(d, "verify-report.md", None,
++                 body="# 验证报告\n", verify="PASS")
++    commit_all(repo, "reports (verify without anchor)")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN" and js["cause_category"] == "anchor-missing"
++
++
++# ── 反推锚已退役 ─────────────────────────────────────────────────────────
++
++def test_inferred_anchor_helper_is_gone():
++    assert not hasattr(_sg, "report_last_sha"), "反推锚 helper 仍在（退役未完成）"
++    src = (Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py").read_text(
++        encoding="utf-8")
++    # 只允许出现在「已退役」的说明性注释里，不得有调用点（`report_last_sha(`）。
++    assert "report_last_sha(" not in src, "仓内仍有 report_last_sha 调用点"
++
++
++def test_touching_the_report_does_not_move_the_anchor(repo):
++    # 5.5 的核心不变量（本票半场）：锚是**录下来的常量**，任何后续提交顺带碰一下报告文件
++    # 都推不动它。旧反推实现在此盘面上会把锚前移到「排版提交」，从而把锚前的设计改动埋掉。
++    # ⚠ 本条的变异手段与其余不同源：新实现里没有「反推逻辑」可删（复活 report_last_sha
++    #   直接违反 Compliance），故以**旧实现为参照物**做对比——见 impl-report Task1 §变异证明。
++    d = approved_change(repo, plan=PLAN2)
++    (d / "design.md").write_text("# 拍板后偷改设计\n", encoding="utf-8")
++    commit_all(repo, "docs: 改设计（未重审）")
++    # 之后有人顺带给报告补了个空行（旧实现：锚前移到这一提交 ⇒ 上面那次改设计被埋掉）
++    report = d / "spec-review-report.md"
++    report.write_text(report.read_text(encoding="utf-8") + "\n", encoding="utf-8")
++    commit_all(repo, "docs: 报告排版")
++    code, js, _ = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START", "锚被后续触碰前移，埋掉了未审的设计改动"
++
++
++# ── 测试基座：两段 / 三段提交模型（tasks 4.1 / 4.1b）─────────────────────
++
++def test_fixture_two_stage_model_puts_artifacts_before_report(repo):
++    d = approved_change(repo, plan=PLAN2)
++    subjects = _git(repo, "log", "--format=%s").splitlines()
++    assert subjects[0] == "spec-review report (approved)"       # 报告单独一段
++    assert "seed change artifacts" in subjects                   # 四件套先落盘
++    anchor = _sg.read_reviewed_sha(repo, "openspec/changes/demo/spec-review-report.md")
++    # 锚指向的提交 MUST 已含被批准的四件套，且 MUST NOT 是报告那一提交
++    assert anchor != head_sha(repo)
++    assert _git(repo, "cat-file", "-t", anchor) == "commit"
++    assert "proposal.md" in _git(repo, "ls-tree", "-r", "--name-only", anchor)
++
++
++def test_fixture_third_stage_models_pre_approval_revision(repo):
++    # 4.1b：三段模型（四件套 → 二次修订 → 报告）。锚指修订**之后** ⇒ 拍板即自洽，不失鲜。
++    def revise(d):
++        (d / "design.md").write_text("# 拍板前二次修订\n", encoding="utf-8")
++
++    d = approved_change(repo, plan=PLAN2, revise=revise)
++    subjects = _git(repo, "log", "--format=%s").splitlines()
++    assert "pre-approval revision" in subjects
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] != "REFUSE_START", "锚含二次修订却仍判失鲜"
++
++
++def test_fixture_third_stage_can_express_adr7b_selflock(repo):
++    # 4.1b 的存在理由：两段模型表达不出 ADR-7(b) 的自锁形态。锚指修订**之前**的提交
++    # ⇒ 拍板刚完成、第一次跑 gate 就 REFUSE_START。本用例证明基座能构造出该盘面
++    # （守 ADR-7(b) 的完整端到端用例属 5.17，在评审 SKILL 时序票内）。
++    def revise(d):
++        (d / "design.md").write_text("# 拍板前二次修订（未单独落盘的等价形态）\n",
++                                     encoding="utf-8")
++
++    approved_change(repo, plan=PLAN2, revise=revise, anchor="pre-revision")
++    code, js, _ = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START"
+diff --git a/sdflow-ship/tests/test_gate_tail.py b/sdflow-ship/tests/test_gate_tail.py
+index 65ba9e9..0c55a64 100644
+--- a/sdflow-ship/tests/test_gate_tail.py
++++ b/sdflow-ship/tests/test_gate_tail.py
+@@ -1,4 +1,4 @@
+-from conftest import commit_all, mkchange
++from conftest import commit_all, mkchange, head_sha, write_report
+ from test_gate_preflight import run_gate
+ from test_gate_impl_progress import approved_change, PLAN2
+ 
+@@ -17,7 +17,7 @@ def test_cr_blocked_exit4(repo):
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: blocked\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: blocked\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     commit_all(repo, "cr")
+     code, js, _ = run_gate(repo)
+     assert code == 4 and js["verdict"] == "BLOCKED_UPSTREAM"
+@@ -26,9 +26,9 @@ def test_verify_fail_exit5(repo):
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     (d / "verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+     commit_all(repo, "cr+verify")
+     code, js, _ = run_gate(repo)
+     assert code == 5 and js["verdict"] == "VERIFY_FAIL"
+@@ -39,9 +39,9 @@ def test_verify_pass_active_present_run_verify(repo):
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     (d / "verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+     (d / "hand-off.md").write_text("交接\n", encoding="utf-8")
+     arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
+     arch.mkdir(parents=True)
+@@ -62,7 +62,7 @@ def test_verify_report_no_anchor_in_progress(repo):
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter（verify-report.md 保持无锚正文不变——本用例本就测「无锚」）
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     (d / "verify-report.md").write_text(
+         "# 报告\n验证中…\n", encoding="utf-8")
+     commit_all(repo, "verify-in-progress")
+@@ -73,9 +73,9 @@ def test_verify_pass_but_no_handoff_run_verify_step(repo):
+     d = impl_done(repo)
+     # [mlh-p5 Task5] live 迁 frontmatter
+     (d / "code-review-report.md").write_text(
+-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
+     (d / "verify-report.md").write_text(
+-        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
++        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
+     commit_all(repo, "tail")
+     _, js, _ = run_gate(repo)
+     assert js["verdict"] == "RUN_VERIFY"  # done 未走完（hand-off/archive 缺）
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index 4a6b6a7..721c637 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -216,9 +216,17 @@ description: >
+ ---
+ ship-gate:
+   design_approved: true
++  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+ ---
+ ```
+ 
++**`reviewed_sha` = 被批准的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD`
++的完整 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。
++语义是「**拍板批准的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「批准之后四件套有没有被改」。
++写之前 MUST 核对 `git log -1`，确认所选 commit **已包含**最终批准的四件套内容。
++**两个字段 MUST 在同一次文件写入中落盘**（不可拆成两次 Edit）：拆开且中断落在中间，
++盘面会变成「`design_approved: true` 在、`reviewed_sha` 缺」——gate 判 UNKNOWN(6)，可恢复但无指引。
++
+ 写入规则：若 `spec-review-report.md` 已有首块 frontmatter（首行即 `---`），MUST 将 `ship-gate:` 键合并进该已有块（不新开第二块、
+ 不破坏已有其他键）；若尚无 frontmatter，MUST 在文件最顶端新建此块（**prepend**，MUST NOT 追加到文件末尾）。
+ **正文人读拍板记录行保留不删**：决策登记区/拍板记录区仍写一行人读结论（如"设计门已拍板批准，日期 XXXX-XX-XX"）——
