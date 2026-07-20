@@ -551,11 +551,11 @@ def test_tasks_flip_plus_source_code_not_stale(repo):
 
 def test_merge_commit_pure_flip_not_stale(repo):
     # merge 场景**整体**不撞门。
-    # ⚠️ [fix1 M2] 名不副实澄清：本例并**没有**验到「merge 帧逐 parent 求值」——
-    # merge 提交自身不改 tasks.md，其帧的 --name-only 为空 ⇒ subs 为空 ⇒ 直接跳过，
-    # 真正被求值的是 side 分支上那个普通提交（单 parent）。逐 parent 求值的判别性用例
-    # 是 test_exempt_requires_every_parent_of_a_merge（函数级，构造 merge 自身改 tasks.md）。
-    # 此处保留是为守「merge 拓扑不会让端到端整体误判失鲜」。
+    # [impl-review-fix F1] 原注释「本例没有验到 merge 帧逐 parent 求值（--name-only 对
+    # merge 恒空 ⇒ subs 为空 ⇒ 直接跳过）」已随枚举协议换成 diff-tree -m 而失效：merge
+    # 帧现在会被真正枚举出触及 tasks.md（相对 main-parent 有改动），并逐 parent 求值——
+    # 相对 side-parent 为 unchanged（跳过）、相对 main-parent 为纯翻转（豁免）。
+    # 本例因此从「拓扑不误判」升级为「普通 merge 的逐 parent 求值不产生假失鲜」的钉子。
     d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
     _reanchor(repo, d)
     _git(repo, "checkout", "-q", "-b", "side")
@@ -1006,3 +1006,230 @@ def test_is_stale_result_stays_two_tuple_compatible(repo):
     stale, freshness = res                              # 解包仍是二元
     assert (stale, freshness) == (False, "fresh") and res == (False, "fresh")
     assert res.stale is False and res.freshness == "fresh" and res.trigger is None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [impl-review-fix F1/F2/F3] 帧枚举面 fail-open 三洞 + 枚举失败 + 归一化第三支
+#
+# 🔴 本节全部走 **is_stale / run_gate 端到端**（不直调内部函数、不打替身）——
+#   三个洞的共同特征就是「内部函数各自正确，但生产路径根本走不到它们」，
+#   直调内部函数的用例对它们**结构性免疫**（原 rename 用例只直调 blob_pair 即假绿）。
+# ══════════════════════════════════════════════════════════════════════════
+
+def _merge_amended(repo, mutate, msg="merge side"):
+    """造一个 merge 提交，其树由 mutate 决定（两个 parent 各自都没有这份内容）。
+
+    `git merge --no-ff` 后 `git commit --amend -a` 保留双 parent，是构造 evil-merge
+    的最短确定性路径（不依赖冲突解决的交互）。
+    """
+    _git(repo, "checkout", "-q", "-b", "side")
+    (repo / "s.txt").write_text("s\n", encoding="utf-8")
+    commit_all(repo, "side edit")
+    _git(repo, "checkout", "-q", "main")
+    (repo / "m.txt").write_text("m\n", encoding="utf-8")
+    commit_all(repo, "main edit")
+    _git(repo, "merge", "--no-ff", "-q", "-m", msg, "side")
+    mutate()
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "--amend", "--no-edit")
+    parents = _git(repo, "rev-list", "--parents", "-n", "1", "HEAD").stdout.split()
+    assert len(parents) == 3, "构造失败：应为双 parent 的 merge 提交"
+
+
+# ── F1-a evil-merge：改动只存在于 merge 自身 resolve 出的树 ─────────────────
+
+def test_evil_merge_design_edit_is_stale(repo):
+    # 🔴 旧协议 `git log --name-only` 对 merge 提交**不输出任何文件** ⇒ subs 为空 ⇒
+    #   `continue` 跳过整帧 ⇒ design 域整体判 fresh = 放行未批准的设计改动。
+    d, _ = _seed_tasks(repo)
+    (d / "design.md").write_text("v1\n", encoding="utf-8")
+    commit_all(repo, "seed design")
+    _reanchor(repo, d)
+    _merge_amended(repo, lambda: (d / "design.md").write_text("evil v2\n", encoding="utf-8"))
+    code, js, _h = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    assert js["stale_trigger"]["category"] == "mixed-paths"
+    assert "design.md" in js["stale_trigger"]["paths"]
+
+
+def test_evil_merge_tasks_semantic_edit_is_stale(repo):
+    # 同一个洞的 tasks.md 分支：merge 自身把 task 标题改了（非勾选框）⇒ 必须失鲜。
+    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+    _reanchor(repo, d)
+    _merge_amended(repo, lambda: _write_tasks(repo, _SEMANTIC))
+    code, js, _h = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    assert js["stale_trigger"]["category"] == "content-changed"
+
+
+def test_merge_frame_pure_flip_is_exempt_end_to_end(repo):
+    # 反向证（判别性）：merge 自身只做**纯勾选框翻转**、对**每个 parent** 都成立
+    # ⇒ 豁免真能在 merge 上生效，不是靠「见 merge 就一刀切拒绝」蒙对上一条。
+    # 同时这是 Task1 逐 parent 校验在**生产路径**上可达的端到端证据。
+    d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
+    _reanchor(repo, d)
+    _merge_amended(repo, lambda: _write_tasks(repo, b"### Task 1: A\n- [x] s\n"))
+    code, js, _h = run_gate(repo)
+    assert code == 0 and js["verdict"] == "CONTINUE_IMPL"
+
+
+def test_merge_frame_is_actually_enumerated(repo):
+    # 机械守枚举协议本身：merge 提交的触及路径**非空**（旧 --name-only 恒空）。
+    d, _ = _seed_tasks(repo)
+    _merge_amended(repo, lambda: (d / "design.md").write_text("evil\n", encoding="utf-8"))
+    paths = _sg.frame_touched_paths(repo, _head(repo))
+    assert paths is not None and BASE + "design.md" in paths
+    # 对照：旧协议下同一提交的文件列表为空——这就是洞本身
+    assert _sg.run_git(repo, "log", "-1", "--name-only", "--format=", _head(repo)) == ""
+
+
+# ── F1-b rename：源路径 MUST 进监视集（本 change 的 delta spec 明写） ───────
+
+def test_git_mv_tasks_is_stale_end_to_end(repo):
+    # 🔴 旧协议默认开 rename 检测，`git mv tasks.md x.md` **只**输出目标路径 ⇒
+    #   源 tasks.md 看不到 ⇒ 跳过整帧判 fresh。既有 rename 用例只直调 blob_pair，
+    #   对这个前置洞结构性免疫（假绿）。本例走端到端补上。
+    d, _ = _seed_tasks(repo)
+    _reanchor(repo, d)
+    _git(repo, "mv", "openspec/changes/demo/tasks.md",
+         "openspec/changes/demo/tasks-renamed.md")
+    commit_all(repo, "chore: 迁走 tasks.md")
+    code, js, _h = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    # 源路径进了触发路径集（分类为形态不合格：改名分解成 A+D，D 非普通内容修改）
+    assert js["stale_trigger"]["paths"] == ["tasks.md"]
+    assert js["stale_trigger"]["category"] == "shape-unfit"
+
+
+def test_frame_paths_include_rename_source(repo):
+    # 机械守：--no-renames ⇒ 源路径与目标路径**都**在枚举里
+    d, _ = _seed_tasks(repo)
+    _git(repo, "mv", "openspec/changes/demo/tasks.md",
+         "openspec/changes/demo/tasks-renamed.md")
+    commit_all(repo, "rename")
+    paths = _sg.frame_touched_paths(repo, _head(repo))
+    assert BASE + "tasks.md" in paths and BASE + "tasks-renamed.md" in paths
+
+
+# ── F1-c 路径含 Tab：文本行协议会把它拆碎/加引号，NUL 协议不会 ──────────────
+
+def test_spec_path_with_tab_is_stale(repo):
+    # 换行文件名在部分平台/工具链上不便构造，此处只做 Tab（同一个协议面：
+    # 旧 --name-only 按行切 + C-quote 包裹 ⇒ startswith(base) 失配 ⇒ 逃出监视集）。
+    d, _ = _seed_tasks(repo)
+    _reanchor(repo, d)
+    specs = d / "specs"
+    specs.mkdir(parents=True, exist_ok=True)
+    (specs / "we\tird.md").write_text("delta\n", encoding="utf-8")
+    commit_all(repo, "docs: 加一份带 Tab 文件名的 delta spec")
+    code, js, _h = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    assert js["stale_trigger"]["paths"] == ["specs/we\tird.md"]
+
+
+def test_frame_paths_preserve_tab_unquoted(repo):
+    # 机械守 -z 协议：路径原样、无 C-quote、无按行拆碎
+    d, _ = _seed_tasks(repo)
+    (d / "specs").mkdir(parents=True, exist_ok=True)
+    (d / "specs" / "we\tird.md").write_text("x\n", encoding="utf-8")
+    commit_all(repo, "tab path")
+    paths = _sg.frame_touched_paths(repo, _head(repo))
+    assert BASE + "specs/we\tird.md" in paths
+    assert not any(p.startswith('"') for p in paths)
+
+
+# ── F2 枚举失败 MUST 判失鲜（旧路径：run_git 折叠成空串 ⇒ 零帧 ⇒ fresh） ────
+
+def test_stale_when_commit_enumeration_fails(repo, monkeypatch):
+    d, _ = _seed_tasks(repo)
+    _reanchor(repo, d)
+    real = _sg.run_git_rc
+
+    def fake(root, *args):
+        if args[:1] == ("log",) and any(a.endswith("..HEAD") for a in args):
+            return 128, ""                  # 模拟 git log 失败
+        return real(root, *args)
+
+    monkeypatch.setattr(_sg, "run_git_rc", fake)
+    res = _sg.is_stale(repo, _ANCHOR_REL, "design", "demo")
+    assert res == (True, "stale")
+    assert res.trigger["category"] == "frame-enum-failed"
+
+
+def test_stale_when_frame_path_enumeration_fails(repo, monkeypatch):
+    d, _ = _seed_tasks(repo)
+    _reanchor(repo, d)
+    (d / "design.md").write_text("v2\n", encoding="utf-8")
+    commit_all(repo, "docs: 改设计")
+    monkeypatch.setattr(_sg, "frame_touched_paths", lambda root, sha: None)
+    res = _sg.is_stale(repo, _ANCHOR_REL, "design", "demo")
+    assert res == (True, "stale")
+    assert res.trigger["category"] == "frame-enum-failed"
+
+
+def test_frame_touched_paths_returns_none_on_git_failure(repo):
+    assert _sg.frame_touched_paths(repo, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef") is None
+
+
+def test_frame_enum_failed_is_registered_category():
+    # 分类枚举与判定分支同源：新增分支必须同步登记（否则人读侧拿不到标签）
+    assert "frame-enum-failed" in _sg.STALE_CATEGORIES
+
+
+# ── F3 归一化：CommonMark 缩进代码块 + HTML 注释块（第三、四支） ─────────────
+
+def test_content_stale_on_indented_code_block_flip():
+    # 🔴 四空格缩进代码块内的翻转此前被归一化 ⇒ 误判豁免（fail-open）
+    before = b"# T\n\n    - [ ] sample\n"
+    after = b"# T\n\n    - [x] sample\n"
+    assert E(before, after) is False
+
+
+def test_content_stale_on_tab_indented_code_block_flip():
+    # tab 按 4 列制表位展开 ⇒ 同样落在缩进代码块口径内
+    assert E(b"# T\n\n\t- [ ] s\n", b"# T\n\n\t- [x] s\n") is False
+
+
+def test_content_stale_on_html_comment_block_flip():
+    # 多行 HTML 注释块内的翻转 ⇒ 不归一化 ⇒ 失鲜
+    before = b"# T\n\n<!--\n- [ ] s\n-->\n"
+    after = b"# T\n\n<!--\n- [x] s\n-->\n"
+    assert E(before, after) is False
+
+
+def test_normalize_still_works_outside_indent_and_comment():
+    # 反向证（判别性）：不是靠「见缩进/见注释就全拒」蒙对的——
+    # 浅缩进（<4 列）与注释块**外**的真勾选行照常归一化。
+    assert E(b"  - [ ] s\n", b"  - [x] s\n") is True
+    assert E(b"<!-- c -->\n- [ ] s\n", b"<!-- c -->\n- [x] s\n") is True
+    assert E(b"<!--\nx\n-->\n- [ ] s\n", b"<!--\nx\n-->\n- [x] s\n") is True
+
+
+def test_html_comment_tracker_reports_line_start_state():
+    t = _sg.HtmlCommentTracker()
+    assert t.feed("<!-- open") is False        # 本行行首在注释外
+    assert t.feed("- [ ] s") is True           # 已进注释
+    assert t.feed("--> tail") is True          # 闭合行的行首仍在注释内
+    assert t.feed("- [ ] s") is False          # 之后回到注释外
+
+
+def test_indent_columns_tab_stop():
+    assert _sg.indent_columns("   x") == 3 and _sg.is_indented_code_line("   x") is False
+    assert _sg.indent_columns("    x") == 4 and _sg.is_indented_code_line("    x") is True
+    assert _sg.indent_columns("\tx") == 4 and _sg.is_indented_code_line(b"\tx", is_bytes=True) is True
+
+
+def test_fence_wins_over_comment_and_indent():
+    # 围栏内的 `<!--` 不开注释、围栏内缩进行不另判——三者优先级固定，不互相污染
+    assert E(b"```\n<!--\n```\n- [ ] s\n", b"```\n<!--\n```\n- [x] s\n") is True
+
+
+# ── [impl-review-fix F4] 嵌套示例围栏：gate 侧回归（姊妹用例在 sdflow-implement） ──
+
+def test_nested_example_fence_hides_pseudo_task_and_checkboxes():
+    # 外层 ````markdown 内嵌 ```text 示例：内层 ``` 长度 3 < 开启符 4 且带 info string，
+    # 关不掉外层 ⇒ 整块内容（伪 `### Task 9:` + 两个伪复选框）一律不可见。
+    fx = Path(__file__).resolve().parent / "fixtures" / "tickets_plan_nested_fence.md"
+    ids, boxes = _sg._parse_plan(fx.read_text(encoding="utf-8"))[:2]
+    assert set(ids) == {"1", "2"}                       # 无伪 Task 9
+    assert boxes["1"] == [True] and boxes["2"] == [False]   # 伪复选框未混入

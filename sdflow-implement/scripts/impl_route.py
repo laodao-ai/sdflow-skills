@@ -11,8 +11,18 @@ marker **存在但非法/重复/损坏** 一律停（RouteStop，UNKNOWN 语义�
 防两管线混跑。
 
 本文件不 import yaml（config.yaml 只做逐行文本解析，不做通用 YAML 解析）；
-不读、不改 sdflow-ship/scripts/ship_gate.py（gate 零改动铁律，本文件与 gate 完全独立）；
+**不改** sdflow-ship/scripts/ship_gate.py（gate 零改动铁律：本文件不影响 gate 任何判定）；
 subprocess 仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输出 "-"。
+
+[impl-review-fix F4] 唯一例外：**fenced code block 的围栏词法**从 ship_gate 引入
+（`FenceTracker`，只读纯函数）。原先此处手抄 `line.lstrip().startswith("```")` 并在注释里
+声称「口径与 ship_gate._parse_plan 一致」——gate 侧已收敛到 FenceTracker（同种 + 长度 ≥ 开启符
++ 尾部校验），手抄副本没跟上，那句注释成了假话，两个解析器对同一 plan 给出不同段落边界
+（仓内实证：archive/2026-07-03-sdflow-ship/superpowers-plan.md 的 ```markdown 块内嵌 ```bash
+示例，旧口径被内层 ``` 提前关掉围栏 ⇒ 多认了 2 个复选框）。后果：`Blocked-by` 依赖图与
+完成判据基于两套边界，被隐藏的行若恰是唯一未勾项 ⇒ 完成判据侧假 ✅。
+⇒ 改为**单一源** import。引不到 ⇒ parse_blocked_by 直接 TopoError（fail-closed），
+MUST NOT 回退手抄副本——那正是本条要根治的漂移面。
 """
 from __future__ import annotations
 
@@ -25,6 +35,19 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 FRONT_DELIM = "---"
 LEGAL_PIPELINES = ("tickets", "superpowers")
+
+# [impl-review-fix F4] 围栏词法单一源 = ship_gate.FenceTracker。
+# 定位方式：本文件在 <root>/sdflow-implement/scripts/ 下，gate 在同级 <root>/sdflow-ship/scripts/。
+# 两种安装形态都成立——symlink 安装时 Path(__file__).resolve() 落回仓内；Windows copy 安装时
+# 两个 skill 目录在 ~/.claude/skills/ 下互为兄弟。抽第三个共享模块反而两种形态都找不到
+# （它没有 SKILL.md，setup.sh 不装它），故取 sibling import。
+_GATE_SCRIPTS = Path(__file__).resolve().parents[2] / "sdflow-ship" / "scripts"
+try:
+    if str(_GATE_SCRIPTS) not in sys.path:
+        sys.path.insert(0, str(_GATE_SCRIPTS))
+    from ship_gate import FenceTracker as _FenceTracker  # type: ignore
+except Exception:                                        # noqa: BLE001
+    _FenceTracker = None                                 # fail-closed，见 parse_blocked_by
 
 # [impl-review-fix] 语义对齐 ship_gate.EXIT_UNKNOWN=6（设计禁 import gate，手动同步；
 # gate 侧字面见 ship_gate.py:137 `EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN
@@ -197,9 +220,10 @@ def resolve_pipeline(config_pipeline: str, marker: Optional[str]) -> str:
 def parse_blocked_by(plan_text: str) -> Dict[int, Set[int]]:
     """按 `### Task N:` 分段解析 `Blocked-by:`（`none` 或逗号号列）。
 
-    [impl-review-fix] fence-aware：``` 围栏内的行对标题与声明行均不可见，口径与
-    ship_gate._parse_plan 一致（`line.lstrip().startswith("```")` 翻转围栏状态，围栏内
-    整行跳过）。
+    [impl-review-fix F4] fence-aware：围栏内的行对标题与声明行均不可见，口径与
+    ship_gate._parse_plan **同源**——直接复用 `ship_gate.FenceTracker`（`` ``` `` 与 `~~~`
+    两族、闭合须同种且长度 ≥ 开启符、尾部只余空白），MUST NOT 再手抄
+    `line.lstrip().startswith("```")`（旧手抄口径会被嵌套示例围栏的内层 ``` 提前关掉）。
 
     三态 fail-closed 契约（frontier 只服务 tickets plan，SKILL 契约要求每票显式声明依赖，
     不再对「段内无 Blocked-by 行」静默当无依赖）：
@@ -214,21 +238,23 @@ def parse_blocked_by(plan_text: str) -> Dict[int, Set[int]]:
     EOF 时围栏未闭合（悬空 ```）→ raise TopoError（与 gate UNKNOWN 同向 fail-closed，防悬空
     围栏吞真实 Task 段/Blocked-by 行而假判「无依赖」）。
     """
+    if _FenceTracker is None:
+        # [impl-review-fix F4] 引不到单一源 ⇒ 停，MUST NOT 用手抄口径顶上（口径漂移
+        # 正是本条要根治的病；假 ✅ 的方向比停下来贵得多）。
+        raise TopoError("无法加载围栏词法单一源 ship_gate.FenceTracker，拒绝以分叉口径解析 plan")
+
     task_ids: Set[int] = set()
     segments: List[Tuple[int, List[str]]] = []
     cur_tid: Optional[int] = None
     cur_lines: List[str] = []
-    in_fence = False
+    fence = _FenceTracker()
 
     def _flush() -> None:
         if cur_tid is not None:
             segments.append((cur_tid, cur_lines))
 
     for line in plan_text.splitlines():
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
+        if fence.feed(line) or fence.inside:
             continue
         m = TASK_HEADER_RE.match(line)
         if m:
@@ -241,7 +267,7 @@ def parse_blocked_by(plan_text: str) -> Dict[int, Set[int]]:
             cur_lines.append(line)
     _flush()
 
-    if in_fence:
+    if fence.inside:
         raise TopoError("plan 存在未闭合的 fenced 代码块（```），解析不可靠")
 
     if not segments:

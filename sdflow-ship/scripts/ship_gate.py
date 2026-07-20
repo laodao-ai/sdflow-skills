@@ -55,17 +55,27 @@ verdict × exit × next 契约表:
 D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     design-approved: 其后触及本 change 四件套路径（proposal/design/tasks.md 与 specs/）
         的提交 → 失鲜（改设计须重审）；cr/verify/hand-off 等尾流产物不算，实现提交更不算；
-        例外〔B2〕: subject 精确 `checkpoint(impl-review)` 或 `checkpoint(impl-review):…`
-        的提交豁免（阶段三合法尾流修订，code-review 回填措辞/勾选），只认 subject 不认 hunk
+        例外一〔B2/BR-7〕: subject 精确 `checkpoint(impl-review)` 或 `checkpoint(impl-review):…`
+        的提交豁免（阶段三合法尾流修订，code-review 回填措辞/勾选），只认 subject 不认 hunk；
+        例外二〔fix-design-gate-freshness-proxy · 内容判据〕: **纯勾选框翻转**豁免——
+        任何 subject 的提交，若帧内落在监视集的路径**恰为** {tasks.md}、变更形态是普通
+        内容修改（非 A/D/R/C/T、无 mode 变更）、且勾选框标记归一化后**逐行等值**，则不失鲜。
+        归一化只认行首 task-list 标记（CHECKBOX_RE_PATTERN），且 fenced code block /
+        缩进代码块（缩进 ≥4 列）/ HTML 注释块内的行一律不参与。merge 提交须**对每个
+        parent** 都成立。任何读不到 / 形态不合格 / 围栏未闭合 ⇒ 一律回落判失鲜。
+        帧枚举协议〔impl-review-fix F1〕= `git diff-tree -m -r --raw --no-renames -z --root`
+        （merge 逐 parent、改名分解 A+D、NUL 原始路径）；枚举失败 ⇒ 判失鲜（F2）
     verify / code-review: 其后触及 openspec/ 之外路径的提交 → 陈旧
         （verify=FAIL 陈旧优先于 code-review 陈旧判定，保重验不因陈旧 CR 卡死）
     报告从未提交: fresh（freshness=uncommitted，人机同权）
 
 已知不覆盖（接受并记录）:
     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
-    提交遍历不加 --first-parent（merge 内部提交逐一枚举）；但 evil-merge——仅存在于 merge
-        commit 自身、两 parent 提交都没碰过的改动——因 --name-only 默认不产 merge diff 而漏检
-        （对抗镜 Adv-B；普通冲突解决 merge 多被 side 分支内碰同名文件的提交顺带判陈旧，暴露面偏对抗）；
+    提交遍历不加 --first-parent（merge 内部提交逐一枚举）；
+        〔impl-review-fix F1，已修〕原「evil-merge 漏检」（仅存在于 merge commit 自身、
+        两 parent 都没碰过的改动，因 --name-only 不产 merge diff）已随 design 域枚举协议
+        换成 `diff-tree -m -r --raw --no-renames -z --root` 修复；**code 域仍走 --name-only**
+        （本轮判据逐字不动），故 code 域的 evil-merge 漏检**依旧存在**，登记待后续；
     非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）；
     伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
         （显式越权同权级，git 留痕可审计）；
@@ -100,6 +110,12 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         连续 ≥3 个同种 `` ` `` 或 `~`；闭合符须**同种**且长度 ≥ 开启符、其后仅空白。故
         `~~~` 块与四 backtick 块内的内容一律不可见，`~~~` 不能被 ``` 关掉（反之亦然）。
         MUST NOT 由此扩到 markdown 其它结构（表格/嵌套列表/引用块）——那是无界面，禁手搓。
+    〔impl-review-fix F3〕勾选框归一化另加两道**超集**闸门：行首缩进 ≥4 列（CommonMark
+        缩进代码块的必要条件）与 HTML 注释块（`<!--`…`-->`）内的行不参与归一化。取超集
+        是因为 CommonMark 缩进代码块的精确判定依赖段落/列表上下文（无界，禁手搓）；
+        代价 = 缩进 ≥4 列的**真嵌套任务项**翻转也判失鲜（假失鲜，保守方向，接受）。
+        本闸门只加在 `_normalize_checkbox_lines`（豁免面），MUST NOT 顺手推到 `_parse_plan`
+        / `tg02_hit` / `_line_scoped_hits`——那三处的安全方向各不相同，改动须各自论证。
     〔mlh-p5 Q4；Task6 退役 live inline 后收敛〕live 读**只认 frontmatter**：好 frontmatter
         判定后不看正文任何 inline 锚，absent 亦不回退 inline（正文残留 inline 锚被完全忽略，
         无假过风险，B4/B5 根治）。归档读 dual-read 侧仍保留旧语义：好 frontmatter 判定后不再
@@ -250,6 +266,50 @@ def design_watched_subs(frame_files, base):
     return subs
 
 
+def frame_touched_paths(root, sha):
+    """该提交触及的路径列表；**读不到/形态看不清 → None**（调用方 MUST 保守判失鲜）。
+
+    [impl-review-fix F1] 取代旧的 `git log --name-only`。旧协议有三个 fail-open 洞，
+    同属一个面（枚举协议），故一次扫全：
+
+      F1-a **merge 提交恒空**：`git log --name-only` 不带 -m/--cc 时对 merge commit
+        **不输出任何文件** ⇒ 上游 `if not subs: continue` 在触及豁免判据**之前**就跳过
+        整帧 ⇒ evil-merge（改动只存在于 merge 自身 resolve 出的树、两 parent 都没碰）
+        对 design 域整体判 fresh。且 Task1 的逐 parent 校验在生产路径上成了死代码。
+      F1-b **rename 检测吞源路径**：默认开 rename 检测，`git mv tasks.md x.md` 只输出
+        目标路径 ⇒ 监视集看不到源 `tasks.md` ⇒ 跳过整帧判 fresh（直接违反本 change 的
+        delta spec「`git mv` 迁走 ⇒ 失鲜」）。
+      F1-c **文本行协议承载文件名**：含换行/Tab 的路径按行切会拆碎、且被 C-quote 包裹
+        ⇒ 逃出 `startswith(base)` 监视集。
+
+    ⇒ 协议改为 `git diff-tree -m -r --raw --no-renames -z --root`：
+      `-m`          merge 输出**相对每个 parent** 的 diff（补 F1-a）；
+      `--no-renames` 改名分解成 A+D，源路径与目标路径**都**进枚举（补 F1-b）；
+      `-z`          NUL 分隔的原始路径，零引号零转义（补 F1-c）；
+      `--root`      根提交也能枚举出文件（否则空集 ⇒ 又一处静默跳过）。
+
+    🔴 **与 BR-6 护栏的关系**（防后人误读）：BR-6 禁的是 `--no-merges` / `--first-parent`
+    ——那两个开关会**少枚举提交**。`-m` 是**多输出** merge 的 per-parent diff，不删任何
+    提交、不改变遍历的提交集合，与 BR-6「merge 内部提交逐一枚举不漏检」方向一致。
+    """
+    rc, out = run_git_rc(root, "diff-tree", "-m", "-r", "--raw", "--no-renames",
+                         "-z", "--no-commit-id", "--root", sha)
+    if rc != 0:
+        return None
+    toks = out.split("\0")
+    paths, i = [], 0
+    while i < len(toks):
+        meta = toks[i]
+        if not meta:
+            i += 1                         # 末尾 NUL 切出的空 token
+            continue
+        if not meta.startswith(":") or i + 1 >= len(toks):
+            return None                    # 协议外形态 ⇒ 看不清 ⇒ 保守
+        paths.append(toks[i + 1])
+        i += 2
+    return paths
+
+
 def commit_parents(root, sha):
     """该提交的 parent sha 列表。根提交 → []；解析失败 → None。
 
@@ -279,15 +339,33 @@ def _plain_modification_from_raw(line):
     return status == "M" and src_mode == dst_mode
 
 
-def _plain_content_modification(root, parent, sha, path):
-    """该提交相对某 parent 对 path 的变更是否为普通内容修改。
+def _parent_path_status(root, parent, sha, path):
+    """该提交相对某 parent 对 path 的变更形态。四态：
+
+        "unchanged" — 该 parent 侧与本提交在此路径上**逐字节同一** blob（无改动可审）
+        "plain"     — 普通内容修改（status=M 且 mode 不变）
+        "unfit"     — 形态不合格（A/D/R/C/T 或仅权限位变更）
+        "error"     — git 读取失败 ⇒ 看不清
+
+    [impl-review-fix F1] 从旧的二值 `_plain_content_modification` 拆开。旧版把
+    "unchanged" 与 "unfit"/"error" 一起折叠成 False ⇒ 一旦 merge 帧被真正枚举出来
+    （F1-a 修复后），「side 分支改了 tasks.md、main 侧没改」这类**普通 merge** 会因
+    「相对 side parent 无改动」被误判 shape-unfit ⇒ 假失鲜。unchanged 的正确语义 =
+    该 parent 侧**没有引入任何设计改动**，与豁免判定无关，跳过即可。
 
     --no-renames：让改名分解成 A+D，不依赖 diff.renames 的仓库级 config（确定性）。
     """
     rc, out = run_git_rc(root, "diff", "--raw", "--no-renames", parent, sha, "--", path)
-    if rc != 0 or not out:
-        return False                       # 取不到 / 该 parent 侧未触及此路径 ⇒ 保守
-    return _plain_modification_from_raw(out.splitlines()[0])
+    if rc != 0:
+        return "error"
+    if not out:
+        return "unchanged"
+    return "plain" if _plain_modification_from_raw(out.splitlines()[0]) else "unfit"
+
+
+def _plain_content_modification(root, parent, sha, path):
+    """`_parent_path_status` 的 bool 视图（单一源）：仅 "plain" 为真。"""
+    return _parent_path_status(root, parent, sha, path) == "plain"
 
 
 def blob_pair(root, parent, sha, path):
@@ -379,6 +457,71 @@ class FenceTracker:
         return False                       # 块内出现的异种/过短围栏形状 ⇒ 只是普通内容行
 
 
+# ── [impl-review-fix F3] CommonMark 的**第三支**代码块：缩进代码块 ──────────────────────
+# 基准 5 把「``` / ~~~ / 四 backtick / **缩进 fence**」并列为 CommonMark 的**有界**变体。
+# 前三支已由 fence_delim/FenceTracker 覆盖，缩进这一支此前漏网 ⇒ 四空格缩进代码块内的
+# `- [ ] → - [x]` 仍被归一化 ⇒ 判豁免 = fail-open（放行未批准的设计改动）。
+#
+# 口径 = **超集** 判据（有意）：凡行首缩进 ≥4 列（tab 按 4 列制表位展开）的行，一律
+# 不参与勾选框归一化。CommonMark 的缩进代码块判定本身依赖段落连续性 / 列表上下文
+# （无界，MUST NOT 手搓）；取「缩进 ≥4 列」这个**必要条件**做超集，方向恒 fail-closed：
+#   - 真缩进代码块内的翻转 ⇒ 不归一化 ⇒ 判失鲜 ✅（本条要修的洞）
+#   - 深缩进的真嵌套任务项翻转 ⇒ 也判失鲜（假失鲜，**保守方向**，可接受）
+# MUST NOT 为消掉后一类而引入列表上下文推断——那正是无界解析面。
+_INDENT_CODE_COLUMNS = 4
+_TAB_STOP = 4
+
+
+def indent_columns(line, is_bytes=False):
+    """行首空格/tab 展开后的列数（tab 跳到下一个 4 列制表位）。非空白字符即停。"""
+    sp, tab = (b" ", b"\t") if is_bytes else (" ", "\t")
+    col = 0
+    for i in range(len(line)):
+        ch = line[i:i + 1] if is_bytes else line[i]
+        if ch == sp:
+            col += 1
+        elif ch == tab:
+            col += _TAB_STOP - (col % _TAB_STOP)
+        else:
+            break
+    return col
+
+
+def is_indented_code_line(line, is_bytes=False):
+    return indent_columns(line, is_bytes=is_bytes) >= _INDENT_CODE_COLUMNS
+
+
+# ── [impl-review-fix F3] HTML 注释块（`<!--` … `-->`）────────────────────────────────
+# 同属 fail-open 面：多行 HTML 注释内的勾选框翻转此前被归一化 ⇒ 判豁免。
+# 该词法**有界**（两个固定 token 配对，无嵌套——CommonMark/HTML 里 `<!--` 不嵌套），
+# 故可手写。方向也恒 fail-closed：误判「在注释内」只会少归一化 ⇒ 多判失鲜。
+class HtmlCommentTracker:
+    """逐行喂入的 HTML 注释块状态机。`feed` 返回**该行行首**是否已落在注释内部。
+
+    行首锚定的勾选框只关心行首状态，故 feed 的返回值即调用点所需的全部信息。
+    """
+
+    def __init__(self):
+        self.open = False
+
+    def feed(self, line, is_bytes=False):
+        start_inside = self.open
+        o, c = (b"<!--", b"-->") if is_bytes else ("<!--", "-->")
+        i = 0
+        while True:
+            if not self.open:
+                j = line.find(o, i)
+                if j < 0:
+                    break
+                self.open, i = True, j + len(o)
+            else:
+                j = line.find(c, i)
+                if j < 0:
+                    break
+                self.open, i = False, j + len(c)
+        return start_inside
+
+
 # [fix1 Important-2] 行锚定复选框的**单一源**：str 版 CHECKBOX_RE（见下文 _parse_plan 处）与
 # bytes 版 CHECKBOX_BYTES_RE 都从这一个 pattern 串派生，MUST NOT 再手抄字节副本（口径分叉即
 # 下一个 bug）。test_checkbox_re_bytes_derived_from_single_source 机械守这条派生关系。
@@ -399,6 +542,9 @@ def _normalize_checkbox_lines(raw):
       以及同一行第二个之后的标记**一律不动**；
     - fenced code block 内的行不参与（口径同 _line_scoped_hits/_parse_plan——四处共用
       单一源 fence_delim/FenceTracker，`` ``` `` 与 `~~~` 两族围栏均识别）；
+    - [impl-review-fix F3] **缩进代码块**（行首缩进 ≥4 列）与 **HTML 注释块**
+      （`<!--` … `-->`）内的行同样不参与——二者此前漏网，是 fail-open（块内翻转被
+      归一化 ⇒ 误判豁免 ⇒ 放行未批准的设计改动）；
     - 缩进 / 空白 / 其余字符逐字节保留——MUST NOT strip、MUST NOT 解码转换。
 
     切行用 split(b"\\n") 而非 splitlines()：后者还会在 \\r 处切开，CRLF↔LF
@@ -407,9 +553,15 @@ def _normalize_checkbox_lines(raw):
     lines = raw.split(b"\n")
     out = []
     fence = FenceTracker()
+    comment = HtmlCommentTracker()         # [impl-review-fix F3]
     for line in lines:
         if fence.feed(line, is_bytes=True) or fence.inside:
             out.append(line)               # 围栏行本身 / 块内行：逐字节原样保留，不归一化
+            continue
+        # [impl-review-fix F3] 注释状态只在围栏外推进（围栏内的 `<!--` 是代码文本，不开注释）。
+        in_comment = comment.feed(line, is_bytes=True)
+        if in_comment or is_indented_code_line(line, is_bytes=True):
+            out.append(line)               # 注释块内 / 缩进代码块：同样不归一化
             continue
         m = CHECKBOX_BYTES_RE.match(line)
         if m:
@@ -450,6 +602,9 @@ STALE_CATEGORIES = {
     "content-changed": "tasks.md 出现勾选框以外的改动",
     "blob-unreadable": "tasks.md 前后两版内容读取失败",
     "shape-unfit": "tasks.md 变更形态不合格（新建/删除/改名/类型或权限位变更，或根提交）",
+    # [impl-review-fix F2] 枚举本身失败（git log / diff-tree 非零退出或输出形态看不清）。
+    # 它不是"某帧不豁免"，而是"盘面读不清" ⇒ 按方向铁律一律判失鲜。
+    "frame-enum-failed": "提交枚举失败（git 读取错误或输出形态不可解析）",
 }
 
 
@@ -471,13 +626,18 @@ def design_frame_exempt_reason(root, sha, frame_files, base):
         return "shape-unfit"               # 根提交 / parent 解析失败 ⇒ 保守
     path = base + "tasks.md"
     for parent in parents:                 # merge：与**每个** parent 各自成立才算
+        # [impl-review-fix F1] 形态先分四态再决策：unchanged ⇒ 该 parent 侧无改动可审，
+        # 跳过（MUST NOT 当 shape-unfit——那会把普通 merge 全判失鲜）；error/unfit ⇒ 保守。
+        st = _parent_path_status(root, parent, sha, path)
+        if st == "unchanged":
+            continue
+        if st == "error":
+            return "blob-unreadable"
+        if st == "unfit":
+            return "shape-unfit"
         ok, before, after = blob_pair(root, parent, sha, path)
         if not ok:
-            # 取不到 / 形态不合格 ⇒ 保守。二者判定相同、诊断不同：形态闸门只在
-            # 失败侧再问一次（诊断路径，不进热路径），故不改判定也不多花常态开销。
-            return ("blob-unreadable"
-                    if _plain_content_modification(root, parent, sha, path)
-                    else "shape-unfit")
+            return "blob-unreadable"       # blob 读取失败（形态已确认 plain）
         if not _tasks_content_exempt(before, after):
             return "content-changed"       # 勾选框以外的改动 ⇒ 照判失鲜
     return None
@@ -536,18 +696,25 @@ def is_stale(root, rel, scope, change):
     base = f"openspec/changes/{change}/"
     if scope == "design":
         # [spec-review-amendment B2] 带 subject 分帧遍历，checkpoint(impl-review) 精确式豁免。
-        # 帧形（--format=%x00%H%x1f%s --name-only）：`\x00<sha>\x1f<subject>\n\n<file>…`，
-        # 按 \x00 切帧，帧首行= sha + \x1f + subject、余非空行=触及文件。
+        # [impl-review-fix F1] 分帧与「帧内触及路径」拆成两跳：本跳只取 (sha, subject)
+        # 列表，路径由 frame_touched_paths 逐帧取（协议不同、不能塞进同一次 log：`-z`
+        # 的 NUL 与 --format 的帧分隔符会互相污染）。subject 保证单行 ⇒ 按行切无歧义。
         # [Task1 · tasks 1.1b] format 携带 %H：不带 sha 就取不到该提交前后两版 blob。
         # 分隔符用 \x1f（unit separator）而非空格/冒号——subject 可含空格与冒号，须无歧义。
         # MUST NOT 加 --no-merges/--first-parent〔BR-6 护栏〕
         # ——头注释承诺 merge 内部提交逐一枚举不漏检；--no-merges 会改变 merge 场景失鲜语义。
-        out = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=%x00%H%x1f%s")
-        for frame in out.split("\x00"):
+        # [impl-review-fix F2] 枚举**显式判 returncode**：run_git 把非零退出折叠成空串
+        # ⇒ 零帧 ⇒ 旧路径 return (False,"fresh") = 枚举失败被当成"没有可疑提交"（fail-open）。
+        rc_log, out = run_git_rc(root, "log", f"{sha}..HEAD", "--format=%H%x1f%s")
+        if rc_log != 0:
+            return StaleResult(True, "stale", {
+                "sha": "-", "subject": "", "paths": [],
+                "category": "frame-enum-failed",
+            })
+        for frame in out.splitlines():
             if not frame:
                 continue
-            lines = frame.split("\n")
-            frame_sha, _, subject = lines[0].partition("\x1f")
+            frame_sha, _, subject = frame.partition("\x1f")
             # [spec-review-amendment BR-7] 精确式：裸 checkpoint(impl-review) 或带冒号描述；
             # 裸 startswith 闭合前缀仍收 `checkpoint(impl-review)evil` 尾串垃圾，故用精确式。
             #
@@ -567,13 +734,21 @@ def is_stale(root, rel, scope, change):
             # 此处 MUST NOT 再内联一份 `sub in DESIGN_WATCHED_NAMES or ...`：两份判据
             # 将来只改一处时，design_frame_exempt 会把「帧内路径集」误算成 {tasks.md}
             # ⇒ 豁免误开（fail-open）。新增一类监视路径只改 design_watched_subs 即可。
-            subs = design_watched_subs(lines[1:], base)
+            # [impl-review-fix F1/F2] 帧内触及路径：取不到 ⇒ 保守判失鲜，MUST NOT 当空集
+            # （空集会走下面的 `continue` 静默跳过整帧 = fail-open）。
+            frame_files = frame_touched_paths(root, frame_sha)
+            if frame_files is None:
+                return StaleResult(True, "stale", {
+                    "sha": frame_sha[:7], "subject": subject, "paths": [],
+                    "category": "frame-enum-failed",
+                })
+            subs = design_watched_subs(frame_files, base)
             if not subs:
                 continue                      # 本帧未触及任何监视路径 ⇒ 与设计门无关
             # [Task4 · SW-1] 触发点诊断：判定沿用 Task2/Task3 的分支，只是把「为什么」
             # 留下来交给 emit。分类原因取自 design_frame_exempt_reason 的**实际分支**
             # （单一源），MUST NOT 在此另拼一套归类。
-            reason = design_frame_exempt_reason(root, frame_sha, lines[1:], base)
+            reason = design_frame_exempt_reason(root, frame_sha, frame_files, base)
             if reason is not None:
                 return StaleResult(True, "stale", {
                     "sha": frame_sha[:7],

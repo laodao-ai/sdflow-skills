@@ -569,3 +569,35 @@ def test_cli_frontier_fence_dangling_exit6():
     assert code == 6
     assert out == ""
     assert err
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [impl-review-fix F4] 围栏词法单一源 = ship_gate.FenceTracker
+#
+# 旧状态：本文件手抄 `line.lstrip().startswith("```")`，注释却声称「口径与
+# ship_gate._parse_plan 一致」——gate 侧已收敛到 FenceTracker（同种 + 长度 ≥ 开启符
+# + 尾部校验），手抄副本没跟上 ⇒ 那句注释是假的，两个解析器对同一 plan 给出不同
+# 段落边界；被隐藏的行若恰是唯一未勾项，完成判据侧假 ✅。
+# ══════════════════════════════════════════════════════════════════════════
+
+NESTED_FENCE_FIXTURE = SHIP_FIXTURES / "tickets_plan_nested_fence.md"
+
+
+def test_fence_lexer_is_the_single_source_from_ship_gate():
+    # 机械守单一源关系：手抄一份副本回来 ⇒ 本例转红
+    sys.path.insert(0, str(REPO_ROOT / "sdflow-ship" / "scripts"))
+    import ship_gate as sg  # noqa: E402
+
+    assert ir._FenceTracker is sg.FenceTracker
+
+
+def test_nested_example_fence_agrees_with_gate_cross_script():
+    # 判别性 fixture：外层 ````markdown 内嵌 ```text 示例块。旧手抄口径会被内层 ```
+    # 提前关掉外层围栏 ⇒ 多认一个伪 `### Task 9:` 段（与 gate 分叉）。
+    sys.path.insert(0, str(REPO_ROOT / "sdflow-ship" / "scripts"))
+    import ship_gate as sg  # noqa: E402
+
+    text = NESTED_FENCE_FIXTURE.read_text(encoding="utf-8")
+    gate_ids = {int(i) for i in sg._parse_plan(text)[0]}
+    route_ids = set(ir.parse_blocked_by(text).keys())
+    assert gate_ids == route_ids == {1, 2}      # 伪 Task 9 两侧都不可见
