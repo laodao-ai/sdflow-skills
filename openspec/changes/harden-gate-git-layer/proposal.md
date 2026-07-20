@@ -46,6 +46,12 @@
 
 > 🔴 **砍的是枚举，不是监视集。** 监视集（只盯四件套 / 只盯非 `openspec/`）是**承重的**——它才是「实现期改源码不该让设计门失鲜」的来源。裸 `reviewed_sha == HEAD` 已实测证伪：实现期每个 ticket 都勾 `tasks.md`、每个提交都动 HEAD ⇒ 设计门从实现的第一个提交起永远失鲜，等于把 `fix-design-gate-freshness-proxy` 修的缺陷退回去。
 
+### P0 — 失鲜判据按阶段定义
+
+`decide()` 先判阶段再选判据。design 域两条豁免不再常开：**复选框归一化只在 done 期**（`tasks.md` 对账发生在那里）、**语义分诊只在代码审期**（`[impl-review-fix]` 修订四件套发生在那里）；**实现期零豁免**（实现勾的是 `superpowers-plan.md`，不在监视集内）。
+
+> BR-7 本来就是一条**阶段规则**，只是把阶段编码成了「commit subject 长什么样」——可伪造的代理。阶段由 gate 自己算出 ⇒ 代理消失，且语义逃生口的约束变成**机械的**（其余两阶段根本没有这个口）。
+
 ### P1 — git 调用失败落进退出码契约
 
 - `run_git` / `run_git_rc` / `run_git_bytes` 统一捕获 `OSError`（含 `FileNotFoundError`、`PermissionError`、无效可执行格式）与 `subprocess.TimeoutExpired`，映射 `UNKNOWN(6)`。
@@ -85,6 +91,7 @@ BR-7（`checkpoint(impl-review)` subject 豁免）、`frame_touched_paths`、帧
 |---|---|---|
 | **P0** | 录锚（缺陷 9、10） | 安全面：锚可被无声前移 / 读不到 git 就放行。缺陷 9 存在时，其余修复的威胁模型**一行都不成立** |
 | **P0** | 直接比内容（缺陷 1–8） | 安全面 + 可用性面：五个 fail-open + 一个假阳。已全部复现 |
+| **P0** | 按阶段定义判据 | 安全面：常开的语义逃生口无机械约束；阶段化后逃生口只在代码审期存在 |
 | **P1** | git 调用失败落契约 + `GIT_*` 清理 | 可用性面：退出码脱离契约集致链序误判；无 timeout 致无限阻塞；env 致无故罢工 |
 
 P0 两项同处 `is_stale` 同一函数、同一片面，分开做要付两遍 workflow 循环成本，故合并（基准 4）。P1 动的是同一批 `run_git*`，同理。

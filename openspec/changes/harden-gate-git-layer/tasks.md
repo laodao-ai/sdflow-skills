@@ -8,11 +8,12 @@
 ## 2. 直接比内容，退役枚举（P0）
 
 - [ ] 2.1 design 域：固定清单 `proposal.md`/`design.md`/`tasks.md` 逐个 `git show <锚>:<path>` 与 HEAD 比字节；`specs/` 子树经 `ls-tree -r -z` 枚举后同样逐个比
-- [ ] 2.2 `tasks.md` 比较前过既有 `_normalize_checkbox_lines`（已是 bytes 口径，直接复用）
+- [ ] 2.2 `tasks.md` 比较前过既有 `_normalize_checkbox_lines`（已是 bytes 口径，直接复用）——**仅 done 期生效**（见 2.7）
 - [ ] 2.3 code 域：`git ls-tree <锚>` 与 `git ls-tree HEAD` 各一次（**浅层、不递归**），去掉 `openspec` 条目后比较，不等即失鲜。**MUST NOT 用整树 sha**——实测 done 写 `verify-report.md` 即改变整树 sha ⇒ 正常流程假阳
 - [ ] 2.4 **读失败与内容为空显式区分**：每次 `git show` / `ls-tree` 显式判 returncode，任一失败 → `GateIndeterminate`。**MUST NOT** 让两次失败读比较相等
 - [ ] 2.5 退役 `frame_touched_paths`、帧遍历、`design_frame_exempt_reason`、BR-7 subject 短路、`_stale_trigger_hint` 与 `StaleResult.trigger`
-- [ ] 2.6 `sdflow-ship` SKILL 加语义重锚协议：撞失鲜 → 读 `reviewed_sha..HEAD` diff 判断 → 若无实质影响则重锚并**在报告写理由**；不重锚即维持失鲜
+- [ ] 2.6 `sdflow-ship` SKILL 加语义重锚协议（**仅代码审期**）：撞失鲜 → 读 `reviewed_sha..HEAD` diff 判断 → 若无实质影响则重锚并**在报告写理由**；不重锚即维持失鲜
+- [ ] 2.7 **阶段化**：`decide()` 的阶段判定前移到 design 域失鲜检查之前；按阶段选判据——实现期（零豁免）/ 代码审期（可分诊重锚）/ done 期（复选框归一化）。阶段只取决于盘面产物，无循环依赖
 
 ## 3. git 调用层（P1）
 
@@ -23,7 +24,8 @@
 
 ## 4. 测试与变异证明
 
-- [ ] 4.1 **监视集保住**：实现期改源码 + 勾 `tasks.md` 复选框 ⇒ design 域 fresh（经 `is_stale` 入口）
+- [ ] 4.1 **监视集保住**：实现期改源码 + 勾 `superpowers-plan.md` 复选框 ⇒ design 域 fresh（经 `is_stale` 入口）
+- [ ] 4.1b **阶段化双向用例**：`tasks.md` 仅复选框翻转 ⇒ **done 期 fresh / 非 done 期 stale**；实现期与 done 期**无重锚通路**
 - [ ] 4.2 合并把已批准产物换回锚前旧内容 ⇒ 失鲜（该内容不由锚后任何提交引入）
 - [ ] 4.3 无关的报告排版提交不移动锚 ⇒ 仍失鲜
 - [ ] 4.4 `reviewed_sha` 缺失 / 缩写 SHA / `HEAD` / 坏 SHA / 对象不存在 ⇒ 各判 `UNKNOWN(6)`，且**不回退旧锚**

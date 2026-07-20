@@ -10,9 +10,36 @@
 
 #### Scenario: 实现期不得让设计门失鲜
 
-- **WHEN** 设计门拍板后进入实现期，提交改动源码文件，并把 `tasks.md` 的复选框由 `- [ ]` 勾成 `- [x]`
-- **THEN** gate MUST 判 design 域 fresh——源码不在 design 域监视集内；`tasks.md` 的复选框差异 MUST 经归一化后判等值
+- **WHEN** 设计门拍板后进入实现期，提交改动源码文件，并把 `superpowers-plan.md` 中该 ticket 的验收复选框由 `- [ ]` 勾成 `- [x]`
+- **THEN** gate MUST 判 design 域 fresh——源码与 `superpowers-plan.md` 均不在 design 域监视集内
 - **AND** 该场景 MUST 有用例。**监视集是承重的**：任何令实现期提交使设计门失鲜的实现（如裸 `reviewed_sha == HEAD` 比较）MUST 判为不合格
+
+### Requirement: 失鲜判据按阶段定义，豁免只在其合法 churn 发生的阶段生效
+
+失鲜判据 MUST 按 gate 判定的**阶段**选取；design 域的豁免 MUST NOT 常开，各自只在其合法 churn 实际发生的那个阶段生效。
+
+阶段与判据的对应 MUST 为：
+
+| 阶段 | 对 design 监视集的合法 churn | 判据 | 语义逃生口 |
+|---|---|---|---|
+| 实现期 | 无 | 四件套字节等值 | **MUST NOT 存在** |
+| 代码审期 | `[impl-review-fix]` 对四件套的修订 | 四件套字节等值 | 允许（分诊 + 重锚留痕） |
+| done 期 | `tasks.md` 复选框对账 | 四件套字节等值，`tasks.md` 经复选框归一化 | **MUST NOT 存在** |
+
+阶段判定 MUST 在失鲜判定**之前**完成。二者无循环依赖：阶段只取决于盘面上存在哪些产物，不取决于失鲜结论。
+
+#### Scenario: 复选框归一化只在 done 期生效
+
+- **WHEN** 在**非 done** 阶段，`tasks.md` 的内容差异仅为复选框状态翻转
+- **THEN** gate MUST 判失鲜——复选框归一化 MUST NOT 在该阶段生效（该阶段没有任何合法流程会翻转 `tasks.md` 复选框）
+- **AND** 在 **done** 阶段的同一输入 MUST 判 fresh
+- **AND** 两个方向 MUST 各有用例
+
+#### Scenario: 实现期与 done 期无语义逃生口
+
+- **WHEN** 在实现期或 done 期，design 域监视集内容与锚版本不等值（且非 done 期的复选框差异）
+- **THEN** gate MUST 判失鲜，且 MUST NOT 提供「分诊后重锚」的通路——这两个阶段没有合法的四件套修订流程
+- **AND** 仅在**代码审期**，分诊 + 重锚 MAY 被采用
 
 #### Scenario: 合并把已批准产物换回锚前旧内容
 
@@ -29,7 +56,7 @@
 
 #### Scenario: 语义分诊须留痕且默认 fail-closed
 
-- **WHEN** 机械层判失鲜，而主 session 判定该差异无实质影响（如 `[impl-review-fix]` 修订）
+- **WHEN** **在代码审期**，机械层判失鲜，而主 session 判定该差异无实质影响（如 `[impl-review-fix]` 修订）
 - **THEN** 主 session MAY 把锚重锚到当前 HEAD，但 MUST 在报告中同时写下重锚理由
 - **AND** 未执行重锚时 MUST 维持失鲜结论——机械层 MUST NOT 因「可能会被判为无害」而放行
 - **AND** 本条 MUST NOT 被表述为机械门：分诊由被监管方执行，无可信脚本捕获路径，属显式登记的残余面

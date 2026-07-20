@@ -20,7 +20,8 @@
 - 锚点从「反推」改为「录锚」，缺失即 fail-closed。
 - 十个缺陷**整类消失**，而非逐个修补。
 - git 调用的环境级失败落进退出码契约集 `{0,3,4,5,6}`。
-- **保住监视集**：实现期改源码 / 勾复选框 MUST NOT 让设计门失鲜。
+- **保住监视集**：实现期改源码 / 勾 plan 复选框 MUST NOT 让设计门失鲜。
+- **豁免各归其位**：两条 design 域豁免只在其合法 churn 实际发生的阶段生效，MUST NOT 常开。
 
 **Non-Goals:**
 
@@ -37,8 +38,9 @@
 | `is_stale(root, rel, scope, change)` | design 分支约 50 行帧遍历；code 分支 4 行 | **重写**：两分支各约 15 行内容比较 |
 | `frame_touched_paths` / 帧遍历 / `design_frame_exempt_reason` / BR-7 短路 | 帧枚举与 subject 豁免 | **退役** |
 | `_normalize_checkbox_lines` | 内容豁免核心，已是 bytes 口径 | **保留复用** |
-| `_stale_trigger_hint` / `StaleResult.trigger` | design 域专用触发点渲染 | **退役**（诊断改由语义层给，见 ADR-3） |
+| `_stale_trigger_hint` / `StaleResult.trigger` | design 域专用触发点渲染 | **退役**（诊断改由语义层给，见 ADR-4） |
 | `run_git` / `run_git_rc` / `run_git_bytes` | 三处裸 `subprocess.run`，无 timeout、无异常捕获、不清 env | **修改**：`OSError`+`TimeoutExpired` 映射、`timeout=30`、`GIT_*` 清理 |
+| `decide()` 阶段判定 | 阶段在 design 域失鲜检查**之后**才算出 | **前移**：先判阶段，失鲜判据按阶段选（ADR-3） |
 | `main()` | 无顶层异常处置 | **修改**：`GateIndeterminate` → `UNKNOWN(6)` 的唯一映射点 |
 
 ## Decisions
@@ -59,13 +61,31 @@
 
 **reader 契约 MUST 与 producer 同批落地**：`ship_gate.py` 的 frontmatter parser 目前只认三个枚举字段、其余静默忽略。只做 producer 的结果只有两种——**新锚永远读不到**，或**缺字段时回退旧锚（= 缺陷 9 原样存活）**。∴ P0 MUST 含：reader/schema、完整 40 位 OID 校验（拒缩写 SHA / `HEAD` / 坏 SHA）、commit-object 存在性校验、字段缺失策略（**MUST NOT 静默回退**）、producer/gate 版本错配处置。
 
-### ADR-3：诊断降级为语义层产出
+### ADR-3：失鲜判据**按阶段**定义，豁免各归其位
+
+**决定**：`decide()` 先判阶段，再按阶段选失鲜判据。design 域的两条豁免不再常开，各自只在其**合法 churn 实际发生的那个阶段**生效：
+
+| 阶段 | 对 design 监视集的合法 churn | 判据 | 逃生口 |
+|---|---|---|---|
+| 实现期 | **无**（实现勾的是 `superpowers-plan.md`，不在监视集内） | 四件套字节等值 | **无**，机械 fail-closed |
+| 代码审期 | `[impl-review-fix]` 对四件套的修订 | 四件套字节等值 | **有**：不等 ⇒ 语义分诊 + 重锚留痕 |
+| done 期 | `tasks.md` 复选框对账（`sdflow-done` 0.3 步） | 四件套字节等值，`tasks.md` 走 `_normalize_checkbox_lines` | **无** |
+
+code 域的两个消费方**已经是位置即阶段**——`decide()` 里 `code-review-report` 的检查在代码审阶段之后才可达，`verify-report` 的在 done 阶段之后才可达（源码位置 `:1291` / `:1311`，均在阶段机走完对应分支之后）。design 域是唯一阶段无关的检查，也正是豁免堆得最厚的那个——**一个检查要同时容忍三个阶段的合法 churn，必然长出一堆豁免**。
+
+**备选（已否决）**：维持单一判据 + 常开豁免（本 change 前一版方案）。理由——常开的语义逃生口没有任何机械约束，「什么阻止分诊方每次都重锚」无答案；阶段化之后，逃生口只在代码审期存在，而**阶段由 gate 自己算出、不靠自觉**，约束是机械的。
+
+**BR-7 的定性由此改写**：它从来就是一条**阶段规则**，只是把阶段编码成了「commit subject 长什么样」——一个可伪造的代理（伪造 subject 即可在任意阶段取得豁免）。阶段化后它变成 gate 已知的事实，代理消失。
+
+**实现约束**：阶段判定与失鲜判定**无循环依赖**——阶段只取决于盘面上有哪些产物（plan 在不在、code-review-report 在不在、verify-report 在不在及其锚），均不依赖失鲜结论。∴ 阶段判定可安全前移到 design 域检查之前。
+
+### ADR-4：诊断降级为语义层产出
 
 **决定**：退役 `_stale_trigger_hint` 与 `StaleResult.trigger`。gate 只报「哪个域失鲜」；「撞在哪」由语义分诊时给（主 session 手里就有 diff）。
 
 **理由**：触发点诊断原本依附于帧遍历（要 sha + subject）。帧遍历退役后，为凑齐诊断而保留一条枚举路径，等于把刚砍掉的推断面从后门放回来。且 `decide()` 的两个 code 域调用点本来就二元解包丢弃了 `trigger`（`:1291`/`:1311`），该能力在 code 域**从未真正接通过**。
 
-### ADR-4：`timeout = 30`，对齐仓内既有先例
+### ADR-5：`timeout = 30`，对齐仓内既有先例
 
 **决定**：三个 helper 统一 `timeout=30`。
 
@@ -73,7 +93,7 @@
 
 **聚合上界**：design 域现在是「固定清单 × 2 次 `git show`」（约 8–10 次调用，与帧数无关），不再有帧遍历那种 30N 的无界聚合面。
 
-### ADR-5：外部态中和是 `_GIT_HARDEN` 的职责，配置面与环境面一次扫全
+### ADR-6：外部态中和是 `_GIT_HARDEN` 的职责，配置面与环境面一次扫全
 
 **决定**：`_GIT_HARDEN` 的职责由「中和 `core.quotePath`」重定义为「**中和一切能改变判定输入的外部可控态**」——config 面走 `-c`，环境面走子进程 env 清理（剔除 `GIT_*`，保留必要的 `PATH`/`HOME`）。
 
@@ -105,12 +125,12 @@
 
 - **语义分诊本身由被监管方执行** —— 主 session 判「这处变化不要紧」并重锚，无可信脚本捕获路径（承 [[signal-exists-not-equal-mechanical-capture]]）。缓解 = 机械层默认 fail-closed（不主动重锚就是 stale）+ 重锚 MUST 附理由 + git 留痕可审计。**MUST NOT 声称这是机械门。**
 - **有写权限者直接改 `reviewed_sha`** —— 与改结论字段同权级，留痕可审计。不在失鲜判据职责内。
-- **T189 耦合** —— `_normalize_checkbox_lines` 成为 design 域内容比较的核心依赖，其口径缺陷（T189）会直接影响豁免面。本次不改，**显式登记**。
+- **T189 耦合** —— `_normalize_checkbox_lines` 成为 **done 期** design 域比较的核心依赖，其口径缺陷（T189）会直接影响该阶段的豁免面（其余阶段不受影响，因归一化不在那些阶段生效）。本次不改，**显式登记**。
 - 本 change 提升的是**误操作与流程漏洞**的拦截率，**不声称**能挡有意规避者。
 
 ## Risks / Trade-offs
 
-- **[退役 BR-7 后语义分诊频率过高]** → 缓解：A8 待实现期验证。若 impl-review 修订四件套的频率高到让分诊成为负担，须回补一条机械豁免（判据届时按实测定，不预先猜）。
+- **[代码审期语义分诊频率过高]** → 缓解：阶段化后逃生口只在代码审期存在，触发面已从「任意阶段」收窄到「impl-review 修订四件套」这一种；A8 待实现期验证实际频率。若仍过高，须回补一条机械豁免（判据届时按实测定，不预先猜）。
 - **[判定失去确定性]** → 缓解：机械层仍是确定的（内容比较），不确定的只有分诊；分诊默认 fail-closed，且 MUST 留痕。
 - **[退役大量已上线行为（BR-7 真值表 8 格、帧遍历、触发点诊断）]** → 缓解：这些用例随其守护的机制一并退役，**MUST 在 impl-report 逐条说明每个删除的用例对应哪个退役机制**，MUST NOT 静默删测试。
 - **[存量报告缺 `reviewed_sha` 撞门]** → 缓解：在途的只有本 change 自己；fail-closed 方向安全（停下问人，非假放行）。
@@ -135,7 +155,8 @@
 - 内容比较 **MUST** 显式判 returncode；**MUST NOT** 让两次失败读比较相等（读失败 ≠ 内容为空）。
 - **MUST NOT** 在 `reviewed_sha` 缺失/非法时回退到 `report_last_sha` 或任何反推式锚。
 - **MUST NOT** 为凑触发点诊断而保留任何路径枚举通路。
-- 监视集 **MUST** 保住：实现期改源码、勾 `tasks.md` 复选框 **MUST NOT** 让设计门失鲜，各配用例。
+- 监视集 **MUST** 保住：实现期改源码、勾 `superpowers-plan.md` 复选框 **MUST NOT** 让设计门失鲜；done 期 `tasks.md` 复选框对账 **MUST NOT** 让设计门失鲜。各配用例。
+- 两条 design 域豁免 **MUST** 按阶段生效（复选框归一化=done 期、语义分诊=代码审期），**MUST NOT** 常开；实现期与 done 期 **MUST NOT** 存在语义逃生口。
 - 子进程 **MUST** 清理 `GIT_*` 环境变量；配置面中和走 `-c`。
 - 每条新增守卫 **MUST** 附变异证明（删掉即变红），结果落 impl-report；**MUST NOT** 以「用例存在且为绿」充当证明。
 - 新增用例 **MUST** 经 `is_stale` 公共入口求值，**MUST NOT** 只直接调内部 helper。
