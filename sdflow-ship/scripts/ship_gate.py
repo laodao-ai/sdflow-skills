@@ -148,6 +148,7 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
 #   目标态论证：迁移期评估安全锚 producer 契约而非现存语料快照（见 design ADR-4）。
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -187,27 +188,85 @@ class GateIndeterminate(Exception):
         self.category = category
 
 
-# [impl-review-fix] git 调用统一注入两道加固（对抗镜 Adv-A + 正确性/历史镜 F1）：
+# [harden-gate-git-layer Task2 · ADR-6 · tasks 3.4] `_GIT_HARDEN` 的职责 =
+# **中和一切能改变判定输入的外部可控态**，而不只是「中和 core.quotePath」。外部可控态有两个面，
+# 两面都必须扫，缺一即判定输入仍可被外部翻转：
+#   **config 面**（本常量，`-c` 注入）：
 #   ① -c core.quotePath=false：git 默认把非 ASCII 路径 C-quote（八进制+首尾引号），
 #      裸 f.startswith(base)/startswith("openspec/") 对中文文件名路径全失配 → design 域假鲜
 #      （拍板后偷改中文名 spec 静默放行=假✅）/ code 域假陈旧。本项目中文文件名密集，realistic。
 #   ② errors="replace"：报告内容/subject/文件名非 UTF-8 时 strict 解码抛 UnicodeDecodeError
 #      → 退出码 1 逸出契约集 {0,3,4,5,6}；与头注释「非 UTF-8 以 replace 解码」及本地 read_text
 #      路径的既有加固对齐（archived verify 走 git show 是首个用 subprocess 读报告内容的路径）。
+#   **环境面**（`_git_env()`，denylist 清理）：见该函数注释。
+# MUST NOT 以「我们碰巧没用到 diff / pathspec」当安全论据——那是拿现状当保证（基准 3）。
 _GIT_HARDEN = ("-c", "core.quotePath=false")
+
+# [harden-gate-git-layer Task2 · ADR-5 · tasks 3.2] 三个 helper 统一上界。
+# 判据来源 = 仓内既有先例 `sdflow-buglist/scripts/buglist.py::repo_root` 的 `git_timeout = 30`：
+# 这些都是**纯本地元数据查询**（正常毫秒级），30 秒是**文件系统卡死 / 网络文件系统挂起**的
+# 判定线，**不是性能预算**。MUST NOT 按「最慢的仓要多久」来调大——那会把它误当性能预算，
+# 从而让真正的挂起拖到无限久（而 gate 是同步阻塞在链序里的）。
+# 聚合上界的数量级：design 域一次 decide() 约 4 次 git 调用（与提交数无关）
+# ⇒ 最坏情形（文件系统级挂起）约 2 分钟落进 UNKNOWN(6)。**有界 ≠ 短**，此处写明免各自心算。
+GIT_TIMEOUT_SECONDS = 30
+
+
+def _git_env():
+    """子进程 env：复制当前环境后**剔除 `GIT_` 前缀键**，其余原样透传。
+
+    [harden-gate-git-layer Task2 · ADR-6 · tasks 3.3] MUST 用 denylist，**MUST NOT 用 allowlist**
+    （只显式构造 PATH/HOME 等几个键）——allowlist 在 Windows 会漏 `SYSTEMROOT`/`COMSPEC` 等
+    `CreateProcess` 依赖变量，导致子进程启动本身失败；这与本仓已踩过的跨平台坑同类：
+    **本地 macOS 测不出，只有真实 Windows runner 才暴露**。
+
+    剔除面 = 全部 `GIT_*`，非只剔已知的几个（`GIT_ICASE_PATHSPECS` / `GIT_DIR` / `GIT_WORK_TREE`…）：
+    已知集是会增长的，逐个点名等于承诺「git 不再新增能改变输出的环境变量」——那是拿现状当保证。
+    """
+    env = os.environ.copy()
+    for key in [k for k in env if k.startswith("GIT_")]:
+        del env[key]
+    return env
+
+
+def _git_run(root, args, text):
+    """三个 helper 唯一的 subprocess 出口：统一 timeout + env 清理 + 环境级失败映射。
+
+    [harden-gate-git-layer Task2 · tasks 3.1/3.2/3.3] 单出口而非三处复制——三份拷贝必然漂移
+    （历史上 `_GIT_HARDEN` 就是靠单点注入才没漏），且「新增一个 git 调用点忘了加固」这条
+    失效模式在单出口下不存在。三个 helper 的语义差异（text/strip vs 原始字节）留在各自壳里。
+
+    环境级失败 MUST 收敛进退出码契约集 `{0,3,4,5,6}`：裸 `OSError`（git 不在 PATH /
+    不可执行 / 权限不足）与 `TimeoutExpired`（文件系统挂起）逸出后是 Python 默认退出码 1，
+    对 `/sdflow-ship` 链序而言是**契约外**取值 ⇒ 无处置路径。二者各自 category 不同，
+    因为补救动作完全不同（装 git vs 查磁盘），MUST NOT 合并成一句「git 调用失败」。
+    """
+    cmd = ["git", "-C", str(root), *_GIT_HARDEN, *args]
+    kwargs = {"capture_output": True, "timeout": GIT_TIMEOUT_SECONDS, "env": _git_env()}
+    if text:
+        kwargs["text"] = True
+        kwargs["errors"] = "replace"
+    shown = " ".join(str(x) for x in cmd)
+    try:
+        return subprocess.run(cmd, **kwargs)
+    except subprocess.TimeoutExpired:
+        raise GateIndeterminate(
+            f"git 调用超过 {GIT_TIMEOUT_SECONDS}s 未返回：{shown}", CAUSE_GIT_TIMEOUT)
+    except OSError as exc:
+        raise GateIndeterminate(
+            f"git 子进程无法启动（{type(exc).__name__}: {exc}）：{shown}",
+            CAUSE_GIT_UNAVAILABLE)
 
 
 def run_git(root, *args):
-    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args],
-                       capture_output=True, text=True, errors="replace")
+    r = _git_run(root, args, text=True)
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
 def run_git_rc(root, *args):
     # [spec-review-amendment H3] 返回码可见版：run_git 把 git 错误与「路径不在树/空输出」
     # 都折叠成空串，base_ref 的 None 性据此驱动「base 不存在→UNKNOWN」vs「归档缺→REFUSE」分岔。
-    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args],
-                       capture_output=True, text=True, errors="replace")
+    r = _git_run(root, args, text=True)
     return r.returncode, r.stdout.strip()
 
 
@@ -317,8 +376,12 @@ def run_git_bytes(root, *args):
     那条路径 text=True + errors="replace" + .strip()，四者各自可造假等值：
     吞首尾空白、吞末尾换行、CRLF↔LF 不可分辨、非 UTF-8 字节被替换成 U+FFFD 后两版趋同。
     本函数只做 subprocess 原样取字节，解码与归一化留给调用方按判据自行决定。
+
+    [harden-gate-git-layer Task2] 「MUST NOT 复用 run_git/run_git_rc」约束的是**文本层语义**
+    （text/errors/strip 四者各自可造假等值），不是 subprocess 调用本身：三者共用 `_git_run`
+    取 timeout + env 清理 + 环境级失败映射，本函数仍走 text=False 拿原始字节，语义无损。
     """
-    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args], capture_output=True)
+    r = _git_run(root, args, text=False)
     return r.returncode, r.stdout
 
 
@@ -1467,7 +1530,9 @@ def decide(root, change):
 # 链序里的处置正是「停并转述 reason」，reason 空洞 = 撞门者被裸退出码打发。
 _INDETERMINATE_ADVICE = {
     CAUSE_GIT_UNAVAILABLE: "git 不在 PATH 或不可执行 → 检查环境、安装 git 后重跑",
-    CAUSE_GIT_TIMEOUT: "git 调用超时（>30s）→ 检查磁盘或网络文件系统是否挂起",
+    # [T194] 上界值**插值引用同一常量**，MUST NOT 硬编码字面量——两者天然漂移
+    # （改 GIT_TIMEOUT_SECONDS 而忘了改文案 ⇒ 撞门者按错误的秒数去判断是不是真挂起）。
+    CAUSE_GIT_TIMEOUT: f"git 调用超时（>{GIT_TIMEOUT_SECONDS}s）→ 检查磁盘或网络文件系统是否挂起",
     CAUSE_ANCHOR_MISSING: "该报告产出于本次门禁硬化之前（无 reviewed_sha 锚）"
                           " → 重跑对应评审补锚（结论字段与 reviewed_sha 须同一次写入落盘）",
     CAUSE_ANCHOR_INVALID: "reviewed_sha 不是完整 40 位小写 hex（缩写 SHA / HEAD / 坏值均不接受）"
@@ -1488,11 +1553,14 @@ def main(argv=None):
     p.add_argument("--change", required=True)
     p.add_argument("--root", default=None)
     a = p.parse_args(argv)
-    root = Path(a.root) if a.root else Path(
-        run_git(Path.cwd(), "rev-parse", "--show-toplevel") or Path.cwd())
     # [harden-gate-git-layer Task1 · tasks 3.6] `GateIndeterminate` → UNKNOWN(6) 的**唯一**映射点，
-    # 且捕获范围是 decide 的整个函数体（判定不能可发生在任何一步，不只锚读取那一步）。
+    # 且捕获范围是 **main() 整个函数体**（判定不能可发生在任何一步，不只锚读取那一步）。
+    # [Task2] `--root` 缺省时的仓根解析**本身就是一次 git 调用** ⇒ MUST 在 try 内：
+    # 放在 try 外时「git 不在 PATH」这条最常见的失败会从第一行就逸出成退出码 1，
+    # 恰好绕过为它准备的整套诊断（守卫写了、但主路径够不着 = 假绿的经典形态）。
     try:
+        root = Path(a.root) if a.root else Path(
+            run_git(Path.cwd(), "rev-parse", "--show-toplevel") or Path.cwd())
         decide(root, a.change)
     except GateIndeterminate as exc:
         emit("UNKNOWN", EXIT_UNKNOWN, None, _indeterminate_reason(exc),
