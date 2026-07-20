@@ -213,7 +213,7 @@ GIT_TIMEOUT_SECONDS = 30
 
 
 def _git_env():
-    """子进程 env：复制当前环境后**剔除 `GIT_` 前缀键**，其余原样透传。
+    """子进程 env：复制当前环境 → **剔除 `GIT_` 前缀键** → **本进程回填两个禁读键**。
 
     [harden-gate-git-layer Task2 · ADR-6 · tasks 3.3] MUST 用 denylist，**MUST NOT 用 allowlist**
     （只显式构造 PATH/HOME 等几个键）——allowlist 在 Windows 会漏 `SYSTEMROOT`/`COMSPEC` 等
@@ -222,10 +222,40 @@ def _git_env():
 
     剔除面 = 全部 `GIT_*`，非只剔已知的几个（`GIT_ICASE_PATHSPECS` / `GIT_DIR` / `GIT_WORK_TREE`…）：
     已知集是会增长的，逐个点名等于承诺「git 不再新增能改变输出的环境变量」——那是拿现状当保证。
+
+    [fix1 F1] **剔 `GIT_*` 不等于封死环境面**：global/system gitconfig 的**位置**由
+    `HOME` / `XDG_CONFIG_HOME` 决定，而这两个键非 `GIT_` 前缀、按 denylist 必须透传
+    ⇒ 外部仍能经一份 global gitconfig 改判定输入。已实测：global 置
+    `i18n.logOutputEncoding=GBK` 后 `run_git("log", "--format=%s")` 的 subject 由
+    `主题中文` 变成 `����`，而该 subject 正是 `done_task_ids` 的判定输入。
+    ∴ 在 denylist **之后**回填 `GIT_CONFIG_GLOBAL` / `GIT_CONFIG_SYSTEM` = `/dev/null`：
+    **本进程注入 ≠ 外部可控**，不破坏 denylist 口径（先剔干净，再由我们自己写死）。
+      · 空设备是 git **官方文档给的**跳过写法（git(1)：「Can be set to /dev/null to
+        skip reading configuration files of the respective level.」），非平台巧合。
+        取 `os.devnull` 而非字面量 `"/dev/null"`：Windows 上它是原生 `nul`（Git for
+        Windows 的 compat 层两种写法都认，用平台原生值免赌 compat 映射）。
+      · MUST NOT 改用 `-c i18n.logOutputEncoding=UTF-8 -c log.showSignature=false` 之类的
+        **逐项覆盖**：那是点名已知 knob，与本函数剔除面选全前缀的理由同构地错（config 键集
+        只会增长，点名 = 承诺「不再新增能改变输出的配置项」）。整片禁读才是面治。
+      · 未封 repo-local `.git/config`：那是被判仓自身的一部分（越权改它 git 留痕可审计），
+        不属「外部环境态」。判定不因它改变仍由 `test_verdict_is_identical_under_polluted_git_env`
+        机械守住。
+
+    [fix1 M1] **与先例的差异登记**：`sdflow-buglist/scripts/buglist.py::repo_root`（:613-618）
+    只剔 discovery 类（`GIT_DIR`/`GIT_WORK_TREE`/`GIT_CONFIG_*`…）并**刻意保留执行类**
+    （`GIT_EXEC_PATH` 等）；本函数剔全前缀，故连 `GIT_EXEC_PATH` 一并剔掉。
+    理由：本文件只调 builtin 子命令（`log`/`rev-parse`/`ls-tree`/`show`/`cat-file`），
+    不依赖外部 `git-*` 可执行文件的查找路径，∴ 保留执行类无收益、而枚举「哪些算执行类」
+    要长期跟 git 版本（正是本函数拒绝的那种承诺）。**代价**（显式登记，非未知）：日后若
+    引入非 builtin 的 git 子命令，剔掉 `GIT_EXEC_PATH` 可能令 git 找不到它而 rc≠0，
+    `run_git` 返 `""` ⇒ **静默降级而非 UNKNOWN**。届时 MUST 改为按 buglist 口径分类剔除，
+    而不是给这里打一个特例补丁。
     """
     env = os.environ.copy()
     for key in [k for k in env if k.startswith("GIT_")]:
         del env[key]
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_CONFIG_SYSTEM"] = os.devnull
     return env
 
 

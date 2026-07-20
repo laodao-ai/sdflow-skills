@@ -1,0 +1,552 @@
+diff --git a/openspec/changes/harden-gate-git-layer/impl-reports/task2-git-layer-faults.md b/openspec/changes/harden-gate-git-layer/impl-reports/task2-git-layer-faults.md
+new file mode 100644
+index 0000000..f4d66ca
+--- /dev/null
++++ b/openspec/changes/harden-gate-git-layer/impl-reports/task2-git-layer-faults.md
+@@ -0,0 +1,101 @@
++# Task 2 · git 调用失败一律落在退出码契约内，且带可行动诊断
++
++**R-ID**: R5 ｜ **范围**: tasks 3.1–3.6 + 测试 5.8 / 5.9a / 5.9b / 5.9c ｜ **产物**:
++`sdflow-ship/scripts/ship_gate.py`、`sdflow-ship/tests/test_gate_git_layer.py`（新增，27 用例）
++
++## 做了什么
++
++三个 git helper（`run_git` / `run_git_rc` / `run_git_bytes`）此前是三处**裸 `subprocess.run`**：
++无 timeout、无异常捕获、不清 env。`OSError`（git 不在 PATH / 不可执行 / 权限不足）与
++`TimeoutExpired`（文件系统挂起）会直接逸出，落成 Python 默认退出码 **1** —— **契约集 `{0,3,4,5,6}` 之外**，
++`/sdflow-ship` 链序对它没有处置路径。
++
++改动四件：
++
++1. **单出口 `_git_run(root, args, text)`**（`ship_gate.py:232`）——三个 helper 唯一的 subprocess 出口，
++   统一 `timeout` + env 清理 + 环境级失败映射。三个 helper 只剩各自的语义壳
++   （text/strip vs 原始字节）。
++2. **`GIT_TIMEOUT_SECONDS = 30`**（`:212`）——ADR-5 取值理由（对齐 `buglist.py::repo_root`：
++   纯本地元数据查询，30s 是**文件系统卡死判定线、不是性能预算**；聚合上界数量级 ≈ 2 分钟）
++   写在常量注释里。
++3. **`_git_env()`**（`:215`）——`os.environ.copy()` 后剔除 `GIT_` **前缀全集**，其余原样透传（denylist）。
++4. **`main()` 的 try 覆盖整个函数体**（`:1554`）——**仓根解析（`rev-parse --show-toplevel`）
++   本身就是一次 git 调用**，Task 1 时它落在 try 之外。
++
++**顺带**：`_GIT_HARDEN` 的注释按 tasks 3.4 改写为「中和一切能改变判定输入的外部可控态」，
++显式点出 config 面（`-c`）与环境面（`_git_env`）两半。
++
++## 逐条验收标准 → 证据锚点
++
++| 验收标准 | 证据 |
++|---|---|
++| 三个 helper 各自在 `OSError` 下得到受控结果（三组独立验证） | `test_oserror_is_controlled_per_helper[run_git\|run_git_rc\|run_git_bytes]`；另有 `test_permission_error_is_controlled_per_helper[×3]` 覆盖 `PermissionError`（OSError 另一子类）。**真实手段构造**（PATH 里没有 git / git 不可执行），非打桩 |
++| 三个 helper 各自在超时下得到受控结果（三组独立验证），上界取值理由写在注释里 | `test_timeout_is_controlled_per_helper[×3]`（注入，跨平台）+ `test_real_hang_times_out_per_helper[×3]`（真实 fake-git 挂起，POSIX）+ `test_timeout_bound_is_the_shared_constant[×3]`（断言传进 subprocess 的 timeout 就是那个常量）。理由注释 `ship_gate.py:206-212` |
++| 顶层入口映射 `UNKNOWN(6)`，五类诊断彼此可区分 | `test_main_maps_git_unavailable_to_unknown`、`test_main_maps_git_unavailable_during_repo_root_resolution`、`test_main_maps_timeout_to_unknown`（均经 `main()` 公共入口，断 `cause_category`）；`test_five_causes_give_distinguishable_advice`（六类两两不同，且逐条断各自专属措辞） |
++| 已知会扭曲判定的 git 环境变量被剔除后结论与干净环境一致；非 `GIT_` 前缀原样透传 | `test_verdict_is_identical_under_polluted_git_env[fresh\|stale]`（端到端跑脚本，污染集 = `GIT_ICASE_PATHSPECS` / `GIT_DIR` / `GIT_WORK_TREE` / `GIT_INDEX_FILE` / `GIT_CONFIG_GLOBAL` / `GIT_LITERAL_PATHSPECS` + 仓 config `diff.ignoreSubmodules=all`）；`test_git_prefixed_vars_are_stripped_from_subprocess_env`；透传半场 `test_non_git_prefixed_vars_pass_through`（**行为级**探针：`XDG_CONFIG_HOME` 真的被 git 读到）+ `test_env_is_a_denylist_not_an_allowlist`（剔除面**恰好等于** `GIT_` 前缀集） |
++| 退出码始终落在契约集内 | `test_exit_code_stays_in_contract_under_git_failures`（真跑脚本，断 `code in {0,3,4,5,6}`） |
++| 每条新增守卫各附一次变异证明 | 下节，8/8 全红 |
++
++**额外一条守卫**（非验收项，属基准 3 面治）：`test_all_git_calls_go_through_the_single_hardened_entry`
++——加固靠单出口保证，新增裸 `subprocess.run` 调用点 = 一条没被加固的通路，机械守住（源码中
++`subprocess.run(` 恰好出现 1 次）。
++
++## 变异证明（8 条，逐条实测）
++
++跑法：把守卫改坏 → 跑对应用例 → 记录变红 → 还原。**MUST NOT 以「用例存在且为绿」充当证明。**
++
++| # | 变异 | 结果 |
++|---|---|---|
++| M1 | 删 `_git_run` 的 `except OSError` 子句 | **8 failed** — `test_oserror_is_controlled_per_helper[×3]`、`test_permission_error_is_controlled_per_helper[×3]`、`test_main_maps_git_unavailable_to_unknown`、`test_exit_code_stays_in_contract_under_git_failures`（报错：`FileNotFoundError: No such file or directory: 'git'` 直接逸出） |
++| M2 | 删 `except subprocess.TimeoutExpired` 子句 | **7 failed** — `test_timeout_is_controlled_per_helper[×3]`、`test_real_hang_times_out_per_helper[×3]`、`test_main_maps_timeout_to_unknown` |
++| M3 | 从 kwargs 里删 `"timeout": GIT_TIMEOUT_SECONDS`（回到无限等待） | **6 failed** — `test_timeout_bound_is_the_shared_constant[×3]`、`test_real_hang_times_out_per_helper[×3]`。⚠ 该轮耗时 61s（真实 fake-git 睡满 20s×3），正是「无上界」的直接观测 |
++| M4 | 从 kwargs 里删 `"env": _git_env()`（不清 `GIT_*`） | **3 failed** — `test_git_prefixed_vars_are_stripped_from_subprocess_env`、`test_verdict_is_identical_under_polluted_git_env[fresh\|stale]` |
++| M5 | `_git_env` 由 denylist 改成 allowlist（只留 `PATH`/`HOME`） | **2 failed** — `test_non_git_prefixed_vars_pass_through`、`test_env_is_a_denylist_not_an_allowlist` |
++| M6 | 仓根解析挪回 `try` 之外（= Task 1 的原形态） | **1 failed** — `test_main_maps_git_unavailable_during_repo_root_resolution` |
++| M7 | 超时文案回到硬编码 `>30s`（T194 原形态） | **1 failed** — `test_timeout_advice_interpolates_the_constant` |
++| M8 | 在 `run_git` 里恢复一处裸 `subprocess.run`（绕过单出口） | **2 failed** — `test_all_git_calls_go_through_the_single_hardened_entry`、`test_oserror_is_controlled_per_helper[run_git]`（**只有 `run_git` 那一组红** ⇒ 证明三组是真独立、不是共用一条断言） |
++
++还原后已复跑：`sdflow-ship/tests/` **345 passed**；仓根全套件 **2097 passed, 9 skipped, 3 xfailed**
++（基线 2070 + 本票新增 27）。
++
++## 关于「守卫计数」
++
++tasks 5.14 的括注按「三处各自复制加固」估作 7 组独立守卫。本实现走**单出口**（`_git_run`），
++守卫在源码上不是 7 份而是 4 处（OSError 子句 / Timeout 子句 / timeout 参数 / env 参数）
++＋ main 的 try 边界 ＋ 文案插值 ＋ 单出口约束 = **8 条变异**，逐条实测。
++**三处复制的方案被否**：三份拷贝必然漂移（`_GIT_HARDEN` 历史上正是靠单点注入才没漏），
++且「新增 git 调用点忘了加固」这条失效模式在单出口下不存在——M8 就是把它机械焊住的那条守卫。
++覆盖强度不减：**每个 helper 仍各有独立用例**（M8 证明了这三组不共用断言）。
++
++## T194 的处置
++
++T194（`ship_gate.py` 的 UNKNOWN advice 串硬编码 `>30s`，与本票引入的 timeout 常量天然漂移）
++**已消**：`_INDETERMINATE_ADVICE[CAUSE_GIT_TIMEOUT]` 改为 f-string 插值 `GIT_TIMEOUT_SECONDS`
++（`:1535`），并加机械守 `test_timeout_advice_interpolates_the_constant`
++（断源码里不再有 `>30s` 字面量 + 文案确实随常量走）；变异 M7 证明该守卫承重。
++按 ticket 要求**未改动 todolist 状态**，交编排层处置。
++
++## 遇到的问题与决策
++
++1. **fixture 顺序踩过一次真坑**：起初把「让 git 消失」写成 pytest fixture，它在 setup 阶段抢先生效
++   ⇒ `approved_change` 建仓当场 `FileNotFoundError`——用例是红的，但**红在建仓、不在被测面**
++   （典型的「红得不对」）。改为普通函数、在盘面建好之后显式调用。教训写进测试文件注释。
++2. **构造 `PermissionError` 需要 PATH 里只留 shadow 目录**：POSIX 的 exec 搜索会**跳过不可执行项
++   继续往后找**，把 shadow 目录追加在真 PATH 前面时找到的仍是真 git（实测），构造不出该异常。
++3. **fake-git 里的 `sleep` 必须走绝对路径**：shadow 目录若成为唯一 PATH，`sleep` 会
++   command-not-found 而秒退，用例照样「不抛异常」但原因与被测面无关（实测踩过，已固化进注释）。
++4. **`run_git_bytes` 的「MUST NOT 复用 run_git/run_git_rc」如何解读**：该约束（来自
++   `fix-design-gate-freshness-proxy`）针对的是**文本层语义**（text/errors/strip 四者各自可造假等值），
++   不是 subprocess 调用本身。共用 `_git_run` 时本函数仍走 `text=False` 拿原始字节，语义无损。
++   已在该函数 docstring 里显式登记这一读法，防后续维护者误判为违规。
++5. **跨平台**：`chmod` 权限位与 `#!/bin/sh` fake git 仅 POSIX 成立 ⇒ 两组「真实手段」用例
++   `skipif(os.name != "posix")`；但**同一守卫另有跨平台的注入式用例覆盖**（`test_timeout_is_controlled_per_helper`
++   / `test_oserror_is_controlled_per_helper` 用 PATH 清空，Windows 同样成立）⇒ Windows runner 上守卫不失守。
++
++## Concerns
++
++- **`diff.ignoreSubmodules=all` 只在 5.8 的端到端一致性用例里被覆盖，未单独立守**：本票不改
++  config 面（`_GIT_HARDEN` 的 `-c` 注入），且 ADR-2 的新判定路径已不调 `diff`
++  ⇒ 该 config 的直接利用面随 Task 3/4 落地而消失。此处只保证「它在也不改变结论」。
++- **`CAUSE_READ_FAILED` 的生产触发点尚未接入**（design 组件表标 Task3/4）：本票只验它的
++  诊断文案与其余四类可区分，未验它在真实读失败路径上被抛出——那属 Task 3/4 的覆盖面。
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index cfbcb11..0a25bd0 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -148,6 +148,7 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
+ #   目标态论证：迁移期评估安全锚 producer 契约而非现存语料快照（见 design ADR-4）。
+ import argparse
+ import json
++import os
+ import re
+ import subprocess
+ import sys
+@@ -187,27 +188,85 @@ class GateIndeterminate(Exception):
+         self.category = category
+ 
+ 
+-# [impl-review-fix] git 调用统一注入两道加固（对抗镜 Adv-A + 正确性/历史镜 F1）：
++# [harden-gate-git-layer Task2 · ADR-6 · tasks 3.4] `_GIT_HARDEN` 的职责 =
++# **中和一切能改变判定输入的外部可控态**，而不只是「中和 core.quotePath」。外部可控态有两个面，
++# 两面都必须扫，缺一即判定输入仍可被外部翻转：
++#   **config 面**（本常量，`-c` 注入）：
+ #   ① -c core.quotePath=false：git 默认把非 ASCII 路径 C-quote（八进制+首尾引号），
+ #      裸 f.startswith(base)/startswith("openspec/") 对中文文件名路径全失配 → design 域假鲜
+ #      （拍板后偷改中文名 spec 静默放行=假✅）/ code 域假陈旧。本项目中文文件名密集，realistic。
+ #   ② errors="replace"：报告内容/subject/文件名非 UTF-8 时 strict 解码抛 UnicodeDecodeError
+ #      → 退出码 1 逸出契约集 {0,3,4,5,6}；与头注释「非 UTF-8 以 replace 解码」及本地 read_text
+ #      路径的既有加固对齐（archived verify 走 git show 是首个用 subprocess 读报告内容的路径）。
++#   **环境面**（`_git_env()`，denylist 清理）：见该函数注释。
++# MUST NOT 以「我们碰巧没用到 diff / pathspec」当安全论据——那是拿现状当保证（基准 3）。
+ _GIT_HARDEN = ("-c", "core.quotePath=false")
+ 
++# [harden-gate-git-layer Task2 · ADR-5 · tasks 3.2] 三个 helper 统一上界。
++# 判据来源 = 仓内既有先例 `sdflow-buglist/scripts/buglist.py::repo_root` 的 `git_timeout = 30`：
++# 这些都是**纯本地元数据查询**（正常毫秒级），30 秒是**文件系统卡死 / 网络文件系统挂起**的
++# 判定线，**不是性能预算**。MUST NOT 按「最慢的仓要多久」来调大——那会把它误当性能预算，
++# 从而让真正的挂起拖到无限久（而 gate 是同步阻塞在链序里的）。
++# 聚合上界的数量级：design 域一次 decide() 约 4 次 git 调用（与提交数无关）
++# ⇒ 最坏情形（文件系统级挂起）约 2 分钟落进 UNKNOWN(6)。**有界 ≠ 短**，此处写明免各自心算。
++GIT_TIMEOUT_SECONDS = 30
++
++
++def _git_env():
++    """子进程 env：复制当前环境后**剔除 `GIT_` 前缀键**，其余原样透传。
++
++    [harden-gate-git-layer Task2 · ADR-6 · tasks 3.3] MUST 用 denylist，**MUST NOT 用 allowlist**
++    （只显式构造 PATH/HOME 等几个键）——allowlist 在 Windows 会漏 `SYSTEMROOT`/`COMSPEC` 等
++    `CreateProcess` 依赖变量，导致子进程启动本身失败；这与本仓已踩过的跨平台坑同类：
++    **本地 macOS 测不出，只有真实 Windows runner 才暴露**。
++
++    剔除面 = 全部 `GIT_*`，非只剔已知的几个（`GIT_ICASE_PATHSPECS` / `GIT_DIR` / `GIT_WORK_TREE`…）：
++    已知集是会增长的，逐个点名等于承诺「git 不再新增能改变输出的环境变量」——那是拿现状当保证。
++    """
++    env = os.environ.copy()
++    for key in [k for k in env if k.startswith("GIT_")]:
++        del env[key]
++    return env
++
++
++def _git_run(root, args, text):
++    """三个 helper 唯一的 subprocess 出口：统一 timeout + env 清理 + 环境级失败映射。
++
++    [harden-gate-git-layer Task2 · tasks 3.1/3.2/3.3] 单出口而非三处复制——三份拷贝必然漂移
++    （历史上 `_GIT_HARDEN` 就是靠单点注入才没漏），且「新增一个 git 调用点忘了加固」这条
++    失效模式在单出口下不存在。三个 helper 的语义差异（text/strip vs 原始字节）留在各自壳里。
++
++    环境级失败 MUST 收敛进退出码契约集 `{0,3,4,5,6}`：裸 `OSError`（git 不在 PATH /
++    不可执行 / 权限不足）与 `TimeoutExpired`（文件系统挂起）逸出后是 Python 默认退出码 1，
++    对 `/sdflow-ship` 链序而言是**契约外**取值 ⇒ 无处置路径。二者各自 category 不同，
++    因为补救动作完全不同（装 git vs 查磁盘），MUST NOT 合并成一句「git 调用失败」。
++    """
++    cmd = ["git", "-C", str(root), *_GIT_HARDEN, *args]
++    kwargs = {"capture_output": True, "timeout": GIT_TIMEOUT_SECONDS, "env": _git_env()}
++    if text:
++        kwargs["text"] = True
++        kwargs["errors"] = "replace"
++    shown = " ".join(str(x) for x in cmd)
++    try:
++        return subprocess.run(cmd, **kwargs)
++    except subprocess.TimeoutExpired:
++        raise GateIndeterminate(
++            f"git 调用超过 {GIT_TIMEOUT_SECONDS}s 未返回：{shown}", CAUSE_GIT_TIMEOUT)
++    except OSError as exc:
++        raise GateIndeterminate(
++            f"git 子进程无法启动（{type(exc).__name__}: {exc}）：{shown}",
++            CAUSE_GIT_UNAVAILABLE)
++
+ 
+ def run_git(root, *args):
+-    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args],
+-                       capture_output=True, text=True, errors="replace")
++    r = _git_run(root, args, text=True)
+     return r.stdout.strip() if r.returncode == 0 else ""
+ 
+ 
+ def run_git_rc(root, *args):
+     # [spec-review-amendment H3] 返回码可见版：run_git 把 git 错误与「路径不在树/空输出」
+     # 都折叠成空串，base_ref 的 None 性据此驱动「base 不存在→UNKNOWN」vs「归档缺→REFUSE」分岔。
+-    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args],
+-                       capture_output=True, text=True, errors="replace")
++    r = _git_run(root, args, text=True)
+     return r.returncode, r.stdout.strip()
+ 
+ 
+@@ -317,8 +376,12 @@ def run_git_bytes(root, *args):
+     那条路径 text=True + errors="replace" + .strip()，四者各自可造假等值：
+     吞首尾空白、吞末尾换行、CRLF↔LF 不可分辨、非 UTF-8 字节被替换成 U+FFFD 后两版趋同。
+     本函数只做 subprocess 原样取字节，解码与归一化留给调用方按判据自行决定。
++
++    [harden-gate-git-layer Task2] 「MUST NOT 复用 run_git/run_git_rc」约束的是**文本层语义**
++    （text/errors/strip 四者各自可造假等值），不是 subprocess 调用本身：三者共用 `_git_run`
++    取 timeout + env 清理 + 环境级失败映射，本函数仍走 text=False 拿原始字节，语义无损。
+     """
+-    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args], capture_output=True)
++    r = _git_run(root, args, text=False)
+     return r.returncode, r.stdout
+ 
+ 
+@@ -1467,7 +1530,9 @@ def decide(root, change):
+ # 链序里的处置正是「停并转述 reason」，reason 空洞 = 撞门者被裸退出码打发。
+ _INDETERMINATE_ADVICE = {
+     CAUSE_GIT_UNAVAILABLE: "git 不在 PATH 或不可执行 → 检查环境、安装 git 后重跑",
+-    CAUSE_GIT_TIMEOUT: "git 调用超时（>30s）→ 检查磁盘或网络文件系统是否挂起",
++    # [T194] 上界值**插值引用同一常量**，MUST NOT 硬编码字面量——两者天然漂移
++    # （改 GIT_TIMEOUT_SECONDS 而忘了改文案 ⇒ 撞门者按错误的秒数去判断是不是真挂起）。
++    CAUSE_GIT_TIMEOUT: f"git 调用超时（>{GIT_TIMEOUT_SECONDS}s）→ 检查磁盘或网络文件系统是否挂起",
+     CAUSE_ANCHOR_MISSING: "该报告产出于本次门禁硬化之前（无 reviewed_sha 锚）"
+                           " → 重跑对应评审补锚（结论字段与 reviewed_sha 须同一次写入落盘）",
+     CAUSE_ANCHOR_INVALID: "reviewed_sha 不是完整 40 位小写 hex（缩写 SHA / HEAD / 坏值均不接受）"
+@@ -1488,11 +1553,14 @@ def main(argv=None):
+     p.add_argument("--change", required=True)
+     p.add_argument("--root", default=None)
+     a = p.parse_args(argv)
+-    root = Path(a.root) if a.root else Path(
+-        run_git(Path.cwd(), "rev-parse", "--show-toplevel") or Path.cwd())
+     # [harden-gate-git-layer Task1 · tasks 3.6] `GateIndeterminate` → UNKNOWN(6) 的**唯一**映射点，
+-    # 且捕获范围是 decide 的整个函数体（判定不能可发生在任何一步，不只锚读取那一步）。
++    # 且捕获范围是 **main() 整个函数体**（判定不能可发生在任何一步，不只锚读取那一步）。
++    # [Task2] `--root` 缺省时的仓根解析**本身就是一次 git 调用** ⇒ MUST 在 try 内：
++    # 放在 try 外时「git 不在 PATH」这条最常见的失败会从第一行就逸出成退出码 1，
++    # 恰好绕过为它准备的整套诊断（守卫写了、但主路径够不着 = 假绿的经典形态）。
+     try:
++        root = Path(a.root) if a.root else Path(
++            run_git(Path.cwd(), "rev-parse", "--show-toplevel") or Path.cwd())
+         decide(root, a.change)
+     except GateIndeterminate as exc:
+         emit("UNKNOWN", EXIT_UNKNOWN, None, _indeterminate_reason(exc),
+diff --git a/sdflow-ship/tests/test_gate_git_layer.py b/sdflow-ship/tests/test_gate_git_layer.py
+new file mode 100644
+index 0000000..d589c79
+--- /dev/null
++++ b/sdflow-ship/tests/test_gate_git_layer.py
+@@ -0,0 +1,293 @@
++"""[harden-gate-git-layer Task2 · tasks 3.1–3.6 / 5.8 / 5.9a-c] git 调用层：
++环境级失败一律落在退出码契约集 `{0,3,4,5,6}` 内，且五类原因各给可行动诊断；
++判定输入不受外部环境变量摆布（denylist 清理），非 `GIT_*` 变量原样透传。
++
++口径：
++- 退出码类断言经 CLI 公共入口（`main()` / 子进程跑脚本）求值。Compliance 对 5.9a–c 显式豁免
++  「必须经 `is_stale`」（触发点可在其调用范围外，如仓根解析、D3 短路），但**不豁免公共入口**——
++  故每类失败除三个 helper 各自的独立验证外，另有一条走 `main()` 的端到端用例。
++- 「git 不可用」用**真实**手段构造（PATH 里没有 git / git 不可执行），不靠打桩；
++  超时另有真实 fake-git 端到端用例（POSIX），跨平台的三组独立验证走注入。
++"""
++import json
++import os
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++from conftest import commit_all, mkchange
++from test_gate_impl_progress import approved_change, PLAN2, _sg
++
++GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
++CONTRACT_EXITS = {0, 3, 4, 5, 6}
++
++HELPERS = [
++    ("run_git", lambda root: _sg.run_git(root, "rev-parse", "HEAD")),
++    ("run_git_rc", lambda root: _sg.run_git_rc(root, "rev-parse", "HEAD")),
++    ("run_git_bytes", lambda root: _sg.run_git_bytes(root, "cat-file", "-t", "HEAD")),
++]
++
++
++# ── 构造手段 ────────────────────────────────────────────────────────────
++
++# ⚠ 三者都是**函数而非 fixture**：它们一旦生效，连 conftest 里建仓用的真 git 也没了
++# ⇒ 盘面必须先建好、再让 git 消失。写成 fixture 会在 setup 阶段抢先生效（实测：
++# `approved_change` 当场 FileNotFoundError，用例是红的但红在建仓、不在被测面）。
++
++def _drop_git_from_path(tmp_path, monkeypatch):
++    """PATH 指向一个没有 git 的空目录 ⇒ 子进程启动抛 FileNotFoundError（真实 OSError）。"""
++    empty = tmp_path / "empty-bin"
++    empty.mkdir(exist_ok=True)
++    monkeypatch.setenv("PATH", str(empty))
++    return empty
++
++
++def _shadow_git_with_unexecutable(tmp_path, monkeypatch):
++    """PATH 首位有一个存在但不可执行的 git ⇒ PermissionError（OSError 的另一子类）。"""
++    binder = tmp_path / "bad-bin"
++    binder.mkdir(exist_ok=True)
++    (binder / "git").write_text("not executable\n", encoding="utf-8")
++    (binder / "git").chmod(0o644)
++    # PATH 只留这一处：POSIX 的 exec 搜索会**跳过不可执行项继续往后找**，
++    # 追加在真 PATH 前面时找到的仍是真 git（实测），构造不出 PermissionError。
++    monkeypatch.setenv("PATH", str(binder))
++    return binder
++
++
++def _shadow_git_with_sleeper(tmp_path, monkeypatch):
++    """PATH 首位放一个恒睡眠的 fake git + 把上界压到 1s ⇒ 真实 TimeoutExpired。
++
++    `sleep` 走绝对路径：fake git 的 PATH 里若只剩 shadow 目录，`sleep` 会 command-not-found
++    而秒退 —— 用例照样「不抛异常」，但红的原因与被测面无关（已实测踩过）。
++    """
++    binder = tmp_path / "slow-bin"
++    binder.mkdir(exist_ok=True)
++    (binder / "git").write_text("#!/bin/sh\nexec /bin/sleep 20\n", encoding="utf-8")
++    (binder / "git").chmod(0o755)
++    monkeypatch.setenv("PATH", f"{binder}{os.pathsep}{os.environ['PATH']}")
++    monkeypatch.setattr(_sg, "GIT_TIMEOUT_SECONDS", 1)
++    return binder
++
++
++def _inject_timeout(monkeypatch):
++    def fake_run(cmd, **kw):
++        raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
++    monkeypatch.setattr(_sg.subprocess, "run", fake_run)
++
++
++def run_gate_env(root, extra_env=None, change="demo", cwd=None):
++    env = os.environ.copy()
++    env.update(extra_env or {})
++    argv = [sys.executable, str(GATE), "--change", change]
++    if root is not None:
++        argv += ["--root", str(root)]
++    r = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=cwd)
++    lines = r.stdout.strip().splitlines()
++    return r.returncode, (json.loads(lines[-1]) if lines else {}), r.stderr
++
++
++# ── 5.9a：OSError × 三个 helper 各自验证 ────────────────────────────────
++
++@pytest.mark.parametrize("name,call", HELPERS, ids=[h[0] for h in HELPERS])
++def test_oserror_is_controlled_per_helper(repo, tmp_path, monkeypatch, name, call):
++    _drop_git_from_path(tmp_path, monkeypatch)
++    with pytest.raises(_sg.GateIndeterminate) as ei:
++        call(repo)
++    assert ei.value.category == _sg.CAUSE_GIT_UNAVAILABLE, f"{name} 未把 OSError 收敛为受控结果"
++
++
++@pytest.mark.skipif(os.name != "posix", reason="chmod 权限位语义仅 POSIX 成立")
++@pytest.mark.parametrize("name,call", HELPERS, ids=[h[0] for h in HELPERS])
++def test_permission_error_is_controlled_per_helper(repo, tmp_path, monkeypatch, name, call):
++    # OSError 不止 FileNotFoundError：git 存在但不可执行（权限不足）同样 MUST 受控。
++    _shadow_git_with_unexecutable(tmp_path, monkeypatch)
++    with pytest.raises(_sg.GateIndeterminate) as ei:
++        call(repo)
++    assert ei.value.category == _sg.CAUSE_GIT_UNAVAILABLE, f"{name} 未把 PermissionError 收敛"
++
++
++# ── 5.9b：超时 × 三个 helper 各自验证 ──────────────────────────────────
++
++@pytest.mark.parametrize("name,call", HELPERS, ids=[h[0] for h in HELPERS])
++def test_timeout_is_controlled_per_helper(repo, monkeypatch, name, call):
++    _inject_timeout(monkeypatch)
++    with pytest.raises(_sg.GateIndeterminate) as ei:
++        call(repo)
++    assert ei.value.category == _sg.CAUSE_GIT_TIMEOUT, f"{name} 未把超时收敛为受控结果"
++
++
++@pytest.mark.skipif(os.name != "posix", reason="fake git 用 sh 脚本，仅 POSIX")
++@pytest.mark.parametrize("name,call", HELPERS, ids=[h[0] for h in HELPERS])
++def test_real_hang_times_out_per_helper(repo, tmp_path, monkeypatch, name, call):
++    # 不打桩的真实挂起：证明 timeout 参数确实传到了 subprocess（注入式用例证不了这一点）。
++    _shadow_git_with_sleeper(tmp_path, monkeypatch)
++    with pytest.raises(_sg.GateIndeterminate) as ei:
++        call(repo)
++    assert ei.value.category == _sg.CAUSE_GIT_TIMEOUT, f"{name} 无上界，会无限等待"
++
++
++@pytest.mark.parametrize("name,call", HELPERS, ids=[h[0] for h in HELPERS])
++def test_timeout_bound_is_the_shared_constant(repo, monkeypatch, name, call):
++    # 上界 MUST 是同一个常量（三处各写各的字面量 = 必然漂移）。
++    seen = {}
++    real = _sg.subprocess.run
++
++    def spy(cmd, **kw):
++        seen["timeout"] = kw.get("timeout")
++        return real(cmd, **kw)
++
++    monkeypatch.setattr(_sg.subprocess, "run", spy)
++    call(repo)
++    assert seen["timeout"] == _sg.GIT_TIMEOUT_SECONDS == 30, f"{name} 未使用统一上界"
++
++
++# ── 5.9c：顶层入口映射 + 五类诊断可区分 ────────────────────────────────
++
++def test_main_maps_git_unavailable_to_unknown(repo, tmp_path, monkeypatch, capsys):
++    approved_change(repo, plan=PLAN2)      # 盘面先建好，再让 git 消失
++    _drop_git_from_path(tmp_path, monkeypatch)
++    with pytest.raises(SystemExit) as ex:
++        _sg.main(["--change", "demo", "--root", str(repo)])
++    assert ex.value.code == _sg.EXIT_UNKNOWN
++    js = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
++    assert js["verdict"] == "UNKNOWN" and js["cause_category"] == "git-unavailable"
++    assert "PATH" in js["reason"]
++
++
++def test_main_maps_git_unavailable_during_repo_root_resolution(repo, tmp_path, capsys,
++                                                               monkeypatch):
++    # 仓根解析（`--root` 缺省 → `rev-parse --show-toplevel`）**本身是一次 git 调用**。
++    # 它若落在 try 之外，最常见的失败（git 不在 PATH）会从第一行逸出成退出码 1，
++    # 绕过为它准备的整套诊断——守卫写了但主路径够不着，是本仓有实证的假绿形态。
++    approved_change(repo, plan=PLAN2)
++    monkeypatch.chdir(repo)
++    _drop_git_from_path(tmp_path, monkeypatch)
++    with pytest.raises(SystemExit) as ex:
++        _sg.main(["--change", "demo"])
++    assert ex.value.code == _sg.EXIT_UNKNOWN
++    js = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
++    assert js["cause_category"] == "git-unavailable"
++
++
++def test_main_maps_timeout_to_unknown(repo, monkeypatch, capsys):
++    approved_change(repo, plan=PLAN2)
++    _inject_timeout(monkeypatch)
++    with pytest.raises(SystemExit) as ex:
++        _sg.main(["--change", "demo", "--root", str(repo)])
++    assert ex.value.code == _sg.EXIT_UNKNOWN
++    js = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
++    assert js["cause_category"] == "git-timeout"
++    assert f">{_sg.GIT_TIMEOUT_SECONDS}s" in js["reason"], "超时诊断未给出上界数量级"
++
++
++def test_exit_code_stays_in_contract_under_git_failures(repo, tmp_path):
++    # 端到端（真跑脚本）：环境级失败 MUST NOT 逸出成 Python 默认退出码 1。
++    approved_change(repo, plan=PLAN2)
++    empty = tmp_path / "empty-bin"
++    empty.mkdir(exist_ok=True)
++    code, js, _err = run_gate_env(repo, {"PATH": str(empty)})
++    assert code in CONTRACT_EXITS, f"退出码 {code} 逸出契约集"
++    assert code == _sg.EXIT_UNKNOWN and js["cause_category"] == "git-unavailable"
++
++
++def test_five_causes_give_distinguishable_advice():
++    # 五类原因的补救动作完全不同 ⇒ MUST NOT 用一句「git 调用失败」打天下。
++    cats = [_sg.CAUSE_GIT_UNAVAILABLE, _sg.CAUSE_GIT_TIMEOUT, _sg.CAUSE_ANCHOR_MISSING,
++            _sg.CAUSE_ANCHOR_INVALID, _sg.CAUSE_ANCHOR_UNRESOLVABLE, _sg.CAUSE_READ_FAILED]
++    reasons = {c: _sg._indeterminate_reason(_sg.GateIndeterminate("x", c)) for c in cats}
++    assert len(set(reasons.values())) == len(cats), "存在两类原因给出同一句诊断"
++    # 各自点名了各自的补救动作（不是同一句话换个词）
++    assert "安装 git" in reasons[_sg.CAUSE_GIT_UNAVAILABLE]
++    assert "文件系统" in reasons[_sg.CAUSE_GIT_TIMEOUT]
++    assert "重跑对应评审补锚" in reasons[_sg.CAUSE_ANCHOR_MISSING]
++    assert "40 位小写 hex" in reasons[_sg.CAUSE_ANCHOR_INVALID]
++    assert "force-push" in reasons[_sg.CAUSE_ANCHOR_UNRESOLVABLE]
++    assert "仓完整性" in reasons[_sg.CAUSE_READ_FAILED]
++
++
++def test_timeout_advice_interpolates_the_constant():
++    # [T194] 文案里的秒数 MUST 来自常量插值，MUST NOT 硬编码——否则改上界即产生漂移。
++    src = GATE.read_text(encoding="utf-8")
++    assert ">30s" not in src, "advice 里仍有硬编码的 >30s 字面量（T194 未消）"
++    assert f">{_sg.GIT_TIMEOUT_SECONDS}s" in _sg._INDETERMINATE_ADVICE[_sg.CAUSE_GIT_TIMEOUT]
++
++
++# ── 5.8：外部环境态中和（denylist）────────────────────────────────────
++
++POLLUTED = {
++    "GIT_ICASE_PATHSPECS": "1",          # 缺陷 8：pathspec 大小写不敏感 → 真实代码目录被误排除
++    "GIT_DIR": "/nonexistent/poison.git",  # 指向别的仓 ⇒ 未清理时 -C 被架空
++    "GIT_WORK_TREE": "/nonexistent/tree",
++    "GIT_INDEX_FILE": "/nonexistent/index",
++    "GIT_CONFIG_GLOBAL": "/nonexistent/gitconfig",
++    "GIT_LITERAL_PATHSPECS": "1",
++}
++
++
++def _polluted_repo_config(repo):
++    # 缺陷 7 的 config 半场：diff.ignoreSubmodules=all 与判定同片面。
++    subprocess.run(["git", "-C", str(repo), "config", "diff.ignoreSubmodules", "all"],
++                   check=True, capture_output=True)
++
++
++@pytest.mark.parametrize("scenario", ["fresh", "stale"])
++def test_verdict_is_identical_under_polluted_git_env(repo, scenario):
++    d = approved_change(repo, plan=PLAN2)
++    if scenario == "stale":
++        (d / "design.md").write_text("# 拍板后偷改设计\n", encoding="utf-8")
++        commit_all(repo, "docs: 改设计（未重审）")
++    clean_code, clean_js, _ = run_gate_env(repo)
++    _polluted_repo_config(repo)
++    dirty_code, dirty_js, _ = run_gate_env(repo, POLLUTED)
++    assert (dirty_code, dirty_js["verdict"]) == (clean_code, clean_js["verdict"]), \
++        "判定结论被外部 git 环境变量 / 配置改变了"
++    assert dirty_code in CONTRACT_EXITS
++
++
++def test_git_prefixed_vars_are_stripped_from_subprocess_env(repo, monkeypatch):
++    # 直接观测面：GIT_DIR 若未被剔除，`-C repo rev-parse --show-toplevel` 会被架空到别处
++    # （或直接 fatal）。清理生效 ⇒ 仍解析出 repo 自己。
++    monkeypatch.setenv("GIT_DIR", str(repo / "nonexistent.git"))
++    monkeypatch.setenv("GIT_WORK_TREE", str(repo / "nonexistent-tree"))
++    out = _sg.run_git(repo, "rev-parse", "--show-toplevel")
++    assert out and Path(out).resolve() == repo.resolve(), "GIT_* 未被剔除，判定输入被外部架空"
++
++
++def test_non_git_prefixed_vars_pass_through(repo, tmp_path, monkeypatch):
++    # denylist 的另一半（allowlist 会在此变红）：非 GIT_ 前缀变量 MUST 原样透传。
++    # 探针取 XDG_CONFIG_HOME —— git 读 $XDG_CONFIG_HOME/git/config 作为 global 配置，
++    # 是「环境变量真的到了子进程」的**行为级**证据，而非对 helper 内部实现的断言。
++    xdg = tmp_path / "xdg"
++    (xdg / "git").mkdir(parents=True)
++    (xdg / "git" / "config").write_text("[user]\n\tname = xdg-probe\n", encoding="utf-8")
++    home = tmp_path / "home"
++    home.mkdir()
++    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
++    monkeypatch.setenv("HOME", str(home))
++    monkeypatch.delenv("GIT_CONFIG_GLOBAL", raising=False)
++    rc, out = _sg.run_git_rc(repo, "config", "--global", "--get", "user.name")
++    assert (rc, out) == (0, "xdg-probe"), "非 GIT_ 前缀环境变量未透传给子进程"
++
++
++def test_env_is_a_denylist_not_an_allowlist(monkeypatch):
++    # Windows 上 allowlist 会漏 SYSTEMROOT/COMSPEC 致子进程启动失败（本地 macOS 照不出），
++    # 故在此机械守住口径：任意自定义键 MUST 在，且**只有** GIT_ 前缀键被剔除。
++    monkeypatch.setenv("SDFLOW_PROBE", "kept")
++    monkeypatch.setenv("GIT_PROBE", "dropped")
++    env = _sg._git_env()
++    assert env.get("SDFLOW_PROBE") == "kept"
++    assert "GIT_PROBE" not in env
++    dropped = {k for k in os.environ if k not in env}
++    assert dropped == {k for k in os.environ if k.startswith("GIT_")}, \
++        "剔除面不等于 GIT_ 前缀集（allowlist 化或漏剔）"
++
++
++# ── 3.4：加固面单一出口 ────────────────────────────────────────────────
++
++def test_all_git_calls_go_through_the_single_hardened_entry():
++    # 加固（timeout + env 清理 + 失败映射）靠单出口保证；新增裸 subprocess.run 调用点
++    # = 一条没被加固的通路。允许出现的只有 `_git_run` 内那一处。
++    src = GATE.read_text(encoding="utf-8")
++    assert src.count("subprocess.run(") == 1, "存在绕过 _git_run 的裸 subprocess.run 调用点"

@@ -11,6 +11,7 @@
 """
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -22,6 +23,9 @@ from test_gate_impl_progress import approved_change, PLAN2, _sg
 
 GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
 CONTRACT_EXITS = {0, 3, 4, 5, 6}
+
+# [fix1 M2] 起子进程的整片写法（非只 subprocess.run）——单出口守卫按此面数。
+SPAWN_RE = re.compile(r"subprocess\.(?:run|Popen|call|check_call|check_output)\(|os\.system\(")
 
 HELPERS = [
     ("run_git", lambda root: _sg.run_git(root, "rev-parse", "HEAD")),
@@ -140,7 +144,14 @@ def test_timeout_bound_is_the_shared_constant(repo, monkeypatch, name, call):
 
     monkeypatch.setattr(_sg.subprocess, "run", spy)
     call(repo)
-    assert seen["timeout"] == _sg.GIT_TIMEOUT_SECONDS == 30, f"{name} 未使用统一上界"
+    # [fix1 M3] 只断言「用的是那个常量」，MUST NOT 把 30 再硬编码进来——那正是 T194 刚消灭的
+    # 漂移同形（改常量即红，且报错文案「未使用统一上界」误导）。值本身另立一条断言。
+    assert seen["timeout"] == _sg.GIT_TIMEOUT_SECONDS, f"{name} 未使用统一上界"
+
+
+def test_shared_timeout_constant_value():
+    # 上界的**值**另守一条：改动它是有意决策（须同步头注释的数量级论证），不该只在别处顺带变红。
+    assert _sg.GIT_TIMEOUT_SECONDS == 30
 
 
 # ── 5.9c：顶层入口映射 + 五类诊断可区分 ────────────────────────────────
@@ -255,20 +266,71 @@ def test_git_prefixed_vars_are_stripped_from_subprocess_env(repo, monkeypatch):
     assert out and Path(out).resolve() == repo.resolve(), "GIT_* 未被剔除，判定输入被外部架空"
 
 
-def test_non_git_prefixed_vars_pass_through(repo, tmp_path, monkeypatch):
+def test_non_git_prefixed_vars_pass_through(repo, monkeypatch):
     # denylist 的另一半（allowlist 会在此变红）：非 GIT_ 前缀变量 MUST 原样透传。
-    # 探针取 XDG_CONFIG_HOME —— git 读 $XDG_CONFIG_HOME/git/config 作为 global 配置，
-    # 是「环境变量真的到了子进程」的**行为级**证据，而非对 helper 内部实现的断言。
-    xdg = tmp_path / "xdg"
-    (xdg / "git").mkdir(parents=True)
-    (xdg / "git" / "config").write_text("[user]\n\tname = xdg-probe\n", encoding="utf-8")
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.delenv("GIT_CONFIG_GLOBAL", raising=False)
-    rc, out = _sg.run_git_rc(repo, "config", "--global", "--get", "user.name")
-    assert (rc, out) == (0, "xdg-probe"), "非 GIT_ 前缀环境变量未透传给子进程"
+    # 探针取 PAGER —— git 读它决定 GIT_PAGER，是「环境变量真的到了子进程」的**行为级**
+    # 证据，而非对 helper 内部实现的断言。
+    # [fix1 F1] 旧探针用 XDG_CONFIG_HOME 指一份 global gitconfig 反证透传——那条探针本身
+    # 就是 F1 的洞（它证明的正是「外部 global config 真被 git 读到」）。global config 已被
+    # 本进程禁读，故改用一个**不经 config 面**的环境变量探针，透传口径不减。
+    monkeypatch.setenv("PAGER", "pass-through-probe")
+    rc, out = _sg.run_git_rc(repo, "var", "GIT_PAGER")
+    assert (rc, out) == (0, "pass-through-probe"), "非 GIT_ 前缀环境变量未透传给子进程"
+
+
+# ── [fix1 F1] 环境面另一半：global / system gitconfig MUST 不可改变判定 ────────
+
+GBK_SUBJECT = "主题中文"
+
+
+def _poison_global_gitconfig(tmp_path, monkeypatch=None):
+    """把 HOME / XDG_CONFIG_HOME 指到一份被污染的 global gitconfig（非 GIT_ 前缀通道）。
+
+    `i18n.logOutputEncoding=GBK` 会让 `git log --format=%s` 以 GBK 输出 subject，而 subject
+    正是 `done_task_ids` 的判定输入；`log.showSignature` 同片面。返回可喂给子进程的 env 增量。
+    """
+    home = tmp_path / "poison-home"
+    (home / "git").mkdir(parents=True, exist_ok=True)
+    body = "[i18n]\n\tlogOutputEncoding = GBK\n[log]\n\tshowSignature = true\n"
+    (home / ".gitconfig").write_text(body, encoding="utf-8")       # $HOME/.gitconfig
+    (home / "git" / "config").write_text(body, encoding="utf-8")   # $XDG_CONFIG_HOME/git/config
+    extra = {"HOME": str(home), "XDG_CONFIG_HOME": str(home)}
+    if monkeypatch is not None:
+        for k, v in extra.items():
+            monkeypatch.setenv(k, v)
+    return extra
+
+
+def test_global_gitconfig_cannot_alter_judgment_input(repo, tmp_path, monkeypatch):
+    # 判定输入级（评审方实测同形）：污染前后 subject MUST 逐字相同。
+    # 未加固时实测为 `主题中文` → `����`（GBK 字节按 replace 解码）。
+    commit_all(repo, GBK_SUBJECT)
+    clean = _sg.run_git(repo, "log", "-1", "--format=%s")
+    assert clean == GBK_SUBJECT, "前提不成立：干净环境下就没读到预期 subject"
+    _poison_global_gitconfig(tmp_path, monkeypatch)
+    assert _sg.run_git(repo, "log", "-1", "--format=%s") == GBK_SUBJECT, \
+        "global gitconfig 翻转了判定输入（HOME/XDG 是非 GIT_ 前缀通道，denylist 拦不住）"
+
+
+@pytest.mark.parametrize("scenario", ["fresh", "stale"])
+def test_verdict_is_identical_under_polluted_global_config(repo, tmp_path, scenario):
+    # 判定结论级（端到端跑脚本，含 HOME/XDG 经子进程 env 传入）：MUST 与干净环境一致。
+    d = approved_change(repo, plan=PLAN2)
+    if scenario == "stale":
+        (d / "design.md").write_text("# 拍板后偷改设计\n", encoding="utf-8")
+        commit_all(repo, "docs: 改设计（未重审）")
+    clean_code, clean_js, _ = run_gate_env(repo)
+    dirty_code, dirty_js, _ = run_gate_env(repo, _poison_global_gitconfig(tmp_path))
+    assert (dirty_code, dirty_js["verdict"]) == (clean_code, clean_js["verdict"]), \
+        "判定结论被外部 global gitconfig 改变了"
+    assert dirty_code in CONTRACT_EXITS
+
+
+def test_config_files_are_neutralized_in_child_env():
+    # 口径守卫：两个禁读键 MUST 在**剔除之后**回填（先剔后填的顺序错了就等于没填）。
+    env = _sg._git_env()
+    assert env.get("GIT_CONFIG_GLOBAL") == os.devnull
+    assert env.get("GIT_CONFIG_SYSTEM") == os.devnull
 
 
 def test_env_is_a_denylist_not_an_allowlist(monkeypatch):
@@ -276,18 +338,26 @@ def test_env_is_a_denylist_not_an_allowlist(monkeypatch):
     # 故在此机械守住口径：任意自定义键 MUST 在，且**只有** GIT_ 前缀键被剔除。
     monkeypatch.setenv("SDFLOW_PROBE", "kept")
     monkeypatch.setenv("GIT_PROBE", "dropped")
+    # [fix1 F1] 外部传进来的 GIT_CONFIG_GLOBAL 同样 MUST 先被剔掉（再由本进程写死），
+    # 否则「回填」会退化成「沿用外部值」——那正是本次要封的通道。
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", "/nonexistent/attacker.gitconfig")
     env = _sg._git_env()
     assert env.get("SDFLOW_PROBE") == "kept"
     assert "GIT_PROBE" not in env
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull, "外部 GIT_CONFIG_GLOBAL 未被本进程覆盖"
+    injected = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"}
     dropped = {k for k in os.environ if k not in env}
-    assert dropped == {k for k in os.environ if k.startswith("GIT_")}, \
+    assert dropped == {k for k in os.environ if k.startswith("GIT_")} - injected, \
         "剔除面不等于 GIT_ 前缀集（allowlist 化或漏剔）"
 
 
 # ── 3.4：加固面单一出口 ────────────────────────────────────────────────
 
 def test_all_git_calls_go_through_the_single_hardened_entry():
-    # 加固（timeout + env 清理 + 失败映射）靠单出口保证；新增裸 subprocess.run 调用点
+    # 加固（timeout + env 清理 + 失败映射）靠单出口保证；新增裸子进程调用点
     # = 一条没被加固的通路。允许出现的只有 `_git_run` 内那一处。
+    # [fix1 M2] 只数 `subprocess.run(` 是点补：`Popen` / `call` / `check_output` / `os.system`
+    # 同样能起子进程且同样绕过加固，面治 MUST 一次覆盖整片写法。
     src = GATE.read_text(encoding="utf-8")
-    assert src.count("subprocess.run(") == 1, "存在绕过 _git_run 的裸 subprocess.run 调用点"
+    spawns = SPAWN_RE.findall(src)
+    assert spawns == ["subprocess.run("], f"存在绕过 _git_run 的裸子进程调用点：{spawns}"
