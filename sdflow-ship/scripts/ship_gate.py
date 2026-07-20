@@ -307,23 +307,72 @@ def blob_pair(root, parent, sha, path):
     return True, before, after
 
 
+CHECKBOX_BYTES_RE = re.compile(rb"^\s*-\s+\[([ xX])\]")   # CHECKBOX_RE 的字节版，口径逐字相同
+
+
+def _normalize_checkbox_lines(raw):
+    """原始字节 → 勾选框标记归一化后的行列表；围栏未闭合返回 None（调用方保守）。
+
+    [Task2] 归一化**只**把 task-list 行首那一个标记里的 ` `/`x`/`X` 换成 ` `：
+    - 行首锚定（CHECKBOX_BYTES_RE），故表格单元格、行内反引号、散文字面量、
+      以及同一行第二个之后的标记**一律不动**；
+    - fenced code block 内的行不参与（口径同 _line_scoped_hits/_parse_plan：
+      line.lstrip().startswith("```") 翻转）；
+    - 缩进 / 空白 / 其余字符逐字节保留——MUST NOT strip、MUST NOT 解码转换。
+
+    切行用 split(b"\\n") 而非 splitlines()：后者还会在 \\r 处切开，CRLF↔LF
+    差异会被抹平；前者把 CR 留在行尾，行尾与末尾换行的增删都保持可区分。
+    """
+    lines = raw.split(b"\n")
+    out = []
+    in_fence = False
+    for line in lines:
+        if line.lstrip().startswith(b"```"):
+            in_fence = not in_fence
+            out.append(line)
+            continue
+        if in_fence:
+            out.append(line)
+            continue
+        m = CHECKBOX_BYTES_RE.match(line)
+        if m:
+            i = m.start(1)
+            line = line[:i] + b" " + line[i + 1:]
+        out.append(line)
+    if in_fence:
+        return None                        # 围栏未闭合 ⇒ 「哪些行在 fence 内」不可信
+    return out
+
+
 def _tasks_content_exempt(before, after):
     """前后两版 tasks.md 原始字节 → 是否属于「零设计信息量」的改动，可豁免失鲜。
 
-    🔴 [Task1] **判据尚未接入**，恒 False ⇒ 一律照判失鲜。Task2 在此实现勾选框归一化
-    行级等值比较（MUST 限于行级等值，MUST NOT 语义 diff / 解析 markdown 结构）。
+    [Task2 · ADR-1 求值口径] 判据 = **勾选框标记归一化后逐行等值**，仅此一种形态。
+    MUST NOT 做语义 diff、MUST NOT 解析 markdown 结构、MUST NOT 把豁免面扩到勾选框
+    以外的任何差异（措辞 / 格式化 / 错别字一律照判失鲜）。
+
+    🔴 比较**按行号位置对齐**（zip），MUST NOT 用 LCS / difflib：LCS 下纯行重排的
+    删除行与插入行逐字节相同，会被判等值而放行。行数不等 ⇒ 直接判不等值。
+
     抽成独立函数是为了把「保守回落」与「等值判据」分成两个可各自证伪的面：
     上游 design_frame_exempt 的每道回落分支都能在本函数被替身为恒 True 时单独证伪。
     """
-    return False
+    nb = _normalize_checkbox_lines(before)
+    na = _normalize_checkbox_lines(after)
+    if nb is None or na is None:
+        return False                       # 围栏未闭合 ⇒ 保守
+    if len(nb) != len(na):
+        return False                       # 行数变化（段落增删 / 末尾换行增删）⇒ 失鲜
+    return all(x == y for x, y in zip(nb, na))
 
 
 def design_frame_exempt(root, sha, frame_files, base):
     """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
 
-    🔴 [Task1] **本票不引入任何豁免**——能力就位（能区分监视集内路径集、能取到前后两版
-    原始字节、能识别不合格形态），但因 _tasks_content_exempt 恒 False 而恒返回 False，
-    对外可观察行为与接入前逐字一致。Task2 只需实现 _tasks_content_exempt。
+    [Task2] 豁免资格三连，缺一即失鲜：① 帧内**落在 design 监视集内**的路径集恰为
+    {tasks.md}（🔴 不是整个 commit 的文件列表——checkpoint 走 `git add -A`，真实完成
+    提交必然打包源码；按整 commit 求值 ⇒ 豁免永不触发）② 形态是普通内容修改
+    ③ 勾选框归一化后逐行等值。merge 提交须**对每个 parent** 都成立。
     """
     if design_watched_subs(frame_files, base) != {"tasks.md"}:
         return False                       # 帧内还触及其他监视路径 ⇒ 照判失鲜
@@ -336,7 +385,7 @@ def design_frame_exempt(root, sha, frame_files, base):
         if not ok:
             return False                   # 取不到 / 形态不合格 ⇒ 保守
         if not _tasks_content_exempt(before, after):
-            return False                   # [Task1] 判据未接入，恒走此支 ⇒ 行为不变
+            return False                   # 勾选框以外的改动 ⇒ 照判失鲜
     return True
 
 
