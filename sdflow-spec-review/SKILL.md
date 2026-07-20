@@ -207,6 +207,10 @@ description: >
   降采样/收紧触发/淘汰某镜一律人决，本 skill MUST NOT 自行判断或执行。
 - 据此更新 design/specs，改动处标 `[spec-review-amendment]`。
 - **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
+  🔴 **拍板前流程纪律〔harden-gate-git-layer 1.7〕**：镜子审的是拍板**当时**的四件套（C1）；人读报告后要求修改会产出新盘面（C2）。
+  拍板批准的是 C2、锚也写 C2（拍板批准的就是它），但报告里的 findings 只针对 C1 ⇒ **拍板前若四件套相对镜子审过的提交有实质改动，
+  MUST 先跑一次窄复核（只审增量）再拍板**。gate 看不出「这次改动有没有被审过」，此纪律在流程层兜、不由 gate 管。
+  （落盘时序另见下方拍板回写协议的 ADR-7(b)：窄复核通过后、二次修订 MUST 先单独 checkpoint 提交再回写锚。）
 **拍板回写协议（ship-gate 锚，D2，mlh-p5 迁 frontmatter）**：设计门拍板**发生后**，主 session MUST 立即把 `ship-gate.design_approved`
 写入 `spec-review-report.md`**的报告头部 frontmatter**（文件首块，非文件末尾、非正文）——写入者=主 session、触发点=用户批准动作；
 这是 `/sdflow-ship` pre-flight 的唯一机判依据（**写入报告时 `ship-gate:` 顶格列 0，忽略本处 markdown 列表缩进**——下方 yaml
@@ -227,12 +231,25 @@ ship-gate:
 **两个字段 MUST 在同一次文件写入中落盘**（不可拆成两次 Edit）：拆开且中断落在中间，
 盘面会变成「`design_approved: true` 在、`reviewed_sha` 缺」——gate 判 UNKNOWN(6)，可恢复但无指引。
 
+🔴 **拍板前二次修订 MUST 先单独落盘，再回写锚〔harden-gate-git-layer ADR-7(b)，1.7b〕**：
+人读报告后要求再改四件套（该场景真实存在），那些改动**尚未落盘** ⇒ 若直接回写锚，`git rev-parse HEAD`
+取到的是修订**之前**的 HEAD，而修订与 frontmatter 会被下一次 checkpoint 打包进**同一提交**
+⇒ 锚指向不含该修订的更早提交 ⇒ **拍板刚完成、第一次跑 gate 就判 design 失鲜、当场 `REFUSE_START` 自锁**。
+∴ 拍板前若四件套相对镜子审过的提交有**实质**改动，MUST 先把该改动**单独 checkpoint 提交**、
+取得其 sha（`~/.sdflow/hack/checkpoint-commit.sh spec-review-amendment "拍板前二次修订"` → `git rev-parse HEAD`），
+**再**执行拍板回写把该 sha 写进 `reviewed_sha`。**MUST NOT** 让二次修订与 frontmatter 回写落进同一次提交。
+（正常路径——拍板前无二次修订——下锚天然自洽，无须此步；`design_approved` 锚的监视集不含 `spec-review-report.md`
+自己，故写报告那次提交不动监视集，但**这只覆盖正常路径，不覆盖二次修订未单独落盘这条路径**。）
+
 写入规则：若 `spec-review-report.md` 已有首块 frontmatter（首行即 `---`），MUST 将 `ship-gate:` 键合并进该已有块（不新开第二块、
 不破坏已有其他键）；若尚无 frontmatter，MUST 在文件最顶端新建此块（**prepend**，MUST NOT 追加到文件末尾）。
 **正文人读拍板记录行保留不删**：决策登记区/拍板记录区仍写一行人读结论（如"设计门已拍板批准，日期 XXXX-XX-XX"）——
 frontmatter 是机判锚，人读行仍留在正文供人阅读、不因迁移而消失。
 
-gate exit 3 时若拍板已发生，人工补此 frontmatter 块 = 显式越权留痕（人机同权）。
+**gate exit 3（REFUSE_START）时若拍板已发生，人工补锚指引〔1.8〕**：补此 frontmatter 块 = 显式越权留痕（人机同权）。
+**须补的是两个字段**——`design_approved: true` **与** `reviewed_sha: <40 位 OID>`，二者同一次写入落盘（缺任一即 UNKNOWN(6)）。
+「该填哪个 commit」的判据 = ADR-1 语义句：**锚记的是「被批准的盘面」，不是「写报告的时刻」**——拍板放行的是哪个提交，
+锚就填哪个；填之前 MUST `git log -1 <候选 sha>` 确认它**已包含**最终批准的四件套内容。
 
 **〔SR-M〕lens-metric 锚随拍板最终化（best-effort，无机械兜底，仍在正文、不迁移）〔impl-review-fix CF-8〕**：spec-review 的
 `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，

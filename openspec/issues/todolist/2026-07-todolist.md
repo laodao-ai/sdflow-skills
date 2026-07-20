@@ -49,7 +49,7 @@ sdflow-issues:
     T190: {"module":"sdflow-ship/ship_gate.py","summary":"run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞","type":"基础设施","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T191: {"module":"openspec/changes/*/impl-reports/","summary":"评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）","type":"代码质量","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T192: {"module":"workflow/tools/lens_metric_emit","summary":"emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行","type":"基础设施","status":"OPEN","time":"2026-07-21 00:17","change":"harden-gate-git-layer","batch":null}
-    T193: {"module":"openspec/changes/harden-gate-git-layer","summary":"本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）","type":"基础设施","status":"OPEN","time":"2026-07-21 00:49","change":"harden-gate-git-layer","batch":null}
+    T193: {"module":"openspec/changes/harden-gate-git-layer","summary":"本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）","type":"基础设施","status":"DONE","time":"2026-07-21 00:49","change":"harden-gate-git-layer","batch":null}
     T194: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
     T195: {"module":"sdflow-ship/tests/conftest.py","summary":"git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
     T196: {"module":"sdflow-spec-review/SKILL.md","summary":"三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
@@ -60,6 +60,7 @@ sdflow-issues:
     T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":null}
     T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":null}
     T203: {"module":"sdflow-ship/tests + CI 配置","summary":"门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立","type":"基础设施","status":"OPEN","time":"2026-07-21 03:41","change":"harden-gate-git-layer","batch":null}
+    T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"OPEN","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1840,3 +1841,9 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **备注**：code-review Step1 broad 镜发现，低危、纯仓库卫生。
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T191 -->
+
+<!-- sdflow-issue-block:start id=T193 -->
+## T193: 本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）
+> 本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）
+> 2026-07 状态：OPEN → DONE（本 change spec-review-report.md 已补录 reviewed_sha=edefe35（提交 0b750ae），自查命令验 0 缺锚；Task6 hand-off/impl-report 登记）
+<!-- sdflow-issue-block:end id=T193 -->

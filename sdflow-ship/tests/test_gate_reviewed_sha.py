@@ -254,3 +254,38 @@ def test_fixture_third_stage_can_express_adr7b_selflock(repo):
     approved_change(repo, plan=PLAN2, revise=revise, anchor="pre-revision")
     code, js, _ = run_gate(repo)
     assert code == 3 and js["verdict"] == "REFUSE_START"
+
+
+# ══ [harden-gate-git-layer Task6 · ADR-7(b) · 测试 5.17] design 域拍板前二次修订，端到端 ══
+#
+# Step3 checkpoint 之后、拍板回写之前再改 design.md（二次修订）。ADR-7(b) 时序把该修订
+# **单独 checkpoint 提交**后再回写锚 ⇒ reviewed_sha 指向**包含**该修订的提交 ⇒ 拍板后首次
+# gate 调用不被拒；反之（修订与回写落进同一提交，锚只能取修订前）⇒ 拍板刚完成即 REFUSE_START。
+#
+# 🔴 变异角色：下方 `_anchored_before_self_locks` 既是 ADR-7(b) 时序纪律的对照物，又是真实的
+#   ship_gate design 域守卫变异体——它落在实现窗口（plan 在、无 checkpoint → CONTINUE_IMPL），
+#   拆掉 design 域失鲜求值（emit_windowed / ls-tree 映射比较任一）后其 REFUSE_START 断言即转红。
+
+def test_adr7b_second_revision_anchored_after_is_not_refused(repo):
+    """[5.17 正例] 二次修订单独落盘、锚指含修订的提交 ⇒ 拍板后首次 gate 不被拒。"""
+    def revise(d):
+        (d / "design.md").write_text("# 拍板前二次修订（已单独落盘）\n", encoding="utf-8")
+
+    approved_change(repo, plan=PLAN2, revise=revise, anchor="head")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] != "REFUSE_START", ("锚含二次修订却仍被拒", js)
+    # 落在实现窗口（plan 在、无 checkpoint）→ CONTINUE_IMPL，正常推进
+    assert js["verdict"] == "CONTINUE_IMPL", js
+
+
+def test_adr7b_second_revision_anchored_before_self_locks(repo):
+    """[5.17 变异证明] 让锚指向二次修订**之前**的提交（模拟修订与 frontmatter 回写落进同一
+    次提交的错误时序）⇒ 修订落在锚之后、且在实现窗口内 ⇒ design 域失鲜 ⇒ 拍板刚完成、第一次
+    跑 gate 就 REFUSE_START(exit 3)。本用例即「让锚指向改动前的提交 ⇒ 用例变红」的落地。"""
+    def revise(d):
+        (d / "design.md").write_text("# 拍板前二次修订（未单独落盘的等价形态）\n",
+                                     encoding="utf-8")
+
+    approved_change(repo, plan=PLAN2, revise=revise, anchor="pre-revision")
+    code, js, _ = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START", js

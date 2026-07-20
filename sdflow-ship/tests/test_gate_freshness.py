@@ -1357,3 +1357,52 @@ def test_code_domain_excludes_openspec_by_entry_name_not_pathspec(repo):
     assert anchor_top[b"src.py"] == head_top[b"src.py"], "前提校准：src.py 未动"
     # 排除 openspec 后两侧等值 ⇒ fresh（是 openspec 条目的变化被排除掉，不是整树相等）
     assert _code_stale(repo, _CR_REL) == (False, "fresh")
+
+
+# ══ [harden-gate-git-layer Task6 · ADR-7(a) · 测试 5.13] code-review 自动修复非空，两段提交时序 ══
+#
+# 锚记的是「被代码审放行的那份源码盘面」，而自动修复改的正是源码盘面。SKILL 的两段时序
+# （修复先单独落盘 → 锚指该提交 → 报告单独落盘）令 code 域相对自己刚写下的锚保持 fresh；
+# 单段时序（修复与报告同一次提交）则锚只能取修复前 HEAD ⇒ 相对自己立刻自锁。
+#
+# 🔴 变异形态说明（impl-report 详载）：本对用例是 ADR-7(a) 时序纪律的端到端守卫。SKILL 侧
+#   无 ship_gate 代码可删，故以「单段时序对照」承担变异角色（同 5.5 的对比测试范式）；
+#   但下方的自锁用例**同时**是真实的 ship_gate code 域守卫变异体——把 code 分支改成恒
+#   `return False, "fresh"`，其 stale 断言即转红。两个角色同一用例承担。
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_code_review_autofix_two_stage_commit_does_not_self_stale(repo):
+    """[5.13 · ADR-7(a) 正例] 自动修复非空时，两段提交时序令 code 域相对自己的锚 fresh。"""
+    d = impl_done(repo)
+    (repo / "src.py").write_text("# 被代码审的源码 v1\n", encoding="utf-8")
+    commit_all(repo, "seed 顶层源码进代码审基线")
+    # ① 自动修复先单独提交（改的是源码盘面）
+    (repo / "src.py").write_text("# 自动修复后 [impl-review-fix]\n", encoding="utf-8")
+    commit_all(repo, "checkpoint(impl-review): 多镜代码审自动修复")
+    fix_sha = head_sha(repo)                  # ② 锚指修复提交
+    # ③ 报告单独提交，reviewed_sha = fix_sha（report-only 只动 openspec 顶层条目）
+    _anchor_code_reports(repo, d, fix_sha, verify="PASS")
+    # 两段时序：report-only 提交不动 src.py 顶层条目 ⇒ 两个消费方相对自己的锚均 fresh
+    assert _code_stale(repo, _CR_REL) == (False, "fresh")
+    assert _code_stale(repo, _VF_REL) == (False, "fresh")
+    # 端到端：verify=PASS + active 存在 ⇒ RUN_VERIFY 收尾，绝不自锁成 RERUN_STALE
+    code, js, _h = run_gate(repo)
+    assert code == 0 and js["verdict"] != "RERUN_STALE", js
+
+
+def test_code_review_single_stage_commit_would_self_lock(repo):
+    """[5.13 变异对照 · ADR-7(a)] 时序退回单段（修复与报告塞进同一次提交）⇒ 锚只能取修复
+    **前**的 HEAD ⇒ 修复落盘后源码顶层条目已变 ⇒ code 域相对自己的锚立刻失鲜（自锁）。
+    这正是 ADR-7(a) 要消灭的形态；上一个用例证明两段时序修好它。
+    双重变异角色：把 code 分支改成恒 `return False,"fresh"`，本例 stale 断言亦转红。"""
+    d = impl_done(repo)
+    (repo / "src.py").write_text("# 被代码审的源码 v1\n", encoding="utf-8")
+    commit_all(repo, "seed 顶层源码进代码审基线")
+    pre_fix = head_sha(repo)                   # 锚指修复**前**（单段时序的错误锚）
+    # 单段：自动修复 + 报告同一次提交（_anchor_code_reports 内 git add -A 一并收编 src.py 改动）
+    (repo / "src.py").write_text("# 自动修复后 [impl-review-fix]\n", encoding="utf-8")
+    _anchor_code_reports(repo, d, pre_fix, verify="PASS")
+    assert _code_stale(repo, _CR_REL) == (True, "stale")
+    code, js, _h = run_gate(repo)
+    assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-code-review", js
+    assert js["freshness"] == "stale"

@@ -56,24 +56,30 @@ verdict × exit × next 契约表:
     plan `### Task <n>:` 号集 plan_ids；plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；
     标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
 
-D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
-    design-approved: 其后触及本 change 四件套路径（proposal/design/tasks.md 与 specs/）
-        的提交 → 失鲜（改设计须重审）；cr/verify/hand-off 等尾流产物不算，实现提交更不算；
-        例外一〔B2/BR-7〕: subject 精确 `checkpoint(impl-review)` 或 `checkpoint(impl-review):…`
-        的提交豁免（阶段三合法尾流修订，code-review 回填措辞/勾选），只认 subject 不认 hunk；
-        例外二〔fix-design-gate-freshness-proxy · 内容判据〕: **纯勾选框翻转**豁免——
-        任何 subject 的提交，若帧内落在监视集的路径**恰为** {tasks.md}、变更形态是普通
-        内容修改（非 A/D/R/C/T、无 mode 变更）、且勾选框标记归一化后**逐行等值**，则不失鲜。
-        归一化只认行首 task-list 标记（CHECKBOX_RE_PATTERN），且 fenced code block /
-        缩进代码块（缩进 ≥4 列）/ HTML 注释块内的行一律不参与。merge 提交须**对每个
-        parent** 都成立。任何读不到 / 形态不合格 / 围栏未闭合 ⇒ 一律回落判失鲜。
-        帧枚举协议〔impl-review-fix F1〕= `git diff-tree -m -r --raw --no-renames -z --root`
-        （merge 逐 parent、改名分解 A+D、NUL 原始路径）；枚举失败 ⇒ 判失鲜（F2）
-    verify / code-review: 其后触及 openspec/ 之外路径的提交 → 陈旧
-        （verify=FAIL 陈旧优先于 code-review 陈旧判定，保重验不因陈旧 CR 卡死）
-    锚一律取报告自录的 `reviewed_sha`〔harden-gate-git-layer ADR-1〕；原「报告从未提交 →
-        freshness=uncommitted」语义随反推锚一并退役——锚是录下来的常量，报告有没有进过提交
-        与「被批准的是哪个盘面」无关（未提交的报告照样带得出有效锚）。
+D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-layer ADR-1/2/3；决策与实证 openspec/adr/0026〕:
+    取代旧「反推锚 + 帧枚举推断路径变更 + 全阶段求值」整套——十个管道缺陷同源于「拿 git 管道当代理」，
+    整类随判据更换消失（proposal「Why」清单）。锚一律取报告自录的 `reviewed_sha`〔ADR-1〕：
+    缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6) fail-closed，MUST NOT 回退任何反推锚（旧
+    `report_last_sha` 及「报告从未提交 → uncommitted」语义一并退役——锚是录下来的常量，报告有没有
+    进过提交与「被批准的是哪个盘面」无关）。
+    design（design_approved 锚）〔ADR-2 比内容〕: 对锚与 HEAD **各跑一次**
+        `git ls-tree -r -z <ref> -- proposal.md design.md tasks.md specs/`，比 `path→(mode,type,oid)`
+        映射（新增 / 删除 / rename / 改内容天然全覆盖，无需双侧并集）。映射全等 ⇒ fresh（0 次 git show）；
+        差异**仅在 tasks.md 且两侧均存在** ⇒ 取两侧字节过 `_tasks_content_exempt`（纯勾选框翻转豁免——
+        归一化后逐行等值；**常开、按内容切、不按阶段切**，勾选框写入方是 agent 自由行为非 SKILL 契约）；
+        其余任何差异（含 tasks.md 单侧缺失，属合法「缺失」信号，MUST NOT 混作读失败）⇒ stale。
+        `-z` MUST NOT 省略（同时关路径 C-quote）；解析按 \0 切记录、首个 \t 切分，path 保持原始字节。
+    design **求值窗口**〔ADR-3 限定窗口〕: design 域失鲜**只在**实现窗口（RUN_SOP / RUN_PLAN /
+        CONTINUE_IMPL）三入口各自 emit 前求值（`emit_windowed` 是唯一实现点）；进入代码审后不再求值——
+        判据只在它保护的风险（照着已变的设计继续建）真实存在的阶段求值。代码审期 / done 期对四件套的
+        修订是文档对账、非「目标在移动」，落窗口外。
+    code（verify / code_review 锚）〔ADR-2 比内容〕: 比锚与 HEAD 的**顶层条目**浅层映射
+        （`ls-tree` 非递归），排除 openspec 记账条目后求等值 ⇒ 覆盖「merge 引入源码」「git mv 迁进
+        openspec」（顶层 tree oid 递归摘要整棵子树，深处源码改动亦翻转）。MUST NOT 用整树 sha
+        （done 写 verify 报告即假阳）、MUST NOT 用负向 pathspec（继承 GIT_ICASE_PATHSPECS，实测证伪）。
+        verify=FAIL 陈旧优先于 code-review 陈旧（保重验不因陈旧 CR 卡死）。
+    「读失败 ≠ 内容为空」〔ADR-4·自噬风险〕: 内容比较 MUST 显式判 returncode，MUST NOT 让两次失败
+        读比较相等；`git show` 仅在 ls-tree 已确认双侧均存在时调用，其 rc≠0 恒为真读失败 → UNKNOWN(6)。
 
 已知不覆盖（接受并记录）:
     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
@@ -82,6 +88,19 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
         换成内容映射比较修复；code 域〔harden-gate-git-layer Task5〕已由 --name-only 提交遍历
         改为**锚 vs HEAD 顶层条目映射比较**（`ls-tree` 非递归、排除 openspec），比的是两个树的
         终态而非 diff ⇒ evil-merge 引入的源码改动经顶层 tree oid 反映、不再漏检（两域同源修复）；
+    〔harden-gate-git-layer 残余面·design ADR-3〕**归档终态盲区**：`verify` 检查点之后到 `merge`
+        之间无失鲜检查——① 已提交路径 archive 后 cdir 不存在，D3 短路凭归档 verify=PASS 判 SHIPPED，
+        全程不调 is_stale；② 未提交路径 gate 只看 committed，sdflow-done 的无范围 `git add -u` 会把
+        早躺工作树的改动收编进最终提交。接受理由：done 在 verify 后的动作（archive/commit/merge）本身
+        不改源码，正常走完时该窗口为空，且 merge 前有 untracked 硬检查兜一层。与 T179 同盲区两半；
+    〔harden-gate-git-layer 残余面·design ADR-3〕**窗口右边界间隙**：「实现刚完成」与「代码审进行中」
+        盘面不可区分（都是 plan 全勾 + 无 cr 报告）⇒ 该间隙内的四件套改动不被 design 域求值。纯盘面
+        判据关不上（要关须加新盘面信号，与本 change 简化方向相悖）；第二层由代码审 scope-drift 检查
+        （模型判断、非机械门）兜，此处不吹成已兜住；
+    〔harden-gate-git-layer 残余面·T189 耦合与承重升格〕`_normalize_checkbox_lines` 在旧设计里只是
+        众多判据之一，新设计下**是 design 域唯一的内容豁免闸门**（比内容 + 单一豁免）；而它自己登记着
+        基准 5 警号（T189：勾选框归一化口径应从黑名单反转为白名单）。承重升格而口径缺陷未修，显式登记、
+        本次不 fold（独立面，见 todolist T189）；
     非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）；
     伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
         （显式越权同权级，git 留痕可审计）；
@@ -1338,8 +1357,10 @@ def decide(root, change):
     design_ok = sr_state is not None and sr_state.get("design_approved") is True
     if not design_ok:
         emit("REFUSE_START", EXIT_REFUSE, None,
-             "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
-             "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）"
+             "未过设计门：spec-review-report.md 缺失或无 design_approved 锚；"
+             "先完成设计门。若拍板已发生请人工补锚（显式越权留痕）——"
+             "须补 design_approved 与 reviewed_sha 两个字段（同一次写入落盘）；"
+             "reviewed_sha 记的是被批准的盘面（拍板放行的那个提交），不是写报告的时刻"
              + _unclosed_frontmatter_hint(report))
     # [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5] **求值窗口**：design 域失鲜原本在此处
     # 无条件全阶段求值。现改为只在三个「进入实现期」的分支各自 emit 之前求值

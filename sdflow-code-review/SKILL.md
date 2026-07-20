@@ -254,7 +254,22 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
   是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
   不含评审架构本身的取舍）。
 - 修复代码，改动处标 `[impl-review-fix]`。
-- **checkpoint 提交**：产出报告 + 自动修复后 → `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
+- **checkpoint 提交 — 两段时序〔harden-gate-git-layer ADR-7(a)，1.6/1.6b〕**：`reviewed_sha` 记的是「**被代码审放行的那份源码盘面**」，
+  而自动修复**改的正是源码盘面**。若把修复与报告塞进**同一次**提交，锚只能取到写报告时的 HEAD（= 修复**前**），
+  修复一落盘、源码顶层条目即变 ⇒ **code 域相对自己刚写下的锚立刻失鲜**，每轮有自动修复的代码审都当场自锁。
+  ∴ 分**两次**提交：
+  1. **先单独提交自动修复**（仅源码 + `[impl-review-fix]` 标记）：
+     `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审自动修复"`。
+     **无自动修复时跳过本步**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，同样自洽）。
+  2. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 上一步的修复提交（或无修复时的被审基线），
+     即报告 frontmatter 的 `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是写报告的时刻」）。
+  3. **再单独提交报告**（report-only）：
+     `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审报告"`。
+     🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑第 3 步**前** MUST 先
+     `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
+     否则第 1 步之后残留的、与本轮修复无关的改动会被卷进 report commit。若有残留 ⇒ 先处置（提交或撤回）再落报告。
+  **该两段时序在本设计下天然可行（已实测）**：code 域比较**排除 `openspec` 顶层条目**，而报告落在 `openspec/` 内
+  ⇒ report-only 提交不改任何非 openspec 顶层条目 ⇒ 不触发 code 域失鲜。
 - **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
 
 ---
