@@ -6,7 +6,7 @@
 
 机械层 MUST NOT 使用下列任一方式判定「被审内容是否改变」：`git log --name-only`、`git diff-tree -m`、`git diff-tree --cc`、负向 pathspec。这些方式已累计产出十个实测复现的缺陷（详见 `openspec/adr/0026`），且互为解药兼病灶、可被外部 config/env 翻转。
 
-机械层 MUST 改为**直接比较内容**：design 域按固定监视清单逐文件比较字节，code 域比较整树 sha。
+机械层 MUST 改为**直接比较内容**：design 域按固定监视清单逐文件比较字节；code 域比较**顶层树条目**（排除 `openspec` 条目后），MUST NOT 比较整棵树的 sha。
 
 #### Scenario: 实现期不得让设计门失鲜
 
