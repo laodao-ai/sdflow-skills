@@ -48,21 +48,21 @@ sdflow-issues:
     T189: {"module":"sdflow-ship/ship_gate.py","summary":"基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单","type":"代码质量","status":"PROPOSED","time":"2026-07-20 16:58","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T190: {"module":"sdflow-ship/ship_gate.py","summary":"run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞","type":"基础设施","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T191: {"module":"openspec/changes/*/impl-reports/","summary":"评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）","type":"代码质量","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
-    T192: {"module":"workflow/tools/lens_metric_emit","summary":"emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行","type":"基础设施","status":"OPEN","time":"2026-07-21 00:17","change":"harden-gate-git-layer","batch":null}
+    T192: {"module":"workflow/tools/lens_metric_emit","summary":"emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行","type":"基础设施","status":"PROPOSED","time":"2026-07-21 00:17","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T193: {"module":"openspec/changes/harden-gate-git-layer","summary":"本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）","type":"基础设施","status":"DONE","time":"2026-07-21 00:49","change":"harden-gate-git-layer","batch":null}
-    T194: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
-    T195: {"module":"sdflow-ship/tests/conftest.py","summary":"git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
-    T196: {"module":"sdflow-spec-review/SKILL.md","summary":"三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
-    T197: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"annotated tag OID 经 ^{commit} peel 被接受，spec 措辞是「是 commit 对象」","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
-    T198: {"module":"openspec/changes/harden-gate-git-layer","summary":"tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
-    T199: {"module":"CLAUDE.md / 开发环境","summary":"CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest","type":"基础设施","status":"OPEN","time":"2026-07-21 01:09","change":"harden-gate-git-layer","batch":null}
-    T200: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验","type":"代码质量","status":"OPEN","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":null}
-    T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":null}
-    T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":null}
-    T203: {"module":"sdflow-ship/tests + CI 配置","summary":"门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立","type":"基础设施","status":"OPEN","time":"2026-07-21 03:41","change":"harden-gate-git-layer","batch":null}
-    T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"OPEN","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":null}
-    T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"OPEN","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":null}
-    T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"OPEN","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":null}
+    T194: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T195: {"module":"sdflow-ship/tests/conftest.py","summary":"git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T196: {"module":"sdflow-spec-review/SKILL.md","summary":"三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T197: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"annotated tag OID 经 ^{commit} peel 被接受，spec 措辞是「是 commit 对象」","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T198: {"module":"openspec/changes/harden-gate-git-layer","summary":"tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T199: {"module":"CLAUDE.md / 开发环境","summary":"CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest","type":"基础设施","status":"PROPOSED","time":"2026-07-21 01:09","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T200: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验","type":"代码质量","status":"PROPOSED","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"PROPOSED","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"PROPOSED","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T203: {"module":"sdflow-ship/tests + CI 配置","summary":"门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立","type":"基础设施","status":"PROPOSED","time":"2026-07-21 03:41","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"PROPOSED","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
 ---
 # 2026-07 TODO
 
@@ -1849,3 +1849,87 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 > 本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）
 > 2026-07 状态：OPEN → DONE（本 change spec-review-report.md 已补录 reviewed_sha=edefe35（提交 0b750ae），自查命令验 0 缺锚；Task6 hand-off/impl-report 登记）
 <!-- sdflow-issue-block:end id=T193 -->
+
+<!-- sdflow-issue-block:start id=T192 -->
+## T192: emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行
+> emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T192 -->
+
+<!-- sdflow-issue-block:start id=T194 -->
+## T194: UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移
+> UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T194 -->
+
+<!-- sdflow-issue-block:start id=T195 -->
+## T195: git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout
+> git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T195 -->
+
+<!-- sdflow-issue-block:start id=T196 -->
+## T196: 三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文
+> 三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T196 -->
+
+<!-- sdflow-issue-block:start id=T197 -->
+## T197: annotated tag OID 经 ^{commit} peel 被接受，spec 措辞是「是 commit 对象」
+> annotated tag OID 经 ^{commit} peel 被接受，spec 措辞是「是 commit 对象」
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T197 -->
+
+<!-- sdflow-issue-block:start id=T198 -->
+## T198: tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底
+> tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T198 -->
+
+<!-- sdflow-issue-block:start id=T199 -->
+## T199: CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest
+> CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T199 -->
+
+<!-- sdflow-issue-block:start id=T200 -->
+## T200: CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验
+> CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T200 -->
+
+<!-- sdflow-issue-block:start id=T201 -->
+## T201: 实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐
+> 实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T201 -->
+
+<!-- sdflow-issue-block:start id=T202 -->
+## T202: Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐
+> Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T202 -->
+
+<!-- sdflow-issue-block:start id=T203 -->
+## T203: 门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立
+> 门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T203 -->
+
+<!-- sdflow-issue-block:start id=T204 -->
+## T204: A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计
+> A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T204 -->
+
+<!-- sdflow-issue-block:start id=T205 -->
+## T205: code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale
+> code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T205 -->
+
+<!-- sdflow-issue-block:start id=T206 -->
+## T206: archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致
+> archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T206 -->

@@ -75,6 +75,25 @@
 | T51 | todo | PROPOSED | gate-checkpoint-hardening |
 | T52 | todo | PROPOSED | gate-checkpoint-hardening |
 
+### 批次：harden-gate-git-layer
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T192 | todo | PROPOSED | harden-gate-git-layer |
+| T194 | todo | PROPOSED | harden-gate-git-layer |
+| T195 | todo | PROPOSED | harden-gate-git-layer |
+| T196 | todo | PROPOSED | harden-gate-git-layer |
+| T197 | todo | PROPOSED | harden-gate-git-layer |
+| T198 | todo | PROPOSED | harden-gate-git-layer |
+| T199 | todo | PROPOSED | harden-gate-git-layer |
+| T200 | todo | PROPOSED | harden-gate-git-layer |
+| T201 | todo | PROPOSED | harden-gate-git-layer |
+| T202 | todo | PROPOSED | harden-gate-git-layer |
+| T203 | todo | PROPOSED | harden-gate-git-layer |
+| T204 | todo | PROPOSED | harden-gate-git-layer |
+| T205 | todo | PROPOSED | harden-gate-git-layer |
+| T206 | todo | PROPOSED | harden-gate-git-layer |
+
 ### 批次：harden-repo-root-fail-closed
 
 | ID | Pool | Status | 关联Change |
@@ -306,4 +325,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 58 项已闭合（bug: 6，todo: 52）
+- 共 59 项已闭合（bug: 6，todo: 53）
