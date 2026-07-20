@@ -110,10 +110,24 @@ ship-gate:
 
 **决定**：不再枚举「哪些路径被碰过」，直接比内容。
 
-- **design 域**：对锚与 HEAD **各跑一次** `git ls-tree -r -z <ref> -- proposal.md design.md specs/`，
-  比较 `path → (mode, type, oid)` **映射**；映射不等即失鲜。
-  `tasks.md` 因需过 `_normalize_checkbox_lines` 才单独取内容比较。
+- **design 域**：对锚与 HEAD **各跑一次** `git ls-tree -r -z <ref> -- proposal.md design.md tasks.md specs/`
+  （**含 `tasks.md`**），比较 `path → (mode, type, oid)` **映射**。
+  - 映射完全相等 ⇒ fresh，**无需任何 `git show`**。
+  - 映射差异**仅在 `tasks.md` 一项、且该路径两侧均存在** ⇒ 才取两侧字节内容、过 `_tasks_content_exempt` 判豁免。
+  - 其余任何差异（含 `tasks.md` 单侧缺失）⇒ stale。
 - **code 域**：比 `git ls-tree`（浅层、不递归）的**顶层条目**，排除 `openspec` 条目后求等值。
+
+**`-z` 是必需项，MUST NOT 省略**：它不只是换分隔符——**它同时关闭 git 默认的路径 C-quote**，
+而 C-quote 正是缺陷 6（控制字符路径被弄花）的成因。省掉 `-z` ⇒ 新代码路径原样踩回缺陷 6。
+**解析方式**（`ls-tree -z` 的输出格式有界、良定义，可正确手写解析）：按 `\0` 切记录，
+每条记录按**首个 `\t`** 切分为 `<mode> <type> <oid>` 与 `path`；path 部分是原始字节，不做任何解码或反转义。
+
+**为什么存在性判定统一交给 `ls-tree`、`git show` 只负责取内容**：二者对「路径不存在」的表达完全不同——
+`ls-tree -r -z <ref> -- <不存在的路径>` 返回 **`rc=0` + 空输出**（缺失与失败判然二分），
+而 `git show <ref>:<不存在的路径>` 返回 **`rc=128`**，与仓损坏 / 权限错误**同一退出码**、机械上不可区分。
+若让 `git show` 承担存在性判定，`tasks.md` 被删或 rename 出去时会走「读失败」分支，
+诊断误导撞门者去查仓完整性（真相是文件没了）；要区分就得 grep stderr 文案，那是手搓无界文本匹配（撞基准 5）。
+∴ `git show` **只在 `ls-tree` 已确认双侧均存在时**才被调用，其 `rc≠0` 恒为真读失败。
 
 **为什么比映射而不是逐文件比字节**：`ls-tree -r` 输出即 `mode type oid\tpath`，**天然含 mode 与 type**
 ⇒ 一次比较覆盖「存在性 / 对象类型 / mode / 内容」四者，且**新增、删除、rename 自动落网**。
@@ -206,20 +220,29 @@ config 面走 `-c`，环境面走子进程 env 清理。
 
 **理由**：缺陷 7（`diff.ignoreSubmodules`）与 8（`GIT_ICASE_PATHSPECS`）是**同一片面**。本方案已不调 diff、不用 pathspec，二者的直接利用面消失；但 `git show` / `ls-tree` 仍在子进程里跑，**MUST NOT** 依赖「我们碰巧没用到那些开关」作为安全论据（那是拿现状当保证）。实测 `ls-tree` 在 `GIT_ICASE_PATHSPECS=1` 下 fatal 罢工——方向安全，但会让门无故坏掉。
 
-### ADR-7：`reviewed_sha` 的写入时序 MUST 与自动修复分离（否则 code 域自锁）
+### ADR-7：锚 MUST 在「被批准的内容已落盘」之后才写（否则自锁）
 
-**决定**：`sdflow-code-review` 的 checkpoint 改为**两段提交**——自动修复（`[impl-review-fix]`）先单独提交，
-`reviewed_sha` 指该提交；报告再单独提交。
+**通则**：`reviewed_sha` 写入前，**它要指向的那份内容 MUST 已经是某个已落盘提交的状态**。
+凡「结论与它所审内容在同一次提交里落盘」的编排，都会让锚指向不含该内容的更早提交 ⇒ 判定当场自锁。
+两个域各有一个实例，**MUST 分别处置**：
 
-**理由**：现状是「产出报告 + 自动修复后」**一起** checkpoint（`sdflow-code-review/SKILL.md:256-257`）。
-若锚取「写报告时的 HEAD」，该 HEAD **不含**尚未提交的修复；checkpoint 一落，HEAD 前进、源码顶层条目改变
-⇒ **code 域相对自己刚写下的锚立刻失鲜**。**每一轮有自动修复的代码审都会自锁。**
-
-**该修法在本设计下天然可行**：code 域比较**排除 `openspec` 条目** ⇒ report-only commit（只动 `openspec/`）
+**(a) code 域 —— 自动修复与报告同提交**：现状是「产出报告 + 自动修复后」**一起** checkpoint
+（`sdflow-code-review/SKILL.md:256-257`）。锚取写报告时的 HEAD ⇒ 不含尚未提交的修复；
+checkpoint 一落，源码顶层条目改变 ⇒ **code 域相对自己刚写下的锚立刻失鲜**，每轮有修复的代码审都自锁。
+⇒ **改两段提交**：修复先单独提交、锚指它，报告再单独提交。
+**该修法在本设计下天然可行**（已实测）：code 域比较排除 `openspec` 条目 ⇒ report-only commit
 不改变非 openspec 顶层条目 ⇒ 不触发失鲜。
 
-**design 域天然免疫此问题**：其监视集是四件套 + `specs/`，**不含 `spec-review-report.md` 自己**
-⇒ 写报告那个 commit 不动监视集。
+**(b) design 域 —— 拍板前的二次修订未单独落盘**：`sdflow-spec-review` 的 Step3 checkpoint 把
+amendments 与草稿报告一起提交（`SKILL.md:184`，历史提交证实为常态），拍板回写协议本身**不含 commit 步骤**。
+⇒ **正常路径**（拍板前无二次修订）下锚天然自洽；
+但人读报告后要求再改四件套时（该场景真实存在，见残余面），那些改动**尚未落盘**，
+锚只能取到更早的 HEAD，随后改动与 frontmatter 被下一次 checkpoint 打包进同一提交
+⇒ **拍板刚完成即判 design 失鲜、当场 `REFUSE_START` 自锁**。
+⇒ **拍板前若四件套有实质改动，MUST 先把该改动单独 checkpoint 提交、取得其 sha，再执行拍板回写**。
+
+🔴 **「design 域天然免疫」只对 (b) 的正常路径成立**——其监视集不含 `spec-review-report.md` 自己，
+故写报告那个 commit 不动监视集；但这不覆盖「二次修订未单独落盘」这条路径。
 
 ### 关于「读失败 ≠ 内容为空」（本 change 的头号自噬风险）
 

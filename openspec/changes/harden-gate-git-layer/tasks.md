@@ -5,17 +5,20 @@
 - [ ] 1.3 新增 `read_reviewed_sha(root, rel)` 做**语义级**校验：`git cat-file -e <sha>^{commit}` 确认对象存在**且为 commit**（非 blob/tree）；缺失 / 格式非法 / 对象不存在 → 抛 `GateIndeterminate`。**MUST NOT** 回退 `report_last_sha`
 - [ ] 1.4 三个 producer 报告模板各加 `reviewed_sha`，**挂在顶层 `ship-gate:` 下作直接子键**，三处逐字对齐 design.md ADR-1 的 YAML 示例
 - [ ] 1.5 `sdflow-spec-review` 拍板回写：`design_approved` 与 `reviewed_sha` **MUST 在同一次文件写入中落盘**（不可拆两次 Edit）
-- [ ] 1.6 **`sdflow-code-review` 改两段提交时序**〔ADR-7〕：自动修复先单独 commit → `reviewed_sha` 指该 commit → 报告单独 commit。不改则每轮有自动修复的代码审都自锁
+- [ ] 1.6 **`sdflow-code-review` 改两段提交时序**〔ADR-7(a)〕：自动修复先单独 commit → `reviewed_sha` 指该 commit → 报告单独 commit。不改则每轮有自动修复的代码审都自锁
+- [ ] 1.6b 两段提交的工作树纪律：`checkpoint-commit.sh` 用 `git add -A`，故第二次（report-only）调用前 MUST 确认 `git status --porcelain` 只剩报告文件，否则会把不相干改动卷进 report commit
 - [ ] 1.7 `sdflow-spec-review` 收敛口加流程纪律：拍板前若四件套相对镜子审过的提交有**实质**改动，MUST 先跑窄复核再拍板
-- [ ] 1.8 更新人工补锚指引文案：`ship_gate.py:1212` 的 `REFUSE_START` reason + `design.md` 与另两个 SKILL 的同类文案，说明**需补两个字段**并给出「该填哪个 commit」的操作指引
+- [ ] 1.7b **〔ADR-7(b)〕拍板前二次修订 MUST 先单独落盘**：若拍板前对四件套有实质改动，MUST 先把该改动**单独 checkpoint 提交**、取得其 sha，再执行拍板回写写 `reviewed_sha`。**MUST NOT** 让该改动与 frontmatter 回写落进同一次提交——那会使锚指向不含该改动的更早提交，拍板刚完成即判失鲜自锁
+- [ ] 1.8 更新人工补锚指引文案：`ship_gate.py:1212` 的 `REFUSE_START` reason + `design.md` 与另两个 SKILL 的同类文案，说明**需补两个字段**；「该填哪个 commit」的指引 MUST 直接引 ADR-1 的语义句「锚记的是**被批准的盘面**，不是写报告的时刻」，并提示核对 `git log` 确认所选 commit 已包含最终批准的内容
 - [ ] 1.9 退役 `report_last_sha`；hand-off 写明存量 active 报告须重审一次
 
 ## 2. 比内容 + 求值窗口（P0）
 
-- [ ] 2.1 design 域：对锚与 HEAD **各跑一次** `git ls-tree -r -z <ref> -- proposal.md design.md specs/`，比较 `path → (mode,type,oid)` 映射；映射不等即失鲜（天然覆盖增/删/rename，无需另做双侧并集）
-- [ ] 2.2 `tasks.md` 单独取内容比较，比较前过既有 `_normalize_checkbox_lines`（bytes 口径，直接复用）——**常开，不按阶段**
+- [ ] 2.1 design 域：对锚与 HEAD **各跑一次** `git ls-tree -r -z <ref> -- proposal.md design.md tasks.md specs/`（**含 `tasks.md`**，使存在性判定统一走 `ls-tree` 的干净语义），比较 `path → (mode,type,oid)` 映射（天然覆盖增/删/rename，无需另做双侧并集）
+- [ ] 2.1b **`-z` MUST NOT 省略**：它同时关闭路径 C-quote（缺陷 6 的成因）。解析 = 按 `\0` 切记录、每条记录按**首个 `\t`** 切分；path 部分保持原始字节，不解码、不反转义
+- [ ] 2.2 判定分层：映射完全相等 ⇒ fresh（**0 次 `git show`**）；差异**仅在 `tasks.md` 且两侧均存在** ⇒ 经 `run_git_bytes` 取两侧字节、用既有 `_tasks_content_exempt(before, after)` 判豁免（其内部即「过 `_normalize_checkbox_lines` 后逐行等值」，直接复用不重写）；其余任何差异（含 `tasks.md` 单侧缺失）⇒ stale。豁免**常开、不按阶段**
 - [ ] 2.3 code 域：`git ls-tree <锚>` 与 `git ls-tree HEAD` 各一次（**浅层、不递归**），去掉 `openspec` 条目后比较。**MUST NOT 用整树 sha**（done 写 verify 报告即假阳）、**MUST NOT 用负向 pathspec**（继承 `GIT_ICASE_PATHSPECS`）
-- [ ] 2.4 **读失败与内容为空显式区分**：每次 `ls-tree` / `git show` 显式判 returncode，任一失败 → `GateIndeterminate`。**单侧路径缺失判 stale，MUST NOT 混作读失败**
+- [ ] 2.4 **读失败与内容为空显式区分**：`ls-tree` 的 `rc≠0` → `GateIndeterminate`；**`rc=0` + 路径不在结果里 = 合法的「缺失」信号 → 判 stale，MUST NOT 当读失败**。`git show` **仅在 `ls-tree` 已确认双侧均存在时**调用，故其 `rc≠0` 恒为真读失败 → `GateIndeterminate`（MUST NOT 让 `git show` 承担存在性判定——它对「路径不存在」与「仓损坏」返回同一个 `rc=128`，机械上不可区分）
 - [ ] 2.5 **求值窗口 · 阶段判定前移**：把 steps 5.5–7 改造成「算出 tentative verdict 但不立即 `emit`」，或引入 `emit_windowed()` 辅助函数
 - [ ] 2.6 **求值窗口 · 三分支各自接入**：`RUN_SOP`(`:1237`) / `RUN_PLAN`(`:1243`) / `CONTINUE_IMPL`(`:1269`) 各自在 emit 前求值 design 失鲜。**MUST NOT 只在 step 7 后加一次检查**（前两个分支会完全逃出，方向 fail-open）
 - [ ] 2.7 `emit()` 的 stale 诊断补 `reviewed_sha`（`extra` 字段 + reason 拼出可执行的 `git diff <sha> HEAD -- …`）
@@ -34,6 +37,7 @@
 ## 4. 测试基座（先行，否则后续用例无法构造）
 
 - [ ] 4.1 **重构共享 fixture 为两段提交模型**：`approved_change` / `tail_ok` / `impl_done` 现为单次 `commit_all` 且 `repo` 无初始提交 ⇒ 报告与其审查对象同属根提交 ⇒ **不存在可填的 `reviewed_sha`**。改为「先提交四件套并读出 sha → 再提交携带该 sha 的报告」
+- [ ] 4.1b fixture MUST 能建模**第三段**（拍板前二次修订）：提供参数使盘面成为「四件套提交 → 二次修订提交 → 报告提交」，供 5.17 验证 ADR-7(b)。现两段模型无法表达该场景，因而验不出该自锁
 - [ ] 4.2 跑通 fixture 重构的连带影响：`approved_change` 调用点共 **44 处**（`test_gate_impl_progress.py` 24 / `test_gate_freshness.py` 13 / `test_gate_namespace.py` 6 / `test_gate_tail.py` 1），其中 30 处与失鲜主题无关但都穿过 `:1214`。**MUST NOT 指望 4.13 的全套件回归顺带发现**
 
 ## 5. 测试与变异证明
@@ -61,7 +65,9 @@
 - [ ] 5.11b **code 域正例**：`git mv` 把源码迁进 `openspec/` ⇒ stale
   > 5.11a/b 是 code 域改用顶层条目比较**唯一的正面收益证明**，MUST 各附变异证明
 - [ ] 5.12 code 域两个消费方各有覆盖（`code-review-report` 今天零覆盖）；`openspec/` 内记账（写 verify 报告 / archive 移目录）⇒ 仍 fresh
-- [ ] 5.13 **code-review 自动修复非空**的端到端用例：两段提交时序下锚不自失鲜（守 ADR-7）
+- [ ] 5.13 **code-review 自动修复非空**的端到端用例：两段提交时序下锚不自失鲜（守 ADR-7(a)）
+- [ ] 5.17 **design 域拍板前二次修订**的端到端用例（守 ADR-7(b)）：Step3 checkpoint 之后、拍板回写之前再改 `design.md` ⇒ `reviewed_sha` MUST 指向**包含该改动**的提交；变异证明 = 让锚指向改动前的提交 ⇒ 拍板后首次 gate 调用即 `REFUSE_START`（用例须变红）
+- [ ] 5.18 `tasks.md` **单侧缺失**（被删 / rename 出监视集）⇒ 判 stale，且诊断 MUST NOT 呈现为「读失败 / 检查仓完整性」
 - [ ] 5.14 **变异证明**：逐条删除上述各守卫，确认对应用例变红，结果逐条落 impl-report。**按守卫计数、非按任务号计数**（5.9 一条对应 7 组独立守卫，5.6 对应 4 组）。**MUST NOT** 以「用例存在且为绿」充当证明
 - [ ] 5.15a **删除既有用例 · 纯删除清单**：随退役机制消失且无等价替代需求者（`tt_*` BR-7 真值表 8 格、`stale_trigger_category_*`、直调退役 helper 的单元测试等，约 45+ 个），impl-report 逐条登记「删哪条 / 对应哪个退役机制」
 - [ ] 5.15b **删除既有用例 · 需重新设计等价用例清单**：承载**仍然生效**安全承诺者（`test_evil_merge_*`、`test_git_mv_*`、`test_merge_frame_*` 等约 10+ 个）MUST 改写成内容比较版本的等价用例，并入本节编号体系。**MUST NOT 静默删除**
@@ -86,18 +92,19 @@
  监视集保住  勾选豁免  锚前旧内容  specs   两消费方  code 正例  openspec  读失败
  源码+plan   常开与     换回即     增/删/   各覆盖   merge/mv   记账仍    ≠空
  勾选        阶段无关   失鲜       rename                       fresh     单侧缺失
-  5.1         5.2       5.4        5.10     5.12   5.11a 5.11b  5.12      5.7
+  5.1         5.2       5.4        5.10     5.12   5.11a 5.11b  5.12    5.7 5.18
    │           │         │          │         │        │          │        │
    └───────────┴────┬────┴──────────┴─────────┴────────┴──────────┴────────┘
                     │
         ┌───────────┴────────────┬─────────────────────┐
    求值窗口                    录锚层                测试基座
- 5.3a RUN_SOP                5.5  排版不移锚      4.1 fixture 两段提交
- 5.3b RUN_PLAN               5.6a 缺失            4.2 44 处调用点连带
- 5.3c CONTINUE_IMPL          5.6b 格式非法
+ 5.3a RUN_SOP                5.5  排版不移锚      4.1  fixture 两段提交
+ 5.3b RUN_PLAN               5.6a 缺失            4.1b 第三段(二次修订)
+ 5.3c CONTINUE_IMPL          5.6b 格式非法        4.2  44 处调用点连带
  5.3d 窗口外不求值            5.6c 非 commit 对象
                              5.6d 结论在锚缺
-                             5.13 修复非空不自锁
+                             5.13 修复非空不自锁 (a)
+                             5.17 拍板前二次修订 (b)
                     │
         git 调用层（跨两域，main 入口）
    5.9a OSError×3 · 5.9b Timeout×3 · 5.9c main 五类诊断 · 5.8 GIT_* 无关性
