@@ -13,7 +13,7 @@
 ## 2. 失鲜诊断指引（P1，`ship_gate.py`）
 
 - [ ] 2.1 design 失鲜的 `REFUSE_START` reason 携带触发提交（subject 或 sha）与触发文件路径
-- [ ] 2.2 reason 附两条分支处置提示（真实设计变更 ⇒ 重跑设计门；阶段三尾流修订 ⇒ 走 `checkpoint(impl-review)` subject 通道）
+- [ ] 2.2 reason 携带**分类原因**（混合路径 / 非勾选框变化 / 前后版缺失 / 状态不合格），机读与人读同源；**默认处置只推荐「重跑设计门」一条**，`checkpoint(impl-review)` **MUST NOT** 出现在默认处置指引中〔impl-review-fix：原文写「附两条分支处置提示…⇒ 走 checkpoint(impl-review) subject 通道」，与 spec-review 期改写后的 ADR-2 口径矛盾，系改写方案未扫残留引用所致（本 change 第 6 处同类接缝矛盾），此处对齐〕
 - [ ] 2.3 确认退出码与判定结果不受本项影响（纯诊断）
 
 ## 3. dispatch 信号权威表（P2，`sdflow-implement/SKILL.md`）

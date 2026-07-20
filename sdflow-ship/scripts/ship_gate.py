@@ -487,6 +487,11 @@ def design_frame_exempt(root, sha, frame_files, base):
     """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
 
     判据本体在 design_frame_exempt_reason——本函数是它的 bool 视图（单一源）。
+
+    〔impl-review-fix〕**测试专用**：Task4 拆出 _reason 变体后，生产路径（is_stale）
+    只调 _reason（它要拿分类原因填诊断触发点），本函数已无生产调用者，仅供只关心
+    「豁不豁免」而不关心「为什么」的用例读。保留是因为那批用例读它更直白；
+    MUST NOT 据此以为它在热路径上——改判据一律改 _reason，本函数自动跟随。
     """
     return design_frame_exempt_reason(root, sha, frame_files, base) is None
 
