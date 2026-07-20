@@ -1,0 +1,489 @@
+diff --git a/openspec/changes/harden-gate-git-layer/hand-off.md b/openspec/changes/harden-gate-git-layer/hand-off.md
+new file mode 100644
+index 0000000..b93abef
+--- /dev/null
++++ b/openspec/changes/harden-gate-git-layer/hand-off.md
+@@ -0,0 +1,86 @@
++# hand-off — harden-gate-git-layer
++
++失鲜判定从「反推锚 + 帧枚举 + 全阶段求值」换成「**录锚 + 比内容 + 限定求值窗口**」。
++下面是消费方（本仓与下游）在升级后 MUST 知道的行为变化与自查动作。决策与实证见 `openspec/adr/0026`。
++
++## 1. 存量 active 报告须重审一次（缺 `reviewed_sha` 会 fail-closed）
++
++新 gate 以报告 frontmatter 的 `reviewed_sha` 为失鲜判定**唯一真相源**。产出于本次硬化**之前**的
++报告没有这个字段 ⇒ gate 判 `UNKNOWN(6)` fail-closed（**不**回退任何反推锚，这是有意的方向安全）。
++∴ 每个存量 active change 的 spec-review / code-review / verify 报告都须**重跑对应评审补锚一次**
++（补锚 = 结论字段与 `reviewed_sha` 同一次写入落盘）。
++
++### 消费仓只读自查命令（一次列出「几个 active 报告会因缺锚 fail-closed」）
++
++```bash
++# 在仓根跑：列出缺 reviewed_sha 的 active 评审报告（跨 bash/zsh 稳，不写盘、纯只读）
++find openspec/changes -maxdepth 2 -mindepth 2 -type f \
++     \( -name spec-review-report.md -o -name code-review-report.md -o -name verify-report.md \) \
++     ! -path '*/archive/*' \
++     -exec sh -c 'grep -q reviewed_sha "$1" || echo "缺锚(须重审): $1"' _ {} \;
++```
++
++无输出 = 无缺锚、可直接推进；有输出 = 逐个重审补锚，别等撞门才发现代价（全仓无下游消费仓清单，
++实际影响面不可估算，故给命令让人自查）。
++
++**本仓现状（2026-07-21 实测）**：唯一 active change = 本 change 自身，`0` 缺锚
++（本 change 自身补锚 = 原 todolist T193，**已在本链路兑现**：`spec-review-report.md` 已带
++`reviewed_sha=edefe35`，见提交 `0b750ae`，标**已完成**）。
++
++## 2. 撞 code 域失鲜先确认不是真漏审
++
++code 域改用「锚 vs HEAD 顶层条目映射比较」（排除 openspec）。它会真实抓到「代码审后经 merge
++提交 resolve 出源码」「`git mv` 把源码迁进 openspec」这类**过去会漏检**的改动 ⇒ 判 `RERUN_STALE`。
++撞到 code 域失鲜时 **MUST 先确认这不是一次真的漏审**（源码在放行后确实被改过），再决定重审；
++不要默认「gate 误报」而手改锚绕过——手改锚 = 显式越权同权级（git 留痕可审计），但会把真漏审放行。
++
++## 3. 行为收紧：实现期直接改设计纠偏今后被 `REFUSE_START` 拦下 —— 有意为之、非 bug
++
++design 域失鲜**只在实现窗口（`RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL`）内求值**，进入代码审后不再检查。
++后果两面，**都是有意设计**：
++
++- **代码审期 / done 期**对四件套的修订（`opsx:verify` 明文允许「revise design.md to match reality」）
++  落在窗口外，**不再触发** design 失鲜——消除了全阶段求值在 14 类历史情形上的纯噪声假阳。
++- **实现期**（窗口内）「照着已批准设计边写边纠偏」这类直接改四件套的动作，今后会被 `REFUSE_START(exit 3)`
++  拦下。**这是行为收紧、不是缺陷**：正解 = 走「halt → 重走 spec-review → 重新拍板」的正规流程，
++  **窗口内不设逃生口**。全仓有 3 个确证反例（实现期 checkpoint 改过自身设计产物，最近一个在拍板后
++  1.6 小时）——它们今后会被拦，这正是判据的目的。
++
++维护者若见到「实现期改设计被拒」的反馈，**先按此条判定为预期行为**，别当 bug 去加旁路。
++
++## 4. 生效路径：`sdflow-init update` 对本 change 无效，须 `/sdflow-upgrade`
++
++`ship_gate.py` 与三个评审 SKILL 都**不在** `sdflow-init/assets/workflow/` bundle 内，`sdflow-init update`
++只刷新项目本地 `openspec/workflow/` 规则副本 ⇒ **对本 change 的改动无效**。
++生效路径 = **`/sdflow-upgrade`**（或手动 `git pull` + `bash setup.sh`）。
++
++⚠ **producer 与 gate MUST 同批发布**：只发 producer 则新锚读不到，只发 gate 则所有存量报告 fail-closed。
++Windows 上 `setup.sh` 走逐目录 `cp -r`，字母序 `sdflow-ship` 在 `sdflow-spec-review` 之前 ⇒ 中断会产生
++「新 gate + 旧 producer」（方向 fail-closed，安全但挡流程）；**勿中断，中断后重跑可自愈（幂等）**。
++
++⚠ **回滚不对称，MUST 人工核验后再回**：旧 gate 在 design 域**无条件全阶段求值**。若某 change 已在新
++gate 下进入代码审后修订过四件套（新语义下合法、历史有 14 例），回滚会使其立刻撞 `REFUSE_START` 打回。
++回滚前 MUST 核验在途 change 的阶段。
++
++## 5. 已完成 / 未完成 · defer 批次
++
++**本票（Task 6）已完成**：
++- ADR-7(a) 两段提交时序（`sdflow-code-review/SKILL.md`）+ ADR-7(b) 拍板前二次修订单独落盘
++  （`sdflow-spec-review/SKILL.md`）+ 收敛口窄复核纪律 + 人工补锚指引（补两字段 + ADR-1 语义句）。
++- `ship_gate.py` 头注释重写（录锚 + 比内容 + 限定求值窗口，指向 adr/0026；已知不覆盖段登记归档终态盲区、
++  窗口右边界间隙、T189 耦合）+ `sdflow-ship/SKILL.md` 链序段行为边界。
++- 测试 5.13（code-review 自动修复两段时序不自锁）+ 5.17（design 拍板前二次修订，锚指含修订提交不被拒），
++  各附变异证明（对照用例 + 真实 ship_gate 守卫变异体，双角色，见 impl-report）。
++- 6.3 全历史核验：A2 的三个 strict-口径确证反例仍是全部（编排层已跑，结论登记进 impl-report）。
++
++**未完成 / 延后（defer，指向批次而非裸 ID）**：本 change 执行期识别的残余项已登记进 todolist，
++分三簇——① **诚实边界残余**（T200/T201/T202：CAUSE_READ_FAILED 触发点回验、6 vs 5 类 cause、
++Task3 两处 fail-closed 收紧偏离 design 字面）② **文档完备性**（T204：A2 宽口径低计，非缺陷、
++MUST NOT 当风险缩设计）③ **独立面/超本 change scope**（T189 勾选框归一化口径反转、T203 门禁用例偶发
++flake 定性、T192–T199 各 Task 的 Minor）。均**不阻断本 change 归档**：属残余诚实登记或独立面，
++非本 change 承诺的目标态缺口。
++
++## 6. 全套件回归
++
++- **本地半场（本票完成）**：`sdflow-ship/tests/` = **330 passed**（326 基线 + 4 新增：5.13×2 + 5.17×2）。
++- **合并后主干再跑一次**：归 `sdflow-done` 的 verify/merge 步（tasks 5.16 后半），本票不代跑。
+diff --git a/openspec/changes/harden-gate-git-layer/impl-reports/task6-wrapup.md b/openspec/changes/harden-gate-git-layer/impl-reports/task6-wrapup.md
+new file mode 100644
+index 0000000..0530259
+--- /dev/null
++++ b/openspec/changes/harden-gate-git-layer/impl-reports/task6-wrapup.md
+@@ -0,0 +1,88 @@
++# impl-report — Task 6: 评审工作流不与新判定自锁，全套件回归并交接
++
++**R-ID:** R3 · **Blocked-by:** 1,2,3,4,5（全部已 SHIPPED）
++**范围:** tasks 1.6 / 1.6b / 1.7 / 1.7b / 1.8 / 6.1 / 6.2 / 6.3 / 6.4 / 6.5 + 测试 5.13 / 5.17（4.1b 前票已建）
++
++## 做了什么
++
++### ADR-7(a) code 域两段提交时序（tasks 1.6 / 1.6b）
++`sdflow-code-review/SKILL.md` 的 checkpoint 步从「产出报告 + 自动修复**同一次**提交」改为**两段**：
++① 自动修复先单独 commit（无修复则跳过）② `git rev-parse HEAD` 取锚 = 修复提交 → 写进报告 `reviewed_sha`
++③ 报告单独 report-only commit。附 **1.6b 工作树纪律**：`checkpoint-commit.sh` 用 `git add -A`，故第 3 步前
++MUST `git status --porcelain` 确认只剩报告文件，否则残留改动被卷进 report commit。
++说明「本设计下天然可行」：code 域比较排除 openspec 顶层条目 ⇒ report-only 提交不动非 openspec 顶层条目 ⇒ 不触发失鲜。
++
++### ADR-7(b) design 域拍板前二次修订（tasks 1.7 / 1.7b）
++`sdflow-spec-review/SKILL.md`：
++- **1.7b（拍板回写协议）**：加「拍板前二次修订 MUST 先单独 checkpoint 提交取 sha、再回写锚」，
++  说明自锁成因（修订与 frontmatter 同提交 ⇒ 锚指更早提交 ⇒ 拍板即失鲜），并注明「design 域天然免疫只对
++  正常路径成立」。
++- **1.7（收敛口）**：加流程纪律「拍板前若四件套相对镜子审过的提交有实质改动，MUST 先跑窄复核再拍板」
++  （C1/C2 论证：镜子审 C1、拍板批准 C2、锚写 C2、findings 只针对 C1）。
++
++### 人工补锚指引（task 1.8）
++三处同步说明**需补两个字段**（`design_approved` + `reviewed_sha`）+ 引 ADR-1 语义句「锚记的是被批准的盘面，
++不是写报告的时刻」：
++- `ship_gate.py` 的 `REFUSE_START` reason（`decide()` 内 design 门缺锚分支）；保留「补锚」字样（`test_gate_preflight` 断言）。
++- `sdflow-spec-review/SKILL.md` 的「gate exit 3 人工补锚」段。
++- `design.md` 的 ADR-1 已含该语义句原文，**无需改动**（且本票 MUST NOT 改四件套）——见下「A2 注记（建议区）」。
++
++### 头注释与链序文档（tasks 6.1 / 6.2）
++- `ship_gate.py` 头 docstring 的「D9 新鲜度」段整体重写为「**录锚 + 比内容 + 限定求值窗口**」，逐域展开
++  （design ls-tree 映射比较 + 求值窗口三入口；code 顶层条目比较；读失败≠内容为空），指向 `openspec/adr/0026`。
++  「已知不覆盖」段新增登记三项残余：**归档终态盲区**、**窗口右边界间隙**、**T189 耦合与承重升格**。
++  旧段描述的退役机制（BR-7 subject 短路、`git diff-tree` 帧枚举协议）随重写清除。
++- `sdflow-ship/SKILL.md` 链序段补「行为边界」段：design 域失鲜仅在 `RUN_SOP`/`RUN_PLAN`/`CONTINUE_IMPL`
++  窗口内求值，进入代码审后不再检查；行为收紧非 bug。
++
++### 测试（5.13 / 5.17）
++- **5.13**（`test_gate_freshness.py`）：`test_code_review_autofix_two_stage_commit_does_not_self_stale`（正例，
++  两段时序两消费方均 fresh、e2e 非 RERUN_STALE）+ `test_code_review_single_stage_commit_would_self_lock`
++  （对照/变异，单段时序 → stale → RERUN_STALE）。
++- **5.17**（`test_gate_reviewed_sha.py`）：`test_adr7b_second_revision_anchored_after_is_not_refused`（正例，
++  锚含修订 → CONTINUE_IMPL 不被拒）+ `test_adr7b_second_revision_anchored_before_self_locks`（变异，
++  锚指修订前 → REFUSE_START exit 3）。
++- 4.1b（fixture 第三段建模）**前票已建**：`approved_change(revise=, anchor="head|pre-revision")` 已就绪，本票直接复用。
++
++## 变异证明台账（按守卫计数）
++
++每条「自锁/拒绝」用例承担**双重变异角色**：既是 ADR-7 时序纪律的对照物（SKILL 侧无 ship_gate 代码可删，
++以「错误时序对照」承担变异，同 5.5 对比测试范式），**又是真实的 ship_gate 守卫变异体**。实测：
++
++| 守卫 | 变异手段 | 受影响用例 | 结果 |
++|---|---|---|---|
++| code 域顶层条目比较（`is_stale` scope=code） | 恒 `return False,"fresh"`（ast.parse 通过） | `test_code_review_single_stage_commit_would_self_lock` | **转红** ✓（AssertionError@1405） |
++| design 域失鲜求值（`is_stale` scope=design） | 分支入口恒 `return False,"fresh"`（ast.parse 通过） | `test_adr7b_second_revision_anchored_before_self_locks` | **转红** ✓（AssertionError@291） |
++
++正例（fresh/不被拒）+ 变异例（stale/被拒）成对通过 = 「让锚指向改动前的提交 ⇒ 用例变红」的完整落地。
++变异体均以恒真/恒假替换整条 return、非删多行布尔中一行，先 `ast.parse` 确认可运行（守 change 曾踩的 SyntaxError 零判别力）。
++
++## 6.3 全历史核验（编排层已跑，此处照录，未重跑）
++
++口径 = `checkpoint(<change>:taskN-*)` ∧ 触碰自身 `design.md`/`proposal.md`/`specs/`：
++- **strict 口径**（在该 change `design_approved` frontmatter 之后）：`94c20b7`[mlh] / `5548921`[devenv] /
++  `cfb9a67`[devenv] **三例确证 post-approval，与 A2 登记一致 ⇒ 三例仍是全部，A2 成立**。
++- **宽口径补记（非缺陷）**：`2ef7ba5`[drop-per-dir-review-stub]、`26aeb2d`[checkpoint-tag-single-source]
++  是 pre-frontmatter-机制的 post-approval 同形态例（无 `design_approved` 锚，落 strict 口径域外）；
++  `a309fd8`[sdflow-init-hardening] 无门禁记录无法判定。A2 是「post-approval 设计改动会发生」的**目标态证据**，
++  例子越多结论越强 ⇒ 文档完备性注记，**MUST NOT 当风险去缩设计**（详见 todolist T204）。
++
++## 回归
++
++`sdflow-ship/tests/` = **330 passed**（326 基线 + 4 新增）。仓根全套件回归见「验收」节。
++「合并后主干再跑」归 `sdflow-done`（tasks 5.16 后半），本票不代跑。
++
++## A2 注记（建议区 —— 归 archive 同步 delta 时处理，本票不改四件套）
++
++`proposal.md`/`design.md` 是四件套、本票 **MUST NOT** 改。6.3 的宽口径补记（2 个 pre-frontmatter 同形态例 +
++1 个无法判定例）建议在 archive 同步 delta-spec 时，作为「A2 目标态证据更强」的**文档完备性注记**并入
++（残余面「T189 耦合」旁），**MUST NOT** 反向改写为风险去缩 design。design.md 的 ADR-1 语义句已是权威原文，
++task 1.8 的三处补锚文案均引用它、未改动它。
++
++## 遵从性自检（Global Constraints 相关项）
++
++- `ship_gate.py` 保持零第三方依赖；本票只改 docstring 与一处 reason 文案，未动退出码集 `{0,3,4,5,6}`。
++- 未引入语义分诊层 / 重锚逃生口；ADR-7(b) 的「先单独提交再回写」是**流程时序纪律**（SKILL 层），非 gate 层逃生口。
++- 未改四件套；A2 注记走建议区。
++- 未动任何 `sdflow:principles` 托管块。
++- 新增守卫变异证明齐全（上表），未以「用例存在且为绿」充当证明。
+diff --git a/openspec/issues/todolist/2026-07-todolist.md b/openspec/issues/todolist/2026-07-todolist.md
+index 5047f69..132c75c 100644
+--- a/openspec/issues/todolist/2026-07-todolist.md
++++ b/openspec/issues/todolist/2026-07-todolist.md
+@@ -49,7 +49,7 @@ sdflow-issues:
+     T190: {"module":"sdflow-ship/ship_gate.py","summary":"run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞","type":"基础设施","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
+     T191: {"module":"openspec/changes/*/impl-reports/","summary":"评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）","type":"代码质量","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
+     T192: {"module":"workflow/tools/lens_metric_emit","summary":"emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行","type":"基础设施","status":"OPEN","time":"2026-07-21 00:17","change":"harden-gate-git-layer","batch":null}
+-    T193: {"module":"openspec/changes/harden-gate-git-layer","summary":"本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）","type":"基础设施","status":"OPEN","time":"2026-07-21 00:49","change":"harden-gate-git-layer","batch":null}
++    T193: {"module":"openspec/changes/harden-gate-git-layer","summary":"本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）","type":"基础设施","status":"DONE","time":"2026-07-21 00:49","change":"harden-gate-git-layer","batch":null}
+     T194: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
+     T195: {"module":"sdflow-ship/tests/conftest.py","summary":"git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
+     T196: {"module":"sdflow-spec-review/SKILL.md","summary":"三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文","type":"代码质量","status":"OPEN","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":null}
+@@ -60,6 +60,7 @@ sdflow-issues:
+     T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":null}
+     T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"OPEN","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":null}
+     T203: {"module":"sdflow-ship/tests + CI 配置","summary":"门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立","type":"基础设施","status":"OPEN","time":"2026-07-21 03:41","change":"harden-gate-git-layer","batch":null}
++    T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"OPEN","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":null}
+ ---
+ # 2026-07 TODO
+ 
+@@ -1840,3 +1841,9 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring
+ **备注**：code-review Step1 broad 镜发现，低危、纯仓库卫生。
+ > 2026-07 状态：OPEN → PROPOSED
+ <!-- sdflow-issue-block:end id=T191 -->
++
++<!-- sdflow-issue-block:start id=T193 -->
++## T193: 本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）
++> 本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）
++> 2026-07 状态：OPEN → DONE（本 change spec-review-report.md 已补录 reviewed_sha=edefe35（提交 0b750ae），自查命令验 0 缺锚；Task6 hand-off/impl-report 登记）
++<!-- sdflow-issue-block:end id=T193 -->
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index 212a314..ea6df53 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -254,7 +254,22 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**
+   是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
+   不含评审架构本身的取舍）。
+ - 修复代码，改动处标 `[impl-review-fix]`。
+-- **checkpoint 提交**：产出报告 + 自动修复后 → `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审 + 自动修 + 报告"`。
++- **checkpoint 提交 — 两段时序〔harden-gate-git-layer ADR-7(a)，1.6/1.6b〕**：`reviewed_sha` 记的是「**被代码审放行的那份源码盘面**」，
++  而自动修复**改的正是源码盘面**。若把修复与报告塞进**同一次**提交，锚只能取到写报告时的 HEAD（= 修复**前**），
++  修复一落盘、源码顶层条目即变 ⇒ **code 域相对自己刚写下的锚立刻失鲜**，每轮有自动修复的代码审都当场自锁。
++  ∴ 分**两次**提交：
++  1. **先单独提交自动修复**（仅源码 + `[impl-review-fix]` 标记）：
++     `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审自动修复"`。
++     **无自动修复时跳过本步**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，同样自洽）。
++  2. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 上一步的修复提交（或无修复时的被审基线），
++     即报告 frontmatter 的 `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是写报告的时刻」）。
++  3. **再单独提交报告**（report-only）：
++     `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审报告"`。
++     🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑第 3 步**前** MUST 先
++     `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
++     否则第 1 步之后残留的、与本轮修复无关的改动会被卷进 report commit。若有残留 ⇒ 先处置（提交或撤回）再落报告。
++  **该两段时序在本设计下天然可行（已实测）**：code 域比较**排除 `openspec` 顶层条目**，而报告落在 `openspec/` 内
++  ⇒ report-only 提交不改任何非 openspec 顶层条目 ⇒ 不触发 code 域失鲜。
+ - **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
+ 
+ ---
+diff --git a/sdflow-ship/SKILL.md b/sdflow-ship/SKILL.md
+index 241b8d9..da0e3ac 100644
+--- a/sdflow-ship/SKILL.md
++++ b/sdflow-ship/SKILL.md
+@@ -100,6 +100,11 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一
+ REFUSE_START(exit3)→停并转述 reason 两变体："未过设计门（若拍板已发生请人工补锚——显式越权留痕）"｜"change 不存在（active 与 archive 均无）——核对 change 名拼写"〔B3〕 ·
+ RUN_SOP→跑 embedded-test-sop（TG-18/高风险细判归模型） · RUN_PLAN→先跑 `python3 sdflow-implement/scripts/impl_route.py route --root "$(git rev-parse --show-toplevel)" --change {change}` 取 PIPELINE_RECEIPT（回显进对话）；`pipeline=tickets` → 按模式派发契约字面串派发 `sdflow-implement mode=tickets-plan change={change}`（ship 主 session inline 执行，MUST NOT 作为子代理派发）；`pipeline=superpowers` → superpowers:writing-plans（**派发 args = `workflow/prompts/step6-writing-plans.md` 全文（原样，勿转述；单一源，**别去读 workflow.md**），其中每任务 commit 步的格式规则（权威见 `ship_gate.py` `TAG_RE`〔T36〕）显式写 checkpoint-commit 命令，由 implementer 执行**——gate 主锚契约；gate 只认当前 change 标签、跨 change stacking 不污染〔T32〕）→ subagent-driven-development 自动执行；helper 非 0 退出（RouteStop，UNKNOWN 语义）→ 按 UNKNOWN 停上抛，不静默回退 · CONTINUE_IMPL→一律按 plan frontmatter marker 路由——本步 MUST 重新调用取 marker：`python3 sdflow-implement/scripts/impl_route.py route --root "$(git rev-parse --show-toplevel)" --change {change}`（与 RUN_PLAN 同款字面命令，同一 route CLI 调用取值，首跳 config 值不再参与；**零跨步内存状态**：本步 MUST 重新调用取 marker，禁止复用早前会话结果或人眼读 frontmatter）〔impl-review-fix〕；`marker=tickets` → 按模式派发契约字面串派发 `sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任务号|none}`（值取自 gate JSON `done_tasks`，原样透传不重算不猜测）；marker 缺席 → 把 JSON `done_tasks` 已完成任务号集传给 SDD dispatch **勿重派**（subagent-driven-development）；helper exit 6（marker 在但非法/重复/损坏，RouteStop）→ 按 UNKNOWN 停上抛，MUST NOT 静默回退旧管线（此判据对 RUN_PLAN 与 CONTINUE_IMPL 两处路由调用均适用）〔impl-review-fix〕；**试验期权威声明：「此二态 skill 路由以本链序为权威；gate JSON `next` 在此二态仍输出 writing-plans/subagent-dev，仅信息性（emit 串 Phase B 根治）。『照 next 跑』指令仅约束 RERUN_STALE/STEP_IN_PROGRESS。」**〔impl-review-fix〕 · RUN_CODE_REVIEW→/sdflow-code-review · BLOCKED_UPSTREAM(exit4)→停并原样上抛 blocker 清单 · RUN_VERIFY→/sdflow-done（透传 merge 意图） · VERIFY_FAIL(exit5)→停并原样上抛缺口清单 · RERUN_STALE→重跑 gate 指定步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜） · STEP_IN_PROGRESS→重跑该步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜）；**熔断判据（按 verdict 分治）**〔T26/SR-1；impl-review-fix CR-1〕：① **`STEP_IN_PROGRESS`**（报告在但无结论锚）→ 用锚行集合判据：同一 invocation 内重跑前后，以 `ship_gate.py` 无状态 helper `anchor_set(text)`/`breaker_no_progress(before, after)` 比较该步报告的 **ship-gate frontmatter 状态集合**〔mlh-p5 Task6 D11：判据迁 frontmatter 状态集，inline 锚已随 live 读点退役、不再参与进展判据〕（快照由编排器单 invocation 内持有作参数传入，helper 不落地、不跨 invocation），状态集无净变化即判无进展。② **`RERUN_STALE`**（报告有锚但陈旧）→ 进展信号是**新鲜度已刷新**（重跑后 gate 不再返回 `RERUN_STALE`），故其熔断以「重跑后 gate **仍**返回同一 `RERUN_STALE`」为准，**MUST NOT 用锚集不变误判**（stale 重跑常锚不变如 pass→pass，用锚集会假熔断误杀正常刷新）。任一判无进展 → 按 UNKNOWN 停上抛人工，禁无限静默循环；**HEAD 移动、文件修改时间戳变化 MUST NOT 作免疫信号**（修复类步几乎必产 commit，若把 HEAD 移动当"有进展"熔断永不触发）；**fail-safe：快照缺失（如 context 压缩丢失上一次记录）保守判无进展**，MUST NOT 默认放行再跑〔熔断〕（例外边界声明：重试判定是单 invocation 内的短时持有、非跨步状态记忆——与"禁 prose 记忆步序"红线不冲突〔adr/0006(b) 的步序判定已全部在 gate〕；持久化下沉为长期 defer 项见 todolist，撞三红线不做） · UNKNOWN(exit6)→停并转述 reason · SHIPPED→输出摘要。
+ 
++**行为边界〔harden-gate-git-layer ADR-3〕**：**design 域失鲜仅在 `RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL`
++窗口内求值，进入代码审（`RUN_CODE_REVIEW` 起）后不再检查**。∴ 代码审期 / done 期对四件套的修订（流程明文
++允许「revise design.md to match reality」）不再触发 design 失鲜；而「实现期照着已批准设计边写边纠偏」这类改动
++会在窗口内被 `REFUSE_START` 拦下——**这是有意的行为收紧、非 bug**，正解是走「halt → 重审 → 重新拍板」，不加旁路。
++
+ ## resume / 暂停 / 人机同权〔D9〕
+ 
+ - **停即停、重调即续**：ship 零跨步内存状态，任何时刻中断后重调 `/sdflow-ship {change}`，gate 从盘面推导缺口继续。
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index 88067b4..0772221 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -56,24 +56,30 @@ verdict × exit × next 契约表:
+     plan `### Task <n>:` 号集 plan_ids；plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；
+     标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
+ 
+-D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
+-    design-approved: 其后触及本 change 四件套路径（proposal/design/tasks.md 与 specs/）
+-        的提交 → 失鲜（改设计须重审）；cr/verify/hand-off 等尾流产物不算，实现提交更不算；
+-        例外一〔B2/BR-7〕: subject 精确 `checkpoint(impl-review)` 或 `checkpoint(impl-review):…`
+-        的提交豁免（阶段三合法尾流修订，code-review 回填措辞/勾选），只认 subject 不认 hunk；
+-        例外二〔fix-design-gate-freshness-proxy · 内容判据〕: **纯勾选框翻转**豁免——
+-        任何 subject 的提交，若帧内落在监视集的路径**恰为** {tasks.md}、变更形态是普通
+-        内容修改（非 A/D/R/C/T、无 mode 变更）、且勾选框标记归一化后**逐行等值**，则不失鲜。
+-        归一化只认行首 task-list 标记（CHECKBOX_RE_PATTERN），且 fenced code block /
+-        缩进代码块（缩进 ≥4 列）/ HTML 注释块内的行一律不参与。merge 提交须**对每个
+-        parent** 都成立。任何读不到 / 形态不合格 / 围栏未闭合 ⇒ 一律回落判失鲜。
+-        帧枚举协议〔impl-review-fix F1〕= `git diff-tree -m -r --raw --no-renames -z --root`
+-        （merge 逐 parent、改名分解 A+D、NUL 原始路径）；枚举失败 ⇒ 判失鲜（F2）
+-    verify / code-review: 其后触及 openspec/ 之外路径的提交 → 陈旧
+-        （verify=FAIL 陈旧优先于 code-review 陈旧判定，保重验不因陈旧 CR 卡死）
+-    锚一律取报告自录的 `reviewed_sha`〔harden-gate-git-layer ADR-1〕；原「报告从未提交 →
+-        freshness=uncommitted」语义随反推锚一并退役——锚是录下来的常量，报告有没有进过提交
+-        与「被批准的是哪个盘面」无关（未提交的报告照样带得出有效锚）。
++D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-layer ADR-1/2/3；决策与实证 openspec/adr/0026〕:
++    取代旧「反推锚 + 帧枚举推断路径变更 + 全阶段求值」整套——十个管道缺陷同源于「拿 git 管道当代理」，
++    整类随判据更换消失（proposal「Why」清单）。锚一律取报告自录的 `reviewed_sha`〔ADR-1〕：
++    缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6) fail-closed，MUST NOT 回退任何反推锚（旧
++    `report_last_sha` 及「报告从未提交 → uncommitted」语义一并退役——锚是录下来的常量，报告有没有
++    进过提交与「被批准的是哪个盘面」无关）。
++    design（design_approved 锚）〔ADR-2 比内容〕: 对锚与 HEAD **各跑一次**
++        `git ls-tree -r -z <ref> -- proposal.md design.md tasks.md specs/`，比 `path→(mode,type,oid)`
++        映射（新增 / 删除 / rename / 改内容天然全覆盖，无需双侧并集）。映射全等 ⇒ fresh（0 次 git show）；
++        差异**仅在 tasks.md 且两侧均存在** ⇒ 取两侧字节过 `_tasks_content_exempt`（纯勾选框翻转豁免——
++        归一化后逐行等值；**常开、按内容切、不按阶段切**，勾选框写入方是 agent 自由行为非 SKILL 契约）；
++        其余任何差异（含 tasks.md 单侧缺失，属合法「缺失」信号，MUST NOT 混作读失败）⇒ stale。
++        `-z` MUST NOT 省略（同时关路径 C-quote）；解析按 \0 切记录、首个 \t 切分，path 保持原始字节。
++    design **求值窗口**〔ADR-3 限定窗口〕: design 域失鲜**只在**实现窗口（RUN_SOP / RUN_PLAN /
++        CONTINUE_IMPL）三入口各自 emit 前求值（`emit_windowed` 是唯一实现点）；进入代码审后不再求值——
++        判据只在它保护的风险（照着已变的设计继续建）真实存在的阶段求值。代码审期 / done 期对四件套的
++        修订是文档对账、非「目标在移动」，落窗口外。
++    code（verify / code_review 锚）〔ADR-2 比内容〕: 比锚与 HEAD 的**顶层条目**浅层映射
++        （`ls-tree` 非递归），排除 openspec 记账条目后求等值 ⇒ 覆盖「merge 引入源码」「git mv 迁进
++        openspec」（顶层 tree oid 递归摘要整棵子树，深处源码改动亦翻转）。MUST NOT 用整树 sha
++        （done 写 verify 报告即假阳）、MUST NOT 用负向 pathspec（继承 GIT_ICASE_PATHSPECS，实测证伪）。
++        verify=FAIL 陈旧优先于 code-review 陈旧（保重验不因陈旧 CR 卡死）。
++    「读失败 ≠ 内容为空」〔ADR-4·自噬风险〕: 内容比较 MUST 显式判 returncode，MUST NOT 让两次失败
++        读比较相等；`git show` 仅在 ls-tree 已确认双侧均存在时调用，其 rc≠0 恒为真读失败 → UNKNOWN(6)。
+ 
+ 已知不覆盖（接受并记录）:
+     openspec/workflow/ 规则漂移不触发陈旧；rebase/--amend 历史改写可伪造保鲜；
+@@ -82,6 +88,19 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
+         换成内容映射比较修复；code 域〔harden-gate-git-layer Task5〕已由 --name-only 提交遍历
+         改为**锚 vs HEAD 顶层条目映射比较**（`ls-tree` 非递归、排除 openspec），比的是两个树的
+         终态而非 diff ⇒ evil-merge 引入的源码改动经顶层 tree oid 反映、不再漏检（两域同源修复）；
++    〔harden-gate-git-layer 残余面·design ADR-3〕**归档终态盲区**：`verify` 检查点之后到 `merge`
++        之间无失鲜检查——① 已提交路径 archive 后 cdir 不存在，D3 短路凭归档 verify=PASS 判 SHIPPED，
++        全程不调 is_stale；② 未提交路径 gate 只看 committed，sdflow-done 的无范围 `git add -u` 会把
++        早躺工作树的改动收编进最终提交。接受理由：done 在 verify 后的动作（archive/commit/merge）本身
++        不改源码，正常走完时该窗口为空，且 merge 前有 untracked 硬检查兜一层。与 T179 同盲区两半；
++    〔harden-gate-git-layer 残余面·design ADR-3〕**窗口右边界间隙**：「实现刚完成」与「代码审进行中」
++        盘面不可区分（都是 plan 全勾 + 无 cr 报告）⇒ 该间隙内的四件套改动不被 design 域求值。纯盘面
++        判据关不上（要关须加新盘面信号，与本 change 简化方向相悖）；第二层由代码审 scope-drift 检查
++        （模型判断、非机械门）兜，此处不吹成已兜住；
++    〔harden-gate-git-layer 残余面·T189 耦合与承重升格〕`_normalize_checkbox_lines` 在旧设计里只是
++        众多判据之一，新设计下**是 design 域唯一的内容豁免闸门**（比内容 + 单一豁免）；而它自己登记着
++        基准 5 警号（T189：勾选框归一化口径应从黑名单反转为白名单）。承重升格而口径缺陷未修，显式登记、
++        本次不 fold（独立面，见 todolist T189）；
+     非 UTF-8 报告以 replace 解码（ASCII 锚行不受影响，中文正文可能乱码不影响机判）；
+     伪造/手工 checkpoint(impl-review) subject 可绕过 design 域失鲜——gate 不核验生产者
+         （显式越权同权级，git 留痕可审计）；
+@@ -1338,8 +1357,10 @@ def decide(root, change):
+     design_ok = sr_state is not None and sr_state.get("design_approved") is True
+     if not design_ok:
+         emit("REFUSE_START", EXIT_REFUSE, None,
+-             "未过设计门：spec-review-report.md 缺失或无 design-approved 锚行；"
+-             "先完成设计门；若拍板已发生请人工补锚（显式越权留痕）"
++             "未过设计门：spec-review-report.md 缺失或无 design_approved 锚；"
++             "先完成设计门。若拍板已发生请人工补锚（显式越权留痕）——"
++             "须补 design_approved 与 reviewed_sha 两个字段（同一次写入落盘）；"
++             "reviewed_sha 记的是被批准的盘面（拍板放行的那个提交），不是写报告的时刻"
+              + _unclosed_frontmatter_hint(report))
+     # [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5] **求值窗口**：design 域失鲜原本在此处
+     # 无条件全阶段求值。现改为只在三个「进入实现期」的分支各自 emit 之前求值
+diff --git a/sdflow-ship/tests/test_gate_freshness.py b/sdflow-ship/tests/test_gate_freshness.py
+index 2a5666d..beae72a 100644
+--- a/sdflow-ship/tests/test_gate_freshness.py
++++ b/sdflow-ship/tests/test_gate_freshness.py
+@@ -1357,3 +1357,52 @@ def test_code_domain_excludes_openspec_by_entry_name_not_pathspec(repo):
+     assert anchor_top[b"src.py"] == head_top[b"src.py"], "前提校准：src.py 未动"
+     # 排除 openspec 后两侧等值 ⇒ fresh（是 openspec 条目的变化被排除掉，不是整树相等）
+     assert _code_stale(repo, _CR_REL) == (False, "fresh")
++
++
++# ══ [harden-gate-git-layer Task6 · ADR-7(a) · 测试 5.13] code-review 自动修复非空，两段提交时序 ══
++#
++# 锚记的是「被代码审放行的那份源码盘面」，而自动修复改的正是源码盘面。SKILL 的两段时序
++# （修复先单独落盘 → 锚指该提交 → 报告单独落盘）令 code 域相对自己刚写下的锚保持 fresh；
++# 单段时序（修复与报告同一次提交）则锚只能取修复前 HEAD ⇒ 相对自己立刻自锁。
++#
++# 🔴 变异形态说明（impl-report 详载）：本对用例是 ADR-7(a) 时序纪律的端到端守卫。SKILL 侧
++#   无 ship_gate 代码可删，故以「单段时序对照」承担变异角色（同 5.5 的对比测试范式）；
++#   但下方的自锁用例**同时**是真实的 ship_gate code 域守卫变异体——把 code 分支改成恒
++#   `return False, "fresh"`，其 stale 断言即转红。两个角色同一用例承担。
++# ══════════════════════════════════════════════════════════════════════════
++
++def test_code_review_autofix_two_stage_commit_does_not_self_stale(repo):
++    """[5.13 · ADR-7(a) 正例] 自动修复非空时，两段提交时序令 code 域相对自己的锚 fresh。"""
++    d = impl_done(repo)
++    (repo / "src.py").write_text("# 被代码审的源码 v1\n", encoding="utf-8")
++    commit_all(repo, "seed 顶层源码进代码审基线")
++    # ① 自动修复先单独提交（改的是源码盘面）
++    (repo / "src.py").write_text("# 自动修复后 [impl-review-fix]\n", encoding="utf-8")
++    commit_all(repo, "checkpoint(impl-review): 多镜代码审自动修复")
++    fix_sha = head_sha(repo)                  # ② 锚指修复提交
++    # ③ 报告单独提交，reviewed_sha = fix_sha（report-only 只动 openspec 顶层条目）
++    _anchor_code_reports(repo, d, fix_sha, verify="PASS")
++    # 两段时序：report-only 提交不动 src.py 顶层条目 ⇒ 两个消费方相对自己的锚均 fresh
++    assert _code_stale(repo, _CR_REL) == (False, "fresh")
++    assert _code_stale(repo, _VF_REL) == (False, "fresh")
++    # 端到端：verify=PASS + active 存在 ⇒ RUN_VERIFY 收尾，绝不自锁成 RERUN_STALE
++    code, js, _h = run_gate(repo)
++    assert code == 0 and js["verdict"] != "RERUN_STALE", js
++
++
++def test_code_review_single_stage_commit_would_self_lock(repo):
++    """[5.13 变异对照 · ADR-7(a)] 时序退回单段（修复与报告塞进同一次提交）⇒ 锚只能取修复
++    **前**的 HEAD ⇒ 修复落盘后源码顶层条目已变 ⇒ code 域相对自己的锚立刻失鲜（自锁）。
++    这正是 ADR-7(a) 要消灭的形态；上一个用例证明两段时序修好它。
++    双重变异角色：把 code 分支改成恒 `return False,"fresh"`，本例 stale 断言亦转红。"""
++    d = impl_done(repo)
++    (repo / "src.py").write_text("# 被代码审的源码 v1\n", encoding="utf-8")
++    commit_all(repo, "seed 顶层源码进代码审基线")
++    pre_fix = head_sha(repo)                   # 锚指修复**前**（单段时序的错误锚）
++    # 单段：自动修复 + 报告同一次提交（_anchor_code_reports 内 git add -A 一并收编 src.py 改动）
++    (repo / "src.py").write_text("# 自动修复后 [impl-review-fix]\n", encoding="utf-8")
++    _anchor_code_reports(repo, d, pre_fix, verify="PASS")
++    assert _code_stale(repo, _CR_REL) == (True, "stale")
++    code, js, _h = run_gate(repo)
++    assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-code-review", js
++    assert js["freshness"] == "stale"
+diff --git a/sdflow-ship/tests/test_gate_reviewed_sha.py b/sdflow-ship/tests/test_gate_reviewed_sha.py
+index 697b714..f1d8f5e 100644
+--- a/sdflow-ship/tests/test_gate_reviewed_sha.py
++++ b/sdflow-ship/tests/test_gate_reviewed_sha.py
+@@ -254,3 +254,38 @@ def test_fixture_third_stage_can_express_adr7b_selflock(repo):
+     approved_change(repo, plan=PLAN2, revise=revise, anchor="pre-revision")
+     code, js, _ = run_gate(repo)
+     assert code == 3 and js["verdict"] == "REFUSE_START"
++
++
++# ══ [harden-gate-git-layer Task6 · ADR-7(b) · 测试 5.17] design 域拍板前二次修订，端到端 ══
++#
++# Step3 checkpoint 之后、拍板回写之前再改 design.md（二次修订）。ADR-7(b) 时序把该修订
++# **单独 checkpoint 提交**后再回写锚 ⇒ reviewed_sha 指向**包含**该修订的提交 ⇒ 拍板后首次
++# gate 调用不被拒；反之（修订与回写落进同一提交，锚只能取修订前）⇒ 拍板刚完成即 REFUSE_START。
++#
++# 🔴 变异角色：下方 `_anchored_before_self_locks` 既是 ADR-7(b) 时序纪律的对照物，又是真实的
++#   ship_gate design 域守卫变异体——它落在实现窗口（plan 在、无 checkpoint → CONTINUE_IMPL），
++#   拆掉 design 域失鲜求值（emit_windowed / ls-tree 映射比较任一）后其 REFUSE_START 断言即转红。
++
++def test_adr7b_second_revision_anchored_after_is_not_refused(repo):
++    """[5.17 正例] 二次修订单独落盘、锚指含修订的提交 ⇒ 拍板后首次 gate 不被拒。"""
++    def revise(d):
++        (d / "design.md").write_text("# 拍板前二次修订（已单独落盘）\n", encoding="utf-8")
++
++    approved_change(repo, plan=PLAN2, revise=revise, anchor="head")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] != "REFUSE_START", ("锚含二次修订却仍被拒", js)
++    # 落在实现窗口（plan 在、无 checkpoint）→ CONTINUE_IMPL，正常推进
++    assert js["verdict"] == "CONTINUE_IMPL", js
++
++
++def test_adr7b_second_revision_anchored_before_self_locks(repo):
++    """[5.17 变异证明] 让锚指向二次修订**之前**的提交（模拟修订与 frontmatter 回写落进同一
++    次提交的错误时序）⇒ 修订落在锚之后、且在实现窗口内 ⇒ design 域失鲜 ⇒ 拍板刚完成、第一次
++    跑 gate 就 REFUSE_START(exit 3)。本用例即「让锚指向改动前的提交 ⇒ 用例变红」的落地。"""
++    def revise(d):
++        (d / "design.md").write_text("# 拍板前二次修订（未单独落盘的等价形态）\n",
++                                     encoding="utf-8")
++
++    approved_change(repo, plan=PLAN2, revise=revise, anchor="pre-revision")
++    code, js, _ = run_gate(repo)
++    assert code == 3 and js["verdict"] == "REFUSE_START", js
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index 721c637..32d9a34 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -207,6 +207,10 @@ description: >
+   降采样/收紧触发/淘汰某镜一律人决，本 skill MUST NOT 自行判断或执行。
+ - 据此更新 design/specs，改动处标 `[spec-review-amendment]`。
+ - **收敛口（1.6）**：结尾一句——是否建议进设计 HARD-GATE（用户批准 → writing-plans）。人工过这一份报告拍板，即阶段二唯一人类门。
++  🔴 **拍板前流程纪律〔harden-gate-git-layer 1.7〕**：镜子审的是拍板**当时**的四件套（C1）；人读报告后要求修改会产出新盘面（C2）。
++  拍板批准的是 C2、锚也写 C2（拍板批准的就是它），但报告里的 findings 只针对 C1 ⇒ **拍板前若四件套相对镜子审过的提交有实质改动，
++  MUST 先跑一次窄复核（只审增量）再拍板**。gate 看不出「这次改动有没有被审过」，此纪律在流程层兜、不由 gate 管。
++  （落盘时序另见下方拍板回写协议的 ADR-7(b)：窄复核通过后、二次修订 MUST 先单独 checkpoint 提交再回写锚。）
+ **拍板回写协议（ship-gate 锚，D2，mlh-p5 迁 frontmatter）**：设计门拍板**发生后**，主 session MUST 立即把 `ship-gate.design_approved`
+ 写入 `spec-review-report.md`**的报告头部 frontmatter**（文件首块，非文件末尾、非正文）——写入者=主 session、触发点=用户批准动作；
+ 这是 `/sdflow-ship` pre-flight 的唯一机判依据（**写入报告时 `ship-gate:` 顶格列 0，忽略本处 markdown 列表缩进**——下方 yaml
+@@ -227,12 +231,25 @@ ship-gate:
+ **两个字段 MUST 在同一次文件写入中落盘**（不可拆成两次 Edit）：拆开且中断落在中间，
+ 盘面会变成「`design_approved: true` 在、`reviewed_sha` 缺」——gate 判 UNKNOWN(6)，可恢复但无指引。
+ 
++🔴 **拍板前二次修订 MUST 先单独落盘，再回写锚〔harden-gate-git-layer ADR-7(b)，1.7b〕**：
++人读报告后要求再改四件套（该场景真实存在），那些改动**尚未落盘** ⇒ 若直接回写锚，`git rev-parse HEAD`
++取到的是修订**之前**的 HEAD，而修订与 frontmatter 会被下一次 checkpoint 打包进**同一提交**
++⇒ 锚指向不含该修订的更早提交 ⇒ **拍板刚完成、第一次跑 gate 就判 design 失鲜、当场 `REFUSE_START` 自锁**。
++∴ 拍板前若四件套相对镜子审过的提交有**实质**改动，MUST 先把该改动**单独 checkpoint 提交**、
++取得其 sha（`~/.sdflow/hack/checkpoint-commit.sh spec-review-amendment "拍板前二次修订"` → `git rev-parse HEAD`），
++**再**执行拍板回写把该 sha 写进 `reviewed_sha`。**MUST NOT** 让二次修订与 frontmatter 回写落进同一次提交。
++（正常路径——拍板前无二次修订——下锚天然自洽，无须此步；`design_approved` 锚的监视集不含 `spec-review-report.md`
++自己，故写报告那次提交不动监视集，但**这只覆盖正常路径，不覆盖二次修订未单独落盘这条路径**。）
++
+ 写入规则：若 `spec-review-report.md` 已有首块 frontmatter（首行即 `---`），MUST 将 `ship-gate:` 键合并进该已有块（不新开第二块、
+ 不破坏已有其他键）；若尚无 frontmatter，MUST 在文件最顶端新建此块（**prepend**，MUST NOT 追加到文件末尾）。
+ **正文人读拍板记录行保留不删**：决策登记区/拍板记录区仍写一行人读结论（如"设计门已拍板批准，日期 XXXX-XX-XX"）——
+ frontmatter 是机判锚，人读行仍留在正文供人阅读、不因迁移而消失。
+ 
+-gate exit 3 时若拍板已发生，人工补此 frontmatter 块 = 显式越权留痕（人机同权）。
++**gate exit 3（REFUSE_START）时若拍板已发生，人工补锚指引〔1.8〕**：补此 frontmatter 块 = 显式越权留痕（人机同权）。
++**须补的是两个字段**——`design_approved: true` **与** `reviewed_sha: <40 位 OID>`，二者同一次写入落盘（缺任一即 UNKNOWN(6)）。
++「该填哪个 commit」的判据 = ADR-1 语义句：**锚记的是「被批准的盘面」，不是「写报告的时刻」**——拍板放行的是哪个提交，
++锚就填哪个；填之前 MUST `git log -1 <候选 sha>` 确认它**已包含**最终批准的四件套内容。
+ 
+ **〔SR-M〕lens-metric 锚随拍板最终化（best-effort，无机械兜底，仍在正文、不迁移）〔impl-review-fix CF-8〕**：spec-review 的
+ `采纳`/`裁掉`/`defer`（决策登记区「自动决策」/「已裁掉」/「需拍板」三态，需拍板项设计门可翻改其去向）因中置信项设计门可翻改，
