@@ -45,6 +45,9 @@ sdflow-issues:
     T186: {"module":"sdflow-ship/ship_gate.py","summary":"merge 帧在 live 路径取不到文件列表 → design 域逐 parent 豁免分支不可达（evil-merge 面）","type":"代码质量","status":"OPEN","time":"2026-07-20 14:17","change":"fix-design-gate-freshness-proxy","batch":null}
     T187: {"module":"sdflow-ship/tests/test_gate_freshness.py","summary":"_stale_after 的 empty_subject 布尔旗标是 flag-argument smell（subject 须传 None 且被忽略）","type":"代码质量","status":"OPEN","time":"2026-07-20 15:23","change":"fix-design-gate-freshness-proxy","batch":null}
     T188: {"module":"仓根 pytest 收集","summary":"跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守","type":"基础设施","status":"OPEN","time":"2026-07-20 15:54","change":"fix-design-gate-freshness-proxy","batch":null}
+    T189: {"module":"sdflow-ship/ship_gate.py","summary":"基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单","type":"代码质量","status":"OPEN","time":"2026-07-20 16:58","change":"fix-design-gate-freshness-proxy","batch":null}
+    T190: {"module":"sdflow-ship/ship_gate.py","summary":"run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞","type":"基础设施","status":"OPEN","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":null}
+    T191: {"module":"openspec/changes/*/impl-reports/","summary":"评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）","type":"代码质量","status":"OPEN","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1780,3 +1783,42 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：本次已用改名规避（test_dispatch_signal_authority.py）。属仓级基础设施面，非本 change 功能相关，故 defer 未 fold。
 <!-- sdflow-issue-block:end id=T188 -->
+
+<!-- sdflow-issue-block:start id=T189 -->
+## T189: 基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单
+> 基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单
+
+**关联文档**：`openspec/changes/fix-design-gate-freshness-proxy/design.md`
+
+**动机**：该函数的 fence/上下文排除清单已补了四轮：``` → ~~~ → 四 backtick → 缩进代码块 + HTML 注释。CLAUDE.md 基准 5 的警号原文：「当你发现每轮 review 都在同一个函数里补一个新的语法分支，那不是还差最后一个 case，那是这个函数本来就不该存在」。目前靠「超集口径 + fail-closed + 只加在豁免面」三重围栏止损，方向保守、可接受，但趋势要盯。
+
+**思路**：冷层 code-review 复审给的正解：把口径反转成白名单——只归一化「缩进 ≤3 列、且不在任何 fence / HTML 注释内的行首标记」，其余一律不归一化（即照判失鲜）。白名单天然有界，新语法变体不再需要逐个补黑名单分支。
+
+**备注**：code-review 复审 Minor，非当前缺陷、是趋势信号。
+<!-- sdflow-issue-block:end id=T189 -->
+
+<!-- sdflow-issue-block:start id=T190 -->
+## T190: run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞
+> run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞
+
+**关联文档**：`openspec/changes/fix-design-gate-freshness-proxy/design.md`
+
+**动机**：对抗镜 B（置信 40，DoS 方向非误判）：blob_pair 每帧每 parent 要发起 rev-list + diff --raw + 两次 cat-file 共 4 次子进程，tasks.md 改动帧数多时线性放大；远端凭据交互提示 / 损坏 pack 会让 git 阻塞等待输入。
+
+**思路**：给 run_git / run_git_rc / run_git_bytes 加统一 timeout（值待定，需兼顾大仓 cat-file 耗时），超时按既有保守方向判失鲜 / UNKNOWN。
+
+**备注**：低置信、非本 change 引入；与 B20（git 缺失异常）同属 run_git* 系列的健壮性面，宜一并治。
+<!-- sdflow-issue-block:end id=T190 -->
+
+<!-- sdflow-issue-block:start id=T191 -->
+## T191: 评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）
+> 评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）
+
+**关联文档**：`openspec/changes/fix-design-gate-freshness-proxy/design.md`
+
+**动机**：Step1 scope-drift 扫出：本 change 的 impl-reports/ 下有 4 个 *-review-package.diff（合计 ~1600 行），是 git diff 完全可再生的派生物，却被 checkpoint 的 add -A 提交并将随 archive 永久留存。sdflow-implement 的文件交接条款只说把 diff 写到该目录供 reviewer 读，没说要入库。
+
+**思路**：两条候选：① 把 *-review-package.diff 加进 .gitignore（最省，但要确认 archive 时不需要它们做审计）；② 改文件交接约定，diff 包落到 .outside-voice/ 同款的 gitignored 位置。倾向 ①。
+
+**备注**：code-review Step1 broad 镜发现，低危、纯仓库卫生。
+<!-- sdflow-issue-block:end id=T191 -->

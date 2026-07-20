@@ -46,8 +46,13 @@ try:
     if str(_GATE_SCRIPTS) not in sys.path:
         sys.path.insert(0, str(_GATE_SCRIPTS))
     from ship_gate import FenceTracker as _FenceTracker  # type: ignore
-except Exception:                                        # noqa: BLE001
+except Exception as _e:                                  # noqa: BLE001
     _FenceTracker = None                                 # fail-closed，见 parse_blocked_by
+    # [impl-review-fix] 记下失败原因串：fail-closed 本身对，但吞掉原因会让
+    # 「装歪了 vs 语法错 vs 版本不符」三种情况在诊断上无法区分。
+    _FENCE_IMPORT_ERR = f"{type(_e).__name__}: {_e}"
+else:
+    _FENCE_IMPORT_ERR = ""
 
 # [impl-review-fix] 语义对齐 ship_gate.EXIT_UNKNOWN=6（设计禁 import gate，手动同步；
 # gate 侧字面见 ship_gate.py:137 `EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN
@@ -241,7 +246,10 @@ def parse_blocked_by(plan_text: str) -> Dict[int, Set[int]]:
     if _FenceTracker is None:
         # [impl-review-fix F4] 引不到单一源 ⇒ 停，MUST NOT 用手抄口径顶上（口径漂移
         # 正是本条要根治的病；假 ✅ 的方向比停下来贵得多）。
-        raise TopoError("无法加载围栏词法单一源 ship_gate.FenceTracker，拒绝以分叉口径解析 plan")
+        raise TopoError(
+            "无法加载围栏词法单一源 ship_gate.FenceTracker，拒绝以分叉口径解析 plan"
+            + (f"（import 失败原因：{_FENCE_IMPORT_ERR}）" if _FENCE_IMPORT_ERR else "")
+        )
 
     task_ids: Set[int] = set()
     segments: List[Tuple[int, List[str]]] = []
