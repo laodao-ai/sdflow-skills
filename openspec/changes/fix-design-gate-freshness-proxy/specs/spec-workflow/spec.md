@@ -133,7 +133,9 @@ design 域监视集 SHALL 保持固定四件套不变。豁免 SHALL 仅覆盖**
 #### Scenario: 失鲜 REFUSE_START 须携带触发点与处置指引
 
 - **WHEN** gate 因 design 域失鲜而 emit `REFUSE_START`
-- **THEN** reason MUST 指明**触发失鲜的提交与文件**（至少一条 `<commit subject 或 sha>` + `<路径>`），并 MUST 给出可操作的分支处置提示（真实设计变更 ⇒ 重跑设计门；阶段三合法尾流修订 ⇒ 走 `checkpoint(impl-review)` subject 声明通道）；MUST NOT 只输出「结论陈旧」而不指明触发点
+- **THEN** reason MUST 指明**触发失鲜的提交与文件**（至少一条 `<commit subject 或 sha>` + `<路径>`），并 MUST 携带**分类原因**（混合路径 / 非勾选框变化 / 前后版缺失 / 状态不合格，取值以判据实际分支为准）；MUST NOT 只输出「结论陈旧」而不指明触发点
+- **AND** 机读输出 MUST 与人读文案**同源**（同一份触发点数据的两个视图），MUST NOT 各自拼装而允许单侧漂移
+- **AND** 默认处置指引 MUST 只推荐**重跑设计门**一条；`checkpoint(impl-review)` **MUST NOT** 出现在默认处置指引中〔spec-review-amendment 设计门拍板；impl-review-fix：本条原文与 ADR-2 改写后的口径冲突，系 spec-review 期改写 ADR-2 未扫残留引用所致，此处对齐〕——两条理由：① 它是**显式越权口**（让任意四件套语义改动不经二次批准随档 ship，`ship_gate.py` 头注释已声明为「已知不覆盖」），写进常规建议会把例外变成默认工作流；② 🔴 **它对撞门者无效**——豁免逐提交求值，已经触发失鲜的那个提交**不会**因为后补一个 `checkpoint(impl-review)` 提交而被追溯赦免，写进指引等于教人做一件不起作用的事。其正确定位是**事前、受控的 impl-review 提交协议**（用在会触发失鲜的那个提交自身上），只在该协议文档中说明
 - **AND** 该指引 MUST 为纯诊断输出，MUST NOT 改变退出码或失鲜判据本身
 
 #### Scenario: 阶段三合法尾流修订不失鲜〔B2〕
