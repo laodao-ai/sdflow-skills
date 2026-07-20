@@ -1,3 +1,4 @@
+import os
 import subprocess, sys
 from pathlib import Path
 
@@ -546,6 +547,24 @@ def test_checkbox_flip_plus_design_edit_is_stale(repo):
     assert _design_stale(repo) == (True, "stale")
 
 
+def _spy_blob_reads(monkeypatch):
+    """打桩 `run_git_bytes`，记录所有 `cat-file blob` 调用（其余原样透传）。返回该记录 list。
+
+    [fix1 F5] 单一源：三个「内容读取发生 / 未发生」类用例共用本 helper，
+    MUST NOT 各自内联一份逐字相同的 spy（三份拷贝会漂移，且改 spy 口径时必漏其一）。
+    """
+    calls = []
+    real = _sg.run_git_bytes
+
+    def spy(root, *args):
+        if args[:2] == ("cat-file", "blob"):
+            calls.append(args)
+        return real(root, *args)
+
+    monkeypatch.setattr(_sg, "run_git_bytes", spy)
+    return calls
+
+
 def test_no_content_read_when_maps_are_equal(repo, monkeypatch):
     """分层判定的机械守：映射相等 ⇒ fresh，**0 次内容读取**。
 
@@ -554,15 +573,7 @@ def test_no_content_read_when_maps_are_equal(repo, monkeypatch):
     _approved_with_tasks(repo)
     (repo / "src.py").write_text("# impl\n", encoding="utf-8")
     commit_all(repo, "checkpoint(task1-a): 只改源码")
-    calls = []
-    real = _sg.run_git_bytes
-
-    def spy(root, *args):
-        if args[:2] == ("cat-file", "blob"):
-            calls.append(args)
-        return real(root, *args)
-
-    monkeypatch.setattr(_sg, "run_git_bytes", spy)
+    calls = _spy_blob_reads(monkeypatch)
     assert _design_stale(repo) == (False, "fresh")
     assert calls == []
 
@@ -571,15 +582,7 @@ def test_content_read_does_happen_when_only_tasks_differs(repo, monkeypatch):
     _approved_with_tasks(repo)
     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
     commit_all(repo, "docs: 勾选回填")
-    calls = []
-    real = _sg.run_git_bytes
-
-    def spy(root, *args):
-        if args[:2] == ("cat-file", "blob"):
-            calls.append(args)
-        return real(root, *args)
-
-    monkeypatch.setattr(_sg, "run_git_bytes", spy)
+    calls = _spy_blob_reads(monkeypatch)
     assert _design_stale(repo) == (False, "fresh")
     assert len(calls) == 2          # 锚侧 + HEAD 侧各一次
 
@@ -724,19 +727,6 @@ def test_specs_subtree_edit_is_stale(repo):
 
 # ── 5.18 / 5.7 缺失 ≠ 读失败；读失败 ≠ 内容为空 ───────────────────────────
 
-def _spy_blob_reads(monkeypatch):
-    calls = []
-    real = _sg.run_git_bytes
-
-    def spy(root, *args):
-        if args[:2] == ("cat-file", "blob"):
-            calls.append(args)
-        return real(root, *args)
-
-    monkeypatch.setattr(_sg, "run_git_bytes", spy)
-    return calls
-
-
 @pytest.mark.parametrize("how", ["delete", "rename-away"])
 def test_one_sided_missing_tasks_is_stale_not_a_read_failure(repo, monkeypatch, how):
     """[5.18] `tasks.md` 单侧缺失（被删 / rename 出监视集）⇒ **判 stale**。
@@ -772,34 +762,34 @@ def test_tasks_appearing_only_on_head_side_is_stale(repo):
     assert _design_stale(repo) == (True, "stale")
 
 
-def test_ls_tree_read_failure_is_indeterminate_not_fresh(repo):
+def test_ls_tree_read_failure_is_indeterminate_not_fresh(repo, monkeypatch):
     """[5.7] `ls-tree` 的 rc≠0 = 真读失败 ⇒ `GateIndeterminate`（→ UNKNOWN(6)），
     **MUST NOT** 当成空映射——两侧都失败会比出「空 == 空」⇒ 判 fresh ⇒ 放行一切改动。"""
     d = _approved_with_tasks(repo)
     (d / "design.md").write_text("偷改\n", encoding="utf-8")
     commit_all(repo, "docs: 偷改")
-    monkeypatch_target = lambda root, *args: (128, b"") if args[:1] == ("ls-tree",) else _real(root, *args)
-    _real = _sg.run_git_bytes
-    import unittest.mock as _mock
-    with _mock.patch.object(_sg, "run_git_bytes", monkeypatch_target):
-        with pytest.raises(_sg.GateIndeterminate) as ei:
-            _design_stale(repo)
+    # [fix1 F5] 原写法是个 lambda，闭包引用**下一行才赋值**的 `_real`——能跑通纯属
+    # 「lambda 体到调用时才求值」的巧合，读起来是先用后定义。改成先取真值、再定义桩。
+    real = _sg.run_git_bytes
+    monkeypatch.setattr(_sg, "run_git_bytes", lambda root, *args:
+                        (128, b"") if args[:1] == ("ls-tree",) else real(root, *args))
+    with pytest.raises(_sg.GateIndeterminate) as ei:
+        _design_stale(repo)
     assert ei.value.category == _sg.CAUSE_READ_FAILED
 
 
-def test_ls_tree_unparsable_output_is_indeterminate(repo):
+def test_ls_tree_unparsable_output_is_indeterminate(repo, monkeypatch):
     """协议外形态（无 `\\t` / 字段数不对）⇒ 看不清 ⇒ 不可判。
     MUST NOT 静默跳过该记录——跳过等于把一个真实条目从映射里抹掉（fail-open）。"""
     _approved_with_tasks(repo)
-    import unittest.mock as _mock
-    with _mock.patch.object(_sg, "run_git_bytes",
-                            lambda root, *a: (0, b"garbage-without-tab\0")):
-        with pytest.raises(_sg.GateIndeterminate) as ei:
-            _design_stale(repo)
+    monkeypatch.setattr(_sg, "run_git_bytes",
+                        lambda root, *a: (0, b"garbage-without-tab\0"))
+    with pytest.raises(_sg.GateIndeterminate) as ei:
+        _design_stale(repo)
     assert ei.value.category == _sg.CAUSE_READ_FAILED
 
 
-def test_blob_read_failure_on_both_sides_is_not_equal_content(repo):
+def test_blob_read_failure_on_both_sides_is_not_equal_content(repo, monkeypatch):
     """🔴 本 change 的头号自噬风险钉（design.md 明列）：两侧内容读取都失败、各返回空串，
     比较判「同」⇒ 假绿。∴ 内容读取 MUST 显式判 returncode 并上抛不可判，
     **MUST NOT** 把失败折成 `b""`。
@@ -810,35 +800,33 @@ def test_blob_read_failure_on_both_sides_is_not_equal_content(repo):
     _write_tasks(repo, _SEMANTIC)              # 语义改动：若两侧读成 b"" 会被判等值而豁免
     commit_all(repo, "docs: 偷改 task 标题")
     real = _sg.run_git_bytes
-    import unittest.mock as _mock
 
     def blob_always_fails(root, *args):
         if args[:2] == ("cat-file", "blob"):
             return 128, b""
         return real(root, *args)
 
-    with _mock.patch.object(_sg, "run_git_bytes", blob_always_fails):
-        with pytest.raises(_sg.GateIndeterminate) as ei:
-            _design_stale(repo)
+    monkeypatch.setattr(_sg, "run_git_bytes", blob_always_fails)
+    with pytest.raises(_sg.GateIndeterminate) as ei:
+        _design_stale(repo)
     assert ei.value.category == _sg.CAUSE_READ_FAILED
 
 
-def test_blob_read_failure_on_one_side_is_indeterminate(repo):
+def test_blob_read_failure_on_one_side_is_indeterminate(repo, monkeypatch):
     _approved_with_tasks(repo)
     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
     commit_all(repo, "docs: 勾选回填")
     real = _sg.run_git_bytes
     anchor = _sg.read_reviewed_sha(repo, _ANCHOR_REL)
-    import unittest.mock as _mock
 
     def anchor_side_fails(root, *args):
         if args[:2] == ("cat-file", "blob") and args[2].startswith(anchor):
             return 128, b""
         return real(root, *args)
 
-    with _mock.patch.object(_sg, "run_git_bytes", anchor_side_fails):
-        with pytest.raises(_sg.GateIndeterminate):
-            _design_stale(repo)
+    monkeypatch.setattr(_sg, "run_git_bytes", anchor_side_fails)
+    with pytest.raises(_sg.GateIndeterminate):
+        _design_stale(repo)
 
 
 def test_mode_only_change_on_tasks_is_stale(repo):
@@ -967,7 +955,7 @@ def test_chinese_named_spec_edit_still_stale(repo):
 
 # ── 保留复用件仍在场且有真实调用点（tasks 2.9）─────────────────────────────
 
-def test_retained_helpers_are_still_wired_into_production_path(repo):
+def test_retained_helpers_are_still_wired_into_production_path(repo, monkeypatch):
     """[tasks 2.9] `DESIGN_WATCHED_NAMES` / `_tasks_content_exempt` /
     `_normalize_checkbox_lines` 是退役后仅有的三处**保留复用**件。
 
@@ -987,9 +975,9 @@ def test_retained_helpers_are_still_wired_into_production_path(repo):
     _approved_with_tasks(repo)
     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
     commit_all(repo, "docs: 勾选回填")
-    import unittest.mock as _mock
-    with _mock.patch.object(_sg, "_tasks_content_exempt", lambda b, a: False):
-        assert _design_stale(repo) == (True, "stale")
+    monkeypatch.setattr(_sg, "_tasks_content_exempt", lambda b, a: False)
+    assert _design_stale(repo) == (True, "stale")
+    monkeypatch.undo()                    # 复原后必须变回 fresh（证明替身真被调到）
     assert _design_stale(repo) == (False, "fresh")
 
 
@@ -1023,3 +1011,116 @@ def test_stale_verdict_carries_no_trigger_payload(repo):
     code, js, _h = run_gate(repo)
     assert code == 3 and js["verdict"] == "REFUSE_START"
     assert "stale_trigger" not in js
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [fix1] 双轴审第 1 轮返修的三条守卫（F1 退出码契约 / F2 gitlink 诊断 / F3 基座隔离）
+# ══════════════════════════════════════════════════════════════════════════
+
+# ── F1：`--change` 的非 UTF-8 字节 MUST NOT 把退出码打出契约集 ────────────────
+#
+# `--change` 经 argv 由 CPython 以 **surrogateescape** 解码 ⇒ 非 UTF-8 字节变 lone
+# surrogate。`is_stale` 里 `(base + "tasks.md").encode("utf-8")` 对它抛
+# `UnicodeEncodeError`，而 `main()` 只捕 `GateIndeterminate` ⇒ 异常逸出 ⇒ 退出码 1。
+# 正解 = `os.fsencode`（argv 解码的逆运算，与 git 吐的原始路径字节天然同口径）。
+
+_NON_UTF8_CHANGE = os.fsdecode(b"br\xffken")      # 含 lone surrogate `\udcff`
+EXIT_CONTRACT = {0, 3, 4, 5, 6}
+
+
+def test_non_utf8_change_reaches_design_branch_without_escaping(repo, monkeypatch):
+    """🔴 判别性最强的一格：**真的走到** `tasks.md` 路径编码那一行。
+
+    只用真实文件系统构造进不了这一格——APFS/HFS+ 拒绝非 UTF-8 文件名（实测
+    `[Errno 92] Illegal byte sequence`），故在此把两侧映射直接摆好，让 `is_stale`
+    公共入口从 `base` 拼出那个含 surrogate 的路径去查表。旧实现在此抛
+    `UnicodeEncodeError`（不是 `GateIndeterminate`）⇒ 逸出 `main()` 的捕获面。
+    """
+    _approved_with_tasks(repo)
+    base = f"openspec/changes/{_NON_UTF8_CHANGE}/"
+    tasks_key = os.fsencode(base + "tasks.md")
+    anchor_map = {tasks_key: (b"100644", b"blob", b"a" * 40)}
+    head_map = {tasks_key: (b"100644", b"blob", b"b" * 40)}
+    maps = iter([anchor_map, head_map])
+    monkeypatch.setattr(_sg, "ls_tree_map", lambda root, ref, specs: next(maps))
+    monkeypatch.setattr(_sg, "read_blob_bytes", lambda root, ref, path, label:
+                        _PURE_FLIP if ref == "HEAD" else b"### Task 1: A\n- [ ] s\n")
+    # 纯勾选翻转 ⇒ fresh。关键在于「算得出结论」而非抛 UnicodeEncodeError。
+    assert _sg.is_stale(repo, _ANCHOR_REL, "design", _NON_UTF8_CHANGE) == (False, "fresh")
+
+
+def test_non_utf8_change_exit_code_stays_in_contract_set(repo):
+    """端到端补位：非 UTF-8 的 `--change` 经 `main()` 求值，退出码 MUST 落在契约集内。
+
+    ⚠ 诚实边界：本机文件系统拒绝该名字的目录 ⇒ 本例走的是 `decide()` 的归档短路半场，
+    **够不到** design 域的路径编码那一行（那一格由上一条覆盖）。它钉的是另一件事：
+    argv 里的非 UTF-8 字节在**任何**一步都不得逸出成退出码 1。
+    """
+    mkchange(repo)
+    commit_all(repo, "seed")
+    code, js, _h = run_gate(repo, change=_NON_UTF8_CHANGE)
+    assert code in EXIT_CONTRACT, f"退出码 {code} 落在契约集 {EXIT_CONTRACT} 之外"
+    assert js.get("verdict")            # 有结构化输出，不是裸崩
+
+
+# ── F2：gitlink 形态的 tasks.md ⇒ 判 stale，且诊断 MUST NOT 说「仓坏了」──────
+
+def _replace_tasks_with_gitlink(repo, commit_oid, msg):
+    """把 `tasks.md` 换成 gitlink 条目（`160000 commit <oid>`）并提交。
+
+    用 `update-index --cacheinfo` 而非真建 submodule：确定性、零网络、零 .gitmodules。
+    工作树里的同名文件先删掉——否则后续 `git add -A` 会把它作为 blob 重新加回来。
+    """
+    p = repo / TASKS_REL
+    if p.exists():
+        p.unlink()
+    _git(repo, "rm", "-q", "--cached", "--ignore-unmatch", TASKS_REL)
+    _git(repo, "update-index", "--add", "--cacheinfo",
+         f"160000,{commit_oid},{TASKS_REL}")
+    _git(repo, "commit", "-q", "-m", msg)
+
+
+def test_gitlink_tasks_is_stale_without_repo_corruption_diagnosis(repo):
+    """🔴 `ls-tree -r` **会**输出 gitlink（已实测）⇒ 豁免闸门只校 `mode/type` 两侧相等
+    是不够的，MUST 另校 `type == blob`。
+
+    否则两侧同为 `160000 commit`、oid 不同时会落进豁免分支 → `cat-file blob` rc=128
+    → UNKNOWN(6)，诊断说「该路径已确认存在，故此为真读失败（仓损坏 / 权限）」——
+    把「tasks.md 变成了 submodule」讲成「仓坏了」，正是 `read_blob_bytes` docstring
+    自己禁止的误导口径。方向虽 fail-closed，但会把撞门者送错方向。
+    """
+    d = _approved_with_tasks(repo)
+    oid1 = _head(repo)
+    _replace_tasks_with_gitlink(repo, oid1, "chore: tasks.md 变 gitlink")
+    _reanchor(repo, d)                       # 锚侧也是 gitlink ⇒ 两侧 mode/type 相等
+    oid2 = _head(repo)
+    assert oid1 != oid2
+    _replace_tasks_with_gitlink(repo, oid2, "chore: gitlink 指向变更")
+    # 前提校准：两侧确实都被 ls-tree 列成 commit 类型（否则本例失去区分力）
+    entry = _sg.ls_tree_map(repo, "HEAD", _sg.design_pathspecs(BASE))[os.fsencode(TASKS_REL)]
+    assert entry[1] == b"commit", f"前提校准失败：ls-tree 未输出 gitlink（{entry}）"
+
+    assert _design_stale(repo) == (True, "stale")
+    code, js, _h = run_gate(repo)
+    assert code == 3 and js["verdict"] == "REFUSE_START"
+    for misleading in ("完整性", "读取失败", "读失败", "仓损坏", "UNKNOWN"):
+        assert misleading not in js["reason"], js["reason"]
+
+
+# ── F3：测试基座 MUST NOT 让判定输入受这台机器的 gitconfig 摆布 ──────────────
+
+@pytest.mark.parametrize("key,want", [("core.autocrlf", "false"), ("core.fileMode", "true")])
+def test_repo_fixture_pins_byte_and_mode_semantics(repo, key, want):
+    """[F3] `repo` fixture MUST 钉死这两项——用例的判别力直接建在它们上：
+
+    · `core.autocrlf=true`（Windows 安装默认）⇒ 回环时 LF↔CRLF 被悄悄改字节，
+      而「纯复选框翻转」类用例依赖 `tasks.md` 的**字节原样回环**；
+    · `core.fileMode=false`（部分文件系统上 git 自动置）⇒ chmod 进不了 git，
+      `test_mode_only_change_on_tasks_is_stale` 失去区分力。
+
+    旧的退役用例曾各自显式补偿这两项，**补偿随退役一并消失** ⇒ 上移到基座、按面治。
+    锚目标态：消费机上两种取值都存在，「我这台机器上没事」不构成保证。
+    """
+    got = subprocess.run(["git", "-C", str(repo), "config", "--get", key],
+                         capture_output=True, text=True).stdout.strip()
+    assert got == want, f"{key}={got!r}，基座未钉死（期望 {want!r}）"

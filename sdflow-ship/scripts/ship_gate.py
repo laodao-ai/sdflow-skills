@@ -477,10 +477,18 @@ def read_blob_bytes(root, ref, path, label):
     不可判——存在性判定 MUST NOT 落到这里（对「路径不存在」与「仓损坏」它返回同一个
     rc=128，机械上不可区分，会让「文件被删」的诊断误导撞门者去查仓完整性）。
 
-    用 `cat-file blob` 而非 `show`：前者输出 object 的**原始字节**，绕开 textconv /
-    smudge 等工作树转换；`show` 的输出受这些 config 影响，同一 blob 在不同 config 下
-    可读出不同字节 ⇒ 判定输入重新变成外部可控（违反 ADR-6）。二者对本函数的**契约面**
-    （rc=0 取字节 / rc≠0 不可判）完全一致，∴ 这是同契约下的更安全取法。
+    用 `cat-file blob` 而非 `show`：前者是**契约级**的原始字节原语（plumbing，定义上不做
+    任何工作树转换）；后者输出原始字节只是**默认行为**——`git show --textconv <rev>:<path>`
+    可以翻转它（已实测，git 2.50.1：`.gitattributes` 配 `diff=fake` + `diff.fake.textconv`
+    后，`show HEAD:a.md` 仍是原始字节，`show --textconv HEAD:a.md` 则被转换）。
+    ∴ 选前者是**缩小可翻转面**（判定输入不依赖「没人加那个 flag」这一约定），
+    **不是**在修补一个现存的洞。二者对本函数的**契约面**（rc=0 取字节 / rc≠0 不可判）
+    完全一致，∴ 这是同契约下更保守的取法。
+
+    🔴 **推论（防后人据错理由去修不存在的洞）**：`archived_verify_state`（:337）用
+    `git show <ref>:<path>` 读归档 verify-report，依同一实测口径**不受 textconv/smudge
+    影响、无需改动**。早先版本的本段曾声称「`show` 的输出受这些 config 影响」——该前提
+    实测为假，已订正（`openspec/rules/premise-verification.md`：写断言前先验证外部事实）。
 
     **MUST NOT** 把失败折成 `b""`：两侧都失败会比出 `b"" == b""` ⇒ 判等值 ⇒ 放行真实
     设计改动（design.md「读失败 ≠ 内容为空」的头号自噬风险，与缺陷 3/10 同一失效模式）。
@@ -734,11 +742,25 @@ def is_stale(root, rel, scope, change):
         # （按阶段切会让非该阶段的正常勾选立刻假失鲜，前序 change 已实测证伪）。
         diff = {p for p in set(anchor_map) | set(head_map)
                 if anchor_map.get(p) != head_map.get(p)}
-        tasks_path = (base + "tasks.md").encode("utf-8")
+        # [fix1 F1] `os.fsencode`，**MUST NOT `.encode("utf-8")`**：`change` 来自 argv，
+        # CPython 用 **surrogateescape** 把原始字节解成 str，非 UTF-8 字节变 lone surrogate
+        # （`\udcff`）——`.encode("utf-8")` 对它抛 `UnicodeEncodeError`，而 `main()` 只捕
+        # `GateIndeterminate` ⇒ 异常逸出 ⇒ **退出码 1，落在契约集 `{0,3,4,5,6}` 之外**。
+        # `os.fsencode` 是那次解码的**逆运算**，∴ 还原出的正是 git 在 `ls-tree -z` 里吐的
+        # 原始路径字节，与映射的 key 口径天然对齐（不是「换个更宽容的编码」，是对称性）。
+        # MUST NOT 改用 `except Exception` 兜底——那会把编程错误一并吞成 UNKNOWN。
+        tasks_path = os.fsencode(base + "tasks.md")
         before_entry, after_entry = anchor_map.get(tasks_path), head_map.get(tasks_path)
         if (diff == {tasks_path}
                 and before_entry is not None and after_entry is not None
-                and before_entry[:2] == after_entry[:2]):
+                and before_entry[:2] == after_entry[:2]
+                # [fix1 F2] type **是 blob**，非只「两侧相等」：`ls-tree -r` 会输出 gitlink
+                # （`160000 commit <oid>\t<path>`，已实测）⇒ 两侧同为 commit、oid 不同时
+                # 会落进本豁免分支，随后 `cat-file blob` rc=128 → UNKNOWN(6)，诊断说
+                # 「该路径已确认存在，故此为真读失败（仓损坏 / 权限）」——**正是
+                # `read_blob_bytes` docstring 自己禁止的误导口径**。方向虽 fail-closed，
+                # 但把「tasks.md 变成了 submodule」讲成「仓坏了」，会把撞门者送错方向。
+                and after_entry[1] == b"blob"):
             # 两侧均存在（单侧缺失 = 被删 / rename 出监视集 ⇒ 落下面的 stale，**不是**读失败）
             # 且 mode/type 相同（仅 oid 变 = 纯内容改动）⇒ 才值得取字节判豁免。
             # mode/type 变了却内容相同（chmod / regular↔symlink）⇒ 字节判据必说「等值」，

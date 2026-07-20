@@ -33,9 +33,30 @@
 **(a) 内容读取用 `cat-file blob`，不是 `git show`。**
 design.md ADR-2 的行文是「`git show` 只负责取内容」。二者在本函数的**契约面**（前提 = `ls-tree` 已确认双侧存在；
 rc=0 取字节 / rc≠0 = 真读失败）完全一致，∴ 这不是换判据，是同契约下的更安全取法：
-`show` 的输出受 textconv / smudge 等 config 影响，同一 blob 在不同 config 下可读出不同字节
-⇒ 判定输入重新变成外部可控，**违反 ADR-6**（`_GIT_HARDEN` 只中和了 `core.quotePath`，够不着 textconv）。
-仓内既有先例同判据（退役的 `blob_pair` 注释原文：「用 cat-file blob 而非 show：前者输出 object 的原始字节，绕开 smudge/textconv」）。
+`cat-file blob` 是**契约级**的原始字节原语（plumbing，定义上不做工作树转换）；
+`show <rev>:<path>` 输出原始字节则是**默认行为**——`--textconv` 可以翻转它。
+∴ 选前者是**缩小可翻转面**（判定输入不依赖「没人加那个 flag」这一约定），
+**不是**在修补一个现存的洞。
+
+> **🔴 [fix1 F4] 本条原先的登记理由已被实测证伪，此处为订正。**
+> 原文曾称「`show` 的输出受 textconv / smudge 等 config 影响 ⇒ 判定输入外部可控 ⇒ 违反 ADR-6」。
+> **该前提为假。** 实测（git 2.50.1，`.gitattributes` 配 `a.md diff=fake filter=sm` +
+> `git config diff.fake.textconv` / `filter.sm.smudge`）：
+>
+> | 命令 | 输出 |
+> |---|---|
+> | `git show HEAD:a.md` | `REAL`（原始字节） |
+> | `git show --textconv HEAD:a.md` | `FAKED-SMUDGE`（**只有显式 flag 才转换**） |
+> | `git cat-file blob HEAD:a.md` | `REAL` |
+>
+> **为什么必须订正而不是留着**：`archived_verify_state`（`ship_gate.py:337`）至今仍用
+> `git show <ref>:<path>` 读归档 verify-report，输出直接喂 SHIPPED 判定。
+> **按那个（假的）理由，那里就是一个没跟上的同片面口子；按实测事实，两处都不是洞。二者必居其一。**
+> 留着错理由，后人要么去修一个不存在的洞，要么据此推出别的错结论。
+> 结论：**`:337` 依同一口径评估不受影响、无需改动**，已在 `read_blob_bytes` docstring 内联同一推论。
+>
+> 仓内既有先例（退役的 `blob_pair` 注释）当年写的是同一句错理由 ⇒ **先例本身不构成证据**，
+> 一并作废。本条是 `openspec/rules/premise-verification.md` 的实例：写断言前先验证它依赖的外部事实。
 
 **(b) 豁免额外要求 `tasks.md` 两侧 mode/type 相同。**
 design.md 的分层文字只写了「两侧均存在」。若照字面实现，**仅 chmod / regular↔symlink** 的 `tasks.md`
