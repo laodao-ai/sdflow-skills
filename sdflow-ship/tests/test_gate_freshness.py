@@ -531,7 +531,9 @@ def test_tasks_only_checkbox_flip_not_stale(repo):
     _write_tasks(repo, b"### Task 1: A\n- [x] s\n")
     commit_all(repo, "docs: 勾选回填")
     code, js, _h = run_gate(repo)
-    assert js["verdict"] != "REFUSE_START"
+    # [fix1 M1] 断确切值，MUST NOT 用 `!= "REFUSE_START"`——UNKNOWN(6) 等异常出口
+    # 也满足弱断言，会把"门崩了"读成"门放行了"。
+    assert code == 0 and js["verdict"] == "CONTINUE_IMPL"
 
 def test_tasks_flip_plus_source_code_not_stale(repo):
     # 🔴 主用例：`git add -A` 打包形态（勾选 tasks.md + 仓库别处源码）⇒ 仍豁免。
@@ -543,10 +545,15 @@ def test_tasks_flip_plus_source_code_not_stale(repo):
     (repo / "src.py").write_text("# impl\n", encoding="utf-8")
     commit_all(repo, "docs: 勾选回填 + 实现")
     code, js, _h = run_gate(repo)
-    assert js["verdict"] != "REFUSE_START"
+    assert code == 0 and js["verdict"] == "CONTINUE_IMPL"        # [fix1 M1] 断确切值
 
 def test_merge_commit_pure_flip_not_stale(repo):
-    # merge 帧：相对每个 parent 都只是勾选框翻转 ⇒ 豁免（BR-6 逐 parent 求值）
+    # merge 场景**整体**不撞门。
+    # ⚠️ [fix1 M2] 名不副实澄清：本例并**没有**验到「merge 帧逐 parent 求值」——
+    # merge 提交自身不改 tasks.md，其帧的 --name-only 为空 ⇒ subs 为空 ⇒ 直接跳过，
+    # 真正被求值的是 side 分支上那个普通提交（单 parent）。逐 parent 求值的判别性用例
+    # 是 test_exempt_requires_every_parent_of_a_merge（函数级，构造 merge 自身改 tasks.md）。
+    # 此处保留是为守「merge 拓扑不会让端到端整体误判失鲜」。
     d, _ = _seed_tasks(repo, b"### Task 1: A\n- [ ] s\n")
     _reanchor(repo, d)
     _git(repo, "checkout", "-q", "-b", "side")
@@ -557,7 +564,7 @@ def test_merge_commit_pure_flip_not_stale(repo):
     commit_all(repo, "main edit")
     _git(repo, "merge", "--no-ff", "-q", "-m", "merge side", "side")
     code, js, _h = run_gate(repo)
-    assert js["verdict"] != "REFUSE_START"
+    assert code == 0 and js["verdict"] == "CONTINUE_IMPL"        # [fix1 M1] 断确切值
 
 def test_frame_sha_parsed_from_subject_with_spaces_and_colons(repo):
     # 〔1.1b〕分隔符须无歧义：subject 含空格与冒号时 sha 仍可正确切出
@@ -700,3 +707,56 @@ def test_e2e_br7_impl_review_subject_exemption_intact(repo):
     commit_all(repo, "checkpoint(impl-review): 收尾修订")
     _, js, _h = run_gate(repo)
     assert js["verdict"] != "REFUSE_START"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [fix1 Important-1] 勾选框归一化的 fence 口径：`~~~` / 四 backtick 围栏
+#
+# 旧口径只认 ```：`~~~` 块内 task-list 形状行的**实质改动**被当成块外普通勾选翻转
+# ⇒ 豁免误开（fail-open，放行未批准的设计改动）。修法 = 四个 fence 追踪点收敛到
+# 单一源 fence_delim/FenceTracker，口径按 CommonMark 有界词法写全。
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_content_stale_on_tilde_fenced_code_block_flip():
+    # 🔴 Important-1 复现钉：删掉 `~~~` 支持 ⇒ 本例转红（返回 True = 假阳放行）
+    assert E(b"~~~\n- [ ] s\n~~~\n", b"~~~\n- [x] s\n~~~\n") is False
+
+def test_content_stale_on_four_backtick_fenced_flip():
+    assert E(b"````\n- [ ] s\n````\n", b"````\n- [x] s\n````\n") is False
+
+def test_content_stale_on_tilde_fence_with_info_string():
+    assert E(b"~~~python\n- [ ] s\n~~~\n", b"~~~python\n- [x] s\n~~~\n") is False
+
+def test_content_exempt_conservative_on_unbalanced_tilde_fence():
+    # `~~~` 未闭合 ⇒ 保守判失鲜（同 ``` 口径）
+    assert E(b"~~~\n- [ ] s\n", b"~~~\n- [x] s\n") is False
+
+def test_content_exempt_conservative_when_cross_type_fence_cannot_close():
+    # 异种围栏关不掉：~~~ 开、``` 关不上 ⇒ EOF 仍在块内 ⇒ 保守
+    assert _sg._normalize_checkbox_lines(b"~~~\n- [ ] s\n```\n") is None
+
+def test_content_exempt_conservative_when_shorter_fence_cannot_close():
+    # 闭合符须 ≥ 开启符长度：``` 关不掉 ```` 开的块
+    assert _sg._normalize_checkbox_lines(b"````\n- [ ] s\n```\n") is None
+
+def test_normalize_still_works_outside_tilde_fence():
+    # 反向证：`~~~` 块外的真勾选行照常归一化（不是靠「见 ~ 就全拒」蒙对的）
+    assert E(b"~~~\ncode\n~~~\n- [ ] s\n", b"~~~\ncode\n~~~\n- [x] s\n") is True
+
+
+# ── [fix1 Important-2] CHECKBOX_RE / CHECKBOX_BYTES_RE 单一源机械守 ──────────
+
+def test_checkbox_re_bytes_derived_from_single_source():
+    # 把「口径同源」从注释变成门：手抄一份字节副本并改口径 ⇒ 本例转红
+    assert _sg.CHECKBOX_BYTES_RE.pattern == _sg.CHECKBOX_RE.pattern.encode()
+    assert _sg.CHECKBOX_RE.pattern == _sg.CHECKBOX_RE_PATTERN
+
+def test_checkbox_str_vs_bytes_nbsp_divergence_is_conservative():
+    # 注释订正的机械锚：`\s` 在 str 模式认 Unicode 空白、bytes 模式只认 ASCII。
+    # NBSP 缩进行 ⇒ str 版认、bytes 版不认 ⇒ 该行不被归一化 ⇒ 判失鲜（保守方向）。
+    nbsp = " - [ ] s"
+    assert _sg.CHECKBOX_RE.match(nbsp) is not None
+    assert _sg.CHECKBOX_BYTES_RE.match(nbsp.encode("utf-8")) is None
+    assert _sg.CHECKBOX_RE.match("\t- [ ] s") is not None
+    assert _sg.CHECKBOX_BYTES_RE.match(b"\t- [ ] s") is not None
+    assert E(" - [ ] s\n".encode(), " - [x] s\n".encode()) is False

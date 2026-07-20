@@ -95,8 +95,11 @@ D9 新鲜度按锚分域〔设计门拍板 Q1=B / Q3=A〕:
     多行 HTML 注释内嵌锚不解析：不判断锚是否落在更大的 `<!-- ... -->` 多行注释块「内部」被
         整体注释掉——模板锚本身即单行注释，独占一行等值已足；多行嵌套锚属人为构造，归
         「显式越权同权级」（git 留痕可审计）；
-    `~~~` 围栏 / 带语言标签围栏（如 ```python）导致的围栏识别误判不特判——仅认 ``` 前缀翻转，
-        非本仓现实语料出现的变体不收，且方向 = 安全侧假阴（漏判不覆盖 ≠ 假阳）。
+    〔fix1 Important-1〕fenced code block 的围栏识别收敛到**单一源** `fence_delim`（str）+
+        `fence_delim_bytes`（bytes 委派），口径按 CommonMark 的**有界**词法写全：开启符 =
+        连续 ≥3 个同种 `` ` `` 或 `~`；闭合符须**同种**且长度 ≥ 开启符、其后仅空白。故
+        `~~~` 块与四 backtick 块内的内容一律不可见，`~~~` 不能被 ``` 关掉（反之亦然）。
+        MUST NOT 由此扩到 markdown 其它结构（表格/嵌套列表/引用块）——那是无界面，禁手搓。
     〔mlh-p5 Q4；Task6 退役 live inline 后收敛〕live 读**只认 frontmatter**：好 frontmatter
         判定后不看正文任何 inline 锚，absent 亦不回退 inline（正文残留 inline 锚被完全忽略，
         无假过风险，B4/B5 根治）。归档读 dual-read 侧仍保留旧语义：好 frontmatter 判定后不再
@@ -307,7 +310,85 @@ def blob_pair(root, parent, sha, path):
     return True, before, after
 
 
-CHECKBOX_BYTES_RE = re.compile(rb"^\s*-\s+\[([ xX])\]")   # CHECKBOX_RE 的字节版，口径逐字相同
+# ────────────────────────────── fenced code block 围栏识别（单一源） ──────────────────────────
+# [fix1 Important-1] 本仓四个 fence 追踪点（_normalize_checkbox_lines / _line_scoped_hits /
+# tg02_hit / _parse_plan）**全部**经由下面这一组函数 + FenceTracker 判定围栏，MUST NOT 再各自
+# 手抄 `line.lstrip().startswith("```")`——旧手抄口径只认 ``` ⇒ `~~~` 块内的实质改动被当成
+# 「块外普通行」，在勾选框豁免侧是 fail-open（放行未批准的设计改动），在归档锚读侧是假 SHIPPED。
+#
+# 口径 = CommonMark fenced code block 的**有界**词法（数得完，故可手写；见 CLAUDE.md 基准 5）：
+#   开启符：行首（去 ASCII 空白后）连续 ≥3 个同种字符，`` ` `` 或 `~`；
+#   闭合符：与开启符**同种**、长度 **≥** 开启符长度、其后只余空白（故 ```` ``` ```` 关不掉
+#           `~~~`，三 backtick 也关不掉四 backtick 开的块）；
+#   info string（如 ```python）只出现在开启行，不影响识别。
+# MUST NOT 在此之上再解析 markdown 的其它结构（表格 / 嵌套列表 / 引用块）——那是无界语法面。
+_ASCII_WS = " \t\v\f\r\n"
+_FENCE_CHARS = ("`", "~")
+
+
+def fence_delim(line):
+    """一行 str → 围栏符 (char, count, tail) 或 None（不是围栏形状）。
+
+    tail = 围栏字符游程之后的剩余内容（判闭合时须 strip 后为空）。
+    """
+    s = line.lstrip(_ASCII_WS)
+    if not s or s[0] not in _FENCE_CHARS:
+        return None
+    ch = s[0]
+    n = len(s) - len(s.lstrip(ch))
+    if n < 3:
+        return None
+    return ch, n, s[n:]
+
+
+def fence_delim_bytes(line):
+    """一行 bytes → 同 `fence_delim`。**单一源就是 `fence_delim`**——本函数只做形态转换。
+
+    latin-1 是字节保序映射：任意字节都能解码、且 ASCII 区语义不变 ⇒ 转换零信息损失，
+    两个形态不可能口径分叉（不是手抄副本，是同一份实现的两个入口）。
+    """
+    return fence_delim(line.decode("latin-1"))
+
+
+class FenceTracker:
+    """逐行喂入的围栏状态机。`inside` = 当前行是否落在 fenced code block 内部。
+
+    `feed(line)` 返回该行是否**是围栏行本身**（开启或闭合）；围栏行既不在块内也不是普通内容，
+    各调用点按自己的语义决定保留还是丢弃。EOF 时 `inside` 为真 = 围栏未闭合（调用方保守）。
+    """
+
+    def __init__(self):
+        self.open = None                   # None=块外；(char, count)=块内，记开启符
+
+    @property
+    def inside(self):
+        return self.open is not None
+
+    def feed(self, line, is_bytes=False):
+        d = fence_delim_bytes(line) if is_bytes else fence_delim(line)
+        if d is None:
+            return False
+        ch, n, tail = d
+        if self.open is None:
+            self.open = (ch, n)            # 开启：任意 info string 均可
+            return True
+        och, on = self.open
+        if ch == och and n >= on and not tail.strip():
+            self.open = None               # 闭合：同种 + 不短于开启符 + 尾部只余空白
+            return True
+        return False                       # 块内出现的异种/过短围栏形状 ⇒ 只是普通内容行
+
+
+# [fix1 Important-2] 行锚定复选框的**单一源**：str 版 CHECKBOX_RE（见下文 _parse_plan 处）与
+# bytes 版 CHECKBOX_BYTES_RE 都从这一个 pattern 串派生，MUST NOT 再手抄字节副本（口径分叉即
+# 下一个 bug）。test_checkbox_re_bytes_derived_from_single_source 机械守这条派生关系。
+#
+# ⚠️ 两个形态**并非行为逐字相同**——`\s` 在 str 模式下认 Unicode 空白（NBSP U+00A0 等），
+# 在 bytes 模式下**只认 ASCII 空白**（tab 认、NBSP 不认）。故 NBSP 缩进的复选框行：
+# CHECKBOX_RE 认（plan 解析把它当复选框），CHECKBOX_BYTES_RE 不认（勾选框归一化不动它）。
+# 该差异的方向 = bytes 侧**少归一化** ⇒ 这类行的翻转不被豁免 ⇒ 判失鲜 ⇒ **保守**，可接受。
+CHECKBOX_RE_PATTERN = r"^\s*-\s+\[([ xX])\]"
+CHECKBOX_BYTES_RE = re.compile(CHECKBOX_RE_PATTERN.encode())
 
 
 def _normalize_checkbox_lines(raw):
@@ -316,8 +397,8 @@ def _normalize_checkbox_lines(raw):
     [Task2] 归一化**只**把 task-list 行首那一个标记里的 ` `/`x`/`X` 换成 ` `：
     - 行首锚定（CHECKBOX_BYTES_RE），故表格单元格、行内反引号、散文字面量、
       以及同一行第二个之后的标记**一律不动**；
-    - fenced code block 内的行不参与（口径同 _line_scoped_hits/_parse_plan：
-      line.lstrip().startswith("```") 翻转）；
+    - fenced code block 内的行不参与（口径同 _line_scoped_hits/_parse_plan——四处共用
+      单一源 fence_delim/FenceTracker，`` ``` `` 与 `~~~` 两族围栏均识别）；
     - 缩进 / 空白 / 其余字符逐字节保留——MUST NOT strip、MUST NOT 解码转换。
 
     切行用 split(b"\\n") 而非 splitlines()：后者还会在 \\r 处切开，CRLF↔LF
@@ -325,21 +406,17 @@ def _normalize_checkbox_lines(raw):
     """
     lines = raw.split(b"\n")
     out = []
-    in_fence = False
+    fence = FenceTracker()
     for line in lines:
-        if line.lstrip().startswith(b"```"):
-            in_fence = not in_fence
-            out.append(line)
-            continue
-        if in_fence:
-            out.append(line)
+        if fence.feed(line, is_bytes=True) or fence.inside:
+            out.append(line)               # 围栏行本身 / 块内行：逐字节原样保留，不归一化
             continue
         m = CHECKBOX_BYTES_RE.match(line)
         if m:
             i = m.start(1)
             line = line[:i] + b" " + line[i + 1:]
         out.append(line)
-    if in_fence:
+    if fence.inside:
         return None                        # 围栏未闭合 ⇒ 「哪些行在 fence 内」不可信
     return out
 
@@ -442,20 +519,17 @@ def _line_scoped_hits(text, candidates):
     [impl-review-fix FIX-5；T75] 现役唯一调用方 = archived_verify_state（归档 dual-read 兜底旧
     inline）；live decide() 侧的 inline 读半场已随 Task6 迁 frontmatter 退役，其专属读点函数
     随 T75 一并删除（不再留孤儿）。fence 翻转口径同 _parse_plan
-    （line.lstrip().startswith("```")）。"""
+    （共用单一源 fence_delim/FenceTracker，``` 与 ~~~ 两族均识别）。"""
     cand = set(candidates)
     hit = set()
-    in_fence = False
+    fence = FenceTracker()
     for line in text.splitlines():
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
+        if fence.feed(line) or fence.inside:
             continue
         s = line.strip()
         if s in cand:
             hit.add(s)
-    return [a for a in candidates if a in hit], in_fence
+    return [a for a in candidates if a in hit], fence.inside
 
 
 # [mlh-p5] frontmatter 状态解析（手写 stdlib，不 import yaml——保零依赖不变量）。
@@ -679,12 +753,9 @@ def tg02_hit(cdir):
     # [impl-review-fix] 头部声明区检测须 fence-aware（对齐 _line_scoped_hits/_parse_plan 口径）+ 声明行匹配：
     # ①fenced 块（```）内的 `## ` 不算头部边界、内容不计（对抗镜1 假阴/假阳）；
     # ②只认 strip 后以「〔TG」起始的声明行（排除「技术栈…均不命中」描述行/反引号提及，codex OV-code-2）。
-    in_fence = False
+    fence = FenceTracker()
     for line in text.splitlines():
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
+        if fence.feed(line) or fence.inside:
             continue
         if line.startswith("## "):   # 真 H2 标题（非 fence 内）= 头部区结束
             break
@@ -753,7 +824,7 @@ def done_task_ids(root, sha, change):
 # MUST 共享**同一个全文 fence 状态**（单遍 _parse_plan）——旧版"先切段、每段各自重置 in_fence"
 # 会让悬空/跨段围栏泄漏（段内未闭合 ``` 吞掉真实未勾项 → 假✅）、且标题正则对围栏无感知
 # （fenced 示例标题被当真 task/误判重号）。二者统一到一次带 fence 状态的整文扫描。
-CHECKBOX_RE = re.compile(r"^\s*-\s+\[([ xX])\]")   # 行锚定复选框（非全文子串）
+CHECKBOX_RE = re.compile(CHECKBOX_RE_PATTERN)   # 行锚定复选框（非全文子串）；单一源见上文常量
 
 
 def _parse_plan(text):
@@ -765,12 +836,9 @@ def _parse_plan(text):
     boxes_by_task = {}
     any_checkbox = False
     cur = None
-    in_fence = False
+    fence = FenceTracker()
     for line in text.splitlines():
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
+        if fence.feed(line) or fence.inside:
             continue
         tm = TASK_TITLE_RE.match(line)
         if tm:
@@ -783,7 +851,7 @@ def _parse_plan(text):
             any_checkbox = True
             if cur is not None:   # 前言段（首个 Task 前）的框不归任何 task，忽略
                 boxes_by_task[cur].append(cm.group(1) in ("x", "X"))
-    return task_order, boxes_by_task, any_checkbox, in_fence
+    return task_order, boxes_by_task, any_checkbox, fence.inside
 
 
 def checkbox_done_ids(plan):

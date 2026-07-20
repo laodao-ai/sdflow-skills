@@ -290,3 +290,64 @@ def test_tg02_header_descriptive_mention_not_hit(tmp_path):
         "# p\n说明：正例形如 `〔TG-02：`\n〔TG-25：契约〕\n## Real\n正文\n",
         encoding="utf-8")
     assert _sg.tg02_hit(d) is False
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [fix1 Important-1] fence 单一源在 plan 解析侧（_parse_plan）与 tg02_hit 侧的独立举证。
+# 旧口径只认 ```，`~~~` 块内的伪复选框/伪 Task 标题会被当真 ⇒ 假✅ / 误判重号。
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_t34_tilde_fenced_checkbox_not_counted(repo):
+    # `~~~` 代码块内的伪 [x]：不计入 ⇒ task1 未完成 ⇒ CONTINUE_IMPL（旧口径此处假✅齐）
+    plan = ("### Task 1: A\n实现说明\n~~~\n- [x] 代码块里的示例，不是真勾\n~~~\n"
+            "### Task 2: B\n- [x] real\n")
+    approved_change(repo, plan=plan)
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
+
+
+def test_t34_tilde_task_header_in_fence_not_counted(repo):
+    # `~~~` 块内的 `### Task 1:` 示例标题不算 task、不误判重号
+    plan = ("### Task 1: 真实任务\n- [x] done\n模板示例:\n~~~\n### Task 1: <替换标题>\n"
+            "- [ ] <替换>\n~~~\n### Task 2: B\n- [x] d\n")
+    approved_change(repo, plan=plan)
+    commit_all(repo, "checkpoint(task1-a): A")
+    commit_all(repo, "checkpoint(task2-b): B")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "RUN_CODE_REVIEW"
+
+
+def test_t34_unclosed_tilde_fence_unknown(repo):
+    # `~~~` 悬空围栏 ⇒ 全文 fence 不平衡 ⇒ UNKNOWN(fail-safe)，与 ``` 同口径
+    plan = ("### Task 1: A\n- [x] done1\n~~~\n- [ ] 真实未完成(被悬空fence吞)\n"
+            "### Task 2: B\n- [x] done2\n")
+    approved_change(repo, plan=plan)
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN"
+
+
+def test_t34_backtick_cannot_close_tilde_fence(repo):
+    # 异种围栏关不掉：~~~ 开、``` 试图闭合 ⇒ 仍未闭合 ⇒ UNKNOWN
+    plan = ("### Task 1: A\n- [x] done1\n~~~\n- [ ] 未完成\n```\n"
+            "### Task 2: B\n- [x] done2\n")
+    approved_change(repo, plan=plan)
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN"
+
+
+def test_tg02_tilde_fenced_example_in_header_not_hit(tmp_path):
+    """头部区 `~~~` 围栏内的 〔TG-02 示例不得命中（旧口径只认 ``` ⇒ 假 RUN_SOP）。"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n~~~\n〔TG-02：嵌入式〕\n~~~\n〔TG-25：契约〕\n## Real\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is False
+
+
+def test_tg02_tilde_fenced_heading_in_header_still_hits(tmp_path):
+    """`~~~` 围栏内的 `## Example` 不算头部边界 ⇒ 围栏后的真声明行仍须命中。"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n~~~\n## Example\n~~~\n〔TG-02：嵌入式固件变更〕\n## Real Section\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is True

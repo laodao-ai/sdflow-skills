@@ -135,3 +135,44 @@ def test_contract_live_frontmatter_corpus_fields():
         covered.add(field)
     # 聚合断言：三个 gate 关键字段各至少一枚举值经 frontmatter 承载被识别（不依赖任一 inline 锚常量）
     assert covered == set(_sg.FIELD_ENUMS), "live frontmatter 语料聚合未覆盖全部 gate 字段"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# [fix1 Important-1] fence 单一源：`~~~` 围栏与四 backtick 围栏
+# 调用点 = _line_scoped_hits（归档 verify 锚读）。旧口径只认 ```，`~~~` 块内的
+# 锚会被当成块外真锚计入 ⇒ 归档侧假 SHIPPED。
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_line_scoped_tilde_fence_hides_anchor():
+    hits, unbalanced = _sg._line_scoped_hits(f"~~~\n{VPASS}\n~~~\n", [VPASS, VFAIL])
+    assert hits == [] and unbalanced is False
+
+
+def test_line_scoped_four_backtick_fence_hides_anchor():
+    hits, unbalanced = _sg._line_scoped_hits(f"````\n{VPASS}\n````\n", [VPASS, VFAIL])
+    assert hits == [] and unbalanced is False
+
+
+def test_line_scoped_tilde_fence_not_closed_by_backticks():
+    # 异种围栏关不掉：``` 不闭合 ~~~ ⇒ EOF 时仍在块内 ⇒ unbalanced（保守）
+    hits, unbalanced = _sg._line_scoped_hits(f"~~~\n{VPASS}\n```\n", [VPASS, VFAIL])
+    assert hits == [] and unbalanced is True
+
+
+def test_line_scoped_short_fence_cannot_close_longer_one():
+    # 三 backtick 关不掉四 backtick 开的块（闭合符须 ≥ 开启符长度）
+    hits, unbalanced = _sg._line_scoped_hits(f"````\n{VPASS}\n```\n", [VPASS, VFAIL])
+    assert hits == [] and unbalanced is True
+
+
+def test_line_scoped_info_string_line_is_not_a_closer():
+    # 带 info string 的行不能当闭合符（尾部非空白）⇒ 整块仍未闭合
+    hits, unbalanced = _sg._line_scoped_hits(f"```\n{VPASS}\n```python\n", [VPASS, VFAIL])
+    assert hits == [] and unbalanced is True
+
+
+def test_fence_delim_bytes_delegates_to_str_single_source():
+    # 单一源机械守：bytes 入口只做形态转换，任意字节序列两侧判定必须一致
+    for s in ["```", "~~~~", "  ```python", "``", "text", "\t~~~ ", "```\xa0"]:
+        assert _sg.fence_delim_bytes(s.encode("utf-8")) == _sg.fence_delim(
+            s.encode("utf-8").decode("latin-1"))

@@ -99,11 +99,18 @@ tasks.md 的那一提交本身落在 design 锚之后的窗口内，而「新建
 | **M-B** 删监视集限定，改按**整 commit 文件列表**求值（`set(frame_files) != {base+"tasks.md"}`） | ✅ 4 failed | 🔴 **`test_tasks_flip_plus_source_code_not_stale`**（ticket 点名的那颗钉子）, `test_design_frame_exempt_true_on_pure_checkbox_flip`, `test_tasks_only_checkbox_flip_not_stale`, `test_merge_commit_pure_flip_not_stale` |
 | **M-C** 删 fence 感知（去掉围栏翻转与 in_fence 跳过 + 去掉未闭合回落） | ✅ 2 failed | `test_content_stale_on_fenced_code_block_flip`, `test_content_exempt_conservative_on_unbalanced_fence` |
 | **M-D** 删行首锚定（改 `line.replace(b"[x]", b"[ ]")` 全行替换） | ✅ 3 failed | `test_content_stale_on_table_and_inline_code_literals`, `test_content_stale_on_prose_literal_marker`, `test_content_stale_when_second_marker_on_same_line_flips_back` |
-| **M-E** 位置对齐改 LCS（`difflib.SequenceMatcher` 收集非 equal 区块、比较差异行多重集） | ✅ 1 failed | `test_content_stale_on_pure_line_reorder`（报错行直呈 `True = E(b'- [ ] a\n- [x] b\n', b'- [x] b\n- [ ] a\n')`——即 LCS 下重排被判等值放行） |
+| **M-E** 位置对齐改 LCS（🔴 构造敏感，唯一有判别力的形态 = `difflib.SequenceMatcher` 收集非 equal 区块后**比较删除行/插入行多重集**；详见下方订正表） | ✅ 1 failed | `test_content_stale_on_pure_line_reorder`（报错行直呈 `True = E(b'- [ ] a\n- [x] b\n', b'- [x] b\n- [ ] a\n')`——即 LCS 下重排被判等值放行） |
 
-M-E 首版构造（`sm.ratio() == 1.0 or …`）**未转红**——那个表达式并不真的等价于 LCS 误判形态。
-按 ticket 描述的实际失效机制（「删除行与插入行逐字节相同」）重写成差异块多重集比较后转红。
-记录在此：不为凑数放宽变异，构造不对就换构造。
+**〔fix1 M3 订正〕M-E 的构造敏感，原描述过弱、易被读成「随便换个 difflib 写法都能转红」。
+实测（fix1 轮复跑，两种构造各跑一次全 sdflow-ship 套件）：**
+
+| M-E 构造 | 结果 | 说明 |
+|---|---|---|
+| `return difflib.SequenceMatcher(None, nb, na).ratio() == 1.0` | ❌ **238 passed，不转红** | ratio() 只是相似度；重排两版 ratio < 1.0 ⇒ 仍返回 False（判失鲜）⇒ 与正确实现同结论，**零区分力** |
+| 收集非 equal 区块的**删除行/插入行多重集**并比较：<br>`for tag,i1,i2,j1,j2 in SequenceMatcher(None,nb,na).get_opcodes(): if tag!="equal": dels+=nb[i1:i2]; ins+=na[j1:j2]`<br>`return sorted(dels)==sorted(ins)` | ✅ **1 failed** | 这才复现 LCS 误判机制（「删除行与插入行逐字节相同」）⇒ `test_content_stale_on_pure_line_reorder` 转红，报错行直呈 `True = E(b'- [ ] a\n- [x] b\n', b'- [x] b\n- [ ] a\n')` |
+
+**结论：只有多重集形态对「位置对齐 vs LCS」这道守护有判别力。** 记录在此：不为凑数放宽变异，
+构造不对就换构造；也不许拿无区分力的构造冒充「变异已验」。
 
 ## 全套件结果
 
