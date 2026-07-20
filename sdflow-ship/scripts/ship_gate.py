@@ -762,6 +762,12 @@ def tg02_hit(cdir):
         s = line.strip()
         if s.startswith("〔TG") and "〔TG-02" in s:   # 声明行（非描述散文）且含 TG-02
             return True
+    # [fix2 Important] 围栏未闭合 ⇒ 头部声明区的可见性判定不可信（悬空围栏会吞掉声明行，
+    # 方向是 fail-open：静默跳过 embedded-test-sop 门）。与另三个 fence 调用点
+    # （_normalize_checkbox_lines / _parse_plan / _line_scoped_hits「看不清就保守」）方向对齐：
+    # 看不清 ⇒ 保守要求跑 SOP。
+    if fence.inside:
+        return True
     return False
 
 

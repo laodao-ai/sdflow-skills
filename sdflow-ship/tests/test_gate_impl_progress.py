@@ -292,6 +292,37 @@ def test_tg02_header_descriptive_mention_not_hit(tmp_path):
     assert _sg.tg02_hit(d) is False
 
 
+# [fix2 Important] tg02_hit 围栏未闭合 ⇒ 保守判命中（原本是四个 fence 调用点里唯一 fail-open 的：
+# 悬空围栏吞掉真声明行 → tg02_hit False → SKIP_SOP → 静默跳过 embedded-test-sop 门）。
+# 三例形态取自复审实测（未闭合 ``` / 未闭合 ~~~ / 长游程 ~~~~~~~~ 分隔线出现在声明行之前）。
+def test_tg02_unclosed_backtick_fence_conservative_hit(tmp_path):
+    """头部区未闭合 ``` 吞掉其后的真声明行 〔TG-02 ⇒ 判定不可信 ⇒ 保守返回 True"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n```\n示例内容\n〔TG-02：嵌入式固件变更〕\n## Real\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is True
+
+
+def test_tg02_unclosed_tilde_fence_conservative_hit(tmp_path):
+    """头部区未闭合 ~~~ 同理 ⇒ 保守返回 True"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n~~~\n示例内容\n〔TG-02：嵌入式固件变更〕\n## Real\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is True
+
+
+def test_tg02_long_tilde_run_before_declaration_conservative_hit(tmp_path):
+    """一行 `~~~~~~~~`（本意是水平分隔线）出现在声明行之前 —— 按 CommonMark 它是围栏开启符，
+    后续声明行被吞、且直到 EOF 未闭合 ⇒ 保守返回 True（旧行为：False → 静默 SKIP_SOP）。"""
+    d = mkchange(tmp_path, "demo")
+    d.joinpath("proposal.md").write_text(
+        "# p\n~~~~~~~~\n〔TG-02：嵌入式固件变更〕\n## Real\n正文\n",
+        encoding="utf-8")
+    assert _sg.tg02_hit(d) is True
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # [fix1 Important-1] fence 单一源在 plan 解析侧（_parse_plan）与 tg02_hit 侧的独立举证。
 # 旧口径只认 ```，`~~~` 块内的伪复选框/伪 Task 标题会被当真 ⇒ 假✅ / 误判重号。

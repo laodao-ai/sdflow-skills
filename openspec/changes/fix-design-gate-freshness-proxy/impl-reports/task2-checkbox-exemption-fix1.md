@@ -43,8 +43,16 @@
 
 ### 行为变化方向
 
-更多东西被认作「在围栏内」⇒ 归档读更易 `none`/`unbalanced`、plan 解析更易 `UNKNOWN`、豁免更易判失鲜
-——**一律 fail-safe**。**既有 217 条 sdflow-ship 用例、仓根全套件零转红**（见下）。
+更多东西被认作「在围栏内」⇒ 归档读更易 `none`/`unbalanced`、plan 解析更易 `UNKNOWN`、豁免更易判失鲜。
+
+> 🔴 **本节原写「一律 fail-safe」，该表述不准确**（由 re-review 指出，`fix2` 一并修正）。**须分调用点看**：
+> `_normalize_checkbox_lines` / `_parse_plan` / `_line_scoped_hits` 三处把 `fence.inside`(EOF) 作为
+> unbalanced 上报给调用方做保守处理，**方向确为 fail-safe**；但 `tg02_hit` 当时**直接吞掉返 `False`**，
+> 「更易认作围栏」在该点意味着**更易吞掉头部声明行 ⇒ 更易 `SKIP_SOP`**，**方向是 fail-open**。
+> 本次扩口径（`~~~` 与任意长游程）**放大了**这个既有洞。修法见
+> `task2-checkbox-exemption-fix2.md`（`tg02_hit` 循环后补 `if fence.inside: return True`）。
+
+**既有 217 条 sdflow-ship 用例、仓根全套件零转红**（见下）。
 
 ### 每个调用点各自举证（不只测一处）
 
@@ -108,8 +116,13 @@
 ## 残留 / 诚实边界
 
 - 本轮把 fence 词法收敛到 CommonMark 的**有界**子集（fence 类型 + 长度 + 尾部空白）。CommonMark 里
-  「开启符前最多 3 空格缩进」这条**未实现**——沿用仓内既有的「无限量 ASCII 空白 lstrip」，方向是
-  **更容易认作围栏 ⇒ 更保守**（fail-safe），且与四个调用点修前行为一致。刻意不动，避免把有界修补
-  扩成 markdown 结构解析。
+  「开启符前最多 3 空格缩进」这条**未实现**——沿用仓内既有的「无限量 ASCII 空白 lstrip」，且与四个
+  调用点修前行为一致。刻意不动，避免把有界修补扩成 markdown 结构解析。
+  **该差异的方向须分调用点写**（原文笼统写「更保守 / fail-safe」，不准确，由 re-review 指出）：
+  「更容易认作围栏」在 `_normalize_checkbox_lines` / `_parse_plan` / `_line_scoped_hits` 三处
+  = 更易 unbalanced/UNKNOWN/隐藏锚 ⇒ **确为 fail-safe**；但在 `tg02_hit` 处
+  = **更易吞掉头部声明行 ⇒ 更易 `SKIP_SOP`，方向是 fail-open**。
+  该风险自 `fix2` 起被 `tg02_hit` 末尾的 `if fence.inside: return True` 兜住
+  （吞掉声明行的前提是围栏未闭合，此时一律保守判命中），但**表述本身不许笼统说「一律保守」**。
 - `_line_scoped_hits` 对 `~~~` 块的处理是**隐藏锚**（更易判 `none`），归档侧从「假 SHIPPED」翻成
   「判定不能」——符合 ADR-5「宁可判定不能也不假阳」。
