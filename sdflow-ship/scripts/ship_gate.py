@@ -150,6 +150,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -421,6 +422,16 @@ def run_git_bytes(root, *args):
 
 
 DESIGN_WATCHED_SUBTREE = "specs/"      # 监视集里唯一的子树（其余三项是固定文件名）
+
+
+def change_base(change):
+    """change 目录前缀单一源。
+
+    [harden-gate-git-layer Task4 fix] 判定本体（`is_stale`）与诊断
+    （`guard_design_freshness`）都要拼这个前缀。散成两份字面量 ⇒ 目录布局若变，
+    诊断命令会静默指向错路径而判定仍对（Standards 轴点穿的漂移面）。此处收单一源。
+    """
+    return f"openspec/changes/{change}/"
 
 
 def design_pathspecs(base):
@@ -722,7 +733,7 @@ def is_stale(root, rel, scope, change):
     # 不再从 `git log -1 -- <report>` 反推「写报告的时刻」。缺失 / 非法 / 不解析为 commit ⇒
     # `GateIndeterminate` 上抛（→ UNKNOWN(6)），**MUST NOT** 回退旧锚、MUST NOT 静默判 fresh。
     sha = read_reviewed_sha(root, rel)
-    base = f"openspec/changes/{change}/"
+    base = change_base(change)
     if scope == "design":
         # [harden-gate-git-layer Task3 · ADR-2 · tasks 2.1/2.2] **比内容，不枚举路径**：
         # 把锚与 HEAD 两侧的被审内容直接摆在一起比。比较单位 = `path → (mode, type, oid)`
@@ -1006,7 +1017,9 @@ def guard_design_freshness(root, change, report):
     # `reviewed_sha` 是**录下来的常量**，读出来打印零推断成本 ⇒ 与「MUST NOT 为凑诊断
     # 保留路径枚举通路」不冲突（那条禁的是从 git 管道**反推**触发点）。
     sha = read_reviewed_sha(root, rel)
-    paths = " ".join(design_pathspecs(f"openspec/changes/{change}/"))
+    # shlex.join 让「怎么 shell 引用」交给标准库回答（change 名含空格时命令仍可直接粘贴）；
+    # 纯展示面（只进 reason 诊断串、不进比较），零判定输入风险。
+    paths = shlex.join(design_pathspecs(change_base(change)))
     # 默认处置**只**推荐重跑设计门——MUST NOT 在此提 `checkpoint(impl-review)`：
     # 该 subject 豁免已随帧比较退役，写进指引等于教撞门者做一件不起作用的事。
     emit("REFUSE_START", EXIT_REFUSE, None,

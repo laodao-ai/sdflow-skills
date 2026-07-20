@@ -32,7 +32,11 @@ design 域失鲜原在 `decide()` 的 pre-flight 段**无条件求值**（旧 `:
 | `RUN_PLAN` | step 6，`superpowers-plan.md` 缺 | 5.3b |
 | `CONTINUE_IMPL` | step 7，`plan_ids ⊄ done` | 5.3c |
 
-窗口右边界 = **代码审报告出现**（非「最后一个任务打勾」）—— 以 design.md 为准，未自行推导。
+窗口右边界：**设计意图**是「代码审报告出现」（design.md 的目标态，代码审期改文档不该被判失鲜）；
+但**机械实现**闭于「实现完成判定点」——`CONTINUE_IMPL` 条件是 `plan_ids - done` 非空，一旦末勾全勾、
+verdict 即转 `RUN_CODE_REVIEW`（窗口外），守卫不再经过。二者之间的间隙（「实现刚完成」与「代码审
+进行中」盘面不可区分）是 design 已登记的残余面（见下方 §残余）。此处如实写机械边界，不把设计意图
+当作已实现的边界表述（DOC-1）。
 
 ### 2.7 失鲜诊断带出锚值 + 可执行差异命令〔ADR-4〕
 
