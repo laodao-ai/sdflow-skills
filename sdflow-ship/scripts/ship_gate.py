@@ -219,6 +219,127 @@ def report_last_sha(root, rel):
 DESIGN_WATCHED_NAMES = ("proposal.md", "design.md", "tasks.md")   # D9〔design.md 决策源〕四件套
 
 
+def run_git_bytes(root, *args):
+    """保真读取：返回 (returncode, stdout **原始字节**)。
+
+    [fix-design-gate-freshness-proxy Task1 · tasks 1.1d] MUST NOT 复用 run_git/run_git_rc——
+    那条路径 text=True + errors="replace" + .strip()，四者各自可造假等值：
+    吞首尾空白、吞末尾换行、CRLF↔LF 不可分辨、非 UTF-8 字节被替换成 U+FFFD 后两版趋同。
+    本函数只做 subprocess 原样取字节，解码与归一化留给调用方按判据自行决定。
+    """
+    r = subprocess.run(["git", "-C", str(root), *_GIT_HARDEN, *args], capture_output=True)
+    return r.returncode, r.stdout
+
+
+def design_watched_subs(frame_files, base):
+    """帧内**落在 design 域监视集内**的触及路径集（相对 change 目录）。
+
+    [Task1] 这与「该提交的完整文件列表」是两个不同的量：checkpoint 走 `git add -A`，
+    真实提交必然打包源码；按整 commit 求值 ⇒ 任何以此为前提的判据永不触发。
+    """
+    subs = set()
+    for f in frame_files:
+        if not f or not f.startswith(base):
+            continue
+        sub = f[len(base):]
+        if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
+            subs.add(sub)
+    return subs
+
+
+def commit_parents(root, sha):
+    """该提交的 parent sha 列表。根提交 → []；解析失败 → None。
+
+    [Task1 · BR-6 护栏] merge 提交下「前版」相对**每个** parent 各自定义——
+    调用方须逐 parent 求值，MUST NOT 只看 first parent。
+    """
+    rc, out = run_git_rc(root, "rev-list", "--parents", "-n", "1", sha)
+    if rc != 0 or not out:
+        return None
+    return out.split()[1:]
+
+
+def _plain_modification_from_raw(line):
+    """`git diff --raw` 单行 → 该行是否表示**普通内容修改**。纯函数（可对合成行直接测）。
+
+    行形：`:<srcmode> <dstmode> <srcsha> <dstsha> <status>\\t<path>`
+    [Task1] 新建(A)/删除(D)/改名(R)/复制(C)/类型变更(T)/仅权限位(mode 变) 一律 False——
+    此类形态下前后两版 blob 字节可能**完全相同**（chmod、regular↔symlink），拿字节等值
+    当「没实质改动」会放行真实的状态位变更。
+    """
+    if not line.startswith(":"):
+        return False                       # 非 raw 行形 ⇒ 下面的定位全不可信，保守
+    fields = line.split("\t", 1)[0].split()
+    if len(fields) < 5:
+        return False
+    src_mode, dst_mode, status = fields[0][1:], fields[1], fields[4]
+    return status == "M" and src_mode == dst_mode
+
+
+def _plain_content_modification(root, parent, sha, path):
+    """该提交相对某 parent 对 path 的变更是否为普通内容修改。
+
+    --no-renames：让改名分解成 A+D，不依赖 diff.renames 的仓库级 config（确定性）。
+    """
+    rc, out = run_git_rc(root, "diff", "--raw", "--no-renames", parent, sha, "--", path)
+    if rc != 0 or not out:
+        return False                       # 取不到 / 该 parent 侧未触及此路径 ⇒ 保守
+    return _plain_modification_from_raw(out.splitlines()[0])
+
+
+def tasks_blob_pair(root, parent, sha, path):
+    """取该提交相对某 parent 的前后两版 blob 原始字节。
+
+    返回 (ok, before_bytes, after_bytes)。**ok=False ⇒ 调用方 MUST 保守判失鲜**——
+    取不到、读不准、形态不合格一律归此侧，绝不因读取失败而放行。
+
+    [tasks 1.1c] 两侧读取各自显式判 returncode，MUST NOT 依赖空串巧合：
+    双侧失败会得 b"" == b"" ⇒ 判等值 ⇒ 放行真实设计改动（假绿方向）。
+    """
+    if not _plain_content_modification(root, parent, sha, path):
+        return False, b"", b""
+    # 用 cat-file blob 而非 show：前者输出 object 的**原始字节**，绕开 smudge/textconv
+    # 等工作树转换；show 的输出受这些过滤器影响，同一 blob 在不同 config 下可读出不同字节。
+    rc_before, before = run_git_bytes(root, "cat-file", "blob", f"{parent}:{path}")
+    rc_after, after = run_git_bytes(root, "cat-file", "blob", f"{sha}:{path}")
+    if rc_before != 0 or rc_after != 0:
+        return False, b"", b""
+    return True, before, after
+
+
+def _tasks_content_exempt(before, after):
+    """前后两版 tasks.md 原始字节 → 是否属于「零设计信息量」的改动，可豁免失鲜。
+
+    🔴 [Task1] **判据尚未接入**，恒 False ⇒ 一律照判失鲜。Task2 在此实现勾选框归一化
+    行级等值比较（MUST 限于行级等值，MUST NOT 语义 diff / 解析 markdown 结构）。
+    抽成独立函数是为了把「保守回落」与「等值判据」分成两个可各自证伪的面：
+    上游 design_frame_exempt 的每道回落分支都能在本函数被替身为恒 True 时单独证伪。
+    """
+    return False
+
+
+def design_frame_exempt(root, sha, frame_files, base):
+    """该帧是否豁免失鲜判定。任何「看不清」一律 False（保守判失鲜）。
+
+    🔴 [Task1] **本票不引入任何豁免**——能力就位（能区分监视集内路径集、能取到前后两版
+    原始字节、能识别不合格形态），但因 _tasks_content_exempt 恒 False 而恒返回 False，
+    对外可观察行为与接入前逐字一致。Task2 只需实现 _tasks_content_exempt。
+    """
+    if design_watched_subs(frame_files, base) != {"tasks.md"}:
+        return False                       # 帧内还触及其他监视路径 ⇒ 照判失鲜
+    parents = commit_parents(root, sha)
+    if not parents:
+        return False                       # 根提交 / parent 解析失败 ⇒ 保守
+    path = base + "tasks.md"
+    for parent in parents:                 # merge：与**每个** parent 各自成立才算
+        ok, before, after = tasks_blob_pair(root, parent, sha, path)
+        if not ok:
+            return False                   # 取不到 / 形态不合格 ⇒ 保守
+        if not _tasks_content_exempt(before, after):
+            return False                   # [Task1] 判据未接入，恒走此支 ⇒ 行为不变
+    return True
+
+
 def is_stale(root, rel, scope, change):
     """D9 分域〔Q1=B/Q3=A〕。scope: 'design'|'code'。返回 (stale, freshness)。
 
@@ -232,26 +353,36 @@ def is_stale(root, rel, scope, change):
     base = f"openspec/changes/{change}/"
     if scope == "design":
         # [spec-review-amendment B2] 带 subject 分帧遍历，checkpoint(impl-review) 精确式豁免。
-        # 帧形（--format=%x00%s --name-only）：`\x00<subject>\n\n<file>\n<file>…`，按 \x00 切帧，
-        # 帧首行=subject、余非空行=触及文件。MUST NOT 加 --no-merges/--first-parent〔BR-6 护栏〕
+        # 帧形（--format=%x00%H%x1f%s --name-only）：`\x00<sha>\x1f<subject>\n\n<file>…`，
+        # 按 \x00 切帧，帧首行= sha + \x1f + subject、余非空行=触及文件。
+        # [Task1 · tasks 1.1b] format 携带 %H：不带 sha 就取不到该提交前后两版 blob。
+        # 分隔符用 \x1f（unit separator）而非空格/冒号——subject 可含空格与冒号，须无歧义。
+        # MUST NOT 加 --no-merges/--first-parent〔BR-6 护栏〕
         # ——头注释承诺 merge 内部提交逐一枚举不漏检；--no-merges 会改变 merge 场景失鲜语义。
-        out = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=%x00%s")
+        out = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=%x00%H%x1f%s")
         for frame in out.split("\x00"):
             if not frame:
                 continue
             lines = frame.split("\n")
-            subject = lines[0]
+            frame_sha, _, subject = lines[0].partition("\x1f")
             # [spec-review-amendment BR-7] 精确式：裸 checkpoint(impl-review) 或带冒号描述；
             # 裸 startswith 闭合前缀仍收 `checkpoint(impl-review)evil` 尾串垃圾，故用精确式。
             if subject == "checkpoint(impl-review)" or subject.startswith("checkpoint(impl-review):"):
                 continue                      # 阶段三合法尾流修订，豁免不失鲜
+            # [tasks 1.1a] 沿用逐文件 return-True 结构，仅 tasks.md 走单独分支（延后到帧末
+            # 判定——「帧内监视集路径集是否恰为 {tasks.md}」由控制流建立）。
+            tasks_touched = False
             for f in lines[1:]:
                 if not f:
                     continue
                 if f.startswith(base):
                     sub = f[len(base):]
-                    if sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
+                    if sub == "tasks.md":
+                        tasks_touched = True
+                    elif sub in DESIGN_WATCHED_NAMES or sub.startswith("specs/"):
                         return True, "stale"
+            if tasks_touched and not design_frame_exempt(root, frame_sha, lines[1:], base):
+                return True, "stale"
         return False, "fresh"
     # scope == "code"：行为逐字不变（无 subject、无豁免、无 --no-merges）
     files = run_git(root, "log", f"{sha}..HEAD", "--name-only", "--format=")
