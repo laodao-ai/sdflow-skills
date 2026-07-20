@@ -1,6 +1,6 @@
 import json, subprocess, sys
 from pathlib import Path
-from conftest import commit_all, mkchange
+from conftest import commit_all, mkchange, head_sha, write_report
 
 GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
 
@@ -26,10 +26,12 @@ def test_refuse_when_anchor_missing(repo):
 
 def test_pass_gate_when_anchor_present(repo):
     # [mlh-p5 Task5] live 迁 frontmatter（原 inline design-approved 锚）
+    # [harden-gate-git-layer Task1] 两段提交：先有盘面可锚，报告才写得出 reviewed_sha
     d = mkchange(repo)
-    (d / "spec-review-report.md").write_text(
-        "---\nship-gate:\n  design_approved: true\n---\n# 报告\n", encoding="utf-8")
     commit_all(repo, "seed")
+    write_report(d, "spec-review-report.md", head_sha(repo),
+                 body="# 报告\n", design_approved="true")
+    commit_all(repo, "spec-review report")
     code, js, human = run_gate(repo)
     assert code == 0 and js["verdict"] != "REFUSE_START"
     assert human.startswith("[ship-gate]")  # D2 首行人读
@@ -42,12 +44,13 @@ def test_verify_conflict_anchors_unknown(repo):
     # test_live_dup_key_unknown 覆盖重叠，属有意——两处分别锚 preflight 早检入口与
     # frontmatter 解析器本身，双证据不算冗余）。
     d = mkchange(repo)
-    (d / "spec-review-report.md").write_text(
-        "---\nship-gate:\n  design_approved: true\n---\n# 报告\n", encoding="utf-8")
+    commit_all(repo, "seed")
+    write_report(d, "spec-review-report.md", head_sha(repo),
+                 body="# 报告\n", design_approved="true")
     (d / "verify-report.md").write_text(
         "---\nship-gate:\n  verify: PASS\n  verify: FAIL\n---\n# 验证报告\n",
         encoding="utf-8")
-    commit_all(repo, "seed")
+    commit_all(repo, "reports")
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN"
     assert "verify" in js["reason"]
@@ -60,10 +63,11 @@ def test_gbk_report_no_crash(repo):
     # （parse_ship_gate_frontmatter 内 read_text errors="replace"）上验证，
     # Task 6 退役 inline 读点后此覆盖仍有效。
     d = mkchange(repo)
-    body = (b"---\nship-gate:\n  design_approved: true\n---\n"
-            + "设计门拍板".encode("gbk") + b"\n")
-    (d / "spec-review-report.md").write_bytes(body)
     commit_all(repo, "seed")
+    head = f"---\nship-gate:\n  design_approved: true\n  reviewed_sha: {head_sha(repo)}\n---\n"
+    (d / "spec-review-report.md").write_bytes(
+        head.encode("ascii") + "设计门拍板".encode("gbk") + b"\n")
+    commit_all(repo, "spec-review report")
     code, js, _ = run_gate(repo)
     assert code in (0, 3, 4, 5, 6)  # 合法退出码集合，排除 traceback 导致的 1
     assert "verdict" in js and js["verdict"]  # 正常给出 verdict（未因解码异常崩溃）

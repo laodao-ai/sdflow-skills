@@ -366,6 +366,7 @@ MUST 在文件**最顶端**（prepend，非追加末尾）写：
 ---
 ship-gate:
   code_review: pass
+  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
 ---
 ```
 或
@@ -373,10 +374,15 @@ ship-gate:
 ---
 ship-gate:
   code_review: blocked
+  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
 ---
 ```
 
 ——`code_review` 字段二选一（`pass`/`blocked`，下划线字段名、小写值），/sdflow-ship 读此 frontmatter 机判。
+**`reviewed_sha` = 被审的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD` 的完整
+40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。语义是「**本次代码审
+放行的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「放行之后源码有没有被改」。
+MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
 若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。头部之后紧接下方正文（含人读结论行，不可省略）：
 
 ```

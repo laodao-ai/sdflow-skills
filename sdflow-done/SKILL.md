@@ -156,6 +156,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 ---
 ship-gate:
   verify: PASS
+  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
 ---
 
      或
@@ -163,9 +164,14 @@ ship-gate:
 ---
 ship-gate:
   verify: FAIL
+  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
 ---
 
      ——`verify` 字段二选一（`PASS`/`FAIL`，大写、非布尔），/sdflow-ship 读此 frontmatter 机判。
+     **`reviewed_sha` = 被验证的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD`
+     的完整 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。
+     语义是「**verify 结论覆盖的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「验证之后
+     源码有没有被改」。MUST 与 `verify` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
      若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。
    - 标题 + 日期 + change 名
    - **结论**：PASS / FAIL（人读结论行，紧跟标题下方，供人阅读；frontmatter 已是机判锚，此行不可省略）

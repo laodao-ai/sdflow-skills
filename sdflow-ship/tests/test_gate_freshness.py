@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import commit_all, mkchange
+from conftest import commit_all, mkchange, head_sha, write_report
 from test_gate_preflight import run_gate
 from test_gate_impl_progress import approved_change, PLAN2, _sg
 from test_gate_tail import impl_done
@@ -15,9 +15,9 @@ def tail_ok(repo):
     # [mlh-p5 Task5] live 迁 frontmatter（原 inline 双锚，产出的 gate verdict 不变）
     d = impl_done(repo)
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "reports")
     return d
 
@@ -36,31 +36,35 @@ def test_stale_fail_reruns_not_exit5(repo):
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "reports")
     touch_code(repo)             # FAIL 之后修了代码 → 重验不卡死
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done"
 
-def test_stale_unclosed_verify_appends_hint(repo):
-    # [impl-review-fix OV-2] verify 读点 stale 分支（next=sdflow-done）在 verify-report 首行 ---
-    # 无闭合(absent) 时追加纯结构提示：避免把无有效结论的报告误称「结论陈旧」且吞掉未闭合诊断。
-    # 该分支仅在「code-review 新鲜 ∧ verify 陈旧」窄边界可达——否则 code-review stale 分支
-    # (next=sdflow-code-review) 先触发。故 fixture 须把 code-review-report 提交在外部改动之后
-    # （cr 新鲜），verify-report 提交在其前（verify 因后续外部提交而陈旧）。verdict/退出码/next 不变。
+def test_unclosed_verify_frontmatter_keeps_structural_hint(repo):
+    # [impl-review-fix OV-2 → harden-gate-git-layer Task1 重新设计] 原用例名
+    # test_stale_unclosed_verify_appends_hint，断言 verdict=RERUN_STALE 且 reason 含结构提示。
+    # **承载的安全承诺不变**：verify-report 首行 --- 无闭合（parse 判 absent、无有效结论）时，
+    # 「未见闭合」这条结构诊断 MUST NOT 被其它分支吞掉。
+    # 变的是它落在哪个 verdict 上：新模型下 `reviewed_sha` 与结论字段同一次写入落盘，
+    # ∴「无有效结论」⇒ 本就没有锚可读，若仍先求失鲜就会把这个合法中间态判成缺锚 UNKNOWN(6)。
+    # gate 遂改为「先定结论、再求失鲜」（与 code-review 读点次序一致）⇒ 该形态落 STEP_IN_PROGRESS，
+    # 结构提示由该分支自带的 hint 承载。措辞「结论陈旧」也不再被误加到无结论的报告上（OV-2 本意）。
     d = impl_done(repo)
     (d / "verify-report.md").write_text(
         "---\nship-gate:\n  verify: PASS\n无闭合横线，正文继续\n", encoding="utf-8")   # 首块无闭合 → absent
     commit_all(repo, "verify report (unclosed)")
     touch_code(repo)             # 外部提交 → 使 verify-report 陈旧
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     commit_all(repo, "code-review report after external change → cr 新鲜")
     code, js, _ = run_gate(repo)
-    assert code == 0 and js["verdict"] == "RERUN_STALE" and js["next"] == "sdflow-done"
-    assert "未见闭合" in js["reason"]   # 结构提示未被 stale 分支吞掉
+    assert code == 0 and js["verdict"] == "STEP_IN_PROGRESS" and js["next"] == "sdflow-done"
+    assert "未见闭合" in js["reason"]   # 结构提示未被任何先行分支吞掉（本用例的承重点）
+    assert "陈旧" not in js["reason"]   # 无有效结论的报告不该被称「结论陈旧」（OV-2 本意）
 
 def test_design_anchor_survives_impl_commits(repo):
     # Q1=B 断言①：实现提交不令 design-approved 失鲜
@@ -77,29 +81,30 @@ def test_design_anchor_stale_on_design_edit(repo):
     code, js, _ = run_gate(repo)
     assert code == 3 and "重审" in js["reason"]
 
-def test_uncommitted_report_is_fresh(repo):
-    # Q3=A：报告从未提交 → fresh + freshness=uncommitted
-    # [impl-review-fix] 裁决项7：原用 tail_ok() 先提交过 verify-report.md 再工作区覆盖，
-    # git log 仍能找到该路径的历史 sha，实测得到 freshness="fresh" 而非 "uncommitted"
-    # （report_last_sha 只看提交历史，不看工作区）——与本用例名/注释意图（报告从未
-    # 提交过）不符。改为让 verify-report.md 全程不进任何 commit，才是真正的
-    # "never committed" 路径（sha 为空 → freshness=uncommitted）。
+def test_uncommitted_report_still_evaluated_by_its_own_anchor(repo):
+    # [harden-gate-git-layer Task1 · ADR-1] 原用例名 test_uncommitted_report_is_fresh，
+    # 断言 freshness == "uncommitted"。该语义随**反推锚**一并退役：旧实现只能从
+    # `git log -1 -- <report>` 反推锚，报告没进过提交 ⇒ 推不出锚 ⇒ 只好特判 uncommitted。
+    # 新实现的锚是报告自己录下的 `reviewed_sha`，**与报告有没有进过提交无关**——未提交的
+    # 报告照样带得出有效锚，照常参与失鲜求值（Q3=A「人机同权、手写产物合法」由此保住：
+    # 手写报告不被拒，只是同样要落锚）。故本用例改为验「未提交的报告仍经其自录锚正常求值」。
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter（未提交语义靠"从未进 commit"承载，与锚承载格式无关）
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "hand-off.md").write_text("x", encoding="utf-8")
     arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
     arch.mkdir(parents=True); (arch / "p.md").write_text("a", encoding="utf-8")
     commit_all(repo, "tail without verify report")
     # verify-report.md 只写盘，从未进入任何提交
     (d / "verify-report.md").write_text(
-        "---\nship-gate:\n  verify: PASS\n---\n新一轮手写\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n新一轮手写\n", encoding="utf-8")
     code, js, _ = run_gate(repo)
-    # 〔H1〕active 存在 → RUN_VERIFY（非 SHIPPED）；本用例主张仍是 freshness=uncommitted
-    # （report_last_sha 空 → 人机同权），验其经 final RUN_VERIFY 携带 freshness 无误
+    # 〔H1〕active 存在 → RUN_VERIFY（非 SHIPPED）。未提交的 verify-report 携带指向当前
+    # HEAD 的有效锚 ⇒ 正常求值、判 fresh（而非旧的特判 "uncommitted"），且**不**因
+    # 「没进过提交」被判缺锚 UNKNOWN——人机同权保住。
     assert code == 0 and js["verdict"] == "RUN_VERIFY"
-    assert js["freshness"] == "uncommitted"
+    assert js["freshness"] == "fresh"
 
 def test_openspec_only_commits_keep_fresh(repo):
     d = tail_ok(repo)
@@ -172,11 +177,11 @@ def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     commit_all(repo, "cr alone")
     touch_code(repo)             # 触及 src.py → cr 变陈旧
     (d / "verify-report.md").write_text(
-        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "verify alone")   # verify 本身新鲜（其后无提交）
     code, js, _ = run_gate(repo)
     assert code == 5 and js["verdict"] == "VERIFY_FAIL"
@@ -211,7 +216,7 @@ def _reanchor(repo, d):
     而「新建」形态不合格 ⇒ 该帧照判失鲜，会先于待测的翻转帧触发，把用例的结论理由换掉。
     """
     (d / "spec-review-report.md").write_text(
-        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告 v2\n", encoding="utf-8")
+        f"---\nship-gate:\n  design_approved: true\n  reviewed_sha: {head_sha(repo)}\n---\n# 设计审报告 v2\n", encoding="utf-8")
     commit_all(repo, "re-approve design")
 
 def _seed_tasks(repo, data=b"### Task 1: A\n- [ ] s\n"):

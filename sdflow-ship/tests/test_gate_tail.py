@@ -1,4 +1,4 @@
-from conftest import commit_all, mkchange
+from conftest import commit_all, mkchange, head_sha, write_report
 from test_gate_preflight import run_gate
 from test_gate_impl_progress import approved_change, PLAN2
 
@@ -17,7 +17,7 @@ def test_cr_blocked_exit4(repo):
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: blocked\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: blocked\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     commit_all(repo, "cr")
     code, js, _ = run_gate(repo)
     assert code == 4 and js["verdict"] == "BLOCKED_UPSTREAM"
@@ -26,9 +26,9 @@ def test_verify_fail_exit5(repo):
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "---\nship-gate:\n  verify: FAIL\n---\n# 验证报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: FAIL\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "cr+verify")
     code, js, _ = run_gate(repo)
     assert code == 5 and js["verdict"] == "VERIFY_FAIL"
@@ -39,9 +39,9 @@ def test_verify_pass_active_present_run_verify(repo):
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
     (d / "hand-off.md").write_text("交接\n", encoding="utf-8")
     arch = repo / "openspec" / "changes" / "archive" / "2026-07-04-demo"
     arch.mkdir(parents=True)
@@ -62,7 +62,7 @@ def test_verify_report_no_anchor_in_progress(repo):
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter（verify-report.md 保持无锚正文不变——本用例本就测「无锚」）
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
         "# 报告\n验证中…\n", encoding="utf-8")
     commit_all(repo, "verify-in-progress")
@@ -73,9 +73,9 @@ def test_verify_pass_but_no_handoff_run_verify_step(repo):
     d = impl_done(repo)
     # [mlh-p5 Task5] live 迁 frontmatter
     (d / "code-review-report.md").write_text(
-        "---\nship-gate:\n  code_review: pass\n---\n# 代码审报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  code_review: pass\n  reviewed_sha: {head_sha(repo)}\n---\n# 代码审报告\n", encoding="utf-8")
     (d / "verify-report.md").write_text(
-        "---\nship-gate:\n  verify: PASS\n---\n# 验证报告\n", encoding="utf-8")
+        f"---\nship-gate:\n  verify: PASS\n  reviewed_sha: {head_sha(repo)}\n---\n# 验证报告\n", encoding="utf-8")
     commit_all(repo, "tail")
     _, js, _ = run_gate(repo)
     assert js["verdict"] == "RUN_VERIFY"  # done 未走完（hand-off/archive 缺）

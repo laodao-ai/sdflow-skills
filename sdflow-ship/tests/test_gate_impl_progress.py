@@ -1,6 +1,6 @@
 import subprocess, sys, json
 from pathlib import Path
-from conftest import commit_all, mkchange
+from conftest import commit_all, mkchange, head_sha, write_report
 from test_gate_preflight import run_gate
 
 # Load ship_gate module for direct function testing
@@ -11,20 +11,32 @@ import ship_gate as _sg
 
 PLAN2 = "### Task 1: A\n- [ ] s\n### Task 2: B\n- [ ] s\n"
 
-def approved_change(repo, plan=None, sop=False, tg02=False):
-    # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）：
-    # 本 helper 是多文件共用的高杠杆基座（tail/freshness/frontmatter_live_read 均经此链路），
-    # 迁移后 design_ok 判定改走 frontmatter 路径，gate verdict 不变（design_approved=true 恒真）。
+def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor="head"):
+    # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）。
+    # [harden-gate-git-layer Task1 · tasks 4.1/4.1b] 迁**两段提交模型**：报告 frontmatter 现须带
+    # `reviewed_sha`（被批准的盘面），而旧单次 commit_all 让报告与其审查对象同属根提交 ⇒ 结构上
+    # 没有先于报告的盘面可填。分段：
+    #   ① 四件套（+ 可选 plan/sop）落盘提交 → 这就是「被批准的盘面」
+    #   ② 可选第三段〔4.1b〕revise=callable(d)：拍板前二次修订，单独提交（ADR-7(b) 场景）
+    #   ③ 读出 HEAD → 写携带该 sha 的 spec-review-report → 单独提交
+    # anchor: "head"（默认，锚指被批准盘面）｜"pre-revision"（锚指修订**之前**的提交，用于
+    #   验 ADR-7(b) 自锁：拍板刚完成即失鲜）｜None（不写 reviewed_sha，缺锚负例）｜显式 sha 串。
     d = mkchange(repo)
-    (d / "spec-review-report.md").write_text(
-        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", encoding="utf-8")
     prop = "# p\n〔TG-02：嵌入式〕\n" if tg02 else "# p\n〔TG-01：工具链〕\n"
     (d / "proposal.md").write_text(prop, encoding="utf-8")
     if sop:
         (d / "demo-sop.md").write_text("sop\n", encoding="utf-8")
     if plan is not None:
         (d / "superpowers-plan.md").write_text(plan, encoding="utf-8")
-    commit_all(repo, "seed change")
+    commit_all(repo, "seed change artifacts")      # ① 被批准的盘面
+    pre_revision = head_sha(repo)
+    if revise is not None:                          # ② 拍板前二次修订（单独落盘）
+        revise(d)
+        commit_all(repo, "pre-approval revision")
+    sha = {"head": head_sha(repo), "pre-revision": pre_revision}.get(anchor, anchor)
+    write_report(d, "spec-review-report.md", sha,
+                 body="# 设计审报告\n", design_approved="true")
+    commit_all(repo, "spec-review report (approved)")   # ③ 报告单独提交
     return d
 
 def test_tg02_hit_sop_missing(repo):
@@ -98,12 +110,13 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
 def test_plan_task1_same_commit_counts(repo):
     # 〔B1 闭区间〕plan 与 checkpoint(task1-) 同 commit（checkpoint add -A 携带未提交 plan）
     # → task1 锚在窗口起点 sha 自身，排他窗口会漏数；闭区间须计入
+    # [harden-gate-git-layer Task1 · tasks 4.1] 两段提交：四件套先落盘 → 报告携锚后落盘
     d = mkchange(repo)
-    # [mlh-p5 Task5] live 迁 frontmatter（同上 helper 理由）
-    (d / "spec-review-report.md").write_text(
-        "---\nship-gate:\n  design_approved: true\n---\n# 设计审报告\n", encoding="utf-8")
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
-    commit_all(repo, "seed change")           # approved base，无 plan
+    commit_all(repo, "seed change artifacts")     # 被批准的盘面（无 plan）
+    write_report(d, "spec-review-report.md", head_sha(repo),
+                 body="# 设计审报告\n", design_approved="true")
+    commit_all(repo, "spec-review report (approved)")
     (d / "superpowers-plan.md").write_text(PLAN2, encoding="utf-8")
     commit_all(repo, "checkpoint(task1-foo): plan+task1 同 commit")  # plan 首次提交 == task1 锚
     commit_all(repo, "checkpoint(task2-bar): B")

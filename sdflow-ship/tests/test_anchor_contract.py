@@ -18,6 +18,42 @@ PRODUCER_FRONTMATTER = [
 ]
 
 
+# [harden-gate-git-layer Task1 · tasks 1.4] 三个 producer 的锚字段模板 MUST 逐字对齐
+# design.md ADR-1 的 YAML 示例：字段名、挂载层级（顶层 `ship-gate:` 的**直接子键**，与结论
+# 字段同层）、示例值形态。某处写成独立顶层键或改了字段名 ⇒ 该 producer 的锚永远读不到。
+ADR1_ANCHOR_LINE = "reviewed_sha: 0123456789abcdef0123456789abcdef01234567"
+
+
+def test_producer_templates_declare_reviewed_sha_verbatim():
+    for rel, _field, _value_lines in PRODUCER_FRONTMATTER:
+        lines = [ln.strip() for ln in (REPO / rel).read_text(encoding="utf-8").splitlines()]
+        assert ADR1_ANCHOR_LINE in lines, \
+            f"{rel} 模板缺锚字段裸行 {ADR1_ANCHOR_LINE!r}（与 design.md ADR-1 示例逐字对齐）"
+
+
+def test_producer_anchor_is_direct_child_of_ship_gate():
+    # 列敏感验证：抽真实字节的模板块喂 parser——锚若被挂成独立顶层键 / 嵌套更深一层，
+    # parse 解不出 reviewed_sha，本断言变红。
+    for rel, field, value_lines in PRODUCER_FRONTMATTER:
+        text = (REPO / rel).read_text(encoding="utf-8")
+        blocks = [b for b in _extract_frontmatter_blocks(text) if ADR1_ANCHOR_LINE in b]
+        assert blocks, f"{rel} 未找到含锚字段的 frontmatter 模板块"
+        for block in blocks:
+            state, err = ship_gate.parse_ship_gate_frontmatter(block)
+            assert err is None, f"{rel} 含锚模板块解析出错: {err}\n{block}"
+            assert "reviewed_sha" in state, \
+                f"{rel} 锚字段未被解析出（挂载层级错？须是顶层 ship-gate: 的直接子键）\n{block}"
+            assert field in state, \
+                f"{rel} 锚与结论字段 {field!r} 须同层同块（ADR-1：同一次写入落盘）\n{block}"
+
+
+def test_reviewed_sha_registered_in_validators():
+    assert "reviewed_sha" in ship_gate.FIELD_VALIDATORS, \
+        "解析器未注册 reviewed_sha —— producer 写了也读不到（新锚永远读不到）"
+    assert "reviewed_sha" not in ship_gate.FIELD_ENUMS, \
+        "reviewed_sha 的值域是任意 40 位 hex，不该塞进有限枚举表"
+
+
 def test_producer_frontmatter_fields():
     # 字段名 ∈ FIELD_ENUMS（精确下划线，非连字符）+ 三 SKILL 模板确实各自声明了该字段。
     # 注：本测试对每行 .strip() 后比对——这是有意的粗筛（"字段是否被提及"），**不**覆盖列 0

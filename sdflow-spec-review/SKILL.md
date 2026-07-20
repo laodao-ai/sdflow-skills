@@ -216,8 +216,16 @@ description: >
 ---
 ship-gate:
   design_approved: true
+  reviewed_sha: 0123456789abcdef0123456789abcdef01234567
 ---
 ```
+
+**`reviewed_sha` = 被批准的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD`
+的完整 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。
+语义是「**拍板批准的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「批准之后四件套有没有被改」。
+写之前 MUST 核对 `git log -1`，确认所选 commit **已包含**最终批准的四件套内容。
+**两个字段 MUST 在同一次文件写入中落盘**（不可拆成两次 Edit）：拆开且中断落在中间，
+盘面会变成「`design_approved: true` 在、`reviewed_sha` 缺」——gate 判 UNKNOWN(6)，可恢复但无指引。
 
 写入规则：若 `spec-review-report.md` 已有首块 frontmatter（首行即 `---`），MUST 将 `ship-gate:` 键合并进该已有块（不新开第二块、
 不破坏已有其他键）；若尚无 frontmatter，MUST 在文件最顶端新建此块（**prepend**，MUST NOT 追加到文件末尾）。
