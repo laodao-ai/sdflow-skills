@@ -1,3 +1,8 @@
+---
+ship-gate:
+  design_approved: true
+---
+
 # spec-review-report — harden-gate-git-layer（第二轮 · 设计重写后）
 
 > **本报告取代第一轮**（针对 `-m`/`--cc` 枚举方案的那版，内容见 git 历史 `6424751`）。
@@ -334,7 +339,36 @@ BASE-17 把 `CONTEXT.md` 术语条目补进 proposal Impact；BASE-19 补一张�
 
 ---
 
-## 收敛口
+## 拍板记录（设计 HARD-GATE）
+
+**设计门已拍板批准，日期 2026-07-21。** 机判锚见本文件头部 frontmatter `ship-gate.design_approved: true`。
+
+三个 `[需拍板]` 项的最终去向：
+
+| # | 最终裁决 | 落点 |
+|---|---|---|
+| **Q1** | **不做**（用户裁定：verify 检查点到 merge 之间本无其他动作，无须再查） | 无 |
+| **Q2** | **a 不改**（用户纠正：code-review 过程中本就可能改代码与文档，`code-review-report.md` 出现之前不是合法右边界；窗口维持原定义，间隙登记为残余面 + 语义层第二道）；**b 修**（→ ADR-7(a)）；**c 降级为流程纪律**（不改 gate，改为「拍板前先跑窄复核」+ ADR-7(b) 二次修订须单独提交）；**d 登记残余面并升级措辞** | design.md ADR-7 / tasks 1.7b |
+| **Q3** | **登记 + 人读约束**（Migration Plan 补一句：回滚前 MUST 人工核验在途 change 阶段） | design.md Migration Plan |
+
+窄复核（`edefe35`）已跑，3 条真发现（1 致 2 高）全部返修落盘；机械门（`openspec validate`、通则 sync、覆盖图双向一致、退役簇闭包）全绿。**本记录本身即 ADR-7(b) 的首次实践**：被审四件套已于 `5f54da0` / `edefe35` 单独提交，∴ 此刻写入的锚指向已包含全部批准内容的提交。
+
+### ⚠️ 〔SR-M〕lens-metric 门后重算 —— 本轮**未执行**，诚实登记
+
+锚行区的 6 条 `lens-metric` 仍是 **Step3 的 pre-gate 临时值**。原因：`lens_metric_emit.py` 是**全 roster 一次性确定性归约**，重算需要原始的 45 条 finding hit 集作输入，而**该输入 JSON 从未落盘**（SKILL 只要求「构造 → 调 emitter → 落 stdout」，未要求持久化）。反推一份能复现已知输出的输入即是编造；手改 emitter 产出的锚行则绕过了机械层。∴ 两条路都不走，如实标注。
+
+**若执行，本应发生的 delta（仅两行，供人工复核）**：
+
+| 行 | 字段 | pre-gate | 门后应为 | 触发 |
+|---|---|---|---|---|
+| `outside-voice / design-voice` | 采纳/裁掉/defer | 2 / 0 / 1 | 2 / **1** / **0** | V-F1（Q1）被裁定不做 |
+| `outside-voice / hr-tg` | 采纳/裁掉/defer | 2 / 0 / 2 | **3** / **1** / **0** | H-F1（Q1）裁掉；H-F4（Q2d）采纳为残余面登记 |
+
+**影响面**：`/sdflow-retro` 的采纳率/独立率聚合会把本 change 的两条 outside-voice 行按 pre-gate 值计入（低估采纳率、高估 defer 率）。这正是 SKILL 里已声明的「best-effort、无机械兜底」局限的一次真实兑现——**根因是 emitter 输入不持久化，使 SR-M 在结构上不可执行**，已记 todo。
+
+---
+
+## 收敛口（拍板前的原始建议，保留供审计）
 
 **不建议现在进设计 HARD-GATE。** 建议顺序：
 

@@ -48,6 +48,7 @@ sdflow-issues:
     T189: {"module":"sdflow-ship/ship_gate.py","summary":"基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单","type":"代码质量","status":"PROPOSED","time":"2026-07-20 16:58","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T190: {"module":"sdflow-ship/ship_gate.py","summary":"run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞","type":"基础设施","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T191: {"module":"openspec/changes/*/impl-reports/","summary":"评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）","type":"代码质量","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
+    T192: {"module":"workflow/tools/lens_metric_emit","summary":"emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行","type":"基础设施","status":"OPEN","time":"2026-07-21 00:17","change":"harden-gate-git-layer","batch":null}
 ---
 # 2026-07 TODO
 
