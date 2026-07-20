@@ -44,6 +44,7 @@ sdflow-issues:
     T185: {"module":"recorder/repo_root","summary":"repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice","type":"可观测性","status":"PROPOSED","time":"2026-07-20 00:31","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
     T186: {"module":"sdflow-ship/ship_gate.py","summary":"merge 帧在 live 路径取不到文件列表 → design 域逐 parent 豁免分支不可达（evil-merge 面）","type":"代码质量","status":"OPEN","time":"2026-07-20 14:17","change":"fix-design-gate-freshness-proxy","batch":null}
     T187: {"module":"sdflow-ship/tests/test_gate_freshness.py","summary":"_stale_after 的 empty_subject 布尔旗标是 flag-argument smell（subject 须传 None 且被忽略）","type":"代码质量","status":"OPEN","time":"2026-07-20 15:23","change":"fix-design-gate-freshness-proxy","batch":null}
+    T188: {"module":"仓根 pytest 收集","summary":"跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守","type":"基础设施","status":"OPEN","time":"2026-07-20 15:54","change":"fix-design-gate-freshness-proxy","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1766,3 +1767,16 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：Task3 双轴审唯一发现，两轴均 PASS。
 <!-- sdflow-issue-block:end id=T187 -->
+
+<!-- sdflow-issue-block:start id=T188 -->
+## T188: 跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守
+> 跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守
+
+**关联文档**：`openspec/changes/fix-design-gate-freshness-proxy/design.md`
+
+**动机**：Task5 实测撞到：新建 sdflow-implement/tests/test_skill_text.py 与既有 sdflow-ship/tests/test_skill_text.py basename 冲突，pytest 从仓根收集时报 import 冲突并【中断整个收集】——不是跳过单文件，是全套件跑不起来。任何 skill 后续加同名测试文件都会撞，且撞了才知道。
+
+**思路**：两条候选：① 各 tests/ 加 __init__.py（改包语义，影响既有 import 写法，需评估）；② 加一条机械守用例，扫全仓 test_*.py 的 basename 唯一性，撞名当场红（成本低、方向 fail-loud，推荐）。倾向 ②。
+
+**备注**：本次已用改名规避（test_dispatch_signal_authority.py）。属仓级基础设施面，非本 change 功能相关，故 defer 未 fold。
+<!-- sdflow-issue-block:end id=T188 -->

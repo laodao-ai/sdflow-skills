@@ -258,7 +258,7 @@ dispatch prompt 必含：
 
   | 范畴 | 权威在哪 | 谁写 |
   |---|---|---|
-  | **本票完成信号** | ① `superpowers-plan.md` 里该 `### Task N:` 段的验收复选框（全勾即计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
+  | **本票完成信号** | ① `superpowers-plan.md` 里该 `### Task N:` 段的验收复选框（段内**须有**复选框**且**全勾才计入——空段不计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
   | **本票工作产物** | 实现代码、测试、`{change_dir}/impl-reports/task<N>-<slug>.md` | implementer 自己写 |
   | **设计意图（需求 / 设计 / 规格 / 任务清单）** | `proposal.md` · `design.md` · `specs/` · `tasks.md` | **设计阶段已定稿，实现期不是它们的作者**——发现设计有问题走 `NEEDS_CONTEXT` / `BLOCKED` 上抛编排层，由编排层裁决，**不自行改盘** |
 

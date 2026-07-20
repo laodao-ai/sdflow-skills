@@ -51,7 +51,9 @@ def test_fix_dispatch_also_carries_authority_table():
     """IO-1：fix 轮次子代理同为 fresh context，dispatch 同样必带权威表。"""
     t = text()
     assert "fix 子代理的 dispatch prompt 同样 MUST 原文携带" in t
-    assert "信号权威表" in t.split("fix 子代理的 dispatch prompt 同样 MUST 原文携带", 1)[1][:200]
+    # 切到下一个段落边界再断言邻近性——用固定字符窗口（如 [:200]）会因措辞增删而脆
+    tail = t.split("fix 子代理的 dispatch prompt 同样 MUST 原文携带", 1)[1]
+    assert "信号权威表" in tail.split("\n\n", 1)[0]
 
 
 def test_authority_table_absence_not_silently_degraded():
