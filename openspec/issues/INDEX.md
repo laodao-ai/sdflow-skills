@@ -87,8 +87,6 @@
 | T198 | todo | PROPOSED | harden-gate-git-layer |
 | T199 | todo | PROPOSED | harden-gate-git-layer |
 | T200 | todo | PROPOSED | harden-gate-git-layer |
-| T201 | todo | PROPOSED | harden-gate-git-layer |
-| T202 | todo | PROPOSED | harden-gate-git-layer |
 | T203 | todo | PROPOSED | harden-gate-git-layer |
 | T204 | todo | PROPOSED | harden-gate-git-layer |
 | T205 | todo | PROPOSED | harden-gate-git-layer |
@@ -254,12 +252,6 @@
 | T42 | todo | PROPOSED | gate-anchor-line-scoped |
 | T50 | todo | PROPOSED | three-lens-decision-framework |
 
-### 批次：review-tool-followups
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T47 | todo | PROPOSED | review-tool-followups |
-
 ### 批次：sdflow-init-hardening
 
 | ID | Pool | Status | 关联Change |
@@ -325,4 +317,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 59 项已闭合（bug: 6，todo: 53）
+- 共 62 项已闭合（bug: 6，todo: 56）

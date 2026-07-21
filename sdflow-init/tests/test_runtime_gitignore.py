@@ -14,9 +14,9 @@ ENTRY = b"/openspec/issues/.recorder.lock\n"
 def _stub_run_dependencies(monkeypatch):
     monkeypatch.setattr(INIT, "ensure_dirs", lambda _root: [])
     monkeypatch.setattr(INIT, "copy_bundle", lambda _root, full=False: ("workflow", 0))
-    monkeypatch.setattr(INIT, "copy_review_tool", lambda _root: 0)
     monkeypatch.setattr(INIT, "ensure_global_hooks", lambda: "")
     monkeypatch.setattr(INIT, "retire_hooks", lambda: "")
+    monkeypatch.setattr(INIT, "retire_deploy_files", lambda _root: "")
     monkeypatch.setattr(INIT, "stale_shadow_warnings", lambda _root: [])
     monkeypatch.setattr(INIT, "handle_config", lambda _root, _mode: ("unchanged", "noop"))
     monkeypatch.setattr(INIT, "inject", lambda *_args, **_kwargs: "noop")

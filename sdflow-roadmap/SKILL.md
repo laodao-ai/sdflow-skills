@@ -333,7 +333,7 @@ roadmap 的 wayfinder 收敛后**直写**三件套、**不经** `opsx:ff`——�
 
 design.md 首部「需求与目标态」章 **不占用**正文既有 `## N.` 数字编号序列（无编号章名）——规避历史「design §N」位置引用随内容增删级联位移。
 
-> 浏览 roadmap 文档包：用项目根 `openspec/serve.sh` 起 HTTP 服务、开 `openspec/review.html`（根查看器起于全树，经内置 INDEX/树浏览到任意 `roadmaps/{name}/`）——不再每目录生成 `review.html` stub（放弃 scoped 深链，可接受降级）。
+> 浏览 roadmap 文档包：直接读 `openspec/roadmaps/{name}/` 下的 Markdown 文件（design / roadmap / task-log）。
 
 ### 三件套之间的引用关系
 

@@ -31,7 +31,7 @@
 把 opsx-project-init 的部署从"整 bundle 复制进消费仓"改为**按内容性质分层**，减少消费仓污染：
 
 - **规则**（`workflow/*.md` + `spec-checklists/` + `code-checklists/`，≈28 文件）→ **全局唯一**，skills 全局解析、消费仓不复制。
-- **review UI 机械**（`tools/` + `serve.sh` + `review.html`，≈5 文件）→ **留 `openspec/` 最小**（服务器根=openspec/ 约束，不落地即 404）。
+- **review 机械层脚本**（`tools/` 下 `anchor_lint.py` 等确定性脚本）→ **留 `openspec/workflow/tools/` 最小**（评审流程运行时依赖）。〔注：原随此层部署的 HTML 文档查看器 `serve.sh` + `review.html` 已由 `drop-review-html-viewer` 整体移除。〕
 - **`hack/checkpoint-commit.sh`** → **全局**（同 ff0-branch-guard 全局 hook；顺带根治 `core.fileMode=false` 的 exec 位坑）。
 - **`config.yaml` / `changes/` / `specs/`** → 仓内（本体）。
 - **明确接受的代价**：消费仓失去按仓 pin 工作流规则（跟随全局 HEAD）。

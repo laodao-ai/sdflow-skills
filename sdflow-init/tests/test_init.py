@@ -1,10 +1,9 @@
 """
-Tests for init.py's review-tool copying + generalized hook installer.
+Tests for init.py's bundle deployment, retired-file/hook cleanup, and hook installer.
 Run with: python3 -m pytest sdflow-init/tests/test_init.py -v
 """
 import json
 import os
-import stat
 import sys
 from pathlib import Path
 
@@ -12,72 +11,64 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 import init as init_mod
-from init import copy_review_tool, copy_bundle
+from init import copy_bundle, retire_deploy_files
 
 
-class TestReviewToolDeployment:
-    """B1 归位后：tools/ 由 workflow bundle 携带（copy_bundle → openspec/workflow/tools/），
-    copy_review_tool 只铺「服务器根锚」——serve.sh + 根 review.html 留 openspec/ 根。
-    故测试须先 copy_bundle 再 copy_review_tool（复刻 run() 的调用顺序）。"""
+class TestRetireDeployFiles:
+    """drop-review-html-viewer：曾铺进消费仓 openspec/ 根的查看器根锚（serve.sh + review.html）
+    在 init/update 每次运行时被**签名门控删除**；用户自建同名文件（无 bundle 签名）不被误删；
+    fresh 安装（无残留）则 no-op。与 retire_hooks 同构。"""
 
-    def _deploy(self, root):
-        copy_bundle(str(root))            # tools/ 落 openspec/workflow/tools/
-        return copy_review_tool(str(root))  # serve.sh + 根 review.html 落 openspec/ 根
+    def _write(self, root, rel, content):
+        osroot = root / "openspec"
+        osroot.mkdir(parents=True, exist_ok=True)
+        p = osroot / rel
+        p.write_text(content, encoding="utf-8")
+        return p
 
-    def test_tools_under_workflow_and_root_anchors_at_openspec_root(self, tmp_path):
-        n = self._deploy(tmp_path)
-        osroot = tmp_path / "openspec"
-        # 工具机械随 bundle 落 openspec/workflow/tools/（B1 归位）
-        assert (osroot / "workflow" / "tools" / "engine.js").is_file()
-        assert (osroot / "workflow" / "tools" / "engine.css").is_file()
-        assert (osroot / "workflow" / "tools" / "review-stub.html").is_file()
-        assert (osroot / "workflow" / "tools" / "vendor" / "marked.min.js").is_file()
-        # 服务器根锚留 openspec/ 根（serve.sh 须从此起服务才覆盖到 changes/specs）
-        assert (osroot / "serve.sh").is_file()
-        assert (osroot / "review.html").is_file()
-        # 不再在 openspec/ 根留 tools/
-        assert not (osroot / "tools").exists()
-        assert n == 2  # copy_review_tool 只铺 serve.sh + 根 review.html
+    def test_removes_deployed_viewer_anchors(self, tmp_path):
+        # 复刻 bundle 部署签名：review.html 含渲染 token 的宿主变量名、serve.sh 含 PIDFILE key 前缀
+        review = self._write(tmp_path, "review.html",
+                             '<script>window.__OPENSPEC_PROJECT_NAME__ = "x";</script>')
+        serve = self._write(tmp_path, "serve.sh",
+                            'PIDFILE="/tmp/openspec-review-serve-${KEY}.pid"\n')
+        acts = retire_deploy_files(str(tmp_path))
+        assert not review.exists()
+        assert not serve.exists()
+        assert "review.html" in acts and "serve.sh" in acts
 
-    def test_root_review_html_substitutes_project_name(self, tmp_path):
-        project_dir = tmp_path / "my-project"
-        project_dir.mkdir()
-        self._deploy(project_dir)
-        osroot = project_dir / "openspec"
-        content = (osroot / "review.html").read_text(encoding="utf-8")
-        template = (osroot / "workflow" / "tools" / "review-stub.html").read_text(encoding="utf-8")
-        # 模板源（openspec/workflow/tools/）须保持原始未替换——它是 copy_review_tool 渲染
-        # 根 review.html 的源模板，须仍含字面 token（每目录 stub 生产者已移除）。
-        assert "__PROJECT_NAME__" in template
-        # 生成的根 review.html 须已替换为项目目录名，且与模板逐字节一致（仅 token 被换）。
-        assert "__PROJECT_NAME__" not in content
-        assert content == template.replace("__PROJECT_NAME__", "my-project")
+    def test_skips_user_files_without_signature(self, tmp_path):
+        # 用户自建同名文件，内容不含 bundle 签名 → MUST NOT 删
+        review = self._write(tmp_path, "review.html", "# my own notes about a review\n")
+        serve = self._write(tmp_path, "serve.sh", "#!/bin/sh\necho my own server\n")
+        acts = retire_deploy_files(str(tmp_path))
+        assert review.exists() and serve.exists()
+        assert acts.strip() == "· 无退役部署文件残留"
 
-    def test_root_review_html_references_workflow_tools_assets(self, tmp_path):
-        # B1 归位后资产必须是根相对 /workflow/tools/...（服务器根 = openspec/），旧 /tools/ 不得残留
-        self._deploy(tmp_path)
-        content = (tmp_path / "openspec" / "review.html").read_text(encoding="utf-8")
-        assert "/workflow/tools/engine.js" in content
-        assert "/workflow/tools/engine.css" in content
-        assert 'href="/tools/' not in content
-        assert 'src="/tools/' not in content
+    def test_noop_on_fresh_install(self, tmp_path):
+        (tmp_path / "openspec").mkdir()
+        acts = retire_deploy_files(str(tmp_path))
+        assert acts.strip() == "· 无退役部署文件残留"
 
-    def test_serve_sh_is_executable(self, tmp_path):
-        self._deploy(tmp_path)
-        mode = (tmp_path / "openspec" / "serve.sh").stat().st_mode
-        assert mode & stat.S_IXUSR
+    def test_idempotent(self, tmp_path):
+        self._write(tmp_path, "review.html",
+                    '<script>window.__OPENSPEC_PROJECT_NAME__ = "x";</script>')
+        retire_deploy_files(str(tmp_path))
+        acts2 = retire_deploy_files(str(tmp_path))   # 第二次跑：已删净 → no-op
+        assert acts2.strip() == "· 无退役部署文件残留"
 
-    def test_idempotent_rerun_overwrites_cleanly(self, tmp_path):
-        project_dir = tmp_path / "another-project"
-        project_dir.mkdir()
-        self._deploy(project_dir)
-        self._deploy(project_dir)  # update-mode re-run
-        osroot = project_dir / "openspec"
-        assert (osroot / "review.html").is_file()
-        content = (osroot / "review.html").read_text(encoding="utf-8")
-        template = (osroot / "workflow" / "tools" / "review-stub.html").read_text(encoding="utf-8")
-        # still a clean substituted copy, not duplicated/appended, not re-substituted-twice
-        assert content == template.replace("__PROJECT_NAME__", "another-project")
+    def test_run_retires_deployed_viewer(self, tmp_path, monkeypatch):
+        # 端到端：run(update) 应清掉已铺的查看器根锚
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+        proj = tmp_path / "proj"
+        (proj / "openspec").mkdir(parents=True)
+        (proj / "openspec" / "review.html").write_text(
+            '<script>window.__OPENSPEC_PROJECT_NAME__ = "x";</script>', encoding="utf-8")
+        (proj / "openspec" / "serve.sh").write_text(
+            'PIDFILE="/tmp/openspec-review-serve-${KEY}.pid"\n', encoding="utf-8")
+        init_mod.run(str(proj), "update")
+        assert not (proj / "openspec" / "review.html").exists()
+        assert not (proj / "openspec" / "serve.sh").exists()
 
 
 class TestNoConsumerHack:
@@ -98,7 +89,11 @@ class TestBundleToolsOnly:
     def test_deploys_only_tools_subtree(self, tmp_path):
         dst, n = copy_bundle(str(tmp_path))
         wf = tmp_path / "openspec" / "workflow"
-        assert (wf / "tools" / "engine.js").is_file()
+        assert (wf / "tools" / "anchor_lint.py").is_file()   # 机械层脚本随 tools/ 部署
+        # 查看器资产已移除（drop-review-html-viewer）——tools/ 下不再含 HTML 查看器文件
+        assert not (wf / "tools" / "engine.js").exists()
+        assert not (wf / "tools" / "review-stub.html").exists()
+        assert not (wf / "tools" / "vendor").exists()
         assert not (wf / "workflow.md").exists()
         assert not (wf / "spec-checklists").exists()
         assert not (wf / "code-checklists").exists()

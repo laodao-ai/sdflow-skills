@@ -38,7 +38,6 @@ except ImportError:  # pragma: no cover （沙箱恒 POSIX，Windows 分支无�
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(SKILL_DIR, "assets")
 BUNDLE_SRC = os.path.join(ASSETS, "workflow")
-REVIEW_TOOL_SRC = os.path.join(ASSETS, "review-tool")
 SNIPPETS = os.path.join(ASSETS, "snippets")
 
 MARK_DOC = ("<!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本区块 -->",
@@ -85,6 +84,17 @@ HOOKS = [
 # hook。retire_hooks() 在 init/update 每次跑时自愈：外科式摘 settings 注册 + 删脚本；
 # fresh 安装无残留则全 no-op。后续任何 hook 退役都往这里加名即可。
 RETIRED_HOOKS = ["change-review-stub.py"]
+
+# 退役部署文件名单（drop-review-html-viewer）：曾由 sdflow-init 铺进消费仓 openspec/ 根、现已
+# 废弃的文件。停止铺设后它们会变孤儿（不在 tools/ 整删重拷范围内），须显式清理。**签名门控删除**：
+# 仅当目标文件内容含该文件的 bundle 部署签名时才删——防误删用户自建同名文件（承 adr/0022：只删
+# 自己确知铺设过的、不猜用户文件内容）。tools/ 下的查看器资产（engine.js/css、vendor/、
+# review-stub.html）**不入此名单**——它们随 copy_bundle 对 tools/ 的「整删重拷」自动清除。
+# 每项 = (相对 openspec/ 的路径, bundle 部署签名子串)。后续任何根锚部署文件退役都往这里加。
+RETIRED_DEPLOY_FILES = [
+    ("review.html", "__OPENSPEC_PROJECT_NAME__"),   # 查看器模板渲染 token 的宿主变量名，查看器独有
+    ("serve.sh", "openspec-review-serve-"),          # 查看器 serve.sh 的 PIDFILE key 前缀，查看器独有
+]
 
 
 def merge_runtime_gitignore(root, snippet):
@@ -242,39 +252,30 @@ def stale_shadow_warnings(root):
     return warns
 
 
-def copy_review_tool(root):
-    """铺设 review 工具的「服务器根锚」文件：serve.sh + 根 review.html 到 openspec/ 根。
-
-    tools/（engine.js, engine.css, vendor/, review-stub.html）已随 workflow bundle 由
-    copy_bundle 铺到 openspec/workflow/tools/（B1 归位）——本函数**不再拷 tools/**。
-
-    为何 serve.sh / 根 review.html 留 openspec/ 根、不进 workflow/：review 工具靠「HTTP
-    服务器根 = openspec/」+ 根相对资产路径（/workflow/tools/engine.js）工作；被审内容
-    （changes/ specs/ roadmaps/）在 openspec/ 层、在 workflow/ 之上——serve.sh 须从
-    openspec/ 起服务才覆盖得到它们，engine.js 从 window.location.pathname 推 scope、根
-    review.html 须落 /review.html 才得 scope=""（全树）。故这两个根锚留根，仅工具机械
-    （tools/）归 workflow bundle。见 design.md 决策表 B1 / 原则6〔grill-amendment〕。
-
-    根 review.html = openspec/workflow/tools/review-stub.html 模板替换 __PROJECT_NAME__ 为
-    项目目录名（该值对一次安装永不变，不重蹈 __SCOPE__ 过时症）。模板本身保持原始未替换
-    （作本函数渲染根 review.html 的源模板）。update 覆盖刷新。
-    """
+def retire_deploy_files(root):
+    """清理退役的部署文件（drop-review-html-viewer，与 retire_hooks 同构、fail-safe）：
+    对 RETIRED_DEPLOY_FILES 每项，仅当 openspec/<path> 存在且内容含其 bundle 部署签名时删除；
+    签名不匹配（用户自建同名文件）或读不了（权限/二进制）→ 保守跳过、原样保留（承 adr/0022：
+    只删自己确知铺设过的、不猜用户文件内容）。幂等、存量安装自愈、fresh 安装 no-op。返回动作汇总。"""
     osroot = os.path.join(root, "openspec")
-
-    serve_src = os.path.join(REVIEW_TOOL_SRC, "serve.sh")
-    serve_dst = os.path.join(osroot, "serve.sh")
-    shutil.copyfile(serve_src, serve_dst)
-    shutil.copymode(serve_src, serve_dst)
-
-    stub_path = os.path.join(osroot, "workflow", "tools", "review-stub.html")
-    project_name = os.path.basename(os.path.abspath(root))
-    with open(stub_path, encoding="utf-8") as f:
-        template_text = f.read()
-    rendered = template_text.replace("__PROJECT_NAME__", project_name)
-    with open(os.path.join(osroot, "review.html"), "w", encoding="utf-8") as f:
-        f.write(rendered)
-
-    return 2  # serve.sh + 根 review.html（tools/ 已由 copy_bundle 计入 openspec/workflow/）
+    acts = []
+    for rel, signature in RETIRED_DEPLOY_FILES:
+        path = os.path.join(osroot, rel)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                content = f.read()
+        except (OSError, UnicodeDecodeError):
+            continue   # 读不了 → 保守跳过，不猜、不删
+        if signature not in content:
+            continue   # 无 bundle 签名 = 用户自建同名文件，MUST NOT 删
+        try:
+            os.remove(path)
+            acts.append(f"删退役查看器根锚 openspec/{rel}")
+        except OSError:
+            pass   # fail-safe：删不掉不中止（fail-safe 与 retire_hooks 一致）
+    return "\n".join(f"  · {a}" for a in acts) if acts else "  · 无退役部署文件残留"
 
 
 def ensure_dirs(root):
@@ -810,18 +811,16 @@ def run(root, mode, dev=False):
         dev_suffix = "（--dev 整刷）" if dev else ""
         report.append(f"铺 bundle：openspec/workflow/{dev_suffix}（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
 
-        n_review = copy_review_tool(root)
-        report.append(
-            f"铺 review 根锚：openspec/review.html + openspec/serve.sh"
-            f"（{n_review} 文件，{'覆盖' if mode=='update' else '写入'}；tools/ 随 bundle 入 openspec/workflow/tools/）"
-        )
-
         report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
 
         report.append("全局 hooks：\n" + ensure_global_hooks())
 
         # 退役 hook 反注册（ADR-1）：init 与 update 都跑，自愈存量安装（fresh 则 no-op）。
         report.append("退役 hook 清理：\n" + retire_hooks())
+
+        # 退役部署文件清理（drop-review-html-viewer）：曾铺进消费仓的查看器根锚（serve.sh +
+        # review.html），签名门控删除；tools/ 下查看器资产随 copy_bundle 整删重拷自动清除。
+        report.append("退役部署文件清理：\n" + retire_deploy_files(root))
 
         # init 与 update 都跑：fresh init 无残留自然零告警；老仓误跑 init 不再假绿（B2-F3）。
         for w in stale_shadow_warnings(root):

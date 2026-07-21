@@ -63,7 +63,7 @@
 计划: 已完成——T44(退役 hook 自愈接进 setup.sh) + T45(engine.js scoped 深链恢复) 随 review-tool-followups ship（ab1ef45）
 
 ### review-tool-followups — review-tool-followups
-状态: PLANNED
+状态: DONE
 成员: (生成) T47
 优先级: P3
 计划: T47 engine.js 深链抽 resolveInitialDir+bootstrap 为可注入 mock 的纯函数补单测（深链逻辑现零单测，测试补强）。注：原 T48/T49（init.py python 守卫 / settings.json 并发）已挪入 sdflow-init-hardening（按 module 归位）

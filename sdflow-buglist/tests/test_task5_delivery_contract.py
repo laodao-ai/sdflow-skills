@@ -146,6 +146,7 @@ def _reference_canonical_rows(path, pool):
 
 DOGFOOD_OVERLAY_DELTAS = {
     "T2": {},
+    "T47": {"status": ("PROPOSED", "WONTDO")},  # drop-review-html-viewer：engine.js 删除→该 todo 失对象，legacy 行冻结、overlay 置 WONTDO
     "T66": {"status": ("PROPOSED", "DONE")},
     "T67": {"status": ("PROPOSED", "DONE")},
     "T85": {"status": ("PROPOSED", "DONE")},

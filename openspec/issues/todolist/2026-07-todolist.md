@@ -5,6 +5,7 @@ sdflow-issues:
   mode: overlay
   items:
     T2: {"module":"`recorder`","summary":"字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）","type":"代码质量","status":"DONE","time":"2026-07-03 00:26","change":"issues-pool-batch-mgmt","batch":"issues-pool-hardening"}
+    T47: {"module":"`sdflow-init/assets/workflow/tools/engine.js`","summary":"engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice)","type":"代码质量","status":"WONTDO","time":"2026-07-05 19:14","change":"review-tool-followups","batch":"review-tool-followups"}
     T66: {"module":"`cmd_scan(buglist/todolist) + cmd_batch_rename(issues)`","summary":"recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化","type":"性能优化","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
     T67: {"module":"`cmd_add id 校验(buglist/todolist)`","summary":"显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)","type":"代码质量","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
     T85: {"module":"`roadmap mechanical-layer-hardening / recorder`","summary":"P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块","type":"基础设施","status":"DONE","time":"2026-07-08 15:55","change":null,"batch":"mlh-p4-target-state"}
@@ -784,6 +785,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T47 -->
 ## T47: engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice)
 
 | 属性 | 值 |
@@ -796,6 +798,8 @@ sdflow-issues:
 
 **备注**：code-review FB-1。现靠 verify-manual-t45 浏览器四态实测兜，无回归网。抽出 resolveInitialDir(已具名)用 URL/window stub 单测同源/跨源/畸形/空 hash；bootstrap 分支注入 loadDir/loadDoc/content mock 断言 404→INDEX+notice 恰一次。
 
+> 2026-07 状态：PROPOSED → WONTDO（engine.js 已被 drop-review-html-viewer 整体删除，其深链单测的载体不存在——该 todo 失去对象）
+<!-- sdflow-issue-block:end id=T47 -->
 ---
 
 ## T48: python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫

@@ -137,10 +137,11 @@
 
 ### Requirement: workflow bundle 改在权威源、经部署下发
 
-workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / `code-checklists/` / review UI / hooks / checkpoint 脚本）与自制 skill 的改动 MUST 在权威源（sdflow-skills 的 bundle 公共家与 skill 目录）进行，MUST NOT 只改消费仓副本。部署 SHALL **按内容性质分层**，而非整 bundle 复制：
+workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / `code-checklists/` / review 机械层脚本（`tools/`）/ hooks / checkpoint 脚本）与自制 skill 的改动 MUST 在权威源（sdflow-skills 的 bundle 公共家与 skill 目录）进行，MUST NOT 只改消费仓副本。部署 SHALL **按内容性质分层**，而非整 bundle 复制：
 
 - **规则**（`workflow/*.md` + `spec-checklists/` + `code-checklists/`）MUST **不再复制进消费仓**，改由 skills 从全局 canonical bundle 解析（见「规则解析 resolver」需求）。
-- **review UI 机械**（`tools/` + `serve.sh` + `review.html`）SHALL 仍复制进消费仓 `openspec/`（服务器根=openspec/ 约束逼留，尽量少）。review UI SHALL 以**根锚单一查看面**提供——`openspec/review.html` 起于全树（其 `location.pathname` 为根 → scope=""），经内置 INDEX/树在应用内浏览到任意 change/roadmap；MUST NOT 为每个 change 或 roadmap 生成独立的 `review.html` stub（既冗余于根锚，又违最小部署足迹 adr/0003）。**scoped 深链**〔grill-amendment；spec-review A1/A2/A3 加固〕：engine `bootstrap` SHALL 先读 `location.hash`——非空则作初始 scope 候选，经**同一 origin 检查**（`new URL(rawHash, origin)`，比较 `.origin === location.origin`）后**取其 `.pathname` 喂 scope**（A3：MUST 提取 `url.pathname`，非把 raw hash 原样喂——`#http://host/changes/X/` 同源但非 `/path` 形态；提取 pathname 顺带归一 `%2F` 编码）；深链范围 = **任意同源路径**（与 `navigate` 写 `#<path>` 契约一致，非仅 change/roadmap）。空 hash / 跨源（协议相对 `//host`）MUST 回落 `location.pathname`，MUST NOT 越界跳转；路径遍历由服务器根（openspec/）兜住。**陈旧深链 404**：MUST NOT 停在裸报错卡死；bootstrap MUST **自派发**（自 try/catch 调 loadDir/loadDoc，因 `navigate` 吞错不返信号）、404 走根 INDEX 路径（**MUST NOT 重调 bootstrap**——防同坏 hash 递归，回落前 `replaceState` 清 hash）、**显式提示**以**专用 DOM 节点在回落渲染之后注入**（MUST NOT `contentBody.innerHTML=`，否则被擦 → 提示静默蒸发，违反静默守卫）。〔恢复 `drop-per-dir-review-stub` 标注的可接受降级增强〕
+- **review 机械层脚本**（`tools/` 下 `anchor_lint.py` / `lens_metric_emit.py` / `outside_voice_guard.py` / `hr_tg_intersect.py` / `review_disposition_check.py` / `trivial_shape.py` 等确定性脚本）SHALL 复制进消费仓 `openspec/workflow/tools/`（评审流程运行时依赖）。`tools/` 下 MUST NOT 再含任何 HTML 文档查看器资产（`engine.js` / `engine.css` / `vendor/` / `review-stub.html`）。**不再提供任何浏览器文档查看面**——`serve.sh` / `review.html` 及其查看器（`engine.*` / `vendor/` / `review-stub.html`）已从权威源整体移除；浏览 change / spec / roadmap 直接读 Markdown 文件。
+- **退役部署文件自愈**：`sdflow-init` MUST 维护一份**退役部署文件名单**（含曾铺进消费仓 `openspec/` 根的 `serve.sh` + `review.html`）并在 `init/update` 每次运行时对其**签名门控删除**——仅当目标文件内容含该文件的 bundle 部署签名（`review.html` 含 `__OPENSPEC_PROJECT_NAME__`、`serve.sh` 含 `openspec-review-serve-`）时才删，MUST NOT 删除不含签名的用户同名文件（防误删）。删除幂等、存量安装自愈、fresh 安装 no-op；机制与退役 hook 反注册同构（承 adr/0022 精神：只删自己确知铺设过的文件，不猜用户文件内容）。`tools/` 下的查看器资产不入该名单——它们随 `tools/` 整删重拷（下方 `copy_bundle` 收敛语义）自动清除。
 - **全局 Claude hook**（`~/.claude/hooks/` + 注册进 `~/.claude/settings.json`）集 SHALL = `{ff0-branch-guard}`（PreToolUse.Bash 的 FF-0 分支守卫）。`sdflow-init` MUST 维护一份**退役 hook 名单**并对其**反注册**（从 settings.json 各事件列表外科式摘除匹配条目 + 删除 `~/.claude/hooks/` 里的脚本，幂等、存量安装自愈、fresh 安装 no-op）；MUST NOT 只增不减而在存量安装留下指向已删脚本的孤儿注册。该反注册 SHALL 覆盖**两条更新路径**：① `sdflow-init init/update`（消费项目铺设路径，每次运行）；② `setup.sh`（工具链升级路径，装了 sdflow-skills 的机器经 `/sdflow-upgrade` 必跑、早于任何 `sdflow-init update`）。两路径 MUST 复用**同一** retire 逻辑（`init.py` 暴露独立 retire 子命令，`setup.sh` 调之），MUST NOT 各写一份。`setup.sh` 调用该步 SHALL **fail-safe**：解释器缺失或调用非零退出 MUST NOT 阻断 setup 安装（清理为尽力而为，非安装必要步）。fail-safe 构造 SHALL 以 `|| echo`/`|| true` 收尾〔A5〕——`set -e` 下仅 `command -v` 门控或 if-guard 不够（then-body 仍受 set -e，present-but-nonzero 会中止 setup）。解释器探测 SHALL `python3 || python`〔A6〕——MUST NOT 假设 `python3`（Windows/Git-Bash 常名 `python`，否则 Windows 机系统性漏 retire，T44 零收益）。全局 hook 的**安装侧**（`ensure_global_hooks` 装 ff0-branch-guard 等 PreToolUse.Bash 拦截钩子）MUST NOT 随之进 `setup.sh`〔grill-amendment·不对称原则〕——**清除主动伤害可 eager（retire 进 setup.sh），新增会拦截的能力须 opt-in（ensure 留 `sdflow-init init/update`，用户显式启用工作流时才装）**，MUST NOT 把拦截钩子推给仅安装 skill、不用 OpenSpec 的机器。
 - **`checkpoint-commit.sh`** MUST 全局安装到 agent 中立的 canonical 根 `~/.sdflow/hack/`（**非** `~/.claude/hooks`——它是跨-agent bash 工具、非 Claude 事件 hook）、不再进消费仓 `hack/`。
 - **`config.yaml` / `changes/` / `specs/`** 天然属仓，仍仓内。
@@ -153,19 +154,23 @@ workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / 
 
 #### Scenario: 新 init 的消费仓不含规则副本
 - **WHEN** 对一个新项目跑 `sdflow-init init`
-- **THEN** 消费仓 `openspec/workflow/` 只含 `tools/`（≈5 文件），规则文件数 = 0；`checkpoint-commit.sh` 全局安装、不进仓 `hack/`
+- **THEN** 消费仓 `openspec/workflow/` 只含 `tools/`（仅机械层脚本，无 HTML 查看器资产），规则文件数 = 0；`checkpoint-commit.sh` 全局安装、不进仓 `hack/`；`openspec/` 根不含 `serve.sh` / `review.html`
 
 #### Scenario: 消费仓 update 后 tools/ 收敛、不留孤儿文件
-- **WHEN** 权威源 `assets/workflow/tools/` 删除了某个已废弃文件，消费仓随后跑 `update`
+- **WHEN** 权威源 `assets/workflow/tools/` 删除了某个已废弃文件（如查看器 `engine.js`），消费仓随后跑 `update`
 - **THEN** 消费仓 `openspec/workflow/tools/` 被整删重拷，废弃文件不再残留（MUST NOT 因 `dirs_exist_ok` 式合并覆盖而假装已同步）
 
 #### Scenario: --dev 只许 toolkit 源仓自用
 - **WHEN** 在某个消费仓（非 toolkit 源仓自身）误跑 `sdflow-init update --dev`
 - **THEN** 脚本校验 `--root` 与 toolkit 仓根不一致，拒绝执行并报错，MUST NOT 把整套规则文件灌进该消费仓
 
-#### Scenario: 建 change 不再落每目录 review stub
-- **WHEN** 跑 `openspec new change X`（或经 `/opsx:ff` 等入口 scaffold 变更）
-- **THEN** `openspec/changes/X/` 目录**不含** `review.html`；查看该变更改由根锚 `openspec/review.html` 起服务、经内置 INDEX/树浏览抵达（浏览能力不回退）
+#### Scenario: 退役查看器根锚文件在存量安装被清理自愈
+- **WHEN** 某存量消费仓曾被铺过查看器（`openspec/serve.sh` + `openspec/review.html` 存在且含 bundle 部署签名），随后跑 `sdflow-init update`（或 `init`）
+- **THEN** update 删除这两个根锚文件、`tools/` 下的查看器资产（`engine.js`/`engine.css`/`vendor/`/`review-stub.html`）随 `tools/` 整删重拷一并清除；此后该消费仓不再含任何查看器；对从未铺过查看器的 fresh 安装则全程 no-op
+
+#### Scenario: 用户同名文件不被签名门控删除误伤
+- **WHEN** 消费仓 `openspec/` 根存在用户自建的 `serve.sh`（内容不含 `openspec-review-serve-` 签名），随后跑 `sdflow-init update`
+- **THEN** 退役清理**跳过**该文件（签名不匹配），用户的 `serve.sh` 原样保留，MUST NOT 因文件名相同而误删
 
 #### Scenario: 退役 hook 在存量安装被反注册自愈
 - **WHEN** 某存量安装曾装过 `change-review-stub.py`（`~/.claude/hooks/` 有脚本、`settings.json` PostToolUse.Bash 有其注册条目），随后跑 `sdflow-init update`
@@ -182,18 +187,6 @@ workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / 
 #### Scenario: setup.sh 只 eager 清退役、不推安装侧拦截钩子〔T44·grill 不对称原则〕
 - **WHEN** 某机器仅为别的 skill 装了 sdflow-skills（跑过 `setup.sh`）、**从未**在任何项目跑 `sdflow-init init/update`
 - **THEN** `setup.sh` 已 eager retire 掉存量死 hook（对谁都是主动伤害）；但 `~/.claude/hooks/` **不含** ff0-branch-guard（安装侧 PreToolUse.Bash 拦截钩子未被 `setup.sh` 推送）——ff0 仅在该机器显式 `sdflow-init init/update` 启用工作流时才装，MUST NOT 由 `setup.sh` 塞给不用 OpenSpec 的机器
-
-#### Scenario: review UI 根锚 hash 深链落 scoped 首屏〔T45·grill 宽目标〕
-- **WHEN** 用户打开 `openspec/review.html#/changes/some-change/`（或任意同源路径如 `#/specs/spec-workflow/spec.md`、`#/INDEX.md`——与 `navigate` 写出的 hash 契约一致）
-- **THEN** engine bootstrap 即以 hash 路径为初始 scope，首屏直接显示该视图（非全树 INDEX）；浏览到其它目录仍走既有 hash-based 导航
-
-#### Scenario: 空 hash 或跨源 hash 回落根锚全树〔T45 安全·grill 同源守卫〕
-- **WHEN** 打开 `review.html`（无 hash），或 hash 为跨源/协议相对值（如 `#//evil.com/x`）
-- **THEN** engine 经同源守卫拒绝跨源 hash、回落 `location.pathname` 起于全树 scope=""，MUST NOT 越界 fetch 跨源资源；路径遍历（`#/etc/passwd`）由服务器根（openspec/）兜住返 404
-
-#### Scenario: 陈旧深链 404 回落根锚并显形〔T45·grill Q3·反静默守卫〕
-- **WHEN** 深链 hash 指向已归档/移动的目录（如 `#/changes/foo/` 而 foo 已移入 `changes/archive/`）→ fetch 404
-- **THEN** engine MUST NOT 停在 `navigate` 裸报错致侧栏空、无🏠、卡死；SHALL 回落根 bootstrap（INDEX/全树，恢复完整导航）并**显式提示**「深链未找到（可能已归档）」，MUST NOT 静默把用户扔到别处（遵反静默守卫）
 
 ### Requirement: 债务池统一为 issues 结构且 INDEX 只生成
 

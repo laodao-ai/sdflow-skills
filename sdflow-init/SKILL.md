@@ -146,16 +146,11 @@ openspec/
 │   ├── generation-process.md design-diagrams.md spec-review.md
 │   ├── config.template.yaml
 │   ├── spec-checklists/  code-checklists/   (base + domains)
-│   ├── tools/            ← engine.js + engine.css + vendor/marked.min.js + review-stub.html（B1 归位进 bundle）
-│   │                       （review-stub.html 是模板，根 review.html 由它渲染；不再生成每目录 stub）
+│   ├── tools/            ← 评审机械层脚本（anchor_lint.py / lens_metric_emit.py / outside_voice_guard.py 等）
 │   └── reference/         (说明类，可删)
 ├── config.yaml            ← init 从 config.template.yaml 生成（本项目段待填）
 ├── INDEX.md               ← 注入「工作流规则」托管区块
 ├── changes/  specs/       ← 目录骨架
-├── review.html            ← 文档查看器根入口（scope="" 全树导航；资产引用 /workflow/tools/…）
-├── serve.sh                ← 后台起停封装：start [port] / stop / restart [port]，
-│                             cd 到 openspec/ 再起 python3 -m http.server（服务器根=openspec/，
-│                             故 review UI 能 HTTP 覆盖 changes/specs；根锚留根，工具机械在 workflow/tools/）
 CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强制规范 + 3 配套 skill 说明）
 ```
 
@@ -178,6 +173,9 @@ CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强�
 - **FF-0 硬强制（全局）**：hook 脚本源在本 skill 的 `assets/hooks/ff0-branch-guard.py`，由 `init`/`update` **全局安装**到 `~/.claude/hooks/` + 注册进 `~/.claude/settings.json` 的 PreToolUse.Bash（幂等、跨所有项目，**不写项目 `.claude/`**）。使得在 `master`/`main` 上跑 `openspec new change`（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 共用此 CLI 入口）被直接拦下，逼先开 feature 分支。想卸载：删 `~/.claude/hooks/ff0-branch-guard.py` + 移除 `~/.claude/settings.json` 中对应 PreToolUse entry。权威定义见 `workflow/ff-generation-constraints.md` FF-0。
 - **退役 hook 反注册（自愈）**：`init`/`update` 每次跑时按 `RETIRED_HOOKS` 名单把已退役的全局 hook
   从 `~/.claude/settings.json` 摘除注册 + 删 `~/.claude/hooks/` 里的脚本（外科式、保留他项、fresh 安装 no-op）。
-  当前名单含 `change-review-stub.py`（每目录 review.html stub 生产者已废弃——改由根查看器 `openspec/review.html`
-  起服务、经内置 INDEX/树浏览到任意 change/roadmap；放弃每目录 scoped 深链，属可接受降级）。
+  当前名单含 `change-review-stub.py`（每目录 review.html stub 生产者，已废弃）。
+- **退役部署文件清理（自愈）**：`init`/`update` 每次跑时按 `RETIRED_DEPLOY_FILES` 名单清理曾铺进消费仓
+  `openspec/` 根、现已废弃的文件——**签名门控删除**（仅当文件内容含 bundle 部署签名时删，防误删用户同名文件）。
+  当前名单含查看器根锚 `serve.sh` + `review.html`（HTML 文档查看器已整体移除；`tools/` 下的查看器资产随
+  `tools/` 整删重拷自动清除）。
 - 脚本默认 `--root .`（当前目录）；务必在目标项目根跑，或用 `--root` 指定。
