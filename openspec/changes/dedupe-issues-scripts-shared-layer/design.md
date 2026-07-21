@@ -15,7 +15,7 @@ issues 台账由三个物理脚本承载：`buglist.py`（1814 行）/ `todolist
 ## Goals / Non-Goals
 
 **Goals:**
-- 三脚本的**三层重复全消**：执行逻辑 + 共享 helper 收敛为唯一物理源 `core.py`；`SKILL.md` 正文合一。
+- 三脚本的**三层重复全消**：执行逻辑 + 共享 helper 收敛为唯一命名 package `sdflow_issues_core`；`SKILL.md` 正文合一。
 - CLI 逐命令外部行为等价，现有 **603 测试零回归**。
 - 三 skill 合并为一个 `sdflow-issues`，owns 整个 issues 台账。
 

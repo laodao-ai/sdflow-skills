@@ -1,7 +1,7 @@
 # dedupe-issues-scripts-shared-layer
 
 > **触发判定（TG，起手一次性）**：**TG-06 ⚠️HR**（跨模块共享数据模型边界：重评并变更 D-6「独立分发」边界，三 skill 合一 + 共享 `core`）·
-> TG-10（跨 3+ 组件：三脚本 + setup.sh + 下游编排器）· TG-13（大改架构：三 skill 合一）· TG-14（新组件 `core.py` + 重构）·
+> TG-10（跨 3+ 组件：三脚本 + setup.sh + 下游编排器）· TG-13（大改架构：三 skill 合一）· TG-14（新组件 `sdflow_issues_core` package + 重构）·
 > TG-18（测试计划：603 零回归 + 新守法）· TG-19（多条需求）· TG-23（≥2 方案 → `adr/0027`）。
 >
 > **HR-TG 命中非空 {TG-06}** ⇒ spec-review 规划镜头 MUST 单开领域 cross-model。

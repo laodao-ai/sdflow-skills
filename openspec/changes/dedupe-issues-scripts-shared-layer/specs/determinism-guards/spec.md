@@ -2,7 +2,7 @@
 
 ### Requirement: 共享逻辑一致性由「单一源 + 无 pool 分支 + POOL_SPEC 完备」守护
 
-> `[grill-amendment]`（`dedupe-issues-scripts-shared-layer`）：原 requirement「recorder 镜像 helper 由『剥 docstring 后 AST 等价』一致性测试守护」以「三 skill 各自内联、独立分发」为前提（D4：`MUST NOT 抽公共运行时模块`）。三 skill 合一为 `sdflow-issues`、撤销独立分发前提后（`adr/0027`），**镜像 AST 守失去对象**——共享逻辑物理上只剩一份 `core.py`，没有多份需要保持等价。守法据此重写。
+> `[grill-amendment]`（`dedupe-issues-scripts-shared-layer`）：原 requirement「recorder 镜像 helper 由『剥 docstring 后 AST 等价』一致性测试守护」以「三 skill 各自内联、独立分发」为前提（D4：`MUST NOT 抽公共运行时模块`）。三 skill 合一为 `sdflow-issues`、撤销独立分发前提后（`adr/0027`），**镜像 AST 守失去对象**——共享逻辑物理上只剩一份（唯一命名 package `sdflow_issues_core`），没有多份需要保持等价。守法据此重写。
 
 三条 CLI（`buglist.py`/`todolist.py`/`issues.py` 薄入口）共享的执行逻辑收敛为**唯一命名 package** `sdflow-issues/scripts/sdflow_issues_core/` 后，一致性 MUST 由以下机械守卫维持（`test_mirror_consistency.py` 的三向/两向 AST roster 测试 SHALL 删除——单一物理源使其无对象）：
 
@@ -58,4 +58,4 @@
 #### Scenario: 共享逻辑经同目录 import、不跨目录
 
 - **WHEN** 检查三个薄入口获取共享逻辑的方式
-- **THEN** 经同一 `sdflow-issues/scripts/` 目录内 `import core` 获得；不存在跨 skill 目录 import 或 sys.path 注入
+- **THEN** 经同一 `sdflow-issues/scripts/` 目录内 `from sdflow_issues_core import` 获得（唯一命名 package）；不存在跨 skill 目录 import 或 sys.path 注入（除薄入口自身 dir 的 `sys.path.insert`）
