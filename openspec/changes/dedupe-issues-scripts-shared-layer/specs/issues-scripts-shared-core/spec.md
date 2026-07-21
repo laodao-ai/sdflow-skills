@@ -59,7 +59,7 @@ issues 台账的 `buglist`/`todolist`/`issues` 三个 skill SHALL 合并为**一
 #### Scenario: 机械引用守卫（allowlist 兜底）
 
 - **WHEN** 合并完成后跑全仓引用守卫
-- **THEN** 除 allowlist（`openspec/changes/archive/`、历史 `adr/`、issue ledger `openspec/issues/*`、`setup.sh` `OUR_LEGACY_NAMES`、**在途 change 自身四件套**、池目录名 `openspec/issues/buglist|todolist/`）外，无活跃托管点仍引用旧 skill 目录/脚本路径/slash 名，否则 FAIL
+- **THEN** 除 allowlist（`openspec/changes/archive/`、历史 `adr/`、issue ledger `openspec/issues/*`、`setup.sh` `OUR_LEGACY_NAMES`、**整个在途活跃 change 目录 `openspec/changes/{active}/**`**——含四件套 + specs delta + 评审产物 `spec-review-report.md`/`gstack-review.md`/`.outside-voice/`、池目录名 `openspec/issues/buglist|todolist/`）外，无活跃托管点仍引用旧 skill 目录/脚本路径/slash 名，否则 FAIL
 - **AND** `test_sync_principles.py` 投放面计数与实际 `SKILL.md` 数一致（15）
 
 #### Scenario: CI 与安装测试同步

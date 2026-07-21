@@ -1,6 +1,6 @@
 ## MODIFIED Requirements
 
-### Requirement: 共享逻辑一致性由「单一源 + 无 pool 分支 + POOL_SPEC 完备」守护
+### Requirement: recorder 镜像 helper 由「剥 docstring 后 AST 等价」一致性测试守护
 
 > `[grill-amendment]`（`dedupe-issues-scripts-shared-layer`）：原 requirement「recorder 镜像 helper 由『剥 docstring 后 AST 等价』一致性测试守护」以「三 skill 各自内联、独立分发」为前提（D4：`MUST NOT 抽公共运行时模块`）。三 skill 合一为 `sdflow-issues`、撤销独立分发前提后（`adr/0027`），**镜像 AST 守失去对象**——共享逻辑物理上只剩一份（唯一命名 package `sdflow_issues_core`），没有多份需要保持等价。守法据此重写。
 
@@ -44,7 +44,7 @@
 - **WHEN** 同一 canonical/pure-legacy/overlay fixture 分别经 issues direct snapshot 与 `scan --json` contract 解析
 - **THEN** effective items/problems 按 semantic key 完全等价，issues 结果另带 raw bytes/spans；任一方漏掉 lexical/marker/overlay/ID rule 时测试失败
 
-### Requirement: 确定性守卫不越权、不判内容
+### Requirement: 确定性守卫不越权、不破 D4 隔离
 
 > `[grill-amendment]`（`dedupe-issues-scripts-shared-layer`）：原 requirement 含「一致性测试 MUST NOT 引入跨 recorder import」——该条为保「三 skill 独立分发」而设。合一后共享逻辑经**同一 skill 内同目录 `from sdflow_issues_core import`** 获得（`adr/0027` 的目标架构，非违规）；跨目录 import / sys.path 注入仍禁（合一后根本不需要）。「守卫不判内容」与「batch lint 只读不覆写」不变。
 

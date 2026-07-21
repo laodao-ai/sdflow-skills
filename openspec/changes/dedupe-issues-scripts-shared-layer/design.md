@@ -126,7 +126,7 @@ bug↔todo 差异收敛为一张**封闭 schema** 参数表 `POOL_SPEC`，`core`
 - `sdflow-init/assets/{snippets/claude-section.md, workflow/workflow.md}`（下游铺设面，改后 `sdflow-init update` 推）。
 - `sdflow-done/SKILL.md:207-211`——**语义块**（描述整个 sibling-独立分发架构，正是被反转的东西），需**语义重写**非路径替换。
 - `sdflow-ship`(**仅** `ship_gate.py`)——路径引用在 `ship_gate.py`（repo_root 先例 + todolist T189，`:238/281/288/111`）。
-- `sdflow-retro/SKILL.md:107-108`、`sdflow-implement/SKILL.md:378`、`sdflow-init/SKILL.md:138`——**prose 引用已删的 slash `/sdflow-buglist`·`/sdflow-todolist`**〔补：原清单漏〕。
+- `sdflow-retro/SKILL.md:107-108`、`sdflow-init/SKILL.md:138`——**prose 引用已删的 slash `/sdflow-buglist`·`/sdflow-todolist`**〔补：原清单漏〕；`sdflow-implement/SKILL.md:378` 是 **skill-名 doc-pointer**（非 slash，指向 sdflow-todolist 文档 → 改指 sdflow-issues）、其 `:375/377` 的「defer 进 buglist/todolist 池」属池概念**不改**〔窄复核 F3 分范畴〕。
 - `issues.py:66-69` 的 `SKILLS_ROOT`/`BUGLIST_SCRIPT`/`TODOLIST_SCRIPT` sibling-spawn 常量改同目录（见 AD-2）〔补〕。
 
 **B. CI + 测试（本地 pytest 照不到，须显式枚举，非只靠 5.5 sweep）**〔补：原清单漏〕：
@@ -139,7 +139,7 @@ bug↔todo 差异收敛为一张**封闭 schema** 参数表 `POOL_SPEC`，`core`
 
 **D. 计数**：`hack/tests/test_sync_principles.py` 投放面计数 **17→15（少两个**，删 buglist+todolist 两 skill；`sync_principles.py` 已动态枚举、自动收敛，只 test 的 docstring 常量 `17` 手改 `15`）〔修正原「自动少一个」的自相矛盾〕。
 
-**E. 机械引用守卫（把 A3 从「实现者手 grep 自觉」升级为门）**〔补〕：新增全仓引用守卫 test——除 **allowlist** 外出现旧 skill 目录名/脚本路径/slash 名即 FAIL。allowlist 放行：`openspec/changes/archive/`、历史 `adr/`、issue ledger（`openspec/issues/*`）、`setup.sh` 的 `OUR_LEGACY_NAMES`（**MUST 保留旧名用于 Windows `.laodao-skills` legacy marker orphan 回收**，领域镜 BE-10.3——别当陈旧引用删）、**在途 change 自身四件套**（proposal/design/tasks/adr 满是旧名字样，不豁免则 archive 前自伤，对抗B）、**池目录名引用**（`openspec/issues/buglist/`·`todolist/` 池不合并）。
+**E. 机械引用守卫（把 A3 从「实现者手 grep 自觉」升级为门）**〔补〕：新增全仓引用守卫 test——除 **allowlist** 外出现旧 skill 目录名/脚本路径/slash 名即 FAIL。allowlist 放行：`openspec/changes/archive/`、历史 `adr/`、issue ledger（`openspec/issues/*`）、`setup.sh` 的 `OUR_LEGACY_NAMES`（**MUST 保留旧名用于 Windows `.laodao-skills` legacy marker orphan 回收**，领域镜 BE-10.3——别当陈旧引用删）、**整个在途活跃 change 目录 `openspec/changes/{active}/**`**（含四件套 + `specs/` 两 delta + 评审产物 `spec-review-report.md`/`gstack-review.md`/`.outside-voice/`——后二者被旧名/脚本路径/`import core` 塞满，**只豁免「四件套」会让守卫在自己 change 的评审报告上假阳、实现期第一次跑就红**，窄复核 F2）、**池目录名引用**（`openspec/issues/buglist/`·`todolist/` 池不合并）。
 
 **⚠️ 去 overclaim**：`sdflow-ship`/`sdflow-code-review` 的 **SKILL.md** 只有「defer 进 buglist/todolist **池**」概念（`sdflow-code-review/SKILL.md:7/101/215/423/427`）——指池目录（**不合并**），**无脚本路径引用、无需改**（接地镜 ⑨ 实测 0 处路径引用；原 AD-5 把两 SKILL.md 列为「路径引用」是 overclaim，删）。全部进 tasks.md。
 

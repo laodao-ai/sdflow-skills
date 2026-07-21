@@ -10,10 +10,12 @@
 > ① 枚举中 `sdflow-buglist`/`sdflow-todolist` **删除**（并入 `sdflow-issues`）；② sibling-spawn 改为**同目录**定位。
 > 命名规范其余部分（前缀约束、豁免名单、触发等价、trigger-map 留档）不变。
 
-工具链自制 skill MUST 统一使用 `sdflow-` 前缀命名（目录名 = 安装名 = 斜杠命令名）。合一后台账类 skill 收敛为单一
-`sdflow-issues`（owns 整个 issues 台账两池 + 跨池），`sdflow-buglist`/`sdflow-todolist` **已删除、并入 `sdflow-issues`**；
-现役 sdflow- skill 集 = `sdflow-init`、`sdflow-done`、`sdflow-maintain`、`sdflow-roadmap`、`sdflow-spec-review`、
-`sdflow-code-review`、`sdflow-issues`（不再含 buglist/todolist）。豁免保留名单 = `embedded-test-sop`（域技能）、
+工具链自制 skill MUST 统一使用 `sdflow-` 前缀命名（目录名 = 安装名 = 斜杠命令名），按 RENAME-MAP（design §三）执行。
+**RENAME-MAP 随本次台账合一更新**：原 map 中的 `sdflow-buglist`/`sdflow-todolist` **从 map 移除**（两 skill 删除、并入
+`sdflow-issues`），map 台账项收敛为单一 `sdflow-issues`（owns 两池 + 跨池）；RENAME-MAP 其余项不变。
+（注：RENAME-MAP 是那次改名 change 的映射子集、**非现役 skill census**——map 之后新增的 skill 如 `sdflow-architecture`/
+`sdflow-devenv`/`sdflow-implement`/`sdflow-retro`/`sdflow-ship`/`sdflow-upgrade` 本就不在 map 内、不受本条约束。）
+豁免保留名单 = `embedded-test-sop`（域技能）、
 `openspec-upgrade`（升级外部 CLI）、`sdflow-upgrade`。主 spec 与功能性文件全文中的旧 skill 名 SHALL 随合一同步替换
 （语义不变）；文档性历史记录（`adr/`、ROADMAP 历史行、CONTEXT 术语史、`changes/archive/`、`setup.sh` 的
 `OUR_LEGACY_NAMES` 孤儿清理名单）MUST NOT 回改。各 SKILL.md 的 description MUST 触发等价：合并前分属两 skill 的触发

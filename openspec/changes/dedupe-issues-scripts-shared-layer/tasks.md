@@ -47,7 +47,7 @@
 - [ ] 5.1 `README.md` skills 列表 3→1；`CLAUDE.md`/`AGENTS.md` 配套 skill 表与数据类 skill 名单更新〔SC-R4〕
 - [ ] 5.2 `sdflow-init/assets/{snippets/claude-section.md, workflow/workflow.md}` + `sdflow-init/SKILL.md:138` 的 buglist/todolist 引用更新（下游铺设面须 `sdflow-init update` 推）〔SC-R4〕
 - [ ] 5.3 `ship_gate.py` 路径引用 + `sdflow-done/SKILL.md:207-211`（语义块重写，非路径替换）改指 `sdflow-issues`〔SC-R4〕
-- [ ] 5.4 **prose slash 引用**：`sdflow-retro/SKILL.md:107-108`、`sdflow-implement/SKILL.md:378` 的 `/sdflow-buglist`·`/sdflow-todolist` 更新〔SC-R4·spec-review-amendment〕
+- [ ] 5.4 **prose 引用（分范畴）**：`sdflow-retro/SKILL.md:107-108` 的 `/sdflow-buglist`·`/sdflow-todolist` slash prose 更新；`sdflow-implement/SKILL.md:378` 是 **skill-名 doc-pointer**（「坑见 sdflow-todolist 的 `change` 字段说明」，该文档合并后在 sdflow-issues）→ 改指 `sdflow-issues`；**`:375/377` 的「defer 进 buglist/todolist 池」属池概念、不改**〔SC-R4·spec-review-amendment·窄复核 F3〕
 - [ ] 5.5 **CI**：`.github/workflows/windows-recorder-smoke.yml` 的 path-trigger（`:8-9,16-17`）+ 测试调用（`:35`）改指 `sdflow-issues/tests/`〔SC-R4·spec-review-amendment〕
 - [ ] 5.6 **安装测试**：`sdflow-init/tests/test_setup_sdflow.py:97,106,151` 断言由 `sdflow-buglist` 建链改为 `sdflow-issues` 建链 + 旧目录 orphan 清理〔SC-R4·spec-review-amendment〕
 - [ ] 5.7 **主 spec MODIFIED delta**：本 change 已带 `recorder-root-resolution`（RR-M：单一源+路径）+ `spec-workflow`（SW-M：RENAME-MAP 枚举+sibling 场景）两份 delta；archive 时同步进主 spec〔SC-R4·spec-review-amendment〕
