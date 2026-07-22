@@ -82,6 +82,30 @@ EXPECTED_CONTRACT = {
 }
 
 
+# ── [impl-review-fix] V2：pool 身份 / requires_block / 枚举 / 状态 / 终态的**外部字面锚**──────
+# design AD-3 表钉死。T2 起 RECORDER_POOL_CONFIG 派生自 POOL_SPEC ⇒ 逐值对照已 tautology，
+# 这些值的正确性此前**无独立外部锚**（EXPECTED_CONTRACT 漏了它们）。此锚是唯一真外部锚：
+# 改 POOL_SPEC 任一值须同步改此锚、经审查。枚举/状态/终态用集合比较；pool/requires_block 用相等。
+EXPECTED_ENUMS = {
+    "bug": {
+        "pool": "bug",
+        "requires_block": True,
+        "specific_values": {"P0", "P1", "P2", "P3", "P4"},
+        "status_values": {
+            "OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX", "BLOCKED",
+        },
+        "terminal_set": {"FIXED", "WONTFIX"},
+    },
+    "todo": {
+        "pool": "todo",
+        "requires_block": False,
+        "specific_values": {"性能优化", "代码质量", "功能增强", "基础设施", "可观测性"},
+        "status_values": {"OPEN", "PROPOSED", "DONE", "WONTDO"},
+        "terminal_set": {"DONE", "WONTDO"},
+    },
+}
+
+
 # ── 封闭 schema ─────────────────────────────────────────────────────────────
 def test_pool_spec_keys_fail_closed():
     """POOL_SPEC.keys() 必须恰为 {"bug","todo"}——额外/缺失 pool key 即红。"""
@@ -163,6 +187,27 @@ def test_fixed_contract_dims_match_design_table():
             assert getattr(spec, dim) == want, f"{pool}.{dim}: got {getattr(spec, dim)!r}, want {want!r}"
 
 
+def test_pool_identity_and_flag_match_design_table():
+    """[impl-review-fix] V2：pool 身份 + requires_block 钉死 design AD-3 表字面值（外部锚）。"""
+    for pool, expected in EXPECTED_ENUMS.items():
+        spec = core.POOL_SPEC[pool]
+        assert spec.pool == expected["pool"], f"{pool}.pool: got {spec.pool!r}"
+        assert spec.requires_block == expected["requires_block"], f"{pool}.requires_block"
+
+
+def test_enums_match_external_design_table():
+    """[impl-review-fix] V2：枚举/状态/终态集钉死 design AD-3 表字面值（**唯一真外部锚**）。
+
+    T2 起 RECORDER_POOL_CONFIG 派生自 POOL_SPEC，逐值对照成 tautology；此锚是这些值
+    正确性的唯一独立外部锚——改 POOL_SPEC 任一维值须同步改此锚、经审查。
+    """
+    for pool, expected in EXPECTED_ENUMS.items():
+        spec = core.POOL_SPEC[pool]
+        assert set(spec.specific_values) == expected["specific_values"], f"{pool}.specific_values"
+        assert set(spec.status_values) == expected["status_values"], f"{pool}.status_values"
+        assert set(spec.terminal_set) == expected["terminal_set"], f"{pool}.terminal_set"
+
+
 # ── validator 本体：正例绿 + 对违规 fail-closed（mutation 反红证明守卫有效）──────
 def test_validate_pool_spec_passes_on_canonical():
     """规范 POOL_SPEC 通过 validate_pool_spec（不抛）。"""
@@ -213,6 +258,42 @@ def test_validate_reds_on_registry_drift(monkeypatch):
     monkeypatch.setattr(core, "POOL_SPEC_FIELDS", drifted)
     with pytest.raises(core.PoolSpecError):
         core.validate_pool_spec(core.POOL_SPEC)
+
+
+def test_validate_reds_on_pool_identity_mismatch():
+    """[impl-review-fix] V2：value.pool 与 dict key 不符（装错桶）→ PoolSpecError。"""
+    mutated = dict(core.POOL_SPEC)
+    mutated["bug"] = dataclasses.replace(core.POOL_SPEC["bug"], pool="todo")
+    with pytest.raises(core.PoolSpecError):
+        core.validate_pool_spec(mutated)
+
+
+def test_validate_reds_on_empty_string_dim():
+    """[impl-review-fix] V2：字符串契约维为空串（fail-open 洞）→ PoolSpecError。"""
+    mutated = dict(core.POOL_SPEC)
+    mutated["bug"] = dataclasses.replace(core.POOL_SPEC["bug"], issues_dir="")
+    with pytest.raises(core.PoolSpecError):
+        core.validate_pool_spec(mutated)
+
+
+def test_validate_reds_on_empty_collection_dim():
+    """[impl-review-fix] V2：枚举/状态/终态集为空（fail-open 洞）→ PoolSpecError。"""
+    mutated = dict(core.POOL_SPEC)
+    mutated["bug"] = dataclasses.replace(core.POOL_SPEC["bug"], specific_values=frozenset())
+    with pytest.raises(core.PoolSpecError):
+        core.validate_pool_spec(mutated)
+
+
+def test_specific_values_single_source_no_drift():
+    """[impl-review-fix] V3：POOL_SPEC.specific_values 与 PoolStrategy.specific_values_ordered
+    同源派生（共用有序 tuple 常量），结构上无漂移——此断言守「接线未被后续改回双源」。"""
+    assert set(core.BUG_STRATEGY.specific_values_ordered) == set(core.POOL_SPEC["bug"].specific_values)
+    assert set(core.TODO_STRATEGY.specific_values_ordered) == set(core.POOL_SPEC["todo"].specific_values)
+    # 同源身份：strategy 有序源 与 POOL_SPEC 集合 均由同一 tuple 常量派生
+    assert core.BUG_STRATEGY.specific_values_ordered is core.BUG_SPECIFIC_VALUES_ORDERED
+    assert core.TODO_STRATEGY.specific_values_ordered is core.TODO_SPECIFIC_VALUES_ORDERED
+    assert core.POOL_SPEC["bug"].specific_values == frozenset(core.BUG_SPECIFIC_VALUES_ORDERED)
+    assert core.POOL_SPEC["todo"].specific_values == frozenset(core.TODO_SPECIFIC_VALUES_ORDERED)
 
 
 def test_pool_spec_frozen_rejects_mutation():

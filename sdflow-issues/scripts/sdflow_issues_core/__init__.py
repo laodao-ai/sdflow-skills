@@ -101,6 +101,14 @@ POOL_SPEC_FIELDS = (
 )
 
 
+# [impl-review-fix] V3: specific 枚举的**有序**单一源。frozenset 无序、给人看的提示需有序，
+# ∴ 有序 tuple 为唯一源：`POOL_SPEC.specific_values`（集合，cmd_add 判合法用）与
+# `PoolStrategy.specific_values_ordered`（有序，提示/lint 用）**同源派生**，结构上不可能漂移
+# （消除「add 收但 lint 拒 / 提示与规则不一致」，V3 双真相源）。
+BUG_SPECIFIC_VALUES_ORDERED = ("P0", "P1", "P2", "P3", "P4")
+TODO_SPECIFIC_VALUES_ORDERED = ("性能优化", "可观测性", "代码质量", "功能增强", "基础设施")
+
+
 POOL_SPEC = {
     "bug": PoolSpec(
         pool="bug",
@@ -109,7 +117,7 @@ POOL_SPEC = {
         issues_dir="openspec/issues/buglist",
         legacy_dir_glob="openspec/buglists/*.md",
         specific_field="priority",
-        specific_values=frozenset({"P0", "P1", "P2", "P3", "P4"}),
+        specific_values=frozenset(BUG_SPECIFIC_VALUES_ORDERED),
         status_values=frozenset(
             {"OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX", "BLOCKED"}
         ),
@@ -125,7 +133,7 @@ POOL_SPEC = {
         issues_dir="openspec/issues/todolist",
         legacy_dir_glob="openspec/todolists/*.md",
         specific_field="type",
-        specific_values=frozenset({"性能优化", "可观测性", "代码质量", "功能增强", "基础设施"}),
+        specific_values=frozenset(TODO_SPECIFIC_VALUES_ORDERED),  # [impl-review-fix] V3 单一源
         status_values=frozenset({"OPEN", "PROPOSED", "DONE", "WONTDO"}),
         terminal_set=frozenset({"DONE", "WONTDO"}),
         default_prefix="T",
@@ -164,6 +172,26 @@ def validate_pool_spec(spec=None):
                 f"⊄ status_values {set(value.status_values)}; "
                 f"cause: 终态越出状态词表; fix: 终态集必须是状态词表子集"
             )
+        # [impl-review-fix] V2: fail-closed 补漏——身份一致 + 关键维非空
+        if value.pool != pool:
+            raise PoolSpecError(
+                f"ERROR: POOL_SPEC[{pool!r}].pool == {value.pool!r} 与 dict key 不符; "
+                f"cause: 实例装错桶（key 与内嵌 pool 身份漂移）; fix: value.pool 必须 == 其 dict key"
+            )
+        for dim in ("issues_dir", "file_stem", "default_prefix", "legacy_dir_glob", "specific_field"):
+            if not getattr(value, dim):
+                raise PoolSpecError(
+                    f"ERROR: POOL_SPEC[{pool!r}].{dim} 为空; "
+                    f"cause: 字符串维缺省/空串（fail-open 洞：空目录/空前缀会静默落错位置）; "
+                    f"fix: 每个字符串契约维必须非空"
+                )
+        for dim in ("specific_values", "status_values", "terminal_set"):
+            if not getattr(value, dim):
+                raise PoolSpecError(
+                    f"ERROR: POOL_SPEC[{pool!r}].{dim} 为空集; "
+                    f"cause: 枚举/状态/终态集空（fail-open 洞：空枚举令一切值合法或一切非法）; "
+                    f"fix: 每个集合维必须非空"
+                )
     return True
 
 
@@ -1840,7 +1868,7 @@ BUG_STRATEGY = PoolStrategy(
     header=_bug_header,
     add_required_extra=("phenomenon",),
     specific_label="优先级",
-    specific_values_ordered=("P0", "P1", "P2", "P3", "P4"),
+    specific_values_ordered=BUG_SPECIFIC_VALUES_ORDERED,  # [impl-review-fix] V3 单一源
     source_field="source",
     add_time_fmt="%H:%M",
     add_output=_bug_add_output,
@@ -1864,7 +1892,7 @@ TODO_STRATEGY = PoolStrategy(
     header=_todo_header,
     add_required_extra=(),
     specific_label="类型",
-    specific_values_ordered=("性能优化", "可观测性", "代码质量", "功能增强", "基础设施"),
+    specific_values_ordered=TODO_SPECIFIC_VALUES_ORDERED,  # [impl-review-fix] V3 单一源
     source_field="project",
     add_time_fmt="%Y-%m-%d %H:%M",
     add_output=_todo_add_output,

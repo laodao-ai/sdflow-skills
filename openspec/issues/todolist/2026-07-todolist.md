@@ -68,6 +68,7 @@ sdflow-issues:
     T208: {"module":"sdflow-issues/scripts/sdflow_issues_core/__init__.py","summary":"sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程","type":"代码质量","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
     T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
     T210: {"module":"sdflow-issues/tests","summary":"冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。","type":"代码质量","status":"OPEN","time":"2026-07-22 14:40","change":"dedupe-issues-scripts-shared-layer","batch":null}
+    T211: {"module":"sdflow-issues/scripts/sdflow_issues_core","summary":"冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。","type":"代码质量","status":"OPEN","time":"2026-07-22 14:50","change":"dedupe-issues-scripts-shared-layer","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1979,3 +1980,12 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：修法：每 case 冻结完整 stdout/stderr+退出码+落盘文件树 golden，规范化后全值比较，至少覆盖一成功+一失败输入。冷审 defer（非 correctness bug）。
 <!-- sdflow-issue-block:end id=T210 -->
+
+<!-- sdflow-issue-block:start id=T211 -->
+## T211: recorder 委派 token 改上下文栈隔离（ContextVar/显式 RecorderLockState）——与 T208 同期
+> 冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。
+
+**关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
+
+**备注**：今日全 CLI 调用=独立进程、无 in-process 多池并发，故不可达；与 T208(消 issues 自调用子进程→in-process import)同期才成真问题。修法=token 改显式 RecorderLockState 传递或 ContextVar.set()/reset() 上下文栈 + 补两线程×两仓 + 嵌套恢复测试。绑定 T208 一起做。
+<!-- sdflow-issue-block:end id=T211 -->
