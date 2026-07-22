@@ -165,18 +165,18 @@ import 走同目录 package 无 sys.path 污染。守法的诚实边界（best-e
 路径/名称引用、语义块重写、prose 分范畴、CI、安装测试、投放面计数——池目录引用与 `OUR_LEGACY_NAMES` 旧名
 保留**不改**。
 
-- [ ] 路径/名称引用更新：README / CLAUDE.md / AGENTS.md skill 列表与数据类 skill 名单（3→1）、sdflow-init
+- [x] 路径/名称引用更新：README / CLAUDE.md / AGENTS.md skill 列表与数据类 skill 名单（3→1）、sdflow-init
       assets（claude-section.md / workflow.md）+ `sdflow-init/SKILL.md` 引用、`ship_gate.py` 路径引用、
       `sdflow-done/SKILL.md:207-211` 语义块重写
-- [ ] prose 分范畴：`sdflow-retro` 的 `/sdflow-buglist`·`/sdflow-todolist` slash prose 更新、
+- [x] prose 分范畴：`sdflow-retro` 的 `/sdflow-buglist`·`/sdflow-todolist` slash prose 更新、
       `sdflow-implement/SKILL.md:378` skill-名 doc-pointer 改指 sdflow-issues；「defer 进 buglist/todolist
       **池**」概念不改
-- [ ] CI：`.github/workflows/windows-recorder-smoke.yml` 的 path-trigger + 测试调用改指 `sdflow-issues/tests/`；
+- [x] CI：`.github/workflows/windows-recorder-smoke.yml` 的 path-trigger + 测试调用改指 `sdflow-issues/tests/`；
       安装测试 `sdflow-init/tests/test_setup_sdflow.py` 断言由 `sdflow-buglist` 建链改为 `sdflow-issues` 建链
       + 旧目录 orphan 清理；`hack/tests/test_sync_principles.py` 投放面常量 17→15
-- [ ] 机械引用守卫 test：allowlist（archive / 历史 adr / issue ledger / `setup.sh` OUR_LEGACY_NAMES / 在途
+- [x] 机械引用守卫 test：allowlist（archive / 历史 adr / issue ledger / `setup.sh` OUR_LEGACY_NAMES / 在途
       活跃 change 目录整体 / 池目录名）外出现旧 skill 目录/脚本路径/slash 名即 FAIL；现状下通过
-- [ ] 确认 `setup.sh` `OUR_LEGACY_NAMES` **保留** 旧名（Windows legacy marker orphan 回收依赖）；全仓检索确认
+- [x] 确认 `setup.sh` `OUR_LEGACY_NAMES` **保留** 旧名（Windows legacy marker orphan 回收依赖）；全仓检索确认
       除 allowlist 外无活跃托管点仍引用旧 skill
 
 ### Task 6: 行为等价留存测试 + 覆盖判据零回归门 + setup.sh 验证 + 显式 defer

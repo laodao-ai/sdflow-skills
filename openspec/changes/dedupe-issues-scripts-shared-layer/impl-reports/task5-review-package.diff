@@ -1,0 +1,694 @@
+diff --git a/.github/workflows/windows-recorder-smoke.yml b/.github/workflows/windows-recorder-smoke.yml
+index 6136be1..0d1e73c 100644
+--- a/.github/workflows/windows-recorder-smoke.yml
++++ b/.github/workflows/windows-recorder-smoke.yml
+@@ -5,16 +5,12 @@ on:
+     paths:
+       - ".github/workflows/windows-recorder-smoke.yml"
+       - "setup.sh"
+-      - "sdflow-buglist/**"
+-      - "sdflow-todolist/**"
+       - "sdflow-issues/**"
+       - "sdflow-init/scripts/init.py"
+   pull_request:
+     paths:
+       - ".github/workflows/windows-recorder-smoke.yml"
+       - "setup.sh"
+-      - "sdflow-buglist/**"
+-      - "sdflow-todolist/**"
+       - "sdflow-issues/**"
+       - "sdflow-init/scripts/init.py"
+   workflow_dispatch:
+@@ -32,4 +28,4 @@ jobs:
+       - name: Install pytest
+         run: py -m pip install "pytest>=8"
+       - name: Run actual Windows local-disk recorder smoke
+-        run: py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error
++        run: py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
+diff --git a/AGENTS.md b/AGENTS.md
+index 19349fe..6225a29 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -62,7 +62,7 @@
+ ```bash
+ bash setup.sh                                         # 安装/刷新 Claude、Codex skills 与全局 bundle
+ pytest                                                # 运行全部 pytest 测试
+-pytest sdflow-buglist/tests/                          # 运行单个 skill 测试
++pytest sdflow-issues/tests/                           # 运行单个 skill 测试
+ pytest path/to/test_file.py::test_name -v             # 运行单个用例
+ python3 hack/sync_principles.py --check                # 检查托管通则是否漂移
+ git diff --check                                      # 检查空白错误
+@@ -167,7 +167,7 @@ git diff --check                                      # 检查空白错误
+ | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
+ | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
+ 
+-> 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
++> 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 100d670..aab22cd 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -80,11 +80,11 @@ conftest 收集止于塌缩后的 rootdir、断言静默失效）。**两者缺
+ 
+ ```bash
+ pytest                                                  # 发现并运行全部 test_*.py
+-pytest sdflow-buglist/tests/                            # 单个 skill
+-pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
++pytest sdflow-issues/tests/                             # 单个 skill
++pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
+ ```
+ 
+-带脚本+测试的 skill 仅这几个：`sdflow-buglist`、`sdflow-todolist`、`sdflow-issues`、
++带脚本+测试的 skill 仅这几个：`sdflow-issues`、
+ `sdflow-init`、`sdflow-retro`、`sdflow-maintain`、`sdflow-architecture`、`sdflow-devenv`。其余为纯 Markdown 编排类，无自动化测试。
+ <!-- [impl-review-fix] C8：清单失鲜补 sdflow-architecture（已有 scripts/ + tests/，此前遗漏） -->
+ 
+@@ -105,7 +105,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
+ 
+ 1. **编排类（纯 Markdown）**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` /
+    `sdflow-roadmap` / `embedded-test-sop` / `openspec-upgrade` — 靠 SKILL.md 指令驱动主 session 调度子代理，无脚本。
+-2. **数据类（Markdown + Python）**：`sdflow-buglist` / `sdflow-todolist` / `sdflow-issues` / `sdflow-init` /
++2. **数据类（Markdown + Python）**：`sdflow-issues` / `sdflow-init` /
+    `sdflow-retro` / `sdflow-maintain` — 由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
+ 
+ ### `setup.sh` 安装机制（核心，改动需谨慎）
+@@ -303,7 +303,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
+ | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
+ | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
+ 
+-> 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
++> 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+diff --git a/README.md b/README.md
+index 7bce700..062116c 100644
+--- a/README.md
++++ b/README.md
+@@ -23,13 +23,11 @@
+ | 规划 | `sdflow-architecture` | 系统架构设计编排器：简单需求 → skeleton-ready SAD（openspec/architecture/ 单例）+ 骨架切片建议交棒 |
+ | 规划 | `sdflow-devenv` | 开发/测试环境副驾：定测试策略（单元/集成/e2e 三层，一层不留白）→ 落脚手架 → 尽可能真跑一遍确认 → 出 `testing-strategy.md` + `environments.md` |
+ | 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，直写产出 design/roadmap/task-log 三件套（可选 memo），不经 change 壳 |
+-| 记录（issues 池） | `sdflow-buglist` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |
+-| 记录（issues 池） | `sdflow-todolist` | 改进想法 / 技术债收集池（非缺陷），全局唯一 T-ID |
+-| 记录（issues 池） | `sdflow-issues` | 跨 buglist+todolist 的 `issues/INDEX.md` 重建与批次注册表维护 |
++| 记录（issues 台账） | `sdflow-issues` | issues 台账单一 skill：bug 池（缺陷记录 + 状态回写 OPEN→VERIFIED→FIXED，B-ID）+ todo 池（改进 / 技术债，T-ID）两池记录，跨池 `issues/INDEX.md` 重建与批次注册表维护，保证 ID 不撞号、总览/详情双写一致 |
+ | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
+ | 测试 | `embedded-test-sop` | 为嵌入式固件功能生成手动测试 SOP + 配套日志自动分析规则（log-checks.yaml） |
+ 
+-> 三个 recorder、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**（带 `scripts/` + `tests/`），
++> `sdflow-issues`、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**（带 `scripts/` + `tests/`），
+ > 由脚本保证确定性；其余（含 `sdflow-roadmap`）为纯 Markdown 编排类。
+ 
+ > **曾用名对照**（改名于 `sdflow-rebrand`，历史 PR / issue / 本地记忆若引用旧名，按此表换算）：
+@@ -42,8 +40,8 @@
+ > | `opsx-roadmap-planner` | `sdflow-roadmap` |
+ > | `spec-review` | `sdflow-spec-review` |
+ > | `impl-review` | `sdflow-code-review` |
+-> | `buglist-recorder` | `sdflow-buglist` |
+-> | `todolist-recorder` | `sdflow-todolist` |
++> | `buglist-recorder` | `sdflow-issues`（bug 池已并入统一台账 skill） |
++> | `todolist-recorder` | `sdflow-issues`（todo 池已并入统一台账 skill） |
+ > | `issues-recorder` | `sdflow-issues` |
+ 
+ ## 安装
+@@ -80,9 +78,9 @@ bash setup.sh
+ 
+ ### Recorder 存储契约
+ 
+-`sdflow-buglist`、`sdflow-todolist` 与 `sdflow-issues` 共享 versioned **Shared Frontmatter Envelope**：
++`sdflow-issues` 的 bug/todo 两池共用 versioned **Shared Frontmatter Envelope**：
+ 新 item 的机器索引只写 `sdflow-issues` namespace，历史 Markdown 总览表永久只读；首次修改历史 item
+-会在同文件生成 overlay，保留旧表 bytes。三者用仓级 exclusive snapshot lock 串行权威读写，batch
++会在同文件生成 overlay，保留旧表 bytes。两池 CLI（三薄入口共唯一 `sdflow_issues_core`）用仓级 exclusive snapshot lock 串行权威读写，batch
+ rename 以 registry provenance 支持重跑原命令收敛。完整契约、POSIX/Windows 本地盘、network FS、
+ power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md`。
+   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
+@@ -98,8 +96,8 @@ power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versio
+ 
+ ```bash
+ pytest                                                       # 全部
+-pytest sdflow-buglist/tests/                                # 单个 skill
+-pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v    # 单个用例
++pytest sdflow-issues/tests/                                 # 单个 skill
++pytest sdflow-issues/tests/test_buglist.py::test_xxx -v     # 单个用例
+ ```
+ 
+ 面向 AI 协作者的项目级指令见 [CLAUDE.md](./CLAUDE.md) / [AGENTS.md](./AGENTS.md)。
+diff --git a/hack/tests/test_sync_principles.py b/hack/tests/test_sync_principles.py
+index 73155c7..019eb50 100644
+--- a/hack/tests/test_sync_principles.py
++++ b/hack/tests/test_sync_principles.py
+@@ -1,7 +1,7 @@
+ """守「两条通则」的一致性 —— 真相源唯一，注入机械化，漂移机械可查。
+ 
+ 【为什么需要这个测试】
+-两条通则被【复制】进 17 个 SKILL.md + 1 份 bundle 副本。复制就会漂。
++两条通则被【复制】进 15 个 SKILL.md + 1 份 bundle 副本。复制就会漂。
+ 而这正是 CLAUDE.md 基准 1 说的：能用「可固化规则 + 脚本」保证的一致性，MUST 机械化。
+ —— 复制是必要的（skill 是独立分发单元，跑在别的项目里，读不到本仓 CLAUDE.md），
+    但复制【不能靠手】。
+@@ -15,7 +15,7 @@ import sync_principles as SP  # noqa: E402
+ 
+ 
+ def test_every_skill_carries_the_principles():
+-    """⭐ 17 个 SKILL.md 全部与真相源逐字节一致 —— 漂了就红。
++    """⭐ 15 个 SKILL.md 全部与真相源逐字节一致 —— 漂了就红。
+ 
+     修：python3 hack/sync_principles.py --apply
+     """
+diff --git a/openspec/changes/dedupe-issues-scripts-shared-layer/impl-reports/task5-downstream-sync.md b/openspec/changes/dedupe-issues-scripts-shared-layer/impl-reports/task5-downstream-sync.md
+new file mode 100644
+index 0000000..d4323f6
+--- /dev/null
++++ b/openspec/changes/dedupe-issues-scripts-shared-layer/impl-reports/task5-downstream-sync.md
+@@ -0,0 +1,125 @@
++# Task 5 — 下游托管引用同步（AD-5 fail-closed + 机械引用守卫）
++
++R-ID: SC-R4 · 分支 `feat/dedupe-issues-scripts-shared-layer`
++
++前置状态：Task 0–4 已落地（`sdflow-buglist`/`sdflow-todolist` 目录已删除，三薄入口 +
++`sdflow_issues_core` 已迁入 `sdflow-issues/scripts/`）。本 Task 只做「合并的必然连带」：
++把凡引用旧 skill 目录名/脚本路径/slash 触发名的**活跃托管点**全部同步更新，并新增机械引用守卫。
++
++## 1. 全仓 grep 结果 + 逐引用点「改 / 不改 + 范畴」
++
++全仓扫 `sdflow-buglist` / `sdflow-todolist`（这两个字面覆盖目录名、脚本路径、slash 名——
++后者都是前者的子串）。逐文件分范畴判定：
++
++### 改（活跃托管点，已同步）
++
++| 文件 | 位置 | 范畴 | 处理 |
++|---|---|---|---|
++| `README.md` | skills 列表 3 行 | 名单 3→1 | 合并为一行 `sdflow-issues`（bug+todo 两池） |
++| `README.md` | 「三个 recorder」注记 | 名单 | → `sdflow-issues` |
++| `README.md` | 曾用名对照表 `buglist-recorder`/`todolist-recorder` 行 | 名称映射 | 右列 → `sdflow-issues`（不再嵌旧 skill 名，否则守卫假阳） |
++| `README.md` | Recorder 存储契约段 | 语义 | 「三者共享」→「两池共用」+ 三薄入口共 `sdflow_issues_core` |
++| `README.md` | pytest 示例 ×2 | 路径 | `sdflow-issues/tests/` |
++| `CLAUDE.md` | pytest 示例 ×2 / 数据类名单 ×2 / slash prose ×1 | 路径+名单+slash | 3→1，slash → `/sdflow-issues` |
++| `AGENTS.md` | pytest 示例 / slash prose | 路径+slash | 同上 |
++| `sdflow-init/assets/snippets/claude-section.md` | slash prose | slash（下游铺设面） | → `/sdflow-issues`；保 `openspec/issues/buglist\|todolist/` 池目录名 |
++| `sdflow-init/assets/workflow/workflow.md` | 脚本分工句 | 名称（下游铺设面） | 「`sdflow-issues` 两池 scan/triage」 |
++| `sdflow-init/SKILL.md:138` | slash prose | slash | → `/sdflow-issues` |
++| `sdflow-done/SKILL.md:207-213` | sibling 独立分发**语义块** | 语义重写 | 三薄入口同属**一个** skill `sdflow-issues`，整目录一次 symlink，路径块改同目录 |
++| `sdflow-implement/SKILL.md:378` | skill-名 doc-pointer | doc-pointer | → `sdflow-issues 的 todo 池 change 字段`（`:375/377` 「defer 进 buglist/todolist 池」= 池概念**不改**） |
++| `sdflow-retro/SKILL.md:107-108` | slash prose | slash | → `/sdflow-issues` |
++| `sdflow-ship/scripts/ship_gate.py:238,281` | `::repo_root` 先例注释 | 脚本路径 | → `sdflow-issues/scripts/sdflow_issues_core/__init__.py::repo_root`（repo_root 实测已迁 core；删去已失鲜的 `:613-618` 行号断言） |
++| `.github/workflows/windows-recorder-smoke.yml` | path-trigger `:8-9,16-17` + 测试调用 `:35` | CI | 删旧 glob（`sdflow-issues/**` 已覆盖）+ 测试路径 → `sdflow-issues/tests/` |
++| `hack/tests/test_sync_principles.py` | docstring 常量 `17` ×2 | 计数 | → `15`（少两个；`sync_principles.py` 动态枚举，自动收敛，只 test 常量手改） |
++| `sdflow-issues/scripts/{buglist,todolist}.py:4` | 「原 sdflow-X skill」头注 | 名称 | 去旧 skill 名（provenance archaeology，DOC-1） |
++| `sdflow-issues/tests/test_{buglist,todolist}.py:4` | Run-with docstring | 路径 | → `sdflow-issues/tests/` |
++| `sdflow-issues/tests/test_repo_root_identity_{buglist,todolist,issues}.py` | sibling 三镜像注释 + Run-with | 语义+路径 | 三薄入口经唯一 `sdflow_issues_core` 取同一 repo_root（去「三份内联」旧述） |
++| `sdflow-issues/tests/test_issues.py:27,1726,1826` | sibling 探测注释 + 镜像引用 | 语义+名称 | 同目录 co-located；去旧 tests 目录名 |
++| `sdflow-issues/tests/test_task2_windows_local_fs_smoke.py:5,119` | Run-with + **安装路径断言** | 路径（`:119` 功能性） | 安装后 skill = `sdflow-issues` |
++| `sdflow-issues/tests/test_task5_delivery_contract.py:234` | CI workflow 内容断言 | 断言同步 | 随 `:35` 改指新路径 |
++
++### 不改（allowlist / 池概念 / 主 spec delta 纪律）
++
++| 文件/面 | 范畴 | 理由 |
++|---|---|---|
++| `setup.sh:26 OUR_LEGACY_NAMES` | legacy marker 名 | **MUST 保留**旧名——Windows `.laodao-skills` legacy marker orphan 回收依赖（已确认在列） |
++| `sdflow-init/tests/test_setup_sdflow.py` | marker-compat + orphan | `OUR_NAMES`（`setup.sh` 口径镜像）+ 改名端到端 orphan 场景，同 `OUR_LEGACY_NAMES` 理由须保留；`:108` T3 已 fold 修（断言旧目录**不**建链）——**已验证正确** |
++| `openspec/specs/{spec-workflow,recorder-root-resolution}/spec.md` | 主 spec | 本 change 携 MODIFIED delta，主 spec 在 **archive 阶段**同步（delta-at-archive 纪律，tasks 5.7，**非本 sync 任务**） |
++| `openspec/adr/**`（0007, 0027） | 历史决策 | 归档式历史记录 MUST NOT 回改 |
++| `openspec/changes/archive/**` | 历史归档 | 同上 |
++| `openspec/issues/**`（含 `buglist/`·`todolist/` 池目录 + T153/T154/T177/T180 legacy 行） | issue 台账 + 池目录 | 池**不合并**；ledger 历史行是既成记录 |
++| `openspec/changes/dedupe-issues-scripts-shared-layer/**` | 在途活跃 change 目录整体 | 四件套 + specs delta + 评审产物（`spec-review-report.md`/`gstack-review.md` 等被旧名/`import core` 塞满） |
++| `sdflow-ship`/`sdflow-code-review` SKILL.md「defer 进 buglist/todolist **池**」 | 池概念 | 指池目录（不合并），无脚本路径引用——**去 overclaim 确认：0 处路径引用，无需改** |
++| `docs/**`（workflow-map.{md,html}、sdflow-fable5/02-module-reference.md、drafts/…） | 视图/快照文档 | 见 §3 决策 |
++
++### 全仓核销确认
++
++`git ls-files` 逐文件扫（排除上述 allowlist 路径）→ **0 处**残留旧名。命令与结果见 §2 守卫。
++
++## 2. 机械引用守卫（`sdflow-issues/tests/test_downstream_reference_guard.py`，AD-5 E）
++
++把兜底从「手 grep 自觉」升级为门。三个 test：
++1. `test_no_legacy_skill_references_outside_allowlist`：`git ls-files`（= 托管点集）逐文件
++   `read_bytes()` 子串扫两个旧名字节串，除 allowlist 外命中即 FAIL。
++2. `test_guard_does_not_self_match`：实证本文件源码无连续旧名字面（守卫自身不假阳）。
++3. `test_allowlist_paths_still_exist`：allowlist exact 路径 + 两池目录仍存在——防 allowlist 因
++   改名静默失效放行。
++
++**allowlist 构成**（路径前缀 + exact）：
++- 前缀：`openspec/changes/archive/`、`openspec/adr/`、`openspec/issues/`、`openspec/specs/`、
++  `openspec/changes/dedupe-issues-scripts-shared-layer/`、`docs/`。
++- exact：`setup.sh`、`sdflow-init/tests/test_setup_sdflow.py`。
++- 自身：`SELF` basename 显式跳过。
++
++其中 `openspec/specs/`（主 spec，delta-at-archive 纪律）、`sdflow-init/tests/test_setup_sdflow.py`
++（OUR_NAMES marker-compat，同 `OUR_LEGACY_NAMES` 理由）、`docs/`（视图快照，见 §3）为设计原始
++清单**未显式列出、但按同类理由补入**的合法豁免（面治：诚实边界，非放水）。
++
++**自指规避手法**（CLAUDE.md 基准 5「gate 子串自指坑」）：pattern 用拼接 `"sdflow-" + "buglist"`
++构造，令本文件源码无连续旧名字面；`read_bytes` + 字节串子串扫（不解析 markdown 结构——基准 5
++「别手搓解析器」）；`read_bytes` 而非 `read_text` 避免 encoding skip 漏掉 mis-encoded 文本文件。
++
++**为什么用 `git ls-files`**：托管点 = 跟踪文件；未跟踪的 scratch/`__pycache__` 非托管点，天然排除。
++内容仍从磁盘 `read_bytes`（读工作树，未提交编辑也被扫到）。
++
++## 3. `docs/` 处理决策（allowlist + 后置刷新）
++
++`docs/workflow-map.{md,html}`、`docs/sdflow-fable5/02-module-reference.md`、
++`docs/drafts/sdflow-issues-toolchain-defects.md` 仍含旧 skill 名。判定为 **allowlist**（不在本
++Task 强改），理由：
++1. 设计 AD-5（多轮评审）清单**零** `docs/` 条目，尽管可 grep——信号：docs 非 fail-closed 托管点。
++2. docs 自标「**视图文档，非真相源**」并 pin 到特定 git HEAD（`fc1b98b`）——快照性质。
++3. AD-5 的 fail-closed 理由是「调用断裂/CI 打红/主 spec 死路径」；docs 不触发任一。
++4. 连贯刷新到目标态 = 重述整套 recorder 架构（退役的 `test_mirror_consistency.py`、单一源 core、
++   POOL_SPEC、mermaid 拓扑），属**独立文档交付物**（基准 4：一个 change 一件事），半改只满足
++   守卫会让 docs 自相矛盾（违 DOC-1）。
++
++**后置**：docs 刷新到 3→1 目标态建议记 todo（未由本 Task 写入 ledger——避免扰动 dogfood 语料
++契约测 `test_task5_delivery_contract` 且属 Task 7 记 todo 范畴）。交编排层/Task 7 收口。
++
++## 4. 计数变更 17→15
++
++顶层含 `SKILL.md` 目录实测 15 个（删 `sdflow-buglist`/`sdflow-todolist` 后 = 17−2）。
++`sync_principles.py:57-59` 动态枚举，`--check` 自动收敛；仅 `test_sync_principles.py` docstring
++两处 `17` 常量手改 `15`。`sync_principles.py --check` = exit 0（`✅ 18 个投放面全部一致`）。
++
++## 5. T3 fold 验证
++
++`sdflow-init/tests/test_setup_sdflow.py`：
++- `:108` `for gone in ["sdflow-buglist","sdflow-todolist"]: assert not (skills/gone).exists()`——
++  断言旧目录删后**不建链**（orphan 清理）。**正确**，无需重做。
++- `:153` `OUR_NAMES` 含旧名——marker-compat 边界，**须保留**（同 `OUR_LEGACY_NAMES`）。
++`test_rename_scenario_old_links_cleaned_new_links_made` 端到端跑真 setup.sh 验旧链清零 + 新链建立——绿。
++
++## 6. 全套件输出
++
++```
++$ /usr/bin/python3 hack/sync_principles.py --check
++[sync_principles] ✅ 18 个投放面全部与真相源一致   exit=0
++
++$ /usr/bin/python3 -m pytest -q
++2114 passed, 9 skipped, 3 xfailed in 144.81s
++```
++
++含新增机械守卫 3 test、`test_sync_principles` 15 计数、`test_setup_sdflow` T3、
++`test_task5_delivery_contract` 新 CI 路径断言，及既有全绿。
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index a42f1b0..a416554 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -204,11 +204,11 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
+ 
+ verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的未分诊 OPEN 项归入一个批次——这样上面第 2 段能引批次号，而不是逐条罗列裸 ID。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了中档子代理，由该子代理顺带执行）。
+ 
+-**脚本路径**：buglist.py / todolist.py / issues.py 分属 `sdflow-buglist`、`sdflow-todolist`、`sdflow-issues` 三个 sibling skill，随 sdflow-skills `setup.sh` 各自独立 symlink 到 `~/.claude/skills/`（同 tag、sdflow-init 等 skill 引用兄弟脚本的既有约定）：
++**脚本路径**：buglist.py / todolist.py / issues.py 现同属**一个 skill `sdflow-issues`** 的三个薄入口（共唯一共享源 `sdflow_issues_core`），随 sdflow-skills `setup.sh` 整目录一次 symlink 到 `~/.claude/skills/sdflow-issues/`——三者同目录 co-located，无跨 skill 依赖：
+ 
+ ```
+-~/.claude/skills/sdflow-buglist/scripts/buglist.py
+-~/.claude/skills/sdflow-todolist/scripts/todolist.py
++~/.claude/skills/sdflow-issues/scripts/buglist.py
++~/.claude/skills/sdflow-issues/scripts/todolist.py
+ ~/.claude/skills/sdflow-issues/scripts/issues.py
+ ```
+ 
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 22493ba..7eaab56 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -375,7 +375,7 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代
+   无客观判据派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist 并停上抛），**MUST NOT**
+   无限循环。
+ - Minor 发现 → defer 进 todolist，**JSON 显式带 `"change"` 字段**（省略会被脚本自动挂到"当前活跃
+-  change"，多 change 并行时会挂错，坑见 sdflow-todolist 的 `change` 字段说明）。
++  change"，多 change 并行时会挂错，坑见 sdflow-issues 的 todo 池 `change` 字段说明）。
+ 
+ **无 warm final whole-branch review**——本模式不追加分支级终审步；全部 ticket 完成、gate 判进
+ `RUN_CODE_REVIEW` 后直接交给冷层 `/sdflow-code-review` 承接（独立冷视角 + 实测捕获承重墙，见下节
+diff --git a/sdflow-init/SKILL.md b/sdflow-init/SKILL.md
+index 5f042c2..ef6eed7 100644
+--- a/sdflow-init/SKILL.md
++++ b/sdflow-init/SKILL.md
+@@ -135,7 +135,7 @@ workflow.md 的流程依赖 3 个 sdflow skill，提示用户安装：
+ bash ~/.skills/sdflow-skills/setup.sh
+ ```
+ - `/sdflow-spec-review` — 设计审主审 · `/sdflow-code-review` — 代码审主审 · `/sdflow-done` — 闭环（verify→archive→commit→merge）
+-（记录类按需：`/sdflow-buglist`、`/sdflow-todolist`。）
++（记录类按需：`/sdflow-issues`。）
+ 
+ ## 铺设了什么
+ 
+diff --git a/sdflow-init/assets/snippets/claude-section.md b/sdflow-init/assets/snippets/claude-section.md
+index 0db53e9..3d9ab7c 100644
+--- a/sdflow-init/assets/snippets/claude-section.md
++++ b/sdflow-init/assets/snippets/claude-section.md
+@@ -76,7 +76,7 @@
+ | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
+ | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
+ 
+-> 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
++> 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+diff --git a/sdflow-init/assets/workflow/workflow.md b/sdflow-init/assets/workflow/workflow.md
+index dd4539f..64870f9 100644
+--- a/sdflow-init/assets/workflow/workflow.md
++++ b/sdflow-init/assets/workflow/workflow.md
+@@ -59,7 +59,7 @@
+ 
+ > **sdflow-done 含 issues sweep 子步**（§2.1，I5/I6）：verify 判完、写 hand-off 正文前，分诊**本 change**新增的
+ > OPEN 项入**单一批次**（key=本 change 名）→ 末尾跑 `issues.py reindex` 刷新 INDEX/批次状态 → hand-off 第 2 段引用该批次号
+-> （不再逐条罗列裸 ID）。脚本分工：`sdflow-buglist`/`sdflow-todolist` 的 `scan`/`triage` 分诊 + `sdflow-issues` 的
++> （不再逐条罗列裸 ID）。脚本分工：`sdflow-issues` 的两池 `scan`/`triage` 分诊 +
+ > `batch add`/`reindex` 管批次与索引。细则见 `sdflow-done` skill 的 SKILL.md §2.1（配套 skill，不在本 bundle 内，随 sdflow-skills `setup.sh` 安装）。
+ > **跨模型 outside voice**：sdflow-spec-review / sdflow-code-review 默认开；命中 **HR-TG** 再单开一次领域 cross-model（C2/C3/C4）。调用协议见两 SKILL 的「outside-voice helper 调用协议」节；helper 契约 = `~/.sdflow/hack/outside-voice.sh` 头注释。
+ 
+diff --git a/sdflow-issues/scripts/buglist.py b/sdflow-issues/scripts/buglist.py
+index acecfc3..f281203 100644
+--- a/sdflow-issues/scripts/buglist.py
++++ b/sdflow-issues/scripts/buglist.py
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env python3
+ """buglist.py — sdflow-issues 的 **bug 池薄入口**（dedupe-issues-scripts-shared-layer · adr/0027）。
+ 
+-原 `sdflow-buglist` skill 的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
++bug 池的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
+ 解析 args → 注入 bug 的 `POOL_SPEC` + `PoolStrategy` → 调 `run_cli`。共享执行逻辑
+ （ID 扫描自增、canonical/overlay 写入、legacy 只读 promotion、状态门禁、扫描自检）全部
+ 在 core，本文件不再持有任何副本。
+diff --git a/sdflow-issues/scripts/todolist.py b/sdflow-issues/scripts/todolist.py
+index e3ffe2c..3b1f310 100644
+--- a/sdflow-issues/scripts/todolist.py
++++ b/sdflow-issues/scripts/todolist.py
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env python3
+ """todolist.py — sdflow-issues 的 **todo 池薄入口**（dedupe-issues-scripts-shared-layer · adr/0027）。
+ 
+-原 `sdflow-todolist` skill 的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
++todo 池的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
+ 解析 args → 注入 todo 的 `POOL_SPEC` + `PoolStrategy` → 调 `run_cli`。收集优化想法/技术债/
+ 改进等**非缺陷**项，与 bug 的差异（每月一文件、T 前缀、按类型而非优先级、详细块可选、
+ 状态码 OPEN/PROPOSED/DONE/WONTDO）全部经 `POOL_SPEC`/`PoolStrategy` 注入，本文件不持副本。
+diff --git a/sdflow-issues/tests/test_buglist.py b/sdflow-issues/tests/test_buglist.py
+index 626590f..dae7797 100644
+--- a/sdflow-issues/tests/test_buglist.py
++++ b/sdflow-issues/tests/test_buglist.py
+@@ -1,7 +1,7 @@
+ """
+ Tests for buglist.py's `doc`（关联文档）field: normalization, soft validation,
+ detail-block rendering, and change-based auto-default.
+-Run with: python3 -m pytest sdflow-buglist/tests/ -v
++Run with: python3 -m pytest sdflow-issues/tests/ -v
+ """
+ import json
+ import os
+diff --git a/sdflow-issues/tests/test_downstream_reference_guard.py b/sdflow-issues/tests/test_downstream_reference_guard.py
+new file mode 100644
+index 0000000..9cd7bc7
+--- /dev/null
++++ b/sdflow-issues/tests/test_downstream_reference_guard.py
+@@ -0,0 +1,109 @@
++"""下游托管引用守卫（dedupe-issues-scripts-shared-layer · Task 5 · AD-5 E）。
++
++三 skill 合一后，旧 buglist / todolist skill 的目录名 / 脚本路径 / slash 触发名不应再出现
++在任何**活跃托管点**（漏改 = 合并后调用断裂 / CI 打红 / 主 spec 死路径）。本守卫把 AD-5 的
++兜底从「实现者手 grep 自觉」升级为机械门：全仓（git 跟踪文件）扫这两个字面串，除 allowlist
++外命中即 FAIL。
++
++allowlist（合法保留旧名的面，非陈旧引用）：
++- `openspec/changes/archive/**`  —— 历史归档，MUST NOT 回改。
++- `openspec/adr/**`              —— 历史决策记录。
++- `openspec/issues/**`           —— issue 台账（含两池目录 `buglist/`·`todolist/`——池不合并——与 legacy 行）。
++- `openspec/specs/**`            —— 主 spec：本 change 携 MODIFIED delta，主 spec 在 archive 阶段同步
++                                    （delta-at-archive 纪律，非本 sync 任务；见 tasks 5.7）。
++- `openspec/changes/dedupe-issues-scripts-shared-layer/**` —— 在途活跃 change 目录整体（四件套 +
++                                    specs/ 两 delta + 评审产物 spec-review-report.md / gstack-review.md /
++                                    .outside-voice/ + impl-reports/——被旧名/脚本路径/`import core` 塞满，
++                                    只豁免四件套会让守卫在自己 change 的评审报告上假阳、第一次跑就红）。
++- `setup.sh`                     —— `OUR_LEGACY_NAMES` MUST 保留旧名（Windows `.laodao-skills` legacy
++                                    marker orphan 回收依赖）。
++- `sdflow-init/tests/test_setup_sdflow.py` —— `OUR_NAMES` marker-compat 边界（`setup.sh` 口径的镜像）
++                                    + orphan 清理端到端场景，同 `OUR_LEGACY_NAMES` 理由 MUST 保留旧名。
++- `docs/**`                      —— 视图 / 快照文档（自标「视图文档，非真相源」、pin 到特定 git HEAD），
++                                    非 fail-closed 托管点；连贯刷新到目标态属独立文档交付物（记 todo 后置）。
++- 本守卫测试文件自身            —— pattern 用拼接构造（无连续旧名字面）+ basename 显式跳过，避免自匹配假阳。
++
++基准 5 + 「gate 子串自指坑」：pattern 用拼接（`"sdflow-" + "buglist"`）避免守卫扫到自己；
++直接文件内容子串扫 + 路径 allowlist（不解析 markdown 结构）。
++"""
++import subprocess
++from pathlib import Path
++
++import pytest
++
++ROOT = Path(__file__).resolve().parents[2]
++
++# 拼接构造，令本文件源码内无连续旧名字面 → 全仓扫描不会自命中（CLAUDE.md「gate 子串自指坑」）。
++LEGACY_SKILL_NAMES = ("sdflow-" + "buglist", "sdflow-" + "todolist")
++LEGACY_BYTES = tuple(name.encode("utf-8") for name in LEGACY_SKILL_NAMES)
++
++ALLOWLIST_PREFIXES = (
++    "openspec/changes/archive/",
++    "openspec/adr/",
++    "openspec/issues/",
++    "openspec/specs/",
++    "openspec/changes/dedupe-issues-scripts-shared-layer/",
++    "docs/",
++)
++ALLOWLIST_EXACT = frozenset({
++    "setup.sh",
++    "sdflow-init/tests/test_setup_sdflow.py",
++})
++SELF = Path(__file__).resolve().relative_to(ROOT).as_posix()
++
++
++def _tracked_files():
++    result = subprocess.run(
++        ["git", "-C", str(ROOT), "ls-files", "-z"],
++        capture_output=True, text=True, check=True,
++    )
++    return [rel for rel in result.stdout.split("\0") if rel]
++
++
++def _is_allowlisted(relpath):
++    if relpath == SELF:
++        return True
++    if relpath in ALLOWLIST_EXACT:
++        return True
++    return any(relpath.startswith(prefix) for prefix in ALLOWLIST_PREFIXES)
++
++
++def test_no_legacy_skill_references_outside_allowlist():
++    """全仓（git 跟踪）扫旧 skill 目录/脚本路径/slash 名，除 allowlist 外命中即 FAIL。"""
++    offenders = []
++    for relpath in _tracked_files():
++        if _is_allowlisted(relpath):
++            continue
++        path = ROOT / relpath
++        try:
++            blob = path.read_bytes()
++        except (FileNotFoundError, IsADirectoryError, PermissionError):
++            continue
++        for name, needle in zip(LEGACY_SKILL_NAMES, LEGACY_BYTES):
++            if needle in blob:
++                offenders.append(f"  {relpath}: {name}")
++    assert not offenders, (
++        "合并 3→1 后仍有活跃托管点引用旧 skill 目录/脚本路径/slash 名（AD-5 fail-closed，漏改即"
++        "调用断裂/CI 打红/主 spec 死路径）：\n" + "\n".join(sorted(offenders))
++    )
++
++
++def test_guard_does_not_self_match():
++    """自指规避实证：本守卫文件源码里无连续旧名字面（pattern 拼接构造）。
++
++    若有人日后把 pattern 写成连续字面，本测试当场红 —— 守卫扫全仓时会把自己算成 offender。
++    """
++    src = Path(__file__).read_bytes()
++    for name, needle in zip(LEGACY_SKILL_NAMES, LEGACY_BYTES):
++        assert needle not in src, (
++            f"守卫测试文件不得含连续旧名字面 {name!r}（会在全仓扫描时自匹配假阳）"
++        )
++
++
++def test_allowlist_paths_still_exist():
++    """allowlist 里的 exact 路径 + 池目录仍存在——防 allowlist 因文件改名而静默失效放行。"""
++    for exact in ALLOWLIST_EXACT:
++        assert (ROOT / exact).is_file(), f"allowlist exact 路径已不存在：{exact}"
++    # 池目录不合并——存在即校验 openspec/issues/ 豁免确实覆盖两池。
++    for pool in ("openspec/issues/buglist", "openspec/issues/todolist"):
++        assert (ROOT / pool).is_dir(), f"池目录缺失：{pool}"
+diff --git a/sdflow-issues/tests/test_issues.py b/sdflow-issues/tests/test_issues.py
+index 413a588..b3c0c64 100644
+--- a/sdflow-issues/tests/test_issues.py
++++ b/sdflow-issues/tests/test_issues.py
+@@ -23,8 +23,8 @@ from issues import (
+ SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
+ 
+ # Task 16：端到端一致性自检要用真实 buglist.py/todolist.py CLI 子进程（不借道 issues.py
+-# 内部函数）造数据，定位方式镜像 issues.py 自身的 SKILLS_ROOT 探测（tests 目录上三级
+-# 是 sdflow-skills 根，sdflow-buglist/sdflow-todolist 与本 skill 是同级 sibling）。
++# 内部函数）造数据；三薄入口现同属 sdflow-issues/scripts/ 同目录 co-located，直接用
++# 本测试文件上两级的 sdflow-issues/scripts/ 定位。
+ BUGLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-issues" / "scripts" / "buglist.py")
+ TODOLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-issues" / "scripts" / "todolist.py")
+ 
+@@ -1723,7 +1723,7 @@ class TestSweep:
+ 
+ def _run_cli(script, root, args, input_json=None):
+     """通过真实 CLI 子进程调 buglist.py/todolist.py（stdin 喂 JSON，镜像
+-    sdflow-buglist/tests/test_buglist.py 的 run_add 写法：不传 --json，
++    test_buglist.py 的 run_add 写法：不传 --json，
+     默认走 stdin，`input=None` 时等价于不喂 stdin JSON 的命令，如 triage/scan/set-status）。"""
+     return subprocess.run(
+         [sys.executable, script, "--root", str(root)] + args,
+@@ -1823,7 +1823,7 @@ def _read_index_bytes(root):
+ 
+ def _write_bug_file(root, date, rows):
+     """写一个最小合法的 dated buglist 文件（新路径 openspec/issues/buglist/），
+-    格式镜像 sdflow-buglist/tests/test_buglist.py 的 _write_mixed_file。"""
++    格式镜像 test_buglist.py 的 _write_mixed_file。"""
+     dir_path = Path(root) / "openspec" / "issues" / "buglist"
+     dir_path.mkdir(parents=True, exist_ok=True)
+     lines = [
+diff --git a/sdflow-issues/tests/test_repo_root_identity_buglist.py b/sdflow-issues/tests/test_repo_root_identity_buglist.py
+index 72b688c..a726548 100644
+--- a/sdflow-issues/tests/test_repo_root_identity_buglist.py
++++ b/sdflow-issues/tests/test_repo_root_identity_buglist.py
+@@ -9,14 +9,14 @@
+ bare repo、git 不可用才回落。「最近」二字同样是 cr-fix1 加的：祖先校验 + worktree marker
+ 对**外层祖先仓库**（core.worktree 指祖先仓 / PATH 上的 fake git）双双放行。
+ 
+-本文件与 sdflow-issues/tests · sdflow-todolist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
+-D4 红线禁止互相 import，故测试也各自一份）。
++本文件与 sdflow-issues/tests 下的 test_repo_root_identity_{todolist,issues}.py 逐条对应（三薄入口
++经唯一共享源 `sdflow_issues_core` 取同一 `repo_root`；本组测试各自经其入口验证解析身份一致）。
+ 
+ 方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
+ `isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
+ 外部依赖行为外，一切都用 `tmp_path` 下真实存在/不存在的路径构造。
+ 
+-Run with: python3 -m pytest sdflow-buglist/tests/test_repo_root_identity_buglist.py -v
++Run with: python3 -m pytest sdflow-issues/tests/test_repo_root_identity_buglist.py -v
+ """
+ 
+ import ast
+diff --git a/sdflow-issues/tests/test_repo_root_identity_issues.py b/sdflow-issues/tests/test_repo_root_identity_issues.py
+index 2c28fa4..36dcf3b 100644
+--- a/sdflow-issues/tests/test_repo_root_identity_issues.py
++++ b/sdflow-issues/tests/test_repo_root_identity_issues.py
+@@ -9,8 +9,8 @@
+ bare repo、git 不可用才回落。「最近」二字同样是 cr-fix1 加的：祖先校验 + worktree marker
+ 对**外层祖先仓库**（core.worktree 指祖先仓 / PATH 上的 fake git）双双放行。
+ 
+-本文件与 sdflow-buglist/tests · sdflow-todolist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
+-D4 红线禁止互相 import，故测试也各自一份）。
++本文件与 sdflow-issues/tests 下的 test_repo_root_identity_{buglist,todolist}.py 逐条对应（三薄入口
++经唯一共享源 `sdflow_issues_core` 取同一 `repo_root`；本组测试各自经其入口验证解析身份一致）。
+ 
+ 方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
+ `isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
+diff --git a/sdflow-issues/tests/test_repo_root_identity_todolist.py b/sdflow-issues/tests/test_repo_root_identity_todolist.py
+index 100230e..7aab8b9 100644
+--- a/sdflow-issues/tests/test_repo_root_identity_todolist.py
++++ b/sdflow-issues/tests/test_repo_root_identity_todolist.py
+@@ -9,14 +9,14 @@
+ bare repo、git 不可用才回落。「最近」二字同样是 cr-fix1 加的：祖先校验 + worktree marker
+ 对**外层祖先仓库**（core.worktree 指祖先仓 / PATH 上的 fake git）双双放行。
+ 
+-本文件与 sdflow-issues/tests · sdflow-buglist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
+-D4 红线禁止互相 import，故测试也各自一份）。
++本文件与 sdflow-issues/tests 下的 test_repo_root_identity_{buglist,issues}.py 逐条对应（三薄入口
++经唯一共享源 `sdflow_issues_core` 取同一 `repo_root`；本组测试各自经其入口验证解析身份一致）。
+ 
+ 方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
+ `isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
+ 外部依赖行为外，一切都用 `tmp_path` 下真实存在/不存在的路径构造。
+ 
+-Run with: python3 -m pytest sdflow-todolist/tests/test_repo_root_identity_todolist.py -v
++Run with: python3 -m pytest sdflow-issues/tests/test_repo_root_identity_todolist.py -v
+ """
+ 
+ import ast
+diff --git a/sdflow-issues/tests/test_task2_windows_local_fs_smoke.py b/sdflow-issues/tests/test_task2_windows_local_fs_smoke.py
+index 19c41ac..6923308 100644
+--- a/sdflow-issues/tests/test_task2_windows_local_fs_smoke.py
++++ b/sdflow-issues/tests/test_task2_windows_local_fs_smoke.py
+@@ -2,7 +2,7 @@
+ 
+ Run on an actual Windows runner whose pytest tmp path is a local drive:
+ 
+-    py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error
++    py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
+ 
+ Non-Windows hosts skip this module and MUST NOT cite the skip as Windows evidence.
+ The test deliberately fails when the runner provides a UNC/network temp path.
+@@ -116,7 +116,7 @@ def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
+         assert "mode: copy (Windows)" in result.stdout
+ 
+     for host in (".claude", ".codex"):
+-        installed = home / host / "skills" / "sdflow-buglist"
++        installed = home / host / "skills" / "sdflow-issues"
+         assert installed.is_dir() and not installed.is_symlink()
+         assert (installed / ".sdflow-skills").is_file()
+         assert (installed / "scripts/buglist.py").read_bytes() == (
+diff --git a/sdflow-issues/tests/test_task5_delivery_contract.py b/sdflow-issues/tests/test_task5_delivery_contract.py
+index 2f2712a..6be755c 100644
+--- a/sdflow-issues/tests/test_task5_delivery_contract.py
++++ b/sdflow-issues/tests/test_task5_delivery_contract.py
+@@ -231,7 +231,7 @@ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
+         assert trigger in workflow
+     assert "branches:" not in workflow
+     assert "runs-on: windows-latest" in workflow
+-    assert "py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
++    assert "py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
+ 
+ 
+ def test_delivery_docs_name_operational_boundaries():
+diff --git a/sdflow-issues/tests/test_todolist.py b/sdflow-issues/tests/test_todolist.py
+index 67ff764..d9bbcb8 100644
+--- a/sdflow-issues/tests/test_todolist.py
++++ b/sdflow-issues/tests/test_todolist.py
+@@ -1,7 +1,7 @@
+ """
+ Tests for todolist.py's `doc`（关联文档）field: normalization, soft validation,
+ detail-block rendering, and change-based auto-default.
+-Run with: python3 -m pytest sdflow-todolist/tests/ -v
++Run with: python3 -m pytest sdflow-issues/tests/ -v
+ """
+ import json
+ import os
+diff --git a/sdflow-retro/SKILL.md b/sdflow-retro/SKILL.md
+index 9179e19..1020570 100644
+--- a/sdflow-retro/SKILL.md
++++ b/sdflow-retro/SKILL.md
+@@ -104,8 +104,7 @@ description: >
+ - ✅ 想看 per-镜（lens）出的 findings 数、采纳率、独立发现数——判断某镜是否还值得跑。
+ - ✅ 归档了新 change 之后，想让 `openspec/retro/report.md` 反映最新数据。
+ - ⚠️ 不用于：扫 openspec 目录结构一致性（那是 `/sdflow-maintain` 的事）；不用于团队周度
+-  工程复盘会（那是 gstack `retro`）；不用于记录单个 bug/todo（`/sdflow-buglist` /
+-  `/sdflow-todolist`）。
++  工程复盘会（那是 gstack `retro`）；不用于记录单个 bug/todo（`/sdflow-issues`）。
+ 
+ ## 怎么做
+ 
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index d0348ef..f6f0a42 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -235,7 +235,7 @@ class GateIndeterminate(Exception):
+ _GIT_HARDEN = ("-c", "core.quotePath=false")
+ 
+ # [harden-gate-git-layer Task2 · ADR-5 · tasks 3.2] 三个 helper 统一上界。
+-# 判据来源 = 仓内既有先例 `sdflow-buglist/scripts/buglist.py::repo_root` 的 `git_timeout = 30`：
++# 判据来源 = 仓内既有先例 `sdflow-issues/scripts/sdflow_issues_core/__init__.py::repo_root` 的 `git_timeout = 30`：
+ # 这些都是**纯本地元数据查询**（正常毫秒级），30 秒是**文件系统卡死 / 网络文件系统挂起**的
+ # 判定线，**不是性能预算**。MUST NOT 按「最慢的仓要多久」来调大——那会把它误当性能预算，
+ # 从而让真正的挂起拖到无限久（而 gate 是同步阻塞在链序里的）。
+@@ -278,7 +278,7 @@ def _git_env():
+         MUST NOT 声称它被 `test_verdict_is_identical_under_polluted_git_env` 守住——
+         那条只污染 `diff.ignoreSubmodules` 这一个良性 knob，覆盖不到本面。
+ 
+-    [fix1 M1] **与先例的差异登记**：`sdflow-buglist/scripts/buglist.py::repo_root`（:613-618）
++    [fix1 M1] **与先例的差异登记**：`sdflow-issues/scripts/sdflow_issues_core/__init__.py::repo_root`
+     只剔 discovery 类（`GIT_DIR`/`GIT_WORK_TREE`/`GIT_CONFIG_*`…）并**刻意保留执行类**
+     （`GIT_EXEC_PATH` 等）；本函数剔全前缀，故连 `GIT_EXEC_PATH` 一并剔掉。
+     理由：本文件只调 builtin 子命令（`log`/`rev-parse`/`ls-tree`/`show`/`cat-file`），

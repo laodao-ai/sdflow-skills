@@ -19,8 +19,10 @@ allowlist（合法保留旧名的面，非陈旧引用）：
                                     marker orphan 回收依赖）。
 - `sdflow-init/tests/test_setup_sdflow.py` —— `OUR_NAMES` marker-compat 边界（`setup.sh` 口径的镜像）
                                     + orphan 清理端到端场景，同 `OUR_LEGACY_NAMES` 理由 MUST 保留旧名。
-- `docs/**`                      —— 视图 / 快照文档（自标「视图文档，非真相源」、pin 到特定 git HEAD），
-                                    非 fail-closed 托管点；连贯刷新到目标态属独立文档交付物（记 todo 后置）。
+- `docs/**`                      —— 非 fail-closed 托管点（非调用/CI/spec 承重）：多为自标「视图文档，
+                                    非真相源」、pin 到特定 git HEAD 的快照，另有历史调查 draft（如
+                                    `drafts/sdflow-issues-toolchain-defects.md`，无「视图快照」自标但属
+                                    历史记录、明言不预设实现）。连贯刷新到目标态属独立文档交付物（记 todo 后置）。
 - 本守卫测试文件自身            —— pattern 用拼接构造（无连续旧名字面）+ basename 显式跳过，避免自匹配假阳。
 
 基准 5 + 「gate 子串自指坑」：pattern 用拼接（`"sdflow-" + "buglist"`）避免守卫扫到自己；

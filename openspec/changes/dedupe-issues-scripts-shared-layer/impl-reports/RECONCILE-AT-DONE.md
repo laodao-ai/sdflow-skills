@@ -22,6 +22,20 @@
 semantic key 等价（接线/投影正确）」，删「任一方漏掉…rule 时测试失败」的 rule-完整性宣称（真 rule-完整性
 须外部 golden fixture，非 core 自比 core，AD-4/R6 已声明）。使两 Scenario 一致。
 
+## R-2〔T5 发现·主 spec delta 同步核验〕：archive 须落地两主 spec 的旧 ref 更新
+
+**文件**：`specs/recorder-root-resolution/spec.md`、`specs/spec-workflow/spec.md`（两份 MODIFIED delta）
+
+T5 的机械引用守卫（`test_downstream_reference_guard.py`）**永久 allowlist 了 `openspec/specs/`**，前提是
+「本 change 携 MODIFIED delta，主 spec 在 archive 阶段经 delta-sync 更新」。T5 Spec 轴已核实两 delta 真含
+sdflow-issues 更新（recorder delta:37-42 三薄入口路径写为 `sdflow-issues/scripts/`；spec-workflow delta
+RENAME-MAP 移除两旧名）、且 delta header 与主 spec 现役 header 逐一匹配 → sync 有对象。
+
+**和解动作（done/archive）**：archive 子代理 delta-sync 后，**MUST 核验** `openspec/specs/recorder-root-resolution/spec.md`
+与 `openspec/specs/spec-workflow/spec.md` 中原有的旧 skill 名/脚本路径（recorder 3 处、spec-workflow 4 处）
+**已被 delta 替换为 sdflow-issues 目标态**（守卫 allowlist 了 specs/、不会自动抓；这是 delta-sync 正确性的
+兜底核验点）。
+
 ## A-1〔T4 发现·已闭·无需 done 动作〕：`issues._legacy_block_range` 同名近重复
 
 **结论**：T4 双轴审定级 **Important = T2 单一源遗漏**（逐行相同承重扫描算法，非 AD-7 defer）。

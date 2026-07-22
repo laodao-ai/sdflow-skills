@@ -64,6 +64,7 @@ sdflow-issues:
     T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"PROPOSED","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T207: {"module":"docs","summary":"T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。","type":"代码质量","status":"OPEN","time":"2026-07-22 13:34","change":"dedupe-issues-scripts-shared-layer","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1939,3 +1940,12 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 > archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T206 -->
+
+<!-- sdflow-issue-block:start id=T207 -->
+## T207: 刷新 docs/ 下旧 skill 名到 sdflow-issues
+> T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。
+
+**关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
+
+**备注**：涉及 docs/workflow-map.md·docs/drafts/sdflow-issues-toolchain-defects.md（无视图快照自标、属历史调查）·docs/sdflow-fable5/02-module-reference.md（pin git HEAD 快照）。非承重（非调用/CI/spec）。
+<!-- sdflow-issue-block:end id=T207 -->
