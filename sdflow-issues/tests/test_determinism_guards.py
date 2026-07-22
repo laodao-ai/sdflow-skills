@@ -93,10 +93,12 @@ def _describe_pool_valueish(node):
     return None
 
 
-def scan_pool_branches(source, filename="<core>"):
+def scan_pool_branches(source):
     """扫描 Python 源码 AST，返回针对 pool 值分岔的 findings。
 
     findings: [(lineno, form, snippet)]。form ∈ {compare, match}。best-effort（见模块 docstring）。
+    调用方各自持有源文件名（`test_core_has_no_pool_value_branches` 的 offenders 以 `path.name`
+    为键、mutation/prose 自测传字面 label），故本函数不复携带 filename。
     """
     tree = ast.parse(source)
     findings = []
@@ -134,7 +136,7 @@ def test_core_has_no_pool_value_branches():
     """core 每个 .py 文件 AST 无针对裸 pool 字面的条件分支/match（差异一律经 POOL_SPEC 取值）。"""
     offenders = {}
     for path in _core_py_files():
-        findings = scan_pool_branches(path.read_text(encoding="utf-8"), str(path))
+        findings = scan_pool_branches(path.read_text(encoding="utf-8"))
         if findings:
             offenders[path.name] = findings
     assert not offenders, (
@@ -167,8 +169,9 @@ def test_scanner_reds_on_injected_pool_branches_mutation():
         mutated = clean + "\n\ndef _injected_pool_branch(pool, expected_pool, document):\n" + "".join(
             "    " + line if line.strip() else line for line in snippet.splitlines(keepends=True)
         )
-        findings = scan_pool_branches(mutated, "<mutated-core>")
-        # 减去 clean 基线（clean 恒为 0），mutation 必新增 ≥1 finding
+        findings = scan_pool_branches(mutated)
+        # clean 基线恒为 0（由 test_core_has_no_pool_value_branches 独立保证），故此处
+        # 只需断言 mutation 后 findings 非空即证守卫捕获了注入分支。
         assert findings, f"mutation 未被守卫捕获: {label} :: {snippet!r}"
 
 
@@ -184,7 +187,7 @@ def test_scanner_allows_closed_schema_keys_assertion():
         'RECORDER = {pool: () for pool in ("bug", "todo")}\n'
         'if pool in {"bug", "todo"}:\n    ok = True\n'
     )
-    assert scan_pool_branches(allowed, "<allowed>") == []
+    assert scan_pool_branches(allowed) == []
 
 
 def test_scanner_does_not_scan_prose():
@@ -195,7 +198,7 @@ def test_scanner_does_not_scan_prose():
     """
     prose = "设计讨论：core 里若出现 `if pool == \"bug\"` 就该红。\n- 见 AD-4\n"
     with pytest.raises(SyntaxError):
-        scan_pool_branches(prose, "<design.md>")
+        scan_pool_branches(prose)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -204,6 +207,7 @@ def test_scanner_does_not_scan_prose():
 
 # 旧 test_mirror_consistency.py 的 THREE_WAY(37) + TWO_WAY(24) roster（T2 impl-report §2 逐字）。
 # 把「三份剥 docstring AST 等价」转「从薄入口解析的对象 __module__ == core」。
+# Task 4 fix1 追加 `_scan_legacy_block_range`（新的 legacy 块扫描单一源，见 ALLOWED_DISTINCT 注记）。
 THREE_WAY_ROSTER = (
     "atomic_write", "atomic_write_bytes", "repo_root", "_reject_line_unsafe", "canonical_id",
     "semantic_id_key", "validate_prefix", "_lock_path", "_read_lock_metadata", "_lock_conflict",
@@ -222,7 +226,7 @@ TWO_WAY_ROSTER = (
     "_canonical_document", "_render_recorder_document", "_display_title", "_summary_blockquote",
     "_escape_user_markers", "_canonical_from_key", "_find_item_document", "_legacy_block_range",
     "_splice_body_lines", "_reject_document_mutation", "_preflight_target_legacy_block",
-    "_promotion_insertions", "_validated_rendered_mutation",
+    "_promotion_insertions", "_validated_rendered_mutation", "_scan_legacy_block_range",
 )
 ROSTER = THREE_WAY_ROSTER + TWO_WAY_ROSTER
 
@@ -238,17 +242,16 @@ ALLOWED_POOL_BOUND = {
     ("todolist", "next_id"), ("todolist", "all_ids"),
 }
 
-# ── 放行 2：issues 独占 rename-path 变体（documented·Task 4 记为已知代价）──────────
-# issues.py 有一个**同名但语义相异**的 `_legacy_block_range(document, raw_id)`（2 参，读
-# document['path']；抛 rename-path 专属 fix 文案「rerun the original batch rename command」，
-# 与 issues 批量改名错误族一致），用于 issues 独占的 batch-rename 快照机制——**非** pool CLI
-# 路径对 core helper 的 shadow。其结构逻辑与 core 版近似（找唯一 legacy block + 拒 marker 撞），
-# 属**已知近重复**：合并进 core 需把 rename 专属错误文案注入 core（caller-specific 污染）或
-# catch-rewrap（脆），属 Task 2 单一源范畴 + 非低成本 fold，故 Task 4 显式放行 + 登记待整合
-# （见本票 impl-report Concern；对比 test_patch_discipline 的 allowlist-with-reason 惯例）。
-ALLOWED_DISTINCT = {
-    ("issues", "_legacy_block_range"),
-}
+# ── 放行 2：已清空（原 issues 独占 rename-path 近重复已 dedup）────────────────────
+# 曾登记 `("issues", "_legacy_block_range")`：issues.py 有一份**逐行相同**的块边界扫描算法，
+# 与 core 的 `_legacy_block_range` 仅差 path 取值与错误发射（issues 抛英文 rename ValueError、
+# core 抛中文 `_frontmatter_error`）。Task 4 双轴审 fix1 把扫描提取为 core 的唯一命名单一源
+# `_scan_legacy_block_range`（pool-agnostic，抛结构化 `LegacyBlockError` sentinel，无 prose）；
+# 两侧各留一个薄格式化器：core 的 `_legacy_block_range`（中文）+ issues 的
+# `_rename_legacy_block_range`（英文，仅调 `_scan_legacy_block_range`）。issues 不再持有扫描
+# 副本，`_scan_legacy_block_range` 纳入下方 roster 由 thinness 守正面核验解析到 core；`_legacy_block_range`
+# 亦经 issues re-export 解析到 core。∴ 本放行清空。
+ALLOWED_DISTINCT = set()
 
 _MISSING = object()
 

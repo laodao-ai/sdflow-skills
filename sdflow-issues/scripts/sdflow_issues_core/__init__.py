@@ -1368,7 +1368,35 @@ def _find_item_document(root, requested_id, pool):
     return found[0]
 
 
-def _legacy_block_range(document, raw_id, path):
+class LegacyBlockError(Exception):
+    """Structured sentinel raised by the single-source legacy block scan.
+
+    Carries only structured data (never caller-facing prose): ``kind`` is
+    ``"ambiguous"`` (the semantic ID resolved to != 1 heading block) or
+    ``"collision"`` (a preexisting marker line sits inside the resolved block).
+    Each caller catches this and formats its own pool/language-appropriate fix
+    message, so the scan itself stays pool-agnostic and prose-free (AD-3/Q2).
+    """
+
+    def __init__(self, kind, raw_id, *, candidates=None, line=None):
+        super().__init__(kind)
+        self.kind = kind
+        self.raw_id = raw_id
+        self.candidates = candidates
+        self.line = line
+
+
+def _scan_legacy_block_range(document, raw_id):
+    """Pool-agnostic single source for the legacy block boundary scan.
+
+    Resolve exactly one semantic legacy heading block for ``raw_id`` and reject a
+    preexisting marker collision inside it, returning ``(start, end)`` line
+    indices.  On failure raises :class:`LegacyBlockError` with structured data
+    (no prose) — callers translate it into their own fix message.  This is the
+    only copy of the scan algorithm; both ``_legacy_block_range`` (core, Chinese
+    ``_frontmatter_error``) and issues' ``_rename_legacy_block_range`` (English
+    rename-path ``ValueError``) delegate here.
+    """
     starts = []
     key = _legacy_semantic_id_key(raw_id)
     for index, line in enumerate(document["lines"]):
@@ -1376,11 +1404,7 @@ def _legacy_block_range(document, raw_id, path):
         if match and _legacy_semantic_id_key(match.group(1)) == key:
             starts.append(index)
     if len(starts) != 1:
-        _frontmatter_error(
-            f"file={path} legacy block 无法安全包裹",
-            f"id={raw_id} candidates={len(starts)}",
-            "修正为唯一 legacy block 后重试",
-        )
+        raise LegacyBlockError("ambiguous", raw_id, candidates=len(starts))
     start = starts[0]
     end = len(document["lines"])
     for index in range(start + 1, len(document["lines"])):
@@ -1390,12 +1414,25 @@ def _legacy_block_range(document, raw_id, path):
             break
     for index in range(start, end):
         if _match_marker_line(document["lines"][index]):
-            _frontmatter_error(
-                f"file={path} legacy marker collision",
-                f"id={raw_id} line={index + 1}",
-                "删除或转义候选块内预存 marker 后重试",
-            )
+            raise LegacyBlockError("collision", raw_id, line=index + 1)
     return start, end
+
+
+def _legacy_block_range(document, raw_id, path):
+    try:
+        return _scan_legacy_block_range(document, raw_id)
+    except LegacyBlockError as exc:
+        if exc.kind == "ambiguous":
+            _frontmatter_error(
+                f"file={path} legacy block 无法安全包裹",
+                f"id={exc.raw_id} candidates={exc.candidates}",
+                "修正为唯一 legacy block 后重试",
+            )
+        _frontmatter_error(
+            f"file={path} legacy marker collision",
+            f"id={exc.raw_id} line={exc.line}",
+            "删除或转义候选块内预存 marker 后重试",
+        )
 
 
 def _splice_body_lines(document, insertions):

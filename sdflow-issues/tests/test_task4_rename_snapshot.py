@@ -440,6 +440,35 @@ def test_batch_rename_preflight_rejects_unsafe_target_before_any_write(tmp_path,
     assert (tmp_path / "openspec" / "issues" / "INDEX.md").read_bytes() == before["INDEX"]
 
 
+def test_rename_legacy_block_range_emits_exact_english_fix_text():
+    """dedupe fix1 锁：issues 的 rename-path 格式化器逐字保留英文 fix 文案（与 core 的中文
+    sibling 只差 prose、不差扫描）。扫描单一源提取后，两分支文案 MUST byte-exact 不变。"""
+    # ambiguous 分支：零个匹配的 legacy heading → candidates=0
+    ambiguous_doc = {"path": "p.md", "lines": ["# x", "no heading"]}
+    with pytest.raises(ValueError) as exc_ambiguous:
+        issues_mod._rename_legacy_block_range(ambiguous_doc, "A1")
+    assert str(exc_ambiguous.value) == (
+        "ERROR: file=p.md legacy block 无法安全包裹; "
+        "cause: id=A1 candidates=0; "
+        "fix: repair to exactly one legacy block, then rerun the original batch rename command"
+    )
+    # collision 分支：唯一 heading 内含预存 marker → line 定位
+    collision_doc = {
+        "path": "p.md",
+        "lines": ["## A1: title", "<!-- sdflow-issue-block:start id=A9 -->"],
+    }
+    with pytest.raises(ValueError) as exc_collision:
+        issues_mod._rename_legacy_block_range(collision_doc, "A1")
+    assert str(exc_collision.value) == (
+        "ERROR: file=p.md legacy marker collision; "
+        "cause: id=A1 line=2; "
+        "fix: remove or escape the preexisting marker, then rerun the original batch rename command"
+    )
+    # 扫描已收敛为唯一命名单一源（两侧格式化器均解析到 core）
+    assert issues_mod._scan_legacy_block_range.__module__ == "sdflow_issues_core"
+    assert issues_mod._legacy_block_range.__module__ == "sdflow_issues_core"
+
+
 @pytest.mark.parametrize(
     "marker_bytes",
     [

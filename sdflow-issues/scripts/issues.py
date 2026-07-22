@@ -37,6 +37,9 @@ from sdflow_issues_core import (  # 显式取 underscore 前缀的共享 helper�
     _validate_unicode_scalar,
     _die,
     _reject_line_unsafe,
+    _scan_legacy_block_range,  # 唯一命名 package 单一源的 legacy 块边界扫描（AD-3 pool-agnostic）
+    _legacy_block_range,       # core 的中文格式化 sibling；本文件不调，仅经 re-export 供 thinness 守解析到 core
+    LegacyBlockError,          # 扫描抛的结构化 sentinel（caller 各自格式化 fix 文案）
 )
 
 
@@ -121,7 +124,7 @@ def _body_with_legacy_bug_markers(document, targets):
         line_offsets.append(line_offsets[-1] + len(line.encode("utf-8")))
     ranges = []
     for raw_id, canonical in targets:
-        start, end = _legacy_block_range(document, raw_id)
+        start, end = _rename_legacy_block_range(document, raw_id)
         ranges.append((start, end, canonical))
     for start, end, canonical in sorted(ranges):
         insertions.setdefault(line_offsets[start], []).append(
@@ -145,35 +148,31 @@ def _canonical_from_legacy_key(key):
     return f"{key[0]}{key[1]}"
 
 
-def _legacy_block_range(document, raw_id):
-    """Resolve exactly one semantic legacy block and reject marker collisions."""
-    semantic_key = _legacy_semantic_id_key(raw_id)
-    starts = []
-    for index, line in enumerate(document["lines"]):
-        match = re.match(r"##\s+([A-Z][0-9]+)\s*:", line, re.ASCII)
-        if match and _legacy_semantic_id_key(match.group(1)) == semantic_key:
-            starts.append(index)
-    if len(starts) != 1:
-        raise ValueError(
-            f"ERROR: file={document['path']} legacy block 无法安全包裹; "
-            f"cause: id={raw_id} candidates={len(starts)}; "
-            "fix: repair to exactly one legacy block, then rerun the original batch rename command"
-        )
-    start = starts[0]
-    end = len(document["lines"])
-    for index in range(start + 1, len(document["lines"])):
-        line = document["lines"][index]
-        if line.strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", line, re.ASCII):
-            end = index
-            break
-    for index in range(start, end):
-        if _match_marker_line(document["lines"][index]):
+def _rename_legacy_block_range(document, raw_id):
+    """Rename-path wrapper: delegate to the single-source scan, format English fix.
+
+    The block boundary scan lives once in ``sdflow_issues_core._scan_legacy_block_range``
+    (pool-agnostic, prose-free).  This wrapper is the issues-owned batch-rename
+    caller: it catches the structured ``LegacyBlockError`` and emits the
+    rename-path-specific English fix text ("rerun the original batch rename
+    command"), matching issues' batch-rename error family.  The core sibling
+    ``_legacy_block_range`` formats the same failures in Chinese via
+    ``_frontmatter_error``; only the fix prose differs, never the scan.
+    """
+    try:
+        return _scan_legacy_block_range(document, raw_id)
+    except LegacyBlockError as exc:
+        if exc.kind == "ambiguous":
             raise ValueError(
-                f"ERROR: file={document['path']} legacy marker collision; "
-                f"cause: id={raw_id} line={index + 1}; "
-                "fix: remove or escape the preexisting marker, then rerun the original batch rename command"
-            )
-    return start, end
+                f"ERROR: file={document['path']} legacy block 无法安全包裹; "
+                f"cause: id={exc.raw_id} candidates={exc.candidates}; "
+                "fix: repair to exactly one legacy block, then rerun the original batch rename command"
+            ) from None
+        raise ValueError(
+            f"ERROR: file={document['path']} legacy marker collision; "
+            f"cause: id={exc.raw_id} line={exc.line}; "
+            "fix: remove or escape the preexisting marker, then rerun the original batch rename command"
+        ) from None
 
 
 def _reject_target_document_problems(document, target_ids):
@@ -189,7 +188,7 @@ def _reject_target_document_problems(document, target_ids):
         # a generic ``marker-only legacy`` diagnostic.
         for raw_id in target_ids:
             if _legacy_semantic_id_key(raw_id) not in frontmatter_keys:
-                _legacy_block_range(document, raw_id)
+                _rename_legacy_block_range(document, raw_id)
     structural = [
         problem for problem in document["problems"]
         if "marker" in problem or "frontmatter" in problem
