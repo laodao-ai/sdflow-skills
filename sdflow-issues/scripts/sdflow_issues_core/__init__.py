@@ -107,7 +107,7 @@ POOL_SPEC = {
 }
 
 
-def validate_pool_spec(spec=POOL_SPEC):
+def validate_pool_spec(spec=None):
     """校验一份 POOL_SPEC 映射的封闭性 + 关系正确性，违规抛 PoolSpecError（fail-closed）。
 
     只做**数据面**的 intra-schema 校验（不触外部常量，避免与 issues.py 循环 import）：
@@ -118,6 +118,8 @@ def validate_pool_spec(spec=POOL_SPEC):
 
     与 `RECORDER_POOL_CONFIG` / `TERMINAL_STATUSES` 现值的逐值一致由 tests 守（外部对照源）。
     """
+    if spec is None:  # 避免可变模块级 dict 作默认参数；缺省即校验模块级 POOL_SPEC
+        spec = POOL_SPEC
     if set(spec) != {"bug", "todo"}:
         raise PoolSpecError(
             f"ERROR: POOL_SPEC keys 必须恰为 {{'bug','todo'}}，实际 {sorted(spec)}; "

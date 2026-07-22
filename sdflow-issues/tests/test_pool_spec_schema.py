@@ -21,7 +21,6 @@
 不额外污染 sys.path。
 """
 
-import copy
 import dataclasses
 import importlib.util
 import sys
@@ -102,7 +101,10 @@ def test_field_registry_matches_dataclass():
 
 
 def test_required_dims_all_present():
-    """design/tasks 点名的 8 个 required 差异维在 schema 中都有对应字段。"""
+    """design/tasks 点名的 8 个 required 差异维在 schema 中都有对应字段。
+
+    「特定字段」拆为 specific_field（字段名）+ specific_values（枚举，成对）⇒ 字段级 9 项。
+    """
     required_dims = {
         "date_granularity",   # 文件粒度（日/月）
         "issues_dir",         # 目录

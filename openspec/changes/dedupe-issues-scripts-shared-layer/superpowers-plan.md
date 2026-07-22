@@ -90,13 +90,13 @@ impl-pipeline: tickets
 POOL_SPEC 是后续所有差异注入的唯一入口，它的封闭性与关系正确性必须先于任何逻辑上移被守住，否则差异会
 从后门（argparse default / 硬编码常量 / 任意 callable）漏进 core。
 
-- [ ] 冻结 pre-refactor pytest node-id manifest 作为零回归门的 allowlist 基线；标注意图删除项 =
+- [x] 冻结 pre-refactor pytest node-id manifest 作为零回归门的 allowlist 基线；标注意图删除项 =
       `test_mirror_consistency.py` 的 7 个测试 node
-- [ ] 唯一命名内部 package `sdflow_issues_core`（**非**裸 `core.py`）建立且可被 `from sdflow_issues_core
+- [x] 唯一命名内部 package `sdflow_issues_core`（**非**裸 `core.py`）建立且可被 `from sdflow_issues_core
       import ...` 解析
-- [ ] `POOL_SPEC` 为封闭 dataclass/TypedDict，required 维含：文件粒度 / 目录 / legacy dir glob / 特定字段
+- [x] `POOL_SPEC` 为封闭 dataclass/TypedDict，required 维含：文件粒度 / 目录 / legacy dir glob / 特定字段
       / 状态词表 / 终态集 / `DEFAULT_PREFIX`(B/T) / scan 输出键(bugs/items)；新增维不改 schema 即报错
-- [ ] schema 守卫红于：缺任一 required 维、`terminal_set ⊄ 状态词表`、`POOL_SPEC` 值与
+- [x] schema 守卫红于：缺任一 required 维、`terminal_set ⊄ 状态词表`、`POOL_SPEC` 值与
       `RECORDER_POOL_CONFIG` 不一致、`POOL_SPEC.keys() != {"bug","todo"}`
 
 ### Task 2: 三层共享逻辑单一物理源 + 三薄入口迁入 sdflow-issues/scripts/（CLI 逐命令行为等价）
