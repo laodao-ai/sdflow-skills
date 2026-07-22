@@ -1,4 +1,14 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: c7f666da17451f53805def51c8956a1646a59564
+---
+
 # spec-review-report — dedupe-issues-scripts-shared-layer
+
+> **设计 HARD-GATE 已拍板批准 · 2026-07-22**（用户过本报告 + amendments + 窄复核批准 → 阶段三 /sdflow-ship）。
+> 被批准盘面 `reviewed_sha=c7f666d`（四件套最终态：D1-D7 amendments + Q1-Q4 按推荐 + 窄复核 4 洞已修）。
+> ship-gate 机判锚见头部 frontmatter；初评（v1）总裁决为「打回」，收敛历程见文末〔窄复核收敛 + 拍板登记〕。
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 
@@ -6,10 +16,10 @@
 > → Step2 并行多镜（1 领域镜 backend + 2 对抗镜 + 1 接地镜）+ hr-tg 领域 cross-model voice → Step3 合并去重 +
 > 对抗裁决。宿主 host=claude（档位 opus/sonnet/haiku），metrics.enabled=true。
 >
-> **总裁决：设计 HARD-GATE 当前不应通过——方向对，契约机械层未做全。** 方向（三 skill 3→1 合一、撤「独立分发」）
+> **初评（v1）总裁决：设计 HARD-GATE 当前不应通过——方向对，契约机械层未做全。**（**已被后续 amendments + 窄复核推翻，最终态=批准**，见文末〔窄复核收敛 + 拍板登记〕）方向（三 skill 3→1 合一、撤「独立分发」）
 > **站得住**（setup.sh 实测无单装路径、CONTEXT「三维度分家」把台账当一个概念）；问题**全在目标态契约的机械守卫与
 > 引用完备性**：1 个合并后必打红 CI 的 Critical（R1）+ 5 个 High 契约缺口（R2/R3/R5/R6 + R4 tension）。
-> 建议**打回补 amendments 后重过窄复核再拍板**，非直接批准。
+> 初评建议**打回补 amendments 后重过窄复核再拍板**——已按此走完（D1-D7 落定 + Q1-Q4 拍板 + 窄复核 4 洞修复）。
 
 ---
 
@@ -172,3 +182,18 @@ Codex 另举 `match pool`/`kind=pool` 别名/callable 内部比较等绕法。**
 **建议流程**：人门**打回** → 按 D1-D7 补 amendments（重点：AD-5 两 delta + 机械引用守卫、POOL_SPEC 封闭 schema + 关系守、守卫升 AST 级并诚实标 best-effort、零回归门改覆盖判据、golden 诚实降级）→ 对 Q1-Q4 拍板 → **跑一次窄复核（只审增量 amendments）** → 再拍板批准。amendments 落定前不写 `ship-gate.design_approved`。
 
 > 注：R2/R3/R6 三条共享同一模式——**「有确定性信号的外壳」骗过「机械化」闸门**（源码扫描像机械、POOL_SPEC 完备像机械、golden 像交叉校验），但都在语义无界面 / 自比自己上失效。修 amendments 时统一按基准 5「机械判定须正确、best-effort 展示须诚实标注」处理，别逐条补丁。
+
+---
+
+## 窄复核收敛 + 拍板登记〔最终态〕
+
+初评（v1，收敛口以上）总裁决为**打回**（1 Critical + 5 High 契约机械层缺口）。已按初评建议的流程走完，最终 **HARD-GATE 批准**：
+
+| 阶段 | 提交 | 内容 |
+|---|---|---|
+| ① D1-D7 二次修订 | `5078c62` | 唯一命名内部 package / 守卫升 AST / POOL_SPEC 封闭 schema / 零回归门改覆盖判据 / golden 诚实降级 / AD-5 补全 + 机械引用守卫 / 2 主 spec delta |
+| ② Q1-Q4 拍板 | `5078c62` | Q1 唯一命名内部 package（消 import 碰撞 + 令测试加载显式）· Q2 命名限签 callable · Q3 记「误判落错池不可机械恢复」为已知代价 + 合一 SKILL.md 骑墙判定规则 · Q4 内部 package 拆分 |
+| ③ 接缝修正 | `9ccdd89` | 4 处残留 `core.py`/`import core` 漏改（determinism-guards Scenario + Goals + TG-14 + 旧注记）改 package |
+| ④ 窄复核（只审增量） | `c7f666d` | 4 洞修复：F1（spec-workflow census→RENAME-MAP 框架）· F2（allowlist 豁免整个在途 change 目录非仅四件套）· F3（implement:378 doc-pointer 非 slash）· L1（determinism-guards 2 delta header 匹配主 spec 防 archive 失配） |
+
+**拍板**：用户 2026-07-22 过本报告 + 全部 amendments + 窄复核后批准 → 回写 `ship-gate.design_approved=true`、`reviewed_sha=c7f666d`（被批准盘面）→ 进入阶段三 /sdflow-ship。初评列出的 R1（CI 必红）/R2/R3/R6（机械化假绿面）均已在 ①②④ 中按基准 5 收口。
