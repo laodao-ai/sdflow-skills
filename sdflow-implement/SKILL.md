@@ -375,7 +375,7 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
   无客观判据派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist 并停上抛），**MUST NOT**
   无限循环。
 - Minor 发现 → defer 进 todolist，**JSON 显式带 `"change"` 字段**（省略会被脚本自动挂到"当前活跃
-  change"，多 change 并行时会挂错，坑见 sdflow-todolist 的 `change` 字段说明）。
+  change"，多 change 并行时会挂错，坑见 sdflow-issues 的 todo 池 `change` 字段说明）。
 
 **无 warm final whole-branch review**——本模式不追加分支级终审步；全部 ticket 完成、gate 判进
 `RUN_CODE_REVIEW` 后直接交给冷层 `/sdflow-code-review` 承接（独立冷视角 + 实测捕获承重墙，见下节

@@ -104,8 +104,7 @@ description: >
 - ✅ 想看 per-镜（lens）出的 findings 数、采纳率、独立发现数——判断某镜是否还值得跑。
 - ✅ 归档了新 change 之后，想让 `openspec/retro/report.md` 反映最新数据。
 - ⚠️ 不用于：扫 openspec 目录结构一致性（那是 `/sdflow-maintain` 的事）；不用于团队周度
-  工程复盘会（那是 gstack `retro`）；不用于记录单个 bug/todo（`/sdflow-buglist` /
-  `/sdflow-todolist`）。
+  工程复盘会（那是 gstack `retro`）；不用于记录单个 bug/todo（`/sdflow-issues`）。
 
 ## 怎么做
 

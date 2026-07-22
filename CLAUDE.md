@@ -80,11 +80,11 @@ conftest 收集止于塌缩后的 rootdir、断言静默失效）。**两者缺�
 
 ```bash
 pytest                                                  # 发现并运行全部 test_*.py
-pytest sdflow-buglist/tests/                            # 单个 skill
-pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
+pytest sdflow-issues/tests/                             # 单个 skill
+pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
 ```
 
-带脚本+测试的 skill 仅这几个：`sdflow-buglist`、`sdflow-todolist`、`sdflow-issues`、
+带脚本+测试的 skill 仅这几个：`sdflow-issues`、
 `sdflow-init`、`sdflow-retro`、`sdflow-maintain`、`sdflow-architecture`、`sdflow-devenv`。其余为纯 Markdown 编排类，无自动化测试。
 <!-- [impl-review-fix] C8：清单失鲜补 sdflow-architecture（已有 scripts/ + tests/，此前遗漏） -->
 
@@ -105,7 +105,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 
 1. **编排类（纯 Markdown）**：`sdflow-spec-review` / `sdflow-code-review` / `sdflow-done` /
    `sdflow-roadmap` / `embedded-test-sop` / `openspec-upgrade` — 靠 SKILL.md 指令驱动主 session 调度子代理，无脚本。
-2. **数据类（Markdown + Python）**：`sdflow-buglist` / `sdflow-todolist` / `sdflow-issues` / `sdflow-init` /
+2. **数据类（Markdown + Python）**：`sdflow-issues` / `sdflow-init` /
    `sdflow-retro` / `sdflow-maintain` — 由 `scripts/` 保证确定性，SKILL.md 负责判断与编排。
 
 ### `setup.sh` 安装机制（核心，改动需谨慎）
@@ -303,7 +303,7 @@ pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v     # 单个用例
 | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
 | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
-> 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
+> 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
 > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
 
 ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）

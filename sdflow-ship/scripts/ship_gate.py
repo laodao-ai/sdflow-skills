@@ -235,7 +235,7 @@ class GateIndeterminate(Exception):
 _GIT_HARDEN = ("-c", "core.quotePath=false")
 
 # [harden-gate-git-layer Task2 · ADR-5 · tasks 3.2] 三个 helper 统一上界。
-# 判据来源 = 仓内既有先例 `sdflow-buglist/scripts/buglist.py::repo_root` 的 `git_timeout = 30`：
+# 判据来源 = 仓内既有先例 `sdflow-issues/scripts/sdflow_issues_core/__init__.py::repo_root` 的 `git_timeout = 30`：
 # 这些都是**纯本地元数据查询**（正常毫秒级），30 秒是**文件系统卡死 / 网络文件系统挂起**的
 # 判定线，**不是性能预算**。MUST NOT 按「最慢的仓要多久」来调大——那会把它误当性能预算，
 # 从而让真正的挂起拖到无限久（而 gate 是同步阻塞在链序里的）。
@@ -278,7 +278,7 @@ def _git_env():
         MUST NOT 声称它被 `test_verdict_is_identical_under_polluted_git_env` 守住——
         那条只污染 `diff.ignoreSubmodules` 这一个良性 knob，覆盖不到本面。
 
-    [fix1 M1] **与先例的差异登记**：`sdflow-buglist/scripts/buglist.py::repo_root`（:613-618）
+    [fix1 M1] **与先例的差异登记**：`sdflow-issues/scripts/sdflow_issues_core/__init__.py::repo_root`
     只剔 discovery 类（`GIT_DIR`/`GIT_WORK_TREE`/`GIT_CONFIG_*`…）并**刻意保留执行类**
     （`GIT_EXEC_PATH` 等）；本函数剔全前缀，故连 `GIT_EXEC_PATH` 一并剔掉。
     理由：本文件只调 builtin 子命令（`log`/`rev-parse`/`ls-tree`/`show`/`cat-file`），

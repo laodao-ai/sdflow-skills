@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """buglist.py — sdflow-issues 的 **bug 池薄入口**（dedupe-issues-scripts-shared-layer · adr/0027）。
 
-原 `sdflow-buglist` skill 的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
+bug 池的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
 解析 args → 注入 bug 的 `POOL_SPEC` + `PoolStrategy` → 调 `run_cli`。共享执行逻辑
 （ID 扫描自增、canonical/overlay 写入、legacy 只读 promotion、状态门禁、扫描自检）全部
 在 core，本文件不再持有任何副本。

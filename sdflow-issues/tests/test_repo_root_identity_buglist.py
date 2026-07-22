@@ -9,14 +9,14 @@
 bare repo、git 不可用才回落。「最近」二字同样是 cr-fix1 加的：祖先校验 + worktree marker
 对**外层祖先仓库**（core.worktree 指祖先仓 / PATH 上的 fake git）双双放行。
 
-本文件与 sdflow-issues/tests · sdflow-todolist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
-D4 红线禁止互相 import，故测试也各自一份）。
+本文件与 sdflow-issues/tests 下的 test_repo_root_identity_{todolist,issues}.py 逐条对应（三薄入口
+经唯一共享源 `sdflow_issues_core` 取同一 `repo_root`；本组测试各自经其入口验证解析身份一致）。
 
 方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
 `isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
 外部依赖行为外，一切都用 `tmp_path` 下真实存在/不存在的路径构造。
 
-Run with: python3 -m pytest sdflow-buglist/tests/test_repo_root_identity_buglist.py -v
+Run with: python3 -m pytest sdflow-issues/tests/test_repo_root_identity_buglist.py -v
 """
 
 import ast

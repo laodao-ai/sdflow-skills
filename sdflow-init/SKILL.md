@@ -135,7 +135,7 @@ workflow.md 的流程依赖 3 个 sdflow skill，提示用户安装：
 bash ~/.skills/sdflow-skills/setup.sh
 ```
 - `/sdflow-spec-review` — 设计审主审 · `/sdflow-code-review` — 代码审主审 · `/sdflow-done` — 闭环（verify→archive→commit→merge）
-（记录类按需：`/sdflow-buglist`、`/sdflow-todolist`。）
+（记录类按需：`/sdflow-issues`。）
 
 ## 铺设了什么
 

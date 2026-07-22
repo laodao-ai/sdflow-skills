@@ -62,7 +62,7 @@
 ```bash
 bash setup.sh                                         # 安装/刷新 Claude、Codex skills 与全局 bundle
 pytest                                                # 运行全部 pytest 测试
-pytest sdflow-buglist/tests/                          # 运行单个 skill 测试
+pytest sdflow-issues/tests/                           # 运行单个 skill 测试
 pytest path/to/test_file.py::test_name -v             # 运行单个用例
 python3 hack/sync_principles.py --check                # 检查托管通则是否漂移
 git diff --check                                      # 检查空白错误
@@ -167,7 +167,7 @@ git diff --check                                      # 检查空白错误
 | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
 | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
-> 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
+> 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
 > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
 
 ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）

@@ -76,7 +76,7 @@
 | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
 | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
-> 另有两个记录类配套 skill（按需）：`/sdflow-buglist`（缺陷）、`/sdflow-todolist`（改进收集池），
+> 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
 > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
 
 ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）

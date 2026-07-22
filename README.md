@@ -23,13 +23,11 @@
 | 规划 | `sdflow-architecture` | 系统架构设计编排器：简单需求 → skeleton-ready SAD（openspec/architecture/ 单例）+ 骨架切片建议交棒 |
 | 规划 | `sdflow-devenv` | 开发/测试环境副驾：定测试策略（单元/集成/e2e 三层，一层不留白）→ 落脚手架 → 尽可能真跑一遍确认 → 出 `testing-strategy.md` + `environments.md` |
 | 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，直写产出 design/roadmap/task-log 三件套（可选 memo），不经 change 壳 |
-| 记录（issues 池） | `sdflow-buglist` | 缺陷记录 + 状态回写（OPEN→VERIFIED→FIXED），保证 ID 不撞号、总览/详情双写一致 |
-| 记录（issues 池） | `sdflow-todolist` | 改进想法 / 技术债收集池（非缺陷），全局唯一 T-ID |
-| 记录（issues 池） | `sdflow-issues` | 跨 buglist+todolist 的 `issues/INDEX.md` 重建与批次注册表维护 |
+| 记录（issues 台账） | `sdflow-issues` | issues 台账单一 skill：bug 池（缺陷记录 + 状态回写 OPEN→VERIFIED→FIXED，B-ID）+ todo 池（改进 / 技术债，T-ID）两池记录，跨池 `issues/INDEX.md` 重建与批次注册表维护，保证 ID 不撞号、总览/详情双写一致 |
 | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
 | 测试 | `embedded-test-sop` | 为嵌入式固件功能生成手动测试 SOP + 配套日志自动分析规则（log-checks.yaml） |
 
-> 三个 recorder、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**（带 `scripts/` + `tests/`），
+> `sdflow-issues`、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**（带 `scripts/` + `tests/`），
 > 由脚本保证确定性；其余（含 `sdflow-roadmap`）为纯 Markdown 编排类。
 
 > **曾用名对照**（改名于 `sdflow-rebrand`，历史 PR / issue / 本地记忆若引用旧名，按此表换算）：
@@ -42,8 +40,8 @@
 > | `opsx-roadmap-planner` | `sdflow-roadmap` |
 > | `spec-review` | `sdflow-spec-review` |
 > | `impl-review` | `sdflow-code-review` |
-> | `buglist-recorder` | `sdflow-buglist` |
-> | `todolist-recorder` | `sdflow-todolist` |
+> | `buglist-recorder` | `sdflow-issues`（bug 池已并入统一台账 skill） |
+> | `todolist-recorder` | `sdflow-issues`（todo 池已并入统一台账 skill） |
 > | `issues-recorder` | `sdflow-issues` |
 
 ## 安装
@@ -80,9 +78,9 @@ bash setup.sh
 
 ### Recorder 存储契约
 
-`sdflow-buglist`、`sdflow-todolist` 与 `sdflow-issues` 共享 versioned **Shared Frontmatter Envelope**：
+`sdflow-issues` 的 bug/todo 两池共用 versioned **Shared Frontmatter Envelope**：
 新 item 的机器索引只写 `sdflow-issues` namespace，历史 Markdown 总览表永久只读；首次修改历史 item
-会在同文件生成 overlay，保留旧表 bytes。三者用仓级 exclusive snapshot lock 串行权威读写，batch
+会在同文件生成 overlay，保留旧表 bytes。两池 CLI（三薄入口共唯一 `sdflow_issues_core`）用仓级 exclusive snapshot lock 串行权威读写，batch
 rename 以 registry provenance 支持重跑原命令收敛。完整契约、POSIX/Windows 本地盘、network FS、
 power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md`。
   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
@@ -98,8 +96,8 @@ power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versio
 
 ```bash
 pytest                                                       # 全部
-pytest sdflow-buglist/tests/                                # 单个 skill
-pytest sdflow-buglist/tests/test_buglist.py::test_xxx -v    # 单个用例
+pytest sdflow-issues/tests/                                 # 单个 skill
+pytest sdflow-issues/tests/test_buglist.py::test_xxx -v     # 单个用例
 ```
 
 面向 AI 协作者的项目级指令见 [CLAUDE.md](./CLAUDE.md) / [AGENTS.md](./AGENTS.md)。

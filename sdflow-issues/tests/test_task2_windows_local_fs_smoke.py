@@ -2,7 +2,7 @@
 
 Run on an actual Windows runner whose pytest tmp path is a local drive:
 
-    py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error
+    py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
 
 Non-Windows hosts skip this module and MUST NOT cite the skip as Windows evidence.
 The test deliberately fails when the runner provides a UNC/network temp path.
@@ -116,7 +116,7 @@ def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
         assert "mode: copy (Windows)" in result.stdout
 
     for host in (".claude", ".codex"):
-        installed = home / host / "skills" / "sdflow-buglist"
+        installed = home / host / "skills" / "sdflow-issues"
         assert installed.is_dir() and not installed.is_symlink()
         assert (installed / ".sdflow-skills").is_file()
         assert (installed / "scripts/buglist.py").read_bytes() == (

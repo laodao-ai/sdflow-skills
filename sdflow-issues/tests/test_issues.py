@@ -23,8 +23,8 @@ from issues import (
 SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
 
 # Task 16：端到端一致性自检要用真实 buglist.py/todolist.py CLI 子进程（不借道 issues.py
-# 内部函数）造数据，定位方式镜像 issues.py 自身的 SKILLS_ROOT 探测（tests 目录上三级
-# 是 sdflow-skills 根，sdflow-buglist/sdflow-todolist 与本 skill 是同级 sibling）。
+# 内部函数）造数据；三薄入口现同属 sdflow-issues/scripts/ 同目录 co-located，直接用
+# 本测试文件上两级的 sdflow-issues/scripts/ 定位。
 BUGLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-issues" / "scripts" / "buglist.py")
 TODOLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-issues" / "scripts" / "todolist.py")
 
@@ -1723,7 +1723,7 @@ class TestSweep:
 
 def _run_cli(script, root, args, input_json=None):
     """通过真实 CLI 子进程调 buglist.py/todolist.py（stdin 喂 JSON，镜像
-    sdflow-buglist/tests/test_buglist.py 的 run_add 写法：不传 --json，
+    test_buglist.py 的 run_add 写法：不传 --json，
     默认走 stdin，`input=None` 时等价于不喂 stdin JSON 的命令，如 triage/scan/set-status）。"""
     return subprocess.run(
         [sys.executable, script, "--root", str(root)] + args,
@@ -1823,7 +1823,7 @@ def _read_index_bytes(root):
 
 def _write_bug_file(root, date, rows):
     """写一个最小合法的 dated buglist 文件（新路径 openspec/issues/buglist/），
-    格式镜像 sdflow-buglist/tests/test_buglist.py 的 _write_mixed_file。"""
+    格式镜像 test_buglist.py 的 _write_mixed_file。"""
     dir_path = Path(root) / "openspec" / "issues" / "buglist"
     dir_path.mkdir(parents=True, exist_ok=True)
     lines = [

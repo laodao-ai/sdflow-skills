@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """todolist.py — sdflow-issues 的 **todo 池薄入口**（dedupe-issues-scripts-shared-layer · adr/0027）。
 
-原 `sdflow-todolist` skill 的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
+todo 池的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件只做薄入口：
 解析 args → 注入 todo 的 `POOL_SPEC` + `PoolStrategy` → 调 `run_cli`。收集优化想法/技术债/
 改进等**非缺陷**项，与 bug 的差异（每月一文件、T 前缀、按类型而非优先级、详细块可选、
 状态码 OPEN/PROPOSED/DONE/WONTDO）全部经 `POOL_SPEC`/`PoolStrategy` 注入，本文件不持副本。

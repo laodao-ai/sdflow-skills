@@ -231,7 +231,7 @@ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
         assert trigger in workflow
     assert "branches:" not in workflow
     assert "runs-on: windows-latest" in workflow
-    assert "py -m pytest -q sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
+    assert "py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
 
 
 def test_delivery_docs_name_operational_boundaries():

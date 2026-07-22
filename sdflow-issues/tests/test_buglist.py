@@ -1,7 +1,7 @@
 """
 Tests for buglist.py's `doc`（关联文档）field: normalization, soft validation,
 detail-block rendering, and change-based auto-default.
-Run with: python3 -m pytest sdflow-buglist/tests/ -v
+Run with: python3 -m pytest sdflow-issues/tests/ -v
 """
 import json
 import os

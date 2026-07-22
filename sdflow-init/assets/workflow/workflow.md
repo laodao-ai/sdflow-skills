@@ -59,7 +59,7 @@
 
 > **sdflow-done 含 issues sweep 子步**（§2.1，I5/I6）：verify 判完、写 hand-off 正文前，分诊**本 change**新增的
 > OPEN 项入**单一批次**（key=本 change 名）→ 末尾跑 `issues.py reindex` 刷新 INDEX/批次状态 → hand-off 第 2 段引用该批次号
-> （不再逐条罗列裸 ID）。脚本分工：`sdflow-buglist`/`sdflow-todolist` 的 `scan`/`triage` 分诊 + `sdflow-issues` 的
+> （不再逐条罗列裸 ID）。脚本分工：`sdflow-issues` 的两池 `scan`/`triage` 分诊 +
 > `batch add`/`reindex` 管批次与索引。细则见 `sdflow-done` skill 的 SKILL.md §2.1（配套 skill，不在本 bundle 内，随 sdflow-skills `setup.sh` 安装）。
 > **跨模型 outside voice**：sdflow-spec-review / sdflow-code-review 默认开；命中 **HR-TG** 再单开一次领域 cross-model（C2/C3/C4）。调用协议见两 SKILL 的「outside-voice helper 调用协议」节；helper 契约 = `~/.sdflow/hack/outside-voice.sh` 头注释。
 
