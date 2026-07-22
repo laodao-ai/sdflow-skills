@@ -1,0 +1,318 @@
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index 73f09e8..fa0e96d 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -37,6 +37,9 @@ from sdflow_issues_core import (  # 显式取 underscore 前缀的共享 helper
+     _validate_unicode_scalar,
+     _die,
+     _reject_line_unsafe,
++    _scan_legacy_block_range,  # 唯一命名 package 单一源的 legacy 块边界扫描（AD-3 pool-agnostic）
++    _legacy_block_range,       # core 的中文格式化 sibling；本文件不调，仅经 re-export 供 thinness 守解析到 core
++    LegacyBlockError,          # 扫描抛的结构化 sentinel（caller 各自格式化 fix 文案）
+ )
+ 
+ 
+@@ -121,7 +124,7 @@ def _body_with_legacy_bug_markers(document, targets):
+         line_offsets.append(line_offsets[-1] + len(line.encode("utf-8")))
+     ranges = []
+     for raw_id, canonical in targets:
+-        start, end = _legacy_block_range(document, raw_id)
++        start, end = _rename_legacy_block_range(document, raw_id)
+         ranges.append((start, end, canonical))
+     for start, end, canonical in sorted(ranges):
+         insertions.setdefault(line_offsets[start], []).append(
+@@ -145,35 +148,31 @@ def _canonical_from_legacy_key(key):
+     return f"{key[0]}{key[1]}"
+ 
+ 
+-def _legacy_block_range(document, raw_id):
+-    """Resolve exactly one semantic legacy block and reject marker collisions."""
+-    semantic_key = _legacy_semantic_id_key(raw_id)
+-    starts = []
+-    for index, line in enumerate(document["lines"]):
+-        match = re.match(r"##\s+([A-Z][0-9]+)\s*:", line, re.ASCII)
+-        if match and _legacy_semantic_id_key(match.group(1)) == semantic_key:
+-            starts.append(index)
+-    if len(starts) != 1:
+-        raise ValueError(
+-            f"ERROR: file={document['path']} legacy block 无法安全包裹; "
+-            f"cause: id={raw_id} candidates={len(starts)}; "
+-            "fix: repair to exactly one legacy block, then rerun the original batch rename command"
+-        )
+-    start = starts[0]
+-    end = len(document["lines"])
+-    for index in range(start + 1, len(document["lines"])):
+-        line = document["lines"][index]
+-        if line.strip() == "---" or re.match(r"##\s+[A-Z][0-9]+\s*:", line, re.ASCII):
+-            end = index
+-            break
+-    for index in range(start, end):
+-        if _match_marker_line(document["lines"][index]):
++def _rename_legacy_block_range(document, raw_id):
++    """Rename-path wrapper: delegate to the single-source scan, format English fix.
++
++    The block boundary scan lives once in ``sdflow_issues_core._scan_legacy_block_range``
++    (pool-agnostic, prose-free).  This wrapper is the issues-owned batch-rename
++    caller: it catches the structured ``LegacyBlockError`` and emits the
++    rename-path-specific English fix text ("rerun the original batch rename
++    command"), matching issues' batch-rename error family.  The core sibling
++    ``_legacy_block_range`` formats the same failures in Chinese via
++    ``_frontmatter_error``; only the fix prose differs, never the scan.
++    """
++    try:
++        return _scan_legacy_block_range(document, raw_id)
++    except LegacyBlockError as exc:
++        if exc.kind == "ambiguous":
+             raise ValueError(
+-                f"ERROR: file={document['path']} legacy marker collision; "
+-                f"cause: id={raw_id} line={index + 1}; "
+-                "fix: remove or escape the preexisting marker, then rerun the original batch rename command"
+-            )
+-    return start, end
++                f"ERROR: file={document['path']} legacy block 无法安全包裹; "
++                f"cause: id={exc.raw_id} candidates={exc.candidates}; "
++                "fix: repair to exactly one legacy block, then rerun the original batch rename command"
++            ) from None
++        raise ValueError(
++            f"ERROR: file={document['path']} legacy marker collision; "
++            f"cause: id={exc.raw_id} line={exc.line}; "
++            "fix: remove or escape the preexisting marker, then rerun the original batch rename command"
++        ) from None
+ 
+ 
+ def _reject_target_document_problems(document, target_ids):
+@@ -189,7 +188,7 @@ def _reject_target_document_problems(document, target_ids):
+         # a generic ``marker-only legacy`` diagnostic.
+         for raw_id in target_ids:
+             if _legacy_semantic_id_key(raw_id) not in frontmatter_keys:
+-                _legacy_block_range(document, raw_id)
++                _rename_legacy_block_range(document, raw_id)
+     structural = [
+         problem for problem in document["problems"]
+         if "marker" in problem or "frontmatter" in problem
+diff --git a/sdflow-issues/scripts/sdflow_issues_core/__init__.py b/sdflow-issues/scripts/sdflow_issues_core/__init__.py
+index c2d9a2b..6a46cc0 100644
+--- a/sdflow-issues/scripts/sdflow_issues_core/__init__.py
++++ b/sdflow-issues/scripts/sdflow_issues_core/__init__.py
+@@ -1368,7 +1368,35 @@ def _find_item_document(root, requested_id, pool):
+     return found[0]
+ 
+ 
+-def _legacy_block_range(document, raw_id, path):
++class LegacyBlockError(Exception):
++    """Structured sentinel raised by the single-source legacy block scan.
++
++    Carries only structured data (never caller-facing prose): ``kind`` is
++    ``"ambiguous"`` (the semantic ID resolved to != 1 heading block) or
++    ``"collision"`` (a preexisting marker line sits inside the resolved block).
++    Each caller catches this and formats its own pool/language-appropriate fix
++    message, so the scan itself stays pool-agnostic and prose-free (AD-3/Q2).
++    """
++
++    def __init__(self, kind, raw_id, *, candidates=None, line=None):
++        super().__init__(kind)
++        self.kind = kind
++        self.raw_id = raw_id
++        self.candidates = candidates
++        self.line = line
++
++
++def _scan_legacy_block_range(document, raw_id):
++    """Pool-agnostic single source for the legacy block boundary scan.
++
++    Resolve exactly one semantic legacy heading block for ``raw_id`` and reject a
++    preexisting marker collision inside it, returning ``(start, end)`` line
++    indices.  On failure raises :class:`LegacyBlockError` with structured data
++    (no prose) — callers translate it into their own fix message.  This is the
++    only copy of the scan algorithm; both ``_legacy_block_range`` (core, Chinese
++    ``_frontmatter_error``) and issues' ``_rename_legacy_block_range`` (English
++    rename-path ``ValueError``) delegate here.
++    """
+     starts = []
+     key = _legacy_semantic_id_key(raw_id)
+     for index, line in enumerate(document["lines"]):
+@@ -1376,11 +1404,7 @@ def _legacy_block_range(document, raw_id, path):
+         if match and _legacy_semantic_id_key(match.group(1)) == key:
+             starts.append(index)
+     if len(starts) != 1:
+-        _frontmatter_error(
+-            f"file={path} legacy block 无法安全包裹",
+-            f"id={raw_id} candidates={len(starts)}",
+-            "修正为唯一 legacy block 后重试",
+-        )
++        raise LegacyBlockError("ambiguous", raw_id, candidates=len(starts))
+     start = starts[0]
+     end = len(document["lines"])
+     for index in range(start + 1, len(document["lines"])):
+@@ -1390,12 +1414,25 @@ def _legacy_block_range(document, raw_id, path):
+             break
+     for index in range(start, end):
+         if _match_marker_line(document["lines"][index]):
++            raise LegacyBlockError("collision", raw_id, line=index + 1)
++    return start, end
++
++
++def _legacy_block_range(document, raw_id, path):
++    try:
++        return _scan_legacy_block_range(document, raw_id)
++    except LegacyBlockError as exc:
++        if exc.kind == "ambiguous":
+             _frontmatter_error(
+-                f"file={path} legacy marker collision",
+-                f"id={raw_id} line={index + 1}",
+-                "删除或转义候选块内预存 marker 后重试",
++                f"file={path} legacy block 无法安全包裹",
++                f"id={exc.raw_id} candidates={exc.candidates}",
++                "修正为唯一 legacy block 后重试",
+             )
+-    return start, end
++        _frontmatter_error(
++            f"file={path} legacy marker collision",
++            f"id={exc.raw_id} line={exc.line}",
++            "删除或转义候选块内预存 marker 后重试",
++        )
+ 
+ 
+ def _splice_body_lines(document, insertions):
+diff --git a/sdflow-issues/tests/test_determinism_guards.py b/sdflow-issues/tests/test_determinism_guards.py
+index 4125439..08204cf 100644
+--- a/sdflow-issues/tests/test_determinism_guards.py
++++ b/sdflow-issues/tests/test_determinism_guards.py
+@@ -93,10 +93,12 @@ def _describe_pool_valueish(node):
+     return None
+ 
+ 
+-def scan_pool_branches(source, filename="<core>"):
++def scan_pool_branches(source):
+     """扫描 Python 源码 AST，返回针对 pool 值分岔的 findings。
+ 
+     findings: [(lineno, form, snippet)]。form ∈ {compare, match}。best-effort（见模块 docstring）。
++    调用方各自持有源文件名（`test_core_has_no_pool_value_branches` 的 offenders 以 `path.name`
++    为键、mutation/prose 自测传字面 label），故本函数不复携带 filename。
+     """
+     tree = ast.parse(source)
+     findings = []
+@@ -134,7 +136,7 @@ def test_core_has_no_pool_value_branches():
+     """core 每个 .py 文件 AST 无针对裸 pool 字面的条件分支/match（差异一律经 POOL_SPEC 取值）。"""
+     offenders = {}
+     for path in _core_py_files():
+-        findings = scan_pool_branches(path.read_text(encoding="utf-8"), str(path))
++        findings = scan_pool_branches(path.read_text(encoding="utf-8"))
+         if findings:
+             offenders[path.name] = findings
+     assert not offenders, (
+@@ -167,8 +169,9 @@ def test_scanner_reds_on_injected_pool_branches_mutation():
+         mutated = clean + "\n\ndef _injected_pool_branch(pool, expected_pool, document):\n" + "".join(
+             "    " + line if line.strip() else line for line in snippet.splitlines(keepends=True)
+         )
+-        findings = scan_pool_branches(mutated, "<mutated-core>")
+-        # 减去 clean 基线（clean 恒为 0），mutation 必新增 ≥1 finding
++        findings = scan_pool_branches(mutated)
++        # clean 基线恒为 0（由 test_core_has_no_pool_value_branches 独立保证），故此处
++        # 只需断言 mutation 后 findings 非空即证守卫捕获了注入分支。
+         assert findings, f"mutation 未被守卫捕获: {label} :: {snippet!r}"
+ 
+ 
+@@ -184,7 +187,7 @@ def test_scanner_allows_closed_schema_keys_assertion():
+         'RECORDER = {pool: () for pool in ("bug", "todo")}\n'
+         'if pool in {"bug", "todo"}:\n    ok = True\n'
+     )
+-    assert scan_pool_branches(allowed, "<allowed>") == []
++    assert scan_pool_branches(allowed) == []
+ 
+ 
+ def test_scanner_does_not_scan_prose():
+@@ -195,7 +198,7 @@ def test_scanner_does_not_scan_prose():
+     """
+     prose = "设计讨论：core 里若出现 `if pool == \"bug\"` 就该红。\n- 见 AD-4\n"
+     with pytest.raises(SyntaxError):
+-        scan_pool_branches(prose, "<design.md>")
++        scan_pool_branches(prose)
+ 
+ 
+ # ══════════════════════════════════════════════════════════════════════════════
+@@ -204,6 +207,7 @@ def test_scanner_does_not_scan_prose():
+ 
+ # 旧 test_mirror_consistency.py 的 THREE_WAY(37) + TWO_WAY(24) roster（T2 impl-report §2 逐字）。
+ # 把「三份剥 docstring AST 等价」转「从薄入口解析的对象 __module__ == core」。
++# Task 4 fix1 追加 `_scan_legacy_block_range`（新的 legacy 块扫描单一源，见 ALLOWED_DISTINCT 注记）。
+ THREE_WAY_ROSTER = (
+     "atomic_write", "atomic_write_bytes", "repo_root", "_reject_line_unsafe", "canonical_id",
+     "semantic_id_key", "validate_prefix", "_lock_path", "_read_lock_metadata", "_lock_conflict",
+@@ -222,7 +226,7 @@ TWO_WAY_ROSTER = (
+     "_canonical_document", "_render_recorder_document", "_display_title", "_summary_blockquote",
+     "_escape_user_markers", "_canonical_from_key", "_find_item_document", "_legacy_block_range",
+     "_splice_body_lines", "_reject_document_mutation", "_preflight_target_legacy_block",
+-    "_promotion_insertions", "_validated_rendered_mutation",
++    "_promotion_insertions", "_validated_rendered_mutation", "_scan_legacy_block_range",
+ )
+ ROSTER = THREE_WAY_ROSTER + TWO_WAY_ROSTER
+ 
+@@ -238,17 +242,16 @@ ALLOWED_POOL_BOUND = {
+     ("todolist", "next_id"), ("todolist", "all_ids"),
+ }
+ 
+-# ── 放行 2：issues 独占 rename-path 变体（documented·Task 4 记为已知代价）──────────
+-# issues.py 有一个**同名但语义相异**的 `_legacy_block_range(document, raw_id)`（2 参，读
+-# document['path']；抛 rename-path 专属 fix 文案「rerun the original batch rename command」，
+-# 与 issues 批量改名错误族一致），用于 issues 独占的 batch-rename 快照机制——**非** pool CLI
+-# 路径对 core helper 的 shadow。其结构逻辑与 core 版近似（找唯一 legacy block + 拒 marker 撞），
+-# 属**已知近重复**：合并进 core 需把 rename 专属错误文案注入 core（caller-specific 污染）或
+-# catch-rewrap（脆），属 Task 2 单一源范畴 + 非低成本 fold，故 Task 4 显式放行 + 登记待整合
+-# （见本票 impl-report Concern；对比 test_patch_discipline 的 allowlist-with-reason 惯例）。
+-ALLOWED_DISTINCT = {
+-    ("issues", "_legacy_block_range"),
+-}
++# ── 放行 2：已清空（原 issues 独占 rename-path 近重复已 dedup）────────────────────
++# 曾登记 `("issues", "_legacy_block_range")`：issues.py 有一份**逐行相同**的块边界扫描算法，
++# 与 core 的 `_legacy_block_range` 仅差 path 取值与错误发射（issues 抛英文 rename ValueError、
++# core 抛中文 `_frontmatter_error`）。Task 4 双轴审 fix1 把扫描提取为 core 的唯一命名单一源
++# `_scan_legacy_block_range`（pool-agnostic，抛结构化 `LegacyBlockError` sentinel，无 prose）；
++# 两侧各留一个薄格式化器：core 的 `_legacy_block_range`（中文）+ issues 的
++# `_rename_legacy_block_range`（英文，仅调 `_scan_legacy_block_range`）。issues 不再持有扫描
++# 副本，`_scan_legacy_block_range` 纳入下方 roster 由 thinness 守正面核验解析到 core；`_legacy_block_range`
++# 亦经 issues re-export 解析到 core。∴ 本放行清空。
++ALLOWED_DISTINCT = set()
+ 
+ _MISSING = object()
+ 
+diff --git a/sdflow-issues/tests/test_task4_rename_snapshot.py b/sdflow-issues/tests/test_task4_rename_snapshot.py
+index 16bd974..1f7f437 100644
+--- a/sdflow-issues/tests/test_task4_rename_snapshot.py
++++ b/sdflow-issues/tests/test_task4_rename_snapshot.py
+@@ -440,6 +440,35 @@ def test_batch_rename_preflight_rejects_unsafe_target_before_any_write(tmp_path,
+     assert (tmp_path / "openspec" / "issues" / "INDEX.md").read_bytes() == before["INDEX"]
+ 
+ 
++def test_rename_legacy_block_range_emits_exact_english_fix_text():
++    """dedupe fix1 锁：issues 的 rename-path 格式化器逐字保留英文 fix 文案（与 core 的中文
++    sibling 只差 prose、不差扫描）。扫描单一源提取后，两分支文案 MUST byte-exact 不变。"""
++    # ambiguous 分支：零个匹配的 legacy heading → candidates=0
++    ambiguous_doc = {"path": "p.md", "lines": ["# x", "no heading"]}
++    with pytest.raises(ValueError) as exc_ambiguous:
++        issues_mod._rename_legacy_block_range(ambiguous_doc, "A1")
++    assert str(exc_ambiguous.value) == (
++        "ERROR: file=p.md legacy block 无法安全包裹; "
++        "cause: id=A1 candidates=0; "
++        "fix: repair to exactly one legacy block, then rerun the original batch rename command"
++    )
++    # collision 分支：唯一 heading 内含预存 marker → line 定位
++    collision_doc = {
++        "path": "p.md",
++        "lines": ["## A1: title", "<!-- sdflow-issue-block:start id=A9 -->"],
++    }
++    with pytest.raises(ValueError) as exc_collision:
++        issues_mod._rename_legacy_block_range(collision_doc, "A1")
++    assert str(exc_collision.value) == (
++        "ERROR: file=p.md legacy marker collision; "
++        "cause: id=A1 line=2; "
++        "fix: remove or escape the preexisting marker, then rerun the original batch rename command"
++    )
++    # 扫描已收敛为唯一命名单一源（两侧格式化器均解析到 core）
++    assert issues_mod._scan_legacy_block_range.__module__ == "sdflow_issues_core"
++    assert issues_mod._legacy_block_range.__module__ == "sdflow_issues_core"
++
++
+ @pytest.mark.parametrize(
+     "marker_bytes",
+     [

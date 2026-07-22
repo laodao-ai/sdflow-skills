@@ -145,14 +145,14 @@ POOL_SPEC 是后续所有差异注入的唯一入口，它的封闭性与关系�
 best-effort）、薄入口 thinness 同一性守、golden 诚实降级为接线守，并确认既有 fail-closed 校验不受迁移影响、
 import 走同目录 package 无 sys.path 污染。守法的诚实边界（best-effort 声明、删 tautology 宣称）是本票硬约束。
 
-- [ ] `test_mirror_consistency.py`（三向/两向 roster）删除，无孤立 roster 残留
-- [ ] 无 pool 分支守为 AST 级（拦 `If`/`IfExp`/`Match`/`Compare` 右操作数 ∈{bug,todo} 且左操作数解析到
+- [x] `test_mirror_consistency.py`（三向/两向 roster）删除，无孤立 roster 残留
+- [x] 无 pool 分支守为 AST 级（拦 `If`/`IfExp`/`Match`/`Compare` 右操作数 ∈{bug,todo} 且左操作数解析到
       pool 值/别名/subscript），mutation test 证其对 `expected_pool=="bug"`/`document["pool"]=="bug"` 反红；
       spec/test 诚实标 best-effort 代理、非充要
-- [ ] 薄入口 thinness 同一性守：THREE_WAY/TWO_WAY 名单每 helper 从薄入口 `getattr` 解析对象
+- [x] 薄入口 thinness 同一性守：THREE_WAY/TWO_WAY 名单每 helper 从薄入口 `getattr` 解析对象
       `__module__ == 'sdflow_issues_core'`（未被 shadow）
-- [ ] golden 降级为「同源两 code-path 接线正确」守，删「任一方漏 rule → 失败」宣称
-- [ ] `validate_scan_envelope` fail-closed / `config.yaml` lint / `batches.md` lint 随迁移继续绿；三薄入口经
+- [x] golden 降级为「同源两 code-path 接线正确」守，删「任一方漏 rule → 失败」宣称
+- [x] `validate_scan_envelope` fail-closed / `config.yaml` lint / `batches.md` lint 随迁移继续绿；三薄入口经
       同目录 package import、无跨目录 import / sys.path 污染（除入口自身 dir）
 
 ### Task 5: 下游托管引用同步（AD-5 fail-closed + 机械引用守卫）
