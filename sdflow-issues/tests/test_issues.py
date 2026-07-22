@@ -167,33 +167,24 @@ class TestReadPoolConflictGuard:
 
 
 class TestTerminalStatusesCrossScriptConsistency:
-    """T3 守卫：bug 终态集 {FIXED,WONTFIX}、todo 终态集 {DONE,WONTDO} 在多处独立硬编码
-    （`issues.py TERMINAL_STATUSES`、buglist.py/todolist.py 的 `cmd_scan`/`cmd_triage`
-    内联字面量），改任一处忘了另一处会静默漂移——本类锁死这几处互相一致。
+    """终态集一致性守卫。单一源化（adr/0027）后：bug 终态集 {FIXED,WONTFIX}、todo 终态集
+    {DONE,WONTDO} 不再多处内联，唯一源 = `core.POOL_SPEC[pool].terminal_set`，`issues.py`
+    的 `TERMINAL_STATUSES` 由其派生、`core` 的 `cmd_scan`/`cmd_triage` 减法表达式也从
+    `spec.terminal_set` 取值——故「多处独立硬编码、改一处忘另一处静默漂移」的旧风险已消失。
 
-    （a）issues.TERMINAL_STATUSES[pool] 必须是对应 recorder STATUS_CODES 的子集
-    （终态状态词必须真实存在于该 recorder 的合法状态码表里）。
+    本类护住的是派生链两端与外部锚：
 
-    （b）buglist.py/todolist.py 的 `cmd_scan`（`nonterminal = set(STATUS_CODES) - {...}`，
-    约:629/596）与 `cmd_triage`（`open_untriaged = set(STATUS_CODES) - {...}`，约:534/508）
-    内联的终态字面量，实际是**各自硬编码的字面量集合**、不从 `issues.TERMINAL_STATUSES`
-    派生（两脚本各自独立、不 import issues.py，见 issues.py 模块 docstring"子进程解耦"）。
-    单纯断言 `{"FIXED","WONTFIX"} == issues.TERMINAL_STATUSES["bug"]` 只是重申 issues.py
-    自己常量的已知值，测不出 buglist.py/todolist.py 源码里的字面量是否已经漂移——因此
-    这里额外用正则从两个源文件里抠出所有 `{"A","B",...}` 形态的字面量集合，断言其中
-    确有 >=2 处（对应 cmd_scan + cmd_triage 两个已知内联点）完整覆盖 issues.py 的终态集，
-    这样任一处漏改都会让本测试变红。
+    （a）**外部字面锚**：`{"FIXED","WONTFIX"} == TERMINAL_STATUSES["bug"]`（todo 同理）——
+    在测试里独立复写字面量，防单一源被整体改错值（同源断言两侧同源、恒真、护力为零，
+    真正抓漂移的是这条外部锚）。
+
+    （b）**⊆ 独立 STATUS_CODES**：`TERMINAL_STATUSES[pool] <= set(<recorder>.STATUS_CODES)`
+    ——终态词必须真实存在于该 recorder 独立维护的合法状态码表里。
+
+    （c）**派生用法源锚**：`core` 源码里 cmd_scan 的
+    `nonterminal = set(spec.status_values) - set(spec.terminal_set)` 字面串在场——守 cmd_scan
+    确实走派生（而非回退内联字面量）。
     """
-
-    @staticmethod
-    def _inline_literal_sets(source_text):
-        """提取源码里形如 {"A", "B", ...} 的字面量字符串集合列表（用于定位
-        cmd_scan/cmd_triage 里减法表达式的终态字面量）。"""
-        sets = []
-        for m in re.finditer(r'\{\s*(?:"[A-Z_]+"\s*,?\s*)+\}', source_text):
-            codes = re.findall(r'"([A-Z_]+)"', m.group(0))
-            sets.append(set(codes))
-        return sets
 
     def test_terminal_sets_are_subset_of_recorder_status_codes(self):
         assert issues_mod.TERMINAL_STATUSES["bug"] <= set(buglist_mod.STATUS_CODES)
@@ -211,22 +202,6 @@ class TestTerminalStatusesCrossScriptConsistency:
     def test_todolist_inline_terminal_literals_match_issues_constant(self):
         # 单一源化：见 bug 版注释。
         assert set(todolist_mod._core.POOL_SPEC["todo"].terminal_set) == issues_mod.TERMINAL_STATUSES["todo"]
-
-    @staticmethod
-    def _cmd_scan_nonterminal_literal(source_text):
-        """精确定位 cmd_scan 里 `nonterminal = set(STATUS_CODES) - {...}` 语句
-        （约 buglist.py:629 / todolist.py:596）的排除字面量集合——与 cmd_triage 的
-        `open_untriaged = set(STATUS_CODES) - {...}`（多含一个 "PROPOSED"，语义上
-        本就不能严格 == 终态集，只能用覆盖判定）区分开。cmd_scan 这条排除集在语义上
-        就是该 pool 的终态集本身，理应严格相等——单纯的『覆盖』判定（`<=`）测不出
-        『多塞一个非终态码』这种过度包含漂移（字面量仍是终态集的超集，覆盖判定不会
-        变红，但 nonterminal/open_ungrouped 计算会静默丢项）。"""
-        m = re.search(
-            r'nonterminal\s*=\s*set\(STATUS_CODES\)\s*-\s*\{\s*((?:"[A-Z_]+"\s*,?\s*)+)\}',
-            source_text,
-        )
-        assert m, "未在源码中定位到 cmd_scan 的 `nonterminal = set(STATUS_CODES) - {...}` 语句"
-        return set(re.findall(r'"([A-Z_]+)"', m.group(1)))
 
     def test_buglist_cmd_scan_exclusion_set_strictly_equals_terminal_statuses(self):
         """严格 ==（区别于上面两条测『覆盖』的用例）：cmd_scan 的排除字面量集合

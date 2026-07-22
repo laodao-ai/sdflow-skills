@@ -344,7 +344,9 @@ def test_marker_prose_display_title_and_line_safety_helpers_have_golden_behavior
 
 
 def test_dated_writer_call_graph_has_no_legacy_table_or_text_writer_calls():
-    # 单一源化：dated-writer 命令现居 core（cmd_add 共享；set-status/triage 为 per-pool 策略函数）
+    # 单一源化：dated-writer 命令现居 core（cmd_add 共享；set-status/triage 为 per-pool 策略函数）。
+    # 落盘走 byte-writer 路径——cmd_add 直接调 atomic_write_bytes；set-status/triage 4 个策略函数
+    # 经公共写尾 _commit_mutation 落盘（该 helper 内部即 atomic_write_bytes，见下方 assert）。
     core = BUG._core
     for fn in (core.cmd_add, core._bug_set_status, core._bug_triage,
                core._todo_set_status, core._todo_triage):
@@ -353,7 +355,9 @@ def test_dated_writer_call_graph_has_no_legacy_table_or_text_writer_calls():
         assert "_reject_cell_unsafe" not in source
         assert "parse_table_rows(" not in source
         assert "split_sections(" not in source
-        assert "atomic_write_bytes(" in source
+        assert "atomic_write_bytes(" in source or "_commit_mutation(" in source
+    # 公共写尾本体走 byte-writer（策略函数经它落盘）。
+    assert "atomic_write_bytes(" in inspect.getsource(core._commit_mutation)
 
 
 def test_overlay_writer_preserves_bom_crlf_and_external_namespace_bytes(tmp_path):

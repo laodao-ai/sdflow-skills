@@ -1428,6 +1428,19 @@ def _preflight_target_legacy_block(document, raw_id, path):
         _legacy_block_range(document, raw_id, path)
 
 
+def _minimal_marker_block(canonical, item, eol, history):
+    """承重的 marker 契约：惰性建的 minimal `sdflow-issue-block` 6 行字节块
+    （start 标记 / 二级标题 / summary 引用 / 历史 / end 标记）。history 为**已拼接的字节**
+    （调用方对 tuple 形态先 `b"".join(...)`）。三处促升路径共用此单一源——格式一变只改此处。"""
+    return (
+        eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
+        + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
+        + _summary_blockquote(item["summary"]).encode("utf-8") + eol
+        + history
+        + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
+    )
+
+
 def _promotion_insertions(document, raw_id, canonical, path, item, history, require_block):
     eol = document["eol"]
     candidates = [raw for raw in document["legacy_blocks"]
@@ -1442,13 +1455,7 @@ def _promotion_insertions(document, raw_id, canonical, path, item, history, requ
             b_end: (*boundary, *history,
                     f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol),
         }
-    minimal = (
-        eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
-        + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
-        + _summary_blockquote(item["summary"]).encode("utf-8") + eol
-        + b"".join(history)
-        + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
-    )
+    minimal = _minimal_marker_block(canonical, item, eol, b"".join(history))
     return {len(document["lines"]): (minimal,)}
 
 
@@ -1467,6 +1474,28 @@ def _validated_rendered_mutation(rendered, pool, canonical, require_marker, path
             f"file={path} rendered candidate 关系自检失败", structural[0], "拒绝写入并修正渲染逻辑",
         )
     return rendered
+
+
+def _prepare_overlay_model(document, pool, canonical, item):
+    """pool-agnostic 公共写头：拷贝既有 overlay model（无则建 minimal overlay 骨架），
+    深拷 items 后置入更新后的 item。差异经参数 pool/canonical/item 注入，无 pool 值分支。"""
+    model = dict(document["model"] or {
+        "schema": 1, "pool": pool, "mode": "overlay", "items": {},
+    })
+    model["items"] = dict(model["items"])
+    model["items"][canonical] = item
+    return model
+
+
+def _commit_mutation(document, model, insertions, path, pool, canonical, require_marker, output):
+    """pool-agnostic 公共写尾：splice → render → 关系自检 → 原子落盘 → stdout JSON。
+    output 为调用方预建的结果 dict（各命令语义不同，此处只负责序列化打印）。"""
+    body = _splice_body_lines(document, insertions)
+    rendered = _render_recorder_document(document, model, body)
+    atomic_write_bytes(path, _validated_rendered_mutation(
+        rendered, pool, canonical, require_marker, path,
+    ))
+    print(json.dumps(output, ensure_ascii=False))
 
 
 # ── 工具 ─────────────────────────────────────────────────────────────────────
@@ -1536,8 +1565,7 @@ def _todo_build_block(spec, item_id, data, docs, explicit_docs):
     title = _display_title(data["summary"], data.get("title"))
     b = f"\n<!-- sdflow-issue-block:start id={item_id} -->\n## {item_id}: {title}\n"
     b += _summary_blockquote(data["summary"]) + "\n"
-    if docs:
-        b += "\n**关联文档**：" + "、".join(f"`{d}`" for d in docs) + "\n"
+    b += render_doc_block(docs)
     if parts["motivation"]:
         b += f"\n**动机**：{_escape_user_markers(parts['motivation'])}\n"
     if parts["approach"]:
@@ -1630,24 +1658,17 @@ def _bug_set_status(args, spec):
     eol = document["eol"]
     history = hist.encode("utf-8") + eol
     item["status"] = new
-    model = dict(document["model"] or {
-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
-    })
-    model["items"] = dict(model["items"])
-    model["items"][canonical] = item
+    model = _prepare_overlay_model(document, spec.pool, canonical, item)
     if not frontmatter_owned:
         insertions = _promotion_insertions(
             document, raw_id, canonical, path, item, (history,), True,
         )
     else:
         insertions = {b_end - 1: (history,)}
-    body = _splice_body_lines(document, insertions)
-    rendered = _render_recorder_document(document, model, body)
-    atomic_write_bytes(path, _validated_rendered_mutation(
-        rendered, spec.pool, canonical, True, path,
-    ))
-    print(json.dumps({"id": canonical, "old": old, "new": new,
-                      "file": os.path.relpath(path, root)}, ensure_ascii=False))
+    _commit_mutation(
+        document, model, insertions, path, spec.pool, canonical, True,
+        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root)},
+    )
 
 
 def _todo_set_status(args, spec):
@@ -1676,11 +1697,7 @@ def _todo_set_status(args, spec):
     eol = document["eol"]
     history = hist.encode("utf-8") + eol
     item["status"] = new
-    model = dict(document["model"] or {
-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
-    })
-    model["items"] = dict(model["items"])
-    model["items"][canonical] = item
+    model = _prepare_overlay_model(document, spec.pool, canonical, item)
     insertions = {}
     frontmatter_owned = bool(document["model"] and canonical in document["model"]["items"])
     if not frontmatter_owned:
@@ -1691,21 +1708,12 @@ def _todo_set_status(args, spec):
         _b_start, b_end = document["marker_blocks"][canonical]
         insertions = {b_end - 1: (history,)}
     else:
-        minimal = (
-            eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
-            + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
-            + _summary_blockquote(item["summary"]).encode("utf-8") + eol
-            + history
-            + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
-        )
+        minimal = _minimal_marker_block(canonical, item, eol, history)
         insertions = {len(document["lines"]): (minimal,)}
-    body = _splice_body_lines(document, insertions)
-    rendered = _render_recorder_document(document, model, body)
-    atomic_write_bytes(path, _validated_rendered_mutation(
-        rendered, spec.pool, canonical, True, path,
-    ))
-    print(json.dumps({"id": canonical, "old": old, "new": new,
-                      "file": os.path.relpath(path, root)}, ensure_ascii=False))
+    _commit_mutation(
+        document, model, insertions, path, spec.pool, canonical, True,
+        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root)},
+    )
 
 
 def _bug_triage(args, spec):
@@ -1721,11 +1729,7 @@ def _bug_triage(args, spec):
     new_status = "PROPOSED" if old_status in open_untriaged else old_status
     item["status"] = new_status
     item["batch"] = batch or None
-    model = dict(document["model"] or {
-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
-    })
-    model["items"] = dict(model["items"])
-    model["items"][canonical] = item
+    model = _prepare_overlay_model(document, spec.pool, canonical, item)
     eol = document["eol"]
     history = ()
     if new_status != old_status:
@@ -1744,13 +1748,11 @@ def _bug_triage(args, spec):
             )
         _b_start, b_end = document["marker_blocks"][canonical]
         insertions = {b_end - 1: history} if history else {}
-    body = _splice_body_lines(document, insertions)
-    rendered = _render_recorder_document(document, model, body)
-    atomic_write_bytes(path, _validated_rendered_mutation(
-        rendered, spec.pool, canonical, True, path,
-    ))
-    print(json.dumps({"id": canonical, "old_status": old_status, "new_status": new_status,
-                      "batch": batch, "file": os.path.relpath(path, root)}, ensure_ascii=False))
+    _commit_mutation(
+        document, model, insertions, path, spec.pool, canonical, True,
+        {"id": canonical, "old_status": old_status, "new_status": new_status,
+         "batch": batch, "file": os.path.relpath(path, root)},
+    )
 
 
 def _todo_triage(args, spec):
@@ -1766,11 +1768,7 @@ def _todo_triage(args, spec):
     new_status = "PROPOSED" if old_status in open_untriaged else old_status
     item["status"] = new_status
     item["batch"] = batch or None
-    model = dict(document["model"] or {
-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
-    })
-    model["items"] = dict(model["items"])
-    model["items"][canonical] = item
+    model = _prepare_overlay_model(document, spec.pool, canonical, item)
     eol = document["eol"]
     history = ()
     if new_status != old_status:
@@ -1786,24 +1784,16 @@ def _todo_triage(args, spec):
         _b_start, b_end = document["marker_blocks"][canonical]
         insertions = {b_end - 1: history} if history else {}
     elif history:
-        minimal = (
-            eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
-            + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
-            + _summary_blockquote(item["summary"]).encode("utf-8") + eol
-            + b"".join(history)
-            + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
-        )
+        minimal = _minimal_marker_block(canonical, item, eol, b"".join(history))
         insertions = {len(document["lines"]): (minimal,)}
     else:
         insertions = {}
     require_marker = not frontmatter_owned or canonical in document["marker_blocks"] or bool(history)
-    body = _splice_body_lines(document, insertions)
-    rendered = _render_recorder_document(document, model, body)
-    atomic_write_bytes(path, _validated_rendered_mutation(
-        rendered, spec.pool, canonical, require_marker, path,
-    ))
-    print(json.dumps({"id": canonical, "old_status": old_status, "new_status": new_status,
-                      "batch": batch, "file": os.path.relpath(path, root)}, ensure_ascii=False))
+    _commit_mutation(
+        document, model, insertions, path, spec.pool, canonical, require_marker,
+        {"id": canonical, "old_status": old_status, "new_status": new_status,
+         "batch": batch, "file": os.path.relpath(path, root)},
+    )
 
 
 BUG_STRATEGY = PoolStrategy(
