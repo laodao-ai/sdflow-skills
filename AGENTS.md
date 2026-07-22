@@ -140,7 +140,7 @@ git diff --check                                      # 检查空白错误
 
 ## OpenSpec 工作流（sdflow-init 铺设）
 
-端到端流程见 workflow 规则集 `workflow.md`（真相源；本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。规则集在 `openspec/workflow/`：
+端到端流程见 workflow 规则集 `workflow.md`（真相源；本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。规则集（本仓有 `openspec/workflow/` 规则副本则用之，否则解析到全局 `~/.sdflow/workflow/`）：
 `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
 `ff-generation-constraints.md` · `design-diagrams.md` · `spec-review.md` · `generation-process.md`。
 质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。
