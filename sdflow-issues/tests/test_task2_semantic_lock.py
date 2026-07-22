@@ -21,7 +21,7 @@ def load(name, relative):
 
 def _snapshot_barrier_worker(root, command, ready, release, suffix=None):
     """Spawn-safe cooperative reader/writer used by true cross-process barriers."""
-    module = load(f"barrier_{command}_{os.getpid()}", "sdflow-buglist/scripts/buglist.py")
+    module = load(f"barrier_{command}_{os.getpid()}", "sdflow-issues/scripts/buglist.py")
     target = Path(root) / "shared.md"
     with module.recorder_lock(root, command):
         snapshot = target.read_text(encoding="utf-8")
@@ -34,7 +34,7 @@ def _snapshot_barrier_worker(root, command, ready, release, suffix=None):
 
 def _producer_barrier_worker(root, suffix, ready, release, result_path):
     """Fake sibling producer: report conflict or the exact bytes read after acquire."""
-    module = load(f"producer_{suffix}_{os.getpid()}", "sdflow-buglist/scripts/buglist.py")
+    module = load(f"producer_{suffix}_{os.getpid()}", "sdflow-issues/scripts/buglist.py")
     target = Path(root) / "dated.md"
     try:
         with module.recorder_lock(root, "add"):
@@ -50,8 +50,8 @@ def _producer_barrier_worker(root, suffix, ready, release, result_path):
 
 
 @pytest.mark.parametrize("relative", [
-    "sdflow-buglist/scripts/buglist.py",
-    "sdflow-todolist/scripts/todolist.py",
+    "sdflow-issues/scripts/buglist.py",
+    "sdflow-issues/scripts/todolist.py",
     "sdflow-issues/scripts/issues.py",
 ])
 def test_canonical_id_rejects_alias_and_unicode_digits(relative):
@@ -63,15 +63,15 @@ def test_canonical_id_rejects_alias_and_unicode_digits(relative):
 
 
 def test_repository_lock_is_exclusive_and_token_safe(tmp_path):
-    module = load("bug_lock", "sdflow-buglist/scripts/buglist.py")
+    module = load("bug_lock", "sdflow-issues/scripts/buglist.py")
     root = tmp_path
     (root / "openspec/issues").mkdir(parents=True)
     with module.recorder_lock(root, "sweep") as owner:
         with pytest.raises(module.RecorderLockError, match="lock occupied"):
             with module.recorder_lock(root, "add"):
                 pass
-        module._ACTIVE_RECORDER_TOKEN = owner.token
-        module._ACTIVE_RECORDER_CHAIN = owner.chain
+        module._core._ACTIVE_RECORDER_TOKEN = owner.token
+        module._core._ACTIVE_RECORDER_CHAIN = owner.chain
         participant_env = module.recorder_child_env("reindex")
         with pytest.MonkeyPatch.context() as monkeypatch:
             monkeypatch.setattr(os, "environ", participant_env)
@@ -87,13 +87,13 @@ def test_repository_lock_is_exclusive_and_token_safe(tmp_path):
             module.validate_recorder_participant(other, owner.token, "scan")
         assert module.RECORDER_LOCK_ENV in participant_env
         assert module.RECORDER_LOCK_ENV not in module.recorder_child_env("git", token=False)
-        module._ACTIVE_RECORDER_TOKEN = None
-        module._ACTIVE_RECORDER_CHAIN = None
+        module._core._ACTIVE_RECORDER_TOKEN = None
+        module._core._ACTIVE_RECORDER_CHAIN = None
     assert not (root / "openspec/issues/.recorder.lock").exists()
 
 
 def test_twenty_process_adds_are_unique_or_fail_loud(tmp_path):
-    script = ROOT / "sdflow-buglist/scripts/buglist.py"
+    script = ROOT / "sdflow-issues/scripts/buglist.py"
     payload = tmp_path / "bug.json"
     payload.write_text(json.dumps({
         "module": "lock", "summary": "race", "priority": "P2", "phenomenon": "race",
@@ -116,8 +116,8 @@ def test_twenty_process_adds_are_unique_or_fail_loud(tmp_path):
 
 
 @pytest.mark.parametrize("relative", [
-    "sdflow-buglist/scripts/buglist.py",
-    "sdflow-todolist/scripts/todolist.py",
+    "sdflow-issues/scripts/buglist.py",
+    "sdflow-issues/scripts/todolist.py",
     "sdflow-issues/scripts/issues.py",
 ])
 def test_lock_metadata_short_write_and_failure_cleanup(relative, tmp_path, monkeypatch):
@@ -142,7 +142,7 @@ def test_lock_metadata_short_write_and_failure_cleanup(relative, tmp_path, monke
 
 @pytest.mark.parametrize("fault_name", ["fsync", "close"])
 def test_lock_metadata_publish_faults_cleanup_own_inode(tmp_path, monkeypatch, fault_name):
-    module = load("metadata_publish_" + fault_name, "sdflow-buglist/scripts/buglist.py")
+    module = load("metadata_publish_" + fault_name, "sdflow-issues/scripts/buglist.py")
     lock = tmp_path / "openspec/issues/.recorder.lock"
     real_close = os.close
     calls = 0
@@ -174,8 +174,8 @@ def test_lock_metadata_publish_faults_cleanup_own_inode(tmp_path, monkeypatch, f
 
 
 @pytest.mark.parametrize("relative,args", [
-    ("sdflow-buglist/scripts/buglist.py", ["scan", "--json"]),
-    ("sdflow-todolist/scripts/todolist.py", ["scan", "--json"]),
+    ("sdflow-issues/scripts/buglist.py", ["scan", "--json"]),
+    ("sdflow-issues/scripts/todolist.py", ["scan", "--json"]),
     ("sdflow-issues/scripts/issues.py", ["reindex"]),
 ])
 def test_invalid_participant_env_falls_back_to_owner_or_conflict(relative, args, tmp_path):
@@ -190,7 +190,7 @@ def test_invalid_participant_env_falls_back_to_owner_or_conflict(relative, args,
     assert owner.returncode == 0, owner.stderr
     assert not (tmp_path / "openspec/issues/.recorder.lock").exists()
 
-    lock_module = load("invalid_env_lock", "sdflow-buglist/scripts/buglist.py")
+    lock_module = load("invalid_env_lock", "sdflow-issues/scripts/buglist.py")
     with lock_module.recorder_lock(tmp_path, "add"):
         conflict = subprocess.run(
             [sys.executable, str(script), "--root", str(tmp_path), *args],
@@ -201,27 +201,27 @@ def test_invalid_participant_env_falls_back_to_owner_or_conflict(relative, args,
 
 
 @pytest.mark.parametrize("relative", [
-    "sdflow-buglist/scripts/buglist.py",
-    "sdflow-todolist/scripts/todolist.py",
+    "sdflow-issues/scripts/buglist.py",
+    "sdflow-issues/scripts/todolist.py",
     "sdflow-issues/scripts/issues.py",
 ])
 def test_delegation_graph_allows_nested_chain_and_rejects_escalation(relative, tmp_path, monkeypatch):
     module = load("delegation_" + relative.replace("/", "_"), relative)
     with module.recorder_lock(tmp_path, "sweep") as owner:
-        module._ACTIVE_RECORDER_TOKEN = owner.token
-        module._ACTIVE_RECORDER_CHAIN = owner.chain
+        module._core._ACTIVE_RECORDER_TOKEN = owner.token
+        module._core._ACTIVE_RECORDER_CHAIN = owner.chain
         reindex_env = module.recorder_child_env("reindex")
         with monkeypatch.context() as nested:
             nested.setattr(os, "environ", reindex_env)
             reindex = module.validate_recorder_participant(tmp_path, owner.token, "reindex")
-        module._ACTIVE_RECORDER_CHAIN = reindex.chain
+        module._core._ACTIVE_RECORDER_CHAIN = reindex.chain
         scan_env = module.recorder_child_env("scan")
         with monkeypatch.context() as nested:
             nested.setattr(os, "environ", scan_env)
             scan = module.validate_recorder_participant(tmp_path, owner.token, "scan")
         assert scan.chain == ("sweep", "reindex", "scan")
 
-        module._ACTIVE_RECORDER_CHAIN = owner.chain
+        module._core._ACTIVE_RECORDER_CHAIN = owner.chain
         with pytest.raises(module.RecorderLockError, match="delegation denied"):
             module.recorder_child_env("batch-rename")
         forged = dict(reindex_env)
@@ -235,13 +235,13 @@ def test_delegation_graph_allows_nested_chain_and_rejects_escalation(relative, t
             nested.setattr(os, "environ", forged)
             with pytest.raises(module.RecorderLockError, match="chain"):
                 module.validate_recorder_participant(tmp_path, owner.token, "sweep")
-        module._ACTIVE_RECORDER_TOKEN = None
-        module._ACTIVE_RECORDER_CHAIN = None
+        module._core._ACTIVE_RECORDER_TOKEN = None
+        module._core._ACTIVE_RECORDER_CHAIN = None
 
 
 @pytest.mark.parametrize("relative,result_key", [
-    ("sdflow-buglist/scripts/buglist.py", "bugs"),
-    ("sdflow-todolist/scripts/todolist.py", "items"),
+    ("sdflow-issues/scripts/buglist.py", "bugs"),
+    ("sdflow-issues/scripts/todolist.py", "items"),
 ])
 def test_scan_json_serialization_happens_after_lock_release(relative, result_key, tmp_path, monkeypatch):
     module = load("render_" + relative.replace("/", "_"), relative)
@@ -261,7 +261,7 @@ def test_scan_json_serialization_happens_after_lock_release(relative, result_key
 
 
 def test_blocked_stdout_write_starts_after_lock_release(tmp_path, monkeypatch):
-    module = load("blocked_stdout", "sdflow-buglist/scripts/buglist.py")
+    module = load("blocked_stdout", "sdflow-issues/scripts/buglist.py")
     lock = tmp_path / "openspec/issues/.recorder.lock"
     writes = []
 
@@ -282,7 +282,7 @@ def test_blocked_stdout_write_starts_after_lock_release(tmp_path, monkeypatch):
 
 def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
     ctx = multiprocessing.get_context("spawn")
-    script = ROOT / "sdflow-buglist/scripts/buglist.py"
+    script = ROOT / "sdflow-issues/scripts/buglist.py"
     payload = tmp_path / "bug.json"
     payload.write_text(json.dumps({"module": "m", "summary": "barrier", "priority": "P2", "phenomenon": "x"}))
     shared = tmp_path / "shared.md"
@@ -331,7 +331,7 @@ def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
 
 
 def test_next_id_release_does_not_reserve_number(tmp_path):
-    script = ROOT / "sdflow-buglist/scripts/buglist.py"
+    script = ROOT / "sdflow-issues/scripts/buglist.py"
     suggestion = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "next-id", "--prefix", "A"],
         capture_output=True, text=True,
@@ -427,7 +427,7 @@ def test_real_sweep_reindex_scan_nested_delegation(tmp_path):
 
 
 def test_cli_writer_fault_releases_lock_and_preserves_target(tmp_path, monkeypatch):
-    module = load("cli_writer_fault", "sdflow-buglist/scripts/buglist.py")
+    module = load("cli_writer_fault", "sdflow-issues/scripts/buglist.py")
     payload = tmp_path / "bug.json"
     payload.write_text(json.dumps({"module": "m", "summary": "fault", "priority": "P2", "phenomenon": "x"}))
     target = tmp_path / "openspec/issues/buglist/2026-01-01-buglist.md"
@@ -435,7 +435,7 @@ def test_cli_writer_fault_releases_lock_and_preserves_target(tmp_path, monkeypat
     def fail_write(_path, _text):
         raise OSError("writer fault")
 
-    monkeypatch.setattr(module, "atomic_write_bytes", fail_write)
+    monkeypatch.setattr(module._core, "atomic_write_bytes", fail_write)
     monkeypatch.setattr(sys, "argv", [
         "buglist", "--root", str(tmp_path), "add", "--json", str(payload),
         "--date", "2026-01-01",
@@ -447,7 +447,7 @@ def test_cli_writer_fault_releases_lock_and_preserves_target(tmp_path, monkeypat
 
 
 def test_partial_lock_and_ownership_lost_are_fail_closed(tmp_path):
-    module = load("bug_lock_faults", "sdflow-buglist/scripts/buglist.py")
+    module = load("bug_lock_faults", "sdflow-issues/scripts/buglist.py")
     lock = tmp_path / "openspec/issues/.recorder.lock"
     lock.parent.mkdir(parents=True)
     lock.write_bytes(b"")
@@ -464,8 +464,8 @@ def test_partial_lock_and_ownership_lost_are_fail_closed(tmp_path):
 
 
 def test_custom_prefix_is_repository_wide_across_pools(tmp_path):
-    bug_script = ROOT / "sdflow-buglist/scripts/buglist.py"
-    todo_script = ROOT / "sdflow-todolist/scripts/todolist.py"
+    bug_script = ROOT / "sdflow-issues/scripts/buglist.py"
+    todo_script = ROOT / "sdflow-issues/scripts/todolist.py"
     bug = tmp_path / "bug.json"
     todo = tmp_path / "todo.json"
     bug.write_text(json.dumps({"id": "A1", "module": "m", "summary": "bug", "priority": "P2", "phenomenon": "x"}))

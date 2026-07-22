@@ -25,8 +25,8 @@ SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
 # Task 16：端到端一致性自检要用真实 buglist.py/todolist.py CLI 子进程（不借道 issues.py
 # 内部函数）造数据，定位方式镜像 issues.py 自身的 SKILLS_ROOT 探测（tests 目录上三级
 # 是 sdflow-skills 根，sdflow-buglist/sdflow-todolist 与本 skill 是同级 sibling）。
-BUGLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-buglist" / "scripts" / "buglist.py")
-TODOLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-todolist" / "scripts" / "todolist.py")
+BUGLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-issues" / "scripts" / "buglist.py")
+TODOLIST_SCRIPT = str(Path(__file__).parent.parent.parent / "sdflow-issues" / "scripts" / "todolist.py")
 
 
 def _load_module_from_path(name, path):
@@ -204,26 +204,13 @@ class TestTerminalStatusesCrossScriptConsistency:
         assert {"DONE", "WONTDO"} == issues_mod.TERMINAL_STATUSES["todo"]
 
     def test_buglist_inline_terminal_literals_match_issues_constant(self):
-        bug_src = Path(BUGLIST_SCRIPT).read_text(encoding="utf-8")
-        bug_terminal = issues_mod.TERMINAL_STATUSES["bug"]
-        literal_sets = self._inline_literal_sets(bug_src)
-        covering = [s for s in literal_sets if bug_terminal <= s]
-        assert len(covering) >= 2, (
-            f"buglist.py 里少于 2 处内联字面量集合覆盖终态集 {bug_terminal}"
-            f"（cmd_scan/cmd_triage 应各有一处）——候选集合：{literal_sets}；"
-            "很可能是某处内联字面量与 issues.TERMINAL_STATUSES['bug'] 已漂移"
-        )
+        # 单一源化（adr/0027）：bug 终态不再是三份内联字面量——唯一源 = core.POOL_SPEC。
+        # 守 core 的 terminal_set 与 issues.TERMINAL_STATUSES 同源一致（后者由前者派生）。
+        assert set(buglist_mod._core.POOL_SPEC["bug"].terminal_set) == issues_mod.TERMINAL_STATUSES["bug"]
 
     def test_todolist_inline_terminal_literals_match_issues_constant(self):
-        todo_src = Path(TODOLIST_SCRIPT).read_text(encoding="utf-8")
-        todo_terminal = issues_mod.TERMINAL_STATUSES["todo"]
-        literal_sets = self._inline_literal_sets(todo_src)
-        covering = [s for s in literal_sets if todo_terminal <= s]
-        assert len(covering) >= 2, (
-            f"todolist.py 里少于 2 处内联字面量集合覆盖终态集 {todo_terminal}"
-            f"（cmd_scan/cmd_triage 应各有一处）——候选集合：{literal_sets}；"
-            "很可能是某处内联字面量与 issues.TERMINAL_STATUSES['todo'] 已漂移"
-        )
+        # 单一源化：见 bug 版注释。
+        assert set(todolist_mod._core.POOL_SPEC["todo"].terminal_set) == issues_mod.TERMINAL_STATUSES["todo"]
 
     @staticmethod
     def _cmd_scan_nonterminal_literal(source_text):
@@ -245,20 +232,16 @@ class TestTerminalStatusesCrossScriptConsistency:
         """严格 ==（区别于上面两条测『覆盖』的用例）：cmd_scan 的排除字面量集合
         必须与 issues.TERMINAL_STATUSES['bug'] 严格相等，不能只是超集——防止误把
         非终态码（如 BLOCKED）也塞进这条排除集，导致 nonterminal 计算漏项。"""
-        bug_src = Path(BUGLIST_SCRIPT).read_text(encoding="utf-8")
-        literal = self._cmd_scan_nonterminal_literal(bug_src)
-        assert literal == issues_mod.TERMINAL_STATUSES["bug"], (
-            f"buglist.py cmd_scan 的 nonterminal 排除集 {literal} 与 "
-            f"issues.TERMINAL_STATUSES['bug'] {issues_mod.TERMINAL_STATUSES['bug']} 不严格相等"
-        )
+        # 单一源化：cmd_scan 的 nonterminal 排除集现由 spec.terminal_set 派生（非内联字面量）。
+        core_src = Path(buglist_mod._core.__file__).read_text(encoding="utf-8")
+        assert "nonterminal = set(spec.status_values) - set(spec.terminal_set)" in core_src
+        assert set(buglist_mod._core.POOL_SPEC["bug"].terminal_set) == issues_mod.TERMINAL_STATUSES["bug"]
 
     def test_todolist_cmd_scan_exclusion_set_strictly_equals_terminal_statuses(self):
-        todo_src = Path(TODOLIST_SCRIPT).read_text(encoding="utf-8")
-        literal = self._cmd_scan_nonterminal_literal(todo_src)
-        assert literal == issues_mod.TERMINAL_STATUSES["todo"], (
-            f"todolist.py cmd_scan 的 nonterminal 排除集 {literal} 与 "
-            f"issues.TERMINAL_STATUSES['todo'] {issues_mod.TERMINAL_STATUSES['todo']} 不严格相等"
-        )
+        # 单一源化：见 bug 版注释。
+        core_src = Path(todolist_mod._core.__file__).read_text(encoding="utf-8")
+        assert "nonterminal = set(spec.status_values) - set(spec.terminal_set)" in core_src
+        assert set(todolist_mod._core.POOL_SPEC["todo"].terminal_set) == issues_mod.TERMINAL_STATUSES["todo"]
 
 
 class TestAtomicWrite:

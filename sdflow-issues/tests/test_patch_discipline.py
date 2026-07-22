@@ -65,6 +65,22 @@ INTENTIONAL_WHOLESALE_PATCHES = {
         "注入 TimeoutExpired 并捕获 kwargs，验证超时不回落；劫持 git 即断言本体。",
     ("test_repo_root_identity_issues.py", "test_timeout_with_real_hanging_git"):
         "全量透传、仅把 timeout 压到 1s 让真实 git shim 触发超时；非替身。",
+    ("test_repo_root_identity_buglist.py", "_fake_git_stdout"):
+        "被测对象是 repo_root 对 git stdout 的解释；换掉 git 输出即断言本体。",
+    ("test_repo_root_identity_buglist.py", "_forbid_subprocess"):
+        "断言「起点校验发生在调 git 之前」——任何子进程都判失败即断言本体。",
+    ("test_repo_root_identity_buglist.py", "test_timeout_raises_and_does_not_fall_back"):
+        "注入 TimeoutExpired 并捕获 kwargs，验证超时不回落；劫持 git 即断言本体。",
+    ("test_repo_root_identity_buglist.py", "test_timeout_with_real_hanging_git"):
+        "全量透传、仅把 timeout 压到 1s 让真实 git shim 触发超时；非替身。",
+    ("test_repo_root_identity_todolist.py", "_fake_git_stdout"):
+        "被测对象是 repo_root 对 git stdout 的解释；换掉 git 输出即断言本体。",
+    ("test_repo_root_identity_todolist.py", "_forbid_subprocess"):
+        "断言「起点校验发生在调 git 之前」——任何子进程都判失败即断言本体。",
+    ("test_repo_root_identity_todolist.py", "test_timeout_raises_and_does_not_fall_back"):
+        "注入 TimeoutExpired 并捕获 kwargs，验证超时不回落；劫持 git 即断言本体。",
+    ("test_repo_root_identity_todolist.py", "test_timeout_with_real_hanging_git"):
+        "全量透传、仅把 timeout 压到 1s 让真实 git shim 触发超时；非替身。",
     ("test_task4_rename_snapshot.py",
      "test_batch_rename_uses_direct_snapshot_zero_recorder_scans_and_writes_provenance"):
         "observe_run 是全量透传的观察器（只记录 argv，不返回替身），无劫持面。",

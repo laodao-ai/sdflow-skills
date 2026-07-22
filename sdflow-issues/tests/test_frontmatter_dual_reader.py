@@ -9,8 +9,8 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).parents[2]
-BUG_PATH = REPO_ROOT / "sdflow-buglist" / "scripts" / "buglist.py"
-TODO_PATH = REPO_ROOT / "sdflow-todolist" / "scripts" / "todolist.py"
+BUG_PATH = REPO_ROOT / "sdflow-issues" / "scripts" / "buglist.py"
+TODO_PATH = REPO_ROOT / "sdflow-issues" / "scripts" / "todolist.py"
 ISSUES_PATH = REPO_ROOT / "sdflow-issues" / "scripts" / "issues.py"
 
 
@@ -441,14 +441,14 @@ def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, ca
     directory = tmp_path / "openspec/issues/buglist"
     directory.mkdir(parents=True)
     (directory / "2026-07-17-buglist.md").write_text(_legacy_table("bug", "B1"), encoding="utf-8")
-    original = BUG.parse_recorder_document
+    original = BUG._core.parse_recorder_document
     calls = []
 
     def counted(raw, pool):
         calls.append(pool)
         return original(raw, pool)
 
-    monkeypatch.setattr(BUG, "parse_recorder_document", counted)
+    monkeypatch.setattr(BUG._core, "parse_recorder_document", counted)
     BUG.cmd_scan(SimpleNamespace(
         root=str(tmp_path), status=None, change=None, 批次=None, open_ungrouped=False, json=True,
     ))

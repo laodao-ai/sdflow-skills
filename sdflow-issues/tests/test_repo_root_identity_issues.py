@@ -801,6 +801,11 @@ def _script_ast():
     return ast.parse(Path(SCRIPT).read_text(encoding="utf-8"))
 
 
+def _core_ast():
+    _core_path = Path(__file__).parent.parent / "scripts" / "sdflow_issues_core" / "__init__.py"
+    return ast.parse(_core_path.read_text(encoding="utf-8"))
+
+
 def test_diagnostics_never_recommend_explicit_root(request):
     """诊断的 `fix:` MUST NOT 把「显式指定 --root」当修复手段（cr-fix2 · F5）。
 
@@ -816,7 +821,7 @@ def test_diagnostics_never_recommend_explicit_root(request):
     本用例当场判红。
     """
     fn = next(
-        (n for n in ast.walk(_script_ast())
+        (n for n in ast.walk(_core_ast())
          if isinstance(n, ast.FunctionDef) and n.name == "repo_root"),
         None,
     )

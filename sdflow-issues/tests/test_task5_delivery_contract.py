@@ -13,8 +13,8 @@ import pytest
 
 
 ROOT = Path(__file__).parents[2]
-BUG_PATH = ROOT / "sdflow-buglist/scripts/buglist.py"
-TODO_PATH = ROOT / "sdflow-todolist/scripts/todolist.py"
+BUG_PATH = ROOT / "sdflow-issues/scripts/buglist.py"
+TODO_PATH = ROOT / "sdflow-issues/scripts/todolist.py"
 ISSUES_PATH = ROOT / "sdflow-issues/scripts/issues.py"
 
 
@@ -39,14 +39,13 @@ def test_legacy_table_is_read_promotion_only_and_cell_guard_left_batch_only():
     assert "def _reject_cell_unsafe" not in issues_source
     assert "def _reject_batch_line_unsafe" in issues_source
 
-    # Legacy cells are still parsed for dual-read/promotion, but no writer may
-    # assign through a parsed row or render a new recorder overview table.
-    for source in (bug_source, todo_source):
-        assert "parse_table_rows" in source
-        assert "_legacy_item_from_row" in source
-        assert "_render_item_table" not in source
-        assert "rows[item_id][" not in source
-        assert "rows[raw_id][" not in source
+    # 单一源化（adr/0027）：dual-read/promotion 的 legacy 表解析现居 core（薄入口不含）。
+    core_source = (BUG_PATH.parent / "sdflow_issues_core" / "__init__.py").read_text(encoding="utf-8")
+    assert "parse_table_rows" in core_source
+    assert "_legacy_item_from_row" in core_source
+    assert "_render_item_table" not in core_source
+    assert "rows[item_id][" not in core_source
+    assert "rows[raw_id][" not in core_source
 
 
 def test_recorders_stay_self_contained_without_yaml_or_cross_skill_imports():
@@ -59,7 +58,12 @@ def test_recorders_stay_self_contained_without_yaml_or_cross_skill_imports():
             elif isinstance(node, ast.ImportFrom) and node.module:
                 imports.append(node.module)
         assert not any(name in {"yaml", "ruamel", "ruamel.yaml"} for name in imports)
-        assert not any(name.startswith("sdflow_") or name.startswith("sdflow-") for name in imports)
+        # 单一源化（adr/0027）：薄入口 MUST 只依赖唯一共享源 sdflow_issues_core；
+        # 其它 sdflow_*/sdflow-* 跨 skill import 仍禁止。
+        assert not any(
+            (name.startswith("sdflow_") or name.startswith("sdflow-")) and name != "sdflow_issues_core"
+            for name in imports
+        )
 
 
 def _reference_legacy_rows(path, pool):
@@ -205,15 +209,15 @@ def test_repository_legacy_corpus_matches_independent_projection_item_by_item():
 def test_reindex_to_scan_delegation_contract_runs_before_windows_smoke(tmp_path, monkeypatch):
     (tmp_path / "openspec/issues").mkdir(parents=True)
     with BUG.recorder_lock(tmp_path, "reindex") as owner:
-        previous_token = BUG._ACTIVE_RECORDER_TOKEN
-        previous_chain = BUG._ACTIVE_RECORDER_CHAIN
+        previous_token = BUG._core._ACTIVE_RECORDER_TOKEN
+        previous_chain = BUG._core._ACTIVE_RECORDER_CHAIN
         try:
-            BUG._ACTIVE_RECORDER_TOKEN = owner.token
-            BUG._ACTIVE_RECORDER_CHAIN = owner.chain
+            BUG._core._ACTIVE_RECORDER_TOKEN = owner.token
+            BUG._core._ACTIVE_RECORDER_CHAIN = owner.chain
             participant_env = BUG.recorder_child_env("scan")
         finally:
-            BUG._ACTIVE_RECORDER_TOKEN = previous_token
-            BUG._ACTIVE_RECORDER_CHAIN = previous_chain
+            BUG._core._ACTIVE_RECORDER_TOKEN = previous_token
+            BUG._core._ACTIVE_RECORDER_CHAIN = previous_chain
         with monkeypatch.context() as participant_patch:
             participant_patch.setattr(os, "environ", participant_env)
             participant = BUG.validate_recorder_participant(tmp_path, owner.token, "scan")
@@ -265,10 +269,10 @@ def test_delivery_docs_and_human_scan_output_reject_retired_contracts():
         "调用方 MUST 串行（D6）",
     ):
         assert retired not in issues_skill
-    for path in (BUG_PATH, TODO_PATH):
-        source = path.read_text(encoding="utf-8")
-        assert "✓ 表↔块一致" not in source
-        assert "✓ frontmatter/marker/legacy 关系一致" in source
+    # 单一源化：human scan 输出字串现居 core（薄入口不含）。
+    core_source = (BUG_PATH.parent / "sdflow_issues_core" / "__init__.py").read_text(encoding="utf-8")
+    assert "✓ 表↔块一致" not in core_source
+    assert "✓ frontmatter/marker/legacy 关系一致" in core_source
 
 
 def test_upgraded_install_known_consumer_smoke(tmp_path):
@@ -327,8 +331,8 @@ def test_upgraded_install_known_consumer_smoke(tmp_path):
             env=env, text=True, capture_output=True,
         )
 
-    bug = run("sdflow-buglist/scripts/buglist.py", "scan", "--json")
-    todo = run("sdflow-todolist/scripts/todolist.py", "scan", "--json")
+    bug = run("sdflow-issues/scripts/buglist.py", "scan", "--json")
+    todo = run("sdflow-issues/scripts/todolist.py", "scan", "--json")
     assert bug.returncode == todo.returncode == 0, bug.stderr + todo.stderr
     bug_payload, todo_payload = json.loads(bug.stdout), json.loads(todo.stdout)
     assert set(bug_payload) == {"bugs", "problems"}

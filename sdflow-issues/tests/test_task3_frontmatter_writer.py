@@ -9,8 +9,8 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BUG_SCRIPT = REPO_ROOT / "sdflow-buglist" / "scripts" / "buglist.py"
-TODO_SCRIPT = REPO_ROOT / "sdflow-todolist" / "scripts" / "todolist.py"
+BUG_SCRIPT = REPO_ROOT / "sdflow-issues" / "scripts" / "buglist.py"
+TODO_SCRIPT = REPO_ROOT / "sdflow-issues" / "scripts" / "todolist.py"
 
 
 def _load_module(name, path):
@@ -326,7 +326,7 @@ def test_todo_triage_mutates_canonical_index_and_creates_history_block(tmp_path)
 
 
 def test_marker_prose_display_title_and_line_safety_helpers_have_golden_behavior():
-    for module in (BUG, TODO):
+    for module in (BUG._core, TODO._core):  # 单一源化：这些 helper 现居 core
         assert module._display_title("  first\tsecond\n---  ") == "first second ---"
         assert module._summary_blockquote("a\n\nb") == "> a\n> \n> b"
         assert module._summary_blockquote("a\r\nb\rc\n") == "> a\n> b\n> c\n> "
@@ -344,14 +344,16 @@ def test_marker_prose_display_title_and_line_safety_helpers_have_golden_behavior
 
 
 def test_dated_writer_call_graph_has_no_legacy_table_or_text_writer_calls():
-    for module in (BUG, TODO):
-        for name in ("cmd_add", "cmd_set_status", "cmd_triage"):
-            source = inspect.getsource(getattr(module, name))
-            assert "atomic_write(" not in source
-            assert "_reject_cell_unsafe" not in source
-            assert "parse_table_rows(" not in source
-            assert "split_sections(" not in source
-            assert "atomic_write_bytes(" in source
+    # 单一源化：dated-writer 命令现居 core（cmd_add 共享；set-status/triage 为 per-pool 策略函数）
+    core = BUG._core
+    for fn in (core.cmd_add, core._bug_set_status, core._bug_triage,
+               core._todo_set_status, core._todo_triage):
+        source = inspect.getsource(fn)
+        assert "atomic_write(" not in source
+        assert "_reject_cell_unsafe" not in source
+        assert "parse_table_rows(" not in source
+        assert "split_sections(" not in source
+        assert "atomic_write_bytes(" in source
 
 
 def test_overlay_writer_preserves_bom_crlf_and_external_namespace_bytes(tmp_path):

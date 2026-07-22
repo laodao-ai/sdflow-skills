@@ -9,14 +9,14 @@
 bare repo、git 不可用才回落。「最近」二字同样是 cr-fix1 加的：祖先校验 + worktree marker
 对**外层祖先仓库**（core.worktree 指祖先仓 / PATH 上的 fake git）双双放行。
 
-本文件与 sdflow-issues/tests · sdflow-todolist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
+本文件与 sdflow-issues/tests · sdflow-buglist/tests 下的同名文件逐条对应（三份 recorder 各自内联一份 `repo_root`，
 D4 红线禁止互相 import，故测试也各自一份）。
 
 方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
 `isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
 外部依赖行为外，一切都用 `tmp_path` 下真实存在/不存在的路径构造。
 
-Run with: python3 -m pytest sdflow-buglist/tests/test_repo_root_identity_buglist.py -v
+Run with: python3 -m pytest sdflow-todolist/tests/test_repo_root_identity_todolist.py -v
 """
 
 import ast
@@ -29,10 +29,10 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-import buglist as rec_mod
-from buglist import repo_root
+import todolist as rec_mod
+from todolist import repo_root
 
-SCRIPT = str(Path(__file__).parent.parent / "scripts" / "buglist.py")
+SCRIPT = str(Path(__file__).parent.parent / "scripts" / "todolist.py")
 
 # 单点解析用例（Task 3）用的子命令：本 recorder 上一条读路径 + 一条合法委派边。
 SINGLE_POINT_CMD = ["scan", "--json"]
@@ -147,7 +147,7 @@ def test_deleted_process_cwd_yields_controlled_failure(tmp_path):
     program = (
         "import os, sys\n"
         "sys.path.insert(0, sys.argv[1])\n"
-        "from buglist import repo_root\n"
+        "from todolist import repo_root\n"
         "os.chdir(sys.argv[2])\n"
         "os.rmdir(sys.argv[2])\n"
         "assert os.path.isdir('.') is True, 'premise: isdir(\\'.\\') 仍为 True'\n"
@@ -798,7 +798,8 @@ def _repo_root_calls(node):
 
 
 def _script_ast():
-    return ast.parse(Path(SCRIPT).read_text(encoding="utf-8"))
+    _core_path = Path(__file__).parent.parent / "scripts" / "sdflow_issues_core" / "__init__.py"
+    return ast.parse(_core_path.read_text(encoding="utf-8"))
 
 
 def test_diagnostics_never_recommend_explicit_root(request):
@@ -860,7 +861,7 @@ def test_repo_root_is_resolved_once_per_process_and_only_in_main():
 
     owners = sorted(fn.name for fn in ast.walk(tree)
                     if isinstance(fn, ast.FunctionDef) and _repo_root_calls(fn))
-    assert owners == ["main"], owners
+    assert owners == ["run_cli"], owners
 
 
 def test_root_argparse_default_is_none():

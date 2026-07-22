@@ -59,21 +59,21 @@ def _load(name, relative):
 def test_windows_local_disk_acquire_conflict_replace_cleanup(tmp_path, monkeypatch):
     assert sys.platform == "win32"
     assert not str(tmp_path).startswith("\\\\"), "runner temp path must be a local Windows drive"
-    recorder = _load("windows_recorder", "sdflow-buglist/scripts/buglist.py")
+    recorder = _load("windows_recorder", "sdflow-issues/scripts/buglist.py")
     init = _load("windows_init", "sdflow-init/scripts/init.py")
     lock_path = tmp_path / "openspec/issues/.recorder.lock"
 
     with recorder.recorder_lock(tmp_path, "reindex") as owner:
         assert lock_path.exists()
-        previous_token = recorder._ACTIVE_RECORDER_TOKEN
-        previous_chain = recorder._ACTIVE_RECORDER_CHAIN
+        previous_token = recorder._core._ACTIVE_RECORDER_TOKEN
+        previous_chain = recorder._core._ACTIVE_RECORDER_CHAIN
         try:
-            recorder._ACTIVE_RECORDER_TOKEN = owner.token
-            recorder._ACTIVE_RECORDER_CHAIN = owner.chain
+            recorder._core._ACTIVE_RECORDER_TOKEN = owner.token
+            recorder._core._ACTIVE_RECORDER_CHAIN = owner.chain
             participant_env = recorder.recorder_child_env("scan", owner.token)
         finally:
-            recorder._ACTIVE_RECORDER_TOKEN = previous_token
-            recorder._ACTIVE_RECORDER_CHAIN = previous_chain
+            recorder._core._ACTIVE_RECORDER_TOKEN = previous_token
+            recorder._core._ACTIVE_RECORDER_CHAIN = previous_chain
         with monkeypatch.context() as participant_patch:
             participant_patch.setattr(os, "environ", participant_env)
             participant = recorder.validate_recorder_participant(tmp_path, owner.token, "scan")
@@ -120,7 +120,7 @@ def test_windows_setup_uses_owned_copies_and_refreshes_them(tmp_path):
         assert installed.is_dir() and not installed.is_symlink()
         assert (installed / ".sdflow-skills").is_file()
         assert (installed / "scripts/buglist.py").read_bytes() == (
-            ROOT / "sdflow-buglist/scripts/buglist.py"
+            ROOT / "sdflow-issues/scripts/buglist.py"
         ).read_bytes()
 
 
@@ -150,7 +150,7 @@ def _clean_git_env(monkeypatch):
 
 
 def _repo_root_fn():
-    return _load("buglist_win_repo_root", "sdflow-buglist/scripts/buglist.py").repo_root
+    return _load("buglist_win_repo_root", "sdflow-issues/scripts/buglist.py").repo_root
 
 
 def _git(*args, cwd):

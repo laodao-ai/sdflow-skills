@@ -18,8 +18,8 @@ from issues import (
     validate_scan_envelope,
 )
 
-BUGLIST_SCRIPT = str(Path(__file__).parents[2] / "sdflow-buglist" / "scripts" / "buglist.py")
-TODOLIST_SCRIPT = str(Path(__file__).parents[2] / "sdflow-todolist" / "scripts" / "todolist.py")
+BUGLIST_SCRIPT = str(Path(__file__).parents[2] / "sdflow-issues" / "scripts" / "buglist.py")
+TODOLIST_SCRIPT = str(Path(__file__).parents[2] / "sdflow-issues" / "scripts" / "todolist.py")
 
 
 # 分派型补桩的单一源在 `conftest.py`（`scan_only_run` fixture）——为什么 MUST NOT
