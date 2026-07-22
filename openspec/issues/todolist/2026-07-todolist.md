@@ -67,6 +67,7 @@ sdflow-issues:
     T207: {"module":"docs","summary":"T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。","type":"代码质量","status":"OPEN","time":"2026-07-22 13:34","change":"dedupe-issues-scripts-shared-layer","batch":null}
     T208: {"module":"sdflow-issues/scripts/sdflow_issues_core/__init__.py","summary":"sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程","type":"代码质量","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
     T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
+    T210: {"module":"sdflow-issues/tests","summary":"冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。","type":"代码质量","status":"OPEN","time":"2026-07-22 14:40","change":"dedupe-issues-scripts-shared-layer","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1969,3 +1970,12 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：AD-6/R7 显式 defer：触发面塌缩后 bug↔todo 分池由模型在 skill 内按坏了没判，NL 骑墙输入可能误判落错池，拿错前缀(B↔T)/粒度/schema/词表；当前 CLI 无 move/reclassify，纠正须手删+重 add、丢 ID 与历史。move --to-pool 应换前缀+粒度文件+schema+保 provenance 做机械恢复。nice-to-have，属将来另开 CLI change，非本 change 阻断项。
 <!-- sdflow-issue-block:end id=T209 -->
+
+<!-- sdflow-issue-block:start id=T210 -->
+## T210: 强化 CLI 等价 harness 为 frozen golden（stdout+落盘+exit 全字节对账）
+> 冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。
+
+**关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
+
+**备注**：修法：每 case 冻结完整 stdout/stderr+退出码+落盘文件树 golden，规范化后全值比较，至少覆盖一成功+一失败输入。冷审 defer（非 correctness bug）。
+<!-- sdflow-issue-block:end id=T210 -->

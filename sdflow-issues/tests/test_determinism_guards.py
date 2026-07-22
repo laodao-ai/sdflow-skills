@@ -255,6 +255,42 @@ ALLOWED_DISTINCT = set()
 
 _MISSING = object()
 
+# ── [impl-review-fix] F4: 每个薄入口的 expected-export roster ─────────────────────
+# 该入口 MUST 导出（且解析到 core / 为登记的 pool-bound 薄委派）的共享 helper 名单，从当前
+# **真实导出集**钉死。旧守卫对 `_MISSING` 直接 `continue`——从薄入口删任意 roster helper 不
+# 反红（违 spec「每个 helper 从薄入口 getattr 解析 __module__=='sdflow_issues_core'」）。
+# 现改为：先断言这些名字**存在**（缺失即红），再校验 identity。确实不由该入口导出的
+# underscore-内部 helper（`from sdflow_issues_core import *` 不带下划线名）**显式不在**本名单
+# ——是「显式移除」而非靠 missing 静默跳过掩盖。增删导出须显式改此处、经审查。
+#
+# buglist/todolist：`import *` 只带 core 公共名 + 各自 pool-bound 薄封装（all_ids/next_id，
+# __module__ 指本入口，属 ALLOWED_POOL_BOUND）。二者形状相同，共用 _BUGTODO_EXPECTED。
+_BUGTODO_EXPECTED = frozenset({
+    "atomic_write", "atomic_write_bytes", "repo_root", "canonical_id", "semantic_id_key",
+    "validate_prefix", "validate_recorder_participant", "recorder_lock",
+    "read_repository_snapshot", "repository_semantic_occurrences", "recorder_child_env",
+    "render_recorder_namespace", "parse_recorder_document", "read_recorder_document",
+    "split_sections", "parse_table_rows", "block_ranges", "marker_block_ranges",
+    "detect_change", "normalize_doc_paths", "auto_default_doc", "validate_doc_paths",
+    "all_ids", "next_id",
+})
+# issues.py 额外 re-export 若干 underscore helper（供其 top-level 命令直调），故 roster 更全。
+_ISSUES_EXPECTED = frozenset(_BUGTODO_EXPECTED | {
+    "_reject_line_unsafe", "_validate_unicode_scalar", "_validated_recorder_model",
+    "_legacy_semantic_id_key", "_match_marker_line", "_die", "_render_recorder_document",
+    "_legacy_block_range", "_scan_legacy_block_range",
+})
+EXPECTED_EXPORTS = {
+    "buglist": _BUGTODO_EXPECTED,
+    "todolist": _BUGTODO_EXPECTED,
+    "issues": _ISSUES_EXPECTED,
+}
+# 冗余锚：expected-export 名单 MUST 是 ROSTER 子集（拼写错/死配置当场红）。
+for _en, _names in EXPECTED_EXPORTS.items():
+    assert _names <= set(ROSTER), (
+        f"{_en} expected-export 含非 roster 名: {sorted(_names - set(ROSTER))}"
+    )
+
 
 def _load_entry(name):
     spec = importlib.util.spec_from_file_location(name, str(SCRIPTS_DIR / f"{name}.py"))
@@ -289,17 +325,21 @@ def _wrapper_delegates_to_core(entry_name, func_name):
 def test_thin_entry_does_not_shadow_core_helper(entry_name):
     """薄入口不 shadow core helper：roster 每个 helper 若在薄入口可见，则解析到 core（未被重实现）。
 
+    - 遍历该入口的 **expected-export roster**（`EXPECTED_EXPORTS[entry_name]`）——非全 ROSTER。
+    - [impl-review-fix] F4: 名字**缺失** → FAIL（从薄入口删了应导出的共享 helper = 破单一源/
+      静默回归；不再 `continue` 掩盖）。确不导出的 underscore-内部 helper 已从 roster 显式移除。
     - `__module__ == 'sdflow_issues_core'` → 直接 import 未改，PASS。
-    - 名单未在该薄入口暴露（多为 underscore helper，`import *` 不带）→ 未 shadow，跳过。
     - ALLOWED_POOL_BOUND → 验其为薄委派（body 调 `_core.<name>`），PASS。
     - ALLOWED_DISTINCT → documented 独占变体，PASS。
     - 其余非 core 解析 → FAIL（薄入口重实现了共享 helper，破单一源）。
     """
     entry = ENTRIES[entry_name]
     shadows = []
-    for name in ROSTER:
+    missing = []
+    for name in sorted(EXPECTED_EXPORTS[entry_name]):
         obj = getattr(entry, name, _MISSING)
         if obj is _MISSING:
+            missing.append(name)
             continue
         module = getattr(obj, "__module__", None)
         if module == "sdflow_issues_core":
@@ -313,6 +353,10 @@ def test_thin_entry_does_not_shadow_core_helper(entry_name):
         if (entry_name, name) in ALLOWED_DISTINCT:
             continue
         shadows.append(f"{name} (__module__={module})")
+    assert not missing, (  # [impl-review-fix] F4: 缺失即红，不再静默 continue
+        f"{entry_name} 未导出预期共享 helper（从薄入口删 = 破单一源/静默回归）: {missing}"
+        "——若确要停止导出，从 EXPECTED_EXPORTS 显式移除并经审查"
+    )
     assert not shadows, (
         f"{entry_name} 本地 shadow 了 core 的共享 helper（破单一源）: {shadows}"
     )

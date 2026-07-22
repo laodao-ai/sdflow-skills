@@ -26,6 +26,21 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 import issues as issues_mod  # noqa: E402
+import sdflow_issues_core as _issues_core  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_recorder_delegation_globals():
+    """[impl-review-fix] F1 防御：每个测试后无条件复位 core 的委派单例全局。
+
+    core 是进程内单例模块全局；大量测试直调 read_pool/_scan_pool 绕过 main()，若某测试
+    （或被测 main() 的错误路径）遗留脏 `_ACTIVE_RECORDER_TOKEN`/`_ACTIVE_RECORDER_CHAIN`，
+    会按执行顺序污染同进程后续测试（RecorderLockError: delegation denied）。此 fixture
+    消除「靠执行顺序侥幸绿」——不依赖任何被测代码正常复位。
+    """
+    yield
+    _issues_core._ACTIVE_RECORDER_TOKEN = None
+    _issues_core._ACTIVE_RECORDER_CHAIN = None
 
 
 def is_recorder_scan(command):

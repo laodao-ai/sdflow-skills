@@ -1215,11 +1215,17 @@ def main():
             with recorder_lock(args.root, command) as lock_state, redirect_stdout(output):
                 args._recorder_token = lock_state.token
                 # 委派状态存于共享源 core（recorder_child_env 从 core 读取当前 token/chain）。
+                # [impl-review-fix] F1: token/chain 复位 MUST 走 finally——core 是进程内单例模块
+                # 全局，三入口合并后共用一个 core；错误路径（_die→SystemExit / args.func 抛异常）
+                # 若跳过复位，脏 token 泄漏给同进程后续任何直调 read_pool/_scan_pool，
+                # 触发 RecorderLockError: delegation denied（根本没碰目标仓）。
                 _core._ACTIVE_RECORDER_TOKEN = lock_state.token
                 _core._ACTIVE_RECORDER_CHAIN = lock_state.chain
-                args.func(args)
-                _core._ACTIVE_RECORDER_TOKEN = None
-                _core._ACTIVE_RECORDER_CHAIN = None
+                try:
+                    args.func(args)
+                finally:
+                    _core._ACTIVE_RECORDER_TOKEN = None
+                    _core._ACTIVE_RECORDER_CHAIN = None
             sys.stdout.write(output.getvalue())
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

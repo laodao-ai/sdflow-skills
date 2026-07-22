@@ -17,6 +17,7 @@ node-id manifest **逐 node 比对**：
      实际 pass/fail 由全套件 run 保证，pre-existing 环境/平台 skip 不算回归）。
 """
 import functools
+import hashlib
 import re
 import subprocess
 import sys
@@ -131,10 +132,33 @@ def test_allowlist_deleted_nodes_are_actually_gone():
     )
 
 
+# [impl-review-fix] F3: baseline 是**冻结契约**——钉死精确 node 数 + 文件内容 sha256。
+# 软下限 `>= 2000` 可游戏化：逐 node 对账（门 1）检不到「删若干条 + 总数仍 ≥ 下限」，
+# 于是删除 baseline 条目只要不跌破下限就不反红，重新引入 design 反对的可游戏化门。
+# 钉精确值后，baseline 的**任何**改动（增/删/改一行、乃至一个字符）都必过下面两个断言 =
+# 强制显式改这两个常量、经审查。改 baseline 时须同步更新此处（这正是「显式审查」闸门）。
+_BASELINE_EXPECT_COUNT = 2093
+_BASELINE_EXPECT_SHA256 = (
+    "b08c60d536f456db6d9f1ad3b233f2c832da3f3e71327a4cc52a0f0aacc2e3ec"
+)
+
+
 def test_baseline_is_frozen_and_nonempty():
-    """基线自身完整性：非空 + 恰含 7 个 allowlist node（防基线被误改削弱门）。"""
-    baseline = set(_load_baseline_nodes())
-    assert len(baseline) >= 2000, f"baseline node 数异常偏少: {len(baseline)}"
+    """基线自身完整性（冻结契约）：钉死精确 node 数 + 文件 sha256 + 含 7 个 allowlist node。
+
+    钉精确值而非软下限——任何 baseline 改动都必过本断言，强制显式审查（见上方常量注记）。
+    """
+    baseline_nodes = _load_baseline_nodes()
+    baseline = set(baseline_nodes)
+    assert len(baseline_nodes) == _BASELINE_EXPECT_COUNT, (
+        f"baseline node 数变动: 期望 {_BASELINE_EXPECT_COUNT}, 实得 {len(baseline_nodes)}"
+        "——baseline 是冻结契约，改它须显式更新 _BASELINE_EXPECT_COUNT/_SHA256 并经审查"
+    )
+    actual_sha = hashlib.sha256(BASELINE.read_bytes()).hexdigest()
+    assert actual_sha == _BASELINE_EXPECT_SHA256, (
+        f"baseline 文件内容变动: 期望 sha256 {_BASELINE_EXPECT_SHA256}, 实得 {actual_sha}"
+        "——baseline 是冻结契约，改它须显式更新 _BASELINE_EXPECT_SHA256 并经审查"
+    )
     assert ALLOWLIST_DELETED <= baseline, "baseline 应含 7 个 intended-delete node"
 
 
