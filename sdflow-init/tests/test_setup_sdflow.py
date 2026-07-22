@@ -103,8 +103,10 @@ class TestRenameEndToEnd:
         r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
         for old in ["opsx-project-init","opsx-done","spec-review","impl-review","buglist-recorder"]:
             assert not (skills / old).exists(), old     # 旧链清零
-        for new in ["sdflow-init","sdflow-done","sdflow-spec-review","sdflow-code-review","sdflow-buglist"]:
+        for new in ["sdflow-init","sdflow-done","sdflow-spec-review","sdflow-code-review","sdflow-issues"]:
             assert (skills / new).is_symlink(), new     # 新链建立
+        for gone in ["sdflow-buglist","sdflow-todolist"]:   # 三合一后旧目录删除：不再建链（orphan 清理）
+            assert not (skills / gone).exists(), gone
 
     def test_layout_smoke(self, tmp_path):
         """布局冒烟：canonical 软链指向改名后的 sdflow-init/assets/workflow；hack 三脚本可执行。"""

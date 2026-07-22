@@ -237,14 +237,8 @@ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
 def test_delivery_docs_name_operational_boundaries():
     adr = (ROOT / "openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md").read_text(encoding="utf-8")
     context = (ROOT / "openspec/CONTEXT.md").read_text(encoding="utf-8")
-    skills = "\n".join(
-        (ROOT / relative).read_text(encoding="utf-8")
-        for relative in (
-            "sdflow-buglist/SKILL.md",
-            "sdflow-todolist/SKILL.md",
-            "sdflow-issues/SKILL.md",
-        )
-    )
+    # 三合一（adr/0027）：两池 + 跨池的交付/操作边界叙述现全居唯一 sdflow-issues/SKILL.md。
+    skills = (ROOT / "sdflow-issues/SKILL.md").read_text(encoding="utf-8")
     contract = adr + context + skills
     for phrase in (
         "Shared Frontmatter Envelope",
