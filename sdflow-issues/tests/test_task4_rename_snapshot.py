@@ -580,6 +580,17 @@ def test_retag_rename_snapshot_canonicalizes_legacy_alias_without_rewriting_row(
 @pytest.mark.parametrize("shape", ["canonical", "legacy", "overlay"])
 @pytest.mark.parametrize("pool", ["bug", "todo"])
 def test_direct_snapshot_matches_recorder_scan_contract_for_all_shapes_and_pools(tmp_path, pool, shape):
+    """**同源两 code-path 的接线正确性守**（非 rule-omission 守）——DG-M1·R6 诚实降级。
+
+    三脚本合一后，`issues.py` 的 direct rename snapshot 与薄入口 `scan --json` 跑的是**同一个**
+    `sdflow_issues_core` parser（core 是解析 rule 的**单一源**）。∴「一方漏某 lexical/marker/
+    overlay/ID rule、另一方不漏」在结构上**不可能**（两方同源、要漏一起漏），本 golden 自比自己
+    = tautology，**不再宣称抓 rule 遗漏**（该能力已由「core 是 rule 单一源」的结构事实取代）。
+
+    本测试守的是**接线正确性**：direct 路径的 envelope 组装 / 字段投影（`{**found, "pool": pool}`）
+    与 scan 契约的输出**逐字段一致**——即两条 code-path 对同一 core 结果的**装配**没接错。
+    若要真 rule-完整性守，须 core-parse vs **外部 golden fixture**（外部锚，非 core 自比 core）。
+    """
     if pool == "bug":
         item_id = "B1"
         filename = "2026-01-01-buglist.md"

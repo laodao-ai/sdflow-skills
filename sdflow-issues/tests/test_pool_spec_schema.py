@@ -8,12 +8,21 @@
   不得从后门（硬编码常量 / argparse default / callable）漏进 core。字段注册表漂移即红。
 - **fail-closed keys**：`POOL_SPEC.keys() == {"bug","todo"}`，额外/缺失 pool key 即红。
 - **关系正确性**：`terminal_set ⊆ status_values`（per pool）。
-- **值正确性（对照现值）**：`POOL_SPEC` 的 pool 特定值与三脚本的权威常量
-  （`issues.py` 的 `RECORDER_POOL_CONFIG` / `TERMINAL_STATUSES`）逐值一致——**非只 non-None**。
-  其余固定契约维（前缀 / scan 键 / 目录 / legacy glob / 粒度 / 文件干）按 design AD-3 表钉死字面值。
+- **值正确性（外部字面锚）**：固定契约维（前缀 / scan 键 / 目录 / legacy glob / 粒度 / 文件干）
+  按 design AD-3 表**钉死字面值**（`EXPECTED_CONTRACT` / `test_fixed_contract_dims_match_design_table`）
+  ——**这是值正确性的真外部锚**（POOL_SPEC 之外独立的 design-table 常量，改错值即红）。
 
-诚实边界：本守卫是 POOL_SPEC **数据面**的封闭性 + 关系 + 值正确性守（fail-closed 充要）。
-「core 源码无 pool 条件分支」是**另一条**守（AST 级 best-effort，Task 4.2 落）——不在本文件口径内。
+> **诚实修正（Task 4 复核·DG-M1 诚实边界）**：`RECORDER_POOL_CONFIG` / `TERMINAL_STATUSES` 自 Task 2
+> 起已**从 POOL_SPEC 派生**（单一源，见 core `__init__.py:227-233`）。故
+> `test_specific_field_and_enums_match_recorder_config` / `test_terminal_set_matches_recorder_terminal_statuses`
+> 现为 **POOL_SPEC 自比其派生物 = 同源**——它们守的是「派生接线正确」（RECORDER_POOL_CONFIG 确实
+> 由 POOL_SPEC 生成、投影没接错），**不再是独立的漂移捕获**（同源、护力对「值填错」为零）。
+> 值正确性的真护力**全在** `EXPECTED_CONTRACT`（外部 design-table 字面锚）与 `test_required_dims_all_present`。
+> 不 overclaim「对照三脚本权威常量抓漂移」。
+
+诚实边界：本守卫是 POOL_SPEC **数据面**的封闭性（keys/schema/关系 fail-closed 充要）+ **外部字面锚**
+值正确性守。「core 源码无 pool 条件分支」是**另一条**守（AST 级 best-effort，`test_determinism_guards.py`）
+——不在本文件口径内。
 
 加载策略（AD-1 / SC-R3）：本测试把 `sdflow-issues/scripts/` 插入 `sys.path` 后
 `import sdflow_issues_core`（package-aware 加载）；唯一命名避 `sys.modules["core"]` 碰撞。
