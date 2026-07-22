@@ -1,4 +1,4 @@
-"""把「三条通则」托管区块同步进每个 SKILL.md。
+"""把「四条通则」托管区块同步进每个 SKILL.md。
 
 【为什么是内联复制，不是一行指针】
 skill 是【独立分发单元】——symlink 装到 ~/.claude/skills/，跑在别的项目里，
@@ -134,7 +134,7 @@ def main(argv=None):
             print(f"   {d}")
         return 0
 
-    print("[sync_principles] FAIL: 这些文件的「三条通则」缺失或已漂移：", file=sys.stderr)
+    print("[sync_principles] FAIL: 这些文件的「四条通则」缺失或已漂移：", file=sys.stderr)
     for d in drift:
         print(f"   {d}", file=sys.stderr)
     print("   修：python3 hack/sync_principles.py --apply", file=sys.stderr)

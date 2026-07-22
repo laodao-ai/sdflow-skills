@@ -91,15 +91,15 @@ def test_plan_constraints_land_where_implementer_can_see_them():
 
 
 def test_dispatch_sites_carry_the_principles():
-    """两条实现管线的 dispatch 点，都 MUST 点名「原文携带三条通则」。
+    """两条实现管线的 dispatch 点，都 MUST 点名「原文携带四条通则」。
 
     子代理 fresh context —— 看不见 CLAUDE.md，也看不见 SKILL.md。
     通则块自带传播纪律，但【声明在通则里】拦不住【dispatch 那一行忘了带】——
     所以每个 dispatch 站点上都要点名（同 spec-review / code-review 的 fan-out）。
     """
     w = WORKFLOW.read_text(encoding="utf-8")
-    assert "dispatch prompt MUST 原文携带三条通则" in w        # superpowers 路径（步骤 7）
+    assert "dispatch prompt MUST 原文携带四条通则" in w        # superpowers 路径（步骤 7）
 
     impl = (Path(__file__).resolve().parents[2] / "sdflow-implement" / "SKILL.md") \
         .read_text(encoding="utf-8")
-    assert "「三条通则」区块全文" in impl                        # tickets 路径
+    assert "「四条通则」区块全文" in impl                        # tickets 路径

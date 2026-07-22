@@ -81,7 +81,7 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 ### Requirement: 出境安全三件套对两条 runner 路径一视同仁
 
-`outside-voice.sh` 的 secret 扫描（`secret_scan`）、不可信上下文硬分隔与三条通则注入（`render_prompt` 的 FRAME）、体积上限截断（200KB 保头尾）SHALL 为**两条 runner 路径共用的同一份代码**。反向路径（Codex 宿主 → Claude）MUST NOT 另起炉灶组装 prompt。
+`outside-voice.sh` 的 secret 扫描（`secret_scan`）、不可信上下文硬分隔与四条通则注入（`render_prompt` 的 FRAME）、体积上限截断（200KB 保头尾）SHALL 为**两条 runner 路径共用的同一份代码**。反向路径（Codex 宿主 → Claude）MUST NOT 另起炉灶组装 prompt。
 
 理由：新增的 runner 意味着**新的数据出境端点**；任何"给该路径单独写一套 prompt 组装"的实现都会绕过扫描器，是安全回归。runner 之间的差异 SHALL 只体现在最终 `exec` 的命令行分叉一处。
 
@@ -101,7 +101,7 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 #### Scenario: 反向路径复用同一 FRAME 与截断
 - **WHEN** `SDFLOW_HOST=codex`，向 `claude` 发起 voice
-- **THEN** prompt SHALL 由同一个 `render_prompt` 产出（含三条通则、UNTRUSTED CONTEXT 硬分隔、200KB 保头尾截断），MUST NOT 存在第二份 prompt 组装实现
+- **THEN** prompt SHALL 由同一个 `render_prompt` 产出（含四条通则、UNTRUSTED CONTEXT 硬分隔、200KB 保头尾截断），MUST NOT 存在第二份 prompt 组装实现
 
 #### Scenario: 只读约束按 runner 落到对应机制（反向路径只读全仓，对称 codex）〔spec-review-r3 C4〕
 - **WHEN** 向 claude 发起跨模型 voice（`claude -p`）

@@ -1,7 +1,7 @@
-"""守「两条通则」的一致性 —— 真相源唯一，注入机械化，漂移机械可查。
+"""守「四条通则」的一致性 —— 真相源唯一，注入机械化，漂移机械可查。
 
 【为什么需要这个测试】
-两条通则被【复制】进 15 个 SKILL.md + 1 份 bundle 副本。复制就会漂。
+四条通则被【复制】进 15 个 SKILL.md + 1 份 bundle 副本。复制就会漂。
 而这正是 CLAUDE.md 基准 1 说的：能用「可固化规则 + 脚本」保证的一致性，MUST 机械化。
 —— 复制是必要的（skill 是独立分发单元，跑在别的项目里，读不到本仓 CLAUDE.md），
    但复制【不能靠手】。
@@ -43,7 +43,7 @@ def test_skill_source_is_the_file_outside_voice_reads():
     assert SP.SOURCE.is_file()
 
 
-HEADLINES = ("能查的自己查", "先调研再给推荐", "MUST NOT 拿现状反驳目标")
+HEADLINES = ("能查的自己查", "先调研再给推荐", "MUST NOT 拿现状反驳目标", "方案尽量简化")
 
 
 def test_consumer_project_snippet_carries_all_three():
