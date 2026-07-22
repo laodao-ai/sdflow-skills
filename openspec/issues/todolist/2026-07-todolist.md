@@ -65,6 +65,8 @@ sdflow-issues:
     T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T207: {"module":"docs","summary":"T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。","type":"代码质量","status":"OPEN","time":"2026-07-22 13:34","change":"dedupe-issues-scripts-shared-layer","batch":null}
+    T208: {"module":"sdflow-issues/scripts/sdflow_issues_core/__init__.py","summary":"sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程","type":"代码质量","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
+    T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1949,3 +1951,21 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：涉及 docs/workflow-map.md·docs/drafts/sdflow-issues-toolchain-defects.md（无视图快照自标、属历史调查）·docs/sdflow-fable5/02-module-reference.md（pin git HEAD 快照）。非承重（非调用/CI/spec）。
 <!-- sdflow-issue-block:end id=T207 -->
+
+<!-- sdflow-issue-block:start id=T208 -->
+## T208: sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程
+> sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程
+
+**关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
+
+**备注**：AD-7/R10 显式 defer：起步单 __init__.py，将来按 cohesive 边界拆 recorder/document/locking/ledger/policies 子模块；且 issues 内部对一 snapshot 调两次 pool view 现走 subprocess spawn buglist/todolist scan --json，应消掉自调用子进程改为进程内 import 调用。非本 change 阻断项（同 CLI-子命令树 defer 先例），本 change 目标=消三层重复、不含内部再分层。
+<!-- sdflow-issue-block:end id=T208 -->
+
+<!-- sdflow-issue-block:start id=T209 -->
+## T209: move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）
+> move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）
+
+**关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
+
+**备注**：AD-6/R7 显式 defer：触发面塌缩后 bug↔todo 分池由模型在 skill 内按坏了没判，NL 骑墙输入可能误判落错池，拿错前缀(B↔T)/粒度/schema/词表；当前 CLI 无 move/reclassify，纠正须手删+重 add、丢 ID 与历史。move --to-pool 应换前缀+粒度文件+schema+保 provenance 做机械恢复。nice-to-have，属将来另开 CLI change，非本 change 阻断项。
+<!-- sdflow-issue-block:end id=T209 -->
