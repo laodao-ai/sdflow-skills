@@ -109,16 +109,16 @@ POOL_SPEC 是后续所有差异注入的唯一入口，它的封闭性与关系�
 最终家（含 `sys.path.insert` 令 file-based 测试可解 package import、sibling-spawn 常量改同目录、承重注释
 重写）；对应 tests 迁入 `sdflow-issues/tests/`。收尾 CLI 逐命令外部行为与基线等价、既有测试全绿。
 
-- [ ] THREE_WAY 共享 helper（`atomic_write`/`repo_root`/`canonical_id`/`recorder_lock`/frontmatter
+- [x] THREE_WAY 共享 helper（`atomic_write`/`repo_root`/`canonical_id`/`recorder_lock`/frontmatter
       mechanics 等）与 TWO_WAY 镜像逻辑全部上移 core，作唯一物理源；差异点改读 `POOL_SPEC`
-- [ ] 现存 pool 分支（三元 / `expected_pool==` 别名 / subscript 等）在迁进 core 前全部重写为 POOL_SPEC 取值；
+- [x] 现存 pool 分支（三元 / `expected_pool==` 别名 / subscript 等）在迁进 core 前全部重写为 POOL_SPEC 取值；
       `core` 源码无任何针对 pool 值的条件分支
-- [ ] `buglist.py`/`todolist.py`/`issues.py` 壳化为薄入口（解析 args → 注入各自 `POOL_SPEC` →
+- [x] `buglist.py`/`todolist.py`/`issues.py` 壳化为薄入口（解析 args → 注入各自 `POOL_SPEC` →
       `from sdflow_issues_core import`；顶部 `sys.path.insert`）并迁入 `sdflow-issues/scripts/`；对应 tests
       迁入 `sdflow-issues/tests/` 且全绿
-- [ ] `issues.py` 跨池 reindex/batch/sweep 的 sibling-spawn 常量改同目录解析、承重注释去掉已作废的 sibling
+- [x] `issues.py` 跨池 reindex/batch/sweep 的 sibling-spawn 常量改同目录解析、承重注释去掉已作废的 sibling
       前提；`reindex`/`sweep` 仍能正确 spawn 子进程
-- [ ] CLI 逐命令（add / scan --json / set-status / triage / reindex / batch / next-id / sweep）外部行为与
+- [x] CLI 逐命令（add / scan --json / set-status / triage / reindex / batch / next-id / sweep）外部行为与
       冻结基线等价，无回归
 
 ### Task 3: skill 合并 — SKILL.md 合一 + 骑墙规则 + 删旧目录

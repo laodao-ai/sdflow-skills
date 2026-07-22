@@ -1,0 +1,328 @@
+diff --git a/sdflow-issues/scripts/sdflow_issues_core/__init__.py b/sdflow-issues/scripts/sdflow_issues_core/__init__.py
+index ad31546..c2d9a2b 100644
+--- a/sdflow-issues/scripts/sdflow_issues_core/__init__.py
++++ b/sdflow-issues/scripts/sdflow_issues_core/__init__.py
+@@ -1428,6 +1428,19 @@ def _preflight_target_legacy_block(document, raw_id, path):
+         _legacy_block_range(document, raw_id, path)
+ 
+ 
++def _minimal_marker_block(canonical, item, eol, history):
++    """承重的 marker 契约：惰性建的 minimal `sdflow-issue-block` 6 行字节块
++    （start 标记 / 二级标题 / summary 引用 / 历史 / end 标记）。history 为**已拼接的字节**
++    （调用方对 tuple 形态先 `b"".join(...)`）。三处促升路径共用此单一源——格式一变只改此处。"""
++    return (
++        eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
++        + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
++        + _summary_blockquote(item["summary"]).encode("utf-8") + eol
++        + history
++        + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
++    )
++
++
+ def _promotion_insertions(document, raw_id, canonical, path, item, history, require_block):
+     eol = document["eol"]
+     candidates = [raw for raw in document["legacy_blocks"]
+@@ -1442,13 +1455,7 @@ def _promotion_insertions(document, raw_id, canonical, path, item, history, requ
+             b_end: (*boundary, *history,
+                     f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol),
+         }
+-    minimal = (
+-        eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
+-        + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
+-        + _summary_blockquote(item["summary"]).encode("utf-8") + eol
+-        + b"".join(history)
+-        + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
+-    )
++    minimal = _minimal_marker_block(canonical, item, eol, b"".join(history))
+     return {len(document["lines"]): (minimal,)}
+ 
+ 
+@@ -1469,6 +1476,28 @@ def _validated_rendered_mutation(rendered, pool, canonical, require_marker, path
+     return rendered
+ 
+ 
++def _prepare_overlay_model(document, pool, canonical, item):
++    """pool-agnostic 公共写头：拷贝既有 overlay model（无则建 minimal overlay 骨架），
++    深拷 items 后置入更新后的 item。差异经参数 pool/canonical/item 注入，无 pool 值分支。"""
++    model = dict(document["model"] or {
++        "schema": 1, "pool": pool, "mode": "overlay", "items": {},
++    })
++    model["items"] = dict(model["items"])
++    model["items"][canonical] = item
++    return model
++
++
++def _commit_mutation(document, model, insertions, path, pool, canonical, require_marker, output):
++    """pool-agnostic 公共写尾：splice → render → 关系自检 → 原子落盘 → stdout JSON。
++    output 为调用方预建的结果 dict（各命令语义不同，此处只负责序列化打印）。"""
++    body = _splice_body_lines(document, insertions)
++    rendered = _render_recorder_document(document, model, body)
++    atomic_write_bytes(path, _validated_rendered_mutation(
++        rendered, pool, canonical, require_marker, path,
++    ))
++    print(json.dumps(output, ensure_ascii=False))
++
++
+ # ── 工具 ─────────────────────────────────────────────────────────────────────
+ 
+ def _load_json(src):
+@@ -1536,8 +1565,7 @@ def _todo_build_block(spec, item_id, data, docs, explicit_docs):
+     title = _display_title(data["summary"], data.get("title"))
+     b = f"\n<!-- sdflow-issue-block:start id={item_id} -->\n## {item_id}: {title}\n"
+     b += _summary_blockquote(data["summary"]) + "\n"
+-    if docs:
+-        b += "\n**关联文档**：" + "、".join(f"`{d}`" for d in docs) + "\n"
++    b += render_doc_block(docs)
+     if parts["motivation"]:
+         b += f"\n**动机**：{_escape_user_markers(parts['motivation'])}\n"
+     if parts["approach"]:
+@@ -1630,24 +1658,17 @@ def _bug_set_status(args, spec):
+     eol = document["eol"]
+     history = hist.encode("utf-8") + eol
+     item["status"] = new
+-    model = dict(document["model"] or {
+-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
+-    })
+-    model["items"] = dict(model["items"])
+-    model["items"][canonical] = item
++    model = _prepare_overlay_model(document, spec.pool, canonical, item)
+     if not frontmatter_owned:
+         insertions = _promotion_insertions(
+             document, raw_id, canonical, path, item, (history,), True,
+         )
+     else:
+         insertions = {b_end - 1: (history,)}
+-    body = _splice_body_lines(document, insertions)
+-    rendered = _render_recorder_document(document, model, body)
+-    atomic_write_bytes(path, _validated_rendered_mutation(
+-        rendered, spec.pool, canonical, True, path,
+-    ))
+-    print(json.dumps({"id": canonical, "old": old, "new": new,
+-                      "file": os.path.relpath(path, root)}, ensure_ascii=False))
++    _commit_mutation(
++        document, model, insertions, path, spec.pool, canonical, True,
++        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root)},
++    )
+ 
+ 
+ def _todo_set_status(args, spec):
+@@ -1676,11 +1697,7 @@ def _todo_set_status(args, spec):
+     eol = document["eol"]
+     history = hist.encode("utf-8") + eol
+     item["status"] = new
+-    model = dict(document["model"] or {
+-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
+-    })
+-    model["items"] = dict(model["items"])
+-    model["items"][canonical] = item
++    model = _prepare_overlay_model(document, spec.pool, canonical, item)
+     insertions = {}
+     frontmatter_owned = bool(document["model"] and canonical in document["model"]["items"])
+     if not frontmatter_owned:
+@@ -1691,21 +1708,12 @@ def _todo_set_status(args, spec):
+         _b_start, b_end = document["marker_blocks"][canonical]
+         insertions = {b_end - 1: (history,)}
+     else:
+-        minimal = (
+-            eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
+-            + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
+-            + _summary_blockquote(item["summary"]).encode("utf-8") + eol
+-            + history
+-            + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
+-        )
++        minimal = _minimal_marker_block(canonical, item, eol, history)
+         insertions = {len(document["lines"]): (minimal,)}
+-    body = _splice_body_lines(document, insertions)
+-    rendered = _render_recorder_document(document, model, body)
+-    atomic_write_bytes(path, _validated_rendered_mutation(
+-        rendered, spec.pool, canonical, True, path,
+-    ))
+-    print(json.dumps({"id": canonical, "old": old, "new": new,
+-                      "file": os.path.relpath(path, root)}, ensure_ascii=False))
++    _commit_mutation(
++        document, model, insertions, path, spec.pool, canonical, True,
++        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root)},
++    )
+ 
+ 
+ def _bug_triage(args, spec):
+@@ -1721,11 +1729,7 @@ def _bug_triage(args, spec):
+     new_status = "PROPOSED" if old_status in open_untriaged else old_status
+     item["status"] = new_status
+     item["batch"] = batch or None
+-    model = dict(document["model"] or {
+-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
+-    })
+-    model["items"] = dict(model["items"])
+-    model["items"][canonical] = item
++    model = _prepare_overlay_model(document, spec.pool, canonical, item)
+     eol = document["eol"]
+     history = ()
+     if new_status != old_status:
+@@ -1744,13 +1748,11 @@ def _bug_triage(args, spec):
+             )
+         _b_start, b_end = document["marker_blocks"][canonical]
+         insertions = {b_end - 1: history} if history else {}
+-    body = _splice_body_lines(document, insertions)
+-    rendered = _render_recorder_document(document, model, body)
+-    atomic_write_bytes(path, _validated_rendered_mutation(
+-        rendered, spec.pool, canonical, True, path,
+-    ))
+-    print(json.dumps({"id": canonical, "old_status": old_status, "new_status": new_status,
+-                      "batch": batch, "file": os.path.relpath(path, root)}, ensure_ascii=False))
++    _commit_mutation(
++        document, model, insertions, path, spec.pool, canonical, True,
++        {"id": canonical, "old_status": old_status, "new_status": new_status,
++         "batch": batch, "file": os.path.relpath(path, root)},
++    )
+ 
+ 
+ def _todo_triage(args, spec):
+@@ -1766,11 +1768,7 @@ def _todo_triage(args, spec):
+     new_status = "PROPOSED" if old_status in open_untriaged else old_status
+     item["status"] = new_status
+     item["batch"] = batch or None
+-    model = dict(document["model"] or {
+-        "schema": 1, "pool": spec.pool, "mode": "overlay", "items": {},
+-    })
+-    model["items"] = dict(model["items"])
+-    model["items"][canonical] = item
++    model = _prepare_overlay_model(document, spec.pool, canonical, item)
+     eol = document["eol"]
+     history = ()
+     if new_status != old_status:
+@@ -1786,24 +1784,16 @@ def _todo_triage(args, spec):
+         _b_start, b_end = document["marker_blocks"][canonical]
+         insertions = {b_end - 1: history} if history else {}
+     elif history:
+-        minimal = (
+-            eol + f"<!-- sdflow-issue-block:start id={canonical} -->".encode("ascii") + eol
+-            + f"## {canonical}: {_display_title(item['summary'])}".encode("utf-8") + eol
+-            + _summary_blockquote(item["summary"]).encode("utf-8") + eol
+-            + b"".join(history)
+-            + f"<!-- sdflow-issue-block:end id={canonical} -->".encode("ascii") + eol
+-        )
++        minimal = _minimal_marker_block(canonical, item, eol, b"".join(history))
+         insertions = {len(document["lines"]): (minimal,)}
+     else:
+         insertions = {}
+     require_marker = not frontmatter_owned or canonical in document["marker_blocks"] or bool(history)
+-    body = _splice_body_lines(document, insertions)
+-    rendered = _render_recorder_document(document, model, body)
+-    atomic_write_bytes(path, _validated_rendered_mutation(
+-        rendered, spec.pool, canonical, require_marker, path,
+-    ))
+-    print(json.dumps({"id": canonical, "old_status": old_status, "new_status": new_status,
+-                      "batch": batch, "file": os.path.relpath(path, root)}, ensure_ascii=False))
++    _commit_mutation(
++        document, model, insertions, path, spec.pool, canonical, require_marker,
++        {"id": canonical, "old_status": old_status, "new_status": new_status,
++         "batch": batch, "file": os.path.relpath(path, root)},
++    )
+ 
+ 
+ BUG_STRATEGY = PoolStrategy(
+diff --git a/sdflow-issues/tests/test_issues.py b/sdflow-issues/tests/test_issues.py
+index 6723f3f..413a588 100644
+--- a/sdflow-issues/tests/test_issues.py
++++ b/sdflow-issues/tests/test_issues.py
+@@ -167,33 +167,24 @@ class TestReadPoolConflictGuard:
+ 
+ 
+ class TestTerminalStatusesCrossScriptConsistency:
+-    """T3 守卫：bug 终态集 {FIXED,WONTFIX}、todo 终态集 {DONE,WONTDO} 在多处独立硬编码
+-    （`issues.py TERMINAL_STATUSES`、buglist.py/todolist.py 的 `cmd_scan`/`cmd_triage`
+-    内联字面量），改任一处忘了另一处会静默漂移——本类锁死这几处互相一致。
+-
+-    （a）issues.TERMINAL_STATUSES[pool] 必须是对应 recorder STATUS_CODES 的子集
+-    （终态状态词必须真实存在于该 recorder 的合法状态码表里）。
+-
+-    （b）buglist.py/todolist.py 的 `cmd_scan`（`nonterminal = set(STATUS_CODES) - {...}`，
+-    约:629/596）与 `cmd_triage`（`open_untriaged = set(STATUS_CODES) - {...}`，约:534/508）
+-    内联的终态字面量，实际是**各自硬编码的字面量集合**、不从 `issues.TERMINAL_STATUSES`
+-    派生（两脚本各自独立、不 import issues.py，见 issues.py 模块 docstring"子进程解耦"）。
+-    单纯断言 `{"FIXED","WONTFIX"} == issues.TERMINAL_STATUSES["bug"]` 只是重申 issues.py
+-    自己常量的已知值，测不出 buglist.py/todolist.py 源码里的字面量是否已经漂移——因此
+-    这里额外用正则从两个源文件里抠出所有 `{"A","B",...}` 形态的字面量集合，断言其中
+-    确有 >=2 处（对应 cmd_scan + cmd_triage 两个已知内联点）完整覆盖 issues.py 的终态集，
+-    这样任一处漏改都会让本测试变红。
+-    """
++    """终态集一致性守卫。单一源化（adr/0027）后：bug 终态集 {FIXED,WONTFIX}、todo 终态集
++    {DONE,WONTDO} 不再多处内联，唯一源 = `core.POOL_SPEC[pool].terminal_set`，`issues.py`
++    的 `TERMINAL_STATUSES` 由其派生、`core` 的 `cmd_scan`/`cmd_triage` 减法表达式也从
++    `spec.terminal_set` 取值——故「多处独立硬编码、改一处忘另一处静默漂移」的旧风险已消失。
++
++    本类护住的是派生链两端与外部锚：
+ 
+-    @staticmethod
+-    def _inline_literal_sets(source_text):
+-        """提取源码里形如 {"A", "B", ...} 的字面量字符串集合列表（用于定位
+-        cmd_scan/cmd_triage 里减法表达式的终态字面量）。"""
+-        sets = []
+-        for m in re.finditer(r'\{\s*(?:"[A-Z_]+"\s*,?\s*)+\}', source_text):
+-            codes = re.findall(r'"([A-Z_]+)"', m.group(0))
+-            sets.append(set(codes))
+-        return sets
++    （a）**外部字面锚**：`{"FIXED","WONTFIX"} == TERMINAL_STATUSES["bug"]`（todo 同理）——
++    在测试里独立复写字面量，防单一源被整体改错值（同源断言两侧同源、恒真、护力为零，
++    真正抓漂移的是这条外部锚）。
++
++    （b）**⊆ 独立 STATUS_CODES**：`TERMINAL_STATUSES[pool] <= set(<recorder>.STATUS_CODES)`
++    ——终态词必须真实存在于该 recorder 独立维护的合法状态码表里。
++
++    （c）**派生用法源锚**：`core` 源码里 cmd_scan 的
++    `nonterminal = set(spec.status_values) - set(spec.terminal_set)` 字面串在场——守 cmd_scan
++    确实走派生（而非回退内联字面量）。
++    """
+ 
+     def test_terminal_sets_are_subset_of_recorder_status_codes(self):
+         assert issues_mod.TERMINAL_STATUSES["bug"] <= set(buglist_mod.STATUS_CODES)
+@@ -212,22 +203,6 @@ class TestTerminalStatusesCrossScriptConsistency:
+         # 单一源化：见 bug 版注释。
+         assert set(todolist_mod._core.POOL_SPEC["todo"].terminal_set) == issues_mod.TERMINAL_STATUSES["todo"]
+ 
+-    @staticmethod
+-    def _cmd_scan_nonterminal_literal(source_text):
+-        """精确定位 cmd_scan 里 `nonterminal = set(STATUS_CODES) - {...}` 语句
+-        （约 buglist.py:629 / todolist.py:596）的排除字面量集合——与 cmd_triage 的
+-        `open_untriaged = set(STATUS_CODES) - {...}`（多含一个 "PROPOSED"，语义上
+-        本就不能严格 == 终态集，只能用覆盖判定）区分开。cmd_scan 这条排除集在语义上
+-        就是该 pool 的终态集本身，理应严格相等——单纯的『覆盖』判定（`<=`）测不出
+-        『多塞一个非终态码』这种过度包含漂移（字面量仍是终态集的超集，覆盖判定不会
+-        变红，但 nonterminal/open_ungrouped 计算会静默丢项）。"""
+-        m = re.search(
+-            r'nonterminal\s*=\s*set\(STATUS_CODES\)\s*-\s*\{\s*((?:"[A-Z_]+"\s*,?\s*)+)\}',
+-            source_text,
+-        )
+-        assert m, "未在源码中定位到 cmd_scan 的 `nonterminal = set(STATUS_CODES) - {...}` 语句"
+-        return set(re.findall(r'"([A-Z_]+)"', m.group(1)))
+-
+     def test_buglist_cmd_scan_exclusion_set_strictly_equals_terminal_statuses(self):
+         """严格 ==（区别于上面两条测『覆盖』的用例）：cmd_scan 的排除字面量集合
+         必须与 issues.TERMINAL_STATUSES['bug'] 严格相等，不能只是超集——防止误把
+diff --git a/sdflow-issues/tests/test_task3_frontmatter_writer.py b/sdflow-issues/tests/test_task3_frontmatter_writer.py
+index 3280d9e..9ab7d4a 100644
+--- a/sdflow-issues/tests/test_task3_frontmatter_writer.py
++++ b/sdflow-issues/tests/test_task3_frontmatter_writer.py
+@@ -344,7 +344,9 @@ def test_marker_prose_display_title_and_line_safety_helpers_have_golden_behavior
+ 
+ 
+ def test_dated_writer_call_graph_has_no_legacy_table_or_text_writer_calls():
+-    # 单一源化：dated-writer 命令现居 core（cmd_add 共享；set-status/triage 为 per-pool 策略函数）
++    # 单一源化：dated-writer 命令现居 core（cmd_add 共享；set-status/triage 为 per-pool 策略函数）。
++    # 落盘走 byte-writer 路径——cmd_add 直接调 atomic_write_bytes；set-status/triage 4 个策略函数
++    # 经公共写尾 _commit_mutation 落盘（该 helper 内部即 atomic_write_bytes，见下方 assert）。
+     core = BUG._core
+     for fn in (core.cmd_add, core._bug_set_status, core._bug_triage,
+                core._todo_set_status, core._todo_triage):
+@@ -353,7 +355,9 @@ def test_dated_writer_call_graph_has_no_legacy_table_or_text_writer_calls():
+         assert "_reject_cell_unsafe" not in source
+         assert "parse_table_rows(" not in source
+         assert "split_sections(" not in source
+-        assert "atomic_write_bytes(" in source
++        assert "atomic_write_bytes(" in source or "_commit_mutation(" in source
++    # 公共写尾本体走 byte-writer（策略函数经它落盘）。
++    assert "atomic_write_bytes(" in inspect.getsource(core._commit_mutation)
+ 
+ 
+ def test_overlay_writer_preserves_bom_crlf_and_external_namespace_bytes(tmp_path):
