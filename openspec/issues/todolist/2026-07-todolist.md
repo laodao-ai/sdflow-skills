@@ -64,11 +64,11 @@ sdflow-issues:
     T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"PROPOSED","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
-    T207: {"module":"docs","summary":"T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。","type":"代码质量","status":"OPEN","time":"2026-07-22 13:34","change":"dedupe-issues-scripts-shared-layer","batch":null}
-    T208: {"module":"sdflow-issues/scripts/sdflow_issues_core/__init__.py","summary":"sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程","type":"代码质量","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
-    T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
-    T210: {"module":"sdflow-issues/tests","summary":"冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。","type":"代码质量","status":"OPEN","time":"2026-07-22 14:40","change":"dedupe-issues-scripts-shared-layer","batch":null}
-    T211: {"module":"sdflow-issues/scripts/sdflow_issues_core","summary":"冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。","type":"代码质量","status":"OPEN","time":"2026-07-22 14:50","change":"dedupe-issues-scripts-shared-layer","batch":null}
+    T207: {"module":"docs","summary":"T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 13:34","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
+    T208: {"module":"sdflow-issues/scripts/sdflow_issues_core/__init__.py","summary":"sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程","type":"代码质量","status":"PROPOSED","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
+    T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"PROPOSED","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
+    T210: {"module":"sdflow-issues/tests","summary":"冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:40","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
+    T211: {"module":"sdflow-issues/scripts/sdflow_issues_core","summary":"冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:50","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
 ---
 # 2026-07 TODO
 
@@ -1952,6 +1952,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
 
 **备注**：涉及 docs/workflow-map.md·docs/drafts/sdflow-issues-toolchain-defects.md（无视图快照自标、属历史调查）·docs/sdflow-fable5/02-module-reference.md（pin git HEAD 快照）。非承重（非调用/CI/spec）。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T207 -->
 
 <!-- sdflow-issue-block:start id=T208 -->
@@ -1961,6 +1962,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
 
 **备注**：AD-7/R10 显式 defer：起步单 __init__.py，将来按 cohesive 边界拆 recorder/document/locking/ledger/policies 子模块；且 issues 内部对一 snapshot 调两次 pool view 现走 subprocess spawn buglist/todolist scan --json，应消掉自调用子进程改为进程内 import 调用。非本 change 阻断项（同 CLI-子命令树 defer 先例），本 change 目标=消三层重复、不含内部再分层。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T208 -->
 
 <!-- sdflow-issue-block:start id=T209 -->
@@ -1970,6 +1972,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
 
 **备注**：AD-6/R7 显式 defer：触发面塌缩后 bug↔todo 分池由模型在 skill 内按坏了没判，NL 骑墙输入可能误判落错池，拿错前缀(B↔T)/粒度/schema/词表；当前 CLI 无 move/reclassify，纠正须手删+重 add、丢 ID 与历史。move --to-pool 应换前缀+粒度文件+schema+保 provenance 做机械恢复。nice-to-have，属将来另开 CLI change，非本 change 阻断项。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T209 -->
 
 <!-- sdflow-issue-block:start id=T210 -->
@@ -1979,6 +1982,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
 
 **备注**：修法：每 case 冻结完整 stdout/stderr+退出码+落盘文件树 golden，规范化后全值比较，至少覆盖一成功+一失败输入。冷审 defer（非 correctness bug）。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T210 -->
 
 <!-- sdflow-issue-block:start id=T211 -->
@@ -1988,4 +1992,5 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
 
 **备注**：今日全 CLI 调用=独立进程、无 in-process 多池并发，故不可达；与 T208(消 issues 自调用子进程→in-process import)同期才成真问题。修法=token 改显式 RecorderLockState 传递或 ContextVar.set()/reset() 上下文栈 + 补两线程×两仓 + 嵌套恢复测试。绑定 T208 一起做。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T211 -->

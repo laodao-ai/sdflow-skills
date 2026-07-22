@@ -42,7 +42,8 @@
 #### Scenario: direct snapshot 与 scan 语义漂移
 
 - **WHEN** 同一 canonical/pure-legacy/overlay fixture 分别经 issues direct snapshot 与 `scan --json` contract 解析
-- **THEN** effective items/problems 按 semantic key 完全等价，issues 结果另带 raw bytes/spans；任一方漏掉 lexical/marker/overlay/ID rule 时测试失败
+- **THEN** effective items/problems 按 semantic key 完全等价，issues 结果另带 raw bytes/spans（**同源两 code-path 的接线/投影正确性守**）
+- **注（AD-4/R6 诚实降级）**：direct 与 scan 现同源自 core parser，故本守 **MUST NOT 宣称**「任一方漏某 lexical/marker/overlay/ID rule → 失败」——同源自比 = tautology、结构上不可能一方漏而另一方不漏；真 rule-完整性须 core-parse vs **外部** golden fixture（非 core 自比 core），本 change 未含该外部锚。与本 capability 上文「direct↔scan golden 不再宣称抓 rule 遗漏」Scenario 一致
 
 ### Requirement: 确定性守卫不越权、不破 D4 隔离
 
