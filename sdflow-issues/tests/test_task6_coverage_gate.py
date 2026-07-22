@@ -16,6 +16,7 @@ node-id manifest **逐 node 比对**：
   3. **无 FAILED / 无重构导致的 skip**：当前 collection 干净可跑（本门只做 collect-only 对账；
      实际 pass/fail 由全套件 run 保证，pre-existing 环境/平台 skip 不算回归）。
 """
+import functools
 import re
 import subprocess
 import sys
@@ -74,12 +75,20 @@ def _apply_rename(node):
     return node
 
 
+@functools.lru_cache(maxsize=1)
 def _collect_current_nodes():
-    """pytest --collect-only 从仓根 collect 全部 node id（让 pytest 自己回答，非静态推断）。"""
-    proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
-        cwd=str(REPO_ROOT), capture_output=True, text=True,
-    )
+    """pytest --collect-only 从仓根 collect 全部 node id（让 pytest 自己回答，非静态推断）。
+
+    lru_cache：本门内多个 test 各调一次，collect-only 结果在单次 pytest 进程内不变——
+    缓存一次全仓 collect 子进程，避免每 test 重跑（返回集合只读、不 mutate，缓存共享安全）。
+    """
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300,
+        )
+    except subprocess.TimeoutExpired as exc:  # 病态挂起 → fail-closed（非静默 hang）
+        raise AssertionError(f"collect-only 子进程超时（>300s）: {exc}") from exc
     assert proc.returncode == 0, f"collect-only 失败:\n{proc.stdout}\n{proc.stderr}"
     nodes = set()
     for raw in proc.stdout.splitlines():
@@ -145,10 +154,13 @@ _USAGE_CHOICES_RE = re.compile(r"\{([^}]+)\}")
 
 def _argparse_choices(argv):
     """跑一次 invalid-choice，让 argparse 自己在 usage 行吐出 `{a,b,c}` 枚举。"""
-    proc = subprocess.run(
-        [sys.executable, str(SCRIPTS / "issues.py"), "--root", ".", *argv, "__invalid__"],
-        capture_output=True, text=True,
-    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPTS / "issues.py"), "--root", ".", *argv, "__invalid__"],
+            capture_output=True, text=True, timeout=120,
+        )
+    except subprocess.TimeoutExpired as exc:  # fail-closed，非静默 hang
+        raise AssertionError(f"argparse usage 子进程超时（>120s）: {exc}") from exc
     text = proc.stdout + proc.stderr
     m = _USAGE_CHOICES_RE.search(text)
     assert m, f"未从 argparse usage 解析出 subcommand 枚举: {text!r}"

@@ -188,10 +188,10 @@ import 走同目录 package 无 sys.path 污染。守法的诚实边界（best-e
 manifest allowlist + 全 subcommand 触达，非 `≥603` 魔数），跑 setup.sh 确认链接与 orphan 清理，并落两条显式
 defer 占位 todo。全部前序完成后本票是最终验证面。
 
-- [ ] CLI 逐命令 param 化测试**留存**（遍历全 subcommand：add / scan --json / set-status / triage / reindex
+- [x] CLI 逐命令 param 化测试**留存**（遍历全 subcommand：add / scan --json / set-status / triage / reindex
       / batch add|set-status|rename / next-id / sweep：stdout JSON + 落盘字节 + 退出码）
-- [ ] 覆盖判据零回归：冻结 node-id manifest 除 allowlist（`test_mirror_consistency.py` 7 个）外每 node 仍
+- [x] 覆盖判据零回归：冻结 node-id manifest 除 allowlist（`test_mirror_consistency.py` 7 个）外每 node 仍
       pass；全 argparse subcommand migration 后逐一有测试触达；无 FAILED、无因重构导致的 skip（非 `≥603` 魔数）
-- [ ] 跑 `setup.sh`：确认建 `sdflow-issues` 链接、orphan 清理回收 `sdflow-buglist`/`sdflow-todolist` 旧链接
-- [ ] 记 todo 占位：`sdflow_issues_core` god-module 拆 cohesive 子模块 + issues 内部消自调用子进程（AD-7）；
+- [x] 跑 `setup.sh`：确认建 `sdflow-issues` 链接、orphan 清理回收 `sdflow-buglist`/`sdflow-todolist` 旧链接
+- [x] 记 todo 占位：`sdflow_issues_core` god-module 拆 cohesive 子模块 + issues 内部消自调用子进程（AD-7）；
       `move --to-pool` 跨池搬运命令（AD-6）

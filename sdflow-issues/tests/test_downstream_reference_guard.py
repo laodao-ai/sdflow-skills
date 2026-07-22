@@ -50,6 +50,11 @@ ALLOWLIST_PREFIXES = (
 ALLOWLIST_EXACT = frozenset({
     "setup.sh",
     "sdflow-init/tests/test_setup_sdflow.py",
+    # 覆盖门（Task 6.2）：RENAME-MAP 映射键（旧 tests/·scripts/ 路径 → sdflow-issues）+
+    # ALLOWLIST_DELETED 的已删 mirror 测试 roster + 解释注释——合法引用旧名作 migration
+    # 映射数据（同 test_setup_sdflow.py 的 rename-scenario roster：迁移测试会计，非陈旧
+    # 调用/CI/spec 死路径）。零回归门的整个用途就是把旧名 node 重定位到新家，故必含旧名。
+    "sdflow-issues/tests/test_task6_coverage_gate.py",
 })
 SELF = Path(__file__).resolve().relative_to(ROOT).as_posix()
 

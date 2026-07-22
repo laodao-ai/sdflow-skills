@@ -1,0 +1,567 @@
+diff --git a/openspec/changes/dedupe-issues-scripts-shared-layer/impl-reports/task6-equivalence-gate.md b/openspec/changes/dedupe-issues-scripts-shared-layer/impl-reports/task6-equivalence-gate.md
+new file mode 100644
+index 0000000..e0d0d40
+--- /dev/null
++++ b/openspec/changes/dedupe-issues-scripts-shared-layer/impl-reports/task6-equivalence-gate.md
+@@ -0,0 +1,67 @@
++# Task 6 impl-report — 行为等价留存测试 + 覆盖判据零回归门 + setup.sh 验证 + 显式 defer
++
++**R-ID:** SC-R3 · R5 · AD-6 · AD-7 ｜ 收口票。全套件绿：`2137 passed, 8 skipped, 3 xfailed`（`/usr/bin/python3 -m pytest -q` 仓根）。
++
++## 6.1 CLI 逐命令行为等价**留存** param 化 harness
++
++新文件 `sdflow-issues/tests/test_task6_cli_equivalence_harness.py`——持久 param 化契约（**非一次性 smoke**），
++遍历三薄入口注册的**全部 argparse subcommand**，每命令跑真实 CLI 子进程断言三面：**stdout（JSON envelope / token / 文本）+ 落盘字节 + 退出码**。
++共 16 个 param case（core 命令两池各跑）：
++
++| subcommand | 池 | stdout 断言 | 落盘断言 |
++|---|---|---|---|
++| `core:next-id` | bug·todo | token `^[A-Z][0-9]+$` | 无（只读） |
++| `core:add` | bug·todo | JSON `id` | dated 文件字节含 id |
++| `core:scan --json` | bug·todo | JSON envelope key（`bugs`/`items`）+`problems` | 无（只读） |
++| `core:set-status` | bug·todo | JSON `new`==目标态 | dated 文件字节含新态 |
++| `core:triage` | bug·todo | JSON `batch` | dated 文件字节含批次 |
++| `issues:reindex` | — | exit0 | INDEX.md 字节含 `DO NOT EDIT` banner |
++| `issues:sweep` | — | 文本 `tagged 1` | batches.md 落盘 |
++| `issues:batch:add` | — | JSON `key` | batches.md 字节含 key |
++| `issues:batch:set-status` | — | JSON `new_status` | batches.md 字节含新态 |
++| `issues:batch:rename` | — | JSON `new_key`+`items_changed` | batches.md 字节含新 key |
++| `issues:batch:lint` | — | 文本 `通过` | 无（只读） |
++
++前置数据一律经真实 `add`/`triage` CLI producer 造（避 fixture 格式漂移）。harness 导出 `COVERED_SUBCOMMANDS` 供覆盖门核对。
++
++## 6.2 覆盖判据零回归门（**非 `≥N` 魔数**）
++
++新文件 `sdflow-issues/tests/test_task6_coverage_gate.py`——留存门，4 个 assert：
++
++**门 1 · 零回归 node 门（逐 node 比对，非计数）**：读冻结 `node-id-manifest.baseline.txt`（2093 node），
++allowlist = 7 个 `test_mirror_consistency.py`。三合一把旧两 skill 的 tests+scripts 整体并入 `sdflow-issues`，
++故 baseline 旧路径 node 经 **RENAME-MAP** 重定位后须命中当前 collection：
++- `sdflow-{buglist,todolist}/tests/` → `sdflow-issues/tests/`（测试文件搬家）
++- `sdflow-{buglist,todolist}/scripts/` → `sdflow-issues/scripts/`（**param 括号内被测脚本路径**，如 `test_...[sdflow-buglist/scripts/buglist.py]`——migration 实况，实现期此门 RED 一次抓到我初版只重定位文件前缀、漏了 param 内脚本路径；已核实 baseline 旧名**仅**以这两类路径出现、无 legacy-name 数据 param，全串替换精确不误伤）。
++消失 node 只允许是 7 个 allowlist；其它消失=回归=红。新增 node 允许。
++- 反向门：7 个 allowlist node 确已消失（旧路径与重定位后都不在 current）——防 mirror 测试残留=守法未切换。
++- 基线完整性门：baseline ≥2000 node 且含 7 allowlist——防基线被误改削弱门。
++
++**门 2 · 全 argparse subcommand 触达门**：让 argparse **自己**枚举 subcommand（CLAUDE.md 基准 5，非手搓名单）：
++core 经 `build_parser` 的 subparser choices（`{add,next-id,scan,set-status,triage}`）；issues.py 经 invalid-choice
++让 argparse 在 usage 行吐 `{reindex,batch,sweep}` / `batch {add,set-status,rename,lint}`。枚举出 11 个 canonical label，
++断言 ⊆ 6.1 harness 的 `COVERED_SUBCOMMANDS`（枚举与 harness 交叉锁死，缺一即红）。
++
++**门 3 · 无 FAILED/无重构 skip**：门 1/2 用 `pytest --collect-only`（让 pytest 自答）对账；8 skip 全 pre-existing
++（7×`test_task2_windows_local_fs_smoke` 需真 Windows 磁盘 + 1×outside-voice 环境敏感复现），非重构导致。
++
++## 6.3 setup.sh 验证（temp-HOME，**非真实环境 mutation**）
++
++编排层裁定不 mutate 真实 `~/.claude|.codex/skills`（真实部署留合并后 `/sdflow-upgrade`）。两路核验：
++
++1. **既有机械门**：`sdflow-init/tests/test_setup_sdflow.py::test_rename_scenario_old_links_cleaned_new_links_made`
++   在 tmp HOME 里 subprocess 跑 setup.sh，断言建 `sdflow-issues` 链 + `sdflow-buglist`/`sdflow-todolist` orphan 清理——`11 passed`（T5.6 已接线，本票确认绿）。
++2. **额外端到端 demo**（temp HOME，跑完即弃）：预置指向已删旧目录的 dangling 链 → `HOME=<tmp> bash setup.sh` → 结果：
++   - `.claude/skills/sdflow-issues` 与 `.codex/skills/sdflow-issues` 符号链接建立（→ 仓内 `sdflow-issues`）；
++   - setup 输出 `cleaned orphans (2): ✗ sdflow-buglist  ✗ sdflow-todolist`；旧链 AFTER 已消失（orphan reclaimed）。
++   - 真实环境未触碰。
++
++## 7 显式 defer todo（dev 脚本记，显式带 `change` 字段）
++
++经 `sdflow-issues/scripts/todolist.py add`（开发版）记两条，均 `change=dedupe-issues-scripts-shared-layer`（scan 查重：T141/T164 无关，无撞号）：
++- **T208**〔AD-7/R10〕：`sdflow_issues_core` god-module 拆 cohesive 子模块（recorder/document/locking/ledger/policies）+ issues 内部消自调用子进程（subprocess spawn → 进程内 import）。
++- **T209**〔AD-6/R7〕：`move --to-pool` 跨池搬运命令（误判落错池的机械恢复：换前缀+粒度文件+schema+保 provenance）。
++
++## 契约合规
++
++未勾任何复选框、未打 `task6-` 标签、未改 proposal/design/specs/tasks。改动仅：2 个新测试文件 + todolist ledger（T208/T209）。
+diff --git a/openspec/issues/todolist/2026-07-todolist.md b/openspec/issues/todolist/2026-07-todolist.md
+index b602cb3..3108a7b 100644
+--- a/openspec/issues/todolist/2026-07-todolist.md
++++ b/openspec/issues/todolist/2026-07-todolist.md
+@@ -65,6 +65,8 @@ sdflow-issues:
+     T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+     T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+     T207: {"module":"docs","summary":"T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。","type":"代码质量","status":"OPEN","time":"2026-07-22 13:34","change":"dedupe-issues-scripts-shared-layer","batch":null}
++    T208: {"module":"sdflow-issues/scripts/sdflow_issues_core/__init__.py","summary":"sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程","type":"代码质量","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
++    T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"OPEN","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":null}
+ ---
+ # 2026-07 TODO
+ 
+@@ -1949,3 +1951,21 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring
+ 
+ **备注**：涉及 docs/workflow-map.md·docs/drafts/sdflow-issues-toolchain-defects.md（无视图快照自标、属历史调查）·docs/sdflow-fable5/02-module-reference.md（pin git HEAD 快照）。非承重（非调用/CI/spec）。
+ <!-- sdflow-issue-block:end id=T207 -->
++
++<!-- sdflow-issue-block:start id=T208 -->
++## T208: sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程
++> sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程
++
++**关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
++
++**备注**：AD-7/R10 显式 defer：起步单 __init__.py，将来按 cohesive 边界拆 recorder/document/locking/ledger/policies 子模块；且 issues 内部对一 snapshot 调两次 pool view 现走 subprocess spawn buglist/todolist scan --json，应消掉自调用子进程改为进程内 import 调用。非本 change 阻断项（同 CLI-子命令树 defer 先例），本 change 目标=消三层重复、不含内部再分层。
++<!-- sdflow-issue-block:end id=T208 -->
++
++<!-- sdflow-issue-block:start id=T209 -->
++## T209: move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）
++> move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）
++
++**关联文档**：`openspec/changes/dedupe-issues-scripts-shared-layer/design.md`
++
++**备注**：AD-6/R7 显式 defer：触发面塌缩后 bug↔todo 分池由模型在 skill 内按坏了没判，NL 骑墙输入可能误判落错池，拿错前缀(B↔T)/粒度/schema/词表；当前 CLI 无 move/reclassify，纠正须手删+重 add、丢 ID 与历史。move --to-pool 应换前缀+粒度文件+schema+保 provenance 做机械恢复。nice-to-have，属将来另开 CLI change，非本 change 阻断项。
++<!-- sdflow-issue-block:end id=T209 -->
+diff --git a/sdflow-issues/tests/test_task6_cli_equivalence_harness.py b/sdflow-issues/tests/test_task6_cli_equivalence_harness.py
+new file mode 100644
+index 0000000..52d411e
+--- /dev/null
++++ b/sdflow-issues/tests/test_task6_cli_equivalence_harness.py
+@@ -0,0 +1,264 @@
++"""Task 6.1 — CLI 逐命令行为等价**留存** param 化 harness（SC-R3 / R5）。
++
++这不是一次性 smoke：它是**持久**的 param 化契约，遍历 `sdflow-issues` 三薄入口
++（`buglist.py`/`todolist.py`/`issues.py`）注册的**全部 argparse subcommand**，对每个命令
++断言三个外部可观测面——**stdout（JSON envelope / token / 文本）+ 落盘字节 + 退出码**。
++
++合并前后（三物理脚本 → 一 package + 三薄入口）CLI 外部行为必须逐命令等价；本 harness 就是
++那份「等价」的可执行定义，长期留存、每次跑 pytest 都复核。**面治**（CLAUDE.md 基准 3）：
++不是只测被点名的几个命令，而是遍历 argparse 全 subcommand——覆盖闭包由
++`test_task6_coverage_gate.py` 用 argparse 自身的 subparser 枚举机械核对（那份 gate import 本
++文件的 `CASES`，断言枚举 ⊆ 本 harness 覆盖）。
++
++覆盖的 subcommand（canonical label 与 coverage gate 的 argparse 枚举对齐）：
++  core（buglist.py + todolist.py，两池各跑）:
++    core:next-id · core:add · core:set-status · core:triage · core:scan
++  issues.py:
++    issues:reindex · issues:sweep
++    issues:batch:add · issues:batch:set-status · issues:batch:rename · issues:batch:lint
++"""
++import json
++import re
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++SCRIPTS = Path(__file__).parent.parent / "scripts"
++BUG = str(SCRIPTS / "buglist.py")
++TODO = str(SCRIPTS / "todolist.py")
++ISS = str(SCRIPTS / "issues.py")
++CORE_SCRIPT = {"bug": BUG, "todo": TODO}
++
++TOKEN_RE = re.compile(r"^[A-Z][0-9]+$")
++
++
++# ── CLI 调用 helper ────────────────────────────────────────────────────────────
++def _run(script, root, *args, stdin=None):
++    """跑一个真实 CLI 子进程（不借道内部函数），返回 CompletedProcess。"""
++    return subprocess.run(
++        [sys.executable, script, "--root", str(root), *args],
++        input=stdin, capture_output=True, text=True,
++    )
++
++
++def _bug_payload(**overrides):
++    p = {"module": "foo.c:1", "summary": "s", "priority": "P1", "phenomenon": "p"}
++    p.update(overrides)
++    return p
++
++
++def _todo_payload(**overrides):
++    p = {"module": "foo.c:1", "summary": "s", "type": "代码质量"}
++    p.update(overrides)
++    return p
++
++
++POOL_PAYLOAD = {"bug": _bug_payload, "todo": _todo_payload}
++# 各池非终态 set-status 目标（避免终态要求 evidence）
++POOL_SET_STATUS_TARGET = {"bug": "VERIFIED", "todo": "PROPOSED"}
++
++
++def _seed_item(pool, root, **extra):
++    """经真实 `add` CLI 造一条 item（用真实 producer，避免 fixture 格式漂移）。返回 id。"""
++    proc = _run(CORE_SCRIPT[pool], root, "add", stdin=json.dumps(POOL_PAYLOAD[pool](**extra)))
++    assert proc.returncode == 0, f"seed add failed: {proc.stderr}"
++    return json.loads(proc.stdout)["id"], json.loads(proc.stdout)["file"]
++
++
++# ── 每个 subcommand 的 case 定义 ────────────────────────────────────────────────
++# 每个 case: (param_id, subcommand_label, run(root)->proc, check(proc, root))
++#   run 完成命令自身的前置 setup 后跑目标命令，返回目标命令的 proc。
++#   check 断言 exit + stdout 形态 + 落盘字节。
++
++def _c_next_id(pool):
++    def run(root):
++        return _run(CORE_SCRIPT[pool], root, "next-id")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        token = proc.stdout.strip()
++        assert TOKEN_RE.match(token), f"next-id token 非法: {token!r}"
++
++    return (f"core:next-id[{pool}]", "core:next-id", run, check)
++
++
++def _c_add(pool):
++    def run(root):
++        return _run(CORE_SCRIPT[pool], root, "add", stdin=json.dumps(POOL_PAYLOAD[pool]()))
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        out = json.loads(proc.stdout)  # stdout = JSON
++        assert TOKEN_RE.match(out["id"]), out
++        landed = Path(root) / out["file"]
++        assert landed.exists(), f"落盘文件缺失: {landed}"
++        assert out["id"].encode("utf-8") in landed.read_bytes()  # 落盘字节含该 id
++
++    return (f"core:add[{pool}]", "core:add", run, check)
++
++
++def _c_scan(pool):
++    def run(root):
++        _seed_item(pool, root)
++        return _run(CORE_SCRIPT[pool], root, "scan", "--json")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        out = json.loads(proc.stdout)  # stdout = JSON envelope
++        # scan envelope key 各池各异（bugs / items），必存在 + 含 seeded item
++        key = "bugs" if pool == "bug" else "items"
++        assert key in out, f"scan envelope 缺 {key}: {list(out)}"
++        assert "problems" in out
++        assert len(out[key]) == 1
++
++    return (f"core:scan[{pool}]", "core:scan", run, check)
++
++
++def _c_set_status(pool):
++    def run(root):
++        iid, _ = _seed_item(pool, root)
++        target = POOL_SET_STATUS_TARGET[pool]
++        return _run(CORE_SCRIPT[pool], root, "set-status", "--id", iid, "--to", target)
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        out = json.loads(proc.stdout)  # stdout = JSON
++        target = POOL_SET_STATUS_TARGET[pool]
++        assert out["new"] == target, out
++        landed = Path(root) / out["file"]
++        assert target.encode("utf-8") in landed.read_bytes()  # 落盘反映新态
++
++    return (f"core:set-status[{pool}]", "core:set-status", run, check)
++
++
++def _c_triage(pool):
++    def run(root):
++        iid, _ = _seed_item(pool, root)
++        return _run(CORE_SCRIPT[pool], root, "triage", "--id", iid, "--批次", "batch-x")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        out = json.loads(proc.stdout)  # stdout = JSON
++        assert out["batch"] == "batch-x", out
++        landed = Path(root) / out["file"]
++        assert b"batch-x" in landed.read_bytes()  # 落盘含批次
++
++    return (f"core:triage[{pool}]", "core:triage", run, check)
++
++
++def _c_reindex():
++    def run(root):
++        _seed_item("bug", root)
++        return _run(ISS, root, "reindex")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        index = Path(root) / "openspec" / "issues" / "INDEX.md"
++        assert index.exists(), "reindex 未落 INDEX.md"
++        assert b"DO NOT EDIT" in index.read_bytes()  # 落盘 banner
++
++    return ("issues:reindex", "issues:reindex", run, check)
++
++
++def _c_sweep():
++    def run(root):
++        _seed_item("bug", root, change="change-a")
++        return _run(ISS, root, "sweep", "--change", "change-a")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        assert "tagged 1" in proc.stdout, proc.stdout  # stdout = 文本汇总
++        batches = Path(root) / "openspec" / "issues" / "batches.md"
++        assert batches.exists(), "sweep 未落 batches.md"
++
++    return ("issues:sweep", "issues:sweep", run, check)
++
++
++def _c_batch_add():
++    def run(root):
++        return _run(ISS, root, "batch", "add", "batch-x")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        out = json.loads(proc.stdout)  # stdout = JSON
++        assert out["key"] == "batch-x", out
++        batches = Path(root) / "openspec" / "issues" / "batches.md"
++        assert b"batch-x" in batches.read_bytes()  # 落盘含 key
++
++    return ("issues:batch:add", "issues:batch:add", run, check)
++
++
++def _c_batch_set_status():
++    def run(root):
++        _run(ISS, root, "batch", "add", "batch-x")
++        return _run(ISS, root, "batch", "set-status", "batch-x", "IN_PROGRESS")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        out = json.loads(proc.stdout)  # stdout = JSON
++        assert out["new_status"] == "IN_PROGRESS", out
++        batches = Path(root) / "openspec" / "issues" / "batches.md"
++        assert b"IN_PROGRESS" in batches.read_bytes()  # 落盘反映新态
++
++    return ("issues:batch:set-status", "issues:batch:set-status", run, check)
++
++
++def _c_batch_rename():
++    def run(root):
++        iid, _ = _seed_item("bug", root)
++        _run(CORE_SCRIPT["bug"], root, "triage", "--id", iid, "--批次", "batch-old")
++        _run(ISS, root, "batch", "add", "batch-old")
++        return _run(ISS, root, "batch", "rename", "batch-old", "batch-new")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr
++        out = json.loads(proc.stdout)  # stdout = JSON
++        assert out["new_key"] == "batch-new" and out["items_changed"] >= 1, out
++        batches = Path(root) / "openspec" / "issues" / "batches.md"
++        assert b"batch-new" in batches.read_bytes()  # 落盘含新 key
++
++    return ("issues:batch:rename", "issues:batch:rename", run, check)
++
++
++def _c_batch_lint():
++    def run(root):
++        _run(ISS, root, "batch", "add", "batch-x")
++        return _run(ISS, root, "batch", "lint")
++
++    def check(proc, root):
++        assert proc.returncode == 0, proc.stderr  # read-only、合法字段 → exit 0
++        assert "通过" in proc.stdout, proc.stdout
++
++    return ("issues:batch:lint", "issues:batch:lint", run, check)
++
++
++# ── CASES 清单（coverage gate import 此常量核对覆盖闭包）─────────────────────────
++CASES = [
++    _c_next_id("bug"), _c_next_id("todo"),
++    _c_add("bug"), _c_add("todo"),
++    _c_scan("bug"), _c_scan("todo"),
++    _c_set_status("bug"), _c_set_status("todo"),
++    _c_triage("bug"), _c_triage("todo"),
++    _c_reindex(),
++    _c_sweep(),
++    _c_batch_add(),
++    _c_batch_set_status(),
++    _c_batch_rename(),
++    _c_batch_lint(),
++]
++
++# coverage gate 用：本 harness 触达的 canonical subcommand label 集合。
++COVERED_SUBCOMMANDS = frozenset(subcommand for (_pid, subcommand, _run, _check) in CASES)
++
++
++@pytest.mark.parametrize(
++    "run,check",
++    [(run, check) for (_pid, _sub, run, check) in CASES],
++    ids=[pid for (pid, _sub, _run, _check) in CASES],
++)
++def test_cli_command_behavior_equivalence(run, check, tmp_path):
++    """逐命令行为等价：跑真实 CLI，断言 stdout（JSON/token/文本）+ 落盘字节 + 退出码。"""
++    proc = run(tmp_path)
++    check(proc, tmp_path)
+diff --git a/sdflow-issues/tests/test_task6_coverage_gate.py b/sdflow-issues/tests/test_task6_coverage_gate.py
+new file mode 100644
+index 0000000..1b14a37
+--- /dev/null
++++ b/sdflow-issues/tests/test_task6_coverage_gate.py
+@@ -0,0 +1,183 @@
++"""Task 6.2 — 覆盖判据零回归门（SC-R3 / R5）。**留存**门，非一次性脚本。
++
++**MUST NOT 用 `通过数 ≥ N` 魔数**——design 明确：该魔数被本 change 删除的 7 个 mirror 测试
++证伪（删测试后总数下降，魔数会误判为回归，或被下调掩盖真回归）。正解 = 与冻结的 pre-refactor
++node-id manifest **逐 node 比对**：
++
++  1. **零回归 node 门**：baseline 每个 node（除 allowlist 的 7 个 `test_mirror_consistency.py`）
++     在 migration 后仍存在且 collect 得到。三脚本合一把 `sdflow-buglist/tests/`·`sdflow-todolist/tests/`
++     的测试文件迁进 `sdflow-issues/tests/`，故 baseline 里旧目录路径的 node 经 **RENAME-MAP**
++     （旧 tests 目录 → `sdflow-issues/tests/`）重定位后须命中当前 collection。消失的 node **只允许**
++     是那 7 个 allowlist；其它 node 消失 = 回归（红）。新增 node 允许。
++  2. **全 subcommand 触达门**：argparse **自身**枚举的每个 subcommand（core 三薄入口 + issues.py
++     top-level + batch 二级）migration 后逐一被行为等价 harness（`test_task6_cli_equivalence_harness`）
++     触达。枚举让 argparse 自己回答（`build_parser` 的 subparser choices + `--help`/invalid-choice
++     的 usage `{...}`），非手搓 subcommand 名单（CLAUDE.md 基准 5：让工具自己回答）。
++  3. **无 FAILED / 无重构导致的 skip**：当前 collection 干净可跑（本门只做 collect-only 对账；
++     实际 pass/fail 由全套件 run 保证，pre-existing 环境/平台 skip 不算回归）。
++"""
++import re
++import subprocess
++import sys
++from pathlib import Path
++
++REPO_ROOT = Path(__file__).resolve().parents[2]
++SCRIPTS = Path(__file__).parent.parent / "scripts"
++BASELINE = (
++    REPO_ROOT
++    / "openspec" / "changes" / "dedupe-issues-scripts-shared-layer"
++    / "impl-reports" / "node-id-manifest.baseline.txt"
++)
++
++# 三脚本合一：旧两 skill 目录整体并入 sdflow-issues。node id 里旧名有两类出现——
++#   ① 测试文件路径前缀：`sdflow-{buglist,todolist}/tests/*`  → `sdflow-issues/tests/*`
++#   ② param 括号内的**被测脚本路径**：`sdflow-{buglist,todolist}/scripts/{buglist,todolist}.py`
++#      （如 `test_...[sdflow-buglist/scripts/buglist.py]`）→ `sdflow-issues/scripts/*`
++# 二者都是「文件搬家、测试不删」的 migration 事实，故按目录前缀做**全串替换**（非仅 node 头部）。
++# baseline 已核实：旧名在 node id 中**仅**以上述 tests/·scripts/ 路径出现（无 legacy-name 数据
++# param），故全串替换不会误改本应保留旧名的 param。消失 node 只允许是 7 个 allowlist。
++RENAME_MAP = {
++    "sdflow-buglist/tests/": "sdflow-issues/tests/",
++    "sdflow-todolist/tests/": "sdflow-issues/tests/",
++    "sdflow-buglist/scripts/": "sdflow-issues/scripts/",
++    "sdflow-todolist/scripts/": "sdflow-issues/scripts/",
++}
++
++# 允许消失的 node（design/tasks 4.1：镜像 AST 守单一物理源后无对象，整文件删除）。
++ALLOWLIST_DELETED = frozenset(
++    f"sdflow-buglist/tests/test_mirror_consistency.py::{t}"
++    for t in (
++        "test_docstring_diff_ok",
++        "test_frontmatter_constant_consistency",
++        "test_helper_deletion_is_not_silently_swallowed",
++        "test_logic_drift_is_caught",
++        "test_priorities_constant_consistency",
++        "test_three_way_mirror_consistency",
++        "test_two_way_mirror_consistency",
++    )
++)
++
++
++def _load_baseline_nodes():
++    nodes = []
++    for raw in BASELINE.read_text(encoding="utf-8").splitlines():
++        line = raw.strip()
++        if not line or line.startswith("#"):
++            continue
++        nodes.append(line)
++    return nodes
++
++
++def _apply_rename(node):
++    for old, new in RENAME_MAP.items():
++        node = node.replace(old, new)
++    return node
++
++
++def _collect_current_nodes():
++    """pytest --collect-only 从仓根 collect 全部 node id（让 pytest 自己回答，非静态推断）。"""
++    proc = subprocess.run(
++        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
++        cwd=str(REPO_ROOT), capture_output=True, text=True,
++    )
++    assert proc.returncode == 0, f"collect-only 失败:\n{proc.stdout}\n{proc.stderr}"
++    nodes = set()
++    for raw in proc.stdout.splitlines():
++        line = raw.strip()
++        if "::" in line and not line.startswith(("=", "_", "warnings", "no tests")):
++            nodes.add(line)
++    assert nodes, "collect-only 未解析出任何 node id"
++    return nodes
++
++
++# ── 门 1：零回归 node 门（逐 node 比对，非计数魔数）──────────────────────────────
++def test_zero_regression_every_baseline_node_survives():
++    baseline = _load_baseline_nodes()
++    current = _collect_current_nodes()
++
++    missing = []
++    for node in baseline:
++        if node in ALLOWLIST_DELETED:
++            continue
++        relocated = _apply_rename(node)
++        if relocated not in current:
++            missing.append((node, relocated))
++
++    assert not missing, (
++        "零回归门失败——以下 baseline node 在 migration 后消失（非 allowlist）：\n"
++        + "\n".join(f"  baseline: {n}\n  期望(重定位后): {r}" for n, r in missing)
++    )
++
++
++def test_allowlist_deleted_nodes_are_actually_gone():
++    """反向：7 个 intended-delete node 确已消失（防 test_mirror_consistency 残留导致守法未切换）。"""
++    current = _collect_current_nodes()
++    still_present = [n for n in ALLOWLIST_DELETED if n in current]
++    # 迁移后旧路径也不该出现在 sdflow-issues/tests/ 下
++    relocated_present = [
++        _apply_rename(n) for n in ALLOWLIST_DELETED if _apply_rename(n) in current
++    ]
++    assert not still_present and not relocated_present, (
++        f"intended-delete mirror node 仍存在: {still_present + relocated_present}"
++    )
++
++
++def test_baseline_is_frozen_and_nonempty():
++    """基线自身完整性：非空 + 恰含 7 个 allowlist node（防基线被误改削弱门）。"""
++    baseline = set(_load_baseline_nodes())
++    assert len(baseline) >= 2000, f"baseline node 数异常偏少: {len(baseline)}"
++    assert ALLOWLIST_DELETED <= baseline, "baseline 应含 7 个 intended-delete node"
++
++
++# ── 门 2：全 argparse subcommand 触达门（argparse 自己枚举，非手搓名单）──────────
++def _core_subcommands():
++    sys.path.insert(0, str(SCRIPTS))
++    import sdflow_issues_core as core
++    parser = core.build_parser(core.POOL_SPEC["bug"], core.BUG_STRATEGY)
++    choices = set()
++    for action in parser._subparsers._group_actions:
++        choices.update(action.choices.keys())
++    return {f"core:{name}" for name in choices}
++
++
++_USAGE_CHOICES_RE = re.compile(r"\{([^}]+)\}")
++
++
++def _argparse_choices(argv):
++    """跑一次 invalid-choice，让 argparse 自己在 usage 行吐出 `{a,b,c}` 枚举。"""
++    proc = subprocess.run(
++        [sys.executable, str(SCRIPTS / "issues.py"), "--root", ".", *argv, "__invalid__"],
++        capture_output=True, text=True,
++    )
++    text = proc.stdout + proc.stderr
++    m = _USAGE_CHOICES_RE.search(text)
++    assert m, f"未从 argparse usage 解析出 subcommand 枚举: {text!r}"
++    return [c.strip() for c in m.group(1).split(",")]
++
++
++def _issues_subcommands():
++    top = _argparse_choices([])  # {reindex, batch, sweep}
++    labels = set()
++    for name in top:
++        if name == "batch":
++            for action in _argparse_choices(["batch"]):  # {add,set-status,rename,lint}
++                labels.add(f"issues:batch:{action}")
++        else:
++            labels.add(f"issues:{name}")
++    return labels
++
++
++def test_every_argparse_subcommand_is_touched_by_equivalence_harness():
++    sys.path.insert(0, str(Path(__file__).parent))
++    from test_task6_cli_equivalence_harness import COVERED_SUBCOMMANDS
++
++    enumerated = _core_subcommands() | _issues_subcommands()
++    assert enumerated, "未枚举出任何 subcommand"
++
++    uncovered = sorted(enumerated - COVERED_SUBCOMMANDS)
++    assert not uncovered, (
++        "以下 argparse subcommand 未被行为等价 harness 触达（migration 覆盖缺口）：\n"
++        f"  {uncovered}\n"
++        f"  argparse 枚举: {sorted(enumerated)}\n"
++        f"  harness 覆盖: {sorted(COVERED_SUBCOMMANDS)}"
++    )
