@@ -131,10 +131,10 @@ POOL_SPEC 是后续所有差异注入的唯一入口，它的封闭性与关系�
 `sdflow-buglist/`、`sdflow-todolist/` 目录（scripts 与 tests 已在 T2 迁走）。这是 contract 的第一步：旧
 触发面塌缩为一个。
 
-- [ ] `sdflow-issues/SKILL.md` 覆盖两池 + 跨池，触发短语聚合到一个触发面，无逐字重复正文
-- [ ] SKILL.md 给出骑墙输入判定规则（「坏了没」判据 + 举例）+ 显式登记「误判落错池不可机械恢复」为已知代价
-- [ ] `sdflow-buglist/`、`sdflow-todolist/` 目录删除
-- [ ] `sdflow-issues/SKILL.md` 保留且仅保留一份 `sdflow:principles` 托管块
+- [x] `sdflow-issues/SKILL.md` 覆盖两池 + 跨池，触发短语聚合到一个触发面，无逐字重复正文
+- [x] SKILL.md 给出骑墙输入判定规则（「坏了没」判据 + 举例）+ 显式登记「误判落错池不可机械恢复」为已知代价
+- [x] `sdflow-buglist/`、`sdflow-todolist/` 目录删除
+- [x] `sdflow-issues/SKILL.md` 保留且仅保留一份 `sdflow:principles` 托管块
 
 ### Task 4: determinism-guards 守法切换（镜像守退役 → 单一源新守法）
 
