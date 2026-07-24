@@ -1,8 +1,14 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 501e3c333dc37d7c4c94e348569dd9f85da79387
+---
+
 # spec-review-report — enable-codex-background-outside-voice
 
 > 阶段二设计评审，宿主 `codex`，`metrics.enabled=true`。Step1 原生 autoplan 广审 → Step2 三个独立对抗镜 + 接地镜 + HR 高风险触发镜 → Step3 合并去重与对抗裁决。本 change 不命中 backend/frontend/embedded 领域清单，故无业务领域镜。
 >
-> **结论：初始设计不通过；本轮已把 9 High + 3 Medium 的目标态缺口回流四件套，修订后建议进入人门 HARD-GATE 拍板。当前尚未获得用户批准，不写 `ship-gate.design_approved`。**
+> **设计 HARD-GATE 已于 2026-07-24 由用户拍板批准。** 被批准盘面为 `501e3c333dc37d7c4c94e348569dd9f85da79387`；初始设计的 9 High + 3 Medium 目标态缺口均已回流四件套，门后 lens-metric 裁决与报告现值一致，无需翻改。
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 
@@ -112,4 +118,4 @@
 
 ## 收敛口
 
-四件套现已覆盖本轮发现的 blocker；无未处置 Critical/High，也无需要把调研工作甩给用户的开放题。建议用户按修订后的 D1–D7 做设计 HARD-GATE 拍板；获明确批准前保持 `design_approved` 缺席，不进入实现。
+四件套已覆盖本轮发现的 blocker；无未处置 Critical/High，也无开放决策。用户已按修订后的 D1–D7 批准设计 HARD-GATE，阶段二闭环完成，可进入阶段三实现/`sdflow-ship`。
