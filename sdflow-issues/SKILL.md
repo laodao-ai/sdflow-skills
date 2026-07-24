@@ -334,6 +334,26 @@ python scripts/buglist.py scan --json             # 机器可读（两池皆有 
 
 末尾自动做 **frontmatter/marker/未提升 legacy 表**关系自检。盘点或交接前先跑一次。
 
+### 少量历史数据迁移（`migrate_legacy.py`）
+
+旧表中的空字符串/破折号占位、历史分类或旧状态若不符合当前 schema，用维护工具定向提升为 same-file
+overlay；已经提升到 frontmatter 的历史破折号占位也会归一化。**旧表 bytes 永久不改**。默认先 `audit`，
+历史枚举必须显式映射，不做语义猜测：
+
+```bash
+python scripts/migrate_legacy.py --root . \
+  --specific-map-json '{"todo":{"技术债":"代码质量"}}' \
+  --status-map-json '{"todo":{"wontfix":"WONTDO"}}' audit
+
+# 确认报告无 unresolved 后执行；成功后自动 reindex
+python scripts/migrate_legacy.py --root . \
+  --specific-map-json '{"todo":{"技术债":"代码质量"}}' \
+  --status-map-json '{"todo":{"wontfix":"WONTDO"}}' apply
+```
+
+`apply` 在仓级 recorder lock 内全量 preflight，按文件原子写 overlay；默认随后调用同目录 `issues.py reindex`。
+修复脚本或测试需要只验证迁移层时可显式传 `apply --no-reindex`。
+
 ---
 
 ## 跨池：`reindex` / `batch` / `sweep`（`issues.py`）
