@@ -1,3 +1,5 @@
+<!-- /autoplan restore point: ~/.gstack/projects/laodao-ai-sdflow-skills/feat-enable-codex-background-outside-voice-autoplan-restore-20260724-1203.md -->
+
 ## Context
 
 当前 `sdflow-spec-review/SKILL.md` 与 `sdflow-code-review/SKILL.md` 的等值调度段在 `host=codex` 时同步调用 `outside-voice.sh exec --timeout 300`。helper 的 Claude 分支再运行 `claude -p --model "$SDFLOW_VOICE_MODEL" --tools "Read,Grep,Glob" --strict-mcp-config --add-dir "$repo_root" --settings "$OV_CLAUDE_READ_FENCE"`。`zhws_ops_api` 的 `optimize-device-access-authorization` 已提供 5/5 真实 rc124 证据；小且未截断 context 在关闭 customizations 后仍可撞 90 秒天花板，说明根因是“无界 agentic review × 同步固定天花板”，不是安装、context 截断或 hooks 单点故障。
