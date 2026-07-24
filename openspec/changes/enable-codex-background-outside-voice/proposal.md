@@ -4,7 +4,7 @@ Codex 宿主当前把 Claude outside voice 当作同步 `claude -p` 命令执行
 
 ## Success Metrics
 
-- **[grill-amendment]** Codex-host 真跨模型成功率 — `optimize-device-access-authorization` 同类真实负载基准 `0/5 reason_code=ok` → 在 `zhws_ops_api` 至少完成一层真实 spec-review 或 code-review，该层所有 declared/dispatch 站点均可信 collect 且取得 `reason_code="ok"`，其中至少一个 `opus` + `high` 推理自然耗时 >300 秒 — 通过报告锚与 dispatch/terminal/collect 记录核验，sleep/shim/无模型或短调用不得替代。
+- **[grill-amendment]** Codex-host 真跨模型成功率 — `optimize-device-access-authorization` 同类真实负载基准 `0/5 reason_code=ok` → 在 `zhws_ops_api` 至少完成一层真实 spec-review 或 code-review，该层所有 declared/dispatch 站点均可信 collect 且取得 `reason_code="ok"`，其中至少一个 `opus` + `high` 推理自然耗时 >300 秒 — **[spec-review-amendment]** 通过报告锚与不含 payload 的结构化 runner/model/effort、dispatch/start/terminal/collect/duration 证据由确定性检查器核验，sleep/shim/无模型或短调用不得替代。
 - 关键路径阻塞 — 每个 Claude voice 同步占用单条 shell 调用约 300 秒 → dispatch 命令 5 秒内返回，collect 单次状态查询 5 秒内返回 — 通过集成测试墙钟断言与真实 smoke 记录核验。
 - 诚实与安全回归 — 现有四旗、secret scan、FRAME、200KB 截断及合法组合矩阵基准全绿 → 仍为 100% 通过，且 pending/timeout/损坏结果不得产生 `reason_code="ok"` — 通过既有测试套件与新增故障矩阵测试核验。
 
@@ -37,11 +37,11 @@ Codex 宿主当前把 Claude outside voice 当作同步 `claude -p` 命令执行
 - **工作流维护者**：维护 `outside-voice` helper、两份 review SKILL、安装资产与回归测试。
 - **Codex 宿主使用者**：获得真实 Claude 第二意见，不再每站点同步等待 300 秒后回落。
 - **Claude 宿主使用者**：既有 Claude-host → Codex voice 路径保持兼容。
-- **外部依赖**：Claude Code CLI 的 background agents、`claude agents --json` 和 per-user supervisor；目标环境需满足本 change 钉死的最低能力版本。
+- **外部依赖**：Claude Code CLI research-preview background agents、`claude agents --json` 和 per-user supervisor；`--exec` 仅按本机实测执行形态使用，真实 dispatch 是最终能力探针，目标环境需满足本 change 钉死的最低能力版本与受支持平台。**[spec-review-amendment]**
 
 ## Assumptions
 
-- Claude Code background supervisor 会按官方契约脱离发起终端托管会话；若目标版本不提供该能力，preflight 必须 fail-loud 并诚实降级，不能尝试伪后台化。
+- Claude Code background supervisor 会按公开的 research-preview 行为脱离发起终端托管会话；`--exec` 形态只由本机 smoke 与真实 dispatch 核验，若目标版本/平台不提供该能力，preflight 必须 fail-loud 并诚实降级，不能尝试伪后台化。**[spec-review-amendment]**
 - **[grill-amendment]** background session 的结构化状态只承担 liveness；结果与退出语义不依赖 transcript/log schema。若 agent JSON schema 漂移但可信 rc 已发布，仍可 collect；若 rc 缺席且 liveness 无法判定，则 fail-closed 为 `exec-error`，不得猜测最终文本。
 - Codex 一轮最多并行少量 outside-voice 站点；若未来扩展为无界 fan-out，当前并发与成本上界失效，必须另加队列/限流设计。
 
@@ -60,7 +60,7 @@ Codex 宿主当前把 Claude outside voice 当作同步 `claude -p` 命令执行
 
 - 主要影响 `sdflow-init/assets/hack/` 下的 outside-voice 运行工具、`sdflow-spec-review/SKILL.md`、`sdflow-code-review/SKILL.md`、`setup.sh` 及对应 pytest/hack tests。
 - 修改 canonical `host-adaptive-execution` requirement，并新增 `outside-voice-background-jobs` capability；归档后同步主 specs。
-- 下游项目需经 `bash setup.sh` / `sdflow-init update` 获取新 helper 与 SKILL 指令；`zhws_ops_api` 用作真实回归样本，不直接在其 workflow 副本上修源代码。
+- 下游项目需先经 `bash ~/.skills/sdflow-skills/setup.sh` 原子刷新全局 helper/SKILL，再由 `sdflow-init update` 刷新消费仓 workflow tools；两条分发链不可互相替代。`zhws_ops_api` 用作真实回归样本，不直接在其 workflow 副本上修源代码。**[spec-review-amendment]**
 - 不命中 backend、frontend、embedded 技术栈领域清单；涉及外部 CLI、后台状态机、跨组件协作、复杂降级、并发、可用性、信任边界、测试计划与外部 LLM 成本。
 
 ## Compliance

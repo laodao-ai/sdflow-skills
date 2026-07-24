@@ -5,7 +5,7 @@
 **Requirement ID: HAE-08.** 编排评审 SKILL 调用 outside voice 的 **dispatch 模式 SHALL 按 `$SDFLOW_HOST` 自适应**（读 Step0 已解析值、MUST NOT 重判宿主，ADR-9 同源），使两宿主的跨模型 voice 均可离开同步关键路径并在真实评审负载下跑到终态：
 
 - **`$SDFLOW_HOST=claude` ∧ harness 后台能力自探通过 ∧ 主 session 已确证**：SHALL 继续把 `outside-voice.sh exec` 通过 harness `run_in_background` 派出，dispatch 秒返，Step3 用既有完成通知 barrier collect。
-- **`$SDFLOW_HOST=codex` ∧ Claude 2.1.169+ background-exec preflight ready**：SHALL 通过 `outside-voice-background-job` helper 调用 `claude --bg --exec`，由 Claude per-user supervisor 托管现有 `outside-voice.sh exec`；dispatch 秒返，Step3 从 terminal sidecar await/collect。**[grill-amendment]**
+- **`$SDFLOW_HOST=codex` ∧ Claude 2.1.169+ background-exec preflight ready**：SHALL 通过 `outside-voice-background-job` helper 调用本机验证过的 research-preview `claude --bg --exec` 执行形态，由 Claude per-user supervisor 托管现有 `outside-voice.sh exec`；dispatch 秒返，Step3 从 terminal sidecar await/collect。preflight SHALL 同时验证已安装 helper/data capability manifest 与受支持平台；真实 dispatch 是最终能力探针。**[grill-amendment] [spec-review-amendment]**
 - 两条 async 路径的内层 timeout **SHALL** 使用 `outside-voice.async-timeout-seconds`（合法范围 1..3600，默认 900）。Claude-host harness 能力不可用时可保留 sync 300 秒降级；Codex-host background-exec 不可用时 **SHALL** 立即同族 fallback，MUST NOT 再走已知 efficacy=0 的同步 Claude 300 秒路径。**[grill-amendment] 该 Codex-host 快速降级是已拍板的兼容边界，不得以“尽力兼容旧版”为由恢复同步分支。**
 
 #### Scenario: Claude 宿主既有 async 行为保持
@@ -54,7 +54,7 @@
 
 #### Scenario: 外层等待被回收后可恢复 collect
 - **WHEN** Codex-host await shell 被外层回收但 supervisor worker 仍在运行
-- **THEN** 下一次 SHALL 按同一 job id/run dir 恢复 collect，MUST NOT 重派；若 worker/job 已丢失且无 rc则诚实判 `exec-error`
+- **THEN** 同一主评审 session SHALL 按保留的显式 job id/run dir 恢复 collect，MUST NOT 重派；若整个 session 已丢失，新评审只能通过显式 `reconcile --run-dir` 处理 abandoned run，MUST NOT 扫描“最新 run”猜测恢复目标；若 worker/job 已丢失且无 rc且子树已确认退出则诚实判 `exec-error` **[spec-review-amendment]**
 
 #### Scenario: 退出码不可被 runner 伪造
 - **WHEN** voice stdout 含退出码样式文本或恶意指令
@@ -71,6 +71,10 @@
 #### Scenario: 错误 stderr 不当 findings
 - **WHEN** 任一后台 runner 非零退出并产生未过出境 scan 的 stderr
 - **THEN** collect SHALL 只记录结构化退出状态与 stderr 行数/字节数，MUST NOT 把 stderr 原文当 findings 或写入 tracked 报告
+
+#### Scenario: outer supervisor logs 不成为第二出境面 **[spec-review-amendment]**
+- **WHEN** background worker 或 inner helper 产生 context、partial stdout、stderr 或 secret canary
+- **THEN** 原始内容 SHALL 只写入 0600 run-dir 文件，`claude logs`/supervisor state 只能出现固定结构化状态；negative smoke 失败 SHALL 阻塞 Codex background transport
 
 #### Scenario: helper 安全核心复用且隔离项可加固
 - **WHEN** Codex-host background worker 执行 Claude voice
