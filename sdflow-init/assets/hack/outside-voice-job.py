@@ -35,13 +35,40 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
     充当结果通道）。
 
+  status --run-dir <d> --site <s> [--timeout <n>]
+    **纯派生**的当前归类：读盘面（job/started/terminal/rc）+ 一次 `claude agents` liveness 探针。
+    **MUST NOT 在终态之前读 stdout**（半成品输出没有任何进 findings 池的通道）。
+    stdout: 单行 JSON（见下方「派生输出」）                       exit 0=ok | 1=非 ok（含未终态）
+
+  await --run-dir <d> --site <s> [--timeout <n>] [--max-wait <n>] [--poll-interval <f>]
+    有界等待到终态。上界**不从 dispatch 时刻起算**：started sidecar 未发布时受**独立**的
+    startup deadline 约束；已发布则为可信 `started_at` + timeout + 30 秒 grace。
+    `--timeout` 缺省取 `job.json` 里 dispatch 当时记下的 `timeout_seconds`（即既有
+    `outside-voice.async-timeout-seconds` 的值）；显式给出时同样受 1..3600 约束。
+    stdout: status 的同一份 JSON + `waited_seconds`               exit 0=ok | 1=其他
+
+  collect --run-dir <d> --site <s> [--timeout <n>]
+    **幂等**收集：只在 rc 发布后读 stdout，核对 terminal witness 的 digest，
+    首次收集把整份结果原子发布为 `<site>.collected.json`（**首写者胜**），
+    重复 collect 原样回放该文件 ⇒ 输出与分类逐字节一致。
+    stdout: 单行 JSON（含 dispatched/started/terminal/collected 时刻、自然 duration、
+            runner/model/effort、stdout digest/bytes/lines、stderr bytes/lines）
+    exit 0=ok | 1=其他
+
   version
     stdout: "outside-voice-job.py <ver>"                       exit 0
 
 ── 盘面即状态（ADR-2）───────────────────────────────────────────────────────────
 本脚本**不持久化可变 status 字段**。`<site>.rc` 是唯一终态发布点；`claude agents` 的
-`done/failed` 只提供 liveness，MUST NOT 决定 `ok`/`timeout`。status/await/collect 的
-派生规则见 Task 2，本文件只负责把证据按 started → terminal → rc 的顺序原子放上盘面。
+`done/failed` 只提供 liveness，MUST NOT 决定 `ok`/`timeout`。
+（`<site>.collected.json` 不是可变 status：它是**首次 collect 的不可变见证**，
+OVBG-02 要求 collect 幂等返回**首次** `collected_at` ⇒ 跨进程只能靠落盘。）
+
+── 派生输出（status/await/collect 共用同一形状）─────────────────────────────────
+  state ∈ MISSING | RESERVED | STARTING | RUNNING | SUCCEEDED | TIMED_OUT | FAILED |
+          LOST | CORRUPT
+  reason_code ∈ ok | timeout | secret-hit | exec-error | null（null = 未终态，不可收集）
+  `ok` ⟺ reason_code == "ok" ⟺ exit 0。**任何 pending/lost/corrupt 组合恒不产出 ok。**
 """
 
 import argparse
@@ -836,6 +863,549 @@ def cmd_worker(args):
     return 0, None
 
 
+# ── status / await / collect：终态派生 ────────────────────────────────────────
+
+# await 的固定 grace（秒）——design.md Non-Functional Requirements「await grace 固定 30 秒」。
+# 它加在**可信 started_at** 之上，不是加在 dispatch 时刻上。
+AWAIT_GRACE_SECONDS = 30
+
+DEFAULT_POLL_INTERVAL_SECONDS = 0.5
+MIN_POLL_INTERVAL_SECONDS = 0.05
+MAX_POLL_INTERVAL_SECONDS = 5.0
+# 单次 await 调用的外层上界上限：派生上界最坏 = timeout(≤3600) + grace(30)。
+MAX_AWAIT_WAIT_SECONDS = MAX_TIMEOUT_SECONDS + AWAIT_GRACE_SECONDS
+
+STATE_MISSING = "MISSING"
+STATE_RESERVED = "RESERVED"
+STATE_STARTING = "STARTING"
+STATE_RUNNING = "RUNNING"
+STATE_SUCCEEDED = "SUCCEEDED"
+STATE_TIMED_OUT = "TIMED_OUT"
+STATE_FAILED = "FAILED"
+STATE_LOST = "LOST"
+STATE_CORRUPT = "CORRUPT"
+
+# 未终态集合：这三个状态**没有** reason_code（null），故永远不可能被误读成 `ok`。
+PENDING_STATES = frozenset({STATE_RESERVED, STATE_STARTING, STATE_RUNNING})
+
+REASON_OK = "ok"
+REASON_TIMEOUT = "timeout"
+REASON_SECRET_HIT = "secret-hit"
+REASON_EXEC_ERROR = "exec-error"
+
+# 🔴 rc → reason_code 的**唯一**映射源，与两份评审 SKILL 调用协议 ⑦ 的同步分支同表
+# （HAE-09：async dispatch 只改执行时机与托管方，reason_code 枚举语义 MUST 不变）。
+# `3` 单列的理由是**行为差异而非美观**：secret-hit 意味着「本次 voice 拒发且不 fallback」，
+# 若并入 exec-error，调用方会拿同一份已命中 secret 的 context 再派一次同族 fallback。
+RC_TIMEOUT = 124
+RC_SECRET_HIT = 3
+
+# `claude agents --all --json` 的 state 值分档。**只有这一档能判定 job 已终结**；
+# 其余（含 schema 漂移出的未知值）一律当「探不到」——探针无判别力 MUST NOT 触发降级，
+# 否则一次 CLI 改名就把所有在飞的合法 worker 判成 LOST，整条通道退回 efficacy=0。
+LIVENESS_ALIVE = "working"
+LIVENESS_TERMINAL = frozenset({"done", "failed", "stopped", "missing"})
+LIVENESS_UNAVAILABLE = "unavailable"
+
+# job.json 的必填字段：任一缺失即 CORRUPT（OVBG-02「元数据损坏不得猜成功」）。
+JOB_REQUIRED_FIELDS = (
+    "schema_version", "run_id", "site", "repo_root", "run_dir", "attempt_nonce",
+    "runner", "model", "effort", "job_id", "dispatched_at", "startup_deadline_at",
+    "timeout_seconds",
+)
+
+
+def parse_utc_iso(value):
+    """`YYYY-MM-DDTHH:MM:SSZ` → epoch 秒；不可解析返回 None（调用方一律 fail-closed）。"""
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc).timestamp()
+    except Exception:
+        return None
+
+
+def collected_path(run_dir, site):
+    return os.path.join(str(run_dir), site + ".collected.json")
+
+
+def stdout_stat_evidence(run_dir, site):
+    """**只 stat 不读**：status 判「rc=0 时 stdout 是否非空」只需要大小。
+
+    单列成函数是为了让「终态前有没有碰过 stdout」变成可 spy 的机械锚，
+    而不是靠通读实现自证（见 test_status_never_reads_stdout_before_terminal）。
+    """
+    path = os.path.join(str(run_dir), site + ".stdout")
+    if not os.path.isfile(path):
+        return {"exists": False, "bytes": 0, "path": os.path.realpath(path)}
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return {"exists": False, "bytes": 0, "path": os.path.realpath(path)}
+    return {"exists": True, "bytes": size, "path": os.path.realpath(path)}
+
+
+def stdout_read_evidence(run_dir, site):
+    """**真正读 stdout 正文的唯一入口** —— MUST 只在 rc 已发布后调用（collect 专用）。"""
+    path = os.path.join(str(run_dir), site + ".stdout")
+    try:
+        data = open(path, "rb").read()
+    except OSError as exc:
+        return {"ok": False, "detail": "stdout 不可读: %s" % exc}
+    lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+    return {"ok": True, "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data), "lines": lines, "path": os.path.realpath(path)}
+
+
+def stderr_stat_evidence(run_dir, site):
+    """stderr **只出结构化计数**：它绕过出境 secret scan，正文 MUST NOT 进入任何 tracked 产物。"""
+    path = os.path.join(str(run_dir), site + ".stderr")
+    try:
+        data = open(path, "rb").read()
+    except OSError:
+        return {"bytes": 0, "lines": 0}
+    lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
+    return {"bytes": len(data), "lines": lines}
+
+
+def load_job_metadata(run_dir, site):
+    """→ (kind, data, detail)，kind ∈ {"ok","corrupt","absent"}。"""
+    path = job_path(run_dir, site)
+    if not os.path.isfile(path):
+        return ("absent", None, "job metadata 不存在: %s" % path)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception as exc:
+        return ("corrupt", None, "job metadata 不可解析: %s" % exc)
+    if not isinstance(data, dict):
+        return ("corrupt", None, "job metadata 顶层不是 object")
+    if data.get("schema_version") != SCHEMA_VERSION:
+        return ("corrupt", data,
+                "job metadata schema_version 不受支持（schema drift）: %r"
+                % (data.get("schema_version"),))
+    missing = [name for name in JOB_REQUIRED_FIELDS
+               if data.get(name) in (None, "")]
+    if missing:
+        return ("corrupt", data, "job metadata 缺字段: %s" % ", ".join(missing))
+    if data.get("site") != site:
+        return ("corrupt", data,
+                "job metadata site 与请求不符: %r ≠ %r" % (data.get("site"), site))
+    if os.path.realpath(str(data.get("run_dir"))) != os.path.realpath(str(run_dir)):
+        return ("corrupt", data,
+                "job metadata run_dir 与请求不符: %r" % (data.get("run_dir"),))
+    timeout = data.get("timeout_seconds")
+    if isinstance(timeout, bool) or not isinstance(timeout, int) \
+            or not (MIN_TIMEOUT_SECONDS <= timeout <= MAX_TIMEOUT_SECONDS):
+        return ("corrupt", data,
+                "job metadata timeout_seconds 非整或越界（合法 %d..%d）: %r"
+                % (MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, timeout))
+    for field in ("dispatched_at", "startup_deadline_at"):
+        if parse_utc_iso(data.get(field)) is None:
+            return ("corrupt", data, "job metadata %s 时刻不可解析: %r" % (field, data.get(field)))
+    return ("ok", data, "")
+
+
+def load_witness(run_dir, site, suffix, job, time_field):
+    """读 started/terminal witness 并**重新核验 identity**（site / run_id / attempt nonce）。
+
+    → (kind, data, detail)，kind ∈ {"ok","corrupt","absent"}。
+    identity 核不过 ⇒ corrupt：上一轮遗留或被换过的 witness MUST NOT 当本次结果采信。
+    """
+    path = os.path.join(str(run_dir), site + suffix)
+    if not os.path.isfile(path):
+        return ("absent", None, "")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception as exc:
+        return ("corrupt", None, "%s%s 不可解析: %s" % (site, suffix, exc))
+    if not isinstance(data, dict):
+        return ("corrupt", None, "%s%s 顶层不是 object" % (site, suffix))
+    if data.get("schema_version") != SCHEMA_VERSION:
+        return ("corrupt", data, "%s%s schema_version 不受支持" % (site, suffix))
+    for field, expected in (("site", site), ("run_id", job.get("run_id")),
+                            ("attempt_nonce", job.get("attempt_nonce"))):
+        if data.get(field) != expected:
+            return ("corrupt", data,
+                    "%s%s 的 %s 与本次 attempt 不符: %r ≠ %r"
+                    % (site, suffix, field, data.get(field), expected))
+    if parse_utc_iso(data.get(time_field)) is None:
+        return ("corrupt", data, "%s%s 的 %s 不可解析" % (site, suffix, time_field))
+    return ("ok", data, "")
+
+
+def read_rc(run_dir, site):
+    """→ (present, value_or_None, raw)。value 为 None 表示「rc 已发布但不是纯十进制」。"""
+    path = os.path.join(str(run_dir), site + ".rc")
+    if not os.path.isfile(path):
+        return (False, None, None)
+    try:
+        raw = open(path, "r", encoding="utf-8", errors="replace").read()
+    except OSError as exc:
+        return (True, None, "<unreadable: %s>" % exc)
+    text = raw.strip()
+    if not re.match(r"\A\d+\Z", text):
+        return (True, None, raw)
+    return (True, int(text), raw)
+
+
+def probe_liveness(job_id, claude_bin=None):
+    """一次 `claude agents --all --json`，按 **id** 通道定位本 job 的 state。
+
+    🔴 MUST 走 id 而非 name：真机实测 `state="done"` 的 background 条目**没有 `name` 字段**
+    （Task 1 已独立核实）——只认 name 的探针会把每一个已完成的 job 报成 missing。
+    任何取不到答案的情形一律返回 `unavailable`（探不到 ≠ 丢了，见 LIVENESS_TERMINAL 注释）。
+    """
+    claude_bin = claude_bin or shutil.which("claude")
+    if not claude_bin or not job_id:
+        return LIVENESS_UNAVAILABLE
+    try:
+        proc = _run_cli([claude_bin, "agents", "--all", "--json"],
+                        timeout=CLI_PROBE_TIMEOUT_SECONDS)
+        if proc.returncode != 0:
+            return LIVENESS_UNAVAILABLE
+        data = json.loads(proc.stdout)
+    except Exception:
+        return LIVENESS_UNAVAILABLE
+    if not isinstance(data, list):
+        return LIVENESS_UNAVAILABLE
+    for item in data:
+        if isinstance(item, dict) and str(item.get("id") or "") == str(job_id):
+            state = str(item.get("state") or "").strip().lower()
+            return state or LIVENESS_UNAVAILABLE
+    return "missing"
+
+
+def _status_payload(state, reason_code, detail, **extra):
+    payload = {
+        "ok": reason_code == REASON_OK,
+        "state": state,
+        "terminal": state not in PENDING_STATES,
+        "reason_code": reason_code,
+        "detail": detail,
+        "unknown_cost": False,
+        "liveness": None,
+        "rc": None,
+        "run_id": None,
+        "job_id": None,
+        "attempt_nonce": None,
+        "runner": None,
+        "model": None,
+        "effort": None,
+        "dispatched_at": None,
+        "started_at": None,
+        "terminal_at": None,
+        "startup_deadline_at": None,
+        "deadline_at": None,
+        "timeout_seconds": None,
+        "stdout_bytes": None,
+        "stdout_sha256": None,
+    }
+    payload.update(extra)
+    return payload
+
+
+def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
+                  timeout_override=None):
+    """从盘面 + liveness **纯派生**当前归类。不写任何文件、不做任何破坏性动作。
+
+    判定顺序是契约（不是风格）：
+      ① job metadata（坏 ⇒ CORRUPT，**此时不看 rc、不碰 stdout**——元数据损坏不得猜成功）
+      ② rc（终态发布点。一旦存在，liveness 完全不参与判定，ADR-2）
+      ③ witness identity（rc 在而 terminal witness 缺失/对不上 ⇒ CORRUPT）
+      ④ liveness 终态且无 rc ⇒ LOST（不等满 timeout，OVBG-03）
+      ⑤ 时间上界：无 started ⇒ **独立**的 startup deadline；有 started ⇒
+         可信 started_at + timeout + grace
+    """
+    now = time.time() if now is None else now
+    run_dir_real = os.path.realpath(str(run_dir))
+    base = {"site": site, "run_dir": run_dir_real}
+
+    if not os.path.isdir(run_dir_real):
+        return _status_payload(STATE_MISSING, REASON_EXEC_ERROR,
+                               "run-dir 不存在: %s" % run_dir_real, **base)
+
+    kind, job, detail = load_job_metadata(run_dir_real, site)
+    if kind == "corrupt":
+        return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, detail, **base)
+    if kind == "absent":
+        if os.path.isfile(reserve_path(run_dir_real, site)):
+            return _status_payload(
+                STATE_RESERVED, None,
+                "存在 reservation 但无 job metadata —— 成本未知，只允许显式 reconcile/人工 cleanup",
+                unknown_cost=True, **base)
+        return _status_payload(STATE_MISSING, REASON_EXEC_ERROR, detail, **base)
+
+    timeout_seconds = timeout_override if timeout_override is not None \
+        else job["timeout_seconds"]
+    started_kind, started, started_detail = load_witness(
+        run_dir_real, site, ".started.json", job, "started_at")
+    terminal_kind, terminal, terminal_detail = load_witness(
+        run_dir_real, site, ".terminal.json", job, "terminal_at")
+    started_at = started.get("started_at") if started_kind == "ok" else None
+    terminal_at = terminal.get("terminal_at") if terminal_kind == "ok" else None
+    base.update({
+        "run_id": job["run_id"], "job_id": job["job_id"],
+        "attempt_nonce": job["attempt_nonce"], "runner": job["runner"],
+        "model": job["model"], "effort": job["effort"],
+        "dispatched_at": job["dispatched_at"],
+        "startup_deadline_at": job["startup_deadline_at"],
+        "started_at": started_at, "terminal_at": terminal_at,
+        "timeout_seconds": timeout_seconds,
+    })
+    started_epoch = parse_utc_iso(started_at)
+    if started_epoch is not None:
+        base["deadline_at"] = datetime.fromtimestamp(
+            started_epoch + timeout_seconds + AWAIT_GRACE_SECONDS,
+            timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if started_kind == "corrupt":
+        return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, started_detail, **base)
+    if terminal_kind == "corrupt":
+        return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, terminal_detail, **base)
+
+    rc_present, rc_value, rc_raw = read_rc(run_dir_real, site)
+    if rc_present:
+        if rc_value is None:
+            return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR,
+                                   "rc 内容非纯十进制: %r" % (rc_raw,), **base)
+        base["rc"] = rc_value
+        if terminal_kind != "ok":
+            # worker 的发布顺序是 terminal witness → rc（Task 1 的顺序锚）⇒ 缺 witness
+            # 意味着证据链断了，MUST NOT 只凭一个 rc 数字就把 stdout 放进 findings 池。
+            return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR,
+                                   "rc 已发布但缺少可核验的 terminal witness", **base)
+        base["stdout_sha256"] = terminal.get("stdout_sha256")
+        evidence = stdout_stat_evidence(run_dir_real, site)   # stat，不读正文
+        base["stdout_bytes"] = evidence["bytes"]
+        if rc_value == 0:
+            if evidence["bytes"] > 0:
+                return _status_payload(STATE_SUCCEEDED, REASON_OK, "rc=0 且 stdout 非空", **base)
+            return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR,
+                                   "rc=0 但 stdout 为空 —— 不得猜成功", **base)
+        if rc_value == RC_TIMEOUT:
+            return _status_payload(STATE_TIMED_OUT, REASON_TIMEOUT,
+                                   "内层 timeout 实际写出 rc=124", **base)
+        if rc_value == RC_SECRET_HIT:
+            return _status_payload(STATE_FAILED, REASON_SECRET_HIT,
+                                   "helper 出境 secret scan 命中（rc=3），本次 voice 拒发", **base)
+        return _status_payload(STATE_FAILED, REASON_EXEC_ERROR,
+                               "helper 非零退出 rc=%d" % rc_value, **base)
+
+    if liveness is None:
+        liveness = probe_liveness(job["job_id"], claude_bin=claude_bin)
+    base["liveness"] = liveness
+    if liveness in LIVENESS_TERMINAL:
+        # 极窄竞态：worker 先发布 rc 再退出，但文件可见性可能滞后于 agent state 翻转
+        # ⇒ 判 LOST 前再看一眼 rc（一次，不轮询）。
+        if os.path.isfile(os.path.join(run_dir_real, site + ".rc")):
+            return derive_status(run_dir_real, site, liveness=liveness, now=now,
+                                 claude_bin=claude_bin, timeout_override=timeout_override)
+        return _status_payload(
+            STATE_LOST, REASON_EXEC_ERROR,
+            "supervisor job 已终结（state=%s）但 rc 缺席 —— 判 exec-error，"
+            "MUST NOT 冒充 timeout" % liveness, **base)
+
+    if started_kind != "ok":
+        startup_deadline = parse_utc_iso(job["startup_deadline_at"])
+        if startup_deadline is not None and now > startup_deadline:
+            return _status_payload(
+                STATE_LOST, REASON_EXEC_ERROR,
+                "startup deadline（%s）已过仍无 started sidecar" % job["startup_deadline_at"],
+                **base)
+        return _status_payload(STATE_STARTING, None,
+                               "已 dispatch，等待 worker 发布 started sidecar", **base)
+
+    if started_epoch is not None and now > started_epoch + timeout_seconds + AWAIT_GRACE_SECONDS:
+        return _status_payload(
+            STATE_LOST, REASON_EXEC_ERROR,
+            "自可信 started_at 起算已超过 timeout(%d)+grace(%d) 仍无 rc"
+            % (timeout_seconds, AWAIT_GRACE_SECONDS), **base)
+    return _status_payload(STATE_RUNNING, None, "worker 在飞，未到终态", **base)
+
+
+# ── collect（幂等）─────────────────────────────────────────────────────────────
+
+def _first_writer_wins_json(path, payload, mode=0o600):
+    """原子发布且**首写者胜**：已存在则原样保留（幂等的落盘基石）。
+
+    用「temp 全量写完 → `os.link`」而不是 `os.replace`：link 在目标已存在时失败，
+    于是「先到者定终身」，且读者看到的一定是**写完之后**的完整文件。
+    """
+    path = str(path)
+    directory = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".tmp-" + os.path.basename(path) + "-")
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            pass
+        except OSError:
+            # 文件系统不支持 hard link ⇒ 退到「不存在才落」（窗口极窄，方向仍是首写者胜）
+            if not os.path.exists(path):
+                os.replace(tmp, path)
+                tmp = None
+    finally:
+        if tmp is not None and os.path.exists(tmp):
+            os.unlink(tmp)
+    return path
+
+
+def load_collected(run_dir, site, job):
+    """读回首次 collect 见证并核验 identity。→ (kind, data, detail)。"""
+    path = collected_path(run_dir, site)
+    if not os.path.isfile(path):
+        return ("absent", None, "")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception as exc:
+        return ("corrupt", None, "collected witness 不可解析: %s" % exc)
+    if not isinstance(data, dict):
+        return ("corrupt", None, "collected witness 顶层不是 object")
+    for field, expected in (("schema_version", SCHEMA_VERSION), ("site", site),
+                            ("run_id", job.get("run_id")),
+                            ("attempt_nonce", job.get("attempt_nonce"))):
+        if data.get(field) != expected:
+            return ("corrupt", data,
+                    "collected witness 的 %s 与本次 attempt 不符: %r ≠ %r"
+                    % (field, data.get(field), expected))
+    return ("ok", data, "")
+
+
+def build_collect_payload(status):
+    """把终态 status 补成 collect 结果：collected_at、自然 duration、stdout digest 核验。"""
+    payload = dict(status)
+    payload["schema_version"] = SCHEMA_VERSION
+    payload["collected_at"] = utc_now_iso()
+    started_epoch = parse_utc_iso(status.get("started_at"))
+    terminal_epoch = parse_utc_iso(status.get("terminal_at"))
+    payload["duration_seconds"] = round(terminal_epoch - started_epoch, 3) \
+        if (started_epoch is not None and terminal_epoch is not None) else None
+    stderr_evidence = stderr_stat_evidence(status["run_dir"], status["site"])
+    payload["stderr_bytes"] = stderr_evidence["bytes"]
+    payload["stderr_lines"] = stderr_evidence["lines"]
+    payload["stdout_lines"] = None
+
+    if status.get("rc") is None:
+        return payload
+    # rc 已发布才读 stdout（OVBG-02：collect 只在 rc 发布后读取 stdout）
+    evidence = stdout_read_evidence(status["run_dir"], status["site"])
+    if not evidence.get("ok"):
+        payload.update({"ok": False, "state": STATE_CORRUPT, "terminal": True,
+                        "reason_code": REASON_EXEC_ERROR, "detail": evidence["detail"]})
+        return payload
+    payload["stdout_bytes"] = evidence["bytes"]
+    payload["stdout_lines"] = evidence["lines"]
+    witness_digest = status.get("stdout_sha256")
+    if witness_digest and witness_digest != evidence["sha256"]:
+        payload.update({
+            "ok": False, "state": STATE_CORRUPT, "terminal": True,
+            "reason_code": REASON_EXEC_ERROR,
+            "detail": "stdout digest 与 terminal witness 不符（证据被改动）: %s ≠ %s"
+                      % (evidence["sha256"], witness_digest)})
+        return payload
+    payload["stdout_sha256"] = evidence["sha256"]
+    if payload["reason_code"] == REASON_OK:
+        # 只有可信成功的 stdout 才给出路径 —— 它是唯一进 findings 池的通道。
+        payload["stdout_path"] = evidence["path"]
+    return payload
+
+
+# ── 子命令入口 ────────────────────────────────────────────────────────────────
+
+def _validate_site_args(args):
+    """三个只读子命令共享的入参校验。→ 错误 payload 或 None。"""
+    site = args.site or ""
+    if not SITE_RE.match(site):
+        return _reject("site 名非法（只允许 [A-Za-z0-9._-]，且不得以 . - 开头）: %r" % site,
+                       state="usage-error", reason_code=REASON_EXEC_ERROR,
+                       fallback_allowed=False, site=site)
+    if not _no_control_chars(args.run_dir or "") or not os.path.isabs(args.run_dir or ""):
+        return _reject("run-dir MUST 为不含换行/NUL 的绝对路径: %r" % (args.run_dir,),
+                       state="usage-error", reason_code=REASON_EXEC_ERROR,
+                       fallback_allowed=False, site=site)
+    timeout = getattr(args, "timeout", None)
+    if timeout is not None and not (MIN_TIMEOUT_SECONDS <= timeout <= MAX_TIMEOUT_SECONDS):
+        # 复用 dispatch 的同一组常量（= 既有 outside-voice.async-timeout-seconds 的取值域），
+        # MUST NOT 在这里新造第二份范围口径。
+        return _reject("timeout 越界（合法 %d..%d）: %d"
+                       % (MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, timeout),
+                       state="usage-error", reason_code=REASON_EXEC_ERROR,
+                       fallback_allowed=False, site=site)
+    return None
+
+
+def cmd_status(args):
+    bad = _validate_site_args(args)
+    if bad is not None:
+        return 2, bad
+    payload = derive_status(args.run_dir, args.site, timeout_override=args.timeout)
+    return (0 if payload["ok"] else 1), payload
+
+
+def cmd_await(args):
+    bad = _validate_site_args(args)
+    if bad is not None:
+        return 2, bad
+    poll = min(max(args.poll_interval, MIN_POLL_INTERVAL_SECONDS), MAX_POLL_INTERVAL_SECONDS)
+    max_wait = args.max_wait
+    if max_wait is not None and not (0 < max_wait <= MAX_AWAIT_WAIT_SECONDS):
+        return 2, _reject("max-wait 越界（合法 0<v≤%d）: %r" % (MAX_AWAIT_WAIT_SECONDS, max_wait),
+                          state="usage-error", reason_code=REASON_EXEC_ERROR,
+                          fallback_allowed=False, site=args.site)
+    started = time.monotonic()
+    while True:
+        payload = derive_status(args.run_dir, args.site, timeout_override=args.timeout)
+        waited = time.monotonic() - started
+        # 终态 / RESERVED（unknown-cost，永远不会自行到达终态，交 reconcile）/ 外层 max-wait
+        # 到点 —— 三者之外一律继续等：MUST NOT 因为「等久了」就落 timeout。
+        if payload["terminal"] or payload["state"] == STATE_RESERVED:
+            break
+        if max_wait is not None and waited >= max_wait:
+            break
+        time.sleep(poll)
+    payload["waited_seconds"] = round(time.monotonic() - started, 3)
+    return (0 if payload["ok"] else 1), payload
+
+
+def cmd_collect(args):
+    bad = _validate_site_args(args)
+    if bad is not None:
+        return 2, bad
+    run_dir = os.path.realpath(args.run_dir)
+    site = args.site
+    kind, job, detail = load_job_metadata(run_dir, site)
+    if kind == "ok":
+        stored_kind, stored, stored_detail = load_collected(run_dir, site, job)
+        if stored_kind == "corrupt":
+            return 1, _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, stored_detail,
+                                      site=site, run_dir=run_dir)
+        if stored_kind == "ok":
+            # 幂等：首次收集的结论就是终局，原样回放（含首次 collected_at）。
+            return (0 if stored.get("ok") else 1), stored
+
+    status = derive_status(run_dir, site, timeout_override=args.timeout)
+    if not status["terminal"]:
+        # 未终态 ⇒ 不落 collected witness、不读 stdout、reason_code 恒为 null。
+        return 1, status
+    payload = build_collect_payload(status)
+    if kind == "ok":
+        _first_writer_wins_json(collected_path(run_dir, site), payload)
+        stored_kind, stored, _ = load_collected(run_dir, site, job)
+        if stored_kind == "ok":
+            payload = stored
+    return (0 if payload["ok"] else 1), payload
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def build_parser():
@@ -863,6 +1433,22 @@ def build_parser():
     add_common(worker)
     worker.add_argument("--attempt-nonce", required=True)
 
+    def add_site_only(p):
+        p.add_argument("--run-dir", required=True)
+        p.add_argument("--site", required=True)
+        # 缺省 None = 「用 job.json 里 dispatch 当时记下的 timeout_seconds」，
+        # 即既有 `outside-voice.async-timeout-seconds` 的值 —— 本 helper 不另解析 config。
+        p.add_argument("--timeout", type=int, default=None)
+
+    add_site_only(sub.add_parser("status"))
+
+    awaiter = sub.add_parser("await")
+    add_site_only(awaiter)
+    awaiter.add_argument("--max-wait", type=float, default=None)
+    awaiter.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_SECONDS)
+
+    add_site_only(sub.add_parser("collect"))
+
     return parser
 
 
@@ -886,6 +1472,11 @@ def main(argv=None):
         return code
     if args.command == "worker":
         code, _ = cmd_worker(args)
+        return code
+    if args.command in ("status", "await", "collect"):
+        code, payload = {"status": cmd_status, "await": cmd_await,
+                         "collect": cmd_collect}[args.command](args)
+        emit(payload)
         return code
     parser.print_usage(sys.stderr)
     return 2

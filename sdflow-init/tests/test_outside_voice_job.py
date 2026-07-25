@@ -1,4 +1,4 @@
-"""outside-voice-job.py 的 Task 1 契约测试（preflight / reserve / dispatch / worker）。
+"""outside-voice-job.py 的契约测试（preflight / reserve / dispatch / worker / status / await / collect）。
 
 TDD 接缝（先定后写）——两处公共边界，测试只打这两处，不打内部实现：
 
@@ -15,6 +15,7 @@ TDD 接缝（先定后写）——两处公共边界，测试只打这两处，�
 
 import hashlib
 import importlib.util
+import itertools
 import json
 import os
 import re
@@ -24,7 +25,9 @@ import stat
 import subprocess
 import sys
 import textwrap
+import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -85,6 +88,10 @@ if argv[:1] == ["agents"]:
         sys.exit(0)
     if mode == "empty":
         sys.stdout.write("[]\n")
+        sys.exit(0)
+    if mode == "fixed":
+        # Task 2：由测试直接给定整份 roster JSON（liveness 维度的注入点）。
+        sys.stdout.write(os.environ.get("FAKE_CLAUDE_FIXED", "[]") + "\n")
         sys.exit(0)
     st = load_state()
     if not st:
@@ -996,3 +1003,698 @@ def test_background_worker_survives_dispatching_shell_exit(fake_job_home, repo):
     finally:
         subprocess.run([shutil.which("claude"), "rm", job_id],
                        capture_output=True, text=True, timeout=60)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 2：终态派生的 status / await / collect
+#
+# TDD 接缝（先定后写，测试只打这两处）：
+#   ③ **子命令 CLI 契约**：`status` / `await` / `collect` 的 argv、stdout 上的单行 JSON
+#      （`ok` / `state` / `terminal` / `reason_code` / 时刻 / duration / runner/model/effort /
+#      stdout digest）与退出码（0 ⟺ `ok` 为真）。
+#   ④ **派生纯函数契约**：`JOB.derive_status(run_dir, site, liveness=…, now=…)` ——
+#      rc × liveness × 元数据的笛卡尔归类在此逐组合钉死；CLI 只是它的薄壳，
+#      `test_status_cli_is_a_thin_shell_over_derive_status` 把二者绑住，防第二份实现。
+# ══════════════════════════════════════════════════════════════════════════════
+
+RC_KINDS = ("absent", "rc0_nonempty", "rc0_empty", "rc124", "rc3", "rc_other", "rc_bad")
+LIVENESS_KINDS = ("working", "done", "failed", "stopped", "missing", "unavailable")
+META_KINDS = ("complete", "missing-field", "schema-drift")
+
+
+def _expected_classification(rc_kind, liveness, meta_kind):
+    """期望表**逐条抄自 spec**，MUST NOT 从实现回读（否则等于用实现证明实现）。
+
+    · OVBG-02：`.rc` 不存在且 agent working = RUNNING；`.rc=0` 且 stdout 非空 = SUCCEEDED；
+      `.rc=124` = TIMED_OUT；其他退出码 = FAILED；terminal agent 无 `.rc` = LOST。
+    · OVBG-02「元数据损坏不得猜成功」：job JSON 缺字段 / rc 非纯十进制 / rc=0 但 stdout 为空
+      → `exec-error`。
+    · HAE-09「锚契约与 reason_code 枚举语义不变」⇒ 沿用两份评审 SKILL ⑦ 的同一张 rc 表：
+      `3` = `secret-hit`（该码**不允许**同族 fallback，若并入 exec-error 会让调用方拿同一份
+      命中 secret 的 context 再派一次，正是 OVBG-04 要杀的形态）。
+    """
+    if meta_kind != "complete":
+        return ("CORRUPT", "exec-error")
+    if rc_kind == "rc_bad":
+        return ("CORRUPT", "exec-error")
+    if rc_kind == "rc0_nonempty":
+        return ("SUCCEEDED", "ok")
+    if rc_kind == "rc0_empty":
+        return ("CORRUPT", "exec-error")
+    if rc_kind == "rc124":
+        return ("TIMED_OUT", "timeout")
+    if rc_kind == "rc3":
+        return ("FAILED", "secret-hit")
+    if rc_kind == "rc_other":
+        return ("FAILED", "exec-error")
+    if liveness in ("done", "failed", "stopped", "missing"):
+        return ("LOST", "exec-error")
+    return ("RUNNING", None)
+
+
+_RC_TEXT = {"rc0_nonempty": "0", "rc0_empty": "0", "rc124": "124", "rc3": "3",
+            "rc_other": "7", "rc_bad": "oops"}
+
+
+def _iso(epoch):
+    return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent",
+               now=None, dispatched_ago=2.0, started_ago=1.0, timeout_seconds=900,
+               startup_deadline_ago=None, job_id="75d34378", nonce="n0nce7777",
+               write_job=True, write_started=True, write_terminal=None,
+               stdout=b"outside voice findings\n", stderr=b"fake-stderr\n",
+               terminal_digest=None, run_id=None, nonce_in_witness=None):
+    """把一个站点的盘面摆成指定形态。返回写下的 job metadata（dict 或 None）。
+
+    盘面即状态 ⇒ 所有用例的输入都是「run dir 里有哪些文件、内容是什么」，
+    不通过任何可变 status 字段注入。
+    """
+    run_dir = Path(run_dir)
+    now = time.time() if now is None else now
+    run_id = run_id or run_dir.name
+    witness_nonce = nonce if nonce_in_witness is None else nonce_in_witness
+    meta_payload = None
+    if write_job:
+        startup_at = (now - startup_deadline_ago) if startup_deadline_ago is not None \
+            else (now - dispatched_ago + JOB.STARTUP_DEADLINE_SECONDS)
+        meta_payload = {
+            "schema_version": JOB.SCHEMA_VERSION,
+            "run_id": run_id,
+            "site": site,
+            "repo_root": str(Path(run_dir).parents[3].resolve()) if len(Path(run_dir).parents) > 3
+                         else str(run_dir.resolve()),
+            "run_dir": str(run_dir.resolve()),
+            "context_file": str((run_dir / (site + "-context.md")).resolve()),
+            "attempt_nonce": nonce,
+            "runner": "claude", "model": "opus", "effort": "high",
+            "platform": "posix", "sys_platform": sys.platform,
+            "job_id": job_id, "session_id": job_id + "-sess",
+            "dispatched_at": _iso(now - dispatched_ago),
+            "startup_deadline_at": _iso(startup_at),
+            "timeout_seconds": timeout_seconds,
+            "command_sha256": "0" * 64,
+            "job_helper_version": JOB.VERSION,
+            "dispatch_duration_seconds": 0.4,
+        }
+        if meta == "missing-field":
+            meta_payload.pop("attempt_nonce")
+        elif meta == "schema-drift":
+            meta_payload["schema_version"] = JOB.SCHEMA_VERSION + 1
+        JOB.atomic_write_json(JOB.job_path(run_dir, site), meta_payload)
+
+    if write_started:
+        JOB.atomic_write_json(run_dir / (site + ".started.json"), {
+            "schema_version": JOB.SCHEMA_VERSION, "site": site, "run_id": run_id,
+            "attempt_nonce": witness_nonce, "started_at": _iso(now - started_ago),
+            "worker": {"pid": 4242, "ppid": 1, "pgid": 4242, "sid": 4242,
+                       "executable": sys.executable},
+        })
+
+    if rc_kind != "absent":
+        payload = b"" if rc_kind == "rc0_empty" else stdout
+        (run_dir / (site + ".stdout")).write_bytes(payload)
+        (run_dir / (site + ".stderr")).write_bytes(stderr)
+        if write_terminal is not False:
+            JOB.atomic_write_json(run_dir / (site + ".terminal.json"), {
+                "schema_version": JOB.SCHEMA_VERSION, "site": site, "run_id": run_id,
+                "attempt_nonce": witness_nonce, "terminal_at": _iso(now - 0.2),
+                "stdout_sha256": terminal_digest or hashlib.sha256(payload).hexdigest(),
+                "stdout_bytes": len(payload), "stderr_bytes": len(stderr),
+            })
+        (run_dir / (site + ".rc")).write_text(_RC_TEXT[rc_kind], encoding="utf-8")
+    elif write_terminal:
+        JOB.atomic_write_json(run_dir / (site + ".terminal.json"), {
+            "schema_version": JOB.SCHEMA_VERSION, "site": site, "run_id": run_id,
+            "attempt_nonce": witness_nonce, "terminal_at": _iso(now),
+            "stdout_sha256": None, "stdout_bytes": 0, "stderr_bytes": 0,
+        })
+    return meta_payload
+
+
+# ── ④ 派生纯函数：rc × liveness × 元数据 的**逐组合**归类 ─────────────────────
+
+@pytest.mark.parametrize("rc_kind,liveness,meta_kind",
+                         list(itertools.product(RC_KINDS, LIVENESS_KINDS, META_KINDS)))
+def test_status_cartesian_classification(tmp_path, rc_kind, liveness, meta_kind):
+    """rc 维度 × liveness 维度 × 元数据维度**逐组合**有确定性归类。
+
+    参数化而非挑 happy path：本票的核心验收标准就是这张笛卡尔表。
+    """
+    run_dir = tmp_path / "20260725T000000Z-Zz99"
+    run_dir.mkdir()
+    now = time.time()
+    _seed_site(run_dir, meta=meta_kind, rc_kind=rc_kind, now=now)
+    payload = JOB.derive_status(run_dir, "design-voice", liveness=liveness, now=now)
+    exp_state, exp_reason = _expected_classification(rc_kind, liveness, meta_kind)
+    assert payload["state"] == exp_state, payload
+    assert payload["reason_code"] == exp_reason, payload
+    assert payload["terminal"] is (exp_state not in ("RESERVED", "STARTING", "RUNNING")), payload
+    assert payload["ok"] is (exp_reason == "ok"), payload
+
+
+def test_no_pending_lost_or_corrupt_combination_ever_yields_ok(tmp_path):
+    """机械断言：全笛卡尔里「非 rc=0+非空 stdout」的组合产生 `reason_code="ok"` 的**数量为 0**。
+
+    这是 design.md Non-Functional Requirements 的那条硬指标，MUST 是遍历断言而非 prose。
+    """
+    offenders = []
+    ok_count = 0
+    now = time.time()
+    for idx, (rc_kind, liveness, meta_kind) in enumerate(
+            itertools.product(RC_KINDS, LIVENESS_KINDS, META_KINDS)):
+        run_dir = tmp_path / ("run-%03d" % idx)
+        run_dir.mkdir()
+        _seed_site(run_dir, meta=meta_kind, rc_kind=rc_kind, now=now)
+        payload = JOB.derive_status(run_dir, "design-voice", liveness=liveness, now=now)
+        legit = (meta_kind == "complete" and rc_kind == "rc0_nonempty")
+        if payload["reason_code"] == "ok":
+            ok_count += 1
+            if not legit:
+                offenders.append((rc_kind, liveness, meta_kind, payload["state"]))
+    assert offenders == [], offenders
+    # 正向对照：合法组合确实产出了 ok（否则「0 个 ok」可能只是因为**没有任何** ok）
+    assert ok_count == len(LIVENESS_KINDS), ok_count
+
+
+def test_liveness_never_overrides_a_published_rc(tmp_path):
+    """ADR-2：`claude agents` 的 done/failed 只提供 liveness，MUST NOT 决定 ok/timeout。"""
+    now = time.time()
+    seen = set()
+    for liveness in LIVENESS_KINDS:
+        run_dir = tmp_path / ("rc-vs-%s" % liveness)
+        run_dir.mkdir()
+        _seed_site(run_dir, rc_kind="rc0_nonempty", now=now)
+        payload = JOB.derive_status(run_dir, "design-voice", liveness=liveness, now=now)
+        seen.add((payload["state"], payload["reason_code"]))
+        assert payload["liveness"] is None, payload  # 终态站点根本不必探 liveness
+    assert seen == {("SUCCEEDED", "ok")}, seen
+
+
+# ── 终态前不读 stdout（机械锚：对读取口的 spy）────────────────────────────────
+
+def test_status_never_reads_stdout_before_terminal(monkeypatch, tmp_path):
+    """终态（rc 发布）之前 MUST NOT 读 stdout —— 半成品输出不得有任何进 findings 的路径。"""
+    calls = []
+    monkeypatch.setattr(JOB, "stdout_read_evidence",
+                        lambda *a, **k: calls.append(("read", a)) or {})
+    monkeypatch.setattr(JOB, "stdout_stat_evidence",
+                        lambda *a, **k: calls.append(("stat", a)) or {"bytes": 0, "exists": False})
+    for liveness in LIVENESS_KINDS:
+        run_dir = tmp_path / ("pending-%s" % liveness)
+        run_dir.mkdir()
+        _seed_site(run_dir, rc_kind="absent")
+        (run_dir / "design-voice.stdout").write_bytes(b"HALF WRITTEN FINDINGS\n")
+        JOB.derive_status(run_dir, "design-voice", liveness=liveness)
+    assert calls == [], calls
+
+
+def test_status_stats_stdout_size_but_never_reads_its_content(monkeypatch, tmp_path):
+    """终态后 status 只需要「stdout 是否非空」⇒ stat 即可，MUST NOT 把正文读进来。"""
+    reads = []
+    monkeypatch.setattr(JOB, "stdout_read_evidence", lambda *a, **k: reads.append(a) or {})
+    run_dir = tmp_path / "terminal"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="rc0_nonempty")
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="done")
+    assert payload["state"] == "SUCCEEDED"
+    assert reads == [], reads
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0,
+                    reason="root 绕过文件权限，chmod 000 的负向探针在 root 下无判别力")
+def test_status_of_a_running_site_survives_an_unreadable_stdout(tmp_path):
+    """独立于 spy 的第二条锚：stdout 完全读不动时，未终态站点的归类照常成立。"""
+    run_dir = tmp_path / "unreadable"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    out = run_dir / "design-voice.stdout"
+    out.write_bytes(b"HALF WRITTEN\n")
+    out.chmod(0o000)
+    try:
+        payload = JOB.derive_status(run_dir, "design-voice", liveness="working")
+        assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
+    finally:
+        out.chmod(0o600)
+
+
+# ── 独立的 startup deadline vs 从可信 started_at 起算的 worker 上界 ──────────
+
+def test_startup_deadline_is_independent_of_the_worker_deadline(tmp_path):
+    """started sidecar 未发布 ⇒ 只受**独立**的 startup deadline 约束（非 worker timeout）。"""
+    now = time.time()
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    _seed_site(fresh, rc_kind="absent", write_started=False, now=now,
+               startup_deadline_ago=-3)          # startup deadline 还在未来
+    assert JOB.derive_status(fresh, "design-voice", liveness="working", now=now)["state"] == "STARTING"
+
+    stale = tmp_path / "stale"
+    stale.mkdir()
+    _seed_site(stale, rc_kind="absent", write_started=False, now=now,
+               startup_deadline_ago=1)           # startup deadline 已过
+    payload = JOB.derive_status(stale, "design-voice", liveness="working", now=now)
+    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
+
+
+def test_worker_upper_bound_counts_from_trusted_started_at_plus_grace(tmp_path):
+    """worker 上界 = 可信 `started_at` + timeout + 30 秒 grace，**不是**从 dispatch 时刻起算。
+
+    排队 300 秒才启动的合法 worker：若从 dispatch 时刻起算，它在 timeout 到点时就被误杀；
+    从 started_at 起算则仍在预算内。这里 dispatch 已过 400 秒、started 才过 10 秒、timeout=60。
+    """
+    now = time.time()
+    queued = tmp_path / "queued"
+    queued.mkdir()
+    _seed_site(queued, rc_kind="absent", now=now, dispatched_ago=400, started_ago=10,
+               timeout_seconds=60)
+    payload = JOB.derive_status(queued, "design-voice", liveness="working", now=now)
+    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
+
+    # 恰好越过 started_at + timeout + grace 才归 LOST（且**不是** timeout）
+    over = tmp_path / "over"
+    over.mkdir()
+    _seed_site(over, rc_kind="absent", now=now, dispatched_ago=400,
+               started_ago=60 + JOB.AWAIT_GRACE_SECONDS + 1, timeout_seconds=60)
+    payload = JOB.derive_status(over, "design-voice", liveness="working", now=now)
+    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
+    assert payload["reason_code"] != "timeout"
+
+
+def test_deadline_uses_the_timeout_override_when_given(tmp_path):
+    now = time.time()
+    run_dir = tmp_path / "override"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent", now=now, started_ago=100, timeout_seconds=900)
+    assert JOB.derive_status(run_dir, "design-voice", liveness="working", now=now,
+                             timeout_override=1)["state"] == "LOST"
+    assert JOB.derive_status(run_dir, "design-voice", liveness="working", now=now,
+                             timeout_override=900)["state"] == "RUNNING"
+
+
+def test_liveness_probe_failure_does_not_declare_the_worker_lost(tmp_path):
+    """探针本身取不到答案 ≠ job 丢了 —— 无判别力的探针 MUST NOT 触发降级。"""
+    now = time.time()
+    run_dir = tmp_path / "probe-down"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent", now=now)
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="unavailable", now=now)
+    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
+
+
+def test_unknown_agent_state_is_inconclusive_not_terminal(tmp_path):
+    """agents JSON 的 state 枚举漂移 ⇒ 保守当「探不到」，MUST NOT 当成 job 已终态而误降级。"""
+    now = time.time()
+    run_dir = tmp_path / "drift"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent", now=now)
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="hibernating", now=now)
+    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
+
+
+def test_reserve_without_job_metadata_is_reserved_and_never_collectable(tmp_path):
+    run_dir = tmp_path / "reserved"
+    run_dir.mkdir()
+    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="working")
+    assert payload["state"] == "RESERVED"
+    assert payload["reason_code"] is None
+    assert payload["terminal"] is False
+    assert payload["unknown_cost"] is True
+
+
+def test_site_with_nothing_on_disk_is_exec_error_never_ok(tmp_path):
+    run_dir = tmp_path / "nothing"
+    run_dir.mkdir()
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="missing")
+    assert (payload["state"], payload["reason_code"]) == ("MISSING", "exec-error"), payload
+
+
+def test_terminal_rc_without_a_terminal_witness_is_corrupt(tmp_path):
+    run_dir = tmp_path / "no-witness"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="rc0_nonempty", write_terminal=False)
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="done")
+    assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
+
+
+def test_witness_attempt_nonce_mismatch_is_corrupt(tmp_path):
+    """上一轮遗留的 witness 混进本轮 run dir ⇒ identity 核不过，MUST NOT 当本次结果采信。"""
+    run_dir = tmp_path / "stale-witness"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce_in_witness="someone-elses-nonce")
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="done")
+    assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
+
+
+# ── ③ CLI 契约 ────────────────────────────────────────────────────────────────
+
+def _fixed_roster(job_id="75d34378", state="working", cwd="/tmp"):
+    entry = {"id": job_id, "cwd": cwd, "kind": "background", "startedAt": 1784974140034,
+             "sessionId": job_id + "-sess", "state": state}
+    if state != "done":
+        entry["name"] = "python3 outside-voice-job.py worker …"
+    return json.dumps([entry])
+
+
+def _site_args(cmd, run_dir, site="design-voice", *extra):
+    return [cmd, "--run-dir", str(run_dir), "--site", site, *extra]
+
+
+def test_status_cli_emits_single_line_json_for_a_running_site(job_home, fake_claude, tmp_path):
+    run_dir = tmp_path / "20260725T010000Z-Cli001"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    started = time.monotonic()
+    proc = _run_job(job_home, _site_args("status", run_dir), env)
+    elapsed = time.monotonic() - started
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1                       # 非 ok ⇒ 非零；分类看 JSON
+    assert proc.stdout.strip().count("\n") == 0       # 单行 JSON
+    assert payload["state"] == "RUNNING"
+    assert payload["reason_code"] is None
+    assert payload["terminal"] is False
+    assert payload["liveness"] == "working"
+    assert payload["job_id"] == "75d34378"
+    assert elapsed < 5, elapsed                        # 单次 status 查询 ≤5 秒（NFR）
+
+
+@pytest.mark.parametrize("rc_kind", RC_KINDS)
+@pytest.mark.parametrize("meta_kind", META_KINDS)
+def test_status_cli_is_a_thin_shell_over_derive_status(job_home, fake_claude, tmp_path,
+                                                       rc_kind, meta_kind):
+    """CLI 与派生函数 MUST 同一个真相源——否则笛卡尔表只证明了那个没人调用的函数。"""
+    run_dir = tmp_path / "20260725T020000Z-Thin01"
+    run_dir.mkdir()
+    _seed_site(run_dir, meta=meta_kind, rc_kind=rc_kind)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    proc = _run_job(job_home, _site_args("status", run_dir), env)
+    cli = _json_stdout(proc)
+    direct = JOB.derive_status(run_dir, "design-voice", liveness="working")
+    assert cli == direct, (cli, direct)
+    assert proc.returncode == (0 if cli["ok"] else 1)
+
+
+@pytest.mark.parametrize("agent_state,expected", [
+    ("working", "RUNNING"), ("done", "LOST"), ("failed", "LOST"), ("stopped", "LOST"),
+])
+def test_status_cli_maps_real_agent_states_through_the_id_channel(job_home, fake_claude,
+                                                                  tmp_path, agent_state, expected):
+    """liveness 走 **id** 通道匹配：`state="done"` 的条目没有 `name`（真机实测，Task 1）。"""
+    run_dir = tmp_path / "20260725T030000Z-Live01"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster(state=agent_state)})
+    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
+    assert payload["state"] == expected, payload
+    assert payload["liveness"] == agent_state
+    assert payload["reason_code"] != "timeout"
+
+
+def test_status_cli_reports_missing_when_job_id_absent_from_roster(job_home, fake_claude, tmp_path):
+    run_dir = tmp_path / "20260725T040000Z-Miss01"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
+    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
+    assert payload["liveness"] == "missing"
+    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
+
+
+def test_status_cli_treats_unreachable_agents_cli_as_inconclusive(job_home, fake_claude, tmp_path):
+    run_dir = tmp_path / "20260725T050000Z-Down01"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "disabled"})
+    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
+    assert payload["liveness"] == "unavailable"
+    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
+
+
+# ── collect ───────────────────────────────────────────────────────────────────
+
+def test_collect_returns_structured_machine_readable_evidence(job_home, fake_claude, tmp_path):
+    run_dir = tmp_path / "20260725T060000Z-Col001"
+    run_dir.mkdir()
+    now = time.time()
+    _seed_site(run_dir, rc_kind="rc0_nonempty", now=now, dispatched_ago=930, started_ago=920)
+    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert proc.returncode == 0, proc.stderr
+    assert payload["ok"] is True
+    assert payload["reason_code"] == "ok"
+    assert payload["state"] == "SUCCEEDED"
+    for field in ("dispatched_at", "started_at", "terminal_at", "collected_at",
+                  "duration_seconds", "runner", "model", "effort", "stdout_sha256",
+                  "stdout_bytes", "stdout_lines", "stderr_bytes", "rc", "job_id",
+                  "attempt_nonce", "timeout_seconds"):
+        assert field in payload and payload[field] is not None, field
+    assert payload["runner"] == "claude"
+    assert payload["model"] == "opus"
+    assert payload["effort"] == "high"
+    assert payload["rc"] == 0
+    # 自然耗时 = terminal_at − started_at（不是墙钟外壳，也不是 dispatch 起算）
+    assert 900 < payload["duration_seconds"] < 940, payload["duration_seconds"]
+    assert payload["stdout_sha256"] == hashlib.sha256(
+        (run_dir / "design-voice.stdout").read_bytes()).hexdigest()
+    assert payload["stdout_path"] == str((run_dir / "design-voice.stdout").resolve())
+    # stderr 只出结构化计数，MUST NOT 转录正文
+    assert "fake-stderr" not in json.dumps(payload, ensure_ascii=False)
+    assert payload["stderr_bytes"] == len(b"fake-stderr\n")
+
+
+def test_collect_is_idempotent_byte_for_byte(job_home, fake_claude, tmp_path):
+    run_dir = tmp_path / "20260725T070000Z-Idem01"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="rc0_nonempty")
+    first = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
+    time.sleep(1.1)                                  # 保证「重算」会得到不同的 collected_at
+    second = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
+    assert first.returncode == second.returncode == 0
+    assert first.stdout == second.stdout, (first.stdout, second.stdout)
+    assert json.loads(first.stdout)["collected_at"] == json.loads(second.stdout)["collected_at"]
+
+
+def test_collect_before_terminal_is_not_ok_and_reads_no_stdout(job_home, fake_claude, tmp_path):
+    """「起了没收」MUST NOT 读作成功——未终态站点没有任何进 findings 的通道。"""
+    run_dir = tmp_path / "20260725T080000Z-Early1"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    (run_dir / "design-voice.stdout").write_bytes(b"PARTIAL FINDINGS: looks fine!\n")
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    proc = _run_job(job_home, _site_args("collect", run_dir), env)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert payload["ok"] is False
+    assert payload["reason_code"] is None
+    assert payload["state"] == "RUNNING"
+    assert "PARTIAL FINDINGS" not in proc.stdout
+    assert "stdout_path" not in payload
+    assert not (run_dir / "design-voice.collected.json").exists()
+
+
+@pytest.mark.parametrize("rc_kind,reason", [
+    ("rc124", "timeout"), ("rc3", "secret-hit"), ("rc_other", "exec-error"),
+    ("rc_bad", "exec-error"), ("rc0_empty", "exec-error"),
+])
+def test_collect_rc_to_reason_code_table(job_home, fake_claude, tmp_path, rc_kind, reason):
+    run_dir = tmp_path / "20260725T090000Z-Rc0001"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind=rc_kind)
+    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert payload["reason_code"] == reason, payload
+    assert "stdout_path" not in payload            # 非 ok ⇒ 输出不得进 findings 池
+
+
+def test_collect_detects_a_stdout_digest_mismatch(job_home, fake_claude, tmp_path):
+    """terminal witness 的 digest 与实际 stdout 不符 ⇒ 证据被动过，fail-closed。"""
+    run_dir = tmp_path / "20260725T100000Z-Dig001"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="rc0_nonempty", terminal_digest="f" * 64)
+    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
+
+
+def test_collect_refuses_to_reuse_a_collected_witness_from_another_attempt(job_home, fake_claude,
+                                                                          tmp_path):
+    run_dir = tmp_path / "20260725T110000Z-Wit001"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="rc0_nonempty")
+    JOB.atomic_write_json(run_dir / "design-voice.collected.json", {
+        "schema_version": JOB.SCHEMA_VERSION, "site": "design-voice",
+        "run_id": run_dir.name, "attempt_nonce": "not-this-attempt",
+        "ok": True, "reason_code": "ok", "state": "SUCCEEDED",
+    })
+    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert payload["reason_code"] == "exec-error", payload
+
+
+# ── await ─────────────────────────────────────────────────────────────────────
+
+def test_await_waits_for_a_real_rc_and_never_early_timeouts(job_home, fake_claude, tmp_path):
+    """站点仍 RUNNING 时有界 await 不早退、不落 timeout（HAE-09 的 barrier 语义）。"""
+    run_dir = tmp_path / "20260725T120000Z-Awa001"
+    run_dir.mkdir()
+    now = time.time()
+    _seed_site(run_dir, rc_kind="absent", now=now, timeout_seconds=60)
+
+    def publish_later():
+        time.sleep(1.5)
+        _seed_site(run_dir, rc_kind="rc0_nonempty", now=time.time(), write_job=False,
+                   write_started=False)
+
+    worker = threading.Thread(target=publish_later)
+    worker.start()
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    started = time.monotonic()
+    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
+                                         "--poll-interval", "0.2"), env, timeout=60)
+    elapsed = time.monotonic() - started
+    worker.join()
+    payload = _json_stdout(proc)
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert payload["reason_code"] == "ok", payload
+    assert elapsed >= 1.4, elapsed                    # 真的等到了 rc，而不是早退
+    assert payload["waited_seconds"] >= 1.4, payload
+
+
+def test_await_exhausting_max_wait_stays_running_and_is_not_timeout(job_home, fake_claude, tmp_path):
+    run_dir = tmp_path / "20260725T130000Z-Awa002"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent", timeout_seconds=900)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    started = time.monotonic()
+    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
+                                         "--max-wait", "1", "--poll-interval", "0.2"),
+                    env, timeout=60)
+    elapsed = time.monotonic() - started
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert payload["state"] == "RUNNING", payload
+    assert payload["reason_code"] is None, payload    # 🔴 MUST NOT 落 timeout
+    assert payload["terminal"] is False
+    assert 1 <= elapsed < 20, elapsed
+
+
+def test_await_declares_lost_after_started_plus_timeout_plus_grace(job_home, fake_claude, tmp_path):
+    run_dir = tmp_path / "20260725T140000Z-Awa003"
+    run_dir.mkdir()
+    now = time.time()
+    _seed_site(run_dir, rc_kind="absent", now=now, dispatched_ago=1000,
+               started_ago=1 + JOB.AWAIT_GRACE_SECONDS + 1, timeout_seconds=1)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    started = time.monotonic()
+    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
+                                         "--poll-interval", "0.2"), env, timeout=60)
+    elapsed = time.monotonic() - started
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
+    assert elapsed < 20, elapsed                      # 有界：不等满 900 秒
+
+
+def test_await_returns_immediately_when_the_job_is_gone(job_home, fake_claude, tmp_path):
+    """supervisor/job 丢失不是 timeout，且 MUST NOT 等满 timeout。"""
+    run_dir = tmp_path / "20260725T150000Z-Awa004"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent", timeout_seconds=900)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
+    started = time.monotonic()
+    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice"), env, timeout=60)
+    elapsed = time.monotonic() - started
+    payload = _json_stdout(proc)
+    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
+    assert payload["reason_code"] != "timeout"
+    assert elapsed < 20, elapsed
+
+
+def test_await_on_a_bare_reservation_does_not_spin_forever(job_home, fake_claude, tmp_path):
+    """RESERVED（unknown-cost）永远不会自行到达终态 ⇒ 有界 await MUST 立即返回交给 reconcile。"""
+    run_dir = tmp_path / "20260725T160000Z-Awa005"
+    run_dir.mkdir()
+    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
+    started = time.monotonic()
+    proc = _run_job(job_home, _site_args("await", run_dir), _env(fake_claude), timeout=60)
+    elapsed = time.monotonic() - started
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert payload["state"] == "RESERVED"
+    assert payload["unknown_cost"] is True
+    assert elapsed < 20, elapsed
+
+
+@pytest.mark.parametrize("timeout", ["0", "3601", "abc", "-1"])
+def test_await_rejects_out_of_range_timeout(job_home, fake_claude, tmp_path, timeout):
+    """超时上限复用既有 async timeout 配置项的合法范围 1..3600（越界即拒）。"""
+    run_dir = tmp_path / "20260725T170000Z-Awa006"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
+                                         "--timeout", timeout), _env(fake_claude), timeout=60)
+    assert proc.returncode != 0
+
+
+def test_await_default_upper_bound_comes_from_job_metadata_timeout(job_home, fake_claude, tmp_path):
+    """默认上界取 dispatch 时记进 job.json 的 `timeout_seconds`（= 既有 async 配置项的值），
+    MUST NOT 在本 helper 里另造一份 config 解析。"""
+    run_dir = tmp_path / "20260725T180000Z-Awa007"
+    run_dir.mkdir()
+    now = time.time()
+    _seed_site(run_dir, rc_kind="absent", now=now, dispatched_ago=1000, started_ago=940,
+               timeout_seconds=JOB.DEFAULT_TIMEOUT_SECONDS)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    # started_ago=940 > 900+30 ⇒ 默认上界（900）已越，立即 LOST
+    payload = _json_stdout(_run_job(job_home, _site_args("await", run_dir), env, timeout=60))
+    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
+    assert payload["timeout_seconds"] == JOB.DEFAULT_TIMEOUT_SECONDS
+
+
+def test_default_timeout_and_range_are_the_single_shared_constants():
+    """默认 900、范围 1..3600 —— 与 dispatch 共用同一组常量，不新增第二份口径。"""
+    assert JOB.DEFAULT_TIMEOUT_SECONDS == 900
+    assert (JOB.MIN_TIMEOUT_SECONDS, JOB.MAX_TIMEOUT_SECONDS) == (1, 3600)
+    assert JOB.AWAIT_GRACE_SECONDS == 30
+
+
+# ── dispatch → worker → await → collect 全链（离线，无真 claude）──────────────
+
+def test_dispatch_worker_await_collect_end_to_end_offline(fake_job_home, fake_claude, repo):
+    """本票的端到端接缝：Task 1 真写出来的盘面，MUST 能被 Task 2 的 await/collect 认。"""
+    env = _env(fake_claude, {
+        "FAKE_CLAUDE_BG_MODE": "run",
+        "FAKE_CLAUDE_JOB_ID": "abc12345",
+        "FAKE_HELPER_MARKER": "e2e",
+        "FAKE_HELPER_SLEEP": "1",
+    })
+    proc = _run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env)
+    assert proc.returncode == 0, proc.stderr
+
+    awaited = _json_stdout(_run_job(fake_job_home,
+                                    _site_args("await", repo["run_dir"], "design-voice",
+                                               "--poll-interval", "0.2"),
+                                    env, timeout=120))
+    assert awaited["reason_code"] == "ok", awaited
+    collected = _json_stdout(_run_job(fake_job_home,
+                                      _site_args("collect", repo["run_dir"]), env, timeout=60))
+    assert collected["ok"] is True, collected
+    assert collected["runner"] == "claude" and collected["model"] == "opus"
+    assert collected["effort"] == "high"
+    assert collected["duration_seconds"] >= 0
+    assert collected["stdout_sha256"] == hashlib.sha256(
+        (repo["run_dir"] / "design-voice.stdout").read_bytes()).hexdigest()
