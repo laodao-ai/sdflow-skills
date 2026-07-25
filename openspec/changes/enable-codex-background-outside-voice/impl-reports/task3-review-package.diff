@@ -1,0 +1,1858 @@
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task3-reconcile-cleanup.md b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task3-reconcile-cleanup.md
+new file mode 100644
+index 0000000..b0d694e
+--- /dev/null
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task3-reconcile-cleanup.md
+@@ -0,0 +1,156 @@
++# Task 3 实现报告 — 中断恢复与 identity-safe 清理
++
++**票**：Task 3（R-ID: OVBG-03, OVBG-05）· **Blocked-by**: 2（HEAD 起点 `7dd071e`）
++**改动文件**：`sdflow-init/assets/hack/outside-voice-job.py`（+~530 行）·
++`sdflow-init/tests/test_outside_voice_job.py`（+~520 行，245 → 283 条）
++
++## 做了什么
++
++在 Task 1/2 已有的盘面之上加两个子命令，并把 Task 2 双轴审留下的三条硬交接落地：
++
++| 新增 | 角色 |
++|---|---|
++| `cleanup --run-dir --site [--cancel] [--subtree-wait]` | **单站点 identity-safe 清理**：四项 identity 重新核验 → 分支到 `rm` / `stop→子树核验→rm` / 拒绝 / orphan warning |
++| `reconcile --run-dir <exact> [--site] [--subtree-wait]` | **abandoned run 的显式恢复入口**：站点只从本 run-dir 自己的 metadata 枚举，先 collect 落袋再决定清不清 |
++| `probe_subtree` / `wait_subtree_exited` | worker + inner child 进程子树的**三值**核验（exited / alive / unverifiable） |
++| `verify_identity` / `load_roster` | canonical id · repo · site · attempt 四项交叉核验（盘面 witness + roster 命令串两个独立信号源） |
++| `_lost()` | LOST 的**唯一**构造口，三条产生路径共用 ⇒ `unknown_cost` / `orphan_warning` 不会漏翻某一条 |
++| `run_collect()` | 从 `cmd_collect` 抽出的核心，CLI 与 reconcile 共用**同一条**实现路径（不长第二份） |
++
++### 关键设计判断（含与 spec 的对照）
++
++1. **`unknown_cost` 的翻转点放在纯派生层，子树探针放在 cleanup 层。**
++   `derive_status` 保持「盘面 + liveness 纯派生」不变（不引入进程探针，笛卡尔表仍确定性）；
++   LOST 的定义就是「rc 缺席 ⇒ 无 terminal witness」⇒ **纯派生阶段没有任何证据能证明子树已退出**
++   ⇒ 一律 fail-closed 翻 `unknown_cost=true` + `orphan_warning`。**解闸的唯一途径**是
++   `cleanup`/`reconcile` 真去探进程树，核验通过后返回 `fallback_allowed=true`。
++   这与 OVBG-03 原文一一对应：「只有在 identity 与子树退出**均可核验**时才 SHALL 停止/移除
++   已知 job 并归约为 exec-error；无法证明子树已退出时 SHALL 标记 unknown-cost/orphan-warning
++   并抑制自动 fallback」。
++
++2. **子树核验用「pid + 进程组 + terminal witness」三段，不改 worker 的 spawn 语义。**
++   曾考虑让 worker `os.setsid()` 以保证 `pgid == pid`（让 killpg 永远是精确的子树信号）——
++   **否掉了**：那会让 worker 脱离 supervisor 的进程组，`claude stop` 很可能就杀不到它，
++   等于为了让核验好看而把 OVBG-05 的 stop 路径打断。改为**诚实三值**：组长时 killpg 是直接
++   答案；非组长时退到 terminal witness（`subprocess.call` 同步 ⇒ 走到发布点意味着 child 已被
++   wait 回收）；两者都没有 ⇒ `unverifiable`，落 orphan warning。**「不可证」不折算成「已退出」。**
++
++3. **`verify_identity` 的判据是「有没有矛盾」，不是「有没有全部拿到肯定答案」。**
++   真机上 `state="done"` 的 roster 条目**没有 `name` 字段**（Task 1 实测），若要求四项都
++   positively verified，正常完成的 job 就永远 `rm` 不掉——那会把「不猜目标」写成「什么也别做」。
++   故 `unavailable`（信号缺席）不阻塞，`fail`（信号相互矛盾）一票否决，且 `canonical-id`
++   额外要求**唯一命中**才放行破坏性调用。
++
++4. **`--run-dir` 是 `required=True`，全脚本没有任何「找最新 run」的代码路径。**
++   站点枚举只走 `discover_sites()`（只 `os.listdir` 本 run-dir 的 `*.job.json` / `*.reserve`），
++   **不**从 supervisor roster 反向取站点——那会碰到未持有 metadata 的他人 job。
++
++5. **`probe_liveness` 加 repo 交叉核验（`expect_cwd`），矛盾时降级为 `unavailable` 而非 `missing`。**
++   `missing` 属 `LIVENESS_TERMINAL`，会把还在飞的合法 worker 当场判 LOST；cwd 对不上只说明
++   「这条探针没有判别力」，MUST NOT 拿它触发降级。
++
++6. **清理闸门按 `PENDING_STATES` 划，不按 `!= LOST` 划**（实现中途自查改掉的一处）。
++   终态但无可用 rc 的形态不止 LOST——rc 不可解析的 `CORRUPT` 同样永远等不到 rc。写成
++   `!= LOST` 会把它报成「站点仍在飞」（一句假话），并让那个 job 被永久挂起：既不清理，
++   也永远等不到终态。锚：`test_reconcile_treats_a_terminal_but_rc_less_corrupt_site_as_cleanup_not_pending`
++   （反向变异回 `!= LOST` ⇒ **RED**）。
++
++## 每条验收标准的机械锚
++
++| # | 验收标准 | 机械锚 |
++|---|---|---|
++| 1 | 外层 await 被回收后，同一主评审 session 用保留的 exact job/run-dir 恢复 collect，结果不丢且不重新派发 | `test_reclaimed_await_recovers_by_collect_without_a_second_dispatch` —— 真 dispatch → `await --max-wait 0.3` 被回收（`terminal is False`）→ worker 继续跑到 rc → `collect` 拿到 SUCCEEDED + 真实 stdout；**锚 = `len(_bg_invocations(fake_claude)) == 1`**（fake `claude` 的调用日志，非实现自述） |
++| 2 | 评审 session 整体丢失时禁止扫描「最新目录」，只接受显式 `reconcile --run-dir` | `test_reconcile_requires_an_explicit_run_dir`（无 `--run-dir` ⇒ exit 2）+ `test_reconcile_never_reaches_into_a_sibling_or_newer_run_dir`（两个同级 run，**站点名刻意不同**；断言 sites 列表、`_destructive` 只含旧 run 的 id、新 run 的 id 全日志零出现）+ `test_reconcile_ignores_supervisor_jobs_it_holds_no_metadata_for`（roster 3 个 job，只动持有 metadata 的那 1 个） |
++| 3 | terminal 结果**已 collect 后**才清理 roster；`status/stop/rm` 前重新核验 canonical id / repo / site / attempt，核验失败只告警不猜目标 | 顺序：`test_cleanup_refuses_to_remove_a_terminal_site_before_it_was_collected`（`state="not-collected"` + `_destructive == []`）· `test_cleanup_removes_a_collected_terminal_site_from_the_roster`（`_destructive == [("rm","75d34378")]`）。identity：`test_cleanup_refuses_every_destructive_call_when_identity_does_not_verify` **5 参数化**（repo 不符 / id 不唯一 / 命令串 site 不符 / 命令串 nonce 不符 / 盘面 witness 属另一 attempt）—— **五格全断言 `_destructive(fake_claude) == []`**。status 侧：`test_status_liveness_probe_degrades_when_the_roster_entry_belongs_to_another_repo` + 正向对照 `..._accepts_a_roster_entry_whose_cwd_matches_repo_root` |
++| 4 | 取消/失联按 `stop → 核验子树已退出 → rm`；不可证时落 orphan warning 并抑制自动 fallback | `test_cleanup_cancel_order_is_stop_then_subtree_verification_then_rm` —— **真起一个被 init 收养的进程**当 worker identity，fake `claude stop` 真把它杀掉；断言 `_destructive == [("stop", id), ("rm", id)]`（顺序）+ `subtree == "exited"` + `fallback_allowed is True`。负向三条：`..._when_the_subtree_survives_stop`（真活进程 ⇒ `orphan-warning` / `removed False` / `unknown_cost True` / `fallback_allowed False` / `_destructive == [("stop", id)]`）· `..._when_the_subtree_exit_cannot_be_proven`（无 started witness ⇒ `unverifiable`）· `test_cleanup_does_not_rm_when_stop_itself_failed` |
++| 5 | 清理失败不改写已取得的 rc、不删除本轮 run-dir 审计证据 | `test_cleanup_failure_never_rewrites_the_rc_or_deletes_run_dir_evidence` —— `FAKE_CLAUDE_RM_MODE=fail`，断言 **run-dir 全部文件的字节内容逐一不变**（`after == before` 的 dict 比较），且清理失败后再 collect 仍是 `(True, "SUCCEEDED")`（已成功的 findings 不被改判） |
++
++进程探针本身对**真内核**取答案：`test_pid_and_pgid_probes_answer_from_the_real_kernel`
++（活进程 / 确定已死的 pid / 非法输入三值）+ `test_probe_subtree_*` 四条（alive / exited /
++unverifiable-无 witness / 共用进程组两分支）。
++
++## 三条硬交接的落地位置
++
++| 交接（来自 `task2-review.md`） | 落地 |
++|---|---|
++| ① **LOST 路径 MUST 翻 `unknown_cost` / orphan-warning**，否则 Task 5 无可 gate 的字段 | `_lost()`（`outside-voice-job.py`，LOST 的唯一构造口）+ `_status_payload` 新增 `orphan_warning` 键。锚：`test_every_lost_verdict_flags_unknown_cost_and_an_orphan_warning`（**三条 LOST 产生路径逐条**：liveness 终态 / startup deadline / started+timeout+grace）+ 正向对照 `test_states_other_than_lost_and_reserved_never_raise_a_false_orphan_warning`（防「全都标 orphan」的假绿）。**Task 5 的 gate 字段 = `unknown_cost`**，模块 docstring 已把这条写进契约单一源 |
++| ② `<site>.collected.json` 是第 6 个 sidecar，reconcile 需知其存在（terminal 已 collect 过可直接 `rm`） | `run_cleanup()` 用 `load_collected(...)[0] == "ok"` 作为 `rm` 的前置闸；已 collect ⇒ 直接 `rm`（不 stop）。锚：`test_cleanup_removes_a_collected_terminal_site_from_the_roster`（`stopped is False`, `removed is True`） |
++| ③ 无 rc 的终态不再冻结 ⇒ **这正是留给 reconcile 修正的面** | `reconcile_site()` 的第一步就是「rc 已发布就 `run_collect`（幂等）」，先落袋再谈清理。锚：`test_reconcile_recovers_a_result_that_landed_after_a_lost_verdict` —— 先 collect 判 LOST（`collected.json` 不落盘），worker 随后真发布 rc=0，reconcile 拿到 `SUCCEEDED` 且落盘的 digest 等于**新** stdout 的 sha256 |
++
++## 反向变异实测（判据不是「新增了测试」，是「改错了会不会红」）
++
++在隔离副本上把实现改回错误形态逐条跑（仓内文件零残留，每轮跑完 `cp` 还原；脚本
++`scratchpad/mut.py` / `mut2.py`）：
++
++| # | 变异 | 结果 |
++|---|---|---|
++| M1 | `_lost` 不翻 `unknown_cost`/`orphan_warning` | **RED**（1 failed） |
++| M2 | 子树「不可证」当「已退出」 | **RED**（3 failed） |
++| M3 | `verify_identity` 的 `failed` 恒空（永远放行） | **RED**（4 failed / 1 passed，见下） |
++| M4 | 未 collect 也 `rm` | **RED** |
++| M5 | 子树仍存活也 `rm` | **RED** |
++| M6 | `discover_sites` 顺带扫父目录（= 摸到「最新 run」） | 初版 **绿 → 已修测试** → **RED**（见下） |
++| M7 | `probe_liveness` 忽略 repo 交叉核验 | **RED** |
++| M8 | reconcile 跳过 collect 直接清理 | **RED**（2 failed） |
++| M9 | 未到 deadline 的在飞站点也被 stop | **RED** |
++| M10 | `stop` 失败后仍继续 `rm` | **RED** |
++| M11 | `_status_payload` 默认 `unknown_cost=True`（「全标 orphan」的假绿形态） | **RED** |
++| M12 | `probe_subtree` 恒返回 `unverifiable`（反方向） | **RED**（3 failed） |
++| M13 | `discover_sites` 只返回第一个站点 | **RED** |
++| M14 | 清理失败时删掉 `collected.json` 证据 | **RED** |
++| M15 | roster 已无此 job 时仍走 `rm`（幂等路径消失） | **RED** |
++| M16 | 清理闸门写回 `state != LOST`（CORRUPT 被报成「仍在飞」） | **RED** |
++
++**M6 是本轮唯一真被照出来的测试缺陷**：初版 `test_reconcile_never_reaches_into_a_sibling_...`
++把两个 run dir 的站点都写成 `design-voice` ⇒ 「扫了父目录」与「没扫」产出**同一份**站点集合
++（`set` 去重），断言恒真。已改成 sibling 用 `hr-tg`，变异复跑 **RED**。测试 docstring 里
++写明了这条陷阱，防后来者改回同名。
++
++**M3 的那 1 个幸存者**是 `duplicate-id` 参数格：它被 `verify_identity` 的**第二道**闸
++（`canonical-id` 必须唯一命中）挡住，属**冗余防御**而非漏洞——已单独 `-v` 复跑确认幸存者
++就是它，另外 4 格全红。
++
++## 测试结果
++
++- 本文件：`/usr/bin/python3 -m pytest sdflow-init/tests/test_outside_voice_job.py -q`
++  → **283 passed in 82.01s**（基线 245，新增 38）
++- 全量：`/usr/bin/python3 -m pytest -q`
++  → **2433 passed, 8 skipped, 3 xfailed in 232.00s**
++  （基线 2395 passed / 8 skipped / 3 xfailed，增量恰为新增的 38 条，**零回归**）
++
++## 未做 / 降级项（如实报告）
++
++1. **`status` 未接入完整的四项 identity 核验，只加了 repo 维度的交叉核验。**
++   依据：`design.md` 原文是「任何 `status/stop/rm` 在**破坏性操作前**都必须重新核验」——
++   `status` 不做任何破坏性操作，且它已在**每一次**派生里重新核验盘面 identity
++   （`load_witness` 逐个核 site / run_id / attempt nonce，Task 2 已有锚）。本票补上的是
++   缺失的 repo 维度（`probe_liveness(expect_cwd=…)`）。**若评审认为 spec 要求 `status`
++   也走完整四项（含每次拉 roster 交叉核验 site/nonce），这是一处可判缺口**——代价是每次
++   `status`/每轮 `await` 都多一次 `claude agents` 冷启动，与 Task 2 刚修的「liveness 探针
++   独立节流」直接冲突，故没有自作主张扩大。
++2. **`test_probe_subtree_reports_alive_when_the_group_still_holds_a_child` 用 monkeypatch，
++   不是真进程。** 真实构造「组长已死但组内仍有活口」需要一个仍以死者 pid 为 pgid 的活进程，
++   本机无法确定性摆出来。两个 syscall 探针本身对真内核有独立锚
++   （`test_pid_and_pgid_probes_answer_from_the_real_kernel`），此处只钉判定逻辑。诚实降级。
++3. **`_dead_pid()` 存在极低概率的 pid 回绕误差**（拿到的 pid 在断言前被系统复用）。已做
++   `PermissionError → pytest.skip` 的兜底；进一步完美化（pid namespace / 进程句柄）成本
++   远高于收益，按④简化不做。
++4. **本票范围外未动**：`outside-voice.sh` 的 isolation flags 与 `claude logs` canary（Task 4）·
++   `setup.sh` 安装快照与两份评审 SKILL 的调度段（Task 5）· 真实 efficacy（Task 6）。
++   `superpowers-plan.md` 复选框**未勾**、未打 `task3-` 完成标签、`proposal/design/specs/tasks.md`
++   **零改动**（`git status` 亲验：本次只改两个文件）。
++
++## Concerns（交给编排层裁决）
++
++- **C1（Task 5 必读）**：`unknown_cost=true` 现在会出现在**每一个** LOST 站点上，而 Task 2
++  之前 LOST 是「直接 exec-error + 允许 fallback」。⇒ **Task 5 的 SKILL 侧分支必须显式处理
++  `unknown_cost`**：命中即 MUST NOT 自动同族 fallback，改为报出 orphan warning + 提示跑
++  `cleanup --cancel`。若 Task 5 沿用旧的「LOST ⇒ fallback」写法，本票的抑制就被绕过去了。
++  这是 spec 要求的行为变化，不是回归。
++- **C2**：`cleanup` 的 `rm` 前会**再拉一次** roster 做第二次 identity 核验（`stop` 前一次、
++  `rm` 前一次），单次 cleanup 最多 3 次 `claude agents` 冷启动（~0.5s）。取消路径是低频
++  人工动作，没有做缓存；若 Task 6 真机实测嫌慢，可把两次核验合并为一次（代价：stop 与 rm
++  之间 roster 变化窗口不再被覆盖）。
++- **C3（继承 Task 2 的 T217）**：`parse_utc_iso` 的宽 `except Exception` 吞噬面仍在，本票
++  新增的 `probe_subtree` / `verify_identity` 都调用了 `load_witness`（其内部依赖它）。
++  未在本票扩大修复范围（属既有 defer 项）。
+diff --git a/sdflow-init/assets/hack/outside-voice-job.py b/sdflow-init/assets/hack/outside-voice-job.py
+index 6c3803f..e1a713e 100644
+--- a/sdflow-init/assets/hack/outside-voice-job.py
++++ b/sdflow-init/assets/hack/outside-voice-job.py
+@@ -62,6 +62,34 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代
+             runner/model/effort、stdout digest/bytes/lines、stderr bytes/lines）
+     exit 0=ok | 1=其他（含未终态） | 2=usage-error
+ 
++  cleanup --run-dir <d> --site <s> [--cancel] [--timeout <n>] [--subtree-wait <f>]
++    **identity-safe** 的单站点清理。任何破坏性调用（`claude stop` / `claude rm`）之前
++    都**重新核验** canonical job id、repo、site 与 attempt identity 四项；任一项出现
++    **矛盾** ⇒ 只告警、零破坏性调用（MUST NOT 猜测并操作其他 job）。
++      · 终态（rc 已发布）且**已 collect** ⇒ 直接 `rm`；未 collect ⇒ 拒绝（`not-collected`）
++      · 在飞站点 ⇒ 拒绝（`still-running`），除非显式 `--cancel`
++      · LOST / `--cancel` ⇒ `stop` → **核验 worker 与 inner child 子树已退出** → `rm`
++        子树不可证 ⇒ `orphan-warning`：**不 rm**、`unknown_cost=true`、
++        `fallback_allowed=false`（禁止叠加费用的自动 fallback）
++    清理失败**不改写**已取得的 rc、不删除 run-dir 的本轮审计证据、不把已成功的
++    findings 改判失败。`--subtree-wait` 是子树核验的有界轮询上限（默认 5 秒）。
++    stdout: 单行 JSON {ok,state,stopped,removed,subtree,orphan_warning,unknown_cost,
++            fallback_allowed,identity,…}
++    state ∈ removed | stopped-removed | absent | not-collected | still-running |
++            orphan-warning | identity-unverified | cleanup-failed
++    exit 0=已清理/无需清理 | 1=未清理（看 orphan_warning） | 2=usage-error
++
++  reconcile --run-dir <d> [--site <s>] [--subtree-wait <f>]
++    **abandoned run 的显式恢复入口**。`--run-dir` 是必填的：整个脚本**没有**
++    「找最新 run」的代码路径 —— 评审 session 整体丢失时 MUST NOT 扫描目录猜恢复目标。
++    站点只从**本 run-dir 自己的** `<site>.job.json` / `<site>.reserve` 枚举，
++    MUST NOT 从 supervisor roster 反向取站点（那会碰到未持有 metadata 的他人 job）。
++    每站点：终态 → collect（结果不丢）→ cleanup rm；超 deadline 的活动 → stop/子树核验/rm；
++    未到 deadline 的在飞 → 只报 pending 不动它；残留 reserve → `manual-cleanup-required`
++    （unknown-cost：MUST NOT 自动重派、MUST NOT 删 reserve）。
++    stdout: 单行 JSON {ok,run_dir,sites:[…],orphan_warnings:[…],unknown_cost_sites:[…]}
++    exit 0=全部无残留 | 1=有 orphan/unknown-cost/identity 未核验 | 2=usage-error
++
+   version
+     stdout: "outside-voice-job.py <ver>"                       exit 0
+ 
+@@ -77,6 +105,14 @@ OVBG-02 要求 collect 幂等返回**首次** `collected_at` ⇒ 跨进程只能
+   reason_code ∈ ok | timeout | secret-hit | exec-error | null（null = 未终态，不可收集）
+   `ok` ⟺ reason_code == "ok" ⟺ exit 0。**任何 pending/lost/corrupt 组合恒不产出 ok。**
+ 
++  🔴 `unknown_cost` / `orphan_warning`（调用方的 fallback 闸门，OVBG-03/OVBG-05）：
++  `unknown_cost=true` ⇒ **MUST NOT 自动同族 fallback**——外部 job 可能仍在跑（已计费），
++  再派一次就是双倍付费。它出现在两类站点上：
++    · `RESERVED`（dispatch accepted 但 metadata 未发布，成本未知）
++    · **一切 `LOST`**（rc 缺席 ⇒ 盘面上没有 terminal witness ⇒ 子树是否退出**未经核验**）
++  解闸的**唯一**途径是 `cleanup` / `reconcile`：它们真去探进程树，核验通过（identity ✅ +
++  子树确已退出 + stop/rm 成功）后返回 `fallback_allowed=true`。
++
+   ⚠️ **exit 2（usage-error）的 payload 不是这个形状**：入参本身非法（site 名 / run-dir /
+   timeout 越界）时走 reject 形状 `{ok:false, state:"usage-error", reason_code:"exec-error",
+   fallback_allowed:false, detail}` —— **没有 `terminal` / `rc` / 时刻等派生字段**。
+@@ -441,6 +477,13 @@ def _no_control_chars(value):
+     return "\n" not in value and "\r" not in value and "\0" not in value
+ 
+ 
++def _same_path(a, b):
++    try:
++        return os.path.realpath(str(a)) == os.path.realpath(str(b))
++    except OSError:
++        return False
++
++
+ def _within(child, parent):
+     child = os.path.realpath(child)
+     parent = os.path.realpath(parent)
+@@ -1073,12 +1116,17 @@ def read_rc(run_dir, site):
+     return (True, int(text), raw)
+ 
+ 
+-def probe_liveness(job_id, claude_bin=None):
++def probe_liveness(job_id, claude_bin=None, expect_cwd=None):
+     """一次 `claude agents --all --json`，按 **id** 通道定位本 job 的 state。
+ 
+     🔴 MUST 走 id 而非 name：真机实测 `state="done"` 的 background 条目**没有 `name` 字段**
+     （Task 1 已独立核实）——只认 name 的探针会把每一个已完成的 job 报成 missing。
+     任何取不到答案的情形一律返回 `unavailable`（探不到 ≠ 丢了，见 LIVENESS_TERMINAL 注释）。
++
++    `expect_cwd`（= job metadata 的 repo_root）是 **repo 维度的重新核验**（OVBG-02）：
++    id 命中但 cwd 指向另一个仓 ⇒ 那不是我们的 job。此时**降级为 `unavailable` 而非
++    `missing`**：`missing` 属 LIVENESS_TERMINAL，会把一个还在飞的合法 worker 当场判 LOST；
++    而 cwd 对不上只说明「这条探针没有判别力」，MUST NOT 拿它触发降级。
+     """
+     claude_bin = claude_bin or shutil.which("claude")
+     if not claude_bin or not job_id:
+@@ -1095,6 +1143,8 @@ def probe_liveness(job_id, claude_bin=None):
+         return LIVENESS_UNAVAILABLE
+     for item in data:
+         if isinstance(item, dict) and str(item.get("id") or "") == str(job_id):
++            if expect_cwd and item.get("cwd") and not _same_path(item["cwd"], expect_cwd):
++                return LIVENESS_UNAVAILABLE
+             state = str(item.get("state") or "").strip().lower()
+             return state or LIVENESS_UNAVAILABLE
+     return "missing"
+@@ -1108,6 +1158,9 @@ def _status_payload(state, reason_code, detail, **extra):
+         "reason_code": reason_code,
+         "detail": detail,
+         "unknown_cost": False,
++        # 子树退出未经核验时的可读告警（null = 无告警）。与 unknown_cost 同生同灭：
++        # 调用方 gate 的是 unknown_cost，人读的是这一条。
++        "orphan_warning": None,
+         "liveness": None,
+         "rc": None,
+         "run_id": None,
+@@ -1129,6 +1182,27 @@ def _status_payload(state, reason_code, detail, **extra):
+     return payload
+ 
+ 
++ORPHAN_WARNING_TEMPLATE = (
++    "%s —— worker 与 inner child 的子树是否退出**未经核验**，成本未知：MUST NOT 自动同族 "
++    "fallback（会在一次已计费的 voice 上再叠一次）。先跑 "
++    "`outside-voice-job.py cleanup --run-dir %s --site %s --cancel` "
++    "（identity 核验 → stop → 子树终止核验 → rm）；核验通过后才可 fallback。")
++
++
++def _lost(detail, run_dir, site, base):
++    """LOST 的**唯一**构造口 —— 三条产生路径共用，别再各写各的。
++
++    OVBG-03：「无法证明子树已退出时 SHALL 标记 unknown-cost/orphan-warning 并抑制自动
++    fallback」。LOST 的定义就是 rc 缺席 ⇒ 盘面上没有 terminal witness ⇒ **纯派生阶段
++    根本没有任何证据能证明子树已退出**。因此这里一律 fail-closed 翻 `unknown_cost`；
++    解闸只能靠 cleanup/reconcile 真去探进程树（`probe_subtree`）。
++    """
++    payload = dict(base)
++    payload["unknown_cost"] = True
++    payload["orphan_warning"] = ORPHAN_WARNING_TEMPLATE % (detail, run_dir, site)
++    return _status_payload(STATE_LOST, REASON_EXEC_ERROR, detail, **payload)
++
++
+ def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
+                   timeout_override=None, _rechecked=False):
+     """从盘面 + liveness **纯派生**当前归类。不写任何文件、不做任何破坏性动作。
+@@ -1154,10 +1228,12 @@ def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
+         return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, detail, **base)
+     if kind == "absent":
+         if os.path.isfile(reserve_path(run_dir_real, site)):
++            reserved_detail = ("存在 reservation 但无 job metadata —— 成本未知，"
++                               "只允许显式 reconcile/人工 cleanup")
+             return _status_payload(
+-                STATE_RESERVED, None,
+-                "存在 reservation 但无 job metadata —— 成本未知，只允许显式 reconcile/人工 cleanup",
+-                unknown_cost=True, **base)
++                STATE_RESERVED, None, reserved_detail, unknown_cost=True,
++                orphan_warning=ORPHAN_WARNING_TEMPLATE % (reserved_detail, run_dir_real, site),
++                **base)
+         return _status_payload(STATE_MISSING, REASON_EXEC_ERROR, detail, **base)
+ 
+     timeout_seconds = timeout_override if timeout_override is not None \
+@@ -1217,7 +1293,8 @@ def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
+                                "helper 非零退出 rc=%d" % rc_value, **base)
+ 
+     if liveness is None:
+-        liveness = probe_liveness(job["job_id"], claude_bin=claude_bin)
++        liveness = probe_liveness(job["job_id"], claude_bin=claude_bin,
++                                  expect_cwd=job.get("repo_root"))
+     base["liveness"] = liveness
+     if liveness in LIVENESS_TERMINAL:
+         # 极窄竞态：worker 先发布 rc 再退出，但文件可见性可能滞后于 agent state 翻转
+@@ -1228,26 +1305,23 @@ def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
+             return derive_status(run_dir_real, site, liveness=liveness, now=now,
+                                  claude_bin=claude_bin, timeout_override=timeout_override,
+                                  _rechecked=True)
+-        return _status_payload(
+-            STATE_LOST, REASON_EXEC_ERROR,
++        return _lost(
+             "supervisor job 已终结（state=%s）但 rc 缺席 —— 判 exec-error，"
+-            "MUST NOT 冒充 timeout" % liveness, **base)
++            "MUST NOT 冒充 timeout" % liveness, run_dir_real, site, base)
+ 
+     if started_kind != "ok":
+         startup_deadline = parse_utc_iso(job["startup_deadline_at"])
+         if startup_deadline is not None and now > startup_deadline:
+-            return _status_payload(
+-                STATE_LOST, REASON_EXEC_ERROR,
++            return _lost(
+                 "startup deadline（%s）已过仍无 started sidecar" % job["startup_deadline_at"],
+-                **base)
++                run_dir_real, site, base)
+         return _status_payload(STATE_STARTING, None,
+                                "已 dispatch，等待 worker 发布 started sidecar", **base)
+ 
+     if started_epoch is not None and now > started_epoch + timeout_seconds + AWAIT_GRACE_SECONDS:
+-        return _status_payload(
+-            STATE_LOST, REASON_EXEC_ERROR,
++        return _lost(
+             "自可信 started_at 起算已超过 timeout(%d)+grace(%d) 仍无 rc"
+-            % (timeout_seconds, AWAIT_GRACE_SECONDS), **base)
++            % (timeout_seconds, AWAIT_GRACE_SECONDS), run_dir_real, site, base)
+     return _status_payload(STATE_RUNNING, None, "worker 在飞，未到终态", **base)
+ 
+ 
+@@ -1345,6 +1419,500 @@ def build_collect_payload(status):
+     return payload
+ 
+ 
++# ── 进程子树核验（cleanup / reconcile 专用；只读探针，无破坏性动作）───────────
++
++SUBTREE_EXITED = "exited"
++SUBTREE_ALIVE = "alive"
++SUBTREE_UNVERIFIABLE = "unverifiable"
++
++# 子树核验的有界轮询上限（秒）。stop 之后进程死透需要一点时间，但这不是无界等待。
++SUBTREE_VERIFY_SECONDS = 5.0
++SUBTREE_VERIFY_INTERVAL_SECONDS = 0.2
++
++
++def _pid_alive(pid):
++    """→ True 存活 / False **确定**不存在 / None 不可判定。
++
++    三值而非布尔是关键：`PermissionError`（pid 已被别的用户复用）与「确定不存在」
++    在语义上完全相反，压成布尔就会把「不知道」当成「已退出」，正是 OVBG-05 要杀的形态。
++    """
++    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
++        return None
++    try:
++        os.kill(pid, 0)
++        return True
++    except ProcessLookupError:
++        return False
++    except (PermissionError, OSError):
++        return None
++
++
++def _pgid_alive(pgid):
++    """整个进程组是否还有存活成员。三值语义同 `_pid_alive`。"""
++    if isinstance(pgid, bool) or not isinstance(pgid, int) or pgid <= 0:
++        return None
++    try:
++        os.killpg(pgid, 0)
++        return True
++    except ProcessLookupError:
++        return False
++    except (PermissionError, OSError):
++        return None
++
++
++def probe_subtree(run_dir, site, job):
++    """核验 **worker 与 inner child** 的进程子树是否确已退出。→ (verdict, detail)
++
++    verdict ∈ exited | alive | unverifiable。**「不可证」不等于「已退出」**——
++    OVBG-05 要求「子树终止不可证时落 orphan warning 并抑制自动 fallback」。
++
++    判定顺序（每一步都有确定性信号，无信号即降级为 unverifiable）：
++      ① started witness 里的 worker identity —— 没有它就没有可核验的对象。
++      ② worker pid 本体：存活 ⇒ alive；不可判定 ⇒ unverifiable。
++      ③ worker pid 已不在，再问 inner child：
++         · `pgid == pid`（worker 是组长）⇒ 该进程组恰好圈住 worker 及其未 setsid 的
++           全部后代（worker → bash helper → claude 都是同步 fork，不换组）⇒
++           `killpg(pgid, 0)` 就是「子树是否还有活口」的**直接**答案。
++         · `pgid != pid`（组与 supervisor 共用）⇒ killpg 无判别力。退到盘面信号：
++           terminal witness 存在 ⟺ worker 自己走到了发布点，而 `subprocess.call` 是
++           **同步**的 ⇒ 走到那里意味着 inner child 已被 wait 回收 ⇒ exited。
++           两个信号都没有 ⇒ unverifiable（design.md「terminal witness 缺失 ⇒ orphan warning」）。
++    """
++    started_kind, started, detail = load_witness(
++        run_dir, site, ".started.json", job, "started_at")
++    if started_kind != "ok":
++        return (SUBTREE_UNVERIFIABLE,
++                "无可核验的 started witness（%s）—— 子树是否退出不可证"
++                % (detail or "sidecar 缺失"))
++    worker = started.get("worker")
++    if not isinstance(worker, dict):
++        return (SUBTREE_UNVERIFIABLE,
++                "started witness 未记录 worker process identity —— 子树是否退出不可证")
++    pid = worker.get("pid")
++    pgid = worker.get("pgid")
++
++    alive = _pid_alive(pid)
++    if alive is True:
++        return (SUBTREE_ALIVE, "worker pid=%s 仍存活" % (pid,))
++    if alive is None:
++        return (SUBTREE_UNVERIFIABLE, "worker pid=%r 的存活性不可判定" % (pid,))
++
++    if pgid == pid:
++        group = _pgid_alive(pgid)
++        if group is True:
++            return (SUBTREE_ALIVE,
++                    "worker pid=%s 已退出，但其进程组 pgid=%s 内仍有存活进程"
++                    "（inner child 未随之退出）" % (pid, pgid))
++        if group is False:
++            return (SUBTREE_EXITED,
++                    "worker pid=%s 与其进程组 pgid=%s 均已不存在" % (pid, pgid))
++        return (SUBTREE_UNVERIFIABLE, "进程组 pgid=%r 的存活性不可判定" % (pgid,))
++
++    terminal_kind, _, _ = load_witness(run_dir, site, ".terminal.json", job, "terminal_at")
++    if terminal_kind == "ok":
++        return (SUBTREE_EXITED,
++                "worker pid=%s 已发布 terminal witness 后退出 ⇒ inner child 已被同步 wait 回收"
++                % (pid,))
++    return (SUBTREE_UNVERIFIABLE,
++            "worker pid=%s 已不在，但它不是进程组长（pgid=%r，与 supervisor 共用）且无 "
++            "terminal witness ⇒ inner child 是否退出不可证" % (pid, pgid))
++
++
++def wait_subtree_exited(run_dir, site, job, max_wait=SUBTREE_VERIFY_SECONDS):
++    """有界轮询到「已退出」。alive 会等（进程正在死），unverifiable 立即返回（等不来信号）。"""
++    deadline = time.monotonic() + max(0.0, max_wait)
++    while True:
++        verdict, detail = probe_subtree(run_dir, site, job)
++        if verdict != SUBTREE_ALIVE or time.monotonic() >= deadline:
++            return (verdict, detail)
++        time.sleep(SUBTREE_VERIFY_INTERVAL_SECONDS)
++
++
++# ── identity 重新核验（**每一次破坏性调用之前**）──────────────────────────────
++
++IDENTITY_OK = "ok"
++IDENTITY_FAIL = "fail"
++IDENTITY_UNAVAILABLE = "unavailable"
++IDENTITY_ABSENT = "absent"
++
++# roster 条目的 `name` 承载完整 worker 命令串（Task 1 真机实测）。从中反查 site 与
++# attempt nonce 是**交叉**核验：盘面自证之外的第二个独立信号源。
++NAME_SITE_RE = re.compile(r"--site\s+(\S+)")
++NAME_NONCE_RE = re.compile(r"\b[0-9a-f]{32}\b")
++
++
++def load_roster(claude_bin=None):
++    """→ (entries | None, detail)。None = roster 不可得（**探不到 ≠ 不存在**）。"""
++    claude_bin = claude_bin or shutil.which("claude")
++    if not claude_bin:
++        return (None, "PATH 上找不到 claude")
++    try:
++        proc = _run_cli([claude_bin, "agents", "--all", "--json"],
++                        timeout=CLI_PROBE_TIMEOUT_SECONDS)
++    except Exception as exc:
++        return (None, "agents --all --json 调用失败: %s" % exc)
++    if proc.returncode != 0:
++        return (None, "agents --all --json 非零退出 rc=%d" % proc.returncode)
++    try:
++        data = json.loads(proc.stdout)
++    except Exception as exc:
++        return (None, "agents JSON 不可解析: %s" % exc)
++    if not isinstance(data, list):
++        return (None, "agents JSON 顶层不是 list")
++    return (data, "")
++
++
++def _check(status, detail):
++    return {"status": status, "detail": detail}
++
++
++def verify_identity(run_dir, site, job, roster):
++    """破坏性操作前重新核验 canonical id / repo / site / attempt identity 四项。
++
++    → {"ok":bool, "entry":dict|None, "checks":{…}, "detail":str}
++
++    🔴 判据是「**有没有矛盾**」，不是「有没有全部拿到肯定答案」：
++    真机上 `state="done"` 的条目**没有 `name` 字段**（Task 1 实测），若要求四项都
++    positively verified，正常完成的 job 就永远 rm 不掉——那会把「不猜目标」写成
++    「什么也别做」。故 `unavailable`（信号缺席）不阻塞，`fail`（信号相互矛盾）一票否决。
++    """
++    checks = {}
++    job_id = str(job.get("job_id") or "")
++    entry = None
++
++    if not job_id:
++        checks["canonical-id"] = _check(IDENTITY_FAIL, "job metadata 无 canonical job id")
++    elif roster is None:
++        checks["canonical-id"] = _check(IDENTITY_UNAVAILABLE,
++                                        "supervisor roster 不可得，无法重新核验 job id")
++    else:
++        hits = [item for item in roster
++                if isinstance(item, dict) and str(item.get("id") or "") == job_id]
++        if len(hits) > 1:
++            checks["canonical-id"] = _check(
++                IDENTITY_FAIL, "canonical job id=%s 在 roster 里命中 %d 个条目（不唯一）"
++                               % (job_id, len(hits)))
++        elif not hits:
++            checks["canonical-id"] = _check(IDENTITY_ABSENT,
++                                            "supervisor roster 已无 job id=%s" % job_id)
++        else:
++            entry = hits[0]
++            checks["canonical-id"] = _check(IDENTITY_OK, "job id=%s 唯一命中" % job_id)
++
++    entry_cwd = (entry or {}).get("cwd")
++    if entry is None:
++        checks["repo"] = _check(IDENTITY_UNAVAILABLE, "无 roster 条目可比对 repo")
++    elif not entry_cwd:
++        checks["repo"] = _check(IDENTITY_UNAVAILABLE, "roster 条目无 cwd 字段")
++    elif not _same_path(entry_cwd, job.get("repo_root")):
++        checks["repo"] = _check(IDENTITY_FAIL,
++                                "roster 条目的 cwd 与本 job 的 repo_root 不符: %r ≠ %r"
++                                % (entry_cwd, job.get("repo_root")))
++    else:
++        checks["repo"] = _check(IDENTITY_OK, "cwd == repo_root")
++
++    name = str((entry or {}).get("name") or "")
++    sites_in_name = NAME_SITE_RE.findall(name)
++    if job.get("site") != site:
++        checks["site"] = _check(IDENTITY_FAIL, "job metadata 的 site 与请求不符")
++    elif not sites_in_name:
++        checks["site"] = _check(IDENTITY_UNAVAILABLE,
++                                "roster 条目无可用于交叉核验 site 的命令串")
++    elif site not in sites_in_name:
++        checks["site"] = _check(IDENTITY_FAIL,
++                                "roster 命令串里的 site=%r 与本次请求 %r 不符"
++                                % (sites_in_name, site))
++    else:
++        checks["site"] = _check(IDENTITY_OK, "命令串里的 --site 与本次请求一致")
++
++    nonce = str(job.get("attempt_nonce") or "")
++    attempt_detail = []
++    attempt_status = IDENTITY_OK
++    for suffix, field in ((".started.json", "started_at"), (".terminal.json", "terminal_at")):
++        kind, _, why = load_witness(run_dir, site, suffix, job, field)
++        if kind == "corrupt":
++            attempt_status = IDENTITY_FAIL
++            attempt_detail.append(why)
++    stored_kind, _, stored_why = load_collected(run_dir, site, job)
++    if stored_kind == "corrupt":
++        attempt_status = IDENTITY_FAIL
++        attempt_detail.append(stored_why)
++    nonces_in_name = NAME_NONCE_RE.findall(name)
++    if attempt_status != IDENTITY_FAIL:
++        if nonces_in_name and nonce not in nonces_in_name:
++            attempt_status = IDENTITY_FAIL
++            attempt_detail.append("roster 命令串携带的 attempt nonce 与本 job 不符")
++        elif not nonces_in_name:
++            attempt_status = IDENTITY_UNAVAILABLE
++            attempt_detail.append("roster 条目无可用于交叉核验 attempt nonce 的命令串")
++        else:
++            attempt_detail.append("盘面 witness 与 roster 命令串的 attempt nonce 一致")
++    checks["attempt"] = _check(attempt_status, "; ".join(attempt_detail))
++
++    failed = sorted(name_ for name_, item in checks.items() if item["status"] == IDENTITY_FAIL)
++    ok = not failed and checks["canonical-id"]["status"] == IDENTITY_OK
++    if failed:
++        detail = "identity 核验矛盾: " + "; ".join(
++            "%s(%s)" % (n, checks[n]["detail"]) for n in failed)
++    elif checks["canonical-id"]["status"] == IDENTITY_ABSENT:
++        detail = checks["canonical-id"]["detail"]
++    elif checks["canonical-id"]["status"] == IDENTITY_UNAVAILABLE:
++        detail = checks["canonical-id"]["detail"]
++    else:
++        detail = "canonical id / repo / site / attempt 四项无矛盾"
++    return {"ok": ok, "entry": entry, "checks": checks, "detail": detail}
++
++
++# ── cleanup ───────────────────────────────────────────────────────────────────
++
++def claude_job_action(claude_bin, action, job_id):
++    """`claude stop|rm <id>` —— **只**接受一个已核验过的 canonical id。→ (rc|None, detail)。"""
++    if not claude_bin:
++        return (None, "PATH 上找不到 claude，无法执行 %s" % action)
++    try:
++        proc = _run_cli([claude_bin, action, job_id], timeout=CLI_PROBE_TIMEOUT_SECONDS)
++    except Exception as exc:
++        return (None, "claude %s 调用失败: %s" % (action, exc))
++    if proc.returncode != 0:
++        return (proc.returncode,
++                "claude %s 非零退出 rc=%d: %s"
++                % (action, proc.returncode, (proc.stderr or "").strip()[:200]))
++    return (0, "")
++
++
++def _cleanup_payload(state, ok, detail, **extra):
++    payload = {
++        "ok": ok, "state": state, "detail": detail,
++        "site": None, "run_dir": None, "job_id": None,
++        "stopped": False, "removed": False,
++        "subtree": None, "orphan_warning": None,
++        "unknown_cost": False, "fallback_allowed": False,
++        "identity": None,
++    }
++    payload.update(extra)
++    return payload
++
++
++def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=None,
++                subtree_wait=SUBTREE_VERIFY_SECONDS):
++    """identity-safe 的单站点清理。**不写、不删 run-dir 里的任何文件。**
++
++    这个函数唯一的破坏性动作是对 `claude stop|rm` 传一个**已重新核验过**的 canonical id；
++    run-dir 是本轮的审计证据，清理成功与否都原样保留（OVBG-05）。
++    """
++    run_dir = os.path.realpath(str(run_dir))
++    claude_bin = claude_bin or shutil.which("claude")
++    base = {"site": site, "run_dir": run_dir}
++
++    kind, job, detail = load_job_metadata(run_dir, site)
++    if kind != "ok":
++        # 没有 job metadata = 没有 identity 可核 ⇒ 只告警。残留 reserve 更是成本未知：
++        # 删掉它就等于放行下一次 dispatch，把「可能已花掉一次」变成「确定花两次」。
++        reserved = os.path.isfile(reserve_path(run_dir, site))
++        why = ("存在 reservation 但无 job metadata（dispatch accepted 与 metadata 发布之间"
++               "可能已崩溃）" if reserved else detail)
++        return _cleanup_payload(
++            "identity-unverified", False,
++            "无法核验 job identity（%s）—— 只告警，MUST NOT 猜测并操作其他 job" % why,
++            unknown_cost=True,
++            orphan_warning=ORPHAN_WARNING_TEMPLATE % (why, run_dir, site), **base)
++
++    base["job_id"] = job["job_id"]
++    status = derive_status(run_dir, site, timeout_override=timeout_override,
++                           claude_bin=claude_bin)
++    roster, roster_detail = load_roster(claude_bin)
++    ident = verify_identity(run_dir, site, job, roster)
++    base["identity"] = ident
++    id_status = ident["checks"]["canonical-id"]["status"]
++
++    if not ident["ok"]:
++        if id_status == IDENTITY_ABSENT:
++            # roster 里已经没有这个 job ⇒ 无需清理。幂等，不是失败。
++            return _cleanup_payload("absent", True,
++                                    "supervisor roster 已无此 job，无需清理", **base)
++        return _cleanup_payload(
++            "identity-unverified", False,
++            "identity 核验未通过（%s）—— 只告警，MUST NOT stop/rm 任何 job" % ident["detail"],
++            unknown_cost=True,
++            orphan_warning=ORPHAN_WARNING_TEMPLATE % (ident["detail"], run_dir, site), **base)
++
++    collected_ok = load_collected(run_dir, site, job)[0] == "ok"
++    rc_published = status.get("rc") is not None
++
++    if rc_published:
++        # OVBG-05：terminal 结果**已 collect 后**才清理 supervisor roster。
++        if not collected_ok:
++            return _cleanup_payload(
++                "not-collected", False,
++                "terminal 结果（state=%s）尚未 collect —— MUST 先 collect 再清理 roster"
++                % status["state"], **base)
++        base["subtree"] = probe_subtree(run_dir, site, job)[0]
++        rc, why = claude_job_action(claude_bin, "rm", job["job_id"])
++        if rc != 0:
++            return _cleanup_payload(
++                "cleanup-failed", False, "rm 失败: %s" % why,
++                orphan_warning="supervisor roster 可能仍残留 job id=%s（%s）—— "
++                               "MUST NOT 静默声称已清理，请人工处理；已取得的 rc 与本轮"
++                               "审计证据未被改动" % (job["job_id"], why), **base)
++        return _cleanup_payload("removed", True,
++                                "已 collect 的终态 job 已从 supervisor roster 移除",
++                                removed=True, fallback_allowed=True, **base)
++
++    # 闸门按 PENDING_STATES 划，不是按 `!= LOST` 划：LOST 之外还有**终态但无 rc** 的形态
++    # （witness 损坏的 CORRUPT）。用 `!= LOST` 会把它报成「站点仍在飞」——一句假话，
++    # 且它永远等不到 rc，等于把一个该清理的 job 永久挂起。
++    if status["state"] in PENDING_STATES and not cancel:
++        return _cleanup_payload(
++            "still-running", False,
++            "站点仍在飞（state=%s）—— 需显式 --cancel 才做破坏性清理" % status["state"], **base)
++
++    # 取消 / 失联路径：stop → 核验子树已退出 → rm（顺序是 OVBG-05 的契约）
++    rc, why = claude_job_action(claude_bin, "stop", job["job_id"])
++    if rc != 0:
++        return _cleanup_payload(
++            "cleanup-failed", False, "stop 失败: %s" % why, unknown_cost=True,
++            orphan_warning="stop 失败，job id=%s 可能仍在运行（%s）—— MUST NOT 静默声称"
++                           "已清理，MUST NOT 自动 fallback 叠加费用" % (job["job_id"], why),
++            **base)
++    base["stopped"] = True
++
++    verdict, verdict_detail = wait_subtree_exited(run_dir, site, job, max_wait=subtree_wait)
++    base["subtree"] = verdict
++    if verdict != SUBTREE_EXITED:
++        return _cleanup_payload(
++            "orphan-warning", False,
++            "stop 已发出，但子树终止不可证（%s）—— MUST NOT rm 后声称完成" % verdict_detail,
++            unknown_cost=True,
++            orphan_warning="stop 之后仍无法证明 worker/inner child 子树已退出（%s）；"
++                           "job id=%s 需人工核查并终止，其间 MUST NOT 自动 fallback"
++                           % (verdict_detail, job["job_id"]), **base)
++
++    # stop 与核验之间 worker 可能刚好发布了 rc ⇒ 结果不能丢，先 collect 再来清。
++    after = derive_status(run_dir, site, timeout_override=timeout_override,
++                          claude_bin=claude_bin)
++    if after.get("rc") is not None and load_collected(run_dir, site, job)[0] != "ok":
++        return _cleanup_payload(
++            "not-collected", False,
++            "stop 之后检出已发布的 rc（state=%s）—— MUST 先 collect 再清理 roster"
++            % after["state"], **base)
++
++    roster2, _ = load_roster(claude_bin)
++    ident2 = verify_identity(run_dir, site, job, roster2)
++    base["identity"] = ident2
++    if not ident2["ok"] and ident2["checks"]["canonical-id"]["status"] != IDENTITY_ABSENT:
++        return _cleanup_payload(
++            "identity-unverified", False,
++            "rm 前重新核验未通过（%s）—— 只告警，MUST NOT rm" % ident2["detail"],
++            unknown_cost=True,
++            orphan_warning=ORPHAN_WARNING_TEMPLATE % (ident2["detail"], run_dir, site), **base)
++
++    rc, why = claude_job_action(claude_bin, "rm", job["job_id"])
++    if rc != 0:
++        return _cleanup_payload(
++            "cleanup-failed", False, "rm 失败: %s" % why,
++            orphan_warning="子树已确认退出，但 roster 可能仍残留 job id=%s（%s）"
++                           % (job["job_id"], why), **base)
++    return _cleanup_payload(
++        "stopped-removed", True,
++        "identity 已核验、子树已确认退出、supervisor job 已移除（%s）" % verdict_detail,
++        removed=True, fallback_allowed=True, **base)
++
++
++# ── reconcile（abandoned run 的**显式**恢复入口）──────────────────────────────
++
++def discover_sites(run_dir):
++    """站点名**只**从本 run-dir 自己的 metadata 枚举。
++
++    🔴 这里没有、也 MUST NOT 有任何「找最新 run」的代码路径：评审 session 整体丢失后，
++    唯一合法的恢复目标是操作者显式点名的 run-dir（OVBG-03/OVBG-05）。
++    同理 MUST NOT 从 supervisor roster 反向取站点——那会碰到未持有 metadata 的他人 job。
++    """
++    sites = set()
++    try:
++        names = os.listdir(str(run_dir))
++    except OSError:
++        return []
++    for name in names:
++        for suffix in (".job.json", ".reserve"):
++            if name.endswith(suffix):
++                candidate = name[: -len(suffix)]
++                if SITE_RE.match(candidate):
++                    sites.add(candidate)
++    return sorted(sites)
++
++
++def reconcile_site(run_dir, site, claude_bin=None, subtree_wait=SUBTREE_VERIFY_SECONDS):
++    """单站点恢复：结果先落袋（collect），再决定清不清理。→ 一条 site 记录。"""
++    record = {"site": site, "state": None, "reason_code": None, "job_id": None,
++              "ok": False, "action": "none", "collected": False,
++              "stopped": False, "removed": False, "unknown_cost": False,
++              "orphan_warning": None, "detail": ""}
++
++    kind, job, detail = load_job_metadata(run_dir, site)
++    if kind != "ok":
++        if os.path.isfile(reserve_path(run_dir, site)):
++            status = derive_status(run_dir, site, claude_bin=claude_bin)
++            record.update({
++                "state": status["state"], "action": "manual-cleanup-required",
++                "unknown_cost": True, "orphan_warning": status["orphan_warning"],
++                "detail": status["detail"]})
++            return record
++        record.update({"state": STATE_MISSING, "detail": detail})
++        return record
++
++    record["job_id"] = job["job_id"]
++    status = derive_status(run_dir, site, claude_bin=claude_bin)
++
++    # ① 结果先落袋：rc 已发布就 collect（幂等）。交接③——先前被判 LOST 的站点若
++    #    worker 后来真发布了 rc，这一步就把真结果取回来，不会被旧的 LOST 判定挡住。
++    if status.get("rc") is not None:
++        _, status = run_collect(run_dir, site)
++        record["collected"] = os.path.isfile(collected_path(run_dir, site))
++
++    record.update({"state": status["state"], "reason_code": status.get("reason_code"),
++                   "detail": status.get("detail", "")})
++
++    if status["state"] in PENDING_STATES:
++        # 未到 deadline 的在飞站点 MUST NOT 被 stop —— 那会杀掉一次已计费的 voice。
++        record.update({"ok": True, "action": "pending"})
++        return record
++
++    cleanup = run_cleanup(run_dir, site, cancel=False, claude_bin=claude_bin,
++                          subtree_wait=subtree_wait)
++    record.update({
++        "stopped": cleanup["stopped"], "removed": cleanup["removed"],
++        "unknown_cost": cleanup["unknown_cost"],
++        "orphan_warning": cleanup["orphan_warning"],
++        "action": cleanup["state"],
++        "detail": "%s | cleanup: %s" % (record["detail"], cleanup["detail"]),
++    })
++    record["ok"] = cleanup["ok"]
++    return record
++
++
++def run_reconcile(run_dir, only_site=None, claude_bin=None,
++                  subtree_wait=SUBTREE_VERIFY_SECONDS):
++    run_dir = os.path.realpath(str(run_dir))
++    claude_bin = claude_bin or shutil.which("claude")
++    sites = discover_sites(run_dir)
++    if only_site is not None:
++        sites = [s for s in sites if s == only_site]
++    records = [reconcile_site(run_dir, site, claude_bin=claude_bin,
++                              subtree_wait=subtree_wait)
++               for site in sites]
++    warnings = [r["site"] for r in records if r["orphan_warning"]]
++    unknown = [r["site"] for r in records if r["unknown_cost"]]
++    ok = all(r["ok"] for r in records) and not warnings and not unknown
++    return {
++        "ok": ok,
++        "run_dir": run_dir,
++        "sites": records,
++        "orphan_warnings": warnings,
++        "unknown_cost_sites": unknown,
++        "detail": "reconcile 只处理显式点名的 run-dir 内、本 run 自己持有 metadata 的站点",
++    }
++
++
+ # ── 子命令入口 ────────────────────────────────────────────────────────────────
+ 
+ def _validate_site_args(args):
+@@ -1421,8 +1989,12 @@ def cmd_collect(args):
+     bad = _validate_site_args(args)
+     if bad is not None:
+         return 2, bad
+-    run_dir = os.path.realpath(args.run_dir)
+-    site = args.site
++    return run_collect(args.run_dir, args.site, timeout_override=args.timeout)
++
++
++def run_collect(run_dir, site, timeout_override=None):
++    """collect 的核心（CLI 与 reconcile 共用同一条实现路径，MUST NOT 长出第二份）。"""
++    run_dir = os.path.realpath(str(run_dir))
+     kind, job, detail = load_job_metadata(run_dir, site)
+     if kind == "ok":
+         stored_kind, stored, stored_detail = load_collected(run_dir, site, job)
+@@ -1433,7 +2005,7 @@ def cmd_collect(args):
+             # 幂等：首次收集的结论就是终局，原样回放（含首次 collected_at）。
+             return (0 if stored.get("ok") else 1), stored
+ 
+-    status = derive_status(run_dir, site, timeout_override=args.timeout)
++    status = derive_status(run_dir, site, timeout_override=timeout_override)
+     if not status["terminal"]:
+         # 未终态 ⇒ 不落 collected witness、不读 stdout、reason_code 恒为 null。
+         return 1, status
+@@ -1452,6 +2024,42 @@ def cmd_collect(args):
+     return (0 if payload["ok"] else 1), payload
+ 
+ 
++def cmd_cleanup(args):
++    bad = _validate_site_args(args)
++    if bad is not None:
++        return 2, bad
++    if not (0 < args.subtree_wait <= MAX_TIMEOUT_SECONDS):
++        return 2, _reject("subtree-wait 越界（合法 0<v≤%d）: %r"
++                          % (MAX_TIMEOUT_SECONDS, args.subtree_wait),
++                          state="usage-error", reason_code=REASON_EXEC_ERROR,
++                          fallback_allowed=False, site=args.site)
++    payload = run_cleanup(args.run_dir, args.site, cancel=args.cancel,
++                          timeout_override=args.timeout, subtree_wait=args.subtree_wait)
++    return (0 if payload["ok"] else 1), payload
++
++
++def cmd_reconcile(args):
++    run_dir = args.run_dir or ""
++    if not _no_control_chars(run_dir) or not os.path.isabs(run_dir):
++        return 2, _reject("run-dir MUST 为不含换行/NUL 的绝对路径: %r" % (run_dir,),
++                          state="usage-error", reason_code=REASON_EXEC_ERROR,
++                          fallback_allowed=False)
++    if not os.path.isdir(run_dir):
++        # 🔴 显式点名的 run-dir 不存在就是 usage-error —— MUST NOT 退而求其次去找别的 run。
++        return 2, _reject("run-dir 不存在: %s" % run_dir, state="usage-error",
++                          reason_code=REASON_EXEC_ERROR, fallback_allowed=False)
++    if args.site is not None and not SITE_RE.match(args.site):
++        return 2, _reject("site 名非法: %r" % (args.site,), state="usage-error",
++                          reason_code=REASON_EXEC_ERROR, fallback_allowed=False)
++    if not (0 < args.subtree_wait <= MAX_TIMEOUT_SECONDS):
++        return 2, _reject("subtree-wait 越界（合法 0<v≤%d）: %r"
++                          % (MAX_TIMEOUT_SECONDS, args.subtree_wait),
++                          state="usage-error", reason_code=REASON_EXEC_ERROR,
++                          fallback_allowed=False)
++    payload = run_reconcile(run_dir, only_site=args.site, subtree_wait=args.subtree_wait)
++    return (0 if payload["ok"] else 1), payload
++
++
+ # ── CLI ───────────────────────────────────────────────────────────────────────
+ 
+ def build_parser():
+@@ -1495,6 +2103,18 @@ def build_parser():
+ 
+     add_site_only(sub.add_parser("collect"))
+ 
++    cleanup = sub.add_parser("cleanup")
++    add_site_only(cleanup)
++    cleanup.add_argument("--cancel", action="store_true")
++    cleanup.add_argument("--subtree-wait", type=float, default=SUBTREE_VERIFY_SECONDS)
++
++    reconcile = sub.add_parser("reconcile")
++    # 🔴 `--run-dir` required=True 是「禁止扫描最新目录」的第一道机械闸：
++    # 没有默认值、没有「找最近一个 run」的兜底，恢复目标只能由操作者显式点名。
++    reconcile.add_argument("--run-dir", required=True)
++    reconcile.add_argument("--site", default=None)
++    reconcile.add_argument("--subtree-wait", type=float, default=SUBTREE_VERIFY_SECONDS)
++
+     return parser
+ 
+ 
+@@ -1519,9 +2139,10 @@ def main(argv=None):
+     if args.command == "worker":
+         code, _ = cmd_worker(args)
+         return code
+-    if args.command in ("status", "await", "collect"):
++    if args.command in ("status", "await", "collect", "cleanup", "reconcile"):
+         code, payload = {"status": cmd_status, "await": cmd_await,
+-                         "collect": cmd_collect}[args.command](args)
++                         "collect": cmd_collect, "cleanup": cmd_cleanup,
++                         "reconcile": cmd_reconcile}[args.command](args)
+         emit(payload)
+         return code
+     parser.print_usage(sys.stderr)
+diff --git a/sdflow-init/tests/test_outside_voice_job.py b/sdflow-init/tests/test_outside_voice_job.py
+index 9906015..f5eae09 100644
+--- a/sdflow-init/tests/test_outside_voice_job.py
++++ b/sdflow-init/tests/test_outside_voice_job.py
+@@ -1,4 +1,5 @@
+-"""outside-voice-job.py 的契约测试（preflight / reserve / dispatch / worker / status / await / collect）。
++"""outside-voice-job.py 的契约测试
++（preflight / reserve / dispatch / worker / status / await / collect / cleanup / reconcile）。
+ 
+ TDD 接缝（先定后写）——两处公共边界，测试只打这两处，不打内部实现：
+ 
+@@ -129,6 +130,24 @@ if argv[:1] == ["agents"]:
+     sys.stdout.write(json.dumps([base]) + "\n")
+     sys.exit(0)
+ 
++if argv[:1] in (["stop"], ["rm"]):
++    # Task 3：破坏性子命令替身。目标 id 一律进调用日志 ⇒ 「有没有对某个 id 动过手」
++    # 是日志上的机械事实，而不是实现自述。
++    action = argv[0]
++    mode = os.environ.get("FAKE_CLAUDE_%s_MODE" % action.upper(), "ok")
++    if mode == "fail":
++        sys.stderr.write("%s failed: supervisor unreachable\n" % action)
++        sys.exit(1)
++    if action == "stop":
++        victim = os.environ.get("FAKE_CLAUDE_STOP_KILLS_PID", "")
++        if victim:
++            try:
++                os.kill(int(victim), 9)
++            except Exception:
++                pass
++    sys.stdout.write("%s %s ok\n" % (action, argv[1] if len(argv) > 1 else ""))
++    sys.exit(0)
++
+ if "--bg" in argv:
+     command = argv[argv.index("--exec") + 1] if "--exec" in argv else ""
+     mode = os.environ.get("FAKE_CLAUDE_BG_MODE", "ok")
+@@ -1065,7 +1084,8 @@ def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent
+                startup_deadline_ago=None, job_id="75d34378", nonce="n0nce7777",
+                write_job=True, write_started=True, write_terminal=None,
+                stdout=b"outside voice findings\n", stderr=b"fake-stderr\n",
+-               terminal_digest=None, run_id=None, nonce_in_witness=None):
++               terminal_digest=None, run_id=None, nonce_in_witness=None,
++               worker_pid=4242, worker_pgid=None, repo_root=None):
+     """把一个站点的盘面摆成指定形态。返回写下的 job metadata（dict 或 None）。
+ 
+     盘面即状态 ⇒ 所有用例的输入都是「run dir 里有哪些文件、内容是什么」，
+@@ -1083,8 +1103,9 @@ def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent
+             "schema_version": JOB.SCHEMA_VERSION,
+             "run_id": run_id,
+             "site": site,
+-            "repo_root": str(Path(run_dir).parents[3].resolve()) if len(Path(run_dir).parents) > 3
+-                         else str(run_dir.resolve()),
++            "repo_root": str(repo_root) if repo_root is not None else (
++                str(Path(run_dir).parents[3].resolve()) if len(Path(run_dir).parents) > 3
++                else str(run_dir.resolve())),
+             "run_dir": str(run_dir.resolve()),
+             "context_file": str((run_dir / (site + "-context.md")).resolve()),
+             "attempt_nonce": nonce,
+@@ -1108,8 +1129,9 @@ def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent
+         JOB.atomic_write_json(run_dir / (site + ".started.json"), {
+             "schema_version": JOB.SCHEMA_VERSION, "site": site, "run_id": run_id,
+             "attempt_nonce": witness_nonce, "started_at": _iso(now - started_ago),
+-            "worker": {"pid": 4242, "ppid": 1, "pgid": 4242, "sid": 4242,
+-                       "executable": sys.executable},
++            "worker": {"pid": worker_pid, "ppid": 1,
++                       "pgid": worker_pid if worker_pgid is None else worker_pgid,
++                       "sid": worker_pid, "executable": sys.executable},
+         })
+ 
+     if rc_kind != "absent":
+@@ -1365,9 +1387,16 @@ def test_witness_attempt_nonce_mismatch_is_corrupt(tmp_path):
+ 
+ # ── ③ CLI 契约 ────────────────────────────────────────────────────────────────
+ 
+-def _fixed_roster(job_id="75d34378", state="working", cwd="/tmp"):
+-    entry = {"id": job_id, "cwd": cwd, "kind": "background", "startedAt": 1784974140034,
++def _fixed_roster(job_id="75d34378", state="working", cwd=None):
++    """单条 roster 条目。`cwd=None` ⇒ **不带 cwd 键**（repo 维度「探不到」而非「不符」）。
++
++    默认省略 cwd 是刻意的：这些用例只在钉 rc × liveness 的归类，不该顺带把
++    repo 交叉核验也一起断言掉。带 cwd 的正/负向锚单列在 Task 3 段。
++    """
++    entry = {"id": job_id, "kind": "background", "startedAt": 1784974140034,
+              "sessionId": job_id + "-sess", "state": state}
++    if cwd is not None:
++        entry["cwd"] = cwd
+     if state != "done":
+         entry["name"] = "python3 outside-voice-job.py worker …"
+     return json.dumps([entry])
+@@ -1812,3 +1841,813 @@ def test_dispatch_worker_await_collect_end_to_end_offline(fake_job_home, fake_cl
+     assert collected["duration_seconds"] >= 0
+     assert collected["stdout_sha256"] == hashlib.sha256(
+         (repo["run_dir"] / "design-voice.stdout").read_bytes()).hexdigest()
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# Task 3：中断恢复与 identity-safe 清理（OVBG-03 / OVBG-05）
++#
++# TDD 接缝（先定后写，测试只打这三处）：
++#   ⑤ **子命令 CLI 契约**：`cleanup` / `reconcile` 的 argv、stdout 单行 JSON
++#      （`state` / `stopped` / `removed` / `subtree` / `orphan_warning` /
++#      `unknown_cost` / `fallback_allowed` / `identity`）与退出码。
++#   ⑥ **进程子树核验纯函数契约**：`JOB.probe_subtree(run_dir, site, job)` 的三值判定
++#      （exited / alive / unverifiable）与两个 syscall 探针 `_pid_alive` / `_pgid_alive`。
++#   ⑦ **破坏性调用的负向锚**：identity 核不过时，fake `claude` 的调用日志里
++#      **零** `stop` / `rm` —— 「不猜目标」是日志上的机械事实，不是实现自述。
++# ══════════════════════════════════════════════════════════════════════════════
++
++
++def _roster(*entries):
++    """按需拼 roster：只写给定的键，`None` 表示**该键不存在**（真 CLI 的 done 条目无 name）。"""
++    out = []
++    for item in entries:
++        entry = {"id": item["id"], "kind": item.get("kind", "background"),
++                 "startedAt": 1784974140034, "sessionId": item["id"] + "-sess",
++                 "state": item.get("state", "working")}
++        for key in ("cwd", "name"):
++            if item.get(key) is not None:
++                entry[key] = item[key]
++        out.append(entry)
++    return json.dumps(out)
++
++
++def _worker_name(site="design-voice", nonce="0" * 32):
++    """真 roster 条目的 `name` 承载完整 worker 命令串（Task 1 已实测）。"""
++    return ("/usr/bin/python3 /x/outside-voice-job.py worker --run-dir /x/run "
++            "--site %s --context-file /x/ctx.md --repo-root /x --runner claude "
++            "--model opus --effort high --timeout 900 --attempt-nonce %s --run-id r1"
++            % (site, nonce))
++
++
++def _detached_sleeper(seconds=30):
++    """起一个**被 init 收养**的真进程 → 返回 pid。
++
++    收养是关键：它被杀之后立刻被 init 回收，不会以 zombie 形态继续让
++    `os.kill(pid, 0)` 成功 —— 否则「子树已退出」的探针会被僵尸骗过去。
++    """
++    out = subprocess.run(["sh", "-c", "sleep %d >/dev/null 2>&1 & echo $!" % seconds],
++                         capture_output=True, text=True, timeout=10)
++    return int(out.stdout.strip())
++
++
++def _dead_pid():
++    """拿一个**确定已不存在**的 pid（起一个立刻退出的被收养进程，等它消失）。"""
++    pid = _detached_sleeper(0)
++    deadline = time.monotonic() + 10
++    while time.monotonic() < deadline:
++        try:
++            os.kill(pid, 0)
++        except ProcessLookupError:
++            return pid
++        except PermissionError:            # pid 已被别人复用 ⇒ 换一个
++            break
++        time.sleep(0.02)
++    pytest.skip("拿不到一个确定已死的 pid（本机 pid 回绕过快）")
++
++
++def _destructive(fake_claude):
++    """fake `claude` 日志里所有 `stop` / `rm` 调用的 (action, target) 序列。"""
++    return [(i["argv"][0], i["argv"][1] if len(i["argv"]) > 1 else None)
++            for i in _invocations(fake_claude) if i["argv"][:1] in (["stop"], ["rm"])]
++
++
++# ── 交接①：LOST 路径 MUST 翻 unknown_cost / orphan_warning ────────────────────
++
++def test_every_lost_verdict_flags_unknown_cost_and_an_orphan_warning(tmp_path):
++    """三条 LOST 产生路径**无一例外**都要翻 `unknown_cost` + `orphan_warning`。
++
++    OVBG-03：「无法证明子树已退出时 SHALL 标记 unknown-cost/orphan-warning 并抑制自动
++    fallback」。LOST 的定义就是「rc 缺席」⇒ 盘面上根本没有 terminal witness ⇒
++    子树是否退出**未经核验**。此时若照常同族 fallback，就是在一次已计费的 voice 之上
++    再叠一次费用。核验只能由 cleanup/reconcile（会真探进程树）来做。
++    """
++    now = time.time()
++    cases = {}
++
++    # ① liveness 终态且无 rc
++    a = tmp_path / "lost-liveness"
++    a.mkdir()
++    _seed_site(a, rc_kind="absent", now=now)
++    cases["liveness-terminal"] = JOB.derive_status(a, "design-voice", liveness="done", now=now)
++
++    # ② startup deadline 已过且无 started sidecar
++    b = tmp_path / "lost-startup"
++    b.mkdir()
++    _seed_site(b, rc_kind="absent", now=now, write_started=False, startup_deadline_ago=5)
++    cases["startup-deadline"] = JOB.derive_status(b, "design-voice", liveness="working", now=now)
++
++    # ③ 可信 started_at + timeout + grace 已过且无 rc
++    c = tmp_path / "lost-deadline"
++    c.mkdir()
++    _seed_site(c, rc_kind="absent", now=now, dispatched_ago=1000,
++               started_ago=1 + JOB.AWAIT_GRACE_SECONDS + 5, timeout_seconds=1)
++    cases["started-plus-grace"] = JOB.derive_status(c, "design-voice", liveness="working", now=now)
++
++    for label, payload in cases.items():
++        assert payload["state"] == "LOST", (label, payload)
++        assert payload["unknown_cost"] is True, (label, payload)
++        assert payload["orphan_warning"], (label, payload)
++        assert "cleanup" in payload["orphan_warning"], (label, payload)
++
++
++def test_states_other_than_lost_and_reserved_never_raise_a_false_orphan_warning(tmp_path):
++    """正向对照：真终态（rc 已发布）与在飞状态 MUST NOT 被顺手标成 orphan。
++
++    没有这一条，「LOST 翻 unknown_cost」可以靠「所有状态都翻」来假绿，
++    而那会把每一次正常成功也变成「禁止 fallback」。
++    """
++    now = time.time()
++    expected = {"rc0_nonempty": "SUCCEEDED", "rc124": "TIMED_OUT",
++                "rc3": "FAILED", "rc_other": "FAILED"}
++    for rc_kind, state in expected.items():
++        run_dir = tmp_path / ("clean-" + rc_kind)
++        run_dir.mkdir()
++        _seed_site(run_dir, rc_kind=rc_kind, now=now)
++        payload = JOB.derive_status(run_dir, "design-voice", liveness="done", now=now)
++        assert payload["state"] == state, payload
++        assert payload["unknown_cost"] is False, payload
++        assert payload["orphan_warning"] is None, payload
++
++    running = tmp_path / "clean-running"
++    running.mkdir()
++    _seed_site(running, rc_kind="absent", now=now)
++    payload = JOB.derive_status(running, "design-voice", liveness="working", now=now)
++    assert (payload["state"], payload["unknown_cost"], payload["orphan_warning"]) \
++        == ("RUNNING", False, None), payload
++
++
++# ── 外层 await 被回收后的恢复（不丢结果、不重派）──────────────────────────────
++
++def test_reclaimed_await_recovers_by_collect_without_a_second_dispatch(
++        fake_job_home, fake_claude, repo):
++    """外层 await 被回收 ⇒ 同一 run-dir/站点重新 collect 即可拿回结果，且**不重派**。
++
++    机械锚是 fake `claude` 的调用日志：整个恢复过程里 `--bg --exec` 的次数恒为 1。
++    """
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_BG_MODE": "run",
++        "FAKE_CLAUDE_JOB_ID": "abc12345",
++        "FAKE_HELPER_MARKER": "reclaimed",
++        "FAKE_HELPER_SLEEP": "2",
++    })
++    dispatched = _json_stdout(_run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env))
++    assert dispatched["ok"] is True, dispatched
++
++    # 外层 shell 只等了很短一会儿就被回收
++    reclaimed = _json_stdout(_run_job(
++        fake_job_home,
++        _site_args("await", repo["run_dir"], "design-voice", "--max-wait", "0.3",
++                   "--poll-interval", "0.1"),
++        env, timeout=60))
++    assert reclaimed["terminal"] is False, reclaimed
++
++    # worker 由 supervisor 托管继续跑到终态
++    rc_path = repo["run_dir"] / "design-voice.rc"
++    deadline = time.monotonic() + 60
++    while time.monotonic() < deadline and not rc_path.exists():
++        time.sleep(0.2)
++    assert rc_path.exists()
++
++    recovered = _json_stdout(_run_job(fake_job_home,
++                                      _site_args("collect", repo["run_dir"]), env, timeout=60))
++    assert recovered["ok"] is True, recovered
++    assert recovered["state"] == "SUCCEEDED", recovered
++    assert "fake-helper-stdout reclaimed" in (repo["run_dir"] / "design-voice.stdout").read_text(
++        encoding="utf-8")
++    assert len(_bg_invocations(fake_claude)) == 1, _bg_invocations(fake_claude)
++
++
++def test_status_liveness_probe_degrades_when_the_roster_entry_belongs_to_another_repo(
++        job_home, fake_claude, tmp_path):
++    """id 命中但 repo 对不上 ⇒ 那不是我们的 job，liveness 降级为「探不到」。
++
++    降到 `unavailable` 而不是 `missing` 是刻意的：`missing` 会立刻把一个**还在飞的**
++    合法 worker 判成 LOST。探针无判别力 MUST NOT 触发降级（与 LIVENESS_TERMINAL 同口径）。
++    """
++    run_dir = tmp_path / "20260726T010000Z-Rep001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", repo_root=str(tmp_path / "repo-A"))
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++        "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "cwd": str(tmp_path / "repo-B"),
++                                      "name": _worker_name()}),
++    })
++    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
++    assert payload["state"] == "RUNNING", payload
++    assert payload["liveness"] == "unavailable", payload
++
++
++def test_status_liveness_accepts_a_roster_entry_whose_cwd_matches_repo_root(
++        job_home, fake_claude, tmp_path):
++    """正向对照：repo 对得上就照常取 state（否则上一条可以靠「永远 unavailable」假绿）。"""
++    run_dir = tmp_path / "20260726T011000Z-Rep002"
++    run_dir.mkdir()
++    repo_root = tmp_path / "repo-A"
++    repo_root.mkdir()
++    _seed_site(run_dir, rc_kind="absent", repo_root=str(repo_root))
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++        "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "cwd": str(repo_root),
++                                      "name": _worker_name()}),
++    })
++    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
++    assert (payload["state"], payload["liveness"]) == ("RUNNING", "working"), payload
++
++
++# ── ⑥ 子树核验纯函数 ──────────────────────────────────────────────────────────
++
++def test_pid_and_pgid_probes_answer_from_the_real_kernel():
++    """两个 syscall 探针对真进程给真答案（三值：True / False / None）。"""
++    assert JOB._pid_alive(os.getpid()) is True
++    alive = _detached_sleeper(30)
++    try:
++        assert JOB._pid_alive(alive) is True
++    finally:
++        os.kill(alive, 9)
++    assert JOB._pid_alive(_dead_pid()) is False
++    assert JOB._pid_alive(0) is None
++    assert JOB._pid_alive(-1) is None
++    assert JOB._pid_alive("nope") is None
++    assert JOB._pgid_alive(os.getpgid(0)) is True
++    assert JOB._pgid_alive("nope") is None
++
++
++def test_probe_subtree_calls_a_live_worker_alive(tmp_path):
++    run_dir = tmp_path / "sub-alive"
++    run_dir.mkdir()
++    pid = _detached_sleeper(30)
++    try:
++        job = _seed_site(run_dir, rc_kind="absent", worker_pid=pid)
++        verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
++    finally:
++        os.kill(pid, 9)
++    assert verdict == JOB.SUBTREE_ALIVE, (verdict, detail)
++
++
++def test_probe_subtree_calls_a_dead_group_leader_exited(tmp_path):
++    run_dir = tmp_path / "sub-exited"
++    run_dir.mkdir()
++    pid = _dead_pid()
++    job = _seed_site(run_dir, rc_kind="absent", worker_pid=pid, worker_pgid=pid)
++    verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
++    assert verdict == JOB.SUBTREE_EXITED, (verdict, detail)
++
++
++def test_probe_subtree_is_unverifiable_without_a_started_witness(tmp_path):
++    """没有 started witness ⇒ 根本没有可核验的 process identity ⇒ **不可证**，不是「已退出」。"""
++    run_dir = tmp_path / "sub-nowitness"
++    run_dir.mkdir()
++    job = _seed_site(run_dir, rc_kind="absent", write_started=False)
++    verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
++    assert verdict == JOB.SUBTREE_UNVERIFIABLE, (verdict, detail)
++
++
++def test_probe_subtree_will_not_call_a_shared_process_group_exited(tmp_path):
++    """worker 不是组长（pgid 与 supervisor 共用）⇒ killpg 探针无判别力。
++
++    此时若没有 terminal witness 证明 worker 自己走到了发布点（`subprocess.call` 是同步的，
++    走到那里意味着 inner child 已被 wait 回收），inner child 是否退出**不可证**。
++    """
++    run_dir = tmp_path / "sub-shared-group"
++    run_dir.mkdir()
++    dead = _dead_pid()
++    job = _seed_site(run_dir, rc_kind="absent", worker_pid=dead, worker_pgid=os.getpgid(0),
++                     write_terminal=False)
++    verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
++    assert verdict == JOB.SUBTREE_UNVERIFIABLE, (verdict, detail)
++
++    # 同一形态 + terminal witness ⇒ worker 自己走完了发布点 ⇒ 可判已退出
++    job2 = _seed_site(run_dir, "hr-tg", rc_kind="absent", worker_pid=dead,
++                      worker_pgid=os.getpgid(0), write_terminal=True)
++    verdict2, detail2 = JOB.probe_subtree(run_dir, "hr-tg", job2)
++    assert verdict2 == JOB.SUBTREE_EXITED, (verdict2, detail2)
++
++
++def test_probe_subtree_reports_alive_when_the_group_still_holds_a_child(monkeypatch, tmp_path):
++    """worker 本体已退但组内仍有存活进程（inner child 未随之退出）⇒ ALIVE。
++
++    这一格用 monkeypatch 造：真实构造「组长已死但组还在」需要一个仍以死者 pid 为 pgid 的
++    活进程，本机无法确定性摆出来。两个 syscall 探针本身由
++    `test_pid_and_pgid_probes_answer_from_the_real_kernel` 对真内核钉死，此处只钉判定逻辑。
++    """
++    run_dir = tmp_path / "sub-group-alive"
++    run_dir.mkdir()
++    job = _seed_site(run_dir, rc_kind="absent", worker_pid=999001, worker_pgid=999001)
++    monkeypatch.setattr(JOB, "_pid_alive", lambda pid: False)
++    monkeypatch.setattr(JOB, "_pgid_alive", lambda pgid: True)
++    verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
++    assert verdict == JOB.SUBTREE_ALIVE, (verdict, detail)
++
++
++# ── cleanup：identity 核不过 ⇒ 只告警，零破坏性调用 ──────────────────────────
++
++def _cleanup_args(run_dir, site="design-voice", *extra):
++    return ["cleanup", "--run-dir", str(run_dir), "--site", site, *extra]
++
++
++@pytest.mark.parametrize("label,roster_entries,seed_over", [
++    ("repo-mismatch",
++     [{"id": "75d34378", "cwd": "/somewhere/else", "name": _worker_name()}], {}),
++    ("duplicate-id",
++     [{"id": "75d34378", "name": _worker_name()},
++      {"id": "75d34378", "name": _worker_name()}], {}),
++    ("another-site",
++     [{"id": "75d34378", "name": _worker_name(site="hr-tg")}], {}),
++    ("another-attempt-nonce",
++     [{"id": "75d34378", "name": _worker_name(nonce="f" * 32)}], {}),
++    ("witness-from-another-attempt",
++     [{"id": "75d34378", "name": _worker_name()}],
++     {"nonce_in_witness": "someone-elses-nonce"}),
++])
++def test_cleanup_refuses_every_destructive_call_when_identity_does_not_verify(
++        job_home, fake_claude, tmp_path, label, roster_entries, seed_over):
++    """🔴 负向锚：identity 四项任一**矛盾** ⇒ 只告警，MUST NOT stop/rm 任何 job。
++
++    判据落在 fake `claude` 的调用日志上（零 stop、零 rm），而不是 payload 的自述。
++    """
++    run_dir = tmp_path / ("20260726T02-" + label)
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32, **seed_over)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(*roster_entries)})
++    proc = _run_job(job_home, _cleanup_args(run_dir, "design-voice", "--cancel",
++                                            "--subtree-wait", "0.2"), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1, (proc.stdout, proc.stderr)
++    assert payload["state"] == "identity-unverified", payload
++    assert payload["removed"] is False and payload["stopped"] is False, payload
++    assert _destructive(fake_claude) == [], _destructive(fake_claude)
++
++
++def test_cleanup_on_a_bare_reservation_only_warns_and_touches_nothing(
++        job_home, fake_claude, tmp_path):
++    """残留 reserve（dispatch accepted 但 metadata 未发布）⇒ 无 identity 可核 ⇒ 只告警。
++
++    MUST NOT 删 reserve：删掉就等于放行下一次 dispatch，把一次成本未知的调用变成双倍计费。
++    """
++    run_dir = tmp_path / "20260726T030000Z-Res001"
++    run_dir.mkdir()
++    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
++    proc = _run_job(job_home, _cleanup_args(run_dir), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "identity-unverified", payload
++    assert payload["unknown_cost"] is True, payload
++    assert payload["orphan_warning"], payload
++    assert (run_dir / "design-voice.reserve").exists()
++    assert _destructive(fake_claude) == []
++
++
++# ── cleanup：先 collect 才允许清理 roster ─────────────────────────────────────
++
++def test_cleanup_refuses_to_remove_a_terminal_site_before_it_was_collected(
++        job_home, fake_claude, tmp_path):
++    """OVBG-05：「每个 terminal job **在结果已 collect 后** SHALL 调用 claude rm」。
++
++    先 rm 再 collect 没有直接坏处，但 roster 一旦清掉，任何「这次到底跑没跑」的
++    交叉核验就只剩盘面单证；顺序是 spec 明写的，且这是唯一能机械守住它的位置。
++    """
++    run_dir = tmp_path / "20260726T040000Z-Ord001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "state": "done"})})
++    proc = _run_job(job_home, _cleanup_args(run_dir), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "not-collected", payload
++    assert _destructive(fake_claude) == []
++
++
++def test_cleanup_removes_a_collected_terminal_site_from_the_roster(
++        job_home, fake_claude, tmp_path):
++    """交接②：terminal 且已 collect 过的 job 可直接 `rm`（无需 stop）。"""
++    run_dir = tmp_path / "20260726T041000Z-Ord002"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "state": "done"})})
++    collected = _json_stdout(_run_job(job_home, _site_args("collect", run_dir), env))
++    assert collected["ok"] is True, collected
++
++    proc = _run_job(job_home, _cleanup_args(run_dir), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    assert payload["state"] == "removed", payload
++    assert (payload["removed"], payload["stopped"]) == (True, False), payload
++    assert _destructive(fake_claude) == [("rm", "75d34378")], _destructive(fake_claude)
++
++
++def test_cleanup_is_idempotent_when_the_roster_no_longer_lists_the_job(
++        job_home, fake_claude, tmp_path):
++    """OVBG-05「正常 collect 后无活动残留」：roster 已无此 job ⇒ 清理是 no-op，不报错。"""
++    run_dir = tmp_path / "20260726T042000Z-Ord003"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
++    _run_job(job_home, _site_args("collect", run_dir), env)
++    proc = _run_job(job_home, _cleanup_args(run_dir), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    assert payload["state"] == "absent", payload
++    assert _destructive(fake_claude) == []
++
++
++def test_cleanup_refuses_to_touch_a_site_that_is_still_running_without_cancel(
++        job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260726T043000Z-Ord004"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", nonce="0" * 32)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "name": _worker_name()})})
++    proc = _run_job(job_home, _cleanup_args(run_dir), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "still-running", payload
++    assert _destructive(fake_claude) == []
++
++
++# ── cleanup 取消路径：stop → 核验子树 → rm ───────────────────────────────────
++
++def test_cleanup_cancel_order_is_stop_then_subtree_verification_then_rm(
++        job_home, fake_claude, tmp_path):
++    """取消路径的**顺序**是契约：`stop` 必须早于 `rm`，且中间夹一次真的子树核验。
++
++    fake `claude stop` 真的把 worker 进程杀掉 ⇒ 「子树已退出」不是摆拍，是内核的答案。
++    """
++    run_dir = tmp_path / "20260726T050000Z-Can001"
++    run_dir.mkdir()
++    pid = _detached_sleeper(60)
++    try:
++        _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, worker_pid=pid, worker_pgid=pid)
++        env = _env(fake_claude, {
++            "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++            "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "name": _worker_name()}),
++            "FAKE_CLAUDE_STOP_KILLS_PID": str(pid),
++        })
++        proc = _run_job(job_home, _cleanup_args(run_dir, "design-voice", "--cancel",
++                                                "--subtree-wait", "5"), env, timeout=60)
++    finally:
++        try:
++            os.kill(pid, 9)
++        except OSError:
++            pass
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    assert payload["state"] == "stopped-removed", payload
++    assert (payload["stopped"], payload["removed"]) == (True, True), payload
++    assert payload["subtree"] == JOB.SUBTREE_EXITED, payload
++    assert payload["orphan_warning"] is None, payload
++    assert payload["fallback_allowed"] is True, payload
++    assert _destructive(fake_claude) == [("stop", "75d34378"), ("rm", "75d34378")], \
++        _destructive(fake_claude)
++
++
++def test_cleanup_leaves_an_orphan_warning_and_skips_rm_when_the_subtree_survives_stop(
++        job_home, fake_claude, tmp_path):
++    """🔴 stop 之后子树仍存活 ⇒ orphan warning，**不 rm**、不声称完成、抑制自动 fallback。
++
++    「rm 之后声称已清理」正是 OVBG-05 要杀的形态：roster 干净了，进程还在烧钱。
++    """
++    run_dir = tmp_path / "20260726T051000Z-Can002"
++    run_dir.mkdir()
++    pid = _detached_sleeper(60)
++    try:
++        _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, worker_pid=pid, worker_pgid=pid)
++        env = _env(fake_claude, {
++            "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++            "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "name": _worker_name()}),
++        })
++        proc = _run_job(job_home, _cleanup_args(run_dir, "design-voice", "--cancel",
++                                                "--subtree-wait", "0.4"), env, timeout=60)
++    finally:
++        os.kill(pid, 9)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "orphan-warning", payload
++    assert (payload["stopped"], payload["removed"]) == (True, False), payload
++    assert payload["subtree"] == JOB.SUBTREE_ALIVE, payload
++    assert payload["unknown_cost"] is True, payload
++    assert payload["fallback_allowed"] is False, payload
++    assert str(pid) in payload["orphan_warning"], payload
++    assert _destructive(fake_claude) == [("stop", "75d34378")], _destructive(fake_claude)
++
++
++def test_cleanup_leaves_an_orphan_warning_when_the_subtree_exit_cannot_be_proven(
++        job_home, fake_claude, tmp_path):
++    """不可证 ≠ 已退出：没有 started witness 就没有 process identity ⇒ 同样 orphan warning。"""
++    run_dir = tmp_path / "20260726T052000Z-Can003"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, write_started=False,
++               startup_deadline_ago=5)
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++        "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "name": _worker_name()}),
++    })
++    proc = _run_job(job_home, _cleanup_args(run_dir, "design-voice", "--subtree-wait", "0.2"),
++                    env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "orphan-warning", payload
++    assert payload["subtree"] == JOB.SUBTREE_UNVERIFIABLE, payload
++    assert payload["removed"] is False, payload
++    assert payload["unknown_cost"] is True, payload
++    assert _destructive(fake_claude) == [("stop", "75d34378")], _destructive(fake_claude)
++
++
++def test_cleanup_does_not_rm_when_stop_itself_failed(job_home, fake_claude, tmp_path):
++    """stop 失败 ⇒ cleanup warning + job id 供人工处理，MUST NOT 静默声称已清理。"""
++    run_dir = tmp_path / "20260726T053000Z-Can004"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, write_started=False,
++               startup_deadline_ago=5)
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++        "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "name": _worker_name()}),
++        "FAKE_CLAUDE_STOP_MODE": "fail",
++    })
++    proc = _run_job(job_home, _cleanup_args(run_dir, "design-voice", "--subtree-wait", "0.2"),
++                    env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "cleanup-failed", payload
++    assert "75d34378" in payload["orphan_warning"], payload
++    assert _destructive(fake_claude) == [("stop", "75d34378")], _destructive(fake_claude)
++
++
++def test_cleanup_failure_never_rewrites_the_rc_or_deletes_run_dir_evidence(
++        job_home, fake_claude, tmp_path):
++    """OVBG-05：清理失败 MUST NOT 改写已取得的 rc、MUST NOT 删本轮审计证据、
++    MUST NOT 把已成功的 findings 改判失败。"""
++    run_dir = tmp_path / "20260726T060000Z-Fail01"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "state": "done"}),
++                             "FAKE_CLAUDE_RM_MODE": "fail"})
++    collected = _json_stdout(_run_job(job_home, _site_args("collect", run_dir), env))
++    assert collected["ok"] is True
++
++    before = {p.name: p.read_bytes() for p in run_dir.iterdir()}
++    proc = _run_job(job_home, _cleanup_args(run_dir), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "cleanup-failed", payload
++    assert "75d34378" in payload["orphan_warning"], payload
++    after = {p.name: p.read_bytes() for p in run_dir.iterdir()}
++    assert after == before, "清理失败 MUST NOT 改动 run-dir 里的任何审计证据"
++
++    # 已成功的 findings 不因清理失败改判
++    again = _json_stdout(_run_job(job_home, _site_args("collect", run_dir), env))
++    assert (again["ok"], again["state"]) == (True, "SUCCEEDED"), again
++
++
++# ── reconcile：只按显式 identity，绝不猜目标 ─────────────────────────────────
++
++def test_reconcile_requires_an_explicit_run_dir(job_home, fake_claude):
++    """🔴 「禁止扫描最新目录」的第一道机械闸：没有 `--run-dir` 根本无从下手。"""
++    proc = _run_job(job_home, ["reconcile"], _env(fake_claude))
++    assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
++    assert _destructive(fake_claude) == []
++
++
++def test_reconcile_never_reaches_into_a_sibling_or_newer_run_dir(
++        job_home, fake_claude, tmp_path):
++    """🔴 评审 session 整体丢失时只处理**被显式点名**的那个 run-dir。
++
++    摆两个同级 run dir（被点名的旧 run + 更新的 run），断言更新那个 run 的 job id
++    在整条调用日志里**一次都没出现过**——「不扫描最新目录」是日志上的事实。
++
++    🔴 两个 run 的**站点名刻意不同**：同名会让「扫了父目录」与「没扫」产出同一份
++    站点集合（set 去重），断言就失去判别力——本用例正是靠站点集合把这条路照出来的。
++    """
++    abandoned = tmp_path / "20260726T070000Z-Aband1"
++    newest = tmp_path / "20260726T090000Z-Newest"
++    abandoned.mkdir()
++    newest.mkdir()
++    _seed_site(abandoned, "design-voice", rc_kind="rc0_nonempty", nonce="0" * 32,
++               job_id="aaaa1111")
++    _seed_site(newest, "hr-tg", rc_kind="rc0_nonempty", nonce="0" * 32, job_id="bbbb2222")
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++        "FAKE_CLAUDE_FIXED": _roster({"id": "aaaa1111", "state": "done"},
++                                     {"id": "bbbb2222", "state": "done"}),
++    })
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(abandoned)], env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    assert [s["site"] for s in payload["sites"]] == ["design-voice"], payload
++    assert _destructive(fake_claude) == [("rm", "aaaa1111")], _destructive(fake_claude)
++    assert "bbbb2222" not in json.dumps(_invocations(fake_claude))
++    assert not (newest / "hr-tg.collected.json").exists(), \
++        "未被点名的 run-dir MUST NOT 被碰"
++
++
++def test_reconcile_ignores_supervisor_jobs_it_holds_no_metadata_for(
++        job_home, fake_claude, tmp_path):
++    """roster 里有别人的 job ⇒ MUST NOT 扫描或清理未持有 metadata 的 Claude job。"""
++    run_dir = tmp_path / "20260726T071000Z-Own001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32, job_id="aaaa1111")
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++        "FAKE_CLAUDE_FIXED": _roster({"id": "aaaa1111", "state": "done"},
++                                     {"id": "cccc3333", "state": "working",
++                                      "name": "someone else's job"},
++                                     {"id": "dddd4444", "state": "failed"}),
++    })
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir)], env, timeout=60)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    assert _destructive(fake_claude) == [("rm", "aaaa1111")], _destructive(fake_claude)
++
++
++def test_reconcile_collects_a_terminal_site_then_removes_it(job_home, fake_claude, tmp_path):
++    """abandoned run 的终态站点：先 collect（结果不丢）再 rm（roster 不留活动残留）。"""
++    run_dir = tmp_path / "20260726T072000Z-Rec001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "state": "done"})})
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir)], env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    site = payload["sites"][0]
++    assert (site["state"], site["reason_code"]) == ("SUCCEEDED", "ok"), site
++    assert (site["collected"], site["removed"]) == (True, True), site
++    assert (run_dir / "design-voice.collected.json").exists()
++    assert _destructive(fake_claude) == [("rm", "75d34378")]
++
++
++def test_reconcile_recovers_a_result_that_landed_after_a_lost_verdict(
++        job_home, fake_claude, tmp_path):
++    """交接③：先前被判 LOST 的站点，若 worker 后来真发布了 rc，reconcile MUST 拿到真结果。
++
++    这是 Task 2「无 rc 的终态不再冻结」留给本票去修正的那个面。
++    """
++    run_dir = tmp_path / "20260726T073000Z-Rec002"
++    run_dir.mkdir()
++    now = time.time()
++    _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, now=now, write_started=False,
++               startup_deadline_ago=5)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "name": _worker_name()})})
++    lost = _json_stdout(_run_job(job_home, _site_args("collect", run_dir), env))
++    assert lost["state"] == "LOST", lost
++    assert not (run_dir / "design-voice.collected.json").exists()
++
++    # worker 其实只是慢，随后真发布了 started → terminal → rc=0
++    _seed_site(run_dir, rc_kind="rc0_nonempty", now=time.time(), write_job=False,
++               nonce="0" * 32, stdout=b"REAL FINDINGS after a LOST verdict\n")
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir)], env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    site = payload["sites"][0]
++    assert (site["state"], site["reason_code"]) == ("SUCCEEDED", "ok"), site
++    stored = json.loads((run_dir / "design-voice.collected.json").read_text(encoding="utf-8"))
++    assert stored["stdout_sha256"] == hashlib.sha256(
++        b"REAL FINDINGS after a LOST verdict\n").hexdigest()
++
++
++def test_reconcile_leaves_a_bare_reservation_to_manual_cleanup(job_home, fake_claude, tmp_path):
++    """unknown-cost 的残留 reserve：报出来交人工，MUST NOT 自动重派、MUST NOT 删证据。"""
++    run_dir = tmp_path / "20260726T074000Z-Rec003"
++    run_dir.mkdir()
++    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir)],
++                    _env(fake_claude), timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["ok"] is False, payload
++    site = payload["sites"][0]
++    assert site["site"] == "design-voice", site
++    assert site["action"] == "manual-cleanup-required", site
++    assert site["unknown_cost"] is True, site
++    assert payload["unknown_cost_sites"] == ["design-voice"], payload
++    assert (run_dir / "design-voice.reserve").exists()
++    assert _destructive(fake_claude) == []
++    assert _bg_invocations(fake_claude) == []
++
++
++def test_reconcile_does_not_stop_a_site_that_is_still_legitimately_running(
++        job_home, fake_claude, tmp_path):
++    """未到 deadline 的在飞站点 ⇒ 只报 pending，MUST NOT stop（那会杀掉一次已计费的 voice）。"""
++    run_dir = tmp_path / "20260726T075000Z-Rec004"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, timeout_seconds=900)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "name": _worker_name()})})
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir)], env, timeout=60)
++    payload = _json_stdout(proc)
++    site = payload["sites"][0]
++    assert site["state"] == "RUNNING", site
++    assert site["action"] == "pending", site
++    assert _destructive(fake_claude) == []
++
++
++def test_reconcile_stops_and_removes_a_lost_site_whose_subtree_is_proven_dead(
++        job_home, fake_claude, tmp_path):
++    """超 deadline 的活动 ⇒ stop → 子树终止核验 → rm，三步齐全才算清理完成。"""
++    run_dir = tmp_path / "20260726T076000Z-Rec005"
++    run_dir.mkdir()
++    now = time.time()
++    dead = _dead_pid()
++    _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, now=now, dispatched_ago=1000,
++               started_ago=1 + JOB.AWAIT_GRACE_SECONDS + 5, timeout_seconds=1,
++               worker_pid=dead, worker_pgid=dead)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "name": _worker_name()})})
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir),
++                               "--subtree-wait", "0.5"], env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    site = payload["sites"][0]
++    assert site["state"] == "LOST", site
++    assert (site["stopped"], site["removed"]) == (True, True), site
++    assert site["orphan_warning"] is None, site
++    assert _destructive(fake_claude) == [("stop", "75d34378"), ("rm", "75d34378")]
++
++
++def test_reconcile_reports_an_orphan_warning_and_exits_nonzero(job_home, fake_claude, tmp_path):
++    """子树不可证 ⇒ 整份 reconcile 报告 ok=false + orphan_warnings 列表，退出码非零。"""
++    run_dir = tmp_path / "20260726T077000Z-Rec006"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, write_started=False,
++               startup_deadline_ago=5)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "name": _worker_name()})})
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir),
++                               "--subtree-wait", "0.2"], env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["ok"] is False, payload
++    assert payload["orphan_warnings"], payload
++    assert payload["sites"][0]["removed"] is False, payload
++
++
++def test_reconcile_handles_both_sites_of_a_two_site_run(job_home, fake_claude, tmp_path):
++    """一个 run 最多两个站点 ⇒ reconcile MUST 把**两个**都处理掉，别只做第一个。"""
++    run_dir = tmp_path / "20260726T078000Z-Rec007"
++    run_dir.mkdir()
++    _seed_site(run_dir, "design-voice", rc_kind="rc0_nonempty", nonce="0" * 32,
++               job_id="aaaa1111")
++    _seed_site(run_dir, "hr-tg", rc_kind="rc124", nonce="0" * 32, job_id="bbbb2222")
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
++        "FAKE_CLAUDE_FIXED": _roster({"id": "aaaa1111", "state": "done"},
++                                     {"id": "bbbb2222", "state": "done"}),
++    })
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir)], env, timeout=60)
++    payload = _json_stdout(proc)
++    assert [s["site"] for s in payload["sites"]] == ["design-voice", "hr-tg"], payload
++    assert {s["state"] for s in payload["sites"]} == {"SUCCEEDED", "TIMED_OUT"}, payload
++    assert sorted(_destructive(fake_claude)) == [("rm", "aaaa1111"), ("rm", "bbbb2222")]
++
++
++def test_contract_docstring_documents_cleanup_reconcile_and_the_orphan_fields():
++    """模块 docstring 自称「契约单一源（两份评审 SKILL 只引用本注释）」⇒ 新子命令与
++    新字段漏写就是契约与实现不符：Task 5 会照着它去 gate `unknown_cost`。"""
++    doc = JOB.__doc__
++    for token in ("cleanup", "reconcile", "unknown_cost", "orphan_warning",
++                  "--subtree-wait", "--cancel"):
++        assert token in doc, token
++    assert doc.count("2=usage-error") >= 5, "契约单一源 MUST 逐子命令写明 exit 2"
++
++
++def test_reconcile_treats_a_terminal_but_rc_less_corrupt_site_as_cleanup_not_pending(
++        job_home, fake_claude, tmp_path):
++    """终态但无可用 rc 的形态不止 LOST：rc 不可解析的 CORRUPT 同样永远等不到 rc。
++
++    把清理闸门写成 `state != LOST` 会把它报成「站点仍在飞」——一句假话，且那个 job
++    会被永久挂起（既不清理也永远等不到终态）。闸门 MUST 按「是不是 pending」划。
++
++    构造用**非纯十进制 rc**（identity 全部干净、witness 齐全，只是 rc 不可用）：
++    这样闸门走的确实是「pending 与否」，而不是被更靠前的 identity 闸挡住。
++    """
++    run_dir = tmp_path / "20260726T079000Z-Rec008"
++    run_dir.mkdir()
++    dead = _dead_pid()
++    _seed_site(run_dir, rc_kind="rc_bad", nonce="0" * 32,
++               worker_pid=dead, worker_pgid=dead)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _roster(
++                                 {"id": "75d34378", "name": _worker_name()})})
++    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir),
++                               "--subtree-wait", "0.5"], env, timeout=60)
++    payload = _json_stdout(proc)
++    site = payload["sites"][0]
++    assert site["state"] == "CORRUPT", site
++    assert site["action"] != "still-running", site       # 🔴 它永远等不到 rc
++    assert site["action"] == "stopped-removed", site
++    assert (site["stopped"], site["removed"]) == (True, True), site
++    assert _destructive(fake_claude) == [("stop", "75d34378"), ("rm", "75d34378")]
++    # 清理不动审计证据：坏 rc 原样留在盘上
++    assert (run_dir / "design-voice.rc").read_text(encoding="utf-8") == "oops"

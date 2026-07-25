@@ -94,11 +94,11 @@ started → terminal → rc 的顺序原子发布本轮证据。能力不满足�
 按保留的确切 job/run-dir 恢复收集；session 整体丢失只走显式 reconcile；一切破坏性清理先核验完整
 identity，子树终止不可证时诚实落 orphan warning。
 
-- [ ] 外层 await 被回收后，同一主评审 session 用保留的 exact job/run-dir 恢复 collect，结果不丢且不重新派发
-- [ ] 评审 session 整体丢失时，禁止扫描“最新目录”猜恢复目标；只接受显式 `reconcile --run-dir` 处理 abandoned run
-- [ ] terminal 结果已 collect 后才清理 supervisor roster；`status/stop/rm` 前重新核验 canonical id、repo、site 与 attempt identity，核验失败只告警不猜目标
-- [ ] 取消/失联按 `stop → 核验 worker 与 inner child 子树已退出 → rm` 顺序执行；子树终止不可证时落 orphan warning 并抑制会叠加费用的自动 fallback
-- [ ] 清理失败不改写已取得的 rc、不删除本轮 run-dir 审计证据
+- [x] 外层 await 被回收后，同一主评审 session 用保留的 exact job/run-dir 恢复 collect，结果不丢且不重新派发
+- [x] 评审 session 整体丢失时，禁止扫描“最新目录”猜恢复目标；只接受显式 `reconcile --run-dir` 处理 abandoned run
+- [x] terminal 结果已 collect 后才清理 supervisor roster；`status/stop/rm` 前重新核验 canonical id、repo、site 与 attempt identity，核验失败只告警不猜目标
+- [x] 取消/失联按 `stop → 核验 worker 与 inner child 子树已退出 → rm` 顺序执行；子树终止不可证时落 orphan warning 并抑制会叠加费用的自动 fallback
+- [x] 清理失败不改写已取得的 rc、不删除本轮 run-dir 审计证据
 
 ### Task 4: runner 隔离加固与出境面封堵
 
