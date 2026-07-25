@@ -73,6 +73,9 @@ sdflow-issues:
     T213: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调","type":"基础设施","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
     T214: {"module":"openspec/changes/enable-codex-background-outside-voice/specs/outside-voice-background-jobs/spec.md","summary":"OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace","type":"代码质量","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
     T215: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言","type":"代码质量","status":"OPEN","time":"2026-07-25 19:07","change":"enable-codex-background-outside-voice","batch":null}
+    T216: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"collect 幂等的两条冗余路径缺单路径回归锚","type":"代码质量","status":"OPEN","time":"2026-07-25 20:10","change":"enable-codex-background-outside-voice","batch":null}
+    T217: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)","type":"代码质量","status":"OPEN","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":null}
+    T218: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"rc_bad(CORRUPT) 路径重复 collect 非逐字节一致","type":"代码质量","status":"OPEN","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2037,3 +2040,42 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：编排层裁定：实现期 MUST NOT 改 specs/（ship_gate design 域失鲜监视集含 specs/，当场 REFUSE_START）。留到代码审/done 阶段（失鲜窗口已关闭、流程明文允许修订四件套）执行。
 <!-- sdflow-issue-block:end id=T214 -->
+
+<!-- sdflow-issue-block:start id=T216 -->
+## T216: collect 幂等的两条冗余路径缺单路径回归锚
+> collect 幂等的两条冗余路径缺单路径回归锚
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 2 双轴复审 Spec 轴 Minor：outside-voice-job.py 的早期回放路径与写后回读 stored 路径互为兜底，实测只打掉其一时全部测试仍绿 ⇒ 后续若有人「简化」掉其中一条，锚不会报警。
+
+**思路**：补一条只针对早期回放路径的用例（如断言二次 collect 不重读 stdout），或在注释里写明二者互为兜底、勿单删。
+
+**备注**：来源=Task 2 双轴复审（f558722 后）Spec 轴 Minor。当前不变量未被削弱（两重保证），故非缺口，defer。
+<!-- sdflow-issue-block:end id=T216 -->
+
+<!-- sdflow-issue-block:start id=T217 -->
+## T217: parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)
+> parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 2 双轴复审 Standards 轴 Minor：宽 except 会吞掉与解析无关的异常并伪装成「时刻不可解析」。已被实证——去掉 _rechecked 守卫后 RecursionError 被吞，静默降级成假的 CORRUPT/exec-error 而非崩溃。_rechecked 只堵了当前这一条入口，吞噬面仍在。
+
+**思路**：except 子句收窄为 (ValueError, TypeError)。
+
+**备注**：来源=Task 2 双轴复审（f558722 后）Standards 轴 Minor。属「掩盖真实错误」类隐患，defer 至冷层 code-review 统一处理。
+<!-- sdflow-issue-block:end id=T217 -->
+
+<!-- sdflow-issue-block:start id=T218 -->
+## T218: rc_bad(CORRUPT) 路径重复 collect 非逐字节一致
+> rc_bad(CORRUPT) 路径重复 collect 非逐字节一致
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 2 双轴复审 Standards 轴 Minor：fix1 把冻结闸门收窄到 rc 已发布后，rc 文件存在但非纯十进制（CORRUPT）因未赋值 base[rc] 也不再冻结 ⇒ 重复 collect 仅 collected_at 逐次刷新，与 design.md Global Constraint「terminal rc 后…重复 collect 输出/分类一致」的字面有偏差。
+
+**思路**：要么把 rc_bad 纳入冻结闸门，要么在 spec/design 里明确 CORRUPT 属非 durable 终态。两轴均判影响可接受（分类稳定、CORRUPT 本不可进 findings）。
+
+**备注**：来源=Task 2 双轴复审 Standards 轴 Minor，fix 报告已主动披露。与 T214（OVBG-01 措辞对齐）同属「实现正确但 spec 字面需对齐」，可一并在 done 阶段处理。
+<!-- sdflow-issue-block:end id=T218 -->

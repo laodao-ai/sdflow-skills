@@ -77,13 +77,13 @@ started → terminal → rc 的顺序原子发布本轮证据。能力不满足�
 派生；未到终态不读 stdout；只有真实内层 timeout 才归 timeout，其余异常一律 exec-error。收集结果
 是幂等的，并结构化返回可机读的时刻/时长/runner/model/effort 证据。
 
-- [ ] rc 维度（rc=0+非空 stdout / rc=124 / 其他 rc / 坏 rc / rc=0+空 stdout）× liveness 维度（agent working/done/failed/stopped/missing）× 元数据维度（完整 / 缺字段 / schema drift）逐组合有确定性归类，且终态前不读 stdout
-- [ ] 只有真实 124 归 timeout；terminal 无 rc、失联、元数据损坏一律 exec-error，不从 stdout 猜成功
-- [ ] 任何 pending/lost/corrupt 组合产生 `reason_code="ok"` 的数量为 0（机械断言）
-- [ ] startup deadline 独立于 worker deadline；worker 上界从可信 `started_at` 起算为 timeout + 30 秒 grace，排队中的合法 worker 不被误杀
-- [ ] 站点仍 RUNNING 时有界 await 不早退、不落 timeout
-- [ ] collect 幂等：重复收集的输出与分类一致，并返回 dispatched/started/terminal/collected 时刻、自然 duration、runner/model/effort 与 stdout digest
-- [ ] 超时上限复用既有 async timeout 配置项，默认 900 秒、合法范围 1..3600，越界值被拒绝
+- [x] rc 维度（rc=0+非空 stdout / rc=124 / 其他 rc / 坏 rc / rc=0+空 stdout）× liveness 维度（agent working/done/failed/stopped/missing）× 元数据维度（完整 / 缺字段 / schema drift）逐组合有确定性归类，且终态前不读 stdout
+- [x] 只有真实 124 归 timeout；terminal 无 rc、失联、元数据损坏一律 exec-error，不从 stdout 猜成功
+- [x] 任何 pending/lost/corrupt 组合产生 `reason_code="ok"` 的数量为 0（机械断言）
+- [x] startup deadline 独立于 worker deadline；worker 上界从可信 `started_at` 起算为 timeout + 30 秒 grace，排队中的合法 worker 不被误杀
+- [x] 站点仍 RUNNING 时有界 await 不早退、不落 timeout
+- [x] collect 幂等：重复收集的输出与分类一致，并返回 dispatched/started/terminal/collected 时刻、自然 duration、runner/model/effort 与 stdout digest
+- [x] 超时上限复用既有 async timeout 配置项，默认 900 秒、合法范围 1..3600，越界值被拒绝
 
 ### Task 3: 中断恢复与 identity-safe 清理——不重派、不猜目标、不掩盖 orphan
 

@@ -1,0 +1,1607 @@
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task2-collect-state.md b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task2-collect-state.md
+new file mode 100644
+index 0000000..1132c9b
+--- /dev/null
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task2-collect-state.md
+@@ -0,0 +1,223 @@
++# Task 2 实现报告 — 终态派生的 status / await / collect
++
++**票**：Task 2（R-ID: OVBG-02, OVBG-03, HAE-09；对应 `tasks.md` 1.3）
++**Blocked-by**：Task 1（`93a1258`，49 条契约测试全绿，未推翻其任何既有契约）
++**实现 commit**：`b4c1488`（+ 一次命名修正，见「反向变异」小节）
++
++## 做了什么
++
++在 `sdflow-init/assets/hack/outside-voice-job.py` 上加三个**只读**子命令，全部建在 Task 1
++已经放上盘面的证据之上（`<site>.reserve` / `.job.json` / `.started.json` / `.terminal.json` /
++`.rc` / `.stdout` / `.stderr`），不改 Task 1 的任何既有行为：
++
++| 子命令 | 契约 |
++|---|---|
++| `status --run-dir --site [--timeout]` | 纯派生当前归类：读盘面 + 一次 `claude agents --all --json` liveness 探针。终态站点**根本不探 liveness**（NFR「单次查询 ≤5 秒」自然满足） |
++| `await --run-dir --site [--timeout] [--max-wait] [--poll-interval]` | 有界等到终态。上界不从 dispatch 时刻起算 |
++| `collect --run-dir --site [--timeout]` | 幂等收集：只在 rc 发布后读 stdout，核对 witness digest，首次结果原子发布为 `<site>.collected.json` |
++
++三者 stdout 恒为**单行 JSON**、同一形状；`exit 0 ⟺ payload["ok"] ⟺ reason_code == "ok"`，
++usage-error 走 exit 2。
++
++**状态枚举**（design.md 状态机 + 两个补格）：
++`MISSING | RESERVED | STARTING | RUNNING | SUCCEEDED | TIMED_OUT | FAILED | LOST | CORRUPT`。
++`RESERVED/STARTING/RUNNING` 三个未终态状态的 `reason_code` 恒为 `null` ⇒ **构造上不可能被读成 ok**。
++
++**判定顺序是契约，不是风格**（写在 `derive_status` docstring 里）：
++① job metadata（坏 ⇒ CORRUPT，**此时不看 rc、不碰 stdout**）→ ② rc（终态发布点，一旦存在
++liveness 完全不参与，ADR-2）→ ③ witness identity → ④ liveness 终态且无 rc ⇒ LOST（不等满
++timeout）→ ⑤ 时间上界。
++
++## 每条验收标准的机械锚
++
++> 全部锚均经**反向变异**验过可判别（把实现改回错误形态 → 对应锚变红），见文末表。
++> 测试文件：`sdflow-init/tests/test_outside_voice_job.py`（49 → **239** 条）。
++
++### ① rc × liveness × 元数据 逐组合确定性归类，且终态前不读 stdout
++
++- **笛卡尔本体**：`test_status_cartesian_classification` —— `itertools.product` 参数化
++  **7 × 6 × 3 = 126** 组合，逐组合断言 `(state, reason_code, terminal, ok)`。
++  - rc 维度 7：`absent / rc0_nonempty / rc0_empty / rc124 / rc3 / rc_other / rc_bad`
++    （票面 5 格 + `absent`（pending/lost 那一半根本进不来）+ `rc3`（见 ② 的 secret-hit 说明））
++  - liveness 维度 6：`working / done / failed / stopped / missing` + `unavailable`（探针本身失效）
++  - 元数据维度 3：`complete / missing-field / schema-drift`
++  - 期望表 `_expected_classification()` **逐条抄自 spec 原文**（OVBG-02 的派生规则 + 「元数据
++    损坏不得猜成功」Scenario + SKILL ⑦ 的 rc 表），**MUST NOT 从实现回读**——否则等于用实现证明实现。
++- **liveness 不得越过 rc**：`test_liveness_never_overrides_a_published_rc` —— 6 种 liveness 下
++  rc=0+非空 stdout 恒 `(SUCCEEDED, ok)`，且 `liveness is None`（终态站点压根没探）。ADR-2 直锚。
++- **终态前不读 stdout（三条独立锚）**：
++  1. `test_status_never_reads_stdout_before_terminal` —— 读取口被拆成两个模块级函数
++     （`stdout_stat_evidence` 只 stat / `stdout_read_evidence` 才读正文），monkeypatch 两者为 spy，
++     6 种 liveness 下 pending 站点断言 `calls == []`。**这是唯一真正的「有没有读过」判别器。**
++  2. `test_status_stats_stdout_size_but_never_reads_its_content` —— 终态后也只 stat 不读正文。
++  3. `test_status_of_a_running_site_survives_an_unreadable_stdout` —— `chmod 000` 负向探针
++     （root 下无判别力 ⇒ 显式 `skipif geteuid()==0`，诚实降级不假绿）。
++
++### ② 只有真实 124 归 timeout；terminal 无 rc / 失联 / 元数据损坏一律 exec-error
++
++| 情形 | 锚 |
++|---|---|
++| rc=124 → `timeout` | `test_collect_rc_to_reason_code_table[rc124-timeout]` + 笛卡尔 18 格 |
++| agent done/failed/stopped/missing 且无 rc → `LOST`/`exec-error`，**不等满 timeout** | `test_status_cli_maps_real_agent_states_through_the_id_channel`（4 参数）· `test_await_returns_immediately_when_the_job_is_gone`（断言 `elapsed < 20` 而 timeout=900） |
++| rc 已发布但缺 terminal witness → `CORRUPT` | `test_terminal_rc_without_a_terminal_witness_is_corrupt` |
++| witness attempt nonce 不符（上轮遗留混入）→ `CORRUPT` | `test_witness_attempt_nonce_mismatch_is_corrupt` |
++| rc 非纯十进制 / rc=0 但 stdout 为空 / job JSON 缺字段 / schema drift → `exec-error` | 笛卡尔 + `test_collect_rc_to_reason_code_table[rc_bad-…][rc0_empty-…]` |
++| stdout digest 与 witness 不符 → `CORRUPT` | `test_collect_detects_a_stdout_digest_mismatch` |
++| collected witness 属别的 attempt → `exec-error` | `test_collect_refuses_to_reuse_a_collected_witness_from_another_attempt` |
++| 盘面全空 → `MISSING`/`exec-error`（「起了没收」不得读作成功） | `test_site_with_nothing_on_disk_is_exec_error_never_ok` |
++
++**`rc=3` 保持 `secret-hit`（不并入 exec-error）** —— 这不是加宽，是 HAE-09 的硬要求
++（「reason_code 枚举语义 MUST 保持不变」）：两份评审 SKILL 调用协议 ⑦ 的同步分支表里
++`exit 3 → secret-hit 且拒发不 fallback`。若并入 exec-error，调用方会拿**同一份已命中 secret 的
++context** 再派一次同族 fallback，正是 OVBG-04 要杀的形态。这条判据写在实现的 `RC_SECRET_HIT`
++注释与测试的 `_expected_classification` docstring 里。
++
++**探不到 ≠ 丢了**（本票为诚实降级加的两条保守锚）：
++- `test_liveness_probe_failure_does_not_declare_the_worker_lost`（CLI 不可达）
++- `test_unknown_agent_state_is_inconclusive_not_terminal`（agents JSON state 枚举漂移）
++两者一律回落时间上界判定，**MUST NOT** 因为一次探针失效就把所有在飞的合法 worker 判成 LOST
++（那会让整条通道退回 efficacy=0，且伪装成 helper 故障）。
++
++### ③ 产生 `reason_code="ok"` 的数量为 0 —— 机械断言
++
++`test_no_pending_lost_or_corrupt_combination_ever_yields_ok`：遍历**同一份 126 组合**，
++`offenders == []` + **正向对照** `ok_count == 6`（合法组合确实产出了 ok，防止「0 个 ok」
++只是因为根本没有任何 ok 的空断言）。反向变异（把 RUNNING 的 reason_code 改成 `ok`）当场变红。
++
++### ④ startup deadline 独立；worker 上界从可信 `started_at` 起算 timeout + 30s grace
++
++- `test_startup_deadline_is_independent_of_the_worker_deadline` —— started sidecar 未发布时，
++  未过 startup deadline = `STARTING`，已过 = `LOST`（与 worker timeout 无关）。
++- `test_worker_upper_bound_counts_from_trusted_started_at_plus_grace` —— **dispatch 已过 400 秒、
++  started 才过 10 秒、timeout=60** 的排队 worker 判 `RUNNING`（从 dispatch 起算会当场误杀）；
++  越过 `started_at + 60 + 30` 才判 `LOST`，且断言 `reason_code != "timeout"`。
++- `AWAIT_GRACE_SECONDS == 30` 由 `test_default_timeout_and_range_are_the_single_shared_constants` 钉死。
++
++### ⑤ 站点仍 RUNNING 时有界 await 不早退、不落 timeout
++
++- `test_await_waits_for_a_real_rc_and_never_early_timeouts` —— 后台线程 1.5 秒后才发布 rc；
++  断言 `elapsed >= 1.4` **且** `reason_code == "ok"`（既证不早退、又证没把等待当 timeout）。
++- `test_await_exhausting_max_wait_stays_running_and_is_not_timeout` —— 外层 `--max-wait 1` 耗尽时
++  仍返回 `(RUNNING, reason_code=None)`，**不落 timeout**。
++- `test_await_declares_lost_after_started_plus_timeout_plus_grace` —— 越界归 `LOST` 而非 timeout，
++  且 `elapsed < 20`（有界，不等满）。
++- `test_await_on_a_bare_reservation_does_not_spin_forever` —— `RESERVED`（unknown-cost）永远不会
++  自行到达终态 ⇒ 立即返回交 reconcile（Task 3），不死等。
++
++### ⑥ collect 幂等 + 结构化证据
++
++- `test_collect_is_idempotent_byte_for_byte` —— 两次 collect 之间 `sleep(1.1)`（保证「重算」会得到
++  不同的 `collected_at`），断言 `first.stdout == second.stdout` **逐字节相等**。
++  实现：首次结果整份原子发布为 `<site>.collected.json`，用 **temp 全量写完 → `os.link`**（目标已存在
++  即失败 ⇒ 首写者胜，且读者看到的一定是写完之后的完整文件），重复 collect 原样回放。
++- `test_collect_returns_structured_machine_readable_evidence` —— 断言 16 个字段非空：
++  `dispatched_at / started_at / terminal_at / collected_at / duration_seconds / runner / model /
++  effort / stdout_sha256 / stdout_bytes / stdout_lines / stderr_bytes / rc / job_id /
++  attempt_nonce / timeout_seconds`；`duration_seconds` 是 **`terminal_at − started_at` 的自然耗时**
++  （断言落在 900..940 区间，构造上排除了「墙钟外壳」与「从 dispatch 起算」两种错法）；
++  `stdout_sha256` 与真实文件重算值相等；`stdout_path` **只在 `ok` 时出现**。
++- **stderr 只出计数**：断言 `"fake-stderr" not in json.dumps(payload)` —— 未过出境 scan 的正文
++  MUST NOT 出现在任何可能落进 tracked 报告的通道里。
++
++### ⑦ 超时上限复用既有 async timeout 配置项（默认 900、范围 1..3600、越界拒绝）
++
++**先查了读取路径**：全仓 `grep -rln "async-timeout-seconds"` 只命中两份评审 SKILL、
++`openspec/config.yaml` 的注释块与 change 文档 —— **没有任何脚本解析它**；它由主 session 按
++`sdflow-spec-review/SKILL.md` 调用协议 ① 直读 `config.yaml`（校验 1..3600、回落 900），再以
++`--timeout` 传给 dispatch。∴ 本票的「复用」= 接到那条既有链上，**不新造第二份解析**：
++
++- `await/status/collect` 的默认上界取 `job.json.timeout_seconds`（dispatch 当时记下的那个值，
++  Task 1 已按 `MIN/MAX/DEFAULT_TIMEOUT_SECONDS` 校验过）——锚：
++  `test_await_default_upper_bound_comes_from_job_metadata_timeout`（断言 `timeout_seconds == 900`）。
++- `--timeout` 显式传入时走**同一组常量**校验：`test_await_rejects_out_of_range_timeout[0/3601/abc/-1]`。
++- `test_default_timeout_and_range_are_the_single_shared_constants` 钉死 `900` / `(1, 3600)` / `30`。
++- 元数据里的 `timeout_seconds` 越界/非整同样判 `CORRUPT`（`load_job_metadata`）。
++
++### 端到端接缝
++
++`test_dispatch_worker_await_collect_end_to_end_offline` —— 用 Task 1 的 fake-claude `run` 模式真跑
++`dispatch → worker` 写出盘面，再让本票的 `await → collect` 去认。这是「Task 1 写的证据格式与
++Task 2 读的格式是否真的对得上」的唯一机械锚（两票各自绿但对不上，是跨票最典型的缺口）。
++
++### CLI 与派生函数不是两份实现
++
++`test_status_cli_is_a_thin_shell_over_derive_status`（`7 × 3 = 21` 参数）—— 逐组合断言
++`CLI 单行 JSON == JOB.derive_status(...)` 且退出码与 `ok` 一致。没有这条，126 格笛卡尔只证明了
++那个**没人调用的函数**是对的。
++
++## 反向变异（判据是「锚会不会红」，不是「有没有新增测试」）
++
++在实现副本上逐条改回错误形态、跑对应锚、`git checkout` 还原（仓内文件零残留，末次
++`git status --short` 已空）：
++
++| # | 变异 | 结果 |
++|---|---|---|
++| M1 | stdout 读取提前到 rc 判定之前 | **RED** `test_status_never_reads_stdout_before_terminal` |
++| M2 | `rc=3` 并入 exec-error | **RED** 7 条（笛卡尔 rc3 六格 + collect 表） |
++| M3 | worker 上界改从 `dispatched_at` 起算 | **RED** `…counts_from_trusted_started_at_plus_grace` + `…timeout_override…` |
++| M4 | 把 `unavailable`/未知 state 也当已终结 | **RED** 4 条（含 CLI 层与笛卡尔） |
++| M5 | collect 不落 collected witness | **RED** `test_collect_is_idempotent_byte_for_byte` |
++| M6 | 缺 terminal witness 也认 rc | **RED** `test_terminal_rc_without_a_terminal_witness_is_corrupt` |
++| M7 | 不核验 stdout digest | **RED** `test_collect_detects_a_stdout_digest_mismatch` |
++| M8 | 未终态也当可收集 | **RED** `test_collect_before_terminal_…` |
++| M9 | await 撞外层上界就落 timeout | **RED** `test_await_exhausting_max_wait_stays_running_and_is_not_timeout` |
++| M10 | RUNNING 的 reason_code 给 `ok` | **RED** 笛卡尔 2 格 + `test_no_pending_lost_or_corrupt_combination_ever_yields_ok` |
++| M11 | await 见 RUNNING 也 break（早退） | **RED** `…never_early_timeouts` + 端到端 |
++
++**M1 顺带纠出一处命名过度声明**：原 `test_collect_before_terminal_is_not_ok_and_reads_no_stdout`
++在 M1 下**照样绿**——它守的是**出口**（不给 `stdout_path`、不落 witness、不把正文带进自己的
++stdout），不是「有没有读过」。已改名为
++`…_and_leaks_no_partial_output` 并在 docstring 里写明该边界与真正的读取锚在哪。
++（名字过度声明的测试 = 假绿的伪装形态，本仓 CLAUDE.md ③ 的直接靶子。）
++
++## 测试结果（实跑，非自述）
++
++```
++/usr/bin/python3 -m pytest sdflow-init/tests/test_outside_voice_job.py -q
++  → 239 passed in 67.74s          （Task 1 的 49 条全部保持绿，新增 190 条）
++
++/usr/bin/python3 -m pytest -q
++  → 2389 passed, 8 skipped, 3 xfailed in 225.97s
++     基线 2199 passed / 8 skipped / 3 xfailed ⇒ 净 +190，skip/xfail 数**未变**（无静默降级）
++
++git diff --check → 无输出
++```
++
++> 备注（本机环境事实，非文档问题）：本机裸 `pytest` 不存在、默认 `python3` 未装 pytest，
++> 必须 `/usr/bin/python3 -m pytest`。
++
++## 未做 / 降级项（明说，不含糊）
++
++| 项 | 状态 | 理由 |
++|---|---|---|
++| `reconcile --run-dir`、identity-safe cleanup（`stop → 核验子树 → rm`） | **未做** | 票面范围边界明写归 **Task 3**。本票在需要它的两处只**留出接口**：`RESERVED` 状态带 `unknown_cost: true` 且 await 立即返回；`LOST` 只归类不做任何破坏性动作 |
++| `--effort high --safe-mode --no-session-persistence` 四旗与 `claude logs` canary | **未做** | 归 **Task 4**。collect 返回的 `effort` 取自 `job.json`（Task 1 已下发 `SDFLOW_VOICE_EFFORT`，下游 `outside-voice.sh` 尚未消费——Task 1 报告已交接此事）⇒ 该字段目前证明的是**下发值**，不是 runner 实际生效值 |
++| `setup.sh` 安装快照 / 两份 SKILL 的调度段改造 | **未做** | 归 **Task 5**（Task 1 报告已交接：`setup.sh` 未写 `capability-manifest.json` ⇒ 真实安装态 preflight 仍必红） |
++| 真实模型 efficacy | **未做** | 归 **Task 6**。本票全部用 fake claude + fake helper，**MUST NOT** 当 efficacy 证据 |
++| `status`/`collect` 的 NFR「≤5 秒」 | 只有**弱**锚 | `test_status_cli_emits_single_line_json_for_a_running_site` 断言 `elapsed < 5`，但 fake claude 是秒退的 ⇒ 该断言在本机恒真。真上界由 `CLI_PROBE_TIMEOUT_SECONDS=5`（Task 1 常量）保证，终态站点则完全不探 liveness |
++
++## Concerns（交编排层裁决，本票已按设计原样交付）
++
++1. **startup deadline = dispatch 时刻 + 5 秒是硬判据，可能误杀 supervisor 冷启动慢的合法 worker。**
++   `design.md` 状态机原文即「STARTING ── startup deadline 到且无 started sidecar ──▶ LOST」，
++   无 liveness 限定，故**照原样实现**。风险面：dispatch 本身要等到 job 进 agents roster 才返回
++   （Task 1 的 nonce 核验），worker 第一动作就是发布 started sidecar，∴ 正常路径余量充裕；
++   但 supervisor 冷启动慢时会把一次**已计费**的合法 dispatch 降级成 `exec-error` + 同族 fallback。
++   可选收敛（**未实施**，属改设计）：STARTING 过期时若 liveness 仍为 `working`，改为继续等到
++   `dispatched_at + startup + timeout + grace` 的兜底上界。**建议留到 Task 6 真实 efficacy 跑完后
++   按实测决定**——现在改属于拿推测反驳设计。
++2. **`<site>.collected.json` 是本票新增的第 6 个 sidecar。** 它不是可变 status（首写者胜、只写一次），
++   但确实是新增的落盘面。理由：OVBG-02 明写「collect SHALL 幂等返回**首次** `collected_at`」，
++   跨进程调用下这只能靠落盘。已在实现的模块 docstring「盘面即状态」段落里写明它与 ADR-2 的关系。
++   Task 3 的 reconcile 需要知道它的存在（terminal 已 collect 过的 job 可直接 `rm`）。
++3. **rc=3 → `secret-hit` 是本票在票面 5 格之外补的一格。** 依据是 HAE-09「reason_code 枚举语义
++   MUST 保持不变」+ SKILL ⑦ 的既有同步分支表。若编排层认为应并入 exec-error，改一行
++   （`RC_SECRET_HIT` 分支）即可，但需同步改 SKILL ⑦ 与 `_expected_classification`。
++
++## 未触碰（按票面硬约束核过）
++
++`git show --stat b4c1488` 只含两个文件：`sdflow-init/assets/hack/outside-voice-job.py` 与
++`sdflow-init/tests/test_outside_voice_job.py`。
++**未改** `proposal.md` / `design.md` / `specs/` / `tasks.md`；
++**未勾** `superpowers-plan.md` 任何复选框；**未打** `task<N>-` 完成标签（commit subject 为普通
++`feat(outside-voice): …`）。
+diff --git a/sdflow-init/assets/hack/outside-voice-job.py b/sdflow-init/assets/hack/outside-voice-job.py
+index 91d01d8..fa185f4 100644
+--- a/sdflow-init/assets/hack/outside-voice-job.py
++++ b/sdflow-init/assets/hack/outside-voice-job.py
+@@ -35,13 +35,40 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代
+     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
+     充当结果通道）。
+ 
++  status --run-dir <d> --site <s> [--timeout <n>]
++    **纯派生**的当前归类：读盘面（job/started/terminal/rc）+ 一次 `claude agents` liveness 探针。
++    **MUST NOT 在终态之前读 stdout**（半成品输出没有任何进 findings 池的通道）。
++    stdout: 单行 JSON（见下方「派生输出」）                       exit 0=ok | 1=非 ok（含未终态）
++
++  await --run-dir <d> --site <s> [--timeout <n>] [--max-wait <n>] [--poll-interval <f>]
++    有界等待到终态。上界**不从 dispatch 时刻起算**：started sidecar 未发布时受**独立**的
++    startup deadline 约束；已发布则为可信 `started_at` + timeout + 30 秒 grace。
++    `--timeout` 缺省取 `job.json` 里 dispatch 当时记下的 `timeout_seconds`（即既有
++    `outside-voice.async-timeout-seconds` 的值）；显式给出时同样受 1..3600 约束。
++    stdout: status 的同一份 JSON + `waited_seconds`               exit 0=ok | 1=其他
++
++  collect --run-dir <d> --site <s> [--timeout <n>]
++    **幂等**收集：只在 rc 发布后读 stdout，核对 terminal witness 的 digest，
++    首次收集把整份结果原子发布为 `<site>.collected.json`（**首写者胜**），
++    重复 collect 原样回放该文件 ⇒ 输出与分类逐字节一致。
++    stdout: 单行 JSON（含 dispatched/started/terminal/collected 时刻、自然 duration、
++            runner/model/effort、stdout digest/bytes/lines、stderr bytes/lines）
++    exit 0=ok | 1=其他
++
+   version
+     stdout: "outside-voice-job.py <ver>"                       exit 0
+ 
+ ── 盘面即状态（ADR-2）───────────────────────────────────────────────────────────
+ 本脚本**不持久化可变 status 字段**。`<site>.rc` 是唯一终态发布点；`claude agents` 的
+-`done/failed` 只提供 liveness，MUST NOT 决定 `ok`/`timeout`。status/await/collect 的
+-派生规则见 Task 2，本文件只负责把证据按 started → terminal → rc 的顺序原子放上盘面。
++`done/failed` 只提供 liveness，MUST NOT 决定 `ok`/`timeout`。
++（`<site>.collected.json` 不是可变 status：它是**首次 collect 的不可变见证**，
++OVBG-02 要求 collect 幂等返回**首次** `collected_at` ⇒ 跨进程只能靠落盘。）
++
++── 派生输出（status/await/collect 共用同一形状）─────────────────────────────────
++  state ∈ MISSING | RESERVED | STARTING | RUNNING | SUCCEEDED | TIMED_OUT | FAILED |
++          LOST | CORRUPT
++  reason_code ∈ ok | timeout | secret-hit | exec-error | null（null = 未终态，不可收集）
++  `ok` ⟺ reason_code == "ok" ⟺ exit 0。**任何 pending/lost/corrupt 组合恒不产出 ok。**
+ """
+ 
+ import argparse
+@@ -836,6 +863,549 @@ def cmd_worker(args):
+     return 0, None
+ 
+ 
++# ── status / await / collect：终态派生 ────────────────────────────────────────
++
++# await 的固定 grace（秒）——design.md Non-Functional Requirements「await grace 固定 30 秒」。
++# 它加在**可信 started_at** 之上，不是加在 dispatch 时刻上。
++AWAIT_GRACE_SECONDS = 30
++
++DEFAULT_POLL_INTERVAL_SECONDS = 0.5
++MIN_POLL_INTERVAL_SECONDS = 0.05
++MAX_POLL_INTERVAL_SECONDS = 5.0
++# 单次 await 调用的外层上界上限：派生上界最坏 = timeout(≤3600) + grace(30)。
++MAX_AWAIT_WAIT_SECONDS = MAX_TIMEOUT_SECONDS + AWAIT_GRACE_SECONDS
++
++STATE_MISSING = "MISSING"
++STATE_RESERVED = "RESERVED"
++STATE_STARTING = "STARTING"
++STATE_RUNNING = "RUNNING"
++STATE_SUCCEEDED = "SUCCEEDED"
++STATE_TIMED_OUT = "TIMED_OUT"
++STATE_FAILED = "FAILED"
++STATE_LOST = "LOST"
++STATE_CORRUPT = "CORRUPT"
++
++# 未终态集合：这三个状态**没有** reason_code（null），故永远不可能被误读成 `ok`。
++PENDING_STATES = frozenset({STATE_RESERVED, STATE_STARTING, STATE_RUNNING})
++
++REASON_OK = "ok"
++REASON_TIMEOUT = "timeout"
++REASON_SECRET_HIT = "secret-hit"
++REASON_EXEC_ERROR = "exec-error"
++
++# 🔴 rc → reason_code 的**唯一**映射源，与两份评审 SKILL 调用协议 ⑦ 的同步分支同表
++# （HAE-09：async dispatch 只改执行时机与托管方，reason_code 枚举语义 MUST 不变）。
++# `3` 单列的理由是**行为差异而非美观**：secret-hit 意味着「本次 voice 拒发且不 fallback」，
++# 若并入 exec-error，调用方会拿同一份已命中 secret 的 context 再派一次同族 fallback。
++RC_TIMEOUT = 124
++RC_SECRET_HIT = 3
++
++# `claude agents --all --json` 的 state 值分档。**只有这一档能判定 job 已终结**；
++# 其余（含 schema 漂移出的未知值）一律当「探不到」——探针无判别力 MUST NOT 触发降级，
++# 否则一次 CLI 改名就把所有在飞的合法 worker 判成 LOST，整条通道退回 efficacy=0。
++LIVENESS_ALIVE = "working"
++LIVENESS_TERMINAL = frozenset({"done", "failed", "stopped", "missing"})
++LIVENESS_UNAVAILABLE = "unavailable"
++
++# job.json 的必填字段：任一缺失即 CORRUPT（OVBG-02「元数据损坏不得猜成功」）。
++JOB_REQUIRED_FIELDS = (
++    "schema_version", "run_id", "site", "repo_root", "run_dir", "attempt_nonce",
++    "runner", "model", "effort", "job_id", "dispatched_at", "startup_deadline_at",
++    "timeout_seconds",
++)
++
++
++def parse_utc_iso(value):
++    """`YYYY-MM-DDTHH:MM:SSZ` → epoch 秒；不可解析返回 None（调用方一律 fail-closed）。"""
++    if not isinstance(value, str):
++        return None
++    try:
++        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
++            tzinfo=timezone.utc).timestamp()
++    except Exception:
++        return None
++
++
++def collected_path(run_dir, site):
++    return os.path.join(str(run_dir), site + ".collected.json")
++
++
++def stdout_stat_evidence(run_dir, site):
++    """**只 stat 不读**：status 判「rc=0 时 stdout 是否非空」只需要大小。
++
++    单列成函数是为了让「终态前有没有碰过 stdout」变成可 spy 的机械锚，
++    而不是靠通读实现自证（见 test_status_never_reads_stdout_before_terminal）。
++    """
++    path = os.path.join(str(run_dir), site + ".stdout")
++    if not os.path.isfile(path):
++        return {"exists": False, "bytes": 0, "path": os.path.realpath(path)}
++    try:
++        size = os.path.getsize(path)
++    except OSError:
++        return {"exists": False, "bytes": 0, "path": os.path.realpath(path)}
++    return {"exists": True, "bytes": size, "path": os.path.realpath(path)}
++
++
++def stdout_read_evidence(run_dir, site):
++    """**真正读 stdout 正文的唯一入口** —— MUST 只在 rc 已发布后调用（collect 专用）。"""
++    path = os.path.join(str(run_dir), site + ".stdout")
++    try:
++        data = open(path, "rb").read()
++    except OSError as exc:
++        return {"ok": False, "detail": "stdout 不可读: %s" % exc}
++    lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
++    return {"ok": True, "sha256": hashlib.sha256(data).hexdigest(),
++            "bytes": len(data), "lines": lines, "path": os.path.realpath(path)}
++
++
++def stderr_stat_evidence(run_dir, site):
++    """stderr **只出结构化计数**：它绕过出境 secret scan，正文 MUST NOT 进入任何 tracked 产物。"""
++    path = os.path.join(str(run_dir), site + ".stderr")
++    try:
++        data = open(path, "rb").read()
++    except OSError:
++        return {"bytes": 0, "lines": 0}
++    lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
++    return {"bytes": len(data), "lines": lines}
++
++
++def load_job_metadata(run_dir, site):
++    """→ (kind, data, detail)，kind ∈ {"ok","corrupt","absent"}。"""
++    path = job_path(run_dir, site)
++    if not os.path.isfile(path):
++        return ("absent", None, "job metadata 不存在: %s" % path)
++    try:
++        with open(path, "r", encoding="utf-8") as fh:
++            data = json.load(fh)
++    except Exception as exc:
++        return ("corrupt", None, "job metadata 不可解析: %s" % exc)
++    if not isinstance(data, dict):
++        return ("corrupt", None, "job metadata 顶层不是 object")
++    if data.get("schema_version") != SCHEMA_VERSION:
++        return ("corrupt", data,
++                "job metadata schema_version 不受支持（schema drift）: %r"
++                % (data.get("schema_version"),))
++    missing = [name for name in JOB_REQUIRED_FIELDS
++               if data.get(name) in (None, "")]
++    if missing:
++        return ("corrupt", data, "job metadata 缺字段: %s" % ", ".join(missing))
++    if data.get("site") != site:
++        return ("corrupt", data,
++                "job metadata site 与请求不符: %r ≠ %r" % (data.get("site"), site))
++    if os.path.realpath(str(data.get("run_dir"))) != os.path.realpath(str(run_dir)):
++        return ("corrupt", data,
++                "job metadata run_dir 与请求不符: %r" % (data.get("run_dir"),))
++    timeout = data.get("timeout_seconds")
++    if isinstance(timeout, bool) or not isinstance(timeout, int) \
++            or not (MIN_TIMEOUT_SECONDS <= timeout <= MAX_TIMEOUT_SECONDS):
++        return ("corrupt", data,
++                "job metadata timeout_seconds 非整或越界（合法 %d..%d）: %r"
++                % (MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, timeout))
++    for field in ("dispatched_at", "startup_deadline_at"):
++        if parse_utc_iso(data.get(field)) is None:
++            return ("corrupt", data, "job metadata %s 时刻不可解析: %r" % (field, data.get(field)))
++    return ("ok", data, "")
++
++
++def load_witness(run_dir, site, suffix, job, time_field):
++    """读 started/terminal witness 并**重新核验 identity**（site / run_id / attempt nonce）。
++
++    → (kind, data, detail)，kind ∈ {"ok","corrupt","absent"}。
++    identity 核不过 ⇒ corrupt：上一轮遗留或被换过的 witness MUST NOT 当本次结果采信。
++    """
++    path = os.path.join(str(run_dir), site + suffix)
++    if not os.path.isfile(path):
++        return ("absent", None, "")
++    try:
++        with open(path, "r", encoding="utf-8") as fh:
++            data = json.load(fh)
++    except Exception as exc:
++        return ("corrupt", None, "%s%s 不可解析: %s" % (site, suffix, exc))
++    if not isinstance(data, dict):
++        return ("corrupt", None, "%s%s 顶层不是 object" % (site, suffix))
++    if data.get("schema_version") != SCHEMA_VERSION:
++        return ("corrupt", data, "%s%s schema_version 不受支持" % (site, suffix))
++    for field, expected in (("site", site), ("run_id", job.get("run_id")),
++                            ("attempt_nonce", job.get("attempt_nonce"))):
++        if data.get(field) != expected:
++            return ("corrupt", data,
++                    "%s%s 的 %s 与本次 attempt 不符: %r ≠ %r"
++                    % (site, suffix, field, data.get(field), expected))
++    if parse_utc_iso(data.get(time_field)) is None:
++        return ("corrupt", data, "%s%s 的 %s 不可解析" % (site, suffix, time_field))
++    return ("ok", data, "")
++
++
++def read_rc(run_dir, site):
++    """→ (present, value_or_None, raw)。value 为 None 表示「rc 已发布但不是纯十进制」。"""
++    path = os.path.join(str(run_dir), site + ".rc")
++    if not os.path.isfile(path):
++        return (False, None, None)
++    try:
++        raw = open(path, "r", encoding="utf-8", errors="replace").read()
++    except OSError as exc:
++        return (True, None, "<unreadable: %s>" % exc)
++    text = raw.strip()
++    if not re.match(r"\A\d+\Z", text):
++        return (True, None, raw)
++    return (True, int(text), raw)
++
++
++def probe_liveness(job_id, claude_bin=None):
++    """一次 `claude agents --all --json`，按 **id** 通道定位本 job 的 state。
++
++    🔴 MUST 走 id 而非 name：真机实测 `state="done"` 的 background 条目**没有 `name` 字段**
++    （Task 1 已独立核实）——只认 name 的探针会把每一个已完成的 job 报成 missing。
++    任何取不到答案的情形一律返回 `unavailable`（探不到 ≠ 丢了，见 LIVENESS_TERMINAL 注释）。
++    """
++    claude_bin = claude_bin or shutil.which("claude")
++    if not claude_bin or not job_id:
++        return LIVENESS_UNAVAILABLE
++    try:
++        proc = _run_cli([claude_bin, "agents", "--all", "--json"],
++                        timeout=CLI_PROBE_TIMEOUT_SECONDS)
++        if proc.returncode != 0:
++            return LIVENESS_UNAVAILABLE
++        data = json.loads(proc.stdout)
++    except Exception:
++        return LIVENESS_UNAVAILABLE
++    if not isinstance(data, list):
++        return LIVENESS_UNAVAILABLE
++    for item in data:
++        if isinstance(item, dict) and str(item.get("id") or "") == str(job_id):
++            state = str(item.get("state") or "").strip().lower()
++            return state or LIVENESS_UNAVAILABLE
++    return "missing"
++
++
++def _status_payload(state, reason_code, detail, **extra):
++    payload = {
++        "ok": reason_code == REASON_OK,
++        "state": state,
++        "terminal": state not in PENDING_STATES,
++        "reason_code": reason_code,
++        "detail": detail,
++        "unknown_cost": False,
++        "liveness": None,
++        "rc": None,
++        "run_id": None,
++        "job_id": None,
++        "attempt_nonce": None,
++        "runner": None,
++        "model": None,
++        "effort": None,
++        "dispatched_at": None,
++        "started_at": None,
++        "terminal_at": None,
++        "startup_deadline_at": None,
++        "deadline_at": None,
++        "timeout_seconds": None,
++        "stdout_bytes": None,
++        "stdout_sha256": None,
++    }
++    payload.update(extra)
++    return payload
++
++
++def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
++                  timeout_override=None):
++    """从盘面 + liveness **纯派生**当前归类。不写任何文件、不做任何破坏性动作。
++
++    判定顺序是契约（不是风格）：
++      ① job metadata（坏 ⇒ CORRUPT，**此时不看 rc、不碰 stdout**——元数据损坏不得猜成功）
++      ② rc（终态发布点。一旦存在，liveness 完全不参与判定，ADR-2）
++      ③ witness identity（rc 在而 terminal witness 缺失/对不上 ⇒ CORRUPT）
++      ④ liveness 终态且无 rc ⇒ LOST（不等满 timeout，OVBG-03）
++      ⑤ 时间上界：无 started ⇒ **独立**的 startup deadline；有 started ⇒
++         可信 started_at + timeout + grace
++    """
++    now = time.time() if now is None else now
++    run_dir_real = os.path.realpath(str(run_dir))
++    base = {"site": site, "run_dir": run_dir_real}
++
++    if not os.path.isdir(run_dir_real):
++        return _status_payload(STATE_MISSING, REASON_EXEC_ERROR,
++                               "run-dir 不存在: %s" % run_dir_real, **base)
++
++    kind, job, detail = load_job_metadata(run_dir_real, site)
++    if kind == "corrupt":
++        return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, detail, **base)
++    if kind == "absent":
++        if os.path.isfile(reserve_path(run_dir_real, site)):
++            return _status_payload(
++                STATE_RESERVED, None,
++                "存在 reservation 但无 job metadata —— 成本未知，只允许显式 reconcile/人工 cleanup",
++                unknown_cost=True, **base)
++        return _status_payload(STATE_MISSING, REASON_EXEC_ERROR, detail, **base)
++
++    timeout_seconds = timeout_override if timeout_override is not None \
++        else job["timeout_seconds"]
++    started_kind, started, started_detail = load_witness(
++        run_dir_real, site, ".started.json", job, "started_at")
++    terminal_kind, terminal, terminal_detail = load_witness(
++        run_dir_real, site, ".terminal.json", job, "terminal_at")
++    started_at = started.get("started_at") if started_kind == "ok" else None
++    terminal_at = terminal.get("terminal_at") if terminal_kind == "ok" else None
++    base.update({
++        "run_id": job["run_id"], "job_id": job["job_id"],
++        "attempt_nonce": job["attempt_nonce"], "runner": job["runner"],
++        "model": job["model"], "effort": job["effort"],
++        "dispatched_at": job["dispatched_at"],
++        "startup_deadline_at": job["startup_deadline_at"],
++        "started_at": started_at, "terminal_at": terminal_at,
++        "timeout_seconds": timeout_seconds,
++    })
++    started_epoch = parse_utc_iso(started_at)
++    if started_epoch is not None:
++        base["deadline_at"] = datetime.fromtimestamp(
++            started_epoch + timeout_seconds + AWAIT_GRACE_SECONDS,
++            timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++    if started_kind == "corrupt":
++        return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, started_detail, **base)
++    if terminal_kind == "corrupt":
++        return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, terminal_detail, **base)
++
++    rc_present, rc_value, rc_raw = read_rc(run_dir_real, site)
++    if rc_present:
++        if rc_value is None:
++            return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR,
++                                   "rc 内容非纯十进制: %r" % (rc_raw,), **base)
++        base["rc"] = rc_value
++        if terminal_kind != "ok":
++            # worker 的发布顺序是 terminal witness → rc（Task 1 的顺序锚）⇒ 缺 witness
++            # 意味着证据链断了，MUST NOT 只凭一个 rc 数字就把 stdout 放进 findings 池。
++            return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR,
++                                   "rc 已发布但缺少可核验的 terminal witness", **base)
++        base["stdout_sha256"] = terminal.get("stdout_sha256")
++        evidence = stdout_stat_evidence(run_dir_real, site)   # stat，不读正文
++        base["stdout_bytes"] = evidence["bytes"]
++        if rc_value == 0:
++            if evidence["bytes"] > 0:
++                return _status_payload(STATE_SUCCEEDED, REASON_OK, "rc=0 且 stdout 非空", **base)
++            return _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR,
++                                   "rc=0 但 stdout 为空 —— 不得猜成功", **base)
++        if rc_value == RC_TIMEOUT:
++            return _status_payload(STATE_TIMED_OUT, REASON_TIMEOUT,
++                                   "内层 timeout 实际写出 rc=124", **base)
++        if rc_value == RC_SECRET_HIT:
++            return _status_payload(STATE_FAILED, REASON_SECRET_HIT,
++                                   "helper 出境 secret scan 命中（rc=3），本次 voice 拒发", **base)
++        return _status_payload(STATE_FAILED, REASON_EXEC_ERROR,
++                               "helper 非零退出 rc=%d" % rc_value, **base)
++
++    if liveness is None:
++        liveness = probe_liveness(job["job_id"], claude_bin=claude_bin)
++    base["liveness"] = liveness
++    if liveness in LIVENESS_TERMINAL:
++        # 极窄竞态：worker 先发布 rc 再退出，但文件可见性可能滞后于 agent state 翻转
++        # ⇒ 判 LOST 前再看一眼 rc（一次，不轮询）。
++        if os.path.isfile(os.path.join(run_dir_real, site + ".rc")):
++            return derive_status(run_dir_real, site, liveness=liveness, now=now,
++                                 claude_bin=claude_bin, timeout_override=timeout_override)
++        return _status_payload(
++            STATE_LOST, REASON_EXEC_ERROR,
++            "supervisor job 已终结（state=%s）但 rc 缺席 —— 判 exec-error，"
++            "MUST NOT 冒充 timeout" % liveness, **base)
++
++    if started_kind != "ok":
++        startup_deadline = parse_utc_iso(job["startup_deadline_at"])
++        if startup_deadline is not None and now > startup_deadline:
++            return _status_payload(
++                STATE_LOST, REASON_EXEC_ERROR,
++                "startup deadline（%s）已过仍无 started sidecar" % job["startup_deadline_at"],
++                **base)
++        return _status_payload(STATE_STARTING, None,
++                               "已 dispatch，等待 worker 发布 started sidecar", **base)
++
++    if started_epoch is not None and now > started_epoch + timeout_seconds + AWAIT_GRACE_SECONDS:
++        return _status_payload(
++            STATE_LOST, REASON_EXEC_ERROR,
++            "自可信 started_at 起算已超过 timeout(%d)+grace(%d) 仍无 rc"
++            % (timeout_seconds, AWAIT_GRACE_SECONDS), **base)
++    return _status_payload(STATE_RUNNING, None, "worker 在飞，未到终态", **base)
++
++
++# ── collect（幂等）─────────────────────────────────────────────────────────────
++
++def _first_writer_wins_json(path, payload, mode=0o600):
++    """原子发布且**首写者胜**：已存在则原样保留（幂等的落盘基石）。
++
++    用「temp 全量写完 → `os.link`」而不是 `os.replace`：link 在目标已存在时失败，
++    于是「先到者定终身」，且读者看到的一定是**写完之后**的完整文件。
++    """
++    path = str(path)
++    directory = os.path.dirname(path) or "."
++    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".tmp-" + os.path.basename(path) + "-")
++    try:
++        os.fchmod(fd, mode)
++        with os.fdopen(fd, "w", encoding="utf-8") as fh:
++            json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
++            fh.write("\n")
++            fh.flush()
++            os.fsync(fh.fileno())
++        try:
++            os.link(tmp, path)
++        except FileExistsError:
++            pass
++        except OSError:
++            # 文件系统不支持 hard link ⇒ 退到「不存在才落」（窗口极窄，方向仍是首写者胜）
++            if not os.path.exists(path):
++                os.replace(tmp, path)
++                tmp = None
++    finally:
++        if tmp is not None and os.path.exists(tmp):
++            os.unlink(tmp)
++    return path
++
++
++def load_collected(run_dir, site, job):
++    """读回首次 collect 见证并核验 identity。→ (kind, data, detail)。"""
++    path = collected_path(run_dir, site)
++    if not os.path.isfile(path):
++        return ("absent", None, "")
++    try:
++        with open(path, "r", encoding="utf-8") as fh:
++            data = json.load(fh)
++    except Exception as exc:
++        return ("corrupt", None, "collected witness 不可解析: %s" % exc)
++    if not isinstance(data, dict):
++        return ("corrupt", None, "collected witness 顶层不是 object")
++    for field, expected in (("schema_version", SCHEMA_VERSION), ("site", site),
++                            ("run_id", job.get("run_id")),
++                            ("attempt_nonce", job.get("attempt_nonce"))):
++        if data.get(field) != expected:
++            return ("corrupt", data,
++                    "collected witness 的 %s 与本次 attempt 不符: %r ≠ %r"
++                    % (field, data.get(field), expected))
++    return ("ok", data, "")
++
++
++def build_collect_payload(status):
++    """把终态 status 补成 collect 结果：collected_at、自然 duration、stdout digest 核验。"""
++    payload = dict(status)
++    payload["schema_version"] = SCHEMA_VERSION
++    payload["collected_at"] = utc_now_iso()
++    started_epoch = parse_utc_iso(status.get("started_at"))
++    terminal_epoch = parse_utc_iso(status.get("terminal_at"))
++    payload["duration_seconds"] = round(terminal_epoch - started_epoch, 3) \
++        if (started_epoch is not None and terminal_epoch is not None) else None
++    stderr_evidence = stderr_stat_evidence(status["run_dir"], status["site"])
++    payload["stderr_bytes"] = stderr_evidence["bytes"]
++    payload["stderr_lines"] = stderr_evidence["lines"]
++    payload["stdout_lines"] = None
++
++    if status.get("rc") is None:
++        return payload
++    # rc 已发布才读 stdout（OVBG-02：collect 只在 rc 发布后读取 stdout）
++    evidence = stdout_read_evidence(status["run_dir"], status["site"])
++    if not evidence.get("ok"):
++        payload.update({"ok": False, "state": STATE_CORRUPT, "terminal": True,
++                        "reason_code": REASON_EXEC_ERROR, "detail": evidence["detail"]})
++        return payload
++    payload["stdout_bytes"] = evidence["bytes"]
++    payload["stdout_lines"] = evidence["lines"]
++    witness_digest = status.get("stdout_sha256")
++    if witness_digest and witness_digest != evidence["sha256"]:
++        payload.update({
++            "ok": False, "state": STATE_CORRUPT, "terminal": True,
++            "reason_code": REASON_EXEC_ERROR,
++            "detail": "stdout digest 与 terminal witness 不符（证据被改动）: %s ≠ %s"
++                      % (evidence["sha256"], witness_digest)})
++        return payload
++    payload["stdout_sha256"] = evidence["sha256"]
++    if payload["reason_code"] == REASON_OK:
++        # 只有可信成功的 stdout 才给出路径 —— 它是唯一进 findings 池的通道。
++        payload["stdout_path"] = evidence["path"]
++    return payload
++
++
++# ── 子命令入口 ────────────────────────────────────────────────────────────────
++
++def _validate_site_args(args):
++    """三个只读子命令共享的入参校验。→ 错误 payload 或 None。"""
++    site = args.site or ""
++    if not SITE_RE.match(site):
++        return _reject("site 名非法（只允许 [A-Za-z0-9._-]，且不得以 . - 开头）: %r" % site,
++                       state="usage-error", reason_code=REASON_EXEC_ERROR,
++                       fallback_allowed=False, site=site)
++    if not _no_control_chars(args.run_dir or "") or not os.path.isabs(args.run_dir or ""):
++        return _reject("run-dir MUST 为不含换行/NUL 的绝对路径: %r" % (args.run_dir,),
++                       state="usage-error", reason_code=REASON_EXEC_ERROR,
++                       fallback_allowed=False, site=site)
++    timeout = getattr(args, "timeout", None)
++    if timeout is not None and not (MIN_TIMEOUT_SECONDS <= timeout <= MAX_TIMEOUT_SECONDS):
++        # 复用 dispatch 的同一组常量（= 既有 outside-voice.async-timeout-seconds 的取值域），
++        # MUST NOT 在这里新造第二份范围口径。
++        return _reject("timeout 越界（合法 %d..%d）: %d"
++                       % (MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, timeout),
++                       state="usage-error", reason_code=REASON_EXEC_ERROR,
++                       fallback_allowed=False, site=site)
++    return None
++
++
++def cmd_status(args):
++    bad = _validate_site_args(args)
++    if bad is not None:
++        return 2, bad
++    payload = derive_status(args.run_dir, args.site, timeout_override=args.timeout)
++    return (0 if payload["ok"] else 1), payload
++
++
++def cmd_await(args):
++    bad = _validate_site_args(args)
++    if bad is not None:
++        return 2, bad
++    poll = min(max(args.poll_interval, MIN_POLL_INTERVAL_SECONDS), MAX_POLL_INTERVAL_SECONDS)
++    max_wait = args.max_wait
++    if max_wait is not None and not (0 < max_wait <= MAX_AWAIT_WAIT_SECONDS):
++        return 2, _reject("max-wait 越界（合法 0<v≤%d）: %r" % (MAX_AWAIT_WAIT_SECONDS, max_wait),
++                          state="usage-error", reason_code=REASON_EXEC_ERROR,
++                          fallback_allowed=False, site=args.site)
++    started = time.monotonic()
++    while True:
++        payload = derive_status(args.run_dir, args.site, timeout_override=args.timeout)
++        waited = time.monotonic() - started
++        # 终态 / RESERVED（unknown-cost，永远不会自行到达终态，交 reconcile）/ 外层 max-wait
++        # 到点 —— 三者之外一律继续等：MUST NOT 因为「等久了」就落 timeout。
++        if payload["terminal"] or payload["state"] == STATE_RESERVED:
++            break
++        if max_wait is not None and waited >= max_wait:
++            break
++        time.sleep(poll)
++    payload["waited_seconds"] = round(time.monotonic() - started, 3)
++    return (0 if payload["ok"] else 1), payload
++
++
++def cmd_collect(args):
++    bad = _validate_site_args(args)
++    if bad is not None:
++        return 2, bad
++    run_dir = os.path.realpath(args.run_dir)
++    site = args.site
++    kind, job, detail = load_job_metadata(run_dir, site)
++    if kind == "ok":
++        stored_kind, stored, stored_detail = load_collected(run_dir, site, job)
++        if stored_kind == "corrupt":
++            return 1, _status_payload(STATE_CORRUPT, REASON_EXEC_ERROR, stored_detail,
++                                      site=site, run_dir=run_dir)
++        if stored_kind == "ok":
++            # 幂等：首次收集的结论就是终局，原样回放（含首次 collected_at）。
++            return (0 if stored.get("ok") else 1), stored
++
++    status = derive_status(run_dir, site, timeout_override=args.timeout)
++    if not status["terminal"]:
++        # 未终态 ⇒ 不落 collected witness、不读 stdout、reason_code 恒为 null。
++        return 1, status
++    payload = build_collect_payload(status)
++    if kind == "ok":
++        _first_writer_wins_json(collected_path(run_dir, site), payload)
++        stored_kind, stored, _ = load_collected(run_dir, site, job)
++        if stored_kind == "ok":
++            payload = stored
++    return (0 if payload["ok"] else 1), payload
++
++
+ # ── CLI ───────────────────────────────────────────────────────────────────────
+ 
+ def build_parser():
+@@ -863,6 +1433,22 @@ def build_parser():
+     add_common(worker)
+     worker.add_argument("--attempt-nonce", required=True)
+ 
++    def add_site_only(p):
++        p.add_argument("--run-dir", required=True)
++        p.add_argument("--site", required=True)
++        # 缺省 None = 「用 job.json 里 dispatch 当时记下的 timeout_seconds」，
++        # 即既有 `outside-voice.async-timeout-seconds` 的值 —— 本 helper 不另解析 config。
++        p.add_argument("--timeout", type=int, default=None)
++
++    add_site_only(sub.add_parser("status"))
++
++    awaiter = sub.add_parser("await")
++    add_site_only(awaiter)
++    awaiter.add_argument("--max-wait", type=float, default=None)
++    awaiter.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_SECONDS)
++
++    add_site_only(sub.add_parser("collect"))
++
+     return parser
+ 
+ 
+@@ -887,6 +1473,11 @@ def main(argv=None):
+     if args.command == "worker":
+         code, _ = cmd_worker(args)
+         return code
++    if args.command in ("status", "await", "collect"):
++        code, payload = {"status": cmd_status, "await": cmd_await,
++                         "collect": cmd_collect}[args.command](args)
++        emit(payload)
++        return code
+     parser.print_usage(sys.stderr)
+     return 2
+ 
+diff --git a/sdflow-init/tests/test_outside_voice_job.py b/sdflow-init/tests/test_outside_voice_job.py
+index 386718c..0e828bc 100644
+--- a/sdflow-init/tests/test_outside_voice_job.py
++++ b/sdflow-init/tests/test_outside_voice_job.py
+@@ -1,4 +1,4 @@
+-"""outside-voice-job.py 的 Task 1 契约测试（preflight / reserve / dispatch / worker）。
++"""outside-voice-job.py 的契约测试（preflight / reserve / dispatch / worker / status / await / collect）。
+ 
+ TDD 接缝（先定后写）——两处公共边界，测试只打这两处，不打内部实现：
+ 
+@@ -15,6 +15,7 @@ TDD 接缝（先定后写）——两处公共边界，测试只打这两处，
+ 
+ import hashlib
+ import importlib.util
++import itertools
+ import json
+ import os
+ import re
+@@ -24,7 +25,9 @@ import stat
+ import subprocess
+ import sys
+ import textwrap
++import threading
+ import time
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ import pytest
+@@ -86,6 +89,10 @@ if argv[:1] == ["agents"]:
+     if mode == "empty":
+         sys.stdout.write("[]\n")
+         sys.exit(0)
++    if mode == "fixed":
++        # Task 2：由测试直接给定整份 roster JSON（liveness 维度的注入点）。
++        sys.stdout.write(os.environ.get("FAKE_CLAUDE_FIXED", "[]") + "\n")
++        sys.exit(0)
+     st = load_state()
+     if not st:
+         sys.stdout.write("[]\n")
+@@ -996,3 +1003,706 @@ def test_background_worker_survives_dispatching_shell_exit(fake_job_home, repo):
+     finally:
+         subprocess.run([shutil.which("claude"), "rm", job_id],
+                        capture_output=True, text=True, timeout=60)
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# Task 2：终态派生的 status / await / collect
++#
++# TDD 接缝（先定后写，测试只打这两处）：
++#   ③ **子命令 CLI 契约**：`status` / `await` / `collect` 的 argv、stdout 上的单行 JSON
++#      （`ok` / `state` / `terminal` / `reason_code` / 时刻 / duration / runner/model/effort /
++#      stdout digest）与退出码（0 ⟺ `ok` 为真）。
++#   ④ **派生纯函数契约**：`JOB.derive_status(run_dir, site, liveness=…, now=…)` ——
++#      rc × liveness × 元数据的笛卡尔归类在此逐组合钉死；CLI 只是它的薄壳，
++#      `test_status_cli_is_a_thin_shell_over_derive_status` 把二者绑住，防第二份实现。
++# ══════════════════════════════════════════════════════════════════════════════
++
++RC_KINDS = ("absent", "rc0_nonempty", "rc0_empty", "rc124", "rc3", "rc_other", "rc_bad")
++LIVENESS_KINDS = ("working", "done", "failed", "stopped", "missing", "unavailable")
++META_KINDS = ("complete", "missing-field", "schema-drift")
++
++
++def _expected_classification(rc_kind, liveness, meta_kind):
++    """期望表**逐条抄自 spec**，MUST NOT 从实现回读（否则等于用实现证明实现）。
++
++    · OVBG-02：`.rc` 不存在且 agent working = RUNNING；`.rc=0` 且 stdout 非空 = SUCCEEDED；
++      `.rc=124` = TIMED_OUT；其他退出码 = FAILED；terminal agent 无 `.rc` = LOST。
++    · OVBG-02「元数据损坏不得猜成功」：job JSON 缺字段 / rc 非纯十进制 / rc=0 但 stdout 为空
++      → `exec-error`。
++    · HAE-09「锚契约与 reason_code 枚举语义不变」⇒ 沿用两份评审 SKILL ⑦ 的同一张 rc 表：
++      `3` = `secret-hit`（该码**不允许**同族 fallback，若并入 exec-error 会让调用方拿同一份
++      命中 secret 的 context 再派一次，正是 OVBG-04 要杀的形态）。
++    """
++    if meta_kind != "complete":
++        return ("CORRUPT", "exec-error")
++    if rc_kind == "rc_bad":
++        return ("CORRUPT", "exec-error")
++    if rc_kind == "rc0_nonempty":
++        return ("SUCCEEDED", "ok")
++    if rc_kind == "rc0_empty":
++        return ("CORRUPT", "exec-error")
++    if rc_kind == "rc124":
++        return ("TIMED_OUT", "timeout")
++    if rc_kind == "rc3":
++        return ("FAILED", "secret-hit")
++    if rc_kind == "rc_other":
++        return ("FAILED", "exec-error")
++    if liveness in ("done", "failed", "stopped", "missing"):
++        return ("LOST", "exec-error")
++    return ("RUNNING", None)
++
++
++_RC_TEXT = {"rc0_nonempty": "0", "rc0_empty": "0", "rc124": "124", "rc3": "3",
++            "rc_other": "7", "rc_bad": "oops"}
++
++
++def _iso(epoch):
++    return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent",
++               now=None, dispatched_ago=2.0, started_ago=1.0, timeout_seconds=900,
++               startup_deadline_ago=None, job_id="75d34378", nonce="n0nce7777",
++               write_job=True, write_started=True, write_terminal=None,
++               stdout=b"outside voice findings\n", stderr=b"fake-stderr\n",
++               terminal_digest=None, run_id=None, nonce_in_witness=None):
++    """把一个站点的盘面摆成指定形态。返回写下的 job metadata（dict 或 None）。
++
++    盘面即状态 ⇒ 所有用例的输入都是「run dir 里有哪些文件、内容是什么」，
++    不通过任何可变 status 字段注入。
++    """
++    run_dir = Path(run_dir)
++    now = time.time() if now is None else now
++    run_id = run_id or run_dir.name
++    witness_nonce = nonce if nonce_in_witness is None else nonce_in_witness
++    meta_payload = None
++    if write_job:
++        startup_at = (now - startup_deadline_ago) if startup_deadline_ago is not None \
++            else (now - dispatched_ago + JOB.STARTUP_DEADLINE_SECONDS)
++        meta_payload = {
++            "schema_version": JOB.SCHEMA_VERSION,
++            "run_id": run_id,
++            "site": site,
++            "repo_root": str(Path(run_dir).parents[3].resolve()) if len(Path(run_dir).parents) > 3
++                         else str(run_dir.resolve()),
++            "run_dir": str(run_dir.resolve()),
++            "context_file": str((run_dir / (site + "-context.md")).resolve()),
++            "attempt_nonce": nonce,
++            "runner": "claude", "model": "opus", "effort": "high",
++            "platform": "posix", "sys_platform": sys.platform,
++            "job_id": job_id, "session_id": job_id + "-sess",
++            "dispatched_at": _iso(now - dispatched_ago),
++            "startup_deadline_at": _iso(startup_at),
++            "timeout_seconds": timeout_seconds,
++            "command_sha256": "0" * 64,
++            "job_helper_version": JOB.VERSION,
++            "dispatch_duration_seconds": 0.4,
++        }
++        if meta == "missing-field":
++            meta_payload.pop("attempt_nonce")
++        elif meta == "schema-drift":
++            meta_payload["schema_version"] = JOB.SCHEMA_VERSION + 1
++        JOB.atomic_write_json(JOB.job_path(run_dir, site), meta_payload)
++
++    if write_started:
++        JOB.atomic_write_json(run_dir / (site + ".started.json"), {
++            "schema_version": JOB.SCHEMA_VERSION, "site": site, "run_id": run_id,
++            "attempt_nonce": witness_nonce, "started_at": _iso(now - started_ago),
++            "worker": {"pid": 4242, "ppid": 1, "pgid": 4242, "sid": 4242,
++                       "executable": sys.executable},
++        })
++
++    if rc_kind != "absent":
++        payload = b"" if rc_kind == "rc0_empty" else stdout
++        (run_dir / (site + ".stdout")).write_bytes(payload)
++        (run_dir / (site + ".stderr")).write_bytes(stderr)
++        if write_terminal is not False:
++            JOB.atomic_write_json(run_dir / (site + ".terminal.json"), {
++                "schema_version": JOB.SCHEMA_VERSION, "site": site, "run_id": run_id,
++                "attempt_nonce": witness_nonce, "terminal_at": _iso(now - 0.2),
++                "stdout_sha256": terminal_digest or hashlib.sha256(payload).hexdigest(),
++                "stdout_bytes": len(payload), "stderr_bytes": len(stderr),
++            })
++        (run_dir / (site + ".rc")).write_text(_RC_TEXT[rc_kind], encoding="utf-8")
++    elif write_terminal:
++        JOB.atomic_write_json(run_dir / (site + ".terminal.json"), {
++            "schema_version": JOB.SCHEMA_VERSION, "site": site, "run_id": run_id,
++            "attempt_nonce": witness_nonce, "terminal_at": _iso(now),
++            "stdout_sha256": None, "stdout_bytes": 0, "stderr_bytes": 0,
++        })
++    return meta_payload
++
++
++# ── ④ 派生纯函数：rc × liveness × 元数据 的**逐组合**归类 ─────────────────────
++
++@pytest.mark.parametrize("rc_kind,liveness,meta_kind",
++                         list(itertools.product(RC_KINDS, LIVENESS_KINDS, META_KINDS)))
++def test_status_cartesian_classification(tmp_path, rc_kind, liveness, meta_kind):
++    """rc 维度 × liveness 维度 × 元数据维度**逐组合**有确定性归类。
++
++    参数化而非挑 happy path：本票的核心验收标准就是这张笛卡尔表。
++    """
++    run_dir = tmp_path / "20260725T000000Z-Zz99"
++    run_dir.mkdir()
++    now = time.time()
++    _seed_site(run_dir, meta=meta_kind, rc_kind=rc_kind, now=now)
++    payload = JOB.derive_status(run_dir, "design-voice", liveness=liveness, now=now)
++    exp_state, exp_reason = _expected_classification(rc_kind, liveness, meta_kind)
++    assert payload["state"] == exp_state, payload
++    assert payload["reason_code"] == exp_reason, payload
++    assert payload["terminal"] is (exp_state not in ("RESERVED", "STARTING", "RUNNING")), payload
++    assert payload["ok"] is (exp_reason == "ok"), payload
++
++
++def test_no_pending_lost_or_corrupt_combination_ever_yields_ok(tmp_path):
++    """机械断言：全笛卡尔里「非 rc=0+非空 stdout」的组合产生 `reason_code="ok"` 的**数量为 0**。
++
++    这是 design.md Non-Functional Requirements 的那条硬指标，MUST 是遍历断言而非 prose。
++    """
++    offenders = []
++    ok_count = 0
++    now = time.time()
++    for idx, (rc_kind, liveness, meta_kind) in enumerate(
++            itertools.product(RC_KINDS, LIVENESS_KINDS, META_KINDS)):
++        run_dir = tmp_path / ("run-%03d" % idx)
++        run_dir.mkdir()
++        _seed_site(run_dir, meta=meta_kind, rc_kind=rc_kind, now=now)
++        payload = JOB.derive_status(run_dir, "design-voice", liveness=liveness, now=now)
++        legit = (meta_kind == "complete" and rc_kind == "rc0_nonempty")
++        if payload["reason_code"] == "ok":
++            ok_count += 1
++            if not legit:
++                offenders.append((rc_kind, liveness, meta_kind, payload["state"]))
++    assert offenders == [], offenders
++    # 正向对照：合法组合确实产出了 ok（否则「0 个 ok」可能只是因为**没有任何** ok）
++    assert ok_count == len(LIVENESS_KINDS), ok_count
++
++
++def test_liveness_never_overrides_a_published_rc(tmp_path):
++    """ADR-2：`claude agents` 的 done/failed 只提供 liveness，MUST NOT 决定 ok/timeout。"""
++    now = time.time()
++    seen = set()
++    for liveness in LIVENESS_KINDS:
++        run_dir = tmp_path / ("rc-vs-%s" % liveness)
++        run_dir.mkdir()
++        _seed_site(run_dir, rc_kind="rc0_nonempty", now=now)
++        payload = JOB.derive_status(run_dir, "design-voice", liveness=liveness, now=now)
++        seen.add((payload["state"], payload["reason_code"]))
++        assert payload["liveness"] is None, payload  # 终态站点根本不必探 liveness
++    assert seen == {("SUCCEEDED", "ok")}, seen
++
++
++# ── 终态前不读 stdout（机械锚：对读取口的 spy）────────────────────────────────
++
++def test_status_never_reads_stdout_before_terminal(monkeypatch, tmp_path):
++    """终态（rc 发布）之前 MUST NOT 读 stdout —— 半成品输出不得有任何进 findings 的路径。"""
++    calls = []
++    monkeypatch.setattr(JOB, "stdout_read_evidence",
++                        lambda *a, **k: calls.append(("read", a)) or {})
++    monkeypatch.setattr(JOB, "stdout_stat_evidence",
++                        lambda *a, **k: calls.append(("stat", a)) or {"bytes": 0, "exists": False})
++    for liveness in LIVENESS_KINDS:
++        run_dir = tmp_path / ("pending-%s" % liveness)
++        run_dir.mkdir()
++        _seed_site(run_dir, rc_kind="absent")
++        (run_dir / "design-voice.stdout").write_bytes(b"HALF WRITTEN FINDINGS\n")
++        JOB.derive_status(run_dir, "design-voice", liveness=liveness)
++    assert calls == [], calls
++
++
++def test_status_stats_stdout_size_but_never_reads_its_content(monkeypatch, tmp_path):
++    """终态后 status 只需要「stdout 是否非空」⇒ stat 即可，MUST NOT 把正文读进来。"""
++    reads = []
++    monkeypatch.setattr(JOB, "stdout_read_evidence", lambda *a, **k: reads.append(a) or {})
++    run_dir = tmp_path / "terminal"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty")
++    payload = JOB.derive_status(run_dir, "design-voice", liveness="done")
++    assert payload["state"] == "SUCCEEDED"
++    assert reads == [], reads
++
++
++@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0,
++                    reason="root 绕过文件权限，chmod 000 的负向探针在 root 下无判别力")
++def test_status_of_a_running_site_survives_an_unreadable_stdout(tmp_path):
++    """独立于 spy 的第二条锚：stdout 完全读不动时，未终态站点的归类照常成立。"""
++    run_dir = tmp_path / "unreadable"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent")
++    out = run_dir / "design-voice.stdout"
++    out.write_bytes(b"HALF WRITTEN\n")
++    out.chmod(0o000)
++    try:
++        payload = JOB.derive_status(run_dir, "design-voice", liveness="working")
++        assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
++    finally:
++        out.chmod(0o600)
++
++
++# ── 独立的 startup deadline vs 从可信 started_at 起算的 worker 上界 ──────────
++
++def test_startup_deadline_is_independent_of_the_worker_deadline(tmp_path):
++    """started sidecar 未发布 ⇒ 只受**独立**的 startup deadline 约束（非 worker timeout）。"""
++    now = time.time()
++    fresh = tmp_path / "fresh"
++    fresh.mkdir()
++    _seed_site(fresh, rc_kind="absent", write_started=False, now=now,
++               startup_deadline_ago=-3)          # startup deadline 还在未来
++    assert JOB.derive_status(fresh, "design-voice", liveness="working", now=now)["state"] == "STARTING"
++
++    stale = tmp_path / "stale"
++    stale.mkdir()
++    _seed_site(stale, rc_kind="absent", write_started=False, now=now,
++               startup_deadline_ago=1)           # startup deadline 已过
++    payload = JOB.derive_status(stale, "design-voice", liveness="working", now=now)
++    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
++
++
++def test_worker_upper_bound_counts_from_trusted_started_at_plus_grace(tmp_path):
++    """worker 上界 = 可信 `started_at` + timeout + 30 秒 grace，**不是**从 dispatch 时刻起算。
++
++    排队 300 秒才启动的合法 worker：若从 dispatch 时刻起算，它在 timeout 到点时就被误杀；
++    从 started_at 起算则仍在预算内。这里 dispatch 已过 400 秒、started 才过 10 秒、timeout=60。
++    """
++    now = time.time()
++    queued = tmp_path / "queued"
++    queued.mkdir()
++    _seed_site(queued, rc_kind="absent", now=now, dispatched_ago=400, started_ago=10,
++               timeout_seconds=60)
++    payload = JOB.derive_status(queued, "design-voice", liveness="working", now=now)
++    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
++
++    # 恰好越过 started_at + timeout + grace 才归 LOST（且**不是** timeout）
++    over = tmp_path / "over"
++    over.mkdir()
++    _seed_site(over, rc_kind="absent", now=now, dispatched_ago=400,
++               started_ago=60 + JOB.AWAIT_GRACE_SECONDS + 1, timeout_seconds=60)
++    payload = JOB.derive_status(over, "design-voice", liveness="working", now=now)
++    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
++    assert payload["reason_code"] != "timeout"
++
++
++def test_deadline_uses_the_timeout_override_when_given(tmp_path):
++    now = time.time()
++    run_dir = tmp_path / "override"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", now=now, started_ago=100, timeout_seconds=900)
++    assert JOB.derive_status(run_dir, "design-voice", liveness="working", now=now,
++                             timeout_override=1)["state"] == "LOST"
++    assert JOB.derive_status(run_dir, "design-voice", liveness="working", now=now,
++                             timeout_override=900)["state"] == "RUNNING"
++
++
++def test_liveness_probe_failure_does_not_declare_the_worker_lost(tmp_path):
++    """探针本身取不到答案 ≠ job 丢了 —— 无判别力的探针 MUST NOT 触发降级。"""
++    now = time.time()
++    run_dir = tmp_path / "probe-down"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", now=now)
++    payload = JOB.derive_status(run_dir, "design-voice", liveness="unavailable", now=now)
++    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
++
++
++def test_unknown_agent_state_is_inconclusive_not_terminal(tmp_path):
++    """agents JSON 的 state 枚举漂移 ⇒ 保守当「探不到」，MUST NOT 当成 job 已终态而误降级。"""
++    now = time.time()
++    run_dir = tmp_path / "drift"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", now=now)
++    payload = JOB.derive_status(run_dir, "design-voice", liveness="hibernating", now=now)
++    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
++
++
++def test_reserve_without_job_metadata_is_reserved_and_never_collectable(tmp_path):
++    run_dir = tmp_path / "reserved"
++    run_dir.mkdir()
++    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
++    payload = JOB.derive_status(run_dir, "design-voice", liveness="working")
++    assert payload["state"] == "RESERVED"
++    assert payload["reason_code"] is None
++    assert payload["terminal"] is False
++    assert payload["unknown_cost"] is True
++
++
++def test_site_with_nothing_on_disk_is_exec_error_never_ok(tmp_path):
++    run_dir = tmp_path / "nothing"
++    run_dir.mkdir()
++    payload = JOB.derive_status(run_dir, "design-voice", liveness="missing")
++    assert (payload["state"], payload["reason_code"]) == ("MISSING", "exec-error"), payload
++
++
++def test_terminal_rc_without_a_terminal_witness_is_corrupt(tmp_path):
++    run_dir = tmp_path / "no-witness"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", write_terminal=False)
++    payload = JOB.derive_status(run_dir, "design-voice", liveness="done")
++    assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
++
++
++def test_witness_attempt_nonce_mismatch_is_corrupt(tmp_path):
++    """上一轮遗留的 witness 混进本轮 run dir ⇒ identity 核不过，MUST NOT 当本次结果采信。"""
++    run_dir = tmp_path / "stale-witness"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce_in_witness="someone-elses-nonce")
++    payload = JOB.derive_status(run_dir, "design-voice", liveness="done")
++    assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
++
++
++# ── ③ CLI 契约 ────────────────────────────────────────────────────────────────
++
++def _fixed_roster(job_id="75d34378", state="working", cwd="/tmp"):
++    entry = {"id": job_id, "cwd": cwd, "kind": "background", "startedAt": 1784974140034,
++             "sessionId": job_id + "-sess", "state": state}
++    if state != "done":
++        entry["name"] = "python3 outside-voice-job.py worker …"
++    return json.dumps([entry])
++
++
++def _site_args(cmd, run_dir, site="design-voice", *extra):
++    return [cmd, "--run-dir", str(run_dir), "--site", site, *extra]
++
++
++def test_status_cli_emits_single_line_json_for_a_running_site(job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260725T010000Z-Cli001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent")
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
++    started = time.monotonic()
++    proc = _run_job(job_home, _site_args("status", run_dir), env)
++    elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1                       # 非 ok ⇒ 非零；分类看 JSON
++    assert proc.stdout.strip().count("\n") == 0       # 单行 JSON
++    assert payload["state"] == "RUNNING"
++    assert payload["reason_code"] is None
++    assert payload["terminal"] is False
++    assert payload["liveness"] == "working"
++    assert payload["job_id"] == "75d34378"
++    assert elapsed < 5, elapsed                        # 单次 status 查询 ≤5 秒（NFR）
++
++
++@pytest.mark.parametrize("rc_kind", RC_KINDS)
++@pytest.mark.parametrize("meta_kind", META_KINDS)
++def test_status_cli_is_a_thin_shell_over_derive_status(job_home, fake_claude, tmp_path,
++                                                       rc_kind, meta_kind):
++    """CLI 与派生函数 MUST 同一个真相源——否则笛卡尔表只证明了那个没人调用的函数。"""
++    run_dir = tmp_path / "20260725T020000Z-Thin01"
++    run_dir.mkdir()
++    _seed_site(run_dir, meta=meta_kind, rc_kind=rc_kind)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
++    proc = _run_job(job_home, _site_args("status", run_dir), env)
++    cli = _json_stdout(proc)
++    direct = JOB.derive_status(run_dir, "design-voice", liveness="working")
++    assert cli == direct, (cli, direct)
++    assert proc.returncode == (0 if cli["ok"] else 1)
++
++
++@pytest.mark.parametrize("agent_state,expected", [
++    ("working", "RUNNING"), ("done", "LOST"), ("failed", "LOST"), ("stopped", "LOST"),
++])
++def test_status_cli_maps_real_agent_states_through_the_id_channel(job_home, fake_claude,
++                                                                  tmp_path, agent_state, expected):
++    """liveness 走 **id** 通道匹配：`state="done"` 的条目没有 `name`（真机实测，Task 1）。"""
++    run_dir = tmp_path / "20260725T030000Z-Live01"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent")
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster(state=agent_state)})
++    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
++    assert payload["state"] == expected, payload
++    assert payload["liveness"] == agent_state
++    assert payload["reason_code"] != "timeout"
++
++
++def test_status_cli_reports_missing_when_job_id_absent_from_roster(job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260725T040000Z-Miss01"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent")
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
++    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
++    assert payload["liveness"] == "missing"
++    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
++
++
++def test_status_cli_treats_unreachable_agents_cli_as_inconclusive(job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260725T050000Z-Down01"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent")
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "disabled"})
++    payload = _json_stdout(_run_job(job_home, _site_args("status", run_dir), env))
++    assert payload["liveness"] == "unavailable"
++    assert (payload["state"], payload["reason_code"]) == ("RUNNING", None), payload
++
++
++# ── collect ───────────────────────────────────────────────────────────────────
++
++def test_collect_returns_structured_machine_readable_evidence(job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260725T060000Z-Col001"
++    run_dir.mkdir()
++    now = time.time()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", now=now, dispatched_ago=930, started_ago=920)
++    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, proc.stderr
++    assert payload["ok"] is True
++    assert payload["reason_code"] == "ok"
++    assert payload["state"] == "SUCCEEDED"
++    for field in ("dispatched_at", "started_at", "terminal_at", "collected_at",
++                  "duration_seconds", "runner", "model", "effort", "stdout_sha256",
++                  "stdout_bytes", "stdout_lines", "stderr_bytes", "rc", "job_id",
++                  "attempt_nonce", "timeout_seconds"):
++        assert field in payload and payload[field] is not None, field
++    assert payload["runner"] == "claude"
++    assert payload["model"] == "opus"
++    assert payload["effort"] == "high"
++    assert payload["rc"] == 0
++    # 自然耗时 = terminal_at − started_at（不是墙钟外壳，也不是 dispatch 起算）
++    assert 900 < payload["duration_seconds"] < 940, payload["duration_seconds"]
++    assert payload["stdout_sha256"] == hashlib.sha256(
++        (run_dir / "design-voice.stdout").read_bytes()).hexdigest()
++    assert payload["stdout_path"] == str((run_dir / "design-voice.stdout").resolve())
++    # stderr 只出结构化计数，MUST NOT 转录正文
++    assert "fake-stderr" not in json.dumps(payload, ensure_ascii=False)
++    assert payload["stderr_bytes"] == len(b"fake-stderr\n")
++
++
++def test_collect_is_idempotent_byte_for_byte(job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260725T070000Z-Idem01"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty")
++    first = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
++    time.sleep(1.1)                                  # 保证「重算」会得到不同的 collected_at
++    second = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
++    assert first.returncode == second.returncode == 0
++    assert first.stdout == second.stdout, (first.stdout, second.stdout)
++    assert json.loads(first.stdout)["collected_at"] == json.loads(second.stdout)["collected_at"]
++
++
++def test_collect_before_terminal_is_not_ok_and_leaks_no_partial_output(job_home, fake_claude,
++                                                                       tmp_path):
++    """「起了没收」MUST NOT 读作成功——未终态站点没有任何进 findings 的通道。
++
++    ⚠️ 命名边界（反向变异实测）：本条**不是**「有没有读过 stdout」的判别器——把读取
++    提前到 rc 判定之前，本条照样绿。「终态前不读」的锚是
++    `test_status_never_reads_stdout_before_terminal`（对读取口的 spy）。
++    本条守的是**出口**：未终态时 collect 不给 stdout_path、不落 collected witness、
++    不把半成品正文带进自己的 stdout。
++    """
++    run_dir = tmp_path / "20260725T080000Z-Early1"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent")
++    (run_dir / "design-voice.stdout").write_bytes(b"PARTIAL FINDINGS: looks fine!\n")
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
++    proc = _run_job(job_home, _site_args("collect", run_dir), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["ok"] is False
++    assert payload["reason_code"] is None
++    assert payload["state"] == "RUNNING"
++    assert "PARTIAL FINDINGS" not in proc.stdout
++    assert "stdout_path" not in payload
++    assert not (run_dir / "design-voice.collected.json").exists()
++
++
++@pytest.mark.parametrize("rc_kind,reason", [
++    ("rc124", "timeout"), ("rc3", "secret-hit"), ("rc_other", "exec-error"),
++    ("rc_bad", "exec-error"), ("rc0_empty", "exec-error"),
++])
++def test_collect_rc_to_reason_code_table(job_home, fake_claude, tmp_path, rc_kind, reason):
++    run_dir = tmp_path / "20260725T090000Z-Rc0001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind=rc_kind)
++    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["reason_code"] == reason, payload
++    assert "stdout_path" not in payload            # 非 ok ⇒ 输出不得进 findings 池
++
++
++def test_collect_detects_a_stdout_digest_mismatch(job_home, fake_claude, tmp_path):
++    """terminal witness 的 digest 与实际 stdout 不符 ⇒ 证据被动过，fail-closed。"""
++    run_dir = tmp_path / "20260725T100000Z-Dig001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty", terminal_digest="f" * 64)
++    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
++
++
++def test_collect_refuses_to_reuse_a_collected_witness_from_another_attempt(job_home, fake_claude,
++                                                                          tmp_path):
++    run_dir = tmp_path / "20260725T110000Z-Wit001"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="rc0_nonempty")
++    JOB.atomic_write_json(run_dir / "design-voice.collected.json", {
++        "schema_version": JOB.SCHEMA_VERSION, "site": "design-voice",
++        "run_id": run_dir.name, "attempt_nonce": "not-this-attempt",
++        "ok": True, "reason_code": "ok", "state": "SUCCEEDED",
++    })
++    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["reason_code"] == "exec-error", payload
++
++
++# ── await ─────────────────────────────────────────────────────────────────────
++
++def test_await_waits_for_a_real_rc_and_never_early_timeouts(job_home, fake_claude, tmp_path):
++    """站点仍 RUNNING 时有界 await 不早退、不落 timeout（HAE-09 的 barrier 语义）。"""
++    run_dir = tmp_path / "20260725T120000Z-Awa001"
++    run_dir.mkdir()
++    now = time.time()
++    _seed_site(run_dir, rc_kind="absent", now=now, timeout_seconds=60)
++
++    def publish_later():
++        time.sleep(1.5)
++        _seed_site(run_dir, rc_kind="rc0_nonempty", now=time.time(), write_job=False,
++                   write_started=False)
++
++    worker = threading.Thread(target=publish_later)
++    worker.start()
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
++    started = time.monotonic()
++    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
++                                         "--poll-interval", "0.2"), env, timeout=60)
++    elapsed = time.monotonic() - started
++    worker.join()
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    assert payload["reason_code"] == "ok", payload
++    assert elapsed >= 1.4, elapsed                    # 真的等到了 rc，而不是早退
++    assert payload["waited_seconds"] >= 1.4, payload
++
++
++def test_await_exhausting_max_wait_stays_running_and_is_not_timeout(job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260725T130000Z-Awa002"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", timeout_seconds=900)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
++    started = time.monotonic()
++    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
++                                         "--max-wait", "1", "--poll-interval", "0.2"),
++                    env, timeout=60)
++    elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "RUNNING", payload
++    assert payload["reason_code"] is None, payload    # 🔴 MUST NOT 落 timeout
++    assert payload["terminal"] is False
++    assert 1 <= elapsed < 20, elapsed
++
++
++def test_await_declares_lost_after_started_plus_timeout_plus_grace(job_home, fake_claude, tmp_path):
++    run_dir = tmp_path / "20260725T140000Z-Awa003"
++    run_dir.mkdir()
++    now = time.time()
++    _seed_site(run_dir, rc_kind="absent", now=now, dispatched_ago=1000,
++               started_ago=1 + JOB.AWAIT_GRACE_SECONDS + 1, timeout_seconds=1)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
++    started = time.monotonic()
++    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
++                                         "--poll-interval", "0.2"), env, timeout=60)
++    elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
++    assert elapsed < 20, elapsed                      # 有界：不等满 900 秒
++
++
++def test_await_returns_immediately_when_the_job_is_gone(job_home, fake_claude, tmp_path):
++    """supervisor/job 丢失不是 timeout，且 MUST NOT 等满 timeout。"""
++    run_dir = tmp_path / "20260725T150000Z-Awa004"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent", timeout_seconds=900)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
++    started = time.monotonic()
++    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice"), env, timeout=60)
++    elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
++    assert payload["reason_code"] != "timeout"
++    assert elapsed < 20, elapsed
++
++
++def test_await_on_a_bare_reservation_does_not_spin_forever(job_home, fake_claude, tmp_path):
++    """RESERVED（unknown-cost）永远不会自行到达终态 ⇒ 有界 await MUST 立即返回交给 reconcile。"""
++    run_dir = tmp_path / "20260725T160000Z-Awa005"
++    run_dir.mkdir()
++    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
++    started = time.monotonic()
++    proc = _run_job(job_home, _site_args("await", run_dir), _env(fake_claude), timeout=60)
++    elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "RESERVED"
++    assert payload["unknown_cost"] is True
++    assert elapsed < 20, elapsed
++
++
++@pytest.mark.parametrize("timeout", ["0", "3601", "abc", "-1"])
++def test_await_rejects_out_of_range_timeout(job_home, fake_claude, tmp_path, timeout):
++    """超时上限复用既有 async timeout 配置项的合法范围 1..3600（越界即拒）。"""
++    run_dir = tmp_path / "20260725T170000Z-Awa006"
++    run_dir.mkdir()
++    _seed_site(run_dir, rc_kind="absent")
++    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
++                                         "--timeout", timeout), _env(fake_claude), timeout=60)
++    assert proc.returncode != 0
++
++
++def test_await_default_upper_bound_comes_from_job_metadata_timeout(job_home, fake_claude, tmp_path):
++    """默认上界取 dispatch 时记进 job.json 的 `timeout_seconds`（= 既有 async 配置项的值），
++    MUST NOT 在本 helper 里另造一份 config 解析。"""
++    run_dir = tmp_path / "20260725T180000Z-Awa007"
++    run_dir.mkdir()
++    now = time.time()
++    _seed_site(run_dir, rc_kind="absent", now=now, dispatched_ago=1000, started_ago=940,
++               timeout_seconds=JOB.DEFAULT_TIMEOUT_SECONDS)
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
++                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
++    # started_ago=940 > 900+30 ⇒ 默认上界（900）已越，立即 LOST
++    payload = _json_stdout(_run_job(job_home, _site_args("await", run_dir), env, timeout=60))
++    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
++    assert payload["timeout_seconds"] == JOB.DEFAULT_TIMEOUT_SECONDS
++
++
++def test_default_timeout_and_range_are_the_single_shared_constants():
++    """默认 900、范围 1..3600 —— 与 dispatch 共用同一组常量，不新增第二份口径。"""
++    assert JOB.DEFAULT_TIMEOUT_SECONDS == 900
++    assert (JOB.MIN_TIMEOUT_SECONDS, JOB.MAX_TIMEOUT_SECONDS) == (1, 3600)
++    assert JOB.AWAIT_GRACE_SECONDS == 30
++
++
++# ── dispatch → worker → await → collect 全链（离线，无真 claude）──────────────
++
++def test_dispatch_worker_await_collect_end_to_end_offline(fake_job_home, fake_claude, repo):
++    """本票的端到端接缝：Task 1 真写出来的盘面，MUST 能被 Task 2 的 await/collect 认。"""
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_BG_MODE": "run",
++        "FAKE_CLAUDE_JOB_ID": "abc12345",
++        "FAKE_HELPER_MARKER": "e2e",
++        "FAKE_HELPER_SLEEP": "1",
++    })
++    proc = _run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env)
++    assert proc.returncode == 0, proc.stderr
++
++    awaited = _json_stdout(_run_job(fake_job_home,
++                                    _site_args("await", repo["run_dir"], "design-voice",
++                                               "--poll-interval", "0.2"),
++                                    env, timeout=120))
++    assert awaited["reason_code"] == "ok", awaited
++    collected = _json_stdout(_run_job(fake_job_home,
++                                      _site_args("collect", repo["run_dir"]), env, timeout=60))
++    assert collected["ok"] is True, collected
++    assert collected["runner"] == "claude" and collected["model"] == "opus"
++    assert collected["effort"] == "high"
++    assert collected["duration_seconds"] >= 0
++    assert collected["stdout_sha256"] == hashlib.sha256(
++        (repo["run_dir"] / "design-voice.stdout").read_bytes()).hexdigest()
