@@ -746,6 +746,33 @@ def test_dispatch_fails_closed_when_preflight_not_ready(job_home, fake_claude, r
     assert not (repo["run_dir"] / "design-voice.reserve").exists()
 
 
+def test_reject_defaults_to_fail_closed_fallback():
+    """🔴 `_reject()` 的 `fallback_allowed` 默认 MUST 是 False。
+
+    Global Constraint：成本未知时禁止再次 dispatch 或立即 fallback。默认 True 与它反向 ——
+    现有调用点虽全部显式传值，但**下一个**新增失败分支忘了传就会静默放行一次重复计费。
+    允许 fallback 是要**显式声明**的事，不是忘记时的落点。
+    """
+    assert JOB._reject("boom")["fallback_allowed"] is False
+    assert JOB._reject("boom", fallback_allowed=True)["fallback_allowed"] is True
+
+
+def test_every_reject_call_site_states_its_fallback_stance():
+    """面治：默认翻 False 之后，仍要求每个调用点**显式**表态（默认只当兜底，不当省事）。"""
+    src = JOB_PY.read_text(encoding="utf-8")
+    missing = []
+    for m in re.finditer(r"_reject\(", src):
+        if src[:m.start()].rstrip().endswith("def"):
+            continue
+        i, depth = m.end(), 1
+        while depth and i < len(src):
+            depth += (src[i] == "(") - (src[i] == ")")
+            i += 1
+        if "fallback_allowed" not in src[m.start():i]:
+            missing.append(src[:m.start()].count("\n") + 1)
+    assert not missing, f"这些 _reject 调用点未显式表态 fallback_allowed：行 {missing}"
+
+
 @pytest.mark.parametrize("timeout", ["0", "3601", "abc"])
 def test_dispatch_rejects_out_of_range_timeout(job_home, fake_claude, repo, timeout):
     proc = _run_job(job_home, _dispatch_args(repo, job_home, timeout=timeout), _env(fake_claude))

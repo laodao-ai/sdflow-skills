@@ -26,7 +26,8 @@ import subprocess
 import sys
 import tempfile
 
-# [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 探测 3.6+ 才喂）：
+# [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 的 `$_py` 探测
+# 实际按 3.7+ 卡——那个解释器还要跑 outside-voice-job.py，闸门取两个消费者的上确界）：
 # 整模块编译先于任何语句执行，f-string 在 py<3.6 上是解析期 SyntaxError——模块内加
 # `sys.version_info` 守卫无从拦截自身 parse，故这里只声明契约、不放无功能的假守卫。
 

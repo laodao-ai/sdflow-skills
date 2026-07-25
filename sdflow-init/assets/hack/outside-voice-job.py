@@ -495,7 +495,14 @@ def release_reservation(run_dir, site):
 
 
 def _reject(message, state="usage-error", reason_code="preflight-error",
-            fallback_allowed=True, **extra):
+            fallback_allowed=False, **extra):
+    """失败 payload 的唯一构造口。
+
+    🔴 `fallback_allowed` 默认 **False**（fail-closed）：Global Constraint 是
+    「成本未知时禁止再次 dispatch 或立即 fallback」——默认 True 与它反向，
+    下一个新增的失败分支忘了传参就会**静默放行**一次可能的重复计费。
+    现有调用点全部显式传值，翻默认不改任何现行行为，只改「忘了传」时的落点。
+    """
     payload = {"ok": False, "reason_code": reason_code, "state": state,
                "fallback_allowed": fallback_allowed, "detail": message}
     payload.update(extra)

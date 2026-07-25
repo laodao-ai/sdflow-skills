@@ -418,7 +418,8 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
       dispatch stdout 是**单行 JSON**：成功（exit 0）含 `job_id` / `attempt_nonce` / `site` / `run_dir` / `dispatched_at` / `timeout_seconds` / `runner` / `model` / `effort`；MUST 就地记进 ⑧ 的记账表，并按 context 构造节把 `job_id` 与 `attempt_nonce` 追加落盘 `dispatch-manifest.tsv`。
       **exit≠0 时 MUST 先读 `fallback_allowed`，MUST NOT 一律 fallback**：
         `fallback_allowed=true`（preflight 未过 / 外部 job 根本没产生、reservation 已被 helper 回收）→ **立即同族 fallback**，`reason_code` 取 payload 的 `reason_code`。
-        `fallback_allowed=false`（`state` ∈ `duplicate-site` | `slot-limit` | `unknown-cost` | `usage-error`）→ **MUST NOT fallback、MUST NOT 重派**：外部 job 可能已经产生并计费，再派一次就是双倍付费。报告本段 MUST 显著标注 payload 的 `detail` 与 orphan warning，并提示人跑 `outside-voice-job.py cleanup --run-dir <d> --site <s> --cancel`（整轮则 `reconcile --run-dir <d>`）。
+        `fallback_allowed=false`（`state` ∈ `duplicate-site` | `slot-limit` | `unknown-cost` | `usage-error`）→ **MUST NOT fallback、MUST NOT 重派**：外部 job 可能已经产生并计费，再派一次就是双倍付费。报告本段 MUST 显著标注 payload 的 `detail`（**dispatch 的失败 payload 只有 `detail`，没有 `orphan_warning` 字段**——后者是 `collect` / `cleanup` / `reconcile` 才有的；MUST NOT 声称转录了一个不存在的字段），并提示人跑 `outside-voice-job.py cleanup --run-dir <d> --site <s> --cancel`（整轮则 `reconcile --run-dir <d>`）。
+        该站点的锚行 MUST 落 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（一次 voice 都没跑成、同族 fallback 也被成本闸门禁止 ⇒ 与 F8 同属矩阵的**无执行行**；MUST NOT 把 payload 自己的 `reason_code`（`exec-error` / `preflight-error`）搬进锚行——那两个都属**同族降级**码集，蕴含「fallback 真跑过」，而这里一次都没跑，runner 也 MUST NOT 写成 host）。
   **⑤ 终态取值（两宿主各自的可信终态；MUST NOT 从 voice 正文推断，F-D）**：
     · **claude-host**：读 `{run-dir}/<site>.rc` 的内容——**文件存在且内容匹配 `^[0-9]+$`** → 该数即退出码，进 ⑦；**文件不存在 / 内容不匹配 / 读取失败 → `exec-error`**（任务被回收时 `printf` 从未执行 ⇒ 无文件，这是诚实降级而非假绿）。
     · **codex-host**：**MUST NOT 自己读 `.rc`、MUST NOT 自己解释 sidecar**——跑 `python3 ~/.sdflow/hack/outside-voice-job.py collect --run-dir {run-dir} --site <site>`（幂等：重复 collect 输出与分类逐字节一致），按 stdout 单行 JSON 判：
@@ -432,9 +433,10 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
       · 完成通知**异步到达**（可能早于 Step3）→ 收到即**暂存该站点的输出与退出码**，MUST NOT 丢弃；
       · **Step3 是 barrier**：每个**实际 dispatch 过的**站点，其结果 MUST 已在手、或已按 ⑦ 降级完毕，才可进综合裁决。
     · **codex-host —— 有界 await**：对每个 dispatch 过的站点跑 `python3 ~/.sdflow/hack/outside-voice-job.py await --run-dir {run-dir} --site <site>`（helper 内部自定上界 = 可信 `started_at` + 内层 timeout + 30 秒 grace，并独立节流 liveness 探针）。**MUST NOT 自造轮询循环**、MUST NOT 单次长 sleep、MUST NOT 用 `--max-wait` 把它截短成早退。
-      await 返回 `terminal=false`（仍 STARTING / RUNNING）⇒ **MUST 再调一次 await**；MUST NOT 就此落 `timeout`——「外层调用返回了」不是终态证据。
+      await 返回 `terminal=false` **∧ `unknown_cost=false`**（仍 STARTING / RUNNING）⇒ **MUST 再调一次 await**；MUST NOT 就此落 `timeout`——「外层调用返回了」不是终态证据。
+      🔴 `terminal=false` **∧ `unknown_cost=true`** ⇒ **MUST NOT 再调 await**：该形态是 RESERVED（dispatch 已受理、metadata 从未发布），helper 明写它**永远不会自行到达终态** ⇒ 再等就是无限循环。直接走下一条的 unknown-cost 处置。
       🔴 **外层等待被回收 ≠ 后台任务死了**：supervisor 托管的 worker 仍在跑 ⇒ MUST 用**同一** run-dir + site 重新 `await` / `collect`，**MUST NOT 重新 dispatch**（重派 = 第二次计费）。若整轮评审 session 已丢失，只能由人显式跑 `reconcile --run-dir <确切目录>`，**MUST NOT 扫描"最新目录"猜恢复目标**。
-      🔴 **`unknown_cost=true` ⇒ MUST NOT 自动同族 fallback**（它覆盖**每一个** LOST 站点与残留 reservation）：rc 从未发布 ⇒ 子树是否退出**未经核验**、成本未知，自动 fallback 会在一次**已计费**的 voice 上再叠一次。此时 MUST 把 payload 的 `orphan_warning` 原样报进报告本段，并提示人跑 `outside-voice-job.py cleanup --run-dir <d> --site <s> --cancel`（identity 核验 → stop → 子树终止核验 → rm）；只有核验通过、helper 返回 `fallback_allowed=true` 之后才可 fallback。在此之前该站点 MUST 落 `reason_code="exec-error"`，MUST NOT 落 `ok`，MUST NOT 落 `timeout`。
+      🔴 **`unknown_cost=true` ⇒ MUST NOT 自动同族 fallback**（它覆盖**每一个** LOST 站点与残留 reservation）：rc 从未发布 ⇒ 子树是否退出**未经核验**、成本未知，自动 fallback 会在一次**已计费**的 voice 上再叠一次。此时 MUST 把 payload 的 `orphan_warning` 原样报进报告本段，并提示人跑 `outside-voice-job.py cleanup --run-dir <d> --site <s> --cancel`（identity 核验 → stop → 子树终止核验 → rm）；只有核验通过、helper 返回 `fallback_allowed=true` 之后才可 fallback。在此之前该站点 MUST 落锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（**没有任何执行段、也没有同族 fallback 跑过** ⇒ runner MUST NOT 写成 host，那是谎称跑过；anchor_lint 矩阵判 no-exec 合法），MUST NOT 落 `ok`，MUST NOT 落 `timeout`，MUST NOT 落 `exec-error`（后者属同族降级码集，与 runner="none" 组合矩阵判 illegal）。
       · **收完即清**：已取得 `reason_code` 的站点 MUST 跑一次 `python3 ~/.sdflow/hack/outside-voice-job.py cleanup --run-dir {run-dir} --site <site>` 回收 supervisor roster；cleanup 失败只报 warning 与 job id，**MUST NOT** 因清理失败把已成功的 findings 改判失败，**MUST NOT** 静默声称已清理。
     🔴 **两条路径共同的正向 barrier 语义**：某 dispatch 站点在 Step3 时**尚无终态**（仍 RUNNING）⇒ MUST 等到它的终态证据再继续（前者等完成通知——由 harness 推送，这既非长 sleep 也非轮询；后者继续调有界 `await`）。
       **`reason_code="timeout"` 只允许由实际观测到的 `exit 124` 产生**——**MUST NOT** 在拿到该站点终态之前落 `timeout`。早退假 timeout 把「慢但会成功」的 voice 假降级，正是本机制要消灭的失效模式；且它**逃得过 per-site 站点集核**（该站点仍在集合内、照样判绿），∴ 本条是唯一防线。
@@ -450,7 +452,7 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     exit 2   → 用法错 / context 不可读 → fallback（reason_code="exec-error"；`2` 不在 reason_code 枚举内，**并入 exec-error**，枚举不新增）
     exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
     其余一切情形（未知码 / `.rc` 缺席或内容不匹配 / 后台任务标识查不到 / 输出取不回 / collect 判 CORRUPT）→ **保守** fallback（reason_code="exec-error"）；**MUST NOT** 读作 `ok`、MUST NOT 静默丢该站点、MUST NOT 落零锚
-    🔴 **唯一例外是 `unknown_cost=true`**：判 `exec-error` 但**不自动 fallback**（见 ⑥），先按 orphan warning 处置。
+    🔴 **唯一例外是 `unknown_cost=true`**：**不自动 fallback**（见 ⑥），先按 orphan warning 处置；该站点锚行落 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"，**MUST NOT** 落 `exec-error`——本表其余各行的降级码都蕴含「fallback 真跑过」，这里一次都没跑。
   **⑧ 站点 ↔ 后台作业记账（MUST 在指令执行中显式维护此表；model-driven 记账易错，故既落盘又逐站点取）**：
     | 站点 | 本轮是否 dispatch | 后台任务标识 | attempt nonce |
     | <逐个填本轮涉及的站点> | 是 / 否（否则附未派原因） | harness 任务标识 / 后台作业 `job_id` / 字面 `sync` | 后台作业的 `attempt_nonce`，其余填字面 `none` |

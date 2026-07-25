@@ -180,26 +180,30 @@ install_sdflow() {
   # 快照收尾：manifest 由 job helper 自己算（**单一计算源**——写与验共用
   # `compute_manifest()`；MUST NOT 在 shell 里抄第二份 hash 口径）。
   # 写不成不中止安装：其后果是 preflight 红 ⇒ 后台通道走同族 fallback，这是诚实降级。
-  if [ -n "$_py" ] && [ -f "$sdflow/hack/outside-voice-job.py" ]; then
-    if "$_py" "$sdflow/hack/outside-voice-job.py" install-manifest \
+  # 归因分开写：跳过的两个成因（无合格解释器 / helper 没装上）修法完全不同，
+  # 合取成一条 else 会把「helper 未装」误报成「PATH 无 Python」，把人指到错误的方向。
+  if [ -z "$_py" ]; then
+    echo "  ⚠ capability-manifest 跳过（PATH 无 Python 3.7+）——Codex 后台 voice 通道会 fail-closed 降级"
+  elif [ ! -f "$sdflow/hack/outside-voice-job.py" ]; then
+    echo "  ⚠ capability-manifest 跳过（job helper 未装到 $sdflow/hack/）——Codex 后台 voice 通道会 fail-closed 降级"
+  elif "$_py" "$sdflow/hack/outside-voice-job.py" install-manifest \
          --dir "$sdflow/hack" >/dev/null; then
-      installed+=("hack/capability-manifest.json @ $sdflow")
-    else
-      echo "  ⚠ capability-manifest 写入失败——Codex 后台 voice 通道会 fail-closed 降级"
-    fi
+    installed+=("hack/capability-manifest.json @ $sdflow")
   else
-    echo "  ⚠ capability-manifest 跳过（PATH 无 Python 3.6+）——Codex 后台 voice 通道会 fail-closed 降级"
+    echo "  ⚠ capability-manifest 写入失败——Codex 后台 voice 通道会 fail-closed 降级"
   fi
 }
 
-# [T48] 挑一个 Python 3.6+ 解释器（capability manifest 与 retire-hooks 共用）——裸 `python`
+# [T48] 挑一个 Python 3.7+ 解释器（capability manifest 与 retire-hooks 共用）——裸 `python`
 # 可能是 Python2，喂进去会在 f-string 解析期崩（整模块编译先于任何语句执行，脚本内的版本
-# 守卫无从拦截自身 parse），故版本把关只能在调用侧。**逐候选校验、取首个 3.6+**
+# 守卫无从拦截自身 parse），故版本把关只能在调用侧。**逐候选校验、取首个 3.7+**
 # （不只看 python3：若 python3 恰是旧版而 python 合格，仍能用）。
+# 下限为什么是 3.7 而非 init.py 所需的 3.6：这个 `_py` 还要跑 outside-voice-job.py，
+# 而它用 `subprocess.run(capture_output=…)`（3.7 才有）——闸门取两个消费者的**上确界**。
 _py=""
 for _cand in python3 python; do
   if command -v "$_cand" >/dev/null 2>&1 \
-     && "$_cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then
+     && "$_cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)' >/dev/null 2>&1; then
     _py="$_cand"; break
   fi
 done
@@ -216,7 +220,7 @@ install_sdflow
 # fail-safe：绝不中止 setup（清理是尽力而为，非安装必要步）。
 # 解释器已在上面（install_sdflow 之前）挑好——manifest 与本步共用同一个 $_py。
 if [ -z "$_py" ]; then
-  echo "  ⚠ retire-hooks 跳过：PATH 无 Python 3.6+（init.py 需 f-string，非致命）"
+  echo "  ⚠ retire-hooks 跳过：PATH 无 Python 3.7+（init.py 需 f-string，非致命）"
 else
   { "$_py" "$REPO_DIR/sdflow-init/scripts/init.py" retire-hooks ; } || echo "  ⚠ retire-hooks 跳过（非致命）"
 fi
