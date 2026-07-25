@@ -78,6 +78,9 @@ sdflow-issues:
     T218: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"rc_bad(CORRUPT) 路径重复 collect 非逐字节一致","type":"代码质量","status":"OPEN","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":null}
     T219: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）","type":"代码质量","status":"OPEN","time":"2026-07-25 23:14","change":"enable-codex-background-outside-voice","batch":null}
     T220: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）","type":"代码质量","status":"OPEN","time":"2026-07-25 23:15","change":"enable-codex-background-outside-voice","batch":null}
+    T221: {"module":"openspec/specs/host-adaptive-execution + anchor_lint","summary":"fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值","type":"代码质量","status":"OPEN","time":"2026-07-26 00:34","change":"enable-codex-background-outside-voice","batch":null}
+    T222: {"module":"sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md","summary":"止损行「走下一条的 unknown-cost 处置」指代不准","type":"代码质量","status":"OPEN","time":"2026-07-26 00:41","change":"enable-codex-background-outside-voice","batch":null}
+    T223: {"module":"hack/tests/test_async_branch_parity.py","summary":"_the_line_with 的「恰好 1 行」是双向判据，良性新增会假红","type":"代码质量","status":"OPEN","time":"2026-07-26 00:46","change":"enable-codex-background-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2107,3 +2110,42 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：来源=Task 4 双轴复审（e1b8bc4 后）Standards 轴 Minor。纯 docstring、零行为影响，但有误导性 ⇒ 冷层 code-review 时优先处理。面治提示：这两簇根因在本 change 已复发三轮，扫时按「降级方向美化」「runner/host 主语反用」两个模式全仓 grep，别逐条补。
 <!-- sdflow-issue-block:end id=T220 -->
+
+<!-- sdflow-issue-block:start id=T221 -->
+## T221: fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值
+> fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 5 fix1 上抛：unknown_cost=true 分支的合法锚形复用了 fallback-unavailable，但 spec Scenario 描述的是「同族 fallback 起不来」，而本轮两处新用法是「同族 fallback 被成本闸门禁止」。两者共享矩阵同一条无执行行（runner=none 且 findings=0），锚形合法性已用 classify_combo 实跑自证。
+
+**思路**：若判需独立枚举值，是跨 openspec/specs/ + anchor_lint + 全笛卡尔 golden 的矩阵变更。当前用 detail 字段区分两种语义。
+
+**备注**：编排层裁定：本票验收标准第3条字面要求「anchor 合法组合矩阵保持不变」⇒ 复用是符合 ticket 范围的正解，新增枚举值超范围。交冷层 code-review / done 阶段复看是否值得单开。
+<!-- sdflow-issue-block:end id=T221 -->
+
+<!-- sdflow-issue-block:start id=T222 -->
+## T222: 止损行「走下一条的 unknown-cost 处置」指代不准
+> 止损行「走下一条的 unknown-cost 处置」指代不准
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 5 双轴复审 Spec 轴 Minor：fix1 新增的止损行写「走下一条的 unknown-cost 处置」，但字面下一条是「外层等待被回收」行，unknown-cost 条款在再下一行。指代名唯一故不致误读，但措辞不准——SKILL 是写给模型看的指令，措辞精度即执行精度。
+
+**思路**：改为直接点名条款（如「走 ⑥ 的 unknown-cost 处置」）而非相对位置指代。两份 SKILL 等值段同步改，改完跑 check_async_branch_parity.py。
+
+**备注**：来源=Task 5 双轴复审（fa378fb 后）Spec 轴 Minor。零行为影响，defer 至冷层 code-review。
+<!-- sdflow-issue-block:end id=T222 -->
+
+<!-- sdflow-issue-block:start id=T223 -->
+## T223: _the_line_with 的「恰好 1 行」是双向判据，良性新增会假红
+> _the_line_with 的「恰好 1 行」是双向判据，良性新增会假红
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 5 双轴复审 Standards 轴 Minor：实测在等值段内良性新增一句提到 outside-voice-job.py dispatch 或 MUST NOT 自动同族 fallback 即触发假红（报「实得 2」）。方向是 fail-closed、报错点名 key、修法明确，故按④接受，但登记为已知刚性——将来扩写 SKILL 段落时会被它绊一下。
+
+**思路**：若绊得频繁，改为「≥1 行且目标行存在」或给 key 加更强的定位前缀。
+
+**备注**：来源=Task 5 双轴复审（fa378fb 后）Standards 轴 Minor，登记备查非缺陷。
+<!-- sdflow-issue-block:end id=T223 -->

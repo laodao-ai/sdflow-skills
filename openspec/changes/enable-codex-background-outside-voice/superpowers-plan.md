@@ -126,13 +126,13 @@ ready 时走后台 dispatch + Step3 有界 collect，不可用时 5 秒级同族
 分支彻底删除。同一批工具以带同代 capability manifest 的兼容快照原子安装到全局 home，任一 skew
 preflight fail-closed。
 
-- [ ] 两 SKILL 的 async-branch 等值段同步修改，Codex sync 300 秒路径删除，负向 golden 证明 marker 段不再含该兼容分支
-- [ ] Codex dispatch 的 job id、site 与 attempt nonce 追加 dispatch manifest；Step3 barrier 使用有界 await/collect，逐站点按 rc 映射 `ok/timeout/exec-error/secret-hit`，RUNNING 不早退、外层 wait 回收后不重派、stderr 不进 findings/报告
-- [ ] 锚行契约、`reason_code` 枚举、anchor 合法组合矩阵与 `declared-sites` 公式保持不变
-- [ ] parity gate 证明两份 SKILL 的 marker 段逐字节一致
-- [ ] job helper、shell helper 与所需 data file 以同一 capability manifest/hash 作为兼容快照原子安装；执行权限/解释器、安装中断、新旧混配、stale copy 均有测试覆盖
-- [ ] 从临时全局 home 的已安装路径跑通完整 lifecycle（dispatch → collect → cleanup）的无模型集成 smoke；任一 manifest/hash skew 令 preflight fail-closed 并给出刷新指引
-- [ ] 使用说明写明最低 Claude Code 版本、agent view 被策略禁用的修法、`--exec` 为本机验证的 research-preview 形态、v1 POSIX 支持边界，以及全局 helper/SKILL 刷新与消费仓 workflow tools 刷新是两条不可互相替代的分发链
+- [x] 两 SKILL 的 async-branch 等值段同步修改，Codex sync 300 秒路径删除，负向 golden 证明 marker 段不再含该兼容分支
+- [x] Codex dispatch 的 job id、site 与 attempt nonce 追加 dispatch manifest；Step3 barrier 使用有界 await/collect，逐站点按 rc 映射 `ok/timeout/exec-error/secret-hit`，RUNNING 不早退、外层 wait 回收后不重派、stderr 不进 findings/报告
+- [x] 锚行契约、`reason_code` 枚举、anchor 合法组合矩阵与 `declared-sites` 公式保持不变
+- [x] parity gate 证明两份 SKILL 的 marker 段逐字节一致
+- [x] job helper、shell helper 与所需 data file 以同一 capability manifest/hash 作为兼容快照原子安装；执行权限/解释器、安装中断、新旧混配、stale copy 均有测试覆盖
+- [x] 从临时全局 home 的已安装路径跑通完整 lifecycle（dispatch → collect → cleanup）的无模型集成 smoke；任一 manifest/hash skew 令 preflight fail-closed 并给出刷新指引
+- [x] 使用说明写明最低 Claude Code 版本、agent view 被策略禁用的修法、`--exec` 为本机验证的 research-preview 形态、v1 POSIX 支持边界，以及全局 helper/SKILL 刷新与消费仓 workflow tools 刷新是两条不可互相替代的分发链
 
 ### Task 6: 真实 efficacy 证据与 T162 关闭
 
