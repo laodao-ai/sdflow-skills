@@ -81,6 +81,7 @@ sdflow-issues:
     T221: {"module":"openspec/specs/host-adaptive-execution + anchor_lint","summary":"fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值","type":"代码质量","status":"OPEN","time":"2026-07-26 00:34","change":"enable-codex-background-outside-voice","batch":null}
     T222: {"module":"sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md","summary":"止损行「走下一条的 unknown-cost 处置」指代不准","type":"代码质量","status":"OPEN","time":"2026-07-26 00:41","change":"enable-codex-background-outside-voice","batch":null}
     T223: {"module":"hack/tests/test_async_branch_parity.py","summary":"_the_line_with 的「恰好 1 行」是双向判据，良性新增会假红","type":"代码质量","status":"OPEN","time":"2026-07-26 00:46","change":"enable-codex-background-outside-voice","batch":null}
+    T224: {"module":"hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py","summary":"面治枚举漏 2 条 isinstance 早退分支（无独立锚）","type":"代码质量","status":"OPEN","time":"2026-07-26 03:28","change":"enable-codex-background-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2149,3 +2150,16 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：来源=Task 5 双轴复审（fa378fb 后）Standards 轴 Minor，登记备查非缺陷。
 <!-- sdflow-issue-block:end id=T223 -->
+
+<!-- sdflow-issue-block:start id=T224 -->
+## T224: 面治枚举漏 2 条 isinstance 早退分支（无独立锚）
+> 面治枚举漏 2 条 isinstance 早退分支（无独立锚）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 6 第3轮复审 Standards 轴 Minor：fix2 面治扫全「38 条门」，但枚举本身漏了两条 isinstance 早退分支——:140 的 sites[i] 不是对象、:236 的顶层不是对象。两条均无独立锚（定点删掉 → 116 passed 全绿）。非当前假绿（emit 永不产出非 dict、declared 集合门部分兜住），但报告标题「38 条门修后 0 条无独立锚」宜订正为「所枚举的 38 条中 0 条」。
+
+**思路**：补两条用例（sites=[good, "junk"]、verify([1,2,3])）约 8 行；报告标题措辞订正。
+
+**备注**：来源=Task 6 第3轮复审 Standards 轴 Minor。可复用观察：面治时「我扫了 N 条门」本身也是一个可能不全的断言——枚举的完整性同样需要机械核（如按 AST 数 append/return 点），否则「0 条无独立锚」只覆盖被枚举到的那些。
+<!-- sdflow-issue-block:end id=T224 -->

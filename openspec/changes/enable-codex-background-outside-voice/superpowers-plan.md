@@ -146,6 +146,6 @@ efficacy 证据；只有全站点可信 `ok` 且至少一个自然耗时 >300 �
 - [ ] 以 Codex 宿主对 `zhws_ops_api` 跑至少一轮 `opus` + `high` 的真实 spec-review 或 code-review，该层全部 declared/dispatch 站点取得 `host="codex" runner="claude" reason_code="ok"`
 - [ ] 该层至少含一个真实 Claude 推理自然耗时 >300 秒并成功的站点；sleep/shim、无模型命令或短调用不得替代
 - [ ] 报告落不含 context/stderr 的结构化 efficacy 证据（runner/model/effort、dispatch/start/terminal/collect 时刻、自然 duration、stdout digest），并由确定性检查器判定通过
-- [ ] 仅当以上三条同时达标才关闭 T162 并更新 design/CONTEXT/hand-off 中的“Codex efficacy=0”陈述；任一未达标则保留 T162 并如实记录，不得以编排 smoke 假绿
-- [ ] 全量回归绿：既有 outside-voice 测试、async-branch parity 检查、通则同步 `--check`、`git diff --check` 与全量 pytest 全部通过
-- [ ] `openspec validate enable-codex-background-outside-voice --strict` 通过，且下游 `zhws_ops_api` 未被直接手改 canonical workflow 规则
+- [x] 仅当以上三条同时达标才关闭 T162 并更新 design/CONTEXT/hand-off 中的“Codex efficacy=0”陈述；任一未达标则保留 T162 并如实记录，不得以编排 smoke 假绿
+- [x] 全量回归绿：既有 outside-voice 测试、async-branch parity 检查、通则同步 `--check`、`git diff --check` 与全量 pytest 全部通过
+- [x] `openspec validate enable-codex-background-outside-voice --strict` 通过，且下游 `zhws_ops_api` 未被直接手改 canonical workflow 规则
