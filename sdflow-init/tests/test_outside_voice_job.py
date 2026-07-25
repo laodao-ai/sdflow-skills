@@ -1480,8 +1480,16 @@ def test_collect_is_idempotent_byte_for_byte(job_home, fake_claude, tmp_path):
     assert json.loads(first.stdout)["collected_at"] == json.loads(second.stdout)["collected_at"]
 
 
-def test_collect_before_terminal_is_not_ok_and_reads_no_stdout(job_home, fake_claude, tmp_path):
-    """「起了没收」MUST NOT 读作成功——未终态站点没有任何进 findings 的通道。"""
+def test_collect_before_terminal_is_not_ok_and_leaks_no_partial_output(job_home, fake_claude,
+                                                                       tmp_path):
+    """「起了没收」MUST NOT 读作成功——未终态站点没有任何进 findings 的通道。
+
+    ⚠️ 命名边界（反向变异实测）：本条**不是**「有没有读过 stdout」的判别器——把读取
+    提前到 rc 判定之前，本条照样绿。「终态前不读」的锚是
+    `test_status_never_reads_stdout_before_terminal`（对读取口的 spy）。
+    本条守的是**出口**：未终态时 collect 不给 stdout_path、不落 collected witness、
+    不把半成品正文带进自己的 stdout。
+    """
     run_dir = tmp_path / "20260725T080000Z-Early1"
     run_dir.mkdir()
     _seed_site(run_dir, rc_kind="absent")
