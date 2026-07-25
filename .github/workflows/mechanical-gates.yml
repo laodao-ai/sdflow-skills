@@ -20,19 +20,41 @@ jobs:
     # 对【已知形态】无假阴性，但挡不住一种不匹配该正则的新罢工形态 ⇒ 只有 ubuntu 泳道时，
     # 真实 3.2 运行时行为从未被跑过，而静态门的存在会制造「已机械覆盖」的错觉。
     # 同理：`timeout`/`gtimeout` 缺失分支在 ubuntu 上恒 skip（自带 coreutils），只有 macOS 跑得到。
+    #
+    # 🔴 **os × python 刻意不做笛卡尔积**——两条轴各自的理由互不相干，交叉只是重复验证：
+    #   os 轴的理由 = bash 3.2 vs 5.x（上面那段），**与 python 版本无关**；
+    #   python 轴的理由 = 脚本被 symlink 进【消费仓】，要在别人机器的任意 python3 上跑
+    #     （零依赖不变量 `MUST NOT import yaml` 正是为此存在），**与 os 无关**。
+    #   且本仓是 private ⇒ macOS runner 按 **10 倍**计费。全交叉 = 6 job（3 个 macOS），
+    #   而多出的 2 个 macOS job 一条新信息都不产生。∴ python 轴只铺在最廉价的 ubuntu 上。
+    #
+    # python 三档的选取（**固定版本，MUST NOT 用浮动的 `3.x`**——同第 34 行「别让 CI 的绿
+    # 依赖于时点」：浮动会在新版发布当天无预警变红，且历史 job 不可复现）：
+    #   3.9  = 真实下限。macOS 自带 `/usr/bin/python3` 就是 3.9.x，消费仓在 mac 上跑
+    #          skill 脚本很可能落在它上面。上游虽已 EOL，Apple 仍在系统里带着它。
+    #   3.12 = 原有单档 + Ubuntu 24.04 自带，保留以不丢现有信号。
+    #   3.14 = 当前上限。
+    # ⚠️ 3.9 显式钉 **ubuntu-24.04**：actions/python-versions 的 3.9.25 只有 22.04/24.04
+    #    构建（无 26.04），而 26.04 已进 manifest ⇒ `ubuntu-latest` 漂过去那天 3.9 会装不上。
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - { os: ubuntu-24.04,  python: "3.9" }
+          - { os: ubuntu-latest, python: "3.12" }
+          - { os: ubuntu-latest, python: "3.14" }
+          - { os: macos-latest,  python: "3.12" }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       # pytest>=8 是硬下限：仓根 conftest.py 用 `@pytest.hookimpl(wrapper=True)`（8+ 才有）。
       # 裸 `pip install pytest` 今天恰好装到 8.x，但那是**当下 PyPI 的最新版碰巧满足**，
       # 不是约束——pin 住下限，别让 CI 的绿依赖于时点。与 pytest.ini 的 minversion 成对。
+      # 附带收益：3.9 泳道上 pip 会自动解析到 pytest 8.x（9.x 要求更高的 python），
+      # 其余泳道拿 9.x ⇒ 两个 pytest 大版本都被跑到（本地已验 8.4.2 / 9.1.1 均全绿）。
       - name: Install pytest
         run: python -m pip install "pytest>=8"
 
