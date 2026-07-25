@@ -210,6 +210,7 @@ fi
 echo "ENV_RUNNER=${SDFLOW_VOICE_RUNNER:-<unset>}"
 echo "ENV_MODEL=${SDFLOW_VOICE_MODEL:-<unset>}"
 echo "ENV_EFFORT=${SDFLOW_VOICE_EFFORT:-<unset>}"
+echo "ENV_RUNNER_PID_FILE=${SDFLOW_VOICE_RUNNER_PID_FILE:-<unset>}"
 echo "fake-helper-stdout ${FAKE_HELPER_MARKER:-none}"
 echo "fake-helper-stderr" >&2
 sleep "${FAKE_HELPER_SLEEP:-0}"
@@ -846,6 +847,23 @@ def test_worker_passes_runner_model_effort_env_to_helper(fake_job_home, repo):
     assert "ENV_EFFORT=medium" in stdout_text, stdout_text
 
 
+def test_worker_hands_the_runner_pid_file_path_down_to_the_helper(fake_job_home, repo):
+    """🔴 跨票交接锚（Task 4 的落点）：worker MUST 把 `<site>.runner.pid` 的绝对路径经
+    `SDFLOW_VOICE_RUNNER_PID_FILE` 下发给 helper。
+
+    helper 在 spawn runner 前把 `OV_RUNNER_PID` 写进这个文件后，`probe_subtree` 才有
+    「runner 子树是否退出」的直接信号 —— 否则组长分支只能永久 fail-closed 判 unverifiable
+    （worker 自己的进程组圈不住 GNU timeout 自建的独立组）。
+    """
+    env = os.environ.copy()
+    env.pop("SDFLOW_VOICE_RUNNER_PID_FILE", None)
+    proc = _run_job(fake_job_home, _worker_args(repo), env, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    stdout_text = (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
+    expected = str(repo["run_dir"] / "design-voice.runner.pid")
+    assert ("ENV_RUNNER_PID_FILE=" + expected) in stdout_text, stdout_text
+
+
 def test_worker_env_reaches_the_real_shell_helper(job_home, repo):
     """C1 接缝锚：让 worker 调**仓内真的** `outside-voice.sh`（不调模型）。
 
@@ -1085,7 +1103,7 @@ def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent
                write_job=True, write_started=True, write_terminal=None,
                stdout=b"outside voice findings\n", stderr=b"fake-stderr\n",
                terminal_digest=None, run_id=None, nonce_in_witness=None,
-               worker_pid=4242, worker_pgid=None, repo_root=None):
+               worker_pid=4242, worker_pgid=None, repo_root=None, runner_pid=None):
     """把一个站点的盘面摆成指定形态。返回写下的 job metadata（dict 或 None）。
 
     盘面即状态 ⇒ 所有用例的输入都是「run dir 里有哪些文件、内容是什么」，
@@ -1133,6 +1151,11 @@ def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent
                        "pgid": worker_pid if worker_pgid is None else worker_pgid,
                        "sid": worker_pid, "executable": sys.executable},
         })
+
+    if runner_pid is not None:
+        # Task 4 的 helper 在 spawn runner 前落的直接信号（纯十进制 `OV_RUNNER_PID`）。
+        (run_dir / (site + JOB.RUNNER_PID_SUFFIX)).write_text(
+            str(runner_pid), encoding="utf-8")
 
     if rc_kind != "absent":
         payload = b"" if rc_kind == "rc0_empty" else stdout
@@ -2084,13 +2107,125 @@ def test_probe_subtree_calls_a_live_worker_alive(tmp_path):
     assert verdict == JOB.SUBTREE_ALIVE, (verdict, detail)
 
 
-def test_probe_subtree_calls_a_dead_group_leader_exited(tmp_path):
+def _group_escaping_worker(tmp_path, seconds=60):
+    """真起一对进程：**组长** worker + 一个换组逃逸的 runner。→ (leader_pid, runner_pid)
+
+    这就是 GNU timeout 在真机上的形态（`outside-voice.sh` 的组级 KILL 守卫注释即据此写成：
+    timeout 会 setpgid 把自己放进独立进程组，PGID 恒等于它自己的 PID）⇒ 杀掉 worker 之后
+    worker 组空了，而真正烧额度的 runner 整棵还活着。
+    """
+    timeout_bin = shutil.which("gtimeout") or shutil.which("timeout")
+    if not timeout_bin:
+        pytest.skip("本机没有 GNU timeout/gtimeout，摆不出真实的换组子进程")
+    script = Path(tmp_path) / "escaping-worker.py"
+    marker = Path(tmp_path) / "escaping-worker.pids"
+    script.write_text(textwrap.dedent("""
+        import os, subprocess, sys, time
+        os.setpgrp()                       # worker 自建进程组（组长 = 自己）
+        p = subprocess.Popen([sys.argv[1], sys.argv[2], "sleep", sys.argv[2]],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(0.3)                    # 等 timeout 完成它自己的 setpgid
+        with open(sys.argv[3], "w") as fh:
+            fh.write("%d %d" % (os.getpid(), p.pid))
+        time.sleep(int(sys.argv[2]))
+    """), encoding="utf-8")
+    cmd = " ".join(shlex.quote(x) for x in
+                   [sys.executable, str(script), timeout_bin, str(seconds), str(marker)])
+    # 后台 + 孤儿化：被 init 收养，杀掉后立刻回收，不会留 zombie 骗过 `kill(pid, 0)`。
+    subprocess.run(["sh", "-c", cmd + " >/dev/null 2>&1 &"], timeout=15)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        text = marker.read_text(encoding="utf-8").strip() if marker.is_file() else ""
+        if len(text.split()) == 2:
+            return tuple(int(x) for x in text.split())
+        time.sleep(0.05)
+    pytest.skip("换组子进程没能在 15 秒内摆出来")
+
+
+def test_probe_subtree_will_not_call_a_dead_group_leader_exited_when_a_child_escaped(tmp_path):
+    """🔴 真机复现的假阳：**worker 组空了 ≠ runner 已死。**
+
+    GNU timeout 把自己（连同 claude）setpgid 进独立进程组 ⇒ worker 被杀之后
+    `killpg(worker_pgid, 0)` 报 ProcessLookupError，而真正烧额度的那棵子树还活着。
+    没有 `<site>.runner.pid` 这个直接信号时，组长分支 MUST fail-closed 判 unverifiable；
+    信号在场则 MUST 以它为准判 alive。
+    """
+    run_dir = tmp_path / "sub-escaped"
+    run_dir.mkdir()
+    leader, runner = _group_escaping_worker(tmp_path)
+    try:
+        assert os.getpgid(leader) == leader, "worker 必须是组长，否则复现的不是这条分支"
+        assert os.getpgid(runner) != leader, "runner 必须真的换了组（前提，不是假设）"
+        os.kill(leader, 9)
+        deadline = time.monotonic() + 10
+        while JOB._pid_alive(leader) is not False and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert JOB._pid_alive(leader) is False, "组长确已消失"
+        assert JOB._pgid_alive(leader) is False, "🔴 组也空了 —— 这正是那个骗人的信号"
+        assert JOB._pid_alive(runner) is True, "而 runner 仍在跑、仍在计费"
+
+        job = _seed_site(run_dir, rc_kind="absent", worker_pid=leader, worker_pgid=leader)
+        without_signal = JOB.probe_subtree(run_dir, "design-voice", job)
+
+        (run_dir / ("design-voice" + JOB.RUNNER_PID_SUFFIX)).write_text(
+            str(runner), encoding="utf-8")
+        with_signal = JOB.probe_subtree(run_dir, "design-voice", job)
+    finally:
+        for pid in (runner, leader):
+            for killer in (os.killpg, os.kill):
+                try:
+                    killer(pid, 9)
+                except OSError:
+                    pass
+    assert without_signal[0] == JOB.SUBTREE_UNVERIFIABLE, without_signal
+    assert with_signal[0] == JOB.SUBTREE_ALIVE, with_signal
+
+
+def test_probe_subtree_is_unverifiable_for_a_dead_group_leader_without_a_runner_signal(tmp_path):
+    """组探针**只判 alive，不判 exited**：组空了推不出 runner 已退出（见上一条的真机复现）。"""
     run_dir = tmp_path / "sub-exited"
     run_dir.mkdir()
     pid = _dead_pid()
     job = _seed_site(run_dir, rc_kind="absent", worker_pid=pid, worker_pgid=pid)
     verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
-    assert verdict == JOB.SUBTREE_EXITED, (verdict, detail)
+    assert verdict == JOB.SUBTREE_UNVERIFIABLE, (verdict, detail)
+
+    # 同一形态 + runner 的直接信号（已死）⇒ 才可判已退出
+    job2 = _seed_site(run_dir, "hr-tg", rc_kind="absent", worker_pid=pid, worker_pgid=pid,
+                      runner_pid=_dead_pid())
+    verdict2, detail2 = JOB.probe_subtree(run_dir, "hr-tg", job2)
+    assert verdict2 == JOB.SUBTREE_EXITED, (verdict2, detail2)
+
+
+def test_probe_subtree_answers_from_the_runner_pid_sidecar_before_the_disk_inference(tmp_path):
+    """runner 的直接信号在场 ⇒ 以它为准，MUST NOT 退回 terminal witness 的推断。
+
+    terminal witness 只证明「helper 同步返回了」——helper 被 SIGKILL 时它同样发布，
+    而孤儿 runner 仍活着。那个窄口只能靠这个信号关掉。
+    """
+    run_dir = tmp_path / "sub-sidecar"
+    run_dir.mkdir()
+    dead = _dead_pid()
+    alive = _detached_sleeper(30)
+    try:
+        job = _seed_site(run_dir, rc_kind="rc0_nonempty", worker_pid=dead, worker_pgid=dead,
+                         runner_pid=alive)
+        verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
+    finally:
+        os.kill(alive, 9)
+    assert verdict == JOB.SUBTREE_ALIVE, (verdict, detail)
+
+
+def test_probe_subtree_is_unverifiable_when_the_runner_pid_sidecar_is_corrupt(tmp_path):
+    """坏信号 ≠ 无信号：损坏的 sidecar MUST fail-closed，MUST NOT 静默退回弱推断。"""
+    run_dir = tmp_path / "sub-badsidecar"
+    run_dir.mkdir()
+    dead = _dead_pid()
+    job = _seed_site(run_dir, rc_kind="rc0_nonempty", worker_pid=dead, worker_pgid=dead)
+    (run_dir / ("design-voice" + JOB.RUNNER_PID_SUFFIX)).write_text("not-a-pid\n",
+                                                                   encoding="utf-8")
+    verdict, detail = JOB.probe_subtree(run_dir, "design-voice", job)
+    assert verdict == JOB.SUBTREE_UNVERIFIABLE, (verdict, detail)
 
 
 def test_probe_subtree_is_unverifiable_without_a_started_witness(tmp_path):
@@ -2242,16 +2377,54 @@ def test_cleanup_removes_a_collected_terminal_site_from_the_roster(
 
 def test_cleanup_is_idempotent_when_the_roster_no_longer_lists_the_job(
         job_home, fake_claude, tmp_path):
-    """OVBG-05「正常 collect 后无活动残留」：roster 已无此 job ⇒ 清理是 no-op，不报错。"""
+    """OVBG-05「正常 collect 后无活动残留」：roster 已无此 job **且子树已证退出** ⇒ no-op。
+
+    「已证退出」是这条幂等的前提，不是修饰：解闸（`fallback_allowed`）只能建立在核验上。
+    """
     run_dir = tmp_path / "20260726T042000Z-Ord003"
     run_dir.mkdir()
-    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32)
+    dead = _dead_pid()
+    _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32,
+               worker_pid=dead, worker_pgid=dead, runner_pid=_dead_pid())
     env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
     _run_job(job_home, _site_args("collect", run_dir), env)
     proc = _run_job(job_home, _cleanup_args(run_dir), env)
     payload = _json_stdout(proc)
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     assert payload["state"] == "absent", payload
+    assert payload["subtree"] == JOB.SUBTREE_EXITED, payload
+    assert payload["fallback_allowed"] is True, payload
+    assert payload["unknown_cost"] is False, payload
+    assert _destructive(fake_claude) == []
+
+
+def test_cleanup_still_verifies_the_subtree_when_the_roster_no_longer_lists_the_job(
+        job_home, fake_claude, tmp_path):
+    """🔴 roster 干净 ≠ 进程死了。
+
+    `missing` liveness（roster 无此条目）正是 **LOST 的主要产生路径**（`derive_status`）。
+    这一分支若无条件返回成功，一个仍在跑、已计费的 worker 就被报成干净通过，且自动同族
+    fallback 会在它头上再叠一次 —— OVBG-05 与 OVBG-03 直接违反。
+    """
+    run_dir = tmp_path / "20260726T042500Z-Ord005"
+    run_dir.mkdir()
+    pid = _detached_sleeper(60)
+    try:
+        _seed_site(run_dir, rc_kind="absent", nonce="0" * 32,
+                   worker_pid=pid, worker_pgid=pid)
+        env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
+        proc = _run_job(job_home,
+                        _cleanup_args(run_dir, "design-voice", "--subtree-wait", "0.3"),
+                        env, timeout=60)
+    finally:
+        os.kill(pid, 9)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1, (proc.stdout, proc.stderr)
+    assert payload["state"] == "orphan-warning", payload
+    assert payload["subtree"] == JOB.SUBTREE_ALIVE, payload
+    assert payload["unknown_cost"] is True, payload
+    assert payload["fallback_allowed"] is False, payload
+    assert payload["orphan_warning"], payload
     assert _destructive(fake_claude) == []
 
 
@@ -2282,7 +2455,9 @@ def test_cleanup_cancel_order_is_stop_then_subtree_verification_then_rm(
     run_dir.mkdir()
     pid = _detached_sleeper(60)
     try:
-        _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, worker_pid=pid, worker_pgid=pid)
+        # runner 早已收摊（sidecar 记的 pid 确定不存在）⇒ 只等 worker 本体被 stop 打掉。
+        _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, worker_pid=pid, worker_pgid=pid,
+                   runner_pid=_dead_pid())
         env = _env(fake_claude, {
             "FAKE_CLAUDE_AGENTS_MODE": "fixed",
             "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "name": _worker_name()}),
@@ -2560,7 +2735,7 @@ def test_reconcile_stops_and_removes_a_lost_site_whose_subtree_is_proven_dead(
     dead = _dead_pid()
     _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, now=now, dispatched_ago=1000,
                started_ago=1 + JOB.AWAIT_GRACE_SECONDS + 5, timeout_seconds=1,
-               worker_pid=dead, worker_pgid=dead)
+               worker_pid=dead, worker_pgid=dead, runner_pid=_dead_pid())
     env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
                              "FAKE_CLAUDE_FIXED": _roster(
                                  {"id": "75d34378", "name": _worker_name()})})
@@ -2591,6 +2766,70 @@ def test_reconcile_reports_an_orphan_warning_and_exits_nonzero(job_home, fake_cl
     assert payload["ok"] is False, payload
     assert payload["orphan_warnings"], payload
     assert payload["sites"][0]["removed"] is False, payload
+
+
+def test_reconcile_will_not_report_a_site_clean_when_the_roster_dropped_a_live_worker(
+        job_home, fake_claude, tmp_path):
+    """🔴 LOST 的**主要**产生路径就是 roster 里没有这条 job（`probe_liveness` → missing）。
+
+    真起一个活 worker、roster 空 ⇒ reconcile MUST 落 orphan warning + unknown_cost + 非零
+    退出，MUST NOT 报成干净通过（那等于放行 fallback 在一次仍在计费的 voice 上再叠一次）。
+    """
+    run_dir = tmp_path / "20260726T078500Z-Rec009"
+    run_dir.mkdir()
+    pid = _detached_sleeper(60)
+    try:
+        _seed_site(run_dir, rc_kind="absent", nonce="0" * 32, worker_pid=pid, worker_pgid=pid)
+        env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
+        proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir),
+                                   "--subtree-wait", "0.3"], env, timeout=60)
+    finally:
+        os.kill(pid, 9)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1, (proc.stdout, proc.stderr)
+    assert payload["ok"] is False, payload
+    site = payload["sites"][0]
+    assert site["state"] == "LOST", site
+    assert site["action"] == "orphan-warning", site
+    assert site["unknown_cost"] is True and site["orphan_warning"], site
+    assert payload["orphan_warnings"] == ["design-voice"], payload
+    assert payload["unknown_cost_sites"] == ["design-voice"], payload
+    assert _destructive(fake_claude) == []
+
+
+def test_reconcile_rejects_a_site_the_run_dir_does_not_hold(job_home, fake_claude, tmp_path):
+    """🔴 `--site` 未命中 ⇒ usage-error，MUST NOT 拿 `all([]) == True` 渲染一份绿报告。
+
+    敲错 site / 点错 run-dir 恰恰是**成本未知**的场景：那时给操作者「一切正常」，
+    等于把一个可能仍在计费的 run 判成已收摊。
+    """
+    run_dir = tmp_path / "20260726T078600Z-Rec010"
+    run_dir.mkdir()
+    _seed_site(run_dir, "design-voice", rc_kind="rc0_nonempty", nonce="0" * 32)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
+    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir), "--site", "hr-tg"],
+                    env, timeout=60)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 2, (proc.stdout, proc.stderr)
+    assert payload["ok"] is False, payload
+    assert payload["state"] == "usage-error", payload
+    assert payload["sites"] == [], payload
+    assert _destructive(fake_claude) == []
+
+
+def test_reconcile_does_not_report_an_empty_run_dir_as_all_clear(
+        job_home, fake_claude, tmp_path):
+    """站点集为空 ⇒ `ok=false` + 显式 detail：没有可核对的站点**不等于**没有残留。"""
+    run_dir = tmp_path / "20260726T078700Z-Rec011"
+    run_dir.mkdir()
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "empty"})
+    proc = _run_job(job_home, ["reconcile", "--run-dir", str(run_dir)], env, timeout=60)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1, (proc.stdout, proc.stderr)
+    assert payload["ok"] is False, payload
+    assert payload["sites"] == [], payload
+    assert payload["detail"], payload
+    assert _destructive(fake_claude) == []
 
 
 def test_reconcile_handles_both_sites_of_a_two_site_run(job_home, fake_claude, tmp_path):

@@ -32,6 +32,10 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     可携带 payload 的代码之前）；随后 started → child → terminal → rc 依序原子发布。
     runner/model/effort 经 `SDFLOW_VOICE_RUNNER` / `SDFLOW_VOICE_MODEL` /
     `SDFLOW_VOICE_EFFORT` **环境变量**下发（helper 的 `exec` 只吃 --context-file/--timeout）。
+    另经 `SDFLOW_VOICE_RUNNER_PID_FILE` 下发 `<site>.runner.pid` 的绝对路径：helper MUST 在
+    spawn runner **之前**把 `OV_RUNNER_PID`（GNU timeout 自身 pid = 它 setpgid 出的那个独立
+    进程组的 pgid）以**纯十进制**原子写入该文件 —— 它是 cleanup 核验「runner 子树是否已
+    退出」的唯一直接信号（worker 自己的进程组圈不住 timeout 的独立组）。
     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
     充当结果通道）。
 
@@ -68,9 +72,11 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     **矛盾** ⇒ 只告警、零破坏性调用（MUST NOT 猜测并操作其他 job）。
       · 终态（rc 已发布）且**已 collect** ⇒ 直接 `rm`；未 collect ⇒ 拒绝（`not-collected`）
       · 在飞站点 ⇒ 拒绝（`still-running`），除非显式 `--cancel`
-      · LOST / `--cancel` ⇒ `stop` → **核验 worker 与 inner child 子树已退出** → `rm`
+      · LOST / `--cancel` ⇒ `stop` → **核验 worker 与 runner 子树已退出** → `rm`
         子树不可证 ⇒ `orphan-warning`：**不 rm**、`unknown_cost=true`、
         `fallback_allowed=false`（禁止叠加费用的自动 fallback）
+      · roster 已无此 job ⇒ **照样先核验子树**（roster 干净 ≠ 进程死了）：已退出才是
+        `absent`（幂等成功、放行 fallback）；未退出/不可证 ⇒ `orphan-warning`
     清理失败**不改写**已取得的 rc、不删除 run-dir 的本轮审计证据、不把已成功的
     findings 改判失败。`--subtree-wait` 是子树核验的有界轮询上限（默认 5 秒）。
     stdout: 单行 JSON {ok,state,stopped,removed,subtree,orphan_warning,unknown_cost,
@@ -87,7 +93,10 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     每站点：终态 → collect（结果不丢）→ cleanup rm；超 deadline 的活动 → stop/子树核验/rm；
     未到 deadline 的在飞 → 只报 pending 不动它；残留 reserve → `manual-cleanup-required`
     （unknown-cost：MUST NOT 自动重派、MUST NOT 删 reserve）。
-    stdout: 单行 JSON {ok,run_dir,sites:[…],orphan_warnings:[…],unknown_cost_sites:[…]}
+    **站点集为空 MUST NOT 报绿**（`all([])` 为真）：`--site` 在本 run-dir 里没有对应站点
+    ⇒ usage-error（敲错 site / 点错 run-dir 恰恰是成本未知的场景）；run-dir 内一个站点都
+    没有 ⇒ `ok=false` + 显式 detail。
+    stdout: 单行 JSON {ok,state,run_dir,sites:[…],orphan_warnings:[…],unknown_cost_sites:[…]}
     exit 0=全部无残留 | 1=有 orphan/unknown-cost/identity 未核验 | 2=usage-error
 
   version
@@ -891,6 +900,12 @@ def cmd_worker(args):
         # 注：把它变成 `--effort <e>` argv 属 outside-voice.sh 侧（Task 4）；本票不改该文件，
         # 故当前这一格是「已接线、下游尚未消费」——Task 4 接上即生效，无需再回头改 worker。
         env["SDFLOW_VOICE_EFFORT"] = args.effort
+    # 🔴 runner pid sidecar 的落盘路径 —— cleanup 核验「runner 子树是否已退出」的**唯一直接
+    # 信号**：worker 自己的进程组圈不住 GNU timeout 自建的那个独立组（见 probe_subtree 的
+    # 判定地基），缺这个信号时组长分支只能 fail-closed 判 unverifiable。
+    # 同样是「已接线、下游尚未消费」：Task 4 在 outside-voice.sh 里 spawn runner **之前**，
+    # 把 `OV_RUNNER_PID` 以纯十进制原子写入本路径（临时文件 + mv）即生效。
+    env["SDFLOW_VOICE_RUNNER_PID_FILE"] = runner_pid_path(run_dir, site)
     rc = 127
     try:
         if not os.path.isfile(helper):
@@ -1460,23 +1475,83 @@ def _pgid_alive(pgid):
         return None
 
 
+RUNNER_PID_SUFFIX = ".runner.pid"
+
+
+def runner_pid_path(run_dir, site):
+    return os.path.join(str(run_dir), site + RUNNER_PID_SUFFIX)
+
+
+def read_runner_pid(run_dir, site):
+    """读 `<site>.runner.pid` → (kind, pid, detail)，kind ∈ {"ok","corrupt","absent"}。
+
+    盘面格式与 `<site>.rc` 同构：**纯十进制单值**，由 `outside-voice.sh` 在 spawn runner
+    **之前**原子写入，内容 = `OV_RUNNER_PID`（GNU timeout 自身 pid，亦即它 setpgid 出的
+    那个独立进程组的 pgid）。
+
+    为什么是裸 pid 文件而不是 JSON witness：这个文件由 shell 写，契约越小越不容易写错，
+    而写错的代价是 cleanup 永久 fail-closed。identity 绑定来自**路径本身**——run-dir × site
+    每次 attempt 唯一（同 site 重复 dispatch 是硬失败）；且两个误判方向都安全：串到别人的
+    活 pid ⇒ 判 alive（fail-closed），pid 被复用 ⇒ 同样判 alive。
+    """
+    path = runner_pid_path(run_dir, site)
+    if not os.path.isfile(path):
+        return ("absent", None, "")
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            raw = fh.read()
+    except OSError as exc:
+        return ("corrupt", None, "%s%s 不可读: %s" % (site, RUNNER_PID_SUFFIX, exc))
+    text = raw.strip()
+    if not re.match(r"\A\d+\Z", text) or int(text) <= 0:
+        return ("corrupt", None,
+                "%s%s 不是纯十进制正整数: %r" % (site, RUNNER_PID_SUFFIX, text[:64]))
+    return ("ok", int(text), "")
+
+
+def probe_runner_pid(pid):
+    """runner 本体与它自建的那个进程组，任一还有活口即 alive。→ 三值 verdict。
+
+    两个探针都问：`OV_RUNNER_PID == 其 pgid` 只在 **GNU timeout 在场**时成立；timeout 缺席
+    （helper 直接跑 runner）时该 pid 不是组长，`killpg` 打的是别的组 —— 那只可能**多**判
+    一次 alive（fail-closed 方向），MUST NOT 反过来用它判 exited。
+    """
+    pid_state = _pid_alive(pid)
+    group_state = _pgid_alive(pid)
+    if pid_state is True or group_state is True:
+        return SUBTREE_ALIVE
+    if pid_state is False and group_state is False:
+        return SUBTREE_EXITED
+    return SUBTREE_UNVERIFIABLE
+
+
 def probe_subtree(run_dir, site, job):
-    """核验 **worker 与 inner child** 的进程子树是否确已退出。→ (verdict, detail)
+    """核验 **worker 与 runner** 的进程子树是否确已退出。→ (verdict, detail)
 
     verdict ∈ exited | alive | unverifiable。**「不可证」不等于「已退出」**——
     OVBG-05 要求「子树终止不可证时落 orphan warning 并抑制自动 fallback」。
 
-    判定顺序（每一步都有确定性信号，无信号即降级为 unverifiable）：
+    🔴 判定的地基：**worker 自己的进程组圈不住真正烧额度的那棵子树。**
+    `outside-voice.sh` 用 GNU timeout 跑 runner，而 timeout 会 `setpgid` 把自己放进
+    **独立进程组**（该组 PGID 恒等于 timeout 自身 PID —— 见 outside-voice.sh 的组级 KILL
+    守卫注释，本机 gtimeout 实测同）。∴ worker 组空了**推不出** runner 已死：worker 被
+    SIGKILL 时 bash trap 不执行，孤儿 timeout/claude 整棵留在另一个组里继续计费，而
+    `killpg(worker_pgid, 0)` 照样报 `ProcessLookupError`。
+    **组探针只用来判 alive，永不用来判 exited。**
+
+    判定顺序（每一步都要有确定性信号，无信号即降级为 unverifiable）：
       ① started witness 里的 worker identity —— 没有它就没有可核验的对象。
       ② worker pid 本体：存活 ⇒ alive；不可判定 ⇒ unverifiable。
-      ③ worker pid 已不在，再问 inner child：
-         · `pgid == pid`（worker 是组长）⇒ 该进程组恰好圈住 worker 及其未 setsid 的
-           全部后代（worker → bash helper → claude 都是同步 fork，不换组）⇒
-           `killpg(pgid, 0)` 就是「子树是否还有活口」的**直接**答案。
-         · `pgid != pid`（组与 supervisor 共用）⇒ killpg 无判别力。退到盘面信号：
-           terminal witness 存在 ⟺ worker 自己走到了发布点，而 `subprocess.call` 是
-           **同步**的 ⇒ 走到那里意味着 inner child 已被 wait 回收 ⇒ exited。
-           两个信号都没有 ⇒ unverifiable（design.md「terminal witness 缺失 ⇒ orphan warning」）。
+      ③ worker 是组长且组内仍有活口 ⇒ alive（未换组的后代还在跑）。
+      ④ `<site>.runner.pid`（helper 在 spawn runner 前落盘）—— **唯一能直接回答「runner
+         子树是否退出」的信号**：alive ⇒ alive；确定不存在 ⇒ exited；不可判定 / 文件损坏
+         ⇒ unverifiable（信号在场就以它为准，MUST NOT 再退回 ⑤ 的推断）。
+      ⑤ 该信号缺席 ⇒ 退到盘面推断：terminal witness 存在 ⟺ worker 自己走到了发布点，而
+         `subprocess.call` 是**同步**的 ⇒ 走到那里意味着 helper 已退出、其 `wait` 已回收
+         runner ⇒ exited。**残余**：helper 若是被 SIGKILL 打死的（trap 不执行），
+         `subprocess.call` 同样返回、witness 同样发布，而孤儿 runner 仍活着 —— 这个窄口
+         只能由 ④ 的直接信号关掉。
+      ⑥ 两个信号都没有 ⇒ unverifiable。
     """
     started_kind, started, detail = load_witness(
         run_dir, site, ".started.json", job, "started_at")
@@ -1497,25 +1572,37 @@ def probe_subtree(run_dir, site, job):
     if alive is None:
         return (SUBTREE_UNVERIFIABLE, "worker pid=%r 的存活性不可判定" % (pid,))
 
-    if pgid == pid:
-        group = _pgid_alive(pgid)
-        if group is True:
+    if pgid == pid and _pgid_alive(pgid) is True:
+        return (SUBTREE_ALIVE,
+                "worker pid=%s 已退出，但其进程组 pgid=%s 内仍有存活进程"
+                "（未换组的后代未随之退出）" % (pid, pgid))
+
+    runner_kind, runner_pid, runner_detail = read_runner_pid(run_dir, site)
+    if runner_kind == "corrupt":
+        return (SUBTREE_UNVERIFIABLE,
+                "runner pid sidecar 损坏（%s）—— runner 子树是否退出不可证" % runner_detail)
+    if runner_kind == "ok":
+        verdict = probe_runner_pid(runner_pid)
+        if verdict == SUBTREE_ALIVE:
             return (SUBTREE_ALIVE,
-                    "worker pid=%s 已退出，但其进程组 pgid=%s 内仍有存活进程"
-                    "（inner child 未随之退出）" % (pid, pgid))
-        if group is False:
+                    "worker pid=%s 已退出，但 runner pid=%s（及其进程组）仍存活"
+                    "—— 孤儿 runner 仍在计费" % (pid, runner_pid))
+        if verdict == SUBTREE_EXITED:
             return (SUBTREE_EXITED,
-                    "worker pid=%s 与其进程组 pgid=%s 均已不存在" % (pid, pgid))
-        return (SUBTREE_UNVERIFIABLE, "进程组 pgid=%r 的存活性不可判定" % (pgid,))
+                    "worker pid=%s 与 runner pid=%s（及其进程组）均已不存在"
+                    % (pid, runner_pid))
+        return (SUBTREE_UNVERIFIABLE,
+                "runner pid=%s 的存活性不可判定 —— 子树是否退出不可证" % (runner_pid,))
 
     terminal_kind, _, _ = load_witness(run_dir, site, ".terminal.json", job, "terminal_at")
     if terminal_kind == "ok":
         return (SUBTREE_EXITED,
-                "worker pid=%s 已发布 terminal witness 后退出 ⇒ inner child 已被同步 wait 回收"
-                % (pid,))
+                "worker pid=%s 已发布 terminal witness 后退出 ⇒ helper 已同步返回、其 wait "
+                "已回收 runner" % (pid,))
     return (SUBTREE_UNVERIFIABLE,
-            "worker pid=%s 已不在，但它不是进程组长（pgid=%r，与 supervisor 共用）且无 "
-            "terminal witness ⇒ inner child 是否退出不可证" % (pid, pgid))
+            "worker pid=%s 已不在，但既无 %s%s（runner 的直接信号）也无 terminal witness"
+            "（worker 组 pgid=%r 为空**不**构成 runner 已退出的证据）⇒ 子树是否退出不可证"
+            % (pid, site, RUNNER_PID_SUFFIX, pgid))
 
 
 def wait_subtree_exited(run_dir, site, job, max_wait=SUBTREE_VERIFY_SECONDS):
@@ -1727,9 +1814,27 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
 
     if not ident["ok"]:
         if id_status == IDENTITY_ABSENT:
-            # roster 里已经没有这个 job ⇒ 无需清理。幂等，不是失败。
-            return _cleanup_payload("absent", True,
-                                    "supervisor roster 已无此 job，无需清理", **base)
+            # 🔴 roster 干净**不等于**进程死了：`missing` liveness（roster 无此条目）正是
+            # LOST 的主要产生路径（`derive_status`），此处若无条件返回成功，一个仍在计费的
+            # worker 就会被报成干净通过、并放行自动 fallback 再叠一次 —— OVBG-05/OVBG-03
+            # 要杀的正是这个形态。roster 无条目 ⇒ 无 job 可 stop/rm，但子树仍 MUST 核验。
+            verdict, verdict_detail = probe_subtree(run_dir, site, job)
+            base["subtree"] = verdict
+            if verdict == SUBTREE_EXITED:
+                return _cleanup_payload(
+                    "absent", True,
+                    "supervisor roster 已无此 job 且子树已确认退出，无需清理（%s）"
+                    % verdict_detail,
+                    fallback_allowed=True, **base)
+            return _cleanup_payload(
+                "orphan-warning", False,
+                "supervisor roster 已无此 job，但子树终止不可证（%s）—— MUST NOT 声称已清理"
+                % verdict_detail,
+                unknown_cost=True,
+                orphan_warning="supervisor roster 已无 job id=%s，但 worker/runner 子树"
+                               "仍未证退出（%s）；需人工核查并终止，其间 MUST NOT 自动 "
+                               "fallback（会在一次可能仍在计费的 voice 上再叠一次）"
+                               % (job["job_id"], verdict_detail), **base)
         return _cleanup_payload(
             "identity-unverified", False,
             "identity 核验未通过（%s）—— 只告警，MUST NOT stop/rm 任何 job" % ident["detail"],
@@ -1746,6 +1851,10 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
                 "not-collected", False,
                 "terminal 结果（state=%s）尚未 collect —— MUST 先 collect 再清理 roster"
                 % status["state"], **base)
+        # 🔴 这里的 `subtree` 是**留痕，不是闸门**：rc 已发布 ⇒ 这次 voice 的额度已经花完，
+        # 而 fallback 的意义是「重试一次没拿到结果的 voice」——已 collect 的终态不存在
+        # 「再叠一次费用」的问题。故本分支照常 rm 并放行 fallback，探针值只写进 payload
+        # 供人工审计（真在这里发现 alive，说明 helper 是被 SIGKILL 打死的，见 probe_subtree ⑤）。
         base["subtree"] = probe_subtree(run_dir, site, job)[0]
         rc, why = claude_job_action(claude_bin, "rm", job["job_id"])
         if rc != 0:
@@ -1890,27 +1999,51 @@ def reconcile_site(run_dir, site, claude_bin=None, subtree_wait=SUBTREE_VERIFY_S
     return record
 
 
-def run_reconcile(run_dir, only_site=None, claude_bin=None,
-                  subtree_wait=SUBTREE_VERIFY_SECONDS):
-    run_dir = os.path.realpath(str(run_dir))
-    claude_bin = claude_bin or shutil.which("claude")
-    sites = discover_sites(run_dir)
-    if only_site is not None:
-        sites = [s for s in sites if s == only_site]
-    records = [reconcile_site(run_dir, site, claude_bin=claude_bin,
-                              subtree_wait=subtree_wait)
-               for site in sites]
+def _reconcile_payload(run_dir, records, detail, ok=None, state=None):
     warnings = [r["site"] for r in records if r["orphan_warning"]]
     unknown = [r["site"] for r in records if r["unknown_cost"]]
-    ok = all(r["ok"] for r in records) and not warnings and not unknown
+    if ok is None:
+        ok = all(r["ok"] for r in records) and not warnings and not unknown
     return {
         "ok": ok,
+        "state": state,
         "run_dir": run_dir,
         "sites": records,
         "orphan_warnings": warnings,
         "unknown_cost_sites": unknown,
-        "detail": "reconcile 只处理显式点名的 run-dir 内、本 run 自己持有 metadata 的站点",
+        "detail": detail,
     }
+
+
+def run_reconcile(run_dir, only_site=None, claude_bin=None,
+                  subtree_wait=SUBTREE_VERIFY_SECONDS):
+    """→ reconcile 报告。**站点集为空 MUST NOT 报绿**（见下方两个空集分支）。"""
+    run_dir = os.path.realpath(str(run_dir))
+    claude_bin = claude_bin or shutil.which("claude")
+    sites = discover_sites(run_dir)
+    if only_site is not None:
+        matched = [s for s in sites if s == only_site]
+        if not matched:
+            # 🔴 点名的站点不在这个 run-dir 里 ⇒ usage-error，MUST NOT 报「一切正常」：
+            # 操作者恢复 abandoned run 时敲错 site / 点错 run-dir 正是**成本未知**的场景，
+            # 而 `all([])` 为真会把它渲染成一份干净的绿报告。
+            return _reconcile_payload(
+                run_dir, [],
+                "run-dir 内没有名为 %r 的站点（本 run 自己持有 metadata/reserve 的站点: %s）"
+                "—— 请核对 --site 与 --run-dir" % (only_site, sites or "无"),
+                ok=False, state="usage-error")
+        sites = matched
+    records = [reconcile_site(run_dir, site, claude_bin=claude_bin,
+                              subtree_wait=subtree_wait)
+               for site in sites]
+    if not records:
+        return _reconcile_payload(
+            run_dir, [],
+            "run-dir 内没有任何本 run 自己持有 metadata/reserve 的站点 —— 没有可核对的站点"
+            "**不等于**没有残留：请确认 --run-dir 点对了", ok=False)
+    return _reconcile_payload(
+        run_dir, records,
+        "reconcile 只处理显式点名的 run-dir 内、本 run 自己持有 metadata 的站点")
 
 
 # ── 子命令入口 ────────────────────────────────────────────────────────────────
@@ -2057,6 +2190,8 @@ def cmd_reconcile(args):
                           state="usage-error", reason_code=REASON_EXEC_ERROR,
                           fallback_allowed=False)
     payload = run_reconcile(run_dir, only_site=args.site, subtree_wait=args.subtree_wait)
+    if payload.get("state") == "usage-error":
+        return 2, payload
     return (0 if payload["ok"] else 1), payload
 
 
