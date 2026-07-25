@@ -72,6 +72,38 @@ def test_both_sources_carry_all_three():
             assert h in text, f"{src.name} 缺了通则「{h}」"
 
 
+def test_render_updates_every_block_not_just_the_first():
+    """⭐ 一个文件里有多份托管块时，【每一份】都要被回填。
+
+    CLAUDE.md / AGENTS.md 各有两份：顶部（本仓 dogfood）+ 文末（sdflow-init 铺设的
+    工作流托管区块自带）。只更新首个 ⇒ 第二份静默留旧版、同一文件自相矛盾，
+    而 --check 照样报绿 —— 这是【假绿】。
+    """
+    stale = "## 四条通则（旧版占位）\n"
+    text = (f"# T\n\n{SP.START} x -->\n{stale}{SP.END}\n\n"
+            f"中间正文\n\n{SP.START} x -->\n{stale}{SP.END}\n\n尾部\n")
+
+    out = SP.render(text, SP.SOURCE_PROJECT)
+
+    assert "旧版占位" not in out, "有块没被回填"
+    assert len(SP._blocks(out)) == 2, "块数不该变"
+    assert out.count("真人用户明确指示优先") == 2
+    assert "中间正文" in out and "尾部" in out
+    assert SP.render(out, SP.SOURCE_PROJECT) == out, "render 必须幂等"
+
+
+def test_every_block_in_project_targets_matches_source():
+    """本仓 CLAUDE.md / AGENTS.md / claude-section.md 的【每一份】块 == 真相源全文。"""
+    body = SP.block(SP.SOURCE_PROJECT).strip()
+    for p in SP.PROJECT_TARGETS:
+        lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+        spans = SP._blocks("".join(lines))
+        assert spans, f"{p.name} 没有托管块"
+        for s, e in spans:
+            got = "".join(lines[s:e + 1]).strip()
+            assert got == body, f"{p.name} 第 {s + 1} 行起的托管块与真相源不一致"
+
+
 def test_outside_voice_frame_carries_the_principles(tmp_path):
     """⭐ 端到端：render-prompt 的输出里，通则 MUST 出现在 UNTRUSTED 分隔线【之前】。
 

@@ -59,23 +59,29 @@ def skills():
                   if p.is_dir() and (p / "SKILL.md").is_file())
 
 
-def _split(text):
-    """→ (前, 后)：托管块该插进这两段之间。
+def _blocks(text):
+    """→ [(start_idx, end_idx)]：文本里【全部】托管块的行区间（含首尾 marker 行）。
 
-    已有块 ⇒ 就地替换（前 = 块之前，后 = 块之后）。
-    无块   ⇒ 插在首个 H1 之后；无 H1 则插在 frontmatter 之后。
+    【为什么是「全部」而不是「首个」】：CLAUDE.md / AGENTS.md 各有【两份】——
+    顶部一份（本仓 dogfood）+ 文末一份（sdflow-init 铺设的工作流托管区块自带）。
+    只更新首个 ⇒ 第二份静默留旧版 ⇒ 同一文件里两份通则自相矛盾，而 --check 照样报绿。
+    这是【假绿】，不是省事。
     """
     lines = text.splitlines(keepends=True)
-
-    starts = [i for i, l in enumerate(lines) if l.startswith(START)]
-    if starts:
-        i = starts[0]
-        ends = [j for j, l in enumerate(lines) if l.startswith(END) and j >= i]
+    out, cursor = [], 0
+    for i, l in enumerate(lines):
+        if i < cursor or not l.startswith(START):
+            continue
+        ends = [j for j in range(i, len(lines)) if lines[j].startswith(END)]
         if not ends:
-            raise SystemExit(f"[sync_principles] FAIL: 有 start 无 end —— 区块被手改坏了")
-        return "".join(lines[:i]), "".join(lines[ends[0] + 1:])
+            raise SystemExit("[sync_principles] FAIL: 有 start 无 end —— 区块被手改坏了")
+        out.append((i, ends[0]))
+        cursor = ends[0] + 1
+    return out
 
-    # frontmatter：首行 `---` → 找下一个独立 `---` 行
+
+def _insert_anchor(lines):
+    """无块时的插入点：首个 H1 之后；无 H1 则 frontmatter 之后。"""
     anchor = 0
     if lines and lines[0].strip() == "---":
         for j in range(1, len(lines)):
@@ -87,17 +93,26 @@ def _split(text):
         if lines[j].startswith("# "):
             anchor = j + 1
             break
-
-    return "".join(lines[:anchor]), "".join(lines[anchor:])
+    return anchor
 
 
 def render(text, src):
-    head, tail = _split(text)
     body = block(src)
-    tail = tail.lstrip("\n")
-    if not head.strip():                 # 文件以托管块开头（如 claude-section.md）
-        return f"{body}\n{tail}"
-    return f"{head.rstrip(chr(10))}\n\n{body}\n{tail}"
+    lines = text.splitlines(keepends=True)
+
+    spans = _blocks(text)
+    if not spans:
+        anchor = _insert_anchor(lines)
+        spans = [(anchor, anchor - 1)]   # 空区间 = 纯插入，不吞掉任何行
+
+    out, cursor = "", 0
+    for start, end in spans:
+        head = out + "".join(lines[cursor:start])
+        # 块前恰好一个空行（文件以块开头时不加）
+        out = f"{head.rstrip(chr(10))}\n\n{body}" if head.strip() else body
+        cursor = end + 1
+    tail = "".join(lines[cursor:]).lstrip("\n")
+    return f"{out}\n{tail}"
 
 
 def targets():
