@@ -6,7 +6,8 @@ skill 是【独立分发单元】——symlink 装到 ~/.claude/skills/，跑在
 立场 MUST 在 prompt 里，不能藏在一个「模型可能不去 Read」的指针后面。
 
 【那怎么防漂移】
-真相源唯一（hack/skill-principles.md），注入机械化（本脚本），漂移机械可查（--check）。
+真相源唯一（sdflow-init/assets/ 下的两个源，见下方 SOURCE / SOURCE_PROJECT），
+注入机械化（本脚本），漂移机械可查（--check）。
 —— 这正是 CLAUDE.md 基准 1：能用「可固化规则 + 脚本」保证的一致性，优先机械化。
 
 【语法面】

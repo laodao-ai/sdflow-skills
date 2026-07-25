@@ -50,7 +50,7 @@ jobs:
       - name: Gate — async 调度段两处字节等值（ADR-5）
         run: python hack/check_async_branch_parity.py
 
-      - name: Gate — 三条通则托管块与真相源一致
+      - name: Gate — 四条通则托管块与真相源一致
         run: python hack/sync_principles.py --check
 
       - name: Full test suite
