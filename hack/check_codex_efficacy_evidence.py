@@ -28,17 +28,24 @@ stderr 只允许以 `stderr_bytes` / `stderr_lines` 两个**计数**出现（OVB
 MUST NOT 演化成「从 Markdown 报告里正则抠证据」—— Markdown 是无界语法面。
 ∴ 证据的单一源是那个 `.json` 文件，报告引用它的路径。
 
+【host 是**盘面派生**的，不是自报】
+`host` 由 `outside-voice-job.py dispatch` 在**它自己所在的宿主 shell 里**读出来
+（`CLAUDECODE=1` / `CODEX_THREAD_ID`，与 `resolve-models.sh` 判宿主同口径），落进
+`<site>.job.json`，再由 status/collect 原样透传到 `<site>.collected.json`。
+∴ 本脚本的 `emit` **从 witness 里读 host**，**没有** `--host` 入参 —— 决胜门 MUST NOT
+靠调用方自报（那正是 adr/0018 说的「无机械锚的 ✅」，也正是本 change 要消灭的东西）。
+旧格式 witness 没有 `host` ⇒ 搬 None ⇒ verify 报红，**fail-closed，MUST NOT 回落到自报**。
+
 【诚实边界（MUST NOT 声称机械保证的部分）】
-`host="codex"` 与 `declared_sites` 这两项**不是**本脚本能从盘面派生的：前者是「这一轮评审跑在
-哪个宿主里」，后者是「这一层应该有哪些锚」——两者的权威都在评审报告的锚行 / 编排层的实际调用，
-本脚本只能核**证据自洽**（顶层 host 与每个 site 的 host 一致、集合双向相等）。
-∴ `emit` 把它们做成**必填 CLI 入参**（而不是猜），谁跑谁负责；本脚本机械守的是
-「一旦声明了，就必须处处自洽且达标」。
+`declared_sites` **不是**本脚本能从盘面派生的：它是「这一层**应该**有哪些锚」，权威在评审
+报告的锚行 / 编排层的实际调用，而 run-dir 只知道「实际 dispatch 了哪些」——拿实落集当
+declared 集会让「漏收站点」自动自洽（HAE-09 要杀的正是这个）。∴ 它是**必填 CLI 入参**，
+谁跑谁负责；本脚本机械守的是「一旦声明了，就必须处处自洽且达标」。
 
 用法：
     # 从 run-dir 的 <site>.collected.json 机械生成证据（避免手抄 collect 输出）
     python3 hack/check_codex_efficacy_evidence.py emit \
-        --run-dir <d> --host codex --layer spec-review \
+        --run-dir <d> --layer spec-review \
         --repo <name> --change <name> --declared-sites design-voice,hr-tg \
         --out <evidence.json>
 
@@ -203,6 +210,25 @@ def _check_site_shape(site, idx, failures):
     return name
 
 
+def crossed_ceiling(site):
+    """该站点是否**自然跨过了旧同步天花板**（G2 的谓词）。
+
+    **成功摘要行也 MUST 用这一个谓词** —— 摘要是人会直接引用的证据句，若它只看
+    duration、不看 model/effort/reason_code，就会把一个 sonnet 站点列进
+    「自然 >300s 的站点」，把 G2 的结论说得比实际宽。判据只此一份。
+    """
+    if not isinstance(site, dict):
+        return False
+    duration = site.get("duration_seconds")
+    return (isinstance(duration, (int, float))
+            and not isinstance(duration, bool)
+            and duration > MIN_NATURAL_DURATION_SECONDS
+            and site.get("model") == REQUIRED_MODEL
+            and site.get("effort") == REQUIRED_EFFORT
+            and site.get("reason_code") == REQUIRED_REASON_CODE
+            and site.get("runner") == REQUIRED_RUNNER)
+
+
 def verify(evidence):
     """→ 失败原因列表（空 = 三条门全过）。"""
     failures = []
@@ -255,6 +281,22 @@ def verify(evidence):
     if len(set(names)) != len(names):
         failures.append(f"sites 有重复站点: {names}")
 
+    # per-site 完整性：**站点名不同还不够，身份也 MUST 各不相同**。
+    # 把同一份 witness 复制成 N 个站点名（job_id / attempt_nonce / stdout digest 全相同）
+    # 只需改一个字段就能伪造出「整层都成功了」—— 这是 HAE-09「漏收站点」的镜像形态：
+    # 前者少一个真站点，后者多 N-1 个假站点，而单看站点名两者都自洽。
+    for field, label in (("job_id", "canonical job id"),
+                         ("attempt_nonce", "attempt nonce"),
+                         ("stdout_sha256", "stdout digest")):
+        values = [s[field] for s in sites
+                  if isinstance(s, dict) and isinstance(s.get(field), str)]
+        if len(set(values)) != len(values):
+            dupes = sorted({v for v in values if values.count(v) > 1})
+            failures.append(
+                f"sites 的 {field} 有重复（{label}）: {dupes} —— "
+                f"不同站点 MUST 是不同的真实 attempt，"
+                f"同一份 witness 换个站点名复制 N 份不构成 per-site 完整性")
+
     # G1 的「全部」= 双向集合相等（单向包含会放过漏收站点）
     if declared and set(names) != set(declared):
         only_declared = sorted(set(declared) - set(names))
@@ -264,19 +306,7 @@ def verify(evidence):
             f"只在 declared={only_declared} / 只在证据={only_present}")
 
     # G2：至少一个自然 >300 秒的强模型成功站点
-    def _crossed(site):
-        if not isinstance(site, dict):
-            return False
-        duration = site.get("duration_seconds")
-        return (isinstance(duration, (int, float))
-                and not isinstance(duration, bool)
-                and duration > MIN_NATURAL_DURATION_SECONDS
-                and site.get("model") == REQUIRED_MODEL
-                and site.get("effort") == REQUIRED_EFFORT
-                and site.get("reason_code") == REQUIRED_REASON_CODE
-                and site.get("runner") == REQUIRED_RUNNER)
-
-    if not any(_crossed(s) for s in sites):
+    if not any(crossed_ceiling(s) for s in sites):
         failures.append(
             f"G2 未达标：没有任何站点满足「自然 duration > "
             f"{MIN_NATURAL_DURATION_SECONDS}s ∧ model={REQUIRED_MODEL} ∧ "
@@ -300,24 +330,26 @@ def _load_collected(run_dir, site):
         raise EvidenceError(f"{path} 不是合法 JSON: {e}")
 
 
-def emit(run_dir, host, layer, repo, change, declared_sites):
+MIXED_HOST = "mixed"
+
+
+def emit(run_dir, layer, repo, change, declared_sites):
     """→ 证据 dict。**只搬 collect 已经落盘的字段，不新造事实。**
 
     缺字段一律原样搬 None ⇒ 由 verify 报出来，MUST NOT 在这里兜底成好看的默认值。
 
-    **唯一的例外是 `host`**：collect 的 payload 里**没有**这个字段，因为 helper 不知道
-    自己被哪个宿主的编排层调用（它只知道 runner）。∴ 每个 site 的 `host` 只能来自
-    `--host` 入参 —— 这是本脚本的**诚实边界**，不是机械派生。谁跑谁负责；本脚本机械守的
-    是「一旦声明成 codex，就必须处处自洽且达标」。
+    `host` 也一样从 witness 搬（dispatch 在宿主 shell 里读出、经 job.json → collect 透传）。
+    **没有 `--host` 入参可以覆盖它。** 各站点 host 不一致 ⇒ 顶层落 `MIXED_HOST`，由 verify
+    判红；旧格式 witness 无该字段 ⇒ None ⇒ 同样判红（fail-closed）。
     """
     sites = []
     run_id = None
     for name in declared_sites:
         data = _load_collected(run_dir, name)
         run_id = run_id or data.get("run_id")
-        site = {k: data.get(k) for k in sorted(SITE_KEYS)}
-        site["host"] = host          # 盘面无此字段，见 docstring 的诚实边界
-        sites.append(site)
+        sites.append({k: data.get(k) for k in sorted(SITE_KEYS)})
+    hosts = {s["host"] for s in sites}
+    host = hosts.pop() if len(hosts) == 1 else MIXED_HOST
     return {
         "schema_version": SCHEMA_VERSION,
         "layer": layer,
@@ -347,7 +379,8 @@ def build_parser():
 
     p_emit = sub.add_parser("emit", help="从 run-dir 的 collected witness 生成证据")
     p_emit.add_argument("--run-dir", required=True)
-    p_emit.add_argument("--host", required=True)
+    # 有意**没有** `--host`：宿主是盘面派生量（dispatch 在宿主 shell 里读、经 job.json →
+    # collect 透传到 witness）。留一个自报入参就等于给决胜门留了后门。
     p_emit.add_argument("--layer", required=True)
     p_emit.add_argument("--repo", required=True)
     p_emit.add_argument("--change", required=True)
@@ -367,7 +400,7 @@ def main(argv=None):
                   "空集会让门恒真", file=sys.stderr)
             return 2
         try:
-            evidence = emit(args.run_dir, args.host, args.layer,
+            evidence = emit(args.run_dir, args.layer,
                             args.repo, args.change, declared)
         except EvidenceError as e:
             print(f"[efficacy] FAIL: {e}", file=sys.stderr)
@@ -399,8 +432,7 @@ def main(argv=None):
               file=sys.stderr)
         return 1
 
-    crossed = [s["site"] for s in evidence["sites"]
-               if s["duration_seconds"] > MIN_NATURAL_DURATION_SECONDS]
+    crossed = [s["site"] for s in evidence["sites"] if crossed_ceiling(s)]
     print(f"[efficacy] ✅ 三条门全过 —— layer={evidence['layer']} "
           f"host={evidence['host']} 站点 {len(evidence['sites'])}/"
           f"{len(evidence['declared_sites'])} 全 ok；"

@@ -576,6 +576,70 @@ def test_dispatch_writes_job_metadata_atomically_with_required_fields(job_home, 
     assert [p.name for p in repo["run_dir"].glob(".tmp-*")] == []
 
 
+# ── 宿主锚：`host` 由 dispatch 从自己所在的 shell 读出，不是调用方自报 ─────────
+#
+# efficacy 门要回答「这一轮跑在哪个宿主里」。dispatch **就跑在宿主 shell 里** ⇒ 该量
+# 有确定性信号（`resolve-models.sh` 判宿主用的同两个环境变量）。它落进 job.json 之后，
+# status → collect → efficacy 证据整条链都是盘面派生，不再需要 `--host` 自报参数。
+
+def _host_env(fake_claude, host_signals, extra=None):
+    """把继承来的宿主信号**先清干净**再按用例注入 —— 否则测试结果随「谁在跑 pytest」而变
+    （在 Claude Code 里跑时 `CLAUDECODE=1` 会从 `os.environ` 漏进来）。"""
+    env = _env(fake_claude, extra)
+    env.pop("CLAUDECODE", None)
+    env.pop("CODEX_THREAD_ID", None)
+    env.update(host_signals)
+    return env
+
+
+@pytest.mark.parametrize("host_signals,expected", [
+    ({"CLAUDECODE": "1"}, "claude"),
+    ({"CODEX_THREAD_ID": "11111111-2222-3333-4444-555555555555"}, "codex"),
+    # 两个正信号同时出现 = 冲突，MUST NOT 静默取其一（`resolve-models.sh` 同口径）。
+    ({"CLAUDECODE": "1", "CODEX_THREAD_ID": "abc"}, "unknown"),
+    # 缺失 MUST NOT 推断成另一方。
+    ({}, "unknown"),
+    ({"CLAUDECODE": "0"}, "unknown"),      # 严格判 "1"，不做真值转换猜测
+    ({"CODEX_THREAD_ID": ""}, "unknown"),  # 空串不是正信号
+])
+def test_dispatch_records_the_host_it_actually_runs_in(job_home, fake_claude, repo,
+                                                       host_signals, expected):
+    env = _host_env(fake_claude, host_signals)
+    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
+    assert proc.returncode == 0, proc.stderr
+    meta = json.loads((repo["run_dir"] / "design-voice.job.json").read_text(encoding="utf-8"))
+    assert meta["host"] == expected, meta
+
+
+def test_job_metadata_without_host_is_corrupt_not_guessed(tmp_path):
+    """旧格式 job.json（无 `host`）⇒ CORRUPT，MUST NOT 兜底成某个宿主。
+
+    `host` 进 `JOB_REQUIRED_FIELDS` 的意义就在这里：缺了就是缺了，猜一个出来等于
+    把 efficacy 门的地基换成自述。
+    """
+    run_dir = tmp_path / "20260725T090000Z-NoHost"
+    run_dir.mkdir()
+    meta = _seed_site(run_dir, rc_kind="rc0_nonempty")
+    del meta["host"]
+    JOB.atomic_write_json(run_dir / "design-voice.job.json", meta)
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="done")
+    assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
+
+
+@pytest.mark.parametrize("host", ["codex", "claude", "unknown"])
+def test_collect_carries_the_dispatch_host_verbatim(job_home, fake_claude, tmp_path, host):
+    """collect 原样透传 job.json 的 `host` —— 不美化、不改写，证据才可能是盘面派生的。"""
+    run_dir = tmp_path / ("20260725T091000Z-Hst" + host[:3])
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="rc0_nonempty", host=host)
+    payload = _json_stdout(_run_job(job_home, _site_args("collect", run_dir),
+                                    _env(fake_claude)))
+    assert payload["host"] == host, payload
+    witness = json.loads(
+        (run_dir / "design-voice.collected.json").read_text(encoding="utf-8"))
+    assert witness["host"] == host, witness
+
+
 def test_dispatch_command_is_single_shell_quoted_worker_invocation(job_home, fake_claude, repo):
     env = _env(fake_claude)
     proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
@@ -1160,7 +1224,8 @@ def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent
                write_job=True, write_started=True, write_terminal=None,
                stdout=b"outside voice findings\n", stderr=b"fake-stderr\n",
                terminal_digest=None, run_id=None, nonce_in_witness=None,
-               worker_pid=4242, worker_pgid=None, repo_root=None, runner_pid=None):
+               worker_pid=4242, worker_pgid=None, repo_root=None, runner_pid=None,
+               host="codex"):
     """把一个站点的盘面摆成指定形态。返回写下的 job metadata（dict 或 None）。
 
     盘面即状态 ⇒ 所有用例的输入都是「run dir 里有哪些文件、内容是什么」，
@@ -1184,6 +1249,7 @@ def _seed_site(run_dir, site="design-voice", *, meta="complete", rc_kind="absent
             "run_dir": str(run_dir.resolve()),
             "context_file": str((run_dir / (site + "-context.md")).resolve()),
             "attempt_nonce": nonce,
+            "host": host,
             "runner": "claude", "model": "opus", "effort": "high",
             "platform": "posix", "sys_platform": sys.platform,
             "job_id": job_id, "session_id": job_id + "-sess",

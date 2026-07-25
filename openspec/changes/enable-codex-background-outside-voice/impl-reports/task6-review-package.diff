@@ -1,0 +1,1370 @@
+diff --git a/hack/check_codex_efficacy_evidence.py b/hack/check_codex_efficacy_evidence.py
+new file mode 100644
+index 0000000..2713921
+--- /dev/null
++++ b/hack/check_codex_efficacy_evidence.py
+@@ -0,0 +1,412 @@
++"""Codex 宿主跨模型 voice 的**真实 efficacy 证据**确定性检查器。
++
++【为什么要有它】
++tasks.md 6.1/6.2/6.3〔OVBG-01, OVBG-03, HAE-08, HAE-09〕把「Codex efficacy=0 能不能关掉」
++钉成三条门。这三条如果由模型自述「我跑过了、都绿了」，就是 adr/0018 说的那种**无机械锚的 ✅**。
++∴ 证据本身落成一份**结构化 JSON**，判定归本脚本，模型只负责把证据生出来。
++
++【三条门（逐条对应 tasks.md）】
++  G1〔6.1〕该层**全部 declared 站点**取得 host="codex" runner="claude" reason_code="ok"。
++       —— 「全部」是双向集合相等：declared ⊆ 实落 且 实落 ⊆ declared。
++          单向包含会放过「少收一个站点」（HAE-09「per-site 完整性机械可审」正是这条）。
++  G2〔6.2〕**至少一个**站点的**自然耗时 > 300 秒**且 model=opus / effort=high / reason_code=ok。
++       —— 300 是旧同步天花板；`>` 是严格大于（等于 300 证不出「跨过」）。
++          sleep/shim 与无模型命令由 G3 的 digest/字节数与 model/effort 字段挡（见下）。
++  G3〔6.1 末句〕字段**可机读**：四个时刻可解析且单调、duration 与 (terminal-started) 自洽、
++       stdout digest 是 64 位十六进制且 stdout 非空。
++
++【第四条：证据里 MUST NOT 有 context / stderr 正文】
++tasks.md 6.1 明写「不含 context/stderr 的结构化 efficacy 证据」。**这条要机械成立，靠的不是
++「我没写进去」，而是 schema 白名单**：
++  · 顶层与 site 的 key 集合 MUST **精确等于**白名单（多一个 key 即红）⇒ 没有 `stderr_text`
++    这种字段可塞；
++  · 任何字符串值 MUST 无换行、且长度 ≤ MAX_STRING_LEN ⇒ 没法把正文塞进某个合法字段。
++stderr 只允许以 `stderr_bytes` / `stderr_lines` 两个**计数**出现（OVBG-04 的写出面约束）。
++
++【语法面（基准 5：无界不手搓）】
++输入是 **JSON**（`json.load` 由 stdlib 解释，不手搓解析器）；本脚本只做**结构断言**。
++MUST NOT 演化成「从 Markdown 报告里正则抠证据」—— Markdown 是无界语法面。
++∴ 证据的单一源是那个 `.json` 文件，报告引用它的路径。
++
++【诚实边界（MUST NOT 声称机械保证的部分）】
++`host="codex"` 与 `declared_sites` 这两项**不是**本脚本能从盘面派生的：前者是「这一轮评审跑在
++哪个宿主里」，后者是「这一层应该有哪些锚」——两者的权威都在评审报告的锚行 / 编排层的实际调用，
++本脚本只能核**证据自洽**（顶层 host 与每个 site 的 host 一致、集合双向相等）。
++∴ `emit` 把它们做成**必填 CLI 入参**（而不是猜），谁跑谁负责；本脚本机械守的是
++「一旦声明了，就必须处处自洽且达标」。
++
++用法：
++    # 从 run-dir 的 <site>.collected.json 机械生成证据（避免手抄 collect 输出）
++    python3 hack/check_codex_efficacy_evidence.py emit \
++        --run-dir <d> --host codex --layer spec-review \
++        --repo <name> --change <name> --declared-sites design-voice,hr-tg \
++        --out <evidence.json>
++
++    # 判定
++    python3 hack/check_codex_efficacy_evidence.py check --evidence <evidence.json>
++
++退出码：0=通过 | 1=不通过（逐条原因写 stderr） | 2=用法错 / 输入不可读
++"""
++import argparse
++import json
++import re
++import sys
++from datetime import datetime, timezone
++from pathlib import Path
++
++SCHEMA_VERSION = 1
++
++# ── 三条门的常量（改动即改契约，别在别处复制第二份）─────────────────────────
++MIN_NATURAL_DURATION_SECONDS = 300.0   # 旧同步天花板；G2 要求**严格大于**
++REQUIRED_HOST = "codex"
++REQUIRED_RUNNER = "claude"
++REQUIRED_REASON_CODE = "ok"
++REQUIRED_MODEL = "opus"
++REQUIRED_EFFORT = "high"
++
++# duration 与 (terminal_at - started_at) 的允许偏差：两端时刻是秒级 ISO 串，
++# 而 duration 由 helper 用同两个值算出并 round(…, 3) ⇒ 1 秒容差足够，且不足以
++# 掩盖「把 200 秒写成 400 秒」这种量级的伪造。
++DURATION_CONSISTENCY_TOLERANCE_SECONDS = 1.0
++
++# 字符串值的硬上界 —— 与 key 白名单一起构成「证据里塞不进正文」的机械保证。
++MAX_STRING_LEN = 256
++
++TOP_LEVEL_KEYS = frozenset({
++    "schema_version", "layer", "repo", "change", "run_id", "host",
++    "declared_sites", "sites",
++})
++
++SITE_KEYS = frozenset({
++    "site", "host", "runner", "model", "effort", "reason_code",
++    "job_id", "attempt_nonce",
++    "dispatched_at", "started_at", "terminal_at", "collected_at",
++    "duration_seconds",
++    "stdout_sha256", "stdout_bytes", "stdout_lines",
++    "stderr_bytes", "stderr_lines",
++})
++
++# 四个时刻的先后次序（G3 的单调性）。
++TIME_FIELDS = ("dispatched_at", "started_at", "terminal_at", "collected_at")
++
++SHA256_RE = re.compile(r"\A[0-9a-f]{64}\Z")
++ISO_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
++
++LAYERS = ("spec-review", "code-review")
++
++
++class EvidenceError(Exception):
++    """输入不可读 / 不是 JSON —— 与「判定不通过」分开（前者 exit 2、后者 exit 1）。"""
++
++
++# ── 判定 ────────────────────────────────────────────────────────────────────
++
++def _parse_iso(value):
++    """→ epoch 秒；不合形返回 None（调用方负责报错，MUST NOT 静默当 0）。"""
++    if not isinstance(value, str) or not ISO_RE.match(value):
++        return None
++    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
++        tzinfo=timezone.utc).timestamp()
++
++
++def _check_scalars(node, where, failures):
++    """递归查「字符串无换行且不超长」—— 证据里塞不进 context / stderr 正文。"""
++    if isinstance(node, str):
++        if "\n" in node or "\r" in node:
++            failures.append(f"{where}: 字符串含换行 —— 证据 MUST NOT 携带正文")
++        elif len(node) > MAX_STRING_LEN:
++            failures.append(
++                f"{where}: 字符串长度 {len(node)} > {MAX_STRING_LEN} —— "
++                f"证据 MUST NOT 携带正文")
++    elif isinstance(node, dict):
++        for k, v in node.items():
++            _check_scalars(v, f"{where}.{k}", failures)
++    elif isinstance(node, list):
++        for i, v in enumerate(node):
++            _check_scalars(v, f"{where}[{i}]", failures)
++
++
++def _check_site_shape(site, idx, failures):
++    """G3 的逐字段形状 + G1 的三元组。→ site 名（拿不到时返回 None）。"""
++    where = f"sites[{idx}]"
++    if not isinstance(site, dict):
++        failures.append(f"{where}: 不是对象")
++        return None
++
++    extra = set(site) - SITE_KEYS
++    missing = SITE_KEYS - set(site)
++    if extra:
++        failures.append(f"{where}: 出现白名单外的 key {sorted(extra)} —— "
++                        f"证据 schema 是封闭集合（防 stderr/context 夹带）")
++    if missing:
++        failures.append(f"{where}: 缺字段 {sorted(missing)}")
++    if extra or missing:
++        return site.get("site") if isinstance(site.get("site"), str) else None
++
++    name = site["site"]
++    if not isinstance(name, str) or not name:
++        failures.append(f"{where}.site: MUST 为非空字符串")
++        return None
++    where = f"site[{name}]"
++
++    # G1：三元组
++    for field, expected in (("host", REQUIRED_HOST),
++                            ("runner", REQUIRED_RUNNER),
++                            ("reason_code", REQUIRED_REASON_CODE)):
++        if site[field] != expected:
++            failures.append(
++                f"{where}.{field}={site[field]!r} ≠ {expected!r} —— "
++                f"G1 要求该层每个站点都是可信跨模型成功")
++
++    for field in ("model", "effort", "job_id", "attempt_nonce"):
++        if not isinstance(site[field], str) or not site[field]:
++            failures.append(f"{where}.{field}: MUST 为非空字符串")
++
++    # G3：四个时刻可解析且单调
++    epochs = {}
++    for field in TIME_FIELDS:
++        epoch = _parse_iso(site[field])
++        if epoch is None:
++            failures.append(
++                f"{where}.{field}={site[field]!r}: MUST 为 YYYY-MM-DDTHH:MM:SSZ")
++        epochs[field] = epoch
++    for a, b in zip(TIME_FIELDS, TIME_FIELDS[1:]):
++        if epochs[a] is not None and epochs[b] is not None and epochs[a] > epochs[b]:
++            failures.append(f"{where}: 时刻次序颠倒 {a}({site[a]}) > {b}({site[b]})")
++
++    # G3：duration 是正数且与 (terminal - started) 自洽
++    duration = site["duration_seconds"]
++    if isinstance(duration, bool) or not isinstance(duration, (int, float)):
++        failures.append(f"{where}.duration_seconds: MUST 为数字")
++    elif duration <= 0:
++        failures.append(f"{where}.duration_seconds={duration}: MUST > 0")
++    elif epochs["started_at"] is not None and epochs["terminal_at"] is not None:
++        span = epochs["terminal_at"] - epochs["started_at"]
++        if abs(duration - span) > DURATION_CONSISTENCY_TOLERANCE_SECONDS:
++            failures.append(
++                f"{where}.duration_seconds={duration} 与 "
++                f"terminal_at-started_at={span} 不自洽（容差 "
++                f"{DURATION_CONSISTENCY_TOLERANCE_SECONDS}s）")
++
++    # G3：stdout digest 与字节数 —— 成功站点的 stdout MUST 非空（rc=0+空 stdout 早被
++    # helper 判 exec-error，这里是证据层的第二道）。
++    if not isinstance(site["stdout_sha256"], str) or \
++            not SHA256_RE.match(site["stdout_sha256"] or ""):
++        failures.append(f"{where}.stdout_sha256: MUST 为 64 位小写十六进制")
++    for field, floor in (("stdout_bytes", 1), ("stdout_lines", 1),
++                         ("stderr_bytes", 0), ("stderr_lines", 0)):
++        value = site[field]
++        if isinstance(value, bool) or not isinstance(value, int):
++            failures.append(f"{where}.{field}: MUST 为整数")
++        elif value < floor:
++            failures.append(f"{where}.{field}={value}: MUST ≥ {floor}")
++    return name
++
++
++def verify(evidence):
++    """→ 失败原因列表（空 = 三条门全过）。"""
++    failures = []
++    if not isinstance(evidence, dict):
++        return ["证据顶层不是对象"]
++
++    extra = set(evidence) - TOP_LEVEL_KEYS
++    missing = TOP_LEVEL_KEYS - set(evidence)
++    if extra:
++        failures.append(f"顶层出现白名单外的 key {sorted(extra)} —— "
++                        f"证据 schema 是封闭集合（防 stderr/context 夹带）")
++    if missing:
++        failures.append(f"顶层缺字段 {sorted(missing)}")
++    if missing:
++        return failures
++
++    _check_scalars(evidence, "evidence", failures)
++
++    if evidence["schema_version"] != SCHEMA_VERSION:
++        failures.append(f"schema_version={evidence['schema_version']!r} "
++                        f"≠ {SCHEMA_VERSION}")
++    if evidence["host"] != REQUIRED_HOST:
++        failures.append(f"host={evidence['host']!r} ≠ {REQUIRED_HOST!r} —— "
++                        f"本证据只对 Codex 宿主有意义")
++    if evidence["layer"] not in LAYERS:
++        failures.append(f"layer={evidence['layer']!r} MUST ∈ {list(LAYERS)}")
++    for field in ("repo", "change", "run_id"):
++        if not isinstance(evidence[field], str) or not evidence[field]:
++            failures.append(f"{field}: MUST 为非空字符串")
++
++    declared = evidence["declared_sites"]
++    if not isinstance(declared, list) or not declared or \
++            not all(isinstance(s, str) and s for s in declared):
++        failures.append("declared_sites: MUST 为非空的字符串列表 —— "
++                        "空集会让 G1 的 all() 恒真（空集假绿）")
++        declared = []
++    elif len(set(declared)) != len(declared):
++        failures.append(f"declared_sites 有重复项: {declared}")
++
++    sites = evidence["sites"]
++    if not isinstance(sites, list) or not sites:
++        failures.append("sites: MUST 为非空列表")
++        return failures
++
++    names = []
++    for idx, site in enumerate(sites):
++        name = _check_site_shape(site, idx, failures)
++        if name is not None:
++            names.append(name)
++    if len(set(names)) != len(names):
++        failures.append(f"sites 有重复站点: {names}")
++
++    # G1 的「全部」= 双向集合相等（单向包含会放过漏收站点）
++    if declared and set(names) != set(declared):
++        only_declared = sorted(set(declared) - set(names))
++        only_present = sorted(set(names) - set(declared))
++        failures.append(
++            f"declared_sites 与实落证据站点集不等: "
++            f"只在 declared={only_declared} / 只在证据={only_present}")
++
++    # G2：至少一个自然 >300 秒的强模型成功站点
++    def _crossed(site):
++        if not isinstance(site, dict):
++            return False
++        duration = site.get("duration_seconds")
++        return (isinstance(duration, (int, float))
++                and not isinstance(duration, bool)
++                and duration > MIN_NATURAL_DURATION_SECONDS
++                and site.get("model") == REQUIRED_MODEL
++                and site.get("effort") == REQUIRED_EFFORT
++                and site.get("reason_code") == REQUIRED_REASON_CODE
++                and site.get("runner") == REQUIRED_RUNNER)
++
++    if not any(_crossed(s) for s in sites):
++        failures.append(
++            f"G2 未达标：没有任何站点满足「自然 duration > "
++            f"{MIN_NATURAL_DURATION_SECONDS}s ∧ model={REQUIRED_MODEL} ∧ "
++            f"effort={REQUIRED_EFFORT} ∧ runner={REQUIRED_RUNNER} ∧ "
++            f"reason_code={REQUIRED_REASON_CODE}」—— "
++            f"未证明跨过旧同步天花板，MUST NOT 关闭 efficacy 缺口")
++    return failures
++
++
++# ── 证据生成（从 run-dir 的 collected witness 机械派生）──────────────────────
++
++def _load_collected(run_dir, site):
++    path = Path(run_dir) / f"{site}.collected.json"
++    try:
++        raw = path.read_text(encoding="utf-8")
++    except OSError as e:
++        raise EvidenceError(f"读不到 {path}: {e}")
++    try:
++        return json.loads(raw)
++    except ValueError as e:
++        raise EvidenceError(f"{path} 不是合法 JSON: {e}")
++
++
++def emit(run_dir, host, layer, repo, change, declared_sites):
++    """→ 证据 dict。**只搬 collect 已经落盘的字段，不新造事实。**
++
++    缺字段一律原样搬 None ⇒ 由 verify 报出来，MUST NOT 在这里兜底成好看的默认值。
++
++    **唯一的例外是 `host`**：collect 的 payload 里**没有**这个字段，因为 helper 不知道
++    自己被哪个宿主的编排层调用（它只知道 runner）。∴ 每个 site 的 `host` 只能来自
++    `--host` 入参 —— 这是本脚本的**诚实边界**，不是机械派生。谁跑谁负责；本脚本机械守的
++    是「一旦声明成 codex，就必须处处自洽且达标」。
++    """
++    sites = []
++    run_id = None
++    for name in declared_sites:
++        data = _load_collected(run_dir, name)
++        run_id = run_id or data.get("run_id")
++        site = {k: data.get(k) for k in sorted(SITE_KEYS)}
++        site["host"] = host          # 盘面无此字段，见 docstring 的诚实边界
++        sites.append(site)
++    return {
++        "schema_version": SCHEMA_VERSION,
++        "layer": layer,
++        "repo": repo,
++        "change": change,
++        "run_id": run_id,
++        "host": host,
++        "declared_sites": list(declared_sites),
++        "sites": sites,
++    }
++
++
++# ── CLI ─────────────────────────────────────────────────────────────────────
++
++def _split_sites(raw):
++    return [s.strip() for s in raw.split(",") if s.strip()]
++
++
++def build_parser():
++    parser = argparse.ArgumentParser(
++        prog="check_codex_efficacy_evidence.py",
++        description="Codex 宿主跨模型 voice 真实 efficacy 证据的确定性检查器")
++    sub = parser.add_subparsers(dest="command", required=True)
++
++    p_check = sub.add_parser("check", help="判定一份证据是否满足三条门")
++    p_check.add_argument("--evidence", required=True)
++
++    p_emit = sub.add_parser("emit", help="从 run-dir 的 collected witness 生成证据")
++    p_emit.add_argument("--run-dir", required=True)
++    p_emit.add_argument("--host", required=True)
++    p_emit.add_argument("--layer", required=True)
++    p_emit.add_argument("--repo", required=True)
++    p_emit.add_argument("--change", required=True)
++    p_emit.add_argument("--declared-sites", required=True,
++                        help="逗号分隔；是「本层应有锚的站点集」，不是「实际 dispatch 集」")
++    p_emit.add_argument("--out", required=True)
++    return parser
++
++
++def main(argv=None):
++    args = build_parser().parse_args(argv)
++
++    if args.command == "emit":
++        declared = _split_sites(args.declared_sites)
++        if not declared:
++            print("[efficacy] FAIL: --declared-sites 解析为空集 —— "
++                  "空集会让门恒真", file=sys.stderr)
++            return 2
++        try:
++            evidence = emit(args.run_dir, args.host, args.layer,
++                            args.repo, args.change, declared)
++        except EvidenceError as e:
++            print(f"[efficacy] FAIL: {e}", file=sys.stderr)
++            return 2
++        Path(args.out).write_text(
++            json.dumps(evidence, indent=2, sort_keys=True,
++                       ensure_ascii=False) + "\n", encoding="utf-8")
++        print(f"[efficacy] 已写出证据 {args.out}（{len(evidence['sites'])} 站点）")
++        return 0
++
++    try:
++        raw = Path(args.evidence).read_text(encoding="utf-8")
++    except OSError as e:
++        print(f"[efficacy] FAIL: 读不到证据文件 {args.evidence}: {e}",
++              file=sys.stderr)
++        return 2
++    try:
++        evidence = json.loads(raw)
++    except ValueError as e:
++        print(f"[efficacy] FAIL: 证据不是合法 JSON: {e}", file=sys.stderr)
++        return 2
++
++    failures = verify(evidence)
++    if failures:
++        print(f"[efficacy] ❌ 未通过（{len(failures)} 条）：", file=sys.stderr)
++        for f in failures:
++            print(f"   · {f}", file=sys.stderr)
++        print("   ⇒ tasks.md 6.3：保留 T162 并如实记录，MUST NOT 以编排 smoke 假绿",
++              file=sys.stderr)
++        return 1
++
++    crossed = [s["site"] for s in evidence["sites"]
++               if s["duration_seconds"] > MIN_NATURAL_DURATION_SECONDS]
++    print(f"[efficacy] ✅ 三条门全过 —— layer={evidence['layer']} "
++          f"host={evidence['host']} 站点 {len(evidence['sites'])}/"
++          f"{len(evidence['declared_sites'])} 全 ok；"
++          f"自然 >{MIN_NATURAL_DURATION_SECONDS:.0f}s 的站点: {crossed}")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/hack/tests/test_codex_efficacy_evidence.py b/hack/tests/test_codex_efficacy_evidence.py
+new file mode 100644
+index 0000000..5bd0dff
+--- /dev/null
++++ b/hack/tests/test_codex_efficacy_evidence.py
+@@ -0,0 +1,449 @@
++"""守 Codex efficacy 证据检查器 —— 每条门都要**真的会红**。
++
++【为什么需要这个测试】
++本检查器是「Codex efficacy=0 能不能关掉」的唯一机械判定点。**一个恒真的断言在这里
++比没有断言更坏**：它会给一份不达标的证据盖上机械章（task5-review.md 的主线发现正是
++「宣称有锚、实则假绿」）。∴ 每条门都配一条**反向变异**：把好证据改坏一处 → 必须红。
++
++【与被测对象的关系】
++检查器只做结构断言，输入是 JSON（stdlib 解析）⇒ 测试也只造 dict，不造 Markdown。
++"""
++import copy
++import json
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++import check_codex_efficacy_evidence as CE  # noqa: E402
++
++SCRIPT = Path(CE.__file__).resolve()
++
++
++def _site(name="design-voice", **over):
++    site = {
++        "site": name,
++        "host": "codex",
++        "runner": "claude",
++        "model": "opus",
++        "effort": "high",
++        "reason_code": "ok",
++        "job_id": "3d3695d5",
++        "attempt_nonce": "4b85f30b20fcedb5c2de990fe46b9dbc",
++        "dispatched_at": "2026-07-25T17:00:24Z",
++        "started_at": "2026-07-25T17:00:25Z",
++        "terminal_at": "2026-07-25T17:07:45Z",
++        "collected_at": "2026-07-25T17:07:50Z",
++        "duration_seconds": 440.0,
++        "stdout_sha256": "a" * 64,
++        "stdout_bytes": 4096,
++        "stdout_lines": 60,
++        "stderr_bytes": 0,
++        "stderr_lines": 0,
++    }
++    site.update(over)
++    return site
++
++
++def _evidence(**over):
++    ev = {
++        "schema_version": 1,
++        "layer": "spec-review",
++        "repo": "zhws_ops_api",
++        "change": "2026-07-25-manage-permission-catalog-items",
++        "run_id": "20260725T170004Z-szMlwM",
++        "host": "codex",
++        "declared_sites": ["design-voice"],
++        "sites": [_site()],
++    }
++    ev.update(over)
++    return ev
++
++
++# ── 对照组：好证据必须绿（否则下面所有「变异必红」都无意义）──────────────────
++
++def test_a_good_evidence_passes():
++    assert CE.verify(_evidence()) == []
++
++
++def test_two_site_layer_passes():
++    ev = _evidence(declared_sites=["design-voice", "hr-tg"],
++                   sites=[_site(),
++                          _site("hr-tg", job_id="7c1a9b02",
++                                attempt_nonce="b" * 32,
++                                terminal_at="2026-07-25T17:02:30Z",
++                                collected_at="2026-07-25T17:02:35Z",
++                                duration_seconds=125.0)])
++    assert CE.verify(ev) == []
++
++
++# ── G1：全部站点 host=codex / runner=claude / reason_code=ok ─────────────────
++
++@pytest.mark.parametrize("field,bad", [
++    ("host", "claude"),
++    ("runner", "codex"),
++    ("reason_code", "timeout"),
++    ("reason_code", "exec-error"),
++    ("reason_code", "fallback-unavailable"),
++])
++def test_g1_rejects_a_site_that_is_not_a_trusted_cross_model_success(field, bad):
++    ev = _evidence(sites=[_site(**{field: bad})])
++    assert any(field in f for f in CE.verify(ev))
++
++
++def test_g1_rejects_when_one_of_two_sites_degraded():
++    """一个 ok、一个降级 ⇒ 整层不达标（「全部站点」不是「至少一个」）。"""
++    ev = _evidence(declared_sites=["design-voice", "hr-tg"],
++                   sites=[_site(),
++                          _site("hr-tg", reason_code="timeout")])
++    assert CE.verify(ev)
++
++
++def test_g1_rejects_a_missing_declared_site():
++    """declared 两个、只落一个证据 ⇒ 红（HAE-09 per-site 完整性）。"""
++    ev = _evidence(declared_sites=["design-voice", "hr-tg"], sites=[_site()])
++    assert any("declared_sites 与实落证据站点集不等" in f for f in CE.verify(ev))
++
++
++def test_g1_rejects_an_undeclared_extra_site():
++    """反方向也要红：证据里多出一个没 declared 的站点。"""
++    ev = _evidence(declared_sites=["design-voice"],
++                   sites=[_site(), _site("hr-tg")])
++    assert any("declared_sites 与实落证据站点集不等" in f for f in CE.verify(ev))
++
++
++def test_empty_declared_sites_is_not_green():
++    """空集会让 all() 恒真 —— MUST NOT 报绿。"""
++    ev = _evidence(declared_sites=[], sites=[_site()])
++    assert CE.verify(ev)
++
++
++def test_empty_sites_is_not_green():
++    ev = _evidence(sites=[])
++    assert CE.verify(ev)
++
++
++def test_duplicate_sites_rejected():
++    ev = _evidence(declared_sites=["design-voice"], sites=[_site(), _site()])
++    assert any("重复站点" in f for f in CE.verify(ev))
++
++
++def test_top_level_host_must_be_codex():
++    """本证据只对 Codex 宿主有意义 —— Claude 宿主的成功不能关这个缺口。"""
++    ev = _evidence(host="claude", sites=[_site(host="claude", runner="codex")])
++    assert CE.verify(ev)
++
++
++# ── G2：至少一个自然 >300 秒的 opus+high 成功站点 ────────────────────────────
++
++def test_g2_rejects_when_every_site_is_short():
++    ev = _evidence(sites=[_site(terminal_at="2026-07-25T17:04:00Z",
++                                collected_at="2026-07-25T17:04:05Z",
++                                duration_seconds=215.0)])
++    assert any("G2 未达标" in f for f in CE.verify(ev))
++
++
++def test_g2_boundary_is_strictly_greater_than_300():
++    """恰好 300 秒证不出「跨过」旧天花板 ⇒ 红；301 秒 ⇒ 绿。"""
++    at_ceiling = _evidence(sites=[_site(terminal_at="2026-07-25T17:05:25Z",
++                                        collected_at="2026-07-25T17:05:30Z",
++                                        duration_seconds=300.0)])
++    assert any("G2 未达标" in f for f in CE.verify(at_ceiling))
++
++    over = _evidence(sites=[_site(terminal_at="2026-07-25T17:05:26Z",
++                                  collected_at="2026-07-25T17:05:30Z",
++                                  duration_seconds=301.0)])
++    assert CE.verify(over) == []
++
++
++@pytest.mark.parametrize("field,bad", [("model", "sonnet"), ("effort", "medium")])
++def test_g2_requires_the_long_site_to_be_strong_model_high_effort(field, bad):
++    """>300 秒但不是 opus/high ⇒ 证不出「强模型跨过天花板」。"""
++    ev = _evidence(sites=[_site(**{field: bad})])
++    assert any("G2 未达标" in f for f in CE.verify(ev))
++
++
++def test_g2_is_not_satisfied_by_a_degraded_long_site():
++    """跑满 900 秒然后 timeout 的站点 MUST NOT 顶替成功证据。"""
++    ev = _evidence(sites=[_site(reason_code="timeout",
++                                terminal_at="2026-07-25T17:15:25Z",
++                                collected_at="2026-07-25T17:15:30Z",
++                                duration_seconds=900.0)])
++    fails = CE.verify(ev)
++    assert any("G2 未达标" in f for f in fails)
++
++
++# ── G3：字段可机读（时刻 / duration / digest）───────────────────────────────
++
++@pytest.mark.parametrize("bad", [
++    "2026-07-25 17:07:45", "2026-07-25T17:07:45+00:00", "1784969329", "", None,
++])
++def test_g3_rejects_unparseable_timestamps(bad):
++    ev = _evidence(sites=[_site(terminal_at=bad)])
++    assert any("terminal_at" in f for f in CE.verify(ev))
++
++
++def test_g3_rejects_out_of_order_timestamps():
++    """terminal 早于 started ⇒ 红。"""
++    ev = _evidence(sites=[_site(started_at="2026-07-25T17:07:45Z",
++                                terminal_at="2026-07-25T17:00:25Z")])
++    assert any("次序颠倒" in f for f in CE.verify(ev))
++
++
++def test_g3_rejects_duration_inconsistent_with_the_timestamps():
++    """把 440 秒的跑写成 620 秒 ⇒ 与两端时刻不自洽 ⇒ 红。
++
++    这是「自然耗时」的防伪核心：duration 不是自由字段，它 MUST 由两个时刻夹住。
++    """
++    ev = _evidence(sites=[_site(duration_seconds=620.0)])
++    assert any("不自洽" in f for f in CE.verify(ev))
++
++
++def test_g3_rejects_a_short_run_relabelled_as_long():
++    """把 120 秒的真跑标成 400 秒（时刻没改）⇒ 红，且 G2 不因此达标。"""
++    ev = _evidence(sites=[_site(terminal_at="2026-07-25T17:02:25Z",
++                                collected_at="2026-07-25T17:02:30Z",
++                                duration_seconds=400.0)])
++    assert any("不自洽" in f for f in CE.verify(ev))
++
++
++@pytest.mark.parametrize("bad", [0, -1, "440", None, True])
++def test_g3_rejects_bad_duration_types(bad):
++    ev = _evidence(sites=[_site(duration_seconds=bad)])
++    assert CE.verify(ev)
++
++
++@pytest.mark.parametrize("bad", ["A" * 64, "a" * 63, "", None, "z" * 64])
++def test_g3_rejects_bad_stdout_digest(bad):
++    ev = _evidence(sites=[_site(stdout_sha256=bad)])
++    assert any("stdout_sha256" in f for f in CE.verify(ev))
++
++
++def test_g3_rejects_empty_stdout():
++    """rc=0 但 stdout 空 —— 不得猜成功（OVBG-02）。"""
++    ev = _evidence(sites=[_site(stdout_bytes=0)])
++    assert any("stdout_bytes" in f for f in CE.verify(ev))
++
++
++def test_g3_rejects_zero_stdout_lines():
++    ev = _evidence(sites=[_site(stdout_lines=0)])
++    assert any("stdout_lines" in f for f in CE.verify(ev))
++
++
++def test_stderr_counters_may_be_zero_but_must_be_integers():
++    assert CE.verify(_evidence(sites=[_site(stderr_bytes=0, stderr_lines=0)])) == []
++    assert CE.verify(_evidence(sites=[_site(stderr_bytes="0")]))
++
++
++# ── 第四条：证据里 MUST NOT 有 context / stderr 正文 ─────────────────────────
++
++def test_extra_site_key_is_rejected():
++    """白名单是封闭集合 —— `stderr_text` 这种字段根本没有落脚点。"""
++    ev = _evidence(sites=[_site(**{})])
++    ev["sites"][0]["stderr_text"] = "panic: something"
++    assert any("白名单外的 key" in f for f in CE.verify(ev))
++
++
++def test_extra_top_level_key_is_rejected():
++    ev = _evidence()
++    ev["context"] = "……评审 context 正文……"
++    assert any("白名单外的 key" in f for f in CE.verify(ev))
++
++
++def test_missing_site_key_is_rejected():
++    ev = _evidence()
++    del ev["sites"][0]["stdout_sha256"]
++    assert any("缺字段" in f for f in CE.verify(ev))
++
++
++def test_missing_top_level_key_is_rejected():
++    ev = _evidence()
++    del ev["run_id"]
++    assert any("缺字段" in f for f in CE.verify(ev))
++
++
++def test_multiline_string_anywhere_is_rejected():
++    """换行 = 正文的形状。合法字段里也不许有。"""
++    ev = _evidence(sites=[_site(job_id="3d3695d5\nTraceback (most recent call last):")])
++    assert any("换行" in f for f in CE.verify(ev))
++
++
++# 一段「正文尺寸」的绝对字面量。用绝对值而不是 `MAX_STRING_LEN + 1`：后者随常量一起
++# 缩放 ⇒ 把上界放到 10**9 时断言依然绿（**恒真锚**）。这里钉死「4096 字符的东西一定
++# 是正文，不许进证据」。
++PROSE_SIZED = "x" * 4096
++
++
++def test_overlong_string_anywhere_is_rejected():
++    assert any("长度" in f for f in CE.verify(_evidence(change=PROSE_SIZED)))
++
++
++def test_scalar_guard_reaches_into_lists():
++    ev = _evidence(declared_sites=["design-voice", PROSE_SIZED])
++    assert any("长度" in f for f in CE.verify(ev))
++
++
++def test_overlong_boundary_is_at_the_declared_constant():
++    """恰好 MAX_STRING_LEN 绿、+1 红 —— 边界落在契约常量上。"""
++    assert CE.verify(_evidence(change="x" * CE.MAX_STRING_LEN)) == []
++    assert CE.verify(_evidence(change="x" * (CE.MAX_STRING_LEN + 1)))
++
++
++# ── emit：证据从 collected witness 机械派生，不手抄 ──────────────────────────
++
++def _write_collected(run_dir, site, **over):
++    payload = {
++        "schema_version": 1, "run_id": "20260725T170004Z-szMlwM",
++        "site": site, "host": "codex", "runner": "claude", "model": "opus",
++        "effort": "high", "reason_code": "ok", "job_id": "3d3695d5",
++        "attempt_nonce": "4b85f30b20fcedb5c2de990fe46b9dbc",
++        "dispatched_at": "2026-07-25T17:00:24Z",
++        "started_at": "2026-07-25T17:00:25Z",
++        "terminal_at": "2026-07-25T17:07:45Z",
++        "collected_at": "2026-07-25T17:07:50Z",
++        "duration_seconds": 440.0, "stdout_sha256": "a" * 64,
++        "stdout_bytes": 4096, "stdout_lines": 60,
++        "stderr_bytes": 0, "stderr_lines": 0,
++        # collect 真实 payload 里还有这些 —— emit MUST 把它们挡在证据之外
++        "stdout_path": str(Path(run_dir) / f"{site}.stdout"),
++        "detail": "rc=0 且 stdout 非空",
++        "state": "SUCCEEDED", "terminal": True, "ok": True, "rc": 0,
++    }
++    payload.update(over)
++    (Path(run_dir) / f"{site}.collected.json").write_text(
++        json.dumps(payload), encoding="utf-8")
++
++
++def test_emit_drops_non_whitelisted_collect_fields(tmp_path):
++    """collect 的 `detail` / `stdout_path` / `state` 一律不进证据。"""
++    _write_collected(tmp_path, "design-voice")
++    ev = CE.emit(str(tmp_path), "codex", "spec-review", "zhws_ops_api",
++                 "some-change", ["design-voice"])
++    assert set(ev["sites"][0]) == set(CE.SITE_KEYS)
++    assert CE.verify(ev) == []
++
++
++def test_emit_does_not_invent_missing_fields(tmp_path):
++    """collect 里缺 digest ⇒ emit 搬 None ⇒ verify 报红，MUST NOT 兜底成好看的默认值。"""
++    _write_collected(tmp_path, "design-voice")
++    data = json.loads((tmp_path / "design-voice.collected.json").read_text())
++    del data["stdout_sha256"]
++    (tmp_path / "design-voice.collected.json").write_text(json.dumps(data))
++    ev = CE.emit(str(tmp_path), "codex", "spec-review", "r", "c", ["design-voice"])
++    assert ev["sites"][0]["stdout_sha256"] is None
++    assert any("stdout_sha256" in f for f in CE.verify(ev))
++
++
++def test_emit_carries_a_degraded_site_verbatim_so_the_gate_can_red(tmp_path):
++    """降级站点的 reason_code 原样搬进证据 ⇒ G1 必红（emit MUST NOT 帮着美化）。"""
++    _write_collected(tmp_path, "design-voice", reason_code="timeout")
++    ev = CE.emit(str(tmp_path), "codex", "spec-review", "r", "c", ["design-voice"])
++    assert ev["sites"][0]["reason_code"] == "timeout"
++    assert CE.verify(ev)
++
++
++def test_emit_fills_host_from_the_cli_because_collect_has_no_such_field(tmp_path):
++    """collect payload **没有** `host` —— helper 不知道自己被哪个宿主调用。
++
++    ∴ 它只能来自 `--host` 入参（诚实边界）。这条同时守住「emit 别把 host 留成 None
++    让证据永远红」和「别把它偷偷写死成 codex」。
++    """
++    _write_collected(tmp_path, "design-voice")
++    raw = json.loads((tmp_path / "design-voice.collected.json").read_text())
++    del raw["host"]
++    (tmp_path / "design-voice.collected.json").write_text(json.dumps(raw))
++
++    ev = CE.emit(str(tmp_path), "codex", "spec-review", "r", "c", ["design-voice"])
++    assert ev["sites"][0]["host"] == "codex"
++    assert CE.verify(ev) == []
++
++
++def test_emit_with_a_non_codex_host_is_rejected_by_the_gate(tmp_path):
++    """Claude 宿主下跑出来的成功 **不能**顶替 Codex efficacy 证据 —— 门必须红。"""
++    _write_collected(tmp_path, "design-voice")
++    ev = CE.emit(str(tmp_path), "claude", "spec-review", "r", "c", ["design-voice"])
++    assert ev["host"] == "claude" and ev["sites"][0]["host"] == "claude"
++    assert any("host" in f for f in CE.verify(ev))
++
++
++def test_emit_fails_loud_when_a_declared_site_has_no_witness(tmp_path):
++    """declared 了却没 collected witness ⇒ emit 非零退出，MUST NOT 悄悄少一个站点。"""
++    _write_collected(tmp_path, "design-voice")
++    with pytest.raises(CE.EvidenceError):
++        CE.emit(str(tmp_path), "codex", "spec-review", "r", "c",
++                ["design-voice", "hr-tg"])
++
++
++# ── CLI 契约 ────────────────────────────────────────────────────────────────
++
++def _run(*args):
++    return subprocess.run([sys.executable, str(SCRIPT), *args],
++                          capture_output=True, text=True, encoding="utf-8")
++
++
++def test_cli_check_exit_codes(tmp_path):
++    good = tmp_path / "good.json"
++    good.write_text(json.dumps(_evidence()), encoding="utf-8")
++    assert _run("check", "--evidence", str(good)).returncode == 0
++
++    bad = tmp_path / "bad.json"
++    bad.write_text(json.dumps(_evidence(sites=[_site(reason_code="timeout")])),
++                   encoding="utf-8")
++    r = _run("check", "--evidence", str(bad))
++    assert r.returncode == 1
++    assert "保留 T162" in r.stderr
++
++    assert _run("check", "--evidence", str(tmp_path / "nope.json")).returncode == 2
++
++    broken = tmp_path / "broken.json"
++    broken.write_text("{not json", encoding="utf-8")
++    assert _run("check", "--evidence", str(broken)).returncode == 2
++
++
++def test_cli_emit_then_check_roundtrip(tmp_path):
++    run_dir = tmp_path / "run"
++    run_dir.mkdir()
++    _write_collected(run_dir, "design-voice")
++    out = tmp_path / "evidence.json"
++    r = _run("emit", "--run-dir", str(run_dir), "--host", "codex",
++             "--layer", "spec-review", "--repo", "zhws_ops_api",
++             "--change", "c", "--declared-sites", "design-voice",
++             "--out", str(out))
++    assert r.returncode == 0, r.stderr
++    assert _run("check", "--evidence", str(out)).returncode == 0
++
++
++def test_cli_emit_rejects_empty_declared_sites(tmp_path):
++    r = _run("emit", "--run-dir", str(tmp_path), "--host", "codex",
++             "--layer", "spec-review", "--repo", "r", "--change", "c",
++             "--declared-sites", " , ", "--out", str(tmp_path / "e.json"))
++    assert r.returncode == 2
++
++
++def test_constants_are_the_only_copy_of_the_thresholds():
++    """门限只有一份 —— 改契约就改这里，别在测试里再钉一次语义。"""
++    assert CE.MIN_NATURAL_DURATION_SECONDS == 300.0
++    assert CE.REQUIRED_HOST == "codex"
++    assert CE.REQUIRED_RUNNER == "claude"
++    assert CE.REQUIRED_MODEL == "opus"
++    assert CE.REQUIRED_EFFORT == "high"
++    assert CE.MAX_STRING_LEN == 256
++    assert CE.DURATION_CONSISTENCY_TOLERANCE_SECONDS == 1.0
++
++
++def test_site_key_whitelist_has_no_free_text_field():
++    """白名单里 MUST NOT 出现任何能装正文的字段（这是「不含 context/stderr」的定义）。"""
++    forbidden = {"detail", "stdout", "stderr", "stdout_text", "stderr_text",
++                 "context", "stdout_path", "findings", "output", "log"}
++    assert CE.SITE_KEYS & forbidden == frozenset()
++    assert CE.TOP_LEVEL_KEYS & forbidden == frozenset()
++
++
++def test_verify_is_pure(tmp_path):
++    """verify MUST NOT 改输入（报告会把同一份 dict 再序列化落盘）。"""
++    ev = _evidence()
++    snapshot = copy.deepcopy(ev)
++    CE.verify(ev)
++    assert ev == snapshot
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task6-real-efficacy.md b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task6-real-efficacy.md
+new file mode 100644
+index 0000000..b7d0a23
+--- /dev/null
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task6-real-efficacy.md
+@@ -0,0 +1,452 @@
++# Task 6 impl report —— 真实 efficacy 门与 T162 处置
++
++**R-ID**：OVBG-01 / OVBG-03 / HAE-08 / HAE-09（落笔前已逐条通读四条 delta spec 的 SHALL + 全部 Scenario）
++**Blocked-by**：Task 5（已 checkpoint，起手 HEAD = `6dc9919`）
++
++---
++
++## 🔴 结论先行：**G1 未达标 ⇒ T162 保留，design/CONTEXT/hand-off 的「Codex efficacy=0」陈述一字未改**
++
++**阻断原因不是实现缺陷，是外部账户额度**：本机 Codex CLI 的 ChatGPT 登录**已耗尽用量配额**，
++最早 **2026-07-29 10:11** 才恢复（今天 2026-07-26）。∴ **无法起任何一轮 Codex 宿主评审**，
++tasks.md 6.1 要求的「该层全部 declared 站点取得 `host="codex"`」在本轮**根本无从产生**。
++
++按 tasks.md 6.3 明文：「若任一站点未可信 collect/未 `ok`、没有自然 >300 秒成功证据或证据字段
++不可机读，则**保留 T162 并如实记录，不得以编排 smoke 假绿**」——本报告即该如实记录。
++
++> ⚠️ **MUST NOT 把下文的 transport 证据读作 efficacy 证据。** 我做的是**后台通道探针**，
++> 它跑在 **Claude 宿主的 shell 里**，`host="claude"`。确定性检查器**当场把它判红**（见 §四）。
++> 「helper 的行为与宿主无关，所以 codex 下也一样」——这是推断，**不是证据**，MUST NOT 拿它关缺口。
++
++---
++
++## 一、`setup.sh` 前后的全局状态快照（含还原后亲验）
++
++### 1.1 跑之前（`/private/tmp/.../global-state-before.txt` 同源）
++
++```
++~/.sdflow/               workflow -> /Users/cheneyzhao/.skills/sdflow-skills/sdflow-init/assets/workflow
++~/.sdflow/hack/          checkpoint-commit.sh · outside-voice.sh(52254B) · resolve-models.sh
++                         · resolve-workflow.sh · skill-principles.md
++                         ❗ 无 outside-voice-job.py、无 capability-manifest.json（Task 1–5 的成果尚未落地）
++~/.claude/skills/·~/.codex/skills/   17 条 sdflow 系 symlink，全部 -> /Users/cheneyzhao/.skills/sdflow-skills/*
++                                     （含合并前 bug/todo 双池 skill 遗留的两条 Jul 21 旧链）
++```
++
++### 1.2 `bash setup.sh`（开发 checkout）后
++
++`v0.10.0 ready`，38 项 installed。关键差异：
++
++```
++~/.sdflow/workflow  -> /Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-init/assets/workflow   ← 接管到 dev
++~/.sdflow/hack/     + outside-voice-job.py (118687B, 0755)
++                    + capability-manifest.json (388B)
++                      outside-voice.sh 52254B → 59928B（Task 4 的 isolation flags + runner pid sidecar）
++15 条 sdflow 系 symlink -> /Users/cheneyzhao/Documents/04-sdflow-skills/*
++setup.sh 自带三门当场绿：sync_principles ✅18 · gen_workflow_guide ✅ · async-branch-parity ✅
++```
++
++**从已安装快照跑 preflight（`cwd` = `zhws_ops_api`）—— Task 5 遗留的「真实 HOME 未验」项在此兑现：**
++
++```json
++{"ok": true, "reason_code": "ready", "claude_bin": "/Users/cheneyzhao/.local/bin/claude",
++ "job_dir": "/Users/cheneyzhao/.sdflow/hack",
++ "checks": {"claude-version": {"ok": true, "detail": "2.1.220"},
++            "agents-json":    {"ok": true, "detail": "3 个会话"},
++            "capability-manifest": {"ok": true, "detail": "generation=3bb91090fbad2115…"},
++            "posix-shell":    {"ok": true, "detail": "darwin / /bin/sh"}}}
++exit=0
++```
++
++四项**全部**在真实 HOME 上过，`job_dir` 是安装路径、不含仓根 ⇒ 走的确是安装态而非仓内源。
++
++### 1.3 还原后（在运行 checkout `~/.skills/sdflow-skills` 重跑 `bash setup.sh`）
++
++见 §八「收工亲验」——已还原并逐条 `ls -l` 核对。
++
++---
++
++## 二、Codex 宿主评审的实际执行方式与失败实录
++
++### 2.1 判据先行：spec-review 还是 code-review？（②：调研后给结论，不甩开放题）
++
++- `zhws_ops_api` 在 `master`、工作树干净、`openspec/changes/` 下**只有 archive、无活跃 change**。
++- `sdflow-code-review` 第零步硬要求「代码已实现且**在 feature 分支**」+ `merge-base` diff base ⇒ 无对象。
++- `sdflow-spec-review` 只需 `{change_dir}` 的四件套，**归档目录里四件套俱全**。
++
++⇒ **结论：走 spec-review**，对象取最新归档 change `2026-07-25-manage-permission-catalog-items`
++（proposal 87 行 / design 425 行 / 6 份 delta spec，体量足以产生真实评审负载）。
++
++### 2.2 实跑命令与输出（原文）
++
++先做 host 探测 smoke（**确认 `CODEX_THREAD_ID` 真能让 `resolve-models.sh` 判出 `codex`**，
++再决定要不要投整轮成本）：
++
++```
++$ cd /Users/cheneyzhao/Documents/20-projects/10-appbuilder/zhws_ops_api
++$ codex exec --dangerously-bypass-approvals-and-sandbox -C "$PWD" \
++    'Run exactly this one shell command and paste its raw stdout+stderr verbatim, then stop: …'
++
++OpenAI Codex v0.145.0
++workdir: /Users/cheneyzhao/Documents/20-projects/10-appbuilder/zhws_ops_api
++model: gpt-5.6-sol   provider: openai   approval: never   sandbox: danger-full-access
++reasoning effort: high   session id: 019f9a3f-f078-7000-98a3-407560b47a07
++--------
++ERROR: You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage
++       to purchase more credits or try again at Jul 29th, 2026 10:11 AM.
++```
++
++**复现一次以排除瞬时抖动**（最小 prompt `print OK`）：同一条 `ERROR: You've hit your usage limit`，
++`session id: 019f9a40-2659-7873-a45c-2a1814640442`。⇒ 账户级硬拦，不是本次调用的问题。
++
++### 2.3 有没有别的路子拿到 Codex 宿主？（①：能查的自己查完再下结论）
++
++| 候选 | 实查结果 | 可行性 |
++|---|---|---|
++| 换 API key 计费 | `env \| grep -iE '^(OPENAI\|CODEX)'` **零命中**；`~/.codex/config.toml` 只有 `model` / `model_reasoning_effort`，**无 `model_provider` / `api_key`** | ❌ 无凭据；且改用户 auth 配置不在本票授权内 |
++| `codex login status` | `Logged in using ChatGPT`（就是被限流的那条） | ❌ |
++| `--oss` 本地 provider | `command -v ollama lmstudio` **零命中**，两者均未安装 | ❌ |
++| 用弱模型顶替编排层 | 即便装上，评审是**门禁步**，`model-tiers.md` 明写禁降档 | ❌ 换来的会是假绿，正是本 change 要消灭的东西 |
++
++⇒ **本机在 2026-07-29 之前不存在任何真实 Codex 宿主路径。** 这是外部约束，**MUST NOT** 靠工程手段绕开。
++
++### 2.4 成本纪律
++
++按本票约束「失败就分析原因、最多重试一轮；连续两轮不成即如实记录并停」——
++codex 侧**实跑 2 次**（正式 + 最小复现），均同一账户级错误，**就此停**，未做第三次、未做无界重跑。
++
++---
++
++## 三、后台通道探针（**transport 证明，不是 efficacy 证明**）
++
++投 codex 整轮成本之前，先用**一次真实 opus voice** 验证最险的那道接缝——
++「`claude --bg --exec` + 真实模型 runner 能不能跨过 300 秒跑到可信终态」。
++（这次调用在 codex 被拦之前就已发起；它**不是**为了替代 efficacy 证据而补的。）
++
++### 3.1 dispatch（真实、非 shim）
++
++```
++$ python3 ~/.sdflow/hack/outside-voice-job.py dispatch \
++    --run-dir <archive change>/.outside-voice/20260725T170004Z-szMlwM \
++    --site design-voice --context-file <同目录>/design-voice-context.md \
++    --repo-root /Users/cheneyzhao/Documents/20-projects/10-appbuilder/zhws_ops_api \
++    --runner claude --model opus --effort high --timeout 900
++
++{"ok": true, "state": "dispatched", "reason_code": "ok",
++ "job_id": "3d3695d5", "session_id": "3d3695d5-c1cb-45d1-8072-fce268cfe5e0",
++ "attempt_nonce": "4b85f30b20fcedb5c2de990fe46b9dbc",
++ "dispatch_duration_seconds": 1.257, "runner": "claude", "model": "opus",
++ "effort": "high", "timeout_seconds": 900}
++exit=0
++```
++
++context 是**真实评审负载**：proposal「What Changes」+ design「Decisions」全文，**25751 字节**。
++dispatch **1.257 s** ≪ 5 秒 monotonic deadline（OVBG-01 / NFR）。
++
++### 3.2 实际落到 argv 上的 runner（`ps` 实抓，非推断）
++
++```
++timeout -k 10 900 claude -p --model opus --output-format text \
++  --tools Read,Grep,Glob --strict-mcp-config \
++  --add-dir /Users/…/zhws_ops_api --settings {"permissions":{"deny":[…11 条 read-fence…]}} \
++  --effort high --safe-mode --no-session-persistence
++```
++
++⇒ OVBG-04 的四旗 + strong model + `--effort high --safe-mode --no-session-persistence`
++**逐项在真实进程上兑现**，工具集精确为 `Read,Grep,Glob`，无 Write/Edit/Bash/WebFetch。
++进程树四层俱在（supervisor pty host → `worker` → `outside-voice.sh exec` → `timeout` → `claude -p`）。
++
++### 3.3 终态与 collect
++
++```
++$ …collect --run-dir <同上> --site design-voice
++{"ok": true, "state": "SUCCEEDED", "reason_code": "ok", "terminal": true, "rc": 0,
++ "runner": "claude", "model": "opus", "effort": "high",
++ "dispatched_at": "2026-07-25T17:00:24Z", "started_at": "2026-07-25T17:00:25Z",
++ "terminal_at":  "2026-07-25T17:07:41Z", "collected_at": "2026-07-25T17:08:00Z",
++ "duration_seconds": 436.0,
++ "stdout_sha256": "7d1b28145114f39de2c91f8cc51d10b04d216a653c3cf093c0079707d8cbf2d2",
++ "stdout_bytes": 5129, "stdout_lines": 27, "stderr_bytes": 19, "stderr_lines": 1,
++ "unknown_cost": false, "orphan_warning": null}
++exit=0
++```
++
++**自然耗时 436 秒 > 300 秒且 rc=0** —— 旧同步天花板会在 300 秒把它砍成 rc=124
++（`optimize-device-access-authorization` 的 5/5 rc124 正是这么来的）。**这一条是本票最有价值的实测。**
++产出是真评审意见（`## Findings`，high 级，带 `resource/query/auth/check-permission.toml:14-17`
++这类可核 file:line 引用），不是空转。
++
++### 3.4 cleanup（identity-safe）
++
++```
++{"ok": true, "state": "removed", "removed": true, "stopped": false, "subtree": "exited",
++ "orphan_warning": null, "unknown_cost": false, "fallback_allowed": true,
++ "identity": {"ok": true, "checks": {"canonical-id": "ok(唯一命中)", "repo": "ok(cwd == repo_root)",
++              "site": "ok", "attempt": "ok(盘面 witness 与 roster 命令串 nonce 一致)"}}}
++```
++
++四项 identity 核验全过 → `claude rm` → roster 复查该仓 job **零残留**（§八）。
++
++### 3.5 这条探针**证不了**什么（诚实边界，MUST NOT 越界读）
++
++| 证到了 | 没证到 |
++|---|---|
++| 安装态 preflight ready；dispatch ≤5s 拿到 canonical id | **`host="codex"` 锚**——本次是 Claude 宿主 shell 发起 |
++| 真实 opus+high runner、四旗、read-fence 在真进程上兑现 | **一层完整评审**——只跑了 1 个站点，没有 declared 集、没有报告、没有 anchor_lint |
++| **自然 436s > 300s 跑到 rc=0**，rc 原子发布、collect 幂等字段齐全 | **Codex 编排层**按 SKILL 的 ②④⑤⑥⑦ 分支真的调得对（HAE-08 的宿主分流未经真机走通） |
++| cleanup identity 四项核验 + 子树退出 + roster 清空 | — |
++
++---
++
++## 四、确定性检查器与它的实际输出
++
++### 4.1 落点与形态
++
++| 文件 | 作用 |
++|---|---|
++| `hack/check_codex_efficacy_evidence.py` | 检查器本体（`emit` 生成证据 / `check` 判定） |
++| `hack/tests/test_codex_efficacy_evidence.py` | 60 条测试 |
++| `openspec/changes/…/impl-reports/task6-transport-probe-evidence.json` | 本轮探针的结构化证据（**不是 efficacy 证据**） |
++
++与 `check_async_branch_parity.py` / `sync_principles.py` 同级同 idiom（仓级机械门放 `hack/`）。
++
++**三条门逐条对应 tasks.md：**
++
++- **G1〔6.1〕** 每个站点 `host="codex" runner="claude" reason_code="ok"`，且
++  `set(declared_sites) == set(证据站点)`（**双向**相等——单向包含会放过「漏收一个站点」，
++  正是 HAE-09「per-site 完整性机械可审」那条）。
++- **G2〔6.2〕** ≥1 站点 `duration_seconds > 300`（**严格大于**，等于 300 证不出「跨过」）
++  ∧ `model=opus` ∧ `effort=high` ∧ `reason_code=ok` ∧ `runner=claude`。
++- **G3〔6.1 末句〕** 四个时刻可解析且单调、`duration` 与 `terminal-started` 自洽（容差 1s）、
++  digest 为 64 位小写十六进制、`stdout_bytes/lines ≥ 1`。
++
++**「不含 context/stderr」怎么做成机械保证**（而非「我没写进去」）：
++顶层与 site 的 key 集合 **MUST 精确等于白名单**（多一个即红 ⇒ `stderr_text` 这类字段**无落脚点**），
++且任意字符串值**无换行、长度 ≤ 256**（⇒ 正文塞不进任何合法字段）。
++stderr 只以 `stderr_bytes` / `stderr_lines` 两个**计数**出现（OVBG-04 写出面约束）。
++`emit` 从 `<site>.collected.json` 机械派生并**丢弃** `detail` / `stdout_path` / `state` 等非白名单字段。
++
++**语法面（基准 5）**：输入是 JSON，由 `json.load` 解释——**MUST NOT** 演化成「从 Markdown 报告里
++正则抠证据」。证据单一源就是那个 `.json`，报告只引路径。
++
++### 4.2 检查器对本轮证据的**实际输出**（红，且红得对）
++
++```
++$ python3 hack/check_codex_efficacy_evidence.py emit --run-dir <run-dir> --host claude \
++    --layer spec-review --repo zhws_ops_api \
++    --change 2026-07-25-manage-permission-catalog-items \
++    --declared-sites design-voice --out <…>/task6-transport-probe-evidence.json
++[efficacy] 已写出证据 …/task6-transport-probe-evidence.json（1 站点）        exit=0
++
++$ python3 hack/check_codex_efficacy_evidence.py check --evidence <…>
++[efficacy] ❌ 未通过（2 条）：
++   · host='claude' ≠ 'codex' —— 本证据只对 Codex 宿主有意义
++   · site[design-voice].host='claude' ≠ 'codex' —— G1 要求该层每个站点都是可信跨模型成功
++   ⇒ tasks.md 6.3：保留 T162 并如实记录，MUST NOT 以编排 smoke 假绿
++exit=1
++```
++
++**这正是本票要的形状**：证据被机械拒收，`--host claude` 是我如实填的，
++检查器不接受「Claude 宿主的成功」顶替 Codex efficacy。
++
++### 4.3 诚实边界：`host` **不是**盘面可派生量
++
++`collect` 的 payload 里**没有** `host` 字段——helper 只知道 `runner`，不知道自己被哪个宿主的编排层调用。
++∴ `emit` 的 `--host` 是**必填入参**，谁跑谁负责；检查器机械守的是「一旦声明成 codex，就必须处处自洽且达标」。
++`declared_sites` 同理（权威在评审报告锚行）。**MUST NOT 声称这两项有机械捕获路径。**
++
++### 4.4 测试与**反向变异实证**（防「宣称有锚实则假绿」）
++
++`pytest hack/tests/test_codex_efficacy_evidence.py -q` → **60 passed**。
++逐条把检查器改坏一处，确认对应断言**真的会红**（全部实跑，非推断）：
++
++| 变异 | 结果 |
++|---|---|
++| `MIN_NATURAL_DURATION_SECONDS 300 → 0` | 3 failed |
++| duration 自洽检查 `if abs(…) > 容差:` → `if False:` | 2 failed |
++| 站点集相等 `!=` → 单向包含 `not <=` | 1 failed |
++| site key 白名单 `set(site) - SITE_KEYS` → `frozenset()` | 1 failed |
++| 换行守卫 `if "\n" in node…` → `if False:` | 1 failed |
++| G1 三元组 `if site[field] != expected:` → `if False:` | 2 failed |
++| `MAX_STRING_LEN 256 → 10**9` | 3 failed |
++| `DURATION_CONSISTENCY_TOLERANCE_SECONDS 1.0 → 10000.0` | 3 failed |
++
++> 🔴 **一次自捕**：`MAX_STRING_LEN → 10**9` 的**首轮变异是绿的**——因为超长断言写成
++> `"x" * (CE.MAX_STRING_LEN + 1)`，**随常量一起缩放 ⇒ 恒真锚**（正是 task5-review 主线发现的同族）。
++> 已修：改用绝对字面量 `PROSE_SIZED = "x" * 4096`（「4096 字符的东西一定是正文」），
++> 并把 `MAX_STRING_LEN == 256` / 容差 `== 1.0` 钉进常量测试。修后该变异 3 failed。
++
++---
++
++## 五、三条门逐条判定
++
++| 门 | 判定 | 依据 |
++|---|---|---|
++| **G1** 该层全部 declared 站点 `host="codex" runner="claude" reason_code="ok"` | ❌ | Codex 账户额度耗尽至 2026-07-29，**一轮 Codex 宿主评审都没跑成**（§2.2 两次实录）⇒ 不存在任何 `host="codex"` 锚。检查器实跑 exit=1（§4.2） |
++| **G2** ≥1 站点 `opus`+`high` 自然 >300 秒且成功 | ⚠️ **实质已证，但不在 codex 层内** | 真实 opus+high、自然 **436 s**、rc=0、digest 齐全（§3.3）。但它 `host="claude"` ⇒ **不满足 6.2「该完整层必须含」的限定**，MUST NOT 单独记作达标 |
++| **G3** 字段可机读、不含 context/stderr | ✅ | 检查器的 G3 段对该证据**零报错**（§4.2 只报了 host 两条）；白名单 + 无换行 + ≤256 三重机械守，60 条测试 + 8 组变异 |
++
++**G1 ❌ ⇒ 三条不同时达标 ⇒ 按 tasks.md 6.3：保留 T162。**
++
++---
++
++## 六、T162 的处置
++
++**保留（未关闭）。** 依据 tasks.md 6.3 的「仅当 6.1/6.2 同时达标且确定性 evidence checker 通过后关闭」。
++
++- `openspec/issues/todolist/2026-07-todolist.md` 的 `## T162` **一字未改**（本票只授权在**达标时**改
++  design/CONTEXT/hand-off 的 efficacy 陈述，未达标 ⇒ 连那一处也不改）。
++- `design.md` / `openspec/CONTEXT.md` / hand-off 里的「Codex efficacy=0」相关陈述**全部保持原样**
++  —— `git status` 亲验：本票工作树只有 3 个新增文件，**零修改行**（§七）。
++- **达标后要改的那几处陈述在哪**（本轮**一处未动**，替将来重跑的人先定位好）：
++  `design.md:159`（ADR-3「`zhws_ops_api` 五个真实站点均为 rc124」）·
++  `design.md:244`（Test Coverage 段的真实 efficacy 门口径）·
++  `design.md:270`（Open Questions 的收敛陈述）·
++  `sdflow-spec-review/SKILL.md:398` ≡ `sdflow-code-review/SKILL.md` 同行
++  （「该兼容分支已知 efficacy=0」——⚠️ 在 `sdflow:async-branch` 等值段内，
++  **改一侧必须两侧同改**，否则 `check_async_branch_parity.py` 当场红）。
++- **重开条件（可机械复核）**：2026-07-29 10:11 之后 Codex 额度恢复 ⇒ 重跑 §2.2 的
++  `codex exec` 起一轮 spec-review，用 §4 的 `emit --host codex` + `check` 判定即可关门。
++  **本票已把「怎么判」做成脚本，剩下的只是「跑一轮」。**
++
++---
++
++## 七、全部门禁命令的实际输出
++
++```
++$ /usr/bin/python3 -m pytest -q
++2557 passed, 10 skipped, 3 xfailed in 261.54s (0:04:21)
++        基线 2497 passed / 10 skipped / 3 xfailed；差额 = 本票新增 60 条，skip/xfail 数一条不变
++
++$ /usr/bin/python3 -m pytest hack/tests/test_codex_efficacy_evidence.py -q
++60 passed in 0.20s
++
++$ python3 hack/check_async_branch_parity.py
++[async-branch-parity] ✅ 2 处 async host 调度段逐字节一致                        exit=0
++
++$ python3 hack/sync_principles.py --check
++[sync_principles] ✅ 18 个投放面全部与真相源一致                                  exit=0
++
++$ git diff --check
++（无输出）                                                                       exit=0
++
++$ openspec validate enable-codex-background-outside-voice --strict
++Change 'enable-codex-background-outside-voice' is valid                          exit=0
++```
++
++**本票工作树（`git status --porcelain`）—— 3 个新增、零修改：**
++
++```
++?? hack/check_codex_efficacy_evidence.py
++?? hack/tests/test_codex_efficacy_evidence.py
++?? openspec/changes/enable-codex-background-outside-voice/impl-reports/task6-transport-probe-evidence.json
++```
++
++未勾任何复选框、未打 `task6-` 完成标签、未改四件套（`git diff --stat` 空）。
++
++---
++
++## 八、`zhws_ops_api` 与全局安装状态的收工亲验
++
++### 8.1 下游仓（验收标准第 6 条）
++
++```
++$ git -C <zhws_ops_api> status --porcelain
++（空 —— 工作树进来时干净，出去时同样干净）
++
++$ git -C <zhws_ops_api> status --porcelain --ignored <archive change>/
++!! openspec/changes/archive/2026-07-25-manage-permission-catalog-items/.outside-voice/
++
++$ git -C <zhws_ops_api> diff --stat HEAD -- openspec/workflow/
++（空 —— canonical workflow 规则零改动）
++```
++
++- 唯一产物是 **gitignored** 的 `.outside-voice/<run-id>/`（`.gitignore` 的 `**/.outside-voice/` 覆盖）。
++  **有意保留**：OVBG-05 明写「不得删除 `.outside-voice/<run-id>/` 的本轮审计证据」，
++  且 §4 的证据文件引用它。它不入库、不污染下游仓。
++- **canonical workflow 规则未被直接手改**（上面 `diff --stat` 空即证）；
++  Codex 评审因额度未跑成 ⇒ 也没产生任何报告/锚写入。
++- supervisor roster 对该仓 job 残留：`claude agents --all --json` 过滤 `cwd` 含 `zhws_ops_api` → `[]`。
++
++### 8.2 全局安装还原（在**运行 checkout** 重跑 `bash setup.sh`）
++
++```
++$ bash ~/.skills/sdflow-skills/setup.sh
++✓ workflow @ ~/.sdflow — 接管：…/Documents/04-sdflow-skills/… → …/.skills/sdflow-skills/…
++[sync_principles] ✅18 · [gen_workflow_guide] ✅ · [async-branch-parity] ✅
++```
++
++**逐条 `ls -l` 与跑前快照 diff：唯一差异是 mtime（Jul 25 17:18 → Jul 26 01:18）。
++全部 32 条 symlink 的 target 一条不差地指回 `/Users/cheneyzhao/.skills/sdflow-skills/*`，
++`~/.sdflow/workflow` 亦然；`outside-voice.sh` 从 59928B 退回 52254B（旧版）。**
++
++#### ⚠️ 残留两个文件（**不静默**，显式登记）
++
++运行 checkout 的 `setup.sh` 是**旧版**（无 `*.py` 安装循环）⇒ 它**不认识**、也就不会清掉这两个：
++
++```
++~/.sdflow/hack/outside-voice-job.py        118687B  Jul 26 00:58   ← dev setup 装的
++~/.sdflow/hack/capability-manifest.json       388B  Jul 26 00:58   ← 对「新 outside-voice.sh」算的
++```
++
++**实跑确认它们不会造成假绿——反而当场自证 OVBG-01 的 fail-closed：**
++
++```
++$ python3 ~/.sdflow/hack/outside-voice-job.py preflight
++preflight 未通过 [capability-manifest]: 安装 skew: outside-voice.sh 内容与快照不符
++  → 安装快照不一致——在运行 checkout 重跑 `bash setup.sh` 刷新 ~/.sdflow/hack/
++{"ok": false, "reason_code": "preflight-error", …}                              exit=1
++```
++
++⇒ 新 job helper × 旧 shell helper 的混配被 manifest **当场识破**，落 `preflight-error`，
++按 HAE-08 走 5 秒级同族 fallback。**这是 Task 5 只在 tmp HOME 上测过的那条 skew 门，
++在真实 HOME 的真实混配上第一次得到验证。**
++
++**为什么不删掉它们**（而不是「忘了删」）：
++- **载荷性的还原已完成**——本票明令要防的是「把全局链留在 dev checkout 上」，
++  32 条 symlink 全部已指回运行 checkout。这两个是**多出来的文件**，不是被改坏的链。
++- **留着与删掉，可观察行为等价**：删掉 ⇒ preflight 报「job helper 未安装」→ fallback；
++  留着 ⇒ preflight 报「安装 skew」→ fallback。**都是 fail-closed，且留着的那条 hint 更准**
++  （它直接点名修法 = 重跑 setup.sh，而那正是本 change 合并后要做的事）。
++- 全局 CLAUDE.md 的安全规则是「**未经真人明确确认不删文件**」，而上游 agent 的 prompt
++  不构成真人确认。∴ 取「**响亮报告 + 不删**」——本票禁的是「**静默**留下不一致状态」，不是留下状态。
++
++**要清干净，一条命令**（合并后本就会跑，届时自动变成正确的同代快照）：
++`bash ~/.skills/sdflow-skills/setup.sh`（在运行 checkout 已含本 change 的代码之后）。
++
++---
++
++## 九、未做 / 降级项（如实报告）
++
++1. **【最要害】Codex 宿主的完整一层评审：未跑成。** 原因 = 外部账户额度耗尽至 2026-07-29（§2.2 两次实录 + §2.3 四条替代路径全查过）。
++   ⇒ G1 ❌、T162 保留、efficacy 陈述不改。**这不是「我觉得可能不行所以没跑」——两次真实调用都留了 session id。**
++2. **HAE-08 的 Codex 宿主分流未经真机走通**：SKILL 段内 ②④⑤⑥⑦ 的 codex 分支只有 Task 3/5 的
++   段内 golden 守着，**没有一次真实 Codex 编排层执行过它**。这是本 change 剩下的最大未验面。
++3. **G2 的证据不在 codex 层内**：436 s 的成功是 Claude 宿主 shell 直调 helper 拿到的。
++   按 6.2 字面（「该完整层必须至少含一个…」）**不计达标**。
++4. **`--effort high` 与 `--model opus` 是我在 dispatch 命令行显式给的**，不是 Codex 宿主下
++   `resolve-models.sh` 解析出来的（本机 `CLAUDECODE=1` ⇒ 它只会解析出 `SDFLOW_VOICE_RUNNER=codex`）。
++   两者数值与 canonical 缺省一致，但「解析链在 codex 下确实吐出 claude/opus」**未经真机验证**。
++5. **`~/.sdflow/hack/` 残留两个文件未删**（`outside-voice-job.py` + `capability-manifest.json`）。
++   理由与实测行为见 §8.2 —— fail-closed、hint 精准、可观察行为与删掉等价；
++   全局 CLAUDE.md 禁未经真人确认删文件。**已响亮登记，非静默残留。**
++6. **未改 `openspec/issues/todolist/`**：本票要求「保留 T162」，如实记录落在本报告。
++   把「额度 2026-07-29 恢复」这条时效信息写进 T162 会更耐久，但那是本票未授权的范围外改动 ⇒ 交编排层裁决。
++
++---
++
++## 十、Concerns（交给双轴审判）
++
++1. **`layer` 字段对本轮证据略显名不副实**：探针只跑了 1 个站点、没有报告与 anchor_lint，
++   却在证据里写 `layer="spec-review"`（因为 `design-voice` 属 spec-review 的站点集）。
++   检查器**不因此判红**（它靠 `host` 那条红），文件名 `task6-transport-probe-evidence.json` 与
++   §3.5 的边界表承担区分职责。若评审认为「证据文件的存在本身就有被误读成 efficacy 证据的风险」，
++   可考虑给 schema 加一个 `evidence_kind: probe|layer` 枚举 —— 我判**不加**：
++   多一个字段就多一处要守的口径，而 `host≠codex` 已经把门关死了（④）。
++2. **`MAX_STRING_LEN=256` 是拍的**：够装 `run_id`/`job_id`/`change` 名，装不下段落。
++   若将来 change 名超长会误红——报错点名字段，fail-closed 方向正确，登记为已知刚性。
++3. **检查器只在本仓被 pytest 调用，未接进 `setup.sh` 三门**：它判的是**一次性的 Task 6 证据**，
++   不是每次安装都要复核的不变量。接进 setup 会让一份历史证据变成永久门 ⇒ 判**不接**。
++4. **`--host` 由调用者自报**（§4.3）：这是真诚实边界，不是可修的洞。
++   若要机械化，得让评审 SKILL 在落锚时把 `host=` 一并写进 run-dir 的某个 sidecar——
++   那是改 SKILL 的活，属本票范围外。**MUST NOT 声称当前已机械捕获。**
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task6-transport-probe-evidence.json b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task6-transport-probe-evidence.json
+new file mode 100644
+index 0000000..c061d05
+--- /dev/null
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task6-transport-probe-evidence.json
+@@ -0,0 +1,33 @@
++{
++  "change": "2026-07-25-manage-permission-catalog-items",
++  "declared_sites": [
++    "design-voice"
++  ],
++  "host": "claude",
++  "layer": "spec-review",
++  "repo": "zhws_ops_api",
++  "run_id": "20260725T170004Z-szMlwM",
++  "schema_version": 1,
++  "sites": [
++    {
++      "attempt_nonce": "4b85f30b20fcedb5c2de990fe46b9dbc",
++      "collected_at": "2026-07-25T17:08:00Z",
++      "dispatched_at": "2026-07-25T17:00:24Z",
++      "duration_seconds": 436.0,
++      "effort": "high",
++      "host": "claude",
++      "job_id": "3d3695d5",
++      "model": "opus",
++      "reason_code": "ok",
++      "runner": "claude",
++      "site": "design-voice",
++      "started_at": "2026-07-25T17:00:25Z",
++      "stderr_bytes": 19,
++      "stderr_lines": 1,
++      "stdout_bytes": 5129,
++      "stdout_lines": 27,
++      "stdout_sha256": "7d1b28145114f39de2c91f8cc51d10b04d216a653c3cf093c0079707d8cbf2d2",
++      "terminal_at": "2026-07-25T17:07:41Z"
++    }
++  ]
++}

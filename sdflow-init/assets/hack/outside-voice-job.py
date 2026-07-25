@@ -214,6 +214,35 @@ RUNNER_VALUES = ("claude", "codex")
 # v1 background transport 只在这两个已过 quoting/injection golden 的 POSIX 平台 ready。
 SUPPORTED_SYS_PLATFORMS = ("darwin", "linux")
 
+# 〔宿主标识：dispatch 侧的**盘面锚**，不是自述〕
+# efficacy 证据要回答「这一轮 voice 跑在哪个宿主的编排层里」。这个量**有确定性信号**
+# （`resolve-models.sh` 判宿主用的就是这两个环境变量），而 **dispatch 恰好就跑在宿主
+# 自己的 shell 里** ⇒ 这里读一次落进 job.json，整条链（status → collect → 证据）就有了
+# 机械锚，不必再靠调用方 `--host` 自报（那正是 adr/0018 说的「无机械锚的 ✅」）。
+# 判据与 `resolve-models.sh` 逐条同口径：**正信号**判定，MUST NOT「缺失即另一方」推断；
+# 两个信号同时出现 = 冲突，落 unknown（MUST NOT 静默取其一）。
+HOST_CLAUDE = "claude"
+HOST_CODEX = "codex"
+HOST_UNKNOWN = "unknown"
+
+
+def detect_host(env=None):
+    """→ "claude" | "codex" | "unknown"（与 `resolve-models.sh` 第 1 段同口径）。
+
+    判不出一律 `unknown` —— 它在 efficacy 门里等价于「不是 codex」⇒ fail-closed。
+    """
+    env = os.environ if env is None else env
+    claude_sig = env.get("CLAUDECODE") == "1"
+    codex_sig = bool(env.get("CODEX_THREAD_ID"))
+    if claude_sig and codex_sig:
+        return HOST_UNKNOWN
+    if claude_sig:
+        return HOST_CLAUDE
+    if codex_sig:
+        return HOST_CODEX
+    return HOST_UNKNOWN
+
+
 JOB_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -786,6 +815,7 @@ def cmd_dispatch(args):
         "run_dir": run_dir,
         "context_file": ctx,
         "attempt_nonce": nonce,
+        "host": detect_host(),   # 盘面锚：dispatch 就跑在宿主 shell 里，见 detect_host 注释
         "runner": args.runner,
         "model": args.model,
         "effort": args.effort,
@@ -1019,8 +1049,8 @@ LIVENESS_UNAVAILABLE = "unavailable"
 # job.json 的必填字段：任一缺失即 CORRUPT（OVBG-02「元数据损坏不得猜成功」）。
 JOB_REQUIRED_FIELDS = (
     "schema_version", "run_id", "site", "repo_root", "run_dir", "attempt_nonce",
-    "runner", "model", "effort", "job_id", "dispatched_at", "startup_deadline_at",
-    "timeout_seconds",
+    "host", "runner", "model", "effort", "job_id", "dispatched_at",
+    "startup_deadline_at", "timeout_seconds",
 )
 
 
@@ -1293,7 +1323,8 @@ def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
     terminal_at = terminal.get("terminal_at") if terminal_kind == "ok" else None
     base.update({
         "run_id": job["run_id"], "job_id": job["job_id"],
-        "attempt_nonce": job["attempt_nonce"], "runner": job["runner"],
+        "attempt_nonce": job["attempt_nonce"], "host": job["host"],
+        "runner": job["runner"],
         "model": job["model"], "effort": job["effort"],
         "dispatched_at": job["dispatched_at"],
         "startup_deadline_at": job["startup_deadline_at"],

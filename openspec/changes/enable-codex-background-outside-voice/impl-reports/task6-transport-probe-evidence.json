@@ -3,7 +3,7 @@
   "declared_sites": [
     "design-voice"
   ],
-  "host": "claude",
+  "host": null,
   "layer": "spec-review",
   "repo": "zhws_ops_api",
   "run_id": "20260725T170004Z-szMlwM",
@@ -15,7 +15,7 @@
       "dispatched_at": "2026-07-25T17:00:24Z",
       "duration_seconds": 436.0,
       "effort": "high",
-      "host": "claude",
+      "host": null,
       "job_id": "3d3695d5",
       "model": "opus",
       "reason_code": "ok",

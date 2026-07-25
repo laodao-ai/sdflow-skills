@@ -30,7 +30,7 @@ tasks.md 6.1 要求的「该层全部 declared 站点取得 `host="codex"`」在
                          · resolve-workflow.sh · skill-principles.md
                          ❗ 无 outside-voice-job.py、无 capability-manifest.json（Task 1–5 的成果尚未落地）
 ~/.claude/skills/·~/.codex/skills/   17 条 sdflow 系 symlink，全部 -> /Users/cheneyzhao/.skills/sdflow-skills/*
-                                     （含 sdflow-buglist / sdflow-todolist 两条 Jul 21 的旧链）
+                                     （含合并前 bug/todo 双池 skill 遗留的两条 Jul 21 旧链）
 ```
 
 ### 1.2 `bash setup.sh`（开发 checkout）后

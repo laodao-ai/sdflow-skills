@@ -47,6 +47,16 @@ def _site(name="design-voice", **over):
     return site
 
 
+def _distinct(name, tag):
+    """身份三件（job_id / attempt_nonce / stdout digest）各不相同的站点。
+
+    多站点用例的合法底座 —— 让「站点集」「reason_code」这些门的失败原因不被
+    「身份重复」那条门顺手满足（断言被无关门满足 = 恒真锚）。
+    """
+    return _site(name, job_id=tag * 8, attempt_nonce=tag * 32,
+                 stdout_sha256=tag * 64)
+
+
 def _evidence(**over):
     ev = {
         "schema_version": 1,
@@ -73,6 +83,7 @@ def test_two_site_layer_passes():
                    sites=[_site(),
                           _site("hr-tg", job_id="7c1a9b02",
                                 attempt_nonce="b" * 32,
+                                stdout_sha256="b" * 64,
                                 terminal_at="2026-07-25T17:02:30Z",
                                 collected_at="2026-07-25T17:02:35Z",
                                 duration_seconds=125.0)])
@@ -94,11 +105,16 @@ def test_g1_rejects_a_site_that_is_not_a_trusted_cross_model_success(field, bad)
 
 
 def test_g1_rejects_when_one_of_two_sites_degraded():
-    """一个 ok、一个降级 ⇒ 整层不达标（「全部站点」不是「至少一个」）。"""
+    """一个 ok、一个降级 ⇒ 整层不达标（「全部站点」不是「至少一个」）。
+
+    降级站点的身份三件与对照站点**各不相同** ⇒ 失败原因只能出自 `reason_code`，
+    不会被重复身份检测顺手满足（否则 G1 那条门被无关门顶着，等于没锚）。
+    """
+    degraded = _distinct("hr-tg", "b")
+    degraded["reason_code"] = "timeout"
     ev = _evidence(declared_sites=["design-voice", "hr-tg"],
-                   sites=[_site(),
-                          _site("hr-tg", reason_code="timeout")])
-    assert CE.verify(ev)
+                   sites=[_site(), degraded])
+    assert any("reason_code" in f for f in CE.verify(ev)), CE.verify(ev)
 
 
 def test_g1_rejects_a_missing_declared_site():
@@ -110,7 +126,7 @@ def test_g1_rejects_a_missing_declared_site():
 def test_g1_rejects_an_undeclared_extra_site():
     """反方向也要红：证据里多出一个没 declared 的站点。"""
     ev = _evidence(declared_sites=["design-voice"],
-                   sites=[_site(), _site("hr-tg")])
+                   sites=[_site(), _distinct("hr-tg", "b")])
     assert any("declared_sites 与实落证据站点集不等" in f for f in CE.verify(ev))
 
 
@@ -131,9 +147,63 @@ def test_duplicate_sites_rejected():
 
 
 def test_top_level_host_must_be_codex():
-    """本证据只对 Codex 宿主有意义 —— Claude 宿主的成功不能关这个缺口。"""
-    ev = _evidence(host="claude", sites=[_site(host="claude", runner="codex")])
-    assert CE.verify(ev)
+    """顶层 host 门**自己**要有锚。
+
+    ⚠️ 这条曾经写成「顶层 host + site 的 host/runner 一起改坏」——那样 site 级的三元组
+    先把它杀了，顶层那行 `if evidence["host"] != REQUIRED_HOST` 改成 `if False:` 依然全绿。
+    ∴ **sites 保持合法**，只动顶层，让失败原因只能出自顶层那一行。
+    """
+    ev = _evidence(host="claude")             # sites 仍是 host="codex" 的合法站点
+    fails = CE.verify(ev)
+    assert any("本证据只对 Codex 宿主有意义" in f for f in fails), fails
+
+
+@pytest.mark.parametrize("bad", ["claude", "unknown", CE.MIXED_HOST, "", None])
+def test_top_level_host_rejects_every_non_codex_value(bad):
+    ev = _evidence(host=bad)
+    assert any("本证据只对 Codex 宿主有意义" in f for f in CE.verify(ev))
+
+
+def test_schema_version_drift_is_rejected():
+    """schema 漂了就不是本门认识的证据 —— 这条门自己也要有锚（sites 保持合法）。"""
+    ev = _evidence(schema_version=CE.SCHEMA_VERSION + 1)
+    assert any("schema_version" in f for f in CE.verify(ev))
+
+
+# ── per-site 完整性：站点名不同还不够，**身份**也 MUST 不同 ──────────────────
+#
+# 「把同一份 witness 复制成 3 个站点名」只改 site 一个字段就能伪造出「整层都成功」。
+# 这是 HAE-09「漏收站点」的镜像：前者少一个真站点，后者多 N-1 个假站点。
+
+@pytest.mark.parametrize("field", ["job_id", "attempt_nonce", "stdout_sha256"])
+def test_cloned_witness_across_site_names_is_rejected(field):
+    """三个站点名、其余身份都不同，**只有一个字段撞车** ⇒ 仍必须红。
+
+    逐字段单独撞，才证得出「三条重复检测各自都有锚」——三条一起撞的话，删掉任意两条
+    检测这条用例都还是绿的。
+    """
+    shared = _site()[field]
+    sites = [_site("design-voice"), _distinct("hr-tg", "b"), _distinct("risk-voice", "c")]
+    for site in sites[1:]:
+        site[field] = shared
+    ev = _evidence(declared_sites=[s["site"] for s in sites], sites=sites)
+    fails = CE.verify(ev)
+    assert any(field in f and "重复" in f for f in fails), fails
+
+
+def test_a_fully_cloned_witness_layer_is_rejected():
+    """整份 witness 原样复制成 3 个站点名（job_id/nonce/digest 全同）—— 反向变异用例：
+    把三条重复检测逐条删掉，这条就会绿。"""
+    ev = _evidence(declared_sites=["design-voice", "hr-tg", "risk-voice"],
+                   sites=[_site("design-voice"), _site("hr-tg"), _site("risk-voice")])
+    assert CE.verify(ev), "同一份 witness 换站点名复制 3 份不得判绿"
+
+
+def test_distinct_identities_across_sites_still_pass():
+    """对照组：身份各不相同的多站点层必须绿（否则上面的「必红」无意义）。"""
+    ev = _evidence(declared_sites=["design-voice", "hr-tg"],
+                   sites=[_site(), _distinct("hr-tg", "b")])
+    assert CE.verify(ev) == []
 
 
 # ── G2：至少一个自然 >300 秒的 opus+high 成功站点 ────────────────────────────
@@ -209,10 +279,22 @@ def test_g3_rejects_a_short_run_relabelled_as_long():
     assert any("不自洽" in f for f in CE.verify(ev))
 
 
-@pytest.mark.parametrize("bad", [0, -1, "440", None, True])
-def test_g3_rejects_bad_duration_types(bad):
-    ev = _evidence(sites=[_site(duration_seconds=bad)])
-    assert CE.verify(ev)
+@pytest.mark.parametrize("bad", ["440", None, True, [440]])
+def test_g3_rejects_non_numeric_duration(bad):
+    """非数字（含 bool —— `True` 在 Python 里是 int 的子类，会绕过朴素的 isinstance）。"""
+    assert any("MUST 为数字" in f
+               for f in CE.verify(_evidence(sites=[_site(duration_seconds=bad)])))
+
+
+@pytest.mark.parametrize("bad", [0, -1, -440.0])
+def test_g3_rejects_non_positive_duration(bad):
+    """⚠️ 断言 MUST 定向到 `MUST > 0` 那一行。
+
+    早先写成裸 `assert CE.verify(ev)`：把 `duration <= 0` 改成 `< 0` 之后，`0` 会掉进
+    「与时刻不自洽」那条分支 ⇒ 依然红 ⇒ 断言依然绿 —— **门被无关门满足**，等于没锚。
+    """
+    assert any("MUST > 0" in f
+               for f in CE.verify(_evidence(sites=[_site(duration_seconds=bad)])))
 
 
 @pytest.mark.parametrize("bad", ["A" * 64, "a" * 63, "", None, "z" * 64])
@@ -319,7 +401,7 @@ def _write_collected(run_dir, site, **over):
 def test_emit_drops_non_whitelisted_collect_fields(tmp_path):
     """collect 的 `detail` / `stdout_path` / `state` 一律不进证据。"""
     _write_collected(tmp_path, "design-voice")
-    ev = CE.emit(str(tmp_path), "codex", "spec-review", "zhws_ops_api",
+    ev = CE.emit(str(tmp_path), "spec-review", "zhws_ops_api",
                  "some-change", ["design-voice"])
     assert set(ev["sites"][0]) == set(CE.SITE_KEYS)
     assert CE.verify(ev) == []
@@ -331,7 +413,7 @@ def test_emit_does_not_invent_missing_fields(tmp_path):
     data = json.loads((tmp_path / "design-voice.collected.json").read_text())
     del data["stdout_sha256"]
     (tmp_path / "design-voice.collected.json").write_text(json.dumps(data))
-    ev = CE.emit(str(tmp_path), "codex", "spec-review", "r", "c", ["design-voice"])
+    ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
     assert ev["sites"][0]["stdout_sha256"] is None
     assert any("stdout_sha256" in f for f in CE.verify(ev))
 
@@ -339,40 +421,76 @@ def test_emit_does_not_invent_missing_fields(tmp_path):
 def test_emit_carries_a_degraded_site_verbatim_so_the_gate_can_red(tmp_path):
     """降级站点的 reason_code 原样搬进证据 ⇒ G1 必红（emit MUST NOT 帮着美化）。"""
     _write_collected(tmp_path, "design-voice", reason_code="timeout")
-    ev = CE.emit(str(tmp_path), "codex", "spec-review", "r", "c", ["design-voice"])
+    ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
     assert ev["sites"][0]["reason_code"] == "timeout"
     assert CE.verify(ev)
 
 
-def test_emit_fills_host_from_the_cli_because_collect_has_no_such_field(tmp_path):
-    """collect payload **没有** `host` —— helper 不知道自己被哪个宿主调用。
+# ── host 是盘面派生量：emit 从 witness 读，**没有** `--host` 可以覆盖它 ────────
 
-    ∴ 它只能来自 `--host` 入参（诚实边界）。这条同时守住「emit 别把 host 留成 None
-    让证据永远红」和「别把它偷偷写死成 codex」。
+def test_emit_has_no_host_parameter_at_all():
+    """决胜门 MUST NOT 留自报后门 —— 连接口上都不该有这个入参。
+
+    `dispatch` 跑在宿主 shell 里，把 `CLAUDECODE` / `CODEX_THREAD_ID` 读出来落进
+    `job.json`，collect 透传到 witness ⇒ 本脚本只需搬。
     """
+    import inspect
+    assert "host" not in inspect.signature(CE.emit).parameters
+    parser = CE.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["emit", "--run-dir", ".", "--host", "codex",
+                           "--layer", "spec-review", "--repo", "r",
+                           "--change", "c", "--declared-sites", "s",
+                           "--out", "o"])
+
+
+def test_emit_takes_host_from_the_witness(tmp_path):
+    """witness 说 codex 就是 codex —— 盘面派生，不是入参。"""
+    _write_collected(tmp_path, "design-voice", host="codex")
+    ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
+    assert ev["host"] == "codex" and ev["sites"][0]["host"] == "codex"
+    assert CE.verify(ev) == []
+
+
+@pytest.mark.parametrize("witness_host", ["claude", "unknown"])
+def test_emit_cannot_upgrade_a_non_codex_witness(tmp_path, witness_host):
+    """Claude 宿主（或判不出宿主）下跑出来的成功 **不能**顶替 Codex efficacy 证据。
+
+    关键在「不能」：调用方**没有**任何入参可以把它说成 codex。
+    """
+    _write_collected(tmp_path, "design-voice", host=witness_host)
+    ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
+    assert ev["host"] == witness_host and ev["sites"][0]["host"] == witness_host
+    assert any("host" in f for f in CE.verify(ev))
+
+
+def test_emit_leaves_host_none_when_the_witness_predates_the_field(tmp_path):
+    """旧格式 witness 无 `host` ⇒ None ⇒ 判红。**MUST NOT 回落到自报或猜 codex。**"""
     _write_collected(tmp_path, "design-voice")
     raw = json.loads((tmp_path / "design-voice.collected.json").read_text())
     del raw["host"]
     (tmp_path / "design-voice.collected.json").write_text(json.dumps(raw))
-
-    ev = CE.emit(str(tmp_path), "codex", "spec-review", "r", "c", ["design-voice"])
-    assert ev["sites"][0]["host"] == "codex"
-    assert CE.verify(ev) == []
-
-
-def test_emit_with_a_non_codex_host_is_rejected_by_the_gate(tmp_path):
-    """Claude 宿主下跑出来的成功 **不能**顶替 Codex efficacy 证据 —— 门必须红。"""
-    _write_collected(tmp_path, "design-voice")
-    ev = CE.emit(str(tmp_path), "claude", "spec-review", "r", "c", ["design-voice"])
-    assert ev["host"] == "claude" and ev["sites"][0]["host"] == "claude"
+    ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
+    assert ev["host"] is None and ev["sites"][0]["host"] is None
     assert any("host" in f for f in CE.verify(ev))
+
+
+def test_emit_marks_a_mixed_host_layer_and_the_gate_reds(tmp_path):
+    """两个站点跑在不同宿主里 ⇒ 顶层落 `mixed`，MUST NOT 挑一个好看的当层级 host。"""
+    _write_collected(tmp_path, "design-voice", host="codex")
+    _write_collected(tmp_path, "hr-tg", host="claude", job_id="7c1a9b02",
+                     attempt_nonce="b" * 32, stdout_sha256="b" * 64)
+    ev = CE.emit(str(tmp_path), "spec-review", "r", "c",
+                 ["design-voice", "hr-tg"])
+    assert ev["host"] == CE.MIXED_HOST
+    assert any("本证据只对 Codex 宿主有意义" in f for f in CE.verify(ev))
 
 
 def test_emit_fails_loud_when_a_declared_site_has_no_witness(tmp_path):
     """declared 了却没 collected witness ⇒ emit 非零退出，MUST NOT 悄悄少一个站点。"""
     _write_collected(tmp_path, "design-voice")
     with pytest.raises(CE.EvidenceError):
-        CE.emit(str(tmp_path), "codex", "spec-review", "r", "c",
+        CE.emit(str(tmp_path), "spec-review", "r", "c",
                 ["design-voice", "hr-tg"])
 
 
@@ -402,12 +520,32 @@ def test_cli_check_exit_codes(tmp_path):
     assert _run("check", "--evidence", str(broken)).returncode == 2
 
 
+def test_cli_success_summary_lists_only_sites_that_really_crossed(tmp_path):
+    """成功摘要行是**人会直接引用的证据句** ⇒ 它的谓词 MUST 与 G2 同一个。
+
+    构造：opus 站点真跨过（440s），sonnet 站点也 >300s（400s）但不是强模型。
+    摘要若只看 duration，就会把 sonnet 列进「自然 >300s 的站点」，把结论说得比实际宽。
+    """
+    weak = _distinct("hr-tg", "b")
+    weak.update(model="sonnet", terminal_at="2026-07-25T17:07:05Z",
+                collected_at="2026-07-25T17:07:10Z", duration_seconds=400.0)
+    ev = _evidence(declared_sites=["design-voice", "hr-tg"], sites=[_site(), weak])
+    assert CE.verify(ev) == []          # 两站点都合法，G2 由 opus 站点满足
+
+    path = tmp_path / "two.json"
+    path.write_text(json.dumps(ev), encoding="utf-8")
+    r = _run("check", "--evidence", str(path))
+    assert r.returncode == 0, r.stderr
+    assert "design-voice" in r.stdout
+    assert "hr-tg" not in r.stdout, r.stdout
+
+
 def test_cli_emit_then_check_roundtrip(tmp_path):
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     _write_collected(run_dir, "design-voice")
     out = tmp_path / "evidence.json"
-    r = _run("emit", "--run-dir", str(run_dir), "--host", "codex",
+    r = _run("emit", "--run-dir", str(run_dir),
              "--layer", "spec-review", "--repo", "zhws_ops_api",
              "--change", "c", "--declared-sites", "design-voice",
              "--out", str(out))
@@ -416,7 +554,7 @@ def test_cli_emit_then_check_roundtrip(tmp_path):
 
 
 def test_cli_emit_rejects_empty_declared_sites(tmp_path):
-    r = _run("emit", "--run-dir", str(tmp_path), "--host", "codex",
+    r = _run("emit", "--run-dir", str(tmp_path),
              "--layer", "spec-review", "--repo", "r", "--change", "c",
              "--declared-sites", " , ", "--out", str(tmp_path / "e.json"))
     assert r.returncode == 2
