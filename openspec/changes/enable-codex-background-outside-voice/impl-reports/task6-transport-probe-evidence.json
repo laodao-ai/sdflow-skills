@@ -1,0 +1,33 @@
+{
+  "change": "2026-07-25-manage-permission-catalog-items",
+  "declared_sites": [
+    "design-voice"
+  ],
+  "host": "claude",
+  "layer": "spec-review",
+  "repo": "zhws_ops_api",
+  "run_id": "20260725T170004Z-szMlwM",
+  "schema_version": 1,
+  "sites": [
+    {
+      "attempt_nonce": "4b85f30b20fcedb5c2de990fe46b9dbc",
+      "collected_at": "2026-07-25T17:08:00Z",
+      "dispatched_at": "2026-07-25T17:00:24Z",
+      "duration_seconds": 436.0,
+      "effort": "high",
+      "host": "claude",
+      "job_id": "3d3695d5",
+      "model": "opus",
+      "reason_code": "ok",
+      "runner": "claude",
+      "site": "design-voice",
+      "started_at": "2026-07-25T17:00:25Z",
+      "stderr_bytes": 19,
+      "stderr_lines": 1,
+      "stdout_bytes": 5129,
+      "stdout_lines": 27,
+      "stdout_sha256": "7d1b28145114f39de2c91f8cc51d10b04d216a653c3cf093c0079707d8cbf2d2",
+      "terminal_at": "2026-07-25T17:07:41Z"
+    }
+  ]
+}
