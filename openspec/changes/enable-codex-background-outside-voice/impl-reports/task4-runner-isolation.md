@@ -40,7 +40,7 @@ runner 由调用方决定，helper 不预设只有 claude。
 
 | 边界 | 处理 |
 |---|---|
-| **「spawn 之前落盘」在 shell 层不可能** | pid 只有 `&` 之后（`$!`）才存在 ⇒ 只能 spawn 后**立即**写、早于 `wait`。残余窗口与既有残余 (b) 同源：`&` 与写入之间落信号 ⇒ 文件缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable`（**不是**误判 exited），方向安全 |
+| **「spawn 之前落盘」在 shell 层不可能** | pid 只有 `&` 之后（`$!`）才存在 ⇒ 只能 spawn 后**立即**写、早于 `wait`。残余窗口与既有残余 (b) 同源：`&` 与写入之间落信号 ⇒ 文件缺席 ⇒ 消费侧 `probe_subtree` 退回判据 ⑤ 的盘面推断（terminal witness 在场即判 `exited`）。**〔fix1 订正〕** 本行原写「退回 fail-closed 的 `unverifiable`（不是误判 exited），方向安全」——**被自家消费侧代码证伪**：`runner_kind=="absent"` 直落 ⑤，而该窄口里 helper 恰是被信号打死的 ⇒ ⑤ **误判 exited**、孤儿 runner 仍在计费。这正是 ④ 要关、而它自己缺席时关不满的口子；登记为已知窄口，不声称方向安全 |
 | **写入失败** | 打 `OV_RUNNER_PID_PUBLISH_FAILED=1 stage=... path=...`（结构化字段，无 context 正文）并**继续跑 voice**——它是清理辅助信号、不是交付物；掀掉 voice 是拿主交付物去换一个辅助信号 |
 | **写完不删** | 与消费侧 `read_runner_pid` docstring 已声明的模型一致（「串到别人的活 pid ⇒ 判 alive；pid 被复用 ⇒ 同样判 alive」——两个误判方向都是 fail-closed）。删掉反而会让 helper 被 SIGKILL 那一格失去 ④ 的直接信号 |
 
@@ -51,11 +51,13 @@ runner 由调用方决定，helper 不预设只有 claude。
 「代码里读了它」与「契约里写了它」绑死（见下表「三条硬交接」的 B 行），防再次出现 Task 1 那种「已下发、
 零消费者、却已写进 job.json 当事实」的无主变量。
 
-### 4. `outside-voice-job.py` 的两处契约 docstring 订正（**不改行为**）
+### 4. `outside-voice-job.py` 的契约 docstring 订正（**不改行为**）
 
 Task 3 写下的「helper MUST 在 spawn runner **之前**把 `OV_RUNNER_PID` 写入」是一条
 **不可能被满足**的契约（pid 那时还不存在）。已订正为「spawn 后立即（`$!` 可得的最早时刻，
 早于 `wait`）」并登记残余窗口。同时把两处「已接线、下游尚未消费」的注释更新为真实消费者。
+**〔fix1 订正〕** 本节原标题写「两处」——实为**三处**：`probe_subtree` 判据 ④ 的
+「helper 在 spawn runner 前落盘」当轮漏改，与另两处打架，已在 fix1 一并订正（Minor M1）。
 `git diff` 核实：`outside-voice-job.py` 的改动**全部**是注释/docstring，零可执行行。
 
 ---

@@ -753,6 +753,36 @@ def test_dispatch_rejects_out_of_range_timeout(job_home, fake_claude, repo, time
     assert _bg_invocations(fake_claude) == []
 
 
+@pytest.mark.parametrize("effort", ["low", "medium", "xhigh", ""])
+def test_dispatch_only_ever_dispatches_effort_high(job_home, fake_claude, repo, effort):
+    """🔒 OVBG-04：spec 把后台通道的推理档位**写死 `--effort high`**。
+
+    dispatch 是这条链上 effort 的**唯一 producer**（`build_worker_command` → worker →
+    `SDFLOW_VOICE_EFFORT` → `outside-voice.sh` 全程原样透传，没有第二个注入点）⇒ 钉在
+    这里一处，整条链就只可能跑 high。降档一律 **fail-loud 拒绝**，MUST NOT 静默改写成
+    high——静默改写会让「调用方以为发了 medium、实际跑了 high」两边都察觉不到。
+    helper 侧 `${SDFLOW_VOICE_EFFORT:-high}` 的透传能力**保留不删**（宿主直调 exec 用）。
+    """
+    proc = _run_job(job_home, _dispatch_args(repo, job_home, effort=effort), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert payload["ok"] is False
+    assert payload["state"] == "usage-error", payload
+    assert _bg_invocations(fake_claude) == [], "非 high 的档位 MUST 在任何外部派发之前被拒"
+    assert not (repo["run_dir"] / "design-voice.reserve").exists()
+
+
+def test_dispatch_accepts_effort_high_and_hands_it_down_verbatim(job_home, fake_claude, repo):
+    """正向对照：唯一放行的档位真的被原样传进 worker 命令（拒绝不是靠"全拒"实现的）。"""
+    proc = _run_job(job_home, _dispatch_args(repo, job_home, effort="high"), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert proc.returncode == 0, proc.stderr
+    assert payload["ok"] is True
+    command = _bg_invocations(fake_claude)[0]["argv"][-1]
+    parts = shlex.split(command)
+    assert parts[parts.index("--effort") + 1] == "high", command
+
+
 @pytest.mark.parametrize("site", ["../escape", "a/b", "with space", ""])
 def test_dispatch_rejects_unsafe_site_names(job_home, fake_claude, repo, site):
     proc = _run_job(job_home, _dispatch_args(repo, job_home, site=site), _env(fake_claude))
@@ -2965,7 +2995,10 @@ def test_the_published_runner_pid_unblocks_the_subtree_verdict(job_home, repo, f
 
     判别器刻意把 terminal witness 删掉 —— 否则 ⑤ 的盘面推断会替 ④ 把结论"蒙对"，
     这条用例就退化成证不出交接是否兑现的空断言。
-    没有它：verdict 恒 `unverifiable` ⇒ `cleanup --cancel` **永不解闸**同族 fallback。
+    没有它、且**本用例这种无 terminal witness 的形态**下：verdict 恒 `unverifiable`
+    ⇒ `cleanup --cancel` 永不解闸同族 fallback。（有 terminal witness 时缺 ④ 不会卡住，
+    而是走 ⑤ 判 `exited` —— 那条路在 helper 被 SIGKILL 时会误判，见 `probe_subtree` ⑤ 的
+    残余登记。两种坏结果不同：这里是卡死，那里是漏放。）
     """
     env = os.environ.copy()
     env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
@@ -2982,7 +3015,10 @@ def test_the_published_runner_pid_unblocks_the_subtree_verdict(job_home, repo, f
 
 def test_helper_writes_no_runner_pid_when_the_worker_did_not_ask_for_one(job_home, repo,
                                                                         fake_runner_bin):
-    """同步（Claude 宿主）路径没有这个变量 ⇒ helper MUST 零副作用。"""
+    """不走后台通道的直调 exec 没有这个变量 ⇒ helper MUST 零副作用。
+
+    主语校正：本用例 runner=claude ⟺ 宿主是 **Codex**（runner 恒为宿主之外的机队）。
+    """
     env = os.environ.copy()
     env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
     env["SDFLOW_VOICE_RUNNER"] = "claude"

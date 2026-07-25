@@ -14,12 +14,15 @@
 #     $SDFLOW_VOICE_MODEL   claude 反向路径专用：-p --model 的取值。runner=claude 时必须非空，
 #                           否则同样 fail-loud（exit 1）。
 #     $SDFLOW_VOICE_EFFORT  claude 反向路径专用：`--effort` 的取值〔OVBG-04 · Task 4〕。
-#                           空/未设 ⇒ 缺省 "high"（spec 写死的档位；Claude 宿主的同步路径
-#                           本就没有下发方，走这条缺省）。**取值域 MUST NOT 在本脚本再复制
-#                           一份枚举**——后台通道的合法值由上游 outside-voice-job.py 的
-#                           EFFORT_VALUES 单点校验（CLI 自己支持 5 档、job helper 只放行 3 档，
-#                           抄一份必漂）。本脚本只负责把它原样变成一个 argv 词，
-#                           故它 MUST NOT 拆词：非法值只会让 claude 自己 fail-loud。
+#                           空/未设 ⇒ 缺省 "high"（spec 写死的档位）。⚠ 主语别搞反：
+#                           $SDFLOW_VOICE_RUNNER 指的是【宿主之外】的机队 ⇒ 走到 claude
+#                           分支 ⟺ 宿主是 **Codex**；而 Codex 宿主的同步路径直调本脚本
+#                           exec、没有下发方，走的就是这条缺省。只有后台通道的 worker
+#                           才显式下发它。**取值域 MUST NOT 在本脚本再复制一份枚举**——
+#                           后台通道的合法值由上游 outside-voice-job.py 的 EFFORT_VALUES
+#                           单点校验（spec 把后台档位钉死 high，故那里只放行 high 一档；
+#                           CLI 自己支持 5 档，抄一份必漂）。本脚本只负责把它原样变成一个
+#                           argv 词，故它 MUST NOT 拆词：非法值只会让 claude 自己 fail-loud。
 #     $SDFLOW_VOICE_RUNNER_PID_FILE
 #                           后台通道专用〔OVBG-05 · Task 4 交接〕：`<site>.runner.pid` 的
 #                           绝对路径。非空时，本脚本在 spawn runner 后【立即】把
@@ -27,10 +30,15 @@
 #                           独立进程组的 pgid）以纯十进制原子写入该路径（临时文件 + mv，0600）。
 #                           它是 outside-voice-job.py 的 cleanup 核验「runner 子树是否已退出」
 #                           的【唯一直接信号】——worker 自己的进程组圈不住 timeout 的独立组。
-#                           空/未设 ⇒ 不写任何文件（Claude 宿主同步路径零副作用）。
+#                           空/未设 ⇒ 不写任何文件（不走后台通道的直调 exec 零副作用）。
 #                           写入失败 ⇒ 打 OV_RUNNER_PID_PUBLISH_FAILED=1 哨兵并【继续】跑
-#                           voice（它是清理辅助信号，不是交付物；消费方读不到即退回
-#                           fail-closed 的 unverifiable，属诚实降级）。
+#                           voice（它是清理辅助信号，不是交付物）。
+#                           ⚠ 降级方向如实说：消费方读不到本文件时**并非**一律判
+#                           unverifiable，而是退回 outside-voice-job.py `probe_subtree`
+#                           判据 ⑤ 的盘面推断 —— terminal witness 在场即判 exited。
+#                           helper 正常退出时该结论正确；helper 被 SIGKILL 打死时会
+#                           **误判 exited**（孤儿 runner 仍在计费、fallback 被解闸）——
+#                           那正是本文件（判据 ④）要关、而它缺席时关不满的那个窄口。
 #   preflight
 #     stdout: "ready" | "not_installed" | "missing-deps"         exit 0（$SDFLOW_VOICE_RUNNER 非空时）
 #             探测目标 = $SDFLOW_VOICE_RUNNER 的 CLI（MUST NOT 硬编码 codex）
@@ -139,7 +147,9 @@
 #                                  （本机真机探针已复核，见 test_real_runner_isolates_*）。
 #         --no-session-persistence inner `claude -p` 的 transcript 不落盘、不可 resume。
 #         --effort <档位>          推理档位显式下发（取 $SDFLOW_VOICE_EFFORT，缺省 high），
-#                                  使 job.json 里记的 effort 是真实生效值而非装饰。
+#                                  使 job.json 里记的 effort 在 **runner=claude 时**是真实
+#                                  生效值而非装饰（codex 分支不读该变量 ⇒ runner=codex 的
+#                                  job.json effort 仍只是下发记录，别拿它当生效证据）。
 #       claude 侧读边界 = 【应用层负向】——`--settings` permissions.deny 挡凭证库路径（列出的拒读、
 #       未列的仍可读，见 OV_CLAUDE_READ_FENCE 注释）。⚠ 与 codex 的对称性【未定·未真机验】（A1）：
 #       codex `-s read-only` 内核沙箱封写/网络确定，但是否也限【读】未在真 Codex 宿主实测 → 待验批。
@@ -463,8 +473,11 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找�
 #
 # 🔴 时序的诚实边界：pid 只有在 `&` 之后（`$!`）才存在 ⇒ 本函数只能在 spawn **之后**
 #   立即调用，不可能真在 spawn 之前落盘。残余窗口与头部契约的残余 (b) 同源同性质：
-#   `&` 与本次写入之间若落信号，该次 runner 的 pid 没被记下 ⇒ 消费方退回 fail-closed
-#   的 unverifiable（不是误判 exited）。方向安全，只登记不声称消除。
+#   `&` 与本次写入之间若落信号，该次 runner 的 pid 没被记下 ⇒ 消费侧 `probe_subtree`
+#   退回判据 ⑤ 的盘面推断（terminal witness 在场即判 exited），**不是**退回 unverifiable。
+#   ⚠ 该窄口里 helper 恰是被信号打死的 ⇒ ⑤ 会**误判 exited**（孤儿 runner 仍在计费）。
+#   本文件（判据 ④）存在的意义就是关掉这个口子，而它自己缺席时关不满 —— 只登记，
+#   不声称消除，也不假称降级方向是安全的。
 #
 # 失败一律**不掀掉 voice**：它是清理辅助信号、不是交付物；只打结构化哨兵让降级可见
 # （同 OV_GROUP_KILL_DEGRADED=1 规格，MUST NOT 含 context 正文）。

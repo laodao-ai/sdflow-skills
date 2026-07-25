@@ -622,14 +622,20 @@ def test_exec_claude_effort_comes_from_the_dispatched_env(tmp_path):
     这条锚同时守 Task 1 遗留的交接：worker 早已把 effort 塞进 helper 的 env，但在本票
     之前**全仓零消费者** ⇒ `job.json` 里的 `"effort"` 只是个未经核实的自述值。
     取值域由上游 `outside-voice-job.py` 的 `EFFORT_VALUES` 单点校验，本脚本 MUST NOT
-    再复制一份枚举（两份枚举必然漂——CLI 自己支持 5 档，job helper 只放行 3 档）。
+    再复制一份枚举（两份枚举必然漂——CLI 自己支持 5 档）。
+    ⚠ 本锚锁的是**透传能力**（helper 拿到什么就发什么），**不是**「后台通道允许降档」：
+    后台档位由 dispatch 钉死 high（`EFFORT_VALUES = ("high",)` + 那侧的拒绝锚），
+    这里的 `medium` 只是一个"非缺省值"探针，MUST NOT 被读成 dispatch 可以下发 medium。
     """
     _, argv = _claude_argv(tmp_path, {"SDFLOW_VOICE_EFFORT": "medium"})
     assert argv[argv.index("--effort") + 1] == "medium"
 
 
 def test_exec_claude_effort_defaults_to_high_without_the_env(tmp_path):
-    """Claude 宿主的同步路径没有 worker 下发 env ⇒ 仍 MUST 是 spec 写死的 high。"""
+    """直调 exec 的同步路径没有 worker 下发 env ⇒ 仍 MUST 是 spec 写死的 high。
+
+    主语校正：走 claude 分支 ⟺ 宿主是 **Codex**（runner 恒为宿主之外的机队）。
+    """
     _, argv = _claude_argv(tmp_path, {"SDFLOW_VOICE_EFFORT": ""})
     assert argv[argv.index("--effort") + 1] == "high"
 
@@ -691,7 +697,10 @@ def test_exec_publishes_the_runner_pid_sidecar_on_the_codex_path_too(tmp_path):
 
 
 def test_exec_writes_no_runner_pid_sidecar_when_the_env_is_absent(tmp_path):
-    """Claude 宿主的同步路径没有这个变量 ⇒ MUST 不产生任何多余文件（零副作用）。"""
+    """不走后台通道的直调 exec 没有这个变量 ⇒ MUST 不产生任何多余文件（零副作用）。
+
+    主语校正：本用例 runner=claude ⟺ 宿主是 **Codex**（runner 恒为宿主之外的机队）。
+    """
     bin_dir = make_fake_claude(tmp_path)
     ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
     sidecar_dir = tmp_path / "rundir"; sidecar_dir.mkdir()
@@ -706,8 +715,10 @@ def test_exec_writes_no_runner_pid_sidecar_when_the_env_is_absent(tmp_path):
 def test_exec_still_delivers_findings_when_the_pid_sidecar_cannot_be_written(tmp_path):
     """落盘失败 MUST NOT 掀掉这次 voice —— 它只是清理用的辅助信号，不是交付物。
 
-    降级 MUST 可见（结构化哨兵，同 OV_GROUP_KILL_DEGRADED=1 规格）：消费方读不到文件时
-    退回 fail-closed 的 `unverifiable`，是诚实降级；静默才是不可接受的那一种。
+    降级 MUST 可见（结构化哨兵，同 OV_GROUP_KILL_DEGRADED=1 规格）——**因为它并不是**
+    一个 fail-closed 的降级：消费方读不到文件时退回 `probe_subtree` 判据 ⑤ 的盘面推断，
+    terminal witness 在场即判 `exited`（helper 被 SIGKILL 时那是**误判**，孤儿 runner
+    仍在计费）。∴ 这条哨兵是操作者唯一能看见该窄口被打开的信号，静默才是不可接受的。
     """
     bin_dir = make_fake_claude(tmp_path)
     ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
@@ -727,10 +738,14 @@ def test_env_contract_block_registers_every_consumed_variable():
     反面教训（Task 1 双轴审）：`SDFLOW_VOICE_EFFORT` 被 worker 下发、被记进 job.json，
     却既无消费者也无契约登记 ⇒ `"effort":"high"` 是一条未经核实即落盘的"事实"。
     这条锚把「代码里读了它」与「契约里写了它」绑在一起，防再次出现无主变量。
+
+    解析口径 MUST 同时覆盖 `${VAR…}` 与**裸** `$VAR` 两种形态：脚本里两种都在用
+    （如 `"$SDFLOW_VOICE_MODEL"` / `"$SDFLOW_VOICE_RUNNER"`），只认带花括号的那种会让
+    「只以裸形态出现的新变量」静默逃逸本锚。
     """
     text = HELPER.read_text()
     header = text.split("set -u", 1)[0]
-    consumed = set(re.findall(r"\$\{(SDFLOW_VOICE_[A-Z_]+)[:\-}]", text))
+    consumed = set(re.findall(r"\$\{?(SDFLOW_VOICE_[A-Z_]+)", text))
     assert consumed, "未从脚本正文解析到任何 SDFLOW_VOICE_* 消费点（解析口径漂了）"
     for name in sorted(consumed):
         assert name in header, f"{name} 被消费但未登记进头部契约块"

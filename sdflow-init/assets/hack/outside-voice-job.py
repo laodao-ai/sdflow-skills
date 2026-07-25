@@ -38,7 +38,10 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     写入该文件 —— 它是 cleanup 核验「runner 子树是否已退出」的唯一直接信号
     （worker 自己的进程组圈不住 timeout 的独立组）。
     ⚠ pid 只有在 `&` 之后才存在 ⇒ 「spawn 之前落盘」在 shell 层不可能；`&` 与写入之间
-    的窗口里被杀 ⇒ 文件缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable`（方向安全）。
+    的窗口里被杀 ⇒ 文件缺席 ⇒ 消费侧 `probe_subtree` 退回判据 ⑤ 的盘面推断（terminal
+    witness 在场即判 `exited`），**不是**退回 `unverifiable` —— 而该窄口里 helper 恰是
+    被信号打死的 ⇒ ⑤ 会**误判 exited**、孤儿 runner 仍在计费。本 sidecar（判据 ④）就是
+    为关这个口子而存在，它自己缺席时关不满：登记为已知窄口，MUST NOT 声称已消除。
     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
     充当结果通道）。
 
@@ -192,7 +195,14 @@ SITE_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 # 当成可以放任任意串的理由（quoting 是最后一道，不是唯一一道）。
 RUN_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 MODEL_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}\Z")
-EFFORT_VALUES = ("low", "medium", "high")
+# 〔OVBG-04〕spec 把后台通道的推理档位**写死 `--effort high`** ⇒ 合法集就是这一个值，
+# 不是 CLI 自己支持的那 5 档、也不是原先随手放行的 3 档。dispatch 是整条链上 effort 的
+# **唯一 producer**（`build_worker_command` → worker → `SDFLOW_VOICE_EFFORT` →
+# `outside-voice.sh` 全程原样透传，没有第二个注入点）⇒ 钉在这里一处即钉住全链。
+# 降档一律 fail-loud 拒绝，MUST NOT 静默改写成 high（静默改写 = 调用方以为发了 medium、
+# 实际跑了 high，两边都察觉不到）。helper 侧 `${SDFLOW_VOICE_EFFORT:-high}` 的透传能力
+# 保留不删 —— 宿主直调 `exec` 的同步路径用得上，那条路径不经本文件。
+EFFORT_VALUES = ("high",)
 RUNNER_VALUES = ("claude", "codex")
 # v1 background transport 只在这两个已过 quoting/injection golden 的 POSIX 平台 ready。
 SUPPORTED_SYS_PLATFORMS = ("darwin", "linux")
@@ -611,8 +621,9 @@ def cmd_dispatch(args):
         return 1, _reject("model 名非法: %r" % (args.model,), state="usage-error",
                           fallback_allowed=False, site=site)
     if args.effort not in EFFORT_VALUES:
-        return 1, _reject("effort 非法: %r" % (args.effort,), state="usage-error",
-                          fallback_allowed=False, site=site)
+        return 1, _reject("effort 非法（后台通道按 OVBG-04 钉死 %s，MUST NOT 降档）: %r"
+                          % ("|".join(EFFORT_VALUES), args.effort),
+                          state="usage-error", fallback_allowed=False, site=site)
     if args.runner not in RUNNER_VALUES:
         return 1, _reject("runner 非法: %r" % (args.runner,), state="usage-error",
                           fallback_allowed=False, site=site)
@@ -899,13 +910,17 @@ def cmd_worker(args):
     if args.model:
         env["SDFLOW_VOICE_MODEL"] = args.model
     if args.effort:
-        # effort 与 runner/model 同路下发，让 job.json 里记的 effort 是**真实下发值**而非装饰。
-        # 消费者 = `outside-voice.sh` 的 claude 分支（1.5.0 起）：`--effort "${SDFLOW_VOICE_EFFORT:-high}"`。
-        # ∴ job.json 里记的 effort 是**真实下发并生效**的值，不是装饰。
+        # effort 与 runner/model 同路下发。消费者**只有一个**：`outside-voice.sh` 的
+        # **claude 分支**（1.5.0 起）`--effort "${SDFLOW_VOICE_EFFORT:-high}"`。
+        # ∴ 断言要带主语——`runner=claude` 时 job.json 里记的 effort 才是真实下发并生效的值；
+        # `runner=codex` 时 codex 分支**从不读这个变量**（档位不经本通道），它在 job.json 里
+        # 仍是装饰值，MUST NOT 拿它当「codex 实际生效档位」的证据。
         env["SDFLOW_VOICE_EFFORT"] = args.effort
     # 🔴 runner pid sidecar 的落盘路径 —— cleanup 核验「runner 子树是否已退出」的**唯一直接
     # 信号**：worker 自己的进程组圈不住 GNU timeout 自建的那个独立组（见 probe_subtree 的
-    # 判定地基），缺这个信号时组长分支只能 fail-closed 判 unverifiable。
+    # 判定地基）。缺这个信号时判定退回 `probe_subtree` 的判据 ⑤ 盘面推断 —— 无 terminal
+    # witness 才判 unverifiable，有 terminal witness 则判 exited（helper 被 SIGKILL 那格是
+    # **误判**，孤儿 runner 仍在计费）。∴ 接上本路径不是"锦上添花"，是把那格误判关掉。
     # 消费者 = `outside-voice.sh` 的 `ov_publish_runner_pid`（1.5.0 起）：spawn runner 后立即
     # 把 `OV_RUNNER_PID` 以纯十进制原子写入本路径（临时文件 + mv，0600）。
     env["SDFLOW_VOICE_RUNNER_PID_FILE"] = runner_pid_path(run_dir, site)
@@ -1490,8 +1505,10 @@ def read_runner_pid(run_dir, site):
 
     盘面格式与 `<site>.rc` 同构：**纯十进制单值**，由 `outside-voice.sh` 在 spawn runner
     后**立即**（早于 `wait`）原子写入，内容 = `OV_RUNNER_PID`（GNU timeout 自身 pid，
-    亦即它 setpgid 出的那个独立进程组的 pgid）。文件缺席 = 该窗口内 helper 被杀或
-    未接线 ⇒ 判定退回下一级信号，MUST NOT 当成「runner 已退出」。
+    亦即它 setpgid 出的那个独立进程组的 pgid）。文件缺席 = 该窗口内 helper 被杀、或本次
+    调用根本没接线（宿主直调 exec 不设 env）⇒ `"absent"` 本身**不构成任何一侧的证据**：
+    调用方 `probe_subtree` 由此退回判据 ⑤ 的盘面推断（见那里登记的误判 exited 窄口），
+    MUST NOT 把 `"absent"` 读成「runner 已退出」。
 
     为什么是裸 pid 文件而不是 JSON witness：这个文件由 shell 写，契约越小越不容易写错，
     而写错的代价是 cleanup 永久 fail-closed。identity 绑定来自**路径本身**——run-dir × site
@@ -1547,7 +1564,8 @@ def probe_subtree(run_dir, site, job):
       ① started witness 里的 worker identity —— 没有它就没有可核验的对象。
       ② worker pid 本体：存活 ⇒ alive；不可判定 ⇒ unverifiable。
       ③ worker 是组长且组内仍有活口 ⇒ alive（未换组的后代还在跑）。
-      ④ `<site>.runner.pid`（helper 在 spawn runner 前落盘）—— **唯一能直接回答「runner
+      ④ `<site>.runner.pid`（helper 在 spawn runner **后**立即落盘，早于 `wait`；pid 在
+         `&` 之前不存在，"spawn 前落盘"在 shell 层不可能）—— **唯一能直接回答「runner
          子树是否退出」的信号**：alive ⇒ alive；确定不存在 ⇒ exited；不可判定 / 文件损坏
          ⇒ unverifiable（信号在场就以它为准，MUST NOT 再退回 ⑤ 的推断）。
       ⑤ 该信号缺席 ⇒ 退到盘面推断：terminal witness 存在 ⟺ worker 自己走到了发布点，而
