@@ -60,13 +60,13 @@ Codex 宿主发起一次 Claude outside voice 后台派发：先做无副作用�
 started → terminal → rc 的顺序原子发布本轮证据。能力不满足或 dispatch 失败一律快速诚实降级，
 不伪造后台成功。
 
-- [ ] preflight 在旧版本、agent view 被策略禁用、非 POSIX 平台三种情形下 fail-closed，stderr 给 actionable 升级/解禁提示
-- [ ] 负向 golden 证明 preflight 不执行 `--bg --exec 'true'`、不创建任何 dummy job、无任何外部副作用
-- [ ] 任何外部副作用之前先以 `O_CREAT|O_EXCL` 建立 reservation；同 site 重复派发与本 run 第三个不同 site 均在外部副作用前原子拒绝
-- [ ] dispatch 在 monotonic 5 秒 deadline 内返回并核验唯一 canonical job id；超时回收 spawn 进程树，并清理尚未产生外部 job 的 reserve
-- [ ] job metadata 以临时文件 + atomic rename 写入，字段含 schema version、run id、site、repo root、attempt nonce、runner、model、effort、platform、canonical job id、session id、dispatch UTC、timeout 秒数、命令摘要
-- [ ] 发起 shell 退出后 worker 仍跑到终态（可由无模型 job 证明跨 shell 存活），worker 第一动作发布 started/process-tree identity，终态发布 terminal witness 后再 atomic rename 出纯十进制 rc
-- [ ] dispatch accepted 与 metadata 发布之间崩溃留下的残留 reserve 判定 `unknown-cost`，禁止自动重派、禁止立即 fallback
+- [x] preflight 在旧版本、agent view 被策略禁用、非 POSIX 平台三种情形下 fail-closed，stderr 给 actionable 升级/解禁提示
+- [x] 负向 golden 证明 preflight 不执行 `--bg --exec 'true'`、不创建任何 dummy job、无任何外部副作用
+- [x] 任何外部副作用之前先以 `O_CREAT|O_EXCL` 建立 reservation；同 site 重复派发与本 run 第三个不同 site 均在外部副作用前原子拒绝
+- [x] dispatch 在 monotonic 5 秒 deadline 内返回并核验唯一 canonical job id；超时回收 spawn 进程树，并清理尚未产生外部 job 的 reserve
+- [x] job metadata 以临时文件 + atomic rename 写入，字段含 schema version、run id、site、repo root、attempt nonce、runner、model、effort、platform、canonical job id、session id、dispatch UTC、timeout 秒数、命令摘要
+- [x] 发起 shell 退出后 worker 仍跑到终态（可由无模型 job 证明跨 shell 存活），worker 第一动作发布 started/process-tree identity，终态发布 terminal witness 后再 atomic rename 出纯十进制 rc
+- [x] dispatch accepted 与 metadata 发布之间崩溃留下的残留 reserve 判定 `unknown-cost`，禁止自动重派、禁止立即 fallback
 
 ### Task 2: 终态派生的 status/await/collect——只认可信终态，不假绿
 

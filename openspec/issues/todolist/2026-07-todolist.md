@@ -69,6 +69,10 @@ sdflow-issues:
     T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"PROPOSED","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
     T210: {"module":"sdflow-issues/tests","summary":"冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:40","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
     T211: {"module":"sdflow-issues/scripts/sdflow_issues_core","summary":"冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:50","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
+    T212: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束","type":"代码质量","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
+    T213: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调","type":"基础设施","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
+    T214: {"module":"openspec/changes/enable-codex-background-outside-voice/specs/outside-voice-background-jobs/spec.md","summary":"OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace","type":"代码质量","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
+    T215: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言","type":"代码质量","status":"OPEN","time":"2026-07-25 19:07","change":"enable-codex-background-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -1994,3 +1998,42 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **备注**：今日全 CLI 调用=独立进程、无 in-process 多池并发，故不可达；与 T208(消 issues 自调用子进程→in-process import)同期才成真问题。修法=token 改显式 RecorderLockState 传递或 ContextVar.set()/reset() 上下文栈 + 补两线程×两仓 + 嵌套恢复测试。绑定 T208 一起做。
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T211 -->
+
+<!-- sdflow-issue-block:start id=T212 -->
+## T212: nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束
+> nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 1 双轴审 Standards 轴 Minor：id 通道把 _parse_job_id_hint 的解析结果从「拒绝依据」翻成「接受依据」，漂移解出的 8 位 hex 若撞上另一个在跑 bg job 的 id，会把别人的 canonical id 写进 job.json。
+
+**思路**：id 匹配通道追加 item.get("cwd") == repo_root 判据（一行 + 一条测试）。design.md:76 的破坏性操作二次核验是下游第二道门，故当前非 Critical。
+
+**备注**：来源=Task 1 双轴复审（e791679 后）Standards 轴 Minor，编排层裁定 defer 至冷层 code-review 统一处理。
+<!-- sdflow-issue-block:end id=T212 -->
+
+<!-- sdflow-issue-block:start id=T213 -->
+## T213: CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调
+> CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 1 双轴审 Standards 轴 Minor：preflight 两条 CLI 探针的 5 秒上界由单次热机采样（claude --version 0.06s / agents --all --json 0.17s）定；冷启动或高负载下 node 启动可能超 5s，导致静默永久回落同族 voice。
+
+**思路**：与既有 outside-voice.async-timeout-seconds 同路，走 config 旋钮而非新造常量；默认值保持 5 秒。
+
+**备注**：来源=Task 1 双轴复审 Standards 轴 Minor。方向安全（超时=诚实降级，不假绿），故 defer。
+<!-- sdflow-issue-block:end id=T213 -->
+
+<!-- sdflow-issue-block:start id=T214 -->
+## T214: OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace
+> OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 1 双轴审 Spec 轴 Minor：NONCE_LOOKUP_GRACE_SECONDS 与 DISPATCH_DEADLINE_SECONDS 解耦后，返回 canonical job id 最坏约 10 秒，而 OVBG-01 字面写「MUST 在 monotonic 5 秒 deadline 内返回」。解耦本身是评审 I1 推动的正解（消灭「成功 dispatch 被误判 unknown-cost + 禁 fallback」竞态），实现无误且全程有界。
+
+**思路**：改 spec 一行措辞为「5 秒 spawn deadline + 独立有界核验 grace」，而非改码把 grace 收回 5 秒总预算（那等于把竞态请回来）。
+
+**备注**：编排层裁定：实现期 MUST NOT 改 specs/（ship_gate design 域失鲜监视集含 specs/，当场 REFUSE_START）。留到代码审/done 阶段（失鲜窗口已关闭、流程明文允许修订四件套）执行。
+<!-- sdflow-issue-block:end id=T214 -->

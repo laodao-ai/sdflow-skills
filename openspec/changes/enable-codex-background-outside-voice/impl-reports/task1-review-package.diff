@@ -1,0 +1,1804 @@
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task1-bg-dispatch.md b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task1-bg-dispatch.md
+new file mode 100644
+index 0000000..aa41ab3
+--- /dev/null
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task1-bg-dispatch.md
+@@ -0,0 +1,164 @@
++# Task 1 impl-report — 后台派发落地（preflight 无副作用 + dispatch ≤5 秒 + worker 跨 shell 存活）
++
++**R-ID**: OVBG-01, OVBG-02
++**新增文件**（两个，无既有文件改动）：
++
++| 文件 | 角色 |
++|---|---|
++| `sdflow-init/assets/hack/outside-voice-job.py` | canonical 源资产（`setup.sh` 分发面，Task 5 接安装）。含 `version` / `preflight` / `dispatch` / `worker` 四个子命令 |
++| `sdflow-init/tests/test_outside_voice_job.py` | 41 条契约测试（40 条离线 fake + 1 条真机 `claude --bg --exec` 跨 shell 存活 smoke） |
++
++`proposal.md` / `design.md` / `specs/` / `tasks.md` / `superpowers-plan.md` **未改动**；无 `task<N>-` 完成标签、
++未勾任何复选框（`git status` 只有上面两个 `??`）。
++
++## 落笔前的接缝核验（真打开过）
++
++- `sdflow-init/assets/hack/outside-voice.sh`（755 行）——既有 `exec --context-file <f> [--timeout <s>]`
++  契约、四旗 Claude argv、`OV_CLAUDE_READ_FENCE`、rc 语义（0/1/124/3/2）。worker 原样调它，
++  **零改动、零复制**（prompt render / secret scan / FRAME / 截断仍是它的独家职责）。
++- `sdflow-init/tests/test_outside_voice{,_utf8,_child_lifecycle}.py`——既有 golden 口径（fake `timeout`
++  stub、`SDFLOW_VOICE_*` 清脏、`bash <helper>` 调用姿势），本文件沿用。
++- 本 change 的 `design.md`（Data Model / Sequence / ADR-1..D-6 / NFR / Security）与
++  `specs/outside-voice-background-jobs/spec.md`（OVBG-01/02 全文 + Scenario）。
++- `sdflow-spec-review/SKILL.md:367-376`——run-dir 约定 `{change_dir}/.outside-voice/<run-id>/`、
++  `dispatch-manifest.tsv` 的现有 producer 是 SKILL 自身（∴ 本票不抢写，见「未做项」）。
++- `.gitignore:19` `**/.outside-voice/`——run-dir 已递归 gitignore，本票无需新增条目。
++
++## 本机真机核验（②：不猜，先探）
++
++在写代码之前对 research-preview 形态做了四次真实探针（`~/scratchpad/probe`，已 `claude rm` 清理）：
++
++| 探针 | 结论 |
++|---|---|
++| `claude --version` | `2.1.220 (Claude Code)` ≥ 下限 2.1.169 |
++| `claude --bg --exec '<cmd>'` | ~1.1 秒返回 `backgrounded · <8位hex> · <完整命令>`；发起 shell 退出后作业继续跑满 `sleep 5` 并写完文件 ⇒ **跨 shell 存活成立** |
++| `claude agents --all --json` | 0.17 秒；顶层 list；background 条目字段 = `id`/`cwd`/`kind:"background"`/`startedAt`/`sessionId`/`state`/`name`，**`name` 就是下发的完整命令串** |
++| bg session 环境 | 环境变量**被继承**（自设 `MYPROBE` 可见）、`PATH` 完整、`CLAUDECODE` 未设、cwd = 发起时 cwd |
++
++`name` 字段承载完整命令这一点是本票 dispatch 核验机制的地基：attempt nonce 写进命令 ⇒
++「外部 job 到底产生没有」变成一条**可机读信号**，而不是 dispatch 自述。
++
++## 实现要点（与设计条款的对应）
++
++**preflight（无副作用，D-6）** —— 四项检查，任一不过即 `reason_code="preflight-error"` + exit 1，
++stderr 逐条给 actionable 提示：
++`posix-shell`（`os.name`/`sys.platform ∈ {darwin,linux}`/`/bin/sh` 可执行）·
++`claude-version`（≥2.1.169）· `agents-json`（rc=0 且顶层 list）· `capability-manifest`（同代安装快照）。
++**全程只跑 `--version` 与 `agents --all --json` 两条只读命令**，MUST NOT `--bg --exec 'true'`、
++MUST NOT 建 dummy job。
++
++**capability manifest** —— `capability-manifest.json`（与 job helper 同目录）记
++`{schema_version, entries:{outside-voice-job.py, outside-voice.sh, skill-principles.md → sha256}, generation}`；
++`generation` 由 entries 重算比对（挡手改）。计算与写入的**单一源** = 模块函数
++`compute_manifest()` / `write_manifest()`，供 Task 5 的 setup.sh 安装步与本文件测试共用，防两份口径漂移。
++
++**reservation（外部副作用之前）** —— `acquire_reservation()` 用 `os.open(O_WRONLY|O_CREAT|O_EXCL, 0o600)`
++原子占坑；`FileExistsError` 分两类：有 `<site>.job.json` ⇒ `duplicate-site`，无 ⇒ `unknown-cost`。
++占坑成功后数 `*.reserve`，>2 即**退回自己的坑**并落 `slot-limit`（此刻仍无任何外部副作用）。
++三种拒绝一律 `fallback_allowed=false`——它们要么是硬失败、要么成本未知，立即 fallback 会叠加费用。
++
++**dispatch（monotonic 5 秒）** —— `time.monotonic()` 起 deadline；
++`subprocess.Popen([claude,'--bg','--exec',cmd], start_new_session=True)` ⇒ 超时用
++`os.killpg(os.getpgid(pid), SIGKILL)` 回收**整棵进程树**。随后按 attempt nonce 在 agents JSON 里
++核验：**恰好 1 个** background 条目携带该 nonce 才算成功；0 个/≥2 个/与 stdout 解析出的 short id
++不一致 ⇒ 一律 `unknown-cost` fail-closed（stdout 解析只作**交叉核验线索**，解析不出不构成失败判据——
++该输出格式属 research preview，会漂）。
++- 超时/非零 **且** 检出外部 job ⇒ `unknown-cost`，**保留** reserve 交给 reconcile；
++- 超时/非零 **且** 未检出外部 job ⇒ 回收 reserve，`exec-error` + `fallback_allowed=true`。
++
++**worker** —— 第一动作即 `os.dup2` 把自身与 child 的 fd 1/2 直接接到 0600 的
++`<site>.stdout`/`<site>.stderr`（**在执行任何可携带 payload 的代码之前**），随后
++`started.json` → `bash outside-voice.sh exec` → `terminal.json` → atomic-rename `<site>.rc`。
++rc 恒为纯十进制（被信号杀死的负返回码按 shell 惯例归一成 128+signum）；helper 缺失/启动失败
++也照样发布 terminal + rc（127/126），**不留「没有终态可读」的黑洞**。worker 自身 exit 恒 0——
++真实结果只经 `.rc` 发布，MUST NOT 让 supervisor 的 job state 充当结果通道（ADR-2）。
++
++## 逐条验收标准 × 机械锚
++
++测试文件统一路径 `sdflow-init/tests/test_outside_voice_job.py`。
++
++| 验收标准 | 机械锚（测试名） |
++|---|---|
++| preflight 在旧版本 / agent view 被策略禁用 / 非 POSIX 三情形 fail-closed + actionable stderr | `test_preflight_fails_closed_on_old_claude_version`（断言 stderr 含 `2.1.169` 与「升级」）· `test_preflight_fails_closed_when_agent_view_disabled_by_policy`（断言 stderr 含 `disableAgentView`）· `test_preflight_fails_closed_on_non_posix_platform`（`monkeypatch` `os.name="nt"`，断言 hint 含 POSIX）· `test_preflight_fails_closed_when_agents_json_top_level_is_not_a_list` |
++| 负向 golden：不执行 `--bg --exec 'true'`、不建 dummy job、无外部副作用 | `test_preflight_has_no_external_side_effect_and_never_runs_bg_exec`——遍历 fake claude 的**全部**调用日志断言 argv 不含 `--bg`/`--exec`/`true`；断言 fake 的 state 文件（只由 `--bg` 分支写）不存在；断言 job 目录与 run 目录顶层条目集**逐字节不变** |
++| 任何外部副作用之前先 `O_CREAT|O_EXCL` 建 reservation | `test_reservation_exists_before_any_external_dispatch`——fake claude 在**每次被调用的当刻**快照 run-dir 条目集，断言 `--bg` 那次的快照里已含 `design-voice.reserve` |
++| 同 site 重复派发在外部副作用前原子拒绝 | `test_duplicate_site_is_rejected_before_external_side_effect`（`state="duplicate-site"`、`fallback_allowed=false`、`--bg` 调用数 = 0） |
++| 本 run 第三个不同 site 在外部副作用前原子拒绝 | `test_third_distinct_site_is_rejected_before_external_side_effect`（`state="slot-limit"`、`--bg` 调用数 = 0、自己的 reserve 已回收） |
++| dispatch 在 monotonic 5 秒 deadline 内返回并核验唯一 canonical job id | `test_dispatch_returns_within_monotonic_deadline_with_verified_job_id`（`job_id=="75d34378"`、`dispatch_duration_seconds < 5`）· `test_dispatch_fails_closed_when_canonical_job_id_is_not_unique`（2 个匹配 ⇒ unknown-cost）· `test_dispatch_fails_closed_when_no_job_carries_the_attempt_nonce`（0 个匹配 ⇒ unknown-cost、不写 metadata） |
++| 超时回收 spawn 进程树，并清理尚未产生外部 job 的 reserve | `test_dispatch_reclaims_process_tree_and_reserve_when_deadline_expires`——fake claude 挂起 60 秒并**再 spawn 一个孙进程**，把两个 PID 落盘；断言 dispatch <30 秒返回、reserve 已删、**两个 PID 均已不存在**（`os.kill(pid,0)` 轮询） |
++| job metadata 临时文件 + atomic rename，字段齐全 | `test_dispatch_writes_job_metadata_atomically_with_required_fields`——逐字段断言 15 个必填字段；`command_sha256` 与 fake claude **实际收到的命令串**重算一致（非自述）；文件权限 `0o600`；run-dir 无 `.tmp-*` 残留 |
++| 命令只带受校验路径/runner/model/timeout，不带 context 正文 | `test_dispatch_command_is_single_shell_quoted_worker_invocation`——`shlex.split` 还原 argv 逐项断言；断言命令串不含换行/NUL、**不含 context 文件正文** |
++| 发起 shell 退出后 worker 仍跑到终态（无模型 job 证明跨 shell 存活） | `test_background_worker_survives_dispatching_shell_exit`（**真 `claude --bg --exec`**）——fake helper `sleep 6`；断言 dispatch 子进程返回时 `.rc` **尚不存在**（否则证不出跨 shell），随后轮询到 rc=0、stdout 含标记、started/terminal 均在；`finally` 里 `claude rm <job_id>` 清理 |
++| worker 第一动作发布 started/process-tree identity | `test_worker_publishes_started_then_terminal_then_rc`——**由 child 自己看盘面**：fake helper 检查 `started.json` 是否存在并把结论写进 stdout，断言 `STARTED_SIDECAR_VISIBLE=yes`；started 含 `attempt_nonce`/ISO `started_at`/`worker.{pid,ppid,pgid}` |
++| 终态发布 terminal witness 后**再** atomic rename 出纯十进制 rc | `test_worker_publish_order_is_terminal_witness_then_rc`（模块级 spy，断言调用序恰为 `[terminal.json, s.rc]`）· `test_worker_publishes_pure_decimal_rc_for_helper_timeout`（rc 文件 == `"124"` 且匹配 `^\d+$`）· `test_worker_publishes_rc_even_when_shell_helper_is_missing` |
++| 残留 reserve（dispatch accepted ↔ metadata 发布之间崩溃）判 `unknown-cost`，禁自动重派/禁立即 fallback | `test_residual_reserve_without_metadata_is_unknown_cost`（`state="unknown-cost"`、`fallback_allowed=false`、`--bg` 调用数 = 0、reserve 保留）· `test_dispatch_deadline_with_external_job_present_is_unknown_cost`（超时但外部 job 已存在 ⇒ reserve 保留、不写 metadata） |
++
++附加（非 checkbox，属同片安全面）：`test_worker_output_files_are_0600`（五个 sidecar 全 0600）·
++`test_worker_redirects_own_and_child_streams_before_running_payload`（worker 进程 stdout/stderr **全空**）·
++`test_dispatch_rejects_unsafe_site_names` / `_run_ids`（`../escape`、`a/b`、空格、`bad;rm -rf /`）·
++`test_dispatch_rejects_context_file_outside_repo_root` · `test_dispatch_rejects_out_of_range_timeout`（0/3601/abc）·
++`test_dispatch_fails_closed_when_preflight_not_ready` · `test_dispatch_to_worker_lifecycle_offline`（fake claude 真执行
++下发命令 ⇒ 证明组出来的命令串确实跑得通 worker，全链无真模型）。
++
++## 测试结果（如实）
++
++单文件：
++
++```
++$ /usr/bin/python3 -m pytest sdflow-init/tests/test_outside_voice_job.py -q -rs
++41 passed in 37.86s
++```
++
++真机 smoke 确实**跑了**（未 skip，`-rs` 无 skip 行）；单独跑：
++
++```
++$ /usr/bin/python3 -m pytest ... -k "survives" -v
++1 passed, 37 deselected in 8.33s
++```
++
++全量：
++
++```
++$ /usr/bin/python3 -m pytest -q -rs
++2188 passed, 8 skipped, 3 xfailed in 191.03s (0:03:11)
++```
++
++8 条 skip 全部是既有环境性 skip（1 条信号风暴复现率 + 7 条 Windows 本地盘），与本票无关。
++`git diff --check` 干净。跨版本：`/usr/bin/python3` 3.9.6 全绿；`python3` 3.14.6 上
++`py_compile` + `version` + `preflight` 三条烟测通过（CI 泳道跑 3.12，语法/API 均在 3.9 兼容集内）。
++
++## 未做 / 降级项（本票范围外，如实登记）
++
++1. **`setup.sh` 尚未安装 `*.py`、也尚未生成 `capability-manifest.json`** —— 属 Task 5 的
++   「兼容快照原子安装」checkbox。后果**当前可见且诚实**：开发 checkout 里直接跑
++   `outside-voice-job.py preflight` 会因 manifest 缺失 fail-closed（实测输出见上）。
++   `write_manifest()` 已作为单一计算源就位，Task 5 只需在安装步调它。
++2. **`--effort high --safe-mode --no-session-persistence` 尚未进 `outside-voice.sh` 的 Claude argv**
++   —— 属 Task 4。本票把 `effort` 记进 job metadata（可机读证据链已就位），但 worker 调 helper 时
++   仍走既有 `exec --context-file --timeout` 契约，**未改 `outside-voice.sh` 一个字节**。
++3. **`dispatch-manifest.tsv` 不由本 helper 追加** —— 现 producer 是两份 SKILL（`SKILL.md:376`），
++   「job id/site/nonce 追加 manifest」是 Task 5 的 checkbox。dispatch 已把 `job_id`/`site`/
++   `attempt_nonce` 结构化返回，Task 5 直接取用即可。
++4. **`status` / `await` / `collect` / `cleanup` / `reconcile` 子命令未实现** —— Task 2/3 范围。
++   本票只把证据按 started → terminal → rc 放上盘面，不做任何状态派生。
++5. **`STARTUP_DEADLINE_SECONDS = 5`** —— 取 `design.md` job.json 示例的字面值
++   （`dispatched_at` 02:00:00 → `startup_deadline_at` 02:00:05）。本票只把它**写进 metadata**，
++   不消费；实际「启动 deadline 是否够宽」的判定归 Task 2。真机 smoke 观察到 worker 在
++   dispatch 返回后 1 秒内即发布 started sidecar，5 秒有余量，但**这是单次采样，不是阈值证明**。
++
++## Concerns（交编排层）
++
++1. **同 site 并发在途 dispatcher 会被归类成 `unknown-cost` 而非 `duplicate-site`**：判据是
++   「reserve 存在但 job.json 尚未发布」，而在途 dispatcher 恰好处于这个窗口。两者都是拒绝且
++   `fallback_allowed=false`，方向保守（不会多花钱），但 `unknown-cost` 的措辞会把「对方正在正常
++   派发」说成「成本未知需人工 reconcile」。修法要么给 reserve 加 liveness 探针（读 `dispatcher_pid`
++   探活），要么接受措辞。按 ④ 五问：概率低（同 site 并发 dispatch 本身即契约违规）、影响小
++   （只是提示语，不改判定）、完美成本不低（PID 探活跨主机不可靠）⇒ **本票选择接受，登记在此**。
++2. **`claude agents --all --json` 的 `name` 字段承载完整命令串**：本票的 nonce 核验机制依赖它，
++   同时它也意味着 supervisor state 里**会有**一条完整的 worker 命令（含 run-dir/context 文件的
++   绝对**路径**，不含正文）。Task 4 的「`claude logs <id>` canary 回归」需要把这条纳入口径——
++   路径不是 payload，但它是一条已存在的、结构化的外泄面，**不该被 canary 测试意外判红**。
++3. **`--exec` 仍未出现在 `claude --help`**（本机 2.1.220 实测）：与 design 的 research-preview
++   定性一致。本票的 preflight **不**探测 `--exec` 是否存在（那需要副作用），最终能力核验落在
++   真实 dispatch 的 nonce 匹配上——若未来 `--exec` 被移除，表现为「dispatch 非零 + 无 nonce 命中」
++   ⇒ `exec-error` + `fallback_allowed=true`，即 5 秒级诚实降级，符合 ADR-3。
+diff --git a/sdflow-init/assets/hack/outside-voice-job.py b/sdflow-init/assets/hack/outside-voice-job.py
+new file mode 100644
+index 0000000..bbce5cc
+--- /dev/null
++++ b/sdflow-init/assets/hack/outside-voice-job.py
+@@ -0,0 +1,837 @@
++#!/usr/bin/env python3
++"""outside-voice-job.py — Codex 宿主的 Claude outside-voice 后台作业 helper。
++
++── 契约单一源（两份评审 SKILL 只引用本注释，不得转述细节）─────────────────────
++
++本脚本**只编排后台生命周期**：它不 render prompt、不做 secret scan、不组装/接触
++context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代安装的既有权威实现）。
++本脚本对 prompt 正文唯一的接触是**把 context 文件的绝对路径当 argv 传下去**。
++
++  preflight [--json]
++    无副作用能力探针（**MUST NOT** 创建 dummy job、MUST NOT 跑 `--bg --exec 'true'`）。
++    stdout: 单行 JSON {"ok":bool,"reason_code":"ready"|"preflight-error","checks":{…}}
++    stderr: 不通过时逐条 actionable 提示（升级 / 解禁策略 / 重跑 setup.sh）
++    exit 0=ready | 1=preflight-error
++
++  dispatch --run-dir <d> --site <s> --context-file <f> --repo-root <r>
++           --runner claude --model <m> [--effort high] [--timeout 900]
++    ① preflight（不通过即 5 秒级 fallback）→ ② `O_CREAT|O_EXCL` 建 `<site>.reserve`
++    （**任何外部副作用之前**，同时机械核验同 site 唯一 + 本 run ≤2 slot）→
++    ③ 在 monotonic 5 秒 deadline 内 `claude --bg --exec '<单条 shell 命令>'` →
++    ④ 用 attempt nonce 在 `claude agents --all --json` 里核验**唯一** canonical job id →
++    ⑤ 临时文件 + atomic rename 发布 `<site>.job.json`（0600）。
++    stdout: 单行 JSON；失败时含 `state`（duplicate-site|slot-limit|unknown-cost|
++            exec-error|preflight-error）与 `fallback_allowed`。
++    exit 0=已派发 | 1=未派发（按 `fallback_allowed` 决定调用方能否立即同族 fallback）
++
++  worker --run-dir <d> --site <s> --context-file <f> --repo-root <r>
++         --runner <x> --model <m> --effort <e> --timeout <n>
++         --attempt-nonce <hex> --run-id <id>
++    **由 supervisor 在后台 shell 里执行，不给人手动调**。第一动作 = 把自身与 child 的
++    stdout/stderr 直接重定向到 0600 的 `<site>.stdout`/`<site>.stderr`（在执行任何
++    可携带 payload 的代码之前）；随后 started → child → terminal → rc 依序原子发布。
++    exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
++    充当结果通道）。
++
++  version
++    stdout: "outside-voice-job.py <ver>"                       exit 0
++
++── 盘面即状态（ADR-2）───────────────────────────────────────────────────────────
++本脚本**不持久化可变 status 字段**。`<site>.rc` 是唯一终态发布点；`claude agents` 的
++`done/failed` 只提供 liveness，MUST NOT 决定 `ok`/`timeout`。status/await/collect 的
++派生规则见 Task 2，本文件只负责把证据按 started → terminal → rc 的顺序原子放上盘面。
++"""
++
++import argparse
++import hashlib
++import json
++import os
++import re
++import secrets
++import shlex
++import shutil
++import signal
++import subprocess
++import sys
++import tempfile
++import time
++from datetime import datetime, timezone
++
++VERSION = "outside-voice-job.py 0.1.0"
++
++SCHEMA_VERSION = 1
++
++# `--bg --exec`、`--safe-mode` 与含 `--all`/`id`/`state` 的 agents JSON 的**共同**能力下限
++# 〔design.md ADR-1 grill-amendment〕。版本只是必要条件，真实 dispatch 才是最终能力探针。
++MIN_CLAUDE_VERSION = (2, 1, 169)
++
++# 每轮每层实际 background voice 站点上限（design.md Non-Functional Requirements）。
++MAX_SITES_PER_RUN = 2
++
++# dispatch 的 monotonic deadline（秒）。超时 MUST 回收 spawn 进程树。
++DISPATCH_DEADLINE_SECONDS = 5.0
++
++# worker 启动的**独立**短 deadline（秒）：与 worker 自身的 timeout 分开，避免用 dispatch
++# 时刻误杀排队中的合法 worker。只写进 job metadata 供 Task 2 的 status 派生消费。
++STARTUP_DEADLINE_SECONDS = 5
++
++DEFAULT_TIMEOUT_SECONDS = 900
++MIN_TIMEOUT_SECONDS = 1
++MAX_TIMEOUT_SECONDS = 3600
++
++HELPER_NAME = "outside-voice.sh"
++MANIFEST_NAME = "capability-manifest.json"
++# 同代安装快照的成员：job helper + shell helper + 所需 data file。任一漂移即 preflight
++# fail-closed（design.md Failure Modes「helper/skill/data 安装 skew」）。
++MANIFEST_ENTRIES = ("outside-voice-job.py", "outside-voice.sh", "skill-principles.md")
++
++# `<site>` 直接参与文件名拼装 ⇒ 字符集 MUST 收紧（挡 `../` 越目录与 shell 元字符）。
++SITE_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
++# run-id 同样进 argv（且默认取自 run-dir basename）⇒ 同样收紧，别把「shlex 会 quote」
++# 当成可以放任任意串的理由（quoting 是最后一道，不是唯一一道）。
++RUN_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
++MODEL_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}\Z")
++EFFORT_VALUES = ("low", "medium", "high")
++RUNNER_VALUES = ("claude", "codex")
++# v1 background transport 只在这两个已过 quoting/injection golden 的 POSIX 平台 ready。
++SUPPORTED_SYS_PLATFORMS = ("darwin", "linux")
++
++JOB_DIR = os.path.dirname(os.path.abspath(__file__))
++
++
++# ── 基础工具 ──────────────────────────────────────────────────────────────────
++
++def utc_now_iso():
++    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def utc_iso_plus(seconds):
++    ts = datetime.now(timezone.utc).timestamp() + seconds
++    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def sha256_file(path):
++    digest = hashlib.sha256()
++    with open(path, "rb") as fh:
++        for chunk in iter(lambda: fh.read(65536), b""):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def atomic_write_json(path, payload, mode=0o600):
++    """临时文件 + atomic rename 发布 JSON —— 读者永远看不到半成品。"""
++    path = str(path)
++    directory = os.path.dirname(path) or "."
++    fd, tmp = tempfile.mkstemp(dir=directory, prefix=".tmp-" + os.path.basename(path) + "-")
++    try:
++        os.fchmod(fd, mode)
++        with os.fdopen(fd, "w", encoding="utf-8") as fh:
++            json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
++            fh.write("\n")
++            fh.flush()
++            os.fsync(fh.fileno())
++        os.replace(tmp, path)
++        tmp = None
++    finally:
++        if tmp is not None and os.path.exists(tmp):
++            os.unlink(tmp)
++    return path
++
++
++def emit(payload, stream=None):
++    (stream or sys.stdout).write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
++
++
++# ── capability manifest（同代安装快照）────────────────────────────────────────
++
++def manifest_generation(entries):
++    blob = json.dumps(entries, sort_keys=True, ensure_ascii=False).encode("utf-8")
++    return hashlib.sha256(blob).hexdigest()
++
++
++def compute_manifest(directory, entries=MANIFEST_ENTRIES):
++    digests = {}
++    for name in entries:
++        digests[name] = sha256_file(os.path.join(str(directory), name))
++    return {
++        "schema_version": SCHEMA_VERSION,
++        "entries": digests,
++        "generation": manifest_generation(digests),
++    }
++
++
++def write_manifest(directory, entries=MANIFEST_ENTRIES):
++    """写出同代安装快照。由 setup.sh 的安装步与测试共用同一份计算，防两份口径漂移。"""
++    payload = compute_manifest(directory, entries)
++    atomic_write_json(os.path.join(str(directory), MANIFEST_NAME), payload, mode=0o644)
++    return payload
++
++
++def verify_manifest(directory=None):
++    directory = str(directory or JOB_DIR)
++    path = os.path.join(directory, MANIFEST_NAME)
++    hint = "安装快照不一致——在运行 checkout 重跑 `bash setup.sh` 刷新 ~/.sdflow/hack/"
++    if not os.path.isfile(path):
++        return {"ok": False, "detail": "capability manifest 缺失: %s" % path, "hint": hint}
++    try:
++        with open(path, "r", encoding="utf-8") as fh:
++            data = json.load(fh)
++    except Exception as exc:
++        return {"ok": False, "detail": "capability manifest 不可解析: %s" % exc, "hint": hint}
++    if not isinstance(data, dict) or data.get("schema_version") != SCHEMA_VERSION:
++        return {"ok": False, "detail": "capability manifest schema_version 不受支持", "hint": hint}
++    entries = data.get("entries")
++    if not isinstance(entries, dict):
++        return {"ok": False, "detail": "capability manifest entries 形状非法", "hint": hint}
++    if sorted(entries) != sorted(MANIFEST_ENTRIES):
++        return {"ok": False,
++                "detail": "capability manifest 成员集与本代不符: %s" % sorted(entries),
++                "hint": hint}
++    if data.get("generation") != manifest_generation(entries):
++        return {"ok": False,
++                "detail": "capability manifest generation 与 entries 不自洽（疑似手改）",
++                "hint": hint}
++    skew = []
++    for name, expected in sorted(entries.items()):
++        target = os.path.join(directory, name)
++        if not os.path.isfile(target):
++            skew.append("%s 缺失" % name)
++            continue
++        if sha256_file(target) != expected:
++            skew.append("%s 内容与快照不符" % name)
++    if skew:
++        return {"ok": False, "detail": "安装 skew: " + "; ".join(skew), "hint": hint}
++    return {"ok": True, "detail": "generation=%s" % data["generation"], "hint": ""}
++
++
++# ── preflight 各项检查（全部无副作用）────────────────────────────────────────
++
++def _run_cli(argv, timeout):
++    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
++
++
++def check_posix_shell():
++    if os.name != "posix":
++        return {"ok": False,
++                "detail": "os.name=%r" % os.name,
++                "hint": "v1 后台通道只支持 POSIX 平台（darwin/linux）——其他平台一律同族 fallback"}
++    if sys.platform not in SUPPORTED_SYS_PLATFORMS:
++        return {"ok": False,
++                "detail": "sys.platform=%r" % sys.platform,
++                "hint": "v1 后台通道只支持 POSIX 平台（darwin/linux）——其他平台一律同族 fallback"}
++    if not os.access("/bin/sh", os.X_OK):
++        return {"ok": False,
++                "detail": "/bin/sh 不可执行",
++                "hint": "v1 后台通道要求可用的 POSIX shell（/bin/sh）"}
++    return {"ok": True, "detail": "%s / /bin/sh" % sys.platform, "hint": ""}
++
++
++def check_claude_version(claude_bin):
++    hint = ("升级 Claude Code 到 %s 或更高（npm i -g @anthropic-ai/claude-code）——"
++            "它是 `--bg --exec`、`--safe-mode` 与 agents JSON 的共同能力下限"
++            % ".".join(str(x) for x in MIN_CLAUDE_VERSION))
++    if not claude_bin:
++        return {"ok": False, "detail": "PATH 上找不到 claude", "hint": hint}
++    try:
++        proc = _run_cli([claude_bin, "--version"], timeout=30)
++    except Exception as exc:
++        return {"ok": False, "detail": "claude --version 调用失败: %s" % exc, "hint": hint}
++    if proc.returncode != 0:
++        return {"ok": False, "detail": "claude --version 非零退出 rc=%d" % proc.returncode, "hint": hint}
++    match = re.search(r"(\d+)\.(\d+)\.(\d+)", proc.stdout or "")
++    if not match:
++        return {"ok": False, "detail": "claude --version 输出不可解析: %r" % (proc.stdout,), "hint": hint}
++    found = tuple(int(x) for x in match.groups())
++    if found < MIN_CLAUDE_VERSION:
++        return {"ok": False,
++                "detail": "claude %s < %s" % (".".join(str(x) for x in found),
++                                              ".".join(str(x) for x in MIN_CLAUDE_VERSION)),
++                "hint": hint}
++    return {"ok": True, "detail": ".".join(str(x) for x in found), "hint": ""}
++
++
++def check_agents_json(claude_bin):
++    hint = ("`claude agents --all --json` 不可用——agent view 可能被 `disableAgentView` "
++            "策略禁用；解除该策略（或改用同族 fallback）后重试")
++    if not claude_bin:
++        return {"ok": False, "detail": "PATH 上找不到 claude", "hint": hint}
++    try:
++        proc = _run_cli([claude_bin, "agents", "--all", "--json"], timeout=30)
++    except Exception as exc:
++        return {"ok": False, "detail": "agents --all --json 调用失败: %s" % exc, "hint": hint}
++    if proc.returncode != 0:
++        return {"ok": False,
++                "detail": "agents --all --json 非零退出 rc=%d" % proc.returncode,
++                "hint": hint}
++    try:
++        data = json.loads(proc.stdout)
++    except Exception as exc:
++        return {"ok": False, "detail": "agents JSON 不可解析: %s" % exc, "hint": hint}
++    if not isinstance(data, list):
++        return {"ok": False, "detail": "agents JSON 顶层不是 list: %s" % type(data).__name__, "hint": hint}
++    return {"ok": True, "detail": "%d 个会话" % len(data), "hint": ""}
++
++
++def run_preflight(job_dir=None):
++    """无副作用能力探针。MUST NOT 创建 dummy job、MUST NOT 触发任何外部状态变更。"""
++    job_dir = str(job_dir or JOB_DIR)
++    claude_bin = shutil.which("claude")
++    checks = {
++        "posix-shell": check_posix_shell(),
++        "claude-version": check_claude_version(claude_bin),
++        "agents-json": check_agents_json(claude_bin),
++        "capability-manifest": verify_manifest(job_dir),
++    }
++    ok = all(item["ok"] for item in checks.values())
++    return {
++        "ok": ok,
++        "reason_code": "ready" if ok else "preflight-error",
++        "claude_bin": claude_bin or "",
++        "job_dir": job_dir,
++        "checks": checks,
++    }
++
++
++def _print_preflight_hints(result, stream=None):
++    stream = stream or sys.stderr
++    for name, item in sorted(result["checks"].items()):
++        if item["ok"]:
++            continue
++        stream.write("preflight 未通过 [%s]: %s\n" % (name, item["detail"]))
++        if item.get("hint"):
++            stream.write("  → %s\n" % item["hint"])
++
++
++# ── reservation ───────────────────────────────────────────────────────────────
++
++def reserve_path(run_dir, site):
++    return os.path.join(str(run_dir), site + ".reserve")
++
++
++def job_path(run_dir, site):
++    return os.path.join(str(run_dir), site + ".job.json")
++
++
++def classify_existing_reserve(run_dir, site):
++    """已存在的 reserve 归类：有 job metadata = 重复派发；无 = unknown-cost。
++
++    unknown-cost 的语义（design.md Sequence and Concurrency）：外部 dispatch 可能已被
++    接受但 metadata 未发布 ⇒ 成本未知。此时 **MUST NOT 自动重派、MUST NOT 立即 fallback**
++    （两者都会叠加一次模型费用），只允许显式 reconcile / 人工 cleanup（Task 3）。
++    """
++    if os.path.exists(job_path(run_dir, site)):
++        return ("duplicate-site",
++                "site=%s 在本 run 已有 job metadata —— 同 site 重复派发是硬失败" % site)
++    return ("unknown-cost",
++            "site=%s 存在残留 reserve 但无 job metadata（dispatch accepted 与 metadata "
++            "发布之间可能已崩溃）—— 成本未知，只允许显式 reconcile/人工 cleanup" % site)
++
++
++def acquire_reservation(run_dir, site, nonce, run_id):
++    """`O_CREAT|O_EXCL` 建 reservation，并原子核验 slot 上限。
++
++    返回 (ok, state, detail)。ok=False 时**不会**留下自己的 reserve。
++    """
++    path = reserve_path(run_dir, site)
++    payload = {
++        "schema_version": SCHEMA_VERSION,
++        "site": site,
++        "run_id": run_id,
++        "attempt_nonce": nonce,
++        "created_at": utc_now_iso(),
++        "dispatcher_pid": os.getpid(),
++    }
++    try:
++        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
++    except FileExistsError:
++        state, detail = classify_existing_reserve(run_dir, site)
++        return (False, state, detail)
++    with os.fdopen(fd, "w", encoding="utf-8") as fh:
++        json.dump(payload, fh, ensure_ascii=False, sort_keys=True)
++        fh.write("\n")
++    # slot 上限：先原子占坑、再数坑——超限就把自己的坑退回去（此刻尚无任何外部副作用）。
++    held = sorted(name for name in os.listdir(str(run_dir)) if name.endswith(".reserve"))
++    if len(held) > MAX_SITES_PER_RUN:
++        os.unlink(path)
++        return (False, "slot-limit",
++                "本 run 已有 %d 个 reservation（上限 %d）——第三个不同 site 一律 fail-closed: %s"
++                % (len(held) - 1, MAX_SITES_PER_RUN, ", ".join(held)))
++    return (True, "reserved", path)
++
++
++# ── dispatch ──────────────────────────────────────────────────────────────────
++
++def _reject(message, state="usage-error", reason_code="preflight-error",
++            fallback_allowed=True, **extra):
++    payload = {"ok": False, "reason_code": reason_code, "state": state,
++               "fallback_allowed": fallback_allowed, "detail": message}
++    payload.update(extra)
++    return payload
++
++
++def _no_control_chars(value):
++    return "\n" not in value and "\r" not in value and "\0" not in value
++
++
++def _within(child, parent):
++    child = os.path.realpath(child)
++    parent = os.path.realpath(parent)
++    return child == parent or child.startswith(parent + os.sep)
++
++
++def build_worker_command(job_dir, run_dir, site, ctx, repo_root, runner, model,
++                         effort, timeout, nonce, run_id):
++    """组一条**唯一** shell command。
++
++    只携带受校验的绝对路径、runner/model 与 timeout —— MUST NOT 携带 prompt 正文
++    （context 只以路径形式出现，正文由 worker 下游的 outside-voice.sh 自己读）。
++    v1 仅在已验证的 POSIX shell 上用 `shlex.join` quoting；未验证的平台由 preflight
++    fail-closed，不在这里假装跨平台安全。
++    """
++    argv = [
++        sys.executable,
++        os.path.join(str(job_dir), "outside-voice-job.py"),
++        "worker",
++        "--run-dir", str(run_dir),
++        "--site", site,
++        "--context-file", str(ctx),
++        "--repo-root", str(repo_root),
++        "--runner", runner,
++        "--model", model,
++        "--effort", effort,
++        "--timeout", str(timeout),
++        "--attempt-nonce", nonce,
++        "--run-id", run_id,
++    ]
++    for part in argv:
++        if not _no_control_chars(part):
++            raise ValueError("命令参数含换行/回车/NUL，拒绝组装: %r" % part)
++    return shlex.join(argv)
++
++
++def _kill_process_tree(proc):
++    """回收 spawn 进程树：proc 以 start_new_session=True 起，故它就是组长。"""
++    try:
++        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
++    except Exception:
++        try:
++            proc.kill()
++        except Exception:
++            pass
++    try:
++        proc.wait(timeout=5)
++    except Exception:
++        pass
++
++
++def _parse_job_id_hint(stdout_text):
++    """从 `backgrounded · <id> · <cmd>` 里取 short id（**仅作交叉核验线索**）。
++
++    权威 id 来自 `claude agents --all --json` 里唯一携带本次 attempt nonce 的条目；
++    此处解析失败只是拿不到第二个信号，不构成失败判据（格式属 research preview，会漂）。
++    """
++    for line in (stdout_text or "").splitlines():
++        idx = line.find("backgrounded")
++        if idx < 0:
++            continue
++        match = re.search(r"\b([0-9a-f]{6,40})\b", line[idx + len("backgrounded"):])
++        if match:
++            return match.group(1)
++    return None
++
++
++def find_jobs_by_nonce(claude_bin, nonce, deadline_monotonic):
++    """轮询 agents JSON，找出**所有**命令串里携带本次 attempt nonce 的 background job。
++
++    nonce 由 `secrets.token_hex` 生成、只出现在本次下发命令里 ⇒ 它是「外部 job 是否
++    真的产生了」这件事的**机械信号**（而不是靠 dispatch 自述成功）。
++    """
++    matches = []
++    while True:
++        try:
++            proc = _run_cli([claude_bin, "agents", "--all", "--json"], timeout=30)
++            data = json.loads(proc.stdout) if proc.returncode == 0 else []
++        except Exception:
++            data = []
++        if isinstance(data, list):
++            matches = [item for item in data
++                       if isinstance(item, dict)
++                       and item.get("kind") == "background"
++                       and nonce in str(item.get("name") or "")]
++        if matches or time.monotonic() >= deadline_monotonic:
++            return matches
++        time.sleep(0.2)
++
++
++def cmd_dispatch(args):
++    job_dir = JOB_DIR
++    site = args.site or ""
++    if not SITE_RE.match(site):
++        return 1, _reject("site 名非法（只允许 [A-Za-z0-9._-]，且不得以 . - 开头）: %r" % site,
++                          state="usage-error", fallback_allowed=False, site=site)
++    if not MODEL_RE.match(args.model or ""):
++        return 1, _reject("model 名非法: %r" % (args.model,), state="usage-error",
++                          fallback_allowed=False, site=site)
++    if args.effort not in EFFORT_VALUES:
++        return 1, _reject("effort 非法: %r" % (args.effort,), state="usage-error",
++                          fallback_allowed=False, site=site)
++    if args.runner not in RUNNER_VALUES:
++        return 1, _reject("runner 非法: %r" % (args.runner,), state="usage-error",
++                          fallback_allowed=False, site=site)
++    if not (MIN_TIMEOUT_SECONDS <= args.timeout <= MAX_TIMEOUT_SECONDS):
++        return 1, _reject("timeout 越界（合法 %d..%d）: %d"
++                          % (MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS, args.timeout),
++                          state="usage-error", fallback_allowed=False, site=site)
++
++    run_dir = os.path.realpath(args.run_dir)
++    repo_root = os.path.realpath(args.repo_root)
++    ctx = os.path.realpath(args.context_file)
++    for label, path in (("run-dir", args.run_dir), ("repo-root", args.repo_root),
++                        ("context-file", args.context_file)):
++        if not _no_control_chars(path):
++            return 1, _reject("%s 路径含换行/NUL: %r" % (label, path), state="usage-error",
++                              fallback_allowed=False, site=site)
++        if not os.path.isabs(path):
++            return 1, _reject("%s MUST 为绝对路径: %r" % (label, path), state="usage-error",
++                              fallback_allowed=False, site=site)
++    if not os.path.isdir(run_dir):
++        return 1, _reject("run-dir 不存在: %s" % run_dir, state="usage-error",
++                          fallback_allowed=False, site=site)
++    if not os.path.isfile(ctx) or not os.access(ctx, os.R_OK):
++        return 1, _reject("context-file 不存在或不可读: %s" % ctx, state="usage-error",
++                          fallback_allowed=False, site=site)
++    if not _within(run_dir, repo_root):
++        return 1, _reject("run-dir 越出 repo root: %s ⊄ %s" % (run_dir, repo_root),
++                          state="usage-error", fallback_allowed=False, site=site)
++    if not _within(ctx, repo_root):
++        return 1, _reject("context-file 越出 repo root: %s ⊄ %s" % (ctx, repo_root),
++                          state="usage-error", fallback_allowed=False, site=site)
++
++    run_id = args.run_id or os.path.basename(run_dir)
++    if not RUN_ID_RE.match(run_id):
++        return 1, _reject("run-id 非法（只允许 [A-Za-z0-9._-]）: %r" % run_id,
++                          state="usage-error", fallback_allowed=False, site=site)
++
++    pre = run_preflight(job_dir)
++    if not pre["ok"]:
++        _print_preflight_hints(pre)
++        return 1, _reject("preflight 未通过——不发起后台派发，立即同族 fallback",
++                          state="preflight-error", reason_code="preflight-error",
++                          fallback_allowed=True, site=site, checks=pre["checks"])
++    claude_bin = pre["claude_bin"]
++
++    nonce = secrets.token_hex(16)
++    ok, state, detail = acquire_reservation(run_dir, site, nonce, run_id)
++    if not ok:
++        # duplicate-site / slot-limit / unknown-cost 一律是硬失败：MUST NOT 靠 fallback
++        # 把「可能已经花掉的一次模型调用」再花第二次。
++        return 1, _reject(detail, state=state, reason_code="exec-error",
++                          fallback_allowed=False, site=site)
++
++    try:
++        command = build_worker_command(job_dir, run_dir, site, ctx, repo_root, args.runner,
++                                       args.model, args.effort, args.timeout, nonce, run_id)
++    except ValueError as exc:
++        os.unlink(reserve_path(run_dir, site))
++        return 1, _reject(str(exc), state="usage-error", fallback_allowed=False, site=site)
++
++    dispatched_at = utc_now_iso()
++    startup_deadline_at = utc_iso_plus(STARTUP_DEADLINE_SECONDS)
++    start = time.monotonic()
++    deadline = start + DISPATCH_DEADLINE_SECONDS
++    timed_out = False
++    stdout_text = ""
++    stderr_text = ""
++    rc = None
++    try:
++        proc = subprocess.Popen(
++            [claude_bin, "--bg", "--exec", command],
++            cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
++            text=True, start_new_session=True,
++        )
++    except Exception as exc:
++        os.unlink(reserve_path(run_dir, site))
++        return 1, _reject("claude --bg --exec 无法启动: %s" % exc, state="exec-error",
++                          reason_code="exec-error", fallback_allowed=True, site=site)
++    try:
++        stdout_text, stderr_text = proc.communicate(timeout=max(0.05, deadline - time.monotonic()))
++        rc = proc.returncode
++    except subprocess.TimeoutExpired:
++        timed_out = True
++        _kill_process_tree(proc)
++        try:
++            stdout_text, stderr_text = proc.communicate(timeout=5)
++        except Exception:
++            stdout_text, stderr_text = "", ""
++    duration = time.monotonic() - start
++
++    # 外部 job 是否真的产生了 —— 只认 attempt nonce 在 agents JSON 里的机械命中。
++    lookup_deadline = deadline if not timed_out else time.monotonic()
++    matches = find_jobs_by_nonce(claude_bin, nonce, lookup_deadline)
++
++    if timed_out or rc != 0:
++        why = ("dispatch 超过 monotonic %.0f 秒 deadline" % DISPATCH_DEADLINE_SECONDS
++               if timed_out else "claude --bg --exec 非零退出 rc=%s" % rc)
++        if matches:
++            # 外部 job 已存在但本次没能完整发布 metadata ⇒ 成本未知，reserve 留给 reconcile。
++            return 1, _reject(
++                "%s，但已检出携带本次 attempt nonce 的外部 job（%d 个）——成本未知，"
++                "禁止自动重派、禁止立即 fallback，请用显式 reconcile 处理"
++                % (why, len(matches)),
++                state="unknown-cost", reason_code="exec-error", fallback_allowed=False,
++                site=site, run_dir=run_dir, attempt_nonce=nonce,
++                dispatch_duration_seconds=round(duration, 3),
++                stderr_bytes=len(stderr_text or ""))
++        # 尚未产生外部 job ⇒ 清理 reserve，允许 5 秒级同族 fallback。
++        try:
++            os.unlink(reserve_path(run_dir, site))
++        except OSError:
++            pass
++        return 1, _reject("%s；未检出任何携带本次 attempt nonce 的外部 job，已回收 reservation" % why,
++                          state="exec-error", reason_code="exec-error", fallback_allowed=True,
++                          site=site, run_dir=run_dir,
++                          dispatch_duration_seconds=round(duration, 3),
++                          stderr_bytes=len(stderr_text or ""))
++
++    if len(matches) != 1:
++        return 1, _reject(
++            "无法核验唯一 canonical job id：携带本次 attempt nonce 的 background job 有 %d 个"
++            % len(matches),
++            state="unknown-cost", reason_code="exec-error", fallback_allowed=False,
++            site=site, run_dir=run_dir, attempt_nonce=nonce,
++            dispatch_duration_seconds=round(duration, 3))
++
++    job = matches[0]
++    job_id = str(job.get("id") or "")
++    if not job_id:
++        return 1, _reject("匹配到的 background job 无 id 字段", state="unknown-cost",
++                          reason_code="exec-error", fallback_allowed=False, site=site)
++    hint = _parse_job_id_hint(stdout_text)
++    if hint and hint != job_id:
++        return 1, _reject(
++            "canonical job id 交叉核验不一致：dispatch stdout=%s，agents JSON=%s" % (hint, job_id),
++            state="unknown-cost", reason_code="exec-error", fallback_allowed=False, site=site)
++
++    metadata = {
++        "schema_version": SCHEMA_VERSION,
++        "run_id": run_id,
++        "site": site,
++        "repo_root": repo_root,
++        "run_dir": run_dir,
++        "context_file": ctx,
++        "attempt_nonce": nonce,
++        "runner": args.runner,
++        "model": args.model,
++        "effort": args.effort,
++        "platform": os.name,
++        "sys_platform": sys.platform,
++        "job_id": job_id,
++        "session_id": job.get("sessionId"),
++        "dispatched_at": dispatched_at,
++        "startup_deadline_at": startup_deadline_at,
++        "timeout_seconds": args.timeout,
++        "command_sha256": hashlib.sha256(command.encode("utf-8")).hexdigest(),
++        "job_helper_version": VERSION,
++        "dispatch_duration_seconds": round(duration, 3),
++    }
++    atomic_write_json(job_path(run_dir, site), metadata, mode=0o600)
++
++    return 0, {
++        "ok": True,
++        "reason_code": "ok",
++        "state": "dispatched",
++        "site": site,
++        "run_dir": run_dir,
++        "run_id": run_id,
++        "job_id": job_id,
++        "session_id": job.get("sessionId"),
++        "attempt_nonce": nonce,
++        "dispatched_at": dispatched_at,
++        "dispatch_duration_seconds": round(duration, 3),
++        "timeout_seconds": args.timeout,
++        "runner": args.runner,
++        "model": args.model,
++        "effort": args.effort,
++    }
++
++
++# ── worker ────────────────────────────────────────────────────────────────────
++
++def publish_started(run_dir, site, nonce, run_id):
++    payload = {
++        "schema_version": SCHEMA_VERSION,
++        "site": site,
++        "run_id": run_id,
++        "attempt_nonce": nonce,
++        "started_at": utc_now_iso(),
++        "worker": {
++            "pid": os.getpid(),
++            "ppid": os.getppid(),
++            "pgid": os.getpgid(0),
++            "sid": os.getsid(0),
++            "executable": sys.executable,
++        },
++    }
++    atomic_write_json(os.path.join(str(run_dir), site + ".started.json"), payload, mode=0o600)
++    return payload
++
++
++def publish_rc(run_dir, site, rc):
++    """rc 是**唯一终态发布点** ⇒ 临时文件 + atomic rename，且恒为纯十进制。"""
++    path = os.path.join(str(run_dir), site + ".rc")
++    fd, tmp = tempfile.mkstemp(dir=str(run_dir), prefix=".tmp-" + site + ".rc-")
++    try:
++        os.fchmod(fd, 0o600)
++        with os.fdopen(fd, "w", encoding="utf-8") as fh:
++            fh.write("%d" % rc)
++            fh.flush()
++            os.fsync(fh.fileno())
++        os.replace(tmp, path)
++        tmp = None
++    finally:
++        if tmp is not None and os.path.exists(tmp):
++            os.unlink(tmp)
++    return path
++
++
++def publish_terminal(run_dir, site, nonce, run_id, rc):
++    """先写 terminal witness，**再**原子发布 rc —— 顺序是契约，不是风格。
++
++    collect 只在 rc 出现后才读 stdout；若 rc 先于 witness 落盘，就会出现「已判终态却
++    没有可核验的 digest」的窗口，等于把半成品放进 findings 池的门开了一条缝。
++    """
++    stdout_path = os.path.join(str(run_dir), site + ".stdout")
++    stderr_path = os.path.join(str(run_dir), site + ".stderr")
++    digest = sha256_file(stdout_path) if os.path.isfile(stdout_path) else None
++    payload = {
++        "schema_version": SCHEMA_VERSION,
++        "site": site,
++        "run_id": run_id,
++        "attempt_nonce": nonce,
++        "terminal_at": utc_now_iso(),
++        "stdout_sha256": digest,
++        "stdout_bytes": os.path.getsize(stdout_path) if os.path.isfile(stdout_path) else 0,
++        "stderr_bytes": os.path.getsize(stderr_path) if os.path.isfile(stderr_path) else 0,
++    }
++    atomic_write_json(os.path.join(str(run_dir), site + ".terminal.json"), payload, mode=0o600)
++    publish_rc(run_dir, site, rc)
++    return payload
++
++
++def cmd_worker(args):
++    run_dir = args.run_dir
++    site = args.site
++    if not SITE_RE.match(site or ""):
++        sys.stderr.write("worker: site 名非法: %r\n" % (site,))
++        return 2, None
++    if not os.path.isdir(run_dir):
++        sys.stderr.write("worker: run-dir 不存在: %s\n" % run_dir)
++        return 2, None
++
++    # 🔴 第一动作：在执行**任何**可携带 payload 的代码之前完成重定向。
++    # 目的不是省事，是不让原始输出流经 outer supervisor 的 transcript
++    # （`claude logs <id>` 可读）——那是一条未经出境 secret scan 的旁路出境面。
++    out_fd = os.open(os.path.join(run_dir, site + ".stdout"),
++                     os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
++    err_fd = os.open(os.path.join(run_dir, site + ".stderr"),
++                     os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
++    try:
++        sys.stdout.flush()
++        sys.stderr.flush()
++    except Exception:
++        pass
++    os.dup2(out_fd, 1)
++    os.dup2(err_fd, 2)
++    os.close(out_fd)
++    os.close(err_fd)
++
++    publish_started(run_dir, site, args.attempt_nonce, args.run_id)
++
++    helper = os.path.join(JOB_DIR, HELPER_NAME)
++    env = os.environ.copy()
++    env["SDFLOW_VOICE_RUNNER"] = args.runner
++    if args.model:
++        env["SDFLOW_VOICE_MODEL"] = args.model
++    rc = 127
++    try:
++        if not os.path.isfile(helper):
++            sys.stderr.write("worker: shell helper 缺失: %s\n" % helper)
++        else:
++            rc = subprocess.call(
++                ["bash", helper, "exec", "--context-file", args.context_file,
++                 "--timeout", str(args.timeout)],
++                cwd=args.repo_root if os.path.isdir(args.repo_root) else None,
++                stdin=subprocess.DEVNULL,
++            )
++    except Exception as exc:
++        sys.stderr.write("worker: helper 启动失败: %s\n" % exc)
++        rc = 126
++    # 被信号杀死时 subprocess 返回负数；按 shell 惯例归一成 128+signum，保证 rc 恒为纯十进制。
++    if rc < 0:
++        rc = 128 + (-rc)
++    try:
++        sys.stdout.flush()
++        sys.stderr.flush()
++    except Exception:
++        pass
++    publish_terminal(run_dir, site, args.attempt_nonce, args.run_id, rc)
++    return 0, None
++
++
++# ── CLI ───────────────────────────────────────────────────────────────────────
++
++def build_parser():
++    parser = argparse.ArgumentParser(prog="outside-voice-job.py", add_help=True)
++    sub = parser.add_subparsers(dest="command")
++
++    sub.add_parser("version")
++    sub.add_parser("preflight")
++
++    def add_common(p):
++        p.add_argument("--run-dir", required=True)
++        p.add_argument("--site", required=True)
++        p.add_argument("--context-file", required=True)
++        p.add_argument("--repo-root", required=True)
++        p.add_argument("--runner", default="claude")
++        p.add_argument("--model", default="")
++        p.add_argument("--effort", default="high")
++        p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
++        p.add_argument("--run-id", default="")
++
++    dispatch = sub.add_parser("dispatch")
++    add_common(dispatch)
++
++    worker = sub.add_parser("worker")
++    add_common(worker)
++    worker.add_argument("--attempt-nonce", required=True)
++
++    return parser
++
++
++def main(argv=None):
++    parser = build_parser()
++    args = parser.parse_args(argv)
++    if args.command == "version":
++        sys.stdout.write(VERSION + "\n")
++        return 0
++    if args.command == "preflight":
++        result = run_preflight()
++        emit(result)
++        if not result["ok"]:
++            _print_preflight_hints(result)
++            return 1
++        return 0
++    if args.command == "dispatch":
++        code, payload = cmd_dispatch(args)
++        if payload is not None:
++            emit(payload)
++        return code
++    if args.command == "worker":
++        code, _ = cmd_worker(args)
++        return code
++    parser.print_usage(sys.stderr)
++    return 2
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/sdflow-init/tests/test_outside_voice_job.py b/sdflow-init/tests/test_outside_voice_job.py
+new file mode 100644
+index 0000000..e0bd702
+--- /dev/null
++++ b/sdflow-init/tests/test_outside_voice_job.py
+@@ -0,0 +1,785 @@
++"""outside-voice-job.py 的 Task 1 契约测试（preflight / reserve / dispatch / worker）。
++
++TDD 接缝（先定后写）——两处公共边界，测试只打这两处，不打内部实现：
++
++  ① **子命令 CLI 契约**：`preflight` / `dispatch` / `worker` 的 argv、stdout 上的
++     单行 JSON（`ok` / `reason_code` / `state` / `fallback_allowed` / `job_id` …）、
++     退出码与 stderr 上的 actionable 提示。
++  ② **sidecar 文件契约**：`<site>.reserve` / `<site>.job.json` / `<site>.started.json` /
++     `<site>.terminal.json` / `<site>.stdout` / `<site>.stderr` / `<site>.rc` 的
++     存在时序、原子发布、权限与字段。
++
++单测一律用 **fake `claude` 可执行** 与 **fake `outside-voice.sh` 替身**，MUST NOT 真调模型。
++唯一一条真机集成用例（跨 shell 存活）在文件末尾，缺 `claude` / 版本不足时 skip 并给出理由。
++"""
++
++import hashlib
++import importlib.util
++import json
++import os
++import re
++import shlex
++import shutil
++import stat
++import subprocess
++import sys
++import textwrap
++import time
++from pathlib import Path
++
++import pytest
++
++REPO = Path(__file__).resolve().parents[2]
++ASSETS = REPO / "sdflow-init" / "assets" / "hack"
++JOB_PY = ASSETS / "outside-voice-job.py"
++HELPER_SH = ASSETS / "outside-voice.sh"
++PRINCIPLES = ASSETS / "skill-principles.md"
++
++_SPEC = importlib.util.spec_from_file_location("sdflow_outside_voice_job", JOB_PY)
++JOB = importlib.util.module_from_spec(_SPEC)
++_SPEC.loader.exec_module(JOB)
++
++
++# ── fake claude ────────────────────────────────────────────────────────────────
++# 一个可配置的 `claude` 替身：记录每次 argv、按环境变量决定 --version / agents /
++# --bg --exec 三条路径的行为。所有测试对「外部副作用是否发生」的判定都落在它的
++# 调用日志上（而不是模型的自述），故它是本文件的机械锚底座。
++FAKE_CLAUDE = r'''#!/usr/bin/env python3
++import json, os, subprocess, sys, time, uuid
++
++argv = sys.argv[1:]
++log = os.environ.get("FAKE_CLAUDE_LOG")
++if log:
++    entry = {"argv": argv}
++    snap = os.environ.get("FAKE_CLAUDE_SNAPSHOT_DIR")
++    if snap and os.path.isdir(snap):
++        entry["entries"] = sorted(os.listdir(snap))
++    with open(log, "a", encoding="utf-8") as fh:
++        fh.write(json.dumps(entry) + "\n")
++
++state_path = os.environ.get("FAKE_CLAUDE_STATE", "")
++
++
++def load_state():
++    try:
++        with open(state_path, "r", encoding="utf-8") as fh:
++            return json.load(fh)
++    except Exception:
++        return None
++
++
++if argv[:1] == ["--version"]:
++    sys.stdout.write(os.environ.get("FAKE_CLAUDE_VERSION", "2.1.220 (Claude Code)") + "\n")
++    sys.exit(0)
++
++if argv[:1] == ["agents"]:
++    mode = os.environ.get("FAKE_CLAUDE_AGENTS_MODE", "from-state")
++    if mode == "disabled":
++        sys.stderr.write("agent view is disabled by policy (disableAgentView)\n")
++        sys.exit(1)
++    if mode == "notjson":
++        sys.stdout.write("not json at all\n")
++        sys.exit(0)
++    if mode == "notlist":
++        sys.stdout.write('{"sessions": []}\n')
++        sys.exit(0)
++    if mode == "empty":
++        sys.stdout.write("[]\n")
++        sys.exit(0)
++    st = load_state()
++    if not st:
++        sys.stdout.write("[]\n")
++        sys.exit(0)
++    base = {
++        "id": st["id"],
++        "cwd": st.get("cwd", os.getcwd()),
++        "kind": "background",
++        "startedAt": 1784974140034,
++        "sessionId": st["id"] + "-f13f-4c83-9bda-92067348905b",
++        "state": "working",
++        "name": st["command"],
++    }
++    if mode == "nomatch":
++        base["name"] = "some unrelated background command"
++        sys.stdout.write(json.dumps([base]) + "\n")
++        sys.exit(0)
++    if mode == "duplicate":
++        second = dict(base)
++        second["id"] = "dead" + st["id"][4:]
++        second["sessionId"] = second["id"] + "-0000-0000-0000-000000000000"
++        sys.stdout.write(json.dumps([base, second]) + "\n")
++        sys.exit(0)
++    sys.stdout.write(json.dumps([base]) + "\n")
++    sys.exit(0)
++
++if "--bg" in argv:
++    command = argv[argv.index("--exec") + 1] if "--exec" in argv else ""
++    mode = os.environ.get("FAKE_CLAUDE_BG_MODE", "ok")
++    job_id = os.environ.get("FAKE_CLAUDE_JOB_ID", uuid.uuid4().hex[:8])
++    if mode == "fail":
++        sys.stderr.write("dispatch refused\n")
++        sys.exit(1)
++    if os.environ.get("FAKE_CLAUDE_BG_WRITE_STATE", "1") == "1" and state_path:
++        with open(state_path, "w", encoding="utf-8") as fh:
++            json.dump({"id": job_id, "command": command, "cwd": os.getcwd()}, fh)
++    if mode == "hang":
++        child = subprocess.Popen(["sleep", "60"])
++        pid_file = os.environ.get("FAKE_CLAUDE_PID_FILE")
++        if pid_file:
++            with open(pid_file, "w", encoding="utf-8") as fh:
++                json.dump({"self": os.getpid(), "child": child.pid}, fh)
++        time.sleep(60)
++        sys.exit(0)
++    if mode == "run":
++        subprocess.Popen(command, shell=True, start_new_session=True)
++    sys.stdout.write("Starting background service…\n")
++    sys.stdout.write("backgrounded · %s · %s\n" % (job_id, command))
++    sys.exit(0)
++
++sys.stderr.write("fake claude: unhandled argv %r\n" % (argv,))
++sys.exit(2)
++'''
++
++# fake outside-voice.sh —— 只认 `exec --context-file <f> --timeout <n>` 这一条既有契约，
++# 不调任何模型；行为由环境变量 FAKE_HELPER_* 驱动。
++FAKE_HELPER = r'''#!/usr/bin/env bash
++set -u
++# 证明「started sidecar 在 child 起跑之前已发布」：child 自己看盘面，把结论写进 stdout。
++if [ -n "${FAKE_HELPER_STARTED_PROBE:-}" ]; then
++  if [ -f "$FAKE_HELPER_STARTED_PROBE" ]; then
++    echo "STARTED_SIDECAR_VISIBLE=yes"
++  else
++    echo "STARTED_SIDECAR_VISIBLE=no"
++  fi
++fi
++echo "fake-helper-stdout ${FAKE_HELPER_MARKER:-none}"
++echo "fake-helper-stderr" >&2
++sleep "${FAKE_HELPER_SLEEP:-0}"
++exit "${FAKE_HELPER_RC:-0}"
++'''
++
++
++def _write_exec(path, body):
++    path.write_text(body, encoding="utf-8")
++    path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
++    return path
++
++
++@pytest.fixture
++def job_home(tmp_path):
++    """一个「已安装」形态的 hack 目录：job helper + shell helper + data file + manifest。"""
++    home = tmp_path / "hack"
++    home.mkdir()
++    shutil.copy2(JOB_PY, home / "outside-voice-job.py")
++    shutil.copy2(HELPER_SH, home / "outside-voice.sh")
++    shutil.copy2(PRINCIPLES, home / "skill-principles.md")
++    JOB.write_manifest(home)
++    return home
++
++
++@pytest.fixture
++def fake_job_home(tmp_path):
++    """同上，但 shell helper 换成无模型替身（worker / 集成 smoke 用）。"""
++    home = tmp_path / "hack-fake"
++    home.mkdir()
++    shutil.copy2(JOB_PY, home / "outside-voice-job.py")
++    _write_exec(home / "outside-voice.sh", FAKE_HELPER)
++    shutil.copy2(PRINCIPLES, home / "skill-principles.md")
++    JOB.write_manifest(home)
++    return home
++
++
++@pytest.fixture
++def repo(tmp_path):
++    """一个最小仓：repo_root / run_dir / context 文件。"""
++    root = tmp_path / "repo"
++    run_dir = root / "openspec" / "changes" / "c1" / ".outside-voice" / "20260724T020000Z-Ab12Cd"
++    run_dir.mkdir(parents=True)
++    ctx = run_dir / "design-voice-context.md"
++    ctx.write_text("some evidence context\n", encoding="utf-8")
++    return {"root": root, "run_dir": run_dir, "ctx": ctx}
++
++
++@pytest.fixture
++def fake_claude(tmp_path):
++    bin_dir = tmp_path / "bin"
++    bin_dir.mkdir()
++    _write_exec(bin_dir / "claude", FAKE_CLAUDE)
++    return {
++        "bin_dir": bin_dir,
++        "log": tmp_path / "claude-invocations.jsonl",
++        "state": tmp_path / "claude-state.json",
++    }
++
++
++def _env(fake_claude, extra=None, run_dir=None):
++    env = os.environ.copy()
++    env.pop("SDFLOW_VOICE_RUNNER", None)
++    env.pop("SDFLOW_VOICE_MODEL", None)
++    env["PATH"] = str(fake_claude["bin_dir"]) + os.pathsep + env["PATH"]
++    env["FAKE_CLAUDE_LOG"] = str(fake_claude["log"])
++    env["FAKE_CLAUDE_STATE"] = str(fake_claude["state"])
++    if run_dir is not None:
++        env["FAKE_CLAUDE_SNAPSHOT_DIR"] = str(run_dir)
++    if extra:
++        env.update({k: str(v) for k, v in extra.items()})
++    return env
++
++
++def _invocations(fake_claude):
++    if not fake_claude["log"].exists():
++        return []
++    return [json.loads(line) for line in fake_claude["log"].read_text(encoding="utf-8").splitlines() if line.strip()]
++
++
++def _bg_invocations(fake_claude):
++    return [i for i in _invocations(fake_claude) if "--bg" in i["argv"] or "--exec" in i["argv"]]
++
++
++def _run_job(job_home, args, env, timeout=60, cwd=None):
++    return subprocess.run(
++        [sys.executable, str(job_home / "outside-voice-job.py"), *args],
++        capture_output=True, text=True, env=env, timeout=timeout,
++        cwd=str(cwd) if cwd else None,
++    )
++
++
++def _json_stdout(proc):
++    assert proc.stdout.strip(), "stdout 为空；stderr=%s" % proc.stderr
++    return json.loads(proc.stdout.strip().splitlines()[-1])
++
++
++def _dispatch_args(repo, job_home, site="design-voice", **over):
++    args = [
++        "dispatch",
++        "--run-dir", str(repo["run_dir"]),
++        "--site", site,
++        "--context-file", str(repo["ctx"]),
++        "--repo-root", str(repo["root"]),
++        "--runner", "claude",
++        "--model", "opus",
++        "--effort", "high",
++        "--timeout", "900",
++    ]
++    for key, value in over.items():
++        flag = "--" + key.replace("_", "-")
++        idx = args.index(flag)
++        args[idx + 1] = str(value)
++    return args
++
++
++# ── preflight ─────────────────────────────────────────────────────────────────
++
++def test_preflight_ready_on_supported_version_and_agents_json(job_home, fake_claude):
++    proc = _run_job(job_home, ["preflight"], _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, proc.stderr
++    assert payload["ok"] is True
++    assert payload["reason_code"] == "ready"
++    assert payload["checks"]["claude-version"]["ok"] is True
++    assert payload["checks"]["agents-json"]["ok"] is True
++    assert payload["checks"]["capability-manifest"]["ok"] is True
++    assert payload["checks"]["posix-shell"]["ok"] is True
++
++
++def test_preflight_has_no_external_side_effect_and_never_runs_bg_exec(job_home, fake_claude, repo):
++    before_home = sorted(p.name for p in job_home.iterdir())
++    before_run = sorted(p.name for p in repo["run_dir"].iterdir())
++
++    proc = _run_job(job_home, ["preflight"], _env(fake_claude, run_dir=repo["run_dir"]))
++
++    assert proc.returncode == 0, proc.stderr
++    # 负向 golden：任何一次 claude 调用都不得带 --bg / --exec
++    for inv in _invocations(fake_claude):
++        assert "--bg" not in inv["argv"], inv
++        assert "--exec" not in inv["argv"], inv
++        assert "true" not in inv["argv"], inv
++    # 无 dummy job：fake claude 的 state 文件只由 --bg 分支写
++    assert not fake_claude["state"].exists()
++    # 无任何落盘副作用
++    assert sorted(p.name for p in job_home.iterdir()) == before_home
++    assert sorted(p.name for p in repo["run_dir"].iterdir()) == before_run
++
++
++def test_preflight_fails_closed_on_old_claude_version(job_home, fake_claude):
++    env = _env(fake_claude, {"FAKE_CLAUDE_VERSION": "2.1.168 (Claude Code)"})
++    proc = _run_job(job_home, ["preflight"], env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["ok"] is False
++    assert payload["reason_code"] == "preflight-error"
++    assert payload["checks"]["claude-version"]["ok"] is False
++    assert "2.1.169" in proc.stderr
++    assert "升级" in proc.stderr or "upgrade" in proc.stderr.lower()
++
++
++def test_preflight_fails_closed_when_agent_view_disabled_by_policy(job_home, fake_claude):
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "disabled"})
++    proc = _run_job(job_home, ["preflight"], env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["checks"]["agents-json"]["ok"] is False
++    assert "disableAgentView" in proc.stderr
++
++
++def test_preflight_fails_closed_when_agents_json_top_level_is_not_a_list(job_home, fake_claude):
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "notlist"})
++    proc = _run_job(job_home, ["preflight"], env)
++    assert proc.returncode == 1
++    assert _json_stdout(proc)["checks"]["agents-json"]["ok"] is False
++
++
++def test_preflight_fails_closed_on_non_posix_platform(monkeypatch, job_home):
++    monkeypatch.setattr(JOB.os, "name", "nt")
++    result = JOB.check_posix_shell()
++    assert result["ok"] is False
++    assert "POSIX" in result["hint"]
++
++
++def test_preflight_fails_closed_on_capability_manifest_skew(job_home, fake_claude):
++    (job_home / "outside-voice.sh").write_text("# tampered\n", encoding="utf-8")
++    proc = _run_job(job_home, ["preflight"], _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["checks"]["capability-manifest"]["ok"] is False
++    assert "outside-voice.sh" in json.dumps(payload, ensure_ascii=False)
++    assert "setup.sh" in proc.stderr
++
++
++def test_preflight_fails_closed_on_missing_capability_manifest(job_home, fake_claude):
++    (job_home / JOB.MANIFEST_NAME).unlink()
++    proc = _run_job(job_home, ["preflight"], _env(fake_claude))
++    assert proc.returncode == 1
++    assert _json_stdout(proc)["checks"]["capability-manifest"]["ok"] is False
++    assert "setup.sh" in proc.stderr
++
++
++def test_preflight_fails_closed_when_manifest_generation_hand_edited(job_home, fake_claude):
++    path = job_home / JOB.MANIFEST_NAME
++    data = json.loads(path.read_text(encoding="utf-8"))
++    data["entries"]["outside-voice.sh"] = "0" * 64
++    path.write_text(json.dumps(data), encoding="utf-8")
++    proc = _run_job(job_home, ["preflight"], _env(fake_claude))
++    assert proc.returncode == 1
++    detail = json.dumps(_json_stdout(proc), ensure_ascii=False)
++    assert "generation" in detail
++
++
++# ── reservation（外部副作用之前的原子门）────────────────────────────────────────
++
++def test_reservation_exists_before_any_external_dispatch(job_home, fake_claude, repo):
++    env = _env(fake_claude, run_dir=repo["run_dir"])
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    assert proc.returncode == 0, proc.stderr
++    bg = _bg_invocations(fake_claude)
++    assert len(bg) == 1
++    assert "design-voice.reserve" in bg[0]["entries"], bg[0]
++
++
++def test_duplicate_site_is_rejected_before_external_side_effect(job_home, fake_claude, repo):
++    (repo["run_dir"] / "design-voice.reserve").write_text("{}", encoding="utf-8")
++    (repo["run_dir"] / "design-voice.job.json").write_text("{}", encoding="utf-8")
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "duplicate-site"
++    assert payload["fallback_allowed"] is False
++    assert _bg_invocations(fake_claude) == []
++
++
++def test_third_distinct_site_is_rejected_before_external_side_effect(job_home, fake_claude, repo):
++    for site in ("design-voice", "hr-tg"):
++        (repo["run_dir"] / (site + ".reserve")).write_text("{}", encoding="utf-8")
++        (repo["run_dir"] / (site + ".job.json")).write_text("{}", encoding="utf-8")
++    proc = _run_job(job_home, _dispatch_args(repo, job_home, site="third-voice"), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "slot-limit"
++    assert payload["fallback_allowed"] is False
++    assert _bg_invocations(fake_claude) == []
++    # 自己的 reserve 必须被回收，不留第三个坑
++    assert not (repo["run_dir"] / "third-voice.reserve").exists()
++
++
++def test_residual_reserve_without_metadata_is_unknown_cost(job_home, fake_claude, repo):
++    (repo["run_dir"] / "design-voice.reserve").write_text("{}", encoding="utf-8")
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "unknown-cost"
++    assert payload["fallback_allowed"] is False  # 禁止立即 fallback（防双倍计费）
++    assert _bg_invocations(fake_claude) == []    # 禁止自动重派
++    assert (repo["run_dir"] / "design-voice.reserve").exists()  # 证据保留给 reconcile
++
++
++# ── dispatch ──────────────────────────────────────────────────────────────────
++
++def test_dispatch_returns_within_monotonic_deadline_with_verified_job_id(job_home, fake_claude, repo):
++    env = _env(fake_claude, {"FAKE_CLAUDE_JOB_ID": "75d34378"})
++    started = time.monotonic()
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, proc.stderr
++    assert payload["ok"] is True
++    assert payload["job_id"] == "75d34378"
++    assert payload["reason_code"] == "ok"
++    assert elapsed < JOB.DISPATCH_DEADLINE_SECONDS + 10  # 进程启动开销宽放
++    assert payload["dispatch_duration_seconds"] < JOB.DISPATCH_DEADLINE_SECONDS
++
++
++def test_dispatch_writes_job_metadata_atomically_with_required_fields(job_home, fake_claude, repo):
++    env = _env(fake_claude, {"FAKE_CLAUDE_JOB_ID": "75d34378"})
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    assert proc.returncode == 0, proc.stderr
++    meta_path = repo["run_dir"] / "design-voice.job.json"
++    meta = json.loads(meta_path.read_text(encoding="utf-8"))
++    for field in ("schema_version", "run_id", "site", "repo_root", "attempt_nonce",
++                  "runner", "model", "effort", "platform", "job_id", "session_id",
++                  "dispatched_at", "startup_deadline_at", "timeout_seconds", "command_sha256"):
++        assert field in meta, field
++    assert meta["schema_version"] == JOB.SCHEMA_VERSION
++    assert meta["run_id"] == repo["run_dir"].name
++    assert meta["site"] == "design-voice"
++    assert meta["repo_root"] == str(repo["root"].resolve())
++    assert meta["runner"] == "claude"
++    assert meta["model"] == "opus"
++    assert meta["effort"] == "high"
++    assert meta["platform"] == "posix"
++    assert meta["timeout_seconds"] == 900
++    assert re.match(r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z", meta["dispatched_at"])
++    assert stat.S_IMODE(meta_path.stat().st_mode) == 0o600
++    # 命令摘要必须是真实下发命令的 sha256（不是自述）
++    command = _bg_invocations(fake_claude)[0]["argv"][-1]
++    assert meta["command_sha256"] == hashlib.sha256(command.encode("utf-8")).hexdigest()
++    # 原子发布：不得残留临时文件
++    assert [p.name for p in repo["run_dir"].glob(".tmp-*")] == []
++
++
++def test_dispatch_command_is_single_shell_quoted_worker_invocation(job_home, fake_claude, repo):
++    env = _env(fake_claude)
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    assert proc.returncode == 0, proc.stderr
++    command = _bg_invocations(fake_claude)[0]["argv"][-1]
++    parts = shlex.split(command)
++    assert parts[1] == str(job_home / "outside-voice-job.py")
++    assert parts[2] == "worker"
++    assert "--run-dir" in parts and str(repo["run_dir"].resolve()) in parts
++    assert "--site" in parts and "design-voice" in parts
++    assert "--timeout" in parts and "900" in parts
++    assert "\n" not in command and "\0" not in command
++    # 只带受校验的路径 / runner / model / timeout —— MUST NOT 携带 context 正文
++    assert "some evidence context" not in command
++
++
++def test_dispatch_reclaims_process_tree_and_reserve_when_deadline_expires(job_home, fake_claude, repo, tmp_path):
++    pid_file = tmp_path / "hang-pids.json"
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_BG_MODE": "hang",
++        "FAKE_CLAUDE_BG_WRITE_STATE": "0",   # 未产生外部 job
++        "FAKE_CLAUDE_AGENTS_MODE": "empty",
++        "FAKE_CLAUDE_PID_FILE": pid_file,
++    })
++    started = time.monotonic()
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env, timeout=60)
++    elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["reason_code"] == "exec-error"
++    assert payload["fallback_allowed"] is True
++    assert elapsed < 30, "monotonic 5 秒 deadline 未生效，实际 %.1fs" % elapsed
++    # 尚未产生外部 job 的 reserve 必须清理
++    assert not (repo["run_dir"] / "design-voice.reserve").exists()
++    # spawn 进程树被回收
++    pids = json.loads(pid_file.read_text(encoding="utf-8"))
++    deadline = time.monotonic() + 5
++    while time.monotonic() < deadline:
++        alive = [p for p in (pids["self"], pids["child"]) if _pid_alive(p)]
++        if not alive:
++            break
++        time.sleep(0.1)
++    assert not [p for p in (pids["self"], pids["child"]) if _pid_alive(p)], pids
++
++
++def _pid_alive(pid):
++    try:
++        os.kill(pid, 0)
++    except OSError:
++        return False
++    return True
++
++
++def test_dispatch_deadline_with_external_job_present_is_unknown_cost(job_home, fake_claude, repo, tmp_path):
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_BG_MODE": "hang",
++        "FAKE_CLAUDE_BG_WRITE_STATE": "1",   # 外部 job 已产生
++        "FAKE_CLAUDE_PID_FILE": tmp_path / "pids.json",
++    })
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "unknown-cost"
++    assert payload["fallback_allowed"] is False
++    assert (repo["run_dir"] / "design-voice.reserve").exists()
++    assert not (repo["run_dir"] / "design-voice.job.json").exists()
++
++
++def test_dispatch_fails_closed_when_canonical_job_id_is_not_unique(job_home, fake_claude, repo):
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "duplicate"})
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "unknown-cost"
++    assert payload["fallback_allowed"] is False
++
++
++def test_dispatch_fails_closed_when_no_job_carries_the_attempt_nonce(job_home, fake_claude, repo):
++    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "nomatch"})
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["state"] == "unknown-cost"
++    assert not (repo["run_dir"] / "design-voice.job.json").exists()
++
++
++def test_dispatch_fails_closed_and_frees_reserve_when_cli_refuses(job_home, fake_claude, repo):
++    env = _env(fake_claude, {"FAKE_CLAUDE_BG_MODE": "fail", "FAKE_CLAUDE_AGENTS_MODE": "empty"})
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["reason_code"] == "exec-error"
++    assert payload["fallback_allowed"] is True
++    assert not (repo["run_dir"] / "design-voice.reserve").exists()
++
++
++def test_dispatch_fails_closed_when_preflight_not_ready(job_home, fake_claude, repo):
++    env = _env(fake_claude, {"FAKE_CLAUDE_VERSION": "2.1.100 (Claude Code)"})
++    proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["reason_code"] == "preflight-error"
++    assert payload["fallback_allowed"] is True
++    assert _bg_invocations(fake_claude) == []
++    assert not (repo["run_dir"] / "design-voice.reserve").exists()
++
++
++@pytest.mark.parametrize("timeout", ["0", "3601", "abc"])
++def test_dispatch_rejects_out_of_range_timeout(job_home, fake_claude, repo, timeout):
++    proc = _run_job(job_home, _dispatch_args(repo, job_home, timeout=timeout), _env(fake_claude))
++    assert proc.returncode != 0
++    assert _bg_invocations(fake_claude) == []
++
++
++@pytest.mark.parametrize("site", ["../escape", "a/b", "with space", ""])
++def test_dispatch_rejects_unsafe_site_names(job_home, fake_claude, repo, site):
++    proc = _run_job(job_home, _dispatch_args(repo, job_home, site=site), _env(fake_claude))
++    assert proc.returncode != 0
++    assert _bg_invocations(fake_claude) == []
++
++
++@pytest.mark.parametrize("run_id", ["bad;rm -rf /", "with space", "../up"])
++def test_dispatch_rejects_unsafe_run_ids(job_home, fake_claude, repo, run_id):
++    args = _dispatch_args(repo, job_home) + ["--run-id", run_id]
++    proc = _run_job(job_home, args, _env(fake_claude))
++    assert proc.returncode != 0
++    assert _bg_invocations(fake_claude) == []
++    assert not (repo["run_dir"] / "design-voice.reserve").exists()
++
++
++def test_dispatch_rejects_context_file_outside_repo_root(job_home, fake_claude, repo, tmp_path):
++    outside = tmp_path / "outside-context.md"
++    outside.write_text("x\n", encoding="utf-8")
++    args = _dispatch_args(repo, job_home)
++    args[args.index("--context-file") + 1] = str(outside)
++    proc = _run_job(job_home, args, _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["ok"] is False
++    assert _bg_invocations(fake_claude) == []
++
++
++# ── worker ────────────────────────────────────────────────────────────────────
++
++def _worker_args(repo, site="design-voice", nonce="nonce-abc", timeout=30):
++    return [
++        "worker",
++        "--run-dir", str(repo["run_dir"]),
++        "--site", site,
++        "--context-file", str(repo["ctx"]),
++        "--repo-root", str(repo["root"]),
++        "--runner", "claude",
++        "--model", "opus",
++        "--effort", "high",
++        "--timeout", str(timeout),
++        "--attempt-nonce", nonce,
++        "--run-id", repo["run_dir"].name,
++    ]
++
++
++def test_worker_publishes_started_then_terminal_then_rc(fake_job_home, repo):
++    env = os.environ.copy()
++    env["FAKE_HELPER_MARKER"] = "hello"
++    env["FAKE_HELPER_STARTED_PROBE"] = str(repo["run_dir"] / "design-voice.started.json")
++    proc = _run_job(fake_job_home, _worker_args(repo), env, timeout=60)
++    assert proc.returncode == 0, proc.stderr
++
++    started = json.loads((repo["run_dir"] / "design-voice.started.json").read_text(encoding="utf-8"))
++    assert started["attempt_nonce"] == "nonce-abc"
++    assert re.match(r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z", started["started_at"])
++    assert started["worker"]["pid"] > 0
++    assert "pgid" in started["worker"] and "ppid" in started["worker"]
++
++    stdout_text = (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
++    assert "fake-helper-stdout hello" in stdout_text
++    # child 起跑时 started sidecar 必须已在盘面上（发布顺序的机械锚，非自述）
++    assert "STARTED_SIDECAR_VISIBLE=yes" in stdout_text
++
++    terminal = json.loads((repo["run_dir"] / "design-voice.terminal.json").read_text(encoding="utf-8"))
++    assert terminal["attempt_nonce"] == "nonce-abc"
++    assert terminal["stdout_sha256"] == hashlib.sha256(
++        (repo["run_dir"] / "design-voice.stdout").read_bytes()).hexdigest()
++    assert re.match(r"\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z", terminal["terminal_at"])
++
++    rc_path = repo["run_dir"] / "design-voice.rc"
++    assert rc_path.read_text(encoding="utf-8") == "0"
++    assert (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8").strip() == "fake-helper-stderr"
++
++
++def test_worker_output_files_are_0600(fake_job_home, repo):
++    proc = _run_job(fake_job_home, _worker_args(repo), os.environ.copy(), timeout=60)
++    assert proc.returncode == 0, proc.stderr
++    for name in ("design-voice.stdout", "design-voice.stderr", "design-voice.rc",
++                 "design-voice.started.json", "design-voice.terminal.json"):
++        mode = stat.S_IMODE((repo["run_dir"] / name).stat().st_mode)
++        assert mode == 0o600, (name, oct(mode))
++
++
++def test_worker_redirects_own_and_child_streams_before_running_payload(fake_job_home, repo):
++    """worker 自身与 child 的 stdout/stderr 都不得回流到 supervisor transcript。"""
++    proc = _run_job(fake_job_home, _worker_args(repo), os.environ.copy(), timeout=60)
++    assert proc.returncode == 0, proc.stderr
++    assert proc.stdout == ""
++    assert proc.stderr == ""
++    assert "fake-helper-stdout" in (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
++
++
++def test_worker_publishes_pure_decimal_rc_for_helper_timeout(fake_job_home, repo):
++    env = os.environ.copy()
++    env["FAKE_HELPER_RC"] = "124"
++    proc = _run_job(fake_job_home, _worker_args(repo), env, timeout=60)
++    assert proc.returncode == 0, proc.stderr
++    rc_text = (repo["run_dir"] / "design-voice.rc").read_text(encoding="utf-8")
++    assert rc_text == "124"
++    assert re.match(r"\A\d+\Z", rc_text)
++
++
++def test_worker_publishes_rc_even_when_shell_helper_is_missing(fake_job_home, repo):
++    (fake_job_home / "outside-voice.sh").unlink()
++    proc = _run_job(fake_job_home, _worker_args(repo), os.environ.copy(), timeout=60)
++    rc_path = repo["run_dir"] / "design-voice.rc"
++    assert rc_path.exists(), (proc.stdout, proc.stderr)
++    assert re.match(r"\A\d+\Z", rc_path.read_text(encoding="utf-8"))
++    assert rc_path.read_text(encoding="utf-8") != "0"
++    assert (repo["run_dir"] / "design-voice.terminal.json").exists()
++
++
++def test_worker_publish_order_is_terminal_witness_then_rc(monkeypatch, tmp_path):
++    """rc 是终态发布点 ⇒ terminal witness MUST 先落盘（模块级顺序锚）。"""
++    order = []
++    real_atomic = JOB.atomic_write_json
++
++    def spy_json(path, payload, mode=0o600):
++        order.append(("json", Path(path).name))
++        return real_atomic(path, payload, mode)
++
++    real_rc = JOB.publish_rc
++
++    def spy_rc(run_dir, site, rc):
++        order.append(("rc", "%s.rc" % site))
++        return real_rc(run_dir, site, rc)
++
++    monkeypatch.setattr(JOB, "atomic_write_json", spy_json)
++    monkeypatch.setattr(JOB, "publish_rc", spy_rc)
++    run_dir = tmp_path / "run"
++    run_dir.mkdir()
++    (run_dir / "s.stdout").write_bytes(b"out")
++    (run_dir / "s.stderr").write_bytes(b"err")
++    JOB.publish_terminal(run_dir, "s", "nonce", "run-1", 7)
++    assert order == [("json", "s.terminal.json"), ("rc", "s.rc")]
++    assert (run_dir / "s.rc").read_text(encoding="utf-8") == "7"
++
++
++# ── dispatch → worker 全链（离线，无真 claude）────────────────────────────────
++
++def test_dispatch_to_worker_lifecycle_offline(fake_job_home, fake_claude, repo):
++    """fake claude 的 `run` 模式真执行下发命令 ⇒ 验 dispatch 组的命令串确实可跑通 worker。"""
++    env = _env(fake_claude, {
++        "FAKE_CLAUDE_BG_MODE": "run",
++        "FAKE_CLAUDE_JOB_ID": "abc12345",
++        "FAKE_HELPER_MARKER": "offline",
++    })
++    proc = _run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env)
++    assert proc.returncode == 0, proc.stderr
++    rc_path = repo["run_dir"] / "design-voice.rc"
++    deadline = time.monotonic() + 60
++    while time.monotonic() < deadline and not rc_path.exists():
++        time.sleep(0.2)
++    assert rc_path.exists(), "worker 未发布 rc"
++    assert rc_path.read_text(encoding="utf-8") == "0"
++    assert "fake-helper-stdout offline" in (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
++    meta = json.loads((repo["run_dir"] / "design-voice.job.json").read_text(encoding="utf-8"))
++    started = json.loads((repo["run_dir"] / "design-voice.started.json").read_text(encoding="utf-8"))
++    assert started["attempt_nonce"] == meta["attempt_nonce"]
++
++
++# ── 真机集成：跨 shell 存活（无模型 job）──────────────────────────────────────
++
++def _real_claude_reason():
++    claude = shutil.which("claude")
++    if not claude:
++        return "需要本机安装的 claude CLI（真实 --bg --exec supervisor 跨 shell 存活证明）"
++    try:
++        out = subprocess.run([claude, "--version"], capture_output=True, text=True, timeout=30)
++    except Exception as exc:  # pragma: no cover - 环境异常
++        return "claude --version 不可用: %s" % exc
++    match = re.search(r"(\d+)\.(\d+)\.(\d+)", out.stdout or "")
++    if not match:
++        return "claude --version 输出无法解析: %r" % (out.stdout,)
++    if tuple(int(x) for x in match.groups()) < JOB.MIN_CLAUDE_VERSION:
++        return "claude 版本低于 %s" % ".".join(str(x) for x in JOB.MIN_CLAUDE_VERSION)
++    return None
++
++
++_REAL_CLAUDE_SKIP = _real_claude_reason()
++
++
++@pytest.mark.skipif(_REAL_CLAUDE_SKIP is not None, reason=_REAL_CLAUDE_SKIP or "")
++def test_background_worker_survives_dispatching_shell_exit(fake_job_home, repo):
++    """真 `claude --bg --exec`：发起 shell 退出后，无模型 worker 仍跑到终态。"""
++    env = os.environ.copy()
++    env["FAKE_HELPER_MARKER"] = "cross-shell"
++    env["FAKE_HELPER_SLEEP"] = "6"      # 明显长于 dispatch 调用本身
++    started = time.monotonic()
++    proc = _run_job(fake_job_home, _dispatch_args(repo, fake_job_home), env, timeout=60)
++    dispatch_elapsed = time.monotonic() - started
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    job_id = payload["job_id"]
++    try:
++        assert dispatch_elapsed < 20, "dispatch 用时 %.1fs" % dispatch_elapsed
++        assert payload["dispatch_duration_seconds"] < JOB.DISPATCH_DEADLINE_SECONDS
++        # 发起 shell（上面的 subprocess）已经退出；worker 由 supervisor 托管继续跑
++        rc_path = repo["run_dir"] / "design-voice.rc"
++        assert not rc_path.exists(), "worker 在发起 shell 退出前就终态了，证不出跨 shell 存活"
++        deadline = time.monotonic() + 120
++        while time.monotonic() < deadline and not rc_path.exists():
++            time.sleep(0.5)
++        assert rc_path.exists(), "worker 未在 120s 内发布 rc"
++        assert rc_path.read_text(encoding="utf-8") == "0"
++        assert "fake-helper-stdout cross-shell" in (
++            repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
++        assert (repo["run_dir"] / "design-voice.started.json").exists()
++        assert (repo["run_dir"] / "design-voice.terminal.json").exists()
++    finally:
++        subprocess.run([shutil.which("claude"), "rm", job_id],
++                       capture_output=True, text=True, timeout=60)
