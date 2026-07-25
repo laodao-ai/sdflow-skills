@@ -92,6 +92,21 @@ def test_two_site_layer_passes():
 
 # ── G1：全部站点 host=codex / runner=claude / reason_code=ok ─────────────────
 
+# G1 三元组那一行**独有**的定向串。
+#
+# ⚠️ 这条曾经写成裸 needle `any(field in f ...)` —— 而 **G2 未达标的消息里本就含
+# `runner=claude` / `reason_code=ok` / `model=opus` / `effort=high`**（它把要求逐条列了
+# 出来）⇒ 5 个参数里 4 个恒真：把 `("runner", REQUIRED_RUNNER)` 整行删掉，测试依然
+# **78 passed**。∴ needle MUST 定向到 G1 自己那句话 + `.{field}=` 这个字段前缀，
+# 让每一维各自都会红。
+G1_TRIPLE_MSG = "G1 要求该层每个站点都是可信跨模型成功"
+
+
+def _g1_hit(fails, field):
+    """G1 三元组里**这一维**真的报了 —— 不接受被 G2 的「要求清单」文本顶替。"""
+    return any(G1_TRIPLE_MSG in f and f".{field}=" in f for f in fails)
+
+
 @pytest.mark.parametrize("field,bad", [
     ("host", "claude"),
     ("runner", "codex"),
@@ -100,8 +115,8 @@ def test_two_site_layer_passes():
     ("reason_code", "fallback-unavailable"),
 ])
 def test_g1_rejects_a_site_that_is_not_a_trusted_cross_model_success(field, bad):
-    ev = _evidence(sites=[_site(**{field: bad})])
-    assert any(field in f for f in CE.verify(ev))
+    fails = CE.verify(_evidence(sites=[_site(**{field: bad})]))
+    assert _g1_hit(fails, field), fails
 
 
 def test_g1_rejects_when_one_of_two_sites_degraded():
@@ -114,7 +129,8 @@ def test_g1_rejects_when_one_of_two_sites_degraded():
     degraded["reason_code"] = "timeout"
     ev = _evidence(declared_sites=["design-voice", "hr-tg"],
                    sites=[_site(), degraded])
-    assert any("reason_code" in f for f in CE.verify(ev)), CE.verify(ev)
+    fails = CE.verify(ev)
+    assert _g1_hit(fails, "reason_code"), fails
 
 
 def test_g1_rejects_a_missing_declared_site():
@@ -132,13 +148,28 @@ def test_g1_rejects_an_undeclared_extra_site():
 
 def test_empty_declared_sites_is_not_green():
     """空集会让 all() 恒真 —— MUST NOT 报绿。"""
-    ev = _evidence(declared_sites=[], sites=[_site()])
-    assert CE.verify(ev)
+    fails = CE.verify(_evidence(declared_sites=[], sites=[_site()]))
+    assert any("declared_sites: MUST 为非空的字符串列表" in f for f in fails), fails
 
 
-def test_empty_sites_is_not_green():
-    ev = _evidence(sites=[])
-    assert CE.verify(ev)
+def test_duplicate_declared_sites_are_rejected():
+    """declared 集重复 ⇒ 红。
+
+    对照站点集**恰好等于**去重后的 declared ⇒ 集合相等那条门不会顺手满足这条断言。
+    """
+    ev = _evidence(declared_sites=["design-voice", "design-voice"])
+    assert any("declared_sites 有重复项" in f for f in CE.verify(ev)), CE.verify(ev)
+
+
+@pytest.mark.parametrize("bad", [[], "design-voice", None, {}])
+def test_empty_sites_is_not_green(bad):
+    """⚠️ 断言 MUST 定向到 `sites: MUST 为非空列表` 那一行。
+
+    早先写成裸 `assert CE.verify(ev)`：空 sites 会连带触发「集合不等」与「G2 未达标」
+    ⇒ 把这条门整个删掉，测试照绿 —— 门被无关门顶着，等于没锚。
+    """
+    fails = CE.verify(_evidence(sites=bad))
+    assert any("sites: MUST 为非空列表" in f for f in fails), fails
 
 
 def test_duplicate_sites_rejected():
@@ -168,6 +199,24 @@ def test_schema_version_drift_is_rejected():
     """schema 漂了就不是本门认识的证据 —— 这条门自己也要有锚（sites 保持合法）。"""
     ev = _evidence(schema_version=CE.SCHEMA_VERSION + 1)
     assert any("schema_version" in f for f in CE.verify(ev))
+
+
+@pytest.mark.parametrize("bad", ["spec_review", "review", "", None, "SPEC-REVIEW"])
+def test_layer_outside_the_declared_set_is_rejected(bad):
+    """`layer` 只能取 `LAYERS` 里的值 —— 这条门此前完全无锚（删掉照绿）。"""
+    fails = CE.verify(_evidence(layer=bad))
+    assert any("MUST ∈" in f and "layer=" in f for f in fails), fails
+
+
+@pytest.mark.parametrize("field", ["repo", "change", "run_id"])
+@pytest.mark.parametrize("bad", ["", None, 42])
+def test_top_level_identity_fields_must_be_non_empty_strings(field, bad):
+    """`repo` / `change` / `run_id` 是证据的身份三件 —— 空串/缺类型 MUST 红。
+
+    断言用**全等**而不是子串：`{field}: MUST 为非空字符串` 这句只有这一行会产出。
+    """
+    fails = CE.verify(_evidence(**{field: bad}))
+    assert f"{field}: MUST 为非空字符串" in fails, fails
 
 
 # ── per-site 完整性：站点名不同还不够，**身份**也 MUST 不同 ──────────────────
@@ -235,6 +284,25 @@ def test_g2_requires_the_long_site_to_be_strong_model_high_effort(field, bad):
     assert any("G2 未达标" in f for f in CE.verify(ev))
 
 
+@pytest.mark.parametrize("field,bad", [
+    ("duration_seconds", 200.0),
+    ("model", "sonnet"),
+    ("effort", "medium"),
+    ("reason_code", "timeout"),
+    ("runner", "codex"),
+])
+def test_crossed_ceiling_requires_every_conjunct(field, bad):
+    """G2 的谓词**逐个合取项**都要有锚 —— 直接打 `crossed_ceiling`，不经 `verify`。
+
+    `runner` 那一项经 `verify` 打不到：`runner≠claude` 会先被 G1 三元组红掉，整层
+    无论如何都不绿 ⇒ 把 `and site.get("runner") == REQUIRED_RUNNER` 删掉照样 78 passed。
+    而 `crossed_ceiling` 还被 **CLI 成功摘要行**单独消费（那句是人会直接引用的证据句），
+    ∴ 它的每一项 MUST 在谓词层面各自可证。
+    """
+    assert CE.crossed_ceiling(_site()) is True
+    assert CE.crossed_ceiling(_site(**{field: bad})) is False
+
+
 def test_g2_is_not_satisfied_by_a_degraded_long_site():
     """跑满 900 秒然后 timeout 的站点 MUST NOT 顶替成功证据。"""
     ev = _evidence(sites=[_site(reason_code="timeout",
@@ -243,6 +311,28 @@ def test_g2_is_not_satisfied_by_a_degraded_long_site():
                                 duration_seconds=900.0)])
     fails = CE.verify(ev)
     assert any("G2 未达标" in f for f in fails)
+
+
+# ── site 的身份字段：名字与四个非空字符串字段 ────────────────────────────────
+#
+# 这两条门此前**完全无锚**（定点删掉照样 78 passed）—— 与 G1 那条恒真锚同族：
+# 不是「needle 太宽」，而是压根没有用例走到这一行。
+
+@pytest.mark.parametrize("bad", ["", None, 42])
+def test_a_site_without_a_usable_name_is_rejected(bad):
+    """站点名不可用 ⇒ 红。**它同时也是 declared 集合门的前置**：拿不到名字就
+    没法参与集合比对，静默跳过等于给「漏收站点」开后门。"""
+    fails = CE.verify(_evidence(sites=[_site(site=bad)]))
+    assert any("sites[0].site: MUST 为非空字符串" in f for f in fails), fails
+
+
+@pytest.mark.parametrize("field", ["model", "effort", "job_id", "attempt_nonce"])
+@pytest.mark.parametrize("bad", ["", None, 7])
+def test_site_identity_strings_must_be_non_empty(field, bad):
+    """`model`/`effort` 是 G2 的判据，`job_id`/`attempt_nonce` 是 per-site 身份的判据 ——
+    空串会让「身份各不相同」那条门在一堆空串上恒真，MUST 先在这里挡住。"""
+    fails = CE.verify(_evidence(sites=[_site(**{field: bad})]))
+    assert any(f".{field}: MUST 为非空字符串" in f for f in fails), fails
 
 
 # ── G3：字段可机读（时刻 / duration / digest）───────────────────────────────
@@ -461,7 +551,10 @@ def test_emit_cannot_upgrade_a_non_codex_witness(tmp_path, witness_host):
     _write_collected(tmp_path, "design-voice", host=witness_host)
     ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
     assert ev["host"] == witness_host and ev["sites"][0]["host"] == witness_host
-    assert any("host" in f for f in CE.verify(ev))
+    fails = CE.verify(ev)
+    # 顶层门与 site 级门**各自**要报 —— 裸 `any("host" in f)` 会让两条门互相顶替。
+    assert any("本证据只对 Codex 宿主有意义" in f for f in fails), fails
+    assert _g1_hit(fails, "host"), fails
 
 
 def test_emit_leaves_host_none_when_the_witness_predates_the_field(tmp_path):
@@ -472,7 +565,9 @@ def test_emit_leaves_host_none_when_the_witness_predates_the_field(tmp_path):
     (tmp_path / "design-voice.collected.json").write_text(json.dumps(raw))
     ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
     assert ev["host"] is None and ev["sites"][0]["host"] is None
-    assert any("host" in f for f in CE.verify(ev))
+    fails = CE.verify(ev)
+    assert any("本证据只对 Codex 宿主有意义" in f for f in fails), fails
+    assert _g1_hit(fails, "host"), fails
 
 
 def test_emit_marks_a_mixed_host_layer_and_the_gate_reds(tmp_path):

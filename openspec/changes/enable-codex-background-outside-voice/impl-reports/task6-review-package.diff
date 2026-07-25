@@ -1,3 +1,8 @@
+⚠️ 本文件不是 `git diff 6dc9919..3c7ff5e` 的**逐字节**输出，别拿它当可复现产物：
+   fix1 §1.4 把其中 **1 行** legacy 池名（守卫会红的两个字面串）就地 scrub 掉了 ⇒
+   该行已是 fix 后文本，与所标范围不符。**这是有意的回改，不是 diff 生成有误。**
+   要拿权威 diff 请直接跑 git；本文件的用途只是给评审子代理一份自包含的阅读包。
+
 diff --git a/hack/check_codex_efficacy_evidence.py b/hack/check_codex_efficacy_evidence.py
 new file mode 100644
 index 0000000..2713921

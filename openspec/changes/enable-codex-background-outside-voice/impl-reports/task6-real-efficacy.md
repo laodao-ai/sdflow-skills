@@ -251,6 +251,12 @@ exit=1
 
 ### 4.3 诚实边界：`host` **不是**盘面可派生量
 
+> 🔴 **本节结论已被 fix1 推翻（保留原文作轮 1 实录，MUST NOT 据此写新代码）。**
+> 轮 1 双轴审的 I3 指出：`dispatch` **就跑在宿主 shell 里** ⇒ `host` 有确定性信号也有捕获路径。
+> fix1 已把它做成盘面派生（dispatch 读 env → `job.json` → collect 透传 → 证据），
+> **`emit` 的 `--host` 入参随之删除**。当前口径见 `task6-real-efficacy-fix1.md` §4.5–4.6。
+> 仍成立的只有 `declared_sites` 那半句。
+
 `collect` 的 payload 里**没有** `host` 字段——helper 只知道 `runner`，不知道自己被哪个宿主的编排层调用。
 ∴ `emit` 的 `--host` 是**必填入参**，谁跑谁负责；检查器机械守的是「一旦声明成 codex，就必须处处自洽且达标」。
 `declared_sites` 同理（权威在评审报告锚行）。**MUST NOT 声称这两项有机械捕获路径。**
@@ -306,8 +312,11 @@ exit=1
   （「该兼容分支已知 efficacy=0」——⚠️ 在 `sdflow:async-branch` 等值段内，
   **改一侧必须两侧同改**，否则 `check_async_branch_parity.py` 当场红）。
 - **重开条件（可机械复核）**：2026-07-29 10:11 之后 Codex 额度恢复 ⇒ 重跑 §2.2 的
-  `codex exec` 起一轮 spec-review，用 §4 的 `emit --host codex` + `check` 判定即可关门。
-  **本票已把「怎么判」做成脚本，剩下的只是「跑一轮」。**
+  `codex exec` 起一轮 spec-review，用 §4 的 `emit` + `check` 判定即可关门。
+  ⚠️ **`emit` 没有 `--host` 入参**（fix1 起 `host` 改为盘面派生：dispatch 在宿主 shell 里读出
+  → `job.json` → collect 透传 → 证据；见 `task6-real-efficacy-fix1.md` §4.5–4.6）。
+  照旧写法带 `--host codex` 会 argparse **exit 2**。
+  **本票已把「怎么判」做成脚本，剩下的只是「在真 Codex 宿主里跑一轮」。**
 
 ---
 
@@ -447,6 +456,8 @@ preflight 未通过 [capability-manifest]: 安装 skew: outside-voice.sh 内容�
    若将来 change 名超长会误红——报错点名字段，fail-closed 方向正确，登记为已知刚性。
 3. **检查器只在本仓被 pytest 调用，未接进 `setup.sh` 三门**：它判的是**一次性的 Task 6 证据**，
    不是每次安装都要复核的不变量。接进 setup 会让一份历史证据变成永久门 ⇒ 判**不接**。
-4. **`--host` 由调用者自报**（§4.3）：这是真诚实边界，不是可修的洞。
+4. ~~**`--host` 由调用者自报**（§4.3）：这是真诚实边界，不是可修的洞。
    若要机械化，得让评审 SKILL 在落锚时把 `host=` 一并写进 run-dir 的某个 sidecar——
-   那是改 SKILL 的活，属本票范围外。**MUST NOT 声称当前已机械捕获。**
+   那是改 SKILL 的活，属本票范围外。**MUST NOT 声称当前已机械捕获。**~~
+   🔴 **已被 fix1 推翻**（同 §4.3 的批注）：捕获点不在评审 SKILL，而在 `dispatch` 自己所在的
+   宿主 shell —— fix1 已做成盘面派生并删掉 `--host`。此条的「不是可修的洞」判断**是错的**。

@@ -9,11 +9,14 @@ SDFLOW_HOST / SDFLOW_TIER_{STRONG,MID,LIGHT} / SDFLOW_VOICE_RUNNER / SDFLOW_VOIC
 
 Run: python3 -m pytest sdflow-init/tests/test_resolve_models.py -v
 """
+import importlib.util
 import os
 import shlex
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
 from model_tiers_cases import CASES as MODEL_TIERS_CASES  # noqa: E402 共享畸形输入语料
@@ -21,6 +24,12 @@ from model_tiers_cases import CASES as MODEL_TIERS_CASES  # noqa: E402 共享畸
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / "sdflow-init" / "assets" / "hack" / "resolve-models.sh"
 OUTSIDE_VOICE = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
+JOB_PY = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice-job.py"
+
+# 宿主判据的**第二份实现**（Python 侧）——parity 门要拿它跟本 shell 脚本对跑。
+_JOB_SPEC = importlib.util.spec_from_file_location("sdflow_outside_voice_job", JOB_PY)
+JOB = importlib.util.module_from_spec(_JOB_SPEC)
+_JOB_SPEC.loader.exec_module(JOB)
 
 
 def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
@@ -155,6 +164,41 @@ class TestHostDetection:
         exports = parse_exports(r.stdout)
         assert exports["SDFLOW_HOST"] == "unknown"
         assert exports["SDFLOW_TIER_STRONG"] == "opus"
+
+
+class TestHostDetectionParityAcrossLanguages:
+    """🔒 跨语言 parity 门：宿主判据有**两份实现**，同一组 env 必须给同一个答案。
+
+    `resolve-models.sh` 第 1 段（shell，决定 voice 用哪个 runner / 哪档模型）与
+    `outside-voice-job.py` 的 `detect_host()`（Python，决定 efficacy 证据里落哪个 `host`）
+    是同一个判据的两处实现。两边漂了不会有任何人当场发现 —— 而 efficacy 门的**决胜量**
+    正是那个 `host`：shell 说 codex、Python 说 unknown，会让一轮真 Codex 跑出来的证据
+    被判红（假失败），反向则是假绿。
+
+    **手写「等价性证明」是死路**（CLAUDE.md 基准 5）：那等于用一份解析器去猜另一个
+    语言的语义。正解 = **让两边自己回答** —— 同一组 env 各跑一遍，比结果。
+    真值表与 `test_outside_voice_job.py` 的 `detect_host` 用例同源（正/负/冲突/缺失各一）。
+    """
+
+    HOST_ENVS = [
+        {"CLAUDECODE": "1"},                                             # 正信号 → claude
+        {"CODEX_THREAD_ID": "11111111-2222-3333-4444-555555555555"},     # 正信号 → codex
+        {"CLAUDECODE": "1", "CODEX_THREAD_ID": "abc"},                   # 冲突 → unknown
+        {},                                                              # 缺失 → unknown
+        {"CLAUDECODE": "0"},                                             # 非 "1" 不算信号
+        {"CODEX_THREAD_ID": ""},                                         # 空串不算信号
+    ]
+
+    @pytest.mark.parametrize("host_env", HOST_ENVS, ids=lambda e: repr(sorted(e.items())))
+    def test_shell_and_python_agree_on_the_same_env(self, tmp_path, host_env):
+        root = make_bundle_repo(tmp_path)
+        r = run_resolve(root, host_env)          # run_resolve 先清两个信号再注入本用例
+        assert r.returncode == 0, r.stderr
+        shell_host = parse_exports(r.stdout)["SDFLOW_HOST"]
+        python_host = JOB.detect_host(dict(host_env))
+        assert shell_host == python_host, (
+            f"宿主判据跨语言漂移：env={host_env} → resolve-models.sh={shell_host!r} / "
+            f"detect_host()={python_host!r}")
 
 
 class TestTierDefaultsPerFleet:
