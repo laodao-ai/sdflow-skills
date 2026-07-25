@@ -2890,3 +2890,314 @@ def test_reconcile_treats_a_terminal_but_rc_less_corrupt_site_as_cleanup_not_pen
     assert _destructive(fake_claude) == [("stop", "75d34378"), ("rm", "75d34378")]
     # 清理不动审计证据：坏 rc 原样留在盘上
     assert (run_dir / "design-voice.rc").read_text(encoding="utf-8") == "oops"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 4：runner 隔离加固与出境面封堵（OVBG-04）
+#
+# TDD 接缝（沿用本文件既有两处，不新造）：
+#   ② **sidecar 文件契约**：新增 `<site>.runner.pid` —— 由 `outside-voice.sh` 生产、
+#      本脚本的 `read_runner_pid` / `probe_subtree` 消费。跨文件接缝 MUST 端到端验一次：
+#      两侧各自单测全绿、中间那根线没接上，是 Task 1 的 C1（worker 漏传 env）刚栽过的形态。
+#   ① **CLI 契约**：注入 / 越界输入 MUST 在任何外部副作用之前被拒。
+# ══════════════════════════════════════════════════════════════════════════════
+
+_FAKE_RUNNER = """#!/usr/bin/env bash
+# 极简 runner 替身（不调模型）：claude -p --output-format text 的 stdout 即最终消息。
+cat >/dev/null
+sleep "${FAKE_RUNNER_SLEEP:-0}"
+printf 'CROSS_FILE_FINDINGS\\n'
+exit 0
+"""
+
+_FAKE_TIMEOUT = """#!/usr/bin/env bash
+# timeout 替身：只吃 `-k N <sec> <cmd...>`，把自己的 pid 记下来供比对
+# （生产里 OV_RUNNER_PID 记的就是 timeout 自身的 pid）。
+[ -n "${FAKE_TIMEOUT_PID_FILE:-}" ] && echo $$ > "${FAKE_TIMEOUT_PID_FILE}"
+if [ "$1" = "-k" ]; then shift 2; fi
+shift
+stdin_tmp=$(mktemp)
+cat > "$stdin_tmp"
+"$@" < "$stdin_tmp"
+rc=$?
+rm -f "$stdin_tmp"
+exit "$rc"
+"""
+
+
+@pytest.fixture
+def fake_runner_bin(tmp_path):
+    """PATH 前置目录：假 claude runner + 假 timeout（供**真** outside-voice.sh 使用）。"""
+    bin_dir = tmp_path / "runner-bin"
+    bin_dir.mkdir()
+    _write_exec(bin_dir / "claude", _FAKE_RUNNER)
+    _write_exec(bin_dir / "timeout", _FAKE_TIMEOUT)
+    return bin_dir
+
+
+def test_real_helper_publishes_the_runner_pid_this_module_consumes(job_home, repo, fake_runner_bin,
+                                                                   tmp_path):
+    """🔴 跨票交接 A 的端到端锚：worker 下发 → **真** helper 落盘 → 本模块解析成功。
+
+    两侧此前各自绿着，中间那根线却是断的：worker 早就 export 了
+    `SDFLOW_VOICE_RUNNER_PID_FILE`，`read_runner_pid` 也早就写好，但 `outside-voice.sh`
+    从不写这个文件 ⇒ 消费侧恒走 `absent`。这条用例是唯一能照出那段断线的形状。
+    """
+    timeout_pid_file = tmp_path / "timeout-self.pid"
+    env = os.environ.copy()
+    env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
+    env["FAKE_TIMEOUT_PID_FILE"] = str(timeout_pid_file)
+    proc = _run_job(job_home, _worker_args(repo), env, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    assert (repo["run_dir"] / "design-voice.rc").read_text(encoding="utf-8") == "0", \
+        (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8")
+
+    kind, pid, detail = JOB.read_runner_pid(repo["run_dir"], "design-voice")
+    assert kind == "ok", (kind, detail)
+    assert pid == int(timeout_pid_file.read_text(encoding="utf-8").strip()), \
+        "落盘的不是 runner（timeout）自己的 pid"
+    sidecar = repo["run_dir"] / ("design-voice" + JOB.RUNNER_PID_SUFFIX)
+    assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
+
+
+def test_the_published_runner_pid_unblocks_the_subtree_verdict(job_home, repo, fake_runner_bin):
+    """交接 A 的**后果**锚：有了这个信号，`probe_subtree` 才能判 `exited`。
+
+    判别器刻意把 terminal witness 删掉 —— 否则 ⑤ 的盘面推断会替 ④ 把结论"蒙对"，
+    这条用例就退化成证不出交接是否兑现的空断言。
+    没有它：verdict 恒 `unverifiable` ⇒ `cleanup --cancel` **永不解闸**同族 fallback。
+    """
+    env = os.environ.copy()
+    env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
+    proc = _run_job(job_home, _worker_args(repo), env, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    job = json.loads(json.dumps({
+        "site": "design-voice", "run_id": repo["run_dir"].name, "attempt_nonce": "nonce-abc",
+    }))
+    (repo["run_dir"] / "design-voice.terminal.json").unlink()
+    verdict, detail = JOB.probe_subtree(repo["run_dir"], "design-voice", job)
+    assert verdict == JOB.SUBTREE_EXITED, (verdict, detail)
+    assert "runner pid" in detail
+
+
+def test_helper_writes_no_runner_pid_when_the_worker_did_not_ask_for_one(job_home, repo,
+                                                                        fake_runner_bin):
+    """同步（Claude 宿主）路径没有这个变量 ⇒ helper MUST 零副作用。"""
+    env = os.environ.copy()
+    env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
+    env["SDFLOW_VOICE_RUNNER"] = "claude"
+    env["SDFLOW_VOICE_MODEL"] = "opus"
+    env.pop("SDFLOW_VOICE_RUNNER_PID_FILE", None)
+    proc = subprocess.run(["bash", str(job_home / "outside-voice.sh"), "exec",
+                           "--context-file", str(repo["ctx"])],
+                          capture_output=True, text=True, env=env, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    assert not list(repo["run_dir"].glob("*" + JOB.RUNNER_PID_SUFFIX))
+
+
+# ── 注入与越界：外部副作用之前一律拒绝 ────────────────────────────────────────
+
+@pytest.mark.parametrize("bad", ["ctx\nfile.md", "ctx\rfile.md", "ctx\0file.md"])
+def test_build_worker_command_refuses_control_characters(tmp_path, bad):
+    """NUL / 换行 / 回车 MUST 在**组装命令之前**拒绝——quoting 之后再发现就晚了。"""
+    with pytest.raises(ValueError):
+        JOB.build_worker_command(str(tmp_path), str(tmp_path), "design-voice", bad,
+                                 str(tmp_path), "claude", "opus", "high", 900,
+                                 "n0nce", "run-1")
+
+
+def test_dispatch_rejects_a_newline_in_a_path_before_any_external_side_effect(
+        job_home, fake_claude, repo):
+    ctx = repo["run_dir"] / "line\nbreak.md"
+    args = _dispatch_args(repo, job_home)
+    args[args.index("--context-file") + 1] = str(ctx)
+    proc = _run_job(job_home, args, _env(fake_claude))
+    assert proc.returncode != 0
+    assert _bg_invocations(fake_claude) == []
+    assert not (repo["run_dir"] / "design-voice.reserve").exists()
+
+
+def test_dispatch_rejects_a_run_dir_outside_the_repo_root(job_home, fake_claude, repo, tmp_path):
+    """run-dir 越界与 context-file 越界是同一片面 —— 只补一处就是点补。"""
+    outside = tmp_path / "elsewhere" / ".outside-voice" / "run-x"
+    outside.mkdir(parents=True)
+    args = _dispatch_args(repo, job_home)
+    args[args.index("--run-dir") + 1] = str(outside)
+    proc = _run_job(job_home, args, _env(fake_claude))
+    assert proc.returncode != 0
+    assert _bg_invocations(fake_claude) == []
+    assert not list(outside.glob("*.reserve"))
+
+
+def test_shell_metacharacters_in_paths_cannot_rewrite_the_dispatched_command(
+        job_home, fake_claude, repo, tmp_path):
+    """让 **shell 自己** 回答「这条命令会被切成哪些词」（基准 5：无界语法面别手搓解析器）。
+
+    做法：把生产真正下发的那条命令串原样接在 `printf '%s\\n'` 后面交给 bash。
+    quoting 若被击穿，`; touch PWNED` 就会作为一条**独立命令**执行 —— PWNED 是否出现
+    是内核事实，不是我们对 quoting 的信念。
+    """
+    hostile = repo["run_dir"] / "x; touch PWNED $(touch PWNED2) `touch PWNED3`"
+    hostile.mkdir()
+    ctx = hostile / "ctx.md"
+    ctx.write_text("hostile evidence\n", encoding="utf-8")
+    args = _dispatch_args(repo, job_home)
+    args[args.index("--context-file") + 1] = str(ctx)
+    proc = _run_job(job_home, args, _env(fake_claude))
+    assert proc.returncode == 0, proc.stderr
+    command = _bg_invocations(fake_claude)[0]["argv"][-1]
+
+    probe = subprocess.run(["bash", "-c", "printf '%s\\n' " + command],
+                           capture_output=True, text=True, cwd=str(tmp_path), timeout=30)
+    assert probe.returncode == 0, probe.stderr
+    tokens = probe.stdout.splitlines()
+    assert str(ctx) in tokens, tokens
+    assert tokens.count("worker") == 1
+    for pwned in ("PWNED", "PWNED2", "PWNED3"):
+        assert not (tmp_path / pwned).exists(), "quoting 被击穿：%s 被真的执行了" % pwned
+        assert not (Path.cwd() / pwned).exists()
+
+
+def test_failed_collect_reports_stderr_counts_but_never_its_text(job_home, fake_claude, tmp_path):
+    """**失败**站点的 stderr 同样只出计数 —— 既有锚只覆盖 rc=0 那格。
+
+    失败路径才是 stderr 真正装满东西（runner 报错原文、可能夹带路径与片段）的那一格，
+    而它恰恰也是最容易被"顺手贴进报告帮助排查"的一格。
+    """
+    run_dir = tmp_path / "run-stderr-fail"
+    run_dir.mkdir()
+    canary = "STDERR_CANARY_" + "M4X"
+    _seed_site(run_dir, rc_kind="rc_other")
+    (run_dir / "design-voice.stderr").write_text(canary + "\n", encoding="utf-8")
+    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert payload["reason_code"] == "exec-error"
+    assert canary not in json.dumps(payload, ensure_ascii=False), payload
+    assert payload["stderr_bytes"] == len((canary + "\n").encode("utf-8"))
+    assert payload["stderr_lines"] == 1
+    assert canary not in proc.stdout and canary not in proc.stderr
+
+
+# ── 真机 canary：supervisor transcript / state 不得成为第二条出境面 ────────────
+
+_CANARY_HELPER = r'''#!/usr/bin/env bash
+set -u
+# 故意把 context 正文原样吐向 stdout **和** stderr —— 模拟「worker 的输出里什么都有」。
+# 若 worker 没有在执行任何可携带 payload 的代码之前完成重定向，这些内容就会流进
+# outer supervisor 的 transcript（`claude logs <id>` 可读），成为一条绕过出境
+# secret scan 的旁路出境面。
+ctx=""
+prev=""
+for a in "$@"; do
+  [ "$prev" = "--context-file" ] && ctx="$a"
+  prev="$a"
+done
+if [ -n "$ctx" ] && [ -r "$ctx" ]; then
+  cat "$ctx"
+  cat "$ctx" >&2
+fi
+sleep "${FAKE_HELPER_SLEEP:-0}"
+exit 0
+'''
+
+
+@pytest.mark.skipif(_REAL_CLAUDE_SKIP is not None, reason=_REAL_CLAUDE_SKIP or "")
+def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_path, repo):
+    """🔴 OVBG-04 出境面封堵的真机锚：`claude logs <id>` 与 agents state 都不得含 payload。
+
+    口径（Task 1 双轴审已实测确立）：`claude agents --all --json` 的 `name` 字段承载
+    **完整 worker 命令串**，其中含 run-dir / context 文件的绝对**路径**——
+    **路径不是 payload**，不判红；判红的是 context 正文、（半截）stdout、stderr 与假密钥。
+
+    🔴 判别器有效性靠**对照组**，不靠 rc=0：本机实测 `claude logs <worker-id>` 输出为
+    **空**。空既可能是"重定向奏效"，也可能是"`claude logs` 本来就不捕获 background 命令
+    的输出" —— 两者不可区分。故先跑一条不做任何重定向的裸 `--bg --exec`，确认它的
+    stdout/stderr **确实**会出现在 transcript 里；对照组不成立时本用例 MUST 立即失败，
+    MUST NOT 让一条无判别力的断言冒充证据。
+    """
+    claude = shutil.which("claude")
+    control_canary = "CONTROL_TRANSCRIPT_CANARY_A1B2"
+    control = subprocess.run(
+        [claude, "--bg", "--exec",
+         "printf '%s\\n' " + control_canary + "; printf '%s\\n' " + control_canary + "-ERR >&2"],
+        capture_output=True, text=True, timeout=60)
+    assert control.returncode == 0, control.stderr
+    control_id = JOB._parse_job_id_hint(control.stdout)
+    assert control_id, control.stdout
+    try:
+        control_logs = ""
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            got = subprocess.run([claude, "logs", control_id],
+                                 capture_output=True, text=True, timeout=60)
+            control_logs = got.stdout + got.stderr
+            if control_canary in control_logs:
+                break
+            time.sleep(0.5)
+        assert control_canary in control_logs, (
+            "对照组：裸 --bg --exec 的输出未出现在 `claude logs` 里 ⇒ 本探针对"
+            "「worker 是否重定向」无判别力，下面的断言不构成证据\n%r" % control_logs[:800])
+        assert control_canary + "-ERR" in control_logs, "对照组：stderr 未进 transcript"
+    finally:
+        subprocess.run([claude, "rm", control_id], capture_output=True, text=True, timeout=60)
+
+    home = tmp_path / "hack-canary"
+    home.mkdir()
+    shutil.copy2(JOB_PY, home / "outside-voice-job.py")
+    _write_exec(home / "outside-voice.sh", _CANARY_HELPER)
+    shutil.copy2(PRINCIPLES, home / "skill-principles.md")
+    JOB.write_manifest(home)
+
+    ctx_canary = "CTX_BODY_CANARY_5F2A9"
+    secret_canary = "AKIA" + "Q" * 16          # 形状即密钥，内容是自造的假货
+    repo["ctx"].write_text("%s\naws_key=%s\n" % (ctx_canary, secret_canary), encoding="utf-8")
+
+    env = os.environ.copy()
+    env["FAKE_HELPER_SLEEP"] = "3"
+    proc = _run_job(home, _dispatch_args(repo, home), env, timeout=60)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    job_id = payload["job_id"]
+    try:
+        rc_path = repo["run_dir"] / "design-voice.rc"
+        deadline = time.monotonic() + 120
+        while time.monotonic() < deadline and not rc_path.exists():
+            time.sleep(0.5)
+        assert rc_path.exists(), "worker 未在 120s 内发布 rc"
+        # 前提核实：canary 确实走过了 worker 的输出流（否则本用例什么都没测）
+        assert ctx_canary in (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
+        assert ctx_canary in (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8")
+
+        logs = subprocess.run([claude, "logs", job_id], capture_output=True, text=True, timeout=60)
+        assert logs.returncode == 0, (logs.stdout, logs.stderr)
+        roster = subprocess.run([claude, "agents", "--all", "--json"],
+                                capture_output=True, text=True, timeout=60)
+        assert roster.returncode == 0, roster.stderr
+        surface = logs.stdout + logs.stderr + roster.stdout
+        assert ctx_canary not in surface, "context 正文进了 supervisor transcript/state"
+        assert secret_canary not in surface, "假密钥进了 supervisor transcript/state"
+        # 路径出现在 roster 的 name 里是**既有且已知**的结构化事实，不判红
+        assert str(repo["ctx"]) in roster.stdout or job_id in roster.stdout
+    finally:
+        subprocess.run([claude, "rm", job_id], capture_output=True, text=True, timeout=60)
+
+
+@pytest.mark.parametrize("attr,value", [("name", "nt"), ("platform", "win32"),
+                                        ("platform", "aix")])
+def test_non_posix_platforms_fail_closed_all_the_way_up_to_preflight(monkeypatch, job_home,
+                                                                     attr, value):
+    """三条非 POSIX 形态各自 fail-closed，且 MUST 一路顶到 `run_preflight` 的 ok=False。
+
+    既有锚只打 `os.name`，而 `check_posix_shell` 有**两个**并列判据（`os.name` 与
+    `sys.platform`）——只补被点穿的那一处是点补。dispatch 在任何外部副作用之前调
+    `run_preflight`，故这一层红即整条通道红。
+    """
+    if attr == "name":
+        monkeypatch.setattr(JOB.os, "name", value)
+    else:
+        monkeypatch.setattr(JOB.sys, "platform", value)
+    assert JOB.check_posix_shell()["ok"] is False
+    result = JOB.run_preflight(job_home)
+    assert result["ok"] is False
+    assert result["reason_code"] == "preflight-error"
+    assert result["checks"]["posix-shell"]["ok"] is False

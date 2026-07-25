@@ -13,6 +13,24 @@
 #                           本脚本此处的检查是防调用方误用的第二道防线，非主控制点。
 #     $SDFLOW_VOICE_MODEL   claude 反向路径专用：-p --model 的取值。runner=claude 时必须非空，
 #                           否则同样 fail-loud（exit 1）。
+#     $SDFLOW_VOICE_EFFORT  claude 反向路径专用：`--effort` 的取值〔OVBG-04 · Task 4〕。
+#                           空/未设 ⇒ 缺省 "high"（spec 写死的档位；Claude 宿主的同步路径
+#                           本就没有下发方，走这条缺省）。**取值域 MUST NOT 在本脚本再复制
+#                           一份枚举**——后台通道的合法值由上游 outside-voice-job.py 的
+#                           EFFORT_VALUES 单点校验（CLI 自己支持 5 档、job helper 只放行 3 档，
+#                           抄一份必漂）。本脚本只负责把它原样变成一个 argv 词，
+#                           故它 MUST NOT 拆词：非法值只会让 claude 自己 fail-loud。
+#     $SDFLOW_VOICE_RUNNER_PID_FILE
+#                           后台通道专用〔OVBG-05 · Task 4 交接〕：`<site>.runner.pid` 的
+#                           绝对路径。非空时，本脚本在 spawn runner 后【立即】把
+#                           `OV_RUNNER_PID`（GNU timeout 自身 pid = 它 setpgid 出的那个
+#                           独立进程组的 pgid）以纯十进制原子写入该路径（临时文件 + mv，0600）。
+#                           它是 outside-voice-job.py 的 cleanup 核验「runner 子树是否已退出」
+#                           的【唯一直接信号】——worker 自己的进程组圈不住 timeout 的独立组。
+#                           空/未设 ⇒ 不写任何文件（Claude 宿主同步路径零副作用）。
+#                           写入失败 ⇒ 打 OV_RUNNER_PID_PUBLISH_FAILED=1 哨兵并【继续】跑
+#                           voice（它是清理辅助信号，不是交付物；消费方读不到即退回
+#                           fail-closed 的 unverifiable，属诚实降级）。
 #   preflight
 #     stdout: "ready" | "not_installed" | "missing-deps"         exit 0（$SDFLOW_VOICE_RUNNER 非空时）
 #             探测目标 = $SDFLOW_VOICE_RUNNER 的 CLI（MUST NOT 硬编码 codex）
@@ -90,6 +108,8 @@
 #             「已 SIGKILL 兜底」；探活失败或 kill 本身返回非零 ⇒ 打 `OV_KILL_FAILED=1
 #             pid=... target=... kill_rc=... still_alive=...`（结构化字段），MUST NOT 打印
 #             成功措辞（防伪造成功证据，adr/0018）。
+#             〔Task 4 · OVBG-05〕runner pid sidecar 落盘失败 ⇒ 打 `OV_RUNNER_PID_PUBLISH_FAILED=1
+#             stage=... path=...`（结构化字段，MUST NOT 含 context 正文），voice 继续跑。
 #             〔code-review-fix1 M3〕render_prompt 内部任一关键生成写入失败 ⇒ 打
 #             `OV_RENDER_WRITE_FAILED=1 stage=...` 并 fail-loud；若该行连同其余 render_prompt
 #             stderr 因 workdir 所在磁盘写满等原因整体写入失败（此处的 stderr 被重定向进
@@ -109,7 +129,17 @@
 #     codex 固定注入: -C <repo_root> -s read-only --ephemeral --output-last-message <tmp>，
 #       prompt 经临时文件 `- < file` 喂入（内核级沙箱：seccomp/sandbox-exec 封写+网络）；
 #     claude 反向路径固定注入: -p --model "$SDFLOW_VOICE_MODEL" --output-format text
-#       --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root> --settings <读围栏>。
+#       --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root> --settings <读围栏>
+#       --effort <档位> --safe-mode --no-session-persistence。
+#       后三面是【隔离旗】〔OVBG-04 · Task 4〕，与上面四旗**不是同一片**，各自 golden：
+#         --safe-mode              ambient 定制（SessionStart hooks / plugins / skills /
+#                                  CLAUDE.md memory / 自定义 agents…）一律不执行。
+#                                  `claude --help` 原文：Auth, model selection, built-in tools,
+#                                  and permissions work normally ⇒ 它【不】关掉四旗与读围栏
+#                                  （本机真机探针已复核，见 test_real_runner_isolates_*）。
+#         --no-session-persistence inner `claude -p` 的 transcript 不落盘、不可 resume。
+#         --effort <档位>          推理档位显式下发（取 $SDFLOW_VOICE_EFFORT，缺省 high），
+#                                  使 job.json 里记的 effort 是真实生效值而非装饰。
 #       claude 侧读边界 = 【应用层负向】——`--settings` permissions.deny 挡凭证库路径（列出的拒读、
 #       未列的仍可读，见 OV_CLAUDE_READ_FENCE 注释）。⚠ 与 codex 的对称性【未定·未真机验】（A1）：
 #       codex `-s read-only` 内核沙箱封写/网络确定，但是否也限【读】未在真 Codex 宿主实测 → 待验批。
@@ -124,7 +154,7 @@
 #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
 set -u
 
-OV_VERSION="outside-voice.sh 1.4.3"
+OV_VERSION="outside-voice.sh 1.5.0"
 
 # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
 # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
@@ -421,6 +451,44 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找�
   command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true
 }
 
+# ── runner pid sidecar〔enable-codex-background-outside-voice Task 4 · OVBG-05〕──
+# $SDFLOW_VOICE_RUNNER_PID_FILE 非空时把 $1（= OV_RUNNER_PID，即 timeout 自身 pid）
+# 原子发布到该路径。消费方是 outside-voice-job.py 的 `probe_subtree`：它要回答
+# 「真正烧额度的那棵子树是否已退出」，而 worker 自己的进程组【圈不住】GNU timeout
+# setpgid 出的那个独立组 ⇒ 没有这个文件，无 terminal witness 的站点恒判 unverifiable，
+# `cleanup --cancel` 永不解闸同族 fallback。
+#
+# 格式契约（与 `<site>.rc` 同构）：**纯十进制单值**。消费侧 strict `\A\d+\Z` 解析，
+# 坏值一律 corrupt ⇒ fail-closed，∴ 这里 MUST NOT 写任何附加字段/前缀。
+#
+# 🔴 时序的诚实边界：pid 只有在 `&` 之后（`$!`）才存在 ⇒ 本函数只能在 spawn **之后**
+#   立即调用，不可能真在 spawn 之前落盘。残余窗口与头部契约的残余 (b) 同源同性质：
+#   `&` 与本次写入之间若落信号，该次 runner 的 pid 没被记下 ⇒ 消费方退回 fail-closed
+#   的 unverifiable（不是误判 exited）。方向安全，只登记不声称消除。
+#
+# 失败一律**不掀掉 voice**：它是清理辅助信号、不是交付物；只打结构化哨兵让降级可见
+# （同 OV_GROUP_KILL_DEGRADED=1 规格，MUST NOT 含 context 正文）。
+ov_publish_runner_pid() {  # $1=pid
+  local pid="$1" dest tmp
+  dest="${SDFLOW_VOICE_RUNNER_PID_FILE:-}"
+  [ -n "$dest" ] || return 0
+  [ -n "$pid" ] || { echo "OV_RUNNER_PID_PUBLISH_FAILED=1 stage=empty_pid path=${dest}" >&2; return 1; }
+  tmp="${dest}.tmp.$$"
+  # umask 077 放在子壳里：只影响这一次创建，不改动脚本其余部分的 umask（本 helper 的
+  # 其他产物在 mktemp -d 的 0700 workdir 内，不需要也不应受这里影响）。
+  if ! ( umask 077; printf '%s\n' "$pid" > "$tmp" ) 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null
+    echo "OV_RUNNER_PID_PUBLISH_FAILED=1 stage=write path=${dest}" >&2
+    return 1
+  fi
+  if ! mv -f "$tmp" "$dest" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null
+    echo "OV_RUNNER_PID_PUBLISH_FAILED=1 stage=rename path=${dest}" >&2
+    return 1
+  fi
+  return 0
+}
+
 # ── 组级 KILL 守卫〔fix-mechanical-layer-silent-failures 残余(d) 根治 · design D2.1〕──
 # 根因：`OV_RUNNER_PID` 记的是 timeout 自身的 PID。旧版 KILL 升级只对这一个 PID 发
 # SIGKILL——不可捕获、瞬间生效，timeout 来不及跑到它自己那条「向子进程组转发 KILL」的
@@ -561,7 +629,7 @@ ov_cleanup() {  # $1=触发来源标签（EXIT|INT|TERM|HUP|SIGNAL——最后�
 }
 
 do_exec() {  # $1=context file  $2=timeout 秒
-  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner
+  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner ov_effort
   runner="${SDFLOW_VOICE_RUNNER:-}"
   if [ -z "$runner" ]; then
     echo 'SDFLOW_VOICE_RUNNER 未设置（host=unknown，无法确定跨模型 runner）——不跑 voice；调用方 SHALL 落 reason_code="host-unknown" 并跳过本次调用' >&2
@@ -641,6 +709,7 @@ do_exec() {  # $1=context file  $2=timeout 秒
         --output-last-message "$workdir/last-message.md" - \
         < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log" &
       OV_RUNNER_PID=$!   # ⚠ 残余(b)：`&` 与本行之间落信号 ⇒ trap 拿到空 PID，该次 runner 逃逸
+      ov_publish_runner_pid "$OV_RUNNER_PID"   # 后台通道的子树核验信号（env 未设时空转）
       # `wait` 原样透传退出码：124(超时) / 0 / 其他非零一律不改写。脚本【无 set -e】
       # （只有 set -u）⇒ 非零返回不会误中止。
       wait "$OV_RUNNER_PID"
@@ -656,12 +725,23 @@ do_exec() {  # $1=context file  $2=timeout 秒
       # 应用层读边界；见 OV_CLAUDE_READ_FENCE 处的诚实边界注释——非内核级、对 codex 沙箱不对称）。
       # MUST NOT 改动这四旗——回归即红。注：--add-dir 是【增量授权提示、非访问围栏】（实测 Read 无
       # --add-dir 也能读全盘），真读边界由 --settings deny 提供；两者职责不同，勿混。
+      #
+      # 三面隔离旗〔OVBG-04 · Task 4〕——与四旗**不同片**，同样 MUST NOT 漂移：
+      #   --safe-mode              ambient 定制（SessionStart hooks / plugins / skills /
+      #                            CLAUDE.md memory / 自定义 agents）一律不执行；它
+      #                            【不】影响 permissions ⇒ 上面的读围栏仍生效（真机已验）。
+      #   --no-session-persistence inner transcript 不落盘、不可 resume。
+      #   --effort <档位>          显式声明推理档位；取值来自 $SDFLOW_VOICE_EFFORT
+      #                            （后台 worker 下发），缺省 high。
+      ov_effort="${SDFLOW_VOICE_EFFORT:-high}"
       "$ov_timeout_bin" -k 10 "$tmo" claude -p --model "$SDFLOW_VOICE_MODEL" --output-format text \
         --tools "Read,Grep,Glob" --strict-mcp-config --add-dir "$repo_root" \
         --settings "$OV_CLAUDE_READ_FENCE" \
+        --effort "$ov_effort" --safe-mode --no-session-persistence \
         < "$workdir/prompt.md" > "$workdir/last-message.md" 2> "$workdir/stderr.log" &
       OV_RUNNER_PID=$!   # 同 codex 路径〔R2〕：后台 + wait，让 ov_cleanup 有 PID 可杀
                          # ⚠ 残余(b) 同上：`&` 与本行之间落信号 ⇒ 空 PID，该次 runner 逃逸
+      ov_publish_runner_pid "$OV_RUNNER_PID"   # 后台通道的子树核验信号（env 未设时空转）
       wait "$OV_RUNNER_PID"
       rc=$?
       OV_RUNNER_PID=""   # ⚠ 残余(c) 同上：wait 返回与本行之间落信号 ⇒ 对已回收 PID 开火

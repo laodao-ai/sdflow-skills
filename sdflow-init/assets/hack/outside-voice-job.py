@@ -33,9 +33,12 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     runner/model/effort 经 `SDFLOW_VOICE_RUNNER` / `SDFLOW_VOICE_MODEL` /
     `SDFLOW_VOICE_EFFORT` **环境变量**下发（helper 的 `exec` 只吃 --context-file/--timeout）。
     另经 `SDFLOW_VOICE_RUNNER_PID_FILE` 下发 `<site>.runner.pid` 的绝对路径：helper MUST 在
-    spawn runner **之前**把 `OV_RUNNER_PID`（GNU timeout 自身 pid = 它 setpgid 出的那个独立
-    进程组的 pgid）以**纯十进制**原子写入该文件 —— 它是 cleanup 核验「runner 子树是否已
-    退出」的唯一直接信号（worker 自己的进程组圈不住 timeout 的独立组）。
+    spawn runner 后**立即**（`$!` 可得的最早时刻，早于 `wait`）把 `OV_RUNNER_PID`
+    （GNU timeout 自身 pid = 它 setpgid 出的那个独立进程组的 pgid）以**纯十进制**原子
+    写入该文件 —— 它是 cleanup 核验「runner 子树是否已退出」的唯一直接信号
+    （worker 自己的进程组圈不住 timeout 的独立组）。
+    ⚠ pid 只有在 `&` 之后才存在 ⇒ 「spawn 之前落盘」在 shell 层不可能；`&` 与写入之间
+    的窗口里被杀 ⇒ 文件缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable`（方向安全）。
     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
     充当结果通道）。
 
@@ -897,14 +900,14 @@ def cmd_worker(args):
         env["SDFLOW_VOICE_MODEL"] = args.model
     if args.effort:
         # effort 与 runner/model 同路下发，让 job.json 里记的 effort 是**真实下发值**而非装饰。
-        # 注：把它变成 `--effort <e>` argv 属 outside-voice.sh 侧（Task 4）；本票不改该文件，
-        # 故当前这一格是「已接线、下游尚未消费」——Task 4 接上即生效，无需再回头改 worker。
+        # 消费者 = `outside-voice.sh` 的 claude 分支（1.5.0 起）：`--effort "${SDFLOW_VOICE_EFFORT:-high}"`。
+        # ∴ job.json 里记的 effort 是**真实下发并生效**的值，不是装饰。
         env["SDFLOW_VOICE_EFFORT"] = args.effort
     # 🔴 runner pid sidecar 的落盘路径 —— cleanup 核验「runner 子树是否已退出」的**唯一直接
     # 信号**：worker 自己的进程组圈不住 GNU timeout 自建的那个独立组（见 probe_subtree 的
     # 判定地基），缺这个信号时组长分支只能 fail-closed 判 unverifiable。
-    # 同样是「已接线、下游尚未消费」：Task 4 在 outside-voice.sh 里 spawn runner **之前**，
-    # 把 `OV_RUNNER_PID` 以纯十进制原子写入本路径（临时文件 + mv）即生效。
+    # 消费者 = `outside-voice.sh` 的 `ov_publish_runner_pid`（1.5.0 起）：spawn runner 后立即
+    # 把 `OV_RUNNER_PID` 以纯十进制原子写入本路径（临时文件 + mv，0600）。
     env["SDFLOW_VOICE_RUNNER_PID_FILE"] = runner_pid_path(run_dir, site)
     rc = 127
     try:
@@ -1486,8 +1489,9 @@ def read_runner_pid(run_dir, site):
     """读 `<site>.runner.pid` → (kind, pid, detail)，kind ∈ {"ok","corrupt","absent"}。
 
     盘面格式与 `<site>.rc` 同构：**纯十进制单值**，由 `outside-voice.sh` 在 spawn runner
-    **之前**原子写入，内容 = `OV_RUNNER_PID`（GNU timeout 自身 pid，亦即它 setpgid 出的
-    那个独立进程组的 pgid）。
+    后**立即**（早于 `wait`）原子写入，内容 = `OV_RUNNER_PID`（GNU timeout 自身 pid，
+    亦即它 setpgid 出的那个独立进程组的 pgid）。文件缺席 = 该窗口内 helper 被杀或
+    未接线 ⇒ 判定退回下一级信号，MUST NOT 当成「runner 已退出」。
 
     为什么是裸 pid 文件而不是 JSON witness：这个文件由 shell 写，契约越小越不容易写错，
     而写错的代价是 cleanup 永久 fail-closed。identity 绑定来自**路径本身**——run-dir × site
