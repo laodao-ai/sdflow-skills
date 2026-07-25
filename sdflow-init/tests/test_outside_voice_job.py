@@ -99,8 +99,18 @@ if argv[:1] == ["agents"]:
         "state": "working",
         "name": st["command"],
     }
+    if mode == "done-noname":
+        # 真 CLI 实测约束：kind=background 且 state=done 的条目**没有 name 字段**
+        # （极快失败的 worker 会走到这里）⇒ 只认 name 的核验会扑空。
+        base.pop("name", None)
+        base["state"] = "done"
+        sys.stdout.write(json.dumps([base]) + "\n")
+        sys.exit(0)
     if mode == "nomatch":
+        # 「本次 attempt 没有产生任何 job」⇒ name 与 id 两条通道都必须不命中
+        # （id 也要换掉：dispatch 自己 stdout 里的 short id 是并列匹配通道）。
         base["name"] = "some unrelated background command"
+        base["id"] = "0000dead"
         sys.stdout.write(json.dumps([base]) + "\n")
         sys.exit(0)
     if mode == "duplicate":
@@ -120,20 +130,37 @@ if "--bg" in argv:
         sys.stderr.write("dispatch refused\n")
         sys.exit(1)
     if os.environ.get("FAKE_CLAUDE_BG_WRITE_STATE", "1") == "1" and state_path:
-        with open(state_path, "w", encoding="utf-8") as fh:
-            json.dump({"id": job_id, "command": command, "cwd": os.getcwd()}, fh)
+        payload = json.dumps({"id": job_id, "command": command, "cwd": os.getcwd()})
+        # supervisor 注册滞后：job 已被接受（已计费），但要过 D 秒才进 agents roster。
+        # 用独立 session 的 detached 进程写，才能在 dispatch 回收 spawn 进程树之后仍然发生。
+        delay = float(os.environ.get("FAKE_CLAUDE_BG_STATE_DELAY", "0") or 0)
+        if delay > 0:
+            subprocess.Popen(
+                [sys.executable, "-c",
+                 "import sys,time;time.sleep(float(sys.argv[1]));"
+                 "open(sys.argv[2],'w',encoding='utf-8').write(sys.argv[3])",
+                 str(delay), state_path, payload],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, start_new_session=True)
+        else:
+            with open(state_path, "w", encoding="utf-8") as fh:
+                fh.write(payload)
     if mode == "hang":
-        child = subprocess.Popen(["sleep", "60"])
-        pid_file = os.environ.get("FAKE_CLAUDE_PID_FILE")
-        if pid_file:
-            with open(pid_file, "w", encoding="utf-8") as fh:
-                json.dump({"self": os.getpid(), "child": child.pid}, fh)
+        if os.environ.get("FAKE_CLAUDE_HANG_CHILD", "1") == "1":
+            child = subprocess.Popen(["sleep", "60"])
+            pid_file = os.environ.get("FAKE_CLAUDE_PID_FILE")
+            if pid_file:
+                with open(pid_file, "w", encoding="utf-8") as fh:
+                    json.dump({"self": os.getpid(), "child": child.pid}, fh)
         time.sleep(60)
         sys.exit(0)
     if mode == "run":
         subprocess.Popen(command, shell=True, start_new_session=True)
     sys.stdout.write("Starting background service…\n")
-    sys.stdout.write("backgrounded · %s · %s\n" % (job_id, command))
+    # `backgrounded · <id> · <cmd>` 是 research preview 格式；FAKE_CLAUDE_BG_HINT_ID
+    # 用来模拟它漂移成一个与 canonical id 不同的值。
+    hint_id = os.environ.get("FAKE_CLAUDE_BG_HINT_ID") or job_id
+    sys.stdout.write("backgrounded · %s · %s\n" % (hint_id, command))
     sys.exit(0)
 
 sys.stderr.write("fake claude: unhandled argv %r\n" % (argv,))
@@ -152,6 +179,11 @@ if [ -n "${FAKE_HELPER_STARTED_PROBE:-}" ]; then
     echo "STARTED_SIDECAR_VISIBLE=no"
   fi
 fi
+# worker→helper 的 runner/model/effort 只有 env 一条通道 ⇒ 把收到的值原样回显，
+# 让「env 是否真的传到了 child」变成 stdout 上的机械锚（而不是靠实现自述）。
+echo "ENV_RUNNER=${SDFLOW_VOICE_RUNNER:-<unset>}"
+echo "ENV_MODEL=${SDFLOW_VOICE_MODEL:-<unset>}"
+echo "ENV_EFFORT=${SDFLOW_VOICE_EFFORT:-<unset>}"
 echo "fake-helper-stdout ${FAKE_HELPER_MARKER:-none}"
 echo "fake-helper-stderr" >&2
 sleep "${FAKE_HELPER_SLEEP:-0}"
@@ -365,7 +397,47 @@ def test_preflight_fails_closed_when_manifest_generation_hand_edited(job_home, f
     assert "generation" in detail
 
 
+def test_preflight_cli_probes_are_bounded_by_a_short_timeout(monkeypatch, job_home):
+    """preflight 的两条 CLI 探针本身不在任何 deadline 内 ⇒ 它们各自的 timeout 就是上界。
+
+    30 秒会让「5 秒级失败」在 CLI 卡死时退化到 ~60 秒（两条串行）。
+    本机实测 `claude --version` 0.06s、`agents --all --json` 0.17s ⇒ 5 秒已极宽。
+    """
+    seen = []
+
+    class _Proc:
+        def __init__(self, stdout):
+            self.returncode = 0
+            self.stdout = stdout
+            self.stderr = ""
+
+    def spy(argv, timeout):
+        seen.append(timeout)
+        return _Proc("2.1.220 (Claude Code)\n" if argv[1:] == ["--version"] else "[]\n")
+
+    monkeypatch.setattr(JOB, "_run_cli", spy)
+    monkeypatch.setattr(JOB.shutil, "which", lambda name: "/usr/bin/" + name)
+    result = JOB.run_preflight(job_home)
+    assert result["ok"] is True, result
+    assert len(seen) == 2, seen
+    assert all(t <= 5 for t in seen), seen
+
+
 # ── reservation（外部副作用之前的原子门）────────────────────────────────────────
+
+def test_release_reservation_never_raises_when_reserve_is_already_gone(tmp_path):
+    """降级路径上唯一还要交付的是 stdout 那行 JSON —— 清理失败 MUST NOT 掀掉它。
+
+    裸 `os.unlink` 的 traceback 会让 stdout 空掉，调用方读不到 `fallback_allowed`，
+    一次本可立即同族 fallback 的失败就变成哑失败。
+    """
+    assert JOB.release_reservation(tmp_path, "ghost") is False
+    path = Path(JOB.reserve_path(tmp_path, "real"))
+    path.write_text("{}", encoding="utf-8")
+    assert JOB.release_reservation(tmp_path, "real") is True
+    assert not path.exists()
+
+
 
 def test_reservation_exists_before_any_external_dispatch(job_home, fake_claude, repo):
     env = _env(fake_claude, run_dir=repo["run_dir"])
@@ -418,14 +490,35 @@ def test_dispatch_returns_within_monotonic_deadline_with_verified_job_id(job_hom
     env = _env(fake_claude, {"FAKE_CLAUDE_JOB_ID": "75d34378"})
     started = time.monotonic()
     proc = _run_job(job_home, _dispatch_args(repo, job_home), env)
-    elapsed = time.monotonic() - started
+    elapsed = time.monotonic() - started   # 真实墙钟——不回读被测自己写的字段
     payload = _json_stdout(proc)
     assert proc.returncode == 0, proc.stderr
     assert payload["ok"] is True
     assert payload["job_id"] == "75d34378"
     assert payload["reason_code"] == "ok"
-    assert elapsed < JOB.DISPATCH_DEADLINE_SECONDS + 10  # 进程启动开销宽放
-    assert payload["dispatch_duration_seconds"] < JOB.DISPATCH_DEADLINE_SECONDS
+    # 成功路径 MUST NOT 把核验 grace 耗满：job 一进 roster 就立刻返回。
+    assert elapsed < JOB.DISPATCH_DEADLINE_SECONDS + JOB.NONCE_LOOKUP_GRACE_SECONDS, elapsed
+    assert payload["dispatch_duration_seconds"] <= elapsed
+
+
+def test_dispatch_duration_covers_nonce_verification_not_just_the_spawn(job_home, fake_claude, repo):
+    """`dispatch_duration_seconds` MUST 覆盖到 nonce 核验结束。
+
+    只算到 `communicate()` 返回的话，这个值从构造上就 <DISPATCH_DEADLINE_SECONDS，
+    任何拿它跟 deadline 比较的断言都恒真 ⇒「5 秒级诚实降级」等于没有机械锚。
+    这里让 CLI 秒退（rc!=0）、roster 恒空：墙钟里剩下的全部就是那段有界核验 grace。
+    """
+    env = _env(fake_claude, {"FAKE_CLAUDE_BG_MODE": "fail", "FAKE_CLAUDE_AGENTS_MODE": "empty"})
+    started = time.monotonic()
+    proc = _run_job(job_home, _dispatch_args(repo, job_home), env, timeout=60)
+    elapsed = time.monotonic() - started
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    duration = payload["dispatch_duration_seconds"]
+    assert duration >= JOB.NONCE_LOOKUP_GRACE_SECONDS * 0.8, (duration, elapsed)
+    assert duration <= elapsed, (duration, elapsed)
+    # 有界：整段诚实降级仍在「spawn deadline + 核验 grace」的预算内
+    assert elapsed < JOB.DISPATCH_DEADLINE_SECONDS + JOB.NONCE_LOOKUP_GRACE_SECONDS + 10, elapsed
 
 
 def test_dispatch_writes_job_metadata_atomically_with_required_fields(job_home, fake_claude, repo):
@@ -487,7 +580,9 @@ def test_dispatch_reclaims_process_tree_and_reserve_when_deadline_expires(job_ho
     assert proc.returncode == 1
     assert payload["reason_code"] == "exec-error"
     assert payload["fallback_allowed"] is True
-    assert elapsed < 30, "monotonic 5 秒 deadline 未生效，实际 %.1fs" % elapsed
+    # 上界 = spawn deadline + kill 后收流 + 核验 grace，全部有界
+    assert elapsed < JOB.DISPATCH_DEADLINE_SECONDS + 5 + JOB.NONCE_LOOKUP_GRACE_SECONDS + 10, \
+        "monotonic deadline 未生效，实际 %.1fs" % elapsed
     # 尚未产生外部 job 的 reserve 必须清理
     assert not (repo["run_dir"] / "design-voice.reserve").exists()
     # spawn 进程树被回收
@@ -522,6 +617,67 @@ def test_dispatch_deadline_with_external_job_present_is_unknown_cost(job_home, f
     assert payload["fallback_allowed"] is False
     assert (repo["run_dir"] / "design-voice.reserve").exists()
     assert not (repo["run_dir"] / "design-voice.job.json").exists()
+
+
+def test_dispatch_grants_bounded_grace_when_job_registers_after_the_kill(job_home, fake_claude, repo):
+    """超时被 SIGKILL 之后，nonce 核验 MUST 仍有**独立**的有界 grace。
+
+    5 秒 deadline 到点，正是 supervisor 注册最可能滞后的时刻。零 grace（只轮询一次）
+    会把一个**已经产生、已经计费**的 job 判成「没产生」⇒ 清掉 reserve + 允许 fallback，
+    同时留下孤儿付费 job 和一次重付——恰是 OVBG-02 要杀的形态。
+    这里 job 在 kill 之后才进 roster：正确行为是 unknown-cost + 禁 fallback + 留 reserve。
+    """
+    env = _env(fake_claude, {
+        "FAKE_CLAUDE_BG_MODE": "hang",
+        "FAKE_CLAUDE_BG_WRITE_STATE": "1",
+        "FAKE_CLAUDE_HANG_CHILD": "0",      # 不留持有管道的孙子进程，kill 后立即收流
+        "FAKE_CLAUDE_BG_STATE_DELAY": "7",  # > 5 秒 deadline ⇒ 注册必然落在 kill 之后
+    })
+    started = time.monotonic()
+    proc = _run_job(job_home, _dispatch_args(repo, job_home), env, timeout=90)
+    elapsed = time.monotonic() - started
+    payload = _json_stdout(proc)
+    assert proc.returncode == 1
+    assert payload["state"] == "unknown-cost", payload
+    assert payload["fallback_allowed"] is False, payload
+    assert (repo["run_dir"] / "design-voice.reserve").exists()   # 证据留给 reconcile
+    assert not (repo["run_dir"] / "design-voice.job.json").exists()
+    # grace 是有界的，不是无限等
+    assert elapsed < JOB.DISPATCH_DEADLINE_SECONDS + 5 + JOB.NONCE_LOOKUP_GRACE_SECONDS + 10, elapsed
+
+
+def test_dispatch_verifies_attempt_by_job_id_when_done_entry_has_no_name(job_home, fake_claude, repo):
+    """`state=done` 的 background 条目**没有 name** ⇒ 只认 name 的核验会扑空。
+
+    极快失败的 worker（helper 缺失，<1s 即终态）就落在这一格：job 真的产生了，
+    却被判成「没产生」。故 dispatch stdout 的 short id 必须是**并列**匹配通道。
+    """
+    env = _env(fake_claude, {
+        "FAKE_CLAUDE_JOB_ID": "75d34378",
+        "FAKE_CLAUDE_AGENTS_MODE": "done-noname",
+    })
+    proc = _run_job(job_home, _dispatch_args(repo, job_home), env, timeout=60)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert payload["job_id"] == "75d34378"
+    assert (repo["run_dir"] / "design-voice.job.json").exists()
+
+
+def test_dispatch_is_not_blocked_by_a_drifted_backgrounded_stdout_format(job_home, fake_claude, repo):
+    """stdout 的 short id 只是**匹配线索**，MUST NOT 单独构成失败判据。
+
+    `backgrounded · <id> · <cmd>` 属 research preview 格式；一次漂移解出的垃圾 hex
+    若能否掉一次好 dispatch，`_parse_job_id_hint` 的「解析不构成失败判据」就是空话。
+    这里 nonce 通道唯一命中，核验应照常通过。
+    """
+    env = _env(fake_claude, {
+        "FAKE_CLAUDE_JOB_ID": "75d34378",
+        "FAKE_CLAUDE_BG_HINT_ID": "0badc0de",   # 与 canonical id 不一致的漂移值
+    })
+    proc = _run_job(job_home, _dispatch_args(repo, job_home), env, timeout=60)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert payload["job_id"] == "75d34378"
 
 
 def test_dispatch_fails_closed_when_canonical_job_id_is_not_unique(job_home, fake_claude, repo):
@@ -643,6 +799,61 @@ def test_worker_publishes_started_then_terminal_then_rc(fake_job_home, repo):
     rc_path = repo["run_dir"] / "design-voice.rc"
     assert rc_path.read_text(encoding="utf-8") == "0"
     assert (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8").strip() == "fake-helper-stderr"
+
+
+def test_worker_passes_runner_model_effort_env_to_helper(fake_job_home, repo):
+    """worker→helper 的 runner/model/effort **只有 env 一条通道** ⇒ 必须真的传到 child。
+
+    这条锚同时守 C1（`subprocess.call` 漏 `env=`）与 I2（effort 被记进 job.json 却从未下发）。
+    调用方 env 里刻意不含这三个变量：child 若拿到值，就只可能来自 worker 显式构造的 env。
+    """
+    env = os.environ.copy()
+    for name in ("SDFLOW_VOICE_RUNNER", "SDFLOW_VOICE_MODEL", "SDFLOW_VOICE_EFFORT"):
+        env.pop(name, None)
+    args = _worker_args(repo)
+    args[args.index("--effort") + 1] = "medium"
+    proc = _run_job(fake_job_home, args, env, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    stdout_text = (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
+    assert "ENV_RUNNER=claude" in stdout_text, stdout_text
+    assert "ENV_MODEL=opus" in stdout_text, stdout_text
+    assert "ENV_EFFORT=medium" in stdout_text, stdout_text
+
+
+def test_worker_env_reaches_the_real_shell_helper(job_home, repo):
+    """C1 接缝锚：让 worker 调**仓内真的** `outside-voice.sh`（不调模型）。
+
+    全部既有 worker 用例都走 FAKE_HELPER（完全不看 env）⇒ 漏传 `env=` 也能全绿。
+    这里用真 helper 的两条**早期**拒绝路径做判别器（本机实测，见 fix 报告）：
+      · runner 未送达 ⇒ stderr "SDFLOW_VOICE_RUNNER 未设置"、rc=1
+      · runner 送达但值非法 ⇒ stderr "未知 SDFLOW_VOICE_RUNNER: <值>"、rc=1
+      · runner+model 都送达、context 不存在 ⇒ stderr "context file not found"、rc=2
+    三者互斥且都在任何模型调用之前返回。
+    """
+    base_env = os.environ.copy()
+    for name in ("SDFLOW_VOICE_RUNNER", "SDFLOW_VOICE_MODEL", "SDFLOW_VOICE_EFFORT"):
+        base_env.pop(name, None)
+
+    # ① runner 通道
+    args = _worker_args(repo, site="runner-probe")
+    args[args.index("--runner") + 1] = "bogus-runner"
+    proc = _run_job(job_home, args, base_env, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    err = (repo["run_dir"] / "runner-probe.stderr").read_text(encoding="utf-8")
+    assert "SDFLOW_VOICE_RUNNER 未设置" not in err, err
+    assert "未知 SDFLOW_VOICE_RUNNER: bogus-runner" in err, err
+    assert (repo["run_dir"] / "runner-probe.rc").read_text(encoding="utf-8") == "1"
+
+    # ② model 通道（runner=claude 时 helper 强制要求 SDFLOW_VOICE_MODEL 非空）
+    args = _worker_args(repo, site="model-probe")
+    args[args.index("--context-file") + 1] = str(repo["run_dir"] / "no-such-context.md")
+    proc = _run_job(job_home, args, base_env, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    err = (repo["run_dir"] / "model-probe.stderr").read_text(encoding="utf-8")
+    assert "SDFLOW_VOICE_RUNNER 未设置" not in err, err
+    assert "SDFLOW_VOICE_MODEL 未设置" not in err, err
+    assert "context file not found" in err, err
+    assert (repo["run_dir"] / "model-probe.rc").read_text(encoding="utf-8") == "2"
 
 
 def test_worker_output_files_are_0600(fake_job_home, repo):
@@ -767,7 +978,9 @@ def test_background_worker_survives_dispatching_shell_exit(fake_job_home, repo):
     job_id = payload["job_id"]
     try:
         assert dispatch_elapsed < 20, "dispatch 用时 %.1fs" % dispatch_elapsed
-        assert payload["dispatch_duration_seconds"] < JOB.DISPATCH_DEADLINE_SECONDS
+        # duration 现在覆盖到 nonce 核验结束 ⇒ 上界是 spawn deadline + 核验 grace
+        assert payload["dispatch_duration_seconds"] < (
+            JOB.DISPATCH_DEADLINE_SECONDS + JOB.NONCE_LOOKUP_GRACE_SECONDS)
         # 发起 shell（上面的 subprocess）已经退出；worker 由 supervisor 托管继续跑
         rc_path = repo["run_dir"] / "design-voice.rc"
         assert not rc_path.exists(), "worker 在发起 shell 退出前就终态了，证不出跨 shell 存活"

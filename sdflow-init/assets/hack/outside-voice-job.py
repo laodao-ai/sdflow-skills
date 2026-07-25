@@ -30,6 +30,8 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     **由 supervisor 在后台 shell 里执行，不给人手动调**。第一动作 = 把自身与 child 的
     stdout/stderr 直接重定向到 0600 的 `<site>.stdout`/`<site>.stderr`（在执行任何
     可携带 payload 的代码之前）；随后 started → child → terminal → rc 依序原子发布。
+    runner/model/effort 经 `SDFLOW_VOICE_RUNNER` / `SDFLOW_VOICE_MODEL` /
+    `SDFLOW_VOICE_EFFORT` **环境变量**下发（helper 的 `exec` 只吃 --context-file/--timeout）。
     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
     充当结果通道）。
 
@@ -70,6 +72,18 @@ MAX_SITES_PER_RUN = 2
 
 # dispatch 的 monotonic deadline（秒）。超时 MUST 回收 spawn 进程树。
 DISPATCH_DEADLINE_SECONDS = 5.0
+
+# attempt nonce 核验的**独立** grace（秒）—— MUST NOT 与 DISPATCH_DEADLINE_SECONDS 共用预算。
+# 共用会让「dispatch 越慢、核验窗口越短」，极端下只轮询一次：一次 supervisor 注册延迟就把
+# **成功的** dispatch 误判成 unknown-cost（fallback_allowed=false ⇒ 人工 reconcile 硬阻塞）。
+# 超时被 SIGKILL 之后同样走这份 grace——那恰是注册最可能滞后的时刻，零 grace 会同时留下
+# 一个孤儿付费 job 和一次 fallback 重付，正是 design.md「dispatch 后 metadata 前崩溃」要杀的形态。
+NONCE_LOOKUP_GRACE_SECONDS = 5.0
+
+# 单次 claude CLI 探针的上限（秒）：preflight 两条探针与 nonce 核验轮询共用同一口径。
+# 本机实测 `claude --version` 0.06s、`claude agents --all --json` 0.17s ⇒ 5 秒已是极宽上限；
+# 旧值 30 秒会让「5 秒级诚实降级」在 CLI 卡死时退化到 ~60 秒（preflight 两条串行）。
+CLI_PROBE_TIMEOUT_SECONDS = 5
 
 # worker 启动的**独立**短 deadline（秒）：与 worker 自身的 timeout 分开，避免用 dispatch
 # 时刻误杀排队中的合法 worker。只写进 job metadata 供 Task 2 的 status 派生消费。
@@ -233,7 +247,7 @@ def check_claude_version(claude_bin):
     if not claude_bin:
         return {"ok": False, "detail": "PATH 上找不到 claude", "hint": hint}
     try:
-        proc = _run_cli([claude_bin, "--version"], timeout=30)
+        proc = _run_cli([claude_bin, "--version"], timeout=CLI_PROBE_TIMEOUT_SECONDS)
     except Exception as exc:
         return {"ok": False, "detail": "claude --version 调用失败: %s" % exc, "hint": hint}
     if proc.returncode != 0:
@@ -256,7 +270,7 @@ def check_agents_json(claude_bin):
     if not claude_bin:
         return {"ok": False, "detail": "PATH 上找不到 claude", "hint": hint}
     try:
-        proc = _run_cli([claude_bin, "agents", "--all", "--json"], timeout=30)
+        proc = _run_cli([claude_bin, "agents", "--all", "--json"], timeout=CLI_PROBE_TIMEOUT_SECONDS)
     except Exception as exc:
         return {"ok": False, "detail": "agents --all --json 调用失败: %s" % exc, "hint": hint}
     if proc.returncode != 0:
@@ -361,6 +375,21 @@ def acquire_reservation(run_dir, site, nonce, run_id):
 
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
+def release_reservation(run_dir, site):
+    """回收自己的 reserve —— **MUST NOT 让删除失败掀掉整个 dispatch**。
+
+    调用方此刻正走在失败/降级路径上，唯一还要交付的东西就是 stdout 上那行带
+    `fallback_allowed` 的 JSON。一个裸 `os.unlink` 的 traceback 会让 stdout 空掉，
+    调用方读不到 `fallback_allowed`，于是一次本可立即同族 fallback 的失败变成哑失败。
+    返回 True=已删除 / False=删除未成功（reserve 可能仍在盘上，留给 reconcile）。
+    """
+    try:
+        os.unlink(reserve_path(run_dir, site))
+        return True
+    except OSError:
+        return False
+
+
 def _reject(message, state="usage-error", reason_code="preflight-error",
             fallback_allowed=True, **extra):
     payload = {"ok": False, "reason_code": reason_code, "state": state,
@@ -425,10 +454,12 @@ def _kill_process_tree(proc):
 
 
 def _parse_job_id_hint(stdout_text):
-    """从 `backgrounded · <id> · <cmd>` 里取 short id（**仅作交叉核验线索**）。
+    """从 `backgrounded · <id> · <cmd>` 里取 short id（**仅作匹配线索，永不单独构成失败**）。
 
     权威 id 来自 `claude agents --all --json` 里唯一携带本次 attempt nonce 的条目；
-    此处解析失败只是拿不到第二个信号，不构成失败判据（格式属 research preview，会漂）。
+    此处解析失败只是拿不到第二个信号（格式属 research preview，会漂）。解析**成功**时
+    同样不作为失败判据——只并入 `find_jobs_by_nonce` 的匹配通道，最终仍由「命中是否唯一」
+    这一条 fail-closed 判据决定；否则一次格式漂移解析出的垃圾 hex 就能否掉一次好 dispatch。
     """
     for line in (stdout_text or "").splitlines():
         idx = line.find("backgrounded")
@@ -440,24 +471,37 @@ def _parse_job_id_hint(stdout_text):
     return None
 
 
-def find_jobs_by_nonce(claude_bin, nonce, deadline_monotonic):
-    """轮询 agents JSON，找出**所有**命令串里携带本次 attempt nonce 的 background job。
+def _job_matches_attempt(item, nonce, id_hint):
+    """本次 attempt 的两条并列匹配通道：命令串带 nonce **或** id 等于本次 dispatch stdout 的 hint。
+
+    🔴 契约约束（对真 CLI 实测）：`kind=background` 且 `state=working` 的条目里 `name` 承载
+    完整命令串（故 nonce 可命中）；但 **`state=done` 的条目没有 `name` 字段**——极快失败的
+    worker（如 helper 缺失，<1s 即终态）会让只认 `name` 的轮询扑空，从而把一次**真的已经
+    产生的**外部 job 误判成「没产生」。故 id 通道 MUST 并列存在，不是冗余。
+    """
+    if not isinstance(item, dict) or item.get("kind") != "background":
+        return False
+    if nonce in str(item.get("name") or ""):
+        return True
+    return bool(id_hint) and str(item.get("id") or "") == id_hint
+
+
+def find_jobs_by_nonce(claude_bin, nonce, deadline_monotonic, id_hint=None):
+    """轮询 agents JSON，找出**所有**属于本次 attempt 的 background job。
 
     nonce 由 `secrets.token_hex` 生成、只出现在本次下发命令里 ⇒ 它是「外部 job 是否
-    真的产生了」这件事的**机械信号**（而不是靠 dispatch 自述成功）。
+    真的产生了」这件事的**机械信号**（而不是靠 dispatch 自述成功）。id_hint 是同一次
+    dispatch 自己 stdout 里的 short id，同属本次 attempt，作并列通道见 `_job_matches_attempt`。
     """
     matches = []
     while True:
         try:
-            proc = _run_cli([claude_bin, "agents", "--all", "--json"], timeout=30)
+            proc = _run_cli([claude_bin, "agents", "--all", "--json"], timeout=CLI_PROBE_TIMEOUT_SECONDS)
             data = json.loads(proc.stdout) if proc.returncode == 0 else []
         except Exception:
             data = []
         if isinstance(data, list):
-            matches = [item for item in data
-                       if isinstance(item, dict)
-                       and item.get("kind") == "background"
-                       and nonce in str(item.get("name") or "")]
+            matches = [item for item in data if _job_matches_attempt(item, nonce, id_hint)]
         if matches or time.monotonic() >= deadline_monotonic:
             return matches
         time.sleep(0.2)
@@ -532,7 +576,7 @@ def cmd_dispatch(args):
         command = build_worker_command(job_dir, run_dir, site, ctx, repo_root, args.runner,
                                        args.model, args.effort, args.timeout, nonce, run_id)
     except ValueError as exc:
-        os.unlink(reserve_path(run_dir, site))
+        release_reservation(run_dir, site)
         return 1, _reject(str(exc), state="usage-error", fallback_allowed=False, site=site)
 
     dispatched_at = utc_now_iso()
@@ -550,7 +594,7 @@ def cmd_dispatch(args):
             text=True, start_new_session=True,
         )
     except Exception as exc:
-        os.unlink(reserve_path(run_dir, site))
+        release_reservation(run_dir, site)
         return 1, _reject("claude --bg --exec 无法启动: %s" % exc, state="exec-error",
                           reason_code="exec-error", fallback_allowed=True, site=site)
     try:
@@ -563,11 +607,18 @@ def cmd_dispatch(args):
             stdout_text, stderr_text = proc.communicate(timeout=5)
         except Exception:
             stdout_text, stderr_text = "", ""
-    duration = time.monotonic() - start
 
-    # 外部 job 是否真的产生了 —— 只认 attempt nonce 在 agents JSON 里的机械命中。
-    lookup_deadline = deadline if not timed_out else time.monotonic()
-    matches = find_jobs_by_nonce(claude_bin, nonce, lookup_deadline)
+    # 外部 job 是否真的产生了 —— 只认本次 attempt 在 agents JSON 里的机械命中。
+    # 🔴 核验用**独立** grace（见 NONCE_LOOKUP_GRACE_SECONDS），两条分支同一口径：
+    # 既不跟 dispatch 抢同一份 5 秒预算，超时被 kill 之后也不是零 grace。
+    id_hint = _parse_job_id_hint(stdout_text)
+    lookup_deadline = time.monotonic() + NONCE_LOOKUP_GRACE_SECONDS
+    matches = find_jobs_by_nonce(claude_bin, nonce, lookup_deadline, id_hint=id_hint)
+
+    # 🔴 duration MUST 覆盖到核验结束：它是「5 秒级诚实降级」对外唯一的可机读锚。
+    # 若只算到 communicate 返回，这个数从构造上就 <DISPATCH_DEADLINE_SECONDS，
+    # 任何拿它跟 deadline 比的断言都恒真——等于没有锚。
+    duration = time.monotonic() - start
 
     if timed_out or rc != 0:
         why = ("dispatch 超过 monotonic %.0f 秒 deadline" % DISPATCH_DEADLINE_SECONDS
@@ -575,7 +626,7 @@ def cmd_dispatch(args):
         if matches:
             # 外部 job 已存在但本次没能完整发布 metadata ⇒ 成本未知，reserve 留给 reconcile。
             return 1, _reject(
-                "%s，但已检出携带本次 attempt nonce 的外部 job（%d 个）——成本未知，"
+                "%s，但已检出属于本次 attempt 的外部 job（%d 个）——成本未知，"
                 "禁止自动重派、禁止立即 fallback，请用显式 reconcile 处理"
                 % (why, len(matches)),
                 state="unknown-cost", reason_code="exec-error", fallback_allowed=False,
@@ -583,19 +634,20 @@ def cmd_dispatch(args):
                 dispatch_duration_seconds=round(duration, 3),
                 stderr_bytes=len(stderr_text or ""))
         # 尚未产生外部 job ⇒ 清理 reserve，允许 5 秒级同族 fallback。
-        try:
-            os.unlink(reserve_path(run_dir, site))
-        except OSError:
-            pass
-        return 1, _reject("%s；未检出任何携带本次 attempt nonce 的外部 job，已回收 reservation" % why,
+        release_reservation(run_dir, site)
+        return 1, _reject("%s；未检出任何属于本次 attempt 的外部 job，已回收 reservation" % why,
                           state="exec-error", reason_code="exec-error", fallback_allowed=True,
                           site=site, run_dir=run_dir,
                           dispatch_duration_seconds=round(duration, 3),
                           stderr_bytes=len(stderr_text or ""))
 
+    # 唯一 fail-closed 判据 = 命中是否唯一（两条匹配通道并集之后仍须收敛到一个 job）。
+    # stdout hint 只参与匹配、不再单独当「不一致」判死：它的格式属 research preview，
+    # 一次漂移解出的垃圾 hex 若能否掉一次好 dispatch，就把 `_parse_job_id_hint` 的
+    # 「解析不构成失败判据」写成了空话。
     if len(matches) != 1:
         return 1, _reject(
-            "无法核验唯一 canonical job id：携带本次 attempt nonce 的 background job 有 %d 个"
+            "无法核验唯一 canonical job id：属于本次 attempt 的 background job 有 %d 个"
             % len(matches),
             state="unknown-cost", reason_code="exec-error", fallback_allowed=False,
             site=site, run_dir=run_dir, attempt_nonce=nonce,
@@ -606,11 +658,6 @@ def cmd_dispatch(args):
     if not job_id:
         return 1, _reject("匹配到的 background job 无 id 字段", state="unknown-cost",
                           reason_code="exec-error", fallback_allowed=False, site=site)
-    hint = _parse_job_id_hint(stdout_text)
-    if hint and hint != job_id:
-        return 1, _reject(
-            "canonical job id 交叉核验不一致：dispatch stdout=%s，agents JSON=%s" % (hint, job_id),
-            state="unknown-cost", reason_code="exec-error", fallback_allowed=False, site=site)
 
     metadata = {
         "schema_version": SCHEMA_VERSION,
@@ -748,10 +795,20 @@ def cmd_worker(args):
     publish_started(run_dir, site, args.attempt_nonce, args.run_id)
 
     helper = os.path.join(JOB_DIR, HELPER_NAME)
+    # 🔴 env 是 worker→helper 之间**唯一**的 runner/model/effort 通道（helper 的既有 `exec`
+    # 契约只吃 --context-file / --timeout 两个 flag）⇒ 下面的 subprocess.call MUST 传 `env=env`。
+    # 漏传 = helper 读不到 SDFLOW_VOICE_RUNNER（Codex 宿主的环境里本就没有它）⇒ 立即 exit 1
+    # 「host=unknown」，整条后台通道对**真** voice dead on arrival，而 fake helper 全都不看 env、
+    # 照样绿 —— 这条接缝的回归锚见 test_worker_passes_runner_model_effort_env_to_real_helper。
     env = os.environ.copy()
     env["SDFLOW_VOICE_RUNNER"] = args.runner
     if args.model:
         env["SDFLOW_VOICE_MODEL"] = args.model
+    if args.effort:
+        # effort 与 runner/model 同路下发，让 job.json 里记的 effort 是**真实下发值**而非装饰。
+        # 注：把它变成 `--effort <e>` argv 属 outside-voice.sh 侧（Task 4）；本票不改该文件，
+        # 故当前这一格是「已接线、下游尚未消费」——Task 4 接上即生效，无需再回头改 worker。
+        env["SDFLOW_VOICE_EFFORT"] = args.effort
     rc = 127
     try:
         if not os.path.isfile(helper):
@@ -762,6 +819,7 @@ def cmd_worker(args):
                  "--timeout", str(args.timeout)],
                 cwd=args.repo_root if os.path.isdir(args.repo_root) else None,
                 stdin=subprocess.DEVNULL,
+                env=env,
             )
     except Exception as exc:
         sys.stderr.write("worker: helper 启动失败: %s\n" % exc)
