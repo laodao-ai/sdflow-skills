@@ -109,12 +109,12 @@ Claude 反向 runner 主动隔离 ambient customizations 并显式声明推理�
 条出境面：原始 context、半截 stdout、stderr 与 secret canary 都不得进入 supervisor transcript/state，
 本轮文件权限收紧，注入与越界输入不能改写命令或逃出本轮目录。
 
-- [ ] Claude 分支 argv golden 更新为显式 `--effort high --safe-mode --no-session-persistence`，模型仍只取 `SDFLOW_VOICE_MODEL`（Claude strong），helper 版本同步升级
-- [ ] 四旗（`--tools "Read,Grep,Glob"`、`--strict-mcp-config`、`--add-dir <repo_root>`、`--settings <read-fence>`）、共享 FRAME、两次 secret scan、200KB 截断保持同源语义不变，既有 golden 不回归
-- [ ] safe mode 下 SessionStart hooks/plugins/skills/memory 不执行，显式 read-fence 仍拒绝凭证路径，只读工具精确为 `Read,Grep,Glob`
-- [ ] worker 在执行任何可携带 payload 的代码前完成输出重定向；真实 `claude logs <id>` canary 回归证明 context、partial stdout、stderr、fake secret 均不进入 supervisor transcript/state
-- [ ] job 与输出文件权限为 0600；失败 stderr 只留在 gitignored run-dir，tracked 报告只写 rc/行数/字节数
-- [ ] 注入与越界攻击测试证明 NUL/换行、仓外路径、重复 site、shell 元字符不能改写命令或越出本轮目录；非 POSIX 平台 fail-closed
+- [x] Claude 分支 argv golden 更新为显式 `--effort high --safe-mode --no-session-persistence`，模型仍只取 `SDFLOW_VOICE_MODEL`（Claude strong），helper 版本同步升级
+- [x] 四旗（`--tools "Read,Grep,Glob"`、`--strict-mcp-config`、`--add-dir <repo_root>`、`--settings <read-fence>`）、共享 FRAME、两次 secret scan、200KB 截断保持同源语义不变，既有 golden 不回归
+- [x] safe mode 下 SessionStart hooks/plugins/skills/memory 不执行，显式 read-fence 仍拒绝凭证路径，只读工具精确为 `Read,Grep,Glob`
+- [x] worker 在执行任何可携带 payload 的代码前完成输出重定向；真实 `claude logs <id>` canary 回归证明 context、partial stdout、stderr、fake secret 均不进入 supervisor transcript/state
+- [x] job 与输出文件权限为 0600；失败 stderr 只留在 gitignored run-dir，tracked 报告只写 rc/行数/字节数
+- [x] 注入与越界攻击测试证明 NUL/换行、仓外路径、重复 site、shell 元字符不能改写命令或越出本轮目录；非 POSIX 平台 fail-closed
 
 ### Task 5: 两份评审 SKILL 的宿主自适应调度切换与安装快照
 

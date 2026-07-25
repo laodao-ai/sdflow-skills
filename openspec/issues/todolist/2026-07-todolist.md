@@ -76,6 +76,8 @@ sdflow-issues:
     T216: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"collect 幂等的两条冗余路径缺单路径回归锚","type":"代码质量","status":"OPEN","time":"2026-07-25 20:10","change":"enable-codex-background-outside-voice","batch":null}
     T217: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)","type":"代码质量","status":"OPEN","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":null}
     T218: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"rc_bad(CORRUPT) 路径重复 collect 非逐字节一致","type":"代码质量","status":"OPEN","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":null}
+    T219: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）","type":"代码质量","status":"OPEN","time":"2026-07-25 23:14","change":"enable-codex-background-outside-voice","batch":null}
+    T220: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）","type":"代码质量","status":"OPEN","time":"2026-07-25 23:15","change":"enable-codex-background-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2079,3 +2081,29 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：来源=Task 2 双轴复审 Standards 轴 Minor，fix 报告已主动披露。与 T214（OVBG-01 措辞对齐）同属「实现正确但 spec 字面需对齐」，可一并在 done 阶段处理。
 <!-- sdflow-issue-block:end id=T218 -->
+
+<!-- sdflow-issue-block:start id=T219 -->
+## T219: cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）
+> cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 4 双轴复审 Spec 轴新增 Minor：EFFORT_VALUES 收窄为 (high,) 后，拒绝只发生在 dispatch 层，worker 子命令自身不再校验。当前 dispatch 是唯一 producer（spec 亦禁自动重派）⇒ 不构成缺口，但若将来出现第二个 producer，worker 层无兜底。
+
+**思路**：worker 入口补一次同源校验（复用 EFFORT_VALUES，不抄第二份枚举）。
+
+**备注**：来源=Task 4 双轴复审（e1b8bc4 后）Spec 轴 Minor，判为登记备查、非缺口。
+<!-- sdflow-issue-block:end id=T219 -->
+
+<!-- sdflow-issue-block:start id=T220 -->
+## T220: probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）
+> probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 4 双轴复审 Standards 轴 M-r1/M-r2：同一文件里两簇根因（M1 spawn 时序、I1 降级方向美化）各留一处未扫到。:884-886 同时写着「helper 在 spawn runner 前落盘」（M1 第 4 处，自查只报三处）与「否则组长分支只能永久 fail-closed 判 unverifiable」——后半句双重不准：sidecar 缺席落的是判据⑤不是组长分支③，且⑤有 terminal witness 时判 exited 而非 unverifiable。该用例正是标着「Task 4 落点」的跨票交接锚。:2180 的同类句式仍是全称，表述过宽。
+
+**思路**：照 cmd_worker 已订正的措辞同步这两处；:2180 加「本 fixture 无 terminal witness」限定。
+
+**备注**：来源=Task 4 双轴复审（e1b8bc4 后）Standards 轴 Minor。纯 docstring、零行为影响，但有误导性 ⇒ 冷层 code-review 时优先处理。面治提示：这两簇根因在本 change 已复发三轮，扫时按「降级方向美化」「runner/host 主语反用」两个模式全仓 grep，别逐条补。
+<!-- sdflow-issue-block:end id=T220 -->

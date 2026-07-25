@@ -1,0 +1,523 @@
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation-fix1.md b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation-fix1.md
+new file mode 100644
+index 0000000..3d45ddc
+--- /dev/null
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation-fix1.md
+@@ -0,0 +1,197 @@
++# Task 4 · fix1 —— 双轴审轮 1 Standards 轴 FAIL 的修复报告
++
++**票**：`task4-runner-isolation`（`enable-codex-background-outside-voice`）
++**轮次**：fix1（Spec 轴 PASS / Standards 轴 FAIL：3 Important + 3 Minor）
++**基线 commit**：`908b818`
++**性质**：**5 条纯陈述订正 + 1 条行为改动（M3）**。行为改动只有一处：`EFFORT_VALUES` 收窄为
++`("high",)`，其余全部是注释 / docstring / 报告文字。
++
++> 本轮三条 Important 是**同一个形态**：写下的「契约陈述」被自家代码证伪。
++> ∴ 除逐条修复外，另做了一遍**全票契约断言自查**（第三节），又自捕到 5 处同族陈述错误，一并订正。
++
++---
++
++## 一、逐条发现 → 修法 → 锚
++
++### I1（Important）「pid 缺席 ⇒ 退回 `unverifiable`」被消费侧代码证伪
++
++**事实核对**（自己打开代码看的，不是转述）：`probe_subtree` 的 `runner_kind == "absent"`
++分支**不返回** unverifiable，而是直落判据 ⑤ —— `outside-voice-job.py:1600-1611`：
++
++```python
++    terminal_kind, _, _ = load_witness(run_dir, site, ".terminal.json", job, "terminal_at")
++    if terminal_kind == "ok":
++        return (SUBTREE_EXITED, "worker pid=%s 已发布 terminal witness 后退出 ⇒ …")
++```
++
++而 ⑤ 自己的残余登记里写着「helper 若是被 SIGKILL 打死的，`subprocess.call` 同样返回、
++witness 同样发布，而孤儿 runner 仍活着」——**正是 pid 缺席窗口里发生的那件事**。
++∴ 真实降级方向是**假 `exited`**（`cleanup --cancel` 解闸同族 fallback、孤儿仍在计费），
++不是 fail-closed 的 unverifiable。
++
++**修法（裁定照办：改陈述，不改行为）**——四处陈述全部订正为「缺席 ⇒ 退回 ⑤ 的盘面推断；
++helper 正常退出时结论正确，SIGKILL-in-window 时会误判 exited —— 这正是 ④ 要关而缺席时关不满的窄口」：
++
++| # | 位置 | 订正 |
++|---|---|---|
++| 1 | `outside-voice.sh:30-38`（头部契约 `$SDFLOW_VOICE_RUNNER_PID_FILE` 段） | 删掉「消费方读不到即退回 fail-closed 的 unverifiable，属诚实降级」，改为 ⑤ 的真实路径 + **误判 exited** 明写 |
++| 2 | `outside-voice.sh:474-480`（`ov_publish_runner_pid` 时序诚实边界） | 同上；并删掉「方向安全」这句（它正是被证伪的那半句） |
++| 3 | `outside-voice-job.py:38-42`（`worker` 子命令契约） | 同上 |
++| 4 | `sdflow-init/tests/test_outside_voice.py:715-721`（`test_exec_still_delivers_findings_when_the_pid_sidecar_cannot_be_written` docstring） | 改写为「**因为它不是 fail-closed 降级**，所以这条哨兵是操作者唯一能看见窄口被打开的信号」 |
++| 5 | `impl-reports/task4-runner-isolation.md:43`（三条边界表首行） | 原文保留 + `〔fix1 订正〕` 标注，明写「被自家消费侧代码证伪」 |
++
++**行为零改动**（裁定要求）：`git diff` 亲验，这五处全是注释 / docstring / 报告文字。
++pid 文件在场时 ④ 压过 ⑤ 的既有行为原样保留。
++
++**锚**：无新锚（纯陈述）。既有 `test_the_published_runner_pid_unblocks_the_subtree_verdict`
++仍是 ④ 生效的后果锚；⑤ 的误判窄口**按裁定不修**，故只登记不上锚。
++
++### I2（Important）`outside-voice.sh` 头部注释主语颠倒
++
++`$SDFLOW_VOICE_RUNNER`（`:6`）定义为「当前宿主**之外**的另一个机队」⇒ 走 claude 分支
++⟺ 宿主是 **Codex**。原文「Claude 宿主的同步路径走这条缺省」主语反了。
++
++**修**：`outside-voice.sh:16-25` 重写该段，显式点出「⚠ 主语别搞反：走到 claude 分支 ⟺ 宿主是
++**Codex**；Codex 宿主的同步路径直调本脚本 exec、没有下发方，走的就是这条缺省」。
++交叉核实（`sdflow-code-review/SKILL.md:398` 执行模式矩阵）：`| sync | host=codex |` —— Codex 宿主
++确实走同步直调 exec，订正后的陈述成立。
++
++**行为零改动**：按编排层裁定，**三旗覆盖所有 claude 反向调用是照 OVBG-04 原文，不是加宽** ⇒
++未加任何分档、未动 argv。
++
++### I3（Important）effort 断言对 codex runner 不成立
++
++`RUNNER_VALUES` 含 `codex`，而 `outside-voice.sh` 的 codex 分支**从不读** `SDFLOW_VOICE_EFFORT`
++⇒ `--runner codex` 时 job.json 的 `effort` 仍是装饰。原注释无条件称「真实下发并生效」。
++
++**修**：`outside-voice-job.py:912-917` 把断言**带上主语**——`runner=claude` 时才是生效值；
++`runner=codex` 时明写「仍是装饰值，MUST NOT 拿它当『codex 实际生效档位』的证据」。
++同族一处（自查发现）：`outside-voice.sh:149-152` 的 `--effort <档位>` 说明也做了同样限定。
++
++### M1（Minor）`probe_subtree` 判据 ④ 的时序描述漏改
++
++`outside-voice-job.py:1550` 仍写「helper 在 spawn runner **前**落盘」，与已订正的 `:36`/`:1496`
++打架（首轮报告自述「两处」，实为三处）。
++
++**修**：订正为「spawn runner **后**立即落盘，早于 `wait`；pid 在 `&` 之前不存在，"spawn 前落盘"
++在 shell 层不可能」。首轮报告第 4 节标题的「两处」也加了 `〔fix1 订正〕` 注记。
++
++### M2（Minor）契约锚正则看不见裸 `$SDFLOW_VOICE_*`
++
++`test_env_contract_block_registers_every_consumed_variable` 原正则 `\$\{(SDFLOW_VOICE_[A-Z_]+)[:\-}]`
++只认花括号形态；脚本里 `"$SDFLOW_VOICE_MODEL"`（`:737`）/ `"$SDFLOW_VOICE_RUNNER"`（`:800`）是**裸**形态。
++当前四个变量各自都另有花括号用法故无实漏，但「只以裸形态出现的新变量」会静默逃逸本锚。
++
++**修**：正则改为 `\$\{?(SDFLOW_VOICE_[A-Z_]+)`，docstring 写明口径 MUST 覆盖两种形态。
++（预防性改动，当前无红可转绿 —— 如实说明，不假称"修复了一个漏检"。）
++
++### M3（Minor · **唯一的行为改动**）dispatch 侧把 effort 钉死 `high`
++
++spec（OVBG-04）写死 `--effort high`，而实现允许 `dispatch --effort low|medium` 一路下发。
++裁定：**dispatch 侧钉死 high**（它是整条链上 effort 的唯一 producer：`build_worker_command`
++→ worker → `SDFLOW_VOICE_EFFORT` → `outside-voice.sh` 全程原样透传，没有第二个注入点），
++helper 侧 `${SDFLOW_VOICE_EFFORT:-high}` 的透传能力**保留不删**（宿主直调 exec 路径用）。
++
++**修**：`EFFORT_VALUES = ("low","medium","high")` → `("high",)`（一行 + 理由注释），
++拒绝文案改为「effort 非法（后台通道按 OVBG-04 钉死 high，MUST NOT 降档）」。
++**选了 fail-loud 拒绝而非静默改写成 high**：静默改写会让「调用方以为发了 medium、实际跑了 high」
++两边都察觉不到；拒绝则当场暴露调用方 bug。校验点仍是原来那一处 `if args.effort not in EFFORT_VALUES`，
++**没有新增分支**。
++
++**TDD（先红后绿，实跑）**：
++
++```
++$ /usr/bin/python3 -m pytest sdflow-init/tests/test_outside_voice_job.py -q -k effort   # 实现前
++FAILED …::test_dispatch_only_ever_dispatches_effort_high[low]
++FAILED …::test_dispatch_only_ever_dispatches_effort_high[medium]
++2 failed, 4 passed, 304 deselected
++```
++
++（`xhigh` / `""` 两格改前就绿——原枚举已挡掉；真正的缺口正是 `low`/`medium` 这两格，
++∴ 这条锚不是"全拒式"空断言。）
++
++**新锚 2 条**（`test_outside_voice_job.py`）：
++
++| 锚 | 证明什么 |
++|---|---|
++| `test_dispatch_only_ever_dispatches_effort_high[low\|medium\|xhigh\|""]` | 非 high 一律 exit 1 + `state="usage-error"`，且 `_bg_invocations == []`、`.reserve` 不存在 ⇒ **在任何外部派发之前**被拒 |
++| `test_dispatch_accepts_effort_high_and_hands_it_down_verbatim` | 正向对照：high 真被 `shlex` 解出的 worker 命令原样携带（证明拒绝不是靠"全拒"实现的） |
++
++**连带订正**（同一片，避免留下互相打架的陈述）：`outside-voice.sh:22-25` 与
++`test_outside_voice.py:624` 的「job helper 只放行 3 档」→「只放行 high 一档」；
++`test_exec_claude_effort_comes_from_the_dispatched_env` 的 docstring 补一句「本锚锁的是**透传能力**，
++MUST NOT 被读成 dispatch 可以下发 medium」——那条金标里的 `medium` 保留（裁定：helper 透传能力不删）。
++
++**版本号未动**（`outside-voice-job.py 0.1.0`）：本文件由本 change 的 Task 1 新增、尚未下发到任何
++消费仓，无 skew 面；且无测试锚该字面值。如判需 bump，请下轮明示。
++
++---
++
++## 二、全量测试
++
++```
++$ cd /Users/cheneyzhao/Documents/04-sdflow-skills && /usr/bin/python3 -m pytest sdflow-init/tests/ -q
++621 passed, 4 skipped in 163.49s
++```
++
++```
++$ /usr/bin/python3 -m pytest -q
++2469 passed, 10 skipped, 3 xfailed in 254.16s (0:04:14)
++```
++
++基线（`908b818`）= 2464 passed, 10 skipped, 3 xfailed；本轮新增 2 条 dispatch 锚（其中一条
++4 格参数化）⇒ 预期 +5，**实测 +5，无回归、无 skip/xfail 变化**。
++（本机 pytest 只在系统 python 里：命令 MUST 写 `/usr/bin/python3 -m pytest`。）
++
++---
++
++## 三、契约断言自查（本票每一句「保证 / 不会发生」× 代码是否兑现）
++
++逐条打开代码核对（`git show 908b818` 全 diff 逐行过），本票落下的断言清单：
++
++| # | 断言（本票写下的） | 代码兑现？ | 处置 |
++|---|---|---|---|
++| 1 | pid 缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable` | ❌ **证伪**（落 ⑤，terminal witness 在场即 `exited`） | I1，四处订正 |
++| 2 | 该降级「方向安全」 | ❌ **证伪**（假 exited = 解闸 fallback，方向不安全） | I1，删该措辞 |
++| 3 | claude 分支缺省档位服务的是「Claude 宿主同步路径」 | ❌ **主语反**（claude 分支 ⟺ Codex 宿主） | I2 |
++| 4 | job.json 的 effort 是「真实下发并生效」值 | ❌ **对 `runner=codex` 不成立** | I3 |
++| 5 | pid sidecar「spawn 前落盘」（`probe_subtree` ④） | ❌ **shell 层不可能**，且与同文件另两处打架 | M1 |
++| 6 | 「订正了**两处** docstring」（首轮报告） | ❌ 实为三处，漏 `probe_subtree` ④ | M1，报告加注 |
++| 7 | 后台通道 effort 合法值 = 3 档 | ❌ 与 spec「写死 high」不符 | M3 |
++| 8 | **自捕 a**：`cmd_worker` 注释「缺这个信号时组长分支只能 fail-closed 判 unverifiable」 | ❌ 同 I1 形态（缺信号是落 ⑤，不是卡在组长分支） | 已订正（`:919-923`） |
++| 9 | **自捕 b**：`read_runner_pid` docstring「文件缺席 ⇒ MUST NOT 当成 runner 已退出」 | ⚠️ 半真 —— 函数自身返回 `"absent"` 无误，但读起来像在承诺判定结果，而 ⑤ 确会判 exited | 已改写为「`"absent"` 本身不构成任何一侧的证据，调用方由此退回 ⑤」（`:1496-1499`） |
++| 10 | **自捕 c**：`test_exec_claude_effort_defaults_to_high_without_the_env` docstring「Claude 宿主的同步路径」 | ❌ 同 I2 主语反 | 已订正 |
++| 11 | **自捕 d**：`test_exec_writes_no_runner_pid_sidecar_when_the_env_is_absent` docstring「Claude 宿主的同步路径」（用例 env 恰是 `runner=claude`，自相矛盾） | ❌ 同 I2 主语反 | 已订正 |
++| 12 | **自捕 e**：`test_helper_writes_no_runner_pid_when_the_worker_did_not_ask_for_one` docstring「同步（Claude 宿主）路径」 | ❌ 同 I2 主语反 | 已订正 |
++| 13 | **自捕 f**：`test_the_published_runner_pid_unblocks_the_subtree_verdict` docstring「没有它：verdict 恒 `unverifiable`」 | ⚠️ 只在**本用例刻意删掉 terminal witness** 的形态下成立，孤立读会读成全称命题 | 已加限定 + 点明「有 witness 时是漏放不是卡死」 |
++| 14 | `--safe-mode` 关掉 ambient 定制但**不**关四旗/读围栏 | ✅ 真机探针 + 对照组（首轮第三节实测输出） | 保留 |
++| 15 | 两条 runner 路径都落 pid sidecar | ✅ `test_exec_publishes_the_runner_pid_sidecar` + `…_on_the_codex_path_too` | 保留 |
++| 16 | sidecar 格式 = 纯十进制、权限 0600 | ✅ 两侧各有断言（helper 侧 `stat` + 消费侧 `read_runner_pid` strict `\A\d+\Z`） | 保留 |
++| 17 | 「无 terminal witness 的站点恒判 unverifiable」（`ov_publish_runner_pid` 段 + 一条测试 docstring） | ✅ 该句**自带限定**，与 ⑤ 一致 | 保留 |
++| 18 | worker 的 stdout/stderr 不入 supervisor transcript | ✅ 真机 canary + 反向变异（首轮第三节） | 保留 |
++
++**结论**：本票原有 18 条断言里，**7 条不成立、2 条表述过宽**（其中 6 条是本轮自查新捕的，
++双轴审只点了 3 条 Important + 1 条 Minor）。全部已订正；无一条靠改行为去迁就陈述。
++
++**同源根因**（如实记，不粉饰）：这 9 条集中在两簇——
++① **降级方向**（把「我希望它 fail-closed」写成了「它 fail-closed」，共 4 条）；
++② **主语**（`runner` 名与 `host` 名反着用，共 4 条）。两簇都属「落笔前没回去打开被引用的那段代码」。
++② 尤其便宜可防：`$SDFLOW_VOICE_RUNNER` 的定义就在同一文件第 6 行。
++
++---
++
++## 四、未修项（裁定不修，MUST NOT 顺手做）
++
++| 项 | 理由（照裁定原样执行） |
++|---|---|
++| ⑤ 的 SIGKILL-in-window 误判 exited 本身 | 裁定「改陈述，不改行为」——pid 文件在场时 ④ 压过 ⑤，缺席只发生在宿主直调路径或 helper 版本 skew，属已登记的诚实降级 |
++| `--safe-mode` 对 plugins/skills 未独立探针 | Spec 轴独立裁定为合理简化（`claude --help` 原文把 skills/plugins 与 hooks/memory 归同一 flag，且已实证覆盖两个最高影响类 + 对照组） |
++| 哨兵三档只有 `write` 有锚、`${dest}.tmp.$$` 残片 | 影响≈0（gitignored run-dir、无 glob 消费者），已 defer |
++| canary 依赖本机 claude≥2.1.169、CI skip | research-preview 下不可避免，已 defer |
++| `EFFORT_VALUES` 3 档 vs CLI 5 档的"漂" | 已被 M3 取代：现在是 1 档 vs 5 档，且方向 fail-closed |
++| `<site>.runner.pid` 写后不删 | 方向安全（stale ⇒ 判 alive） |
++| `openspec/specs/` 主 spec 的「四旗」措辞 | 归 archive 阶段的 delta 同步，实现期 MUST NOT 改 |
++
++**流程纪律**：未勾任何复选框、未打 `task4-` 完成标签、未改 `proposal.md` / `design.md` /
++`specs/` / `tasks.md` / `openspec/specs/`（`git status` 亲验：改动仅 4 个源/测试文件 +
++本票两份 impl-report）。
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation.md b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation.md
+index 870c68c..f5700f8 100644
+--- a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation.md
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation.md
+@@ -40,7 +40,7 @@ runner 由调用方决定，helper 不预设只有 claude。
+ 
+ | 边界 | 处理 |
+ |---|---|
+-| **「spawn 之前落盘」在 shell 层不可能** | pid 只有 `&` 之后（`$!`）才存在 ⇒ 只能 spawn 后**立即**写、早于 `wait`。残余窗口与既有残余 (b) 同源：`&` 与写入之间落信号 ⇒ 文件缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable`（**不是**误判 exited），方向安全 |
++| **「spawn 之前落盘」在 shell 层不可能** | pid 只有 `&` 之后（`$!`）才存在 ⇒ 只能 spawn 后**立即**写、早于 `wait`。残余窗口与既有残余 (b) 同源：`&` 与写入之间落信号 ⇒ 文件缺席 ⇒ 消费侧 `probe_subtree` 退回判据 ⑤ 的盘面推断（terminal witness 在场即判 `exited`）。**〔fix1 订正〕** 本行原写「退回 fail-closed 的 `unverifiable`（不是误判 exited），方向安全」——**被自家消费侧代码证伪**：`runner_kind=="absent"` 直落 ⑤，而该窄口里 helper 恰是被信号打死的 ⇒ ⑤ **误判 exited**、孤儿 runner 仍在计费。这正是 ④ 要关、而它自己缺席时关不满的口子；登记为已知窄口，不声称方向安全 |
+ | **写入失败** | 打 `OV_RUNNER_PID_PUBLISH_FAILED=1 stage=... path=...`（结构化字段，无 context 正文）并**继续跑 voice**——它是清理辅助信号、不是交付物；掀掉 voice 是拿主交付物去换一个辅助信号 |
+ | **写完不删** | 与消费侧 `read_runner_pid` docstring 已声明的模型一致（「串到别人的活 pid ⇒ 判 alive；pid 被复用 ⇒ 同样判 alive」——两个误判方向都是 fail-closed）。删掉反而会让 helper 被 SIGKILL 那一格失去 ④ 的直接信号 |
+ 
+@@ -51,11 +51,13 @@ runner 由调用方决定，helper 不预设只有 claude。
+ 「代码里读了它」与「契约里写了它」绑死（见下表「三条硬交接」的 B 行），防再次出现 Task 1 那种「已下发、
+ 零消费者、却已写进 job.json 当事实」的无主变量。
+ 
+-### 4. `outside-voice-job.py` 的两处契约 docstring 订正（**不改行为**）
++### 4. `outside-voice-job.py` 的契约 docstring 订正（**不改行为**）
+ 
+ Task 3 写下的「helper MUST 在 spawn runner **之前**把 `OV_RUNNER_PID` 写入」是一条
+ **不可能被满足**的契约（pid 那时还不存在）。已订正为「spawn 后立即（`$!` 可得的最早时刻，
+ 早于 `wait`）」并登记残余窗口。同时把两处「已接线、下游尚未消费」的注释更新为真实消费者。
++**〔fix1 订正〕** 本节原标题写「两处」——实为**三处**：`probe_subtree` 判据 ④ 的
++「helper 在 spawn runner 前落盘」当轮漏改，与另两处打架，已在 fix1 一并订正（Minor M1）。
+ `git diff` 核实：`outside-voice-job.py` 的改动**全部**是注释/docstring，零可执行行。
+ 
+ ---
+diff --git a/sdflow-init/assets/hack/outside-voice-job.py b/sdflow-init/assets/hack/outside-voice-job.py
+index ad5713e..627bd18 100644
+--- a/sdflow-init/assets/hack/outside-voice-job.py
++++ b/sdflow-init/assets/hack/outside-voice-job.py
+@@ -38,7 +38,10 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代
+     写入该文件 —— 它是 cleanup 核验「runner 子树是否已退出」的唯一直接信号
+     （worker 自己的进程组圈不住 timeout 的独立组）。
+     ⚠ pid 只有在 `&` 之后才存在 ⇒ 「spawn 之前落盘」在 shell 层不可能；`&` 与写入之间
+-    的窗口里被杀 ⇒ 文件缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable`（方向安全）。
++    的窗口里被杀 ⇒ 文件缺席 ⇒ 消费侧 `probe_subtree` 退回判据 ⑤ 的盘面推断（terminal
++    witness 在场即判 `exited`），**不是**退回 `unverifiable` —— 而该窄口里 helper 恰是
++    被信号打死的 ⇒ ⑤ 会**误判 exited**、孤儿 runner 仍在计费。本 sidecar（判据 ④）就是
++    为关这个口子而存在，它自己缺席时关不满：登记为已知窄口，MUST NOT 声称已消除。
+     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
+     充当结果通道）。
+ 
+@@ -192,7 +195,14 @@ SITE_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
+ # 当成可以放任任意串的理由（quoting 是最后一道，不是唯一一道）。
+ RUN_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+ MODEL_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}\Z")
+-EFFORT_VALUES = ("low", "medium", "high")
++# 〔OVBG-04〕spec 把后台通道的推理档位**写死 `--effort high`** ⇒ 合法集就是这一个值，
++# 不是 CLI 自己支持的那 5 档、也不是原先随手放行的 3 档。dispatch 是整条链上 effort 的
++# **唯一 producer**（`build_worker_command` → worker → `SDFLOW_VOICE_EFFORT` →
++# `outside-voice.sh` 全程原样透传，没有第二个注入点）⇒ 钉在这里一处即钉住全链。
++# 降档一律 fail-loud 拒绝，MUST NOT 静默改写成 high（静默改写 = 调用方以为发了 medium、
++# 实际跑了 high，两边都察觉不到）。helper 侧 `${SDFLOW_VOICE_EFFORT:-high}` 的透传能力
++# 保留不删 —— 宿主直调 `exec` 的同步路径用得上，那条路径不经本文件。
++EFFORT_VALUES = ("high",)
+ RUNNER_VALUES = ("claude", "codex")
+ # v1 background transport 只在这两个已过 quoting/injection golden 的 POSIX 平台 ready。
+ SUPPORTED_SYS_PLATFORMS = ("darwin", "linux")
+@@ -611,8 +621,9 @@ def cmd_dispatch(args):
+         return 1, _reject("model 名非法: %r" % (args.model,), state="usage-error",
+                           fallback_allowed=False, site=site)
+     if args.effort not in EFFORT_VALUES:
+-        return 1, _reject("effort 非法: %r" % (args.effort,), state="usage-error",
+-                          fallback_allowed=False, site=site)
++        return 1, _reject("effort 非法（后台通道按 OVBG-04 钉死 %s，MUST NOT 降档）: %r"
++                          % ("|".join(EFFORT_VALUES), args.effort),
++                          state="usage-error", fallback_allowed=False, site=site)
+     if args.runner not in RUNNER_VALUES:
+         return 1, _reject("runner 非法: %r" % (args.runner,), state="usage-error",
+                           fallback_allowed=False, site=site)
+@@ -899,13 +910,17 @@ def cmd_worker(args):
+     if args.model:
+         env["SDFLOW_VOICE_MODEL"] = args.model
+     if args.effort:
+-        # effort 与 runner/model 同路下发，让 job.json 里记的 effort 是**真实下发值**而非装饰。
+-        # 消费者 = `outside-voice.sh` 的 claude 分支（1.5.0 起）：`--effort "${SDFLOW_VOICE_EFFORT:-high}"`。
+-        # ∴ job.json 里记的 effort 是**真实下发并生效**的值，不是装饰。
++        # effort 与 runner/model 同路下发。消费者**只有一个**：`outside-voice.sh` 的
++        # **claude 分支**（1.5.0 起）`--effort "${SDFLOW_VOICE_EFFORT:-high}"`。
++        # ∴ 断言要带主语——`runner=claude` 时 job.json 里记的 effort 才是真实下发并生效的值；
++        # `runner=codex` 时 codex 分支**从不读这个变量**（档位不经本通道），它在 job.json 里
++        # 仍是装饰值，MUST NOT 拿它当「codex 实际生效档位」的证据。
+         env["SDFLOW_VOICE_EFFORT"] = args.effort
+     # 🔴 runner pid sidecar 的落盘路径 —— cleanup 核验「runner 子树是否已退出」的**唯一直接
+     # 信号**：worker 自己的进程组圈不住 GNU timeout 自建的那个独立组（见 probe_subtree 的
+-    # 判定地基），缺这个信号时组长分支只能 fail-closed 判 unverifiable。
++    # 判定地基）。缺这个信号时判定退回 `probe_subtree` 的判据 ⑤ 盘面推断 —— 无 terminal
++    # witness 才判 unverifiable，有 terminal witness 则判 exited（helper 被 SIGKILL 那格是
++    # **误判**，孤儿 runner 仍在计费）。∴ 接上本路径不是"锦上添花"，是把那格误判关掉。
+     # 消费者 = `outside-voice.sh` 的 `ov_publish_runner_pid`（1.5.0 起）：spawn runner 后立即
+     # 把 `OV_RUNNER_PID` 以纯十进制原子写入本路径（临时文件 + mv，0600）。
+     env["SDFLOW_VOICE_RUNNER_PID_FILE"] = runner_pid_path(run_dir, site)
+@@ -1490,8 +1505,10 @@ def read_runner_pid(run_dir, site):
+ 
+     盘面格式与 `<site>.rc` 同构：**纯十进制单值**，由 `outside-voice.sh` 在 spawn runner
+     后**立即**（早于 `wait`）原子写入，内容 = `OV_RUNNER_PID`（GNU timeout 自身 pid，
+-    亦即它 setpgid 出的那个独立进程组的 pgid）。文件缺席 = 该窗口内 helper 被杀或
+-    未接线 ⇒ 判定退回下一级信号，MUST NOT 当成「runner 已退出」。
++    亦即它 setpgid 出的那个独立进程组的 pgid）。文件缺席 = 该窗口内 helper 被杀、或本次
++    调用根本没接线（宿主直调 exec 不设 env）⇒ `"absent"` 本身**不构成任何一侧的证据**：
++    调用方 `probe_subtree` 由此退回判据 ⑤ 的盘面推断（见那里登记的误判 exited 窄口），
++    MUST NOT 把 `"absent"` 读成「runner 已退出」。
+ 
+     为什么是裸 pid 文件而不是 JSON witness：这个文件由 shell 写，契约越小越不容易写错，
+     而写错的代价是 cleanup 永久 fail-closed。identity 绑定来自**路径本身**——run-dir × site
+@@ -1547,7 +1564,8 @@ def probe_subtree(run_dir, site, job):
+       ① started witness 里的 worker identity —— 没有它就没有可核验的对象。
+       ② worker pid 本体：存活 ⇒ alive；不可判定 ⇒ unverifiable。
+       ③ worker 是组长且组内仍有活口 ⇒ alive（未换组的后代还在跑）。
+-      ④ `<site>.runner.pid`（helper 在 spawn runner 前落盘）—— **唯一能直接回答「runner
++      ④ `<site>.runner.pid`（helper 在 spawn runner **后**立即落盘，早于 `wait`；pid 在
++         `&` 之前不存在，"spawn 前落盘"在 shell 层不可能）—— **唯一能直接回答「runner
+          子树是否退出」的信号**：alive ⇒ alive；确定不存在 ⇒ exited；不可判定 / 文件损坏
+          ⇒ unverifiable（信号在场就以它为准，MUST NOT 再退回 ⑤ 的推断）。
+       ⑤ 该信号缺席 ⇒ 退到盘面推断：terminal witness 存在 ⟺ worker 自己走到了发布点，而
+diff --git a/sdflow-init/assets/hack/outside-voice.sh b/sdflow-init/assets/hack/outside-voice.sh
+index 1e602a7..203e929 100755
+--- a/sdflow-init/assets/hack/outside-voice.sh
++++ b/sdflow-init/assets/hack/outside-voice.sh
+@@ -14,12 +14,15 @@
+ #     $SDFLOW_VOICE_MODEL   claude 反向路径专用：-p --model 的取值。runner=claude 时必须非空，
+ #                           否则同样 fail-loud（exit 1）。
+ #     $SDFLOW_VOICE_EFFORT  claude 反向路径专用：`--effort` 的取值〔OVBG-04 · Task 4〕。
+-#                           空/未设 ⇒ 缺省 "high"（spec 写死的档位；Claude 宿主的同步路径
+-#                           本就没有下发方，走这条缺省）。**取值域 MUST NOT 在本脚本再复制
+-#                           一份枚举**——后台通道的合法值由上游 outside-voice-job.py 的
+-#                           EFFORT_VALUES 单点校验（CLI 自己支持 5 档、job helper 只放行 3 档，
+-#                           抄一份必漂）。本脚本只负责把它原样变成一个 argv 词，
+-#                           故它 MUST NOT 拆词：非法值只会让 claude 自己 fail-loud。
++#                           空/未设 ⇒ 缺省 "high"（spec 写死的档位）。⚠ 主语别搞反：
++#                           $SDFLOW_VOICE_RUNNER 指的是【宿主之外】的机队 ⇒ 走到 claude
++#                           分支 ⟺ 宿主是 **Codex**；而 Codex 宿主的同步路径直调本脚本
++#                           exec、没有下发方，走的就是这条缺省。只有后台通道的 worker
++#                           才显式下发它。**取值域 MUST NOT 在本脚本再复制一份枚举**——
++#                           后台通道的合法值由上游 outside-voice-job.py 的 EFFORT_VALUES
++#                           单点校验（spec 把后台档位钉死 high，故那里只放行 high 一档；
++#                           CLI 自己支持 5 档，抄一份必漂）。本脚本只负责把它原样变成一个
++#                           argv 词，故它 MUST NOT 拆词：非法值只会让 claude 自己 fail-loud。
+ #     $SDFLOW_VOICE_RUNNER_PID_FILE
+ #                           后台通道专用〔OVBG-05 · Task 4 交接〕：`<site>.runner.pid` 的
+ #                           绝对路径。非空时，本脚本在 spawn runner 后【立即】把
+@@ -27,10 +30,15 @@
+ #                           独立进程组的 pgid）以纯十进制原子写入该路径（临时文件 + mv，0600）。
+ #                           它是 outside-voice-job.py 的 cleanup 核验「runner 子树是否已退出」
+ #                           的【唯一直接信号】——worker 自己的进程组圈不住 timeout 的独立组。
+-#                           空/未设 ⇒ 不写任何文件（Claude 宿主同步路径零副作用）。
++#                           空/未设 ⇒ 不写任何文件（不走后台通道的直调 exec 零副作用）。
+ #                           写入失败 ⇒ 打 OV_RUNNER_PID_PUBLISH_FAILED=1 哨兵并【继续】跑
+-#                           voice（它是清理辅助信号，不是交付物；消费方读不到即退回
+-#                           fail-closed 的 unverifiable，属诚实降级）。
++#                           voice（它是清理辅助信号，不是交付物）。
++#                           ⚠ 降级方向如实说：消费方读不到本文件时**并非**一律判
++#                           unverifiable，而是退回 outside-voice-job.py `probe_subtree`
++#                           判据 ⑤ 的盘面推断 —— terminal witness 在场即判 exited。
++#                           helper 正常退出时该结论正确；helper 被 SIGKILL 打死时会
++#                           **误判 exited**（孤儿 runner 仍在计费、fallback 被解闸）——
++#                           那正是本文件（判据 ④）要关、而它缺席时关不满的那个窄口。
+ #   preflight
+ #     stdout: "ready" | "not_installed" | "missing-deps"         exit 0（$SDFLOW_VOICE_RUNNER 非空时）
+ #             探测目标 = $SDFLOW_VOICE_RUNNER 的 CLI（MUST NOT 硬编码 codex）
+@@ -139,7 +147,9 @@
+ #                                  （本机真机探针已复核，见 test_real_runner_isolates_*）。
+ #         --no-session-persistence inner `claude -p` 的 transcript 不落盘、不可 resume。
+ #         --effort <档位>          推理档位显式下发（取 $SDFLOW_VOICE_EFFORT，缺省 high），
+-#                                  使 job.json 里记的 effort 是真实生效值而非装饰。
++#                                  使 job.json 里记的 effort 在 **runner=claude 时**是真实
++#                                  生效值而非装饰（codex 分支不读该变量 ⇒ runner=codex 的
++#                                  job.json effort 仍只是下发记录，别拿它当生效证据）。
+ #       claude 侧读边界 = 【应用层负向】——`--settings` permissions.deny 挡凭证库路径（列出的拒读、
+ #       未列的仍可读，见 OV_CLAUDE_READ_FENCE 注释）。⚠ 与 codex 的对称性【未定·未真机验】（A1）：
+ #       codex `-s read-only` 内核沙箱封写/网络确定，但是否也限【读】未在真 Codex 宿主实测 → 待验批。
+@@ -463,8 +473,11 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找
+ #
+ # 🔴 时序的诚实边界：pid 只有在 `&` 之后（`$!`）才存在 ⇒ 本函数只能在 spawn **之后**
+ #   立即调用，不可能真在 spawn 之前落盘。残余窗口与头部契约的残余 (b) 同源同性质：
+-#   `&` 与本次写入之间若落信号，该次 runner 的 pid 没被记下 ⇒ 消费方退回 fail-closed
+-#   的 unverifiable（不是误判 exited）。方向安全，只登记不声称消除。
++#   `&` 与本次写入之间若落信号，该次 runner 的 pid 没被记下 ⇒ 消费侧 `probe_subtree`
++#   退回判据 ⑤ 的盘面推断（terminal witness 在场即判 exited），**不是**退回 unverifiable。
++#   ⚠ 该窄口里 helper 恰是被信号打死的 ⇒ ⑤ 会**误判 exited**（孤儿 runner 仍在计费）。
++#   本文件（判据 ④）存在的意义就是关掉这个口子，而它自己缺席时关不满 —— 只登记，
++#   不声称消除，也不假称降级方向是安全的。
+ #
+ # 失败一律**不掀掉 voice**：它是清理辅助信号、不是交付物；只打结构化哨兵让降级可见
+ # （同 OV_GROUP_KILL_DEGRADED=1 规格，MUST NOT 含 context 正文）。
+diff --git a/sdflow-init/tests/test_outside_voice.py b/sdflow-init/tests/test_outside_voice.py
+index 1fad1a8..120598f 100644
+--- a/sdflow-init/tests/test_outside_voice.py
++++ b/sdflow-init/tests/test_outside_voice.py
+@@ -622,14 +622,20 @@ def test_exec_claude_effort_comes_from_the_dispatched_env(tmp_path):
+     这条锚同时守 Task 1 遗留的交接：worker 早已把 effort 塞进 helper 的 env，但在本票
+     之前**全仓零消费者** ⇒ `job.json` 里的 `"effort"` 只是个未经核实的自述值。
+     取值域由上游 `outside-voice-job.py` 的 `EFFORT_VALUES` 单点校验，本脚本 MUST NOT
+-    再复制一份枚举（两份枚举必然漂——CLI 自己支持 5 档，job helper 只放行 3 档）。
++    再复制一份枚举（两份枚举必然漂——CLI 自己支持 5 档）。
++    ⚠ 本锚锁的是**透传能力**（helper 拿到什么就发什么），**不是**「后台通道允许降档」：
++    后台档位由 dispatch 钉死 high（`EFFORT_VALUES = ("high",)` + 那侧的拒绝锚），
++    这里的 `medium` 只是一个"非缺省值"探针，MUST NOT 被读成 dispatch 可以下发 medium。
+     """
+     _, argv = _claude_argv(tmp_path, {"SDFLOW_VOICE_EFFORT": "medium"})
+     assert argv[argv.index("--effort") + 1] == "medium"
+ 
+ 
+ def test_exec_claude_effort_defaults_to_high_without_the_env(tmp_path):
+-    """Claude 宿主的同步路径没有 worker 下发 env ⇒ 仍 MUST 是 spec 写死的 high。"""
++    """直调 exec 的同步路径没有 worker 下发 env ⇒ 仍 MUST 是 spec 写死的 high。
++
++    主语校正：走 claude 分支 ⟺ 宿主是 **Codex**（runner 恒为宿主之外的机队）。
++    """
+     _, argv = _claude_argv(tmp_path, {"SDFLOW_VOICE_EFFORT": ""})
+     assert argv[argv.index("--effort") + 1] == "high"
+ 
+@@ -691,7 +697,10 @@ def test_exec_publishes_the_runner_pid_sidecar_on_the_codex_path_too(tmp_path):
+ 
+ 
+ def test_exec_writes_no_runner_pid_sidecar_when_the_env_is_absent(tmp_path):
+-    """Claude 宿主的同步路径没有这个变量 ⇒ MUST 不产生任何多余文件（零副作用）。"""
++    """不走后台通道的直调 exec 没有这个变量 ⇒ MUST 不产生任何多余文件（零副作用）。
++
++    主语校正：本用例 runner=claude ⟺ 宿主是 **Codex**（runner 恒为宿主之外的机队）。
++    """
+     bin_dir = make_fake_claude(tmp_path)
+     ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+     sidecar_dir = tmp_path / "rundir"; sidecar_dir.mkdir()
+@@ -706,8 +715,10 @@ def test_exec_writes_no_runner_pid_sidecar_when_the_env_is_absent(tmp_path):
+ def test_exec_still_delivers_findings_when_the_pid_sidecar_cannot_be_written(tmp_path):
+     """落盘失败 MUST NOT 掀掉这次 voice —— 它只是清理用的辅助信号，不是交付物。
+ 
+-    降级 MUST 可见（结构化哨兵，同 OV_GROUP_KILL_DEGRADED=1 规格）：消费方读不到文件时
+-    退回 fail-closed 的 `unverifiable`，是诚实降级；静默才是不可接受的那一种。
++    降级 MUST 可见（结构化哨兵，同 OV_GROUP_KILL_DEGRADED=1 规格）——**因为它并不是**
++    一个 fail-closed 的降级：消费方读不到文件时退回 `probe_subtree` 判据 ⑤ 的盘面推断，
++    terminal witness 在场即判 `exited`（helper 被 SIGKILL 时那是**误判**，孤儿 runner
++    仍在计费）。∴ 这条哨兵是操作者唯一能看见该窄口被打开的信号，静默才是不可接受的。
+     """
+     bin_dir = make_fake_claude(tmp_path)
+     ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
+@@ -727,10 +738,14 @@ def test_env_contract_block_registers_every_consumed_variable():
+     反面教训（Task 1 双轴审）：`SDFLOW_VOICE_EFFORT` 被 worker 下发、被记进 job.json，
+     却既无消费者也无契约登记 ⇒ `"effort":"high"` 是一条未经核实即落盘的"事实"。
+     这条锚把「代码里读了它」与「契约里写了它」绑在一起，防再次出现无主变量。
++
++    解析口径 MUST 同时覆盖 `${VAR…}` 与**裸** `$VAR` 两种形态：脚本里两种都在用
++    （如 `"$SDFLOW_VOICE_MODEL"` / `"$SDFLOW_VOICE_RUNNER"`），只认带花括号的那种会让
++    「只以裸形态出现的新变量」静默逃逸本锚。
+     """
+     text = HELPER.read_text()
+     header = text.split("set -u", 1)[0]
+-    consumed = set(re.findall(r"\$\{(SDFLOW_VOICE_[A-Z_]+)[:\-}]", text))
++    consumed = set(re.findall(r"\$\{?(SDFLOW_VOICE_[A-Z_]+)", text))
+     assert consumed, "未从脚本正文解析到任何 SDFLOW_VOICE_* 消费点（解析口径漂了）"
+     for name in sorted(consumed):
+         assert name in header, f"{name} 被消费但未登记进头部契约块"
+diff --git a/sdflow-init/tests/test_outside_voice_job.py b/sdflow-init/tests/test_outside_voice_job.py
+index 7d0a99b..8202da5 100644
+--- a/sdflow-init/tests/test_outside_voice_job.py
++++ b/sdflow-init/tests/test_outside_voice_job.py
+@@ -753,6 +753,36 @@ def test_dispatch_rejects_out_of_range_timeout(job_home, fake_claude, repo, time
+     assert _bg_invocations(fake_claude) == []
+ 
+ 
++@pytest.mark.parametrize("effort", ["low", "medium", "xhigh", ""])
++def test_dispatch_only_ever_dispatches_effort_high(job_home, fake_claude, repo, effort):
++    """🔒 OVBG-04：spec 把后台通道的推理档位**写死 `--effort high`**。
++
++    dispatch 是这条链上 effort 的**唯一 producer**（`build_worker_command` → worker →
++    `SDFLOW_VOICE_EFFORT` → `outside-voice.sh` 全程原样透传，没有第二个注入点）⇒ 钉在
++    这里一处，整条链就只可能跑 high。降档一律 **fail-loud 拒绝**，MUST NOT 静默改写成
++    high——静默改写会让「调用方以为发了 medium、实际跑了 high」两边都察觉不到。
++    helper 侧 `${SDFLOW_VOICE_EFFORT:-high}` 的透传能力**保留不删**（宿主直调 exec 用）。
++    """
++    proc = _run_job(job_home, _dispatch_args(repo, job_home, effort=effort), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 1
++    assert payload["ok"] is False
++    assert payload["state"] == "usage-error", payload
++    assert _bg_invocations(fake_claude) == [], "非 high 的档位 MUST 在任何外部派发之前被拒"
++    assert not (repo["run_dir"] / "design-voice.reserve").exists()
++
++
++def test_dispatch_accepts_effort_high_and_hands_it_down_verbatim(job_home, fake_claude, repo):
++    """正向对照：唯一放行的档位真的被原样传进 worker 命令（拒绝不是靠"全拒"实现的）。"""
++    proc = _run_job(job_home, _dispatch_args(repo, job_home, effort="high"), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, proc.stderr
++    assert payload["ok"] is True
++    command = _bg_invocations(fake_claude)[0]["argv"][-1]
++    parts = shlex.split(command)
++    assert parts[parts.index("--effort") + 1] == "high", command
++
++
+ @pytest.mark.parametrize("site", ["../escape", "a/b", "with space", ""])
+ def test_dispatch_rejects_unsafe_site_names(job_home, fake_claude, repo, site):
+     proc = _run_job(job_home, _dispatch_args(repo, job_home, site=site), _env(fake_claude))
+@@ -2965,7 +2995,10 @@ def test_the_published_runner_pid_unblocks_the_subtree_verdict(job_home, repo, f
+ 
+     判别器刻意把 terminal witness 删掉 —— 否则 ⑤ 的盘面推断会替 ④ 把结论"蒙对"，
+     这条用例就退化成证不出交接是否兑现的空断言。
+-    没有它：verdict 恒 `unverifiable` ⇒ `cleanup --cancel` **永不解闸**同族 fallback。
++    没有它、且**本用例这种无 terminal witness 的形态**下：verdict 恒 `unverifiable`
++    ⇒ `cleanup --cancel` 永不解闸同族 fallback。（有 terminal witness 时缺 ④ 不会卡住，
++    而是走 ⑤ 判 `exited` —— 那条路在 helper 被 SIGKILL 时会误判，见 `probe_subtree` ⑤ 的
++    残余登记。两种坏结果不同：这里是卡死，那里是漏放。）
+     """
+     env = os.environ.copy()
+     env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
+@@ -2982,7 +3015,10 @@ def test_the_published_runner_pid_unblocks_the_subtree_verdict(job_home, repo, f
+ 
+ def test_helper_writes_no_runner_pid_when_the_worker_did_not_ask_for_one(job_home, repo,
+                                                                         fake_runner_bin):
+-    """同步（Claude 宿主）路径没有这个变量 ⇒ helper MUST 零副作用。"""
++    """不走后台通道的直调 exec 没有这个变量 ⇒ helper MUST 零副作用。
++
++    主语校正：本用例 runner=claude ⟺ 宿主是 **Codex**（runner 恒为宿主之外的机队）。
++    """
+     env = os.environ.copy()
+     env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
+     env["SDFLOW_VOICE_RUNNER"] = "claude"
