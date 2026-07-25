@@ -105,6 +105,13 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
     stdout: 单行 JSON {ok,state,run_dir,sites:[…],orphan_warnings:[…],unknown_cost_sites:[…]}
     exit 0=全部无残留 | 1=有 orphan/unknown-cost/identity 未核验 | 2=usage-error
 
+  install-manifest [--dir <d>]
+    **安装步专用**（`setup.sh` 的最后一步调它，不给人手动调）：按同代成员算 sha256 并原子
+    发布 `capability-manifest.json`。之所以是子命令而非 shell 里的一段 hash 计算：
+    manifest 的口径（成员集 + generation 派生式）MUST 只有**一份**——写与验共用本文件的
+    `compute_manifest()`，shell 侧抄第二份必然漂。缺文件 / 目录不可写 ⇒ 非零退出且不写半份。
+    stdout: 单行 JSON（即 manifest 内容）                       exit 0=已写 | 1=失败
+
   version
     stdout: "outside-voice-job.py <ver>"                       exit 0
 
@@ -2226,6 +2233,10 @@ def build_parser():
     sub.add_parser("version")
     sub.add_parser("preflight")
 
+    manifest_writer = sub.add_parser("install-manifest")
+    # 缺省 = 本文件所在目录（安装态即 ~/.sdflow/hack）——安装步无须知道路径口径。
+    manifest_writer.add_argument("--dir", default=None)
+
     def add_common(p):
         p.add_argument("--run-dir", required=True)
         p.add_argument("--site", required=True)
@@ -2280,6 +2291,16 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "version":
         sys.stdout.write(VERSION + "\n")
+        return 0
+    if args.command == "install-manifest":
+        try:
+            payload = write_manifest(args.dir or JOB_DIR)
+        except OSError as exc:
+            # 半份快照比没有快照更危险 ⇒ 失败一律非零退出、什么都不留（atomic_write_json
+            # 走 temp+rename，故这里不会留下半截文件）。
+            sys.stderr.write("install-manifest 失败: %s\n" % exc)
+            return 1
+        emit(payload)
         return 0
     if args.command == "preflight":
         result = run_preflight()

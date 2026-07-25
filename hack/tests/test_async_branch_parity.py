@@ -226,3 +226,110 @@ def test_setup_sh_runs_the_gate():
     """门必须真被跑到 —— 「存在但没人跑的门」= 不存在的门。"""
     assert "check_async_branch_parity.py" in (REPO / "setup.sh").read_text(
         encoding="utf-8")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 段内内容契约（enable-codex-background-outside-voice Task 5）
+#
+# 等值门只保证「两侧一样」，不保证「一样的那份是对的」。本节是段内**内容**的
+# golden：一条负向（Codex 同步 300 秒兼容分支已删除）+ 若干条正向（后台通道的调用
+# 协议、fallback 闸门、既有不变量）。两侧逐条各断言一次 —— MUST NOT 只查 SITES[0]
+# 再靠等值门推另一侧（等值门若被误删，这里就成了单侧盲区）。
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _segments():
+    return [(rel, P.interior(P.extract(REPO / rel))) for rel in P.SITES]
+
+
+def _matrix_rows(seg):
+    """段内的表格行（有界语法面：只认「trim 后以 | 开头」，MUST NOT 解析 Markdown 结构）。"""
+    return [l for l in seg.splitlines() if l.lstrip().startswith("|")]
+
+
+def test_codex_sync_300s_compat_branch_is_deleted():
+    """🔴 负向 golden：执行模式矩阵里 MUST NOT 再有「codex ⇒ 同步 300 秒」那一行。
+
+    该分支已知 efficacy=0（HAE-08 grill-amendment 明写「不得以尽力兼容旧版为由恢复」）。
+    判据落在**矩阵行**上：codex 的行里既不许出现 `sync`，也不许出现同步档的 300 秒。
+    """
+    for rel, seg in _segments():
+        for row in _matrix_rows(seg):
+            if "codex" not in row:
+                continue
+            # 先摘掉 `async` 再找 `sync`：`async` 本身含 `sync` 子串，不摘会把
+            # 「codex 走 async」误判成「codex 走 sync」（假红，且方向正好相反）。
+            assert "sync" not in row.replace("async", ""), \
+                f"{rel}: codex 行仍写着 sync —— {row}"
+            assert "300" not in row, f"{rel}: codex 行仍带同步 300 秒档 —— {row}"
+
+
+def test_codex_branch_goes_through_the_background_job_helper():
+    """正向：Codex 分支 MUST 调 job helper 的四个子命令，MUST NOT 自己拼 `claude --bg`。"""
+    for rel, seg in _segments():
+        assert "outside-voice-job.py" in seg, rel
+        for sub in ("dispatch", "await", "collect", "cleanup"):
+            assert sub in seg, f"{rel}: 段内未出现子命令 {sub}"
+
+
+def test_codex_branch_gates_auto_fallback_on_unknown_cost():
+    """🔴 Task 3 交接 C1：`unknown_cost=true` ⇒ MUST NOT 自动同族 fallback，改报 orphan + cleanup。"""
+    for rel, seg in _segments():
+        assert "unknown_cost" in seg, rel
+        assert "cleanup --run-dir" in seg and "--cancel" in seg, rel
+        assert "fallback_allowed" in seg, rel
+
+
+def test_skill_side_timeout_clamp_is_retained():
+    """🔴 Task 2 交接：越界 config MUST 回落默认 900（**不** fail-closed 罢工）。
+
+    job helper 对越界 `--timeout` 是硬拒绝 ⇒ 若 SKILL 侧的 clamp 被删，config 打错一个字
+    就从「回落默认」变成「usage-error 罢工」。
+    """
+    for rel, seg in _segments():
+        assert "回落默认 `900`" in seg, rel
+        assert "MUST NOT fail-closed 罢工" in seg, rel
+
+
+def test_barrier_invariants_survive():
+    """既有不变量（HAE-09）：RUNNING 不早退、timeout 只由真实 124 产生、回收后不重派。"""
+    for rel, seg in _segments():
+        assert "MUST NOT 自造轮询循环" in seg, rel
+        assert "只允许由实际" in seg and "124" in seg, rel
+        assert "MUST NOT 重" in seg, rel                     # 外层回收后不重新 dispatch
+
+
+def test_stderr_never_reaches_findings_or_the_tracked_report():
+    for rel, seg in _segments():
+        assert "stderr" in seg
+        assert "MUST NOT 逐字转录" in seg, rel
+
+
+def test_usage_notes_cover_version_policy_preview_and_platform_boundary():
+    """使用说明四项 + 两条不可互相替代的分发链。"""
+    for rel, seg in _segments():
+        assert "2.1.169" in seg, rel
+        assert "disableAgentView" in seg, rel
+        assert "research preview" in seg or "research-preview" in seg, rel
+        assert "POSIX" in seg, rel
+        assert "setup.sh" in seg and "sdflow-init update" in seg, rel
+
+
+# ── marker 段外：dispatch manifest 与锚行契约（两侧各自断言）──────────────────
+
+def test_dispatch_manifest_records_job_id_and_attempt_nonce():
+    """Codex 后台 dispatch 的 job id / site / attempt nonce MUST 落 dispatch manifest。"""
+    for rel in P.SITES:
+        text = (REPO / rel).read_text(encoding="utf-8")
+        line = [l for l in text.splitlines() if "dispatch-manifest.tsv" in l and "printf" in l]
+        assert line, rel
+        joined = "\n".join(line)
+        assert "attempt_nonce" in joined or "<attempt-nonce>" in joined, f"{rel}: {joined}"
+        assert "job_id" in joined or "<job-id>" in joined, f"{rel}: {joined}"
+
+
+def test_anchor_line_reason_code_enum_is_unchanged():
+    """锚行契约与 `reason_code` 枚举 MUST 保持不变（HAE-09）。"""
+    enum = ('reason_code="ok|not-installed|preflight-error|timeout|exec-error|'
+            'host-unknown|secret-hit|fallback-unavailable"')
+    for rel in P.SITES:
+        assert enum in (REPO / rel).read_text(encoding="utf-8"), rel

@@ -3237,3 +3237,125 @@ def test_non_posix_platforms_fail_closed_all_the_way_up_to_preflight(monkeypatch
     assert result["ok"] is False
     assert result["reason_code"] == "preflight-error"
     assert result["checks"]["posix-shell"]["ok"] is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Task 5：同代安装快照 + 从**已安装路径**跑通完整 lifecycle（无模型）
+#
+# 【为什么不能只在仓内测】上面所有用例的「已安装形态」都是 fixture 用
+# `JOB.write_manifest(tmp)` 现造的 —— 真实消费者读的是 `~/.sdflow/hack/`。
+# setup.sh 若不装 `*.py` / 不写 manifest，**真实安装态 preflight 必红**，而仓内
+# 测试一条都不会变色（memory「dogfood 盲区：源仓 config 掩盖消费仓默认态」）。
+# ∴ 本节的锚一律打在「真跑一次 setup.sh 之后的那个目录」上。
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _install_into_temp_global_home(tmp_path):
+    """真跑一次 setup.sh，HOME / SDFLOW_HOME 全部重定向 → 返回已安装的 hack 目录。"""
+    home = tmp_path / "global-home"
+    home.mkdir()
+    env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+    proc = subprocess.run(["bash", str(REPO / "setup.sh")], env=env,
+                          capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return home / ".sdflow" / "hack"
+
+
+def _seed_hack_dir(path, *, with_principles=True):
+    path.mkdir()
+    shutil.copy2(JOB_PY, path / "outside-voice-job.py")
+    shutil.copy2(HELPER_SH, path / "outside-voice.sh")
+    if with_principles:
+        shutil.copy2(PRINCIPLES, path / "skill-principles.md")
+    return path
+
+
+def test_install_manifest_subcommand_writes_a_verifiable_snapshot(tmp_path):
+    """安装步与校验步共用**同一份**计算（`compute_manifest`）—— shell 侧不抄第二份口径。"""
+    home = _seed_hack_dir(tmp_path / "hack-manual")
+    assert JOB.verify_manifest(home)["ok"] is False          # 前提：写之前是红的
+    proc = _run_job(home, ["install-manifest"], os.environ.copy())
+    assert proc.returncode == 0, proc.stderr
+    payload = _json_stdout(proc)
+    assert sorted(payload["entries"]) == sorted(JOB.MANIFEST_ENTRIES)
+    assert JOB.verify_manifest(home)["ok"] is True
+
+
+def test_install_manifest_fails_loudly_and_writes_nothing_when_a_member_is_missing(tmp_path):
+    """半份快照比没有快照更危险 ⇒ 成员缺失时非零退出且**不留** manifest。"""
+    home = _seed_hack_dir(tmp_path / "hack-partial", with_principles=False)
+    proc = _run_job(home, ["install-manifest"], os.environ.copy())
+    assert proc.returncode != 0
+    assert not (home / JOB.MANIFEST_NAME).exists()
+
+
+def test_installed_snapshot_passes_preflight_from_the_global_home(tmp_path, fake_claude):
+    """🔴 交接①的正面锚：`bash setup.sh` 之后，**安装路径**的 preflight 必须是绿的。
+
+    本用例在 setup.sh 装 `*.py` + 写 manifest 之前必红（helper 缺失 / manifest 缺失）。
+    """
+    installed = _install_into_temp_global_home(tmp_path)
+    proc = _run_job(installed, ["preflight"], _env(fake_claude))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    payload = _json_stdout(proc)
+    assert payload["ok"] is True and payload["reason_code"] == "ready"
+    assert payload["checks"]["capability-manifest"]["ok"] is True
+    # 自证「跑的确实是安装路径那份」，不是仓内源路径
+    assert payload["job_dir"] == str(installed)
+    assert str(REPO) not in payload["job_dir"]
+
+
+def test_installed_snapshot_fails_closed_on_manifest_skew_with_a_refresh_hint(
+        tmp_path, fake_claude):
+    """安装态的新旧混配 / stale copy：任一成员漂 ⇒ preflight 红 + 给出刷新指引。"""
+    installed = _install_into_temp_global_home(tmp_path)
+    (installed / "outside-voice.sh").write_text("# stale\n", encoding="utf-8")
+    proc = _run_job(installed, ["preflight"], _env(fake_claude))
+    assert proc.returncode == 1
+    payload = _json_stdout(proc)
+    assert payload["ok"] is False and payload["reason_code"] == "preflight-error"
+    assert payload["checks"]["capability-manifest"]["ok"] is False
+    assert "setup.sh" in proc.stderr                      # 刷新指引落到 stderr，可执行
+
+
+def test_installed_path_runs_dispatch_collect_cleanup_offline(tmp_path, fake_claude, repo):
+    """⭐ 安装态 lifecycle 集成 smoke（**无模型**）：dispatch → await → collect → cleanup。
+
+    只把**模型边界**那一个文件（shell helper）换成无模型替身，随后用安装态自己的
+    `install-manifest` 重算快照 —— job helper、执行路径、manifest 口径全是 setup.sh 真装
+    出来的那份。⚠ 本 smoke **不构成 efficacy 证据**（没有任何模型被调用），efficacy 归
+    Task 6 的真实评审层。
+    """
+    installed = _install_into_temp_global_home(tmp_path)
+    _write_exec(installed / "outside-voice.sh", FAKE_HELPER)
+    assert _run_job(installed, ["install-manifest"], os.environ.copy()).returncode == 0
+
+    env = _env(fake_claude, {
+        "FAKE_CLAUDE_BG_MODE": "run",
+        "FAKE_CLAUDE_JOB_ID": "5eeded01",
+        "FAKE_HELPER_MARKER": "install-smoke",
+        "FAKE_HELPER_SLEEP": "1",
+    })
+    dispatched = _json_stdout(_run_job(installed, _dispatch_args(repo, installed), env))
+    assert dispatched["ok"] is True, dispatched
+    assert dispatched["job_id"] == "5eeded01"
+    assert dispatched["attempt_nonce"] and dispatched["site"] == "design-voice"
+    assert dispatched["dispatch_duration_seconds"] <= JOB.DISPATCH_DEADLINE_SECONDS
+
+    awaited = _json_stdout(_run_job(installed,
+                                    _site_args("await", repo["run_dir"], "design-voice",
+                                               "--poll-interval", "0.2"),
+                                    env, timeout=120))
+    assert awaited["reason_code"] == "ok" and awaited["terminal"] is True, awaited
+
+    collected = _json_stdout(_run_job(installed, _site_args("collect", repo["run_dir"]),
+                                      env, timeout=60))
+    assert collected["ok"] is True, collected
+    assert collected["unknown_cost"] is False
+    assert collected["runner"] == "claude" and collected["effort"] == "high"
+    assert collected["duration_seconds"] is not None
+
+    cleaned = _json_stdout(_run_job(installed, _cleanup_args(repo["run_dir"]), env, timeout=60))
+    assert cleaned["ok"] is True, cleaned
+    assert cleaned["removed"] is True and cleaned["orphan_warning"] is None
+    assert ("rm", "5eeded01") in _destructive(fake_claude)
