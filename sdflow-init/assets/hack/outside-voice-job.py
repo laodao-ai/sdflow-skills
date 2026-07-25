@@ -38,22 +38,29 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代�
   status --run-dir <d> --site <s> [--timeout <n>]
     **纯派生**的当前归类：读盘面（job/started/terminal/rc）+ 一次 `claude agents` liveness 探针。
     **MUST NOT 在终态之前读 stdout**（半成品输出没有任何进 findings 池的通道）。
-    stdout: 单行 JSON（见下方「派生输出」）                       exit 0=ok | 1=非 ok（含未终态）
+    stdout: 单行 JSON（见下方「派生输出」）
+    exit 0=ok | 1=非 ok（含未终态） | 2=usage-error
 
   await --run-dir <d> --site <s> [--timeout <n>] [--max-wait <n>] [--poll-interval <f>]
     有界等待到终态。上界**不从 dispatch 时刻起算**：started sidecar 未发布时受**独立**的
     startup deadline 约束；已发布则为可信 `started_at` + timeout + 30 秒 grace。
     `--timeout` 缺省取 `job.json` 里 dispatch 当时记下的 `timeout_seconds`（即既有
     `outside-voice.async-timeout-seconds` 的值）；显式给出时同样受 1..3600 约束。
-    stdout: status 的同一份 JSON + `waited_seconds`               exit 0=ok | 1=其他
+    liveness 探针**独立于 poll 节流**（每 5 秒最多一次，缓存复用）：盘面读是本地 stat，
+    `claude agents` 是外部进程冷启动，MUST NOT 每轮 poll 都 spawn 一次。
+    stdout: status 的同一份 JSON + `waited_seconds`
+    exit 0=ok | 1=其他（含未终态） | 2=usage-error
 
   collect --run-dir <d> --site <s> [--timeout <n>]
     **幂等**收集：只在 rc 发布后读 stdout，核对 terminal witness 的 digest，
     首次收集把整份结果原子发布为 `<site>.collected.json`（**首写者胜**），
     重复 collect 原样回放该文件 ⇒ 输出与分类逐字节一致。
+    幂等的边界是 **rc 已发布**：LOST / RESERVED 这类由非 durable 证据（liveness 探针、
+    startup deadline）推出的终态**只返回、不落见证**——worker 可能只是慢，冻结它等于把
+    一次已计费的 voice 永久丢弃；这类站点交 reconcile 处置。
     stdout: 单行 JSON（含 dispatched/started/terminal/collected 时刻、自然 duration、
             runner/model/effort、stdout digest/bytes/lines、stderr bytes/lines）
-    exit 0=ok | 1=其他
+    exit 0=ok | 1=其他（含未终态） | 2=usage-error
 
   version
     stdout: "outside-voice-job.py <ver>"                       exit 0
@@ -69,6 +76,11 @@ OVBG-02 要求 collect 幂等返回**首次** `collected_at` ⇒ 跨进程只能
           LOST | CORRUPT
   reason_code ∈ ok | timeout | secret-hit | exec-error | null（null = 未终态，不可收集）
   `ok` ⟺ reason_code == "ok" ⟺ exit 0。**任何 pending/lost/corrupt 组合恒不产出 ok。**
+
+  ⚠️ **exit 2（usage-error）的 payload 不是这个形状**：入参本身非法（site 名 / run-dir /
+  timeout 越界）时走 reject 形状 `{ok:false, state:"usage-error", reason_code:"exec-error",
+  fallback_allowed:false, detail}` —— **没有 `terminal` / `rc` / 时刻等派生字段**。
+  调用方 MUST 先看 exit code，MUST NOT 按 0|1 两分法直接读 `terminal`。
 """
 
 import argparse
@@ -875,6 +887,14 @@ MAX_POLL_INTERVAL_SECONDS = 5.0
 # 单次 await 调用的外层上界上限：派生上界最坏 = timeout(≤3600) + grace(30)。
 MAX_AWAIT_WAIT_SECONDS = MAX_TIMEOUT_SECONDS + AWAIT_GRACE_SECONDS
 
+# 🔴 liveness 探针的**独立**节流间隔（秒）——与 poll 间隔解耦。
+# 盘面读是本地 stat（便宜，按 poll-interval 走）；`claude agents --all --json` 是**外部
+# 进程冷启动**（实测 ~0.17 秒，CLI 卡顿时吃满 CLI_PROBE_TIMEOUT_SECONDS）。若每轮都探，
+# 一次上界 timeout(3600)+grace 的 await 能烧掉上千次 Node 冷启动。
+# 代价：liveness 变化（job 突然消失）最多晚 5 秒被看见 —— 而 rc 一旦发布就**优先于**
+# liveness 参与判定（ADR-2），所以这段陈旧窗口不会推迟任何真实终态的识别。
+LIVENESS_PROBE_INTERVAL_SECONDS = 5.0
+
 STATE_MISSING = "MISSING"
 STATE_RESERVED = "RESERVED"
 STATE_STARTING = "STARTING"
@@ -903,7 +923,6 @@ RC_SECRET_HIT = 3
 # `claude agents --all --json` 的 state 值分档。**只有这一档能判定 job 已终结**；
 # 其余（含 schema 漂移出的未知值）一律当「探不到」——探针无判别力 MUST NOT 触发降级，
 # 否则一次 CLI 改名就把所有在飞的合法 worker 判成 LOST，整条通道退回 efficacy=0。
-LIVENESS_ALIVE = "working"
 LIVENESS_TERMINAL = frozenset({"done", "failed", "stopped", "missing"})
 LIVENESS_UNAVAILABLE = "unavailable"
 
@@ -950,7 +969,8 @@ def stdout_read_evidence(run_dir, site):
     """**真正读 stdout 正文的唯一入口** —— MUST 只在 rc 已发布后调用（collect 专用）。"""
     path = os.path.join(str(run_dir), site + ".stdout")
     try:
-        data = open(path, "rb").read()
+        with open(path, "rb") as fh:
+            data = fh.read()
     except OSError as exc:
         return {"ok": False, "detail": "stdout 不可读: %s" % exc}
     lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
@@ -962,7 +982,8 @@ def stderr_stat_evidence(run_dir, site):
     """stderr **只出结构化计数**：它绕过出境 secret scan，正文 MUST NOT 进入任何 tracked 产物。"""
     path = os.path.join(str(run_dir), site + ".stderr")
     try:
-        data = open(path, "rb").read()
+        with open(path, "rb") as fh:
+            data = fh.read()
     except OSError:
         return {"bytes": 0, "lines": 0}
     lines = data.count(b"\n") + (1 if data and not data.endswith(b"\n") else 0)
@@ -1042,7 +1063,8 @@ def read_rc(run_dir, site):
     if not os.path.isfile(path):
         return (False, None, None)
     try:
-        raw = open(path, "r", encoding="utf-8", errors="replace").read()
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            raw = fh.read()
     except OSError as exc:
         return (True, None, "<unreadable: %s>" % exc)
     text = raw.strip()
@@ -1108,7 +1130,7 @@ def _status_payload(state, reason_code, detail, **extra):
 
 
 def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
-                  timeout_override=None):
+                  timeout_override=None, _rechecked=False):
     """从盘面 + liveness **纯派生**当前归类。不写任何文件、不做任何破坏性动作。
 
     判定顺序是契约（不是风格）：
@@ -1199,10 +1221,13 @@ def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
     base["liveness"] = liveness
     if liveness in LIVENESS_TERMINAL:
         # 极窄竞态：worker 先发布 rc 再退出，但文件可见性可能滞后于 agent state 翻转
-        # ⇒ 判 LOST 前再看一眼 rc（一次，不轮询）。
-        if os.path.isfile(os.path.join(run_dir_real, site + ".rc")):
+        # ⇒ 判 LOST 前再看一眼 rc。**只重入一次**（`_rechecked`）：rc 若在 isfile 与
+        # read_rc 之间消失，无界重入会打满栈（且 RecursionError 会被 parse_utc_iso 的
+        # `except Exception` 吞掉，静默降级成 CORRUPT）。
+        if not _rechecked and os.path.isfile(os.path.join(run_dir_real, site + ".rc")):
             return derive_status(run_dir_real, site, liveness=liveness, now=now,
-                                 claude_bin=claude_bin, timeout_override=timeout_override)
+                                 claude_bin=claude_bin, timeout_override=timeout_override,
+                                 _rechecked=True)
         return _status_payload(
             STATE_LOST, REASON_EXEC_ERROR,
             "supervisor job 已终结（state=%s）但 rc 缺席 —— 判 exec-error，"
@@ -1363,8 +1388,23 @@ def cmd_await(args):
                           state="usage-error", reason_code=REASON_EXEC_ERROR,
                           fallback_allowed=False, site=args.site)
     started = time.monotonic()
+    # liveness 探针独立节流：盘面按 poll 间隔读，`claude agents` 最多每
+    # LIVENESS_PROBE_INTERVAL_SECONDS 一次（缓存上次结果喂给派生函数）。
+    cached_liveness = None
+    cached_at = None
     while True:
-        payload = derive_status(args.run_dir, args.site, timeout_override=args.timeout)
+        if cached_at is None \
+                or time.monotonic() - cached_at >= LIVENESS_PROBE_INTERVAL_SECONDS:
+            liveness = None                      # None ⇒ 由 derive_status 真探一次
+        else:
+            liveness = cached_liveness
+        payload = derive_status(args.run_dir, args.site, liveness=liveness,
+                                timeout_override=args.timeout)
+        if liveness is None and payload["liveness"] is not None:
+            # payload["liveness"] 非 None ⟺ 本轮真的走到了探针分支（rc 已发布 /
+            # 元数据坏 的早退路径不探，也不该刷新缓存时刻）。
+            cached_liveness = payload["liveness"]
+            cached_at = time.monotonic()
         waited = time.monotonic() - started
         # 终态 / RESERVED（unknown-cost，永远不会自行到达终态，交 reconcile）/ 外层 max-wait
         # 到点 —— 三者之外一律继续等：MUST NOT 因为「等久了」就落 timeout。
@@ -1398,7 +1438,13 @@ def cmd_collect(args):
         # 未终态 ⇒ 不落 collected witness、不读 stdout、reason_code 恒为 null。
         return 1, status
     payload = build_collect_payload(status)
-    if kind == "ok":
+    # 🔴 只有 **rc 已发布**的终态才冻结成不可变见证。
+    # 幂等的边界是 design.md 的 Global Constraint：「terminal **rc** 之后 collect 幂等」。
+    # LOST / RESERVED 也是 terminal，但它们由**非 durable 证据**推出（liveness 探针、
+    # startup deadline）——worker 可能只是慢，随后仍会发布 rc + 真实 findings。
+    # 把它们落成见证 = 把一次**已经计费**的 voice 永久丢弃（二次 collect 只会原样回放
+    # LOST）。无 rc 的终态一律**只返回、不落盘**，交 reconcile 处置。
+    if kind == "ok" and status.get("rc") is not None:
         _first_writer_wins_json(collected_path(run_dir, site), payload)
         stored_kind, stored, _ = load_collected(run_dir, site, job)
         if stored_kind == "ok":

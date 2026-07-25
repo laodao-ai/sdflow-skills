@@ -1192,6 +1192,21 @@ def test_liveness_never_overrides_a_published_rc(tmp_path):
     assert seen == {("SUCCEEDED", "ok")}, seen
 
 
+def test_rc_recheck_before_declaring_lost_is_bounded_to_one_retry(monkeypatch, tmp_path):
+    """判 LOST 前的「再看一眼 rc」是**一次性**的，MUST NOT 变成自递归。
+
+    构造 rc 文件存在（`isfile` 为真）但读取口报「不存在」的错位——真实成因是
+    rc 在 isfile 与 read 之间被移走。无界重入时这里直接 RecursionError。
+    """
+    run_dir = tmp_path / "20260725T190000Z-Rec001"
+    run_dir.mkdir()
+    now = time.time()
+    _seed_site(run_dir, rc_kind="rc0_nonempty", now=now)
+    monkeypatch.setattr(JOB, "read_rc", lambda *a, **k: (False, None, None))
+    payload = JOB.derive_status(run_dir, "design-voice", liveness="done", now=now)
+    assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
+
+
 # ── 终态前不读 stdout（机械锚：对读取口的 spy）────────────────────────────────
 
 def test_status_never_reads_stdout_before_terminal(monkeypatch, tmp_path):
@@ -1533,6 +1548,47 @@ def test_collect_detects_a_stdout_digest_mismatch(job_home, fake_claude, tmp_pat
     assert (payload["state"], payload["reason_code"]) == ("CORRUPT", "exec-error"), payload
 
 
+def test_collect_does_not_freeze_a_lost_verdict_reached_before_rc_was_published(
+        job_home, fake_claude, tmp_path):
+    """LOST 是**非 durable 证据**推出的终态 ⇒ MUST NOT 被 collected witness 冻结。
+
+    幂等的边界是 design.md 的 Global Constraint：「**terminal rc 之后** collect 幂等」。
+    rc 之前的终态（LOST / RESERVED）只是「此刻探不到」，把它落成不可变见证，
+    等于把一次**已经计费**的 voice 在 worker 真跑完之前就永久丢弃。
+    """
+    run_dir = tmp_path / "20260725T113000Z-Lost01"
+    run_dir.mkdir()
+    now = time.time()
+    # startup deadline 已过 + 无 started sidecar ⇒ 第一次 collect 判 LOST
+    _seed_site(run_dir, rc_kind="absent", now=now, write_started=False,
+               startup_deadline_ago=5)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    first = _run_job(job_home, _site_args("collect", run_dir), env)
+    first_payload = _json_stdout(first)
+    assert first.returncode == 1
+    assert (first_payload["state"], first_payload["reason_code"]) == ("LOST", "exec-error"), \
+        first_payload
+    assert not (run_dir / "design-voice.collected.json").exists(), \
+        "rc 尚未发布的 LOST 判定 MUST NOT 落成不可变见证"
+
+    # worker 其实只是慢：随后真正发布 started → terminal → rc=0 + 真实 findings
+    _seed_site(run_dir, rc_kind="rc0_nonempty", now=time.time(), write_job=False,
+               stdout=b"REAL FINDINGS: the voice did land\n")
+    second = _run_job(job_home, _site_args("collect", run_dir), env)
+    second_payload = _json_stdout(second)
+    assert second.returncode == 0, second.stdout
+    assert (second_payload["state"], second_payload["reason_code"]) == ("SUCCEEDED", "ok"), \
+        second_payload
+    assert second_payload["stdout_path"] == str((run_dir / "design-voice.stdout").resolve())
+    assert second_payload["stdout_sha256"] == hashlib.sha256(
+        b"REAL FINDINGS: the voice did land\n").hexdigest()
+    # 真终态（rc 已发布）之后才冻结 —— 幂等仍然成立
+    assert (run_dir / "design-voice.collected.json").exists()
+    third = _run_job(job_home, _site_args("collect", run_dir), env)
+    assert third.stdout == second.stdout
+
+
 def test_collect_refuses_to_reuse_a_collected_witness_from_another_attempt(job_home, fake_claude,
                                                                           tmp_path):
     run_dir = tmp_path / "20260725T110000Z-Wit001"
@@ -1646,6 +1702,34 @@ def test_await_on_a_bare_reservation_does_not_spin_forever(job_home, fake_claude
     assert elapsed < 20, elapsed
 
 
+def test_await_throttles_the_liveness_probe_far_below_the_poll_rate(job_home, fake_claude,
+                                                                    tmp_path):
+    """盘面读（本地 stat）可以 0.5 秒一轮，但 `claude agents` 是**外部进程冷启动**。
+
+    每轮都 spawn 一次 ⇒ 上界 timeout(3600)+grace 的 await 能烧掉数千次 Node 冷启动
+    （每次实测 0.17 秒，CLI 卡顿时吃满 5 秒探针超时）。**探针 MUST 独立节流**：
+    盘面照常密集轮询，liveness 复用上次结果。
+    """
+    run_dir = tmp_path / "20260725T171500Z-Thr001"
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent", timeout_seconds=900)
+    env = _env(fake_claude, {"FAKE_CLAUDE_AGENTS_MODE": "fixed",
+                             "FAKE_CLAUDE_FIXED": _fixed_roster()})
+    proc = _run_job(job_home, _site_args("await", run_dir, "design-voice",
+                                         "--max-wait", "1.2", "--poll-interval", "0.05"),
+                    env, timeout=60)
+    payload = _json_stdout(proc)
+    assert payload["state"] == "RUNNING", payload
+    assert payload["liveness"] == "working", payload      # 仍然真的探过，不是假绿
+    probes = [i for i in _invocations(fake_claude) if i["argv"][:1] == ["agents"]]
+    polls = payload["waited_seconds"] / 0.05
+    assert polls >= 10, polls                              # 盘面确实密集轮询过
+    assert len(probes) * 4 < polls, (len(probes), polls)   # 探针远少于轮询次数
+    assert len(probes) <= 1 + payload["waited_seconds"] / JOB.LIVENESS_PROBE_INTERVAL_SECONDS + 1, \
+        (len(probes), payload["waited_seconds"])
+    assert JOB.LIVENESS_PROBE_INTERVAL_SECONDS >= 5
+
+
 @pytest.mark.parametrize("timeout", ["0", "3601", "abc", "-1"])
 def test_await_rejects_out_of_range_timeout(job_home, fake_claude, tmp_path, timeout):
     """超时上限复用既有 async timeout 配置项的合法范围 1..3600（越界即拒）。"""
@@ -1671,6 +1755,28 @@ def test_await_default_upper_bound_comes_from_job_metadata_timeout(job_home, fak
     payload = _json_stdout(_run_job(job_home, _site_args("await", run_dir), env, timeout=60))
     assert (payload["state"], payload["reason_code"]) == ("LOST", "exec-error"), payload
     assert payload["timeout_seconds"] == JOB.DEFAULT_TIMEOUT_SECONDS
+
+
+@pytest.mark.parametrize("cmd", ["status", "await", "collect"])
+def test_readonly_usage_error_exits_2_and_is_documented_in_the_contract_source(
+        job_home, fake_claude, tmp_path, cmd):
+    """三个只读子命令的 usage-error 走 **exit 2** 且 payload 是 reject 形状（**无 `terminal` 键**）。
+
+    模块 docstring 自称「契约单一源（两份评审 SKILL 只引用本注释）」⇒ 它漏写 exit 2
+    就是契约与实现不符：调用方会按「0|1」两分法把 2 当成「非 ok 的正常分类」，
+    再去读一个根本不存在的 `terminal`。
+    """
+    run_dir = tmp_path / ("20260725T200000Z-Usg-" + cmd)
+    run_dir.mkdir()
+    _seed_site(run_dir, rc_kind="absent")
+    proc = _run_job(job_home, _site_args(cmd, run_dir, "design-voice", "--timeout", "9999"),
+                    _env(fake_claude), timeout=60)
+    payload = _json_stdout(proc)
+    assert proc.returncode == 2, (proc.returncode, proc.stdout)
+    assert payload["state"] == "usage-error", payload
+    assert payload["ok"] is False
+    assert "terminal" not in payload, payload
+    assert JOB.__doc__.count("2=usage-error") >= 3, "契约单一源 MUST 逐子命令写明 exit 2"
 
 
 def test_default_timeout_and_range_are_the_single_shared_constants():
