@@ -56,9 +56,17 @@ MEMO_SCHEMA_DOC = REPO / "sdflow-spec" / "references" / "decision-memo-schema.md
 # 数字变了照改，但改之前先想清楚「那一处是不是也该跟着改名」。
 #
 # 落在这张表**之外**的同名字面量只剩两类，都不需要守：
-# ① 本文件的 fixture —— `_write_memo` 直接引 `REQUIRED_SECTIONS`（跟着真相源走，不可能漂），
-#    另两条 inline 文本 fixture 是 `_section_body` 的行为样本，改名后当场判红（响亮，不是假绿）；
+# ① 本文件的 fixture 与断言 —— **一律引 `REQUIRED_SECTIONS`**（跟着真相源走，不可能漂）。
+#    🔴 **inline 硬编码 MUST NOT 复活**：它不会「改名后当场判红」，只会**静默恒真**。
+#    硬编码版上的变异实测：完整改名 `## 承重约束`→`## 承重约束项`（本表同步）+ 抽掉
+#    `_visible_flags` 的围栏/注释感知 ⇒ 改名组只 `2 failed`、不改名对照组 `4 failed`；
+#    差的两条正是围栏与 HTML 注释块的 ⭐⭐ 自指坑用例 —— 字面量与真相源脱钩后它们双双恒真，
+#    HTML 注释块感知就此失去唯一守卫，而套件照样绿；
 # ② `openspec/changes/**/impl-reports/*`、评审报告 —— 冻结的历史记录，不是格式消费者。
+#
+# 本表的 key 是**故意**留字面量的：它是 `grep -rn` 普查结果的快照，
+# 而 `test_schema_doc_and_gate_agree` 的 `set(expected) == set(REQUIRED_SECTIONS)` 会在改名时当场判红，
+# 逼人回来逐处核对消费面 —— 若把 key 也改成引 `REQUIRED_SECTIONS`，那条断言即恒真。
 MEMO_SECTION_CONSUMERS = {
     MEMO_SCHEMA_DOC: {"## 拍板决策": 3, "## 承重约束": 3},
     REPO / "sdflow-spec" / "SKILL.md": {"## 拍板决策": 2, "## 承重约束": 1},
@@ -105,18 +113,14 @@ def _visible_flags(lines):
     return flags
 
 
-def _section_span(text, heading):
-    """`heading` 小节的正文行区间 `(start, end)`（半开，行号基于 `text.splitlines()`）；找不到 → None。
+def _section_body(text, heading):
+    """取 `heading` 这一行到下一个**同级或更高级** ATX 标题（或 EOF）之间的正文；找不到该小节 → None。
 
-    终点 = 下一个**同级或更高级** ATX 标题（或 EOF）。两条口径都落在**有界**语法面上（基准 5），
-    MUST NOT 演化成「解析 Markdown 结构」：
+    两条口径都落在**有界**语法面上（基准 5），MUST NOT 演化成「解析 Markdown 结构」：
     - **级数**：`##` 只被 `##` / `#` 终止 —— `### D1 …` 子标题**属于本节正文**
       （决策纪要必然用 `###` 列决策，任何 `#` 都断 = 假红）；
     - **可见性**：fenced code block 与 HTML 注释块内的行不参与标题判定
-      （纪要引用 schema 模板时，代码块内必然出现 `## 承重约束` 字面量 —— 当真即假绿）。
-
-    区间形态（而非直接返回字符串）是给 `decision_hash` 覆盖面用例用的：它要逐行做定点变异，
-    需要知道「门认的正文」到底是**哪几行**。
+      （纪要引用 schema 模板时，代码块内必然出现小节名字面量 —— 当真即假绿）。
     """
     level = _atx_level(heading)
     lines = text.splitlines()
@@ -131,15 +135,7 @@ def _section_span(text, heading):
         if visible[i] and lv is not None and lv <= level:
             end = i
             break
-    return start + 1, end
-
-
-def _section_body(text, heading):
-    """取 `heading` 这一行到下一个**同级或更高级** ATX 标题（或 EOF）之间的正文（口径见 `_section_span`）。"""
-    span = _section_span(text, heading)
-    if span is None:
-        return None
-    return "\n".join(text.splitlines()[span[0]:span[1]])
+    return "\n".join(lines[start + 1:end])
 
 
 def _strip_noise(body):
@@ -181,6 +177,16 @@ def _write_memo(tmp_path, decisions, constraints):
     return d
 
 
+def _names_section(problem, heading):
+    """判「这条 problem 报的是不是 `heading` 这一节」——**引真相源 + 带右界**。
+
+    右界（`「…」`）不是装饰：裸子串 `"承重约束" in problem` 在**前缀改名**
+    （`## 承重约束` → `## 承重约束项`）下照样为真 ⇒ 断言恒真、假绿。
+    与 `test_schema_doc_and_gate_agree` 的右界判据是同一个坑（本仓「gate 子串检测自指坑」同形）。
+    """
+    return f"「{heading}」" in problem
+
+
 def test_missing_memo_is_red(tmp_path):
     """⭐ 纪要文件不存在 ⇒ 判红。"""
     d = tmp_path / "changes" / "demo"
@@ -195,7 +201,7 @@ def test_empty_required_section_is_red(tmp_path):
     d = _write_memo(tmp_path, decisions="- **D1 …**", constraints="")
     problems = check_decision_memo(d)
     assert len(problems) == 1, problems
-    assert "承重约束" in problems[0] and "为空" in problems[0]
+    assert _names_section(problems[0], REQUIRED_SECTIONS[1]) and "为空" in problems[0], problems
 
 
 def test_comment_only_section_is_red(tmp_path):
@@ -203,7 +209,7 @@ def test_comment_only_section_is_red(tmp_path):
     d = _write_memo(tmp_path, decisions="<!-- 待填 -->", constraints="- **C1 …** 证据锚：a.py:1")
     problems = check_decision_memo(d)
     assert len(problems) == 1, problems
-    assert "拍板决策" in problems[0]
+    assert _names_section(problems[0], REQUIRED_SECTIONS[0]), problems
 
 
 def test_both_sections_missing_reports_both(tmp_path):
@@ -245,16 +251,17 @@ def test_heading_inside_fenced_block_is_not_a_real_heading(tmp_path):
 
     三族围栏各来一发（``` / ~~~ / 四 backtick）——CommonMark 的**有界**变体，数得完（基准 5）。
     """
+    constraint_h = REQUIRED_SECTIONS[1]          # 小节名引真相源，MUST NOT 硬编码（改名即恒真）
     for n, fence in enumerate(("```markdown", "~~~markdown", "````markdown")):
         close = fence.split("markdown")[0]
         d = _write_memo(
             tmp_path / f"case{n}",
-            decisions=f"- **D1 纪要格式照 schema** — 模板：\n\n{fence}\n## 承重约束\n\n- **C1 …**\n{close}\n",
+            decisions=f"- **D1 纪要格式照 schema** — 模板：\n\n{fence}\n{constraint_h}\n\n- **C1 …**\n{close}\n",
             constraints="",
         )
         problems = check_decision_memo(d)
         assert len(problems) == 1, f"{fence}: {problems}"
-        assert "承重约束" in problems[0] and "为空" in problems[0], f"{fence}: {problems}"
+        assert _names_section(problems[0], constraint_h) and "为空" in problems[0], f"{fence}: {problems}"
 
 
 def test_fenced_heading_neither_truncates_nor_relocates_the_section():
@@ -263,11 +270,12 @@ def test_fenced_heading_neither_truncates_nor_relocates_the_section():
     ① 围栏内的 `## X` MUST NOT **截断**本节正文（否则围栏之后的内容整段丢失）；
     ② 真正的 `## X` 小节 MUST 被定位到**围栏外**那一处（否则取到的是模板里的假小节）。
     """
-    text = ("## 拍板决策\n\n```markdown\n## 承重约束\n<模板占位>\n```\n\n- **D1 真决策**\n\n"
-            "## 承重约束\n\n- **C1 真约束**\n")
-    body = _section_body(text, "## 拍板决策")
+    decision_h, constraint_h = REQUIRED_SECTIONS   # 小节名引真相源，MUST NOT 硬编码（改名即恒真）
+    text = (f"{decision_h}\n\n```markdown\n{constraint_h}\n<模板占位>\n```\n\n- **D1 真决策**\n\n"
+            f"{constraint_h}\n\n- **C1 真约束**\n")
+    body = _section_body(text, decision_h)
     assert "D1 真决策" in body, f"围栏内的标题截断了本节正文：{body!r}"
-    assert _section_body(text, "## 承重约束").strip().startswith("- **C1"), "定位到了围栏内的假小节"
+    assert _section_body(text, constraint_h).strip().startswith("- **C1"), "定位到了围栏内的假小节"
 
 
 def test_heading_hidden_in_html_comment_block_is_red(tmp_path):
@@ -276,16 +284,17 @@ def test_heading_hidden_in_html_comment_block_is_red(tmp_path):
     与 `_strip_noise` 是**两件事**：那条管「小节里只有注释」，这条管「标题本身被注释掉」。
     注释块无感 ⇒ 注释里的 `## 承重约束` 被当真小节、`-->` 被当正文 ⇒ 假绿。
     """
+    decision_h, constraint_h = REQUIRED_SECTIONS   # 小节名引真相源，MUST NOT 硬编码（改名即恒真）
     d = tmp_path / "changes" / "demo"
     d.mkdir(parents=True)
     (d / MEMO_FILENAME).write_text(
-        "# 决策纪要 · demo\n\n## 拍板决策\n\n- **D1 …**\n\n"
-        "<!--\n## 承重约束\n\n- **C1 …**\n-->\n",
+        f"# 决策纪要 · demo\n\n{decision_h}\n\n- **D1 …**\n\n"
+        f"<!--\n{constraint_h}\n\n- **C1 …**\n-->\n",
         encoding="utf-8",
     )
     problems = check_decision_memo(d)
     assert len(problems) == 1, problems
-    assert "承重约束" in problems[0]
+    assert _names_section(problems[0], constraint_h), problems
 
 
 # ------------------------------------------- `decision_hash` 的覆盖面（门 ↔ hash 同口径）
@@ -319,6 +328,24 @@ def _decision_hash(memo_path):
     return r.stdout.strip()
 
 
+def _body_start_line(text):
+    """frontmatter 之后第一行的行号（`text.splitlines()` 下标）；没有 frontmatter → 0。
+
+    这是**取样范围定位器**，不是 hash 算法的复刻 —— schema 文档把覆盖范围写成
+    「frontmatter 之外的全文」，本函数只回答「那到底是哪几行」，好让覆盖面用例逐行变异。
+    frontmatter 语法在本 schema 下**有界**（首行 `---`，到下一行 `---` 为止）⇒ 可手写（基准 5）。
+    另一侧（「frontmatter 确实被排除」）由 `test_decision_hash_is_deterministic_and_frontmatter_independent`
+    独立钉住，两条合起来正好等于文档承诺的范围。
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return 0
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return i + 1
+    return 0
+
+
 def _memo_with_fence_then_more_decisions(tmp_path):
     """门**认可**的一种真实形态：拍板决策节内贴了 schema 模板（含 `## ` 字面量），围栏之后还有 D2。
 
@@ -327,18 +354,26 @@ def _memo_with_fence_then_more_decisions(tmp_path):
     return _write_memo(
         tmp_path,
         decisions=("- **D1 纪要格式照 schema** — 模板：\n\n"
-                   "```markdown\n## 承重约束\n\n- **C1 …**\n```\n\n"
+                   # 围栏内的小节名同样引真相源：硬编码则改名后这里不再是「真标题的同名字面量」，
+                   # 本 fixture 的围栏自指性质当场失效（恒真）。
+                   f"```markdown\n{REQUIRED_SECTIONS[1]}\n\n- **C1 …**\n```\n\n"
                    "- **D2 后续决策（fence 之后）** — 依据：围栏之后仍然是拍板决策的正文"),
         constraints="- **C1 CLI 无 rename change** — 证据锚：`openspec new --help` 实跑输出",
     )
 
 
 def test_decision_hash_covers_every_line_the_gate_calls_body(tmp_path):
-    """⭐⭐ **门与 hash 必须同口径**：门认作「拍板决策」正文的**每一行**，改动后 `decision_hash` MUST 变。
+    """⭐⭐ **hash 覆盖面 = schema 承诺的全部范围**：frontmatter 之外的**每一行**改动后 hash MUST 变。
 
-    失配的后果是**静默放行**：门 fence-aware ⇒ 围栏之后的 `- **D2 …**` 算正文；
-    hash 若按「逐行 `startswith("## ")` 截断」算，就只覆盖到围栏那一行 ⇒
-    把 D2 改成**相反的决策**，C.1 判 4 重算出来的 hash 照旧相等 ⇒ 判 4 什么也没挡住。
+    两个失配方向，本条一并钉住：
+
+    ① **窄于门认可的正文**（原 G-1）：门 fence-aware ⇒ 围栏之后的 `- **D2 …**` 算「拍板决策」正文；
+       hash 若按「逐行 `startswith("## ")` 截断」算，就只覆盖到围栏那一行 ⇒
+       把 D2 改成**相反的决策**，C.1 判 4 重算出来的 hash 照旧相等 ⇒ 判 4 什么也没挡住。
+    ② **窄于文档承诺的范围**（M-C）：`decision-memo-schema.md` 写死「范围 = frontmatter 之外的全文」。
+       变异实测：把命令收窄成 `body=raw[raw.index("## 拍板决策"):]`（丢掉 H1 与 `## 目标态`）
+       ⇒ 旧版本用例 **19 passed 静默** —— 只在「拍板决策」节内取样的锚看不见这种收窄。
+       ∴ 取样范围 MUST 是 `_body_start_line()` 之后的**全部**非空行，而不是某一节的 span。
 
     ∴ 这条一致性有**确定性信号**（两次算出的字节串等不等），属于该机械化的范畴（基准 1），
     MUST NOT 只在文档里写一句「SHOULD 不要那样写」就算完。
@@ -352,9 +387,10 @@ def test_decision_hash_covers_every_line_the_gate_calls_body(tmp_path):
     assert re.fullmatch(r"[0-9a-f]{12}", base), f"hash 命令的输出不是 12 位十六进制：{base!r}"
 
     lines = original.splitlines()
-    start, end = _section_span(original, REQUIRED_SECTIONS[0])
-    checked = 0
-    for i in range(start, end):
+    body_start = _body_start_line(original)
+    assert body_start > 0, "fixture 没有 frontmatter —— 取样范围定位失效，本条会退化成扫全文"
+    checked = []
+    for i in range(body_start, len(lines)):
         if not lines[i].strip():
             continue                      # 纯空行：两端都 strip，改它本就不该动 hash
         mutated = list(lines)
@@ -362,12 +398,20 @@ def test_decision_hash_covers_every_line_the_gate_calls_body(tmp_path):
         memo.write_text("\n".join(mutated) + "\n", encoding="utf-8")
         try:
             assert _decision_hash(memo) != base, (
-                f"改了门认作正文的第 {i - start + 1} 行（{lines[i]!r}）而 decision_hash 不变 —— "
-                "hash 覆盖面窄于门认可的正文，C.1 判 4 对这一行是静默放行的")
+                f"改了 frontmatter 之外的第 {i - body_start + 1} 行（{lines[i]!r}）而 decision_hash 不变 —— "
+                "hash 覆盖面窄于 schema 承诺的范围，C.1 判 4 对这一行是静默放行的")
         finally:
             memo.write_text(original, encoding="utf-8")
-        checked += 1
-    assert checked >= 5, f"只变异到 {checked} 行 —— fixture 太瘦，这条锚接近恒真"
+        checked.append(lines[i])
+
+    # 取样范围本身的自检 —— 三个探针**都落在「拍板决策」小节之外**，且分踞它的两侧：
+    # 前两个在它之前（M-C 那种「从 `## 拍板决策` 起截」会丢掉），第三个在它之后
+    # （旧版本「只扫『拍板决策』小节的行区间」会丢掉）。少了任何一个 ⇒ 本条又缩回单节取样。
+    for probe in ("# 决策纪要", "## 目标态", "- **C1 CLI"):
+        assert any(l.startswith(probe) for l in checked), (
+            f"取样没盖到 {probe!r} 开头的行 —— 覆盖面锚窄于 schema 承诺的「frontmatter 之外全文」；"
+            f"实际取样：{checked!r}")
+    assert len(checked) >= 12, f"只变异到 {len(checked)} 行 —— fixture 太瘦，这条锚接近恒真"
 
 
 def test_decision_hash_is_deterministic_and_frontmatter_independent(tmp_path):
