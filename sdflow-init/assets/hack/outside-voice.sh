@@ -39,6 +39,18 @@
 #                           helper 正常退出时该结论正确；helper 被 SIGKILL 打死时会
 #                           **误判 exited**（孤儿 runner 仍在计费、fallback 被解闸）——
 #                           那正是本文件（判据 ④）要关、而它缺席时关不满的那个窄口。
+#   secret-scan --context-file <f>
+#     stdout: 无                                                exit 0=干净 | 3=命中（拒发）
+#                                                                    | 2=用法错 / 文件不存在或不可读
+#     stderr: 命中时每条规则一行「secret-hit（拒发）: 规则=<name> 行=<行号,…>」
+#             （与 exec 路径同一份 secret_scan ⇒ 同一份规则、同一份脱敏口径：MUST NOT 打印命中原行）
+#     【为什么有这个子命令】〔add-sdflow-spec · SA-12 S2〕：voice 不是唯一的数据出境端点——
+#       /sdflow-spec 把「最小净化查询」交给联网子代理（sdflow-web-researcher）同样是出境。
+#       该场景 MUST 复用本文件既有的 secret_scan（host-adaptive-execution「出境安全三件套」
+#       的同一条语义），MUST NOT 在别处重写一个扫描器（第二份规则表 = 第二个漂移面，
+#       且新写的那份必然先漏掉这里已经踩过的坑）。
+#     🔴 文件不存在/不可读 ⇒ exit 2，**MUST NOT 兜底成「干净」**：secret_scan 内部 grep 吞掉
+#       文件错误后返回 0，直接调用它会把「压根没扫」读成「扫过了，干净」= 静默放行。
 #   preflight
 #     stdout: "ready" | "not_installed" | "missing-deps"         exit 0（$SDFLOW_VOICE_RUNNER 非空时）
 #             探测目标 = $SDFLOW_VOICE_RUNNER 的 CLI（MUST NOT 硬编码 codex）
@@ -164,7 +176,7 @@
 #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
 set -u
 
-OV_VERSION="outside-voice.sh 1.5.0"
+OV_VERSION="outside-voice.sh 1.5.1"
 
 # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
 # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
@@ -203,7 +215,7 @@ case "$OV_MAX_CONTEXT_BYTES" in
 esac
 
 usage() {
-  echo "usage: outside-voice.sh {preflight|version|render-prompt --context-file <f>|exec --context-file <f> [--timeout <s>]}" >&2
+  echo "usage: outside-voice.sh {preflight|version|secret-scan --context-file <f>|render-prompt --context-file <f>|exec --context-file <f> [--timeout <s>]}" >&2
   exit 2
 }
 
@@ -820,6 +832,22 @@ case "$cmd" in
     ;;
   version)
     echo "$OV_VERSION"
+    ;;
+  secret-scan)
+    # 非 voice 出境场景的扫描入口（SA-12 S2）。只做一件事：把 secret_scan 的判定原样透出。
+    ctx=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --context-file)
+          [ $# -ge 2 ] || usage
+          ctx="$2"; shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    [ -n "$ctx" ] || usage
+    # fail-closed：不可读 ≠ 干净（见文件头该子命令的契约注释）
+    [ -f "$ctx" ] && [ -r "$ctx" ] || { echo "context file not found/unreadable: $ctx" >&2; exit 2; }
+    secret_scan "$ctx" || exit 3
     ;;
   render-prompt|exec)
     ctx=""; tmo=300

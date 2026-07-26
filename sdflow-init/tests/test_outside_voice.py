@@ -169,7 +169,10 @@ def test_version():
     #   三面隔离旗 `--effort <e>`（取 $SDFLOW_VOICE_EFFORT，缺省 high）/ `--safe-mode` /
     #   `--no-session-persistence`；两条 runner 路径均把 OV_RUNNER_PID 原子发布到
     #   $SDFLOW_VOICE_RUNNER_PID_FILE（0600），供后台 cleanup 核验 runner 子树。
-    assert r.stdout.strip() == "outside-voice.sh 1.5.0"
+    # 1.5.1：add-sdflow-spec Task 4（SA-12 S2）—— 新增 `secret-scan --context-file <f>` 子命令，
+    #   把既有 secret_scan 暴露给【非 voice】的出境端点（/sdflow-spec 派联网子代理前扫最小净化
+    #   查询），复用同一份规则表与同一份脱敏口径；文件不可读 fail-closed exit 2（不兜底成干净）。
+    assert r.stdout.strip() == "outside-voice.sh 1.5.1"
 
 
 # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────

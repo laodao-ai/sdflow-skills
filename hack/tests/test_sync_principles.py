@@ -105,6 +105,73 @@ def test_every_block_in_project_targets_matches_source():
             assert got == body, f"{p.name} 第 {s + 1} 行起的托管块与真相源不一致"
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# agent 定义投放面（add-sdflow-spec · SA-07）
+#
+# 【为什么单列一组】agent 定义的读者是【被下发的子代理】，受众同 SKILL.md ⇒ 必须配
+# skill 味 SOURCE（含 fan-out 传播纪律那一段）。若被顺手并进 PROJECT_TARGETS，
+# 注入的是项目味源 —— 而 `--check` 照样报绿（它只比「文件 vs 它自己配的源」）。
+# ∴ 「配的是哪个源」必须单独断言，光靠 --check 是照不到的。
+# ══════════════════════════════════════════════════════════════════════════════
+
+AGENT_DIR = SP.REPO / "sdflow-spec" / "agents"
+EXPECTED_AGENTS = {
+    "sdflow-local-researcher.md",
+    "sdflow-web-researcher.md",
+    "sdflow-spec-writer.md",
+}
+
+
+def test_all_three_agent_defs_are_in_the_delivery_surface():
+    """三个 agent 定义都进了投放面（少一个 = 那份定义的通则永远不会被守）。"""
+    found = {p.name for p in SP.agent_defs()}
+    assert EXPECTED_AGENTS <= found, f"agents 投放面缺了：{EXPECTED_AGENTS - found}"
+
+
+def test_agent_defs_are_paired_with_the_skill_flavored_source():
+    """⭐ 每个 agent 定义配的 MUST 是 skill 味 SOURCE，不是项目味。
+
+    这条是 --check 照不到的那一面：并进 PROJECT_TARGETS 会注入项目味源而 --check 全绿。
+    """
+    pairs = dict(SP.targets())
+    for p in SP.agent_defs():
+        assert pairs[p] == SP.SOURCE, f"{p.name} 配错了源（应为 skill 味 SOURCE）"
+
+
+def test_every_agent_block_matches_the_skill_source_byte_for_byte():
+    """三个定义里的托管块 == skill 味真相源全文（含传播纪律那一段）。"""
+    body = SP.block(SP.SOURCE).strip()
+    for p in SP.agent_defs():
+        lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+        spans = SP._blocks("".join(lines))
+        assert spans, f"{p.name} 没有托管块"
+        for s, e in spans:
+            got = "".join(lines[s:e + 1]).strip()
+            assert got == body, f"{p.name} 第 {s + 1} 行起的托管块与 skill 味真相源不一致"
+
+
+def test_a_new_agent_file_turns_check_red():
+    """⭐⭐ 定点用例：往 `agents/` 放一个**新** `.md` ⇒ `--check` MUST 变红。
+
+    【它守的是「glob 发现」这个机制本身，不是某三个文件名】
+    把 `agent_defs()` 换成硬编码清单 ⇒ 新文件不在清单里 ⇒ `--check` 看不见它 ⇒ 绿 ⇒ 本用例红。
+    「新增 agent 定义忘了纳入投放面」这个失效场景，只有 glob 做得出来。
+
+    【为什么写进真实目录而不是 tmp_path】需要被守的正是**那个真实目录**：
+    monkeypatch 到临时目录只能证明「glob 对某个目录有效」，证不到「投放面指的是它」。
+    ∴ try/finally 保证收尾；文件名带 `_probe_` 前缀，与任何真实定义不会撞。
+    """
+    probe = AGENT_DIR / "_probe_glob_discovery.md"
+    assert not probe.exists(), "上一次运行留下了探针文件 —— 先删掉它"
+    probe.write_text("---\nname: probe\n---\n\n# probe\n\n（无托管块）\n", encoding="utf-8")
+    try:
+        assert probe in SP.agent_defs(), "glob 没发现新文件 —— agent_defs() 是硬编码清单？"
+        assert SP.main(["--check"]) == 1, "新增未纳入托管的 agent 定义，--check 居然是绿的"
+    finally:
+        probe.unlink()
+    assert SP.main(["--check"]) == 0, "收尾后应恢复全绿"
+
+
 def test_outside_voice_frame_carries_the_principles(tmp_path):
     """⭐ 端到端：render-prompt 的输出里，通则 MUST 出现在 UNTRUSTED 分隔线【之前】。
 

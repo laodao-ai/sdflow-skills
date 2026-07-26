@@ -205,7 +205,7 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
   三个 `$SDFLOW_TIER_*` MUST 非空。**空值 = resolver 根本没跑成，MUST NOT 回落当 `unknown` 处置。**
 
 **传递方式**：harness 每次 Bash 调用是**独立 shell**，`export` **不跨调用存活**。⇒ 从该次工具输出里
-读到**具体模型 id**，派发时把**字面值**填进 `model` 参数；本文正文只写变量名，二者不矛盾。
+读到**解析结果**，派发时把**字面值**填进 `model` 参数（枚举边界见「外派协议」）；本文正文只写变量名，二者不矛盾。
 
 **`$SDFLOW_HOST="codex"`** ⇒ 整条管线降级为主 session 亲做（检索亲查、生成亲写），**起手时即告知用户**。
 
@@ -252,11 +252,57 @@ absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B
 ### A.3 外派阈值（阶段一：**不外派**）
 
 阶段一的检索与生成**均由主 session 亲做**（薄编排形态，这是本 skill 的正式交付形态之一）。
-阶段二引入 `sdflow-local-researcher` / `sdflow-web-researcher` / `sdflow-spec-writer` 后，
-外派阈值为**事后可复核**形式：**同类任务累计工具调用 > 5 次 → 下次同类改派**。
-MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定**的判据。
+阶段二引入三个 agent 定义后，外派阈值为**事后可复核**形式：**同类任务累计工具调用 > 5 次 →
+下次同类改派**。MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定**的判据。
 
 **判断永远不外派**：方案推荐、承重约束是否站稳、纪要撰写、终审裁决 —— 原材料是对话共识，只有主 session 持有。
+
+---
+
+## 外派协议（阶段二 · 三个 agent 定义）
+
+> 阶段一**不外派**，本节不生效。启用前提 = SA-07 的 GO/NO-GO 实测门判 GO。
+
+| 用途 | `subagent_type` | 档位 | 它**没有**什么 |
+|---|---|---|---|
+| 仓内检索 | `sdflow-local-researcher` | light | 无联网工具 |
+| 联网调研 | `sdflow-web-researcher` | light | **无仓库读取、无 `Bash`** |
+| 单产物成文 | `sdflow-spec-writer` | mid | 无判断权（遇缺口返回 blocker） |
+
+**派发三要素**：
+
+1. **`subagent_type`** —— **MUST NOT 用 `agentType`**〔A-2〕。
+2. **`model`** = 0.2 解析出的**字面值**。🔴 **实测边界**：Agent 工具的 `model` 是**枚举**，
+   只接受 `sonnet|opus|haiku|fable`；填完整版本化 id（如 `claude-haiku-4-5-20251001`）会被
+   `InputValidationError` 当场拒。本机队 `resolve-models.sh` 解析出的正是这类别名，直接填即可。
+   若解析值**不在该枚举内**（被 config 覆盖成完整 id 等）⇒ 派发必被参数校验拒 ⇒ **如实报告并亲做**；
+   **MUST NOT 猜一个别名顶上**（那是绕过档位配置），**MUST NOT 填变量名 `$SDFLOW_TIER_*`**。
+3. **prompt** = 本次任务。四条通则**不必再内联** —— agent 定义正文已承载，由 `sync_principles.py` 机械守。
+
+### 派联网 agent 前：最小净化查询 → secret scan（**顺序不可换**）
+
+`sdflow-web-researcher` 是本管线的**数据出境端点**。给它的**只有一条自足查询**：
+
+- **MUST 只含**公开可讨论的问题本身（协议 / 规范 / 版本 / 最佳实践 / 权威出处）；
+- **MUST NOT 含**仓库路径、代码片段、内部标识符、项目/客户专名、配置值、任何凭证；
+- 「结合我们的代码怎么办」这类推理 **MUST 由主 session 自己做**，MUST NOT 外包给它。
+
+查询写进临时文件后 **MUST 先扫再发**（**复用**既有出境扫描器，**MUST NOT 另写一个**）：
+
+```bash
+~/.sdflow/hack/outside-voice.sh secret-scan --context-file <查询文件>
+```
+
+- `exit 0` ⇒ 放行；
+- `exit 3` ⇒ **拒发，且 MUST NOT fallback** —— 既不改由主 session 自己发出去、也不换个 agent 发。
+  命中意味着**这条查询本身不该出境**，换通道不改变这一点。按三要素报告并**重写查询**；
+- `exit 2` ⇒ 文件不可读 / 用法错 ⇒ **同样拒发**（**没扫成 ≠ 干净**）。
+
+### 定义不可用 ⇒ 主 session 亲做（**唯一合法降级方向**）
+
+任一 `subagent_type` 派发报「未知 agent 类型」⇒ 该职责**主 session 亲查 / 亲写**，报告标注降级。
+🔴 **MUST NOT 退通用子代理顶替**（`general-purpose` 工具面是 `*` ⇒ 撤掉唯一的权限边界 =
+**降级即提权**，且 agent 正文承载的角色纪律全部消失）。诊断见「降级与诊断」。
 
 ---
 
@@ -473,6 +519,18 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 
 🔴 **MUST NOT 用通用子代理当 fallback**（无法限制工具集 ⇒ **降级即提权**）。
 🔴 **降级前 MUST 确认替代路径不复用同一故障依赖**，否则那不是降级。
+
+**诊断：`Agent type 'sdflow-*' not found`（三要素）**
+
+- **problem** —— 派发直接报未知 agent 类型，可用清单里只有 `general-purpose` / `Explore` 之类内置项。
+- **cause** —— 二选一，先看第二条：
+  1. **定义没铺**：`ls -l ~/.claude/agents/sdflow-*.md` 为空 ⇒ 没跑过 `setup.sh`；或宿主是
+     **Windows**（`install_agents()` 明写不铺）/ **Codex**（无 `~/.claude/agents/` 机制）。
+  2. 🔴 **铺了但本 session 看不见** —— **agent 名册在 session 启动时加载**（实测：同一次
+     `bash setup.sh` 之后，当前 session 派发仍报 not found，而**新起的进程**里同名 agent 在册）。
+     这与 `CLAUDE.md` 记载的「pull 与 setup 之间的窗口期」同族：**新装的东西对已开的 session 不可见**。
+- **fix** —— ① 先在**运行 checkout** 跑 `bash setup.sh`；② **然后新开一个 session**（本 session
+  重试多少次都不会出现）。二者缺一无效。Windows / Codex 宿主则**没有 fix**，就走亲做，如实标注。
 
 外部检索的退避与错误分类、总时间预算、完整失败模式表 →
 [`references/degradation-ladder.md`](./references/degradation-ladder.md)。
