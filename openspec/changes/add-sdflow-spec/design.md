@@ -4,7 +4,7 @@
 
 阶段一现状：`opsx:explore`（思考伙伴，CLI 官方 skill）→ `opsx:ff`（四件套生成，CLI 官方 skill）→ `/grill-with-docs`（对抗拷问，Matt Pocock skills 集合 `~/.agents/skills`，非 git 管理）。三入口拼接的缺陷与动机见 proposal。
 
-**既有权威源（本设计 MUST 与之对齐，不得另起一套）**〔spec-review-amendment F-02，原文遗漏这一整段〕：`sdflow-init/assets/workflow/generation-process.md` §四已规定推荐流水线 = `explore→ff→grill`，且该文件 `:81-84` 原文警告「否则它会另起一套……形成第二套真相源」；`workflow.md` §三决策 2 规定 **G1「全流程不用 `/clear`」**；`WORKFLOW-GUIDE.md` 是其生成物；`openspec/specs/spec-workflow/spec.md:968-994` 另有两条阶段一衔接 Requirement。本仓运行时经 `resolve-workflow.sh` 解析到**全局 canonical**、仓内不留副本 ⇒ 不同步这四处，本仓 agent 读到的仍是旧流水线。
+**既有权威源（本设计 MUST 与之对齐，不得另起一套）**〔spec-review-amendment F-02，原文遗漏这一整段；窄复核补齐为 **7 处**〕：`sdflow-init/assets/workflow/generation-process.md` §四（`:51` 起）已规定推荐流水线 = `explore→ff→grill`，且该文件 `:79-80` 载有同族防漂移警告「否则它会另起一套 `docs/adr/`……形成**第二套真相源**（正是我们一路在消除的漂移）」——原文出自 §六讨论 ADR/术语**路径约定**，此处为**同一原则的类比引用**，非该文件直接针对流水线顺序的警告；`workflow.md` §三决策 2 规定 **G1「全流程不用 `/clear`」**；`WORKFLOW-GUIDE.md` 是其生成物；`openspec/specs/spec-workflow/spec.md:968-994` 另有两条阶段一衔接 Requirement。另有 `reference/quality-layering.md`（G1 的第二处载体）、`snippets/claude-section.md` 的托管块（其中「ff 之后是 grill」条款）、`ff-generation-constraints.md:17`（FF-0「已在 feature 分支就跳过」的弱判据，与本设计的三分支判定冲突）。本仓运行时经 `resolve-workflow.sh` 解析到**全局 canonical**、仓内不留副本 ⇒ 不同步这七处，本仓 agent 读到的仍是旧规则。完整清单与处置见 SA-11。
 
 本设计基于四路实证调研：①既有 fan-out 编排模式（dispatch 三要素、principles 注入、`resolve-models.sh` 档位变量）；②成本基线（retro 报告 + workflow-cost-optimization roadmap）；③openspec CLI 机制实测（**1.5.0**：`instructions --json` 幂等只读、单产物载荷 3.5-6KB）；④agent 定义文件调研（`docs/subagent-definitions-plan.md`）。外部权威输入：Anthropic multi-agent 研究（多代理 ≈15× token 溢价，仅子任务独立时划算）。
 
@@ -17,7 +17,7 @@
 - 判断不出主 session；**阶段二起**检索与生成外派子代理（阶段一薄编排）。
 - 决策纪要为承重件：对话中的 why 100% 落盘，`/clear` 无损；**Phase B 内增量落盘**。
 - 档位相对化：主 session 档位人选，子代理经档位变量。
-- **规则单一源不分叉**：本 change 与四个既有 canonical 源的冲突同 change 消除。
+- **规则单一源不分叉**：本 change 与**七处**既有 canonical 源的冲突同 change 消除（清单见 SA-11）。
 
 **Non-Goals：** 见 proposal Non-Goals（含可证伪假设，此处不重复）。
 
@@ -28,11 +28,14 @@
 | `sdflow-spec/SKILL.md` | 一 | 新增·编排指令 | 三相位管线、相位状态机、降级矩阵、出口序列（**体量控制见 D12**） | openspec CLI |
 | `sdflow-spec/references/` | 一 | 新增·外置资料 | 降级阶梯表、ADR/术语最小模板、决策纪要字段 schema（表格型少判断内容外置，对齐 `code-checklists/domains` 模式）〔spec-review-amendment F-16〕 | — |
 | `sdflow-init/assets/workflow/{workflow.md,generation-process.md}` | 一 | **修改**〔F-02〕 | G1 修订（Q2=A）+ 流水线分支 | 托管刷新机制 |
+| `sdflow-init/assets/workflow/reference/quality-layering.md` | 一 | **修改**〔F-02·窄复核补〕 | G1 的第二处载体，同步例外 | 托管刷新机制 |
+| `sdflow-init/assets/workflow/ff-generation-constraints.md` | 一 | **修改**〔窄复核补〕 | FF-0 弱判据 `:17` 改三分支判定，与 SA-05 对齐 | — |
 | `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md` | 一 | **重生成**〔F-02〕 | 随源刷新 | `gen_workflow_guide.py` |
 | `openspec/specs/spec-workflow/spec.md` | 一 | **修改**〔F-02〕 | 新旧入口共存与路由（`:968-994` 两条既有 Requirement） | — |
 | `sdflow-init/assets/snippets/claude-section.md` | 一 | 修改 | 归属修正（superpowers → Matt Pocock，`:118`） | 托管区块刷新机制 |
 | CLAUDE.md/AGENTS.md/README.md | 一 | 修改 | **非托管区**：使用路径 + **四入口选择规则** + 出口序列；删「15 个 SKILL.md」硬编码数字〔F-28〕 | — |
-| `sdflow-spec/agents/sdflow-researcher.md` | 二 | 新增·agent 定义 | 检索/调研/供证 | 通则托管块 |
+| `sdflow-spec/agents/sdflow-local-researcher.md` | 二 | 新增·agent 定义 | **仓内**检索供证（无网络） | 通则托管块 |
+| `sdflow-spec/agents/sdflow-web-researcher.md` | 二 | 新增·agent 定义 | **联网**调研（无仓库读取、无 `Bash`；只收净化查询）〔BASE-28 S2〕 | 通则托管块 |
 | `sdflow-spec/agents/sdflow-spec-writer.md` | 二 | 新增·agent 定义 | 四件套单产物生成（单一职责） | 通则托管块、openspec CLI |
 | `setup.sh` | 二 | 修改 | **新写 `install_agents()`**（**不是**沿用 `install_into`，见 D11） | — |
 | `hack/tests/test_install_agents.py` | 二 | 新增·测试 | 全仓首个 setup.sh 测试〔F-09〕 | pytest |
@@ -45,7 +48,7 @@
                 │
     ┌───────────┼──────────────┬─────────────────┬──────────────┐
     ▼           ▼              ▼                 ▼              ▼
- openspec CLI  sdflow-researcher  sdflow-spec-writer  checkpoint-  canonical 规则
+ openspec CLI  local/web-researcher sdflow-spec-writer  checkpoint-  canonical 规则
  (new/status/  〔阶段二〕         〔阶段二〕          commit.sh    workflow.md
   instructions/ subagent_type 派发  subagent_type 派发 (全局)      generation-process.md
   validate)     阶段一=主session亲查 阶段一=主session亲写           WORKFLOW-GUIDE.md
@@ -67,15 +70,16 @@
 │  每问附推荐│◀────结论+出处──────────│
 │  …若干轮…  │
 │            │ ══ Phase A→B：共识初成 ══
-│            │ 亲笔压缩共识为锚点纪要(对话内呈现,作拷问靶)
-│◀─ 拷问(攻承重约束,一次一问)
-│            │ ★每条承重约束站稳即增量落盘 memo 草稿〔F-12〕
-│  …至共识+承重约束全站稳(判据见 SA-03 最小充分条件)…
-│            │ ══ Phase B 收敛 ══
+│            │ ══ Phase B 起手（前移三步，B-draft 才有落点〔窄复核 F-12〕）══
 │            │ ①工作树前置检查(git status --porcelain)〔F-05〕──脏─▶ halt 问人
 │            │ ②FF-0 三分支判定〔F-11〕──其它 feature 分支─▶ halt 问人
-│            │ ③openspec new change ───────────────────────────────────────▶│
-│            │ ④亲笔 decision-memo.md 定稿(含 change/branch/时间戳/决策 hash)
+│            │ ③openspec new change（名由目标态定，见 D9）──────────────────▶│
+│            │ 亲笔压缩共识为锚点纪要(对话内呈现,作拷问靶)
+│◀─ 拷问(攻承重约束,一次一问)
+│            │ ★每条承重约束站稳即增量落盘 memo 草稿到 change 目录〔F-12〕
+│  …至共识+承重约束全站稳(判据见 SA-03 最小充分条件)…
+│            │ ══ Phase B 收敛 ══
+│            │ ④亲笔 decision-memo.md 定稿(补 change/branch/时间戳/决策 hash)
 │            │ ⑤checkpoint
 │            │ ══ Phase B→C ══
 │            │ 起手核验 memo 有效性(存在+必填非空+身份对得上当前 change/branch)
@@ -101,12 +105,14 @@
 ## 相位状态机〔spec-review-amendment F-11，原设计缺失〕
 
 ```
-absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-finalized ──派/亲写──▶ C-partial ──全产物过 validate──▶ complete
-   ▲                 │                            │                        │
-   └──删分支即净──────┘                            └──memo 身份不符─────────┘（退回 B-draft）
+absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B-finalized ──派/亲写──▶ C-partial ──全产物过 validate──▶ complete
+   ▲                        │                        │                          │
+   └────删分支即净───────────┘                        └──memo 身份不符───────────┘（退回 B-draft）
 ```
 
-- **重入 MUST 先探测**：当前分支名 + `openspec/changes/` 下是否有「含 `decision-memo.md` 但 `openspec status` 未完成」的 change。命中 → **问人**「继续该 change 还是新开」（两种意图导致实质不同产物，属通则③里必须确认的那类）。
+🔴 **`B-draft` 必须是可探测状态**〔窄复核 F-12〕：这正是把 ①②③ 从「B 收敛」前移到「B 起手」的理由——原设计里 `openspec new change` 在收敛点才跑，B 进行中既无 change 目录也无 feature 分支，SA-04 的「增量落盘」**无处可写**（而 `MUST NOT 存放于 session 级临时目录` 又堵死唯一替代），且状态机的 `B-draft` 结构上探测不到。前移后 memo 草稿从第一条约束站稳起就在 git 里，D9 否决 scratchpad 的理由不再反噬本方案自身。
+
+- **重入 MUST 先探测**：当前分支名 + `openspec/changes/` 下是否有「含 `decision-memo.md` 但 `openspec status` 未完成」的 change。命中 → **问人**「继续该 change 还是新开」（两种意图导致实质不同产物，属通则③里必须确认的那类）。**该探测能看见 `B-draft`**（草稿 memo 已在 change 目录内）。
 - **memo 身份字段**：`schema_version` / `change` / `branch` / 生成时间戳 / 决策 hash。C 起手核对不上即拒绝并呈现旧 memo 摘要给人确认，**MUST NOT 静默复用**（原设计只查「存在且必填非空」，对上一次废弃运行留下的 memo 是全绿的）。
 - `complete` 态拒绝重生成。
 
@@ -123,7 +129,7 @@ absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-fi
 
 **决策纪要字段**：目标态一句话 · 拍板决策[]（决策 + 依据 + **砍掉的候选 + 砍的理由**）· 承重约束[]（约束 + 验证方式/证据锚）· 接受的边角[]（通则④，风险 + 为何接受）· 三镜代价（仅命中 TG-23 的方案选择）· **身份字段**（见状态机）。
 
-**生命周期**：Phase B 增量追加（每条承重约束站稳即写）→ B 收敛定稿 + checkpoint → Phase C 作为每个生成步的输入 → **终审后不并入 design.md，design.md 的 Decisions 只留指针**〔spec-review-amendment F-21 决议：采纳「不并入」〕。
+**生命周期**：Phase B **起手**建 change 目录（前移 ①②③）→ B 进行中增量追加（每条承重约束站稳即写）→ B 收敛定稿 + checkpoint → Phase C 作为每个生成步的输入 → **终审后不并入 design.md，design.md 的 Decisions 只留指针**〔spec-review-amendment F-21 决议：采纳「不并入」〕。
 
 理由：① `openspec instructions design --json` 实跑核验，design 原生 Sections = `Context / Goals-Non-Goals / Decisions / Risks-Trade-offs / Migration Plan / Open Questions` —— **「承重约束[]」没有对应槽位**，而它是 D1/SA-03 里最承重的东西；② SA-04 的验收不变式（`/clear` 后 why 100% 可得）**单靠 memo 就已满足**（它在 change 目录、spec-review 读得到）⇒「保留 + 并入」的双写成本全部是白付的，且失配时无优先级规则；③ 指针式引用符合 DOC-1 的查表式定位。
 
@@ -133,7 +139,7 @@ absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-fi
 
 〔spec-review-amendment F-06 · hr-tg voice V-2/V-4/V-5：**原设计判 TG-17 不命中，本段整块为新增**〕
 
-**判定**：TG-17 **命中**。`sdflow-researcher` 的工具面同时持有仓库读取、`Bash`、`WebFetch`/`WebSearch`；`sdflow-spec-writer` 持有 `Bash`、`Write`。
+**判定**：TG-17 **命中**。原设计的单体 researcher 工具面同时持有仓库读取、`Bash`、`WebFetch`/`WebSearch`；`sdflow-spec-writer` 持有 `Bash`、`Write`。
 
 | # | 面 | 处置 |
 |---|---|---|
@@ -154,12 +160,12 @@ absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-fi
 - **阶段一 = 薄编排形态**（主 session 亲写）—— 原文已承认这是「本方案的合法降级形态」，现将其提升为**阶段一的正式交付形态**；
 - **阶段二 = 引入外派**，起手过 GO/NO-GO 实测门（D3），并用 legacy/thin/subagent **三路 A/B** 判定是否保留。
 依据：官方 lead+subagent 实证 90.2%；15× 溢价警告 → 子代理少而定向、单一职责短命。
-🔴 **未被原设计正视的反证**〔spec-review-amendment F-15/Q4〕：写 design 会发现架构缺口、写 spec 会发现不可验收表述——**这些发现本身就是判断工作**，而 writer 被禁止询问用户 ⇒ 遇缺口只能猜/漏写/失败，主 session 再读回修正 = **双写**。另：`archive/2026-07-18-async-outside-voice/design.md` 的 9 条 ADR 里 ≥4 条带 `[grill]`/`[spec-review-amendment]`/`[seam-review-amendment]` 复合标记 ⇒ 其最终形态依赖多轮跨阶段输入，**不是一份 5 字段纪要能压缩的**。⇒ 这正是分阶段的理由：阶段二的 A/B **MUST 用一个真实复杂 change**（非玩具需求），并人工比对「纪要驱动的 design.md」vs「有完整拷问上下文的 design.md」的**论证密度**（Q4 决议）。writer 遇未决判断 MUST 返回结构化 blocker，MUST NOT 自行补全。
+🔴 **未被原设计正视的反证**〔spec-review-amendment F-15/Q4〕：写 design 会发现架构缺口、写 spec 会发现不可验收表述——**这些发现本身就是判断工作**，而 writer 被禁止询问用户 ⇒ 遇缺口只能猜/漏写/失败，主 session 再读回修正 = **双写**。另：`archive/2026-07-18-async-outside-voice/design.md` 的 **6 条 ADR 里 3 条**（ADR-3/5/6）带 `[grill]` + `[spec-review-amendment]` 等复合标记 ⇒ 其最终形态依赖多轮跨阶段输入，**不是一份 5 字段纪要能压缩的**。⇒ 这正是分阶段的理由：阶段二的 A/B **MUST 用一个真实复杂 change**（非玩具需求），并人工比对「纪要驱动的 design.md」vs「有完整拷问上下文的 design.md」的**论证密度**（Q4 决议）。writer 遇未决判断 MUST 返回结构化 blocker，MUST NOT 自行补全。
 三镜：系统镜——多一层纪要中间件与 dispatch 面，每件独立可测，且阶段门使其可回退到阶段一；用户镜——生成阶段等待略增；开发循环镜——复用既有 dispatch 模式，但成本收益未证实、由阶段二判定。主次：**系统镜主导**（可归因性是分阶段的首要收益，成本是待验假设）。
 
 **D3 agent 定义文件承载角色（阶段二），派发用 `subagent_type`，全局分发**（备选：纯 prompt 内联）：
-- 🔴 **派发参数 = `subagent_type`，不是 `agentType`**〔spec-review-amendment F-01〕。依据：`docs/subagent-definitions-plan.md:114-145` 把三条路径分清——①Agent 工具（参数 `subagent_type`）②agent 定义文件（载体）③Workflow `agent()`（参数 `agentType`），而同文 `:145` 明记 **③ 不采纳**（需用户每次显式授权）。本仓三处先例（`.claude/skills/openspec-archive-change/SKILL.md:69` 等）均用 `subagent_type`，15 个 SKILL.md 无一用 `agentType`。
-- **`sdflow-researcher`**（`model: inherit`·`effort: low`·工具面见 BASE-28 的 S1/S2 处置，**不再声称「全只读」**）、**`sdflow-spec-writer`**（`model: inherit`·`effort: medium`·`tools: Read, Glob, Grep, Bash, Write`）。
+- 🔴 **派发参数 = `subagent_type`，不是 `agentType`**〔spec-review-amendment F-01〕。依据：`docs/subagent-definitions-plan.md:114-145` 把三条路径分清——①Agent 工具（参数 `subagent_type`）②agent 定义文件（载体）③Workflow `agent()`（参数 `agentType`），而同文 `:136-137` 明记 **③ 不采纳**（需用户每次显式授权）。本仓三处先例（`.claude/skills/openspec-archive-change/SKILL.md:69` 等）均用 `subagent_type`，15 个 SKILL.md 无一用 `agentType`。
+- **三个** agent 定义〔窄复核订正：原写「两个」，与 BASE-28 S2 的拆分要求自相矛盾〕：**`sdflow-local-researcher`**（`model: inherit`·`effort: low`·仓内检索，无网络）、**`sdflow-web-researcher`**（`model: inherit`·`effort: low`·联网调研，**无仓库读取、无 `Bash`**）、**`sdflow-spec-writer`**（`model: inherit`·`effort: medium`·`tools: Read, Glob, Grep, Bash, Write`）。工具面见 BASE-28 的 S1/S2，**不再声称「全只读」**。
 - 🔴 **fallback 不是等价降级，改为亲查/亲写**〔spec-review-amendment F-01 · hr-tg V-3〕：原设计的「agent 定义不可用 → 通用子代理 + prompt 内联通则」**撤掉了唯一的工具权限边界 = 降级即提权**（`docs/subagent-definitions-plan.md:116-123`：直接 Agent 路径无法限制工具集），且 agent 正文承载的角色纪律（researcher 的「材料不回传」、writer 的「自调 instructions / 禁 AskUserQuestion」）在 fallback 下全部消失。**改为**：researcher 不可用 → 主 session **亲查**；writer 不可用 → 主 session **亲写**。MUST NOT 用权限更宽的通用子代理当安全 fallback。**副作用（正向）**：消灭了双路径 parity 问题（原本需要 `check_async_branch_parity.py` 那种字节等值门才能守住）。
 - **分发层级 = 全局 `~/.claude/agents/`**（设计门 Q3 决议）。**MUST 声明反驳理由**〔spec-review-amendment F-19〕：`docs/subagent-definitions-plan.md:303-308` 倾向「先放本仓验证」，但**仓内 `.claude/agents/` 无法服务跨项目使用**——本 skill 的价值恰在其它项目里跑，故直接全局。**代价照单收**：全局命名空间污染（缓解 = 排他式 `description`，见 BASE-28 S5）+ Windows 守卫不可实现（见 D11）。附注：官方 `claude-plugins-official/plugins/feature-dev` 的打包方式是 `<plugin>/agents/`（与插件同包），本决定与之不同，理由同上。
 - 收益：通则传播从指令变机制 + 每次派发省 ~2KB 重复注入 + `effort` 分档。代价：投放面 +2 必须纳入 sync_principles（见 D11）。
@@ -168,6 +174,7 @@ absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-fi
 **D4 档位相对化**（备选：SKILL.md 写死 Fable 5）。主 session = 人选档；子代理引用 `$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`。
 🔴 **档位解析 MUST 照既有加固协议，不得自造简写**〔spec-review-amendment F-06(Eng)〕：`sdflow-spec-review/SKILL.md` 第零步第 3 项的 (a) unset 清脏 →(b) `[ -x ]` 预检 fail-loud →(c) 捕获退出码再 eval →(d) eval 后校验枚举与非空，**四步一步不少**（裸 `eval "$(…)"` 会被脚本缺失静默吞，且旧值留存 ⇒ 拿旧宿主假绿；`resolve-models.sh:61/74/209` 三种失败面都 exit 0 只在 stderr 告警）。
 🔴 **传递方式**：harness 每次 Bash 调用是独立 shell，`export` **不跨调用存活**（本次评审运行中已亲身撞到：voice preflight 首次报 `SDFLOW_VOICE_RUNNER 未设置`）。⇒ 主 session 从该次工具输出里读到**具体模型 id**，再把**字面值**填进派发的 `model` 参数；SKILL.md 正文写变量名（不内联 id），二者不矛盾。
+三镜〔窄复核补齐：F-27 是面治，D4/D7 同样带备选〕：系统镜——复用既有 resolver，不新增机制，可回退（写死模型名随时可改回）；用户镜——人可按 change 价值自选主 session 档位；开发循环镜——档位随机队自动解析，换机器/换宿主无需改 skill。主次：**开发循环镜主导**（可移植性是档位相对化的首要收益）。
 
 **D5 吸收技法、锚仓内格式、运行时零第三方 skill 依赖**（备选：运行时调用 grilling/domain-modeling/grill-with-docs）。三者均在仓外非受控（更新即覆盖）；grilling 全文 ~12 行已全吸收；domain-modeling 只吸收触发判据，写入格式真相源 = 仓内既有 `openspec/adr/*.md` 与 CONTEXT.md 现状。唯一运行时外部依赖 = openspec CLI。
 三镜〔spec-review-amendment F-27 补齐〕：系统镜——切断对仓外非受控资产的运行时依赖，可回退（技法是文本，随时可再吸收）；用户镜——无感，拷问体验由 SKILL.md 承载；开发循环镜——第三方更新不再打断本流程，代价是技法更新须手动跟进。主次：**系统镜主导**（供应链可控性）。
@@ -179,6 +186,7 @@ absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-fi
 三镜：系统镜——G1 从「无例外」变为「带一处具名例外」，规则复杂度 +1 但单一源保持；用户镜——多敲一次 `/clear` 与一次换档；开发循环镜——cache 成本与档位纪律双收益。主次：**开发循环镜主导**。
 
 **D7 命名 `sdflow-spec`**（备选：sdflow-forge/sdflow-explore）。与 sdflow-spec-review 构成「产 spec → 审 spec」对仗；explore 只覆盖第一相位职责。前缀重叠经查无触发面冲突。
+三镜〔窄复核补齐〕：系统镜——与既有 `sdflow-*` 命名空间一致，无冲突，改名成本仅限文档；用户镜——名字自解释「产 spec」，与 `sdflow-spec-review` 成对好记；开发循环镜——前缀一致使 `/sdflow-` 补全即可列出全家族。主次：**用户镜主导**（命名的唯一产出就是可记性）。
 
 **D8 失败降级阶梯 + 诊断契约**（备选：fail-closed 整体中止）。检索败 → 主 session 亲查；生成败 → 重试一次 → 主 session 亲写；每级降级 MUST 如实报告。openspec CLI 不可用/**schema 不兼容**是唯一 fail-closed（产物契约单一源）。
 🔴 **报告必须 actionable**〔spec-review-amendment F-18〕：降级/失败报告 SHALL 含 **problem + cause（exit code / 缺失文件 / 实际版本）+ 可执行的下一步**（如「回运行 checkout 跑 `bash setup.sh`」「跑 `/openspec-upgrade`」）。否则安装问题会长期隐藏在「能跑但更贵、更慢」的降级模式里。
@@ -186,18 +194,19 @@ absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-fi
 「重试一次」的次数〔spec-review-amendment F-30〕：无强依据，**按通则④判为可接受边角**；改写为「按失败类型判断——瞬时错误重试一次，schema/契约错误不重试直接降级」，不为此单独返工。
 三镜〔F-27 补齐〕：系统镜——阶梯每级独立可测，fail-closed 边界收窄到 CLI 一处；用户镜——降级可见、有修复指引；开发循环镜——避免整体中止造成的重跑成本。主次：**用户镜主导**（诊断质量决定人能否自救）。
 
-**D9 纪要落盘 change 目录、FF-0 与 `openspec new` 前移至 B 收敛**（备选：scratchpad 暂存 + Phase C 起手建 change——被否：①scratchpad 为 per-session 目录，session 崩溃即丢承重件；②B 收敛 checkpoint 时仓内零变更，`checkpoint-commit.sh` 静默跳过；③即使纪要进仓，feature 分支 Phase C 才建，B checkpoint 落错分支）。
+**D9 纪要落盘 change 目录、FF-0 与 `openspec new` 前移至 B 起手**〔窄复核订正：原写「前移至 B **收敛**」，导致 B 进行中无落点、增量落盘无法执行〕（备选：scratchpad 暂存 + Phase C 起手建 change——被否：①scratchpad 为 per-session 目录，session 崩溃即丢承重件；②B 收敛 checkpoint 时仓内零变更，`checkpoint-commit.sh` 静默跳过；③即使纪要进仓，feature 分支 Phase C 才建，B checkpoint 落错分支）。
 🔴 **原论证的盲点已修**〔spec-review-amendment F-12〕：否决 scratchpad 的理由（「session 崩溃即丢」）**对本方案的 B 收敛前窗口完全同样成立**——只是把丢失窗口从「到 C 起手」挪到「到 B 收敛」，而 SA-03 明确禁止用固定轮数当停止条件 ⇒ **首次落盘无有限上界**。**处置**：Phase B **增量落盘**（每条承重约束站稳即追加写 memo 草稿），把全损窗口收窄到「两次保存之间」。
 🔴 **「删分支即净」补条件限定**〔spec-review-amendment F-05〕：**当且仅当 B 收敛时工作树是干净的**。否则 FF-0 的 `checkout -b` 会把用户的脏改动带上新分支，`checkpoint-commit.sh:51` 的无条件 `git add -A` 再把它们全部提交 ⇒ 删分支会连用户被裹挟进来的活一起删。
-代价：change 名在 B 尾即定（此时信息已足够）；拷问后放弃则留带纪要的空 change 目录。
+**为什么 change 名可以在 B 起手就定**〔窄复核〕：SA-03 的相位 A 收束禁止清单已含「**目标态一句话尚写不出**」⇒ 进入 B 时必然已能写出目标态 ⇒ change 名此时即可定。原本「B 尾信息才足够」的顾虑被该判据消解。**且 openspec CLI 无 rename change 命令**（实查 `openspec --help`：仅 `new change` / `archive`，无 rename）⇒ 「先用暂定名、收敛时改名」不可行，手工 `git mv` + 改 `.openspec.yaml` 等于手搓 change 目录结构（SA-05 禁止）。
+代价：拷问若推翻目标态导致名字不再贴切，就留一个名字略偏的 change 目录——**按通则④判为可接受边角**（在 feature 分支内，删分支即净）；拷问后放弃同理。
 三镜〔F-27 补齐〕：系统镜——承重件进 git，可重入与审计双得，代价是 change 目录可能留空壳；用户镜——中途放弃的损失从「全损」降到「上次保存点」；开发循环镜——B checkpoint 落对分支，retro 归因可用。主次：**系统镜主导**（承重件持久化是 `/clear` 无损的前提）。
 
-**D10 canonical 规则单一源同 change 同步**〔spec-review-amendment F-02 · 新增决策〕（备选：defer 到「下游推广另 change」——**已否决**）。本 change 与四个既有权威源冲突，而本仓运行时经 `resolve-workflow.sh` 解析到**全局 canonical**、仓内不留副本 ⇒ 不同步即：**人看 README 得到新入口，AI 从 bundle 得到旧入口，且二者对 `/clear` 直接矛盾**。`generation-process.md:81-84` 自己就在警告这种分叉。defer 掉的是收益不是成本。
+**D10 canonical 规则单一源同 change 同步**〔spec-review-amendment F-02 · 新增决策〕（备选：defer 到「下游推广另 change」——**已否决**）。本 change 与**七处**既有权威源冲突（清单见 SA-11），而本仓运行时经 `resolve-workflow.sh` 解析到**全局 canonical**、仓内不留副本 ⇒ 不同步即：**人看 README 得到新入口，AI 从 bundle 得到旧入口，且二者对 `/clear` 直接矛盾**。`generation-process.md:79-80` 载有同族防漂移警告（原文针对 ADR/术语路径约定，此处类比引用）。defer 掉的是收益不是成本。
 三镜：系统镜——规则单一源保持不分叉，代价是本 change 要动 bundle（下游随 `sdflow-init update` 获得）；用户镜——不会读到互相矛盾的两套流程；开发循环镜——省掉「另一个 change 才修」期间所有人踩坑的成本。主次：**系统镜主导**。
 
 **D11 `install_agents()` 新写，不沿用 `install_into`**〔spec-review-amendment F-10 · 新增决策〕（备选：沿用 `install_into` —— **不可行**）。
-实证：`setup.sh:38-39` 只认**顶层目录**且必须含 `SKILL.md`，`sdflow-spec/agents/` 是二级目录、散装 `.md` 进不了该循环；`setup.sh:27-32` 的 `is_our_marker_copy()` 判据 `[ -f "$1/.sdflow-skills" ]` 对散装文件是**路径谬误、恒 false**；`setup.sh:106` 的判据 `[ ! -d "$REPO_DIR/$entry_name" ]` 对 `sdflow-researcher.md` **恒真**；`setup.sh:211` 的 `cleanup_orphans` 只对两个 skills 目录调用；`setup.sh:60` 会无条件替换任何同名 symlink。
-**设计**：Unix 逐文件 `ln -snf`；所有权守卫 = 「**只接管软链、且 `readlink` 指向本仓**，其余一律 skip 并计入 `skipped[]`」（对齐 `setup.sh:128-134` 处理 `$sdflow/workflow` 的既有 idiom——那里已经是「只接管自属软链」）。
+实证：`setup.sh:38-39` 只认**顶层目录**且必须含 `SKILL.md`，`sdflow-spec/agents/` 是二级目录、散装 `.md` 进不了该循环；`setup.sh:27-32` 的 `is_our_marker_copy()` 判据 `[ -f "$1/.sdflow-skills" ]` 对散装文件是**路径谬误、恒 false**；`setup.sh:106` 的判据 `[ ! -d "$REPO_DIR/$entry_name" ]` 对 `sdflow-local-researcher.md` **恒真**；`setup.sh:211` 的 `cleanup_orphans` 只对两个 skills 目录调用；`setup.sh:60` 会无条件替换任何同名 symlink。
+**设计**：Unix 逐文件 `ln -snf`；所有权守卫 = 「**只接管软链、且 `readlink` 指向本仓**，其余一律 skip 并计入 `skipped[]`」。⚠️ **这比既有 idiom 更严，不是复用**〔窄复核订正〕：`setup.sh:128-136` 处理 `$sdflow/workflow` 时只区分「软链 vs 真目录」，`readlink` 的结果仅用于**打印告警**、**不作为守卫判据**（是软链即无条件 `ln -snf` 覆盖，无论原指向谁）。⇒ `install_agents()` 的 readlink 归属校验须**新增**，MUST NOT 声称沿用现状。
 🔴 **Windows 分支明写取舍**：散装 `.md` 无 marker 落点 ⇒ **Windows 下不铺 agents，走主 session 亲查/亲写路径**，并在 `skipped[]` 报一行。MUST NOT 写「copy + 所有权守卫」这种做不出来的东西。
 🔴 **`--check` 的真实性质**〔spec-review-amendment F-29〕：`setup.sh:261-266` 的 `if !` 结构使 `set -e` 不触发、**退出码恒 0** ⇒ 它是**提示不是门**。真正会红的是 `hack/tests/`。spec 措辞按此如实写。
 三镜：系统镜——新增独立安装协议，与 skills 路径解耦；用户镜——Windows 用户得到明确降级而非静默失败；开发循环镜——需补全仓首个 setup.sh 测试（`test_install_agents.py`），一次性成本。主次：**系统镜主导**。
@@ -246,7 +255,7 @@ absent ──触发──▶ B-draft ──收敛(①②③④⑤)──▶ B-fi
 | 拷问覆盖率 | 管线内建默认路径（**非机械保证**）；机械审计信号 = `decision-memo.md` 必填小节非空的 **grep 门**（会红） |
 | /clear 无损 | 阶段二「上下文缺失」finding = 0（**N=1 自评，非统计显著**） |
 | dispatch 开销阈值 | 〔F-23〕改为**事后可复核**形式：主 session 直接查同类任务累计工具调用 > 5 次 → 下次同类改派。原「预计材料 ≳ 数百行」在派发**前**不可判定 |
-| SKILL.md 体量 | 主体 ≤ 500 行（表格型内容外置 `references/`，见 D12） |
+| SKILL.md 体量 | 主体 ≤ **600** 行（表格型内容外置 `references/`，见 D12）。⚠️ 500 行曾被考虑但偏紧——既有单一职责编排器已 490/572 行，本 skill 行为面更宽，过紧会把内容硬挤进 `references/` 反致割裂〔窄复核订正〕 |
 
 ## Risks / Trade-offs
 

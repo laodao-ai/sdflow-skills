@@ -452,3 +452,55 @@
 
 > 拍板后，主 session MUST 立即把 `ship-gate.design_approved` + `reviewed_sha`（`git rev-parse HEAD` 完整 40 位）**同一次写入**本文件头部 frontmatter，并按 SR-M 最终化上方 lens-metric 锚。
 > ⚠️ 若拍板前四件套相对 `7f221c9` 有实质改动，MUST 先**单独 checkpoint 提交**该修订、取得其 sha，**再**回写 `reviewed_sha`（否则第一次跑 gate 就会判设计失鲜、当场 `REFUSE_START` 自锁）。
+
+---
+
+# 窄复核（增量审 · `7f221c9` → `f9f785a`）
+
+> 依据本报告收敛口第 5 条与 harden-gate-git-layer 1.7：**拍板前若四件套相对镜子审过的提交有实质改动，MUST 先跑一次只审增量的窄复核**。
+> 派 3 个冷镜：**接缝镜**（新旧交界）· **事实核验镜**（回改新引入的 file:line 断言）· **回归对账镜**（32 条 findings 逐条对账）。
+> **如实标注**：窄复核**未开跨模型 voice**（roster 与主轮不同：3 个 Claude 冷镜、零 outside-voice）⇒ **本段不落 lens-metric 锚**，上方度量锚只反映主轮。这是按通则④的轻量化取舍，非机械层缺失。
+
+## 回归对账结论
+
+**32 条中 29 条真解决、3 条部分处理、0 条未处理、0 条被非法推迟。** X1–X3 三条裁掉项均被尊重（四件套零处据其放宽核验）。Q1–Q4 四条决议全部落实。
+
+三条部分处理已在本轮全部修掉：
+
+| # | 窄复核判定 | 修法 |
+|---|---|---|
+| **F-12** | 🔴 **阻断级：增量落盘没有落点** —— SA-04 要求 B 进行中增量写 `openspec/changes/<name>/decision-memo.md`，但 SA-05 把 `openspec new change` 排在 B **收敛点**第③步 ⇒ B 进行中既无 change 目录也无 feature 分支，而 `MUST NOT 存放于 session 级临时目录` 又堵死唯一替代；连带状态机的 `B-draft` 结构上不可被重入探测看见 | **FF-0 + `openspec new change` 前移到相位 B 起手**（SA-05 拆为「B 起手三步 + B 收敛两步」）。依据：SA-03 的相位 A 收束禁止清单已含「目标态一句话尚写不出」⇒ 进 B 时必然能定 change 名，D9 原本「B 尾信息才足够」的顾虑被该判据消解。**且实查 `openspec --help` 确认 CLI 无 rename change 命令** ⇒ 「暂定名后改名」不可行，手工 `git mv` 等于手搓目录（SA-05 禁止）。代价（拷问推翻目标态则名字略偏）按通则④判为可接受边角 |
+| **F-06** | ⚠️ **拆 local/web researcher 只写了一半** —— SA-12 S2 是 SHALL 级要求拆，但 SA-07「**两个** agent 定义」、design 组件表、proposal、tasks 6.1、实测门 5.1 五处仍按单体 `sdflow-researcher` 写 ⇒ 实现方照 SA-07 干活就会造出正是 V-4 要消除的那个面 | 全线改为**三个** agent 定义（`sdflow-local-researcher` / `sdflow-web-researcher` / `sdflow-spec-writer`），SA-07 / 组件表 / proposal / tasks 6.1-6.3 / 实测门 5.1 / 依赖图同步 |
+| **F-17** | ⚠️ **两处未解**：①入口选择规则仍只落 CLAUDE.md **非托管区自由文字**，而报告明确要求「写进 spec 作为 requirement，否则规则本身也会漂移」；②sunset 条件挂在「阶段二达标才做」的阶段三下，**而阶段二失败恰是新旧并存最久的分支** ⇒ 会永久搁浅 | ①新增 **SA-14「四入口选择规则」**（含模型侧 MUST NOT 自行调 `opsx:ff` 绕过拷问），并要求人读侧（CLAUDE.md）与 AI 读侧（canonical）各落一份；②sunset 条件**前移到阶段一**（tasks 3.4）并明写「与阶段二成败无关」；§9 三条遗留登记同步前移 |
+
+## 接缝镜额外发现（均已修）
+
+- **canonical 计数漂移**：SA-11 与 tasks 已扩到 5 处，但 design 的 Context/Goals/D10/组件表与 proposal 的冲突源表仍停在「四个」且缺 `quality-layering.md` —— 典型的「扩了枚举没回改派生判据」。**修法**：全线改为 **7 处**（另补 `snippets/claude-section.md` 的「ff 之后是 grill」托管条款、`ff-generation-constraints.md:17` 的 FF-0 弱判据——后者与 SA-05 的三分支判定直接冲突，而 SA-11 存在的全部理由就是不留分叉）。
+- **task 1.7 的 grep 是空判据**：`grep -rn "explore.*ff.*grill"` 对 `generation-process.md` **实测零命中**（§四是跨行 ASCII 图），且 `grep "全流程不用"` 打不中 `quality-layering.md`（其措辞是「无 `/clear`（G1）」）⇒ 那条「会红的机械检查」永远不会红，覆盖图却标 ✅。**修法**：改用打得中的独立锚点（1.8），覆盖图把其余五处如实标 **❌ 人核**。
+- **阶段二验收门漏了安全项**：门禁只锚 5.1（dispatch）+ 7.2（成本），未含 7.4（SA-12 的注入防线/路径逃逸/排他 description）⇒ 理论上可在「成本达标但安全未验」时进阶段三，而阶段三恰是暴露面最大的全局分发。**修法**：门禁加「7.4 全过（安全前提，不达标不得进阶段三，即便成本达标）」。
+- **阶段三无完成定义** ⇒ 补阶段三验收门。
+- **NFR「≤500 行」偏紧**（既有单一职责编排器已 490/572 行，本 skill 行为面更宽）⇒ 放宽到 **600 行**并注明理由。
+
+## 事实核验镜：6 处引用误差（均已订正）
+
+回改新引入的约 51 条 file:line 与命令行为断言中，**45 条逐字属实**（含两条最承重的：CLI 源码 `state.js:25-29` 的「完成=文件存在」、npm registry 的 1.6.0/2026-07-10；以及两条精确统计：归档中位数 42,536 字节、本 change 基线 42,351 字节）。6 处误差：
+
+| 原引用 | 实际 | 影响 |
+|---|---|---|
+| `subagent-definitions-plan.md:145` | **`:136-137`**（`:145` 是空行） | 三处重复，已全改 |
+| `generation-process.md:47-58`（§四） | **`:51-63`** | 已改为 `:51` 起 |
+| `generation-process.md:81-84`（「第二套真相源」警告） | **`:79-80`**，且原文出自 **§六讨论 ADR/术语路径约定**，非直接针对流水线顺序 | 已改行号 **并注明这是同一防漂移原则的类比引用**，不再表述为「该文件直接警告流水线冲突」 |
+| `retro/report.md:72`（unknown 56%） | **`:74`**（`:72` 是表格分隔线） | 已改 |
+| `setup.sh:128-134`「那里已经是只接管自属软链」 | **不准确** —— 实际只区分「软链 vs 真目录」，`readlink` 结果**仅用于打印告警、不作守卫判据** | D11 已改写：`install_agents()` 的 readlink 归属校验须**新增**，MUST NOT 声称沿用现状 |
+| `async-outside-voice/design.md` 「9 条 ADR 里 ≥4 条带复合标记」 | **6 条 ADR 里 3 条**（ADR-3/5/6） | 已改（定性结论「依赖多轮跨阶段修正」方向不变，但这是 Q4 的直接论据，数字须准） |
+
+> 上表前四项在本报告主轮正文与 `gstack-review.md` 中亦有同源引用。**那两份是评审当时的审计记录，按审计锚原则不追改历史正文**，以本段订正为准。
+
+## 窄复核后的机械层
+
+- `openspec validate add-sdflow-spec --strict` → **valid**（exit 0）
+- ⚠️ 回改过程中 validate 曾抓出 3 处（SA-11/12/13 首段缺规范性语句），而**同一时刻 `openspec status` 报 4/4 artifacts complete** —— **这是 F-03「存在态 ≠ 合格态」的当场实证**，已修。
+
+## 窄复核结论
+
+**够格进设计 HARD-GATE。** F-12 这条阻断级已修（且修法不涉方案取向变更，只是时序前移一步）；F-06/F-17 的贯通不全已全线补齐；6 处引用误差已订正。回改未发现「顺手重构周边」「补以后可能用得上的抽象」类加宽。
