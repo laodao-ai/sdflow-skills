@@ -216,14 +216,14 @@ grep -rln "opsx:ff\|grill-with-docs\|explore *→ *ff\|阶段一" --exclude-dir=
 | `02:1` 标题 | 「15 个 skill 的设计与实现」 | 「全部 skill 的设计与实现」 |
 | `02:3` 导读 | 「15 skill 总表」 | 「skill 总表」 |
 | `02:15` 仓库解剖树 | `<15 个 skill 目录>/` | `<各 skill 目录>/` |
-| `02:27` 两类 skill 表 | `sdflow-buglist · sdflow-todolist · sdflow-issues · …（合计 ≈374 用例）` | `sdflow-issues · sdflow-init · sdflow-retro · sdflow-maintain · sdflow-architecture · sdflow-devenv`（后两个是实际的数据类 skill，原表也漏了）；用例数改为「以 `pytest <skill>/tests/` 实测为准，**勿在此写死**」 |
+| `02:27` 两类 skill 表 | `<两个已并入 issues 的旧 recorder skill 名> · sdflow-issues · …（合计 ≈374 用例）` | `sdflow-issues · sdflow-init · sdflow-retro · sdflow-maintain · sdflow-architecture · sdflow-devenv`（后两个是实际的数据类 skill，原表也漏了）；用例数改为「以 `pytest <skill>/tests/` 实测为准，**勿在此写死**」 |
 | `02:61` 小节标题 | 「## 2. 15 个 skill 总表」 | 「## 2. skill 总表」 |
 | `02:71-73` 总表 | buglist / todolist / issues 三行 | 合并为一行 `sdflow-issues`，数字**实测重取**（`wc -l SKILL.md`=559、`scripts/*.py`=1746、`pytest --collect-only`=679） |
-| `02:290-291` 拓扑图 | `IS --- BL["sdflow-buglist"]` / `TL["sdflow-todolist"]` | 删两节点，`IS` 改为 `sdflow-issues（bug/todo 两池，单一触发面）` |
+| `02:290-291` 拓扑图 | `IS --- BL["<旧 bug 池 skill 名>"]` / `TL["<旧 todo 池 skill 名>"]` | 删两节点，`IS` 改为 `sdflow-issues（bug/todo 两池，单一触发面）` |
 | `README:11` | 「15 个 skill 各自怎么设计」 | 「每个 skill 各自怎么设计」 |
 | `01:28` | 「自建的 15 个 `sdflow-*` skill」 | 「自建的一组 `sdflow-*` skill」 |
 
-复核：`grep -rn "15 个\|15 skill\|sdflow-buglist\|sdflow-todolist" docs/sdflow-fable5/` → **CLEAN**。
+复核：`grep -rn "15 个|15 skill|<两个旧 recorder skill 名>" docs/sdflow-fable5/` → **CLEAN**。
 `sdflow-issues/tests/test_downstream_reference_guard.py` 的 allowlist 含 `docs/**`（**允许**保留旧名，
 不是**要求**），故本次刷新不与它冲突 —— 已确认全量绿。
 
