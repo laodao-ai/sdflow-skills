@@ -51,7 +51,29 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 SKILL = REPO / "sdflow-spec" / "SKILL.md"
-DESIGN = REPO / "openspec" / "changes" / "add-sdflow-spec" / "design.md"
+
+
+def _resolve_design() -> Path:
+    """定位本 change 的 design.md —— active 与 archive 两处都认。
+
+    [impl-review-fix] 归档陷阱：原实现硬编码 `openspec/changes/add-sdflow-spec/design.md`，
+    `openspec archive` 一跑路径即失效、整条用例 `FileNotFoundError` 红（本轮 merge 后当场撞到）。
+    参照系判定：本门守的是「指令载体（SKILL.md）与失败模式表**不得单边消失**」这条**当前契约**
+    ——归档只是把表冻结进 archive，配对关系仍在 ⇒ 该退役的是**硬编码路径**、不是这道门。
+    """
+    active = REPO / "openspec" / "changes" / "add-sdflow-spec" / "design.md"
+    if active.exists():
+        return active
+    hits = sorted((REPO / "openspec" / "changes" / "archive").glob("*-add-sdflow-spec/design.md"))
+    if not hits:
+        raise AssertionError(
+            "本 change 的 design.md 在 active 与 archive 两处都找不到 —— "
+            "要么归档目录被改名，要么文件被删；两者都该显红而非静默跳过。"
+        )
+    return hits[-1]
+
+
+DESIGN = _resolve_design()
 HOOK = REPO / "sdflow-init" / "assets" / "hooks" / "ff0-branch-guard.py"
 LADDER = REPO / "sdflow-spec" / "references" / "degradation-ladder.md"
 
