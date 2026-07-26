@@ -114,7 +114,6 @@ def test_every_block_in_project_targets_matches_source():
 # ∴ 「配的是哪个源」必须单独断言，光靠 --check 是照不到的。
 # ══════════════════════════════════════════════════════════════════════════════
 
-AGENT_DIR = SP.REPO / "sdflow-spec" / "agents"
 EXPECTED_AGENTS = {
     "sdflow-local-researcher.md",
     "sdflow-web-researcher.md",
@@ -150,26 +149,41 @@ def test_every_agent_block_matches_the_skill_source_byte_for_byte():
             assert got == body, f"{p.name} 第 {s + 1} 行起的托管块与 skill 味真相源不一致"
 
 
-def test_a_new_agent_file_turns_check_red():
-    """⭐⭐ 定点用例：往 `agents/` 放一个**新** `.md` ⇒ `--check` MUST 变红。
+def test_the_delivery_surface_points_at_the_real_agents_dir():
+    """投放面**指的就是那个真实目录** —— 静态断言，不需要往它写任何文件。
+
+    与下一条配对：下一条用 `tmp_path` 证「glob 发现机制有效」，本条证「机制作用在真目录上」。
+    两条合起来 == 旧版「往真实 `agents/` 写探针」那一条的全部证明力，且不碰工作树。
+    """
+    assert SP.AGENT_TARGETS[0] == SP.REPO / "sdflow-spec" / "agents"
+    assert SP.AGENT_TARGETS[0].is_dir()
+
+
+def test_a_new_agent_file_turns_check_red(tmp_path, monkeypatch):
+    """⭐⭐ 定点用例：往投放面目录放一个**新** `.md` ⇒ `--check` MUST 变红。
 
     【它守的是「glob 发现」这个机制本身，不是某三个文件名】
     把 `agent_defs()` 换成硬编码清单 ⇒ 新文件不在清单里 ⇒ `--check` 看不见它 ⇒ 绿 ⇒ 本用例红。
     「新增 agent 定义忘了纳入投放面」这个失效场景，只有 glob 做得出来。
 
-    【为什么写进真实目录而不是 tmp_path】需要被守的正是**那个真实目录**：
-    monkeypatch 到临时目录只能证明「glob 对某个目录有效」，证不到「投放面指的是它」。
-    ∴ try/finally 保证收尾；文件名带 `_probe_` 前缀，与任何真实定义不会撞。
+    🔴 **探针 MUST NOT 写进真实工作树**：旧版往真实 `sdflow-spec/agents/` 写文件并以
+    `assert not probe.exists()` 起手 —— ① 并行跑 pytest 时两侧互踩（一方的探针触另一方的
+    起手断言）② 测试被中断则残留文件进 **tracked 目录**，且下次 `bash setup.sh` 会把它
+    **软链进全局 `~/.claude/agents/`**。∴ 探针落 `tmp_path`，投放面用 monkeypatch 改指过去；
+    「投放面确实指向真实目录」这一维由上一条**静态断言**承担。
     """
-    probe = AGENT_DIR / "_probe_glob_discovery.md"
-    assert not probe.exists(), "上一次运行留下了探针文件 —— 先删掉它"
+    probe_dir = tmp_path / "agents"
+    probe_dir.mkdir()
+    monkeypatch.setattr(SP, "AGENT_TARGETS", (probe_dir, SP.SOURCE))
+
+    probe = probe_dir / "_probe_glob_discovery.md"
     probe.write_text("---\nname: probe\n---\n\n# probe\n\n（无托管块）\n", encoding="utf-8")
-    try:
-        assert probe in SP.agent_defs(), "glob 没发现新文件 —— agent_defs() 是硬编码清单？"
-        assert SP.main(["--check"]) == 1, "新增未纳入托管的 agent 定义，--check 居然是绿的"
-    finally:
-        probe.unlink()
-    assert SP.main(["--check"]) == 0, "收尾后应恢复全绿"
+
+    assert probe in SP.agent_defs(), "glob 没发现新文件 —— agent_defs() 是硬编码清单？"
+    assert SP.main(["--check"]) == 1, "新增未纳入托管的 agent 定义，--check 居然是绿的"
+
+    probe.unlink()
+    assert SP.main(["--check"]) == 0, "移走探针后应恢复全绿"
 
 
 def test_outside_voice_frame_carries_the_principles(tmp_path):

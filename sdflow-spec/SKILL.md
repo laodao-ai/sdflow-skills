@@ -273,7 +273,7 @@ absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B
 
 1. **`subagent_type`** —— **MUST NOT 用 `agentType`**〔A-2〕。
 2. **`model`** = 0.2 解析出的**字面值**。🔴 **实测边界**：Agent 工具的 `model` 是**枚举**，
-   只接受 `sonnet|opus|haiku|fable`；填完整版本化 id（如 `claude-haiku-4-5-20251001`）会被
+   只接受 `sonnet|opus|haiku|fable`；填**完整版本化 id**（`<族>-<代>-<日期>` 那种形态）会被
    `InputValidationError` 当场拒。本机队 `resolve-models.sh` 解析出的正是这类别名，直接填即可。
    若解析值**不在该枚举内**（被 config 覆盖成完整 id 等）⇒ 派发必被参数校验拒 ⇒ **如实报告并亲做**；
    **MUST NOT 猜一个别名顶上**（那是绕过档位配置），**MUST NOT 填变量名 `$SDFLOW_TIER_*`**。
@@ -287,16 +287,20 @@ absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B
 - **MUST NOT 含**仓库路径、代码片段、内部标识符、项目/客户专名、配置值、任何凭证；
 - 「结合我们的代码怎么办」这类推理 **MUST 由主 session 自己做**，MUST NOT 外包给它。
 
-查询写进临时文件后 **MUST 先扫再发**（**复用**既有出境扫描器，**MUST NOT 另写一个**）：
+查询写进临时文件后 **MUST 先扫再发**（**复用**既有出境扫描器，**MUST NOT 另写一个**）。
+**预检**（同 0.2(b) idiom）：`[ -x ~/.sdflow/hack/outside-voice.sh ]` 不成立 ⇒ **拒发并 fail-loud**
+「outside-voice.sh 未安装——先在运行 checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh`」。
 
 ```bash
 ~/.sdflow/hack/outside-voice.sh secret-scan --context-file <查询文件>
 ```
 
-- `exit 0` ⇒ 放行；
+- `exit 0` ⇒ 放行（**只有这一个码是「扫过了且干净」**）；
 - `exit 3` ⇒ **拒发，且 MUST NOT fallback** —— 既不改由主 session 自己发出去、也不换个 agent 发。
   命中意味着**这条查询本身不该出境**，换通道不改变这一点。按三要素报告并**重写查询**；
-- `exit 2` ⇒ 文件不可读 / 用法错 ⇒ **同样拒发**（**没扫成 ≠ 干净**）。
+- `exit 2` ⇒ 文件不可读 / 用法错 ⇒ **同样拒发**（**没扫成 ≠ 干净**）；
+- 🔴 **其余任何非 0 退出码一律拒发**（catch-all；`127` = helper 未装/不可执行，是 pull 与
+  setup 之间 skew 窗口的高发码）。**MUST NOT 把「不是 3」读成「没命中」。**
 
 ### 定义不可用 ⇒ 主 session 亲做（**唯一合法降级方向**）
 
@@ -457,7 +461,7 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 5. **写后核验（C.4）**。
 
 **阶段二**：本步改派 `subagent_type: sdflow-spec-writer`（**MUST NOT 用 `agentType`**〔A-2〕），
-`model` 填 0.2 解析出的具体 id。
+`model` 填 0.2 解析出的**字面值**（枚举边界见「外派协议」）。
 writer 遇未决判断 MUST 返回**结构化 blocker**（缺口描述 + 它需要什么），MUST NOT 自行猜测补全。
 agent 定义不可用 ⇒ **主 session 亲写**，MUST NOT 退通用子代理（见降级阶梯）。
 

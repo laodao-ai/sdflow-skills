@@ -19,6 +19,7 @@ MUST NOT 演化成「解析 Markdown 结构」。
     python3 hack/sync_principles.py --apply     # 回填
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -159,7 +160,10 @@ def main(argv=None):
         want = render(cur, src)
         if cur == want:
             continue
-        drift.append(p.relative_to(REPO))
+        # os.path.relpath 而非 Path.relative_to：后者对【仓外】的投放面直接抛 ValueError，
+        # 于是「报告一个漂移」变成「整个 --check 崩掉」。投放面目录可被测试 monkeypatch 到
+        # 仓外，此处只是【打印用的显示形式】，不该有能力中止判定。
+        drift.append(os.path.relpath(p, REPO))
         if args.apply:
             p.write_text(want, encoding="utf-8")
 

@@ -140,7 +140,14 @@ install_agents() {
     return 0
   fi
 
-  mkdir -p "$dest"
+  # 落点被占为普通文件/不可写 ⇒ mkdir 失败。set -e 下那会【中止整个 setup.sh】——
+  # 而本函数在 install_sdflow 之前，连 ~/.sdflow/ 的 canonical 与 hack 脚本都跟着装不上，
+  # 用户只看到一行裸 `mkdir:` 错误。与本文件既定取向（外来同名条目 → skip + 汇总报告）一致：
+  # 这里也降级为 skip。
+  mkdir -p "$dest" 2>/dev/null || {
+    skipped+=("agents @ $dest — 落点建不出来（被占为普通文件？权限？），未铺设")
+    return 0
+  }
 
   local f name target link
   for f in "$src_dir"/*.md; do
@@ -155,8 +162,18 @@ install_agents() {
         continue
       fi
       link="$(readlink "$target" 2>/dev/null || true)"
+      # 【自属判据 = 位置无关的路径后缀，不是当前 checkout 的前缀】
+      #   前缀判据（"$REPO_DIR"/*）只认【当前】checkout ⇒ 从另一个 checkout 跑 setup 时，
+      #   既有的自属链既不接管、也不进孤儿清理 ⇒ 名册裂脑（一条来自 A、其余来自 B），
+      #   而 CLAUDE.md 的 dev/runtime 纪律明写「测完在运行 checkout 重跑 setup【还原】」
+      #   「回滚 = 运行 checkout + 重跑 setup.sh」—— 前缀判据令这两条对 agent 定义静默失效。
+      #   cleanup_orphans 的 */"$REPO_NAME"/* 子串 idiom 在这里也不够：两个 checkout 的
+      #   目录名本就不同（~/.skills/sdflow-skills vs 04-sdflow-skills）。
+      #   ∴ 判据取「链指向某个 sdflow-spec/agents/ 下的同名文件」——无第三方会用这个路径形状。
+      #   ⚠️ MUST NOT 放宽成「是软链就覆盖」：~/.claude/agents/ 是全局命名空间，
+      #   覆盖别人的同名定义就是数据丢失（上面 install_into 的同一条纪律）。
       case "$link" in
-        "$REPO_DIR"/*) : ;;   # 本仓装出去的，可以接管
+        */sdflow-spec/agents/"$name") : ;;   # 本仓（任一 checkout）装出去的，可以接管
         *) skipped+=("agents/$name @ $dest — 软链指向 ${link:-<读不到>}（非本仓），未接管"); continue ;;
       esac
     fi
@@ -167,13 +184,15 @@ install_agents() {
 
   # 孤儿清理：本仓装出去的软链，源 .md 已删 ⇒ 悬空 ⇒ 清掉。
   # 用 find 枚举（而非 glob）：尾斜杠/普通 glob 在 POSIX 语义下匹配不到 dangling 软链。
+  # 自属判据与上面【同一条】（位置无关的路径后缀）：判据比接管判据窄的话，指向另一 checkout
+  # 的悬空链会永远留着——既不接管也不清理，正是裂脑的另一半。
   local entry link2
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     [ -L "$entry" ] || continue
     link2="$(readlink "$entry" 2>/dev/null || true)"
     case "$link2" in
-      "$src_dir"/*) : ;;
+      */sdflow-spec/agents/*.md) : ;;
       *) continue ;;
     esac
     if [ -e "$entry" ]; then continue; fi   # 有效链接，留着

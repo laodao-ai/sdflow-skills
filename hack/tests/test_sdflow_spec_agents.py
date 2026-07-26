@@ -41,6 +41,24 @@ def _squash(s):
     return re.sub(r"\s+", "", s)
 
 
+# 「把禁令翻成声称」这个动作必然带走的标记。句子里一个都没有 ⇒ 它是**声称**，不是禁令。
+_NEGATION = ("MUSTNOT", "不得", "不许", "并非", "别声称")
+
+
+def _sentences(text):
+    """→ 句子列表：先按空行切段、段内压掉全部空白，再按 `。；` 切句。
+
+    **为什么不是行级**：中文正文硬折行位置随时会变，行级 needle 被折断后**一条都不会红**
+    （假绿，不是假红）。先段内压空白 ⇒ needle 折不断。
+    **为什么还要切句**：整段/整文件判定分不清「禁止这么说」和「就这么说了」——
+    禁令句与声称句必须落在不同的判定单位里，门才守得住。
+    """
+    out = []
+    for para in re.split(r"\n\s*\n", text):
+        out += [s for s in re.split(r"[。；]", _squash(para)) if s]
+    return out
+
+
 # ── frontmatter 提取（**只认我们自己产出的这几行**，不是通用 YAML 解析器）──────────
 # 基准 5：YAML 全语法面无界，MUST NOT 手搓。这里只做两件有界的事：
 #   ① 取首个 `---` 到下一个 `---` 之间的行；② 认「行首无缩进的 `key: value`」。
@@ -82,9 +100,8 @@ def test_no_agent_def_uses_scoped_tool_syntax():
     实测（2026-07-26 两轮探针）：定义写 `Bash(git log:*)` 时，子代理拿到的是**裸 `Bash`**，
     没有任何 scoped 条目 ⇒ 括号形态**制造一道并不存在的机械边界**，而 S1 的诚实声明
     恰恰要求不许这么写。
-    🔴 **同轮的另一条观测已被证伪，别再引用**：当时以为「括号把同一行的 `Glob`/`Grep`
-    一起吞掉了」——第二轮交叉验证（主 session + `general-purpose` 子代理的工具清单）表明
-    **本 harness 压根没有 `Glob`/`Grep` 这两个工具**，与括号无关。
+    另一条实测事实（与括号无关）：**本 harness 不存在 `Glob` / `Grep` 这两个工具**
+    （主 session 与 `general-purpose` 子代理的工具清单里都没有），检索走 `Bash`。
 
     用 glob 扫**全部**定义（不写死三个名字）：新增第四个定义写了括号，这里同样会红。
     """
@@ -112,25 +129,40 @@ def test_web_researcher_has_neither_repo_access_nor_bash():
         assert banned not in tools, f"web-researcher 不该有 {banned}"
 
 
-def test_no_definition_claims_to_be_fully_read_only():
-    """S1 的诚实边界：MUST NOT **声称**「全只读」/「白名单挡住写权」。
+CLAIM_WORDS = ("全只读", "白名单挡")
 
-    needle 取**肯定式**的说法（`是全只读` / `全只读的` / `白名单挡住`）——
-    定义里那句「MUST NOT 对外声称「全只读」」是**禁令**，不能被算作违规
-    （否则这道门会把自己的诚实声明判成红，人只好把声明删掉 = 反向激励）。
+
+def test_no_definition_claims_to_be_fully_read_only():
+    """S1 的诚实边界：**逐句**判 —— 含「全只读」/「白名单挡」的句子 MUST 是禁令，不能是声称。
+
+    🔴 **为什么是句级判据，而不是「整文件里找肯定式 needle」**：肯定式写法是**无界**的，
+    枚举必然漏。实测绕过（Spec 轴）：往定义追加「本 agent 的工具面全只读，工具白名单挡住**了**
+    写权。」—— 只比枚举里的 needle 多一个「了」，整文件判据全绿，而这句正是 BASE-28 S1
+    禁止的那种声称。
+    句级判据把问题反过来问：命中 claim 词的句子**必须自带否定标记**——「把禁令翻成声称」
+    这个动作本身就会把否定标记带走，∴ 它绕不过去。
+    定义里那句「MUST NOT 对外声称「全只读」…」自带 `MUST NOT` ⇒ 合法，不会被自己的门判红。
     """
     for p in sorted(AGENT_DIR.glob("*.md")):
-        squashed = _squash(p.read_text(encoding="utf-8"))
-        for claim in ("是全只读", "全只读的", "白名单挡住写权", "白名单挡得住"):
-            assert claim not in squashed, f"{p.name} 声称了「{claim}」—— 与实测不符"
+        for s in _sentences(p.read_text(encoding="utf-8")):
+            if not any(w in s for w in CLAIM_WORDS):
+                continue
+            assert any(n in s for n in _NEGATION), (
+                f"{p.name} 里有一句在**声称**只读性，而不是禁止这么说：{s!r}\n"
+                f"—— 该句 MUST 带否定标记之一 {_NEGATION}（实测：`Bash` 在手就没有机械边界）"
+            )
 
 
 def test_bash_holders_carry_the_honest_non_mechanical_disclaimer():
-    """持 `Bash` 的两个定义 MUST 各自写明「只读性属指令层、非机械门」。"""
+    """持 `Bash` 的两个定义 MUST 各自写明「只读性属指令层、非机械门」。
+
+    **两个 needle MUST 落在同一句里**：分散在全文两处时，「属指令层」可能说的是别的事、
+    「非机械门」也可能出现在「不是非机械门」这种反转句里 —— 两个 needle 都还在，门却空了。
+    """
     for p in (LOCAL, WRITER):
-        squashed = _squash(p.read_text(encoding="utf-8"))
-        assert "属指令层" in squashed and "非机械门" in squashed, \
-            f"{p.name} 缺了「属指令层非机械门」的诚实声明"
+        assert any("属指令层" in s and "非机械门" in s
+                   for s in _sentences(p.read_text(encoding="utf-8"))), \
+            f"{p.name} 缺了「属指令层、非机械门」的诚实声明（须在同一句内）"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -236,6 +268,25 @@ def test_skill_routes_outbound_queries_through_the_shared_scanner():
     assert "拒发，且MUSTNOTfallback" in squashed, "命中后的「禁 fallback」不见了"
     assert "没扫成≠干净" in squashed, "exit 2 的 fail-closed 处置不见了"
     assert "MUSTNOT含**仓库路径、代码片段、内部标识符" in squashed, "最小净化查询的负面清单不见了"
+
+
+def test_outbound_scan_prechecks_the_helper_and_has_a_catch_all():
+    """⭐ 出境扫描 MUST NOT fail-open：`[ -x ]` 预检 + 「非 0 一律拒发」的 catch-all。
+
+    🔴 **为什么只枚举 `0|3|2` 不够**：`~/.sdflow/hack/` 是 **copy 而非 symlink**（setup.sh
+    每次重拷），pull 与 setup 之间的 skew 窗口是本仓自述的高发面 —— 此时调用**实测 exit 127**，
+    落在枚举之外。没有 catch-all，模型完全可能把「不是 3」读成「没命中」而**放行一条从未被
+    扫描过的出境查询**，这正是 BASE-28 S2「命中即拒发且禁 fallback」被击穿的方式。
+    预检 idiom 与 `sdflow-code-review/SKILL.md`（outside-voice helper）、本文件 0.2(b)
+    （resolve-models.sh）一致 —— 此处缺失属回退。
+    """
+    squashed = _squash(SKILL.read_text(encoding="utf-8"))
+    assert "[-x~/.sdflow/hack/outside-voice.sh]" in squashed, \
+        "helper 可执行性预检不见了 —— 缺失时 exit 127 会落在退出码枚举之外"
+    assert "其余任何非0退出码一律拒发" in squashed, \
+        "非枚举退出码的 catch-all 不见了 —— 出境面 fail-open"
+    assert "MUSTNOT把「不是3」读成「没命中」" in squashed, \
+        "「非 3 ≠ 没命中」的显式反读法警告不见了"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -357,15 +408,29 @@ def test_s4_rejects_a_symlinked_ancestor(change_tree):
     assert not ok and "软链" in why
 
 
+# S4 判据的**祈使形态**（不是话题词）：needle 自带 MUST / 拒写，翻成声称就带不走。
+_S4_MUST_SATISFY = re.compile(r"canonicaliz\w*.{0,40}?MUST[^。]{0,8}满足")
+_S4_ALLOWLIST = re.compile(r"落在\**artifactallowlist")
+_S4_REFUSE = re.compile(r"任一不满足⇒\**拒写")
+
+
 def test_s4_disposition_is_written_in_the_skill_and_the_writer_def():
     """算法锚的另一半：这套判据**还写在给模型看的两处**（删掉就红）。
 
     没有这半边，上面的纯函数用例在「SKILL.md 里的三条判据被删光」时**一条都不会红**。
+
+    🔴 **needle 取祈使形态，不取话题词**：只查 `canonicaliz` / `artifactallowlist` /
+    `confuseddeputy` 这些**话题词**时，把整段翻成声称（「CLI 已经 canonicalize 过了，
+    artifact allowlist 不必再查，confused deputy 不适用」）**四个 needle 全在、门全绿**。
+    ∴ 判据必须钉住带 `MUST` / `拒写` 的那半句 —— 那是翻成声称时必然消失的部分。
     """
     for path in (SKILL, WRITER):
         squashed = _squash(path.read_text(encoding="utf-8"))
-        assert "canonicaliz" in squashed.lower(), f"{path.name} 缺 canonicalization 要求"
-        assert "artifactallowlist" in squashed.lower(), f"{path.name} 缺 allowlist 要求"
+        assert _S4_MUST_SATISFY.search(squashed), \
+            f"{path.name} 缺「canonicalize 之后 MUST 满足…」这条祈使要求"
+        assert _S4_ALLOWLIST.search(squashed), f"{path.name} 缺「落在 artifact allowlist」要求"
+        assert _S4_REFUSE.search(squashed), \
+            f"{path.name} 缺「任一不满足 ⇒ 拒写」—— 判据在场但没有拒写动作 = 恒绿"
         assert "拒绝symlink逃逸" in squashed or "不是symlink" in squashed, \
             f"{path.name} 缺 symlink 拒绝要求"
         assert "confuseddeputy" in squashed.lower(), \
