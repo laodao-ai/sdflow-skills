@@ -366,8 +366,8 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 3. **身份字段匹配当前盘面**：`change` == 当前 change 名 ∧ `branch` == 当前分支；
 4. **`decision_hash` 重算后匹配** —— 按
    [`references/decision-memo-schema.md`](./references/decision-memo-schema.md) §2 的唯一算法
-   重算「拍板决策」全文 hash，与 frontmatter 比对；`generated_at` 一并**读出来呈现给人**
-   （不可解析或落在未来 ⇒ 同样请人确认）。
+   重算纪要正文（frontmatter 之外全文）hash，与 frontmatter 比对；`generated_at` 一并
+   **读出来呈现给人**（不可解析或落在未来 ⇒ 同样请人确认）。
 
 任一不过 ⇒ **拒绝进入生成，退回相位 B**，并向人说明缺口。
 身份不符（判 3）或 hash 不符（判 4）⇒ **呈现旧 memo 摘要 + `generated_at` 给人确认**

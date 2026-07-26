@@ -46,17 +46,32 @@ HtmlCommentTracker = _ship_gate.HtmlCommentTracker
 # 纪要格式的真相源 —— 小节名从这里来，改名两边一起改（下方 test_schema_doc_and_gate_agree 守）
 MEMO_SCHEMA_DOC = REPO / "sdflow-spec" / "references" / "decision-memo-schema.md"
 
-# 小节名的**第三处消费者**：skill 指令本体（C.1 起手核验逐字引用这两个标题）。
-# 只守「门 ↔ schema 文档」两处 ⇒ 改名漏改 SKILL.md 仍全绿（基准 3：同片一致性面一次扫全）。
-MEMO_SECTION_CONSUMERS = (
-    MEMO_SCHEMA_DOC,
-    REPO / "sdflow-spec" / "SKILL.md",
-)
+# 小节名的**全部**消费者与**每个文件里的出现次数下限**（全量 `grep -rn`，不加 `--include`）。
+#
+# 🔴 **为什么是次数、不是「出现过就行」**：改名是**逐处**动作，而「出现过就行」的守卫对
+# **同一文件里的第 N 处**是瞎的 —— 变异实测：把门 / SKILL.md / schema 模板全改名、只留
+# schema §4 那一处旧名 ⇒ 旧守卫 `1 passed` 假绿。次数下限一上，漏改的那一处立刻把计数打到下限之下。
+#
+# 语义是**下限**（`>=`）：新增一处合法提及 ⇒ 计数上升，不红；漏改 / 删掉一处 ⇒ 红。
+# 数字变了照改，但改之前先想清楚「那一处是不是也该跟着改名」。
+#
+# 落在这张表**之外**的同名字面量只剩两类，都不需要守：
+# ① 本文件的 fixture —— `_write_memo` 直接引 `REQUIRED_SECTIONS`（跟着真相源走，不可能漂），
+#    另两条 inline 文本 fixture 是 `_section_body` 的行为样本，改名后当场判红（响亮，不是假绿）；
+# ② `openspec/changes/**/impl-reports/*`、评审报告 —— 冻结的历史记录，不是格式消费者。
+MEMO_SECTION_CONSUMERS = {
+    MEMO_SCHEMA_DOC: {"## 拍板决策": 3, "## 承重约束": 3},
+    REPO / "sdflow-spec" / "SKILL.md": {"## 拍板决策": 2, "## 承重约束": 1},
+}
 
 MEMO_FILENAME = "decision-memo.md"
 
 # 必填且必须非空的小节（SA-01 Scenario「纪要缺失拒绝生成」逐字点名的两项）
 REQUIRED_SECTIONS = ("## 拍板决策", "## 承重约束")
+
+# 外部命令（openspec CLI / schema 文档里那条 hash 命令）一律带 timeout：挂起时本用例自己红
+# （TimeoutExpired），而不是把 CI job 拖到 workflow 级超时才被杀（那时红的是整条泳道，看不出是哪一条）。
+_CLI_TIMEOUT_S = 60
 
 
 # ---------------------------------------------------------------- 门 1 的判据本体
@@ -90,14 +105,18 @@ def _visible_flags(lines):
     return flags
 
 
-def _section_body(text, heading):
-    """取 `heading` 这一行到下一个**同级或更高级** ATX 标题（或 EOF）之间的正文。
+def _section_span(text, heading):
+    """`heading` 小节的正文行区间 `(start, end)`（半开，行号基于 `text.splitlines()`）；找不到 → None。
 
-    两条口径，都落在**有界**语法面上（基准 5），MUST NOT 演化成「解析 Markdown 结构」：
+    终点 = 下一个**同级或更高级** ATX 标题（或 EOF）。两条口径都落在**有界**语法面上（基准 5），
+    MUST NOT 演化成「解析 Markdown 结构」：
     - **级数**：`##` 只被 `##` / `#` 终止 —— `### D1 …` 子标题**属于本节正文**
       （决策纪要必然用 `###` 列决策，任何 `#` 都断 = 假红）；
     - **可见性**：fenced code block 与 HTML 注释块内的行不参与标题判定
       （纪要引用 schema 模板时，代码块内必然出现 `## 承重约束` 字面量 —— 当真即假绿）。
+
+    区间形态（而非直接返回字符串）是给 `decision_hash` 覆盖面用例用的：它要逐行做定点变异，
+    需要知道「门认的正文」到底是**哪几行**。
     """
     level = _atx_level(heading)
     lines = text.splitlines()
@@ -106,13 +125,21 @@ def _section_body(text, heading):
                   if visible[i] and _atx_level(l) == level and l.strip() == heading), None)
     if start is None:
         return None
-    body = []
+    end = len(lines)
     for i in range(start + 1, len(lines)):
         lv = _atx_level(lines[i])
         if visible[i] and lv is not None and lv <= level:
+            end = i
             break
-        body.append(lines[i])
-    return "\n".join(body)
+    return start + 1, end
+
+
+def _section_body(text, heading):
+    """取 `heading` 这一行到下一个**同级或更高级** ATX 标题（或 EOF）之间的正文（口径见 `_section_span`）。"""
+    span = _section_span(text, heading)
+    if span is None:
+        return None
+    return "\n".join(text.splitlines()[span[0]:span[1]])
 
 
 def _strip_noise(body):
@@ -140,12 +167,15 @@ def check_decision_memo(change_dir):
 # ---------------------------------------------------------------- 门 1 的用例
 
 def _write_memo(tmp_path, decisions, constraints):
+    """造一份 fixture 纪要。小节名**直接引真相源** `REQUIRED_SECTIONS` —— 改名时 fixture 自动跟上，
+    ∴ 它不是「会因改名而失效的消费者」，无需进 `MEMO_SECTION_CONSUMERS`。"""
+    decision_h, constraint_h = REQUIRED_SECTIONS
     d = tmp_path / "changes" / "demo"
     d.mkdir(parents=True)
     (d / MEMO_FILENAME).write_text(
         "---\nschema_version: 1\nchange: demo\nbranch: feat/demo\n---\n\n"
         "# 决策纪要 · demo\n\n## 目标态\n\n一句话。\n\n"
-        f"## 拍板决策\n\n{decisions}\n\n## 承重约束\n\n{constraints}\n",
+        f"{decision_h}\n\n{decisions}\n\n{constraint_h}\n\n{constraints}\n",
         encoding="utf-8",
     )
     return d
@@ -258,23 +288,137 @@ def test_heading_hidden_in_html_comment_block_is_red(tmp_path):
     assert "承重约束" in problems[0]
 
 
+# ------------------------------------------- `decision_hash` 的覆盖面（门 ↔ hash 同口径）
+
+# schema 文档里那条命令是 `decision_hash` 的**唯一定义**（B.7④ 定稿与 C.1 判 4 跑的是同一条）。
+# 本节的用例**从文档里抽出那条命令真跑一遍** —— 不在这里手抄一份等价实现：
+# 手抄 = 又一个漂移面，而漂移的方向恰好是「文档改了、用例还在给旧算法背书」。
+_HASH_SECTION_HEADING = "### `decision_hash` 的唯一算法"
+_HASH_CMD_PLACEHOLDER = "openspec/changes/<change>/decision-memo.md"
+
+
+def _documented_hash_command():
+    """从 `decision-memo-schema.md` 抽出 `decision_hash` 小节里的那个 ```bash 代码块。"""
+    doc = MEMO_SCHEMA_DOC.read_text(encoding="utf-8")
+    head = doc.find(_HASH_SECTION_HEADING)
+    assert head >= 0, f"schema 文档里找不到小节「{_HASH_SECTION_HEADING}」——算法的单一源不见了"
+    m = re.search(r"^```bash\n(.*?)^```", doc[head:], re.S | re.M)
+    assert m, "该小节下找不到 ```bash 代码块 —— `decision_hash` 的唯一算法必须是一条可执行命令"
+    cmd = m.group(1)
+    assert _HASH_CMD_PLACEHOLDER in cmd, (
+        f"命令里找不到路径占位符 `{_HASH_CMD_PLACEHOLDER}` —— 本用例靠替换它把命令指到 fixture 上")
+    return cmd
+
+
+def _decision_hash(memo_path):
+    """按**文档里那条命令**算 `decision_hash`（真跑 bash，不复刻实现）。"""
+    cmd = _documented_hash_command().replace(_HASH_CMD_PLACEHOLDER, str(memo_path))
+    r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True,
+                       timeout=_CLI_TIMEOUT_S)
+    assert r.returncode == 0, f"文档里的 hash 命令跑不起来：\n{r.stdout}\n{r.stderr}"
+    return r.stdout.strip()
+
+
+def _memo_with_fence_then_more_decisions(tmp_path):
+    """门**认可**的一种真实形态：拍板决策节内贴了 schema 模板（含 `## ` 字面量），围栏之后还有 D2。
+
+    这正是 `test_heading_inside_fenced_block_is_not_a_real_heading` 背书的形态。
+    """
+    return _write_memo(
+        tmp_path,
+        decisions=("- **D1 纪要格式照 schema** — 模板：\n\n"
+                   "```markdown\n## 承重约束\n\n- **C1 …**\n```\n\n"
+                   "- **D2 后续决策（fence 之后）** — 依据：围栏之后仍然是拍板决策的正文"),
+        constraints="- **C1 CLI 无 rename change** — 证据锚：`openspec new --help` 实跑输出",
+    )
+
+
+def test_decision_hash_covers_every_line_the_gate_calls_body(tmp_path):
+    """⭐⭐ **门与 hash 必须同口径**：门认作「拍板决策」正文的**每一行**，改动后 `decision_hash` MUST 变。
+
+    失配的后果是**静默放行**：门 fence-aware ⇒ 围栏之后的 `- **D2 …**` 算正文；
+    hash 若按「逐行 `startswith("## ")` 截断」算，就只覆盖到围栏那一行 ⇒
+    把 D2 改成**相反的决策**，C.1 判 4 重算出来的 hash 照旧相等 ⇒ 判 4 什么也没挡住。
+
+    ∴ 这条一致性有**确定性信号**（两次算出的字节串等不等），属于该机械化的范畴（基准 1），
+    MUST NOT 只在文档里写一句「SHOULD 不要那样写」就算完。
+    """
+    d = _memo_with_fence_then_more_decisions(tmp_path)
+    memo = d / MEMO_FILENAME
+    assert check_decision_memo(d) == [], "前提失守：这形态本该是门认可的"
+
+    original = memo.read_text(encoding="utf-8")
+    base = _decision_hash(memo)
+    assert re.fullmatch(r"[0-9a-f]{12}", base), f"hash 命令的输出不是 12 位十六进制：{base!r}"
+
+    lines = original.splitlines()
+    start, end = _section_span(original, REQUIRED_SECTIONS[0])
+    checked = 0
+    for i in range(start, end):
+        if not lines[i].strip():
+            continue                      # 纯空行：两端都 strip，改它本就不该动 hash
+        mutated = list(lines)
+        mutated[i] = mutated[i] + " 【篡改】"
+        memo.write_text("\n".join(mutated) + "\n", encoding="utf-8")
+        try:
+            assert _decision_hash(memo) != base, (
+                f"改了门认作正文的第 {i - start + 1} 行（{lines[i]!r}）而 decision_hash 不变 —— "
+                "hash 覆盖面窄于门认可的正文，C.1 判 4 对这一行是静默放行的")
+        finally:
+            memo.write_text(original, encoding="utf-8")
+        checked += 1
+    assert checked >= 5, f"只变异到 {checked} 行 —— fixture 太瘦，这条锚接近恒真"
+
+
+def test_decision_hash_is_deterministic_and_frontmatter_independent(tmp_path):
+    """⭐ 反向锚（三条，缺一这门就没意义）：
+
+    ① **确定性**：内容不变 ⇒ 两次算出同一个值（否则 C.1 判 4 恒红）；
+    ② **不含 frontmatter**：`decision_hash` 自己就写在 frontmatter 里 —— 若把它算进去，
+       写回文件的那一刻 hash 就失效，判 4 恒红（自指坑）。`generated_at` 同理；
+    ③ **覆盖 frontmatter 之外的全部正文**：改「承重约束」也 MUST 变 ——
+       定稿之后 memo 是冻结的，任何手改都该被判 4 看见。
+    """
+    d = _memo_with_fence_then_more_decisions(tmp_path)
+    memo = d / MEMO_FILENAME
+    base = _decision_hash(memo)
+    assert _decision_hash(memo) == base, "同一份文件两次算出不同 hash —— 算法不确定"
+
+    original = memo.read_text(encoding="utf-8")
+    frontmatter_touched = original.replace(
+        "schema_version: 1", "schema_version: 1\ndecision_hash: deadbeefcafe", 1)
+    assert frontmatter_touched != original
+    memo.write_text(frontmatter_touched, encoding="utf-8")
+    assert _decision_hash(memo) == base, "frontmatter 参与了 hash —— 写回 decision_hash 即自毁"
+
+    memo.write_text(original.replace("CLI 无 rename change", "CLI 有 rename change"), encoding="utf-8")
+    assert _decision_hash(memo) != base, "改「承重约束」正文 hash 不变 —— 定稿后的手改看不见"
+
+
 def test_schema_doc_and_gate_agree():
-    """⭐ 小节名是**共享字符串**：门与**全部**消费者 MUST 逐字一致。
+    """⭐ 小节名是**共享字符串**：门与**全部**消费者的**每一处**出现 MUST 逐字一致。
 
-    消费者三处（`grep -rn "## 承重约束"` 全量扫，不加 `--include`）：本门 · schema 文档 ·
-    `sdflow-spec/SKILL.md` 的 C.1 起手核验。少守一处 ⇒ 改名漏改那一处仍全绿（基准 3：面治）。
+    消费面与次数下限见 `MEMO_SECTION_CONSUMERS`（`grep -rn` 全量扫，不加 `--include` 得来）。
+    两条判据缺一不可：
 
-    🔴 **判据必须带右界**（本仓「gate 子串检测自指坑」的同形）：裸 `heading in doc` 下
+    🔴 **① 判据必须带右界**（本仓「gate 子串检测自指坑」的同形）：裸 `heading in doc` 下
     `## 承重约束` 是 `## 承重约束项` 的**前缀** ⇒ 改名成后者，守卫照样绿（实测：变异 M5 不红）。
     故要求紧跟其后的字符 ∈ {空白, 反引号, 竖线} 或已到文末 —— 覆盖三种真实出现形态：
     代码块里独占一行、行内 `` `## 承重约束` ``、表格单元格 `| ## 承重约束 |`。
+
+    🔴 **② 判据必须数全部出现处**：只查「出现过」等于只守每个文件的第一处，
+    对同文件内的第 2/3/N 处是瞎的（实测：只留 schema §4 一处旧名 ⇒ 旧守卫假绿）。
     """
-    for path in MEMO_SECTION_CONSUMERS:
+    for path, expected in MEMO_SECTION_CONSUMERS.items():
         doc = path.read_text(encoding="utf-8")
-        for heading in REQUIRED_SECTIONS:
-            assert re.search(re.escape(heading) + r"(?![^\s`|])", doc), (
-                f"{path.relative_to(REPO)} 里找不到小节「{heading}」（须整名出现，前缀不算）"
-                "——门与消费者已漂移")
+        assert set(expected) == set(REQUIRED_SECTIONS), (
+            f"{path.relative_to(REPO)} 的期望表漏了小节 —— 新增必填小节时 MEMO_SECTION_CONSUMERS 要一起补")
+        for heading, minimum in expected.items():
+            hits = re.findall(re.escape(heading) + r"(?![^\s`|])", doc)
+            assert len(hits) >= minimum, (
+                f"{path.relative_to(REPO)} 里小节「{heading}」只整名出现 {len(hits)} 处，"
+                f"少于下限 {minimum} —— 多半是改名只改了一部分（前缀不算整名）；"
+                "确属合法删减 ⇒ 同步下调 MEMO_SECTION_CONSUMERS 里的下限")
     assert MEMO_FILENAME in MEMO_SCHEMA_DOC.read_text(encoding="utf-8")
 
 
@@ -354,11 +498,6 @@ def _make_change(root, *, proposal=_GOOD_PROPOSAL, spec=_GOOD_SPEC, design=_GOOD
     (change / "design.md").write_text(design, encoding="utf-8")
     (change / "tasks.md").write_text("# Tasks\n\n## 1. 组\n\n- [ ] 1.1 做\n", encoding="utf-8")
     return change
-
-
-# 外部 CLI 一律带 timeout：挂起时本用例自己红（TimeoutExpired），
-# 而不是把 CI job 拖到 workflow 级超时才被杀（那时红的是整条泳道，看不出是哪一条）。
-_CLI_TIMEOUT_S = 60
 
 
 def _validate(root):
