@@ -347,9 +347,10 @@
           <div class="stage-left">
             <div class="stage-tag">STAGE 1</div>
             <div class="stage-name">propose 生成</div>
-            <span class="stage-skill">/opsx:ff · /opsx:new</span>
+            <span class="stage-skill">/sdflow-spec（分支 A · 默认）· /opsx:ff · /opsx:new（分支 B）</span>
           </div>
           <div class="stage-body">
+            <div class="row-line"><span class="row-k">入口</span><span class="row-v"><b>分支 A（默认）</b>：装了 <code>sdflow-spec</code> ⇒ 人敲 <code>/sdflow-spec</code>，澄清→拷问→生成一次连续跑（拷问前置于成文）。<b>分支 B</b>：未装、或命中三种例外（wayfinder 铺图 / 用户要求分步 / 环境不可用）⇒ 旧三步 <code>opsx:explore → opsx:ff → grill-with-docs</code>。规则见 <code>generation-process.md</code> §四</span></div>
             <div class="row-line"><span class="row-k">门禁</span><span class="row-v"><b>FF-0 三分支判定</b>：保护分支先 <code>git checkout -b feat/{change}</code>；已在 <code>feat/{本 change}</code> 跳过；在其它 feature 分支 halt 问人。按 <code>trigger-catalog</code> 判 TG 命中激活生成约束</span></div>
             <div class="row-line"><span class="row-k">产物</span><span class="row-v art">proposal · design · specs/ · tasks.md（四件套）</span></div>
           </div>

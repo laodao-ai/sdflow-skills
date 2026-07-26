@@ -24,9 +24,11 @@
 
 ```mermaid
 flowchart TD
-    Start(["需求 / 想法"]) --> A["opsx:explore<br/>（问题模糊才跑，清晰则跳）"]
+    Start(["需求 / 想法"]) --> SP["/sdflow-spec（分支 A · 默认）<br/>澄清 → 拷问 → 生成，一次连续跑"]
+    Start -.未装 / 三种例外.-> A["opsx:explore<br/>（问题模糊才跑，清晰则跳）"]
     A --> B["opsx:ff<br/>生成四件套 + 建 feature 分支"]
     B --> C["grill-with-docs<br/>对抗压测设计 + 落 ADR / 术语"]
+    SP --> D
     C --> D["sdflow-spec-review<br/>广审 + 并行多镜 → 一份报告"]
     D --> E{{"★ 设计 HARD-GATE<br/>全流程唯一人类门"}}
     E -->|批准| F["embedded-test-sop<br/>仅 TG-02 ∧ 高风险 才触发"]
@@ -36,6 +38,7 @@ flowchart TD
     I -.异步.-> J["人类读 hand-off.md<br/>→ 决定开清理 change → 下个 change 输入"]
 
     subgraph 阶段一["阶段一 · 生成（人类对话岛）"]
+        SP
         A
         B
         C
@@ -90,15 +93,31 @@ flowchart LR
 
 ## 2. 阶段一 · 生成（人类对话岛）
 
+**先判装没装 `sdflow-spec`——两条分支，规则见 `generation-process.md` §四「四入口选择规则」。**
+
 ```mermaid
 flowchart LR
-    S(["需求/想法"]) --> E{"问题清晰?"}
+    S(["需求/想法"]) --> BR{"装了 sdflow-spec?"}
+    BR -->|"是（默认）"| SP["/sdflow-spec 分支A<br/>澄清→拷问→生成 一次连续跑"]
+    SP --> OUT
+    BR -->|"否 / 命中三种例外"| E{"问题清晰?"}
     E -->|否| EX["opsx:explore<br/>发散探索"]
     E -->|是| FF
     EX --> FF["opsx:ff 🔒黑盒<br/>生成四件套"]
     FF --> GR["grill-with-docs<br/>对抗压测"]
     GR --> OUT(["设计收敛<br/>→ 进设计审"])
 ```
+
+### 分支 A（默认）：`/sdflow-spec` 单入口
+
+| 步 | skill | 目标 | 产出 | 注意事项 |
+|---|---|---|---|---|
+| 0 | `/sdflow-spec` | 一个入口跑完**澄清(A) → 拷问(B) → 生成(C)**，拷问结构性**前置于成文** | 四件套 + `decision-memo.md` + feature 分支 | `disable-model-invocation: true`，**模型唤不起，只能人敲**；相位 B **起手**即过 FF-0 三分支判定 + `openspec new change`；出口序列由该 skill 原样贴出（`/clear` → 换档 → `/sdflow-spec-review`，是 G1 的唯一具名例外） |
+
+### 分支 B：未装 `sdflow-spec`，或命中三种例外 → 旧三步（沿用，未被删除）
+
+> **三种例外**：① 需要 wayfinder 跨会话铺图；② 用户明确要求分步执行；③ `sdflow-spec` 因环境原因不可用。
+> 走旧三步的那次运行**须在完成报告里说明为何未走单入口**；分支 B 里 grill 一律全深度，MUST NOT 瘦跑。
 
 | 步 | skill | 目标 | 产出 | 注意事项 |
 |---|---|---|---|---|
@@ -278,9 +297,10 @@ flowchart TD
 
 ## 7. 跑一个变更时的自检清单
 
-- [ ] 问题清晰否？不清晰先 `opsx:explore`
-- [ ] ff 是否在 feature 分支上生成（FF-0）？每步是否 checkpoint？
-- [ ] grill 是否收敛后才提交（多轮中途不提交）？
+- [ ] 装了 `sdflow-spec` 吗？装了就走**分支 A**（人敲 `/sdflow-spec`）；走旧三步须命中三种例外之一并在报告说明
+- [ ] 〔分支 B〕问题清晰否？不清晰先 `opsx:explore`
+- [ ] ff / `sdflow-spec` 相位 B 起手是否过了 **FF-0 三分支判定**？每步是否 checkpoint？
+- [ ] 〔分支 B〕grill 是否收敛后才提交（多轮中途不提交）？
 - [ ] `sdflow-spec-review` 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
 - [ ] 设计是否过 HARD-GATE（用户批准）才进 `writing-plans`？（阶段二唯一人类门）
 - [ ] `sdflow-code-review` 是否**每次全跑**（并入 scope+完成度、领域清单、对抗、置信过滤）？

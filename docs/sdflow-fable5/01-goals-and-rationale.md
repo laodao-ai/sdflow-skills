@@ -35,6 +35,7 @@
 ```mermaid
 flowchart LR
     subgraph P1["阶段一 · 生成（人类对话岛）"]
+        S0["/sdflow-spec（分支 A · 默认）<br/>澄清→拷问→生成"]
         A["opsx:explore<br/>（模糊才跑）"] --> B["opsx:ff<br/>四件套+分支"] --> C["grill<br/>对抗压测设计"]
     end
     subgraph P2["阶段二 · 设计审（连续）"]
@@ -43,6 +44,7 @@ flowchart LR
     subgraph P3["阶段三 · 实现到 merge（gate 驱动·无人类门）"]
         F["writing-plans→SDD<br/>原子任务 TDD"] --> G["sdflow-code-review<br/>每次全跑·独立冷"] --> H["sdflow-done<br/>verify→archive→merge"]
     end
+    S0 --> D
     C --> D
     E -->|"frontmatter<br/>design_approved:true"| F
     H -.->|hand-off.md 异步| P1
@@ -151,8 +153,8 @@ roadmap 回写的初版论证用「现存 25 份归档报告 24 份不会触发�
 | 用户目标要素 | 现状实现 | 完成度 |
 |---|---|---|
 | roadmap 制定 | `sdflow-roadmap`（三件套直写 + 分档 review） | ✅ |
-| 需求明确 | `opsx:explore` + grill（人类对话岛，刻意不机械化） | ✅ |
-| 生成 Spec | `opsx:ff` + config.yaml 规则注入 + TG 触发目录 | ✅（依赖 OpenSpec 官方 skill） |
+| 需求明确 | 分支 A（默认）`/sdflow-spec` 相位 A/B；分支 B `opsx:explore` + grill（人类对话岛，刻意不机械化） | ✅ |
+| 生成 Spec | 分支 A（默认）`/sdflow-spec` 相位 C；分支 B `opsx:ff` + config.yaml 规则注入 + TG 触发目录 | ✅（分支 B 依赖 OpenSpec 官方 skill） |
 | 设计评审 | `sdflow-spec-review`（autoplan+多镜+决策登记+HARD-GATE） | ✅ |
 | 代码生成 | superpowers writing-plans + SDD（注入点 A/B） | ✅（外部黑盒 + 注入） |
 | 代码评审 | `sdflow-code-review`（每次全跑·冷·强制主审） | ✅ |

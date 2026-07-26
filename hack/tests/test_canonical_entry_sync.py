@@ -11,15 +11,28 @@
   `quality-layering.md` 写「无 `/clear`（G1）」），**一条 grep 命不中两处**，必须分开断言。
 - **MUST NOT 用跨行结构当判据**：`generation-process.md` §四 是跨行 ASCII 图，
   `explore.*ff.*grill` 这类单行正则对它**实测零命中** = 一个永远不会红的空判据。
-  故本文件一律锚**单行散文/表格行**，不锚图。
-- 每条断言都做过**定点变异回验**（把被锚的那句话改掉 → 该断言必红）。
+  故对 canonical bundle 一律锚**单行散文/表格行**，不锚图。
+- **锚要打在它自称守的那句话上**：一条锚若能被**别处**的行满足，它就守不住被点名的那一处。
+  （实测教训：`keeps_legacy_path_alive` 原先锚 `opsx:explore` / `grill-with-docs` 两个裸词，
+  删掉 §四 整个分支 B 块仍绿——它被 §五 的 skill 选择表满足了。）
+- **例外：人读侧（CLAUDE.md / AGENTS.md）用「压掉空白后比对」，不用单行锚。**
+  那两份是硬折行的中文散文，句子会跨行；单行锚会随折行位置变化而假红/假绿。
+- 每条断言都做过**定点变异回验**（把被锚的那句话改掉/删掉 → 该断言必红）。
 
 【谁不在本文件里，为什么】
 - `WORKFLOW-GUIDE.md` 是**生成物**：与单一源的一致性由 `test_workflow_split.py` 的
   `gen_workflow_guide --check` 守；这里只补一条「重生成后阶段一段落确实带上了新入口」。
 - `ff0-branch-guard.py` 的**行为**由 `sdflow-init/tests/test_ff0_branch_guard.py` 守
   （真跑 hook）；这里只守「规则文本与 hook 提到的是同一个逃生口口令」。
+
+【人核残余：如实登记，MUST NOT 硬造恒真锚】
+下面三项无可靠单行锚点，机械层**故意**不覆盖（登记于此即可，**不需要一条测试来给它背书**——
+一条只断言「本文件自己的字面量非空」的用例，参照系不含任何仓状态，无任何仓改动能使它红）：
+  · `generation-process.md` §四 的两张 ASCII 流水线图本身（跨行结构；本文件只锚其周边散文）
+  · `workflow.md` §一 的阶段一流程图分支框（同上）
+  · 「例外情形①②③的语义是否真的互斥且穷尽」——语义判断，无确定性信号
 """
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -33,6 +46,48 @@ GUIDE = WF / "WORKFLOW-GUIDE.md"
 CLAUDE_SECTION = REPO / "sdflow-init" / "assets" / "snippets" / "claude-section.md"
 SPEC_WORKFLOW = REPO / "openspec" / "specs" / "spec-workflow" / "spec.md"
 HOOK = REPO / "sdflow-init" / "assets" / "hooks" / "ff0-branch-guard.py"
+
+# 人读侧的两份载体（非托管区，手写）——本 change 的立项理由就是「人读侧与 AI 读侧分叉」，
+# 故这一面 MUST NOT 只靠 prose「改一处就改另一处」兜底。
+HUMAN_SIDE = {
+    "CLAUDE.md": REPO / "CLAUDE.md",
+    "AGENTS.md": REPO / "AGENTS.md",
+}
+ENTRY_HEADING = "## 阶段一入口："
+
+# 人读侧的第三类载体：docs/ 下四份「呈现阶段一流程」的文档。
+# 它们不是规则真相源，但**人从它们读到入口**——只写旧三步即 D10 描述的分叉形态。
+#
+# ⚠️ 锚**逐处**打，不是「全文提过分支 A 就算数」：一份文档完全可能在总览图里提了
+# `/sdflow-spec`、而它的阶段一详解小节仍只画旧三步 —— 那正是本组要修的缺陷形态。
+# （实测：只写「全文含『分支 A』+『sdflow-spec』」的弱锚，删掉 overview §2 的分支 A
+# 小节标题、删掉 map.html 的入口行，都仍然绿。）
+DOCS_CARRIERS = {
+    "docs/workflow-overview.md": (
+        REPO / "docs" / "workflow-overview.md",
+        [("/sdflow-spec（分支 A · 默认）",),          # §0 全局流程图节点
+         ("### 分支 A（默认）", "sdflow-spec"),       # §2 阶段一 · 分支 A 小节
+         ("### 分支 B", "旧三步"),                    # §2 阶段一 · 分支 B 小节
+         ("装了 `sdflow-spec` 吗", "分支 A")],        # §7 自检清单
+    ),
+    "docs/workflow-map.md": (
+        REPO / "docs" / "workflow-map.md",
+        # ⚠️「propose + /sdflow-spec」会被下面的阶段表行满足 ⇒ 用轨道箭头把锚钉在 ASCII 轨上
+        [("──▶", "/sdflow-spec"),                     # ASCII 全景轨
+         ("分支 A · 默认", "/sdflow-spec")],          # 阶段表
+    ),
+    "docs/workflow-map.html": (
+        REPO / "docs" / "workflow-map.html",
+        [("stage-skill", "/sdflow-spec"),             # STAGE 1 的 skill 行
+         ("分支 A（默认）", "/sdflow-spec")],         # STAGE 1 的入口行
+    ),
+    "docs/workflow-console.html": (
+        REPO / "docs" / "workflow-console.html",
+        # ⚠️ 裸词 `sdflow-spec` 是 `sdflow-spec-review` 的前缀 ⇒ chips 锚须带尖括号定界
+        [("分支 A（默认）", "/sdflow-spec"),          # 阶段一卡片的角色描述
+         ("chip", ">sdflow-spec<")],                  # 阶段一卡片的 skill chips
+    ),
+}
 
 
 def lines(p: Path):
@@ -51,11 +106,34 @@ def require(p: Path, *needles: str):
     )
 
 
+def flat(text: str) -> str:
+    """压掉全部空白（含换行）。用于比对**硬折行的中文散文**，见模块 docstring。"""
+    return re.sub(r"\s+", "", text)
+
+
+def entry_section(p: Path) -> str:
+    """截出「阶段一入口」那一节（到下一个同级 `## ` 标题为止）。"""
+    text = p.read_text(encoding="utf-8")
+    start = text.find(ENTRY_HEADING)
+    assert start >= 0, (
+        f"{p.relative_to(REPO)} 里没有「{ENTRY_HEADING}…」这一节 —— "
+        "SA-14 要求四入口选择规则**同时**落在人读侧与 AI 读侧，人读侧这份不许消失"
+    )
+    end = text.find("\n## ", start + 1)
+    return text[start:] if end < 0 else text[start:end]
+
+
 # ── ① generation-process.md：推荐流水线两分支 + 四入口选择规则 ─────────────
 
 def test_generation_process_has_two_branches():
-    require(GENERATION, "分支 A", "sdflow-spec")
-    require(GENERATION, "分支 B", "未装")
+    """锚 §四 的两个**小节标题**本身。
+
+    ⚠️ 不能只锚裸词「分支 A」+「sdflow-spec」——§八 检查清单那行
+    （「装了 `sdflow-spec` 吗？装了就走**分支 A 单入口**」）同样含这两个词，
+    ⇒ 把 §四 的分支 A 小节整块删掉，那种弱锚仍会绿。
+    """
+    require(GENERATION, "### 分支 A", "已装", "单入口")
+    require(GENERATION, "### 分支 B", "未装", "旧三步")
 
 
 def test_generation_process_states_entry_selection_rule():
@@ -65,9 +143,15 @@ def test_generation_process_states_entry_selection_rule():
 
 
 def test_generation_process_keeps_legacy_path_alive():
-    """旧三步未被删除——它仍是三种例外情形下的合法路径。"""
-    require(GENERATION, "opsx:explore")
-    require(GENERATION, "grill-with-docs")
+    """旧三步未被删除——它仍是三种例外情形下的合法路径。
+
+    ⚠️ 锚必须落在 §四 里**明说这件事**的那一句上。原先锚裸词 `opsx:explore` /
+    `grill-with-docs` 是**打偏的**：实测把 §四 的分支 B 整块删掉，本用例仍绿
+    ——那两个词被 §五 的 skill 选择表满足了，而 §五 说的是「什么时候用哪个 skill」，
+    不是「旧三步仍是合法路径」。
+    """
+    require(GENERATION, "旧三步仍是合法路径", "三个原入口未被删除")
+    require(GENERATION, "分支 B", "grill 一律全深度", "MUST NOT")
 
 
 # ── ② workflow.md：G1 具名例外（载体一，措辞「全流程不用 `/clear`」）──────
@@ -168,15 +252,83 @@ def test_generated_guide_reflects_the_new_entry():
     require(GUIDE, "阶段一", "步骤 0", "/sdflow-spec")
 
 
-# ── ⑧ 人核残余：如实登记，MUST NOT 假装有机械覆盖 ────────────────────────
+# ── ⑧ 人读侧（CLAUDE.md / AGENTS.md 非托管区）：SA-14 的另一半落点 ────────
+#     本 change 的立项理由就是「人读侧与 AI 读侧分叉」。人读侧这 60 行手抄成
+#     第三、第四份副本，若零机械守，就是在**要消除的问题形态本身**上留了唯一无守面。
 
-MANUAL_ONLY = """
-以下面无可靠单行锚点，如实留人核（MUST NOT 硬造恒真锚）：
-  · generation-process.md §四 的两张 ASCII 流水线图本身（跨行结构；本文件只锚其周边散文）
-  · workflow.md §一 的阶段一流程图分支框（同上）
-  · 「例外情形①②③的语义是否真的互斥且穷尽」——语义判断，无确定性信号
-"""
+def test_entry_section_exists_in_both_human_carriers():
+    for name, path in HUMAN_SIDE.items():
+        assert entry_section(path).strip(), f"{name} 的阶段一入口小节是空的"
 
 
-def test_manual_residue_is_declared():
-    assert MANUAL_ONLY.strip(), "人核残余清单不许空着"
+def test_two_human_carriers_are_verbatim_identical():
+    """CLAUDE.md 与 AGENTS.md 的该节 MUST 逐字相等。
+
+    两份是手抄的同一段话，唯一的兜底原本只是一句 prose「改一处就改另一处」——
+    而「会想起去查那句 prose 的人本来就不会漏改」。这条把它变成机械的。
+    """
+    claude = entry_section(HUMAN_SIDE["CLAUDE.md"])
+    agents = entry_section(HUMAN_SIDE["AGENTS.md"])
+    assert claude == agents, (
+        "CLAUDE.md 与 AGENTS.md 的「阶段一入口」小节已分叉 —— "
+        "两份是同一条规则的两个手抄副本，MUST 逐字相同（改一处就改另一处）"
+    )
+
+
+def _require_flat(name: str, section: str, *needles: str):
+    for n in needles:
+        assert flat(n) in flat(section), (
+            f"{name} 的「阶段一入口」小节里找不到「{n}」 —— "
+            "人读侧与 AI 读侧的四入口选择规则/sunset 阈值已分叉或被删"
+        )
+
+
+def test_human_carriers_state_the_default_entry_and_the_model_ban():
+    for name, path in HUMAN_SIDE.items():
+        _require_flat(name, entry_section(path),
+                      "**默认走 `/sdflow-spec`**",
+                      "MUST NOT 默认拿 `opsx:ff` 起手",
+                      "模型 MUST NOT 自行选 `opsx:ff` 绕过拷问")
+
+
+def test_human_carriers_state_the_sunset_thresholds_and_disposition():
+    """sunset 那节的价值全在**具体数字**上；数字被抹掉/改软 = 条款失效。"""
+    for name, path in HUMAN_SIDE.items():
+        _require_flat(name, entry_section(path),
+                      "连续 6 个新开 change",   # 观察窗（次数）
+                      "8 周",                   # 观察窗（时间）
+                      "5/6",                    # 采用率阈值
+                      "0.79",                   # findings 采纳率下限
+                      "75 min",                 # 阶段一墙钟上限
+                      "删除 `sdflow-spec`",      # 未达标处置（不许软化成「再看看」）
+                      "MUST NOT 无限期延长观察窗")
+
+
+def test_human_side_and_canonical_use_the_same_wording():
+    """人读侧与 AI 读侧（canonical）**同串**——不许各写各的。"""
+    canonical = GENERATION.read_text(encoding="utf-8")
+    shared = (
+        "**默认走 `/sdflow-spec`**",
+        "MUST NOT 默认拿 `opsx:ff` 起手",
+        "① 需要 wayfinder 跨会话铺图（`sdflow-spec` 不覆盖该职责）；"
+        "② 用户明确要求分步执行；③ `sdflow-spec` 因环境原因不可用"
+        "（未跑 setup / Codex 宿主降级不可接受）",
+    )
+    for n in shared:
+        assert flat(n) in flat(canonical), (
+            f"canonical（generation-process.md §四）里找不到「{n}」"
+        )
+    for name, path in HUMAN_SIDE.items():
+        _require_flat(name, entry_section(path), *shared)
+
+
+# ── ⑨ docs/ 下呈现「阶段一流程」的人读载体：不许只画旧三步 ────────────────
+#     它们不是规则真相源，但人从它们读到入口 —— 只写 explore→ff→grill 就是 D10 的分叉形态。
+
+def test_docs_stage_one_carriers_present_branch_a():
+    for name, (path, anchors) in DOCS_CARRIERS.items():
+        for needles in anchors:
+            assert has_line(path, *needles), (
+                f"{name} 里找不到同时含 {needles!r} 的单行 —— 该文档的这一处仍只呈现"
+                "旧三步，人从它读到的入口与 canonical 分叉（D10 / SA-11）"
+            )

@@ -18,9 +18,13 @@
  阶段          编排 skill                    脚本门 / 门禁                        产物 + frontmatter 锚
 ════════════════════════════════════════════════════════════════════════════════════════════════════
  explore  ──▶  /opsx:explore                （无门）                              探索笔记
+              〔分支 B 才走〕                                                    ※ 分支 A 无此步
                    │
- propose  ──▶  /opsx:ff / :new    ──FF-0──▶ trigger-catalog TG 判定             proposal/design/specs/tasks
-                   │                          git checkout -b feat/{change}
+ propose  ──▶  /sdflow-spec       ──FF-0──▶ trigger-catalog TG 判定             proposal/design/specs/tasks
+              〔分支 A · 默认〕              git checkout -b feat/{change}       + decision-memo.md
+              /opsx:ff / :new
+              〔分支 B〕
+                   │
                    ▼
               ┏━━━━━━━━━━━━━━━┓
    人类门①    ┃  grill / 前提确认  ┃  ◀── ship 不跨此门 (adr/0004)
@@ -65,8 +69,8 @@
 
 | # | 阶段 | 编排 skill | 脚本门 / 门禁 | ship_gate verdict（exit） | 产物 + frontmatter 字段 | anchor-lint |
 |---|------|-----------|--------------|--------------------------|----------------------|-------------|
-| 0 | explore | `/opsx:explore` | 无门 | —（不覆盖） | 探索笔记 | — |
-| 1 | propose | `/opsx:new` `/opsx:ff` | FF-0 分支 + TG 判定 | — | proposal/design/specs/tasks | — |
+| 0 | explore | `/opsx:explore`〔分支 B〕 | 无门 | —（不覆盖） | 探索笔记 | — |
+| 1 | propose | **`/sdflow-spec`〔分支 A · 默认〕** · `/opsx:new` `/opsx:ff`〔分支 B〕 | FF-0 三分支判定 + TG 判定 | — | proposal/design/specs/tasks（分支 A 另出 decision-memo.md） | — |
 | — | **人类门①** grill | （propose/explore 内） | 人类拍板 | ship 不跨（adr/0004） | grill 记录进正文 | — |
 | 2 | **spec-review 设计审** | `sdflow-spec-review` | `anchor_lint --layer spec-review` ✅#1 · outside-voice · HR-TG | 未过 → **REFUSE_START(3)** | `spec-review-report.md` → `design_approved: true` + lens-metric 锚 | ✅ #1 |
 | — | **人类门②** 设计 HARD-GATE | `sdflow-spec-review` 收敛口 | `design_approved: true`（机判锚） | REFUSE_START(3) 若未过 | 拍板后 prepend 头部 frontmatter | — |

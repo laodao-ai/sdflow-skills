@@ -93,6 +93,88 @@ def test_other_feature_branch_with_human_ack_allows(repo):
     assert not denied
 
 
+def test_ack_allows_when_preceded_by_other_shell_work(repo):
+    """人真敲的形态常带前缀（`cd … && ACK=1 openspec …`）—— 仍算 ack。"""
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    denied, _ = run_hook(
+        repo, "cd . && SDFLOW_FF0_ACK=1 FOO=bar openspec new change add-foo")
+    assert not denied
+
+
+def test_incidental_mention_of_the_ack_literal_is_not_an_ack(repo):
+    """口令只在【真的作为 env 赋值前缀传给那条命令】时才算人拍板。
+
+    反例是模型极易产出的形态：把口令写进注释/说明文字里。若那也放行，
+    「ack 只能由人决定」就退化成「命令串里出现过这 11 个字符即可」——
+    而 deny 文案本身就把该字面量原样回传给模型 ⇒ 复现门槛为零。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    for cmd in (
+        "openspec new change add-foo # note: SDFLOW_FF0_ACK=1 was discussed",
+        "echo 'SDFLOW_FF0_ACK=1' && openspec new change add-foo",
+        "SDFLOW_FF0_ACK=1 && openspec new change add-foo",
+    ):
+        denied, _ = run_hook(repo, cmd)
+        assert denied, f"口令只是被提及、并未作为 env 前缀传给命令，不该放行：{cmd}"
+
+
+# ── detached HEAD：不是分支，更不是「其它 feature 分支」→ fail-open ──────
+
+def test_detached_head_fails_open(repo):
+    """`git rev-parse --abbrev-ref HEAD` 在 detached HEAD 下返回字面量 `HEAD`。
+
+    它非空、且不在受保护集里 ⇒ 若不特判就会落进分支③，提示「当前在 feature
+    分支 `HEAD`」—— 一个不存在的分支。worktree / bisect / tag checkout 全命中。
+    按本 hook 的 fail-open 纪律（探测不出可判定的分支就不挡人干活）应放行。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    _git(repo, "checkout", "-q", "--detach")
+    denied, reason = run_hook(repo, "openspec new change add-foo")
+    assert not denied, f"detached HEAD 被误判成 feature 分支并 deny：{reason}"
+
+
+# ── 分支①的边界：受保护集 MUST 含【该仓真正的默认分支】，不止 main/master ──
+#    misclassify 即等于开后门：分支①无逃生口、分支③有 ack。
+
+def _set_origin_head(repo, branch):
+    """本地伪造 `refs/remotes/origin/HEAD`（clone 时 git 自己写的就是它）。"""
+    _git(repo, "symbolic-ref", "refs/remotes/origin/HEAD",
+         f"refs/remotes/origin/{branch}")
+
+
+def test_default_branch_from_origin_head_is_protected(repo):
+    _git(repo, "checkout", "-qb", "trunk")
+    _set_origin_head(repo, "trunk")
+    denied, reason = run_hook(repo, "openspec new change add-foo")
+    assert denied, "默认分支为 trunk 的仓里，trunk 就是分支①，必须 deny"
+    assert "受保护分支" in reason
+
+
+def test_default_branch_is_protected_even_with_human_ack(repo):
+    """ack 是【分支③】的逃生口。它若在分支①也生效，FF-0 的核心不变量就被击穿。"""
+    _git(repo, "checkout", "-qb", "trunk")
+    _set_origin_head(repo, "trunk")
+    denied, _ = run_hook(repo, "SDFLOW_FF0_ACK=1 openspec new change add-foo")
+    assert denied, "ack MUST NOT 让「在默认分支上建 change」放行"
+
+
+def test_default_branch_from_init_default_branch_config_is_protected(repo):
+    """本地 `git init` 出来的仓没有 origin/HEAD —— 退到 init.defaultBranch。"""
+    _git(repo, "config", "init.defaultBranch", "develop")
+    _git(repo, "checkout", "-qb", "develop")
+    denied, reason = run_hook(repo, "openspec new change add-foo")
+    assert denied and "受保护分支" in reason
+
+
+def test_feature_branch_still_denies_when_default_branch_is_unusual(repo):
+    """默认分支探测不改变分支③的判定（回归保护）。"""
+    _git(repo, "checkout", "-qb", "trunk")
+    _set_origin_head(repo, "trunk")
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    denied, reason = run_hook(repo, "openspec new change add-foo")
+    assert denied and "feature 分支" in reason
+
+
 # ── fail-open：守卫拿不准时不挡人干活 ───────────────────────────────────
 
 def test_unparseable_change_name_fails_open(repo):

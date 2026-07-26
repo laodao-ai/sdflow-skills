@@ -274,8 +274,10 @@ flowchart LR
 flowchart TD
     RM["sdflow-roadmap<br/>（多阶段规划）"] -.每阶段.-> FF
     subgraph 阶段一
+        SP["/sdflow-spec<br/>（分支 A · 默认，只能人敲）"]
         EX["opsx:explore"] --> FF["opsx:ff<br/>（config.yaml + TG 注入）"] --> GR["grill（人类对话岛）"]
     end
+    SP --> SR
     GR --> SR["sdflow-spec-review"]
     SR -->|"autoplan 原生并入"| SR
     SR --> GATE{{"设计 HARD-GATE<br/>design_approved: true"}}
