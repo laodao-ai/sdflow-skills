@@ -56,8 +56,18 @@ PreToolUse 在命令**执行前**判定 ⇒ 判定发生时 touch 还没跑、�
 
 【为什么「取不到 change 名」也放行】（基准 5：无界语法面别手搓）
 shell 命令行的语法面是无界的（管道、环境变量、别名、嵌套引号…）。本守卫只认
-`openspec new change <bare|'quoted'|"quoted">` 这一种【有界】形态；认不出就放行，
+`openspec new change <bare|'quoted'|"quoted">` 这一种【有界】形态；**单次**调用认不出就放行，
 而不是猜。fail-open 是既有纪律：守卫拿不准时不挡人干活，规则的文档层与 review 兜底。
+
+【一条命令里有多处创建调用 ⇒ 枚举全部，不一致即 deny】[impl-review-fix]
+🔴 只取**第一个**匹配 = 前置文本即绕过：`echo openspec new change <本 change>;
+openspec new change <另一个>` 在 `feat/<本 change>` 上会被判成分支②幂等放行，而 Bash
+真正执行的是第二条（实测：无 deny 输出、exit 0）。∴ 判据改为**枚举全部有界匹配**：
+  · 多个**不同** change 名 ⇒ deny，要求拆成独立调用（一次一个）；
+  · 创建调用的**出现次数**多于读得出的名字数（有一处是 `$(...)`/变量展开）⇒ 同样 deny
+    —— 读不出的那一条与上一形态同构，而判据只是**两个有界计数之差**，不是解析 shell；
+  · **全部**匹配都等于同一个名字 ⇒ 才按单名走②③（幂等仍然幂等）。
+⚠️ 这不放宽单次调用的 fail-open：只有一处创建调用而名字读不出时，行为一如既往是放行。
 
 铺设/注册：全局装于 ~/.claude/hooks/ + 注册进 ~/.claude/settings.json 的 PreToolUse.Bash
           （通用功能，跨项目生效；非 openspec 项目里命令不匹配即放行）。
@@ -65,6 +75,7 @@ shell 命令行的语法面是无界的（管道、环境变量、别名、嵌�
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -190,13 +201,20 @@ def deny(reason: str) -> None:
     sys.exit(0)
 
 
-def change_name(command: str) -> str:
-    """从命令里取 change 名；取不到返回空串（→ 调用方 fail-open）。"""
-    m = CHANGE_NAME_RE.search(command)
-    if not m:
-        return ""
-    name = next((g for g in m.groups() if g), "")
-    return name if CHANGE_NAME_OK_RE.match(name) else ""
+def change_names(command: str) -> list:
+    """枚举命令里**全部**有界匹配的 change 名（按出现顺序）。
+
+    任一匹配抽出的 token 不是合法 change 名（`$VAR` / 反引号 / 通配符…）⇒ 返回 `[]`
+    —— 与旧的「取不到就放行」同义，调用方据此 fail-open。
+    ⚠️ MUST NOT 退回 `search()` 只取第一个：那等于「前置一段文本即绕过」（见模块 docstring）。
+    """
+    names = []
+    for m in CHANGE_NAME_RE.finditer(command):
+        name = next((g for g in m.groups() if g), "")
+        if not CHANGE_NAME_OK_RE.match(name):
+            return []
+        names.append(name)
+    return names
 
 
 def main() -> None:
@@ -226,11 +244,30 @@ def main() -> None:
             "（FF-0：变更工件须随 feature 分支落地，merge 后 PR 完整呈现设计→实现故事）"
         )
 
-    name = change_name(command)
-    if not name:
-        sys.exit(0)  # 认不出 change 名 → 无从区分②③ → 放行（fail-open）
+    # 【枚举全部创建调用】occurrences 与 names 是**两个有界计数**：前者数「有多少处
+    # `openspec new change`」，后者数「其中有多少处读得出合法名字」。二者不等 ⇒ 至少有一处
+    # 的名字藏在展开语法里，与「多个不同名字」同构 ⇒ 一并 deny。[impl-review-fix]
+    occurrences = len(NEW_CHANGE_RE.findall(command))
+    names = change_names(command)
+    if occurrences > 1 and (len(names) != occurrences or len(set(names)) > 1):
+        deny(
+            f"FF-0 守卫：这一条命令里有 {occurrences} 处 `openspec new change`"
+            f"（读得出的 change 名：{sorted(set(names)) or '无'}）。\n"
+            "MUST 拆成独立调用，一次只创建一个变更 —— 否则前一条的判定会替后一条背书，\n"
+            "多个 change 的工件与 checkpoint 会交错落进同一段历史（stacking）。\n"
+            "请分开重跑，每条命令只含一处 `openspec new change <name>`。"
+        )
 
-    # 分支②：已在 feat/{本 change} → 放行（真幂等）。
+    if not names:
+        sys.exit(0)  # 单处调用且认不出 change 名 → 无从区分②③ → 放行（fail-open）
+    if len(set(names)) > 1:
+        deny(
+            f"FF-0 守卫：这一条命令要创建多个不同的变更 {sorted(set(names))}。\n"
+            "MUST 拆成独立调用，一次只创建一个变更（每个 change 各自一条 feature 分支）。"
+        )
+    name = names[0]
+
+    # 分支②：已在 feat/{本 change} → 放行（真幂等；**全部**匹配都等于它才走到这里）。
     if branch == f"feat/{name}":
         sys.exit(0)
 
@@ -240,6 +277,11 @@ def main() -> None:
         sys.exit(0)  # 人已拍板「就地继续」（哨兵已被消费掉，只对这一次生效）
 
     token = os.path.join(root, ACK_FILE) if root else ACK_FILE
+    # 文案里那条 `touch` 是**给人直接复制进 shell 的**，故路径 MUST 经 shell quoting：
+    # 仓库路径含空格 ⇒ touch 拆词造出两个错文件、哨兵根本不存在（逃生口不可用）；
+    # 含 `$(…)` / `&` / `;` ⇒ 复制执行还会**额外产生命令**。[impl-review-fix]
+    # `shlex.quote` 对干净路径原样返回 ⇒ 常见情形文案不变。
+    quoted_token = shlex.quote(token)
     deny(
         f"FF-0 守卫：当前在 feature 分支 `{branch}`，而你要创建的是另一个变更 `{name}`。\n"
         "MUST NOT 因「已经在 feature 分支上」就直接建——那会把两个 change 的工件与 "
@@ -249,7 +291,7 @@ def main() -> None:
         f"  b) 回 base 再切出：git checkout <base> && git checkout -b feat/{name}\n"
         "  c) 就地继续 —— 人明确拍板后，由**人**分两步敲（本守卫在命令执行【前】判定，\n"
         "     写成 `touch … && openspec …` 一条会连同 touch 一起被 deny）：\n"
-        f"       touch {token}\n"
+        f"       touch {quoted_token}\n"
         f"     然后重跑：\n"
         f"       openspec new change {name}\n"
         f"     （该哨兵用后即焚：守卫读到就删，只对下一次调用生效；\n"

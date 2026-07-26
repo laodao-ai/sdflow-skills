@@ -342,6 +342,65 @@ def test_a_readonly_dest_degrades_to_skip_and_does_not_abort_setup(fake_home):
         "install_sdflow 没跑到 —— agents 落点只读把整条安装链带崩了"
 
 
+def test_an_agent_deleted_in_the_new_checkout_is_retired_even_though_the_old_file_lives(
+        fake_home, tmp_path):
+    """🔴 复现（代码审 F3）：跨 checkout 删掉一个 agent 后，废弃定义**永久留在全局名册**。
+
+    铺设循环只接管「**当前**源目录里还在的名字」，孤儿清理只删「**悬空**的链」——
+    而「旧 checkout 里那个 .md 还在、新 checkout 已经删了它」同时落在两者之外：
+    既不接管、也不清理 ⇒ 一份**已被废弃**、却仍持有 `Bash`/`Write` 的 agent 定义，
+    对这台机器上的**所有**项目继续可见。现有用例只覆盖了跨 checkout 的**悬空**链。
+
+    修法 = installer-owned manifest（`.sdflow-agents`）：只记**本安装器铺出去的名字**，
+    下一趟清掉「manifest 里有、当前源集合里没有」的那些。
+    ⚠️ MUST NOT 放宽成「本仓路径形状的链就删」—— 那会删掉别人仓里同布局的**有效**链
+    （本文件第六格守的正是它），是真实数据丢失。manifest 的作用恰恰是把
+    「我们装的」与「碰巧同形的」分开。
+    """
+    dest = _agents_dir(fake_home)
+    env = dict(os.environ)
+    env["HOME"] = str(fake_home)
+    env.pop("SDFLOW_HOME", None)
+
+    # ① 旧 checkout（替身仓）里**多一个** agent 定义 —— 用真实文件，删了源仓也不受影响
+    farm = _symlink_farm(tmp_path)
+    legacy = farm / "sdflow-spec" / "agents" / "sdflow-legacy-agent.md"
+    legacy.write_text("---\nname: sdflow-legacy-agent\ntools: Bash, Write\n---\n旧定义\n",
+                      encoding="utf-8")
+    first = subprocess.run(["bash", str(farm / "setup.sh")], cwd=str(farm), env=env,
+                           capture_output=True, text=True, timeout=300)
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert (dest / "sdflow-legacy-agent.md").is_symlink(), "前提不成立：旧定义没铺出去"
+
+    # 别人仓里同布局的**有效**链：从头到尾 MUST 原样保留（manifest 里从来没有它）
+    live_foreign_dir = tmp_path / "someone-else-repo" / "sdflow-spec" / "agents"
+    live_foreign_dir.mkdir(parents=True)
+    (live_foreign_dir / "their-live-agent.md").write_text("third party\n", encoding="utf-8")
+    live_foreign = dest / "their-live-agent.md"
+    os.symlink(str(live_foreign_dir / "their-live-agent.md"), live_foreign)
+
+    # ② 新 checkout（真仓）里没有这个定义，而**旧 checkout 的文件仍然存在**（链有效）
+    assert legacy.is_file(), "前提不成立：旧 checkout 的源文件应当还在"
+    second = _run_setup(fake_home)
+    assert second.returncode == 0, second.stdout + second.stderr
+
+    leaked = dest / "sdflow-legacy-agent.md"
+    assert not leaked.is_symlink() and not leaked.exists(), (
+        "已废弃的 agent 定义仍留在全局名册里（旧 checkout 文件还在 ⇒ 链有效 ⇒ 孤儿清理不碰它）"
+        "\n" + second.stdout + second.stderr)
+    assert f"agents/sdflow-legacy-agent.md @ {dest}" in second.stdout, "撤下动作没进汇总"
+    assert legacy.is_file(), "清理动作把**源文件**删了 —— 只该撤下名册里的链"
+    assert live_foreign.is_symlink() and live_foreign.is_file(), \
+        "误删了别人仓里同布局的**有效**链 —— 判据放宽成了「路径形状」"
+
+    # ③ 再跑一次：不许把自己刚铺的链当废弃项扫掉（manifest 每趟重写）
+    third = _run_setup(fake_home)
+    assert third.returncode == 0, third.stdout + third.stderr
+    for name in _expected_names():
+        assert (dest / name).is_symlink() and (dest / name).is_file(), f"{name} 被误撤"
+    assert live_foreign.is_symlink() and live_foreign.is_file()
+
+
 def test_rerun_is_idempotent(fake_home):
     """④ 重跑幂等：链指向不变、不产生 skip、不产生 cleaned。"""
     first = _run_setup(fake_home)

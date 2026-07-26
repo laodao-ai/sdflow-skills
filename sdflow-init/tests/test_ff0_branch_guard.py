@@ -33,10 +33,9 @@ def ack(repo):
     (repo / ACK_REL).write_text("", encoding="utf-8")
 
 
-@pytest.fixture
-def repo(tmp_path):
-    """一个最小 git 仓，默认停在 main 分支上。"""
-    r = tmp_path / "proj"
+def _make_repo(parent, name="proj"):
+    """在 parent 下造一个最小 git 仓（停在 main）。名字可含空格 / shell 元字符。"""
+    r = parent / name
     r.mkdir()
     (r / "openspec").mkdir()
     _git(r, "init", "-q", "-b", "main")
@@ -46,6 +45,12 @@ def repo(tmp_path):
     _git(r, "add", "-A")
     _git(r, "commit", "-qm", "init")
     return r
+
+
+@pytest.fixture
+def repo(tmp_path):
+    """一个最小 git 仓，默认停在 main 分支上。"""
+    return _make_repo(tmp_path)
 
 
 def run_hook(repo, command, tool="Bash"):
@@ -314,3 +319,91 @@ def test_non_bash_tool_passes_through(repo):
 def test_outside_git_repo_fails_open(tmp_path):
     denied, _ = run_hook(tmp_path, "openspec new change add-foo")
     assert not denied
+
+
+# ── 多次创建调用：只看**第一个**匹配 = 前置文本可绕过 [impl-review-fix] ──────
+
+def test_second_creation_call_behind_a_decoy_is_denied(repo):
+    """🔴 复现（代码审 F2）：只 `search()` 第一个匹配 ⇒ 前置一段文本即绕过。
+
+    payload 在 `feat/add-sdflow-spec` 上跑：第一处匹配是 `echo` 后面那段（名字 = 当前
+    change ⇒ 判成分支②幂等放行），而 Bash 真正会执行的第二条创建的是**另一个** change。
+    实测旧实现：无 deny 输出、exit 0，第二个 change 直接落在本 change 的分支上（stacking）。
+    修法**不是**解析 shell（无界面，基准 5）——只是把「取第一个匹配」改成「枚举全部有界
+    匹配并要求一致」，判据仍是同一条有界正则。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-sdflow-spec")
+    denied, reason = run_hook(
+        repo,
+        "echo openspec new change add-sdflow-spec; openspec new change unrelated-change",
+    )
+    assert denied, "前置诱饵让第二条创建命令静默放行 —— FF-0 三分支判定被绕过"
+    assert "unrelated-change" in reason
+
+
+@pytest.mark.parametrize("cmd", [
+    "openspec new change add-foo && openspec new change add-bar",
+    "openspec new change add-bar; openspec new change add-foo",
+    "openspec new change 'add-foo' | tee /dev/null; openspec new change \"add-bar\"",
+])
+def test_multiple_distinct_change_names_are_denied(repo, cmd):
+    """一条命令里出现**多个不同** change 名 ⇒ 直接 deny 并要求拆成独立调用。
+
+    连当前分支就叫 `feat/add-foo` 的幂等形态也不放行：放行判据是「**全部**匹配都等于
+    当前 change」，只要还有第二个名字，这一次调用就不是幂等的。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-foo")
+    denied, reason = run_hook(repo, cmd)
+    assert denied, f"多个 change 名居然放行：{cmd!r}"
+    assert "拆" in reason
+
+
+def test_repeated_identical_change_name_stays_idempotent(repo):
+    """全部匹配都等于当前 change ⇒ 仍是分支②真幂等（收紧 MUST NOT 误伤它）。"""
+    _git(repo, "checkout", "-qb", "feat/add-foo")
+    denied, _ = run_hook(repo, "openspec new change add-foo || openspec new change add-foo")
+    assert not denied
+
+
+def test_multiple_calls_with_an_unreadable_name_are_denied(repo):
+    """多处创建调用但只读得出一部分名字 ⇒ deny（**单次**调用认不出仍 fail-open）。
+
+    `$(...)`/变量展开的那一处压根匹配不上有界正则 ⇒ 若沿用「只看读得出的那些」，
+    读不出的那一条就是一个与 F2 同形的绕过口。判据是**两个有界计数**之差，
+    MUST NOT 演化成解析 shell。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-foo")
+    denied, reason = run_hook(
+        repo, "openspec new change add-foo; openspec new change $(cat /tmp/n)")
+    assert denied, "读不出名字的第二条创建调用被静默放行"
+    assert "拆" in reason
+
+
+# ── deny 文案里的 touch 命令必须经 shell quoting [impl-review-fix] ───────────
+
+@pytest.mark.parametrize("dirname", [
+    "pro j",                       # 空格：不 quote 时 touch 会造出两个错文件
+    "pro;j $(id) &x",              # shell 元字符：复制执行还会**额外产生命令**
+])
+def test_escape_hatch_command_is_shell_quoted(tmp_path, dirname):
+    """🔴 复现（代码审 F7）：仓库路径含空格/元字符时，deny 文案给的 `touch` 不可用。
+
+    端到端跑一遍人的动作：把文案里那条 touch 原样丢给 shell，必须**恰好**造出哨兵，
+    且哨兵随后真的能放行一次。旧实现（裸 f-string 拼路径）在这两种路径下：
+    空格 ⇒ 造出两个错文件、哨兵不存在；元字符 ⇒ `$(id)` 被展开、`&` 起后台命令。
+    """
+    repo = _make_repo(tmp_path, dirname)
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    _, reason = run_hook(repo, "openspec new change add-foo")
+    touch_cmd = next(ln.strip() for ln in reason.splitlines()
+                     if ln.strip().startswith("touch "))
+
+    before = set(os.listdir(repo / "openspec"))
+    subprocess.run(touch_cmd, shell=True, check=True, cwd=str(repo), timeout=30)
+    assert (repo / ACK_REL).is_file(), \
+        f"文案给的 touch 命令没造出哨兵（路径未经 quoting）：{touch_cmd!r}"
+    assert set(os.listdir(repo / "openspec")) - before == {".ff0-ack"}, \
+        f"touch 命令造出了预期之外的文件（路径被 shell 拆词）：{touch_cmd!r}"
+
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert not denied, "哨兵造出来了却没放行"

@@ -194,7 +194,10 @@ openspec instructions <artifact> --change "<name>" --json
 
 1. **严格位于** `openspec/changes/<name>/` 之内（含边界：`openspec/changes/<name>-evil/` 不算在内）；
 2. 落在 **artifact allowlist**：`proposal.md` / `design.md` / `tasks.md` / `specs/**/*.md`；
-3. **不是 symlink**（拒绝 symlink 逃逸）。
+3. **从仓根到目标逐组件都不是 symlink**（拒绝 symlink 逃逸）。只查目标自身不够：
+   `openspec` / `changes` / `<name>` 任一层是指向仓外的软链时，1 与 2 是**纯词法**判定、
+   照样成立，写入却落到仓外。**含 change 目录自身及其每一级祖先**；再核验解析后的
+   change 目录仍在解析后的仓根内。[impl-review-fix]
 
 任一不满足 ⇒ **拒写并返回 blocker**，MUST NOT「先写了再说」、MUST NOT 自行改写成一个看起来
 更合理的路径。

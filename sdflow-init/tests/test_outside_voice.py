@@ -172,7 +172,10 @@ def test_version():
     # 1.5.1：add-sdflow-spec Task 4（SA-12 S2）—— 新增 `secret-scan --context-file <f>` 子命令，
     #   把既有 secret_scan 暴露给【非 voice】的出境端点（/sdflow-spec 派联网子代理前扫最小净化
     #   查询），复用同一份规则表与同一份脱敏口径；文件不可读 fail-closed exit 2（不兜底成干净）。
-    assert r.stdout.strip() == "outside-voice.sh 1.5.1"
+    # 1.5.2：code-review-fix（F1）—— secret_scan 单独捕获 grep 返回码：rc≥2（扫描器
+    #   自身执行失败）不再与「无匹配」同形被判成干净，一律 fail-closed；四个调用点统一
+    #   走 secret_scan_or_exit（命中 exit 3 / 没扫成 exit 2），MUST NOT 再 `|| exit 3`。
+    assert r.stdout.strip() == "outside-voice.sh 1.5.2"
 
 
 # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────

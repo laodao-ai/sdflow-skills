@@ -42,6 +42,7 @@
 #   secret-scan --context-file <f>
 #     stdout: 无                                                exit 0=干净 | 3=命中（拒发）
 #                                                                    | 2=用法错 / 文件不存在或不可读
+#                                                                        / **扫描器自身执行失败**
 #     stderr: 命中时每条规则一行「secret-hit（拒发）: 规则=<name> 行=<行号,…>」
 #             （与 exec 路径同一份 secret_scan ⇒ 同一份规则、同一份脱敏口径：MUST NOT 打印命中原行）
 #     【为什么有这个子命令】〔add-sdflow-spec · SA-12 S2〕：voice 不是唯一的数据出境端点——
@@ -49,8 +50,11 @@
 #       该场景 MUST 复用本文件既有的 secret_scan（host-adaptive-execution「出境安全三件套」
 #       的同一条语义），MUST NOT 在别处重写一个扫描器（第二份规则表 = 第二个漂移面，
 #       且新写的那份必然先漏掉这里已经踩过的坑）。
-#     🔴 文件不存在/不可读 ⇒ exit 2，**MUST NOT 兜底成「干净」**：secret_scan 内部 grep 吞掉
-#       文件错误后返回 0，直接调用它会把「压根没扫」读成「扫过了，干净」= 静默放行。
+#     🔴 文件不存在/不可读 ⇒ exit 2，**MUST NOT 兜底成「干净」**：把「压根没扫」读成
+#       「扫过了，干净」= 静默放行。**同一条纪律覆盖「扫描器自己跑挂了」**〔F1 · impl-review-fix〕：
+#       grep 的 rc≥2（命令错误）曾被管道尾端吞掉、与「无匹配」同形 ⇒ 现分别捕获，扫描器失败
+#       一律 exit 2。调用方 SHALL 按既有 catch-all 处置（非 0 一律拒发，MUST NOT 把「不是 3」
+#       读成「没命中」）。
 #   preflight
 #     stdout: "ready" | "not_installed" | "missing-deps"         exit 0（$SDFLOW_VOICE_RUNNER 非空时）
 #             探测目标 = $SDFLOW_VOICE_RUNNER 的 CLI（MUST NOT 硬编码 codex）
@@ -176,7 +180,7 @@
 #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
 set -u
 
-OV_VERSION="outside-voice.sh 1.5.1"
+OV_VERSION="outside-voice.sh 1.5.2"
 
 # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
 # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
@@ -220,8 +224,9 @@ usage() {
 }
 
 secret_scan() {  # $1=file；命中只报"规则类型+行号"到 stderr（D8 脱敏：MUST NOT 打印命中
-                 # 整行/匹配值——防密钥经 context 出境，边界指令管不住 SKILL 主动喂），返回 1
-  local file="$1" hit=false entry name pattern lines
+                 # 整行/匹配值——防密钥经 context 出境，边界指令管不住 SKILL 主动喂）
+                 # 返回码：0=干净 | 1=命中（拒发）| 2=**扫描器自身失败**（没扫成 ≠ 干净）
+  local file="$1" hit=false entry name pattern raw rc lines
   # 规则名:正则 —— 逐条独立探测，只取行号不取内容（grep 匹配的原文只在内部管道中
   # 短暂经过、从不落进任何输出流，见下方 cut 丢弃内容列）
   local rules=(
@@ -237,16 +242,44 @@ secret_scan() {  # $1=file；命中只报"规则类型+行号"到 stderr（D8 �
     name="${entry%%:*}"
     pattern="${entry#*:}"
     # `--` 防「以 - 开头的正则」(如 private-key 规则) 被 grep 误当成选项解析 [impl-review-fix]
-    lines=$(grep -nE -- "$pattern" "$file" 2>/dev/null | head -3 | cut -d: -f1 | tr '\n' ',' | sed 's/,$//')
-    if [ -n "$lines" ]; then
-      hit=true
-      printf 'secret-hit（拒发）: 规则=%s 行=%s\n' "$name" "$lines" >&2
+    #
+    # 🔴 **grep 的返回码 MUST 单独捕获，MUST NOT 藏在管道里** [impl-review-fix]
+    #   旧版 `lines=$(grep … | head | cut | tr | sed)` 的 `$?` 只反映管道尾端的 sed，而
+    #   grep 的 rc≥2（**命令错误**：文件不可读、非法正则、坏 locale、二进制被沙箱拦…）
+    #   与 rc=1（真·无匹配）产出**同一个空 `lines`** ⇒ 扫描器坏掉时函数 `return 0` = 判干净
+    #   = 出境直接放行（实测：注入恒返回 2 的 grep 后，`secret-scan` 对任意文件都得 rc=0）。
+    #   这与 `_ov_bytes_at` 的 M2 修法同族：**成败信号不经管道尾端转手**。
+    #   ∴ 三分：0=命中 / 1=无匹配 / ≥2=命令错误 ⇒ 整个扫描 fail-closed 返回 2。
+    raw=$(grep -nE -- "$pattern" "$file" 2>/dev/null)
+    rc=$?
+    if [ "$rc" -ge 2 ]; then
+      printf 'secret-scan 扫描器失败（fail-closed 拒发）: 规则=%s grep_rc=%s 文件=%s\n' \
+        "$name" "$rc" "$file" >&2
+      return 2
     fi
+    [ "$rc" -eq 0 ] || continue   # rc=1：真·无匹配
+    lines=$(printf '%s\n' "$raw" | head -3 | cut -d: -f1 | tr '\n' ',' | sed 's/,$//')
+    hit=true
+    printf 'secret-hit（拒发）: 规则=%s 行=%s\n' "$name" "$lines" >&2
   done
   if [ "$hit" = true ]; then
     return 1
   fi
   return 0
+}
+
+# 三个调用点共用的处置〔F1 · impl-review-fix〕。
+# 🔴 **MUST NOT 写回 `secret_scan … || exit 3`**：那把「扫描器坏了、压根没扫成」与
+#   「扫到了密钥」报成同一个码 ⇒ 归因错误（操作者会去找一个不存在的密钥），
+#   且一旦有人把 3 特判掉，扫描器故障就又静默放行了。
+#   0=干净放行 | 1=命中 → exit 3（既有 secret-hit 码）| 其余 → exit 2（没扫成 ≠ 干净）。
+secret_scan_or_exit() {  # $1=file
+  secret_scan "$1"
+  case $? in
+    0) return 0 ;;
+    1) exit 3 ;;
+    *) echo "secret-scan 未能完成扫描 ⇒ 拒发（没扫成 ≠ 干净）: $1" >&2; exit 2 ;;
+  esac
 }
 
 emit_frame() {
@@ -402,7 +435,7 @@ render_prompt() {  # $1=context file → stdout 完整 prompt；stderr 含 OV_TR
                    # （调用方按【子串命中】取，MUST NOT 假定它是 stderr 末行——见头部契约 :52）
   local ctx="$1" size truncated=false
   [ -f "$ctx" ] && [ -r "$ctx" ] || { echo "context file not found/unreadable: $ctx" >&2; exit 2; }
-  secret_scan "$ctx" || exit 3
+  secret_scan_or_exit "$ctx"
   # 重定向顺序同 utf8_tail_skip〔S1/S2〕：`2>/dev/null` MUST 在 `< "$ctx"` 之前，否则打开失败的
   # 报错由 shell 打进契约通道。这里【不】兜底成 0：size 是截断判据本身，取不到就【不知道该不该
   # 截断】——静默走 else 分支会把超限 context 全量 cat 出去（正是本 change 要消灭的静默失效）。
@@ -701,7 +734,7 @@ do_exec() {  # $1=context file  $2=timeout 秒
   trap 'ov_cleanup TERM; exit 143' TERM
   trap 'ov_cleanup HUP;  exit 129' HUP
   # 预扫：让 secret 证据落真实 stderr（重定向会吞 render_prompt 内部的报告——review fix）
-  secret_scan "$ctx" || exit 3
+  secret_scan_or_exit "$ctx"
   # 子壳隔离〔N1〕：render_prompt 内部的 fail-loud 分支是 `exit`（不可读 / size 取不到 / secret 命中）。
   # 不套子壳时那个 exit 会【直接终止整个脚本】⇒ 下一行的回灌 cat 永不执行，且 EXIT trap 的
   # `rm -rf $workdir` 抹掉 render.meta ⇒ 操作者拿到 rc=2 且 stderr 全空（正是本 change 要消灭的
@@ -795,7 +828,7 @@ do_exec() {  # $1=context file  $2=timeout 秒
   # A1 出境侧 secret_scan：入境 secret_scan 只扫 context，runner 回传的 findings【不扫 = 原样 exfil】
   # （注入成功后经返回通道带出密钥）。两 runner 路径共用此 emit 点，一处兜底：回传含密钥形状 →
   # 拒发 exit 3（D8 脱敏 stderr、密钥 MUST NOT 进 stdout findings 通道），语义同入境 secret-hit。
-  secret_scan "$workdir/last-message.md" || exit 3
+  secret_scan_or_exit "$workdir/last-message.md"
   cat "$workdir/last-message.md"
 }
 
@@ -847,7 +880,7 @@ case "$cmd" in
     [ -n "$ctx" ] || usage
     # fail-closed：不可读 ≠ 干净（见文件头该子命令的契约注释）
     [ -f "$ctx" ] && [ -r "$ctx" ] || { echo "context file not found/unreadable: $ctx" >&2; exit 2; }
-    secret_scan "$ctx" || exit 3
+    secret_scan_or_exit "$ctx"
     ;;
   render-prompt|exec)
     ctx=""; tmo=300

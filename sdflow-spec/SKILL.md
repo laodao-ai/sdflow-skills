@@ -5,8 +5,8 @@ description: >
   阶段一「产 spec」单一入口——把 澄清（A）→ 拷问（B）→ 生成（C）三相位编排成一次连续跑，产出
   标准四件套（proposal / design / specs / tasks）+ 一份承重的 `decision-memo.md`。**拷问结构性
   前置于成文**：改想法比改四份成文便宜，且错误 premise 一旦成文就会被后续多镜评审当成既定框架。
-  主 session 亲自做全部判断（澄清 / 拷问 / 纪要 / 终审）；相位 B 起手就建分支与 change 目录，
-  承重约束站稳一条就增量落盘一条 ⇒ `/clear` 与 session 崩溃无损。出口原样贴
+  主 session 亲自做全部判断（澄清 / 拷问 / 纪要 / 终审）；相位 B 起手就建分支、change 目录与草稿纪要，
+  承重约束站稳一条就增量落盘一条 ⇒ `/clear` 无损，崩溃只丢「上一次保存之后」那一段。出口原样贴
   `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:explore` + `opsx:ff` + `/grill-with-docs`
   三入口拼接。**只能人触发**（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
 ---
@@ -157,9 +157,8 @@ description: >
 三相位一次连续跑，**中途只与人对话、不派子代理做判断**：
 
 ```
-A 澄清 ──共识初成──▶ B 拷问 ──共识+承重约束全站稳──▶ C 生成 ──▶ 终审 ──▶ 出口序列
-（一次一问）        （起手即建分支+change     （逐产物，读强制阅读
-                     目录，约束站稳即落盘）      清单，写后双判）
+A 澄清（一次一问）──共识初成──▶ B 拷问（起手即建分支 + change 目录 + 草稿纪要，约束站稳即落盘）
+──共识+承重约束全站稳──▶ C 生成（逐产物，读强制阅读清单，写后双判）──▶ 终审 ──▶ 出口序列
 ```
 
 > **两条铁律**：
@@ -211,24 +210,26 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 
 ### 0.3 重入探测（MUST 在相位 A 之前）
 
-探测 ① 当前分支名 ② `openspec/changes/` 下是否存在「含 `decision-memo.md` 但
-`openspec status --change <name> --json` 的 `isComplete` 为 false」的 change。
+探测 ① 当前分支名（`feat/{change}` ⇒ 取 `{change}`）② `openspec/changes/` 下的在途目录。命中任一
+⇒ 对该 change **无条件**读 `openspec status --change <name> --json` 的 `isComplete`，三态分治
+（未命中 → 正常进入相位 A）。「继续还是新开」**必须问人**：两种意图导致**实质不同的产物**。
 
-- **命中** → **问人**：「检测到在途 change `<name>`（分支 `<branch>`，纪要已有 N 条承重约束），
-  继续它还是新开一个？」——两种意图导致**实质不同的产物**，属必须确认的那类。
-  确认继续 ⇒ 跳过相位 A，核验纪要有效性（见 C.1）后进入相位 C。
-- **未命中** → 正常进入相位 A。
+| `isComplete` | 纪要 | 态 | 动作 |
+|---|---|---|---|
+| `false` | **无** | `B-draft`（草稿都没落成） | 继续 ⇒ **回相位 B**：A 的共识随上下文丢了，先重述锚点纪要再拷问 |
+| `false` | **有** | `B-draft`/`B-finalized`/`C-partial` | 问话附分支名 + 纪要已有 N 条承重约束；继续 ⇒ 跳过 A，核验纪要（C.1）后进入 C |
+| `true` | 任意 | `complete` | **拒绝重生成**，呈现该 change 与出口序列；要改走评审或新 change |
+
+🔴 **MUST NOT 拿「有没有 `decision-memo.md`」当探测前提**——B 起手建完目录到第一次落盘之间崩溃，
+留下的正是第一行那种**没有纪要**的在途 change；**MUST NOT 只探 `isComplete=false`**，那让
+`complete` 只剩一句声明、没有对应的操作判定。
 
 ### 0.4 相位状态机
 
-```
-absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B-finalized ──生成──▶ C-partial ──全产物过 validate──▶ complete
-   ▲                       │                        │                        │
-   └───删分支即净──────────┘                        └──memo 身份不符─────────┘（退回 B-draft）
-```
+`absent ──B起手①②③④──▶ B-draft ──收敛⑤⑥──▶ B-finalized ──生成──▶ C-partial ──全产物过 validate──▶ complete`
 
-`B-draft` 是**可探测**状态（草稿 memo 已在 change 目录内，git 可见）。
-**`complete` 态 SHALL 拒绝重生成。**
+回边：删分支即净 ⇒ `absent`；纪要身份不符 ⇒ 退回 `B-draft`。`B-draft` 起于 B.1 ④（草稿纪要
+一落盘，change 目录内 git 可见 ⇒ **可探测**）。**`complete` 态 SHALL 拒绝重生成**，判定见 0.3 第三行。
 
 ---
 
@@ -253,8 +254,7 @@ absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B
 
 阶段一的检索与生成**均由主 session 亲做**（薄编排形态，这是本 skill 的正式交付形态之一）。
 🔴 **阶段二外派当前未启用**（验收门判回退，见「外派协议」节）——下列阈值仅在**人明确指示启用后**适用：
-**同类任务累计工具调用 > 5 次 → 下次同类改派**（事后可复核形式）。
-MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定**的判据。
+**同类任务累计工具调用 > 5 次 → 下次同类改派**（事后可复核形式）。MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定**的判据。
 
 **判断永远不外派**：方案推荐、承重约束是否站稳、纪要撰写、终审裁决 —— 原材料是对话共识，只有主 session 持有。
 
@@ -305,7 +305,7 @@ MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定*
 - `exit 0` ⇒ 放行（**只有这一个码是「扫过了且干净」**）；
 - `exit 3` ⇒ **拒发，且 MUST NOT fallback** —— 既不改由主 session 自己发出去、也不换个 agent 发。
   命中意味着**这条查询本身不该出境**，换通道不改变这一点。按三要素报告并**重写查询**；
-- `exit 2` ⇒ 文件不可读 / 用法错 ⇒ **同样拒发**（**没扫成 ≠ 干净**）；
+- `exit 2` ⇒ 文件不可读 / 用法错 / **扫描器自身跑挂** ⇒ **同样拒发**（**没扫成 ≠ 干净**）；
 - 🔴 **其余任何非 0 退出码一律拒发**（catch-all；`127` = helper 未装/不可执行，是 pull 与
   setup 之间 skew 窗口的高发码）。**MUST NOT 把「不是 3」读成「没命中」。**
 
@@ -319,7 +319,7 @@ MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定*
 
 ## 相位 B · 拷问
 
-### B.1 起手三步（**前移，不在收敛点**；`B-draft` 才有落点）
+### B.1 起手四步（**前移，不在收敛点**；`B-draft` 才有落点）
 
 **① 工作树前置检查**
 
@@ -356,13 +356,19 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 `new change` 非零退出 ⇒ 检查 `.openspec.yaml` / `openspec status` / 新建路径，
 **精确报告 partial state，MUST NOT 假定其原子性**。
 
+**④ 立即落最小草稿纪要**（B.4 的第一个保存点前移到这里）
+
+目录一建成就**当场**写出 `decision-memo.md`：身份 frontmatter（`schema_version` / `change` /
+`branch` / `generated_at`；`decision_hash` **留空**——定稿才算，见 B.7 ⑤）+ 空的 `## 承重约束` /
+`## 拍板决策`。🔴 少了这一步，③ 与 B.4 首次落盘之间的崩溃会留下一个**没有纪要的在途 change**，
+而重入探测以纪要为前提就认不出它（0.3）。草稿必然过不了 C.1 判 4 ⇒ 走那里既有的「缺失 ⇒ 退回 B 补定稿」。
+
 ### B.2 锚点纪要（对话内，不落盘）
 
-起手三步跑完，**主 session 亲笔**把 A 的共识压缩成一份**锚点纪要**，在对话内呈现给人。
+起手四步跑完，**主 session 亲笔**把 A 的共识压缩成一份**锚点纪要**，在对话内呈现给人。
 它的唯一作用是**当拷问的文本靶**——有形状才攻得动。
 
-> 锚点纪要 ≠ 决策纪要。前者是**待推翻的靶**（对话内、不落盘）；后者是**拷问后的存活残余 + 拷问产出**
-> （落盘、承重件）。二者非同一物，见 `references/decision-memo-schema.md`。
+> 锚点纪要 ≠ 决策纪要。前者是**待推翻的靶**（对话内、不落盘）；后者是**拷问后的存活残余 + 拷问产出**（落盘、承重件）。二者非同一物，见 `references/decision-memo-schema.md`。
 
 ### B.3 拷问技法
 
@@ -399,14 +405,14 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
 [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
 
-### B.7 收敛两步
+### B.7 收敛两步（⑤⑥）
 
-**④ 纪要定稿** —— 补齐 frontmatter 身份字段：`schema_version` / `change` / `branch` /
+**⑤ 纪要定稿** —— 补齐 frontmatter 身份字段：`schema_version` / `change` / `branch` /
 `generated_at` / `decision_hash`。`decision_hash` MUST 用
 [`references/decision-memo-schema.md`](./references/decision-memo-schema.md) §2 的**那一条命令**
 算（C.1 判 4 重算时跑的是同一条 ⇒ 定义即命令，无两端口径失配面）。
 
-**⑤ checkpoint**（先核工作树，见「checkpoint 纪律」）：
+**⑥ checkpoint**（先核工作树，见「checkpoint 纪律」）：
 
 ```bash
 ~/.sdflow/hack/checkpoint-commit.sh sdflow-spec-grill "相位 B 收敛：decision-memo 定稿"
@@ -461,9 +467,9 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
    任一缺失或类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，**MUST NOT 重试同一调用**
    （schema 错误重试只会再失败一次，且掩盖真因）。
 3. **路径净化**（`resolvedOutputPath` 来自第三方 CLI，直接当写入目标 = confused deputy）：
-   canonicalize 后 MUST 满足 —— ① 严格位于 `openspec/changes/<name>/` 内 ② 落在
-   artifact allowlist（`proposal.md` / `design.md` / `tasks.md` / `specs/**/*.md`）
-   ③ **不是 symlink**（拒绝 symlink 逃逸）。任一不满足 ⇒ 拒写并 fail-closed 报告。
+   canonicalize 后 MUST 满足 —— ① 严格位于 `openspec/changes/<name>/` 内 ② 落在 artifact
+   allowlist（`proposal.md` / `design.md` / `tasks.md` / `specs/**/*.md`）③ **从仓根到目标
+   逐组件都不是 symlink**（含 change 目录自身及其祖先；拒绝 symlink 逃逸）。任一不满足 ⇒ 拒写并 fail-closed 报告。
 4. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
 5. **写后核验（C.4）**。
 
@@ -502,14 +508,12 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
    发现冲突 ⇒ 修正并注明；**MUST NOT 因「二者各自与纪要一致」而放过**。
 3. **proposal / design / tasks 未截断** —— C.4 的机械门只够得着 `specs/`（见上），这三份人判。
 
-**中间态判据**：「内容都在、但论证强度被稀释」是自然语言压缩的高频结果。判据为——
-纪要中「**砍掉的候选 + 砍的理由**」在产物里**完全消失**才算判断性偏差；措辞压缩但候选与理由
-仍可追溯 ⇒ **放过**。措辞与风格差异一律放过，不进报告。
+**中间态判据**：「内容都在、但论证强度被稀释」是自然语言压缩的高频结果。判据为——纪要中
+「**砍掉的候选 + 砍的理由**」在产物里**完全消失**才算判断性偏差；措辞压缩但候选与理由仍可追溯 ⇒ **放过**。措辞与风格差异一律放过，不进报告。
 
 **判断性偏差直接修改产物**，并在完成报告中注明改了什么。
 
-🔴 **纪要 MUST NOT 并入 design.md**：`design.md` 的 `## Decisions` 只留一行指向
-`decision-memo.md` 的指针。理由见 `references/decision-memo-schema.md` §5。
+🔴 **纪要 MUST NOT 并入 design.md**：`design.md` 的 `## Decisions` 只留一行指向 `decision-memo.md` 的指针。理由见 `references/decision-memo-schema.md` §5。
 
 终审后按 `status` + `validate --strict` **复核全部产物完成且合格**，再打 checkpoint：
 
@@ -571,9 +575,7 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 ```
 
 **理由只引两条**（这两条构成对 `workflow.md` G1「全流程不用 `/clear`」的**具名例外**）：
-
-1. **cache 按模型隔离** —— 拖着旧上下文切档 = 全价重付。
-2. **产 / 审错档纪律** —— 阶段一与阶段二的合适档位不同，换档是本例外的真实动因。
+① **cache 按模型隔离** —— 拖着旧上下文切档 = 全价重付；② **产 / 审错档纪律** —— 阶段一与阶段二的合适档位不同，换档是本例外的真实动因。
 
 🔴 **MUST NOT 引用「主审裁决需冷视角」** —— 该论据已被 G1 正面回答（独立性由 fan-out 的
 fresh 子代理提供，不由 `/clear` 提供）〔A-3〕。

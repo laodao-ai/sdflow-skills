@@ -31,10 +31,26 @@ is_our_marker_copy() {  # $1 = 目录路径
   return 1
 }
 
+# ─── `set -e` 面治：外部命令**裸调用**失败 = 整个 setup.sh 当场中止 ─────────
+# 🔴 后果不是「少装一件」，而是【这一趟什么都没装完】：stdout 只剩一行裸 `ln:`/`cp:` 错误，
+#   没有汇总，且 `~/.sdflow/` 的 canonical 与 hack 脚本（resolve-models.sh /
+#   outside-voice.sh / checkpoint-commit.sh）全不在位 —— 所有 sdflow skill 的第零步都依赖它们。
+# 触发面不止「权限/只读」：`ln -sf` **不是单一系统调用**（内部 unlink → symlink 两步），
+#   两个 setup.sh 并发铺同一个 HOME 时后者拿到 EEXIST（实测 4 轮命中 2 轮，
+#   一个进程 EXIT:1 + 一行 `ln: …: File exists`）。并发是真实场景：`/sdflow-upgrade`
+#   与手敲 setup 撞上、两个 checkout 同时装。
+# ∴ 全文取向统一为 `install_agents()` 早已用的那一条：**失败降级为 skipped[] + 汇总**，
+#   MUST NOT 让 `set -e` 把整条安装链带崩。[impl-review-fix]
+# ⚠️ 这**不是**放宽所有权守卫：谁能被覆盖仍由上面的 `-L` / marker / readlink 判据决定，
+#   本节只管「判定放行之后，那条命令跑挂了怎么办」。
+
 # ─── Install all skills into one destination ─────────────────
 install_into() {
   local dest="$1"
-  mkdir -p "$dest"
+  if ! mkdir -p "$dest" 2>/dev/null; then
+    skipped+=("skills @ $dest — 落点建不出来（被占为普通文件？权限？），未铺设")
+    return 0
+  fi
   for skill_dir in "$REPO_DIR"/*/; do
     [ -f "$skill_dir/SKILL.md" ] || continue
     local skill_name target
@@ -48,9 +64,15 @@ install_into() {
         continue
       fi
       if [ -d "$target" ] && is_our_marker_copy "$target"; then
-        rm -rf "$target"
+        if ! rm -rf "$target" 2>/dev/null; then
+          skipped+=("$skill_name @ $dest — 旧拷贝删不掉（只读？占用？），未更新")
+          continue
+        fi
       fi
-      cp -r "$skill_dir" "$target"
+      if ! cp -r "$skill_dir" "$target" 2>/dev/null; then
+        skipped+=("$skill_name @ $dest — 拷贝失败（落点只读？磁盘满？），未铺设")
+        continue
+      fi
       git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null > "$target/.sdflow-skills" || echo "unknown" > "$target/.sdflow-skills"
       installed+=("$skill_name @ $dest")
     else
@@ -59,13 +81,20 @@ install_into() {
       # tool's skill of the same name).
       if [ -e "$target" ] && [ ! -L "$target" ]; then
         if is_our_marker_copy "$target"; then
-          rm -rf "$target"
+          if ! rm -rf "$target" 2>/dev/null; then
+            skipped+=("$skill_name @ $dest — 旧 marker 拷贝删不掉（只读？占用？），未接管")
+            continue
+          fi
         else
           skipped+=("$skill_name @ $dest")
           continue
         fi
       fi
-      ln -snf "$REPO_DIR/$skill_name" "$target"
+      # 裸 `ln -snf` 在此失败即中止全脚本（并发 EEXIST / 落点只读）——见本节顶部注释。
+      if ! ln -snf "$REPO_DIR/$skill_name" "$target" 2>/dev/null; then
+        skipped+=("$skill_name @ $dest — 软链建不出来（落点只读？与另一个 setup 并发？），未铺设")
+        continue
+      fi
       installed+=("$skill_name @ $dest")
     fi
   done
@@ -107,7 +136,10 @@ cleanup_orphans() {
         gone=1                                          # Windows marker copy, source gone
       fi
       if [ "$gone" -eq 1 ]; then
-        rm -rf "$dest/$entry_name"
+        if ! rm -rf "$dest/$entry_name" 2>/dev/null; then
+          skipped+=("$entry_name @ $dest — 孤儿链清不掉（落点只读？权限？），未清理")
+          continue
+        fi
         cleaned+=("$entry_name @ $dest")
       fi
     fi
@@ -127,6 +159,20 @@ cleanup_orphans() {
 #   $sdflow/workflow 时 readlink 的结果也只用于【打印告警】、不作判据。
 #   这里必须 readlink 确认指向本仓才接管 —— 因为 ~/.claude/agents/ 是【全局命名空间】，
 #   任何插件或别的工具都可能在里面放同名定义，覆盖掉就是数据丢失。
+#
+# 【为什么还要一份 installer-owned manifest】[impl-review-fix]
+#   上面两条判据（接管「当前源里还在的名字」+ 清理「悬空的链」）合起来仍漏掉一格：
+#   **旧 checkout 里那个 .md 还在、而新 checkout 已经把它删了** —— 名字不在当前源集合里
+#   ⇒ 进不了接管循环；链指向的文件仍存在 ⇒ 进不了悬空清理。于是一份**已被废弃**、
+#   却仍持有 `Bash`/`Write` 的定义，对这台机器上所有项目继续可见，且永远不会被撤下。
+#   ∴ 每趟把「本安装器铺出去的名字」写进 `$dest/.sdflow-agents`，下一趟撤掉
+#   「manifest 里有、当前源集合里没有」的那些。
+#   🔴 判据 MUST 是「**我们装的**」而不是「路径形状像我们的」：别人仓里同布局的**有效**链
+#     MUST NOT 被碰（那是真实数据丢失，见 cleanup_agent_orphans 的「承认的代价」）。
+#   诚实边界：**首趟**（升级到本版本后的第一次运行）盘上还没有 manifest ⇒ 撤不出任何废弃项；
+#     一趟之后自愈。人手删掉 manifest 亦然。这是可接受的一次性窗口，MUST NOT 声称零窗口。
+AGENTS_MANIFEST=".sdflow-agents"
+
 install_agents() {
   local src_dir="$REPO_DIR/sdflow-spec/agents"
   local dest="$HOME/.claude/agents"
@@ -153,8 +199,10 @@ install_agents() {
   fi
 
   # 源目录整体消失（人手删掉 / 被回滚掉一半）⇒ 不铺设，但**清理照跑**。
+  # 当前源集合为空 ⇒ manifest 里记着的全都是废弃项，一并撤下。
   if [ ! -d "$src_dir" ]; then
-    cleanup_agent_orphans "$dest"
+    cleanup_agent_orphans "$dest" ""
+    write_agents_manifest "$dest"
     return 0
   fi
 
@@ -168,6 +216,7 @@ install_agents() {
   }
 
   local f name target link
+  local -a laid=()          # 本趟真正铺出去的名字 → 写进 manifest（skip 掉的不算）
   for f in "$src_dir"/*.md; do
     [ -f "$f" ] || continue
     name="$(basename "$f")"
@@ -203,18 +252,61 @@ install_agents() {
       continue
     fi
     installed+=("agents/$name @ $dest")
+    laid+=("$name")
   done
 
-  cleanup_agent_orphans "$dest"
+  # 顺序不可换：清理先读【上一趟的】 manifest，写入才覆盖成这一趟的。
+  cleanup_agent_orphans "$dest" "$src_dir"
+  write_agents_manifest "$dest" "${laid[@]}"
+}
+
+# 名册快照：把「本安装器这一趟铺出去的名字」原子写进 $dest/.sdflow-agents（每行一个）。
+# 写不成 ⇒ 记一笔并继续：后果只是下一趟识别不出废弃定义（退回本次修复前的行为），
+# MUST NOT 让 `set -e` 把整条安装链带崩（同「set -e 面治」节）。
+write_agents_manifest() {
+  local dest="$1"; shift
+  [ -d "$dest" ] || return 0          # 落点不存在 ⇒ 无名册可言，也不该为它凭空建目录
+  local tmp="$dest/$AGENTS_MANIFEST.tmp$$"
+  if printf '%s\n' "$@" > "$tmp" 2>/dev/null && mv -f "$tmp" "$dest/$AGENTS_MANIFEST" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp" 2>/dev/null || true
+  skipped+=("agents manifest @ $dest — 写不出来（落点只读？权限？），下一趟识别不出废弃定义")
 }
 
 # 孤儿清理：本仓装出去的软链，源 .md 已删 ⇒ 悬空 ⇒ 清掉。
 # 🔴 **独立成函数、由 install_agents 的两条出路各调一次**——因为「源目录整体没了」
 #   恰恰是它最该跑的那一刻（见 install_agents 开头）。
 cleanup_agent_orphans() {
-  local dest="$1"
+  local dest="$1" src_dir="$2"     # $2 = 当前源目录（空串 = 源集合为空）
   # 落点本身不存在 ⇒ 无链可清（且不该为清理而凭空建目录）。
   [ -d "$dest" ] || return 0
+
+  # ── (0) manifest 驱动：本安装器上一趟铺过、而**当前源集合里已没有**的名字 ⇒ 撤下 ──
+  #   这一格专治「链仍有效」的废弃定义（旧 checkout 的 .md 还在），下面那一格只管悬空链。
+  #   三道守卫缺一不可：① 名字必须是**裸文件名**（manifest 被写坏时不许变成任意路径删除）；
+  #   ② 落点必须是**软链**（真实文件 = 别人后来放的，不碰）；③ 链指向必须是本仓布局
+  #   （与接管判据同一条路径形状）。
+  local manifest="$dest/$AGENTS_MANIFEST" mname mtarget mlink
+  if [ -f "$manifest" ]; then
+    while IFS= read -r mname; do
+      [ -n "$mname" ] || continue
+      case "$mname" in */*|.|..) continue ;; esac
+      if [ -n "$src_dir" ] && [ -f "$src_dir/$mname" ]; then continue; fi   # 当前源里还有 ⇒ 不是废弃项
+      mtarget="$dest/$mname"
+      [ -L "$mtarget" ] || continue
+      mlink="$(readlink "$mtarget" 2>/dev/null || true)"
+      case "$mlink" in
+        */sdflow-spec/agents/"$mname") : ;;
+        *) continue ;;
+      esac
+      if ! rm -f "$mtarget" 2>/dev/null; then
+        skipped+=("agents/$mname @ $dest — 废弃定义撤不掉（落点只读？权限？），未清理")
+        continue
+      fi
+      cleaned+=("agents/$mname @ $dest")
+    done < "$manifest"
+  fi
 
   # 用 find 枚举（而非 glob）：尾斜杠/普通 glob 在 POSIX 语义下匹配不到 dangling 软链。
   #
@@ -255,11 +347,17 @@ cleanup_agent_orphans() {
 install_sdflow() {
   local sdflow="${SDFLOW_HOME:-$HOME/.sdflow}"
   local bundle="$REPO_DIR/sdflow-init/assets/workflow"
-  mkdir -p "$sdflow/hack"
+  if ! mkdir -p "$sdflow/hack" 2>/dev/null; then
+    skipped+=("sdflow home @ $sdflow — 建不出来（被占为普通文件？权限？），整段未铺设")
+    return 0
+  fi
 
   if [ "$IS_WINDOWS" -eq 1 ]; then
-    printf '%s\n' "$bundle" > "$sdflow/workflow-path"
-    installed+=("workflow-path @ $sdflow")
+    if ! printf '%s\n' "$bundle" > "$sdflow/workflow-path" 2>/dev/null; then
+      skipped+=("workflow-path @ $sdflow — 写不进去（只读？磁盘满？），未铺设")
+    else
+      installed+=("workflow-path @ $sdflow")
+    fi
   else
     if [ -e "$sdflow/workflow" ] && [ ! -L "$sdflow/workflow" ]; then
       skipped+=("workflow @ $sdflow — 真实目录非本工具软链，未接管")
@@ -268,8 +366,10 @@ install_sdflow() {
       if [ -L "$sdflow/workflow" ]; then
         old_target="$(readlink "$sdflow/workflow" 2>/dev/null || true)"
       fi
-      ln -snf "$bundle" "$sdflow/workflow"
-      if [ -n "$old_target" ] && [ "$old_target" != "$bundle" ]; then
+      # 同 install_into：裸 `ln -snf` 失败即中止全脚本 —— 见「set -e 面治」节。
+      if ! ln -snf "$bundle" "$sdflow/workflow" 2>/dev/null; then
+        skipped+=("workflow @ $sdflow — canonical 软链建不出来（只读？与另一个 setup 并发？），未铺设")
+      elif [ -n "$old_target" ] && [ "$old_target" != "$bundle" ]; then
         installed+=("workflow @ $sdflow — 接管：$old_target → $bundle")
       else
         installed+=("workflow @ $sdflow")
@@ -283,14 +383,31 @@ install_sdflow() {
   # 🔴 **先删 manifest、最后才写**：安装中途失败（cp 权限 / 磁盘满，set -e 当场中止）时
   # 现场没有 manifest ⇒ preflight 红 ⇒ 后台通道诚实降级；MUST NOT 留一份「自洽但陈旧」的
   # 快照，那会让新旧混配悄悄跑起来（一半新一半旧，且没有任何人会看见）。
-  rm -f "$sdflow/hack/capability-manifest.json"
+  # 删不掉（落点只读等）⇒ 记一笔并**继续**装：新脚本 + 陈旧 manifest 会被 preflight 判 skew
+  # 而 fail-closed（诚实降级）；反过来「因为删不掉就整段不装」留下的是旧脚本 + 旧 manifest
+  # 这一份**自洽而陈旧**的快照 —— 恰恰是本段注释要防的那一个。[impl-review-fix]
+  local cap_broken_pre=0
+  if ! rm -f "$sdflow/hack/capability-manifest.json" 2>/dev/null; then
+    skipped+=("hack/capability-manifest.json @ $sdflow — 陈旧快照删不掉，后台 voice 通道将 fail-closed 降级")
+    cap_broken_pre=1
+  fi
 
+  # 🔴 **本趟只要有一个 capability 成员没装上，就 MUST NOT 写 manifest**〔F5 接缝 · impl-review-fix〕：
+  #   把 cp/chmod 从「裸调用 + set -e 中止」改成「skip + 汇总」之后，控制流会继续往下走到
+  #   写 manifest 那一步 —— 而它算的是【当前盘上的字节】⇒ 会给一份「新旧混装」的现场签一个
+  #   自洽的名，preflight 从此判绿。那正是本段注释要防的「自洽但陈旧」。
+  #   ∴ 用 cap_broken 记账：有成员没装上 ⇒ 跳过写 manifest ⇒ 现场无 manifest ⇒ preflight
+  #   fail-closed 降级（与中止时同一个终态，但这一趟其余东西照样装完、失败也进了汇总）。
+  local cap_broken=0
   local f base
   for f in "$REPO_DIR/sdflow-init/assets/hack/"*.sh; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"
-    cp "$f" "$sdflow/hack/$base"
-    chmod +x "$sdflow/hack/$base"
+    if ! cp "$f" "$sdflow/hack/$base" 2>/dev/null || ! chmod +x "$sdflow/hack/$base" 2>/dev/null; then
+      skipped+=("hack/$base @ $sdflow — 装不上（落点只读？磁盘满？），未安装")
+      cap_broken=1
+      continue
+    fi
     installed+=("hack/$base @ $sdflow")
   done
 
@@ -299,7 +416,11 @@ install_sdflow() {
   for f in "$REPO_DIR/sdflow-init/assets/hack/"*.md; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"
-    cp "$f" "$sdflow/hack/$base"
+    if ! cp "$f" "$sdflow/hack/$base" 2>/dev/null; then
+      skipped+=("hack/$base @ $sdflow — 装不上（落点只读？磁盘满？），未安装")
+      cap_broken=1
+      continue
+    fi
     installed+=("hack/$base @ $sdflow")
   done
 
@@ -308,8 +429,11 @@ install_sdflow() {
   for f in "$REPO_DIR/sdflow-init/assets/hack/"*.py; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"
-    cp "$f" "$sdflow/hack/$base"
-    chmod +x "$sdflow/hack/$base"
+    if ! cp "$f" "$sdflow/hack/$base" 2>/dev/null || ! chmod +x "$sdflow/hack/$base" 2>/dev/null; then
+      skipped+=("hack/$base @ $sdflow — 装不上（落点只读？磁盘满？），未安装")
+      cap_broken=1
+      continue
+    fi
     installed+=("hack/$base @ $sdflow")
   done
 
@@ -318,7 +442,9 @@ install_sdflow() {
   # 写不成不中止安装：其后果是 preflight 红 ⇒ 后台通道走同族 fallback，这是诚实降级。
   # 归因分开写：跳过的两个成因（无合格解释器 / helper 没装上）修法完全不同，
   # 合取成一条 else 会把「helper 未装」误报成「PATH 无 Python」，把人指到错误的方向。
-  if [ -z "$_py" ]; then
+  if [ "$cap_broken" -eq 1 ] || [ "$cap_broken_pre" -eq 1 ]; then
+    echo "  ⚠ capability-manifest 跳过（本趟有成员没装上，见 skipped 汇总）——MUST NOT 给一份不完整/新旧混装的现场签名；后台 voice 通道会 fail-closed 降级"
+  elif [ -z "$_py" ]; then
     echo "  ⚠ capability-manifest 跳过（PATH 无 Python 3.7+）——Codex 后台 voice 通道会 fail-closed 降级"
   elif [ ! -f "$sdflow/hack/outside-voice-job.py" ]; then
     echo "  ⚠ capability-manifest 跳过（job helper 未装到 $sdflow/hack/）——Codex 后台 voice 通道会 fail-closed 降级"

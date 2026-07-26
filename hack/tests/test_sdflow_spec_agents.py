@@ -259,6 +259,51 @@ def test_unreadable_query_fails_closed(tmp_path):
     assert _scan(tmp_path / "nope.txt").returncode == 2
 
 
+def _scan_with_broken_grep(path, bin_dir, rc=2):
+    """把一个恒返回 `rc` 的假 `grep` 前置进 PATH，再真跑 `secret-scan`。
+
+    `rc >= 2` 是 grep 自己的「命令错误」语义（不可读文件、非法正则、坏 locale、
+    被 SIP/沙箱拦下的二进制…）；`1` 才是「无匹配」。
+    """
+    bin_dir.mkdir(exist_ok=True)
+    fake = bin_dir / "grep"
+    fake.write_text(f"#!/bin/sh\nexit {rc}\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
+    return subprocess.run(["bash", str(OUTSIDE_VOICE), "secret-scan",
+                           "--context-file", str(path)],
+                          capture_output=True, text=True, timeout=60, env=env)
+
+
+def test_secret_scan_fails_closed_when_the_scanner_itself_fails(tmp_path):
+    """🔴 复现（代码审 F1）：扫描器**执行失败**MUST NOT 被判成「干净」。
+
+    旧实现把 grep 塞在管道头 —— `$?` 只反映管道尾端的 `sed`，grep 的 rc≥2（命令错误）
+    与 rc=1（无匹配）产出同一个空 `lines`，随后函数 `return 0` = 放行。
+    实测：注入恒返回 2 的 `grep` 后，`secret-scan --context-file <干净文件>` 得 rc=0
+    —— 扫描器坏了 = 判没命中 = 出境查询直接放行，BASE-28 S2「命中即拒发」被直接击穿。
+    修法：**分别捕获 grep 的返回码**（1=无匹配 / 0=命中 / ≥2=命令错误），错误即 fail-closed。
+    """
+    q = tmp_path / "query.txt"
+    q.write_text("一条干净的查询\n", encoding="utf-8")
+
+    r = _scan_with_broken_grep(q, tmp_path / "brokenbin")
+
+    assert r.returncode != 0, \
+        "扫描器执行失败却判成「干净」并放行 —— 出境安全门 fail-open"
+    assert r.returncode == 2, (r.returncode, r.stdout, r.stderr)
+    assert "扫描" in r.stderr, "没有说明为什么拒发（操作者只看到一个裸退出码）"
+
+
+def test_secret_scan_still_passes_when_grep_reports_no_match(tmp_path):
+    """区分力校准：rc=1（**真**无匹配）仍必须是 exit 0，否则这门恒红 = 没人会用它。"""
+    q = tmp_path / "query.txt"
+    q.write_text("一条干净的查询\n", encoding="utf-8")
+    r = _scan_with_broken_grep(q, tmp_path / "nomatchbin", rc=1)
+    assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+
+
 def test_sdflow_spec_does_not_ship_a_second_scanner():
     """单一源：sdflow-spec 自己**不带**第二份规则表（MUST NOT 新造）。
 
@@ -323,8 +368,11 @@ def check_output_path(raw, *, change_root, repo_root):
       ② containment：MUST 严格位于 change_root **之内**（用路径分量比，
          **MUST NOT 用字符串前缀** —— `<name>-evil/` 会整个溜过去）
       ③ allowlist：顶层三件 或 `specs/**/*.md`
-      ④ symlink 拒绝：目标自身**或 change_root 与它之间的任一祖先**是软链即拒
-         （只查目标自身 ⇒ 把 `specs -> /tmp/x` 这种祖先逃逸放过去）
+      ④ symlink 拒绝：**从仓根到最终目标逐组件**检查（含 change_root 自身与它的每一级
+         祖先）；再核验**解析后**的 change_root 仍位于**解析后**的仓根内
+         （只查目标自身 ⇒ 把 `specs -> /tmp/x` 这种祖先逃逸放过去；只从 change_root
+          之内起步 ⇒ `openspec` / `changes` / `<name>` 三层的逃逸全部溜过 —— 而
+          ①②③ 全是**纯词法**判定，对软链一无所知，接不住这一格）[impl-review-fix]
     """
     p = Path(raw)
     if not p.is_absolute():
@@ -349,11 +397,27 @@ def check_output_path(raw, *, change_root, repo_root):
     else:
         return False, f"不在 artifact allowlist：{rel}"
 
-    probe = root
-    for part in parts:
+    repo = Path(os.path.normpath(str(repo_root)))
+    try:
+        ancestors = root.relative_to(repo).parts       # 仓根 → change_root 的每一层
+    except ValueError:
+        return False, f"越界：change 目录不在仓根 {repo} 之内"
+    probe = repo
+    for part in ancestors + parts:
         probe = probe / part
         if probe.is_symlink():
             return False, f"软链逃逸：{probe}"
+    # 解析后的最终落点复核。**诚实标注：在当前构造下它被上面那个循环蕴含** ——
+    # 仓根到 change_root 的每一跳都已确认非软链 ⇒ `root.resolve()` 必然 =
+    # `repo.resolve()/ancestors`，落不到仓外（仓根自身是软链时两边同向解析，不构成逃逸）。
+    # 保留它的理由**不是**「多一道判据」，而是：① 上面的循环是逐 `lstat` 的**词法快照**，
+    # 判定与写入之间组件可被替换（TOCTOU），这里是一次独立的、更接近写入时刻的复核；
+    # ② 若日后有人放宽循环的起点，这条仍是最后一格。
+    # MUST NOT 在文档里把它算作「已被用例证明的一道门」—— 没有输入能单独走到它。
+    try:
+        root.resolve().relative_to(repo.resolve())
+    except ValueError:
+        return False, f"软链逃逸：change 目录解析后逸出仓根（{root.resolve()}）"
     return True, ""
 
 
@@ -425,6 +489,58 @@ def test_s4_rejects_a_symlinked_ancestor(change_tree):
     ok, why = check_output_path(str(change / "specs" / "cap" / "spec.md"),
                                 change_root=change, repo_root=root)
     assert not ok and "软链" in why
+
+
+@pytest.mark.parametrize("level", ["openspec", "changes", "demo"])
+def test_s4_rejects_a_symlinked_ancestor_above_the_change_root(tmp_path, level):
+    """🔴 复现（代码审 F4）：**change root 自身与它的每一级祖先**也得查。
+
+    旧实现从 `change_root` 起步、且**先拼好目标子路径再 `is_symlink()`** ⇒
+    `openspec` / `changes` / `<name>` 三层里任何一层是指向仓外的软链时，
+    `relative_to`（纯词法）照样成立、逐组件检查又只从 change root 之内开始 ⇒ 全部放行，
+    写入落到仓外。现有用例只覆盖了目标文件自身与 `specs` 子目录两格。
+    """
+    root = tmp_path / "repo"
+    outside = tmp_path / "outside"
+    parts = ["openspec", "changes", "demo"]
+    i = parts.index(level)
+
+    prefix = root
+    for p in parts[:i]:
+        prefix = prefix / p
+    prefix.mkdir(parents=True, exist_ok=True)
+
+    target = outside / "hijacked"
+    rest = target
+    for p in parts[i + 1:]:
+        rest = rest / p
+    (rest / "specs" / "cap").mkdir(parents=True)
+    os.symlink(str(target), str(prefix / level))
+
+    change = root / "openspec" / "changes" / "demo"
+    ok, why = check_output_path(str(change / "specs" / "cap" / "spec.md"),
+                                change_root=change, repo_root=root)
+    assert not ok, f"`{level}` 是指向仓外的软链却放行了 —— 写入会落到仓外"
+    assert "软链" in why, f"被拦下了，但拦它的不是软链那道门：{why}"
+
+
+def test_s4_rejects_a_change_root_outside_the_repo_root(tmp_path):
+    """change_root 压根不在 repo_root 之内 ⇒ 拒（④ 的起点判定，**连哪道门一起断言**）。
+
+    ⚠️ 拦它的是**越界**那一格，不是解析复核那一格 —— 后者在当前构造下被逐组件循环蕴含
+    （见 `check_output_path` 里的诚实标注），**没有输入能单独走到它**，
+    MUST NOT 写一个「看起来在测它」的用例来给它背书（恒真锚）。
+    """
+    real = tmp_path / "elsewhere"
+    change = real / "openspec" / "changes" / "demo"
+    (change / "specs" / "cap").mkdir(parents=True)
+    root = tmp_path / "repo"
+    root.mkdir()
+
+    ok, why = check_output_path(str(change / "proposal.md"),
+                                change_root=change, repo_root=root)
+    assert not ok, "change 目录在仓根之外却放行了"
+    assert "越界" in why, f"被拦下了，但拦它的不是预期那道门：{why}"
 
 
 # S4 判据的**祈使形态** needle（自带 `MUST` / `拒写`）。

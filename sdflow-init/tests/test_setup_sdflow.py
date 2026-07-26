@@ -5,6 +5,8 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).parent.parent.parent
 
 
@@ -115,6 +117,75 @@ class TestRenameEndToEnd:
         assert (sdflow / "workflow").resolve() == (REPO / "sdflow-init" / "assets" / "workflow").resolve()
         for s in ("checkpoint-commit.sh", "resolve-workflow.sh", "resolve-models.sh"):
             assert (sdflow / "hack" / s).stat().st_mode & stat.S_IXUSR
+
+
+class TestSetEDoesNotKillTheWholeInstall:
+    """🔴 `set -e` 面治（代码审 F5）：外部命令**裸调用**失败 = 整个 setup.sh 当场中止。
+
+    后果不是「少装一个 skill」，而是**这一趟什么都没装完**：stdout 只剩一行裸 `ln:` 错误，
+    没有汇总、`~/.sdflow/` 的 canonical 与 hack 脚本（resolve-models.sh / outside-voice.sh /
+    checkpoint-commit.sh）全不在位 —— 而所有 sdflow skill 的第零步都依赖它们。
+    `install_agents()` 早已按「失败降级为 skipped[] + 汇总」处理过同一形态，
+    本类把同片的另两处（`install_into` / `install_sdflow`）钉在同一取向上。
+    """
+
+    @staticmethod
+    def _skip_if_root():
+        if os.geteuid() == 0:
+            pytest.skip("root 无视目录写权限位 —— 这条只在非 root 下有区分力")
+
+    def test_readonly_skills_dest_degrades_to_skip(self, tmp_path):
+        """`install_into` 的 `ln` 失败 ⇒ skip + 汇总，且后续步骤照常跑完。"""
+        self._skip_if_root()
+        home = tmp_path / "home"
+        dest = home / ".claude" / "skills"
+        dest.mkdir(parents=True)
+        os.chmod(dest, 0o555)
+        try:
+            r, sdflow = run_setup(tmp_path)
+        finally:
+            os.chmod(dest, 0o755)
+
+        assert r.returncode == 0, "skills 落点只读竟中止了整个 setup.sh：\n" + r.stdout + r.stderr
+        assert "skipped (" in r.stdout, "失败没进汇总 —— 只剩一行裸 ln 错误"
+        assert "建不出来" in r.stdout
+        assert (sdflow / "hack").is_dir(), \
+            "install_sdflow 没跑到 —— 一个建不出来的软链把整条安装链带崩了"
+
+    def test_readonly_sdflow_home_degrades_to_skip(self, tmp_path):
+        """`install_sdflow` 的 `ln`/`cp`/`rm` 失败 ⇒ 同样 skip + 汇总，不中止。"""
+        self._skip_if_root()
+        home = tmp_path / "home"
+        sdflow = home / ".sdflow"
+        (sdflow / "hack").mkdir(parents=True)
+        os.chmod(sdflow, 0o555)
+        try:
+            r, _ = run_setup(tmp_path)
+        finally:
+            os.chmod(sdflow, 0o755)
+
+        assert r.returncode == 0, "~/.sdflow 只读竟中止了整个 setup.sh：\n" + r.stdout + r.stderr
+        assert "skipped (" in r.stdout, "失败没进汇总 —— 只剩一行裸 ln/cp 错误"
+        assert "sdflow-skills v" in r.stdout, "汇总段根本没打出来"
+
+    def test_two_concurrent_runs_both_finish(self, tmp_path):
+        """⭐ 复现（代码审 F5）：两个 setup.sh 并发铺同一个全新 HOME。
+
+        `ln -sf` **不是单一系统调用**（内部 unlink → symlink 两步）⇒ 并发下后者 `EEXIST`。
+        实测旧实现 4 轮里 2 轮命中：一个进程 `EXIT:1`，stdout 只有一行
+        `ln: …: File exists`，无汇总。并发是真实场景（`/sdflow-upgrade` 与手敲 setup 撞上、
+        两个 checkout 同时装）。判据：**两边都必须跑完**（失败一格 ⇒ 顶多进 skipped）。
+        """
+        home = tmp_path / "home"
+        home.mkdir(exist_ok=True)
+        env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+        procs = [subprocess.Popen(["bash", str(REPO / "setup.sh")], env=env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  text=True) for _ in range(2)]
+        outs = [p.communicate(timeout=300)[0] for p in procs]
+        for i, (p, out) in enumerate(zip(procs, outs)):
+            assert p.returncode == 0, f"并发第 {i} 个进程被 set -e 打断：\n{out}"
+            assert "sdflow-skills v" in out, f"并发第 {i} 个进程没走到汇总：\n{out}"
 
 
 class TestResolveModelsInstallPath:
@@ -262,11 +333,17 @@ class TestCapabilitySnapshot:
         assert JOB.verify_manifest(sdflow / "hack")["ok"] is True
 
     def test_interrupted_install_leaves_no_consistent_snapshot(self, tmp_path):
-        """安装中断 ⇒ MUST NOT 留下一份「自洽但陈旧」的 manifest。
+        """成员没装上 ⇒ MUST NOT 留下 / 写出一份「自洽但陈旧」的 manifest。
 
-        制造真实中断：把已安装的 shell helper 置为只读 ⇒ 下一次 `cp` 失败 ⇒ `set -e` 当场
-        中止。此时 manifest MUST 已经不在（安装步先删后写），于是 preflight fail-closed，
-        而不是拿着上一代的 manifest 声称快照一致。
+        制造真实失败：把已安装的 shell helper 置为只读 ⇒ 下一次 `cp` 失败。
+        此时 manifest MUST 不在场（安装步先删后写、且**本趟不补写**），于是 preflight
+        fail-closed，而不是拿着一份给「新旧混装现场」签的名声称快照一致。
+
+        ⚠️ **判据是「manifest 不在场」，不是「setup 非零退出」**〔F5 · impl-review-fix〕：
+        cp 失败已按全文取向降级为 skipped + 汇总（裸调用会把整条安装链带崩，
+        连 canonical 与其余 hack 脚本都装不上）。若只把「中止」当判据，这条门在降级后
+        就变成了**恒红**；真正承重的不变量是下面两条 —— manifest 不在 + verify 判红。
+        补一条正向断言：失败必须**可见**（进 skipped 汇总），MUST NOT 静默跳过。
         """
         r, sdflow = run_setup(tmp_path)
         assert JOB.verify_manifest(sdflow / "hack")["ok"] is True
@@ -274,9 +351,10 @@ class TestCapabilitySnapshot:
         victim.chmod(0o444)
         try:
             r2, _ = run_setup(tmp_path)
-            assert r2.returncode != 0, "cp 到只读目标未失败 ⇒ 本用例未制造出中断"
+            assert "outside-voice.sh" in r2.stdout and "未安装" in r2.stdout, \
+                "cp 到只读目标未失败、或失败没进汇总 ⇒ 本用例未制造出中断：\n" + r2.stdout
             assert not (sdflow / "hack" / JOB.MANIFEST_NAME).exists(), \
-                "中断后仍留着上一代 manifest ⇒ 陈旧快照会被当成一致"
+                "成员没装上却仍写/留了 manifest ⇒ 新旧混装的现场被签成一致"
             assert JOB.verify_manifest(sdflow / "hack")["ok"] is False
         finally:
             victim.chmod(0o755)
