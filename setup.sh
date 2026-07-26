@@ -135,7 +135,7 @@ install_agents() {
   #   「整个 sdflow-spec/agents/ 被删掉」正是**孤儿清理最该跑**的那一刻：上一次 setup 铺出去的
   #   软链此刻全部悬空，而在源目录上早退会把它们**永久留在全局命名空间里**。
   #   （实测：早退版本下「删目录 + 重跑新版 setup」⇒ 3 条悬空链原样存活；见
-  #   add-sdflow-spec/impl-reports/task6-stage3-conditional.md 的回滚演练 C 组。）
+  #   openspec/changes/add-sdflow-spec/impl-reports/task6-stage3-conditional.md 的回滚演练 C 组。）
   #   ∴ 铺设循环按 src_dir 有无条件执行，**清理无条件走到底**。
   #   这也让 design Migration Plan 要求的「先移除 agents 再 revert」有了可执行的落地动作
   #   （删源目录 + 跑一次新版 setup），无需另造 uninstall 开关。
@@ -196,7 +196,12 @@ install_agents() {
       esac
     fi
 
-    ln -snf "$f" "$target"
+    # 落点存在但不可写（只读目录 / 别人的 ACL）⇒ ln 失败。set -e 下那会【中止整个 setup.sh】，
+    # 与上面 mkdir 那一格同族（mkdir -p 对已存在目录返回 0，控制流会一路走到这里）⇒ 同样降级为 skip。
+    if ! ln -snf "$f" "$target" 2>/dev/null; then
+      skipped+=("agents/$name @ $dest — 软链建不出来（落点只读？权限？），未铺设")
+      continue
+    fi
     installed+=("agents/$name @ $dest")
   done
 
@@ -235,7 +240,12 @@ cleanup_agent_orphans() {
       *) continue ;;
     esac
     if [ -e "$entry" ]; then continue; fi   # 有效链接，留着
-    rm -f "$entry"
+    # 清不掉（落点只读等）⇒ 与 install_agents 的 mkdir / ln 同一取向：skip + 汇总，
+    # MUST NOT 让 `set -e` 把整个 setup.sh 带崩（本函数的调用点都在 install_sdflow 之前）。
+    if ! rm -f "$entry" 2>/dev/null; then
+      skipped+=("agents/$(basename "$entry") @ $dest — 悬空链清不掉（落点只读？权限？），未清理")
+      continue
+    fi
     cleaned+=("agents/$(basename "$entry") @ $dest")
   done < <(find "$dest" -mindepth 1 -maxdepth 1)
 }

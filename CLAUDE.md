@@ -142,7 +142,11 @@ pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
   `*/sdflow-spec/agents/<同名>` 才覆盖，其余一律 skip 进汇总。
 - 🔴 **`~/.claude/agents/` 是全局命名空间，不是本工具独占的**——这是它与 `~/.claude/skills/`
   最实质的差别：任何插件都可能放同名定义，覆盖即数据丢失。改这段守卫前先读
-  `hack/tests/test_install_agents.py`（全仓首个 setup.sh 测试，8 个用例）。
+  `hack/tests/test_install_agents.py`（全仓首个 setup.sh 测试；**用例数不写死在这里**——
+  以 `pytest hack/tests/test_install_agents.py` 自己报的为准）。
+  🔴 该函数里**任何**会失败的外部命令（`mkdir` / `ln` / `rm`）都 MUST 降级为 `skipped[]` + 汇总：
+  `set -e` 下裸调用一失败就中止**整个** `setup.sh`，而 `install_agents` 排在 `install_sdflow`
+  **之前** ⇒ `~/.sdflow/` 的 canonical 与 hack 脚本一并装不上，用户只看到一行裸错误。
 - 🔴 **外派当前未启用，但定义照铺不误**：`add-sdflow-spec` 阶段二验收门判回退，三个定义
   作为**未启用资产**保留 ⇒ 它们**仍然对这台机器上的每个项目可见**。挡住误选的只有各定义
   `description` 里的排他式声明（「仅由 `/sdflow-spec` 编排派发」）——那是**指令层约束，不是机械门**。

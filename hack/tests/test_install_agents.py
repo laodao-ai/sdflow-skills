@@ -296,6 +296,52 @@ def test_an_occupied_dest_degrades_to_skip_and_does_not_abort_setup(fake_home):
         "install_sdflow 没跑到 —— agents 落点被占把整条安装链带崩了"
 
 
+def test_a_readonly_dest_degrades_to_skip_and_does_not_abort_setup(fake_home):
+    """⑦ 落点**已存在但只读** ⇒ `ln` 与 `rm` 双双失败 ⇒ 仍是 **skip + 汇总**，MUST NOT 中止 setup。
+
+    🔴 上一条用例只覆盖了 `mkdir -p` 那一格（落点建不出来）。落点**建得出来、写不进去**是
+    另一条路径：`mkdir -p` 对已存在目录返回 0，于是控制流一路走到 `ln -snf`（铺设）与
+    `rm -f`（孤儿清理）—— 这两处在 `set -e` 下失败就**当场中止整个 setup.sh**，
+    用户只看到一行裸 `ln:` / `rm:` 错误，而 `install_agents` 排在 `install_sdflow` 之前
+    ⇒ `~/.sdflow/` 的 canonical 与 hack 脚本全装不上。
+    与本文件既定取向（外来同名条目 → skip + 汇总）一致，两处一并降级为 skip。
+
+    定点删门法：把 `install_agents` 的 `if ! ln -snf … then skipped+=…` 改回裸 `ln -snf`，
+    或把 `cleanup_agent_orphans` 的 `if ! rm -f … then skipped+=…` 改回裸 `rm -f` ⇒ 本用例必须红。
+    """
+    if os.geteuid() == 0:
+        pytest.skip("root 无视目录写权限位 —— 这条只在非 root 下有区分力")
+
+    dest = _agents_dir(fake_home)
+    dest.mkdir(parents=True)
+    # 同形状**悬空**链：只读之下孤儿清理会试着 `rm` 它并失败 —— 专打 cleanup 那一格
+    orphan = dest / "sdflow-gone-agent.md"
+    os.symlink(str(SRC_DIR / "sdflow-gone-agent.md"), orphan)
+    os.chmod(dest, 0o555)
+    try:
+        r = _run_setup(fake_home)
+    finally:
+        os.chmod(dest, 0o755)   # 还原，否则 tmp_path 清理也进不去
+
+    assert r.returncode == 0, "落点只读竟中止了整个 setup.sh：\n" + r.stdout + r.stderr
+
+    skipped = _skipped_section(r.stdout)
+    for name in _expected_names():
+        assert f"agents/{name} @ {dest}" in skipped, \
+            f"{name} 铺设失败却没进 skipped 汇总 —— 只剩一行裸 ln 错误"
+        assert f"✓ agents/{name} @ {dest}" not in r.stdout, \
+            f"{name} 既报跳过又报安装成功"
+    assert f"agents/{orphan.name} @ {dest}" in skipped, \
+        "悬空孤儿链清不掉却没进 skipped 汇总 —— 只剩一行裸 rm 错误"
+    assert f"✗ agents/{orphan.name} @ {dest}" not in r.stdout, \
+        "清理失败却报进了 cleaned 段"
+
+    assert orphan.is_symlink(), "只读落点里的条目居然被动了"
+    # 后续步骤 MUST 照常跑完：~/.sdflow/hack 是 /sdflow-spec 第零步档位解析的依赖
+    assert (fake_home / ".sdflow" / "hack").is_dir(), \
+        "install_sdflow 没跑到 —— agents 落点只读把整条安装链带崩了"
+
+
 def test_rerun_is_idempotent(fake_home):
     """④ 重跑幂等：链指向不变、不产生 skip、不产生 cleaned。"""
     first = _run_setup(fake_home)
