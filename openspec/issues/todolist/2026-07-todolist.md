@@ -88,6 +88,7 @@ sdflow-issues:
     T228: {"module":"sdflow-init/assets/hack/outside-voice.sh: secret_scan","summary":"含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号","type":"基础设施","status":"PROPOSED","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
     T229: {"module":"openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞)","summary":"两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）","type":"可观测性","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
     T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T231: {"module":"sdflow-issues 读取路径（core cmd_scan 自检 / issues.py validate_scan_envelope / _bug_triage·_todo_triage）","summary":"重开 harden-issues-read-path change：读取路径诚实化（显红 + reindex 不罢工 + triage 解耦），砍掉已被 migrate_legacy 取代的 normalize；分支 feat/harden-issues-read-path 已过期不可直接续用","type":"代码质量","status":"OPEN","time":"2026-07-26 10:10","change":null,"batch":null}
 ---
 # 2026-07 TODO
 
@@ -2271,3 +2272,16 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 > 删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T215 -->
+
+<!-- sdflow-issue-block:start id=T231 -->
+## T231: 重开 harden-issues-read-path change：读取路径诚实化（显红 + reindex 不罢工 + triage 解耦），砍掉已被 migrate_legacy 取代的 normalize；分支 feat/harden-issues-read-path 已过期不可直接续用
+> 重开 harden-issues-read-path change：读取路径诚实化（显红 + reindex 不罢工 + triage 解耦），砍掉已被 migrate_legacy 取代的 normalize；分支 feat/harden-issues-read-path 已过期不可直接续用
+
+**关联文档**（均只存在于分支 `feat/harden-issues-read-path`，main 上无此路径）：`git show feat/harden-issues-read-path:docs/sdflow-issues-toolchain-defects.md`（265 行缺陷报告）、`git show feat/harden-issues-read-path:openspec/changes/harden-issues-read-path/proposal.md`（含 grill 五项收敛）
+
+**动机**：2026-07-26 复核分支 feat/harden-issues-read-path（两个 commit，ff 四件套 + grill 收敛，零实现）结论：值得做，但分支已过期。缺陷在 main 上原样还在，均已读码坐实——(1) 显红缺失：core __init__.py:842-887 的 scan 自检只 append arity/marker/表块问题，无 status/type/priority 词表校验，_legacy_item_from_row:818 把 cells[4] 原样当 status 透传 ⇒ 脏状态项按非终态计入 open，盘点数字静默造假；(2) reindex 罢工：issues.py:431-433 对 status/specific_field 枚举漂移直接 raise，且甩锅文案 'fix: repair/reinstall the recorder producer'（producer 没坏，是历史数据脏）⇒ 一条脏 legacy 行炸掉整个盘点面、INDEX 建不起来；(3) triage 越权：core:1795-1796 与 :1834-1835 的 open_untriaged 链仍在，赋批次强推 OPEN→PROPOSED，对『有归属无认领』项等于撒谎。(1)(2) 正是 CLAUDE.md 基准 5 降级判据的反面（机械判定必须正确、给人看的展示 MUST NOT fail-closed 罢工）。原始证据：docs/sdflow-issues-toolchain-defects.md（分支上，265 行，源自 2026-07-14 消费仓 zhws_ops_api 实战）。
+
+**思路**：重开一个 change，不接着旧分支跑（旧分支保留不删，是缺陷报告与 grill 结论的唯一载体）。四件套搬过来后按以下四点收敛：(A) scope 只留 §1 显红 + §2 reindex 降级 + §4 triage 解耦，三字段 status/type/priority 一起、producer/consumer 两侧对称；(B) 砍掉 §3 normalize——已被 main 的 migrate_legacy.py（de549f4，带 test_migrate_legacy.py，audit 只读 / apply atomic / legacy 表字节不动 / 拒绝猜测，out-of-domain 值须调用方显式给映射）取代，且比原设计的『机械占位到 OPEN』更对（占位本身就是机器凭空造状态，正是显红要防的静默造假）；§2.3 的 problem 文案改指 migrate_legacy audit 出口；(C) ADR 重编号 0027→0030，四件套内所有 adr/0027 引用同步改；(D) 删掉分支 todolist 里那条 T207（内容=三脚本重复消除，已由 dedupe-issues-scripts-shared-layer 于 2026-07-22 做完），docs 里 sdflow-todolist / sdflow-buglist 旧 skill 名全刷成 sdflow-issues。grill 结论（批次=ownership、三维度分家、A2 修正、5F 第四维度拆出单开）可直接复用，只需就『§3 被取代』再确认一次，不必重跑整轮 grill。工作量小：一处 problems.append + 删两个 raise 分支改文案 + 拆 open_untriaged 链 + 对应测试。
+
+**备注**：阻塞已解除：原 grill 把本 change 后置于『三脚本重复消除重构』，该重构已 shipped（dedupe-issues-scripts-shared-layer，2026-07-22 归档），现为单份 sdflow_issues_core/__init__.py(2153 行) + 两个薄 shim，当初『要加两份镜像补丁』的理由不再成立，§1/§2 各自变成一处改动。三处硬冲突（直接 merge 会撞）：ADR 0027 号已被 main 的 0027-issues-ledger-single-skill-shared-core.md 占用；T207 已被 main 分配给另一项（docs 旧 skill 名刷新）；分支 265 行缺陷报告通篇写已废的 sdflow-todolist/buglist 路径。诚实边界：本仓与 10-michi 台账当前均干净（实测 scan --json：todo 230 / bug 22 / michi 2 项，脏值 0、problems 0，reindex 正常），原始痛点仓 zhws_ops_api 不在本机 ⇒ 非在血急事，优先级建议 P0→P1。但按基准 2 锚目标态：legacy 表仍被解析（cells[4] 原样透传）、手写表格行仍是被设计允许的路径 ⇒ 脏值在目标态依然可达，不因『现存语料干净』而缩水。
+<!-- sdflow-issue-block:end id=T231 -->
