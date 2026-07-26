@@ -142,6 +142,41 @@ def test_map_stage_longest_prefix(tmp_path):
     assert R.map_stage("feat(x): 随手") == "unknown"
 
 
+def test_namespaced_step_slug_falls_back_to_tail():
+    """`checkpoint(<change>:<step>)` 的 `<step>` 段 MUST 参与前缀匹配。
+
+    [impl-review-fix] F1：旧实现只在 `task\\d+` / `-impl` 两条判定里剥命名空间，
+    前缀匹配仍拿含 `<change>:` 前缀的整串去比 ⇒ 仓内 27 个 checkpoint 的 `<step>` 段
+    **精确等于**既有规则却全落 unknown（plan×13 / grill×5 / ff×4 / spec-review×2 /
+    propose×2 / design-gate×1）。`sdflow-implement/SKILL.md:287` 明写
+    `checkpoint-commit.sh "<change>:plan"`，即目标态 producer 就在产出这种形态。
+    """
+    assert R.map_stage("checkpoint(add-sdflow-spec:plan)") == "other"
+    assert R.map_stage("checkpoint(add-codex-host-support:grill)") == "grill"
+    assert R.map_stage("checkpoint(add-codex-host-support:ff)") == "ff"
+    assert R.map_stage("checkpoint(add-codex-host-support:spec-review)") == "spec-review"
+    assert R.map_stage("checkpoint(add-codex-host-support:spec-review-amend)") == "spec-review"
+    assert R.map_stage("checkpoint(harden-hr-tg-anchor-consistency:design-gate)") == "spec-review"
+    assert R.map_stage("checkpoint(three-lens-decision-framework:propose)") == "other"
+    assert R.map_stage(
+        "checkpoint(harden-hr-tg-anchor-consistency:impl-review-fix-parsing)") == "code-review"
+    # 回退**只在整串无命中时**发生 ⇒ 既有的整串匹配语义不变。
+    assert R.map_stage("checkpoint(sdflow-spec-grill)") == "grill"
+    assert R.map_stage("checkpoint(sdflow-retro:task3-boundary)") == "impl"
+    # `<step>` 段无任何规则可依 ⇒ 照旧 unknown（不猜）。
+    assert R.map_stage("checkpoint(sdflow-retro-cleanup:t58-tilde-fence)") == "unknown"
+
+
+def test_two_review_skill_slugs_map_to_their_stage():
+    """[impl-review-fix] F1（面治）：`sdflow-` 前缀的两个评审 slug 与 `sdflow-spec-*` 同形。
+
+    上一轮只补了 `sdflow-spec-grill` / `sdflow-spec-generate` 两条，同形的
+    `sdflow-code-review`（仓内 3 次）与 `sdflow-spec-review`（1 次）漏掉 —— 同一失效模式。
+    """
+    assert R.map_stage("checkpoint(sdflow-code-review)") == "code-review"
+    assert R.map_stage("checkpoint(sdflow-spec-review)") == "spec-review"
+
+
 def test_archive_rename_detects_done(tmp_path):
     root = _init_repo(tmp_path)
     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")

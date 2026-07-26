@@ -133,11 +133,15 @@ _STAGE_RULES = [
     ("done-archive", "done"),
     ("done-verify", "done"),
     ("gate", "spec-review"),
-    # `sdflow-spec` 的两个相位锚。**MUST 各自单列**——匹配是 `startswith`，
-    # 「grill」不是 `sdflow-spec-grill` 的前缀，靠既有词表两者都落 unknown（dogfood 实测）。
+    # `sdflow-` 前缀的 skill 名式 slug。**MUST 各自单列**——匹配是 `startswith`，
+    # 「grill」不是 `sdflow-spec-grill` 的前缀，靠既有词表这一族全落 unknown（dogfood 实测）。
     # 相位 B（对抗拷问）同族于 grill；相位 C（生成四件套）同族于 ff（旧三入口里由 ff 承担同一产出）。
+    # [impl-review-fix] F1（面治）：`sdflow-code-review`（仓内 3 次）/ `sdflow-spec-review`（1 次）
+    # 与上两条**同形**，上一轮只补了 sdflow-spec-* 两条 ⇒ 一并补齐，别再留同族漏网格。
     ("sdflow-spec-grill", "grill"),
     ("sdflow-spec-generate", "ff"),
+    ("sdflow-code-review", "code-review"),
+    ("sdflow-spec-review", "spec-review"),
     ("grill", "grill"),
     ("ff", "ff"),
     ("propose", "other"),
@@ -157,11 +161,18 @@ def map_stage(subject):
     tail = inner.split(":", 1)[1] if ":" in inner else inner
     if re.match(r"task\d+", tail) or tail.endswith("-impl"):
         return "impl"
-    # 最长前缀匹配：规则按前缀长度降序
-    for prefix, stage in sorted(_STAGE_RULES, key=lambda r: -len(r[0])):
-        if inner.startswith(prefix):
-            return stage
-    if inner.endswith("-cross-review"):
+    # 最长前缀匹配：规则按前缀长度降序。
+    # 先拿整串 `inner` 试（保住 `<change>` 名本身就带阶段词的既有语义），
+    # [impl-review-fix] F1：整串无命中 ⇒ **回退用剥掉命名空间的 `tail` 再试一次**。
+    # 目标态 producer 就在产出 `checkpoint(<change>:<step>)`（`sdflow-implement/SKILL.md:287`
+    # 明写 `checkpoint-commit.sh "<change>:plan"`），旧实现只在 task/-impl 两条判定里剥前缀，
+    # 前缀匹配却拿整串比 ⇒ `<step>` 精确等于既有规则的 27 个 checkpoint 全落 unknown。
+    ordered = sorted(_STAGE_RULES, key=lambda r: -len(r[0]))
+    for candidate in (inner, tail):
+        for prefix, stage in ordered:
+            if candidate.startswith(prefix):
+                return stage
+    if inner.endswith("-cross-review") or tail.endswith("-cross-review"):
         return "other"
     return "unknown"
 

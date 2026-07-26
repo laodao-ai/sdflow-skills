@@ -295,6 +295,12 @@ fix: 拒写。核 openspec 配置 planningHome/changeRoot 是否被改动
 > （`artifact_guard.py`）实现，它是 dogfood 脚手架、不是交付物。它的 `fix` 文案让人去跑
 > `openspec --version` 而非把版本号内嵌进同一行 —— 上面的「实际 CLI 版本」是我另跑一条补上的。
 > 真实跑动中该职责在主 session。
+>
+> 🔄 〔fix 轮次 1 按 F2/F8 消解〕该 wrapper 已被**交付物级回归**取代：
+> `hack/tests/test_sdflow_spec_failure_modes.py` 里
+> `test_fault6_real_cli_payload_carries_every_documented_field`（真 CLI 载荷 ⊇ SKILL.md C.3 §2
+> 声明的字段集）+ `test_fault6_malformed_payload_fails_closed`（假 `openspec` 在临时 PATH 上
+> 吐三种畸形载荷，逐个 fail-closed）。⇒ 本条不再是「只在内联披露的一次性脚手架」。
 
 ---
 
@@ -335,8 +341,14 @@ fix: 拒写。核 openspec 配置 planningHome/changeRoot 是否被改动
 
 | | unknown 桶占比 |
 |---|---|
-| 基线（tasks 9.1 记，`openspec/retro/report.md:74`） | **56 %** |
+| 基线（`tasks.md` 9.1 记，锚 `openspec/retro/report.md` §「聚合① 阶段占比」表的 `unknown` 行） | **56 %** |
 | 本轮再生后 | **55 %** |
+
+> 〔fix 轮次 1 按 F6 订正引用方式〕原文写的 `openspec/retro/report.md:74` 是**行号锚**，
+> 该文件每次再生行数就变，现已漂到指向数据行（真值在 `:85` 一带）。
+> **行号锚天然会漂 ⇒ 本报告此后一律锚「小节标题 + 行标识」，不锚行号。**
+> `tasks.md:102` 与 `design.md:241` 带着同一个陈旧行号锚 + 陈旧的「56%」数字，
+> 但那两份是**设计阶段定稿件、本阶段 MUST NOT 改** ⇒ 如实记在此，留待 archive 阶段一并订正。
 
 1 个百分点的变动来自分母增长，**不是相位锚带来的改善**。两条独立原因：
 
@@ -371,34 +383,59 @@ fix: 拒写。核 openspec 配置 planningHome/changeRoot 是否被改动
 | ID | 内容 | 归属 |
 |---|---|---|
 | **T233** | `disable-model-invocation` 在 **Codex 宿主**下的语义未核（Claude 宿主已有两次独立实测：`archive/2026-07-10-matt-workflow-integration/impl-notes.md` §4.1，主 session 经 Skill tool 调用被 harness 直接拒绝）。SA-01 把「只能人触发」当承重前提，该前提在另一宿主上从未验过 | tasks 9.2 要求 |
-| **T234** | **T132 已存在**（`2026-07-todolist.md:233`，OPEN），故**未重复登记**；核对结论是**内容不再准确**，另立订正项：① 信号载体枚举缺了 `checkpoint(sdflow-spec-grill)` + 非空 `decision-memo.md`（后者已有现成机械门可复用）② `workflow.md:83` 行号锚已被 Task 2 插入 `/sdflow-spec` 行而漂移。不订正就实现，门会对分支 A 的正常跑动误判 REFUSE_START | tasks 9.3 要求 |
+| **T234** | **T132 已存在**（`openspec/issues/todolist/2026-07-todolist.md` 的 **T132**，OPEN —— 〔fix 轮次 1 按 F6〕原写 `:233` 的行号锚已因本轮自身登记而漂到 `:238`，**改用 ID 锚**），故**未重复登记**；核对结论是**内容不再准确**，另立订正项：① 信号载体枚举缺了 `checkpoint(sdflow-spec-grill)` + 非空 `decision-memo.md`（后者已有现成机械门可复用）② `workflow.md:83` 行号锚已被 Task 2 插入 `/sdflow-spec` 行而漂移。不订正就实现，门会对分支 A 的正常跑动误判 REFUSE_START | tasks 9.3 要求 |
 | **T235** | FF-0 守卫按 payload `cwd` 判分支的 mis-scope（§3② 实测），双向失效；附带发现散文含该命令字面量也会被 deny | dogfood 实测 |
 | **T236** | 终审「中间态判据」与「纪要不并入 design.md」架构的张力（§2.7 实测），措辞两可会让不同评审者得出相反结论 | dogfood 实测 |
+| **T237** | 〔fix 轮次 1 按 F4 补登〕FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型可自行触发、且不留审计痕**的绕过口（本轮就用了一次）。与 T235 互为一对：T235 = 判得不对（锚错了仓），T237 = 根本没判（判据被合法跳过）。含只做**可见性**的有界缓解思路，**本轮不实现** | fix 轮次 1 双轴审 F4 |
 
-`scan --json` 复核：四项 `change` 均为 `add-sdflow-spec`，`problems: []`。
+`scan --json` 复核：五项 `change` 均为 `add-sdflow-spec`，`problems: []`。
 
 ---
 
 ## 7. 阶段一验收门结论
 
-| 票 | 状态 | 依据 |
+> 🔄 **本节由 fix 轮次 1 按双轴审 F3 改写**（原措辞由执行方自判「验收门通过」= 越权）。
+> 详见 `task3-stage1-acceptance-fix1.md` §F3。
+
+**门判据的字面**（`tasks.md` 阶段一验收门那一行）：
+**4.1–4.6 全过 + canonical 七处（1.1–1.8）同步完成 + 3.4 sunset 条件已落定**。
+
+### 7.1 逐条状态（让人一眼能拍）
+
+| 判据 | 状态 | 证据锚 |
 |---|---|---|
-| Task 1（skill 本体 + 两道机械门） | ✅ 已收票，**有一处诚实保留** | 见下 |
-| Task 2（canonical 七处 + FF-0 三分支 + 四入口双落点） | ✅ 已收票 | `37e3820` + `impl-reports/task2-*` |
-| Task 3（本票） | ✅ | 本报告 §2–§6 |
+| **4.1** 仓根 pytest 全绿 + `setup.sh` 幂等重跑 | ✅ | §9 收尾三件套；fix1 轮次复跑见 fix1 §收尾 |
+| **4.2** memo grep 门（缺失 / 必填小节为空判红） | ✅ | `hack/tests/test_decision_memo_gate.py`「门 1」组；§2.1 三段实测输出 |
+| **4.3** 截断的 `design.md` 经 `validate --strict` → 红 | ❌ **未勾** | **该断言被实测证伪**（CLI 1.5.0 的 `validate --strict` 只读 `specs/*/spec.md`），已登记 **T232**；见 7.2 |
+| **4.4** dogfood 跑通 A→B→C 八项核验 | ✅ | §2 八项逐项 |
+| **4.5** 六种故障各注入一次、处置与失败模式表一致 | ✅（注入）· ⚠️（回归） | §3 六段；**但当轮夹具跑完即删 ⇒ 无回归会红**，fix1 已按 F2 固化为 `hack/tests/test_sdflow_spec_failure_modes.py`，并如实分级强弱锚 |
+| **4.6** `/clear` 无损抽检 + 标注 N=1 | ✅ | §4（fresh 子代理真冷读）+ §4 末的 N=1 声明 |
+| **canonical 1.1–1.8 七处同步** | ✅ | Task 2 收票（`37e3820` + `impl-reports/task2-canonical-sync*.md`）；机械守 = `hack/tests/test_canonical_entry_sync.py` |
+| **3.4 sunset 条件已落定** | ✅ | `CLAUDE.md` §「旧入口 sunset 条件（阈值已写死；**与阶段二成败无关**）」——观察窗（6 个 change / 8 周）+ 三档阈值（采用率 5/6 · 质量 0 条上下文缺失 finding 且采纳率 ≥0.79 · 成本中位 ≤75 min）+ **二选一处置**（达标进 sunset / 任一不达标即删除 `sdflow-spec`）+「MUST NOT 无限期延窗」 |
 
-🔴 **诚实保留（MUST NOT 略过）**：Task 1 的验收复选框
-「新增 pytest 用例：截断的 `design.md` 经 `openspec validate --strict` → 红」**仍未勾**，
-因为该断言被实现期三方独立实测**证伪**：`validate --strict` 只跑 `validateChangeDeltaSpecs`、
-只读 `specs/*/spec.md`，对 `design.md` 恒假（已登记 **T232**，标注为 `/sdflow-done` archive 阶段必做）。
-已交付的**可达形态**是：门锚在 delta spec + 正面证明「存在态 ≠ 合格态」+ 把覆盖边界机械钉住。
-本票 §2.5 的实测**独立复现了同一事实**（`validate --strict` 报的红全部来自 delta spec 结构，
-而 `proposal/design/tasks` 的截断没有任何机械门）。
+### 7.2 唯一未满足项的性质（4.3）
 
-**结论**：三票的**实质交付**全部到位，阶段一形态端到端可跑通、六种故障处置正确、
-`/clear` 无损在 N=1 尺度上成立 ⇒ **阶段一验收门通过，可启动阶段二**；
-唯一未闭合项 T232 是**文档措辞与实现的对齐**（archive 阶段必做），**不阻塞阶段二**——
-阶段二的起手是 GO/NO-GO 外派实测门，与该措辞无依赖。
+Task 1 的验收复选框「新增 pytest 用例：截断的 `design.md` 经 `openspec validate --strict` → 红」
+**仍未勾**，因为该断言被实现期三方独立实测**证伪**：`validate --strict` 只跑
+`validateChangeDeltaSpecs`、只读 `specs/*/spec.md`，对 `design.md` 恒假
+（已登记 **T232**，标注为 `/sdflow-done` archive 阶段必做）。
+已交付的**可达形态**是：门锚在 delta spec + 正面证明「存在态 ≠ 合格态」+ 把覆盖边界机械钉住
+（`test_validate_strict_only_covers_delta_specs`）。
+本票 §2.5 的实测**独立复现了同一事实**。
+
+### 7.3 结论（**判断留给人**）
+
+**实质到位；字面判据（4.1–4.6 全过）未满足，因 4.3 的断言被实测证伪（T232）。
+是否放行由人拍板。**
+
+- **支持放行的理由**（供拍板参考，非结论）：4.3 是**断言本身写错了**、不是实现缺了东西；
+  它要的能力（截断产物被挡住）在 delta spec 面已交付，在 `design.md` 面则被证明**任何实现都做不到**
+  （CLI 不读它）；且阶段二起手是 GO/NO-GO 外派实测门，与该措辞无依赖。
+- **MUST NOT 由执行方代拍**：`tasks.md` 的门判据是「4.1–4.6 **全过**」，4.3 未勾即字面不满足。
+  **接受偏离是人的决定，不是执行方的**——上一轮报告直接写「阶段一验收门通过，可启动阶段二」是越权，
+  本节已改。
+- 若人拍板放行，建议同时拍 T232 的落点（改 SA-05 Scenario 与 `tasks.md` 4.3 的措辞，
+  这两份在 archive 阶段才可改）。
 
 ---
 
@@ -424,6 +461,21 @@ fix: 拒写。核 openspec 配置 planningHome/changeRoot 是否被改动
    真人在项目根目录里正常跑时 session cwd 与目标仓重合，不会遇到。
    反过来说，本轮的 `openspec new change` 是走 fail-open 过的守卫，
    **没有**验证「守卫在同仓场景下对分支②真幂等放行」这条路径。
+8. 🔴 **本轮自己就绕过了一次 SA-05 的 MUST-halt，且那条绕过口是模型可自行触发的**
+   〔fix 轮次 1 按 F4 补记〕。§3② 里我走的是 FF-0 守卫 docstring 明写的 fail-open
+   （change 名 token 含 `$` ⇒ 守卫不展开、不猜、放行）。它与哨兵逃生口**不同级**：
+   哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作；这条 fail-open
+   **零成本、零痕迹、模型自己就能触发**，盘上什么都不留。
+   上一轮只把 mis-scope（按 session cwd 判仓）登记成 T235，**漏了这一半** ——
+   现已另立 **T237**（含只做「可见性」的有界缓解方案：判定前扫有界 token 集，
+   命中即照旧放行但在 reason 里明写「本次没判、理由是 X」），T235 的备注已回指 T237。
+   ⚠️ 这意味着 §3② 那一格的「处置与失败模式表一致」只在**目标仓内**成立
+   （目标仓当时确实已在 `feat/harden-issues-read-path`），
+   **不能**被读成「FF-0 的 MUST-halt 在本轮被守住了」。
+9. **`openspec/retro/report.md` 的字节不可复现**〔fix 轮次 1 按 F7 补记〕：它含**实时墙钟**
+   （in-progress change 的边界取当下时刻），只要本 change 还没归档，任意两次再生的字节就不同
+   ⇒ **「它是否被人手改过」不可机械核**。本轮与 fix 轮次 1 都靠人工比对增量形态判定。
+   该文件的纪律仍是 view-only（改 `retro_report.py` 后重跑再生，MUST NOT 手改）。
 
 ---
 

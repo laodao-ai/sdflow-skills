@@ -94,6 +94,7 @@ sdflow-issues:
     T234: {"module":"openspec/issues/todolist 的 T132（spec-review 起手 grill 已收敛门）","summary":"T132 的信号载体枚举与行号锚已被 add-sdflow-spec 改过时，须订正后再实现：①T132 只枚举了两个载体（`workflow.md:83` 强制的 grill checkpoint-commit / design.md 内的 `<!-- sdflow:grill-done -->` 锚），而阶段一默认入口改为 `/sdflow-spec` 后，新增两个更强的载体 —— `checkpoint(sdflow-spec-grill)` 提交标签 + change 目录内非空 `decision-memo.md`（后者已有机械门 `hack/tests/test_decision_memo_gate.py::check_decision_memo`，可直接复用，不必另造锚）；②`workflow.md:83` 这个行号锚已因 Task 2 在 §流程表插入 `/sdflow-spec` 行而漂移，T132 正文按行号找不到原条款。⇒ 实现 T132 前 MUST 先按四入口现状重列信号载体（分支 A 走 sdflow-spec 锚、分支 B 走旧 grill 锚），否则门会对分支 A 的正常跑动误判 REFUSE_START","type":"代码质量","status":"OPEN","time":"2026-07-26 21:28","change":"add-sdflow-spec","batch":null}
     T235: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（+ 已铺设的 ~/.claude/hooks/ 副本）","summary":"FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上）","type":"基础设施","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
     T236: {"module":"sdflow-spec/SKILL.md 终审段的「中间态判据」","summary":"终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径","type":"代码质量","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
+    T237: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（`change_name` 的 fail-open 分支）","summary":"FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型自己就能触发、且不留任何审计痕**的绕过口，与哨兵逃生口不同级：哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作，而本 fail-open 只需让命令里的 change 名 token 含 `$`（或反引号 / 通配符 / 其它使 CHANGE_NAME_OK_RE 不匹配的字符），守卫即不展开、不猜、直接放行，盘上不留任何痕迹。实测（add-sdflow-spec Task 3 dogfood）：本轮正是走这条 fail-open 绕过了分支③ 的 MUST-halt（SA-05 Scenario 「在其它 feature 分支上创建变更 → MUST halt 问人」），当轮虽已原地披露、且目标仓内 FF-0 规则实际满足，但**这条路径在设计上对模型是完全敞开的**。它与 T235 的 mis-scope 是**两个独立缺陷**：T235 是判据锚错了仓（判得不对），本条是判据被合法跳过（根本没判）。fail-open 本身是既有纪律（基准 5：shell 语法面无界，守卫拿不准时不挡人干活），MUST NOT 改成解析命令串 —— 但「拿不准」和「已被绕过」在 reason 与审计面上目前完全不可区分","type":"基础设施","status":"OPEN","time":"2026-07-26 22:06","change":"add-sdflow-spec","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2332,7 +2333,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **动机**：守卫是 Task 2 刚同步过的 FF-0 三分支判定的机械实现；本缺陷使它在跨仓调用下给出与规则相反的结论
 
-**备注**：本项由 add-sdflow-spec Task 3 dogfood 实测发现；当轮为不触碰「只能人 touch」的哨兵，走了守卫 docstring 明写的 fail-open（token 含 `$` 即不展开不猜）并全程披露
+**备注**：本项由 add-sdflow-spec Task 3 dogfood 实测发现；当轮为不触碰「只能人 touch」的哨兵，走了守卫 docstring 明写的 fail-open（token 含 `$` 即不展开不猜）并全程披露。⚠️ **该 fail-open 本身另立 T237**（模型可自行触发、不留审计痕的绕过口）——本条是「判得不对（锚错了仓）」，T237 是「根本没判（判据被合法跳过）」，两条同一处代码、互为一对，宜一并修；有界缓解方案写在 T237 的思路里
 <!-- sdflow-issue-block:end id=T235 -->
 
 <!-- sdflow-issue-block:start id=T236 -->
@@ -2345,3 +2346,16 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：本项由 add-sdflow-spec Task 3 dogfood 终审步实测发现
 <!-- sdflow-issue-block:end id=T236 -->
+
+<!-- sdflow-issue-block:start id=T237 -->
+## T237: FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型自己就能触发、且不留任何审计痕**的绕过口，与哨兵逃生口不同级：哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作，而本 fail-open 只需让命令里的 change 名 token 含 `$`（或反引号 / 通配符 / 其它使 CHANGE_NAME_OK_RE 不匹配的字符），守卫即不展开、不猜、直接放行，盘上不留任何痕迹。实测（add-sdflow-spec Task 3 dogfood）：本轮正是走这条 fail-open 绕过了分支③ 的 MUST-halt（SA-05 Scenario 「在其它 feature 分支上创建变更 → MUST halt 问人」），当轮虽已原地披露、且目标仓内 FF-0 规则实际满足，但**这条路径在设计上对模型是完全敞开的**。它与 T235 的 mis-scope 是**两个独立缺陷**：T235 是判据锚错了仓（判得不对），本条是判据被合法跳过（根本没判）。fail-open 本身是既有纪律（基准 5：shell 语法面无界，守卫拿不准时不挡人干活），MUST NOT 改成解析命令串 —— 但「拿不准」和「已被绕过」在 reason 与审计面上目前完全不可区分
+> FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型自己就能触发、且不留任何审计痕**的绕过口，与哨兵逃生口不同级：哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作，而本 fail-open 只需让命令里的 change 名 token 含 `$`（或反引号 / 通配符 / 其它使 CHANGE_NAME_OK_RE 不匹配的字符），守卫即不展开、不猜、直接放行，盘上不留任何痕迹。实测（add-sdflow-spec Task 3 dogfood）：本轮正是走这条 fail-open 绕过了分支③ 的 MUST-halt（SA-05 Scenario 「在其它 feature 分支上创建变更 → MUST halt 问人」），当轮虽已原地披露、且目标仓内 FF-0 规则实际满足，但**这条路径在设计上对模型是完全敞开的**。它与 T235 的 mis-scope 是**两个独立缺陷**：T235 是判据锚错了仓（判得不对），本条是判据被合法跳过（根本没判）。fail-open 本身是既有纪律（基准 5：shell 语法面无界，守卫拿不准时不挡人干活），MUST NOT 改成解析命令串 —— 但「拿不准」和「已被绕过」在 reason 与审计面上目前完全不可区分
+
+**关联文档**：`openspec/changes/add-sdflow-spec/design.md`
+
+**动机**：SA-05 Scenario 把「其它 feature 分支 → MUST halt 问人」当硬约束，而该约束的唯一机械实现（FF-0 hook）有一条零成本、零痕迹、模型可自行触发的旁路；不登记就等于把 SA-05 的机械保证悄悄降级成纪律
+
+**思路**：有界缓解（MUST NOT 手搓 shell 解析器）：判定前先扫命令串里**有界的 token 集**——① change 名 token 落在 CHANGE_NAME_OK_RE 之外（含 `$` / 反引号 / 通配符）② 出现改变工作目录的 token（`cd` / `-C` / `git -C`，这一项同时覆盖 T235 的 mis-scope 前提）。命中任一 ⇒ 判定的前提不成立 ⇒ 照旧 fail-open 放行（不挡人干活），但 deny/allow 的 reason MUST 明写「本次没判，理由是 X」，并把这句话回传给模型。这把「守卫拿不准」与「守卫被绕过」从不可区分变成 transcript 里可审计的一行。⚠️ 这只是**可见性**缓解，不是堵死：它照旧放行，防线仍是纪律 + review（同哨兵的信任级别声明）。与 T235 同一处代码、宜一并做
+
+**备注**：与 T235 互为一对（T235 = 判得不对 / 本条 = 根本没判），两条都源自 add-sdflow-spec Task 3 dogfood 的故障② 注入；本条由 Task 3 fix 轮次 1 的双轴审 F4 点出——上一轮只登记了 T235 的 mis-scope，漏了「fail-open 是模型可用的绕过口」这一半
+<!-- sdflow-issue-block:end id=T237 -->
