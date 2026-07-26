@@ -16,7 +16,7 @@
 
 ### Requirement: SA-02 判断不出主 session，检索与生成外派
 
-主 session SHALL 亲自执行：澄清对话、对抗拷问、决策纪要撰写、终审裁决。检索/调研 SHALL 外派 `sdflow-researcher` 子代理（返回结论 + file:line 出处，原始材料不回传主上下文）；锚点纪要压缩与四件套逐产物生成 SHALL 外派 `sdflow-spec-writer` 子代理。外派 SHALL 遵守阈值：预计读取材料 ≳ 数百行且结论可压缩才派发，其余主 session 直接执行。
+主 session SHALL 亲自执行：澄清对话、对抗拷问、锚点纪要压缩、决策纪要撰写、终审裁决 [grill-amendment]（锚点纪要的原材料为对话共识，仅主 session 持有）。检索/调研 SHALL 外派 `sdflow-researcher` 子代理（返回结论 + file:line 出处，原始材料不回传主上下文）；四件套逐产物生成 SHALL 外派 `sdflow-spec-writer` 子代理（单一职责）。外派 SHALL 遵守阈值：预计读取材料 ≳ 数百行且结论可压缩才派发，其余主 session 直接执行。
 
 #### Scenario: 大材料检索外派
 - **WHEN** 拷问需要核验一个横跨多文件、预计数百行以上的代码事实
@@ -44,7 +44,7 @@
 
 ### Requirement: SA-04 决策纪要为承重件，/clear 无损
 
-相位 B SHALL 产出主 session 亲笔的决策纪要，字段：目标态一句话、拍板决策（每条含依据 + 砍掉的候选 + 砍的理由）、承重约束清单（每条含验证方式/证据锚）、接受的边角风险；命中 TG-23 的方案选择另含三镜 + 主次判定。纪要 SHALL 作为相位 C 每个生成子代理的输入；生成完成后其内容 SHALL 并入 design.md 决策记录节。验收不变式：`/clear` 后阶段二评审所需的全部 why SHALL 可从落盘产物获得。
+相位 B SHALL 产出主 session 亲笔的决策纪要，字段：目标态一句话、拍板决策（每条含依据 + 砍掉的候选 + 砍的理由）、承重约束清单（每条含验证方式/证据锚）、接受的边角风险；命中 TG-23 的方案选择另含三镜 + 主次判定。纪要 SHALL 写入 `openspec/changes/<name>/decision-memo.md`（git 跟踪，MUST NOT 存放于 session 级临时目录）[grill-amendment]；SHALL 作为相位 C 每个生成子代理的输入；生成完成后其内容 SHALL 并入 design.md 决策记录节，memo 文件保留为审计锚。验收不变式：`/clear` 后阶段二评审所需的全部 why SHALL 可从落盘产物获得；session 中断后重入 SHALL 不丢失已收敛的拷问成果。
 
 #### Scenario: 纪要随派发下发
 - **WHEN** 相位 C 派发任一产物的生成子代理
@@ -56,7 +56,7 @@
 
 ### Requirement: SA-05 生成经 openspec CLI，产物契约不变
 
-相位 C SHALL：先执行 FF-0 分支检查（不在 feature 分支则 `git checkout -b feat/{change}`）；经 `openspec new change` 创建 change；按 `openspec status --change <name> --json` 的依赖序**串行**生成产物；每个生成子代理 SHALL 自行调用 `openspec instructions <artifact> --change <name> --json` 获取载荷（MUST NOT 由主 session 转述 instructions 内容）并自行读取依赖产物全文；产物写入 `resolvedOutputPath`。openspec CLI 不可用或报错 SHALL fail-closed 中止并报告，MUST NOT 手工创建 change 目录结构。
+FF-0 分支检查（不在 feature 分支则 `git checkout -b feat/{change}`）与 `openspec new change` SHALL 在相位 B 收敛点、纪要落盘前执行 [grill-amendment]。相位 C SHALL：起手核验 `decision-memo.md` 存在且必填字段非空；按 `openspec status --change <name> --json` 的依赖序**串行**生成产物；每个生成子代理 SHALL 自行调用 `openspec instructions <artifact> --change <name> --json` 获取载荷（MUST NOT 由主 session 转述 instructions 内容）并自行读取依赖产物全文；产物写入 `resolvedOutputPath`。openspec CLI 不可用或报错 SHALL fail-closed 中止并报告，MUST NOT 手工创建 change 目录结构。
 
 #### Scenario: 生成子代理自取载荷
 - **WHEN** 派发 tasks.md 生成子代理
@@ -84,7 +84,7 @@
 
 ### Requirement: SA-07 agent 定义承载角色，通则托管，带 fallback
 
-两个 agent 定义 SHALL 位于 `sdflow-spec/agents/`：`sdflow-researcher`（`model: inherit`、`effort: low`、tools 白名单 `Read, Glob, Grep, Bash`）与 `sdflow-spec-writer`（`model: inherit`、`effort: medium`、tools 白名单 `Read, Glob, Grep, Bash, Write`）。定义正文 SHALL 含四条通则托管块，由 `sync_principles.py` 以 skill 味源渲染并由 `hack/tests/` 守卫（MUST NOT 手改块内部）。`setup.sh` SHALL 将其铺设到 `~/.claude/agents/`（含所有权守卫与孤儿清理）。派发 SHALL 优先 `agentType` 引用定义并传 `$SDFLOW_TIER_*` 档位变量；`agentType` 解析失败 SHALL fallback 到 prompt 内联通则路径。SKILL.md 与 agent 定义 MUST NOT 内联具体模型 id。
+两个 agent 定义 SHALL 位于 `sdflow-spec/agents/`：`sdflow-researcher`（`model: inherit`、`effort: low`、tools 白名单 `Read, Glob, Grep, Bash, WebFetch, WebSearch`——含联网调研职责，全只读 [grill-amendment]）与 `sdflow-spec-writer`（`model: inherit`、`effort: medium`、tools 白名单 `Read, Glob, Grep, Bash, Write`）。定义正文 SHALL 含四条通则托管块，由 `sync_principles.py` 以 skill 味源渲染并由 `hack/tests/` 守卫（MUST NOT 手改块内部）。`setup.sh` SHALL 将其铺设到 `~/.claude/agents/`（含所有权守卫与孤儿清理）。派发 SHALL 优先 `agentType` 引用定义并传 `$SDFLOW_TIER_*` 档位变量；`agentType` 解析失败 SHALL fallback 到 prompt 内联通则路径。SKILL.md 与 agent 定义 MUST NOT 内联具体模型 id。
 
 #### Scenario: agentType 派发携带档位
 - **WHEN** Claude 宿主已跑 setup.sh，主 session 派 researcher
@@ -120,7 +120,7 @@
 
 #### Scenario: 相位 checkpoint
 - **WHEN** 相位 B 收敛（纪要落笔）与相位 C 终审完成
-- **THEN** 各产生一次 checkpoint 提交；拷问进行中的任何轮次不产生提交
+- **THEN** 各产生一次 checkpoint 提交；B 收敛的 checkpoint 在 feature 分支上包含 `decision-memo.md`（FF-0 与 `openspec new` 已于 B 收敛点前移执行）[grill-amendment]；拷问进行中的任何轮次不产生提交
 
 ### Requirement: SA-10 ADR 与术语提议钩子（惰性，只提议不写）
 

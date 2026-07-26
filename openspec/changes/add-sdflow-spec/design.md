@@ -24,11 +24,12 @@
 |---|---|---|---|
 | `sdflow-spec/SKILL.md` | 新增·编排指令 | 三相位管线、dispatch 契约、降级矩阵、出口序列 | openspec CLI、agent 定义（带 fallback） |
 | `sdflow-spec/agents/sdflow-researcher.md` | 新增·agent 定义 | 检索/调研/供证；只读 | 通则托管块（sync 渲染） |
-| `sdflow-spec/agents/sdflow-spec-writer.md` | 新增·agent 定义 | 锚点纪要压缩、四件套单产物生成 | 通则托管块、openspec CLI |
+| `sdflow-spec/agents/sdflow-spec-writer.md` | 新增·agent 定义 | 四件套单产物生成（单一职责）[grill-amendment] | 通则托管块、openspec CLI |
 | `setup.sh` | 修改 | 新增 agents 铺设段：`sdflow-spec/agents/*.md` → `~/.claude/agents/`（symlink + 所有权守卫，对齐 `install_into` 模式） | — |
 | `hack/sync_principles.py` | 修改 | agent 定义正文纳入投放面（skill 味源渲染——受众为下发的 mid/light 档子代理） | `PROJECT_TARGETS`/`skills()` 既有结构 |
 | `hack/tests/test_sync_principles.py` | 修改 | 投放面守卫覆盖 agents 文件（`HEADLINES` 四子串机械守） | — |
-| CLAUDE.md/AGENTS.md/README.md | 修改 | 阶段一规范区改写 + 归属修正 + 列表 | — |
+| `sdflow-init/assets/snippets/claude-section.md` | 修改 | 归属错误修正（superpowers → Matt Pocock），经托管机制刷新本仓区块；「ff 之后是 grill」保留管旧路径 [grill-amendment] | 托管区块刷新机制 |
+| CLAUDE.md/AGENTS.md/README.md | 修改 | **非托管区**新增 sdflow-spec 使用路径与出口序列 + README 列表 [grill-amendment] | — |
 
 **组件/依赖图**〔TG-14〕：
 
@@ -57,12 +58,12 @@
 │  每问附推荐│◀────结论+出处──────│
 │  …若干轮…  │
 │            │ ══ Phase A→B：共识初成 ══
-│            │ ──派「压缩共识为锚点纪要」──────────▶│写 scratchpad
-│            │◀───────────锚点纪要─────────────────│
+│            │ 亲笔压缩共识为锚点纪要(对话内呈现,作拷问靶)
 │◀─ 拷问(攻承重约束,一次一问) ──依据 researcher 供证
 │  …至共识+承重约束全站稳…
-│            │ Fable/主档亲笔落決策纪要(scratchpad)
-│            │ ══ Phase B→C：FF-0 检查 → openspec new change ───────────▶│
+│            │ ══ Phase B 收敛：FF-0 检查 → openspec new change ────────▶│
+│            │ 主档亲笔落决策纪要(change 目录 decision-memo.md)→checkpoint
+│            │ ══ Phase B→C ══
 │            │ ──串行逐产物派(纪要随 prompt 下发)──▶│自调 instructions ──▶│
 │            │                                     │读依赖产物→写产物
 │            │◀──────────完成/失败──────────────────│
@@ -73,7 +74,7 @@
 
 行为要点（specs 承载正式 requirement，此处记设计意图）：
 - **Phase A**：grilling 技法固化——一次一问、每问附推荐、事实自查/决策问人、沿设计树逐分支解依赖。成熟可提前进 B；**B 不可跳过**。
-- **Phase B**：拷问以锚点纪要为文本锚（调和「先拷问省返工」与「有锚更接地」两派）；**优先攻承重约束**（一撤则候选整列塌缩）；停止信号 = 共识 + 承重约束清单全部站稳。domain-modeling 判据吸收：命中 ADR 三条件（难逆转 + 缺上下文意外 + 真实权衡）→ 提议落 `openspec/adr/`（格式锚同目录现状，冷启动用 SKILL.md 内一行最小模板）；术语冲突 → 提议 CONTEXT.md。只提议不自动写。
+- **Phase B**：拷问以锚点纪要为文本锚（调和「先拷问省返工」与「有锚更接地」两派）；锚点纪要由主 session 亲笔 [grill-amendment]——原材料（A 阶段对话共识）只在主上下文，外派压缩须先序列化共识进 prompt（等于亲写一遍）再经 writer 重述（两跳失真），且多一次 dispatch 往返；**优先攻承重约束**（一撤则候选整列塌缩）；停止信号 = 共识 + 承重约束清单全部站稳。domain-modeling 判据吸收：命中 ADR 三条件（难逆转 + 缺上下文意外 + 真实权衡）→ 提议落 `openspec/adr/`（格式锚同目录现状，冷启动用 SKILL.md 内一行最小模板）；术语冲突 → 提议 CONTEXT.md。只提议不自动写。
 - **Phase C**：产物间依赖链（proposal → design/specs → tasks）决定**串行**；生成子代理 fresh context 三输入 = 决策纪要（prompt 下发）+ instructions（自调 CLI，防主 session 转述漂移）+ 依赖产物全文（自读）。终审只兜判断层。
 
 ## 数据模型与生命周期〔BASE-24〕：决策纪要
@@ -86,7 +87,7 @@
 | 接受的边角[] | 通则④显式记录（风险 + 为何接受） |
 | 三镜代价 | 仅命中 TG-23 的方案选择决策 |
 
-生命周期：Phase B 尾由主 session 亲笔写入 scratchpad → Phase C 作为每个生成子代理的输入 → 终审后**内容并入 design.md 决策记录节**（OpenSpec 原生槽位）→ scratchpad 版废弃。**验收 = /clear 无损**：清上下文后阶段二若丢失任何 why，即管线 bug。
+生命周期 [grill-amendment]：Phase B 收敛 → FF-0 分支检查 + `openspec new change`（此时目标态已清晰、change 名可定）→ 主 session 亲笔写入 `openspec/changes/<name>/decision-memo.md`（change 目录放流程附件是既有惯例，同 hand-off.md / impl-reports/）→ B checkpoint 在 feature 分支提交该文件 → Phase C 作为每个生成子代理的输入 → 终审后**内容并入 design.md 决策记录节**（OpenSpec 原生槽位），memo 文件保留（footage 性质，审计锚）。**验收 = /clear 无损**：纪要在 git 内，session 崩溃/换 session 重入不丢拷问成果；清上下文后阶段二若丢失任何 why，即管线 bug。
 
 ## Decisions〔TG-23·BASE-12〕
 
@@ -94,7 +95,7 @@
 
 **D2 判断/机械分层外派**（备选：薄编排=主 session 全做；重管线=全阶段大 roster fan-out）。判断（澄清/拷问/纪要/终审）不出主 session；检索与生成外派。依据：官方 lead+subagent 实证 90.2%；15× 溢价警告 → 子代理少而定向、单一职责短命；CLI 幂等自取实测扫清生成外派障碍。薄编排是本方案的合法降级形态；重管线与拷问的顺序对话性错配、且与阶段二对抗镜职责重叠。三镜：系统镜——多一层纪要中间件与 dispatch 面，每件独立可测；用户镜——生成阶段等待略增（串行子代理），拷问体验同档；开发循环镜——复用既有 dispatch 模式零新机制，生成输出从主档价降 mid 档价。主次：开发循环镜（成本结构）主导，系统镜代价可控。
 
-**D3 agent 定义文件承载角色**（备选：纯 prompt 内联，现有各 skill 做法）。`sdflow-researcher`（`model: inherit`·`effort: low`·`tools: Read, Glob, Grep, Bash`）、`sdflow-spec-writer`（`model: inherit`·`effort: medium`·`tools: Read, Glob, Grep, Bash, Write`）。收益（docs/subagent-definitions-plan.md 四维表）：通则传播从指令变机制 + 每次派发省 ~2KB 重复注入；工具白名单挡 researcher 写权；per-agent effort 缓存中性（主 session effort 整场不动）。代价照单收：投放面 +2 必须纳入 sync_principles（否则正是该机制防的漂移）。派发写法：`agentType` 优先，解析失败 fallback prompt 内联通则（host-adaptive）。三镜：系统镜——新增 `~/.claude/agents/` 铺设面与所有权守卫；用户镜——无感；开发循环镜——effort 分档与通则免重复注入双收益。主次：开发循环镜主导。
+**D3 agent 定义文件承载角色**（备选：纯 prompt 内联，现有各 skill 做法）。`sdflow-researcher`（`model: inherit`·`effort: low`·`tools: Read, Glob, Grep, Bash, WebFetch, WebSearch`——联网调研属其本职（通则②「主动联网找权威最佳实践」），六者皆只读、不破无写权边界 [grill-amendment]）、`sdflow-spec-writer`（`model: inherit`·`effort: medium`·`tools: Read, Glob, Grep, Bash, Write`）。收益（docs/subagent-definitions-plan.md 四维表）：通则传播从指令变机制 + 每次派发省 ~2KB 重复注入；工具白名单挡 researcher 写权；per-agent effort 缓存中性（主 session effort 整场不动）。代价照单收：投放面 +2 必须纳入 sync_principles（否则正是该机制防的漂移）。派发写法：`agentType` 优先，解析失败 fallback prompt 内联通则（host-adaptive）。三镜：系统镜——新增 `~/.claude/agents/` 铺设面与所有权守卫；用户镜——无感；开发循环镜——effort 分档与通则免重复注入双收益。主次：开发循环镜主导。
 
 **D4 档位相对化**（备选：SKILL.md 写死 Fable 5）。主 session = 人选档；子代理引用 `$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（`resolve-models.sh` 既有机制）。遵守 host-adaptive-execution「skill 引用变量不内联模型名」requirement。使用纪律写入 SKILL.md：高价值 change 建议最强档主 session；产/审错档（见 D6）。
 
@@ -106,6 +107,8 @@
 
 **D8 生成失败降级阶梯**（备选：fail-closed 整体中止）。检索败 → 主 session 亲查；生成子代理败 → 重试一次 → 主 session 亲写该产物；每级降级 MUST 如实报告。openspec CLI 不可用是唯一 fail-closed（产物契约单一源，手搓目录 = 契约漂移）。
 
+**D9 纪要落盘 change 目录、FF-0 与 `openspec new` 前移至 B 收敛** [grill-amendment]（备选：scratchpad 暂存 + Phase C 起手建 change——被否：①scratchpad 为 per-session 目录，session 崩溃/换 session 即丢承重件，「可重入」被击穿；②B 收敛 checkpoint 时仓内零变更，checkpoint-commit.sh 静默跳过，SA-09 空转；③即使纪要进仓，feature 分支 Phase C 才建，B checkpoint 落错分支）。代价：change 名在 B 尾即定（此时信息已足够）；拷问后放弃则留带纪要的空 change 目录（feature 分支内，删分支即净）。
+
 ## 失败模式表〔BASE-06·TG-08/15〕
 
 | 失败模式 | 检测 | 处置 | 超时/回滚〔D-4〕 |
@@ -115,7 +118,7 @@
 | spec-writer 失败/产物缺失 | 写后核验 `resolvedOutputPath` 存在 + status 复查 | 重试 1 次 → 亲写；报告标注降级 | 产物文件可 git checkout 丢弃（feature 分支内，天然可回滚） |
 | openspec CLI 不可用/报错 | 命令 exit code | **fail-closed 中止**，报错给人 | 未产生半成品（new change 失败即无目录） |
 | 生成中断（部分产物完成） | status --json 对账 | 如实报告完成/未完成清单；可重入（ready 产物继续） | 分支内 git 状态即真相 |
-| 纪要缺失/不完整进入 Phase C | Phase C 起手核验纪要字段非空 | 拒绝进入生成，退回 Phase B | — |
+| 纪要缺失/不完整进入 Phase C | Phase C 起手核验 `decision-memo.md` 存在且必填字段非空 | 拒绝进入生成，退回 Phase B | — |
 
 ## 可观测性〔BASE-11〕
 
@@ -129,7 +132,7 @@
 |---|---|
 | 生成环节输出单价 | 主档价 → mid 档价（Fable $50/M → Sonnet $15/M，-70%；Opus 主 session 时 $25→$15，-40%） |
 | 单次阶段一总成本 | 强档全包 ~$15-20 → 本方案 ~$10-13（Fable 主）/ ~$5-6（Opus 主） |
-| 拷问覆盖率 | 100%（结构性，B 不可跳过） |
+| 拷问覆盖率 | 管线内建默认路径（非机械保证）；机械审计信号 = `decision-memo.md` 存在 + 决策记录砍掉候选可 grep [grill-amendment] |
 | /clear 无损 | 阶段二「上下文缺失」finding = 0 |
 | dispatch 开销阈值 | 材料 ≳ 数百行且结论可压缩才外派，其余主 session 直做 |
 

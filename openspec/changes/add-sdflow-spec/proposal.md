@@ -7,10 +7,10 @@
 ## What Changes
 
 - **新增顶层 skill `sdflow-spec`**：单一入口「澄清 → 拷问 → 生成」管线，替代阶段一的三入口**使用路径**（三个原 skill 保留不动）。主 session 只做判断（澄清对话、对抗拷问、决策纪要、终审），检索/调研与四件套生成外派子代理。
-- **新增 agent 定义文件** `sdflow-spec/agents/`：`sdflow-researcher`（检索供证，effort low、只读工具白名单）、`sdflow-spec-writer`（纪要压缩 + 四件套生成，effort medium）；`model: inherit`，调用时经 `resolve-models.sh` 传档位变量。
+- **新增 agent 定义文件** `sdflow-spec/agents/`：`sdflow-researcher`（检索供证，effort low、只读工具白名单）、`sdflow-spec-writer`（四件套生成，effort medium）；`model: inherit`，调用时经 `resolve-models.sh` 传档位变量。
 - **`setup.sh` 扩展**：agents 定义铺设到 `~/.claude/agents/`（沿用 symlink/copy 机制）。
 - **`sync_principles.py` 投放面扩展**：agent 定义正文纳入四条通则托管块 + `hack/tests/` 守卫同步更新。
-- **本仓阶段一规范改写**：CLAUDE.md/AGENTS.md 中「ff 之后贴 grill prompt」的出口约定改为 `sdflow-spec` 出口序列（`/clear` → 换档 → `/sdflow-spec-review`）；顺带修正「grill-with-docs 来自 superpowers 插件」的归属错误（实为 Matt Pocock skills 集合）。
+- **本仓阶段一规范双通道改写** [grill-amendment]：①归属错误修正（「grill-with-docs 来自 superpowers 插件」实为 Matt Pocock skills 集合）改真相源 `sdflow-init/assets/snippets/claude-section.md` + 经托管机制刷新本仓区块（纯事实纠错，下游随 update 自然获得）；②`sdflow-spec` 使用路径与出口序列（`/clear` → 换档 → `/sdflow-spec-review`）写入本仓 CLAUDE.md/AGENTS.md **非托管区**；托管块「ff 之后是 grill」保留（管旧路径，三原 skill 并存），下游推广另 change。
 - **README skills 列表**更新 + 重跑 `setup.sh`。
 
 ## Capabilities
@@ -25,7 +25,7 @@
 ## Success Metrics
 
 - **四件套生成环节输出成本** — 基准：全部按主 session 档位输出价（Fable $50/M、Opus $25/M）→ 目标：生成环节按 mid 档价（$15/M，降 ≥40%）— 度量：dogfood change 中生成子代理的 usage 归属；粗粒度用 `/usage` 前后对比并如实标注精度。
-- **拷问覆盖率** — 基准：grill 人工触发、可静默跳过（已实证发生）→ 目标：经 `sdflow-spec` 产出的 change 100% 经过拷问 — 度量：design.md 决策记录节含「砍掉的候选 + 理由」条目（可 grep 抽查）。
+- **拷问覆盖率** [grill-amendment] — 基准：grill 人工触发、可静默跳过（已实证发生）→ 目标：拷问为管线内建默认路径（跳过须主动偏离指令；结构性改善而非机械保证——指令层约束由执行方自报，按诚实边界纪律不冒充机械门）— 度量（机械审计信号）：`decision-memo.md` 存在 + design.md 决策记录节含「砍掉的候选 + 理由」条目（可 grep 抽查）；若 dogfood 发现跳过实际发生，另 change 补机械门禁。
 - **阶段二冷启动无损率** — 基准：部分决策 why 滞留对话上下文 → 目标：`/clear` 后 spec-review 所需 why 100% 可从落盘产物获得 — 度量：dogfood change 的 spec-review 报告中「上下文缺失/需回问」类 finding = 0。
 
 ## 需求优先级〔TG-19〕
@@ -61,7 +61,7 @@
 ## Impact
 
 - **新增**：`sdflow-spec/SKILL.md`、`sdflow-spec/agents/{sdflow-researcher,sdflow-spec-writer}.md`
-- **修改**：`setup.sh`（agents 铺设段）、`hack/sync_principles.py` + `hack/tests/test_sync_principles.py`（投放面 +2）、`CLAUDE.md`/`AGENTS.md`（阶段一规范区，经 assets 源如适用——本 change 限本仓生效范围）、`README.md`
+- **修改**：`setup.sh`（agents 铺设段）、`hack/sync_principles.py` + `hack/tests/test_sync_principles.py`（投放面 +2）、`sdflow-init/assets/snippets/claude-section.md`（仅归属修正）、`CLAUDE.md`/`AGENTS.md`（非托管区新增；托管块经刷新机制同步归属修正）、`README.md`
 - **依赖**：openspec CLI ≥1.5（`new`/`status --json`/`instructions --json`，均已实测）；Claude Code agent 定义解析（`~/.claude/agents/`，带 prompt 内联 fallback）；`resolve-models.sh` 档位变量（既有）
 - **技术栈标注**〔TG-01/02/03 判定〕：纯 Markdown 编排 + Python/Bash 构建脚本，不命中 backend/embedded/frontend 领域清单
 - **不受影响**：阶段二/三编排器、openspec CLI 生成的官方 skills、`~/.agents/skills` 第三方集合
