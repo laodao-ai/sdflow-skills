@@ -16,11 +16,11 @@ Task 3 的 dogfood 把六种故障**各注入过一次**，夹具跑完即删 �
 | # | 故障 | 可执行 producer | 本文件给的锚 | 强度 |
 |---|---|---|---|---|
 | ① | 工作树脏 | **无**（B.1① 是给模型看的指令） | SKILL.md 指令在场 + design 失败模式表行在场 | 弱 |
-| ② | 在其它 feature 分支 | ✅ `ff0-branch-guard.py` | **真跑 hook**（三选一处置） | **强** |
+| ② | 在其它 feature 分支 | ✅ `ff0-branch-guard.py` | **真跑 hook**（三选一处置）+ **B.1② 判定指令在场** | **强** |
 | ③ | 目标分支已存在 | **无**（git 自身行为 + B.1② 指令） | 指令在场 + `git` 真实行为对账 | 中 |
-| ④ | 纪要陈旧（身份字段不匹配） | 判 1/2 已有门；判 3/4 算法有单一源 | **四 fixture 真跑判 3/判 4** | **强** |
-| ⑤ | CLI 缺失 | **无**（0.1 预检是指令） | 指令在场 + 真实 PATH 剥离下的 exit code | 中 |
-| ⑥ | `instructions --json` schema 断言不过 | **无**（C.3 §2 是指令） | **真 CLI 载荷 ⊇ 文档声明字段集** + 假 CLI 三种畸形 fail-closed | **强** |
+| ④ | 纪要陈旧（身份字段不匹配） | 判 1/2 已有门；判 3/4 算法有单一源 | **四 fixture 真跑判 3/判 4** + **C.1 四判与两条处置指令在场** | **强** |
+| ⑤ | CLI 缺失 | **无**（0.1 预检是指令） | 指令在场（三件事逐条）+ 真实 PATH 剥离下的 exit code | 中 |
+| ⑥ | `instructions --json` schema 断言不过 | **无**（C.3 §2 是指令） | **真 CLI 载荷 ⊇ 文档声明字段集** + 假 CLI 三种畸形 fail-closed + 处置句在场 | **强** |
 
 🔴 **弱锚守的是「指令还在、没被后续编辑悄悄删掉/弱化」，MUST NOT 被表述成「处置正确会红」。**
 「模型收到脏工作树时真的 halt 了没」没有确定性信号，只能靠 dogfood 人核 —— 这条残余不消失。
@@ -29,6 +29,13 @@ Task 3 的 dogfood 把六种故障**各注入过一次**，夹具跑完即删 �
 【锚质量纪律（承 `test_canonical_entry_sync.py`）】
 - 指令在场锚 MUST 打在**它自称守的那句话**上，且能被定点变异打红（删那句 → 红）。
 - 数量类断言一律给**下限**并注明语义，防「正则一个字没匹配上 ⇒ 空转恒绿」。
+- **算法锚 MUST 配一条指令在场锚**〔[impl-review-fix fix2] F-A〕。判据只有一条：
+  **「它守的那条处置，从 SKILL.md 里删掉，会红吗？」** —— 判 3/判 4 的算法住在本文件里
+  （被守的产品是给模型看的指令，不存在第二份可执行实现），故算法锚只证明「**判得出**」，
+  证不了「**处置还写在那儿**」；处置句被删 ⇒ 模型不再核身份，而算法用例一条不红。
+  ④ 曾是本文件里自评最高的一格，恰恰只有它缺这半边 —— **假绿复发在自评最高处**。
+- 指令在场锚的 needle 要么**足够长**、要么**整句连读**：短 needle 会被文档别处的同词满足
+  （恒真锚的第二种成因），删掉它自称守的那句仍然绿。
 """
 import importlib.util
 import json
@@ -139,6 +146,20 @@ def _run_hook(repo_dir, command):
         return False, ""
     d = json.loads(proc.stdout)["hookSpecificOutput"]
     return d["permissionDecision"] == "deny", d["permissionDecisionReason"]
+
+
+def test_fault2_branch_judgment_instruction_is_present():
+    """B.1② 的三分判定表 + 「MUST NOT 沿用弱判据」在 SKILL.md 在场。
+
+    [impl-review-fix fix2] F-A（面治）：hook 只在**模型敲 `openspec new change`** 时才拦；
+    B.1② 才是模型自己那一跳的判定。删掉它 ⇒ 只剩 hook 这一层兜底，而 hook 之外的路径
+    （人手敲、或先切分支再建目录）全裸奔 —— 下面那条真跑 hook 的用例照样绿。
+    """
+    squashed = _squash(_skill_text())
+    assert "|**其它feature分支**|**halt问人**：从当前切出/回base切出/就地继续|" in squashed, \
+        "B.1② 三分判定表的「其它 feature 分支 ⇒ halt 问人（三选一）」那一行不见了"
+    assert "MUSTNOT沿用「已在feature分支就跳过」的弱判据" in squashed, \
+        "B.1② 的「MUST NOT 沿用弱判据」不见了 —— 第二个 change 会落在前一个 change 的分支上"
 
 
 def test_fault2_deny_offers_exactly_the_three_documented_choices(repo):
@@ -361,6 +382,34 @@ def test_fault4_three_verdicts_are_distinguishable(tmp_path):
     assert len({ok, stale, undrafted}) == 3, (ok, stale, undrafted)
 
 
+def test_fault4_dispositions_are_present_in_the_skill():
+    """C.1 的**四判 + 两条处置**在 SKILL.md 在场 —— 上面五条算法用例守不到这里。
+
+    🔴 [impl-review-fix fix2] F-A：这是本文件要治的假绿**复发在自评最高的那一格**。
+    `check_memo_identity` 住在本测试文件里（`sdflow-spec` 无 `scripts/`，见文件头），
+    ⇒ 把 SKILL.md 那句处置整行删掉，判 3/判 4 的算法用例**一条都不会红**：
+    模型不再核身份，陈旧纪要静默复用，而覆盖图 4.5 照旧绿。
+    算法锚只证明「判得出」，本用例补的是「**处置还写在那儿**」这另一半。
+    """
+    squashed = _squash(_skill_text())
+    # 判 3 / 判 4 的判据本身
+    assert "身份字段匹配当前盘面" in squashed, \
+        "C.1 判 3（身份字段匹配当前盘面）不见了 —— 陈旧 memo 的唯一识别信号没了"
+    assert "`decision_hash`重算后匹配" in squashed and "重算纪要正文" in squashed, \
+        "C.1 判 4（decision_hash 重算比对）不见了 —— 定稿后被手改的 memo 无从发现"
+    # 处置 A：任一不过 ⇒ 拒绝进入生成
+    assert "任一不过⇒**拒绝进入生成，退回相位B**" in squashed, \
+        "C.1「任一不过 ⇒ 拒绝进入生成」不见了 —— 四判退化成只报告不阻断"
+    # 处置 B：stale（判 3/判 4 红）⇒ 呈摘要给人确认，MUST NOT 静默复用
+    assert "身份不符（判3）或hash不符（判4）⇒**呈现旧memo摘要" in squashed, \
+        "C.1「身份/hash 不符 ⇒ 呈现旧 memo 摘要给人确认」不见了 —— stale 的处置没了"
+    assert "MUSTNOT静默复用" in squashed, \
+        "C.1 的「MUST NOT 静默复用」不见了 —— 这句正是故障④ 的整个要害"
+    # 处置 C：undrafted（定稿两字段缺失）⇒ 退回 B 补定稿，**与 stale 不同处置**
+    assert "**退回B补定稿**，MUSTNOT按「身份不匹配」去问人复用与否" in squashed, \
+        "C.1 的 undrafted 分支（退回 B 补定稿）不见了 —— 会去问人复用与否，人机交互错"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 故障⑤/⑥ —— openspec CLI 缺失 / `instructions --json` 载荷畸形
 #
@@ -451,7 +500,13 @@ def _fake_openspec(tmp_path, stdout_body, *, exit_code=0):
      '"template":"y","resolvedOutputPath":"/tmp/x.md"}', "dependencies 类型不符"),
 ])
 def test_fault6_malformed_payload_fails_closed(tmp_path, body, label):
-    """⑥b：三种畸形载荷各跑一次，**全部 fail-closed（抛异常）、零重试、零写入**。"""
+    """⑥b：三种畸形载荷各跑一次，**全部 fail-closed（抛异常）+ 诊断带 `problem:` 三要素**。
+
+    🔴 [impl-review-fix fix2] F-D：本用例**不**断言「零重试 / 零写入」——那两维是
+    **模型行为**（要不要再调一次、要不要落盘），无确定性信号可捕获（基准 1）；
+    在这里硬断只会断到本用例自己写的那一次 `subprocess.run` 上，是恒真锚。
+    这两维由 `test_fault6_no_retry_instruction_is_present` 的**指令在场锚（弱）**承载。
+    """
     env = _fake_openspec(tmp_path, body)
     out = subprocess.run(["openspec", "instructions", "design", "--change", "demo", "--json"],
                          cwd=str(tmp_path), capture_output=True, text=True,
@@ -473,6 +528,12 @@ def test_fault5_preflight_instruction_is_present():
     """⑤ 的处置指令三件事：fail-closed 中止 · 报实际版本 · 「MUST NOT 手工创建 change 目录顶替」。"""
     squashed = _squash(_skill_text())
     assert "openspecCLI预检" in squashed, "0.1 的 CLI 预检小节不见了"
+    # 三件事逐条落锚（[impl-review-fix fix2] F-D 面治：docstring 宣称几条就断言几条）。
+    # 「fail-closed 中止」用**整段连读**断，防被 C.3 §2 那处同词满足（假绿的另一种成因）。
+    assert "命令不存在或非零退出⇒**fail-closed中止**" in squashed, \
+        "0.1 的「命令不存在/非零退出 ⇒ fail-closed 中止」不见了 —— 预检退化成只提示不阻断"
+    assert "cause（exitcode/`commandnotfound`原文+实际版本）" in squashed, \
+        "0.1 三要素里的「报实际版本」不见了 —— 版本对不上的降级报告将无从复现"
     assert "MUSTNOT手工创建change目录结构顶替" in squashed, \
         "0.1 的「MUST NOT 手工创建 change 目录结构顶替」不见了 —— 这句正是本故障的要害"
     ladder = _squash(LADDER.read_text(encoding="utf-8"))
@@ -481,5 +542,12 @@ def test_fault5_preflight_instruction_is_present():
 
 
 def test_fault6_no_retry_instruction_is_present():
-    """⑥ 的「MUST NOT 重试同一调用」—— 重试只会再失败一次且掩盖真因。"""
-    assert "MUSTNOT重试同一调用" in _squash(_skill_text())
+    """⑥ 断言不过时的处置指令：**fail-closed 中止 + 报实际 CLI 版本 + MUST NOT 重试同一调用**。
+
+    整句连读断言（不是三段散断）：⑥b 的「零重试 / 零写入」两维无确定性信号（F-D），
+    全部由这一条**弱锚**承载 —— 处置句在，才有「断言不过就不写、也不再调一次」这回事；
+    「fail-closed 中止」若拆开单断，会被 0.1 那处同词满足，锚就空了。
+    """
+    assert ("任一缺失或类型不符⇒**fail-closed中止**，报**实际CLI版本**+修复命令，"
+            "**MUSTNOT重试同一调用**") in _squash(_skill_text()), \
+        "C.3 §2 的处置句（fail-closed 中止 / 报实际版本 / MUST NOT 重试）被删或改写了"

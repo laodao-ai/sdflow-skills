@@ -20,9 +20,9 @@
 
 | 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |
 |---|---|---|---|
-| 49 | ~459.6 hr | 31 | 11 |
+| 49 | ~460.3 hr | 31 | 11 |
 
-本轮复盘覆盖 **49 个 change**，累计评审墙钟约 **459.6 hr**（其中 31 个带真实度量锚、可参与价值统计）。评审时间集中在 设计审 49%、未归类 18%（两者合计 67%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审对抗镜（198 条，采纳率 92%）。另有 11 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
+本轮复盘覆盖 **49 个 change**，累计评审墙钟约 **460.3 hr**（其中 31 个带真实度量锚、可参与价值统计）。评审时间集中在 设计审 49%、未归类 19%（两者合计 67%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审对抗镜（198 条，采纳率 92%）。另有 11 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
 
 ## per-change 明细
 
@@ -32,7 +32,7 @@
 | add-codex-host-support | 5026.3 | 433.6 | 979.8 | 124.2 | 140.8 | 20 | TG-06,TG-08,TG-17 | TG-04,TG-06,TG-07,TG-08,TG-17 | 14 | 0.86 | 10 | archived |
 | add-sdflow-architecture | 378.4 | 54.4 | 228.6 | 15.4 | — | 9 | TG-06,TG-08,TG-09 | TG-06,TG-08,TG-09 | 108 | 0.83 | 35 | archived |
 | add-sdflow-devenv | 1808.5 | 298.6 | 466.5 | — | — | 18 | TG-08,TG-09,TG-17,TG-26 | — | 22 | 0.64 | 8 | archived |
-| add-sdflow-spec | 644.4 | 123.6 | 75.6 | — | — | 22 | TG-08,TG-17 | — | 69 | 0.94 | 12 | in-progress |
+| add-sdflow-spec | 685.7 | 123.6 | 75.6 | — | — | 23 | TG-08,TG-17 | — | 69 | 0.94 | 12 | in-progress |
 | async-outside-voice | 411.5 | 161.4 | 94.7 | 10.5 | — | 29 | TG-09,TG-17,TG-26 | TG-06,TG-08,TG-09,TG-16,TG-17,TG-26 | 57 | 0.93 | 19 | archived |
 | batch-triage-strategy | 107.4 | 41.9 | 50.0 | 10.8 | — | 8 | none | none | 29 | 0.9 | 11 | archived |
 | checkpoint-tag-single-source | 753.8 | 678.1 | 68.7 | 7.0 | — | 6 | none | none | — | 无度量锚 | — | archived |
@@ -48,7 +48,7 @@
 | gate-checkpoint-hardening | 87.8 | 17.9 | 26.7 | 7.3 | — | 10 | none | none | — | 无度量锚 | — | archived |
 | harden-gate-git-layer | 617.1 | 202.2 | 111.1 | 14.6 | — | 36 | TG-17 | TG-17 | 54 | 0.8 | 37 | archived |
 | harden-hr-tg-anchor-consistency | 183.6 | 51.2 | 104.4 | 7.2 | — | 6 | none | none | 24 | 1.0 | 20 | archived |
-| harden-repo-root-fail-closed | 522.3 | 142.2 | 123.5 | 19.3 | — | 28 | TG-08 | TG-08 | 54 | 0.83 | 32 | archived |
+| harden-repo-root-fail-closed | 522.4 | 142.2 | 123.5 | 19.3 | — | 28 | TG-08 | TG-08 | 54 | 0.83 | 32 | archived |
 | implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 97.8 | 77.5 | 7.6 | — | 9 | TG-06 | TG-06 | 67 | 0.88 | 13 | archived |
 | issues-pool-batch-mgmt | 0.0（边界不可解析） | — | — | — | — | 0 | — | — | — | 无度量锚 | — | archived |
 | issues-pool-hardening | 206.3 | 40.5 | — | 8.8 | — | 10 | none | none | 28 | 0.86 | 9 | archived |
@@ -83,7 +83,7 @@
 | 阶段 | 墙钟(min) | 占比 |
 |---|---|---|
 | spec-review | 13445.6 | 49% |
-| unknown | 5071.5 | 18% |
+| unknown | 5112.9 | 19% |
 | impl | 4455.2 | 16% |
 | ff | 2609.5 | 9% |
 | grill | 682.9 | 2% |
@@ -99,7 +99,7 @@
 | add-codex-host-support | 5026.3 | 2% |
 | add-sdflow-architecture | 378.4 | 4% |
 | add-sdflow-devenv | 1808.5 | 0% |
-| add-sdflow-spec | 644.4 | 0% |
+| add-sdflow-spec | 685.7 | 0% |
 | async-outside-voice | 411.5 | 3% |
 | batch-triage-strategy | 107.4 | 10% |
 | checkpoint-tag-single-source | 753.8 | 1% |
@@ -115,7 +115,7 @@
 | gate-checkpoint-hardening | 87.8 | 8% |
 | harden-gate-git-layer | 617.1 | 2% |
 | harden-hr-tg-anchor-consistency | 183.6 | 4% |
-| harden-repo-root-fail-closed | 522.3 | 4% |
+| harden-repo-root-fail-closed | 522.4 | 4% |
 | implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 3% |
 | issues-pool-batch-mgmt | 0.0 | — |
 | issues-pool-hardening | 206.3 | 4% |

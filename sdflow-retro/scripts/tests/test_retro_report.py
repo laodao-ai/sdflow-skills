@@ -177,6 +177,31 @@ def test_two_review_skill_slugs_map_to_their_stage():
     assert R.map_stage("checkpoint(sdflow-spec-review)") == "spec-review"
 
 
+def test_short_prefix_tail_fallback_requires_a_token_boundary():
+    """[impl-review-fix fix2] F-B：tail 回退把 ≤4 字符的短前缀误配到更长的词上。
+
+    F1 的回退放宽了匹配面（整串无命中 ⇒ 拿 `tail` 再试一次），而 `gate` / `ff` / `plan`
+    这三条短规则是**词**、不是**前缀**：`gateway-refactor` / `ffmpeg-upgrade` / `planner`
+    会被静默吞进 spec-review / ff / other。归因错了不报错、不缺文件 —— 与本词表要治的病同型。
+    ⇒ 短前缀（≤ `_TAIL_STRICT_MAXLEN`）在 tail 回退里 MUST 要求 token 边界（全等或后接 `-`）。
+    """
+    # 误配面：token 边界不成立 ⇒ 不猜，落 unknown
+    assert R.map_stage("checkpoint(c:gateway-refactor)") == "unknown"
+    assert R.map_stage("checkpoint(c:ffmpeg-upgrade)") == "unknown"
+    assert R.map_stage("checkpoint(c:planner)") == "unknown"
+    # 边界另一侧：全等 / 后接 `-` 照常命中 —— F1 的收益一分不丢
+    assert R.map_stage("checkpoint(c:gate)") == "spec-review"
+    assert R.map_stage("checkpoint(c:gate-frontmatter)") == "spec-review"
+    assert R.map_stage("checkpoint(c:ff)") == "ff"
+    assert R.map_stage("checkpoint(c:ff-amend)") == "ff"
+    assert R.map_stage("checkpoint(c:plan)") == "other"
+    assert R.map_stage("checkpoint(c:plan-b)") == "other"
+    # 长前缀不受此限（`spec-review-amend` 这类既有形态照旧）
+    assert R.map_stage("checkpoint(c:spec-reviewX)") == "spec-review"
+    # 严格化**只加在回退这一跳**上 ⇒ 整串匹配（change 名本身带阶段词）语义一字未动
+    assert R.map_stage("checkpoint(gateway-refactor)") == "spec-review"
+
+
 def test_archive_rename_detects_done(tmp_path):
     root = _init_repo(tmp_path)
     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")

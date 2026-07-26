@@ -151,6 +151,22 @@ _STAGE_RULES = [
 ]
 _CKPT_RE = re.compile(r"^checkpoint\(([^)]*)\)")
 
+# [impl-review-fix fix2] F-B：tail 回退里，**短**规则按 token 匹配而非裸前缀匹配。
+# `gate` / `ff` / `plan` 这三条是词不是前缀 —— 裸 startswith 会把 `gateway-refactor` /
+# `ffmpeg-upgrade` / `planner` 静默吞进 spec-review / ff / other。4 是当前最短规则族的长度
+# （`gate`/`plan` 4 字符、`ff` 2 字符），再长的规则（`grill` 起）自带足够特异性。
+_TAIL_STRICT_MAXLEN = 4
+
+
+def _prefix_hit(candidate, prefix, *, token_boundary):
+    """`candidate` 是否命中规则 `prefix`；`token_boundary` 时短前缀须全等或后接 `-`。"""
+    if not candidate.startswith(prefix):
+        return False
+    if token_boundary and len(prefix) <= _TAIL_STRICT_MAXLEN:
+        rest = candidate[len(prefix):]
+        return rest == "" or rest.startswith("-")
+    return True
+
 
 def map_stage(subject):
     m = _CKPT_RE.match(subject.strip())
@@ -167,10 +183,12 @@ def map_stage(subject):
     # 目标态 producer 就在产出 `checkpoint(<change>:<step>)`（`sdflow-implement/SKILL.md:287`
     # 明写 `checkpoint-commit.sh "<change>:plan"`），旧实现只在 task/-impl 两条判定里剥前缀，
     # 前缀匹配却拿整串比 ⇒ `<step>` 精确等于既有规则的 27 个 checkpoint 全落 unknown。
+    # [impl-review-fix fix2] F-B：回退这一跳（且**仅**这一跳）要求短前缀落在 token 边界上，
+    # 整串 `inner` 的匹配语义一字未动（change 名本身带阶段词的既有归类照旧）。
     ordered = sorted(_STAGE_RULES, key=lambda r: -len(r[0]))
-    for candidate in (inner, tail):
+    for candidate, token_boundary in ((inner, False), (tail, True)):
         for prefix, stage in ordered:
-            if candidate.startswith(prefix):
+            if _prefix_hit(candidate, prefix, token_boundary=token_boundary):
                 return stage
     if inner.endswith("-cross-review") or tail.endswith("-cross-review"):
         return "other"
