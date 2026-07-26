@@ -42,6 +42,16 @@ MUST NOT 演化成「从 Markdown 报告里正则抠证据」—— Markdown 是
 declared 集会让「漏收站点」自动自洽（HAE-09 要杀的正是这个）。∴ 它是**必填 CLI 入参**，
 谁跑谁负责；本脚本机械守的是「一旦声明了，就必须处处自洽且达标」。
 
+🔴 **`check` 不是防伪门 —— 它只核 evidence.json 的内部自洽性，不回查 run-dir。**
+`verify()` 校 schema / key 白名单 / 时序单调 / duration 自洽 / digest 形状与去重，**全部只读
+传进来的那一个文件**：它从不打开 `<site>.collected.json` 去对 job_id、attempt_nonce、
+stdout_sha256。∴ **一份手写的、结构合规的 JSON 能让三条门全过**（`check` exit 0）——
+已实测复现。安全性完全建立在「evidence.json 来自本脚本 `emit`」这个**流程约定**上，
+而 `emit` 与 `check` 由同一方背靠背执行 ⇒ 这道门挡的是**手抄失误**，不是**自报为真**。
+拿它当「模型说跑过了 ⇒ 机械证实跑过了」用，就又造出一个 adr/0018 的「无机械锚的 ✅」，
+只是外壳换成了 sha256。**加固（给 `check` 补 `--run-dir` 逐站点交叉核验）挂在 T225**：
+那张票会产出第一份真实 run-dir，届时新绑定能对着真证物验，而不是只对着自造 fixture。
+
 用法：
     # 从 run-dir 的 <site>.collected.json 机械生成证据（避免手抄 collect 输出）
     python3 hack/check_codex_efficacy_evidence.py emit \

@@ -732,6 +732,7 @@ def cmd_dispatch(args):
     start = time.monotonic()
     deadline = start + DISPATCH_DEADLINE_SECONDS
     timed_out = False
+    comm_error = None
     stdout_text = ""
     stderr_text = ""
     rc = None
@@ -739,7 +740,7 @@ def cmd_dispatch(args):
         proc = subprocess.Popen(
             [claude_bin, "--bg", "--exec", command],
             cwd=repo_root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, start_new_session=True,
+            text=True, encoding="utf-8", errors="replace", start_new_session=True,
         )
     except Exception as exc:
         release_reservation(run_dir, site)
@@ -755,6 +756,17 @@ def cmd_dispatch(args):
             stdout_text, stderr_text = proc.communicate(timeout=5)
         except Exception:
             stdout_text, stderr_text = "", ""
+    except Exception as exc:
+        # [impl-review-fix] communicate() 会抛的不止 TimeoutExpired（管道 OSError、
+        # 解码失败……；`errors="replace"` 已消掉解码那一类，但 producer 是 research
+        # preview，MUST NOT 假设剩下的都不会来）。让异常逃出本函数的后果是三重的：
+        # reservation 不释放（该 site 永久占坑，只能人工 reconcile）、已 Popen 的进程树
+        # 不回收（孤儿计费）、调用方拿不到那行带 fallback_allowed 的 JSON —— 「5 秒级
+        # 诚实降级」在这条路径上退化成一次哑崩溃。收进下方同一出口，由「本次 attempt
+        # 的 nonce 是否命中外部 job」决定 unknown-cost 还是 release+fallback。
+        comm_error = str(exc)
+        _kill_process_tree(proc)
+        stdout_text, stderr_text = "", ""
 
     # 外部 job 是否真的产生了 —— 只认本次 attempt 在 agents JSON 里的机械命中。
     # 🔴 核验用**独立** grace（见 NONCE_LOOKUP_GRACE_SECONDS），两条分支同一口径：
@@ -768,9 +780,13 @@ def cmd_dispatch(args):
     # 任何拿它跟 deadline 比的断言都恒真——等于没有锚。
     duration = time.monotonic() - start
 
-    if timed_out or rc != 0:
-        why = ("dispatch 超过 monotonic %.0f 秒 deadline" % DISPATCH_DEADLINE_SECONDS
-               if timed_out else "claude --bg --exec 非零退出 rc=%s" % rc)
+    if timed_out or comm_error is not None or rc != 0:
+        if timed_out:
+            why = "dispatch 超过 monotonic %.0f 秒 deadline" % DISPATCH_DEADLINE_SECONDS
+        elif comm_error is not None:
+            why = "读取 claude --bg --exec 输出失败: %s" % comm_error
+        else:
+            why = "claude --bg --exec 非零退出 rc=%s" % rc
         if matches:
             # 外部 job 已存在但本次没能完整发布 metadata ⇒ 成本未知，reserve 留给 reconcile。
             return 1, _reject(
@@ -1265,6 +1281,21 @@ ORPHAN_WARNING_TEMPLATE = (
     "`outside-voice-job.py cleanup --run-dir %s --site %s --cancel` "
     "（identity 核验 → stop → 子树终止核验 → rm）；核验通过后才可 fallback。")
 
+# [impl-review-fix] 上面那条把人指向 `cleanup --cancel`，**只在 cleanup 真能受理时才成立**。
+# 有两类状态它结构上受理不了：① 有 reservation 但无 job metadata（没有 identity 可核）；
+# ② identity 核验出矛盾。这两类若仍发上面那条，人照做会拿回一模一样的拒绝——**指引在说谎**，
+# 而且 ② 更荒唐：那句话本身就是 `cleanup --cancel` 打印出来的。
+# 拒绝是对的（删 reserve = 把「可能已花一次」变成「确定花两次」），说谎的是指引 ⇒ 这条模板
+# 给**真正可执行**的人工步骤，不给一个必然拒绝他的命令。
+MANUAL_ONLY_WARNING_TEMPLATE = (
+    "%s —— 子树是否退出**未经核验**，成本未知：MUST NOT 自动同族 fallback。"
+    "⚠️ 本状态下 `cleanup --cancel` **受理不了**（无 identity 可核 / identity 有矛盾），"
+    "跑它只会拿回同一条拒绝。人工步骤：① 看 %s 下的 `<site>.reserve`、`<site>.job.json`、"
+    "`<site>.started.json`、`<site>.runner.pid` 取 attempt nonce 与 pid；"
+    "② `claude agents --all --json` 里按该 nonce 找对应 job，确认无误后手动 "
+    "`claude stop <id>` / `claude rm <id>`；③ 确认子树确已退出后，再手工删除 "
+    "`%s/<site>.reserve` 解闸下一次 dispatch（site=%s）。")
+
 
 def _lost(detail, run_dir, site, base):
     """LOST 的**唯一**构造口 —— 三条产生路径共用，别再各写各的。
@@ -1309,7 +1340,8 @@ def derive_status(run_dir, site, liveness=None, now=None, claude_bin=None,
                                "只允许显式 reconcile/人工 cleanup")
             return _status_payload(
                 STATE_RESERVED, None, reserved_detail, unknown_cost=True,
-                orphan_warning=ORPHAN_WARNING_TEMPLATE % (reserved_detail, run_dir_real, site),
+                orphan_warning=MANUAL_ONLY_WARNING_TEMPLATE % (
+                    reserved_detail, run_dir_real, run_dir_real, site),
                 **base)
         return _status_payload(STATE_MISSING, REASON_EXEC_ERROR, detail, **base)
 
@@ -1865,11 +1897,16 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
         reserved = os.path.isfile(reserve_path(run_dir, site))
         why = ("存在 reservation 但无 job metadata（dispatch accepted 与 metadata 发布之间"
                "可能已崩溃）" if reserved else detail)
+        # [impl-review-fix] 这里 MUST NOT 用 ORPHAN_WARNING_TEMPLATE —— 它的正文是
+        # 「请跑 cleanup --cancel」，而**本分支就是 cleanup 的拒绝分支**：照它做的人会
+        # 原地打转，拿到同一句话。拒绝本身是对的（见上方注释），说谎的是指引。
+        # 故这条路径给**真正可执行**的人工步骤，不给一个必然拒绝他的命令。
         return _cleanup_payload(
             "identity-unverified", False,
             "无法核验 job identity（%s）—— 只告警，MUST NOT 猜测并操作其他 job" % why,
             unknown_cost=True,
-            orphan_warning=ORPHAN_WARNING_TEMPLATE % (why, run_dir, site), **base)
+            orphan_warning=MANUAL_ONLY_WARNING_TEMPLATE % (why, run_dir, run_dir, site),
+            **base)
 
     base["job_id"] = job["job_id"]
     status = derive_status(run_dir, site, timeout_override=timeout_override,
@@ -1906,7 +1943,8 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
             "identity-unverified", False,
             "identity 核验未通过（%s）—— 只告警，MUST NOT stop/rm 任何 job" % ident["detail"],
             unknown_cost=True,
-            orphan_warning=ORPHAN_WARNING_TEMPLATE % (ident["detail"], run_dir, site), **base)
+            orphan_warning=MANUAL_ONLY_WARNING_TEMPLATE % (
+                ident["detail"], run_dir, run_dir, site), **base)
 
     collected_ok = load_collected(run_dir, site, job)[0] == "ok"
     rc_published = status.get("rc") is not None
@@ -1922,7 +1960,8 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
         # 而 fallback 的意义是「重试一次没拿到结果的 voice」——已 collect 的终态不存在
         # 「再叠一次费用」的问题。故本分支照常 rm 并放行 fallback，探针值只写进 payload
         # 供人工审计（真在这里发现 alive，说明 helper 是被 SIGKILL 打死的，见 probe_subtree ⑤）。
-        base["subtree"] = probe_subtree(run_dir, site, job)[0]
+        subtree, subtree_detail = probe_subtree(run_dir, site, job)
+        base["subtree"] = subtree
         rc, why = claude_job_action(claude_bin, "rm", job["job_id"])
         if rc != 0:
             return _cleanup_payload(
@@ -1930,6 +1969,20 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
                 orphan_warning="supervisor roster 可能仍残留 job id=%s（%s）—— "
                                "MUST NOT 静默声称已清理，请人工处理；已取得的 rc 与本轮"
                                "审计证据未被改动" % (job["job_id"], why), **base)
+        # [impl-review-fix] rm 之后 roster 里就没有这个 job 了 —— 那是**追踪它的最后一个
+        # 句柄**。若此刻子树并未核验为已退出，本次清理留下的是一个既没人管、也没人看得见
+        # 的进程。上面的计费论证（rc 已发布 ⇒ 额度已花完 ⇒ fallback 不重复计费）依然成立，
+        # 故闸门不变、fallback 照放；但「已从 roster 移除」MUST NOT 被读成「已经清理干净」。
+        if subtree != SUBTREE_EXITED:
+            return _cleanup_payload(
+                "removed", True,
+                "已 collect 的终态 job 已从 supervisor roster 移除",
+                removed=True, fallback_allowed=True,
+                orphan_warning="job id=%s 已从 roster 移除，但其子树**未核验为已退出**"
+                               "（subtree=%s：%s）—— roster 句柄已随 rm 消失，若确有残留"
+                               "进程需人工按 %s 下的 <site>.runner.pid / <site>.started.json "
+                               "自行核查。本轮 rc 与审计证据未被改动。"
+                               % (job["job_id"], subtree, subtree_detail, run_dir), **base)
         return _cleanup_payload("removed", True,
                                 "已 collect 的终态 job 已从 supervisor roster 移除",
                                 removed=True, fallback_allowed=True, **base)
@@ -1980,7 +2033,8 @@ def run_cleanup(run_dir, site, cancel=False, timeout_override=None, claude_bin=N
             "identity-unverified", False,
             "rm 前重新核验未通过（%s）—— 只告警，MUST NOT rm" % ident2["detail"],
             unknown_cost=True,
-            orphan_warning=ORPHAN_WARNING_TEMPLATE % (ident2["detail"], run_dir, site), **base)
+            orphan_warning=MANUAL_ONLY_WARNING_TEMPLATE % (
+                ident2["detail"], run_dir, run_dir, site), **base)
 
     rc, why = claude_job_action(claude_bin, "rm", job["job_id"])
     if rc != 0:

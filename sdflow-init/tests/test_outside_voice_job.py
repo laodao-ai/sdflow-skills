@@ -16,6 +16,7 @@ TDD 接缝（先定后写）——两处公共边界，测试只打这两处，�
 
 import hashlib
 import importlib.util
+import inspect
 import itertools
 import json
 import os
@@ -2654,6 +2655,130 @@ def test_cleanup_leaves_an_orphan_warning_when_the_subtree_exit_cannot_be_proven
     assert payload["removed"] is False, payload
     assert payload["unknown_cost"] is True, payload
     assert _destructive(fake_claude) == [("stop", "75d34378")], _destructive(fake_claude)
+
+
+def test_dispatch_stays_honest_when_reading_the_spawn_output_blows_up(monkeypatch, tmp_path):
+    """🔴 `communicate()` 抛的不止 `TimeoutExpired` —— 别的异常逃出去就是三重后果。
+
+    ① reservation 不释放 ⇒ 该 site **永久占坑**，后续 dispatch 全被 duplicate-site 挡掉，
+       只能人工 reconcile；② 已 Popen 的进程树不回收 ⇒ 孤儿计费；③ 调用方拿不到那行带
+       `fallback_allowed` 的 JSON ⇒「5 秒级诚实降级」退化成一次哑崩溃。
+    本条把这三件事一起钉住：异常必须被收进同一个出口，走 nonce 命中判定。
+    """
+    run_dir = tmp_path / "20260726T064000Z-Boom01"
+    run_dir.mkdir()
+    ctx = run_dir / "design-voice-context.md"
+    ctx.write_text("ctx", encoding="utf-8")
+
+    class _ExplodingProc:
+        pid = os.getpid()
+        returncode = None
+
+        def communicate(self, timeout=None):
+            raise OSError("read end of the pipe exploded")
+
+    killed = []
+    monkeypatch.setattr(JOB.subprocess, "Popen", lambda *a, **k: _ExplodingProc())
+    monkeypatch.setattr(JOB, "_kill_process_tree", lambda proc: killed.append(proc))
+    monkeypatch.setattr(JOB, "run_preflight",
+                        lambda job_dir: {"ok": True, "claude_bin": "/usr/bin/true", "checks": {}})
+    monkeypatch.setattr(JOB, "find_jobs_by_nonce", lambda *a, **k: [])
+
+    args = JOB.build_parser().parse_args([
+        "dispatch", "--run-dir", str(run_dir), "--site", "design-voice",
+        "--context-file", str(ctx), "--repo-root", str(tmp_path),
+        "--runner", "claude", "--model", "opus", "--effort", "high", "--timeout", "900",
+    ])
+    code, payload = JOB.cmd_dispatch(args)
+
+    assert code == 1, payload
+    assert payload["ok"] is False, payload
+    assert payload["reason_code"] == "exec-error", payload
+    assert payload["fallback_allowed"] is True, payload   # 未产生外部 job ⇒ 允许同族降级
+    assert killed, "异常路径 MUST 回收已 Popen 的进程树，否则是孤儿计费"
+    assert not (run_dir / "design-voice.reserve").exists(), \
+        "异常路径没释放 reservation —— 该 site 从此永久占坑"
+
+
+def test_cleanup_warns_when_it_rms_a_terminal_job_whose_subtree_exit_is_unproven(
+        job_home, fake_claude, tmp_path):
+    """🔴 rm 拿走的是**追踪该 job 的最后一个句柄**——子树没核验为已退出就 MUST 出警告。
+
+    计费论证（rc 已发布 ⇒ 额度已花完 ⇒ fallback 不会重复计费）成立，故闸门不变、照常 rm
+    并放行 fallback；但「已从 roster 移除」MUST NOT 被读成「已经清理干净」：roster 句柄随
+    rm 消失之后，一个未证退出的子树就既没人管、也没人看得见了。
+    """
+    run_dir = tmp_path / "20260726T061000Z-Trm001"
+    run_dir.mkdir()
+    meta = _seed_site(run_dir, rc_kind="rc0_nonempty", nonce="0" * 32, write_started=False)
+    JOB.atomic_write_json(run_dir / "design-voice.collected.json", {
+        "schema_version": JOB.SCHEMA_VERSION, "site": "design-voice",
+        "run_id": run_dir.name, "attempt_nonce": meta["attempt_nonce"], "ok": True,
+    })
+    env = _env(fake_claude, {
+        "FAKE_CLAUDE_AGENTS_MODE": "fixed",
+        "FAKE_CLAUDE_FIXED": _roster({"id": "75d34378", "name": _worker_name()}),
+    })
+    proc = _run_job(job_home, _cleanup_args(run_dir, "design-voice", "--subtree-wait", "0.2"),
+                    env, timeout=60)
+    payload = _json_stdout(proc)
+    assert payload["state"] == "removed", payload
+    assert (payload["removed"], payload["fallback_allowed"]) == (True, True), payload
+    assert payload["subtree"] != JOB.SUBTREE_EXITED, payload
+    assert payload["orphan_warning"], \
+        "子树未证退出却报了一句干净的『已移除』——rm 之后就再没有句柄能找到它了"
+    assert payload["subtree"] in payload["orphan_warning"], payload
+
+
+def test_cleanup_never_tells_the_operator_to_re_run_the_command_that_just_refused(tmp_path):
+    """🔴 自指指引门：`run_cleanup` 的拒绝分支 MUST NOT 把人指回 `cleanup --cancel`。
+
+    `ORPHAN_WARNING_TEMPLATE` 的正文是「先跑 … cleanup --cancel」。它对 status/reconcile
+    报出的 LOST 是对的（那时 job metadata 在、identity 可核，cleanup 真能受理）；但
+    `run_cleanup` **自己**的拒绝分支照它做，只会原地拿回同一条拒绝——指引在说谎。
+    ∴ 本函数体内一律用 `MANUAL_ONLY_WARNING_TEMPLATE`（给真正可执行的人工步骤）。
+    """
+    # 只看**可执行代码**：注释里提这个常量名是在解释为什么不用它，那不是一次使用。
+    # （门被自己的解释性注释满足，是恒真锚的一种典型成因。）
+    body = "\n".join(line for line in inspect.getsource(JOB.run_cleanup).splitlines()
+                     if not line.lstrip().startswith("#"))
+    assert "ORPHAN_WARNING_TEMPLATE" not in body.replace("MANUAL_ONLY_WARNING_TEMPLATE", ""), \
+        "run_cleanup 的某条拒绝分支把人指回了 `cleanup --cancel`（自指死循环）"
+    assert "MANUAL_ONLY_WARNING_TEMPLATE" in body, body[:200]
+
+
+def _assert_manual_only_warning(warning):
+    """「cleanup 受理不了」这一类警告的共同形状：说实话 + 给真能跑的步骤。"""
+    assert warning, "该状态下 MUST 出警告"
+    assert "受理不了" in warning, warning        # 明说 cleanup 帮不了你
+    assert "claude agents" in warning, warning   # 给出真正可执行的人工步骤
+    assert "先跑" not in warning, warning        # 「先跑 cleanup --cancel」= 死胡同指引
+
+
+def test_bare_reservation_cleanup_warning_gives_manual_steps_not_a_dead_end(
+        job_home, fake_claude, tmp_path):
+    """残留 reserve ⇒ 无 identity 可核 ⇒ cleanup 结构上受理不了，警告 MUST 说实话。"""
+    run_dir = tmp_path / "20260726T062000Z-Res003"
+    run_dir.mkdir()
+    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
+    proc = _run_job(job_home, _cleanup_args(run_dir), _env(fake_claude))
+    payload = _json_stdout(proc)
+    assert payload["state"] == "identity-unverified", payload
+    _assert_manual_only_warning(payload["orphan_warning"])
+
+
+def test_reserved_status_warning_gives_manual_steps_not_a_dead_end(tmp_path):
+    """同一条死胡同指引的**另一处出口**：status/reconcile 派生出的 RESERVED。
+
+    面治而非点补——两处出口用同一个模板，改一处漏一处就会被这两条锚一起照出来。
+    """
+    run_dir = tmp_path / "20260726T063000Z-Res004"
+    run_dir.mkdir()
+    (run_dir / "design-voice.reserve").write_text("{}", encoding="utf-8")
+    payload = JOB.derive_status(run_dir, "design-voice")
+    assert payload["state"] == JOB.STATE_RESERVED, payload
+    assert payload["unknown_cost"] is True, payload
+    _assert_manual_only_warning(payload["orphan_warning"])
 
 
 def test_cleanup_does_not_rm_when_stop_itself_failed(job_home, fake_claude, tmp_path):
