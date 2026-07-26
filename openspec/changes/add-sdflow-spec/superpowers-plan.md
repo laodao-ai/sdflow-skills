@@ -93,15 +93,15 @@ skill 声明 `disable-model-invocation: true`，四条通则块纳入 `sync_prin
 配套两道**会红**的机械门：决策纪要缺失或必填小节为空即判红；一份被截断的产物喂进
 `openspec validate --strict` 必须判红（证明「存在态 ≠ 合格态」这条判据真的挡得住）。
 
-- [ ] `/sdflow-spec` 在两个 runtime 均可见，且模型无法自行唤起（只能人触发）
-- [ ] 三相位管线的全部判据在指令中可查：A 的收束禁止清单三项、B 起手三步、B 的停止信号最小充分条件、C 的强制阅读清单（specs 步显式读 design）、写后 `status` + `validate --strict` 双判、终审的 design↔specs 互验与中间态判据、出口序列三步原样贴且**只引两条理由**
-- [ ] 决策纪要的字段集（含 `schema_version`/`change`/`branch`/时间戳/决策 hash 身份字段）与增量落盘时机在指令中明确；纪要 MUST NOT 并入 design.md，design 的 Decisions 只留指针
-- [ ] 通则托管块由 `sync_principles.py --apply` 落入，`--check` 无漂移
-- [ ] SKILL.md 主体行数 ≤ 设计给定上限，超出部分已外置到 `references/`
-- [ ] 新增 pytest 用例：`decision-memo.md` 缺失 / 必填小节为空 → 红；定点删掉该门必须红（非恒真锚）
+- [x] `/sdflow-spec` 在两个 runtime 均可见，且模型无法自行唤起（只能人触发）
+- [x] 三相位管线的全部判据在指令中可查：A 的收束禁止清单三项、B 起手三步、B 的停止信号最小充分条件、C 的强制阅读清单（specs 步显式读 design）、写后 `status` + `validate --strict` 双判、终审的 design↔specs 互验与中间态判据、出口序列三步原样贴且**只引两条理由**
+- [x] 决策纪要的字段集（含 `schema_version`/`change`/`branch`/时间戳/决策 hash 身份字段）与增量落盘时机在指令中明确；纪要 MUST NOT 并入 design.md，design 的 Decisions 只留指针
+- [x] 通则托管块由 `sync_principles.py --apply` 落入，`--check` 无漂移
+- [x] SKILL.md 主体行数 ≤ 设计给定上限，超出部分已外置到 `references/`
+- [x] 新增 pytest 用例：`decision-memo.md` 缺失 / 必填小节为空 → 红；定点删掉该门必须红（非恒真锚）
 - [ ] 新增 pytest 用例：截断的 design.md 经 `openspec validate --strict` → 红
-- [ ] 硬编码的 SKILL.md 计数已删除并改由脚本自报；`grep -rn` 全量扫（不加 `--include`）无同族残留
-- [ ] 仓根 `/usr/bin/python3 -m pytest` 全绿；`setup.sh` 幂等重跑无异常
+- [x] 硬编码的 SKILL.md 计数已删除并改由脚本自报；`grep -rn` 全量扫（不加 `--include`）无同族残留
+- [x] 仓根 `/usr/bin/python3 -m pytest` 全绿；`setup.sh` 幂等重跑无异常
 
 ---
 
