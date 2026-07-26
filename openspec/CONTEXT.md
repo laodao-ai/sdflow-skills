@@ -32,6 +32,10 @@ _Avoid_: 镜子 / mirror（是"镜头 / lens"，聚焦单一角度，非映照�
 **Outside Voice（外部第二意见）**:
 换**模型家族**（Claude ↔ GPT via codex）做的独立"找漏"评审——不是重跑清单，而是不受清单约束的整体第二意见。价值在跨家族盲区结构性错开。区别于同模型 fresh-context 子代理（只换上下文、盲区同处）。
 
+**[grill-amendment] Outside Voice 后台作业 (Outside Voice Background Job)**:
+由宿主 CLI 的独立 supervisor 托管、在主评审继续运行时异步产出 Outside Voice 结果的单站点执行单元；其完成真相来自 helper 发布的终态文件，supervisor 状态只表示存活性。
+_Avoid_: 把 background agent 的摘要、TUI 日志或 `done` 状态直接当成评审结果
+
 **复用产出物 vs 依赖内部 (Reuse Output vs Depend on Internals)**:
 自制 skill 与 gstack/superpowers 的合规边界线。**读它们产出的文件（output artifact，如 `gstack-review.md`）= 复用产出物，合法**；**调用它们的内部 bin / 探针 / config = 依赖内部，非法**（须自包含重写）。见 `adr/0002`。
 _Avoid_: 笼统说"不依赖 gstack"（会误伤合法的产出物复用）

@@ -45,6 +45,8 @@ def test_setup_sh_retire_block_binds_to_real_construct():
     text = (root / "setup.sh").read_text(encoding="utf-8")
     assert "retire-hooks" in text                     # 接线存在
     assert "|| echo" in text                          # A5 fail-safe 尾式
-    # A6 python3/python 探测（T48 后升级为逐候选迭代 + 3.6+ 版本校验，取首个合格）
+    # A6 python3/python 探测（T48 后升级为逐候选迭代 + 版本校验，取首个合格）
     assert "for _cand in python3 python" in text      # 候选迭代（含 python3 与 python）
-    assert "version_info >= (3, 6)" in text            # T48 版本校验
+    # 下限 3.7 而非 init.py 所需的 3.6：同一个 `$_py` 还要跑 outside-voice-job.py，
+    # 而它用 `subprocess.run(capture_output=…)` —— 闸门取两个消费者的上确界。
+    assert "version_info >= (3, 7)" in text            # T48 版本校验

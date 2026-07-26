@@ -69,6 +69,25 @@ sdflow-issues:
     T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"PROPOSED","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
     T210: {"module":"sdflow-issues/tests","summary":"冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:40","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
     T211: {"module":"sdflow-issues/scripts/sdflow_issues_core","summary":"冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:50","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
+    T212: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束","type":"代码质量","status":"PROPOSED","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T213: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调","type":"基础设施","status":"PROPOSED","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T214: {"module":"openspec/changes/enable-codex-background-outside-voice/specs/outside-voice-background-jobs/spec.md","summary":"OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace","type":"代码质量","status":"PROPOSED","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T215: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言","type":"代码质量","status":"PROPOSED","time":"2026-07-25 19:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T216: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"collect 幂等的两条冗余路径缺单路径回归锚","type":"代码质量","status":"PROPOSED","time":"2026-07-25 20:10","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T217: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)","type":"代码质量","status":"PROPOSED","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T218: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"rc_bad(CORRUPT) 路径重复 collect 非逐字节一致","type":"代码质量","status":"PROPOSED","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T219: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）","type":"代码质量","status":"PROPOSED","time":"2026-07-25 23:14","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T220: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）","type":"代码质量","status":"PROPOSED","time":"2026-07-25 23:15","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T221: {"module":"openspec/specs/host-adaptive-execution + anchor_lint","summary":"fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值","type":"代码质量","status":"PROPOSED","time":"2026-07-26 00:34","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T222: {"module":"sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md","summary":"止损行「走下一条的 unknown-cost 处置」指代不准","type":"代码质量","status":"PROPOSED","time":"2026-07-26 00:41","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T223: {"module":"hack/tests/test_async_branch_parity.py","summary":"_the_line_with 的「恰好 1 行」是双向判据，良性新增会假红","type":"代码质量","status":"PROPOSED","time":"2026-07-26 00:46","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T224: {"module":"hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py","summary":"面治枚举漏 2 条 isinstance 早退分支（无独立锚）","type":"代码质量","status":"PROPOSED","time":"2026-07-26 03:28","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T225: {"module":"hack/check_codex_efficacy_evidence.py + openspec/changes/enable-codex-background-outside-voice(已归档)","summary":"补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）","type":"基础设施","status":"PROPOSED","time":"2026-07-26 08:23","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T226: {"module":"hack/check_codex_efficacy_evidence.py: check 子命令","summary":"给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）","type":"基础设施","status":"PROPOSED","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T227: {"module":"sdflow-init/assets/hack/outside-voice-job.py: cmd_worker + run_cleanup","summary":"worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程","type":"功能增强","status":"PROPOSED","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T228: {"module":"sdflow-init/assets/hack/outside-voice.sh: secret_scan","summary":"含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号","type":"基础设施","status":"PROPOSED","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T229: {"module":"openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞)","summary":"两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）","type":"可观测性","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
 ---
 # 2026-07 TODO
 
@@ -1994,3 +2013,261 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **备注**：今日全 CLI 调用=独立进程、无 in-process 多池并发，故不可达；与 T208(消 issues 自调用子进程→in-process import)同期才成真问题。修法=token 改显式 RecorderLockState 传递或 ContextVar.set()/reset() 上下文栈 + 补两线程×两仓 + 嵌套恢复测试。绑定 T208 一起做。
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T211 -->
+
+<!-- sdflow-issue-block:start id=T212 -->
+## T212: nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束
+> nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 1 双轴审 Standards 轴 Minor：id 通道把 _parse_job_id_hint 的解析结果从「拒绝依据」翻成「接受依据」，漂移解出的 8 位 hex 若撞上另一个在跑 bg job 的 id，会把别人的 canonical id 写进 job.json。
+
+**思路**：id 匹配通道追加 item.get("cwd") == repo_root 判据（一行 + 一条测试）。design.md:76 的破坏性操作二次核验是下游第二道门，故当前非 Critical。
+
+**备注**：来源=Task 1 双轴复审（e791679 后）Standards 轴 Minor，编排层裁定 defer 至冷层 code-review 统一处理。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T212 -->
+
+<!-- sdflow-issue-block:start id=T213 -->
+## T213: CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调
+> CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 1 双轴审 Standards 轴 Minor：preflight 两条 CLI 探针的 5 秒上界由单次热机采样（claude --version 0.06s / agents --all --json 0.17s）定；冷启动或高负载下 node 启动可能超 5s，导致静默永久回落同族 voice。
+
+**思路**：与既有 outside-voice.async-timeout-seconds 同路，走 config 旋钮而非新造常量；默认值保持 5 秒。
+
+**备注**：来源=Task 1 双轴复审 Standards 轴 Minor。方向安全（超时=诚实降级，不假绿），故 defer。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T213 -->
+
+<!-- sdflow-issue-block:start id=T214 -->
+## T214: OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace
+> OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 1 双轴审 Spec 轴 Minor：NONCE_LOOKUP_GRACE_SECONDS 与 DISPATCH_DEADLINE_SECONDS 解耦后，返回 canonical job id 最坏约 10 秒，而 OVBG-01 字面写「MUST 在 monotonic 5 秒 deadline 内返回」。解耦本身是评审 I1 推动的正解（消灭「成功 dispatch 被误判 unknown-cost + 禁 fallback」竞态），实现无误且全程有界。
+
+**思路**：改 spec 一行措辞为「5 秒 spawn deadline + 独立有界核验 grace」，而非改码把 grace 收回 5 秒总预算（那等于把竞态请回来）。
+
+**备注**：编排层裁定：实现期 MUST NOT 改 specs/（ship_gate design 域失鲜监视集含 specs/，当场 REFUSE_START）。留到代码审/done 阶段（失鲜窗口已关闭、流程明文允许修订四件套）执行。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T214 -->
+
+<!-- sdflow-issue-block:start id=T216 -->
+## T216: collect 幂等的两条冗余路径缺单路径回归锚
+> collect 幂等的两条冗余路径缺单路径回归锚
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 2 双轴复审 Spec 轴 Minor：outside-voice-job.py 的早期回放路径与写后回读 stored 路径互为兜底，实测只打掉其一时全部测试仍绿 ⇒ 后续若有人「简化」掉其中一条，锚不会报警。
+
+**思路**：补一条只针对早期回放路径的用例（如断言二次 collect 不重读 stdout），或在注释里写明二者互为兜底、勿单删。
+
+**备注**：来源=Task 2 双轴复审（f558722 后）Spec 轴 Minor。当前不变量未被削弱（两重保证），故非缺口，defer。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T216 -->
+
+<!-- sdflow-issue-block:start id=T217 -->
+## T217: parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)
+> parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 2 双轴复审 Standards 轴 Minor：宽 except 会吞掉与解析无关的异常并伪装成「时刻不可解析」。已被实证——去掉 _rechecked 守卫后 RecursionError 被吞，静默降级成假的 CORRUPT/exec-error 而非崩溃。_rechecked 只堵了当前这一条入口，吞噬面仍在。
+
+**思路**：except 子句收窄为 (ValueError, TypeError)。
+
+**备注**：来源=Task 2 双轴复审（f558722 后）Standards 轴 Minor。属「掩盖真实错误」类隐患，defer 至冷层 code-review 统一处理。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T217 -->
+
+<!-- sdflow-issue-block:start id=T218 -->
+## T218: rc_bad(CORRUPT) 路径重复 collect 非逐字节一致
+> rc_bad(CORRUPT) 路径重复 collect 非逐字节一致
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 2 双轴复审 Standards 轴 Minor：fix1 把冻结闸门收窄到 rc 已发布后，rc 文件存在但非纯十进制（CORRUPT）因未赋值 base[rc] 也不再冻结 ⇒ 重复 collect 仅 collected_at 逐次刷新，与 design.md Global Constraint「terminal rc 后…重复 collect 输出/分类一致」的字面有偏差。
+
+**思路**：要么把 rc_bad 纳入冻结闸门，要么在 spec/design 里明确 CORRUPT 属非 durable 终态。两轴均判影响可接受（分类稳定、CORRUPT 本不可进 findings）。
+
+**备注**：来源=Task 2 双轴复审 Standards 轴 Minor，fix 报告已主动披露。与 T214（OVBG-01 措辞对齐）同属「实现正确但 spec 字面需对齐」，可一并在 done 阶段处理。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T218 -->
+
+<!-- sdflow-issue-block:start id=T219 -->
+## T219: cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）
+> cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 4 双轴复审 Spec 轴新增 Minor：EFFORT_VALUES 收窄为 (high,) 后，拒绝只发生在 dispatch 层，worker 子命令自身不再校验。当前 dispatch 是唯一 producer（spec 亦禁自动重派）⇒ 不构成缺口，但若将来出现第二个 producer，worker 层无兜底。
+
+**思路**：worker 入口补一次同源校验（复用 EFFORT_VALUES，不抄第二份枚举）。
+
+**备注**：来源=Task 4 双轴复审（e1b8bc4 后）Spec 轴 Minor，判为登记备查、非缺口。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T219 -->
+
+<!-- sdflow-issue-block:start id=T220 -->
+## T220: probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）
+> probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 4 双轴复审 Standards 轴 M-r1/M-r2：同一文件里两簇根因（M1 spawn 时序、I1 降级方向美化）各留一处未扫到。:884-886 同时写着「helper 在 spawn runner 前落盘」（M1 第 4 处，自查只报三处）与「否则组长分支只能永久 fail-closed 判 unverifiable」——后半句双重不准：sidecar 缺席落的是判据⑤不是组长分支③，且⑤有 terminal witness 时判 exited 而非 unverifiable。该用例正是标着「Task 4 落点」的跨票交接锚。:2180 的同类句式仍是全称，表述过宽。
+
+**思路**：照 cmd_worker 已订正的措辞同步这两处；:2180 加「本 fixture 无 terminal witness」限定。
+
+**备注**：来源=Task 4 双轴复审（e1b8bc4 后）Standards 轴 Minor。纯 docstring、零行为影响，但有误导性 ⇒ 冷层 code-review 时优先处理。面治提示：这两簇根因在本 change 已复发三轮，扫时按「降级方向美化」「runner/host 主语反用」两个模式全仓 grep，别逐条补。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T220 -->
+
+<!-- sdflow-issue-block:start id=T221 -->
+## T221: fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值
+> fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 5 fix1 上抛：unknown_cost=true 分支的合法锚形复用了 fallback-unavailable，但 spec Scenario 描述的是「同族 fallback 起不来」，而本轮两处新用法是「同族 fallback 被成本闸门禁止」。两者共享矩阵同一条无执行行（runner=none 且 findings=0），锚形合法性已用 classify_combo 实跑自证。
+
+**思路**：若判需独立枚举值，是跨 openspec/specs/ + anchor_lint + 全笛卡尔 golden 的矩阵变更。当前用 detail 字段区分两种语义。
+
+**备注**：编排层裁定：本票验收标准第3条字面要求「anchor 合法组合矩阵保持不变」⇒ 复用是符合 ticket 范围的正解，新增枚举值超范围。交冷层 code-review / done 阶段复看是否值得单开。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T221 -->
+
+<!-- sdflow-issue-block:start id=T222 -->
+## T222: 止损行「走下一条的 unknown-cost 处置」指代不准
+> 止损行「走下一条的 unknown-cost 处置」指代不准
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 5 双轴复审 Spec 轴 Minor：fix1 新增的止损行写「走下一条的 unknown-cost 处置」，但字面下一条是「外层等待被回收」行，unknown-cost 条款在再下一行。指代名唯一故不致误读，但措辞不准——SKILL 是写给模型看的指令，措辞精度即执行精度。
+
+**思路**：改为直接点名条款（如「走 ⑥ 的 unknown-cost 处置」）而非相对位置指代。两份 SKILL 等值段同步改，改完跑 check_async_branch_parity.py。
+
+**备注**：来源=Task 5 双轴复审（fa378fb 后）Spec 轴 Minor。零行为影响，defer 至冷层 code-review。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T222 -->
+
+<!-- sdflow-issue-block:start id=T223 -->
+## T223: _the_line_with 的「恰好 1 行」是双向判据，良性新增会假红
+> _the_line_with 的「恰好 1 行」是双向判据，良性新增会假红
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 5 双轴复审 Standards 轴 Minor：实测在等值段内良性新增一句提到 outside-voice-job.py dispatch 或 MUST NOT 自动同族 fallback 即触发假红（报「实得 2」）。方向是 fail-closed、报错点名 key、修法明确，故按④接受，但登记为已知刚性——将来扩写 SKILL 段落时会被它绊一下。
+
+**思路**：若绊得频繁，改为「≥1 行且目标行存在」或给 key 加更强的定位前缀。
+
+**备注**：来源=Task 5 双轴复审（fa378fb 后）Standards 轴 Minor，登记备查非缺陷。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T223 -->
+
+<!-- sdflow-issue-block:start id=T224 -->
+## T224: 面治枚举漏 2 条 isinstance 早退分支（无独立锚）
+> 面治枚举漏 2 条 isinstance 早退分支（无独立锚）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 6 第3轮复审 Standards 轴 Minor：fix2 面治扫全「38 条门」，但枚举本身漏了两条 isinstance 早退分支——:140 的 sites[i] 不是对象、:236 的顶层不是对象。两条均无独立锚（定点删掉 → 116 passed 全绿）。非当前假绿（emit 永不产出非 dict、declared 集合门部分兜住），但报告标题「38 条门修后 0 条无独立锚」宜订正为「所枚举的 38 条中 0 条」。
+
+**思路**：补两条用例（sites=[good, "junk"]、verify([1,2,3])）约 8 行；报告标题措辞订正。
+
+**备注**：来源=Task 6 第3轮复审 Standards 轴 Minor。可复用观察：面治时「我扫了 N 条门」本身也是一个可能不全的断言——枚举的完整性同样需要机械核（如按 AST 数 append/return 点），否则「0 条无独立锚」只覆盖被枚举到的那些。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T224 -->
+
+<!-- sdflow-issue-block:start id=T225 -->
+## T225: 补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）
+> 补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 6 的 efficacy 三门（G1 站点集双向相等 / G2 单站点墙钟严格 > 300s / G3 无 context 与 stderr 外泄）在本 change 内未能达成：本机 Codex CLI 的 ChatGPT 额度耗尽（两次 codex exec 均返 usage limit，最早 2026-07-29 10:11 恢复），四条替代路径逐条查证均不可行。按 tasks.md 6.3 明文出口走了诚实降级：T162 保留、design.md/CONTEXT/hand-off 的「Codex efficacy=0」陈述一字未改、superpowers-plan.md Task 6 的验收复选框 1/2/3 保持未勾作为永久记录。人于 2026-07-26 拍板选项 A（降级合并，缺口移交后续 change 补证）。
+
+**思路**：额度恢复后（≥2026-07-29 10:11）在真实 Codex 宿主跑一轮完整评审，产出 efficacy evidence JSON，用 hack/check_codex_efficacy_evidence.py 验三门；通过则关闭 T162 并同步 design.md/CONTEXT 的 efficacy 陈述。已有的两个真实证据可直接复用为对照：transport 全链路 436s>300s rc=0（旧同步 300s 天花板会砍成 rc=124）、真实混配下 OVBG-01 skew fail-closed 首次触发。
+
+**备注**：来源=Task 6 双轴审第3轮 Spec 轴裁定「票面已做到尽头的未完成」+ 人拍板 A。注意本项不是质量缺口而是范围决定：ship 卡在 5/6 是因为 6.1/6.2 是动作项、外部额度封锁下不可诚实勾选，而非实现有问题。gate 的完成信号经 checkpoint 标签通道显式补打（commit message 写明人授权降级），复选框刻意留白。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T225 -->
+
+<!-- sdflow-issue-block:start id=T226 -->
+## T226: 给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）
+> 给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：两个独立来源（cold 对抗镜实测 + code-voice 跨模型）同时命中：verify() 只读传入的那一个文件，从不打开 <site>.collected.json 去对 job_id / attempt_nonce / stdout_sha256，也不校 layer/repo/change/run_id 的派生一致性（layer/repo/change 纯来自 CLI，run_id 只取首个 witness 且不在 SITE_KEYS 里）。实测：一份全手工伪造的 evidence.json（job_id/nonce/sha256 全瞎编）→ check 判三门全过、exit 0。∴ 这道门挡的是「手抄失误」，不是「自报为真」——而它存在的理由（adr/0018）恰恰是后者。属本仓反复出现的失效模式：外壳看起来机械（sha256/schema/单调时序），捕获环节却由被监管方把持。
+
+**思路**：check 增加 --run-dir（建议设为必填，fail-closed），对 declared 的每个站点重新读 <site>.collected.json 并逐字段比对 job_id/attempt_nonce/stdout_sha256/run_id/host/runner/model/effort/四个时刻；任一不符即红。同时强制所有站点属于同一 run，并校验 layer 与其基础站点（spec-review→design-voice / code-review→code-voice）对应，禁止 CLI 覆盖可派生的身份字段。诚实边界要写清：这只把伪造成本从「写一个文件」抬高到「同时伪造一致的 run-dir 证物」，本机 agent 仍有 Bash 写权限，MUST NOT 宣称不可伪造。
+
+**备注**：🔴 与 T225 同批做，不要单独排期——T225 是「额度恢复后跑真实 Codex efficacy」，它会产出**第一份真实 run-dir**；本条的新绑定只有对着那份真证物才验得了，现在做只能用我自造的 fixture 验（等于用被测对象自己的假设去验被测对象）。这也是本次 code-review 没有当场修它的理由。当前无假绿风险：Task 6 已按人拍板 A 降级，T162 保留、efficacy=0 陈述未改、无任何 evidence.json 产出过。已在文件 docstring 的「诚实边界」节写死这段声明，防后人误读为防伪门。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T226 -->
+
+<!-- sdflow-issue-block:start id=T227 -->
+## T227: worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程
+> worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 对抗镜（资源泄漏角度）实测：cmd_worker 用 subprocess.call 起 bash，零 signal.signal() 注册 ⇒ 对 worker PID 发 SIGTERM，python 父进程瞬间死亡、bash 子进程未收到任何信号、PPID 变 1、其内部 trap TERM 从未触发，继续跑满。这与设计文档已登记的残余(a)「outside-voice.sh 被 SIGKILL 时 trap 不执行」不是同一个洞：这里连 outside-voice.sh 都没收到信号。配套的另一半：run_cleanup 读到了 <site>.runner.pid（真正烧钱的那个 pid），但全程只拿它做只读核验（probe_runner_pid），唯一破坏性调用是 claude stop/rm（纯 supervisor API），工具里没有任何代码路径真正 kill 它 ⇒ subtree_wait 到点仍 ALIVE 就只报 orphan-warning，永久卡住。
+
+**思路**：① cmd_worker 装 SIGTERM/SIGINT/SIGHUP handler，收到即转发给 bash 子进程（或整个进程组）；② cleanup 在落 orphan-warning 之前，用已核验过的 runner_pid 做一次兜底 killpg。②改的是 OVBG-05 的既定行为，MUST 先过设计门再动。
+
+**备注**：⚠️ 本条**不是实现偏离 spec**：OVBG-05 原文只要求「stop→核验子树退出→rm，无法核验时落 unknown-cost/orphan-warning 并抑制自动 fallback」，没要求 MUST kill runner。∴ 当前实现是合规的，检测方向也是 fail-closed（不产生假绿），这属于 spec 野心之外的加固 ⇒ 按通则③『不加宽』不在本次 change 内自行补上。⚠️ 前提未验：claude --bg 内部的 stop 究竟走 per-pid kill 还是 killpg **没有核实过**——若走 group-kill 则①整条不成立。做之前 MUST 先用一次真实后台 agent 把这个前提验掉，别直接照着改。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T227 -->
+
+<!-- sdflow-issue-block:start id=T228 -->
+## T228: 含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号
+> 含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 对抗镜（信任边界角度）实测：_OV_TEST_LIB_ONLY=1 source 后直调 secret_scan，对含 NUL 的文件 RC=0（对照不含 NUL 的同串 RC=1）——GNU grep 对含 NUL 的输入按二进制语义处理，跨 NUL 的字面量匹配失败。该函数同时用于入境扫 context 与出境扫 runner 的 last-message.md。附带一条：命中二进制文件时 grep 输出 Binary file <path> matches，被 cut 取「行号」后打进 stderr，与 D8「只报规则类型+行号，MUST NOT 打印命中整行/匹配值」的字面契约不符（只泄漏路径不泄漏密钥）。
+
+**思路**：secret_scan 改用 grep -a，或先把文件的 NUL 规范化成占位符再扫（不改行为契约，只加一个字节归一化步骤）；stderr 那条在 cut 之前先过滤掉非数字行。
+
+**备注**：两条都是**既有代码**（非本 change 引入，本 change 未改这些行），故按代码审的置信过滤规则不作为本 change 的阻断项。严重度评估要诚实：NUL 切开的密钥已不是明文密钥，要真泄漏需要『模型被诱导主动插入控制字符做混淆』+『接收方主动剥除』——那是对抗性外泄场景，而正则扫描器对**蓄意混淆**（base64/换行/间隔）本来就一概无效，这是该类防线的固有边界，不是本实现的缺陷。归类为廉价加固而非漏洞。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T228 -->
+
+<!-- sdflow-issue-block:start id=T229 -->
+## T229: 两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）
+> 两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 代码审两条独立发现，都不是实现错、而是 spec 写窄了：① OVBG-01「dispatch MUST 在 monotonic 5 秒 deadline 内返回」——实现是 communicate 最多 5s + 收流最多 5s + 独立的 nonce lookup grace，端到端上界不是 5s。这是**有意的、代码里写明理由的**设计（核验用独立 grace，不与 dispatch 抢同一份预算；且 duration 字段覆盖到核验结束，正是为了让拿它跟 deadline 比的断言不恒真）。② OVBG-05「破坏性操作前 MUST 重新核验 canonical job id、repo、site、attempt identity；无法核验时只允许告警」——实现里只有 canonical-id 必须肯定核验，repo/site/attempt 是「矛盾即一票否决、缺席不阻塞」。理由写在 verify_identity 的 docstring：真机上 state=done 的 roster 条目没有 name 字段（Task 1 实测），四项都要求肯定证据的话，正常完成的 job 永远 rm 不掉——那会把「不猜目标」写成「什么也别做」。
+
+**思路**：在 /sdflow-done 的 archive delta 同步步骤里，把这两条 spec 文本改写成与实现一致的措辞（① 明确 5 秒是 spawn+首次读的 deadline，核验用独立 grace，端到端上界另述；② 明确四项的判据是「canonical id 必须肯定核验 + 其余三项矛盾即否决、缺席不阻塞」并附真机依据）。
+
+**备注**：🔴 这是 /sdflow-done 的 **archive 阶段必做项**，不是可选。实现期 MUST NOT 改 openspec/specs/（会触发设计门失鲜 REFUSE_START），故只能在此登记后延到 archive。同批还有 Task 4 交接的既有一项：host-adaptive-execution/spec.md 与 spec-workflow/spec.md 仍只写「四旗」，而 OVBG-04 已含三面隔离旗。三条一起在 delta 同步时核对。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T229 -->
+
+<!-- sdflow-issue-block:start id=T230 -->
+## T230: 200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限
+> 200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 对抗镜（资源泄漏角度）读码发现：OV_MAX_CONTEXT_BYTES 的 200KB 保头尾截断只施加在 render_prompt 的入境 ctx 上；出境方向 last-message.md → cat 到 stdout → worker 落盘 <site>.stdout 全程无上限。runner 产出异常大的结果时会无节制占盘。
+
+**思路**：出境侧加同量级上限，或至少在超过阈值时记一条 bytes 告警（与既有 OV_TRUNCATED 同口径落 stderr）。
+
+**备注**：影响低：模型单次输出天然有上限，且 .outside-voice/ 已被 gitignore 递归排除、不会入库。列为廉价加固。
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T230 -->
+
+<!-- sdflow-issue-block:start id=T215 -->
+## T215: 删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言
+> 删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T215 -->

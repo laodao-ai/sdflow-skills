@@ -117,35 +117,35 @@ class TestT21InjectMalformed:
 # ── T48: setup.sh python 探测版本校验 ────────────────────────────
 
 class TestT48SetupVersionCheck:
-    def test_setup_probe_rejects_non_py36(self, tmp_path):
-        """T48: 探测落到非 Python3.6+（裸 `python` 是 py2）时须跳过、不喂 init.py
+    def test_setup_probe_rejects_non_py37(self, tmp_path):
+        """T48: 探测落到非 Python3.7+（裸 `python` 是 py2）时须跳过、不喂 init.py
         （f-string 解析期崩）。修前探测块无版本校验 → 会喂 py2 → FAIL。
         本测复刻 setup.sh 探测块逻辑（另有 bind 测锁真文件）。"""
         fakebin = tmp_path / "bin"; fakebin.mkdir()
         py = fakebin / "python"
-        # 假 py2：-c 版本校验退出 1（模拟 <3.6）；其它参数 echo RAN（若被误喂 init.py 可检测）
+        # 假 py2：-c 版本校验退出 1（模拟 <3.7）；其它参数 echo RAN（若被误喂 init.py 可检测）
         py.write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN_$*\n')
         py.chmod(0o755)
         snippet = (
             '_py=""\n'
             'for _cand in python3 python; do\n'
             '  if command -v "$_cand" >/dev/null 2>&1 && "$_cand" -c '
-            "'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then\n"
+            "'import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)' >/dev/null 2>&1; then\n"
             '    _py="$_cand"; break\n'
             '  fi\n'
             'done\n'
-            'if [ -z "$_py" ]; then echo NOPY36\n'
+            'if [ -z "$_py" ]; then echo NOPY37\n'
             'else "$_py" /nonexistent retire-hooks; fi\n'
         )
         r = subprocess.run(["/bin/bash", "-c", snippet],
                            env={"PATH": str(fakebin)}, capture_output=True, text=True)
-        assert "NOPY36" in r.stdout, "非 py3.6+ 未被版本校验拦下"
+        assert "NOPY37" in r.stdout, "非 py3.7+ 未被版本校验拦下"
         assert "RAN_" not in r.stdout, "把 init.py 误喂给了 py2"
 
     def test_setup_probe_falls_back_to_valid_candidate(self, tmp_path):
         """T48/codex#4: python3 不合格但 python 合格时须 fallback 到 python（不止校验第一个）。"""
         fakebin = tmp_path / "bin"; fakebin.mkdir()
-        # python3 = 假 py2（版本校验退出 1）；python = 合格 py3.6+（版本校验退出 0）
+        # python3 = 假 py2（版本校验退出 1）；python = 合格 py3.7+（版本校验退出 0）
         (fakebin / "python3").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN3_$*\n')
         (fakebin / "python").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 0; fi\necho RANP_$*\n')
         (fakebin / "python3").chmod(0o755); (fakebin / "python").chmod(0o755)
@@ -153,23 +153,26 @@ class TestT48SetupVersionCheck:
             '_py=""\n'
             'for _cand in python3 python; do\n'
             '  if command -v "$_cand" >/dev/null 2>&1 && "$_cand" -c '
-            "'import sys; sys.exit(0 if sys.version_info >= (3, 6) else 1)' >/dev/null 2>&1; then\n"
+            "'import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)' >/dev/null 2>&1; then\n"
             '    _py="$_cand"; break\n'
             '  fi\n'
             'done\n'
-            'if [ -z "$_py" ]; then echo NOPY36\n'
+            'if [ -z "$_py" ]; then echo NOPY37\n'
             'else "$_py" retire-hooks; fi\n'
         )
         r = subprocess.run(["/bin/bash", "-c", snippet],
                            env={"PATH": str(fakebin)}, capture_output=True, text=True)
         assert "RANP_retire-hooks" in r.stdout, "python3 旧版时未 fallback 到合格 python"
-        assert "NOPY36" not in r.stdout
+        assert "NOPY37" not in r.stdout
 
     def test_setup_sh_has_version_check(self):
-        """T48 bind: 绑真 setup.sh——探测块须含 3.6+ 版本校验构造，防漂移丢失。"""
+        """T48 bind: 绑真 setup.sh——探测块须含 3.7+ 版本校验构造，防漂移丢失。
+
+        下限 3.7（不是 init.py 所需的 3.6）：同一个 `_py` 还要跑 outside-voice-job.py，
+        而它用 `subprocess.run(capture_output=…)` —— 3.7 才有。"""
         root = Path(__file__).resolve().parents[2]
         text = (root / "setup.sh").read_text(encoding="utf-8")
-        assert "version_info >= (3, 6)" in text, "setup.sh 探测块缺 3.6+ 版本校验"
+        assert "version_info >= (3, 7)" in text, "setup.sh 探测块缺 3.7+ 版本校验"
 
 
 # ── 冷 code-review 折叠修：ensure_global_hook 对称硬化（F-B 崩溃守卫 / F-C 锁+原子）──

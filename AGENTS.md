@@ -73,7 +73,8 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 ## 项目结构与模块组织
 
 - 根目录下含 `SKILL.md` 的目录是可安装 skill，例如 `sdflow-init/`、`sdflow-done/`；其 `scripts/`、`tests/`、`assets/`、`references/` 必须保持自包含。
-- `sdflow-init/assets/workflow/` 是下游 OpenSpec workflow bundle 的唯一权威源；`openspec/` 是本仓 dogfooding 实例，`openspec/workflow/` 仅保留运行工具，不存规则副本。
+- `sdflow-init/assets/workflow/` 是下游 OpenSpec workflow bundle 的唯一权威源；`openspec/` 是本仓 dogfooding 实例，`openspec/workflow/` 仅保留运行工具、生成文档和契约文件，不存规则真相源副本。
+- `openspec/rules/` 是本仓写作与工程规则的单一源；`openspec/changes/`、`openspec/specs/`、`openspec/issues/` 分别承载变更、主规格和问题台账。
 - `hack/` 放仓库级生成与一致性脚本，`docs/` 放架构、流程和草案文档。新增或删除顶层 skill 时同步更新 `README.md` 的 Skills 列表。
 
 ## 构建、测试与开发命令
@@ -95,7 +96,7 @@ git diff --check                                      # 检查空白错误
 
 ## 测试准则
 
-仓库未设数值覆盖率门槛，但数据类 skill 的 `scripts/` 改动必须附带回归测试。先跑受影响目录，再在提交前跑全量 `pytest`。纯 Markdown skill 重点核对 frontmatter、触发条件、命令和引用路径。修改 `sdflow-init/assets/hack/` 或新增/删除 skill 后还需运行 `bash setup.sh`，确认复制资产和 symlink 状态。
+仓库未设数值覆盖率门槛，但数据类 skill 的 `scripts/` 改动必须附带回归测试。先跑受影响目录，再在提交前跑全量 `pytest`。仓根 `conftest.py` 和 `pytest.ini` 共同保证从仓外调用时仍加载全局副作用断言，两者不可拆分或塞入无关共享配置。纯 Markdown skill 重点核对 frontmatter、触发条件、命令和引用路径。修改 `sdflow-init/assets/workflow/`、`sdflow-init/assets/hack/` 或新增/删除 skill 后还需运行 `bash setup.sh`，确认全局 bundle、复制资产和 symlink 状态。
 
 ## 提交与 Pull Request 规范
 
@@ -103,7 +104,8 @@ git diff --check                                      # 检查空白错误
 
 ## 修改与安全约定
 
-- 不要手改带 `sdflow:*` 或 `opsx-init:*` marker 的托管区块；修改其真相源后运行对应生成/同步脚本。
+- 不要手改带 `sdflow:*` 或 `opsx-init:*` marker 的托管区块；通则改 `sdflow-init/assets/snippets/principles-project.md` 后运行 `python3 hack/sync_principles.py --apply`，OpenSpec 托管块通过 `python3 sdflow-init/scripts/init.py update --root .` 同步。
+- 勿手改 `.claude/skills/openspec-*`、`.codex/skills/openspec-*` 或 `openspec/retro/report.md`；前两者由 OpenSpec CLI 生成，后者由 `sdflow-retro` 再生。
 - `bash setup.sh` 会写入 `~/.claude/skills/`、`~/.codex/skills/` 和 `~/.sdflow/`。运行前确认改动确实需要刷新全局安装。
 - 不提交密钥、凭据或本机路径配置；变更管理、规则和生成资产遵循下方 OpenSpec 工作流。
 

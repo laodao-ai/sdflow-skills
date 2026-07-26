@@ -1,4 +1,5 @@
 """setup.sh 的 ~/.sdflow 建链测试。HOME/SDFLOW_HOME 全部重定向 tmp_path。"""
+import json
 import os
 import stat
 import subprocess
@@ -192,3 +193,90 @@ class TestBrandAndMarkerNarrowing:
         alien = skills / "bilibili-research"
         assert alien.is_dir() and not alien.is_symlink()
         assert (alien / ".laodao-skills").exists()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 同代 capability 安装快照（enable-codex-background-outside-voice Task 5）
+#
+# 【为什么必须在这一层测】memory「dogfood 盲区：源仓 config 掩盖消费仓默认态」——
+# 仓内 `sdflow-init/tests/` 用 `JOB.write_manifest(tmp)` 造出来的「已安装形态」永远绿，
+# 而真实消费者读的是 `~/.sdflow/hack/`：setup.sh 若不装 `*.py`、不写 manifest，
+# **真实安装态的 preflight 必红**（helper 缺失 / manifest 缺失都 fail-closed）。
+# ∴ 锚必须打在「真跑一次 setup.sh 之后的那个目录」上。
+# ══════════════════════════════════════════════════════════════════════════════
+
+import importlib.util  # noqa: E402
+
+_JOB_PY = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice-job.py"
+_SPEC = importlib.util.spec_from_file_location("sdflow_ov_job_for_setup_tests", _JOB_PY)
+JOB = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(JOB)
+
+
+class TestCapabilitySnapshot:
+    def test_installs_job_helper_with_exec_bit_and_python3_interpreter(self, tmp_path):
+        """job helper 是 `claude --bg --exec` 之外的**另一个执行面**：装漏 = 整条后台通道死。"""
+        r, sdflow = run_setup(tmp_path)
+        assert r.returncode == 0, r.stderr
+        installed = sdflow / "hack" / "outside-voice-job.py"
+        assert installed.is_file() and not installed.is_symlink()      # 拷贝安装，非仓内直跑
+        assert installed.stat().st_mode & stat.S_IXUSR                 # exec 位一次设好
+        first = installed.read_text(encoding="utf-8").splitlines()[0]
+        assert first.startswith("#!") and "python3" in first           # 解释器正确
+
+    def test_writes_a_capability_manifest_that_verifies_against_installed_bytes(self, tmp_path):
+        r, sdflow = run_setup(tmp_path)
+        assert r.returncode == 0, r.stderr
+        hack = sdflow / "hack"
+        manifest = hack / JOB.MANIFEST_NAME
+        assert manifest.is_file(), "setup.sh 未写 capability manifest ⇒ 安装态 preflight 必红"
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        assert sorted(data["entries"]) == sorted(JOB.MANIFEST_ENTRIES)
+        for name, digest in data["entries"].items():
+            assert digest == JOB.sha256_file(str(hack / name)), name
+        assert JOB.verify_manifest(hack)["ok"] is True
+
+    def test_rerun_keeps_the_snapshot_consistent(self, tmp_path):
+        run_setup(tmp_path)
+        r, sdflow = run_setup(tmp_path)
+        assert r.returncode == 0, r.stderr
+        assert JOB.verify_manifest(sdflow / "hack")["ok"] is True
+
+    def test_hand_mutated_install_is_skew_and_fails_closed(self, tmp_path):
+        """新旧混配 / stale copy：任一成员与快照不符即红（正是 preflight 的 fail-closed 判据）。"""
+        r, sdflow = run_setup(tmp_path)
+        hack = sdflow / "hack"
+        (hack / "outside-voice.sh").write_text("# stale copy\n", encoding="utf-8")
+        verdict = JOB.verify_manifest(hack)
+        assert verdict["ok"] is False
+        assert "outside-voice.sh" in verdict["detail"]
+        assert "setup.sh" in verdict["hint"]                   # 刷新指引可执行
+
+    def test_rerun_heals_a_stale_copy(self, tmp_path):
+        """对照组：上一条的红确实来自 skew —— 重跑 setup.sh 即恢复绿。"""
+        r, sdflow = run_setup(tmp_path)
+        (sdflow / "hack" / "outside-voice.sh").write_text("# stale copy\n", encoding="utf-8")
+        assert JOB.verify_manifest(sdflow / "hack")["ok"] is False
+        r2, _ = run_setup(tmp_path)
+        assert r2.returncode == 0, r2.stderr
+        assert JOB.verify_manifest(sdflow / "hack")["ok"] is True
+
+    def test_interrupted_install_leaves_no_consistent_snapshot(self, tmp_path):
+        """安装中断 ⇒ MUST NOT 留下一份「自洽但陈旧」的 manifest。
+
+        制造真实中断：把已安装的 shell helper 置为只读 ⇒ 下一次 `cp` 失败 ⇒ `set -e` 当场
+        中止。此时 manifest MUST 已经不在（安装步先删后写），于是 preflight fail-closed，
+        而不是拿着上一代的 manifest 声称快照一致。
+        """
+        r, sdflow = run_setup(tmp_path)
+        assert JOB.verify_manifest(sdflow / "hack")["ok"] is True
+        victim = sdflow / "hack" / "outside-voice.sh"
+        victim.chmod(0o444)
+        try:
+            r2, _ = run_setup(tmp_path)
+            assert r2.returncode != 0, "cp 到只读目标未失败 ⇒ 本用例未制造出中断"
+            assert not (sdflow / "hack" / JOB.MANIFEST_NAME).exists(), \
+                "中断后仍留着上一代 manifest ⇒ 陈旧快照会被当成一致"
+            assert JOB.verify_manifest(sdflow / "hack")["ok"] is False
+        finally:
+            victim.chmod(0o755)

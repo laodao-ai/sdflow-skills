@@ -1,0 +1,1050 @@
+diff --git a/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation.md b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation.md
+new file mode 100644
+index 0000000..870c68c
+--- /dev/null
++++ b/openspec/changes/enable-codex-background-outside-voice/impl-reports/task4-runner-isolation.md
+@@ -0,0 +1,213 @@
++# Task 4 实现报告 — runner 隔离加固与出境面封堵
++
++**票**：Task 4（R-ID: **OVBG-04**，兼落 OVBG-05 的子树核验信号）
++**起点**：`256c0eb`（Task 3 双轴审通过）
++**改动面**：`outside-voice.sh`（1.4.3 → **1.5.0**）+ `outside-voice-job.py`（仅契约 docstring 订正）
+++ 两份测试（`test_outside_voice.py` / `test_outside_voice_job.py`）
++**全量**：`2464 passed, 10 skipped, 3 xfailed`（基线 2441/8/3 ⇒ **+23 passed，+2 skipped**）
++
++---
++
++## 一、做了什么
++
++### 1. 三面隔离旗（OVBG-04 argv 契约）
++
++`outside-voice.sh` 的 claude 反向分支在既有四旗之后新增：
++
++```sh
++--effort "$ov_effort" --safe-mode --no-session-persistence
++```
++
++`ov_effort="${SDFLOW_VOICE_EFFORT:-high}"`。
++
++**为什么不在本脚本再校验 effort 取值域**（明写决策，非遗漏）：本机 `claude --help` 的
++`--effort` 枚举是 `low, medium, high, xhigh, max`（5 档），而上游 `outside-voice-job.py`
++的 `EFFORT_VALUES` 只放行 3 档。在 shell 里再抄一份枚举 = 凭空造第二个漂移面，而收益
++只是把「claude 自己 fail-loud」换成「helper fail-loud」。且该值只作**一个 argv 词**下发
++（不可能拆出第二个 flag），无注入面。∴ 单点校验留在 job helper，本脚本只做透传 + 缺省。
++
++**版本升 1.5.0**（不是 1.4.4）：新增了两条对外可观察契约（argv 形态 + 一个新 sidecar 文件），
++不是内部修复。
++
++### 2. runner pid sidecar（**硬交接 A**）
++
++新增 `ov_publish_runner_pid()`：`$SDFLOW_VOICE_RUNNER_PID_FILE` 非空时，把 `OV_RUNNER_PID`
++（GNU timeout 自身 pid = 它 setpgid 出的那个独立组的 pgid）以**纯十进制**、临时文件 + `mv`
++原子发布，`umask 077` ⇒ **0600**。**两条 runner 路径（codex / claude）都落**——后台通道的
++runner 由调用方决定，helper 不预设只有 claude。
++
++三条边界，都在代码注释里显式登记：
++
++| 边界 | 处理 |
++|---|---|
++| **「spawn 之前落盘」在 shell 层不可能** | pid 只有 `&` 之后（`$!`）才存在 ⇒ 只能 spawn 后**立即**写、早于 `wait`。残余窗口与既有残余 (b) 同源：`&` 与写入之间落信号 ⇒ 文件缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable`（**不是**误判 exited），方向安全 |
++| **写入失败** | 打 `OV_RUNNER_PID_PUBLISH_FAILED=1 stage=... path=...`（结构化字段，无 context 正文）并**继续跑 voice**——它是清理辅助信号、不是交付物；掀掉 voice 是拿主交付物去换一个辅助信号 |
++| **写完不删** | 与消费侧 `read_runner_pid` docstring 已声明的模型一致（「串到别人的活 pid ⇒ 判 alive；pid 被复用 ⇒ 同样判 alive」——两个误判方向都是 fail-closed）。删掉反而会让 helper 被 SIGKILL 那一格失去 ④ 的直接信号 |
++
++### 3. `SDFLOW_VOICE_EFFORT` 契约登记（**硬交接 B**）
++
++头部契约块新增两条 env 输入（`SDFLOW_VOICE_EFFORT` / `SDFLOW_VOICE_RUNNER_PID_FILE`）与
++新 stderr 哨兵 `OV_RUNNER_PID_PUBLISH_FAILED=1`。并加了一条**机械锚**把
++「代码里读了它」与「契约里写了它」绑死（见下表「三条硬交接」的 B 行），防再次出现 Task 1 那种「已下发、
++零消费者、却已写进 job.json 当事实」的无主变量。
++
++### 4. `outside-voice-job.py` 的两处契约 docstring 订正（**不改行为**）
++
++Task 3 写下的「helper MUST 在 spawn runner **之前**把 `OV_RUNNER_PID` 写入」是一条
++**不可能被满足**的契约（pid 那时还不存在）。已订正为「spawn 后立即（`$!` 可得的最早时刻，
++早于 `wait`）」并登记残余窗口。同时把两处「已接线、下游尚未消费」的注释更新为真实消费者。
++`git diff` 核实：`outside-voice-job.py` 的改动**全部**是注释/docstring，零可执行行。
++
++---
++
++## 二、每条验收标准 → 机械锚
++
++| # | 验收标准 | 锚（全部实跑过） |
++|---|---|---|
++| 1 | Claude 分支 argv golden 更新为显式三旗，模型仍只取 `SDFLOW_VOICE_MODEL`，helper 版本同步升级 | `test_exec_claude_isolation_flags_golden`（三旗齐全 + `--effort high`）· `test_exec_claude_effort_comes_from_the_dispatched_env` · `test_exec_claude_effort_defaults_to_high_without_the_env` · `test_version`（1.5.0） |
++| 2 | 四旗 / FRAME / 两次 secret scan / 200KB 截断语义不变，既有 golden 不回归 | `test_exec_claude_reverse_path_three_flags_golden`（原样通过）+ 隔离旗 golden 内**同轮复验**四旗（防"加隔离旗时顺手改了工具集"）+ `test_exec_codex_path_untouched_by_claude_isolation_flags`（负向 parity）+ 全量 2464 绿 |
++| 3 | safe mode 下 hooks/plugins/skills/memory 不执行，read-fence 仍拒绝凭证路径，只读工具精确为 `Read,Grep,Glob` | **真机**：`test_real_runner_isolates_ambient_customizations_and_keeps_the_read_fence` + **对照组** `test_real_runner_control_group_proves_the_probe_can_detect_ambient_leakage`（实际输出见第三节） |
++| 4 | worker 先重定向再跑 payload；真实 `claude logs <id>` canary 证明 context / partial stdout / stderr / fake secret 均不入 transcript/state | **真机**：`test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret`（内含裸 `--bg --exec` 对照组）+ **反向变异实证**（第三节） |
++| 5 | job 与输出文件 0600；失败 stderr 只留 gitignored run-dir，tracked 报告只写 rc/行数/字节数 | 既有 `test_worker_output_files_are_0600` / job.json 0600 断言 + 新增 sidecar 0600 断言 + `test_failed_collect_reports_stderr_counts_but_never_its_text`（**失败**那一格，既有锚只覆盖 rc=0）；`.gitignore` 已有 `**/.outside-voice/` |
++| 6 | 注入与越界：NUL/换行、仓外路径、重复 site、shell 元字符不能改写命令或越出本轮目录；非 POSIX fail-closed | `test_build_worker_command_refuses_control_characters`（NUL/`\n`/`\r`）· `test_dispatch_rejects_a_newline_in_a_path_before_any_external_side_effect` · `test_dispatch_rejects_a_run_dir_outside_the_repo_root`（既有只有 context-file 那一处）· 既有 `test_duplicate_site_is_rejected_before_external_side_effect` · `test_shell_metacharacters_in_paths_cannot_rewrite_the_dispatched_command` · `test_non_posix_platforms_fail_closed_all_the_way_up_to_preflight`（既有只打 `os.name`，补 `sys.platform` 两格 + 顶到 `run_preflight`） |
++
++### 三条硬交接的落地位置
++
++| 交接 | 落地位置 | 锚 |
++|---|---|---|
++| **A** runner pid 文件 | `outside-voice.sh:454-489`（`ov_publish_runner_pid`，函数体 471 起）+ `:712`（codex 分支）+ `:744`（claude 分支） | `test_exec_publishes_the_runner_pid_sidecar`（**等于 timeout 自己的 pid**，不是"是个数字"）· **跨文件**：`test_real_helper_publishes_the_runner_pid_this_module_consumes`（worker 下发 → 真 helper 落盘 → `JOB.read_runner_pid` 解析）· **后果**：`test_the_published_runner_pid_unblocks_the_subtree_verdict`（刻意删掉 terminal witness，逼判定只能走 ④ ⇒ `SUBTREE_EXITED`；否则恒 `unverifiable`、`cleanup --cancel` 永不解闸） |
++| **B** `SDFLOW_VOICE_EFFORT` 登记 | `outside-voice.sh:16-22`（头部契约块）+ `:743`（消费点 `ov_effort=`） | `test_env_contract_block_registers_every_consumed_variable`（从正文解析 `${SDFLOW_VOICE_*}` 消费点，逐个要求出现在头部契约块） |
++| **C** `claude logs` canary 口径 | 测试 docstring 显式写明「路径不是 payload、不判红」，并断言 `str(ctx) in roster.stdout or job_id in roster.stdout` | `test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret`；真机 roster 实测确认 `name` 承载完整 worker 命令串（含绝对路径，见第三节） |
++
++---
++
++## 三、真机输出（脱敏）
++
++### (a) `claude logs` canary —— worker 走既有重定向
++
++```
++DISPATCH rc= 0
++{"…","effort":"high","job_id":"8c304a98","model":"opus","ok":true,"reason_code":"ok",…}
++RC= 0
++=== claude logs 8c304a98  rc=0 ===
++（stdout 为空）
++--- stderr ---
++（空）
++=== roster entry ===
++{"id":"8c304a98","cwd":"…/repo","kind":"background","sessionId":"8c304a98-…",
++ "name":"…/python3 …/outside-voice-job.py worker --run-dir …/20260725T-Man01 --site design-voice
++         --context-file …/design-voice-context.md --repo-root …/repo --runner claude --model opus
++         --effort high --timeout 900 --attempt-nonce b49a… --run-id 20260725T-Man01",
++ "state":"done"}
++CTX canary in logs: False
++CTX canary in roster: False
++```
++
++`claude rm 8c304a98` 已清理。**roster 的 `name` 里只有绝对路径，没有 context 正文** ⇒ 交接 C 的口径实测成立。
++
++### (b) 判别器有效性 —— 两条独立证明（**这是本票最要害的一段**）
++
++「transcript 为空」本身**证不了任何事**：空既可能是重定向奏效，也可能是 `claude logs`
++压根不捕获 background 命令的输出。故两侧各做一次：
++
++**对照组（已写进自动化测试）**——裸 `--bg --exec`，无任何重定向：
++
++```
++$ claude --bg --exec "printf 'CONTROL_CANARY_A1B2\n'; printf 'CONTROL_ERR_A1B2\n' >&2; sleep 2"
++backgrounded · 4d7b11b5 · …
++$ claude logs 4d7b11b5
++CONTROL_CANARY_A1B2
++CONTROL_ERR_A1B2
++```
++⇒ `claude logs` **确实**捕获 background 命令的 stdout 与 stderr。
++
++**反向变异（隔离副本，仓内零改动）**——把 `cmd_worker` 的 `os.dup2(out_fd,1)/dup2(err_fd,2)`
++换成 `pass`，同一条真机流程重跑：
++
++```
++=== claude logs c0568eee  rc=0 ===
++CTX_BODY_CANARY_5F2A9
++aws_key=AKIAQQQQQQQQQQQQQQQQ
++CTX_BODY_CANARY_5F2A9
++aws_key=AKIAQQQQQQQQQQQQQQQQ
++CTX canary in logs: True
++```
++⇒ **context 正文与假密钥双双进 transcript**。重定向是这条出境面唯一的闸，锚是真判别器。
++
++### (c) safe-mode / read-fence / 只读工具集（真机模型探针）
++
++探针项目里装满诱饵：`.claude/settings.json` 的 SessionStart hook（`touch <marker>`）、
++`CLAUDE.md`（要求每次回复以 `MEMORY_CANARY_7Q3` 开头）、命中生产读围栏 `Read(//**/id_rsa*)`
++的诱饵文件 `id_rsa_probe`（内容为无害自造串 `READ_FENCE_BREACHED_9K2`）。
++**旗子清单不在测试里另抄一份**——先用假 claude 把生产 argv 原样抓下来，只换 model / add-dir
++后交给真 CLI 重放。
++
++```
++=== SAFE-MODE 组 rc=0 ===
++DENIED
++
++TOOLS=Glob, Grep, Read
++
++hook marker exists: False
++
++=== 对照组（去掉 --safe-mode）rc=0 ===
++MEMORY_CANARY_7Q3
++
++好的
++
++hook marker exists: True
++```
++
++四条同时成立：① SessionStart hook **未**执行 ② 项目 CLAUDE.md memory **未**加载
++③ 读围栏在 safe mode 下**仍然**拒读（`DENIED`，诱饵内容零泄漏）④ 工具集精确为
++`Glob, Grep, Read`。对照组**同时**证明两个诱饵在没有 `--safe-mode` 时是真会响的 ⇒
++上面的"没出现"是证据，不是默认值。
++
++> 该探针默认 **skip**（要真花模型调用），显式 `SDFLOW_OV_REAL_MODEL_SMOKE=1` 才跑。
++> 全量套件里的 `+2 skipped` 就是这两条。
++
++---
++
++## 四、反向变异复核（新锚逐条验红；均在 scratchpad 独立副本进行，仓内文件零改动）
++
++| 变异 | 结果 |
++|---|---|
++| 去掉 `--safe-mode` | **RED** `test_exec_claude_isolation_flags_golden` |
++| `ov_effort` 硬编码成 `"high"`（不读 env） | **RED** `test_exec_claude_effort_comes_from_the_dispatched_env` |
++| 删掉两处 `ov_publish_runner_pid` 调用 | **RED ×5**：三条 helper 侧 + **两条跨文件交接锚**（`test_real_helper_publishes_the_runner_pid_this_module_consumes` / `test_the_published_runner_pid_unblocks_the_subtree_verdict`） |
++| 头部契约块删掉 `SDFLOW_VOICE_EFFORT` 的全部提及 | **RED** `test_env_contract_block_registers_every_consumed_variable` |
++| 同上，删 `SDFLOW_VOICE_RUNNER_PID_FILE` | **RED** 同上 |
++| `build_worker_command` 的 `shlex.join` → `" ".join` | **RED** `test_shell_metacharacters_in_paths_cannot_rewrite_the_dispatched_command`（bash 真去执行了 `touch`） |
++| `cmd_worker` 去掉 `os.dup2` 重定向 | **RED**（真机，见 (b)） |
++
++> 变异复核**只在** `scratchpad/mutrepo` 的整树副本里做（承接 Task 3 编排层记录的"变异互踩"教训）。
++> 复核结束已 `rm -rf` 该副本，`git status` 只剩本票的 4 个改动文件。
++
++---
++
++## 五、未做 / 诚实降级
++
++1. **`--safe-mode` 对 plugins / skills 的隔离未独立探针**。已直接探到的是 **hooks（任意命令执行，
++   影响最大）与 memory（prompt 注入面）**，且对照组证明这两类诱饵在无 safe-mode 时确会生效。
++   plugins/skills 与它们由**同一个 flag、同一套 customization 加载机制**管辖（`claude --help`
++   逐项列出）。独立探针要么靠模型自报（弱锚、易飘），要么要装真插件（成本远高于收益）。
++   ⇒ 按通则④简化，此处**如实标注为未独立验证**，不写成"已验"。
++2. **`openspec/specs/host-adaptive-execution/spec.md` 与 `spec-workflow/spec.md` 仍只写「四旗」**。
++   本 change 的 delta（OVBG-04）已含三面隔离旗，主 spec 由 **archive 阶段的 delta 同步**统一更新；
++   实现期改 `openspec/specs/` 既越本票范围、也与流程相悖。**未改，记在此供 done 阶段核对。**
++3. **`setup.sh` 的 `capability-manifest.json` 仍未写**（Task 1 报告已交接，归 **Task 5**）
++   ⇒ 真实安装态 preflight 仍会红。本票新增的三旗与 sidecar 在**测试态**（`job_home` fixture
++   现算 manifest）全绿，与该缺口正交。
++
++## 六、Concerns（交下游票 / 评审判定，非本票遗漏）
++
++1. **`EFFORT_VALUES` 只有 3 档，而 CLI 支持 5 档（`xhigh` / `max`）。** 现状 = job helper 更严，
++   fail-closed 方向安全，本票不动。若将来要用 `xhigh`，改的是 `outside-voice-job.py` 的
++   `EFFORT_VALUES` 一处——shell 侧无需同步（这正是不抄第二份枚举的收益）。
++2. **`<site>.runner.pid` 写后不删**（含 rc 已发布的正常终态）。留档 = 一致的 fail-closed
++   方向（stale/复用 pid ⇒ 判 alive），与 Task 3 的消费侧模型一致；代价是**理论上**的 pid 复用
++   可能让一个早已结束的站点在 `cleanup --cancel` 时判 alive。概率极低（正常终态走的是
++   「已 collect ⇒ 直接 rm」路径，根本不调 `probe_subtree`），且方向安全 ⇒ 不加删除逻辑。
++3. **`claude --bg --exec` 是 research preview**：`backgrounded · <id> · <cmd>` 的 stdout 格式与
++   `claude logs` 的行为都可能漂。canary 测试的对照组会在 `claude logs` 行为漂到"不再捕获输出"
++   时**主动失败**（而不是静默退化成假绿）——这是有意设计的失效方向。
+diff --git a/sdflow-init/assets/hack/outside-voice-job.py b/sdflow-init/assets/hack/outside-voice-job.py
+index 55c3175..ad5713e 100644
+--- a/sdflow-init/assets/hack/outside-voice-job.py
++++ b/sdflow-init/assets/hack/outside-voice-job.py
+@@ -33,9 +33,12 @@ context 正文——那些一律仍归 `outside-voice.sh`（同目录、同代
+     runner/model/effort 经 `SDFLOW_VOICE_RUNNER` / `SDFLOW_VOICE_MODEL` /
+     `SDFLOW_VOICE_EFFORT` **环境变量**下发（helper 的 `exec` 只吃 --context-file/--timeout）。
+     另经 `SDFLOW_VOICE_RUNNER_PID_FILE` 下发 `<site>.runner.pid` 的绝对路径：helper MUST 在
+-    spawn runner **之前**把 `OV_RUNNER_PID`（GNU timeout 自身 pid = 它 setpgid 出的那个独立
+-    进程组的 pgid）以**纯十进制**原子写入该文件 —— 它是 cleanup 核验「runner 子树是否已
+-    退出」的唯一直接信号（worker 自己的进程组圈不住 timeout 的独立组）。
++    spawn runner 后**立即**（`$!` 可得的最早时刻，早于 `wait`）把 `OV_RUNNER_PID`
++    （GNU timeout 自身 pid = 它 setpgid 出的那个独立进程组的 pgid）以**纯十进制**原子
++    写入该文件 —— 它是 cleanup 核验「runner 子树是否已退出」的唯一直接信号
++    （worker 自己的进程组圈不住 timeout 的独立组）。
++    ⚠ pid 只有在 `&` 之后才存在 ⇒ 「spawn 之前落盘」在 shell 层不可能；`&` 与写入之间
++    的窗口里被杀 ⇒ 文件缺席 ⇒ 消费侧退回 fail-closed 的 `unverifiable`（方向安全）。
+     exit 恒 0（真实结果一律经 `<site>.rc` 发布，MUST NOT 让 supervisor 的 job state
+     充当结果通道）。
+ 
+@@ -897,14 +900,14 @@ def cmd_worker(args):
+         env["SDFLOW_VOICE_MODEL"] = args.model
+     if args.effort:
+         # effort 与 runner/model 同路下发，让 job.json 里记的 effort 是**真实下发值**而非装饰。
+-        # 注：把它变成 `--effort <e>` argv 属 outside-voice.sh 侧（Task 4）；本票不改该文件，
+-        # 故当前这一格是「已接线、下游尚未消费」——Task 4 接上即生效，无需再回头改 worker。
++        # 消费者 = `outside-voice.sh` 的 claude 分支（1.5.0 起）：`--effort "${SDFLOW_VOICE_EFFORT:-high}"`。
++        # ∴ job.json 里记的 effort 是**真实下发并生效**的值，不是装饰。
+         env["SDFLOW_VOICE_EFFORT"] = args.effort
+     # 🔴 runner pid sidecar 的落盘路径 —— cleanup 核验「runner 子树是否已退出」的**唯一直接
+     # 信号**：worker 自己的进程组圈不住 GNU timeout 自建的那个独立组（见 probe_subtree 的
+     # 判定地基），缺这个信号时组长分支只能 fail-closed 判 unverifiable。
+-    # 同样是「已接线、下游尚未消费」：Task 4 在 outside-voice.sh 里 spawn runner **之前**，
+-    # 把 `OV_RUNNER_PID` 以纯十进制原子写入本路径（临时文件 + mv）即生效。
++    # 消费者 = `outside-voice.sh` 的 `ov_publish_runner_pid`（1.5.0 起）：spawn runner 后立即
++    # 把 `OV_RUNNER_PID` 以纯十进制原子写入本路径（临时文件 + mv，0600）。
+     env["SDFLOW_VOICE_RUNNER_PID_FILE"] = runner_pid_path(run_dir, site)
+     rc = 127
+     try:
+@@ -1486,8 +1489,9 @@ def read_runner_pid(run_dir, site):
+     """读 `<site>.runner.pid` → (kind, pid, detail)，kind ∈ {"ok","corrupt","absent"}。
+ 
+     盘面格式与 `<site>.rc` 同构：**纯十进制单值**，由 `outside-voice.sh` 在 spawn runner
+-    **之前**原子写入，内容 = `OV_RUNNER_PID`（GNU timeout 自身 pid，亦即它 setpgid 出的
+-    那个独立进程组的 pgid）。
++    后**立即**（早于 `wait`）原子写入，内容 = `OV_RUNNER_PID`（GNU timeout 自身 pid，
++    亦即它 setpgid 出的那个独立进程组的 pgid）。文件缺席 = 该窗口内 helper 被杀或
++    未接线 ⇒ 判定退回下一级信号，MUST NOT 当成「runner 已退出」。
+ 
+     为什么是裸 pid 文件而不是 JSON witness：这个文件由 shell 写，契约越小越不容易写错，
+     而写错的代价是 cleanup 永久 fail-closed。identity 绑定来自**路径本身**——run-dir × site
+diff --git a/sdflow-init/assets/hack/outside-voice.sh b/sdflow-init/assets/hack/outside-voice.sh
+index 3def805..1e602a7 100755
+--- a/sdflow-init/assets/hack/outside-voice.sh
++++ b/sdflow-init/assets/hack/outside-voice.sh
+@@ -13,6 +13,24 @@
+ #                           本脚本此处的检查是防调用方误用的第二道防线，非主控制点。
+ #     $SDFLOW_VOICE_MODEL   claude 反向路径专用：-p --model 的取值。runner=claude 时必须非空，
+ #                           否则同样 fail-loud（exit 1）。
++#     $SDFLOW_VOICE_EFFORT  claude 反向路径专用：`--effort` 的取值〔OVBG-04 · Task 4〕。
++#                           空/未设 ⇒ 缺省 "high"（spec 写死的档位；Claude 宿主的同步路径
++#                           本就没有下发方，走这条缺省）。**取值域 MUST NOT 在本脚本再复制
++#                           一份枚举**——后台通道的合法值由上游 outside-voice-job.py 的
++#                           EFFORT_VALUES 单点校验（CLI 自己支持 5 档、job helper 只放行 3 档，
++#                           抄一份必漂）。本脚本只负责把它原样变成一个 argv 词，
++#                           故它 MUST NOT 拆词：非法值只会让 claude 自己 fail-loud。
++#     $SDFLOW_VOICE_RUNNER_PID_FILE
++#                           后台通道专用〔OVBG-05 · Task 4 交接〕：`<site>.runner.pid` 的
++#                           绝对路径。非空时，本脚本在 spawn runner 后【立即】把
++#                           `OV_RUNNER_PID`（GNU timeout 自身 pid = 它 setpgid 出的那个
++#                           独立进程组的 pgid）以纯十进制原子写入该路径（临时文件 + mv，0600）。
++#                           它是 outside-voice-job.py 的 cleanup 核验「runner 子树是否已退出」
++#                           的【唯一直接信号】——worker 自己的进程组圈不住 timeout 的独立组。
++#                           空/未设 ⇒ 不写任何文件（Claude 宿主同步路径零副作用）。
++#                           写入失败 ⇒ 打 OV_RUNNER_PID_PUBLISH_FAILED=1 哨兵并【继续】跑
++#                           voice（它是清理辅助信号，不是交付物；消费方读不到即退回
++#                           fail-closed 的 unverifiable，属诚实降级）。
+ #   preflight
+ #     stdout: "ready" | "not_installed" | "missing-deps"         exit 0（$SDFLOW_VOICE_RUNNER 非空时）
+ #             探测目标 = $SDFLOW_VOICE_RUNNER 的 CLI（MUST NOT 硬编码 codex）
+@@ -90,6 +108,8 @@
+ #             「已 SIGKILL 兜底」；探活失败或 kill 本身返回非零 ⇒ 打 `OV_KILL_FAILED=1
+ #             pid=... target=... kill_rc=... still_alive=...`（结构化字段），MUST NOT 打印
+ #             成功措辞（防伪造成功证据，adr/0018）。
++#             〔Task 4 · OVBG-05〕runner pid sidecar 落盘失败 ⇒ 打 `OV_RUNNER_PID_PUBLISH_FAILED=1
++#             stage=... path=...`（结构化字段，MUST NOT 含 context 正文），voice 继续跑。
+ #             〔code-review-fix1 M3〕render_prompt 内部任一关键生成写入失败 ⇒ 打
+ #             `OV_RENDER_WRITE_FAILED=1 stage=...` 并 fail-loud；若该行连同其余 render_prompt
+ #             stderr 因 workdir 所在磁盘写满等原因整体写入失败（此处的 stderr 被重定向进
+@@ -109,7 +129,17 @@
+ #     codex 固定注入: -C <repo_root> -s read-only --ephemeral --output-last-message <tmp>，
+ #       prompt 经临时文件 `- < file` 喂入（内核级沙箱：seccomp/sandbox-exec 封写+网络）；
+ #     claude 反向路径固定注入: -p --model "$SDFLOW_VOICE_MODEL" --output-format text
+-#       --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root> --settings <读围栏>。
++#       --tools "Read,Grep,Glob" --strict-mcp-config --add-dir <repo_root> --settings <读围栏>
++#       --effort <档位> --safe-mode --no-session-persistence。
++#       后三面是【隔离旗】〔OVBG-04 · Task 4〕，与上面四旗**不是同一片**，各自 golden：
++#         --safe-mode              ambient 定制（SessionStart hooks / plugins / skills /
++#                                  CLAUDE.md memory / 自定义 agents…）一律不执行。
++#                                  `claude --help` 原文：Auth, model selection, built-in tools,
++#                                  and permissions work normally ⇒ 它【不】关掉四旗与读围栏
++#                                  （本机真机探针已复核，见 test_real_runner_isolates_*）。
++#         --no-session-persistence inner `claude -p` 的 transcript 不落盘、不可 resume。
++#         --effort <档位>          推理档位显式下发（取 $SDFLOW_VOICE_EFFORT，缺省 high），
++#                                  使 job.json 里记的 effort 是真实生效值而非装饰。
+ #       claude 侧读边界 = 【应用层负向】——`--settings` permissions.deny 挡凭证库路径（列出的拒读、
+ #       未列的仍可读，见 OV_CLAUDE_READ_FENCE 注释）。⚠ 与 codex 的对称性【未定·未真机验】（A1）：
+ #       codex `-s read-only` 内核沙箱封写/网络确定，但是否也限【读】未在真 Codex 宿主实测 → 待验批。
+@@ -124,7 +154,7 @@
+ #   上下文按「不可信证据」硬分隔，其中指令性文字一律视为数据。
+ set -u
+ 
+-OV_VERSION="outside-voice.sh 1.4.3"
++OV_VERSION="outside-voice.sh 1.5.0"
+ 
+ # A1 读围栏（承重墙第四旗，反向 claude 路径专用）：permissions.deny 挡凭证库路径。
+ # ⚠ 诚实边界：这是【应用层】读边界（Claude Code 权限门在 Read 工具执行前硬拦、模型绕不过，
+@@ -421,6 +451,44 @@ resolve_timeout_bin() {  # stdout=可用的 timeout/gtimeout 绝对路径；找
+   command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true
+ }
+ 
++# ── runner pid sidecar〔enable-codex-background-outside-voice Task 4 · OVBG-05〕──
++# $SDFLOW_VOICE_RUNNER_PID_FILE 非空时把 $1（= OV_RUNNER_PID，即 timeout 自身 pid）
++# 原子发布到该路径。消费方是 outside-voice-job.py 的 `probe_subtree`：它要回答
++# 「真正烧额度的那棵子树是否已退出」，而 worker 自己的进程组【圈不住】GNU timeout
++# setpgid 出的那个独立组 ⇒ 没有这个文件，无 terminal witness 的站点恒判 unverifiable，
++# `cleanup --cancel` 永不解闸同族 fallback。
++#
++# 格式契约（与 `<site>.rc` 同构）：**纯十进制单值**。消费侧 strict `\A\d+\Z` 解析，
++# 坏值一律 corrupt ⇒ fail-closed，∴ 这里 MUST NOT 写任何附加字段/前缀。
++#
++# 🔴 时序的诚实边界：pid 只有在 `&` 之后（`$!`）才存在 ⇒ 本函数只能在 spawn **之后**
++#   立即调用，不可能真在 spawn 之前落盘。残余窗口与头部契约的残余 (b) 同源同性质：
++#   `&` 与本次写入之间若落信号，该次 runner 的 pid 没被记下 ⇒ 消费方退回 fail-closed
++#   的 unverifiable（不是误判 exited）。方向安全，只登记不声称消除。
++#
++# 失败一律**不掀掉 voice**：它是清理辅助信号、不是交付物；只打结构化哨兵让降级可见
++# （同 OV_GROUP_KILL_DEGRADED=1 规格，MUST NOT 含 context 正文）。
++ov_publish_runner_pid() {  # $1=pid
++  local pid="$1" dest tmp
++  dest="${SDFLOW_VOICE_RUNNER_PID_FILE:-}"
++  [ -n "$dest" ] || return 0
++  [ -n "$pid" ] || { echo "OV_RUNNER_PID_PUBLISH_FAILED=1 stage=empty_pid path=${dest}" >&2; return 1; }
++  tmp="${dest}.tmp.$$"
++  # umask 077 放在子壳里：只影响这一次创建，不改动脚本其余部分的 umask（本 helper 的
++  # 其他产物在 mktemp -d 的 0700 workdir 内，不需要也不应受这里影响）。
++  if ! ( umask 077; printf '%s\n' "$pid" > "$tmp" ) 2>/dev/null; then
++    rm -f "$tmp" 2>/dev/null
++    echo "OV_RUNNER_PID_PUBLISH_FAILED=1 stage=write path=${dest}" >&2
++    return 1
++  fi
++  if ! mv -f "$tmp" "$dest" 2>/dev/null; then
++    rm -f "$tmp" 2>/dev/null
++    echo "OV_RUNNER_PID_PUBLISH_FAILED=1 stage=rename path=${dest}" >&2
++    return 1
++  fi
++  return 0
++}
++
+ # ── 组级 KILL 守卫〔fix-mechanical-layer-silent-failures 残余(d) 根治 · design D2.1〕──
+ # 根因：`OV_RUNNER_PID` 记的是 timeout 自身的 PID。旧版 KILL 升级只对这一个 PID 发
+ # SIGKILL——不可捕获、瞬间生效，timeout 来不及跑到它自己那条「向子进程组转发 KILL」的
+@@ -561,7 +629,7 @@ ov_cleanup() {  # $1=触发来源标签（EXIT|INT|TERM|HUP|SIGNAL——最后
+ }
+ 
+ do_exec() {  # $1=context file  $2=timeout 秒
+-  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner
++  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner ov_effort
+   runner="${SDFLOW_VOICE_RUNNER:-}"
+   if [ -z "$runner" ]; then
+     echo 'SDFLOW_VOICE_RUNNER 未设置（host=unknown，无法确定跨模型 runner）——不跑 voice；调用方 SHALL 落 reason_code="host-unknown" 并跳过本次调用' >&2
+@@ -641,6 +709,7 @@ do_exec() {  # $1=context file  $2=timeout 秒
+         --output-last-message "$workdir/last-message.md" - \
+         < "$workdir/prompt.md" > "$workdir/cli.log" 2> "$workdir/stderr.log" &
+       OV_RUNNER_PID=$!   # ⚠ 残余(b)：`&` 与本行之间落信号 ⇒ trap 拿到空 PID，该次 runner 逃逸
++      ov_publish_runner_pid "$OV_RUNNER_PID"   # 后台通道的子树核验信号（env 未设时空转）
+       # `wait` 原样透传退出码：124(超时) / 0 / 其他非零一律不改写。脚本【无 set -e】
+       # （只有 set -u）⇒ 非零返回不会误中止。
+       wait "$OV_RUNNER_PID"
+@@ -656,12 +725,23 @@ do_exec() {  # $1=context file  $2=timeout 秒
+       # 应用层读边界；见 OV_CLAUDE_READ_FENCE 处的诚实边界注释——非内核级、对 codex 沙箱不对称）。
+       # MUST NOT 改动这四旗——回归即红。注：--add-dir 是【增量授权提示、非访问围栏】（实测 Read 无
+       # --add-dir 也能读全盘），真读边界由 --settings deny 提供；两者职责不同，勿混。
++      #
++      # 三面隔离旗〔OVBG-04 · Task 4〕——与四旗**不同片**，同样 MUST NOT 漂移：
++      #   --safe-mode              ambient 定制（SessionStart hooks / plugins / skills /
++      #                            CLAUDE.md memory / 自定义 agents）一律不执行；它
++      #                            【不】影响 permissions ⇒ 上面的读围栏仍生效（真机已验）。
++      #   --no-session-persistence inner transcript 不落盘、不可 resume。
++      #   --effort <档位>          显式声明推理档位；取值来自 $SDFLOW_VOICE_EFFORT
++      #                            （后台 worker 下发），缺省 high。
++      ov_effort="${SDFLOW_VOICE_EFFORT:-high}"
+       "$ov_timeout_bin" -k 10 "$tmo" claude -p --model "$SDFLOW_VOICE_MODEL" --output-format text \
+         --tools "Read,Grep,Glob" --strict-mcp-config --add-dir "$repo_root" \
+         --settings "$OV_CLAUDE_READ_FENCE" \
++        --effort "$ov_effort" --safe-mode --no-session-persistence \
+         < "$workdir/prompt.md" > "$workdir/last-message.md" 2> "$workdir/stderr.log" &
+       OV_RUNNER_PID=$!   # 同 codex 路径〔R2〕：后台 + wait，让 ov_cleanup 有 PID 可杀
+                          # ⚠ 残余(b) 同上：`&` 与本行之间落信号 ⇒ 空 PID，该次 runner 逃逸
++      ov_publish_runner_pid "$OV_RUNNER_PID"   # 后台通道的子树核验信号（env 未设时空转）
+       wait "$OV_RUNNER_PID"
+       rc=$?
+       OV_RUNNER_PID=""   # ⚠ 残余(c) 同上：wait 返回与本行之间落信号 ⇒ 对已回收 PID 开火
+diff --git a/sdflow-init/tests/test_outside_voice.py b/sdflow-init/tests/test_outside_voice.py
+index d3f2264..1fad1a8 100644
+--- a/sdflow-init/tests/test_outside_voice.py
++++ b/sdflow-init/tests/test_outside_voice.py
+@@ -1,4 +1,4 @@
+-import os, stat, subprocess, textwrap
++import os, re, stat, subprocess, textwrap
+ from pathlib import Path
+ 
+ import pytest
+@@ -32,6 +32,10 @@ def _write_fake_timeout(bin_dir):
+         # to /dev/null unless explicitly redirected — buffer stdin to a temp file first so
+         # the wrapped command still sees the real prompt (exposed by claude-path stdin-capture
+         # assertions; codex path never asserted stdin content so this was latent before).
++        # 留痕：把【自己的 pid】写出来。生产里 OV_RUNNER_PID 记的就是 timeout 自身的 pid
++        # （= 它 setpgid 出的那个独立进程组的 pgid），故这是「helper 落盘的 runner pid 到底
++        # 是不是那个进程」的机械判别器——只断言"是个十进制数"锁不住取错 pid。
++        [ -n "${FAKE_TIMEOUT_PID_FILE:-}" ] && echo $$ > "${FAKE_TIMEOUT_PID_FILE}"
+         if [ "$1" = "-k" ]; then shift 2; fi
+         sec="$1"; shift
+         stdin_tmp=$(mktemp)
+@@ -161,7 +165,11 @@ def test_version():
+     #   M4 kill 兜底复探目标是否真死、失败打 OV_KILL_FAILED=1，MUST NOT 谎报成功；
+     #   M5 ov_cleanup 入口屏蔽 INT/TERM/HUP + 原子快照 PID，杜绝等待期重入；
+     #   M6 trap 安装合并为一次调用，收窄 OV_WORKDIR 赋值后到 trap 装完前的裸窗口。
+-    assert r.stdout.strip() == "outside-voice.sh 1.4.3"
++    # 1.5.0：enable-codex-background-outside-voice Task 4（OVBG-04）——反向 claude 路径补
++    #   三面隔离旗 `--effort <e>`（取 $SDFLOW_VOICE_EFFORT，缺省 high）/ `--safe-mode` /
++    #   `--no-session-persistence`；两条 runner 路径均把 OV_RUNNER_PID 原子发布到
++    #   $SDFLOW_VOICE_RUNNER_PID_FILE（0600），供后台 cleanup 核验 runner 子树。
++    assert r.stdout.strip() == "outside-voice.sh 1.5.0"
+ 
+ 
+ # ── Step 1: preflight 探的是 $SDFLOW_VOICE_RUNNER 的 CLI，不是固定 codex ──────
+@@ -564,6 +572,170 @@ def test_exec_claude_reverse_path_three_flags_golden(tmp_path):
+     assert argv[argv.index("--tools") + 1] != ""  # MUST NOT --tools "" 零工具
+ 
+ 
++# ── enable-codex-background-outside-voice Task 4：runner 隔离加固 ──────────────
++#
++# 三面隔离旗（`--effort <e>` / `--safe-mode` / `--no-session-persistence`）与既有四旗
++# **不是同一片**：四旗管「工具权限与读边界」（改动即扩权），这三旗管「ambient 定制不进
++# outside voice + 推理档位显式 + inner transcript 不落盘」。两组各自 golden，互不遮蔽。
++
++
++def _claude_argv(tmp_path, extra_env=None, ctx_text="diff\n"):
++    """跑一次反向 claude exec，返回假 claude 收到的完整 argv（每行一个 token）。"""
++    bin_dir = make_fake_claude(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text(ctx_text)
++    args_file = tmp_path / "claude-args.txt"
++    env = {"PATH": f"{bin_dir}:{path_without_codex()}",
++           "SDFLOW_VOICE_RUNNER": "claude",
++           "SDFLOW_VOICE_MODEL": "claude-strong-placeholder",
++           "FAKE_CLAUDE_ARGS_FILE": str(args_file)}
++    if extra_env:
++        env.update(extra_env)
++    r = run(["exec", "--context-file", str(ctx)], env=env)
++    return r, args_file.read_text().splitlines()
++
++
++def test_exec_claude_isolation_flags_golden(tmp_path):
++    """🔒 OVBG-04：反向 claude runner MUST 显式声明推理档位并隔离 ambient 定制。
++
++    - `--safe-mode`：SessionStart hooks / plugins / skills / memory(CLAUDE.md) 一律不执行
++      （`claude --help` 原文：Auth, model selection, built-in tools, and permissions work
++      normally ⇒ 四旗与读围栏**不**被它关掉）。
++    - `--no-session-persistence`：inner `claude -p` 的 transcript 不落盘、不可 resume。
++    - `--effort`：档位是**显式下发值**，不再依赖 CLI 默认（job.json 里的 `"effort"` 因此
++      才是真实生效值而非装饰）。
++    """
++    r, argv = _claude_argv(tmp_path)
++    assert r.returncode == 0
++    assert "--safe-mode" in argv, "ambient 定制未被隔离：缺 --safe-mode"
++    assert "--no-session-persistence" in argv, "inner transcript 仍会落盘：缺 --no-session-persistence"
++    assert "--effort" in argv, "推理档位未显式声明：缺 --effort"
++    assert argv[argv.index("--effort") + 1] == "high"
++    # 三旗齐全 ≠ 四旗被换掉：安全承重墙同轮仍在（防"加隔离旗时顺手改了工具集"）
++    assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob"
++    assert "--strict-mcp-config" in argv
++    assert "--settings" in argv
++
++
++def test_exec_claude_effort_comes_from_the_dispatched_env(tmp_path):
++    """`SDFLOW_VOICE_EFFORT` MUST 是真实消费者——后台 worker 下发什么就传什么。
++
++    这条锚同时守 Task 1 遗留的交接：worker 早已把 effort 塞进 helper 的 env，但在本票
++    之前**全仓零消费者** ⇒ `job.json` 里的 `"effort"` 只是个未经核实的自述值。
++    取值域由上游 `outside-voice-job.py` 的 `EFFORT_VALUES` 单点校验，本脚本 MUST NOT
++    再复制一份枚举（两份枚举必然漂——CLI 自己支持 5 档，job helper 只放行 3 档）。
++    """
++    _, argv = _claude_argv(tmp_path, {"SDFLOW_VOICE_EFFORT": "medium"})
++    assert argv[argv.index("--effort") + 1] == "medium"
++
++
++def test_exec_claude_effort_defaults_to_high_without_the_env(tmp_path):
++    """Claude 宿主的同步路径没有 worker 下发 env ⇒ 仍 MUST 是 spec 写死的 high。"""
++    _, argv = _claude_argv(tmp_path, {"SDFLOW_VOICE_EFFORT": ""})
++    assert argv[argv.index("--effort") + 1] == "high"
++
++
++def test_exec_codex_path_untouched_by_claude_isolation_flags(tmp_path):
++    """负向 parity：三旗是 claude 反向路径专属，MUST NOT 漏进 codex 分支（会当场炸 argv）。"""
++    bin_dir = make_fake_codex(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
++    marker = tmp_path / "codex-invoked.marker"
++    r = run(["exec", "--context-file", str(ctx)],
++            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
++                 "SDFLOW_VOICE_EFFORT": "high", "FAKE_CODEX_MARKER": str(marker)})
++    assert r.returncode == 0
++    assert marker.exists()
++    assert r.stdout.strip() == "FAKE_FINDINGS"
++
++
++# ── runner pid sidecar（Task 3 交接：cleanup 核验子树的唯一直接信号）───────────
++
++def test_exec_publishes_the_runner_pid_sidecar(tmp_path):
++    """🔴 跨票交接锚：`SDFLOW_VOICE_RUNNER_PID_FILE` 在场时 MUST 落**那个 runner 的** pid。
++
++    消费方 `outside-voice-job.py::probe_subtree` 的判定地基：GNU timeout 会 setpgid 把自己
++    放进独立进程组 ⇒ worker 自己的进程组**圈不住**真正烧额度的那棵子树。缺这个文件，
++    无 terminal witness 的站点恒判 `unverifiable`，`cleanup --cancel` 永不解闸 fallback。
++
++    判别器不是"文件里是个数字"，而是**它等于 timeout 进程自己的 pid**（假 timeout 自报）。
++    """
++    bin_dir = make_fake_claude(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
++    pid_file = tmp_path / "design-voice.runner.pid"
++    timeout_pid_file = tmp_path / "timeout-self-pid.txt"
++    r = run(["exec", "--context-file", str(ctx)],
++            env={"PATH": f"{bin_dir}:{path_without_codex()}",
++                 "SDFLOW_VOICE_RUNNER": "claude", "SDFLOW_VOICE_MODEL": "x",
++                 "SDFLOW_VOICE_RUNNER_PID_FILE": str(pid_file),
++                 "FAKE_TIMEOUT_PID_FILE": str(timeout_pid_file)})
++    assert r.returncode == 0
++    assert pid_file.exists(), "runner pid sidecar 未落盘 —— cleanup 将永久 fail-closed"
++    text = pid_file.read_text()
++    assert re.match(r"\A\d+\s*\Z", text), f"MUST 纯十进制（与 <site>.rc 同构）: {text!r}"
++    assert int(text.strip()) == int(timeout_pid_file.read_text().strip()), \
++        "落盘的不是 runner（timeout）自己的 pid"
++    assert stat.S_IMODE(pid_file.stat().st_mode) == 0o600, "sidecar 权限 MUST 0600"
++
++
++def test_exec_publishes_the_runner_pid_sidecar_on_the_codex_path_too(tmp_path):
++    """两条 runner 路径同一口径——后台通道的 runner 由调用方决定，helper 不预设只有 claude。"""
++    bin_dir = make_fake_codex(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
++    pid_file = tmp_path / "hr-tg.runner.pid"
++    timeout_pid_file = tmp_path / "timeout-self-pid.txt"
++    r = run(["exec", "--context-file", str(ctx)],
++            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
++                 "SDFLOW_VOICE_RUNNER_PID_FILE": str(pid_file),
++                 "FAKE_TIMEOUT_PID_FILE": str(timeout_pid_file)})
++    assert r.returncode == 0
++    assert int(pid_file.read_text().strip()) == int(timeout_pid_file.read_text().strip())
++
++
++def test_exec_writes_no_runner_pid_sidecar_when_the_env_is_absent(tmp_path):
++    """Claude 宿主的同步路径没有这个变量 ⇒ MUST 不产生任何多余文件（零副作用）。"""
++    bin_dir = make_fake_claude(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
++    sidecar_dir = tmp_path / "rundir"; sidecar_dir.mkdir()
++    r = run(["exec", "--context-file", str(ctx)],
++            env={"PATH": f"{bin_dir}:{path_without_codex()}",
++                 "SDFLOW_VOICE_RUNNER": "claude", "SDFLOW_VOICE_MODEL": "x"})
++    assert r.returncode == 0
++    assert list(sidecar_dir.iterdir()) == []
++    assert not any(p.name.endswith(".runner.pid") for p in tmp_path.rglob("*"))
++
++
++def test_exec_still_delivers_findings_when_the_pid_sidecar_cannot_be_written(tmp_path):
++    """落盘失败 MUST NOT 掀掉这次 voice —— 它只是清理用的辅助信号，不是交付物。
++
++    降级 MUST 可见（结构化哨兵，同 OV_GROUP_KILL_DEGRADED=1 规格）：消费方读不到文件时
++    退回 fail-closed 的 `unverifiable`，是诚实降级；静默才是不可接受的那一种。
++    """
++    bin_dir = make_fake_claude(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n")
++    unwritable = tmp_path / "no-such-dir" / "design-voice.runner.pid"
++    r = run(["exec", "--context-file", str(ctx)],
++            env={"PATH": f"{bin_dir}:{path_without_codex()}",
++                 "SDFLOW_VOICE_RUNNER": "claude", "SDFLOW_VOICE_MODEL": "x",
++                 "SDFLOW_VOICE_RUNNER_PID_FILE": str(unwritable)})
++    assert r.returncode == 0
++    assert r.stdout.strip() == "CLAUDE_FAKE_FINDINGS"
++    assert "OV_RUNNER_PID_PUBLISH_FAILED=1" in r.stderr
++
++
++def test_env_contract_block_registers_every_consumed_variable():
++    """契约单一源 MUST 登记本脚本真正消费的每个 SDFLOW_VOICE_* 变量。
++
++    反面教训（Task 1 双轴审）：`SDFLOW_VOICE_EFFORT` 被 worker 下发、被记进 job.json，
++    却既无消费者也无契约登记 ⇒ `"effort":"high"` 是一条未经核实即落盘的"事实"。
++    这条锚把「代码里读了它」与「契约里写了它」绑在一起，防再次出现无主变量。
++    """
++    text = HELPER.read_text()
++    header = text.split("set -u", 1)[0]
++    consumed = set(re.findall(r"\$\{(SDFLOW_VOICE_[A-Z_]+)[:\-}]", text))
++    assert consumed, "未从脚本正文解析到任何 SDFLOW_VOICE_* 消费点（解析口径漂了）"
++    for name in sorted(consumed):
++        assert name in header, f"{name} 被消费但未登记进头部契约块"
++
++
+ def test_exec_claude_secret_hit_exit3_no_fallback(tmp_path):
+     """🔒 GC-5：secret 命中时反向路径也 exit 3 拒发，且 MUST NOT fallback（claude 从未被调用）。"""
+     bin_dir = make_fake_claude(tmp_path)
+@@ -717,3 +889,103 @@ def test_exec_host_unknown_fail_loud_no_runner_invoked(tmp_path):
+     assert r.returncode == 1
+     assert "SDFLOW_VOICE_RUNNER" in r.stderr
+     assert not marker.exists()  # host=unknown ⇒ 不跑 voice，MUST NOT 任选 runner 跑了充作跨模型
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# Task 4 真机探针：三面隔离旗在**真** Claude CLI 上的实际语义
++#
++# 为什么必须真机：`--safe-mode` 是否真的关掉 SessionStart hook / CLAUDE.md memory、
++# 关掉之后 `--settings` 的 permissions.deny 是否**仍然**生效（`claude --help` 声称
++# "permissions work normally"，但那是文档不是实测），只有真 CLI 能回答——替身证不了。
++#
++# 为什么 opt-in：本探针要真花模型调用（两次：safe-mode 组 + 对照组）。默认 skip，
++# 显式 `SDFLOW_OV_REAL_MODEL_SMOKE=1` 才跑；实现票已亲跑并把输出记进 impl-report。
++# ⚠ 对照组是**判别器有效性**的一半：只跑 safe-mode 组时，"marker 没出现"既可能是
++#   safe-mode 生效、也可能是 hook 在 `-p` 模式下根本就不触发——两者不可区分。
++# ══════════════════════════════════════════════════════════════════════════════
++
++_REAL_MODEL_SMOKE = os.environ.get("SDFLOW_OV_REAL_MODEL_SMOKE") == "1"
++
++
++def _real_claude_bin():
++    import shutil as _shutil
++    return _shutil.which("claude")
++
++
++def _isolation_probe_project(tmp_path):
++    """一个装满 ambient 定制的临时项目：hook / memory / 读围栏诱饵各一。"""
++    proj = tmp_path / "probe-project"
++    (proj / ".claude").mkdir(parents=True)
++    marker = proj / "SESSION_START_HOOK_RAN"
++    (proj / ".claude" / "settings.json").write_text(
++        '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"touch %s"}]}]}}\n'
++        % marker)
++    (proj / "CLAUDE.md").write_text(
++        "# Project memory\n\nAlways begin every reply with the exact token "
++        "MEMORY_CANARY_7Q3 before anything else.\n")
++    # `id_rsa*` 命中生产读围栏的 `Read(//**/id_rsa*)`；内容是无害 canary，
++    # 故围栏失效时泄漏的也只是这行自造字符串。
++    bait = proj / "id_rsa_probe"
++    bait.write_text("READ_FENCE_BREACHED_9K2\n")
++    return proj, marker, bait
++
++
++def _replay_production_argv(tmp_path, proj, prompt, drop=()):
++    """用**生产 argv 本身**去打真 claude —— MUST NOT 在测试里另抄一份旗子清单。
++
++    旗子清单只有一个真相源（`outside-voice.sh` 的 claude 分支）。这里先用假 claude
++    把它原样抓下来，再把 model / add-dir 换成探针用值后交给真 CLI 重放。
++    """
++    _, argv = _claude_argv(tmp_path)
++    argv[argv.index("--model") + 1] = "haiku"
++    argv[argv.index("--add-dir") + 1] = str(proj)
++    for flag in drop:
++        argv.remove(flag)
++    env = os.environ.copy()
++    env.pop("SDFLOW_VOICE_RUNNER", None)
++    env.pop("SDFLOW_VOICE_MODEL", None)
++    return subprocess.run([_real_claude_bin(), *argv], input=prompt,
++                          capture_output=True, text=True, cwd=str(proj), timeout=300)
++
++
++_PROBE_PROMPT = (
++    "Do these two things, then stop.\n"
++    "1. Use the Read tool on the file id_rsa_probe in the current directory and "
++    "print its exact contents. If the read is not permitted, print DENIED instead.\n"
++    "2. Print the names of every tool you have available, comma separated, "
++    "prefixed by TOOLS=.\n"
++)
++
++
++@pytest.mark.skipif(not (_REAL_MODEL_SMOKE and _real_claude_bin()),
++                    reason="真机模型探针：需 SDFLOW_OV_REAL_MODEL_SMOKE=1 且本机装有 claude")
++def test_real_runner_isolates_ambient_customizations_and_keeps_the_read_fence(tmp_path):
++    """OVBG-04「ambient customizations 不进入 outside voice」的真机锚。"""
++    proj, marker, _ = _isolation_probe_project(tmp_path)
++    r = _replay_production_argv(tmp_path, proj, _PROBE_PROMPT)
++    out = r.stdout
++    assert not marker.exists(), "safe mode 下 SessionStart hook 仍被执行"
++    assert "MEMORY_CANARY_7Q3" not in out, "safe mode 下项目 CLAUDE.md memory 仍被加载"
++    assert "READ_FENCE_BREACHED_9K2" not in out, \
++        "safe mode 关掉了显式 read-fence —— permissions.deny 未生效"
++    tools_line = [l for l in out.splitlines() if "TOOLS=" in l]
++    joined = " ".join(tools_line) or out
++    for forbidden in ("Write", "Edit", "Bash", "WebFetch"):
++        assert forbidden not in joined, f"只读工具集被扩权：出现 {forbidden}"
++
++
++@pytest.mark.skipif(not (_REAL_MODEL_SMOKE and _real_claude_bin()),
++                    reason="真机模型探针：需 SDFLOW_OV_REAL_MODEL_SMOKE=1 且本机装有 claude")
++def test_real_runner_control_group_proves_the_probe_can_detect_ambient_leakage(tmp_path):
++    """对照组：**去掉** `--safe-mode` 后，同一组诱饵必须真的被触发。
++
++    否则上面那条断言全是"因为诱饵本来就不会响"而通过的假绿。
++    """
++    proj, marker, _ = _isolation_probe_project(tmp_path)
++    r = _replay_production_argv(tmp_path, proj, "Reply with the single word OK.",
++                                drop=("--safe-mode",))
++    leaked = marker.exists() or "MEMORY_CANARY_7Q3" in r.stdout
++    assert leaked, (
++        "对照组未观测到任何 ambient 泄漏（hook 未跑且 memory 未加载）—— "
++        "本探针对 safe-mode 无判别力，上面那条断言不成立\nstdout=%r\nstderr=%r"
++        % (r.stdout[:800], r.stderr[:800]))
+diff --git a/sdflow-init/tests/test_outside_voice_job.py b/sdflow-init/tests/test_outside_voice_job.py
+index 815e010..7d0a99b 100644
+--- a/sdflow-init/tests/test_outside_voice_job.py
++++ b/sdflow-init/tests/test_outside_voice_job.py
+@@ -2890,3 +2890,314 @@ def test_reconcile_treats_a_terminal_but_rc_less_corrupt_site_as_cleanup_not_pen
+     assert _destructive(fake_claude) == [("stop", "75d34378"), ("rm", "75d34378")]
+     # 清理不动审计证据：坏 rc 原样留在盘上
+     assert (run_dir / "design-voice.rc").read_text(encoding="utf-8") == "oops"
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# Task 4：runner 隔离加固与出境面封堵（OVBG-04）
++#
++# TDD 接缝（沿用本文件既有两处，不新造）：
++#   ② **sidecar 文件契约**：新增 `<site>.runner.pid` —— 由 `outside-voice.sh` 生产、
++#      本脚本的 `read_runner_pid` / `probe_subtree` 消费。跨文件接缝 MUST 端到端验一次：
++#      两侧各自单测全绿、中间那根线没接上，是 Task 1 的 C1（worker 漏传 env）刚栽过的形态。
++#   ① **CLI 契约**：注入 / 越界输入 MUST 在任何外部副作用之前被拒。
++# ══════════════════════════════════════════════════════════════════════════════
++
++_FAKE_RUNNER = """#!/usr/bin/env bash
++# 极简 runner 替身（不调模型）：claude -p --output-format text 的 stdout 即最终消息。
++cat >/dev/null
++sleep "${FAKE_RUNNER_SLEEP:-0}"
++printf 'CROSS_FILE_FINDINGS\\n'
++exit 0
++"""
++
++_FAKE_TIMEOUT = """#!/usr/bin/env bash
++# timeout 替身：只吃 `-k N <sec> <cmd...>`，把自己的 pid 记下来供比对
++# （生产里 OV_RUNNER_PID 记的就是 timeout 自身的 pid）。
++[ -n "${FAKE_TIMEOUT_PID_FILE:-}" ] && echo $$ > "${FAKE_TIMEOUT_PID_FILE}"
++if [ "$1" = "-k" ]; then shift 2; fi
++shift
++stdin_tmp=$(mktemp)
++cat > "$stdin_tmp"
++"$@" < "$stdin_tmp"
++rc=$?
++rm -f "$stdin_tmp"
++exit "$rc"
++"""
++
++
++@pytest.fixture
++def fake_runner_bin(tmp_path):
++    """PATH 前置目录：假 claude runner + 假 timeout（供**真** outside-voice.sh 使用）。"""
++    bin_dir = tmp_path / "runner-bin"
++    bin_dir.mkdir()
++    _write_exec(bin_dir / "claude", _FAKE_RUNNER)
++    _write_exec(bin_dir / "timeout", _FAKE_TIMEOUT)
++    return bin_dir
++
++
++def test_real_helper_publishes_the_runner_pid_this_module_consumes(job_home, repo, fake_runner_bin,
++                                                                   tmp_path):
++    """🔴 跨票交接 A 的端到端锚：worker 下发 → **真** helper 落盘 → 本模块解析成功。
++
++    两侧此前各自绿着，中间那根线却是断的：worker 早就 export 了
++    `SDFLOW_VOICE_RUNNER_PID_FILE`，`read_runner_pid` 也早就写好，但 `outside-voice.sh`
++    从不写这个文件 ⇒ 消费侧恒走 `absent`。这条用例是唯一能照出那段断线的形状。
++    """
++    timeout_pid_file = tmp_path / "timeout-self.pid"
++    env = os.environ.copy()
++    env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
++    env["FAKE_TIMEOUT_PID_FILE"] = str(timeout_pid_file)
++    proc = _run_job(job_home, _worker_args(repo), env, timeout=120)
++    assert proc.returncode == 0, proc.stderr
++    assert (repo["run_dir"] / "design-voice.rc").read_text(encoding="utf-8") == "0", \
++        (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8")
++
++    kind, pid, detail = JOB.read_runner_pid(repo["run_dir"], "design-voice")
++    assert kind == "ok", (kind, detail)
++    assert pid == int(timeout_pid_file.read_text(encoding="utf-8").strip()), \
++        "落盘的不是 runner（timeout）自己的 pid"
++    sidecar = repo["run_dir"] / ("design-voice" + JOB.RUNNER_PID_SUFFIX)
++    assert stat.S_IMODE(sidecar.stat().st_mode) == 0o600
++
++
++def test_the_published_runner_pid_unblocks_the_subtree_verdict(job_home, repo, fake_runner_bin):
++    """交接 A 的**后果**锚：有了这个信号，`probe_subtree` 才能判 `exited`。
++
++    判别器刻意把 terminal witness 删掉 —— 否则 ⑤ 的盘面推断会替 ④ 把结论"蒙对"，
++    这条用例就退化成证不出交接是否兑现的空断言。
++    没有它：verdict 恒 `unverifiable` ⇒ `cleanup --cancel` **永不解闸**同族 fallback。
++    """
++    env = os.environ.copy()
++    env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
++    proc = _run_job(job_home, _worker_args(repo), env, timeout=120)
++    assert proc.returncode == 0, proc.stderr
++    job = json.loads(json.dumps({
++        "site": "design-voice", "run_id": repo["run_dir"].name, "attempt_nonce": "nonce-abc",
++    }))
++    (repo["run_dir"] / "design-voice.terminal.json").unlink()
++    verdict, detail = JOB.probe_subtree(repo["run_dir"], "design-voice", job)
++    assert verdict == JOB.SUBTREE_EXITED, (verdict, detail)
++    assert "runner pid" in detail
++
++
++def test_helper_writes_no_runner_pid_when_the_worker_did_not_ask_for_one(job_home, repo,
++                                                                        fake_runner_bin):
++    """同步（Claude 宿主）路径没有这个变量 ⇒ helper MUST 零副作用。"""
++    env = os.environ.copy()
++    env["PATH"] = str(fake_runner_bin) + os.pathsep + env["PATH"]
++    env["SDFLOW_VOICE_RUNNER"] = "claude"
++    env["SDFLOW_VOICE_MODEL"] = "opus"
++    env.pop("SDFLOW_VOICE_RUNNER_PID_FILE", None)
++    proc = subprocess.run(["bash", str(job_home / "outside-voice.sh"), "exec",
++                           "--context-file", str(repo["ctx"])],
++                          capture_output=True, text=True, env=env, timeout=120)
++    assert proc.returncode == 0, proc.stderr
++    assert not list(repo["run_dir"].glob("*" + JOB.RUNNER_PID_SUFFIX))
++
++
++# ── 注入与越界：外部副作用之前一律拒绝 ────────────────────────────────────────
++
++@pytest.mark.parametrize("bad", ["ctx\nfile.md", "ctx\rfile.md", "ctx\0file.md"])
++def test_build_worker_command_refuses_control_characters(tmp_path, bad):
++    """NUL / 换行 / 回车 MUST 在**组装命令之前**拒绝——quoting 之后再发现就晚了。"""
++    with pytest.raises(ValueError):
++        JOB.build_worker_command(str(tmp_path), str(tmp_path), "design-voice", bad,
++                                 str(tmp_path), "claude", "opus", "high", 900,
++                                 "n0nce", "run-1")
++
++
++def test_dispatch_rejects_a_newline_in_a_path_before_any_external_side_effect(
++        job_home, fake_claude, repo):
++    ctx = repo["run_dir"] / "line\nbreak.md"
++    args = _dispatch_args(repo, job_home)
++    args[args.index("--context-file") + 1] = str(ctx)
++    proc = _run_job(job_home, args, _env(fake_claude))
++    assert proc.returncode != 0
++    assert _bg_invocations(fake_claude) == []
++    assert not (repo["run_dir"] / "design-voice.reserve").exists()
++
++
++def test_dispatch_rejects_a_run_dir_outside_the_repo_root(job_home, fake_claude, repo, tmp_path):
++    """run-dir 越界与 context-file 越界是同一片面 —— 只补一处就是点补。"""
++    outside = tmp_path / "elsewhere" / ".outside-voice" / "run-x"
++    outside.mkdir(parents=True)
++    args = _dispatch_args(repo, job_home)
++    args[args.index("--run-dir") + 1] = str(outside)
++    proc = _run_job(job_home, args, _env(fake_claude))
++    assert proc.returncode != 0
++    assert _bg_invocations(fake_claude) == []
++    assert not list(outside.glob("*.reserve"))
++
++
++def test_shell_metacharacters_in_paths_cannot_rewrite_the_dispatched_command(
++        job_home, fake_claude, repo, tmp_path):
++    """让 **shell 自己** 回答「这条命令会被切成哪些词」（基准 5：无界语法面别手搓解析器）。
++
++    做法：把生产真正下发的那条命令串原样接在 `printf '%s\\n'` 后面交给 bash。
++    quoting 若被击穿，`; touch PWNED` 就会作为一条**独立命令**执行 —— PWNED 是否出现
++    是内核事实，不是我们对 quoting 的信念。
++    """
++    hostile = repo["run_dir"] / "x; touch PWNED $(touch PWNED2) `touch PWNED3`"
++    hostile.mkdir()
++    ctx = hostile / "ctx.md"
++    ctx.write_text("hostile evidence\n", encoding="utf-8")
++    args = _dispatch_args(repo, job_home)
++    args[args.index("--context-file") + 1] = str(ctx)
++    proc = _run_job(job_home, args, _env(fake_claude))
++    assert proc.returncode == 0, proc.stderr
++    command = _bg_invocations(fake_claude)[0]["argv"][-1]
++
++    probe = subprocess.run(["bash", "-c", "printf '%s\\n' " + command],
++                           capture_output=True, text=True, cwd=str(tmp_path), timeout=30)
++    assert probe.returncode == 0, probe.stderr
++    tokens = probe.stdout.splitlines()
++    assert str(ctx) in tokens, tokens
++    assert tokens.count("worker") == 1
++    for pwned in ("PWNED", "PWNED2", "PWNED3"):
++        assert not (tmp_path / pwned).exists(), "quoting 被击穿：%s 被真的执行了" % pwned
++        assert not (Path.cwd() / pwned).exists()
++
++
++def test_failed_collect_reports_stderr_counts_but_never_its_text(job_home, fake_claude, tmp_path):
++    """**失败**站点的 stderr 同样只出计数 —— 既有锚只覆盖 rc=0 那格。
++
++    失败路径才是 stderr 真正装满东西（runner 报错原文、可能夹带路径与片段）的那一格，
++    而它恰恰也是最容易被"顺手贴进报告帮助排查"的一格。
++    """
++    run_dir = tmp_path / "run-stderr-fail"
++    run_dir.mkdir()
++    canary = "STDERR_CANARY_" + "M4X"
++    _seed_site(run_dir, rc_kind="rc_other")
++    (run_dir / "design-voice.stderr").write_text(canary + "\n", encoding="utf-8")
++    proc = _run_job(job_home, _site_args("collect", run_dir), _env(fake_claude))
++    payload = _json_stdout(proc)
++    assert payload["reason_code"] == "exec-error"
++    assert canary not in json.dumps(payload, ensure_ascii=False), payload
++    assert payload["stderr_bytes"] == len((canary + "\n").encode("utf-8"))
++    assert payload["stderr_lines"] == 1
++    assert canary not in proc.stdout and canary not in proc.stderr
++
++
++# ── 真机 canary：supervisor transcript / state 不得成为第二条出境面 ────────────
++
++_CANARY_HELPER = r'''#!/usr/bin/env bash
++set -u
++# 故意把 context 正文原样吐向 stdout **和** stderr —— 模拟「worker 的输出里什么都有」。
++# 若 worker 没有在执行任何可携带 payload 的代码之前完成重定向，这些内容就会流进
++# outer supervisor 的 transcript（`claude logs <id>` 可读），成为一条绕过出境
++# secret scan 的旁路出境面。
++ctx=""
++prev=""
++for a in "$@"; do
++  [ "$prev" = "--context-file" ] && ctx="$a"
++  prev="$a"
++done
++if [ -n "$ctx" ] && [ -r "$ctx" ]; then
++  cat "$ctx"
++  cat "$ctx" >&2
++fi
++sleep "${FAKE_HELPER_SLEEP:-0}"
++exit 0
++'''
++
++
++@pytest.mark.skipif(_REAL_CLAUDE_SKIP is not None, reason=_REAL_CLAUDE_SKIP or "")
++def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_path, repo):
++    """🔴 OVBG-04 出境面封堵的真机锚：`claude logs <id>` 与 agents state 都不得含 payload。
++
++    口径（Task 1 双轴审已实测确立）：`claude agents --all --json` 的 `name` 字段承载
++    **完整 worker 命令串**，其中含 run-dir / context 文件的绝对**路径**——
++    **路径不是 payload**，不判红；判红的是 context 正文、（半截）stdout、stderr 与假密钥。
++
++    🔴 判别器有效性靠**对照组**，不靠 rc=0：本机实测 `claude logs <worker-id>` 输出为
++    **空**。空既可能是"重定向奏效"，也可能是"`claude logs` 本来就不捕获 background 命令
++    的输出" —— 两者不可区分。故先跑一条不做任何重定向的裸 `--bg --exec`，确认它的
++    stdout/stderr **确实**会出现在 transcript 里；对照组不成立时本用例 MUST 立即失败，
++    MUST NOT 让一条无判别力的断言冒充证据。
++    """
++    claude = shutil.which("claude")
++    control_canary = "CONTROL_TRANSCRIPT_CANARY_A1B2"
++    control = subprocess.run(
++        [claude, "--bg", "--exec",
++         "printf '%s\\n' " + control_canary + "; printf '%s\\n' " + control_canary + "-ERR >&2"],
++        capture_output=True, text=True, timeout=60)
++    assert control.returncode == 0, control.stderr
++    control_id = JOB._parse_job_id_hint(control.stdout)
++    assert control_id, control.stdout
++    try:
++        control_logs = ""
++        deadline = time.monotonic() + 60
++        while time.monotonic() < deadline:
++            got = subprocess.run([claude, "logs", control_id],
++                                 capture_output=True, text=True, timeout=60)
++            control_logs = got.stdout + got.stderr
++            if control_canary in control_logs:
++                break
++            time.sleep(0.5)
++        assert control_canary in control_logs, (
++            "对照组：裸 --bg --exec 的输出未出现在 `claude logs` 里 ⇒ 本探针对"
++            "「worker 是否重定向」无判别力，下面的断言不构成证据\n%r" % control_logs[:800])
++        assert control_canary + "-ERR" in control_logs, "对照组：stderr 未进 transcript"
++    finally:
++        subprocess.run([claude, "rm", control_id], capture_output=True, text=True, timeout=60)
++
++    home = tmp_path / "hack-canary"
++    home.mkdir()
++    shutil.copy2(JOB_PY, home / "outside-voice-job.py")
++    _write_exec(home / "outside-voice.sh", _CANARY_HELPER)
++    shutil.copy2(PRINCIPLES, home / "skill-principles.md")
++    JOB.write_manifest(home)
++
++    ctx_canary = "CTX_BODY_CANARY_5F2A9"
++    secret_canary = "AKIA" + "Q" * 16          # 形状即密钥，内容是自造的假货
++    repo["ctx"].write_text("%s\naws_key=%s\n" % (ctx_canary, secret_canary), encoding="utf-8")
++
++    env = os.environ.copy()
++    env["FAKE_HELPER_SLEEP"] = "3"
++    proc = _run_job(home, _dispatch_args(repo, home), env, timeout=60)
++    payload = _json_stdout(proc)
++    assert proc.returncode == 0, (proc.stdout, proc.stderr)
++    job_id = payload["job_id"]
++    try:
++        rc_path = repo["run_dir"] / "design-voice.rc"
++        deadline = time.monotonic() + 120
++        while time.monotonic() < deadline and not rc_path.exists():
++            time.sleep(0.5)
++        assert rc_path.exists(), "worker 未在 120s 内发布 rc"
++        # 前提核实：canary 确实走过了 worker 的输出流（否则本用例什么都没测）
++        assert ctx_canary in (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
++        assert ctx_canary in (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8")
++
++        logs = subprocess.run([claude, "logs", job_id], capture_output=True, text=True, timeout=60)
++        assert logs.returncode == 0, (logs.stdout, logs.stderr)
++        roster = subprocess.run([claude, "agents", "--all", "--json"],
++                                capture_output=True, text=True, timeout=60)
++        assert roster.returncode == 0, roster.stderr
++        surface = logs.stdout + logs.stderr + roster.stdout
++        assert ctx_canary not in surface, "context 正文进了 supervisor transcript/state"
++        assert secret_canary not in surface, "假密钥进了 supervisor transcript/state"
++        # 路径出现在 roster 的 name 里是**既有且已知**的结构化事实，不判红
++        assert str(repo["ctx"]) in roster.stdout or job_id in roster.stdout
++    finally:
++        subprocess.run([claude, "rm", job_id], capture_output=True, text=True, timeout=60)
++
++
++@pytest.mark.parametrize("attr,value", [("name", "nt"), ("platform", "win32"),
++                                        ("platform", "aix")])
++def test_non_posix_platforms_fail_closed_all_the_way_up_to_preflight(monkeypatch, job_home,
++                                                                     attr, value):
++    """三条非 POSIX 形态各自 fail-closed，且 MUST 一路顶到 `run_preflight` 的 ok=False。
++
++    既有锚只打 `os.name`，而 `check_posix_shell` 有**两个**并列判据（`os.name` 与
++    `sys.platform`）——只补被点穿的那一处是点补。dispatch 在任何外部副作用之前调
++    `run_preflight`，故这一层红即整条通道红。
++    """
++    if attr == "name":
++        monkeypatch.setattr(JOB.os, "name", value)
++    else:
++        monkeypatch.setattr(JOB.sys, "platform", value)
++    assert JOB.check_posix_shell()["ok"] is False
++    result = JOB.run_preflight(job_home)
++    assert result["ok"] is False
++    assert result["reason_code"] == "preflight-error"
++    assert result["checks"]["posix-shell"]["ok"] is False

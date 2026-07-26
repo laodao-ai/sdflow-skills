@@ -373,72 +373,101 @@ context 构造（摘录规则定死，不现场发挥）：本轮**起手先占�
   **per-run 不可变**：同一 run-id 下每站点只写一次，写完不改不删（留调试证据）；后续轮次一律换新 run-id，**MUST NOT 复用或覆盖既有 run 目录**（helper 的入境扫描与渲染是对该文件的两次独立读——不可变路径令二者恒对同一快照，闭掉「上轮 voice 尚未读完、下轮重写同一路径」的跨会话 TOCTOU；`mkdir` 占坑令「run-id 是否真每轮换新」由 OS 判定，而非诚实边界）
   **父目录 MUST 仍在 {change_dir}/.outside-voice/ 下**：`.gitignore` 的 `**/.outside-voice/` 递归覆盖该层级；落到该目录之外 = checkpoint 的 `git add -A` 把全量 diff / 敏感 context 永久入库，正是该条款要防的
   **dispatch manifest（落盘审计证据，F-I）**：每次实际发起 voice 时**追加**一行到 {change_dir}/.outside-voice/<run-id>/dispatch-manifest.tsv——MUST 逐字用下面这条 `printf`（`printf` 把 `\t` 解释成真制表符；MUST NOT 手拼字符串或用 `echo`，那会落成字面 `\t`），时间戳格式与 run-id 同为 `%Y%m%dT%H%M%SZ`：
-    `printf '%s\t%s\t%s\n' "<site>" "<task_id>" "$(date -u +%Y%m%dT%H%M%SZ)" >> "{change_dir}/.outside-voice/<run-id>/dispatch-manifest.tsv"`（`<run-id>` 代入上面取回的字面串，不是 shell 变量）
-  `<task_id>`：后台派发填该后台任务标识；同步 exec 填字面 `sync`。「是否真派发过某站点」以本文件为准，MUST NOT 靠会话记忆
+    `printf '%s\t%s\t%s\t%s\n' "<site>" "<task_id>" "$(date -u +%Y%m%dT%H%M%SZ)" "<attempt_nonce>" >> "{change_dir}/.outside-voice/<run-id>/dispatch-manifest.tsv"`（`<run-id>` 代入上面取回的字面串，不是 shell 变量；codex-host 后台作业的 `<task_id>` 代入 dispatch 返回 JSON 的 `job_id`）
+  `<task_id>`：claude-host 后台派发填该后台任务标识；**codex-host 后台作业填 dispatch 返回的 `job_id`**；同步 exec 填字面 `sync`
+  `<attempt_nonce>`：codex-host 后台作业填 dispatch 返回的 `attempt_nonce`（它是「这次外部 job 真的产生过」的机械信号，也是后续 cleanup / reconcile 核身份的依据）；其余分支填字面 `none`
+  「是否真派发过某站点」以本文件为准，MUST NOT 靠会话记忆
   site=design-voice → proposal「What Changes」+ design「Decisions」全文
   site=hr-tg       → 命中 TG 判据触发点 + 相关 diff hunk
 <!-- sdflow:async-branch:start —— 站点无关的 host 调度段。与另一评审 SKILL 的同名 marker 段 MUST 字节相同（hack/check_async_branch_parity.py 机械守）。站点枚举 / context 构造 / reuse-guard 门控 / declared-sites 计算 MUST 留在本 marker 之外 -->
 exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在此重判宿主**，ADR-4）
   **① 内层超时 `<VOICE_TIMEOUT>` 取值（config.yaml 直读，沿 `metrics.enabled` 先例；MUST NOT 走 resolver——两 SKILL 同法，否则等值门红）**：
-    读仓根 `openspec/config.yaml` 的 `outside-voice.async-timeout-seconds`；**仅 async 分支用它**，sync / 降级分支恒 `300`。
+    读仓根 `openspec/config.yaml` 的 `outside-voice.async-timeout-seconds`；**两条 async 路径（claude-host harness / codex-host 后台作业）共用它**，sync 降级分支恒 `300`。
     校验：MUST 为**正整数**（纯十进制数字串，无小数点 / 无单位后缀 / 无正负号 / 无空白）且 `1 ≤ v ≤ 3600`（`3600` = 理智上界——helper 内层 `timeout -k 10` 自身无上限，误配成 `86400` 会把一轮评审永久挂住；3600 远高于 900 默认，留足调宽空间）。
     缺键 / 缺 config 文件 / 读失败 / 非整 / `0` / 负数 / 越界 → **一律回落默认 `900`**（fail-safe 恒生效：**MUST NOT fail-closed 罢工**、**MUST NOT 传 `--timeout 0`**——那会取消 helper 的「≤天花板必终止」保证）。
-  **② 后台能力自探（dispatch 前 MUST 先跑；语义核验非机械门。这是验证「本调用上下文真能后台化」的实际防线，不是冗余保险，ADR-6）**：
-    `$SDFLOW_HOST≠"claude"` → 不自探，直接走 sync 分支。
-    `$SDFLOW_HOST="claude"` → 用 run_in_background 派一条 trivial 命令（如 `printf PROBE_OK`）：拿得到后台任务标识**且**取得回 `PROBE_OK` → `background="available"`；派不出 / 机制报错 / 取不回哨兵 → `background="unavailable"`。
-    `background="unavailable"` ⇒ **降级走 sync 分支**，且报告本段 MUST 显著标注「⚠️ voice 同步降级（后台能力不可用，host=claude）」——**MUST NOT 假装 async 成功**、MUST NOT 因此跳过 voice、MUST NOT 因此改动锚行契约。
-    🔴 **探针对「轮次终结回收」结构性失明 ⇒ 必须再加一个正交条件**：探针在**同一轮次内**发哨兵并当场取回，而回收发生在**轮次终结时** ⇒ 在子代理上下文里探针**必然**报 `available`，随后长任务照样被吞（`.rc` 缺席 → `exec-error` → 同族 fallback = efficacy=0 复发，且伪装成 helper 故障）。∴ 走 async 的条件是**两个**、缺一即 sync：
-      · `background="available"`（探针过），**且**
-      · **本 SKILL 确证运行在主 session**（非子代理上下文）。**无法确证 ⇒ MUST 走 sync 降级**，报告标注「⚠️ voice 同步降级（无法确证主 session 上下文）」。
-    依据（实证，非推断）：主 session 起的后台任务跨多次让出轮次转空闲**702s 跑满、exit 0、ppid 全程稳定**；而子代理上下文的在飞任务在轮次终结时被整体 SIGTERM 回收。**探针补不上这个洞**——它测的是「能否后台化」，被吞发生在「轮次怎么结束」。
-  **③ 执行模式矩阵（F-B；三行始终满足「外层 ≥ 内层+30s」）**：
+    🔴 **clamp MUST 在本步做完**：后台作业 helper 对越界 `--timeout` 是**硬拒绝**（usage-error 罢工）⇒ 把未 clamp 的值原样透传下去，config 打错一个字就从「回落默认」变成「整条通道罢工」。两侧口径的差异由本步吸收，MUST NOT 下推。
+  **② 后台通道就绪判定（dispatch 前 MUST 先跑；两宿主判据不同，互不替代）**：
+    · **host=claude —— harness 后台能力自探**（语义核验非机械门。这是验证「本调用上下文真能后台化」的实际防线，不是冗余保险，ADR-6）：用 run_in_background 派一条 trivial 命令（如 `printf PROBE_OK`）：拿得到后台任务标识**且**取得回 `PROBE_OK` → `background="available"`；派不出 / 机制报错 / 取不回哨兵 → `background="unavailable"`。
+      `background="unavailable"` ⇒ **降级走 sync 分支**，且报告本段 MUST 显著标注「⚠️ voice 同步降级（后台能力不可用，host=claude）」——**MUST NOT 假装 async 成功**、MUST NOT 因此跳过 voice、MUST NOT 因此改动锚行契约。
+      🔴 **探针对「轮次终结回收」结构性失明 ⇒ 必须再加一个正交条件**：探针在**同一轮次内**发哨兵并当场取回，而回收发生在**轮次终结时** ⇒ 在子代理上下文里探针**必然**报 `available`，随后长任务照样被吞（`.rc` 缺席 → `exec-error` → 同族 fallback = efficacy=0 复发，且伪装成 helper 故障）。∴ 走 async 的条件是**两个**、缺一即 sync：
+        · `background="available"`（探针过），**且**
+        · **本 SKILL 确证运行在主 session**（非子代理上下文）。**无法确证 ⇒ MUST 走 sync 降级**，报告标注「⚠️ voice 同步降级（无法确证主 session 上下文）」。
+      依据（实证，非推断）：主 session 起的后台任务跨多次让出轮次转空闲**702s 跑满、exit 0、ppid 全程稳定**；而子代理上下文的在飞任务在轮次终结时被整体 SIGTERM 回收。**探针补不上这个洞**——它测的是「能否后台化」，被吞发生在「轮次怎么结束」。
+    · **host=codex —— 后台作业 helper 的无副作用 preflight**：跑 `python3 ~/.sdflow/hack/outside-voice-job.py preflight`（**MUST NOT** 自己查 CLI 版本、**MUST NOT** 自己拼 `claude --bg`：判据单一源在该 helper 的头注释里，本段不转述接口细节）。exit 0 且 stdout 单行 JSON 的 `ok=true` ⇒ 后台通道就绪；否则 **5 秒级立即同族 fallback**（`reason_code="preflight-error"`），并把 stderr 上的逐条修法原样写进报告本段（升级 / 解禁策略 / 重跑 setup.sh，见 ⑨）。
+      🔴 **preflight 只是必要条件**：真实 dispatch 才是最终能力探针（见 ④ 的 exit≠0 分支）。
+      🔴 **不 ready 时 MUST NOT 回落任何「同步等 Claude」的长路径**——该兼容分支已知 efficacy=0（真机实测全 timeout 回落同族），已从本段**彻底删除**；把它接回来 = 在已被证伪的方向上继续加码。
+  **③ 执行模式矩阵（F-B；async 两行始终满足「外层 ≥ 内层+30s」）**：
     🔴 **内层秒数一律代入十进制字面值**（如 `900` / `300`）——**MUST NOT 写 `$VOICE_TIMEOUT` 之类 shell 变量**：harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空（同 ④ 的 `$HELPER` 条款、同 context 构造节的 run-id 条款）。下表 `<VOICE_TIMEOUT>` 是**占位符**，指 ① 解析出的那个数。
     | 分支 | 条件 | 内层 `--timeout` | 外层 Bash 工具超时 |
-    | async | host=claude ∧ `background="available"` ∧ **主 session 已确证** | `<VOICE_TIMEOUT>`（默认 900） | 不适用——dispatch 调用 <1s 即返回；后台任务**不受 Bash 工具超时约束**（spike 实证 2026-07-18：后台跑满 660s、跨过 600000ms 上限、exit 0、ppid 稳定）⇒ 有效外层无界 ≥ 内层+30s。**MUST NOT** 因它"是长命令"就给 dispatch 调用设长超时 |
-    | sync | host=codex | `300` | ≥330000ms |
+    | async·harness | host=claude ∧ `background="available"` ∧ **主 session 已确证** | `<VOICE_TIMEOUT>`（默认 900） | 不适用——dispatch 调用 <1s 即返回；后台任务**不受 Bash 工具超时约束**（spike 实证 2026-07-18：后台跑满 660s、跨过 600000ms 上限、exit 0、ppid 稳定）⇒ 有效外层无界 ≥ 内层+30s。**MUST NOT** 因它"是长命令"就给 dispatch 调用设长超时 |
+    | async·后台作业 | host=codex ∧ ② 的 preflight ready | `<VOICE_TIMEOUT>`（默认 900） | 不适用——dispatch 受 helper 自身的 5 秒 monotonic deadline 约束、秒级返回，外层给默认即可；等待一律走 ⑥ 的有界 `await`（其上界由 helper 从可信 `started_at` 起算，**不从 dispatch 时刻起算**）。**MUST NOT** 因它"是长命令"就给 dispatch 调用设长超时 |
     | sync（降级） | host=claude ∧（`background="unavailable"` **或 主 session 未能确证**）| `300` | ≥330000ms |
-    ⏱ **sync 两行的外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 300s + 10s grace）——MUST 把外层 Bash/shell 工具超时设为 **≥330000ms**，MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。**指令层约束**（外层超时由调用方逐调用设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
-  **④ 命令形态（两分支共用同一哨兵 envelope）**：整条命令 MUST 逐字为——
-    `~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file <f>; printf '%s' "$?" > {run-dir}/<site>.rc`
-    🔴 **退出码 MUST 走 runner 写不了的 sidecar，MUST NOT 走 stdout 哨兵**：`{run-dir}` 代入 context 构造节的字面 run 目录，`<site>` 为本站点名。
-    **为什么不能用 stdout 里的哨兵串**（含带 run-id nonce 的版本，均已废弃）：runner 被授予**仓库读取能力**（claude 侧 `--tools "Read,Grep,Glob"`、codex 侧 read-only sandbox 内可读仓库）⇒ 它**无需猜** nonce，枚举 `.outside-voice/` 目录即可得；进程列表亦可能暴露含 nonce 的祖先命令。∴ 把认证建立在「模型读得到的字符串」上是无效的——**stdout 是模型能写的通道，任何写在那里的退出码都可被顶替**（wrapper 被回收未发时，正文里伪造的那行会成为唯一来源 ⇒ 被杀的运行拿到 `ok` 信用）。
-    sidecar 之所以可信：四旗承重墙只给 runner **只读**工具集、无 Write/Bash ⇒ 它**写不了**该文件。且「文件缺席」本身是有意义的信号（任务被回收 ⇒ `printf` 从未执行 ⇒ 无 `.rc`）。
-    （`<T>` 代入本分支内层秒数的**字面值**，`<f>` 代入 context 文件**字面路径**；**MUST 代入 `~/.sdflow/hack/outside-voice.sh` 字面路径、MUST NOT 写 `$HELPER`**——harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空）
-    async 分支：该命令**以 run_in_background 派出**，立刻记下返回的后台任务标识（见 ⑧）；sync 分支：前台跑，当场即得退出码。
-  **⑤ 退出码 MUST 从哨兵 envelope 取，MUST NOT 从 voice 正文推断（F-D）**：
-    读 `{run-dir}/<site>.rc` 的内容：
-      **文件存在且内容匹配 `^[0-9]+$`** → 该数即退出码，进 ⑦。
-      **文件不存在 / 内容不匹配 / 读取失败 → `exec-error`**（任务被回收时 `printf` 从未执行 ⇒ 无文件，这是诚实降级而非假绿）。
+    | 不跑 exec | host=codex ∧ ② 的 preflight 未 ready | 不适用 | 不适用——直接走 fallback（`reason_code="preflight-error"`），不进本表其余各步 |
+    ⏱ **sync 那一行的外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 300s + 10s grace）——MUST 把外层 Bash/shell 工具超时设为 **≥330000ms**，MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。**指令层约束**（外层超时由调用方逐调用设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
+  **④ 命令形态（每条路径各自唯一形态，MUST 逐字照搬，MUST NOT 现场发挥）**：
+    · **claude-host（async·harness 与 sync 共用同一哨兵 envelope）**：整条命令 MUST 逐字为——
+      `~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file <f>; printf '%s' "$?" > {run-dir}/<site>.rc`
+      🔴 **退出码 MUST 走 runner 写不了的 sidecar，MUST NOT 走 stdout 哨兵**：`{run-dir}` 代入 context 构造节的字面 run 目录，`<site>` 为本站点名。
+      **为什么不能用 stdout 里的哨兵串**（含带 run-id nonce 的版本，均已废弃）：runner 被授予**仓库读取能力**（claude 侧 `--tools "Read,Grep,Glob"`、codex 侧 read-only sandbox 内可读仓库）⇒ 它**无需猜** nonce，枚举 `.outside-voice/` 目录即可得；进程列表亦可能暴露含 nonce 的祖先命令。∴ 把认证建立在「模型读得到的字符串」上是无效的——**stdout 是模型能写的通道，任何写在那里的退出码都可被顶替**（wrapper 被回收未发时，正文里伪造的那行会成为唯一来源 ⇒ 被杀的运行拿到 `ok` 信用）。
+      sidecar 之所以可信：四旗承重墙只给 runner **只读**工具集、无 Write/Bash ⇒ 它**写不了**该文件。且「文件缺席」本身是有意义的信号（任务被回收 ⇒ `printf` 从未执行 ⇒ 无 `.rc`）。
+      （`<T>` 代入本分支内层秒数的**字面值**，`<f>` 代入 context 文件**字面路径**；**MUST 代入 `~/.sdflow/hack/outside-voice.sh` 字面路径、MUST NOT 写 `$HELPER`**——harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空）
+      async·harness 分支：该命令**以 run_in_background 派出**，立刻记下返回的后台任务标识（见 ⑧）；sync 分支：前台跑，当场即得退出码。
+    · **codex-host（async·后台作业）**：整条命令 MUST 逐字为——
+      `python3 ~/.sdflow/hack/outside-voice-job.py dispatch --run-dir {run-dir} --site <site> --context-file <f> --repo-root <repo-root> --runner "$SDFLOW_VOICE_RUNNER" --model "$SDFLOW_VOICE_MODEL" --effort high --timeout <T>`
+      **MUST NOT** 自己拼 `claude --bg --exec`、**MUST NOT** 自己写 `<site>.rc`、**MUST NOT** 自造轮询——reservation（外部副作用之前建、同 site 唯一 + 本 run ≤2 slot）、5 秒 deadline、canonical job id 核验、metadata 与 rc 的原子发布**全在 helper 里**；`<T>` 同样代入 ① clamp 后的**字面值**，`{run-dir}` / `<f>` / `<repo-root>` 一律代入**绝对路径字面值**（MUST NOT 用 shell 变量）。
+      dispatch stdout 是**单行 JSON**：成功（exit 0）含 `job_id` / `attempt_nonce` / `site` / `run_dir` / `dispatched_at` / `timeout_seconds` / `runner` / `model` / `effort`；MUST 就地记进 ⑧ 的记账表，并按 context 构造节把 `job_id` 与 `attempt_nonce` 追加落盘 `dispatch-manifest.tsv`。
+      **exit≠0 时 MUST 先读 `fallback_allowed`，MUST NOT 一律 fallback**：
+        `fallback_allowed=true`（preflight 未过 / 外部 job 根本没产生、reservation 已被 helper 回收）→ **立即同族 fallback**，`reason_code` 取 payload 的 `reason_code`。
+        `fallback_allowed=false`（`state` ∈ `duplicate-site` | `slot-limit` | `unknown-cost` | `usage-error`）→ **MUST NOT fallback、MUST NOT 重派**：外部 job 可能已经产生并计费，再派一次就是双倍付费。报告本段 MUST 显著标注 payload 的 `detail`（**dispatch 的失败 payload 只有 `detail`，没有 `orphan_warning` 字段**——后者是 `collect` / `cleanup` / `reconcile` 才有的；MUST NOT 声称转录了一个不存在的字段），并提示人跑 `outside-voice-job.py cleanup --run-dir <d> --site <s> --cancel`（整轮则 `reconcile --run-dir <d>`）。
+        该站点的锚行 MUST 落 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（一次 voice 都没跑成、同族 fallback 也被成本闸门禁止 ⇒ 与 F8 同属矩阵的**无执行行**；MUST NOT 把 payload 自己的 `reason_code`（`exec-error` / `preflight-error`）搬进锚行——那两个都属**同族降级**码集，蕴含「fallback 真跑过」，而这里一次都没跑，runner 也 MUST NOT 写成 host）。
+  **⑤ 终态取值（两宿主各自的可信终态；MUST NOT 从 voice 正文推断，F-D）**：
+    · **claude-host**：读 `{run-dir}/<site>.rc` 的内容——**文件存在且内容匹配 `^[0-9]+$`** → 该数即退出码，进 ⑦；**文件不存在 / 内容不匹配 / 读取失败 → `exec-error`**（任务被回收时 `printf` 从未执行 ⇒ 无文件，这是诚实降级而非假绿）。
+    · **codex-host**：**MUST NOT 自己读 `.rc`、MUST NOT 自己解释 sidecar**——跑 `python3 ~/.sdflow/hack/outside-voice-job.py collect --run-dir {run-dir} --site <site>`（幂等：重复 collect 输出与分类逐字节一致），按 stdout 单行 JSON 判：
+      **MUST 先看 exit code**：`2` = usage-error（入参非法，payload 形状不同、**没有** `terminal` / `rc` 字段）→ 按 `exec-error` 处理；MUST NOT 按 0|1 两分法直接读 `terminal`。
+      `reason_code` 即结果（`ok` | `timeout` | `secret-hit` | `exec-error`；`null` = 未终态、不可收集 ⇒ 回 ⑥ 继续等）。它由 helper 从 worker 原子发布的 rc 派生（`124`→`timeout`、`3`→`secret-hit`、其余非零 / 缺失 / 坏格式 → `exec-error`），与 ⑦ **同一张表**，枚举语义不变。
+      只有 `reason_code="ok"` 的 stdout 才可进 findings 池（取 payload 的 `stdout_path`）；`stderr_bytes` / `stderr_lines` 只是结构化计数（见本节末的写出面约束）。
     **MUST NOT** 从 voice 正文（stdout）里解析退出码——无论用哨兵串、整行锚定还是子串匹配：**stdout 是 runner 能写的通道**，那里的任何退出码都不可信（见 ④ 的威胁模型）。
-  **⑥ 通知驱动 collect @Step3 barrier（F-A；async 分支专属，sync 分支当场就有退出码）**：
-    本 harness 的 run_in_background 是**完成推送通知**（"you will be notified — do not poll"），**不是**可主动查询的状态接口 ⇒
-      · dispatch 时 MUST 就地记「**站点 ↔ 后台任务标识**」映射（见 ⑧），并按 context 构造节把该 task_id 追加落盘 `dispatch-manifest.tsv`；
+  **⑥ Step3 barrier（async 两条路径专属；sync 分支当场就有退出码）**：
+    · **claude-host —— 通知驱动 collect（F-A）**：本 harness 的 run_in_background 是**完成推送通知**（"you will be notified — do not poll"），**不是**可主动查询的状态接口 ⇒
+      · dispatch 时 MUST 就地记「**站点 ↔ 后台任务标识**」映射（见 ⑧），并按 context 构造节把该标识追加落盘 `dispatch-manifest.tsv`；
       · 完成通知**异步到达**（可能早于 Step3）→ 收到即**暂存该站点的输出与退出码**，MUST NOT 丢弃；
       · **Step3 是 barrier**：每个**实际 dispatch 过的**站点，其结果 MUST 已在手、或已按 ⑦ 降级完毕，才可进综合裁决。
-    🔴 **正向 barrier 语义**：某 dispatch 站点在 Step3 时**尚无终态退出码**（仍 RUNNING）⇒ MUST **让出轮次、等该后台任务的完成/超时通知**后再继续（通知由 harness 推送，这既非长 sleep 也非轮询）。
-      **MUST NOT** 单次长 sleep 等待、**MUST NOT** 自造轮询循环。
-      **`reason_code="timeout"` 只允许由实际观测到的 `exit 124` 产生**——**MUST NOT** 在未收到该站点终态通知前落 `timeout`。早退假 timeout 把「慢但会成功」的 voice 假降级，正是本机制要消灭的失效模式；且它**逃得过 per-site 站点集核**（该站点仍在集合内、照样判绿），∴ 本条是唯一防线。
-    🔴 **barrier 的执行位：MUST 在主 session，MUST NOT 委派子代理**：本 barrier 的「让出轮次等通知」以及各站点的 collect，MUST 由**主 session 自己**执行——**MUST NOT** 把等待/取回动作交给任何子代理，也 MUST NOT 在子代理内 dispatch 后由外层跨轮次接手。
+    · **codex-host —— 有界 await**：对每个 dispatch 过的站点跑 `python3 ~/.sdflow/hack/outside-voice-job.py await --run-dir {run-dir} --site <site>`（helper 内部自定上界 = 可信 `started_at` + 内层 timeout + 30 秒 grace，并独立节流 liveness 探针）。**MUST NOT 自造轮询循环**、MUST NOT 单次长 sleep、MUST NOT 用 `--max-wait` 把它截短成早退。
+      await 返回 `terminal=false` **∧ `unknown_cost=false`**（仍 STARTING / RUNNING）⇒ **MUST 再调一次 await**；MUST NOT 就此落 `timeout`——「外层调用返回了」不是终态证据。
+      🔴 `terminal=false` **∧ `unknown_cost=true`** ⇒ **MUST NOT 再调 await**：该形态是 RESERVED（dispatch 已受理、metadata 从未发布），helper 明写它**永远不会自行到达终态** ⇒ 再等就是无限循环。直接走下一条的 unknown-cost 处置。
+      🔴 **外层等待被回收 ≠ 后台任务死了**：supervisor 托管的 worker 仍在跑 ⇒ MUST 用**同一** run-dir + site 重新 `await` / `collect`，**MUST NOT 重新 dispatch**（重派 = 第二次计费）。若整轮评审 session 已丢失，只能由人显式跑 `reconcile --run-dir <确切目录>`，**MUST NOT 扫描"最新目录"猜恢复目标**。
+      🔴 **`unknown_cost=true` ⇒ MUST NOT 自动同族 fallback**（它覆盖**每一个** LOST 站点与残留 reservation）：rc 从未发布 ⇒ 子树是否退出**未经核验**、成本未知，自动 fallback 会在一次**已计费**的 voice 上再叠一次。此时 MUST 把 payload 的 `orphan_warning` 原样报进报告本段，并提示人跑 `outside-voice-job.py cleanup --run-dir <d> --site <s> --cancel`（identity 核验 → stop → 子树终止核验 → rm）；只有核验通过、helper 返回 `fallback_allowed=true` 之后才可 fallback。在此之前该站点 MUST 落锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（**没有任何执行段、也没有同族 fallback 跑过** ⇒ runner MUST NOT 写成 host，那是谎称跑过；anchor_lint 矩阵判 no-exec 合法），MUST NOT 落 `ok`，MUST NOT 落 `timeout`，MUST NOT 落 `exec-error`（后者属同族降级码集，与 runner="none" 组合矩阵判 illegal）。
+      · **收完即清**：已取得 `reason_code` 的站点 MUST 跑一次 `python3 ~/.sdflow/hack/outside-voice-job.py cleanup --run-dir {run-dir} --site <site>` 回收 supervisor roster；cleanup 失败只报 warning 与 job id，**MUST NOT** 因清理失败把已成功的 findings 改判失败，**MUST NOT** 静默声称已清理。
+    🔴 **两条路径共同的正向 barrier 语义**：某 dispatch 站点在 Step3 时**尚无终态**（仍 RUNNING）⇒ MUST 等到它的终态证据再继续（前者等完成通知——由 harness 推送，这既非长 sleep 也非轮询；后者继续调有界 `await`）。
+      **`reason_code="timeout"` 只允许由实际观测到的 `exit 124` 产生**——**MUST NOT** 在拿到该站点终态之前落 `timeout`。早退假 timeout 把「慢但会成功」的 voice 假降级，正是本机制要消灭的失效模式；且它**逃得过 per-site 站点集核**（该站点仍在集合内、照样判绿），∴ 本条是唯一防线。
+    🔴 **barrier 的执行位：MUST 在主 session，MUST NOT 委派子代理**：本 barrier 的等待以及各站点的 collect，MUST 由**主 session 自己**执行——**MUST NOT** 把等待/取回动作交给任何子代理，也 MUST NOT 在子代理内 dispatch 后由外层跨轮次接手。
       依据（2026-07-18 实测，两侧都有正面证据）：**子代理上下文的轮次终结会连带回收该上下文在飞的后台任务**——一次观测中该上下文 3 个在飞任务同时被 SIGTERM，**无 envelope、无完成通知** ⇒ 等待方既拿不到退出码、也永远等不到那条通知；而**主 session 让出轮次转空闲不触发回收**——心跳探针 702s 跑满、exit 0、ppid 全程稳定无 reparent、并跨过 600000ms 外层上限。
       ∴ dispatch 与 collect MUST 同在主 session：子代理内派出的后台任务只允许在**该子代理自己的轮次内**取回，MUST NOT 跨其轮次边界等待。
-    **安全（MUST）**：collect **只取「结构化退出码 + exit 0 时的 stdout findings」**。helper 在 exit≠0 时把 runner **原始 stderr + 未扫描的 final-message 前 3 行**写 stderr，该段**绕过出境 `secret_scan`**（既有缺口），而后台化把它落进了 harness 托管的后台任务输出文件（新持久化载体）⇒ **MUST NOT 把后台文件里的原始 stderr 当 findings 采信**。
-    🔴 **写出面同样受限（勿留逃逸口）**：锚行外正文允许写的**只有结构化字段**——`reason_code`、退出码、stderr 行数/字节数。**MUST NOT 逐字转录、摘录、或复述 stderr 的内容文本**：报告文件是 git-tracked、随 checkpoint 永久入库，而这段 stderr **未过出境 `secret_scan`** ⇒ 逐字转录 = 把可能含凭证的未扫描文本永久写进版本库，正是 `.gitignore` 的 `**/.outside-voice/` 那条要防的载体。要诊断细节的人去读后台任务输出文件本身（不入库），MUST NOT 经由报告正文搬运。
-  **⑦ 退出码 → 去向 / reason_code（两分支同一张表，无遗漏；未知码 MUST NOT 读作 ok）**：
+    **安全（MUST）**：collect **只取「结构化退出状态 + 成功时的 stdout findings」**。helper 在 exit≠0 时把 runner **原始 stderr + 未扫描的 final-message 前 3 行**写 stderr，该段**绕过出境 `secret_scan`**（既有缺口），而后台化把它落进了持久化载体（claude-host 是 harness 的后台任务输出文件，codex-host 是 run 目录里 0600 的 `<site>.stderr`）⇒ **MUST NOT 把这些文件里的原始 stderr 当 findings 采信**。
+    🔴 **写出面同样受限（勿留逃逸口）**：锚行外正文允许写的**只有结构化字段**——`reason_code`、退出码、stderr 行数/字节数。**MUST NOT 逐字转录、摘录、或复述 stderr 的内容文本**：报告文件是 git-tracked、随 checkpoint 永久入库，而这段 stderr **未过出境 `secret_scan`** ⇒ 逐字转录 = 把可能含凭证的未扫描文本永久写进版本库，正是 `.gitignore` 的 `**/.outside-voice/` 那条要防的载体。要诊断细节的人去读那些文件本身（不入库），MUST NOT 经由报告正文搬运。
+  **⑦ 退出码 → 去向 / reason_code（两宿主同一张表，无遗漏；未知码 MUST NOT 读作 ok）**：
     exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
     exit 124 → fallback（reason_code="timeout"）——**仅当真观测到 124**，见 ⑥ 正向 barrier 语义
     exit 1   → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
     exit 2   → 用法错 / context 不可读 → fallback（reason_code="exec-error"；`2` 不在 reason_code 枚举内，**并入 exec-error**，枚举不新增）
     exit 3   → 本次 voice 拒发不 fallback（锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="secret-hit"；密钥既不出境也不进子代理 prompt）
-    其余一切情形（未知码 / `.rc` 缺席或内容不匹配 / 后台任务标识查不到 / 输出取不回）→ **保守** fallback（reason_code="exec-error"）；**MUST NOT 读作 `ok`**、MUST NOT 静默丢该站点、MUST NOT 落零锚
-  **⑧ 站点 ↔ 后台任务标识记账（MUST 在指令执行中显式维护此表；model-driven 记账易错，故既落盘又逐站点取）**：
-    | 站点 | 本轮是否 dispatch | 后台任务标识 |
-    | <逐个填本轮涉及的站点> | 是 / 否（否则附未派原因） | `<task_id>` 或字面 `sync` |
+    其余一切情形（未知码 / `.rc` 缺席或内容不匹配 / 后台任务标识查不到 / 输出取不回 / collect 判 CORRUPT）→ **保守** fallback（reason_code="exec-error"）；**MUST NOT** 读作 `ok`、MUST NOT 静默丢该站点、MUST NOT 落零锚
+    🔴 **唯一例外是 `unknown_cost=true`**：**不自动 fallback**（见 ⑥），先按 orphan warning 处置；该站点锚行落 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"，**MUST NOT** 落 `exec-error`——本表其余各行的降级码都蕴含「fallback 真跑过」，这里一次都没跑。
+  **⑧ 站点 ↔ 后台作业记账（MUST 在指令执行中显式维护此表；model-driven 记账易错，故既落盘又逐站点取）**：
+    | 站点 | 本轮是否 dispatch | 后台任务标识 | attempt nonce |
+    | <逐个填本轮涉及的站点> | 是 / 否（否则附未派原因） | harness 任务标识 / 后台作业 `job_id` / 字面 `sync` | 后台作业的 `attempt_nonce`，其余填字面 `none` |
     · 本表的集合 = **实际 dispatch 过的站点**（后台 voice 数不定 0/1/2）——**它与「应有锚的站点集」不是同一个集合**（门控/复用态可以不派却仍落锚），二者 MUST NOT 混用。
     · collect 时 MUST **按本表逐站点取**（不靠"好像都回来了"的整体印象），每站点各自独立走 ⑤ 与 ⑦。
-    · 「是否真派发过某站点」以 `dispatch-manifest.tsv` 为准，MUST NOT 靠会话记忆。
+    · 「是否真派发过某站点」以 `dispatch-manifest.tsv` 为准，MUST NOT 靠会话记忆；恢复 collect / 交人 reconcile 时，run-dir + site + `attempt_nonce` 是**唯一**可核身份，MUST NOT 靠"最新那个目录"。
+  **⑨ 后台通道的运行前提与刷新纪律（codex-host；命中哪条就把那条原样写进报告本段）**：
+    · **最低 Claude Code 版本 `2.1.169`** —— `--bg --exec`、`--safe-mode` 与含 `--all`/`id`/`state` 的 agents JSON 的**共同**能力下限。低于它 preflight 直接红，修法：`npm i -g @anthropic-ai/claude-code` 升级。
+    · **agent view 被策略禁用**（`disableAgentView`）⇒ `claude agents --all --json` 不可用 ⇒ preflight 红。修法：解除该策略；不解除就只能同族 fallback——那是诚实降级，不是 bug。
+    · **`claude --bg --exec` 是本机验证过的 research preview 形态，不是公开稳定契约**：它 stdout 的 `backgrounded · <id>` 格式会漂 ⇒ canonical job id 以 `claude agents --all --json` 里**唯一**带本次 attempt nonce 的条目为准，MUST NOT 只信 dispatch 自己打印的那个短 id。
+    · **v1 只支持已过 quoting/injection golden 的 POSIX 平台**（darwin / linux + 可执行 `/bin/sh`）；其他平台 preflight fail-closed → 同族 fallback，MUST NOT 声称跨平台安全。
+    · 🔴 **两条分发链不可互相替代**：全局 helper 与 SKILL 走 **`bash setup.sh`**（刷新 `~/.sdflow/hack/` 的同代快照——capability manifest 正是在这一步写；任一成员漂 ⇒ preflight fail-closed 并给出刷新指引）；消费仓的 `openspec/workflow/tools/` 走 **`sdflow-init update`**。**跑了其中一条不等于另一条也刷新了**；manifest skew 的修法恒为「回运行 checkout 重跑 `bash setup.sh`」。
 <!-- sdflow:async-branch:end -->
 fallback（同族降级，reason_code ∈ {not-installed,preflight-error,timeout,exec-error}）：以 $HELPER render-prompt --context-file <f> 的输出为 prompt 派 fresh **只读型**（与 $SDFLOW_HOST 同宿主）子代理（禁写/禁执行副作用）（同源同 prompt；框架已含范围收窄）；
-  无硬超时（与 codex 侧 300s 不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_HOST"（同族——`claude-fallback` 枚举值已废弃，跨模型性是派生量，同族 fallback 由 runner==host 表达）
+  无硬超时（与 exec 路径的内层天花板不对称，接受并留痕）；findings=0 的 fallback 在报告标注供抽查；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_HOST"（同族——`claude-fallback` 枚举值已废弃，跨模型性是派生量，同族 fallback 由 runner==host 表达）
   **F8（同族 fallback 也起不来）**：若该 fallback 只读子代理**本身也派不出**（spawn 失败/机制报错）→ 无同族降级可用 → 锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（host-adaptive-execution spec：同族 fallback 也起不来 ⇒ 无执行段、非自审；runner="none" 恒 findings=0，anchor_lint 矩阵判 no-exec 合法）
 锚行（每调用位点一行，truncated 取 helper stderr 的 OV_TRUNCATED；host/runner 恒取第零步同一次 resolve-models.sh 导出值，不重判）：
   <!-- sdflow:outside-voice v1 site="…" guard="none|file-missing|section-not-found|zero-findings|stale|simulated-source" host="claude|codex|unknown" runner="claude|codex|none" reason_code="ok|not-installed|preflight-error|timeout|exec-error|host-unknown|secret-hit|fallback-unavailable" findings="N" truncated="true|false" -->
