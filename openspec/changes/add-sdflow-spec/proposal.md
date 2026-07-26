@@ -6,66 +6,111 @@
 
 ## What Changes
 
-- **新增顶层 skill `sdflow-spec`**：单一入口「澄清 → 拷问 → 生成」管线，替代阶段一的三入口**使用路径**（三个原 skill 保留不动）。主 session 只做判断（澄清对话、对抗拷问、决策纪要、终审），检索/调研与四件套生成外派子代理。
-- **新增 agent 定义文件** `sdflow-spec/agents/`：`sdflow-researcher`（检索供证，effort low、只读工具白名单）、`sdflow-spec-writer`（四件套生成，effort medium）；`model: inherit`，调用时经 `resolve-models.sh` 传档位变量。
-- **`setup.sh` 扩展**：agents 定义铺设到 `~/.claude/agents/`（沿用 symlink/copy 机制）。
-- **`sync_principles.py` 投放面扩展**：agent 定义正文纳入四条通则托管块 + `hack/tests/` 守卫同步更新。
-- **本仓阶段一规范双通道改写** [grill-amendment]：①归属错误修正（「grill-with-docs 来自 superpowers 插件」实为 Matt Pocock skills 集合）改真相源 `sdflow-init/assets/snippets/claude-section.md` + 经托管机制刷新本仓区块（纯事实纠错，下游随 update 自然获得）；②`sdflow-spec` 使用路径与出口序列（`/clear` → 换档 → `/sdflow-spec-review`）写入本仓 CLAUDE.md/AGENTS.md **非托管区**；托管块「ff 之后是 grill」保留（管旧路径，三原 skill 并存），下游推广另 change。
+**交付按三阶段推进，阶段间有验收门**〔spec-review-amendment · 设计门 Q1〕——**同一个 change 内**（scope = 一个完整内聚阶段结果「阶段一 spec 生产管线」，符合基准 4「不按同批来源拆」），但**归因由阶段门提供**：阶段二是否启用取决于阶段二自己的 A/B 结果，不预先押注。
+
+### 阶段一 · 可靠性（无 subagent，主 session 亲写 = D2 的「薄编排」合法形态）
+
+- **新增顶层 skill `sdflow-spec`**：单一入口「澄清 → 拷问 → 生成」管线，替代阶段一的三入口**使用路径**（三个原 skill 保留不动）。判断（澄清对话、对抗拷问、锚点纪要、决策纪要、终审）全部在主 session；**本阶段生成也由主 session 亲写**。
+- **决策纪要 `decision-memo.md` 为承重件**：Phase B 收敛落盘 change 目录（git 跟踪，`/clear` 无损）；Phase B 内部**增量落盘**（每条承重约束站稳即追加，非等全部站稳才一次性写）〔spec-review-amendment F-12〕。
+- **canonical 规则单一源同步**〔spec-review-amendment F-02 · 本阶段 P0，不可 defer〕——本 change 与**四个**既有权威源冲突，MUST 同 change 消除：
+  | 文件 | 冲突 | 处置 |
+  |---|---|---|
+  | `sdflow-init/assets/workflow/generation-process.md`（§四 推荐流水线） | 规定 `explore→ff→grill` | 加分支：已装 sdflow-spec 的仓走单入口；未装沿用三步 |
+  | `sdflow-init/assets/workflow/workflow.md`（§三 关键设计决策 2 = **G1「全流程不用 `/clear`」**） | 与本 change 出口序列的 `/clear` 正面冲突 | **修订 G1**，见下方决议 |
+  | `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md` | 生成物，继续教旧流程 | 改源后重生成 |
+  | `openspec/specs/spec-workflow/spec.md:968-994` | **已有两条正式 Requirement** 涉阶段一衔接 | 见 Modified Capabilities |
+- **G1 修订（设计门 Q2 决议 = 选项 A）**〔spec-review-amendment〕：**保留 `/clear` 出口序列，同 change 修订 G1** —— 在 `workflow.md` §三决策 2 与 `reference/quality-layering.md` 为「阶段一→阶段二」这一段写明例外与理由。**例外的依据只有两条**（cache 按模型隔离 + 产/审错档纪律），**G1 未覆盖它们**（G1 的论证只针对「独立性」，没谈成本与档位）；原 D6 的第三条依据「主审裁决需冷视角」**MUST 删除**——它已被 G1 正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供）。
+- **拷问不可跳过的诚实收窄 + 机械审计信号**〔spec-review-amendment F-04〕：消除 proposal/design 间的强度矛盾；D1 备选表补入 **T132**（`openspec/issues/todolist/2026-07-todolist.md:232`，OPEN，2026-07-11：「spec-review 起手机械核验 grill 已收敛信号，无信号→REFUSE_START」）并说明为何仍需本 skill。
+- **本仓阶段一规范双通道改写**：①归属错误修正（「grill-with-docs 来自 superpowers 插件」实为 Matt Pocock skills 集合）改真相源 `sdflow-init/assets/snippets/claude-section.md`（`:118`）+ 经托管机制刷新本仓区块；②`sdflow-spec` 使用路径、**四入口选择规则**〔spec-review-amendment F-17〕与出口序列写入本仓 CLAUDE.md/AGENTS.md **非托管区**。
 - **README skills 列表**更新 + 重跑 `setup.sh`。
+
+### 阶段二 · 成本实验（agent 定义 + 外派，起手先过实测门）
+
+- **新增 agent 定义文件** `sdflow-spec/agents/`：`sdflow-researcher`（检索供证，`effort: low`）、`sdflow-spec-writer`（四件套单产物生成，`effort: medium`）；`model: inherit`，派发时填 `resolve-models.sh` 解析出的**具体模型 id**。
+- 🔴 **起手 GO/NO-GO 实测门**〔spec-review-amendment F-01〕：写任何 producer 前先实测一次 `subagent_type: sdflow-researcher` 派发（**不是 `agentType`**——后者是 Workflow JS 的参数，`docs/subagent-definitions-plan.md:145` 明记该路径不采纳）。NO-GO 即红，**MUST NOT** 用「失败就验 fallback」把门变成恒绿。
+- **`setup.sh` 扩展**：新写 `install_agents()` 铺 `~/.claude/agents/`（**不是**沿用 `install_into`，见 design F-10）。
+- **`sync_principles.py` 投放面扩展**：agent 定义正文纳入通则托管块（**glob 发现**，非硬编码清单）+ `hack/tests/` 守卫同步更新。
+- **A/B 三路对照实测**：legacy（旧三入口）/ thin（阶段一薄编排）/ subagent（阶段二），量**总** token、美元、墙钟、人工返工、阶段二 findings 数与采纳率。
+
+### 阶段三 · 产品化（阶段二达标才做）
+
+- **agent 定义分发层级 = 全局 `~/.claude/agents/`**（设计门 Q3 决议）〔spec-review-amendment〕。design D3 MUST 补明反驳 `docs/subagent-definitions-plan.md:303-308`「先放本仓验证」倾向的理由，并给两个 agent 的 `description` 写成**排他式**（仅由 `/sdflow-spec` 编排派发）——因为 SKILL 的 `disable-model-invocation` 挡不到 agent 定义，全局 agent 会进入每个 session 的可选名册，而 `sdflow-spec-writer` 持有 `Write`。
+- **旧入口 sunset 条件**〔spec-review-amendment F-17〕：明确阈值（采用率/质量/成本），达标后文档不再推荐旧三步组合；未达标则删除本 skill。
+- bundle 下游推广（`sdflow-init update` 推 canonical 改动至消费项目）。
 
 ## Capabilities
 
 ### New Capabilities
-- `spec-authoring`: 阶段一 spec 生产管线——澄清/拷问/生成三相位的行为契约、判断与机械的外派分工线、决策纪要承重件（/clear 无损）、错误降级与 Codex 宿主降级、出口衔接序列。
+- `spec-authoring`: 阶段一 spec 生产管线——澄清/拷问/生成三相位的行为契约、判断与机械的外派分工线、决策纪要承重件（/clear 无损）、相位状态机与重入、错误降级与 Codex 宿主降级、出口衔接序列。
 
 ### Modified Capabilities
+〔spec-review-amendment F-02 · 原写「无」，理由「现有 specs 的 requirement 层不含阶段一入口约定」**与事实不符**〕
 
-（无——现有 specs 的 requirement 层不含阶段一入口约定；`spec-workflow` 只在场景措辞中引用 grill 上下文，其需求不变。）
+- `spec-workflow`: `openspec/specs/spec-workflow/spec.md:968-994` 已有两条正式 Requirement 涉及阶段一衔接（雾量三段分流的 wayfinder→ff 衔接契约、grill 对已决分支瘦跑）。本 change MUST 声明新入口与它们如何**共存与路由**，不得留空。
 
 ## Success Metrics
 
-- **四件套生成环节输出成本** — 基准：全部按主 session 档位输出价（Fable $50/M、Opus $25/M）→ 目标：生成环节按 mid 档价（$15/M，降 ≥40%）— 度量：dogfood change 中生成子代理的 usage 归属；粗粒度用 `/usage` 前后对比并如实标注精度。
-- **拷问覆盖率** [grill-amendment] — 基准：grill 人工触发、可静默跳过（已实证发生）→ 目标：拷问为管线内建默认路径（跳过须主动偏离指令；结构性改善而非机械保证——指令层约束由执行方自报，按诚实边界纪律不冒充机械门）— 度量（机械审计信号）：`decision-memo.md` 存在 + design.md 决策记录节含「砍掉的候选 + 理由」条目（可 grep 抽查）；若 dogfood 发现跳过实际发生，另 change 补机械门禁。
-- **阶段二冷启动无损率** — 基准：部分决策 why 滞留对话上下文 → 目标：`/clear` 后 spec-review 所需 why 100% 可从落盘产物获得 — 度量：dogfood change 的 spec-review 报告中「上下文缺失/需回问」类 finding = 0。
+〔spec-review-amendment F-08：原指标 #1 测的是**单价表常量**（只要派到 Sonnet 就必然「达标」），测不出「这次重构是否让阶段一变便宜」——已改为总成本口径〕
+
+- **阶段一总成本** — 基准：A/B 三路对照里的 legacy 与 thin 两路实测值 → 目标：subagent 路的**总** token 与总美元均不劣于 thin 路 — 度量：一次 A/B 覆盖 **legacy / thin / subagent** 三路跑同一个真实需求，计入 researcher + writer + memo 往返 + 终审读回的**全部**开销。⏰ 8/31 前的测量须按 Sonnet 稳态价 $15/M 折算（现有 $10/M 促销价到期，否则高估约 33%）。
+- **下游成本不回归** — mid 档生成的 change，其阶段二 spec-review 的 findings 数与采纳率不显著劣于强档亲写的历史基线（retro 脚本已在算此量，边际成本近零）。若 findings 涨幅吃掉生成侧节省，D2 退回薄编排。
+- **拷问覆盖率** — 基准：grill 人工触发、可静默跳过（已实证发生）→ 目标：拷问为管线内建默认路径（跳过须主动偏离指令；**结构性改善而非机械保证**——指令层约束由执行方自报，按诚实边界纪律不冒充机械门）— 度量（机械审计信号）：`decision-memo.md` 存在 + 必填小节非空的 **grep 门**（会红的检查，非人工抽查）〔spec-review-amendment F-09〕。
+- **阶段二冷启动无损率** — 基准：部分决策 why 滞留对话上下文 → 目标：`/clear` 后 spec-review 所需 why 100% 可从落盘产物获得 — 度量：dogfood change 的 spec-review 报告中「上下文缺失/需回问」类 finding = 0。**样本 N=1 且为自评**，报告须如实标注「非统计显著」〔spec-review-amendment F-09〕。
 
 ## 需求优先级〔TG-19〕
 
-- **P0**：skill 本体（三相位管线 SKILL.md）· agents 定义 × 2 · setup.sh 铺设 · sync_principles 投放面纳入（防漂移，与 skill 同 change 落地不可拆）
-- **P1**：本仓 CLAUDE.md/AGENTS.md 阶段一规范改写 · grill-with-docs 归属错误修正 · README 列表
-- **P2**：checkpoint 阶段锚（补 retro 数据阶段一无独立打点的缺口）
+〔spec-review-amendment · 设计门 Q1：改为三阶段口径〕
+
+- **阶段一 P0**：skill 本体三相位管线（薄编排形态）· 决策纪要与增量落盘 · **canonical 四文件同步（含 G1 修订）** · 相位状态机与工作树前置检查 · 机械审计信号（memo grep 门 + `openspec validate --strict`）
+- **阶段一 P1**：本仓 CLAUDE.md/AGENTS.md 规范改写（含四入口选择规则）· 归属错误修正 · README 列表
+- **阶段二 P0**（阶段一验收后启动）：`subagent_type` GO/NO-GO 实测门 · agents 定义 × 2 · `install_agents()` + 首个 setup.sh pytest · sync_principles glob 投放面 · A/B 三路对照
+- **阶段三 P0**（阶段二达标后启动）：全局分发定案 · 旧入口 sunset 条件 · bundle 下游推广
+- **P2**：checkpoint 相位锚——**提高阶段一的墙钟归因率**〔spec-review-amendment F-20：原理由「补 retro 数据阶段一无独立打点的缺口」**与仓内数据矛盾**，`openspec/retro/report.md:77,79` 有 `ff 9%` / `grill 2%` 打点且已参与聚合；真实缺口是 `unknown` 桶占 56%（`report.md:72`）〕
 
 ## 假设〔TG-22〕
 
-- **agent 定义 `agentType` 派发 + `effort` frontmatter 在 dispatch 中生效**——依据为 claude-security 官方插件 7 个实例的静态核验（docs/subagent-definitions-plan.md §4.6），本仓未实测过派发链路。失效影响：降级为 prompt 内联通则路径（SKILL.md 已内置 fallback），收益打折但管线不阻塞。
-- **省 token 量级估算（~30-40% vs 强档全包）未实测**——基于官方定价推算。失效影响：成本目标不达，但质量收益（拷问前置/上下文卫生）独立成立。
-- **openspec CLI `instructions` 幂等只读、载荷 3.5-6KB**——已实测（本 change 调研），非假设，列此为证据锚。
+- **agent 定义经 `subagent_type` 派发 + `effort` frontmatter 生效**〔spec-review-amendment F-01：原写 `agentType`，那是 Workflow JS 的参数（`docs/subagent-definitions-plan.md:320`），而同文 `:145` 明记该路径不采纳；本仓三处先例均用 `subagent_type`〕——`effort`/`model: inherit` 的合法性依据为 claude-security 官方插件 7 实例静态核验（`docs/subagent-definitions-plan.md §4.6`，已复核准确），**但派发链路本仓未实测**。失效影响：阶段二起手门判 NO-GO，管线停在阶段一（薄编排）——**不静默降级为 fallback**（见下条）。
+- **fallback 的工具边界等价性——已被证伪，改为不假设**〔spec-review-amendment F-01/hr-tg V-3〕：原设计把「agent 定义缺失 → 通用子代理 + prompt 内联通则」当等价降级，但 `docs/subagent-definitions-plan.md:116-123` 明确直接 Agent 路径**无法限制工具集** ⇒ 该 fallback **撤掉了唯一的工具权限边界 = 降级即提权**。改为：无法证明等价时，researcher 降级为**主 session 亲查**、writer 降级为**主 session 亲写**，MUST NOT 用权限更宽的通用子代理当安全 fallback。
+- **总成本方向未实测**〔spec-review-amendment F-08〕——原写「省 token 30-40%」混淆了 token 数与单价：串行 fresh-context writer 重复读 instructions/memo/依赖产物、主 session 终审读回四件套，**总 token 很可能上升**。失效影响：阶段二 A/B 判不达标，停在阶段一；质量收益（拷问前置 / `/clear` 无损）独立成立。
+- **mid 档生成不抬高下游评审成本**〔spec-review-amendment F-08，原未登记〕。失效影响：见 Success Metrics 第二条，D2 退回薄编排。
+- **并存无触发面冲突**的真实风险方向〔spec-review-amendment F-04，原未登记〕：风险不是「误触发抢占」，而是**新入口模型唤不起、旧入口模型唤得起** ⇒ 动机①（grill 可绕过）未被本 skill 解决。缓解只能来自阶段一的 canonical 规则更新 + T132 类机械门。
+- **openspec CLI 行为在版本升级后保持稳定——不假设**〔spec-review-amendment F-13〕：**最后验证版本 = 1.5.0**；npm registry 最新已是 **1.6.0（2026-07-10 发布）**，且 `openspec-upgrade/SKILL.md:192` 装 `@latest`、仓内无 pin。⇒ 生成子代理自调 `instructions --json` 时 MUST 做最小 schema 断言（必需字段存在性 + 类型），不兼容即 fail-closed 并报告实际版本。
+- **openspec CLI `instructions` 幂等只读、载荷 3.5-6KB**——已实测（1.5.0），非假设，列此为证据锚。
 
 ## 开放问题〔TG-21〕
 
-- **token 实测基线**：首个 dogfood change 跑完后由人比对 `/usage`（负责人：用户；截止：本 change merge 后首个新 change）。
-- **agent 定义的分发层级**：v1 由 setup.sh 装 `~/.claude/agents/`（全局）；是否纳入 `sdflow-init` 铺设物随 bundle 分发，待 dogfood 验证后另 change 决策。
-- **bundle workflow.md 阶段一规范的下游推广**：本 change 只改本仓自身流程约定（dogfood 先行）；`sdflow-init/assets/` 源与下游推广另 change。
+〔spec-review-amendment F-31：三条统一补负责人 + 截止〕
+
+- **A/B 三路对照的实测基线**：阶段二起手前由人跑一次 legacy/thin/subagent 对照（负责人：用户；截止：**阶段一验收门通过后、阶段二动工前**）。
+- **agent 定义是否纳入 `sdflow-init` 铺设物随 bundle 分发**：v1 定为全局 `~/.claude/agents/`（设计门 Q3 已决）；是否改为随 bundle 分发待阶段三决策（负责人：用户；截止：阶段三启动时）。
+- **bundle canonical 改动的下游推广时机**：阶段一改源，阶段三经 `sdflow-init update` 推下游（负责人：用户；截止：阶段三）。
 
 ## 成本估算〔TG-24〕
 
-单次阶段一运行（40 轮对话、四件套 ~65KB 量级，API 价折算）：强档（Fable）全包 ~$15-20；本方案 Fable 主 session + mid 档外派 ~$10-13；Opus 主 session + 外派 ~$5-6（≈或低于现状 Opus 全包 $6-8）。主 session 档位由人按 change 价值选择，skill 不写死模型。
+〔spec-review-amendment F-08：原写「40 轮对话、四件套 ~65KB 量级」，全仓 `grep` **除本文件外零命中**、无出处；实测 48 个归档 change 的四件套字节数**中位数 42,536 字节**（65KB 在第 85 百分位），**本 change 自己实测 42,351 字节**〕
+
+按 42KB 中位数（≈20–25K output tokens）折算，**生成环节**的档位下调节省上限约 **$0.9**（Fable 主 session）/ **$0.25**（Opus 主 session）——占单次阶段一成本的个位数百分比。**真正的成本大头是主 session 的多轮 input 与 thinking 输出**，而本方案（拷问前置 + 亲笔锚点纪要）**增加**主 session 轮次。⇒ **成本不是本 change 的主要收益**；主要收益是「拷问前置」与「`/clear` 无损」两条质量项。绝对值目标由阶段二 A/B 实测给出，本文不预设。
 
 ## Non-Goals
 
-- **不改 openspec CLI 与四件套 schema**——可证伪假设：现有 `instructions --json` 载荷足以驱动生成子代理产出合格产物（已实测载荷 3.5-6KB；若 dogfood 中产物质量不合格且归因于载荷缺失，此假设被证伪，需另 change 补充生成上下文）。
-- **不动阶段二/三（spec-review / ship 链）**——可证伪假设：产/审错档纪律用出口提示承载即可，无须改 spec-review 本体（若 dogfood 中人反复忘记换档，此假设被证伪，需机械层承接）。
-- **不删除/修改 opsx:explore、opsx:ff、grill-with-docs、grilling、domain-modeling**——可证伪假设：并存无触发面冲突（新 skill `disable-model-invocation: true` 仅人触发；若实际出现误触发抢占，假设被证伪）。
-- **不做 Codex 宿主适配（agent 定义对应物）**——可证伪假设：Codex 下降级为主 session 亲做可接受，因阶段一在 Codex 宿主的运行频率低（若 Codex 阶段一成为常态用法，假设被证伪，需另 change）。
-- **不做 per-子代理 token 归因度量**——可证伪假设：`/usage` 粗粒度前后对比足以验证成本方向（若数据无法区分方向性结论，假设被证伪，需补细粒度打点）。
+- **不改 openspec CLI 与四件套 schema**——可证伪假设：现有 `instructions --json` 载荷足以驱动生成子代理产出合格产物（已实测载荷 3.5-6KB **于 1.5.0**；若 dogfood 中产物质量不合格且归因于载荷缺失，此假设被证伪）。
+- **不动阶段三（ship 链）**——阶段二 spec-review 本体不改，但**其上游 canonical 规则（G1）本 change 要改**〔spec-review-amendment F-02〕。
+- **不删除/修改 opsx:explore、opsx:ff、grill-with-docs、grilling、domain-modeling**——但**阶段三 MUST 给出 sunset 条件**〔spec-review-amendment F-17〕；无退出条件的永久并存已被评审判为「维护成本永久叠加」。
+- **不做 Codex 宿主适配（agent 定义对应物）**——可证伪假设：Codex 下降级为主 session 亲做可接受。⚠️ 附带未核项：`disable-model-invocation: true` 在 Codex 宿主的语义未验证，而本仓已有该字段非直觉行为的实测（`openspec/changes/archive/2026-07-10-matt-workflow-integration/impl-notes.md:3-14`）〔spec-review-amendment F-32〕。
+- **不做 per-子代理 token 归因度量**——但阶段二 A/B **MUST** 量总 token 与总美元（粗粒度 `/usage` 前后对比不足以支撑方向性结论，这一点已被 roadmap P2 的未闭环实证：`openspec/roadmaps/workflow-cost-optimization/roadmap.md:84`）〔spec-review-amendment F-08〕。
 
 ## Impact
 
-- **新增**：`sdflow-spec/SKILL.md`、`sdflow-spec/agents/{sdflow-researcher,sdflow-spec-writer}.md`
-- **修改**：`setup.sh`（agents 铺设段）、`hack/sync_principles.py` + `hack/tests/test_sync_principles.py`（投放面 +2）、`sdflow-init/assets/snippets/claude-section.md`（仅归属修正）、`CLAUDE.md`/`AGENTS.md`（非托管区新增；托管块经刷新机制同步归属修正）、`README.md`
-- **依赖**：openspec CLI ≥1.5（`new`/`status --json`/`instructions --json`，均已实测）；Claude Code agent 定义解析（`~/.claude/agents/`，带 prompt 内联 fallback）；`resolve-models.sh` 档位变量（既有）
+- **新增**：`sdflow-spec/SKILL.md`、`sdflow-spec/agents/{sdflow-researcher,sdflow-spec-writer}.md`（阶段二）、`hack/tests/test_install_agents.py`（阶段二，全仓首个 setup.sh 测试）
+- **修改**：`setup.sh`（新 `install_agents()` 段）、`hack/sync_principles.py` + `hack/tests/test_sync_principles.py`（glob 投放面）、`sdflow-init/assets/snippets/claude-section.md`（归属修正）、**`sdflow-init/assets/workflow/{workflow.md,generation-process.md,WORKFLOW-GUIDE.md}`**〔spec-review-amendment F-02，原遗漏〕、`openspec/specs/spec-workflow/spec.md` 的衔接 Requirement、`CLAUDE.md`/`AGENTS.md`（非托管区 + 删「15 个 SKILL.md」硬编码数字，改由脚本自报）〔spec-review-amendment F-28〕、`README.md`
+- **依赖**：openspec CLI（**最后验证 1.5.0**，1.6.0 未验证，须 schema 断言）；Claude Code agent 定义解析（`~/.claude/agents/`，阶段二起手实测门把关）；`resolve-models.sh` 档位变量（既有）
 - **技术栈标注**〔TG-01/02/03 判定〕：纯 Markdown 编排 + Python/Bash 构建脚本，不命中 backend/embedded/frontend 领域清单
-- **不受影响**：阶段二/三编排器、openspec CLI 生成的官方 skills、`~/.agents/skills` 第三方集合
+- **不受影响**：阶段三编排器、openspec CLI 生成的官方 skills、`~/.agents/skills` 第三方集合
 
 ## Compliance
 
-无涉敏感数据/信任边界变更（TG-17 不命中）。项目既有边界合规（adr/0005 dev-runtime checkout 纪律、通则托管单一源机制、host-adaptive-execution「skill 引用档位变量不内联模型名」）在 design.md 按 D-6 逐条声明。
+〔spec-review-amendment F-06：**TG-17 改判命中**，原写「不命中」〕
+
+**TG-17（信任边界 / 敏感数据）命中** —— `sdflow-researcher` 的工具面同时含仓库读取、`Bash`（**非只读**：可 `>` 重定向、`rm`、`git commit`、`curl -X POST`；工具 allowlist 不能限制 Bash 子命令）与 `WebFetch`/`WebSearch`（出境通道）。⇒ design MUST 补 **BASE-28「安全与数据保护」**段，覆盖：① Bash 权限收窄或诚实边界声明；② 出境 secret scan（复用 `openspec/specs/host-adaptive-execution/spec.md:82-96` 既有的 secret scan + 读围栏 + 拒发语义，MUST NOT 新造）；③ Web 内容一律作**不可执行数据**（间接 prompt injection 防线）；④ `resolvedOutputPath` 的 canonicalization 与 change-root containment（第三方 CLI 输出直接当写入目标 = confused deputy）。
+
+其余边界合规（adr/0005 dev-runtime checkout 纪律、通则托管单一源机制、host-adaptive-execution「skill 引用档位变量不内联模型名」、**workflow.md G1**〔spec-review-amendment Q2，原漏核〕）在 design.md 按 D-6 逐条声明。
