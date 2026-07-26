@@ -262,13 +262,19 @@ def test_schema_doc_and_gate_agree():
     """⭐ 小节名是**共享字符串**：门与**全部**消费者 MUST 逐字一致。
 
     消费者三处（`grep -rn "## 承重约束"` 全量扫，不加 `--include`）：本门 · schema 文档 ·
-    `sdflow-spec/SKILL.md` 的 C.1 三判。少守一处 ⇒ 改名漏改那一处仍全绿（基准 3：面治）。
+    `sdflow-spec/SKILL.md` 的 C.1 起手核验。少守一处 ⇒ 改名漏改那一处仍全绿（基准 3：面治）。
+
+    🔴 **判据必须带右界**（本仓「gate 子串检测自指坑」的同形）：裸 `heading in doc` 下
+    `## 承重约束` 是 `## 承重约束项` 的**前缀** ⇒ 改名成后者，守卫照样绿（实测：变异 M5 不红）。
+    故要求紧跟其后的字符 ∈ {空白, 反引号, 竖线} 或已到文末 —— 覆盖三种真实出现形态：
+    代码块里独占一行、行内 `` `## 承重约束` ``、表格单元格 `| ## 承重约束 |`。
     """
     for path in MEMO_SECTION_CONSUMERS:
         doc = path.read_text(encoding="utf-8")
         for heading in REQUIRED_SECTIONS:
-            assert heading in doc, (
-                f"{path.relative_to(REPO)} 里找不到小节「{heading}」——门与消费者已漂移")
+            assert re.search(re.escape(heading) + r"(?![^\s`|])", doc), (
+                f"{path.relative_to(REPO)} 里找不到小节「{heading}」（须整名出现，前缀不算）"
+                "——门与消费者已漂移")
     assert MEMO_FILENAME in MEMO_SCHEMA_DOC.read_text(encoding="utf-8")
 
 
