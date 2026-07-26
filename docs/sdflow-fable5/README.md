@@ -18,7 +18,7 @@
 
 ```mermaid
 flowchart LR
-    R["roadmap 规划"] --> G["生成<br/>explore→ff→grill"] --> S["设计审<br/>spec-review"] --> HG{{"★唯一人类门"}}
+    R["roadmap 规划"] --> G["生成<br/>分支 A（默认）/sdflow-spec<br/>分支 B explore→ff→grill"] --> S["设计审<br/>spec-review"] --> HG{{"★唯一人类门"}}
     HG --> I["实现<br/>plans→SDD"] --> C["代码审<br/>code-review"] --> D["收尾<br/>done: verify→archive→merge"]
     D -.锚+墙钟.-> M["retro 度量"] -.供数.-> H["人决策"] -.-> R
 ```

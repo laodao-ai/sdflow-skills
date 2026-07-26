@@ -17,10 +17,18 @@ import pytest
 
 HOOK = Path(__file__).resolve().parents[1] / "assets" / "hooks" / "ff0-branch-guard.py"
 
+# 人拍板「就地继续」的一次性哨兵（相对仓根）——与 hook 的 ACK_FILE 是同一个字面量。
+ACK_REL = Path("openspec") / ".ff0-ack"
+
 
 def _git(repo, *args):
     subprocess.run(["git", *args], cwd=repo, check=True,
                    capture_output=True, text=True)
+
+
+def ack(repo):
+    """模拟人 `touch openspec/.ff0-ack`。"""
+    (repo / ACK_REL).write_text("", encoding="utf-8")
 
 
 @pytest.fixture
@@ -28,6 +36,7 @@ def repo(tmp_path):
     """一个最小 git 仓，默认停在 main 分支上。"""
     r = tmp_path / "proj"
     r.mkdir()
+    (r / "openspec").mkdir()
     _git(r, "init", "-q", "-b", "main")
     _git(r, "config", "user.email", "t@t")
     _git(r, "config", "user.name", "t")
@@ -84,38 +93,64 @@ def test_other_feature_branch_denies(repo):
     denied, reason = run_hook(repo, "openspec new change add-foo")
     assert denied, "在别的 change 的 feature 分支上建新 change 必须 halt 问人（FF-0 三分支判定）"
     assert "add-bar" in reason and "add-foo" in reason
-    assert "SDFLOW_FF0_ACK=1" in reason  # 人拍板「就地继续」的逃生口要写在提示里
+    # 逃生口要给出**可直接复制的那条命令**（人零思考成本），且带绝对路径（cwd 可能在子目录）
+    assert f"touch {repo / ACK_REL}" in reason
 
 
-def test_other_feature_branch_with_human_ack_allows(repo):
+def test_sentinel_allows_on_other_feature_branch(repo):
+    """人 `touch` 了哨兵 ⇒ 分支③放行。"""
     _git(repo, "checkout", "-qb", "feat/add-bar")
-    denied, _ = run_hook(repo, "SDFLOW_FF0_ACK=1 openspec new change add-foo")
+    ack(repo)
+    denied, _ = run_hook(repo, "openspec new change add-foo")
     assert not denied
 
 
-def test_ack_allows_when_preceded_by_other_shell_work(repo):
-    """人真敲的形态常带前缀（`cd … && ACK=1 openspec …`）—— 仍算 ack。"""
+def test_sentinel_is_one_shot(repo):
+    """令牌用后即焚：放行一次后哨兵被删，第二次照常 deny。"""
     _git(repo, "checkout", "-qb", "feat/add-bar")
-    denied, _ = run_hook(
-        repo, "cd . && SDFLOW_FF0_ACK=1 FOO=bar openspec new change add-foo")
+    ack(repo)
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert not denied
+    assert not (repo / ACK_REL).exists(), "哨兵未被消费 ⇒ 令牌成了永久后门"
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert denied, "同一个哨兵放行了第二次"
+
+
+def test_sentinel_found_from_repo_subdirectory(repo):
+    """人可能在子目录里跑命令 —— 哨兵锚仓根，不锚 cwd。"""
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    ack(repo)
+    sub = repo / "openspec" / "changes"
+    sub.mkdir(parents=True)
+    denied, _ = run_hook(sub, "openspec new change add-foo")
     assert not denied
 
 
-def test_incidental_mention_of_the_ack_literal_is_not_an_ack(repo):
-    """口令只在【真的作为 env 赋值前缀传给那条命令】时才算人拍板。
+def test_undeletable_sentinel_does_not_allow(repo):
+    """放行 ⇔ 成功消费。删不掉（此处：它是个目录）就不放行 —— 否则它不再是一次性的。"""
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    (repo / ACK_REL).mkdir()
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert denied
 
-    反例是模型极易产出的形态：把口令写进注释/说明文字里。若那也放行，
-    「ack 只能由人决定」就退化成「命令串里出现过这 11 个字符即可」——
-    而 deny 文案本身就把该字面量原样回传给模型 ⇒ 复现门槛为零。
+
+def test_mentioning_the_ack_in_the_command_string_is_not_an_ack(repo):
+    """逃生口 MUST NOT 从命令串里认 —— 命令串是无界的 shell 语法面（基准 5）。
+
+    deny 文案把逃生口原样回传给模型 ⇒ 只要判据落在命令串上，模型顺手把它写进
+    一句注释/说明就绕过，且「注释算不算」需要真解析 shell，补丁循环不收敛。
+    哨兵文件把判据挪到**有界**的语义面（文件在不在），下列各式一律不是 ack。
     """
     _git(repo, "checkout", "-qb", "feat/add-bar")
     for cmd in (
+        f"openspec new change add-foo # 人已 ack: touch {ACK_REL}",
+        f"# 人已 ack: touch {ACK_REL}\nopenspec new change add-foo",
+        f"echo '{ACK_REL}' && openspec new change add-foo",
+        "SDFLOW_FF0_ACK=1 openspec new change add-foo",
         "openspec new change add-foo # note: SDFLOW_FF0_ACK=1 was discussed",
-        "echo 'SDFLOW_FF0_ACK=1' && openspec new change add-foo",
-        "SDFLOW_FF0_ACK=1 && openspec new change add-foo",
     ):
         denied, _ = run_hook(repo, cmd)
-        assert denied, f"口令只是被提及、并未作为 env 前缀传给命令，不该放行：{cmd}"
+        assert denied, f"命令串里提到逃生口不是 ack，不该放行：{cmd!r}"
 
 
 # ── detached HEAD：不是分支，更不是「其它 feature 分支」→ fail-open ──────
@@ -154,8 +189,11 @@ def test_default_branch_is_protected_even_with_human_ack(repo):
     """ack 是【分支③】的逃生口。它若在分支①也生效，FF-0 的核心不变量就被击穿。"""
     _git(repo, "checkout", "-qb", "trunk")
     _set_origin_head(repo, "trunk")
-    denied, _ = run_hook(repo, "SDFLOW_FF0_ACK=1 openspec new change add-foo")
+    ack(repo)
+    denied, _ = run_hook(repo, "openspec new change add-foo")
     assert denied, "ack MUST NOT 让「在默认分支上建 change」放行"
+    assert (repo / ACK_REL).exists(), \
+        "分支①不该消费哨兵 —— 静默吃掉人的令牌会让下一次分支③的 ack 莫名失效"
 
 
 def test_default_branch_from_init_default_branch_config_is_protected(repo):

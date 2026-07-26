@@ -27,7 +27,7 @@
 `先过 FF-0 三分支判定（保护分支则 git checkout -b feat/{change}；已在本 change 分支则跳过；在其它 feature 分支则停下问我），再按 config + trigger-catalog 生成`。
 
 > **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 殊途同归调它）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。
-> hook 实现同一条三分支判定：**保护分支 → deny**；**已在 `feat/{该 change}` → 放行**；**其它 feature 分支 → deny 并要求先问人**（人确认「就地继续」后，用 `SDFLOW_FF0_ACK=1 openspec new change …` 重跑即放行——**该 ack 是给人拍板用的逃生口，模型 MUST NOT 自行加上它**）。任何解析/探测异常一律 fail-open 放行（守卫自身故障绝不阻断正常工作）。文档级强制（调用方注入 + review 核对）作为补充层。
+> hook 实现同一条三分支判定：**保护分支 → deny**；**已在 `feat/{该 change}` → 放行**；**其它 feature 分支 → deny 并要求先问人**（人确认「就地继续」后，`touch <仓根>/openspec/.ff0-ack` 再重跑即放行——**该哨兵是给人拍板用的一次性逃生口：守卫读到即删、只对下一次调用生效，模型 MUST NOT 自行 touch 它**；判据只看文件在不在，MUST NOT 从命令串里认口令——命令串是无界的 shell 语法面）。任何解析/探测异常一律 fail-open 放行（守卫自身故障绝不阻断正常工作）。文档级强制（调用方注入 + review 核对）作为补充层。
 
 ## wayfinder→ff 衔接契约（条件：change 源于 wayfinder map）
 

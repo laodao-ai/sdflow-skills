@@ -27,8 +27,9 @@
                    │
                    ▼
               ┏━━━━━━━━━━━━━━━┓
-   人类门①    ┃  grill / 前提确认  ┃  ◀── ship 不跨此门 (adr/0004)
+   人类门①    ┃  拷问 / 前提确认  ┃  ◀── ship 不跨此门 (adr/0004)
               ┗━━━━━━━━━━━━━━━┛
+              〔A: /sdflow-spec 相位 B · B: grill-with-docs〕
                    │
  spec-review ─▶ sdflow-spec-review  ──▶  anchor_lint.py --layer spec-review ✅#1  spec-review-report.md
   (设计审)    autoplan+领域/对抗/接地镜        outside-voice.sh · HR-TG cross-model    └─ frontmatter:

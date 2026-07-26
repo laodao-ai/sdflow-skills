@@ -1,7 +1,9 @@
 # 自制 skill 展开 · `grill-with-docs`
 
-> 属 [工作流总览](../workflow-overview.md) 的展开。这是**阶段一生成的「人类对话岛」**（第 3 步）——
+> 属 [工作流总览](../workflow-overview.md) 的展开。这是**阶段一生成的「人类对话岛」**（**分支 B 的第 3 步**）——
 > 对抗压测设计、对齐术语、边界场景、代码与主张不符即揭穿；落 ADR / 术语表。
+> **分支 A（默认，`/sdflow-spec`）不走本 skill**：那里拷问由相位 B 承担，且**前置于成文**——
+> 拷问对象是设计意图本身，而非已写好的四件套（入口选择规则见 `generation-process.md` §四）。
 >
 > **一句话**：`Interview me relentlessly about every aspect of this plan until we reach a shared understanding.`
 > 逐分支死磕设计树，一次一题、等反馈再下一题；能查码就查码。
@@ -15,7 +17,7 @@
 
 | 维度 | 内容 |
 |---|---|
-| 谁调它 | 阶段一第 3 步（`opsx:ff` 生成四件套之后、设计审之前），非平凡变更 |
+| 谁调它 | **分支 B** 的阶段一第 3 步（`opsx:ff` 生成四件套之后、设计审之前），非平凡变更；**分支 A 不经本 skill**（拷问在 `/sdflow-spec` 相位 B，前置于成文） |
 | 进（输入） | `{change_dir}` 的 design.md（+ proposal/specs/tasks）+ 真实代码（`sdflow-ship/scripts/ship_gate.py` 等） |
 | 出（产物） | design/ADR/CONTEXT 更新（标 `[grill-amendment]`）；`docs/adr/NNNN-*.md`（按需）；`CONTEXT.md` 术语表（按需，lazily） |
 | 本性 | **人类对话岛**——人对着设计死磕，不折叠、不自动化 |

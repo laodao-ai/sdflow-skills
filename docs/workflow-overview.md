@@ -59,7 +59,7 @@ flowchart TD
 
 | 阶段 | 本性 | 人的角色 | 自动化载体 |
 |---|---|---|---|
-| 一 · 生成 | **人类对话岛** —— grill 是人对着设计死磕 | 深度参与（对抗、拍术语） | `opsx:ff` 生成骨架 |
+| 一 · 生成 | **人类对话岛** —— 人对着设计死磕（分支 A 的相位 B / 分支 B 的 grill） | 深度参与（对抗、拍术语） | 分支 A `/sdflow-spec` 一次跑完；分支 B `opsx:ff` 生成骨架 |
 | 二 · 设计审 | **连续自动审 + 一次拍板** | 只在 HARD-GATE 过一份报告拍板 | `sdflow-spec-review` 编排器 |
 | 三 · 实现收尾 | **全自动跑到 merge** | 零门（异步读 hand-off） | `/sdflow-ship` gate 驱动链 |
 
@@ -244,7 +244,7 @@ flowchart LR
 
 | 黑盒 skill | 在流程里的角色 | 进（输入） | 出（产出契约） | 详解 |
 |---|---|---|---|---|
-| `opsx:ff` | 阶段一生成骨架 | 需求 + config.yaml + trigger-catalog | 四件套 + feature 分支 | （暂未展开） |
+| `opsx:ff` | 阶段一生成骨架〔**仅分支 B**；分支 A 由自制 `/sdflow-spec` 承担，非黑盒〕 | 需求 + config.yaml + trigger-catalog | 四件套 + feature 分支 | （暂未展开） |
 | gstack `autoplan` | spec-review Step1 广审 | 四件套 | findings + 双声 outside-voice（落 `gstack-review.md`） | [→](./workflow-skills/gstack-autoplan.md) |
 | gstack `/review` | code-review Step1 scope-drift/完成度 | diff `BASE..HEAD` | scope-drift + 完成度缺口 findings | [→](./workflow-skills/gstack-review.md) |
 | superpowers `writing-plans` | 阶段三 plan 生成 | design + 评审结论 | `superpowers-plan.md`（含命名空间 commit 步） | [→](./workflow-skills/superpowers-writing-plans.md) |

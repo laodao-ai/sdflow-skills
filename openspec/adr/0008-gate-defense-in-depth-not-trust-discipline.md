@@ -2,7 +2,7 @@
 
 `ship_gate` 的完成判据以 `checkpoint(task<N>-)` 任务标签为主锚。跨 change 污染（同号 task 互相计入 → 假✅）的唯一触发入口是 **stacking**（在已有 feature 分支上再 `openspec new change` 建第二个变更，使两 change 的 checkpoint 交错落进同一分支历史）。
 
-关键实证：**入口守卫拦不住 stacking 的全部路径**。`ff0-branch-guard.py` 现行三分支判定会对「在其它 feature 分支上建 change」deny 并要求先问人，但 stacking **仍然可达**——人拍板后带 `SDFLOW_FF0_ACK=1` 重跑即放行；守卫在「取不到 change 名 / 探测不到分支（detached HEAD 等） / 走非 Bash 入口 / 手工 `git`」时一律 fail-open。故 stacking 可达但非常规。
+关键实证：**入口守卫拦不住 stacking 的全部路径**。`ff0-branch-guard.py` 现行三分支判定会对「在其它 feature 分支上建 change」deny 并要求先问人，但 stacking **仍然可达**——人拍板后 `touch openspec/.ff0-ack`（一次性哨兵）再重跑即放行；守卫在「取不到 change 名 / 探测不到分支（detached HEAD 等） / 走非 Bash 入口 / 手工 `git`」时一律 fail-open。故 stacking 可达但非常规。
 
 据此确立：gate 对完成判据取**防御纵深**立场——不把"每 change 独立分支"当作可依赖的不变量，change-命名空间隔离（`checkpoint(<change>:task<N>-)`，gate 只认当前 change）作为**防御纵深层**存在，即便触发场景需要 stacking 反模式。**MUST NOT 因"入口守卫现在会拦了"而撤掉或降级该隔离**〔A-1〕。
 
@@ -29,7 +29,7 @@
 
 ### 〔A-1〕FF-0 的演进：从"只拦 main/master"到三分支判定，本 ADR 的决定为何不变
 
-本 ADR 立案时（ship-gate-hardening-2 grill 2026-07-04），FF-0 **只拦 `main`/`master` 上建 change，完全不拦 feature 分支上 stacking**。`add-sdflow-spec`（2026-07）把 FF-0 与 `ff0-branch-guard.py` 升为三分支判定：**在其它 feature 分支上建 change 会被 deny，要求先问人**（人拍板"就地继续"后带 `SDFLOW_FF0_ACK=1` 重跑即放行）。
+本 ADR 立案时（ship-gate-hardening-2 grill 2026-07-04），FF-0 **只拦 `main`/`master` 上建 change，完全不拦 feature 分支上 stacking**。`add-sdflow-spec`（2026-07）把 FF-0 与 `ff0-branch-guard.py` 升为三分支判定：**在其它 feature 分支上建 change 会被 deny，要求先问人**（人拍板"就地继续"后 `touch openspec/.ff0-ack` 再重跑即放行）。
 
 ⇒ 立案时那句实证（"FF-0 不拦 feature 分支上 stacking"）已被现行行为取代（正文已就地改写为当前形态），但**本 ADR 的选择与派生铁律全部不变**：
 

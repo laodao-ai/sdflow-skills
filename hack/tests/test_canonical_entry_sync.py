@@ -23,7 +23,7 @@
 - `WORKFLOW-GUIDE.md` 是**生成物**：与单一源的一致性由 `test_workflow_split.py` 的
   `gen_workflow_guide --check` 守；这里只补一条「重生成后阶段一段落确实带上了新入口」。
 - `ff0-branch-guard.py` 的**行为**由 `sdflow-init/tests/test_ff0_branch_guard.py` 守
-  （真跑 hook）；这里只守「规则文本与 hook 提到的是同一个逃生口口令」。
+  （真跑 hook）；这里只守「规则文本与 hook 说的是同一个逃生口机制」。
 
 【人核残余：如实登记，MUST NOT 硬造恒真锚】
 下面三项无可靠单行锚点，机械层**故意**不覆盖（登记于此即可，**不需要一条测试来给它背书**——
@@ -86,6 +86,29 @@ DOCS_CARRIERS = {
         # ⚠️ 裸词 `sdflow-spec` 是 `sdflow-spec-review` 的前缀 ⇒ chips 锚须带尖括号定界
         [("分支 A（默认）", "/sdflow-spec"),          # 阶段一卡片的角色描述
          ("chip", ">sdflow-spec<")],                  # 阶段一卡片的 skill chips
+    ),
+    # ⚠️ 同一文档包内也会自相矛盾：01/02 改了、README 的速览图没改，包内两说。
+    #    故**包内每份**呈现阶段一的载体各自上锚，不靠「同包某处提过分支 A」。
+    "docs/sdflow-fable5/README.md": (
+        REPO / "docs" / "sdflow-fable5" / "README.md",
+        [("分支 A（默认）/sdflow-spec", "分支 B explore→ff→grill")],  # 一图速览的生成节点
+    ),
+    "docs/sdflow-fable5/01-goals-and-rationale.md": (
+        REPO / "docs" / "sdflow-fable5" / "01-goals-and-rationale.md",
+        [("S0[", "分支 A · 默认"),                    # §2 全局形态图
+         ("需求明确", "分支 A（默认）", "分支 B"),      # §7 目标 vs 现状对照
+         ("生成 Spec", "分支 A（默认）", "分支 B")],
+    ),
+    "docs/sdflow-fable5/02-module-reference.md": (
+        REPO / "docs" / "sdflow-fable5" / "02-module-reference.md",
+        [("SP[", "分支 A · 默认")],                   # §7 端到端调用拓扑
+    ),
+    # 位置声明类载体：它自称「阶段一第 N 步」，分支 A 下该定位无条件成立即错
+    # （分支 A 的拷问是 `/sdflow-spec` 相位 B，前置于成文，不经本 skill）。
+    "docs/workflow-skills/grill-with-docs.md": (
+        REPO / "docs" / "workflow-skills" / "grill-with-docs.md",
+        [("人类对话岛", "分支 B 的第 3 步"),           # 文首定位
+         ("谁调它", "分支 B", "分支 A 不经本 skill")],  # §1 位置与契约表
     ),
 }
 
@@ -211,10 +234,23 @@ def test_ff0_rule_is_three_way():
 
 
 def test_ff0_rule_and_hook_agree_on_the_escape_hatch():
-    """规则文本与 hook 实现是两处载体 —— 逃生口口令必须是同一个字面量。"""
-    require(FF_CONSTRAINTS, "SDFLOW_FF0_ACK=1")
-    assert "SDFLOW_FF0_ACK=1" in HOOK.read_text(encoding="utf-8"), \
-        "hook 没实现规则文本承诺的 ack 逃生口 —— 人拍板「就地继续」这条路会走不通"
+    """规则文本与 hook 实现是两处载体 —— 逃生口必须是同一个哨兵路径。"""
+    require(FF_CONSTRAINTS, "openspec/.ff0-ack")
+    assert 'os.path.join("openspec", ".ff0-ack")' in HOOK.read_text(encoding="utf-8"), \
+        "hook 没实现规则文本承诺的哨兵逃生口 —— 人拍板「就地继续」这条路会走不通"
+
+
+def test_ff0_escape_hatch_is_not_a_command_string_passphrase():
+    """规则文本与 hook 都 MUST NOT 退回「从命令串里认口令」（基准 5：shell 语法面无界）。
+
+    这条锚的是**机制本身**而非某个字面量：口令一旦回到命令串上，「注释算不算 / 在不在
+    命令起始位置」就要解析 shell，而每堵一种形态就冒出下一种（行尾注释 → 行首注释 → …）。
+    """
+    require(FF_CONSTRAINTS, "MUST NOT 从命令串里认口令")
+    hook = HOOK.read_text(encoding="utf-8")
+    assert "MUST NOT 退回「从命令串里认口令」" in hook
+    assert "SDFLOW_FF0_ACK" not in hook, \
+        "hook 里又出现了命令串口令 —— 逃生口判据 MUST 只看哨兵文件在不在"
 
 
 # ── ⑤ claude-section.md（托管块源）：grill 条款分支化 + 归属修正 ──────────

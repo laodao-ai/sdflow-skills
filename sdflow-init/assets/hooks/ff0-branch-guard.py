@@ -11,8 +11,8 @@ workflow，但**全都殊途同归调同一条命令 `openspec new change`** 来
     `git checkout -b feat/<change>`。**这一支没有逃生口**（见下）。
   · 已在 `feat/<该 change>` → 放行（真幂等，FF-0 满足）。
   · 在【其它】feature 分支 → deny，要求先问人（从当前切出 / 回 base 切出 / 就地继续）。
-    人拍板「就地继续」后，用 `SDFLOW_FF0_ACK=1 openspec new change …` 重跑即放行。
-    ⚠️ 该 ack 是给【人】用的逃生口 —— 模型 MUST NOT 自行加上它绕过本守卫。
+    人拍板「就地继续」后，`touch <仓根>/openspec/.ff0-ack` 再重跑即放行（一次性哨兵，
+    守卫读到即删）。⚠️ 该 ack 是给【人】用的逃生口 —— 模型 MUST NOT 自行 touch 它绕过本守卫。
   · 任何解析/探测异常、或判不出当前在哪个分支（detached HEAD 等）→ 放行
     （fail-open，绝不因守卫自身故障阻断正常工作）。
 
@@ -22,12 +22,19 @@ workflow，但**全都殊途同归调同一条命令 `openspec new change`** 来
 而分支③**有** ack 逃生口、分支①**没有** ⇒ misclassify 直接等于给「在默认分支上建
 change」开了后门。故默认分支须探测（best-effort，取不到就退回 {main, master}）。
 
-【为什么 ack 必须是 env 赋值前缀，而不是「命令里出现过」】
-deny 文案把 `SDFLOW_FF0_ACK=1` 原样回传给模型 ⇒ 若只要命令串里出现该字面量即放行，
-模型把它写进一句注释（`… # note: SDFLOW_FF0_ACK=1 was discussed`）就绕过了，
-「ack 只能由人决定」退化成一个零门槛的字符串。要求它**真的作为 env 赋值前缀**传给那条
-`openspec` 命令，至少保证它是一次**有意的调用形态**，而不是顺手写下的文字。
-认不出 ack ⇒ 分支③的 deny 照常成立（deny 文案里就写着该敲的确切形态），
+【逃生口 = 一次性哨兵文件，MUST NOT 从命令串里认口令】（基准 5：无界语法面别手搓）
+判据是「仓根下 `openspec/.ff0-ack` 在不在」——一个**有界**的语义面（存在/不存在），
+守卫读到即 `os.remove` 消费掉，故**放行 ⇔ 成功删掉它**：删不掉就不放行，令牌不会残留成后门。
+🔴 MUST NOT 退回「从命令串里认口令」：deny 文案必然把逃生口原样回传给模型，判据一旦落在命令串上，
+「这段文字是命令还是注释 / 在不在命令起始位置」就是**解析 shell**——而 shell 的语法面无界，
+每堵一种形态就会冒出下一种（行尾注释 → 行首注释 → …），补丁循环不收敛。
+
+**信任级别（如实写明，MUST NOT 声称它是安全边界）**：哨兵和口令一样**分不出人和模型**——
+模型同样能 `touch` 它。它买到的只有两件事：①「顺手引用一次 deny 文案就绕过」变成
+**一次独立的、可在 transcript 里审计的有意动作**；② 消灭了那个无界解析面。
+真正的防线是纪律 + review，不是本 hook。
+
+认不出 ack ⇒ 分支③的 deny 照常成立（deny 文案里就写着该敲的确切命令），
 不是 fail-open 的适用场景 —— fail-open 管的是「探测不出上下文」，不是「人没拍板」。
 
 【为什么「取不到 change 名」也放行】（基准 5：无界语法面别手搓）
@@ -39,6 +46,7 @@ shell 命令行的语法面是无界的（管道、环境变量、别名、嵌�
           （通用功能，跨项目生效；非 openspec 项目里命令不匹配即放行）。
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -60,14 +68,9 @@ CHANGE_NAME_RE = re.compile(
 # 带 `$`/反引号/通配符的 token 是 shell 待展开的东西，本守卫不展开、也不猜。
 CHANGE_NAME_OK_RE = re.compile(r"\A[A-Za-z0-9._-]+\Z")
 
-# 人拍板「就地继续」后的逃生口，**只放行「其它 feature 分支」这一支**（分支③）。
-# 判据 = 该口令真的作为 env 赋值前缀挂在被拦的那条 openspec 命令上（可再跟别的赋值）。
-# 只是在命令里被提及（注释 / echo / `&&` 串联）不算 —— 见模块 docstring。
-ACK_RE = re.compile(
-    r"\bSDFLOW_FF0_ACK=1\s+"                      # 口令本身
-    r"(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"         # 其后可再跟若干 env 赋值
-    r"(?:[^\s;|&]*/)?openspec\s+(?:new\s+change|change\s+new)\b"  # 紧接被拦的命令
-)
+# 人拍板「就地继续」后的逃生口：仓根下的一次性哨兵文件，**只放行「其它 feature 分支」这一支**
+# （分支③）。判据是「文件在不在」，与命令串无关 —— 见模块 docstring。
+ACK_FILE = os.path.join("openspec", ".ff0-ack")
 
 
 def _git(cwd: str, *args: str) -> str:
@@ -111,6 +114,25 @@ def default_branch(cwd: str) -> str:
     if head.startswith("origin/") and len(head) > len("origin/"):
         return head[len("origin/"):]
     return _git(cwd, "config", "--get", "init.defaultBranch")
+
+
+def repo_root(cwd: str) -> str:
+    """cwd 所在 git 工作树的根；取不到返回空串。哨兵锚仓根，不锚 cwd（人可能在子目录里跑）。"""
+    return _git(cwd, "rev-parse", "--show-toplevel")
+
+
+def consume_ack(root: str) -> bool:
+    """一次性哨兵：存在即**消费**（删除）并返回 True；不存在 / 删不掉一律 False。
+
+    「放行 ⇔ 成功删掉」是本函数的全部语义 —— 删不掉就不放行，令牌不会因残留而放行第二次。
+    """
+    if not root:
+        return False
+    try:
+        os.remove(os.path.join(root, ACK_FILE))
+    except OSError:  # 不存在 / 是目录 / 无权限 —— 一律「没拍板」
+        return False
+    return True
 
 
 def protected_branches(cwd: str) -> set:
@@ -176,9 +198,11 @@ def main() -> None:
         sys.exit(0)
 
     # 分支③：在其它 feature 分支 → deny，要求先问人（stacking 不是默认动作）。
-    if ACK_RE.search(command):
-        sys.exit(0)  # 人已拍板「就地继续」
+    root = repo_root(cwd)
+    if consume_ack(root):
+        sys.exit(0)  # 人已拍板「就地继续」（哨兵已被消费掉，只对这一次生效）
 
+    token = os.path.join(root, ACK_FILE) if root else ACK_FILE
     deny(
         f"FF-0 守卫：当前在 feature 分支 `{branch}`，而你要创建的是另一个变更 `{name}`。\n"
         "MUST NOT 因「已经在 feature 分支上」就直接建——那会把两个 change 的工件与 "
@@ -186,9 +210,10 @@ def main() -> None:
         "先停下问人，三选一：\n"
         f"  a) 从当前分支切出：git checkout -b feat/{name}\n"
         f"  b) 回 base 再切出：git checkout <base> && git checkout -b feat/{name}\n"
-        "  c) 就地继续（人明确拍板后，用 "
-        f"`SDFLOW_FF0_ACK=1 openspec new change {name}` 重跑）\n"
-        "⚠️ c) 的 ack 只能由人决定 —— 模型 MUST NOT 自行加上它绕过本守卫。"
+        "  c) 就地继续 —— 人明确拍板后，由**人**敲这一条：\n"
+        f"       touch {token} && openspec new change {name}\n"
+        "     （该哨兵用后即焚：守卫读到就删，只对下一次调用生效）\n"
+        "⚠️ c) 只能由人决定 —— 模型 MUST NOT 自行 touch 哨兵绕过本守卫。"
     )
 
 

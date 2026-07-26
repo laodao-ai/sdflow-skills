@@ -24,3 +24,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 /openspec/issues/.recorder.lock
+
+# FF-0 守卫的一次性 ack 哨兵（人 touch、hook 读到即删）——本地令牌，不该入库
+/openspec/.ff0-ack
