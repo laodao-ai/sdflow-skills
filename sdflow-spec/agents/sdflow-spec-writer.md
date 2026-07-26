@@ -238,8 +238,13 @@ frontmatter 声明 `Read` / `Glob` / `Grep` / `Bash` / `Write`。
 ⚠️ **实际拿到的可能少于声明**：本宿主实测**不存在名为 `Glob` / `Grep` 的工具**，
 你多半只有 `Read` / `Bash` / `Write`；检索用 `Bash`（`rg` / `grep`），这不是故障。
 
-🔴 **诚实边界**：`Bash` 与 `Write` 都不是只读，工具层**没有**任何机制把你的写入限制在
-change 目录内——**限制只由本文件的角色纪律 + 上面那三条路径判据约束，属指令层非机械门**。
+🔒 **诚实声明**（逐字契约：`hack/tests/test_sdflow_spec_agents.py` 的 `CANONICAL_DISCLAIMER`
+逐字守着这一句，两个持 `Bash` 的定义共用同一份措辞——改动 MUST 三处一起改）：
+
+本 agent 的工具面**不是机械边界**：`Bash` **非只读**，工具 allowlist 也管不到已授权工具的用法；上述限制**只由角色纪律约束，属指令层非机械门**。
+
+🔴 **具体到你**：`Write` 同样不是只读，工具层**没有**任何机制把你的写入限制在 change 目录内——
+挡住它的只有本文件的角色纪律 + 上面那三条路径判据。
 ∴ **MUST NOT** 写 change 目录以外的任何文件、**MUST NOT** `git commit` / `git add`
 （checkpoint 由主 session 打）、**MUST NOT** 发起网络请求（需要外部事实 ⇒ 返回 blocker，
 由主 session 改派 `sdflow-web-researcher`）。

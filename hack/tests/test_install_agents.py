@@ -153,9 +153,15 @@ def test_a_link_from_another_checkout_of_this_repo_is_taken_over(fake_home, tmp_
 def test_dangling_link_of_a_deleted_source_is_cleaned(fake_home, tmp_path):
     """③ 源已删 ⇒ 悬空软链被清；**有效链保留**（别把还活着的一起扫了）。
 
-    第三格（**跨 checkout 的悬空链**）守孤儿判据与接管判据**同宽**：清理判据若比接管判据窄，
+    第三格（**跨 checkout 的悬空链**）守清理判据不比接管判据**窄**：判据若只认当前 checkout，
     「指向另一 checkout、且源已删」的链就永远留着 —— 既不被接管、也不被清理，
     正是名册裂脑的另一半。
+
+    🔴 **两条判据在「名字」这一维上必然不同宽，这是设计**：接管只对 `$src_dir/*.md` 里现存的名字
+    （循环源就是它），清理必须覆盖**已从本仓删掉的名字**——那正是「孤儿」的定义。
+    第一格的 `sdflow-gone-agent.md` 就不在 `$src_dir` 里；给清理加上「名字 ∈ `$src_dir`」的
+    限定，这一格当场红（实测），即孤儿清理的主用途被击穿。
+    第四、五格把这条不同宽的**代价与边界**一起钉死（见各自的注释）。
     """
     dest = _agents_dir(fake_home)
     dest.mkdir(parents=True)
@@ -165,7 +171,19 @@ def test_dangling_link_of_a_deleted_source_is_cleaned(fake_home, tmp_path):
     os.symlink(str(tmp_path / "sdflow-skills-runtime" / "sdflow-spec" / "agents"
                    / "sdflow-gone-from-other-checkout.md"), other_gone)
     foreign_dangling = dest / "someone-elses.md"
-    os.symlink("/nonexistent/elsewhere.md", foreign_dangling)     # 不是本仓的，别碰
+    os.symlink("/nonexistent/elsewhere.md", foreign_dangling)     # 不是本仓的路径形状，别碰
+    # 第五格 = **承认的代价**：路径形状是本仓专有布局、但名字从不属于本仓的**悬空**链，
+    # 会被一并清掉。钉在这里是为了让这条边界**可见且是有意的** —— 想「收严」的人会先看到
+    # 第一格（收严即红）。只删悬空链 ⇒ 目标已不存在 ⇒ 零数据丢失。
+    shaped_dangling = dest / "their-own-agent.md"
+    os.symlink(str(tmp_path / "someone-else-repo" / "sdflow-spec" / "agents"
+                   / "their-own-agent.md"), shaped_dangling)
+    # 第六格 = 边界的另一侧：同样的路径形状但链**有效** ⇒ MUST 原样保留（不是悬空就不碰）。
+    live_foreign_dir = tmp_path / "someone-else-repo" / "sdflow-spec" / "agents"
+    live_foreign_dir.mkdir(parents=True)
+    (live_foreign_dir / "their-live-agent.md").write_text("third party\n", encoding="utf-8")
+    live_foreign = dest / "their-live-agent.md"
+    os.symlink(str(live_foreign_dir / "their-live-agent.md"), live_foreign)
 
     r = _run_setup(fake_home)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -175,6 +193,10 @@ def test_dangling_link_of_a_deleted_source_is_cleaned(fake_home, tmp_path):
     assert not other_gone.is_symlink() and not other_gone.exists(), \
         "跨 checkout 的悬空孤儿链没被清 —— 孤儿判据比接管判据窄"
     assert foreign_dangling.is_symlink(), "清了别人的悬空链 —— 守卫太宽"
+    assert not shaped_dangling.exists() and not shaped_dangling.is_symlink(), \
+        "承认的代价变了：本仓路径形状的悬空链不再被清 —— 要么代价被改小了，要么孤儿清理失灵"
+    assert live_foreign.is_symlink() and live_foreign.is_file(), \
+        "清了一条**有效**的第三方链 —— 那是真实数据丢失，MUST NOT"
     for name in _expected_names():
         assert (dest / name).is_file(), f"{name} 被孤儿清理误伤"
 

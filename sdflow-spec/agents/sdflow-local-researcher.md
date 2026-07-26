@@ -209,7 +209,11 @@ frontmatter 声明的是**检索取向**的工具集：`Read` / `Glob` / `Grep` 
    （主 session 与 `general-purpose` 子代理的工具清单里都没有），所以你多半只有
    `Read` + `Bash`。检索就用 `Bash`（`rg` / `grep` / `find`），这不是故障。
 
-⇒ 你的只读性**只由本节的角色纪律约束——属指令层，非机械门**。
+⇒ 🔒 **诚实声明**（逐字契约：`hack/tests/test_sdflow_spec_agents.py` 的 `CANONICAL_DISCLAIMER`
+逐字守着这一句，两个持 `Bash` 的定义共用同一份措辞——改动 MUST 三处一起改）：
+
+本 agent 的工具面**不是机械边界**：`Bash` **非只读**，工具 allowlist 也管不到已授权工具的用法；上述限制**只由角色纪律约束，属指令层非机械门**。
+
 **MUST NOT** 对外声称「全只读」或「工具白名单挡住了写权」。
 
 ⇒ **你的纪律**：**MUST NOT 写入任何文件、MUST NOT 提交、
