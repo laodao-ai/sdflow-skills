@@ -173,6 +173,28 @@ def test_stale_sentinel_expires_and_is_swept(repo):
         "过期哨兵未被顺手清掉 —— 它会一直留在盘上（且可能被 git add -A 提交入库）"
 
 
+@pytest.mark.parametrize("skew_seconds, label", [
+    (300, "略超窗（时钟回拨 5 分钟）"),
+    (365 * 24 * 3600, "远未来（从备份恢复保留 mtime）"),
+])
+def test_future_mtime_sentinel_expires_and_is_swept(repo, skew_seconds, label):
+    """**未来** mtime MUST NOT 恒新鲜 —— 时效判据必须是双边的。
+
+    `(now - mtime) <= TTL` 是单边的：mtime 落在未来时该式恒真 ⇒ 哨兵永不过期，
+    「10 分钟窗口」退回常驻后门。命中场景真实存在且不需要恶意：系统时钟回拨、
+    从备份/归档恢复保留原 mtime、跨机器 rsync -t 带回一个更快的钟。
+    判据 = `0 <= (now - mtime) <= TTL`。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    ack(repo)
+    future = time.time() + skew_seconds
+    os.utime(repo / ACK_REL, (future, future))
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert denied, f"未来 mtime（{label}）的哨兵仍然放行 —— 时效是单边比较，窗口形同虚设"
+    assert not (repo / ACK_REL).exists(), \
+        f"未来 mtime（{label}）的哨兵未被顺手清掉 —— 它会一直留在盘上放行每一次调用"
+
+
 def test_sentinel_found_from_repo_subdirectory(repo):
     """人可能在子目录里跑命令 —— 哨兵锚仓根，不锚 cwd。"""
     _git(repo, "checkout", "-qb", "feat/add-bar")

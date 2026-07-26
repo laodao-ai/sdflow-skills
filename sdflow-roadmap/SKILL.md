@@ -391,7 +391,7 @@ map.md 顶部（Destination 之前）**SHALL** 留一行去向说明，例如：
 
 每个文件使用 `references/` 下对应的模板骨架。读对应模板，按项目实际内容填充。
 
-roadmap 的 wayfinder 收敛后**直写**三件套、**不经** `opsx:ff`——「wayfinder→ff 衔接契约」（`ff-generation-constraints.md`）属 change 生产路径，与本 skill 的直写路径互斥不叠加。
+roadmap 的 wayfinder 收敛后**直写**三件套、**不经 change 生产路径**（分支 A `/sdflow-spec` · 分支 B `opsx:ff`，两条都不经）——「wayfinder→ff 衔接契约」（`ff-generation-constraints.md`）属 change 生产路径，与本 skill 的直写路径互斥不叠加。
 
 | 文件 | 内容核心 | 模板 |
 |---|---|---|
@@ -517,10 +517,12 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 roadmap 完成只是起点。后续每个阶段通过独立的 OpenSpec 变更推进：
 
 ```
-/opsx:new implement-{roadmap-name}-p1    # 阶段 1 实施
-/opsx:new implement-{roadmap-name}-p2    # 阶段 2 实施
+/sdflow-spec implement-{roadmap-name}-p1    # 阶段 1 实施〔分支 A · 默认〕
+/sdflow-spec implement-{roadmap-name}-p2    # 阶段 2 实施
 ...
 ```
+
+未装 `sdflow-spec`、或命中三种例外（需 wayfinder 跨会话铺图 / 用户明确要求分步 / 环境不可用）⇒ 分支 B 沿用旧入口 `/opsx:new implement-{roadmap-name}-p<N>`〔分支 B〕。入口选择规则的单一源 = `workflow/generation-process.md` §四，本节不复述。
 
 命名 **MUST** 用 `-p<N>`（非 `-phase-N`）——与 `sdflow-done` 回填解析器 `PREFIX_RE`（`implement-{roadmap}-p<N>[-…]`）及既有实践（如 `mlh-p4`）一致，用错命名回填草稿将 `NO_ASSOCIATION`。
 

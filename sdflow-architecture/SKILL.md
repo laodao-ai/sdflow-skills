@@ -4,8 +4,9 @@ description: >
   架构设计（SAD）编排器——为**一个系统**产出/维护「系统架构设计文档」（SAD）：事实三问采集 → 子系统划分
   与 contract 定义 → 挂产物拍板 → 冷走查 + 人门 → skeleton-ready 交棒骨架 change。本 skill 管**空间轴**
   （一个系统当下怎么切成子系统、子系统间 contract 怎么定）。触发词面：「设计架构 / 划分子系统 / 定 contract /
-  做一份 SAD / 系统架构设计 / 这个系统该怎么拆模块 / 架构评审」。**不触发**：单次 change 的 spec/design（走
-  /opsx:ff）、纯代码实现、bug 修复。**过程轴（搭开发/测试环境 · 定测试策略 · 配 CI）→ 用 /sdflow-devenv**（本 skill 只定空间结构，不建环境）。
+  做一份 SAD / 系统架构设计 / 这个系统该怎么拆模块 / 架构评审」。
+  **不触发**：单次 change 的 spec/design（走 `/sdflow-spec`〔分支 A · 默认〕，未装则 `opsx:ff`〔分支 B〕）、纯代码实现、bug 修复。
+  **过程轴（搭开发/测试环境 · 定测试策略 · 配 CI）→ 用 /sdflow-devenv**（本 skill 只定空间结构，不建环境）。
   **时间轴规划（分阶段 roadmap / 阶段排期 / 里程碑）→ 用 /sdflow-roadmap**
   （本 skill 不排期，只定一个系统当下的空间结构）。**前置条件**：消费仓需已 `sdflow-init`——无 `openspec/`
   布局时首触即 preflight fail-closed 并指引先跑 /sdflow-init。Trigger with /sdflow-architecture。

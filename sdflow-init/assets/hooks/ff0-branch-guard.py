@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """FF-0 branch guard —— PreToolUse hook（硬拦在受保护分支上创建 OpenSpec 变更）。
 
-为什么挂在 CLI 这层：/opsx:new、/opsx:propose、/opsx:ff、/opsx:onboard 是各自独立的
-workflow，但**全都殊途同归调同一条命令 `openspec new change`** 来 scaffold 变更。
-故只需拦这一条 Bash 命令，即覆盖所有「创建变更」入口，无需逐个 skill 拦。
+为什么挂在 CLI 这层：/opsx:new、/opsx:propose、/opsx:ff、/opsx:onboard、/sdflow-spec
+（分支 A，相位 B ③ 建 change 目录）是各自独立的 workflow，但**全都殊途同归调同一条命令
+`openspec new change`** 来 scaffold 变更。故只需拦这一条 Bash 命令，即覆盖所有「创建变更」
+入口，无需逐个 skill 拦 —— 分支 A 与分支 B 同样受本守卫管辖，没有哪条入口能绕过。
 
 行为（FF-0 三分支判定，与 workflow/ff-generation-constraints.md §FF-0 同一条规则）：
   · 仅对 Bash 工具、且命令实际执行 `openspec new change` 时介入。
@@ -39,7 +40,9 @@ PreToolUse 在命令**执行前**判定 ⇒ 判定发生时 touch 还没跑、�
 人若在**自己的终端**里敲 `openspec new change`（本 hook 根本不触发），哨兵**永不被消费**，
 会原样留在盘上，下一次任意「其它 feature 分支」调用就被它静默放行一次。故哨兵带
 `ACK_TTL_SECONDS` 的**有界时效**：超窗即视为失效**并顺手删除**（自愈残留），把「常驻绕过口」
-压成「一个 10 分钟的窗口」。窗口内的残留仍是真洞，本守卫 MUST NOT 声称堵死它（见信任级别）。
+压成一个短窗口。窗口内的残留仍是真洞，本守卫 MUST NOT 声称堵死它（见信任级别）。
+⚠️ 窗口长度**只在 `ACK_TTL_SECONDS` 一处**给出，deny 文案按 `// 60` 自报分钟数；
+散文（含本 docstring）MUST NOT 手抄一份数字——那是与常量分叉、改常量不会红的第二份口径。
 配套：`openspec/.ff0-ack` 已进 canonical runtime gitignore（`assets/snippets/runtime-gitignore.txt`），
 防 `checkpoint-commit.sh` 的无条件 `git add -A` 把残留令牌提交入库、让每个 clone 都带一个。
 
@@ -87,7 +90,8 @@ CHANGE_NAME_OK_RE = re.compile(r"\A[A-Za-z0-9._-]+\Z")
 # （分支③）。判据是「文件在不在」，与命令串无关 —— 见模块 docstring。
 ACK_FILE = os.path.join("openspec", ".ff0-ack")
 
-# 哨兵的**有界时效**（秒）。人 touch 完立刻重跑命令是秒级动作；10 分钟已是极宽裕的上界。
+# 哨兵的**有界时效**（秒），**全仓唯一的窗口长度出口**（deny 文案按 `// 60` 自报分钟数）。
+# 人 touch 完立刻重跑命令是秒级动作，故这里取的是一个极宽裕的上界。
 # 它买到的是「残留令牌从常驻变成一个短窗口」——见模块 docstring「残留令牌是真实的绕过口」。
 ACK_TTL_SECONDS = 600
 
@@ -146,6 +150,11 @@ def consume_ack(root: str) -> bool:
     三种情况返回 False：不存在 / 删不掉（是目录、无权限）/ **已过期**。
     ⚠️ 过期的哨兵**照样删掉**——残留令牌本身就是绕过口（人在自己终端跑 openspec 时哨兵
     永不被消费），顺手清掉它比留着强；只是这一次不放行。
+
+    ⚠️ 时效比较 MUST 是**双边**的：`(now - mtime) <= TTL` 单边式在 mtime 落在**未来**时
+    恒真 ⇒ 哨兵永不过期，窗口退回常驻后门。未来 mtime 不需要恶意就会出现（系统时钟回拨、
+    从备份/归档恢复保留原 mtime、`rsync -t` 从一台钟更快的机器带回）。故判据是
+    `0 <= age <= TTL`：未来 mtime 与超窗一样，视为失效并顺手删除。
     """
     if not root:
         return False
@@ -154,7 +163,8 @@ def consume_ack(root: str) -> bool:
         mtime = os.stat(path).st_mtime
     except OSError:  # 不存在 / 取不到 —— 「没拍板」
         return False
-    fresh = (time.time() - mtime) <= ACK_TTL_SECONDS
+    age = time.time() - mtime
+    fresh = 0 <= age <= ACK_TTL_SECONDS
     try:
         os.remove(path)
     except OSError:  # 是目录 / 无权限 —— 删不掉就不放行（否则它不再是一次性的）

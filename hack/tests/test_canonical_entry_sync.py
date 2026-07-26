@@ -137,12 +137,41 @@ DOCS_CARRIERS = {
          ("没装 `sdflow-spec` 的项目沿用旧三步", "opsx:explore"),  # 分支 B 注
          ("`sdflow-spec`", "阶段一·产 spec 单一入口")],       # Skills 列表行
     ),
-    # ⚠️ SKILL.md 也会呈现下游入口：architecture 的交棒行原写死 `下游：/opsx:ff <名>`
-    #    —— 分支 A 下无条件成立即错（与 grill-with-docs 的位置声明同形态）。
+    # ⚠️⚠️⚠️ **载体范畴 = 「任何呈现『怎么开一个 change / 阶段一入口』的行」，不限于 `docs/`。**
+    #    连续三轮冷验都是同一个失效：**期望集的范畴取窄**（先只圈 docs/，再补 README，
+    #    再补 architecture 一份 SKILL.md）。fix4 起按上述范畴把**全仓 tracked 的 SKILL.md
+    #    + docs/** 一次扫全（`grep -rnE 'opsx:(ff|new|propose)|openspec new change'`，不加
+    #    `--include`），逐处「改掉 + 上锚」或在 fix4 报告里登记不改的理由。
+    #    扫出的 **指示性**载体（告诉读者去敲哪条命令开 change）全部在下面上锚；
+    #    **描述性**引用（历史来源标注、粒度度量、hook 覆盖面、否定式排除）登记在报告里不改。
     "sdflow-architecture/SKILL.md": (
         REPO / "sdflow-architecture" / "SKILL.md",
-        [("skeleton-ready", "/sdflow-spec", "分支 A · 默认")],  # §5.2 对话收尾行
+        [("skeleton-ready", "/sdflow-spec", "分支 A · 默认"),   # §5.2 对话收尾行
+         # frontmatter `description` 的「不触发」清单原写死「单次 change 的 spec/design（走 /opsx:ff）」
+         # —— 它是**指路行**，分支 A 下无条件成立即错。
+         ("单次 change 的 spec/design", "/sdflow-spec`〔分支 A · 默认〕", "`opsx:ff`〔分支 B〕")],
     ),
+    # ⚠️ roadmap 的「下游：阶段实施」交棒块与 architecture §5.2 **同形态、同范畴**：
+    #    都在 SKILL.md 里给下游 change 的创建命令。原写死 `/opsx:new`（分支 B 入口，
+    #    见 docs/workflow-map.md 阶段表 / workflow-map.html STAGE 1）。
+    "sdflow-roadmap/SKILL.md": (
+        REPO / "sdflow-roadmap" / "SKILL.md",
+        [("/sdflow-spec implement-", "〔分支 A · 默认〕"),      # 下游交棒块 · 分支 A
+         ("/opsx:new implement-", "〔分支 B〕"),                # 下游交棒块 · 分支 B
+         # 「直写不经 change 生产路径」原只否定 `opsx:ff` —— 分支 A 下该否定不完整，
+         # 读者会问「那经 /sdflow-spec 吗」。两分支都要点名。
+         ("不经 change 生产路径", "分支 A `/sdflow-spec`", "分支 B `opsx:ff`")],
+    ),
+}
+
+# FF-0 hook 拦的是 `openspec new change` 这一条 CLI —— 三处载体各抄了一份「哪些入口殊途同归
+# 调它」的**入口全集**清单。本 change 新增的 `/sdflow-spec` 相位 B ③ 同样调它
+# （`sdflow-spec/SKILL.md` 的「③ 建 change 目录」），三处清单漏它 ⇒ 人会读成「分支 A 不过 FF-0」，
+# 与 `docs/workflow-overview.md`「相位 B **起手**即过 FF-0 三分支判定 + `openspec new change`」矛盾。
+FF0_ROSTER_CARRIERS = {
+    "ff0-branch-guard.py": HOOK,
+    "ff-generation-constraints.md": FF_CONSTRAINTS,
+    "sdflow-init/SKILL.md": REPO / "sdflow-init" / "SKILL.md",
 }
 
 
@@ -311,6 +340,29 @@ def test_ff0_lingering_sentinel_is_declared_and_time_bounded():
     require(FF_CONSTRAINTS, "残留令牌是真实的绕过口")
 
 
+def test_ttl_window_has_a_single_source():
+    """哨兵时效的**分钟数只有一个源** = hook 的 `ACK_TTL_SECONDS`（deny 文案 `//60` 自报）。
+
+    冷验变异 X1 实证：把 `ACK_TTL_SECONDS` 600→300，hook 行为测试与本文件**全绿**——
+    三处散文（hook docstring / 常量注释 / canonical 规则文本）各手抄了一份「10 分钟」，
+    与常量分叉无人守。修法取本仓既有手法「**删掉数字、让脚本自己报**」：散文一律不写死
+    分钟数，唯一的数字出口是 deny 文案里的 `{ACK_TTL_SECONDS // 60}`。
+    故本用例的判据是**散文里不许再出现字面分钟数**（正锚会随数字改动而失鲜，负锚不会）。
+    """
+    minutes = re.compile(r"\d+\s*分钟")
+    hook = HOOK.read_text(encoding="utf-8")
+    assert "ACK_TTL_SECONDS // 60" in hook, \
+        "deny 文案不再从常量算分钟数 —— 数字失去唯一出口，散文必然重新手抄一份"
+    for label, blob in (("ff0-branch-guard.py", hook),
+                        ("ff-generation-constraints.md",
+                         FF_CONSTRAINTS.read_text(encoding="utf-8"))):
+        hits = [ln.strip() for ln in blob.splitlines() if minutes.search(ln)]
+        assert not hits, (
+            f"{label} 的散文里写死了分钟数 {hits!r} —— 它与 `ACK_TTL_SECONDS` 是两份口径，"
+            "改常量不会红。让 deny 文案（`ACK_TTL_SECONDS // 60`）自己报，散文只说「有界时效」"
+        )
+
+
 def test_ff0_sentinel_is_ignored_in_consumer_repos():
     """哨兵 MUST 进 canonical runtime gitignore —— hook 是**全局**安装、拦所有项目。
 
@@ -434,6 +486,20 @@ def test_human_side_and_canonical_use_the_same_wording():
 
 # ── ⑨ docs/ 下呈现「阶段一流程」的人读载体：不许只画旧三步 ────────────────
 #     它们不是规则真相源，但人从它们读到入口 —— 只写 explore→ff→grill 就是 D10 的分叉形态。
+
+def test_ff0_entry_roster_includes_branch_a():
+    """三处「哪些入口殊途同归调 `openspec new change`」的清单 MUST 含分支 A 的 `/sdflow-spec`。
+
+    漏它不是措辞问题：清单的**用途**就是回答「我这条路会不会被 FF-0 拦」。只列四个 opsx
+    入口 ⇒ 读者读成「走 `/sdflow-spec` 不过 FF-0」，而 `sdflow-spec` 相位 B ③ 就是
+    `openspec new change "<name>"`，照样被拦。
+    """
+    for name, path in FF0_ROSTER_CARRIERS.items():
+        assert has_line(path, "opsx:onboard", "sdflow-spec"), (
+            f"{name} 的「共用 `openspec new change` 入口」清单里没有 `/sdflow-spec` —— "
+            "分支 A 同样撞 FF-0 守卫（相位 B ③ 建 change 目录），清单漏它即误导"
+        )
+
 
 def test_docs_stage_one_carriers_present_branch_a():
     for name, (path, anchors) in DOCS_CARRIERS.items():

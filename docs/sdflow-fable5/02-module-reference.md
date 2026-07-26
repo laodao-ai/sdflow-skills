@@ -2,7 +2,8 @@
 
 > **本文是模块级参考**：仓库解剖 → skill 总表 → 四大编排器详解 → 规则 bundle → 数据类六件套 → 调用拓扑。
 > 与既有文档分工：[workflow-overview.md](../workflow-overview.md) 讲阶段叙事、[workflow-map.md](../workflow-map.md) 讲字段×判据速查；本文讲**每个模块内部怎么设计、怎么实现**，并覆盖旧详解未收录的模块（ship / roadmap / init / recorder 三件套 / retro / maintain / embedded-test-sop）。
-> 数据基线：git HEAD `fc1b98b`，全部论断接地自源码（关键处附 file:line）。
+> 数据基线：**混基线，如实登记**——大部分数字取自 git HEAD `fc1b98b` 快照；`add-sdflow-spec` 触及的两片已按**当前 HEAD** 重取：① 阶段一入口（分支 A `/sdflow-spec` / 分支 B 旧三步）；② recorder skill 名册合并后的 `sdflow-issues` 一行（SKILL.md 行数 / 脚本行数 / 用例数）。全部论断接地自源码（关键处附 file:line）。
+> 本文是**活文档**（非冻结快照）：数字与实况漂了以实况为准，重取用 `wc -l` / `pytest <skill>/tests/` 实测，勿凭本文回写代码。
 
 ---
 
