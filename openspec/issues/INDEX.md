@@ -47,6 +47,32 @@
 | T91 | todo | PROPOSED | done-roadmap-writeback |
 | T92 | todo | PROPOSED | done-roadmap-writeback |
 
+### 批次：enable-codex-background-outside-voice
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| B21 | bug | PROPOSED | enable-codex-background-outside-voice |
+| B22 | bug | PROPOSED | enable-codex-background-outside-voice |
+| T212 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T213 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T214 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T215 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T216 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T217 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T218 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T219 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T220 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T221 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T222 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T223 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T224 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T225 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T226 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T227 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T228 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T229 | todo | PROPOSED | enable-codex-background-outside-voice |
+| T230 | todo | PROPOSED | enable-codex-background-outside-voice |
+
 ### 批次：fix-design-gate-freshness-proxy
 
 | ID | Pool | Status | 关联Change |

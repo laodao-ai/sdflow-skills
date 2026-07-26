@@ -200,70 +200,81 @@ Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`
 
 ### Requirement: outside-voice exec 的 dispatch 模式宿主自适应
 
-编排评审 SKILL 调用 `outside-voice.sh exec` 的 **dispatch 模式 SHALL 按 `$SDFLOW_HOST` 自适应**（读 Step0 已解析值、MUST NOT 重判宿主，ADR-9 同源），使跨模型 voice 在真实评审负载下不被外层超时杀：
+**Requirement ID: HAE-08.** 编排评审 SKILL 调用 outside voice 的 **dispatch 模式 SHALL 按 `$SDFLOW_HOST` 自适应**（读 Step0 已解析值、MUST NOT 重判宿主，ADR-9 同源），使两宿主的跨模型 voice 均可离开同步关键路径并在真实评审负载下跑到终态：
 
-- **`$SDFLOW_HOST=claude` ∧ 后台能力自探通过 ∧ 主 session 已确证**：SHALL 将 voice exec 派为 **off-critical-path 后台执行**（harness `run_in_background`；三个条件缺一即走 sync 分支），dispatch 秒返、主 session 继续其余评审工作，综合阶段（Step3）以**通知驱动 barrier** collect（完成推送异步到达即暂存，非轮询）；voice SHALL 得以跑到完成，MUST NOT 被外层 Bash 超时杀。**内层 `--timeout` 天花板仅此 async 分支** SHALL 由 sync 默认 300s 调大（config 默认 900s、caller flag、脚本不改；spike 证后台跨 Bash 外层 600000ms 上限可达）——**Codex 同步分支与 claude 自探失败降级同步分支保留 sync 300s 天花板 / 外层 ≥330s**，始终外层 ≥ 内层+30s。
-- **`$SDFLOW_HOST=codex`**：SHALL 保持**同步执行**（外层超时 ≥330s）——Codex 宿主下后台进程在 shell 命令返回时被 sandbox 域回收，off-critical-path 架构性不可行；超时按既有语义降级。
+- **`$SDFLOW_HOST=claude` ∧ harness 后台能力自探通过 ∧ 主 session 已确证**：SHALL 继续把 `outside-voice.sh exec` 通过 harness `run_in_background` 派出，dispatch 秒返，Step3 用既有完成通知 barrier collect。
+- **`$SDFLOW_HOST=codex` ∧ Claude 2.1.169+ background-exec preflight ready**：SHALL 通过 `outside-voice-background-job` helper 调用本机验证过的 research-preview `claude --bg --exec` 执行形态，由 Claude per-user supervisor 托管现有 `outside-voice.sh exec`；dispatch 秒返，Step3 从 terminal sidecar await/collect。preflight SHALL 同时验证已安装 helper/data capability manifest 与受支持平台；真实 dispatch 是最终能力探针。**[grill-amendment] [spec-review-amendment]**
+- 两条 async 路径的内层 timeout **SHALL** 使用 `outside-voice.async-timeout-seconds`（合法范围 1..3600，默认 900）。Claude-host harness 能力不可用时可保留 sync 300 秒降级；Codex-host background-exec 不可用时 **SHALL** 立即同族 fallback，MUST NOT 再走已知 efficacy=0 的同步 Claude 300 秒路径。**[grill-amendment] 该 Codex-host 快速降级是已拍板的兼容边界，不得以“尽力兼容旧版”为由恢复同步分支。**
 
-#### Scenario: Claude 宿主 voice 跑到完成、efficacy 非零
-- **WHEN** `$SDFLOW_HOST=claude` 且一次真实评审的 voice 推理时长 > 外层同步超时窗口
-- **THEN** voice 经后台执行跑到完成，锚行记 `reason_code="ok"`（跨模型 findings 进合并池），**而非** `reason_code="timeout"` 降级同族
+#### Scenario: Claude 宿主既有 async 行为保持
+- **WHEN** `$SDFLOW_HOST=claude` 且 harness background 可用、主 session 已确证
+- **THEN** voice 经 `run_in_background` 跑到完成，dispatch 秒级返回，锚行按真实结果落 `reason_code="ok"` 或诚实降级
 
-#### Scenario: 主 session 无长阻塞调用
-- **WHEN** `$SDFLOW_HOST=claude` 派 voice
-- **THEN** dispatch 的 Bash 调用 SHALL 秒级返回（不设 ≥330s 外层超时、不阻塞主 session），主 session 得以与 voice 并行推进 fan-out 镜
+#### Scenario: Codex 宿主经 Claude supervisor 后台运行
+- **WHEN** `$SDFLOW_HOST=codex`、Claude Code ≥2.1.169 且 background-exec preflight ready **[grill-amendment]**
+- **THEN** `claude --bg --exec` SHALL 托管 `outside-voice.sh exec --timeout <async-timeout>`，Codex 发起 shell 5 秒内返回，任务跨 shell 生命周期继续运行，终态成功落 `host="codex" runner="claude" reason_code="ok"`
 
-#### Scenario: Codex 宿主保持同步
-- **WHEN** `$SDFLOW_HOST=codex` 派 voice
-- **THEN** SHALL 同步执行（外层超时 ≥330s），MUST NOT 尝试后台化；超时（exit 124）→ 既有同族 fallback（`reason_code="timeout"`）
+#### Scenario: 两宿主 dispatch 均不长阻塞
+- **WHEN** 任一受支持宿主实际派发跨模型 voice
+- **THEN** dispatch shell SHALL 在 5 秒内返回并允许主 session 继续 fan-out；总 barrier 可等待 voice 终态，但 MUST NOT 把整个模型运行塞在 dispatch 调用内
 
-#### Scenario: 后台能力不可用【或无法确证主 session】则降级同步（保留 sync 天花板）
-- **WHEN** `$SDFLOW_HOST=claude` 但当前执行上下文无 `run_in_background` 能力（自探失败），**或无法确证本次执行位于主 session**（子代理上下文在轮次终结时会整体回收在飞的后台任务，而自探对该模式结构性失明——它在同轮次内取回哨兵，故必报可用）
-- **THEN** SHALL 降级回同步执行、**用 sync 300s 天花板 + 外层 ≥330s**（MUST NOT 沿用 async 900s——否则外层 330s 会假超时杀正常降级 voice），报告显式标注降级，MUST NOT 假装 async 成功、MUST NOT 静默失败
+#### Scenario: Codex background-exec 不可用时快速降级
+- **WHEN** `$SDFLOW_HOST=codex` 但 Claude CLI 版本过旧、agent view 被策略禁用、supervisor 启动失败或 job id 不可解析
+- **THEN** SHALL 在 5 秒级走同族 fallback并落 `preflight-error`/`exec-error`，MUST NOT 同步调用 Claude 等待 300 秒，MUST NOT 假装跨模型成功 **[grill-amendment]**
+
+#### Scenario: Claude harness 后台不可用则保留同步兼容降级
+- **WHEN** `$SDFLOW_HOST=claude` 但 harness background 自探失败，或无法确证当前为主 session
+- **THEN** SHALL 降级回 sync 300 秒、外层 ≥330 秒并显著标注同步降级，MUST NOT 沿用 async 900 秒导致假超时
 
 ### Requirement: async dispatch 不改变锚契约与诚实降级
 
-async dispatch SHALL 是**纯执行时机**的改变——锚行契约、`reason_code` 枚举、`anchor_lint` 合法组合矩阵、`outside-voice.sh` 出境安全三件套 MUST 逐字不变；collect SHALL **通知驱动（非轮询）**、按**结构化退出码 envelope** 分支，voice 未按天花板完成 / 退出码未知 / task lookup 失败时 SHALL 保守诚实降级（同族 fallback），MUST NOT 假绿；barrier 时站点仍 RUNNING SHALL 让出轮次等终态通知，`reason_code="timeout"` SHALL **只由实际观测到的 `exit 124`** 产生。
+**Requirement ID: HAE-09.** async dispatch SHALL 只改变执行时机与托管方——锚行契约、`reason_code` 枚举、`anchor_lint` 合法组合矩阵、outside-voice 的 FRAME/secret scan/200KB 截断与 Claude 四旗 MUST 保持语义不变。Claude-host collect **SHALL** 继续使用 harness 完成通知；Codex-host collect **SHALL** 使用 background job 的原子 terminal sidecar + 有界 await。两路径均须只按可信终态分支，MUST NOT 假绿。
 
 #### Scenario: 锚契约与矩阵不变
 - **WHEN** 本 change 落地后跑 `anchor_lint` 的 host×runner×reason_code×findings 全笛卡尔 golden
-- **THEN** 结果 SHALL 与本 change 前逐条一致（合法组合矩阵未被触碰）
+- **THEN** 结果 SHALL 与本 change 前逐条一致，跨模型成功仍只允许 `host≠runner ∧ reason_code="ok"` 的合法组合
 
-#### Scenario: 撞天花板 / 退出码未知 → 诚实降级
-- **WHEN** `$SDFLOW_HOST=claude` 后台 voice 撞 async `--timeout` 天花板（exit 124）、或结构化 envelope 取得退出码 `1/2`、或退出码丢失 / task lookup 失败
-- **THEN** collect SHALL 走既有同族 fallback（124→`reason_code="timeout"`；`1/2`/未知/丢失→`exec-error`，reason_code 枚举不新增）；退出码 MUST 由结构化 envelope 取、MUST NOT 从 voice 正文推断；MUST NOT 静默当 `ok`、MUST NOT 落零锚
+#### Scenario: 两类 async 路径按各自可信终态 collect
+- **WHEN** Claude-host harness 或 Codex-host supervisor job 到达终态
+- **THEN** 前者按 harness task 终态、后者按 worker 原子 `.rc` sidecar 分支；成功 stdout 才进 findings，MUST NOT 从自由文本、agent summary 或未完成输出推断状态
+
+#### Scenario: 撞天花板或异常退出诚实降级
+- **WHEN** worker 实际 rc=124、rc=1/2/其他非零、terminal job 无 rc、job lookup 失败或 collect 读取失败
+- **THEN** 124 SHALL 映射 `timeout`；其他非零/未知/丢失 SHALL 映射 `exec-error`；MUST NOT 静默当 `ok`、MUST NOT 落零锚
 
 #### Scenario: 起了没收不得读作成功
-- **WHEN** 后台 voice 已 dispatch 但评审中止 / 未 collect
-- **THEN** 该站点 SHALL 无 `reason_code="ok"` 锚（读作 voice 缺席），MUST NOT 因"起过一次"而假绿
+- **WHEN** background voice 已 dispatch 但评审中止、尚未 collect 或 terminal sidecar 不完整
+- **THEN** 该站点 SHALL 无 `reason_code="ok"` 锚，MUST NOT 因“起过一次”或 agent summary 看似完成而假绿
 
-#### Scenario: barrier 时站点仍 RUNNING 不得早退落 timeout
-- **WHEN** Step3 barrier 时某 dispatch 站点尚无终态退出码（后台 voice 仍在跑、未撞天花板）
-- **THEN** 主 session SHALL 让出轮次等待该任务的完成/超时通知，MUST NOT 落 `reason_code="timeout"`；`timeout` SHALL 只由实际观测到的 `exit 124` 产生——早退假 timeout 会把「慢但会成功」的 voice 降级（即本 change 要消灭的 efficacy=0），且该假绿**逃过 per-site 站点集核**（站点仍在集合内）
+#### Scenario: barrier 时 RUNNING 不得早退落 timeout
+- **WHEN** Step3 barrier 时某 dispatch 站点仍 RUNNING 且未撞内层 timeout
+- **THEN** Claude-host SHALL 等完成通知，Codex-host SHALL 进入有界 await；两者均 MUST NOT 提前落 `timeout`，`reason_code="timeout"` 只允许由实际 rc=124 产生
 
-#### Scenario: 退出码不可被 runner 伪造（经 runner 不可写的通道取得）
-- **WHEN** voice 的 stdout 正文含退出码样式文本（本 change 自指场景下必然出现），或 wrapper 未能发出该文本（后台任务在轮次终结时被回收 ⇒ 写 stdout 的那步从未执行）
-- **THEN** 退出码 SHALL 取自 **runner 不可写的旁路通道**（wrapper 在 runner 结束后写入 run 目录的 `<site>.rc` sidecar，主 session 独立读取）；**该通道之所以可信，是因为四旗承重墙只授予 runner 只读工具集（无 Write / 无 Bash）**。文件缺席 / 内容不匹配 `^[0-9]+$` / 读取失败 SHALL 判 `exec-error`（诚实降级）。
-- **MUST NOT** 从 voice 的 stdout 推断退出码——无论用哨兵串、整行锚定还是子串匹配：**stdout 是 runner 能写的通道**。亦 **MUST NOT** 把「随机 run-id 拼进哨兵」当作认证——runner 被授予仓库读取能力，可枚举 `.outside-voice/` 直接取得该值，认证不能建立在模型读得到的字符串上。
+#### Scenario: 外层等待被回收后可恢复 collect
+- **WHEN** Codex-host await shell 被外层回收但 supervisor worker 仍在运行
+- **THEN** 同一主评审 session SHALL 按保留的显式 job id/run dir 恢复 collect，MUST NOT 重派；若整个 session 已丢失，新评审只能通过显式 `reconcile --run-dir` 处理 abandoned run，MUST NOT 扫描“最新 run”猜测恢复目标；若 worker/job 已丢失且无 rc且子树已确认退出则诚实判 `exec-error` **[spec-review-amendment]**
 
-#### Scenario: per-site 完整性机械可审（并发多站点漏收）
-- **WHEN** Claude 宿主同轮并发 dispatch 2 个站点（design-voice + hr-tg），其一 dispatch 后未 collect、另一正常落锚
-- **THEN** 机械核 SHALL 报错（`declared` 应**有锚**站点集 ≠ 实落 `outside-voice` 锚站点集）——MUST NOT 因 anchor_lint 家族级门（"outside-voice" 有 ≥1 行即过）而判 CLEAN，使「漏收」与「合法不派」机械可区分
+#### Scenario: 退出码不可被 runner 伪造
+- **WHEN** voice stdout 含退出码样式文本或恶意指令
+- **THEN** Claude-host 继续读 runner 不可写的 wrapper sidecar；Codex-host 读 supervisor worker 在 child 结束后原子发布的 rc sidecar。runner 仅有只读工具，不能写这些文件；文件缺失/坏格式 SHALL 判 `exec-error`，MUST NOT 从 stdout 解析退出码
 
-#### Scenario: 复用态 MUST NOT 假红（declared 按「应有锚」而非「应 dispatch」）
-- **WHEN** spec-review 复用 autoplan 的 codex voice（reuse-guard `reason_code=none` ⇒ **未** dispatch `design-voice`，但报告仍落 `site="design-voice"` 锚——归档实证 44 条）
-- **THEN** 机械核 SHALL 判 CLEAN：`declared` SHALL 含 `design-voice`（该层**恒有锚**站点），MUST NOT 定义为「应 dispatch 的站点集」（否则在最常见路径上假红）；同理 `code-voice`（code-review，always）SHALL 恒在 declared 内
-- **AND** 机械核 SHALL NOT 解析 `guard=` 字段——其语义**站点相关**（`design-voice` 上 `none`=复用·未派，`hr-tg` 上 `none`=填充值·已派），拿它承重即引入 site 特判
+#### Scenario: per-site 完整性机械可审
+- **WHEN** 任一宿主同轮 dispatch 2 个站点，其一未 collect、另一正常落锚
+- **THEN** `declared-sites` 与实落 outside-voice 锚集合核 SHALL 报错，MUST NOT 因家族级“至少一行”而判 CLEAN
 
-#### Scenario: 机械核不得自指假阳（fence 口径单一源）
-- **WHEN** 报告正文含模版或示例锚行（讨论锚格式的 change 报告本身即是）
-- **THEN** 机械核 SHALL 复用 `anchor_lint.py` 的 `fence_outside_lines` 口径统计真锚，MUST NOT 另起裸 grep 解析路径（否则模版/示例锚被计入 → 自指假阳，且形成 fence 口径二源）
+#### Scenario: 复用态不假红
+- **WHEN** spec-review 复用已有 `design-voice` 产出而未重新 dispatch
+- **THEN** declared 仍按“应有锚”站点集计算并包含 `design-voice`，MUST NOT 改成按 job dispatch 集计算，MUST NOT 解析站点语义不同的 `guard=` 承重
 
-#### Scenario: 错误路径未扫描 stderr 不当 findings
-- **WHEN** 后台 voice `exit≠0`（helper 把未过出境 scan 的 runner stderr 写 stderr、落进 harness 后台输出文件）
-- **THEN** collect SHALL 只把 exit0 的 stdout 当 findings 采信、按结构化状态判降级，MUST NOT 把后台文件原始 stderr 当 findings 进池（后台文件「内容=已过 scan」仅对 exit0 成立）
+#### Scenario: 错误 stderr 不当 findings
+- **WHEN** 任一后台 runner 非零退出并产生未过出境 scan 的 stderr
+- **THEN** collect SHALL 只记录结构化退出状态与 stderr 行数/字节数，MUST NOT 把 stderr 原文当 findings 或写入 tracked 报告
 
-#### Scenario: outside-voice.sh 零改动
-- **WHEN** 审查本 change 的 diff
-- **THEN** `outside-voice.sh` SHALL 零改动（四旗承重墙、`secret_scan`、FRAME、200KB 截断逐字不变）
+#### Scenario: outer supervisor logs 不成为第二出境面 **[spec-review-amendment]**
+- **WHEN** background worker 或 inner helper 产生 context、partial stdout、stderr 或 secret canary
+- **THEN** 原始内容 SHALL 只写入 0600 run-dir 文件，`claude logs`/supervisor state 只能出现固定结构化状态；negative smoke 失败 SHALL 阻塞 Codex background transport
+
+#### Scenario: helper 安全核心复用且隔离项可加固
+- **WHEN** Codex-host background worker 执行 Claude voice
+- **THEN** SHALL 调用同一 `outside-voice.sh exec`，FRAME、secret scan、截断与四旗保持同源；Claude runner SHALL 使用单一源解析的 strong 模型（目标仓为 `opus`）与 `--effort high --safe-mode --no-session-persistence`，但 MUST NOT 复制第二份 prompt/safety/model-tier 实现 **[grill-amendment]**
 

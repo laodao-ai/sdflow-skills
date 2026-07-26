@@ -242,3 +242,9 @@
 优先级: <待填>
 计划: <待填>
 
+### enable-codex-background-outside-voice — enable-codex-background-outside-voice
+状态: PLANNED
+成员: (生成) B21, B22, T212, T213, T214, T215, T216, T217, T218, T219, T220, T221, T222, T223, T224, T225, T226, T227, T228, T229, T230
+优先级: <待填>
+计划: <待填>
+

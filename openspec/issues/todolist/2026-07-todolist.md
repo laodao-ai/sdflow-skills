@@ -69,25 +69,25 @@ sdflow-issues:
     T209: {"module":"sdflow-issues/scripts/issues.py","summary":"move --to-pool 跨池搬运命令（误判落错池的机械恢复路径）","type":"功能增强","status":"PROPOSED","time":"2026-07-22 13:54","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
     T210: {"module":"sdflow-issues/tests","summary":"冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:40","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
     T211: {"module":"sdflow-issues/scripts/sdflow_issues_core","summary":"冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 14:50","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
-    T212: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束","type":"代码质量","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
-    T213: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调","type":"基础设施","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
-    T214: {"module":"openspec/changes/enable-codex-background-outside-voice/specs/outside-voice-background-jobs/spec.md","summary":"OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace","type":"代码质量","status":"OPEN","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":null}
-    T215: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言","type":"代码质量","status":"OPEN","time":"2026-07-25 19:07","change":"enable-codex-background-outside-voice","batch":null}
-    T216: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"collect 幂等的两条冗余路径缺单路径回归锚","type":"代码质量","status":"OPEN","time":"2026-07-25 20:10","change":"enable-codex-background-outside-voice","batch":null}
-    T217: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)","type":"代码质量","status":"OPEN","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":null}
-    T218: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"rc_bad(CORRUPT) 路径重复 collect 非逐字节一致","type":"代码质量","status":"OPEN","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":null}
-    T219: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）","type":"代码质量","status":"OPEN","time":"2026-07-25 23:14","change":"enable-codex-background-outside-voice","batch":null}
-    T220: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）","type":"代码质量","status":"OPEN","time":"2026-07-25 23:15","change":"enable-codex-background-outside-voice","batch":null}
-    T221: {"module":"openspec/specs/host-adaptive-execution + anchor_lint","summary":"fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值","type":"代码质量","status":"OPEN","time":"2026-07-26 00:34","change":"enable-codex-background-outside-voice","batch":null}
-    T222: {"module":"sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md","summary":"止损行「走下一条的 unknown-cost 处置」指代不准","type":"代码质量","status":"OPEN","time":"2026-07-26 00:41","change":"enable-codex-background-outside-voice","batch":null}
-    T223: {"module":"hack/tests/test_async_branch_parity.py","summary":"_the_line_with 的「恰好 1 行」是双向判据，良性新增会假红","type":"代码质量","status":"OPEN","time":"2026-07-26 00:46","change":"enable-codex-background-outside-voice","batch":null}
-    T224: {"module":"hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py","summary":"面治枚举漏 2 条 isinstance 早退分支（无独立锚）","type":"代码质量","status":"OPEN","time":"2026-07-26 03:28","change":"enable-codex-background-outside-voice","batch":null}
-    T225: {"module":"hack/check_codex_efficacy_evidence.py + openspec/changes/enable-codex-background-outside-voice(已归档)","summary":"补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）","type":"基础设施","status":"OPEN","time":"2026-07-26 08:23","change":"enable-codex-background-outside-voice","batch":null}
-    T226: {"module":"hack/check_codex_efficacy_evidence.py: check 子命令","summary":"给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）","type":"基础设施","status":"OPEN","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":null}
-    T227: {"module":"sdflow-init/assets/hack/outside-voice-job.py: cmd_worker + run_cleanup","summary":"worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程","type":"功能增强","status":"OPEN","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":null}
-    T228: {"module":"sdflow-init/assets/hack/outside-voice.sh: secret_scan","summary":"含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号","type":"基础设施","status":"OPEN","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":null}
-    T229: {"module":"openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞)","summary":"两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）","type":"可观测性","status":"OPEN","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":null}
-    T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"OPEN","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":null}
+    T212: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束","type":"代码质量","status":"PROPOSED","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T213: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调","type":"基础设施","status":"PROPOSED","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T214: {"module":"openspec/changes/enable-codex-background-outside-voice/specs/outside-voice-background-jobs/spec.md","summary":"OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace","type":"代码质量","status":"PROPOSED","time":"2026-07-25 19:06","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T215: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言","type":"代码质量","status":"PROPOSED","time":"2026-07-25 19:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T216: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"collect 幂等的两条冗余路径缺单路径回归锚","type":"代码质量","status":"PROPOSED","time":"2026-07-25 20:10","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T217: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError)","type":"代码质量","status":"PROPOSED","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T218: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"rc_bad(CORRUPT) 路径重复 collect 非逐字节一致","type":"代码质量","status":"PROPOSED","time":"2026-07-25 20:11","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T219: {"module":"sdflow-init/assets/hack/outside-voice-job.py","summary":"cmd_worker 自身不校验 effort（钉死只在 dispatch 一层）","type":"代码质量","status":"PROPOSED","time":"2026-07-25 23:14","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T220: {"module":"sdflow-init/tests/test_outside_voice_job.py","summary":"probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导）","type":"代码质量","status":"PROPOSED","time":"2026-07-25 23:15","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T221: {"module":"openspec/specs/host-adaptive-execution + anchor_lint","summary":"fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值","type":"代码质量","status":"PROPOSED","time":"2026-07-26 00:34","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T222: {"module":"sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md","summary":"止损行「走下一条的 unknown-cost 处置」指代不准","type":"代码质量","status":"PROPOSED","time":"2026-07-26 00:41","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T223: {"module":"hack/tests/test_async_branch_parity.py","summary":"_the_line_with 的「恰好 1 行」是双向判据，良性新增会假红","type":"代码质量","status":"PROPOSED","time":"2026-07-26 00:46","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T224: {"module":"hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py","summary":"面治枚举漏 2 条 isinstance 早退分支（无独立锚）","type":"代码质量","status":"PROPOSED","time":"2026-07-26 03:28","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T225: {"module":"hack/check_codex_efficacy_evidence.py + openspec/changes/enable-codex-background-outside-voice(已归档)","summary":"补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）","type":"基础设施","status":"PROPOSED","time":"2026-07-26 08:23","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T226: {"module":"hack/check_codex_efficacy_evidence.py: check 子命令","summary":"给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）","type":"基础设施","status":"PROPOSED","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T227: {"module":"sdflow-init/assets/hack/outside-voice-job.py: cmd_worker + run_cleanup","summary":"worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程","type":"功能增强","status":"PROPOSED","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T228: {"module":"sdflow-init/assets/hack/outside-voice.sh: secret_scan","summary":"含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号","type":"基础设施","status":"PROPOSED","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T229: {"module":"openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞)","summary":"两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）","type":"可观测性","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
+    T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
 ---
 # 2026-07 TODO
 
@@ -2025,6 +2025,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：id 匹配通道追加 item.get("cwd") == repo_root 判据（一行 + 一条测试）。design.md:76 的破坏性操作二次核验是下游第二道门，故当前非 Critical。
 
 **备注**：来源=Task 1 双轴复审（e791679 后）Standards 轴 Minor，编排层裁定 defer 至冷层 code-review 统一处理。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T212 -->
 
 <!-- sdflow-issue-block:start id=T213 -->
@@ -2038,6 +2039,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：与既有 outside-voice.async-timeout-seconds 同路，走 config 旋钮而非新造常量；默认值保持 5 秒。
 
 **备注**：来源=Task 1 双轴复审 Standards 轴 Minor。方向安全（超时=诚实降级，不假绿），故 defer。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T213 -->
 
 <!-- sdflow-issue-block:start id=T214 -->
@@ -2051,6 +2053,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：改 spec 一行措辞为「5 秒 spawn deadline + 独立有界核验 grace」，而非改码把 grace 收回 5 秒总预算（那等于把竞态请回来）。
 
 **备注**：编排层裁定：实现期 MUST NOT 改 specs/（ship_gate design 域失鲜监视集含 specs/，当场 REFUSE_START）。留到代码审/done 阶段（失鲜窗口已关闭、流程明文允许修订四件套）执行。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T214 -->
 
 <!-- sdflow-issue-block:start id=T216 -->
@@ -2064,6 +2067,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：补一条只针对早期回放路径的用例（如断言二次 collect 不重读 stdout），或在注释里写明二者互为兜底、勿单删。
 
 **备注**：来源=Task 2 双轴复审（f558722 后）Spec 轴 Minor。当前不变量未被削弱（两重保证），故非缺口，defer。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T216 -->
 
 <!-- sdflow-issue-block:start id=T217 -->
@@ -2077,6 +2081,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：except 子句收窄为 (ValueError, TypeError)。
 
 **备注**：来源=Task 2 双轴复审（f558722 后）Standards 轴 Minor。属「掩盖真实错误」类隐患，defer 至冷层 code-review 统一处理。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T217 -->
 
 <!-- sdflow-issue-block:start id=T218 -->
@@ -2090,6 +2095,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：要么把 rc_bad 纳入冻结闸门，要么在 spec/design 里明确 CORRUPT 属非 durable 终态。两轴均判影响可接受（分类稳定、CORRUPT 本不可进 findings）。
 
 **备注**：来源=Task 2 双轴复审 Standards 轴 Minor，fix 报告已主动披露。与 T214（OVBG-01 措辞对齐）同属「实现正确但 spec 字面需对齐」，可一并在 done 阶段处理。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T218 -->
 
 <!-- sdflow-issue-block:start id=T219 -->
@@ -2103,6 +2109,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：worker 入口补一次同源校验（复用 EFFORT_VALUES，不抄第二份枚举）。
 
 **备注**：来源=Task 4 双轴复审（e1b8bc4 后）Spec 轴 Minor，判为登记备查、非缺口。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T219 -->
 
 <!-- sdflow-issue-block:start id=T220 -->
@@ -2116,6 +2123,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：照 cmd_worker 已订正的措辞同步这两处；:2180 加「本 fixture 无 terminal witness」限定。
 
 **备注**：来源=Task 4 双轴复审（e1b8bc4 后）Standards 轴 Minor。纯 docstring、零行为影响，但有误导性 ⇒ 冷层 code-review 时优先处理。面治提示：这两簇根因在本 change 已复发三轮，扫时按「降级方向美化」「runner/host 主语反用」两个模式全仓 grep，别逐条补。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T220 -->
 
 <!-- sdflow-issue-block:start id=T221 -->
@@ -2129,6 +2137,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：若判需独立枚举值，是跨 openspec/specs/ + anchor_lint + 全笛卡尔 golden 的矩阵变更。当前用 detail 字段区分两种语义。
 
 **备注**：编排层裁定：本票验收标准第3条字面要求「anchor 合法组合矩阵保持不变」⇒ 复用是符合 ticket 范围的正解，新增枚举值超范围。交冷层 code-review / done 阶段复看是否值得单开。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T221 -->
 
 <!-- sdflow-issue-block:start id=T222 -->
@@ -2142,6 +2151,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：改为直接点名条款（如「走 ⑥ 的 unknown-cost 处置」）而非相对位置指代。两份 SKILL 等值段同步改，改完跑 check_async_branch_parity.py。
 
 **备注**：来源=Task 5 双轴复审（fa378fb 后）Spec 轴 Minor。零行为影响，defer 至冷层 code-review。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T222 -->
 
 <!-- sdflow-issue-block:start id=T223 -->
@@ -2155,6 +2165,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：若绊得频繁，改为「≥1 行且目标行存在」或给 key 加更强的定位前缀。
 
 **备注**：来源=Task 5 双轴复审（fa378fb 后）Standards 轴 Minor，登记备查非缺陷。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T223 -->
 
 <!-- sdflow-issue-block:start id=T224 -->
@@ -2168,6 +2179,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：补两条用例（sites=[good, "junk"]、verify([1,2,3])）约 8 行；报告标题措辞订正。
 
 **备注**：来源=Task 6 第3轮复审 Standards 轴 Minor。可复用观察：面治时「我扫了 N 条门」本身也是一个可能不全的断言——枚举的完整性同样需要机械核（如按 AST 数 append/return 点），否则「0 条无独立锚」只覆盖被枚举到的那些。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T224 -->
 
 <!-- sdflow-issue-block:start id=T225 -->
@@ -2181,6 +2193,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：额度恢复后（≥2026-07-29 10:11）在真实 Codex 宿主跑一轮完整评审，产出 efficacy evidence JSON，用 hack/check_codex_efficacy_evidence.py 验三门；通过则关闭 T162 并同步 design.md/CONTEXT 的 efficacy 陈述。已有的两个真实证据可直接复用为对照：transport 全链路 436s>300s rc=0（旧同步 300s 天花板会砍成 rc=124）、真实混配下 OVBG-01 skew fail-closed 首次触发。
 
 **备注**：来源=Task 6 双轴审第3轮 Spec 轴裁定「票面已做到尽头的未完成」+ 人拍板 A。注意本项不是质量缺口而是范围决定：ship 卡在 5/6 是因为 6.1/6.2 是动作项、外部额度封锁下不可诚实勾选，而非实现有问题。gate 的完成信号经 checkpoint 标签通道显式补打（commit message 写明人授权降级），复选框刻意留白。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T225 -->
 
 <!-- sdflow-issue-block:start id=T226 -->
@@ -2194,6 +2207,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：check 增加 --run-dir（建议设为必填，fail-closed），对 declared 的每个站点重新读 <site>.collected.json 并逐字段比对 job_id/attempt_nonce/stdout_sha256/run_id/host/runner/model/effort/四个时刻；任一不符即红。同时强制所有站点属于同一 run，并校验 layer 与其基础站点（spec-review→design-voice / code-review→code-voice）对应，禁止 CLI 覆盖可派生的身份字段。诚实边界要写清：这只把伪造成本从「写一个文件」抬高到「同时伪造一致的 run-dir 证物」，本机 agent 仍有 Bash 写权限，MUST NOT 宣称不可伪造。
 
 **备注**：🔴 与 T225 同批做，不要单独排期——T225 是「额度恢复后跑真实 Codex efficacy」，它会产出**第一份真实 run-dir**；本条的新绑定只有对着那份真证物才验得了，现在做只能用我自造的 fixture 验（等于用被测对象自己的假设去验被测对象）。这也是本次 code-review 没有当场修它的理由。当前无假绿风险：Task 6 已按人拍板 A 降级，T162 保留、efficacy=0 陈述未改、无任何 evidence.json 产出过。已在文件 docstring 的「诚实边界」节写死这段声明，防后人误读为防伪门。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T226 -->
 
 <!-- sdflow-issue-block:start id=T227 -->
@@ -2207,6 +2221,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：① cmd_worker 装 SIGTERM/SIGINT/SIGHUP handler，收到即转发给 bash 子进程（或整个进程组）；② cleanup 在落 orphan-warning 之前，用已核验过的 runner_pid 做一次兜底 killpg。②改的是 OVBG-05 的既定行为，MUST 先过设计门再动。
 
 **备注**：⚠️ 本条**不是实现偏离 spec**：OVBG-05 原文只要求「stop→核验子树退出→rm，无法核验时落 unknown-cost/orphan-warning 并抑制自动 fallback」，没要求 MUST kill runner。∴ 当前实现是合规的，检测方向也是 fail-closed（不产生假绿），这属于 spec 野心之外的加固 ⇒ 按通则③『不加宽』不在本次 change 内自行补上。⚠️ 前提未验：claude --bg 内部的 stop 究竟走 per-pid kill 还是 killpg **没有核实过**——若走 group-kill 则①整条不成立。做之前 MUST 先用一次真实后台 agent 把这个前提验掉，别直接照着改。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T227 -->
 
 <!-- sdflow-issue-block:start id=T228 -->
@@ -2220,6 +2235,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：secret_scan 改用 grep -a，或先把文件的 NUL 规范化成占位符再扫（不改行为契约，只加一个字节归一化步骤）；stderr 那条在 cut 之前先过滤掉非数字行。
 
 **备注**：两条都是**既有代码**（非本 change 引入，本 change 未改这些行），故按代码审的置信过滤规则不作为本 change 的阻断项。严重度评估要诚实：NUL 切开的密钥已不是明文密钥，要真泄漏需要『模型被诱导主动插入控制字符做混淆』+『接收方主动剥除』——那是对抗性外泄场景，而正则扫描器对**蓄意混淆**（base64/换行/间隔）本来就一概无效，这是该类防线的固有边界，不是本实现的缺陷。归类为廉价加固而非漏洞。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T228 -->
 
 <!-- sdflow-issue-block:start id=T229 -->
@@ -2233,6 +2249,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：在 /sdflow-done 的 archive delta 同步步骤里，把这两条 spec 文本改写成与实现一致的措辞（① 明确 5 秒是 spawn+首次读的 deadline，核验用独立 grace，端到端上界另述；② 明确四项的判据是「canonical id 必须肯定核验 + 其余三项矛盾即否决、缺席不阻塞」并附真机依据）。
 
 **备注**：🔴 这是 /sdflow-done 的 **archive 阶段必做项**，不是可选。实现期 MUST NOT 改 openspec/specs/（会触发设计门失鲜 REFUSE_START），故只能在此登记后延到 archive。同批还有 Task 4 交接的既有一项：host-adaptive-execution/spec.md 与 spec-workflow/spec.md 仍只写「四旗」，而 OVBG-04 已含三面隔离旗。三条一起在 delta 同步时核对。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T229 -->
 
 <!-- sdflow-issue-block:start id=T230 -->
@@ -2246,4 +2263,11 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：出境侧加同量级上限，或至少在超过阈值时记一条 bytes 告警（与既有 OV_TRUNCATED 同口径落 stderr）。
 
 **备注**：影响低：模型单次输出天然有上限，且 .outside-voice/ 已被 gitignore 递归排除、不会入库。列为廉价加固。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T230 -->
+
+<!-- sdflow-issue-block:start id=T215 -->
+## T215: 删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言
+> 删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T215 -->

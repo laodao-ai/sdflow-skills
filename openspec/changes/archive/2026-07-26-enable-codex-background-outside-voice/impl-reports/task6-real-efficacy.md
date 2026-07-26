@@ -289,7 +289,7 @@ exit=1
 | 门 | 判定 | 依据 |
 |---|---|---|
 | **G1** 该层全部 declared 站点 `host="codex" runner="claude" reason_code="ok"` | ❌ | Codex 账户额度耗尽至 2026-07-29，**一轮 Codex 宿主评审都没跑成**（§2.2 两次实录）⇒ 不存在任何 `host="codex"` 锚。检查器实跑 exit=1（§4.2） |
-| **G2** ≥1 站点 `opus`+`high` 自然 >300 秒且成功 | ⚠️ **实质已证，但不在 codex 层内** | 真实 opus+high、自然 **436 s**、rc=0、digest 齐全（§3.3）。但它 `host="claude"` ⇒ **不满足 6.2「该完整层必须含」的限定**，MUST NOT 单独记作达标 |
+| **G2** ≥1 站点 `opus`+`high` 自然 >300 秒且成功 | ⚠️ **实质已证，但不在 codex 层内** | 真实 opus+high、自然 **436 s**、rc=0、digest 齐全（§3.3）。但它**不是 Codex 宿主产出的**（该证据的 `host` 字段实为 `null` —— probe 跑在 Claude 宿主、且早于 host 盘面派生落地）⇒ **不满足 6.2「该完整层必须含」的限定**，MUST NOT 单独记作达标 |
 | **G3** 字段可机读、不含 context/stderr | ✅ | 检查器的 G3 段对该证据**零报错**（§4.2 只报了 host 两条）；白名单 + 无换行 + ≤256 三重机械守，60 条测试 + 8 组变异 |
 
 **G1 ❌ ⇒ 三条不同时达标 ⇒ 按 tasks.md 6.3：保留 T162。**
