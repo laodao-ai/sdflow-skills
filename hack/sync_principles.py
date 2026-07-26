@@ -46,6 +46,18 @@ PROJECT_TARGETS = [
     ASSETS / "snippets" / "claude-section.md",
 ]
 
+# agent 定义（~/.claude/agents/ 的投放面）= 【目录, 该用哪个源】。
+#
+# 【为什么是独立的一项，不并进 PROJECT_TARGETS】
+#   PROJECT_TARGETS 固定配 SOURCE_PROJECT（项目味）。agent 定义的读者是【被下发的子代理】,
+#   受众与 SKILL.md 相同 ⇒ 必须用 skill 味 SOURCE（含 fan-out 传播纪律那一段）。
+#   直接加进 PROJECT_TARGETS = 给子代理注入错误味源，而 --check 照样报绿。
+#
+# 【为什么成员靠 glob 发现，不写死清单】
+#   写死清单的话，「新增一个 agent 定义却忘了纳入投放面」这个失效场景【做不出来】——
+#   新文件不在清单里，--check 看不见它，绿。glob 使新文件自动进入检查范围。
+AGENT_TARGETS = (REPO / "sdflow-spec" / "agents", SOURCE)
+
 START = "<!-- sdflow:principles:start"
 END = "<!-- sdflow:principles:end -->"
 
@@ -58,6 +70,16 @@ def block(src):
 def skills():
     return sorted(p / "SKILL.md" for p in REPO.iterdir()
                   if p.is_dir() and (p / "SKILL.md").is_file())
+
+
+def agent_defs():
+    """AGENT_TARGETS 目录下的全部 agent 定义 —— 【每次调用重新 glob】。
+
+    不在 import 期定死：否则「往 agents/ 放一个新 .md → --check 必红」这个场景
+    在同一个进程里测不出来（测试写完文件，模块级常量早已算好，看不见它）。
+    """
+    d, _ = AGENT_TARGETS
+    return sorted(d.glob("*.md")) if d.is_dir() else []
 
 
 def _blocks(text):
@@ -120,6 +142,7 @@ def targets():
     """→ [(文件, 该用哪个源)]"""
     pairs = [(p, SOURCE) for p in skills()]
     pairs += [(p, SOURCE_PROJECT) for p in PROJECT_TARGETS]
+    pairs += [(p, AGENT_TARGETS[1]) for p in agent_defs()]
     return pairs
 
 

@@ -114,6 +114,74 @@ cleanup_orphans() {
   done < <(find "$dest" -mindepth 1 -maxdepth 1)
 }
 
+# ─── Agent definitions → ~/.claude/agents/ (D11) ─────────────
+# 【为什么是新写的一份，不能沿用 install_into】
+#   ① install_into 只枚举【顶层目录】且必须含 SKILL.md（上面第 38-39 行），
+#      而 agent 定义是 sdflow-spec/agents/ 下的【散装 .md】—— 进不了那个循环。
+#   ② is_our_marker_copy() 的判据是 `[ -f "$1/.sdflow-skills" ]`：对一个【文件】做
+#      目录拼接，恒 false —— 是路径谬误，不是「保守地判成不是我们的」。
+#   ③ cleanup_orphans 的 `[ ! -d "$REPO_DIR/$entry_name" ]` 对 `xxx.md` 恒真。
+#
+# 【所有权守卫比 skills 那边更严，不是复用】
+#   install_into 对任何同名 symlink 无条件 `ln -snf` 覆盖；install_sdflow 处理
+#   $sdflow/workflow 时 readlink 的结果也只用于【打印告警】、不作判据。
+#   这里必须 readlink 确认指向本仓才接管 —— 因为 ~/.claude/agents/ 是【全局命名空间】，
+#   任何插件或别的工具都可能在里面放同名定义，覆盖掉就是数据丢失。
+install_agents() {
+  local src_dir="$REPO_DIR/sdflow-spec/agents"
+  local dest="$HOME/.claude/agents"
+  [ -d "$src_dir" ] || return 0
+
+  if [ "$IS_WINDOWS" -eq 1 ]; then
+    # 散装 .md 【没有 marker 落点】——marker 是「目录里放一个标记文件」，对单文件做不出来。
+    # ⇒ Windows 下不铺 agents。/sdflow-spec 在该宿主走主 session 亲查/亲写路径（D3 的降级方向）。
+    # MUST NOT 在这里写「copy + 所有权守卫」——那是做不出来的东西。
+    skipped+=("agents @ $dest — Windows：散装 .md 无 marker 落点，不铺设；/sdflow-spec 走主 session 亲查/亲写")
+    return 0
+  fi
+
+  mkdir -p "$dest"
+
+  local f name target link
+  for f in "$src_dir"/*.md; do
+    [ -f "$f" ] || continue
+    name="$(basename "$f")"
+    target="$dest/$name"
+
+    # -e 对悬空软链为 false，故必须 `-e || -L` 才能覆盖「存在」的全部形态
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      if [ ! -L "$target" ]; then
+        skipped+=("agents/$name @ $dest — 已存在真实文件，非本仓软链，未接管")
+        continue
+      fi
+      link="$(readlink "$target" 2>/dev/null || true)"
+      case "$link" in
+        "$REPO_DIR"/*) : ;;   # 本仓装出去的，可以接管
+        *) skipped+=("agents/$name @ $dest — 软链指向 ${link:-<读不到>}（非本仓），未接管"); continue ;;
+      esac
+    fi
+
+    ln -snf "$f" "$target"
+    installed+=("agents/$name @ $dest")
+  done
+
+  # 孤儿清理：本仓装出去的软链，源 .md 已删 ⇒ 悬空 ⇒ 清掉。
+  # 用 find 枚举（而非 glob）：尾斜杠/普通 glob 在 POSIX 语义下匹配不到 dangling 软链。
+  local entry link2
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    [ -L "$entry" ] || continue
+    link2="$(readlink "$entry" 2>/dev/null || true)"
+    case "$link2" in
+      "$src_dir"/*) : ;;
+      *) continue ;;
+    esac
+    if [ -e "$entry" ]; then continue; fi   # 有效链接，留着
+    rm -f "$entry"
+    cleaned+=("agents/$(basename "$entry") @ $dest")
+  done < <(find "$dest" -mindepth 1 -maxdepth 1)
+}
+
 # ─── sdflow global home: canonical bundle anchor + hack scripts ──
 # canonical 只接管自属软链/指针（对齐 skills 的所有权守卫）；~/.sdflow 其余视为本工具独占命名空间。
 install_sdflow() {
@@ -212,6 +280,7 @@ for d in "${TARGET_DIRS[@]}"; do
   install_into "$d"
   cleanup_orphans "$d"
 done
+install_agents
 install_sdflow
 
 # ─── retire deregistered global hooks (T44) ─────────────────────
