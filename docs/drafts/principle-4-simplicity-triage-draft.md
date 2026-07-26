@@ -82,7 +82,7 @@ MUST NOT 为一个低概率、影响小、甚至无法完美解决或完美成�
 
 ### Q1 — 落点/形态（决定 blast radius）
 
-- **(推荐) 并入通则块，升为"第四条通则"**：改真相源 `sdflow-init/assets/snippets/principles-project.md`（项目味）+ `sdflow-init/assets/hack/skill-principles.md`（skill 味），`python3 hack/sync_principles.py --apply` 推 18 个投放面。
+- **(推荐) 并入通则块，升为"第四条通则"**：改真相源 `sdflow-init/assets/snippets/principles-project.md`（项目味）+ `sdflow-init/assets/hack/skill-principles.md`（skill 味），`python3 hack/sync_principles.py --apply` 推全部投放面（数量由脚本 glob 自报，**MUST NOT 在文档里硬编码计数**——新增一个 skill 就会让它过期）。
   - 好处：fan-out 评审镜（grill / spec-review 跑 fresh context，只看 FRAME 注入的通则块）也受本条约束 —— 而那正是完美主义空转的主战场。
   - 代价：通则块 3→4 条，篇幅与每次 fan-out 的 token 都增加（与"嫌通则长"的顾虑逆向）。
 - **(备选) 独立"方案分诊"基准段**：只进 CLAUDE.md / AGENTS.md 项目文件，不进 SKILL fan-out FRAME → 评审镜看不到它。

@@ -48,15 +48,43 @@ decision_hash: <「拍板决策」小节全文的 sha256 前 12 位>
  系统镜 / 用户镜 / 开发循环镜 + 一句主次判定。>
 ```
 
+### `decision_hash` 的唯一算法
+
+**定稿（B 收敛）与核验（C 起手）跑的是同一条命令 ⇒ 定义就是这条命令本身**，
+不存在「两端口径不同」的失配面。MUST NOT 手算、MUST NOT 换等价写法：
+
+```bash
+python3 -c '
+import hashlib,sys
+lines=open(sys.argv[1],encoding="utf-8").read().splitlines()
+i=lines.index("## 拍板决策")
+b=[]
+for l in lines[i+1:]:
+    if l.startswith("## ") or l.startswith("# "): break
+    b.append(l)
+print(hashlib.sha256("\n".join(b).strip().encode()).hexdigest()[:12])
+' openspec/changes/<change>/decision-memo.md
+```
+
+范围 = `## 拍板决策` 下一行起、到下一个以 `## ` / `# ` 开头的行（或 EOF）为止，两端 strip。
+🔴 **口径边界**：它是**逐行字面量**判断，不认围栏 ⇒ 「拍板决策」节内若出现以 `## ` 开头的行
+（**包括代码块内的**），hash 只覆盖到那一行为止。两端同命令 ⇒ 不会因此失配，只是覆盖面变窄；
+故 SHOULD 不在该节内贴含 `## ` 的代码块。
+
 ## 3. 必填与判红
 
 | 项 | 判据 | 谁判 |
 |---|---|---|
 | 文件存在 | `openspec/changes/<change>/decision-memo.md` 存在 | **机械门**（pytest） |
-| `## 拍板决策` 非空 | 该 H2 与下一个 H2（或 EOF）之间存在非空白、非注释正文 | **机械门**（pytest） |
+| `## 拍板决策` 非空 | 该 H2 与下一个**同级/更高级** ATX 标题（或 EOF）之间存在非空白、非注释正文；围栏与 HTML 注释块内的标题不算标题 | **机械门**（pytest） |
 | `## 承重约束` 非空 | 同上 | **机械门**（pytest） |
 | 身份字段匹配当前盘面 | `change` == 当前 change 名 ∧ `branch` == 当前分支 | **指令层**（相位 C 起手，主 session 判） |
+| **`decision_hash` 匹配** | 按上方唯一算法**重算**「拍板决策」全文 hash，与 frontmatter 比对 —— 不符 = 定稿后被手改 | **指令层**（重算本身是机械的，处置是判断） |
+| **`generated_at` 合理** | 存在、可解析、不落在未来；**其值呈现给人**做陈旧判断（旧运行留下的 memo 可能 change/branch 都对得上，只有时间戳看得出） | **指令层** |
 | 每条承重约束真有证据锚 | 锚是不是真的、指的对不对 | **指令层**（无确定性信号，语义残余） |
+
+> `decision_hash` / `generated_at` 缺失 ⇒ 视为**未定稿**（相位 B 的收敛两步没走完）⇒ 退回相位 B，
+> **不是**身份不匹配。二者处置不同：前者继续做 B，后者要人拍板「复用还是重做」。
 
 🔴 **诚实边界**：机械门只证明「纪要存在且这两节非空」，**MUST NOT** 被表述为「证明发生过对抗拷问」。
 拷问是管线的**内建默认路径**，跳过须主动偏离指令——**结构性改善，不是机械保证**。

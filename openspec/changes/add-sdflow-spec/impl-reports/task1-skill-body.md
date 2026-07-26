@@ -10,7 +10,7 @@
 
 | 文件 | 动作 | 行数 |
 |---|---|---|
-| `sdflow-spec/SKILL.md` | 新增 | 497（含 140 行通则托管块） |
+| `sdflow-spec/SKILL.md` | 新增 | 499（含 140 行通则托管块）〔@`210298a`〕 |
 | `sdflow-spec/references/decision-memo-schema.md` | 新增 | 81 |
 | `sdflow-spec/references/degradation-ladder.md` | 新增 | 74 |
 | `sdflow-spec/references/adr-and-glossary-templates.md` | 新增 | 63 |
@@ -71,8 +71,8 @@ $ /usr/bin/python3 hack/sync_principles.py --check
 ### ✅ SKILL.md 主体行数 ≤ 上限，超出部分已外置
 
 ```
-$ wc -l sdflow-spec/SKILL.md
-     497 sdflow-spec/SKILL.md
+$ git show 210298a:sdflow-spec/SKILL.md | wc -l
+     499
 ```
 
 上限 600（design NFR 表 / tasks 2.10）。外置三份 `references/`：降级阶梯表 + 失败模式表 +
@@ -256,8 +256,9 @@ $ # 移走整个 specs/
 ### C2 · `docs/sdflow-fable5/` 的「15 个 skill」未改（定基线快照，改反而更错）
 
 该文档集头部写明「2026-07-10 由深度调研产出（git HEAD `fc1b98b` / v0.9.0）」，
-且其总表**仍列着已删除的 `sdflow-buglist` / `sdflow-todolist`**（`02-module-reference.md` 内
-5 处命中）—— 它描述的是一个与当前 HEAD 已不同的 roster。把 15 改成 16 会产出一个
+且其总表**仍列着两个此后被合并删除的旧 issues skill**（见 `docs/sdflow-fable5/02-module-reference.md`
+总表，旧名不在此复述——`test_downstream_reference_guard.py` 只豁免 `docs/**`，不豁免本目录）
+—— 它描述的是一个与当前 HEAD 已不同的 roster。把 15 改成 16 会产出一个
 「写着 16、列着旧 15」的更误导的产物；正解是重新生成整份模块参考，属另一件工作。
 本票按通则③「不加宽」留置并在此登记。
 

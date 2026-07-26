@@ -272,7 +272,7 @@ git status --porcelain
 
 含与本 change 无关的条目 ⇒ **halt 并向人说明检测到的条目**，给三个选项（stash / 先提交 /
 确认带过来）。**MUST NOT 静默继续。** 理由：下一步 `git checkout -b` 会把脏改动带上新分支，
-而 `checkpoint-commit.sh` 的无条件 `git add -A` 会把它们全部提交 —— 本仓已真实发生过。
+而 `checkpoint-commit.sh` 的无条件 `git add -A` 会把它们全部提交〔A-1〕。
 
 **② FF-0 三分支判定**
 
@@ -345,7 +345,9 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 ### B.7 收敛两步
 
 **④ 纪要定稿** —— 补齐 frontmatter 身份字段：`schema_version` / `change` / `branch` /
-`generated_at` / `decision_hash`。
+`generated_at` / `decision_hash`。`decision_hash` MUST 用
+[`references/decision-memo-schema.md`](./references/decision-memo-schema.md) §2 的**那一条命令**
+算（C.1 判 4 重算时跑的是同一条 ⇒ 定义即命令，无两端口径失配面）。
 
 **⑤ checkpoint**（先核工作树，见「checkpoint 纪律」）：
 
@@ -357,15 +359,23 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 
 ## 相位 C · 生成
 
-### C.1 起手核验纪要（三判，缺一即拒）
+### C.1 起手核验纪要（四判，缺一即拒）
 
 1. `decision-memo.md` **存在**；
 2. `## 拍板决策` 与 `## 承重约束` **非空**；
-3. **身份字段匹配当前盘面**：`change` == 当前 change 名 ∧ `branch` == 当前分支。
+3. **身份字段匹配当前盘面**：`change` == 当前 change 名 ∧ `branch` == 当前分支；
+4. **`decision_hash` 重算后匹配** —— 按
+   [`references/decision-memo-schema.md`](./references/decision-memo-schema.md) §2 的唯一算法
+   重算「拍板决策」全文 hash，与 frontmatter 比对；`generated_at` 一并**读出来呈现给人**
+   （不可解析或落在未来 ⇒ 同样请人确认）。
 
 任一不过 ⇒ **拒绝进入生成，退回相位 B**，并向人说明缺口。
-身份不符时 ⇒ **呈现旧 memo 摘要给人确认**（复用还是重做 B），**MUST NOT 静默复用**——
-上一次废弃运行留下的非空 memo，在「只查存在且非空」的判据下是全绿的。
+身份不符（判 3）或 hash 不符（判 4）⇒ **呈现旧 memo 摘要 + `generated_at` 给人确认**
+（复用还是重做 B），**MUST NOT 静默复用**——上一次废弃运行留下的非空 memo，
+在「只查存在且非空」的判据下是全绿的；而 hash 不符意味着**定稿之后 memo 被手改过**，
+此时 memo 承载的共识与人记得的已经不是同一份。
+🔴 `decision_hash` / `generated_at` **缺失**是另一回事：那是相位 B 收敛两步没走完 ⇒
+**退回 B 补定稿**，MUST NOT 按「身份不匹配」去问人复用与否。
 
 ### C.2 强制阅读清单（**显式写死**）
 
@@ -400,8 +410,8 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 4. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
 5. **写后核验（C.4）**。
 
-**阶段二**：本步改派 `subagent_type: sdflow-spec-writer`（**MUST NOT 用 `agentType`**——
-那是 Workflow `agent()` 的参数，该调度路径已被否决），`model` 填 0.2 解析出的具体 id。
+**阶段二**：本步改派 `subagent_type: sdflow-spec-writer`（**MUST NOT 用 `agentType`**〔A-2〕），
+`model` 填 0.2 解析出的具体 id。
 writer 遇未决判断 MUST 返回**结构化 blocker**（缺口描述 + 它需要什么），MUST NOT 自行猜测补全。
 agent 定义不可用 ⇒ **主 session 亲写**，MUST NOT 退通用子代理（见降级阶梯）。
 
@@ -496,4 +506,23 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 2. **产 / 审错档纪律** —— 阶段一与阶段二的合适档位不同，换档是本例外的真实动因。
 
 🔴 **MUST NOT 引用「主审裁决需冷视角」** —— 该论据已被 G1 正面回答（独立性由 fan-out 的
-fresh 子代理提供，不由 `/clear` 提供）。拿它当理由是漏查。
+fresh 子代理提供，不由 `/clear` 提供）〔A-3〕。
+
+---
+
+## 附录 A · 依据与演进史
+
+> 正文只放最终态；本附录承载「为什么是这样 / 曾经不是这样」——**读正文不需要它**
+> （`openspec/rules/doc-authoring.md` DOC-1）。
+
+**〔A-1〕工作树前置检查为什么是硬 halt** —— 「脏工作树被 `checkout -b` 带上新分支、
+再被 `checkpoint-commit.sh` 的无条件 `git add -A` 全量提交」**在本仓已真实发生过**，
+不是假想风险。
+
+**〔A-2〕为什么点名禁 `agentType`** —— 派子代理有三条路径：① Agent 工具（参数
+`subagent_type`）② agent 定义文件（载体）③ Workflow `agent()`（参数 `agentType`）。
+**③ 已被否决**（需用户每次显式授权）；本仓既有先例一律用 `subagent_type`。
+∴ 写 `agentType` 不只是拼写问题，是走上了一条不采纳的调度路径。
+
+**〔A-3〕「主审裁决需冷视角」为什么不能当出口理由** —— 它看起来像个好理由，但
+`workflow.md` 的 G1 已正面回答过：独立性由 fan-out 的 fresh 子代理提供。拿它当理由 = 漏查。

@@ -68,6 +68,32 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install coreutils
 
+      # 🔴 openspec CLI 同属「装了才跑得到」的那一类（与上面 coreutils **同形**）：
+      # `hack/tests/test_decision_memo_gate.py` 的门 2（「存在态 ≠ 合格态」）用
+      # `pytest.mark.skipif(shutil.which("openspec") is None)` 守着 —— 不装它，
+      # 门 2 的用例在**全部**泳道恒 skip（本地实测：`env PATH=/usr/bin:/bin` 跑同一文件，
+      # 门 2 全数 skip），即「泳道绿但承诺没兑现」，
+      # 本仓 fix-mechanical-layer-silent-failures 所治的同形病。
+      #
+      # **只铺一条泳道**（沿本文件「两条轴各自的理由互不相干，交叉只是重复验证」的既有取舍）：
+      # openspec 是 node CLI，其行为**与 os 无关、与 python 版本无关** ⇒ 铺满 4 条只是
+      # 同一信息重复 4 次，而 macOS 泳道按 10 倍计费。选最廉价的 ubuntu-latest × 3.12。
+      #
+      # **钉死版本**（同第 31 行「MUST NOT 用浮动版本」）：这 6 条用例断言的是
+      # **CLI 1.5.0 的具体行为**（`validate --strict` 只覆盖 delta specs），
+      # 浮动到新版会在发布当天无预警变红且历史 job 不可复现。本机实测基线即 1.5.0。
+      # node 下限来自该包的 `engines: {node: ">=20.19.0"}`（实查 npm 全局包 package.json）。
+      - name: Setup Node (openspec CLI 的运行时 — 仅这一条泳道)
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install openspec CLI (让 validate 门真跑起来)
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: |
+          npm install -g @fission-ai/openspec@1.5.0
+          openspec --version
+
       # 三道门各自独立跑、各自能红——不合并成一步，否则先失败的那道会掩盖后面的。
       - name: Gate — async 调度段两处字节等值（ADR-5）
         run: python hack/check_async_branch_parity.py

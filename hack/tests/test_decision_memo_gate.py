@@ -3,7 +3,8 @@
 【门 1 · 决策纪要】`decision-memo.md` 缺失 / 必填小节为空 ⇒ 红。
     纪要是 `/sdflow-spec` 相位 B 的**承重件**（`/clear` 无损这条不变式全靠它）。
     它是这条管线上**唯一有确定性信号的东西** —— 文件在不在、两个必填小节有没有正文，
-    都是逐行字面量可判的（语法面有界，基准 5）。
+    都是逐行字面量可判的（语法面有界，基准 5）。围栏 / HTML 注释块的识别**复用
+    `ship_gate.py` 的单一源**，MUST NOT 在此手抄一份（见下方 import 处注释）。
     🔴 **诚实边界**：本门只证明「纪要存在且这两节非空」，**MUST NOT** 被表述成
     「证明发生过对抗拷问」。拷问是管线的内建默认路径，不是机械保证。
 
@@ -18,6 +19,7 @@
     照样报 valid）。故「半截 design.md」这一形态**无机械门**，只能靠终审人判。
     该事实由本文件机械钉住 —— openspec 哪天扩了覆盖面，那条用例会红，提示回来改文档。
 """
+import importlib.util
 import re
 import shutil
 import subprocess
@@ -27,8 +29,29 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 
+# ── fenced code block / HTML 注释块的识别口径：**复用本仓单一源**，MUST NOT 手抄 ──────────
+# 单一源 = `sdflow-ship/scripts/ship_gate.py:568-579` 那一组（`fence_delim` / `FenceTracker` /
+# `HtmlCommentTracker`），原文即写着「MUST NOT 再各自手抄 `line.lstrip().startswith("```")`」。
+# 手抄的口径只认 ``` ⇒ `~~~` / 四 backtick 开的块内的 `## 标题` 会被当成真标题（本门里 = 假绿）。
+# 从**文件路径**加载而非 `import`：目录名含 `-`（非合法包名），且 MUST NOT 动 sys.path/sys.modules
+# 污染全套件 —— 与 `sdflow-ship/tests/test_gate_breaker.py:13-16` 同一 idiom。
+# ⇒ 两处**是同一份实现**，不是两份拷贝，∴ 结构上不存在漂移面，无需再加漂移守卫。
+_GATE_PATH = REPO / "sdflow-ship" / "scripts" / "ship_gate.py"
+_gate_spec = importlib.util.spec_from_file_location("_ship_gate_for_memo_gate", _GATE_PATH)
+_ship_gate = importlib.util.module_from_spec(_gate_spec)
+_gate_spec.loader.exec_module(_ship_gate)
+FenceTracker = _ship_gate.FenceTracker
+HtmlCommentTracker = _ship_gate.HtmlCommentTracker
+
 # 纪要格式的真相源 —— 小节名从这里来，改名两边一起改（下方 test_schema_doc_and_gate_agree 守）
 MEMO_SCHEMA_DOC = REPO / "sdflow-spec" / "references" / "decision-memo-schema.md"
+
+# 小节名的**第三处消费者**：skill 指令本体（C.1 起手核验逐字引用这两个标题）。
+# 只守「门 ↔ schema 文档」两处 ⇒ 改名漏改 SKILL.md 仍全绿（基准 3：同片一致性面一次扫全）。
+MEMO_SECTION_CONSUMERS = (
+    MEMO_SCHEMA_DOC,
+    REPO / "sdflow-spec" / "SKILL.md",
+)
 
 MEMO_FILENAME = "decision-memo.md"
 
@@ -38,22 +61,57 @@ REQUIRED_SECTIONS = ("## 拍板决策", "## 承重约束")
 
 # ---------------------------------------------------------------- 门 1 的判据本体
 
-def _section_body(text, heading):
-    """取 `heading` 这一行到下一个同级/更高级 ATX 标题（或 EOF）之间的正文。
+_ATX_RE = re.compile(r"^ {0,3}(#{1,6})(?:\s|$)")
 
-    【语法面有界】只做两件事：逐行字面量比对标题行、逐行看是否以 `#` 开头。
-    MUST NOT 演化成「解析 Markdown 结构」（基准 5）。
+
+def _atx_level(line):
+    """ATX 标题行 → 级数 1–6；不是标题行 → None。
+
+    口径 = CommonMark ATX 的**有界**词法（数得完，故可手写；基准 5）：行首 ≤3 个空格
+    + 1–6 个 `#` + 空白或行尾。缩进 ≥4 列的行按定义是缩进代码块、**不是标题**，
+    ∴ 这条正则同时把「缩进代码块里的 `## X`」挡在外面，无需另设追踪器。
     """
+    m = _ATX_RE.match(line)
+    return len(m.group(1)) if m else None
+
+
+def _visible_flags(lines):
+    """逐行 → 该行是否是「可当标题看」的行：既不在 fenced code block 内、也不在 HTML 注释块内。
+
+    围栏行与注释块内的行本身也算不可见（它们不是正文结构）。
+    两个追踪器都从 `ship_gate.py` 复用（本仓单一源），MUST NOT 手抄。
+    """
+    fence, comment = FenceTracker(), HtmlCommentTracker()
+    flags = []
+    for l in lines:
+        is_fence_line = fence.feed(l)
+        in_comment = comment.feed(l)
+        flags.append(not is_fence_line and not fence.inside and not in_comment)
+    return flags
+
+
+def _section_body(text, heading):
+    """取 `heading` 这一行到下一个**同级或更高级** ATX 标题（或 EOF）之间的正文。
+
+    两条口径，都落在**有界**语法面上（基准 5），MUST NOT 演化成「解析 Markdown 结构」：
+    - **级数**：`##` 只被 `##` / `#` 终止 —— `### D1 …` 子标题**属于本节正文**
+      （决策纪要必然用 `###` 列决策，任何 `#` 都断 = 假红）；
+    - **可见性**：fenced code block 与 HTML 注释块内的行不参与标题判定
+      （纪要引用 schema 模板时，代码块内必然出现 `## 承重约束` 字面量 —— 当真即假绿）。
+    """
+    level = _atx_level(heading)
     lines = text.splitlines()
-    try:
-        start = next(i for i, l in enumerate(lines) if l.strip() == heading)
-    except StopIteration:
+    visible = _visible_flags(lines)
+    start = next((i for i, l in enumerate(lines)
+                  if visible[i] and _atx_level(l) == level and l.strip() == heading), None)
+    if start is None:
         return None
     body = []
-    for l in lines[start + 1:]:
-        if l.startswith("#"):
+    for i in range(start + 1, len(lines)):
+        lv = _atx_level(lines[i])
+        if visible[i] and lv is not None and lv <= level:
             break
-        body.append(l)
+        body.append(lines[i])
     return "\n".join(body)
 
 
@@ -137,15 +195,81 @@ def test_complete_memo_is_green(tmp_path):
     assert check_decision_memo(d) == []
 
 
-def test_schema_doc_and_gate_agree():
-    """⭐ 小节名是**共享字符串**：门与格式真相源 MUST 逐字一致。
+def test_subheading_does_not_end_the_section(tmp_path):
+    """⭐ `###` 子标题**属于本节正文**，MUST NOT 终止 `##` 小节。
 
-    改了 `references/decision-memo-schema.md` 里的标题却忘了改本门（或反之）⇒ 这里红。
+    决策纪要必然用 `### D1 …` 列决策 —— 若任何 `#` 开头的行都断，这类纪要会被判「为空」= 假红。
     """
-    doc = MEMO_SCHEMA_DOC.read_text(encoding="utf-8")
-    for heading in REQUIRED_SECTIONS:
-        assert heading in doc, f"{MEMO_SCHEMA_DOC.name} 里找不到小节「{heading}」——门与真相源已漂移"
-    assert MEMO_FILENAME in doc
+    d = _write_memo(
+        tmp_path,
+        decisions="### D1 拷问前置\n\n依据：改想法比改四份成文便宜。",
+        constraints="### C1 CLI 无 rename change\n\n证据锚：`openspec new --help` 实跑输出。",
+    )
+    assert check_decision_memo(d) == []
+
+
+def test_heading_inside_fenced_block_is_not_a_real_heading(tmp_path):
+    """⭐⭐ **本门的 dogfood 自指坑**：纪要在「拍板决策」里引用 schema 模板，
+    而模板的代码块内含 `## 承重约束` 字面量 —— 若围栏无感，门会把它当成真小节，
+    于是**真正空着的** `## 承重约束` 反而判绿（假绿，`/sdflow-spec` 在本仓自跑必然命中）。
+
+    三族围栏各来一发（``` / ~~~ / 四 backtick）——CommonMark 的**有界**变体，数得完（基准 5）。
+    """
+    for n, fence in enumerate(("```markdown", "~~~markdown", "````markdown")):
+        close = fence.split("markdown")[0]
+        d = _write_memo(
+            tmp_path / f"case{n}",
+            decisions=f"- **D1 纪要格式照 schema** — 模板：\n\n{fence}\n## 承重约束\n\n- **C1 …**\n{close}\n",
+            constraints="",
+        )
+        problems = check_decision_memo(d)
+        assert len(problems) == 1, f"{fence}: {problems}"
+        assert "承重约束" in problems[0] and "为空" in problems[0], f"{fence}: {problems}"
+
+
+def test_fenced_heading_neither_truncates_nor_relocates_the_section():
+    """⭐ 同一个洞的另外两侧（直接打 `_section_body` 这个判据本体）：
+
+    ① 围栏内的 `## X` MUST NOT **截断**本节正文（否则围栏之后的内容整段丢失）；
+    ② 真正的 `## X` 小节 MUST 被定位到**围栏外**那一处（否则取到的是模板里的假小节）。
+    """
+    text = ("## 拍板决策\n\n```markdown\n## 承重约束\n<模板占位>\n```\n\n- **D1 真决策**\n\n"
+            "## 承重约束\n\n- **C1 真约束**\n")
+    body = _section_body(text, "## 拍板决策")
+    assert "D1 真决策" in body, f"围栏内的标题截断了本节正文：{body!r}"
+    assert _section_body(text, "## 承重约束").strip().startswith("- **C1"), "定位到了围栏内的假小节"
+
+
+def test_heading_hidden_in_html_comment_block_is_red(tmp_path):
+    """⭐ 把整节注释掉（多行 `<!-- … -->`）⇒ 那个标题不算数，仍判缺失/为空。
+
+    与 `_strip_noise` 是**两件事**：那条管「小节里只有注释」，这条管「标题本身被注释掉」。
+    注释块无感 ⇒ 注释里的 `## 承重约束` 被当真小节、`-->` 被当正文 ⇒ 假绿。
+    """
+    d = tmp_path / "changes" / "demo"
+    d.mkdir(parents=True)
+    (d / MEMO_FILENAME).write_text(
+        "# 决策纪要 · demo\n\n## 拍板决策\n\n- **D1 …**\n\n"
+        "<!--\n## 承重约束\n\n- **C1 …**\n-->\n",
+        encoding="utf-8",
+    )
+    problems = check_decision_memo(d)
+    assert len(problems) == 1, problems
+    assert "承重约束" in problems[0]
+
+
+def test_schema_doc_and_gate_agree():
+    """⭐ 小节名是**共享字符串**：门与**全部**消费者 MUST 逐字一致。
+
+    消费者三处（`grep -rn "## 承重约束"` 全量扫，不加 `--include`）：本门 · schema 文档 ·
+    `sdflow-spec/SKILL.md` 的 C.1 三判。少守一处 ⇒ 改名漏改那一处仍全绿（基准 3：面治）。
+    """
+    for path in MEMO_SECTION_CONSUMERS:
+        doc = path.read_text(encoding="utf-8")
+        for heading in REQUIRED_SECTIONS:
+            assert heading in doc, (
+                f"{path.relative_to(REPO)} 里找不到小节「{heading}」——门与消费者已漂移")
+    assert MEMO_FILENAME in MEMO_SCHEMA_DOC.read_text(encoding="utf-8")
 
 
 def test_repo_memos_all_pass_the_gate():
@@ -226,16 +350,22 @@ def _make_change(root, *, proposal=_GOOD_PROPOSAL, spec=_GOOD_SPEC, design=_GOOD
     return change
 
 
+# 外部 CLI 一律带 timeout：挂起时本用例自己红（TimeoutExpired），
+# 而不是把 CI job 拖到 workflow 级超时才被杀（那时红的是整条泳道，看不出是哪一条）。
+_CLI_TIMEOUT_S = 60
+
+
 def _validate(root):
     return subprocess.run(
         ["openspec", "validate", "demo", "--strict", "--type", "change"],
-        cwd=str(root), capture_output=True, text=True)
+        cwd=str(root), capture_output=True, text=True, timeout=_CLI_TIMEOUT_S)
 
 
 def _status_is_complete(root):
     out = subprocess.run(
         ["openspec", "status", "--change", "demo", "--json"],
-        cwd=str(root), capture_output=True, text=True, check=True).stdout
+        cwd=str(root), capture_output=True, text=True, check=True,
+        timeout=_CLI_TIMEOUT_S).stdout
     import json
     return json.loads(out)["isComplete"]
 
