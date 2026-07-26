@@ -27,7 +27,9 @@
 `先过 FF-0 三分支判定（保护分支则 git checkout -b feat/{change}；已在本 change 分支则跳过；在其它 feature 分支则停下问我），再按 config + trigger-catalog 生成`。
 
 > **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 殊途同归调它）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。
-> hook 实现同一条三分支判定：**保护分支 → deny**；**已在 `feat/{该 change}` → 放行**；**其它 feature 分支 → deny 并要求先问人**（人确认「就地继续」后，`touch <仓根>/openspec/.ff0-ack` 再重跑即放行——**该哨兵是给人拍板用的一次性逃生口：守卫读到即删、只对下一次调用生效，模型 MUST NOT 自行 touch 它**；判据只看文件在不在，MUST NOT 从命令串里认口令——命令串是无界的 shell 语法面）。任何解析/探测异常一律 fail-open 放行（守卫自身故障绝不阻断正常工作）。文档级强制（调用方注入 + review 核对）作为补充层。
+> hook 实现同一条三分支判定：**保护分支 → deny**；**已在 `feat/{该 change}` → 放行**；**其它 feature 分支 → deny 并要求先问人**（人确认「就地继续」后**分两步**敲：先单独 `touch <仓根>/openspec/.ff0-ack`，**再重跑** `openspec new change <name>`——**MUST NOT 写成 `touch … && openspec …` 一条**：PreToolUse 在命令执行**前**判定，那一刻哨兵还不存在，守卫会把这条命令连同 touch 一起 deny，唯一逃生口变死循环。**该哨兵是给人拍板用的一次性逃生口：守卫读到即删、只对下一次调用生效，模型 MUST NOT 自行 touch 它**；判据只看文件在不在，MUST NOT 从命令串里认口令——命令串是无界的 shell 语法面）。
+> **残留令牌是真实的绕过口，如实登记**：人若在自己的终端里敲 `openspec new change`（hook 根本不触发），哨兵**永不被消费**，会留在盘上静默放行下一次调用。缓解只做两件**有界**的事：① 哨兵带 **10 分钟时效**，超窗即失效并自动删除（把「常驻绕过口」压成一个短窗口）；② `/openspec/.ff0-ack` 进 canonical runtime gitignore（`assets/snippets/runtime-gitignore.txt`），防 `checkpoint-commit.sh` 的 `git add -A` 把它提交入库、让每个 clone 都带一个。窗口内的残留仍是真洞，本 hook **MUST NOT 声称堵死它**——它从来不是安全边界，真正的防线是纪律 + review。
+> 任何解析/探测异常一律 fail-open 放行（守卫自身故障绝不阻断正常工作）。文档级强制（调用方注入 + review 核对）作为补充层。
 
 ## wayfinder→ff 衔接契约（条件：change 源于 wayfinder map）
 

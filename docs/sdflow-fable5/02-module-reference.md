@@ -1,6 +1,6 @@
-# sdflow 全模块参考：15 个 skill 的设计与实现
+# sdflow 全模块参考：全部 skill 的设计与实现
 
-> **本文是模块级参考**：仓库解剖 → 15 skill 总表 → 四大编排器详解 → 规则 bundle → 数据类六件套 → 调用拓扑。
+> **本文是模块级参考**：仓库解剖 → skill 总表 → 四大编排器详解 → 规则 bundle → 数据类六件套 → 调用拓扑。
 > 与既有文档分工：[workflow-overview.md](../workflow-overview.md) 讲阶段叙事、[workflow-map.md](../workflow-map.md) 讲字段×判据速查；本文讲**每个模块内部怎么设计、怎么实现**，并覆盖旧详解未收录的模块（ship / roadmap / init / recorder 三件套 / retro / maintain / embedded-test-sop）。
 > 数据基线：git HEAD `fc1b98b`，全部论断接地自源码（关键处附 file:line）。
 
@@ -12,7 +12,7 @@
 sdflow-skills/
 ├── setup.sh                    # 安装入口：含 SKILL.md 的目录 → 双运行时 symlink
 ├── VERSION                     # v0.9.0
-├── <15 个 skill 目录>/          # 每个 = SKILL.md（必需）+ scripts/ + tests/ + assets/（可选）
+├── <各 skill 目录>/          # 每个 = SKILL.md（必需）+ scripts/ + tests/ + assets/（可选）
 │   └── sdflow-init/assets/workflow/   # ★ 整套规则 bundle 的唯一权威源（34 文件）
 │   └── sdflow-init/assets/hack/       # ★ 全局 hack 脚本源（checkpoint/outside-voice/resolve-workflow）
 ├── openspec/                   # 本仓 dogfood 自己的工作流（changes/specs/issues/adr/roadmaps/retro）
@@ -24,7 +24,7 @@ sdflow-skills/
 | 类型 | 成员 | 确定性来源 |
 |---|---|---|
 | 编排类（纯 Markdown） | sdflow-ship¹ · sdflow-spec-review · sdflow-code-review · sdflow-done¹ · sdflow-roadmap · embedded-test-sop · openspec-upgrade · sdflow-upgrade | SKILL.md 指令驱动主 session 调度子代理；机械门外置到脚本 |
-| 数据类（Markdown + Python） | sdflow-buglist · sdflow-todolist · sdflow-issues · sdflow-init · sdflow-retro · sdflow-maintain | `scripts/` owns 不变量 + pytest（合计 ≈374 用例） |
+| 数据类（Markdown + Python） | sdflow-issues · sdflow-init · sdflow-retro · sdflow-maintain · sdflow-architecture · sdflow-devenv | `scripts/` owns 不变量 + pytest（用例数以 `pytest <skill>/tests/` 实测为准，勿在此写死） |
 
 ¹ ship/done 带自有脚本（ship_gate.py / roadmap_writeback_draft.py），介于两类之间。
 
@@ -58,7 +58,7 @@ flowchart LR
 
 ---
 
-## 2. 15 个 skill 总表
+## 2. skill 总表
 
 | skill | 分类 | SKILL.md 行数 | 脚本行数 | 测试用例 | 在闭环中的位置 | 被谁调用 |
 |---|---|---|---|---|---|---|
@@ -68,9 +68,7 @@ flowchart LR
 | sdflow-code-review | 评审主审 | 250 | 0（外部化） | — | 阶段三·步8 | ship（RUN_CODE_REVIEW）/人工 |
 | sdflow-done | 闭环 | 360 | 368（roadmap_writeback_draft.py） | 32 | 阶段三·步9 | ship（RUN_VERIFY）/人工 |
 | embedded-test-sop | 测试 | 362 | 0 | 0 | 阶段三·步5.5（条件） | ship（RUN_SOP）/人工 |
-| sdflow-buglist | 记录 | 234 | 751 | 76 | 全阶段 | 人工 + done sweep 间接 |
-| sdflow-todolist | 记录 | 245 | 715 | 71 | 全阶段 | 人工 + done sweep 间接 |
-| sdflow-issues | 记录 | 145 | 1173 | 118 | 收尾 + 批次管理 | **done §2.1 sweep 自动调** |
+| sdflow-issues | 记录 | 559 | 1746 | 679 | 全阶段 + 收尾批次管理 | 人工 + **done §2.1 sweep 自动调** |
 | sdflow-retro | 复盘 | 104 | 799（2 脚本） | 71 | 闭环之外（只读） | 人工 + maintain 薄指针 |
 | sdflow-maintain | 维护 | 67 | 314（maintain_scan.py） | 38 | 归档后/合并上游后 | 人工 |
 | sdflow-init | 铺设 | 111 | init.py（含 config-lint） | — | 消费仓 init/update | 人工 |
@@ -286,9 +284,7 @@ flowchart TD
     SHIP -->|RUN_PLAN| WP["writing-plans → SDD<br/>（注入点 A/B）"]
     SHIP -->|RUN_CODE_REVIEW| CR["sdflow-code-review<br/>（gstack/review 原生并入）"]
     SHIP -->|RUN_VERIFY| DN["sdflow-done"]
-    DN -->|"§2.1 sweep"| IS["sdflow-issues"]
-    IS --- BL["sdflow-buglist"] 
-    IS --- TL["sdflow-todolist"]
+    DN -->|"§2.1 sweep"| IS["sdflow-issues<br/>（bug/todo 两池，单一触发面）"]
     DN -->|"归档+merge"| ARCH["openspec archive"]
     ARCH -.锚数据.-> RT["sdflow-retro（只读）"]
     ARCH -.目录.-> MT["sdflow-maintain"]

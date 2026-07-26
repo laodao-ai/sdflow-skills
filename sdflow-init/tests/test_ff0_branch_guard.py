@@ -9,8 +9,10 @@ hook 契约：读 stdin 的 PreToolUse payload，deny 时往 stdout 打一份 JS
 放行时不打任何 JSON（exit 0）。故判据 = stdout 里有没有 `"permissionDecision": "deny"`。
 """
 import json
+import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -114,6 +116,61 @@ def test_sentinel_is_one_shot(repo):
     assert not (repo / ACK_REL).exists(), "哨兵未被消费 ⇒ 令牌成了永久后门"
     denied, _ = run_hook(repo, "openspec new change add-foo")
     assert denied, "同一个哨兵放行了第二次"
+
+
+def test_escape_hatch_command_in_deny_reason_is_itself_allowed(repo):
+    """deny 文案给的逃生口命令 MUST NOT 被本 hook 自己 deny —— 否则唯一合规出路是死循环。
+
+    PreToolUse 在命令**执行前**判定：写成一条 `touch <token> && openspec new change X`
+    时，判定发生在 touch 之前 ⇒ 哨兵还不存在 ⇒ 本 hook 把这条命令连同 touch 一起 deny。
+    故文案必须把逃生口拆成**两步**，且第一步（单独 touch）本身可放行。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    _, reason = run_hook(repo, "openspec new change add-foo")
+    hatch = [ln.strip() for ln in reason.splitlines() if ln.strip().startswith("touch ")]
+    assert hatch, "deny 文案里没有一条可直接复制的 touch 命令"
+    for cmd in hatch:
+        denied, _ = run_hook(repo, cmd)
+        assert not denied, \
+            f"deny 文案给出的逃生口命令本身会被本 hook deny（死循环）：{cmd!r}"
+
+
+def test_two_step_escape_hatch_runs_end_to_end(repo):
+    """真实跑一遍人的两步序列：① 单独 touch 放行 → ② 重跑放行 → ③ 同令牌再跑 deny。"""
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    _, reason = run_hook(repo, "openspec new change add-foo")
+    touch_cmd = next(ln.strip() for ln in reason.splitlines()
+                     if ln.strip().startswith("touch "))
+
+    # ① 第一步：人敲 touch —— 不被拦
+    denied, _ = run_hook(repo, touch_cmd)
+    assert not denied, "第一步 touch 被 deny ⇒ 逃生口不可用"
+    subprocess.run(touch_cmd, shell=True, check=True, cwd=repo)
+    assert (repo / ACK_REL).exists(), f"文案给的 touch 命令没造出哨兵：{touch_cmd!r}"
+
+    # ② 第二步：重跑创建命令 → 放行
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert not denied, "两步序列的第二步仍被 deny"
+
+    # ③ 令牌用后即焚
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert denied
+
+
+def test_stale_sentinel_expires_and_is_swept(repo):
+    """残留令牌有**有界时效**：超窗即失效，且被顺手删除（不留常驻绕过口）。
+
+    残留是真实场景：人若在自己的终端里敲 `openspec new change`（本 hook 根本不触发），
+    哨兵永不被消费 —— 若无时效，它就是下一次任意分支③调用的静默放行口。
+    """
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    ack(repo)
+    stale = time.time() - 3600
+    os.utime(repo / ACK_REL, (stale, stale))
+    denied, _ = run_hook(repo, "openspec new change add-foo")
+    assert denied, "过期哨兵仍然放行 —— 残留令牌成了常驻绕过口"
+    assert not (repo / ACK_REL).exists(), \
+        "过期哨兵未被顺手清掉 —— 它会一直留在盘上（且可能被 git add -A 提交入库）"
 
 
 def test_sentinel_found_from_repo_subdirectory(repo):

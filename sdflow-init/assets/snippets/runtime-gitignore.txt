@@ -1,1 +1,2 @@
 /openspec/issues/.recorder.lock
+/openspec/.ff0-ack

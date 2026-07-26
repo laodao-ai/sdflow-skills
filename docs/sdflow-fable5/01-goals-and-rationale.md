@@ -25,7 +25,7 @@
 
 **基座与自建的边界**：不重造已有轮子——`OpenSpec`（change 四件套 + archive CLI）、
 `gstack`（autoplan 广审 / review）、`superpowers`（writing-plans / subagent-driven-development）、
-`MattPopock skills`（issue tracker 约定）作为黑盒复用；自建的 15 个 `sdflow-*` skill 只做**编排、门禁、记录、复盘**四类粘合层。
+`MattPopock skills`（issue tracker 约定）作为黑盒复用；自建的一组 `sdflow-*` skill 只做**编排、门禁、记录、复盘**四类粘合层。
 复用边界有明文红线（adr/0002）：**读外部 skill 的产出物合法，依赖其内部实现非法**——依赖内部实现在对方升级时会静默失效。
 
 ---

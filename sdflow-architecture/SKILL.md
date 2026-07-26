@@ -481,7 +481,7 @@ lint 通过码 `structure-ok-SEMANTICS-UNCHECKED`——复述信任边界：**li
 **对话收尾行（原文级，交棒不得只埋在文件里）**：
 
 ```
-SAD 已 skeleton-ready · 建议骨架 change：<名> · 下游：/opsx:ff <名> · 软提示：git add openspec/architecture/ 纳入版本控制
+SAD 已 skeleton-ready · 建议骨架 change：<名> · 下游：/sdflow-spec <名>〔分支 A · 默认〕，未装 sdflow-spec 则 /opsx:ff <名>〔分支 B〕 · 软提示：git add openspec/architecture/ 纳入版本控制
 ```
 
 ### 5.3 过程轴文档指路（指出不代写，与 5.1「建议骨架 change 不代开」同构）

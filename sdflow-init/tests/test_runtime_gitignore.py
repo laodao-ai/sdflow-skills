@@ -10,6 +10,12 @@ INIT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(INIT)
 ENTRY = b"/openspec/issues/.recorder.lock\n"
 
+# canonical 全集（**不写死条目内容**）：本组用例约束的是「每条 canonical 条目恰一条 +
+# 用户 bytes 逐字节保留」这条不变量，而不是「canonical 里恰好有哪一条」——后者写死会让
+# 新增一条运行期产物（如 FF-0 哨兵 `/openspec/.ff0-ack`）连带撞红一批无关断言。
+CANONICAL = (Path(INIT.SNIPPETS) / "runtime-gitignore.txt").read_bytes()
+CANONICAL_ENTRIES = [line for line in CANONICAL.splitlines() if line]
+
 
 def _stub_run_dependencies(monkeypatch):
     monkeypatch.setattr(INIT, "ensure_dirs", lambda _root: [])
@@ -112,14 +118,16 @@ def test_run_init_and_update_use_canonical_runtime_merge(mode, case, tmp_path, m
     if mode == "update":
         (tmp_path / "openspec").mkdir()
     target = tmp_path / ".gitignore"
-    if case == "existing":
-        target.write_bytes(b"user\r\n" + ENTRY)
-    elif case == "user-bytes":
-        target.write_bytes(b"# user\r\ncustom/**\r\n")
-    elif case == "duplicate":
-        target.write_bytes(ENTRY + b"keep\n" + ENTRY)
+    originals = {
+        "missing": b"",
+        "existing": b"user\r\n" + ENTRY,
+        "user-bytes": b"# user\r\ncustom/**\r\n",
+        "duplicate": ENTRY + b"keep\n" + ENTRY,
+    }
+    if originals[case]:
+        target.write_bytes(originals[case])
 
-    canonical = (Path(INIT.SNIPPETS) / "runtime-gitignore.txt").read_bytes()
+    canonical = CANONICAL
     calls = []
     real_merge = INIT.merge_runtime_gitignore
 
@@ -136,9 +144,14 @@ def test_run_init_and_update_use_canonical_runtime_merge(mode, case, tmp_path, m
     else:
         INIT.run(str(tmp_path), mode)
         result = target.read_bytes()
-        assert result.splitlines().count(ENTRY.rstrip(b"\n")) == 1
-        if case == "existing":
-            assert result == b"user\r\n" + ENTRY
-        elif case == "user-bytes":
-            assert result == b"# user\r\ncustom/**\r\n" + ENTRY
+        original = originals[case]
+        # ① 用户既有 bytes 逐字节保留，且**原样在前**（合并只追加，不重写）
+        assert result.startswith(original), "用户既有 .gitignore bytes 未被逐字节保留"
+        # ② 追加段 == 恰好那些缺失的 canonical 条目，各一行，按 canonical 顺序
+        missing = [e for e in CANONICAL_ENTRIES if e not in original.splitlines()]
+        assert result[len(original):] == b"".join(e + b"\n" for e in missing)
+        # ③ 每条 canonical 条目在结果里**恰好一条**
+        for entry in CANONICAL_ENTRIES:
+            assert result.splitlines().count(entry) == 1, \
+                f"canonical 条目 {entry!r} 不是恰好一条"
     assert calls == [canonical]

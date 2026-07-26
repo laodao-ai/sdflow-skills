@@ -22,8 +22,7 @@
                    │
  propose  ──▶  /sdflow-spec       ──FF-0──▶ trigger-catalog TG 判定             proposal/design/specs/tasks
               〔分支 A · 默认〕              git checkout -b feat/{change}       + decision-memo.md
-              /opsx:ff / :new
-              〔分支 B〕
+              /opsx:ff / :new〔分支 B〕
                    │
                    ▼
               ┏━━━━━━━━━━━━━━━┓

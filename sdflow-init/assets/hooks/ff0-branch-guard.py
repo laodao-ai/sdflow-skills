@@ -11,8 +11,9 @@ workflow，但**全都殊途同归调同一条命令 `openspec new change`** 来
     `git checkout -b feat/<change>`。**这一支没有逃生口**（见下）。
   · 已在 `feat/<该 change>` → 放行（真幂等，FF-0 满足）。
   · 在【其它】feature 分支 → deny，要求先问人（从当前切出 / 回 base 切出 / 就地继续）。
-    人拍板「就地继续」后，`touch <仓根>/openspec/.ff0-ack` 再重跑即放行（一次性哨兵，
-    守卫读到即删）。⚠️ 该 ack 是给【人】用的逃生口 —— 模型 MUST NOT 自行 touch 它绕过本守卫。
+    人拍板「就地继续」后**分两步**敲：先单独 `touch <仓根>/openspec/.ff0-ack`，**再重跑**
+    `openspec new change <name>`（一次性哨兵，守卫读到即删）。⚠️ 该 ack 是给【人】用的
+    逃生口 —— 模型 MUST NOT 自行 touch 它绕过本守卫。
   · 任何解析/探测异常、或判不出当前在哪个分支（detached HEAD 等）→ 放行
     （fail-open，绝不因守卫自身故障阻断正常工作）。
 
@@ -23,11 +24,24 @@ workflow，但**全都殊途同归调同一条命令 `openspec new change`** 来
 change」开了后门。故默认分支须探测（best-effort，取不到就退回 {main, master}）。
 
 【逃生口 = 一次性哨兵文件，MUST NOT 从命令串里认口令】（基准 5：无界语法面别手搓）
-判据是「仓根下 `openspec/.ff0-ack` 在不在」——一个**有界**的语义面（存在/不存在），
-守卫读到即 `os.remove` 消费掉，故**放行 ⇔ 成功删掉它**：删不掉就不放行，令牌不会残留成后门。
+判据是「仓根下 `openspec/.ff0-ack` 在不在、且够新」——一个**有界**的语义面（存在性 + 一个
+时间差），守卫读到即 `os.remove` 消费掉，故**放行 ⇔ 这一次成功消费掉了一个未过期的哨兵**。
 🔴 MUST NOT 退回「从命令串里认口令」：deny 文案必然把逃生口原样回传给模型，判据一旦落在命令串上，
 「这段文字是命令还是注释 / 在不在命令起始位置」就是**解析 shell**——而 shell 的语法面无界，
 每堵一种形态就会冒出下一种（行尾注释 → 行首注释 → …），补丁循环不收敛。
+
+【逃生口必须是两步，MUST NOT 写成一条 `touch … && openspec …`】
+PreToolUse 在命令**执行前**判定 ⇒ 判定发生时 touch 还没跑、哨兵还不存在 ⇒ 本守卫会把这条
+一行命令连同 touch 一起 deny，唯一合规出路变成死循环。故 deny 文案分两条给：
+先单独 `touch <token>`（不含 `openspec new change`，本守卫不触发），**再重跑**创建命令。
+
+【残留令牌是真实的绕过口 —— 如实写明，只做有界压缩】
+人若在**自己的终端**里敲 `openspec new change`（本 hook 根本不触发），哨兵**永不被消费**，
+会原样留在盘上，下一次任意「其它 feature 分支」调用就被它静默放行一次。故哨兵带
+`ACK_TTL_SECONDS` 的**有界时效**：超窗即视为失效**并顺手删除**（自愈残留），把「常驻绕过口」
+压成「一个 10 分钟的窗口」。窗口内的残留仍是真洞，本守卫 MUST NOT 声称堵死它（见信任级别）。
+配套：`openspec/.ff0-ack` 已进 canonical runtime gitignore（`assets/snippets/runtime-gitignore.txt`），
+防 `checkpoint-commit.sh` 的无条件 `git add -A` 把残留令牌提交入库、让每个 clone 都带一个。
 
 **信任级别（如实写明，MUST NOT 声称它是安全边界）**：哨兵和口令一样**分不出人和模型**——
 模型同样能 `touch` 它。它买到的只有两件事：①「顺手引用一次 deny 文案就绕过」变成
@@ -50,6 +64,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 # 受保护分支的**固定**部分；实际受保护集 = 本集合 ∪ {探测到的默认分支}（见 protected_branches）。
 PROTECTED_BRANCHES = {"master", "main"}
@@ -71,6 +86,10 @@ CHANGE_NAME_OK_RE = re.compile(r"\A[A-Za-z0-9._-]+\Z")
 # 人拍板「就地继续」后的逃生口：仓根下的一次性哨兵文件，**只放行「其它 feature 分支」这一支**
 # （分支③）。判据是「文件在不在」，与命令串无关 —— 见模块 docstring。
 ACK_FILE = os.path.join("openspec", ".ff0-ack")
+
+# 哨兵的**有界时效**（秒）。人 touch 完立刻重跑命令是秒级动作；10 分钟已是极宽裕的上界。
+# 它买到的是「残留令牌从常驻变成一个短窗口」——见模块 docstring「残留令牌是真实的绕过口」。
+ACK_TTL_SECONDS = 600
 
 
 def _git(cwd: str, *args: str) -> str:
@@ -122,17 +141,25 @@ def repo_root(cwd: str) -> str:
 
 
 def consume_ack(root: str) -> bool:
-    """一次性哨兵：存在即**消费**（删除）并返回 True；不存在 / 删不掉一律 False。
+    """一次性哨兵：存在、**且 mtime 在 ACK_TTL_SECONDS 窗口内** ⇒ 消费（删除）并返回 True。
 
-    「放行 ⇔ 成功删掉」是本函数的全部语义 —— 删不掉就不放行，令牌不会因残留而放行第二次。
+    三种情况返回 False：不存在 / 删不掉（是目录、无权限）/ **已过期**。
+    ⚠️ 过期的哨兵**照样删掉**——残留令牌本身就是绕过口（人在自己终端跑 openspec 时哨兵
+    永不被消费），顺手清掉它比留着强；只是这一次不放行。
     """
     if not root:
         return False
+    path = os.path.join(root, ACK_FILE)
     try:
-        os.remove(os.path.join(root, ACK_FILE))
-    except OSError:  # 不存在 / 是目录 / 无权限 —— 一律「没拍板」
+        mtime = os.stat(path).st_mtime
+    except OSError:  # 不存在 / 取不到 —— 「没拍板」
         return False
-    return True
+    fresh = (time.time() - mtime) <= ACK_TTL_SECONDS
+    try:
+        os.remove(path)
+    except OSError:  # 是目录 / 无权限 —— 删不掉就不放行（否则它不再是一次性的）
+        return False
+    return fresh
 
 
 def protected_branches(cwd: str) -> set:
@@ -210,9 +237,13 @@ def main() -> None:
         "先停下问人，三选一：\n"
         f"  a) 从当前分支切出：git checkout -b feat/{name}\n"
         f"  b) 回 base 再切出：git checkout <base> && git checkout -b feat/{name}\n"
-        "  c) 就地继续 —— 人明确拍板后，由**人**敲这一条：\n"
-        f"       touch {token} && openspec new change {name}\n"
-        "     （该哨兵用后即焚：守卫读到就删，只对下一次调用生效）\n"
+        "  c) 就地继续 —— 人明确拍板后，由**人**分两步敲（本守卫在命令执行【前】判定，\n"
+        "     写成 `touch … && openspec …` 一条会连同 touch 一起被 deny）：\n"
+        f"       touch {token}\n"
+        f"     然后重跑：\n"
+        f"       openspec new change {name}\n"
+        f"     （该哨兵用后即焚：守卫读到就删，只对下一次调用生效；\n"
+        f"       且 {ACK_TTL_SECONDS // 60} 分钟内未被消费即失效并自动删除）\n"
         "⚠️ c) 只能由人决定 —— 模型 MUST NOT 自行 touch 哨兵绕过本守卫。"
     )
 

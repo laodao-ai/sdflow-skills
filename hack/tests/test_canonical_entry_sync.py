@@ -46,6 +46,7 @@ GUIDE = WF / "WORKFLOW-GUIDE.md"
 CLAUDE_SECTION = REPO / "sdflow-init" / "assets" / "snippets" / "claude-section.md"
 SPEC_WORKFLOW = REPO / "openspec" / "specs" / "spec-workflow" / "spec.md"
 HOOK = REPO / "sdflow-init" / "assets" / "hooks" / "ff0-branch-guard.py"
+RUNTIME_GITIGNORE = REPO / "sdflow-init" / "assets" / "snippets" / "runtime-gitignore.txt"
 
 # 人读侧的两份载体（非托管区，手写）——本 change 的立项理由就是「人读侧与 AI 读侧分叉」，
 # 故这一面 MUST NOT 只靠 prose「改一处就改另一处」兜底。
@@ -62,19 +63,36 @@ ENTRY_HEADING = "## 阶段一入口："
 # `/sdflow-spec`、而它的阶段一详解小节仍只画旧三步 —— 那正是本组要修的缺陷形态。
 # （实测：只写「全文含『分支 A』+『sdflow-spec』」的弱锚，删掉 overview §2 的分支 A
 # 小节标题、删掉 map.html 的入口行，都仍然绿。）
+#
+# ⚠️⚠️ 「逐处」= 该文档里**每一处**分支表述各自一条锚，**不是每份一条**。判据逐处问：
+# 「把这一处删掉/改回无条件表述，本文件会红吗？」红不了就是漏网格。
+# （fix2 的实测教训：`DOCS_CARRIERS` 只扩了「份」没扩「处」—— overview `:62`/`:247`、
+#  map.md `:30` 三处逐一删掉，25 个用例仍全绿。典型「扩枚举不回改派生判据」。）
+# 两类都算「一处」：① 呈现阶段一入口的行；② **带分支限定词的条件表述**——删掉限定词后
+# 它会变成无条件成立的错误声明（`〔仅分支 B〕`、`〔分支 B〕问题清晰否`…）。
 DOCS_CARRIERS = {
     "docs/workflow-overview.md": (
         REPO / "docs" / "workflow-overview.md",
         [("/sdflow-spec（分支 A · 默认）",),          # §0 全局流程图节点
+         ("一 · 生成", "分支 A `/sdflow-spec` 一次跑完", "分支 B `opsx:ff`"),  # §1 三阶段画像表
          ("### 分支 A（默认）", "sdflow-spec"),       # §2 阶段一 · 分支 A 小节
          ("### 分支 B", "旧三步"),                    # §2 阶段一 · 分支 B 小节
-         ("装了 `sdflow-spec` 吗", "分支 A")],        # §7 自检清单
+         ("分支 B 里 grill 一律全深度", "MUST NOT 瘦跑"),  # §2 分支 B 的深度约束
+         ("`opsx:ff`", "仅分支 B", "非黑盒"),         # §6 黑盒 skill 表（无条件成立即错）
+         ("装了 `sdflow-spec` 吗", "分支 A"),         # §7 自检清单 · 入口选择
+         ("〔分支 B〕", "问题清晰否"),                 # §7 自检清单 · explore 条（同上）
+         ("〔分支 B〕", "grill 是否收敛后才提交")],    # §7 自检清单 · grill 条（同上）
     ),
     "docs/workflow-map.md": (
         REPO / "docs" / "workflow-map.md",
         # ⚠️「propose + /sdflow-spec」会被下面的阶段表行满足 ⇒ 用轨道箭头把锚钉在 ASCII 轨上
-        [("──▶", "/sdflow-spec"),                     # ASCII 全景轨
-         ("分支 A · 默认", "/sdflow-spec")],          # 阶段表
+        [("──▶", "/sdflow-spec"),                     # ASCII 轨 · propose 行
+         ("分支 B 才走", "分支 A 无此步"),             # ASCII 轨 · explore 行的分支限定
+         ("〔分支 A · 默认〕", "git checkout -b"),     # ASCII 轨 · propose 行下的分支标
+         ("/opsx:ff / :new", "〔分支 B〕"),            # ASCII 轨 · 旧入口的分支限定
+         ("A: /sdflow-spec 相位 B", "B: grill-with-docs"),  # ASCII 轨 · 人类门①两分支
+         ("| 0 |", "explore", "〔分支 B〕"),           # 阶段表 · explore 行
+         ("分支 A · 默认", "/sdflow-spec")],          # 阶段表 · propose 行
     ),
     "docs/workflow-map.html": (
         REPO / "docs" / "workflow-map.html",
@@ -108,7 +126,22 @@ DOCS_CARRIERS = {
     "docs/workflow-skills/grill-with-docs.md": (
         REPO / "docs" / "workflow-skills" / "grill-with-docs.md",
         [("人类对话岛", "分支 B 的第 3 步"),           # 文首定位
+         ("分支 A（默认，`/sdflow-spec`）不走本 skill", "前置于成文"),  # 文首的分支 A 排除句
          ("谁调它", "分支 B", "分支 A 不经本 skill")],  # §1 位置与契约表
+    ),
+    # ⚠️ 仓 README 是**人第一眼**读到的阶段一入口（`:20-29` 的出口序列代码块 + 旧三步注）。
+    #    fix2 实测：把那两处删掉，25 个用例全绿 —— 期望集只圈了 docs/，漏了仓门口那一份。
+    "README.md": (
+        REPO / "README.md",
+        [("/sdflow-spec", "阶段一：澄清 → 拷问 → 生成"),      # 出口序列代码块
+         ("没装 `sdflow-spec` 的项目沿用旧三步", "opsx:explore"),  # 分支 B 注
+         ("`sdflow-spec`", "阶段一·产 spec 单一入口")],       # Skills 列表行
+    ),
+    # ⚠️ SKILL.md 也会呈现下游入口：architecture 的交棒行原写死 `下游：/opsx:ff <名>`
+    #    —— 分支 A 下无条件成立即错（与 grill-with-docs 的位置声明同形态）。
+    "sdflow-architecture/SKILL.md": (
+        REPO / "sdflow-architecture" / "SKILL.md",
+        [("skeleton-ready", "/sdflow-spec", "分支 A · 默认")],  # §5.2 对话收尾行
     ),
 }
 
@@ -251,6 +284,47 @@ def test_ff0_escape_hatch_is_not_a_command_string_passphrase():
     assert "MUST NOT 退回「从命令串里认口令」" in hook
     assert "SDFLOW_FF0_ACK" not in hook, \
         "hook 里又出现了命令串口令 —— 逃生口判据 MUST 只看哨兵文件在不在"
+
+
+def test_ff0_escape_hatch_is_two_steps_in_both_carriers():
+    """逃生口 MUST 是两步，规则文本与 hook 两侧同说。
+
+    PreToolUse 在命令**执行前**判定 ⇒ `touch <token> && openspec new change X` 这一条
+    在判定时哨兵还不存在，会被本 hook 连同 touch 一起 deny —— 唯一合规逃生口死循环。
+    （hook 侧的**行为**由 `test_ff0_branch_guard.py::test_escape_hatch_command_in_deny_reason_is_itself_allowed`
+    真跑一遍钉住；这里钉的是「两处载体都写明了这件事」。）
+    """
+    require(FF_CONSTRAINTS, "MUST NOT 写成 `touch … && openspec …` 一条")
+    assert "MUST NOT 写成一条 `touch … && openspec …`" in HOOK.read_text(encoding="utf-8")
+
+
+def test_ff0_lingering_sentinel_is_declared_and_time_bounded():
+    """残留令牌是真实绕过口 —— MUST NOT 再声称「令牌不会残留成后门」（那是假断言）。
+
+    成因：人在**自己的终端**里敲 `openspec new change` 时本 hook 根本不触发 ⇒ 哨兵永不被
+    消费、原样留在盘上。缓解只有两件有界的事：有界时效 + 进 canonical runtime gitignore。
+    """
+    hook = HOOK.read_text(encoding="utf-8")
+    assert "令牌不会残留成后门" not in hook, \
+        "hook docstring 又断言令牌不会残留 —— 人在自己终端跑 openspec 时它就是会残留"
+    assert "ACK_TTL_SECONDS" in hook, "哨兵没有有界时效 ⇒ 残留令牌 = 常驻绕过口"
+    require(FF_CONSTRAINTS, "残留令牌是真实的绕过口")
+
+
+def test_ff0_sentinel_is_ignored_in_consumer_repos():
+    """哨兵 MUST 进 canonical runtime gitignore —— hook 是**全局**安装、拦所有项目。
+
+    否则叠加 `checkpoint-commit.sh` 的无条件 `git add -A`，残留令牌会被提交入库，
+    **每个 clone 都带一个常驻绕过口**。本仓 `.gitignore`（dogfood）同样必须有。
+    """
+    entry = "/openspec/.ff0-ack"
+    snippet = RUNTIME_GITIGNORE.read_text(encoding="utf-8").splitlines()
+    assert entry in snippet, (
+        f"canonical runtime gitignore 缺 {entry} —— 消费仓不会忽略 FF-0 哨兵，"
+        "checkpoint 的 git add -A 会把它提交入库"
+    )
+    assert entry in (REPO / ".gitignore").read_text(encoding="utf-8").splitlines(), \
+        "本仓 .gitignore 未 dogfood 同一条目"
 
 
 # ── ⑤ claude-section.md（托管块源）：grill 条款分支化 + 归属修正 ──────────
