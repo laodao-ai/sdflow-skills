@@ -89,6 +89,7 @@ sdflow-issues:
     T229: {"module":"openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞)","summary":"两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）","type":"可观测性","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
     T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
     T231: {"module":"sdflow-issues 读取路径（core cmd_scan 自检 / issues.py validate_scan_envelope / _bug_triage·_todo_triage）","summary":"重开 harden-issues-read-path change：读取路径诚实化（显红 + reindex 不罢工 + triage 解耦），砍掉已被 migrate_legacy 取代的 normalize；分支 feat/harden-issues-read-path 已过期不可直接续用","type":"代码质量","status":"OPEN","time":"2026-07-26 10:10","change":null,"batch":null}
+    T232: {"module":"openspec/changes/add-sdflow-spec","summary":"SA-05 Scenario 与 design 失败模式表点名 design.md 的 validate 断言恒假：openspec validate --strict 只读 delta spec","type":"代码质量","status":"OPEN","time":"2026-07-26 17:37","change":"add-sdflow-spec","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2285,3 +2286,14 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：阻塞已解除：原 grill 把本 change 后置于『三脚本重复消除重构』，该重构已 shipped（dedupe-issues-scripts-shared-layer，2026-07-22 归档），现为单份 sdflow_issues_core/__init__.py(2153 行) + 两个薄 shim，当初『要加两份镜像补丁』的理由不再成立，§1/§2 各自变成一处改动。三处硬冲突（直接 merge 会撞）：ADR 0027 号已被 main 的 0027-issues-ledger-single-skill-shared-core.md 占用；T207 已被 main 分配给另一项（docs 旧 skill 名刷新）；分支 265 行缺陷报告通篇写已废的 sdflow-todolist/buglist 路径。诚实边界：本仓与 10-michi 台账当前均干净（实测 scan --json：todo 230 / bug 22 / michi 2 项，脏值 0、problems 0，reindex 正常），原始痛点仓 zhws_ops_api 不在本机 ⇒ 非在血急事，优先级建议 P0→P1。但按基准 2 锚目标态：legacy 表仍被解析（cells[4] 原样透传）、手写表格行仍是被设计允许的路径 ⇒ 脏值在目标态依然可达，不因『现存语料干净』而缩水。
 <!-- sdflow-issue-block:end id=T231 -->
+
+<!-- sdflow-issue-block:start id=T232 -->
+## T232: SA-05 Scenario 与 design 失败模式表点名 design.md 的 validate 断言恒假：openspec validate --strict 只读 delta spec
+> SA-05 Scenario 与 design 失败模式表点名 design.md 的 validate 断言恒假：openspec validate --strict 只读 delta spec
+
+**关联文档**：`openspec/changes/add-sdflow-spec/design.md`
+
+**动机**：Task 1 实现期实测证伪（implementer + Spec 轴 reviewer + 接缝复审三方独立复现，CLI 1.5.0）：openspec validate <change> --strict 只跑 validateChangeDeltaSpecs、只读 specs/*/spec.md。三条硬证据 —— (1) dist/core/validation/validator.js 全文无 design 字样；(2) 把 proposal.md 整份删除仍输出 Change 'demo' is valid、exit 0；(3) 只有截断 delta spec（must include at least one scenario）或移走整个 specs/（Change must have at least one delta）才会红。⇒ specs/spec-authoring/spec.md:133-135 的 SA-05 Scenario「半截产物不被判完成」逐字点名 design.md（『status 报 done 但 validate --strict 不过』）对 design.md 恒假；design.md:230 失败模式表『writer 写半截/垃圾 → validate 判该产物未完成』同理，对 4 份产物里的 3 份（proposal / design / tasks）不成立。
+
+**备注**：🔴 /sdflow-done 的 archive 阶段必做项，不是可选。实现期 MUST NOT 改本 change 四件套（会触发设计门失鲜 REFUSE_START、卡死 ship 链），故只能登记后延（同 T229 先例）。已交付的可达形态：门锚在 delta spec（test_truncated_spec_delta_is_caught_by_strict_validate）+ test_status_says_done_while_validate_says_red 正面证明『存在态 ≠ 合格态』+ test_validate_strict_only_covers_delta_specs 把覆盖边界机械钉住（upstream 哪天扩了覆盖面该用例会红，提示回来收紧文档）。
+<!-- sdflow-issue-block:end id=T232 -->
