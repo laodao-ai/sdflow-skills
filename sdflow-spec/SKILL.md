@@ -261,7 +261,15 @@ absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B
 
 ## 外派协议（阶段二 · 三个 agent 定义）
 
-> 阶段一**不外派**，本节不生效。启用前提 = SA-07 的 GO/NO-GO 实测门判 GO。
+> 阶段一**不外派**，本节不生效。
+>
+> 🔴 **本节当前 = 未启用资产。** SA-07 的 GO/NO-GO 实测门判 **GO**（派发链路可用），但阶段二验收门的
+> 另一半——A/B 三路实测——判**不达标**：同一个真实 change 上 subagent 路 **$11.68 / 12.57M token**
+> vs thin 路 **$9.06 / 8.81M token**（**成本劣于薄编排**，且冷审 Important findings 1 vs 0）。
+> 依 `add-sdflow-spec/tasks.md` 阶段二验收门的失败分支 ⇒ **回退到阶段一薄编排形态**；三个 agent 定义、
+> `install_agents()` 与其守卫**作为未启用资产保留**。数据与诚实边界（**N=1，非统计显著**）见
+> `openspec/changes/add-sdflow-spec/impl-reports/task5-ab-comparison.md`。
+> **本节仅在人明确指示启用外派时生效**，MUST NOT 自行启用。
 
 | 用途 | `subagent_type` | 档位 | 它**没有**什么 |
 |---|---|---|---|
@@ -460,7 +468,8 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 4. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
 5. **写后核验（C.4）**。
 
-**阶段二**：本步改派 `subagent_type: sdflow-spec-writer`（**MUST NOT 用 `agentType`**〔A-2〕），
+**阶段二**（**当前未启用**，见「外派协议」节的验收门结论）：本步改派
+`subagent_type: sdflow-spec-writer`（**MUST NOT 用 `agentType`**〔A-2〕），
 `model` 填 0.2 解析出的**字面值**（枚举边界见「外派协议」）。
 writer 遇未决判断 MUST 返回**结构化 blocker**（缺口描述 + 它需要什么），MUST NOT 自行猜测补全。
 agent 定义不可用 ⇒ **主 session 亲写**，MUST NOT 退通用子代理（见降级阶梯）。
