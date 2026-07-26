@@ -130,13 +130,31 @@ cleanup_orphans() {
 install_agents() {
   local src_dir="$REPO_DIR/sdflow-spec/agents"
   local dest="$HOME/.claude/agents"
-  [ -d "$src_dir" ] || return 0
+
+  # 🔴 【源目录不存在 ≠ 无事可做】—— MUST NOT 在这里 `return 0`。
+  #   「整个 sdflow-spec/agents/ 被删掉」正是**孤儿清理最该跑**的那一刻：上一次 setup 铺出去的
+  #   软链此刻全部悬空，而在源目录上早退会把它们**永久留在全局命名空间里**。
+  #   （实测：早退版本下「删目录 + 重跑新版 setup」⇒ 3 条悬空链原样存活；见
+  #   add-sdflow-spec/impl-reports/task6-stage3-conditional.md 的回滚演练 C 组。）
+  #   ∴ 铺设循环按 src_dir 有无条件执行，**清理无条件走到底**。
+  #   这也让 design Migration Plan 要求的「先移除 agents 再 revert」有了可执行的落地动作
+  #   （删源目录 + 跑一次新版 setup），无需另造 uninstall 开关。
 
   if [ "$IS_WINDOWS" -eq 1 ]; then
     # 散装 .md 【没有 marker 落点】——marker 是「目录里放一个标记文件」，对单文件做不出来。
     # ⇒ Windows 下不铺 agents。/sdflow-spec 在该宿主走主 session 亲查/亲写路径（D3 的降级方向）。
     # MUST NOT 在这里写「copy + 所有权守卫」——那是做不出来的东西。
-    skipped+=("agents @ $dest — Windows：散装 .md 无 marker 落点，不铺设；/sdflow-spec 走主 session 亲查/亲写")
+    # （Windows 从不铺软链 ⇒ 也没有悬空链要清，故这里仍是唯一一处合法的整体早退。）
+    # ⚠️ 用 if/fi 而非 `[ … ] && …`：后者在条件为假时整条语句退出码为 1，`set -e` 会当场中止 setup。
+    if [ -d "$src_dir" ]; then
+      skipped+=("agents @ $dest — Windows：散装 .md 无 marker 落点，不铺设；/sdflow-spec 走主 session 亲查/亲写")
+    fi
+    return 0
+  fi
+
+  # 源目录整体消失（人手删掉 / 被回滚掉一半）⇒ 不铺设，但**清理照跑**。
+  if [ ! -d "$src_dir" ]; then
+    cleanup_agent_orphans "$dest"
     return 0
   fi
 
@@ -182,7 +200,17 @@ install_agents() {
     installed+=("agents/$name @ $dest")
   done
 
-  # 孤儿清理：本仓装出去的软链，源 .md 已删 ⇒ 悬空 ⇒ 清掉。
+  cleanup_agent_orphans "$dest"
+}
+
+# 孤儿清理：本仓装出去的软链，源 .md 已删 ⇒ 悬空 ⇒ 清掉。
+# 🔴 **独立成函数、由 install_agents 的两条出路各调一次**——因为「源目录整体没了」
+#   恰恰是它最该跑的那一刻（见 install_agents 开头）。
+cleanup_agent_orphans() {
+  local dest="$1"
+  # 落点本身不存在 ⇒ 无链可清（且不该为清理而凭空建目录）。
+  [ -d "$dest" ] || return 0
+
   # 用 find 枚举（而非 glob）：尾斜杠/普通 glob 在 POSIX 语义下匹配不到 dangling 软链。
   #
   # 【自属判据 = 与接管判据同一条**路径形状**，但**名字维度必然更宽**（这是设计，不是疏忽）】

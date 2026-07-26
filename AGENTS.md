@@ -76,6 +76,12 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 - `sdflow-init/assets/workflow/` 是下游 OpenSpec workflow bundle 的唯一权威源；`openspec/` 是本仓 dogfooding 实例，`openspec/workflow/` 仅保留运行工具、生成文档和契约文件，不存规则真相源副本。
 - `openspec/rules/` 是本仓写作与工程规则的单一源；`openspec/changes/`、`openspec/specs/`、`openspec/issues/` 分别承载变更、主规格和问题台账。
 - `hack/` 放仓库级生成与一致性脚本，`docs/` 放架构、流程和草案文档。新增或删除顶层 skill 时同步更新 `README.md` 的 Skills 列表。
+- `sdflow-spec/agents/*.md` 是三个 agent 定义，由 `setup.sh` 的 `install_agents()` 铺进
+  **全局** `~/.claude/agents/`（第三个安装目的地，与两个 skills 目录并列）。🔴 该目录是
+  **全局命名空间、非本工具独占**：所有权守卫为「只接管软链且 `readlink` 指向本仓」，
+  Windows 不铺。**外派当前未启用（阶段二验收门判回退），但定义仍对本机所有项目可见**——
+  挡误选的只有 `description` 的排他式声明（指令层，非机械门）。移除 = 删源目录后
+  **仍在新版 installer 上**跑一次 `setup.sh`（顺序不可颠倒，先 revert 会留下永久悬空软链）。
 
 ## 构建、测试与开发命令
 
@@ -134,6 +140,12 @@ git diff --check                                      # 检查空白错误
 ### 旧入口 sunset 条件（阈值已写死；**与阶段二成败无关**）
 
 **观察窗** = `sdflow-spec` 上线后**连续 6 个新开 change**，或 **8 周**，先到者为准。
+
+🔴 **「上线」的起算点 = `add-sdflow-spec` merge 进默认分支、且运行 checkout 跑过 `setup.sh`**
+（此前 skill 尚未对日常可用，敲不出来的东西谈不上采用率）。**在此之前，判定结果是「未到期」，
+不是「未达标」**——两者处置完全相反：下表的「任一档不达标 ⇒ 删除 `sdflow-spec`」是**观察窗
+结束之后**才适用的条款，MUST NOT 拿「窗口还没开」去触发删除。窗口未开时正确的动作只有一个：
+把下一个判定点写清楚（起算日 + 6 个 change / 8 周孰先），由**人**在到期时判。
 
 | 档 | 阈值 | 依据 |
 |---|---|---|

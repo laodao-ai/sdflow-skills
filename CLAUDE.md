@@ -134,6 +134,29 @@ pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
   清理源已删除的孤儿链接（用 `-e` 解析检查，保留有效链接）。
 - 读 `REPO_DIR/VERSION` 显示版本（如 `v0.9.0`）。
 
+**第三个安装目的地：`~/.claude/agents/`（全局 agent 定义 · `install_agents()`）**
+
+- `sdflow-spec/agents/*.md` 的三个定义（`sdflow-local-researcher` / `sdflow-web-researcher` /
+  `sdflow-spec-writer`）逐文件 `ln -snf` 到 `~/.claude/agents/`。**不是** `install_into` 那条路径
+  （它只认含 `SKILL.md` 的顶层目录），所有权守卫也**更严**：只接管软链**且** `readlink` 命中
+  `*/sdflow-spec/agents/<同名>` 才覆盖，其余一律 skip 进汇总。
+- 🔴 **`~/.claude/agents/` 是全局命名空间，不是本工具独占的**——这是它与 `~/.claude/skills/`
+  最实质的差别：任何插件都可能放同名定义，覆盖即数据丢失。改这段守卫前先读
+  `hack/tests/test_install_agents.py`（全仓首个 setup.sh 测试，8 个用例）。
+- 🔴 **外派当前未启用，但定义照铺不误**：`add-sdflow-spec` 阶段二验收门判回退，三个定义
+  作为**未启用资产**保留 ⇒ 它们**仍然对这台机器上的每个项目可见**。挡住误选的只有各定义
+  `description` 里的排他式声明（「仅由 `/sdflow-spec` 编排派发」）——那是**指令层约束，不是机械门**。
+  真要它们从名册上消失，见下面的「移除」。
+- **Windows**：不铺（散装 `.md` 无 marker 落点），报一行进 `skipped[]`，`/sdflow-spec` 走主 session
+  亲查/亲写。此路径**无机械覆盖**（本机 Darwin 测不到），如实记在测试文件的诚实边界里。
+- **移除 agents（= 回滚第①步）**：`setup.sh` **没有** uninstall 开关。可执行动作 =
+  **删掉 `sdflow-spec/agents/`（或其中某个 `.md`）后，仍在新版 installer 上跑一次 `bash setup.sh`**
+  ——孤儿清理会把悬空链清干净（`cleanup_agent_orphans()` 在源目录整体消失时**照跑**，
+  `test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone` 守）。
+  🔴 **顺序不可颠倒**：先 revert 再跑 setup ⇒ `install_agents()` 连同清理逻辑一起被撤掉，
+  **三条悬空软链永久留在全局名册里**（正反两向实跑证据见
+  `openspec/changes/add-sdflow-spec/impl-reports/task6-stage3-conditional.md`）。
+
 ### OpenSpec 的双重角色（`openspec/`）
 
 本仓库既**产出** OpenSpec 工作流资产、又**用**它管理自身变更（dogfooding）：
@@ -215,6 +238,12 @@ pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
 ### 旧入口 sunset 条件（阈值已写死；**与阶段二成败无关**）
 
 **观察窗** = `sdflow-spec` 上线后**连续 6 个新开 change**，或 **8 周**，先到者为准。
+
+🔴 **「上线」的起算点 = `add-sdflow-spec` merge 进默认分支、且运行 checkout 跑过 `setup.sh`**
+（此前 skill 尚未对日常可用，敲不出来的东西谈不上采用率）。**在此之前，判定结果是「未到期」，
+不是「未达标」**——两者处置完全相反：下表的「任一档不达标 ⇒ 删除 `sdflow-spec`」是**观察窗
+结束之后**才适用的条款，MUST NOT 拿「窗口还没开」去触发删除。窗口未开时正确的动作只有一个：
+把下一个判定点写清楚（起算日 + 6 个 change / 8 周孰先），由**人**在到期时判。
 
 | 档 | 阈值 | 依据 |
 |---|---|---|

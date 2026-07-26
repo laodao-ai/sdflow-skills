@@ -264,13 +264,11 @@ MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定*
 
 > 阶段一**不外派**，本节不生效。
 >
-> 🔴 **本节当前 = 未启用资产。** SA-07 的 GO/NO-GO 实测门判 **GO**（派发链路可用），但阶段二验收门的
-> 另一半——A/B 三路实测——判**不达标**：同一个真实 change 上 subagent 路 **$11.68 / 12.57M token**
-> vs thin 路 **$9.06 / 8.81M token**（**未观察到外派更便宜**，且冷审 Important findings 1 vs 0）。
-> 依 `add-sdflow-spec/tasks.md` 阶段二验收门的失败分支 ⇒ **回退到阶段一薄编排形态**；三个 agent 定义、
-> `install_agents()` 与其守卫**作为未启用资产保留**。数据与诚实边界（**N=1，非统计显著**）见
-> `openspec/changes/add-sdflow-spec/impl-reports/task5-ab-comparison.md`。
-> **本节仅在人明确指示启用外派时生效**，MUST NOT 自行启用。
+> 🔴 **本节当前 = 未启用资产。** SA-07 的 GO/NO-GO 实测门判 **GO**（派发链路可用），但阶段二验收门的另一半——A/B 三路实测——判**不达标**：同一个真实 change 上 subagent 路 **$11.68 / 12.57M token** vs thin 路 **$9.06 / 8.81M token**（**未观察到外派更便宜**，且冷审 Important findings 1 vs 0）。
+> 依 `add-sdflow-spec/tasks.md` 失败分支 ⇒ **回退到阶段一薄编排形态**；三个 agent 定义与 `install_agents()` **作为未启用资产保留**。数据与诚实边界（**N=1，非统计显著**）见 `add-sdflow-spec/impl-reports/task5-ab-comparison.md`。**仅在人明确指示启用时生效**，MUST NOT 自行启用。
+>
+> ⚠️ **「未启用」只约束本管线，定义照样铺在全局 `~/.claude/agents/`**（`install_agents()` 不看本节启用状态）⇒ 对本机每个项目可见；挡误选的只有 `description` 的排他式声明（**指令层、非机械门**）。
+> 要它们真从名册消失：删 `sdflow-spec/agents/` 后**仍在新版 installer 上**跑 `bash setup.sh`（顺序不可颠倒 —— 见仓 CLAUDE.md「`setup.sh` 安装机制」与 task6 报告的正反两向实跑）。
 
 | 用途 | `subagent_type` | 档位 | 它**没有**什么 |
 |---|---|---|---|

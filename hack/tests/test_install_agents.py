@@ -201,6 +201,79 @@ def test_dangling_link_of_a_deleted_source_is_cleaned(fake_home, tmp_path):
         assert (dest / name).is_file(), f"{name} 被孤儿清理误伤"
 
 
+def _symlink_farm(tmp_path):
+    """造一个**可写的 REPO_DIR 替身**：顶层条目全部软链回真仓，只有 `sdflow-spec/agents/`
+    是真目录（内含指向真定义的软链）—— 于是它可以被删掉，而真仓一动不动。
+
+    为什么需要它：`REPO_DIR` 由 `dirname $0` 决定，而本用例要验的正是「**源目录整体消失**
+    时 setup 还清不清孤儿」。不造替身就只能删真仓的 `sdflow-spec/agents/`。
+    （`hack/*.py` 里的 `Path(__file__).resolve()` 会穿过软链落回真仓 ⇒ 那几个 `--check`
+    仍在真仓上跑，只读，不污染。）
+    """
+    farm = tmp_path / "farm-repo"
+    farm.mkdir()
+    for entry in REPO.iterdir():
+        if entry.name == "sdflow-spec":
+            continue
+        os.symlink(str(entry), str(farm / entry.name))
+    spec = farm / "sdflow-spec"
+    spec.mkdir()
+    for entry in (REPO / "sdflow-spec").iterdir():
+        if entry.name == "agents":
+            continue
+        os.symlink(str(entry), str(spec / entry.name))
+    agents = spec / "agents"
+    agents.mkdir()
+    for p in SRC_DIR.glob("*.md"):
+        os.symlink(str(p), str(agents / p.name))
+    return farm
+
+
+def test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone(fake_home, tmp_path):
+    """⑤ **整个 `sdflow-spec/agents/` 被删** ⇒ 悬空链**照样**被清。
+
+    🔴 这一格守的是 design Migration Plan 的回滚故事本身。原实现在函数开头写
+    `[ -d "$src_dir" ] || return 0`：源目录整体消失时**连孤儿清理都不跑** ⇒ 上一次铺出去的
+    三条链永久留在**全局** `~/.claude/agents/` 里。而「删掉源再跑一次新版 setup」正是
+    Migration Plan 要求的回滚第①步（先移除 agents、再 revert）的唯一可执行动作
+    —— `setup.sh` 没有 uninstall 开关（实测：全文零命中）。
+    ∴ 早退 = 那条回滚路径**根本走不通**，且失败是静默的。
+
+    定点删门法：把 `install_agents` 里的 `cleanup_agent_orphans "$dest"` 调用删掉任一处，
+    或把它改回源目录上的早退 ⇒ 本用例必须红。
+    """
+    # ① 先用替身仓铺一次 —— 链指向替身仓的 agents/
+    farm = _symlink_farm(tmp_path)
+    env = dict(os.environ)
+    env["HOME"] = str(fake_home)
+    env.pop("SDFLOW_HOME", None)
+    first = subprocess.run(["bash", str(farm / "setup.sh")], cwd=str(farm), env=env,
+                           capture_output=True, text=True, timeout=300)
+    assert first.returncode == 0, first.stdout + first.stderr
+    dest = _agents_dir(fake_home)
+    names = _expected_names()
+    for name in names:
+        assert (dest / name).is_symlink(), f"{name} 没铺出来，前提就不成立"
+
+    # ② 「移除 agents」：删掉整个源目录（人手回滚时最自然的动作）
+    for p in (farm / "sdflow-spec" / "agents").iterdir():
+        p.unlink()
+    (farm / "sdflow-spec" / "agents").rmdir()
+
+    # ③ 仍在**新版 installer** 上重跑一次
+    second = subprocess.run(["bash", str(farm / "setup.sh")], cwd=str(farm), env=env,
+                            capture_output=True, text=True, timeout=300)
+    assert second.returncode == 0, second.stdout + second.stderr
+
+    dangling = [n for n in names if (dest / n).is_symlink() and not (dest / n).exists()]
+    assert not dangling, (
+        f"源目录整体消失后仍留下悬空软链 {dangling} —— 全局命名空间被污染，"
+        "且 Migration Plan 的回滚第①步无法执行\n" + second.stdout + second.stderr)
+    for name in names:
+        assert not (dest / name).is_symlink(), f"{name} 的链没被清"
+        assert f"agents/{name} @ {dest}" in second.stdout, f"{name} 没进 cleaned 汇总"
+
+
 def test_an_occupied_dest_degrades_to_skip_and_does_not_abort_setup(fake_home):
     """⑥ 落点被占为普通文件 ⇒ **skip + 汇总报告**，MUST NOT 中止整个 setup.sh。
 
