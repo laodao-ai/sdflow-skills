@@ -89,17 +89,17 @@ sdflow-issues:
     T229: {"module":"openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞)","summary":"两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）","type":"可观测性","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
     T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
     T231: {"module":"sdflow-issues 读取路径（core cmd_scan 自检 / issues.py validate_scan_envelope / _bug_triage·_todo_triage）","summary":"重开 harden-issues-read-path change：读取路径诚实化（显红 + reindex 不罢工 + triage 解耦），砍掉已被 migrate_legacy 取代的 normalize；分支 feat/harden-issues-read-path 已过期不可直接续用","type":"代码质量","status":"OPEN","time":"2026-07-26 10:10","change":null,"batch":null}
-    T232: {"module":"openspec/changes/add-sdflow-spec","summary":"SA-05 Scenario 与 design 失败模式表点名 design.md 的 validate 断言恒假：openspec validate --strict 只读 delta spec","type":"代码质量","status":"OPEN","time":"2026-07-26 17:37","change":"add-sdflow-spec","batch":null}
-    T233: {"module":"sdflow-spec/SKILL.md（`disable-model-invocation` 的宿主语义）","summary":"`disable-model-invocation: true` 在 Codex 宿主下的语义未核：Claude 宿主已有实测（archive/2026-07-10-matt-workflow-integration/impl-notes.md §4.1，两次独立实证 —— 主 session 经 Skill tool 调用被 harness 直接拒绝，报 `Skill X cannot be used with Skill tool due to disable-model-invocation`，须人手敲 `/x` 才执行）。sdflow-spec 把「只能人触发」当作 SA-01 的承重前提，但该前提在 Codex 宿主下**从未实测**——若 Codex 忽略该旗标，模型即可自行唤起 sdflow-spec，「拷问是内建默认路径」这条结构性改善在该宿主上不成立。核法：Codex 宿主下让模型尝试唤起一个带该旗标的 skill，观察是否被拒；结果不论正负都回写 SKILL.md 的诚实边界段","type":"基础设施","status":"OPEN","time":"2026-07-26 21:28","change":"add-sdflow-spec","batch":null}
-    T234: {"module":"openspec/issues/todolist 的 T132（spec-review 起手 grill 已收敛门）","summary":"T132 的信号载体枚举与行号锚已被 add-sdflow-spec 改过时，须订正后再实现：①T132 只枚举了两个载体（`workflow.md:83` 强制的 grill checkpoint-commit / design.md 内的 `<!-- sdflow:grill-done -->` 锚），而阶段一默认入口改为 `/sdflow-spec` 后，新增两个更强的载体 —— `checkpoint(sdflow-spec-grill)` 提交标签 + change 目录内非空 `decision-memo.md`（后者已有机械门 `hack/tests/test_decision_memo_gate.py::check_decision_memo`，可直接复用，不必另造锚）；②`workflow.md:83` 这个行号锚已因 Task 2 在 §流程表插入 `/sdflow-spec` 行而漂移，T132 正文按行号找不到原条款。⇒ 实现 T132 前 MUST 先按四入口现状重列信号载体（分支 A 走 sdflow-spec 锚、分支 B 走旧 grill 锚），否则门会对分支 A 的正常跑动误判 REFUSE_START","type":"代码质量","status":"OPEN","time":"2026-07-26 21:28","change":"add-sdflow-spec","batch":null}
-    T235: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（+ 已铺设的 ~/.claude/hooks/ 副本）","summary":"FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上）","type":"基础设施","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
-    T236: {"module":"sdflow-spec/SKILL.md 终审段的「中间态判据」","summary":"终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径","type":"代码质量","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
-    T237: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（`change_name` 的 fail-open 分支）","summary":"FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型自己就能触发、且不留任何审计痕**的绕过口，与哨兵逃生口不同级：哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作，而本 fail-open 只需让命令里的 change 名 token 含 `$`（或反引号 / 通配符 / 其它使 CHANGE_NAME_OK_RE 不匹配的字符），守卫即不展开、不猜、直接放行，盘上不留任何痕迹。实测（add-sdflow-spec Task 3 dogfood）：本轮正是走这条 fail-open 绕过了分支③ 的 MUST-halt（SA-05 Scenario 「在其它 feature 分支上创建变更 → MUST halt 问人」），当轮虽已原地披露、且目标仓内 FF-0 规则实际满足，但**这条路径在设计上对模型是完全敞开的**。它与 T235 的 mis-scope 是**两个独立缺陷**：T235 是判据锚错了仓（判得不对），本条是判据被合法跳过（根本没判）。fail-open 本身是既有纪律（基准 5：shell 语法面无界，守卫拿不准时不挡人干活），MUST NOT 改成解析命令串 —— 但「拿不准」和「已被绕过」在 reason 与审计面上目前完全不可区分","type":"基础设施","status":"OPEN","time":"2026-07-26 22:06","change":"add-sdflow-spec","batch":null}
-    T238: {"module":"openspec/changes/add-sdflow-spec","summary":"SA-07 写「model 填具体模型 id」与实测不符：Agent 工具的 model 是枚举 sonnet|opus|haiku|fable，完整版本化 id 被 InputValidationError 拒","type":"代码质量","status":"OPEN","time":"2026-07-27 00:39","change":"add-sdflow-spec","batch":null}
-    T239: {"module":"sdflow-init/assets/workflow（canonical bundle）+ 下游消费项目的 openspec/workflow/","summary":"add-sdflow-spec 的 canonical 七处改动只落在源仓、未经 `sdflow-init update` 推给下游消费项目 ⇒ 下游 AI 侧读到的仍是旧的阶段一入口规则（explore→ff→grill，无 /sdflow-spec 分支、无 G1 具名例外）。原属 tasks 8.2（阶段三），因阶段二验收门判回退、阶段三整体不执行而搁置。推法：本 change merge 后，在每个已铺 workflow bundle 的消费项目跑 `sdflow-init update`，核验其 openspec/workflow/ 的 generation-process.md §四已含分支 A/B、workflow.md §三.2 与 reference/quality-layering.md 已含 G1 具名例外；由人在 merge 后择机执行","type":"基础设施","status":"OPEN","time":"2026-07-27 03:32","change":"add-sdflow-spec","batch":null}
-    T240: {"module":"openspec/changes/add-sdflow-spec/design.md（Migration Plan · 回滚段）","summary":"回滚正确顺序第①步写「先跑 uninstall 分支移除 agents」，但 setup.sh 从来没有 uninstall 开关（全文零命中，task6 实测）。实际可执行的等价动作 = 删 sdflow-spec/agents/ 后仍在新版 installer 上跑一次 setup.sh（孤儿清理已改为源目录消失时照跑，test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone 守）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】把 Migration Plan 的措辞校正为实际动作","type":"代码质量","status":"OPEN","time":"2026-07-27 03:32","change":"add-sdflow-spec","batch":null}
-    T241: {"module":"openspec/changes/add-sdflow-spec/tasks.md（阶段三验收门，:96）","summary":"阶段三验收门只有 ✅ 分支（8.1-8.4 全过 + 下游实跑 update ⇒ 可进 /sdflow-done），没有 ❌/回退分支。而阶段二验收门判回退 ⇒ 阶段三整体不执行 ⇒ 该门的 ✅ 前件永远不成立，「回退形态下本 change 能不能进 /sdflow-done」在票面上无书面出处（对照阶段二验收门就同时写了 ✅/❌ 两支，§9 也在窄复核时被从阶段三下移出以免随阶段二失败搁浅）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】给阶段三验收门补 ❌/回退分支：明确回退形态下哪些条目仍须完成、以及据此可否进 /sdflow-done","type":"可观测性","status":"OPEN","time":"2026-07-27 04:04","change":"add-sdflow-spec","batch":null}
-    T242: {"module":"openspec/changes/add-sdflow-spec/tasks.md 2.10 + design.md D12（SKILL.md ≤600 行体量门）","summary":"体量门以 `wc -l` 计 ⇒ 可由**重排软换行**规避而不删任何内容：task6 加了一段后到 604 行，仅把同节软换行重排为更长的行即回到 598，内容一字未减。∴ 该门对 sdflow-spec/SKILL.md 已无实际约束力（该文件既有最长行 200+ 字符，长行是既有形态、无行宽门可依）。且它当前**无机械覆盖**——只有 tasks 2.10 里一句人跑 `wc -l`。修法候选（择一，需人拍板）：① 改计字符/字节数；② 加行宽上限与 `wc -l` 联判；③ 承认它只是软提示、从验收门降级为注记。本轮**不改门**（改门是设计决策）","type":"代码质量","status":"OPEN","time":"2026-07-27 04:05","change":"add-sdflow-spec","batch":null}
+    T232: {"module":"openspec/changes/add-sdflow-spec","summary":"SA-05 Scenario 与 design 失败模式表点名 design.md 的 validate 断言恒假：openspec validate --strict 只读 delta spec","type":"代码质量","status":"PROPOSED","time":"2026-07-26 17:37","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T233: {"module":"sdflow-spec/SKILL.md（`disable-model-invocation` 的宿主语义）","summary":"`disable-model-invocation: true` 在 Codex 宿主下的语义未核：Claude 宿主已有实测（archive/2026-07-10-matt-workflow-integration/impl-notes.md §4.1，两次独立实证 —— 主 session 经 Skill tool 调用被 harness 直接拒绝，报 `Skill X cannot be used with Skill tool due to disable-model-invocation`，须人手敲 `/x` 才执行）。sdflow-spec 把「只能人触发」当作 SA-01 的承重前提，但该前提在 Codex 宿主下**从未实测**——若 Codex 忽略该旗标，模型即可自行唤起 sdflow-spec，「拷问是内建默认路径」这条结构性改善在该宿主上不成立。核法：Codex 宿主下让模型尝试唤起一个带该旗标的 skill，观察是否被拒；结果不论正负都回写 SKILL.md 的诚实边界段","type":"基础设施","status":"PROPOSED","time":"2026-07-26 21:28","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T234: {"module":"openspec/issues/todolist 的 T132（spec-review 起手 grill 已收敛门）","summary":"T132 的信号载体枚举与行号锚已被 add-sdflow-spec 改过时，须订正后再实现：①T132 只枚举了两个载体（`workflow.md:83` 强制的 grill checkpoint-commit / design.md 内的 `<!-- sdflow:grill-done -->` 锚），而阶段一默认入口改为 `/sdflow-spec` 后，新增两个更强的载体 —— `checkpoint(sdflow-spec-grill)` 提交标签 + change 目录内非空 `decision-memo.md`（后者已有机械门 `hack/tests/test_decision_memo_gate.py::check_decision_memo`，可直接复用，不必另造锚）；②`workflow.md:83` 这个行号锚已因 Task 2 在 §流程表插入 `/sdflow-spec` 行而漂移，T132 正文按行号找不到原条款。⇒ 实现 T132 前 MUST 先按四入口现状重列信号载体（分支 A 走 sdflow-spec 锚、分支 B 走旧 grill 锚），否则门会对分支 A 的正常跑动误判 REFUSE_START","type":"代码质量","status":"PROPOSED","time":"2026-07-26 21:28","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T235: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（+ 已铺设的 ~/.claude/hooks/ 副本）","summary":"FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上）","type":"基础设施","status":"PROPOSED","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T236: {"module":"sdflow-spec/SKILL.md 终审段的「中间态判据」","summary":"终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径","type":"代码质量","status":"PROPOSED","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T237: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（`change_name` 的 fail-open 分支）","summary":"FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型自己就能触发、且不留任何审计痕**的绕过口，与哨兵逃生口不同级：哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作，而本 fail-open 只需让命令里的 change 名 token 含 `$`（或反引号 / 通配符 / 其它使 CHANGE_NAME_OK_RE 不匹配的字符），守卫即不展开、不猜、直接放行，盘上不留任何痕迹。实测（add-sdflow-spec Task 3 dogfood）：本轮正是走这条 fail-open 绕过了分支③ 的 MUST-halt（SA-05 Scenario 「在其它 feature 分支上创建变更 → MUST halt 问人」），当轮虽已原地披露、且目标仓内 FF-0 规则实际满足，但**这条路径在设计上对模型是完全敞开的**。它与 T235 的 mis-scope 是**两个独立缺陷**：T235 是判据锚错了仓（判得不对），本条是判据被合法跳过（根本没判）。fail-open 本身是既有纪律（基准 5：shell 语法面无界，守卫拿不准时不挡人干活），MUST NOT 改成解析命令串 —— 但「拿不准」和「已被绕过」在 reason 与审计面上目前完全不可区分","type":"基础设施","status":"PROPOSED","time":"2026-07-26 22:06","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T238: {"module":"openspec/changes/add-sdflow-spec","summary":"SA-07 写「model 填具体模型 id」与实测不符：Agent 工具的 model 是枚举 sonnet|opus|haiku|fable，完整版本化 id 被 InputValidationError 拒","type":"代码质量","status":"PROPOSED","time":"2026-07-27 00:39","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T239: {"module":"sdflow-init/assets/workflow（canonical bundle）+ 下游消费项目的 openspec/workflow/","summary":"add-sdflow-spec 的 canonical 七处改动只落在源仓、未经 `sdflow-init update` 推给下游消费项目 ⇒ 下游 AI 侧读到的仍是旧的阶段一入口规则（explore→ff→grill，无 /sdflow-spec 分支、无 G1 具名例外）。原属 tasks 8.2（阶段三），因阶段二验收门判回退、阶段三整体不执行而搁置。推法：本 change merge 后，在每个已铺 workflow bundle 的消费项目跑 `sdflow-init update`，核验其 openspec/workflow/ 的 generation-process.md §四已含分支 A/B、workflow.md §三.2 与 reference/quality-layering.md 已含 G1 具名例外；由人在 merge 后择机执行","type":"基础设施","status":"PROPOSED","time":"2026-07-27 03:32","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T240: {"module":"openspec/changes/add-sdflow-spec/design.md（Migration Plan · 回滚段）","summary":"回滚正确顺序第①步写「先跑 uninstall 分支移除 agents」，但 setup.sh 从来没有 uninstall 开关（全文零命中，task6 实测）。实际可执行的等价动作 = 删 sdflow-spec/agents/ 后仍在新版 installer 上跑一次 setup.sh（孤儿清理已改为源目录消失时照跑，test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone 守）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】把 Migration Plan 的措辞校正为实际动作","type":"代码质量","status":"PROPOSED","time":"2026-07-27 03:32","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T241: {"module":"openspec/changes/add-sdflow-spec/tasks.md（阶段三验收门，:96）","summary":"阶段三验收门只有 ✅ 分支（8.1-8.4 全过 + 下游实跑 update ⇒ 可进 /sdflow-done），没有 ❌/回退分支。而阶段二验收门判回退 ⇒ 阶段三整体不执行 ⇒ 该门的 ✅ 前件永远不成立，「回退形态下本 change 能不能进 /sdflow-done」在票面上无书面出处（对照阶段二验收门就同时写了 ✅/❌ 两支，§9 也在窄复核时被从阶段三下移出以免随阶段二失败搁浅）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】给阶段三验收门补 ❌/回退分支：明确回退形态下哪些条目仍须完成、以及据此可否进 /sdflow-done","type":"可观测性","status":"PROPOSED","time":"2026-07-27 04:04","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
+    T242: {"module":"openspec/changes/add-sdflow-spec/tasks.md 2.10 + design.md D12（SKILL.md ≤600 行体量门）","summary":"体量门以 `wc -l` 计 ⇒ 可由**重排软换行**规避而不删任何内容：task6 加了一段后到 604 行，仅把同节软换行重排为更长的行即回到 598，内容一字未减。∴ 该门对 sdflow-spec/SKILL.md 已无实际约束力（该文件既有最长行 200+ 字符，长行是既有形态、无行宽门可依）。且它当前**无机械覆盖**——只有 tasks 2.10 里一句人跑 `wc -l`。修法候选（择一，需人拍板）：① 改计字符/字节数；② 加行宽上限与 `wc -l` 联判；③ 承认它只是软提示、从验收门降级为注记。本轮**不改门**（改门是设计决策）","type":"代码质量","status":"PROPOSED","time":"2026-07-27 04:05","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
 ---
 # 2026-07 TODO
 
@@ -2306,6 +2306,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：Task 1 实现期实测证伪（implementer + Spec 轴 reviewer + 接缝复审三方独立复现，CLI 1.5.0）：openspec validate <change> --strict 只跑 validateChangeDeltaSpecs、只读 specs/*/spec.md。三条硬证据 —— (1) dist/core/validation/validator.js 全文无 design 字样；(2) 把 proposal.md 整份删除仍输出 Change 'demo' is valid、exit 0；(3) 只有截断 delta spec（must include at least one scenario）或移走整个 specs/（Change must have at least one delta）才会红。⇒ specs/spec-authoring/spec.md:133-135 的 SA-05 Scenario「半截产物不被判完成」逐字点名 design.md（『status 报 done 但 validate --strict 不过』）对 design.md 恒假；design.md:230 失败模式表『writer 写半截/垃圾 → validate 判该产物未完成』同理，对 4 份产物里的 3 份（proposal / design / tasks）不成立。
 
 **备注**：🔴 /sdflow-done 的 archive 阶段必做项，不是可选。实现期 MUST NOT 改本 change 四件套（会触发设计门失鲜 REFUSE_START、卡死 ship 链），故只能登记后延（同 T229 先例）。已交付的可达形态：门锚在 delta spec（test_truncated_spec_delta_is_caught_by_strict_validate）+ test_status_says_done_while_validate_says_red 正面证明『存在态 ≠ 合格态』+ test_validate_strict_only_covers_delta_specs 把覆盖边界机械钉住（upstream 哪天扩了覆盖面该用例会红，提示回来收紧文档）。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T232 -->
 
 <!-- sdflow-issue-block:start id=T233 -->
@@ -2317,6 +2318,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：proposal Non-Goals 已把跨宿主语义列为未核项；tasks 9.2 要求登记
 
 **备注**：本项由 add-sdflow-spec Task 3 阶段一验收门登记
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T233 -->
 
 <!-- sdflow-issue-block:start id=T234 -->
@@ -2328,6 +2330,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：tasks 9.3 要求核对 T132 内容是否仍准确；核对结论 = 不再准确（枚举不全 + 行号锚漂移），故另立订正项而非重复登记 T132
 
 **备注**：本项由 add-sdflow-spec Task 3 阶段一验收门登记；T132 本身保持 OPEN 不动
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T234 -->
 
 <!-- sdflow-issue-block:start id=T235 -->
@@ -2339,6 +2342,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：守卫是 Task 2 刚同步过的 FF-0 三分支判定的机械实现；本缺陷使它在跨仓调用下给出与规则相反的结论
 
 **备注**：本项由 add-sdflow-spec Task 3 dogfood 实测发现；当轮为不触碰「只能人 touch」的哨兵，走了守卫 docstring 明写的 fail-open（token 含 `$` 即不展开不猜）并全程披露。⚠️ **该 fail-open 本身另立 T237**（模型可自行触发、不留审计痕的绕过口）——本条是「判得不对（锚错了仓）」，T237 是「根本没判（判据被合法跳过）」，两条同一处代码、互为一对，宜一并修；有界缓解方案写在 T237 的思路里
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T235 -->
 
 <!-- sdflow-issue-block:start id=T236 -->
@@ -2350,6 +2354,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：dogfood 冷读抽检时该判据的两可性直接影响终审结论，属指令歧义而非实现缺陷
 
 **备注**：本项由 add-sdflow-spec Task 3 dogfood 终审步实测发现
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T236 -->
 
 <!-- sdflow-issue-block:start id=T237 -->
@@ -2363,6 +2368,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：有界缓解（MUST NOT 手搓 shell 解析器）：判定前先扫命令串里**有界的 token 集**——① change 名 token 落在 CHANGE_NAME_OK_RE 之外（含 `$` / 反引号 / 通配符）② 出现改变工作目录的 token（`cd` / `-C` / `git -C`，这一项同时覆盖 T235 的 mis-scope 前提）。命中任一 ⇒ 判定的前提不成立 ⇒ 照旧 fail-open 放行（不挡人干活），但 deny/allow 的 reason MUST 明写「本次没判，理由是 X」，并把这句话回传给模型。这把「守卫拿不准」与「守卫被绕过」从不可区分变成 transcript 里可审计的一行。⚠️ 这只是**可见性**缓解，不是堵死：它照旧放行，防线仍是纪律 + review（同哨兵的信任级别声明）。与 T235 同一处代码、宜一并做
 
 **备注**：与 T235 互为一对（T235 = 判得不对 / 本条 = 根本没判），两条都源自 add-sdflow-spec Task 3 dogfood 的故障② 注入；本条由 Task 3 fix 轮次 1 的双轴审 F4 点出——上一轮只登记了 T235 的 mis-scope，漏了「fail-open 是模型可用的绕过口」这一半
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T237 -->
 
 <!-- sdflow-issue-block:start id=T238 -->
@@ -2374,4 +2380,29 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：Task 4 实现期实测（step2 §4.1 + fix1 复核）：Agent 工具的 model 参数是枚举 sonnet|opus|haiku|fable，填完整版本化 id（如 claude-haiku-4-5-20251001）当场被 InputValidationError 拒；而 resolve-models.sh 在本机队解析出的正是这些别名 ⇒ 直接填字面值可用。specs/spec-authoring/spec.md:163,177 的 SA-07 措辞「派发时 model 参数 SHALL 填该轮档位解析出的具体模型 id」会诱导实现方填完整 id、当场失败。SKILL.md 侧措辞已按实测改写（含 :205/:460 两处与外派协议段），但 spec 侧未改（实现期 MUST NOT 改四件套）。
 
 **备注**：与 T232 同批、同性质（实现期实测证伪已过设计门的 spec 断言，实现期 MUST NOT 改四件套 ⇒ 登记后延到 archive 阶段）。本条不阻塞：SKILL.md 侧已是可执行的正确措辞，spec 侧是文档滞后。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T238 -->
+
+<!-- sdflow-issue-block:start id=T239 -->
+## T239: add-sdflow-spec 的 canonical 七处改动只落在源仓、未经 `sdflow-init update` 推给下游消费项目 ⇒ 下游 AI 侧读到的仍是旧的阶段一入口规则（explore→ff→grill，无 /sdflow-spec 分支、无 G1 具名例外）。原属 tasks 8.2（阶段三），因阶段二验收门判回退、阶段三整体不执行而搁置。推法：本 change merge 后，在每个已铺 workflow bundle 的消费项目跑 `sdflow-init update`，核验其 openspec/workflow/ 的 generation-process.md §四已含分支 A/B、workflow.md §三.2 与 reference/quality-layering.md 已含 G1 具名例外；由人在 merge 后择机执行
+> add-sdflow-spec 的 canonical 七处改动只落在源仓、未经 `sdflow-init update` 推给下游消费项目 ⇒ 下游 AI 侧读到的仍是旧的阶段一入口规则（explore→ff→grill，无 /sdflow-spec 分支、无 G1 具名例外）。原属 tasks 8.2（阶段三），因阶段二验收门判回退、阶段三整体不执行而搁置。推法：本 change merge 后，在每个已铺 workflow bundle 的消费项目跑 `sdflow-init update`，核验其 openspec/workflow/ 的 generation-process.md §四已含分支 A/B、workflow.md §三.2 与 reference/quality-layering.md 已含 G1 具名例外；由人在 merge 后择机执行
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T239 -->
+
+<!-- sdflow-issue-block:start id=T240 -->
+## T240: 回滚正确顺序第①步写「先跑 uninstall 分支移除 agents」，但 setup.sh 从来没有 uninstall 开关（全文零命中，task6 实测）。实际可执行的等价动作 = 删 sdflow-spec/agents/ 后仍在新版 installer 上跑一次 setup.sh（孤儿清理已改为源目录消失时照跑，test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone 守）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】把 Migration Plan 的措辞校正为实际动作
+> 回滚正确顺序第①步写「先跑 uninstall 分支移除 agents」，但 setup.sh 从来没有 uninstall 开关（全文零命中，task6 实测）。实际可执行的等价动作 = 删 sdflow-spec/agents/ 后仍在新版 installer 上跑一次 setup.sh（孤儿清理已改为源目录消失时照跑，test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone 守）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】把 Migration Plan 的措辞校正为实际动作
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T240 -->
+
+<!-- sdflow-issue-block:start id=T241 -->
+## T241: 阶段三验收门只有 ✅ 分支（8.1-8.4 全过 + 下游实跑 update ⇒ 可进 /sdflow-done），没有 ❌/回退分支。而阶段二验收门判回退 ⇒ 阶段三整体不执行 ⇒ 该门的 ✅ 前件永远不成立，「回退形态下本 change 能不能进 /sdflow-done」在票面上无书面出处（对照阶段二验收门就同时写了 ✅/❌ 两支，§9 也在窄复核时被从阶段三下移出以免随阶段二失败搁浅）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】给阶段三验收门补 ❌/回退分支：明确回退形态下哪些条目仍须完成、以及据此可否进 /sdflow-done
+> 阶段三验收门只有 ✅ 分支（8.1-8.4 全过 + 下游实跑 update ⇒ 可进 /sdflow-done），没有 ❌/回退分支。而阶段二验收门判回退 ⇒ 阶段三整体不执行 ⇒ 该门的 ✅ 前件永远不成立，「回退形态下本 change 能不能进 /sdflow-done」在票面上无书面出处（对照阶段二验收门就同时写了 ✅/❌ 两支，§9 也在窄复核时被从阶段三下移出以免随阶段二失败搁浅）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】给阶段三验收门补 ❌/回退分支：明确回退形态下哪些条目仍须完成、以及据此可否进 /sdflow-done
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T241 -->
+
+<!-- sdflow-issue-block:start id=T242 -->
+## T242: 体量门以 `wc -l` 计 ⇒ 可由**重排软换行**规避而不删任何内容：task6 加了一段后到 604 行，仅把同节软换行重排为更长的行即回到 598，内容一字未减。∴ 该门对 sdflow-spec/SKILL.md 已无实际约束力（该文件既有最长行 200+ 字符，长行是既有形态、无行宽门可依）。且它当前**无机械覆盖**——只有 tasks 2.10 里一句人跑 `wc -l`。修法候选（择一，需人拍板）：① 改计字符/字节数；② 加行宽上限与 `wc -l` 联判；③ 承认它只是软提示、从验收门降级为注记。本轮**不改门**（改门是设计决策）
+> 体量门以 `wc -l` 计 ⇒ 可由**重排软换行**规避而不删任何内容：task6 加了一段后到 604 行，仅把同节软换行重排为更长的行即回到 598，内容一字未减。∴ 该门对 sdflow-spec/SKILL.md 已无实际约束力（该文件既有最长行 200+ 字符，长行是既有形态、无行宽门可依）。且它当前**无机械覆盖**——只有 tasks 2.10 里一句人跑 `wc -l`。修法候选（择一，需人拍板）：① 改计字符/字节数；② 加行宽上限与 `wc -l` 联判；③ 承认它只是软提示、从验收门降级为注记。本轮**不改门**（改门是设计决策）
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T242 -->

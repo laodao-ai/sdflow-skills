@@ -21,6 +21,22 @@
 | T144 | todo | PROPOSED | add-sdflow-architecture |
 | T145 | todo | PROPOSED | add-sdflow-architecture |
 
+### 批次：add-sdflow-spec
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T232 | todo | PROPOSED | add-sdflow-spec |
+| T233 | todo | PROPOSED | add-sdflow-spec |
+| T234 | todo | PROPOSED | add-sdflow-spec |
+| T235 | todo | PROPOSED | add-sdflow-spec |
+| T236 | todo | PROPOSED | add-sdflow-spec |
+| T237 | todo | PROPOSED | add-sdflow-spec |
+| T238 | todo | PROPOSED | add-sdflow-spec |
+| T239 | todo | PROPOSED | add-sdflow-spec |
+| T240 | todo | PROPOSED | add-sdflow-spec |
+| T241 | todo | PROPOSED | add-sdflow-spec |
+| T242 | todo | PROPOSED | add-sdflow-spec |
+
 ### 批次：cross-model-outside-voice
 
 | ID | Pool | Status | 关联Change |

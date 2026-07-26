@@ -1,7 +1,8 @@
-# spec-authoring Delta Specification
+# spec-authoring Specification
 
-## ADDED Requirements
-
+## Purpose
+`sdflow-spec` 把阶段一「想需求→生成四件套」收拢为单一入口的三相位管线（澄清 A → 拷问 B → 生成 C），解决原三分离入口（`opsx:explore` + `opsx:ff` + 仓外 `grill-with-docs`）的结构性缺陷：拷问易被静默跳过、拷问发生在成文之后导致锚定效应、全程主 session 亲做耗费强档 token。生成经 `openspec` CLI（完成态问 `status`、合格态问 `validate --strict`，MUST NOT 手搓 Markdown 解析器），决策纪要在相位 B 内增量落盘、生成完毕后由主 session 终审核一致性。当前交付形态为**阶段一薄编排**（无 subagent 外派）——阶段二 agent 定义外派因 A/B 验收门判回退而降级为未启用资产保留，外派启用以未来独立实测门达标为前提（见本能力 SA-07）。
+## Requirements
 ### Requirement: SA-01 单一入口三相位管线，拷问前置且为内建默认路径
 
 `sdflow-spec` SHALL 以单一入口驱动「澄清（A）→ 拷问（B）→ 生成（C）」三相位管线。相位 A 可在需求已成熟时由主 session 判断提前收束，但相位 B SHALL 是管线的内建默认路径——任何进入相位 C 的路径 SHALL 先产出非空决策纪要。skill SHALL 声明 `disable-model-invocation: true`，仅由人触发。
@@ -131,8 +132,9 @@ openspec CLI 不可用、报错或 schema 不兼容 SHALL fail-closed 中止并�
 - **THEN** 生成方自己执行 `openspec instructions tasks --change <name> --json`、对载荷做最小 schema 断言，并按强制阅读清单读取 proposal + design + specs 全文
 
 #### Scenario: 半截产物不被判完成
-- **WHEN** 生成 design.md 时命中输出上限，文件落盘但内容中途截断
+- **WHEN** 生成 delta spec（`specs/<capability>/spec.md`）时命中输出上限，文件落盘但内容中途截断
 - **THEN** `status` 报 done 但 `validate --strict` 不过 ⇒ 判该产物未完成，进重试/亲写阶梯；MUST NOT 因「文件存在」跳过
+- **注**：`openspec validate <change> --strict`（CLI 1.5.0 实证：`dist/core/validation/validator.js` 只含 `validateChangeDeltaSpecs`，全文无 `design`/`proposal` 字样）**只覆盖 delta spec**，对 proposal.md/design.md/tasks.md 是恒假的机械门——这三份的「未截断」无机械门，由终审人判（SA-06 终审兜底；降级阶梯见 `sdflow-spec/references/degradation-ladder.md` §5）。
 
 #### Scenario: CLI 缺失 fail-closed
 - **WHEN** `openspec` 命令不存在、`new change` 失败、或 `instructions --json` 载荷 schema 断言不通过
@@ -140,7 +142,7 @@ openspec CLI 不可用、报错或 schema 不兼容 SHALL fail-closed 中止并�
 
 ### Requirement: SA-06 终审兜判断层，并核产物间一致性
 
-相位 C 生成完毕后，主 session SHALL 读回四件套执行终审：核验产物与决策纪要的一致性（决策遗漏、约束翻转、范围漂移），**以及 design 与 specs 的互相一致性** [spec-review-amendment]（二者在 CLI 依赖图中互不依赖，矛盾不会被任何其它环节发现）。判断性偏差直接修改；措辞与风格差异 SHALL 放过。终审后 SHALL 按 status + `validate --strict` 复核全部产物完成且合格。
+相位 C 生成完毕后，主 session SHALL 读回四件套执行终审：核验产物与决策纪要的一致性（决策遗漏、约束翻转、范围漂移），**以及 design 与 specs 的互相一致性** [spec-review-amendment]（二者在 CLI 依赖图中互不依赖，矛盾不会被任何其它环节发现）。判断性偏差直接修改；措辞与风格差异 SHALL 放过。终审后 SHALL 按 status 复核全部产物完成、按 `validate --strict` 复核 delta spec 合格；proposal/design/tasks 三份的合格态无机械门，由本次终审读判（见 SA-05 相应注记）。
 
 **中间态判据** [spec-review-amendment]：「内容都在、但论证强度被稀释」是高频中间态（自然语言压缩的常见结果）。判据 SHALL 为：纪要中「砍掉的候选 + 砍的理由」若在产物里**完全消失**才算判断性偏差；措辞压缩但候选与理由仍可追溯则放过。
 
@@ -160,7 +162,7 @@ openspec CLI 不可用、报错或 schema 不兼容 SHALL fail-closed 中止并�
 
 **三个** agent 定义 SHALL 位于 `sdflow-spec/agents/` [窄复核订正：原写「两个」并点名单体 `sdflow-researcher`，与 SA-12 S2 的 SHALL 级拆分要求直接冲突]：`sdflow-local-researcher`（`model: inherit`、`effort: low`、仓内检索、**无网络**）、`sdflow-web-researcher`（`model: inherit`、`effort: low`、联网调研、**无仓库读取、无 `Bash`**）、`sdflow-spec-writer`（`model: inherit`、`effort: medium`、`tools: Read, Glob, Grep, Bash, Write`）。工具面的安全约束见 SA-12。
 
-**派发 SHALL 使用 `subagent_type`** [spec-review-amendment]，MUST NOT 使用 `agentType`——后者是 Workflow `agent()` 的参数，而该调度路径已被本方案的调研依据显式否决（`docs/subagent-definitions-plan.md:136-137`）；本仓既有先例一律用 `subagent_type`。派发时 `model` 参数 SHALL 填该轮档位解析出的**具体模型 id**（SKILL.md 正文写变量名，MUST NOT 内联具体模型 id）。
+**派发 SHALL 使用 `subagent_type`** [spec-review-amendment]，MUST NOT 使用 `agentType`——后者是 Workflow `agent()` 的参数，而该调度路径已被本方案的调研依据显式否决（`docs/subagent-definitions-plan.md:136-137`）；本仓既有先例一律用 `subagent_type`。派发时 `model` 参数 SHALL 填该轮档位解析出的**值**（本 harness 的 Agent 工具 `model` 为枚举 `sonnet|opus|haiku|fable`，故填档位解析出的别名；若宿主的调度接口接受完整版本化模型 id 则填 id）（SKILL.md 正文写变量名，MUST NOT 内联具体模型名）。
 
 **阶段二起手 SHALL 过 GO/NO-GO 实测门** [spec-review-amendment]：写任何依赖 agent 定义的 producer 之前，先真派一次 `subagent_type: sdflow-local-researcher` 并核验其确实走了 agent 定义路径。NO-GO 即判红并停在阶段一形态，MUST NOT 用「失败则改验 fallback」把该门变成不可能红的恒绿门。
 
@@ -329,3 +331,4 @@ openspec CLI 不可用、报错或 schema 不兼容 SHALL fail-closed 中止并�
 #### Scenario: 旧入口的合法使用
 - **WHEN** 用户明确要求分步执行，或需要 wayfinder 跨会话铺图
 - **THEN** 旧三步组合为合法路径，且该次运行 SHALL 在完成报告中说明为何未走单入口
+

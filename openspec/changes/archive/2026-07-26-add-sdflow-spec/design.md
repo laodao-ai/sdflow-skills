@@ -275,7 +275,7 @@ absent ──B起手(①②③)──▶ B-draft ──收敛(④⑤)──▶ B
 - **从开发 checkout 跑 `setup.sh` 会把全局 skill 链接整体指向 WIP checkout**（`setup.sh:38,68`），不只是测新 skill。测完 MUST 在运行 checkout 重跑 setup 还原。
 
 🔴 **回滚（如实改写）**〔spec-review-amendment F-10〕：原文称「revert + 重跑 setup.sh，孤儿清理自动移除 agents 链接」——**不成立**：revert 会把 `install_agents()` **连同其清理逻辑一起撤掉**，重跑时没有代码去看 `~/.claude/agents/`，两个悬空软链**永久留下**。（与 skills 不同：skills 的 `cleanup_orphans` 是通用的、不随单个 skill 被 revert。）
-**正确顺序**：① 在**仍运行新版 installer** 时先跑 uninstall 分支移除 agents；② 再 revert commit；③ 重跑 setup.sh。canonical 规则区改动随 revert 还原（本仓源），下游需重跑 `sdflow-init update`。三个原 skill 未动，回滚后旧流程原样可用。
+**正确顺序**（`setup.sh` 无 uninstall 分支——`grep -ic uninstall setup.sh` = 0；实际落地动作见 `install_agents()` 注释：删源目录 + 重跑新版 setup 即可，无需另造开关）：① **仍运行新版 installer**（含 `install_agents`/`cleanup_agent_orphans`）时，先删除 `sdflow-spec/agents/` 源目录（或其下 `.md` 文件），重跑 `setup.sh`——命中 `install_agents()` 的「源目录消失 ⇒ 不铺设但清理照跑」分支（`if [ ! -d "$src_dir" ]; then cleanup_agent_orphans "$dest" ""`），把 `~/.claude/agents/` 下已铺的软链清掉；② 再 revert commit（此时 `install_agents`/`cleanup_agent_orphans` 与源 `.md` 一起撤走，但全局软链已在①清空，不留悬空）；③ 重跑 setup.sh（旧版逻辑，agents 相关为空操作）。顺序不可颠倒——若先 revert 再 setup，`install_agents()` 连同其清理逻辑一起消失，`~/.claude/agents/` 下的软链永久悬空（`impl-reports/task6-stage3-conditional.md` 回滚演练 C 组反向对照实跑：先 revert 再 setup ⇒ 3 条悬空链、exit 0、零告警）。canonical 规则区改动随 revert 还原（本仓源），下游需重跑 `sdflow-init update`。三个原 skill 未动，回滚后旧流程原样可用。
 
 ## Open Questions
 
