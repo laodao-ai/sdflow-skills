@@ -95,6 +95,7 @@ sdflow-issues:
     T235: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（+ 已铺设的 ~/.claude/hooks/ 副本）","summary":"FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上）","type":"基础设施","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
     T236: {"module":"sdflow-spec/SKILL.md 终审段的「中间态判据」","summary":"终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径","type":"代码质量","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
     T237: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（`change_name` 的 fail-open 分支）","summary":"FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型自己就能触发、且不留任何审计痕**的绕过口，与哨兵逃生口不同级：哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作，而本 fail-open 只需让命令里的 change 名 token 含 `$`（或反引号 / 通配符 / 其它使 CHANGE_NAME_OK_RE 不匹配的字符），守卫即不展开、不猜、直接放行，盘上不留任何痕迹。实测（add-sdflow-spec Task 3 dogfood）：本轮正是走这条 fail-open 绕过了分支③ 的 MUST-halt（SA-05 Scenario 「在其它 feature 分支上创建变更 → MUST halt 问人」），当轮虽已原地披露、且目标仓内 FF-0 规则实际满足，但**这条路径在设计上对模型是完全敞开的**。它与 T235 的 mis-scope 是**两个独立缺陷**：T235 是判据锚错了仓（判得不对），本条是判据被合法跳过（根本没判）。fail-open 本身是既有纪律（基准 5：shell 语法面无界，守卫拿不准时不挡人干活），MUST NOT 改成解析命令串 —— 但「拿不准」和「已被绕过」在 reason 与审计面上目前完全不可区分","type":"基础设施","status":"OPEN","time":"2026-07-26 22:06","change":"add-sdflow-spec","batch":null}
+    T238: {"module":"openspec/changes/add-sdflow-spec","summary":"SA-07 写「model 填具体模型 id」与实测不符：Agent 工具的 model 是枚举 sonnet|opus|haiku|fable，完整版本化 id 被 InputValidationError 拒","type":"代码质量","status":"OPEN","time":"2026-07-27 00:39","change":"add-sdflow-spec","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2359,3 +2360,14 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：与 T235 互为一对（T235 = 判得不对 / 本条 = 根本没判），两条都源自 add-sdflow-spec Task 3 dogfood 的故障② 注入；本条由 Task 3 fix 轮次 1 的双轴审 F4 点出——上一轮只登记了 T235 的 mis-scope，漏了「fail-open 是模型可用的绕过口」这一半
 <!-- sdflow-issue-block:end id=T237 -->
+
+<!-- sdflow-issue-block:start id=T238 -->
+## T238: SA-07 写「model 填具体模型 id」与实测不符：Agent 工具的 model 是枚举 sonnet|opus|haiku|fable，完整版本化 id 被 InputValidationError 拒
+> SA-07 写「model 填具体模型 id」与实测不符：Agent 工具的 model 是枚举 sonnet|opus|haiku|fable，完整版本化 id 被 InputValidationError 拒
+
+**关联文档**：`openspec/changes/add-sdflow-spec/design.md`
+
+**动机**：Task 4 实现期实测（step2 §4.1 + fix1 复核）：Agent 工具的 model 参数是枚举 sonnet|opus|haiku|fable，填完整版本化 id（如 claude-haiku-4-5-20251001）当场被 InputValidationError 拒；而 resolve-models.sh 在本机队解析出的正是这些别名 ⇒ 直接填字面值可用。specs/spec-authoring/spec.md:163,177 的 SA-07 措辞「派发时 model 参数 SHALL 填该轮档位解析出的具体模型 id」会诱导实现方填完整 id、当场失败。SKILL.md 侧措辞已按实测改写（含 :205/:460 两处与外派协议段），但 spec 侧未改（实现期 MUST NOT 改四件套）。
+
+**备注**：与 T232 同批、同性质（实现期实测证伪已过设计门的 spec 断言，实现期 MUST NOT 改四件套 ⇒ 登记后延到 archive 阶段）。本条不阻塞：SKILL.md 侧已是可执行的正确措辞，spec 侧是文档滞后。
+<!-- sdflow-issue-block:end id=T238 -->
