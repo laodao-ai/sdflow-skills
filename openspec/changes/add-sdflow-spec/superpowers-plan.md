@@ -222,8 +222,8 @@ subagent（阶段二外派），量总 token、总美元、墙钟、人工返工
 时移除 agents → 再 revert → 重跑 setup），核验全局 agents 目录无悬空软链残留；最后按 Task 2 已落定
 的阈值判定旧入口是否进入 sunset，达标则更新人读侧与 canonical 的推荐措辞。
 
-- [ ] 全局分发的实际铺设行为与文档描述一致（含 Windows 不铺 agents 的明写取舍）
+- [x] 全局分发的实际铺设行为与文档描述一致（含 Windows 不铺 agents 的明写取舍）
 - [ ] 至少一个下游消费项目跑完 bundle 更新，其规则副本已含本 change 的七处改动，阶段一流程在该项目可用
-- [ ] 回滚演练按「先 uninstall → 再 revert → 重跑 setup」顺序实跑，全局 agents 目录零悬空软链
-- [ ] 按已落定阈值判定 sunset：达标则人读侧与 canonical 的推荐措辞同步更新；未达标则按 Task 2 写死的处置执行
-- [ ] 阶段三验收门结论落纸：本票四项全过 ⇒ 本 change 可进 `/sdflow-done`
+- [x] 回滚演练按「先 uninstall → 再 revert → 重跑 setup」顺序实跑，全局 agents 目录零悬空软链
+- [x] 按已落定阈值判定 sunset：达标则人读侧与 canonical 的推荐措辞同步更新；未达标则按 Task 2 写死的处置执行
+- [x] 阶段三验收门结论落纸：本票四项全过 ⇒ 本 change 可进 `/sdflow-done`
