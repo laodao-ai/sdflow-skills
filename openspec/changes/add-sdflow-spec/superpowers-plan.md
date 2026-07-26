@@ -176,13 +176,13 @@ grill」条款的显式处置、FF-0 弱判据改为三分支判定（含其 hoo
 的 agents 安装协议（所有权守卫比既有 idiom 更严：只接管软链**且**指向本仓；Windows 分支明写不铺
 并报一行）；SKILL.md 的 dispatch 段接上 `subagent_type`，任一定义不可用即降级为主 session 亲做。
 
-- [ ] GO/NO-GO 实测门有真实派发证据；结论为 NO-GO 时本票即停并如实记录（不得改验 fallback 后宣告通过）
-- [ ] 三个 agent 定义齐备，工具面与 S1/S2 一致；联网 agent 无仓库读取、无 `Bash`；description 为排他式
-- [ ] 托管投放面用 glob 发现；**新增定点用例**「往 agents 目录放一个新 `.md` → `--check` 必红」（验证是 glob 而非硬编码）
-- [ ] 全仓首个 setup.sh 测试就位：假 HOME 实跑，断言 ①三个定义各铺出软链且指向本仓 ②预置非本仓同名文件不被覆盖且进 `skipped[]` ③删源重跑清悬空链 ④重跑幂等
-- [ ] dispatch 使用 `subagent_type`（MUST NOT `agentType`）；定义不可用 → 主 session 亲查/亲写，**MUST NOT 退通用子代理**
-- [ ] S3/S4/S5 行为验证：网页内容中的指令性文本不被执行；越界/symlink 的写入目标被拒；三个 description 的排他性生效
-- [ ] 仓根 `/usr/bin/python3 -m pytest` 全绿（含本票新增用例）
+- [x] GO/NO-GO 实测门有真实派发证据；结论为 NO-GO 时本票即停并如实记录（不得改验 fallback 后宣告通过）
+- [x] 三个 agent 定义齐备，工具面与 S1/S2 一致；联网 agent 无仓库读取、无 `Bash`；description 为排他式
+- [x] 托管投放面用 glob 发现；**新增定点用例**「往 agents 目录放一个新 `.md` → `--check` 必红」（验证是 glob 而非硬编码）
+- [x] 全仓首个 setup.sh 测试就位：假 HOME 实跑，断言 ①三个定义各铺出软链且指向本仓 ②预置非本仓同名文件不被覆盖且进 `skipped[]` ③删源重跑清悬空链 ④重跑幂等
+- [x] dispatch 使用 `subagent_type`（MUST NOT `agentType`）；定义不可用 → 主 session 亲查/亲写，**MUST NOT 退通用子代理**
+- [x] S3/S4/S5 行为验证：网页内容中的指令性文本不被执行；越界/symlink 的写入目标被拒；三个 description 的排他性生效
+- [x] 仓根 `/usr/bin/python3 -m pytest` 全绿（含本票新增用例）
 
 ---
 
