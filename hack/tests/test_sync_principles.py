@@ -1,7 +1,8 @@
 """守「四条通则」的一致性 —— 真相源唯一，注入机械化，漂移机械可查。
 
 【为什么需要这个测试】
-四条通则被【复制】进 15 个 SKILL.md + 1 份 bundle 副本。复制就会漂。
+四条通则被【复制】进每一个顶层 SKILL.md + 1 份 bundle 副本。复制就会漂。
+（数量由 sync_principles.py 自报——文档里硬编码计数，新增一个 skill 就过期。）
 而这正是 CLAUDE.md 基准 1 说的：能用「可固化规则 + 脚本」保证的一致性，MUST 机械化。
 —— 复制是必要的（skill 是独立分发单元，跑在别的项目里，读不到本仓 CLAUDE.md），
    但复制【不能靠手】。
@@ -15,7 +16,7 @@ import sync_principles as SP  # noqa: E402
 
 
 def test_every_skill_carries_the_principles():
-    """⭐ 15 个 SKILL.md 全部与真相源逐字节一致 —— 漂了就红。
+    """⭐ 每一个顶层 SKILL.md 都与真相源逐字节一致 —— 漂了就红。
 
     修：python3 hack/sync_principles.py --apply
     """

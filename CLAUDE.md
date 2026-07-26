@@ -189,7 +189,7 @@ pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
 
 | 真相源 | 受众 | 投放面 |
 |---|---|---|
-| `assets/hack/skill-principles.md`（**skill 味**，含 fan-out 传播纪律） | skill 自己 | **15 个 `SKILL.md`**；**它本身**就是 `outside-voice.sh` 的 FRAME 要 cat 的那个文件（setup.sh 装进 `~/.sdflow/hack/`） |
+| `assets/hack/skill-principles.md`（**skill 味**，含 fan-out 传播纪律） | skill 自己 | **每个顶层 `SKILL.md`**（由 `sync_principles.py` glob 发现并自报数量，**MUST NOT 在文档里硬编码计数**——新增一个 skill 就会让它过期）；**它本身**就是 `outside-voice.sh` 的 FRAME 要 cat 的那个文件（setup.sh 装进 `~/.sdflow/hack/`） |
 | `assets/snippets/principles-project.md`（**项目味**） | 在项目里干活的 agent | **本仓 `CLAUDE.md` / `AGENTS.md`** + `assets/snippets/claude-section.md`（`sdflow-init` 推给消费项目） |
 
 > **源为什么在 `assets/` 而不在 `hack/`**：skill 味的源**就是** outside-voice 要读的那个文件。
