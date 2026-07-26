@@ -83,6 +83,11 @@ sdflow-issues:
     T223: {"module":"hack/tests/test_async_branch_parity.py","summary":"_the_line_with 的「恰好 1 行」是双向判据，良性新增会假红","type":"代码质量","status":"OPEN","time":"2026-07-26 00:46","change":"enable-codex-background-outside-voice","batch":null}
     T224: {"module":"hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py","summary":"面治枚举漏 2 条 isinstance 早退分支（无独立锚）","type":"代码质量","status":"OPEN","time":"2026-07-26 03:28","change":"enable-codex-background-outside-voice","batch":null}
     T225: {"module":"hack/check_codex_efficacy_evidence.py + openspec/changes/enable-codex-background-outside-voice(已归档)","summary":"补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）","type":"基础设施","status":"OPEN","time":"2026-07-26 08:23","change":"enable-codex-background-outside-voice","batch":null}
+    T226: {"module":"hack/check_codex_efficacy_evidence.py: check 子命令","summary":"给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）","type":"基础设施","status":"OPEN","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":null}
+    T227: {"module":"sdflow-init/assets/hack/outside-voice-job.py: cmd_worker + run_cleanup","summary":"worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程","type":"功能增强","status":"OPEN","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":null}
+    T228: {"module":"sdflow-init/assets/hack/outside-voice.sh: secret_scan","summary":"含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号","type":"基础设施","status":"OPEN","time":"2026-07-26 09:07","change":"enable-codex-background-outside-voice","batch":null}
+    T229: {"module":"openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞)","summary":"两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）","type":"可观测性","status":"OPEN","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":null}
+    T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"OPEN","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2177,3 +2182,68 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：来源=Task 6 双轴审第3轮 Spec 轴裁定「票面已做到尽头的未完成」+ 人拍板 A。注意本项不是质量缺口而是范围决定：ship 卡在 5/6 是因为 6.1/6.2 是动作项、外部额度封锁下不可诚实勾选，而非实现有问题。gate 的完成信号经 checkpoint 标签通道显式补打（commit message 写明人授权降级），复选框刻意留白。
 <!-- sdflow-issue-block:end id=T225 -->
+
+<!-- sdflow-issue-block:start id=T226 -->
+## T226: 给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）
+> 给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：两个独立来源（cold 对抗镜实测 + code-voice 跨模型）同时命中：verify() 只读传入的那一个文件，从不打开 <site>.collected.json 去对 job_id / attempt_nonce / stdout_sha256，也不校 layer/repo/change/run_id 的派生一致性（layer/repo/change 纯来自 CLI，run_id 只取首个 witness 且不在 SITE_KEYS 里）。实测：一份全手工伪造的 evidence.json（job_id/nonce/sha256 全瞎编）→ check 判三门全过、exit 0。∴ 这道门挡的是「手抄失误」，不是「自报为真」——而它存在的理由（adr/0018）恰恰是后者。属本仓反复出现的失效模式：外壳看起来机械（sha256/schema/单调时序），捕获环节却由被监管方把持。
+
+**思路**：check 增加 --run-dir（建议设为必填，fail-closed），对 declared 的每个站点重新读 <site>.collected.json 并逐字段比对 job_id/attempt_nonce/stdout_sha256/run_id/host/runner/model/effort/四个时刻；任一不符即红。同时强制所有站点属于同一 run，并校验 layer 与其基础站点（spec-review→design-voice / code-review→code-voice）对应，禁止 CLI 覆盖可派生的身份字段。诚实边界要写清：这只把伪造成本从「写一个文件」抬高到「同时伪造一致的 run-dir 证物」，本机 agent 仍有 Bash 写权限，MUST NOT 宣称不可伪造。
+
+**备注**：🔴 与 T225 同批做，不要单独排期——T225 是「额度恢复后跑真实 Codex efficacy」，它会产出**第一份真实 run-dir**；本条的新绑定只有对着那份真证物才验得了，现在做只能用我自造的 fixture 验（等于用被测对象自己的假设去验被测对象）。这也是本次 code-review 没有当场修它的理由。当前无假绿风险：Task 6 已按人拍板 A 降级，T162 保留、efficacy=0 陈述未改、无任何 evidence.json 产出过。已在文件 docstring 的「诚实边界」节写死这段声明，防后人误读为防伪门。
+<!-- sdflow-issue-block:end id=T226 -->
+
+<!-- sdflow-issue-block:start id=T227 -->
+## T227: worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程
+> worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 对抗镜（资源泄漏角度）实测：cmd_worker 用 subprocess.call 起 bash，零 signal.signal() 注册 ⇒ 对 worker PID 发 SIGTERM，python 父进程瞬间死亡、bash 子进程未收到任何信号、PPID 变 1、其内部 trap TERM 从未触发，继续跑满。这与设计文档已登记的残余(a)「outside-voice.sh 被 SIGKILL 时 trap 不执行」不是同一个洞：这里连 outside-voice.sh 都没收到信号。配套的另一半：run_cleanup 读到了 <site>.runner.pid（真正烧钱的那个 pid），但全程只拿它做只读核验（probe_runner_pid），唯一破坏性调用是 claude stop/rm（纯 supervisor API），工具里没有任何代码路径真正 kill 它 ⇒ subtree_wait 到点仍 ALIVE 就只报 orphan-warning，永久卡住。
+
+**思路**：① cmd_worker 装 SIGTERM/SIGINT/SIGHUP handler，收到即转发给 bash 子进程（或整个进程组）；② cleanup 在落 orphan-warning 之前，用已核验过的 runner_pid 做一次兜底 killpg。②改的是 OVBG-05 的既定行为，MUST 先过设计门再动。
+
+**备注**：⚠️ 本条**不是实现偏离 spec**：OVBG-05 原文只要求「stop→核验子树退出→rm，无法核验时落 unknown-cost/orphan-warning 并抑制自动 fallback」，没要求 MUST kill runner。∴ 当前实现是合规的，检测方向也是 fail-closed（不产生假绿），这属于 spec 野心之外的加固 ⇒ 按通则③『不加宽』不在本次 change 内自行补上。⚠️ 前提未验：claude --bg 内部的 stop 究竟走 per-pid kill 还是 killpg **没有核实过**——若走 group-kill 则①整条不成立。做之前 MUST 先用一次真实后台 agent 把这个前提验掉，别直接照着改。
+<!-- sdflow-issue-block:end id=T227 -->
+
+<!-- sdflow-issue-block:start id=T228 -->
+## T228: 含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号
+> 含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 对抗镜（信任边界角度）实测：_OV_TEST_LIB_ONLY=1 source 后直调 secret_scan，对含 NUL 的文件 RC=0（对照不含 NUL 的同串 RC=1）——GNU grep 对含 NUL 的输入按二进制语义处理，跨 NUL 的字面量匹配失败。该函数同时用于入境扫 context 与出境扫 runner 的 last-message.md。附带一条：命中二进制文件时 grep 输出 Binary file <path> matches，被 cut 取「行号」后打进 stderr，与 D8「只报规则类型+行号，MUST NOT 打印命中整行/匹配值」的字面契约不符（只泄漏路径不泄漏密钥）。
+
+**思路**：secret_scan 改用 grep -a，或先把文件的 NUL 规范化成占位符再扫（不改行为契约，只加一个字节归一化步骤）；stderr 那条在 cut 之前先过滤掉非数字行。
+
+**备注**：两条都是**既有代码**（非本 change 引入，本 change 未改这些行），故按代码审的置信过滤规则不作为本 change 的阻断项。严重度评估要诚实：NUL 切开的密钥已不是明文密钥，要真泄漏需要『模型被诱导主动插入控制字符做混淆』+『接收方主动剥除』——那是对抗性外泄场景，而正则扫描器对**蓄意混淆**（base64/换行/间隔）本来就一概无效，这是该类防线的固有边界，不是本实现的缺陷。归类为廉价加固而非漏洞。
+<!-- sdflow-issue-block:end id=T228 -->
+
+<!-- sdflow-issue-block:start id=T229 -->
+## T229: 两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）
+> 两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 代码审两条独立发现，都不是实现错、而是 spec 写窄了：① OVBG-01「dispatch MUST 在 monotonic 5 秒 deadline 内返回」——实现是 communicate 最多 5s + 收流最多 5s + 独立的 nonce lookup grace，端到端上界不是 5s。这是**有意的、代码里写明理由的**设计（核验用独立 grace，不与 dispatch 抢同一份预算；且 duration 字段覆盖到核验结束，正是为了让拿它跟 deadline 比的断言不恒真）。② OVBG-05「破坏性操作前 MUST 重新核验 canonical job id、repo、site、attempt identity；无法核验时只允许告警」——实现里只有 canonical-id 必须肯定核验，repo/site/attempt 是「矛盾即一票否决、缺席不阻塞」。理由写在 verify_identity 的 docstring：真机上 state=done 的 roster 条目没有 name 字段（Task 1 实测），四项都要求肯定证据的话，正常完成的 job 永远 rm 不掉——那会把「不猜目标」写成「什么也别做」。
+
+**思路**：在 /sdflow-done 的 archive delta 同步步骤里，把这两条 spec 文本改写成与实现一致的措辞（① 明确 5 秒是 spawn+首次读的 deadline，核验用独立 grace，端到端上界另述；② 明确四项的判据是「canonical id 必须肯定核验 + 其余三项矛盾即否决、缺席不阻塞」并附真机依据）。
+
+**备注**：🔴 这是 /sdflow-done 的 **archive 阶段必做项**，不是可选。实现期 MUST NOT 改 openspec/specs/（会触发设计门失鲜 REFUSE_START），故只能在此登记后延到 archive。同批还有 Task 4 交接的既有一项：host-adaptive-execution/spec.md 与 spec-workflow/spec.md 仍只写「四旗」，而 OVBG-04 已含三面隔离旗。三条一起在 delta 同步时核对。
+<!-- sdflow-issue-block:end id=T229 -->
+
+<!-- sdflow-issue-block:start id=T230 -->
+## T230: 200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限
+> 200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：cold 对抗镜（资源泄漏角度）读码发现：OV_MAX_CONTEXT_BYTES 的 200KB 保头尾截断只施加在 render_prompt 的入境 ctx 上；出境方向 last-message.md → cat 到 stdout → worker 落盘 <site>.stdout 全程无上限。runner 产出异常大的结果时会无节制占盘。
+
+**思路**：出境侧加同量级上限，或至少在超过阈值时记一条 bytes 告警（与既有 OV_TRUNCATED 同口径落 stderr）。
+
+**备注**：影响低：模型单次输出天然有上限，且 .outside-voice/ 已被 gitignore 递归排除、不会入库。列为廉价加固。
+<!-- sdflow-issue-block:end id=T230 -->
