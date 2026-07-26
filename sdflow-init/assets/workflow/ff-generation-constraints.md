@@ -11,16 +11,23 @@
 
 > FF-0 是 ff **起手必做的非 D 动作**（VCS 前置，不是内容约束，故与 D-x 区分编号）。
 
-**FF-0**：执行 `/opsx:ff {change}` 时，**生成任何产物之前**必须确保当前在 feature 分支：
+**FF-0**：起手建 change（`/opsx:ff {change}`、或 `/sdflow-spec` 的相位 B 起手）时，**生成任何产物之前**必须过**三分支判定**——按当前分支恰好命中一条：
 
-- 不在 feature 分支（在 main/master/默认分支）→ 先 `git checkout -b feat/{change}`。
-- 已在 feature 分支 → 跳过（**幂等**，不重复建）。
+| 当前分支 | 动作 |
+|---|---|
+| **保护分支**（main / master / 默认分支） | `git checkout -b feat/{change}` |
+| **已在 `feat/{本 change}`** | 跳过（**真幂等**，不重复建） |
+| **其它 feature 分支**（前一个 change 的分支等） | 🔴 **halt 问人**：从当前切出 / 回 base 切出 / 就地继续，三选一 |
+
+- 🔴 **MUST NOT 沿用「已在 feature 分支就跳过」的弱判据**——那会让第二个 change 的工件与 checkpoint 落在**前一个 change 的分支**上（stacking），使两个 change 的提交历史交错，`ship_gate` 的完成判据须靠 change-命名空间隔离才不被污染。
+- `git checkout -b` 失败（分支已存在）→ fallback 到 `git checkout feat/{change}`；再失败即**如实报告**给人决定，MUST NOT 静默继续。
 - 目的：`proposal/design/specs/tasks` 随 feature 分支落地，merge 后 PR 完整呈现「设计→审查→实现」变更故事。
 
 调用方在 ff prompt 第一句注入：
-`先确保在 feature 分支（不在则 git checkout -b feat/{change}），再按 config + trigger-catalog 生成`。
+`先过 FF-0 三分支判定（保护分支则 git checkout -b feat/{change}；已在本 change 分支则跳过；在其它 feature 分支则停下问我），再按 config + trigger-catalog 生成`。
 
-> **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦在受保护分支（master/main）上执行 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 殊途同归调它）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。文档级强制（调用方注入 + review 核对）作为补充层。
+> **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard` 殊途同归调它）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。
+> hook 实现同一条三分支判定：**保护分支 → deny**；**已在 `feat/{该 change}` → 放行**；**其它 feature 分支 → deny 并要求先问人**（人确认「就地继续」后，用 `SDFLOW_FF0_ACK=1 openspec new change …` 重跑即放行——**该 ack 是给人拍板用的逃生口，模型 MUST NOT 自行加上它**）。任何解析/探测异常一律 fail-open 放行（守卫自身故障绝不阻断正常工作）。文档级强制（调用方注入 + review 核对）作为补充层。
 
 ## wayfinder→ff 衔接契约（条件：change 源于 wayfinder map）
 

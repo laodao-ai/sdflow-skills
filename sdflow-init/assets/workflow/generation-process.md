@@ -48,7 +48,23 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
 
 结论：**brainstorming 是"产设计"的收敛器，grill 是"锤设计"的对抗器。** 结构与约束已被 config 守住后，真正稀缺的是**对抗压测**——grill 比再跑一遍 brainstorming 的机械自检更值钱。
 
-## 四、推荐流水线
+## 四、推荐流水线（**两条分支，先判装没装 `sdflow-spec`**）
+
+### 分支 A —— 已装 `sdflow-spec`：单入口（**默认路径**）
+
+```
+  /sdflow-spec                          澄清(A) → 拷问(B) → 生成(C) 一次连续跑
+        ↓                               拷问结构性前置于成文；产四件套 + decision-memo.md
+  HARD-GATE 批准                        保留「未批准不实现」门禁
+        ↓
+  opsx:apply
+```
+
+`sdflow-spec` 把「发散 + 对抗 + 生成」收进一个入口，且**拷问在成文之前**——改想法比改四份成文便宜。
+它 `disable-model-invocation: true`，**只能人触发**。出口序列由该 skill 原样贴出（`/clear` → 换档 →
+`/sdflow-spec-review`，对 [workflow.md](./workflow.md) §三.2 的 G1 构成一处具名例外，理由见该处）。
+
+### 分支 B —— 未装 `sdflow-spec`：旧三步（沿用，未被删除）
 
 ```
   〔问题模糊 / 方向未定〕opsx:explore     发散,想清要不要 / 是什么
@@ -62,13 +78,21 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
   opsx:apply
 ```
 
-净分工：**explore 发散（条件）· grill 对抗（主力）· brainstorming 收窄为「产设计 + 把门」。**
+净分工（分支 B 内）：**explore 发散（条件）· grill 对抗（主力）· brainstorming 收窄为「产设计 + 把门」。**
+
+### 四入口选择规则（**规则，不是建议**）
+
+- **默认走 `/sdflow-spec`**：装了它就用它；MUST NOT 默认拿 `opsx:ff` 起手。
+- **仅下列三种情形用旧三步**：① 需要 wayfinder 跨会话铺图（`sdflow-spec` 不覆盖该职责）；② 用户明确要求分步执行；③ `sdflow-spec` 因环境原因不可用（未跑 setup / Codex 宿主降级不可接受）。走旧三步的那次运行 SHALL 在完成报告里说明为何未走单入口。
+- **模型侧**：模型 MUST NOT 自行选 `opsx:ff` 绕过拷问；判断需要开 change 时 SHALL 提示用户触发 `/sdflow-spec`，MUST NOT 直接调 `opsx:ff`。
+- **旧三步仍是合法路径**：三个原入口未被删除；分支 B 里 grill 一律全深度，MUST NOT 因「反正以后会换单入口」而瘦跑。
 
 ## 五、各 skill 何时用
 
 | skill | 触发 / 选择条件 |
 |------|----------------|
-| `opsx:explore` | **条件**：问题 / 方向模糊、有多种框定、方案未定。清晰的变更跳过 |
+| `/sdflow-spec` | **默认**（装了就用）：一个入口跑完澄清 → 拷问 → 生成，拷问前置于成文。只能人触发 |
+| `opsx:explore` | **条件**：问题 / 方向模糊、有多种框定、方案未定。清晰的变更跳过。走分支 B 时用 |
 | `brainstorming` | 需要从零产出设计 + 要 HARD-GATE 时；config 固化后**瘦着跑**（只做澄清/选方案/把门，跳过机械自检） |
 | `grill-me` | 无领域文档基建时的轻量对抗压测（纯拷问） |
 | `grill-with-docs` | 有领域文档（术语表 / ADR）时：对抗压测 + 对齐术语/领域模型/代码 + 落档（维护长期真相源） |
@@ -90,7 +114,8 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
 
 ## 八、检查清单（用 ③ 时）
 
-- [ ] 问题/方向是否清晰？不清晰先 `opsx:explore`，别直接 ff
+- [ ] 装了 `sdflow-spec` 吗？装了就走**分支 A 单入口**；走旧三步须命中 §四 三种例外之一并在报告说明
+- [ ] 问题/方向是否清晰？不清晰先 `opsx:explore`，别直接 ff（分支 B）
 - [ ] 生成后是否做过**对抗压测**（grill），而不止机械自检？
 - [ ] 设计是否过 HARD-GATE（用户批准）后才进 apply？
 - [ ] grill-with-docs 是否读写本 repo 的 ADR/术语位置，未另起第二套？

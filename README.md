@@ -7,6 +7,27 @@
 本仓库同时是这套 spec 工作流 bundle 的 **权威源**（见下方[工作原理](#工作原理)），
 既产出工作流资产、又用它管理自身变更（dogfooding）。
 
+## Quick Start（跑一个变更，从需求到 merge）
+
+```bash
+git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && bash setup.sh
+```
+
+装完在**你的项目**里，逐条敲（`/sdflow-spec` 与 `/grill-with-docs` 只能人手动敲，模型唤不起）：
+
+```text
+/sdflow-init            # 只做一次：把 spec 工作流 bundle 铺进这个项目
+/sdflow-spec            # 阶段一：澄清 → 拷问 → 生成四件套 + decision-memo.md
+/clear                  # ↓ 出口序列（G1 的唯一具名例外：cache 按模型隔离 + 产/审错档）
+                        #   切换到评审档模型
+/sdflow-spec-review     # 阶段二：并行多镜设计审 → 一份 spec-review-report.md
+                        #   ★ 人在这里过一次报告拍板（全流程唯一人类门）
+/sdflow-ship {change}   # 阶段三：实现 → 代码审 → done → merge，一路连续跑
+```
+
+> 没装 `sdflow-spec` 的项目沿用旧三步 `opsx:explore → opsx:ff → /grill-with-docs`；
+> 两条分支的选择规则见 `sdflow-init/assets/workflow/generation-process.md` §四。
+
 ## Skills 列表
 
 | 分类 | Skill | 说明 |
@@ -15,6 +36,7 @@
 | 工作流铺设/维护 | `sdflow-maintain` | 扫描 openspec 目录状态、对比 INDEX、报告差异并修复 |
 | 工作流铺设/维护 | `openspec-upgrade` | 升级 openspec CLI（`@fission-ai/openspec`）并刷新项目内 openspec skills |
 | 工作流铺设/维护 | `sdflow-upgrade` | 运行 checkout 一键升级：pull → setup → 版本展示（堵 pull→setup 窗口期） |
+| 生成（阶段一） | `sdflow-spec` | 阶段一·产 spec 单一入口：澄清 → 拷问 → 生成三相位一次连续跑，拷问结构性前置于成文；产四件套 + 承重的 `decision-memo.md`（`/clear` 无损）。只能人手动触发 |
 | 评审（主审） | `sdflow-spec-review` | 阶段二·设计审主审：并行多镜（领域+对抗+接地读码）→ 一份 spec-review-report |
 | 评审（主审） | `sdflow-code-review` | 阶段三·代码审主审：并行多镜 + 对抗裁决 + 置信过滤 → 一份 code-review-report |
 | 编排（阶段三） | `sdflow-ship` | 阶段三编排器：gate 台账驱动 5.5→9 到 merge 建议 |

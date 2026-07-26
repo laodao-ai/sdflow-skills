@@ -20,3 +20,10 @@
 - **CONTEXT.md 补术语 Stacking**（含立论自否铁律）；后续 gate 加固写"分支/纪律"处受本 ADR 约束。
 - **收紧后手留档**：per-change 模式检测（命名 change 忽略所有裸标签 → 对裸污染全免疫）审议后故意不做（KISS + A1 摩擦），若 stacking 变常态再作 D2-b 式升级（见 ship-gate-hardening-2 design ADR-2）。
 - **与 adr/0006 同系**：均属"gate/workflow 不押上游理想假设"哲学——0006 不押"开发时的强模型"，本 ADR 不押"分支纪律"。
+
+### 〔现状更新 · add-sdflow-spec 2026-07〕FF-0 已升为三分支判定，本 ADR 的决定不变
+
+FF-0 与 `ff0-branch-guard.py` 已改为三分支判定：**在其它 feature 分支上建 change 会被 deny，要求先问人**（人拍板"就地继续"后带 `SDFLOW_FF0_ACK=1` 重跑即放行）。⇒ 正文"关键实证"那句（"FF-0 不拦 feature 分支上 stacking"）**已不再是当前行为**，但**本 ADR 的选择与派生铁律全部不变**：
+
+- 上面 Considered Options 里拒绝"在 FF-0 里拦 stacking"的理由 ①（"stacking 有时是合法工作流，不该一刀切禁"）由 **ack 逃生口**满足——新判据挡的是"静默默认发生"，不是"禁止 stacking"；
+- 理由 ②（"把正确性寄托于入口守卫无漏违反防御纵深"）**完全不受影响**：守卫仍可绕过（人 ack / 取不到 change 名或探测不到分支时 fail-open / 手工 `git` 与其它入口）⇒ `ship_gate` 的 change-命名空间隔离 **MUST NOT** 因"现在 FF-0 会拦了"而被撤掉或降级。

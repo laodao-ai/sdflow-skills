@@ -13,6 +13,14 @@
 
 ---
 
+## 阶段一 · 步骤 0 — `/sdflow-spec`
+
+**默认入口（装了就走这条，取代步 1/1b/2/3）**：一次跑完 澄清(A)→拷问(B)→生成(C)。只能人手动敲（`disable-model-invocation: true`）——模型 MUST NOT 代唤起，也 MUST NOT 改用 `opsx:ff` 绕过拷问，而 SHALL 提示用户触发本步
+
+**产出物**：proposal/design/specs/tasks + decision-memo.md
+
+**规则 · 条件**：generation-process §四 分支 A + 四入口选择规则；出口序列 = `/clear` → 换档 → `/sdflow-spec-review`（对 G1 的具名例外，见 §三.2）；**未装本 skill 或命中三种例外情形 → 走步 1~3（分支 B）**
+
 ## 阶段一 · 步骤 1 — `/opsx:explore`
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step1-explore.md`）：
@@ -23,7 +31,7 @@
 
 **产出物**：—
 
-**规则 · 条件**：generation-process ③发散；**单 session 可收敛的模糊才跑**（问题清晰直接 ff；事中判定超单 session 转 wayfinder，见 1b）
+**规则 · 条件**：**〔分支 B〕** generation-process ③发散；**单 session 可收敛的模糊才跑**（问题清晰直接 ff；事中判定超单 session 转 wayfinder，见 1b）
 
 ## 阶段一 · 步骤 1b — `wayfinder chart`
 
@@ -31,19 +39,19 @@
 
 **产出物**：map.md + issues/*.md
 
-**规则 · 条件**：T126/D6；三档判据事中可观察
+**规则 · 条件**：**〔分支 B〕** T126/D6；三档判据事中可观察
 
 ## 阶段一 · 步骤 2 — `/opsx:ff`
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step2-ff.md`）：
 
 ```
-/opsx:ff {change}。若不在 feature 分支则先 git checkout -b feat/{change}。若 change 源于 wayfinder map：调用语显式携带 map 路径（如 @openspec/roadmaps/{name}/map.md）并按 ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读取。完成后 checkpoint-commit ff。
+/opsx:ff {change}。先过 FF-0 三分支判定：在保护分支（main/master）则 git checkout -b feat/{change}；已在 feat/{change} 则跳过；在其它 feature 分支则停下问我（从当前切出 / 回 base 切出 / 就地继续）。若 change 源于 wayfinder map：调用语显式携带 map 路径（如 @openspec/roadmaps/{name}/map.md）并按 ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读取。完成后 checkpoint-commit ff。
 ```
 
 **产出物**：proposal/design/specs/tasks
 
-**规则 · 条件**：ff-generation-constraints(FF-0)+config；**必跑**
+**规则 · 条件**：**〔分支 B〕** ff-generation-constraints(FF-0 三分支判定)+config；**分支 B 内必跑**
 
 ## 阶段一 · 步骤 3 — `/grill-with-docs`
 
@@ -55,7 +63,7 @@
 
 **产出物**：design/ADR/CONTEXT 更新
 
-**规则 · 条件**：generation-process ③对抗；非平凡变更必跑。**grill 是独立审视，一律全深度**——MUST NOT 因上游（explore / wayfinder 已决 ticket）已经想过就瘦跑或跳过某条分支；拿上游产出给自己松绑，二次审视就退化成盖章（见 ff-generation-constraints.md 的回链锚条款）。
+**规则 · 条件**：**〔分支 B〕** generation-process ③对抗；分支 B 内非平凡变更必跑。**grill 是独立审视，一律全深度**——MUST NOT 因上游（explore / wayfinder 已决 ticket）已经想过就瘦跑或跳过某条分支；拿上游产出给自己松绑，二次审视就退化成盖章（见 ff-generation-constraints.md 的回链锚条款）。
 
 ## 阶段二 · 步骤 4 — `/sdflow-spec-review`
 

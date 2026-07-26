@@ -519,7 +519,7 @@ design 域监视集 SHALL 保持固定四件套不变。豁免 SHALL 仅覆盖**
 - **THEN** gate MUST 输出 REFUSE_START 且 reason 为「change 不存在（active 与 archive 均无）」，MUST NOT 输出误导性的「未过设计门请补锚」提示；active 目录存在时同名历史归档 MUST NOT 干扰判定（active 优先）
 
 #### Scenario: 完成任务号按 change 命名空间隔离〔T32/ship-gate-hardening-2〕
-- **WHEN** 当前 change A 的 plan 号集 = {1, 2}，同一分支窗口内只有 A 的 `checkpoint(A:task1-…)`（task2 未完成），另一 change B 的 `checkpoint(B:task2-…)` 落进 A 的窗口（B 的号恰是 A 缺的 task2；触发本需 stacking——feat/A 上再建 change B，FF-0 不拦 feature 分支 stacking）
+- **WHEN** 当前 change A 的 plan 号集 = {1, 2}，同一分支窗口内只有 A 的 `checkpoint(A:task1-…)`（task2 未完成），另一 change B 的 `checkpoint(B:task2-…)` 落进 A 的窗口（B 的号恰是 A 缺的 task2；触发本需 stacking——feat/A 上再建 change B；FF-0 三分支判定后该动作需人显式 ack 才放行，但守卫可绕过（ack / fail-open / 手工 git），故隔离仍必要，见 adr/0008）
 - **THEN** gate 对 A 判定时 MUST 只把 `checkpoint(A:task1-…)` 计入（`done_ids={1}`），MUST NOT 把 `checkpoint(B:task2-…)` 计入（命名空间 `<ns>` 严格 `==` 当前 change 才计；`foo` 与 `foo-bar` 精确互斥非前缀）；`plan_ids - done_ids = {2} ≠ ∅` → MUST 判 CONTINUE_IMPL 且 `done_tasks==["1"]`，MUST NOT 因 B 的 task2 顶替使 `done={1,2}` 假齐放行 RUN_CODE_REVIEW〔判别性负例（B 号=A 缺号）方能区分"只计当前"与"两个都计"，MUST NOT 用同号无区分力写法〕；解析 MUST 用可选命名空间捕获组 `checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-`，且 `done_task_ids` 的字面前缀过滤 MUST 同步放宽为 `startswith("checkpoint(")`（MUST NOT 保留 `startswith("checkpoint(task")`——否则命名标签在 `TAG_RE.match` 前被整条跳过、T32 静默失效）；回归覆盖 MUST 用真实 git commit fixture
 
 #### Scenario: 旧无命名空间 checkpoint 标签向后兼容〔T32/ship-gate-hardening-2〕
@@ -967,7 +967,15 @@ marker 检测 MUST **fence-aware**（跳过 code fence/行内 code）+ **行锚�
 
 ### Requirement: 阶段一讨论按雾量三段分流并约定 wayfinder→ff 衔接契约
 
-阶段一入口 SHALL 按讨论雾量三分：问题清晰 → 直接 `opsx:ff`；单 session 可收敛的模糊 → `/opsx:explore`；**事中判定**超单 session（讨论已跨 session/跨天、或经历 /clear/压缩仍未收敛）→ 切换 wayfinder chart 铺图逐 ticket 决议〔spec-review-amendment F11：事前「预估轮数」不可观测，判据改事中触发〕。wayfinder 收敛后接 ff SHALL 遵守衔接契约三条：① ff 起手逐区读 map——Destination 喂 proposal 动机与 Success Metrics（D-5）、Decisions-so-far 逐 ticket zoom 到决议全文（MUST NOT 只读 map 摘要行，防 ff「prefer making reasonable decisions」对已决项重新决歪；zoom SHALL 设上界：≤8 张展开全文，超出按与本 change 相关性截断并在 proposal 注明〔F11〕）、Out-of-scope 喂 Non-Goals 可证伪假设（D-3）；② TG 判命中 SHALL 前置到 chart 阶段写入 map Notes；③ proposal SHALL 回链 map 供溯源，且 ff 写 design 决策段时源自已决 ticket 的 SHALL 内联回链该 ticket（机械可 grep 锚，同 R-ID 标注模式）〔F11〕。契约生效 SHALL 依赖双注入通道同步落地：`openspec/config.yaml` `rules:` 段规则文本 + workflow.md ff 调用行显式携带 map 路径——仅写入约束文件不构成注入（FF-0 先例）〔spec-review-amendment F2〕。
+**新旧入口共存与路由〔add-sdflow-spec · SA-11/SA-14〕**：`sdflow-spec` 上线后，阶段一有**两条分支**，三个原入口（`opsx:explore` / `opsx:ff` / `grill-with-docs`）**保留不删**。路由规则 SHALL 为：
+
+- **分支 A（默认）**：装了 `sdflow-spec` ⇒ 走 `/sdflow-spec` 单入口（澄清 → 拷问 → 生成三相位，拷问结构性前置于成文，产四件套 + `decision-memo.md`）。本 Requirement 下方的雾量三分与 wayfinder→ff 衔接契约**在分支 A 下不适用**——雾量由相位 A 的对话吸收，衔接契约的三条（逐区读 map / TG 前置 / 回链）只约束 `opsx:ff` 这条产出路径。
+- **分支 B**：未装 `sdflow-spec`，或命中三种例外情形之一——① 需要 wayfinder 跨会话铺图（`sdflow-spec` 不覆盖该职责）；② 用户明确要求分步执行；③ `sdflow-spec` 因环境原因不可用（未跑 setup / Codex 宿主降级不可接受）⇒ 走下方雾量三分的旧三步。该次运行 SHALL 在完成报告中说明为何未走单入口。
+- **模型侧**：`sdflow-spec` 声明 `disable-model-invocation: true`（只能人触发），而三个旧入口模型唤得起。故模型 MUST NOT 自行选 `opsx:ff` 绕过拷问；判断需要开 change 时 SHALL 提示用户触发 `/sdflow-spec`，MUST NOT 直接调 `opsx:ff`。
+- **FF-0 对两条分支同样适用**，且 SHALL 为**三分支判定**（保护分支建 / 已在 `feat/{本 change}` 跳过 / 在其它 feature 分支 halt 问人），MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
+- **规则真相源不得分叉**：以上路由 SHALL 同时落在 canonical bundle（`generation-process.md` §四、`workflow.md` §一/§二/§三.2）与本仓项目指令文件的非托管区，二者 MUST NOT 互相矛盾。
+
+分支 B 内，阶段一入口 SHALL 按讨论雾量三分：问题清晰 → 直接 `opsx:ff`；单 session 可收敛的模糊 → `/opsx:explore`；**事中判定**超单 session（讨论已跨 session/跨天、或经历 /clear/压缩仍未收敛）→ 切换 wayfinder chart 铺图逐 ticket 决议〔spec-review-amendment F11：事前「预估轮数」不可观测，判据改事中触发〕。wayfinder 收敛后接 ff SHALL 遵守衔接契约三条：① ff 起手逐区读 map——Destination 喂 proposal 动机与 Success Metrics（D-5）、Decisions-so-far 逐 ticket zoom 到决议全文（MUST NOT 只读 map 摘要行，防 ff「prefer making reasonable decisions」对已决项重新决歪；zoom SHALL 设上界：≤8 张展开全文，超出按与本 change 相关性截断并在 proposal 注明〔F11〕）、Out-of-scope 喂 Non-Goals 可证伪假设（D-3）；② TG 判命中 SHALL 前置到 chart 阶段写入 map Notes；③ proposal SHALL 回链 map 供溯源，且 ff 写 design 决策段时源自已决 ticket 的 SHALL 内联回链该 ticket（机械可 grep 锚，同 R-ID 标注模式）〔F11〕。契约生效 SHALL 依赖双注入通道同步落地：`openspec/config.yaml` `rules:` 段规则文本 + workflow.md ff 调用行显式携带 map 路径——仅写入约束文件不构成注入（FF-0 先例）〔spec-review-amendment F2〕。
 
 #### Scenario: 大雾讨论走 wayfinder 后 ff 不重决已决项
 
@@ -976,12 +984,24 @@ marker 检测 MUST **fence-aware**（跳过 code fence/行内 code）+ **行锚�
 
 #### Scenario: 清晰问题不强制前置讨论
 
-- **WHEN** 需求边界与方案在触发时已清晰
+- **WHEN** 需求边界与方案在触发时已清晰，且走分支 B
 - **THEN** 直接 opsx:ff，不强制 explore/wayfinder 仪式
+
+#### Scenario: 默认入口是单入口，模型不得绕过拷问
+
+- **WHEN** 用户说「开个 change 做 X」而未指定入口，且本机已装 `sdflow-spec`
+- **THEN** 提示用户触发 `/sdflow-spec`；MUST NOT 直接调 `opsx:ff` 生成四件套（哪怕需求看起来已清晰——「清晰」在分支 A 下由相位 A 的提前收束判据处置，不构成跳过拷问的理由）
+
+#### Scenario: 旧入口的合法使用须留痕
+
+- **WHEN** 需要 wayfinder 跨会话铺图、用户明确要求分步执行、或 `sdflow-spec` 环境不可用
+- **THEN** 旧三步为合法路径，走完整的雾量三分 + 衔接契约；且该次运行在完成报告中说明为何未走单入口
 
 ### Requirement: grill 对上游已决分支瘦跑
 
-grill（阶段一对抗压测步）SHALL 对上游 wayfinder 已决分支瘦跑：引用该 ticket resolution 快速核对（决议是否仍与代码 ground truth 一致）即过，MUST NOT 对已决内容重复全深度死磕；ff 新生成或未经上游决议的部分 SHALL 照常全深度死磕。瘦跑判定 SHALL 锚定 design 决策段的内联 ticket 回链（见衔接契约③）——无回链锚的分支 MUST 按全深度死磕，MUST NOT 以语义模糊匹配定「已决」〔spec-review-amendment F11〕。grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling ticket（生成前决策拷问）非冗余，MUST NOT 因上游已跑 grilling 而整跳 grill。
+本 Requirement 只约束**分支 B**（`explore/wayfinder → opsx:ff → grill-with-docs` 那条路径）〔add-sdflow-spec · SA-11〕——分支 A 的拷问是 `sdflow-spec` 的内建相位 B，**在成文之前**跑，不存在「对已成文产物瘦跑」这个动作；其停止信号由 spec-authoring 的 SA-03（人机共识 ∧ 承重约束逐条有证据锚）定义，MUST NOT 套用本节的瘦跑判据。
+
+grill（分支 B 的阶段一对抗压测步）SHALL 对上游 wayfinder 已决分支瘦跑：引用该 ticket resolution 快速核对（决议是否仍与代码 ground truth 一致）即过，MUST NOT 对已决内容重复全深度死磕；ff 新生成或未经上游决议的部分 SHALL 照常全深度死磕。瘦跑判定 SHALL 锚定 design 决策段的内联 ticket 回链（见衔接契约③）——无回链锚的分支 MUST 按全深度死磕，MUST NOT 以语义模糊匹配定「已决」〔spec-review-amendment F11〕。grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling ticket（生成前决策拷问）非冗余，MUST NOT 因上游已跑 grilling 而整跳 grill。
 
 #### Scenario: 已决分支快速核对
 

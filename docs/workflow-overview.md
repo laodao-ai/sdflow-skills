@@ -103,7 +103,7 @@ flowchart LR
 | 步 | skill | 目标 | 产出 | 注意事项 |
 |---|---|---|---|---|
 | 1 | `opsx:explore` | 需求方向未定时**发散思考**，不实现 | 对话（可选落 OpenSpec 草稿） | **问题模糊才跑**，清晰直接跳；explore 模式**禁写代码**，只捕获思考 |
-| 2 | `opsx:ff` 🔒 | 一把生成 **proposal / design / specs / tasks 四件套** | 四件套 + feature 分支 | **FF-0**：不在 feature 分支先 `git checkout -b feat/{change}`；结构①+约束② 已由 `config.yaml` + `trigger-catalog` 自动注入，prompt 无需内联；生成后 checkpoint |
+| 2 | `opsx:ff` 🔒 | 一把生成 **proposal / design / specs / tasks 四件套** | 四件套 + feature 分支 | **FF-0 三分支判定**：保护分支先 `git checkout -b feat/{change}`；已在 `feat/{本 change}` 跳过；在其它 feature 分支 halt 问人。结构①+约束② 已由 `config.yaml` + `trigger-catalog` 自动注入，prompt 无需内联；生成后 checkpoint |
 | 3 | `grill-with-docs` [详解](./workflow-skills/grill-with-docs.md) | **对抗压测设计**：逐分支死磕、对齐术语、边界场景、代码与主张不符即揭穿 | design/ADR/CONTEXT 更新（标 `[grill-amendment]`） | 一次一题、等反馈再下一题；能查码就查码；ADR 只在「难逆 + 无背景会困惑 + 真权衡」三者全真时才落；**收敛后才 checkpoint**（多轮中途不提交） |
 
 > 🔒 = 黑盒：`opsx:ff` 的生成内部（config 槽注入、模版填充）本文不展开，只认它的**产出契约 = 四件套 + 分支**。

@@ -105,6 +105,13 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 - shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 sdflow-code-review 本身。sdflow-code-review 编排器还并入
   `gstack/review`（scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤，合成一份 code-review-report.md。
 - **无 `/clear`（G1）**：独立性由评审 fan-out 的 fresh 子代理给，不由 `/clear` 给。
+  - 🔴 **具名例外（唯一一处）：`/sdflow-spec` 的「阶段一→阶段二」交界**——该 skill 的出口序列
+    `/clear` → 换档 → `/sdflow-spec-review` 里那次 `/clear` 是**允许的**。**理由只有两条，都在 G1 的论证范围之外**：
+    ① **cache 按模型隔离**（拖着阶段一旧上下文切档 = 全价重付）；② **产 / 审错档纪律**（阶段一产出档 ≠ 阶段二评审档，换档才是真实动因）。
+    本节这条 G1 谈的是**独立性**，成本与档位不在其射程内 ⇒ 例外不与之矛盾。
+  - 🔴 **MUST NOT 拿「主审裁决需要冷视角」当该例外的理由**——本节上面几行已正面回答过它
+    （事后 sdflow-code-review 的冷来自**独立编排器 + fresh 子代理 fan-out**，不来自 `/clear`）。
+  - **边界**：仅那一处交界。阶段二内部、阶段三全程（含 subagent-dev / sdflow-implement 调度期间）仍禁 `/clear`。
 
 TG 驱动的是**领域镜的选取 + outside voice 是否走 cross-model**（命中 HR-TG 才单开领域 cross-model），
 **不是"sdflow-code-review 跑不跑"**——sdflow-code-review 每次都跑。
@@ -115,5 +122,6 @@ TG 驱动的是**领域镜的选取 + outside voice 是否走 cross-model**（�
 - [ ] 终审 dispatch 是否把 rubric 增强为 **通用模板 + 命中栈 code-checklists/domains**（注入点 B）？
 - [ ] sdflow-code-review 是否**每次全跑**（P3c 独立冷强制主审，非高风险才跑）？并入 `gstack/review` 的 scope-drift + 完成度？
 - [ ] 是否**没有**依赖 `/clear`（G1：fresh 子代理即独立性；子 agent 调度中禁清）？
+      **唯一例外** = `/sdflow-spec` 的阶段一→阶段二交界那一次（理由 = cache 按模型隔离 + 产/审错档，**不是**「主审需冷视角」）。
 
 *方法论 v2（P3c：sdflow-code-review 每次全跑强制主审）· 项目无关 · 配套 spec-review.md（设计侧残差）/ code-checklists/（领域清单）/ workflow.md（编排）*

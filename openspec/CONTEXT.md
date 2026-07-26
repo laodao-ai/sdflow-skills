@@ -105,8 +105,8 @@ trigger-catalog 附录维护的 TG 具名子集（做错会运行期爆炸/数�
 _Avoid_: 再造 R1~R6 式风险代号（触发一律具体行为描述）
 
 **Stacking（变更摞叠）**:
-在**已有 feature 分支**上再 `openspec new change` 建第二个变更，使两个 change 的工件与 checkpoint 提交交错落在同一分支历史里。**FF-0 只拦 `main`/`master` 上建 change，不拦 feature 分支上 stacking**（实证 `ff0-branch-guard.py`）——故它可达但非常规。是 `ship_gate` 完成判据跨 change 污染（同号 task 互相计入 → 假✅）的唯一触发入口；gate 对此取**防御纵深**立场（change-命名空间标签隔离，见 ship-gate-hardening-2），**MUST NOT 用"每 change 独立分支是纪律"作缓解**——该纪律若成立则污染不可达、隔离本身失去意义（立论自否），gate 恰取"纪律可能破"立场才使隔离有价值。
-_Avoid_: 把 stacking 当"被 FF-0 禁止"（FF-0 不拦它）；用"独立分支纪律"给 stacking 残留兜底（自否）
+在**已有 feature 分支**上再 `openspec new change` 建第二个变更，使两个 change 的工件与 checkpoint 提交交错落在同一分支历史里。**FF-0 自 `add-sdflow-spec` 起为三分支判定**：保护分支 deny / 已在 `feat/{本 change}` 放行 / **在其它 feature 分支 deny 并要求先问人**（`ff0-branch-guard.py`）——即 stacking 不再是默认可静默发生的动作，但**仍然可达**：人拍板后带 `SDFLOW_FF0_ACK=1` 重跑即放行，且守卫在「取不到 change 名 / 探测不到分支 / 走非 Bash 入口」时一律 fail-open。是 `ship_gate` 完成判据跨 change 污染（同号 task 互相计入 → 假✅）的唯一触发入口；gate 对此取**防御纵深**立场（change-命名空间标签隔离，见 ship-gate-hardening-2 / adr/0008），**MUST NOT 用"每 change 独立分支是纪律"作缓解**，也 **MUST NOT 因 FF-0 现在会拦而撤掉隔离**——守卫可绕过（ack / fail-open / 手工 git），把正确性寄托于"入口守卫无漏"正是 adr/0008 拒绝的那条路。
+_Avoid_: 把 stacking 当"被 FF-0 彻底禁止"（它只是不再默认发生，人 ack 即可）；用"独立分支纪律"或"FF-0 会拦"给 stacking 残留兜底（自否）
 
 **度量回路 (Metrics Loop)**:
 把每轮评审的**价值**结构化落锚、跨 change 只读聚合成表、据累积数据**人决**评审架构（保留 / 降采样 / 收紧触发 / 淘汰低价值镜）的反馈回路。**供数不供裁决**——给维度不给结论，砍哪镜是人读表后的决定。ROADMAP 暂名 `workflow-metrics-loop`；价值半由 lens-metric 锚承载，成本半（时长）另立、粒度更粗（见下）。

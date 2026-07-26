@@ -10,7 +10,15 @@
 ## 一、完整流程（三阶段连续化）
 
 ```
- 阶段一·生成 ── 人类对话岛：grill ──────────────────────────────────
+ 阶段一·生成 ── 人类对话岛：拷问 ──────────────────────────────────
+   ┌─ 分支 A〔已装 sdflow-spec，默认〕────────────────────────────┐
+   │  /sdflow-spec   澄清(A) → 拷问(B) → 生成(C) 一次连续跑        │
+   │    └─ 拷问前置于成文；产四件套 + decision-memo.md（承重件）   │
+   │    └─ 相位 B 起手即 FF-0 三分支判定 + openspec new change     │
+   │    └─ 相位 B 收敛 / 相位 C 终审各一次 [checkpoint]            │
+   │    └─ 出口原样贴：/clear → 换档 → sdflow-spec-review（G1 例外）│
+   └──────────────────────────────────────────────────────────────┘
+   ┌─ 分支 B〔未装 sdflow-spec，或命中三种例外情形〕──────────────┐
    〔问题清晰〕──────────────────────────────────────┐
    〔单 session 可收敛的模糊〕opsx:explore             │  发散(条件,清晰则跳)
         │                                            │
@@ -24,14 +32,15 @@
         └────────────────────────────────────────────┘
         │
    opsx:ff                                 生成 proposal/design/specs/tasks
-     └─ FF-0: 不在 feature 分支 → git checkout -b feat/{change}
+     └─ FF-0 三分支判定: 保护分支→checkout -b feat/{change} / 本 change 分支→跳过 / 其它 feature 分支→halt 问人
      └─ 按 config.yaml + trigger-catalog 生成(结构①+约束②已固化)
      └─ [checkpoint] 生成产物落点
         │
    grill-with-docs                         对抗压测:死磕分支+对齐术语+查代码+落 ADR/术语
      └─ 收敛后 [checkpoint]（多轮中途不提交,只收敛后一次）
+   └──────────────────────────────────────────────────────────────┘
         │
- 阶段二·设计审 ── 连续,无 /clear ───────────────────────────────────
+ 阶段二·设计审 ── 连续,无 /clear（例外:分支 A 的阶段一→阶段二交界，见 §三.2）──
    sdflow-spec-review 编排器               Step1 autoplan(广审)→Step2 并行多镜(本项目标准)→Step3 一份 report
      └─ fresh 子代理替代 /clear 保独立；中途不 AskUserQuestion(决策登记进报告)
      └─ 内部 2×[checkpoint]（autoplan 子步 / sdflow-spec-review 子步）
@@ -73,10 +82,11 @@
 
 | 阶段 | 步 | command/skill | prompt（可复制） | 产出物 | 规则·条件 |
 |---|---|---|---|---|---|
-| 一 | 1 | /opsx:explore | **→ [`prompts/step1-explore.md`](./prompts/step1-explore.md)**（原样复制，勿转述） | — | generation-process ③发散；**单 session 可收敛的模糊才跑**（问题清晰直接 ff；事中判定超单 session 转 wayfinder，见 1b） |
-| 一 | 1b | wayfinder chart | 事中判定超单 session（讨论已跨 session/跨天，或经历 /clear/压缩仍未收敛）才切入；铺图逐 ticket 决议；TG 判命中前置写入 map Notes（**增强非转移**：ff 起手判触发纪律不变，Notes 有则核对、无则照常全判，缺失不硬卡）；缺装（`~/.claude/skills/wayfinder` 不存在）→ 显式降级 opsx:explore | map.md + issues/*.md | T126/D6；三档判据事中可观察 |
-| 一 | 2 | /opsx:ff | **→ [`prompts/step2-ff.md`](./prompts/step2-ff.md)**（原样复制，勿转述） | proposal/design/specs/tasks | ff-generation-constraints(FF-0)+config；**必跑** |
-| 一 | 3 | /grill-with-docs | **→ [`prompts/step3-grill.md`](./prompts/step3-grill.md)**（原样复制，勿转述） | design/ADR/CONTEXT 更新 | generation-process ③对抗；非平凡变更必跑。**grill 是独立审视，一律全深度**——MUST NOT 因上游（explore / wayfinder 已决 ticket）已经想过就瘦跑或跳过某条分支；拿上游产出给自己松绑，二次审视就退化成盖章（见 ff-generation-constraints.md 的回链锚条款）。 |
+| 一 | 0 | /sdflow-spec | **默认入口（装了就走这条，取代步 1/1b/2/3）**：一次跑完 澄清(A)→拷问(B)→生成(C)。只能人手动敲（`disable-model-invocation: true`）——模型 MUST NOT 代唤起，也 MUST NOT 改用 `opsx:ff` 绕过拷问，而 SHALL 提示用户触发本步 | proposal/design/specs/tasks + decision-memo.md | generation-process §四 分支 A + 四入口选择规则；出口序列 = `/clear` → 换档 → `/sdflow-spec-review`（对 G1 的具名例外，见 §三.2）；**未装本 skill 或命中三种例外情形 → 走步 1~3（分支 B）** |
+| 一 | 1 | /opsx:explore | **→ [`prompts/step1-explore.md`](./prompts/step1-explore.md)**（原样复制，勿转述） | — | **〔分支 B〕** generation-process ③发散；**单 session 可收敛的模糊才跑**（问题清晰直接 ff；事中判定超单 session 转 wayfinder，见 1b） |
+| 一 | 1b | wayfinder chart | 事中判定超单 session（讨论已跨 session/跨天，或经历 /clear/压缩仍未收敛）才切入；铺图逐 ticket 决议；TG 判命中前置写入 map Notes（**增强非转移**：ff 起手判触发纪律不变，Notes 有则核对、无则照常全判，缺失不硬卡）；缺装（`~/.claude/skills/wayfinder` 不存在）→ 显式降级 opsx:explore | map.md + issues/*.md | **〔分支 B〕** T126/D6；三档判据事中可观察 |
+| 一 | 2 | /opsx:ff | **→ [`prompts/step2-ff.md`](./prompts/step2-ff.md)**（原样复制，勿转述） | proposal/design/specs/tasks | **〔分支 B〕** ff-generation-constraints(FF-0 三分支判定)+config；**分支 B 内必跑** |
+| 一 | 3 | /grill-with-docs | **→ [`prompts/step3-grill.md`](./prompts/step3-grill.md)**（原样复制，勿转述） | design/ADR/CONTEXT 更新 | **〔分支 B〕** generation-process ③对抗；分支 B 内非平凡变更必跑。**grill 是独立审视，一律全深度**——MUST NOT 因上游（explore / wayfinder 已决 ticket）已经想过就瘦跑或跳过某条分支；拿上游产出给自己松绑，二次审视就退化成盖章（见 ff-generation-constraints.md 的回链锚条款）。 |
 | 二 | 4 | /sdflow-spec-review | **→ [`prompts/step4-spec-review.md`](./prompts/step4-spec-review.md)**（原样复制，勿转述） | spec-review-report.md | 编排器：内部 autoplan→并行多镜→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 2×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）** |
 | 二 | 5 | HARD-GATE | 人工过 **一份** `spec-review-report.md`（决策登记区已摊开选项+推荐+三面后果(系统/用户/开发循环)+主次判定）→ 批准设计 | （人工：批准后才进实现） | generation-process 门；**★全流程唯一人类门** |
 | 二 | 5.5 | /embedded-test-sop | **→ [`prompts/step5_5-embedded-sop.md`](./prompts/step5_5-embedded-sop.md)**（原样复制，勿转述） | {change}-sop.md + log-checks.yaml | 嵌入式专属条件触发：TG-02(嵌入式固件) **∧**（启动/复位·状态机·协议 等高风险 **∨** TG-18 有测试计划）；非嵌入式天然不触发 |
@@ -87,8 +97,11 @@
 
 ## 三、关键设计决策
 
-1. **git 分支在 ff prompt 内做（带守卫）= 规则 FF-0**：`若不在 feature 分支则 git checkout -b feat/{change}`。分支恰在生成开始时创建，spec 文件随分支落地，幂等。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
+1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
 2. **子代理 fresh-context 替代 `/clear`（最关键，G1）**：`/clear` 唯一作用是给评审独立上下文；但 sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md) 自认 `/clear` 只剩边际收益）。故**全流程不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+   - 🔴 **具名例外（唯一一处）：分支 A 的「阶段一 → 阶段二」交界 SHALL 用一次 `/clear`**——`/sdflow-spec` 终审通过后的出口序列是 `/clear` → 换档 → `/sdflow-spec-review`。**理由只有两条，且都是 G1 未覆盖的面**：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。G1 的论证只针对**独立性**，没谈成本与档位 ⇒ 例外成立、不与 G1 矛盾。
+   - 🔴 **MUST NOT 拿「主审裁决需要冷视角」当本例外的理由**——那一条已被 G1 正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
+   - **例外的边界**：仅这一处交界。阶段二内部、阶段三全程（含 subagent-dev / sdflow-implement 调度期间）**仍然禁 `/clear`**；分支 B（旧三步）**不适用**本例外。
 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
 4. **只在阶段二设计门停一次人类**：grill 是对话岛（人类对抗，不折叠）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议〔T10〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。grill 多轮中途不提交、只收敛后一次。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
@@ -119,9 +132,11 @@
 
 ## 六、检查清单（跑一个变更时）
 
-- [ ] 问题清晰否？不清晰先 `opsx:explore`
-- [ ] ff 是否在 feature 分支上生成（FF-0）？每步是否 checkpoint-commit？
-- [ ] grill 是否收敛后才提交（多轮中途不提交）？
+- [ ] 装了 `sdflow-spec` 吗？装了走**分支 A 单入口**；走分支 B 须命中 generation-process §四 三种例外之一并在报告说明
+- [ ] 〔分支 B〕问题清晰否？不清晰先 `opsx:explore`
+- [ ] 生成起手是否过 **FF-0 三分支判定**（保护分支建 / 本 change 分支跳过 / 其它 feature 分支 halt 问人）？每步是否 checkpoint-commit？
+- [ ] 〔分支 B〕grill 是否收敛后才提交（多轮中途不提交）？
+- [ ] `/clear` 只在**分支 A 的阶段一→阶段二交界**用过一次（G1 具名例外）？其余全程无 `/clear`？
 - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
 - [ ] 设计是否过 HARD-GATE（用户批准）才进 writing-plans？（阶段二唯一人类门）
 - [ ] sdflow-code-review 是否**每次全跑**（并入 gstack/review scope+完成度、领域 code-checklists、对抗、置信过滤）？
