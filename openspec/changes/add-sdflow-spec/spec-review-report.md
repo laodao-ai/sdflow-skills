@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: ab2d0812b4b554098848f64dc9b021f38be1178d
+---
+
 # add-sdflow-spec · 设计评审报告（阶段二）
 
 > 评审对象盘面：`7f221c9`（四件套 = ff 初稿 `bd6601e` + grill 5 问收敛 `7f221c9`）
@@ -83,6 +89,18 @@
 - Codex-CEO 从另一角度收敛到同一处（C-5）：「写 design 会发现架构缺口、写 spec 会发现不可验收表述 —— **这些发现本身就是判断工作**」，而 writer 被禁止询问用户 ⇒ 遇缺口只能猜/漏写/失败，随后主 session 读回直接修正 ⇒ 实际形成**双写**。
 - **这是行为层推断（中置信），不是事实错误** ⇒ 登记为需拍板，不自动裁决。
 - **推荐**：不改 D2 的目标，但把 **tasks 4.3 的 dogfood 从「小型真实需求」改为「一个真实复杂 change」**，并加一条验收：人工比对「纪要驱动的 design.md」vs「有完整拷问上下文的 design.md」的**论证密度差距**（而非只查字段填没填）。零额外机制，只改一条任务措辞。
+
+### ✅ [拍板记录] 设计门已批准 —— 2026-07-26
+
+用户于 2026-07-26 拍板**批准**本设计进入阶段三。四个需拍板项的决议：
+
+- **Q1** 不拆 change，但按**三阶段推进**（可靠性 → 成本实验 → 产品化），阶段间设验收门。
+- **Q2** 选项 **A** —— 保留 `/clear` 出口序列，**同 change 修订 canonical 的 G1**。
+- **Q3** agent 定义装**全局** `~/.claude/agents/`（design D3 已补反驳 `subagent-definitions-plan.md:303-308` 的理由）。
+- **Q4** 采纳推荐 —— dogfood 换真实复杂 change + 论证密度人工比对。
+
+决议已全部回改进四件套（`f9f785a`），窄复核修补后定稿于 **`ab2d081`**；该 SHA 即 frontmatter 的 `reviewed_sha`。
+上方 lens-metric 锚已按 SR-M 最终化（Q3/Q4 两个 `defer` 转为 `采纳`，原地更新不新开行）。
 
 ### [自动决策] autoplan 相位裁决
 
@@ -431,11 +449,11 @@
 <!-- sdflow:outside-voice v1 site="design-voice" guard="none" host="claude" runner="codex" reason_code="ok" findings="29" truncated="false" -->
 <!-- sdflow:outside-voice v1 site="hr-tg" guard="none" host="claude" runner="codex" reason_code="ok" findings="6" truncated="false" -->
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="17" 采纳="15" 裁掉="1" defer="1" 独立="4" sev="致5/高6/中2/低2" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="21" 采纳="19" 裁掉="1" defer="1" 独立="2" sev="致5/高6/中6/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="17" 采纳="16" 裁掉="1" defer="0" 独立="4" sev="致5/高7/中2/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="21" 采纳="20" 裁掉="1" defer="0" 独立="3" sev="致5/高6/中7/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="7" 采纳="7" 裁掉="0" defer="0" 独立="3" sev="致1/高1/中4/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="1" 采纳="0" 裁掉="1" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="18" 采纳="16" 裁掉="1" defer="1" 独立="0" sev="致5/高6/中4/低1" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="18" 采纳="17" 裁掉="1" defer="0" 独立="0" sev="致5/高7/中4/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="2" sev="致1/高3/中1/低0" -->
 
 ---
