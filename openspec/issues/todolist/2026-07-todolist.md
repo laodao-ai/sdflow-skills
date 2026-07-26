@@ -90,6 +90,10 @@ sdflow-issues:
     T230: {"module":"sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧","summary":"200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限","type":"性能优化","status":"PROPOSED","time":"2026-07-26 09:08","change":"enable-codex-background-outside-voice","batch":"enable-codex-background-outside-voice"}
     T231: {"module":"sdflow-issues 读取路径（core cmd_scan 自检 / issues.py validate_scan_envelope / _bug_triage·_todo_triage）","summary":"重开 harden-issues-read-path change：读取路径诚实化（显红 + reindex 不罢工 + triage 解耦），砍掉已被 migrate_legacy 取代的 normalize；分支 feat/harden-issues-read-path 已过期不可直接续用","type":"代码质量","status":"OPEN","time":"2026-07-26 10:10","change":null,"batch":null}
     T232: {"module":"openspec/changes/add-sdflow-spec","summary":"SA-05 Scenario 与 design 失败模式表点名 design.md 的 validate 断言恒假：openspec validate --strict 只读 delta spec","type":"代码质量","status":"OPEN","time":"2026-07-26 17:37","change":"add-sdflow-spec","batch":null}
+    T233: {"module":"sdflow-spec/SKILL.md（`disable-model-invocation` 的宿主语义）","summary":"`disable-model-invocation: true` 在 Codex 宿主下的语义未核：Claude 宿主已有实测（archive/2026-07-10-matt-workflow-integration/impl-notes.md §4.1，两次独立实证 —— 主 session 经 Skill tool 调用被 harness 直接拒绝，报 `Skill X cannot be used with Skill tool due to disable-model-invocation`，须人手敲 `/x` 才执行）。sdflow-spec 把「只能人触发」当作 SA-01 的承重前提，但该前提在 Codex 宿主下**从未实测**——若 Codex 忽略该旗标，模型即可自行唤起 sdflow-spec，「拷问是内建默认路径」这条结构性改善在该宿主上不成立。核法：Codex 宿主下让模型尝试唤起一个带该旗标的 skill，观察是否被拒；结果不论正负都回写 SKILL.md 的诚实边界段","type":"基础设施","status":"OPEN","time":"2026-07-26 21:28","change":"add-sdflow-spec","batch":null}
+    T234: {"module":"openspec/issues/todolist 的 T132（spec-review 起手 grill 已收敛门）","summary":"T132 的信号载体枚举与行号锚已被 add-sdflow-spec 改过时，须订正后再实现：①T132 只枚举了两个载体（`workflow.md:83` 强制的 grill checkpoint-commit / design.md 内的 `<!-- sdflow:grill-done -->` 锚），而阶段一默认入口改为 `/sdflow-spec` 后，新增两个更强的载体 —— `checkpoint(sdflow-spec-grill)` 提交标签 + change 目录内非空 `decision-memo.md`（后者已有机械门 `hack/tests/test_decision_memo_gate.py::check_decision_memo`，可直接复用，不必另造锚）；②`workflow.md:83` 这个行号锚已因 Task 2 在 §流程表插入 `/sdflow-spec` 行而漂移，T132 正文按行号找不到原条款。⇒ 实现 T132 前 MUST 先按四入口现状重列信号载体（分支 A 走 sdflow-spec 锚、分支 B 走旧 grill 锚），否则门会对分支 A 的正常跑动误判 REFUSE_START","type":"代码质量","status":"OPEN","time":"2026-07-26 21:28","change":"add-sdflow-spec","batch":null}
+    T235: {"module":"sdflow-init/assets/hooks/ff0-branch-guard.py（+ 已铺设的 ~/.claude/hooks/ 副本）","summary":"FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上）","type":"基础设施","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
+    T236: {"module":"sdflow-spec/SKILL.md 终审段的「中间态判据」","summary":"终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径","type":"代码质量","status":"OPEN","time":"2026-07-26 21:29","change":"add-sdflow-spec","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2297,3 +2301,47 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：🔴 /sdflow-done 的 archive 阶段必做项，不是可选。实现期 MUST NOT 改本 change 四件套（会触发设计门失鲜 REFUSE_START、卡死 ship 链），故只能登记后延（同 T229 先例）。已交付的可达形态：门锚在 delta spec（test_truncated_spec_delta_is_caught_by_strict_validate）+ test_status_says_done_while_validate_says_red 正面证明『存在态 ≠ 合格态』+ test_validate_strict_only_covers_delta_specs 把覆盖边界机械钉住（upstream 哪天扩了覆盖面该用例会红，提示回来收紧文档）。
 <!-- sdflow-issue-block:end id=T232 -->
+
+<!-- sdflow-issue-block:start id=T233 -->
+## T233: `disable-model-invocation: true` 在 Codex 宿主下的语义未核：Claude 宿主已有实测（archive/2026-07-10-matt-workflow-integration/impl-notes.md §4.1，两次独立实证 —— 主 session 经 Skill tool 调用被 harness 直接拒绝，报 `Skill X cannot be used with Skill tool due to disable-model-invocation`，须人手敲 `/x` 才执行）。sdflow-spec 把「只能人触发」当作 SA-01 的承重前提，但该前提在 Codex 宿主下**从未实测**——若 Codex 忽略该旗标，模型即可自行唤起 sdflow-spec，「拷问是内建默认路径」这条结构性改善在该宿主上不成立。核法：Codex 宿主下让模型尝试唤起一个带该旗标的 skill，观察是否被拒；结果不论正负都回写 SKILL.md 的诚实边界段
+> `disable-model-invocation: true` 在 Codex 宿主下的语义未核：Claude 宿主已有实测（archive/2026-07-10-matt-workflow-integration/impl-notes.md §4.1，两次独立实证 —— 主 session 经 Skill tool 调用被 harness 直接拒绝，报 `Skill X cannot be used with Skill tool due to disable-model-invocation`，须人手敲 `/x` 才执行）。sdflow-spec 把「只能人触发」当作 SA-01 的承重前提，但该前提在 Codex 宿主下**从未实测**——若 Codex 忽略该旗标，模型即可自行唤起 sdflow-spec，「拷问是内建默认路径」这条结构性改善在该宿主上不成立。核法：Codex 宿主下让模型尝试唤起一个带该旗标的 skill，观察是否被拒；结果不论正负都回写 SKILL.md 的诚实边界段
+
+**关联文档**：`openspec/changes/add-sdflow-spec/design.md`
+
+**动机**：proposal Non-Goals 已把跨宿主语义列为未核项；tasks 9.2 要求登记
+
+**备注**：本项由 add-sdflow-spec Task 3 阶段一验收门登记
+<!-- sdflow-issue-block:end id=T233 -->
+
+<!-- sdflow-issue-block:start id=T234 -->
+## T234: T132 的信号载体枚举与行号锚已被 add-sdflow-spec 改过时，须订正后再实现：①T132 只枚举了两个载体（`workflow.md:83` 强制的 grill checkpoint-commit / design.md 内的 `<!-- sdflow:grill-done -->` 锚），而阶段一默认入口改为 `/sdflow-spec` 后，新增两个更强的载体 —— `checkpoint(sdflow-spec-grill)` 提交标签 + change 目录内非空 `decision-memo.md`（后者已有机械门 `hack/tests/test_decision_memo_gate.py::check_decision_memo`，可直接复用，不必另造锚）；②`workflow.md:83` 这个行号锚已因 Task 2 在 §流程表插入 `/sdflow-spec` 行而漂移，T132 正文按行号找不到原条款。⇒ 实现 T132 前 MUST 先按四入口现状重列信号载体（分支 A 走 sdflow-spec 锚、分支 B 走旧 grill 锚），否则门会对分支 A 的正常跑动误判 REFUSE_START
+> T132 的信号载体枚举与行号锚已被 add-sdflow-spec 改过时，须订正后再实现：①T132 只枚举了两个载体（`workflow.md:83` 强制的 grill checkpoint-commit / design.md 内的 `<!-- sdflow:grill-done -->` 锚），而阶段一默认入口改为 `/sdflow-spec` 后，新增两个更强的载体 —— `checkpoint(sdflow-spec-grill)` 提交标签 + change 目录内非空 `decision-memo.md`（后者已有机械门 `hack/tests/test_decision_memo_gate.py::check_decision_memo`，可直接复用，不必另造锚）；②`workflow.md:83` 这个行号锚已因 Task 2 在 §流程表插入 `/sdflow-spec` 行而漂移，T132 正文按行号找不到原条款。⇒ 实现 T132 前 MUST 先按四入口现状重列信号载体（分支 A 走 sdflow-spec 锚、分支 B 走旧 grill 锚），否则门会对分支 A 的正常跑动误判 REFUSE_START
+
+**关联文档**：`openspec/changes/add-sdflow-spec/design.md`
+
+**动机**：tasks 9.3 要求核对 T132 内容是否仍准确；核对结论 = 不再准确（枚举不全 + 行号锚漂移），故另立订正项而非重复登记 T132
+
+**备注**：本项由 add-sdflow-spec Task 3 阶段一验收门登记；T132 本身保持 OPEN 不动
+<!-- sdflow-issue-block:end id=T234 -->
+
+<!-- sdflow-issue-block:start id=T235 -->
+## T235: FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上）
+> FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上）
+
+**关联文档**：`openspec/changes/add-sdflow-spec/design.md`
+
+**动机**：守卫是 Task 2 刚同步过的 FF-0 三分支判定的机械实现；本缺陷使它在跨仓调用下给出与规则相反的结论
+
+**备注**：本项由 add-sdflow-spec Task 3 dogfood 实测发现；当轮为不触碰「只能人 touch」的哨兵，走了守卫 docstring 明写的 fail-open（token 含 `$` 即不展开不猜）并全程披露
+<!-- sdflow-issue-block:end id=T235 -->
+
+<!-- sdflow-issue-block:start id=T236 -->
+## T236: 终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径
+> 终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径
+
+**关联文档**：`openspec/changes/add-sdflow-spec/design.md`
+
+**动机**：dogfood 冷读抽检时该判据的两可性直接影响终审结论，属指令歧义而非实现缺陷
+
+**备注**：本项由 add-sdflow-spec Task 3 dogfood 终审步实测发现
+<!-- sdflow-issue-block:end id=T236 -->

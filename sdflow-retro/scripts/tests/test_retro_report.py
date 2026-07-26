@@ -134,6 +134,11 @@ def test_map_stage_longest_prefix(tmp_path):
     assert R.map_stage("checkpoint(final-review)") == "code-review"
     assert R.map_stage("checkpoint(ff)") == "ff"
     assert R.map_stage("checkpoint(grill)") == "grill"
+    # sdflow-spec 的两个相位锚：匹配是 startswith，故「grill」不是 `sdflow-spec-grill` 的前缀，
+    # 二者 MUST 各自单列；漏任一条即落 unknown 桶，相位锚等于白打。
+    assert R.map_stage("checkpoint(sdflow-spec-grill)") == "grill"
+    assert R.map_stage("checkpoint(sdflow-spec-generate)") == "ff"
+    assert R.map_stage("checkpoint(sdflow-spec-grill): 相位 B 收敛") == "grill"
     assert R.map_stage("feat(x): 随手") == "unknown"
 
 

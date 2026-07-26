@@ -133,6 +133,11 @@ _STAGE_RULES = [
     ("done-archive", "done"),
     ("done-verify", "done"),
     ("gate", "spec-review"),
+    # `sdflow-spec` 的两个相位锚。**MUST 各自单列**——匹配是 `startswith`，
+    # 「grill」不是 `sdflow-spec-grill` 的前缀，靠既有词表两者都落 unknown（dogfood 实测）。
+    # 相位 B（对抗拷问）同族于 grill；相位 C（生成四件套）同族于 ff（旧三入口里由 ff 承担同一产出）。
+    ("sdflow-spec-grill", "grill"),
+    ("sdflow-spec-generate", "ff"),
     ("grill", "grill"),
     ("ff", "ff"),
     ("propose", "other"),
