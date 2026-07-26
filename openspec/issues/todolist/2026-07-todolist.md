@@ -82,6 +82,7 @@ sdflow-issues:
     T222: {"module":"sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md","summary":"止损行「走下一条的 unknown-cost 处置」指代不准","type":"代码质量","status":"OPEN","time":"2026-07-26 00:41","change":"enable-codex-background-outside-voice","batch":null}
     T223: {"module":"hack/tests/test_async_branch_parity.py","summary":"_the_line_with 的「恰好 1 行」是双向判据，良性新增会假红","type":"代码质量","status":"OPEN","time":"2026-07-26 00:46","change":"enable-codex-background-outside-voice","batch":null}
     T224: {"module":"hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py","summary":"面治枚举漏 2 条 isinstance 早退分支（无独立锚）","type":"代码质量","status":"OPEN","time":"2026-07-26 03:28","change":"enable-codex-background-outside-voice","batch":null}
+    T225: {"module":"hack/check_codex_efficacy_evidence.py + openspec/changes/enable-codex-background-outside-voice(已归档)","summary":"补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）","type":"基础设施","status":"OPEN","time":"2026-07-26 08:23","change":"enable-codex-background-outside-voice","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2163,3 +2164,16 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：来源=Task 6 第3轮复审 Standards 轴 Minor。可复用观察：面治时「我扫了 N 条门」本身也是一个可能不全的断言——枚举的完整性同样需要机械核（如按 AST 数 append/return 点），否则「0 条无独立锚」只覆盖被枚举到的那些。
 <!-- sdflow-issue-block:end id=T224 -->
+
+<!-- sdflow-issue-block:start id=T225 -->
+## T225: 补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）
+> 补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并）
+
+**关联文档**：`openspec/changes/enable-codex-background-outside-voice/design.md`
+
+**动机**：Task 6 的 efficacy 三门（G1 站点集双向相等 / G2 单站点墙钟严格 > 300s / G3 无 context 与 stderr 外泄）在本 change 内未能达成：本机 Codex CLI 的 ChatGPT 额度耗尽（两次 codex exec 均返 usage limit，最早 2026-07-29 10:11 恢复），四条替代路径逐条查证均不可行。按 tasks.md 6.3 明文出口走了诚实降级：T162 保留、design.md/CONTEXT/hand-off 的「Codex efficacy=0」陈述一字未改、superpowers-plan.md Task 6 的验收复选框 1/2/3 保持未勾作为永久记录。人于 2026-07-26 拍板选项 A（降级合并，缺口移交后续 change 补证）。
+
+**思路**：额度恢复后（≥2026-07-29 10:11）在真实 Codex 宿主跑一轮完整评审，产出 efficacy evidence JSON，用 hack/check_codex_efficacy_evidence.py 验三门；通过则关闭 T162 并同步 design.md/CONTEXT 的 efficacy 陈述。已有的两个真实证据可直接复用为对照：transport 全链路 436s>300s rc=0（旧同步 300s 天花板会砍成 rc=124）、真实混配下 OVBG-01 skew fail-closed 首次触发。
+
+**备注**：来源=Task 6 双轴审第3轮 Spec 轴裁定「票面已做到尽头的未完成」+ 人拍板 A。注意本项不是质量缺口而是范围决定：ship 卡在 5/6 是因为 6.1/6.2 是动作项、外部额度封锁下不可诚实勾选，而非实现有问题。gate 的完成信号经 checkpoint 标签通道显式补打（commit message 写明人授权降级），复选框刻意留白。
+<!-- sdflow-issue-block:end id=T225 -->
