@@ -1,0 +1,51 @@
+# 完成报告 · `dry-async-dispatch-block`
+
+分支 `feat/dry-async-dispatch-block`，两个 checkpoint 已落（`28e3908` 相位 B、`16dff2c` 相位 C）。
+
+## 产物
+
+| 文件 | 行数 | 状态 |
+|---|---|---|
+| `decision-memo.md` | 89 | 9 条决策 + 9 条承重约束，`decision_hash=5241b49ae1ac` |
+| `proposal.md` | 60 | 7 小节，Modified Capabilities 留空（C5 证据支撑） |
+| `design.md` | 165 | D1–D6 逐条含砍掉的候选 + 具体反例 |
+| `specs/shared-block-injection/spec.md` | 79 | 8 条 ADDED Requirement / 12 个 Scenario |
+| `tasks.md` | 103 | 9 组任务 + SBI-01~08 全覆盖追溯表 |
+
+`openspec status` 四件全 `done`，`openspec validate --strict` 我亲跑：`Change 'dry-async-dispatch-block' is valid`。
+
+## 五处你下放给我的决策（依据都在 design.md）
+
+1. **declared-sites 纳入抽取块** —— 它已实际漂移（`SKILL.md:481` 两侧措辞分叉），是 T161 的现场实证。
+2. **单一源落点 = 仓根新目录 `blocks/`** —— 砍掉 `assets/hack/`（`setup.sh:259-266` 会无条件拷成运行时件）、`assets/snippets/`（语义是推给消费项目）、仓根 `hack/`（CLAUDE.md 明禁放资产）。
+3. **泛化 `sync_principles.py`，不改名** —— 新写脚本会重演「为一个块单造一套」的 660 行；改名涉及 132 个文件含一份主 spec 和 CI workflow，按通则④判为完美成本过高。
+4. **删等值门** —— 它在两边被同时改成同一个错值时报绿，而 `setup.sh:379` 现有修复指引「以一侧为准整段原样复制」正会诱发这个动作。
+5. **change 名** `dry-async-dispatch-block`。
+
+## 终审我改了两处产物
+
+- `tasks.md` 5.1 的判据 grep 模式是凭空造的，实际等值断言是 `assert P.compare([a, b]) == 1`（`test_async_branch_parity.py:91`）——已改成对 `compare(` / `P.main(` 的实查。
+- `tasks.md` 8.1 说「照抄字段」，但 `todolist.py add` 实际吃 JSON（stdin 或 `--json`）——已订正。
+
+## 三条须知
+
+1. **我偏离了一处 SKILL 规则**：SKILL 明写 `design.md` 的 Decisions 只留一行指向 memo 的指针；你要求砍掉的备选写进 design.md。**按你的指示办了**，并加了「与 memo 冲突时以 memo 为准」消掉双写无优先级的问题。
+2. **范围**：三处圈外共享散文（能力探针段 / HR-TG 判定段 / 残余诚实边界段）+ setup.sh gate 严格度，已写进 Non-Goals，tasks 8.1 负责登记 todo——**本轮没有实际登记**（那是实现期的活）。
+3. **实现有前置门**：与在途 `add-sdflow-spec` 都改 `hack/sync_principles.py` 与 `test_sync_principles.py`，tasks 0.1 是阻塞门。
+
+一处诚实边界：`validate --strict` 只校验 `specs/`，proposal/design/tasks 的「未截断」是我人读判的，无机械门。
+
+## 出口序列
+
+```
+1. /clear
+2. 切换到评审档模型（阶段二用评审档，与阶段一的产出档不同）
+3. /sdflow-spec-review
+```
+
+理由两条：① cache 按模型隔离，拖旧上下文切档 = 全价重付；② 产 / 审错档纪律。
+
+===META=== rc=0 sid=aa1ccc2b-6477-479d-ad0a-ea9759ddf784 cost=8.2415 dur_ms=1199751 turns=27 err=False denials=[]
+usage in=50 out=40356 cache_create=209623 cache_read=4907374
+  model claude-opus-5: in=50 out=40356 cr=4907374 cc=209623 cost=5.5591
+  model claude-sonnet-5: in=56 out=35654 cr=1563035 cc=279756 cost=2.6824

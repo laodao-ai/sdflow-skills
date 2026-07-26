@@ -1,0 +1,26 @@
+**再一条实测**：ZoneA + marker 段 + ZoneB **一个站点名都没有**（`grep -c` = 0，两侧皆然）——所以块① 根本不需要「本层主站点」这个元变量，它天然站点无关。需要元变量的**只有块② 的 8 行**（`design-voice` 在其中出现 5 次）。ADR-3 的风险面和可读性代价都比我上一轮估的小一个量级，这条也进 amendment。
+
+---
+
+## Q2｜两个新块的投放面：写死两文件清单，还是按 marker 发现？
+
+`sync_principles.py` 里两种做法都有先例，且它自己在注释里给了判据（第 57–59 行）：
+
+> 【为什么成员靠 glob 发现，不写死清单】写死清单的话，「新增一个 agent 定义却忘了纳入投放面」这个失效场景**做不出来**——新文件不在清单里，`--check` 看不见它，绿。
+
+对照到新块上，两种失效场景不同：
+
+| 做法 | 挡得住 | 挡不住 |
+|---|---|---|
+| **静态清单** `["sdflow-spec-review/SKILL.md", "sdflow-code-review/SKILL.md"]`（= 旧等值门 `SITES` 的形态） | 已登记的两个投放面漂移 | 有人在第三个 SKILL 里**贴了块 ① 的 marker**（比如复制评审 SKILL 起手）——`--check` 视而不见，那份副本永久脱管 |
+| **marker 发现**（投放面 = 仓内所有含该 marker 的 `SKILL.md`）+ 最小成员断言（两个已知文件 MUST 在内） | 上面两条都挡 | 第三评审层**整段复制协议但不贴 marker**——这条谁都挡不住（无确定性信号） |
+
+**我推荐 marker 发现 + 最小成员断言**，依据是脚本自己那条注释的同一逻辑：静态清单让「新投放面脱管」这个失效场景**构造不出来**；而最小成员断言补上 glob 的对称漏洞（两个已知文件的 marker 被人删掉 → glob 集合缩小 → 静默变绿，这正是 `test_the_delivery_surface_points_at_the_real_agents_dir` 那条静态断言在守的东西）。代价：`--check` 每次多一次全仓 `SKILL.md` 扫描（17 个文件，可忽略）。
+
+顺带一个它自动带来的好处：ADR-7 的 `strict` 策略在 marker 发现下语义更干净——「块缺失」不再需要遍历一张清单去发现，而是退化成「最小成员断言失败」这一条。
+
+**要不要按 marker 发现 + 最小成员断言定？**
+
+===META=== rc=0 sid=ed6c1a71-7aed-450c-aefd-aafc2dada45a cost=0.6200 dur_ms=87018 turns=4 err=False denials=[]
+usage in=8 out=4363 cache_create=9797 cache_read=825882
+  model claude-opus-5: in=8 out=4363 cr=825882 cc=9797 cost=0.6200

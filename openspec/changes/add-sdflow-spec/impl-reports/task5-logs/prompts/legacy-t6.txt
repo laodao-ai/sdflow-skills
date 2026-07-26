@@ -1,0 +1,3 @@
+按 marker 发现 + 最小成员断言定。
+
+拷问到这里够了——把全部 [grill-amendment] 落进四件套、checkpoint，然后停。不要写实现代码。

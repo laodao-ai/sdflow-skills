@@ -1,0 +1,52 @@
+## 🔴 卡点：Bash 工具被本 session 权限拒绝，管线起手即停
+
+**problem** —— 第零步 0.1 的 openspec CLI 预检、0.2 档位解析全部无法执行；连 `git status` 都跑不了。
+
+**cause** —— 每次 Bash 调用返回：
+
+```
+Permission to use Bash has been denied because Claude Code is running in don't ask mode.
+```
+
+同时本 session 的工具面里 **`Grep` / `Glob` 也不存在**（报 "No such tool available … use Bash instead"）——即除 `Read` 之外没有任何仓内检索/执行手段。
+
+**fix** —— 需要你放开 Bash 权限（退出 don't ask mode，或给 Bash 加 allow）。理由是这不是"少个便利工具"，而是管线的四个硬前提全在 Bash 后面：
+
+| 相位 | 必须的 Bash 动作 | 能否绕 |
+|---|---|---|
+| 0.1 | `openspec --version` / `context` / `list` | **不能**——这是 skill 唯一的 fail-closed 面 |
+| B.1 | `git status --porcelain` → `git checkout -b` → `openspec new change` | **不能**——SKILL.md 明写 MUST NOT 手工创建 change 目录结构顶替 |
+| B.7 / 终审 | `checkpoint-commit.sh` | 不能 |
+| C.3 / C.4 | `openspec instructions --json`、`status --json`、`validate --strict` | 不能——载荷必须自取，MUST NOT 由旁人转述 |
+
+我 **MUST NOT** 用 Write 手搓 `openspec/changes/<name>/` 顶替，所以在拿到权限前不能进相位 B/C。
+
+---
+
+## 等权限期间已做的功课（派 `sdflow-local-researcher` / haiku，其 Bash 也部分被拒，靠 Read 完成，结论我按需复核）
+
+- **T163 / T161 均在** `openspec/issues/todolist/2026-07-todolist.md:21`（T161）、`:23`（T163），status 都是 OPEN，都挂 change `async-outside-voice`。
+- **现有守法**：`hack/check_async_branch_parity.py:44-45` 用 `<!-- sdflow:async-branch:start … -->` / `:end` 界段，`:119` 一句 `if seg != ref` 做逐字节等值；另有 interior 非空检查（`:111-114`）与禁用串黑名单（`:126-130`）。它是**守卫，不是注入**。
+- **两 SKILL 的 marker 段**：`sdflow-spec-review/SKILL.md` 与 `sdflow-code-review/SKILL.md` 均在 382-468 行。
+- **本仓已有的唯一「单一源注入多处」机制** = `hack/sync_principles.py`：marker 界段（`:62-63`）、glob 自发现投放面（`:142-147`，含 SKILL.md / CLAUDE.md / agent 定义）、多块支持（`:86-104`）、`--check` 门禁 + `--apply` 回填（`:150-154`），`setup.sh:360-364` 每次跑 `--check`。**没有第二套**。
+- `openspec/changes/` 下只有 `add-sdflow-spec`（无 decision-memo.md）+ `archive` ⇒ **0.3 重入探测未命中**，是新开 change。
+
+这条现状对设计的意义很直接：T163 要的「单一源注入」在本仓**已有一套跑了很久的同构实现**，方案主体应当是复用 `sync_principles.py` 的那套形状（marker + `--apply`/`--check` + setup.sh 门禁），而不是另发明一套机制——这我会在相位 B 带着依据来拷问，不用你现在决定。
+
+---
+
+## 顺手问你相位 A 的第一个问题（可以现在答，不必等权限）
+
+**T161 的圈外三段（preflight / fallback / 锚行段），你要的是哪种处置？**
+
+- **推荐：一并抽进同一个单一源，和 marker 段一起注入**（即把被抽取的区块扩到覆盖那三段）。
+  **依据**：基准 3「面治优先于点补」——只抽 marker 段会留下三片「漂了不会红」的面，T161 原地不动；而基准 1 说能机械化的一致性优先机械化，DRY 抽取比扩大等值门更彻底（等值门只能发现漂移，抽取让漂移不可能发生）。
+  **代价**（三镜）：系统镜——被抽取块变长，两 SKILL 里可手改的空间变小；用户镜——无可感知变化；开发循环镜——改 async 调度必须改源 + 跑 `--apply`，多一步，但与四条通则的现行体验完全同构，无新心智负担。**主次判定：系统镜的"可手改空间变小"正是本次要的效果，不是代价。**
+- **备选**：只抽 marker 段，圈外三段改为扩大等值门覆盖。后果——留下一套「一半注入、一半等值门」的混合形态，两种机制都要维护，且 T161 只是被缓解不是被消除。
+
+**要不要按推荐定？** 另外请一并放开 Bash 权限，我好正式起手。
+
+===META=== rc=0 sid=768727ef-c0d8-4508-90c4-8a42a11909de cost=1.4111 dur_ms=240283 turns=8 err=False
+usage in=12 out=6440 cache_create=75284 cache_read=351430
+  model claude-opus-5: in=12 out=6440 cr=351430 cc=75284 cost=1.0896
+  model claude-haiku-4-5-20251001: in=178 out=8532 cr=1269980 cc=75803 cost=0.3214

@@ -1,0 +1,18 @@
+补三条已亲验的事实（都影响后续设计，但不改 Q1 的推荐）：
+
+1. **`setup.sh` 里两个门都是 warn-only，没有 `exit 1`**（`setup.sh:360-370` / `372-380`）。真正的硬门是 `hack/tests/`（pytest 红）。⇒ T161 的「漂了不会红」要精确成两级：**圈内**漂了 setup 黄 + pytest 红；**圈外**漂了**连黄都没有**。
+2. `sync_principles.py` 的 marker 名是**模块级常量** `START`/`END`（`hack/sync_principles.py:62-63`），`render()` 直接吃全局；`targets()` 返回的是 `(文件, 源)` 二元组（`:142-147`）。⇒ 支持第二个块需要把 marker 一路带进 `targets()`/`render()`，是**中改（二元组→三元组的表驱动重构）**，不是加个表项就完；但脚本只有 188 行，改动面可控。
+3. `openspec/specs/**` 里**没有**任何 Requirement 钉住「两份必须字节相同」——该约束目前只活在两个 SKILL.md 的 marker 注释里 + 已归档 change 的 tasks 里。⇒ 本次 change 的 delta spec 是**新增**能力条款，不是改写既有条款。
+
+---
+
+**Q1 仍待你拍板**（上一条消息，无人回答；上面那条是后台检索完成通知，不是你的答复）：
+
+> 「DRY 全抽取」的终态 = **注入式单一源**（源文件唯一权威，脚本原样内联进两个 SKILL.md，`--check` 当门；SKILL.md 里仍有物理文本，但它是生成物）——**要不要按这个定？**
+>
+> 如果你本意是「物理上只剩一份文本、SKILL.md 里只留指针」，请直接纠正——两种理解会产出实质不同的四件套。
+
+===META=== rc=0 sid=aa1ccc2b-6477-479d-ad0a-ea9759ddf784 cost=1.6444 dur_ms=29969 turns=2 err=False denials=[]
+usage in=4 out=1631 cache_create=8153 cache_read=192691
+  model claude-opus-5: in=17 out=12036 cr=713091 cc=34115 cost=0.9987
+  model claude-haiku-4-5-20251001: in=324 out=13736 cr=2439007 cc=166419 cost=0.6457

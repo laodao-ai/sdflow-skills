@@ -1,0 +1,74 @@
+我先把地形摸清了。下面是实测结论 + 需要你拍板的几处。**本轮不落任何文件**，你拍完板我再出四件套。
+
+## 一、现状地形（实测，非推断）
+
+两个 SKILL 的 outside-voice 协议区，按「是否守、是否真相同」分成四带：
+
+```
+sdflow-spec-review/SKILL.md              sdflow-code-review/SKILL.md
+────────────────────────────────────     ────────────────────────────────
+358 ## outside-voice helper 调用协议  ┐   360 同（标题行两侧位置不同）
+360 ```                              │   
+361 HELPER=… / 版本核对 / host-unknown│   ← ZoneA：19 行，**逐字节相同**，无门 ❗T161
+    preflight / run-id / manifest    ┘
+380 site=design-voice → proposal…      380 site=code-voice → git diff…     ← 站点枚举（本就该不同）
+381 site=hr-tg       → …              381 site=hr-tg      → …
+382 <!-- async-branch:start -->        382 同   ┐
+    ①内层超时 ②后台就绪 ③模式矩阵      │   87 行，**已被 check_async_branch_parity.py 守**（T163 目标）
+468 <!-- async-branch:end -->          468 同   ┘
+469 fallback（同族降级）…              469 同   ┐ ZoneB：5 行 fallback + 锚行，
+473 锚行 <!-- sdflow:outside-voice --> 473 同   ┘ **逐字节相同**，无门 ❗T161
+474 ```
+476 declared-sites 段（8 行）          476 同构  ← ZoneC：**参数化差异**——`{design-voice}` vs `{code-voice}`
+                                                   + 2 句「为何恒在集合内」的理由不同 ❗T161
+```
+
+实测口径（`diff` 亲跑）：
+
+| 带 | 行数 | 两侧关系 | 现状机械守 |
+|---|---|---|---|
+| ZoneA | 19 | 逐字节相同 | ❌ |
+| 站点枚举 | 2 | 本就不同 | —（不该守） |
+| marker 段 | 87 | 逐字节相同 | ✅ 等值门 |
+| ZoneB | 5 | 逐字节相同 | ❌ |
+| ZoneC | 8 | 同构、参数化不同 | ❌ |
+
+⇒ **111 行共享文本里，只有 87 行被守**；ZoneA/B 漂了不会红，ZoneC 连「相同」这个谓词都不成立。
+
+仓内已有正解 idiom：`hack/sync_principles.py` = 单一源 + marker 注入 + `--check` 门（setup.sh warn-only + CI `mechanical-gates.yml` 硬门 + `hack/tests/`），已在 17 个 SKILL.md + CLAUDE/AGENTS + `sdflow-spec/agents/*.md` 三个投放面家族上跑通。T163 就是把同一模式再用一次。
+
+## 二、要点：注入后「两份副本」依然存在
+
+skill 是独立分发单元（symlink 装进 `~/.claude/skills/`），**共享块的字节必须物理落在两个 SKILL.md 里**——注入消除的不是「有两份」，是「手工改两处」。这与 `sync_principles.py` 的取舍完全一致，也意味着：**等值门在注入后变成永绿的装饰门**（谁也不可能让它红），必须删，否则是假信心。
+
+## 三、需要你拍板的 5 处
+
+**D1 · 抽取宽度（这条决定 change 的体量）**
+- 推荐 **(c) 收敛差异 + 全抽取**：ZoneA + marker 段 + ZoneB 合成**注入块 ①**（fence 内），ZoneC 成**注入块 ②**（fence 外）；把「站点枚举 + 主站点是谁 + 为何恒在应有锚集内」全部收进块前一个 **per-layer「本层站点表」**（约 6 行，两层各写各的），共享块里一律写「主站点」。
+- 代价：这是**文档改写**，两个 SKILL 的行文顺序要动（站点枚举上移）、ZoneC 那两句理由要改写成通用句 + 站点表脚注。收益：站点差异从散在四处 → 收敛成一处，共享面 111 行全进单一源，T161 一次做完（面治，基准 3）。
+- 备选 (a)：只抽 ZoneA+marker+ZoneB（不碰 ZoneC），T161 留半条尾巴。备选 (b)：给 ZoneC 上模板变量 `{{PRIMARY_SITE}}`——我**不推荐**，占位符能替掉站点名却替不掉那两句整句差异，最后仍要 per-target 分支，等于引入一门模板语言换半个收益。
+
+**D2 · 单一源放哪**
+- 推荐 **仓根新目录 `shared/skill-blocks/async-branch.md`**（+ `declared-sites.md`）。依据：`setup.sh` 只把含 `SKILL.md` 的顶层目录当 skill，新目录零风险；而 `sdflow-init/assets/` 的语义是「bundle 权威源 / 推给消费项目」，这段只服务本仓两个 skill，放进去会误导（CLAUDE.md 已明写 `hack/` 只放构建脚本、不放资产，所以 `hack/` 排除）。
+- 你若嫌仓根多一层，备选是 `hack/blocks/`（要改 CLAUDE.md 那句口径）。
+
+**D3 · 注入器：泛化还是新写**
+- 推荐**泛化 `hack/sync_principles.py` 为表驱动**（一张 `BLOCKS` 表：marker 名 + 源 + 投放面 + 该块的 post-inject 谓词）。新写一个脚本 = 把 `render/_blocks/_insert_anchor` 再抄一份——正是本 change 要消灭的病。
+- 附带问题：**要不要改名**为 `hack/sync_managed_blocks.py`？改名扩散面实测 ≈ 10 处引用（`setup.sh`、CI、`CLAUDE.md`、`AGENTS.md`、以及 `assets/snippets/claude-section.md` 这个托管块源）。我略倾向改（名副其实），但这是 taste，你定。
+
+**D4 · 旧门处置**
+- 推荐**删 `hack/check_async_branch_parity.py`**，把它唯一不可替代的谓词——`FORBIDDEN_IN_SEGMENT`（块内不许出现 `sdflow-spec-review` / `code-review-report` 等站点专名）——迁进新注入器，作为**块级 lint 守单一源**；`hack/tests/test_async_branch_parity.py` 改造为新块的测试。`setup.sh` 的独立守卫段、CI 的独立 step 一并收口。
+- 反对意见（你可以否）：保留等值门当「双保险」。我认为那是永绿门，删。
+
+**D5 · 排期**
+- 在途 change `add-sdflow-spec` 正在动 `sdflow-spec/agents/`（`sync_principles.py` 的第三个投放面家族）。本 change 要改的正是这个脚本 ⇒ **建议排在 `add-sdflow-spec` 归档之后**，否则两边同时改同一文件必冲突。你要现在就开也行，我在 proposal 里写明依赖。
+
+## 四、我打算怎么走
+
+拍板后：`openspec new change` → 建议名 **`dry-async-branch-block`** → 出 proposal / design / specs（capability 落在 `determinism-guards`，因为它是机械层一致性守；若你更倾向 `host-adaptive-execution` 我改）/ tasks 四件套，然后停——不实现。
+
+**最少需要你回的：D1 的宽度、D2 的落点、D3 的改名与否、D5 的排期。** D4 你不反对我就按删走。
+
+===META=== rc=0 sid=ed6c1a71-7aed-450c-aefd-aafc2dada45a cost=1.1633 dur_ms=209839 turns=15 err=False denials=[]
+usage in=19 out=11719 cache_create=48082 cache_read=778859
+  model claude-opus-5: in=19 out=11719 cr=778859 cc=48082 cost=1.1633

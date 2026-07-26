@@ -1,0 +1,30 @@
+拷问收敛，`[grill-amendment]` 已落进四件套 + 落档，commit `961cc3c`，`openspec validate --strict` 绿。**没写实现代码**——`shared/`、`hack/`、两个 SKILL.md 一个字未动。
+
+## 拷问挖出的东西
+
+**两条把设计打回来的实测**（都是我上一轮凭「读代码觉得应该」写的，实跑才发现错）：
+
+1. **marker 行属于真相源，不是注入器生成的**。`block(src)` 原样返回源内容，对照 `assets/hack/skill-principles.md:1` 首行就是 start 行。⇒ 源文件 = 块全文，不是「纯正文」。
+2. **`render()` 强制在块前后各插一个空行**。marker 若留在 ` ``` ` 围栏内，围栏里就凭空多两行空行——**当场推翻 tasks 4.5 那道「搬运保真 diff 必须为空」的硬门**，而它是本 change 唯一能证明 111 行没搬错的证据。这条没被问出来的话，实现期会在「要不要把保真门松成忽略首尾空行」上纠结一轮，然后大概率松了。
+
+**两条把风险面砍小的实测**：
+
+3. **块① 正文里站点名出现次数 = 0**（两侧 `grep -c` 都是 0）。所以需要「本层主站点」这个元变量的只有块② 的 8 行——ADR-3 的改写风险和可读性代价，比我上一轮估的小一个量级。
+4. **`anchor_lint.check_declared_sites` 从不读 SKILL.md**：主站点映射硬编码在 `anchor_lint.py:512` 的 `_LAYER_BASE_SITE`，键是 `--layer` CLI 参数。⇒「改写误伤 lint」这条风险**结构上不成立**，tasks 4.6 从风险门降为廉价复核。副产品：站点表写错主站点会让报告落错 `declared=`，运行期被 `declared-not-expected` 抓——残余有兜底，只是晚一拍，这条我在 spec 里明写了「MUST NOT 据此声称 build 期已守」。
+
+## 两处新拍板（ADR-9 / ADR-10）
+
+- **块① 的边界把围栏包进去**（站点表随之移出围栏，成普通 Markdown 列表）——空行落到围栏外的正常位置，保真门可以要求严格相等。砍掉「接受空行」（为实现细节磨钝唯一一道保真门）和「改 `render()` 加 padding 开关」（那 50 行里有两个踩出来的坑，为排版去动它是拿最高风险代码解最低优先级问题）。
+- **投放面按 marker 发现 + 最小成员断言**——依据是脚本自己第 57–59 行那条注释：写死清单会让「新投放面脱管」这个失效场景**构造不出来**。最小成员断言补 glob 的对称漏洞（块被整段删掉 ⇒ 集合缩小 ⇒ 静默变绿）。诚实边界写进 spec：整段复制但不贴 marker，两条都挡不住，靠评审。
+
+## 落档
+
+- `openspec/adr/0031-managed-block-injection-mechanics.md`——把四条形态约束（源自带 marker · 块边界避开围栏内 padding · marker 发现 + 最小成员 · 块级谓词 + `strict`/`after-h1`）升成**跨 change 生效**的 ADR，因为下一个托管块会原样撞上同样两个坑。
+- `openspec/CONTEXT.md` 补术语条目：托管块 / 投放面 / 块级谓词 / 本层站点表，附 `_Avoid_` 四条。
+- design 的 Open Questions 少一条（站点表位置从排版偏好变成有机械依据的决定），多一条并当场处置（要不要给站点表加 build 期弱门 → 不做，理由是撞基准 5 的手搓 Markdown 解析，且运行期已有兜底）。
+
+下一步仍是 `/clear` → 切评审档 → `/sdflow-spec-review`。
+
+===META=== rc=0 sid=ed6c1a71-7aed-450c-aefd-aafc2dada45a cost=4.9976 dur_ms=463784 turns=34 err=False denials=[]
+usage in=64 out=27181 cache_create=35985 cache_read=7915763
+  model claude-opus-5: in=64 out=27181 cr=7915763 cc=35985 cost=4.9976

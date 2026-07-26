@@ -1,0 +1,10 @@
+/sdflow-spec
+
+【需求】把本仓 openspec/issues/todolist 里的 T163（并连带处置 T161）做成一个完整的 openspec change 四件套（proposal / design / specs / tasks）。**本轮只出设计产物，不做实现**。
+
+- T163：`sdflow-spec-review` / `sdflow-code-review` 两个 SKILL.md 里的「async host 调度段」是两份物理副本，靠 `hack/check_async_branch_parity.py` 的逐字节等值门守住。要求做 DRY 全抽取——把 marker 段抽成单一源注入两 SKILL，替代「两份副本 + 机械等值门」。
+- T161：那个等值门只覆盖 marker 段；圈外的 preflight / fallback / 锚行段两层也高度相似，漂了不会红。
+
+【我的身份】我是本次需求的提出方，负责拍板。你有问题就问我，我会回答。
+
+【运行形态】按**阶段一薄编排形态**跑：检索与生成**均由主 session 亲做**，全程不派任何子代理。

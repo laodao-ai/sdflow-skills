@@ -1,0 +1,18 @@
+【拍板】
+
+1. **范围 = 一次全抽**：T163 + T161 合并做掉，圈外的 preflight / fallback / 锚行段一并纳入单一源，不留残余。站点相关的差异用重构（本层站点表之类）收敛掉，**MUST NOT 引入模板变量 / 占位符替换**——注入器必须保持「源内容就是注入文本、零解析」。
+
+2. **终态 = 注入式单一源**（build-time 原样内联进两个 SKILL.md），**不是**运行时指针 / include。
+
+3. **以下五处按你自己的推荐定，我不额外指定**：declared-sites 那一节纳不纳入、单一源文件落哪、注入器是泛化既有脚本还是新写、旧的等值门删还是留、change 叫什么名。
+   但每一处 **MUST 在 design.md 里写清「砍掉的备选 + 砍它的具体理由（要有具体反例，不要形容词）」**——我事后要能看见你为什么没选另一条。承重约束也 MUST 写清它是怎么被证实/证伪的。
+
+4. **排期**：现在就开。在途 change 的冲突在 proposal 里写明依赖即可。
+
+5. 本轮**只出四件套设计产物，不实现**。四件套出完就停，不要写代码。
+
+---
+
+按你上面说的分步路径走，现在敲下一步：
+
+/opsx:ff {你上面定的 change 名}。先过 FF-0 三分支判定：在保护分支（main/master）则 git checkout -b feat/{change}；已在 feat/{change} 则跳过；在其它 feature 分支则停下问我（从当前切出 / 回 base 切出 / 就地继续）。若 change 源于 wayfinder map：调用语显式携带 map 路径（如 @openspec/roadmaps/{name}/map.md）并按 ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读取。完成后 checkpoint-commit ff。
