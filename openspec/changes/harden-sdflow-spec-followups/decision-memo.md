@@ -3,7 +3,7 @@ schema_version: 1
 change: harden-sdflow-spec-followups
 branch: feat/harden-sdflow-spec-followups
 generated_at: 2026-07-27T03:23:36Z
-decision_hash: 2e009c574169
+decision_hash: 67e299e595d9
 ---
 
 # 决策纪要 · harden-sdflow-spec-followups
@@ -26,7 +26,7 @@ decision_hash: 2e009c574169
 
 - **D1 新 change 统一收口源仓 follow-ups** — 名称采用 `harden-sdflow-spec-followups`；不另开 rollout change。依据：遗留共享 `/sdflow-spec`、FF-0 与台账闭环；**砍掉的候选**：拆为源仓修复与下游 rollout 两个 change，理由：T239 由用户在消费仓自行执行，拆分只增加完整 workflow 成本。
 - **D2 入口采用“薄 SKILL + 按需 reference”** — `SKILL.md` ≤ 18,000 Unicode 字符；将未启用外派、异常诊断细节、演进依据拆到受版本管理的 references，并为必驻章节与引用加载条件添加测试。依据：降低每次注入成本且不丢执行契约；**砍掉的候选**：24,000 字符但不拆分，理由：只能防软换行规避，不能减少日常上下文。
-- **D3 未判定的 FF-0 调用保留 fail-open，但带单一上下文审计** — [spec-review-amendment] 只有完整匹配单条直接 literal 创建 grammar 才进入 payload cwd 的三分支；其余命中创建字样的形态采用无 `permissionDecision`、统一带 `command-unverifiable` 的 `additionalContext` JSON。依据：正向有界识别不需要对无界 shell 做负向证明、不越权自动批准、使模型和 transcript 都看见守卫未判定；**砍掉的候选**：危险结构黑名单，理由：永远无法证明覆盖所有 cwd 包装；`cwd-ambiguous|change-name-unparseable` 双原因码，理由：两者无运行时消费者、权限行为相同，细分已连续产生组合分类反例；返回 `allow`，理由：会跳过宿主原生权限提示。
+- **D3 未判定的 FF-0 调用保留 fail-open，但带单一上下文审计** — [spec-review-amendment] 只有完整匹配单条直接 literal 创建 grammar 才进入 payload cwd 的三分支；其余命中创建字样的形态采用无 `permissionDecision`、统一带 `command-unverifiable` 的 `additionalContext` JSON。依据：正向有界识别不需要对无界 shell 做负向证明、不越权自动批准、使模型和 transcript 都看见守卫未判定；**砍掉的候选**：危险结构黑名单，理由：永远无法证明覆盖所有 cwd 包装；`cwd-ambiguous|change-name-unparseable` 双原因码，理由：没有 hook 外部或跨阶段消费者、权限行为相同，当前内部仅用于选择两段说明，细分已连续产生组合分类反例；返回 `allow`，理由：会跳过宿主原生权限提示。
 - **D4 Codex 宿主声明降为“依赖宿主执行语义，当前未作模型调用拒绝实证”** — 同时增加可复现的宿主测试说明/测试夹具，只在接口真正出现时给出正反结论。依据：不能把接口缺席伪装成拒绝证据；**砍掉的候选**：继续写“只能人触发”，理由：当前 Codex 上无可核验支撑。
 
 ## 接受的边角

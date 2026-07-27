@@ -20,7 +20,7 @@
 
 [spec-review-amendment] 只有整条命令完整匹配一条直接 literal 创建调用（`openspec new change <合法字面量>` 或 `openspec change new <合法字面量>`，保留既有空白、单双引号与 `--json` 变体）时，才把 payload `cwd` 作为判定仓并进入原三分支。命令串含创建字样但不是该有限 grammar 的单条直接调用——包括 `cd`/`pushd`/`env -C`/shell wrapper、复合运算符、换行、前后散文或动态名——统一输出仅含 `hookEventName` 与 `additionalContext` 的 JSON，不设置 `permissionDecision`。既有“多处可识别创建调用必须拆开”的 deny 在此 cwd 判定前保留。
 
-[spec-review-amendment] 所有未命中直接 grammar 的单调用统一输出原因码 `command-unverifiable` 加人类可读说明，不再细分 cwd 不明、动态 change 名或 shell 组合。双原因码没有运行时消费者，且细分必须用正则推测无界 shell 的优先级，已连续产生组合分类反例；合并原因码不改变任何权限行为。这既避免把 `allow` 当作日志而跳过宿主权限，也不靠“危险结构全覆盖”的负向黑名单假装证明无界 shell；实际仓语义继续由 shell 和 review 负责。
+[spec-review-amendment] 所有未命中直接 grammar 的单调用统一输出原因码 `command-unverifiable` 加人类可读说明，不再细分 cwd 不明、动态 change 名或 shell 组合。双原因码没有 hook 外部或跨阶段消费者；当前仅在 hook 内部选择两段说明文案，而这项细分必须用正则推测无界 shell 的优先级，已连续产生组合分类反例。实现一并删除内部分类器与条件说明；合并原因码不改变任何权限行为。这既避免把 `allow` 当作日志而跳过宿主权限，也不靠“危险结构全覆盖”的负向黑名单假装证明无界 shell；实际仓语义继续由 shell 和 review 负责。
 
 ```text
 命令含创建字样？
@@ -31,7 +31,7 @@
     │   ├── protected → deny
     │   ├── feat/{same-change} → pass
     │   └── other feature → fresh ack ? consume+pass : deny
-    └── 其余形态 → additionalContext(reason_code)，无 permissionDecision
+    └── 其余形态 → additionalContext(command-unverifiable)，无 permissionDecision
 ```
 
 ### D2：入口薄化但不稀释执行契约

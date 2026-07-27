@@ -1,7 +1,7 @@
 ## 1. FF-0 未判定路径（spec-workflow）
 
-- [ ] 1.1 [FF-0 未判定路径] [spec-review-amendment] 实现完整匹配的单条直接 literal 调用 allowlist；未命中但含创建字样时统一输出带 `command-unverifiable` 的 `additionalContext`，无 `permissionDecision`，且不解析 shell 或推测细分原因；保留多调用 stacking deny。
-- [ ] 1.2 [FF-0 未判定路径] [spec-review-amendment] 扩展 hook 单测：直接 grammar 的空白/引号/`--json`、非直接形态的代表性 `cd`/wrapper/compound/decoy/变量/替换/glob、单一稳定原因码、审计不自动 `allow|deny`，以及原三分支/哨兵/多调用行为；不维护 shell 形态交叉分类矩阵。
+- [ ] 1.1 [FF-0 未判定路径] [spec-review-amendment] 实现完整匹配的单条直接 literal 调用 allowlist；未命中但含创建字样时统一输出带 `command-unverifiable` 的 `additionalContext`，无 `permissionDecision`，且不解析 shell 或推测细分原因；删除 `undecided_reason`、动态 marker、双分支说明及仅为旧分类存在的正则，保留 `CHANGE_NAME_RE` 的 stacking 用途与多调用 deny。
+- [ ] 1.2 [FF-0 未判定路径] [spec-review-amendment] 同步 `sdflow-init/tests/test_ff0_branch_guard.py` 与 `hack/tests/test_canonical_entry_sync.py`：直接 grammar 的空白/引号/`--json` 进入原门禁；非直接形态的代表性 `cd`/wrapper/compound/decoy/变量/替换/glob 统一断言单一 `command-unverifiable`、无 `permissionDecision`；保留原三分支/哨兵/多调用行为，不维护 shell 形态交叉分类矩阵或旧原因码兼容断言。
 - [ ] 1.3 [FF-0 未判定路径] 同步 canonical workflow 与入口文案，说明未判定行为及其边界。
 
 ## 2. `sdflow-spec` 入口与规则收口（spec-authoring）
