@@ -105,6 +105,8 @@ sdflow-issues:
     T244: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造","type":"基础设施","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
     T245: {"module":"sdflow-implement/SKILL.md","summary":"fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制","type":"功能增强","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
     T246: {"module":"sdflow-implement/SKILL.md + model-tiers.md","summary":"按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号","type":"性能优化","status":"OPEN","time":"2026-07-27 18:32","change":"main","batch":null}
+    T247: {"module":"sdflow-spec/SKILL.md","summary":"B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步","type":"代码质量","status":"OPEN","time":"2026-07-27 22:30","change":"harden-implement-review-loop","batch":null}
+    T248: {"module":"sdflow-spec/agents/（sdflow-local-researcher / sdflow-web-researcher）","summary":"两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议","type":"基础设施","status":"OPEN","time":"2026-07-27 22:51","change":"harden-implement-review-loop","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2473,3 +2475,29 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：改动面涉及 model-tiers.md + dispatch 逻辑，量级比①②③④大，需要单独立项设计，不是顺手能改的小事；且同样要先解除 D8 的「档位钉死 mid」试点期变量控制约束（与 T245 共享同一个前置决定，建议合并讨论）。
 <!-- sdflow-issue-block:end id=T246 -->
+
+<!-- sdflow-issue-block:start id=T247 -->
+## T247: B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步
+> B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：本次 harden-implement-review-loop 拷问里，T10 标签拆分(D2a/D2b)是典型 ADR 候选(难逆转+缺上下文意外+有真实权衡三条全占)，但 B.6 只是「拷问中命中就提议」的临场感知，没有 B.5 那样的收敛前强制检查——直到用户事后追问才补记 adr/0031，若非用户主动问会被漏记。
+
+**思路**：比照 B.5「停止信号」的写法，在 B.7 收敛两步之前插入一道显式检查:把 decision-memo.md 里已拍板的每条 D 编号决策，过一遍 ADR 三条件(难逆转/缺上下文意外/有真实权衡)与术语冲突/模糊语言判据，命中则按现有 B.6 流程提议(仍只提议、不自动写入)。
+
+**备注**：涉及文件:sdflow-spec/SKILL.md 的相位 B 部分(B.6/B.7)
+<!-- sdflow-issue-block:end id=T247 -->
+
+<!-- sdflow-issue-block:start id=T248 -->
+## T248: 两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议
+> 两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：add-sdflow-spec 的 hand-off.md 留了一道拍板题(继续保留 vs 删除)，一直没人正式回答；这次追问顺带查清楚：①档位设计本身没问题(light/haiku，符合最初『便宜模型做调研』的意图)；②唯一一次真实 A/B 测试显示未观察到更便宜、冷审质量也没提升(N=1，非统计显著)；③本次会话自己做的拷问调研模式是『边想边查、强耦合上下文』，正是 A/B 测试揭示的『不划算』那类用法，不是反证。
+
+**思路**：结论：暂不删除(维持现状未启用资产)，也暂不做成两个独立通用 skill——虽然它们的角色纪律(本地只读检索+带引用回传)跟 sdflow-spec-review 的接地镜、sdflow-code-review 的历史镜任务形状相似，但①三个姊妹 skill 目前各自的 light 档 ad-hoc 派发都工作正常，没有实证的重复痛点；②独立成 skill 不改变已测出的成本结构(派发开销与是否共享 skill 无关)，只省重复 prompt；③放宽成通用 skill 会扩大全局 ~/.claude/agents/ 命名空间暴露面，收益不成比例。若未来想验证『任务独立性是否是关键变量』这个假设，更便宜的路径是挑一次接地镜/历史镜这类真正独立的单次核查任务，试着路由到现有 sdflow-local-researcher，而不是新造两个 skill。
+
+**备注**：关联文档：sdflow-spec/references/delegation-protocol.md（当前状态与档位表）、openspec/changes/archive/2026-07-26-add-sdflow-spec/hand-off.md（原始拍板题出处）
+<!-- sdflow-issue-block:end id=T248 -->
