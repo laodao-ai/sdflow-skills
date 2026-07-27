@@ -198,25 +198,20 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 
 ### 起手检查
 
-1. **matt 语义源目录**必须已装（只读消费其语义，不改内部，adr/0002）：`~/.claude/skills/to-tickets`、
-   `~/.claude/skills/implement`、`~/.claude/skills/code-review`、`~/.claude/skills/tdd`。**目录存在
-   不够**——须逐一 Read 其 `SKILL.md` 头部（frontmatter `description`），核验语义关键词在场：
-   `to-tickets` → 含 ticket/切片类词；`implement` → 含 implement/TDD 类词；`code-review` → 含
-   review 类词；`tdd` → 含 test 类词。任一目录缺失，或 `description` 与预期语义明显不符（同名空壳、
-   被改版成无关用途）→ **显式停**，报告缺失的具体路径 / 具体不符点；MUST NOT 降级到臆造替代语义、
-   MUST NOT 静默跳过检查。config 未开 `impl-pipeline: tickets` 的仓本不会触发这条路径（缺省仓零
-   暴露）。
-   > matt 套件官方仅发 Claude 侧（`~/.claude/skills/`），Codex 运行时未验证——Codex 宿主缺装即走
-   > 上述显式停路径，属已知范围收窄非遗漏。〔impl-review-fix〕
-2. 读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
-   **建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
-   用户，走 ship T10 三级决策协议（design D9）。
+读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
+**建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
+用户，走 ship T10 三级决策协议（design D9）。
 
 ### 产出：3–6 张 tracer-bullet 垂直切片
 
 - 每张打穿全层（行为级、可独立验证、demoable），**MUST NOT 预写实现代码或具体文件路径**——ticket
   只描述"交付什么行为"，不描述"改哪个文件/写什么代码"（文件路径写死会很快过期，且抢了
-  implementer 的判断权）。
+  implementer 的判断权）。**例外**：若某决策性片段（状态机、reducer、schema、类型形状）源自
+  prototype 技能产出、且用 prose 描述会失真，可内联该片段并注明"源自 prototype"，只保留决策
+  相关部分，不是可运行 demo。
+- 每张预估改动范围 SHALL 能被单个 fresh implementer 子代理在一个上下文窗口内完整消化（读相关
+  代码 + 实现 + 测试）；预估会 touch 的文件数明显超出常规单窗口容量时，按下方「宽重构例外」走
+  expand–contract，不硬塞成一张大 ticket。
 - 每 ticket 显式声明 `Blocked-by:`（阻塞它的其他 ticket 号，逗号分隔，或 `none`）与 `R-ID:`（该
   ticket 对应的需求编号，源于本 change 自身 delta spec 的 Requirement ID 缩写）。
 - 每 ticket 含验收标准复选框（`- [ ] ...`）。
@@ -295,13 +290,6 @@ impl-pipeline: tickets
 
 ## 执行模式（`mode=tickets-exec`）
 
-### 起手复核（跨会话语义源二次核验）〔impl-review-fix〕
-
-出 ticket 与执行可能跨会话 / 跨天——执行模式起手（frontier 计算前）MUST 重跑与出 ticket 模式
-起手检查同款的语义源核验（同上「matt 语义源目录」四项：逐一 Read SKILL.md 头部核验语义关键词
-在场），缺失 / 不符 → 显式停，报告具体路径 / 不符点。**MUST NOT** 凭记忆臆造 `tdd` /
-`code-review` 的语义（跨会话记忆不可靠，须重新读盘核验）。
-
 ### frontier 严格串行
 
 - 调用 frontier helper，用透传的 `done_tasks` 算出下一批 next-ready ticket 号：
@@ -338,8 +326,20 @@ dispatch prompt 必含：
   > **MUST NOT** 在表里声明 gate 并不读取的信号源（如 ledger 文件、返回值里的口头「done」）——
   > 声明了 gate 也不认，只会诱导 implementer 把完成信号写到无人消费的地方。
 
-- 契约：TDD at pre-agreed seams（matt tdd 语义：先与实现者对齐测试的公共接口边界，再红→绿）、
-  定期跑 typecheck、结束前跑一次全套件；
+- 契约：TDD at pre-agreed seams（matt tdd 语义：先与实现者对齐测试的公共接口边界，再红→绿；
+  阶段三无人类门，matt 原版「与用户确认 seam」替换为「implementer 自查确认」）、定期跑 typecheck、
+  结束前跑一次全套件；
+
+  > 🔴 **MUST 原文携带进 implementer dispatch prompt**（附录 A 有出处说明）：
+  >
+  > - **Implementation-coupled** — mocks internal collaborators, tests private methods, or verifies through a side channel (querying the database instead of using the interface). The tell: the test breaks when you refactor but behavior hasn't changed.
+  > - **Tautological** — the assertion recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way, a constant asserted equal to itself), so it passes by construction and can never disagree with the code. Expected values must come from an independent source of truth — a known-good literal, a worked example, the spec.
+  > - **Horizontal slicing** — writing all tests first, then all implementation. Bulk tests verify _imagined_ behavior: you test the _shape_ of things rather than user-facing behavior, the tests go insensitive to real changes, and you commit to test structure before understanding the implementation. Work in **vertical slices** instead — one test → one implementation → repeat, each test a **tracer bullet** that responds to what the last cycle taught you.
+  >
+  > 循环规则：**Red before green**（先写失败测试，再写刚好够通过的代码，不预写未来测试/不加投机
+  > 功能）；**One slice at a time**（一个 seam、一个测试、一次最小实现）；**Refactoring is not part
+  > of the loop**（重构不属于红→绿循环，属于评审阶段——对应本 skill 的双轴审，不在 implementer 的
+  > TDD 循环内完成）。
 - **完成信号后置双写时序**：implementer **实现期提交 MUST NOT 带 `task<N>-` 完成标签**——普通
   commit 即可，标签延后到该 ticket 双轴审通过后才由执行模式补打；
 - report file 路径契约：implementer **全量报告**写 `{change_dir}/impl-reports/task<N>-<slug>.md`，
@@ -429,11 +429,28 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 为由默默放行——gate 的监视集分流只消解**失鲜误判**，并不阻止 implementer 写脏设计工件；
 本约束与 gate 侧的失鲜判据**各自独立成立**，任一方在场都不使另一方可省。
 
-- **Standards 轴**：仓内文档化标准 + Fowler smell 基线（同 matt code-review 语义），**且**把
+- **Standards 轴**：仓内文档化标准 + 下方 Fowler smell 基线，**且**把
   `code-checklists/domains/<命中栈>`（经 `~/.sdflow/hack/resolve-workflow.sh` 解析取得规则根）
   作为标准源注入——这是 dispatch 模板的**必填槽**，不是可有可无的 prose 叮嘱。resolver 非 0 退出
   / 规则根不可达 / 命中栈在 `domains/` 下无对应清单时，Standards 轴 **MUST NOT 宣称通过**：显式
   停，或在报告中记「领域清单未覆盖」并附降级原因〔F13〕——不得悄悄退化成"看着过"。
+
+  > 🔴 **MUST 原文携带进 Standards 轴 dispatch prompt**（附录 A 有出处说明）。两条治理规则：
+  > **The repo overrides**（仓文档化标准优先，与基线冲突时基线让位）；**Always a judgement call**
+  > （每条都是带标签的启发式，非硬性违规；工具已强制的项跳过）。
+  >
+  > - **Mysterious Name** — a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
+  > - **Duplicated Code** — the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
+  > - **Feature Envy** — a method that reaches into another object's data more than its own. → move the method onto the data it envies.
+  > - **Data Clumps** — the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
+  > - **Primitive Obsession** — a primitive or string standing in for a domain concept that deserves its own type. → give the concept its own small type.
+  > - **Repeated Switches** — the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
+  > - **Shotgun Surgery** — one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
+  > - **Divergent Change** — one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
+  > - **Speculative Generality** — abstraction, parameters, or hooks added for needs the spec doesn't have. → delete it; inline back until a real need shows.
+  > - **Message Chains** — long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
+  > - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
+  > - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 - **Spec 轴**：对照该 ticket 文本的验收复选框与 `R-ID:` 溯源需求，逐条核验是否真实做到。
 
 裁决处置：
@@ -452,7 +469,7 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 
 ## 裁剪边界声明（防未来好心加回）〔R6〕
 
-三项被砍机制，各自去向明示——如后续有人提议"加回"，先读这节：加回前须先证伪对应去向已失效，而不是
+四项被砍机制，各自去向明示——如后续有人提议"加回"，先读这节：加回前须先证伪对应去向已失效，而不是
 默认"更完整更好"。
 
 - **无 warm final whole-branch review** → 去向 = 冷层 `sdflow-code-review` 在全部 ticket 完成后
@@ -463,3 +480,18 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
   状态文件（多一份 ledger = 多一个可能漂移的真相源）。
 - **无 task-brief 抽取层** → 去向 = 行为级 ticket 文本（禁代码/文件路径）本身已经足够精简，dispatch
   直接携带 ticket 全文即等价于 brief，不需要再单独抽取一层。
+- **无 matt 语义源目录起手检查**（出 ticket 模式 / 执行模式均不再验证 `to-tickets`/`implement`/
+  `code-review`/`tdd` 四目录是否已装）→ 去向 = 其语义已在本文件内重述实现（tracer-bullet 切片、
+  TDD 契约、Standards/Spec 双轴），运行时不读取这四个目录任何内容，物理在场与否不影响本 skill
+  正确性（adr/0002：只消费语义、不依赖内部）。
+
+## 附录 A：内联清单出处
+
+正文里标 🔴 MUST 原文携带的两份清单，来源与理由如下：
+
+- **Standards 轴 Fowler smell 12 条基线**：逐字摘自 matt `code-review` skill。
+- **implementer dispatch 的 TDD 三条反模式 + 循环规则**：逐字摘自 matt `tdd` skill。
+
+两处都要求原文携带进各自的 dispatch prompt，而非只留指针或转述——理由与「🔴 传播纪律」（本文件顶部
+四条通则区块）一致：dispatch 对象是 fresh context 子代理，看不到这两个源文件，只能凭训练记忆判断，
+措辞与判定边界不受控。
