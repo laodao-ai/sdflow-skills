@@ -8,7 +8,7 @@ description: >
   主 session 亲自做全部判断（澄清 / 拷问 / 纪要 / 终审）；相位 B 起手就建分支、change 目录与草稿纪要，
   承重约束站稳一条就增量落盘一条 ⇒ `/clear` 无损，崩溃只丢「上一次保存之后」那一段。出口原样贴
   `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:explore` + `opsx:ff` + `/grill-with-docs`
-  三入口拼接。**只能人触发**（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
+  三入口拼接。由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
 ---
 
 # sdflow-spec — 阶段一产 spec 单一入口
@@ -168,11 +168,16 @@ A 澄清（一次一问）──共识初成──▶ B 拷问（起手即建分
 >   约束由执行方自报。机械可验的只有「纪要存在且必填小节非空」这一条门，它**不能证明发生过对抗拷问**。
 >   **MUST NOT 在任何地方声称「跳过风险结构性消灭」。**
 
-**外置资料（表格型、少判断，用时打开）**：
+**按需资料路由（默认不加载）**：
 
-- [`references/decision-memo-schema.md`](./references/decision-memo-schema.md) — 纪要字段 schema、模板、必填判据
-- [`references/degradation-ladder.md`](./references/degradation-ladder.md) — 降级阶梯、三要素诊断契约、失败模式表
-- [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md) — ADR 三条件与最小模板、术语提议
+- 仅在人明确要求重新评估或启用外派时读取
+  [`references/delegation-protocol.md`](references/delegation-protocol.md)。外派当前未启用，默认全程主 session 亲做。
+- 仅在发生失败、降级或需要诊断时读取
+  [`references/degradation-ladder.md`](references/degradation-ladder.md)，按其中 `problem + cause + fix` 契约处置。
+- 仅在审计历史依据或设计未来 T132 gate 时读取
+  [`references/evolution-notes.md`](references/evolution-notes.md)。T132 未来 gate 尚未实现，保持 OPEN。
+- 写或核验决策纪要时读取 [`references/decision-memo-schema.md`](references/decision-memo-schema.md)；
+  命中 ADR/术语提议条件时读取 [`references/adr-and-glossary-templates.md`](references/adr-and-glossary-templates.md)。
 
 ---
 
@@ -203,10 +208,8 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 - **(d) eval 后校验**：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空；host≠unknown 时
   三个 `$SDFLOW_TIER_*` MUST 非空。**空值 = resolver 根本没跑成，MUST NOT 回落当 `unknown` 处置。**
 
-**传递方式**：harness 每次 Bash 调用是**独立 shell**，`export` **不跨调用存活**。⇒ 从该次工具输出里
-读到**解析结果**，派发时把**字面值**填进 `model` 参数（枚举边界见「外派协议」）；本文正文只写变量名，二者不矛盾。
-
-**`$SDFLOW_HOST="codex"`** ⇒ 整条管线降级为主 session 亲做（检索亲查、生成亲写），**起手时即告知用户**。
+**`$SDFLOW_HOST="codex"`** ⇒ 默认仍由主 session 亲查、亲写。Codex 当前只观察到用户显式触发已被接受，
+且没有本 session 可调用的 Skill 执行面；**MUST NOT 把接口缺席写成模型调用已被拒绝**。
 
 ### 0.3 重入探测（MUST 在相位 A 之前）
 
@@ -250,70 +253,11 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 三条都不命中 ⇒ 可以收束（哪怕只问了一轮，甚至用户带着已深思的方案来）。
 **收束进的是 B，不是 C。**
 
-### A.3 外派阈值（阶段一：**不外派**）
+### A.3 外派状态（阶段一：**不外派**）
 
-阶段一的检索与生成**均由主 session 亲做**（薄编排形态，这是本 skill 的正式交付形态之一）。
-🔴 **阶段二外派当前未启用**（验收门判回退，见「外派协议」节）——下列阈值仅在**人明确指示启用后**适用：
-**同类任务累计工具调用 > 5 次 → 下次同类改派**（事后可复核形式）。MUST NOT 用「预计读取材料 ≳ 数百行」这类**派发前不可判定**的判据。
-
-**判断永远不外派**：方案推荐、承重约束是否站稳、纪要撰写、终审裁决 —— 原材料是对话共识，只有主 session 持有。
-
----
-
-## 外派协议（阶段二 · 三个 agent 定义）
-
-> 阶段一**不外派**，本节不生效。
->
-> 🔴 **本节当前 = 未启用资产。** SA-07 的 GO/NO-GO 实测门判 **GO**（派发链路可用），但阶段二验收门的另一半——A/B 三路实测——判**不达标**：同一个真实 change 上 subagent 路 **$11.68 / 12.57M token** vs thin 路 **$9.06 / 8.81M token**（**未观察到外派更便宜**，且冷审 Important findings 1 vs 0）。
-> 依 `openspec/changes/add-sdflow-spec/tasks.md` **阶段二验收门的**失败分支 ⇒ **回退到阶段一薄编排形态**；三个 agent 定义、`install_agents()` **与其守卫**作为未启用资产保留。数据与诚实边界（**N=1，非统计显著**）见 `openspec/changes/add-sdflow-spec/impl-reports/task5-ab-comparison.md`。**本节仅在人明确指示启用外派时生效**，MUST NOT 自行启用。
->
-> ⚠️ **「未启用」只约束本管线，定义照样铺在全局 `~/.claude/agents/`**（`install_agents()` 不看本节启用状态）⇒ 对本机每个项目可见；挡误选的只有 `description` 的排他式声明（**指令层、非机械门**）。
-> 要它们真从名册消失：删 `sdflow-spec/agents/` 后**仍在新版 installer 上**跑 `bash setup.sh`（顺序不可颠倒 —— 见仓 `CLAUDE.md`「`setup.sh` 安装机制」与 `openspec/changes/add-sdflow-spec/impl-reports/task6-stage3-conditional.md` 的正反两向实跑）。
-
-| 用途 | `subagent_type` | 档位 | 它**没有**什么 |
-|---|---|---|---|
-| 仓内检索 | `sdflow-local-researcher` | light | 无联网工具 |
-| 联网调研 | `sdflow-web-researcher` | light | **无仓库读取、无 `Bash`** |
-| 单产物成文 | `sdflow-spec-writer` | mid | 无判断权（遇缺口返回 blocker） |
-
-**派发三要素**：
-
-1. **`subagent_type`** —— **MUST NOT 用 `agentType`**〔A-2〕。
-2. **`model`** = 0.2 解析出的**字面值**。🔴 **实测边界**：Agent 工具的 `model` 是**枚举**，
-   只接受 `sonnet|opus|haiku|fable`；填**完整版本化 id**（`<族>-<代>-<日期>` 那种形态）会被
-   `InputValidationError` 当场拒。本机队 `resolve-models.sh` 解析出的正是这类别名，直接填即可。
-   若解析值**不在该枚举内**（被 config 覆盖成完整 id 等）⇒ 派发必被参数校验拒 ⇒ **如实报告并亲做**；
-   **MUST NOT 猜一个别名顶上**（那是绕过档位配置），**MUST NOT 填变量名 `$SDFLOW_TIER_*`**。
-3. **prompt** = 本次任务。四条通则**不必再内联** —— agent 定义正文已承载，由 `sync_principles.py` 机械守。
-
-### 派联网 agent 前：最小净化查询 → secret scan（**顺序不可换**）
-
-`sdflow-web-researcher` 是本管线的**数据出境端点**。给它的**只有一条自足查询**：
-
-- **MUST 只含**公开可讨论的问题本身（协议 / 规范 / 版本 / 最佳实践 / 权威出处）；
-- **MUST NOT 含**仓库路径、代码片段、内部标识符、项目/客户专名、配置值、任何凭证；
-- 「结合我们的代码怎么办」这类推理 **MUST 由主 session 自己做**，MUST NOT 外包给它。
-
-查询写进临时文件后 **MUST 先扫再发**（**复用**既有出境扫描器，**MUST NOT 另写一个**）。
-**预检**（同 0.2(b) idiom）：`[ -x ~/.sdflow/hack/outside-voice.sh ]` 不成立 ⇒ **拒发并 fail-loud**
-「outside-voice.sh 未安装——先在运行 checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh`」。
-
-```bash
-~/.sdflow/hack/outside-voice.sh secret-scan --context-file <查询文件>
-```
-
-- `exit 0` ⇒ 放行（**只有这一个码是「扫过了且干净」**）；
-- `exit 3` ⇒ **拒发，且 MUST NOT fallback** —— 既不改由主 session 自己发出去、也不换个 agent 发。
-  命中意味着**这条查询本身不该出境**，换通道不改变这一点。按三要素报告并**重写查询**；
-- `exit 2` ⇒ 文件不可读 / 用法错 / **扫描器自身跑挂** ⇒ **同样拒发**（**没扫成 ≠ 干净**）；
-- 🔴 **其余任何非 0 退出码一律拒发**（catch-all；`127` = helper 未装/不可执行，是 pull 与
-  setup 之间 skew 窗口的高发码）。**MUST NOT 把「不是 3」读成「没命中」。**
-
-### 定义不可用 ⇒ 主 session 亲做（**唯一合法降级方向**）
-
-任一 `subagent_type` 派发报「未知 agent 类型」⇒ 该职责**主 session 亲查 / 亲写**，报告标注降级。
-🔴 **MUST NOT 退通用子代理顶替**（`general-purpose` 工具面是 `*` ⇒ 撤掉唯一的权限边界 =
-**降级即提权**，且 agent 正文承载的角色纪律全部消失）。诊断见「降级与诊断」。
+阶段一的检索、判断与生成**均由主 session 亲做**；未启用的外派资产不进入默认执行。
+仅在人明确要求重新评估或启用外派时，读取
+[`references/delegation-protocol.md`](references/delegation-protocol.md)，按其中协议执行；**MUST NOT 自行启用**。
 
 ---
 
@@ -329,7 +273,8 @@ git status --porcelain
 
 含与本 change 无关的条目 ⇒ **halt 并向人说明检测到的条目**，给三个选项（stash / 先提交 /
 确认带过来）。**MUST NOT 静默继续。** 理由：下一步 `git checkout -b` 会把脏改动带上新分支，
-而 `checkpoint-commit.sh` 的无条件 `git add -A` 会把它们全部提交〔A-1〕。
+而 `checkpoint-commit.sh` 的无条件 `git add -A` 会把它们全部提交。历史依据仅在审计时读取
+[`references/evolution-notes.md`](references/evolution-notes.md)。
 
 **② FF-0 三分支判定**
 
@@ -479,11 +424,8 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 4. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
 5. **写后核验（C.4）**。
 
-**阶段二**（**当前未启用**，见「外派协议」节的验收门结论）：本步改派
-`subagent_type: sdflow-spec-writer`（**MUST NOT 用 `agentType`**〔A-2〕），
-`model` 填 0.2 解析出的**字面值**（枚举边界见「外派协议」）。
-writer 遇未决判断 MUST 返回**结构化 blocker**（缺口描述 + 它需要什么），MUST NOT 自行猜测补全。
-agent 定义不可用 ⇒ **主 session 亲写**，MUST NOT 退通用子代理（见降级阶梯）。
+默认由主 session 亲写。外派未启用；仅在人明确要求重新评估或启用外派时读取
+[`references/delegation-protocol.md`](references/delegation-protocol.md)。
 
 ### C.4 写后核验：**存在态与合格态分开判**
 
@@ -507,15 +449,16 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 
 ## 终审（主 session，判断层兜底）
 
-四件套生成完毕 ⇒ **读回全部四份 + 纪要**，核三样：
+四件套生成完毕 ⇒ 以**整个 change 目录**为追溯边界，读回全部四份 + 纪要，核三样：
 
 1. **纪要 ↔ 产物一致性** —— 决策遗漏、约束翻转、范围漂移。
 2. **design ↔ specs 互相一致** —— 二者在 CLI 依赖图中**互不依赖**，其矛盾不会被任何其它环节发现。
    发现冲突 ⇒ 修正并注明；**MUST NOT 因「二者各自与纪要一致」而放过**。
 3. **proposal / design / tasks 未截断** —— C.4 的机械门只够得着 `specs/`（见上），这三份人判。
 
-**中间态判据**：「内容都在、但论证强度被稀释」是自然语言压缩的高频结果。判据为——纪要中
-「**砍掉的候选 + 砍的理由**」在产物里**完全消失**才算判断性偏差；措辞压缩但候选与理由仍可追溯 ⇒ **放过**。措辞与风格差异一律放过，不进报告。
+**追溯判据**：追溯边界是整个 change 目录；只在 `decision-memo.md` 中保留被砍候选与理由也合法，
+`design.md` 的一行纪要指针是合法路径。仅当候选与理由在整个边界内都不可追溯时才算判断性偏差；
+措辞压缩或风格差异一律放过。
 
 **判断性偏差直接修改产物**，并在完成报告中注明改了什么。
 
@@ -531,33 +474,9 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 
 ## 降级与诊断
 
-**每一条降级/失败报告 MUST 含三要素**：**problem**（发生了什么）+ **cause**（exit code /
-缺失文件 / **实际版本号**）+ **fix**（可执行的下一步）。
-❌ 「spec-writer 失败，已亲写」= 零信息量，安装问题会长期隐藏在「能跑但更贵更慢」的降级里。
-
-阶梯（**降级方向只有一个：亲做**）：检索败 → 主 session **亲查**；生成败 → 按失败类型
-（瞬时错误重试一次 → **亲写**；schema/契约错误不重试直接亲写）；agent 定义缺失 → **亲做**；
-**openspec CLI 不可用 / schema 不兼容 → 唯一 fail-closed 面，中止**。
-
-🔴 **MUST NOT 用通用子代理当 fallback**（无法限制工具集 ⇒ **降级即提权**）。
-🔴 **降级前 MUST 确认替代路径不复用同一故障依赖**，否则那不是降级。
-
-**诊断：`Agent type 'sdflow-*' not found`（三要素）**
-
-- **problem** —— 派发直接报未知 agent 类型，可用清单里只有 `general-purpose` / `Explore` 之类内置项。
-- **cause** —— 二选一，先看第二条：
-  1. **定义没铺**：`ls -l ~/.claude/agents/sdflow-*.md` 为空 ⇒ 没跑过 `setup.sh`；或宿主是
-     **Windows**（`install_agents()` 明写不铺）/ **Codex**（无 `~/.claude/agents/` 机制）。
-  2. 🔴 **铺了但本 session 看不见** —— **agent 名册在 session 启动时加载**（实测：同一次
-     `bash setup.sh` 之后，当前 session 派发仍报 not found，而**新起的进程**里同名 agent 在册）。
-     这与 `CLAUDE.md` 记载的「pull 与 setup 之间的窗口期」同族：**新装的东西对已开的 session 不可见**。
-- **fix** —— ① 先在**运行 checkout** 跑 `bash setup.sh`；② **然后新开一个 session**（本 session
-  重试多少次都不会出现）。二者缺一无效。Windows / Codex 宿主则**没有 fix**，就走亲做，如实标注。
-
-外部检索的退避与错误分类、总时间预算、完整失败模式表 →
-[`references/degradation-ladder.md`](./references/degradation-ladder.md)。
-
-**降级事件 MUST 出现在给人的完成报告里**，MUST NOT 静默。MUST NOT 把部分完成报告为完成。
+失败或降级 MUST 如实进入完成报告，且包含 **problem + cause + fix**；openspec CLI 不可用或
+`instructions --json` schema 不兼容时 fail-closed 中止。仅在发生失败、降级或需要诊断时读取
+[`references/degradation-ladder.md`](references/degradation-ladder.md)，按其中错误分类、退避和失败模式表处置。
 
 ---
 
@@ -584,23 +503,9 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 ① **cache 按模型隔离** —— 拖着旧上下文切档 = 全价重付；② **产 / 审错档纪律** —— 阶段一与阶段二的合适档位不同，换档是本例外的真实动因。
 
 🔴 **MUST NOT 引用「主审裁决需冷视角」** —— 该论据已被 G1 正面回答（独立性由 fan-out 的
-fresh 子代理提供，不由 `/clear` 提供）〔A-3〕。
+fresh 子代理提供，不由 `/clear` 提供）。
 
 ---
 
-## 附录 A · 依据与演进史
-
-> 正文只放最终态；本附录承载「为什么是这样 / 曾经不是这样」——**读正文不需要它**
-> （`openspec/rules/doc-authoring.md` DOC-1）。
-
-**〔A-1〕工作树前置检查为什么是硬 halt** —— 「脏工作树被 `checkout -b` 带上新分支、
-再被 `checkpoint-commit.sh` 的无条件 `git add -A` 全量提交」**在本仓已真实发生过**，
-不是假想风险。
-
-**〔A-2〕为什么点名禁 `agentType`** —— 派子代理有三条路径：① Agent 工具（参数
-`subagent_type`）② agent 定义文件（载体）③ Workflow `agent()`（参数 `agentType`）。
-**③ 已被否决**（需用户每次显式授权）；本仓既有先例一律用 `subagent_type`。
-∴ 写 `agentType` 不只是拼写问题，是走上了一条不采纳的调度路径。
-
-**〔A-3〕「主审裁决需冷视角」为什么不能当出口理由** —— 它看起来像个好理由，但
-`workflow.md` 的 G1 已正面回答过：独立性由 fan-out 的 fresh 子代理提供。拿它当理由 = 漏查。
+历史取舍不进入默认运行；仅在审计历史依据或设计未来 T132 gate 时读取
+[`references/evolution-notes.md`](references/evolution-notes.md)。T132 未来 gate 尚未实现，保持 OPEN。

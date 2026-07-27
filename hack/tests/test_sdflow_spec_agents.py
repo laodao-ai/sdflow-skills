@@ -46,6 +46,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 AGENT_DIR = REPO / "sdflow-spec" / "agents"
 SKILL = REPO / "sdflow-spec" / "SKILL.md"
+DELEGATION = REPO / "sdflow-spec" / "references" / "delegation-protocol.md"
 OUTSIDE_VOICE = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
 
 LOCAL = AGENT_DIR / "sdflow-local-researcher.md"
@@ -316,14 +317,14 @@ def test_sdflow_spec_does_not_ship_a_second_scanner():
             assert n not in text, f"{p} 里出现了扫描规则片段 {n!r} —— 第二份扫描器？"
 
 
-def test_skill_routes_outbound_queries_through_the_shared_scanner():
-    """【在场锚 · 见文件头的能力边界】SKILL.md 的派发前扫描步 + 退出码处置 + 禁 fallback 逐字还在。
+def test_delegation_reference_routes_outbound_queries_through_the_shared_scanner():
+    """【在场锚 · 见文件头的能力边界】按需外派协议的扫描步、退出码处置和禁 fallback 仍在。
 
     不保证「主 session 真的先扫再发」（无确定性信号），也不保证别处没说反话。
     """
-    squashed = _squash(SKILL.read_text(encoding="utf-8"))
+    squashed = _squash(DELEGATION.read_text(encoding="utf-8"))
     assert "outside-voice.shsecret-scan--context-file" in squashed, \
-        "SKILL.md 不再调用共享扫描器 —— 出境面失守或改成自己写了一个"
+        "delegation-protocol.md 不再调用共享扫描器 —— 出境面失守或改成自己写了一个"
     assert "拒发，且MUSTNOTfallback" in squashed, "命中后的「禁 fallback」不见了"
     assert "没扫成≠干净" in squashed, "exit 2 的 fail-closed 处置不见了"
     assert "MUSTNOT含**仓库路径、代码片段、内部标识符" in squashed, "最小净化查询的负面清单不见了"
@@ -344,7 +345,7 @@ def test_outbound_scan_prechecks_the_helper_and_has_a_catch_all():
     （「预检可省」「非 3 视同没命中」）；实测：给任一 needle 后面加「（已放宽）」，本用例全绿。
     那属**指令层**，交 code-review 与人读。**MUST NOT 把本用例写成「出境面 MUST NOT fail-open」的证明。**
     """
-    squashed = _squash(SKILL.read_text(encoding="utf-8"))
+    squashed = _squash(DELEGATION.read_text(encoding="utf-8"))
     assert "[-x~/.sdflow/hack/outside-voice.sh]" in squashed, \
         "helper 可执行性预检不见了 —— 缺失时 exit 127 会落在退出码枚举之外"
     assert "其余任何非0退出码一律拒发" in squashed, \
@@ -578,49 +579,49 @@ def test_s4_disposition_is_written_in_the_skill_and_the_writer_def():
 # 派发协议（SA-07）—— subagent_type / model 枚举 / 降级方向 / 名册加载时机
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_skill_dispatches_by_subagent_type_for_all_three_agents():
+def test_delegation_reference_dispatches_by_subagent_type_for_all_three_agents():
     """【在场锚 · 见文件头的能力边界】三个 agent 名 + 禁 `agentType` 那句逐字还在。
 
     三个名字是**标识符**（`subagent_type` 的实参），不是主张 —— 这一维比散文更有界。
     不保证派发真的用了 `subagent_type`（那要真派一次，属 SA-07 的实测门，不在本文件）。
     """
-    squashed = _squash(SKILL.read_text(encoding="utf-8"))
-    assert "`subagent_type`" in SKILL.read_text(encoding="utf-8")
+    squashed = _squash(DELEGATION.read_text(encoding="utf-8"))
+    assert "`subagent_type`" in DELEGATION.read_text(encoding="utf-8")
     for name in ("sdflow-local-researcher", "sdflow-web-researcher", "sdflow-spec-writer"):
-        assert name in squashed, f"SKILL.md 没提到 {name}"
+        assert name in squashed, f"delegation-protocol.md 没提到 {name}"
     assert "MUSTNOT用`agentType`" in squashed, "禁 agentType 的那句不见了"
 
 
-def test_skill_records_the_model_enum_measured_limit():
+def test_delegation_reference_records_the_model_enum_measured_limit():
     """5.2 实测：`model` 是枚举，完整版本化 id 会被 InputValidationError 拒。
 
     【在场锚 · 见文件头的能力边界】needle 是**实测事实的记录**；本用例只保证它没被删掉，
     **不保证**后文没有一句「该限制已解除」。真实防线是 fail-loud：填错当场被参数校验拒。
     """
-    squashed = _squash(SKILL.read_text(encoding="utf-8"))
+    squashed = _squash(DELEGATION.read_text(encoding="utf-8"))
     assert "sonnet|opus|haiku|fable" in squashed, "档位枚举的实测边界不见了"
     assert "InputValidationError" in squashed, "「填完整 id 会被拒」的实测证据不见了"
     assert "MUSTNOT填变量名" in squashed
 
 
-def test_skill_degrades_to_doing_it_itself_not_to_a_generic_subagent():
+def test_delegation_reference_degrades_to_doing_it_itself_not_to_a_generic_subagent():
     """【在场锚 · 见文件头的能力边界】「禁通用子代理顶替」+「降级即提权」两句逐字还在。
 
     不保证真降级时走的是亲做路径 —— 那要真跑一次降级，无确定性信号。
     """
-    squashed = _squash(SKILL.read_text(encoding="utf-8"))
-    assert "MUSTNOT退通用子代理顶替" in squashed, "禁「通用子代理当 fallback」的那句不见了"
+    squashed = _squash(DELEGATION.read_text(encoding="utf-8"))
+    assert "MUSTNOT用通用子代理" in squashed, "禁「通用子代理当 fallback」的那句不见了"
     assert "降级即提权" in squashed
 
 
-def test_skill_documents_that_the_agent_roster_loads_at_session_start():
+def test_delegation_reference_documents_that_the_agent_roster_loads_at_session_start():
     """⭐ 结论 2 的运维事实：新装 agent 定义**对已开的 session 不可见**。
 
     没有这段，人会在同一个 session 里反复重跑 setup.sh 并反复得到 not found。
 
     【在场锚 · 见文件头的能力边界】needle 是**运维事实的记录**；只保证它没被删掉。
     """
-    squashed = _squash(SKILL.read_text(encoding="utf-8"))
+    squashed = _squash(DELEGATION.read_text(encoding="utf-8"))
     assert "agent名册在session启动时加载" in squashed
     assert "然后新开一个session" in squashed
     assert "二者缺一无效" in squashed
