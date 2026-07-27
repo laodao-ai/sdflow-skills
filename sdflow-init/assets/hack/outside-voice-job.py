@@ -422,9 +422,13 @@ def check_agents_json(claude_bin):
 def run_preflight(job_dir=None):
     """无副作用能力探针。MUST NOT 创建 dummy job、MUST NOT 触发任何外部状态变更。"""
     job_dir = str(job_dir or JOB_DIR)
-    claude_bin = shutil.which("claude")
+    posix_shell = check_posix_shell()
+    # 非 POSIX 宿主已由 capability gate 拒绝；继续调用 shutil.which() 会在测试模拟
+    # sys.platform == "win32" 的 POSIX Python 上触发 Windows 专属 _winapi 路径。更重要的是，
+    # 这条已拒绝的路径不应再探测外部 CLI。
+    claude_bin = shutil.which("claude") if posix_shell["ok"] else None
     checks = {
-        "posix-shell": check_posix_shell(),
+        "posix-shell": posix_shell,
         "claude-version": check_claude_version(claude_bin),
         "agents-json": check_agents_json(claude_bin),
         "capability-manifest": verify_manifest(job_dir),

@@ -129,11 +129,19 @@ class TestBundleToolsOnly:
         assert (tools_dst / "trivial_shape.py").is_file()
         assert not (tools_dst / "tests").exists()
 
-    def test_full_flag_still_includes_tools_tests(self, tmp_path):
-        """--dev 整刷（toolkit 源仓 dogfood 用）不排除 tests/——那是刷回源仓工作树，需要完整。"""
+    def test_full_flag_excludes_tools_tests(self, tmp_path):
+        """--dev dogfood instance 是派生产物，不能复制 toolkit 自测。"""
         init_mod.copy_bundle(str(tmp_path), full=True)
         wf = tmp_path / "openspec" / "workflow"
-        assert (wf / "tools" / "tests" / "test_trivial_shape.py").is_file()
+        assert not (wf / "tools" / "tests").exists()
+
+    def test_full_flag_prunes_legacy_tools_tests(self, tmp_path):
+        """重复 --dev update 也要移除旧版留下的测试副本。"""
+        stale = tmp_path / "openspec" / "workflow" / "tools" / "tests"
+        stale.mkdir(parents=True)
+        (stale / "test_stale.py").write_text("# stale\n", encoding="utf-8")
+        init_mod.copy_bundle(str(tmp_path), full=True)
+        assert not stale.exists()
 
 
 class TestUpdateDev:
@@ -381,6 +389,13 @@ class TestInjectMarkerMigration:
         f = tmp_path / "CLAUDE.md"
         init_mod.inject(str(f), *init_mod.MARK_DOC, "内容", header="# H")
         assert "sdflow-init 维护" in f.read_text(encoding="utf-8")
+
+    def test_nested_managed_content_keeps_separator_after_outer_marker(self, tmp_path):
+        """--dev update 不得破坏 sync_principles 的 canonical 空行布局。"""
+        f = tmp_path / "CLAUDE.md"
+        nested = "<!-- sdflow:principles:start -->\n通则\n<!-- sdflow:principles:end -->"
+        init_mod.inject(str(f), *init_mod.MARK_DOC, nested)
+        assert f"{init_mod.MARK_DOC[0]}\n\n{nested}" in f.read_text(encoding="utf-8")
 
     OLD_IDX_BLOCK = ("<!-- opsx-init:rules:start —— 由 opsx-project-init 维护，勿手改本区块 -->\n"
                      "旧内容\n<!-- opsx-init:rules:end -->\n")

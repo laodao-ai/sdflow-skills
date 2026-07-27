@@ -159,7 +159,11 @@ def inject(path, start, end, content, header=""):
     """
     start_token = start.split()[1]
     end_token = end.split()[1]
-    block = f"{start}\n{content.rstrip()}\n{end}\n"
+    # 托管区块的内容可能自身以另一个 managed marker 开头（本仓 dogfood 的
+    # CLAUDE.md / AGENTS.md 即为如此）。保留 start marker 后的空行，才能与
+    # sync_principles.py 的 canonical render 保持字节一致；否则每次 --dev update
+    # 都会制造一次可机械检测的 principles 漂移。
+    block = f"{start}\n\n{content.rstrip()}\n{end}\n"
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             text = f.read()
@@ -197,20 +201,24 @@ def read_snippet(name):
 
 def copy_bundle(root, full=False):
     """R-MRF-1 分层部署：默认只铺 tools/ 子树（规则经全局 canonical 解析，不复制进消费仓）。
-    full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用。
+    full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用；同样
+    不部署 `tools/tests/`，因为它们是 toolkit 自测而非运行时 bundle。
 
     非 full 模式收敛性：拷贝前若 dst/tools 已存在则先 rmtree 再 copytree——tools/ 是随
     workflow bundle 托管的子树（update 覆盖刷新语义），不落入"绝不自动删消费仓文件"红线；
     清后拷保收敛，上游删文件不再残留（B2-F4）。full 模式维持 dirs_exist_ok 现状不变。
 
-    非 full 模式排除 tools/tests/：那是 tools/ 脚本（如 trivial_shape.py）的内部 pytest，
-    只服务 toolkit 源仓自身开发，铺进消费仓既无用又污染其 pytest 收集（消费仓 `pytest` 会误
-    捡进 test_trivial_shape.py）。脚本本体仍随 tools/ 正常部署，只是不带 tests/ 子目录
-    （# [impl-review-fix CF-6]）。full 模式（--dev，仅 toolkit 源仓自身用）不排除——dogfood 场景
-    就是要连 tests/ 一起刷回 toolkit 源仓工作树。"""
+    `tools/tests/` 是 tools 脚本（如 trivial_shape.py）的内部 pytest，只服务 toolkit 源仓
+    自身开发；任何派生到 `openspec/workflow/` 的副本都不应含它。否则 `update --dev` 会把同名
+    测试模块复制到本仓 dogfood instance，仓根 pytest 会收集两份并报 import file mismatch。
+    脚本本体仍随 tools/ 正常部署。full 模式也要清除既有遗留副本，保证重复执行收敛。"""
     dst = os.path.join(root, "openspec", "workflow")
     if full:
-        shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True)
+        shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("tests"))
+        tests_dst = os.path.join(dst, "tools", "tests")
+        if os.path.isdir(tests_dst):
+            shutil.rmtree(tests_dst)
     else:
         tools_dst = os.path.join(dst, "tools")
         if os.path.isdir(tools_dst):
