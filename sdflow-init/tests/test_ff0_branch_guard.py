@@ -346,6 +346,34 @@ def test_dynamic_change_names_are_audited_without_expansion(repo, cmd):
     assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
 
 
+@pytest.mark.parametrize("name", [
+    "--help",
+    "-h",
+    "Foo",
+    "foo_bar",
+    "foo.bar",
+    "1foo",
+    "foo-",
+    "foo--bar",
+])
+def test_invalid_openspec_change_names_are_unparseable(repo, name):
+    """Only OpenSpec's lowercase kebab-case change-name grammar is literal."""
+    assert_undecided_audit(
+        hook_output(repo, f"openspec new change {name}"),
+        "change-name-unparseable",
+    )
+
+
+@pytest.mark.parametrize("cmd", [
+    'openspec new change "add-"$NAME',
+    'openspec new change "add"$NAME',
+    "openspec new change 'add-'$(printf foo)",
+    'openspec new change "add-"*',
+])
+def test_quoted_literal_prefix_with_dynamic_suffix_is_unparseable(repo, cmd):
+    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
+
+
 @pytest.mark.parametrize("cmd", [
     "cd /tmp && openspec new change add-foo",
     "pushd /tmp; openspec new change add-foo",

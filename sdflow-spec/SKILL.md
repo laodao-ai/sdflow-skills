@@ -335,7 +335,7 @@ git status --porcelain
 
 | 当前分支 | 动作 |
 |---|---|
-| 保护分支（main / master） | `git checkout -b feat/{change}` |
+| 保护分支（main / master / 默认分支） | `git checkout -b feat/{change}` |
 | 已在 `feat/{本 change}` | 跳过（**真幂等**） |
 | **其它 feature 分支** | **halt 问人**：从当前切出 / 回 base 切出 / 就地继续 |
 

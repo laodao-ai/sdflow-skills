@@ -101,9 +101,9 @@ CHANGE_NAME_RE = re.compile(
     r"(?:'([^']+)'|\"([^\"]+)\"|([A-Za-z0-9._-]+))"
 )
 
-# change 名的合法字符集（它要当目录名用）。抽出来的 token 不符即视为「认不出」→ 放行：
-# 带 `$`/反引号/通配符的 token 是 shell 待展开的东西，本守卫不展开、也不猜。
-CHANGE_NAME_OK_RE = re.compile(r"\A[A-Za-z0-9._-]+\Z")
+# OpenSpec change 名的唯一合法 pattern。抽出来的 token 不符即视为「认不出」→ 无决策审计：
+# option、大写、下划线、点与 shell 待展开 token 都不属于合法 change 名，本守卫不展开、也不猜。
+CHANGE_NAME_OK_RE = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 # 人拍板「就地继续」后的逃生口：仓根下的一次性哨兵文件，**只放行「其它 feature 分支」这一支**
 # （分支③）。判据是「文件在不在」，与命令串无关 —— 见模块 docstring。
@@ -244,12 +244,17 @@ def undecided_reason(command: str) -> str:
         end = tail.find(quote, 1)
         if end < 0:
             return "change-name-unparseable"
+        if end + 1 < len(tail) and not re.match(r"[\s;&|<>()]", tail[end + 1]):
+            # quoted literal 与变量 / 命令替换 / glob 等无空白拼接；只认这个
+            # 有界形态为动态后缀，不尝试解释 shell 的最终 token。
+            return "change-name-unparseable"
         token = tail[1:end]
     else:
         literal = re.match(r"([A-Za-z0-9._-]+)(?=$|[\s;&|<>()'\"])", tail)
         if literal:
-            return "cwd-ambiguous"
-        token = re.split(r"[\s;&|<>()'\"]", tail, maxsplit=1)[0]
+            token = literal.group(1)
+        else:
+            token = re.split(r"[\s;&|<>()'\"]", tail, maxsplit=1)[0]
 
     if not token or not CHANGE_NAME_OK_RE.fullmatch(token):
         return "change-name-unparseable"

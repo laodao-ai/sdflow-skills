@@ -296,6 +296,12 @@ def test_ff0_rule_is_three_way():
     require(FF_CONSTRAINTS, "MUST NOT 沿用「已在 feature 分支就跳过」的弱判据")
 
 
+def test_ff0_rule_and_sdflow_spec_entry_agree_on_protected_branches():
+    """Canonical and the phase-A entry must both include the detected default branch."""
+    for path in (FF_CONSTRAINTS, SDFLOW_SPEC):
+        require(path, "保护分支", "main", "master", "默认分支")
+
+
 def test_ff0_rule_and_sdflow_spec_entry_state_the_finite_grammar_boundary():
     """Canonical workflow and the phase-A entry must both tell the same honest hook boundary."""
     for path in (FF_CONSTRAINTS, SDFLOW_SPEC):
