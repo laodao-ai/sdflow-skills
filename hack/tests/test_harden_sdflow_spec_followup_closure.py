@@ -11,13 +11,29 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+CHANGE_NAME = "harden-sdflow-spec-followups"
+
+
+def _resolve_change_root(changes_root: Path) -> Path:
+    """[impl-review-fix] 归档前后都解析到本 change，避免闭合锚在 archive 后必红。"""
+    live = changes_root / CHANGE_NAME
+    if live.is_dir():
+        return live
+    archived = sorted((changes_root / "archive").glob(f"*-{CHANGE_NAME}"))
+    if len(archived) != 1:
+        raise AssertionError(
+            f"expected exactly one live-or-archived {CHANGE_NAME}, got {archived}"
+        )
+    return archived[0]
+
+
 TODO_SCRIPT = ROOT / "sdflow-issues/scripts/todolist.py"
 TODO_LEDGER = ROOT / "openspec/issues/todolist/2026-07-todolist.md"
 INDEX = ROOT / "openspec/issues/INDEX.md"
 SPEC_AUTHORING = ROOT / "openspec/specs/spec-authoring/spec.md"
 SPEC_WORKFLOW = ROOT / "openspec/specs/spec-workflow/spec.md"
 ARCHIVE = ROOT / "openspec/changes/archive/2026-07-26-add-sdflow-spec"
-CHANGE = ROOT / "openspec/changes/harden-sdflow-spec-followups"
+CHANGE = _resolve_change_root(ROOT / "openspec/changes")
 DELTA_AUTHORING = CHANGE / "specs/spec-authoring/spec.md"
 TASKS = CHANGE / "tasks.md"
 PLAN = CHANGE / "superpowers-plan.md"
@@ -25,6 +41,18 @@ SDFLOW_SPEC = ROOT / "sdflow-spec/SKILL.md"
 RESIDENT_TEST = ROOT / "hack/tests/test_sdflow_spec_resident_contract.py"
 FF0_HOOK = ROOT / "sdflow-init/assets/hooks/ff0-branch-guard.py"
 FF0_TEST = ROOT / "sdflow-init/tests/test_ff0_branch_guard.py"
+
+
+def test_change_root_resolver_survives_archive(tmp_path: Path) -> None:
+    changes = tmp_path / "changes"
+    live = changes / CHANGE_NAME
+    live.mkdir(parents=True)
+    assert _resolve_change_root(changes) == live
+
+    archived = changes / "archive" / f"2026-07-27-{CHANGE_NAME}"
+    archived.parent.mkdir()
+    live.rename(archived)
+    assert _resolve_change_root(changes) == archived
 
 
 def _todos() -> dict[str, dict[str, object]]:
