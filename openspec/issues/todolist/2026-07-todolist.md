@@ -102,6 +102,9 @@ sdflow-issues:
     T241: {"module":"openspec/changes/add-sdflow-spec/tasks.md（阶段三验收门，:96）","summary":"阶段三验收门只有 ✅ 分支（8.1-8.4 全过 + 下游实跑 update ⇒ 可进 /sdflow-done），没有 ❌/回退分支。而阶段二验收门判回退 ⇒ 阶段三整体不执行 ⇒ 该门的 ✅ 前件永远不成立，「回退形态下本 change 能不能进 /sdflow-done」在票面上无书面出处（对照阶段二验收门就同时写了 ✅/❌ 两支，§9 也在窄复核时被从阶段三下移出以免随阶段二失败搁浅）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】给阶段三验收门补 ❌/回退分支：明确回退形态下哪些条目仍须完成、以及据此可否进 /sdflow-done","type":"可观测性","status":"DONE","time":"2026-07-27 04:04","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
     T242: {"module":"openspec/changes/add-sdflow-spec/tasks.md 2.10 + design.md D12（SKILL.md ≤600 行体量门）","summary":"体量门以 `wc -l` 计 ⇒ 可由**重排软换行**规避而不删任何内容：task6 加了一段后到 604 行，仅把同节软换行重排为更长的行即回到 598，内容一字未减。∴ 该门对 sdflow-spec/SKILL.md 已无实际约束力（该文件既有最长行 200+ 字符，长行是既有形态、无行宽门可依）。且它当前**无机械覆盖**——只有 tasks 2.10 里一句人跑 `wc -l`。修法候选（择一，需人拍板）：① 改计字符/字节数；② 加行宽上限与 `wc -l` 联判；③ 承认它只是软提示、从验收门降级为注记。本轮**不改门**（改门是设计决策）","type":"代码质量","status":"DONE","time":"2026-07-27 04:05","change":"add-sdflow-spec","batch":"add-sdflow-spec"}
     T243: {"module":"hack/tests/test_sdflow_spec_resident_contract.py","summary":"放宽 reference 路由测试的非空链接标签格式","type":"代码质量","status":"PROPOSED","time":"2026-07-27 15:03","change":"harden-sdflow-spec-followups","batch":"harden-sdflow-spec-followups"}
+    T244: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造","type":"基础设施","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
+    T245: {"module":"sdflow-implement/SKILL.md","summary":"fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制","type":"功能增强","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
+    T246: {"module":"sdflow-implement/SKILL.md + model-tiers.md","summary":"按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号","type":"性能优化","status":"OPEN","time":"2026-07-27 18:32","change":"main","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2437,3 +2440,36 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：2026-07-27 由 `harden-sdflow-spec-followups` 仅订正未来输入契约；本 change 不实现或关闭该门。
 <!-- sdflow-issue-block:end id=T132 -->
+
+<!-- sdflow-issue-block:start id=T244 -->
+## T244: sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造
+> sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造
+
+**动机**：对比 matt to-tickets 最新版一 ticket 一文件的做法，纯从 workflow/生成质量/效率/token 成本角度分析：token 成本这条一旦补上 task-text 机械提取脚本后两者基本打平，但「Edit 追加新 ticket 有误伤风险」「面向未来 Phase C 并行方向更友好」两条仍是分文件相对占优，且更贴合本项目机器驱动 frontier（而非 matt 假设的人工按 blockers-first 手翻）的消费模式——一份轻量 index（DAG 元数据）+ 每 ticket 一个详情文件的混合模型是纯设计上较优的方案。但目前受 ship_gate.py 硬编码单文件假设阻塞，改造成本不小。
+
+**思路**：需要重写 ship_gate.py 6 处：①RUN_PLAN 存在性判断（plan=cdir/superpowers-plan.md 单文件路径→判断 index 文件是否存在，且要新增「index 在但 ticket 文件缺」这个全新的第三态判断）；②plan_unbalanced_fence（单文件单遍→每个 ticket 文件+index 各自跑一遍）；③plan_task_ids/plan_task_count（从单文件 Task 标题解析→从 index 结构化列表解析，这条反而能简化)；④plan_has_duplicate_task（单文件 set 折叠判重→至少两处新检查：index 内部判重 + index 与 impl/ 目录实际文件的一致性核对，后者是全新的失效模式类别，现状完全不存在）；⑤checkbox_done_ids（单文件单遍解析→遍历目录各文件解析+按 index 做 ID 归并映射）；⑥plan_has_any_checkbox（单文件布尔→对 N 个文件做 OR）。plan_first_sha 语义可平移（锚点从 superpowers-plan.md 首次新增 sha 改为 index 文件首次新增 sha，F1 追加式增长不影响锚点，跟现状行为等价，风险最低）。done_task_ids/TAG_RE/checkpoint-commit.sh 完全不受影响；DESIGN_WATCHED_NAMES 设计域失鲜也不受影响（superpowers-plan.md 本来就不在监视集里）。
+
+**备注**：违反 sdflow-implement 设计明确的「ship_gate.py 零改动」承诺（matt-workflow-integration proposal Non-Goal），且历史上本仓机械层/gate 层改动的测试量级通常是生产代码变动的 2 倍以上（add-sdflow-devenv 先例：脚本 261→562 行，测试 304→753 行）。不建议现在动——除非「Edit 追加 ticket 误伤」真出过事故，或 Phase C 并行方向真正启动，届时重新评估。
+<!-- sdflow-issue-block:end id=T244 -->
+
+<!-- sdflow-issue-block:start id=T245 -->
+## T245: fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制
+> fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制
+
+**动机**：对比 superpowers subagent-driven-development：其 fix loop 在第4-5轮才换成更强模型的 fresh implementer 再战一次，才触发 breaker（理由：连续 resume 同一 implementer 仍不收敛，通常是它看不见自己的问题，换模型+换眼睛一步到位）。sdflow-implement 现在是同一发现连续 2 轮 re-review 不消解就直接熔断转 T10，中间没有「换档更强模型重试」这一步，可能把「mid 档 implementer 能力不足」误判成「无客观判据的争议」。
+
+**思路**：在 sdflow-implement 每 ticket 双轴审的熔断规则前插入一轮：同一发现第 1 轮修复未消解时，第 2 轮改派 fresh implementer + 更高档位模型重试，若仍不消解才进入现有的 T10 三级决策协议。
+
+**备注**：design D8（matt-workflow-integration）当初把 implementer 档位钉死 mid 是试点期变量控制的决定（不叠加降档实验），试点现已 SHIPPED——这条改动等于重新打开一个已拍板的实验设计决定，需要人先明确要不要解除这条变量控制约束，不能顺手改。
+<!-- sdflow-issue-block:end id=T245 -->
+
+<!-- sdflow-issue-block:start id=T246 -->
+## T246: 按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号
+> 按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号
+
+**动机**：superpowers 有一整套按任务复杂度信号选档位的启发式：改动 1-2 个文件且 spec 完整→用最便宜档；多文件集成/需判断→标准档；架构/设计判断→最强档；并指出「turn count 比 token 单价更重要」（便宜模型多花 2-3 倍轮次，总成本反而更高）。sdflow-implement 现在是「implementer 档位钉死 mid」（design D8 试点期变量控制决定），比 superpowers 这套更粗放，理论上有成本优化空间。
+
+**思路**：按 ticket 描述的改动范围（触碰文件数、是否需要架构判断）选择 implementer 派发档位，取代当前固定 mid 档；需要更新 model-tiers.md 的档位表并接入 dispatch 逻辑。
+
+**备注**：改动面涉及 model-tiers.md + dispatch 逻辑，量级比①②③④大，需要单独立项设计，不是顺手能改的小事；且同样要先解除 D8 的「档位钉死 mid」试点期变量控制约束（与 T245 共享同一个前置决定，建议合并讨论）。
+<!-- sdflow-issue-block:end id=T246 -->

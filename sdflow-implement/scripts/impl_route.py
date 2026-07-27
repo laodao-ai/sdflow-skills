@@ -353,6 +353,58 @@ def next_ready(deps: Dict[int, Set[int]], done: Iterable[int]) -> List[int]:
 
 
 # ---------------------------------------------------------------------------
+# 单张 Task 原文机械抠取（仿 matt to-tickets 的 task-brief 脚本），
+# 供 dispatch prompt 引用文件路径，不再要求编排层手抄 Task N 段落全文
+# （手抄=转录风险；此前 SKILL.md 编辑本身就撞过 old_string 对不上的坑）。
+# ---------------------------------------------------------------------------
+
+def extract_task_text(plan_text: str, task_id: int) -> Optional[str]:
+    """按 `### Task N:` 分段抠出单张 ticket 的完整原文（含标题行，止于下一个 Task 标题或 EOF）。
+
+    围栏词法（单一源 ship_gate.FenceTracker）只用于**标题识别**的豁免——fenced 示例里的
+    `### Task N:` 字样不触发切段；一旦确认身处目标 Task 段内，段内所有行（含 fenced 内容，
+    如出票规则允许内联的 prototype 决策性片段）原样收录、不做二次过滤——这是 ticket 的真实
+    正文，不是需要滤掉的噪音（同 matt task-brief 脚本行为：fence 只挡标题误判，不挡正文收录；
+    与 parse_blocked_by 整段跳过 fenced 行的口径**有意不同**，二者用途不同不可混用）。
+
+    返回 None 表示 plan 里没有该编号的 Task 段。
+    """
+    if _FenceTracker is None:
+        raise TopoError(
+            "无法加载围栏词法单一源 ship_gate.FenceTracker，拒绝以分叉口径解析 plan"
+            + (f"（import 失败原因：{_FENCE_IMPORT_ERR}）" if _FENCE_IMPORT_ERR else "")
+        )
+    # 扫描**全文到 EOF**（不因目标段已收完就提前退出）——与 parse_blocked_by 同一份
+    # fail-closed 纪律对齐：目标段之后的悬空围栏一样代表"这份 plan 解析不可靠"，
+    # 早退会让扫描停在悬空围栏产生之前、看不见它，把一个真实的解析风险静默放过。
+    fence = _FenceTracker()
+    cur_tid: Optional[int] = None
+    out_lines: List[str] = []
+    seen = False
+    collecting = False
+    for line in plan_text.splitlines():
+        gated = fence.feed(line) or fence.inside
+        if not gated:
+            m = TASK_HEADER_RE.match(line)
+            if m:
+                new_tid = int(m.group(1))
+                if collecting and new_tid != task_id:
+                    collecting = False  # 目标段已收完，只停止收录，扫描仍继续到 EOF
+                cur_tid = new_tid
+                if cur_tid == task_id:
+                    seen = True
+                    collecting = True
+        if collecting and cur_tid == task_id:
+            out_lines.append(line)
+
+    if fence.inside:
+        raise TopoError("plan 存在未闭合的 fenced 代码块（```），解析不可靠")
+    if not seen:
+        return None
+    return "\n".join(out_lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
 # plan_sha（唯一 subprocess 用途）
 # ---------------------------------------------------------------------------
 
@@ -454,6 +506,35 @@ def _cmd_frontier(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_task_text(args: argparse.Namespace) -> int:
+    plan_path = Path(args.plan)
+    if not plan_path.exists():
+        print(f"plan 文件不存在: {plan_path}", file=sys.stderr)
+        return EXIT_ROUTE_STOP
+
+    text = plan_path.read_text(encoding="utf-8", errors="replace")
+    try:
+        extracted = extract_task_text(text, args.task)
+    except TopoError as e:
+        print(str(e), file=sys.stderr)
+        return EXIT_ROUTE_STOP
+
+    if extracted is None:
+        print(f"Task {args.task} 在 {plan_path} 中不存在", file=sys.stderr)
+        return EXIT_ROUTE_STOP
+
+    if args.out:
+        out_path = Path(args.out)
+    else:
+        # 默认落 {change_dir}/impl-reports/task<N>-brief.md——沿用 T125 既有的
+        # report/review-package 文件命名惯例（plan_path.parent 即 change_dir）。
+        out_path = plan_path.parent / "impl-reports" / f"task{args.task}-brief.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(extracted, encoding="utf-8")
+    print(f"wrote {out_path}: {len(extracted.splitlines())} lines")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="sdflow-implement 路由/拓扑 stdlib helper（只读，不改 ship_gate.py）")
@@ -467,6 +548,13 @@ def build_parser() -> argparse.ArgumentParser:
     frontier_p.add_argument("--plan", required=True, help="plan 文件路径")
     frontier_p.add_argument("--done", required=True, help="逗号分隔已完成号列，或 none")
 
+    task_text_p = sub.add_parser(
+        "task-text", help="机械抠出单张 Task 段原文落盘，供 dispatch prompt 引用路径而非手抄")
+    task_text_p.add_argument("--plan", required=True, help="plan 文件路径")
+    task_text_p.add_argument("--task", required=True, type=int, help="Task 号")
+    task_text_p.add_argument(
+        "--out", help="输出路径（默认 <change_dir>/impl-reports/task<N>-brief.md）")
+
     return p
 
 
@@ -477,6 +565,8 @@ def main(argv=None) -> int:
         return _cmd_route(args)
     if args.cmd == "frontier":
         return _cmd_frontier(args)
+    if args.cmd == "task-text":
+        return _cmd_task_text(args)
     parser.error(f"未知子命令: {args.cmd}")  # pragma: no cover
     return 2
 

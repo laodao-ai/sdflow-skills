@@ -273,10 +273,16 @@ impl-pipeline: tickets
 ### 落盘 → checkpoint → 返回（显式三步序列，B1 完成窗口锚）〔impl-review-fix〕
 
 出 ticket 模式收尾按固定顺序执行——**返回发生在 checkpoint 之后**，不是「落盘即返回」；模型读到
-「立即返回」不得跳过第②步：
+「立即返回」不得跳过第②③步：
 
 1. **写盘**：完成 `superpowers-plan.md`（结构见上「外衣」节）。
-2. **立即执行 checkpoint 命令**：plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点——
+2. **全 ticket 语义一致性自扫**（附录 B 有出处说明）：checkpoint 前，编排层自己通读一遍刚写好的
+   全部 ticket，找「ticket 之间互相矛盾、或与 `## Global Constraints` 矛盾」的迹象（例如某张
+   ticket 假设的接口形状被另一张明确废弃）——Blocked-by **环**已由 `impl_route.py frontier`
+   拓扑机械挡住，这里补的是拓扑之外的**语义**矛盾，机械查不出。发现矛盾走 T10 三级决策协议
+   （有客观判据自动选 / 无客观判据派对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**。
+   扫描干净则不留痕，直接进下一步。
+3. **立即执行 checkpoint 命令**：plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点——
    不依赖「首 ticket add -A 捎带提交」的巧合自愈〔adr/0017〕：
    ```bash
    bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:plan" "出 ticket 落盘（B1 窗口锚）"
@@ -284,7 +290,7 @@ impl-pipeline: tickets
    这条 checkpoint 的 slug（`plan`）**不带 `task<N>-` 前缀，不计入任何 ticket 的完成数**——它只
    建立 `[sha, HEAD]` 闭区间的起点，供后续每张 ticket 的 `checkpoint(<change>:task<N>-<slug>)`
    落在窗口内被 gate 识别。
-3. **返回编排层（ship）**：checkpoint 提交完成后才返回，**MUST NOT** 在同一次调用内继续派发
+4. **返回编排层（ship）**：checkpoint 提交完成后才返回，**MUST NOT** 在同一次调用内继续派发
    implementer 或直通执行——必须保留 `ship_gate` 在"落盘之后 / 执行之前"对 fence / 标题 / 重号的
    三道校验插入点，让 gate 重新裁决一次是否可以进入 `CONTINUE_IMPL`。
 
@@ -302,9 +308,18 @@ impl-pipeline: tickets
 
 ### 每 ticket 派 fresh implementer
 
+派发前先机械抠出该票原文（附录 B 有出处说明）：
+
+```
+python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/superpowers-plan.md --task {N}
+```
+
+默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
+
 dispatch prompt 必含：
 
-- 该 `### Task N:` 段落全文（含验收复选框）；
+- 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
+  `### Task N:` 段落文本进 prompt**）；
 - plan 头部 `## Global Constraints` 节全文（逐字，implementer 与 reviewer 共享同一份注意力透镜）；
 - **🔴 本 SKILL.md 顶部的「四条通则」区块全文**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——
   子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。漏带 ⇒ implementer 眼前只有现状代码，
@@ -402,9 +417,15 @@ git log --oneline | grep "checkpoint({change}:task<N>-"
 
 ### 文件交接〔T125〕
 
-- reviewer 的 diff 输入以文件传递：
-  ```
-  git diff <before-sha>..<after-sha> > {change_dir}/impl-reports/task<N>-review-package.diff
+- reviewer 的 diff 输入以文件传递，**头部带 commit 列表 + stat 摘要、正文用 `-U10`**（附录 B 有
+  出处说明）：
+  ```bash
+  {
+    echo "# Review package: <before-sha>..<after-sha>"
+    echo; echo "## Commits"; git log --oneline <before-sha>..<after-sha>
+    echo; echo "## Files changed"; git diff --stat <before-sha>..<after-sha>
+    echo; echo "## Diff"; git diff -U10 <before-sha>..<after-sha>
+  } > {change_dir}/impl-reports/task<N>-review-package.diff
   ```
   dispatch prompt 携带该文件路径，**MUST NOT** 把大 diff 贴进 prompt 正文。
 - reviewer 报出的 `⚠️ cannot-verify-from-diff` 项（需求活在未改动代码里，或要跨 ticket 才能验证）
@@ -453,6 +474,16 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
   > - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 - **Spec 轴**：对照该 ticket 文本的验收复选框与 `R-ID:` 溯源需求，逐条核验是否真实做到。
 
+**两轴共用的评审纪律**（附录 B 有出处说明，dispatch prompt 里原样带上）：
+
+- **不信 implementer 的自辩**——报告里的理由（"故意这样做的""按 YAGNI 留的"）不能拿来给 finding
+  降级；只看代码本身下判断。
+- **不重跑 implementer 已经跑过的测试**——只在读代码生出具体怀疑、且现有跑法答不了那个疑问时，
+  才跑一个聚焦测试；不重跑整套件。
+- **输出零寒暄**——最终消息就是报告本身，不写开场白/过程叙述/收尾总结。
+- **反预判**——dispatch prompt 里 MUST NOT 出现"这条不用标""顶多算 Minor""这么写是故意的别管"
+  这类提前定性的措辞。
+
 裁决处置：
 
 - Critical / Important 发现 → 派 fix 子代理修复 + re-review，循环直至通过；**不带着未修的
@@ -495,3 +526,20 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 两处都要求原文携带进各自的 dispatch prompt，而非只留指针或转述——理由与「🔴 传播纪律」（本文件顶部
 四条通则区块）一致：dispatch 对象是 fresh context 子代理，看不到这两个源文件，只能凭训练记忆判断，
 措辞与判定边界不受控。
+
+## 附录 B：task-text 抠取 / diff 上下文 / 评审纪律 / 一致性自扫 出处说明
+
+正文里标「附录 B 有出处说明」的四处，来源与理由如下：
+
+- **task-text 机械抠取**（每 ticket 派 fresh implementer 节）：替代编排层手抄 `### Task N:` 段落——
+  手抄是转录风险，且逼编排层读整份 plan 占用自己的上下文；产物落盘路径与既有 report/review-package
+  文件同一惯例（`{change_dir}/impl-reports/`）。
+- **diff `-U10` + commit 列表头**（T125 文件交接节）：默认 3 行上下文太窄，Feature Envy/Data Clumps
+  这类要看变更外围代码的 smell 判不出来；格式借鉴 superpowers subagent-driven-development 的
+  review-package 脚本。
+- **两轴共用评审纪律 4 条**（每 ticket 双轴审节）：借鉴 superpowers subagent-driven-development 的
+  reviewer 模板。「不重跑已跑过的测试」理由是 implementer 报告已是测试证据；「输出零寒暄」在 400
+  词封顶内进一步省 token。
+- **全 ticket 语义一致性自扫**（出 ticket 收尾序列第②步）：对齐 superpowers
+  writing-plans/subagent-driven-development 的 pre-flight 冲突扫描；原版把冲突批量呈给人拍板，
+  阶段三无人类门场景换成 T10 自主裁决。

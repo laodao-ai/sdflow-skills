@@ -601,3 +601,96 @@ def test_nested_example_fence_agrees_with_gate_cross_script():
     gate_ids = {int(i) for i in sg._parse_plan(text)[0]}
     route_ids = set(ir.parse_blocked_by(text).keys())
     assert gate_ids == route_ids == {1, 2}      # 伪 Task 9 两侧都不可见
+
+
+# ---------------------------------------------------------------------------
+# extract_task_text：单张 Task 原文机械抠取（供 task-text CLI）
+# ---------------------------------------------------------------------------
+
+def test_extract_task_text_basic():
+    text = (SHIP_FIXTURES / "tickets_plan_golden.md").read_text(encoding="utf-8")
+    out = ir.extract_task_text(text, 2)
+    assert out.startswith("### Task 2: 通知节流窗口可配置")
+    assert "调整配置项后" in out
+    assert "### Task 3:" not in out          # 不越界收下一段
+    assert "### Task 1:" not in out          # 不倒收前一段
+
+
+def test_extract_task_text_missing_task_returns_none():
+    text = (SHIP_FIXTURES / "tickets_plan_golden.md").read_text(encoding="utf-8")
+    assert ir.extract_task_text(text, 99) is None
+
+
+def test_extract_task_text_fenced_pseudo_header_not_boundary_and_content_preserved():
+    # 判别性 fixture：Task 2 段内嵌一个 fenced 示例，里面写着假的 `### Task 9:`。
+    # 要求：①假标题不切段（Task 2 抠取不提前止步、也不被误认成 Task 9）；
+    # ②fenced 内容本身原样保留在抠出结果里（这是 Task 2 的真实正文，不是噪音——
+    # 与 parse_blocked_by 整段跳过 fenced 行的口径有意不同）。
+    text = (SHIP_FIXTURES / "tickets_plan_fenced_header.md").read_text(encoding="utf-8")
+    out = ir.extract_task_text(text, 2)
+    assert out.startswith("### Task 2: 通知节流窗口可配置")
+    assert "### Task 9: 直接改" in out        # fenced 内容保留
+    assert "### Task 3:" not in out           # 真实下一段未被误收
+
+
+def test_extract_task_text_dangling_fence_raises_topoerror():
+    text = (SHIP_FIXTURES / "tickets_plan_fence_dangling.md").read_text(encoding="utf-8")
+    with pytest.raises(ir.TopoError):
+        ir.extract_task_text(text, 1)
+
+
+# ---------------------------------------------------------------------------
+# CLI: task-text
+# ---------------------------------------------------------------------------
+
+def _run_task_text(plan_path, task, out=None):
+    cmd = [sys.executable, str(SCRIPT), "task-text", "--plan", str(plan_path),
+           "--task", str(task)]
+    if out is not None:
+        cmd += ["--out", str(out)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    return r.returncode, r.stdout.strip(), r.stderr.strip()
+
+
+def test_cli_task_text_default_out_path_under_impl_reports(tmp_path):
+    change_dir = tmp_path / "openspec" / "changes" / "demo"
+    change_dir.mkdir(parents=True)
+    plan = change_dir / "superpowers-plan.md"
+    plan.write_text(
+        "### Task 1: A\nBlocked-by: none\n- [ ] x\n"
+        "### Task 2: B\nBlocked-by: 1\n- [ ] y\n", encoding="utf-8")
+
+    code, out, err = _run_task_text(plan, 1)
+    assert code == 0, err
+    default_out = change_dir / "impl-reports" / "task1-brief.md"
+    assert default_out.is_file()
+    content = default_out.read_text(encoding="utf-8")
+    assert content.startswith("### Task 1: A")
+    assert "### Task 2:" not in content
+
+
+def test_cli_task_text_explicit_out_path(tmp_path):
+    plan = tmp_path / "plan.md"
+    plan.write_text("### Task 1: A\nBlocked-by: none\n- [ ] x\n", encoding="utf-8")
+    out_path = tmp_path / "custom" / "brief.md"
+
+    code, out, err = _run_task_text(plan, 1, out=out_path)
+    assert code == 0, err
+    assert out_path.is_file()
+    assert out_path.read_text(encoding="utf-8").startswith("### Task 1: A")
+
+
+def test_cli_task_text_missing_task_exit6(tmp_path):
+    plan = tmp_path / "plan.md"
+    plan.write_text("### Task 1: A\nBlocked-by: none\n- [ ] x\n", encoding="utf-8")
+    code, out, err = _run_task_text(plan, 9)
+    assert code == 6
+    assert out == ""
+    assert err
+
+
+def test_cli_task_text_plan_missing_exit6(tmp_path):
+    code, out, err = _run_task_text(tmp_path / "no-such-plan.md", 1)
+    assert code == 6
+    assert out == ""
+    assert err
