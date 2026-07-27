@@ -30,11 +30,11 @@ implementer 与两轴审 reviewer 同等生效。
 其他 feature + ack 三分支；其余包含创建字样的 wrapper、目录切换、复合命令、散文或动态名统一输出
 `command-unverifiable` 审计 context，不设置权限决定，也不尝试解释 shell 或细分未判定原因。多处创建调用仍在 cwd 判断前拒绝拆分。
 
-- [ ] 允许的空白、单双引号与 `--json` 直接调用变体都进入原三分支，既有 ack 与哨兵行为不回归
-- [ ] `cd`、wrapper、compound、换行、decoy、变量、命令替换与 glob 的代表性形态统一产生 `command-unverifiable` context，且没有 `permissionDecision`
-- [ ] 未判定路径删除 `undecided_reason`、动态 marker、双分支说明与旧原因码兼容断言；不含 shell 形态交叉分类器，不展开 shell，也不推测 cwd/name 的细分原因
-- [ ] 多调用或名字冲突仍按既有 stacking deny 处理，判定先于 cwd 未决分支
-- [ ] `sdflow-init/tests/test_ff0_branch_guard.py`、`hack/tests/test_canonical_entry_sync.py`、canonical workflow 与入口叙述同步到正向有限 grammar 和单一未判定边界
+- [x] 允许的空白、单双引号与 `--json` 直接调用变体都进入原三分支，既有 ack 与哨兵行为不回归
+- [x] `cd`、wrapper、compound、换行、decoy、变量、命令替换与 glob 的代表性形态统一产生 `command-unverifiable` context，且没有 `permissionDecision`
+- [x] 未判定路径删除 `undecided_reason`、动态 marker、双分支说明与旧原因码兼容断言；不含 shell 形态交叉分类器，不展开 shell，也不推测 cwd/name 的细分原因
+- [x] 多调用或名字冲突仍按既有 stacking deny 处理，判定先于 cwd 未决分支
+- [x] `sdflow-init/tests/test_ff0_branch_guard.py`、`hack/tests/test_canonical_entry_sync.py`、canonical workflow 与入口叙述同步到正向有限 grammar 和单一未判定边界
 
 ### Task 2: 薄化 `sdflow-spec` 常驻入口并保持完整执行契约
 
