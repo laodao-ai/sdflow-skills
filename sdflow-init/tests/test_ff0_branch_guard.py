@@ -399,8 +399,15 @@ def test_bare_literal_prefix_with_adjacent_quoted_fragment_is_unparseable(repo, 
 ])
 @pytest.mark.parametrize("expression", [
     "$NAME",
+    "${NAME}",
+    'foo"${BAR}"',
+    "$1",
+    "$?",
     "$(printf add-foo)",
+    '$(printf "$(whoami)")',
     "add-*",
+    "add-?",
+    "add-[ab]",
 ])
 def test_wrapped_dynamic_names_are_cwd_ambiguous(repo, wrapper, expression):
     """Wrapper ownership wins over the nested name expression's shape."""
@@ -413,16 +420,27 @@ def test_wrapped_dynamic_names_are_cwd_ambiguous(repo, wrapper, expression):
     )
 
 
+@pytest.mark.parametrize("prefix", [
+    "openspec new change",
+    "openspec change new",
+])
 @pytest.mark.parametrize("expression", [
     "$NAME",
+    "${NAME}",
+    'foo"${BAR}"',
+    "$1",
+    "$?",
     "$(printf add-foo)",
+    '$(printf "$(whoami)")',
     "add-*",
+    "add-?",
+    "add-[ab]",
     'add"$NAME"',
 ])
-def test_direct_prefix_dynamic_names_are_change_name_unparseable(repo, expression):
+def test_direct_prefix_dynamic_names_are_change_name_unparseable(repo, prefix, expression):
     """A direct creation prefix isolates the remaining failure to the name."""
     assert_undecided_audit(
-        hook_output(repo, f"  openspec change new {expression}"),
+        hook_output(repo, f"  {prefix} {expression}"),
         "change-name-unparseable",
     )
 

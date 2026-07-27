@@ -309,6 +309,9 @@ def test_ff0_rule_and_sdflow_spec_entry_state_the_finite_grammar_boundary():
         require(path, "openspec new change", "openspec change new", "--json")
         require(path, "cwd-ambiguous", "change-name-unparseable")
         require(path, "additionalContext", "MUST NOT 解析 shell")
+        require(path, "命令起点（前面仅水平空白）", "有限动态 marker")
+        require(path, "`$`", "`*`", "`?`", "`[`")
+        require(path, "wrapper 优先为 `cwd-ambiguous`")
 
 
 def test_ff0_rule_and_hook_agree_on_the_escape_hatch():

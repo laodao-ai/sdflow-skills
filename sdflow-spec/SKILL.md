@@ -341,9 +341,8 @@ git status --porcelain
 
 全局 FF-0 hook 只在整条 Bash 命令完整匹配**单条直接 literal**创建调用时，才用 payload
 `cwd` 执行上述三分支。
-正向有限 grammar 只包含 `openspec new change <合法字面量>` 与 `openspec change new <合法字面量>`，容忍水平空白、单/双引号与单个 `--json` 变体。wrapper、
-目录切换、compound、换行、散文等只以 `cwd-ambiguous` 记录；动态名只以 `change-name-unparseable`
-记录。两者均只输出 `additionalContext`，**MUST NOT 解析 shell**，也不设置 `permissionDecision`；
+正向有限 grammar 只包含 `openspec new change <合法字面量>` 与 `openspec change new <合法字面量>`，容忍水平空白、单/双引号与单个 `--json` 变体。原因码先排除换行；只有直接创建前缀位于命令起点（前面仅水平空白）、且 name expression 含有限动态 marker（`$` 统一覆盖参数展开与任意嵌套命令替换，另含反引号与 glob `*` / `?` / `[`）时，才以 `change-name-unparseable` 记录。
+wrapper 优先为 `cwd-ambiguous`，即使内层使用相同动态表达式；目录切换、compound、换行、前置散文及不含动态 marker 的后置散文也同样如此。单个无效 literal / option 仍为 `change-name-unparseable`。两类未判定均只输出 `additionalContext`，**MUST NOT 解析 shell**，也不设置 `permissionDecision`；
 多处创建调用的 stacking deny 先于 cwd 未判定。
 
 🔴 **MUST NOT 沿用「已在 feature 分支就跳过」的弱判据**——那会让第二个 change 落在前一个 change
