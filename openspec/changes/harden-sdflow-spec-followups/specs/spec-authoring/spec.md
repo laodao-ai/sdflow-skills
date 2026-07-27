@@ -22,7 +22,7 @@
 
 ## ADDED Requirements
 
-### Requirement: SA-14 入口常驻契约与按需资料分层
+### Requirement: SA-16 入口常驻契约与按需资料分层
 
 [spec-review-amendment] `sdflow-spec/SKILL.md` SHALL 只承载每次运行必须读取和执行的契约，并以 Python Unicode 字符数不超过 18,000 为机械门。未启用外派协议、详细异常诊断与演进依据 SHALL 置于 versioned reference；入口 SHALL 明确其触发条件和相对路径。机械门 SHALL 以 resident-contract token map 同时验证 frontmatter、Phase 0/A/B/C、C.1 四判、终审、`openspec validate --strict`、两个 checkpoint、出口三步与每个 reference 的加载条件仍在入口；MUST NOT 以空标题、裸链接或只移动文字规避。
 

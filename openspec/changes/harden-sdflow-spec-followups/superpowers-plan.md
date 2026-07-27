@@ -39,7 +39,7 @@ implementer 与两轴审 reviewer 同等生效。
 ### Task 2: 薄化 `sdflow-spec` 常驻入口并保持完整执行契约
 
 **Blocked-by:** none
-**R-ID:** SA-01, SA-06, SA-14, SA-15
+**R-ID:** SA-01, SA-06, SA-16, SA-15
 
 `sdflow-spec` 默认入口只常驻三相位执行、终审、strict validate、两个 checkpoint 与出口序列；未启用
 外派、详细诊断和演进依据改为按条件加载的 versioned reference。宿主能力、整个 change 目录追溯边界
@@ -54,7 +54,7 @@ implementer 与两轴审 reviewer 同等生效。
 ### Task 3: 用逐票证据闭合规格与问题台账
 
 **Blocked-by:** 1, 2
-**R-ID:** SA-01, SA-06, SA-14, SA-15
+**R-ID:** SA-01, SA-06, SA-16, SA-15
 
 把已实现的 FF-0 与入口契约同步到权威规格，并按 closure matrix 逐 ID 核对证据后更新问题台账；归档
 证据、当前实现证据和仍未处理项采用不同终态规则，不能以 schema 或重建索引成功代替语义闭合。
@@ -67,7 +67,7 @@ implementer 与两轴审 reviewer 同等生效。
 ### Task 4: 刷新本机安装并完成端到端验收
 
 **Blocked-by:** 3
-**R-ID:** FF-0, SA-01, SA-06, SA-14, SA-15
+**R-ID:** FF-0, SA-01, SA-06, SA-16, SA-15
 
 在 canonical 实现、入口与台账全部闭合后，先完成 focused 与契约测试，再通过开发更新和 setup 刷新
 本仓 dogfood workflow、全局 hook 与 Claude/Codex skill 安装，最后跑全量回归并机械比对安装结果；任何
