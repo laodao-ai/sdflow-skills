@@ -53,17 +53,32 @@ def repo(tmp_path):
     return _make_repo(tmp_path)
 
 
-def run_hook(repo, command, tool="Bash"):
-    """→ (denied: bool, reason: str)"""
+def hook_output(repo, command, tool="Bash"):
+    """Run the public PreToolUse process seam and return its stdout JSON."""
     payload = {"tool_name": tool, "cwd": str(repo), "tool_input": {"command": command}}
     proc = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload),
                           capture_output=True, text=True, timeout=30)
     assert proc.returncode == 0, f"hook 非零退出：{proc.stderr}"
     out = proc.stdout.strip()
-    if not out:
+    return json.loads(out) if out else {}
+
+
+def run_hook(repo, command, tool="Bash"):
+    """→ (denied: bool, reason: str)"""
+    output = hook_output(repo, command, tool)
+    if not output:
         return False, ""
-    decision = json.loads(out)["hookSpecificOutput"]
+    decision = output["hookSpecificOutput"]
     return decision["permissionDecision"] == "deny", decision["permissionDecisionReason"]
+
+
+def assert_undecided_audit(output, reason_code):
+    """The audit path is context-only: it must not make an allow/deny decision."""
+    assert set(output) == {"hookSpecificOutput"}
+    hook_result = output["hookSpecificOutput"]
+    assert set(hook_result) == {"hookEventName", "additionalContext"}
+    assert hook_result["hookEventName"] == "PreToolUse"
+    assert reason_code in hook_result["additionalContext"]
 
 
 # ── 分支①：保护分支 → deny ──────────────────────────────────────────────
@@ -72,6 +87,13 @@ def test_protected_branch_denies(repo):
     denied, reason = run_hook(repo, "openspec new change add-foo")
     assert denied
     assert "受保护分支" in reason
+
+
+def test_compound_call_on_protected_branch_is_audited_without_decision(repo):
+    assert_undecided_audit(
+        hook_output(repo, "cd /tmp && openspec new change add-foo"),
+        "cwd-ambiguous",
+    )
 
 
 # ── 分支②：已在 feat/{本 change} → 放行（真幂等）────────────────────────
@@ -86,6 +108,8 @@ def test_same_change_branch_allows(repo):
     "openspec new change 'add-foo'",
     'openspec new change "add-foo"',
     "openspec   new   change   add-foo --json",
+    "\topenspec\tchange\tnew\t'add-foo'\t",
+    'openspec change new --json "add-foo"',
 ])
 def test_same_change_branch_allows_quoting_variants(repo, cmd):
     _git(repo, "checkout", "-qb", "feat/add-foo")
@@ -218,7 +242,7 @@ def test_undeletable_sentinel_does_not_allow(repo):
     assert denied
 
 
-def test_mentioning_the_ack_in_the_command_string_is_not_an_ack(repo):
+def test_mentioning_the_ack_in_non_direct_commands_is_audited_not_acked(repo):
     """逃生口 MUST NOT 从命令串里认 —— 命令串是无界的 shell 语法面（基准 5）。
 
     deny 文案把逃生口原样回传给模型 ⇒ 只要判据落在命令串上，模型顺手把它写进
@@ -233,8 +257,7 @@ def test_mentioning_the_ack_in_the_command_string_is_not_an_ack(repo):
         "SDFLOW_FF0_ACK=1 openspec new change add-foo",
         "openspec new change add-foo # note: SDFLOW_FF0_ACK=1 was discussed",
     ):
-        denied, _ = run_hook(repo, cmd)
-        assert denied, f"命令串里提到逃生口不是 ack，不该放行：{cmd!r}"
+        assert_undecided_audit(hook_output(repo, cmd), "cwd-ambiguous")
 
 
 # ── detached HEAD：不是分支，更不是「其它 feature 分支」→ fail-open ──────
@@ -299,11 +322,43 @@ def test_feature_branch_still_denies_when_default_branch_is_unusual(repo):
 
 # ── fail-open：守卫拿不准时不挡人干活 ───────────────────────────────────
 
-def test_unparseable_change_name_fails_open(repo):
-    """取不到 change 名 ⇒ 无从区分②③ ⇒ 放行（基准 5：不猜无界的 shell 语法）。"""
+def test_unparseable_change_name_is_audited_without_decision(repo):
+    """取不到 change 名时 fail-open，但必须留下稳定审计原因。"""
     _git(repo, "checkout", "-qb", "feat/add-bar")
-    denied, _ = run_hook(repo, 'openspec new change "$NAME"')
-    assert not denied
+    assert_undecided_audit(
+        hook_output(repo, 'openspec new change "$NAME"'),
+        "change-name-unparseable",
+    )
+
+
+@pytest.mark.parametrize("cmd", [
+    "openspec new change",
+    "openspec new change --json",
+    "openspec new change $NAME",
+    "openspec new change $(printf add-foo)",
+    "openspec new change `printf add-foo`",
+    "openspec new change add-*",
+    "openspec new change add-?",
+    "openspec new change add-[ab]",
+])
+def test_dynamic_change_names_are_audited_without_expansion(repo, cmd):
+    _git(repo, "checkout", "-qb", "feat/add-bar")
+    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
+
+
+@pytest.mark.parametrize("cmd", [
+    "cd /tmp && openspec new change add-foo",
+    "pushd /tmp; openspec new change add-foo",
+    "env -C /tmp openspec new change add-foo",
+    "bash -lc 'openspec new change add-foo'",
+    "sudo openspec new change add-foo",
+    "openspec new change add-foo && git status",
+    "openspec new change add-foo\ngit status",
+    "please run openspec new change add-foo",
+    "echo openspec new change add-foo",
+])
+def test_non_direct_literal_forms_are_cwd_ambiguous(repo, cmd):
+    assert_undecided_audit(hook_output(repo, cmd), "cwd-ambiguous")
 
 
 def test_unrelated_command_passes_through(repo):
@@ -358,11 +413,23 @@ def test_multiple_distinct_change_names_are_denied(repo, cmd):
     assert "拆" in reason
 
 
-def test_repeated_identical_change_name_stays_idempotent(repo):
-    """全部匹配都等于当前 change ⇒ 仍是分支②真幂等（收紧 MUST NOT 误伤它）。"""
+def test_repeated_identical_change_names_are_stacking_denied(repo):
+    """多处创建调用必须拆开，即使名字一致也不例外。"""
     _git(repo, "checkout", "-qb", "feat/add-foo")
-    denied, _ = run_hook(repo, "openspec new change add-foo || openspec new change add-foo")
-    assert not denied
+    denied, reason = run_hook(repo, "openspec new change add-foo || openspec new change add-foo")
+    assert denied
+    assert "stacking" in reason
+
+
+def test_stacking_deny_precedes_cwd_ambiguity(repo):
+    output = hook_output(
+        repo,
+        "cd /tmp && openspec new change add-foo; openspec change new add-bar",
+    )
+    decision = output["hookSpecificOutput"]
+    assert decision["permissionDecision"] == "deny"
+    assert "stacking" in decision["permissionDecisionReason"]
+    assert "additionalContext" not in decision
 
 
 def test_multiple_calls_with_an_unreadable_name_are_denied(repo):

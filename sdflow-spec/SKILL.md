@@ -339,6 +339,13 @@ git status --porcelain
 | 已在 `feat/{本 change}` | 跳过（**真幂等**） |
 | **其它 feature 分支** | **halt 问人**：从当前切出 / 回 base 切出 / 就地继续 |
 
+全局 FF-0 hook 只在整条 Bash 命令完整匹配**单条直接 literal**创建调用时，才用 payload
+`cwd` 执行上述三分支。
+正向有限 grammar 只包含 `openspec new change <合法字面量>` 与 `openspec change new <合法字面量>`，容忍水平空白、单/双引号与单个 `--json` 变体。wrapper、
+目录切换、compound、换行、散文等只以 `cwd-ambiguous` 记录；动态名只以 `change-name-unparseable`
+记录。两者均只输出 `additionalContext`，**MUST NOT 解析 shell**，也不设置 `permissionDecision`；
+多处创建调用的 stacking deny 先于 cwd 未判定。
+
 🔴 **MUST NOT 沿用「已在 feature 分支就跳过」的弱判据**——那会让第二个 change 落在前一个 change
 的分支上。`git checkout -b` 失败（分支已存在）⇒ fallback `git checkout feat/{change}`；再失败即如实报告。
 

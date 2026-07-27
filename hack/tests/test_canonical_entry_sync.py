@@ -46,6 +46,7 @@ GUIDE = WF / "WORKFLOW-GUIDE.md"
 CLAUDE_SECTION = REPO / "sdflow-init" / "assets" / "snippets" / "claude-section.md"
 SPEC_WORKFLOW = REPO / "openspec" / "specs" / "spec-workflow" / "spec.md"
 HOOK = REPO / "sdflow-init" / "assets" / "hooks" / "ff0-branch-guard.py"
+SDFLOW_SPEC = REPO / "sdflow-spec" / "SKILL.md"
 RUNTIME_GITIGNORE = REPO / "sdflow-init" / "assets" / "snippets" / "runtime-gitignore.txt"
 
 # 人读侧的两份载体（非托管区，手写）——本 change 的立项理由就是「人读侧与 AI 读侧分叉」，
@@ -293,6 +294,15 @@ def test_ff0_rule_is_three_way():
     require(FF_CONSTRAINTS, "三分支判定")
     require(FF_CONSTRAINTS, "其它 feature 分支", "halt 问人")
     require(FF_CONSTRAINTS, "MUST NOT 沿用「已在 feature 分支就跳过」的弱判据")
+
+
+def test_ff0_rule_and_sdflow_spec_entry_state_the_finite_grammar_boundary():
+    """Canonical workflow and the phase-A entry must both tell the same honest hook boundary."""
+    for path in (FF_CONSTRAINTS, SDFLOW_SPEC):
+        require(path, "单条直接 literal")
+        require(path, "openspec new change", "openspec change new", "--json")
+        require(path, "cwd-ambiguous", "change-name-unparseable")
+        require(path, "additionalContext", "MUST NOT 解析 shell")
 
 
 def test_ff0_rule_and_hook_agree_on_the_escape_hatch():
