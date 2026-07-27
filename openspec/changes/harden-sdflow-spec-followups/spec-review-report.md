@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: a6b5ac44b0e015d69db65eaa3938eb5e5b17a32a
+---
+
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 <!-- sdflow:fanout-capability v1 host="codex" subagents="available" mirrors="adversarial,grounding" -->
 <!-- sdflow:hr-tg v1 hit="none" declared="TG-12,TG-14,TG-15,TG-18,TG-19" evidence="复杂 FF-0 决策、skill/reference 重构、新 codepath、测试计划与多需求均不属于 trigger-catalog 的 HR-TG 子集" -->
@@ -5,6 +11,8 @@
 <!-- sdflow:outside-voice v1 site="design-voice" guard="same-family" host="codex" runner="none" reason_code="fallback-unavailable" findings="0" truncated="false" -->
 
 # Spec Review Report · harden-sdflow-spec-followups
+
+**设计门已拍板批准，日期 2026-07-27。** 用户无覆盖批准本报告全部 amendments；机判锚见头部 `ship-gate`，批准盘面为 `a6b5ac44b0e015d69db65eaa3938eb5e5b17a32a`。lens-metric 最终裁决与门前一致，无需改数。
 
 ## 结论
 
@@ -98,4 +106,4 @@ helper preflight 成功（Claude Code `2.1.220`、capability manifest/agents/POS
 
 ## HARD-GATE 建议
 
-建议批准本报告和已落盘 amendments。批准后再写 ship-gate approval frontmatter；当前报告刻意不预写批准状态。
+设计 HARD-GATE 已批准；下一步进入 writing-plans / 阶段三连续实现。
