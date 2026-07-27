@@ -11,7 +11,7 @@ implementer 与两轴审 reviewer 同等生效。
 - [spec-review-amendment] 只有整条命令完整匹配一条直接 literal 创建调用（`openspec new change <合法字面量>` 或 `openspec change new <合法字面量>`，保留既有空白、单双引号与 `--json` 变体）时，才把 payload `cwd` 作为判定仓并进入原三分支。
 - 命令串含创建字样但不是该有限 grammar 的单条直接调用——包括 `cd`/`pushd`/`env -C`/shell wrapper、复合运算符、换行、前后散文或动态名——统一输出仅含 `hookEventName` 与 `additionalContext` 的 JSON，不设置 `permissionDecision`。
 - 既有“多处可识别创建调用必须拆开”的 deny 在此 cwd 判定前保留。
-- [spec-review-amendment] 未判定 context 使用有限原因码 `cwd-ambiguous` 或 `change-name-unparseable` 加人类可读说明。
+- [spec-review-amendment] 所有未命中直接 grammar 的单调用统一使用 `command-unverifiable` 加人类可读说明，不再按 cwd、change 名或 shell 组合推测细分原因。
 - [spec-review-amendment] `SKILL.md` 保留四条通则、frontmatter、Phase 0/A/B/C、C.1 四判、终审、`openspec validate --strict`、`sdflow-spec-grill`/`sdflow-spec-generate` 两个 checkpoint、出口三步，以及“何时读哪个 reference”的条件与相对路径。
 - 未启用的外派协议、详细降级诊断和演进依据移入三个 reference。
 - 新增测试以 Python `len()` 验证入口不超过 18,000 Unicode 字符，并以 resident-contract token map 逐项锚定上述语义；只保留空标题或无加载条件的链接不得通过。
@@ -27,12 +27,12 @@ implementer 与两轴审 reviewer 同等生效。
 **R-ID:** FF-0
 
 当命令完整匹配单条直接 literal 创建 grammar 时，FF-0 继续在 payload 仓执行 protected、同 change、
-其他 feature + ack 三分支；其余包含创建字样的 wrapper、目录切换、复合命令、散文或动态名只输出稳定
-原因码的审计 context，不设置权限决定，也不尝试解释 shell。多处创建调用仍在 cwd 判断前拒绝拆分。
+其他 feature + ack 三分支；其余包含创建字样的 wrapper、目录切换、复合命令、散文或动态名统一输出
+`command-unverifiable` 审计 context，不设置权限决定，也不尝试解释 shell 或细分未判定原因。多处创建调用仍在 cwd 判断前拒绝拆分。
 
 - [ ] 允许的空白、单双引号与 `--json` 直接调用变体都进入原三分支，既有 ack 与哨兵行为不回归
-- [ ] `cd`、`pushd`、`env -C`、wrapper、compound、换行与 decoy 只产生 `cwd-ambiguous` context，且没有 `permissionDecision`
-- [ ] 变量、命令替换与 glob 只产生 `change-name-unparseable` context，且不展开 shell
+- [ ] `cd`、wrapper、compound、换行、decoy、变量、命令替换与 glob 的代表性形态统一产生 `command-unverifiable` context，且没有 `permissionDecision`
+- [ ] 未判定路径不含 shell 形态交叉分类器，不展开 shell，也不推测 cwd/name 的细分原因
 - [ ] 多调用或名字冲突仍按既有 stacking deny 处理，判定先于 cwd 未决分支
 - [ ] canonical workflow 与入口叙述同步到正向有限 grammar 和诚实未判定边界
 

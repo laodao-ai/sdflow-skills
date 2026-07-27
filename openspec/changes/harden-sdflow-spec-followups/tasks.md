@@ -1,7 +1,7 @@
 ## 1. FF-0 未判定路径（spec-workflow）
 
-- [ ] 1.1 [FF-0 未判定路径] [spec-review-amendment] 实现完整匹配的单条直接 literal 调用 allowlist；未命中但含创建字样时输出带 `cwd-ambiguous|change-name-unparseable` 的 `additionalContext`，无 `permissionDecision`，且不解析 shell；保留多调用 stacking deny。
-- [ ] 1.2 [FF-0 未判定路径] [spec-review-amendment] 扩展 hook 单测：直接 grammar 的空白/引号/`--json`、`cd`/`pushd`/`env -C`/wrapper/compound/decoy、变量/替换/glob、稳定原因码、审计不自动 `allow|deny`，以及原三分支/哨兵/多调用行为。
+- [ ] 1.1 [FF-0 未判定路径] [spec-review-amendment] 实现完整匹配的单条直接 literal 调用 allowlist；未命中但含创建字样时统一输出带 `command-unverifiable` 的 `additionalContext`，无 `permissionDecision`，且不解析 shell 或推测细分原因；保留多调用 stacking deny。
+- [ ] 1.2 [FF-0 未判定路径] [spec-review-amendment] 扩展 hook 单测：直接 grammar 的空白/引号/`--json`、非直接形态的代表性 `cd`/wrapper/compound/decoy/变量/替换/glob、单一稳定原因码、审计不自动 `allow|deny`，以及原三分支/哨兵/多调用行为；不维护 shell 形态交叉分类矩阵。
 - [ ] 1.3 [FF-0 未判定路径] 同步 canonical workflow 与入口文案，说明未判定行为及其边界。
 
 ## 2. `sdflow-spec` 入口与规则收口（spec-authoring）
@@ -29,8 +29,7 @@
 [spec-review-amendment] FF-0
 ├── direct literal grammar ─────────────── allowlist variants + original branch/ack tests
 ├── multiple calls ────────────────────── existing stacking deny regression
-├── cwd ambiguous ─────────────────────── cd/pushd/env -C/wrapper/compound/decoy → context only
-└── dynamic change name ───────────────── variable/substitution/glob → context only
+└── command unverifiable ──────────────── cd/wrapper/compound/decoy/variable/substitution/glob → same context only
 
 [spec-review-amendment] sdflow-spec resident contract
 ├── len(SKILL.md) <= 18,000 ───────────── boundary fail/pass

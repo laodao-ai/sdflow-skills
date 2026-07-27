@@ -4,7 +4,7 @@
 
 ## Success Metrics
 
-- [spec-review-amendment] FF-0 只对完整匹配的单条直接 literal 创建调用使用 payload `cwd` 执行三分支判定；其余包含创建字样的复合、包装、跨目录或动态形态不对错仓 deny，并留下带稳定原因码且不越权的未判定上下文。
+- [spec-review-amendment] FF-0 只对完整匹配的单条直接 literal 创建调用使用 payload `cwd` 执行三分支判定；其余包含创建字样的复合、包装、跨目录或动态形态不对错仓 deny，并统一留下带单一稳定原因码且不越权的未判定上下文。
 - `sdflow-spec` 的 Codex 文案只陈述已验证的宿主语义；T132 按 A/B 入口分别认定收敛信号。
 - `SKILL.md` 保留全部每次必执行的契约且不超过 18,000 Unicode 字符；按需资料可被确定条件加载。
 - T232、T238、T240、T241 的已归档修正与台账状态一致，T233–T237、T242 有可验证处置。
@@ -17,7 +17,7 @@
 
 ## What Changes
 
-- [spec-review-amendment] 以正向有限的直接调用 allowlist 硬化 FF-0；未命中 allowlist 时保留 fail-open，但通过无决策的 PreToolUse context 记录稳定原因码与说明。
+- [spec-review-amendment] 以正向有限的直接调用 allowlist 硬化 FF-0；未命中 allowlist 时保留 fail-open，并通过无决策的 PreToolUse context 统一记录 `command-unverifiable` 与说明，不再推测未判定来自 cwd、change 名还是 shell 组合。
 - 将 `sdflow-spec` 的 Codex 手动触发、终审追溯与 A/B grill 收敛语义改为可证实口径。
 - 将入口重构为薄 `SKILL.md` 加按需 references，并以机械测试守住入口体量和必驻契约。
 - [spec-review-amendment] 更新相关主规格、测试和 issue 台账，按逐票证据关闭已完成及本 change 完成的项目；T132 与 T239 保持 OPEN/未处理。

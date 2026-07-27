@@ -20,7 +20,7 @@
 
 [spec-review-amendment] 只有整条命令完整匹配一条直接 literal 创建调用（`openspec new change <合法字面量>` 或 `openspec change new <合法字面量>`，保留既有空白、单双引号与 `--json` 变体）时，才把 payload `cwd` 作为判定仓并进入原三分支。命令串含创建字样但不是该有限 grammar 的单条直接调用——包括 `cd`/`pushd`/`env -C`/shell wrapper、复合运算符、换行、前后散文或动态名——统一输出仅含 `hookEventName` 与 `additionalContext` 的 JSON，不设置 `permissionDecision`。既有“多处可识别创建调用必须拆开”的 deny 在此 cwd 判定前保留。
 
-[spec-review-amendment] 未判定 context 使用有限原因码 `cwd-ambiguous` 或 `change-name-unparseable` 加人类可读说明。这避免把 `allow` 当作日志而跳过宿主权限，也不靠“危险结构全覆盖”的负向黑名单假装证明无界 shell；实际仓语义继续由 shell 和 review 负责。
+[spec-review-amendment] 所有未命中直接 grammar 的单调用统一输出原因码 `command-unverifiable` 加人类可读说明，不再细分 cwd 不明、动态 change 名或 shell 组合。双原因码没有运行时消费者，且细分必须用正则推测无界 shell 的优先级，已连续产生组合分类反例；合并原因码不改变任何权限行为。这既避免把 `allow` 当作日志而跳过宿主权限，也不靠“危险结构全覆盖”的负向黑名单假装证明无界 shell；实际仓语义继续由 shell 和 review 负责。
 
 ```text
 命令含创建字样？
@@ -57,14 +57,13 @@
 | 场景 | 检测 | 处理 | 可见性/测试 |
 |---|---|---|---|
 | [spec-review-amendment] 直接 literal 调用 | 完整 grammar 命中 | 原三分支 | deny reason 或 silent pass；覆盖三分支/ack 回归 |
-| [spec-review-amendment] 作用仓不可信 | 命中创建字样但非直接 grammar | fail-open，不做 allow/deny | `additionalContext` 含 `cwd-ambiguous`；覆盖 `cd`、`pushd`、`env -C`、wrapper、compound、decoy |
-| [spec-review-amendment] change 名动态 | 无法读出唯一合法 literal | fail-open，不展开 shell | `additionalContext` 含 `change-name-unparseable`；覆盖变量、命令替换、glob |
+| [spec-review-amendment] 命令形态不可验证 | 命中创建字样但非直接 grammar，包括作用仓不可信、动态名或 shell 组合 | fail-open，不做 allow/deny，不解析 shell | `additionalContext` 含 `command-unverifiable`；代表性覆盖 `cd`、wrapper、compound、decoy、变量、替换、glob |
 | [spec-review-amendment] 多处创建调用 | 有界 occurrence/name 计数冲突 | 保留 stacking deny | 既有多调用回归测试 |
 | [spec-review-amendment] 全局安装未刷新 | source 与 hook/skill 落点不一致或 setup 报相关 skipped | 验收失败，重跑对应安装命令 | source→installed 字节/symlink 与 settings 注册断言 |
 
 ## Risks / Trade-offs
 
-- [spec-review-amendment] [复合/包装调用未被强制拦截] → 正向 allowlist 之外统一注入稳定未判定原因；不假装知道实际仓。
+- [spec-review-amendment] [复合/包装/动态调用未被强制拦截] → 正向 allowlist 之外统一注入 `command-unverifiable`；不假装知道实际仓或未判定的细分原因。
 - [spec-review-amendment] [reference 漂移] → 测试检查 resident-contract token map、入口加载条件、相对路径与文件存在；按需资料随仓版本化。
 - [Codex 宿主接口变更] → 文案不作永久否定；后续出现可调用接口时补正反实测。
 
