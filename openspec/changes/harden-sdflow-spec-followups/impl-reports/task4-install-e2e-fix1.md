@@ -25,4 +25,4 @@
 | 规则与规格门 | `python3 hack/sync_principles.py --check` 通过（22 个投放面）；`openspec validate --all --strict` 通过（21 passed）；`git diff --check` 通过。 |
 | dogfood / setup | `python3 sdflow-init/scripts/init.py update --root . --dev` 与 `bash setup.sh` 通过；清除本次生成的 13 项未跟踪 workflow rules。 |
 | 安装机械比对 | `~/.sdflow/workflow`、Codex `sdflow-init` 均链接到源；安装的 `outside-voice-job.py` 与源字节一致。 |
-| 全量 pytest | 仅执行一次 `uv run --with pytest pytest -q`。pytest 主进程自然结束，但宿主输出通道提前脱离，未取得汇总或退出码；`.pytest_cache` 当前有失败节点但不含本次新增回归，无法从缺失 stdout 做因果归因。依“只跑一次”约束未重跑。 |
+| 全量 pytest | fix agent 的首次前台通道在 35% 脱离，未取得退出码，因此未作为通过证据。主 session 随后在同一 `656c5c1` 盘面运行唯一补证命令 `uv run --with pytest pytest -q`，持续轮询同一 session 至完成：**2846 passed, 11 skipped, 3 xfailed in 285.92s，exit 0**。 |
