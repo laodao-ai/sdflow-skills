@@ -149,6 +149,12 @@
 | T184 | todo | PROPOSED | harden-repo-root-fail-closed |
 | T185 | todo | PROPOSED | harden-repo-root-fail-closed |
 
+### 批次：harden-sdflow-spec-followups
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T243 | todo | PROPOSED | harden-sdflow-spec-followups |
+
 ### 批次：implement-mechanical-layer-hardening-p4-lens-metric-emit
 
 | ID | Pool | Status | 关联Change |
@@ -355,7 +361,6 @@
 | T167 | todo | OPEN | async-outside-voice |
 | T179 | todo | OPEN | main |
 | T231 | todo | OPEN | - |
-| T243 | todo | OPEN | harden-sdflow-spec-followups |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
