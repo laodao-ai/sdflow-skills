@@ -205,7 +205,10 @@ def test_spec_authoring_requirement_ids_and_resident_identity_are_consistent() -
 
     expected_task3_rids = "FF-0, SA-01, SA-06, SA-16, SA-15"
     for task_id in ("3.1", "3.2"):
-        task_line = next(line for line in tasks.splitlines() if line.startswith(f"- [ ] {task_id} "))
+        task_line = next(
+            line for line in tasks.splitlines()
+            if re.match(rf"^- \[[ x]\] {re.escape(task_id)} ", line)
+        )
         assert f"[{expected_task3_rids}]" in task_line
 
     plan = PLAN.read_text(encoding="utf-8")
