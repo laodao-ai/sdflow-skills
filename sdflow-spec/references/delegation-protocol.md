@@ -25,7 +25,8 @@ SA-07 派发链路实测可用，但同一真实 change 的 A/B 比较未观察�
 1. 使用 `subagent_type`，**MUST NOT 用 `agentType`**。
 2. `model` 填 resolver 输出的字面值；Agent 工具实测只接受 `sonnet|opus|haiku|fable`。
    完整版本化 id 会触发 `InputValidationError`；MUST NOT 猜别名，MUST NOT 填变量名。
-3. prompt 带本次任务；四条通则由 agent 定义正文承载并由同步测试守住。
+3. 每一次派发的 prompt 除本次任务外，MUST 把完整托管区块（`sdflow:principles` 从 `start` 到 `end`）
+   原文整段复制进去；MUST NOT 转述、摘要或只给指针，MUST NOT 依赖 agent 定义中的副本。
 
 判断层永不外派：方案推荐、承重约束是否站稳、纪要撰写与终审裁决仍由主 session 完成。
 

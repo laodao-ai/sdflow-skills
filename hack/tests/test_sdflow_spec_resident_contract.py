@@ -7,6 +7,8 @@ versioned references。测试只观察这组公开 Markdown 契约，不解析�
 import re
 from pathlib import Path
 
+import pytest
+
 
 REPO = Path(__file__).resolve().parents[2]
 SKILL = REPO / "sdflow-spec" / "SKILL.md"
@@ -72,6 +74,14 @@ REFERENCE_ROUTES = {
 }
 
 
+DELEGATION_PROPAGATION_CONTRACT = (
+    "每一次派发的 prompt",
+    "`sdflow:principles` 从 `start` 到 `end`",
+    "原文整段复制进去",
+    "MUST NOT 依赖 agent 定义中的副本",
+)
+
+
 def _text(path: Path = SKILL) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -97,13 +107,17 @@ def test_resident_contract_tokens_have_substantive_semantics():
         assert not missing, f"常驻契约 {capability} 缺少实质语义锚：{missing}"
 
 
-def test_three_on_demand_references_have_conditions_paths_and_content():
-    entry = _text()
+def _assert_reference_routes(entry: str) -> None:
     for category, contract in REFERENCE_ROUTES.items():
         path = contract["path"]
         condition = contract["condition"]
-        assert condition in entry, f"{category} reference 缺少明确加载条件"
-        assert f"[{path}]" in entry or f"({path})" in entry, f"{category} reference 不是可达相对链接"
+        route = re.compile(
+            rf"(?m)^- {re.escape(condition)}\s+"
+            rf"\[`{re.escape(path)}`\]\({re.escape(path)}\)"
+        )
+        assert route.search(entry), (
+            f"{category} reference 必须由同一列表项中的加载条件和非空标签相对链接共同路由"
+        )
 
         target = SKILL.parent / path
         assert target.is_file(), f"{category} reference 不可达：{target}"
@@ -112,6 +126,34 @@ def test_three_on_demand_references_have_conditions_paths_and_content():
         assert len(headings) >= 2, f"{category} reference 只有空标题或无实质结构"
         for token in contract["tokens"]:
             assert token in content, f"{category} reference 缺语义锚：{token}"
+
+
+def test_three_on_demand_references_have_conditions_paths_and_content():
+    _assert_reference_routes(_text())
+
+
+@pytest.mark.parametrize(
+    "degraded_route",
+    (
+        "- 仅在人明确要求重新评估或启用外派时读取\n  [](references/delegation-protocol.md)",
+        "- 仅在人明确要求重新评估或启用外派时读取\n  其它文字\n"
+        "  [`references/delegation-protocol.md`](references/delegation-protocol.md)",
+    ),
+)
+def test_reference_route_rejects_bare_or_detached_links(degraded_route):
+    entry = _text()
+    valid_route = (
+        "- 仅在人明确要求重新评估或启用外派时读取\n"
+        "  [`references/delegation-protocol.md`](references/delegation-protocol.md)"
+    )
+    with pytest.raises(AssertionError, match="delegation reference"):
+        _assert_reference_routes(entry.replace(valid_route, degraded_route, 1))
+
+
+def test_delegation_requires_verbatim_principles_in_every_dispatched_prompt():
+    delegation = _text(SKILL.parent / "references/delegation-protocol.md")
+    for token in DELEGATION_PROPAGATION_CONTRACT:
+        assert token in delegation, f"外派协议缺传播纪律锚：{token}"
 
 
 def test_codex_claim_is_limited_to_observed_user_trigger():
