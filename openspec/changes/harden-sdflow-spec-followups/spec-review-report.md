@@ -1,7 +1,7 @@
 ---
 ship-gate:
   design_approved: true
-  reviewed_sha: cc703f552b918f903621a043917171309badba2a
+  reviewed_sha: b64bf95ca151cc69f5cf9769de510b78e1dae518
 ---
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
@@ -12,7 +12,7 @@ ship-gate:
 
 # Spec Review Report · harden-sdflow-spec-followups
 
-**设计门已拍板批准，日期 2026-07-27。** 用户在审阅“四条通则五问 + 单一 `command-unverifiable`”方案后明确回复 `go`；两次规格 checkpoint 将该方案逐字落入四件套，窄复核未改变目标或行为。机判锚见头部 `ship-gate`，批准盘面为 `cc703f552b918f903621a043917171309badba2a`。lens-metric 已按窄复核的最终裁决重算。
+**设计门已拍板批准，日期 2026-07-27。** 用户在审阅“四条通则五问 + 单一 `command-unverifiable`”方案后明确回复 `go`，并明确授权后续全自动完成；两次规格 checkpoint 与 release-stage 窄修订均未改变目标或行为。机判锚见头部 `ship-gate`，批准盘面为 `b64bf95ca151cc69f5cf9769de510b78e1dae518`。lens-metric 已按阶段二窄复核的最终裁决重算。
 
 ## 结论
 
@@ -93,6 +93,24 @@ helper preflight 成功（Claude Code `2.1.220`、capability manifest/agents/POS
 - 修订：design/decision memo 改为“无 hook 外部或跨阶段消费者”，并明确实现时一并删除内部分类器与条件说明。
 
 scoped re-review 结论：F8、F9 与流程图中的泛化 `reason_code` 均 **ADDRESSED**；未发现新的高/中严重度 breakage。严格 OpenSpec 校验、decision memo hash 门与 diff whitespace 检查通过。
+
+## Release-stage 窄复核 · SA-16 唯一身份与 Task 3 追溯
+
+实施期双轴复核发现两个不改变行为、但会破坏规格追溯的缺口，均按四条通则的最简方案修正：
+
+### F10 · 常驻契约与既有四入口规则复用 SA-14（高，采纳）
+
+- 来源：Task 3 spec 轴；fresh 对抗镜与接地镜独立复现。
+- 证据：权威主规格原有 `SA-14 四入口选择规则`，常驻契约同步时又误用 SA-14；strict validate 不检查 Requirement ID 重号。
+- 修订：保留既有 SA-14 与其正确消费者不动；常驻契约在 delta、主规格、tasks、Task 2/3/4 plan 和报告中统一使用未占用的 SA-16。回归机械断言主规格 SA ID 唯一及各消费者身份一致。
+
+### F11 · Task 3 漏标实际同步的 FF-0（高，采纳）
+
+- 来源：Task 3 spec 轴 scoped re-review。
+- 证据：Task 3 已把 FF-0 delta 同步进权威 `spec-workflow`，但 coarse R-ID 与 tasks 3.1/3.2 只列 SA 系列，现有断言也放过该漏标。
+- 修订：三处精确统一为 `FF-0, SA-01, SA-06, SA-16, SA-15`；测试按 Task 2/3/4 的预期集合精确断言，并允许任务正常从 `[ ]` 变为 `[x]`。
+
+能力探针实际收到 `PROBE_OK`。SA-16 的 fresh 对抗镜与接地镜均 PASS；Task 3 standards/spec 两轴最终 PASS。主 session 复跑 focused 138 项、OpenSpec strict 21/21 与 diff check 均通过。以上是 release-stage 追溯修订，不回写或重分类阶段二 roster 的既有 lens-metric。
 
 ## 决策登记与 disposition
 
