@@ -14,8 +14,8 @@
 
 ## 3. 台账与规格同步（spec-authoring）
 
-- [ ] 3.1 [SA-01, SA-06, SA-16, SA-15] [spec-review-amendment] 将 delta 同步进主规格，并按 closure matrix 更新台账：T232/T238/T240/T241 仅在归档 artifact 证据复核通过后关闭；T233–T237/T242 仅在本 change 对应实现与测试通过后关闭；T234 在 A/B 输入订正后关闭；T132 保持 OPEN、T239 保持未处理。
-- [ ] 3.2 [SA-01, SA-06] [spec-review-amendment] 增加逐 ID 的 focused 断言，核状态、证据备注与 T132/T239 不得关闭，防 schema/reindex 通过但语义误关。
+- [ ] 3.1 [FF-0, SA-01, SA-06, SA-16, SA-15] [spec-review-amendment] 将 delta 同步进主规格，并按 closure matrix 更新台账：T232/T238/T240/T241 仅在归档 artifact 证据复核通过后关闭；T233–T237/T242 仅在本 change 对应实现与测试通过后关闭；T234 在 A/B 输入订正后关闭；T132 保持 OPEN、T239 保持未处理。
+- [ ] 3.2 [FF-0, SA-01, SA-06, SA-16, SA-15] [spec-review-amendment] 增加逐 ID 的 focused 断言，核状态、证据备注与 T132/T239 不得关闭，防 schema/reindex 通过但语义误关。
 
 ## 4. 验证与安装
 

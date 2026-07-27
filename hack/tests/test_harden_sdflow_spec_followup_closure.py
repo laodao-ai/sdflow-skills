@@ -203,11 +203,21 @@ def test_spec_authoring_requirement_ids_and_resident_identity_are_consistent() -
     assert len(resident_task_lines) == 2
     assert all("[SA-16]" in line and "[SA-14]" not in line for line in resident_task_lines)
 
+    expected_task3_rids = "FF-0, SA-01, SA-06, SA-16, SA-15"
+    for task_id in ("3.1", "3.2"):
+        task_line = next(line for line in tasks.splitlines() if line.startswith(f"- [ ] {task_id} "))
+        assert f"[{expected_task3_rids}]" in task_line
+
     plan = PLAN.read_text(encoding="utf-8")
-    for task_number in (2, 3, 4):
+    expected_plan_rids = {
+        2: "SA-01, SA-06, SA-16, SA-15",
+        3: expected_task3_rids,
+        4: expected_task3_rids,
+    }
+    for task_number, expected_rids in expected_plan_rids.items():
         section = plan.split(f"### Task {task_number}:", 1)[1].split("### Task ", 1)[0]
         rid_line = next(line for line in section.splitlines() if line.startswith("**R-ID:**"))
-        assert "SA-16" in rid_line and "SA-14" not in rid_line
+        assert rid_line == f"**R-ID:** {expected_rids}"
 
 
 def test_t132_remains_open_with_corrected_future_ab_contract() -> None:

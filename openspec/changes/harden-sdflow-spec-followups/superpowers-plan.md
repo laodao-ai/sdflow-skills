@@ -54,7 +54,7 @@ implementer 与两轴审 reviewer 同等生效。
 ### Task 3: 用逐票证据闭合规格与问题台账
 
 **Blocked-by:** 1, 2
-**R-ID:** SA-01, SA-06, SA-16, SA-15
+**R-ID:** FF-0, SA-01, SA-06, SA-16, SA-15
 
 把已实现的 FF-0 与入口契约同步到权威规格，并按 closure matrix 逐 ID 核对证据后更新问题台账；归档
 证据、当前实现证据和仍未处理项采用不同终态规则，不能以 schema 或重建索引成功代替语义闭合。
