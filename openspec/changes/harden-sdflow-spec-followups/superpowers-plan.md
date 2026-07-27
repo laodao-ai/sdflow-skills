@@ -45,11 +45,11 @@ implementer 与两轴审 reviewer 同等生效。
 外派、详细诊断和演进依据改为按条件加载的 versioned reference。宿主能力、整个 change 目录追溯边界
 以及 T132 的 A/B 未来输入契约按已批准的证据边界表述，不把缺接口写成已机械拒绝，也不实现 T132。
 
-- [ ] 入口以 Python Unicode 字符数计不超过 18,000，且 frontmatter 与四条通则仍完整
-- [ ] resident-contract token map 逐项证明 Phase 0/A/B/C、C.1 四判、终审、strict validate、两个 checkpoint 与出口三步仍有实质语义
-- [ ] 三类按需资料各有明确加载条件和可达相对 reference，空标题、裸链接或缺加载条件均被测试拒绝
-- [ ] Codex 文案只声明用户显式触发已观察，整个 change 目录及 `decision-memo.md` 被终审追溯接受
-- [ ] T132 仅留下 A/B 分治的未来 gate 输入契约并保持 OPEN，外派仍未启用
+- [x] 入口以 Python Unicode 字符数计不超过 18,000，且 frontmatter 与四条通则仍完整
+- [x] resident-contract token map 逐项证明 Phase 0/A/B/C、C.1 四判、终审、strict validate、两个 checkpoint 与出口三步仍有实质语义
+- [x] 三类按需资料各有明确加载条件和可达相对 reference，空标题、裸链接或缺加载条件均被测试拒绝
+- [x] Codex 文案只声明用户显式触发已观察，整个 change 目录及 `decision-memo.md` 被终审追溯接受
+- [x] T132 仅留下 A/B 分治的未来 gate 输入契约并保持 OPEN，外派仍未启用
 
 ### Task 3: 用逐票证据闭合规格与问题台账
 
