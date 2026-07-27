@@ -24,7 +24,7 @@
 
 ### Requirement: SA-14 入口常驻契约与按需资料分层
 
-`sdflow-spec/SKILL.md` SHALL 只承载每次运行必须读取和执行的契约，并以 Python Unicode 字符数不超过 18,000 为机械门。未启用外派协议、详细异常诊断与演进依据 SHALL 置于 versioned reference；入口 SHALL 明确其触发条件和相对路径。机械门 SHALL 同时验证必驻章节仍在入口，MUST NOT 仅靠移动文字规避。
+[spec-review-amendment] `sdflow-spec/SKILL.md` SHALL 只承载每次运行必须读取和执行的契约，并以 Python Unicode 字符数不超过 18,000 为机械门。未启用外派协议、详细异常诊断与演进依据 SHALL 置于 versioned reference；入口 SHALL 明确其触发条件和相对路径。机械门 SHALL 以 resident-contract token map 同时验证 frontmatter、Phase 0/A/B/C、C.1 四判、终审、`openspec validate --strict`、两个 checkpoint、出口三步与每个 reference 的加载条件仍在入口；MUST NOT 以空标题、裸链接或只移动文字规避。
 
 #### Scenario: 未启用外派不进入默认入口
 - **WHEN** 阶段二外派仍为未启用资产
@@ -34,10 +34,10 @@
 - **WHEN** `SKILL.md` 的 Python Unicode 字符数超过 18,000
 - **THEN** 回归测试 SHALL 失败
 
-### Requirement: SA-15 阶段一收敛信号按入口分治
+### Requirement: SA-15 T132 的阶段一收敛输入契约按入口分治
 
-实现 T132 的 grill 收敛门前，规则和门 SHALL 按入口识别证据：分支 A 的证据为身份一致且必填节非空的 `decision-memo.md` 与 `checkpoint(sdflow-spec-grill)`；分支 B 的证据为既有 grill checkpoint 或 `sdflow:grill-done` 锚。MUST NOT 使用会漂移的行号作为规则身份。
+[spec-review-amendment] 本 change SHALL 只为 T132 的未来 grill 收敛门定义并订正输入契约，不实现或关闭 T132。分支 A 的候选证据为身份、hash 与必填节有效的 `decision-memo.md` 加 `checkpoint(sdflow-spec-grill)`；分支 B 的候选证据为既有 `checkpoint(grill)` 或未来 gate 明确认可的 `sdflow:grill-done` 锚。规则身份 MUST NOT 使用会漂移的行号；T132 台账 SHALL 保持 OPEN。
 
-#### Scenario: 分支 A 不被旧 grill 门误拒
-- **WHEN** change 经 `/sdflow-spec` 走分支 A，纪要与 `sdflow-spec-grill` checkpoint 均有效
-- **THEN** 收敛门 SHALL 接受它，MUST NOT 要求旧 grill HTML 锚
+#### Scenario: 分支 A 的未来 gate 输入被完整定义
+- **WHEN** 本 change 订正 T132/T234 的 A/B 信号描述
+- **THEN** [spec-review-amendment] 描述 SHALL 把分支 A 的纪要 + `sdflow-spec-grill` 与分支 B 的 grill 信号分开，且 SHALL 明示 T132 尚未实现、保持 OPEN

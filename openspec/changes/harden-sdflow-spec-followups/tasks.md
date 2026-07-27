@@ -1,24 +1,44 @@
 ## 1. FF-0 未判定路径（spec-workflow）
 
-- [ ] 1.1 [FF-0 未判定路径] 为跨仓目录切换与不可读 change 名增加有界识别，输出无 `permissionDecision` 的 `additionalContext` 审计，且不解析 shell。
-- [ ] 1.2 [FF-0 未判定路径] 扩展 hook 单测：错仓不 deny、动态名不静默、审计不自动 `allow`、原三分支和哨兵仍保持。
+- [ ] 1.1 [FF-0 未判定路径] [spec-review-amendment] 实现完整匹配的单条直接 literal 调用 allowlist；未命中但含创建字样时输出带 `cwd-ambiguous|change-name-unparseable` 的 `additionalContext`，无 `permissionDecision`，且不解析 shell；保留多调用 stacking deny。
+- [ ] 1.2 [FF-0 未判定路径] [spec-review-amendment] 扩展 hook 单测：直接 grammar 的空白/引号/`--json`、`cd`/`pushd`/`env -C`/wrapper/compound/decoy、变量/替换/glob、稳定原因码、审计不自动 `allow|deny`，以及原三分支/哨兵/多调用行为。
 - [ ] 1.3 [FF-0 未判定路径] 同步 canonical workflow 与入口文案，说明未判定行为及其边界。
 
 ## 2. `sdflow-spec` 入口与规则收口（spec-authoring）
 
 - [ ] 2.1 [SA-01] 核验并记录 Codex 当前仅能观察到用户显式触发、无模型 Skill 调用接口的证据边界；修正文案与回归锚。
 - [ ] 2.2 [SA-06] 将终审追溯范围改为整个 change 目录，明确 `decision-memo.md` 和 design 指针是合法路径，并测试该口径。
-- [ ] 2.3 [SA-15] 订正 T132 的 A/B 收敛信号与漂移行号引用；实现或更新其机械门所需的输入和测试。
+- [ ] 2.3 [SA-15] [spec-review-amendment] 只订正 T132/T234 的 A/B 收敛信号、漂移行号与未来 gate 输入契约；添加台账/契约回归锚，明确不得在本 change 实现或关闭 T132。
 - [ ] 2.4 [SA-14] 拆出未启用外派协议、详细诊断、演进依据为按需 references；入口保留必驻执行契约与加载条件。
-- [ ] 2.5 [SA-14] 新增入口体量/必驻章节/reference 完整性测试，按 Python Unicode 字符数强制 `SKILL.md` ≤ 18,000。
+- [ ] 2.5 [SA-14] [spec-review-amendment] 新增入口体量/resident-contract/reference 完整性测试：按 Python Unicode 字符数强制 `SKILL.md` ≤ 18,000，并逐项锚 frontmatter、Phase 0/A/B/C、C.1 四判、终审、strict validate、两个 checkpoint、出口三步及每个 reference 的加载条件/相对路径。
 
 ## 3. 台账与规格同步（spec-authoring）
 
-- [ ] 3.1 [SA-01, SA-06, SA-14, SA-15] 将本 change 的 delta 同步进 `openspec/specs/`，并更新 T232–T238、T240–T242 的状态/备注；T239 保持未处理。
-- [ ] 3.2 [SA-01, SA-06] 复核归档期已修正的 T232、T238、T240、T241，确保台账只关闭真实完成项。
+- [ ] 3.1 [SA-01, SA-06, SA-14, SA-15] [spec-review-amendment] 将 delta 同步进主规格，并按 closure matrix 更新台账：T232/T238/T240/T241 仅在归档 artifact 证据复核通过后关闭；T233–T237/T242 仅在本 change 对应实现与测试通过后关闭；T234 在 A/B 输入订正后关闭；T132 保持 OPEN、T239 保持未处理。
+- [ ] 3.2 [SA-01, SA-06] [spec-review-amendment] 增加逐 ID 的 focused 断言，核状态、证据备注与 T132/T239 不得关闭，防 schema/reindex 通过但语义误关。
 
 ## 4. 验证与安装
 
 - [ ] 4.1 [FF-0 未判定路径, SA-14] 跑 hook、canonical-entry、sdflow-spec failure/agent、体量门与 issue 相关 focused pytest。
-- [ ] 4.2 [FF-0 未判定路径, SA-14] 跑 `python3 hack/sync_principles.py --check`、`bash setup.sh`、`git diff --check`，核验全局安装后的 hook/skill 状态。
+- [ ] 4.2 [FF-0 未判定路径, SA-14] [spec-review-amendment] 跑 `python3 hack/sync_principles.py --check`、`python3 sdflow-init/scripts/init.py update --root . --dev`、`bash setup.sh`、`git diff --check`；比对 canonical hook 与 `~/.claude/hooks/` 内容/settings 注册、Claude/Codex skill symlink（Windows 比内容/hash）。相关 `skipped` 或不一致均判失败。
 - [ ] 4.3 [FF-0 未判定路径, SA-14] 跑全量 `uv run --with pytest pytest`，记录实际结果与任何既有失败。
+
+## Test Coverage Map
+
+```text
+[spec-review-amendment] FF-0
+├── direct literal grammar ─────────────── allowlist variants + original branch/ack tests
+├── multiple calls ────────────────────── existing stacking deny regression
+├── cwd ambiguous ─────────────────────── cd/pushd/env -C/wrapper/compound/decoy → context only
+└── dynamic change name ───────────────── variable/substitution/glob → context only
+
+[spec-review-amendment] sdflow-spec resident contract
+├── len(SKILL.md) <= 18,000 ───────────── boundary fail/pass
+├── resident token map ────────────────── each mandatory semantic anchor required
+└── references ────────────────────────── path exists + loading condition remains in entry
+
+[spec-review-amendment] ledger/install
+├── T132/T232-T242 closure matrix ─────── per-ID status/evidence assertions
+├── init.py update --dev ──────────────── hook copy + settings registration
+└── setup.sh ──────────────────────────── skill symlink/copy + skipped treated as failure
+```
