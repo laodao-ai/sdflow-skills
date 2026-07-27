@@ -159,11 +159,11 @@ def inject(path, start, end, content, header=""):
     """
     start_token = start.split()[1]
     end_token = end.split()[1]
-    # 托管区块的内容可能自身以另一个 managed marker 开头（本仓 dogfood 的
-    # CLAUDE.md / AGENTS.md 即为如此）。保留 start marker 后的空行，才能与
-    # sync_principles.py 的 canonical render 保持字节一致；否则每次 --dev update
-    # 都会制造一次可机械检测的 principles 漂移。
-    block = f"{start}\n\n{content.rstrip()}\n{end}\n"
+    # 只有嵌套的 principles 托管块要求外层 marker 后的分隔空行，才能与
+    # sync_principles.py 的 canonical render 保持字节一致。普通 MARK_IDX 等布局
+    # 保持原有的紧邻格式，避免每次 update 都改写所有消费仓的无关空行。
+    separator = "\n" if content.startswith("<!-- sdflow:principles:start") else ""
+    block = f"{start}\n{separator}{content.rstrip()}\n{end}\n"
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             text = f.read()
@@ -212,10 +212,16 @@ def copy_bundle(root, full=False):
     自身开发；任何派生到 `openspec/workflow/` 的副本都不应含它。否则 `update --dev` 会把同名
     测试模块复制到本仓 dogfood instance，仓根 pytest 会收集两份并报 import file mismatch。
     脚本本体仍随 tools/ 正常部署。full 模式也要清除既有遗留副本，保证重复执行收敛。"""
+    def ignore_tools_tests(source, _names):
+        """仅忽略 bundle tools/ 直属 tests；其他运行时 tests 必须随完整 bundle 铺设。"""
+        if os.path.normpath(source) == os.path.normpath(os.path.join(BUNDLE_SRC, "tools")):
+            return {"tests"}
+        return set()
+
     dst = os.path.join(root, "openspec", "workflow")
     if full:
         shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns("tests"))
+                        ignore=ignore_tools_tests)
         tests_dst = os.path.join(dst, "tools", "tests")
         if os.path.isdir(tests_dst):
             shutil.rmtree(tests_dst)
@@ -224,7 +230,7 @@ def copy_bundle(root, full=False):
         if os.path.isdir(tools_dst):
             shutil.rmtree(tools_dst)
         shutil.copytree(os.path.join(BUNDLE_SRC, "tools"), tools_dst,
-                         ignore=shutil.ignore_patterns("tests"))
+                         ignore=ignore_tools_tests)
         # [mlh-p2-anchor-lint] 契约是 tools/anchor_lint.py 的运行时机读依赖（读 lens-metric-enums 块），
         # 须与 tools/ 同批刷新，否则本地 pin 消费仓 update 后「新脚本+旧契约无块」永久 fail-closed。
         contract_src = os.path.join(BUNDLE_SRC, "lens-metric-contract.md")

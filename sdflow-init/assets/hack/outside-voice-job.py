@@ -426,11 +426,19 @@ def run_preflight(job_dir=None):
     # 非 POSIX 宿主已由 capability gate 拒绝；继续调用 shutil.which() 会在测试模拟
     # sys.platform == "win32" 的 POSIX Python 上触发 Windows 专属 _winapi 路径。更重要的是，
     # 这条已拒绝的路径不应再探测外部 CLI。
-    claude_bin = shutil.which("claude") if posix_shell["ok"] else None
+    if posix_shell["ok"]:
+        claude_bin = shutil.which("claude")
+        claude_version = check_claude_version(claude_bin)
+        agents_json = check_agents_json(claude_bin)
+    else:
+        claude_bin = None
+        skipped_probe = {"ok": False, "detail": "未执行：POSIX gate 未通过", "hint": posix_shell["hint"]}
+        claude_version = skipped_probe.copy()
+        agents_json = skipped_probe.copy()
     checks = {
         "posix-shell": posix_shell,
-        "claude-version": check_claude_version(claude_bin),
-        "agents-json": check_agents_json(claude_bin),
+        "claude-version": claude_version,
+        "agents-json": agents_json,
         "capability-manifest": verify_manifest(job_dir),
     }
     ok = all(item["ok"] for item in checks.values())

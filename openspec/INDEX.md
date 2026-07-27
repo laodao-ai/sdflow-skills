@@ -3,7 +3,6 @@
 本文件是当前仓库 OpenSpec 资产索引。
 
 <!-- opsx-init:rules:start —— 由 sdflow-init 维护，勿手改本区块 -->
-
 ## OpenSpec 工作流规则（sdflow-init 维护）
 
 > 本区块由 `sdflow-init` 维护——`openspec/workflow/` bundle 的规则索引。

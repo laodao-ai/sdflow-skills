@@ -396,6 +396,27 @@ def test_preflight_fails_closed_on_non_posix_platform(monkeypatch, job_home):
     assert "POSIX" in result["hint"]
 
 
+def test_preflight_non_posix_skips_cli_probes_without_claiming_path_missing(monkeypatch, job_home):
+    """POSIX gate 已拒绝时，CLI 检查应如实标记为未执行，而非把它说成 PATH 缺失。"""
+    monkeypatch.setattr(JOB.os, "name", "nt")
+
+    def unexpected_cli_probe(*_args, **_kwargs):
+        raise AssertionError("non-POSIX preflight must not probe claude")
+
+    monkeypatch.setattr(JOB.shutil, "which", unexpected_cli_probe)
+    monkeypatch.setattr(JOB, "_run_cli", unexpected_cli_probe)
+    result = JOB.run_preflight(job_home)
+
+    assert result["ok"] is False
+    assert result["reason_code"] == "preflight-error"
+    for name in ("claude-version", "agents-json"):
+        check = result["checks"][name]
+        assert check["ok"] is False
+        assert "未执行" in check["detail"]
+        assert "POSIX gate 未通过" in check["detail"]
+        assert "PATH 上找不到 claude" not in check["detail"]
+
+
 def test_preflight_fails_closed_on_capability_manifest_skew(job_home, fake_claude):
     (job_home / "outside-voice.sh").write_text("# tampered\n", encoding="utf-8")
     proc = _run_job(job_home, ["preflight"], _env(fake_claude))

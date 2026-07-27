@@ -143,6 +143,22 @@ class TestBundleToolsOnly:
         init_mod.copy_bundle(str(tmp_path), full=True)
         assert not stale.exists()
 
+    def test_full_flag_preserves_tests_outside_tools(self, tmp_path, monkeypatch):
+        """只排除 tools/tests，bundle 其他层级的 tests 是正常运行时资产。"""
+        source = tmp_path / "bundle"
+        (source / "tools" / "tests").mkdir(parents=True)
+        (source / "tools" / "tests" / "test_internal.py").write_text("# toolkit test\n", encoding="utf-8")
+        (source / "references" / "tests").mkdir(parents=True)
+        expected = source / "references" / "tests" / "fixture.md"
+        expected.write_text("runtime fixture\n", encoding="utf-8")
+        monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(source))
+
+        init_mod.copy_bundle(str(tmp_path / "target"), full=True)
+
+        workflow = tmp_path / "target" / "openspec" / "workflow"
+        assert not (workflow / "tools" / "tests").exists()
+        assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
+
 
 class TestUpdateDev:
     """5.6：toolkit 源仓 dogfood 刷新——update --dev 整 bundle 刷 instance；普通 update 只 tools/。"""
@@ -396,6 +412,14 @@ class TestInjectMarkerMigration:
         nested = "<!-- sdflow:principles:start -->\n通则\n<!-- sdflow:principles:end -->"
         init_mod.inject(str(f), *init_mod.MARK_DOC, nested)
         assert f"{init_mod.MARK_DOC[0]}\n\n{nested}" in f.read_text(encoding="utf-8")
+
+    def test_ordinary_index_content_has_no_nested_separator(self, tmp_path):
+        """普通 MARK_IDX 内容不能因 nested 专用格式化而多出空行。"""
+        f = tmp_path / "INDEX.md"
+        init_mod.inject(str(f), *init_mod.MARK_IDX, "## 索引\n")
+        assert f.read_text(encoding="utf-8") == (
+            f"{init_mod.MARK_IDX[0]}\n## 索引\n{init_mod.MARK_IDX[1]}\n"
+        )
 
     OLD_IDX_BLOCK = ("<!-- opsx-init:rules:start —— 由 opsx-project-init 维护，勿手改本区块 -->\n"
                      "旧内容\n<!-- opsx-init:rules:end -->\n")
