@@ -365,6 +365,15 @@ def test_invalid_openspec_change_names_are_unparseable(repo, name):
 
 
 @pytest.mark.parametrize("cmd", [
+    "openspec new change --jsonfoo",
+    "openspec new change --jsonfoo-bar",
+])
+def test_json_prefixed_names_are_not_mistaken_for_the_json_option(repo, cmd):
+    """`--json` is an option only as a complete horizontally delimited token."""
+    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
+
+
+@pytest.mark.parametrize("cmd", [
     'openspec new change "add-"$NAME',
     'openspec new change "add"$NAME',
     "openspec new change 'add-'$(printf foo)",
@@ -386,6 +395,19 @@ def test_quoted_literal_prefix_with_dynamic_suffix_is_unparseable(repo, cmd):
     "echo openspec new change add-foo",
 ])
 def test_non_direct_literal_forms_are_cwd_ambiguous(repo, cmd):
+    assert_undecided_audit(hook_output(repo, cmd), "cwd-ambiguous")
+
+
+@pytest.mark.parametrize("cmd", [
+    "\nopenspec new change add-foo",
+    "openspec\nnew change add-foo",
+    "openspec new\nchange add-foo",
+    "openspec new change\nadd-foo",
+    "openspec new change --json\nadd-foo",
+    "openspec new change add-foo\n",
+])
+def test_newlines_in_or_around_creation_command_are_cwd_ambiguous(repo, cmd):
+    """Any newline makes the command non-direct before name classification."""
     assert_undecided_audit(hook_output(repo, cmd), "cwd-ambiguous")
 
 

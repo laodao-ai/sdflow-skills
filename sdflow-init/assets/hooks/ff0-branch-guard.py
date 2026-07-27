@@ -232,10 +232,13 @@ def direct_change_name(command: str) -> str:
 
 def undecided_reason(command: str) -> str:
     """在不解析 shell 的前提下，区分动态名与作用仓不明。"""
+    if "\n" in command or "\r" in command:
+        return "cwd-ambiguous"
     match = NEW_CHANGE_RE.search(command)
     tail = command[match.end():].lstrip(" \t") if match else ""
-    if tail.startswith("--json"):
-        tail = tail[len("--json"):].lstrip(" \t")
+    json_option = re.match(r"--json(?=$|[ \t])", tail)
+    if json_option:
+        tail = tail[json_option.end():].lstrip(" \t")
     if not tail:
         return "change-name-unparseable"
 
