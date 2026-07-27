@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import subprocess
 
 import pytest
@@ -16,6 +17,14 @@ INDEX = ROOT / "openspec/issues/INDEX.md"
 SPEC_AUTHORING = ROOT / "openspec/specs/spec-authoring/spec.md"
 SPEC_WORKFLOW = ROOT / "openspec/specs/spec-workflow/spec.md"
 ARCHIVE = ROOT / "openspec/changes/archive/2026-07-26-add-sdflow-spec"
+CHANGE = ROOT / "openspec/changes/harden-sdflow-spec-followups"
+DELTA_AUTHORING = CHANGE / "specs/spec-authoring/spec.md"
+TASKS = CHANGE / "tasks.md"
+PLAN = CHANGE / "superpowers-plan.md"
+SDFLOW_SPEC = ROOT / "sdflow-spec/SKILL.md"
+RESIDENT_TEST = ROOT / "hack/tests/test_sdflow_spec_resident_contract.py"
+FF0_HOOK = ROOT / "sdflow-init/assets/hooks/ff0-branch-guard.py"
+FF0_TEST = ROOT / "sdflow-init/tests/test_ff0_branch_guard.py"
 
 
 def _todos() -> dict[str, dict[str, object]]:
@@ -57,6 +66,84 @@ def test_archived_followup_is_done_only_with_real_artifact(item_id: str) -> None
 
 
 IMPLEMENTED_CLOSURES = {
+    "T233": (
+        (
+            SDFLOW_SPEC,
+            (
+                "Codex 当前只观察到用户显式触发已被接受",
+                "MUST NOT 把接口缺席写成模型调用已被拒绝",
+            ),
+        ),
+        (
+            RESIDENT_TEST,
+            ("def test_codex_claim_is_limited_to_observed_user_trigger",),
+        ),
+    ),
+    "T234": (
+        (
+            SPEC_AUTHORING,
+            (
+                "### Requirement: SA-15 T132 的阶段一收敛输入契约按入口分治",
+                "T132 台账 SHALL 保持 OPEN",
+            ),
+        ),
+    ),
+    "T235": (
+        (
+            FF0_HOOK,
+            (
+                "不用 payload cwd 执法",
+                "command-unverifiable",
+            ),
+        ),
+        (
+            FF0_TEST,
+            ("def test_non_direct_forms_emit_one_unverifiable_audit",),
+        ),
+    ),
+    "T236": (
+        (
+            SDFLOW_SPEC,
+            (
+                "追溯边界是整个 change 目录",
+                "只在 `decision-memo.md` 中保留被砍候选与理由也合法",
+            ),
+        ),
+        (
+            RESIDENT_TEST,
+            ("def test_final_review_accepts_change_directory_traceability",),
+        ),
+    ),
+    "T237": (
+        (
+            FF0_HOOK,
+            (
+                "def audit_undecided(explanation: str) -> None",
+                '"additionalContext": f"FF-0 command-unverifiable: {explanation}"',
+            ),
+        ),
+        (
+            FF0_TEST,
+            (
+                "def assert_undecided_audit(output)",
+                'assert set(hook_result) == {"hookEventName", "additionalContext"}',
+            ),
+        ),
+    ),
+    "T242": (
+        (SDFLOW_SPEC, ("name: sdflow-spec",)),
+        (
+            RESIDENT_TEST,
+            (
+                "def test_entry_is_within_unicode_character_budget",
+                "assert len(text) <= 18_000",
+            ),
+        ),
+    ),
+}
+
+
+LEDGER_EVIDENCE = {
     "T233": ("test_sdflow_spec_resident_contract.py", "Codex"),
     "T234": ("test_harden_sdflow_spec_followup_closure.py", "checkpoint(sdflow-spec-grill)"),
     "T235": ("test_ff0_branch_guard.py", "command-unverifiable"),
@@ -68,12 +155,59 @@ IMPLEMENTED_CLOSURES = {
 
 @pytest.mark.parametrize("item_id", sorted(IMPLEMENTED_CLOSURES))
 def test_current_followup_is_done_only_with_implementation_evidence(item_id: str) -> None:
-    test_file, semantic_anchor = IMPLEMENTED_CLOSURES[item_id]
+    for artifact, semantic_anchors in IMPLEMENTED_CLOSURES[item_id]:
+        content = artifact.read_text(encoding="utf-8")
+        for semantic_anchor in semantic_anchors:
+            assert semantic_anchor in content, f"{item_id} 真实产物缺少语义锚：{artifact} :: {semantic_anchor}"
+
+    if item_id == "T234":
+        t132 = _todos()["T132"]
+        assert t132["status"] == "OPEN"
+        projection = str(t132["summary"])
+        for token in (
+            "尚未实现",
+            "decision-memo.md",
+            "checkpoint(sdflow-spec-grill)",
+            "checkpoint(grill)",
+            "sdflow:grill-done",
+        ):
+            assert token in projection
+    elif item_id == "T242":
+        entry = SDFLOW_SPEC.read_text(encoding="utf-8")
+        assert len(entry) <= 18_000, f"T242 入口体量门回退：{len(entry)} Unicode 字符"
+
     assert _todos()[item_id]["status"] == "DONE"
     block = _block(item_id)
     assert "状态：PROPOSED → DONE" in block
-    assert test_file in block
-    assert semantic_anchor in block
+    for ledger_anchor in LEDGER_EVIDENCE[item_id]:
+        assert ledger_anchor in block
+
+
+def test_spec_authoring_requirement_ids_and_resident_identity_are_consistent() -> None:
+    authoring = SPEC_AUTHORING.read_text(encoding="utf-8")
+    requirement_ids = re.findall(r"^### Requirement: (SA-\d+)\b", authoring, flags=re.MULTILINE)
+    assert len(requirement_ids) == len(set(requirement_ids)), "主规格 SA Requirement ID 必须唯一"
+
+    resident_heading = "### Requirement: SA-16 入口常驻契约与按需资料分层"
+    assert authoring.count(resident_heading) == 1
+    assert "### Requirement: SA-14 四入口选择规则" in authoring
+
+    delta = DELTA_AUTHORING.read_text(encoding="utf-8")
+    assert delta.count(resident_heading) == 1
+
+    tasks = TASKS.read_text(encoding="utf-8")
+    resident_task_lines = [
+        line for line in tasks.splitlines()
+        if any(anchor in line for anchor in ("拆出未启用外派协议", "新增入口体量/resident-contract"))
+    ]
+    assert len(resident_task_lines) == 2
+    assert all("[SA-16]" in line and "[SA-14]" not in line for line in resident_task_lines)
+
+    plan = PLAN.read_text(encoding="utf-8")
+    for task_number in (2, 3, 4):
+        section = plan.split(f"### Task {task_number}:", 1)[1].split("### Task ", 1)[0]
+        rid_line = next(line for line in section.splitlines() if line.startswith("**R-ID:**"))
+        assert "SA-16" in rid_line and "SA-14" not in rid_line
 
 
 def test_t132_remains_open_with_corrected_future_ab_contract() -> None:

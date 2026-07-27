@@ -31,7 +31,7 @@ same-file promotion，再仅订正其 summary/marker prose；保留 `OPEN`，未
 - `openspec/specs/spec-authoring/spec.md`
   - SA-01：Codex 宿主执行面诚实边界；
   - SA-06：整个 change 目录的终审追溯边界；
-  - SA-14：18,000 Unicode 字符常驻契约与按需 reference；
+  - SA-16：18,000 Unicode 字符常驻契约与按需 reference；
   - SA-15：T132 分支 A/B 的未来输入契约且保持 OPEN。
 - `openspec/specs/spec-workflow/spec.md`
   - 仅完整匹配单条直接 literal grammar 才使用 payload `cwd`；
