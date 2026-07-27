@@ -25,17 +25,7 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T232 | todo | PROPOSED | add-sdflow-spec |
-| T233 | todo | PROPOSED | add-sdflow-spec |
-| T234 | todo | PROPOSED | add-sdflow-spec |
-| T235 | todo | PROPOSED | add-sdflow-spec |
-| T236 | todo | PROPOSED | add-sdflow-spec |
-| T237 | todo | PROPOSED | add-sdflow-spec |
-| T238 | todo | PROPOSED | add-sdflow-spec |
 | T239 | todo | PROPOSED | add-sdflow-spec |
-| T240 | todo | PROPOSED | add-sdflow-spec |
-| T241 | todo | PROPOSED | add-sdflow-spec |
-| T242 | todo | PROPOSED | add-sdflow-spec |
 
 ### 批次：cross-model-outside-voice
 
@@ -365,9 +355,10 @@
 | T167 | todo | OPEN | async-outside-voice |
 | T179 | todo | OPEN | main |
 | T231 | todo | OPEN | - |
+| T243 | todo | OPEN | harden-sdflow-spec-followups |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 
-- 共 62 项已闭合（bug: 6，todo: 56）
+- 共 72 项已闭合（bug: 6，todo: 66）
