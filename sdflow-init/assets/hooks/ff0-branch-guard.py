@@ -85,6 +85,27 @@ PROTECTED_BRANCHES = {"master", "main"}
 # 有界计数用：只识别创建子命令字样，不解析 shell。
 NEW_CHANGE_RE = re.compile(r"openspec\s+(?:new\s+change|change\s+new)\b")
 
+# 正向列出本守卫会归为「单个非 literal name expression」的有限词法形态。
+# 每个 fragment 只识别边界，不解释引号、展开变量或执行替换；未完整命中（wrapper、
+# compound、注释/散文等）一律留在 cwd-ambiguous。
+NAME_EXPRESSION_PATTERN = (
+    r"(?:"
+    r"[^\s;&|<>#$'\"`()]+"
+    r"|\$[A-Za-z_][A-Za-z0-9_]*"
+    r"|\$\([^\r\n)]*\)"
+    r"|`[^`\r\n]*`"
+    r"|'[^'\r\n]*'"
+    r"|\"[^\"\r\n]*\""
+    r")+"
+)
+DIRECT_UNPARSEABLE_CHANGE_RE = re.compile(
+    r"\A[ \t]*openspec[ \t]+(?:new[ \t]+change|change[ \t]+new)"
+    r"(?:[ \t]+(?:"
+    r"(?:--json[ \t]+)?" + NAME_EXPRESSION_PATTERN + r"(?:[ \t]+--json)?"
+    r"|--json"
+    r"))?[ \t]*\Z"
+)
+
 # 只有**整条命令**命中这个正向 allowlist，才可以把 payload cwd 当作作用仓。
 # 有限 grammar：直接 openspec 调用 + literal change 名，可选单个 --json（位于名前或名后）。
 DIRECT_CHANGE_RE = re.compile(
@@ -231,41 +252,10 @@ def direct_change_name(command: str) -> str:
 
 
 def undecided_reason(command: str) -> str:
-    """在不解析 shell 的前提下，区分动态名与作用仓不明。"""
+    """按单一正向优先级区分动态名与作用仓不明，不解析 shell。"""
     if "\n" in command or "\r" in command:
         return "cwd-ambiguous"
-    match = NEW_CHANGE_RE.search(command)
-    tail = command[match.end():].lstrip(" \t") if match else ""
-    json_option = re.match(r"--json(?=$|[ \t])", tail)
-    if json_option:
-        tail = tail[json_option.end():].lstrip(" \t")
-    if not tail:
-        return "change-name-unparseable"
-
-    if tail[0] in {"'", '"'}:
-        quote = tail[0]
-        end = tail.find(quote, 1)
-        if end < 0:
-            return "change-name-unparseable"
-        if end + 1 < len(tail) and not re.match(r"[\s;&|<>()]", tail[end + 1]):
-            # quoted literal 与变量 / 命令替换 / glob 等无空白拼接；只认这个
-            # 有界形态为动态后缀，不尝试解释 shell 的最终 token。
-            return "change-name-unparseable"
-        token = tail[1:end]
-    else:
-        literal = re.match(r"([A-Za-z0-9._-]+)(?=$|[\s;&|<>()'\"])", tail)
-        if literal:
-            if literal.end() < len(tail) and tail[literal.end()] in {"'", '"'}:
-                if command[:match.start()].strip(" \t"):
-                    return "cwd-ambiguous"
-                # bare prefix 与相邻 quoted fragment 属 shell token 拼接；只判定这个
-                # 有界词法边界，不读取、解释或展开引号内容。
-                return "change-name-unparseable"
-            token = literal.group(1)
-        else:
-            token = re.split(r"[\s;&|<>()'\"]", tail, maxsplit=1)[0]
-
-    if not token or not CHANGE_NAME_OK_RE.fullmatch(token):
+    if DIRECT_UNPARSEABLE_CHANGE_RE.fullmatch(command):
         return "change-name-unparseable"
     return "cwd-ambiguous"
 

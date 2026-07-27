@@ -393,6 +393,40 @@ def test_bare_literal_prefix_with_adjacent_quoted_fragment_is_unparseable(repo, 
     assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
 
 
+@pytest.mark.parametrize("wrapper", [
+    "bash -lc {call}",
+    "env -C /tmp {call}",
+])
+@pytest.mark.parametrize("expression", [
+    "$NAME",
+    "$(printf add-foo)",
+    "add-*",
+])
+def test_wrapped_dynamic_names_are_cwd_ambiguous(repo, wrapper, expression):
+    """Wrapper ownership wins over the nested name expression's shape."""
+    call = f"openspec new change {expression}"
+    if wrapper.startswith("bash"):
+        call = repr(call)
+    assert_undecided_audit(
+        hook_output(repo, wrapper.format(call=call)),
+        "cwd-ambiguous",
+    )
+
+
+@pytest.mark.parametrize("expression", [
+    "$NAME",
+    "$(printf add-foo)",
+    "add-*",
+    'add"$NAME"',
+])
+def test_direct_prefix_dynamic_names_are_change_name_unparseable(repo, expression):
+    """A direct creation prefix isolates the remaining failure to the name."""
+    assert_undecided_audit(
+        hook_output(repo, f"  openspec change new {expression}"),
+        "change-name-unparseable",
+    )
+
+
 @pytest.mark.parametrize("cmd", [
     "cd /tmp && openspec new change add-foo",
     "pushd /tmp; openspec new change add-foo",
@@ -402,6 +436,7 @@ def test_bare_literal_prefix_with_adjacent_quoted_fragment_is_unparseable(repo, 
     "openspec new change add-foo && git status",
     "openspec new change add-foo\ngit status",
     "please run openspec new change add-foo",
+    "openspec new change add-foo please",
     "echo openspec new change add-foo",
 ])
 def test_non_direct_literal_forms_are_cwd_ambiguous(repo, cmd):
