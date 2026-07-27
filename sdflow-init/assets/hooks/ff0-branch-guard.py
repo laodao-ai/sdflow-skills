@@ -56,10 +56,10 @@ PreToolUse 在命令**执行前**判定 ⇒ 判定发生时 touch 还没跑、�
 认不出 ack ⇒ 分支③的 deny 照常成立（deny 文案里就写着该敲的确切命令），
 不是 fail-open 的适用场景 —— fail-open 管的是「探测不出上下文」，不是「人没拍板」。
 
-【为什么「取不到 change 名」只做无决策审计】（基准 5：无界语法面别手搓）
+【为什么非 direct grammar 只做无决策审计】（基准 5：无界语法面别手搓）
 shell 命令行的语法面是无界的（管道、环境变量、别名、嵌套引号…）。本守卫只认
-`openspec new change` / `openspec change new` 的直接 literal 有界形态；单次调用认不出时不猜、
-不用 payload cwd 执法，只输出 `change-name-unparseable` 或 `cwd-ambiguous` 的 context。
+`openspec new change` / `openspec change new` 的直接 literal 有界形态；单次调用不命中时不猜、
+不用 payload cwd 执法，只输出 `command-unverifiable` context。
 
 【一条命令里有多处创建调用 ⇒ 在 cwd 判定前 deny】
 🔴 只取**第一个**匹配 = 前置文本即绕过：`echo openspec new change <本 change>;
@@ -84,34 +84,6 @@ PROTECTED_BRANCHES = {"master", "main"}
 
 # 有界计数用：只识别创建子命令字样，不解析 shell。
 NEW_CHANGE_RE = re.compile(r"openspec\s+(?:new\s+change|change\s+new)\b")
-
-# 从命令起点锚定直接创建前缀；只允许前置水平空白。它不解释后续 shell 语法，
-# 只为 undecided 原因码划出「name expression 从这里开始」的有限边界。
-DIRECT_CHANGE_PREFIX_RE = re.compile(
-    r"\A[ \t]*openspec[ \t]+(?:new[ \t]+change|change[ \t]+new)"
-    r"(?P<tail>[ \t].*)?\Z"
-)
-
-# 单个 name expression 的有限词法骨架只识别水平分隔与引号拼接，不再枚举任何 `$`
-# 具体语法。动态性由下方有限 marker 集统一判定。
-NAME_EXPRESSION_PATTERN = (
-    r"(?:"
-    r"[^\s;&|<>\r\n'\"]+"
-    r"|'[^'\r\n]*'"
-    r"|\"[^\"\r\n]*\""
-    r")+"
-)
-DIRECT_UNPARSEABLE_CHANGE_RE = re.compile(
-    r"\A[ \t]*openspec[ \t]+(?:new[ \t]+change|change[ \t]+new)"
-    r"(?:[ \t]+(?:"
-    r"(?:--json[ \t]+)?" + NAME_EXPRESSION_PATTERN + r"(?:[ \t]+--json)?"
-    r"|--json"
-    r"))?[ \t]*\Z"
-)
-
-# 不解析/展开 shell，只认一组有界动态 marker。`$` 一次覆盖 shell 参数展开与任意深度
-# `$()`；反引号保留既有命令替换契约；glob 认 `* ? [`。
-DYNAMIC_NAME_MARKERS = frozenset("$`*?[")
 
 # 只有**整条命令**命中这个正向 allowlist，才可以把 payload cwd 当作作用仓。
 # 有限 grammar：直接 openspec 调用 + literal change 名，可选单个 --json（位于名前或名后）。
@@ -237,12 +209,12 @@ def deny(reason: str) -> None:
     sys.exit(0)
 
 
-def audit_undecided(reason_code: str, explanation: str) -> None:
+def audit_undecided(explanation: str) -> None:
     """输出无权限决策的 PreToolUse 审计 context 并退出。"""
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "additionalContext": f"FF-0 undecided [{reason_code}]: {explanation}",
+            "additionalContext": f"FF-0 command-unverifiable: {explanation}",
         }
     }))
     sys.exit(0)
@@ -256,31 +228,6 @@ def direct_change_name(command: str) -> str:
     token = match.group(2)
     name = token[1:-1] if token[:1] in {"'", '"'} else token
     return name if name != "--json" and CHANGE_NAME_OK_RE.fullmatch(name) else ""
-
-
-def undecided_reason(command: str) -> str:
-    """按单一正向优先级区分动态名与作用仓不明，不解析 shell。"""
-    if "\n" in command or "\r" in command:
-        return "cwd-ambiguous"
-
-    prefix = DIRECT_CHANGE_PREFIX_RE.fullmatch(command)
-    if not prefix:
-        return "cwd-ambiguous"
-
-    tail = (prefix.group("tail") or "").strip(" \t")
-    if tail.startswith("--json") and (tail == "--json" or tail[6] in " \t"):
-        tail = tail[6:].lstrip(" \t")
-    if not tail:
-        return "change-name-unparseable"
-
-    # 只看直接前缀后的第一个水平分隔字段；因此 wrapper 永远先落 cwd-ambiguous，
-    # 而无动态 marker 的后置散文不会被误当成动态 change 名。
-    name_head = re.split(r"[ \t]", tail, maxsplit=1)[0]
-    if any(marker in name_head for marker in DYNAMIC_NAME_MARKERS):
-        return "change-name-unparseable"
-    if DIRECT_UNPARSEABLE_CHANGE_RE.fullmatch(command):
-        return "change-name-unparseable"
-    return "cwd-ambiguous"
 
 
 def change_names(command: str) -> list:
@@ -326,13 +273,10 @@ def main() -> None:
 
     name = direct_change_name(command)
     if not name:
-        reason_code = undecided_reason(command)
-        explanation = (
-            "change 名不是可安全读取的 literal；守卫未展开变量、命令替换或 glob。"
-            if reason_code == "change-name-unparseable" else
-            "命令不是单条直接 literal 创建调用；守卫未用 payload cwd 作 allow/deny 判定。"
+        audit_undecided(
+            "命令不是完整匹配的单条直接 literal 创建调用；守卫未解析 shell，"
+            "也未用 payload cwd 作 allow/deny 判定。"
         )
-        audit_undecided(reason_code, explanation)
 
     cwd = payload.get("cwd") or "."
     branch = current_branch(cwd)

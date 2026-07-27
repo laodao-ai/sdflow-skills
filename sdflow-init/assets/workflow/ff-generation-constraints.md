@@ -29,9 +29,8 @@
 > **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard`、`/sdflow-spec`（分支 A，相位 B ③ 建 change 目录）殊途同归调它——**分支 A 与分支 B 同样受管辖**，没有哪条入口绕得过）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。
 > hook 只在整条命令完整匹配**单条直接 literal** 创建 grammar 时，才把 payload `cwd` 当作作用仓执行三分支。
 > 有限正向 grammar 仅含 `openspec new change <合法字面量>` 与 `openspec change new <合法字面量>`，容忍水平空白、单/双引号及单个 `--json` 变体。
-> 原因码优先级：先排除换行；只有直接创建前缀位于命令起点（前面仅水平空白）、且 name expression 含有限动态 marker（`$` 统一覆盖参数展开与任意嵌套命令替换，另含反引号与 glob `*` / `?` / `[`）时，才记录 `change-name-unparseable`。
-> wrapper 优先为 `cwd-ambiguous`，即使其内层使用相同动态表达式；目录切换、compound、换行、前置散文以及不含动态 marker 的后置散文也同样记录 `cwd-ambiguous`。单个无效 literal / option 仍记录 `change-name-unparseable`。
-> 两种未判定均只输出 `additionalContext`，**MUST NOT 解析 shell**，也不设 `permissionDecision`；多处创建调用则先行 stacking deny。
+> 只要未命中该 grammar——包括 wrapper、目录切换、compound、换行、前后散文、无效 literal/option 或动态名——一律记录 `command-unverifiable`，不尝试细分原因或解释 shell。
+> 此未判定路径只输出 `additionalContext`，**MUST NOT 解析 shell**，也不设置 `permissionDecision`；多处创建调用则先行 stacking deny。
 > hook 实现同一条三分支判定：**保护分支 → deny**；**已在 `feat/{该 change}` → 放行**；**其它 feature 分支 → deny 并要求先问人**（人确认「就地继续」后**分两步**敲：先单独 `touch <仓根>/openspec/.ff0-ack`，**再重跑** `openspec new change <name>`——**MUST NOT 写成 `touch … && openspec …` 一条**：PreToolUse 在命令执行**前**判定，那一刻哨兵还不存在，守卫会把这条命令连同 touch 一起 deny，唯一逃生口变死循环。**该哨兵是给人拍板用的一次性逃生口：守卫读到即删、只对下一次调用生效，模型 MUST NOT 自行 touch 它**；判据只看文件在不在，MUST NOT 从命令串里认口令——命令串是无界的 shell 语法面）。
 > **残留令牌是真实的绕过口，如实登记**：人若在自己的终端里敲 `openspec new change`（hook 根本不触发），哨兵**永不被消费**，会留在盘上静默放行下一次调用。缓解只做两件**有界**的事：① 哨兵带**有界时效**，超窗即失效并自动删除（把「常驻绕过口」压成一个短窗口）——窗口长度的**单一源** = hook 的 `ACK_TTL_SECONDS`，deny 文案按 `// 60` 自报分钟数，**本文与 hook 散文一律不写死数字**（手抄一份即与常量分叉、改常量不会红）；判据是**双边**的 `0 ≤ now − mtime ≤ TTL`——单边式在 mtime 落在未来（时钟回拨 / 从备份恢复保留 mtime）时恒真，窗口形同虚设；② `/openspec/.ff0-ack` 进 canonical runtime gitignore（`assets/snippets/runtime-gitignore.txt`），防 `checkpoint-commit.sh` 的 `git add -A` 把它提交入库、让每个 clone 都带一个。窗口内的残留仍是真洞，本 hook **MUST NOT 声称堵死它**——它从来不是安全边界，真正的防线是纪律 + review。
 > Git 探测异常一律 silent fail-open；命令语义未判定则按上述无决策 context 诚实显形。文档级强制（调用方注入 + review 核对）作为补充层。

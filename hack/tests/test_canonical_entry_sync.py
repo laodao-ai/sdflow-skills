@@ -307,11 +307,10 @@ def test_ff0_rule_and_sdflow_spec_entry_state_the_finite_grammar_boundary():
     for path in (FF_CONSTRAINTS, SDFLOW_SPEC):
         require(path, "单条直接 literal")
         require(path, "openspec new change", "openspec change new", "--json")
-        require(path, "cwd-ambiguous", "change-name-unparseable")
+        require(path, "command-unverifiable")
         require(path, "additionalContext", "MUST NOT 解析 shell")
-        require(path, "命令起点（前面仅水平空白）", "有限动态 marker")
-        require(path, "`$`", "`*`", "`?`", "`[`")
-        require(path, "wrapper 优先为 `cwd-ambiguous`")
+        require(path, "wrapper", "动态名", "command-unverifiable")
+        require(path, "additionalContext", "MUST NOT 解析 shell", "不设置 `permissionDecision`")
 
 
 def test_ff0_rule_and_hook_agree_on_the_escape_hatch():

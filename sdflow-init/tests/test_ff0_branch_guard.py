@@ -72,13 +72,13 @@ def run_hook(repo, command, tool="Bash"):
     return decision["permissionDecision"] == "deny", decision["permissionDecisionReason"]
 
 
-def assert_undecided_audit(output, reason_code):
+def assert_undecided_audit(output):
     """The audit path is context-only: it must not make an allow/deny decision."""
     assert set(output) == {"hookSpecificOutput"}
     hook_result = output["hookSpecificOutput"]
     assert set(hook_result) == {"hookEventName", "additionalContext"}
     assert hook_result["hookEventName"] == "PreToolUse"
-    assert reason_code in hook_result["additionalContext"]
+    assert "command-unverifiable" in hook_result["additionalContext"]
 
 
 # ── 分支①：保护分支 → deny ──────────────────────────────────────────────
@@ -90,10 +90,7 @@ def test_protected_branch_denies(repo):
 
 
 def test_compound_call_on_protected_branch_is_audited_without_decision(repo):
-    assert_undecided_audit(
-        hook_output(repo, "cd /tmp && openspec new change add-foo"),
-        "cwd-ambiguous",
-    )
+    assert_undecided_audit(hook_output(repo, "cd /tmp && openspec new change add-foo"))
 
 
 # ── 分支②：已在 feat/{本 change} → 放行（真幂等）────────────────────────
@@ -111,10 +108,11 @@ def test_same_change_branch_allows(repo):
     "\topenspec\tchange\tnew\t'add-foo'\t",
     'openspec change new --json "add-foo"',
 ])
-def test_same_change_branch_allows_quoting_variants(repo, cmd):
-    _git(repo, "checkout", "-qb", "feat/add-foo")
-    denied, _ = run_hook(repo, cmd)
-    assert not denied
+def test_direct_literal_variants_enter_the_protected_branch_guard(repo, cmd):
+    """Each allowed direct spelling must reach FF-0, not silently fall through as unrelated Bash."""
+    denied, reason = run_hook(repo, cmd)
+    assert denied
+    assert "受保护分支" in reason
 
 
 # ── 分支③：其它 feature 分支 → deny（这一支是本次新增的，旧实现放行）──
@@ -257,7 +255,7 @@ def test_mentioning_the_ack_in_non_direct_commands_is_audited_not_acked(repo):
         "SDFLOW_FF0_ACK=1 openspec new change add-foo",
         "openspec new change add-foo # note: SDFLOW_FF0_ACK=1 was discussed",
     ):
-        assert_undecided_audit(hook_output(repo, cmd), "cwd-ambiguous")
+        assert_undecided_audit(hook_output(repo, cmd))
 
 
 # ── detached HEAD：不是分支，更不是「其它 feature 分支」→ fail-open ──────
@@ -322,18 +320,19 @@ def test_feature_branch_still_denies_when_default_branch_is_unusual(repo):
 
 # ── fail-open：守卫拿不准时不挡人干活 ───────────────────────────────────
 
-def test_unparseable_change_name_is_audited_without_decision(repo):
-    """取不到 change 名时 fail-open，但必须留下稳定审计原因。"""
-    _git(repo, "checkout", "-qb", "feat/add-bar")
-    assert_undecided_audit(
-        hook_output(repo, 'openspec new change "$NAME"'),
-        "change-name-unparseable",
-    )
-
-
 @pytest.mark.parametrize("cmd", [
+    # cwd-changing / wrapper / compound / newline / decoy
+    "cd /tmp && openspec new change add-foo",
+    "pushd /tmp; openspec new change add-foo",
+    "env -C /tmp openspec new change add-foo",
+    "bash -lc 'openspec new change add-foo'",
+    "openspec new change add-foo && git status",
+    "openspec new change add-foo\ngit status",
+    "please run openspec new change add-foo",
+    "openspec new change add-foo please",
+    "echo openspec new change add-foo",
+    # dynamic / incomplete literal names: do not classify their shell shape
     "openspec new change",
-    "openspec new change --json",
     "openspec new change $NAME",
     "openspec new change $(printf add-foo)",
     "openspec new change `printf add-foo`",
@@ -341,137 +340,9 @@ def test_unparseable_change_name_is_audited_without_decision(repo):
     "openspec new change add-?",
     "openspec new change add-[ab]",
 ])
-def test_dynamic_change_names_are_audited_without_expansion(repo, cmd):
-    _git(repo, "checkout", "-qb", "feat/add-bar")
-    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
-
-
-@pytest.mark.parametrize("name", [
-    "--help",
-    "-h",
-    "Foo",
-    "foo_bar",
-    "foo.bar",
-    "1foo",
-    "foo-",
-    "foo--bar",
-])
-def test_invalid_openspec_change_names_are_unparseable(repo, name):
-    """Only OpenSpec's lowercase kebab-case change-name grammar is literal."""
-    assert_undecided_audit(
-        hook_output(repo, f"openspec new change {name}"),
-        "change-name-unparseable",
-    )
-
-
-@pytest.mark.parametrize("cmd", [
-    "openspec new change --jsonfoo",
-    "openspec new change --jsonfoo-bar",
-])
-def test_json_prefixed_names_are_not_mistaken_for_the_json_option(repo, cmd):
-    """`--json` is an option only as a complete horizontally delimited token."""
-    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
-
-
-@pytest.mark.parametrize("cmd", [
-    'openspec new change "add-"$NAME',
-    'openspec new change "add"$NAME',
-    "openspec new change 'add-'$(printf foo)",
-    'openspec new change "add-"*',
-])
-def test_quoted_literal_prefix_with_dynamic_suffix_is_unparseable(repo, cmd):
-    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
-
-
-@pytest.mark.parametrize("cmd", [
-    'openspec new change add"$NAME"',
-    'openspec new change add"$(printf foo)"',
-    'openspec new change add"*"',
-])
-def test_bare_literal_prefix_with_adjacent_quoted_fragment_is_unparseable(repo, cmd):
-    """Adjacent quote concatenation is dynamic, not a direct literal name."""
-    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
-
-
-@pytest.mark.parametrize("wrapper", [
-    "bash -lc {call}",
-    "env -C /tmp {call}",
-])
-@pytest.mark.parametrize("expression", [
-    "$NAME",
-    "${NAME}",
-    'foo"${BAR}"',
-    "$1",
-    "$?",
-    "$(printf add-foo)",
-    '$(printf "$(whoami)")',
-    "add-*",
-    "add-?",
-    "add-[ab]",
-])
-def test_wrapped_dynamic_names_are_cwd_ambiguous(repo, wrapper, expression):
-    """Wrapper ownership wins over the nested name expression's shape."""
-    call = f"openspec new change {expression}"
-    if wrapper.startswith("bash"):
-        call = repr(call)
-    assert_undecided_audit(
-        hook_output(repo, wrapper.format(call=call)),
-        "cwd-ambiguous",
-    )
-
-
-@pytest.mark.parametrize("prefix", [
-    "openspec new change",
-    "openspec change new",
-])
-@pytest.mark.parametrize("expression", [
-    "$NAME",
-    "${NAME}",
-    'foo"${BAR}"',
-    "$1",
-    "$?",
-    "$(printf add-foo)",
-    '$(printf "$(whoami)")',
-    "add-*",
-    "add-?",
-    "add-[ab]",
-    'add"$NAME"',
-])
-def test_direct_prefix_dynamic_names_are_change_name_unparseable(repo, prefix, expression):
-    """A direct creation prefix isolates the remaining failure to the name."""
-    assert_undecided_audit(
-        hook_output(repo, f"  {prefix} {expression}"),
-        "change-name-unparseable",
-    )
-
-
-@pytest.mark.parametrize("cmd", [
-    "cd /tmp && openspec new change add-foo",
-    "pushd /tmp; openspec new change add-foo",
-    "env -C /tmp openspec new change add-foo",
-    "bash -lc 'openspec new change add-foo'",
-    "sudo openspec new change add-foo",
-    "openspec new change add-foo && git status",
-    "openspec new change add-foo\ngit status",
-    "please run openspec new change add-foo",
-    "openspec new change add-foo please",
-    "echo openspec new change add-foo",
-])
-def test_non_direct_literal_forms_are_cwd_ambiguous(repo, cmd):
-    assert_undecided_audit(hook_output(repo, cmd), "cwd-ambiguous")
-
-
-@pytest.mark.parametrize("cmd", [
-    "\nopenspec new change add-foo",
-    "openspec\nnew change add-foo",
-    "openspec new\nchange add-foo",
-    "openspec new change\nadd-foo",
-    "openspec new change --json\nadd-foo",
-    "openspec new change add-foo\n",
-])
-def test_newlines_in_or_around_creation_command_are_cwd_ambiguous(repo, cmd):
-    """Any newline makes the command non-direct before name classification."""
-    assert_undecided_audit(hook_output(repo, cmd), "cwd-ambiguous")
+def test_non_direct_forms_emit_one_unverifiable_audit(repo, cmd):
+    """Only the direct literal grammar may use payload cwd; all other forms share one audit."""
+    assert_undecided_audit(hook_output(repo, cmd))
 
 
 def test_unrelated_command_passes_through(repo):
