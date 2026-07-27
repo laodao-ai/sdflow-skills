@@ -384,6 +384,16 @@ def test_quoted_literal_prefix_with_dynamic_suffix_is_unparseable(repo, cmd):
 
 
 @pytest.mark.parametrize("cmd", [
+    'openspec new change add"$NAME"',
+    'openspec new change add"$(printf foo)"',
+    'openspec new change add"*"',
+])
+def test_bare_literal_prefix_with_adjacent_quoted_fragment_is_unparseable(repo, cmd):
+    """Adjacent quote concatenation is dynamic, not a direct literal name."""
+    assert_undecided_audit(hook_output(repo, cmd), "change-name-unparseable")
+
+
+@pytest.mark.parametrize("cmd", [
     "cd /tmp && openspec new change add-foo",
     "pushd /tmp; openspec new change add-foo",
     "env -C /tmp openspec new change add-foo",

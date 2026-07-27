@@ -255,6 +255,12 @@ def undecided_reason(command: str) -> str:
     else:
         literal = re.match(r"([A-Za-z0-9._-]+)(?=$|[\s;&|<>()'\"])", tail)
         if literal:
+            if literal.end() < len(tail) and tail[literal.end()] in {"'", '"'}:
+                if command[:match.start()].strip(" \t"):
+                    return "cwd-ambiguous"
+                # bare prefix 与相邻 quoted fragment 属 shell token 拼接；只判定这个
+                # 有界词法边界，不读取、解释或展开引号内容。
+                return "change-name-unparseable"
             token = literal.group(1)
         else:
             token = re.split(r"[\s;&|<>()'\"]", tail, maxsplit=1)[0]
