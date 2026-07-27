@@ -73,8 +73,8 @@ implementer 与两轴审 reviewer 同等生效。
 本仓 dogfood workflow、全局 hook 与 Claude/Codex skill 安装，最后跑全量回归并机械比对安装结果；任何
 相关 skipped、注册缺失、目标漂移或测试失败都如实判失败。
 
-- [ ] hook、canonical-entry、failure/agent、resident-contract、体量门与 issue focused pytest 全部通过
-- [ ] 通则同步检查、OpenSpec strict validate 与空白检查全部通过
-- [ ] 开发更新后 canonical hook 与已安装 hook 字节一致，settings 注册存在
-- [ ] setup 后 Claude/Codex skill 指向正确 canonical source，相关安装步骤没有 skipped 或不一致
-- [ ] 全量 `uv run --with pytest pytest` 通过，并记录实际结果与任何既有失败
+- [x] hook、canonical-entry、failure/agent、resident-contract、体量门与 issue focused pytest 全部通过
+- [x] 通则同步检查、OpenSpec strict validate 与空白检查全部通过
+- [x] 开发更新后 canonical hook 与已安装 hook 字节一致，settings 注册存在
+- [x] setup 后 Claude/Codex skill 指向正确 canonical source，相关安装步骤没有 skipped 或不一致
+- [x] 全量 `uv run --with pytest pytest` 通过，并记录实际结果与任何既有失败
