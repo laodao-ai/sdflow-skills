@@ -134,6 +134,24 @@
 | T205 | todo | PROPOSED | harden-gate-git-layer |
 | T206 | todo | PROPOSED | harden-gate-git-layer |
 
+### 批次：harden-implement-review-loop
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T247 | todo | PROPOSED | harden-implement-review-loop |
+| T248 | todo | PROPOSED | harden-implement-review-loop |
+| T249 | todo | PROPOSED | harden-implement-review-loop |
+| T250 | todo | PROPOSED | harden-implement-review-loop |
+| T251 | todo | PROPOSED | harden-implement-review-loop |
+| T252 | todo | PROPOSED | harden-implement-review-loop |
+| T253 | todo | PROPOSED | harden-implement-review-loop |
+| T254 | todo | PROPOSED | harden-implement-review-loop |
+| T255 | todo | PROPOSED | harden-implement-review-loop |
+| T258 | todo | PROPOSED | harden-implement-review-loop |
+| T259 | todo | PROPOSED | harden-implement-review-loop |
+| T260 | todo | PROPOSED | harden-implement-review-loop |
+| T261 | todo | PROPOSED | harden-implement-review-loop |
+
 ### 批次：harden-repo-root-fail-closed
 
 | ID | Pool | Status | 关联Change |
@@ -340,7 +358,6 @@
 | T132 | todo | OPEN | - |
 | T133 | todo | OPEN | - |
 | T134 | todo | OPEN | - |
-| T135 | todo | OPEN | - |
 | T141 | todo | OPEN | - |
 | T142 | todo | OPEN | - |
 | T148 | todo | OPEN | - |
@@ -361,9 +378,13 @@
 | T167 | todo | OPEN | async-outside-voice |
 | T179 | todo | OPEN | main |
 | T231 | todo | OPEN | - |
+| T244 | todo | OPEN | main |
+| T245 | todo | OPEN | main |
+| T246 | todo | OPEN | main |
+| T256 | todo | OPEN | main |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 
 ## 已闭合（终态）摘要
 
-- 共 72 项已闭合（bug: 6，todo: 66）
+- 共 74 项已闭合（bug: 6，todo: 68）

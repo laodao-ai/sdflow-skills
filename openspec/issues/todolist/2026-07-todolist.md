@@ -106,21 +106,21 @@ sdflow-issues:
     T244: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造","type":"基础设施","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
     T245: {"module":"sdflow-implement/SKILL.md","summary":"fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制","type":"功能增强","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
     T246: {"module":"sdflow-implement/SKILL.md + model-tiers.md","summary":"按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号","type":"性能优化","status":"OPEN","time":"2026-07-27 18:32","change":"main","batch":null}
-    T247: {"module":"sdflow-spec/SKILL.md","summary":"B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步","type":"代码质量","status":"OPEN","time":"2026-07-27 22:30","change":"harden-implement-review-loop","batch":null}
-    T248: {"module":"sdflow-spec/agents/（sdflow-local-researcher / sdflow-web-researcher）","summary":"两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议","type":"基础设施","status":"OPEN","time":"2026-07-27 22:51","change":"harden-implement-review-loop","batch":null}
-    T249: {"module":"sdflow-implement/SKILL.md","summary":"票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本","type":"代码质量","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
-    T250: {"module":"sdflow-implement/tests/test_tickets_plan_golden.py","summary":"golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」)","type":"代码质量","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
-    T251: {"module":"sdflow-implement/SKILL.md","summary":"纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义","type":"功能增强","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
-    T252: {"module":"openspec/adr/0031-t10-label-split-by-decision-semantics.md","summary":"adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次","type":"基础设施","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
-    T253: {"module":"openspec/CONTEXT.md","summary":"「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名","type":"代码质量","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
-    T254: {"module":"openspec/workflow/lens-metric-contract.md","summary":"lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行","type":"可观测性","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
-    T255: {"module":"sdflow-spec-review/SKILL.md","summary":"outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能","type":"基础设施","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T247: {"module":"sdflow-spec/SKILL.md","summary":"B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步","type":"代码质量","status":"PROPOSED","time":"2026-07-27 22:30","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T248: {"module":"sdflow-spec/agents/（sdflow-local-researcher / sdflow-web-researcher）","summary":"两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议","type":"基础设施","status":"PROPOSED","time":"2026-07-27 22:51","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T249: {"module":"sdflow-implement/SKILL.md","summary":"票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本","type":"代码质量","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T250: {"module":"sdflow-implement/tests/test_tickets_plan_golden.py","summary":"golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」)","type":"代码质量","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T251: {"module":"sdflow-implement/SKILL.md","summary":"纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义","type":"功能增强","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T252: {"module":"openspec/adr/0031-t10-label-split-by-decision-semantics.md","summary":"adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次","type":"基础设施","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T253: {"module":"openspec/CONTEXT.md","summary":"「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名","type":"代码质量","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T254: {"module":"openspec/workflow/lens-metric-contract.md","summary":"lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行","type":"可观测性","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T255: {"module":"sdflow-spec-review/SKILL.md","summary":"outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能","type":"基础设施","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
     T256: {"module":"sdflow-ship/SKILL.md + ~/.claude/hooks/","summary":"用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做）","type":"基础设施","status":"OPEN","time":"2026-07-28 11:18","change":"main","batch":null}
     T257: {"module":"`ship_gate.py plan_was_renamed`","summary":"plan_was_renamed 内部已算出不带 --follow 的首次新增 sha，紧随其后的 plan_first_sha 又对同一 plan_rel 重发一次完全相同的 git log --diff-filter=A（decide() 每次判定多一次 subprocess）。修法：plan_was_renamed 返回 (renamed, no_follow_first)，或在 decide() 里算一次分别传给两处复用。非阻断，正确性不受影响。来源：harden-implement-review-loop Task 3 fix 轮 Standards 轴 re-review（Duplicated Code）","type":"性能优化","status":"WONTDO","time":"2026-07-28 14:18","change":"harden-implement-review-loop","batch":null}
-    T258: {"module":"`sdflow-implement/SKILL.md` 文件交接节 · review-package","summary":"双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold","type":"代码质量","status":"OPEN","time":"2026-07-28 16:08","change":"harden-implement-review-loop","batch":null}
-    T259: {"module":"`sdflow-implement/SKILL.md` review-loop-breaker ①档","summary":"熔断规则的①档「有客观判据 → 自动选并记理由后关闭」可在**未修复**的前提下关闭一个仍然成立的 Critical/Important——与同文件「不带着未修 Critical/Important 推进下一 ticket」直接冲突。D2b 的「互斥终态」修正只覆盖了②③档，①档留着旧形状（只回答 finding 是否成立、不产生修复动作）。修法：①档的客观判据只能决定「已解决 / 仍成立」——已解决才关闭；仍成立则走 strong fixer + 仅复验一次，失败即 defer 并停。来源：harden-implement-review-loop 冷层代码审跨模型 outside-voice(codex) 独家。**需改 delta spec 措辞，故不在本 change 修**（改四件套会触发 design 域失鲜）","type":"代码质量","status":"OPEN","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":null}
-    T260: {"module":"`hack/tests/test_canonical_entry_sync.py`","summary":"CLAUDE.md / AGENTS.md / sdflow-init/assets/snippets/claude-section.md 三处的「## Codex 子代理授权」段本次改后逐字节相同(各1045字符)，但无任何机械守卫：test_canonical_entry_sync.py 只对「阶段一入口」小节做 CLAUDE.md==AGENTS.md 等值断言，claude-section.md 完全未纳入。下次只改一处而漏另两处，pytest 与 setup.sh 都不会红，纯靠人工记得。修法：把等值断言扩到该段，或复用 check_tier_resolution_parity.py 的 marker 机制。来源：harden-implement-review-loop 冷层代码审对抗镜#2（结构性风险，非本 change 引入的退化）","type":"基础设施","status":"OPEN","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":null}
-    T261: {"module":"`sdflow-implement/SKILL.md` · `sdflow-implement/scripts/impl_route.py`","summary":"两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2","type":"代码质量","status":"OPEN","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":null}
+    T258: {"module":"`sdflow-implement/SKILL.md` 文件交接节 · review-package","summary":"双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold","type":"代码质量","status":"PROPOSED","time":"2026-07-28 16:08","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T259: {"module":"`sdflow-implement/SKILL.md` review-loop-breaker ①档","summary":"熔断规则的①档「有客观判据 → 自动选并记理由后关闭」可在**未修复**的前提下关闭一个仍然成立的 Critical/Important——与同文件「不带着未修 Critical/Important 推进下一 ticket」直接冲突。D2b 的「互斥终态」修正只覆盖了②③档，①档留着旧形状（只回答 finding 是否成立、不产生修复动作）。修法：①档的客观判据只能决定「已解决 / 仍成立」——已解决才关闭；仍成立则走 strong fixer + 仅复验一次，失败即 defer 并停。来源：harden-implement-review-loop 冷层代码审跨模型 outside-voice(codex) 独家。**需改 delta spec 措辞，故不在本 change 修**（改四件套会触发 design 域失鲜）","type":"代码质量","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T260: {"module":"`hack/tests/test_canonical_entry_sync.py`","summary":"CLAUDE.md / AGENTS.md / sdflow-init/assets/snippets/claude-section.md 三处的「## Codex 子代理授权」段本次改后逐字节相同(各1045字符)，但无任何机械守卫：test_canonical_entry_sync.py 只对「阶段一入口」小节做 CLAUDE.md==AGENTS.md 等值断言，claude-section.md 完全未纳入。下次只改一处而漏另两处，pytest 与 setup.sh 都不会红，纯靠人工记得。修法：把等值断言扩到该段，或复用 check_tier_resolution_parity.py 的 marker 机制。来源：harden-implement-review-loop 冷层代码审对抗镜#2（结构性风险，非本 change 引入的退化）","type":"基础设施","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T261: {"module":"`sdflow-implement/SKILL.md` · `sdflow-implement/scripts/impl_route.py`","summary":"两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2","type":"代码质量","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
 ---
 # 2026-07 TODO
 
@@ -2504,6 +2504,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：比照 B.5「停止信号」的写法，在 B.7 收敛两步之前插入一道显式检查:把 decision-memo.md 里已拍板的每条 D 编号决策，过一遍 ADR 三条件(难逆转/缺上下文意外/有真实权衡)与术语冲突/模糊语言判据，命中则按现有 B.6 流程提议(仍只提议、不自动写入)。
 
 **备注**：涉及文件:sdflow-spec/SKILL.md 的相位 B 部分(B.6/B.7)
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T247 -->
 
 <!-- sdflow-issue-block:start id=T248 -->
@@ -2517,6 +2518,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：结论：暂不删除(维持现状未启用资产)，也暂不做成两个独立通用 skill——虽然它们的角色纪律(本地只读检索+带引用回传)跟 sdflow-spec-review 的接地镜、sdflow-code-review 的历史镜任务形状相似，但①三个姊妹 skill 目前各自的 light 档 ad-hoc 派发都工作正常，没有实证的重复痛点；②独立成 skill 不改变已测出的成本结构(派发开销与是否共享 skill 无关)，只省重复 prompt；③放宽成通用 skill 会扩大全局 ~/.claude/agents/ 命名空间暴露面，收益不成比例。若未来想验证『任务独立性是否是关键变量』这个假设，更便宜的路径是挑一次接地镜/历史镜这类真正独立的单次核查任务，试着路由到现有 sdflow-local-researcher，而不是新造两个 skill。
 
 **备注**：关联文档：sdflow-spec/references/delegation-protocol.md（当前状态与档位表）、openspec/changes/archive/2026-07-26-add-sdflow-spec/hand-off.md（原始拍板题出处）
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T248 -->
 
 <!-- sdflow-issue-block:start id=T249 -->
@@ -2528,6 +2530,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：spec-review L1(Codex CEO，defer)：两类票都不计入 3-6 预算，票数上限正在失去约束力；每票 size 上限仍在，故本次接受。
 
 **思路**：重新定义计量口径：约束「总执行单元数」或「总 frontier 成本」，而非垂直切片张数。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T249 -->
 
 <!-- sdflow-issue-block:start id=T250 -->
@@ -2539,6 +2542,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：spec-review L4(Claude Eng，defer)：收尾票是新形状，golden fixture 没覆盖，形状漂了测试照绿。
 
 **思路**：扩 fixture 到含收尾票的 N+1 票形态，断言 Blocked-by 全集与不计入预算两点。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T250 -->
 
 <!-- sdflow-issue-block:start id=T251 -->
@@ -2550,6 +2554,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：spec-review L5(Claude Eng，defer)：迁移批次不算垂直切片，若某 change 全是 expand-contract，收尾票该 Blocked-by 谁没说清。
 
 **思路**：定义为「Blocked-by 全部非收尾 ticket」而非「全部功能票」，或显式声明该场景下收尾票同样强制。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T251 -->
 
 <!-- sdflow-issue-block:start id=T252 -->
@@ -2561,6 +2566,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：spec-review L6(Claude CEO)：ADR 写了「留待独立立项」但没有任何追踪条目，等于没留。且 C8 差异 B(spec-workflow spec 丢「按三镜+主次」)就是该架构导致的真实漂移。本条即补上该追踪。
 
 **思路**：把 T10-choice 的 15 处复述重构为单一源 + 指针引用(仿 model-tiers.md 的机读块模式)，或至少补一条 lint 守住 15 处措辞一致。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T252 -->
 
 <!-- sdflow-issue-block:start id=T253 -->
@@ -2572,6 +2578,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **动机**：spec-review M11(对抗镜 B + Claude DX)：按 CONTEXT.md:299 的术语澄清，sdflow-implement 的 NEEDS_CONTEXT 尾部引用与 impl-orchestration spec 对应 Scenario 严格说也该脱钩，但给第三类场景命名与定义属加宽(通则③)，本次不做。
 
 **思路**：给该场景命名(如 no-answer-on-board)并定义处置，然后把两处从 T10 别名脱钩。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T253 -->
 
 <!-- sdflow-issue-block:start id=T254 -->
@@ -2585,6 +2592,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：给 broad 行键增加可选的 mixed-runner 表达(如 runner="claude+codex" 或拆出 broad-voice 子行键)，并同步 emitter 与 anchor_lint 的枚举。
 
 **备注**：非 change 来源：由评审工具自身的实测暴露，不属 harden-implement-review-loop 的交付范围。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T254 -->
 
 <!-- sdflow-issue-block:start id=T255 -->
@@ -2598,6 +2606,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **思路**：比照 $HELPER/$RUN_DIR 的写法，明确要求每次调用 outside-voice.sh 前内联 export 本轮已解析的 voice 变量；或让 helper 自己 resolve 一次并与主 session 的值交叉核对。
 
 **备注**：非 change 来源：评审工具自身的协议缺口，不属 harden-implement-review-loop 的交付范围。
+> 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T255 -->
 
 <!-- sdflow-issue-block:start id=T256 -->
@@ -2616,3 +2625,27 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 > plan_was_renamed 内部已算出不带 --follow 的首次新增 sha，紧随其后的 plan_first_sha 又对同一 plan_rel 重发一次完全相同的 git log --diff-filter=A（decide() 每次判定多一次 subprocess）。修法：plan_was_renamed 返回 (renamed, no_follow_first)，或在 decide() 里算一次分别传给两处复用。非阻断，正确性不受影响。来源：harden-implement-review-loop Task 3 fix 轮 Standards 轴 re-review（Duplicated Code）
 > 2026-07 状态：OPEN → WONTDO（5587d07）
 <!-- sdflow-issue-block:end id=T257 -->
+
+<!-- sdflow-issue-block:start id=T258 -->
+## T258: 双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold
+> 双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T258 -->
+
+<!-- sdflow-issue-block:start id=T259 -->
+## T259: 熔断规则的①档「有客观判据 → 自动选并记理由后关闭」可在**未修复**的前提下关闭一个仍然成立的 Critical/Important——与同文件「不带着未修 Critical/Important 推进下一 ticket」直接冲突。D2b 的「互斥终态」修正只覆盖了②③档，①档留着旧形状（只回答 finding 是否成立、不产生修复动作）。修法：①档的客观判据只能决定「已解决 / 仍成立」——已解决才关闭；仍成立则走 strong fixer + 仅复验一次，失败即 defer 并停。来源：harden-implement-review-loop 冷层代码审跨模型 outside-voice(codex) 独家。**需改 delta spec 措辞，故不在本 change 修**（改四件套会触发 design 域失鲜）
+> 熔断规则的①档「有客观判据 → 自动选并记理由后关闭」可在**未修复**的前提下关闭一个仍然成立的 Critical/Important——与同文件「不带着未修 Critical/Important 推进下一 ticket」直接冲突。D2b 的「互斥终态」修正只覆盖了②③档，①档留着旧形状（只回答 finding 是否成立、不产生修复动作）。修法：①档的客观判据只能决定「已解决 / 仍成立」——已解决才关闭；仍成立则走 strong fixer + 仅复验一次，失败即 defer 并停。来源：harden-implement-review-loop 冷层代码审跨模型 outside-voice(codex) 独家。**需改 delta spec 措辞，故不在本 change 修**（改四件套会触发 design 域失鲜）
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T259 -->
+
+<!-- sdflow-issue-block:start id=T260 -->
+## T260: CLAUDE.md / AGENTS.md / sdflow-init/assets/snippets/claude-section.md 三处的「## Codex 子代理授权」段本次改后逐字节相同(各1045字符)，但无任何机械守卫：test_canonical_entry_sync.py 只对「阶段一入口」小节做 CLAUDE.md==AGENTS.md 等值断言，claude-section.md 完全未纳入。下次只改一处而漏另两处，pytest 与 setup.sh 都不会红，纯靠人工记得。修法：把等值断言扩到该段，或复用 check_tier_resolution_parity.py 的 marker 机制。来源：harden-implement-review-loop 冷层代码审对抗镜#2（结构性风险，非本 change 引入的退化）
+> CLAUDE.md / AGENTS.md / sdflow-init/assets/snippets/claude-section.md 三处的「## Codex 子代理授权」段本次改后逐字节相同(各1045字符)，但无任何机械守卫：test_canonical_entry_sync.py 只对「阶段一入口」小节做 CLAUDE.md==AGENTS.md 等值断言，claude-section.md 完全未纳入。下次只改一处而漏另两处，pytest 与 setup.sh 都不会红，纯靠人工记得。修法：把等值断言扩到该段，或复用 check_tier_resolution_parity.py 的 marker 机制。来源：harden-implement-review-loop 冷层代码审对抗镜#2（结构性风险，非本 change 引入的退化）
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T260 -->
+
+<!-- sdflow-issue-block:start id=T261 -->
+## T261: 两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2
+> 两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2
+> 2026-07 状态：OPEN → PROPOSED
+<!-- sdflow-issue-block:end id=T261 -->
