@@ -489,9 +489,11 @@ else
 fi
 
 # ─── Summary ─────────────────────────────────────────────────
-version="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "unknown")"
+# 版本由 git 自报（最近 tag + 领先提交数 + 短 SHA + 是否脏），不维护 VERSION 文件：
+# 手工维护的版本号必然过期（曾停在 v0.10.0 而 HEAD 已领先 391 个提交）。
+version="$(git -C "$REPO_DIR" describe --tags --always --dirty 2>/dev/null || echo "unknown")"
 echo ""
-echo "sdflow-skills v${version} ready → ${TARGET_DIRS[*]}"
+echo "sdflow-skills ${version} ready → ${TARGET_DIRS[*]}"
 echo ""
 
 if [ ${#installed[@]} -gt 0 ]; then

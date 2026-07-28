@@ -229,8 +229,14 @@ OUR_NAMES = {  # RENAME-MAP 旧名∪新名∪保留名单（marker 兼容边界
 class TestBrandAndMarkerNarrowing:
     def test_version_line_branded(self, tmp_path):
         r, _ = run_setup(tmp_path)          # 复用本文件既有 helper
-        expected = "sdflow-skills v" + (REPO / "VERSION").read_text().strip()
-        assert expected in r.stdout
+        # 版号真相源 = git 自报（本仓无 VERSION 文件——手工版号必然过期）。
+        # 期望值在这里独立算一遍，守两件事：品牌前缀不变、版本确实来自 git describe。
+        ver = subprocess.run(
+            ["git", "-C", str(REPO), "describe", "--tags", "--always", "--dirty"],
+            capture_output=True, text=True,
+        ).stdout.strip()
+        assert ver, "git describe 无输出——测试环境不是 git checkout？"
+        assert f"sdflow-skills {ver} ready" in r.stdout
 
     # OUR_NAMES 三分：旧名（源目录已不存在，需从仓内动态判）/ 现存名（源目录仍在仓内）。
     # 别硬编码两份清单——用 (REPO/name/"SKILL.md").is_file() 派生，避免与仓内实际布局漂移。

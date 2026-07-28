@@ -155,7 +155,8 @@ SKILL.md 软链即时生效、`~/.sdflow/hack/` 脚本拷贝生效，只 pull �
    - 非 ff（本地被改过）→ 停下报告，不强推；提示"运行 checkout 只读，改动应发生在开发 checkout"。
 2. **setup**：`bash ~/.skills/sdflow-skills/setup.sh`
    - 刷 skills 软链 + `~/.sdflow/workflow` canonical + `~/.sdflow/hack/{checkpoint-commit.sh,resolve-workflow.sh}`。
-3. **展示**：`cat ~/.skills/sdflow-skills/VERSION 2>/dev/null || echo unknown` + `git -C ~/.skills/sdflow-skills log --oneline -5`，向用户汇报版本与最新变更。
+3. **展示**：`git -C ~/.skills/sdflow-skills describe --tags --always --dirty` + `git -C ~/.skills/sdflow-skills log --oneline -5`，向用户汇报版本与最新变更。
+   （版本由 git 自报——本仓**无 `VERSION` 文件**，手工维护的版本号必然过期。）
 4. **提示**：各消费仓如需拿最新 tools/ 或看陈旧遮蔽告警 → 在该仓跑 `sdflow-init update`（本 skill 不代跑）。
 
 ## 回滚

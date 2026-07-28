@@ -323,7 +323,7 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist�
 
 ### Requirement: 安装器品牌标识与存量 marker 兼容
 
-`setup.sh` MUST 以 `sdflow-skills v<VERSION>` 标识输出（`VERSION` 文件为版号真相源，起始 `0.9.0`）；Windows copy 模式的 marker 文件 MUST 新写为 `.sdflow-skills`，且所有权判定对存量 `.laodao-skills` marker 的兼容 MUST **以名单为界**〔spec-review-amendment D5〕：仅目录名 ∈ RENAME-MAP 旧名∪新名∪保留名单时识别为自属可刷新（源已亡则按孤儿清理），名单外一律视为非自属 skip，MUST NOT 全量兼容（防误伤 laodao 旧仓 misc 拷贝）。
+`setup.sh` MUST 以 `sdflow-skills <version> ready` 标识输出，其中 `<version>` MUST 由 `git -C "$REPO_DIR" describe --tags --always --dirty` **自报**（git 不可用时降级 `unknown`）；本仓 MUST NOT 保留手工维护的 `VERSION` 文件——手工版号必然与 HEAD 脱节（曾停在 `0.10.0` 而 HEAD 已领先 391 个提交），发版标记由 git tag 承载；Windows copy 模式的 marker 文件 MUST 新写为 `.sdflow-skills`，且所有权判定对存量 `.laodao-skills` marker 的兼容 MUST **以名单为界**〔spec-review-amendment D5〕：仅目录名 ∈ RENAME-MAP 旧名∪新名∪保留名单时识别为自属可刷新（源已亡则按孤儿清理），名单外一律视为非自属 skip，MUST NOT 全量兼容（防误伤 laodao 旧仓 misc 拷贝）。
 
 #### Scenario: 存量 laodao marker 仍被识别为自属
 - **WHEN** 某 Windows 机器上存在旧版安装的 skill 拷贝（含 `.laodao-skills` marker），重跑新版 `setup.sh`

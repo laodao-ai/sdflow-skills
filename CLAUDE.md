@@ -132,7 +132,9 @@ pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
 - 遍历 `REPO_DIR/*/`，**仅含 `SKILL.md` 的目录才安装** → `openspec/`、`docs/`、`hack/` 不会被当 skill。
 - 安全兜底：**绝不覆盖非本仓库拥有的同名目录**（只处理自己的 symlink / `.sdflow-skills` marker copy，名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属）；
   清理源已删除的孤儿链接（用 `-e` 解析检查，保留有效链接）。
-- 读 `REPO_DIR/VERSION` 显示版本（如 `v0.9.0`）。
+- 版本由 `git -C "$REPO_DIR" describe --tags --always --dirty` **自报**（如 `v0.10.0-391-g52b6a4a`），
+  非 git / 无 git 命令时降级 `unknown`。**本仓无 `VERSION` 文件**——手工维护的版本号必然过期
+  （它曾停在 `0.10.0` 而 HEAD 已领先 391 个提交），发版标记用 git tag（`/tag`）即可。
 
 **第三个安装目的地：`~/.claude/agents/`（全局 agent 定义 · `install_agents()`）**
 
