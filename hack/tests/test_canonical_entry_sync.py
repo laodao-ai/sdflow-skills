@@ -7,8 +7,11 @@
 `/clear` 直接矛盾。这类分叉没有自然的报错口——不机械钉住，就只能靠人记得。
 
 【锚的质量纪律（本文件的重点）】
-- **MUST 单行命中**：G1 的两处载体措辞不同（`workflow.md` 写「全流程不用 `/clear`」，
+- **MUST 单行命中**：G1 的两处载体措辞不同（`workflow.md` 写「阶段内部不用 `/clear`」，
   `quality-layering.md` 写「无 `/clear`（G1）」），**一条 grep 命不中两处**，必须分开断言。
+  〔2026-07-28〕workflow.md 侧原措辞是「全流程不用 `/clear`」，已判定为过度泛化并撤下——
+  G1 只论证「评审独立性」，而 spec 的 Requirement 也只禁「依赖 `/clear` 隔离**评审**上下文」。
+  两载体现各钉「阶段内部不用」+ 反泛化禁令 + 两处阶段交界例外。
 - **MUST NOT 用跨行结构当判据**：`generation-process.md` §四 是跨行 ASCII 图，
   `explore.*ff.*grill` 这类单行正则对它**实测零命中** = 一个永远不会红的空判据。
   故对 canonical bundle 一律锚**单行散文/表格行**，不锚图。
@@ -243,16 +246,37 @@ def test_generation_process_keeps_legacy_path_alive():
 # ── ② workflow.md：G1 具名例外（载体一，措辞「全流程不用 `/clear`」）──────
 
 def test_workflow_md_g1_still_states_the_rule():
-    require(WORKFLOW, "全流程不用 `/clear`")
+    """规则本体 = 「阶段内部不用 `/clear`」。
+
+    ⚠️ 旧断言钉的是「全流程不用 `/clear`」——那个措辞已被判定为**过度泛化**并撤下：
+    G1 的论证只覆盖「评审独立性」，而 `spec-workflow` spec 的对应 Requirement 也只写
+    「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。本断言随之改钉新措辞，
+    并**额外钉住那句反泛化的禁令**——否则规则一旦被人改回全流程禁令，这里照绿。
+    """
+    require(WORKFLOW, "阶段内部不用 `/clear`")
+    require(WORKFLOW, "MUST NOT 据此推出", "全流程不用 `/clear`")
 
 
-def test_workflow_md_g1_names_the_exception():
-    require(WORKFLOW, "具名例外", "阶段一 → 阶段二")
+def test_workflow_md_g1_names_both_stage_boundary_exceptions():
+    """两处交界例外都得点名——只写一处 = 回到旧的单例外形态。"""
+    require(WORKFLOW, "阶段交界 SHALL 用一次 `/clear`")
+    require(WORKFLOW, "阶段一 → 阶段二")
+    require(WORKFLOW, "阶段二 → 阶段三")
 
 
-def test_workflow_md_g1_exception_cites_exactly_the_two_allowed_reasons():
+def test_workflow_md_g1_exception_cites_the_allowed_reasons():
+    """两处交界各自的理由 —— 混用或漏写即分叉（尤其阶段二→三那三条是本次新增）。"""
     require(WORKFLOW, "cache 按模型隔离")
     require(WORKFLOW, "产 / 审错档")
+    require(WORKFLOW, "盘面纪律")
+    require(WORKFLOW, "产物自足性检验")
+    require(WORKFLOW, "去作者偏置")
+
+
+def test_workflow_md_stage_internal_clear_still_banned():
+    """收窄 ≠ 放开：阶段内部仍是硬禁，且给出 `/compact` 的替代出口。"""
+    require(WORKFLOW, "阶段内部一律禁 `/clear`")
+    require(WORKFLOW, "`/compact` 而非 `/clear`")
 
 
 def test_workflow_md_g1_exception_forbids_the_cold_view_reason():
@@ -271,10 +295,19 @@ def test_quality_layering_still_states_the_rule():
     require(QUALITY, "无 `/clear`（G1）")
 
 
-def test_quality_layering_names_the_same_exception():
+def test_quality_layering_names_the_same_exceptions():
+    """载体二必须与载体一**同步到两处交界**——只跟一半就是两载体分叉。"""
     require(QUALITY, "具名例外", "sdflow-spec")
     require(QUALITY, "cache 按模型隔离")
     require(QUALITY, "产 / 审错档")
+    require(QUALITY, "阶段三」交界")
+    require(QUALITY, "盘面纪律")
+    require(QUALITY, "产物自足性检验")
+
+
+def test_quality_layering_carries_the_anti_overgeneralization_clause():
+    """反泛化那句是本次改动的承重句 —— 两处载体都要有，否则一处被改回全流程禁令无人拦。"""
+    require(QUALITY, "MUST NOT 据此推出", "全流程不用 `/clear`")
 
 
 def test_quality_layering_forbids_the_cold_view_reason():

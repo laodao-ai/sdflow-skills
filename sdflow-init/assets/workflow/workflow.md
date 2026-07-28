@@ -2,7 +2,7 @@
 
 > **定位**：从需求到实现的端到端流程总览，串起 `openspec/workflow/` 的全部规则。
 > 本文给**流程骨架 + 每步归属哪条规则**；各步细则见对应规则文件，不在此重复。
-> **流程本性**：三阶段**尽量连续自动运行**——`/clear` 由子代理 fresh-context 独立性替代、
+> **流程本性**：三阶段**尽量连续自动运行**——阶段内部的 `/clear` 由子代理 fresh-context 独立性替代（阶段交界两处仍 SHALL 清，见 §三.2）、
 > 中途 AskUserQuestion 改报告决策登记、每步产物 checkpoint 提交；全流程**只在阶段二设计门停一次人类**。
 
 ---
@@ -40,7 +40,7 @@
      └─ 收敛后 [checkpoint]（多轮中途不提交,只收敛后一次）
    └──────────────────────────────────────────────────────────────┘
         │
- 阶段二·设计审 ── 连续,无 /clear（例外:分支 A 的阶段一→阶段二交界，见 §三.2）──
+ 阶段二·设计审 ── 阶段内部连续,无 /clear（交界两处 SHALL 清:一→二、二→三，见 §三.2）──
    sdflow-spec-review 编排器               Step1 autoplan(广审)→Step2 并行多镜(本项目标准)→Step3 一份 report
      └─ fresh 子代理替代 /clear 保独立；中途不 AskUserQuestion(决策登记进报告)
      └─ 内部 2×[checkpoint]（autoplan 子步 / sdflow-spec-review 子步）
@@ -50,6 +50,7 @@
    〔嵌入式+SOP测试需求〕embedded-test-sop  条件触发(TG-02 ∧ 高风险/TG-18,见步骤表)
         │
  阶段三·实现+代码审+收尾 ── 过设计门后连续跑到 merge,无人类门 ────────
+   〔入口前 SHALL /clear（G1 交界例外之二，见 §三.2）；调 /sdflow-ship 时重述 merge 意图〕
    writing-plans → subagent-driven-development   原子任务 TDD + 注入点B(code-checklists/domains 附终审)
      └─ 〔可选〕实现管线可经 openspec/config.yaml 可选键 `impl-pipeline: tickets` 路由至 sdflow-implement
         （缺省不变=本行 writing-plans→subagent-dev），路由细则见 sdflow-ship/SKILL.md 链序
@@ -98,10 +99,13 @@
 ## 三、关键设计决策
 
 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
-2. **子代理 fresh-context 替代 `/clear`（最关键，G1）**：`/clear` 唯一作用是给评审独立上下文；但 sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md) 自认 `/clear` 只剩边际收益）。故**全流程不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
-   - 🔴 **具名例外（唯一一处）：分支 A 的「阶段一 → 阶段二」交界 SHALL 用一次 `/clear`**——`/sdflow-spec` 终审通过后的出口序列是 `/clear` → 换档 → `/sdflow-spec-review`。**理由只有两条，且都是 G1 未覆盖的面**：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。G1 的论证只针对**独立性**，没谈成本与档位 ⇒ 例外成立、不与 G1 矛盾。
-   - 🔴 **MUST NOT 拿「主审裁决需要冷视角」当本例外的理由**——那一条已被 G1 正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
-   - **例外的边界**：仅这一处交界。阶段二内部、阶段三全程（含 subagent-dev / sdflow-implement 调度期间）**仍然禁 `/clear`**；分支 B（旧三步）**不适用**本例外。
+2. **评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供（G1）**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+   - 🔴 **本条只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。旧措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
+   - 🔴 **阶段交界 SHALL 用一次 `/clear`（两处，理由各自都在本条射程之外）**：
+     - **阶段一 → 阶段二**（`/sdflow-spec` 出口序列 `/clear` → 换档 → `/sdflow-spec-review`）：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。
+     - **阶段二 → 阶段三**（设计门通过后、`/sdflow-ship` 之前）：① **盘面纪律**——阶段三链序是「零跨步内存状态」，`NEEDS_CONTEXT` MUST 仅从盘面（design/specs/ticket 文本）自答；热编排器会拿对话记忆替代盘面，而**这一条 fresh 子代理防不住**（implementer 是冷的，回答它的编排器是热的）；② **产物自足性检验**——冷启动跑阶段三是对「四件套 + tickets 是否真的够用」的真实检验，热 session 会在盘面缺信息时无声补上、缺口永不暴露；③ **去作者偏置**——实现期若设计被证伪，热 session 倾向合理化而非叫停。**代价**：编排器需重读 SKILL 与产物（一次性），且 MUST 在调用 `/sdflow-ship` 时**重述 merge 意图**（它从调用语透传、不在盘上）。
+   - 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——那一条已被 G1 正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
+   - **边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 subagent-dev / sdflow-implement 调度期间、code-review → done 交接）；分支 B（旧三步）**不适用**阶段一→二那处例外。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
 4. **只在阶段二设计门停一次人类**：grill 是对话岛（人类对抗，不折叠）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议〔T10〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。grill 多轮中途不提交、只收敛后一次。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
@@ -136,11 +140,11 @@
 - [ ] 〔分支 B〕问题清晰否？不清晰先 `opsx:explore`
 - [ ] 生成起手是否过 **FF-0 三分支判定**（保护分支建 / 本 change 分支跳过 / 其它 feature 分支 halt 问人）？每步是否 checkpoint-commit？
 - [ ] 〔分支 B〕grill 是否收敛后才提交（多轮中途不提交）？
-- [ ] `/clear` 只在**分支 A 的阶段一→阶段二交界**用过一次（G1 具名例外）？其余全程无 `/clear`？
+- [ ] `/clear` 只在**两处阶段交界**用过（分支 A 的阶段一→阶段二、阶段二→阶段三；G1 具名例外）？**阶段内部**全程无 `/clear`？
 - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
 - [ ] 设计是否过 HARD-GATE（用户批准）才进 writing-plans？（阶段二唯一人类门）
 - [ ] sdflow-code-review 是否**每次全跑**（并入 gstack/review scope+完成度、领域 code-checklists、对抗、置信过滤）？
-- [ ] 阶段三是否连续跑到 merge（无 /clear——含 subagent-dev/sdflow-implement 执行模式、无 step14 人类门）？能修的自动修、拿不准的 defer？
+- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无 step14 人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
 - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
 
 *流程 v2（三阶段连续化）· 配套 generation-process.md（生成）/ spec-review.md（评审）/ trigger-catalog.md（深度）/ reference/quality-layering.md（分层）*
