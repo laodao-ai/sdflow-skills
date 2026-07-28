@@ -63,7 +63,8 @@
 - [ ] 5.6 bundle 侧:`sdflow-init/assets/workflow/workflow.md`、`.../WORKFLOW-GUIDE.md` 同步;`.../prompts/step6-writing-plans.md` **明确其只管 superpowers 轨、文件名不变**;`openspec/workflow/WORKFLOW-GUIDE.md` 仓内托管副本同步
 - [ ] 5.7 测试同步:`sdflow-implement/tests/test_impl_route.py`、`sdflow-ship/tests/test_gate_impl_progress.py`、`sdflow-ship/tests/test_gate_freshness.py`、`hack/tests/test_checkpoint_slug_coverage.py`、`hack/tests/test_harden_sdflow_spec_followup_closure.py`;新增 resolver 的双存在 fail-closed 用例
 - [ ] 5.8 文档同步:`docs/workflow-overview.md`、`docs/workflow-map.md`、`docs/workflow-map.html`、`docs/workflow-console.html`、`docs/criteria-mechanization-tracker.md`、`docs/workflow-skills/{impl-pipeline-matt-vs-superpowers,superpowers-writing-plans,superpowers-subagent-dev}.md`、`openspec/INDEX.md`
-- [ ] 5.9 **不动**:`openspec/changes/archive/**` 与 `openspec/issues/**` 的历史记录原样保留(改写即伪造审计);`openspec/adr/0017` 只**追加一行**指向 `adr/0033`,正文不改
+- [ ] 5.9 **不动**:`openspec/changes/archive/**` 与 `openspec/issues/**` 的历史记录原样保留(改写即伪造审计);`openspec/adr/0017` 只**追加一行**指向 `adr/0033`,正文不改;`impl_route.py` docstring 里指向 archive 归档文件的两处实路径不改
+- [ ] 5.10 🔴 写明 **MUST NOT 重命名在途 plan** 并补测试:`plan_first_sha` 用 `git log --diff-filter=A`(**不跟随重命名**),改名会把完成判据窗口起点推到改名 commit ⇒ 改名前的 checkpoint 标签全部落窗口外 ⇒ 已完成 ticket 被判未完成、可能重派。用例:造一个「改名前有 task1 checkpoint、改名后跑 gate」的 fixture,断言 gate **不会**漏数 task1(或断言该场景被显式拒绝)
 
 ## 6. ADR 与术语同步
 

@@ -178,6 +178,12 @@
   - **skill 本体**(`sdflow-implement`/`sdflow-done`/`sdflow-ship`/`sdflow-code-review` 的 `SKILL.md`)与**脚本**(`ship_gate.py`/`impl_route.py`)走 **`setup.sh`**:运行 checkout `git pull` → **立即** `bash setup.sh`。Unix 为绝对路径 symlink(改源即时生效),Windows 为 copy。
   - **workflow bundle 规则**(`assets/workflow/*`)走 `sdflow-init update` 推下游。
   - 🔴 **skew 窗口**:第零步 fail-hard 依赖 `resolve-models.sh`(装在 `~/.sdflow/hack/`,由 `setup.sh` 拷贝,**`sdflow-init update` 不装**)。只跑 `update` 不跑 `setup.sh` ⇒ "新指令 + 缺 helper" ⇒ 第零步硬停。发布边界 = push(开发)→ pull(运行)→ **立即** setup。
+- 🔴 **MUST NOT 重命名任何在途 plan 文件**〔窄复核补:该风险首版未识别〕。理由不是"兼容性",是**完成判据窗口会被重置**:
+  `ship_gate.plan_first_sha()` 用 `git log --diff-filter=A -- <plan_rel>` 取窗口起点,而 `--diff-filter=A`
+  **不跟随重命名** ⇒ 改名后新路径的"首次新增"就是那次改名 commit ⇒ 窗口起点被推后 ⇒
+  **改名之前的全部 `checkpoint(<change>:task<N>-…)` 标签落在窗口外** ⇒ gate 少数 `done_tasks` ⇒
+  已完成的 ticket 被判未完成、可能被重派。∴ 在途 plan **一律保留原文件名直到该 change 归档**,
+  grandfather 不是妥协、是正确性要求。(新开 change 从一开始就叫 `tickets.md`,无此问题。)
 - **已在途 plan 的兼容性**〔spec-review-amendment M17:首版把强制票降成"若需要,手动补一张",与"强制"自相矛盾,且无人负责识别〕:
   - **谁负责识别**:`ship_gate` 第四道校验只对**本次改动生效后新出的** plan 生效——判据 = plan 文件名。`tickets.md` ⇒ 必须含收尾票;`superpowers-plan.md`(旧名,tickets 轨在途) ⇒ **grandfather,不校验收尾票**,gate 输出一行提示"在途 plan 未含收尾票(grandfathered)"。
   - **何时必须补**:不必须。在途 plan 按既有"追加新号"机制(F1)**可选**补一张;不补则该 change 的聚合覆盖需求由 verify 判"不适用(在途 grandfather)",MUST NOT 判 gap。
