@@ -1,7 +1,7 @@
 ---
 ship-gate:
   design_approved: true
-  reviewed_sha: aca291e61b3b3750ef5e3f6faedd54b8e89e48b7
+  reviewed_sha: ea0348809d5b6f87c4d0c4214d4b7b942d596d31
 ---
 
 # 设计评审报告 · harden-implement-review-loop
@@ -46,8 +46,10 @@ ship-gate:
 ## 拍板记录（设计 HARD-GATE · 2026-07-28）
 
 **人已就 Q1–Q6 拍板；四件套与两份 delta 已按裁决修订完毕，设计门通过。**
-锚 = 本文件头部 frontmatter，`reviewed_sha = aca291e61b3b3750ef5e3f6faedd54b8e89e48b7`
-（即 checkpoint `checkpoint(spec-review-amendment)`，含全部修订后的四件套）。
+锚 = 本文件头部 frontmatter，`reviewed_sha = ea0348809d5b6f87c4d0c4214d4b7b942d596d31`
+（含全部修订后的四件套；由两次 `checkpoint(spec-review-amendment)` 组成——`aca291e` 主修订，
+`ea03488` 窄复核追加的「禁止重命名在途 plan」一条。锚推进到后者是因为该条落在失鲜监视集
+`design.md`/`tasks.md`/`specs/` 内，锚不跟进则 gate 下次即判失鲜）。
 
 | # | 裁决 | 落地处 |
 |---|---|---|
