@@ -11,6 +11,14 @@ import ship_gate as _sg
 
 PLAN2 = "### Task 1: A\n- [ ] s\n### Task 2: B\n- [ ] s\n"
 
+# [harden-implement-review-loop Task5 · H12/M17] gate 第四道校验只对文件名 `tickets.md`（新名）
+# 生效——同 PLAN2 形状（2 张 task、各自一条复选框），但 Task 2 兼作「实现验证」收尾 ticket
+# （Blocked-by: 1 + R-ID: all），供**新名**测试用例使用，使其在第四道校验下仍合法。
+PLAN2_TICKETS = (
+    "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
+    "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"
+)
+
 def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor="head"):
     # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）。
     # [harden-gate-git-layer Task1 · tasks 4.1/4.1b] 迁**两段提交模型**：报告 frontmatter 现须带
@@ -122,7 +130,7 @@ def test_plan_task1_same_commit_counts(repo):
     write_report(d, "spec-review-report.md", head_sha(repo),
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")
-    (d / "tickets.md").write_text(PLAN2, encoding="utf-8")
+    (d / "tickets.md").write_text(PLAN2_TICKETS, encoding="utf-8")
     commit_all(repo, "checkpoint(task1-foo): plan+task1 同 commit")  # plan 首次提交 == task1 锚
     commit_all(repo, "checkpoint(task2-bar): B")
     code, js, _ = run_gate(repo)
@@ -140,8 +148,13 @@ def test_offplan_task_no_false_complete(repo):
 
 def test_uncommitted_plan_no_checkbox_unknown(repo):
     # plan 写盘但不提交，且内容无任何复选框 → 双通道（标签窗口 / 复选框）皆不可判
+    # [harden-implement-review-loop Task5] 含合法收尾 ticket（Task 2, Blocked-by:1, R-ID:all），
+    # 使第四道校验先行通过、真正走到本用例要测的"双通道"分支（而非在第四道就先被拦下）。
     d = approved_change(repo)  # 不带 plan 提交基底
-    (d / "tickets.md").write_text("### Task 1: A\n正文\n", encoding="utf-8")
+    (d / "tickets.md").write_text(
+        "### Task 1: A\n**Blocked-by:** none\n正文\n"
+        "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n正文\n",
+        encoding="utf-8")
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN" and "双通道" in js["reason"]
 

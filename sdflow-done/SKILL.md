@@ -220,8 +220,23 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 1. Read openspec/changes/{change_name}/tasks.md（看要求什么）
 2. Read openspec/changes/{change_name}/specs/ 下所有 spec（ADDED/MODIFIED 需求）
 3. 用 Grep/Read 核对**代码/迁移/测试**是否反映每条要求（迁移文件、SP、Go、前端、测试）
-4. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
-5. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
+4. **实现期聚合覆盖需求（tickets 轨专属，按管线条件化，harden-implement-review-loop D3/Q2/C2）**：
+   先判本 change 走的是哪条实现管线——看 `openspec/changes/{change_name}/` 下（或已归档路径
+   `openspec/changes/archive/{date}-{change_name}/`）现存/曾存在的计划文件名：`tickets.md` =
+   tickets 轨；`superpowers-plan.md` 或无该类计划文件 = superpowers 轨（canonical 缺省）。
+   - **tickets 轨**：在 `impl-reports/` 下找「实现验证」收尾 ticket 的报告（`R-ID: all` 那张），
+     核对其证据 schema（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）齐全、结论可接受（通过，或
+     按四类失败分诊记录为可接受的放行）。找到 → 该需求判 ✅，锚 = 该 impl-report 文件路径 + 其
+     内的 SHA（**不要求该票有 commit**——`checkpoint-commit.sh` 在干净树上直接成功退出、不建
+     commit，聚合套件一次绿时该票可能本来就无 commit）；**锚语义 MUST 写成「实现期结束时聚合
+     套件通过」，MUST NOT 写成「最终代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其
+     自动修复循环之前，此证据时效缺口是已知且接受的残余风险（design「收尾票的定位」节）。找不到
+     → 判**核心缺口**。
+   - **superpowers 轨**：该需求判**「不适用（非 tickets 轨）」，MUST NOT 判 gap**〔评审 C2：
+     本仓自身 `openspec/config.yaml` 是 `impl-pipeline: tickets`，dogfood 照不到 superpowers 轨
+     这个分支，务必显式按此条处置，不要因为「本仓从没见过」就假设都该判 gap〕。
+5. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
+6. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
    - **报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
      MUST 在文件**最顶端**（prepend，非追加末尾）写下方模板之一（**`ship-gate:` 与首尾 `---` 须顶格列 0——下方模板已按
      实际应写入报告的列对齐单独排版，忽略本段说明文字自身的列表缩进，勿把说明文字的缩进也复制进报告**）：
@@ -249,9 +264,10 @@ ship-gate:
    - 标题 + 日期 + change 名
    - **结论**：PASS / FAIL（人读结论行，紧跟标题下方，供人阅读；frontmatter 已是机判锚，此行不可省略）
    - **逐需求核对表**：| 需求/任务 | 代码出处(文件:行/迁移/测试) | 状态(✅实现/⚠️Minor缺口/❌核心缺失) |
+     ——「实现期聚合覆盖」需求同样占一行，状态取上面第 4 步的判定（✅/❌核心缺失/不适用）
    - **缺口清单**：核心缺口（FAIL 项）+ Minor 缺口（注明可接受/deferred）
    - 此文件会随第三步归档一起进 `openspec/changes/archive/`，作为本 change 的验证留档
-6. 末行输出：PASS 或 FAIL（附原因）
+7. 末行输出：PASS 或 FAIL（附原因）
 
 先 Read 再 Edit。报告**不可省**——没有 verify-report.md 视为 verify 未完成。
 ```

@@ -267,6 +267,11 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 - 每 ticket 显式声明 `Blocked-by:`（阻塞它的其他 ticket 号，逗号分隔，或 `none`）与 `R-ID:`（该
   ticket 对应的需求编号，源于本 change 自身 delta spec 的 Requirement ID 缩写）。
 - 每 ticket 含验收标准复选框（`- [ ] ...`）。
+- **「本票声明的 e2e 场景」的表达方式**〔spec-review-amendment M7〕：验收标准复选框中**标注为
+  `[e2e]`** 的条目即该票声明的 e2e 场景（如 `- [ ] [e2e] 用户提交表单后收到确认邮件`）；未标注
+  `[e2e]` 的条目不算 e2e。**该票没有任何一条标 `[e2e]` ⇒ 该票无 e2e 场景**——implementer 只跑
+  单元 + `Blocked-by` 链上集成，不必臆造 e2e 用例（详细执行契约见下方「每 ticket 派 fresh
+  implementer」节的测试范围段）。
 
 **宽重构例外〔T120〕**：单一机械改动、blast radius 扫全仓的宽重构（批量改名、改共享类型签名等）
 **MUST NOT** 强行拆成垂直切片；改走 **expand–contract** 序列：
@@ -276,6 +281,72 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 3. 1 张 contract ticket（`Blocked-by:` 全部迁移批次号，删旧形态）。
 
 **迁移批次 ticket 不占 3–6 张垂直切片预算**〔E5〕——只有 expand 与 contract 两端计入预算。
+
+### 强制「实现验证」收尾 ticket（D3/D3b，出票模式恒产出，不计入 3–6 预算）
+
+链路里（`sdflow-implement`→`sdflow-code-review`→`sdflow-done`）此前没有任何一步执行「全部票完成
+后的聚合回归」——每 feature ticket 收窄测试范围（见上「本票声明的 e2e 场景」与下方「每 ticket 派
+fresh implementer」节的测试范围段）之后，这个空洞更需要补。**出票模式 MUST 在全部功能垂直切片
+（含宽重构例外产出的 expand/迁移批次/contract ticket）之后，额外追加一张「实现验证」收尾
+ticket**，承担该聚合回归执行点：
+
+- `Blocked-by:` 声明为**全部**其余 ticket 号（逐一列全，**MUST NOT** 用 "all" 之类占位省略——
+  parse 层仍是逗号号列，不认字面 "all"）。
+- `R-ID: all`——**这是该票自身的需求标注**，语义 = 覆盖本 change 全部需求的聚合验证，Spec 轴据此
+  核验而非逐条溯源〔spec-review-amendment M6〕；**与上一条「Blocked-by 写全部依赖号」是两件不同
+  的事，不要混淆**：`R-ID: all` 是需求标注字面量、`Blocked-by:` 是依赖号的逗号列表。
+- **不计入 3–6 张垂直切片预算**（与宽重构迁移批次同属预算外产出）。
+- 验收标准 = 「按下方「聚合套件发现契约」运行本 change 的聚合测试套件（单元+集成+e2e）并全部
+  通过」。
+- **该票的存在与位置由 `ship_gate` 第四道 plan 校验机械保证**〔H12/M17，见下「外衣」节〕——
+  MUST NOT 依赖人工记得加这张票；出票落盘后 gate 重跑若判 UNKNOWN 而非 CONTINUE_IMPL，先检查
+  是否漏了这张票或其 `Blocked-by` 未覆盖全部功能票号。
+
+#### 聚合套件发现契约（Q6 拍板：MUST NOT 解析构建文件，基准 5）
+
+「单元+集成+e2e 聚合套件」在任意下游项目上都没有统一契约，而本 skill 要铺给**任意**项目——
+`MUST NOT` 解析 Makefile / package.json 去找 target（`add-sdflow-devenv` 已为此付过学费：脚本
+562→119 行、7 个 fail-closed 罢工分支，`docs/sad/07` 附录 A21；见 CLAUDE.md 基准 5 反面教训）。
+契约：
+
+1. **命令来源优先级**：① `openspec/config.yaml` 顶层 `test-suites.{unit,integration,e2e}` 显式
+   配置（每层一条 shell 命令字面量）；② 缺失则由**该票 implementer** 依仓内既有约定（CI 配置、
+   README、`devenv` 三层测试框架产物等）判定，**并在票报告里写明命令原文与判定依据**（不得凭
+   记忆下结论，通则①）。
+2. **「某命令能不能跑」由工具自己回答**：候选命令**真跑一遍**看退出码，MUST NOT 靠解析构建
+   文件预判 target 是否存在。
+3. **缺层不罢工**：仓内确无某层（如无 e2e 层）时，该层记「未覆盖（本仓无此层）」并附判定依据，
+   **MUST NOT fail-closed 罢工**——本 skill 的承诺是「不管什么项目都能跑完实现管线」，每个罢工
+   分支都在背叛这个承诺。
+4. **证据 schema（确定性，可机验）**：票报告 MUST 含每层一行：
+   `<层> | <命令原文> | <退出码> | <测试时 git rev-parse HEAD>`；未覆盖层写
+   `<层> | — | 未覆盖 | <判定依据>`。
+5. **四类失败分诊**（退出码非 0 时）：本 change 引入的回归 → 进 fix 循环；仓内既有红测（用 base
+   SHA 复跑该命令确认改动前即红）→ 记录并放行，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；
+   环境故障（依赖缺失 / 网络）→ halt envelope 停并上抛。
+
+#### 收尾票与普通票的三处执行契约差异〔spec-review-amendment H9〕
+
+该票走跟普通 ticket 相同的 implementer + 双轴审 + fix 循环，但 MUST 定制三点：
+
+1. **豁免 red-before-green**——该票不写产品代码，验收物是**证据**（上面的 schema）不是 diff。
+2. **主证据锚 = 该票 impl-report 文件 + 其内的 SHA 三元组，MUST NOT 依赖该票产生 commit**——
+   `checkpoint-commit.sh` 在干净树上直接成功退出、不建 commit，聚合套件一次绿时该票可能根本
+   无 commit；引用该票时锚点找 impl-report 文件路径，commit 存在则附之，不存在不判缺。
+3. **Standards 轴核验范围扩为**「修复方式未靠**加 skip、改测试配置、删除或弱化断言**蒙混过关」
+   （原措辞只禁"删除或弱化断言"，挡不住"加 skip"）。
+
+#### 收尾票的定位（Q2 拍板：实现期聚合回归门，不是最终完整性门）
+
+该票跑在 `sdflow-code-review` 及其自动修复循环**之前**——它回答的是「全部功能票实现完毕这一刻，
+聚合套件是否通过」，**不声称**「最终代码通过聚合套件」。既有 Requirement「verify 为收尾最终门，
+位于所有修复之后」未被触碰：verify 仍在 `sdflow-done`、仍在所有修复之后，本 change 不修改它，
+收尾票不是 verify、不替代 verify、不前移 verify。code-review 之后的修复由其自身保障机制（双轴/
+领域镜 + 置信过滤 + 对抗裁决 + fix 循环）覆盖；「收尾票锚点相对 code-review 修复而言不是最新」是
+**已知且接受**的残余风险，见 design「收尾票的定位」节与 `decision-memo.md`「接受的边角」。
+`sdflow-done` 的 verify 引用该票 impl-report 作为「**实现期**聚合覆盖」证据锚时，措辞 MUST 与此
+定位一致——**MUST NOT** 写成「最终全量回归通过」；该锚**按管线条件化**，superpowers 轨判「不
+适用」而非 gap（详见 `sdflow-done/SKILL.md`）。
 
 ### 外衣（ship_gate.py 既有完成判据契约，零改动兼容）
 
@@ -290,6 +361,13 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
   `## Global Constraints`，作为每个 implementer / reviewer 子代理 dispatch 的共享注意力透镜。
 - **plan 首次提交后结构不可变**：**MUST NOT** 重号 / 重排 / 删除 / 复用已出的 Task 号；后续若需
   重新规划，只能**追加新号**〔F1〕。
+- **gate 第四道校验（H12/M17）**：`ship_gate` 额外校验——**当且仅当计划文件名为 `tickets.md`**
+  （本 skill 唯一产出的新名）时，MUST 恰含一张 `R-ID: all` 的「实现验证」收尾 ticket 且其
+  `Blocked-by` ⊇ 全部功能 ticket 号；旧名 `superpowers-plan.md` 不触发本项校验（grandfather，
+  同时覆盖 superpowers 轨与改名生效前落盘的在途 tickets 轨 plan）。**因此每次出票 MUST 按上文
+  「强制实现验证收尾 ticket」规则产出该票，不可省略**——省略或 `Blocked-by` 漏号会让出票落盘后
+  gate 重跑判 UNKNOWN 而非 CONTINUE_IMPL。此判据**只用文件名区分「新出/在途或他轨」，不是轨道
+  路由**——gate 本身不读 config/marker 即可执行本校验。
 
 骨架示例（仅示意结构，不是真实 ticket 内容）：
 
@@ -318,6 +396,18 @@ impl-pipeline: tickets
 **R-ID:** R3, R4
 
 ...
+
+### Task N: 实现验证（收尾，不计入 3–6 预算）
+
+**Blocked-by:** 1,2,...,N-1
+**R-ID:** all
+
+按「聚合套件发现契约」运行本 change 的单元+集成+e2e 测试套件并全部通过，证据落
+`impl-reports/task<N>-<slug>.md`（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）。
+
+- [ ] 单元测试证据齐全并通过
+- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
 ```
 
 **无 quiz-the-user**：不做人工粒度确认这一步（matt 原版 to-tickets 有此人类步，本 skill 删除——
@@ -397,7 +487,10 @@ python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tic
 
 - 契约：TDD at pre-agreed seams（matt tdd 语义：先与实现者对齐测试的公共接口边界，再红→绿；
   阶段三无人类门，matt 原版「与用户确认 seam」替换为「implementer 自查确认」）、定期跑 typecheck、
-  结束前跑一次全套件；
+  **单元测试 + 本票声明的 e2e 场景（若有，见上「本票声明的 e2e 场景」定义）+ 本票 `Blocked-by`
+  链上模块的集成测试**〔D3，Q3 拍板：保留中间档，非绝对禁令〕——**MUST NOT** 跑**与本票无依赖
+  关系**的集成/e2e 套件；聚合回归由「实现验证」收尾 ticket 承担（见上「出 ticket 模式」节），
+  不再要求每票结束前付全套件成本；
 
   > 🔴 **MUST 原文携带进 implementer dispatch prompt**（附录 A 有出处说明）：
   >

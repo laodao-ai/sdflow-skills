@@ -22,7 +22,7 @@ import pytest
 
 from conftest import commit_all, mkchange, write_report
 from test_gate_preflight import run_gate
-from test_gate_impl_progress import approved_change, PLAN2
+from test_gate_impl_progress import approved_change, PLAN2, PLAN2_TICKETS
 
 _scripts_path = str(Path(__file__).parent.parent / "scripts")
 if _scripts_path not in sys.path:
@@ -84,14 +84,16 @@ def _approved_change_with_new_name(repo, plan):
 
 
 def test_new_plan_name_reaches_continue_impl(repo):
-    _approved_change_with_new_name(repo, PLAN2)
+    # [harden-implement-review-loop Task5] 新名受第四道校验约束——用 PLAN2_TICKETS（含合法
+    # 收尾 ticket）而非裸 PLAN2，否则会在第四道被拦成 UNKNOWN，测不到本用例要验的 CONTINUE_IMPL。
+    _approved_change_with_new_name(repo, PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-foo): done A")
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
 
 
 def test_new_plan_name_all_tasks_done_advances_to_code_review(repo):
-    _approved_change_with_new_name(repo, PLAN2)
+    _approved_change_with_new_name(repo, PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-foo): A")
     commit_all(repo, "checkpoint(task2-bar): B")
     code, js, _ = run_gate(repo)

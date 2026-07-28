@@ -52,7 +52,7 @@ verdict × exit × next 契约表:
     RERUN_STALE      0  <该步 skill>        D9 陈旧结论 → 重跑该步
     STEP_IN_PROGRESS 0  <该步 skill>        产物在但无锚行
     SHIPPED          0  -                  归档已并 base + archived verify=PASS 锚〔B3+D3硬化,含归档后重跑识别；active 缺席才判,detached 无关〕
-    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能/计划文件名双存在(tickets.md 与 superpowers-plan.md 同时存在)
+    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能/计划文件名双存在(tickets.md 与 superpowers-plan.md 同时存在)/收尾票缺失或 Blocked-by 未覆盖全部功能票号(仅 tickets.md 新名校验,旧名 grandfather)
 
 完成判据窗口〔B1 闭区间〕: 计划文件（经共享 resolver 定位的 tickets.md / superpowers-plan.md）
     首次提交 sha 起，窗口 [sha, HEAD] 闭区间
@@ -62,6 +62,10 @@ verdict × exit × next 契约表:
         旧格式向后兼容仍计入窗口；startswith 前缀过滤放宽为 "checkpoint("〕；
     复选框辅通道按 `### Task <n>:` 分段绑定并入 done_ids〔T34：行锚定+忽略代码块，非全局全勾放行〕；
     plan `### Task <n>:` 号集 plan_ids；plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；
+    第四道校验〔harden-implement-review-loop Task5 · H12/M17〕: 当且仅当计划文件名为 tickets.md
+        （新名）时，MUST 恰含一张 R-ID: all 的收尾 ticket 且其 Blocked-by ⊇ 全部功能 ticket 号，
+        否则 UNKNOWN；文件名为 superpowers-plan.md（旧名）时跳过并输出一行 grandfather 提示
+        （随后续 verdict 的 reason 一并带出，非独立 emit）；
     标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
 
 D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-layer ADR-1/2/3；决策与实证 openspec/adr/0026〕:
@@ -1395,6 +1399,110 @@ def plan_unbalanced_fence(plan):
     return _parse_plan(text)[3]
 
 
+# ────────────────────── 第四道 plan 校验：收尾票（harden-implement-review-loop Task5） ──────────
+# [D3/D3b · spec-review-amendment H12/M17] 当且仅当计划文件名为 `tickets.md`（tickets 轨新名）时，
+# plan MUST 恰含一张「实现验证」收尾 ticket（`R-ID: all`）且其 `Blocked-by` ⊇ 全部功能 ticket 号；
+# 文件名为 `superpowers-plan.md`（旧名）时跳过本校验并返回一行 grandfather 提示——该名同时覆盖
+# superpowers 轨（本就无收尾票要求）与改名生效前落盘的在途 tickets 轨 plan（见 design Migration
+# Plan）。**本校验只用文件名区分「新出 plan / 在途或他轨 plan」，MUST NOT 被解读为轨道路由**——
+# gate 不读 config/marker 即可执行本校验。
+CLOSING_TICKET_R_ID = "all"
+# [基准 5：无界语法禁手搓] R-ID 逐 task 提取是本文件目前唯一的「R-ID 字面值」消费点，沿用与
+# Blocked-by（impl_route.BLOCKED_BY_RE）同构的「行内前缀 + 加粗可选」写法，仅认这一个字面槽位，
+# 不是通用 Markdown 解析器。
+_R_ID_RE = re.compile(r"\*{0,2}R-ID:\*{0,2}\s*(.*)$")
+
+
+def _plan_task_r_ids(text):
+    """按 `### Task N:` 分段提取每段首个 `R-ID:` 行的原始值（fence-aware，口径同 `_parse_plan`：
+    同一份 FenceTracker + TASK_TITLE_RE）。返回 {task_num_str: raw_value}。仅供
+    `plan_closing_ticket_check` 识别「R-ID: all」收尾票用。
+    """
+    result = {}
+    cur = None
+    fence = FenceTracker()
+    for line in text.splitlines():
+        if fence.feed(line) or fence.inside:
+            continue
+        tm = TASK_TITLE_RE.match(line)
+        if tm:
+            cur = tm.group(1)
+            continue
+        if cur is not None and cur not in result:
+            m = _R_ID_RE.search(line.strip())
+            if m:
+                result[cur] = m.group(1).strip()
+    return result
+
+
+def _load_parse_blocked_by():
+    """惰性 sibling-import `sdflow-implement/scripts/impl_route.py::parse_blocked_by`
+    （镜像该文件反向 import 本模块 `FenceTracker` 的手法，见其头注 [impl-review-fix F4]）。
+
+    **MUST 惰性**（函数内 import，不放模块顶层）：本模块此刻已运行到 `decide()`（运行期），自身
+    早已执行完毕——此时 import `impl_route`（它又会 sibling-import 本模块）不构成循环导入，
+    Python 按模块名解析（`__main__` 直跑场景下会得到本模块的第二份独立实例，同 impl_route.py
+    被直接调用时的既有形态一致，无害）；若放在模块顶层，本模块自身尚未执行完时就会触发真循环
+    导入。
+
+    基准 5（无界语法禁手搓）：Blocked-by 拓扑解析复用既有单一源 `impl_route.parse_blocked_by`，
+    MUST NOT 在本文件手抄第二份。
+    """
+    scripts_dir = Path(__file__).resolve().parents[2] / "sdflow-implement" / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from impl_route import parse_blocked_by, TopoError  # type: ignore
+    return parse_blocked_by, TopoError
+
+
+def plan_closing_ticket_check(plan):
+    """第四道 plan 校验。返回 `(ok, note)`：
+
+    - `ok=True`：`note` 是提示串——旧名 grandfather 提示，或新名校验通过时的空串。
+    - `ok=False`：`note` 是拒绝原因，调用方按 UNKNOWN(6) fail-closed 处置。
+    """
+    if plan.name != "tickets.md":
+        # superpowers 轨的 plan、或改名生效前落盘的在途 tickets 轨 plan——grandfather，不校验。
+        return True, (f"在途 plan 未含收尾票校验（grandfathered：文件名 {plan.name!r} 非 "
+                       "tickets.md 新名，见 design Migration Plan）")
+
+    text = plan.read_text(encoding="utf-8", errors="replace")
+    plan_ids = plan_task_ids(plan)   # 复用既有单一源（set of str），fence-aware
+    if not plan_ids:
+        return True, ""   # 标题 0 已由更早的判据拦截（UNKNOWN），这里不重复判
+
+    r_ids = _plan_task_r_ids(text)
+    closing = [tid for tid in plan_ids
+               if r_ids.get(tid, "").lower() == CLOSING_TICKET_R_ID]
+    if not closing:
+        return False, ("plan 不含「实现验证」收尾 ticket"
+                        "（未见任一 Task 段的 R-ID 标注为 all，见 design「收尾票的定位」节）")
+    if len(closing) > 1:
+        return False, (
+            "plan 含多张声明 R-ID: all 的 ticket（Task "
+            + ", ".join(sorted(closing, key=int)) + "），收尾票须唯一")
+    closing_id = closing[0]
+
+    try:
+        parse_blocked_by, TopoError = _load_parse_blocked_by()
+    except Exception as exc:                                  # noqa: BLE001
+        return False, (
+            f"收尾票校验无法加载 Blocked-by 拓扑解析器：{type(exc).__name__}: {exc}")
+    try:
+        deps = parse_blocked_by(text)
+    except TopoError as exc:
+        return False, f"收尾票校验无法解析 plan 的 Blocked-by 拓扑：{exc}"
+
+    functional_ids = {int(tid) for tid in plan_ids} - {int(closing_id)}
+    closing_blocked_by = deps.get(int(closing_id), set())
+    missing = functional_ids - closing_blocked_by
+    if missing:
+        return False, (
+            f"收尾 ticket（Task {closing_id}）的 Blocked-by 未覆盖全部功能 ticket 号，"
+            f"缺: {sorted(missing)}")
+    return True, ""
+
+
 # [spec-review-amendment H4] branch_state() 已移除：D3 终态判据改 change 域可达性
 # （archived_dirs_in_tree + base 树），不再用「当前 HEAD 分支是否并进 base」这一全局近似；
 # final 路径（active 存在）恒 RUN_VERIFY 不判 SHIPPED，故也无需 branch_state。detached HEAD
@@ -1511,6 +1619,11 @@ def decide(root, change):
         emit("UNKNOWN", EXIT_UNKNOWN, None,
              f"在途 plan 曾被重命名（{plan.name}），完成判据窗口已失效且不可信；"
              "请改回原文件名（MUST NOT 重命名在途 plan，见 design Migration Plan）")
+    # [harden-implement-review-loop Task5 · H12/M17] 第四道校验：收尾票存在性 + Blocked-by 覆盖
+    # （当且仅当计划文件名为 tickets.md 时生效；旧名 grandfather，见函数注释）。
+    plan_ok, plan_note = plan_closing_ticket_check(plan)
+    if not plan_ok:
+        emit("UNKNOWN", EXIT_UNKNOWN, None, plan_note)
     sha = plan_first_sha(root, plan_rel)
     # [ship-gate-hardening-2 T34] 两通道完成集并集：checkpoint 主锚 ∪ 复选框分段辅通道
     checkpoint_done = done_task_ids(root, sha, change) if sha else set()
@@ -1520,16 +1633,19 @@ def decide(root, change):
     if plan_ids - done:                       # 计划内有未完成号 → 未齐（集合归属,非基数）
         # 双通道皆不可判：plan 未提交（checkpoint 空）且全 plan 无复选框（辅通道空判）
         if not sha and not plan_has_any_checkbox(plan):
-            emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
+            emit("UNKNOWN", EXIT_UNKNOWN, None,
+                 (plan_note + "；" if plan_note else "") + "plan 未提交且无复选框，双通道皆不可判")
         # [Task4 · tasks 2.6] 窗口入口③
         emit_windowed(root, change, report,
                       "CONTINUE_IMPL", EXIT_OK, "subagent-dev",
-                      f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
+                      (plan_note + "；" if plan_note else "")
+                      + f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
                       done_tasks=sorted(done_in_plan, key=int))
     # ── step 8：code-review 门 ─────────────────────────────────
     cr = cdir / "code-review-report.md"
     if not cr.is_file():
-        emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review", "实现完成，进入代码审")
+        emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review",
+             (plan_note + "；" if plan_note else "") + "实现完成，进入代码审")
     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：code_review 优先
     # （pass→'pos'/blocked→'neg'）；坏→UNKNOWN(6) 已 emit；absent→None→STEP_IN_PROGRESS（无锚语义）。
     cr_front = live_ship_gate_state(cr, "code_review")   # [impl-review-fix FIX-5] label 用下划线，与字段名一致
