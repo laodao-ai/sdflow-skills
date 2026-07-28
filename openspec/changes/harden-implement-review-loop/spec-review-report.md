@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: aca291e61b3b3750ef5e3f6faedd54b8e89e48b7
+---
+
 # 设计评审报告 · harden-implement-review-loop
 
 > 阶段二 `/sdflow-spec-review` 编排评审。Step1 autoplan 广审（原生）+ Step2 并行多镜 + Step3 对抗裁决，合并为本报告。
@@ -34,6 +40,34 @@
 - **H2**：D2a 用来支撑 Group A 升 strong 的核心外部依据，实际是 **Group B 语义**；且其标注的出处 C7 记的锚点与该论据毫无关系。
 
 建议：先就下方 **Q1–Q6** 拍板，按拍板结果修订 design/decision-memo/两份 delta，再进门。
+
+---
+
+## 拍板记录（设计 HARD-GATE · 2026-07-28）
+
+**人已就 Q1–Q6 拍板；四件套与两份 delta 已按裁决修订完毕，设计门通过。**
+锚 = 本文件头部 frontmatter，`reviewed_sha = aca291e61b3b3750ef5e3f6faedd54b8e89e48b7`
+（即 checkpoint `checkpoint(spec-review-amendment)`，含全部修订后的四件套）。
+
+| # | 裁决 | 落地处 |
+|---|---|---|
+| **Q1** | **维持一个 change**（不拆三个）；D3 风险敞口在 design 单独成节 | design「Risks / D3 风险敞口」节 |
+| **Q2** | **选 C：维持收尾票在 implement 内**——本 change 解决的是**实现期间**的问题，code-review 有自身保障措施 | design「收尾票的定位」节 + decision-memo D3/接受的边角 |
+| **Q3** | 同意推荐：禁令放宽为「MUST NOT 跑**与本票无依赖关系**的集成/e2e」，保留中间档 | 两处 delta + tasks 4.1 |
+| **Q4** | **一起修掉** `sdflow-done` 的裸 `eval`（顺手的事） | 新增 D1b + tasks 1.8 |
+| **Q5** | 同意推荐 A：改**四步语义**对齐 + 具名锚点 + 补一条 parity 机械守 | 新增 D1a + tasks 1.9/1.10 |
+| **Q6** | 同意推荐：复用 `sdflow-devenv` 的答案（真跑一遍让工具自己判，缺层记未覆盖不罢工） | 新增 D3b + design「聚合套件的发现契约」节 |
+| **追加** | tickets 轨计划文件更名 `tickets.md`（用户会中追加）；两轨共用旧名 ⇒ 取**分轨 + 共享 resolver + 双存在 fail-closed** 读法，已获用户「同意」确认 | 新增 D5 + tasks §5 + `adr/0033` |
+
+**🔴 Q2 的落地读法（已向用户声明并获确认）**：报告原 C 选项写「维持现状，接受 stale，并显式**修改**那条既有 Requirement」。
+按用户给出的理由（收尾票管实现期、verify 位置未动），**未修改**那条既有 Requirement——改为把收尾票定位为
+「**实现期**聚合回归门」、把 verify 锚的语义限定为「实现期聚合套件通过」，并把证据时效缺口按通则④五问
+如实记入 decision-memo「接受的边角」。
+
+**门后处置汇总**：C1 按 Q2 定位澄清（不改既有 Requirement）；C2 修法 = verify 锚**按管线条件化**；
+H1–H15、M1–M19 全部采纳落地；L1/L4/L5 + `adr/0031` 单一源化 + 第三类场景命名 defer 进 todolist
+（**T249–T253**）；两条评审工具自身的缺口记 **T254/T255**（`note` 已声明非本 change 范围）。
+X1/X2 维持裁掉。**L9 由 defer 转采纳**（tasks 1.2 实际覆盖它）——lens-metric 的 broad 行已据此重算。
 
 ---
 
@@ -229,7 +263,7 @@ canonical 缺省是 `writing-plans → subagent-dev`（`spec-workflow/spec.md:83
 ## 度量锚（lens-metric）
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="9" 采纳="8" 裁掉="1" defer="0" 独立="5" sev="致0/高4/中3/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="37" 采纳="30" 裁掉="1" defer="6" 独立="27" sev="致2/高11/中13/低4" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="37" 采纳="31" 裁掉="1" defer="5" 独立="28" sev="致2/高11/中13/低5" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="2" 采纳="2" 裁掉="0" defer="0" 独立="2" sev="致0/高0/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="3" 采纳="3" 裁掉="0" defer="0" 独立="3" sev="致0/高2/中1/低0" -->
@@ -260,7 +294,23 @@ canonical 缺省是 `writing-plans → subagent-dev`（`spec-workflow/spec.md:83
 
 ## 下一步
 
-1. 就 **Q1–Q6** 拍板（设计 HARD-GATE，阶段二唯一人类门）。
-2. 按拍板结果修订 `proposal.md` / `design.md` / `decision-memo.md` / 两份 delta spec，改动处标 `[spec-review-amendment]`。
-3. 拍板后由主 session 立即把 `ship-gate.design_approved` + `reviewed_sha` 写入本文件**头部 frontmatter**（同一次写入），并把 lens-metric 锚按门后最终裁决重算。
-   🔴 若拍板前四件套相对镜子审过的提交（`50d5a48`）有实质改动，MUST 先跑一次**窄复核**（只审增量）、再**单独 checkpoint 提交**该修订、取得其 sha，然后才回写锚——否则第一次跑 gate 就会判 design 失鲜 `REFUSE_START`。
+设计门已通过，阶段二结束。**下一步 = `/sdflow-ship harden-implement-review-loop`**（阶段三连续跑到 merge，无人类门）。
+
+已完成的门后动作：① Q1–Q6 拍板；② 四件套 + 两份 delta 按裁决修订完毕（`openspec validate --strict` 通过）；
+③ 修订**单独** checkpoint 提交为 `aca291e`（ADR-7(b)：先落盘再回写锚，否则 gate 首跑即判失鲜 `REFUSE_START`）；
+④ frontmatter 的 `design_approved` + `reviewed_sha` 同一次写入；⑤ lens-metric 按门后最终裁决重算。
+
+### 窄复核（只审增量）· 诚实边界
+
+拍板后的修订量很大（新增 D1a/D1b/D3b/D5 四条决策、gate 第四道校验、计划文件 resolver、parity 守卫、改名扫面），
+这些**没有任何一面镜子审过**——报告主体的 findings 只针对拍板前的盘面。按纪律跑了一次窄复核，但：
+
+🔴 **该窄复核由主 session 单人完成，不是多镜 fan-out**（本次 session 被明确约束不派子代理）。
+它盯的是三类返修高发接缝（扩枚举不回改派生判据 / 解耦不彻底 / 期望集范畴取错），查出并修正三处：
+① gate 第四道校验以文件名为判据，与「文件名不参与轨道路由」的声明措辞冲突 → 收紧为「仅区分新出/在途或他轨，gate 无需读 config」；
+② tasks 4.9 与 delta 的同一条规则措辞不一致 → 对齐；
+③ Success Metric 4 的期望集把 `adr/0017` 正文与脚本 docstring 里的归档实路径排除在外 → 补进合法剩余项。
+
+**MUST NOT 把这次窄复核当成等价于一轮多镜评审。** 增量中风险最高的两块——`ship_gate` 第四道校验的
+边界条件、以及改名在 5 类文件(脚本/测试/bundle/docs/html)上的扫面完整性——**其真正的把关点在阶段三的
+`sdflow-code-review` 冷层**，而非本次窄复核。
