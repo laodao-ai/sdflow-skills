@@ -114,6 +114,7 @@ sdflow-issues:
     T253: {"module":"openspec/CONTEXT.md","summary":"「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名","type":"代码质量","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
     T254: {"module":"openspec/workflow/lens-metric-contract.md","summary":"lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行","type":"可观测性","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
     T255: {"module":"sdflow-spec-review/SKILL.md","summary":"outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能","type":"基础设施","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T256: {"module":"sdflow-ship/SKILL.md + ~/.claude/hooks/","summary":"用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做）","type":"基础设施","status":"OPEN","time":"2026-07-28 11:18","change":"main","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2589,3 +2590,14 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：非 change 来源：评审工具自身的协议缺口，不属 harden-implement-review-loop 的交付范围。
 <!-- sdflow-issue-block:end id=T255 -->
+
+<!-- sdflow-issue-block:start id=T256 -->
+## T256: 用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做）
+> 用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做）
+
+**动机**：调研结论(Claude Code 2.1.220 实测四面核实)：**不存在任何脚本可达的 compact 入口**——工具面 ToolSearch 零命中、claude --help 无相关 flag、子命令无、settings/env 无 autoCompact 旋钮(唯一一处 compact 是转轮提示语 Use /compact at ~50% context)。∴「在 sdflow-done 前自动 compact」做不到；hook 也只能拦(permissionDecision)或注入文本(additionalContext)，拦=给阶段三加机械强制人类门，撞 P3e 且比被守对象更难绕。⇒ 正确方向是反过来：不控制压缩时机，而是让任意时刻的压缩无害。真实风险点是 ship 熔断快照——SKILL 明写 fail-safe:快照缺失(如 context 压缩丢失上一次记录)保守判无进展 ⇒ 压缩若砸在某步重跑中途会造成一次假停机(安全但需人工重启)。
+
+**思路**：① **先答闸门问题**：逐项列出阶段三里「只活在对话、盘上没有」的状态。已知候选只有两个——(a) ship 熔断快照(单 invocation 内持有)；(b) merge 意图(从用户调用语透传，RUN_VERIFY→sdflow-done)。② **若答案只有 merge 意图 ⇒ 不做这个 hook**，直接在 ship 摘要里提示一句更便宜。③ 若熔断快照也算，再评估 PreCompact hook 落盘 vs 既有 fail-safe 是否值得——注意 T26「熔断重试计数脚本化(gate 零副作用约束下的计数下沉)」已探索并结项为撞红线不做，本条 MUST 先读那份结论，别重走。
+
+**备注**：非 change 来源：由 harden-implement-review-loop 设计门后的一次 compact 时机讨论引出，不属该 change 交付范围。⚠️ hook 装在 ~/.claude/settings.json 是**全局命名空间**，对本机所有项目生效——这是本条最大的隐性代价，评估时 MUST 计入。对照 CLAUDE.md G4/G5：本仓既有取向是 hook 仅作警告安全网、不驱动流程逻辑；状态 dump 属前者还是后者需先判定。
+<!-- sdflow-issue-block:end id=T256 -->
