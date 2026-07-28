@@ -1,0 +1,1114 @@
+# Review package: 87e2dde..9f6bcf2
+
+## Commits
+9f6bcf2 feat(sdflow-implement): 新增第零步宿主/档位解析 + 四 skill parity 守卫
+
+## Files changed
+ AGENTS.md                                          |  11 +-
+ CLAUDE.md                                          |  11 +-
+ hack/check_tier_resolution_parity.py               | 154 +++++++++++
+ hack/tests/test_tier_resolution_parity.py          | 302 +++++++++++++++++++++
+ .../impl-reports/task1-tier-resolution.md          | 168 ++++++++++++
+ sdflow-code-review/SKILL.md                        |   8 +-
+ sdflow-done/SKILL.md                               |   6 +-
+ sdflow-implement/SKILL.md                          |  57 +++-
+ sdflow-init/assets/snippets/claude-section.md      |  11 +-
+ .../tests/test_codex_subagent_authorization.py     |   5 +-
+ sdflow-ship/SKILL.md                               |   2 +-
+ sdflow-spec-review/SKILL.md                        |   8 +-
+ setup.sh                                           |   9 +
+ 13 files changed, 735 insertions(+), 17 deletions(-)
+
+## Diff
+diff --git a/AGENTS.md b/AGENTS.md
+index 0f0a124..8181b34 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -274,29 +274,34 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ > 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+ 
+ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权（host-adaptive-execution 能力「子代理不可用
+ 时镜数如实降级」）。**本节即该授权**：
+ 
+ - **授权范围**：`/sdflow-spec-review`、`/sdflow-code-review` 两个评审编排器在 Codex 宿主下的**多镜
+   fan-out**（领域镜 / 对抗镜 / 接地镜或历史镜等并行子代理）与各自的 outside-voice 同族 fallback
+-  子代理，**MUST 视为已授权**。仅限这两处——不是对任意 skill 无限制放开 `spawn_agent`。
++  子代理，以及 `sdflow-implement` 在 Codex 宿主下派发的 implementer / Standards 轴 / Spec 轴 / fix
++  子代理，**MUST 视为已授权**。仅限这三处——不是对任意 skill 无限制放开 `spawn_agent`。
+ - **`spawn_agent` 指定 `model` 的 task-specific reason**：Codex 要求非默认 `model` 附 clear
+   task-specific reason；**本工作流按机队分列的 `model-tiers.md` 档位表本身即构成该理由**——门禁步
+-  （主 session 综合裁决）禁止降档是硬约束、非偏好，两个评审 SKILL 引用 `$SDFLOW_TIER_STRONG` /
+-  `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理时直接以此为由，不必另编说辞。
++  （主 session 综合裁决）禁止降档是硬约束、非偏好，`sdflow-spec-review`/`sdflow-code-review`/
++  `sdflow-implement` 引用 `$SDFLOW_TIER_STRONG` / `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理
++  时直接以此为由，不必另编说辞。
+ - **能力探针（语义核验，非机械门）**：评审 SKILL 在 fan-out 前先派一个 trivial 探针子代理判定
+   「子代理机制活着没」——探针值是主 session 自报，无可信脚本捕获路径，MUST NOT 被当作机械保证。
+   子代理不可用 ⇒ **缩 roster 到主 session 实际独立完成的镜**，报告显著标注「单镜降级」，MUST NOT
+   为未独立跑过的镜落锚。
++- **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
++  （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
++  跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
+ 
+ > **`/grill-with-docs`（分支 B 的阶段一对抗层）**——**走分支 B 时，ff 之后、设计审之前的必经步**。
+ > 它来自 **Matt Pocock 的 skills 集合**（`~/.agents/skills`，仓外、非 git 管理、更新即覆盖），**不是 sdflow-skills、也不是 superpowers 插件**。
+ > 它 **`disable-model-invocation: true`，只能人手动触发**：模型唤不起它，只能**把 prompt 贴给人、由人敲**。
+ > 因此它极易被静默跳过——**跳过 grill = 把一份没被拷问过的设计直接送进设计审**，
+ > 而 spec-review 的多镜是在**已有设计的框架内**找问题，**不会替你质疑这个框架本身**。
+ >
+ > **分支 A（`/sdflow-spec`）不依赖它**：拷问是那条管线的内建相位 B，且**在成文之前**跑
+ > （改想法比改四份成文便宜）。⚠️ 这是**结构性改善，不是机械保证**——跳过须主动偏离指令，
+ > 而指令层约束由执行方自报；机械可验的只有「`decision-memo.md` 存在且必填小节非空」这一条门。
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 2cb799d..865103f 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -429,29 +429,34 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ > 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+ 
+ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权（host-adaptive-execution 能力「子代理不可用
+ 时镜数如实降级」）。**本节即该授权**：
+ 
+ - **授权范围**：`/sdflow-spec-review`、`/sdflow-code-review` 两个评审编排器在 Codex 宿主下的**多镜
+   fan-out**（领域镜 / 对抗镜 / 接地镜或历史镜等并行子代理）与各自的 outside-voice 同族 fallback
+-  子代理，**MUST 视为已授权**。仅限这两处——不是对任意 skill 无限制放开 `spawn_agent`。
++  子代理，以及 `sdflow-implement` 在 Codex 宿主下派发的 implementer / Standards 轴 / Spec 轴 / fix
++  子代理，**MUST 视为已授权**。仅限这三处——不是对任意 skill 无限制放开 `spawn_agent`。
+ - **`spawn_agent` 指定 `model` 的 task-specific reason**：Codex 要求非默认 `model` 附 clear
+   task-specific reason；**本工作流按机队分列的 `model-tiers.md` 档位表本身即构成该理由**——门禁步
+-  （主 session 综合裁决）禁止降档是硬约束、非偏好，两个评审 SKILL 引用 `$SDFLOW_TIER_STRONG` /
+-  `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理时直接以此为由，不必另编说辞。
++  （主 session 综合裁决）禁止降档是硬约束、非偏好，`sdflow-spec-review`/`sdflow-code-review`/
++  `sdflow-implement` 引用 `$SDFLOW_TIER_STRONG` / `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理
++  时直接以此为由，不必另编说辞。
+ - **能力探针（语义核验，非机械门）**：评审 SKILL 在 fan-out 前先派一个 trivial 探针子代理判定
+   「子代理机制活着没」——探针值是主 session 自报，无可信脚本捕获路径，MUST NOT 被当作机械保证。
+   子代理不可用 ⇒ **缩 roster 到主 session 实际独立完成的镜**，报告显著标注「单镜降级」，MUST NOT
+   为未独立跑过的镜落锚。
++- **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
++  （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
++  跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
+ 
+ > **`/grill-with-docs`（分支 B 的阶段一对抗层）**——**走分支 B 时，ff 之后、设计审之前的必经步**。
+ > 它来自 **Matt Pocock 的 skills 集合**（`~/.agents/skills`，仓外、非 git 管理、更新即覆盖），**不是 sdflow-skills、也不是 superpowers 插件**。
+ > 它 **`disable-model-invocation: true`，只能人手动触发**：模型唤不起它，只能**把 prompt 贴给人、由人敲**。
+ > 因此它极易被静默跳过——**跳过 grill = 把一份没被拷问过的设计直接送进设计审**，
+ > 而 spec-review 的多镜是在**已有设计的框架内**找问题，**不会替你质疑这个框架本身**。
+ >
+ > **分支 A（`/sdflow-spec`）不依赖它**：拷问是那条管线的内建相位 B，且**在成文之前**跑
+ > （改想法比改四份成文便宜）。⚠️ 这是**结构性改善，不是机械保证**——跳过须主动偏离指令，
+ > 而指令层约束由执行方自报；机械可验的只有「`decision-memo.md` 存在且必填小节非空」这一条门。
+diff --git a/hack/check_tier_resolution_parity.py b/hack/check_tier_resolution_parity.py
+new file mode 100644
+index 0000000..01d1b22
+--- /dev/null
++++ b/hack/check_tier_resolution_parity.py
+@@ -0,0 +1,154 @@
++"""断言四个编排 SKILL 的「宿主/档位解析」核心段【逐字节相同】。
++
++【守什么】
++`sdflow-implement`/`sdflow-done`/`sdflow-code-review`/`sdflow-spec-review` 四个 SKILL.md 各自在
++第零步做同一件事：清脏 unset → 预检 `resolve-models.sh` 可执行 → 捕获退出码后 eval → eval 后校验
++`$SDFLOW_HOST`/`$SDFLOW_TIER_*`。这段机制性文本【站点无关】——四处必须逐字一致，否则某个 skill
++的档位解析会静默漂出一套不同的失败语义（如漏了空值/unknown 分家、或漏了清脏步骤），而这是
++load-bearing 的正确性，不是风格问题。∴ 用 marker 圈定 + 机械等值门，一次封死漂移面
++（CLAUDE.md 基准 1 + 面治优先于点补，仿 `check_async_branch_parity.py`）。
++
++【圈外留什么】
++每个 skill 引出该段的标题/编号（"3."/"4."/"### 0.4"/`## 第零步`）、host=unknown 后是硬停还是
++缩 roster（sdflow-implement 硬停，code-review/spec-review 缩 roster——两者不同构，design H10 明写）、
++能力探针协议细节、8 类失败的 problem/cause/fix 表——这些本就应当因 skill 而异，圈进来会逼出假一致
++（design：「对齐目标为四步语义，MUST NOT 要求与任一姊妹 skill 逐字相同」）。
++
++【语法面（基准 5：无界不手搓）】
++只认两个 marker token，单行字面量匹配——有界，∴ 可手写。MUST NOT 演化成「解析 Markdown 结构」。
++
++用法：
++    python3 hack/check_tier_resolution_parity.py            # 查仓内四处（CI / pytest / setup.sh）
++    python3 hack/check_tier_resolution_parity.py A.md B.md   # 查指定文件（测试用，≥2 个）
++"""
++import sys
++from pathlib import Path
++
++REPO = Path(__file__).resolve().parent.parent
++
++SITES = [
++    "sdflow-implement/SKILL.md",
++    "sdflow-done/SKILL.md",
++    "sdflow-code-review/SKILL.md",
++    "sdflow-spec-review/SKILL.md",
++]
++
++# 尾随空格是 token 边界：没有它，`<!-- sdflow:tier-resolution:startX ... -->` 这类
++# 相邻 token 会被误认作 start（有界语法面 ∴ 边界要写死）。
++START_LINE_PREFIX = "<!-- sdflow:tier-resolution:start "
++END_LINE = "<!-- sdflow:tier-resolution:end -->"
++
++# 圈内不许出现的字样——出现即说明这段被写死到了某一侧的语境里（四站点无关性前提）。
++FORBIDDEN_IN_SEGMENT = [
++    "sdflow-implement",
++    "sdflow-done",
++    "sdflow-code-review",
++    "sdflow-spec-review",
++]
++
++
++def _is_start(line):
++    """start 行 = 前缀（含 token 边界空格）+ 本行内闭合 `-->`。"""
++    return line.startswith(START_LINE_PREFIX) and line.rstrip().endswith("-->")
++
++
++class MarkerError(Exception):
++    """marker 形态畸形——明确报错，MUST NOT 静默放行（缺 marker ≠ 一致）。"""
++
++
++def extract(path):
++    """→ marker 段文本（含 start 行与 end 行本身）。
++
++    start 行自身也参与比对：它承载「圈内该放什么」的口径，漂了同样是漂。
++    """
++    lines = Path(path).read_text(encoding="utf-8").splitlines(keepends=True)
++
++    starts = [i for i, l in enumerate(lines) if _is_start(l)]
++    ends = [i for i, l in enumerate(lines) if l.startswith(END_LINE)]
++
++    if len(starts) != 1 or len(ends) != 1:
++        raise MarkerError(
++            f"{path}: 期望恰好 1 对 tier-resolution marker，实得 "
++            f"start={len(starts)} end={len(ends)}")
++    if ends[0] < starts[0]:
++        raise MarkerError(f"{path}: end marker 出现在 start 之前")
++
++    return "".join(lines[starts[0]:ends[0] + 1])
++
++
++def interior(seg):
++    """→ marker 段【去掉首尾 marker 行】后的正文。
++
++    「段是否为空」的判据 MUST 落在正文上：整段永远含两行 marker，
++    拿整段判空恒为假——那是个永远不会触发的守卫（= 不存在的守卫）。
++    """
++    lines = seg.splitlines(keepends=True)
++    return "".join(lines[1:-1])
++
++
++def compare(paths):
++    """→ 0 绿 / 1 红。红时把原因写 stderr。"""
++    segments = []
++    for p in paths:
++        try:
++            segments.append((p, extract(p)))
++        except MarkerError as e:
++            print(f"[tier-resolution-parity] FAIL: {e}", file=sys.stderr)
++            return 1
++
++    ref_path, ref = segments[0]
++    rc = 0
++
++    # 空段判据逐段施加，不只查 segments[0]。
++    for p, seg in segments:
++        if not interior(seg).strip():
++            print(f"[tier-resolution-parity] FAIL: {p} 的 marker 段正文为空",
++                  file=sys.stderr)
++            rc = 1
++    if rc:
++        return rc
++
++    for p, seg in segments[1:]:
++        if seg != ref:
++            print(f"[tier-resolution-parity] FAIL: 宿主/档位解析核心段已漂移—— "
++                  f"{ref_path} 与 {p} 不逐字节相同", file=sys.stderr)
++            _print_first_diff(ref, seg)
++            rc = 1
++
++    for p, seg in segments:
++        for bad in FORBIDDEN_IN_SEGMENT:
++            if bad in seg:
++                print(f"[tier-resolution-parity] FAIL: {p} 的 marker 段内出现 "
++                      f"「{bad}」——圈内 MUST 站点无关", file=sys.stderr)
++                rc = 1
++
++    if rc == 0:
++        print(f"[tier-resolution-parity] ✅ {len(segments)} 处宿主/档位解析核心段逐字节一致")
++    else:
++        print("   修：以一侧为准，把整段（含 marker 行）原样复制到其余各侧", file=sys.stderr)
++    return rc
++
++
++def _print_first_diff(a, b):
++    la, lb = a.splitlines(), b.splitlines()
++    for i in range(max(len(la), len(lb))):
++        x = la[i] if i < len(la) else "<段已结束>"
++        y = lb[i] if i < len(lb) else "<段已结束>"
++        if x != y:
++            print(f"   首个不同在段内第 {i + 1} 行：", file=sys.stderr)
++            print(f"     A: {x}", file=sys.stderr)
++            print(f"     B: {y}", file=sys.stderr)
++            return
++
++
++def main(argv=None):
++    argv = list(sys.argv[1:] if argv is None else argv)
++    paths = [Path(a) for a in argv] if argv else [REPO / s for s in SITES]
++    if len(paths) < 2:
++        print("[tier-resolution-parity] FAIL: 至少需要两个比对面", file=sys.stderr)
++        return 1
++    return compare(paths)
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/hack/tests/test_tier_resolution_parity.py b/hack/tests/test_tier_resolution_parity.py
+new file mode 100644
+index 0000000..14fac7c
+--- /dev/null
++++ b/hack/tests/test_tier_resolution_parity.py
+@@ -0,0 +1,302 @@
++"""守四个编排 SKILL 的「宿主/档位解析」核心段【逐字节相同】。
++
++【为什么需要这个测试】
++`sdflow-implement`/`sdflow-done`/`sdflow-code-review`/`sdflow-spec-review` 各自的第零步都要做
++同一件事（清脏 unset → 预检 resolve-models.sh 可执行 → 捕获退出码后 eval → eval 后校验），这段
++文本被【复制】进四个 SKILL.md。四份若漂——某个 skill 的档位解析会静默行为分叉（漏清脏 / 漏预检 /
++把空值误判成 unknown），而这是 load-bearing 的正确性，不是风格问题。
++—— CLAUDE.md 基准 1：能用「可固化规则 + 脚本」保证的一致性，MUST 机械化。
++   复制是必要的（四个 SKILL 是独立分发单元），但复制【不能靠手】。
++
++【语法面】
++只认两个 marker token（start / end），单行字面量匹配，有界（基准 5）。
++MUST NOT 演化成「解析 Markdown 结构」。
++"""
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++import check_tier_resolution_parity as P  # noqa: E402
++
++REPO = Path(__file__).resolve().parents[2]
++
++
++def _write(tmp_path, name, interior, *, start=P.START_LINE_PREFIX + "x -->",
++           end=P.END_LINE):
++    p = tmp_path / name
++    p.write_text(f"head\n{start}\n{interior}{end}\nfoot\n", encoding="utf-8")
++    return p
++
++
++def _bare(tmp_path, name, body):
++    p = tmp_path / name
++    p.write_text(body, encoding="utf-8")
++    return p
++
++
++# ── 真仓状态 ────────────────────────────────────────────────────────────────
++
++def test_repo_sites_are_byte_identical():
++    """⭐ 四个编排 SKILL 的宿主/档位解析核心段逐字节一致——漂了就红。"""
++    assert P.main([]) == 0
++
++
++def test_all_four_sites_carry_the_markers():
++    """四处 marker 都真的存在（不是「都没有 ∴ 都一致」的空绿）。"""
++    assert len(P.SITES) == 4, "本票交付四个 skill 的核心段——site 枚举不应变多变少"
++    for rel in P.SITES:
++        text = (REPO / rel).read_text(encoding="utf-8")
++        assert P.START_LINE_PREFIX in text, rel
++        assert P.END_LINE in text, rel
++
++
++def test_interior_is_non_empty():
++    """段内正文不是空的——防「把内容删光换个空绿」。
++
++    判据落在【去掉 marker 行后的正文】上：整段恒含两行 marker，拿整段判空恒真。
++    """
++    for rel in P.SITES:
++        assert P.interior(P.extract(REPO / rel)).strip(), rel
++
++
++def test_interior_names_no_orchestrating_skill():
++    """圈内 MUST NOT 出现任一编排 SKILL 的名字——同一串字节要在四处【各自语义正确】。"""
++    for rel in P.SITES:
++        interior = P.extract(REPO / rel)
++        for bad in P.FORBIDDEN_IN_SEGMENT:
++            assert bad not in interior, f"{rel} 段内出现 {bad}"
++
++
++# ── 漂移检测 ────────────────────────────────────────────────────────────────
++
++def test_one_byte_difference_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "line one\nline two\n")
++    b = _write(tmp_path, "b.md", "line one\nline twO\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_identical_is_green(tmp_path):
++    a = _write(tmp_path, "a.md", "line one\nline two\n")
++    b = _write(tmp_path, "b.md", "line one\nline two\n")
++    assert P.compare([a, b]) == 0
++
++
++def test_three_way_all_identical_is_green(tmp_path):
++    """四站点场景的最小可行版本：≥2 个比对面全等仍绿（守 compare() 不是只两两比）。"""
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _write(tmp_path, "b.md", "x\n")
++    c = _write(tmp_path, "c.md", "x\n")
++    assert P.compare([a, b, c]) == 0
++
++
++def test_third_site_drift_is_red(tmp_path):
++    """四站点核心断言：前两个一致不能掩盖第三个漂移——每一侧都要真的被比对。"""
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _write(tmp_path, "b.md", "x\n")
++    c = _write(tmp_path, "c.md", "y\n")
++    assert P.compare([a, b, c]) == 1
++
++
++def test_marker_line_text_drift_is_red(tmp_path):
++    """marker 起始行自身的文字也参与比对——它承载「圈内放什么」的口径。"""
++    a = _write(tmp_path, "a.md", "x\n", start=P.START_LINE_PREFIX + "AAA -->")
++    b = _write(tmp_path, "b.md", "x\n", start=P.START_LINE_PREFIX + "BBB -->")
++    assert P.compare([a, b]) == 1
++
++
++# ── marker 形态错误：各自明确报错，MUST NOT 静默放行 ────────────────────────
++
++def test_missing_markers_entirely_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", "no markers here\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_start_without_end_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", f"{P.START_LINE_PREFIX}x -->\nx\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_end_without_start_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", f"x\n{P.END_LINE}\n")
++    assert P.compare([a, b]) == 1
++
++
++def test_two_marker_pairs_is_red(tmp_path):
++    """出现两对 marker → 报错，MUST NOT 取第一对静默放行。"""
++    a = _write(tmp_path, "a.md", "x\n")
++    dup = (f"{P.START_LINE_PREFIX}x -->\nx\n{P.END_LINE}\n"
++           f"{P.START_LINE_PREFIX}x -->\nx\n{P.END_LINE}\n")
++    b = _bare(tmp_path, "b.md", dup)
++    assert P.compare([a, b]) == 1
++
++
++def test_end_before_start_raises(tmp_path):
++    """end 在 start 之前 → MUST 抛 MarkerError（而不是「碰巧因为段不等而红」）。"""
++    b = _bare(tmp_path, "b.md", f"{P.END_LINE}\nx\n{P.START_LINE_PREFIX}x -->\n")
++    with pytest.raises(P.MarkerError):
++        P.extract(b)
++
++
++def test_end_before_start_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _bare(tmp_path, "b.md", f"{P.END_LINE}\nx\n{P.START_LINE_PREFIX}x -->\n")
++    assert P.compare([a, b]) == 1
++
++
++# ── 合成用例：圈内站点名（FORBIDDEN_IN_SEGMENT）────────────────────────────
++
++@pytest.mark.parametrize("bad", P.FORBIDDEN_IN_SEGMENT)
++def test_forbidden_token_in_interior_is_red(tmp_path, bad):
++    """两侧内容【完全相同】但段内写死了某一侧的语境→仍 MUST 红。"""
++    body = f"派给 {bad} 处理\n"
++    a = _write(tmp_path, "a.md", body)
++    b = _write(tmp_path, "b.md", body)
++    assert P.compare([a, b]) == 1
++
++
++def test_clean_interior_with_neutral_wording_is_green(tmp_path):
++    """对照组：改写成中性措辞即绿——证上条红的原因就是那个 token。"""
++    body = "派给对应 skill 处理\n"
++    a = _write(tmp_path, "a.md", body)
++    b = _write(tmp_path, "b.md", body)
++    assert P.compare([a, b]) == 0
++
++
++# ── 合成用例：空段 ─────────────────────────────────────────────────────────
++
++def test_empty_interior_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "")
++    b = _write(tmp_path, "b.md", "")
++    assert P.compare([a, b]) == 1
++
++
++def test_whitespace_only_interior_is_red(tmp_path):
++    a = _write(tmp_path, "a.md", "   \n\n")
++    b = _write(tmp_path, "b.md", "   \n\n")
++    assert P.compare([a, b]) == 1
++
++
++# ── start marker token 边界 ────────────────────────────────────────────────
++
++def test_start_prefix_requires_token_boundary(tmp_path):
++    """`...:startX -->` 不是 start——无 token 边界会误认相邻 token。"""
++    b = _bare(tmp_path, "b.md",
++              f"<!-- sdflow:tier-resolution:startX -->\nx\n{P.END_LINE}\n")
++    with pytest.raises(P.MarkerError):
++        P.extract(b)
++
++
++def test_start_line_must_close_on_same_line(tmp_path):
++    b = _bare(tmp_path, "b.md",
++              f"{P.START_LINE_PREFIX}未闭合\nx\n{P.END_LINE}\n")
++    with pytest.raises(P.MarkerError):
++        P.extract(b)
++
++
++def test_extract_raises_on_malformed(tmp_path):
++    b = _bare(tmp_path, "b.md", "nothing\n")
++    with pytest.raises(P.MarkerError):
++        P.extract(b)
++
++
++# ── CLI 契约 ───────────────────────────────────────────────────────────────
++
++def test_cli_exits_nonzero_on_drift(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    b = _write(tmp_path, "b.md", "y\n")
++    r = subprocess.run(
++        [sys.executable, str(REPO / "hack" / "check_tier_resolution_parity.py"),
++         str(a), str(b)],
++        capture_output=True, text=True, encoding="utf-8")
++    assert r.returncode != 0
++
++
++def test_cli_exits_zero_on_repo():
++    r = subprocess.run(
++        [sys.executable, str(REPO / "hack" / "check_tier_resolution_parity.py")],
++        capture_output=True, text=True, encoding="utf-8")
++    assert r.returncode == 0, r.stdout + r.stderr
++
++
++def test_setup_sh_runs_the_gate():
++    """门必须真被跑到——「存在但没人跑的门」= 不存在的门。"""
++    assert "check_tier_resolution_parity.py" in (REPO / "setup.sh").read_text(
++        encoding="utf-8")
++
++
++def test_cli_requires_at_least_two_paths(tmp_path):
++    a = _write(tmp_path, "a.md", "x\n")
++    r = subprocess.run(
++        [sys.executable, str(REPO / "hack" / "check_tier_resolution_parity.py"),
++         str(a)],
++        capture_output=True, text=True, encoding="utf-8")
++    assert r.returncode != 0
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# 段内内容契约（harden-implement-review-loop Task 1）
++#
++# 等值门只保证「四侧一样」，不保证「一样的那份是对的」。本节是段内**内容**的
++# golden：四类清脏变量、fail-loud 硬停措辞、host 空值/unknown 分家判据——MUST NOT
++# 只查 SITES[0] 再靠等值门推其余三侧（等值门若被误删，这里就成了盲区）。
++# ══════════════════════════════════════════════════════════════════════════════
++
++def _segments():
++    return [(rel, P.interior(P.extract(REPO / rel))) for rel in P.SITES]
++
++
++def test_unset_clears_all_six_vars():
++    """(a) 步 MUST 清脏全部六个变量——漏一个就可能拿上一轮的脏值继续跑。"""
++    needle = ("先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID "
++              "SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏")
++    for rel, seg in _segments():
++        assert needle in seg, f"{rel}: 清脏步骤缺失或变量集不全"
++
++
++def test_precheck_fails_loud_before_continuing():
++    """(b) 步：resolver 不可执行 MUST fail-loud 硬停，MUST NOT 继续。"""
++    for rel, seg in _segments():
++        assert "`[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检" in seg, rel
++        assert "fail-loud 硬停本轮工作" in seg, rel
++        assert "MUST NOT 继续" in seg, rel
++
++
++def test_nonzero_exit_halts_before_eval():
++    """(c) 步：退出码非 0 MUST fail-loud 硬停，不得继续 eval 一个失败的输出。"""
++    for rel, seg in _segments():
++        assert "退出码非 0 → fail-loud 硬停" in seg, rel
++
++
++def test_empty_host_and_unknown_are_reported_differently():
++    """🔴 核心正确性：host 空值 MUST NOT 被吸进 host=unknown 处置——两种失败分开报。"""
++    for rel, seg in _segments():
++        assert "空值 MUST NOT 回落当 `host=unknown` 处置" in seg, rel
++        assert "取到空值 = resolver 根本没跑成" in seg, rel
++        assert "unknown = 跑成但判不出宿主、空 = 工具没装没跑成" in seg, rel
++
++
++def test_tier_required_only_when_host_known():
++    """(d) 步：host≠unknown 时才要求三档非空——unknown 本身是合法枚举值。"""
++    for rel, seg in _segments():
++        assert "host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空" in seg, rel
++        assert "MUST 精确 ∈ {claude,codex,unknown} 且非空" in seg, rel
++
++
++def test_honest_boundary_declared_not_mechanical_gate():
++    """诚实边界：unset/eval/校验是对主 session 的指令，MUST NOT 声称机械门。"""
++    for rel, seg in _segments():
++        assert "**诚实边界**" in seg, rel
++        assert "MUST NOT 声称机械门" in seg, rel
++
++
++def test_eval_happens_exactly_once_per_round():
++    """本轮全程只 eval 一次——后续取值一律读同一次导出的环境变量，不得各自重判宿主。"""
++    for rel, seg in _segments():
++        assert "本轮全程只 eval 这一次" in seg, rel
++        assert "MUST NOT 各自重判宿主" in seg, rel
+diff --git a/openspec/changes/harden-implement-review-loop/impl-reports/task1-tier-resolution.md b/openspec/changes/harden-implement-review-loop/impl-reports/task1-tier-resolution.md
+new file mode 100644
+index 0000000..d0b66bc
+--- /dev/null
++++ b/openspec/changes/harden-implement-review-loop/impl-reports/task1-tier-resolution.md
+@@ -0,0 +1,168 @@
++# Task 1：四个编排 skill 的宿主/档位解析第零步 + 机械 parity 守卫
++
++状态：`DONE`
++
++## 范围核对（tasks.md §1 全 12 项 + §7.2 + §7.7）
++
++| 项 | 内容 | 落点 |
++|---|---|---|
++| 1.1 | `sdflow-implement/SKILL.md` 新增「第零步：宿主/档位解析」，四步语义对齐姊妹 skill，跨文件引用一律具名锚点（「见预检步」类，本步已消除「本步第 N 项」这类位置派生序号） | `sdflow-implement/SKILL.md` 新增 `## 第零步：宿主/档位解析（两入口共用、无条件执行）` |
++| 1.2 | 第零步置于文件最前（principles 块之后、模式派发契约之前）、两入口共用、无条件执行；出票模式的 `T10-choice` 仲裁步消费 strong 档不在本步内，只在此声明依赖关系 | 同上，intro 段第一句 |
++| 1.3 | `host=unknown` 与子代理不可用两态均 fail-loud 硬停，不缩 roster | 同上「能力探针 + 不可用则硬停」段 |
++| 1.4 | 八类失败 problem+cause+fix 表，沿用五要素 halt envelope（ticket 号字段固定「—（起手失败，无票上下文）」） | 同上「八类失败分支」表格 |
++| 1.5 | implementer dispatch 段新增档位声明，引用 `$SDFLOW_TIER_MID` | 「每 ticket 派 fresh implementer」节新增一句 |
++| 1.6 | Standards 轴 / Spec 轴 dispatch 段同样新增档位声明 | 「每 ticket 双轴审」节首句括注 |
++| 1.7 | fix 子代理无独立 dispatch 段——就地在「裁决处置」bullet 内声明同 mid 档，避免与 1.5/1.6 重复计数 | 「裁决处置」bullet |
++| 1.8 | `sdflow-done/SKILL.md` `### 0.4` 由裸 `eval` 一行升级为同一套四步语义 | 同上 |
++| 1.9 | 新增 `hack/check_tier_resolution_parity.py` + `hack/tests/test_tier_resolution_parity.py`，对四个 SKILL.md 的核心段逐字节比对（marker：`<!-- sdflow:tier-resolution:start v1 -->` / `<!-- sdflow:tier-resolution:end -->`） | 见下「机械守卫」节 |
++| 1.10 | 变异实测：4 文件 × 4 子步 = 16 次删除，全部必红；两种恒真成因均排除 | 见下「变异实测」节 |
++| 1.11 | `AGENTS.md`/`CLAUDE.md`/`sdflow-init/assets/snippets/claude-section.md` 补 `sdflow-implement` 进授权范围，「仅限这两处」→「仅限这三处」；`sdflow-init/tests/test_codex_subagent_authorization.py` 同步改断言 | 三份文档 + 一份测试 |
++| 1.12 | `sdflow-ship/SKILL.md` 枚举补 `implement` | 同上 |
++| 7.2 | `grep -n "SDFLOW_TIER" sdflow-implement/SKILL.md` 不再零命中 | 见下 |
++| 7.7 | Success Metric 1 证据：Codex 宿主下实跑档位解析 | 见下「Success Metric 1」节 |
++
++## 归一化核心段的设计取舍
++
++design 明写「对齐目标为四步语义，MUST NOT 要求与任一姊妹 skill 逐字相同」，但 parity 守卫（1.9）
++要求「逐字节比对核心段」——两者的解法是把**核心段收窄**到真正站点无关的机制文本（清脏 unset →
++预检 → 捕获退出码 eval → eval 后校验），marker 只圈住这一段；引出该段的标题/编号（"3."/"4."/
++"### 0.4"/`## 第零步`）与其后的 skill 专属处理（host=unknown 是硬停还是缩 roster、8 类失败表、
++能力探针细节）都留在 marker 之外，允许因 skill 而异。
++
++改动中发现并清理的非必要漂移面：
++- `sdflow-code-review`/`sdflow-spec-review` 原文里 `(d)` 步含「同本步第 3/5 项」「同本步第 2/4 项」
++  这类**依文件本地编号派生**的交叉引用——两份原文因编号不同已经不是逐字一致（4 步语义相同但序号
++  不同）。这些引用现移出核心段，改写成具名锚点（「规则根解析」「skew 探测」），核心段本身不再含
++  任何位置相关的序号。
++- 「本轮评审」→「本轮工作」、「供下方「模型选择」节引用」→「供本轮后续所有派子代理动作引用」：
++  两处措辞原本假设了 code-review/spec-review 特有的结构（"评审"一词、"模型选择"小节），
++  `sdflow-implement`/`sdflow-done` 没有对应结构，改成中性措辞后四份可以真正逐字相同。
++
++## 机械守卫
++
++`hack/check_tier_resolution_parity.py` 仿 `hack/check_async_branch_parity.py`：只认两个 marker
++token、单行字面量匹配（有界语法面，基准 5），MUST NOT 演化成解析 Markdown 结构。已接入
++`setup.sh`（独立守卫，不挂在 `sync_principles.py` 条件下——理由与既有 async-branch 守卫一致：
++自己的脚本存在即跑，不因另一工具缺失而静默不跑）。
++
++`hack/tests/test_tier_resolution_parity.py` 36 个用例，覆盖：真仓四处逐字节一致、marker 存在性、
++空段防护、漂移检测（含三向比较：前两侧一致不能掩盖第三侧漂移）、marker 畸形各类报错、
++`FORBIDDEN_IN_SEGMENT`（圈内不许出现四个 skill 名字自身）、CLI 契约、以及段内内容 golden
++（六变量清脏、fail-loud 硬停措辞、host 空值/unknown 分家判据、eval 只跑一次）。
++
++```
++$ /usr/bin/python3 -m pytest hack/tests/test_tier_resolution_parity.py -q
++36 passed in 0.10s
++```
++
++全仓回归（含本票改动）：
++
++```
++$ /usr/bin/python3 -m pytest -q
++2893 passed, 11 skipped, 3 xfailed in 283.64s
++```
++
++（跳过/xfail 项与本票无关，为既有已知项。）
++
++## 变异实测（1.10）
++
++对四个 SKILL.md 各自的核心段逐一删除 (a)/(b)/(c)/(d) 四个子步（共 4 文件 × 4 子步 = 16 次），
++每次删除后立即跑 `hack/check_tier_resolution_parity.py`，记录退出码，再恢复原文件：
++
++```
++site                             step  exit
++sdflow-implement/SKILL.md        a     1     RED
++sdflow-implement/SKILL.md        b     1     RED
++sdflow-implement/SKILL.md        c     1     RED
++sdflow-implement/SKILL.md        d     1     RED
++sdflow-done/SKILL.md             a     1     RED
++sdflow-done/SKILL.md             b     1     RED
++sdflow-done/SKILL.md             c     1     RED
++sdflow-done/SKILL.md             d     1     RED
++sdflow-code-review/SKILL.md      a     1     RED
++sdflow-code-review/SKILL.md      b     1     RED
++sdflow-code-review/SKILL.md      c     1     RED
++sdflow-code-review/SKILL.md      d     1     RED
++sdflow-spec-review/SKILL.md      a     1     RED
++sdflow-spec-review/SKILL.md      b     1     RED
++sdflow-spec-review/SKILL.md      c     1     RED
++sdflow-spec-review/SKILL.md      d     1     RED
++
++ALL MUTATIONS CAUSED RED: True
++```
++
++16/16 全红。删除动作直接对仓内真实文件做字符串替换（非 fixture 拷贝），跑的是与
++`test_repo_sites_are_byte_identical`（间接经 `P.main([])`）完全相同的代码路径，跑完立即用
++`try/finally` 恢复原文，`git status --short` 复核确认无残留改动。
++
++**两种恒真成因排除**：
++- 「门被别的断言满足」——抽样对 `sdflow-spec-review` 删除 (a) 步后直接看 `check_tier_resolution_parity.py`
++  的 stderr 输出，`_print_first_diff` 打出了具体的「首个不同在段内第 2 行」+ A/B 两侧原文，证明是
++  这次删除本身造成的字节差异触发红，不是别的检查项恰好同时失败。
++- 「压根没用例走到那行」——本次直接调用 `main([])`（无参数，走仓内真实四文件），与 pytest 里
++  `test_repo_sites_are_byte_identical` 调的是同一行代码 `P.main([])`；不存在「测试从未执行到删除的
++  那一支」的可能。
++
++## 附：Codex 子代理授权 + sdflow-ship 枚举（1.11/1.12）
++
++`AGENTS.md`、`CLAUDE.md`（均为 `opsx-init` 托管块内容）与其单一源
++`sdflow-init/assets/snippets/claude-section.md` 三处同步改动，`diff` 核对逐字一致；
++`sdflow-init/tests/test_codex_subagent_authorization.py` 的 `test_snippet_declares_codex_subagent_authorization`
++断言同步改为 `"sdflow-implement" in t` + `"仅限这三处" in t`。`sdflow-ship/SKILL.md` 枚举串
++`spec-review/code-review/done` → `spec-review/code-review/done/implement`。
++
++```
++$ /usr/bin/python3 -m pytest sdflow-init/tests/test_codex_subagent_authorization.py -q
++52 passed in 0.09s   # （与 hack/tests/test_async_branch_parity.py 合并跑）
++```
++
++## Success Metric 1 证据（7.7，[e2e]）
++
++**取哪种**：按 brief 二选一，选择「只走到档位解析步即止」——不跑完整 `sdflow-implement
++tickets-plan`（会写 `superpowers-plan.md`/`tickets.md`，触发本 change 自身的 `plan_first_sha`
++窗口锚风险），只在真实 Codex 宿主进程内执行 Step 0 的实际机制（`eval
++"$(~/.sdflow/hack/resolve-models.sh)"`），核验解析结果。
++
++**环境说明（诚实边界）**：本机 `codex` CLI（`codex-cli 0.145.0`）已装且已认证鉴权，可用
++`codex exec` 非交互调用。首次直接调用时，因本 agent 运行在 Claude Code 会话内（其 shell 环境
++自带 `CLAUDECODE=1`），该变量被 `codex exec` 派生的子 shell 继承，与 Codex CLI 自身设置的
++`CODEX_THREAD_ID` 同时出现，触发 `resolve-models.sh` 的**宿主信号冲突检测**（`HOST=unknown`，
++回落 Claude 机队缺省 opus/sonnet/haiku）——这本身是该脚本设计正确工作的证据，但不是我们要的
++「纯 Codex 宿主」读数。用 `env -u CLAUDECODE codex exec …` 去掉这个从父进程继承来的干扰变量后
++（这不是伪造 Codex 身份——`CODEX_THREAD_ID` 仍由 Codex CLI 自己的运行时设置，只是消掉了因
++`codex exec` 被 Claude Code 的 Bash 工具启动而额外带入的 `CLAUDECODE` 泄漏），拿到干净读数：
++
++```
++$ timeout 90 env -u CLAUDECODE codex exec 'Run exactly this shell command and print its
++  full stdout verbatim, nothing else: eval "$(~/.sdflow/hack/resolve-models.sh --root
++  "$(pwd)")"; echo "HOST=$SDFLOW_HOST"; echo "STRONG=$SDFLOW_TIER_STRONG"; echo
++  "MID=$SDFLOW_TIER_MID"; echo "LIGHT=$SDFLOW_TIER_LIGHT"; echo
++  "CLAUDECODE_set=${CLAUDECODE:+yes}"; echo "CODEX_THREAD_ID_set=${CODEX_THREAD_ID:+yes}"'
++
++HOST=codex
++STRONG=gpt-5.6-sol
++MID=gpt-5.6-terra
++LIGHT=gpt-5.6-luna
++CLAUDECODE_set=
++CODEX_THREAD_ID_set=yes
++```
++
++（session id `019fa6ed-d5f5-71b2-bb93-2558bd02b14f`；先前一次带冲突的读数 session id
++`019fa6ed-4d06-7c60-9bcd-a72665916c94` 一并留痕，作为「冲突检测确实生效」的对照。）
++
++**结论**：本 change 的四类 dispatch（implementer / Standards 轴 / Spec 轴 / fix）均引用同一次
++Step 0 eval 出的 `$SDFLOW_TIER_MID`（设计上「本轮全程只 eval 这一次」）。在真实 Codex 宿主进程
++内，该值解析为 `gpt-5.6-terra`——**∈ Codex 机队缺省集**（`{gpt-5.6-sol, gpt-5.6-terra,
++gpt-5.6-luna}`，见 `model-tiers.md` 机读块），**零命中 Claude 机队专名**（`{opus, sonnet,
++haiku}`）。`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_LIGHT` 同样落在 Codex 机队集合内，未验证到
++Claude 专名污染。
++
++未做的部分：未实跑完整 `sdflow-implement tickets-plan`（含 implementer 子代理实际 fan-out）——
++brief 明确这两个选项二选一，且完整跑会写这个 change 自身的 plan 文件，与 Global Constraints
++的重命名/覆盖红线冲突。若后续需要「四类 dispatch 真的各自派出一次 Codex 子代理」级别的证据，
++需要另开一次性 fixture change，留给编排层裁决是否需要、是否记 todo。
++
++## 未做/裁剪的部分
++
++无。tasks.md §1 全部 12 项 + §7.2 + §7.7 均已完成并有对应证据；D2b（review-loop-breaker 两项
++机制修正）属 Task 3 范畴，本票未触碰，符合 brief 范围。
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index 9d414cf..4a9b00f 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -187,21 +187,27 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
+ - **本 skill 不可替代 = 独立冷视角 + 实测捕获**（抓循环内被 controller 说服放过的真问题）。撤任一个都留洞。
+ 
+ ---
+ 
+ ## 第零步：确认对象 + diff base + 读规则
+ 
+ 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
+ 2. 确认代码已实现且在 feature 分支（`git branch --show-current`）。算 diff base：
+    `git fetch origin <base> --quiet && DIFF_BASE=$(git merge-base origin/<base> HEAD)`。
+ 3. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用代码审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用代码审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/code-checklists/README.md`（架构/选用）、`$RULES_ROOT/code-checklists/code-review-base.md`（CR-01~09）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
+-4. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检（与本步第 3 项 resolve-workflow 预检同 idiom），不成立 → **fail-loud 硬停本轮评审**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何 fan-out / 调 emitter / 落 v2 锚之前 fail-loud 硬停**（同本步第 5 项 skew 探测纪律），**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**（与第 3 项预检、第二步能力探针同类），MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供下方「模型选择」节引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供下方「outside-voice helper 调用协议」引用）。**本轮全程只 eval 这一次**——后续锚行的 `host=`/`runner=` 与 `outside-voice.sh` 一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++4. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：
++
++<!-- sdflow:tier-resolution:start v1 -->
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++<!-- sdflow:tier-resolution:end -->
++
++（与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、第二步能力探针同类；空值/unknown 分家判据同下方「skew 探测」的 fail-loud 精神——三处均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
+ 5. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探两条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。两条均探到 ⇒ 正常进入第一步。
+ 
+ ## 第一步：gstack/review 子步（并入·原生执行，scope-drift + 完成度）
+ 
+ - **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 gstack `/review` 全量流程（指令直接进主 session，MUST NOT 派子代理读其 SKILL.md 模拟；不因 prompt 措辞裁剪原生步骤），**必须含 scope-drift（顺手多改）与计划完成度缺口（建的=计划的?）**，结论纳入 Step3 合并池；报告 Step1 段写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`。
+ - **显式降级**：gstack/review 不可用 → 子代理模拟 + 显式日志（"scope/完成度审计层缺失 → 模拟降级"）+ 锚行 `mode="simulated"`，MUST NOT 伪装原生，**不静默跳过**。
+ 
+ ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目清单）
+ 
+ **Step2 前置·无逻辑面白名单免除判定（机判·post-diff）**：fan-out 前跑
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index a0bf784..89446ad 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -187,21 +187,25 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
+ ### 0.3 tasks.md 复选框对账（关键，否则 verify/archive 被误导）
+ 
+ 实现常经 `superpowers-plan` / subagent-driven-development 完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
+ 
+ - Read `openspec/changes/{change_name}/tasks.md`，与实际实现对照（看 git log / 实现 commit）。
+ - **已真实完成的任务勾上** `- [x]`；**确实未做/部分做的保持 `- [ ]` 并补一句说明**（别为过 archive 假勾——保持记录诚实）。
+ - 若整批确实完成，可 `sed -i '' 's/^- \[ \]/- [x]/g; s/^  - \[ \]/  - [x]/g'` 批量勾，再单独把未完成项改回。
+ 
+ ### 0.4 宿主/档位解析（每轮恰好一次，ADR-9 同源约束）〔host-adaptive-execution · 模型档位按机队分列〕
+ 
+-`eval "$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）与 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已按 config.yaml 覆盖解析好的具体模型 id）。**下方各步「派发 Agent」的 `model:` 参数 MUST 取对应变量值，MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason** 一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
++<!-- sdflow:tier-resolution:start v1 -->
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++<!-- sdflow:tier-resolution:end -->
++
++**下方各步「派发 Agent」的 `model:` 参数 MUST 取对应变量值，MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason** 一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
+ 
+ ---
+ 
+ ## 第一步：Verify（强档子 agent）
+ 
+ > 用强档而非中档/弱档：verify 是**质量门**且要 grep 代码判 PASS/FAIL、辨核心 vs Minor 缺口，judgment 活，中档/弱档易误判 PASS 放不完整的活进归档。sdflow-done 低频，省那点 token 不值。
+ >
+ > **P3h 禁降档（阶段三去人类门后 verify = 唯一终门）**：铁律"带门禁 / 无人逐条复核的步别用弱档——假绿会放不完整的活过关"。verify 用强档 + 下方 prompt 的 **"Do Not Trust the Report" 冷启**，靠证据锚点硬约束堵假✅，不靠人盯。见 design §7.3.1 / adr/0001。
+ 
+ 派发 Agent（model: `$SDFLOW_TIER_STRONG`——第零步 0.4 已 eval 出的强档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 493241f..c06f3ab 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -157,20 +157,66 @@ tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出
+ 经 `/sdflow-ship` 链序以显式参数路由——两态的 gate 插入点力学与旧 writing-plans/subagent-dev 管线
+ 等价（D1/D2）。
+ 
+ 本 skill 由 ship 主 session 经 Skill **inline 执行**——**MUST NOT 作为子代理派发**：子代理无法再派
+ 子代理，而执行模式需要派发 implementer / 双轴审子代理，这个能力只在主 session 位置成立。
+ 
+ `ship_gate.py` **零改动**——本 skill 只是产出 / 消费 gate 已识别的「试验期外衣」契约
+ （`superpowers-plan.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
+ 不触碰 gate 脚本本身，也不读 `openspec/config.yaml`（config 只在 ship 首跳读一次，见路由说明）。
+ 
++## 第零步：宿主/档位解析（两入口共用、无条件执行）
++
++`mode=tickets-plan`（出票）与 `mode=tickets-exec`（执行）**均**在起手先跑本步，且**无条件执行**——
++出票模式同样消费档位：全 ticket 语义一致性自扫遇到粒度争议时的 `T10-choice` 仲裁步要派 **strong**
++对抗镜（见 tasks.md §2），本步只负责把 `$SDFLOW_TIER_*` 解析出来供该仲裁步与执行模式各处派子代理
++引用，不是空转步〔spec-review-amendment M8/L9〕。
++
++<!-- sdflow:tier-resolution:start v1 -->
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++<!-- sdflow:tier-resolution:end -->
++
++**`$SDFLOW_HOST="codex"`：能力探针 + 不可用则硬停（不缩 roster）**〔spec-review-amendment H10〕：
++
++- 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，不做任何实质工作）；
++  派不出/机制报错 → **fail-loud 硬停**「Codex 宿主下子代理机制不可用——请在受支持宿主（Claude Code
++  或另一个可用的 Codex 环境）下重新运行 `sdflow-implement`」，**MUST NOT** 由主 session 顶替
++  implementer/双轴审继续跑 ticket；派出且收到哨兵 → 正常进入下一步。
++- **诚实边界**：探针结果由主 session 自己观察并落锚——「是否真派出了一次子代理、是否真收到回复」
++  无可信脚本捕获路径，MUST NOT 声称这是机械门（同 `sdflow-code-review`/`sdflow-spec-review` 的
++  能力探针诚实边界）。
++- **与 `sdflow-code-review`/`sdflow-spec-review` 的降级路径不同构**：那两者判 `subagents="unavailable"`
++  后**缩 roster 到主 session 实际独立完成的镜**继续跑；`sdflow-implement` **不 fan-out 就跑不了任何
++  ticket**，implementer/双轴审/fix 子代理没有等价的单 session 替代路径，∴ **硬停而非降级**。
++- `$SDFLOW_HOST="claude"` → 免探，恒可用，直接进入下一步。
++
++**`$SDFLOW_HOST="unknown"`：fail-loud 硬停**（与「host 空值」是两类不同的失败，MUST NOT 合并处置）：
++resolver 已跑成、但两个正信号（`CLAUDECODE=1` / 非空 `CODEX_THREAD_ID`）均未见或同时出现，判不出当前
++机队 ⇒ **MUST NOT 用空档位或默认值继续派发**——提示「当前进程内既未见 `CLAUDECODE=1` 也未见非空
++`CODEX_THREAD_ID`（或两者同时出现），请在受支持宿主（Claude Code 或 Codex CLI）下重新运行
++`sdflow-implement`」。
++
++**八类失败分支逐类 problem/cause/fix**（均沿用下文「halt envelope 五要素」呈现：错误码 = 下表
++problem 一句、ticket 号与名统一填「—（起手失败，无票上下文）」、已核实证据 = 下表 cause、已写盘
++副作用统一填「无（第零步不产生任何写盘副作用）」、精确恢复步骤 = 下表 fix）：
++
++| # | 失败类型 | problem | cause | fix |
++|---|---|---|---|---|
++| 1 | resolver 不存在 | `~/.sdflow/hack/resolve-models.sh` 文件不存在（(b) 步 `[ -x ]` 预检为假） | 本机未装 sdflow hack 脚本，或未跑过 `setup.sh` | 在运行 checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh` 后重试 |
++| 2 | resolver 不可执行 | 文件存在但无执行权限（(b) 步 `[ -x ]` 预检为假） | 拷贝方式异常，权限位丢失（如手动 `cp` 而非走 `setup.sh`） | 重跑 `setup.sh`（会重新 `chmod +x`）；仍失败则手动 `chmod +x ~/.sdflow/hack/resolve-models.sh` |
++| 3 | 非零退出 | (c) 步 `resolve-models.sh` 执行后退出码非 0 | 脚本内部错误（如 `--root` 解析失败、依赖的 `resolve-workflow.sh` 报错） | 原样转发 stderr 给用户；按提示修复后重跑本步 |
++| 4 | 输出无法 eval | (c) 步 `eval "$MODELS_ENV"` 后 `$SDFLOW_HOST` 仍为空（shell 侧语法错误或输出被截断，未显式抛异常） | 脚本 stdout 含非法 shell 语法（脚本自身 bug 或输出被截断） | 视同「host 空值」处置（见下一行）——重新核查 resolver 是否真的执行成功 |
++| 5 | host 非法 | `$SDFLOW_HOST` 取到 `claude`/`codex`/`unknown` 之外的值 | 本机 `resolve-models.sh` 版本与本仓 bundle 不一致，或被外部环境变量污染 | 重跑 `setup.sh` 用本仓 canonical 版本覆盖旧拷贝后重试 |
++| 6 | host 空值 | `$SDFLOW_HOST` 为空字符串 | **resolver 根本没跑成**（(a) 步已清脏，eval 未能重新 export）——**MUST NOT** 当作 `host=unknown` 处置 | 按第 1–4 行逐项核查 resolver 是否真的执行成功，修复后重跑本步 |
++| 7 | tier 缺失 | `$SDFLOW_HOST` ∈ {claude,codex} 但 `$SDFLOW_TIER_STRONG`/`MID`/`LIGHT` 任一为空 | `model-tiers.md` 不可达或机读块缺失（workflow bundle 未装，或未跑 `sdflow-init update`） | 按 stderr 提示跑 `sdflow-init update`；或确认 `~/.sdflow/workflow/model-tiers.md` 存在且含 `model-tier-defaults` 机读块 |
++| 8 | host=unknown | `$SDFLOW_HOST` 取到 `unknown`——resolver **跑成**但判不出宿主 | 当前进程内两个正信号（`CLAUDECODE=1`/非空 `CODEX_THREAD_ID`）均未见或同时出现 | 在受支持宿主（Claude Code 或 Codex CLI）下重新运行 `sdflow-implement`；**MUST NOT** 用空档位或默认值继续派发 |
++
+ ## 模式派发契约（F4 单一源，与本 change plan 头部逐字共用）
+ 
+ skill 内**不自判模式**——管线选择完全是外部确定值（config 键 → plan marker → 缺省一律 superpowers，
+ 零模型自由裁量），本 skill 只认调用时传入的显式字面参数，不重新判断 RUN_PLAN/CONTINUE_IMPL 语义：
+ 
+ ```
+ sdflow-implement mode=tickets-plan change={change}
+ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任务号|none}
+ ```
+ 
+@@ -309,21 +355,22 @@ impl-pipeline: tickets
+ ### 每 ticket 派 fresh implementer
+ 
+ 派发前先机械抠出该票原文（附录 B 有出处说明）：
+ 
+ ```
+ python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/superpowers-plan.md --task {N}
+ ```
+ 
+ 默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
+ 
+-dispatch prompt 必含：
++**派发 Agent（model: `$SDFLOW_TIER_MID`——第零步已 eval 出的中档模型 id；config.yaml model-tiers 段
++已在 resolve-models.sh 内按机队分键覆盖），MUST NOT 内联具体模型 id**，dispatch prompt 必含：
+ 
+ - 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
+   `### Task N:` 段落文本进 prompt**）；
+ - plan 头部 `## Global Constraints` 节全文（逐字，implementer 与 reviewer 共享同一份注意力透镜）；
+ - **🔴 本 SKILL.md 顶部的「四条通则」区块全文**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——
+   子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。漏带 ⇒ implementer 眼前只有现状代码，
+   **必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。**双轴审的两个 reviewer 子代理同样必带。**
+ - **🔴 信号权威表**（必填槽，**原文携带**，非可省的 prose 叮嘱）——子代理是 fresh context，
+   **未声明即等同未约束**。正面陈述归属（不是禁令清单：禁令只挡列举到的那一种越界形态，
+   权威表挡的是整个范畴）：
+@@ -428,21 +475,23 @@ git log --oneline | grep "checkpoint({change}:task<N>-"
+   } > {change_dir}/impl-reports/task<N>-review-package.diff
+   ```
+   dispatch prompt 携带该文件路径，**MUST NOT** 把大 diff 贴进 prompt 正文。
+ - reviewer 报出的 `⚠️ cannot-verify-from-diff` 项（需求活在未改动代码里，或要跨 ticket 才能验证）
+   由**编排层亲自消解**：直接从盘面（design.md / specs/ / ticket 文本）核验。**预算上界**——需触碰
+   **超过 3 个文件**，或盘面**不可直接解答** → 按「确认缺口退回 implementer」处理，**MUST NOT**
+   无限深挖下去〔F7〕。
+ 
+ ## 每 ticket 双轴审
+ 
+-implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代理（各 **<400 词**封顶）：
++implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代理（各 **<400 词**封顶，
++**均派发 Agent model: `$SDFLOW_TIER_MID`**——同一次第零步 eval 出的中档模型 id，MUST NOT 内联具体
++模型 id）：
+ 
+ > **🔴 两个评审子代理的 prompt（以及 implementer / fix 子代理的 prompt）MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**
+ > （`sdflow:principles` 从 start 到 end，整段复制，不转述、不摘要）——**子代理是 fresh context，看不见本 SKILL.md**。
+ > **Spec 轴尤其吃通则 ③**：它的判据是「**ticket 声明的目标态**做到没有」，**不是**「现有代码本来就是这样，那就算了」。
+ >
+ > **🔴 fix 子代理的 dispatch prompt 同样 MUST 原文携带上文「每 ticket 派 fresh implementer」节的
+ > 信号权威表**——fix 轮次同为 fresh context，其完成信号与设计工件的权威归属与首轮完全一致
+ > （fix 也 MUST NOT 自行勾框 / 打完成标签 / 改四件套）。
+ 
+ **权威表缺席不得静默降级**：若因 SKILL 裁剪、模板漂移或上下文预算取舍导致某次 dispatch 未携带
+@@ -479,21 +528,23 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代
+ - **不信 implementer 的自辩**——报告里的理由（"故意这样做的""按 YAGNI 留的"）不能拿来给 finding
+   降级；只看代码本身下判断。
+ - **不重跑 implementer 已经跑过的测试**——只在读代码生出具体怀疑、且现有跑法答不了那个疑问时，
+   才跑一个聚焦测试；不重跑整套件。
+ - **输出零寒暄**——最终消息就是报告本身，不写开场白/过程叙述/收尾总结。
+ - **反预判**——dispatch prompt 里 MUST NOT 出现"这条不用标""顶多算 Minor""这么写是故意的别管"
+   这类提前定性的措辞。
+ 
+ 裁决处置：
+ 
+-- Critical / Important 发现 → 派 fix 子代理修复 + re-review，循环直至通过；**不带着未修的
++- Critical / Important 发现 → 派 fix 子代理修复（**fix 子代理无独立 dispatch 段，就地在此声明**：
++  model: `$SDFLOW_TIER_MID`——同一次第零步解析结果，与上文 implementer/双轴审共用同一档位，不重复
++  计数）+ re-review，循环直至通过；**不带着未修的
+   Critical/Important 推进下一 ticket**。**熔断**〔impl-review-fix〕：同一发现（同 file:line +
+   同问题）连续 2 轮 re-review 仍未消解 → 停止循环，按 T10 三级决策协议处理（有客观判据自动选 /
+   无客观判据派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist 并停上抛），**MUST NOT**
+   无限循环。
+ - Minor 发现 → defer 进 todolist，**JSON 显式带 `"change"` 字段**（省略会被脚本自动挂到"当前活跃
+   change"，多 change 并行时会挂错，坑见 sdflow-issues 的 todo 池 `change` 字段说明）。
+ 
+ **无 warm final whole-branch review**——本模式不追加分支级终审步；全部 ticket 完成、gate 判进
+ `RUN_CODE_REVIEW` 后直接交给冷层 `/sdflow-code-review` 承接（独立冷视角 + 实测捕获承重墙，见下节
+ 去向说明）。
+diff --git a/sdflow-init/assets/snippets/claude-section.md b/sdflow-init/assets/snippets/claude-section.md
+index 0647e83..b89bc3c 100644
+--- a/sdflow-init/assets/snippets/claude-section.md
++++ b/sdflow-init/assets/snippets/claude-section.md
+@@ -100,29 +100,34 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ > 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+ > 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+ 
+ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权（host-adaptive-execution 能力「子代理不可用
+ 时镜数如实降级」）。**本节即该授权**：
+ 
+ - **授权范围**：`/sdflow-spec-review`、`/sdflow-code-review` 两个评审编排器在 Codex 宿主下的**多镜
+   fan-out**（领域镜 / 对抗镜 / 接地镜或历史镜等并行子代理）与各自的 outside-voice 同族 fallback
+-  子代理，**MUST 视为已授权**。仅限这两处——不是对任意 skill 无限制放开 `spawn_agent`。
++  子代理，以及 `sdflow-implement` 在 Codex 宿主下派发的 implementer / Standards 轴 / Spec 轴 / fix
++  子代理，**MUST 视为已授权**。仅限这三处——不是对任意 skill 无限制放开 `spawn_agent`。
+ - **`spawn_agent` 指定 `model` 的 task-specific reason**：Codex 要求非默认 `model` 附 clear
+   task-specific reason；**本工作流按机队分列的 `model-tiers.md` 档位表本身即构成该理由**——门禁步
+-  （主 session 综合裁决）禁止降档是硬约束、非偏好，两个评审 SKILL 引用 `$SDFLOW_TIER_STRONG` /
+-  `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理时直接以此为由，不必另编说辞。
++  （主 session 综合裁决）禁止降档是硬约束、非偏好，`sdflow-spec-review`/`sdflow-code-review`/
++  `sdflow-implement` 引用 `$SDFLOW_TIER_STRONG` / `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理
++  时直接以此为由，不必另编说辞。
+ - **能力探针（语义核验，非机械门）**：评审 SKILL 在 fan-out 前先派一个 trivial 探针子代理判定
+   「子代理机制活着没」——探针值是主 session 自报，无可信脚本捕获路径，MUST NOT 被当作机械保证。
+   子代理不可用 ⇒ **缩 roster 到主 session 实际独立完成的镜**，报告显著标注「单镜降级」，MUST NOT
+   为未独立跑过的镜落锚。
++- **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
++  （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
++  跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
+ 
+ > **`/grill-with-docs`（分支 B 的阶段一对抗层）**——**走分支 B 时，ff 之后、设计审之前的必经步**。
+ > 它来自 **Matt Pocock 的 skills 集合**（`~/.agents/skills`，仓外、非 git 管理、更新即覆盖），**不是 sdflow-skills、也不是 superpowers 插件**。
+ > 它 **`disable-model-invocation: true`，只能人手动触发**：模型唤不起它，只能**把 prompt 贴给人、由人敲**。
+ > 因此它极易被静默跳过——**跳过 grill = 把一份没被拷问过的设计直接送进设计审**，
+ > 而 spec-review 的多镜是在**已有设计的框架内**找问题，**不会替你质疑这个框架本身**。
+ >
+ > **分支 A（`/sdflow-spec`）不依赖它**：拷问是那条管线的内建相位 B，且**在成文之前**跑
+ > （改想法比改四份成文便宜）。⚠️ 这是**结构性改善，不是机械保证**——跳过须主动偏离指令，
+ > 而指令层约束由执行方自报；机械可验的只有「`decision-memo.md` 存在且必填小节非空」这一条门。
+diff --git a/sdflow-init/tests/test_codex_subagent_authorization.py b/sdflow-init/tests/test_codex_subagent_authorization.py
+index 7d39855..1ae9ebe 100644
+--- a/sdflow-init/tests/test_codex_subagent_authorization.py
++++ b/sdflow-init/tests/test_codex_subagent_authorization.py
+@@ -44,22 +44,25 @@ def _anchor_lint_mod():
+ def test_snippet_declares_codex_subagent_authorization():
+     """claude-section.md（sdflow-init 铺给消费项目、经 opsx-init 托管块注入 AGENTS.md 的单一源）
+     MUST 含 Codex 子代理授权段：授权范围（两个评审 SKILL 的 fan-out）+ spawn_agent 的
+     task-specific reason 与 model-tiers 的绑定。"""
+     t = SNIPPET.read_text(encoding="utf-8")
+     assert "Codex 子代理授权" in t
+     assert "spawn_agent" in t
+     assert "task-specific reason" in t
+     assert "model-tiers.md" in t
+     assert "sdflow-spec-review" in t and "sdflow-code-review" in t
++    # harden-implement-review-loop Task 1（H11/C13）：sdflow-implement 的 implementer/Standards轴/
++    # Spec轴/fix 派发同样补进授权范围，第三处
++    assert "sdflow-implement" in t
+     # 授权非无限放开——MUST 显式限定范围，防止被读成"任意 skill 可随便 spawn_agent"
+-    assert "仅限这两处" in t
++    assert "仅限这三处" in t
+ 
+ 
+ def test_snippet_authorization_names_probe_semantic_boundary():
+     """授权段紧邻处 MUST 提醒探针是语义核验非机械门——授权和诚实边界不能分离铺设
+     （只铺授权、不铺边界，会让读者以为探针=机械保证）。"""
+     t = SNIPPET.read_text(encoding="utf-8")
+     assert "语义核验" in t
+     assert "非机械" in t or "MUST NOT 被当作机械保证" in t
+     assert "单镜降级" in t
+ 
+diff --git a/sdflow-ship/SKILL.md b/sdflow-ship/SKILL.md
+index 87113a6..cb2b89c 100644
+--- a/sdflow-ship/SKILL.md
++++ b/sdflow-ship/SKILL.md
+@@ -155,21 +155,21 @@ description: 阶段三编排器——对已过设计门的 OpenSpec change 一
+   python3 ~/.claude/skills/sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"
+   ```
+   路径缺失时按 sibling 约定兜底：`python3 ~/.codex/skills/sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`，
+   再兜底仓内路径 `sdflow-ship/scripts/ship_gate.py`（相对仓根，即 `python3 sdflow-ship/scripts/ship_gate.py --change {change} --root "$(git rev-parse --show-toplevel)"`），三处均找不到才停下问用户。
+   <!-- [impl-review-fix] 裁决项10：兜底句原用省略号"…"，改写全三处显式路径，防止照抄时脑补错命令 -->
+   步前问"NEXT 是谁 + 前置缺什么"，步后问"产物落了吗 + 门禁结论"。首行人读摘要照抄进对话，JSON 供判定。
+ - **ship 零 git 写操作〔D8〕**：全程不 commit/merge/push（各子 skill 的 checkpoint 归其自身；ship 无产物故无自身 checkpoint）；**不自动 push**。
+ - **merge 意图透传**：调用语含 merge opt-out 意图时，ship 归一化为 sdflow-done 词表短语（如「不要 merge」「skip merge」）转述给 done——勿原样转述词表外措辞（git 单向操作只在 done 一处）。
+   <!-- [impl-review-fix] 裁决项10：原"原样转述"允许词表外自由措辞传给 done，改为归一化到 done 认识的固定词表短语 -->
+ - **决策协议（T10 三级，替换"有把握自动选"）**：阶段三遇 ≥2 方案——①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派对抗镜复核推荐项，通过才自动选（复核记录写进该步报告）；③复核不过/无从复核 → defer 进 buglist/todolist + hand-off。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 复核记录格式：写入该步 code-review-report.md 的「修复 / defer 台账」区，行格式 = 「T10复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」。
+-- 模型档位与缺省见规则根 `model-tiers.md`（按机队分列，经 ~/.sdflow/hack/resolve-workflow.sh 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。取值经各被链序调度的子 skill（spec-review/code-review/done）各自 `eval "$(~/.sdflow/hack/resolve-models.sh)"` 解出 `$SDFLOW_TIER_*`；本 skill 自身零 git 写操作、不直接派子代理（无需 spawn_agent 理由声明），此处仅转述覆盖入口，MUST NOT 内联模型名。
++- 模型档位与缺省见规则根 `model-tiers.md`（按机队分列，经 ~/.sdflow/hack/resolve-workflow.sh 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。取值经各被链序调度的子 skill（spec-review/code-review/done/implement）各自 `eval "$(~/.sdflow/hack/resolve-models.sh)"` 解出 `$SDFLOW_TIER_*`；本 skill 自身零 git 写操作、不直接派子代理（无需 spawn_agent 理由声明），此处仅转述覆盖入口，MUST NOT 内联模型名。
+ 
+ ## 链序（gate 驱动，非记忆）
+ 
+ REFUSE_START(exit3)→停并转述 reason 两变体："未过设计门（若拍板已发生请人工补锚——显式越权留痕）"｜"change 不存在（active 与 archive 均无）——核对 change 名拼写"〔B3〕 ·
+ RUN_SOP→跑 embedded-test-sop（TG-18/高风险细判归模型） · RUN_PLAN→先跑 `python3 sdflow-implement/scripts/impl_route.py route --root "$(git rev-parse --show-toplevel)" --change {change}` 取 PIPELINE_RECEIPT（回显进对话）；`pipeline=tickets` → 按模式派发契约字面串派发 `sdflow-implement mode=tickets-plan change={change}`（ship 主 session inline 执行，MUST NOT 作为子代理派发）；`pipeline=superpowers` → superpowers:writing-plans（**派发 args = `workflow/prompts/step6-writing-plans.md` 全文（原样，勿转述；单一源，**别去读 workflow.md**），其中每任务 commit 步的格式规则（权威见 `ship_gate.py` `TAG_RE`〔T36〕）显式写 checkpoint-commit 命令，由 implementer 执行**——gate 主锚契约；gate 只认当前 change 标签、跨 change stacking 不污染〔T32〕）→ subagent-driven-development 自动执行；helper 非 0 退出（RouteStop，UNKNOWN 语义）→ 按 UNKNOWN 停上抛，不静默回退 · CONTINUE_IMPL→一律按 plan frontmatter marker 路由——本步 MUST 重新调用取 marker：`python3 sdflow-implement/scripts/impl_route.py route --root "$(git rev-parse --show-toplevel)" --change {change}`（与 RUN_PLAN 同款字面命令，同一 route CLI 调用取值，首跳 config 值不再参与；**零跨步内存状态**：本步 MUST 重新调用取 marker，禁止复用早前会话结果或人眼读 frontmatter）〔impl-review-fix〕；`marker=tickets` → 按模式派发契约字面串派发 `sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任务号|none}`（值取自 gate JSON `done_tasks`，原样透传不重算不猜测）；marker 缺席 → 把 JSON `done_tasks` 已完成任务号集传给 SDD dispatch **勿重派**（subagent-driven-development）；helper exit 6（marker 在但非法/重复/损坏，RouteStop）→ 按 UNKNOWN 停上抛，MUST NOT 静默回退旧管线（此判据对 RUN_PLAN 与 CONTINUE_IMPL 两处路由调用均适用）〔impl-review-fix〕；**试验期权威声明：「此二态 skill 路由以本链序为权威；gate JSON `next` 在此二态仍输出 writing-plans/subagent-dev，仅信息性（emit 串 Phase B 根治）。『照 next 跑』指令仅约束 RERUN_STALE/STEP_IN_PROGRESS。」**〔impl-review-fix〕 · RUN_CODE_REVIEW→/sdflow-code-review · BLOCKED_UPSTREAM(exit4)→停并原样上抛 blocker 清单 · RUN_VERIFY→/sdflow-done（透传 merge 意图） · VERIFY_FAIL(exit5)→停并原样上抛缺口清单 · RERUN_STALE→重跑 gate 指定步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜） · STEP_IN_PROGRESS→重跑该步（目标步 = JSON `next` 字段值，动态非固定名——照 next 跑，勿凭摘要猜）；**熔断判据（按 verdict 分治）**〔T26/SR-1；impl-review-fix CR-1〕：① **`STEP_IN_PROGRESS`**（报告在但无结论锚）→ 用锚行集合判据：同一 invocation 内重跑前后，以 `ship_gate.py` 无状态 helper `anchor_set(text)`/`breaker_no_progress(before, after)` 比较该步报告的 **ship-gate frontmatter 状态集合**〔mlh-p5 Task6 D11：判据迁 frontmatter 状态集，inline 锚已随 live 读点退役、不再参与进展判据〕（快照由编排器单 invocation 内持有作参数传入，helper 不落地、不跨 invocation），状态集无净变化即判无进展。② **`RERUN_STALE`**（报告有锚但陈旧）→ 进展信号是**新鲜度已刷新**（重跑后 gate 不再返回 `RERUN_STALE`），故其熔断以「重跑后 gate **仍**返回同一 `RERUN_STALE`」为准，**MUST NOT 用锚集不变误判**（stale 重跑常锚不变如 pass→pass，用锚集会假熔断误杀正常刷新）。任一判无进展 → 按 UNKNOWN 停上抛人工，禁无限静默循环；**HEAD 移动、文件修改时间戳变化 MUST NOT 作免疫信号**（修复类步几乎必产 commit，若把 HEAD 移动当"有进展"熔断永不触发）；**fail-safe：快照缺失（如 context 压缩丢失上一次记录）保守判无进展**，MUST NOT 默认放行再跑〔熔断〕（例外边界声明：重试判定是单 invocation 内的短时持有、非跨步状态记忆——与"禁 prose 记忆步序"红线不冲突〔adr/0006(b) 的步序判定已全部在 gate〕；持久化下沉为长期 defer 项见 todolist，撞三红线不做） · UNKNOWN(exit6)→停并转述 reason · SHIPPED→输出摘要。
+ 
+ **行为边界〔harden-gate-git-layer ADR-3〕**：**design 域失鲜仅在 `RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL`
+ 窗口内求值，进入代码审（`RUN_CODE_REVIEW` 起）后不再检查**。∴ 代码审期 / done 期对四件套的修订（流程明文
+ 允许「revise design.md to match reality」）不再触发 design 失鲜；而「实现期照着已批准设计边写边纠偏」这类改动
+ 会在窗口内被 `REFUSE_START` 拦下——**这是有意的行为收紧、非 bug**，正解是走「halt → 重审 → 重新拍板」，不加旁路。
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index 0b5d535..f5e697e 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -163,21 +163,27 @@ description: >
+ >   主 session 携带生成历史进裁决，接受一丝合成层偏置——但**反静默压制**焊死其边界（见 Step3）。
+ > - **中途不 AskUserQuestion（G2）**：撞到决策点写进报告「决策登记区」，继续跑完；人工在设计 HARD-GATE
+ >   一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可（且报告摊开三面后果 + 主次判定，比中途弹窗看得全）。
+ 
+ ---
+ 
+ ## 第零步：确认对象 + 读规则
+ 
+ 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
+ 2. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用评审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用评审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/spec-review.md`（方法论）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
+-3. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检（与本步第 2 项 resolve-workflow 预检同 idiom），不成立 → **fail-loud 硬停本轮评审**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何 fan-out / 调 emitter / 落 v2 锚之前 fail-loud 硬停**（同本步第 4 项 skew 探测纪律），**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**（与第 2 项预检、第二步能力探针同类），MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供下方「模型选择」节引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供下方「outside-voice helper 调用协议」引用）。**本轮全程只 eval 这一次**——后续锚行的 `host=`/`runner=` 与 `outside-voice.sh` 一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++3. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：
++
++<!-- sdflow:tier-resolution:start v1 -->
++**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
++<!-- sdflow:tier-resolution:end -->
++
++（与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、第二步能力探针同类；空值/unknown 分家判据同下方「skew 探测」的 fail-loud 精神——三处均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
+ 4. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探两条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。两条均探到 ⇒ 正常进入第一步。
+ 
+ ## 第一步：autoplan 子步（广审·原生执行，吃其 findings）
+ 
+ 1. **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 autoplan（其指令直接进主 session 执行，MUST NOT 派子代理读其 SKILL.md 转述模拟）。autoplan 跑自己的流程，prompt 不注入；其内部 AskUserQuestion 人类门（premise 确认 / 最终批准）按 G2/C5 适配：不弹窗，连同其自动决策一并登记进本评审报告「决策登记区」，设计门一次拍板。
+ 2. **主 session 落盘〔R5〕**：autoplan 原生机制只写 plan file，无「写任意路径」能力——执行完由**主 session** 汇总其结论 Write 落盘 `{change_dir}/gstack-review.md`（改动标 `[gstack-amendment]`），文件头 + 本报告 Step1 段各写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`；native 声明附一句侧信道佐证（如 autoplan 双声真实调用事实/运行痕迹）。
+ 3. **降级路径**：autoplan skill 不可用 → 子代理模拟广审 + 报告显式标注「模拟广审（降级模式）」+ 锚行 `mode="simulated"`，MUST NOT 伪装原生。
+ 4. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
+ 5. **outside-voice 复用守卫（确定性脚本门·R2）〔mlh-p4 T80〕**：复用 `gstack-review.md` 的 codex outside-voice findings 前，调守卫脚本出 reason_code——三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）的机械判定归脚本，复用/回落的**编排**归你：
+    `python3 $RULES_ROOT/tools/outside_voice_guard.py --review-path {change_dir}/gstack-review.md --change-dir {change_dir}`——脚本纯 stdlib、无 subprocess、新鲜度用源文件 fs-mtime 直比（排除评审产物自身，捕获未提交编辑；不调 git），归约出唯一 reason_code（`none|file-missing|section-not-found|zero-findings|stale|simulated-source`）落 stdout；`none` = 三前置全过、退出码 0；其余码退出码非 0（坏输入如 `step1-broad-review` 锚缺失/mode 非枚举 → stderr `[outside_voice_guard] FAIL` + 无 stdout，遵其判定 MUST NOT 静默吞）。
+diff --git a/setup.sh b/setup.sh
+index 7b8af37..741e054 100644
+--- a/setup.sh
++++ b/setup.sh
+@@ -535,10 +535,19 @@ fi
+ 
+ # 两个评审 SKILL 的 async host 调度段必须逐字节相同 —— 漂了 = 一个宿主路径静默行为分叉。
+ # 【独立守卫】：本门只依赖自己那个脚本存在，MUST NOT 挂在 sync_principles.py 的条件下
+ # （否则 sync_principles.py 一缺失，本门就静默不跑 = 不存在的门）。
+ if command -v python3 >/dev/null 2>&1 && \
+    [ -f "$REPO_DIR/hack/check_async_branch_parity.py" ]; then
+   if ! python3 "$REPO_DIR/hack/check_async_branch_parity.py"; then
+     echo "  ⚠️ async host 调度段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
+   fi
+ fi
++
++# 四个编排 SKILL（implement/done/code-review/spec-review）的宿主/档位解析核心段必须逐字节相同 ——
++# 漂了 = 某个 skill 的档位解析静默行为分叉。独立守卫，同上不挂在 sync_principles.py 条件下。
++if command -v python3 >/dev/null 2>&1 && \
++   [ -f "$REPO_DIR/hack/check_tier_resolution_parity.py" ]; then
++  if ! python3 "$REPO_DIR/hack/check_tier_resolution_parity.py"; then
++    echo "  ⚠️ 宿主/档位解析核心段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
++  fi
++fi
