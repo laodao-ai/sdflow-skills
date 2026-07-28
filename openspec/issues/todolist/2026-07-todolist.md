@@ -115,6 +115,7 @@ sdflow-issues:
     T254: {"module":"openspec/workflow/lens-metric-contract.md","summary":"lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行","type":"可观测性","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
     T255: {"module":"sdflow-spec-review/SKILL.md","summary":"outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能","type":"基础设施","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
     T256: {"module":"sdflow-ship/SKILL.md + ~/.claude/hooks/","summary":"用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做）","type":"基础设施","status":"OPEN","time":"2026-07-28 11:18","change":"main","batch":null}
+    T257: {"module":"`ship_gate.py plan_was_renamed`","summary":"plan_was_renamed 内部已算出不带 --follow 的首次新增 sha，紧随其后的 plan_first_sha 又对同一 plan_rel 重发一次完全相同的 git log --diff-filter=A（decide() 每次判定多一次 subprocess）。修法：plan_was_renamed 返回 (renamed, no_follow_first)，或在 decide() 里算一次分别传给两处复用。非阻断，正确性不受影响。来源：harden-implement-review-loop Task 3 fix 轮 Standards 轴 re-review（Duplicated Code）","type":"性能优化","status":"OPEN","time":"2026-07-28 14:18","change":"harden-implement-review-loop","batch":null}
 ---
 # 2026-07 TODO
 

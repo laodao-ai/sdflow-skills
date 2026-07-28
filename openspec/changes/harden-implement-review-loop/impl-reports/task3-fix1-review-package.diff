@@ -1,0 +1,563 @@
+# Review package (task3 全量, 含 fix1): 9f57dfb..13e0b7e
+
+## Commits
+13e0b7e fix(plan-resolver): 在途 plan 改名 fail-closed + 单一源身份断言
+
+## Files changed
+ .../impl-reports/task3-brief.md                    |  19 +
+ .../impl-reports/task3-plan-resolver-fix1.md       | 113 +++++
+ .../impl-reports/task3-plan-resolver.md            | 118 ++++++
+ .../impl-reports/task3-review-package.diff         | 466 +++++++++++++++++++++
+ sdflow-implement/scripts/impl_route.py             |  37 +-
+ sdflow-implement/tests/test_impl_route.py          |  75 ++++
+ sdflow-ship/scripts/ship_gate.py                   |  89 +++-
+ sdflow-ship/tests/test_plan_resolver.py            | 152 +++++++
+ 8 files changed, 1061 insertions(+), 8 deletions(-)
+
+## Diff
+diff --git a/sdflow-implement/scripts/impl_route.py b/sdflow-implement/scripts/impl_route.py
+index dea7602..9b3d27c 100644
+--- a/sdflow-implement/scripts/impl_route.py
++++ b/sdflow-implement/scripts/impl_route.py
+@@ -39,22 +39,33 @@ LEGAL_PIPELINES = ("tickets", "superpowers")
+ # [impl-review-fix F4] 围栏词法单一源 = ship_gate.FenceTracker。
+ # 定位方式：本文件在 <root>/sdflow-implement/scripts/ 下，gate 在同级 <root>/sdflow-ship/scripts/。
+ # 两种安装形态都成立——symlink 安装时 Path(__file__).resolve() 落回仓内；Windows copy 安装时
+ # 两个 skill 目录在 ~/.claude/skills/ 下互为兄弟。抽第三个共享模块反而两种形态都找不到
+ # （它没有 SKILL.md，setup.sh 不装它），故取 sibling import。
+ _GATE_SCRIPTS = Path(__file__).resolve().parents[2] / "sdflow-ship" / "scripts"
+ try:
+     if str(_GATE_SCRIPTS) not in sys.path:
+         sys.path.insert(0, str(_GATE_SCRIPTS))
+     from ship_gate import FenceTracker as _FenceTracker  # type: ignore
++    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名 resolver 单一源同样是
++    # ship_gate——与上面 FenceTracker 同一条 sibling-import 路径，MUST NOT 在本文件手抄
++    # 第二份候选文件名列表（两轨共用一个文件名，见 tasks.md §5 前言 C14）。
++    from ship_gate import (  # type: ignore
++        resolve_plan_path as _resolve_plan_path,
++        PlanNameConflict as _PlanNameConflict,
++        PLAN_FILENAMES as _PLAN_FILENAMES,
++    )
+ except Exception as _e:                                  # noqa: BLE001
+     _FenceTracker = None                                 # fail-closed，见 parse_blocked_by
++    _resolve_plan_path = None                            # fail-closed，见 _cmd_route
++    _PlanNameConflict = None
++    _PLAN_FILENAMES = ()
+     # [impl-review-fix] 记下失败原因串：fail-closed 本身对，但吞掉原因会让
+     # 「装歪了 vs 语法错 vs 版本不符」三种情况在诊断上无法区分。
+     _FENCE_IMPORT_ERR = f"{type(_e).__name__}: {_e}"
+ else:
+     _FENCE_IMPORT_ERR = ""
+ 
+ # [impl-review-fix] 语义对齐 ship_gate.EXIT_UNKNOWN=6（设计禁 import gate，手动同步；
+ # gate 侧字面见 ship_gate.py:137 `EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN
+ # = 0, 3, 4, 5, 6`）。
+ EXIT_ROUTE_STOP = 6
+@@ -429,21 +440,45 @@ def _get_plan_sha(root: Path, plan_path: Path) -> str:
+     return sha if sha else "-"
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # CLI
+ # ---------------------------------------------------------------------------
+ 
+ def _cmd_route(args: argparse.Namespace) -> int:
+     root = Path(args.root)
+     change = args.change
+-    plan_path = root / "openspec" / "changes" / change / "superpowers-plan.md"
++    change_dir = root / "openspec" / "changes" / change
++
++    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名经共享 resolver 定位
++    # （单一源 = ship_gate.resolve_plan_path，见上方 sibling-import）；MUST NOT 在此手抄
++    # 候选文件名列表。resolver 引不到（装歪/版本不符）⇒ fail-closed，与 FenceTracker 缺失
++    # 同一停机纪律，不静默回退旧硬编码文件名。
++    if _resolve_plan_path is None:
++        print("无法加载计划文件名 resolver 单一源 ship_gate.resolve_plan_path，"
++              "拒绝以分叉口径定位计划文件"
++              + (f"（import 失败原因：{_FENCE_IMPORT_ERR}）" if _FENCE_IMPORT_ERR else ""),
++              file=sys.stderr)
++        return EXIT_ROUTE_STOP
++    try:
++        plan_path = _resolve_plan_path(change_dir)
++    except _PlanNameConflict as e:
++        print(str(e), file=sys.stderr)
++        return EXIT_ROUTE_STOP
++    if plan_path is None:
++        # 两者皆缺——用新名占位（不存在的路径），下游 read_plan_marker/_get_plan_sha
++        # 对不存在的文件均已定义为「缺席」语义，行为与改造前的硬编码路径等价。
++        # [harden-implement-review-loop Task3 fix1 · finding3] 无 `else "tickets.md"` 兜底：
++        # 走到本行时 `_resolve_plan_path is not None` 已在上面判过（否则第 461 行已
++        # return EXIT_ROUTE_STOP），即 import 必已成功、`_PLAN_FILENAMES` 必非空——
++        # 该分支在当前控制流下不可达，且与 `PLAN_FILENAMES[0]` 重复硬编码，纯死代码。
++        plan_path = change_dir / _PLAN_FILENAMES[0]
+ 
+     config_pipeline, config_note = read_config_pipeline(root)
+ 
+     try:
+         marker = read_plan_marker(plan_path)
+     except RouteStop as e:
+         print(str(e), file=sys.stderr)
+         return EXIT_ROUTE_STOP
+ 
+     pipeline = resolve_pipeline(config_pipeline, marker)
+diff --git a/sdflow-implement/tests/test_impl_route.py b/sdflow-implement/tests/test_impl_route.py
+index d085dff..afefa17 100644
+--- a/sdflow-implement/tests/test_impl_route.py
++++ b/sdflow-implement/tests/test_impl_route.py
+@@ -337,20 +337,95 @@ def test_cli_route_plan_sha_present_when_committed(tmp_path):
+                     check=True, capture_output=True, text=True)
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     sha_field = [seg for seg in out.split() if seg.startswith("plan_sha=")][0]
+     sha = sha_field.split("=", 1)[1]
+     assert sha != "-"
+     assert len(sha) == 7
+     assert all(c in "0123456789abcdef" for c in sha)
+ 
+ 
++# ---------------------------------------------------------------------------
++# [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名共享 resolver：
++# route 侧同样经 ship_gate.resolve_plan_path 定位（单一源，非本文件手抄第二份候选）。
++# ---------------------------------------------------------------------------
++
++def test_cli_route_picks_up_new_plan_name_tickets_md(tmp_path):
++    # 仅新名 tickets.md 存在（无旧名）→ resolver 照常识别（marker/pipeline 行为与旧名等价）
++    d = _mkchange(tmp_path)
++    (d / "tickets.md").write_text(
++        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
++        encoding="utf-8")
++    code, out, _ = _run_route(tmp_path, "demo")
++    assert code == 0
++    assert "marker=tickets" in out
++    assert "pipeline=tickets" in out
++
++
++def test_cli_route_both_plan_names_present_fails_closed(tmp_path):
++    # 两个计划文件名同时存在 → fail-closed（不猜哪个有效），退出码与既有 RouteStop 语义一致
++    d = _mkchange(tmp_path)
++    (d / "tickets.md").write_text(
++        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
++        encoding="utf-8")
++    (d / "superpowers-plan.md").write_text(
++        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
++        encoding="utf-8")
++    code, out, err = _run_route(tmp_path, "demo")
++    assert code == ir.EXIT_ROUTE_STOP
++    assert out == ""
++    assert "tickets.md" in err and "superpowers-plan.md" in err
++
++
++def test_cli_route_new_plan_name_plan_sha_present_when_committed(tmp_path):
++    d = _mkchange(tmp_path)
++    (d / "tickets.md").write_text(
++        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
++        encoding="utf-8")
++    subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
++                    check=True, capture_output=True, text=True)
++    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"],
++                    check=True, capture_output=True, text=True)
++    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"],
++                    check=True, capture_output=True, text=True)
++    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"],
++                    check=True, capture_output=True, text=True)
++    subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "seed"],
++                    check=True, capture_output=True, text=True)
++    code, out, _ = _run_route(tmp_path, "demo")
++    assert code == 0
++    sha_field = [seg for seg in out.split() if seg.startswith("plan_sha=")][0]
++    assert sha_field.split("=", 1)[1] != "-"
++
++
++def test_resolve_plan_path_single_source_used_by_route(tmp_path):
++    # 单一源核验：impl_route 引入的 resolve_plan_path 与 ship_gate 里的是同一个对象，
++    # 非各自手抄的两份实现（MUST NOT 手抄第二份，见 tasks.md §5 前言）。
++    #
++    # [harden-implement-review-loop Task3 fix1 · finding2] 行为等价断言（旧版本仅
++    # `== d / "tickets.md"`）对「手抄了一份等价实现」是恒真锚——若真被换成手抄副本，
++    # 该断言仍全绿。改用身份断言（同 :653 `ir._FenceTracker is sg.FenceTracker` 的范式），
++    # 手抄副本会让 `is` 判假、测试必红。三个导入（resolve_plan_path / PlanNameConflict /
++    # PLAN_FILENAMES）逐一核身份，而非只核其中一个函数的返回值。
++    sys.path.insert(0, str(REPO_ROOT / "sdflow-ship" / "scripts"))
++    import ship_gate as sg  # noqa: E402
++
++    assert ir._resolve_plan_path is not None
++    assert ir._resolve_plan_path is sg.resolve_plan_path
++    assert ir._PlanNameConflict is sg.PlanNameConflict
++    assert ir._PLAN_FILENAMES is sg.PLAN_FILENAMES
++
++    d = _mkchange(tmp_path)
++    (d / "tickets.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
++    assert ir._resolve_plan_path(d) == d / "tickets.md"
++
++
+ # ---------------------------------------------------------------------------
+ # parse_blocked_by / next_ready（拓扑）
+ # ---------------------------------------------------------------------------
+ 
+ def test_parse_linear_chain():
+     text = (
+         "### Task 1: A\n**Blocked-by:** none\n- [ ] x\n"
+         "### Task 2: B\n**Blocked-by:** 1\n- [ ] x\n"
+         "### Task 3: C\n**Blocked-by:** 2\n- [ ] x\n"
+     )
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index f6f0a42..cc1b7a3 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -36,32 +36,33 @@ inline 锚行字面集（grep -F 语义，零正则；Task6 后**仅归档读半
+     <!-- ship-gate: verify=PASS -->            verify-report.md（旧格式）
+     <!-- ship-gate: verify=FAIL -->
+     <!-- ship-gate: code-review=pass -->       code-review-report.md（旧格式）
+     <!-- ship-gate: code-review=blocked -->
+ 
+ 退出码: 0=可推进(含 SHIPPED/SKIP) 3=REFUSE_START 4=BLOCKED_UPSTREAM 5=VERIFY_FAIL 6=UNKNOWN
+ 
+ verdict × exit × next 契约表:
+     REFUSE_START     3  -                  未过设计门（补锚）｜change 不存在（active 与 archive 均无）〔B3〕
+     RUN_SOP          0  embedded-test-sop  TG-02 命中且 {change}-sop.md 缺
+-    RUN_PLAN         0  writing-plans      superpowers-plan.md 缺
++    RUN_PLAN         0  writing-plans      计划文件缺（tickets.md / superpowers-plan.md 均未找到）
+     CONTINUE_IMPL    0  subagent-dev       plan_ids⊄done_ids〔B4 集合归属〕（JSON done_tasks=计划内已完成号集，SDD 勿重派）
+     RUN_CODE_REVIEW  0  sdflow-code-review code-review-report.md 缺
+     BLOCKED_UPSTREAM 4  -                  code-review=blocked
+     RUN_VERIFY       0  sdflow-done        verify-report.md 缺｜active 存在 verify=PASS 待收尾｜归档未并 base 待 merge 收尾〔B3/BR-10〕
+     VERIFY_FAIL      5  -                  verify=FAIL 且未陈旧
+     RERUN_STALE      0  <该步 skill>        D9 陈旧结论 → 重跑该步
+     STEP_IN_PROGRESS 0  <该步 skill>        产物在但无锚行
+     SHIPPED          0  -                  归档已并 base + archived verify=PASS 锚〔B3+D3硬化,含归档后重跑识别；active 缺席才判,detached 无关〕
+-    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能
++    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能/计划文件名双存在(tickets.md 与 superpowers-plan.md 同时存在)
+ 
+-完成判据窗口〔B1 闭区间〕: superpowers-plan.md 首次提交 sha 起，窗口 [sha, HEAD] 闭区间
++完成判据窗口〔B1 闭区间〕: 计划文件（经共享 resolver 定位的 tickets.md / superpowers-plan.md）
++    首次提交 sha 起，窗口 [sha, HEAD] 闭区间
+     `git log <sha>..HEAD --no-merges` 加 sha 自身 subject（同前缀+TAG_RE 规则）收集
+     checkpoint(<change>:task<k>- 命名空间标签去重任务号集 done_ids〔ship-gate-hardening-2 T32：
+         gate 只认当前 change 的命名标签，跨 change stacking 不互相污染；裸 checkpoint(task<k>-
+         旧格式向后兼容仍计入窗口；startswith 前缀过滤放宽为 "checkpoint("〕；
+     复选框辅通道按 `### Task <n>:` 分段绑定并入 done_ids〔T34：行锚定+忽略代码块，非全局全勾放行〕；
+     plan `### Task <n>:` 号集 plan_ids；plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；
+     标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
+ 
+ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-layer ADR-1/2/3；决策与实证 openspec/adr/0026〕:
+     锚一律取报告自录的 `reviewed_sha`〔ADR-1〕：缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6)
+@@ -1210,20 +1211,57 @@ def tg02_hit(cdir):
+             return True
+     # [fix2 Important] 围栏未闭合 ⇒ 头部声明区的可见性判定不可信（悬空围栏会吞掉声明行，
+     # 方向是 fail-open：静默跳过 embedded-test-sop 门）。与另三个 fence 调用点
+     # （_normalize_checkbox_lines / _parse_plan / _line_scoped_hits「看不清就保守」）方向对齐：
+     # 看不清 ⇒ 保守要求跑 SOP。
+     if fence.inside:
+         return True
+     return False
+ 
+ 
++# [harden-implement-review-loop D5 / adr/0033 · Task 3] 计划文件名共享 resolver——
++# 单一源，`sdflow-implement/scripts/impl_route.py` 经既有 sibling-import（同 FenceTracker
++# 的引入方式）导入本函数，MUST NOT 手抄第二份候选列表。
++#
++# 两轨计划文件名分列：tickets 轨新名 `tickets.md`，superpowers 轨旧名 `superpowers-plan.md`
++# （两轨曾共用旧名，见 decision-memo C14）。文件名**只用于定位**、MUST NOT 参与轨道路由
++# 判定——路由权威仍是 config 键 + plan frontmatter marker（`impl_route.resolve_pipeline`）。
++#
++# 🔴 在途 plan MUST NOT 被重命名（design Migration Plan 逐字）：`plan_first_sha` 用
++# `git log --diff-filter=A`，不跟随重命名——改名会把完成判据窗口起点推到改名 commit，
++# 使改名前的全部 checkpoint 标签落到窗口外、已完成 ticket 被判未完成。resolver 本身不
++# 试图侦测/修复这个窗口重置（那需要重命名跟踪，超出本 change 范围）；它只负责在两个
++# 名字里找到当前真实落盘的那一个，向后兼容在途的旧名 plan。
++PLAN_FILENAMES = ("tickets.md", "superpowers-plan.md")   # 按序探测：新名优先，旧名向后兼容
++
++
++class PlanNameConflict(Exception):
++    """两个计划文件名同时存在于同一 change 目录——fail-closed，不猜哪个有效。"""
++
++
++def resolve_plan_path(change_dir):
++    """在 `change_dir` 下按序探测计划文件（`tickets.md` / `superpowers-plan.md`）。
++
++    返回命中的 `Path`；两者都不存在时返回 `None`（调用方按 RUN_PLAN / 缺席处置）。
++    两者同时存在 ⇒ raise `PlanNameConflict`（调用方按 fail-closed UNKNOWN 处置，
++    提示人工删除其一——不猜哪个是真的，见 adr/0033）。
++    """
++    change_dir = Path(change_dir)
++    hits = [change_dir / name for name in PLAN_FILENAMES if (change_dir / name).is_file()]
++    if len(hits) > 1:
++        raise PlanNameConflict(
++            "计划文件名冲突：" + str(change_dir) + " 下 "
++            + " 与 ".join(sorted(p.name for p in hits))
++            + " 同时存在，请人工删除其一（不可判哪个有效）")
++    return hits[0] if hits else None
++
++
+ def plan_task_ids(plan):
+     # [spec-review-amendment B4/D5] plan 声明的任务号集（去重）。完成判据按**集合归属**
+     # （plan_ids ⊆ done_ids）而非基数（len(done) < n）——否则计划外任务号（遗留/错号/
+     # merge 内提交的 checkpoint(task9-)）会顶替缺失的计划内号让基数达标而假齐（假✅）。
+     # [impl-review-fix CR-F2] fence-aware：fenced 代码块内的 `### Task N:` 示例标题不算任务
+     # （与复选框同 fence 口径，经共享 _parse_plan——前向引用，运行时已定义，模块级合法）。
+     text = plan.read_text(encoding="utf-8", errors="replace")
+     return set(_parse_plan(text)[0])
+ 
+ 
+@@ -1232,20 +1270,44 @@ def plan_task_count(plan):
+ 
+ 
+ def plan_first_sha(root, plan_rel):
+     out = run_git(root, "log", "--diff-filter=A", "--format=%H", "--", plan_rel)
+     # [impl-review-fix] 取首行（最新一次新增记录，git log 默认新→旧序）而非末行：
+     # plan 被删后重建场景，重建视为该 plan 的新生命周期，窗口应锚定最新一次 A 记录，
+     # 否则窗口会回溯到已作废的旧生命周期首次新增点，混入重建前的历史提交。
+     return out.splitlines()[0] if out else ""
+ 
+ 
++# [harden-implement-review-loop Task3 fix1 · finding1] 🔴 在途 plan MUST NOT 被重命名
++# （design Migration Plan 逐字）——机械检出该纪律是否被违反，fail-closed 拒绝而非静默
++# 漏数放行（旧行为：`plan_first_sha` 不跟随重命名，改名前的完成信号被窗口重置排除，
++# gate 却仍正常判 CONTINUE_IMPL）。若改用 `--follow` 让 gate 透明跟随改名，MUST NOT
++# 重命名就变得无害了——那是注销这条规范性约束，不是实现它（详见 tasks.md §5.10）。
++#
++# 判据（两次 git 调用，零解析，MUST NOT 演化成通用 rename 历史解析器——CLAUDE.md 基准5）：
++# 比较不带 `--follow` 的首次新增记录（同 `plan_first_sha` 口径）与带 `--follow` 的首次
++# 新增记录——`--follow` 会追溯重命名链条回到重命名前的原始创建提交；路径从未被重命名时，
++# 两者是同一次真实创建提交（相等）；发生过重命名时，`--follow` 取到更早的原始创建提交
++# （不等）。实测覆盖：本仓全部在途/已归档 plan 中，未改名者两者恒等，仅经历过目录级
++# 归档搬迁（archive/ 下）或字面改名的路径才不等——归档搬迁不会经此函数（归档后 change
++# 目录不再是当前活跃 change dir，resolver 不会解析到它）。
++def plan_was_renamed(root, plan_rel):
++    """检测 `plan_rel` 在 git 历史中是否发生过重命名（改名前后同一在途 plan）。"""
++    no_follow = run_git(root, "log", "--diff-filter=A", "--format=%H", "--", plan_rel)
++    follow = run_git(root, "log", "--follow", "--diff-filter=A", "--format=%H", "--", plan_rel)
++    no_follow_first = no_follow.splitlines()[0] if no_follow else ""
++    follow_first = follow.splitlines()[0] if follow else ""
++    if not no_follow_first or not follow_first:
++        return False   # 未提交/无历史 ⇒ 无从谈起改名，交由既有"未提交"判据处理
++    return no_follow_first != follow_first
++
++
+ def done_task_ids(root, sha, change):
+     # [spec-review-amendment B1] 窗口闭区间 [sha, HEAD]：{sha}..HEAD 排他 + sha 自身 subject。
+     # checkpoint 的 add -A 会把未提交的 superpowers-plan.md 与 task1 锚打进同一 commit（即 sha），
+     # 排他 {sha}..HEAD 会漏数 task1；追加解析 sha 自身 subject（同前缀+TAG_RE 规则）补齐。
+     # [ship-gate-hardening-2 T32] change 命名空间归属：命名标签 checkpoint(<ns>:task<N>-)
+     # 仅当 ns==change（精确==，非前缀）计入；裸标签 checkpoint(task<N>-) 走窗口计入（A1 兼容）。
+     msgs = run_git(root, "log", f"{sha}..HEAD", "--no-merges", "--format=%s")
+     lines = msgs.splitlines()
+     self_subject = run_git(root, "log", "-1", "--format=%s", sha)
+     if self_subject:
+@@ -1409,41 +1471,54 @@ def decide(root, change):
+     # ── step 5.5：条件步（TG-02 声明式 〔TG-02 匹配，非裸子串；细判归模型）──
+     sop_note = ""
+     if tg02_hit(cdir):
+         if not (cdir / f"{change}-sop.md").is_file():
+             # [Task4 · tasks 2.6] 窗口入口①
+             emit_windowed(root, change, report,
+                           "RUN_SOP", EXIT_OK, "embedded-test-sop", "TG-02 命中且 sop 产物缺")
+     else:
+         sop_note = "SKIP_SOP(非嵌入式不触发); "
+     # ── step 6/7：plan 与完成判据〔Q2 窗口主锚〕──────────────────
+-    plan = cdir / "superpowers-plan.md"
+-    if not plan.is_file():
++    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名经共享 resolver 定位；
++    # 双存在 → fail-closed UNKNOWN（不猜哪个有效，提示人工删除其一）。
++    try:
++        plan = resolve_plan_path(cdir)
++    except PlanNameConflict as exc:
++        emit("UNKNOWN", EXIT_UNKNOWN, None, str(exc))
++    if plan is None:
+         # [Task4 · tasks 2.6] 窗口入口②
+         emit_windowed(root, change, report,
+-                      "RUN_PLAN", EXIT_OK, "writing-plans", sop_note + "superpowers-plan.md 缺")
++                      "RUN_PLAN", EXIT_OK, "writing-plans",
++                      sop_note + "计划文件缺（tickets.md / superpowers-plan.md 均未找到）")
+     # [impl-review-fix CR-F1] 未闭合 fenced code block（悬空 ```）→ 悬空围栏会吞掉真实
+     # 未勾项与 Task 标题（假✅/漏 task）→ plan 无法可靠解析 → fail-safe UNKNOWN（先于其余判据）。
+     if plan_unbalanced_fence(plan):
+         emit("UNKNOWN", EXIT_UNKNOWN, None,
+              "plan 有未闭合的 fenced code block(```)，悬空围栏吞真实项，完成判据无法可靠解析")
+     plan_ids = plan_task_ids(plan)
+     n = len(plan_ids)
+     if n == 0:
+         emit("UNKNOWN", EXIT_UNKNOWN, None,
+              "plan 无 '### Task <n>:' 标题（上游模板漂移？），完成判据不能")
+     # [ship-gate-hardening-2 T34] 重号 Task 段 → UNKNOWN（set 折叠掩盖一段全勾一段未勾的假✅）
+     if plan_has_duplicate_task(plan):
+         emit("UNKNOWN", EXIT_UNKNOWN, None,
+              "plan 出现重号 '### Task <n>:' 段（手改/复制粘贴），完成判据不可判"
+              "——重号折叠会掩盖某段未完成的假✅")
+-    sha = plan_first_sha(root, str(plan.relative_to(root)))
++    plan_rel = str(plan.relative_to(root))
++    # [harden-implement-review-loop Task3 fix1 · finding1] 🔴 在途 plan MUST NOT 被重命名——
++    # 检出改名发生过，fail-closed 拒绝而非静默漏数放行（见 plan_was_renamed 注释）。
++    if plan_was_renamed(root, plan_rel):
++        emit("UNKNOWN", EXIT_UNKNOWN, None,
++             f"在途 plan 曾被重命名（{plan.name}），完成判据窗口已失效且不可信；"
++             "请改回原文件名（MUST NOT 重命名在途 plan，见 design Migration Plan）")
++    sha = plan_first_sha(root, plan_rel)
+     # [ship-gate-hardening-2 T34] 两通道完成集并集：checkpoint 主锚 ∪ 复选框分段辅通道
+     checkpoint_done = done_task_ids(root, sha, change) if sha else set()
+     checkbox_done = checkbox_done_ids(plan)   # 按 Task 分段绑定（非全局全勾放行）
+     done = checkpoint_done | checkbox_done
+     done_in_plan = done & plan_ids            # [spec-review-amendment B4] 只认计划内号
+     if plan_ids - done:                       # 计划内有未完成号 → 未齐（集合归属,非基数）
+         # 双通道皆不可判：plan 未提交（checkpoint 空）且全 plan 无复选框（辅通道空判）
+         if not sha and not plan_has_any_checkbox(plan):
+             emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
+         # [Task4 · tasks 2.6] 窗口入口③
+diff --git a/sdflow-ship/tests/test_plan_resolver.py b/sdflow-ship/tests/test_plan_resolver.py
+new file mode 100644
+index 0000000..946b8d3
+--- /dev/null
++++ b/sdflow-ship/tests/test_plan_resolver.py
+@@ -0,0 +1,152 @@
++"""计划文件名共享 resolver 的测试(harden-implement-review-loop Task 3, D5/adr-0033)。
++
++覆盖两层:
++1. 单元层——`ship_gate.resolve_plan_path` 本身:新名优先探测/旧名向后兼容/双存在
++   fail-closed(`PlanNameConflict`)/都不存在返回 None。
++2. gate 端到端层(经 `decide()` 全流程)——证明:
++   a. 仅新名 `tickets.md` 存在时,gate 完整判据链路(RUN_PLAN→CONTINUE_IMPL→
++      RUN_CODE_REVIEW)与旧名行为等价(向前兼容,新管线不需要借旧名外衣)。
++   b. 两个文件名同时存在 ⇒ UNKNOWN(不猜哪个有效,提示人工删除其一)。
++   c. 〔5.10 · 🔴 在途 plan MUST NOT 被重命名 · fix1〕改名前有 task1 checkpoint、改名后跑
++      gate 的 fixture:断言该场景被 **显式拒绝**(UNKNOWN),而非静默漏数放行。判据 =
++      `plan_was_renamed`——比较不带 `--follow` 与带 `--follow` 的
++      `git log --diff-filter=A` 首行 sha:从未改名的路径两者相同;改过名则 `--follow`
++      追溯到改名前的原始创建提交,两者不同 ⇒ fail-closed 拒绝,而非把改名前的完成信号
++      静默排除在窗口外。
++"""
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++from conftest import commit_all, mkchange, write_report
++from test_gate_preflight import run_gate
++from test_gate_impl_progress import approved_change, PLAN2
++
++_scripts_path = str(Path(__file__).parent.parent / "scripts")
++if _scripts_path not in sys.path:
++    sys.path.insert(0, _scripts_path)
++import ship_gate as _sg  # noqa: E402
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 单元层：resolve_plan_path
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_resolve_plan_path_both_absent_returns_none(tmp_path):
++    d = mkchange(tmp_path)
++    assert _sg.resolve_plan_path(d) is None
++
++
++def test_resolve_plan_path_new_name_only(tmp_path):
++    d = mkchange(tmp_path)
++    (d / "tickets.md").write_text("### Task 1: A\n- [ ] s\n", encoding="utf-8")
++    assert _sg.resolve_plan_path(d) == d / "tickets.md"
++
++
++def test_resolve_plan_path_old_name_only_backward_compat(tmp_path):
++    d = mkchange(tmp_path)
++    (d / "superpowers-plan.md").write_text("### Task 1: A\n- [ ] s\n", encoding="utf-8")
++    assert _sg.resolve_plan_path(d) == d / "superpowers-plan.md"
++
++
++def test_resolve_plan_path_both_present_raises_conflict(tmp_path):
++    d = mkchange(tmp_path)
++    (d / "tickets.md").write_text("### Task 1: A\n- [ ] s\n", encoding="utf-8")
++    (d / "superpowers-plan.md").write_text("### Task 1: A\n- [ ] s\n", encoding="utf-8")
++    with pytest.raises(_sg.PlanNameConflict):
++        _sg.resolve_plan_path(d)
++
++
++def test_resolve_plan_path_ignores_directories_named_like_plan(tmp_path):
++    # 目录同名不算命中——resolver 只认普通文件（is_file），防目录误判为计划文件。
++    d = mkchange(tmp_path)
++    (d / "tickets.md").mkdir()
++    assert _sg.resolve_plan_path(d) is None
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# gate 端到端层：仅新名存在 ⇒ 全流程与旧名等价
++# ─────────────────────────────────────────────────────────────────────────
++
++def _approved_change_with_new_name(repo, plan):
++    """同 test_gate_impl_progress.approved_change，但落盘用新名 tickets.md。"""
++    d = mkchange(repo)
++    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
++    (d / "tickets.md").write_text(plan, encoding="utf-8")
++    commit_all(repo, "seed change artifacts (new plan name)")
++    from conftest import head_sha
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (approved)")
++    return d
++
++
++def test_new_plan_name_reaches_continue_impl(repo):
++    _approved_change_with_new_name(repo, PLAN2)
++    commit_all(repo, "checkpoint(task1-foo): done A")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
++
++
++def test_new_plan_name_all_tasks_done_advances_to_code_review(repo):
++    _approved_change_with_new_name(repo, PLAN2)
++    commit_all(repo, "checkpoint(task1-foo): A")
++    commit_all(repo, "checkpoint(task2-bar): B")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "RUN_CODE_REVIEW"
++
++
++def test_neither_plan_name_present_run_plan_mentions_both_names(repo):
++    approved_change(repo)  # 不带 plan
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "RUN_PLAN"
++    assert "tickets.md" in js["reason"] and "superpowers-plan.md" in js["reason"]
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# gate 端到端层：双存在 fail-closed UNKNOWN
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_both_plan_names_present_gate_fails_closed_unknown(repo):
++    d = approved_change(repo, plan=PLAN2)   # 落盘旧名 superpowers-plan.md
++    (d / "tickets.md").write_text(PLAN2, encoding="utf-8")  # 同时落盘新名
++    commit_all(repo, "两个计划文件名同时存在（人为冲突态）")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert "tickets.md" in js["reason"] and "superpowers-plan.md" in js["reason"]
++    assert "删除其一" in js["reason"]
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 5.10 · 在途 plan 改名 fail-closed 拒绝（fix1：由静默漏数改为显式拒绝）
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_inflight_plan_rename_rejected_as_unknown(repo):
++    """🔴 违反「MUST NOT 重命名在途 plan」——不是 resolver 要「跟随改名」的缺陷，也不该
++    静默漏数放行（旧行为：改名前的 task1 checkpoint 落到窗口外、gate 却仍 CONTINUE_IMPL）。
++
++    正解 = 把「该路径历史上发生过重命名」机械检测出来，fail-closed 判 UNKNOWN，而非让
++    改名把 MUST NOT 变得无害（那等于注销这条规范性约束——见 design Migration Plan）。
++    """
++    d = approved_change(repo, plan=PLAN2)   # 旧名落盘，Task1/Task2
++    commit_all(repo, "checkpoint(task1-a): 改名前完成 task1")
++    # 违反纪律：在途 plan 被重命名（旧名 → 新名）
++    old_rel = str((d / "superpowers-plan.md").relative_to(repo))
++    new_rel = str((d / "tickets.md").relative_to(repo))
++    subprocess.run(["git", "-C", str(repo), "mv", old_rel, new_rel],
++                    check=True, capture_output=True, text=True)
++    commit_all(repo, "checkpoint(task2-b)之前的改名提交：违规重命名在途 plan")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert "重命名" in js["reason"]
++
++
++def test_never_renamed_plan_not_flagged(repo):
++    """反例（防误报）：多次提交但从未 `git mv` 过的 plan——不应被判为改名。"""
++    d = approved_change(repo, plan=PLAN2)
++    commit_all(repo, "checkpoint(task1-a): 正常完成 task1（无改名）")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "CONTINUE_IMPL"
++    assert "1" in js["done_tasks"]
