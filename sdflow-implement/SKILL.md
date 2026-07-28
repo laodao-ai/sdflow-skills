@@ -247,6 +247,10 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
 **建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
 用户，走 ship `T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案）。
+**出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change
+目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案>
+| 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果
+**无处可落**〔spec-review-amendment M15〕。
 
 ### 产出：3–6 张 tracer-bullet 垂直切片
 
@@ -326,8 +330,8 @@ impl-pipeline: tickets
    全部 ticket，找「ticket 之间互相矛盾、或与 `## Global Constraints` 矛盾」的迹象（例如某张
    ticket 假设的接口形状被另一张明确废弃）——Blocked-by **环**已由 `impl_route.py frontier`
    拓扑机械挡住，这里补的是拓扑之外的**语义**矛盾，机械查不出。发现矛盾走 `T10-choice` 三级决策协议
-   （有客观判据自动选 / 无客观判据派 **strong 档**对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**。
-   扫描干净则不留痕，直接进下一步。
+   （有客观判据自动选 / 无客观判据派 **strong 档**对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**，
+   仲裁记录同样落 `impl-reports/planning-decisions.md`。扫描干净则不留痕，直接进下一步。
 3. **立即执行 checkpoint 命令**：plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点——
    不依赖「首 ticket add -A 捎带提交」的巧合自愈〔adr/0017〕：
    ```bash

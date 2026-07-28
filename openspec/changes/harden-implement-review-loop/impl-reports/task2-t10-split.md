@@ -70,6 +70,13 @@ $ grep -rn "T10" . | grep -v "openspec/changes/harden-implement-review-loop/" \
 - 【不动】2 处（`sdflow-implement/SKILL.md` NEEDS_CONTEXT 尾部 + `impl-orchestration/spec.md:60`）：
   "T10" 字样原样健在，未被误删。
 - 【别名保留】1 处（`spec-workflow/spec.md:29`）：未改动。
+- 【Task 1 提前正确使用】1 处（`sdflow-implement/SKILL.md:170`，"出票模式同样消费档位：全 ticket
+  语义一致性自扫遇到粒度争议时的 `T10-choice` 仲裁步要派 **strong** 对抗镜"）——**〔fix1 补记〕**
+  本次首轮 §7.1 分类漏纳此行：该行由 Task 1 commit `9f6bcf22`（"新增第零步宿主/档位解析"）写入，
+  写入时点在本票 `T10-choice` 定名之前，但措辞已提前正确使用该名字（非本票改名对象——不在 design
+  scope-check 表内、当时也未改名，故不落 Group A），审计时应显式归类为"已是目标态、无需改动"，
+  原报告未提及即遗漏，非误改。已经 `fix1` 重跑 `grep -rn "T10" .`（不带 `--include`）+ 逐行核对
+  §7.1 排除口径，确认这是唯一漏网命中，其余 52 处命中均已被上述五类之一覆盖，分类现已穷尽。
 - 其余命中（`docs/` 下除 `workflow-overview.md` 外的分析/历史类文档、`sdflow-done/scripts/
   roadmap_writeback_draft.py:88` 的历史决策注记、`sdflow-issues/tests/test_batch_lint.py`、
   `openspec/specs/determinism-guards/spec.md:88` 的无关示例 ID）——均不在 design scope-check 表内、
