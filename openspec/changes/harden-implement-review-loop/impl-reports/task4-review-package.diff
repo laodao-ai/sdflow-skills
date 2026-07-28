@@ -1,0 +1,990 @@
+# Review package: 038a220..4b1145a
+
+## Commits
+4b1145a rename(tickets-plan): tickets 轨计划文件名全量同步为 tickets.md（D5/adr-0033）
+
+## Files changed
+ docs/criteria-mechanization-tracker.md             |   2 +-
+ .../impl-pipeline-matt-vs-superpowers.md           |   2 +-
+ hack/tests/test_checkpoint_slug_coverage.py        |   5 +-
+ openspec/INDEX.md                                  |   2 +-
+ .../0017-tickets-pipeline-gate-contract-veneer.md  |   2 +
+ .../0033-tickets-plan-filename-split-by-track.md   |  23 +++
+ .../impl-reports/task4-brief.md                    |  22 +++
+ .../impl-reports/task4-filename-sync.md            | 205 +++++++++++++++++++++
+ openspec/issues/todolist/2026-07-todolist.md       |   4 +
+ openspec/workflow/WORKFLOW-GUIDE.md                |   2 +-
+ sdflow-done/SKILL.md                               |   2 +-
+ sdflow-implement/SKILL.md                          |  15 +-
+ sdflow-implement/tests/test_impl_route.py          |  14 +-
+ sdflow-init/assets/workflow/WORKFLOW-GUIDE.md      |   2 +-
+ sdflow-init/assets/workflow/workflow.md            |   2 +-
+ .../tests/test_task5_delivery_contract.py          |   1 +
+ sdflow-ship/tests/test_gate_freshness.py           |   4 +
+ sdflow-ship/tests/test_gate_impl_progress.py       |   9 +-
+ 18 files changed, 294 insertions(+), 24 deletions(-)
+
+## Diff
+diff --git a/docs/criteria-mechanization-tracker.md b/docs/criteria-mechanization-tracker.md
+index 85532ba..1adf7ed 100644
+--- a/docs/criteria-mechanization-tracker.md
++++ b/docs/criteria-mechanization-tracker.md
+@@ -64,21 +64,21 @@
+ 
+ ## 5a. ship·SOP（条件）
+ | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
+ |---|---|---|---|---|---|
+ | 5a.1 | TG-02 命中（嵌入式固件）| 🔵 | — | — | 命中判断归模型 |
+ | 5a.2 | sop 是否缺 → RUN_SOP | 🟢 | `{change}-sop.md` | `ship_gate` tg02_hit | 声明式 |
+ 
+ ## 5b. ship·plan（tickets/superpowers）
+ | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
+ |---|---|---|---|---|---|
+-| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `superpowers-plan.md` | `ship_gate`（plan 缺）| — |
++| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `tickets.md`（tickets 轨）/ `superpowers-plan.md`（superpowers 轨，D5/adr-0033）| `ship_gate`（共享 resolver 按序探测两名，双存在 fail-closed；plan 缺）| — |
+ | 5b.2 | checkpoint 完成标签契约 | 🟢 | `checkpoint({change}:task<N>-…)` commit | `ship_gate.py:492` `TAG_RE` | slug 须含横杠（memory）|
+ | 5b.3 | ticket 切片粒度 / Blocked-by 拓扑划分 | 🔵 | `Blocked-by:` 声明（写） | — | 划成几片=判断；拓扑解析=🟢下条 |
+ | 5b.4 | next-ready ticket（Blocked-by 拓扑 + done 集）| 🟢 | `Blocked-by:` | `impl_route.py frontier` | tickets 管线 |
+ 
+ ## 5c. ship·实现
+ | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
+ |---|---|---|---|---|---|
+ | 5c.1 | 完成集（哪些 task 已完成）| 🟢 | checkpoint 标签 ∪ tasks.md 复选框 | `ship_gate` 集合归属（done⊇plan）| 双通道 |
+ | 5c.2 | implementer 状态（DONE/DONE_WITH_CONCERNS/NEEDS_CONTEXT/BLOCKED）| 🟡 | 状态词（结构化四值）| 编排据词分诊 | 词是结构化，词背后的判断🔵 |
+ | 5c.3 | 双轴审是否通过（Standards+Spec）| 🔵 | — | — | 判断（domain 清单命中🟢辅助）|
+diff --git a/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md b/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md
+index 4fcd3c2..84b729c 100644
+--- a/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md
++++ b/docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md
+@@ -149,21 +149,21 @@ sdflow-ship 是 gate 驱动的 meta-orchestrator（chain 现有 skill、不取
+ 
+ > 方法：系统镜/用户镜/开发循环镜三代理独立答六问（skill 拆分/ship 接入/gate 处理/机制取舍/
+ > 分期/命名），对抗镜逐案证伪并抽查引用行号（4 处引用失实被点名订正）。以下为收敛裁决。
+ 
+ ### 10.1 六问裁决
+ 
+ | 问题 | 裁决 | 关键依据 |
+ |---|---|---|
+ | Q1 skill 形态 | **单 skill `sdflow-implement` 双模式**（用户拍板）：出票模式（to-tickets 语义，删 quiz-the-user）**落盘即返回**；ship 重跑 gate → CONTINUE_IMPL 携 done_tasks 再入执行模式 | 「落盘即返回」保住 gate 在出票后/执行前的三道校验插入点（fence/零标题/重号，ship_gate.py:727-739）——两 skill 与单 skill 的 gate 力学等价（对抗镜裁定「必须两 skill」系假二分），由维护面账收敛：description/README/setup 链接全部减半。⚠️ 同调用直通执行的变体被否决（丢 gate 插入点，违 adr/0006(b)） |
+ | Q2 ship 接入 | **不 fork sdflow-ship2**（三镜全票）：原地改 SKILL.md 链序 RUN_PLAN/CONTINUE_IMPL 两个映射。A/B 路由 = config.yaml 键 `impl-pipeline`（沿 model-tiers 覆盖段先例，**缺省 = superpowers**）定首跳 + 出票时写 plan 文件头 frontmatter marker 定在途归属 | gate 状态机管线无关、专名仅 :724/:750 两处 emit 提示串；fork = 842 行加固沉淀双写必漂移，adr/0007 否决 stub 的「长期维护额外面」理由逐字适用 |
+-| Q3 gate 处理 | 试验期 tickets 穿 `superpowers-plan.md` 外衣（gate 零改动）；**永久否决**文件名配置化（窗口锚按路径 keyed :740、零依赖不变量 :286、双源歧义）；emit 串毕业后单独小改中性词，试验期 ship 链序显式声明「此二态映射以 SKILL.md 为权威、next 仅提示」压弱模型误路由 | 完成判据契约 = 文件名 + `### Task <n>:` 标题集 + checkpoint∪复选框双通道，票体内容不设限（§5 亲验）。终局文件名迁移（改 tickets.md+旧名 fallback+双存判 UNKNOWN vs 永不改）留 Phase B 拍板 |
++| Q3 gate 处理 | 试验期 tickets 穿 `superpowers-plan.md` 外衣（gate 零改动）；**永久否决**文件名配置化（窗口锚按路径 keyed :740、零依赖不变量 :286、双源歧义）；emit 串毕业后单独小改中性词，试验期 ship 链序显式声明「此二态映射以 SKILL.md 为权威、next 仅提示」压弱模型误路由 | 完成判据契约 = 文件名 + `### Task <n>:` 标题集 + checkpoint∪复选框双通道，票体内容不设限（§5 亲验）。终局文件名迁移（改 tickets.md+旧名 fallback+双存判 UNKNOWN vs 永不改）留 Phase B 拍板——**Phase B 已在 `harden-implement-review-loop` 拍板落地（`adr/0033`）：tickets 轨改名 `tickets.md`，superpowers 轨保留 `superpowers-plan.md`，gate/route 经共享 resolver 探两名，双存在 fail-closed UNKNOWN**，与此处列出的候选之一逐字一致 |
+ | Q4 机制取舍 | **砍**：warm final whole-branch review（冷层紧随且承重，SDD 自记修复波成本灾难）、progress ledger（gate done_tasks resume 结构性覆盖，留则双真相源）、pre-flight 批量问人（→T10）、task-brief 抽取（票文即 brief；超阈值折中可留）。**保**：状态词表 DONE/BLOCKED/NEEDS_CONTEXT（NEEDS_CONTEXT 改从盘面自答）、每票双轴审+fix→re-review 环（standards 轴喂 code-checklists/domains=注入点 B）、report file+review-package 文件交接、Global Constraints 逐字携带、checkpoint 标签契约 | 取舍总原则：superpowers 用 prose/文件补丁解决而 sdflow 已有结构机制（gate 通道/T10/冷层/recorder）覆盖的一律砍；确定性信号与上下文经济学机制管线无关地保留 |
+ | Q5 分期 | 三期：**Phase A**（一个 change）= 串行混血 + config 键 + 零 gate 改动，试点 3-5 个有逻辑面的中型 change；**Phase B**（判赢后微 change）= 毕业清理（默认翻转/emit 串/文件名迁移/workflow.md 步表/sdflow-init 推下游）；**Phase C**（另立 workflow-cost-optimization leg）= frontier 并行 | 并行的契约级障碍：gate 完成窗口 = 当前分支 [plan_first_sha, HEAD] 闭区间，每票分支使标签合回前不可见、done_tasks 系统性少算——必须独立 spec-review。A/B 判据取三条结构（impl Δ 降 + 冷层严重项不升 + 护栏哨兵）**定性人读拍板、不设数字阈值**（n=3-5 上是假精度，adr/0009 小样本警告）；至少一个消费仓跑缺省键路径（dogfood 盲区）；试验期 implementer 档位钉死 mid |
+ | Q6 命名 | 编排 skill = **sdflow-implement**（否决 sdflow-impl，adr/0007(b) 判例：impl 非自然触发词）；ship 保名不动，**否决 sdflow-ship2** 及一切版本号后缀（adr/0007 反命名地层）；`disable-model-invocation` 实测 harness 语义前不写入 frontmatter（对抗镜判照搬会让 ship 调不动链条），触发精度靠 description 收窄 | |
+ 
+ ### 10.2 对抗镜挖出的共同盲区（须进 Phase A 设计）
+ 
+ - **Reviewer ⚠️ Cannot-verify-from-diff items**（SDD:150-157）：跨票/未改动代码里的需求项 reviewer
+   无法从 diff 验证、须 controller 亲自消解——垂直切片缩小但不消灭此类项，`sdflow-implement`
+   执行模式契约必须保留此 controller 职责，否则静默缺口。
+ - 票内验收复选框与 gate checkbox 辅通道语义耦合：全勾即判该票 done（:743-744）——implementer
+diff --git a/hack/tests/test_checkpoint_slug_coverage.py b/hack/tests/test_checkpoint_slug_coverage.py
+index 1a7ad3b..3b71006 100644
+--- a/hack/tests/test_checkpoint_slug_coverage.py
++++ b/hack/tests/test_checkpoint_slug_coverage.py
+@@ -15,22 +15,23 @@ SKILL.md 改一个 slug、词表没跟 ⇒ 该阶段的墙钟**静默**落进 `u
+ 【期望集为什么是这四片，不是「全仓」】[impl-review-fix fix2] F-C（面治）
+ `grep -rn "checkpoint-commit.sh"`（不加 `--include`）全仓扫过一遍，命中分两类：
+ 
+ - **producer（会被照抄执行 ⇒ 本文件必须覆盖）** —— 见 `PRODUCER_GLOBS`：
+   各 `*/SKILL.md`（模型读了就跑）· `sdflow-init/assets/workflow/**/*.md`（**下发给下游项目
+   的权威源**，`sdflow-init update` 推给每一个消费仓）· `openspec/workflow/**/*.md`（本仓的
+   已解析副本，`gen_workflow_guide` 刷新）· `assets/hack/checkpoint-commit.sh` 自身的 `--help`
+   样例（人照着敲）。**上一版只 glob `*/SKILL.md`，漏掉后三片。**
+ - **非 producer（描述性散文 / 历史件 ⇒ 不纳入）** —— `docs/**`（讲这套工作流是怎么回事，
+   没人从这里执行）· `openspec/specs/**` 与 `openspec/adr/**`（规格与决策记录）·
+-  `openspec/changes/**`（含 archive 的 per-change 四件套与 `superpowers-plan.md`：
+-  **一次性、已执行完**，它们的 slug 早已在 git 历史里定型，回头改词表也追不回来）·
++  `openspec/changes/**`（含 archive 的 per-change 四件套与计划文件 `tickets.md` /
++  `superpowers-plan.md`〔D5：两轨计划文件名分列〕：**一次性、已执行完**，它们的 slug 早已在
++  git 历史里定型，回头改词表也追不回来）·
+   各 `tests/`（夹具字面量）。把它们纳入 = 让守卫去管一堆改不动的历史文本。
+ 
+ 🔴 **边界（本门证明什么、不证明什么）**：
+   · 证明 —— 「producer 写出的 slug 都能被归类」。
+   · **不证明** —— 归类得*对不对*（`sdflow-spec-generate → ff` 这条对不对是判断，无确定性信号），
+     也不证明模型真的执行了那条命令（那是运行时行为，git 历史里才有）。
+ """
+ import importlib.util
+ import re
+ import sys
+diff --git a/openspec/INDEX.md b/openspec/INDEX.md
+index f2523f9..3b08543 100644
+--- a/openspec/INDEX.md
++++ b/openspec/INDEX.md
+@@ -36,21 +36,21 @@
+ | `spec-workflow` | [specs/spec-workflow/spec.md](./specs/spec-workflow/spec.md) | spec 工作流三阶段（设计评审/代码评审/收尾归档）连续化的规范性行为：fresh 子代理替代 `/clear`、评审决策登记区、无人类门连续跑到 merge、verify 证据锚点、checkpoint 提交、bundle 权威源改动 |
+ | `host-adaptive-execution` | [specs/host-adaptive-execution/spec.md](./specs/host-adaptive-execution/spec.md) | 工作流跨 Claude/Codex 双宿主适配：`resolve-models.sh` 靠正信号判宿主（`CLAUDECODE=1`/`CODEX_THREAD_ID` 非空，两者皆无 fail-loud 落 `unknown`、不猜测）；outside voice 恒为另一机队强档（反向 `claude -p` 四旗只读全仓承重墙对称 codex）；两宿主 dispatch 均秒返（Claude-host harness `run_in_background`、Codex-host `claude --bg --exec` supervisor 后台 job）、内层 timeout 由 `outside-voice.async-timeout-seconds` 统一，能力不可用各自诚实同步/快速降级；`anchor_lint` 合法组合矩阵（跨模型/同族 fallback/无执行）为「跨模型性」唯一单一源，两工具各自重实现 + 全笛卡尔 golden 守漂移；出境安全三件套（secret_scan/FRAME/200KB 截断）两路径共用同一实现；模型档位按机队分列（`SDFLOW_TIER_*` 变量，eval 注入防护）；tools 陈旧探测 fail-loud 硬停在落锚之前；Codex 子代理不可用探针语义核验 + always-on 一致性 lint 缩 roster |
+ | `outside-voice-background-jobs` | [specs/outside-voice-background-jobs/spec.md](./specs/outside-voice-background-jobs/spec.md) | Codex 宿主跨模型 outside voice 经 Claude Code research-preview `claude --bg --exec` supervisor 托管为后台 job：per-site 独立 reservation/job/started/terminal/rc sidecar 原子发布、状态只从盘面不可变终态派生（`claude agents`/`logs` 仅作 liveness、MUST NOT 定状态）、barrier 有界 await（`outside-voice.async-timeout-seconds` 统一内层天花板）、复用 `outside-voice.sh exec` 四旗与出境安全三件套零降级、outer supervisor logs 不成第二出境面、终态 collect 后清理 supervisor roster 且失败可见（orphan warning）、abandoned run 只按显式 `reconcile --run-dir` 处理 |
+ | `workflow-metrics` | [specs/workflow-metrics/spec.md](./specs/workflow-metrics/spec.md) | 评审价值度量回路：`lens-metric v1` 结构化锚（layer/lens/runner/site 四元组）+ 只读可重生聚合（`sdflow-retro/scripts/lens_metric_aggregate.py`）+ per-镜数据驱动反馈，砍镜/降采样由人决不自动 |
+ | `lens-metric-emit` | [specs/lens-metric-emit/spec.md](./specs/lens-metric-emit/spec.md) | `lens_metric_emit.py`：从结构化 findings + 行键 roster 确定性归约出合规 `lens-metric` 锚行（折叠/归属/独立/sev-rollup 机械化，去重/裁决/定级仍归模型）；坏输入 fail-closed all-or-nothing，契约枚举/折叠单一源读取，不 import ship_gate/lens_metric_aggregate |
+ | `workflow-retro` | [specs/workflow-retro/spec.md](./specs/workflow-retro/spec.md) | `sdflow-retro` 只读再生全项目 change 成本×价值复盘：change 边界靠提交路径检测（非 tag 格式）、时间维仅到阶段级并诚实标注含人决策时间、价值维扫 active+archive 两源合并 spec/code 双报告锚、N≥10 待复评镜机械显著呈现、供数不供裁决 |
+ | `retro-report` | [retro/report.md](./retro/report.md)（`/sdflow-retro` 再生）| 全 change 成本×价值复盘活文档：git 提交阶段墙钟（成本维）+ lens-metric 锚聚合（价值维）合成 per-change 明细/阶段占比/成本双峰/per-镜价值表；view-only 再生，不做任何取舍决策 |
+ | `batch-triage` | [specs/batch-triage/spec.md](./specs/batch-triage/spec.md) | issues 池待处理项分诊三分类（相关合批/大扫除批/单开）：大扫除批硬边界（禁装逻辑面）+ issue 级 pre-diff fail-closed 判据（无自动兜底）+ 同类 Leg1 行为面路径守卫 + 聚合上限（MUST 有上限 + 生成物隔离）+ 一项一 commit 执行协议；本仓-local 不进 bundle |
+ | `determinism-guards` | [specs/determinism-guards/spec.md](./specs/determinism-guards/spec.md) | 机械层确定性守卫：`sdflow-issues` 三薄入口（`buglist.py`/`todolist.py`/`issues.py`）共享逻辑合一为唯一命名 package `sdflow_issues_core` 后，原三向/两向 AST 镜像一致性测试退役，改由「无 pool 分支守（AST 级）+ POOL_SPEC 封闭 schema 守 + 薄入口 thinness 同一性守」维持；`init.py config-lint`（手写 stdlib、条件化放行、fail-closed）、`issues.py batch lint`（优先级/计划占位符豁免 + 前导 token 后缀不校验）；direct↔scan golden 降级为「同源两 code-path 接线守」（不再宣称抓 rule 遗漏）；均只判机械可判的一致性/语法，不越权判内容 |
+ | `maintain-scan` | [specs/maintain-scan/spec.md](./specs/maintain-scan/spec.md) | `maintain_scan.py`：只读四类差异报告（specs/rules↔INDEX 双向 set-diff、CLAUDE.md 过时引用、workflow bundle 陈旧遮蔽告警、跨脚本判据一致性守卫）；INDEX 解析限表格行 + 链接目标路径 join-key、CLAUDE.md 引用改直查 fs 存在性、`.git` 精确剪枝、三处围栏未闭合 fail-closed（防假一致），零写文件，归组/是否修复留人 |
+-| `impl-orchestration` | [specs/impl-orchestration/spec.md](./specs/impl-orchestration/spec.md) | tickets 实现管线规范：手动路由三跳（config 键→plan marker→缺省 superpowers，零模型判断、损坏 marker fail-closed 停）、出 ticket 契约（tracer-bullet 垂直切片/Blocked-by/外衣 `superpowers-plan.md`/落盘即返回）、执行契约（frontier 串行/后置双写+双信号核对/双轴审+注入点 B/halt envelope/文件交接）、机制裁剪边界（无 warm 终审/ledger/task-brief）、试点回退与熔断哨兵；ship_gate 零改动外衣兼容（adr/0017） |
++| `impl-orchestration` | [specs/impl-orchestration/spec.md](./specs/impl-orchestration/spec.md) | tickets 实现管线规范：手动路由三跳（config 键→plan marker→缺省 superpowers，零模型判断、损坏 marker fail-closed 停）、出 ticket 契约（tracer-bullet 垂直切片/Blocked-by/外衣 `tickets.md`〔superpowers 轨保留 `superpowers-plan.md`，两名经共享 resolver 定位，双存在 fail-closed，D5/adr-0033〕/落盘即返回）、执行契约（frontier 串行/后置双写+双信号核对/双轴审+注入点 B/halt envelope/文件交接）、机制裁剪边界（无 warm 终审/ledger/task-brief）、试点回退与熔断哨兵；ship_gate 零改动外衣兼容（adr/0017） |
+ | `roadmap-planning` | [specs/roadmap-planning/spec.md](./specs/roadmap-planning/spec.md) | `sdflow-roadmap` 分阶段规划工作流规范：三件套（design/roadmap/task-log）直写 `openspec/roadmaps/{name}/`（MUST NOT 走 OpenSpec 变更、MUST NOT 独立 requirements.md，存量四件套兼容）、design.md 需求与目标态伸缩头部章、讨论层双判据路由（explore/wayfinder/office-hours）、footage 落盘位置与引用边界（含票状态机 open/claimed/resolved/abandoned）、review 按野心分档（plan-eng-review/autoplan）、收尾 checklist 五项软门（含 wayfinder 闭环全目录扫描）、roadmap.md 近细远雾分层 |
+ | `hr-tg-intersection-check` | [specs/hr-tg-intersection-check/spec.md](./specs/hr-tg-intersection-check/spec.md) | `hr_tg_intersect.py`：吃模型判好的命中 TG 集（不自扫声明）与 HR-TG 子集求交，输出带「依据模型判定」的 `hit/none` + 规范锚（不 emit 裸 none，adr/0018）；HR-TG 清单从 trigger-catalog 单一源读（禁硬编码、禁 `__file__` 推导）；纯 stdlib、门控外置、坏输入/单一源损坏 fail-closed |
+ | `outside-voice-reuse-guard` | [specs/outside-voice-reuse-guard/spec.md](./specs/outside-voice-reuse-guard/spec.md) | `outside_voice_guard.py`：spec-review 复用 codex outside-voice 三前置（来源 mode/新鲜度 fs-mtime/结构 codex 段）按序归约唯一 reason_code（六枚举 none｜file-missing｜section-not-found｜zero-findings｜stale｜simulated-source）；新鲜度用源文件 fs-mtime 直比（排除评审产物自身）、纯 stdlib 无 subprocess、fence-aware 锚解析、坏输入 fail-closed |
+ | `outside-voice-exec-integrity` | [specs/outside-voice-exec-integrity/spec.md](./specs/outside-voice-exec-integrity/spec.md) | `outside-voice.sh`：截断切点 UTF-8 字符边界回扫（头段回退/尾段跳过 continuation 字节，只处理 UTF-8、不做通用编码嗅探）保证送出 prompt 恒合法；父进程被 SIGINT/TERM/HUP 回收时经组级 KILL 升级令 runner 子树随之终止（含自杀风险守卫与降级哨兵 `OV_GROUP_KILL_DEGRADED=1`）；诚实登记三类不可消除残余——父进程 SIGKILL 强杀（(a)）、PID 记录/回收窗口（(b)(c)）、以及高频×多类型混合信号风暴可整体击穿 trap 机制（D2.2 (d\*)，实测 67% 复现，登记为设计级残余、不宣称已根治） |
+ | `roadmap-review-reconcile` | [specs/roadmap-review-reconcile/spec.md](./specs/roadmap-review-reconcile/spec.md) | `review_disposition_check.py`：fence/结构感知断言 roadmap task-log `## Review 处置` 小节存在且非空，归约三枚举（section-missing｜section-empty｜section-ok-DISPOSITION-UNCHECKED）；不裸子串匹配「未处置」（防收尾声明句假阳）、逐条处置显式交模型（码尾缀 -DISPOSITION-UNCHECKED 防假绿）、坏输入 fail-closed |
+ | `architecture-design` | [specs/architecture-design/spec.md](./specs/architecture-design/spec.md) | `sdflow-architecture` 系统架构设计文档（SAD）编排规范：事实三问采集 fail-closed 锁 draft、十节骨架 + 重复锚/重名子系统检测、拆分规则集与反模式自检、假设/数值显影溯源（含畸形附录行检测）、文档状态机（`sad_scaffold.py` 唯一写路径，迁移前全量不变式复检 + 仓级互斥锁原子写）、冷走查（留痕存在性前置）与按信号升档、skeleton-ready 交棒切片建议节、ADR/术语分家落位、lint 结构通过≠语义核验诚实标注；空间轴能力，时间轴规划见 `roadmap-planning` |
+ | `devenv-provisioning` | [specs/devenv-provisioning/spec.md](./specs/devenv-provisioning/spec.md) | `sdflow-devenv` 过程轴环境搭建规范：三层（单元/集成/e2e）测试策略框架一层不许留白（结构骨架 fail-closed、内容留白只报不拦）、六槽逐层问（第⑤槽状态机械投影不问）、层状态由泳道**取最弱**投影（MUST NOT 手写，A29：一条绿不能染绿整层）、状态迁移证据只能由 `verify-lane`/`confirm-lane` 产出（`set-lane --status verified` 一律拒绝 exit 5）、执行「不伤害」边界（人门先行/超时/不 debug/不装依赖/不烧板）、落地物零解析 Makefile/shell（让工具自己判）、零删除能力、路径 containment 强制校验、数据模型零 digest 零封闭枚举（除 layer）、`testing-strategy.md`/`environments.md` 测试-非测试切线、lint 只报不拦代价可见、五步固定流程（核心承诺在②步）、冷审 vacuous 镜+盲区镜、独立 marker 注入、触发分工与 sdflow-init/roadmap/architecture 互不重叠 |
+ | `recorder-root-resolution` | [specs/recorder-root-resolution/spec.md](./specs/recorder-root-resolution/spec.md) | `sdflow-issues/scripts/` 下三薄入口（`issues.py`/`buglist.py`/`todolist.py`）`repo_root` 九步 fail-closed 校验序列（起点可信性→环境净化→调 git→最近 marker 上溯→git 失败裁决→形状校验→祖先校验→worktree marker→最近根一致）；回落判据是「上溯一层 marker 都找不到」而非「git rc≠0」；单进程内单点解析（`cmd_*` MUST NOT 重调）；三薄入口经共享 `sdflow_issues_core` 收敛为唯一物理源，一致性由「单一源 + thinness 同一性守」维持（原三向 AST 镜像断言已退役）；仓根 `conftest.py`+`pytest.ini` 两文件联合机械保证测试套件无 cwd 顶层副作用（hook wrapper 非 autouse fixture）；reindex 假绿防护。⚠️ 跨进程根分裂兜底当前不成立（B15，P1，`xfail(strict=True)` 锚死，修法待独立设计门） |
+ | `issues-scripts-shared-core` | [specs/issues-scripts-shared-core/spec.md](./specs/issues-scripts-shared-core/spec.md) | `sdflow-issues/scripts/sdflow_issues_core/` 唯一命名 package：三薄入口（`buglist.py`/`todolist.py`/`issues.py`）共享的执行逻辑单一物理源（`adr/0027`），承载 `repo_root`/pool 无关公共逻辑/`POOL_SPEC` 封闭 schema，薄入口经同目录 `from sdflow_issues_core import` 获得同一实现、禁 shadow |
+ | `spec-authoring` | [specs/spec-authoring/spec.md](./specs/spec-authoring/spec.md) | `sdflow-spec` 单一入口三相位管线（澄清/拷问/生成）取代原三分离入口（explore+ff+仓外 grill）：拷问前置为内建默认路径、决策纪要相位 B 内增量落盘、生成经 openspec CLI 完成态/合格态分开判定、终审核产物一致性；当前交付为**阶段一薄编排**（agent 定义外派因阶段二 A/B 验收门回退而未启用，保留为待激活资产） |
+diff --git a/openspec/adr/0017-tickets-pipeline-gate-contract-veneer.md b/openspec/adr/0017-tickets-pipeline-gate-contract-veneer.md
+index 73a9237..c462cfd 100644
+--- a/openspec/adr/0017-tickets-pipeline-gate-contract-veneer.md
++++ b/openspec/adr/0017-tickets-pipeline-gate-contract-veneer.md
+@@ -28,10 +28,12 @@
+ ### 3. 「文件名说谎」的语义债分两拍还，emit 提示串同拍
+ 
+ - 试验期承受外衣（gate 是全仓被加固最重的脚本，未定案的方案不配动它）；**判赢毕业后（Phase B）**再拍终局：改中性文件名（须带旧名 fallback + 双文件同存判 UNKNOWN，防多仓异步升级期的假初始态/静默重出 ticket）vs 永不改名——以试点期「外衣误导排障」实证为判据。
+ - gate emit 的 next 提示串（:724 `writing-plans` / :750 `subagent-dev`）同拍改管线中性词；试验期以 ship SKILL.md 链序显式声明「此二态映射以链序为权威、next 仅信息性」消歧——gate 的**状态判定**权威不变，失真的只是 skill 名提示。
+ 
+ ## Consequences
+ 
+ - **正**：换管线 = 换 ship 链序两处映射指向；gate 及其测试零波及；两管线可同时在飞（marker 隔离在途）；回退 = config 键回缺省。
+ - **负（显式承受）**：试验期文件名与内容不符，排障首眼可能被误导（记入试点观察项）；弱档模型照 next 提示串误路由的窗口期风险（链序权威声明压制，实发即 Phase B 提前）。
+ - **边界**：本 ADR 只锚 gate 契约对接方式；管线路由策略（手动 config 键 + 盘面 marker、零模型判断）与 ship 不 fork 属可逆策略决策，记录在 change design.md（D2/D5），不占 ADR。
++
++> 〔追记，`harden-implement-review-loop`〕本条目「3. 文件名说谎」预告的 Phase B 终局拍板已完成：tickets 轨改名 `tickets.md`，superpowers 轨保留 `superpowers-plan.md`，gate/route 经共享 resolver 定位两名，双存在 fail-closed。细节见 `adr/0033`。
+diff --git a/openspec/adr/0033-tickets-plan-filename-split-by-track.md b/openspec/adr/0033-tickets-plan-filename-split-by-track.md
+new file mode 100644
+index 0000000..7962fc2
+--- /dev/null
++++ b/openspec/adr/0033-tickets-plan-filename-split-by-track.md
+@@ -0,0 +1,23 @@
++# 计划文件名按轨分列（`tickets.md` / `superpowers-plan.md`），双存在 fail-closed
++
++> 状态：**Accepted**（2026-07-28，`harden-implement-review-loop` 拷问阶段收敛，用户拍板）· 关联 change：`harden-implement-review-loop`
++
++`superpowers-plan.md` 是 sdflow 阶段三**superpowers-only 时期**的遗留文件名——`writing-plans` 生成它、`subagent-driven-development` 消费它、`ship_gate.py` 按字面名判定 `RUN_PLAN`。`matt-workflow-integration` 引入 tickets 实现管线（`sdflow-implement`）时，为了让 `ship_gate.py` **零改动**兼容，选择让 tickets 轨的出票文件也借用同一个文件名（`adr/0017` 的"试验期外衣"决策）。这个借壳从一开始就是已知的命名负债：文件名叫 `superpowers-plan.md`，内容却是 tickets 轨的行为级 ticket，对读者是明显的误导（`openspec/issues/todolist/2026-07-todolist.md` T135 记录了这条 todo）。
++
++`adr/0017` 当时把"终局文件名迁移"明确留给"Phase B 拍板"（见 `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` Q3 行），本 ADR 就是那次拍板的结果。
++
++**关键事实（决定了不能简单改名）**：该文件名当前**两轨共用**——`ship_gate.py`（gate 按字面名判 `RUN_PLAN`）、`impl_route.py`（route 按字面名取 frontmatter marker）、`superpowers` 轨自己的 `prompts/step6-writing-plans.md`（提示 `/writing-plans` 生成该名）三处都依赖这个字面量。全局改名会把 superpowers 轨也改成 `tickets.md`，与其语义（该轨从未产出"ticket"，产出的是带码步骤的 plan）直接冲突。
++
++## Considered Options
++
++- **分轨命名 + gate/route 共享 resolver 探两名，双存在 fail-closed UNKNOWN（选中）**：tickets 轨新出的计划文件落盘为 `tickets.md`；superpowers 轨保持 `superpowers-plan.md` 不变。`ship_gate.py` 与 `sdflow-implement/scripts/impl_route.py` 改用同一个共享 resolver 函数（单一源，非各自手抄候选列表）按序探测两个文件名：命中其一即用；都不存在判 `RUN_PLAN`；**两者同时存在 ⇒ fail-closed 判 `UNKNOWN`**（不猜哪个有效，提示人工删除其一）。文件名本身**不参与轨道路由判定**——路由权威仍是 `config.yaml` 的 `impl-pipeline` 键 + plan frontmatter marker，文件名只用于"到哪个文件里找完成判据"这一件事，避免新增一个会与 marker 打架的冗余路由信号。
++- **全局统一改成一个中性新名（如 `impl-plan.md`）（砍掉）**：理由——用户已明确指定 tickets 轨新名为 `tickets.md`；且中性名同样要面对"superpowers 轨也要不要改"的问题，若跟着改则连累 `writing-plans` 既有 prompt 契约（外部 skill，改名等于改变其调用约定），若不跟着改则仍是两名并存、只是换了个新名字，并未减少本质复杂度。
++- **只改文档说明、不改脚本行为（砍掉）**：理由——`ship_gate.py` 与 `impl_route.py` 都是按**字面文件名**判定完成状态与路由的，不改脚本，tickets 轨新写的 `tickets.md` 根本不会被 gate 认到，`RUN_PLAN` 会永久判定"计划缺失"，管线直接锁死。文档说了等于没说。
++
++## Consequences
++
++- **两个合法文件名永久共存**：`tickets.md`（tickets 轨）与 `superpowers-plan.md`（superpowers 轨）都是当前合法产物，任何未来阅读代码/文档的人不应把"看到 `superpowers-plan.md`"当作"这是遗留错误"——它是 superpowers 轨的正确产物名，只有 tickets 轨的旧引用才是需要迁移的历史负债。
++- **在途 plan 的 grandfather 条款**：升级发生在某个 tickets 轨 change 已经落盘 `superpowers-plan.md`（旧名）的中途时，该文件**MUST NOT 被重命名**——`ship_gate.plan_first_sha()` 用 `git log --diff-filter=A` 取完成判据窗口起点，该判据不跟随 `git mv`，强行改名会把窗口起点推到改名 commit 本身，导致改名前的全部 `checkpoint(<change>:task<N>-...)` 标签落在窗口外，已完成的 ticket 被 gate 判定为未完成、可能被重派。resolver 对这类在途旧名文件按原样识别，`ship_gate` 新增的收尾票校验（相关设计见本 change `design.md`「收尾票」专节）对这类文件 grandfather、不强制要求收尾票。
++- **`ship_gate.py` 与 `impl_route.py` 的 import 关系**：resolver 是单一源（定义于 `ship_gate.py`），`impl_route.py` 经既有 sibling-import 机制引用同一个函数对象，禁止任何一方手抄一份候选文件名列表——否则两处候选列表迟早漂移。
++- **回滚代价**：revert 本次 commit 集合后，resolver 一并回退到旧的单文件名判定；但**已经按新名 `tickets.md` 落盘的在途 change**不会跟着自动改回——需要人工 `git mv tickets.md superpowers-plan.md` 补一次改名操作，且同样要注意"在途 plan 不可重命名"的窗口风险（若该 change 已有 checkpoint 标签，这次回滚改名同样会推后窗口起点）。这条回滚代价已记入本 change `design.md` 的 Migration Plan。
++- **全仓文件名措辞同步**：tickets 轨相关的指令文本（`sdflow-implement/SKILL.md`、`sdflow-done/SKILL.md`）、bundle 规则、文档、既有测试断言字面量，全部同步改为 `tickets.md`；superpowers 轨的引用（`prompts/step6-writing-plans.md`、`docs/workflow-skills/superpowers-writing-plans.md` 等）原样保留 `superpowers-plan.md` 不变；历史归档（`openspec/changes/archive/**`）与 issues 池的既有记录不回改（改写即伪造审计）。
+diff --git a/openspec/changes/harden-implement-review-loop/impl-reports/task4-brief.md b/openspec/changes/harden-implement-review-loop/impl-reports/task4-brief.md
+new file mode 100644
+index 0000000..e9afda9
+--- /dev/null
++++ b/openspec/changes/harden-implement-review-loop/impl-reports/task4-brief.md
+@@ -0,0 +1,22 @@
++### Task 4: 文件名措辞全量同步（宽重构迁移批次，不计入 3–6 预算）
++
++**Blocked-by:** 3
++**R-ID:** R-tickets（出 ticket 模式产出 tracer-bullet ticket）
++
++**交付的行为**：tickets 轨在**指令、bundle 规则、文档、测试断言**四类面上一致地称呼新计划文件名，superpowers 轨的引用原样保留且可逐条归因；历史记录面（归档 change、issues 池、指向归档文件的 docstring 实路径）**一律不动**。
++
++> 这是 `design.md` D5 的宽重构迁移批次：expand（两名并存的 resolver）已由 Task 3 落地，**本序列无 contract 阶段**——旧名对 superpowers 轨永久合法，不存在「删旧形态」这一步。
++
++工作清单权威见 `tasks.md` §5.4、§5.5、§5.6、§5.7（既有测试断言同步）、§5.8、§5.9 与 §7.3。
++
++要点提醒：**MUST NOT 全局 sed**；改共享字符串前先不带 `--include` 全量 grep，测试断言 / 生成物 / docstring 全纳入；`docs/*.html` 这类生成物若有源，改源重跑而非手改产物。
++
++- [ ] skill 指令面（出票落盘路径与全部文件名措辞、done 的引用）已同步
++- [ ] bundle 面已同步，且 `step6-writing-plans.md` 明确其**只管 superpowers 轨、文件名不变**；仓内托管副本同步
++- [ ] 文档面（overview / map / html / tracker / workflow-skills 三篇 / INDEX）已同步
++- [ ] 测试断言面已同步，全量 `/usr/bin/python3 -m pytest` 绿
++- [ ] **不动面**核验：归档 change 与 issues 池原样；`adr/0017` 只追加一行指针、正文不改；指向归档文件的 docstring 实路径未改
++- [ ] 全仓 `grep -rn "superpowers-plan"`（不带 `--include`）剩余命中**全部**可逐条归因为：① superpowers 轨合法引用 ② 明确标注的历史记录引用 ③ **本 change 在途 plan 文件自身**（在途禁改名，见 Global Constraints）
++
++---
++
+diff --git a/openspec/changes/harden-implement-review-loop/impl-reports/task4-filename-sync.md b/openspec/changes/harden-implement-review-loop/impl-reports/task4-filename-sync.md
+new file mode 100644
+index 0000000..6750e1f
+--- /dev/null
++++ b/openspec/changes/harden-implement-review-loop/impl-reports/task4-filename-sync.md
+@@ -0,0 +1,205 @@
++# Task 4 impl-report — 文件名措辞全量同步（宽重构迁移批次）
++
++R-ID: R-tickets（出 ticket 模式产出 tracer-bullet ticket）
++
++## 交付内容
++
++tickets 轨在指令、bundle 规则、文档、既有测试断言四类面上一致地称呼新计划文件名
++`tickets.md`；superpowers 轨的引用（`superpowers-plan.md`）原样保留，逐条可归因；历史记录面
++（归档 change、issues 池、指向归档文件的 docstring 实路径）一律未动。本票不改
++`ship_gate.py`/`impl_route.py` 的脚本逻辑（Task 3 已落地共享 resolver），只做措辞同步。
++
++### 改动文件
++
++**skill 指令面（§5.4/§5.5）**
++
++- `sdflow-implement/SKILL.md`：外衣落盘路径 `{change_dir}/superpowers-plan.md` → `tickets.md`；
++  `frontier`/`task-text` 调用示例、信号权威表「本票完成信号」行、`ship_gate.py 零改动`说明段，
++  同步改为 `tickets.md`，并各处补一句指向 D5/adr-0033（明确 superpowers 轨仍用旧名、两名经
++  共享 resolver 定位）。`:227` 指向 `matt-workflow-integration` 归档 plan 的历史引用未改
++  （该引用本身路径缺归档日期前缀，是本票之外的既有问题，不在本票范围）。
++- `sdflow-done/SKILL.md:189`："实现常经 `superpowers-plan` / subagent-driven-development 完成"
++  改为同时列出 `tickets.md`（sdflow-implement 出票管线）与 `superpowers-plan.md` /
++  subagent-driven-development，并注明 D5 分列关系——该句原描述"任何实现管线都可能不勾
++  `tasks.md`"，D5 后需要覆盖两条轨都不漏。
++
++**bundle 面（§5.6）**
++
++- `sdflow-init/assets/workflow/workflow.md:94`（步骤表第 6 行）：规则·条件列补一句
++  "tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享
++  resolver 定位"；prompt 指针列补"本步骤只管 superpowers 轨，产出文件名不变"（放在
++  `rule` 列而非 `prompt_cell` 列——`hack/gen_workflow_guide.py` 的 `render()` 只把
++  `prompt_cell` 里 `**→` 之前的片段带进生成物，放错列会被生成器静默丢弃，已实测验证）。
++  `产出物` 列 `superpowers-plan.md + 代码` 未改——描述的是 superpowers 轨真实产出，D5 不影响。
++- `prompts/step6-writing-plans.md`：**未改**。该文件全文只有一行，是给人复制粘贴去调用
++  `/writing-plans`（外部 superpowers skill）的原始 prompt 文本，仓内所有引用处都标注"原样
++  复制，勿转述"。D5 只影响 tickets 轨的落盘文件名，`/writing-plans` 本身仍应生成
++  `superpowers-plan.md`（superpowers 轨名不变），故该行提示文字本身无需改字；"明确其只管
++  superpowers 轨"这一澄清放在 `workflow.md` 的规则列（上面一条），而非塞进这份会被原样粘贴
++  执行的 prompt 正文里污染实际调用文本。
++- `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md`：运行 `python3 hack/gen_workflow_guide.py
++  --write` 从更新后的 `workflow.md` + `prompts/*.md` 重新生成（禁手改，`--check` 复核已过）。
++- `openspec/workflow/WORKFLOW-GUIDE.md`（仓内托管副本）：`cp` 自上一步生成物，与源一致。
++
++**文档面（§5.8）**
++
++- `docs/criteria-mechanization-tracker.md` 5b.1 行：写锚点从单一 `superpowers-plan.md` 改为
++  "`tickets.md`（tickets 轨）/ `superpowers-plan.md`（superpowers 轨，D5/adr-0033）"，用锚点
++  补充"共享 resolver 按序探测两名，双存在 fail-closed"——该文档明确"接地自源码"，须反映
++  resolver 落地后的真实行为。
++- `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` Q3 行：追加一句"Phase B 已在
++  `harden-implement-review-loop` 拍板落地（`adr/0033`）"，与该文件自己此前明文"终局文件名
++  迁移...留 Phase B 拍板"的记录闭环；`:62/:74/:94` 三处描述 2026-07-10 探索会当时观察到的
++  ship_gate 状态，属历史record，未改。
++- `openspec/INDEX.md` `impl-orchestration` 行：`出 ticket 契约` 括号内"外衣
++  `superpowers-plan.md`"改为"外衣 `tickets.md`〔superpowers 轨保留 `superpowers-plan.md`，
++  两名经共享 resolver 定位，双存在 fail-closed，D5/adr-0033〕"——该行是当前态描述（非历史
++  record），须反映 D5 后的真实契约。
++- **审计后确认无需改动**（既有内容已准确描述 superpowers 轨、未提及 tickets 轨文件名，
++  D5 不影响其正确性）：`docs/workflow-overview.md`、`docs/workflow-map.md`、
++  `docs/workflow-map.html`、`docs/workflow-console.html`、
++  `docs/workflow-skills/superpowers-writing-plans.md`、
++  `docs/workflow-skills/superpowers-subagent-dev.md`——这几份文档目前**完全未提及**
++  `sdflow-implement`/tickets 轨的计划文件名（只讲 superpowers `writing-plans` 这一个黑盒
++  技能自己的契约），逐条读过确认其中的 `superpowers-plan.md` 引用全部准确描述 superpowers
++  轨、D5 未触及。补一整段"tickets 轨也存在"的新增内容会是加宽（通则③ MUST NOT 顺手扩大
++  改动面），不在本票"文件名措辞同步"范围内。
++
++**测试断言面（§5.7）**
++
++- `sdflow-implement/tests/test_impl_route.py`：7 处生成通用 fixture 的字面量（`:173` 缺失文件
++  判断、`:262/:275/:288/:299/:326` marker/route 各类通用用例、`:733` `task-text` CLI 示例）
++  从 `superpowers-plan.md` 改为 `tickets.md`——这些用例测的是 marker 解析/路由逻辑，与"用哪个
++  文件名"无关，改字面量纯粹是措辞对齐。`:370/:376`（Task 3 新增的
++  `test_cli_route_both_plan_names_present_fails_closed`，**故意**同时写两个文件名以触发双存在
++  冲突）保留不动。
++- `sdflow-ship/tests/test_gate_impl_progress.py`：`:120`（`test_plan_task1_same_commit_counts`）
++  与 `:139`（`test_uncommitted_plan_no_checkbox_unknown`）两处**独立**写盘（不经共享
++  fixture）改为 `tickets.md`。`:30`（`approved_change` 共享 fixture 内部）**保留
++  `superpowers-plan.md` 不变**——见下方「过程中发现并修复的问题」。
++- `sdflow-ship/tests/test_gate_freshness.py`：`:480` 起的 5.1 用例
++  `test_impl_source_edits_and_plan_checkbox_flip_keep_design_fresh` **保留
++  `superpowers-plan.md`**（原因同上，该用例经 `_approved_with_tasks` → `approved_change`
++  共享 fixture 写盘）；加了一句注释解释为何不能改。
++- `hack/tests/test_checkpoint_slug_coverage.py:25`：docstring 里"非 producer"分类描述的
++  `superpowers-plan.md` 改为"计划文件 `tickets.md` / `superpowers-plan.md`〔D5：两轨计划
++  文件名分列〕"——该行只是散文描述，不是断言，纯措辞对齐。
++- `hack/tests/test_harden_sdflow_spec_followup_closure.py:39`：**未改**。`PLAN = CHANGE /
++  "superpowers-plan.md"` 指向的是已归档 change `archive/2026-07-27-harden-sdflow-spec-followups`
++  的**真实磁盘文件**（该 change 走的是 superpowers 轨，其 plan 文件名从未是 tickets 轨范畴，
++  D5 不适用），测试读取该文件真实内容核验 R-ID 标注。改字面量会让测试指向一个不存在的路径、
++  当场报错——已通过 `test_gate_impl_progress.py`/`test_gate_freshness.py` 那次真实回归验证过
++  "改一个被多处消费的字面量前必须 grep 全部消费方"这条教训，此处提前核实后判定不改。
++
++**不动面（§5.9，已核实原样保留）**
++
++- `openspec/changes/archive/**`、`openspec/issues/**` 的历史记录：未碰。
++- `openspec/adr/0017`：只在末尾追加一行〔追记，`harden-implement-review-loop`〕指向
++  `adr/0033`，正文 0-37 行逐字未改。
++- `sdflow-implement/scripts/impl_route.py`（`:5,:21` 两处指向 archive 归档文件的 docstring
++  实路径）：未碰，本票也未改动该脚本任何逻辑或字面量。
++
++**新增（§6.2）**
++
++- `openspec/adr/0033-tickets-plan-filename-split-by-track.md`：记录本次拍板——分轨命名 +
++  共享 resolver 双存在 fail-closed（选中）；砍掉候选①全局统一改中性新名（如
++  `impl-plan.md`）②只改文档不改脚本；含回滚代价（在途 change 若已用新名需人工改回、且要
++  注意改名本身触发窗口锚推后的风险）。
++
++## 过程中发现并修复的问题（共享 fixture 耦合，未列入原始改动面但必须处理）
++
++`sdflow-ship/tests/test_gate_impl_progress.py` 的 `approved_change(...)` 是**跨 6 个测试文件
++共享的 fixture**（`test_gate_namespace.py` / `test_gate_git_layer.py` / `test_plan_resolver.py` /
++`test_gate_reviewed_sha.py` / `test_gate_tail.py` / `test_gate_freshness.py` 均
++`from test_gate_impl_progress import approved_change, PLAN2`）。首轮编辑把 `approved_change`
++内部写盘的文件名也改成了 `tickets.md`——这破坏了 `test_plan_resolver.py` 里依赖"该 fixture
++写旧名"的用例语义（`test_both_plan_names_present_gate_fails_closed_unknown` 靠它先落盘旧名、
++再手动追加新名制造双存在冲突；`test_inflight_plan_rename_rejected_as_unknown` 靠它先落盘旧名
++再 `git mv` 到新名模拟违规改名），全量 pytest 首次运行时在这两个用例上真实红了（`git mv`
++报 `fatal: bad source`，因为源文件根本不叫这个名字）；`test_gate_freshness.py` 的
++`test_impl_source_edits_and_plan_checkbox_flip_keep_design_fresh` 也因为"共享 fixture 写旧名 +
++本用例另写新名"两个文件同时落盘触发 resolver 的双存在 UNKNOWN 判定而变红。
++
++已修复：`approved_change` 内部写盘字面量**改回** `superpowers-plan.md`（并加注释说明为何
++不能改），`test_gate_freshness.py` 的对应用例同步改回、加注释；`test_gate_impl_progress.py`
++里**不经过**共享 fixture 的两处独立写盘（`:120`/`:139`）维持改为 `tickets.md`。这是本仓
++memory 记录过的教训（"改共享字符串前先全量 grep 消费方，别只看字面量匹配"）在函数级共享
++状态上的复现——字面量搜索找不到"谁 import 了这个函数"，只有跑全量测试才能暴露。
++
++## 附带清理：T135 todo 闭环
++
++`openspec/issues/todolist/2026-07-todolist.md` 的 **T135**（"tickets 管线 plan 文件名不应
++硬编码为 superpowers-plan.md"）动机与本票交付完全重合；Task 3 的 impl-report 明确写"T135 的
++完整关闭需 Task 4 的文件名全量改名落地后才闭环，本票不越权代 Task 4 关闭"。本票用
++`sdflow-issues/scripts/todolist.py set-status --id T135 --to DONE --evidence
++"harden-implement-review-loop:task3(resolver)+task4(rename)"` 走正规 overlay 机制关闭
++（frontmatter 侧 `status: DONE`，legacy 表冻结行仍显示 `OPEN`——与 T66/T67/T85/T146 等既有
++先例同构，非"改写历史记录正文"）。该操作会触发 `sdflow-issues` 的
++`test_repository_legacy_corpus_matches_independent_projection_item_by_item` 契约测（legacy
++行与 frontmatter overlay 对拍需要登记 delta，否则 `KeyError`）——已在
++`sdflow-issues/tests/test_task5_delivery_contract.py` 的 `DOGFOOD_OVERLAY_DELTAS` 新增
++`"T135": {"status": ("OPEN", "DONE")}` 一行，与既有条目同构。
++
++## §7.3 全仓 grep 归因表（非 archive、非 issues、非本 change 自身路径）
++
++不带 `--include` 全量 `grep -rln "superpowers-plan"`，剔除 `openspec/changes/archive/**`、
++`openspec/issues/**`、`openspec/changes/harden-implement-review-loop/**` 后剩余 26 个文件，
++逐条归因：
++
++| 文件 | 归因 |
++|---|---|
++| `docs/criteria-mechanization-tracker.md` | 本票已同步（双名 + resolver 行为） |
++| `docs/workflow-console.html` | ①superpowers 轨"writing-plans"卡片，未提及 tickets 轨，无需改 |
++| `docs/workflow-map.html` | ①同上（3b 行 HTML 镜像） |
++| `docs/workflow-map.md` | ①同上（3b 行 markdown 源） |
++| `docs/workflow-overview.md` | ①同上（§4.1 表 + §5 黑盒表两处），全文未提 tickets 轨文件名 |
++| `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` | ①②混合：Q3 行本票已补 Phase B 闭环note；`:62/:74/:94` 是 2026-07-10 探索会历史记录，未改 |
++| `docs/workflow-skills/superpowers-subagent-dev.md` | ①superpowers 轨黑盒详解页，未提 tickets 轨 |
++| `docs/workflow-skills/superpowers-writing-plans.md` | ①同上 |
++| `hack/tests/test_checkpoint_slug_coverage.py` | 本票已同步（docstring 措辞） |
++| `hack/tests/test_harden_sdflow_spec_followup_closure.py` | ②指向真实归档文件（superpowers 轨的 `2026-07-27-harden-sdflow-spec-followups/superpowers-plan.md`），未改 |
++| `openspec/adr/0017-tickets-pipeline-gate-contract-veneer.md` | ②Accepted ADR 正文未改；本票仅追加一行指针到 adr/0033 |
++| `openspec/adr/0033-tickets-plan-filename-split-by-track.md` | ①本票新增，描述分轨方案本身 |
++| `openspec/INDEX.md` | 本票已同步 |
++| `openspec/specs/impl-orchestration/spec.md` | ④主 specs——本 change 未归档，仍反映 pre-D5 状态；delta（`openspec/changes/harden-implement-review-loop/specs/impl-orchestration/spec.md`）已是 D5 后措辞，`sdflow-done` 归档时才会同步进主 specs，非本票范围 |
++| `openspec/specs/spec-workflow/spec.md` | ④同上 |
++| `openspec/workflow/WORKFLOW-GUIDE.md` | 本票已同步（托管副本，随 assets 源重新生成） |
++| `sdflow-done/SKILL.md` | 本票已同步 |
++| `sdflow-implement/scripts/impl_route.py` | ①resolver 契约本体（`PLAN_FILENAMES` 常量等）+ ②两处 archive 归档路径 docstring；Task 3 落地，本票未碰任何脚本逻辑 |
++| `sdflow-implement/SKILL.md` | 本票已同步；剩余 `:227`（历史归档路径引用，②）与"superpowers 轨保留旧名"的说明性提及（①）合法 |
++| `sdflow-implement/tests/test_impl_route.py` | 本票已同步 7 处；剩余 2 处是 Task 3 新增的双名冲突测试（①），故意保留 |
++| `sdflow-init/assets/workflow/prompts/step6-writing-plans.md` | ①单行 prompt 文本，字面描述 superpowers 轨真实产出，未改（见上方"bundle 面"说明） |
++| `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md` | 本票已同步（生成物） |
++| `sdflow-init/assets/workflow/workflow.md` | 本票已同步 |
++| `sdflow-ship/scripts/ship_gate.py` | ①resolver 契约本体，Task 3 落地，本票未碰 |
++| `sdflow-ship/tests/test_gate_freshness.py` | ①共享 fixture 依赖旧名（见上方"过程中发现并修复的问题"），保留 |
++| `sdflow-ship/tests/test_gate_impl_progress.py` | ①同上，`approved_change` 共享 fixture 保留旧名；2 处独立写盘已改新名 |
++| `sdflow-ship/tests/test_plan_resolver.py` | ①Task 3 专门测试双名/改名场景的文件，本票未碰 |
++
++## 自验（本票最高危红线）
++
++```
++python3 sdflow-ship/scripts/ship_gate.py --change harden-implement-review-loop --root "$(git rev-parse --show-toplevel)"
++```
++
++输出：`CONTINUE_IMPL → next=subagent-dev — 实现进度 3/6（窗口 [87e2dde, HEAD] 闭区间，集合归属）`，
++`done_tasks: ["1", "2", "3"]`——Task 1/2/3 完成信号未受影响，本 change 自己的
++`superpowers-plan.md` 全程未被本票触碰（既未改名、也未新建 `tickets.md`）。
++
++## 测试执行范围
++
++全量 `/usr/bin/python3 -m pytest`（本票是全仓字符串同步 + 共享 fixture 修复，回归面即全仓）：
++
++| 层 | 命令原文 | 退出码 | 测试时 HEAD（工作树，本票提交前） |
++|---|---|---|---|
++| sdflow-issues（T135 overlay 验证） | `/usr/bin/python3 -m pytest sdflow-issues/ -q` | 0（669 passed, 7 skipped, 3 xfailed） | 87e2dde（工作树） |
++| sdflow-ship + sdflow-implement（共享 fixture 回归） | `/usr/bin/python3 -m pytest sdflow-ship/tests/ sdflow-implement/tests/ -q` | 0（421 passed） | 同上 |
++| 全仓回归 | `/usr/bin/python3 -m pytest -q` | 0（**2908 passed, 11 skipped, 3 xfailed**） | 同上 |
++
++与本票起手基线（`2908 passed, 11 skipped, 3 xfailed`）逐位对齐，无一条因本票改动变红或消失。
++
++## 完成信号（后置，本票不自行勾选/打标签）
++
++按信号权威表，本票完成信号（复选框全勾 + `checkpoint(harden-implement-review-loop:task4-…)`
++标签）由双轴审通过后补打，实现期未创建该标签、未勾 `superpowers-plan.md` 复选框、
++未改动 `proposal.md`/`design.md`/`tasks.md`/`specs/`。本票**已真实 commit**（见下）。
+diff --git a/openspec/issues/todolist/2026-07-todolist.md b/openspec/issues/todolist/2026-07-todolist.md
+index f9b646d..95e15c7 100644
+--- a/openspec/issues/todolist/2026-07-todolist.md
++++ b/openspec/issues/todolist/2026-07-todolist.md
+@@ -3,20 +3,21 @@ sdflow-issues:
+   schema: 1
+   pool: todo
+   mode: overlay
+   items:
+     T2: {"module":"`recorder`","summary":"字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）","type":"代码质量","status":"DONE","time":"2026-07-03 00:26","change":"issues-pool-batch-mgmt","batch":"issues-pool-hardening"}
+     T47: {"module":"`sdflow-init/assets/workflow/tools/engine.js`","summary":"engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice)","type":"代码质量","status":"WONTDO","time":"2026-07-05 19:14","change":"review-tool-followups","batch":"review-tool-followups"}
+     T66: {"module":"`cmd_scan(buglist/todolist) + cmd_batch_rename(issues)`","summary":"recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化","type":"性能优化","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
+     T67: {"module":"`cmd_add id 校验(buglist/todolist)`","summary":"显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)","type":"代码质量","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
+     T85: {"module":"`roadmap mechanical-layer-hardening / recorder`","summary":"P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块","type":"基础设施","status":"DONE","time":"2026-07-08 15:55","change":null,"batch":"mlh-p4-target-state"}
+     T132: {"module":"`openspec/workflow/ + sdflow-spec-review 起手 fail-closed 门`","summary":"未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。","type":"代码质量","status":"OPEN","time":"2026-07-11 08:59","change":null,"batch":null}
++    T135: {"module":"`sdflow-implement`","summary":"superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化","type":"代码质量","status":"DONE","time":"2026-07-11 12:48","change":null,"batch":null}
+     T146: {"module":"`sdflow-skills 工具族`","summary":"扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）","type":"代码质量","status":"DONE","time":"2026-07-12 18:34","change":"add-sdflow-architecture","batch":"add-sdflow-architecture"}
+     T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"DONE","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
+     T154: {"module":"sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py","summary":"actual Windows local-disk smoke 未执行验证（SW-RI-2 recorder lock 兼容目标，deferred）","type":"基础设施","status":"DONE","time":"2026-07-17 16:14","change":"mlh-p6-recorder-frontmatter","batch":null}
+     T155: {"module":".github/workflows/（全仓 -W error CI 门）","summary":"全仓 pytest -W error 常态化为持久 CI 守卫（防未来再引入未关闭文件/ResourceWarning 类存量债）","type":"基础设施","status":"OPEN","time":"2026-07-17 16:22","change":"mlh-p6-recorder-frontmatter","batch":null}
+     T156: {"module":"sdflow-devenv（配 CI 载体层：SKILL.md + references/testing-framework.md）","summary":"sdflow-devenv 配 CI 的 P2 决策示范清一色 GitHub Actions、且未显式化「硬门/软门」降级边界——对「不管什么项目都能配」的承诺留了平台假设漏洞（用 workflow 的消费仓不一定在 GitHub）","type":"功能增强","status":"OPEN","time":"2026-07-17 19:53","change":"-","batch":null}
+     T157: {"module":"openspec/changes/async-outside-voice","summary":"proposal.md:27 仍写旧 .outside-voice/<site>-context.md 形态，与 design/tasks 的 per-run 口径分叉；实现期改四件套触设计门失鲜，须在 archive 阶段一并校正","type":"代码质量","status":"OPEN","time":"2026-07-18 17:08","change":"async-outside-voice","batch":null}
+     T158: {"module":"sdflow-spec-review + sdflow-code-review","summary":"run-id 新鲜度可机械化：manifest 存在性是确定性信号，宜加 anchor_lint 家族核而非永久留诚实边界","type":"基础设施","status":"OPEN","time":"2026-07-18 17:08","change":"async-outside-voice","batch":null}
+     T159: {"module":"sdflow-spec-review + sdflow-code-review","summary":"协议节 HELPER=~/.sdflow/hack/outside-voice.sh 同属「shell 变量不跨调用存活」失效类，宜改字面路径","type":"代码质量","status":"OPEN","time":"2026-07-18 17:30","change":"async-outside-voice","batch":null}
+     T160: {"module":"openspec/changes/async-outside-voice","summary":"3600 上界依据应回写 design ADR-3 免二源；DOC-1 理由入 SKILL 正文一条待设计门拍板","type":"代码质量","status":"OPEN","time":"2026-07-18 17:43","change":"async-outside-voice","batch":null}
+     T161: {"module":"sdflow-spec-review + sdflow-code-review","summary":"等值门只覆盖 marker 段；圈外 preflight/fallback/锚行段两层也高度相似但漂了不会红","type":"基础设施","status":"OPEN","time":"2026-07-18 18:01","change":"async-outside-voice","batch":null}
+@@ -1342,32 +1343,35 @@ sdflow-issues:
+ | 属性 | 值 |
+ |------|------|
+ | 模块 | `opsx-maintain/SKILL.md + init.py` |
+ | 类型 | 基础设施 |
+ | 状态 | DONE |
+ 
+ > 2026-07 状态：PROPOSED → DONE（mlh-p4-maintain-scan：maintain_scan.py 脚本化陈旧遮蔽判据 + test_marker_consistency.py 一致性守卫机验 RULE_MARKERS/token 与 init.py 相等（f4c61b4/6ce74fc），闭合改常量会漂的风险）
+ 
+ ---
+ 
++<!-- sdflow-issue-block:start id=T135 -->
+ ## T135: tickets 管线 plan 文件名不应硬编码为 superpowers-plan.md
+ 
+ | 属性 | 值 |
+ |------|------|
+ | 模块 | `sdflow-implement` |
+ | 类型 | 代码质量 |
+ | 状态 | OPEN |
+ 
+ **动机**：ship_gate.py 把 superpowers-plan.md 作为唯一识别的完成判据契约文件名；tickets 管线（sdflow-implement）为复用零改动的 gate，被迫把 ticket 也写进 superpowers-plan.md（借壳）。文件名与实际管线（tickets）语义不符，对读者误导；gate 与两条管线三处对该文件名的依赖是隐式耦合。
+ 
+ **思路**：把 plan 文件名从 gate 硬编码提为可配置/可发现（按 frontmatter marker 或 config 决定文件名，或 gate 扫描 openspec/changes/{change}/ 下带 impl-pipeline frontmatter 的任一 *.md）。属 ship 链序注释里的『emit 串 Phase B 根治』范畴。改动须同步 ship_gate.py TAG_RE/解析、impl_route.py、sdflow-implement/sdflow-ship 三处文档，保持向后兼容既有 superpowers-plan.md。
+ 
++> 2026-07 状态：OPEN → DONE（harden-implement-review-loop:task3(resolver)+task4(rename)）
++<!-- sdflow-issue-block:end id=T135 -->
+ ---
+ 
+ ## T136: anchor_lint 重算 hr-tg 交集以堵手改绕过 cross-model
+ 
+ | 属性 | 值 |
+ |------|------|
+ | 模块 | `anchor_lint` |
+ | 类型 | 基础设施 |
+ | 状态 | PROPOSED |
+ 
+diff --git a/openspec/workflow/WORKFLOW-GUIDE.md b/openspec/workflow/WORKFLOW-GUIDE.md
+index 16765fa..1893187 100644
+--- a/openspec/workflow/WORKFLOW-GUIDE.md
++++ b/openspec/workflow/WORKFLOW-GUIDE.md
+@@ -100,21 +100,21 @@
+ ## 阶段三 · 步骤 6 — `/writing-plans`
+ 
+ **prompt**（原样复制，勿转述 · 单一源 `prompts/step6-writing-plans.md`）：
+ 
+ ```
+ /writing-plans 按 {change dir} 的 design.md 与评审结论生成任务清单 superpowers-plan.md，参考 tasks.md 分组，有测试计划则附测试覆盖图。把 design 的领域约束逐字写进 plan 的 Global Constraints，**并在每个 Task 段内复述与该任务相关的那几条 + 四条通则**——`scripts/task-brief` 只抽 `### Task N` 那一段喂给 implementer，**Global Constraints 不进 brief，写在那里 implementer 一个字都看不到**。plan 每任务的 commit 步 MUST 显式写 `bash ~/.sdflow/hack/checkpoint-commit.sh <change>:task<N>-<slug> "<描述>"`（<change> = 本 change 的 openspec kebab slug），由 implementer 自己执行——该标签是 /sdflow-ship gate 的完成判据主锚，格式不合会导致 gate 数不到。生成后自动以 subagent-driven-development 执行，自动完成全部任务，每任务完成跑测试套件确认无 warning；逐任务 checkpoint；final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）作额外 review lens 附给 reviewer；无法自动解决的记入 buglists 或 todolists。
+ ```
+ 
+ **产出物**：superpowers-plan.md + 代码
+ 
+-**规则 · 条件**：superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序）
++**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
+ 
+ ## 阶段三 · 步骤 7 — `/subagent-driven-development`
+ 
+ （由步骤 6 自动触发）
+ 
+ **prompt**（原样复制，勿转述 · 单一源 `prompts/step7-subagent-dev.md`）：
+ 
+ ```
+ /subagent-driven-development 自动完成全部任务，每任务完成跑测试套件确认无 warning；逐任务 checkpoint；final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析） 作额外 review lens 附给 reviewer；无法自动解决的记入 buglists 或 todolists。
+ ```
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index 89446ad..6f59e77 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -179,21 +179,21 @@ description: >
+ ```bash
+ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' \
+   || (git rev-parse --verify origin/master >/dev/null 2>&1 && echo master) \
+   || echo main
+ ```
+ 
+ 记为 `{base_branch}`（很多仓库是 `master`，不是 `main`）。后续 merge 用它。
+ 
+ ### 0.3 tasks.md 复选框对账（关键，否则 verify/archive 被误导）
+ 
+-实现常经 `superpowers-plan` / subagent-driven-development 完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
++实现常经 `tickets.md`（sdflow-implement 出票管线）或 `superpowers-plan.md` / subagent-driven-development〔D5：两轨计划文件名分列，`superpowers-plan` 一名专指 superpowers 轨〕完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
+ 
+ - Read `openspec/changes/{change_name}/tasks.md`，与实际实现对照（看 git log / 实现 commit）。
+ - **已真实完成的任务勾上** `- [x]`；**确实未做/部分做的保持 `- [ ]` 并补一句说明**（别为过 archive 假勾——保持记录诚实）。
+ - 若整批确实完成，可 `sed -i '' 's/^- \[ \]/- [x]/g; s/^  - \[ \]/  - [x]/g'` 批量勾，再单独把未完成项改回。
+ 
+ ### 0.4 宿主/档位解析（每轮恰好一次，ADR-9 同源约束）〔host-adaptive-execution · 模型档位按机队分列〕
+ 
+ <!-- sdflow:tier-resolution:start v1 -->
+ **MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+ <!-- sdflow:tier-resolution:end -->
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 25ab8ae..70842ed 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -154,22 +154,24 @@ description: >
+ 
+ tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出可执行的垂直切片）与执行（frontier
+ 串行 + 每 ticket 双轴审）共享一个 skill、两种互斥模式，由 gate 判定的 RUN_PLAN/CONTINUE_IMPL 两态
+ 经 `/sdflow-ship` 链序以显式参数路由——两态的 gate 插入点力学与旧 writing-plans/subagent-dev 管线
+ 等价（D1/D2）。
+ 
+ 本 skill 由 ship 主 session 经 Skill **inline 执行**——**MUST NOT 作为子代理派发**：子代理无法再派
+ 子代理，而执行模式需要派发 implementer / 双轴审子代理，这个能力只在主 session 位置成立。
+ 
+ `ship_gate.py` **零改动**——本 skill 只是产出 / 消费 gate 已识别的「试验期外衣」契约
+-（`superpowers-plan.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
++（`tickets.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
+ 不触碰 gate 脚本本身，也不读 `openspec/config.yaml`（config 只在 ship 首跳读一次，见路由说明）。
++计划文件名按轨分列〔D5/adr-0033〕：superpowers 轨保持 `superpowers-plan.md` 不变，两名经共享
++resolver 定位，双存在 fail-closed。
+ 
+ ## 第零步：宿主/档位解析（两入口共用、无条件执行）
+ 
+ `mode=tickets-plan`（出票）与 `mode=tickets-exec`（执行）**均**在起手先跑本步，且**无条件执行**——
+ 出票模式同样消费档位：全 ticket 语义一致性自扫遇到粒度争议时的 `T10-choice` 仲裁步要派 **strong**
+ 对抗镜（见 tasks.md §2），本步只负责把 `$SDFLOW_TIER_*` 解析出来供该仲裁步与执行模式各处派子代理
+ 引用，不是空转步〔spec-review-amendment M8/L9〕。
+ 
+ <!-- sdflow:tier-resolution:start v1 -->
+ **MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+@@ -270,21 +272,22 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任
+ **MUST NOT** 强行拆成垂直切片；改走 **expand–contract** 序列：
+ 1. 1 张 expand ticket（新旧形态并存，不破坏任何调用点）；
+ 2. 若干迁移批次 ticket（各自 `Blocked-by: <expand ticket 号>`，按包/目录切批，批数由 blast radius
+    决定，可任意多张）；
+ 3. 1 张 contract ticket（`Blocked-by:` 全部迁移批次号，删旧形态）。
+ 
+ **迁移批次 ticket 不占 3–6 张垂直切片预算**〔E5〕——只有 expand 与 contract 两端计入预算。
+ 
+ ### 外衣（ship_gate.py 既有完成判据契约，零改动兼容）
+ 
+-- 落盘路径固定 `{change_dir}/superpowers-plan.md`。
++- 落盘路径固定 `{change_dir}/tickets.md`〔D5/adr-0033：tickets 轨新名；superpowers 轨仍用
++  `superpowers-plan.md`，两名经共享 resolver 定位，本 skill 只产出 tickets 轨文件〕。
+ - frontmatter **含且仅含** `impl-pipeline: tickets` 单键——**MUST NOT** 加注释行、示例值，或第二个
+   frontmatter 块（杂行 / 第二块会被 gate 的 fence-aware 解析算成幻影任务，或触发 UNKNOWN）〔F5〕。
+ - 每 ticket 以 `### Task N: <ticket 名>`（N 从 1 连续编号）为标题——与验收复选框、`Blocked-by:`
+   共同构成 gate 可解析的完成判据。
+ - frontmatter 之后、首个 `### Task 1:` 之前，**逐字**携带该 change design.md 的领域约束——从
+   design.md 摘出 MUST / MUST NOT / SHALL 类硬约束与 Compliance 条款，逐字（非改写转述）写成一节
+   `## Global Constraints`，作为每个 implementer / reviewer 子代理 dispatch 的共享注意力透镜。
+ - **plan 首次提交后结构不可变**：**MUST NOT** 重号 / 重排 / 删除 / 复用已出的 Task 号；后续若需
+   重新规划，只能**追加新号**〔F1〕。
+ 
+@@ -318,21 +321,21 @@ impl-pipeline: tickets
+ ```
+ 
+ **无 quiz-the-user**：不做人工粒度确认这一步（matt 原版 to-tickets 有此人类步，本 skill 删除——
+ 阶段三无人类门；粒度争议走 `T10-choice`（无客观判据档派 **strong 档**对抗镜复核），不问用户）。
+ 
+ ### 落盘 → checkpoint → 返回（显式三步序列，B1 完成窗口锚）〔impl-review-fix〕
+ 
+ 出 ticket 模式收尾按固定顺序执行——**返回发生在 checkpoint 之后**，不是「落盘即返回」；模型读到
+ 「立即返回」不得跳过第②③步：
+ 
+-1. **写盘**：完成 `superpowers-plan.md`（结构见上「外衣」节）。
++1. **写盘**：完成 `tickets.md`（结构见上「外衣」节）。
+ 2. **全 ticket 语义一致性自扫**（附录 B 有出处说明）：checkpoint 前，编排层自己通读一遍刚写好的
+    全部 ticket，找「ticket 之间互相矛盾、或与 `## Global Constraints` 矛盾」的迹象（例如某张
+    ticket 假设的接口形状被另一张明确废弃）——Blocked-by **环**已由 `impl_route.py frontier`
+    拓扑机械挡住，这里补的是拓扑之外的**语义**矛盾，机械查不出。发现矛盾走 `T10-choice` 三级决策协议
+    （有客观判据自动选 / 无客观判据派 **strong 档**对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**，
+    仲裁记录同样落 `impl-reports/planning-decisions.md`。扫描干净则不留痕，直接进下一步。
+ 3. **立即执行 checkpoint 命令**：plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点——
+    不依赖「首 ticket add -A 捎带提交」的巧合自愈〔adr/0017〕：
+    ```bash
+    bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:plan" "出 ticket 落盘（B1 窗口锚）"
+@@ -343,52 +346,52 @@ impl-pipeline: tickets
+ 4. **返回编排层（ship）**：checkpoint 提交完成后才返回，**MUST NOT** 在同一次调用内继续派发
+    implementer 或直通执行——必须保留 `ship_gate` 在"落盘之后 / 执行之前"对 fence / 标题 / 重号的
+    三道校验插入点，让 gate 重新裁决一次是否可以进入 `CONTINUE_IMPL`。
+ 
+ ## 执行模式（`mode=tickets-exec`）
+ 
+ ### frontier 严格串行
+ 
+ - 调用 frontier helper，用透传的 `done_tasks` 算出下一批 next-ready ticket 号：
+   ```
+-  python3 sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/superpowers-plan.md --done {done_tasks}
++  python3 sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/tickets.md --done {done_tasks}
+   ```
+ - **严格串行**——同一时刻至多一个 implementer 子代理在工作，**MUST NOT** 并行派发多个
+   implementer（首版红线，design D4/Non-Goal）。next-ready 若一次给出多个候选，仍按号序逐个派发、
+   逐个走完双轴审再派下一个。
+ 
+ ### 每 ticket 派 fresh implementer
+ 
+ 派发前先机械抠出该票原文（附录 B 有出处说明）：
+ 
+ ```
+-python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/superpowers-plan.md --task {N}
++python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tickets.md --task {N}
+ ```
+ 
+ 默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
+ 
+ **派发 Agent（model: `$SDFLOW_TIER_MID`——第零步已 eval 出的中档模型 id；config.yaml model-tiers 段
+ 已在 resolve-models.sh 内按机队分键覆盖），MUST NOT 内联具体模型 id**，dispatch prompt 必含：
+ 
+ - 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
+   `### Task N:` 段落文本进 prompt**）；
+ - plan 头部 `## Global Constraints` 节全文（逐字，implementer 与 reviewer 共享同一份注意力透镜）；
+ - **🔴 本 SKILL.md 顶部的「四条通则」区块全文**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——
+   子代理是 fresh context，**看不见本 SKILL.md，也看不见 CLAUDE.md**。漏带 ⇒ implementer 眼前只有现状代码，
+   **必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。**双轴审的两个 reviewer 子代理同样必带。**
+ - **🔴 信号权威表**（必填槽，**原文携带**，非可省的 prose 叮嘱）——子代理是 fresh context，
+   **未声明即等同未约束**。正面陈述归属（不是禁令清单：禁令只挡列举到的那一种越界形态，
+   权威表挡的是整个范畴）：
+ 
+   | 范畴 | 权威在哪 | 谁写 |
+   |---|---|---|
+-  | **本票完成信号** | ① `superpowers-plan.md` 里该 `### Task N:` 段的验收复选框（段内**须有**复选框**且**全勾才计入——空段不计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
++  | **本票完成信号** | ① `tickets.md` 里该 `### Task N:` 段的验收复选框（段内**须有**复选框**且**全勾才计入——空段不计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
+   | **本票工作产物** | 实现代码、测试、`{change_dir}/impl-reports/task<N>-<slug>.md` | implementer 自己写 |
+   | **设计意图（需求 / 设计 / 规格 / 任务清单）** | `proposal.md` · `design.md` · `specs/` · `tasks.md` | **设计阶段已定稿，实现期不是它们的作者**——发现设计有问题走 `NEEDS_CONTEXT` / `BLOCKED` 上抛编排层，由编排层裁决，**不自行改盘** |
+ 
+   > 这两行归属**与设计门实际消费的判据一一对应**：`ship_gate.py` 的完成集 = checkpoint 标签通道
+   > （窗口 `[plan 首次提交 sha, HEAD]` **闭区间**内、命名空间精确等于本 change 的 `TAG_RE` 命中）
+   > **∪** 复选框通道（`_parse_plan` fence-aware 按 `### Task <n>:` 分段绑定、段内全勾）；
+   > 设计工件那一行对应 gate 的 design 域失鲜监视集（`proposal` / `design` / `tasks.md` / `specs/`）。
+   > **MUST NOT** 在表里声明 gate 并不读取的信号源（如 ledger 文件、返回值里的口头「done」）——
+   > 声明了 gate 也不认，只会诱导 implementer 把完成信号写到无人消费的地方。
+ 
+diff --git a/sdflow-implement/tests/test_impl_route.py b/sdflow-implement/tests/test_impl_route.py
+index afefa17..a78cee9 100644
+--- a/sdflow-implement/tests/test_impl_route.py
++++ b/sdflow-implement/tests/test_impl_route.py
+@@ -163,21 +163,21 @@ def test_marker_quoted_trailing_junk_stops(tmp_path):
+                  encoding="utf-8")
+     with pytest.raises(ir.RouteStop):
+         ir.read_plan_marker(p)
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # read_plan_marker
+ # ---------------------------------------------------------------------------
+ 
+ def test_marker_file_missing(tmp_path):
+-    assert ir.read_plan_marker(tmp_path / "superpowers-plan.md") is None
++    assert ir.read_plan_marker(tmp_path / "tickets.md") is None
+ 
+ 
+ def test_marker_no_frontmatter(tmp_path):
+     p = tmp_path / "plan.md"
+     p.write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
+     assert ir.read_plan_marker(p) == "superpowers"
+ 
+ 
+ def test_marker_empty_file(tmp_path):
+     p = tmp_path / "plan.md"
+@@ -252,58 +252,58 @@ def test_cli_route_config_tickets_plan_missing_first_jump(tmp_path):
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "config=tickets" in out
+     assert "marker=absent" in out
+     assert "pipeline=tickets" in out
+ 
+ 
+ def test_cli_route_marker_locks_over_config_change(tmp_path):
+     # marker 存在（tickets）时 marker 优先——事后把 config 改回 superpowers 不影响在途 change
+     d = _mkchange(tmp_path)
+-    (d / "superpowers-plan.md").write_text(
++    (d / "tickets.md").write_text(
+         "---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
+     _write_config(tmp_path, "impl-pipeline: superpowers\n")
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "marker=tickets" in out
+     assert "pipeline=tickets" in out
+ 
+ 
+ def test_cli_route_marker_implicit_superpowers_locks_over_config(tmp_path):
+     # marker 存在但无显式声明（旧管线产物，隐式 superpowers）——同样锁定，不因 config 现在
+     # 说 tickets 就切换（防两管线混跑）
+     d = _mkchange(tmp_path)
+-    (d / "superpowers-plan.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
++    (d / "tickets.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
+     _write_config(tmp_path, "impl-pipeline: tickets\n")
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "marker=none" in out
+     assert "pipeline=superpowers" in out
+ 
+ 
+ def test_cli_route_marker_explicit_superpowers_displays_none(tmp_path):
+     # [impl-review-fix 补测 7] 现行折叠行为：显式 marker=superpowers 与隐式缺省（无
+     # frontmatter/无键）在 receipt 里显示相同（marker=none）——read_plan_marker 两种情形返回
+     # 同一个字符串 "superpowers"，receipt 无法区分（display 改进已 defer），本用例锁定现状。
+     d = _mkchange(tmp_path)
+-    (d / "superpowers-plan.md").write_text(
++    (d / "tickets.md").write_text(
+         "---\nimpl-pipeline: superpowers\n---\n### Task 1: A\nBlocked-by: none\n",
+         encoding="utf-8")
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "marker=none" in out
+     assert "pipeline=superpowers" in out
+ 
+ 
+ def test_cli_route_stop_on_bad_marker(tmp_path):
+     d = _mkchange(tmp_path)
+-    (d / "superpowers-plan.md").write_text(
++    (d / "tickets.md").write_text(
+         "---\nimpl-pipeline: tickets\nimpl-pipeline: superpowers\n---\n### Task 1: A\n",
+         encoding="utf-8")
+     code, out, err = _run_route(tmp_path, "demo")
+     assert code == 6
+     assert out == ""
+     assert err  # stderr 原因非空
+ 
+ 
+ def test_cli_route_unknown_config_value_echoed(tmp_path):
+     _mkchange(tmp_path)
+@@ -316,21 +316,21 @@ def test_cli_route_unknown_config_value_echoed(tmp_path):
+ 
+ def test_cli_route_plan_sha_dash_when_no_plan(tmp_path):
+     _mkchange(tmp_path)
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "plan_sha=-" in out
+ 
+ 
+ def test_cli_route_plan_sha_present_when_committed(tmp_path):
+     d = _mkchange(tmp_path)
+-    (d / "superpowers-plan.md").write_text(
++    (d / "tickets.md").write_text(
+         "---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
+     subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
+                     check=True, capture_output=True, text=True)
+     subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"],
+                     check=True, capture_output=True, text=True)
+     subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"],
+                     check=True, capture_output=True, text=True)
+     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"],
+                     check=True, capture_output=True, text=True)
+     subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "seed"],
+@@ -723,21 +723,21 @@ def _run_task_text(plan_path, task, out=None):
+            "--task", str(task)]
+     if out is not None:
+         cmd += ["--out", str(out)]
+     r = subprocess.run(cmd, capture_output=True, text=True)
+     return r.returncode, r.stdout.strip(), r.stderr.strip()
+ 
+ 
+ def test_cli_task_text_default_out_path_under_impl_reports(tmp_path):
+     change_dir = tmp_path / "openspec" / "changes" / "demo"
+     change_dir.mkdir(parents=True)
+-    plan = change_dir / "superpowers-plan.md"
++    plan = change_dir / "tickets.md"
+     plan.write_text(
+         "### Task 1: A\nBlocked-by: none\n- [ ] x\n"
+         "### Task 2: B\nBlocked-by: 1\n- [ ] y\n", encoding="utf-8")
+ 
+     code, out, err = _run_task_text(plan, 1)
+     assert code == 0, err
+     default_out = change_dir / "impl-reports" / "task1-brief.md"
+     assert default_out.is_file()
+     content = default_out.read_text(encoding="utf-8")
+     assert content.startswith("### Task 1: A")
+diff --git a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+index 16765fa..1893187 100644
+--- a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
++++ b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+@@ -100,21 +100,21 @@
+ ## 阶段三 · 步骤 6 — `/writing-plans`
+ 
+ **prompt**（原样复制，勿转述 · 单一源 `prompts/step6-writing-plans.md`）：
+ 
+ ```
+ /writing-plans 按 {change dir} 的 design.md 与评审结论生成任务清单 superpowers-plan.md，参考 tasks.md 分组，有测试计划则附测试覆盖图。把 design 的领域约束逐字写进 plan 的 Global Constraints，**并在每个 Task 段内复述与该任务相关的那几条 + 四条通则**——`scripts/task-brief` 只抽 `### Task N` 那一段喂给 implementer，**Global Constraints 不进 brief，写在那里 implementer 一个字都看不到**。plan 每任务的 commit 步 MUST 显式写 `bash ~/.sdflow/hack/checkpoint-commit.sh <change>:task<N>-<slug> "<描述>"`（<change> = 本 change 的 openspec kebab slug），由 implementer 自己执行——该标签是 /sdflow-ship gate 的完成判据主锚，格式不合会导致 gate 数不到。生成后自动以 subagent-driven-development 执行，自动完成全部任务，每任务完成跑测试套件确认无 warning；逐任务 checkpoint；final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）作额外 review lens 附给 reviewer；无法自动解决的记入 buglists 或 todolists。
+ ```
+ 
+ **产出物**：superpowers-plan.md + 代码
+ 
+-**规则 · 条件**：superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序）
++**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
+ 
+ ## 阶段三 · 步骤 7 — `/subagent-driven-development`
+ 
+ （由步骤 6 自动触发）
+ 
+ **prompt**（原样复制，勿转述 · 单一源 `prompts/step7-subagent-dev.md`）：
+ 
+ ```
+ /subagent-driven-development 自动完成全部任务，每任务完成跑测试套件确认无 warning；逐任务 checkpoint；final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析） 作额外 review lens 附给 reviewer；无法自动解决的记入 buglists 或 todolists。
+ ```
+diff --git a/sdflow-init/assets/workflow/workflow.md b/sdflow-init/assets/workflow/workflow.md
+index f4c7c78..ac7d15e 100644
+--- a/sdflow-init/assets/workflow/workflow.md
++++ b/sdflow-init/assets/workflow/workflow.md
+@@ -84,21 +84,21 @@
+ | 阶段 | 步 | command/skill | prompt（可复制） | 产出物 | 规则·条件 |
+ |---|---|---|---|---|---|
+ | 一 | 0 | /sdflow-spec | **默认入口（装了就走这条，取代步 1/1b/2/3）**：一次跑完 澄清(A)→拷问(B)→生成(C)。只能人手动敲（`disable-model-invocation: true`）——模型 MUST NOT 代唤起，也 MUST NOT 改用 `opsx:ff` 绕过拷问，而 SHALL 提示用户触发本步 | proposal/design/specs/tasks + decision-memo.md | generation-process §四 分支 A + 四入口选择规则；出口序列 = `/clear` → 换档 → `/sdflow-spec-review`（对 G1 的具名例外，见 §三.2）；**未装本 skill 或命中三种例外情形 → 走步 1~3（分支 B）** |
+ | 一 | 1 | /opsx:explore | **→ [`prompts/step1-explore.md`](./prompts/step1-explore.md)**（原样复制，勿转述） | — | **〔分支 B〕** generation-process ③发散；**单 session 可收敛的模糊才跑**（问题清晰直接 ff；事中判定超单 session 转 wayfinder，见 1b） |
+ | 一 | 1b | wayfinder chart | 事中判定超单 session（讨论已跨 session/跨天，或经历 /clear/压缩仍未收敛）才切入；铺图逐 ticket 决议；TG 判命中前置写入 map Notes（**增强非转移**：ff 起手判触发纪律不变，Notes 有则核对、无则照常全判，缺失不硬卡）；缺装（`~/.claude/skills/wayfinder` 不存在）→ 显式降级 opsx:explore | map.md + issues/*.md | **〔分支 B〕** T126/D6；三档判据事中可观察 |
+ | 一 | 2 | /opsx:ff | **→ [`prompts/step2-ff.md`](./prompts/step2-ff.md)**（原样复制，勿转述） | proposal/design/specs/tasks | **〔分支 B〕** ff-generation-constraints(FF-0 三分支判定)+config；**分支 B 内必跑** |
+ | 一 | 3 | /grill-with-docs | **→ [`prompts/step3-grill.md`](./prompts/step3-grill.md)**（原样复制，勿转述） | design/ADR/CONTEXT 更新 | **〔分支 B〕** generation-process ③对抗；分支 B 内非平凡变更必跑。**grill 是独立审视，一律全深度**——MUST NOT 因上游（explore / wayfinder 已决 ticket）已经想过就瘦跑或跳过某条分支；拿上游产出给自己松绑，二次审视就退化成盖章（见 ff-generation-constraints.md 的回链锚条款）。 |
+ | 二 | 4 | /sdflow-spec-review | **→ [`prompts/step4-spec-review.md`](./prompts/step4-spec-review.md)**（原样复制，勿转述） | spec-review-report.md | 编排器：内部 autoplan→并行多镜→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 2×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）** |
+ | 二 | 5 | HARD-GATE | 人工过 **一份** `spec-review-report.md`（决策登记区已摊开选项+推荐+三面后果(系统/用户/开发循环)+主次判定）→ 批准设计 | （人工：批准后才进实现） | generation-process 门；**★全流程唯一人类门** |
+ | 二 | 5.5 | /embedded-test-sop | **→ [`prompts/step5_5-embedded-sop.md`](./prompts/step5_5-embedded-sop.md)**（原样复制，勿转述） | {change}-sop.md + log-checks.yaml | 嵌入式专属条件触发：TG-02(嵌入式固件) **∧**（启动/复位·状态机·协议 等高风险 **∨** TG-18 有测试计划）；非嵌入式天然不触发 |
+-| 三 | 6 | /writing-plans | **→ [`prompts/step6-writing-plans.md`](./prompts/step6-writing-plans.md)**（原样复制，勿转述） | superpowers-plan.md + 代码 | superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序） |
++| 三 | 6 | /writing-plans | **→ [`prompts/step6-writing-plans.md`](./prompts/step6-writing-plans.md)**（原样复制，勿转述） | superpowers-plan.md + 代码 | **本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位） |
+ | 三 | 7 | /subagent-driven-development | （由步骤 6 自动触发）**→ [`prompts/step7-subagent-dev.md`](./prompts/step7-subagent-dev.md)**（原样复制，勿转述） | 代码 | quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序） |
+ | 三 | 8 | /sdflow-code-review | **→ [`prompts/step8-code-review.md`](./prompts/step8-code-review.md)**（原样复制，勿转述） | code-review-report.md | 编排器：**每次全跑·独立冷·强制主审**〔P3c〕；清单逐条+对抗+历史镜+置信过滤；阶段三无人类门（自动修/裁/defer，不 AskUserQuestion）+ 跨模型 outside voice（always code voice + HR-TG 领域 cross-model） |
+ | 三 | 9 | /sdflow-done | **→ [`prompts/step9-done.md`](./prompts/step9-done.md)**（原样复制，勿转述） | verify-report + hand-off + 归档 + 提交 + 合并 | sdflow-done skill；verify(防假✅证据锚点)→**issues sweep 子步(§2.1,已就位：分诊本change OPEN项入批次→reindex)**→hand-off.md→archive(+delta 同步)→commit→merge；**必跑（闭环）** |
+ 
+ ## 三、关键设计决策
+ 
+ 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
+ 2. **评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供（G1）**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+    - 🔴 **本条只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。旧措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
+    - 🔴 **阶段交界 SHALL 用一次 `/clear`（两处，理由各自都在本条射程之外）**：
+diff --git a/sdflow-issues/tests/test_task5_delivery_contract.py b/sdflow-issues/tests/test_task5_delivery_contract.py
+index c6d41ab..9b1cafd 100644
+--- a/sdflow-issues/tests/test_task5_delivery_contract.py
++++ b/sdflow-issues/tests/test_task5_delivery_contract.py
+@@ -153,20 +153,21 @@ DOGFOOD_OVERLAY_DELTAS = {
+     "T47": {"status": ("PROPOSED", "WONTDO")},  # drop-review-html-viewer：engine.js 删除→该 todo 失对象，legacy 行冻结、overlay 置 WONTDO
+     "T66": {"status": ("PROPOSED", "DONE")},
+     "T67": {"status": ("PROPOSED", "DONE")},
+     "T85": {"status": ("PROPOSED", "DONE")},
+     # harden-sdflow-spec-followups：只订正未来 gate 的 A/B 输入契约，T132 仍 OPEN。
+     "T132": {"summary": (
+         "grill 相位防静默跳过：spec-review 起手机械核验『grill 已收敛』信号（workflow.md:83 已强制的 grill checkpoint-commit，或 design.md 内补 <!-- sdflow:grill-done --> 锚），无信号→REFUSE_START 提示先跑 grill。grill 本身是人类对话岛不能自动跑，但『跑没跑』可机械断言——同 ship_gate 设计门新鲜度 fail-closed 先例，把判断从模型记性挪到脚本。属 mechanical-layer-hardening 家族。关联 T19（T19 定何时可跳；本条定跳了就机械拦）。信号载体（commit-tag vs design.md 锚）待其自身 design 定。",
+         "未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。",
+     )},
+     "T146": {"status": ("PROPOSED", "DONE")},
++    "T135": {"status": ("OPEN", "DONE")},
+ }
+ 
+ 
+ def test_repository_legacy_corpus_matches_independent_projection_item_by_item():
+     """Compare every frozen legacy row with the new dual-reader projection."""
+     fields_by_pool = {
+         "bug": (BUG, ROOT / "openspec/issues/buglist", "priority"),
+         "todo": (TODO, ROOT / "openspec/issues/todolist", "type"),
+     }
+     compared = set()
+diff --git a/sdflow-ship/tests/test_gate_freshness.py b/sdflow-ship/tests/test_gate_freshness.py
+index f6536ab..47f9503 100644
+--- a/sdflow-ship/tests/test_gate_freshness.py
++++ b/sdflow-ship/tests/test_gate_freshness.py
+@@ -478,20 +478,24 @@ def _design_stale(repo):
+ 
+ 
+ # ── 5.1 监视集保住：实现期改源码 + 勾 superpowers-plan.md 复选框 ⇒ fresh ──────
+ 
+ def test_impl_source_edits_and_plan_checkbox_flip_keep_design_fresh(repo):
+     """🔴 本 change 的**头号自噬风险**钉：判定收紧后若把监视集画大（如整个 change 目录、
+     或整棵树），实现期的正常动作会立刻把设计门自锁死。
+ 
+     实现期两个正常动作各来一次：① 改源码 ② 勾 `superpowers-plan.md` 的复选框
+     （它是**实现计划**，不在 design 监视集内——监视集只有四件套与 specs/）。
++
++    🔴 本用例经 `_approved_with_tasks` → `approved_change` 写盘（共享 fixture，写**旧名**——
++    见 test_gate_impl_progress.py 的注释），此处 MUST 沿用同一文件名，否则新旧两名同时落盘
++    会被 resolver 判 `PlanNameConflict` → UNKNOWN，而非本用例要测的 fresh 判定。
+     """
+     d = _approved_with_tasks(repo)
+     (repo / "src.py").write_text("# impl\n", encoding="utf-8")
+     (d / "superpowers-plan.md").write_text(
+         PLAN2.replace("- [ ] s\n### Task 2", "- [x] s\n### Task 2", 1), encoding="utf-8")
+     commit_all(repo, "checkpoint(task1-a): 实现 + 勾计划")
+     assert _design_stale(repo) == (False, "fresh")
+     code, js, _h = run_gate(repo)
+     assert code == 0 and js["verdict"] == "CONTINUE_IMPL"
+ 
+diff --git a/sdflow-ship/tests/test_gate_impl_progress.py b/sdflow-ship/tests/test_gate_impl_progress.py
+index 6a88628..05c613d 100644
+--- a/sdflow-ship/tests/test_gate_impl_progress.py
++++ b/sdflow-ship/tests/test_gate_impl_progress.py
+@@ -20,20 +20,25 @@ def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor=
+     #   ② 可选第三段〔4.1b〕revise=callable(d)：拍板前二次修订，单独提交（ADR-7(b) 场景）
+     #   ③ 读出 HEAD → 写携带该 sha 的 spec-review-report → 单独提交
+     # anchor: "head"（默认，锚指被批准盘面）｜"pre-revision"（锚指修订**之前**的提交，用于
+     #   验 ADR-7(b) 自锁：拍板刚完成即失鲜）｜None（不写 reviewed_sha，缺锚负例）｜显式 sha 串。
+     d = mkchange(repo)
+     prop = "# p\n〔TG-02：嵌入式〕\n" if tg02 else "# p\n〔TG-01：工具链〕\n"
+     (d / "proposal.md").write_text(prop, encoding="utf-8")
+     if sop:
+         (d / "demo-sop.md").write_text("sop\n", encoding="utf-8")
+     if plan is not None:
++        # 🔴 共享 fixture：`approved_change` 被 6 个测试文件 import（test_gate_namespace.py /
++        # test_gate_git_layer.py / test_plan_resolver.py / test_gate_reviewed_sha.py /
++        # test_gate_tail.py / test_gate_freshness.py）。`test_plan_resolver.py` 的双存在/
++        # 改名检测用例依赖它写**旧名**（另行显式写 `tickets.md` 制造双文件冲突态）——
++        # 改这里会连累那些用例，MUST NOT 改（rename-string-consumers-span-file-types 教训）。
+         (d / "superpowers-plan.md").write_text(plan, encoding="utf-8")
+     commit_all(repo, "seed change artifacts")      # ① 被批准的盘面
+     pre_revision = head_sha(repo)
+     if revise is not None:                          # ② 拍板前二次修订（单独落盘）
+         revise(d)
+         commit_all(repo, "pre-approval revision")
+     sha = {"head": head_sha(repo), "pre-revision": pre_revision}.get(anchor, anchor)
+     write_report(d, "spec-review-report.md", sha,
+                  body="# 设计审报告\n", design_approved="true")
+     commit_all(repo, "spec-review report (approved)")   # ③ 报告单独提交
+@@ -110,40 +115,40 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
+ def test_plan_task1_same_commit_counts(repo):
+     # 〔B1 闭区间〕plan 与 checkpoint(task1-) 同 commit（checkpoint add -A 携带未提交 plan）
+     # → task1 锚在窗口起点 sha 自身，排他窗口会漏数；闭区间须计入
+     # [harden-gate-git-layer Task1 · tasks 4.1] 两段提交：四件套先落盘 → 报告携锚后落盘
+     d = mkchange(repo)
+     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+     commit_all(repo, "seed change artifacts")     # 被批准的盘面（无 plan）
+     write_report(d, "spec-review-report.md", head_sha(repo),
+                  body="# 设计审报告\n", design_approved="true")
+     commit_all(repo, "spec-review report (approved)")
+-    (d / "superpowers-plan.md").write_text(PLAN2, encoding="utf-8")
++    (d / "tickets.md").write_text(PLAN2, encoding="utf-8")
+     commit_all(repo, "checkpoint(task1-foo): plan+task1 同 commit")  # plan 首次提交 == task1 锚
+     commit_all(repo, "checkpoint(task2-bar): B")
+     code, js, _ = run_gate(repo)
+     assert js["verdict"] == "RUN_CODE_REVIEW"   # done={1,2} 齐（闭区间含 sha 自身）
+ 
+ def test_offplan_task_no_false_complete(repo):
+     # 〔B4 集合归属〕plan=task1/task2，只完成 task1 + 一个计划外 task9（遗留/错号/merge 内）
+     # → 基数判齐会假齐(len={1,9}=2=N)；集合归属须判 CONTINUE_IMPL（task2 未完不放行）
+     approved_change(repo, plan=PLAN2)
+     commit_all(repo, "checkpoint(task1-a): A")
+     commit_all(repo, "checkpoint(task9-stray): 计划外/遗留")
+     code, js, _ = run_gate(repo)
+     assert js["verdict"] == "CONTINUE_IMPL"     # 非假齐
+     assert js["done_tasks"] == ["1"]            # 只报计划内已完成，不含计划外 9
+ 
+ def test_uncommitted_plan_no_checkbox_unknown(repo):
+     # plan 写盘但不提交，且内容无任何复选框 → 双通道（标签窗口 / 复选框）皆不可判
+     d = approved_change(repo)  # 不带 plan 提交基底
+-    (d / "superpowers-plan.md").write_text("### Task 1: A\n正文\n", encoding="utf-8")
++    (d / "tickets.md").write_text("### Task 1: A\n正文\n", encoding="utf-8")
+     code, js, _ = run_gate(repo)
+     assert code == 6 and js["verdict"] == "UNKNOWN" and "双通道" in js["reason"]
+ 
+ def test_tg02_hit_sop_exists_falls_through(repo):
+     # tg02 命中且 sop 产物已在 → 不再 RUN_SOP，继续往下判（plan 缺 → RUN_PLAN）
+     approved_change(repo, tg02=True, sop=True)
+     code, js, _ = run_gate(repo)
+     assert code == 0 and js["verdict"] == "RUN_PLAN"
+ 
+ def test_plan_zero_titles_unknown(repo):
