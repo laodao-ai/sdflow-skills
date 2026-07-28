@@ -107,6 +107,13 @@ sdflow-issues:
     T246: {"module":"sdflow-implement/SKILL.md + model-tiers.md","summary":"按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号","type":"性能优化","status":"OPEN","time":"2026-07-27 18:32","change":"main","batch":null}
     T247: {"module":"sdflow-spec/SKILL.md","summary":"B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步","type":"代码质量","status":"OPEN","time":"2026-07-27 22:30","change":"harden-implement-review-loop","batch":null}
     T248: {"module":"sdflow-spec/agents/（sdflow-local-researcher / sdflow-web-researcher）","summary":"两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议","type":"基础设施","status":"OPEN","time":"2026-07-27 22:51","change":"harden-implement-review-loop","batch":null}
+    T249: {"module":"sdflow-implement/SKILL.md","summary":"票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本","type":"代码质量","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T250: {"module":"sdflow-implement/tests/test_tickets_plan_golden.py","summary":"golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」)","type":"代码质量","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T251: {"module":"sdflow-implement/SKILL.md","summary":"纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义","type":"功能增强","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T252: {"module":"openspec/adr/0031-t10-label-split-by-decision-semantics.md","summary":"adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次","type":"基础设施","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T253: {"module":"openspec/CONTEXT.md","summary":"「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名","type":"代码质量","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T254: {"module":"openspec/workflow/lens-metric-contract.md","summary":"lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行","type":"可观测性","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
+    T255: {"module":"sdflow-spec-review/SKILL.md","summary":"outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能","type":"基础设施","status":"OPEN","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2501,3 +2508,84 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：关联文档：sdflow-spec/references/delegation-protocol.md（当前状态与档位表）、openspec/changes/archive/2026-07-26-add-sdflow-spec/hand-off.md（原始拍板题出处）
 <!-- sdflow-issue-block:end id=T248 -->
+
+<!-- sdflow-issue-block:start id=T249 -->
+## T249: 票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本
+> 票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：spec-review L1(Codex CEO，defer)：两类票都不计入 3-6 预算，票数上限正在失去约束力；每票 size 上限仍在，故本次接受。
+
+**思路**：重新定义计量口径：约束「总执行单元数」或「总 frontier 成本」，而非垂直切片张数。
+<!-- sdflow-issue-block:end id=T249 -->
+
+<!-- sdflow-issue-block:start id=T250 -->
+## T250: golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」)
+> golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」)
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：spec-review L4(Claude Eng，defer)：收尾票是新形状，golden fixture 没覆盖，形状漂了测试照绿。
+
+**思路**：扩 fixture 到含收尾票的 N+1 票形态，断言 Blocked-by 全集与不计入预算两点。
+<!-- sdflow-issue-block:end id=T250 -->
+
+<!-- sdflow-issue-block:start id=T251 -->
+## T251: 纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义
+> 纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：spec-review L5(Claude Eng，defer)：迁移批次不算垂直切片，若某 change 全是 expand-contract，收尾票该 Blocked-by 谁没说清。
+
+**思路**：定义为「Blocked-by 全部非收尾 ticket」而非「全部功能票」，或显式声明该场景下收尾票同样强制。
+<!-- sdflow-issue-block:end id=T251 -->
+
+<!-- sdflow-issue-block:start id=T252 -->
+## T252: adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次
+> adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：spec-review L6(Claude CEO)：ADR 写了「留待独立立项」但没有任何追踪条目，等于没留。且 C8 差异 B(spec-workflow spec 丢「按三镜+主次」)就是该架构导致的真实漂移。本条即补上该追踪。
+
+**思路**：把 T10-choice 的 15 处复述重构为单一源 + 指针引用(仿 model-tiers.md 的机读块模式)，或至少补一条 lint 守住 15 处措辞一致。
+<!-- sdflow-issue-block:end id=T252 -->
+
+<!-- sdflow-issue-block:start id=T253 -->
+## T253: 「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名
+> 「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：spec-review M11(对抗镜 B + Claude DX)：按 CONTEXT.md:299 的术语澄清，sdflow-implement 的 NEEDS_CONTEXT 尾部引用与 impl-orchestration spec 对应 Scenario 严格说也该脱钩，但给第三类场景命名与定义属加宽(通则③)，本次不做。
+
+**思路**：给该场景命名(如 no-answer-on-board)并定义处置，然后把两处从 T10 别名脱钩。
+<!-- sdflow-issue-block:end id=T253 -->
+
+<!-- sdflow-issue-block:start id=T254 -->
+## T254: lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行
+> lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：harden-implement-review-loop 的 spec-review 实测(诚实边界#1)：autoplan 三个 Codex voice 贡献了两条 Critical 中的两条与多数 High，但 lens_metric_emit.py fail-closed 拒绝「非 outside-voice 行键 runner != --host」⇒ 只能折叠进 broad/runner=claude。该行的 runner 值不反映实际执行机队，跨 change 聚合时会系统性低估跨模型贡献。
+
+**思路**：给 broad 行键增加可选的 mixed-runner 表达(如 runner="claude+codex" 或拆出 broad-voice 子行键)，并同步 emitter 与 anchor_lint 的枚举。
+
+**备注**：非 change 来源：由评审工具自身的实测暴露，不属 harden-implement-review-loop 的交付范围。
+<!-- sdflow-issue-block:end id=T254 -->
+
+<!-- sdflow-issue-block:start id=T255 -->
+## T255: outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能
+> outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能
+
+**关联文档**：`openspec/changes/harden-implement-review-loop/design.md`
+
+**动机**：harden-implement-review-loop 的 spec-review 实跑撞到：SKILL 写「helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL」，但 harness 每次 Bash 调用是独立 shell，第零步 eval 的 export 不存活 ⇒ outside-voice.sh preflight 报「SDFLOW_VOICE_RUNNER 未设置(host=unknown)」。本轮靠手工内联 export 同轮已解析值绕过。SKILL 对 $HELPER/$RUN_DIR/$VOICE_TIMEOUT 已承认这一点，唯独漏了这两个 voice 变量。
+
+**思路**：比照 $HELPER/$RUN_DIR 的写法，明确要求每次调用 outside-voice.sh 前内联 export 本轮已解析的 voice 变量；或让 helper 自己 resolve 一次并与主 session 的值交叉核对。
+
+**备注**：非 change 来源：评审工具自身的协议缺口，不属 harden-implement-review-loop 的交付范围。
+<!-- sdflow-issue-block:end id=T255 -->
