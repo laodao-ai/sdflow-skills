@@ -151,6 +151,7 @@
 | T259 | todo | PROPOSED | harden-implement-review-loop |
 | T260 | todo | PROPOSED | harden-implement-review-loop |
 | T261 | todo | PROPOSED | harden-implement-review-loop |
+| T262 | todo | PROPOSED | harden-implement-review-loop |
 
 ### 批次：harden-repo-root-fail-closed
 
