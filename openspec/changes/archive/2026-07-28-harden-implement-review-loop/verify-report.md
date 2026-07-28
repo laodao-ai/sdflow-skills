@@ -1,3 +1,15 @@
+---
+ship-gate:
+  verify: PASS
+  reviewed_sha: 3e2297c285f76f41318e8cb86b5bc233c0ebaf60
+---
+
+<!-- 🔴 补录声明（显式越权通道，git 留痕可审计）：本 frontmatter 由 /sdflow-done 的编排层
+     在 merge 后补写，**非 verify 子代理亲写**——该子代理写了人读结论行「**结论：PASS**」与
+     核验 SHA，但漏写了 gate 机判用的 frontmatter 锚，导致 ship_gate 判 UNKNOWN（fail-safe
+     正确生效，未假绿）。此处两个字段均为**逐字转录**该报告正文已声明的内容：
+     verify=PASS 取自正文「结论：PASS」，reviewed_sha 取自正文「核验 SHA：3e2297c…」。
+     未新增、未改动任何结论。可复发缺陷已记 todo。 -->
 # verify-report — harden-implement-review-loop
 
 **结论：PASS**
