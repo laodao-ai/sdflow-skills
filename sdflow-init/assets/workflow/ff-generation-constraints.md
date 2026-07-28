@@ -65,7 +65,7 @@ change 若源于 wayfinder map（即由 wayfinder chart 铺图逐 ticket 决议�
 
 仓已开 `impl-pipeline: tickets` 时，design.md 决策区 **MAY** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）。
 出 ticket 模式（`sdflow-implement`）消费该节的语义是**建议，非契约**——节缺席时自主出 ticket；
-对切片粒度的争议走既有 T10 三级决策协议。
+对切片粒度的争议走既有 `T10-choice` 三级决策协议（无客观判据档派 **strong 档**对抗镜复核）。
 
 切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀（两类「ticket」语义须物理区分——本节的
 「切片建议 ticket」与上节 wayfinder map 的「已决 ticket」不是一回事，混用会让溯源指向错误的出处）。

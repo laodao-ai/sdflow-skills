@@ -4,7 +4,7 @@ description: >
   阶段三「代码评审编排器」——**每次全跑·独立冷视角·强制主审**（非"高风险才跑的边际抽查"；实测能抓循环内被
   controller 说服放过的真问题）。主 session（强档）协调：Step1 并入 gstack/review（scope-drift + 计划
   完成度审计），Step2 fan-out 多个 fresh 子代理并行审本项目 code-checklists（领域镜 + 对抗镜 + 历史镜），
-  Step3 置信过滤（<80 滤除）+ 对抗裁决，Step4 **能修的自动修**（标 [impl-review-fix]）、≥2 方案按 T10 三级协议自动选推荐（按三镜 + 主次记理由）、修不了/拿不准的 defer 进 buglist/todolist，Step5 汇总**一份** code-review-report.md。
+  Step3 置信过滤（<80 滤除）+ 对抗裁决，Step4 **能修的自动修**（标 [impl-review-fix]）、≥2 方案按 `T10-choice`（strong 档）三级协议自动选推荐（按三镜 + 主次记理由）、修不了/拿不准的 defer 进 buglist/todolist，Step5 汇总**一份** code-review-report.md。
   **阶段三无人类门**——不 AskUserQuestion，自动修/自动裁/defer，残差交 hand-off 异步再入口。**不依赖 /clear**
   ——子代理 fresh context 即独立性。代码即 ground truth（无接地镜，换历史镜 + 置信过滤）。出报告标
   [impl-review-fix]。也可说"sdflow 代码审"。Trigger with /sdflow-code-review。
@@ -167,7 +167,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 - **不依赖 `/clear`（G1）**：评审 fan-out 到 fresh-context 子代理，独立性由"子代理冷上下文"给。主 session
   携带生成历史进裁决，接受一丝合成层偏置——但**反静默压制**焊死其边界（见 Step3）。
 - **阶段三无人类门（P3e）**：过设计门后一口气跑到 merge，本 skill **不 AskUserQuestion**。**能修的当场修**、
-  **≥2 方案按 T10 三级协议自动选推荐（按三镜 + 主次记理由）**、**genuinely 拿不准的 defer**（进 buglist/todolist + hand-off 异步再入口）。
+  **≥2 方案按 `T10-choice`（strong 档）三级协议自动选推荐（按三镜 + 主次记理由）**、**genuinely 拿不准的 defer**（进 buglist/todolist + hand-off 异步再入口）。
   与阶段二不同——阶段二决策高杠杆（错设计→白做）值一个门；阶段三已实现、残差可追踪可另修。
 
 ## 与注入点 B 的关系（2.4，**别把本 skill 优化掉**）
@@ -286,7 +286,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 ## 第四步：自动修 / 自动裁 / defer（阶段三无人类门，P3e）
 
 - **能修的自动修**：标 `[impl-review-fix]`，**不进延后池**。
-- **≥2 方案（T10 三级协议，替换旧「有把握自动选」）**：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次记理由**入报告；②无客观判据 → 派对抗镜复核推荐项，通过才自动选（复核记录写台账）；③复核不过/无从复核 → defer。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 不问人。
+- **≥2 方案（`T10-choice` 三级协议，替换旧「有把握自动选」；"T10" 保留为历史别名）**：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次记理由**入报告；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过才自动选（复核记录写台账）；③复核不过/无从复核 → defer。**MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。** 不问人。
 - **修不了 / genuinely 拿不准**：defer → 写 buglist（本 change 引入的代码 bug）/ todolist（改进/关注点），
   本 change 不处理，交 hand-off 引导另开清理 change。
 - **绝不 AskUserQuestion**（阶段三无人类门）。
@@ -529,7 +529,7 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
   X1  reviewer 原始发现 + 主 session 裁掉理由；<80 滤除项一行带过
 ### 修复 / defer 台账
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(按三镜+主次附理由)；defer K 项 → buglist/todolist
-  T10复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附
+  T10-choice复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附
 ### 度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步/第五步）
   domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（gstack/review Step1）
   各一行——本段内容 = Step5「度量锚落锚」调 `lens_metric_emit.py` 后 exit0 落进来的 stdout，MUST NOT 手拼：

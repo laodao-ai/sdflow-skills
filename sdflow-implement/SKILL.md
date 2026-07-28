@@ -246,7 +246,7 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 
 读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
 **建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
-用户，走 ship T10 三级决策协议（design D9）。
+用户，走 ship `T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案）。
 
 ### 产出：3–6 张 tracer-bullet 垂直切片
 
@@ -314,7 +314,7 @@ impl-pipeline: tickets
 ```
 
 **无 quiz-the-user**：不做人工粒度确认这一步（matt 原版 to-tickets 有此人类步，本 skill 删除——
-阶段三无人类门；粒度争议走 T10，不问用户）。
+阶段三无人类门；粒度争议走 `T10-choice`（无客观判据档派 **strong 档**对抗镜复核），不问用户）。
 
 ### 落盘 → checkpoint → 返回（显式三步序列，B1 完成窗口锚）〔impl-review-fix〕
 
@@ -325,8 +325,8 @@ impl-pipeline: tickets
 2. **全 ticket 语义一致性自扫**（附录 B 有出处说明）：checkpoint 前，编排层自己通读一遍刚写好的
    全部 ticket，找「ticket 之间互相矛盾、或与 `## Global Constraints` 矛盾」的迹象（例如某张
    ticket 假设的接口形状被另一张明确废弃）——Blocked-by **环**已由 `impl_route.py frontier`
-   拓扑机械挡住，这里补的是拓扑之外的**语义**矛盾，机械查不出。发现矛盾走 T10 三级决策协议
-   （有客观判据自动选 / 无客观判据派对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**。
+   拓扑机械挡住，这里补的是拓扑之外的**语义**矛盾，机械查不出。发现矛盾走 `T10-choice` 三级决策协议
+   （有客观判据自动选 / 无客观判据派 **strong 档**对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**。
    扫描干净则不留痕，直接进下一步。
 3. **立即执行 checkpoint 命令**：plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点——
    不依赖「首 ticket add -A 捎带提交」的巧合自愈〔adr/0017〕：
@@ -538,10 +538,22 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 - Critical / Important 发现 → 派 fix 子代理修复（**fix 子代理无独立 dispatch 段，就地在此声明**：
   model: `$SDFLOW_TIER_MID`——同一次第零步解析结果，与上文 implementer/双轴审共用同一档位，不重复
   计数）+ re-review，循环直至通过；**不带着未修的
-  Critical/Important 推进下一 ticket**。**熔断**〔impl-review-fix〕：同一发现（同 file:line +
-  同问题）连续 2 轮 re-review 仍未消解 → 停止循环，按 T10 三级决策协议处理（有客观判据自动选 /
-  无客观判据派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist 并停上抛），**MUST NOT**
-  无限循环。
+  Critical/Important 推进下一 ticket**。
+
+  **熔断规则 `review-loop-breaker`**〔impl-review-fix；本规则独立定义，MUST NOT 引用 `T10-choice`
+  标签——本场景语义为「同一发现反复未消解」，与 `T10-choice`「≥2 方案自动选」触发条件不同〕：
+
+  - **触发**：同一发现连续 2 轮 re-review 仍未消解 → 停止循环。
+  - **身份键跨轮稳定**：判定「是否同一发现」用**同文件 + 规范化问题指纹**，**行号只作定位、
+    MUST NOT 作为身份键的组成部分**——修复几乎必然移动行号，用行号当身份会让同一未解决问题被
+    认成新发现、轮次计数清零，`MUST NOT 无限循环` 无从兑现。
+  - **三级处置归于互斥终态，MUST NOT 停在「已确认成立」而无后续动作**：①有客观判据（测试/断言/
+    基准可判）→ 自动选并记理由后关闭（**预期极少触发**：触发前提已是连续 2 轮不消解，能客观判定
+    的话第 1 轮就该修好；保留该档是为两组处置形状对称，成本近零）；②无客观判据 → 派对抗镜复核该
+    发现是否成立，复核用 **strong 档**（本场景是低频、需要独立判断力打破同档循环的仲裁点）——
+    复核判**不成立** → 关闭该发现并记理由；判**成立且可修** → 派 strong 档 fix 子代理修复并
+    **仅复验一次**，复验通过则关闭、不通过转③；③复核不过、无从复核、或判成立但不可修 → defer
+    进 buglist 并停上抛。**MUST NOT 无限循环。**
 - Minor 发现 → defer 进 todolist，**JSON 显式带 `"change"` 字段**（省略会被脚本自动挂到"当前活跃
   change"，多 change 并行时会挂错，坑见 sdflow-issues 的 todo 池 `change` 字段说明）。
 
@@ -593,4 +605,4 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
   词封顶内进一步省 token。
 - **全 ticket 语义一致性自扫**（出 ticket 收尾序列第②步）：对齐 superpowers
   writing-plans/subagent-driven-development 的 pre-flight 冲突扫描；原版把冲突批量呈给人拍板，
-  阶段三无人类门场景换成 T10 自主裁决。
+  阶段三无人类门场景换成 `T10-choice`（无客观判据档派 **strong 档**对抗镜复核）自主裁决。

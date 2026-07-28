@@ -15,3 +15,5 @@
 - 以后改"阶段三 ≥2 方案自动选"的处置细节，只需要动 canonical 落点（`workflow.md`/`sdflow-ship`/`sdflow-code-review`/`spec-workflow` spec.md/`impl-orchestration` spec.md 里"粒度争议"与"矛盾裁决"两处）；改 `sdflow-implement` 的熔断仲裁，只需要动它自己那一处，两者互不牵连。
 - 未来若有第三个场景想复用这套"自动选/复核/defer"处置形状，应各自独立描述，不该再往"T10"这个名字底下塞——标签只用于语义真正相同的场景。
 - `openspec/CONTEXT.md` 需要加一行术语说明，防止"T10"被误解为放之四海而皆准的单一协议（见术语表条目）。
+
+> 〔追记，`harden-implement-review-loop` Task 2〕两条具名规则最终定名 `T10-choice`（Group A，15 处规范性落点，②步统一派 strong 档）与 `review-loop-breaker`（Group B，独立成文，不再出现"T10"字样）；落点清单与统一计数口径见 `openspec/changes/harden-implement-review-loop/design.md`「T10 scope-check」表。
