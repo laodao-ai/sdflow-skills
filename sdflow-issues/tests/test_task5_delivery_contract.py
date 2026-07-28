@@ -160,6 +160,7 @@ DOGFOOD_OVERLAY_DELTAS = {
         "未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。",
     )},
     "T146": {"status": ("PROPOSED", "DONE")},
+    "T135": {"status": ("OPEN", "DONE")},
 }
 
 

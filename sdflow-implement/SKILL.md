@@ -161,8 +161,10 @@ tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出
 子代理，而执行模式需要派发 implementer / 双轴审子代理，这个能力只在主 session 位置成立。
 
 `ship_gate.py` **零改动**——本 skill 只是产出 / 消费 gate 已识别的「试验期外衣」契约
-（`superpowers-plan.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
+（`tickets.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
 不触碰 gate 脚本本身，也不读 `openspec/config.yaml`（config 只在 ship 首跳读一次，见路由说明）。
+计划文件名按轨分列〔D5/adr-0033〕：superpowers 轨保持 `superpowers-plan.md` 不变，两名经共享
+resolver 定位，双存在 fail-closed。
 
 ## 第零步：宿主/档位解析（两入口共用、无条件执行）
 
@@ -277,7 +279,8 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 
 ### 外衣（ship_gate.py 既有完成判据契约，零改动兼容）
 
-- 落盘路径固定 `{change_dir}/superpowers-plan.md`。
+- 落盘路径固定 `{change_dir}/tickets.md`〔D5/adr-0033：tickets 轨新名；superpowers 轨仍用
+  `superpowers-plan.md`，两名经共享 resolver 定位，本 skill 只产出 tickets 轨文件〕。
 - frontmatter **含且仅含** `impl-pipeline: tickets` 单键——**MUST NOT** 加注释行、示例值，或第二个
   frontmatter 块（杂行 / 第二块会被 gate 的 fence-aware 解析算成幻影任务，或触发 UNKNOWN）〔F5〕。
 - 每 ticket 以 `### Task N: <ticket 名>`（N 从 1 连续编号）为标题——与验收复选框、`Blocked-by:`
@@ -325,7 +328,7 @@ impl-pipeline: tickets
 出 ticket 模式收尾按固定顺序执行——**返回发生在 checkpoint 之后**，不是「落盘即返回」；模型读到
 「立即返回」不得跳过第②③步：
 
-1. **写盘**：完成 `superpowers-plan.md`（结构见上「外衣」节）。
+1. **写盘**：完成 `tickets.md`（结构见上「外衣」节）。
 2. **全 ticket 语义一致性自扫**（附录 B 有出处说明）：checkpoint 前，编排层自己通读一遍刚写好的
    全部 ticket，找「ticket 之间互相矛盾、或与 `## Global Constraints` 矛盾」的迹象（例如某张
    ticket 假设的接口形状被另一张明确废弃）——Blocked-by **环**已由 `impl_route.py frontier`
@@ -350,7 +353,7 @@ impl-pipeline: tickets
 
 - 调用 frontier helper，用透传的 `done_tasks` 算出下一批 next-ready ticket 号：
   ```
-  python3 sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/superpowers-plan.md --done {done_tasks}
+  python3 sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/tickets.md --done {done_tasks}
   ```
 - **严格串行**——同一时刻至多一个 implementer 子代理在工作，**MUST NOT** 并行派发多个
   implementer（首版红线，design D4/Non-Goal）。next-ready 若一次给出多个候选，仍按号序逐个派发、
@@ -361,7 +364,7 @@ impl-pipeline: tickets
 派发前先机械抠出该票原文（附录 B 有出处说明）：
 
 ```
-python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/superpowers-plan.md --task {N}
+python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tickets.md --task {N}
 ```
 
 默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
@@ -381,7 +384,7 @@ python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/sup
 
   | 范畴 | 权威在哪 | 谁写 |
   |---|---|---|
-  | **本票完成信号** | ① `superpowers-plan.md` 里该 `### Task N:` 段的验收复选框（段内**须有**复选框**且**全勾才计入——空段不计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
+  | **本票完成信号** | ① `tickets.md` 里该 `### Task N:` 段的验收复选框（段内**须有**复选框**且**全勾才计入——空段不计入）<br>② 提交 subject 上的 `checkpoint(<change>:task<N>-<slug>)` 标签 | **双轴审通过后由执行模式补打**——implementer 实现期 **MUST NOT** 自行勾框或打完成标签 |
   | **本票工作产物** | 实现代码、测试、`{change_dir}/impl-reports/task<N>-<slug>.md` | implementer 自己写 |
   | **设计意图（需求 / 设计 / 规格 / 任务清单）** | `proposal.md` · `design.md` · `specs/` · `tasks.md` | **设计阶段已定稿，实现期不是它们的作者**——发现设计有问题走 `NEEDS_CONTEXT` / `BLOCKED` 上抛编排层，由编排层裁决，**不自行改盘** |
 

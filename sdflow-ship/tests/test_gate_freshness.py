@@ -485,6 +485,10 @@ def test_impl_source_edits_and_plan_checkbox_flip_keep_design_fresh(repo):
 
     实现期两个正常动作各来一次：① 改源码 ② 勾 `superpowers-plan.md` 的复选框
     （它是**实现计划**，不在 design 监视集内——监视集只有四件套与 specs/）。
+
+    🔴 本用例经 `_approved_with_tasks` → `approved_change` 写盘（共享 fixture，写**旧名**——
+    见 test_gate_impl_progress.py 的注释），此处 MUST 沿用同一文件名，否则新旧两名同时落盘
+    会被 resolver 判 `PlanNameConflict` → UNKNOWN，而非本用例要测的 fresh 判定。
     """
     d = _approved_with_tasks(repo)
     (repo / "src.py").write_text("# impl\n", encoding="utf-8")

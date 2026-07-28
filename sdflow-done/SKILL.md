@@ -186,7 +186,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 
 ### 0.3 tasks.md 复选框对账（关键，否则 verify/archive 被误导）
 
-实现常经 `superpowers-plan` / subagent-driven-development 完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
+实现常经 `tickets.md`（sdflow-implement 出票管线）或 `superpowers-plan.md` / subagent-driven-development〔D5：两轨计划文件名分列，`superpowers-plan` 一名专指 superpowers 轨〕完成，change 自己的 `tasks.md` 复选框**没被勾**。这会让 `openspec archive` 警告 "N/M incomplete"、让 verify 误判。
 
 - Read `openspec/changes/{change_name}/tasks.md`，与实际实现对照（看 git log / 实现 commit）。
 - **已真实完成的任务勾上** `- [x]`；**确实未做/部分做的保持 `- [ ]` 并补一句说明**（别为过 archive 假勾——保持记录诚实）。

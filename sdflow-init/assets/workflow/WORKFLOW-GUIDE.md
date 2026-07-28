@@ -107,7 +107,7 @@
 
 **产出物**：superpowers-plan.md + 代码
 
-**规则 · 条件**：superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序）
+**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
 
 ## 阶段三 · 步骤 7 — `/subagent-driven-development`
 

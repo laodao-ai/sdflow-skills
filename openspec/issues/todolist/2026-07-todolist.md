@@ -10,6 +10,7 @@ sdflow-issues:
     T67: {"module":"`cmd_add id 校验(buglist/todolist)`","summary":"显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)","type":"代码质量","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
     T85: {"module":"`roadmap mechanical-layer-hardening / recorder`","summary":"P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块","type":"基础设施","status":"DONE","time":"2026-07-08 15:55","change":null,"batch":"mlh-p4-target-state"}
     T132: {"module":"`openspec/workflow/ + sdflow-spec-review 起手 fail-closed 门`","summary":"未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。","type":"代码质量","status":"OPEN","time":"2026-07-11 08:59","change":null,"batch":null}
+    T135: {"module":"`sdflow-implement`","summary":"superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化","type":"代码质量","status":"DONE","time":"2026-07-11 12:48","change":null,"batch":null}
     T146: {"module":"`sdflow-skills 工具族`","summary":"扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）","type":"代码质量","status":"DONE","time":"2026-07-12 18:34","change":"add-sdflow-architecture","batch":"add-sdflow-architecture"}
     T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"DONE","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
     T154: {"module":"sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py","summary":"actual Windows local-disk smoke 未执行验证（SW-RI-2 recorder lock 兼容目标，deferred）","type":"基础设施","status":"DONE","time":"2026-07-17 16:14","change":"mlh-p6-recorder-frontmatter","batch":null}
@@ -1349,6 +1350,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T135 -->
 ## T135: tickets 管线 plan 文件名不应硬编码为 superpowers-plan.md
 
 | 属性 | 值 |
@@ -1361,6 +1363,8 @@ sdflow-issues:
 
 **思路**：把 plan 文件名从 gate 硬编码提为可配置/可发现（按 frontmatter marker 或 config 决定文件名，或 gate 扫描 openspec/changes/{change}/ 下带 impl-pipeline frontmatter 的任一 *.md）。属 ship 链序注释里的『emit 串 Phase B 根治』范畴。改动须同步 ship_gate.py TAG_RE/解析、impl_route.py、sdflow-implement/sdflow-ship 三处文档，保持向后兼容既有 superpowers-plan.md。
 
+> 2026-07 状态：OPEN → DONE（harden-implement-review-loop:task3(resolver)+task4(rename)）
+<!-- sdflow-issue-block:end id=T135 -->
 ---
 
 ## T136: anchor_lint 重算 hr-tg 交集以堵手改绕过 cross-model

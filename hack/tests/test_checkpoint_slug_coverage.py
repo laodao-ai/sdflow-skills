@@ -22,8 +22,9 @@ SKILL.md 改一个 slug、词表没跟 ⇒ 该阶段的墙钟**静默**落进 `u
   样例（人照着敲）。**上一版只 glob `*/SKILL.md`，漏掉后三片。**
 - **非 producer（描述性散文 / 历史件 ⇒ 不纳入）** —— `docs/**`（讲这套工作流是怎么回事，
   没人从这里执行）· `openspec/specs/**` 与 `openspec/adr/**`（规格与决策记录）·
-  `openspec/changes/**`（含 archive 的 per-change 四件套与 `superpowers-plan.md`：
-  **一次性、已执行完**，它们的 slug 早已在 git 历史里定型，回头改词表也追不回来）·
+  `openspec/changes/**`（含 archive 的 per-change 四件套与计划文件 `tickets.md` /
+  `superpowers-plan.md`〔D5：两轨计划文件名分列〕：**一次性、已执行完**，它们的 slug 早已在
+  git 历史里定型，回头改词表也追不回来）·
   各 `tests/`（夹具字面量）。把它们纳入 = 让守卫去管一堆改不动的历史文本。
 
 🔴 **边界（本门证明什么、不证明什么）**：

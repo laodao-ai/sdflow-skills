@@ -35,3 +35,5 @@
 - **正**：换管线 = 换 ship 链序两处映射指向；gate 及其测试零波及；两管线可同时在飞（marker 隔离在途）；回退 = config 键回缺省。
 - **负（显式承受）**：试验期文件名与内容不符，排障首眼可能被误导（记入试点观察项）；弱档模型照 next 提示串误路由的窗口期风险（链序权威声明压制，实发即 Phase B 提前）。
 - **边界**：本 ADR 只锚 gate 契约对接方式；管线路由策略（手动 config 键 + 盘面 marker、零模型判断）与 ship 不 fork 属可逆策略决策，记录在 change design.md（D2/D5），不占 ADR。
+
+> 〔追记，`harden-implement-review-loop`〕本条目「3. 文件名说谎」预告的 Phase B 终局拍板已完成：tickets 轨改名 `tickets.md`，superpowers 轨保留 `superpowers-plan.md`，gate/route 经共享 resolver 定位两名，双存在 fail-closed。细节见 `adr/0033`。

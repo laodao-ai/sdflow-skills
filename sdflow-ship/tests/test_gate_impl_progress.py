@@ -27,6 +27,11 @@ def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor=
     if sop:
         (d / "demo-sop.md").write_text("sop\n", encoding="utf-8")
     if plan is not None:
+        # 🔴 共享 fixture：`approved_change` 被 6 个测试文件 import（test_gate_namespace.py /
+        # test_gate_git_layer.py / test_plan_resolver.py / test_gate_reviewed_sha.py /
+        # test_gate_tail.py / test_gate_freshness.py）。`test_plan_resolver.py` 的双存在/
+        # 改名检测用例依赖它写**旧名**（另行显式写 `tickets.md` 制造双文件冲突态）——
+        # 改这里会连累那些用例，MUST NOT 改（rename-string-consumers-span-file-types 教训）。
         (d / "superpowers-plan.md").write_text(plan, encoding="utf-8")
     commit_all(repo, "seed change artifacts")      # ① 被批准的盘面
     pre_revision = head_sha(repo)
@@ -117,7 +122,7 @@ def test_plan_task1_same_commit_counts(repo):
     write_report(d, "spec-review-report.md", head_sha(repo),
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")
-    (d / "superpowers-plan.md").write_text(PLAN2, encoding="utf-8")
+    (d / "tickets.md").write_text(PLAN2, encoding="utf-8")
     commit_all(repo, "checkpoint(task1-foo): plan+task1 同 commit")  # plan 首次提交 == task1 锚
     commit_all(repo, "checkpoint(task2-bar): B")
     code, js, _ = run_gate(repo)
@@ -136,7 +141,7 @@ def test_offplan_task_no_false_complete(repo):
 def test_uncommitted_plan_no_checkbox_unknown(repo):
     # plan 写盘但不提交，且内容无任何复选框 → 双通道（标签窗口 / 复选框）皆不可判
     d = approved_change(repo)  # 不带 plan 提交基底
-    (d / "superpowers-plan.md").write_text("### Task 1: A\n正文\n", encoding="utf-8")
+    (d / "tickets.md").write_text("### Task 1: A\n正文\n", encoding="utf-8")
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN" and "双通道" in js["reason"]
 

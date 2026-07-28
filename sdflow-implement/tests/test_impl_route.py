@@ -170,7 +170,7 @@ def test_marker_quoted_trailing_junk_stops(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_marker_file_missing(tmp_path):
-    assert ir.read_plan_marker(tmp_path / "superpowers-plan.md") is None
+    assert ir.read_plan_marker(tmp_path / "tickets.md") is None
 
 
 def test_marker_no_frontmatter(tmp_path):
@@ -259,7 +259,7 @@ def test_cli_route_config_tickets_plan_missing_first_jump(tmp_path):
 def test_cli_route_marker_locks_over_config_change(tmp_path):
     # marker 存在（tickets）时 marker 优先——事后把 config 改回 superpowers 不影响在途 change
     d = _mkchange(tmp_path)
-    (d / "superpowers-plan.md").write_text(
+    (d / "tickets.md").write_text(
         "---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
     _write_config(tmp_path, "impl-pipeline: superpowers\n")
     code, out, _ = _run_route(tmp_path, "demo")
@@ -272,7 +272,7 @@ def test_cli_route_marker_implicit_superpowers_locks_over_config(tmp_path):
     # marker 存在但无显式声明（旧管线产物，隐式 superpowers）——同样锁定，不因 config 现在
     # 说 tickets 就切换（防两管线混跑）
     d = _mkchange(tmp_path)
-    (d / "superpowers-plan.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
+    (d / "tickets.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
     _write_config(tmp_path, "impl-pipeline: tickets\n")
     code, out, _ = _run_route(tmp_path, "demo")
     assert code == 0
@@ -285,7 +285,7 @@ def test_cli_route_marker_explicit_superpowers_displays_none(tmp_path):
     # frontmatter/无键）在 receipt 里显示相同（marker=none）——read_plan_marker 两种情形返回
     # 同一个字符串 "superpowers"，receipt 无法区分（display 改进已 defer），本用例锁定现状。
     d = _mkchange(tmp_path)
-    (d / "superpowers-plan.md").write_text(
+    (d / "tickets.md").write_text(
         "---\nimpl-pipeline: superpowers\n---\n### Task 1: A\nBlocked-by: none\n",
         encoding="utf-8")
     code, out, _ = _run_route(tmp_path, "demo")
@@ -296,7 +296,7 @@ def test_cli_route_marker_explicit_superpowers_displays_none(tmp_path):
 
 def test_cli_route_stop_on_bad_marker(tmp_path):
     d = _mkchange(tmp_path)
-    (d / "superpowers-plan.md").write_text(
+    (d / "tickets.md").write_text(
         "---\nimpl-pipeline: tickets\nimpl-pipeline: superpowers\n---\n### Task 1: A\n",
         encoding="utf-8")
     code, out, err = _run_route(tmp_path, "demo")
@@ -323,7 +323,7 @@ def test_cli_route_plan_sha_dash_when_no_plan(tmp_path):
 
 def test_cli_route_plan_sha_present_when_committed(tmp_path):
     d = _mkchange(tmp_path)
-    (d / "superpowers-plan.md").write_text(
+    (d / "tickets.md").write_text(
         "---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
                     check=True, capture_output=True, text=True)
@@ -730,7 +730,7 @@ def _run_task_text(plan_path, task, out=None):
 def test_cli_task_text_default_out_path_under_impl_reports(tmp_path):
     change_dir = tmp_path / "openspec" / "changes" / "demo"
     change_dir.mkdir(parents=True)
-    plan = change_dir / "superpowers-plan.md"
+    plan = change_dir / "tickets.md"
     plan.write_text(
         "### Task 1: A\nBlocked-by: none\n- [ ] x\n"
         "### Task 2: B\nBlocked-by: 1\n- [ ] y\n", encoding="utf-8")

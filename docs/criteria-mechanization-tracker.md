@@ -71,7 +71,7 @@
 ## 5b. ship·plan（tickets/superpowers）
 | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
 |---|---|---|---|---|---|
-| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `superpowers-plan.md` | `ship_gate`（plan 缺）| — |
+| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `tickets.md`（tickets 轨）/ `superpowers-plan.md`（superpowers 轨，D5/adr-0033）| `ship_gate`（共享 resolver 按序探测两名，双存在 fail-closed；plan 缺）| — |
 | 5b.2 | checkpoint 完成标签契约 | 🟢 | `checkpoint({change}:task<N>-…)` commit | `ship_gate.py:492` `TAG_RE` | slug 须含横杠（memory）|
 | 5b.3 | ticket 切片粒度 / Blocked-by 拓扑划分 | 🔵 | `Blocked-by:` 声明（写） | — | 划成几片=判断；拓扑解析=🟢下条 |
 | 5b.4 | next-ready ticket（Blocked-by 拓扑 + done 集）| 🟢 | `Blocked-by:` | `impl_route.py frontier` | tickets 管线 |
