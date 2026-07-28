@@ -345,6 +345,81 @@ def test_cli_route_plan_sha_present_when_committed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名共享 resolver：
+# route 侧同样经 ship_gate.resolve_plan_path 定位（单一源，非本文件手抄第二份候选）。
+# ---------------------------------------------------------------------------
+
+def test_cli_route_picks_up_new_plan_name_tickets_md(tmp_path):
+    # 仅新名 tickets.md 存在（无旧名）→ resolver 照常识别（marker/pipeline 行为与旧名等价）
+    d = _mkchange(tmp_path)
+    (d / "tickets.md").write_text(
+        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+        encoding="utf-8")
+    code, out, _ = _run_route(tmp_path, "demo")
+    assert code == 0
+    assert "marker=tickets" in out
+    assert "pipeline=tickets" in out
+
+
+def test_cli_route_both_plan_names_present_fails_closed(tmp_path):
+    # 两个计划文件名同时存在 → fail-closed（不猜哪个有效），退出码与既有 RouteStop 语义一致
+    d = _mkchange(tmp_path)
+    (d / "tickets.md").write_text(
+        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+        encoding="utf-8")
+    (d / "superpowers-plan.md").write_text(
+        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+        encoding="utf-8")
+    code, out, err = _run_route(tmp_path, "demo")
+    assert code == ir.EXIT_ROUTE_STOP
+    assert out == ""
+    assert "tickets.md" in err and "superpowers-plan.md" in err
+
+
+def test_cli_route_new_plan_name_plan_sha_present_when_committed(tmp_path):
+    d = _mkchange(tmp_path)
+    (d / "tickets.md").write_text(
+        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+        encoding="utf-8")
+    subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
+                    check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"],
+                    check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"],
+                    check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"],
+                    check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "seed"],
+                    check=True, capture_output=True, text=True)
+    code, out, _ = _run_route(tmp_path, "demo")
+    assert code == 0
+    sha_field = [seg for seg in out.split() if seg.startswith("plan_sha=")][0]
+    assert sha_field.split("=", 1)[1] != "-"
+
+
+def test_resolve_plan_path_single_source_used_by_route(tmp_path):
+    # 单一源核验：impl_route 引入的 resolve_plan_path 与 ship_gate 里的是同一个对象，
+    # 非各自手抄的两份实现（MUST NOT 手抄第二份，见 tasks.md §5 前言）。
+    #
+    # [harden-implement-review-loop Task3 fix1 · finding2] 行为等价断言（旧版本仅
+    # `== d / "tickets.md"`）对「手抄了一份等价实现」是恒真锚——若真被换成手抄副本，
+    # 该断言仍全绿。改用身份断言（同 :653 `ir._FenceTracker is sg.FenceTracker` 的范式），
+    # 手抄副本会让 `is` 判假、测试必红。三个导入（resolve_plan_path / PlanNameConflict /
+    # PLAN_FILENAMES）逐一核身份，而非只核其中一个函数的返回值。
+    sys.path.insert(0, str(REPO_ROOT / "sdflow-ship" / "scripts"))
+    import ship_gate as sg  # noqa: E402
+
+    assert ir._resolve_plan_path is not None
+    assert ir._resolve_plan_path is sg.resolve_plan_path
+    assert ir._PlanNameConflict is sg.PlanNameConflict
+    assert ir._PLAN_FILENAMES is sg.PLAN_FILENAMES
+
+    d = _mkchange(tmp_path)
+    (d / "tickets.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
+    assert ir._resolve_plan_path(d) == d / "tickets.md"
+
+
+# ---------------------------------------------------------------------------
 # parse_blocked_by / next_ready（拓扑）
 # ---------------------------------------------------------------------------
 

@@ -46,8 +46,19 @@ try:
     if str(_GATE_SCRIPTS) not in sys.path:
         sys.path.insert(0, str(_GATE_SCRIPTS))
     from ship_gate import FenceTracker as _FenceTracker  # type: ignore
+    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名 resolver 单一源同样是
+    # ship_gate——与上面 FenceTracker 同一条 sibling-import 路径，MUST NOT 在本文件手抄
+    # 第二份候选文件名列表（两轨共用一个文件名，见 tasks.md §5 前言 C14）。
+    from ship_gate import (  # type: ignore
+        resolve_plan_path as _resolve_plan_path,
+        PlanNameConflict as _PlanNameConflict,
+        PLAN_FILENAMES as _PLAN_FILENAMES,
+    )
 except Exception as _e:                                  # noqa: BLE001
     _FenceTracker = None                                 # fail-closed，见 parse_blocked_by
+    _resolve_plan_path = None                            # fail-closed，见 _cmd_route
+    _PlanNameConflict = None
+    _PLAN_FILENAMES = ()
     # [impl-review-fix] 记下失败原因串：fail-closed 本身对，但吞掉原因会让
     # 「装歪了 vs 语法错 vs 版本不符」三种情况在诊断上无法区分。
     _FENCE_IMPORT_ERR = f"{type(_e).__name__}: {_e}"
@@ -436,7 +447,31 @@ def _get_plan_sha(root: Path, plan_path: Path) -> str:
 def _cmd_route(args: argparse.Namespace) -> int:
     root = Path(args.root)
     change = args.change
-    plan_path = root / "openspec" / "changes" / change / "superpowers-plan.md"
+    change_dir = root / "openspec" / "changes" / change
+
+    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名经共享 resolver 定位
+    # （单一源 = ship_gate.resolve_plan_path，见上方 sibling-import）；MUST NOT 在此手抄
+    # 候选文件名列表。resolver 引不到（装歪/版本不符）⇒ fail-closed，与 FenceTracker 缺失
+    # 同一停机纪律，不静默回退旧硬编码文件名。
+    if _resolve_plan_path is None:
+        print("无法加载计划文件名 resolver 单一源 ship_gate.resolve_plan_path，"
+              "拒绝以分叉口径定位计划文件"
+              + (f"（import 失败原因：{_FENCE_IMPORT_ERR}）" if _FENCE_IMPORT_ERR else ""),
+              file=sys.stderr)
+        return EXIT_ROUTE_STOP
+    try:
+        plan_path = _resolve_plan_path(change_dir)
+    except _PlanNameConflict as e:
+        print(str(e), file=sys.stderr)
+        return EXIT_ROUTE_STOP
+    if plan_path is None:
+        # 两者皆缺——用新名占位（不存在的路径），下游 read_plan_marker/_get_plan_sha
+        # 对不存在的文件均已定义为「缺席」语义，行为与改造前的硬编码路径等价。
+        # [harden-implement-review-loop Task3 fix1 · finding3] 无 `else "tickets.md"` 兜底：
+        # 走到本行时 `_resolve_plan_path is not None` 已在上面判过（否则第 461 行已
+        # return EXIT_ROUTE_STOP），即 import 必已成功、`_PLAN_FILENAMES` 必非空——
+        # 该分支在当前控制流下不可达，且与 `PLAN_FILENAMES[0]` 重复硬编码，纯死代码。
+        plan_path = change_dir / _PLAN_FILENAMES[0]
 
     config_pipeline, config_note = read_config_pipeline(root)
 
