@@ -1281,28 +1281,71 @@ def plan_first_sha(root, plan_rel):
     return out.splitlines()[0] if out else ""
 
 
-# [harden-implement-review-loop Task3 fix1 · finding1] 🔴 在途 plan MUST NOT 被重命名
-# （design Migration Plan 逐字）——机械检出该纪律是否被违反，fail-closed 拒绝而非静默
-# 漏数放行（旧行为：`plan_first_sha` 不跟随重命名，改名前的完成信号被窗口重置排除，
-# gate 却仍正常判 CONTINUE_IMPL）。若改用 `--follow` 让 gate 透明跟随改名，MUST NOT
-# 重命名就变得无害了——那是注销这条规范性约束，不是实现它（详见 tasks.md §5.10）。
+# [impl-review-fix FIX-1] 完成标签识别的**单一源**：窗口内计数（`done_task_ids`）与窗口外
+# 检出（`stray_done_tag_commits`）共用同一份「字面前缀 + TAG_RE 锚定匹配 + 命名空间归属」
+# 判据，MUST NOT 各自手抄第二份正则或第二份过滤规则。
+def _tag_task_id(subject, change, require_namespace=False):
+    """单条 commit subject → 完成标签的任务号字符串；不是本 change 的完成标签则 None。
+
+    `require_namespace=True` 时**裸标签**（`checkpoint(task<N>-`，无命名空间）一律不认——
+    窗口外的裸标签无从归属（本仓 main 上大量存在别的 change 的遗留裸标签），拿它当归属证据
+    会把每个 change 全数误报。窗口内则保留 A1 向后兼容（裸标签按窗口计入）。
+    """
+    # [impl-review-fix] 先判字面前缀再锚定匹配：`Revert "checkpoint(task2-b): y"`
+    # 这类 revert 提交消息里 checkpoint( 子串不在行首，不应计入完成集
+    # （TAG_RE.search 不锚位置会把它误计，match 从位置 0 锚定则天然排除）。
+    # [ship-gate-hardening-2 T32/A-F1] 前缀过滤 MUST 放宽为 "checkpoint("——旧硬前缀
+    # "checkpoint(task" 会把命名标签 checkpoint(<ns>:task 在 TAG_RE.match 前整条跳过，
+    # 令 T32 静默失效并吞掉本 change 自己的命名完成号。
+    if not subject.startswith("checkpoint("):
+        return None
+    m = TAG_RE.match(subject)
+    if not m:
+        return None
+    ns, num = m.group(1), m.group(2)
+    if ns is None:
+        return None if require_namespace else num
+    return num if ns == change else None   # 命名空间不匹配 → 排除（假阴安全，不新增假阳）
+
+
+# [impl-review-fix FIX-1] 🔴 在途 plan MUST NOT 被重命名（design Migration Plan 逐字）。
+# 旧实现 `plan_was_renamed` 用 `git log --follow` 的**内容相似度**重命名检测去判「有没有
+# 发生过改名」，三种失效模式均已由 fixture 实测证实（见 test_plan_resolver.py 同名用例）：
+#   ① **误报 → 永久自锁**：同一 commit 里「删掉 change A 的 tickets.md + 新建 change B 的
+#      tickets.md」会被 git 按相似度配对成改名（本 change 强制所有 tickets.md 用同一套
+#      `### Task N:` / `Blocked-by:` / `R-ID:` 模板 ⇒ 相似度天然过线），于是 B 那个**从未
+#      被改过名**的新 plan 判 True；而提示「请改回原文件名」**无原名可改回**，用户唯一出路
+#      是历史重写（本仓明禁 `-i`，且会击穿 `reviewed_sha` 审计锚）。
+#   ② **漏报 → 防护被绕过**：改名拆成两次提交（先 `git rm` 提交、后新建提交）——git 的重命名
+#      配对**只在单个 commit 的 diff 内**做，跨 commit 无从判断 ⇒ False。而这正是要防的场景本身。
+#   ③ **漏报 → 防护被绕过**：`git mv` + **同提交大幅编辑** → 相似度跌破阈值 ⇒ False。而
+#      「改名 + 大幅编辑同提交」恰是 superpowers-plan.md → tickets.md 迁移的天然形态
+#      （迁移正需要给每个 Task 段补 `R-ID:` / `Blocked-by:`）。
+# 两个修法互相冲突（调低相似度阈值 `-M1%` 能救 ③ 却加重 ①），这本身证伪了启发式路线
+# ——拿模糊启发式去回答一个需要精确答案的问题（CLAUDE.md 基准 5 的警号）。
 #
-# 判据（两次 git 调用，零解析，MUST NOT 演化成通用 rename 历史解析器——CLAUDE.md 基准5）：
-# 比较不带 `--follow` 的首次新增记录（同 `plan_first_sha` 口径）与带 `--follow` 的首次
-# 新增记录——`--follow` 会追溯重命名链条回到重命名前的原始创建提交；路径从未被重命名时，
-# 两者是同一次真实创建提交（相等）；发生过重命名时，`--follow` 取到更早的原始创建提交
-# （不等）。实测覆盖：本仓全部在途/已归档 plan 中，未改名者两者恒等，仅经历过目录级
-# 归档搬迁（archive/ 下）或字面改名的路径才不等——归档搬迁不会经此函数（归档后 change
-# 目录不再是当前活跃 change dir，resolver 不会解析到它）。
-def plan_was_renamed(root, plan_rel):
-    """检测 `plan_rel` 在 git 历史中是否发生过重命名（改名前后同一在途 plan）。"""
-    no_follow = run_git(root, "log", "--diff-filter=A", "--format=%H", "--", plan_rel)
-    follow = run_git(root, "log", "--follow", "--diff-filter=A", "--format=%H", "--", plan_rel)
-    no_follow_first = no_follow.splitlines()[0] if no_follow else ""
-    follow_first = follow.splitlines()[0] if follow else ""
-    if not no_follow_first or not follow_first:
-        return False   # 未提交/无历史 ⇒ 无从谈起改名，交由既有"未提交"判据处理
-    return no_follow_first != follow_first
+# ∴ **不再检测「有没有发生过改名」（原因），改为直接检测「危害有没有发生」（结果）**：
+# 本 change 是否存在落在完成判据窗口 `[plan_first_sha, HEAD]` **之外**的完成标签提交。
+# 有 ⇒ 窗口起点是错的（不论成因是改名、两步改名、还是删除重建）⇒ fail-closed 判 UNKNOWN。
+#
+# 这是**精确判据而非启发式**：① 新开 change 的命名空间下不存在早于其 plan 创建的完成标签
+# ⇒ 不误报；②③ 改名前打的标签必然落在新窗口起点之前 ⇒ 检出；且比旧判据**更强**——覆盖
+# 一切导致窗口起点错误的成因，不只是改名。
+def stray_done_tag_commits(root, sha, change):
+    """→ 落在完成判据窗口 `[sha, HEAD]` 之外、且属于 `change` 命名空间的完成标签提交 sha 列表。
+
+    「窗口外」= **从 `sha` 可达、但不是 `sha` 自身**的提交。HEAD 的历史恰好等于
+    「`sha` 可达集」∪「`sha..HEAD`」，二者互补 ∴ 无需再列一遍 HEAD 全史做差集。
+    """
+    out = run_git(root, "log", sha, "--no-merges", "--format=%H %s")
+    stray = []
+    for line in out.splitlines():
+        commit, _, subject = line.partition(" ")
+        if commit == sha:
+            continue                       # sha 自身 = 窗口闭区间左端，在窗口内
+        if _tag_task_id(subject, change, require_namespace=True) is not None:
+            stray.append(commit)
+    return stray
 
 
 def done_task_ids(root, sha, change):
@@ -1318,21 +1361,11 @@ def done_task_ids(root, sha, change):
         lines.append(self_subject)
     ids = set()
     for line in lines:
-        # [impl-review-fix] 先判字面前缀再锚定匹配：`Revert "checkpoint(task2-b): y"`
-        # 这类 revert 提交消息里 checkpoint( 子串不在行首，不应计入完成集
-        # （TAG_RE.search 不锚位置会把它误计，match 从位置 0 锚定则天然排除）。
-        # [ship-gate-hardening-2 T32/A-F1] 前缀过滤 MUST 放宽为 "checkpoint("——旧硬前缀
-        # "checkpoint(task" 会把命名标签 checkpoint(<ns>:task 在 TAG_RE.match 前整条跳过，
-        # 令 T32 静默失效并吞掉本 change 自己的命名完成号。
-        if not line.startswith("checkpoint("):
-            continue
-        m = TAG_RE.match(line)
-        if not m:
-            continue
-        ns, num = m.group(1), m.group(2)
-        if ns is not None and ns != change:
-            continue  # 命名空间不匹配当前 change → 排除（假阴安全，不新增假阳）
-        ids.add(num)
+        # [impl-review-fix FIX-1] 归属判据经共享单一源 `_tag_task_id`（窗口内保留 A1 兼容：
+        # 裸标签按窗口计入 ⇒ require_namespace 取缺省 False）。
+        num = _tag_task_id(line, change)
+        if num is not None:
+            ids.add(num)
     return ids
 
 
@@ -1613,18 +1646,26 @@ def decide(root, change):
              "plan 出现重号 '### Task <n>:' 段（手改/复制粘贴），完成判据不可判"
              "——重号折叠会掩盖某段未完成的假✅")
     plan_rel = str(plan.relative_to(root))
-    # [harden-implement-review-loop Task3 fix1 · finding1] 🔴 在途 plan MUST NOT 被重命名——
-    # 检出改名发生过，fail-closed 拒绝而非静默漏数放行（见 plan_was_renamed 注释）。
-    if plan_was_renamed(root, plan_rel):
-        emit("UNKNOWN", EXIT_UNKNOWN, None,
-             f"在途 plan 曾被重命名（{plan.name}），完成判据窗口已失效且不可信；"
-             "请改回原文件名（MUST NOT 重命名在途 plan，见 design Migration Plan）")
     # [harden-implement-review-loop Task5 · H12/M17] 第四道校验：收尾票存在性 + Blocked-by 覆盖
     # （当且仅当计划文件名为 tickets.md 时生效；旧名 grandfather，见函数注释）。
     plan_ok, plan_note = plan_closing_ticket_check(plan)
     if not plan_ok:
         emit("UNKNOWN", EXIT_UNKNOWN, None, plan_note)
     sha = plan_first_sha(root, plan_rel)
+    # [impl-review-fix FIX-1] 🔴 窗口起点自校验：本 change 有完成标签落在 [sha, HEAD] **之外**
+    # ⇒ 窗口起点是错的（在途 plan 被重命名 / 两步改名 / 删除重建皆归此），fail-closed 判 UNKNOWN
+    # 而非静默漏数放行（旧行为：改名前的完成信号被窗口重置排除、gate 却仍判 CONTINUE_IMPL）。
+    # 详见 `stray_done_tag_commits` 头注释（含旧启发式判据的三种实测失效模式）。
+    # `sha` 为空 = plan 未提交 ⇒ 根本没有窗口，交由下方「双通道皆不可判」分支处置。
+    if sha:
+        stray = stray_done_tag_commits(root, sha, change)
+        if stray:
+            emit("UNKNOWN", EXIT_UNKNOWN, None,
+                 f"检测到本 change 有 {len(stray)} 个完成标签提交（如 {stray[0][:7]}）落在完成判据"
+                 f"窗口 [{sha[:7]}, HEAD] 之外，窗口起点不可信、已完成 ticket 会被判未完成并可能重派；"
+                 f"通常是在途 plan（{plan.name}）被重命名 / 删除重建所致"
+                 "（MUST NOT 重命名在途 plan，见 design Migration Plan）。"
+                 "请把 plan 恢复为其首次提交时的路径，或人工确认后处理")
     # [ship-gate-hardening-2 T34] 两通道完成集并集：checkpoint 主锚 ∪ 复选框分段辅通道
     checkpoint_done = done_task_ids(root, sha, change) if sha else set()
     checkbox_done = checkbox_done_ids(plan)   # 按 Task 分段绑定（非全局全勾放行）

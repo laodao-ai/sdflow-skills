@@ -273,6 +273,21 @@ def test_nonzero_exit_halts_before_eval():
         assert "退出码非 0 → fail-loud 硬停" in seg, rel
 
 
+def test_eval_own_exit_code_is_checked():
+    """[impl-review-fix FIX-3] (c) 步：`eval` **自身**的退出码 MUST 立即捕获并检查。
+
+    delta `impl-orchestration/spec.md` 的失败清单第 ② 项是「非零退出**或输出无法 eval**」
+    ——只检 resolver 的退出码只做了前半。反例（跨模型 outside-voice 实测构造）：resolver 输出
+    **先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ `eval` 退出码 127，而 (d) 的变量校验
+    全 PASS ⇒ 放行一份被截断的解析结果。
+    """
+    for rel, seg in _segments():
+        assert '`eval "$MODELS_ENV"; EVAL_RC=$?`' in seg, f"{rel}: 未捕获 eval 自身退出码"
+        assert "**`eval` 自身的退出码 MUST 立即捕获并检查**" in seg, rel
+        assert "`EVAL_RC` 非 0 → **fail-loud 硬停**" in seg, rel
+        assert "MUST NOT 带着半成品环境继续做 (d) 的变量校验" in seg, rel
+
+
 def test_empty_host_and_unknown_are_reported_differently():
     """🔴 核心正确性：host 空值 MUST NOT 被吸进 host=unknown 处置——两种失败分开报。"""
     for rel, seg in _segments():

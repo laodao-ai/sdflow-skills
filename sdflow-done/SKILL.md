@@ -195,7 +195,7 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 ### 0.4 宿主/档位解析（每轮恰好一次，ADR-9 同源约束）〔host-adaptive-execution · 模型档位按机队分列〕
 
 <!-- sdflow:tier-resolution:start v1 -->
-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
 <!-- sdflow:tier-resolution:end -->
 
 **下方各步「派发 Agent」的 `model:` 参数 MUST 取对应变量值，MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。**Codex 宿主下 `spawn_agent` 指定 `model` 的 task-specific reason** 一律填「本工作流的 model-tiers（门禁步禁降档是硬约束）」，不必另编理由。
@@ -221,12 +221,28 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
 2. Read openspec/changes/{change_name}/specs/ 下所有 spec（ADDED/MODIFIED 需求）
 3. 用 Grep/Read 核对**代码/迁移/测试**是否反映每条要求（迁移文件、SP、Go、前端、测试）
 4. **实现期聚合覆盖需求（tickets 轨专属，按管线条件化，harden-implement-review-loop D3/Q2/C2）**：
-   先判本 change 走的是哪条实现管线——看 `openspec/changes/{change_name}/` 下（或已归档路径
-   `openspec/changes/archive/{date}-{change_name}/`）现存/曾存在的计划文件名：`tickets.md` =
-   tickets 轨；`superpowers-plan.md` 或无该类计划文件 = superpowers 轨（canonical 缺省）。
+   先判本 change 走的是哪条实现管线。🔴 **[impl-review-fix FIX-2] 文件名 MUST NOT 参与轨道
+   路由判定**（delta `impl-orchestration/spec.md` 逐字）——**路由权威 = 仓 `openspec/config.yaml`
+   的 `impl-pipeline` 键 + plan 文件头 frontmatter 的 `impl-pipeline` marker**（判定实现见
+   `sdflow-implement/scripts/impl_route.py` 的 `read_plan_marker` / `resolve_pipeline`：
+   marker 存在则 marker 胜出，marker 缺失则取 config 键；marker 键重复/值非法/frontmatter 未闭合
+   → UNKNOWN 语义，停下问人）。**文件名只用于「定位」plan 文件**，两个名字都要找：
+   `openspec/changes/{change_name}/{tickets.md,superpowers-plan.md}`（或已归档路径
+   `openspec/changes/archive/{date}-{change_name}/` 下同名两者）；两者都不存在且 config 键
+   也缺 ⇒ 按 canonical 缺省 superpowers 轨处置。
+   ⚠️ **MUST NOT 因为计划文件叫 `superpowers-plan.md` 就判 superpowers 轨**——grandfather 条款
+   下**旧文件名同样覆盖在途的 tickets 轨 plan**（本 change 自身即反例：plan 名为
+   `superpowers-plan.md`，frontmatter marker 却是 `impl-pipeline: tickets`，它是 tickets 轨、
+   有收尾票）。按文件名判轨会让这条聚合覆盖需求被静默跳过。
+   〔区分：`ship_gate` 第四道 plan 校验**以文件名为判据是对的**——delta 明确它「仅用于区分
+   『新出 plan / 在途或他轨 plan』，MUST NOT 被解读为用文件名做轨道路由」。两处不是同一件事。〕
    - **tickets 轨**：在 `impl-reports/` 下找「实现验证」收尾 ticket 的报告（`R-ID: all` 那张），
      核对其证据 schema（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）齐全、结论可接受（通过，或
-     按四类失败分诊记录为可接受的放行）。找到 → 该需求判 ✅，锚 = 该 impl-report 文件路径 + 其
+     按四类失败分诊记录为可接受的放行）。🔴 **[impl-review-fix FIX-4] MUST 核验各「通过」层的
+     SHA 一致**——该票的语义是「全部功能票实现完毕**这一刻**聚合套件通过」，「这一刻」蕴含单一
+     盘面；若各通过层锚在不同 SHA（如 unit@A、integration@B），说明先绿的层从未在最终盘面上跑过、
+     「全部通过」是拼出来的 ⇒ 判**核心缺口**，MUST NOT 判 ✅（未覆盖层不参与此核验）。
+     找到（且 SHA 一致）→ 该需求判 ✅，锚 = 该 impl-report 文件路径 + 其
      内的 SHA（**不要求该票有 commit**——`checkpoint-commit.sh` 在干净树上直接成功退出、不建
      commit，聚合套件一次绿时该票可能本来就无 commit）；**锚语义 MUST 写成「实现期结束时聚合
      套件通过」，MUST NOT 写成「最终代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其

@@ -7,12 +7,12 @@
    a. 仅新名 `tickets.md` 存在时,gate 完整判据链路(RUN_PLAN→CONTINUE_IMPL→
       RUN_CODE_REVIEW)与旧名行为等价(向前兼容,新管线不需要借旧名外衣)。
    b. 两个文件名同时存在 ⇒ UNKNOWN(不猜哪个有效,提示人工删除其一)。
-   c. 〔5.10 · 🔴 在途 plan MUST NOT 被重命名 · fix1〕改名前有 task1 checkpoint、改名后跑
-      gate 的 fixture:断言该场景被 **显式拒绝**(UNKNOWN),而非静默漏数放行。判据 =
-      `plan_was_renamed`——比较不带 `--follow` 与带 `--follow` 的
-      `git log --diff-filter=A` 首行 sha:从未改名的路径两者相同;改过名则 `--follow`
-      追溯到改名前的原始创建提交,两者不同 ⇒ fail-closed 拒绝,而非把改名前的完成信号
-      静默排除在窗口外。
+   c. 〔5.10 · 🔴 在途 plan MUST NOT 被重命名 · impl-review-fix FIX-1〕改名前有 task1
+      checkpoint、改名后跑 gate 的 fixture:断言该场景被 **显式拒绝**(UNKNOWN),而非静默
+      漏数放行。判据 = `stray_done_tag_commits`——**不检测「有没有发生过改名」(原因),
+      直接检测「危害有没有发生」(结果)**:本 change 是否有完成标签提交落在完成判据窗口
+      `[plan_first_sha, HEAD]` **之外**。旧启发式(`--follow` 相似度改名检测)已被本文件
+      下方三个 fixture 实测证伪(一误报两漏报),整体撤除。
 """
 import subprocess
 import sys
@@ -121,34 +121,169 @@ def test_both_plan_names_present_gate_fails_closed_unknown(repo):
     assert "删除其一" in js["reason"]
 
 
-# ─────────────────────────────────────────────────────────────────────────
-# 5.10 · 在途 plan 改名 fail-closed 拒绝（fix1：由静默漏数改为显式拒绝）
-# ─────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════
+# 5.10 · 在途 plan 窗口起点自校验（impl-review-fix FIX-1）
+#
+# 【判据换代】旧实现 `plan_was_renamed` 比较 `git log --diff-filter=A` 带/不带 `--follow`
+# 的首行 sha，用 git 的**内容相似度**重命名检测去回答「有没有发生过改名」。三种失效模式
+# 均在本节 fixture 里实测：① 误报（永久自锁，无原名可改回）② 两步改名漏报 ③ mv+大幅编辑
+# 漏报。两个修法互斥（调低 `-M` 阈值救 ③ 却加重 ①）⇒ 启发式路线被证伪（CLAUDE.md 基准 5）。
+#
+# 新判据 = `stray_done_tag_commits`：本 change 是否有 `checkpoint(<change>:task<N>-` 提交
+# 落在完成判据窗口 `[plan_first_sha, HEAD]` **之外**。有 ⇒ 窗口起点错 ⇒ fail-closed UNKNOWN。
+#
+# 🔴 每个用例都带一条**非空锚断言**（`_old_heuristic_would_flag`）——它复算旧判据，
+# 钉死「这个 fixture 确实处在旧判据会误判的那一格」。没有它，三个用例可能全是恒真绿
+# （vacuous-anchor：needle 被别的门满足 / 压根没走到那条路径）。
+# ═════════════════════════════════════════════════════════════════════════
 
-def test_inflight_plan_rename_rejected_as_unknown(repo):
-    """🔴 违反「MUST NOT 重命名在途 plan」——不是 resolver 要「跟随改名」的缺陷，也不该
-    静默漏数放行（旧行为：改名前的 task1 checkpoint 落到窗口外、gate 却仍 CONTINUE_IMPL）。
+# 迁移期的真实 plan 形态：新名 plan 每票带 Blocked-by/R-ID（gate 第四道校验要求），
+# 且体量足以让「mv + 整体重写」把相似度打到阈值以下（模式 ③ 的天然触发路径）。
+PLAN_TICKETS_RICH = (
+    "### Task 1: 建立骨架\n**Blocked-by:** none\n**R-ID:** R1\n"
+    "- [ ] 建目录\n- [ ] 写入口\n- [ ] 补单测\n"
+    "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n"
+    "- [ ] 按聚合套件发现契约跑单元+集成+e2e\n- [ ] 证据 schema 落 impl-report\n"
+)
+PLAN_OLDNAME_RICH = (
+    "### Task 1: 老计划第一步\n- [ ] 甲\n- [ ] 乙\n- [ ] 丙\n- [ ] 丁\n"
+    "### Task 2: 老计划第二步\n- [ ] 戊\n- [ ] 己\n- [ ] 庚\n- [ ] 辛\n"
+)
 
-    正解 = 把「该路径历史上发生过重命名」机械检测出来，fail-closed 判 UNKNOWN，而非让
-    改名把 MUST NOT 变得无害（那等于注销这条规范性约束——见 design Migration Plan）。
+
+def _git(repo, *args):
+    return subprocess.run(["git", "-C", str(repo), *args],
+                          check=True, capture_output=True, text=True).stdout
+
+
+def _old_heuristic_would_flag(repo, plan_rel):
+    """复算**已撤除**的旧判据（`--follow` 相似度改名检测），供非空锚断言使用。
+
+    MUST NOT 被读成「生产代码还在用它」——生产判据已换成 `stray_done_tag_commits`；
+    这里只是把「本 fixture 落在旧判据的哪一格」钉成断言，防三个用例变成恒真绿。
     """
-    d = approved_change(repo, plan=PLAN2)   # 旧名落盘，Task1/Task2
-    commit_all(repo, "checkpoint(task1-a): 改名前完成 task1")
-    # 违反纪律：在途 plan 被重命名（旧名 → 新名）
+    no_follow = _git(repo, "log", "--diff-filter=A", "--format=%H", "--", plan_rel).split()
+    follow = _git(repo, "log", "--follow", "--diff-filter=A", "--format=%H",
+                  "--", plan_rel).split()
+    if not no_follow or not follow:
+        return False
+    return no_follow[0] != follow[0]
+
+
+def test_mode1_lookalike_plan_in_another_change_is_not_flagged(repo):
+    """模式 ①（旧判据**误报** → 新判据 MUST 绿）。
+
+    同一 commit 里「删掉 change A 的 tickets.md + 新建 change B 的 tickets.md」——因为本
+    change 强制所有 tickets.md 用同一套 `### Task N:` / `Blocked-by:` / `R-ID:` 模板，
+    相似度天然过线，git 把两者配对成改名。旧判据据此判 B 那个**从未被改过名**的新 plan
+    为「曾被重命名」，而错误提示「请改回原文件名」**无原名可改回** ⇒ 用户唯一出路是历史
+    重写（本仓明禁 `git rebase -i`，且会击穿 `reviewed_sha` 审计锚）= 永久自锁。
+
+    新判据不误报：change B 是全新 change，其命名空间下不存在早于 plan 创建的完成标签。
+    """
+    other = mkchange(repo, name="change-a")
+    (other / "tickets.md").write_text(PLAN_TICKETS_RICH, encoding="utf-8")
+    commit_all(repo, "seed: change A 的 tickets.md")
+
+    d = mkchange(repo)                       # change B = "demo"（gate 的目标）
+    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+    (d / "tickets.md").write_text(PLAN_TICKETS_RICH, encoding="utf-8")
+    (other / "tickets.md").unlink()          # 同一 commit：A 的 plan 消失、B 的 plan 出现
+    commit_all(repo, "change A 收尾、change B 开工（同一提交）")
+    from conftest import head_sha
+    write_report(d, "spec-review-report.md", head_sha(repo),
+                 body="# 设计审报告\n", design_approved="true")
+    commit_all(repo, "spec-review report (approved)")
+
+    plan_rel = str((d / "tickets.md").relative_to(repo))
+    # 非空锚：证实 git 确实把两者配对成了改名（否则本用例测不到误报面）
+    assert _old_heuristic_would_flag(repo, plan_rel), \
+        "fixture 失效：git 未把 A→B 的同模板 tickets.md 配对成改名，测不到旧判据的误报面"
+
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL", f"新判据误报了从未改名的新 plan：{js}"
+    assert js["done_tasks"] == []
+
+
+def test_mode2_two_step_rename_is_detected(repo):
+    """模式 ②（旧判据**漏报** → 新判据 MUST 红）。
+
+    改名拆成两次提交（先 `git rm` 一次提交、后新建一次提交）——git 的重命名配对**只在单个
+    commit 的 diff 内**做，跨 commit 的两步改名 `--follow` 无从判断 ⇒ 旧判据 False，
+    而这正是设计要防的场景本身，静默放行。
+    """
+    d = approved_change(repo, plan=PLAN_OLDNAME_RICH)     # 旧名落盘
+    commit_all(repo, "checkpoint(demo:task1-a): 改名前完成 task1")
+    old_rel = str((d / "superpowers-plan.md").relative_to(repo))
+    _git(repo, "rm", "-q", old_rel)
+    commit_all(repo, "chore: 删掉旧名 plan（两步改名 · 第一步）")
+    d.mkdir(parents=True, exist_ok=True)                   # git rm 会带走空目录
+    (d / "tickets.md").write_text(PLAN_TICKETS_RICH, encoding="utf-8")
+    commit_all(repo, "chore: 以新名重建 plan（两步改名 · 第二步）")
+
+    plan_rel = str((d / "tickets.md").relative_to(repo))
+    # 非空锚：证实旧判据在此确实漏报（否则本用例证明不了新判据更强）
+    assert not _old_heuristic_would_flag(repo, plan_rel), \
+        "fixture 失效：旧判据在两步改名下竟命中，测不到它的漏报面"
+
+    code, js, _ = run_gate(repo)
+    assert code == 6 and js["verdict"] == "UNKNOWN", f"两步改名未被检出：{js}"
+    assert "窗口" in js["reason"] and "重命名" in js["reason"]
+
+
+def test_mode3_rename_with_heavy_edit_is_detected(repo):
+    """模式 ③（旧判据**漏报** → 新判据 MUST 红）。
+
+    `git mv` + **同提交大幅编辑** ⇒ 相似度跌破默认阈值（~50%），旧判据 False。而这正是
+    `superpowers-plan.md` → `tickets.md` 迁移的天然形态：迁移**正需要**给每个 Task 段补
+    `R-ID:` / `Blocked-by:`（本 change 新引入的格式要求）= 改名 + 大幅编辑同提交。
+    """
+    d = approved_change(repo, plan=PLAN_OLDNAME_RICH)
+    commit_all(repo, "checkpoint(demo:task1-a): 改名前完成 task1")
     old_rel = str((d / "superpowers-plan.md").relative_to(repo))
     new_rel = str((d / "tickets.md").relative_to(repo))
-    subprocess.run(["git", "-C", str(repo), "mv", old_rel, new_rel],
-                    check=True, capture_output=True, text=True)
-    commit_all(repo, "checkpoint(task2-b)之前的改名提交：违规重命名在途 plan")
+    _git(repo, "mv", old_rel, new_rel)
+    (d / "tickets.md").write_text(PLAN_TICKETS_RICH, encoding="utf-8")   # 同提交整体重写
+    commit_all(repo, "chore: 迁 tickets.md 并补 R-ID/Blocked-by（改名+大幅编辑同提交）")
+
+    plan_rel = new_rel
+    assert not _old_heuristic_would_flag(repo, plan_rel), \
+        "fixture 失效：相似度未跌破阈值，测不到旧判据在 mv+大幅编辑下的漏报面"
+
     code, js, _ = run_gate(repo)
-    assert code == 6 and js["verdict"] == "UNKNOWN"
-    assert "重命名" in js["reason"]
+    assert code == 6 and js["verdict"] == "UNKNOWN", f"mv+大幅编辑改名未被检出：{js}"
+    assert "窗口" in js["reason"] and "重命名" in js["reason"]
 
 
-def test_never_renamed_plan_not_flagged(repo):
-    """反例（防误报）：多次提交但从未 `git mv` 过的 plan——不应被判为改名。"""
-    d = approved_change(repo, plan=PLAN2)
-    commit_all(repo, "checkpoint(task1-a): 正常完成 task1（无改名）")
+def test_normal_inflight_change_not_flagged(repo):
+    """正常在途 change（从未改名、完成标签全在窗口内）——MUST NOT 触发窗口起点校验。"""
+    approved_change(repo, plan=PLAN2)
+    commit_all(repo, "checkpoint(demo:task1-a): 正常完成 task1（无改名）")
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL"
-    assert "1" in js["done_tasks"]
+    assert js["done_tasks"] == ["1"]
+
+
+def test_legacy_bare_tags_outside_window_do_not_trigger(repo):
+    """🔴 防大面积误报：窗口外的**裸**标签（`checkpoint(task<N>-`，无命名空间）无从归属，
+    MUST NOT 被当作本 change 的窗口外完成信号——本仓 main 上大量存在别的 change 的遗留裸
+    标签，认它即每个 change 全数误报（对照 test_window_excludes_legacy_and_merge）。"""
+    (repo / "seed.txt").write_text("x", encoding="utf-8")
+    commit_all(repo, "checkpoint(task1-legacy): 旧 change 遗留（裸标签，窗口外）")
+    commit_all(repo, "checkpoint(task2-legacy): 旧 change 遗留（裸标签，窗口外）")
+    approved_change(repo, plan=PLAN2)
+    commit_all(repo, "checkpoint(demo:task1-a): 本 change 窗口内完成 task1")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL", f"窗口外裸标签被误当本 change 信号：{js}"
+    assert js["done_tasks"] == ["1"]
+
+
+def test_other_change_namespaced_tags_outside_window_do_not_trigger(repo):
+    """同上，另一维度：窗口外**别的 change 的命名标签**归属明确不属本 change，MUST NOT 触发。"""
+    (repo / "seed.txt").write_text("x", encoding="utf-8")
+    commit_all(repo, "checkpoint(other-change:task1-x): 别的 change（窗口外）")
+    approved_change(repo, plan=PLAN2)
+    commit_all(repo, "checkpoint(demo:task1-a): 本 change 窗口内完成 task1")
+    code, js, _ = run_gate(repo)
+    assert js["verdict"] == "CONTINUE_IMPL", f"他 change 的命名标签被误算：{js}"
+    assert js["done_tasks"] == ["1"]

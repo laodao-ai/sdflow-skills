@@ -174,7 +174,7 @@ resolver 定位，双存在 fail-closed。
 引用，不是空转步〔spec-review-amendment M8/L9〕。
 
 <!-- sdflow:tier-resolution:start v1 -->
-**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
 <!-- sdflow:tier-resolution:end -->
 
 **`$SDFLOW_HOST="codex"`：能力探针 + 不可用则硬停（不缩 roster）**〔spec-review-amendment H10〕：
@@ -206,7 +206,7 @@ problem 一句、ticket 号与名统一填「—（起手失败，无票上下�
 | 1 | resolver 不存在 | `~/.sdflow/hack/resolve-models.sh` 文件不存在（(b) 步 `[ -x ]` 预检为假） | 本机未装 sdflow hack 脚本，或未跑过 `setup.sh` | 在运行 checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh` 后重试 |
 | 2 | resolver 不可执行 | 文件存在但无执行权限（(b) 步 `[ -x ]` 预检为假） | 拷贝方式异常，权限位丢失（如手动 `cp` 而非走 `setup.sh`） | 重跑 `setup.sh`（会重新 `chmod +x`）；仍失败则手动 `chmod +x ~/.sdflow/hack/resolve-models.sh` |
 | 3 | 非零退出 | (c) 步 `resolve-models.sh` 执行后退出码非 0 | 脚本内部错误（如 `--root` 解析失败、依赖的 `resolve-workflow.sh` 报错） | 原样转发 stderr 给用户；按提示修复后重跑本步 |
-| 4 | 输出无法 eval | (c) 步 `eval "$MODELS_ENV"` 后 `$SDFLOW_HOST` 仍为空（shell 侧语法错误或输出被截断，未显式抛异常） | 脚本 stdout 含非法 shell 语法（脚本自身 bug 或输出被截断） | 视同「host 空值」处置（见下一行）——重新核查 resolver 是否真的执行成功 |
+| 4 | 输出无法 eval | (c) 步 `eval "$MODELS_ENV"` **自身**退出码非 0（`EVAL_RC≠0`）〔impl-review-fix FIX-3：旧措辞只看「`$SDFLOW_HOST` 是否仍为空」——而 resolver 输出可以**先**设好合法 host/tiers、**再**跟一条非法命令，此时 eval 退 127 但 (d) 的变量校验全 PASS ⇒ 静默放行一份被截断的解析结果〕 | 脚本 stdout 含非法 shell 语法（脚本自身 bug 或输出被截断） | 按 `EVAL_RC` fail-loud 硬停并报出该码；重新核查 resolver 是否真的执行成功、stdout 是否完整（`$SDFLOW_HOST` 为空时另见下一行） |
 | 5 | host 非法 | `$SDFLOW_HOST` 取到 `claude`/`codex`/`unknown` 之外的值 | 本机 `resolve-models.sh` 版本与本仓 bundle 不一致，或被外部环境变量污染 | 重跑 `setup.sh` 用本仓 canonical 版本覆盖旧拷贝后重试 |
 | 6 | host 空值 | `$SDFLOW_HOST` 为空字符串 | **resolver 根本没跑成**（(a) 步已清脏，eval 未能重新 export）——**MUST NOT** 当作 `host=unknown` 处置 | 按第 1–4 行逐项核查 resolver 是否真的执行成功，修复后重跑本步 |
 | 7 | tier 缺失 | `$SDFLOW_HOST` ∈ {claude,codex} 但 `$SDFLOW_TIER_STRONG`/`MID`/`LIGHT` 任一为空 | `model-tiers.md` 不可达或机读块缺失（workflow bundle 未装，或未跑 `sdflow-init update`） | 按 stderr 提示跑 `sdflow-init update`；或确认 `~/.sdflow/workflow/model-tiers.md` 存在且含 `model-tier-defaults` 机读块 |
@@ -324,6 +324,13 @@ ticket**，承担该聚合回归执行点：
 5. **四类失败分诊**（退出码非 0 时）：本 change 引入的回归 → 进 fix 循环；仓内既有红测（用 base
    SHA 复跑该命令确认改动前即红）→ 记录并放行，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；
    环境故障（依赖缺失 / 网络）→ halt envelope 停并上抛。
+6. 🔴 **单一盘面（[impl-review-fix FIX-4]）**：该票回答的是「**全部功能票实现完毕这一刻**，聚合
+   套件是否通过」——**「这一刻」蕴含单一盘面**。∴ **任何产品代码修复之后（fix 循环的每一轮），
+   MUST 重跑全部已覆盖层**，MUST NOT 只重跑刚失败的那一层；报告里所有判「通过」的行 MUST 锚
+   **同一个最终 SHA**（= 最后一次修复之后的 `git rev-parse HEAD`）。未覆盖层不受此约束
+   （其 SHA 位写的是判定依据，本就无盘面语义）。
+   ❌ 反例（MUST NOT 拼成「全部通过」）：unit@A 通过 → integration 在 A 失败 → 修到 B →
+   integration/e2e@B 通过。此时 unit 从未在 B 上跑过，「全部通过」是三个不同盘面拼出来的。
 
 #### 收尾票与普通票的三处执行契约差异〔spec-review-amendment H9〕
 

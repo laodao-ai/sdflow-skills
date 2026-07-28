@@ -204,7 +204,10 @@ cause（exit code / `command not found` 原文 + 实际版本）+ fix（`/opensp
 - **(b) 预检**：`[ -x ~/.sdflow/hack/resolve-models.sh ]` 不成立 → **fail-loud 硬停**
   「resolve-models.sh 未安装——先在运行 checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh`」
 - **(c) 捕获退出码再 eval**：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`；
-  非 0 → fail-loud 硬停并原样转发 stderr；否则 `eval "$MODELS_ENV"`
+  非 0 → fail-loud 硬停并原样转发 stderr；否则 `eval "$MODELS_ENV"; EVAL_RC=$?` —— **`eval` 自身
+  的退出码也 MUST 立即检查**，`EVAL_RC` 非 0 → fail-loud 硬停（报出 `EVAL_RC`），MUST NOT 带着
+  半成品环境继续做 (d)〔impl-review-fix FIX-3 · 面治：resolver 输出可以先设好合法 host/tiers、
+  再跟一条非法命令 ⇒ eval 退 127 而 (d) 全 PASS；本 SKILL 的 (c) 与四个编排 SKILL 同缺陷同修〕
 - **(d) eval 后校验**：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空；host≠unknown 时
   三个 `$SDFLOW_TIER_*` MUST 非空。**空值 = resolver 根本没跑成，MUST NOT 回落当 `unknown` 处置。**
 
