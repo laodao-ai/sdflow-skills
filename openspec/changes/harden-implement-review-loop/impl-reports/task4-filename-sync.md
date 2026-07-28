@@ -143,8 +143,10 @@ memory 记录过的教训（"改共享字符串前先全量 grep 消费方，别
 ## §7.3 全仓 grep 归因表（非 archive、非 issues、非本 change 自身路径）
 
 不带 `--include` 全量 `grep -rln "superpowers-plan"`，剔除 `openspec/changes/archive/**`、
-`openspec/issues/**`、`openspec/changes/harden-implement-review-loop/**` 后剩余 26 个文件，
-逐条归因：
+`openspec/issues/**`、`openspec/changes/harden-implement-review-loop/**` 后逐条归因表如下
+（计数以表为准，不在正文重复硬编码——本表自身即含被同一 grep 扫到的字符串，任何后续编辑都会
+让绝对计数过期，Task 2 §7.1 已被同一模式咬过一次）；表格所反映的快照 = commit `4b1145a`
+（本 impl-report 首次落盘所在提交）：
 
 | 文件 | 归因 |
 |---|---|
