@@ -353,6 +353,7 @@
 |----|------|--------|------------|
 | B10 | bug | VERIFIED | async-outside-voice |
 | B11 | bug | VERIFIED | async-outside-voice |
+| B23 | bug | OPEN | main |
 | B7 | bug | OPEN | - |
 | B8 | bug | VERIFIED | async-outside-voice |
 | B9 | bug | VERIFIED | async-outside-voice |
