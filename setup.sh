@@ -542,3 +542,12 @@ if command -v python3 >/dev/null 2>&1 && \
     echo "  ⚠️ async host 调度段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
   fi
 fi
+
+# 四个编排 SKILL（implement/done/code-review/spec-review）的宿主/档位解析核心段必须逐字节相同 ——
+# 漂了 = 某个 skill 的档位解析静默行为分叉。独立守卫，同上不挂在 sync_principles.py 条件下。
+if command -v python3 >/dev/null 2>&1 && \
+   [ -f "$REPO_DIR/hack/check_tier_resolution_parity.py" ]; then
+  if ! python3 "$REPO_DIR/hack/check_tier_resolution_parity.py"; then
+    echo "  ⚠️ 宿主/档位解析核心段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
+  fi
+fi

@@ -164,6 +164,52 @@ tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出
 （`superpowers-plan.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
 不触碰 gate 脚本本身，也不读 `openspec/config.yaml`（config 只在 ship 首跳读一次，见路由说明）。
 
+## 第零步：宿主/档位解析（两入口共用、无条件执行）
+
+`mode=tickets-plan`（出票）与 `mode=tickets-exec`（执行）**均**在起手先跑本步，且**无条件执行**——
+出票模式同样消费档位：全 ticket 语义一致性自扫遇到粒度争议时的 `T10-choice` 仲裁步要派 **strong**
+对抗镜（见 tasks.md §2），本步只负责把 `$SDFLOW_TIER_*` 解析出来供该仲裁步与执行模式各处派子代理
+引用，不是空转步〔spec-review-amendment M8/L9〕。
+
+<!-- sdflow:tier-resolution:start v1 -->
+**MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr），否则 `eval "$MODELS_ENV"`；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+<!-- sdflow:tier-resolution:end -->
+
+**`$SDFLOW_HOST="codex"`：能力探针 + 不可用则硬停（不缩 roster）**〔spec-review-amendment H10〕：
+
+- 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，不做任何实质工作）；
+  派不出/机制报错 → **fail-loud 硬停**「Codex 宿主下子代理机制不可用——请在受支持宿主（Claude Code
+  或另一个可用的 Codex 环境）下重新运行 `sdflow-implement`」，**MUST NOT** 由主 session 顶替
+  implementer/双轴审继续跑 ticket；派出且收到哨兵 → 正常进入下一步。
+- **诚实边界**：探针结果由主 session 自己观察并落锚——「是否真派出了一次子代理、是否真收到回复」
+  无可信脚本捕获路径，MUST NOT 声称这是机械门（同 `sdflow-code-review`/`sdflow-spec-review` 的
+  能力探针诚实边界）。
+- **与 `sdflow-code-review`/`sdflow-spec-review` 的降级路径不同构**：那两者判 `subagents="unavailable"`
+  后**缩 roster 到主 session 实际独立完成的镜**继续跑；`sdflow-implement` **不 fan-out 就跑不了任何
+  ticket**，implementer/双轴审/fix 子代理没有等价的单 session 替代路径，∴ **硬停而非降级**。
+- `$SDFLOW_HOST="claude"` → 免探，恒可用，直接进入下一步。
+
+**`$SDFLOW_HOST="unknown"`：fail-loud 硬停**（与「host 空值」是两类不同的失败，MUST NOT 合并处置）：
+resolver 已跑成、但两个正信号（`CLAUDECODE=1` / 非空 `CODEX_THREAD_ID`）均未见或同时出现，判不出当前
+机队 ⇒ **MUST NOT 用空档位或默认值继续派发**——提示「当前进程内既未见 `CLAUDECODE=1` 也未见非空
+`CODEX_THREAD_ID`（或两者同时出现），请在受支持宿主（Claude Code 或 Codex CLI）下重新运行
+`sdflow-implement`」。
+
+**八类失败分支逐类 problem/cause/fix**（均沿用下文「halt envelope 五要素」呈现：错误码 = 下表
+problem 一句、ticket 号与名统一填「—（起手失败，无票上下文）」、已核实证据 = 下表 cause、已写盘
+副作用统一填「无（第零步不产生任何写盘副作用）」、精确恢复步骤 = 下表 fix）：
+
+| # | 失败类型 | problem | cause | fix |
+|---|---|---|---|---|
+| 1 | resolver 不存在 | `~/.sdflow/hack/resolve-models.sh` 文件不存在（(b) 步 `[ -x ]` 预检为假） | 本机未装 sdflow hack 脚本，或未跑过 `setup.sh` | 在运行 checkout（`~/.skills/sdflow-skills`）跑 `bash setup.sh` 后重试 |
+| 2 | resolver 不可执行 | 文件存在但无执行权限（(b) 步 `[ -x ]` 预检为假） | 拷贝方式异常，权限位丢失（如手动 `cp` 而非走 `setup.sh`） | 重跑 `setup.sh`（会重新 `chmod +x`）；仍失败则手动 `chmod +x ~/.sdflow/hack/resolve-models.sh` |
+| 3 | 非零退出 | (c) 步 `resolve-models.sh` 执行后退出码非 0 | 脚本内部错误（如 `--root` 解析失败、依赖的 `resolve-workflow.sh` 报错） | 原样转发 stderr 给用户；按提示修复后重跑本步 |
+| 4 | 输出无法 eval | (c) 步 `eval "$MODELS_ENV"` 后 `$SDFLOW_HOST` 仍为空（shell 侧语法错误或输出被截断，未显式抛异常） | 脚本 stdout 含非法 shell 语法（脚本自身 bug 或输出被截断） | 视同「host 空值」处置（见下一行）——重新核查 resolver 是否真的执行成功 |
+| 5 | host 非法 | `$SDFLOW_HOST` 取到 `claude`/`codex`/`unknown` 之外的值 | 本机 `resolve-models.sh` 版本与本仓 bundle 不一致，或被外部环境变量污染 | 重跑 `setup.sh` 用本仓 canonical 版本覆盖旧拷贝后重试 |
+| 6 | host 空值 | `$SDFLOW_HOST` 为空字符串 | **resolver 根本没跑成**（(a) 步已清脏，eval 未能重新 export）——**MUST NOT** 当作 `host=unknown` 处置 | 按第 1–4 行逐项核查 resolver 是否真的执行成功，修复后重跑本步 |
+| 7 | tier 缺失 | `$SDFLOW_HOST` ∈ {claude,codex} 但 `$SDFLOW_TIER_STRONG`/`MID`/`LIGHT` 任一为空 | `model-tiers.md` 不可达或机读块缺失（workflow bundle 未装，或未跑 `sdflow-init update`） | 按 stderr 提示跑 `sdflow-init update`；或确认 `~/.sdflow/workflow/model-tiers.md` 存在且含 `model-tier-defaults` 机读块 |
+| 8 | host=unknown | `$SDFLOW_HOST` 取到 `unknown`——resolver **跑成**但判不出宿主 | 当前进程内两个正信号（`CLAUDECODE=1`/非空 `CODEX_THREAD_ID`）均未见或同时出现 | 在受支持宿主（Claude Code 或 Codex CLI）下重新运行 `sdflow-implement`；**MUST NOT** 用空档位或默认值继续派发 |
+
 ## 模式派发契约（F4 单一源，与本 change plan 头部逐字共用）
 
 skill 内**不自判模式**——管线选择完全是外部确定值（config 键 → plan marker → 缺省一律 superpowers，
@@ -316,7 +362,8 @@ python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/sup
 
 默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
 
-dispatch prompt 必含：
+**派发 Agent（model: `$SDFLOW_TIER_MID`——第零步已 eval 出的中档模型 id；config.yaml model-tiers 段
+已在 resolve-models.sh 内按机队分键覆盖），MUST NOT 内联具体模型 id**，dispatch prompt 必含：
 
 - 上一步脚本产出的 brief 文件路径（implementer 自己 Read；**编排层 MUST NOT 手动复制该
   `### Task N:` 段落文本进 prompt**）；
@@ -435,7 +482,9 @@ git log --oneline | grep "checkpoint({change}:task<N>-"
 
 ## 每 ticket 双轴审
 
-implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代理（各 **<400 词**封顶）：
+implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代理（各 **<400 词**封顶，
+**均派发 Agent model: `$SDFLOW_TIER_MID`**——同一次第零步 eval 出的中档模型 id，MUST NOT 内联具体
+模型 id）：
 
 > **🔴 两个评审子代理的 prompt（以及 implementer / fix 子代理的 prompt）MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**
 > （`sdflow:principles` 从 start 到 end，整段复制，不转述、不摘要）——**子代理是 fresh context，看不见本 SKILL.md**。
@@ -486,7 +535,9 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
 
 裁决处置：
 
-- Critical / Important 发现 → 派 fix 子代理修复 + re-review，循环直至通过；**不带着未修的
+- Critical / Important 发现 → 派 fix 子代理修复（**fix 子代理无独立 dispatch 段，就地在此声明**：
+  model: `$SDFLOW_TIER_MID`——同一次第零步解析结果，与上文 implementer/双轴审共用同一档位，不重复
+  计数）+ re-review，循环直至通过；**不带着未修的
   Critical/Important 推进下一 ticket**。**熔断**〔impl-review-fix〕：同一发现（同 file:line +
   同问题）连续 2 轮 re-review 仍未消解 → 停止循环，按 T10 三级决策协议处理（有客观判据自动选 /
   无客观判据派对抗镜复核 / 复核不过或无从复核则 defer 进 buglist 并停上抛），**MUST NOT**

@@ -51,8 +51,11 @@ def test_snippet_declares_codex_subagent_authorization():
     assert "task-specific reason" in t
     assert "model-tiers.md" in t
     assert "sdflow-spec-review" in t and "sdflow-code-review" in t
+    # harden-implement-review-loop Task 1（H11/C13）：sdflow-implement 的 implementer/Standards轴/
+    # Spec轴/fix 派发同样补进授权范围，第三处
+    assert "sdflow-implement" in t
     # 授权非无限放开——MUST 显式限定范围，防止被读成"任意 skill 可随便 spawn_agent"
-    assert "仅限这两处" in t
+    assert "仅限这三处" in t
 
 
 def test_snippet_authorization_names_probe_semantic_boundary():
