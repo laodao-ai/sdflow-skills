@@ -75,8 +75,19 @@ $ grep -rn "T10" . | grep -v "openspec/changes/harden-implement-review-loop/" \
   本次首轮 §7.1 分类漏纳此行：该行由 Task 1 commit `9f6bcf22`（"新增第零步宿主/档位解析"）写入，
   写入时点在本票 `T10-choice` 定名之前，但措辞已提前正确使用该名字（非本票改名对象——不在 design
   scope-check 表内、当时也未改名，故不落 Group A），审计时应显式归类为"已是目标态、无需改动"，
-  原报告未提及即遗漏，非误改。已经 `fix1` 重跑 `grep -rn "T10" .`（不带 `--include`）+ 逐行核对
-  §7.1 排除口径，确认这是唯一漏网命中，其余 52 处命中均已被上述五类之一覆盖，分类现已穷尽。
+  原报告未提及即遗漏，非误改。
+- 【本 change 自身审计/报告文本】**〔fix2 补记 · 常设分类规则〕**：本 change 的 plan、impl-report、
+  `planning-decisions.md` 等自身产物在陈述规则时**必然**引用 `T10-choice` 字面（如
+  `sdflow-implement/SKILL.md:251` 由 fix1 新增的行格式引述）。这类命中是**合规新增、非改名对象**，
+  一律归本类，**不逐行枚举**。
+  🔴 **为何改为常设规则而非补记具体行**〔`review-loop-breaker` 判定 · `T10-choice` ①档，客观判据〕：
+  §7.1 首版给出「总命中 = 53 行、分类穷尽」这类**绝对计数**断言，而本审计文本自身含 `T10-choice`
+  字面 ⇒ **任何一次对本报告的编辑都会使该计数 +1、令断言当场失效**（fix1 修完 finding 1 即把 53
+  变成 54，两轴 re-review 同时判其不实）。这是自指循环，追数永不收敛。∴ 口径改为：
+  **① 计数一律标注快照 commit；② 本类命中按规则归属、不进逐行清单。**
+- **计数快照口径**：上述五类 + 本类的分类，针对 commit `aafbdb9` 的工作树状态；此后对本报告或
+  `planning-decisions.md` 的任何编辑若新增 `T10-choice` 字面，按上一条常设规则自动归类，
+  **不构成分类缺口，也不需要重算总数**。
 - 其余命中（`docs/` 下除 `workflow-overview.md` 外的分析/历史类文档、`sdflow-done/scripts/
   roadmap_writeback_draft.py:88` 的历史决策注记、`sdflow-issues/tests/test_batch_lint.py`、
   `openspec/specs/determinism-guards/spec.md:88` 的无关示例 ID）——均不在 design scope-check 表内、

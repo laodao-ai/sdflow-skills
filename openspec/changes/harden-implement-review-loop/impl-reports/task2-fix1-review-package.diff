@@ -1,0 +1,267 @@
+# Review package (fix1): 98cc407..aafbdb9
+
+## Commits
+aafbdb9 fix(t10-split): 补 planning-decisions 审计落点 + 复核分类补漏
+
+## Files changed
+ .../impl-reports/planning-decisions.md             |  18 ++++
+ .../impl-reports/task2-t10-split-fix1.md           | 110 +++++++++++++++++++++
+ .../impl-reports/task2-t10-split.md                |   7 ++
+ openspec/specs/spec-workflow/spec.md               |   2 +-
+ sdflow-implement/SKILL.md                          |   8 +-
+ 5 files changed, 142 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/harden-implement-review-loop/impl-reports/planning-decisions.md b/openspec/changes/harden-implement-review-loop/impl-reports/planning-decisions.md
+new file mode 100644
+index 0000000..b296fd5
+--- /dev/null
++++ b/openspec/changes/harden-implement-review-loop/impl-reports/planning-decisions.md
+@@ -0,0 +1,18 @@
++# 出票模式 `T10-choice` 仲裁审计落点
++
++本文件是出票模式（`mode=tickets-plan`）粒度争议 / 全 ticket 语义一致性自扫遇矛盾时，`T10-choice`
++仲裁记录的确定性审计落点〔spec-review-amendment M15；delta `impl-orchestration/spec.md`、
++`spec-workflow/spec.md` 均 SHALL〕。行格式 = 「`T10-choice` 复核: <方案> | 对抗镜结论 <通过/证伪> |
++<理由(三镜+主次)>」。
++
++> 首条为**回填**：本 change 自身出票时点（Task 2 之前）该规则尚未落地，此前无处可落，事后按本文件
++> 确立的行格式补记；后续出票一律实时写入，不再回填。
++
++---
++
++`T10-choice` 复核: Task 1 的 Codex 实跑验收项加一条硬约束「该实跑 MUST NOT 以本 change 为目标（会
++覆盖本 plan 文件 = 毁掉完成判据窗口锚）——用一次性 fixture change 或只走到档位解析步即止」 | 对抗镜
++结论 — （①档：有客观判据，自动选，未派对抗镜） | 三镜：系统镜（主）——避免自锁与 ticket 重派：
++`ship_gate.plan_first_sha()` 用 `git log --diff-filter=A -- <plan_rel>` 取完成判据窗口起点，覆盖/
++重建 plan 文件即重置该窗口 ⇒ 已完成 ticket 被判未完成，这是脚本行为可判的事实，非偏好；用户镜——无
++可感知行为变化；开发循环镜——多一行约束，心智成本近零。主次：系统镜为主。
+diff --git a/openspec/changes/harden-implement-review-loop/impl-reports/task2-t10-split-fix1.md b/openspec/changes/harden-implement-review-loop/impl-reports/task2-t10-split-fix1.md
+new file mode 100644
+index 0000000..e2c2f96
+--- /dev/null
++++ b/openspec/changes/harden-implement-review-loop/impl-reports/task2-t10-split-fix1.md
+@@ -0,0 +1,110 @@
++# Task 2 双轴审 fix1：审计漏记 + `planning-decisions.md` 缺口
++
++状态：`DONE`
++
++修复 `task2-t10-split.md` 双轴审的两条 Important 发现。本次不改 Group A/B 的规则文本本身
++（`T10-choice`/`review-loop-breaker` 定名与②步 strong 档已在首轮全部到位），只补两处遗漏。
++
++## finding 1：全仓复核未穷尽 — `sdflow-implement/SKILL.md:170`
++
++重跑 `grep -rn "T10" .`（不带 `--include`），再逐行核对 §7.1 排除口径（Group A 15 / Group B 1 /
++【不动】2 /【别名保留】1 /「其余命中」分析类），发现 `sdflow-implement/SKILL.md:170`（"出票模式
++同样消费档位：全 ticket 语义一致性自扫遇到粒度争议时的 `T10-choice` 仲裁步要派 **strong** 对抗镜"）
++未落入任何一类——非分析类文档，是规范性落点，但也不在 Group A 表内。
++
++`git log --oneline -- sdflow-implement/SKILL.md` + `git show 9f6bcf22 --stat` 核实：该行由
++**Task 1** commit `9f6bcf22`（"feat(sdflow-implement): 新增第零步宿主/档位解析 + 四 skill parity
++守卫"）写入，写入时点早于本票（Task 2）对 `T10-choice` 的正式定名，但措辞已提前使用该名字——写入时
++design.md 的 T10 scope-check 表尚未覆盖此行（该表拟定于本次改名落地之前），故 Task 2 起手 grep 建
++「唯一口径」全景图时理应捕获此行、归入"已是目标态、无需改动"一类，但首轮报告漏记，属"断言穷尽核对、
++实际输出未穷尽"（违 `premise-verification.md` + 通则①）。
++
++**修法**：仅在 `task2-t10-split.md` §7.1 补一条【Task 1 提前正确使用】分类，说明该行现状即为目标
++态、无需改动规则文本。重新核对 53 行过滤后命中（`t10_filtered.txt`，见下方核对记录），确认这是唯一
++漏网命中，其余全部被既有五类覆盖，分类现已穷尽。**不改任何规则文本**——该行本身措辞已正确，不存在
++可改动的缺陷。
++
++## finding 2：delta 已 SHALL 的 `planning-decisions.md` 审计落点未实现
++
++核实链：
++
++- delta `openspec/changes/harden-implement-review-loop/specs/impl-orchestration/spec.md` 4 处
++  （2 处 Requirement 正文 + 2 处 Scenario）SHALL 出票模式仲裁记录落
++  `impl-reports/planning-decisions.md`；delta `specs/spec-workflow/spec.md` 同样要求。
++- `grep -rn "planning-decisions" sdflow-implement/SKILL.md openspec/specs/` 首轮为零命中——未实现。
++- `grep -n "planning-decisions" tasks.md` 亦为零命中——tasks.md 本身漏列，但 delta 已 SHALL，
++  tasks.md 遗漏不构成豁免（通则③目标态判据）。
++
++**三处编辑（措辞与 delta 逐字对齐）**：
++
++1. `sdflow-implement/SKILL.md` 出票模式「起手检查」粒度争议处（原 :247–249 后）新增一段，逐字对齐
++   delta `impl-orchestration/spec.md:104`：「**出票模式的仲裁记录 SHALL 有确定性审计落点**：写入
++   `impl-reports/planning-decisions.md`（change 目录内、git-tracked，由出票落盘的同一次 checkpoint
++   一并提交），行格式 = 「`T10-choice` 复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」
++   ——出票模式无 code-review 报告产物，此前该仲裁结果**无处可落**〔spec-review-amendment M15〕。」
++2. `sdflow-implement/SKILL.md` 出票收尾序列「全 ticket 语义一致性自扫」步（原 :325–329）句末追加
++   delta `impl-orchestration/spec.md:116` 的原句：「仲裁记录同样落 `impl-reports/planning-decisions.md`。」
++3. `openspec/specs/spec-workflow/spec.md`「阶段三过设计门后连续自动跑到 merge」Requirement ②步括号
++   内，从「（复核记录进报告）」补为「（复核记录进报告；出票模式无报告产物时落
++   `impl-reports/planning-decisions.md`）」，与 delta 该句逐字一致。
++
++`tasks.md` 属锁定文件（design/proposal/tasks/specs 四件套改动会触发 ship_gate design 域失鲜），
++本票 MUST NOT 改动，故其漏列不在本次修复范围内——留给编排层裁决是否需要另开 todo 补记 tasks.md
++本身的完整性（不属本 fix 子代理职权）。
++
++## 附带动作：`planning-decisions.md` 回填
++
++新建 `openspec/changes/harden-implement-review-loop/impl-reports/planning-decisions.md`，按上面
++新落地的行格式回填本 change 出票时点已发生但当时无处可落的一条 ①档裁决（Task 1 的 Codex 实跑验收项
++"MUST NOT 以本 change 为目标"约束）。核实该约束原文已存在于 `superpowers-plan.md:117` 与
++`impl-reports/task1-brief.md:21`（逐字比对一致），确认回填内容非杜撰，是对已发生决策的补记。文件头
++注明该条为回填、后续出票实时写入。
++
++## 一致性核对（全仓 grep 重跑）
++
++```
++$ grep -rn "T10" . | grep -v "/\.git/" > t10_grep_full.txt   # 489 行
++$ grep -rn "T10" . | grep -v "/\.git/" \
++    | grep -v "openspec/changes/harden-implement-review-loop/" \
++    | grep -v "openspec/changes/archive/" | grep -v "openspec/issues/" \
++    | grep -v "openspec/ROADMAP.md" | grep -vE "T10:[0-9]|T10[0-9]" > t10_filtered.txt   # 53 行
++```
++
++53 行逐条比对 §7.1 五类（Group A 15 / Group B 2 行 / 不动 2 / 别名保留 1 / 其余命中 32）+
++本次新增的【Task 1 提前正确使用】1 行 = 53，账目吻合，无第二处漏网。
++
++```
++$ grep -n "planning-decisions" sdflow-implement/SKILL.md openspec/specs/spec-workflow/spec.md \
++    openspec/specs/impl-orchestration/spec.md
++sdflow-implement/SKILL.md:250:  ...
++sdflow-implement/SKILL.md:...:  仲裁记录同样落 `impl-reports/planning-decisions.md`。
++openspec/specs/spec-workflow/spec.md:83:...出票模式无报告产物时落 `impl-reports/planning-decisions.md`...
++```
++
++三处均已落地（`impl-orchestration/spec.md` 本身是主 spec，未在本次编辑范围内——delta 已对齐的是
++`sdflow-implement/SKILL.md` 与 `spec-workflow/spec.md` 两个消费面；`impl-orchestration/spec.md`
++的三处 SHALL/Scenario 本身就是 delta 定义，归档时会经 `sdflow-done` 的 delta-sync 流程写回主
++spec，不属本次 fix 子代理的编辑范围）。
++
++## 测试执行
++
++未新增可执行逻辑，仅指令文本改动。跑受影响面 + 全量回归：
++
++```
++$ /usr/bin/python3 -m pytest -q
++2893 passed, 11 skipped, 3 xfailed in 286.47s (0:04:46)
++```
++
++计数与 Task 2 报告记录的基线（同为 2893 passed / 11 skipped / 3 xfailed）完全一致，零回归。
++
++未新增/删除任何断言字符串被测试硬编码的文本，`grep -rln` 核对 `复核推荐切分方案`/`扫描干净则不留痕`/
++`无 quiz-the-user` 在任何 `*.py` 测试文件中均无命中，无需同步测试。
++
++## 完成信号
++
++本次提交不带 `task2-` 标签、不勾 plan 复选框（后置双写时序，由双轴审通过后补打）。
++
++## 未做/裁剪的部分
++
++无。两条 finding 的修法与附带动作均已完成。`tasks.md` 本身漏列 `planning-decisions.md` 条目一事
++超出本 fix 子代理职权（tasks.md 锁定），已在上方明确指出，留待编排层裁决。
+diff --git a/openspec/changes/harden-implement-review-loop/impl-reports/task2-t10-split.md b/openspec/changes/harden-implement-review-loop/impl-reports/task2-t10-split.md
+index 369b8a4..66ea660 100644
+--- a/openspec/changes/harden-implement-review-loop/impl-reports/task2-t10-split.md
++++ b/openspec/changes/harden-implement-review-loop/impl-reports/task2-t10-split.md
+@@ -63,20 +63,27 @@ $ grep -rn "T10" . | grep -v "openspec/changes/harden-implement-review-loop/" \
+ ```
+ 
+ 核对结果：
+ 
+ - Group A 15 处：措辞一致，均含 `T10-choice` + `strong` 标注（详见上表）。
+ - Group B 落点：不再以裸 `T10` 引用规则本身（仅保留一处对照性提及 `T10-choice`，与已定稿 delta
+   同构，非"T10"裸标签）。
+ - 【不动】2 处（`sdflow-implement/SKILL.md` NEEDS_CONTEXT 尾部 + `impl-orchestration/spec.md:60`）：
+   "T10" 字样原样健在，未被误删。
+ - 【别名保留】1 处（`spec-workflow/spec.md:29`）：未改动。
++- 【Task 1 提前正确使用】1 处（`sdflow-implement/SKILL.md:170`，"出票模式同样消费档位：全 ticket
++  语义一致性自扫遇到粒度争议时的 `T10-choice` 仲裁步要派 **strong** 对抗镜"）——**〔fix1 补记〕**
++  本次首轮 §7.1 分类漏纳此行：该行由 Task 1 commit `9f6bcf22`（"新增第零步宿主/档位解析"）写入，
++  写入时点在本票 `T10-choice` 定名之前，但措辞已提前正确使用该名字（非本票改名对象——不在 design
++  scope-check 表内、当时也未改名，故不落 Group A），审计时应显式归类为"已是目标态、无需改动"，
++  原报告未提及即遗漏，非误改。已经 `fix1` 重跑 `grep -rn "T10" .`（不带 `--include`）+ 逐行核对
++  §7.1 排除口径，确认这是唯一漏网命中，其余 52 处命中均已被上述五类之一覆盖，分类现已穷尽。
+ - 其余命中（`docs/` 下除 `workflow-overview.md` 外的分析/历史类文档、`sdflow-done/scripts/
+   roadmap_writeback_draft.py:88` 的历史决策注记、`sdflow-issues/tests/test_batch_lint.py`、
+   `openspec/specs/determinism-guards/spec.md:88` 的无关示例 ID）——均不在 design scope-check 表内、
+   且属分析类/历史记录类/无关示例，按表口径不属扫改范围，未改动。
+ 
+ ## 落点数量与文件改动统计
+ 
+ ```
+ $ git diff --stat
+  docs/workflow-overview.md                                          |  4 +--
+diff --git a/openspec/specs/spec-workflow/spec.md b/openspec/specs/spec-workflow/spec.md
+index 6509464..8903089 100644
+--- a/openspec/specs/spec-workflow/spec.md
++++ b/openspec/specs/spec-workflow/spec.md
+@@ -73,21 +73,21 @@
+ #### Scenario: 改 bundle/SKILL/gate 自身即便是 markdown 也不免多镜
+ - **WHEN** 一个 diff 只改 `sdflow-code-review/SKILL.md` 或 `workflow.md` 一行指令（形状=仅动 markdown）
+ - **THEN** 判器 MUST 因行为面路径豁免清单判其 NOT 无逻辑面 → Step2 多镜照跑，MUST NOT 因「仅动 markdown」误免（bundle markdown 承载行为）
+ 
+ #### Scenario: load-bearing 版本常量不免多镜
+ - **WHEN** 一个 diff 改 `API_VERSION = 2` 或 `SCHEMA_VERSION`（切 code-path/契约）
+ - **THEN** 判器 MUST NOT 判其为白名单版本常量（其有 code-path 依赖）→ Step2 照跑
+ 
+ ### Requirement: 阶段三过设计门后连续自动跑到 merge
+ 
+-阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `实现管线 → sdflow-code-review → sdflow-done`；实现管线为可选双轨——缺省 `writing-plans → subagent-dev`，或经 `impl-orchestration` 能力的手动路由（config 键 + 盘面 marker，缺省/非法值一律 superpowers）选择 `sdflow-implement 双模式（出 ticket → 执行）`；**编排层入口 = `/sdflow-ship`**（一次调用驱动 5.5→9，按「阶段三编排台账确定性」需求经 ship_gate 推进；手动逐步仍为合法 reference 路径）。管线选择 MUST NOT 引入模型自动判断，MUST NOT 新增人类门。实现管线内不可消解的 BLOCKED 停机属「defer-to-human 异常终态」而非人类门——与既有 BLOCKED_UPSTREAM 同构（停并上抛、人工再入口），不违背「无阻塞人类门」承诺（正常路径仍连续到 merge）〔spec-review-amendment F7〕。能修的自动修；**遇 ≥2 方案 MUST 按三级决策协议 `T10-choice`**〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名。语义边界见 `adr/0031`：本规则**只覆盖「多个候选方案选哪个」**，`sdflow-implement` 的「同一发现反复未消解」熔断由 `review-loop-breaker` 独立定义，两者 MUST NOT 互相引用〕：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次**记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 并由 hand-off 引导另开 change 清理。MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。修不了或需拍板的 MUST 进 buglist/todolist 延后。
++阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `实现管线 → sdflow-code-review → sdflow-done`；实现管线为可选双轨——缺省 `writing-plans → subagent-dev`，或经 `impl-orchestration` 能力的手动路由（config 键 + 盘面 marker，缺省/非法值一律 superpowers）选择 `sdflow-implement 双模式（出 ticket → 执行）`；**编排层入口 = `/sdflow-ship`**（一次调用驱动 5.5→9，按「阶段三编排台账确定性」需求经 ship_gate 推进；手动逐步仍为合法 reference 路径）。管线选择 MUST NOT 引入模型自动判断，MUST NOT 新增人类门。实现管线内不可消解的 BLOCKED 停机属「defer-to-human 异常终态」而非人类门——与既有 BLOCKED_UPSTREAM 同构（停并上抛、人工再入口），不违背「无阻塞人类门」承诺（正常路径仍连续到 merge）〔spec-review-amendment F7〕。能修的自动修；**遇 ≥2 方案 MUST 按三级决策协议 `T10-choice`**〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名。语义边界见 `adr/0031`：本规则**只覆盖「多个候选方案选哪个」**，`sdflow-implement` 的「同一发现反复未消解」熔断由 `review-loop-breaker` 独立定义，两者 MUST NOT 互相引用〕：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次**记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告；出票模式无报告产物时落 `impl-reports/planning-decisions.md`）；③复核不过或无从复核 → defer 进 buglist/todolist 并由 hand-off 引导另开 change 清理。MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。修不了或需拍板的 MUST 进 buglist/todolist 延后。
+ 
+ #### Scenario: 修不了的问题延后而非阻塞
+ 
+ - **WHEN** sdflow-code-review 发现一个本 change 修不掉的问题
+ - **THEN** 它进 buglist/todolist(defer) 并写入 hand-off，流程继续跑到 sdflow-done，不设人类门阻塞
+ 
+ #### Scenario: 无客观判据的两方案走对抗复核
+ 
+ - **WHEN** 阶段三某步遇两个可行方案且无测试/断言可判优劣
+ - **THEN** 派对抗镜尝试证伪推荐方案：未被证伪 → 自动选并记复核记录；被证伪或复核无法开展 → defer，MUST NOT 凭"有把握"直接选
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 47e68b6..25ab8ae 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -240,20 +240,24 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任
+   python3 sdflow-implement/scripts/impl_route.py frontier --plan <plan路径> --done <1,2|none>
+   ```
+ 
+ ## 出 ticket 模式（`mode=tickets-plan`）
+ 
+ ### 起手检查
+ 
+ 读 `{change_dir}/design.md` 与 `{change_dir}/tasks.md`。design.md 若含「切片建议」节，作为
+ **建议输入**参考其初步 ticket 划分与阻塞边草图；**无该节则完全自主出 ticket**——粒度争议不问
+ 用户，走 ship `T10-choice` 三级决策协议（design D9；无客观判据档派 **strong 档**对抗镜复核推荐切分方案）。
++**出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change
++目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案>
++| 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果
++**无处可落**〔spec-review-amendment M15〕。
+ 
+ ### 产出：3–6 张 tracer-bullet 垂直切片
+ 
+ - 每张打穿全层（行为级、可独立验证、demoable），**MUST NOT 预写实现代码或具体文件路径**——ticket
+   只描述"交付什么行为"，不描述"改哪个文件/写什么代码"（文件路径写死会很快过期，且抢了
+   implementer 的判断权）。**例外**：若某决策性片段（状态机、reducer、schema、类型形状）源自
+   prototype 技能产出、且用 prose 描述会失真，可内联该片段并注明"源自 prototype"，只保留决策
+   相关部分，不是可运行 demo。
+ - 每张预估改动范围 SHALL 能被单个 fresh implementer 子代理在一个上下文窗口内完整消化（读相关
+   代码 + 实现 + 测试）；预估会 touch 的文件数明显超出常规单窗口容量时，按下方「宽重构例外」走
+@@ -319,22 +323,22 @@ impl-pipeline: tickets
+ ### 落盘 → checkpoint → 返回（显式三步序列，B1 完成窗口锚）〔impl-review-fix〕
+ 
+ 出 ticket 模式收尾按固定顺序执行——**返回发生在 checkpoint 之后**，不是「落盘即返回」；模型读到
+ 「立即返回」不得跳过第②③步：
+ 
+ 1. **写盘**：完成 `superpowers-plan.md`（结构见上「外衣」节）。
+ 2. **全 ticket 语义一致性自扫**（附录 B 有出处说明）：checkpoint 前，编排层自己通读一遍刚写好的
+    全部 ticket，找「ticket 之间互相矛盾、或与 `## Global Constraints` 矛盾」的迹象（例如某张
+    ticket 假设的接口形状被另一张明确废弃）——Blocked-by **环**已由 `impl_route.py frontier`
+    拓扑机械挡住，这里补的是拓扑之外的**语义**矛盾，机械查不出。发现矛盾走 `T10-choice` 三级决策协议
+-   （有客观判据自动选 / 无客观判据派 **strong 档**对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**。
+-   扫描干净则不留痕，直接进下一步。
++   （有客观判据自动选 / 无客观判据派 **strong 档**对抗镜复核 / 复核不过或无从复核则停并上抛），**不批量问人**，
++   仲裁记录同样落 `impl-reports/planning-decisions.md`。扫描干净则不留痕，直接进下一步。
+ 3. **立即执行 checkpoint 命令**：plan 必须单独提交，建立 gate 的 `plan_first_sha` 窗口起点——
+    不依赖「首 ticket add -A 捎带提交」的巧合自愈〔adr/0017〕：
+    ```bash
+    bash ~/.sdflow/hack/checkpoint-commit.sh "<change>:plan" "出 ticket 落盘（B1 窗口锚）"
+    ```
+    这条 checkpoint 的 slug（`plan`）**不带 `task<N>-` 前缀，不计入任何 ticket 的完成数**——它只
+    建立 `[sha, HEAD]` 闭区间的起点，供后续每张 ticket 的 `checkpoint(<change>:task<N>-<slug>)`
+    落在窗口内被 gate 识别。
+ 4. **返回编排层（ship）**：checkpoint 提交完成后才返回，**MUST NOT** 在同一次调用内继续派发
+    implementer 或直通执行——必须保留 `ship_gate` 在"落盘之后 / 执行之前"对 fence / 标题 / 重号的
