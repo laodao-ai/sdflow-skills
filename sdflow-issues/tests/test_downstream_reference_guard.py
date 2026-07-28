@@ -23,11 +23,16 @@ allowlist（合法保留旧名的面，非陈旧引用）：
                                     非真相源」、pin 到特定 git HEAD 的快照，另有历史调查 draft（如
                                     `drafts/sdflow-issues-toolchain-defects.md`，无「视图快照」自标但属
                                     历史记录、明言不预设实现）。连贯刷新到目标态属独立文档交付物（记 todo 后置）。
+- `openspec/changes/*/impl-reports/**` —— 在途 change 的单票执行**历史记录**（implementer 报告 +
+                                    评审 review-package 快照），范畴同 `adr/**`·`issues/**`：非活跃托管点、
+                                    无调用/CI/spec 承重。两条实证污染路径见 `_IMPL_REPORTS_RE` 处注释
+                                    （快照会把已豁免文件内容搬进未豁免路径；报告会逐字引用本守卫的失败输出）。
 - 本守卫测试文件自身            —— pattern 用拼接构造（无连续旧名字面）+ basename 显式跳过，避免自匹配假阳。
 
 基准 5 + 「gate 子串自指坑」：pattern 用拼接（`"sdflow-" + "buglist"`）避免守卫扫到自己；
 直接文件内容子串扫 + 路径 allowlist（不解析 markdown 结构）。
 """
+import re
 import subprocess
 from pathlib import Path
 
@@ -51,6 +56,16 @@ ALLOWLIST_EXACT = frozenset({
     "setup.sh",
     "sdflow-init/tests/test_setup_sdflow.py",
 })
+# 在途 change 的 impl-reports/ —— 单票执行的**历史记录**（implementer 报告、评审 review-package
+# 快照），与已豁免的 `openspec/adr/**`（历史决策）·`openspec/issues/**`（台账）同一范畴：
+# 它们不是「活跃托管点」，没有调用/CI/spec 承重，改写它们反而是伪造审计。
+# 两条实证的污染路径（harden-implement-review-loop 实跑发现）：
+#   ① review-package 是 `git diff` 的**逐字快照**，会把**已豁免文件**（如 `openspec/issues/**`
+#      的台账行）的内容原样搬进未豁免路径 —— allowlist 的意图被快照绕过；
+#   ② impl-report 逐字**引用本守卫自己的失败输出**（offender 清单含旧名）即命中。
+# ∴ 用范畴级前缀豁免，MUST NOT 按 change 逐个开口子（那会退回「实现者手 grep 自觉」，
+# 正是本守卫要替掉的东西）。归档后由 `openspec/changes/archive/` 前缀继续覆盖。
+_IMPL_REPORTS_RE = re.compile(r"^openspec/changes/[^/]+/impl-reports/")
 SELF = Path(__file__).resolve().relative_to(ROOT).as_posix()
 
 
@@ -66,6 +81,8 @@ def _is_allowlisted(relpath):
     if relpath == SELF:
         return True
     if relpath in ALLOWLIST_EXACT:
+        return True
+    if _IMPL_REPORTS_RE.match(relpath):
         return True
     return any(relpath.startswith(prefix) for prefix in ALLOWLIST_PREFIXES)
 

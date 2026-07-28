@@ -1,0 +1,1059 @@
+# Review package: 70aaf28..工作树（含 c7cab4d + 编排层对守卫 allowlist 的未提交改动）
+
+## Commits
+c7cab4d feat(closing-ticket): 测试范围分层 + 强制实现验证收尾票 + gate 第四道校验
+
+## Files changed
+ ...osing-ticket-aggregate-regression-checkpoint.md |  36 ++++
+ .../impl-reports/task5-brief.md                    |  23 +++
+ .../impl-reports/task5-closing-ticket.md           |  89 ++++++++++
+ openspec/issues/todolist/2026-07-todolist.md       |   1 +
+ sdflow-done/SKILL.md                               |  22 ++-
+ sdflow-implement/SKILL.md                          |  95 ++++++++++-
+ .../tests/test_downstream_reference_guard.py       |  17 ++
+ sdflow-ship/scripts/ship_gate.py                   | 124 +++++++++++++-
+ sdflow-ship/tests/test_gate_closing_ticket.py      | 181 +++++++++++++++++++++
+ sdflow-ship/tests/test_gate_impl_progress.py       |  17 +-
+ sdflow-ship/tests/test_plan_resolver.py            |   8 +-
+ .../tests/test_superpowers_track_regression.py     | 107 ++++++++++++
+ 12 files changed, 707 insertions(+), 13 deletions(-)
+
+## Diff
+diff --git a/openspec/adr/0032-closing-ticket-aggregate-regression-checkpoint.md b/openspec/adr/0032-closing-ticket-aggregate-regression-checkpoint.md
+new file mode 100644
+index 0000000..32e69d1
+--- /dev/null
++++ b/openspec/adr/0032-closing-ticket-aggregate-regression-checkpoint.md
+@@ -0,0 +1,36 @@
++# 收尾票承担聚合回归执行点（实现期聚合门，非最终完整性门）
++
++> 状态：**Accepted**（2026-07-28，`harden-implement-review-loop` 拷问阶段收敛，用户拍板 Q2/Q3/Q6）· 关联 change：`harden-implement-review-loop`
++
++## Context
++
++`sdflow-implement` 每 feature ticket 原契约是"结束前跑一次全套件"——不分粒度、对每票无差别付全套件成本。与此同时，链路里（`sdflow-implement` → `sdflow-code-review` → `sdflow-done`）**没有任何一步执行"全部票完成后的聚合回归"**（`decision-memo.md` C3 实证）：每票的测试范围收窄之后，这个空洞更需要补上，否则"每票都局部绿"不等于"合起来仍然绿"。
++
++评审 C1 进一步指出：即便补上聚合回归执行点，若该执行点落在 `sdflow-code-review`（会自动修改并提交源码，但不重跑聚合套件）**之前**，其证据锚相对最终代码就不是最新的。这条残余风险必须被显式承认、而不是掩盖。
++
++## Decision
++
++**新增一张不计入 3–6 张预算的强制「实现验证」收尾 ticket**，由出票模式在全部功能垂直切片之后恒产出：
++
++- `Blocked-by` = 全部其余 ticket 号（逐一列全）；`R-ID: all`（覆盖本 change 全部需求的聚合验证语义）。
++- 验收标准 = 按「聚合套件发现契约」（见下）运行本 change 的单元+集成+e2e 测试套件并全部通过。
++- 执行位置**维持在 `sdflow-implement` 内部**，即 `sdflow-code-review` 及其自动修复循环**之前**——不前移、不后移。
++- 该票的**定位**是"实现期聚合回归门"：回答"全部功能票实现完毕这一刻，聚合套件是否通过"，**不声称**"最终代码通过聚合套件"。既有 Requirement「verify 为收尾最终门，位于所有修复之后」不受触碰。
++- **聚合套件发现契约**（复用 `sdflow-devenv` 的既有答案，基准 5：MUST NOT 解析 Makefile/package.json）：命令来源优先级（config 显式配置 → implementer 依仓内既有约定判定并写明依据）→ 真跑一遍看退出码 → 缺层记「未覆盖」不罢工 → 证据落确定性 schema（`<层>|<命令>|<退出码>|<SHA>`）→ 四类失败分诊（本 change 回归/既有红测/flaky/环境故障）。
++- **存在性与位置由机械门保证**：`ship_gate` 新增第四道 plan 校验——当且仅当计划文件名为 `tickets.md` 时，MUST 恰含一张该票且其 `Blocked-by` ⊇ 全部功能票号；旧名 `superpowers-plan.md` grandfather 跳过。
++- **`sdflow-done` 的 verify** 引用该票 impl-report 作为「实现期聚合覆盖」需求的证据锚，锚语义限定为「实现期结束时聚合套件通过」，**按管线条件化**（仅 tickets 轨要求，superpowers 轨判「不适用」而非 gap）。
++
++## Considered Options
++
++- **本方案（收尾票留在 `sdflow-implement` 内，选中）**：见上 Decision。代价 = 证据锚相对 code-review 之后的修复不是最新（下条 Consequences 详述），但换来的是"实现期结束这一刻，聚合套件真的跑过一次"这个此前完全没有的保证，且不侵入 code-review/verify 既有职责边界。
++- **verify 主动执行聚合套件（砍掉）**：让 `sdflow-done` 的 verify 步骤自己跑一遍聚合套件，而不是引用 implement 阶段留下的证据。理由砍掉：① verify 现有定位是"读证据判定"，不是"执行测试"——把执行力塞进 verify 会让它从"门禁"变成"又一个实现步骤"，职责越界；② verify 在 `sdflow-done` 里只有一次强档子代理调用，临时决定要不要重跑全套件、跑多久、如何处理 flaky，都会让这唯一的终门变得不确定，且本 change 的 Non-Goals 明确排除"重新设计 verify 的执行模型"；③ 即便 verify 主动跑了，仍然只是把"聚合回归执行点"从 A 处挪到 B 处，没有解决"该不该在 code-review 之后再跑一次"这个更根本的问题（见下一条）。
++- **把聚合回归移到 `sdflow-code-review` 之后（砍掉）**：即在 code-review 通过、代码定稿之后再跑一次聚合套件，这样证据锚就是"相对最终代码"新鲜的。理由砍掉：① `sdflow-code-review` 的定位是"分支级冷层主审"，其自身已有双轴/领域镜 + 置信过滤 + 对抗裁决 + fix 循环这一整套保障机制，本 change 要解决的是**实现期间**（`sdflow-implement` 内部）的覆盖空洞，不是给 code-review 再叠一层执行步骤——叠加会让 code-review 的边界模糊，且相当于新增一个"code-review 之后、verify 之前"的隐藏阶段，与本 change 明写的"不修改 verify 位置、不新增阶段"的既有 Requirement 冲突；② 若真要在 code-review 之后强制重跑聚合套件，等价于把"全部功能票完成后聚合回归"这件事复制成两份（一份在 implement 内、一份在 code-review 后），双份维护成本与本 change 的简化取向（基准 4）相悖；③ 该方案仍不能完全消除"聚合套件通过之后 verify 本身或收尾流程又引入改动"这一理论上无穷递归的时效缺口——与其追着这条尾巴无限后移执行点，不如显式承认并接受当前这个更早的时效缺口（见 Consequences）。
++
++## Consequences
++
++- **接受的残余风险（已知且接受，非疏漏）**："收尾票锚点相对 code-review 修复而言不是最新"——`sdflow-code-review` 会自动修改并提交源码，但不重跑聚合套件；这段时效缺口由 code-review 自身的保障机制（双轴/领域镜 + 置信过滤 + 对抗裁决 + fix 循环）覆盖，不由收尾票兜底。五问分析（根因/概率/影响/完美成本/简化方案）见 `decision-memo.md`「接受的边角」一节。
++- **证据锚措辞的强约束**：任何引用该票的地方（`sdflow-done/SKILL.md` 的 verify 步骤、verify-report.md 的逐需求核对表）MUST 把锚语义写成「实现期结束时聚合套件通过」，**MUST NOT** 写成「最终代码通过全量回归」——这是防止本决策的已知边界被后续文档悄悄抹平、变成一个未兑现的更强承诺。
++- **verify 锚的管线条件化是必须实现项，非可选**：`sdflow-implement` 的 canonical 缺省管线是 `writing-plans → subagent-dev`（superpowers 轨），收尾票只由 tickets 轨产出；若 verify 无条件要求该锚，走 superpowers 轨的 change 会被判假 gap。本仓自身 `openspec/config.yaml` 是 `impl-pipeline: tickets`，dogfood 天然照不到这条分支，`tasks.md` §7.6 为此单列一条 superpowers 轨回归验证。
++- **"不计入 3–6 预算"与 expand–contract 迁移批次共同构成两个预算外后门**：已知会稀释"3–6 张票"这个数字本身的约束力，本次接受，记 todo（改为约束总执行单元数或总 frontier 成本，而非单纯垂直切片张数）。
++- **收尾票的存在与 `Blocked-by` 覆盖由 `ship_gate` 第四道校验机械保证**，不依赖人工记得加这张票或记得把依赖号写全——机械门的判据只认计划文件名（`tickets.md` 触发校验、`superpowers-plan.md` grandfather），不读 config/marker，因此与轨道路由权威（config 键 + plan frontmatter marker）解耦，不会因为判据来源不一致而互相打架。
++- **回滚代价**：revert 本次 commit 集合后，`ship_gate` 的第四道校验与 `sdflow-implement`/`sdflow-done` 相关文本一并回退；已经按新契约落盘、含收尾票的在途 `tickets.md` 不会自动改回旧形态，其收尾票会成为该 plan 里一张"多余但无害"的普通 ticket（回滚不需要额外清理动作）。
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index 6f59e77..3393887 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -213,22 +213,37 @@ git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/orig
+ ```
+ 你是 OpenSpec 验证助手。工作目录：{项目根目录}。
+ 任务：verify change `{change_name}`。
+ 
+ **重要（Do Not Trust the Report，P3h 防假✅）**：核对的是**代码是否真的实现了 tasks.md/specs 的每条要求**，不要只看复选框状态、也不要信任任何已有报告的措辞（实现可能经外部计划执行；复选框/报告可能 stale 或乐观）。**每条判 ✅ 的需求必须附一个可机验证据锚点（测试名 / commit hash / 文件:行）；找不到锚点的一律判 gap，绝不凭复选框或"看起来做了"判 ✅**。真实事故：曾有 verify 把两条根本没落实的需求（无 benchmark 实现）标 ✅ 静默放过，靠事后人肉才揪出（见 design §7.3.1 / adr/0001）。
+ 
+ 步骤：
+ 1. Read openspec/changes/{change_name}/tasks.md（看要求什么）
+ 2. Read openspec/changes/{change_name}/specs/ 下所有 spec（ADDED/MODIFIED 需求）
+ 3. 用 Grep/Read 核对**代码/迁移/测试**是否反映每条要求（迁移文件、SP、Go、前端、测试）
+-4. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
+-5. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
++4. **实现期聚合覆盖需求（tickets 轨专属，按管线条件化，harden-implement-review-loop D3/Q2/C2）**：
++   先判本 change 走的是哪条实现管线——看 `openspec/changes/{change_name}/` 下（或已归档路径
++   `openspec/changes/archive/{date}-{change_name}/`）现存/曾存在的计划文件名：`tickets.md` =
++   tickets 轨；`superpowers-plan.md` 或无该类计划文件 = superpowers 轨（canonical 缺省）。
++   - **tickets 轨**：在 `impl-reports/` 下找「实现验证」收尾 ticket 的报告（`R-ID: all` 那张），
++     核对其证据 schema（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）齐全、结论可接受（通过，或
++     按四类失败分诊记录为可接受的放行）。找到 → 该需求判 ✅，锚 = 该 impl-report 文件路径 + 其
++     内的 SHA（**不要求该票有 commit**——`checkpoint-commit.sh` 在干净树上直接成功退出、不建
++     commit，聚合套件一次绿时该票可能本来就无 commit）；**锚语义 MUST 写成「实现期结束时聚合
++     套件通过」，MUST NOT 写成「最终代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其
++     自动修复循环之前，此证据时效缺口是已知且接受的残余风险（design「收尾票的定位」节）。找不到
++     → 判**核心缺口**。
++   - **superpowers 轨**：该需求判**「不适用（非 tickets 轨）」，MUST NOT 判 gap**〔评审 C2：
++     本仓自身 `openspec/config.yaml` 是 `impl-pipeline: tickets`，dogfood 照不到 superpowers 轨
++     这个分支，务必显式按此条处置，不要因为「本仓从没见过」就假设都该判 gap〕。
++5. 判定：**只报真实缺口**（代码确实没实现的）。Minor 级（可观测性日志、UX polish、文档）即使缺也判 PASS 并注明「Minor 缺口」；只有**核心功能**缺失才 FAIL
++6. **（硬性可交付）必须**写出 `openspec/changes/{change_name}/verify-report.md`（先 Read 是否存在再 Write/Edit），结构：
+    - **报告头部 frontmatter（ship-gate 契约，mlh-p5 迁 frontmatter，模板写死二选一，勿改写字段名、勿两键并存）**：
+      MUST 在文件**最顶端**（prepend，非追加末尾）写下方模板之一（**`ship-gate:` 与首尾 `---` 须顶格列 0——下方模板已按
+      实际应写入报告的列对齐单独排版，忽略本段说明文字自身的列表缩进，勿把说明文字的缩进也复制进报告**）：
+ 
+ ---
+ ship-gate:
+   verify: PASS
+   reviewed_sha: 0123456789abcdef0123456789abcdef01234567
+ ---
+ 
+@@ -242,23 +257,24 @@ ship-gate:
+ 
+      ——`verify` 字段二选一（`PASS`/`FAIL`，大写、非布尔），/sdflow-ship 读此 frontmatter 机判。
+      **`reviewed_sha` = 被验证的盘面〔harden-gate-git-layer ADR-1〕**：取值 = `git rev-parse HEAD`
+      的完整 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。
+      语义是「**verify 结论覆盖的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「验证之后
+      源码有没有被改」。MUST 与 `verify` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
+      若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。
+    - 标题 + 日期 + change 名
+    - **结论**：PASS / FAIL（人读结论行，紧跟标题下方，供人阅读；frontmatter 已是机判锚，此行不可省略）
+    - **逐需求核对表**：| 需求/任务 | 代码出处(文件:行/迁移/测试) | 状态(✅实现/⚠️Minor缺口/❌核心缺失) |
++     ——「实现期聚合覆盖」需求同样占一行，状态取上面第 4 步的判定（✅/❌核心缺失/不适用）
+    - **缺口清单**：核心缺口（FAIL 项）+ Minor 缺口（注明可接受/deferred）
+    - 此文件会随第三步归档一起进 `openspec/changes/archive/`，作为本 change 的验证留档
+-6. 末行输出：PASS 或 FAIL（附原因）
++7. 末行输出：PASS 或 FAIL（附原因）
+ 
+ 先 Read 再 Edit。报告**不可省**——没有 verify-report.md 视为 verify 未完成。
+ ```
+ 
+ - **PASS**（含「PASS + Minor 缺口」）→ 继续第二步
+ - **FAIL**（核心缺口）→ 停止，展示原因，等修复后重新触发
+ 
+ ---
+ 
+ ## 第二步：产出 hand-off.md（P3g，verify 之后 / archive 之前）
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 70842ed..ab27cf2 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -260,43 +260,121 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任
+   只描述"交付什么行为"，不描述"改哪个文件/写什么代码"（文件路径写死会很快过期，且抢了
+   implementer 的判断权）。**例外**：若某决策性片段（状态机、reducer、schema、类型形状）源自
+   prototype 技能产出、且用 prose 描述会失真，可内联该片段并注明"源自 prototype"，只保留决策
+   相关部分，不是可运行 demo。
+ - 每张预估改动范围 SHALL 能被单个 fresh implementer 子代理在一个上下文窗口内完整消化（读相关
+   代码 + 实现 + 测试）；预估会 touch 的文件数明显超出常规单窗口容量时，按下方「宽重构例外」走
+   expand–contract，不硬塞成一张大 ticket。
+ - 每 ticket 显式声明 `Blocked-by:`（阻塞它的其他 ticket 号，逗号分隔，或 `none`）与 `R-ID:`（该
+   ticket 对应的需求编号，源于本 change 自身 delta spec 的 Requirement ID 缩写）。
+ - 每 ticket 含验收标准复选框（`- [ ] ...`）。
++- **「本票声明的 e2e 场景」的表达方式**〔spec-review-amendment M7〕：验收标准复选框中**标注为
++  `[e2e]`** 的条目即该票声明的 e2e 场景（如 `- [ ] [e2e] 用户提交表单后收到确认邮件`）；未标注
++  `[e2e]` 的条目不算 e2e。**该票没有任何一条标 `[e2e]` ⇒ 该票无 e2e 场景**——implementer 只跑
++  单元 + `Blocked-by` 链上集成，不必臆造 e2e 用例（详细执行契约见下方「每 ticket 派 fresh
++  implementer」节的测试范围段）。
+ 
+ **宽重构例外〔T120〕**：单一机械改动、blast radius 扫全仓的宽重构（批量改名、改共享类型签名等）
+ **MUST NOT** 强行拆成垂直切片；改走 **expand–contract** 序列：
+ 1. 1 张 expand ticket（新旧形态并存，不破坏任何调用点）；
+ 2. 若干迁移批次 ticket（各自 `Blocked-by: <expand ticket 号>`，按包/目录切批，批数由 blast radius
+    决定，可任意多张）；
+ 3. 1 张 contract ticket（`Blocked-by:` 全部迁移批次号，删旧形态）。
+ 
+ **迁移批次 ticket 不占 3–6 张垂直切片预算**〔E5〕——只有 expand 与 contract 两端计入预算。
+ 
++### 强制「实现验证」收尾 ticket（D3/D3b，出票模式恒产出，不计入 3–6 预算）
++
++链路里（`sdflow-implement`→`sdflow-code-review`→`sdflow-done`）此前没有任何一步执行「全部票完成
++后的聚合回归」——每 feature ticket 收窄测试范围（见上「本票声明的 e2e 场景」与下方「每 ticket 派
++fresh implementer」节的测试范围段）之后，这个空洞更需要补。**出票模式 MUST 在全部功能垂直切片
++（含宽重构例外产出的 expand/迁移批次/contract ticket）之后，额外追加一张「实现验证」收尾
++ticket**，承担该聚合回归执行点：
++
++- `Blocked-by:` 声明为**全部**其余 ticket 号（逐一列全，**MUST NOT** 用 "all" 之类占位省略——
++  parse 层仍是逗号号列，不认字面 "all"）。
++- `R-ID: all`——**这是该票自身的需求标注**，语义 = 覆盖本 change 全部需求的聚合验证，Spec 轴据此
++  核验而非逐条溯源〔spec-review-amendment M6〕；**与上一条「Blocked-by 写全部依赖号」是两件不同
++  的事，不要混淆**：`R-ID: all` 是需求标注字面量、`Blocked-by:` 是依赖号的逗号列表。
++- **不计入 3–6 张垂直切片预算**（与宽重构迁移批次同属预算外产出）。
++- 验收标准 = 「按下方「聚合套件发现契约」运行本 change 的聚合测试套件（单元+集成+e2e）并全部
++  通过」。
++- **该票的存在与位置由 `ship_gate` 第四道 plan 校验机械保证**〔H12/M17，见下「外衣」节〕——
++  MUST NOT 依赖人工记得加这张票；出票落盘后 gate 重跑若判 UNKNOWN 而非 CONTINUE_IMPL，先检查
++  是否漏了这张票或其 `Blocked-by` 未覆盖全部功能票号。
++
++#### 聚合套件发现契约（Q6 拍板：MUST NOT 解析构建文件，基准 5）
++
++「单元+集成+e2e 聚合套件」在任意下游项目上都没有统一契约，而本 skill 要铺给**任意**项目——
++`MUST NOT` 解析 Makefile / package.json 去找 target（`add-sdflow-devenv` 已为此付过学费：脚本
++562→119 行、7 个 fail-closed 罢工分支，`docs/sad/07` 附录 A21；见 CLAUDE.md 基准 5 反面教训）。
++契约：
++
++1. **命令来源优先级**：① `openspec/config.yaml` 顶层 `test-suites.{unit,integration,e2e}` 显式
++   配置（每层一条 shell 命令字面量）；② 缺失则由**该票 implementer** 依仓内既有约定（CI 配置、
++   README、`devenv` 三层测试框架产物等）判定，**并在票报告里写明命令原文与判定依据**（不得凭
++   记忆下结论，通则①）。
++2. **「某命令能不能跑」由工具自己回答**：候选命令**真跑一遍**看退出码，MUST NOT 靠解析构建
++   文件预判 target 是否存在。
++3. **缺层不罢工**：仓内确无某层（如无 e2e 层）时，该层记「未覆盖（本仓无此层）」并附判定依据，
++   **MUST NOT fail-closed 罢工**——本 skill 的承诺是「不管什么项目都能跑完实现管线」，每个罢工
++   分支都在背叛这个承诺。
++4. **证据 schema（确定性，可机验）**：票报告 MUST 含每层一行：
++   `<层> | <命令原文> | <退出码> | <测试时 git rev-parse HEAD>`；未覆盖层写
++   `<层> | — | 未覆盖 | <判定依据>`。
++5. **四类失败分诊**（退出码非 0 时）：本 change 引入的回归 → 进 fix 循环；仓内既有红测（用 base
++   SHA 复跑该命令确认改动前即红）→ 记录并放行，不阻塞；flaky（同命令复跑一次即绿）→ 记录并放行；
++   环境故障（依赖缺失 / 网络）→ halt envelope 停并上抛。
++
++#### 收尾票与普通票的三处执行契约差异〔spec-review-amendment H9〕
++
++该票走跟普通 ticket 相同的 implementer + 双轴审 + fix 循环，但 MUST 定制三点：
++
++1. **豁免 red-before-green**——该票不写产品代码，验收物是**证据**（上面的 schema）不是 diff。
++2. **主证据锚 = 该票 impl-report 文件 + 其内的 SHA 三元组，MUST NOT 依赖该票产生 commit**——
++   `checkpoint-commit.sh` 在干净树上直接成功退出、不建 commit，聚合套件一次绿时该票可能根本
++   无 commit；引用该票时锚点找 impl-report 文件路径，commit 存在则附之，不存在不判缺。
++3. **Standards 轴核验范围扩为**「修复方式未靠**加 skip、改测试配置、删除或弱化断言**蒙混过关」
++   （原措辞只禁"删除或弱化断言"，挡不住"加 skip"）。
++
++#### 收尾票的定位（Q2 拍板：实现期聚合回归门，不是最终完整性门）
++
++该票跑在 `sdflow-code-review` 及其自动修复循环**之前**——它回答的是「全部功能票实现完毕这一刻，
++聚合套件是否通过」，**不声称**「最终代码通过聚合套件」。既有 Requirement「verify 为收尾最终门，
++位于所有修复之后」未被触碰：verify 仍在 `sdflow-done`、仍在所有修复之后，本 change 不修改它，
++收尾票不是 verify、不替代 verify、不前移 verify。code-review 之后的修复由其自身保障机制（双轴/
++领域镜 + 置信过滤 + 对抗裁决 + fix 循环）覆盖；「收尾票锚点相对 code-review 修复而言不是最新」是
++**已知且接受**的残余风险，见 design「收尾票的定位」节与 `decision-memo.md`「接受的边角」。
++`sdflow-done` 的 verify 引用该票 impl-report 作为「**实现期**聚合覆盖」证据锚时，措辞 MUST 与此
++定位一致——**MUST NOT** 写成「最终全量回归通过」；该锚**按管线条件化**，superpowers 轨判「不
++适用」而非 gap（详见 `sdflow-done/SKILL.md`）。
++
+ ### 外衣（ship_gate.py 既有完成判据契约，零改动兼容）
+ 
+ - 落盘路径固定 `{change_dir}/tickets.md`〔D5/adr-0033：tickets 轨新名；superpowers 轨仍用
+   `superpowers-plan.md`，两名经共享 resolver 定位，本 skill 只产出 tickets 轨文件〕。
+ - frontmatter **含且仅含** `impl-pipeline: tickets` 单键——**MUST NOT** 加注释行、示例值，或第二个
+   frontmatter 块（杂行 / 第二块会被 gate 的 fence-aware 解析算成幻影任务，或触发 UNKNOWN）〔F5〕。
+ - 每 ticket 以 `### Task N: <ticket 名>`（N 从 1 连续编号）为标题——与验收复选框、`Blocked-by:`
+   共同构成 gate 可解析的完成判据。
+ - frontmatter 之后、首个 `### Task 1:` 之前，**逐字**携带该 change design.md 的领域约束——从
+   design.md 摘出 MUST / MUST NOT / SHALL 类硬约束与 Compliance 条款，逐字（非改写转述）写成一节
+   `## Global Constraints`，作为每个 implementer / reviewer 子代理 dispatch 的共享注意力透镜。
+ - **plan 首次提交后结构不可变**：**MUST NOT** 重号 / 重排 / 删除 / 复用已出的 Task 号；后续若需
+   重新规划，只能**追加新号**〔F1〕。
++- **gate 第四道校验（H12/M17）**：`ship_gate` 额外校验——**当且仅当计划文件名为 `tickets.md`**
++  （本 skill 唯一产出的新名）时，MUST 恰含一张 `R-ID: all` 的「实现验证」收尾 ticket 且其
++  `Blocked-by` ⊇ 全部功能 ticket 号；旧名 `superpowers-plan.md` 不触发本项校验（grandfather，
++  同时覆盖 superpowers 轨与改名生效前落盘的在途 tickets 轨 plan）。**因此每次出票 MUST 按上文
++  「强制实现验证收尾 ticket」规则产出该票，不可省略**——省略或 `Blocked-by` 漏号会让出票落盘后
++  gate 重跑判 UNKNOWN 而非 CONTINUE_IMPL。此判据**只用文件名区分「新出/在途或他轨」，不是轨道
++  路由**——gate 本身不读 config/marker 即可执行本校验。
+ 
+ 骨架示例（仅示意结构，不是真实 ticket 内容）：
+ 
+ ```markdown
+ ---
+ impl-pipeline: tickets
+ ---
+ 
+ ## Global Constraints
+ 
+@@ -311,20 +389,32 @@ impl-pipeline: tickets
+ 
+ - [ ] 验收标准 1
+ - [ ] 验收标准 2
+ 
+ ### Task 2: <ticket 名>
+ 
+ **Blocked-by:** 1
+ **R-ID:** R3, R4
+ 
+ ...
++
++### Task N: 实现验证（收尾，不计入 3–6 预算）
++
++**Blocked-by:** 1,2,...,N-1
++**R-ID:** all
++
++按「聚合套件发现契约」运行本 change 的单元+集成+e2e 测试套件并全部通过，证据落
++`impl-reports/task<N>-<slug>.md`（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）。
++
++- [ ] 单元测试证据齐全并通过
++- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
++- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+ ```
+ 
+ **无 quiz-the-user**：不做人工粒度确认这一步（matt 原版 to-tickets 有此人类步，本 skill 删除——
+ 阶段三无人类门；粒度争议走 `T10-choice`（无客观判据档派 **strong 档**对抗镜复核），不问用户）。
+ 
+ ### 落盘 → checkpoint → 返回（显式三步序列，B1 完成窗口锚）〔impl-review-fix〕
+ 
+ 出 ticket 模式收尾按固定顺序执行——**返回发生在 checkpoint 之后**，不是「落盘即返回」；模型读到
+ 「立即返回」不得跳过第②③步：
+ 
+@@ -390,21 +480,24 @@ python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tic
+ 
+   > 这两行归属**与设计门实际消费的判据一一对应**：`ship_gate.py` 的完成集 = checkpoint 标签通道
+   > （窗口 `[plan 首次提交 sha, HEAD]` **闭区间**内、命名空间精确等于本 change 的 `TAG_RE` 命中）
+   > **∪** 复选框通道（`_parse_plan` fence-aware 按 `### Task <n>:` 分段绑定、段内全勾）；
+   > 设计工件那一行对应 gate 的 design 域失鲜监视集（`proposal` / `design` / `tasks.md` / `specs/`）。
+   > **MUST NOT** 在表里声明 gate 并不读取的信号源（如 ledger 文件、返回值里的口头「done」）——
+   > 声明了 gate 也不认，只会诱导 implementer 把完成信号写到无人消费的地方。
+ 
+ - 契约：TDD at pre-agreed seams（matt tdd 语义：先与实现者对齐测试的公共接口边界，再红→绿；
+   阶段三无人类门，matt 原版「与用户确认 seam」替换为「implementer 自查确认」）、定期跑 typecheck、
+-  结束前跑一次全套件；
++  **单元测试 + 本票声明的 e2e 场景（若有，见上「本票声明的 e2e 场景」定义）+ 本票 `Blocked-by`
++  链上模块的集成测试**〔D3，Q3 拍板：保留中间档，非绝对禁令〕——**MUST NOT** 跑**与本票无依赖
++  关系**的集成/e2e 套件；聚合回归由「实现验证」收尾 ticket 承担（见上「出 ticket 模式」节），
++  不再要求每票结束前付全套件成本；
+ 
+   > 🔴 **MUST 原文携带进 implementer dispatch prompt**（附录 A 有出处说明）：
+   >
+   > - **Implementation-coupled** — mocks internal collaborators, tests private methods, or verifies through a side channel (querying the database instead of using the interface). The tell: the test breaks when you refactor but behavior hasn't changed.
+   > - **Tautological** — the assertion recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way, a constant asserted equal to itself), so it passes by construction and can never disagree with the code. Expected values must come from an independent source of truth — a known-good literal, a worked example, the spec.
+   > - **Horizontal slicing** — writing all tests first, then all implementation. Bulk tests verify _imagined_ behavior: you test the _shape_ of things rather than user-facing behavior, the tests go insensitive to real changes, and you commit to test structure before understanding the implementation. Work in **vertical slices** instead — one test → one implementation → repeat, each test a **tracer bullet** that responds to what the last cycle taught you.
+   >
+   > 循环规则：**Red before green**（先写失败测试，再写刚好够通过的代码，不预写未来测试/不加投机
+   > 功能）；**One slice at a time**（一个 seam、一个测试、一次最小实现）；**Refactoring is not part
+   > of the loop**（重构不属于红→绿循环，属于评审阶段——对应本 skill 的双轴审，不在 implementer 的
+diff --git a/sdflow-issues/tests/test_downstream_reference_guard.py b/sdflow-issues/tests/test_downstream_reference_guard.py
+index fba504d..3837917 100644
+--- a/sdflow-issues/tests/test_downstream_reference_guard.py
++++ b/sdflow-issues/tests/test_downstream_reference_guard.py
+@@ -16,25 +16,30 @@ allowlist（合法保留旧名的面，非陈旧引用）：
+                                     .outside-voice/ + impl-reports/——被旧名/脚本路径/`import core` 塞满，
+                                     只豁免四件套会让守卫在自己 change 的评审报告上假阳、第一次跑就红）。
+ - `setup.sh`                     —— `OUR_LEGACY_NAMES` MUST 保留旧名（Windows `.laodao-skills` legacy
+                                     marker orphan 回收依赖）。
+ - `sdflow-init/tests/test_setup_sdflow.py` —— `OUR_NAMES` marker-compat 边界（`setup.sh` 口径的镜像）
+                                     + orphan 清理端到端场景，同 `OUR_LEGACY_NAMES` 理由 MUST 保留旧名。
+ - `docs/**`                      —— 非 fail-closed 托管点（非调用/CI/spec 承重）：多为自标「视图文档，
+                                     非真相源」、pin 到特定 git HEAD 的快照，另有历史调查 draft（如
+                                     `drafts/sdflow-issues-toolchain-defects.md`，无「视图快照」自标但属
+                                     历史记录、明言不预设实现）。连贯刷新到目标态属独立文档交付物（记 todo 后置）。
++- `openspec/changes/*/impl-reports/**` —— 在途 change 的单票执行**历史记录**（implementer 报告 +
++                                    评审 review-package 快照），范畴同 `adr/**`·`issues/**`：非活跃托管点、
++                                    无调用/CI/spec 承重。两条实证污染路径见 `_IMPL_REPORTS_RE` 处注释
++                                    （快照会把已豁免文件内容搬进未豁免路径；报告会逐字引用本守卫的失败输出）。
+ - 本守卫测试文件自身            —— pattern 用拼接构造（无连续旧名字面）+ basename 显式跳过，避免自匹配假阳。
+ 
+ 基准 5 + 「gate 子串自指坑」：pattern 用拼接（`"sdflow-" + "buglist"`）避免守卫扫到自己；
+ 直接文件内容子串扫 + 路径 allowlist（不解析 markdown 结构）。
+ """
++import re
+ import subprocess
+ from pathlib import Path
+ 
+ import pytest
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+ 
+ # 拼接构造，令本文件源码内无连续旧名字面 → 全仓扫描不会自命中（CLAUDE.md「gate 子串自指坑」）。
+ LEGACY_SKILL_NAMES = ("sdflow-" + "buglist", "sdflow-" + "todolist")
+ LEGACY_BYTES = tuple(name.encode("utf-8") for name in LEGACY_SKILL_NAMES)
+@@ -44,36 +49,48 @@ ALLOWLIST_PREFIXES = (
+     "openspec/adr/",
+     "openspec/issues/",
+     "openspec/specs/",
+     "openspec/changes/dedupe-issues-scripts-shared-layer/",
+     "docs/",
+ )
+ ALLOWLIST_EXACT = frozenset({
+     "setup.sh",
+     "sdflow-init/tests/test_setup_sdflow.py",
+ })
++# 在途 change 的 impl-reports/ —— 单票执行的**历史记录**（implementer 报告、评审 review-package
++# 快照），与已豁免的 `openspec/adr/**`（历史决策）·`openspec/issues/**`（台账）同一范畴：
++# 它们不是「活跃托管点」，没有调用/CI/spec 承重，改写它们反而是伪造审计。
++# 两条实证的污染路径（harden-implement-review-loop 实跑发现）：
++#   ① review-package 是 `git diff` 的**逐字快照**，会把**已豁免文件**（如 `openspec/issues/**`
++#      的台账行）的内容原样搬进未豁免路径 —— allowlist 的意图被快照绕过；
++#   ② impl-report 逐字**引用本守卫自己的失败输出**（offender 清单含旧名）即命中。
++# ∴ 用范畴级前缀豁免，MUST NOT 按 change 逐个开口子（那会退回「实现者手 grep 自觉」，
++# 正是本守卫要替掉的东西）。归档后由 `openspec/changes/archive/` 前缀继续覆盖。
++_IMPL_REPORTS_RE = re.compile(r"^openspec/changes/[^/]+/impl-reports/")
+ SELF = Path(__file__).resolve().relative_to(ROOT).as_posix()
+ 
+ 
+ def _tracked_files():
+     result = subprocess.run(
+         ["git", "-C", str(ROOT), "ls-files", "-z"],
+         capture_output=True, text=True, check=True,
+     )
+     return [rel for rel in result.stdout.split("\0") if rel]
+ 
+ 
+ def _is_allowlisted(relpath):
+     if relpath == SELF:
+         return True
+     if relpath in ALLOWLIST_EXACT:
+         return True
++    if _IMPL_REPORTS_RE.match(relpath):
++        return True
+     return any(relpath.startswith(prefix) for prefix in ALLOWLIST_PREFIXES)
+ 
+ 
+ def test_no_legacy_skill_references_outside_allowlist():
+     """全仓（git 跟踪）扫旧 skill 目录/脚本路径/slash 名，除 allowlist 外命中即 FAIL。"""
+     offenders = []
+     for relpath in _tracked_files():
+         if _is_allowlisted(relpath):
+             continue
+         path = ROOT / relpath
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index cc1b7a3..94ba8d8 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -45,30 +45,34 @@ verdict × exit × next 契约表:
+     RUN_SOP          0  embedded-test-sop  TG-02 命中且 {change}-sop.md 缺
+     RUN_PLAN         0  writing-plans      计划文件缺（tickets.md / superpowers-plan.md 均未找到）
+     CONTINUE_IMPL    0  subagent-dev       plan_ids⊄done_ids〔B4 集合归属〕（JSON done_tasks=计划内已完成号集，SDD 勿重派）
+     RUN_CODE_REVIEW  0  sdflow-code-review code-review-report.md 缺
+     BLOCKED_UPSTREAM 4  -                  code-review=blocked
+     RUN_VERIFY       0  sdflow-done        verify-report.md 缺｜active 存在 verify=PASS 待收尾｜归档未并 base 待 merge 收尾〔B3/BR-10〕
+     VERIFY_FAIL      5  -                  verify=FAIL 且未陈旧
+     RERUN_STALE      0  <该步 skill>        D9 陈旧结论 → 重跑该步
+     STEP_IN_PROGRESS 0  <该步 skill>        产物在但无锚行
+     SHIPPED          0  -                  归档已并 base + archived verify=PASS 锚〔B3+D3硬化,含归档后重跑识别；active 缺席才判,detached 无关〕
+-    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能/计划文件名双存在(tickets.md 与 superpowers-plan.md 同时存在)
++    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能/计划文件名双存在(tickets.md 与 superpowers-plan.md 同时存在)/收尾票缺失或 Blocked-by 未覆盖全部功能票号(仅 tickets.md 新名校验,旧名 grandfather)
+ 
+ 完成判据窗口〔B1 闭区间〕: 计划文件（经共享 resolver 定位的 tickets.md / superpowers-plan.md）
+     首次提交 sha 起，窗口 [sha, HEAD] 闭区间
+     `git log <sha>..HEAD --no-merges` 加 sha 自身 subject（同前缀+TAG_RE 规则）收集
+     checkpoint(<change>:task<k>- 命名空间标签去重任务号集 done_ids〔ship-gate-hardening-2 T32：
+         gate 只认当前 change 的命名标签，跨 change stacking 不互相污染；裸 checkpoint(task<k>-
+         旧格式向后兼容仍计入窗口；startswith 前缀过滤放宽为 "checkpoint("〕；
+     复选框辅通道按 `### Task <n>:` 分段绑定并入 done_ids〔T34：行锚定+忽略代码块，非全局全勾放行〕；
+     plan `### Task <n>:` 号集 plan_ids；plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；
++    第四道校验〔harden-implement-review-loop Task5 · H12/M17〕: 当且仅当计划文件名为 tickets.md
++        （新名）时，MUST 恰含一张 R-ID: all 的收尾 ticket 且其 Blocked-by ⊇ 全部功能 ticket 号，
++        否则 UNKNOWN；文件名为 superpowers-plan.md（旧名）时跳过并输出一行 grandfather 提示
++        （随后续 verdict 的 reason 一并带出，非独立 emit）；
+     标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
+ 
+ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-layer ADR-1/2/3；决策与实证 openspec/adr/0026〕:
+     锚一律取报告自录的 `reviewed_sha`〔ADR-1〕：缺失 / 非法 / 不解析为 commit ⇒ UNKNOWN(6)
+     fail-closed，MUST NOT 回退任何反推式锚——锚是录下来的常量，报告有没有进过提交与「被批准
+     的是哪个盘面」无关。
+     design（design_approved 锚）〔ADR-2 比内容〕: 对锚与 HEAD **各跑一次**
+         `git ls-tree -r -z <ref> -- proposal.md design.md tasks.md specs/`，比 `path→(mode,type,oid)`
+         映射（新增 / 删除 / rename / 改内容天然全覆盖，无需双侧并集）。映射全等 ⇒ fresh（0 次内容读取）；
+         差异**仅在 tasks.md 且两侧均存在** ⇒ 取两侧字节过 `_tasks_content_exempt`（纯勾选框翻转豁免——
+@@ -1388,20 +1392,124 @@ def plan_has_duplicate_task(plan):
+     order = _parse_plan(text)[0]
+     return len(order) != len(set(order))
+ 
+ 
+ def plan_unbalanced_fence(plan):
+     # [impl-review-fix CR-F1] EOF 时围栏未闭合（悬空 ```）→ 悬空围栏吞真实项 → fail-safe UNKNOWN。
+     text = plan.read_text(encoding="utf-8", errors="replace")
+     return _parse_plan(text)[3]
+ 
+ 
++# ────────────────────── 第四道 plan 校验：收尾票（harden-implement-review-loop Task5） ──────────
++# [D3/D3b · spec-review-amendment H12/M17] 当且仅当计划文件名为 `tickets.md`（tickets 轨新名）时，
++# plan MUST 恰含一张「实现验证」收尾 ticket（`R-ID: all`）且其 `Blocked-by` ⊇ 全部功能 ticket 号；
++# 文件名为 `superpowers-plan.md`（旧名）时跳过本校验并返回一行 grandfather 提示——该名同时覆盖
++# superpowers 轨（本就无收尾票要求）与改名生效前落盘的在途 tickets 轨 plan（见 design Migration
++# Plan）。**本校验只用文件名区分「新出 plan / 在途或他轨 plan」，MUST NOT 被解读为轨道路由**——
++# gate 不读 config/marker 即可执行本校验。
++CLOSING_TICKET_R_ID = "all"
++# [基准 5：无界语法禁手搓] R-ID 逐 task 提取是本文件目前唯一的「R-ID 字面值」消费点，沿用与
++# Blocked-by（impl_route.BLOCKED_BY_RE）同构的「行内前缀 + 加粗可选」写法，仅认这一个字面槽位，
++# 不是通用 Markdown 解析器。
++_R_ID_RE = re.compile(r"\*{0,2}R-ID:\*{0,2}\s*(.*)$")
++
++
++def _plan_task_r_ids(text):
++    """按 `### Task N:` 分段提取每段首个 `R-ID:` 行的原始值（fence-aware，口径同 `_parse_plan`：
++    同一份 FenceTracker + TASK_TITLE_RE）。返回 {task_num_str: raw_value}。仅供
++    `plan_closing_ticket_check` 识别「R-ID: all」收尾票用。
++    """
++    result = {}
++    cur = None
++    fence = FenceTracker()
++    for line in text.splitlines():
++        if fence.feed(line) or fence.inside:
++            continue
++        tm = TASK_TITLE_RE.match(line)
++        if tm:
++            cur = tm.group(1)
++            continue
++        if cur is not None and cur not in result:
++            m = _R_ID_RE.search(line.strip())
++            if m:
++                result[cur] = m.group(1).strip()
++    return result
++
++
++def _load_parse_blocked_by():
++    """惰性 sibling-import `sdflow-implement/scripts/impl_route.py::parse_blocked_by`
++    （镜像该文件反向 import 本模块 `FenceTracker` 的手法，见其头注 [impl-review-fix F4]）。
++
++    **MUST 惰性**（函数内 import，不放模块顶层）：本模块此刻已运行到 `decide()`（运行期），自身
++    早已执行完毕——此时 import `impl_route`（它又会 sibling-import 本模块）不构成循环导入，
++    Python 按模块名解析（`__main__` 直跑场景下会得到本模块的第二份独立实例，同 impl_route.py
++    被直接调用时的既有形态一致，无害）；若放在模块顶层，本模块自身尚未执行完时就会触发真循环
++    导入。
++
++    基准 5（无界语法禁手搓）：Blocked-by 拓扑解析复用既有单一源 `impl_route.parse_blocked_by`，
++    MUST NOT 在本文件手抄第二份。
++    """
++    scripts_dir = Path(__file__).resolve().parents[2] / "sdflow-implement" / "scripts"
++    if str(scripts_dir) not in sys.path:
++        sys.path.insert(0, str(scripts_dir))
++    from impl_route import parse_blocked_by, TopoError  # type: ignore
++    return parse_blocked_by, TopoError
++
++
++def plan_closing_ticket_check(plan):
++    """第四道 plan 校验。返回 `(ok, note)`：
++
++    - `ok=True`：`note` 是提示串——旧名 grandfather 提示，或新名校验通过时的空串。
++    - `ok=False`：`note` 是拒绝原因，调用方按 UNKNOWN(6) fail-closed 处置。
++    """
++    if plan.name != "tickets.md":
++        # superpowers 轨的 plan、或改名生效前落盘的在途 tickets 轨 plan——grandfather，不校验。
++        return True, (f"在途 plan 未含收尾票校验（grandfathered：文件名 {plan.name!r} 非 "
++                       "tickets.md 新名，见 design Migration Plan）")
++
++    text = plan.read_text(encoding="utf-8", errors="replace")
++    plan_ids = plan_task_ids(plan)   # 复用既有单一源（set of str），fence-aware
++    if not plan_ids:
++        return True, ""   # 标题 0 已由更早的判据拦截（UNKNOWN），这里不重复判
++
++    r_ids = _plan_task_r_ids(text)
++    closing = [tid for tid in plan_ids
++               if r_ids.get(tid, "").lower() == CLOSING_TICKET_R_ID]
++    if not closing:
++        return False, ("plan 不含「实现验证」收尾 ticket"
++                        "（未见任一 Task 段的 R-ID 标注为 all，见 design「收尾票的定位」节）")
++    if len(closing) > 1:
++        return False, (
++            "plan 含多张声明 R-ID: all 的 ticket（Task "
++            + ", ".join(sorted(closing, key=int)) + "），收尾票须唯一")
++    closing_id = closing[0]
++
++    try:
++        parse_blocked_by, TopoError = _load_parse_blocked_by()
++    except Exception as exc:                                  # noqa: BLE001
++        return False, (
++            f"收尾票校验无法加载 Blocked-by 拓扑解析器：{type(exc).__name__}: {exc}")
++    try:
++        deps = parse_blocked_by(text)
++    except TopoError as exc:
++        return False, f"收尾票校验无法解析 plan 的 Blocked-by 拓扑：{exc}"
++
++    functional_ids = {int(tid) for tid in plan_ids} - {int(closing_id)}
++    closing_blocked_by = deps.get(int(closing_id), set())
++    missing = functional_ids - closing_blocked_by
++    if missing:
++        return False, (
++            f"收尾 ticket（Task {closing_id}）的 Blocked-by 未覆盖全部功能 ticket 号，"
++            f"缺: {sorted(missing)}")
++    return True, ""
++
++
+ # [spec-review-amendment H4] branch_state() 已移除：D3 终态判据改 change 域可达性
+ # （archived_dirs_in_tree + base 树），不再用「当前 HEAD 分支是否并进 base」这一全局近似；
+ # final 路径（active 存在）恒 RUN_VERIFY 不判 SHIPPED，故也无需 branch_state。detached HEAD
+ # 对 D3 判定无关（凭 base 树可达仍可 SHIPPED）——旧「detached→UNKNOWN」契约随之废止。
+ 
+ 
+ def decide(root, change):
+     # ── git 健全性前置：run_git 吞错会让下游静默失效（D9 等判定悄悄全假）──
+     # [impl-review-fix] 先验 git 可用且 --root 确为 git 仓，防止后续所有 run_git
+     # 调用因非仓/git 缺失而返回空串，被误判为"文件未提交"等正常态。
+@@ -1504,39 +1612,47 @@ def decide(root, change):
+         emit("UNKNOWN", EXIT_UNKNOWN, None,
+              "plan 出现重号 '### Task <n>:' 段（手改/复制粘贴），完成判据不可判"
+              "——重号折叠会掩盖某段未完成的假✅")
+     plan_rel = str(plan.relative_to(root))
+     # [harden-implement-review-loop Task3 fix1 · finding1] 🔴 在途 plan MUST NOT 被重命名——
+     # 检出改名发生过，fail-closed 拒绝而非静默漏数放行（见 plan_was_renamed 注释）。
+     if plan_was_renamed(root, plan_rel):
+         emit("UNKNOWN", EXIT_UNKNOWN, None,
+              f"在途 plan 曾被重命名（{plan.name}），完成判据窗口已失效且不可信；"
+              "请改回原文件名（MUST NOT 重命名在途 plan，见 design Migration Plan）")
++    # [harden-implement-review-loop Task5 · H12/M17] 第四道校验：收尾票存在性 + Blocked-by 覆盖
++    # （当且仅当计划文件名为 tickets.md 时生效；旧名 grandfather，见函数注释）。
++    plan_ok, plan_note = plan_closing_ticket_check(plan)
++    if not plan_ok:
++        emit("UNKNOWN", EXIT_UNKNOWN, None, plan_note)
+     sha = plan_first_sha(root, plan_rel)
+     # [ship-gate-hardening-2 T34] 两通道完成集并集：checkpoint 主锚 ∪ 复选框分段辅通道
+     checkpoint_done = done_task_ids(root, sha, change) if sha else set()
+     checkbox_done = checkbox_done_ids(plan)   # 按 Task 分段绑定（非全局全勾放行）
+     done = checkpoint_done | checkbox_done
+     done_in_plan = done & plan_ids            # [spec-review-amendment B4] 只认计划内号
+     if plan_ids - done:                       # 计划内有未完成号 → 未齐（集合归属,非基数）
+         # 双通道皆不可判：plan 未提交（checkpoint 空）且全 plan 无复选框（辅通道空判）
+         if not sha and not plan_has_any_checkbox(plan):
+-            emit("UNKNOWN", EXIT_UNKNOWN, None, "plan 未提交且无复选框，双通道皆不可判")
++            emit("UNKNOWN", EXIT_UNKNOWN, None,
++                 (plan_note + "；" if plan_note else "") + "plan 未提交且无复选框，双通道皆不可判")
+         # [Task4 · tasks 2.6] 窗口入口③
+         emit_windowed(root, change, report,
+                       "CONTINUE_IMPL", EXIT_OK, "subagent-dev",
+-                      f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
++                      (plan_note + "；" if plan_note else "")
++                      + f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
+                       done_tasks=sorted(done_in_plan, key=int))
+     # ── step 8：code-review 门 ─────────────────────────────────
+     cr = cdir / "code-review-report.md"
+     if not cr.is_file():
+-        emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review", "实现完成，进入代码审")
++        emit("RUN_CODE_REVIEW", EXIT_OK, "sdflow-code-review",
++             (plan_note + "；" if plan_note else "") + "实现完成，进入代码审")
+     # [mlh-p5 Task6 D1] live 只读 frontmatter（inline 回退已退役）：code_review 优先
+     # （pass→'pos'/blocked→'neg'）；坏→UNKNOWN(6) 已 emit；absent→None→STEP_IN_PROGRESS（无锚语义）。
+     cr_front = live_ship_gate_state(cr, "code_review")   # [impl-review-fix FIX-5] label 用下划线，与字段名一致
+     if cr_front is not None:
+         cv = cr_front.get("code_review")
+         cr_state = "pos" if cv == "pass" else "neg" if cv == "blocked" else None
+     else:
+         cr_state = None                          # absent → 无锚 → STEP_IN_PROGRESS
+     if cr_state == "neg":
+         emit("BLOCKED_UPSTREAM", EXIT_BLOCKED, None,
+diff --git a/sdflow-ship/tests/test_gate_closing_ticket.py b/sdflow-ship/tests/test_gate_closing_ticket.py
+new file mode 100644
+index 0000000..8de563e
+--- /dev/null
++++ b/sdflow-ship/tests/test_gate_closing_ticket.py
+@@ -0,0 +1,181 @@
++"""ship_gate 第四道 plan 校验的测试（harden-implement-review-loop Task5，D3/D3b · H12/M17）。
++
++当且仅当计划文件名为 `tickets.md`（tickets 轨新名）时，MUST 恰含一张「实现验证」收尾 ticket
++（`R-ID: all`）且其 `Blocked-by` ⊇ 全部功能 ticket 号；文件名为 `superpowers-plan.md`（旧名）时
++跳过本校验（grandfather：同时覆盖 superpowers 轨与改名生效前落盘的在途 tickets 轨 plan）。
++
++覆盖（tasks.md §4.10 逐字）：
++1. 含收尾票 → 绿（CONTINUE_IMPL / RUN_CODE_REVIEW 均能正常推进）
++2. 删掉收尾票（无任一 Task 段 R-ID: all）→ 必红（UNKNOWN）
++3. `Blocked-by` 缺一张功能票号 → 必红（UNKNOWN）
++4. grandfather 路径（旧名 `superpowers-plan.md`）→ 不红，即使 plan 本身没有收尾票
++5. 额外：收尾票不唯一（>1 张 R-ID: all）同样必红——"恰含一张"的另一半
++
++另加两条单元层测试，直接调 `plan_closing_ticket_check` / `_plan_task_r_ids`，覆盖
++`ship_gate.py` 内部实现细节（不必每次都绕 subprocess 全流程）。
++"""
++import sys
++from pathlib import Path
++
++from conftest import commit_all, mkchange, head_sha, write_report
++from test_gate_preflight import run_gate
++
++_scripts_path = str(Path(__file__).parent.parent / "scripts")
++if _scripts_path not in sys.path:
++    sys.path.insert(0, _scripts_path)
++import ship_gate as _sg  # noqa: E402
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# fixtures：新名 tickets.md 下的三种 plan 形状
++# ─────────────────────────────────────────────────────────────────────────
++
++PLAN_WITH_CLOSER = (
++    "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
++    "### Task 2: B\n**Blocked-by:** 1\n- [ ] s\n"
++    "### Task 3: 实现验证\n**Blocked-by:** 1,2\n**R-ID:** all\n- [ ] s\n"
++)
++
++PLAN_MISSING_CLOSER = (
++    "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
++    "### Task 2: B\n**Blocked-by:** 1\n- [ ] s\n"
++)
++
++PLAN_CLOSER_MISSING_DEP = (
++    "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
++    "### Task 2: B\n**Blocked-by:** 1\n- [ ] s\n"
++    # 收尾票 Blocked-by 漏了功能票 2
++    "### Task 3: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"
++)
++
++PLAN_DUPLICATE_CLOSER = (
++    "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
++    "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"
++    "### Task 3: 实现验证2\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"
++)
++
++
++def _seed_with_new_name(repo, plan):
++    """落盘新名 tickets.md 的已批准 change（同 test_plan_resolver._approved_change_with_new_name）。"""
++    d = mkchange(repo)
++    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
++    (d / "tickets.md").write_text(plan, encoding="utf-8")
++    commit_all(repo, "seed change artifacts (new plan name)")
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (approved)")
++    return d
++
++
++def _seed_with_old_name(repo, plan):
++    """落盘旧名 superpowers-plan.md 的已批准 change（grandfather 路径）。"""
++    d = mkchange(repo)
++    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
++    (d / "superpowers-plan.md").write_text(plan, encoding="utf-8")
++    commit_all(repo, "seed change artifacts (old plan name)")
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (approved)")
++    return d
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 1. 含收尾票 → 绿
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_closing_ticket_present_reaches_continue_impl(repo):
++    _seed_with_new_name(repo, PLAN_WITH_CLOSER)
++    commit_all(repo, "checkpoint(task1-foo): done A")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
++
++
++def test_closing_ticket_present_all_done_advances_to_code_review(repo):
++    _seed_with_new_name(repo, PLAN_WITH_CLOSER)
++    commit_all(repo, "checkpoint(task1-foo): A")
++    commit_all(repo, "checkpoint(task2-bar): B")
++    commit_all(repo, "checkpoint(task3-verify): 实现验证")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "RUN_CODE_REVIEW"
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 2. 删掉收尾票（无任一 R-ID: all）→ 必红
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_missing_closing_ticket_is_unknown(repo):
++    _seed_with_new_name(repo, PLAN_MISSING_CLOSER)
++    commit_all(repo, "checkpoint(task1-foo): A")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert "收尾" in js["reason"]
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 3. Blocked-by 缺一张功能票号 → 必红
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_closing_ticket_missing_functional_dependency_is_unknown(repo):
++    _seed_with_new_name(repo, PLAN_CLOSER_MISSING_DEP)
++    commit_all(repo, "checkpoint(task1-foo): A")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert "Blocked-by" in js["reason"] and "2" in js["reason"]
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 4. grandfather：旧名 superpowers-plan.md 不校验（即使无收尾票）→ 不红
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_grandfather_old_name_without_closing_ticket_not_rejected(repo):
++    _seed_with_old_name(repo, PLAN_MISSING_CLOSER)   # 旧名，且明确无收尾票
++    commit_all(repo, "checkpoint(task1-foo): done A")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
++    assert "grandfather" in js["reason"].lower()
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 5. 收尾票不唯一（>1 张 R-ID: all）→ 必红（"恰含一张"的另一半）
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_duplicate_closing_tickets_is_unknown(repo):
++    _seed_with_new_name(repo, PLAN_DUPLICATE_CLOSER)
++    commit_all(repo, "checkpoint(task1-foo): A")
++    code, js, _ = run_gate(repo)
++    assert code == 6 and js["verdict"] == "UNKNOWN"
++    assert "收尾" in js["reason"] and "唯一" in js["reason"]
++
++
++# ─────────────────────────────────────────────────────────────────────────
++# 单元层：plan_closing_ticket_check / _plan_task_r_ids 直调
++# ─────────────────────────────────────────────────────────────────────────
++
++def test_plan_task_r_ids_extracts_per_task_value(tmp_path):
++    text = ("### Task 1: A\n**R-ID:** R2\n- [ ] s\n"
++            "### Task 2: 实现验证\n**R-ID:** all\n- [ ] s\n")
++    assert _sg._plan_task_r_ids(text) == {"1": "R2", "2": "all"}
++
++
++def test_plan_closing_ticket_check_grandfathers_old_name(tmp_path):
++    d = mkchange(tmp_path)
++    plan = d / "superpowers-plan.md"
++    plan.write_text(PLAN_MISSING_CLOSER, encoding="utf-8")
++    ok, note = _sg.plan_closing_ticket_check(plan)
++    assert ok is True and "grandfather" in note.lower()
++
++
++def test_plan_closing_ticket_check_passes_new_name_with_closer(tmp_path):
++    d = mkchange(tmp_path)
++    plan = d / "tickets.md"
++    plan.write_text(PLAN_WITH_CLOSER, encoding="utf-8")
++    ok, note = _sg.plan_closing_ticket_check(plan)
++    assert ok is True and note == ""
++
++
++def test_plan_closing_ticket_check_rejects_new_name_missing_closer(tmp_path):
++    d = mkchange(tmp_path)
++    plan = d / "tickets.md"
++    plan.write_text(PLAN_MISSING_CLOSER, encoding="utf-8")
++    ok, note = _sg.plan_closing_ticket_check(plan)
++    assert ok is False and "收尾" in note
+diff --git a/sdflow-ship/tests/test_gate_impl_progress.py b/sdflow-ship/tests/test_gate_impl_progress.py
+index 05c613d..4587c43 100644
+--- a/sdflow-ship/tests/test_gate_impl_progress.py
++++ b/sdflow-ship/tests/test_gate_impl_progress.py
+@@ -4,20 +4,28 @@ from conftest import commit_all, mkchange, head_sha, write_report
+ from test_gate_preflight import run_gate
+ 
+ # Load ship_gate module for direct function testing
+ _scripts_path = str(Path(__file__).parent.parent / "scripts")
+ if _scripts_path not in sys.path:
+     sys.path.insert(0, _scripts_path)
+ import ship_gate as _sg
+ 
+ PLAN2 = "### Task 1: A\n- [ ] s\n### Task 2: B\n- [ ] s\n"
+ 
++# [harden-implement-review-loop Task5 · H12/M17] gate 第四道校验只对文件名 `tickets.md`（新名）
++# 生效——同 PLAN2 形状（2 张 task、各自一条复选框），但 Task 2 兼作「实现验证」收尾 ticket
++# （Blocked-by: 1 + R-ID: all），供**新名**测试用例使用，使其在第四道校验下仍合法。
++PLAN2_TICKETS = (
++    "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
++    "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"
++)
++
+ def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor="head"):
+     # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）。
+     # [harden-gate-git-layer Task1 · tasks 4.1/4.1b] 迁**两段提交模型**：报告 frontmatter 现须带
+     # `reviewed_sha`（被批准的盘面），而旧单次 commit_all 让报告与其审查对象同属根提交 ⇒ 结构上
+     # 没有先于报告的盘面可填。分段：
+     #   ① 四件套（+ 可选 plan/sop）落盘提交 → 这就是「被批准的盘面」
+     #   ② 可选第三段〔4.1b〕revise=callable(d)：拍板前二次修订，单独提交（ADR-7(b) 场景）
+     #   ③ 读出 HEAD → 写携带该 sha 的 spec-review-report → 单独提交
+     # anchor: "head"（默认，锚指被批准盘面）｜"pre-revision"（锚指修订**之前**的提交，用于
+     #   验 ADR-7(b) 自锁：拍板刚完成即失鲜）｜None（不写 reviewed_sha，缺锚负例）｜显式 sha 串。
+@@ -115,40 +123,45 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
+ def test_plan_task1_same_commit_counts(repo):
+     # 〔B1 闭区间〕plan 与 checkpoint(task1-) 同 commit（checkpoint add -A 携带未提交 plan）
+     # → task1 锚在窗口起点 sha 自身，排他窗口会漏数；闭区间须计入
+     # [harden-gate-git-layer Task1 · tasks 4.1] 两段提交：四件套先落盘 → 报告携锚后落盘
+     d = mkchange(repo)
+     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
+     commit_all(repo, "seed change artifacts")     # 被批准的盘面（无 plan）
+     write_report(d, "spec-review-report.md", head_sha(repo),
+                  body="# 设计审报告\n", design_approved="true")
+     commit_all(repo, "spec-review report (approved)")
+-    (d / "tickets.md").write_text(PLAN2, encoding="utf-8")
++    (d / "tickets.md").write_text(PLAN2_TICKETS, encoding="utf-8")
+     commit_all(repo, "checkpoint(task1-foo): plan+task1 同 commit")  # plan 首次提交 == task1 锚
+     commit_all(repo, "checkpoint(task2-bar): B")
+     code, js, _ = run_gate(repo)
+     assert js["verdict"] == "RUN_CODE_REVIEW"   # done={1,2} 齐（闭区间含 sha 自身）
+ 
+ def test_offplan_task_no_false_complete(repo):
+     # 〔B4 集合归属〕plan=task1/task2，只完成 task1 + 一个计划外 task9（遗留/错号/merge 内）
+     # → 基数判齐会假齐(len={1,9}=2=N)；集合归属须判 CONTINUE_IMPL（task2 未完不放行）
+     approved_change(repo, plan=PLAN2)
+     commit_all(repo, "checkpoint(task1-a): A")
+     commit_all(repo, "checkpoint(task9-stray): 计划外/遗留")
+     code, js, _ = run_gate(repo)
+     assert js["verdict"] == "CONTINUE_IMPL"     # 非假齐
+     assert js["done_tasks"] == ["1"]            # 只报计划内已完成，不含计划外 9
+ 
+ def test_uncommitted_plan_no_checkbox_unknown(repo):
+     # plan 写盘但不提交，且内容无任何复选框 → 双通道（标签窗口 / 复选框）皆不可判
++    # [harden-implement-review-loop Task5] 含合法收尾 ticket（Task 2, Blocked-by:1, R-ID:all），
++    # 使第四道校验先行通过、真正走到本用例要测的"双通道"分支（而非在第四道就先被拦下）。
+     d = approved_change(repo)  # 不带 plan 提交基底
+-    (d / "tickets.md").write_text("### Task 1: A\n正文\n", encoding="utf-8")
++    (d / "tickets.md").write_text(
++        "### Task 1: A\n**Blocked-by:** none\n正文\n"
++        "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n正文\n",
++        encoding="utf-8")
+     code, js, _ = run_gate(repo)
+     assert code == 6 and js["verdict"] == "UNKNOWN" and "双通道" in js["reason"]
+ 
+ def test_tg02_hit_sop_exists_falls_through(repo):
+     # tg02 命中且 sop 产物已在 → 不再 RUN_SOP，继续往下判（plan 缺 → RUN_PLAN）
+     approved_change(repo, tg02=True, sop=True)
+     code, js, _ = run_gate(repo)
+     assert code == 0 and js["verdict"] == "RUN_PLAN"
+ 
+ def test_plan_zero_titles_unknown(repo):
+diff --git a/sdflow-ship/tests/test_plan_resolver.py b/sdflow-ship/tests/test_plan_resolver.py
+index 946b8d3..bfa5929 100644
+--- a/sdflow-ship/tests/test_plan_resolver.py
++++ b/sdflow-ship/tests/test_plan_resolver.py
+@@ -15,21 +15,21 @@
+       静默排除在窗口外。
+ """
+ import subprocess
+ import sys
+ from pathlib import Path
+ 
+ import pytest
+ 
+ from conftest import commit_all, mkchange, write_report
+ from test_gate_preflight import run_gate
+-from test_gate_impl_progress import approved_change, PLAN2
++from test_gate_impl_progress import approved_change, PLAN2, PLAN2_TICKETS
+ 
+ _scripts_path = str(Path(__file__).parent.parent / "scripts")
+ if _scripts_path not in sys.path:
+     sys.path.insert(0, _scripts_path)
+ import ship_gate as _sg  # noqa: E402
+ 
+ 
+ # ─────────────────────────────────────────────────────────────────────────
+ # 单元层：resolve_plan_path
+ # ─────────────────────────────────────────────────────────────────────────
+@@ -77,28 +77,30 @@ def _approved_change_with_new_name(repo, plan):
+     (d / "tickets.md").write_text(plan, encoding="utf-8")
+     commit_all(repo, "seed change artifacts (new plan name)")
+     from conftest import head_sha
+     write_report(d, "spec-review-report.md", head_sha(repo),
+                  body="# 设计审报告\n", design_approved="true")
+     commit_all(repo, "spec-review report (approved)")
+     return d
+ 
+ 
+ def test_new_plan_name_reaches_continue_impl(repo):
+-    _approved_change_with_new_name(repo, PLAN2)
++    # [harden-implement-review-loop Task5] 新名受第四道校验约束——用 PLAN2_TICKETS（含合法
++    # 收尾 ticket）而非裸 PLAN2，否则会在第四道被拦成 UNKNOWN，测不到本用例要验的 CONTINUE_IMPL。
++    _approved_change_with_new_name(repo, PLAN2_TICKETS)
+     commit_all(repo, "checkpoint(task1-foo): done A")
+     code, js, _ = run_gate(repo)
+     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
+ 
+ 
+ def test_new_plan_name_all_tasks_done_advances_to_code_review(repo):
+-    _approved_change_with_new_name(repo, PLAN2)
++    _approved_change_with_new_name(repo, PLAN2_TICKETS)
+     commit_all(repo, "checkpoint(task1-foo): A")
+     commit_all(repo, "checkpoint(task2-bar): B")
+     code, js, _ = run_gate(repo)
+     assert js["verdict"] == "RUN_CODE_REVIEW"
+ 
+ 
+ def test_neither_plan_name_present_run_plan_mentions_both_names(repo):
+     approved_change(repo)  # 不带 plan
+     code, js, _ = run_gate(repo)
+     assert js["verdict"] == "RUN_PLAN"
+diff --git a/sdflow-ship/tests/test_superpowers_track_regression.py b/sdflow-ship/tests/test_superpowers_track_regression.py
+new file mode 100644
+index 0000000..e060a9c
+--- /dev/null
++++ b/sdflow-ship/tests/test_superpowers_track_regression.py
+@@ -0,0 +1,107 @@
++"""superpowers 轨回归（harden-implement-review-loop Task5 · tasks.md §7.6，评审 C2 的 dogfood 盲区）。
++
++本仓自身 `openspec/config.yaml` 是 `impl-pipeline: tickets`——源仓 dogfood 天然照不到
++superpowers 轨这条分支。本文件用**独立的 fixture 仓**（`repo` fixture，与本仓无关的临时
++git 仓）验证 Task5 引入的两处新行为在 superpowers 轨下不误伤：
++
++1. `ship_gate` 第四道校验（收尾票）**不对 superpowers 轨的 plan 生效**——无论
++   `openspec/config.yaml` 里 `impl-pipeline` 取什么值，gate 只凭**计划文件名**
++   （`tickets.md` vs `superpowers-plan.md`）决定要不要校验收尾票；旧名 plan 即使完全没有
++   收尾票，也照常按 CONTINUE_IMPL/RUN_PLAN 推进，不会被误判 UNKNOWN。
++2. `sdflow-implement/scripts/impl_route.py` 的 config→pipeline 解析本身不受本 change 影响
++   （本 change 未改 `impl_route.py` 的 config/marker 解析逻辑）——`route` CLI 对
++   `impl-pipeline: superpowers` 的 fixture 仍正确解析出 `pipeline=superpowers`。
++
++**MUST NOT 真去改本仓 `openspec/config.yaml`**——以下全部操作只发生在 `tmp_path`/`repo`
++fixture 临时仓内。
++
++`sdflow-done/SKILL.md` 的 verify「实现期聚合覆盖」需求判「不适用（非 tickets 轨）」是**指令
++文本**（该 skill 无 `scripts/`、无自身测试套件，见 CLAUDE.md「带脚本+测试的 skill 仅这几个」
++清单，`sdflow-done` 不在其中），不是可执行判定——对应的正确性核验是 `sdflow-done/SKILL.md`
++§第一步 Verify 里那段「superpowers 轨：该需求判不适用……MUST NOT 判 gap」的文字是否存在、
++措辞是否与本表述一致，留在 impl-report 里人工复核，本文件覆盖的是与之配套的**机械**半
++（gate 侧不误伤）。
++"""
++import subprocess
++import sys
++from pathlib import Path
++
++from conftest import commit_all, mkchange, head_sha, write_report
++from test_gate_preflight import run_gate
++
++_scripts_path = str(Path(__file__).parent.parent / "scripts")
++if _scripts_path not in sys.path:
++    sys.path.insert(0, _scripts_path)
++import ship_gate as _sg  # noqa: E402
++
++_IMPL_ROUTE = str(Path(__file__).resolve().parents[2] / "sdflow-implement" / "scripts")
++
++PLAN_NO_CLOSER = (
++    "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
++    "### Task 2: B\n**Blocked-by:** 1\n- [ ] s\n"
++)
++
++
++def _write_superpowers_config(repo):
++    cfg_dir = repo / "openspec"
++    cfg_dir.mkdir(parents=True, exist_ok=True)
++    (cfg_dir / "config.yaml").write_text("impl-pipeline: superpowers\n", encoding="utf-8")
++
++
++def test_config_superpowers_route_resolves_superpowers(repo):
++    """impl_route.py 的 config 解析不受本 change 影响：superpowers 值仍正确解析。"""
++    _write_superpowers_config(repo)
++    d = mkchange(repo)
++    (d / "proposal.md").write_text("# p\n", encoding="utf-8")
++    commit_all(repo, "seed (superpowers track)")
++    r = subprocess.run(
++        [sys.executable, str(Path(_IMPL_ROUTE) / "impl_route.py"),
++         "route", "--root", str(repo), "--change", "demo"],
++        capture_output=True, text=True)
++    assert r.returncode == 0
++    assert "pipeline=superpowers" in r.stdout
++
++
++def test_gate_run_plan_unaffected_by_config_pipeline_value(repo):
++    """gate 的 RUN_PLAN 判据（计划文件缺）与 config.yaml 的 impl-pipeline 取值无关
++    （ship_gate.py 本就不读 config.yaml——本 change 未改这条既有边界）。"""
++    _write_superpowers_config(repo)
++    d = mkchange(repo)
++    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
++    commit_all(repo, "seed change artifacts")
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (approved)")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "RUN_PLAN"
++    assert "tickets.md" in js["reason"] and "superpowers-plan.md" in js["reason"]
++
++
++def test_gate_old_name_plan_without_closer_advances_under_superpowers_config(repo):
++    """superpowers 轨（config=superpowers + 旧名 plan、且完全没有收尾票）——gate 第四道校验
++    grandfather 生效，CONTINUE_IMPL 正常推进，不因「缺收尾票」被误判 UNKNOWN。"""
++    _write_superpowers_config(repo)
++    d = mkchange(repo)
++    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
++    (d / "superpowers-plan.md").write_text(PLAN_NO_CLOSER, encoding="utf-8")
++    commit_all(repo, "seed change artifacts (superpowers track)")
++    write_report(d, "spec-review-report.md", head_sha(repo),
++                 body="# 设计审报告\n", design_approved="true")
++    commit_all(repo, "spec-review report (approved)")
++    commit_all(repo, "checkpoint(task1-foo): done A")
++    code, js, _ = run_gate(repo)
++    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
++    assert "grandfather" in js["reason"].lower()
++
++
++def test_plan_closing_ticket_check_ignores_config_reads_filename_only(tmp_path):
++    """单元层直证：`plan_closing_ticket_check` 不读 config/marker，只看文件名——即使目录里
++    放了 `impl-pipeline: superpowers` 的 config.yaml，判据不变。"""
++    cfg_dir = tmp_path / "openspec"
++    cfg_dir.mkdir(parents=True)
++    (cfg_dir / "config.yaml").write_text("impl-pipeline: superpowers\n", encoding="utf-8")
++    d = mkchange(tmp_path)
++    plan = d / "superpowers-plan.md"
++    plan.write_text(PLAN_NO_CLOSER, encoding="utf-8")
++    ok, note = _sg.plan_closing_ticket_check(plan)
++    assert ok is True and "grandfather" in note.lower()
