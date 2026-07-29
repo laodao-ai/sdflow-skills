@@ -239,6 +239,11 @@ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
     assert "branches:" not in workflow
     assert "runs-on: windows-latest" in workflow
     assert "py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
+    init_probe = 'python3 sdflow-init/scripts/init.py init --root "$probe"'
+    update_probe = 'PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$probe"'
+    assert init_probe in workflow
+    assert update_probe in workflow
+    assert workflow.index(init_probe) < workflow.index(update_probe)
     assert (
         "PYTHONIOENCODING=gbk py -m pytest -q "
         "sdflow-issues/tests/test_task5_delivery_contract.py::"

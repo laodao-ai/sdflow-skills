@@ -60,6 +60,7 @@ jobs:
           probe="$RUNNER_TEMP/init-encoding-probe"
           mkdir -p "$probe"
           git -C "$probe" init
+          python3 sdflow-init/scripts/init.py init --root "$probe"
           PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$probe"
       - name: Exercise seven UTF-8 text subprocess call sites and invalid-byte replacement
         shell: bash
