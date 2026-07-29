@@ -564,8 +564,11 @@ def test_exec_claude_reverse_path_three_flags_golden(tmp_path):
     assert argv[argv.index("--tools") + 1] == "Read,Grep,Glob"
     assert "--strict-mcp-config" in argv
     assert "--add-dir" in argv
-    expected_repo_root = bash_path(repo_root) if os.name == "nt" else repo_root
-    assert argv[argv.index("--add-dir") + 1] == expected_repo_root
+    actual_repo_root = argv[argv.index("--add-dir") + 1]
+    if os.name == "nt":
+        assert bash_path(actual_repo_root) == bash_path(repo_root)
+    else:
+        assert actual_repo_root == repo_root
     assert "-p" in argv
     assert "--model" in argv
     assert argv[argv.index("--model") + 1] == "claude-strong-placeholder"
