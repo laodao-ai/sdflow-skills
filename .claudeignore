@@ -1,0 +1,8 @@
+# 历史与过程产物
+openspec/changes/archive/
+**/impl-reports/
+docs/drafts/
+
+# 缓存
+__pycache__/
+.pytest_cache/

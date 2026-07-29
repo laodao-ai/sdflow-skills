@@ -82,7 +82,8 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
 
 ### 四入口选择规则（**规则，不是建议**）
 
-- **默认走 `/sdflow-spec`**：装了它就用它；MUST NOT 默认拿 `opsx:ff` 起手。
+- **想法尚未成形**（问题模糊 / 方向未定 / 多种框定）⇒ 先 `opsx:explore` 发散探索，想清楚了再 `/sdflow-spec`。`opsx:explore` 是发散工具，`/sdflow-spec` 是收敛管线（= 增强版 ff + 内建 grill），两者互补不替代。
+- **想法已成形** ⇒ **默认走 `/sdflow-spec`**：装了它就用它；MUST NOT 默认拿 `opsx:ff` 起手。
 - **仅下列三种情形用旧三步**：① 需要 wayfinder 跨会话铺图（`sdflow-spec` 不覆盖该职责）；② 用户明确要求分步执行；③ `sdflow-spec` 因环境原因不可用（未跑 setup / Codex 宿主降级不可接受）。走旧三步的那次运行 SHALL 在完成报告里说明为何未走单入口。
 - **模型侧**：模型 MUST NOT 自行选 `opsx:ff` 绕过拷问；判断需要开 change 时 SHALL 提示用户触发 `/sdflow-spec`，MUST NOT 直接调 `opsx:ff`。
 - **旧三步仍是合法路径**：三个原入口未被删除；分支 B 里 grill 一律全深度，MUST NOT 因「反正以后会换单入口」而瘦跑。

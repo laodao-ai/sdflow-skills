@@ -4,11 +4,13 @@ disable-model-invocation: true
 description: >
   阶段一「产 spec」单一入口——把 澄清（A）→ 拷问（B）→ 生成（C）三相位编排成一次连续跑，产出
   标准四件套（proposal / design / specs / tasks）+ 一份承重的 `decision-memo.md`。**拷问结构性
-  前置于成文**：改想法比改四份成文便宜，且错误 premise 一旦成文就会被后续多镜评审当成既定框架。
+  前置于成文**：memo 是单一源、Phase C 全量生成四件套——消除旧流程「ff→grill→局部改」导致的
+  四件套内部不一致（修改互引文档比从单一源整体生成更容易出错，这是工程事实不是概率论据）。
   主 session 亲自做全部判断（澄清 / 拷问 / 纪要 / 终审）；相位 B 起手就建分支、change 目录与草稿纪要，
   承重约束站稳一条就增量落盘一条 ⇒ `/clear` 无损，崩溃只丢「上一次保存之后」那一段。出口原样贴
-  `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:explore` + `opsx:ff` + `/grill-with-docs`
-  三入口拼接。由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
+  `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:ff` + `/grill-with-docs` 两入口拼接
+  （成文+拷问合体；`opsx:explore` 的发散探索不在本 skill 范围——想法尚未成形时先 explore 再本 skill）。
+  由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
 ---
 
 # sdflow-spec — 阶段一产 spec 单一入口
@@ -313,7 +315,7 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 **④ 立即落最小草稿纪要**（B.4 的第一个保存点前移到这里）
 
 目录一建成就**当场**写出 `decision-memo.md`：身份 frontmatter（`schema_version` / `change` /
-`branch` / `generated_at`；`decision_hash` **留空**——定稿才算，见 B.7 ⑤）+ 空的 `## 承重约束` /
+`branch` / `generated_at`；`decision_hash` **留空**——定稿才算，见 B.8 ⑤）+ 空的 `## 承重约束` /
 `## 拍板决策`。🔴 少了这一步，③ 与 B.4 首次落盘之间的崩溃会留下一个**没有纪要的在途 change**，
 而重入探测以纪要为前提就认不出它（0.3）。草稿必然过不了 C.1 判 4 ⇒ 走那里既有的「缺失 ⇒ 退回 B 补定稿」。
 
@@ -359,7 +361,20 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
 [`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
 
-### B.7 收敛两步（⑤⑥）
+### B.7 收敛前检查（B.6 升级：从「临场感知」→ 显式检查点）
+
+收敛前，把 `decision-memo.md` 已拍板的**每条决策**过一遍：
+
+1. **ADR 三条件**：难逆转 + 缺上下文会令人意外 + 有真实权衡 ⇒ 该决策需要一条 ADR（提议落 `openspec/adr/`）。
+2. **术语冲突判据**：该决策引入/使用的术语与 `openspec/CONTEXT.md` 已有定义是否冲突或模糊 ⇒ 需更新 CONTEXT.md。
+
+🔴 **两者未经人确认 MUST NOT 自动写入。** 判据与模板见
+[`references/adr-and-glossary-templates.md`](./references/adr-and-glossary-templates.md)。
+
+**与 B.6 的区别**：B.6 是拷问过程中的惰性钩子（命中就提议）；本步是**收敛前逐条回扫**——B.6 漏掉的、
+或在后续拷问中语义发生变化的决策，在此兜底捕获。
+
+### B.8 收敛两步（⑤⑥）
 
 **⑤ 纪要定稿** —— 补齐 frontmatter 身份字段：`schema_version` / `change` / `branch` /
 `generated_at` / `decision_hash`。`decision_hash` MUST 用

@@ -1,9 +1,6 @@
-# 防 EOL 错乱：所有 Unix 类文本文件强制 LF
-# 即使被 IDE/sync 工具引入 CRLF，git 也会在 checkout 时 normalize 回来。
-*.sh   text eol=lf
-*.py   text eol=lf
-*.md   text eol=lf
-*.toml text eol=lf
-*.yml  text eol=lf
-*.yaml text eol=lf
-*.json text eol=lf
+# 行尾策略：仓内一律 LF，不看贡献者的 core.autocrlf。
+* text=auto eol=lf
+
+# 例外：Windows 原生脚本保持 CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
