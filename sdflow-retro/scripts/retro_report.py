@@ -48,7 +48,7 @@ def _run_git(root, *args):
     # 仍返回 stdout（失败时通常为空）以保持所有调用方契约不变。
     proc = subprocess.run(
         ["git", "-C", root, "-c", "core.quotePath=false", *args],
-        capture_output=True, text=True, errors="replace")
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         sys.stderr.write(
             f"[sdflow-retro] git 失败 (rc={proc.returncode}): git {' '.join(args)}\n"

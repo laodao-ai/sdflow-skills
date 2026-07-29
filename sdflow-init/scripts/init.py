@@ -569,6 +569,7 @@ def _git_root_or_dot():
         out = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
             capture_output=True, text=True, check=True,
+            encoding="utf-8", errors="replace",
         )
         top = out.stdout.strip()
         return top if top else "."

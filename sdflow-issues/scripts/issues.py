@@ -1105,7 +1105,8 @@ def cmd_sweep(args):
         proc = subprocess.run(
             [sys.executable, script, "--root", root, "scan",
              "--change", change, "--open-ungrouped", "--json"],
-            capture_output=True, text=True, env=recorder_child_env("scan"),
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            env=recorder_child_env("scan"),
         )
         if proc.returncode != 0:
             _die(f"sweep: {pool} scan 失败 (rc={proc.returncode}): {proc.stderr.strip()}")
@@ -1118,7 +1119,8 @@ def cmd_sweep(args):
             tp = subprocess.run(
                 [sys.executable, script, "--root", root, "triage",
                  "--id", iid, "--批次", change],
-                capture_output=True, text=True, env=recorder_child_env("triage"),
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                env=recorder_child_env("triage"),
             )
             if tp.returncode != 0:
                 _die(
@@ -1134,14 +1136,16 @@ def cmd_sweep(args):
     ba = subprocess.run(
         [sys.executable, __file__, "--root", root, "batch", "add",
          change, "--if-exists", "skip"],
-        capture_output=True, text=True, env=recorder_child_env("batch-add"),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env=recorder_child_env("batch-add"),
     )
     if ba.returncode != 0:
         _die(f"sweep: batch add 失败 (rc={ba.returncode}): {ba.stderr.strip()}")
 
     ri = subprocess.run(
         [sys.executable, __file__, "--root", root, "reindex"],
-        capture_output=True, text=True, env=recorder_child_env("reindex"),
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        env=recorder_child_env("reindex"),
     )
     if ri.returncode != 0:
         _die(f"sweep: reindex 失败 (rc={ri.returncode}): {ri.stderr.strip()}")

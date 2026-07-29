@@ -50,7 +50,8 @@ def _now():
 def _head(root):
     try:
         r = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10,
+                           encoding="utf-8", errors="replace")
         return r.stdout.strip() if r.returncode == 0 else "(no-git)"
     except (OSError, subprocess.SubprocessError):
         return "(no-git)"
@@ -325,7 +326,8 @@ def cmd_verify_lane(args):
     print(f"$ {method}")
     try:
         r = subprocess.run(method, shell=True, cwd=str(root), capture_output=True,
-                           text=True, timeout=args.timeout)
+                           text=True, timeout=args.timeout,
+                           encoding="utf-8", errors="replace")
         code, out, err = r.returncode, r.stdout, r.stderr
         timed_out = False
     except subprocess.TimeoutExpired:

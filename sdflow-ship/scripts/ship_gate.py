@@ -321,6 +321,7 @@ def _git_run(root, args, text):
     kwargs = {"capture_output": True, "timeout": GIT_TIMEOUT_SECONDS, "env": _git_env()}
     if text:
         kwargs["text"] = True
+        kwargs["encoding"] = "utf-8"
         kwargs["errors"] = "replace"
     shown = " ".join(str(x) for x in cmd)
     try:

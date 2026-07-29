@@ -302,7 +302,8 @@ def _git_branch(root):
     try:
         out = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, check=True)
+            capture_output=True, text=True, check=True,
+            encoding="utf-8", errors="replace")
         return out.stdout.strip()
     except Exception:
         return "<unknown>"

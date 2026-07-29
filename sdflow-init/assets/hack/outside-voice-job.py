@@ -358,7 +358,8 @@ def verify_manifest(directory=None):
 # ── preflight 各项检查（全部无副作用）────────────────────────────────────────
 
 def _run_cli(argv, timeout):
-    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
+                          encoding="utf-8", errors="replace")
 
 
 def check_posix_shell():

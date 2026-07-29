@@ -435,6 +435,7 @@ def _get_plan_sha(root: Path, plan_path: Path) -> str:
         result = subprocess.run(
             ["git", "-C", str(root), "log", "-1", "--format=%h", "--", target],
             capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="replace",
         )
     except Exception:
         return "-"

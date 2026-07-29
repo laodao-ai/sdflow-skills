@@ -211,7 +211,7 @@ def main():
     args = ap.parse_args()
 
     r = subprocess.run(("git",) + _GIT_HARDEN + ("-C", args.root, "diff", f"{args.base}..HEAD"),
-                       capture_output=True, text=True, errors="replace")
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         emit("ERROR", EXIT_ERROR, f"git-diff-failed:{r.stderr.strip()[:120]}", [])
 
