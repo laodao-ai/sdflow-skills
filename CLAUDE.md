@@ -299,6 +299,12 @@ pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
 ## 修改本仓库的注意
 
 - 新增/删除顶层 skill 后：更新 README「Skills 列表」保持一致，并重跑 `setup.sh` 建链接 / 清孤儿。
+- 新增 Python 入口脚本须带 4 行 `reconfigure` 前导，否则第五道机械门会拦；前导置于 `import sys` 后、首个业务逻辑前，且在模块顶层：
+  ```python
+  for _s in (sys.stdout, sys.stderr):
+      try: _s.reconfigure(encoding="utf-8", errors="replace")
+      except Exception: pass
+  ```
 - **改任何 `SKILL.md`**：勿动 `sdflow:principles` 托管块；改通则请改 `sdflow-init/assets/hack/skill-principles.md`（skill 味）或 `sdflow-init/assets/snippets/principles-project.md`（项目味）+ 跑 `sync_principles.py --apply`。
 - 数据类 skill 改 `scripts/` → 必跑 `tests/`；纯 Markdown skill 改的是指令与触发。
 - 审查顺序（下方托管区块有强制规范）不可颠倒：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
