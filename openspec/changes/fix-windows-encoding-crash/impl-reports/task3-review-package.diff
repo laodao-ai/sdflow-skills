@@ -1,0 +1,648 @@
+﻿# Review package: 8c9bcb5..16adc55
+
+## Commits
+16adc55 fix(encoding): harden remaining text subprocesses
+8663f11 fix(encoding): harden text subprocess decoding
+
+## Files changed
+ hack/tests/test_subprocess_encoding_contract.py    | 85 ++++++++++++++++++++++
+ .../fix-windows-encoding-crash/decision-memo.md    |  2 +-
+ .../impl-reports/task3-subprocess-encoding-fix1.md | 28 +++++++
+ .../impl-reports/task3-subprocess-encoding.md      | 75 +++++++++++++++++++
+ sdflow-devenv/scripts/devenv_scaffold.py           |  6 +-
+ sdflow-done/scripts/roadmap_writeback_draft.py     |  3 +-
+ sdflow-implement/scripts/impl_route.py             |  1 +
+ sdflow-init/assets/hack/outside-voice-job.py       |  3 +-
+ sdflow-init/assets/hooks/ff0-branch-guard.py       |  2 +
+ sdflow-init/assets/workflow/tools/trivial_shape.py |  2 +-
+ sdflow-init/scripts/init.py                        |  1 +
+ sdflow-issues/scripts/issues.py                    | 12 ++-
+ sdflow-issues/scripts/migrate_legacy.py            |  1 +
+ .../scripts/sdflow_issues_core/__init__.py         |  1 +
+ sdflow-retro/scripts/retro_report.py               |  2 +-
+ sdflow-ship/scripts/ship_gate.py                   |  1 +
+ 16 files changed, 214 insertions(+), 11 deletions(-)
+
+## Diff
+diff --git a/hack/tests/test_subprocess_encoding_contract.py b/hack/tests/test_subprocess_encoding_contract.py
+new file mode 100644
+index 0000000..52ce9e2
+--- /dev/null
++++ b/hack/tests/test_subprocess_encoding_contract.py
+@@ -0,0 +1,85 @@
++"""Regression guard for the repository-wide text subprocess encoding contract."""
++import ast
++from pathlib import Path
++
++
++REPO = Path(__file__).resolve().parents[2]
++
++def _keyword_values(call):
++    return {
++        keyword.arg: keyword.value.value
++        for keyword in call.keywords
++        if keyword.arg is not None and isinstance(keyword.value, ast.Constant)
++    }
++
++
++def _is_text_mode(call):
++    return _keyword_values(call).get("text") is True
++
++
++def _is_subprocess_call(call):
++    return (
++        isinstance(call.func, ast.Attribute)
++        and isinstance(call.func.value, ast.Name)
++        and call.func.value.id == "subprocess"
++        and call.func.attr == "run"
++    )
++
++
++def _production_python_files():
++    """Yield every authored production module, excluding tests and generated bundle copies."""
++    for path in REPO.rglob("*.py"):
++        relative = path.relative_to(REPO)
++        if "tests" in relative.parts or relative.parts[0] == "openspec":
++            continue
++        yield path
++
++
++def test_text_mode_subprocesses_declare_utf8_and_replace():
++    """Every direct text subprocess site is locale-independent and loss-tolerant."""
++    misses = []
++    sites = 0
++    for path in _production_python_files():
++        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
++        for call in ast.walk(tree):
++            if not isinstance(call, ast.Call) or not _is_subprocess_call(call) or not _is_text_mode(call):
++                continue
++            sites += 1
++            values = _keyword_values(call)
++            missing = [name for name, expected in (("encoding", "utf-8"), ("errors", "replace"))
++                       if values.get(name) != expected]
++            if missing:
++                misses.append(f"{path.relative_to(REPO)}:{call.lineno}: {', '.join(missing)}")
++
++    assert sites == 15
++    assert not misses, "\n".join(misses)
++
++
++def test_ship_gate_text_wrapper_is_hardened_without_touching_byte_reads():
++    """Text helpers inherit kwargs at their single outlet; byte helper stays raw."""
++    path = REPO / "sdflow-ship/scripts/ship_gate.py"
++    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
++    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
++    text_branch = next(
++        node for node in ast.walk(functions["_git_run"])
++        if isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "text"
++    )
++    assignments = {
++        statement.targets[0].slice.value: statement.value.value
++        for statement in text_branch.body
++        if (isinstance(statement, ast.Assign) and len(statement.targets) == 1
++                and isinstance(statement.targets[0], ast.Subscript)
++                and isinstance(statement.targets[0].value, ast.Name)
++                and statement.targets[0].value.id == "kwargs"
++                and isinstance(statement.targets[0].slice, ast.Constant)
++                and isinstance(statement.value, ast.Constant))
++    }
++    assert assignments["encoding"] == "utf-8"
++    assert assignments["errors"] == "replace"
++
++    byte_calls = [
++        node for node in ast.walk(functions["run_git_bytes"])
++        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_git_run"
++    ]
++    assert len(byte_calls) == 1
++    assert _keyword_values(byte_calls[0])["text"] is False
+diff --git a/openspec/changes/fix-windows-encoding-crash/decision-memo.md b/openspec/changes/fix-windows-encoding-crash/decision-memo.md
+index 24ea747..0c2552b 100644
+--- a/openspec/changes/fix-windows-encoding-crash/decision-memo.md
++++ b/openspec/changes/fix-windows-encoding-crash/decision-memo.md
+@@ -26,21 +26,21 @@ Windows(GBK) 环境下运行 sdflow 仓内任意 Python 脚本（含 `setup.sh`
+ - **C1 真实 Windows(GBK) 环境复现崩溃** — 验证方式：本机 `python3 -c "print('test ✅ done')"`；证据锚：本机实测 `UnicodeEncodeError: 'gbk' codec can't encode character '✅'`，`sys.stdout.encoding=gbk`，`locale.getpreferredencoding()=cp936`（此前 buglist 只有 mac 模拟证据，本次是首次真机验证）。
+ - **C2 reconfigure 前导块实测修复有效** — 验证方式：同一崩溃语句加 4 行 `for s in (sys.stdout, sys.stderr): s.reconfigure(encoding="utf-8", errors="replace")` 后重跑；证据锚：本机实测 exit 0，正常输出 `test ✅ done`。
+ - **C3 Python 版本兼容无问题** — 验证方式：`grep -n "python-version\|matrix" .github/workflows/mechanical-gates.yml`；证据锚：CI matrix 最低 Python 3.9（`ubuntu-24.04, python: "3.9"`），`TextIOWrapper.reconfigure()` 自 Python 3.7 起可用。
+ - **C4 跨 skill 无法共享模块，inline 复制是唯一分发路径** — 验证方式：`grep -rn "sys.path.insert\|sys.path.append" sdflow-*/scripts/*.py`；证据锚：全部命中都只 insert 脚本自身所在目录，无一处导入其它 skill 或共享 `hack/` 模块。
+ - **C5 `openspec/workflow/tools/` 是 `sdflow-init/assets/workflow/tools/` 的字节级镜像** — 验证方式：`diff -rq openspec/workflow/tools sdflow-init/assets/workflow/tools`；证据锚：仅 `tests/` 目录差异（未部署），其余文件零差异。
+ - **C6 真实需要前导的入口脚本 = 28 个（非 buglist 估算的 ~19，亦非本 memo 初版写的 27）** `[spec-review-amendment]` — 验证方式：按 D5 的目标 glob **穷举**，逐文件检查是否含 `if __name__ == "__main__":`；证据锚：glob 下共 **32** 个文件 = **28 个 ENTRY + 4 个 lib**(no `__main__`：`sad_schema.py` / `devenv_paths.py` / `devenv_schema.py` / `sdflow_issues_core/__init__.py`，后者由调用它的入口脚本进程级 `sys.stdout` 覆盖，无需重复注入)；`conftest.py` 命中字符经核实全部在模块级文档字符串内（非 print 调用），排除在外。
+   🔴 **初版错在哪（spec-review M1 · autoplan ENG-3 + 接地镜 F1 双向命中）**：初版写「27 ENTRY + 5 lib = 32」，**总数 32 是对的、两个分项都是错的**——`sdflow-issues/scripts/migrate_legacy.py`（`:383` 有 `__main__`，在 glob 内，不被任何排除规则命中）被误计进了 lib 一侧。**一个算得通的等式掩盖了两个都错的数**，且本条是以「已验证的承重约束」形态写死的，不是待检测器确认的估算 ⇒ 会误导读者信以为真。D5 的「检测器输出驱动注入」在实现期能自我纠正，但**校对承重约束不能靠下游步骤兜底**。
+ - **C7 `subprocess text=True` 缺 `encoding=` 的真实调用站点 = 15，实际编辑点 = 14** `[spec-review-amendment]` — 验证方式：逐站点读取上下文核实是否已含 `encoding=`；证据锚：全 glob 内 `text=True` 原始命中 **20**，减去 **2 处非代码**（`sdflow-issues/scripts/sdflow_issues_core/__init__.py:1055` 注释、`sdflow-ship/scripts/ship_gate.py:464` —— 后者在 `run_git_bytes` 的 **docstring** 内）与 **3 处已带 `encoding=`**（`sdflow-issues/scripts/migrate_legacy.py:321`、**`sdflow-init/assets/hack/outside-voice-job.py:755`**、**`sdflow-issues/scripts/sdflow_issues_core/__init__.py:1057`** —— 后两处初版**遗漏未提**）= **15**。
+   🔴 **站点数 ≠ 编辑点数**：`ship_gate.py` 的 `:334`/`:341` 两个站点调用的是同一个 wrapper `_git_run`，**塌缩为其函数体内一处编辑** ⇒ 真实编辑点 **14**。初版的「16」是笔误（其自身枚举恰好 15 条，枚举是对的）。三方计数曾报 16/15/14 的根因即在此。
+ - **C8 `write_text()` 缺 `encoding=` 的真实站点 = 0（初版写 2，系验证方法假阳性）** `[spec-review-amendment]` — 🔴 **初版的验证命令 `grep -rn "write_text(" --include="*.py" . | grep -v encoding` 是逐行 grep，看不见跨行的函数调用参数**。实际读取上下文：`hack/check_codex_efficacy_evidence.py:418-420` 的 `encoding="utf-8"` 在第 **420** 行、`sdflow-devenv/scripts/devenv_scaffold.py:59-60` 的在第 **60** 行——**两处都已经带了**。目标 glob 内其余全部 `write_text()` 站点（`gen_workflow_guide.py:116`、`sync_principles.py:168`、`devenv_scaffold.py:155/505/534`、`devenv_schema.py:286`、`impl_route.py:568`）亦全部已带 `encoding="utf-8"`。
+-  ⇒ **该 Requirement 的 write_text 那一半，当前代码已 100% 满足**，`tasks.md` §3.2 由「新增编辑」降为「核实确认」。**验证方式更正为**能感知多行调用的方式（AST，或 `grep -Pzo` 多行匹配）。**spec 的 Requirement 保留不动**——它约束的是目标态，「现在恰好满足」不等于「不必写进 spec」；没有 spec 就没有机械门守住它不回退。
++  ⇒ **该 Requirement 的 write_text 那一半，当前代码已 100% 满足**，`tasks.md` §3.2 由「新增编辑」降为「核实确认」。**验证方式更正为**能感知多行调用的方式（AST，或 `grep -Pzo` 多行匹配）。Task 3 复核实际以 `ast.parse()` 遍历非测试、非 `openspec/` Python 文件的每个 `.write_text()` 调用，读取 keyword AST 后断言 `encoding == "utf-8"`；结果为 **9 个站点、0 个缺失**，因此没有制造无须编辑的 diff。**spec 的 Requirement 保留不动**——它约束的是目标态，「现在恰好满足」不等于「不必写进 spec」；没有 spec 就没有机械门守住它不回退。
+ - **C9 `PYTHONIOENCODING` 覆盖 `PYTHONUTF8`，buglist 否决方案①依据成立** — 验证方式：`PYTHONUTF8=1 PYTHONIOENCODING=gbk python3 -c "print(sys.stdout.encoding)"`；证据锚：本机实测输出 `gbk`（单独 `PYTHONUTF8=1` 时输出 `utf-8`，对照组确认变量确实生效）。
+ - **C10 `windows-recorder-smoke.yml` 现状不足以验证本次改动** — 验证方式：读 `.github/workflows/windows-recorder-smoke.yml`；证据锚：`paths:` 仅 3 条**（此处口径为「不含 workflow 文件自引用路径」；连自引用共 4 行）** `[spec-review-amendment]`（不含 `hack/**`、`sdflow-architecture/**`、`sdflow-devenv/**`、`sdflow-done/**`、`sdflow-implement/**`、`sdflow-init/assets/**`、`sdflow-maintain/**`、`sdflow-retro/**`、`sdflow-ship/**`），唯一 job 步骤只跑一个 pytest 文件、未曾以 `PYTHONIOENCODING=gbk` 方式真跑过任何脚本。
+ 
+ ## 接受的边角
+ 
+ - **D 检测器验证前导块的三项契约（stdout / stderr 两处调用 + `errors="replace"`），但不验证 `encoding` 的值拼写是否为 `"utf-8"`** `[spec-review-amendment]`——概率低（4 行模板复制粘贴，非自由手写）、影响小（拼错会让 `reconfigure` 当场抛异常，而模板的 `except Exception` 会吞掉 ⇒ 退化为「前导块不生效」而非崩溃，等价于修复前的行为，不制造新的坏状态）、完美方案成本高（要断言值正确需真正执行每个脚本）。**接受**：D 守三项契约的**在场性**，E 的真实子进程执行验证兜底**有效性**，双层防御。
+   > **本条相对初版已收紧**（spec-review Q1）：初版接受的是「只验证是否存在类似调用」（1 个子串），被跨模型镜指出**这一面是有界的、不该拿「无界语法面」豁免**。现接受的边角只剩「值的拼写」这一项。
+ - **库模块（4 个无 `__main__` 的文件）不在 D 的检测范围内** `[spec-review-amendment]`——如果未来它们被改造成可独立运行（新增 `__main__`），会自动进入检测范围而非遗漏；这不是遗留风险，是设计的自洽性，不需要额外动作。（数量由 5 更正为 4，见 C6。）
+ 
+ ## 三镜代价
+diff --git a/openspec/changes/fix-windows-encoding-crash/impl-reports/task3-subprocess-encoding-fix1.md b/openspec/changes/fix-windows-encoding-crash/impl-reports/task3-subprocess-encoding-fix1.md
+new file mode 100644
+index 0000000..a0e7ea1
+--- /dev/null
++++ b/openspec/changes/fix-windows-encoding-crash/impl-reports/task3-subprocess-encoding-fix1.md
+@@ -0,0 +1,28 @@
++# Task 3 — subprocess encoding follow-up
++
++## Scope
++
++Addressed the two Important review findings in the remaining direct text-mode
++subprocess sites:
++
++- `sdflow-issues/scripts/migrate_legacy.py:322` (`run_reindex`)
++- `sdflow-issues/scripts/sdflow_issues_core/__init__.py:1059` (`detect_change`)
++
++Both already selected UTF-8 and now also use `errors="replace"`, so malformed
++child-process bytes cannot turn diagnostics or branch detection into a decoding
++crash on Windows.
++
++## Regression guard
++
++`hack/tests/test_subprocess_encoding_contract.py` now discovers every authored
++production Python module (excluding tests and generated `openspec/` copies),
++rather than relying on the earlier fixed 13-site file map. It inventories all
++15 direct `subprocess.run(..., text=True)` call sites and requires explicit
++`encoding="utf-8"` plus `errors="replace"` at each site. The raw-byte git
++wrapper contract remains separately asserted.
++
++## Verification
++
++```text
++pytest hack/tests/test_subprocess_encoding_contract.py -q
++```
+diff --git a/openspec/changes/fix-windows-encoding-crash/impl-reports/task3-subprocess-encoding.md b/openspec/changes/fix-windows-encoding-crash/impl-reports/task3-subprocess-encoding.md
+new file mode 100644
+index 0000000..d73acd5
+--- /dev/null
++++ b/openspec/changes/fix-windows-encoding-crash/impl-reports/task3-subprocess-encoding.md
+@@ -0,0 +1,75 @@
++# Task 3 实现报告：子进程文本编码与 `write_text` 核实
++
++## 结果
++
++完成 `tickets.md` 3.1、3.1a、3.1b 与 3.2 的本票实现范围：15 个 `text=True`
++调用站点由 14 个正确编辑点覆盖；`ship_gate` 的两个文本调用仍经单一 `_git_run`
++出口继承编码参数，`run_git_bytes(text=False)` 未改动。
++
++## 变更清单
++
++- 就地补齐 `encoding="utf-8", errors="replace"`：
++  `sdflow-devenv/scripts/devenv_scaffold.py`（2）、
++  `sdflow-done/scripts/roadmap_writeback_draft.py`、
++  `sdflow-implement/scripts/impl_route.py`、
++  `sdflow-init/assets/hack/outside-voice-job.py`、
++  `sdflow-init/assets/hooks/ff0-branch-guard.py`、
++  `sdflow-init/scripts/init.py`、
++  `sdflow-issues/scripts/issues.py`（4）、
++  `sdflow-retro/scripts/retro_report.py`。
++- `sdflow-init/assets/workflow/tools/trivial_shape.py` 原已有
++  `errors="replace"`，仅补 `encoding="utf-8"`，保留原有容错语义。
++- `sdflow-ship/scripts/ship_gate.py` 仅在 `_git_run` 的 `text` 分支补
++  `kwargs["encoding"] = "utf-8"`；两个 `run_git`/`run_git_rc` 调用点未加参数，
++  `run_git_bytes` 仍传 `text=False` 并返回原始字节。
++
++## 判定路径复核
++
++新增 `errors="replace"` 的站点逐一过目如下。替换仅在子进程输出不是 UTF-8 时发生；正常
++UTF-8 协议输出不变。
++
++| 路径 | 后续用途 | 等值/去重/分类结论 |
++|---|---|---|
++| `devenv_scaffold.py` | HEAD 标识或命令日志 | HEAD 为 ASCII；其余仅呈现，不参与等值判定 |
++| `roadmap_writeback_draft.py` | 分支名写入草稿 | 不参与通过/失败、去重或分类 |
++| `impl_route.py` | 短 SHA | Git SHA 为 ASCII，不存在替换趋同 |
++| `outside-voice-job.py` | 外部 CLI 的诊断输出 | 不作为等值或分类键 |
++| `ff0-branch-guard.py` | Git 查询失败回退为空串 | 不把替换结果与成功值等同，异常/失败仍走既有拒绝路径 |
++| `init.py` | 仓根路径发现 | 仅用于定位；失败不会被映射为“同一仓根” |
++| `issues.py` | 子脚本 JSON 协议、错误诊断 | JSON/triage 失败仍显式报错；替换结果未作去重或分类键 |
++| `retro_report.py` | Git 历史文本 | 既有错误分支保留，不以替换文本作历史存在性的等值证明 |
++
++`ship_gate` 与 `trivial_shape` 的 `errors="replace"` 均为既有语义；前者的保真比较
++专用 `run_git_bytes` 路径保持原始字节，后者只新增 UTF-8 声明，未改变其既有替换策略。
++
++## `write_text` 核实
++
++以 AST 解析非测试、非 `openspec/` 的 Python 文件，遍历每个 `.write_text()` 调用并读取
++keyword AST；结果为 **9 个站点、0 个缺少 `encoding="utf-8"`**。该方法可识别跨行参数，未为
++已满足的调用制造修改。相同验证方法与结果已回写 `decision-memo.md` C8。
++
++## 验证
++
++```text
++python -m pytest hack/tests/test_subprocess_encoding_contract.py hack/tests/test_encoding_hygiene.py -q
++10 passed
++
++python hack/check_encoding_hygiene.py
++[encoding-hygiene] ✅ 所有入口脚本均满足编码前导契约
++
++python -m compileall -q <10 个受改脚本>
++exit 0
++
++git diff --check
++exit 0
++```
++
++全量 `python -m pytest -q` 未能完成收集（Windows 环境）：
++`sdflow-init/tests/test_outside_voice_child_lifecycle.py` 依赖不存在的
++`signal.SIGHUP`，`sdflow-ship/tests/test_gate_freshness.py` 在模块导入时以非 UTF-8
++字节构造文件系统字符串而触发 `UnicodeDecodeError`。两项均发生在本票测试执行前的收集阶段，
++与本票修改无关；受影响的聚焦回归已单独通过。
++
++新增 `hack/tests/test_subprocess_encoding_contract.py` 以 AST 锁定 tickets 3.1 列出的
++13 个直接 `subprocess.run(text=True)` 站点，以及 `ship_gate` 的单出口文本 kwargs 与
++原始字节 helper 边界。
+diff --git a/sdflow-devenv/scripts/devenv_scaffold.py b/sdflow-devenv/scripts/devenv_scaffold.py
+index 1a6e9da..66eedb2 100644
+--- a/sdflow-devenv/scripts/devenv_scaffold.py
++++ b/sdflow-devenv/scripts/devenv_scaffold.py
+@@ -43,21 +43,22 @@ MARK_END = "<!-- opsx-devenv:end -->"
+ DEFAULT_TIMEOUT = 300
+ 
+ 
+ def _now():
+     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+ 
+ 
+ def _head(root):
+     try:
+         r = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+-                           capture_output=True, text=True, timeout=10)
++                           capture_output=True, text=True, timeout=10,
++                           encoding="utf-8", errors="replace")
+         return r.stdout.strip() if r.returncode == 0 else "(no-git)"
+     except (OSError, subprocess.SubprocessError):
+         return "(no-git)"
+ 
+ 
+ def _log(root, line):
+     p = Path(root) / LOG_MD
+     p.parent.mkdir(parents=True, exist_ok=True)
+     if not p.exists():
+         p.write_text("# devenv-log\n\n> append-only。continue 断点恢复靠它。\n\n",
+@@ -318,21 +319,22 @@ def cmd_verify_lane(args):
+         return 1
+ 
+     if v.get("executor") == "human":
+         print(f"[devenv] {args.id} 是 executor: human —— 人跑完后用 confirm-lane",
+               file=sys.stderr)
+         return 1
+ 
+     print(f"$ {method}")
+     try:
+         r = subprocess.run(method, shell=True, cwd=str(root), capture_output=True,
+-                           text=True, timeout=args.timeout)
++                           text=True, timeout=args.timeout,
++                           encoding="utf-8", errors="replace")
+         code, out, err = r.returncode, r.stdout, r.stderr
+         timed_out = False
+     except subprocess.TimeoutExpired:
+         code, out, err, timed_out = 124, "", "", True
+     except OSError as exc:
+         code, out, err, timed_out = 127, "", str(exc), False
+ 
+     if out:
+         print(out[-2000:])
+     if err:
+diff --git a/sdflow-done/scripts/roadmap_writeback_draft.py b/sdflow-done/scripts/roadmap_writeback_draft.py
+index 678905c..3eea3a4 100644
+--- a/sdflow-done/scripts/roadmap_writeback_draft.py
++++ b/sdflow-done/scripts/roadmap_writeback_draft.py
+@@ -295,21 +295,22 @@ def _safe_read_text(path):
+         return path.read_text(encoding="utf-8")
+     except (OSError, UnicodeDecodeError) as e:
+         sys.stderr.write("FILE_UNREADABLE %s: %s\n" % (path, e))
+         return ""
+ 
+ 
+ def _git_branch(root):
+     try:
+         out = subprocess.run(
+             ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+-            capture_output=True, text=True, check=True)
++            capture_output=True, text=True, check=True,
++            encoding="utf-8", errors="replace")
+         return out.stdout.strip()
+     except Exception:
+         return "<unknown>"
+ 
+ 
+ def main(argv=None):
+     p = argparse.ArgumentParser(description="roadmap 回填降摩擦助手机械核")
+     p.add_argument("--change", required=True)
+     p.add_argument("--root", default=".")
+     p.add_argument("--roadmap", default=None, help="{name}#{phase} 覆写(优先级最高)")
+diff --git a/sdflow-implement/scripts/impl_route.py b/sdflow-implement/scripts/impl_route.py
+index 578c976..d04e768 100644
+--- a/sdflow-implement/scripts/impl_route.py
++++ b/sdflow-implement/scripts/impl_route.py
+@@ -428,20 +428,21 @@ def _get_plan_sha(root: Path, plan_path: Path) -> str:
+         return "-"
+     try:
+         rel = plan_path.relative_to(root)
+         target = str(rel)
+     except ValueError:
+         target = str(plan_path)
+     try:
+         result = subprocess.run(
+             ["git", "-C", str(root), "log", "-1", "--format=%h", "--", target],
+             capture_output=True, text=True, timeout=10,
++            encoding="utf-8", errors="replace",
+         )
+     except Exception:
+         return "-"
+     if result.returncode != 0:
+         return "-"
+     sha = result.stdout.strip()
+     return sha if sha else "-"
+ 
+ 
+ # ---------------------------------------------------------------------------
+diff --git a/sdflow-init/assets/hack/outside-voice-job.py b/sdflow-init/assets/hack/outside-voice-job.py
+index b904eb0..4790a66 100644
+--- a/sdflow-init/assets/hack/outside-voice-job.py
++++ b/sdflow-init/assets/hack/outside-voice-job.py
+@@ -351,21 +351,22 @@ def verify_manifest(directory=None):
+         if sha256_file(target) != expected:
+             skew.append("%s 内容与快照不符" % name)
+     if skew:
+         return {"ok": False, "detail": "安装 skew: " + "; ".join(skew), "hint": hint}
+     return {"ok": True, "detail": "generation=%s" % data["generation"], "hint": ""}
+ 
+ 
+ # ── preflight 各项检查（全部无副作用）────────────────────────────────────────
+ 
+ def _run_cli(argv, timeout):
+-    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
++    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
++                          encoding="utf-8", errors="replace")
+ 
+ 
+ def check_posix_shell():
+     if os.name != "posix":
+         return {"ok": False,
+                 "detail": "os.name=%r" % os.name,
+                 "hint": "v1 后台通道只支持 POSIX 平台（darwin/linux）——其他平台一律同族 fallback"}
+     if sys.platform not in SUPPORTED_SYS_PLATFORMS:
+         return {"ok": False,
+                 "detail": "sys.platform=%r" % sys.platform,
+diff --git a/sdflow-init/assets/hooks/ff0-branch-guard.py b/sdflow-init/assets/hooks/ff0-branch-guard.py
+index 28f6476..7363250 100644
+--- a/sdflow-init/assets/hooks/ff0-branch-guard.py
++++ b/sdflow-init/assets/hooks/ff0-branch-guard.py
+@@ -120,20 +120,22 @@ ACK_TTL_SECONDS = 600
+ 
+ 
+ def _git(cwd: str, *args: str) -> str:
+     """跑一条 git 命令，返回 stdout（strip 过）；失败/异常一律返回空串。"""
+     try:
+         proc = subprocess.run(
+             ["git", *args],
+             cwd=cwd or ".",
+             capture_output=True,
+             text=True,
++            encoding="utf-8",
++            errors="replace",
+             timeout=5,
+         )
+     except Exception:
+         return ""
+     return proc.stdout.strip() if proc.returncode == 0 else ""
+ 
+ 
+ def current_branch(cwd: str) -> str:
+     """返回 cwd 所在 git 仓库的当前分支名；**判不出分支时返回空串**。
+ 
+diff --git a/sdflow-init/assets/workflow/tools/trivial_shape.py b/sdflow-init/assets/workflow/tools/trivial_shape.py
+index e0a5b7a..eace98f 100644
+--- a/sdflow-init/assets/workflow/tools/trivial_shape.py
++++ b/sdflow-init/assets/workflow/tools/trivial_shape.py
+@@ -204,21 +204,21 @@ def classify_diff(diff_text):
+     return "NOT_EXEMPT", first_block, fv
+ 
+ 
+ def main():
+     ap = argparse.ArgumentParser(description="无逻辑面白名单形状判器（code-review Step2 免除判据）")
+     ap.add_argument("--base", required=True, help="diff 基线 ref（如 merge-base）")
+     ap.add_argument("--root", default=".", help="仓库根")
+     args = ap.parse_args()
+ 
+     r = subprocess.run(("git",) + _GIT_HARDEN + ("-C", args.root, "diff", f"{args.base}..HEAD"),
+-                       capture_output=True, text=True, errors="replace")
++                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+     if r.returncode != 0:
+         emit("ERROR", EXIT_ERROR, f"git-diff-failed:{r.stderr.strip()[:120]}", [])
+ 
+     verdict, reason, fv = classify_diff(r.stdout)
+     code = EXIT_EXEMPT if verdict == "EXEMPT" else EXIT_NOT_EXEMPT
+     emit(verdict, code, reason, fv)
+ 
+ 
+ if __name__ == "__main__":
+     main()
+diff --git a/sdflow-init/scripts/init.py b/sdflow-init/scripts/init.py
+index 757292a..edd9a79 100644
+--- a/sdflow-init/scripts/init.py
++++ b/sdflow-init/scripts/init.py
+@@ -562,20 +562,21 @@ def cmd_config_lint(root):
+ 
+ def _git_root_or_dot():
+     """config-lint 专用 --root 缺省探测：`git rev-parse --show-toplevel` 探 git 仓根；
+     非 git 仓 / 命令失败 → 降级当前目录 "."（M7）。**不复用** init/update/retire-hooks 的
+     `default="."`——那三个 mode 的 "." 语义是「就地铺设/操作当前目录」，config-lint 校验的是
+     openspec/config.yaml，在 git 仓子目录里跑时应回溯到仓根而非误判"当前子目录没有 openspec/"。"""
+     try:
+         out = subprocess.run(
+             ["git", "rev-parse", "--show-toplevel"],
+             capture_output=True, text=True, check=True,
++            encoding="utf-8", errors="replace",
+         )
+         top = out.stdout.strip()
+         return top if top else "."
+     except (OSError, subprocess.CalledProcessError):
+         return "."
+ 
+ 
+ def ensure_global_hook(spec):
+     """幂等把单个全局 hook 装好：脚本拷进 ~/.claude/hooks/ + 注册进 ~/.claude/settings.json
+     对应 event 的 hooks 列表。spec 形如 HOOKS 里的一项。返回动作描述。
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index c1f7ed3..bb9b2b6 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -1098,57 +1098,61 @@ def cmd_sweep(args):
+     _reject_batch_key_unsafe(change)
+ 
+     tagged = []
+     for script, pool, idkey in (
+         (BUGLIST_SCRIPT, "bug", "bugs"),
+         (TODOLIST_SCRIPT, "todo", "items"),
+     ):
+         proc = subprocess.run(
+             [sys.executable, script, "--root", root, "scan",
+              "--change", change, "--open-ungrouped", "--json"],
+-            capture_output=True, text=True, env=recorder_child_env("scan"),
++            capture_output=True, text=True, encoding="utf-8", errors="replace",
++            env=recorder_child_env("scan"),
+         )
+         if proc.returncode != 0:
+             _die(f"sweep: {pool} scan 失败 (rc={proc.returncode}): {proc.stderr.strip()}")
+         data = json.loads(proc.stdout)
+         for p in (data.get("problems") or []):
+             print(f"sweep: {pool} scan problems: {p}", file=sys.stderr)
+         items = data.get(idkey, [])
+         for it in items:
+             iid = it["id"]
+             tp = subprocess.run(
+                 [sys.executable, script, "--root", root, "triage",
+                  "--id", iid, "--批次", change],
+-                capture_output=True, text=True, env=recorder_child_env("triage"),
++                capture_output=True, text=True, encoding="utf-8", errors="replace",
++                env=recorder_child_env("triage"),
+             )
+             if tp.returncode != 0:
+                 _die(
+                     f"sweep: triage 失败于 {pool} 第 {iid} 项 (rc={tp.returncode})；"
+                     f"已 tag={tagged}: {tp.stderr.strip()}"
+                 )
+             tagged.append(iid)
+ 
+     if not tagged:
+         print(f"sweep {change}: tagged 0 项，无匹配项，跳过 batch add/reindex")
+         return
+ 
+     ba = subprocess.run(
+         [sys.executable, __file__, "--root", root, "batch", "add",
+          change, "--if-exists", "skip"],
+-        capture_output=True, text=True, env=recorder_child_env("batch-add"),
++        capture_output=True, text=True, encoding="utf-8", errors="replace",
++        env=recorder_child_env("batch-add"),
+     )
+     if ba.returncode != 0:
+         _die(f"sweep: batch add 失败 (rc={ba.returncode}): {ba.stderr.strip()}")
+ 
+     ri = subprocess.run(
+         [sys.executable, __file__, "--root", root, "reindex"],
+-        capture_output=True, text=True, env=recorder_child_env("reindex"),
++        capture_output=True, text=True, encoding="utf-8", errors="replace",
++        env=recorder_child_env("reindex"),
+     )
+     if ri.returncode != 0:
+         _die(f"sweep: reindex 失败 (rc={ri.returncode}): {ri.stderr.strip()}")
+     elif ri.stderr.strip():
+         print(ri.stderr, end="" if ri.stderr.endswith("\n") else "\n", file=sys.stderr)
+ 
+     print(f"sweep {change}: tagged {len(tagged)} 项 {tagged}")
+ 
+ 
+ def main():
+diff --git a/sdflow-issues/scripts/migrate_legacy.py b/sdflow-issues/scripts/migrate_legacy.py
+index 5b16f04..47522b9 100644
+--- a/sdflow-issues/scripts/migrate_legacy.py
++++ b/sdflow-issues/scripts/migrate_legacy.py
+@@ -317,20 +317,21 @@ def apply_migration(migration):
+     for document in migration["documents"]:
+         atomic_write_bytes(document["path"], document["rendered"])
+ 
+ 
+ def run_reindex(root):
+     proc = subprocess.run(
+         [sys.executable, ISSUES_SCRIPT, "--root", root, "reindex"],
+         capture_output=True,
+         text=True,
+         encoding="utf-8",
++        errors="replace",
+     )
+     if proc.returncode != 0:
+         raise ValueError(
+             f"ERROR: legacy migration 已写入，但 reindex 失败 (rc={proc.returncode}); "
+             f"cause: {proc.stderr.strip() or proc.stdout.strip()}; "
+             "fix: 修正报告的问题后重跑同一 apply 命令"
+         )
+     if proc.stderr:
+         sys.stderr.write(proc.stderr)
+     return {"status": "ok", "stdout": proc.stdout.strip()}
+diff --git a/sdflow-issues/scripts/sdflow_issues_core/__init__.py b/sdflow-issues/scripts/sdflow_issues_core/__init__.py
+index 1a7d8ea..0a455e2 100644
+--- a/sdflow-issues/scripts/sdflow_issues_core/__init__.py
++++ b/sdflow-issues/scripts/sdflow_issues_core/__init__.py
+@@ -1048,20 +1048,21 @@ def detect_change(root):
+             if d != "archive" and os.path.isdir(os.path.join(changes_dir, d))
+         )
+     if len(dirs) == 1:
+         return dirs[0]
+     try:
+         out = subprocess.run(
+             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+             # [impl-review-fix] F5: text=True 须显式 encoding="utf-8"——Windows 非 UTF-8
+             # locale 下 git 输出按平台默认编码解码可能崩（已知 Windows CI 陷阱）。
+             cwd=root, capture_output=True, text=True, check=True, encoding="utf-8",
++            errors="replace",
+             env=recorder_child_env("git", token=False),
+         )
+         branch = out.stdout.strip()
+     except Exception:
+         branch = ""
+     candidate = BRANCH_PREFIX_RE.sub("", branch) if branch else ""
+     if candidate and (not dirs or candidate in dirs):
+         return candidate
+     return ""
+ 
+diff --git a/sdflow-retro/scripts/retro_report.py b/sdflow-retro/scripts/retro_report.py
+index fb78ac0..24f9803 100644
+--- a/sdflow-retro/scripts/retro_report.py
++++ b/sdflow-retro/scripts/retro_report.py
+@@ -41,21 +41,21 @@ def discover_changes(root):
+             out[name]["archive_dir"] = p
+     return out
+ 
+ 
+ def _run_git(root, *args):
+     # [T60] git 失败（returncode≠0）向 stderr 留痕——否则「git 报错」与「真无提交」
+     # 都表现为空 stdout、静默不可区分（边界解析会把 git 故障误当无历史）。
+     # 仍返回 stdout（失败时通常为空）以保持所有调用方契约不变。
+     proc = subprocess.run(
+         ["git", "-C", root, "-c", "core.quotePath=false", *args],
+-        capture_output=True, text=True, errors="replace")
++        capture_output=True, text=True, encoding="utf-8", errors="replace")
+     if proc.returncode != 0:
+         sys.stderr.write(
+             f"[sdflow-retro] git 失败 (rc={proc.returncode}): git {' '.join(args)}\n"
+             f"  stderr: {proc.stderr.strip()}\n")
+     return proc.stdout
+ 
+ 
+ def git_commits_for_path(root, relpath):
+     out = _run_git(root, "log", "--format=%H%x00%ct%x00%s", "--", relpath)
+     commits = []
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index b5d6fb8..c641c84 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -314,20 +314,21 @@ def _git_run(root, args, text):
+ 
+     环境级失败 MUST 收敛进退出码契约集 `{0,3,4,5,6}`：裸 `OSError`（git 不在 PATH /
+     不可执行 / 权限不足）与 `TimeoutExpired`（文件系统挂起）逸出后是 Python 默认退出码 1，
+     对 `/sdflow-ship` 链序而言是**契约外**取值 ⇒ 无处置路径。二者各自 category 不同，
+     因为补救动作完全不同（装 git vs 查磁盘），MUST NOT 合并成一句「git 调用失败」。
+     """
+     cmd = ["git", "-C", str(root), *_GIT_HARDEN, *args]
+     kwargs = {"capture_output": True, "timeout": GIT_TIMEOUT_SECONDS, "env": _git_env()}
+     if text:
+         kwargs["text"] = True
++        kwargs["encoding"] = "utf-8"
+         kwargs["errors"] = "replace"
+     shown = " ".join(str(x) for x in cmd)
+     try:
+         return subprocess.run(cmd, **kwargs)
+     except subprocess.TimeoutExpired:
+         raise GateIndeterminate(
+             f"git 调用超过 {GIT_TIMEOUT_SECONDS}s 未返回：{shown}", CAUSE_GIT_TIMEOUT)
+     except OSError as exc:
+         raise GateIndeterminate(
+             f"git 子进程无法启动（{type(exc).__name__}: {exc}）：{shown}",
