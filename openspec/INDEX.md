@@ -28,6 +28,11 @@
 | 名称 | 文件 | 主题 |
 |---|---|---|
 | `doc-authoring` | [rules/doc-authoring.md](./rules/doc-authoring.md) | DOC-1：设计与决策文档正文只保留当前最终态；被否决方案、演进史和元教训移入附录，避免历史噪声误导后续实现与评审。 |
+| `premise-verification` | [rules/premise-verification.md](./rules/premise-verification.md) | 写断言之前先验证其依赖的外部事实（落笔前证伪、引用即打开、改共享物先溯源、决策落文档前先验依赖、正反双向验证）。 |
+| `file-format-convention` | [rules/file-format-convention.md](./rules/file-format-convention.md) | 文本文件编码统一 UTF-8、换行符统一 LF、尾行换行；`.editorconfig` + `.gitattributes` 双层保证。 |
+| `script-punctuation-resilience` | [rules/script-punctuation-resilience.md](./rules/script-punctuation-resilience.md) | py/sh 脚本解析中文文档时的标点容错（中英文逗号/冒号/括号等变体同时匹配）。 |
+| `context-exclusion` | [rules/context-exclusion.md](./rules/context-exclusion.md) | AI 上下文排除列表及理由（归档产物/impl-reports/草稿/缓存排除，活跃源码/spec/ADR 保留）。 |
+| `question-discussion-convention` | [rules/question-discussion-convention.md](./rules/question-discussion-convention.md) | 禁 AskUserQuestion、多问题先总览再逐个讨论、编号格式。 |
 
 ### spec-workflow
 
