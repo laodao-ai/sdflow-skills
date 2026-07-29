@@ -1,0 +1,36 @@
+{
+  "roster": [
+    {"lens": "broad", "runner": "codex", "site": "—"},
+    {"lens": "domain", "runner": "codex", "site": "—"},
+    {"lens": "adversarial", "runner": "codex", "site": "—"},
+    {"lens": "history", "runner": "codex", "site": "—"},
+    {"lens": "outside-voice", "runner": "codex", "site": "code-voice"}
+  ],
+  "findings": [
+    {
+      "hits": [
+        {"raw": "对抗镜2"},
+        {"raw": "outside-voice", "runner": "codex", "site": "code-voice"}
+      ],
+      "verdict": "采纳",
+      "sev": "高"
+    },
+    {
+      "hits": [
+        {"raw": "对抗镜2"},
+        {"raw": "outside-voice", "runner": "codex", "site": "code-voice"}
+      ],
+      "verdict": "采纳",
+      "sev": "高"
+    },
+    {
+      "hits": [{"raw": "broad"}],
+      "verdict": "采纳",
+      "sev": "低"
+    },
+    {
+      "hits": [{"raw": "历史镜"}],
+      "verdict": "裁掉"
+    }
+  ]
+}
