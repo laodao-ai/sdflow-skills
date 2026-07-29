@@ -1,31 +1,80 @@
-name: Windows recorder smoke
+name: Windows recorder and encoding smoke
 
 on:
   push:
     paths:
       - ".github/workflows/windows-recorder-smoke.yml"
       - "setup.sh"
+      - "hack/**"
+      - "sdflow-architecture/scripts/**"
+      - "sdflow-devenv/scripts/**"
+      - "sdflow-done/scripts/**"
+      - "sdflow-implement/scripts/**"
+      - "sdflow-init/assets/**"
+      - "sdflow-init/scripts/**"
       - "sdflow-issues/**"
-      - "sdflow-init/scripts/init.py"
+      - "sdflow-maintain/scripts/**"
+      - "sdflow-retro/scripts/**"
+      - "sdflow-ship/scripts/**"
   pull_request:
     paths:
       - ".github/workflows/windows-recorder-smoke.yml"
       - "setup.sh"
+      - "hack/**"
+      - "sdflow-architecture/scripts/**"
+      - "sdflow-devenv/scripts/**"
+      - "sdflow-done/scripts/**"
+      - "sdflow-implement/scripts/**"
+      - "sdflow-init/assets/**"
+      - "sdflow-init/scripts/**"
       - "sdflow-issues/**"
-      - "sdflow-init/scripts/init.py"
+      - "sdflow-maintain/scripts/**"
+      - "sdflow-retro/scripts/**"
+      - "sdflow-ship/scripts/**"
   workflow_dispatch:
 
 jobs:
-  windows-recorder-smoke:
+  windows-recorder-and-encoding-smoke:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # pytest>=8 是硬下限：仓根 conftest.py 用 `@pytest.hookimpl(wrapper=True)`（8+ 才有）。
-      # 与 pytest.ini 的 minversion 成对——见 mechanical-gates.yml 同处注释。
       - name: Install pytest
+        shell: bash
         run: py -m pip install "pytest>=8"
       - name: Run actual Windows local-disk recorder smoke
+        shell: bash
         run: py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
+      - name: Run setup with a forced GBK child process
+        shell: bash
+        run: |
+          output="$(PYTHONIOENCODING=gbk bash setup.sh 2>&1)"
+          printf '%s\n' "$output"
+          ! grep -Eq 'UnicodeEncodeError|Traceback' <<<"$output"
+      - name: Run init update with a forced GBK child process
+        shell: bash
+        run: |
+          probe="$RUNNER_TEMP/init-encoding-probe"
+          mkdir -p "$probe"
+          git -C "$probe" init
+          PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$probe"
+      - name: Exercise seven UTF-8 text subprocess call sites and invalid-byte replacement
+        shell: bash
+        run: |
+          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues.py --root . reindex
+          PYTHONIOENCODING=gbk python3 sdflow-retro/scripts/retro_report.py --root .
+          set +e
+          PYTHONIOENCODING=gbk python3 sdflow-ship/scripts/ship_gate.py --root . --change fix-windows-encoding-crash
+          gate_status=$?
+          set -e
+          test "$gate_status" -eq 0 -o "$gate_status" -eq 3 -o "$gate_status" -eq 4 -o "$gate_status" -eq 5 -o "$gate_status" -eq 6
+          python3 -c 'import subprocess, sys; r = subprocess.run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(bytes([0x80]))"], capture_output=True, text=True, encoding="utf-8", errors="replace"); assert r.stdout == "\ufffd"'
+      - name: Exercise cp936 console and redirected setup output without PYTHONIOENCODING
+        shell: bash
+        run: |
+          chcp 936
+          env -u PYTHONIOENCODING bash setup.sh
+          env -u PYTHONIOENCODING bash setup.sh > "$RUNNER_TEMP/setup-cp936.log" 2>&1
+          ! grep -Eq 'UnicodeEncodeError|Traceback' "$RUNNER_TEMP/setup-cp936.log"

@@ -553,3 +553,13 @@ if command -v python3 >/dev/null 2>&1 && \
     echo "  ⚠️ 宿主/档位解析核心段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
   fi
 fi
+
+# 第五道机械门：每个 Python 入口都必须在模块顶层重配 stdout/stderr，避免 Windows
+# GBK 控制台在打印 Unicode 状态信息时把真实成功误报为崩溃。它与其余四门独立：
+# 不依赖任何别的门是否存在或是否通过，失败详情由检查器逐文件列出并指向 CLAUDE.md 模板。
+if command -v python3 >/dev/null 2>&1 && \
+   [ -f "$REPO_DIR/hack/check_encoding_hygiene.py" ]; then
+  if ! python3 "$REPO_DIR/hack/check_encoding_hygiene.py"; then
+    echo "  ⚠️ Python 入口编码前导缺失（上面列了逐文件修复项）。修：按 CLAUDE.md“修改本仓库的注意”中的 4 行模板补齐。"
+  fi
+fi

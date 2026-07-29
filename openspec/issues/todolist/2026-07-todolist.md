@@ -122,6 +122,7 @@ sdflow-issues:
     T260: {"module":"`hack/tests/test_canonical_entry_sync.py`","summary":"CLAUDE.md / AGENTS.md / sdflow-init/assets/snippets/claude-section.md 三处的「## Codex 子代理授权」段本次改后逐字节相同(各1045字符)，但无任何机械守卫：test_canonical_entry_sync.py 只对「阶段一入口」小节做 CLAUDE.md==AGENTS.md 等值断言，claude-section.md 完全未纳入。下次只改一处而漏另两处，pytest 与 setup.sh 都不会红，纯靠人工记得。修法：把等值断言扩到该段，或复用 check_tier_resolution_parity.py 的 marker 机制。来源：harden-implement-review-loop 冷层代码审对抗镜#2（结构性风险，非本 change 引入的退化）","type":"基础设施","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
     T261: {"module":"`sdflow-implement/SKILL.md` · `sdflow-implement/scripts/impl_route.py`","summary":"两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2","type":"代码质量","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
     T262: {"module":"`sdflow-done/SKILL.md` 第一步 verify · `ship_gate.py` archived_verify_state","summary":"verify 子代理漏写 ship-gate frontmatter 锚而无任何即时机械门：本轮 verify 写了人读结论行「结论：PASS」与核验 SHA，却漏了 SKILL 明令的 frontmatter（`ship-gate: verify: PASS` + `reviewed_sha`），一路过 hand-off/archive/commit/merge 都无人发现，直到最末 ship_gate 判 UNKNOWN 才暴露（fail-safe 正确、未假绿，但发现点太晚——此时已 merge 进 base，只能事后补录锚，落成一次显式越权留痕）。对比 code-review 层有 anchor_lint.py 在出报告后立刻机验四类锚，verify 层无对等门。修法二选一：①给 verify 加同款出报告后自检（复用 anchor_lint 或新增轻量 frontmatter 校验），在 archive 之前拦住；②让 sdflow-done 第二步(hand-off)/第三步(archive) 起手先校验 verify-report frontmatter 存在且合法，缺则回退重跑 verify。来源：harden-implement-review-loop 实跑实证","type":"基础设施","status":"PROPOSED","time":"2026-07-28 18:05","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T263: {"module":"setup.sh","summary":"Unify the remaining command -v python3 probes behind the validated Python 3.7+ interpreter selection so setup gates do not use inconsistent interpreter availability checks.","type":"基础设施","status":"OPEN","time":"2026-07-29 11:04","change":"fix-windows-encoding-crash","batch":null}
 ---
 # 2026-07 TODO
 
@@ -2656,3 +2657,14 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 > verify 子代理漏写 ship-gate frontmatter 锚而无任何即时机械门：本轮 verify 写了人读结论行「结论：PASS」与核验 SHA，却漏了 SKILL 明令的 frontmatter（`ship-gate: verify: PASS` + `reviewed_sha`），一路过 hand-off/archive/commit/merge 都无人发现，直到最末 ship_gate 判 UNKNOWN 才暴露（fail-safe 正确、未假绿，但发现点太晚——此时已 merge 进 base，只能事后补录锚，落成一次显式越权留痕）。对比 code-review 层有 anchor_lint.py 在出报告后立刻机验四类锚，verify 层无对等门。修法二选一：①给 verify 加同款出报告后自检（复用 anchor_lint 或新增轻量 frontmatter 校验），在 archive 之前拦住；②让 sdflow-done 第二步(hand-off)/第三步(archive) 起手先校验 verify-report frontmatter 存在且合法，缺则回退重跑 verify。来源：harden-implement-review-loop 实跑实证
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T262 -->
+
+<!-- sdflow-issue-block:start id=T263 -->
+## T263: Unify the remaining command -v python3 probes behind the validated Python 3.7+ interpreter selection so setup gates do not use inconsistent interpreter availability checks.
+> Unify the remaining command -v python3 probes behind the validated Python 3.7+ interpreter selection so setup gates do not use inconsistent interpreter availability checks.
+
+**关联文档**：`openspec/changes/fix-windows-encoding-crash/design.md`
+
+**动机**：Existing probes use command -v python3 while other setup paths select python3 or python after a version check. This is pre-existing and non-blocking for the encoding change.
+
+**思路**：Design a small shared shell predicate or reuse the selected interpreter without broadening this change scope.
+<!-- sdflow-issue-block:end id=T263 -->
