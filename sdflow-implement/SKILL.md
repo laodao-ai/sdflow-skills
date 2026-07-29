@@ -229,17 +229,18 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 
 ## 依赖的确定性 helper（machine-verifiable，本 skill 不重新发明判断逻辑）
 
-路由与拓扑判断一律走 stdlib-only 脚本，本 skill 只消费其输出，不自行解析 config/plan 结构：
+路由与拓扑判断一律走 stdlib-only 脚本，本 skill 只消费其输出，不自行解析 config/plan 结构。
+路径约定：`~/.claude/skills/sdflow-implement/scripts/impl_route.py`；Codex 宿主兜底 `~/.codex/skills/sdflow-implement/scripts/impl_route.py`：
 
 - **route**（由 ship 在派发本 skill **之前** 调用，产出 `PIPELINE_RECEIPT` 决定要不要派发本 skill；
   本 skill 内部不重复调用）：
   ```
-  python3 sdflow-implement/scripts/impl_route.py route --root <仓根> --change <change>
+  python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py route --root <仓根> --change <change>
   ```
 - **frontier**（由本 skill **执行模式内部**每轮调用，解析 `Blocked-by` 拓扑 + 已完成号集，算出
   下一批 next-ready ticket 号）：
   ```
-  python3 sdflow-implement/scripts/impl_route.py frontier --plan <plan路径> --done <1,2|none>
+  python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py frontier --plan <plan路径> --done <1,2|none>
   ```
 
 ## 出 ticket 模式（`mode=tickets-plan`）
@@ -450,7 +451,7 @@ impl-pipeline: tickets
 
 - 调用 frontier helper，用透传的 `done_tasks` 算出下一批 next-ready ticket 号：
   ```
-  python3 sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/tickets.md --done {done_tasks}
+  python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/tickets.md --done {done_tasks}
   ```
 - **严格串行**——同一时刻至多一个 implementer 子代理在工作，**MUST NOT** 并行派发多个
   implementer（首版红线，design D4/Non-Goal）。next-ready 若一次给出多个候选，仍按号序逐个派发、
@@ -461,7 +462,7 @@ impl-pipeline: tickets
 派发前先机械抠出该票原文（附录 B 有出处说明）：
 
 ```
-python3 sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tickets.md --task {N}
+python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tickets.md --task {N}
 ```
 
 默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
