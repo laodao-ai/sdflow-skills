@@ -11,6 +11,10 @@ import os
 import re
 import sys
 
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
+
 
 class MaintainScanError(Exception):
     """坏输入 / 无法可靠完成扫描。main() 捕获 → stderr → 非零退出（fail-closed）。"""

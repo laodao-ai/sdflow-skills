@@ -6,6 +6,10 @@
 sdflow-init/assets/workflow/lens-metric-contract.md。"""
 import re
 import sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 import argparse
 from pathlib import Path
 from collections import defaultdict

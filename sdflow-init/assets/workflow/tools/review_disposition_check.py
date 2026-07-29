@@ -13,6 +13,10 @@
   小节体的「非空」判定去除 HTML 注释 / 水平分隔线 / 空白后再看是否有实体内容。
 承 4.C lens_metric_emit 形态（EmitError + EXIT_OK/EXIT_FAIL、跨模块口径重实现不 import）。"""
 import argparse, re, sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from pathlib import Path
 
 EXIT_OK, EXIT_FAIL = 0, 1

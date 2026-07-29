@@ -68,6 +68,10 @@ import argparse
 import json
 import re
 import sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from datetime import datetime, timezone
 from pathlib import Path
 

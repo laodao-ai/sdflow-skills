@@ -22,6 +22,10 @@ load-bearing 的正确性，不是风格问题。∴ 用 marker 圈定 + 机械�
     python3 hack/check_tier_resolution_parity.py A.md B.md   # 查指定文件（测试用，≥2 个）
 """
 import sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent

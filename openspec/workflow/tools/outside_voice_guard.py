@@ -10,6 +10,10 @@ add-codex-host-support：结构判改为引用「合法组合矩阵」的跨模�
 MUST NOT import anchor_lint——GC-2 边界锁），与 anchor_lint 的同名函数由全笛卡尔 golden 测试互相守一致
 （tests/test_outside_voice_guard.py Step 5）。"""
 import argparse, re, sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from pathlib import Path
 
 EXIT_OK, EXIT_FAIL = 0, 1

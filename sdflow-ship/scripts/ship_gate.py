@@ -189,6 +189,10 @@ import re
 import shlex
 import subprocess
 import sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from pathlib import Path
 
 # [T75] design/code-review inline 锚常量已随 Task6 live inline 读半场退役而删除；

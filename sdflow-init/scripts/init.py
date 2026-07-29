@@ -24,6 +24,10 @@ import os
 import shutil
 import subprocess
 import sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 import tempfile
 
 # [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 的 `$_py` 探测

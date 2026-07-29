@@ -30,6 +30,10 @@ MUST NOT 演化成「解析 Markdown 结构」。
     python3 hack/check_async_branch_parity.py A.md B.md  # 查指定文件（测试用）
 """
 import sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent

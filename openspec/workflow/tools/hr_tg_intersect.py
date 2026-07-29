@@ -9,6 +9,10 @@ MUST NOT 用 __file__ 推导（openspec/workflow/ 下无副本，会 fail-closed
 declared/HR-TG 成员均须存在于「触发词目录」全集（M-new 存在性 + F7 内部一致），全集边界只取表行、
 正文游离提及不纳入（F8）；任一校验失败 fail-closed all-or-nothing。"""
 import argparse, re, sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from pathlib import Path
 
 EXIT_OK, EXIT_FAIL = 0, 1

@@ -25,6 +25,10 @@ import os
 import subprocess
 import sys
 
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
+
 _GIT_HARDEN = ("-c", "core.quotePath=false")
 
 EXIT_EXEMPT, EXIT_NOT_EXEMPT, EXIT_ERROR = 0, 1, 2

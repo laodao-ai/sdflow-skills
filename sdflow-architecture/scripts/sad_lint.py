@@ -16,6 +16,10 @@ exit 码约定（DEC-5 输出诚实）：
 """
 import argparse
 import sys
+
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))

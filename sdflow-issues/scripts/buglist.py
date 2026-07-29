@@ -17,6 +17,10 @@ bug 池的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件�
 import os
 import sys
 
+for _s in (sys.stdout, sys.stderr):
+    try: _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception: pass
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from sdflow_issues_core import *  # noqa: F401,F403  re-export 共享 helper（tests 按名 getattr 取用）
