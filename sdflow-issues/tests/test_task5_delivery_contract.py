@@ -244,6 +244,10 @@ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
     assert init_probe in workflow
     assert update_probe in workflow
     assert workflow.index(init_probe) < workflow.index(update_probe)
+    workflow_lines = {line.strip() for line in workflow.splitlines()}
+    assert "env -u PYTHONIOENCODING python3 hack/check_encoding_hygiene.py" in workflow_lines
+    assert 'env -u PYTHONIOENCODING bash setup.sh > "$RUNNER_TEMP/setup-cp936.log" 2>&1' in workflow_lines
+    assert "! grep -Eq 'UnicodeEncodeError|Traceback' \"$RUNNER_TEMP/setup-cp936.log\"" in workflow_lines
     assert (
         "PYTHONIOENCODING=gbk py -m pytest -q "
         "sdflow-issues/tests/test_task5_delivery_contract.py::"

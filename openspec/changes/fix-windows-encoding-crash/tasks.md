@@ -81,13 +81,13 @@
       注：**此处退出码是有效判据**——`init.py:868` 的崩溃点未被 try/except 或 `if !` 吞，异常真会传到非零退出码（与 6.2 的情况相反）
 - [x] 6.4 🔴 **新增步骤：真正跑到 `subprocess text=True` 站点** `[spec-review-amendment]`——追调用图确认：6.2 跑的 `setup.sh` 只调那四道门，而四道门**全都不调 subprocess**；6.3 跑的 `init.py update` 也够不着（`init.py:567` 在 `_git_root_or_dot()` 内，只有 `mode == "config-lint"` 走得到，`run()` 从不调它）⇒ **现状下 15 处修复零 CI 覆盖**。补 `shell: bash` + `PYTHONIOENCODING=gbk` 下各跑一次 `sdflow-issues/scripts/issues.py`、`sdflow-retro/scripts/retro_report.py`、`sdflow-ship/scripts/ship_gate.py` 的只读子命令（三者合计覆盖 15 站点中的 7 个）+ 一个稳定输出中文与非法 UTF-8 字节的夹具子进程，断言不崩且替换行为符合预期
       （不追求 15/15——按通则④，造 15 份非 UTF-8 夹具的完美成本过高，7/15 + 夹具是成本大幅降、结果可接受的次优解）
-- [x] 6.5 🔴 **新增步骤：不设 `PYTHONIOENCODING` 的真实故障面用例** `[spec-review-amendment]`——`PYTHONIOENCODING` 会**主动覆盖**标准流编码，∴ 6.2/6.3/6.4 测的是「人为强制 GBK 的进程」，而不是 Windows **无该变量**时由控制台 / 重定向管道 / locale 决定编码的路径（还可能掩盖环境继承问题）。补：`shell: bash` + 移除该变量 + `chcp 936` 设 code page，跑一个输出中文/emoji 的脚本，**控制台与重定向管道至少各一**
+- [x] 6.5 🔴 **新增步骤：不设 `PYTHONIOENCODING` 的真实故障面用例** `[spec-review-amendment]`——`PYTHONIOENCODING` 会**主动覆盖**标准流编码，∴ 6.2/6.3/6.4 测的是「人为强制 GBK 的进程」，而不是 Windows **无该变量**时由控制台 / 重定向管道 / locale 决定编码的路径（还可能掩盖环境继承问题）。补：`shell: bash` + 移除该变量 + `chcp 936` 设 code page；控制台路径直接运行会输出中文/emoji 且以退出码 fail-closed 的 `check_encoding_hygiene.py`，重定向路径运行 `setup.sh` 并显式 grep 日志，**控制台与重定向管道至少各一**
       注：**本条使 `windows-latest` 真正承重**——该路径只在 Windows 上存在，不能挪去 Linux runner
 
 ## 7. 回归验证
 
 - [ ] 7.1 本仓既有 pytest 套件全绿（`pytest`，仓根 rootdir）
-  - 未完成说明：当前 Windows / Python 3.14 环境下全量 `pytest` 有 2 项收集错误；相关测试文件相对实际 merge-base `3b4f838b99f2ccd3bf7a246e8ab675a9b6c40943` 未变化，确认不是本 change 引入；本 change 相关测试与 GBK setup 集成验证已通过。
+  - 未完成说明：当前 Windows / Python 3.14 环境下全量 `pytest` 有 2 项收集错误；相关测试文件相对本地 `main` 的 merge-base `3b4f838b99f2ccd3bf7a246e8ab675a9b6c40943` 未变化，确认不是本 change 引入；本 change 相关测试与 GBK setup 集成验证已通过。
       注：该断言**不构成对本 bug 的覆盖**（pytest 的 capsys/capfd 用内存 buffer 替换 `sys.stdout`，规避了这个 bug class，见 `decision-memo.md` D2）；它守的是「本次改动没有打坏别的东西」
 - [x] 7.2 `openspec validate "fix-windows-encoding-crash" --strict --type change` 通过
 - [x] 7.3 ~~人工核对负向用例~~ → **已升为常驻测试，见 1.4** `[spec-review-amendment]`（一次性人工核对跑完即删临时脚本，等于把本 change 唯一常驻防线的自测扔掉；改为 `hack/tests/test_encoding_hygiene.py` 永久保留）
