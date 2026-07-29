@@ -251,7 +251,7 @@ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
     cp936_step = """\
         shell: bash
         run: |
-          chcp 936
+          chcp.com 936
           env -u PYTHONIOENCODING python3 hack/check_encoding_hygiene.py
           env -u PYTHONIOENCODING bash setup.sh > "$RUNNER_TEMP/setup-cp936.log" 2>&1
           ! grep -Eq 'UnicodeEncodeError|Traceback' "$RUNNER_TEMP/setup-cp936.log"""

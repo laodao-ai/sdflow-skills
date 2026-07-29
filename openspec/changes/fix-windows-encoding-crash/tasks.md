@@ -81,7 +81,7 @@
       注：**此处退出码是有效判据**——`init.py:868` 的崩溃点未被 try/except 或 `if !` 吞，异常真会传到非零退出码（与 6.2 的情况相反）
 - [x] 6.4 🔴 **新增步骤：真正跑到 `subprocess text=True` 站点** `[spec-review-amendment]`——追调用图确认：6.2 跑的 `setup.sh` 只调那四道门，而四道门**全都不调 subprocess**；6.3 跑的 `init.py update` 也够不着（`init.py:567` 在 `_git_root_or_dot()` 内，只有 `mode == "config-lint"` 走得到，`run()` 从不调它）⇒ **现状下 15 处修复零 CI 覆盖**。补 `shell: bash` + `PYTHONIOENCODING=gbk` 下各跑一次 `sdflow-issues/scripts/issues.py`、`sdflow-retro/scripts/retro_report.py`、`sdflow-ship/scripts/ship_gate.py` 的只读子命令（三者合计覆盖 15 站点中的 7 个）+ 一个稳定输出中文与非法 UTF-8 字节的夹具子进程，断言不崩且替换行为符合预期
       （不追求 15/15——按通则④，造 15 份非 UTF-8 夹具的完美成本过高，7/15 + 夹具是成本大幅降、结果可接受的次优解）
-- [x] 6.5 🔴 **新增步骤：不设 `PYTHONIOENCODING` 的真实故障面用例** `[spec-review-amendment]`——`PYTHONIOENCODING` 会**主动覆盖**标准流编码，∴ 6.2/6.3/6.4 测的是「人为强制 GBK 的进程」，而不是 Windows **无该变量**时由控制台 / 重定向管道 / locale 决定编码的路径（还可能掩盖环境继承问题）。补：`shell: bash` + 移除该变量 + `chcp 936` 设 code page；控制台路径直接运行会输出中文/emoji 且以退出码 fail-closed 的 `check_encoding_hygiene.py`，重定向路径运行 `setup.sh` 并显式 grep 日志，**控制台与重定向管道至少各一**
+- [x] 6.5 🔴 **新增步骤：不设 `PYTHONIOENCODING` 的真实故障面用例** `[spec-review-amendment]`——`PYTHONIOENCODING` 会**主动覆盖**标准流编码，∴ 6.2/6.3/6.4 测的是「人为强制 GBK 的进程」，而不是 Windows **无该变量**时由控制台 / 重定向管道 / locale 决定编码的路径（还可能掩盖环境继承问题）。补：`shell: bash` + 移除该变量 + `chcp.com 936` 设 code page（Git for Windows Bash 不解析裸 `chcp`）；控制台路径直接运行会输出中文/emoji 且以退出码 fail-closed 的 `check_encoding_hygiene.py`，重定向路径运行 `setup.sh` 并显式 grep 日志，**控制台与重定向管道至少各一**
       注：**本条使 `windows-latest` 真正承重**——该路径只在 Windows 上存在，不能挪去 Linux runner
 
 ## 7. 回归验证
