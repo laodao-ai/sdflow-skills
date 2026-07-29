@@ -1,0 +1,355 @@
+﻿# Review package: 18ffad3..b08a28a
+
+## Commits
+b08a28a fix(ci): exercise sweep encoding path on windows
+9a41785 feat(encoding): wire Windows CI verification
+
+## Files changed
+ .github/workflows/windows-recorder-smoke.yml       | 61 +++++++++++++++++++---
+ .../impl-reports/task4-delivery-windows-ci-fix1.md | 18 +++++++
+ .../impl-reports/task4-delivery-windows-ci.md      | 42 +++++++++++++++
+ openspec/issues/todolist/2026-07-todolist.md       | 12 +++++
+ .../tests/test_task5_delivery_contract.py          | 57 ++++++++++++++++++++
+ setup.sh                                           | 10 ++++
+ 6 files changed, 194 insertions(+), 6 deletions(-)
+
+## Diff
+diff --git a/.github/workflows/windows-recorder-smoke.yml b/.github/workflows/windows-recorder-smoke.yml
+index 0d1e73c..2834df1 100644
+--- a/.github/workflows/windows-recorder-smoke.yml
++++ b/.github/workflows/windows-recorder-smoke.yml
+@@ -1,31 +1,80 @@
+-name: Windows recorder smoke
++name: Windows recorder and encoding smoke
+ 
+ on:
+   push:
+     paths:
+       - ".github/workflows/windows-recorder-smoke.yml"
+       - "setup.sh"
++      - "hack/**"
++      - "sdflow-architecture/scripts/**"
++      - "sdflow-devenv/scripts/**"
++      - "sdflow-done/scripts/**"
++      - "sdflow-implement/scripts/**"
++      - "sdflow-init/assets/**"
++      - "sdflow-init/scripts/**"
+       - "sdflow-issues/**"
+-      - "sdflow-init/scripts/init.py"
++      - "sdflow-maintain/scripts/**"
++      - "sdflow-retro/scripts/**"
++      - "sdflow-ship/scripts/**"
+   pull_request:
+     paths:
+       - ".github/workflows/windows-recorder-smoke.yml"
+       - "setup.sh"
++      - "hack/**"
++      - "sdflow-architecture/scripts/**"
++      - "sdflow-devenv/scripts/**"
++      - "sdflow-done/scripts/**"
++      - "sdflow-implement/scripts/**"
++      - "sdflow-init/assets/**"
++      - "sdflow-init/scripts/**"
+       - "sdflow-issues/**"
+-      - "sdflow-init/scripts/init.py"
++      - "sdflow-maintain/scripts/**"
++      - "sdflow-retro/scripts/**"
++      - "sdflow-ship/scripts/**"
+   workflow_dispatch:
+ 
+ jobs:
+-  windows-recorder-smoke:
++  windows-recorder-and-encoding-smoke:
+     runs-on: windows-latest
+     steps:
+       - uses: actions/checkout@v4
+       - uses: actions/setup-python@v5
+         with:
+           python-version: "3.12"
+-      # pytest>=8 是硬下限：仓根 conftest.py 用 `@pytest.hookimpl(wrapper=True)`（8+ 才有）。
+-      # 与 pytest.ini 的 minversion 成对——见 mechanical-gates.yml 同处注释。
+       - name: Install pytest
++        shell: bash
+         run: py -m pip install "pytest>=8"
+       - name: Run actual Windows local-disk recorder smoke
++        shell: bash
+         run: py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error
++      - name: Run setup with a forced GBK child process
++        shell: bash
++        run: |
++          output="$(PYTHONIOENCODING=gbk bash setup.sh 2>&1)"
++          printf '%s\n' "$output"
++          ! grep -Eq 'UnicodeEncodeError|Traceback' <<<"$output"
++      - name: Run init update with a forced GBK child process
++        shell: bash
++        run: |
++          probe="$RUNNER_TEMP/init-encoding-probe"
++          mkdir -p "$probe"
++          git -C "$probe" init
++          PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$probe"
++      - name: Exercise seven UTF-8 text subprocess call sites and invalid-byte replacement
++        shell: bash
++        run: |
++          PYTHONIOENCODING=gbk py -m pytest -q sdflow-issues/tests/test_task5_delivery_contract.py::test_sweep_cli_executes_all_four_utf8_subprocess_sites -W error
++          PYTHONIOENCODING=gbk python3 sdflow-retro/scripts/retro_report.py --root .
++          set +e
++          PYTHONIOENCODING=gbk python3 sdflow-ship/scripts/ship_gate.py --root . --change fix-windows-encoding-crash
++          gate_status=$?
++          set -e
++          test "$gate_status" -eq 0 -o "$gate_status" -eq 3 -o "$gate_status" -eq 4 -o "$gate_status" -eq 5 -o "$gate_status" -eq 6
++          python3 -c 'import subprocess, sys; r = subprocess.run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(bytes([0x80]))"], capture_output=True, text=True, encoding="utf-8", errors="replace"); assert r.stdout == "\ufffd"'
++      - name: Exercise cp936 console and redirected setup output without PYTHONIOENCODING
++        shell: bash
++        run: |
++          chcp 936
++          env -u PYTHONIOENCODING bash setup.sh
++          env -u PYTHONIOENCODING bash setup.sh > "$RUNNER_TEMP/setup-cp936.log" 2>&1
++          ! grep -Eq 'UnicodeEncodeError|Traceback' "$RUNNER_TEMP/setup-cp936.log"
+diff --git a/openspec/changes/fix-windows-encoding-crash/impl-reports/task4-delivery-windows-ci-fix1.md b/openspec/changes/fix-windows-encoding-crash/impl-reports/task4-delivery-windows-ci-fix1.md
+new file mode 100644
+index 0000000..b2ffa3b
+--- /dev/null
++++ b/openspec/changes/fix-windows-encoding-crash/impl-reports/task4-delivery-windows-ci-fix1.md
+@@ -0,0 +1,18 @@
++# Task 4 delivery — Windows CI sweep path fix
++
++## 交付
++
++- `windows-recorder-smoke.yml` 的 GBK 子进程段由 `issues.py reindex` 改为运行受控盘面的真实 `sweep` 行为测试。
++- 新测试先通过真实 `buglist.py add` 生成临时 fixture，再直接执行 `issues.py sweep`；记录并断言调用图实际经过两次 `scan`、一次 `triage`、一次 `batch add` 与一次 `reindex`，并逐调用断言 `text=True`、`encoding="utf-8"`、`errors="replace"`。
++- 非法字节 replacement fixture 保持不变。
++
++## 验证
++
++```text
++$env:PYTHONIOENCODING='gbk'; py -m pytest -q \
++  sdflow-issues/tests/test_task5_delivery_contract.py::test_windows_smoke_workflow_is_persistent_and_branch_agnostic \
++  sdflow-issues/tests/test_task5_delivery_contract.py::test_sweep_cli_executes_all_four_utf8_subprocess_sites -W error
++2 passed
++```
++
++`git diff --check` 通过。
+diff --git a/openspec/changes/fix-windows-encoding-crash/impl-reports/task4-delivery-windows-ci.md b/openspec/changes/fix-windows-encoding-crash/impl-reports/task4-delivery-windows-ci.md
+new file mode 100644
+index 0000000..5620793
+--- /dev/null
++++ b/openspec/changes/fix-windows-encoding-crash/impl-reports/task4-delivery-windows-ci.md
+@@ -0,0 +1,42 @@
++# Task 4 delivery report: fifth gate and Windows CI
++
++## Delivered
++
++- `setup.sh` now runs `hack/check_encoding_hygiene.py` as an independent fifth
++  mechanical gate after the existing four gates. A failure preserves the
++  checker's per-file contract diagnostics and adds one repair pointer to the
++  four-line template in `CLAUDE.md`.
++- The existing `CLAUDE.md` live documentation already contained the required
++  entry-script template and fifth-gate explanation; it was verified and left
++  unchanged rather than duplicated.
++- `.github/workflows/windows-recorder-smoke.yml` now watches every affected
++  script directory and uses `shell: bash` for every `run` step. It covers:
++  forced-GBK `setup.sh`, forced-GBK `init.py update` in a new Git repository,
++  the seven text subprocess call sites reached by `issues.py` (4),
++  `retro_report.py` (1), and `ship_gate.py` (2), plus an invalid UTF-8-byte
++  replacement fixture.
++- The workflow also removes `PYTHONIOENCODING`, sets `chcp 936`, and runs
++  `setup.sh` once on the console and once redirected, rejecting encoding
++  exceptions and tracebacks in redirected output.
++- Registered non-blocking todo `T263` through the repository's
++  `sdflow-issues` CLI contract. Its immutable `change` field is
++  `fix-windows-encoding-crash`; it records the pre-existing inconsistency
++  between `command -v python3` probes and the validated interpreter chooser.
++
++## Validation
++
++| Command | Result |
++| --- | --- |
++| `python3 hack/check_encoding_hygiene.py` | PASS — all entry scripts satisfy the encoding prelude contract. |
++| `bash setup.sh` | PASS — all five gates ran; output had no `UnicodeEncodeError` or traceback. |
++| `python3 -m pytest -q hack/tests/test_encoding_hygiene.py hack/tests/test_subprocess_encoding_contract.py` | PASS — 10 passed. |
++| `python3 -m pip install --user PyYAML` then `python3 -c "import yaml; yaml.safe_load(...)"` | PASS — workflow YAML syntax parsed locally. PyYAML was absent initially, so it was installed only in the local user environment for this structural check. |
++| Local workflow structural assertion | PASS — both path trigger lists include all affected directories; every `run` step declares Bash; required GBK, CP936, subprocess, and fixture commands are present. |
++| `bash -n setup.sh` and `git diff --check` | PASS. |
++
++## Windows boundary
++
++This machine cannot execute the `windows-latest` GitHub-hosted runner path,
++including its real CP936 console and redirected-pipe behavior. The workflow
++has been syntax- and structure-validated locally; the CP936 behavior remains
++intentionally verified by the newly expanded Windows CI job.
+diff --git a/openspec/issues/todolist/2026-07-todolist.md b/openspec/issues/todolist/2026-07-todolist.md
+index 6cbf0a1..a04ac08 100644
+--- a/openspec/issues/todolist/2026-07-todolist.md
++++ b/openspec/issues/todolist/2026-07-todolist.md
+@@ -115,20 +115,21 @@ sdflow-issues:
+     T253: {"module":"openspec/CONTEXT.md","summary":"「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名","type":"代码质量","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+     T254: {"module":"openspec/workflow/lens-metric-contract.md","summary":"lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行","type":"可观测性","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+     T255: {"module":"sdflow-spec-review/SKILL.md","summary":"outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能","type":"基础设施","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+     T256: {"module":"sdflow-ship/SKILL.md + ~/.claude/hooks/","summary":"用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做）","type":"基础设施","status":"OPEN","time":"2026-07-28 11:18","change":"main","batch":null}
+     T257: {"module":"`ship_gate.py plan_was_renamed`","summary":"plan_was_renamed 内部已算出不带 --follow 的首次新增 sha，紧随其后的 plan_first_sha 又对同一 plan_rel 重发一次完全相同的 git log --diff-filter=A（decide() 每次判定多一次 subprocess）。修法：plan_was_renamed 返回 (renamed, no_follow_first)，或在 decide() 里算一次分别传给两处复用。非阻断，正确性不受影响。来源：harden-implement-review-loop Task 3 fix 轮 Standards 轴 re-review（Duplicated Code）","type":"性能优化","status":"WONTDO","time":"2026-07-28 14:18","change":"harden-implement-review-loop","batch":null}
+     T258: {"module":"`sdflow-implement/SKILL.md` 文件交接节 · review-package","summary":"双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold","type":"代码质量","status":"PROPOSED","time":"2026-07-28 16:08","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+     T259: {"module":"`sdflow-implement/SKILL.md` review-loop-breaker ①档","summary":"熔断规则的①档「有客观判据 → 自动选并记理由后关闭」可在**未修复**的前提下关闭一个仍然成立的 Critical/Important——与同文件「不带着未修 Critical/Important 推进下一 ticket」直接冲突。D2b 的「互斥终态」修正只覆盖了②③档，①档留着旧形状（只回答 finding 是否成立、不产生修复动作）。修法：①档的客观判据只能决定「已解决 / 仍成立」——已解决才关闭；仍成立则走 strong fixer + 仅复验一次，失败即 defer 并停。来源：harden-implement-review-loop 冷层代码审跨模型 outside-voice(codex) 独家。**需改 delta spec 措辞，故不在本 change 修**（改四件套会触发 design 域失鲜）","type":"代码质量","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+     T260: {"module":"`hack/tests/test_canonical_entry_sync.py`","summary":"CLAUDE.md / AGENTS.md / sdflow-init/assets/snippets/claude-section.md 三处的「## Codex 子代理授权」段本次改后逐字节相同(各1045字符)，但无任何机械守卫：test_canonical_entry_sync.py 只对「阶段一入口」小节做 CLAUDE.md==AGENTS.md 等值断言，claude-section.md 完全未纳入。下次只改一处而漏另两处，pytest 与 setup.sh 都不会红，纯靠人工记得。修法：把等值断言扩到该段，或复用 check_tier_resolution_parity.py 的 marker 机制。来源：harden-implement-review-loop 冷层代码审对抗镜#2（结构性风险，非本 change 引入的退化）","type":"基础设施","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+     T261: {"module":"`sdflow-implement/SKILL.md` · `sdflow-implement/scripts/impl_route.py`","summary":"两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2","type":"代码质量","status":"PROPOSED","time":"2026-07-28 17:29","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+     T262: {"module":"`sdflow-done/SKILL.md` 第一步 verify · `ship_gate.py` archived_verify_state","summary":"verify 子代理漏写 ship-gate frontmatter 锚而无任何即时机械门：本轮 verify 写了人读结论行「结论：PASS」与核验 SHA，却漏了 SKILL 明令的 frontmatter（`ship-gate: verify: PASS` + `reviewed_sha`），一路过 hand-off/archive/commit/merge 都无人发现，直到最末 ship_gate 判 UNKNOWN 才暴露（fail-safe 正确、未假绿，但发现点太晚——此时已 merge 进 base，只能事后补录锚，落成一次显式越权留痕）。对比 code-review 层有 anchor_lint.py 在出报告后立刻机验四类锚，verify 层无对等门。修法二选一：①给 verify 加同款出报告后自检（复用 anchor_lint 或新增轻量 frontmatter 校验），在 archive 之前拦住；②让 sdflow-done 第二步(hand-off)/第三步(archive) 起手先校验 verify-report frontmatter 存在且合法，缺则回退重跑 verify。来源：harden-implement-review-loop 实跑实证","type":"基础设施","status":"PROPOSED","time":"2026-07-28 18:05","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
++    T263: {"module":"setup.sh","summary":"Unify the remaining command -v python3 probes behind the validated Python 3.7+ interpreter selection so setup gates do not use inconsistent interpreter availability checks.","type":"基础设施","status":"OPEN","time":"2026-07-29 11:04","change":"fix-windows-encoding-crash","batch":null}
+ ---
+ # 2026-07 TODO
+ 
+ > 项目：<未注明>
+ 
+ ## 状态总览
+ 
+ | ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
+ |----|------|------|------|------|------|------------|------|
+ | T1 | `issues.py` | reindex 回显子进程 scan 的 problems 到 stderr（补齐独立跑 reindex 时表↔块不一致的可见性，D5 承诺） | 可观测性 | DONE | 2026-07-03 00:26 | issues-pool-batch-mgmt | issues-pool-hardening |
+@@ -2649,10 +2650,21 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring
+ ## T261: 两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2
+ > 两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2
+ > 2026-07 状态：OPEN → PROPOSED
+ <!-- sdflow-issue-block:end id=T261 -->
+ 
+ <!-- sdflow-issue-block:start id=T262 -->
+ ## T262: verify 子代理漏写 ship-gate frontmatter 锚而无任何即时机械门：本轮 verify 写了人读结论行「结论：PASS」与核验 SHA，却漏了 SKILL 明令的 frontmatter（`ship-gate: verify: PASS` + `reviewed_sha`），一路过 hand-off/archive/commit/merge 都无人发现，直到最末 ship_gate 判 UNKNOWN 才暴露（fail-safe 正确、未假绿，但发现点太晚——此时已 merge 进 base，只能事后补录锚，落成一次显式越权留痕）。对比 code-review 层有 anchor_lint.py 在出报告后立刻机验四类锚，verify 层无对等门。修法二选一：①给 verify 加同款出报告后自检（复用 anchor_lint 或新增轻量 frontmatter 校验），在 archive 之前拦住；②让 sdflow-done 第二步(hand-off)/第三步(archive) 起手先校验 verify-report frontmatter 存在且合法，缺则回退重跑 verify。来源：harden-implement-review-loop 实跑实证
+ > verify 子代理漏写 ship-gate frontmatter 锚而无任何即时机械门：本轮 verify 写了人读结论行「结论：PASS」与核验 SHA，却漏了 SKILL 明令的 frontmatter（`ship-gate: verify: PASS` + `reviewed_sha`），一路过 hand-off/archive/commit/merge 都无人发现，直到最末 ship_gate 判 UNKNOWN 才暴露（fail-safe 正确、未假绿，但发现点太晚——此时已 merge 进 base，只能事后补录锚，落成一次显式越权留痕）。对比 code-review 层有 anchor_lint.py 在出报告后立刻机验四类锚，verify 层无对等门。修法二选一：①给 verify 加同款出报告后自检（复用 anchor_lint 或新增轻量 frontmatter 校验），在 archive 之前拦住；②让 sdflow-done 第二步(hand-off)/第三步(archive) 起手先校验 verify-report frontmatter 存在且合法，缺则回退重跑 verify。来源：harden-implement-review-loop 实跑实证
+ > 2026-07 状态：OPEN → PROPOSED
+ <!-- sdflow-issue-block:end id=T262 -->
++
++<!-- sdflow-issue-block:start id=T263 -->
++## T263: Unify the remaining command -v python3 probes behind the validated Python 3.7+ interpreter selection so setup gates do not use inconsistent interpreter availability checks.
++> Unify the remaining command -v python3 probes behind the validated Python 3.7+ interpreter selection so setup gates do not use inconsistent interpreter availability checks.
++
++**关联文档**：`openspec/changes/fix-windows-encoding-crash/design.md`
++
++**动机**：Existing probes use command -v python3 while other setup paths select python3 or python after a version check. This is pre-existing and non-blocking for the encoding change.
++
++**思路**：Design a small shared shell predicate or reuse the selected interpreter without broadening this change scope.
++<!-- sdflow-issue-block:end id=T263 -->
+diff --git a/sdflow-issues/tests/test_task5_delivery_contract.py b/sdflow-issues/tests/test_task5_delivery_contract.py
+index 9b1cafd..d0d30d4 100644
+--- a/sdflow-issues/tests/test_task5_delivery_contract.py
++++ b/sdflow-issues/tests/test_task5_delivery_contract.py
+@@ -20,20 +20,21 @@ ISSUES_PATH = ROOT / "sdflow-issues/scripts/issues.py"
+ 
+ def _load(name, path):
+     spec = importlib.util.spec_from_file_location(name, path)
+     module = importlib.util.module_from_spec(spec)
+     spec.loader.exec_module(module)
+     return module
+ 
+ 
+ BUG = _load("_task5_bug", BUG_PATH)
+ TODO = _load("_task5_todo", TODO_PATH)
++ISSUES = _load("_task5_issues", ISSUES_PATH)
+ 
+ 
+ def test_legacy_table_is_read_promotion_only_and_cell_guard_left_batch_only():
+     bug_source = BUG_PATH.read_text(encoding="utf-8")
+     todo_source = TODO_PATH.read_text(encoding="utf-8")
+     issues_source = ISSUES_PATH.read_text(encoding="utf-8")
+ 
+     assert "def _reject_cell_unsafe" not in bug_source
+     assert "def _reject_cell_unsafe" not in todo_source
+     assert "def _reject_cell_unsafe" not in issues_source
+@@ -231,20 +232,76 @@ def test_reindex_to_scan_delegation_contract_runs_before_windows_smoke(tmp_path,
+         assert participant.chain == ("reindex", "scan")
+ 
+ 
+ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
+     workflow = (ROOT / ".github/workflows/windows-recorder-smoke.yml").read_text(encoding="utf-8")
+     for trigger in ("push:", "pull_request:", "workflow_dispatch:"):
+         assert trigger in workflow
+     assert "branches:" not in workflow
+     assert "runs-on: windows-latest" in workflow
+     assert "py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
++    assert (
++        "PYTHONIOENCODING=gbk py -m pytest -q "
++        "sdflow-issues/tests/test_task5_delivery_contract.py::"
++        "test_sweep_cli_executes_all_four_utf8_subprocess_sites -W error"
++    ) in workflow
++
++
++def test_sweep_cli_executes_all_four_utf8_subprocess_sites(tmp_path, monkeypatch):
++    """A controlled fixture must take sweep through scan, triage, batch-add and reindex."""
++    payload = json.dumps({
++        "module": "windows-smoke",
++        "summary": "exercise sweep call graph",
++        "priority": "P2",
++        "phenomenon": "controlled fixture",
++        "change": "windows-sweep-smoke",
++    })
++    seeded = subprocess.run(
++        [sys.executable, str(BUG_PATH), "--root", str(tmp_path), "add"],
++        input=payload,
++        capture_output=True,
++        text=True,
++    )
++    assert seeded.returncode == 0, seeded.stderr
++
++    real_run = ISSUES.subprocess.run
++    calls = []
++
++    def recording_run(command, *args, **kwargs):
++        calls.append((command, kwargs))
++        return real_run(command, *args, **kwargs)
++
++    monkeypatch.setattr(ISSUES.subprocess, "run", recording_run)
++    monkeypatch.setattr(sys, "argv", [
++        "issues.py", "--root", str(tmp_path), "sweep", "--change", "windows-sweep-smoke",
++    ])
++    ISSUES.main()
++
++    sweep_calls = [
++        (command, kwargs)
++        for command, kwargs in calls
++        if len(command) > 1 and str(command[1]) in {str(BUG_PATH), str(TODO_PATH), str(ISSUES_PATH)}
++    ]
++    stages = [
++        "batch-add" if "batch" in command else
++        "scan" if "scan" in command else
++        "triage" if "triage" in command else
++        "reindex"
++        for command, _kwargs in sweep_calls
++    ]
++    assert stages == ["scan", "triage", "scan", "batch-add", "reindex"]
++    for _command, kwargs in sweep_calls:
++        assert kwargs["text"] is True
++        assert kwargs["encoding"] == "utf-8"
++        assert kwargs["errors"] == "replace"
++    assert (tmp_path / "openspec/issues/INDEX.md").exists()
++    assert "windows-sweep-smoke" in (tmp_path / "openspec/issues/batches.md").read_text(encoding="utf-8")
+ 
+ 
+ def test_delivery_docs_name_operational_boundaries():
+     adr = (ROOT / "openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md").read_text(encoding="utf-8")
+     context = (ROOT / "openspec/CONTEXT.md").read_text(encoding="utf-8")
+     # 三合一（adr/0027）：两池 + 跨池的交付/操作边界叙述现全居唯一 sdflow-issues/SKILL.md。
+     skills = (ROOT / "sdflow-issues/SKILL.md").read_text(encoding="utf-8")
+     contract = adr + context + skills
+     for phrase in (
+         "Shared Frontmatter Envelope",
+diff --git a/setup.sh b/setup.sh
+index fbeba60..c41a2bb 100644
+--- a/setup.sh
++++ b/setup.sh
+@@ -546,10 +546,20 @@ if command -v python3 >/dev/null 2>&1 && \
+ fi
+ 
+ # 四个编排 SKILL（implement/done/code-review/spec-review）的宿主/档位解析核心段必须逐字节相同 ——
+ # 漂了 = 某个 skill 的档位解析静默行为分叉。独立守卫，同上不挂在 sync_principles.py 条件下。
+ if command -v python3 >/dev/null 2>&1 && \
+    [ -f "$REPO_DIR/hack/check_tier_resolution_parity.py" ]; then
+   if ! python3 "$REPO_DIR/hack/check_tier_resolution_parity.py"; then
+     echo "  ⚠️ 宿主/档位解析核心段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
+   fi
+ fi
++
++# 第五道机械门：每个 Python 入口都必须在模块顶层重配 stdout/stderr，避免 Windows
++# GBK 控制台在打印 Unicode 状态信息时把真实成功误报为崩溃。它与其余四门独立：
++# 不依赖任何别的门是否存在或是否通过，失败详情由检查器逐文件列出并指向 CLAUDE.md 模板。
++if command -v python3 >/dev/null 2>&1 && \
++   [ -f "$REPO_DIR/hack/check_encoding_hygiene.py" ]; then
++  if ! python3 "$REPO_DIR/hack/check_encoding_hygiene.py"; then
++    echo "  ⚠️ Python 入口编码前导缺失（上面列了逐文件修复项）。修：按 CLAUDE.md“修改本仓库的注意”中的 4 行模板补齐。"
++  fi
++fi
