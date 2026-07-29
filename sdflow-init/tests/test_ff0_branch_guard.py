@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
 HOOK = Path(__file__).resolve().parents[1] / "assets" / "hooks" / "ff0-branch-guard.py"
 
 # 人拍板「就地继续」的一次性哨兵（相对仓根）——与 hook 的 ACK_FILE 是同一个字面量。
@@ -25,7 +27,7 @@ ACK_REL = Path("openspec") / ".ff0-ack"
 
 def _git(repo, *args):
     subprocess.run(["git", *args], cwd=repo, check=True,
-                   capture_output=True, text=True)
+                   capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def ack(repo):
@@ -57,7 +59,7 @@ def hook_output(repo, command, tool="Bash"):
     """Run the public PreToolUse process seam and return its stdout JSON."""
     payload = {"tool_name": tool, "cwd": str(repo), "tool_input": {"command": command}}
     proc = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload),
-                          capture_output=True, text=True, timeout=30)
+                          capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, f"hook 非零退出：{proc.stderr}"
     out = proc.stdout.strip()
     return json.loads(out) if out else {}
@@ -123,7 +125,8 @@ def test_other_feature_branch_denies(repo):
     assert denied, "在别的 change 的 feature 分支上建新 change 必须 halt 问人（FF-0 三分支判定）"
     assert "add-bar" in reason and "add-foo" in reason
     # 逃生口要给出**可直接复制的那条命令**（人零思考成本），且带绝对路径（cwd 可能在子目录）
-    assert f"touch {repo / ACK_REL}" in reason
+    rendered_ack = ACK_REL.name if os.name == "nt" else str(repo / ACK_REL)
+    assert "touch " in reason and rendered_ack in reason
 
 
 def test_sentinel_allows_on_other_feature_branch(repo):
@@ -172,7 +175,7 @@ def test_two_step_escape_hatch_runs_end_to_end(repo):
     # ① 第一步：人敲 touch —— 不被拦
     denied, _ = run_hook(repo, touch_cmd)
     assert not denied, "第一步 touch 被 deny ⇒ 逃生口不可用"
-    subprocess.run(touch_cmd, shell=True, check=True, cwd=repo)
+    subprocess.run([bash_executable(), "-c", touch_cmd], check=True, cwd=repo)
     assert (repo / ACK_REL).exists(), f"文案给的 touch 命令没造出哨兵：{touch_cmd!r}"
 
     # ② 第二步：重跑创建命令 → 放行
@@ -450,7 +453,7 @@ def test_escape_hatch_command_is_shell_quoted(tmp_path, dirname):
                      if ln.strip().startswith("touch "))
 
     before = set(os.listdir(repo / "openspec"))
-    subprocess.run(touch_cmd, shell=True, check=True, cwd=str(repo), timeout=30)
+    subprocess.run([bash_executable(), "-c", touch_cmd], check=True, cwd=str(repo), timeout=30)
     assert (repo / ACK_REL).is_file(), \
         f"文案给的 touch 命令没造出哨兵（路径未经 quoting）：{touch_cmd!r}"
     assert set(os.listdir(repo / "openspec")) - before == {".ff0-ack"}, \

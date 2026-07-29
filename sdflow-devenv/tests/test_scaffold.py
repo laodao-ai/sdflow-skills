@@ -191,7 +191,8 @@ def test_verify_lane_surfaces_make_overriding_warning(repo, capsys):
       `$(shell …)` 在解析期就求值，`include` 的 remake 规则会真往仓库写文件。）
     """
     (repo / "Makefile").write_text(
-        'integration:\n\t@echo "用户原来的"\n\nintegration:\n\t@echo "skill 追加的"\n')
+        'integration:\n\t@echo "用户原来的"\n\nintegration:\n\t@echo "skill 追加的"\n',
+        encoding="utf-8")
     run("init", "--root", repo)
     run("set-lane", "--root", repo, "--id", "dup", "--layer", "integration",
         "--status", "planned", "--method", "make integration", "--source", "Makefile")

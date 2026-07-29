@@ -91,7 +91,7 @@ def run_gate_env(root, extra_env=None, change="demo", cwd=None):
     argv = [sys.executable, str(GATE), "--change", change]
     if root is not None:
         argv += ["--root", str(root)]
-    r = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=cwd)
+    r = subprocess.run(argv, capture_output=True, text=True, env=env, cwd=cwd, encoding="utf-8", errors="replace")
     lines = r.stdout.strip().splitlines()
     return r.returncode, (json.loads(lines[-1]) if lines else {}), r.stderr
 

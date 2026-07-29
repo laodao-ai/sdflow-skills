@@ -43,11 +43,22 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
 REPO = Path(__file__).resolve().parents[2]
 AGENT_DIR = REPO / "sdflow-spec" / "agents"
 SKILL = REPO / "sdflow-spec" / "SKILL.md"
 DELEGATION = REPO / "sdflow-spec" / "references" / "delegation-protocol.md"
 OUTSIDE_VOICE = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
+
+
+def _symlink_or_skip(target, link):
+    try:
+        os.symlink(str(target), str(link), target_is_directory=Path(target).is_dir())
+    except OSError as exc:
+        if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows symlink creation requires Developer Mode or elevated privilege")
+        raise
 
 LOCAL = AGENT_DIR / "sdflow-local-researcher.md"
 WEB = AGENT_DIR / "sdflow-web-researcher.md"
@@ -228,8 +239,8 @@ _FAKE_KEY = "AKIA" + "IOSFODNN7EXAMPLE"      # 拼接：别让本文件自己成
 
 
 def _scan(path):
-    return subprocess.run(["bash", str(OUTSIDE_VOICE), "secret-scan", "--context-file", str(path)],
-                          capture_output=True, text=True, timeout=60)
+    return subprocess.run([bash_executable(), bash_path(OUTSIDE_VOICE), "secret-scan", "--context-file", bash_path(path)],
+                          capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
 
 
 def test_secret_scan_rejects_a_query_carrying_a_key(tmp_path):
@@ -272,9 +283,9 @@ def _scan_with_broken_grep(path, bin_dir, rc=2):
     fake.chmod(0o755)
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env.get('PATH', '')}"
-    return subprocess.run(["bash", str(OUTSIDE_VOICE), "secret-scan",
-                           "--context-file", str(path)],
-                          capture_output=True, text=True, timeout=60, env=env)
+    return subprocess.run([bash_executable(), bash_path(OUTSIDE_VOICE), "secret-scan",
+                           "--context-file", bash_path(path)],
+                          capture_output=True, text=True, timeout=60, env=env, encoding="utf-8", errors="replace")
 
 
 def test_secret_scan_fails_closed_when_the_scanner_itself_fails(tmp_path):
@@ -472,7 +483,7 @@ def test_s4_rejects_a_symlinked_target(change_tree):
     root, change, outside = change_tree
     victim = outside / "stolen.md"
     victim.write_text("x", encoding="utf-8")
-    os.symlink(str(victim), change / "proposal.md")
+    _symlink_or_skip(victim, change / "proposal.md")
     ok, why = check_output_path(str(change / "proposal.md"), change_root=change, repo_root=root)
     assert not ok and "软链" in why
 
@@ -486,7 +497,7 @@ def test_s4_rejects_a_symlinked_ancestor(change_tree):
     for child in real_specs.iterdir():
         child.rmdir()
     real_specs.rmdir()
-    os.symlink(str(elsewhere), real_specs)
+    _symlink_or_skip(elsewhere, real_specs)
     ok, why = check_output_path(str(change / "specs" / "cap" / "spec.md"),
                                 change_root=change, repo_root=root)
     assert not ok and "软链" in why
@@ -516,7 +527,7 @@ def test_s4_rejects_a_symlinked_ancestor_above_the_change_root(tmp_path, level):
     for p in parts[i + 1:]:
         rest = rest / p
     (rest / "specs" / "cap").mkdir(parents=True)
-    os.symlink(str(target), str(prefix / level))
+    _symlink_or_skip(target, prefix / level)
 
     change = root / "openspec" / "changes" / "demo"
     ok, why = check_output_path(str(change / "specs" / "cap" / "spec.md"),

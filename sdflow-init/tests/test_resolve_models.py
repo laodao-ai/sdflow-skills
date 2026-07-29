@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
 from model_tiers_cases import CASES as MODEL_TIERS_CASES  # noqa: E402 共享畸形输入语料
 
@@ -64,32 +66,34 @@ def run_resolve(root, env_overrides=None, no_sdflow_home=True, extra_args=()):
     env = dict(os.environ)
     if no_sdflow_home:
         # 隔离真实 ~/.sdflow：不让本机已装的全局 canonical 干扰测试（每条用例应只吃本地 pin bundle）
-        env["SDFLOW_HOME"] = str(root.parent / "no-such-sdflow-home")
+        env["SDFLOW_HOME"] = bash_path(root.parent / "no-such-sdflow-home")
     env.pop("CLAUDECODE", None)
     env.pop("CODEX_THREAD_ID", None)
     if env_overrides:
         env.update(env_overrides)
     return subprocess.run(
-        ["bash", str(SCRIPT), "--root", str(root), *extra_args],
+        [bash_executable(), bash_path(SCRIPT), "--root", bash_path(root), *extra_args],
         capture_output=True, text=True, env=env, timeout=15,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def eval_resolve(root, env_overrides=None, no_sdflow_home=True, cwd=None):
     """真正走 `eval "$(resolve-models.sh ...)"` 接口——用于恶意值回归（断言不执行）。"""
     env = dict(os.environ)
     if no_sdflow_home:
-        env["SDFLOW_HOME"] = str(root.parent / "no-such-sdflow-home")
+        env["SDFLOW_HOME"] = bash_path(root.parent / "no-such-sdflow-home")
     env.pop("CLAUDECODE", None)
     env.pop("CODEX_THREAD_ID", None)
     if env_overrides:
         env.update(env_overrides)
-    script = f'eval "$(bash {shlex.quote(str(SCRIPT))} --root {shlex.quote(str(root))})"; ' \
+    script = f'eval "$(bash {shlex.quote(bash_path(SCRIPT))} --root {shlex.quote(bash_path(root))})"; ' \
              f'echo "SDFLOW_HOST=$SDFLOW_HOST"; echo "SDFLOW_TIER_STRONG=$SDFLOW_TIER_STRONG"; ' \
              f'echo "SDFLOW_TIER_MID=$SDFLOW_TIER_MID"; echo "SDFLOW_TIER_LIGHT=$SDFLOW_TIER_LIGHT"; ' \
              f'echo "SDFLOW_VOICE_RUNNER=$SDFLOW_VOICE_RUNNER"; echo "SDFLOW_VOICE_MODEL=$SDFLOW_VOICE_MODEL"'
-    return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
-                          env=env, cwd=str(cwd) if cwd else None, timeout=15)
+    return subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True,
+                          env=env, cwd=str(cwd) if cwd else None, timeout=15, encoding="utf-8", errors="replace")
 
 
 def parse_exports(stdout):

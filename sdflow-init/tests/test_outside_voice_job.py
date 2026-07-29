@@ -34,6 +34,12 @@ from pathlib import Path
 
 import pytest
 
+if os.name == "nt":
+    pytest.skip(
+        "outside-voice background jobs require POSIX process and shell semantics",
+        allow_module_level=True,
+    )
+
 REPO = Path(__file__).resolve().parents[2]
 ASSETS = REPO / "sdflow-init" / "assets" / "hack"
 JOB_PY = ASSETS / "outside-voice-job.py"
@@ -301,7 +307,9 @@ def _run_job(job_home, args, env, timeout=60, cwd=None):
         [sys.executable, str(job_home / "outside-voice-job.py"), *args],
         capture_output=True, text=True, env=env, timeout=timeout,
         cwd=str(cwd) if cwd else None,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _json_stdout(proc):
@@ -1137,7 +1145,7 @@ def _real_claude_reason():
     if not claude:
         return "需要本机安装的 claude CLI（真实 --bg --exec supervisor 跨 shell 存活证明）"
     try:
-        out = subprocess.run([claude, "--version"], capture_output=True, text=True, timeout=30)
+        out = subprocess.run([claude, "--version"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     except Exception as exc:  # pragma: no cover - 环境异常
         return "claude --version 不可用: %s" % exc
     match = re.search(r"(\d+)\.(\d+)\.(\d+)", out.stdout or "")
@@ -1182,7 +1190,7 @@ def test_background_worker_survives_dispatching_shell_exit(fake_job_home, repo):
         assert (repo["run_dir"] / "design-voice.terminal.json").exists()
     finally:
         subprocess.run([shutil.which("claude"), "rm", job_id],
-                       capture_output=True, text=True, timeout=60)
+                       capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2054,7 +2062,7 @@ def _detached_sleeper(seconds=30):
     `os.kill(pid, 0)` 成功 —— 否则「子树已退出」的探针会被僵尸骗过去。
     """
     out = subprocess.run(["sh", "-c", "sleep %d >/dev/null 2>&1 & echo $!" % seconds],
-                         capture_output=True, text=True, timeout=10)
+                         capture_output=True, text=True, timeout=10, encoding="utf-8", errors="replace")
     return int(out.stdout.strip())
 
 
@@ -3265,7 +3273,7 @@ def test_helper_writes_no_runner_pid_when_the_worker_did_not_ask_for_one(job_hom
     env.pop("SDFLOW_VOICE_RUNNER_PID_FILE", None)
     proc = subprocess.run(["bash", str(job_home / "outside-voice.sh"), "exec",
                            "--context-file", str(repo["ctx"])],
-                          capture_output=True, text=True, env=env, timeout=120)
+                          capture_output=True, text=True, env=env, timeout=120, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, proc.stderr
     assert not list(repo["run_dir"].glob("*" + JOB.RUNNER_PID_SUFFIX))
 
@@ -3323,7 +3331,7 @@ def test_shell_metacharacters_in_paths_cannot_rewrite_the_dispatched_command(
     command = _bg_invocations(fake_claude)[0]["argv"][-1]
 
     probe = subprocess.run(["bash", "-c", "printf '%s\\n' " + command],
-                           capture_output=True, text=True, cwd=str(tmp_path), timeout=30)
+                           capture_output=True, text=True, cwd=str(tmp_path), timeout=30, encoding="utf-8", errors="replace")
     assert probe.returncode == 0, probe.stderr
     tokens = probe.stdout.splitlines()
     assert str(ctx) in tokens, tokens
@@ -3395,7 +3403,7 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
     control = subprocess.run(
         [claude, "--bg", "--exec",
          "printf '%s\\n' " + control_canary + "; printf '%s\\n' " + control_canary + "-ERR >&2"],
-        capture_output=True, text=True, timeout=60)
+        capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
     assert control.returncode == 0, control.stderr
     control_id = JOB._parse_job_id_hint(control.stdout)
     assert control_id, control.stdout
@@ -3404,7 +3412,7 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             got = subprocess.run([claude, "logs", control_id],
-                                 capture_output=True, text=True, timeout=60)
+                                 capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
             control_logs = got.stdout + got.stderr
             if control_canary in control_logs:
                 break
@@ -3414,7 +3422,7 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
             "「worker 是否重定向」无判别力，下面的断言不构成证据\n%r" % control_logs[:800])
         assert control_canary + "-ERR" in control_logs, "对照组：stderr 未进 transcript"
     finally:
-        subprocess.run([claude, "rm", control_id], capture_output=True, text=True, timeout=60)
+        subprocess.run([claude, "rm", control_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
 
     home = tmp_path / "hack-canary"
     home.mkdir()
@@ -3443,10 +3451,10 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
         assert ctx_canary in (repo["run_dir"] / "design-voice.stdout").read_text(encoding="utf-8")
         assert ctx_canary in (repo["run_dir"] / "design-voice.stderr").read_text(encoding="utf-8")
 
-        logs = subprocess.run([claude, "logs", job_id], capture_output=True, text=True, timeout=60)
+        logs = subprocess.run([claude, "logs", job_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
         assert logs.returncode == 0, (logs.stdout, logs.stderr)
         roster = subprocess.run([claude, "agents", "--all", "--json"],
-                                capture_output=True, text=True, timeout=60)
+                                capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
         assert roster.returncode == 0, roster.stderr
         surface = logs.stdout + logs.stderr + roster.stdout
         assert ctx_canary not in surface, "context 正文进了 supervisor transcript/state"
@@ -3454,7 +3462,7 @@ def test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret(tmp_p
         # 路径出现在 roster 的 name 里是**既有且已知**的结构化事实，不判红
         assert str(repo["ctx"]) in roster.stdout or job_id in roster.stdout
     finally:
-        subprocess.run([claude, "rm", job_id], capture_output=True, text=True, timeout=60)
+        subprocess.run([claude, "rm", job_id], capture_output=True, text=True, timeout=60, encoding="utf-8", errors="replace")
 
 
 @pytest.mark.parametrize("attr,value", [("name", "nt"), ("platform", "win32"),
@@ -3495,7 +3503,7 @@ def _install_into_temp_global_home(tmp_path):
     home.mkdir()
     env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
     proc = subprocess.run(["bash", str(REPO / "setup.sh")], env=env,
-                          capture_output=True, text=True, timeout=300)
+                          capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     return home / ".sdflow" / "hack"
 

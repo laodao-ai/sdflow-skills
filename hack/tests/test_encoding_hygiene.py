@@ -126,6 +126,7 @@ def test_cli_rejects_apply_mode():
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
     )
 
     assert result.returncode != 0

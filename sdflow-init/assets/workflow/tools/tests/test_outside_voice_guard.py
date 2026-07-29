@@ -351,7 +351,7 @@ def test_no_exec_tokens_in_source():
 def _run(review_path, change_dir):
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--review-path", str(review_path),
-         "--change-dir", str(change_dir)], capture_output=True, text=True)
+         "--change-dir", str(change_dir)], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_cli_none_exit0(tmp_path):

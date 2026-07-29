@@ -502,7 +502,7 @@ def test_emit_does_not_invent_missing_fields(tmp_path):
     _write_collected(tmp_path, "design-voice")
     data = json.loads((tmp_path / "design-voice.collected.json").read_text())
     del data["stdout_sha256"]
-    (tmp_path / "design-voice.collected.json").write_text(json.dumps(data))
+    (tmp_path / "design-voice.collected.json").write_text(json.dumps(data), encoding="utf-8")
     ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
     assert ev["sites"][0]["stdout_sha256"] is None
     assert any("stdout_sha256" in f for f in CE.verify(ev))
@@ -562,7 +562,7 @@ def test_emit_leaves_host_none_when_the_witness_predates_the_field(tmp_path):
     _write_collected(tmp_path, "design-voice")
     raw = json.loads((tmp_path / "design-voice.collected.json").read_text())
     del raw["host"]
-    (tmp_path / "design-voice.collected.json").write_text(json.dumps(raw))
+    (tmp_path / "design-voice.collected.json").write_text(json.dumps(raw), encoding="utf-8")
     ev = CE.emit(str(tmp_path), "spec-review", "r", "c", ["design-voice"])
     assert ev["host"] is None and ev["sites"][0]["host"] is None
     fails = CE.verify(ev)
@@ -593,7 +593,7 @@ def test_emit_fails_loud_when_a_declared_site_has_no_witness(tmp_path):
 
 def _run(*args):
     return subprocess.run([sys.executable, str(SCRIPT), *args],
-                          capture_output=True, text=True, encoding="utf-8")
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_cli_check_exit_codes(tmp_path):

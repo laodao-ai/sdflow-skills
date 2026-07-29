@@ -31,7 +31,9 @@ def _run(script, root, *args):
         [sys.executable, str(script), "--root", str(root), *args],
         text=True,
         capture_output=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _legacy_table(pool, item_id, summary="旧摘要"):

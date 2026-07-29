@@ -57,7 +57,7 @@ def test_config_superpowers_route_resolves_superpowers(repo):
     r = subprocess.run(
         [sys.executable, str(Path(_IMPL_ROUTE) / "impl_route.py"),
          "route", "--root", str(repo), "--change", "demo"],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0
     assert "pipeline=superpowers" in r.stdout
 

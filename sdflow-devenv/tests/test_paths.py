@@ -7,7 +7,7 @@ from devenv_paths import contain, PathEscape
 
 
 def test_accepts_plain_relative(tmp_path):
-    (tmp_path / "Makefile").write_text("x\n")
+    (tmp_path / "Makefile").write_text("x\n", encoding="utf-8")
     got = contain(tmp_path, "Makefile")
     assert got == (tmp_path / "Makefile").resolve()
 
@@ -19,7 +19,7 @@ def test_accepts_mid_path_dot(tmp_path):
     这条会挂红。
     """
     (tmp_path / "a").mkdir()
-    (tmp_path / "a" / "b").write_text("x\n")
+    (tmp_path / "a" / "b").write_text("x\n", encoding="utf-8")
     assert contain(tmp_path, "a/./b") == (tmp_path / "a" / "b").resolve()
 
 
@@ -39,9 +39,11 @@ def test_rejects_dotdot_in_middle(tmp_path):
 
 
 def test_rejects_symlink_ancestor(tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows symlink creation requires Developer Mode or elevated privilege")
     outside = tmp_path.parent / "outside_dir"
     outside.mkdir()
-    (outside / "loot.txt").write_text("secret\n")
+    (outside / "loot.txt").write_text("secret\n", encoding="utf-8")
     (tmp_path / "link").symlink_to(outside, target_is_directory=True)
     # 目标文件本身不是 symlink，但它的【祖先】是 —— 前一版只查目标本身，会漏
     with pytest.raises(PathEscape):
@@ -49,8 +51,10 @@ def test_rejects_symlink_ancestor(tmp_path):
 
 
 def test_rejects_symlink_target_itself(tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows symlink creation requires Developer Mode or elevated privilege")
     outside = tmp_path.parent / "outside2.txt"
-    outside.write_text("x\n")
+    outside.write_text("x\n", encoding="utf-8")
     (tmp_path / "sneaky").symlink_to(outside)
     with pytest.raises(PathEscape):
         contain(tmp_path, "sneaky")

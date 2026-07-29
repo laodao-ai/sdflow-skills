@@ -7,7 +7,7 @@ SCRIPT = pathlib.Path(__file__).parent.parent / "scripts" / "sad_scaffold.py"
 
 def run(args, cwd):
     return subprocess.run([sys.executable, str(SCRIPT)] + args,
-                          capture_output=True, text=True, cwd=cwd)
+                          capture_output=True, text=True, cwd=cwd, encoding="utf-8", errors="replace")
 
 def make_repo(tmp_path, with_openspec=True):
     if with_openspec:
@@ -83,7 +83,9 @@ def test_template_missing_fail_closed_no_partial_layout(tmp_path):
     r = subprocess.run(
         [sys.executable, str(fake_scripts / "sad_scaffold.py"), "init", "--root", str(consumer)],
         capture_output=True, text=True, cwd=tmp_path,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert r.returncode == 2
     assert "sad-template.md" in r.stderr
     # fail-closed：模版缺失须在任何 preflight 副作用之前拒绝，不留半套布局
@@ -382,7 +384,7 @@ def test_b1_validated_passes_with_contract_validated_then_lint_clean(tmp_path):
     r = run(["transition", "--root", str(repo), "--to", "validated", "--dod-confirmed"], tmp_path)
     assert r.returncode == 0
     lr = subprocess.run([sys.executable, str(LINT), "--root", str(repo)],
-                        capture_output=True, text=True, cwd=tmp_path)
+                        capture_output=True, text=True, cwd=tmp_path, encoding="utf-8", errors="replace")
     assert lr.returncode == 0, f"事后 lint 未过: {lr.stdout}{lr.stderr}"
 
 def test_b1_validated_to_draft_retained_validated_refused(tmp_path):
@@ -424,6 +426,8 @@ def test_b3_reinit_after_sad_deleted_preserves_log(tmp_path):
     assert after.count(b"init") >= 2              # 两次 init 各留一痕
 
 def test_b3_readonly_log_file_set_fact_exit2_sad_unchanged(tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows does not implement POSIX mode-bit write denial")
     if os.geteuid() == 0:
         pytest.skip("root 绕过权限位，跳过只读日志测试")
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)
@@ -483,6 +487,8 @@ def test_b6_preflight_architecture_is_file_exit3(tmp_path):
     assert r.returncode == 3 and "architecture" in r.stderr
 
 def test_b6_readonly_architecture_dir_set_fact_exit2(tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows does not implement POSIX mode-bit write denial")
     if os.geteuid() == 0:
         pytest.skip("root 绕过权限位，跳过只读目录测试")
     repo = make_repo(tmp_path); run(["init", "--root", str(repo)], tmp_path)

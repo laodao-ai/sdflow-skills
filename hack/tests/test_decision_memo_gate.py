@@ -27,7 +27,10 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
 REPO = Path(__file__).resolve().parents[2]
+OPENSPEC = shutil.which("openspec") or "openspec"
 
 # ── fenced code block / HTML 注释块的识别口径：**复用本仓单一源**，MUST NOT 手抄 ──────────
 # 单一源 = `sdflow-ship/scripts/ship_gate.py:568-579` 那一组（`fence_delim` / `FenceTracker` /
@@ -321,9 +324,9 @@ def _documented_hash_command():
 
 def _decision_hash(memo_path):
     """按**文档里那条命令**算 `decision_hash`（真跑 bash，不复刻实现）。"""
-    cmd = _documented_hash_command().replace(_HASH_CMD_PLACEHOLDER, str(memo_path))
-    r = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True,
-                       timeout=_CLI_TIMEOUT_S)
+    cmd = _documented_hash_command().replace(_HASH_CMD_PLACEHOLDER, bash_path(memo_path))
+    r = subprocess.run([bash_executable(), "-c", cmd], capture_output=True, text=True,
+                       timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace")
     assert r.returncode == 0, f"文档里的 hash 命令跑不起来：\n{r.stdout}\n{r.stderr}"
     return r.stdout.strip()
 
@@ -546,15 +549,15 @@ def _make_change(root, *, proposal=_GOOD_PROPOSAL, spec=_GOOD_SPEC, design=_GOOD
 
 def _validate(root):
     return subprocess.run(
-        ["openspec", "validate", "demo", "--strict", "--type", "change"],
-        cwd=str(root), capture_output=True, text=True, timeout=_CLI_TIMEOUT_S)
+        [OPENSPEC, "validate", "demo", "--strict", "--type", "change"],
+        cwd=str(root), capture_output=True, text=True, timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace")
 
 
 def _status_is_complete(root):
     out = subprocess.run(
-        ["openspec", "status", "--change", "demo", "--json"],
+        [OPENSPEC, "status", "--change", "demo", "--json"],
         cwd=str(root), capture_output=True, text=True, check=True,
-        timeout=_CLI_TIMEOUT_S).stdout
+        timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace").stdout
     import json
     return json.loads(out)["isComplete"]
 

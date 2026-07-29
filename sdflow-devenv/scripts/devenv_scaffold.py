@@ -19,6 +19,7 @@
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -325,8 +326,16 @@ def cmd_verify_lane(args):
 
     print(f"$ {method}")
     try:
-        r = subprocess.run(method, shell=True, cwd=str(root), capture_output=True,
-                           text=True, timeout=args.timeout,
+        command = method
+        run_kwargs = {"shell": True}
+        if os.name == "nt":
+            bash = shutil.which("bash")
+            if not bash:
+                raise OSError("Git Bash is required to execute verification.method on Windows")
+            command = [bash, "-c", method]
+            run_kwargs = {}
+        r = subprocess.run(command, cwd=str(root), capture_output=True,
+                           text=True, timeout=args.timeout, **run_kwargs,
                            encoding="utf-8", errors="replace")
         code, out, err = r.returncode, r.stdout, r.stderr
         timed_out = False

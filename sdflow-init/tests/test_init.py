@@ -375,6 +375,8 @@ class TestRunFsErrorGuard:
     """B1-F2：run() 主体 FS 操作异常须走 _die 惯例，不裸抛 traceback。"""
 
     def test_readonly_root_dies_with_fs_error(self, tmp_path, monkeypatch, capsys):
+        if os.name == "nt":
+            pytest.skip("Windows chmod does not enforce POSIX directory write permissions")
         if hasattr(os, "geteuid") and os.geteuid() == 0:
             pytest.skip("running as root — permission bits don't block writes")
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))

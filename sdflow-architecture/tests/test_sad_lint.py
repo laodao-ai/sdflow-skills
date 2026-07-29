@@ -7,7 +7,7 @@ SCRIPT = pathlib.Path(__file__).parent.parent / "scripts" / "sad_lint.py"
 def lint(tmp_path, text):
     p = tmp_path / "sad.md"; p.write_text(text, encoding="utf-8")
     return subprocess.run([sys.executable, str(SCRIPT), "--sad", str(p)],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 def test_pass_honest_code(tmp_path):
     r = lint(tmp_path, make_sad(assumptions=[(1, "接受")], cache=0))
@@ -69,7 +69,7 @@ def test_bad_input_fail_closed(tmp_path):
     r = lint(tmp_path, "no frontmatter at all\n")
     assert r.returncode == 2 and r.stderr.startswith("[sad_lint] FAIL:") and S.PASS_CODE not in r.stdout
     r2 = subprocess.run([sys.executable, str(SCRIPT), "--sad", str(tmp_path / "nope.md")],
-                        capture_output=True, text=True)
+                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r2.returncode == 2 and "[sad_lint] FAIL:" in r2.stderr
 
 def test_enum_invalid_fail_closed(tmp_path):
@@ -90,7 +90,7 @@ def test_non_utf8_fail_closed(tmp_path):
     p = tmp_path / "sad.md"
     p.write_bytes(b"---\nsad_schema: 1\nsad_status: draft\n---\nbad \x92 byte\n")
     r = subprocess.run([sys.executable, str(SCRIPT), "--sad", str(p)],
-                        capture_output=True, text=True)
+                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 2
     assert r.stderr.startswith("[sad_lint] FAIL:")
     assert "structure-ok" not in r.stdout

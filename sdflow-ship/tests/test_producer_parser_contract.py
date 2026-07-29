@@ -4,6 +4,8 @@ import importlib.util
 import subprocess
 from pathlib import Path
 
+from test_support.windows import bash_executable, bash_path
+
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
@@ -26,10 +28,10 @@ def run_producer(repo, step):
     # [impl-review-fix DF6] 固定文件名（不把 step 拼进文件名）——step 含冒号（demo:task1-slug）
     # 时旧 f"f-{step}.txt" 会造 NTFS 非法名，Windows CI 误红；文件名与契约无关，只需 porcelain 非空。
     (repo / "change.txt").write_text(step, encoding="utf-8")  # 制造非空 porcelain
-    subprocess.run(["bash", str(SCRIPT), step, "msg"], cwd=repo, check=True,
-                   capture_output=True, text=True)
+    subprocess.run([bash_executable(), bash_path(SCRIPT), step, "msg"], cwd=repo, check=True,
+                   capture_output=True, text=True, encoding="utf-8", errors="replace")
     out = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%s"],
-                         check=True, capture_output=True, text=True)
+                         check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return out.stdout.strip()
 
 

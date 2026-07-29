@@ -30,7 +30,9 @@ def _run_lint(root):
     return subprocess.run(
         ["python3", str(INIT_PY), "config-lint", "--root", str(root)],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 VALID_RULES_BLOCK = """schema: spec-driven
@@ -296,7 +298,9 @@ class TestConfigLintGitRootAutoProbe:
         r = subprocess.run(
             ["python3", str(INIT_PY), "config-lint"],
             capture_output=True, text=True, cwd=str(REPO_ROOT / "sdflow-init"),
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert r.returncode == 0, r.stderr
 
 
@@ -313,18 +317,24 @@ class TestConfigLintCliSmoke:
         r_init = subprocess.run(
             ["python3", str(INIT_PY), "init", "--root", str(project)],
             capture_output=True, text=True, env=env,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert r_init.returncode == 0, r_init.stderr
         assert (project / "openspec" / "config.yaml").is_file()
 
         r_update = subprocess.run(
             ["python3", str(INIT_PY), "update", "--root", str(project)],
             capture_output=True, text=True, env=env,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert r_update.returncode == 0, r_update.stderr
 
         r_retire = subprocess.run(
             ["python3", str(INIT_PY), "retire-hooks"],
             capture_output=True, text=True, env=env,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert r_retire.returncode == 0, r_retire.stderr

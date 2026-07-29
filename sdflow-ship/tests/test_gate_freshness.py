@@ -156,7 +156,7 @@ def test_cr_stale_verify_fresh_fail_carries_cr_note(repo):
 
 def _git(root, *args, check=True):
     return subprocess.run(["git", "-C", str(root), *args],
-                          check=check, capture_output=True, text=True)
+                          check=check, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 def _head(repo):
     return _git(repo, "rev-parse", "HEAD").stdout.strip()
@@ -846,6 +846,7 @@ def test_blob_read_failure_on_one_side_is_indeterminate(repo, monkeypatch):
         _design_stale(repo)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="NTFS does not expose POSIX executable-bit changes")
 def test_mode_only_change_on_tasks_is_stale(repo):
     """仅权限位变更：前后两版 blob 字节**完全相同**，纯内容判据必说「等值」
     ⇒ MUST 由映射层（含 mode）先拦下，否则状态位变更被静默放行。"""
@@ -930,6 +931,7 @@ def test_git_mv_tasks_out_of_watched_set_is_stale(repo):
     assert code == 3 and js["verdict"] == "REFUSE_START"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Win32 filenames cannot contain tab characters")
 def test_spec_path_with_tab_is_stale(repo):
     """[5.15b · 原 test_spec_path_with_tab_is_stale] 含 Tab 的路径：旧的文本行协议按行切 +
     C-quote 包裹 ⇒ 逃出监视集。新口径靠 `-z`（关掉 C-quote）+ 按**首个 `\\t`** 切分 +
@@ -944,6 +946,7 @@ def test_spec_path_with_tab_is_stale(repo):
     assert code == 3 and js["verdict"] == "REFUSE_START"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Win32 filenames cannot contain tab characters")
 def test_ls_tree_keeps_tab_path_raw_and_unquoted(repo):
     """机械守 `-z` 协议本身：路径原样进映射键——无 C-quote 包裹、不按 Tab 拆碎。
     删掉 `-z` ⇒ git 会把这条路径 C-quote 成 `"...we\\tird.md"` ⇒ 本例转红。"""
@@ -1041,7 +1044,7 @@ def test_stale_verdict_carries_no_trigger_payload(repo):
 # `UnicodeEncodeError`，而 `main()` 只捕 `GateIndeterminate` ⇒ 异常逸出 ⇒ 退出码 1。
 # 正解 = `os.fsencode`（argv 解码的逆运算，与 git 吐的原始路径字节天然同口径）。
 
-_NON_UTF8_CHANGE = os.fsdecode(b"br\xffken")      # 含 lone surrogate `\udcff`
+_NON_UTF8_CHANGE = b"br\xffken".decode("utf-8", "surrogateescape")  # lone surrogate `\udcff`
 EXIT_CONTRACT = {0, 3, 4, 5, 6}
 
 
@@ -1066,6 +1069,7 @@ def test_non_utf8_change_reaches_design_branch_without_escaping(repo, monkeypatc
     assert _sg.is_stale(repo, _ANCHOR_REL, "design", _NON_UTF8_CHANGE) == (False, "fresh")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Windows argv is Unicode and cannot carry raw non-UTF-8 bytes")
 def test_non_utf8_change_exit_code_stays_in_contract_set(repo):
     """端到端补位：非 UTF-8 的 `--change` 经 `main()` 求值，退出码 MUST 落在契约集内。
 
@@ -1139,7 +1143,7 @@ def test_repo_fixture_pins_byte_and_mode_semantics(repo, key, want):
     锚目标态：消费机上两种取值都存在，「我这台机器上没事」不构成保证。
     """
     got = subprocess.run(["git", "-C", str(repo), "config", "--get", key],
-                         capture_output=True, text=True).stdout.strip()
+                         capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     assert got == want, f"{key}={got!r}，基座未钉死（期望 {want!r}）"
 
 

@@ -73,7 +73,9 @@ def _tracked_files():
     result = subprocess.run(
         ["git", "-C", str(ROOT), "ls-files", "-z"],
         capture_output=True, text=True, check=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     return [rel for rel in result.stdout.split("\0") if rel]
 
 

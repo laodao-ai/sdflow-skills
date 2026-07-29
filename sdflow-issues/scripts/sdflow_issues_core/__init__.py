@@ -496,6 +496,7 @@ def read_repository_snapshot(root):
     for pool, patterns in pool_patterns.items():
         for pattern in patterns:
             for path in sorted(glob.glob(os.path.join(root, pattern))):
+                path = os.path.normpath(path)
                 real = os.path.realpath(path)
                 if real in seen_paths:
                     continue
@@ -651,7 +652,7 @@ def render_recorder_namespace(model, eol=b"\n"):
             item = model["items"][item_id]
             ordered = {field: item[field] for field in order}
             payload = json.dumps(ordered, ensure_ascii=False, separators=(",", ":"))
-            payload = payload.replace("", "\\u0085").replace(" ", "\\u2028").replace(" ", "\\u2029")
+            payload = payload.replace("\u0085", "\\u0085").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
             lines.append(f"    {item_id}: {payload}")
     return eol.join(line.encode("utf-8") for line in lines) + eol
 
@@ -724,7 +725,7 @@ def _find_recorder_span(envelope, eol):
 
 
 def _parse_recorder_namespace(namespace, eol):
-    if any(char in namespace.decode("utf-8") for char in ("", " ", " ")):
+    if any(char in namespace.decode("utf-8") for char in ("\u0085", "\u2028", "\u2029")):
         _frontmatter_error("recorder namespace 含 raw Unicode line break", "必须使用 JSON escape")
     lines = namespace.decode("utf-8").splitlines()
     if len(lines) < 5 or lines[0] != "sdflow-issues:":
@@ -1108,7 +1109,7 @@ def auto_default_doc(root, change):
         for name in ("design.md", "proposal.md"):
             candidate = os.path.join(archive_dir, name)
             if os.path.isfile(candidate):
-                rel = os.path.relpath(candidate, root)
+                rel = os.path.relpath(candidate, root).replace(os.sep, "/")
                 return [rel.replace(os.sep, "/")]
     return []
 
@@ -1735,7 +1736,7 @@ def _bug_set_status(args, spec):
         insertions = {b_end - 1: (history,)}
     _commit_mutation(
         document, model, insertions, path, spec.pool, canonical, True,
-        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root)},
+        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root).replace(os.sep, "/")},
     )
 
 
@@ -1780,7 +1781,7 @@ def _todo_set_status(args, spec):
         insertions = {len(document["lines"]): (minimal,)}
     _commit_mutation(
         document, model, insertions, path, spec.pool, canonical, True,
-        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root)},
+        {"id": canonical, "old": old, "new": new, "file": os.path.relpath(path, root).replace(os.sep, "/")},
     )
 
 
@@ -1819,7 +1820,7 @@ def _bug_triage(args, spec):
     _commit_mutation(
         document, model, insertions, path, spec.pool, canonical, True,
         {"id": canonical, "old_status": old_status, "new_status": new_status,
-         "batch": batch, "file": os.path.relpath(path, root)},
+         "batch": batch, "file": os.path.relpath(path, root).replace(os.sep, "/")},
     )
 
 
@@ -1860,7 +1861,7 @@ def _todo_triage(args, spec):
     _commit_mutation(
         document, model, insertions, path, spec.pool, canonical, require_marker,
         {"id": canonical, "old_status": old_status, "new_status": new_status,
-         "batch": batch, "file": os.path.relpath(path, root)},
+         "batch": batch, "file": os.path.relpath(path, root).replace(os.sep, "/")},
     )
 
 
@@ -2008,7 +2009,7 @@ def cmd_add(args, spec, strat):
     require_marker = spec.requires_block or bool(block)
     rendered = _validated_rendered_mutation(rendered, spec.pool, iid, require_marker, path)
     atomic_write_bytes(path, rendered)
-    print(json.dumps(strat.add_output(iid, os.path.relpath(path, root), status, time_str, change, block),
+    print(json.dumps(strat.add_output(iid, os.path.relpath(path, root).replace(os.sep, "/"), status, time_str, change, block),
                      ensure_ascii=False))
 
 
@@ -2022,11 +2023,12 @@ def _scan_snapshot(args, spec, strat):
     for pool, path, rel, document in snapshot:
         if pool != spec.pool:
             continue
-        problems.extend(f"{rel}: {problem}" for problem in document["problems"])
+        public_rel = rel.replace(os.sep, "/")
+        problems.extend(f"{public_rel}: {problem}" for problem in document["problems"])
         for bid, item in document["effective_items"].items():
-            items.append({"id": bid, **item, "file": rel})
+            items.append({"id": bid, **item, "file": public_rel})
         raw_id_locations.extend(
-            (semantic_key, raw_id, rel)
+            (semantic_key, raw_id, public_rel)
             for semantic_key, raw_id in document["effective_occurrences"]
         )
 

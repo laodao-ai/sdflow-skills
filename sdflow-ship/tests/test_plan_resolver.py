@@ -153,7 +153,7 @@ PLAN_OLDNAME_RICH = (
 
 def _git(repo, *args):
     return subprocess.run(["git", "-C", str(repo), *args],
-                          check=True, capture_output=True, text=True).stdout
+                          check=True, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
 
 
 def _old_heuristic_would_flag(repo, plan_rel):

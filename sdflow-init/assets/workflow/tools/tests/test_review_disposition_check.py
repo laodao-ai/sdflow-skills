@@ -181,7 +181,7 @@ def test_cli_directory_path_fail_closed(tmp_path):
 def _run(task_log):
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--task-log", str(task_log)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_cli_ok_exit0(tmp_path):

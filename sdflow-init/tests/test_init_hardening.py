@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 import init as init_mod
 
@@ -124,7 +126,7 @@ class TestT48SetupVersionCheck:
         fakebin = tmp_path / "bin"; fakebin.mkdir()
         py = fakebin / "python"
         # 假 py2：-c 版本校验退出 1（模拟 <3.7）；其它参数 echo RAN（若被误喂 init.py 可检测）
-        py.write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN_$*\n')
+        py.write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN_$*\n', encoding="utf-8")
         py.chmod(0o755)
         snippet = (
             '_py=""\n'
@@ -137,8 +139,8 @@ class TestT48SetupVersionCheck:
             'if [ -z "$_py" ]; then echo NOPY37\n'
             'else "$_py" /nonexistent retire-hooks; fi\n'
         )
-        r = subprocess.run(["/bin/bash", "-c", snippet],
-                           env={"PATH": str(fakebin)}, capture_output=True, text=True)
+        r = subprocess.run([bash_executable(), "-c", snippet],
+                           env={"PATH": bash_path(fakebin)}, capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert "NOPY37" in r.stdout, "非 py3.7+ 未被版本校验拦下"
         assert "RAN_" not in r.stdout, "把 init.py 误喂给了 py2"
 
@@ -146,8 +148,8 @@ class TestT48SetupVersionCheck:
         """T48/codex#4: python3 不合格但 python 合格时须 fallback 到 python（不止校验第一个）。"""
         fakebin = tmp_path / "bin"; fakebin.mkdir()
         # python3 = 假 py2（版本校验退出 1）；python = 合格 py3.7+（版本校验退出 0）
-        (fakebin / "python3").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN3_$*\n')
-        (fakebin / "python").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 0; fi\necho RANP_$*\n')
+        (fakebin / "python3").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 1; fi\necho RAN3_$*\n', encoding="utf-8")
+        (fakebin / "python").write_text('#!/bin/sh\nif [ "$1" = "-c" ]; then exit 0; fi\necho RANP_$*\n', encoding="utf-8")
         (fakebin / "python3").chmod(0o755); (fakebin / "python").chmod(0o755)
         snippet = (
             '_py=""\n'
@@ -160,8 +162,8 @@ class TestT48SetupVersionCheck:
             'if [ -z "$_py" ]; then echo NOPY37\n'
             'else "$_py" retire-hooks; fi\n'
         )
-        r = subprocess.run(["/bin/bash", "-c", snippet],
-                           env={"PATH": str(fakebin)}, capture_output=True, text=True)
+        r = subprocess.run([bash_executable(), "-c", snippet],
+                           env={"PATH": bash_path(fakebin)}, capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert "RANP_retire-hooks" in r.stdout, "python3 旧版时未 fallback 到合格 python"
         assert "NOPY37" not in r.stdout
 

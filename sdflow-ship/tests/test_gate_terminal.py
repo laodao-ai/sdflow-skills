@@ -5,7 +5,7 @@ from test_gate_preflight import run_gate
 
 def _git(repo, *args):
     subprocess.run(["git", "-C", str(repo), *args], check=True,
-                   capture_output=True, text=True)
+                   capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def mk_archive(repo, name, verify_pass=True):
@@ -94,7 +94,7 @@ def test_detached_head_archived_shipped(repo):
     mk_archive(repo, "2026-07-04-demo")
     commit_all(repo, "archive demo")
     sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
-                         capture_output=True, text=True).stdout.strip()
+                         capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     _git(repo, "checkout", "-q", sha)           # detached
     code, js, _ = run_gate(repo)
     assert code == 0 and js["verdict"] == "SHIPPED"

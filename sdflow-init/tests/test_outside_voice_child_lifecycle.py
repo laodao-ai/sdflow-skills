@@ -40,6 +40,12 @@ from pathlib import Path
 
 import pytest
 
+if os.name == "nt":
+    pytest.skip(
+        "requires POSIX signals and process-group semantics",
+        allow_module_level=True,
+    )
+
 REPO = Path(__file__).resolve().parents[2]
 HELPER = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
 
@@ -142,7 +148,7 @@ def _make_env(tmp_path, pidfile: Path, *, helper: Path = None):
         child=$!
         printf '%s %s\\n' "$$" "$child" > "{pidfile}"
         wait "$child"
-        """))
+        """), encoding="utf-8")
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
 
     ctx = tmp_path / "ctx.md"
@@ -174,7 +180,9 @@ def _run_until_killed(helper: Path, env, ctx: Path, sig: int, cwd: Path, pidfile
     proc = subprocess.Popen(
         [bash_bin, str(helper), "exec", "--context-file", str(ctx), "--timeout", "300"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=str(cwd),
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     try:
         runner_pid, grandchild_pid = _await_pids(pidfile, proc)
         proc.send_signal(sig)
@@ -235,7 +243,7 @@ def _make_env_runner_ignores_term(tmp_path, pidfile: Path):
         child=$!
         printf '%s %s\\n' "$$" "$child" > "{pidfile}"
         wait "$child"
-        """))
+        """), encoding="utf-8")
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
 
     ctx = tmp_path / "ctx.md"
@@ -360,7 +368,9 @@ def _run_one_storm_trial(tmp_path, idx, bash_bin):
     proc = subprocess.Popen(
         [bash_bin, str(HELPER), "exec", "--context-file", str(ctx), "--timeout", "300"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=str(tmp_path),
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     try:
         runner_pid, grandchild_pid = _await_pids(pidfile, proc)
         _fire_mixed_signal_storm(proc)
@@ -530,7 +540,7 @@ def _source_and_run_lib(snippet: str, cwd: Path, helper: Path = HELPER):
     """在 source 态直接驱动 outside-voice.sh 内部函数（不派发命令）。"""
     script = f"_OV_TEST_LIB_ONLY=1 . {helper!s}\n{snippet}\n"
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
-                          cwd=str(cwd), timeout=30)
+                          cwd=str(cwd), timeout=30, encoding="utf-8", errors="replace")
 
 
 def test_group_kill_decision_is_group_when_target_is_a_leader_of_a_foreign_group(tmp_path):
@@ -594,7 +604,7 @@ def _make_env_broken_timeout(tmp_path, pidfile: Path):
         #!/usr/bin/env bash
         shift 3
         exec "$@"
-        """))
+        """), encoding="utf-8")
     fake_timeout.chmod(fake_timeout.stat().st_mode | stat.S_IEXEC)
 
     fake_runner = bin_dir / "codex"
@@ -606,7 +616,7 @@ def _make_env_broken_timeout(tmp_path, pidfile: Path):
         child=$!
         printf '%s %s\\n' "$$" "$child" > "{pidfile}"
         wait "$child"
-        """))
+        """), encoding="utf-8")
     fake_runner.chmod(fake_runner.stat().st_mode | stat.S_IEXEC)
 
     ctx = tmp_path / "ctx.md"
@@ -638,7 +648,9 @@ def test_group_kill_guard_degrades_instead_of_self_harm_when_timeout_shares_own_
         [bash_bin, str(HELPER), "exec", "--context-file", str(ctx), "--timeout", "300"],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=str(tmp_path),
         start_new_session=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     try:
         runner_pid, grandchild_pid = _await_pids(pidfile, proc)
         proc.send_signal(signal.SIGTERM)
@@ -669,7 +681,7 @@ def _fake_runner(tmp_path, body: str):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     fake = bin_dir / "codex"
-    fake.write_text("#!/usr/bin/env bash\n" + textwrap.dedent(body))
+    fake.write_text("#!/usr/bin/env bash\n" + textwrap.dedent(body), encoding="utf-8")
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
     ctx = tmp_path / "ctx.md"
     ctx.write_text("plain context\n", encoding="utf-8")
@@ -684,7 +696,9 @@ def _exec(env, ctx, cwd, bash_bin, extra=()):
     return subprocess.run(
         [bash_bin, str(HELPER), "exec", "--context-file", str(ctx), *extra],
         capture_output=True, text=True, env=env, cwd=str(cwd), timeout=120,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 @needs_real_timeout
@@ -767,7 +781,7 @@ def test_ov_cleanup_reports_kill_failed_when_target_survives_kill(tmp_path):
             + kill_stub
             + f'OV_RUNNER_PID={real_target.pid}\nOV_WORKDIR=""\nov_cleanup TEST\n'
         )
-        r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
         assert r.returncode == 0, r.stderr
         assert f"OV_KILL_FAILED=1 pid={real_target.pid}" in r.stderr, r.stderr
         assert "已 SIGKILL 兜底" not in r.stderr, (
@@ -799,7 +813,7 @@ def test_ov_cleanup_reports_kill_failed_when_target_survives_kill(tmp_path):
             + mutant_cleanup
             + f'OV_RUNNER_PID={real_target.pid}\nOV_WORKDIR=""\nov_cleanup TEST\n'
         )
-        r2 = subprocess.run(["bash", "-c", mutant_script], capture_output=True, text=True, timeout=30)
+        r2 = subprocess.run(["bash", "-c", mutant_script], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
         assert r2.returncode == 0, r2.stderr
         assert "已 SIGKILL 兜底" in r2.stderr, (
             "变异体（旧版不复探）在同样场景下竟然没有谎报成功——"

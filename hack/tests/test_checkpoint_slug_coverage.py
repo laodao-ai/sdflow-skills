@@ -100,7 +100,7 @@ def collect_slugs():
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for m in _SLUG_RE.finditer(line):
                 slug = next(g for g in m.groups() if g)
-                found.append((str(path.relative_to(REPO)), lineno, slug))
+                found.append((path.relative_to(REPO).as_posix(), lineno, slug))
     return found
 
 

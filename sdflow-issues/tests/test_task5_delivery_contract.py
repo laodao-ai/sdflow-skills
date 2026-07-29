@@ -11,6 +11,8 @@ import sys
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
 
 ROOT = Path(__file__).parents[2]
 BUG_PATH = ROOT / "sdflow-issues/scripts/buglist.py"
@@ -277,7 +279,9 @@ def test_sweep_cli_executes_all_four_utf8_subprocess_sites(tmp_path, monkeypatch
         input=payload,
         capture_output=True,
         text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert seeded.returncode == 0, seeded.stderr
 
     real_run = ISSUES.subprocess.run
@@ -374,8 +378,8 @@ def test_upgraded_install_known_consumer_smoke(tmp_path):
     (consumer / "openspec/issues/buglist").mkdir(parents=True)
     (consumer / "openspec/issues/todolist").mkdir(parents=True)
     (consumer / "openspec/issues/batches.md").write_text("# batches\n", encoding="utf-8")
-    env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
-    setup = subprocess.run(["bash", str(ROOT / "setup.sh")], env=env, text=True, capture_output=True)
+    env = dict(os.environ, HOME=bash_path(home), SDFLOW_HOME=bash_path(home / ".sdflow"))
+    setup = subprocess.run([bash_executable(), bash_path(ROOT / "setup.sh")], env=env, text=True, capture_output=True, encoding="utf-8", errors="replace")
     assert setup.returncode == 0, setup.stderr
 
     legacy_bug = (
@@ -420,7 +424,9 @@ def test_upgraded_install_known_consumer_smoke(tmp_path):
         return subprocess.run(
             [sys.executable, str(installed / relative), "--root", str(consumer), *args],
             env=env, text=True, capture_output=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
 
     bug = run("sdflow-issues/scripts/buglist.py", "scan", "--json")
     todo = run("sdflow-issues/scripts/todolist.py", "scan", "--json")

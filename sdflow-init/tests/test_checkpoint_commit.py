@@ -4,11 +4,13 @@ Run with: python3 -m pytest sdflow-init/tests/test_checkpoint_commit.py -v
 import subprocess
 from pathlib import Path
 
-SCRIPT = str(Path(__file__).parent.parent / "assets" / "hack" / "checkpoint-commit.sh")
+from test_support.windows import bash_executable, bash_path
+
+SCRIPT = Path(__file__).parent.parent / "assets" / "hack" / "checkpoint-commit.sh"
 
 
 def _git(repo, *args):
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True)
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _init_repo(tmp_path):
@@ -21,7 +23,7 @@ def _init_repo(tmp_path):
 
 
 def _run(cwd, *args):
-    return subprocess.run(["bash", SCRIPT, *args], cwd=str(cwd), capture_output=True, text=True)
+    return subprocess.run([bash_executable(), bash_path(SCRIPT), *args], cwd=str(cwd), capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _subject(repo):

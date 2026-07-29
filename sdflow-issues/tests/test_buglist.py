@@ -26,7 +26,9 @@ def run_add(root, payload):
     return subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "add"],
         input=json.dumps(payload), capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def base_payload(**overrides):
@@ -200,7 +202,9 @@ class TestBatchColumn:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "scan", "--json"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode == 0, proc.stderr
         result = json.loads(proc.stdout)
         b1 = [b for b in result["bugs"] if b["id"] == "B1"][0]
@@ -214,7 +218,9 @@ class TestBatchColumn:
         scan_proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "scan", "--json"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert scan_proc.returncode == 0, scan_proc.stderr
         result = json.loads(scan_proc.stdout)
         b1 = [b for b in result["bugs"] if b["id"] == "B1"][0]
@@ -246,7 +252,9 @@ class TestCellSafety:
             [sys.executable, SCRIPT, "--root", str(tmp_path), "triage",
              "--id", "B1", "--批次", "evil|key"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode == 0, proc.stderr
         assert _scan_json(tmp_path, [])["bugs"][0]["batch"] == "evil|key"
         content = (tmp_path / "openspec" / "issues" / "buglist" / "2026-01-01-buglist.md").read_text(encoding="utf-8")
@@ -386,6 +394,7 @@ class TestAtomicWrite:
         atomic_write(str(target), "new")
         assert target.read_text(encoding="utf-8") == "new"
 
+    @pytest.mark.skipif(os.name == "nt", reason="Windows does not expose POSIX mode bits")
     def test_overwrite_preserves_original_file_permissions(self, tmp_path):
         """回归：tempfile.mkstemp 固定以 0600 创建临时文件，os.replace 是纯 rename，
         若不显式对齐权限，覆写会让已存在文件的权限被静默从 0644 收紧到 0600。"""
@@ -395,6 +404,7 @@ class TestAtomicWrite:
         atomic_write(str(target), "new")
         assert (os.stat(target).st_mode & 0o777) == 0o644
 
+    @pytest.mark.skipif(os.name == "nt", reason="Windows does not expose POSIX mode bits")
     def test_new_file_gets_default_permissions(self, tmp_path):
         target = tmp_path / "brand_new.md"
         atomic_write(str(target), "content")
@@ -480,7 +490,9 @@ class TestDualRead:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "next-id"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode != 0
         assert proc.stdout == ""
         assert "WARNING" in proc.stderr
@@ -492,7 +504,9 @@ class TestDualRead:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "next-id"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode == 0, proc.stderr
         assert proc.stdout.strip() == "B2"
         assert proc.stderr == ""
@@ -645,7 +659,9 @@ class TestTriage:
             [sys.executable, SCRIPT, "--root", str(tmp_path), "triage",
              "--id", "B99", "--批次", "clear-foo"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode != 0
         assert "ERROR" in proc.stderr
 
@@ -778,14 +794,18 @@ def _set_status_raw(root, bug_id, to, *extra_args):
         [sys.executable, SCRIPT, "--root", str(root), "set-status",
          "--id", bug_id, "--to", to, *extra_args],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _triage(root, bug_id, batch):
     proc = subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "triage", "--id", bug_id, "--批次", batch],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert proc.returncode == 0, proc.stderr
     return json.loads(proc.stdout)
 
@@ -800,7 +820,9 @@ def _scan_proc(root, extra_args):
     return subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "scan", "--json", *extra_args],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _write_mixed_file(dir_path, date, rows):

@@ -6,7 +6,7 @@ GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
 
 def run_gate(root, change="demo"):
     r = subprocess.run([sys.executable, str(GATE), "--change", change,
-                        "--root", str(root)], capture_output=True, text=True)
+                        "--root", str(root)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = r.stdout.strip().splitlines()
     payload = json.loads(lines[-1]) if lines else {}
     return r.returncode, payload, lines[0] if lines else ""

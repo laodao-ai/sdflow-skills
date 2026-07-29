@@ -402,7 +402,9 @@ def _rename_cli(root):
         ],
         capture_output=True,
         text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 @pytest.mark.parametrize("shape", ["canonical-missing-marker", "overlay-missing-marker", "legacy-marker-collision", "legacy-duplicate-candidate"])
@@ -656,7 +658,9 @@ def test_direct_snapshot_matches_recorder_scan_contract_for_all_shapes_and_pools
     scan = subprocess.run(
         [sys.executable, script, "--root", str(tmp_path), "scan", "--json"],
         capture_output=True, text=True, check=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     expected = [{**found, "pool": pool} for found in json.loads(scan.stdout)[key]]
 
     assert direct["items"] == expected
@@ -798,7 +802,7 @@ def test_reindex_core_uses_supplied_snapshot_without_rescanning(tmp_path, monkey
 
     assert items == snapshot["items"]
     assert problems == []
-    assert "批次：batch-new" in (tmp_path / "openspec" / "issues" / "INDEX.md").read_text()
+    assert "批次：batch-new" in (tmp_path / "openspec" / "issues" / "INDEX.md").read_text(encoding="utf-8")
 
 
 def test_batch_rename_uses_direct_snapshot_zero_recorder_scans_and_writes_provenance(

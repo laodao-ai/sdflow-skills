@@ -85,14 +85,14 @@ def test_window_excludes_legacy_and_merge(repo):
     # 切回 main 后 --no-ff 合并，merge commit 自身消息携带外部标签
     # （--no-merges 只滤 merge commit 本身；merge commit 消息携带的标签必须被滤除）
     subprocess.run(["git", "-C", str(repo), "checkout", "-b", "side"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     (repo / "side.txt").write_text("y", encoding="utf-8")
     commit_all(repo, "docs: 旁支提交（无标签）")
     subprocess.run(["git", "-C", str(repo), "checkout", "main"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(repo), "merge", "--no-ff", "side",
                     "-m", "checkpoint(task2-external): merge携带"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     code, js, _ = run_gate(repo)
     # 窗口内无任何 task 标签（merge commit 被 --no-merges 滤除，side 分支内提交无标签）
     # → 0/2 完成，辅通道复选框未全勾 → CONTINUE_IMPL
@@ -106,14 +106,14 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
     commit_all(repo, "seed")
     approved_change(repo, plan=PLAN2)
     subprocess.run(["git", "-C", str(repo), "checkout", "-b", "side"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     (repo / "side.txt").write_text("y", encoding="utf-8")
     commit_all(repo, "checkpoint(task9-side): x")
     subprocess.run(["git", "-C", str(repo), "checkout", "main"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(repo), "merge", "--no-ff", "side",
                     "-m", "merge side into main"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     code, js, _ = run_gate(repo)
     # 9 是计划外号（plan={1,2}）：仍进 done_ids（窗口机制不变，--no-merges 只滤 merge 本身），
     # 但〔B4 集合归属〕计划外号不计入完成、不上报——done_tasks 只报计划内已完成（此处空）；

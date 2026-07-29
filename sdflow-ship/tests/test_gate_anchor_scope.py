@@ -19,7 +19,7 @@ VFAIL = "<!-- ship-gate: verify=FAIL -->"
 
 
 def _git(root, *a):
-    subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_core_descriptive_pass_not_hit():
@@ -68,7 +68,7 @@ GATE = REPO / "sdflow-ship" / "scripts" / "ship_gate.py"
 
 def _run_gate(root, change="demo"):
     r = subprocess.run([sys.executable, str(GATE), "--change", change, "--root", str(root)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = r.stdout.strip().splitlines()
     return r.returncode, (json.loads(lines[-1]) if lines else {})
 

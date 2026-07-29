@@ -16,7 +16,7 @@ VFAIL = "<!-- ship-gate: verify=FAIL -->"
 
 
 def _git(root, *a):
-    subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-C", str(root), *a], check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _seed_archive(tmp_path, content, dirname="2026-07-06-demo"):

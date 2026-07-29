@@ -59,7 +59,9 @@ def _clean_git_env(monkeypatch):
 def _git(*args, cwd):
     return subprocess.run(
         ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _init_repo(path):
@@ -135,6 +137,7 @@ def test_empty_string_start_is_rejected_before_calling_git(monkeypatch):
         repo_root("")
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_deleted_process_cwd_yields_controlled_failure(tmp_path):
     """进程 cwd 在运行期被删除（ADR-7）。
 
@@ -162,7 +165,9 @@ def test_deleted_process_cwd_yields_controlled_failure(tmp_path):
         [sys.executable, "-c", program,
          str(Path(SCRIPT).parent), str(doomed)],
         capture_output=True, text=True, cwd=str(tmp_path),
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
     assert proc.returncode == 0, proc.stderr
     assert "CONTROLLED:ERROR: 无法确定仓根探测起点" in proc.stdout
@@ -204,6 +209,7 @@ def test_multiline_stdout_is_rejected(tmp_path, monkeypatch):
     assert "仓根不可用" in str(exc.value)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_trailing_space_is_preserved_not_stripped(tmp_path, monkeypatch):
     """`rstrip("\\r\\n")` 只剥行结束符：末尾的合法空格 MUST 保留。
 
@@ -279,7 +285,9 @@ def test_core_worktree_redirect_is_rejected(tmp_path):
         ["git", "rev-parse", "--show-toplevel"],
         cwd=str(repo), capture_output=True, text=True,
         env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
     assert Path(probe.stdout.strip()).resolve() == outside.resolve(), (
         f"前提不成立：core.worktree 未重定向 toplevel，实得 {probe.stdout!r}"
@@ -319,7 +327,9 @@ def test_ancestor_check_independently_catches_unsanitized_env(tmp_path, monkeypa
     probe = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         cwd=str(repo), capture_output=True, text=True, env=polluted,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert probe.returncode == 0, probe.stderr
     leaked = probe.stdout.rstrip("\r\n")
     assert Path(leaked).resolve() == other.resolve(), (
@@ -343,6 +353,7 @@ def test_returns_root_from_nested_subdirectory(tmp_path):
     assert repo_root(str(sub)) == os.path.realpath(str(repo))
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_symlinked_start_resolves_to_real_root(tmp_path):
     repo = _init_repo(tmp_path / "repo")
     sub = repo / "pkg"
@@ -360,6 +371,7 @@ def test_symlinked_start_resolves_to_real_root(tmp_path):
 # 「结果与直接用真实路径进入完全一致」，**不是**「没抛异常」——后者对着一个错误的仓根
 # 也能绿。symlink 一律用 tmp_path 下真建，MUST NOT mock os.path.realpath / isdir / isabs。
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_symlinked_repo_root_start_matches_real_path_result(tmp_path):
     """起点是指向仓根本身的 symlink ⇒ 结果与直接从真实仓根进入一致。"""
     repo = _init_repo(tmp_path / "repo")
@@ -379,6 +391,7 @@ def test_dotdot_in_start_matches_real_path_result(tmp_path):
     assert repo_root(str(repo / "sub" / "..")) == os.path.realpath(str(repo))
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_symlinked_start_with_subdir_matches_real_path_result(tmp_path):
     """起点是 `symlink/子目录` ⇒ 结果与直接从真实子目录进入一致。"""
     repo = _init_repo(tmp_path / "repo")
@@ -390,6 +403,7 @@ def test_symlinked_start_with_subdir_matches_real_path_result(tmp_path):
     assert repo_root(str(link / "sub")) == os.path.realpath(str(repo))
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_dotdot_after_symlinked_dir_follows_kernel_not_lexical(tmp_path):
     """`symlink-to-subdir/..` —— **lexical 归一化与内核语义在此分叉**。
 
@@ -492,7 +506,9 @@ def test_git_refusing_inside_repo_fails_closed(tmp_path):
         ["git", "rev-parse", "--show-toplevel"],
         cwd=str(sub), capture_output=True, text=True,
         env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert probe.returncode != 0, f"前提不成立：git 未拒答（rc={probe.returncode}）"
 
     with pytest.raises(ValueError) as exc:
@@ -558,7 +574,9 @@ def test_core_worktree_redirect_to_ancestor_repo_is_rejected(tmp_path):
         ["git", "rev-parse", "--show-toplevel"],
         cwd=str(inner), capture_output=True, text=True,
         env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
     assert Path(probe.stdout.strip()).resolve() == outer.resolve(), (
         f"前提不成立：未重定向到祖先仓，实得 {probe.stdout!r}"
@@ -571,6 +589,7 @@ def test_core_worktree_redirect_to_ancestor_repo_is_rejected(tmp_path):
     assert not (outer / "openspec").exists(), "外层仓库 MUST NOT 出现任何 openspec/ 产物"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_fake_git_on_path_returning_outer_repo_is_rejected(tmp_path, monkeypatch):
     """同形变体：PATH 上被替换的 git（rc=0）返回**外层祖先仓库**。
 
@@ -621,6 +640,7 @@ def test_linked_worktree_resolves_to_worktree(tmp_path):
     assert repo_root(str(wt)) == os.path.realpath(str(wt))
 
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_repo_subdir_and_symlink_start_resolve_to_repo_root(tmp_path):
     """仓库子目录起点 与 symlink 起点：两者都 MUST 解析到同一个真实仓根。"""
     repo = _init_repo(tmp_path / "repo")
@@ -641,7 +661,9 @@ def test_cli_still_exits_zero_outside_any_git_repo(tmp_path):
     proc = subprocess.run(
         [sys.executable, SCRIPT, "--root", str(plain), "reindex"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
     assert proc.returncode == 0, proc.stderr
     assert "Traceback" not in proc.stderr
@@ -706,6 +728,7 @@ def test_timeout_with_real_hanging_git(tmp_path, monkeypatch):
 
 # ── CLI 级 fail-closed 锚（Task 2 双轴审 C1 / C2） ──────────────────────────────
 
+@pytest.mark.skipif(os.name == "nt", reason="requires POSIX cwd, symlink, or executable-shim semantics")
 def test_cli_with_deleted_process_cwd_exits_two_without_traceback(tmp_path):
     """C1：cwd 在运行期被删除时，**经 CLI 调用**必须 exit 2 + 受控诊断，MUST NOT 吐 Traceback。
 
@@ -730,7 +753,9 @@ def test_cli_with_deleted_process_cwd_exits_two_without_traceback(tmp_path):
     outer = subprocess.run(
         [sys.executable, "-c", program, SCRIPT, str(doomed)],
         capture_output=True, text=True, cwd=str(tmp_path),
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
     assert outer.returncode == 0, outer.stderr
     assert "RC:2" in outer.stdout, outer.stdout
@@ -771,7 +796,9 @@ def test_cli_bad_root_exits_two_with_diagnostic_on_stderr(tmp_path):
     proc = subprocess.run(
         [sys.executable, SCRIPT, "--root", str(missing), 'reindex'],
         capture_output=True, text=True, cwd=str(tmp_path),
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
     assert proc.returncode == 2, (proc.returncode, proc.stdout, proc.stderr)
     assert "Traceback" not in proc.stderr, proc.stderr
@@ -902,7 +929,9 @@ def test_unspecified_root_probes_cwd_while_explicit_root_is_validated(tmp_path):
     probed = subprocess.run(
         [sys.executable, SCRIPT, *SINGLE_POINT_CMD],
         capture_output=True, text=True, cwd=str(nested),
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert probed.returncode == 0, probed.stderr
     assert (repo / "openspec" / "issues").exists(), "未指定 --root 应落到 cwd 所属仓根"
     assert not (nested / "openspec").exists(), "MUST NOT 落到 cwd 自身"
@@ -911,7 +940,9 @@ def test_unspecified_root_probes_cwd_while_explicit_root_is_validated(tmp_path):
     explicit = subprocess.run(
         [sys.executable, SCRIPT, "--root", str(missing), *SINGLE_POINT_CMD],
         capture_output=True, text=True, cwd=str(nested),
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert explicit.returncode == 2, (explicit.returncode, explicit.stderr)
     assert "Traceback" not in explicit.stderr, explicit.stderr
     assert "仓根探测起点不是既存目录" in explicit.stderr, explicit.stderr
@@ -976,7 +1007,9 @@ def test_child_resolving_a_different_root_must_fail_loudly(tmp_path):
         child = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(inner), *SINGLE_POINT_CMD],
             capture_output=True, text=True, env=env, cwd=str(tmp_path),
-        )
+
+            encoding="utf-8",
+            errors="replace",)
 
     assert child.returncode != 0, (
         "子进程解析出不同的根却静默成功: rc=%d stdout=%r" % (child.returncode, child.stdout)

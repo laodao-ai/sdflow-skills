@@ -281,7 +281,7 @@ def _run(inp_path, layer="spec-review", host="claude", extra_args=None):
         args += ["--host", host]
     if extra_args:
         args += extra_args
-    return subprocess.run(args, capture_output=True, text=True)
+    return subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_cli_valid_emits(tmp_path):
@@ -324,9 +324,9 @@ def test_cli_idempotent_cross_process(tmp_path):
     import os
     env0 = dict(os.environ, PYTHONHASHSEED="0"); env1 = dict(os.environ, PYTHONHASHSEED="1")
     a = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--host","claude","--input",str(inp)],
-                       capture_output=True, text=True, env=env0).stdout
+                       capture_output=True, text=True, env=env0, encoding="utf-8", errors="replace").stdout
     b = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--host","claude","--input",str(inp)],
-                       capture_output=True, text=True, env=env1).stdout
+                       capture_output=True, text=True, env=env1, encoding="utf-8", errors="replace").stdout
     assert a == b and a.count("lens-metric v1") == 3      # 跨 hashseed 字节一致
 
 
@@ -334,7 +334,7 @@ def test_cli_null_roster_clean_fail(tmp_path):
     inp = tmp_path/"in.json"
     inp.write_text('{"roster": null, "findings": []}', encoding="utf-8")
     r = subprocess.run([sys.executable, str(SCRIPT),"--layer","spec-review","--host","claude","--input",str(inp)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 1 and r.stdout == "" and "FAIL" in r.stderr and "Traceback" not in r.stderr
 
 
@@ -460,7 +460,7 @@ FIX = TOOLS / "tests" / "fixtures" / "lens_metric_input.json"
 
 def test_golden_fixture_emits_and_lints(tmp_path):
     r = subprocess.run([sys.executable, str(SCRIPT), "--layer", "spec-review", "--host", "claude", "--input", str(FIX)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0 and r.stdout.count("lens-metric v1") >= 2
     assert 'host="claude"' in r.stdout
     al = _load("anchor_lint", AL); enums = al.load_enums(CONTRACT)

@@ -97,9 +97,9 @@ def test_twenty_process_adds_are_unique_or_fail_loud(tmp_path):
     payload = tmp_path / "bug.json"
     payload.write_text(json.dumps({
         "module": "lock", "summary": "race", "priority": "P2", "phenomenon": "race",
-    }))
+    }), encoding="utf-8")
     command = [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(payload), "--prefix", "A"]
-    processes = [subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(20)]
+    processes = [subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace") for _ in range(20)]
     results = [process.communicate(timeout=20) + (process.returncode,) for process in processes]
     successful = [json.loads(stdout)["id"] for stdout, _stderr, code in results if code == 0]
     failures = [stderr for _stdout, stderr, code in results if code != 0]
@@ -110,7 +110,9 @@ def test_twenty_process_adds_are_unique_or_fail_loud(tmp_path):
     scan = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "scan", "--json"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert scan.returncode == 0, scan.stderr
     assert {item["id"] for item in json.loads(scan.stdout)["bugs"]} == set(successful)
 
@@ -186,7 +188,9 @@ def test_invalid_participant_env_falls_back_to_owner_or_conflict(relative, args,
     owner = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), *args],
         capture_output=True, text=True, env=env,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert owner.returncode == 0, owner.stderr
     assert not (tmp_path / "openspec/issues/.recorder.lock").exists()
 
@@ -195,7 +199,9 @@ def test_invalid_participant_env_falls_back_to_owner_or_conflict(relative, args,
         conflict = subprocess.run(
             [sys.executable, str(script), "--root", str(tmp_path), *args],
             capture_output=True, text=True, env=env,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
     assert conflict.returncode != 0
     assert "recorder lock occupied" in conflict.stderr
 
@@ -284,7 +290,7 @@ def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
     ctx = multiprocessing.get_context("spawn")
     script = ROOT / "sdflow-issues/scripts/buglist.py"
     payload = tmp_path / "bug.json"
-    payload.write_text(json.dumps({"module": "m", "summary": "barrier", "priority": "P2", "phenomenon": "x"}))
+    payload.write_text(json.dumps({"module": "m", "summary": "barrier", "priority": "P2", "phenomenon": "x"}), encoding="utf-8")
     shared = tmp_path / "shared.md"
     shared.write_text("base\n", encoding="utf-8")
 
@@ -296,7 +302,9 @@ def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
     writer_conflict = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(payload)],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert writer_conflict.returncode != 0
     assert "recorder lock occupied" in writer_conflict.stderr
     release.set()
@@ -305,7 +313,9 @@ def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
     writer_after_release = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(payload)],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert writer_after_release.returncode == 0, writer_after_release.stderr
 
     ready = ctx.Event()
@@ -316,7 +326,9 @@ def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
     reader_conflict = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "scan", "--json"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert reader_conflict.returncode != 0
     assert "recorder lock occupied" in reader_conflict.stderr
     release.set()
@@ -325,7 +337,9 @@ def test_reader_writer_barrier_is_bidirectional_across_processes(tmp_path):
     reader_after_release = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "scan", "--json"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert reader_after_release.returncode == 0, reader_after_release.stderr
     assert shared.read_text(encoding="utf-8") == "base\nwriter\n"
 
@@ -335,22 +349,28 @@ def test_next_id_release_does_not_reserve_number(tmp_path):
     suggestion = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "next-id", "--prefix", "A"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert suggestion.returncode == 0
     assert suggestion.stdout.strip() == "A1"
     payload = tmp_path / "bug.json"
-    payload.write_text(json.dumps({"module": "m", "summary": "race", "priority": "P2", "phenomenon": "x"}))
+    payload.write_text(json.dumps({"module": "m", "summary": "race", "priority": "P2", "phenomenon": "x"}), encoding="utf-8")
     winner = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(payload), "--prefix", "A"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert winner.returncode == 0, winner.stderr
     explicit = tmp_path / "explicit.json"
-    explicit.write_text(json.dumps({"id": "A1", "module": "m", "summary": "late", "priority": "P2", "phenomenon": "x"}))
+    explicit.write_text(json.dumps({"id": "A1", "module": "m", "summary": "late", "priority": "P2", "phenomenon": "x"}), encoding="utf-8")
     loser = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "add", "--json", str(explicit)],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert loser.returncode != 0
     assert "semantic ID" in loser.stderr
 
@@ -358,7 +378,7 @@ def test_next_id_release_does_not_reserve_number(tmp_path):
 def test_two_cooperative_namespace_producers_use_cross_process_barrier(tmp_path):
     ctx = multiprocessing.get_context("spawn")
     target = tmp_path / "dated.md"
-    target.write_text("---\nbase: 1\n---\n")
+    target.write_text("---\nbase: 1\n---\n", encoding="utf-8")
     ready_a, release_a = ctx.Event(), ctx.Event()
     result_a = tmp_path / "producer-a.result"
     producer_a = ctx.Process(
@@ -414,12 +434,15 @@ def test_real_sweep_reindex_scan_nested_delegation(tmp_path):
         "| B1 | `m` | nested | P2 | OPEN | 10:00 | nested-change |  |\n\n"
         "---\n\n## B1: nested\n\n| 属性 | 值 |\n|------|------|\n"
         "| 状态 | OPEN |\n\n**根因**：fixture rootcause\n"
-    )
+    ,
+        encoding="utf-8",)
     script = ROOT / "sdflow-issues/scripts/issues.py"
     proc = subprocess.run(
         [sys.executable, str(script), "--root", str(tmp_path), "sweep", "--change", "nested-change"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert proc.returncode == 0, proc.stderr
     assert "tagged 1" in proc.stdout
     assert (tmp_path / "openspec/issues/INDEX.md").exists()
@@ -429,7 +452,7 @@ def test_real_sweep_reindex_scan_nested_delegation(tmp_path):
 def test_cli_writer_fault_releases_lock_and_preserves_target(tmp_path, monkeypatch):
     module = load("cli_writer_fault", "sdflow-issues/scripts/buglist.py")
     payload = tmp_path / "bug.json"
-    payload.write_text(json.dumps({"module": "m", "summary": "fault", "priority": "P2", "phenomenon": "x"}))
+    payload.write_text(json.dumps({"module": "m", "summary": "fault", "priority": "P2", "phenomenon": "x"}), encoding="utf-8")
     target = tmp_path / "openspec/issues/buglist/2026-01-01-buglist.md"
 
     def fail_write(_path, _text):
@@ -459,7 +482,7 @@ def test_partial_lock_and_ownership_lost_are_fail_closed(tmp_path):
     with pytest.raises(module.RecorderLockError, match="ownership lost"):
         with module.recorder_lock(tmp_path, "scan"):
             lock.unlink()
-            lock.write_text(json.dumps(replacement))
+            lock.write_text(json.dumps(replacement), encoding="utf-8")
     assert json.loads(lock.read_text())["token"] == "replacement"
 
 
@@ -468,10 +491,10 @@ def test_custom_prefix_is_repository_wide_across_pools(tmp_path):
     todo_script = ROOT / "sdflow-issues/scripts/todolist.py"
     bug = tmp_path / "bug.json"
     todo = tmp_path / "todo.json"
-    bug.write_text(json.dumps({"id": "A1", "module": "m", "summary": "bug", "priority": "P2", "phenomenon": "x"}))
+    bug.write_text(json.dumps({"id": "A1", "module": "m", "summary": "bug", "priority": "P2", "phenomenon": "x"}), encoding="utf-8")
     todo.write_text(json.dumps({"id": "A1", "module": "m", "summary": "todo", "type": "代码质量"}))
-    first = subprocess.run([sys.executable, bug_script, "--root", tmp_path, "add", "--json", bug], capture_output=True, text=True)
+    first = subprocess.run([sys.executable, bug_script, "--root", tmp_path, "add", "--json", bug], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert first.returncode == 0, first.stderr
-    second = subprocess.run([sys.executable, todo_script, "--root", tmp_path, "add", "--json", todo], capture_output=True, text=True)
+    second = subprocess.run([sys.executable, todo_script, "--root", tmp_path, "add", "--json", todo], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert second.returncode != 0
     assert "仓级既有 semantic ID 重复" in second.stderr

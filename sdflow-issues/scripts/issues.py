@@ -26,6 +26,8 @@ import sys
 for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
+try: sys.stdin.reconfigure(encoding="utf-8", errors="strict")
+except Exception: pass
 import tempfile
 import time
 
@@ -87,11 +89,12 @@ def read_rename_snapshot(root, instrumentation=None):
     for pool, patterns in pools.items():
         for pattern in patterns:
             for path in sorted(glob.glob(os.path.join(root, pattern))):
+                path = os.path.normpath(path)
                 real = os.path.realpath(path)
                 if real in seen_paths:
                     continue
                 seen_paths.add(real)
-                rel = os.path.relpath(path, root)
+                rel = os.path.relpath(path, root).replace(os.sep, "/")
                 try:
                     with open(path, "rb") as stream:
                         raw = stream.read()

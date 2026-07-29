@@ -167,7 +167,11 @@ def main(argv=None):
         # os.path.relpath 而非 Path.relative_to：后者对【仓外】的投放面直接抛 ValueError，
         # 于是「报告一个漂移」变成「整个 --check 崩掉」。投放面目录可被测试 monkeypatch 到
         # 仓外，此处只是【打印用的显示形式】，不该有能力中止判定。
-        drift.append(os.path.relpath(p, REPO))
+        try:
+            display = os.path.relpath(p, REPO)
+        except ValueError:
+            display = str(p)
+        drift.append(display)
         if args.apply:
             p.write_text(want, encoding="utf-8")
 

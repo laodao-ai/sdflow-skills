@@ -21,7 +21,7 @@ GOOD_SHA = "0123456789abcdef0123456789abcdef01234567"   # 语法合法、语义�
 
 def _git(repo, *args):
     return subprocess.run(["git", "-C", str(repo), *args],
-                          check=True, capture_output=True, text=True).stdout.strip()
+                          check=True, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
 
 
 def _seeded(repo):

@@ -40,7 +40,9 @@ def _run(script, root, *args, stdin=None):
     return subprocess.run(
         [sys.executable, script, "--root", str(root), *args],
         input=stdin, capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _bug_payload(**overrides):

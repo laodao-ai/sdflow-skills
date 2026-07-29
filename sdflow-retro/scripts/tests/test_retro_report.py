@@ -1,6 +1,7 @@
 import sys
 import os
 import subprocess
+import pytest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import retro_report as R
@@ -26,7 +27,7 @@ def test_discover_active_and_archive(tmp_path):
 
 def _git(root, *args):
     return subprocess.run(["git", "-C", str(root), *args],
-                          capture_output=True, text=True, errors="replace").stdout
+        capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
 
 
 def _init_repo(tmp_path):
@@ -40,7 +41,7 @@ def _commit(root, files: dict, msg):
     for rel, body in files.items():
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(body)
+        p.write_text(body, encoding="utf-8")
     _git(root, "add", "-A")
     _git(root, "commit", "-q", "-m", msg)
 
@@ -236,9 +237,9 @@ def test_lens_value_active_change_has_anchor(tmp_path):
     d = tmp_path / "openspec/changes/live"
     d.mkdir(parents=True)
     (d / "spec-review-report.md").write_text(
-        ANCHOR.format(layer="spec-review", f=9, a=9, ind=6) + "\n")
+        ANCHOR.format(layer="spec-review", f=9, a=9, ind=6) + "\n", encoding="utf-8")
     (d / "code-review-report.md").write_text(
-        ANCHOR.format(layer="code-review", f=4, a=3, ind=2) + "\n")
+        ANCHOR.format(layer="code-review", f=4, a=3, ind=2) + "\n", encoding="utf-8")
     info = {"active": True, "active_dir": str(d), "archive_dir": None}
     v = R.lens_value_for_change(info)
     assert v["has_anchor"] is True
@@ -249,7 +250,7 @@ def test_lens_value_active_change_has_anchor(tmp_path):
 def test_lens_value_no_anchor(tmp_path):
     d = tmp_path / "openspec/changes/bare"
     d.mkdir(parents=True)
-    (d / "proposal.md").write_text("no anchor here")
+    (d / "proposal.md").write_text("no anchor here", encoding="utf-8")
     info = {"active": True, "active_dir": str(d), "archive_dir": None}
     v = R.lens_value_for_change(info)
     assert v["has_anchor"] is False
@@ -266,7 +267,7 @@ def test_lens_value_flags_illegal_number(tmp_path):
     d = tmp_path / "openspec/changes/bad"
     d.mkdir(parents=True)
     (d / "spec-review-report.md").write_text(
-        ANCHOR.format(layer="spec-review", f="-7", a="abc", ind=1) + "\n")
+        ANCHOR.format(layer="spec-review", f="-7", a="abc", ind=1) + "\n", encoding="utf-8")
     info = {"active": True, "active_dir": str(d), "archive_dir": None}
     v = R.lens_value_for_change(info)
     assert v["num_bad"] is True
@@ -277,8 +278,8 @@ HRTG = '<!-- sdflow:hr-tg v1 hit="{hit}" evidence="x" -->'
 
 def test_hr_tg_two_columns(tmp_path):
     d = tmp_path / "openspec/changes/hh"; d.mkdir(parents=True)
-    (d / "spec-review-report.md").write_text(HRTG.format(hit="none") + "\n")
-    (d / "code-review-report.md").write_text(HRTG.format(hit="TG-06") + "\n")
+    (d / "spec-review-report.md").write_text(HRTG.format(hit="none") + "\n", encoding="utf-8")
+    (d / "code-review-report.md").write_text(HRTG.format(hit="TG-06") + "\n", encoding="utf-8")
     info = {"active": True, "active_dir": str(d), "archive_dir": None}
     f = R.hr_tg_flags(info)
     assert f["spec_hr_tg"] == "none"
@@ -294,7 +295,7 @@ def test_hr_tg_read_permission_failsafe(tmp_path, monkeypatch):
     """
     d = tmp_path / "openspec/changes/hh"; d.mkdir(parents=True)
     fp = d / "spec-review-report.md"
-    fp.write_text(HRTG.format(hit="TG-01") + "\n")
+    fp.write_text(HRTG.format(hit="TG-01") + "\n", encoding="utf-8")
 
     real_open = open
 
@@ -323,7 +324,7 @@ def test_hr_tg_skips_fenced_example(tmp_path):
         HRTG.format(hit="none"),   # fence 外的真锚
         "",
     ])
-    (d / "spec-review-report.md").write_text(content)
+    (d / "spec-review-report.md").write_text(content, encoding="utf-8")
     got = R._read_hr_hit(str(d), "spec-review-report.md")
     assert got == "none"
 
@@ -334,7 +335,7 @@ def test_hr_tg_multi_anchor_takes_last(tmp_path):
     """
     d = tmp_path / "openspec/changes/hh"; d.mkdir(parents=True)
     content = HRTG.format(hit="none") + "\n" + HRTG.format(hit="TG-06") + "\n"
-    (d / "code-review-report.md").write_text(content)
+    (d / "code-review-report.md").write_text(content, encoding="utf-8")
     got = R._read_hr_hit(str(d), "code-review-report.md")
     assert got == "TG-06"
 
@@ -344,7 +345,7 @@ def test_build_report_coverage_counts(tmp_path):
     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
     _commit(root, {"openspec/changes/foo/design.md": "b"}, "checkpoint(grill)")
     d = root / "openspec/changes/foo"
-    (d / "spec-review-report.md").write_text(ANCHOR.format(layer="spec-review", f=9, a=9, ind=6) + "\n")
+    (d / "spec-review-report.md").write_text(ANCHOR.format(layer="spec-review", f=9, a=9, ind=6) + "\n", encoding="utf-8")
     md = R.build_report(str(root))
     assert "覆盖" in md and "有真锚" in md and "边界不可解析" in md
     assert "foo" in md
@@ -387,9 +388,11 @@ def test_report_idempotent(tmp_path):
 
 
 def test_atomic_write_preserves_mode_on_overwrite(tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows does not expose POSIX mode bits")
     target = tmp_path / "openspec/retro/report.md"
     target.parent.mkdir(parents=True)
-    target.write_text("old")
+    target.write_text("old", encoding="utf-8")
     os.chmod(str(target), 0o644)
     R.atomic_write(str(target), "new")           # 覆盖已存在文件
     assert target.read_text() == "new"
@@ -419,7 +422,7 @@ def test_surfacing_block_flags_ge10(tmp_path):
         d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
         d.mkdir(parents=True)
         (d / "spec-review-report.md").write_text(
-            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n")
+            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n", encoding="utf-8")
     block = R.surfacing_block(str(tmp_path))
     assert block.strip().startswith("⚠️ 待复评:")
     assert "domain" in block
@@ -433,7 +436,7 @@ def test_surfacing_block_shows_host_field(tmp_path):
         d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
         d.mkdir(parents=True)
         (d / "spec-review-report.md").write_text(
-            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n")
+            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n", encoding="utf-8")
     block = R.surfacing_block(str(tmp_path))
     assert "host=claude" in block  # ANCHOR 无 host 字段 → 双代兼容读为 claude
 
@@ -448,7 +451,7 @@ def test_surfacing_threshold_uses_shared_constant(tmp_path, monkeypatch):
         d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
         d.mkdir(parents=True)
         (d / "spec-review-report.md").write_text(
-            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n")
+            ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n", encoding="utf-8")
     block = R.surfacing_block(str(tmp_path))
     assert "出现轮数 3" in block
 
@@ -473,7 +476,7 @@ def test_surfacing_groupkey_matches_render_table_on_empty_lens(tmp_path):
     d.mkdir(parents=True)
     anchor = ('<!-- sdflow:lens-metric v1 layer="spec-review" lens="" runner="claude" '
               'site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="1" sev="致0/高0/中0/低1" -->')
-    (d / "spec-review-report.md").write_text("\n".join([anchor] * 10) + "\n")
+    (d / "spec-review-report.md").write_text("\n".join([anchor] * 10) + "\n", encoding="utf-8")
     block = R.surfacing_block(str(tmp_path))
     assert "⚠️ 待复评:" in block
     assert "出现轮数 10" in block   # 10 份同键锚合并计数=10，命中≥10

@@ -18,6 +18,8 @@ import sys
 for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
+try: sys.stdin.reconfigure(encoding="utf-8", errors="strict")
+except Exception: pass
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

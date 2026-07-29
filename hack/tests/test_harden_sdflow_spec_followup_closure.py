@@ -61,7 +61,9 @@ def _todos() -> dict[str, dict[str, object]]:
         check=True,
         capture_output=True,
         text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     payload = json.loads(proc.stdout)
     items = payload if isinstance(payload, list) else payload["items"]
     return {item["id"]: item for item in items}

@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
 REPO = Path(__file__).resolve().parents[2]
 HELPER = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
 
@@ -46,14 +48,14 @@ def _scan(corpus: Path, size: int, *, mutate: bool = False):
     )
     script = textwrap.dedent(f"""\
         set -u
-        _OV_TEST_LIB_ONLY=1 . {HELPER!s}
+        _OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)}
         {override}
         for (( k=1; k<{size}; k++ )); do
           printf '%s %s %s\\n' "$k" \\
-            "$(utf8_head_trim {corpus!s} "$k")" "$(utf8_tail_skip {corpus!s} "$k")"
+            "$(utf8_head_trim {bash_path(corpus)} "$k")" "$(utf8_tail_skip {bash_path(corpus)} "$k")"
         done
         """)
-    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=300)
+    r = subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     out = {}
     for line in r.stdout.splitlines():
@@ -176,7 +178,7 @@ def test_lib_only_seam_is_source_only_and_fails_loud_when_executed(tmp_path):
     e["_OV_TEST_LIB_ONLY"] = "1"
     e.pop("SDFLOW_VOICE_RUNNER", None)
     r = subprocess.run(
-        ["bash", str(HELPER), "render-prompt", "--context-file", str(ctx)],
+        [bash_executable(), bash_path(HELPER), "render-prompt", "--context-file", bash_path(ctx)],
         capture_output=True, env=e, timeout=30,
     )
     assert r.returncode == 2, (r.returncode, r.stdout[:200], r.stderr[:400])
@@ -188,10 +190,10 @@ def test_lib_only_seam_still_works_when_sourced(tmp_path):
     """接缝在【被 source】时仍只加载函数、不派发命令（正向：函数可驱动、无命令输出）。"""
     script = textwrap.dedent(f"""\
         set -u
-        _OV_TEST_LIB_ONLY=1 . {HELPER!s} version
+        _OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)} version
         utf8_head_trim /dev/null 0
         """)
-    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    r = subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     # `version` 参数被忽略（未派发）⇒ stdout 只有函数自己的输出
     assert "outside-voice.sh" not in r.stdout, r.stdout
@@ -205,7 +207,7 @@ def _run_render(ctx: Path, max_bytes: int):
     e.pop("SDFLOW_VOICE_RUNNER", None)
     e.pop("SDFLOW_VOICE_MODEL", None)
     e["OV_MAX_CONTEXT_BYTES"] = str(max_bytes)
-    return subprocess.run(["bash", str(HELPER), "render-prompt", "--context-file", str(ctx)],
+    return subprocess.run([bash_executable(), bash_path(HELPER), "render-prompt", "--context-file", bash_path(ctx)],
                           capture_output=True, env=e, timeout=30)
 
 
@@ -260,12 +262,14 @@ def test_secret_scan_still_covers_whole_file_before_truncation(tmp_path):
 
 def _source_and_run(snippet: str, cwd: Path):
     """在 source 态驱动脚本内部函数（不走命令派发）。"""
-    script = f"_OV_TEST_LIB_ONLY=1 . {HELPER!s}\n{snippet}\n"
-    return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
-                          cwd=str(cwd), timeout=30)
+    script = f"_OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)}\n{snippet}\n"
+    return subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True,
+                          cwd=str(cwd), timeout=30, encoding="utf-8", errors="replace")
 
 
 def test_tail_skip_unreadable_file_does_not_pollute_stderr_contract(tmp_path):
+    if os.name == "nt":
+        pytest.skip("Windows does not implement POSIX mode-bit read denial")
     """〔S1〕`2>/dev/null` MUST 排在 `< "$file"` 【之前】。
 
     bash 从左到右处理重定向：写成 `wc -c < "$f" 2>/dev/null` 时 `< "$f"` 先失败，报错由
@@ -412,7 +416,7 @@ def test_render_prompt_real_od_failure_reports_backscan_unavailable(tmp_path):
     ctx = _write(tmp_path, "mixed.md", MIXED)
     shim = tmp_path / "shim"
     shim.mkdir()
-    (shim / "od").write_text("#!/bin/sh\nexit 1\n")
+    (shim / "od").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     (shim / "od").chmod(0o755)
     env = os.environ.copy()
     env["PATH"] = f"{shim}{os.pathsep}{env['PATH']}"
@@ -420,7 +424,7 @@ def test_render_prompt_real_od_failure_reports_backscan_unavailable(tmp_path):
     env.pop("SDFLOW_VOICE_RUNNER", None)
     env.pop("SDFLOW_VOICE_MODEL", None)
     r = subprocess.run(
-        ["bash", str(HELPER), "render-prompt", "--context-file", str(ctx)],
+        [bash_executable(), bash_path(HELPER), "render-prompt", "--context-file", bash_path(ctx)],
         capture_output=True, env=env, timeout=30,
     )
     assert r.returncode != 0, (
@@ -460,16 +464,18 @@ def test_exec_render_failure_still_reaches_stderr(tmp_path):
     # wc 失败 = 模拟第 301 行预检之后才发生的 TOCTOU（预检按定义盖不住"检查之后"）
     shim = tmp_path / "shim"
     shim.mkdir()
-    (shim / "wc").write_text("#!/bin/sh\nexit 1\n")
+    (shim / "wc").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     (shim / "wc").chmod(0o755)
 
     env = dict(os.environ)
     env["PATH"] = f"{shim}{os.pathsep}{env['PATH']}"
     env["SDFLOW_VOICE_RUNNER"] = "codex"
     r = subprocess.run(
-        ["bash", str(HELPER), "exec", "--context-file", str(ctx)],
+        [bash_executable(), bash_path(HELPER), "exec", "--context-file", bash_path(ctx)],
         capture_output=True, text=True, cwd=str(tmp_path), env=env,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert r.returncode == 2, (r.returncode, r.stdout[:200], r.stderr[:400])
     assert r.stdout == "", f"fail-loud 路径不得产出半截 prompt: {r.stdout[:200]!r}"
     assert r.stderr.strip() != "", "N1 复发：exit 非零但 stderr 全空（报错被 workdir 吞掉）"
@@ -495,14 +501,14 @@ def test_ov_bytes_at_propagates_real_od_exit_code_not_pipeline_tail(tmp_path):
     """
     shim = tmp_path / "shim"
     shim.mkdir()
-    (shim / "od").write_text("#!/bin/sh\necho ' 65 66'\nexit 1\n")
+    (shim / "od").write_text("#!/bin/sh\necho ' 65 66'\nexit 1\n", encoding="utf-8")
     (shim / "od").chmod(0o755)
     ctx = tmp_path / "ctx.md"
     ctx.write_bytes(b"hello world")
     env = os.environ.copy()
     env["PATH"] = f"{shim}{os.pathsep}{env['PATH']}"
-    script = f'_OV_TEST_LIB_ONLY=1 . {HELPER!s}\n_ov_bytes_at "{ctx}" 0 3\necho "RC=$?"\n'
-    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env, timeout=30)
+    script = f'_OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)}\n_ov_bytes_at "{bash_path(ctx)}" 0 3\necho "RC=$?"\n'
+    r = subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True, env=env, timeout=30, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert "RC=1" in r.stdout, (
         f"M2 复发：od 已非零退出，_ov_bytes_at 却报告成功(RC != 1): {r.stdout!r}"
@@ -512,11 +518,11 @@ def test_ov_bytes_at_propagates_real_od_exit_code_not_pipeline_tail(tmp_path):
     # 替身函数在 source 之后覆盖，不依赖对正文做脆弱的精确字符串匹配），同样输入下应变回
     # RC=0 —— 证明这条断言真的由"单独捕获 od 返回码"这个修复点承重。
     mutant_script = (
-        f'_OV_TEST_LIB_ONLY=1 . {HELPER!s}\n'
+        f'_OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)}\n'
         "_ov_bytes_at() { od -An -tu1 -j \"$2\" -N \"$3\" \"$1\" 2>/dev/null | tr -s ' ' '\\n' | grep -v '^$'; }\n"
         f'_ov_bytes_at "{ctx}" 0 3\necho "RC=$?"\n'
     )
-    r2 = subprocess.run(["bash", "-c", mutant_script], capture_output=True, text=True, env=env, timeout=30)
+    r2 = subprocess.run([bash_executable(), "-c", mutant_script], capture_output=True, text=True, env=env, timeout=30, encoding="utf-8", errors="replace")
     assert r2.returncode == 0, r2.stderr
     assert "RC=0" in r2.stdout, (
         "变异体（旧管道实现）竟然也报告失败——说明本用例未真正锁定"
@@ -533,19 +539,19 @@ def test_ov_read_bytes_strict_rejects_partial_output_even_when_producer_reports_
     ctx = tmp_path / "ctx.md"
     ctx.write_bytes(b"hello world")
     script = f"""
-    _OV_TEST_LIB_ONLY=1 . {HELPER!s}
+    _OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)}
     _ov_bytes_at() {{ printf '104\\n101\\n'; return 0; }}  # 请求 3 个，只给 2 个，且自称成功
     _ov_read_bytes_strict "{ctx}" 0 3
     echo "RC=$?"
     """
-    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    r = subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert "RC=1" in r.stdout, f"M2 复发：字节数与请求不符仍被判定成功: {r.stdout!r}"
 
     # 变异对照：重现旧判据（只查"完全为空"，不核对数量）——同样输入下应报告成功，
     # 证明上面的断言确实由「数量核验」这个新增修复点承重，不是巧合绿。
     mutant_script = f"""
-    _OV_TEST_LIB_ONLY=1 . {HELPER!s}
+    _OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)}
     _ov_bytes_at() {{ printf '104\\n101\\n'; return 0; }}
     _ov_read_bytes_strict_old() {{
       local file="$1" offset="$2" count="$3" raw b
@@ -559,7 +565,7 @@ def test_ov_read_bytes_strict_rejects_partial_output_even_when_producer_reports_
     _ov_read_bytes_strict_old "{ctx}" 0 3
     echo "RC=$?"
     """
-    r2 = subprocess.run(["bash", "-c", mutant_script], capture_output=True, text=True, timeout=30)
+    r2 = subprocess.run([bash_executable(), "-c", mutant_script], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     assert r2.returncode == 0, r2.stderr
     assert "RC=0" in r2.stdout, (
         "旧判据（只查完全为空）对本用例的部分输出竟然也报告失败——"
@@ -572,12 +578,12 @@ def test_ov_read_bytes_strict_rejects_out_of_range_values(tmp_path):
     ctx = tmp_path / "ctx.md"
     ctx.write_bytes(b"abc")
     script = f"""
-    _OV_TEST_LIB_ONLY=1 . {HELPER!s}
+    _OV_TEST_LIB_ONLY=1 . {bash_path(HELPER)}
     _ov_bytes_at() {{ printf '65\\n999\\n67\\n'; return 0; }}  # 999 越界
     _ov_read_bytes_strict "{ctx}" 0 3
     echo "RC=$?"
     """
-    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, timeout=30)
+    r = subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert "RC=1" in r.stdout, f"越界字节值未被拒绝: {r.stdout!r}"
 
@@ -620,11 +626,13 @@ def _make_tiny_full_ramdisk(tmp_path):
         dev = subprocess.run(
             ["hdiutil", "attach", "-nomount", "ram://4096"],
             capture_output=True, text=True, timeout=30, check=True,
-        ).stdout.split()[0]
+
+            encoding="utf-8",
+            errors="replace",).stdout.split()[0]
         subprocess.run(["newfs_hfs", "-b", "512", dev],
-                        capture_output=True, text=True, timeout=30, check=True)
+                        capture_output=True, text=True, timeout=30, check=True, encoding="utf-8", errors="replace")
         subprocess.run(["mount", "-t", "hfs", dev, str(mount_point)],
-                        capture_output=True, text=True, timeout=30, check=True)
+                        capture_output=True, text=True, timeout=30, check=True, encoding="utf-8", errors="replace")
     except Exception as e:  # noqa: BLE001 — 基础设施探测失败一律 skip，不当测试失败
         pytest.skip(f"M3 ramdisk 建立失败（环境不支持，非本次修复问题）: {e}")
 
@@ -692,10 +700,10 @@ def _detach_ramdisk(dev, mount_point=None):
     任何一步失败都不让异常向上抛（清理函数本身不该成为测试失败的新来源）。
     """
     if mount_point is not None:
-        subprocess.run(["umount", "-f", str(mount_point)], capture_output=True, text=True, timeout=30)
-    r = subprocess.run(["hdiutil", "detach", dev], capture_output=True, text=True, timeout=30)
+        subprocess.run(["umount", "-f", str(mount_point)], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
+    r = subprocess.run(["hdiutil", "detach", dev], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     if r.returncode != 0:
-        subprocess.run(["hdiutil", "detach", dev, "-force"], capture_output=True, text=True, timeout=30)
+        subprocess.run(["hdiutil", "detach", dev, "-force"], capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
 
 
 def _build_m3_mutant(tmp_path):
@@ -743,12 +751,12 @@ def _run_disk_full_scenario(script_path, tmp_path, subdir_name):
             )
         ctx = tmp_path / "ctx.md"
         if not ctx.exists():
-            ctx.write_text("diff content for M3 disk-full test\n")
+            ctx.write_text("diff content for M3 disk-full test\n", encoding="utf-8")
         bin_dir = tmp_path / "bin"
         if not bin_dir.exists():
             bin_dir.mkdir()
             fake_codex = bin_dir / "codex"
-            fake_codex.write_text("#!/usr/bin/env bash\ncat >/dev/null\nexit 0\n")
+            fake_codex.write_text("#!/usr/bin/env bash\ncat >/dev/null\nexit 0\n", encoding="utf-8")
             fake_codex.chmod(0o755)
 
         env = os.environ.copy()
@@ -758,7 +766,7 @@ def _run_disk_full_scenario(script_path, tmp_path, subdir_name):
         env.pop("SDFLOW_VOICE_MODEL", None)
 
         return subprocess.run(
-            ["bash", str(script_path), "exec", "--context-file", str(ctx)],
+            [bash_executable(), bash_path(script_path), "exec", "--context-file", bash_path(ctx)],
             capture_output=True, env=env, timeout=30,
         )
     finally:

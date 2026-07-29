@@ -23,6 +23,14 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
+if os.name == "nt":
+    pytest.skip(
+        "global agent installation intentionally does not create symlinks on Windows",
+        allow_module_level=True,
+    )
+
 REPO = Path(__file__).resolve().parents[2]
 SETUP = REPO / "setup.sh"
 SRC_DIR = REPO / "sdflow-spec" / "agents"
@@ -49,8 +57,8 @@ def _run_setup(home):
     env = dict(os.environ)
     env["HOME"] = str(home)
     env.pop("SDFLOW_HOME", None)          # 否则 install_sdflow 会写到真实 ~/.sdflow
-    return subprocess.run(["bash", str(SETUP)], cwd=str(REPO), env=env,
-                          capture_output=True, text=True, timeout=300)
+    return subprocess.run([bash_executable(), bash_path(SETUP)], cwd=str(REPO), env=env,
+                          capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
 
 
 @pytest.fixture
@@ -247,8 +255,8 @@ def test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone(fake_home, t
     env = dict(os.environ)
     env["HOME"] = str(fake_home)
     env.pop("SDFLOW_HOME", None)
-    first = subprocess.run(["bash", str(farm / "setup.sh")], cwd=str(farm), env=env,
-                           capture_output=True, text=True, timeout=300)
+    first = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm), env=env,
+                           capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert first.returncode == 0, first.stdout + first.stderr
     dest = _agents_dir(fake_home)
     names = _expected_names()
@@ -261,8 +269,8 @@ def test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone(fake_home, t
     (farm / "sdflow-spec" / "agents").rmdir()
 
     # ③ 仍在**新版 installer** 上重跑一次
-    second = subprocess.run(["bash", str(farm / "setup.sh")], cwd=str(farm), env=env,
-                            capture_output=True, text=True, timeout=300)
+    second = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm), env=env,
+                            capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert second.returncode == 0, second.stdout + second.stderr
 
     dangling = [n for n in names if (dest / n).is_symlink() and not (dest / n).exists()]
@@ -367,8 +375,8 @@ def test_an_agent_deleted_in_the_new_checkout_is_retired_even_though_the_old_fil
     legacy = farm / "sdflow-spec" / "agents" / "sdflow-legacy-agent.md"
     legacy.write_text("---\nname: sdflow-legacy-agent\ntools: Bash, Write\n---\n旧定义\n",
                       encoding="utf-8")
-    first = subprocess.run(["bash", str(farm / "setup.sh")], cwd=str(farm), env=env,
-                           capture_output=True, text=True, timeout=300)
+    first = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm), env=env,
+                           capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace")
     assert first.returncode == 0, first.stdout + first.stderr
     assert (dest / "sdflow-legacy-agent.md").is_symlink(), "前提不成立：旧定义没铺出去"
 

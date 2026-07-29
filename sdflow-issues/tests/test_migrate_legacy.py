@@ -115,6 +115,7 @@ def test_cli_audit_is_read_only_json_report(tmp_path):
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
     )
 
     assert proc.returncode == 0, proc.stderr
@@ -135,6 +136,7 @@ def test_cli_apply_refuses_unresolved_before_any_write(tmp_path):
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
     )
 
     assert proc.returncode == 2
@@ -192,6 +194,7 @@ def test_cli_rejects_mapping_targets_outside_current_schema(tmp_path, argument, 
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
     )
 
     assert proc.returncode == 2

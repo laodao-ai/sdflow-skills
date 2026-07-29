@@ -30,7 +30,9 @@ def _run_batch_lint(root):
     return subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "batch", "lint"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _batches_path(root):

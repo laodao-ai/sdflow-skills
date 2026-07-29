@@ -39,7 +39,9 @@ def _argparse_choices(argv):
         proc = subprocess.run(
             [sys.executable, str(SCRIPTS / "issues.py"), "--root", ".", *argv, "__invalid__"],
             capture_output=True, text=True, timeout=120,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
     except subprocess.TimeoutExpired as exc:  # fail-closed，非静默 hang
         raise AssertionError(f"argparse usage 子进程超时（>120s）: {exc}") from exc
     text = proc.stdout + proc.stderr

@@ -156,7 +156,9 @@ def _repo_root_fn():
 def _git(*args, cwd):
     return subprocess.run(
         ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _init_repo(path):
@@ -220,7 +222,9 @@ def test_windows_repo_root_rejects_core_worktree_redirect(tmp_path, _clean_git_e
         ["git", "rev-parse", "--show-toplevel"],
         cwd=str(repo), capture_output=True, text=True,
         env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert probe.returncode == 0, f"前提不成立: {probe.stderr}"
     assert Path(probe.stdout.strip()).resolve() == outside.resolve(), (
         f"前提不成立：core.worktree 未重定向 toplevel，实得 {probe.stdout!r}"

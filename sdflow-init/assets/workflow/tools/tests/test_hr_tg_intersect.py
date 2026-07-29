@@ -328,7 +328,7 @@ def test_fc_fence_aware_catalog_cli_fail_closed(tmp_path):
 def _run(tg_set, catalog):
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--tg-set", tg_set, "--trigger-catalog", str(catalog)],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_cli_hit_exit0(tmp_path):

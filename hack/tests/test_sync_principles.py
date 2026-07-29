@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from test_support.windows import bash_executable, bash_path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import sync_principles as SP  # noqa: E402
 
@@ -195,8 +197,8 @@ def test_outside_voice_frame_carries_the_principles(tmp_path):
     ctx = tmp_path / "ctx.md"
     ctx.write_text("证据材料", encoding="utf-8")
 
-    out = subprocess.run(["bash", str(ov), "render-prompt", "--context-file", str(ctx)],
-                         capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([bash_executable(), bash_path(ov), "render-prompt", "--context-file", bash_path(ctx)],
+                         capture_output=True, text=True, check=True, encoding="utf-8", errors="replace").stdout
 
     assert "拿现状反驳目标" in out
     assert out.index("拿现状反驳目标") < out.index("BEGIN UNTRUSTED CONTEXT")

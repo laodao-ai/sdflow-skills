@@ -233,6 +233,7 @@ class TestAtomicWrite:
         atomic_write(str(target), "new")
         assert target.read_text(encoding="utf-8") == "new"
 
+    @pytest.mark.skipif(os.name == "nt", reason="Windows does not expose POSIX mode bits")
     def test_overwrite_preserves_original_file_permissions(self, tmp_path):
         target = tmp_path / "file.md"
         target.write_text("old", encoding="utf-8")
@@ -273,7 +274,7 @@ class TestRepoRoot:
     def test_returns_git_toplevel_from_nested_subdirectory(self, tmp_path):
         repo = tmp_path / "repo"
         repo.mkdir()
-        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True)
+        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
         sub = repo / "a" / "b"
         sub.mkdir(parents=True)
 
@@ -284,7 +285,7 @@ class TestRepoRoot:
     def test_returns_git_toplevel_when_start_is_the_root_itself(self, tmp_path):
         repo = tmp_path / "repo"
         repo.mkdir()
-        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True)
+        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
 
         result = repo_root(str(repo))
 
@@ -318,7 +319,7 @@ class TestRepoRootIntegrationAcrossSubcommands:
     def test_reindex_writes_index_to_git_root_not_passed_subdir(self, tmp_path):
         repo = tmp_path / "repo"
         repo.mkdir()
-        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True)
+        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
         _write_bug_file(repo, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
         ])
@@ -328,7 +329,9 @@ class TestRepoRootIntegrationAcrossSubcommands:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(sub), "reindex"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
 
         assert proc.returncode == 0, proc.stderr
         assert (repo / "openspec" / "issues" / "INDEX.md").exists()
@@ -337,14 +340,16 @@ class TestRepoRootIntegrationAcrossSubcommands:
     def test_batch_add_writes_batches_md_to_git_root_not_passed_subdir(self, tmp_path):
         repo = tmp_path / "repo"
         repo.mkdir()
-        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True)
+        subprocess.run(["git", "init"], cwd=str(repo), capture_output=True, text=True, check=True, encoding="utf-8", errors="replace")
         sub = repo / "nested" / "dir"
         sub.mkdir(parents=True)
 
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(sub), "batch", "add", "batch-1"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
 
         assert proc.returncode == 0, proc.stderr
         assert (repo / "openspec" / "issues" / "batches.md").exists()
@@ -459,7 +464,9 @@ class TestReindexGeneratesIndexMd:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode != 0
         assert proc.stderr.strip() != ""
         assert not (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
@@ -485,7 +492,9 @@ class TestReindexProblemsEcho:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
 
         assert proc.returncode == 0, proc.stderr
         assert "B1" in proc.stderr
@@ -505,14 +514,18 @@ class TestReindexProblemsEcho:
         proc_default = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc_default.returncode == 0, proc_default.stderr
 
         # 有 --strict + 仍存在 problems：exit 非 0
         proc_strict = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex", "--strict"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc_strict.returncode != 0
         assert "B1" in proc_strict.stderr
         # INDEX.md 仍应已被重建（--strict 只影响退出码，不影响重建本身）
@@ -531,7 +544,9 @@ class TestReindexProblemsEcho:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex", "--strict"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode == 0, proc.stderr
         assert proc.stderr.strip() == ""
 
@@ -543,7 +558,9 @@ class TestArgparseSkeleton:
     def test_help_lists_reindex_and_batch(self):
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--help"], capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode == 0, proc.stderr
         assert "reindex" in proc.stdout
         assert "batch" in proc.stdout
@@ -555,7 +572,9 @@ class TestArgparseSkeleton:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode == 0, proc.stderr
         assert (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
 
@@ -565,14 +584,18 @@ class TestArgparseSkeleton:
         proc = subprocess.run(
             [sys.executable, SCRIPT, "--root", str(tmp_path), "batch"],
             capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode != 0
         assert proc.stderr.strip() != ""
 
     def test_missing_subcommand_errors(self):
         proc = subprocess.run(
             [sys.executable, SCRIPT], capture_output=True, text=True,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode != 0
 
 
@@ -1729,7 +1752,9 @@ def _run_cli(script, root, args, input_json=None):
         [sys.executable, script, "--root", str(root)] + args,
         input=json.dumps(input_json) if input_json is not None else None,
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _buglist_add(root, **fields):
@@ -1804,7 +1829,9 @@ def _run_reindex(root):
     proc = subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "reindex"],
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
     assert proc.returncode == 0, proc.stderr
     return proc
 
@@ -1873,7 +1900,9 @@ def _run_batch_raw(root, extra_args):
     return subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "batch"] + extra_args,
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _run_batch(root, extra_args):
@@ -1900,7 +1929,9 @@ def _run_sweep_raw(root, extra_args):
     return subprocess.run(
         [sys.executable, SCRIPT, "--root", str(root), "sweep"] + extra_args,
         capture_output=True, text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def _run_sweep(root, extra_args):

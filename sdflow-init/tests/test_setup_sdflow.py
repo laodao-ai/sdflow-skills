@@ -7,15 +7,23 @@ from pathlib import Path
 
 import pytest
 
+from test_support.windows import bash_executable, bash_path
+
+if os.name == "nt":
+    pytest.skip(
+        "these setup assertions require POSIX symlink and executable-bit semantics",
+        allow_module_level=True,
+    )
+
 REPO = Path(__file__).parent.parent.parent
 
 
 def run_setup(tmp_path):
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
-    env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
-    r = subprocess.run(["bash", str(REPO / "setup.sh")],
-                       env=env, capture_output=True, text=True)
+    env = dict(os.environ, HOME=bash_path(home), SDFLOW_HOME=bash_path(home / ".sdflow"))
+    r = subprocess.run([bash_executable(), bash_path(REPO / "setup.sh")],
+                       env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r, home / ".sdflow"
 
 
@@ -81,7 +89,7 @@ class TestCleanupOrphansDangling:
         # 测试会因无关原因红/绿都失败，测不到本任务要修的枚举逻辑。
         (skills / "spec-review-legacy").symlink_to(REPO / "spec-review-legacy-GONE")
         env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
-        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert r.returncode == 0
         assert not (skills / "spec-review-legacy").is_symlink()   # dangling 自属链被清
         assert "spec-review-legacy" in (r.stdout + r.stderr)       # cleaned orphans 榜上有名
@@ -92,7 +100,7 @@ class TestCleanupOrphansDangling:
         skills.mkdir(parents=True)
         (skills / "alien-skill").symlink_to("/nonexistent/other-tool/alien-skill")
         env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
-        subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert (skills / "alien-skill").is_symlink()               # 非自属不动（红线）
 
 
@@ -103,7 +111,7 @@ class TestRenameEndToEnd:
         for old in ["opsx-project-init","opsx-done","spec-review","impl-review","buglist-recorder"]:
             (skills / old).symlink_to(REPO / old)      # 改名后这些源目录已不存在 → dangling
         env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
-        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
         for old in ["opsx-project-init","opsx-done","spec-review","impl-review","buglist-recorder"]:
             assert not (skills / old).exists(), old     # 旧链清零
         for new in ["sdflow-init","sdflow-done","sdflow-spec-review","sdflow-code-review","sdflow-issues"]:
@@ -181,7 +189,7 @@ class TestSetEDoesNotKillTheWholeInstall:
         env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
         procs = [subprocess.Popen(["bash", str(REPO / "setup.sh")], env=env,
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                  text=True) for _ in range(2)]
+                                  text=True, encoding="utf-8", errors="replace") for _ in range(2)]
         outs = [p.communicate(timeout=300)[0] for p in procs]
         for i, (p, out) in enumerate(zip(procs, outs)):
             assert p.returncode == 0, f"并发第 {i} 个进程被 set -e 打断：\n{out}"
@@ -211,7 +219,9 @@ class TestResolveModelsInstallPath:
         proc = subprocess.run(
             ["bash", str(installed), "--root", str(consumer_repo)],
             capture_output=True, text=True, env=env, timeout=15,
-        )
+
+            encoding="utf-8",
+            errors="replace",)
         assert proc.returncode == 0, proc.stderr
         assert "export SDFLOW_HOST=codex" in proc.stdout
         assert "export SDFLOW_TIER_STRONG=gpt-5.6-sol" in proc.stdout
@@ -234,7 +244,9 @@ class TestBrandAndMarkerNarrowing:
         ver = subprocess.run(
             ["git", "-C", str(REPO), "describe", "--tags", "--always", "--dirty"],
             capture_output=True, text=True,
-        ).stdout.strip()
+
+            encoding="utf-8",
+            errors="replace",).stdout.strip()
         assert ver, "git describe 无输出——测试环境不是 git checkout？"
         assert f"sdflow-skills {ver} ready" in r.stdout
 
@@ -251,7 +263,7 @@ class TestBrandAndMarkerNarrowing:
             d = skills / name; d.mkdir(); (d / "SKILL.md").write_text("x", encoding="utf-8")
             (d / ".laodao-skills").write_text("legacyhash", encoding="utf-8")
         env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
-        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True)
+        r = subprocess.run(["bash", str(REPO / "setup.sh")], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert r.returncode == 0
 
         # 旧名（源目录已不存在）：is_our_marker_copy 识别自属 → install_into 因无同名源

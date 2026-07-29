@@ -233,7 +233,7 @@ def test_marker_unclosed_frontmatter_stops(tmp_path):
 def _run_route(root, change):
     r = subprocess.run(
         [sys.executable, str(SCRIPT), "route", "--root", str(root), "--change", change],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
@@ -326,15 +326,15 @@ def test_cli_route_plan_sha_present_when_committed(tmp_path):
     (d / "tickets.md").write_text(
         "---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "seed"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     code, out, _ = _run_route(tmp_path, "demo")
     assert code == 0
     sha_field = [seg for seg in out.split() if seg.startswith("plan_sha=")][0]
@@ -382,15 +382,15 @@ def test_cli_route_new_plan_name_plan_sha_present_when_committed(tmp_path):
         "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
         encoding="utf-8")
     subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "seed"],
-                    check=True, capture_output=True, text=True)
+                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     code, out, _ = _run_route(tmp_path, "demo")
     assert code == 0
     sha_field = [seg for seg in out.split() if seg.startswith("plan_sha=")][0]
@@ -559,7 +559,7 @@ def test_blocked_by_inline_form_still_matches_canonical():
 def _run_frontier(plan_path, done):
     r = subprocess.run(
         [sys.executable, str(SCRIPT), "frontier", "--plan", str(plan_path), "--done", done],
-        capture_output=True, text=True)
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
@@ -723,7 +723,7 @@ def _run_task_text(plan_path, task, out=None):
            "--task", str(task)]
     if out is not None:
         cmd += ["--out", str(out)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 

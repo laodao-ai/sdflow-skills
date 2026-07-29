@@ -50,6 +50,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+OPENSPEC = shutil.which("openspec") or "openspec"
 SKILL = REPO / "sdflow-spec" / "SKILL.md"
 
 
@@ -142,7 +143,7 @@ def test_fault1_design_failure_table_still_lists_it():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _git(cwd, *args):
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 @pytest.fixture
@@ -162,7 +163,7 @@ def _run_hook(repo_dir, command):
     payload = {"tool_name": "Bash", "cwd": str(repo_dir),
                "tool_input": {"command": command}}
     proc = subprocess.run([sys.executable, str(HOOK)], input=json.dumps(payload),
-                          capture_output=True, text=True, timeout=30)
+                          capture_output=True, text=True, timeout=30, encoding="utf-8", errors="replace")
     assert proc.returncode == 0, f"hook 非零退出：{proc.stderr}"
     if not proc.stdout.strip():
         return False, ""
@@ -220,10 +221,10 @@ def test_fault3_git_really_behaves_as_the_instruction_assumes(repo):
     _git(repo, "checkout", "-qb", "feat/demo")
     _git(repo, "checkout", "-q", "main")
     dup = subprocess.run(["git", "checkout", "-b", "feat/demo"], cwd=repo,
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert dup.returncode != 0, "`git checkout -b` 撞名竟成功 —— fallback 指令的前提没了"
     back = subprocess.run(["git", "checkout", "feat/demo"], cwd=repo,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert back.returncode == 0, "fallback `git checkout <已存在分支>` 失败"
 
 
@@ -494,8 +495,8 @@ def test_fault6_real_cli_payload_carries_every_documented_field(tmp_path):
         "# Demo Proposal\n\n## Why\nx\n\n## What Changes\n- a\n\n## Impact\n- specs/foo\n",
         encoding="utf-8")
     out = subprocess.run(
-        ["openspec", "instructions", "design", "--change", "demo", "--json"],
-        cwd=str(root), capture_output=True, text=True, timeout=_CLI_TIMEOUT_S)
+            [OPENSPEC, "instructions", "design", "--change", "demo", "--json"],
+        cwd=str(root), capture_output=True, text=True, timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace")
     assert out.returncode == 0, f"CLI 非零退出：{out.stderr}"
     payload = assert_instructions_schema(out.stdout)   # 缺字段/类型不符 ⇒ 这里抛
     assert payload["artifactId"] == "design"
@@ -505,12 +506,21 @@ def _fake_openspec(tmp_path, stdout_body, *, exit_code=0):
     """在临时 PATH 里放一个假 `openspec`，返回可直接传给 subprocess 的 env。"""
     binder = tmp_path / "fakebin"
     binder.mkdir(exist_ok=True)
-    exe = binder / "openspec"
-    exe.write_text("#!/bin/sh\n"
-                   'if [ "$1" = "--version" ]; then echo "1.5.0-FAKE"; exit 0; fi\n'
-                   f"cat <<'EOF'\n{stdout_body}\nEOF\nexit {exit_code}\n", encoding="utf-8")
-    exe.chmod(exe.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    env = dict(os.environ, PATH=f"{binder}:/usr/bin:/bin")
+    if os.name == "nt":
+        exe = binder / "openspec.cmd"
+        exe.write_text(
+            "@echo off\n"
+            "if \"%1\"==\"--version\" (echo 1.5.0-FAKE& exit /b 0)\n"
+            f"echo {stdout_body}\nexit /b {exit_code}\n",
+            encoding="utf-8",
+        )
+    else:
+        exe = binder / "openspec"
+        exe.write_text("#!/bin/sh\n"
+                       'if [ "$1" = "--version" ]; then echo "1.5.0-FAKE"; exit 0; fi\n'
+                       f"cat <<'EOF'\n{stdout_body}\nEOF\nexit {exit_code}\n", encoding="utf-8")
+        exe.chmod(exe.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    env = dict(os.environ, PATH=os.pathsep.join((str(binder), os.environ.get("PATH", ""))))
     return env
 
 
@@ -530,9 +540,9 @@ def test_fault6_malformed_payload_fails_closed(tmp_path, body, label):
     这两维由 `test_fault6_no_retry_instruction_is_present` 的**指令在场锚（弱）**承载。
     """
     env = _fake_openspec(tmp_path, body)
-    out = subprocess.run(["openspec", "instructions", "design", "--change", "demo", "--json"],
+    out = subprocess.run([shutil.which("openspec", path=env["PATH"]) or "openspec", "instructions", "design", "--change", "demo", "--json"],
                          cwd=str(tmp_path), capture_output=True, text=True,
-                         env=env, timeout=_CLI_TIMEOUT_S)
+                         env=env, timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace")
     with pytest.raises(AssertionError) as e:
         assert_instructions_schema(out.stdout)
     assert "problem:" in str(e.value), f"{label}：诊断缺 problem 三要素"
@@ -542,7 +552,7 @@ def test_fault5_missing_cli_is_detected(tmp_path):
     """⑤ 中锚：PATH 里没有 `openspec` ⇒ 预检命令非零退出（0.1 的检测信号真的存在）。"""
     env = dict(os.environ, PATH="/usr/bin:/bin")
     out = subprocess.run(["env", "openspec", "--version"], capture_output=True,
-                         text=True, env=env, timeout=_CLI_TIMEOUT_S)
+                         text=True, env=env, timeout=_CLI_TIMEOUT_S, encoding="utf-8", errors="replace")
     assert out.returncode != 0, "剥掉 PATH 后 `openspec --version` 竟成功 —— 检测信号不成立"
 
 

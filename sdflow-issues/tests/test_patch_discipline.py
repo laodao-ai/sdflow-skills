@@ -55,6 +55,10 @@ DISPATCH_FACTORIES = {"dispatch_run", "scan_only_run", "make_dispatch_run"}
 #: 这些站点**整体替换是断言本体**，不是副作用——被测对象就是 `repo_root` 自己对 git
 #: 的调用，改成分派形态会让用例失去测试对象。
 INTENTIONAL_WHOLESALE_PATCHES = {
+    ("test_task5_delivery_contract.py", "test_sweep_cli_executes_all_four_utf8_subprocess_sites"):
+        "断言本体是捕获 sweep 的全部 subprocess kwargs，必须观察整体调用面。",
+    ("test_task5_delivery_contract.py", "test_reindex_nested_scan_decodes_child_json_as_utf8"):
+        "断言本体是隔离并检查 reindex 的唯一嵌套 scan subprocess 调用。",
     ("test_issues.py", "test_falls_back_to_abspath_when_git_command_raises"):
         "被测对象是 repo_root 的 git 失败回落分支；劫持 git 即断言本体。",
     ("test_repo_root_identity_issues.py", "_fake_git_stdout"):

@@ -333,7 +333,7 @@ def _run(root, change, extra=None):
     cmd = ["python3", SCRIPT, "--change", change, "--root", str(root), "--branch", "feat/t"]
     if extra:
         cmd += extra
-    return subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _mk_change(root, name, verify="PASS", proposal="", tasks="- [x] a\n- [ ] b\n"):

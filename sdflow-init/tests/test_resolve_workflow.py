@@ -4,14 +4,27 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from test_support.windows import bash_executable, bash_path
+
 SCRIPT = Path(__file__).parent.parent / "assets" / "hack" / "resolve-workflow.sh"
 
 
+def _symlink_or_skip(link, target):
+    try:
+        link.symlink_to(target, target_is_directory=True)
+    except OSError as exc:
+        if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows symlink creation requires Developer Mode or elevated privilege")
+        raise
+
+
 def run_resolve(cwd, sdflow_home, args=()):
-    env = dict(os.environ, SDFLOW_HOME=str(sdflow_home))
+    env = dict(os.environ, SDFLOW_HOME=bash_path(sdflow_home))
     return subprocess.run(
-        ["bash", str(SCRIPT), *args],
-        cwd=str(cwd), env=env, capture_output=True, text=True)
+        [bash_executable(), bash_path(SCRIPT), *args],
+        cwd=str(cwd), env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def make_bundle(path):
@@ -42,14 +55,14 @@ class TestHappyPaths:
         repo = make_repo(tmp_path / "repo", with_rules=True)
         r = run_resolve(repo, tmp_path / "nonexistent-sdflow")
         assert r.returncode == 0
-        assert r.stdout.strip() == str(repo / "openspec" / "workflow")
+        assert Path(r.stdout.strip()).resolve() == (repo / "openspec" / "workflow").resolve()
 
     def test_tools_only_repo_falls_to_global_symlink(self, tmp_path):
         repo = make_repo(tmp_path / "repo", with_rules=False)
         bundle = make_bundle(tmp_path / "bundle")
         sdflow = tmp_path / "sdflow"
         sdflow.mkdir()
-        (sdflow / "workflow").symlink_to(bundle)
+        _symlink_or_skip(sdflow / "workflow", bundle)
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
         assert Path(r.stdout.strip()).resolve() == bundle.resolve()
@@ -62,9 +75,11 @@ class TestHappyPaths:
         (sdflow / "workflow-path").write_text(str(bundle) + "\n", encoding="utf-8")
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        assert r.stdout.strip() == str(bundle)
+        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
 
     def test_script_is_executable(self):
+        if os.name == "nt":
+            pytest.skip("Windows does not expose POSIX executable mode bits")
         assert SCRIPT.stat().st_mode & stat.S_IXUSR
 
 
@@ -74,7 +89,7 @@ class TestEdgeCases:
         (repo / "openspec" / "workflow" / "spec-checklists").mkdir()  # 只残留一个单元
         r = run_resolve(repo, tmp_path / "no-sdflow")
         assert r.returncode == 0                      # any-of 即 pin
-        assert r.stdout.strip() == str(repo / "openspec" / "workflow")
+        assert Path(r.stdout.strip()).resolve() == (repo / "openspec" / "workflow").resolve()
         assert "部分残留" in r.stderr                  # 专门告警，不静默
 
     def test_global_missing_exits_2_with_guard_message(self, tmp_path):
@@ -93,7 +108,7 @@ class TestEdgeCases:
         (bundle / "code-checklists").mkdir()
         sdflow = tmp_path / "sdflow"
         sdflow.mkdir()
-        (sdflow / "workflow").symlink_to(bundle)
+        _symlink_or_skip(sdflow / "workflow", bundle)
         r = run_resolve(repo, sdflow)
         assert r.returncode == 2                      # 健全性不过检 = 缺失
 
@@ -105,7 +120,7 @@ class TestEdgeCases:
         (sdflow / "workflow-path").write_text(str(bundle) + "  \r\n", encoding="utf-8")
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        assert r.stdout.strip() == str(bundle)
+        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
 
     def test_root_flag_overrides_cwd(self, tmp_path):
         repo = make_repo(tmp_path / "repo", with_rules=True)
@@ -113,7 +128,7 @@ class TestEdgeCases:
         sub.mkdir(parents=True)
         r = run_resolve(sub, tmp_path / "no-sdflow", args=("--root", str(repo)))
         assert r.returncode == 0
-        assert r.stdout.strip() == str(repo / "openspec" / "workflow")
+        assert Path(r.stdout.strip()).resolve() == (repo / "openspec" / "workflow").resolve()
 
     def test_explain_reports_source(self, tmp_path):
         repo = make_repo(tmp_path / "repo", with_rules=True)
@@ -154,11 +169,13 @@ class TestEdgeCases:
 
     def test_deleted_cwd_exits_64(self, tmp_path):
         """cwd 被删时不得静默 fallback 到失败的 pwd（B1-F1）——显式 exit 64 + 指引 --root。"""
+        if os.name == "nt":
+            pytest.skip("Git Bash retains a usable logical cwd after Windows removes the directory")
         d = tmp_path / "will-be-deleted"
         d.mkdir()
         r = subprocess.run(
-            ["bash", "-c", f'cd "{d}" && rmdir "{d}" && bash "{SCRIPT}" --explain'],
-            capture_output=True, text=True)
+            [bash_executable(), "-c", f'cd "{bash_path(d)}" && rmdir "{bash_path(d)}" && bash "{bash_path(SCRIPT)}" --explain'],
+            capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert r.returncode == 64
         assert "无法确定仓根" in r.stderr
 
@@ -180,7 +197,7 @@ class TestEdgeCases:
         (bundle / "code-checklists" / "domains.md").write_text("# code\n", encoding="utf-8")
         sdflow = tmp_path / "sdflow"
         sdflow.mkdir()
-        (sdflow / "workflow").symlink_to(bundle)
+        _symlink_or_skip(sdflow / "workflow", bundle)
         r = run_resolve(repo, sdflow)
         assert r.returncode == 2
 
@@ -193,4 +210,4 @@ class TestEdgeCases:
         (sdflow / "workflow-path").write_text(str(bundle) + "\n", encoding="utf-8")
         r = run_resolve(repo, sdflow)
         assert r.returncode == 0
-        assert r.stdout.strip() == str(bundle)
+        assert Path(r.stdout.strip()).resolve() == bundle.resolve()

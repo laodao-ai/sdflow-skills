@@ -1,11 +1,14 @@
-"""Regression guard for the repository-wide text subprocess encoding contract."""
+"""Regression guard for repository-wide text subprocess encoding."""
+
 import ast
 from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[2]
+SUBPROCESS_APIS = {"run", "Popen", "check_output", "check_call"}
 
-def _keyword_values(call):
+
+def _constant_keywords(call: ast.Call) -> dict[str, object]:
     return {
         keyword.arg: keyword.value.value
         for keyword in call.keywords
@@ -13,46 +16,129 @@ def _keyword_values(call):
     }
 
 
-def _is_text_mode(call):
-    return _keyword_values(call).get("text") is True
+def _dict_assignments(tree: ast.AST) -> dict[str, dict[str, object]]:
+    """Collect simple kwargs dictionaries and later literal subscript writes."""
+    dictionaries: dict[str, dict[str, object]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            value = node.value
+            for target in targets:
+                if isinstance(target, ast.Name) and isinstance(value, ast.Dict):
+                    dictionaries[target.id] = {
+                        key.value: item.value
+                        for key, item in zip(value.keys, value.values)
+                        if isinstance(key, ast.Constant) and isinstance(item, ast.Constant)
+                    }
+                elif (
+                    isinstance(target, ast.Subscript)
+                    and isinstance(target.value, ast.Name)
+                    and isinstance(target.slice, ast.Constant)
+                    and isinstance(value, ast.Constant)
+                ):
+                    dictionaries.setdefault(target.value.id, {})[target.slice.value] = value.value
+    return dictionaries
 
 
-def _is_subprocess_call(call):
+def _effective_keywords(call: ast.Call, dictionaries: dict[str, dict[str, object]]) -> dict[str, object]:
+    values: dict[str, object] = {}
+    for keyword in call.keywords:
+        if keyword.arg is None and isinstance(keyword.value, ast.Name):
+            values.update(dictionaries.get(keyword.value.id, {}))
+        elif keyword.arg is not None and isinstance(keyword.value, ast.Constant):
+            values[keyword.arg] = keyword.value.value
+    return values
+
+
+def _is_subprocess_call(call: ast.Call) -> bool:
     return (
         isinstance(call.func, ast.Attribute)
         and isinstance(call.func.value, ast.Name)
         and call.func.value.id == "subprocess"
-        and call.func.attr == "run"
+        and call.func.attr in SUBPROCESS_APIS
     )
 
 
-def _production_python_files():
-    """Yield every authored production module, excluding tests and generated bundle copies."""
-    for path in REPO.rglob("*.py"):
-        relative = path.relative_to(REPO)
-        if "tests" in relative.parts or relative.parts[0] == "openspec":
+def _python_files(root: Path):
+    """Yield authored Python, including tests but excluding generated/local trees."""
+    for path in root.rglob("*.py"):
+        relative = path.relative_to(root)
+        if relative.parts[0] in {".git", ".worktrees", "openspec"}:
             continue
         yield path
 
 
-def test_text_mode_subprocesses_declare_utf8_and_replace():
-    """Every direct text subprocess site is locale-independent and loss-tolerant."""
-    misses = []
+def _scan(paths, display_root: Path) -> tuple[int, list[str]]:
     sites = 0
-    for path in _production_python_files():
+    misses: list[str] = []
+    for path in paths:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        dictionaries = _dict_assignments(tree)
         for call in ast.walk(tree):
-            if not isinstance(call, ast.Call) or not _is_subprocess_call(call) or not _is_text_mode(call):
+            if not isinstance(call, ast.Call) or not _is_subprocess_call(call):
+                continue
+            values = _effective_keywords(call, dictionaries)
+            if values.get("text") is not True and values.get("universal_newlines") is not True:
                 continue
             sites += 1
-            values = _keyword_values(call)
-            missing = [name for name, expected in (("encoding", "utf-8"), ("errors", "replace"))
-                       if values.get(name) != expected]
+            missing = [
+                name
+                for name, expected in (("encoding", "utf-8"), ("errors", "replace"))
+                if values.get(name) != expected
+            ]
             if missing:
-                misses.append(f"{path.relative_to(REPO)}:{call.lineno}: {', '.join(missing)}")
+                misses.append(f"{path.relative_to(display_root)}:{call.lineno}: {', '.join(missing)}")
+    return sites, misses
 
-    assert sites == 15
+
+def test_text_mode_subprocesses_declare_utf8_and_replace():
+    """Every authored text subprocess site is locale-independent and loss-tolerant."""
+    sites, misses = _scan(_python_files(REPO), REPO)
+
+    assert sites >= 200, "repository scan unexpectedly missed most subprocess sites"
     assert not misses, "\n".join(misses)
+
+
+def test_scanner_rejects_direct_dynamic_and_wrapper_outlets(tmp_path):
+    samples = {
+        "direct.py": "import subprocess\nsubprocess.run(['x'], text=True)\n",
+        "dynamic.py": (
+            "import subprocess\n"
+            "kwargs = {'text': True}\n"
+            "subprocess.check_output(['x'], **kwargs)\n"
+        ),
+        "wrapper.py": (
+            "import subprocess\n"
+            "def text_runner(argv):\n"
+            "    return subprocess.Popen(argv, universal_newlines=True)\n"
+        ),
+    }
+    paths = []
+    for name, source in samples.items():
+        path = tmp_path / name
+        path.write_text(source, encoding="utf-8")
+        paths.append(path)
+
+    sites, misses = _scan(paths, tmp_path)
+
+    assert sites == 3
+    assert {miss.split(":", 1)[0] for miss in misses} == set(samples)
+
+
+def test_scanner_accepts_hardened_dynamic_kwargs(tmp_path):
+    path = tmp_path / "hardened.py"
+    path.write_text(
+        "import subprocess\n"
+        "kwargs = {'text': True, 'encoding': 'utf-8'}\n"
+        "kwargs['errors'] = 'replace'\n"
+        "subprocess.check_call(['x'], **kwargs)\n",
+        encoding="utf-8",
+    )
+
+    sites, misses = _scan([path], tmp_path)
+
+    assert sites == 1
+    assert not misses
 
 
 def test_ship_gate_text_wrapper_is_hardened_without_touching_byte_reads():
@@ -82,4 +168,4 @@ def test_ship_gate_text_wrapper_is_hardened_without_touching_byte_reads():
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_git_run"
     ]
     assert len(byte_calls) == 1
-    assert _keyword_values(byte_calls[0])["text"] is False
+    assert _constant_keywords(byte_calls[0])["text"] is False

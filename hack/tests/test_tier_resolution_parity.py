@@ -213,14 +213,14 @@ def test_cli_exits_nonzero_on_drift(tmp_path):
     r = subprocess.run(
         [sys.executable, str(REPO / "hack" / "check_tier_resolution_parity.py"),
          str(a), str(b)],
-        capture_output=True, text=True, encoding="utf-8")
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode != 0
 
 
 def test_cli_exits_zero_on_repo():
     r = subprocess.run(
         [sys.executable, str(REPO / "hack" / "check_tier_resolution_parity.py")],
-        capture_output=True, text=True, encoding="utf-8")
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
@@ -235,7 +235,7 @@ def test_cli_requires_at_least_two_paths(tmp_path):
     r = subprocess.run(
         [sys.executable, str(REPO / "hack" / "check_tier_resolution_parity.py"),
          str(a)],
-        capture_output=True, text=True, encoding="utf-8")
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode != 0
 
 

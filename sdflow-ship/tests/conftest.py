@@ -29,13 +29,13 @@ def _git_env():
 
 def _git(root, *args):
     subprocess.run(["git", "-C", str(root), *args], check=True,
-                   capture_output=True, text=True, env=_git_env())
+                   capture_output=True, text=True, env=_git_env(), encoding="utf-8", errors="replace")
 
 @pytest.fixture
 def repo(tmp_path):
     _git_init = ["init", "-q", "-b", "main"]
     subprocess.run(["git", "-C", str(tmp_path), *_git_init], check=True,
-                   capture_output=True, text=True, env=_git_env())
+                   capture_output=True, text=True, env=_git_env(), encoding="utf-8", errors="replace")
     _git(tmp_path, "config", "user.name", "t")
     _git(tmp_path, "config", "user.email", "t@t")
     # 整片禁读之外**再钉死这两项**：`GIT_CONFIG_*=/dev/null` 只管 fixture 自己起的进程，
@@ -61,7 +61,7 @@ def mkchange(root, name="demo"):
 
 def head_sha(root):
     out = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                         check=True, capture_output=True, text=True)
+                         check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return out.stdout.strip()
 
 def sg_frontmatter(sha=None, **fields):

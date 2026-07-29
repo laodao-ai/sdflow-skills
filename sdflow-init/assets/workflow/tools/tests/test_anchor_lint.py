@@ -429,7 +429,7 @@ def _run(report_path, layer, root=None, catalog=None):
     cmd = [sys.executable, str(SCRIPT), "--report", str(report_path), "--layer", layer,
            "--trigger-catalog", str(catalog)]
     if root: cmd += ["--root", str(root)]
-    return subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_anchor_lint_missing_catalog_fail_closed(tmp_path):

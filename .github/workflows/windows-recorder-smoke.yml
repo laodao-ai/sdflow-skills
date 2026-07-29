@@ -34,6 +34,24 @@ on:
   workflow_dispatch:
 
 jobs:
+  windows-full-pytest:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install pytest
+        shell: bash
+        run: py -m pip install "pytest>=8"
+      - name: Run full pytest suite
+        shell: bash
+        run: py -m pytest -q
+
   windows-recorder-and-encoding-smoke:
     runs-on: windows-latest
     steps:

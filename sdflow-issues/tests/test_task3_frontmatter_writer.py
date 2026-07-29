@@ -30,7 +30,9 @@ def _run(script, root, *args, payload=None):
         input=None if payload is None else json.dumps(payload, ensure_ascii=False),
         capture_output=True,
         text=True,
-    )
+
+        encoding="utf-8",
+        errors="replace",)
 
 
 def test_bug_add_creates_canonical_frontmatter_without_legacy_row(tmp_path):
