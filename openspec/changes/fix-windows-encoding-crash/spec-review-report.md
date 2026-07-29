@@ -255,6 +255,40 @@ M6（对抗镜 B 追调用图 + 跨模型镜独立命中）：6.2 跑的 `setup.
 
 ---
 
+## 六之二、拍板后修订与窄复核（`[spec-review-amendment]` · 2026-07-29）
+
+人已拍板：**同意 Q1–Q4 四项推荐**，并同意「修订 → 窄复核 → 再进设计门」的顺序。
+
+**修订已落盘并单独 checkpoint**：`8d29b89`（四件套 6 文件，+185/−56）。24 条采纳全部处置完毕，
+无一条 defer。逐条落点见各文件的 `[spec-review-amendment]` 标记。
+
+**窄复核（只审增量）** —— 🔴 **主 session 亲验，不转述镜子结论**。本报告 §三 的每个承重数字
+都来自子代理报告，而它们被写进了 spec 与 decision-memo 的承重约束位 ⇒ 按通则①「落笔前先证伪」，
+逐条独立复跑：
+
+| 复验项 | 方法 | 结果 |
+|---|---|---|
+| 入口 / lib 计数 | 按 §1.1 glob 穷举 + 逐文件读 `__main__` | `TOTAL=32 / ENTRY=28 / LIB=4` ✅ 与 C6 修正值及 lib 清单逐一吻合 |
+| `migrate_legacy.py` 是入口 | `grep -n '__main__'` | `:383` ✅ |
+| 两处 `write_text` 已带编码 | 读 `:418-420` / `:59-60` 原文 | 均在下一行带 `encoding="utf-8"` ✅ C8 修正成立 |
+| `import sys` 位置跨度 | 逐文件 `grep -n '^import sys'` | 191 / 154 / 79 / 70 ✅ 窗口取消的理由成立 |
+| `trivial_shape.py:210` 容错语义 | 读原文 | 确已有 `errors="replace"`、只缺 `encoding=` ✅ Q2 的「非本次新加」成立 |
+| `init.py:868` 崩溃点未被吞 | 读原文 | 即 `print(f"✓ sdflow-init {mode} 完成…")`，无 try/except ✅ 6.3 退出码判据有效 |
+| `init.py:567` 仅 config-lint 可达 | 读 `_git_root_or_dot()` docstring | 自陈「config-lint 专用」✅ M6 成立 |
+| 四道同侪门均有常驻测试 | 逐文件 grep import 行 | 5/5 全部直接 import 模块 ✅；`test_encoding_hygiene.py` 确不存在 ✅ |
+| `setup.sh` 交付机制与退出码 | 读 `:60-77` + `grep -n '^\s*exit '` | Windows 走 `rm -rf`+`cp -r` ✅；**全文无裸 `exit`** ✅ M7 成立 |
+
+**结论**：§三 写进四件套的承重数字**全部经主 session 独立复核为真**，无一条需要回退。
+`openspec validate --strict --type change` 通过。
+
+⚠️ **窄复核的诚实边界**：本次只复核了「被写进四件套的事实断言」，**未**重跑多镜——
+增量是文档修订、不是新设计面，且 Q1–Q4 的方向已由人拍板。若后续再有实质改动，须再走一次本流程。
+
+⚠️ **一处无关改动被扫进 `8d29b89`**：`docs/drafts/20260712.md` 少了尾部 4 行（含一行 `/sdflow-spec …` 草稿）。
+该文件在 `9d47f8b` 之后被改动，**非本次评审动作所致**，已如实告知人，未自行回滚（原内容存于 `bd90f94`）。
+
+---
+
 ## 七、收敛口
 
 **不建议直接进设计 HARD-GATE。** 本轮 24 条采纳里有 7 条 high，其中 **M1 / M2 / M3 三条直接推翻了
