@@ -110,6 +110,12 @@
 | T177 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
 | T178 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
 
+### 批次：fix-windows-encoding-crash
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T263 | todo | PROPOSED | fix-windows-encoding-crash |
+
 ### 批次：gate-checkpoint-hardening
 
 | ID | Pool | Status | 关联Change |
