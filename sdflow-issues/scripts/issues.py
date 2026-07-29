@@ -446,7 +446,12 @@ def _scan_pool(script, root, pool, problems_out=None):
 
     `problems_out`：可选列表，非 None 时透传子进程 `scan --json` 输出里的 `problems`。
     """
-    kwargs = {"capture_output": True, "text": True}
+    kwargs = {
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+    }
     if _core._ACTIVE_RECORDER_TOKEN:
         kwargs["env"] = recorder_child_env("scan")
     proc = subprocess.run(

@@ -314,6 +314,23 @@ def test_sweep_cli_executes_all_four_utf8_subprocess_sites(tmp_path, monkeypatch
     assert "windows-sweep-smoke" in (tmp_path / "openspec/issues/batches.md").read_text(encoding="utf-8")
 
 
+def test_reindex_nested_scan_decodes_child_json_as_utf8(tmp_path, monkeypatch):
+    """The reindex -> scan subprocess must not fall back to the Windows locale codec."""
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0, '{"bugs": [], "problems": []}', "")
+
+    monkeypatch.setattr(ISSUES.subprocess, "run", fake_run)
+    assert ISSUES._scan_pool(str(BUG_PATH), tmp_path, "bug") == []
+    assert len(calls) == 1
+    _command, kwargs = calls[0]
+    assert kwargs["text"] is True
+    assert kwargs["encoding"] == "utf-8"
+    assert kwargs["errors"] == "replace"
+
+
 def test_delivery_docs_name_operational_boundaries():
     adr = (ROOT / "openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md").read_text(encoding="utf-8")
     context = (ROOT / "openspec/CONTEXT.md").read_text(encoding="utf-8")
