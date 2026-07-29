@@ -1,5 +1,5 @@
 > `[spec-review-amendment]` 本文件已按阶段二 spec-review 的裁决整体修订（`spec-review-report.md`，24 条采纳）。
-> 主要变化：入口脚本 27→**28**、subprocess 16→**15 站点 / 14 编辑点**、`write_text` 2 处→**0 处（改为核实确认）**、
+> 主要变化：入口脚本 27→**28**、subprocess → **16 站点 / 15 编辑点**（15 个直接 `text=True` + 1 个 `**kwargs` 动态站点）、`write_text` 2 处→**0 处（改为核实确认）**、
 > `ship_gate.py` 的修复点从调用点改到 `_git_run` 函数体内（照原样改会 `TypeError`）、
 > 检测器判据从「前几行含某子串」改为「整文件 + 三项契约」、新增常驻 pytest、CI 断言拆分并补覆盖。
 
@@ -42,7 +42,7 @@
 
 ## 3. subprocess 编码补全 + write_text 面核实（对应 Requirement: subprocess 文本解码与文件写入 SHALL 显式声明 UTF-8 编码）
 
-- [x] 3.1 **15 个** `subprocess ... text=True` 调用站点补 `encoding="utf-8", errors="replace"`，**实际编辑 14 处** `[spec-review-amendment]`：
+- [x] 3.1 **16 个**文本模式 `subprocess` 调用站点补 `encoding="utf-8", errors="replace"`，**实际编辑 15 处** `[spec-review-amendment]`：15 个直接 `text=True` 站点加 `_scan_pool` 通过 `**kwargs` 动态传入 `text=True` 的站点
       | 文件 | 站点 | 编辑方式 |
       |---|---|---|
       | `sdflow-devenv/scripts/devenv_scaffold.py` | `:49`、`:324` | 各自就地 |
@@ -52,11 +52,11 @@
       | `sdflow-init/assets/hooks/ff0-branch-guard.py` | `:125` | 就地 |
       | `sdflow-init/assets/workflow/tools/trivial_shape.py` | `:210` | 就地（**已有** `errors="replace"`，只补 `encoding=`） |
       | `sdflow-init/scripts/init.py` | `:567` | 就地 |
-      | `sdflow-issues/scripts/issues.py` | `:1104`、`:1117`、`:1133`、`:1140` | 各自就地 |
+      | `sdflow-issues/scripts/issues.py` | `_scan_pool` 的动态 kwargs、`:1104`、`:1117`、`:1133`、`:1140` | 各自就地 |
       | `sdflow-retro/scripts/retro_report.py` | `:47` | 就地 |
       | **`sdflow-ship/scripts/ship_gate.py`** | `:334`、`:341` | 🔴 **MUST NOT 在这两行加参数** —— 见 3.1a |
 - [x] 3.1a 🔴 **`ship_gate.py` 的正确修复点在 `_git_run` 函数体内，不在调用点** `[spec-review-amendment]`：`_git_run(root, args, text)` 定义在 `:304`，**三参定签、无 `**kwargs`**；`:334`/`:341` 是它的调用点而非 `subprocess.run` 本体 ⇒ 在那两行加 `encoding=` 会直接抛 `TypeError: _git_run() got an unexpected keyword argument 'encoding'`。正解 = 在 `:317-320` 的 `kwargs` 构造里加 `kwargs["encoding"] = "utf-8"`（那里**已有** `errors="replace"`，只缺 `encoding`）——**一处编辑覆盖两个调用点及未来任何新增调用方**。注意 `run_git_bytes`（`:472`）走 `text=False` 取原始字节，不受影响
-- [x] 3.1b 对 15 个站点做一次「输出是否流入等值 / 去重 / 分类判断」的过目（Q2 拍板中档）`[spec-review-amendment]`——本次**新加** `errors="replace"` 的站点若流入判定路径，须在 `design.md` Risks 写明为何仍沿用；已确认 `ship_gate` 的保真比对走 `run_git_bytes`、`trivial_shape.py:210` 的 `errors="replace"` 是既有非新增
+- [x] 3.1b 对 16 个站点做一次「输出是否流入等值 / 去重 / 分类判断」的过目（Q2 拍板中档）`[spec-review-amendment]`——本次**新加** `errors="replace"` 的站点若流入判定路径，须在 `design.md` Risks 写明为何仍沿用；已确认 `ship_gate` 的保真比对走 `run_git_bytes`、`trivial_shape.py:210` 的 `errors="replace"` 是既有非新增；`_scan_pool` 消费 JSON，替换后仍由 JSON parser fail-closed
 - [x] 3.2 **`write_text()` 面：核实确认，无编辑** `[spec-review-amendment]`——初版的「2 处待补」是假阳性（`check_codex_efficacy_evidence.py:418-420` 与 `devenv_scaffold.py:59-60` 的 `encoding="utf-8"` 都写在下一行，逐行 grep 看不见）。目标 glob 内**全部** `write_text()` 站点已带 `encoding="utf-8"`。本步 = 用**能感知多行调用**的方式（AST 或 `grep -Pzo`）复跑一次确认，并把该验证方式回写 `decision-memo.md` C8
 
 ## 4. `openspec/workflow/tools/` 镜像同步（对应 Requirement: 入口脚本 SHALL NOT 因 stdout/stderr 编码崩溃）
@@ -79,8 +79,8 @@
 - [x] 6.2 新增步骤：`shell: bash` + `PYTHONIOENCODING=gbk bash setup.sh` 真实子进程运行，**断言输出不含 `UnicodeEncodeError` / `Traceback`** `[spec-review-amendment]`（**退出码断言剔除**，理由同 5.2）
 - [x] 6.3 新增步骤：`shell: bash`；`--root` 指向 CI 内从空目录开始创建的 probe（先 `mkdir -p` + `git init`，再用 `init.py init` 铺设），随后执行 `PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$RUNNER_TEMP/probe"` 并断言退出码 0 `[spec-review-amendment]`。`update` 只接受已铺设项目，probe MUST NOT 在未 `init` 时直接调用 `update`
       注：**此处退出码是有效判据**——`init.py:868` 的崩溃点未被 try/except 或 `if !` 吞，异常真会传到非零退出码（与 6.2 的情况相反）
-- [x] 6.4 🔴 **新增步骤：真正跑到 `subprocess text=True` 站点** `[spec-review-amendment]`——追调用图确认：6.2 跑的 `setup.sh` 只调那四道门，而四道门**全都不调 subprocess**；6.3 跑的 `init.py update` 也够不着（`init.py:567` 在 `_git_root_or_dot()` 内，只有 `mode == "config-lint"` 走得到，`run()` 从不调它）⇒ **现状下 15 处修复零 CI 覆盖**。补 `shell: bash` + `PYTHONIOENCODING=gbk` 下各跑一次 `sdflow-issues/scripts/issues.py`、`sdflow-retro/scripts/retro_report.py`、`sdflow-ship/scripts/ship_gate.py` 的只读子命令（三者合计覆盖 15 站点中的 7 个）+ 一个稳定输出中文与非法 UTF-8 字节的夹具子进程，断言不崩且替换行为符合预期
-      （不追求 15/15——按通则④，造 15 份非 UTF-8 夹具的完美成本过高，7/15 + 夹具是成本大幅降、结果可接受的次优解）
+- [x] 6.4 🔴 **新增步骤：真正跑到文本模式 `subprocess` 站点** `[spec-review-amendment]`——追调用图确认：6.2 跑的 `setup.sh` 只调那四道门，而四道门**全都不调 subprocess**；6.3 跑的 `init.py update` 也够不着（`init.py:567` 在 `_git_root_or_dot()` 内，只有 `mode == "config-lint"` 走得到，`run()` 从不调它）⇒ **这些修复原本零 CI 覆盖**。补 `shell: bash` + `PYTHONIOENCODING=gbk` 下各跑一次 `sdflow-issues/scripts/issues.py`、`sdflow-retro/scripts/retro_report.py`、`sdflow-ship/scripts/ship_gate.py` 的只读子命令（三者合计覆盖 16 站点中的 8 个，含 `_scan_pool` 嵌套 reindex→scan）+ 一个稳定输出中文与非法 UTF-8 字节的夹具子进程，断言不崩且替换行为符合预期
+      （不追求 16/16——按通则④，造 16 份非 UTF-8 夹具的完美成本过高，8/16 + 夹具是成本大幅降、结果可接受的次优解）
 - [x] 6.5 🔴 **新增步骤：不设 `PYTHONIOENCODING` 的真实故障面用例** `[spec-review-amendment]`——`PYTHONIOENCODING` 会**主动覆盖**标准流编码，∴ 6.2/6.3/6.4 测的是「人为强制 GBK 的进程」，而不是 Windows **无该变量**时由控制台 / 重定向管道 / locale 决定编码的路径（还可能掩盖环境继承问题）。补：`shell: bash` + 移除该变量 + `chcp.com 936` 设 code page（Git for Windows Bash 不解析裸 `chcp`）；控制台路径直接运行会输出中文/emoji 且以退出码 fail-closed 的 `check_encoding_hygiene.py`，重定向路径运行 `setup.sh` 并显式 grep 日志，**控制台与重定向管道至少各一**
       注：**本条使 `windows-latest` 真正承重**——该路径只在 Windows 上存在，不能挪去 Linux runner
 
@@ -110,7 +110,7 @@
 | `check_encoding_hygiene.py` 自身检测逻辑 | **常驻 pytest**（正向 + 4 条负向 + 1 条窗口边界） | **1.4** |
 | 排除规则未连坐排掉 bundle 源 | 常驻 pytest 负向 D | **1.4** |
 | 「无行数窗口」不回归 | 常驻 pytest 边界用例（`import sys` 在 190 行后） | **1.4** |
-| `subprocess text=True` 解码（15 站点 / 14 编辑点） | **CI 真实子进程直达该路径 + 非法字节夹具**（7/15 覆盖）；余下靠 review | **6.4** |
+| 文本模式 `subprocess` 解码（16 站点 / 15 编辑点） | **CI 真实子进程直达该路径 + 非法字节夹具**（8/16 覆盖）；余下靠 review | **6.4** |
 | `ship_gate.py` 的 `_git_run` 单点修复 | 既有 `sdflow-ship/tests/` + 6.4 的 ship_gate 只读子命令实跑 | 3.1a, 6.4, 7.1 |
 | `write_text()` 编码 | **核实确认**（AST / 多行 grep），当前已全满足 | 3.2 |
 | 四道既有机械门 + `init.py` 在 GBK 环境下的真实行为 | CI 真实子进程（`PYTHONIOENCODING=gbk` 强制档） | 6.2, 6.3 |

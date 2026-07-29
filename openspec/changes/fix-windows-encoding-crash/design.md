@@ -8,7 +8,7 @@
 
 **Goals:**
 - 消除全部 **28** 个入口脚本在 GBK 环境下因打印 Unicode 字符触发的崩溃。`[spec-review-amendment]`
-- 补全 `subprocess text=True`（**15 个调用站点 / 14 个编辑点**）的显式编码，避免解码崩溃；`write_text()` 经复核**当前已全部带 `encoding="utf-8"`（0 处待补）**，本 change 只做核实确认并写进 spec 防回退。`[spec-review-amendment]`
+- 补全文本模式 `subprocess`（**16 个调用站点 / 15 个编辑点**；15 个直接 `text=True` + 1 个 `**kwargs` 动态站点）的显式编码，避免解码崩溃；`write_text()` 经复核**当前已全部带 `encoding="utf-8"`（0 处待补）**，本 change 只做核实确认并写进 spec 防回退。`[spec-review-amendment]`
 - 新增机械门防止后续新脚本遗漏防护（面治而非点补）。
 - 在真实 Windows CI（`windows-latest` + `PYTHONIOENCODING=gbk` 真实子进程）上验证，而非仅靠此前的 mac 模拟。
 
@@ -78,7 +78,7 @@ setup.sh
 
 - **[风险] 28 个脚本手工插入前导块，逐文件确认插入点存在出错概率** → **缓解**：`check_encoding_hygiene.py` 是插入后的验证闸门，任何遗漏或格式错误都会被它挡在 CI/`setup.sh` 之外；且插入内容 4 行固定模板，复制粘贴出错概率低。`[spec-review-amendment]`
 - 🔴 **[风险] `errors="replace"` 会造静默假等值——本仓已有先例，初版的"不引入新失败模式"表述被自家代码证伪** `[spec-review-amendment]` → **初版表述作废**。`sdflow-ship/scripts/ship_gate.py:460-473` 的 `run_git_bytes` docstring 白纸黑字写着：「MUST NOT 复用 run_git/run_git_rc——那条路径 `text=True` + `errors="replace"` + `.strip()`，四者各自可造假等值：吞首尾空白、吞末尾换行、CRLF↔LF 不可分辨、**非 UTF-8 字节被替换成 U+FFFD 后两版趋同**」——这是**上一个 change**（`fix-design-gate-freshness-proxy`）专门为绕开这个 bug class 新建的函数。行为不是「崩溃 → 局部字符丢失」的纯收益降级，而是**响亮失败 → 静默错误**，正是本仓反假绿哲学要杀的形态。
-  → **缓解（Q2 拍板中档）**：对 15 个站点按「输出是否流入等值 / 去重 / 分类判断」分类——
+  → **缓解（Q2 拍板中档）**：对 16 个站点按「输出是否流入等值 / 去重 / 分类判断」分类——
   **流入判定路径的两处** `sdflow-ship/scripts/ship_gate.py` 的 `_git_run`（gate 决策本体）与
   `sdflow-init/assets/workflow/tools/trivial_shape.py:210`（code-review「免除评审」判器，`git diff` 内容分类）
   MUST 在本节写明为何仍沿用 `errors="replace"`：二者的**判定输入均不经过该条解码路径**

@@ -5,7 +5,7 @@ Windows(GBK/cp936) 环境下运行本仓任意 Python 脚本，只要 `print()`/
 ## What Changes
 
 - 全仓 **28** 个 Python 入口脚本（含 `if __name__ == "__main__":` 的脚本，`hack/**` + `sdflow-*/scripts/**` + `sdflow-init/assets/{hack,hooks,workflow/tools}/**`）顶部内联 4 行 stdout/stderr 自愈：`reconfigure(encoding="utf-8", errors="replace")`（skill 是独立分发单元，不能共享公共模块，与"四条通则"托管块同构：内联 + 脚本守）。`[spec-review-amendment]`
-- **15 个** `subprocess ... text=True` 调用站点补 `encoding="utf-8", errors="replace"`（避免读中文 git commit message 等内容时 `UnicodeDecodeError`）——**实际编辑点 14**，因 `ship_gate.py` 的两个站点共用 wrapper `_git_run`、塌缩为其函数体内一处。`[spec-review-amendment]`
+- **16 个**文本模式 `subprocess` 调用站点补 `encoding="utf-8", errors="replace"`（避免读中文 git commit message / JSON 等内容时 `UnicodeDecodeError`）——其中 15 个是直接 `text=True` 调用，另 1 个是 `_scan_pool` 通过 `**kwargs` 动态传入 `text=True`；**实际编辑点 15**，因 `ship_gate.py` 的两个站点共用 wrapper `_git_run`、塌缩为其函数体内一处。`[spec-review-amendment]`
 - `Path.write_text()` 经复核**当前全部已带 `encoding="utf-8"`（0 处待补）**——初版写"2 处"系逐行 grep 看不见跨行参数造成的假阳性（见 `decision-memo.md` C8）。本 change 对该面只做**核实确认**并写进 spec 防回退，不做编辑。`[spec-review-amendment]`
 - 新增 `hack/check_encoding_hygiene.py`，进 `setup.sh` 与现有四道机械门并列——**分别**检查前导块的三项契约（`sys.stdout` 调用 / `sys.stderr` 调用 / `errors="replace"`）在场性，**整文件匹配、不设行数窗口**，不做语义扫描；防止新脚本遗漏防护。`[spec-review-amendment]`
 - `.github/workflows/windows-recorder-smoke.yml` 的 `paths:` 从 3 条扩到本次改动覆盖的全部脚本目录，并新增以 `PYTHONIOENCODING=gbk` 真实子进程方式跑 `setup.sh`、受影响脚本、**以及至少一条真正调用 `subprocess text=True` 站点的路径**的验证步骤；另加一条**不设 `PYTHONIOENCODING`、改由 Windows code page 决定编码**的用例（覆盖真实故障面，见 `decision-memo.md` D2 的补充）。`[spec-review-amendment]`

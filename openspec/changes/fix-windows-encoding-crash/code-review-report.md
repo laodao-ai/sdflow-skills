@@ -1,7 +1,7 @@
 ---
 ship-gate:
   code_review: pass
-  reviewed_sha: ca6d17c519dea841e4a59c846e41b2a16afbb3a6
+  reviewed_sha: 867c97566ca9990d55015ced7bf2ccf5ad1605ba
 ---
 
 ## code-review 报告 — fix-windows-encoding-crash
@@ -50,6 +50,7 @@ Windows 上后台 cross-model helper preflight 未通过 POSIX gate，按协议�
 - 最终领域镜发现常驻测试未守 `chcp 936` 的同 step 顺序；已用连续块断言封闭。最终领域/对抗复核均 CLEAN，聚合验证 18 passed、1 deselected，证据统一锚定 `dbb8763856c0297a9868b75f8f516f7ccbca0abd`。
 - 远端 `windows-latest` 尚未实际运行，按契约记为未覆盖，不伪报通过；不构成已证实的代码 finding。
 - 强终验进一步证伪 Git Bash 不解析裸 `chcp`；最终改为 `chcp.com 936`。领域镜与对抗镜均在 Git Bash 实跑返回 0，并验证严格 checker 后续可达；连续块测试同步钉死可执行名与顺序。最终复审 SHA 为 `ca6d17c519dea841e4a59c846e41b2a16afbb3a6`，结论 CLEAN。
+- `sdflow-done` 的真实 issues sweep 随后暴露 `_scan_pool` 动态 `**kwargs` 站点仍回落 GBK。`867c97566ca9990d55015ced7bf2ccf5ad1605ba` 已补 UTF-8/replace 与嵌套 reindex→scan 回归；对抗镜在 cp936 复现旧崩溃并验证新路径正确解码 emoji，全仓动态 kwargs 站点重扫无遗漏。领域镜确认代码 CLEAN，并据新事实把四件套计数校正为 16 站点 / 15 编辑点。最终结论 CLEAN。
 
 ### 度量锚
 
