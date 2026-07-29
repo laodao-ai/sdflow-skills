@@ -1,6 +1,15 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 566de78270f60d09525b057f45e2025a84fa2e94
+---
+
 # spec-review report — fix-windows-encoding-crash
 
 阶段二设计评审（`/sdflow-spec-review`）。审的盘面 = `09bbb55` 之后的四件套 + `decision-memo.md`。
+
+> **设计门已批准（2026-07-29）**：人在窄复核全绿后拍板通过。`reviewed_sha` = `566de78`，
+> 即包含 Q1–Q4 拍板修订（`8d29b89`）+ 窄复核记录（`f748ba3`）+ 收敛口更新（`566de78`）的完整盘面。
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 <!-- sdflow:hr-tg v1 hit="none" declared="TG-14,TG-18,TG-19,TG-23" evidence="TG-14 新增组件(check_encoding_hygiene.py)/TG-18 测试覆盖图/TG-19 优先级分层/TG-23 ≥2 方案(存在性检查 vs 语义扫描)，四者均不在 HR-TG 子集内" -->
