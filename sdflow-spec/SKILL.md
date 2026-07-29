@@ -4,11 +4,13 @@ disable-model-invocation: true
 description: >
   阶段一「产 spec」单一入口——把 澄清（A）→ 拷问（B）→ 生成（C）三相位编排成一次连续跑，产出
   标准四件套（proposal / design / specs / tasks）+ 一份承重的 `decision-memo.md`。**拷问结构性
-  前置于成文**：改想法比改四份成文便宜，且错误 premise 一旦成文就会被后续多镜评审当成既定框架。
+  前置于成文**：memo 是单一源、Phase C 全量生成四件套——消除旧流程「ff→grill→局部改」导致的
+  四件套内部不一致（修改互引文档比从单一源整体生成更容易出错，这是工程事实不是概率论据）。
   主 session 亲自做全部判断（澄清 / 拷问 / 纪要 / 终审）；相位 B 起手就建分支、change 目录与草稿纪要，
   承重约束站稳一条就增量落盘一条 ⇒ `/clear` 无损，崩溃只丢「上一次保存之后」那一段。出口原样贴
-  `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:explore` + `opsx:ff` + `/grill-with-docs`
-  三入口拼接。由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
+  `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:ff` + `/grill-with-docs` 两入口拼接
+  （成文+拷问合体；`opsx:explore` 的发散探索不在本 skill 范围——想法尚未成形时先 explore 再本 skill）。
+  由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
 ---
 
 # sdflow-spec — 阶段一产 spec 单一入口
