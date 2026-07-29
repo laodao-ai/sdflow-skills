@@ -27,6 +27,7 @@ def _load(name, path):
 
 BUG = _load("_task5_bug", BUG_PATH)
 TODO = _load("_task5_todo", TODO_PATH)
+ISSUES = _load("_task5_issues", ISSUES_PATH)
 
 
 def test_legacy_table_is_read_promotion_only_and_cell_guard_left_batch_only():
@@ -238,6 +239,62 @@ def test_windows_smoke_workflow_is_persistent_and_branch_agnostic():
     assert "branches:" not in workflow
     assert "runs-on: windows-latest" in workflow
     assert "py -m pytest -q sdflow-issues/tests/test_task2_windows_local_fs_smoke.py -W error" in workflow
+    assert (
+        "PYTHONIOENCODING=gbk py -m pytest -q "
+        "sdflow-issues/tests/test_task5_delivery_contract.py::"
+        "test_sweep_cli_executes_all_four_utf8_subprocess_sites -W error"
+    ) in workflow
+
+
+def test_sweep_cli_executes_all_four_utf8_subprocess_sites(tmp_path, monkeypatch):
+    """A controlled fixture must take sweep through scan, triage, batch-add and reindex."""
+    payload = json.dumps({
+        "module": "windows-smoke",
+        "summary": "exercise sweep call graph",
+        "priority": "P2",
+        "phenomenon": "controlled fixture",
+        "change": "windows-sweep-smoke",
+    })
+    seeded = subprocess.run(
+        [sys.executable, str(BUG_PATH), "--root", str(tmp_path), "add"],
+        input=payload,
+        capture_output=True,
+        text=True,
+    )
+    assert seeded.returncode == 0, seeded.stderr
+
+    real_run = ISSUES.subprocess.run
+    calls = []
+
+    def recording_run(command, *args, **kwargs):
+        calls.append((command, kwargs))
+        return real_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(ISSUES.subprocess, "run", recording_run)
+    monkeypatch.setattr(sys, "argv", [
+        "issues.py", "--root", str(tmp_path), "sweep", "--change", "windows-sweep-smoke",
+    ])
+    ISSUES.main()
+
+    sweep_calls = [
+        (command, kwargs)
+        for command, kwargs in calls
+        if len(command) > 1 and str(command[1]) in {str(BUG_PATH), str(TODO_PATH), str(ISSUES_PATH)}
+    ]
+    stages = [
+        "batch-add" if "batch" in command else
+        "scan" if "scan" in command else
+        "triage" if "triage" in command else
+        "reindex"
+        for command, _kwargs in sweep_calls
+    ]
+    assert stages == ["scan", "triage", "scan", "batch-add", "reindex"]
+    for _command, kwargs in sweep_calls:
+        assert kwargs["text"] is True
+        assert kwargs["encoding"] == "utf-8"
+        assert kwargs["errors"] == "replace"
+    assert (tmp_path / "openspec/issues/INDEX.md").exists()
+    assert "windows-sweep-smoke" in (tmp_path / "openspec/issues/batches.md").read_text(encoding="utf-8")
 
 
 def test_delivery_docs_name_operational_boundaries():

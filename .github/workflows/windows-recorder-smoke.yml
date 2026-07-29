@@ -63,7 +63,7 @@ jobs:
       - name: Exercise seven UTF-8 text subprocess call sites and invalid-byte replacement
         shell: bash
         run: |
-          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues.py --root . reindex
+          PYTHONIOENCODING=gbk py -m pytest -q sdflow-issues/tests/test_task5_delivery_contract.py::test_sweep_cli_executes_all_four_utf8_subprocess_sites -W error
           PYTHONIOENCODING=gbk python3 sdflow-retro/scripts/retro_report.py --root .
           set +e
           PYTHONIOENCODING=gbk python3 sdflow-ship/scripts/ship_gate.py --root . --change fix-windows-encoding-crash
