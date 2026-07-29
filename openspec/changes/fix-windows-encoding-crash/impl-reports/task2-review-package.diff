@@ -1,0 +1,1041 @@
+﻿# Review package: 3ca8733..b71dab2
+
+## Commits
+b71dab2 fix(encoding): protect Python entry streams
+
+## Files changed
+ hack/check_async_branch_parity.py                  |  4 ++++
+ hack/check_codex_efficacy_evidence.py              |  4 ++++
+ hack/check_tier_resolution_parity.py               |  4 ++++
+ hack/gen_workflow_guide.py                         |  4 ++++
+ hack/sync_principles.py                            |  4 ++++
+ .../impl-reports/task2-entrypoint-reconfigure.md   | 28 ++++++++++++++++++++++
+ openspec/workflow/tools/anchor_lint.py             |  4 ++++
+ openspec/workflow/tools/hr_tg_intersect.py         |  4 ++++
+ openspec/workflow/tools/lens_metric_emit.py        |  4 ++++
+ openspec/workflow/tools/outside_voice_guard.py     |  4 ++++
+ .../workflow/tools/review_disposition_check.py     |  4 ++++
+ openspec/workflow/tools/trivial_shape.py           |  4 ++++
+ sdflow-architecture/scripts/sad_lint.py            |  4 ++++
+ sdflow-architecture/scripts/sad_scaffold.py        |  4 ++++
+ sdflow-devenv/scripts/devenv_lint.py               |  4 ++++
+ sdflow-devenv/scripts/devenv_scaffold.py           |  4 ++++
+ sdflow-done/scripts/roadmap_writeback_draft.py     |  4 ++++
+ sdflow-implement/scripts/impl_route.py             |  4 ++++
+ sdflow-init/assets/hack/outside-voice-job.py       |  4 ++++
+ sdflow-init/assets/hooks/ff0-branch-guard.py       |  4 ++++
+ sdflow-init/assets/workflow/tools/anchor_lint.py   |  4 ++++
+ .../assets/workflow/tools/hr_tg_intersect.py       |  4 ++++
+ .../assets/workflow/tools/lens_metric_emit.py      |  4 ++++
+ .../assets/workflow/tools/outside_voice_guard.py   |  4 ++++
+ .../workflow/tools/review_disposition_check.py     |  4 ++++
+ sdflow-init/assets/workflow/tools/trivial_shape.py |  4 ++++
+ sdflow-init/scripts/init.py                        |  4 ++++
+ sdflow-issues/scripts/buglist.py                   |  4 ++++
+ sdflow-issues/scripts/issues.py                    |  4 ++++
+ sdflow-issues/scripts/migrate_legacy.py            |  4 ++++
+ sdflow-issues/scripts/todolist.py                  |  4 ++++
+ sdflow-maintain/scripts/maintain_scan.py           |  4 ++++
+ sdflow-retro/scripts/lens_metric_aggregate.py      |  4 ++++
+ sdflow-retro/scripts/retro_report.py               |  4 ++++
+ sdflow-ship/scripts/ship_gate.py                   |  4 ++++
+ 35 files changed, 164 insertions(+)
+
+## Diff
+diff --git a/hack/check_async_branch_parity.py b/hack/check_async_branch_parity.py
+index c369a31..8035c2d 100644
+--- a/hack/check_async_branch_parity.py
++++ b/hack/check_async_branch_parity.py
+@@ -23,20 +23,24 @@ sdflow-spec-review / sdflow-code-review 各有一段 host 调度逻辑（内层
+ 
+ 【语法面（基准 5：无界不手搓）】
+ 只认两个 marker token，单行字面量匹配 —— 有界，∴ 可手写。
+ MUST NOT 演化成「解析 Markdown 结构」。
+ 
+ 用法：
+     python3 hack/check_async_branch_parity.py            # 查仓内两处（CI / pytest / setup.sh）
+     python3 hack/check_async_branch_parity.py A.md B.md  # 查指定文件（测试用）
+ """
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ REPO = Path(__file__).resolve().parent.parent
+ 
+ SITES = [
+     "sdflow-spec-review/SKILL.md",
+     "sdflow-code-review/SKILL.md",
+ ]
+ 
+ # 尾随空格是 token 边界：没有它，`<!-- sdflow:async-branch:startX ... -->` 这类
+diff --git a/hack/check_codex_efficacy_evidence.py b/hack/check_codex_efficacy_evidence.py
+index 93de50d..37cbce7 100644
+--- a/hack/check_codex_efficacy_evidence.py
++++ b/hack/check_codex_efficacy_evidence.py
+@@ -61,20 +61,24 @@ stdout_sha256。∴ **一份手写的、结构合规的 JSON 能让三条门全
+ 
+     # 判定
+     python3 hack/check_codex_efficacy_evidence.py check --evidence <evidence.json>
+ 
+ 退出码：0=通过 | 1=不通过（逐条原因写 stderr） | 2=用法错 / 输入不可读
+ """
+ import argparse
+ import json
+ import re
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ SCHEMA_VERSION = 1
+ 
+ # ── 三条门的常量（改动即改契约，别在别处复制第二份）─────────────────────────
+ MIN_NATURAL_DURATION_SECONDS = 300.0   # 旧同步天花板；G2 要求**严格大于**
+ REQUIRED_HOST = "codex"
+ REQUIRED_RUNNER = "claude"
+ REQUIRED_REASON_CODE = "ok"
+diff --git a/hack/check_tier_resolution_parity.py b/hack/check_tier_resolution_parity.py
+index 01d1b22..2a49d68 100644
+--- a/hack/check_tier_resolution_parity.py
++++ b/hack/check_tier_resolution_parity.py
+@@ -15,20 +15,24 @@ load-bearing 的正确性，不是风格问题。∴ 用 marker 圈定 + 机械
+ （design：「对齐目标为四步语义，MUST NOT 要求与任一姊妹 skill 逐字相同」）。
+ 
+ 【语法面（基准 5：无界不手搓）】
+ 只认两个 marker token，单行字面量匹配——有界，∴ 可手写。MUST NOT 演化成「解析 Markdown 结构」。
+ 
+ 用法：
+     python3 hack/check_tier_resolution_parity.py            # 查仓内四处（CI / pytest / setup.sh）
+     python3 hack/check_tier_resolution_parity.py A.md B.md   # 查指定文件（测试用，≥2 个）
+ """
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ REPO = Path(__file__).resolve().parent.parent
+ 
+ SITES = [
+     "sdflow-implement/SKILL.md",
+     "sdflow-done/SKILL.md",
+     "sdflow-code-review/SKILL.md",
+     "sdflow-spec-review/SKILL.md",
+ ]
+diff --git a/hack/gen_workflow_guide.py b/hack/gen_workflow_guide.py
+index a224c9f..585145f 100644
+--- a/hack/gen_workflow_guide.py
++++ b/hack/gen_workflow_guide.py
+@@ -15,20 +15,24 @@
+ 【表格解析的语法面】（基准 5：有界可手写 / 无界禁手搓）
+ 只切 `| a | b | c |` 这一种行形态，按 ` | ` 分列，断言恰好 6 列——语法面穷举得完 ⇒ 合法。
+ 列数不符即 fail-closed（stderr + exit 2），MUST NOT 猜。
+ 
+ 用法：
+     python3 hack/gen_workflow_guide.py --check     # 漂了 → exit 1
+     python3 hack/gen_workflow_guide.py --write     # 生成/刷新
+ """
+ import argparse
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ REPO = Path(__file__).resolve().parent.parent
+ WF_DIR = REPO / "sdflow-init" / "assets" / "workflow"
+ WORKFLOW = WF_DIR / "workflow.md"
+ PROMPTS = WF_DIR / "prompts"
+ GUIDE = WF_DIR / "WORKFLOW-GUIDE.md"
+ 
+ BANNER = """<!-- 本文件由 hack/gen_workflow_guide.py 从 workflow.md + prompts/ 机械生成。DO NOT EDIT。 -->
+ <!-- 改 prompt → 改 prompts/step*.md（单一源）；改流程 → 改 workflow.md；然后跑 --write。 -->
+diff --git a/hack/sync_principles.py b/hack/sync_principles.py
+index 6320697..e992e0b 100644
+--- a/hack/sync_principles.py
++++ b/hack/sync_principles.py
+@@ -14,20 +14,24 @@ skill 是【独立分发单元】——symlink 装到 ~/.claude/skills/，跑在
+ 只认两个 marker token（start / end）+ 首个 H1。都是【单行字面量匹配】，语法面有界（基准 5）。
+ MUST NOT 演化成「解析 Markdown 结构」。
+ 
+ 用法：
+     python3 hack/sync_principles.py --check     # 漂了 → exit 1（CI / pytest 用）
+     python3 hack/sync_principles.py --apply     # 回填
+ """
+ import argparse
+ import os
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ REPO = Path(__file__).resolve().parent.parent
+ ASSETS = REPO / "sdflow-init" / "assets"
+ 
+ # 【两个源，因为受众不同 —— 不是同一段话的两份拷贝】
+ #   skill 味  → 读者是 skill 自己（含 fan-out / outside-voice 的传播纪律、SKILL 内部口径）
+ #   项目味    → 读者是「在这个项目里干活的 agent」（不该出现 skill 内部的话）
+ # 三条 headline 一条不许少 —— hack/tests/ 机械守（加第四条时两个源一起红）。
+ #
+diff --git a/openspec/changes/fix-windows-encoding-crash/impl-reports/task2-entrypoint-reconfigure.md b/openspec/changes/fix-windows-encoding-crash/impl-reports/task2-entrypoint-reconfigure.md
+new file mode 100644
+index 0000000..3b1ad6a
+--- /dev/null
++++ b/openspec/changes/fix-windows-encoding-crash/impl-reports/task2-entrypoint-reconfigure.md
+@@ -0,0 +1,28 @@
++# Task 2 实现报告：入口标准流编码保护
++
++## 交付
++
++- 按 `hack/check_encoding_hygiene.py` 的初始真实缺失集合，为全部 28 个 Python 入口脚本加入统一的模块顶层前导：
++
++  ```python
++  for _s in (sys.stdout, sys.stderr):
++      try: _s.reconfigure(encoding="utf-8", errors="replace")
++      except Exception: pass
++  ```
++
++  前导都位于 `import sys` 之后、首个业务逻辑之前，不在 `__main__` 守卫内。它同时保护 stdout 和 stderr，使用 UTF-8 加替换容错；缺少 `reconfigure` 的流会被既定的 `except Exception` 静默降级。
++- 对 canonical bundle 的 6 个 `sdflow-init/assets/workflow/tools/*.py` 仅修改源文件；随后运行 `python3 sdflow-init/scripts/init.py update --root .`，正式刷新了 `openspec/workflow/tools/*.py` 镜像。
++- 同步后比较 canonical 和镜像的 tools 文件集及逐文件 SHA-256，二者完全一致；同步产生的版本控制差异仅为这 6 个预期镜像。`CLAUDE.md` 在同步前已处于修改状态、且无本票内容 diff，未纳入本票。
++
++## TDD 与测试
++
++- 前置常驻行为测试已由 Task 1 建立；本票将其作为入口前导契约的公共 seam，未新增耦合实现细节的测试。
++- `python3 -m pytest hack/tests/test_encoding_hygiene.py -q` → `8 passed`。
++- `python3 hack/check_encoding_hygiene.py` → 退出 0，缺失集合归零。
++- 对本票 34 个变更 Python 文件执行 `python3 -m py_compile` → 全部通过。
++- `git diff --check` → 通过。
++
++## 范围与后续
++
++- 本票仅实现 EH-ENTRY 的入口流保护及镜像同步；`subprocess text=True` 编码、CI 与 setup 接线属于后续票，未修改。
++- 前导中 `except Exception` 的运行时触发分支没有专门自动化测试；这是设计已记录的静默降级边角，机械门验证所有 28 个入口均具备该契约。
+diff --git a/openspec/workflow/tools/anchor_lint.py b/openspec/workflow/tools/anchor_lint.py
+index 29808a1..f5aed37 100644
+--- a/openspec/workflow/tools/anchor_lint.py
++++ b/openspec/workflow/tools/anchor_lint.py
+@@ -1,17 +1,21 @@
+ #!/usr/bin/env python3
+ """anchor_lint — 评审报告锚自检确定性门（mlh-p2-anchor-lint）。
+ 盘面即状态：只读报告，退出码承载判定，双输出（human + JSON）。
+     0=CLEAN  1=VIOLATION  2=ERROR(fail-closed)
+ 枚举单一源 = 契约 lens-metric-contract.md 的 `lens-metric-enums` 机读块（同 workflow bundle）。
+ fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。"""
+ import argparse, json, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ 
+ EXIT_CLEAN, EXIT_VIOLATION, EXIT_ERROR = 0, 1, 2
+ 
+ ANCHOR_PREFIXES = {
+     "<!-- sdflow:outside-voice v1": "outside-voice",
+     "<!-- sdflow:hr-tg v1": "hr-tg",
+     "<!-- sdflow:step1-broad-review v1": "step1-broad-review",
+     "<!-- sdflow:lens-metric v1": "lens-metric",
+diff --git a/openspec/workflow/tools/hr_tg_intersect.py b/openspec/workflow/tools/hr_tg_intersect.py
+index 6363f4b..c8baa27 100644
+--- a/openspec/workflow/tools/hr_tg_intersect.py
++++ b/openspec/workflow/tools/hr_tg_intersect.py
+@@ -2,20 +2,24 @@
+ """hr_tg_intersect — 确定性 HR-TG 交集校验器（mlh-p4·T81）。
+ 吃「模型判好的命中 TG 集」作入参（--tg-set），与 HR-TG 子集（从 trigger-catalog 单一源读）求交，
+ 输出带「依据模型判定」的结果（模型给的输入集显式可见供复审，不 emit 裸 none）+ 规范锚串。
+ 纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 / 单一源损坏 fail-closed all-or-nothing。
+ 〔spec-review Q-D·推翻 grill Q1〕命中哪些 TG 无确定性信号 = 判断归模型；脚本只做确定性交集 + 出锚。
+ HR-TG 清单 MUST 从 trigger-catalog 单一源读、MUST NOT 硬编码副本；catalog 路径由 --trigger-catalog 入参给、
+ MUST NOT 用 __file__ 推导（openspec/workflow/ 下无副本，会 fail-closed 空跑，A3）。承 4.C lens_metric_emit 形态。
+ declared/HR-TG 成员均须存在于「触发词目录」全集（M-new 存在性 + F7 内部一致），全集边界只取表行、
+ 正文游离提及不纳入（F8）；任一校验失败 fail-closed all-or-nothing。"""
+ import argparse, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ 
+ _TG_STRICT_RE = re.compile(r'^TG-\d+$')       # tg-set / 成员 token 逐 token 严格校验
+ _H12_RE = re.compile(r'^#{1,2}\s')            # level-1/2 标题（段边界；level-3 `### ` 不匹配）
+ _MEMBER_RE = re.compile(r'^\s*>\s*成员')       # `> 成员：...` 行（fence/引用前缀容忍空白）
+ _MEMBER_CONTENT_RE = re.compile(r'^\s*>\s*成员[：:]?\s*(.*)$')  # [impl-review-fix] F-A：抽成员行冒号后内容
+ _H3_SECTION_RE = re.compile(r'^##\s.*触发词目录')      # 「触发词目录」段标题定位（限 level-2，避开文档 H1 标题同名误匹配）
+ _TABLE_TG_RE = re.compile(r'^\s*\|\s*(TG-\d+)\s*\|')   # F8：段内表行首列 TG token；正文游离提及不匹配此形
+diff --git a/openspec/workflow/tools/lens_metric_emit.py b/openspec/workflow/tools/lens_metric_emit.py
+index c8eb3e3..814fce4 100644
+--- a/openspec/workflow/tools/lens_metric_emit.py
++++ b/openspec/workflow/tools/lens_metric_emit.py
+@@ -1,15 +1,19 @@
+ #!/usr/bin/env python3
+ """lens_metric_emit — 确定性 lens-metric 锚 emitter（mlh-p4）。
+ 吃 行键 roster + 结构化 findings，按契约折叠/归属/独立/sev-rollup 归约出合规锚行。
+ 门控外置（不读 config）；坏输入 fail-closed all-or-nothing；禁 import yaml/aggregator/ship_gate/anchor_lint。"""
+ import argparse, json, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ VERDICTS = ("采纳", "裁掉", "defer")            # 本地常量豁免（ADR-11：输入独有、不写进锚、不与 anchor_lint 共享）
+ MANDATORY_LENS = ("broad", "outside-voice")     # 一致性测试守 == anchor_lint.MIN_LENS_ROWS（分叉①=B）
+ _SITE_BAD = re.compile(r'["\n\r]|-->|=')        # site 注入字符（C7）
+ _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')
+ 
+ 
+ _OV_RUNNER_DOMAIN = frozenset({"claude", "codex", "none"})   # add-codex-host-support：outside-voice **行**(roster row) runner 域收紧
+diff --git a/openspec/workflow/tools/outside_voice_guard.py b/openspec/workflow/tools/outside_voice_guard.py
+index 3882d58..f61108b 100644
+--- a/openspec/workflow/tools/outside_voice_guard.py
++++ b/openspec/workflow/tools/outside_voice_guard.py
+@@ -3,20 +3,24 @@
+ 读一份 spec-review 的 outside-voice 产物（gstack-review.md）+ 一个 change 目录，
+ 按三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）按序归约出**唯一** reason_code（七枚举，
+ add-codex-host-support 新增 `same-family`：同族 fallback / 无执行段均不得复用）。
+ 纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 fail-closed all-or-nothing。
+ 新鲜度用源文件 fs-mtime 直比〔spec-review Q-C：撤销 grill 的 git 反转、纯 fs-mtime〕，
+ 排除评审产物自身（gstack-review.md / spec-review-report.md / .outside-voice/）。承 4.C lens_metric_emit 形态。
+ add-codex-host-support：结构判改为引用「合法组合矩阵」的跨模型判定（`classify_combo`，本地重实现，
+ MUST NOT import anchor_lint——GC-2 边界锁），与 anchor_lint 的同名函数由全笛卡尔 golden 测试互相守一致
+ （tests/test_outside_voice_guard.py Step 5）。"""
+ import argparse, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ REASON_CODES = ("none", "file-missing", "section-not-found", "zero-findings", "stale",
+                  "simulated-source", "same-family")             # 本地常量豁免（ADR-11：输入独有、不写进锚、不跨模块共享）
+ VALID_MODES = ("native", "simulated")                           # step1-broad-review 锚 mode 枚举（我们的锚，严格 fail-closed）
+ SOURCE_FILES = ("proposal.md", "design.md", "tasks.md")         # + specs/** 递归；评审产物自身不在此列（inclusion allowlist 天然排除）
+ 
+ _S1_RE = re.compile(r'<!--\s*sdflow:step1-broad-review\s+v1\b(.*?)-->')
+ _OV_ANCHOR_RE = re.compile(r'<!--\s*sdflow:outside-voice\s+v1\b(.*?)-->')
+diff --git a/openspec/workflow/tools/review_disposition_check.py b/openspec/workflow/tools/review_disposition_check.py
+index 67973ae..2f972a1 100644
+--- a/openspec/workflow/tools/review_disposition_check.py
++++ b/openspec/workflow/tools/review_disposition_check.py
+@@ -6,20 +6,24 @@
+ 
+ 设计边界（design.md D4 / spec RDC）：
+ - MUST NOT naive-grep 那个「已处置」的否定词子串——收尾声明句「本小节无『…』条目」含该子串却恰是合规态；
+   本脚本根本不匹配该子串，靠「小节存在 + 去注释后非空」的结构判定绕开自指陷阱（memory gate-substring-detection-dogfood）。
+ - MUST NOT 断言逐条已处置（格式三实例不统一、无字面 token、机械不可达）——归模型；
+   输出码尾缀 -DISPOSITION-UNCHECKED 显式点明逐条未核（adr/0018 输出诚实，防 present 被误读为已核=假绿）。
+ - fence 感知：`## Review 处置` 若仅出现在 code fence 内（示例文本）不算小节存在；
+   小节体的「非空」判定去除 HTML 注释 / 水平分隔线 / 空白后再看是否有实体内容。
+ 承 4.C lens_metric_emit 形态（EmitError + EXIT_OK/EXIT_FAIL、跨模块口径重实现不 import）。"""
+ import argparse, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ REASON_OK = "section-ok-DISPOSITION-UNCHECKED"   # 存在+非空达成；逐条处置显式未核
+ REASON_MISSING = "section-missing"
+ REASON_EMPTY = "section-empty"
+ 
+ SECTION_TITLE = "Review 处置"                      # 模版 task-log-template.md:62 规定的 level-2 标题
+ _FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')  # code fence 起止（fence-aware，含缩进容忍）
+ _H2_RE = re.compile(r'^##[ \t]+(.+?)[ \t]*$')    # level-2 标题（`### ` 不匹配：第三字符非空白）
+diff --git a/openspec/workflow/tools/trivial_shape.py b/openspec/workflow/tools/trivial_shape.py
+index 69a548d..e0a5b7a 100644
+--- a/openspec/workflow/tools/trivial_shape.py
++++ b/openspec/workflow/tools/trivial_shape.py
+@@ -18,20 +18,24 @@
+       新增非 tests/非文档文件 → NOT_EXEMPT（新 codepath）；重命名 → NOT_EXEMPT。
+     - 伪装成注释的逻辑改由本判器之外的 Step1 scope-drift 守卫（判器只看 diff 形状）。
+ """
+ import argparse
+ import fnmatch
+ import json
+ import os
+ import subprocess
+ import sys
+ 
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++
+ _GIT_HARDEN = ("-c", "core.quotePath=false")
+ 
+ EXIT_EXEMPT, EXIT_NOT_EXEMPT, EXIT_ERROR = 0, 1, 2
+ 
+ # 行为面路径：命中即 NOT_EXEMPT（承载行为，非文档）
+ BEHAVIOR_PATH_PATTERNS = (
+     "sdflow-init/assets/workflow/*",
+     "*/assets/workflow/*",
+     "SKILL.md", "*/SKILL.md",
+     "workflow.md", "*/workflow.md",
+diff --git a/sdflow-architecture/scripts/sad_lint.py b/sdflow-architecture/scripts/sad_lint.py
+index 1a07660..12fe64b 100644
+--- a/sdflow-architecture/scripts/sad_lint.py
++++ b/sdflow-architecture/scripts/sad_lint.py
+@@ -9,20 +9,24 @@ exit 码约定（DEC-5 输出诚实）：
+   2 = 坏输入（文件缺失 / frontmatter 损坏 / 枚举非法）—— stderr `[sad_lint] FAIL: {原因}`，
+       stdout 不携带任何判定字样（与正常判定物理区分）
+ 
+ 假设计数口径（两个数、两个用途，勿混）：
+   - stdout `假设计数: N` —— 正文内联实扫**去重后**计数（body scan，供人快速核对规模）
+   - assumption-cache-mismatch 的「实扫值」—— 附录表中处置为「未处置」的行数
+     （与 sad_scaffold._recompute_assumptions_cache 同一口径，即 frontmatter assumptions_open 的真相定义）
+ """
+ import argparse
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ sys.path.insert(0, str(Path(__file__).parent))
+ import sad_schema  # noqa: E402  (共享解析源，DEC-1；本脚本只做消费方语义校验)
+ 
+ 
+ def _die(code, msg):
+     print(f"[sad_lint] FAIL: {msg}", file=sys.stderr)
+     sys.exit(code)
+ 
+diff --git a/sdflow-architecture/scripts/sad_scaffold.py b/sdflow-architecture/scripts/sad_scaffold.py
+index 96509f3..698af8d 100644
+--- a/sdflow-architecture/scripts/sad_scaffold.py
++++ b/sdflow-architecture/scripts/sad_scaffold.py
+@@ -7,20 +7,24 @@ exit 码约定：0=ok / 2=坏输入 / 3=preflight无openspec布局 / 4=单例冲
+ 
+ argparse subparsers 结构：main() 的 dispatch 按子命令名查表，新增子命令（adr-new/
+ context-add，Task 5）只需新增一个 _cmd_xxx(args) 函数 + 一个 add_parser 注册，
+ 不需要改动既有子命令的实现或 dispatch 逻辑。
+ """
+ import argparse
+ import contextlib
+ import os
+ import re
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ import tempfile
+ import time
+ import unicodedata
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ sys.path.insert(0, str(Path(__file__).parent))
+ import sad_schema  # noqa: E402  (共享解析源，DEC-1；本脚本只写模版骨架，不重实现解析)
+ import sad_lint    # noqa: E402  ([impl-review-fix] B1：迁移前目标态全量不变式复检复用读侧检查核心)
+ 
+diff --git a/sdflow-devenv/scripts/devenv_lint.py b/sdflow-devenv/scripts/devenv_lint.py
+index 3ea25b1..d73ed31 100644
+--- a/sdflow-devenv/scripts/devenv_lint.py
++++ b/sdflow-devenv/scripts/devenv_lint.py
+@@ -20,20 +20,24 @@
+   - 挑出敷衍的 blocked_by
+   然后【退出码 0，放行】。
+ 
+ 退出码：
+   0  正常（有 findings 也是 0 —— 只报不拦）
+   2  fail-closed：数据坏了（JSON 语法错 / schema 不合法 / 文件不存在）
+      ——【这个才拦】。它拦的是「人看不见的」（坏 JSON 渲染不出来，用户只看到空白）。
+ """
+ import argparse
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ import devenv_schema as S  # noqa: E402
+ 
+ # blocked_by 写成这些 == 没写。人看得见，但值得当场点出来。
+ LAZY = {"", "-", "—", "todo", "TODO", "tbd", "TBD", "待定", "待修复",
+         "环境问题", "稍后处理", "n/a", "N/A"}
+ 
+ 
+diff --git a/sdflow-devenv/scripts/devenv_scaffold.py b/sdflow-devenv/scripts/devenv_scaffold.py
+index 6e88f7d..1a6e9da 100644
+--- a/sdflow-devenv/scripts/devenv_scaffold.py
++++ b/sdflow-devenv/scripts/devenv_scaffold.py
+@@ -14,20 +14,24 @@
+      「命令能不能跑」由 verify-lane 真跑一遍，让工具自己判。
+   ❌ 猜用户文件里原来有什么 —— 要知道就问人。
+   ❌ 删除用户的任何文件 —— 爆炸半径不受控（引用可能在仓外）。
+   ❌ 时效 digest / 文件锁 / CAS。
+ """
+ import argparse
+ import json
+ import os
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ import devenv_schema as S  # noqa: E402
+ from devenv_paths import PathEscape, contain  # noqa: E402
+ 
+ ARCH_DIR = "openspec/architecture"
+ STRATEGY_MD = f"{ARCH_DIR}/testing-strategy.md"
+ ENV_MD = f"{ARCH_DIR}/environments.md"
+diff --git a/sdflow-done/scripts/roadmap_writeback_draft.py b/sdflow-done/scripts/roadmap_writeback_draft.py
+index 041dda7..678905c 100644
+--- a/sdflow-done/scripts/roadmap_writeback_draft.py
++++ b/sdflow-done/scripts/roadmap_writeback_draft.py
+@@ -2,20 +2,24 @@
+ """roadmap_writeback_draft.py — sdflow-done roadmap 回填降摩擦助手机械核.
+ 
+ 机械搬运（定位到 phase + 盘面读 + 骨架拼），判断（勾哪几行/价值叙述）留人.
+ 切分线: 定位到 phase = 机械（change 名前缀确定性信号）; 勾哪几行 = 判断留人.
+ stdlib-only, 确定性（无墙钟/随机）, fail-closed.
+ """
+ import argparse
+ import re
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ # change 名前缀 implement-{roadmap}-pN-* ; roadmap 可含横杠, -p\d+ 作定界, 可选尾缀
+ PREFIX_RE = re.compile(r"^implement-(?P<roadmap>.+)-p(?P<phase>\d+)(?:-.+)?$")
+ 
+ 
+ def parse_prefix(change_name):
+     """implement-{roadmap}-pN-* → (roadmap, phase); 不符返回 None."""
+     m = PREFIX_RE.match(change_name.strip())
+     if not m:
+diff --git a/sdflow-implement/scripts/impl_route.py b/sdflow-implement/scripts/impl_route.py
+index 9b3d27c..578c976 100644
+--- a/sdflow-implement/scripts/impl_route.py
++++ b/sdflow-implement/scripts/impl_route.py
+@@ -23,20 +23,24 @@ subprocess 仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输
+ 完成判据基于两套边界，被隐藏的行若恰是唯一未勾项 ⇒ 完成判据侧假 ✅。
+ ⇒ 改为**单一源** import。引不到 ⇒ parse_blocked_by 直接 TopoError（fail-closed），
+ MUST NOT 回退手抄副本——那正是本条要根治的漂移面。
+ """
+ from __future__ import annotations
+ 
+ import argparse
+ import re
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ from typing import Dict, Iterable, List, Optional, Set, Tuple
+ 
+ FRONT_DELIM = "---"
+ LEGAL_PIPELINES = ("tickets", "superpowers")
+ 
+ # [impl-review-fix F4] 围栏词法单一源 = ship_gate.FenceTracker。
+ # 定位方式：本文件在 <root>/sdflow-implement/scripts/ 下，gate 在同级 <root>/sdflow-ship/scripts/。
+ # 两种安装形态都成立——symlink 安装时 Path(__file__).resolve() 落回仓内；Windows copy 安装时
+ # 两个 skill 目录在 ~/.claude/skills/ 下互为兄弟。抽第三个共享模块反而两种形态都找不到
+diff --git a/sdflow-init/assets/hack/outside-voice-job.py b/sdflow-init/assets/hack/outside-voice-job.py
+index a77cfa9..b904eb0 100644
+--- a/sdflow-init/assets/hack/outside-voice-job.py
++++ b/sdflow-init/assets/hack/outside-voice-job.py
+@@ -145,20 +145,24 @@ import argparse
+ import hashlib
+ import json
+ import os
+ import re
+ import secrets
+ import shlex
+ import shutil
+ import signal
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ import tempfile
+ import time
+ from datetime import datetime, timezone
+ 
+ VERSION = "outside-voice-job.py 0.1.0"
+ 
+ SCHEMA_VERSION = 1
+ 
+ # `--bg --exec`、`--safe-mode` 与含 `--all`/`id`/`state` 的 agents JSON 的**共同**能力下限
+ # 〔design.md ADR-1 grill-amendment〕。版本只是必要条件，真实 dispatch 才是最终能力探针。
+diff --git a/sdflow-init/assets/hooks/ff0-branch-guard.py b/sdflow-init/assets/hooks/ff0-branch-guard.py
+index 1ebfd15..28f6476 100644
+--- a/sdflow-init/assets/hooks/ff0-branch-guard.py
++++ b/sdflow-init/assets/hooks/ff0-branch-guard.py
+@@ -70,20 +70,24 @@ openspec new change <另一个>` 在 `feat/<本 change>` 上会被判成分支
+ 
+ 铺设/注册：全局装于 ~/.claude/hooks/ + 注册进 ~/.claude/settings.json 的 PreToolUse.Bash
+           （通用功能，跨项目生效；非 openspec 项目里命令不匹配即放行）。
+ """
+ import json
+ import os
+ import re
+ import shlex
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ import time
+ 
+ # 受保护分支的**固定**部分；实际受保护集 = 本集合 ∪ {探测到的默认分支}（见 protected_branches）。
+ PROTECTED_BRANCHES = {"master", "main"}
+ 
+ # 有界计数用：只识别创建子命令字样，不解析 shell。
+ NEW_CHANGE_RE = re.compile(r"openspec\s+(?:new\s+change|change\s+new)\b")
+ 
+ # 只有**整条命令**命中这个正向 allowlist，才可以把 payload cwd 当作作用仓。
+ # 有限 grammar：直接 openspec 调用 + literal change 名，可选单个 --json（位于名前或名后）。
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index 29808a1..f5aed37 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -1,17 +1,21 @@
+ #!/usr/bin/env python3
+ """anchor_lint — 评审报告锚自检确定性门（mlh-p2-anchor-lint）。
+ 盘面即状态：只读报告，退出码承载判定，双输出（human + JSON）。
+     0=CLEAN  1=VIOLATION  2=ERROR(fail-closed)
+ 枚举单一源 = 契约 lens-metric-contract.md 的 `lens-metric-enums` 机读块（同 workflow bundle）。
+ fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。"""
+ import argparse, json, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ 
+ EXIT_CLEAN, EXIT_VIOLATION, EXIT_ERROR = 0, 1, 2
+ 
+ ANCHOR_PREFIXES = {
+     "<!-- sdflow:outside-voice v1": "outside-voice",
+     "<!-- sdflow:hr-tg v1": "hr-tg",
+     "<!-- sdflow:step1-broad-review v1": "step1-broad-review",
+     "<!-- sdflow:lens-metric v1": "lens-metric",
+diff --git a/sdflow-init/assets/workflow/tools/hr_tg_intersect.py b/sdflow-init/assets/workflow/tools/hr_tg_intersect.py
+index 6363f4b..c8baa27 100644
+--- a/sdflow-init/assets/workflow/tools/hr_tg_intersect.py
++++ b/sdflow-init/assets/workflow/tools/hr_tg_intersect.py
+@@ -2,20 +2,24 @@
+ """hr_tg_intersect — 确定性 HR-TG 交集校验器（mlh-p4·T81）。
+ 吃「模型判好的命中 TG 集」作入参（--tg-set），与 HR-TG 子集（从 trigger-catalog 单一源读）求交，
+ 输出带「依据模型判定」的结果（模型给的输入集显式可见供复审，不 emit 裸 none）+ 规范锚串。
+ 纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 / 单一源损坏 fail-closed all-or-nothing。
+ 〔spec-review Q-D·推翻 grill Q1〕命中哪些 TG 无确定性信号 = 判断归模型；脚本只做确定性交集 + 出锚。
+ HR-TG 清单 MUST 从 trigger-catalog 单一源读、MUST NOT 硬编码副本；catalog 路径由 --trigger-catalog 入参给、
+ MUST NOT 用 __file__ 推导（openspec/workflow/ 下无副本，会 fail-closed 空跑，A3）。承 4.C lens_metric_emit 形态。
+ declared/HR-TG 成员均须存在于「触发词目录」全集（M-new 存在性 + F7 内部一致），全集边界只取表行、
+ 正文游离提及不纳入（F8）；任一校验失败 fail-closed all-or-nothing。"""
+ import argparse, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ 
+ _TG_STRICT_RE = re.compile(r'^TG-\d+$')       # tg-set / 成员 token 逐 token 严格校验
+ _H12_RE = re.compile(r'^#{1,2}\s')            # level-1/2 标题（段边界；level-3 `### ` 不匹配）
+ _MEMBER_RE = re.compile(r'^\s*>\s*成员')       # `> 成员：...` 行（fence/引用前缀容忍空白）
+ _MEMBER_CONTENT_RE = re.compile(r'^\s*>\s*成员[：:]?\s*(.*)$')  # [impl-review-fix] F-A：抽成员行冒号后内容
+ _H3_SECTION_RE = re.compile(r'^##\s.*触发词目录')      # 「触发词目录」段标题定位（限 level-2，避开文档 H1 标题同名误匹配）
+ _TABLE_TG_RE = re.compile(r'^\s*\|\s*(TG-\d+)\s*\|')   # F8：段内表行首列 TG token；正文游离提及不匹配此形
+diff --git a/sdflow-init/assets/workflow/tools/lens_metric_emit.py b/sdflow-init/assets/workflow/tools/lens_metric_emit.py
+index c8eb3e3..814fce4 100644
+--- a/sdflow-init/assets/workflow/tools/lens_metric_emit.py
++++ b/sdflow-init/assets/workflow/tools/lens_metric_emit.py
+@@ -1,15 +1,19 @@
+ #!/usr/bin/env python3
+ """lens_metric_emit — 确定性 lens-metric 锚 emitter（mlh-p4）。
+ 吃 行键 roster + 结构化 findings，按契约折叠/归属/独立/sev-rollup 归约出合规锚行。
+ 门控外置（不读 config）；坏输入 fail-closed all-or-nothing；禁 import yaml/aggregator/ship_gate/anchor_lint。"""
+ import argparse, json, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ VERDICTS = ("采纳", "裁掉", "defer")            # 本地常量豁免（ADR-11：输入独有、不写进锚、不与 anchor_lint 共享）
+ MANDATORY_LENS = ("broad", "outside-voice")     # 一致性测试守 == anchor_lint.MIN_LENS_ROWS（分叉①=B）
+ _SITE_BAD = re.compile(r'["\n\r]|-->|=')        # site 注入字符（C7）
+ _FENCE = re.compile(r'^ {0,3}(`{3,}|~{3,})')
+ 
+ 
+ _OV_RUNNER_DOMAIN = frozenset({"claude", "codex", "none"})   # add-codex-host-support：outside-voice **行**(roster row) runner 域收紧
+diff --git a/sdflow-init/assets/workflow/tools/outside_voice_guard.py b/sdflow-init/assets/workflow/tools/outside_voice_guard.py
+index 3882d58..f61108b 100644
+--- a/sdflow-init/assets/workflow/tools/outside_voice_guard.py
++++ b/sdflow-init/assets/workflow/tools/outside_voice_guard.py
+@@ -3,20 +3,24 @@
+ 读一份 spec-review 的 outside-voice 产物（gstack-review.md）+ 一个 change 目录，
+ 按三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）按序归约出**唯一** reason_code（七枚举，
+ add-codex-host-support 新增 `same-family`：同族 fallback / 无执行段均不得复用）。
+ 纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 fail-closed all-or-nothing。
+ 新鲜度用源文件 fs-mtime 直比〔spec-review Q-C：撤销 grill 的 git 反转、纯 fs-mtime〕，
+ 排除评审产物自身（gstack-review.md / spec-review-report.md / .outside-voice/）。承 4.C lens_metric_emit 形态。
+ add-codex-host-support：结构判改为引用「合法组合矩阵」的跨模型判定（`classify_combo`，本地重实现，
+ MUST NOT import anchor_lint——GC-2 边界锁），与 anchor_lint 的同名函数由全笛卡尔 golden 测试互相守一致
+ （tests/test_outside_voice_guard.py Step 5）。"""
+ import argparse, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ REASON_CODES = ("none", "file-missing", "section-not-found", "zero-findings", "stale",
+                  "simulated-source", "same-family")             # 本地常量豁免（ADR-11：输入独有、不写进锚、不跨模块共享）
+ VALID_MODES = ("native", "simulated")                           # step1-broad-review 锚 mode 枚举（我们的锚，严格 fail-closed）
+ SOURCE_FILES = ("proposal.md", "design.md", "tasks.md")         # + specs/** 递归；评审产物自身不在此列（inclusion allowlist 天然排除）
+ 
+ _S1_RE = re.compile(r'<!--\s*sdflow:step1-broad-review\s+v1\b(.*?)-->')
+ _OV_ANCHOR_RE = re.compile(r'<!--\s*sdflow:outside-voice\s+v1\b(.*?)-->')
+diff --git a/sdflow-init/assets/workflow/tools/review_disposition_check.py b/sdflow-init/assets/workflow/tools/review_disposition_check.py
+index 67973ae..2f972a1 100644
+--- a/sdflow-init/assets/workflow/tools/review_disposition_check.py
++++ b/sdflow-init/assets/workflow/tools/review_disposition_check.py
+@@ -6,20 +6,24 @@
+ 
+ 设计边界（design.md D4 / spec RDC）：
+ - MUST NOT naive-grep 那个「已处置」的否定词子串——收尾声明句「本小节无『…』条目」含该子串却恰是合规态；
+   本脚本根本不匹配该子串，靠「小节存在 + 去注释后非空」的结构判定绕开自指陷阱（memory gate-substring-detection-dogfood）。
+ - MUST NOT 断言逐条已处置（格式三实例不统一、无字面 token、机械不可达）——归模型；
+   输出码尾缀 -DISPOSITION-UNCHECKED 显式点明逐条未核（adr/0018 输出诚实，防 present 被误读为已核=假绿）。
+ - fence 感知：`## Review 处置` 若仅出现在 code fence 内（示例文本）不算小节存在；
+   小节体的「非空」判定去除 HTML 注释 / 水平分隔线 / 空白后再看是否有实体内容。
+ 承 4.C lens_metric_emit 形态（EmitError + EXIT_OK/EXIT_FAIL、跨模块口径重实现不 import）。"""
+ import argparse, re, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ EXIT_OK, EXIT_FAIL = 0, 1
+ REASON_OK = "section-ok-DISPOSITION-UNCHECKED"   # 存在+非空达成；逐条处置显式未核
+ REASON_MISSING = "section-missing"
+ REASON_EMPTY = "section-empty"
+ 
+ SECTION_TITLE = "Review 处置"                      # 模版 task-log-template.md:62 规定的 level-2 标题
+ _FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')  # code fence 起止（fence-aware，含缩进容忍）
+ _H2_RE = re.compile(r'^##[ \t]+(.+?)[ \t]*$')    # level-2 标题（`### ` 不匹配：第三字符非空白）
+diff --git a/sdflow-init/assets/workflow/tools/trivial_shape.py b/sdflow-init/assets/workflow/tools/trivial_shape.py
+index 69a548d..e0a5b7a 100644
+--- a/sdflow-init/assets/workflow/tools/trivial_shape.py
++++ b/sdflow-init/assets/workflow/tools/trivial_shape.py
+@@ -18,20 +18,24 @@
+       新增非 tests/非文档文件 → NOT_EXEMPT（新 codepath）；重命名 → NOT_EXEMPT。
+     - 伪装成注释的逻辑改由本判器之外的 Step1 scope-drift 守卫（判器只看 diff 形状）。
+ """
+ import argparse
+ import fnmatch
+ import json
+ import os
+ import subprocess
+ import sys
+ 
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++
+ _GIT_HARDEN = ("-c", "core.quotePath=false")
+ 
+ EXIT_EXEMPT, EXIT_NOT_EXEMPT, EXIT_ERROR = 0, 1, 2
+ 
+ # 行为面路径：命中即 NOT_EXEMPT（承载行为，非文档）
+ BEHAVIOR_PATH_PATTERNS = (
+     "sdflow-init/assets/workflow/*",
+     "*/assets/workflow/*",
+     "SKILL.md", "*/SKILL.md",
+     "workflow.md", "*/workflow.md",
+diff --git a/sdflow-init/scripts/init.py b/sdflow-init/scripts/init.py
+index 2477fd3..757292a 100644
+--- a/sdflow-init/scripts/init.py
++++ b/sdflow-init/scripts/init.py
+@@ -17,20 +17,24 @@ skill `sdflow-init` 的执行核心。权威源 = 本 skill 的 assets/workflow/
+ 
+ 用法见 `python init.py --help`。
+ """
+ 
+ import argparse
+ import json
+ import os
+ import shutil
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ import tempfile
+ 
+ # [T48] 本模块用 f-string，需 Python 3.6+。**版本把关在调用侧**（setup.sh 的 `$_py` 探测
+ # 实际按 3.7+ 卡——那个解释器还要跑 outside-voice-job.py，闸门取两个消费者的上确界）：
+ # 整模块编译先于任何语句执行，f-string 在 py<3.6 上是解析期 SyntaxError——模块内加
+ # `sys.version_info` 守卫无从拦截自身 parse，故这里只声明契约、不放无功能的假守卫。
+ 
+ try:
+     import fcntl  # POSIX 独有；Windows 无 → T49 锁降级为 best-effort 无锁
+ except ImportError:  # pragma: no cover （沙箱恒 POSIX，Windows 分支无法在此覆盖）
+diff --git a/sdflow-issues/scripts/buglist.py b/sdflow-issues/scripts/buglist.py
+index f281203..125a50c 100644
+--- a/sdflow-issues/scripts/buglist.py
++++ b/sdflow-issues/scripts/buglist.py
+@@ -10,20 +10,24 @@ bug 池的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件
+ 用法见 `python buglist.py --help`。
+ 
+ 薄入口顶部 `sys.path.insert(...)`（AD-1 / SC-R3）：多数测试用 `importlib.spec_from_file_location`
+ 按文件加载本入口、不设 sys.path，故这里显式把入口所在目录插到 sys.path 前端，令
+ `from sdflow_issues_core import` 可解。
+ """
+ 
+ import os
+ import sys
+ 
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ 
+ from sdflow_issues_core import *  # noqa: F401,F403  re-export 共享 helper（tests 按名 getattr 取用）
+ import sdflow_issues_core as _core
+ 
+ _SPEC = _core.POOL_SPEC["bug"]
+ _STRAT = _core.BUG_STRATEGY
+ 
+ # pool 特定常量（兼容测试按名访问；单一源仍是 POOL_SPEC，此处只是有序/列表投影）
+ STATUS_CODES = ["OPEN", "VERIFIED", "PROPOSED", "IN_PROGRESS", "FIXED", "WONTFIX", "BLOCKED"]
+diff --git a/sdflow-issues/scripts/issues.py b/sdflow-issues/scripts/issues.py
+index 9b7c76c..c1f7ed3 100644
+--- a/sdflow-issues/scripts/issues.py
++++ b/sdflow-issues/scripts/issues.py
+@@ -15,20 +15,24 @@ import argparse
+ from contextlib import contextmanager, redirect_stdout
+ import glob
+ import io
+ import json
+ import os
+ import re
+ import secrets
+ import shlex
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ import tempfile
+ import time
+ 
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ 
+ from sdflow_issues_core import *  # noqa: F401,F403  re-export 共享 helper（tests 按名 getattr 取用）
+ import sdflow_issues_core as _core
+ from sdflow_issues_core import (  # 显式取 underscore 前缀的共享 helper（`import *` 不带下划线名）
+     _legacy_semantic_id_key,
+     _validated_recorder_model,
+diff --git a/sdflow-issues/scripts/migrate_legacy.py b/sdflow-issues/scripts/migrate_legacy.py
+index cbaaf33..5b16f04 100644
+--- a/sdflow-issues/scripts/migrate_legacy.py
++++ b/sdflow-issues/scripts/migrate_legacy.py
+@@ -9,20 +9,24 @@ Historical classifications are never guessed: callers must provide explicit
+ pool-scoped mappings for out-of-domain specific fields or statuses.
+ """
+ 
+ import argparse
+ import hashlib
+ import io
+ import json
+ import os
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from contextlib import redirect_stdout
+ 
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ 
+ from sdflow_issues_core import (  # noqa: E402
+     POOL_SPEC,
+     _canonical_from_key,
+     _legacy_block_range,
+     _legacy_semantic_id_key,
+     _prepare_overlay_model,
+diff --git a/sdflow-issues/scripts/todolist.py b/sdflow-issues/scripts/todolist.py
+index 3b1f310..5187283 100644
+--- a/sdflow-issues/scripts/todolist.py
++++ b/sdflow-issues/scripts/todolist.py
+@@ -8,20 +8,24 @@ todo 池的执行核心已上移唯一共享源 `sdflow_issues_core`；本文件
+ 
+ 文件布局（约定不变）：`<root>/openspec/issues/todolist/YYYY-MM-todolist.md`。
+ 用法见 `python todolist.py --help`。
+ 
+ 薄入口顶部 `sys.path.insert(...)` 理由同 buglist.py（AD-1 / SC-R3）。
+ """
+ 
+ import os
+ import sys
+ 
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ 
+ from sdflow_issues_core import *  # noqa: F401,F403  re-export 共享 helper（tests 按名 getattr 取用）
+ import sdflow_issues_core as _core
+ 
+ _SPEC = _core.POOL_SPEC["todo"]
+ _STRAT = _core.TODO_STRATEGY
+ 
+ # pool 特定常量（兼容测试按名访问；单一源仍是 POOL_SPEC）
+ STATUS_CODES = ["OPEN", "PROPOSED", "DONE", "WONTDO"]
+diff --git a/sdflow-maintain/scripts/maintain_scan.py b/sdflow-maintain/scripts/maintain_scan.py
+index 6a9a60e..2ccdd9d 100644
+--- a/sdflow-maintain/scripts/maintain_scan.py
++++ b/sdflow-maintain/scripts/maintain_scan.py
+@@ -4,20 +4,24 @@
+ 扫 openspec/specs|rules ↔ INDEX.md（托管块外）双向 set-diff、CLAUDE.md 过时引用、
+ workflow bundle 陈旧遮蔽，产出四类分节只读报告。纯读、fail-closed、零写文件。
+ 判断（归组/是否修复）留 SKILL 步骤 4；判据 canonical 见 init.py，本文件保自包含副本
+ + 一致性守卫测试机验（见 tests/test_marker_consistency.py）。
+ """
+ import argparse
+ import os
+ import re
+ import sys
+ 
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++
+ 
+ class MaintainScanError(Exception):
+     """坏输入 / 无法可靠完成扫描。main() 捕获 → stderr → 非零退出（fail-closed）。"""
+ 
+ 
+ def find_repo_root(start):
+     """从 start 向上找含 .git 的目录，返回其绝对路径；找不到 raise MaintainScanError。"""
+     cur = os.path.abspath(start)
+     while True:
+         if os.path.isdir(os.path.join(cur, ".git")):
+diff --git a/sdflow-retro/scripts/lens_metric_aggregate.py b/sdflow-retro/scripts/lens_metric_aggregate.py
+index 74c42dc..0270352 100644
+--- a/sdflow-retro/scripts/lens_metric_aggregate.py
++++ b/sdflow-retro/scripts/lens_metric_aggregate.py
+@@ -1,18 +1,22 @@
+ #!/usr/bin/env python3
+ """lens-metric 只读聚合器（盘面即状态·view-only）。
+ 扫 archive/**/*-review-report.md 的 sdflow:lens-metric v1 锚 → 多列可排序表。
+ 净新字段提取解析器；脚本内重实现 fence-aware 行级核（禁裸 split/substring、
+ 禁跨 skill import ship_gate）。不写任何持久文件、不产合成价值分。契约见
+ sdflow-init/assets/workflow/lens-metric-contract.md。"""
+ import re
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ import argparse
+ from pathlib import Path
+ from collections import defaultdict
+ 
+ ANCHOR_PREFIX = "<!-- sdflow:lens-metric v1"
+ # [T59] 「出现轮数 ≥N 待复评」阈值单一源——render_table 与 retro_report.surfacing_block
+ # 共同引用（此前两处各硬编码 10，调整易改一处漏一处致 flag 口径漂移）。
+ REVIEW_ROUNDS_THRESHOLD = 10
+ LAYER_ENUM = {"spec-review", "code-review"}
+ LENS_ENUM = {"domain", "adversarial", "grounding", "history", "outside-voice", "broad"}
+diff --git a/sdflow-retro/scripts/retro_report.py b/sdflow-retro/scripts/retro_report.py
+index 7feb678..fb78ac0 100644
+--- a/sdflow-retro/scripts/retro_report.py
++++ b/sdflow-retro/scripts/retro_report.py
+@@ -1,15 +1,19 @@
+ import argparse
+ import os
+ import re
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ import tempfile
+ from collections import defaultdict
+ 
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ import lens_metric_aggregate as LMA  # 复用其 fence-aware 锚解析（parse_report + _int），不重实现
+ 
+ _DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}-(.+)$")
+ _REPORT_NAMES = ("spec-review-report.md", "code-review-report.md")
+ _HRTG_RE = re.compile(r'<!--\s*sdflow:hr-tg\s+v1\s+hit="([^"]*)"')
+ 
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index 948ca4b..b5d6fb8 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -182,20 +182,24 @@ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-lay
+ #   但此形态**无 producer 产出**：目标态 producer 写 frontmatter 不写 inline，旧 producer
+ #   首行恒 '#' 非 '---'。须手工伪造归档才能构造 = 显式越权（git 留痕可审计，adr/0008/0011）。
+ #   目标态论证：迁移期评估安全锚 producer 契约而非现存语料快照（见 design ADR-4）。
+ import argparse
+ import json
+ import os
+ import re
+ import shlex
+ import subprocess
+ import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
+ from pathlib import Path
+ 
+ # [T75] design/code-review inline 锚常量已随 Task6 live inline 读半场退役而删除；
+ # 仅 verify 锚保留——archived_verify_state 的归档 dual-read 兜底旧 inline 现役唯一在用。
+ ANCHOR_VERIFY_PASS = "<!-- ship-gate: verify=PASS -->"
+ ANCHOR_VERIFY_FAIL = "<!-- ship-gate: verify=FAIL -->"
+ ALL_ANCHORS = [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL]
+ 
+ EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN = 0, 3, 4, 5, 6
+ 
