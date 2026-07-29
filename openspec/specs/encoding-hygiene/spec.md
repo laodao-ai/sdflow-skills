@@ -91,4 +91,3 @@ TBD - created by archiving change fix-windows-encoding-crash. Update Purpose aft
 
 - **WHEN** 脚本通过 `Path.write_text(content)` 写入产出文件，且运行环境 locale 非 UTF-8
 - **THEN** 写入使用显式 `encoding="utf-8"`，产出文件为 UTF-8 编码，供后续 UTF-8 读取方正确解析
-
