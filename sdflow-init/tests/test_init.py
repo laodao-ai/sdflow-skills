@@ -181,6 +181,11 @@ class TestUpdateDev:
         init_mod.run(str(root), "update", dev=True)
         assert (root / "openspec" / "workflow" / "workflow.md").is_file()
         assert (root / "openspec" / "workflow" / "spec-checklists").is_dir()
+        assert (
+            root / "openspec" / "workflow" / "tools" / "trivial_shape.py"
+        ).read_text(encoding="utf-8") == (
+            Path(init_mod.BUNDLE_SRC) / "tools" / "trivial_shape.py"
+        ).read_text(encoding="utf-8")
 
 
 class TestHandleConfigFromBundleSrc:

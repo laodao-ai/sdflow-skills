@@ -53,6 +53,7 @@ jobs:
           output="$(PYTHONIOENCODING=gbk bash setup.sh 2>&1)"
           printf '%s\n' "$output"
           ! grep -Eq 'UnicodeEncodeError|Traceback' <<<"$output"
+          python3 hack/check_encoding_hygiene.py
       - name: Run init update with a forced GBK child process
         shell: bash
         run: |
