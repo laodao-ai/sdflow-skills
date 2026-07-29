@@ -1055,6 +1055,7 @@ def detect_change(root):
             # [impl-review-fix] F5: text=True 须显式 encoding="utf-8"——Windows 非 UTF-8
             # locale 下 git 输出按平台默认编码解码可能崩（已知 Windows CI 陷阱）。
             cwd=root, capture_output=True, text=True, check=True, encoding="utf-8",
+            errors="replace",
             env=recorder_child_env("git", token=False),
         )
         branch = out.stdout.strip()

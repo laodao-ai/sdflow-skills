@@ -5,19 +5,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 
-TARGET_FILES = {
-    "sdflow-devenv/scripts/devenv_scaffold.py": 2,
-    "sdflow-done/scripts/roadmap_writeback_draft.py": 1,
-    "sdflow-implement/scripts/impl_route.py": 1,
-    "sdflow-init/assets/hack/outside-voice-job.py": 1,
-    "sdflow-init/assets/hooks/ff0-branch-guard.py": 1,
-    "sdflow-init/assets/workflow/tools/trivial_shape.py": 1,
-    "sdflow-init/scripts/init.py": 1,
-    "sdflow-issues/scripts/issues.py": 4,
-    "sdflow-retro/scripts/retro_report.py": 1,
-}
-
-
 def _keyword_values(call):
     return {
         keyword.arg: keyword.value.value
@@ -39,27 +26,32 @@ def _is_subprocess_call(call):
     )
 
 
+def _production_python_files():
+    """Yield every authored production module, excluding tests and generated bundle copies."""
+    for path in REPO.rglob("*.py"):
+        relative = path.relative_to(REPO)
+        if "tests" in relative.parts or relative.parts[0] == "openspec":
+            continue
+        yield path
+
+
 def test_text_mode_subprocesses_declare_utf8_and_replace():
     """Every direct text subprocess site is locale-independent and loss-tolerant."""
     misses = []
     sites = 0
-    for relative, expected_sites in TARGET_FILES.items():
-        path = REPO / relative
+    for path in _production_python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        file_sites = 0
         for call in ast.walk(tree):
             if not isinstance(call, ast.Call) or not _is_subprocess_call(call) or not _is_text_mode(call):
                 continue
             sites += 1
-            file_sites += 1
             values = _keyword_values(call)
             missing = [name for name, expected in (("encoding", "utf-8"), ("errors", "replace"))
                        if values.get(name) != expected]
             if missing:
                 misses.append(f"{path.relative_to(REPO)}:{call.lineno}: {', '.join(missing)}")
-        assert file_sites == expected_sites
 
-    assert sites == 13
+    assert sites == 15
     assert not misses, "\n".join(misses)
 
 
