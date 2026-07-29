@@ -1,7 +1,7 @@
 ---
 ship-gate:
   code_review: pass
-  reviewed_sha: 98239697b5b9fe496bd0ae7c175b1812bc9c5099
+  reviewed_sha: dbb8763856c0297a9868b75f8f516f7ccbca0abd
 ---
 
 ## code-review 报告 — fix-windows-encoding-crash
@@ -41,6 +41,14 @@ Windows 上后台 cross-model helper preflight 未通过 POSIX gate，按协议�
 
 <!-- sdflow:outside-voice v1 site="code-voice" guard="none" host="codex" runner="codex" reason_code="preflight-error" findings="2" truncated="false" -->
 <!-- sdflow:declared-sites v1 declared="code-voice" -->
+
+### 陈旧重审补记（2026-07-29）
+
+- 审查范围：`98239697b5b9fe496bd0ae7c175b1812bc9c5099..dbb8763856c0297a9868b75f8f516f7ccbca0abd`。
+- 首轮终验发现 Windows probe 在空目录直接 `update` 必败；修复为先 `init` 铺设再以 GBK `update`，领域镜与对抗镜复核 CLEAN。
+- 对抗镜另发现 cp936 console 路径经 warn-only `setup.sh` 可假绿；已改为直接运行 fail-closed 编码门，并保留重定向 setup 日志异常断言。
+- 最终领域镜发现常驻测试未守 `chcp 936` 的同 step 顺序；已用连续块断言封闭。最终领域/对抗复核均 CLEAN，聚合验证 18 passed、1 deselected，证据统一锚定 `dbb8763856c0297a9868b75f8f516f7ccbca0abd`。
+- 远端 `windows-latest` 尚未实际运行，按契约记为未覆盖，不伪报通过；不构成已证实的代码 finding。
 
 ### 度量锚
 
