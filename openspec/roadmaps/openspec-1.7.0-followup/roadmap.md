@@ -46,18 +46,14 @@ grammar 对齐锚（CLI 1.7.0 实跑）：接受 `100` / `9` / `a1` / `1a-b` / `
 
 | # | change | 含 | 依赖 | 状态 |
 |---|---|---|---|---|
-| **P1** | sdflow-spec × openspec schema 契约面重整 | A1 A2 A3 · E1 E2 E3 | 无（但受 **Q1** 影响，见下） | 🔵 进行中 |
+| **P1** | sdflow-spec × openspec schema 契约面重整 | A1 A2 A3 **A4** · E1 E2 E3 | 无 | 🔵 进行中 |
 | **P2** | prevention 层扩到 apply/archive | B1 B2 C2 | 无 | ⬜ 未开 |
-| **P3** | sdflow-done archive 现代化 | D1 D2 | 无 | ⬜ 未开 |
-| **Q1** | 是否采纳 `skip_specs` | C1（→ 连带 A4） | — | ❓ **待拍板，应先于 P1 实现** |
+| **P3** | sdflow-done archive 现代化 | D1 D2 **D3** | 无 | ⬜ 未开 |
+| ~~Q1~~ | ~~是否采纳 `skip_specs`~~ | — | — | ✅ **已拍板：采纳**（见 D-3） |
 | **Q2** | amendment 双向 coherence | F1 | — | ❓ 待拍板 |
 
 **P1/P2/P3 改文件集不相交，可并行**：P1 触 `sdflow-spec/SKILL.md` + `sdflow-init`（schema 下发）；
 P2 触 `config.yaml` + `config.template.yaml`；P3 触 `sdflow-done/SKILL.md`。
-
-🔴 **Q1 必须先于 P1 的实现拍板**（拍板 ≠ 实现）：若采纳 `skip_specs`，A4 就属于 P1 的范围
-（相位 C 要认 `skipped` 态）；若不采纳，A4 整条消失。**晚拍 = P1 交付后回头再改 C.2/C.3
-同一片区域**，正是本批切分要避免的浪费。
 
 ---
 
@@ -121,11 +117,33 @@ CLI 已给出展开结果（字段见 A1 实测锚）。
 [{"id":"proposal","done":true,"path":"proposal.md","description":"..."}]
 ```
 
-#### A4 · `skipped` 态 ⚪（**挂在 Q1 上**）
+#### A4 · `skipped` 态 🟡（**已拍板采纳，见 D-3**）
 
-若采纳 `skip_specs`：C.2 强制阅读表与 C.3 逐产物循环都要认这个态——CLI 规定声明了 marker 的
-change 其 specs 文件 **MUST NOT 存在**，而 sdflow-spec 现在会无条件生成，随后 `validate` 会因
-「marker 与 delta 同时存在」报错。**Q1 判不采纳则本条消失。**
+C.2 强制阅读表与 C.3 逐产物循环都要认这个态——CLI 规定声明了 marker 的 change 其 specs 文件
+**MUST NOT 存在**，而 `sdflow-spec` 现在会**无条件生成** specs，随后 `validate` 会因
+「marker 与 delta 同时存在」报错。
+
+**实测锚**（声明 `skip_specs: true` 于 change 的 `.openspec.yaml` 后）：
+
+```
+                          无 marker              有 marker
+specs 的 status:          ready                  skipped      ← 且其文件 MUST NOT 存在
+tasks 的 missingDeps:     （被 specs 挡）         ["design"]   ← specs 从阻塞边上摘掉
+validate --strict:        ✗ ERROR「无 delta」     通过
+```
+
+无 marker 时 `validate` 的报错原文自己就指向这个标记：
+
+> If this change intentionally modifies no specs (pure refactor, tooling, docs),
+> set "skip_specs: true" in the change's .openspec.yaml instead.
+
+⇒ 标记不是「可选的便利」，而是**零 delta change 的唯一合法出口**：要么写 delta，要么声明标记。
+
+**修法**：C.3 逐产物循环遇 `status: "skipped"` ⇒ 跳过该产物且 **MUST NOT 创建文件**；
+C.2 的强制阅读表在 specs 被跳过时，`tasks` 那一行的必读集相应去掉 `specs/**`。
+🔴 **判据只取 CLI 自报的 `status`，MUST NOT 由模型自行判断某个 change 够不够格 skip**
+——那是无确定性信号的语义判断，写进相位 C 会变成每个 change 都要过一次的自由裁量。
+「够不够格」由**人在相位 B 拍板**并落进 `decision-memo.md`，相位 C 只认既成事实。
 
 ### E 组 · project-local schema
 
@@ -273,24 +291,15 @@ B1 若做，模版须同步才能推给下游。
 `## REMOVED Requirements` 不再被报「缺 scenario」；symlink 化的 `specs/<cap>/spec.md` 不再被
 静默丢弃。
 
+### D3 · archive 侧认 `skipped` 态 🟡（**因 D-3 新增**）
+
+`skip_specs` 采纳后，归档一个声明了标记的 change 时**没有 delta 可同步**。`sdflow-done` 的
+archive 步（含「归档必须走 CLI 以同步 delta→主 specs」那条硬约束、以及 `--skip-specs` 手动
+六步 fallback）需要认这个态，**MUST NOT 把「没有 delta」判成异常**。
+
 ---
 
 ## 待拍板
-
-### Q1 · 是否采纳 `skip_specs` ❓ **应先于 P1 实现拍板**
-
-**实测锚**——声明 `skip_specs: true` 于 change 的 `.openspec.yaml` 后：
-
-```
-specs → status: "skipped"        （且其文件 MUST NOT 存在）
-tasks → missingDeps: ["design"]  （specs 已从阻塞边上摘掉）
-```
-
-- **赞成**：本仓确有一批纯脚本硬化 / 文档规则 / 工具链 change，为它们凑 delta spec 是仪式成本。
-- **反对**：本仓的「代码」就是 skill 指令——**指令即契约**。多数看着像「纯文档」的 change 其实
-  改了行为契约，正该有 delta。这个 marker 的滥用面比典型代码库大得多。
-- **倾向**：采纳但开窄门（判据写死进 bundle，而非交给模型自由裁量），并要求在 proposal 的
-  `## Why` 写明理由。
 
 ### Q2 · `[spec-review-amendment]` 的双向 coherence ❓
 
@@ -363,3 +372,22 @@ unchanged」，而 `sdflow-spec` 全是硬编码。这是**有意的窄化**（�
 
 **否掉的第三种切法**：按 skill 边界切（`sdflow-spec` 一个 change、`sdflow-init` 的下发 + 版本门
 一个 change）。否掉理由：E1 的价值只有铺到下游才兑现，拆开等于第一个 change 交付一个半成品。
+
+### D-3 · 采纳 `skip_specs`（2026-07-30 人拍板）
+
+**人给的依据**：开发过程中确实碰到过这种情况，**且是在项目 repo（下游消费项目）中**。
+
+⇒ A4 进入 P1 范围，D3 进入 P3 范围。
+
+🔴 **取样盲区（本决策最重要的一条经验）**：我最初推荐「不采纳」，依据是本仓 52 个归档 change
+里只有 4 个无 specs delta（7.7%，其中 2 个还来自已废弃的 `plan-{topic}` 壳模式）——**但那是
+本仓的数据**。本仓是 skill 仓，「指令即契约」，几乎每个 change 都动契约；**下游是普通业务项目，
+纯重构 / 工具链 / 文档类 change 的占比本就高得多**。拿源仓 dogfood 分布去估消费仓的适用面，
+是典型的 dogfood 盲区。
+
+**落地含义**：`skip_specs` 的主要受益方在**下游**，因此它与 E 组走同一条路——相关规则须随
+bundle 下发，而不是只在本仓生效。
+
+**未定的形态**（留给 P1 相位 B 拷问）：「够不够格声明标记」的判据要不要写死进 bundle、
+写到什么粒度。已定的只有一条边界（见 A4）：相位 C **只认 CLI 自报的 `status`**，
+不做自由裁量；判断发生在相位 B 并落进 `decision-memo.md`。
