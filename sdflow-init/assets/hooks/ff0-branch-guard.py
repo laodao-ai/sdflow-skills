@@ -107,7 +107,14 @@ CHANGE_NAME_RE = re.compile(
 
 # OpenSpec change 名的唯一合法 pattern。抽出来的 token 不符即视为「认不出」→ 无决策审计：
 # option、大写、下划线、点与 shell 待展开 token 都不属于合法 change 名，本守卫不展开、也不猜。
-CHANGE_NAME_OK_RE = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
+#
+# 🔴 这是**外部契约的本地副本**——权威在 openspec CLI，它放宽了本式就必须跟着放宽，
+# 否则合法的新形态会掉进「认不出」分支 ⇒ 守卫对它不执法（fail-open）。
+# 首字符允许数字自 CLI 1.7.0（`100-add-feature` / `00001-add-auth`，用于排序/分层）。
+# 对齐锚（CLI 1.7.0 实跑）：接受 100 / 9 / a1 / 1a-b / 00001-add-auth；
+# 拒绝 add.foo（只许小写字母数字连字符）/ add--foo（连续连字符）/ add-（尾连字符）/
+# Add（大写）/ add_foo（下划线）。
+CHANGE_NAME_OK_RE = re.compile(r"^[a-z0-9][a-z0-9]*(-[a-z0-9]+)*$")
 
 # 人拍板「就地继续」后的逃生口：仓根下的一次性哨兵文件，**只放行「其它 feature 分支」这一支**
 # （分支③）。判据是「文件在不在」，与命令串无关 —— 见模块 docstring。

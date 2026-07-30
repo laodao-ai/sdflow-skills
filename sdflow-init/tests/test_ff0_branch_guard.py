@@ -117,6 +117,45 @@ def test_direct_literal_variants_enter_the_protected_branch_guard(repo, cmd):
     assert "受保护分支" in reason
 
 
+# ── change 名 grammar 必须跟住 openspec CLI（外部契约的本地副本）──────────
+#
+# CLI 1.7.0 起接受数字前缀名（`100-add-feature` / `00001-add-auth`）。本守卫的
+# CHANGE_NAME_OK_RE 若不跟着放宽，这些**合法**调用会掉进「认不出」分支 ⇒ 守卫对它
+# 不执法，保护分支静默失守。下面两组用例是与 CLI 的对齐锚（取值经 1.7.0 实跑核对）。
+
+@pytest.mark.parametrize("name", [
+    "100-add-feature",   # 数字前缀：用于排序
+    "00001-add-auth",    # 前导零
+    "1a-b",              # 数字开头 + 字母数字混合段
+    "100",               # 纯数字
+    "9",                 # 单字符数字
+    "a1",                # 字母开头含数字（1.7.0 前即合法，防回归）
+])
+def test_names_the_cli_accepts_enter_the_protected_branch_guard(repo, name):
+    denied, reason = run_hook(repo, f"openspec new change {name}")
+    assert denied, f"CLI 接受的 change 名 {name!r} 落进了不执法分支 ⇒ 保护分支失守"
+    assert "受保护分支" in reason
+
+
+@pytest.mark.parametrize("name", [
+    "Add",        # 大写
+    "add_foo",    # 下划线
+    "add--foo",   # 连续连字符
+    "add.foo",    # 点
+    "add-",       # 尾连字符
+])
+def test_names_the_cli_rejects_stay_unverifiable(repo, name):
+    """放宽首字符不得放过头：CLI 拒绝的拼法仍属「认不出」，只审计、不执法。"""
+    assert_undecided_audit(hook_output(repo, f"openspec new change {name}"))
+
+
+def test_numeric_prefixed_name_is_idempotent_on_its_own_branch(repo):
+    """分支② 幂等判定读的就是抽出来的名字 —— 数字前缀名必须能与分支名对上。"""
+    _git(repo, "checkout", "-qb", "feat/100-add-feature")
+    denied, _ = run_hook(repo, "openspec new change 100-add-feature")
+    assert not denied
+
+
 # ── 分支③：其它 feature 分支 → deny（这一支是本次新增的，旧实现放行）──
 
 def test_other_feature_branch_denies(repo):
