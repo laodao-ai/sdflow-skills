@@ -183,9 +183,12 @@ tools: Read, Glob, Grep, Bash, Write
 openspec instructions <artifact> --change "<name>" --json
 ```
 
-**③ 最小 schema 断言**：`artifactId`(str) · `instruction`(str) · `template`(str) ·
-`resolvedOutputPath`(str) · `dependencies`(list)。任一缺失或类型不符 ⇒ **停下来返回 blocker**
-（附实际 CLI 版本），**MUST NOT 重试同一调用**、**MUST NOT 自己拼一份模板顶上**。
+**③ 最小 schema 断言**：必需字段 `artifactId`(str) · `instruction`(str) · `template`(str) ·
+`resolvedOutputPath`(str) · `dependencies`(list)。`context` / 当前 artifact 的 `rules` 若存在，
+MUST 分别为字符串 / 列表；你 MUST 把二者作为生成约束应用，MUST NOT 复制进产物。其中 workflow
+引用须经 `~/.sdflow/hack/resolve-workflow.sh --root <repo>` 解析后全文读。任一必需字段缺失或字段
+类型不符 ⇒ **停下来返回 blocker**（附实际 CLI 版本），**MUST NOT 重试同一调用**、
+**MUST NOT 自己拼一份模板顶上**。
 
 ## 🔴 写入前 MUST 净化 `resolvedOutputPath`
 

@@ -20,7 +20,7 @@ Task 3 的 dogfood 把六种故障**各注入过一次**，夹具跑完即删 �
 | ③ | 目标分支已存在 | **无**（git 自身行为 + B.1② 指令） | 指令在场 + `git` 真实行为对账 | 中 |
 | ④ | 纪要陈旧（身份字段不匹配） | 判 1/2 已有门；判 3/4 算法有单一源 | **四 fixture 真跑判 3/判 4** + **C.1 四判与两条处置指令在场** | **强** |
 | ⑤ | CLI 缺失 | **无**（0.1 预检是指令） | 指令在场（三件事逐条）+ 真实 PATH 剥离下的 exit code | 中 |
-| ⑥ | `instructions --json` schema 断言不过 | **无**（C.3 §2 是指令） | **真 CLI 载荷 ⊇ 文档声明字段集** + 假 CLI 三种畸形 fail-closed + 处置句在场 | **强** |
+| ⑥ | `instructions --json` schema 断言不过 | **无**（C.3 §2 是指令） | **真 CLI 载荷 ⊇ 文档声明字段集** + 假 CLI 五种畸形 fail-closed + 处置句在场 | **强** |
 
 🔴 **弱锚守的是「指令还在、没被后续编辑悄悄删掉/弱化」，MUST NOT 被表述成「处置正确会红」。**
 「模型收到脏工作树时真的 halt 了没」没有确定性信号，只能靠 dogfood 人核 —— 这条残余不消失。
@@ -442,6 +442,7 @@ def test_fault4_dispositions_are_present_in_the_skill():
 # ══════════════════════════════════════════════════════════════════════════════
 
 _TYPES = {"str": str, "list": list, "int": int, "bool": bool}
+_OPTIONAL_FIELD_TYPES = {"context": str, "rules": list}
 # 声明字段数的**下限**：防「把 C.3 §2 的字段删剩一个，⑥a 仍然绿」。
 MIN_DECLARED_FIELDS = 5
 
@@ -473,6 +474,9 @@ def assert_instructions_schema(raw):
                                  f"cause: 实有字段={sorted(payload)}")
         if not isinstance(payload[name], typ):
             raise AssertionError(f"problem: 字段 `{name}` 类型不符，期望 {typ.__name__}")
+    for name, typ in _OPTIONAL_FIELD_TYPES.items():
+        if name in payload and not isinstance(payload[name], typ):
+            raise AssertionError(f"problem: 可选字段 `{name}` 类型不符，期望 {typ.__name__}")
     return payload
 
 
@@ -490,7 +494,10 @@ def test_fault6_real_cli_payload_carries_every_documented_field(tmp_path):
     root = tmp_path / "proj"
     (root / "openspec" / "changes" / "demo" / "specs" / "foo").mkdir(parents=True)
     (root / "openspec" / "config.yaml").write_text(
-        "schema: spec-driven\ncontext: |\n  fixture\n", encoding="utf-8")
+        "schema: spec-driven\n"
+        "context: |\n  fixture context\n"
+        "rules:\n  design:\n    - fixture design constraint\n",
+        encoding="utf-8")
     (root / "openspec" / "changes" / "demo" / "proposal.md").write_text(
         "# Demo Proposal\n\n## Why\nx\n\n## What Changes\n- a\n\n## Impact\n- specs/foo\n",
         encoding="utf-8")
@@ -500,6 +507,8 @@ def test_fault6_real_cli_payload_carries_every_documented_field(tmp_path):
     assert out.returncode == 0, f"CLI 非零退出：{out.stderr}"
     payload = assert_instructions_schema(out.stdout)   # 缺字段/类型不符 ⇒ 这里抛
     assert payload["artifactId"] == "design"
+    assert payload["context"] == "fixture context"
+    assert payload["rules"] == ["fixture design constraint"]
 
 
 def _fake_openspec(tmp_path, stdout_body, *, exit_code=0):
@@ -530,9 +539,13 @@ def _fake_openspec(tmp_path, stdout_body, *, exit_code=0):
     ("not json at all", "不是合法 JSON"),
     ('{"artifactId":"design","dependencies":"NOT-A-LIST","instruction":"x",'
      '"template":"y","resolvedOutputPath":"/tmp/x.md"}', "dependencies 类型不符"),
+    ('{"artifactId":"design","dependencies":[],"instruction":"x","template":"y",'
+     '"resolvedOutputPath":"/tmp/x.md","context":[]}', "context 类型不符"),
+    ('{"artifactId":"design","dependencies":[],"instruction":"x","template":"y",'
+     '"resolvedOutputPath":"/tmp/x.md","rules":"NOT-A-LIST"}', "rules 类型不符"),
 ])
 def test_fault6_malformed_payload_fails_closed(tmp_path, body, label):
-    """⑥b：三种畸形载荷各跑一次，**全部 fail-closed（抛异常）+ 诊断带 `problem:` 三要素**。
+    """⑥b：五种畸形载荷各跑一次，**全部 fail-closed（抛异常）+ 诊断带 `problem:` 三要素**。
 
     🔴 [impl-review-fix fix2] F-D：本用例**不**断言「零重试 / 零写入」——那两维是
     **模型行为**（要不要再调一次、要不要落盘），无确定性信号可捕获（基准 1）；
@@ -580,6 +593,6 @@ def test_fault6_no_retry_instruction_is_present():
     全部由这一条**弱锚**承载 —— 处置句在，才有「断言不过就不写、也不再调一次」这回事；
     「fail-closed 中止」若拆开单断，会被 0.1 那处同词满足，锚就空了。
     """
-    assert ("任一缺失或类型不符⇒**fail-closed中止**，报**实际CLI版本**+修复命令，"
+    assert ("任一必需字段缺失或字段类型不符⇒**fail-closed中止**，报**实际CLI版本**+修复命令，"
             "**MUSTNOT重试同一调用**") in _squash(_skill_text()), \
         "C.3 §2 的处置句（fail-closed 中止 / 报实际版本 / MUST NOT 重试）被删或改写了"

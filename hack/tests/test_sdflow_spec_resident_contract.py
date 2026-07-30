@@ -27,7 +27,15 @@ RESIDENT_CONTRACT = {
     "phase-0": ("## 第零步", "openspec --version", "openspec list", "### 0.3 重入探测"),
     "phase-a": ("## 相位 A", "一次只问一个问题", "收束进的是 B，不是 C"),
     "phase-b": ("## 相位 B", "## 承重约束", "sdflow-spec-grill"),
-    "phase-c": ("## 相位 C", "openspec instructions <artifact>", "resolvedOutputPath"),
+    "phase-c": (
+        "## 相位 C",
+        "openspec instructions <artifact>",
+        "resolvedOutputPath",
+        "`context` / 当前 artifact 的 `rules`",
+        "作为生成约束",
+        "MUST NOT 复制进产物",
+        "resolve-workflow.sh",
+    ),
     "c1-four-verdicts": (
         "### C.1 起手核验纪要（四判，缺一即拒）",
         "`decision-memo.md` **存在**",
@@ -35,7 +43,14 @@ RESIDENT_CONTRACT = {
         "**身份字段匹配当前盘面**",
         "**`decision_hash` 重算后匹配**",
     ),
-    "final-review": ("## 终审", "整个 change 目录", "decision-memo.md", "design ↔ specs"),
+    "final-review": (
+        "## 终审",
+        "整个 change 目录",
+        "decision-memo.md",
+        "design ↔ specs",
+        "非平凡 design 至少一张",
+        "TG-18 tasks 含测试覆盖图",
+    ),
     "strict-validate": ("openspec validate", "--strict", "validate --strict"),
     "checkpoints": ("sdflow-spec-grill", "sdflow-spec-generate"),
     "exit-sequence": (

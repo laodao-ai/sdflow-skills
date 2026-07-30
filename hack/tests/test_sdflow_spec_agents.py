@@ -586,6 +586,19 @@ def test_s4_disposition_is_written_in_the_skill_and_the_writer_def():
             f"{path.name} 丢了「第三方 CLI 输出直接当写入目标 = confused deputy」这个理由"
 
 
+def test_skill_and_writer_apply_openspec_config_constraints():
+    """`instructions --json` 的 config 字段必须从“拿到”接通到“执行”。"""
+    for path in (SKILL, WRITER):
+        squashed = _squash(path.read_text(encoding="utf-8"))
+        for token in (
+            "`context`/当前artifact的`rules`",
+            "作为生成约束应用",
+            "MUSTNOT复制进产物",
+            "resolve-workflow.sh--root<repo>",
+        ):
+            assert token in squashed, f"{path.name} 未接通 config 生成约束：缺 {token}"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 派发协议（SA-07）—— subagent_type / model 枚举 / 降级方向 / 名册加载时机
 # ══════════════════════════════════════════════════════════════════════════════

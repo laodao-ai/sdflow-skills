@@ -431,10 +431,12 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
    ```bash
    openspec instructions <artifact> --change "<name>" --json
    ```
-2. **最小 schema 断言**（必需字段存在性 + 类型）：`artifactId`(str) · `instruction`(str) ·
-   `template`(str) · `resolvedOutputPath`(str) · `dependencies`(list)。
-   任一缺失或类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，**MUST NOT 重试同一调用**
-   （schema 错误重试只会再失败一次，且掩盖真因）。
+2. **最小 schema 断言**：必需字段 `artifactId`(str) · `instruction`(str) · `template`(str) ·
+   `resolvedOutputPath`(str) · `dependencies`(list)。`context` / 当前 artifact 的 `rules` 若存在，
+   MUST 分别为字符串 / 列表；生成方 MUST 把二者作为生成约束应用，MUST NOT 复制进产物。
+   其中 workflow 引用须经 `~/.sdflow/hack/resolve-workflow.sh --root <repo>` 解析后全文读。
+   任一必需字段缺失或字段类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，
+   **MUST NOT 重试同一调用**。
 3. **路径净化**（`resolvedOutputPath` 来自第三方 CLI，直接当写入目标 = confused deputy）：
    canonicalize 后 MUST 满足 —— ① 严格位于 `openspec/changes/<name>/` 内 ② 落在 artifact
    allowlist（`proposal.md` / `design.md` / `tasks.md` / `specs/**/*.md`）③ **从仓根到目标
@@ -472,7 +474,8 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 1. **纪要 ↔ 产物一致性** —— 决策遗漏、约束翻转、范围漂移。
 2. **design ↔ specs 互相一致** —— 二者在 CLI 依赖图中**互不依赖**，其矛盾不会被任何其它环节发现。
    发现冲突 ⇒ 修正并注明；**MUST NOT 因「二者各自与纪要一致」而放过**。
-3. **proposal / design / tasks 未截断** —— C.4 的机械门只够得着 `specs/`（见上），这三份人判。
+3. **config/TG 物证 + 未截断** —— 按载荷 `context/rules` 核条件槽；非平凡 design 至少一张
+   组件/依赖图，TG-18 tasks 含测试覆盖图；proposal/design/tasks 未截断仍由人判。
 
 **追溯判据**：追溯边界是整个 change 目录；只在 `decision-memo.md` 中保留被砍候选与理由也合法，
 `design.md` 的一行纪要指针是合法路径。仅当候选与理由在整个边界内都不可追溯时才算判断性偏差；
