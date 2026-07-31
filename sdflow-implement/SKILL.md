@@ -613,9 +613,12 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
   / 规则根不可达 / 命中栈在 `domains/` 下无对应清单时，Standards 轴 **MUST NOT 宣称通过**：显式
   停，或在报告中记「领域清单未覆盖」并附降级原因〔F13〕——不得悄悄退化成"看着过"。
 
-  > 🔴 **MUST 原文携带进 Standards 轴 dispatch prompt**（附录 A 有出处说明）。两条治理规则：
+  > 🔴 **MUST 原文携带进 Standards 轴 dispatch prompt**（附录 A 有出处说明）。三条治理规则：
   > **The repo overrides**（仓文档化标准优先，与基线冲突时基线让位）；**Always a judgement call**
-  > （每条都是带标签的启发式，非硬性违规；工具已强制的项跳过）。
+  > （每条都是带标签的启发式，非硬性违规；工具已强制的项跳过）；**Tests are code**（本清单同样
+  > 适用于**测试文件**——尤其 **Duplicated Code**（重复的测试形状应合并）与 **Speculative
+  > Generality**（为想象中的需求预写的测试应删除）。测试只增不减会让全量套件单次成本单调上升，
+  > 这是唯一的遏制点。⚠️ reviewer **MUST NOT 直接删测试**，只报 finding 交裁决）。
   >
   > - **Mysterious Name** — a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
   > - **Duplicated Code** — the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
