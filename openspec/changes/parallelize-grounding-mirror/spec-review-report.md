@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 2c0a7dda3032750766431bb4b1e364e66a03eebd
+---
+
 # spec-review-report — parallelize-grounding-mirror
 
 ## 诚实边界（§0.0）
@@ -189,5 +195,9 @@ roadmap P3 有 3 个子任务（①串行纪律精化 ②边界守卫强化 ③�
 **10 条 findings 采纳（2 CRITICAL + 3 HIGH + 5 MEDIUM），3 条裁掉，0 条 defer。**
 
 **建议进设计 HARD-GATE？**——**条件进入**。R-1 和 R-2 是阻塞性的（事实性错误 + roadmap 矛盾），须在拍板前修订四件套（至少修正"grounding 镜兜底"措辞 + 正面回应 roadmap 偏离），修订后做一次窄复核再拍板。
+
+---
+
+**设计门已拍板批准，日期 2026-08-01。** Q-1~Q-4 按推荐选项（A）处理，R-1/R-2 的修订在阶段三实现期落实。
 
 [spec-review-amendment]
