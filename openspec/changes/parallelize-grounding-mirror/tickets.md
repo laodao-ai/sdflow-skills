@@ -61,10 +61,10 @@ impl-pipeline: tickets
 同时确认 anchor_lint / lens-metric / fanout-capability 锚语义不受影响（通读确认，无机械测试需新增）。
 
 验收标准：
-- [ ] 4 个 Scenario 逐条确认与 SKILL.md 条款一致
-- [ ] anchor_lint 锚行语义不受影响（mirrors= 仍包含 grounding）
-- [ ] lens-metric 体系不受影响（接地镜仍产 findings、仍被 emitter 归约）
-- [ ] fanout-capability 锚行语义不受影响（记的是「跑了哪些镜」，不是「何时跑的」）
+- [x] 4 个 Scenario 逐条确认与 SKILL.md 条款一致
+- [x] anchor_lint 锚行语义不受影响（mirrors= 仍包含 grounding）
+- [x] lens-metric 体系不受影响（接地镜仍产 findings、仍被 emitter 归约）
+- [x] fanout-capability 锚行语义不受影响（记的是「跑了哪些镜」，不是「何时跑的」）
 
 ### Task 4: 实现验证（收尾，不计入 3–6 预算）
 
@@ -80,6 +80,6 @@ impl-pipeline: tickets
 - e2e 测试：未覆盖（本仓无 e2e 测试层）
 - `openspec validate parallelize-grounding-mirror --strict --type change`（若 CLI 可用）
 
-- [ ] 单元测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 单元测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
