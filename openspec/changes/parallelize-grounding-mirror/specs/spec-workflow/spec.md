@@ -22,4 +22,4 @@
 
 #### Scenario: amendment 后不补跑接地镜
 - **WHEN** autoplan 产出 `[gstack-amendment]` 且 amendment 涉及新增代码事实引用
-- **THEN** 接地镜 SHALL NOT 被要求补跑——该覆盖缺口由 sdflow-code-review 的 grounding 镜在实现完成后兜底
+- **THEN** 接地镜 SHALL NOT 被要求补跑——该覆盖缺口由 sdflow-code-review 的 grounding/history 镜在实现完成后兜底
