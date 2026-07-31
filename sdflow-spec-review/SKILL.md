@@ -194,7 +194,7 @@ description: >
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目标准）
 
-> **串行纪律〔T20〕**：**MUST 待 Step1 checkpoint 完成后才 fan-out，禁止与 Step1 并行**（多镜评审对象须含 autoplan amendment）；若历史运行已并行，Step3 裁决须 diff autoplan amendment 增量核对并在报告注明。
+> **串行纪律〔T20〕分治**：**领域镜 / 对抗镜 MUST 待 Step1 checkpoint 完成后才 fan-out**（多镜评审对象须含 autoplan amendment——它们依赖 autoplan 对 design/specs 的修订）；**接地镜 MAY 与 Step1 并行起跑**（读当前盘面的 design/specs + 真实代码核验代码事实，不依赖 autoplan 的设计判断产出）。autoplan amendment 后 SHALL NOT 自动补跑接地镜（amendment 新增的代码事实引用由 `sdflow-code-review` 的 grounding/history 镜兜底覆盖）。
 
 **规划镜头（主 session）**：
 
