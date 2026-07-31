@@ -14,7 +14,7 @@
 # · 不改包内模版、不改 proposal→specs→design→tasks 流程；只在生成时追加必填槽。
 # · rules 是给 AI 的生成软约束（非 validate 硬校验）。要硬卡须改 schema（则不再升级安全）。
 # ═════════════════════════════════════════════════════════════
-schema: spec-driven
+schema: sdflow-spec-driven
 
 # 项目上下文（生成产物时展示给 AI）
 context: |

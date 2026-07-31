@@ -24,6 +24,7 @@ import os
 import shutil
 import subprocess
 import sys
+import re
 
 for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
@@ -43,7 +44,11 @@ except ImportError:  # pragma: no cover （沙箱恒 POSIX，Windows 分支无�
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(SKILL_DIR, "assets")
 BUNDLE_SRC = os.path.join(ASSETS, "workflow")
+SCHEMAS_SRC = os.path.join(ASSETS, "schemas")
 SNIPPETS = os.path.join(ASSETS, "snippets")
+PROJECT_SCHEMA = "sdflow-spec-driven"
+BUILTIN_SCHEMA = "spec-driven"
+MIN_SCHEMA_CLI = (1, 7, 0)
 
 MARK_DOC = ("<!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本区块 -->",
             "<!-- opsx-init:end -->")
@@ -203,7 +208,7 @@ def read_snippet(name):
 
 # ── bundle 铺设 ──────────────────────────────────────────────
 
-def copy_bundle(root, full=False):
+def copy_bundle(root, full=False, include_schema=True):
     """R-MRF-1 分层部署：默认只铺 tools/ 子树（规则经全局 canonical 解析，不复制进消费仓）。
     full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用；同样
     不部署 `tools/tests/`，因为它们是 toolkit 自测而非运行时 bundle。
@@ -248,7 +253,15 @@ def copy_bundle(root, full=False):
         guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
         if os.path.isfile(guide_src):
             shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
+    if include_schema and os.path.isdir(SCHEMAS_SRC):
+        schemas_dst = os.path.join(root, "openspec", "schemas")
+        if os.path.isdir(schemas_dst):
+            shutil.rmtree(schemas_dst)
+        shutil.copytree(SCHEMAS_SRC, schemas_dst)
     n = sum(len(fs) for _, _, fs in os.walk(dst))
+    schemas_dst = os.path.join(root, "openspec", "schemas")
+    if include_schema and os.path.isdir(schemas_dst):
+        n += sum(len(fs) for _, _, fs in os.walk(schemas_dst))
     return dst, n
 
 
@@ -308,16 +321,110 @@ def ensure_dirs(root):
     return made
 
 
-def handle_config(root, mode):
-    """init: 缺则从模版生成，存在则报告需合并。update: 不动。返回 (状态, 提示)。"""
+def _schema_from_config(root):
+    cfg = os.path.join(root, "openspec", "config.yaml")
+    try:
+        with open(cfg, encoding="utf-8") as f:
+            for line in f:
+                match = re.match(r"^schema:\s*([^#\s]+)", line)
+                if match:
+                    return match.group(1)
+    except (OSError, UnicodeDecodeError):
+        pass
+    return BUILTIN_SCHEMA
+
+
+def _set_schema_key(root, schema):
+    """Patch only the first top-level schema key, preserving every other byte."""
+    cfg = os.path.join(root, "openspec", "config.yaml")
+    with open(cfg, "rb") as f:
+        raw = f.read()
+    text = raw.decode("utf-8")
+    lines = text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if re.match(r"^schema:\s*[^#\r\n]*", line):
+            newline = "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
+            lines[i] = f"schema: {schema}{newline}"
+            new = "".join(lines).encode("utf-8")
+            if new != raw:
+                fd, tmp = tempfile.mkstemp(prefix=".config.", dir=os.path.dirname(cfg))
+                try:
+                    with os.fdopen(fd, "wb") as out:
+                        out.write(new)
+                        out.flush()
+                        os.fsync(out.fileno())
+                    os.replace(tmp, cfg)
+                finally:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+            return True
+    return False
+
+
+def handle_config(root, mode, schema=None):
+    """init: 缺则从模版生成；update 只窄改 schema 单键。返回 (状态, 提示)。"""
     cfg = os.path.join(root, "openspec", "config.yaml")
     tmpl = os.path.join(BUNDLE_SRC, "config.template.yaml")
     if mode == "update":
-        return ("skip", "update 不动 config.yaml（如模版有变，模型按需合并通用段/rules）")
+        if schema and os.path.exists(cfg) and _schema_from_config(root) != schema:
+            _set_schema_key(root, schema)
+            return ("updated", f"update 仅改写 config.yaml 的 schema: → {schema}")
+        return ("skip", "update 保持 config.yaml（schema 已是目标值）")
     if os.path.exists(cfg):
-        return ("exists", "config.yaml 已存在 → 模型合并「通用」context 段 + rules，保留「本项目」段与用户键")
+        if schema and _schema_from_config(root) != schema:
+            _set_schema_key(root, schema)
+        return ("exists", "config.yaml 已存在 → 保留用户内容，仅确保 schema 单键符合版本门")
     shutil.copyfile(tmpl, cfg)
+    if schema and schema != PROJECT_SCHEMA:
+        _set_schema_key(root, schema)
     return ("created", "已从 config.template.yaml 生成 config.yaml → 填写「本项目」context 段")
+
+
+def _openspec_cli_version():
+    try:
+        proc = subprocess.run(["openspec", "--version"], capture_output=True, text=True,
+                              check=False, encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return None, f"命令不可用（{exc}）"
+    if proc.returncode != 0:
+        return None, f"命令退出码 {proc.returncode}"
+    match = re.search(r"(?<!\d)(\d+)\.(\d+)\.(\d+)(?!\d)", proc.stdout or "")
+    if not match:
+        return None, "输出不是可解析的 semver"
+    return tuple(int(x) for x in match.groups()), None
+
+
+def _schema_gate(root):
+    version, error = _openspec_cli_version()
+    if version is None or version < MIN_SCHEMA_CLI:
+        reason = error or f"版本 {'.'.join(map(str, version))} < 1.7.0"
+        return False, f"版本门：不铺 project-local schema（{reason}），保持内置 {BUILTIN_SCHEMA}"
+    return True, f"版本门：铺设 project-local schema（openspec {'.'.join(map(str, version))}）"
+
+
+def migrate_changes(root, schema=BUILTIN_SCHEMA):
+    """为仅含 proposal.md 的在途 change 补写当前旧 schema；失败必须向上抛。
+
+    这里把“stray 目录”定义为 changes 下没有 proposal.md 的目录；它们不是
+    change，不参与迁移。archive 目录则是另一类明确排除项。
+    """
+    changes = os.path.join(root, "openspec", "changes")
+    count = 0
+    if not os.path.isdir(changes):
+        return count
+    for name in os.listdir(changes):
+        if name == "archive":
+            continue
+        path = os.path.join(changes, name)
+        if not os.path.isdir(path) or not os.path.isfile(os.path.join(path, "proposal.md")):
+            continue
+        marker = os.path.join(path, ".openspec.yaml")
+        if os.path.exists(marker):
+            continue
+        with open(marker, "x", encoding="utf-8") as f:
+            f.write(f"schema: {schema}\n")
+        count += 1
+    return count
 
 
 # ── config-lint（mlh-p3-determ-guards Task 2）──────────────────
@@ -827,7 +934,18 @@ def run(root, mode, dev=False):
         if made:
             report.append("建目录：" + " ".join(made))
 
-        dst, n = copy_bundle(root, full=dev)
+        schema_enabled, schema_msg = _schema_gate(root)
+        report.append(schema_msg)
+        target_schema = PROJECT_SCHEMA if schema_enabled else BUILTIN_SCHEMA
+        # 迁移必须先于 config 切换：补写方读取的是当前旧 schema；颠倒会把在途
+        # change 错钉到 fork。任何一个 change 写失败都中止本次 run，避免半迁移。
+        if schema_enabled:
+            migrated = migrate_changes(root, _schema_from_config(root))
+            report.append(f"迁移在途 change：补写 {migrated} 个（仅 proposal.md 且无 .openspec.yaml）")
+        else:
+            report.append("迁移在途 change：跳过（CLI 版本门未通过）")
+
+        dst, n = copy_bundle(root, full=dev, include_schema=schema_enabled)
         dev_suffix = "（--dev 整刷）" if dev else ""
         report.append(f"铺 bundle：openspec/workflow/{dev_suffix}（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
 
@@ -846,7 +964,7 @@ def run(root, mode, dev=False):
         for w in stale_shadow_warnings(root):
             report.append(w)
 
-        cstat, cmsg = handle_config(root, mode)
+        cstat, cmsg = handle_config(root, mode, schema=target_schema)
         report.append(f"config.yaml：{cmsg}")
 
         runtime_snippet = os.path.join(SNIPPETS, "runtime-gitignore.txt")

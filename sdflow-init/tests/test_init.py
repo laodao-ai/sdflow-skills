@@ -160,6 +160,127 @@ class TestBundleToolsOnly:
         assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
 
 
+class TestProjectLocalSchema:
+    def _version(self, monkeypatch, value="1.7.0\n", returncode=0):
+        class Proc:
+            stdout = value
+            stderr = ""
+            pass
+        Proc.returncode = returncode
+        monkeypatch.setattr(init_mod.subprocess, "run", lambda *a, **k: Proc())
+
+    def _project(self, tmp_path):
+        root = tmp_path / "project"
+        (root / "openspec" / "changes" / "active").mkdir(parents=True)
+        (root / "openspec" / "changes" / "active" / "proposal.md").write_text("# proposal\n", encoding="utf-8")
+        (root / "openspec" / "config.yaml").write_text("schema: spec-driven\ncontext: keep\n", encoding="utf-8")
+        return root
+
+    def test_old_cli_does_not_deploy_schema_or_switch_config(self, tmp_path, monkeypatch, capsys):
+        root = self._project(tmp_path)
+        self._version(monkeypatch, "1.6.9\n")
+        init_mod.run(str(root), "update")
+        assert not (root / "openspec" / "schemas").exists()
+        assert (root / "openspec" / "config.yaml").read_text(encoding="utf-8").startswith("schema: spec-driven")
+        assert "版本门：不铺 project-local schema" in capsys.readouterr().out
+
+    def test_semver_numeric_gate_accepts_1_10(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        self._version(monkeypatch, "1.10.0\n")
+        init_mod.run(str(root), "update")
+        assert (root / "openspec" / "schemas" / "sdflow-spec-driven" / "schema.yaml").is_file()
+        assert (root / "openspec" / "config.yaml").read_text(encoding="utf-8").startswith("schema: sdflow-spec-driven")
+
+    def test_missing_or_non_numeric_cli_fails_closed(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        self._version(monkeypatch, "openspec version unknown\n")
+        init_mod.run(str(root), "update")
+        assert not (root / "openspec" / "schemas").exists()
+        assert "schema: spec-driven" in (root / "openspec" / "config.yaml").read_text(encoding="utf-8")
+
+    def test_missing_cli_fails_closed(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+
+        def missing_cli(*args, **kwargs):
+            raise OSError("openspec: command not found")
+
+        monkeypatch.setattr(init_mod.subprocess, "run", missing_cli)
+        init_mod.run(str(root), "update")
+
+        assert not (root / "openspec" / "schemas").exists()
+        assert (root / "openspec" / "config.yaml").read_text(encoding="utf-8").startswith(
+            "schema: spec-driven"
+        )
+
+    def test_migration_failure_stops_before_schema_and_config_switch(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        original_config = (root / "openspec" / "config.yaml").read_bytes()
+        self._version(monkeypatch)
+
+        real_open = open
+
+        def fail_marker_write(path, mode="r", *args, **kwargs):
+            if str(path).endswith(".openspec.yaml") and "x" in mode:
+                raise OSError("injected migration write failure")
+            return real_open(path, mode, *args, **kwargs)
+
+        monkeypatch.setattr(init_mod, "open", fail_marker_write, raising=False)
+        with pytest.raises(SystemExit) as exc:
+            init_mod.run(str(root), "update")
+
+        assert exc.value.code == 1
+        assert (root / "openspec" / "config.yaml").read_bytes() == original_config
+        assert not (root / "openspec" / "schemas").exists()
+        assert not (root / "openspec" / "changes" / "active" / ".openspec.yaml").exists()
+
+    def test_stray_directory_without_proposal_is_ignored(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        stray = root / "openspec" / "changes" / "stray"
+        stray.mkdir()
+        (stray / "notes.md").write_text("not a change\n", encoding="utf-8")
+        self._version(monkeypatch)
+
+        init_mod.run(str(root), "update")
+
+        assert not (stray / ".openspec.yaml").exists()
+        assert (root / "openspec" / "changes" / "active" / ".openspec.yaml").read_text(
+            encoding="utf-8"
+        ) == "schema: spec-driven\n"
+
+    def test_migration_only_in_progress_and_idempotent(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        (root / "openspec" / "changes" / "active" / ".openspec.yaml").unlink(missing_ok=True)
+        archived = root / "openspec" / "changes" / "archive" / "20200101-old"
+        archived.mkdir(parents=True)
+        (archived / "proposal.md").write_text("# old\n", encoding="utf-8")
+        self._version(monkeypatch)
+        init_mod.run(str(root), "update")
+        marker = root / "openspec" / "changes" / "active" / ".openspec.yaml"
+        assert marker.read_text(encoding="utf-8") == "schema: spec-driven\n"
+        assert not (archived / ".openspec.yaml").exists()
+        init_mod.run(str(root), "update")
+        assert marker.read_text(encoding="utf-8") == "schema: spec-driven\n"
+
+    def test_update_changes_only_schema_line(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        original = "schema: spec-driven\ncontext: keep\n# schema: elsewhere\n"
+        (root / "openspec" / "config.yaml").write_text(original, encoding="utf-8")
+        self._version(monkeypatch)
+        init_mod.run(str(root), "update")
+        assert (root / "openspec" / "config.yaml").read_text(encoding="utf-8") == original.replace(
+            "schema: spec-driven", "schema: sdflow-spec-driven", 1
+        )
+
+    def test_schema_bundle_prunes_orphans(self, tmp_path):
+        root = tmp_path / "project"
+        dst = root / "openspec" / "schemas" / "sdflow-spec-driven"
+        dst.mkdir(parents=True)
+        (dst / "orphan.txt").write_text("stale\n", encoding="utf-8")
+        copy_bundle(str(root))
+        assert not (dst / "orphan.txt").exists()
+        assert (dst / "schema.yaml").is_file()
+
+
 class TestUpdateDev:
     """5.6：toolkit 源仓 dogfood 刷新——update --dev 整 bundle 刷 instance；普通 update 只 tools/。"""
 
