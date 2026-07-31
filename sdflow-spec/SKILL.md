@@ -409,7 +409,7 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 🔴 `decision_hash` / `generated_at` **缺失**是另一回事：那是相位 B 收敛两步没走完 ⇒
 **退回 B 补定稿**，MUST NOT 按「身份不匹配」去问人复用与否。
 
-### C.2 强制阅读清单（**显式写死**）
+### C.2 强制阅读清单（schema 依赖图优先，缺口回退超集）
 
 | 生成 | MUST 先全文读 |
 |---|---|
@@ -418,12 +418,9 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
 | `specs/**` | `decision-memo.md` + `proposal.md` + **`design.md`** |
 | `tasks.md` | `decision-memo.md` + `proposal.md` + `design.md` + `specs/**` |
 
-🔴 **MUST NOT 表述为「读依赖产物」。** 实跑 `openspec instructions <artifact> --json` 核验
-（CLI 1.5.0）：`design.dependencies` 与 `specs.dependencies` **都只有 `[proposal]`**，
-`tasks.dependencies` = `[specs, design]`（**不含 proposal**）。照 CLI 的依赖图走 ⇒
-**specs 生成步根本不会读 design.md**，而 design↔specs 矛盾没有任何其它环节会发现。
-
-**决策纪要全文是每一步的输入**：生成方 MUST NOT 需要访问相位 A/B 的对话历史。
+每步读 `dependencies` 对象列表（含 `id`/`done`/`path`/`description`）并比较上表。
+图已覆盖按图读；图不足则回退**写死超集**：`specs` 读 `proposal.md`+`design.md`，`tasks` 读
+`proposal.md`+`design.md`+`specs/**`，不得跳过；纪要输入。
 
 ### C.3 逐产物生成协议（串行，一次一个）
 
@@ -432,38 +429,39 @@ change 名此时即可定 —— A.2 的禁止清单已含「目标态一句话�
    openspec instructions <artifact> --change "<name>" --json
    ```
 2. **最小 schema 断言**：必需字段 `artifactId`(str) · `instruction`(str) · `template`(str) ·
-   `resolvedOutputPath`(str) · `dependencies`(list)。`context` / 当前 artifact 的 `rules` 若存在，
+   `resolvedOutputPath`(str) · `dependencies`(list)。`dependencies` MUST 是对象列表，每项含
+   `id` / `done` / `path` / `description`；`context` / 当前 artifact 的 `rules` 若存在，
    MUST 分别为字符串 / 列表；生成方 MUST 把二者作为生成约束应用，MUST NOT 复制进产物。
    其中 workflow 引用须经 `~/.sdflow/hack/resolve-workflow.sh --root <repo>` 解析后全文读。
    任一必需字段缺失或字段类型不符 ⇒ **fail-closed 中止**，报**实际 CLI 版本** + 修复命令，
    **MUST NOT 重试同一调用**。
-3. **路径净化**（`resolvedOutputPath` 来自第三方 CLI，直接当写入目标 = confused deputy）：
+3. **先处理载荷语义，再写入**：
+   - 成对的 `<!-- sdflow:delegation:start -->` / `<!-- sdflow:delegation:end -->` 区块须在**应用载荷前**整段剥离，MUST NOT 解析 Markdown；两标记均无是 no-op，缺失/乱序/不成对则 fail-closed 报 problem + cause + fix。
+   - `resolvedOutputPath` 为 glob（如 `specs/**/*.md`）时只是模式；按 instruction 推导具体`specs/<capability>/spec.md`。既有产物只取 `status --json` 的 `artifactPaths.<id>.existingOutputPaths`。
+   - 生成前读 status；artifact 的 `status` 为 `skipped` 时跳过，MUST NOT 创建任何对应文件，并从依赖阅读清单移除该artifact；认CLI报skipped。
+4. **路径净化**（`resolvedOutputPath` 来自第三方 CLI，直接当写入目标 = confused deputy）：
    canonicalize 后 MUST 满足 —— ① 严格位于 `openspec/changes/<name>/` 内 ② 落在 artifact
    allowlist（`proposal.md` / `design.md` / `tasks.md` / `specs/**/*.md`）③ **从仓根到目标
    逐组件都不是 symlink**（含 change 目录自身及其祖先；拒绝 symlink 逃逸）。任一不满足 ⇒ 拒写并 fail-closed 报告。
 4. **写入**：临时文件 → **原子替换**（同目录 `.tmp-*` + rename）。MUST NOT 就地半截覆盖。
 5. **写后核验（C.4）**。
 
-默认由主 session 亲写。外派未启用；仅在人明确要求重新评估或启用外派时读取
+默认主 session 亲写；仅在人明确要求启用外派时读取
 [`references/delegation-protocol.md`](references/delegation-protocol.md)。
 
 ### C.4 写后核验：**存在态与合格态分开判**
 
 ```bash
-openspec status  --change "<name>" --json      # 存在态：产出了吗、下一个 ready 是哪个
+openspec status  --change "<name>" --json      # 存在态：产出、skipped、existingOutputPaths、下一个 ready
 openspec validate "<name>" --strict --type change   # 合格态：结构合法吗
 ```
 
-- `status` 的完成判据是**文件存在性**（CLI 源码 `dist/core/artifact-graph/state.js:25-29`）
-  ⇒ 一份被截断的产物照样报 `done`，叠加「不重写已完成产物」后**永久锁死**。
+- `status` 的完成判据是**文件存在性** ⇒ 截断产物也会报 `done`，叠加「不重写已完成产物」后锁死。
 - `validate --strict` 不过 ⇒ 判该产物**未完成**，进重试/亲写阶梯。**MUST NOT「文件存在即跳过」。**
 - **MUST NOT 手搓 Markdown 解析器**去判任一者。
 
-🔴 **`validate --strict` 的真实覆盖面（诚实边界）**：CLI 1.5.0 的它**只校验 `specs/*/spec.md`
-的 delta 结构** —— `proposal.md` 整份删掉都照样报 valid（`hack/tests/test_decision_memo_gate.py`
-机械钉住）。⇒ **`design.md` / `proposal.md` / `tasks.md` 被截断时 status 与 validate 都报绿**，
-这三份的「未截断」**没有机械门**，只能在终审读回时人判（文末是否收束、`## ` 小节是否齐全、
-有无「TODO/待补」残留）。MUST NOT 声称「validate 挡得住半截 design.md」。
+🔴 **诚实边界**：CLI 1.5.0 的 `validate --strict` 只校验 `specs/*/spec.md` delta；
+其余三份截断仍可能双绿，只能由终审读回判定，MUST NOT 声称它能挡住半截 design.md。
 
 ---
 
@@ -477,13 +475,12 @@ openspec validate "<name>" --strict --type change   # 合格态：结构合法�
 3. **config/TG 物证 + 未截断** —— 按载荷 `context/rules` 核条件槽；非平凡 design 至少一张
    组件/依赖图，TG-18 tasks 含测试覆盖图；proposal/design/tasks 未截断仍由人判。
 
-**追溯判据**：追溯边界是整个 change 目录；只在 `decision-memo.md` 中保留被砍候选与理由也合法，
-`design.md` 的一行纪要指针是合法路径。仅当候选与理由在整个边界内都不可追溯时才算判断性偏差；
-措辞压缩或风格差异一律放过。
+**追溯判据**：追溯边界是整个 change 目录；只在 `decision-memo.md` 中保留被砍候选与理由也合法；
+候选与理由在边界内不可追溯才算偏差，措辞压缩放过。
 
-**判断性偏差直接修改产物**，并在完成报告中注明改了什么。
+`design.md` 的一行纪要指针是合法路径。
 
-🔴 **纪要 MUST NOT 并入 design.md**：`design.md` 的 `## Decisions` 只留一行指向 `decision-memo.md` 的指针。理由见 `references/decision-memo-schema.md` §5。
+🔴 **纪要 MUST NOT 并入 design.md**：`## Decisions` 只留一行指向 `decision-memo.md`。
 
 终审后按 `status` + `validate --strict` **复核全部产物完成且合格**，再打 checkpoint：
 
