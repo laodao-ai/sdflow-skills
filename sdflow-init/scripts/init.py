@@ -330,7 +330,8 @@ def ensure_dirs(root):
 def _schema_from_config(root):
     cfg = os.path.join(root, "openspec", "config.yaml")
     try:
-        with open(cfg, encoding="utf-8") as f:
+        # Treat a UTF-8 BOM as an encoding prefix, not as part of the first YAML key.
+        with open(cfg, encoding="utf-8-sig") as f:
             for line in f:
                 match = re.match(r"^schema:\s*([^#\s]+)", line)
                 if match:
@@ -345,7 +346,9 @@ def _set_schema_key(root, schema):
     cfg = os.path.join(root, "openspec", "config.yaml")
     with open(cfg, "rb") as f:
         raw = f.read()
-    lines = raw.splitlines(keepends=True)
+    bom = b"\xef\xbb\xbf" if raw.startswith(b"\xef\xbb\xbf") else b""
+    body = raw[len(bom):]
+    lines = body.splitlines(keepends=True)
     for i, line in enumerate(lines):
         # 仅替换 value；冒号后的空白、inline comment、行尾及其它字节原样保留。
         match = re.match(
@@ -353,18 +356,18 @@ def _set_schema_key(root, schema):
         )
         if match:
             lines[i] = match.group(1) + schema.encode("utf-8") + match.group(2) + (match.group(3) or b"")
-            new = b"".join(lines)
+            new = bom + b"".join(lines)
             if new != raw:
                 _atomic_write(cfg, new, ".config.")
             return True
 
     newline = b"\r\n" if b"\r\n" in raw else b"\n"
-    insert_at = 3 if raw.startswith(b"\xef\xbb\xbf") else 0
-    if raw[insert_at:].startswith(b"---\r\n"):
-        insert_at += 5
-    elif raw[insert_at:].startswith(b"---\n"):
-        insert_at += 4
-    new = raw[:insert_at] + b"schema: " + schema.encode("utf-8") + newline + raw[insert_at:]
+    insert_at = 0
+    if body.startswith(b"---\r\n"):
+        insert_at = 5
+    elif body.startswith(b"---\n"):
+        insert_at = 4
+    new = bom + body[:insert_at] + b"schema: " + schema.encode("utf-8") + newline + body[insert_at:]
     _atomic_write(cfg, new, ".config.")
     return True
 

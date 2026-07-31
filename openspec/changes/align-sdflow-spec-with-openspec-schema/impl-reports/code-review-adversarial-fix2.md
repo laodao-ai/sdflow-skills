@@ -1,7 +1,7 @@
 # Code review · adversarial fix2
 
-审查对象：`align-sdflow-spec-with-openspec-schema`  
-被审盘面：`7e572fb65d20067876a1f0dbbf982351d3a27380`  
+审查对象：`align-sdflow-spec-with-openspec-schema`
+被审盘面：`7e572fb65d20067876a1f0dbbf982351d3a27380`
 范围：fix1 对原子迁移 marker、已有 marker 校验、缺失 `schema:` 插入、兄弟 schema 保留和 inline comment 保留的修复；本复审只读，未修改业务代码或 `code-review-report.md`。
 
 ## Findings（置信 ≥80）

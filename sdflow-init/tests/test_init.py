@@ -322,6 +322,21 @@ class TestProjectLocalSchema:
             b"spec-driven", b"sdflow-spec-driven", 1
         )
 
+    def test_update_rewrites_bom_crlf_schema_once_and_preserves_other_bytes(self, tmp_path):
+        root = self._project(tmp_path)
+        original = b"\xef\xbb\xbfschema: spec-driven  # legacy choice\r\ncontext: keep\r\n"
+        config = root / "openspec" / "config.yaml"
+        config.write_bytes(original)
+
+        assert init_mod._schema_from_config(str(root)) == "spec-driven"
+        status, _ = init_mod.handle_config(str(root), "update", schema=init_mod.PROJECT_SCHEMA)
+        actual = config.read_bytes()
+
+        assert status == "updated"
+        assert actual == original.replace(b"spec-driven", b"sdflow-spec-driven", 1)
+        assert actual.startswith(b"\xef\xbb\xbf")
+        assert actual.count(b"schema:") == 1
+
     def test_schema_bundle_prunes_orphans(self, tmp_path):
         root = tmp_path / "project"
         dst = root / "openspec" / "schemas" / "sdflow-spec-driven"
