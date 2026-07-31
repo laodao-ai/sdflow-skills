@@ -181,8 +181,8 @@ description: >
 
 ## 第一步：autoplan 子步（广审·原生执行，吃其 findings）
 
-> **并行前向指针**：进入本步的同时，MUST 按下方第二步「能力探针」与「两段 dispatch」的
-> dispatch① 条款并行踢出接地镜（不等本步跑完）——具体条款见第二步，此处不重复。
+> **并行前向指针**：进入本步的同时，按下方第二步「能力探针」与「两段 dispatch」的
+> dispatch① 条款，接地镜 MAY 与本步并行起跑（不等本步跑完）——具体条款见第二步，此处不重复。
 
 1. **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 autoplan（其指令直接进主 session 执行，MUST NOT 派子代理读其 SKILL.md 转述模拟）。autoplan 跑自己的流程，prompt 不注入；其内部 AskUserQuestion 人类门（premise 确认 / 最终批准）按 G2/C5 适配：不弹窗，连同其自动决策一并登记进本评审报告「决策登记区」，设计门一次拍板。
 2. **主 session 落盘〔R5〕**：autoplan 原生机制只写 plan file，无「写任意路径」能力——执行完由**主 session** 汇总其结论 Write 落盘 `{change_dir}/gstack-review.md`（改动标 `[gstack-amendment]`），文件头 + 本报告 Step1 段各写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`；native 声明附一句侧信道佐证（如 autoplan 双声真实调用事实/运行痕迹）。
