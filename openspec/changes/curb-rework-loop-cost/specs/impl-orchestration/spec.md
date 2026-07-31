@@ -107,7 +107,11 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 �
   - **(a) 同指纹判据**：同一发现连续 2 轮 re-review 仍未消解 SHALL 停止循环。
   - **(b) 与指纹无关的硬上限**〔curb-rework-loop-cost · adr/0035〕：**同一文件累计被 Critical/Important 发现命中 ≥3 轮**时，无论各轮的问题指纹是否相同，SHALL 停止循环。此时仲裁的命题 SHALL 是「**这个门 / 这段实现本身该不该存在**」，而非「这一条 finding 是否成立」。
   - 判据 (b) 存在的理由：(a) 的身份键可被「同一根因每轮换一个语法分支」绕过——每轮指纹不同则计数清零，`MUST NOT 无限循环` 无从兑现。**MUST NOT 试图靠「让指纹算法更能识别同一根因」来替代 (b)**：那要求指纹算法判断「什么是同一个根因」，本身即模型判断，且落在无界语法面上。
+  - **(a)(b) 同时命中时 (b) subsume (a)**〔curb-rework-loop-cost · R-9〕：第 3 轮同时满足两条判据时，只派 (b) 的仲裁（「门本身该不该存在」），MUST NOT 同时派两个不同 scope 的仲裁。
+- **计数窗口 SHALL 为全 change 生命周期**〔curb-rework-loop-cost · R-10〕：「同一文件累计命中轮数」跨该 change 的全部 ticket 累计，MUST NOT 按单 ticket 独立清零。
+- **熔断账本 SHALL 持久化**〔curb-rework-loop-cost · R-5〕：编排层在每轮 fix-review 后 SHALL 追加一行到 `impl-reports/breaker-ledger.md`，格式 = `轮次 | 文件 | 指纹 | 严重度`。该账本 git-tracked，支持跨 context 压缩后恢复计数与事后审计，但不构成机械门。
 - **身份键 SHALL 跨轮稳定**：判定「是否同一发现」SHALL 用「同文件 + 规范化问题指纹」，**行号只作定位、MUST NOT 作为身份键的组成部分**〔spec-review-amendment H3〕——修复几乎必然移动行号，用行号当身份会让同一未解决问题被认成新发现、轮次计数清零。
+- **(b) 仲裁 dispatch 的 review package SHALL 含该文件 ticket 起点以来的累积 diff**〔curb-rework-loop-cost · R-4〕，不受「fix 轮 review package 只含本轮修复 diff」（③）的增量限定——仲裁命题是「门本身该不该存在」，需要看跨轮修复模式。**(b) 优先于 ③。**
 - **三级处置 SHALL 归于互斥终态，MUST NOT 停在「已确认成立」而无后续动作**〔spec-review-amendment H4〕：①有客观判据（测试/断言/基准可判）→ 自动选并记理由后关闭（**预期极少触发**：触发前提已是连续 2 轮不消解，能客观判定的话第 1 轮就该修好；保留该档是为两组处置形状对称，成本近零）；②无客观判据 → 派对抗镜复核该发现是否成立，复核 SHALL 用 **strong 档**（本场景是低频、需要独立判断力打破同档循环的仲裁点）——复核判**不成立** → 关闭该发现并记理由；判**成立且可修** → 派 strong 档 fix 子代理修复并**仅复验一次**，复验通过则关闭、不通过转 ③；③复核不过、无从复核、或判成立但不可修 → defer 进 buglist 并停上抛。**MUST NOT 无限循环。**
 
 执行模式 MUST NOT 追加 warm final whole-branch review（冷层 sdflow-code-review 紧随其后承担全分支审）。
@@ -155,15 +159,15 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 �
 - **WHEN** 某 ticket 首轮双轴审报出 Critical，fix 子代理修复后进入第 2 轮 re-review
 - **THEN** 该轮 review package 的 diff 范围 SHALL 为「首轮已审 SHA..HEAD」，MUST NOT 包含首轮已经审过且未再改动的 hunk
 
-### Requirement: 往既有测试补断言同样适用 red-before-green
+### Requirement: 往既有测试补断言或修改既有断言同样适用 red-before-green
 
-implementer 的 TDD 契约为 red-before-green（见「执行模式串行工作 frontier 并以文件交接」需求）。该纪律 SHALL 同样适用于**往既有测试文件补一条断言**的场景，而不限于新写测试：**补一条断言时 SHALL 先确认它会红**——当场破坏被测点、确认该断言失败，再恢复。
+implementer 的 TDD 契约为 red-before-green（见「执行模式串行工作 frontier 并以文件交接」需求）。该纪律 SHALL 同样适用于**往既有测试文件补一条断言或修改既有断言的期望值/判定逻辑**的场景，而不限于新写测试：**补一条断言或修改既有断言时 SHALL 先确认它会红**——当场破坏被测点、确认该断言失败，再恢复。
 
-理由：恒真断言（needle 被别的门满足，或压根没有用例走到该行）在写入时无成本可验，在事后 review 时才被发现，届时已需一整轮返工。该自检成本为一次聚焦运行。
+理由：恒真断言（needle 被别的门满足，或压根没有用例走到该行）在写入时无成本可验，在事后 review 时才被发现，届时已需一整轮返工。修改期望值同理——改后仍恒真的断言同样是假绿。该自检成本为一次聚焦运行。
 
-#### Scenario: 补断言未验红被 Standards 轴判为缺口
+#### Scenario: 补断言或改断言未验红被 Standards 轴判为缺口
 
-- **WHEN** implementer 往既有测试补了一条断言，报告中未给出「该断言曾验红」的证据
+- **WHEN** implementer 往既有测试补了一条断言或修改了既有断言的期望值，报告中未给出「该断言曾验红」的证据
 - **THEN** Standards 轴 SHALL 判该项为缺口并要求补验；MUST NOT 因「测试整体是绿的」而放过
 
 #### Scenario: 收尾票豁免不受本需求扩展影响

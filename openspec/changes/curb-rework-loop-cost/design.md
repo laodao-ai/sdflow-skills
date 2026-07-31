@@ -90,6 +90,9 @@ test-suites:
 - **[⑤ 是指令层约束，出票时仍可能漏判]** → ⑫ 的对照表降低漏判率；漏判的后果是退化为今天的状态，不比现状更差。**MUST NOT 在任何产物中声称 ⑤ 是机械保证。**
 - **[⑥ 规定「只审修复 diff」，若修复引入了 diff 之外的连带影响则审不到]** → 该风险由 `sdflow-done` 的 verify（位于所有修复之后）兜底；本 change 不扩张 verify 职责。
 - **[两条分发链不同步：SKILL 经 symlink 即时生效，config 模板须 `sdflow-init update`]** → 扩展设计为向后兼容，新 SKILL 读到旧 config（无 quick 档）时按单命令处理，**窗口期无破坏**。
+- **[跨文件同根因可绕过 (a)(b) 且无全局硬顶]**〔Q-1 已知风险〕→ (a) 靠指纹、(b) 靠文件，同一根因跨文件轮换可绕过两者。概率低（需根因横跨多文件且每轮换文件），且 ①②⑤⑥ 已收窄整体循环成本。retro 后验可发现并追加全局硬顶。
+- **[收尾票 fix 循环不受 review-loop-breaker 管辖]**〔Q-2 观察〕→ 收尾票的「测试失败→修→重跑」由退出码驱动，与 reviewer findings 驱动的 breaker 是不同计数轨道。①② 下每轮只跑 unit，成本已大幅下降；Standards 轴 findings 仍会触发 breaker。暂不加独立硬顶，观察。
+- **[①③④⑥ 叠加后诊断窗口收窄]**〔X-12 降级〕→ 中间轮不跑集成/e2e、review package 只看增量、第 3 轮熔断、code-review 只允许 1 轮复审——四项同时发生时，跨轮/跨层回归更晚暴露且可能被直接 defer。**defer ≠ 验证通过**，是以已知缺陷换取循环上界的有意选择。
 
 ## Migration Plan
 

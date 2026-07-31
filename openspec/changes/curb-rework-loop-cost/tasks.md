@@ -19,11 +19,11 @@
 
 ## 2. 实现期循环边界（P0/P1）
 
-- [ ] 2.1 **IO-1** — 改写 `sdflow-implement/SKILL.md:328-330` 单一盘面条款：中间轮 = unit 全层 + 上轮失败用例（结果仅供诊断）；收口 = 全量且所有通过行锚同一最终 SHA。**保留**原「所有判通过的行锚同一最终 SHA」语句与拼接反例
+- [ ] 2.1 **IO-1** — 改写 `sdflow-implement/SKILL.md:328-330` 单一盘面条款：中间轮 = unit 全层 + 上轮失败用例（⊂ unit 层，结果仅供诊断）；收口 = 全量且所有通过行锚同一最终 SHA。**保留**原「所有判通过的行锚同一最终 SHA」语句与拼接反例
 - [ ] 2.2 **IO-1** — 同段落写入「范围 MUST NOT 由『哪层受影响』判断界定」，并明确「要求为该判断写明依据不构成缓解」；全仓 grep 清除「受影响层」提法
 - [ ] 2.3 **IO-2** — 核对 `sdflow-implement/SKILL.md:616-621` 的「Tests are code」措辞与本 change specs 中 IO-2 的表述一致（实现已在 `d1aa607`，本任务只做一致性核对，不重复实现）
-- [ ] 2.4 **IO-2** — `sdflow-implement/SKILL.md:651-657` 熔断规则增加判据 (b)：同一文件累计被 Critical/Important 命中 ≥3 轮即熔断（与指纹无关），仲裁命题为「这个门本身该不该存在」；写入「MUST NOT 靠改进指纹算法替代 (b)」
-- [ ] 2.5 **IO-4** — `sdflow-implement/SKILL.md:509` red-before-green 扩展到「往既有测试补断言」场景；同时明确收尾票的既有豁免不受影响
+- [ ] 2.4 **IO-2** — `sdflow-implement/SKILL.md:651-657` 熔断规则增加判据 (b)：同一文件累计被 Critical/Important 命中 ≥3 轮即熔断（与指纹无关），仲裁命题为「这个门本身该不该存在」；写入「MUST NOT 靠改进指纹算法替代 (b)」；声明 (a)(b) 同时命中时 (b) subsume (a)；计数窗口 = 全 change 跨全部 ticket；熔断账本持久化到 `impl-reports/breaker-ledger.md`（格式 = `轮次|文件|指纹|严重度`）；(b) 仲裁 dispatch 的 review package 含该文件 ticket 起点以来累积 diff（不受 ③ 增量限定）
+- [ ] 2.5 **IO-4** — `sdflow-implement/SKILL.md:509` red-before-green 扩展到「往既有测试补断言或修改既有断言的期望值/判定逻辑」场景；同时明确收尾票的既有豁免不受影响
 - [ ] 2.6 **IO-3** — `sdflow-implement/SKILL.md:583` review package 构造改为 fix 轮只打包「上轮已审 SHA..HEAD」；首轮范围不变
 - [ ] 2.7 **IO-1** — `sdflow-implement/SKILL.md:270` 附近增加出票语法面有界性闸门，判据覆盖伪装形态（「在某格式文件中定位/插入/修改某处」）；标注为指令层约束、非机械保证
 

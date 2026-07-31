@@ -24,6 +24,7 @@
 - 裁决：**采纳**（三路独立命中，文本直读即得矛盾）
 - 严重度：High
 - 建议：spec 显式限定「上轮失败的具体用例 ⊂ unit 层」，五份文档（proposal/design/adr/decision-memo/spec）统一措辞。
+- ✅ **已修正** `[spec-review-amendment]`：proposal/decision-memo/spec/tasks/Scenario 五处统一加「⊂ unit 层」限定。
 
 **[R-2] unit 层缺 quick 时 design.md 通用规则与 spec.md 必跑约束矛盾**
 - 命中镜：autoplan(Codex) + 对抗镜2
@@ -47,6 +48,7 @@
 - 裁决：**采纳**（三路命中，结构性矛盾明确）
 - 严重度：High
 - 建议：spec 声明 ④(b) 仲裁 dispatch 的 review package 含该文件 ticket 起点以来的累积 diff，不受 ③ 增量限定。(b) 优先于 ③。
+- ✅ **已修正** `[spec-review-amendment]`：spec 熔断规则加「(b) 仲裁 dispatch 的 review package 含累积 diff，不受 ③ 增量限定，(b) 优先于 ③」。
 
 **[R-5] 熔断计数无持久化账本要求 — 机制靠「编排器会自己记得」**
 - 命中镜：对抗镜1
@@ -54,6 +56,7 @@
 - 裁决：**采纳**（对照 planning-decisions.md、code-review-report.md 都有显式落盘要求，唯独熔断计数没有）
 - 严重度：High
 - 建议：要求编排层在每轮 fix-review 后追加一行到轻量账本（如 `impl-reports/breaker-ledger.md`），格式 = `轮次|文件|指纹|严重度`。不需要机械门，但支持事后审计。
+- ✅ **已修正** `[spec-review-amendment]`：spec 熔断规则加持久化账本条款（`impl-reports/breaker-ledger.md`，git-tracked）。
 
 **[R-6] Success Metric #2 指向不存在的产物**
 - 命中镜：autoplan(Eng) + Codex
@@ -61,6 +64,7 @@
 - 裁决：**采纳**
 - 严重度：Medium
 - 建议：改为 grep `code-review-report.md` 中的「复审上限已达」标注 + 检查该 change 的 checkpoint commit 中 `impl-review` 标签计数。
+- ✅ **已修正** `[spec-review-amendment]`：proposal Success Metric #2 改为 code-review-report.md 标注 + checkpoint 计数。
 
 **[R-7] Goals 措辞「四个控制点均可机械求值、fail-safe」与规格自相矛盾**
 - 命中镜：autoplan(Codex) + 对抗镜1
@@ -68,6 +72,7 @@
 - 裁决：**采纳**
 - 严重度：Medium
 - 建议：Goals 改为「四个边界控制点的判据一律**尽可能**由确定信息界定，失效方向为 fail-safe」——删掉「均可机械求值」。
+- ✅ **已修正** `[spec-review-amendment]`：design.md Goals 已改。
 
 **[R-8] ⑨ red-before-green 只覆盖「补断言」未覆盖「改断言」**
 - 命中镜：design-voice(fallback)
@@ -75,6 +80,7 @@
 - 裁决：**采纳**（成本极低——只需扩宽一个短语）
 - 严重度：Medium
 - 建议：⑨ 措辞从「补断言」扩到「补断言或修改既有断言的期望值/判定逻辑」。IO-4 spec 同步。
+- ✅ **已修正** `[spec-review-amendment]`：proposal ⑨ + spec IO-4 Requirement/Scenario 均扩宽。
 
 **[R-9] (a)(b) 同时触发无优先级声明**
 - 命中镜：autoplan(Eng)
@@ -82,6 +88,7 @@
 - 裁决：**采纳**
 - 严重度：Medium
 - 建议：spec 声明 (b) subsume (a)，同时命中时只派 (b)。
+- ✅ **已修正** `[spec-review-amendment]`：spec 熔断规则加「(a)(b) 同时命中时 (b) subsume (a)」。
 
 **[R-10] 熔断计数窗口（单 ticket / 全 change）未定义**
 - 命中镜：对抗镜2
@@ -89,6 +96,7 @@
 - 裁决：**采纳**
 - 严重度：Medium
 - 建议：显式声明计数窗口 = 全 change 生命周期内跨全部 ticket 累计。
+- ✅ **已修正** `[spec-review-amendment]`：spec 熔断规则加「计数窗口 = 全 change 生命周期跨全部 ticket」。
 
 **[R-11] `full` 缺配回落 `quick` 使收口轮可能悄悄变窄**
 - 命中镜：对抗镜2
@@ -206,8 +214,8 @@
 
 | ID | 问题 | 推荐 |
 |---|---|---|
-| [需拍板] Q-1 | 跨文件同根因逃逸：补全局硬顶(A) vs 记为已知风险(B) | **B**——低概率、①②⑤⑥ 已收窄 |
-| [需拍板] Q-2 | 聚合套件 fix 循环管辖：复用 breaker(A) / 专属硬顶(B) / 观察(C) | **C**——①② 已缩窄成本 |
+| [已拍板] Q-1 | 跨文件同根因逃逸：补全局硬顶(A) vs 记为已知风险(B) | **人拍板 → B**——低概率、①②⑤⑥ 已收窄 |
+| [已拍板] Q-2 | 聚合套件 fix 循环管辖：复用 breaker(A) / 专属硬顶(B) / 观察(C) | **人拍板 → C**——①② 已缩窄成本 |
 | [已拍板] Q-3 | T1 路径：新增 helper(a) vs 移入无测试桶(b) | **人拍板 → (b)**——消费方是模型运行时，无 runtime parser；devenv 负责发现与写入 |
 
 ### 已裁掉（反静默压制 · 原始发现 + 裁掉理由供复核）
