@@ -402,6 +402,23 @@ python3 "$SKILL_DIR/scripts/devenv_lint.py"     --root "$REPO"    # 只报不拦
 - **`environments.md`** ← **纯人写，零渲染**。你只是把 ① 问到的答案落成初稿（dev 搭建 + deploy 发布；「测试怎么跑」→ 一行指针）
 - **入口** ← `opsx-devenv` 托管块（CLAUDE / AGENTS / README）+ `openspec/INDEX.md`
 
+**`openspec/config.yaml` 的 `test-suites` 发现与写入**（供 `sdflow-implement` 「聚合套件发现契约」
+消费，schema 见 `config.template.yaml` 的示范段）：
+
+- **来源 = ②-1 已经真跑验证过的逐层命令**，不重新调研——「怎么跑（命令）」那一格拿到的命令原文
+  就是这里的写入内容，`test-suites` 只是给它一个 `sdflow-implement` 认得的落点。
+- **分档判据**：该层**天然有 quick 变体**（`go test -short`、`pytest -m "not slow"`、CI 已区分
+  smoke/full 两条流水线…）⇒ 推荐**映射**形状 `{quick: <快命令>, full: <全量命令>}`；**无天然 quick
+  变体**（本就一条命令覆盖全部，或规模小到不值得分档）⇒ 推荐**字符串**形状（quick=full 同命令），
+  **MUST NOT 为了填格造一个假 quick**。
+- **仓内确无某层** ⇒ 不写该层键——沿用「聚合套件发现契约」的「未覆盖」语义，留给
+  `sdflow-implement` 该票 implementer 运行时判定，**MUST NOT 在 `test-suites` 里造一个假条目**。
+- **已有配置时 MUST NOT 覆盖**——只在该层键缺失时新增；已存在的键可能是人手工调过的（例如刻意
+  选窄的 quick 命令），本 skill 只负责「从无到有」，不做「二次调优」。
+- **落地方式**：直接编辑 `openspec/config.yaml`（不是 `.devenv.json`，本 skill 对它无脚本
+  owns——config.yaml 的 schema 归 `sdflow-init`），diff 与其余落地物同规格，交④冷审 + 人门的
+  「落地物 diff 过目」环节，不单开一道人门。
+
 **🔴 收尾报告 MUST 逐条列出**（**不许埋进文件里**）：
 
 ```

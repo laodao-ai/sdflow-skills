@@ -80,6 +80,29 @@ rules:
 # 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
 # impl-pipeline: tickets
 
+# test-suites（可选段）——sdflow-implement「聚合套件发现契约」的命令来源，优先于该票
+# implementer 运行时判定。缺省请勿填（未配置层由该票 implementer 依仓内既有约定判定）。
+# 具体命令因项目而异，由 sdflow-devenv 运行时调研测试基础设施后推荐写入（已有配置时保留不覆盖），
+# 本模版只示范两种合法形状；旧形状（字符串）是新形状（映射）的子集，未分档的消费仓行为不变。
+#
+# 形状一：字符串——quick 与 full 两档同命令（今日形状，继续有效）：
+# test-suites:
+#   unit: "go test ./..."
+#   integration: "make integration"
+#   e2e: "make e2e"
+#
+# 形状二：映射——quick/full 分档（成本分档）。缺 `quick` 视为该层无 quick 档
+# （unit 层例外：中间 fix 轮缺 quick 取 full，MUST NOT 因此跳过 unit 层）；
+# 缺 `full` 视为未分档（quick=full 同命令）：
+# test-suites:
+#   unit:
+#     quick: "go test -short ./..."
+#     full: "go test ./..."
+#   integration:
+#     full: "make integration"   # 未分档，quick 亦取此命令
+#   e2e:
+#     full: "make e2e"
+
 # 评审价值度量（lens-metric）开关：低频消费仓默认关（避免零收益期背记账+硬阻塞）；
 # 高频仓可改 true 开启。契约见 lens-metric-contract.md。
 metrics:
