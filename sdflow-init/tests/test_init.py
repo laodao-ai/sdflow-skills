@@ -322,6 +322,35 @@ class TestProjectLocalSchema:
             b"spec-driven", b"sdflow-spec-driven", 1
         )
 
+    @pytest.mark.parametrize("prefix", [b"", b"\xef\xbb\xbf"])
+    def test_update_writes_comment_only_schema_with_yaml_comment_separator(self, tmp_path, prefix):
+        root = self._project(tmp_path)
+        original = prefix + b"schema:    # local choice\r\ncontext: keep\r\n"
+        config = root / "openspec" / "config.yaml"
+        config.write_bytes(original)
+
+        status, _ = init_mod.handle_config(str(root), "update", schema=init_mod.PROJECT_SCHEMA)
+
+        assert status == "updated"
+        assert config.read_bytes() == prefix + (
+            b"schema:    sdflow-spec-driven # local choice\r\ncontext: keep\r\n"
+        )
+        assert init_mod._schema_from_config(str(root)) == init_mod.PROJECT_SCHEMA
+
+    def test_update_inserts_schema_after_commented_document_start(self, tmp_path):
+        root = self._project(tmp_path)
+        original = b"--- # local config\r\ncontext: keep\r\n"
+        config = root / "openspec" / "config.yaml"
+        config.write_bytes(original)
+
+        status, _ = init_mod.handle_config(str(root), "update", schema=init_mod.PROJECT_SCHEMA)
+
+        assert status == "updated"
+        assert config.read_bytes() == (
+            b"--- # local config\r\nschema: sdflow-spec-driven\r\ncontext: keep\r\n"
+        )
+        assert init_mod._schema_from_config(str(root)) == init_mod.PROJECT_SCHEMA
+
     def test_update_rewrites_bom_crlf_schema_once_and_preserves_other_bytes(self, tmp_path):
         root = self._project(tmp_path)
         original = b"\xef\xbb\xbfschema: spec-driven  # legacy choice\r\ncontext: keep\r\n"
@@ -355,6 +384,27 @@ class TestProjectLocalSchema:
         copy_bundle(str(root))
 
         assert (sibling / "schema.yaml").read_text(encoding="utf-8") == "custom: true\n"
+
+    def test_schema_bundle_missing_authority_fails_loudly(self, tmp_path, monkeypatch):
+        root = tmp_path / "project"
+        missing = tmp_path / "missing-schema-assets"
+        monkeypatch.setattr(init_mod, "SCHEMAS_SRC", str(missing))
+
+        with pytest.raises(RuntimeError, match="权威资产缺失"):
+            copy_bundle(str(root), include_schema=True)
+
+    def test_update_missing_schema_authority_does_not_switch_config(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        config = root / "openspec" / "config.yaml"
+        original = config.read_bytes()
+        self._version(monkeypatch)
+        monkeypatch.setattr(init_mod, "SCHEMAS_SRC", str(tmp_path / "missing-schema-assets"))
+
+        with pytest.raises(SystemExit) as exc:
+            init_mod.run(str(root), "update")
+
+        assert exc.value.code == 1
+        assert config.read_bytes() == original
 
 
 class TestUpdateDev:

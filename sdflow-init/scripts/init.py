@@ -228,6 +228,14 @@ def copy_bundle(root, full=False, include_schema=True):
             return {"tests"}
         return set()
 
+    schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
+    schema_asset = os.path.join(schema_src, "schema.yaml")
+    if include_schema and not os.path.isfile(schema_asset):
+        raise RuntimeError(
+            "project-local schema 权威资产缺失："
+            f"{schema_asset}"
+        )
+
     dst = os.path.join(root, "openspec", "workflow")
     if full:
         shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True,
@@ -254,16 +262,16 @@ def copy_bundle(root, full=False, include_schema=True):
         guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
         if os.path.isfile(guide_src):
             shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
-    if include_schema and os.path.isdir(SCHEMAS_SRC):
+    if include_schema:
         schemas_dst = os.path.join(root, "openspec", "schemas")
-        schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
         schema_dst = os.path.join(schemas_dst, PROJECT_SCHEMA)
-        if os.path.isdir(schema_src):
-            # 只托管本工具的 fork。消费仓可在 schemas/ 下维护其它 project-local schema，
-            # update 不得删除它们。
-            if os.path.isdir(schema_dst):
-                shutil.rmtree(schema_dst)
-            shutil.copytree(schema_src, schema_dst)
+        # 只托管本工具的 fork。消费仓可在 schemas/ 下维护其它 project-local schema，
+        # update 不得删除它们。
+        if os.path.isdir(schema_dst):
+            shutil.rmtree(schema_dst)
+        shutil.copytree(schema_src, schema_dst)
+        if not os.path.isfile(os.path.join(schema_dst, "schema.yaml")):
+            raise RuntimeError("project-local schema 复制后缺少 schema.yaml")
     n = sum(len(fs) for _, _, fs in os.walk(dst))
     schemas_dst = os.path.join(root, "openspec", "schemas")
     if include_schema and os.path.isdir(schemas_dst):
@@ -351,11 +359,16 @@ def _set_schema_key(root, schema):
     lines = body.splitlines(keepends=True)
     for i, line in enumerate(lines):
         # 仅替换 value；冒号后的空白、inline comment、行尾及其它字节原样保留。
-        match = re.match(
-            rb"^(schema:[ \t]*)(?:[^ \t#\r\n]+)?([^\r\n]*)(\r?\n)?$", line
-        )
+        match = re.match(rb"^(schema:)([ \t]*)(.*?)(\r?\n)?$", line)
         if match:
-            lines[i] = match.group(1) + schema.encode("utf-8") + match.group(2) + (match.group(3) or b"")
+            prefix, spacing, content, newline = match.groups()
+            if content.startswith(b"#"):
+                # YAML 注释前须有空白；保留冒号后的原缩进，再在目标值与注释之间补一格。
+                suffix = b" " + content
+            else:
+                value_match = re.match(rb"([^ \t#\r\n]+)(.*)$", content)
+                suffix = value_match.group(2) if value_match else b""
+            lines[i] = prefix + spacing + schema.encode("utf-8") + suffix + (newline or b"")
             new = bom + b"".join(lines)
             if new != raw:
                 _atomic_write(cfg, new, ".config.")
@@ -363,10 +376,8 @@ def _set_schema_key(root, schema):
 
     newline = b"\r\n" if b"\r\n" in raw else b"\n"
     insert_at = 0
-    if body.startswith(b"---\r\n"):
-        insert_at = 5
-    elif body.startswith(b"---\n"):
-        insert_at = 4
+    if lines and re.match(rb"^---(?:[ \t]*(?:#.*)?)?(?:\r?\n)?$", lines[0]):
+        insert_at = len(lines[0])
     new = bom + body[:insert_at] + b"schema: " + schema.encode("utf-8") + newline + body[insert_at:]
     _atomic_write(cfg, new, ".config.")
     return True
