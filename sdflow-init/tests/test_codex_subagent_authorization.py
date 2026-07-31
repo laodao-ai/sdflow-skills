@@ -90,12 +90,17 @@ def _skill_text(path):
 
 
 def test_both_skills_probe_precedes_fanout_dispatch():
-    """探针 MUST 在实际派出 fan-out 子代理之前跑（spec 原文：「fan-out 前跑能力探针」）——
-    机验文档顺序：能力探针小节的文本位置须早于 fan-out 派发表格。"""
+    """探针 MUST 在实际派出 fan-out 子代理之前跑——
+    机验文档顺序：能力探针小节的文本位置须早于 fan-out 派发表格。
+    spec-review 用「两段 dispatch」，code-review 用「fan-out（一条消息内全部派出」。"""
+    fanout_needles = {
+        SPEC_REVIEW_SKILL: "两段 dispatch",
+        CODE_REVIEW_SKILL: "fan-out（一条消息内全部派出",
+    }
     for path in (SPEC_REVIEW_SKILL, CODE_REVIEW_SKILL):
         t = _skill_text(path)
         probe_idx = t.index("能力探针")
-        fanout_idx = t.index("fan-out（一条消息内全部派出")
+        fanout_idx = t.index(fanout_needles[path])
         assert probe_idx < fanout_idx, f"{path}: 探针小节须在 fan-out 派发表格之前"
 
 
