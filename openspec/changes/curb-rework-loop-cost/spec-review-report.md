@@ -31,6 +31,7 @@
 - 裁决：**采纳**（两路独立命中，逐字对照即得矛盾）
 - 严重度：High
 - 建议：spec 声明 unit 层必跑约束优先于通用规则——unit 缺 quick 时中间轮取 full。design.md 通用规则限定为仅适用于集成/e2e。
+- ✅ **已修正** `[spec-review-amendment]`：design.md 解析规则加 unit 层例外；spec.md 中间轮条款加「无 quick 则取 full——unit 层 MUST NOT 因缺 quick 档被跳过」。
 
 **[R-3] T1 无可测实现对象 — `test-suites` 解析规则无 runtime parser**
 - 命中镜：autoplan(Eng) + Codex
@@ -38,6 +39,7 @@
 - 裁决：**采纳**
 - 严重度：High
 - 建议：二选一——(a) scope 内新增 `parse_test_suites()` helper 函数并配 pytest 测试；(b) 把 T1 移入「无自动化测试」桶，修正覆盖图声明。推荐 (a)（通则①：消费方是 prose 指令，但在 `sdflow-init/scripts/` 补一个验证函数可让 `config_lint` 机械校验配置形状，收益 > 成本）。
+- ✅ **已修正（人拍板 Q-3 → 选 b）** `[spec-review-amendment]`：test-suites 消费方是模型运行时读 config 判断，无 runtime parser。T1 移入「无自动化测试」桶；原 task 1.3（写 parser 测试）改为 sdflow-devenv test-suites 发现能力（prose 任务）。
 
 **[R-4] ③ 与 ④ 未声明的交互 — (b) 仲裁者只看最后一轮增量 diff**
 - 命中镜：autoplan(Eng) + 对抗镜1 + 对抗镜2
@@ -94,6 +96,7 @@
 - 裁决：**采纳**
 - 严重度：Medium
 - 建议：`full` 缺配时视为未分档（quick=full 同命令），或收口报告显式标注「本层无 full 档，取 quick 替代」。
+- ✅ **已修正** `[spec-review-amendment]`：design.md 与 spec.md 统一改为「缺 full 视为未分档（quick=full 同命令）」，消除静默变窄。
 
 ### 需拍板（设计门决策）
 
@@ -205,7 +208,7 @@
 |---|---|---|
 | [需拍板] Q-1 | 跨文件同根因逃逸：补全局硬顶(A) vs 记为已知风险(B) | **B**——低概率、①②⑤⑥ 已收窄 |
 | [需拍板] Q-2 | 聚合套件 fix 循环管辖：复用 breaker(A) / 专属硬顶(B) / 观察(C) | **C**——①② 已缩窄成本 |
-| [需拍板] Q-3 | T1 路径：新增 helper(a) vs 移入无测试桶(b) | **(a)**——机械校验 config 形状 |
+| [已拍板] Q-3 | T1 路径：新增 helper(a) vs 移入无测试桶(b) | **人拍板 → (b)**——消费方是模型运行时，无 runtime parser；devenv 负责发现与写入 |
 
 ### 已裁掉（反静默压制 · 原始发现 + 裁掉理由供复核）
 

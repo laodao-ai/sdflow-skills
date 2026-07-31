@@ -18,7 +18,7 @@
 **P0**
 
 - **① 单一盘面：每轮全量 → 收口一次全量**。中间 fix 轮跑 **unit 全层 + 上轮失败的具体用例**；集成/e2e 整体推到收口。收口跑一次全量，所有判「通过」的行锚同一最终 SHA（**单一盘面语义不变**，被改掉的只是「每轮都重跑」这条对该目的零贡献的强化）。**取消「受影响层」提法**——中间轮范围 MUST 由确定信息界定，MUST NOT 由「哪层受影响」的判断界定。
-- **② `test-suites` 成本分档 + 显式配置**。每层可选配 `quick` / `full` 两条命令（只配一条时两档同命令，向后兼容）。**与 ① 同批落地是硬要求**：① 的收益完全依赖收口那次全量有确定性的命令来源，否则退化回「implementer 每次临时判定范围」。
+- **② `test-suites` 成本分档 + 显式配置**。每层可选配 `quick` / `full` 两条命令（只配一条时两档同命令，向后兼容）。具体命令因项目而异，**由 `sdflow-devenv` 运行时调研项目测试基础设施后推荐写入** `config.yaml`。**与 ① 同批落地是硬要求**：① 的收益完全依赖收口那次全量有确定性的命令来源，否则退化回「implementer 每次临时判定范围」。
 - **⑥ `sdflow-code-review` 补 fix 循环边界**。自动修复后 MUST 复审**一轮**（只审修复 diff、不重审全量）；仍有 Critical/Important ⇒ 不再自发第三轮，全部 defer 进 buglist 并在报告标注。同时消除与 `sdflow-implement:349,353` 的文档分叉。
 
 **P1**
@@ -49,6 +49,7 @@
 
 - **`sdflow-implement/SKILL.md`**：`:270`（出票验收标准约束）、`:313-322`（聚合套件发现契约）、`:328-330`（单一盘面）、`:583`（review package 构造）、`:509`（red-before-green）、`:651-657`（loop-breaker）。
 - **`sdflow-code-review/SKILL.md`**：新增复审边界规定；`:181` 对比表措辞对齐。
+- **`sdflow-devenv/SKILL.md`**：增加 test-suites 发现与写入能力（运行时调研后推荐 quick/full 分档命令）。
 - **`sdflow-devenv/references/verification-patterns.md`**：新增对照表一节。
 - **`openspec/config.yaml` 模板与 `sdflow-init`**：`test-suites` 增加 quick/full 两档（向后兼容，缺档位时退化为单命令）。
 - **下游消费仓**：SKILL 经 symlink 即时生效；`config.template.yaml` 的 `test-suites` 扩展经 `sdflow-init update` 下发。**不强制下游立即配置**——未配 quick 档时行为等同今天。

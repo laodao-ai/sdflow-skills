@@ -14,8 +14,8 @@
 ## 1. 配置契约先行（P0 · ② 是 ① 的前置）
 
 - [ ] 1.1 **IO-1** — `sdflow-init/assets/**/config.template.yaml` 的 `test-suites` 增加 quick/full 两档示例与注释；保持字符串形状为合法子集
-- [ ] 1.2 **IO-1** — `sdflow-implement/SKILL.md:313-322`「聚合套件发现契约」写入分档解析规则：字符串 ⇒ 两档同命令；映射 ⇒ 读 `quick`/`full`，缺 `quick` 记该层无 quick 档、缺 `full` 回落 `quick`
-- [ ] 1.3 **IO-1** — 为 1.2 的解析规则补测试（见测试覆盖图 T1）：字符串形状、完整映射、缺 quick、缺 full 四种输入各一例
+- [ ] 1.2 **IO-1** — `sdflow-implement/SKILL.md:313-322`「聚合套件发现契约」写入分档消费语义：字符串 ⇒ 两档同命令；映射 ⇒ 读 `quick`/`full`，缺 `quick` 记该层无 quick 档（unit 层例外：缺 quick 取 full，MUST NOT 跳过），缺 `full` 视为未分档（quick=full）。具体命令由 `sdflow-devenv` 运行时调研写入，本处只定义消费规则
+- [ ] 1.3 **IO-1** — `sdflow-devenv/SKILL.md` 增加 test-suites 发现与写入能力：运行时调研项目的测试基础设施，推荐 quick/full 分档命令，写入 `openspec/config.yaml` 的 `test-suites`；已有配置时保留不覆盖
 
 ## 2. 实现期循环边界（P0/P1）
 
@@ -49,7 +49,7 @@
 
 | code path / 契约面 | 测试类型 | 落点 | 任务 |
 |---|---|---|---|
-| **T1** `test-suites` 分档解析（字符串 / 完整映射 / 缺 quick / 缺 full） | 单元 | `sdflow-init/tests/` | 1.3 |
+| **T1** `test-suites` 分档消费语义（字符串 / 映射 / 缺 quick / 缺 full） | **无自动化测试**——消费方是 SKILL.md prose 指令（模型运行时读 config 判断），无 runtime parser；由阶段二设计审 + 阶段三双轴审的语义核验承担 | — | 1.2 |
 | **T2** 中间轮与收口轮范围分离（条款语义） | **无自动化测试**——纯 SKILL.md prose，由阶段二设计审 + 阶段三双轴审的语义核验承担 | — | 2.1 / 2.2 |
 | **T3** 熔断判据 (b) | **无自动化测试**——熔断是编排器运行时行为，无确定性捕获路径（`ship_gate` 不介入）；由 IO-2 的 Scenario 作为语义验收 | — | 2.4 |
 | **T4** 复审硬上限 | **无自动化测试**——同 T3，指令层约束由编排器自报 | — | 3.1 |

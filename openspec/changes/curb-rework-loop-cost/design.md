@@ -38,7 +38,7 @@
 
 **Goals**
 
-- 四个边界控制点的判据一律可机械求值，失效方向为 fail-safe。
+- 四个边界控制点的判据一律**尽可能**由确定信息界定，失效方向为 fail-safe。
 - 配置扩展对未配置的消费仓**行为等价于今天**（缺档位退化为单命令）。
 
 **Non-Goals**
@@ -76,7 +76,9 @@ test-suites:
     full:  make e2e                 # 只配 full → quick 判「本层无 quick 档」
 ```
 
-**解析规则**：值为字符串 ⇒ 两档同命令；值为映射 ⇒ 读 `quick` / `full` 两键，缺 `quick` 视为该层无 quick 档（中间轮跳过该层并记「未覆盖（本层无 quick 档）」），缺 `full` 回落到 `quick`。
+**解析规则**：值为字符串 ⇒ 两档同命令；值为映射 ⇒ 读 `quick` / `full` 两键，缺 `quick` 视为该层无 quick 档，缺 `full` 视为未分档（quick=full 同命令）。**unit 层例外**：unit 在中间轮 MUST 始终跑——若无 quick 则取 full，MUST NOT 因「无 quick 档」跳过 unit（此约束仅适用于 unit 层；集成/e2e 缺 quick 时中间轮可推迟到收口）。
+
+**发现与更新**：`test-suites` 的具体命令因项目而异，由 `sdflow-devenv`（环境初始化 skill）运行时调研项目情况后推荐写入 `config.yaml`。本 change 只定义 schema 与消费语义，不硬编码特定命令。
 
 **生命周期**：由 `sdflow-init` 的 `config.template.yaml` 铺设初值；消费仓可手改；`sdflow-init update` 不覆盖消费仓已有的 `test-suites`（沿用 `handle_config` 既有 update 语义）。**无迁移动作**——旧形状是新形状的合法子集。
 
