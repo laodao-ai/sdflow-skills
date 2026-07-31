@@ -255,7 +255,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
   子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
-- **阶段一入口（`generation-process.md` §四 的四入口选择规则）**：想法尚未成形 ⇒ 先 `opsx:explore`（发散），想清楚了再 `/sdflow-spec`（收敛 = 增强版 ff + 内建 grill）。想法已成形 ⇒ **默认走 `/sdflow-spec`**（分支 A 单入口，拷问前置于成文）；未装、或命中三种例外（需 wayfinder 跨会话铺图 / 用户明确要求分步 / 环境不可用）⇒ 走旧三步 `explore → ff → grill`（分支 B）。**模型 MUST NOT 自行选 `opsx:ff` 绕过拷问**——判断需要开 change 时提示用户敲 `/sdflow-spec`。
+- **阶段一入口二选一（`generation-process.md` §四 的四入口选择规则）**：装了 `sdflow-spec` ⇒ **默认走 `/sdflow-spec`**（分支 A 单入口，拷问前置于成文）；未装、或命中三种例外（需 wayfinder 跨会话铺图 / 用户明确要求分步 / 环境不可用）⇒ 走旧三步 `explore → ff → grill`（分支 B）。**模型 MUST NOT 自行选 `opsx:ff` 绕过拷问**——判断需要开 change 时提示用户敲 `/sdflow-spec`。
 - **开分支 = FF-0 三分支判定**：保护分支 → `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
 - 🔴 **ff 之后是 grill，不是 spec-review**（**本条只管分支 B**——走 `/sdflow-spec` 时拷问已在管线内、且在成文之前，本条不适用）：`opsx:ff` 产出四件套后，**MUST 提示下一步 = `/grill-with-docs`**
   （阶段一的对抗层），**MUST NOT 直接跳到 `/sdflow-spec-review`**。

@@ -1,9 +1,25 @@
+# ═════════════════════════════════════════════════════════════
+# 【config 起始模版】—— openspec/workflow/ bundle 的一部分。
+# 用法（新项目）：
+#   1. 规则经全局 canonical（~/.sdflow/workflow）解析，仓内仅 tools/；下文 @openspec/workflow/... 引用在无本地
+#      副本的仓中 = 全局 bundle 内同名文件（resolve-workflow.sh 输出根）。
+#   2. 把本文件**另存为** openspec/config.yaml（OpenSpec 实际读取的是它，不是本模版）。
+#   3. 通用部分照搬：本注释、context 的「通用」段、全部 rules。
+#   4. 仅替换 context 的「本项目」段为该项目的 tech stack / 约定。
+# 维护：本模版是通用部分的**移植母本**；各项目 openspec/config.yaml 为实例，
+#       改 rule 先改本模版，再同步到 openspec/config.yaml 及其他项目。
+# ─────────────────────────────────────────────────────────────
+# 升级安全的叠加层：本文件的 context/rules 是对 OpenSpec 自带 schema 的【加法】。
+# · openspec update 不会覆盖 openspec/config.yaml（init 检测到已存在即跳过）。
+# · 不改包内模版、不改 proposal→specs→design→tasks 流程；只在生成时追加必填槽。
+# · rules 是给 AI 的生成软约束（非 validate 硬校验）。要硬卡须改 schema（则不再升级安全）。
+# ═════════════════════════════════════════════════════════════
 schema: sdflow-spec-driven
 
 # 项目上下文（生成产物时展示给 AI）
 context: |
   ## 通用｜spec 工作流规则集（随模版携带，勿删）
-  spec 质量规则集见 openspec/workflow/：
+  spec 质量规则集见 openspec/workflow/（无本地副本时为 ~/.sdflow/workflow/，下同）：
   - trigger-catalog.md      触发词目录 TG-01~24（约束/领域/画图/模版必填槽 的公共触发源）
   - spec-checklists/        通用 base(BASE-01~28) + 领域 domains(backend·go / embedded·ml307c·esp32 / frontend)
   - design-diagrams.md      设计画图规则（哪些图、何时画、ASCII 优先）
@@ -12,21 +28,8 @@ context: |
   起手对变更评估 trigger-catalog，命中的触发激活对应必填槽 / D约束 / 画图 / 领域清单。
   触发判定一律用具体行为描述，不用风险代号。
 
-  ## 本项目｜tech stack / 约定
-  sdflow-skills：自建 Claude Code Skills 统一管理仓库（本身就是一个 skill 集合库，
-  非典型业务代码库）。
-  - 每个 skill 是仓库根下一个目录：`SKILL.md`（frontmatter + 说明）+ 可选 `scripts/`（Python/Shell）
-    + 可选 `assets/`（模版、bundle 资源）。
-  - 安装机制：`setup.sh` 在 `~/.claude/skills/` 下为每个 skill 建相对路径 symlink（macOS/Linux）或
-    复制目录（Windows，写 `.sdflow-skills` 标记文件；旧 `.laodao-skills` 仅名单内兼容）。
-  - 本仓库同时是 `sdflow-init` skill 的 **bundle 权威源**：其
-    `sdflow-init/assets/workflow/` 就是铺给其他项目的 `openspec/workflow/` 唯一来源；
-    改动这套 spec 工作流规则集，一律先改这里、再用 `sdflow-init update` 推到各使用项目，
-    禁止只改某个下游项目的 `openspec/workflow/` 后忘记回灌。
-  - 技术栈：以 Markdown（SKILL.md）+ Python 脚本（部分用 Bash）为主，无前端/后端服务、无数据库；
-    不命中 domains 清单中的 backend·go / embedded·ml307c·esp32 / frontend 任一领域。
-  - Forbidden patterns：不要把某个 skill 的示例/临时数据当作 bundle 的一部分提交；
-    不要在下游项目里直接改 `openspec/workflow/` 内容并遗忘同步回本仓库。
+  ## 本项目｜tech stack / 约定（每个项目自填；新项目替换本段）
+  <在此填写：Tech stack / API style / DB 访问 / Forbidden patterns / 详见 CLAUDE.md 等>
 
 # 按 artifact 注入的自定义规则（升级安全：在仓库内，openspec update 不覆盖）
 # 槽位分「无条件必填」与「〔TG-NN〕命中才必填」两类；TG 定义见 trigger-catalog.md。
@@ -51,24 +54,33 @@ rules:
     - 单任务控制在可独立验证的小粒度
     - Group related tasks under numbered sections
 
-# model-tiers（可选覆盖段）——真相源 = 规则根 model-tiers.md（resolver 解析）。
-# 此段仅 per-repo 覆盖"档位→模型"映射；缺省请勿填（留空即用 canonical 缺省）。
+# model-tiers（可选覆盖段）——真相源 = 规则根 model-tiers.md（resolve-models.sh 按宿主机队解析）。
+# 此段仅 per-repo 覆盖"档位→模型"映射，MUST 按机队分键（add-codex-host-support · ADR-8）：
+# model-tiers.{claude,codex}.{strong,mid,light}；resolve-models.sh 按当前宿主所属机队读对应段，
+# 无该段回落机队缺省。扁平旧格式（无机队分键，见下）兼容读作 Claude 机队覆盖，仅在 Claude 宿主下
+# 生效，Codex 宿主下不生效（MUST NOT 把 Claude 模型名塞给 Codex 机队）。缺省请勿填。
 # model-tiers:
-#   strong: <model-id>
-#   mid: <model-id>
-#   light: <model-id>
+#   claude:
+#     strong: <claude-model-id>
+#     mid: <claude-model-id>
+#     light: <claude-model-id>
+#   codex:
+#     strong: <codex-model-id>
+#     mid: <codex-model-id>
+#     light: <codex-model-id>
+#
+# 扁平旧格式（历史遗留，兼容读作 Claude 机队覆盖，不推荐新写）：
+# model-tiers:
+#   strong: <claude-model-id>
+#   mid: <claude-model-id>
+#   light: <claude-model-id>
 
 # impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
 # 缺省请勿填（缺失/非法值一律 superpowers 旧管线）；仅在新出 ticket 时刻读一次，
 # 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
-impl-pipeline: tickets
+# impl-pipeline: tickets
 
-# 评审价值度量（lens-metric）开关：源仓 dogfood 高频，默认开
+# 评审价值度量（lens-metric）开关：低频消费仓默认关（避免零收益期背记账+硬阻塞）；
+# 高频仓可改 true 开启。契约见 lens-metric-contract.md。
 metrics:
-  enabled: true
-
-# outside-voice（可选覆盖段）——async 分支内层 --timeout 天花板，单位秒。
-# 缺省请勿填。取值域 / 校验 / 回落规则的单一源 = sdflow-spec-review/SKILL.md
-# 「outside-voice helper 调用协议」节 ①（此处不复述数值与规则，避免第二份 prose 源）。
-# outside-voice:
-#   async-timeout-seconds: 900
+  enabled: false

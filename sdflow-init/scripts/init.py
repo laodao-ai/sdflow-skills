@@ -381,8 +381,9 @@ def handle_config(root, mode, schema=None):
 
 
 def _openspec_cli_version():
+    cli = shutil.which("openspec") or shutil.which("openspec.cmd") or "openspec"
     try:
-        proc = subprocess.run(["openspec", "--version"], capture_output=True, text=True,
+        proc = subprocess.run([cli, "--version"], capture_output=True, text=True,
                               check=False, encoding="utf-8", errors="replace")
     except OSError as exc:
         return None, f"命令不可用（{exc}）"

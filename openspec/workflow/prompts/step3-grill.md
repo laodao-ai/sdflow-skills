@@ -1,0 +1,1 @@
+/grill-with-docs 死磕 {change dir} 的 design.md（连 proposal/specs/tasks）。守四条通则——尤其：拷问的基准是【目标态】，MUST NOT 用「现在代码不是这么写的 / 存量里没出现过」否决设计（现状只用来核事实，不用来定对错）；事实自己查（grep 得到的别问）；≥2 方案先调研再给推荐，别把选项丢回来。落档：ADR→openspec/adr/、术语→openspec/CONTEXT.md；文档改动标 [grill-amendment]。收敛后 checkpoint-commit grill（多轮中途不提交）。
