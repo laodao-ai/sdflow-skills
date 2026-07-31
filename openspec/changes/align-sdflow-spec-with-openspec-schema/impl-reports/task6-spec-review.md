@@ -34,5 +34,4 @@ status: BLOCKED
 
 1. 按 Task 6.1 将 project-local schema、委派仅为提示层、fallback 与迁移顺序的入口说明同步到 `CLAUDE.md`，并核对其与 canonical bundle 不矛盾。
 2. 删除 `openspec/workflow/generation-process.md` 中重复的 schema 边界段和重复 checklist，使 dogfood 副本与 canonical 结构一致。
-3. 按 Task 6.4 在修改后的 assets 上重新运行安装/刷新流程，验证消费侧使用新 bundle；若环境确实无法完成，须留下命令、退出状态、阻断原因和未覆盖范围，不能把 P0 视为完成。
-
+3. 按 Task 6.4 在修改后的 assets 上重新运行安装/刷新流程，验证消费侧使用新 bundle；若环境确实无法完成，须留下命令、退出状态、阻断原因和未覆盖范围，不能把 P0 视为完成。`n

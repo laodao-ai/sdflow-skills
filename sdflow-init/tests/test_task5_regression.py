@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import init as init_mod
 
 
-def test_install_refresh_is_authoritative_and_prunes_schema_orphans(tmp_path, monkeypatch):
-    """A refresh copies the authoritative bundle and removes consumer-only schema files."""
+def test_install_refresh_is_authoritative_and_prunes_only_its_schema_orphans(tmp_path, monkeypatch):
+    """A refresh converges the managed fork without deleting sibling schemas."""
     bundle = tmp_path / "bundle"
     (bundle / "tools").mkdir(parents=True)
     (bundle / "tools" / "anchor_lint.py").write_text("# current\n", encoding="utf-8")
@@ -22,13 +22,17 @@ def test_install_refresh_is_authoritative_and_prunes_schema_orphans(tmp_path, mo
     monkeypatch.setattr(init_mod, "SCHEMAS_SRC", str(schemas))
 
     root = tmp_path / "consumer"
-    stale = root / "openspec" / "schemas" / "old-schema"
-    stale.mkdir(parents=True)
-    (stale / "orphan.yaml").write_text("stale\n", encoding="utf-8")
+    managed = root / "openspec" / "schemas" / "sdflow-spec-driven"
+    managed.mkdir(parents=True)
+    (managed / "orphan.yaml").write_text("stale\n", encoding="utf-8")
+    sibling = root / "openspec" / "schemas" / "old-schema"
+    sibling.mkdir()
+    (sibling / "schema.yaml").write_text("keep: true\n", encoding="utf-8")
 
     init_mod.copy_bundle(str(root), include_schema=True)
 
-    assert not stale.exists()
+    assert not (managed / "orphan.yaml").exists()
+    assert (sibling / "schema.yaml").read_text(encoding="utf-8") == "keep: true\n"
     assert (root / "openspec" / "schemas" / "sdflow-spec-driven" / "schema.yaml").read_text(
         encoding="utf-8"
     ) == "current: true\n"

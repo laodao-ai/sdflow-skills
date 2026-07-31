@@ -217,14 +217,14 @@ class TestProjectLocalSchema:
         original_config = (root / "openspec" / "config.yaml").read_bytes()
         self._version(monkeypatch)
 
-        real_open = open
+        real_replace = init_mod.os.replace
 
-        def fail_marker_write(path, mode="r", *args, **kwargs):
-            if str(path).endswith(".openspec.yaml") and "x" in mode:
-                raise OSError("injected migration write failure")
-            return real_open(path, mode, *args, **kwargs)
+        def fail_marker_publish(src, dst):
+            if str(dst).endswith(".openspec.yaml"):
+                raise OSError("injected migration publish failure")
+            return real_replace(src, dst)
 
-        monkeypatch.setattr(init_mod, "open", fail_marker_write, raising=False)
+        monkeypatch.setattr(init_mod.os, "replace", fail_marker_publish)
         with pytest.raises(SystemExit) as exc:
             init_mod.run(str(root), "update")
 
@@ -261,6 +261,15 @@ class TestProjectLocalSchema:
         init_mod.run(str(root), "update")
         assert marker.read_text(encoding="utf-8") == "schema: spec-driven\n"
 
+    @pytest.mark.parametrize("content", ["schema: ", "schema: unexpected\n", "not-schema: value\n"])
+    def test_migration_rejects_invalid_or_mismatched_existing_marker(self, tmp_path, content):
+        root = self._project(tmp_path)
+        marker = root / "openspec" / "changes" / "active" / ".openspec.yaml"
+        marker.write_text(content, encoding="utf-8")
+
+        with pytest.raises(RuntimeError, match="marker"):
+            init_mod.migrate_changes(str(root), "spec-driven")
+
     def test_update_changes_only_schema_line(self, tmp_path, monkeypatch):
         root = self._project(tmp_path)
         original = "schema: spec-driven\ncontext: keep\n# schema: elsewhere\n"
@@ -271,6 +280,30 @@ class TestProjectLocalSchema:
             "schema: spec-driven", "schema: sdflow-spec-driven", 1
         )
 
+    def test_update_inserts_missing_schema_key_without_losing_config_bytes(self, tmp_path):
+        root = self._project(tmp_path)
+        original = b"context: keep\r\nmetrics:\r\n  enabled: true\r\n"
+        config = root / "openspec" / "config.yaml"
+        config.write_bytes(original)
+
+        status, _ = init_mod.handle_config(str(root), "update", schema=init_mod.PROJECT_SCHEMA)
+
+        assert status == "updated"
+        assert config.read_bytes() == b"schema: sdflow-spec-driven\r\n" + original
+
+    def test_update_preserves_schema_inline_comment_and_suffix_bytes(self, tmp_path):
+        root = self._project(tmp_path)
+        original = b"schema: spec-driven  # legacy choice\r\ncontext: keep\r\n"
+        config = root / "openspec" / "config.yaml"
+        config.write_bytes(original)
+
+        status, _ = init_mod.handle_config(str(root), "update", schema=init_mod.PROJECT_SCHEMA)
+
+        assert status == "updated"
+        assert config.read_bytes() == original.replace(
+            b"spec-driven", b"sdflow-spec-driven", 1
+        )
+
     def test_schema_bundle_prunes_orphans(self, tmp_path):
         root = tmp_path / "project"
         dst = root / "openspec" / "schemas" / "sdflow-spec-driven"
@@ -279,6 +312,16 @@ class TestProjectLocalSchema:
         copy_bundle(str(root))
         assert not (dst / "orphan.txt").exists()
         assert (dst / "schema.yaml").is_file()
+
+    def test_schema_bundle_preserves_sibling_schemas(self, tmp_path):
+        root = tmp_path / "project"
+        sibling = root / "openspec" / "schemas" / "consumer-owned"
+        sibling.mkdir(parents=True)
+        (sibling / "schema.yaml").write_text("custom: true\n", encoding="utf-8")
+
+        copy_bundle(str(root))
+
+        assert (sibling / "schema.yaml").read_text(encoding="utf-8") == "custom: true\n"
 
 
 class TestUpdateDev:

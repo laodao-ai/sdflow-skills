@@ -9,5 +9,4 @@
 - [ ] 运行初始化/更新流程后，schema bundle 与 config 已切换到目标状态
 - [ ] 切换后逐 artifact 对比 status 快照，状态完全一致
 - [ ] 一次性 change 验证 `specs` 含 design、`tasks` 含 proposal 的 dependencies，验证完删除
-- [ ] 验证结果记录了 CLI 实际输出，不以静态解析配置文件替代
-
+- [ ] 验证结果记录了 CLI 实际输出，不以静态解析配置文件替代`n

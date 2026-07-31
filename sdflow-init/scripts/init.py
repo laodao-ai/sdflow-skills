@@ -255,9 +255,14 @@ def copy_bundle(root, full=False, include_schema=True):
             shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
     if include_schema and os.path.isdir(SCHEMAS_SRC):
         schemas_dst = os.path.join(root, "openspec", "schemas")
-        if os.path.isdir(schemas_dst):
-            shutil.rmtree(schemas_dst)
-        shutil.copytree(SCHEMAS_SRC, schemas_dst)
+        schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
+        schema_dst = os.path.join(schemas_dst, PROJECT_SCHEMA)
+        if os.path.isdir(schema_src):
+            # 只托管本工具的 fork。消费仓可在 schemas/ 下维护其它 project-local schema，
+            # update 不得删除它们。
+            if os.path.isdir(schema_dst):
+                shutil.rmtree(schema_dst)
+            shutil.copytree(schema_src, schema_dst)
     n = sum(len(fs) for _, _, fs in os.walk(dst))
     schemas_dst = os.path.join(root, "openspec", "schemas")
     if include_schema and os.path.isdir(schemas_dst):
@@ -339,26 +344,42 @@ def _set_schema_key(root, schema):
     cfg = os.path.join(root, "openspec", "config.yaml")
     with open(cfg, "rb") as f:
         raw = f.read()
-    text = raw.decode("utf-8")
-    lines = text.splitlines(keepends=True)
+    lines = raw.splitlines(keepends=True)
     for i, line in enumerate(lines):
-        if re.match(r"^schema:\s*[^#\r\n]*", line):
-            newline = "\r\n" if line.endswith("\r\n") else ("\n" if line.endswith("\n") else "")
-            lines[i] = f"schema: {schema}{newline}"
-            new = "".join(lines).encode("utf-8")
+        # 仅替换 value；冒号后的空白、inline comment、行尾及其它字节原样保留。
+        match = re.match(
+            rb"^(schema:[ \t]*)(?:[^ \t#\r\n]+)?([^\r\n]*)(\r?\n)?$", line
+        )
+        if match:
+            lines[i] = match.group(1) + schema.encode("utf-8") + match.group(2) + (match.group(3) or b"")
+            new = b"".join(lines)
             if new != raw:
-                fd, tmp = tempfile.mkstemp(prefix=".config.", dir=os.path.dirname(cfg))
-                try:
-                    with os.fdopen(fd, "wb") as out:
-                        out.write(new)
-                        out.flush()
-                        os.fsync(out.fileno())
-                    os.replace(tmp, cfg)
-                finally:
-                    if os.path.exists(tmp):
-                        os.remove(tmp)
+                _atomic_write(cfg, new, ".config.")
             return True
-    return False
+
+    newline = b"\r\n" if b"\r\n" in raw else b"\n"
+    insert_at = 3 if raw.startswith(b"\xef\xbb\xbf") else 0
+    if raw[insert_at:].startswith(b"---\r\n"):
+        insert_at += 5
+    elif raw[insert_at:].startswith(b"---\n"):
+        insert_at += 4
+    new = raw[:insert_at] + b"schema: " + schema.encode("utf-8") + newline + raw[insert_at:]
+    _atomic_write(cfg, new, ".config.")
+    return True
+
+
+def _atomic_write(path, content, prefix):
+    """Publish complete bytes atomically from a temporary file in the target directory."""
+    fd, tmp = tempfile.mkstemp(prefix=prefix, dir=os.path.dirname(path))
+    try:
+        with os.fdopen(fd, "wb") as out:
+            out.write(content)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def handle_config(root, mode, schema=None):
@@ -367,7 +388,8 @@ def handle_config(root, mode, schema=None):
     tmpl = os.path.join(BUNDLE_SRC, "config.template.yaml")
     if mode == "update":
         if schema and os.path.exists(cfg) and _schema_from_config(root) != schema:
-            _set_schema_key(root, schema)
+            if not _set_schema_key(root, schema):
+                raise RuntimeError("无法更新 config.yaml 的顶层 schema 键")
             return ("updated", f"update 仅改写 config.yaml 的 schema: → {schema}")
         return ("skip", "update 保持 config.yaml（schema 已是目标值）")
     if os.path.exists(cfg):
@@ -421,11 +443,32 @@ def migrate_changes(root, schema=BUILTIN_SCHEMA):
             continue
         marker = os.path.join(path, ".openspec.yaml")
         if os.path.exists(marker):
+            if _marker_schema(marker) != schema:
+                raise RuntimeError(f"在途 change 的 schema marker 非法或不匹配：{marker}")
             continue
-        with open(marker, "x", encoding="utf-8") as f:
-            f.write(f"schema: {schema}\n")
+        _atomic_write(marker, f"schema: {schema}\n".encode("utf-8"), ".openspec.")
         count += 1
     return count
+
+
+def _marker_schema(marker):
+    """Return the single schema value in a migration marker, or fail loudly."""
+    try:
+        with open(marker, encoding="utf-8", newline="") as f:
+            lines = f.readlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RuntimeError(f"无法读取 schema marker：{marker}") from exc
+
+    values = []
+    for line in lines:
+        match = re.fullmatch(r"schema:[ \t]*([^\s#]+)[ \t]*(?:#.*)?\r?\n?", line)
+        if match:
+            values.append(match.group(1))
+        elif line.strip() and not line.lstrip().startswith("#"):
+            raise RuntimeError(f"schema marker 不可解析：{marker}")
+    if len(values) != 1:
+        raise RuntimeError(f"schema marker 不可解析：{marker}")
+    return values[0]
 
 
 # ── config-lint（mlh-p3-determ-guards Task 2）──────────────────
@@ -941,7 +984,9 @@ def run(root, mode, dev=False):
         # 迁移必须先于 config 切换：补写方读取的是当前旧 schema；颠倒会把在途
         # change 错钉到 fork。任何一个 change 写失败都中止本次 run，避免半迁移。
         if schema_enabled:
-            migrated = migrate_changes(root, _schema_from_config(root))
+            # 迁移 marker 是本 change 的旧内置 schema 锁；后续重跑时 config 已是 fork，
+            # 仍须接受此前成功写入的旧锁，而不是把它误判为异常。
+            migrated = migrate_changes(root, BUILTIN_SCHEMA)
             report.append(f"迁移在途 change：补写 {migrated} 个（仅 proposal.md 且无 .openspec.yaml）")
         else:
             report.append("迁移在途 change：跳过（CLI 版本门未通过）")
@@ -986,7 +1031,7 @@ def run(root, mode, dev=False):
             a = inject(p, *MARK_DOC, sec,
                        header=f"# {fn.split('.')[0]}\n\n本文件为项目级 AI 指令。")
             report.append(f"{fn}：{a}")
-    except (OSError, shutil.Error, ValueError) as e:
+    except (OSError, shutil.Error, ValueError, RuntimeError) as e:
         _die(f"文件系统操作失败：{e}")
 
     print(f"✓ sdflow-init {mode} 完成 @ {os.path.abspath(root)}\n")

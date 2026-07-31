@@ -9,5 +9,4 @@
 - [ ] 四个 artifact 的 `id` 与 `generates` 和内置契约逐字一致
 - [ ] 四个 artifact 的委派标记成对，文案要求停止并提示人敲 `/sdflow-spec`
 - [ ] `specs` 与 `tasks` 的 `requires` 边符合目标依赖图，design instruction 无条件生成
-- [ ] CLI schema validate 通过
-
+- [ ] CLI schema validate 通过`n

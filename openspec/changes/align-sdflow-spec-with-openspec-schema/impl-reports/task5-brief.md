@@ -11,5 +11,4 @@
 - [ ] schema 内容覆盖 id/generates、委派标记和两条 requires 边
 - [ ] update 模式 schema 单键改写覆盖且其余 config 内容 byte-identical
 - [ ] 每条新增测试均先通过定点破坏验证非恒真
-- [ ] 完成安装刷新后全仓 `pytest` 通过
-
+- [ ] 完成安装刷新后全仓 `pytest` 通过`n

@@ -52,5 +52,4 @@ pytest sdflow-init/tests/test_init.py -q
 ## 遗留关注
 
 此前 `pytest sdflow-init/tests -q` 曾在 120 秒内无输出并超时；本轮按用户
-要求只运行定点测试，未将全量测试宣称为通过。
-
+要求只运行定点测试，未将全量测试宣称为通过。`n

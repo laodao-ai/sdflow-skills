@@ -11,5 +11,4 @@
 - [ ] `skipped` 产物不创建文件，且依赖它的阅读清单条目被移除
 - [ ] 阅读清单以 schema requires 为准，并在依赖图不足时使用写死超集 fallback
 - [ ] dependencies 断言接受且验证包含 `id`、`done`、`path`、`description` 的对象列表
-- [ ] 终审 design↔specs 双向核被表述为 schema 已切换时的兜底，而非唯一防线
-
+- [ ] 终审 design↔specs 双向核被表述为 schema 已切换时的兜底，而非唯一防线`n
