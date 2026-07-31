@@ -27,11 +27,11 @@ impl-pipeline: tickets
 
 devenv 侧：sdflow-devenv SKILL.md 增加 test-suites 发现与写入能力段落——运行时调研项目的测试基础设施，推荐 quick/full 分档命令写入 config.yaml 的 test-suites；已有配置时保留不覆盖。
 
-- [ ] config.template.yaml 增 test-suites quick/full 两档示例
-- [ ] sdflow-implement 聚合套件发现契约写入分档消费语义（含 unit 层例外）
-- [ ] sdflow-implement 单一盘面条款改写（中间轮/收口轮分离 + 取消受影响层）
-- [ ] sdflow-devenv SKILL.md 增 test-suites 发现与写入能力段落
-- [ ] 全仓 grep 确认无残存「受影响层」提法
+- [x] config.template.yaml 增 test-suites quick/full 两档示例
+- [x] sdflow-implement 聚合套件发现契约写入分档消费语义（含 unit 层例外）
+- [x] sdflow-implement 单一盘面条款改写（中间轮/收口轮分离 + 取消受影响层）
+- [x] sdflow-devenv SKILL.md 增 test-suites 发现与写入能力段落
+- [x] 全仓 grep 确认无残存「受影响层」提法
 
 ### Task 2: 熔断硬上限与出票闸门（④⑤⑨③）
 

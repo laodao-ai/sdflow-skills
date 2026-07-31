@@ -268,6 +268,14 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 - 每 ticket 显式声明 `Blocked-by:`（阻塞它的其他 ticket 号，逗号分隔，或 `none`）与 `R-ID:`（该
   ticket 对应的需求编号，源于本 change 自身 delta spec 的 Requirement ID 缩写）。
 - 每 ticket 含验收标准复选框（`- [ ] ...`）。
+- 🔴 **验收标准的语法面有界性闸门**〔curb-rework-loop-cost〕：某条验收标准若要求对某种语法面**做
+  机械判定**，出票时先判该语法面能否穷举——**有界**（如 CommonMark fence 变体、自有格式的机器
+  锚行）⇒ 可写为机械门；**无界**（通用编程语言源码、YAML、make、shell）⇒ **MUST NOT 写成机械
+  门**，改写为「让该工具自己回答」（真跑一遍看行为 / 调用该格式的权威解析器），或降级为
+  best-effort 展示且**不作判定依据**。该判据**覆盖伪装形态**——不仅匹配「扫描 / 识别 / 拒绝某
+  形态 / 指纹」这类显式措辞，**还匹配「在某格式文件中定位 / 插入 / 修改某处」**（"只动一个键
+  值"听起来不像解析，但"找到那个键"本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为
+  机械保证**（CLAUDE.md 基准 5：无界语法禁手搓）。
 - **「本票声明的 e2e 场景」的表达方式**〔spec-review-amendment M7〕：验收标准复选框中**标注为
   `[e2e]`** 的条目即该票声明的 e2e 场景（如 `- [ ] [e2e] 用户提交表单后收到确认邮件`）；未标注
   `[e2e]` 的条目不算 e2e。**该票没有任何一条标 `[e2e]` ⇒ 该票无 e2e 场景**——implementer 只跑
@@ -525,6 +533,14 @@ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan
   > 功能）；**One slice at a time**（一个 seam、一个测试、一次最小实现）；**Refactoring is not part
   > of the loop**（重构不属于红→绿循环，属于评审阶段——对应本 skill 的双轴审，不在 implementer 的
   > TDD 循环内完成）。
+  >
+  > 🔴 **该纪律同样适用于"往既有测试文件补一条断言或修改既有断言的期望值/判定逻辑"场景**
+  > 〔curb-rework-loop-cost〕，不限于新写测试：补一条断言或修改既有断言时 MUST 先确认它会
+  > 红——当场破坏被测点、确认该断言失败，再恢复。理由：恒真断言（needle 被别的门满足，或压根
+  > 没有用例走到该行）在写入时无成本可验，事后 review 才被发现，届时已需一整轮返工；修改期望
+  > 值同理——改后仍恒真的断言同样是假绿。**该自检成本只是一次聚焦运行**。「实现验证」收尾票的
+  > 既有 red-before-green 豁免（见上「收尾票与普通票的三处执行契约差异」节）**不受本扩展影响**
+  > ——该票不写产品代码，验收物是证据不是 diff。
 - **完成信号后置双写时序**：implementer **实现期提交 MUST NOT 带 `task<N>-` 完成标签**——普通
   commit 即可，标签延后到该 ticket 双轴审通过后才由执行模式补打；
 - report file 路径契约：implementer **全量报告**写 `{change_dir}/impl-reports/task<N>-<slug>.md`，
@@ -598,6 +614,13 @@ git log --oneline | grep "checkpoint({change}:task<N>-"
   } > {change_dir}/impl-reports/task<N>-review-package.diff
   ```
   dispatch prompt 携带该文件路径，**MUST NOT** 把大 diff 贴进 prompt 正文。
+  - 🔴 **`<before-sha>` 取值按轮次分列**〔curb-rework-loop-cost〕：**首轮**（implementer 首次报
+    `DONE`/`DONE_WITH_CONCERNS`）`<before-sha>` = 该 ticket 起点 SHA，范围不变；**fix 轮**（第 2
+    轮起）`<before-sha>` = **上一轮已审的 `<after-sha>`**（即"上轮已审 SHA..HEAD"），**MUST NOT**
+    重新打包自 ticket 起点以来的累积全量 diff——fix 轮的评审命题是"这次修复对不对"，不是"重新
+    全审这张票"；累积打包会让同一段 diff 被反复读入 reviewer context（实测单包最大达 1,356KB）。
+    **例外**：`review-loop-breaker` 判据 (b) 的仲裁 dispatch **不适用**本增量限定（累积 ticket
+    起点以来全部 diff，见上「熔断规则」节），(b) 优先于本条。
 - reviewer 报出的 `⚠️ cannot-verify-from-diff` 项（需求活在未改动代码里，或要跨 ticket 才能验证）
   由**编排层亲自消解**：直接从盘面（design.md / specs/ / ticket 文本）核验。**预算上界**——需触碰
   **超过 3 个文件**，或盘面**不可直接解答** → 按「确认缺口退回 implementer」处理，**MUST NOT**
@@ -669,7 +692,26 @@ implementer 报 `DONE` / `DONE_WITH_CONCERNS` 后，并行派两个评审子代�
   **熔断规则 `review-loop-breaker`**〔impl-review-fix；本规则独立定义，MUST NOT 引用 `T10-choice`
   标签——本场景语义为「同一发现反复未消解」，与 `T10-choice`「≥2 方案自动选」触发条件不同〕：
 
-  - **触发**：同一发现连续 2 轮 re-review 仍未消解 → 停止循环。
+  - **触发（两条判据并列，命中任一即停）**：
+    - **(a) 同指纹判据**：同一发现连续 2 轮 re-review 仍未消解 → 停止循环。
+    - **(b) 与指纹无关的硬上限**〔curb-rework-loop-cost · adr/0035〕：**同一文件累计被
+      Critical/Important 发现命中 ≥3 轮**时，无论各轮问题指纹是否相同 → 停止循环。此时仲裁的
+      命题是「**这个门 / 这段实现本身该不该存在**」，而非「这一条 finding 是否成立」。
+    - 判据 (b) 存在的理由：(a) 的身份键可被「同一根因每轮换一个语法分支」绕过——每轮指纹不同则
+      计数清零，`MUST NOT 无限循环` 无从兑现。**MUST NOT 试图靠"让指纹算法更能识别同一根因"来
+      替代 (b)**：那要求指纹算法判断"什么是同一个根因"，本身即模型判断，且落在无界语法面上
+      （CLAUDE.md 基准 5）。
+    - **(a)(b) 同时命中时 (b) subsume (a)**〔curb-rework-loop-cost · R-9〕：第 3 轮同时满足两条
+      判据时，只派 (b) 的仲裁（"门本身该不该存在"），**MUST NOT** 同时派两个不同 scope 的仲裁。
+  - **计数窗口 = 全 change 生命周期**〔curb-rework-loop-cost · R-10〕：「同一文件累计命中轮数」
+    跨该 change 的全部 ticket 累计，**MUST NOT** 按单 ticket 独立清零。
+  - **熔断账本持久化**〔curb-rework-loop-cost · R-5〕：编排层在每轮 fix-review 后 MUST 追加一行到
+    `{change_dir}/impl-reports/breaker-ledger.md`，格式 = `轮次 | 文件 | 指纹 | 严重度`。该账本
+    git-tracked，支持跨 context 压缩后恢复计数与事后审计，但**不构成机械门**（编排层仍需每轮
+    自行读取历史行 + 当轮结果比对完成判定，账本只是持久化记录，不是校验脚本）。
+  - **(b) 仲裁 dispatch 的 review package 含该文件 ticket 起点以来的累积 diff**〔curb-rework-loop-cost
+    · R-4〕，不受下文「文件交接」节「fix 轮 review package 只含本轮修复 diff」的增量限定——仲裁
+    命题是「门本身该不该存在」，需要看跨轮修复模式，**(b) 优先于该增量规则**。
   - **身份键跨轮稳定**：判定「是否同一发现」用**同文件 + 规范化问题指纹**，**行号只作定位、
     MUST NOT 作为身份键的组成部分**——修复几乎必然移动行号，用行号当身份会让同一未解决问题被
     认成新发现、轮次计数清零，`MUST NOT 无限循环` 无从兑现。
