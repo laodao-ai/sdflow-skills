@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 117e503ca164c632d4b7b6b3573b0c103d746881
+---
+
 # Spec Review Report · align-sdflow-spec-with-openspec-schema
 
 ## 评审概要
