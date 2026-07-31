@@ -1,7 +1,7 @@
 # Code review · domain 镜 · fix3
 
-审查对象：`align-sdflow-spec-with-openspec-schema`  
-审查盘面：`89e06a8c45aa353e90e92b4b587f46ee6f23be11`  
+审查对象：`align-sdflow-spec-with-openspec-schema`
+审查盘面：`89e06a8c45aa353e90e92b4b587f46ee6f23be11`
 范围：最终 fix2 的 schema 迁移与分发契约。仅只读复审；未修改业务代码或 `code-review-report.md`。
 
 ## 范围与清单
