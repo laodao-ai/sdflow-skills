@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: efd6660e71ba0b76cb52dde1346e68417dea22c6
+---
+
 # Spec Review Report · curb-rework-loop-cost
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
