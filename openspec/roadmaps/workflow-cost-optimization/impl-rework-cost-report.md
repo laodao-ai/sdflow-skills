@@ -370,26 +370,30 @@ r2 的 finding「scanner 只匹配变量名 `event`/`e`，`evt.key !== 'Tab'` �
   已经是同构的负面知识库（❌ 测试计数门槛、❌ negative control、❌ 轮询式连接观测），
   是该对照表的天然载体。
 
-## 对 roadmap P0 基线的改写
+## 与 P0 基线的口径校准（2026-07-31，⑧ 分桶调研收口）
 
 P0 收口结论（`roadmap.md:68`、`design.md:58`、`task-log.md:43`）记录的 18-change 聚合阶段占比：
 
 > spec-review **43%** / impl **29%** / ff 11% / grill 6% / code-review 5% / done 0%
 
-本次实测（活跃墙钟口径）为 **impl 67–77% / spec-review 6–14%——与 P0 基线倒挂**。
+本报告的实测数据为 **impl 67–77% / spec-review 6–14%**，初看与 P0 倒挂。
+经三仓分桶验证（`sdflow-retro` 49 change + mqtt-console / zhws_ops_api checkpoint 时间戳），
+**倒挂的成因是口径不同，P0 基线在可度量口径内未被推翻**：
 
-差异的可解释来源有二，尚未定论：
-1. **口径不同**：P0 含人类门 elapsed（`design.md:58` 明记 spec-review 43% 由人类门主导），
-   本次剔除 >90min 间隔、只算活跃墙钟。
-2. **管线代际不同**：本次采样的 change 走 tickets 实现管线（每票双轴审 + fix 循环），
-   P0 采样的 18 个 change 多数在该管线引入之前。
+| 口径 | 度量 | impl 占比 | spec-review 占比 |
+|---|---|---|---|
+| P0（retro elapsed，含人类门） | 阶段墙钟 | 29% | 43% |
+| 本报告（活跃墙钟，剔除 >90min 间隔） | 编码活跃时段 | 67–77% | 6–14% |
+| ⑧ 验证（retro elapsed，tickets 管线 8 change） | 阶段墙钟 | **23%** (P50=20%) | **36%** |
 
-下游判断需要复核：`design.md` D11「**墙钟真杠杆归 Leg3**」与 `requirements.md:64`
-「P2 主指标 = token（墙钟撬不动）」都建立在「impl 只占 29%」之上。
-若 tickets 管线下 impl 稳定在 70% 量级，**成本重心已迁到实现期，Leg2/Leg3 优先级需重排**。
+差异成因：
+1. **口径不同**：本报告剔除 >90min 人类间隔后 spec-review（人类门主导）被压缩、impl 膨胀——这是同一现实的两个投影，不矛盾。
+2. **度量维度不同**：报告 §「实测数据」的 impl/test/report **行数比** 67–77% 不是阶段墙钟比，是 `--numstat` 代码行产出比。行数口径下 impl-report 证据文档（2.10–5.45x）是真实异常，但它说的是「每行实现代码附带多少行报告」，不是「impl 阶段占总墙钟多少」。
 
-⚠️ 16 个 change 的样本已足以说明**返工普遍**，但阶段占比的倒挂涉及口径差异，
-正确动作仍是用 `sdflow-retro` 按管线代际分桶重跑聚合，而非直接改写 P0（见清单 ⑦）。
+**结论（三条，详见 `task-log.md` 同日条目）**：
+1. P0 基线未倒挂——roadmap 优先级不需要重排，D11「墙钟真杠杆归 Leg3」不变。
+2. 返工乘数效应**仓内差异显著**：sdflow-skills fix 均=12.0（手搓解析器）、mqtt-console 10.2（界面验证重链）、zhws_ops_api 3.8（最健康，2/6 零返工）——病因在特定仓的特定机制，非管线本身的缺陷。
+3. 消费仓 retro 盲区（评审阶段不落 checkpoint）不影响本清单效果——①②④⑤⑥⑨ 在 SKILL.md 层面改动，对三仓等效生效。
 
 ## 改动清单
 
@@ -551,32 +555,30 @@ TypeError: <lambda>() got an unexpected keyword argument 'schema'
 
 ## 落地分组
 
-### 已完成（本仓 · 快速改，未开 change）
+### ✅ 已完成（change `curb-rework-loop-cost`，2026-07-31 merge `c558109`）
 
-| 项 | 改动 | 验证 |
+| 项 | 交付物 | 承载 |
 |---|---|---|
-| ⑩ | `sdflow-implement/SKILL.md:616-621` Standards 轴治理规则增至三条，新增 **Tests are code**（测试文件同受 Fowler 清单约束，尤其 Duplicated Code / Speculative Generality；reviewer MUST NOT 直接删测试，只报 finding） | 全仓 pytest 绿 |
-| — | `sdflow-init/tests/test_runtime_gitignore.py:22,27` 修复上述签名漂移回归（stub 改宽松签名，与同文件 `inject` 那行一致） | 8 failed → 0；全仓 **2996 passed** |
+| ① | 单一盘面→中间轮/收口轮分离（`sdflow-implement/SKILL.md` 第 7 条） | change |
+| ② | test-suites 成本分档 quick/full（聚合套件发现契约 + config.template.yaml + devenv 发现能力） | change |
+| ③ | review-package fix 轮增量化（上轮已审 SHA..HEAD） | change |
+| ④ | 熔断硬上限（判据 b 同文件≥3 轮 + subsume + 全 change 窗口 + breaker-ledger） | change |
+| ⑤ | 出票语法面有界性闸门（含伪装形态 + 回指对照表） | change |
+| ⑥ | code-review 复审边界（硬上限 1 轮 + 文档分叉消除） | change |
+| ⑨ | red-before-green 扩展到补/改断言 | change |
+| ⑩ | Standards 轴覆盖测试文件冗余检查 | 报告期间直接修 |
+| ⑫ | 格式解析手段对照表（verification-patterns.md §8） | change |
+| ⑧ | P0 基线口径校准（三仓分桶分析，确认未倒挂） | 调研，见上节 |
+| — | sdflow-init/tests 签名漂移回归修复（8 failed → 0） | 报告期间直接修 |
 
-### 建议开一个 change（本仓）
+### 剩余（未开）
 
-**主题（内聚）**：实现/评审循环的成本治理。
-
-| 项 | 内容 |
-|---|---|
-| ① | 单一盘面：每轮全量 → 收口一次全量（**核心**） |
-| ② | `test-suites` 成本分档 + 显式配置（与 ① 同批，理由见上节） |
-| ③ | `review-package.diff` 增量化 |
-| ④ | `sdflow-implement` loop-breaker 补与指纹无关的硬上限 |
-| ⑤ | 出票闸门：禁手搓解析器型验收标准 |
-| ⑥ | `sdflow-code-review` 补 fix 循环熔断（该侧现为零上限） |
-| ⑨ | red-before-green 扩展到「往既有测试补断言」 |
-
-**⑪（YAML 界外 fail-loud）单独评估**：范围已收窄到只治 YAML 一面，
-但它改的是 5 个脚本的解析行为 + 可能新增单一源分发机制，blast radius 与上述 prose 契约改动
-**不同量级**。建议先落上表七项（它们共享同一主题且互相咬合），⑪ 视精力单开。
-
-**⑫（devenv 对照表）** 归入「工具」一节，可并入本 change 或单开。
+| 项 | 内容 | 位置 | 优先级 |
+|---|---|---|---|
+| ⑪ | 共享子集 YAML 解析器 + 界外 fail-loud | 本仓 5 个脚本 | 中（独立 change，blast radius 大） |
+| ⑦ | mqtt-console 补 `test-suites` 配置 | 该仓 config.yaml | 中（② 落地后的消费端，5 分钟） |
+| ⑬ | mqtt-console 静态门改用 `svelte/compiler` 的 `parse()` | 该仓测试文件 | 低 |
+| — | 格式解析手段体检工具（`sdflow-devenv` 子命令） | 本仓 | 低（依赖 ⑫ 已落地） |
 
 ### 其他仓（建议，由用户自行处理）
 

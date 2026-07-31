@@ -11,6 +11,39 @@
 
 ---
 
+## 2026-07-31
+
+### [⑧ 口径校准] 三仓分桶分析——P0 基线未倒挂，roadmap 优先级不变
+- **状态**: ✅ 完成（`/opsx:explore`，对 `impl-rework-cost-report.md` §「对 P0 基线的改写」的验证性调研）
+- **数据源**: 本仓 `retro/report.md`（49 change 含 8 tickets 管线）+ mqtt-console / zhws_ops_api 归档 checkpoint 时间戳
+- **结论（三条）**:
+  1. **P0 基线在可度量口径内未倒挂**：retro 口径（elapsed，含人类门）下 tickets 管线 impl 占比 P50=20%，低于 P0 的 29%；spec-review 仍为最大头（36%）。报告的 67–77% 是代码行产出比（`--numstat` 行数口径），不是阶段墙钟比——两组数字度量不同维度，不矛盾。
+  2. **roadmap 优先级不需要重排**：「Leg3 降轮次是墙钟主杠杆」结论不变。D11/D12 决策不受影响。
+  3. **消费仓 retro 盲区**：mqtt-console / zhws_ops_api 没有 retro 报告、评审阶段不落 checkpoint（review commit 标签数=0）→ retro 看不到它们的评审墙钟。但 curb-rework-loop-cost 的 ①②④⑤⑥⑨ 是 SKILL.md 层面改动，对三仓等效生效，不需分仓数据来验证效果。
+- **仓间返工差异**:
+  - sdflow-skills: fix 均=12.0 / 中位=8，最重（手搓解析器 × 零依赖约束）
+  - mqtt-console: fix 均=10.2 / 中位=13（界面验证重链 + 手搓 JS 解析器）
+  - zhws_ops_api: fix 均=3.8 / 中位=6，最健康（2/6 零返工）
+- **落点**: `impl-rework-cost-report.md` §「对 P0 基线的改写」改写为「口径校准」+ 落地分组更新已完成项
+
+### [清单 ①②③④⑤⑥⑨⑫] curb-rework-loop-cost 交付（实现期返工成本治理）
+- **状态**: ✅ 完成（change `curb-rework-loop-cost`，archive + merge `c558109`）
+- **交付**（报告清单 13 项中的 8 项 + 报告期间直接修的 1 项）:
+  - ① 单一盘面→中间轮/收口轮分离（核心：全量运行从 N× 降到 1×）
+  - ② test-suites 成本分档（quick/full 双形状 + devenv 发现能力）
+  - ③ review-package 增量化（fix 轮只打包上轮已审 SHA..HEAD）
+  - ④ 熔断硬上限（判据 b 同文件≥3 轮 + subsume + 全 change 窗口 + breaker-ledger）
+  - ⑤ 出票语法面有界性闸门（含伪装形态 + 回指对照表）
+  - ⑥ code-review 复审边界（硬上限 1 轮 + 文档分叉消除）
+  - ⑨ red-before-green 扩展到补/改断言
+  - ⑩ Standards 轴覆盖测试文件冗余检查（报告期间直接修）
+  - ⑫ 格式解析手段对照表（verification-patterns.md §8）
+- **未交付**: ⑪ YAML 界外 fail-loud（proposal Non-Goals，blast radius 不同量级，单开）
+- **管线**: tickets（5 任务: 配置分档+scope → 熔断+闸门 → code-review → 对照表 → 验证收尾）
+- **对 roadmap 的影响**: 报告清单 7 项 prose 契约改动 + 1 项知识库扩展一次交付；剩余项 ⑦⑧⑪⑬ + 体检工具
+
+---
+
 ## 2026-07-16
 
 ### [阶段 2 / 完成态对账] P2 核心交付，验收与后台尾部未闭合

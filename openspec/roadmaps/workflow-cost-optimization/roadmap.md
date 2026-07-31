@@ -1,5 +1,6 @@
 # workflow 成本优化 实施路线图
 
+> 版本：v6（2026-07-31，实现期返工成本治理交付 + P0 基线口径校准；curb-rework-loop-cost merged c558109）
 > 版本：v5（2026-07-16，完成态对账：P2 核心随 `add-codex-host-support` 交付；token 验收与 P2b 仍待闭合）
 > 版本：v3（2026-07-06，P0 基线收口：`sdflow-retro` 18-change 实测 → P2 墙钟杠杆证伪、重定位 token play、Leg3 提为墙钟主杠杆、砍镜闸门定案）
 > 版本：v2（2026-07-06，吸收 plan-eng-review 交叉审：codex 冷审 30 条去重后 9 组采纳）
@@ -20,6 +21,7 @@
 | **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | ◐ **核心已交付**（`add-codex-host-support` / `a09afb0`）：双机队矩阵、resolver、两审档位注入与 fail-closed；待 token/墙钟验收证据 + P2b 后台小尾巴 |
 | **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
 | **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | —（已交付） | ✅ consolidation-plan 重划 + 大扫除批 3 硬 MUST + 聚合上限 + issue 级 Leg1 路径守卫（change `batch-triage-strategy` merged `725caf3`；规则**本仓-local**、发布 deferred，见阶段 4 状态段） |
+| **P5** · 实现期返工成本治理 | Leg 2+3 交叉 | —（已交付） | ✅ `curb-rework-loop-cost` merged `c558109`：①②③ 降 impl 每轮固定开销 + ④⑤⑥ 压轮次 + ⑨⑫ 编写成本治理；P0 口径校准确认基线未倒挂（⑧） |
 
 > 每阶段开独立 OpenSpec 变更（`implement-workflow-cost-optimization-pN` 或语义名），完成归档后进下一个。
 > **并行 caveat（交叉审 #29）**：P0/P1/P4 触及互斥文件可并行；**P2/P3 均改 `sdflow-spec-review`/`sdflow-code-review` 的 SKILL.md，MUST 串行**（否则并行改同批规则→审查上下文错位 + merge 冲突）。开并行 leg 前先核文件集是否相交。
@@ -182,10 +184,13 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
                           │          ▼
                           └──▶ P3 (接地镜流水线, P2 后更稳)
   P4 (Leg3 批次) ──独立──▶ ✅ 已交付（batch-triage-strategy merged 725caf3）
+  P5 (Leg2+3 交叉) ─独立─▶ ✅ 已交付（curb-rework-loop-cost merged c558109）
+                            + ⑧ P0 口径校准 ✅（基线未倒挂）
 ```
 
 - **P0 是 P2/P3 的前置**（无基线不立项；且 P0 双峰数据可能直接告诉你 P2 只对小 change 值得）。
 - **P2/P3 同改两评审 SKILL.md → MUST 串行**（并行 caveat #29）。
 - P4 触及 `consolidation-plan.md`/`ff-generation-constraints.md`，与 P2/P3 文件互斥 → 可与之并行。
+- **P5 已交付**：触及 `sdflow-implement/SKILL.md`、`sdflow-code-review/SKILL.md`、`sdflow-devenv/SKILL.md`（与 P2/P3 有文件交集，但 P5 先落地不冲突）。
 
-**建议次序（v5）：先闭合 P2 的 token/墙钟验收证据，并对 P2b 作实现或显式 defer；随后再开 P3。** P2/P3 同改两评审 SKILL.md，MUST 串行；在 P2 仍为部分完成时直接开 P3，会混淆收益归因与回归定位。
+**建议次序（v6）：先闭合 P2 的 token/墙钟验收证据，并对 P2b 作实现或显式 defer；随后再开 P3。** P2/P3 同改两评审 SKILL.md，MUST 串行；在 P2 仍为部分完成时直接开 P3，会混淆收益归因与回归定位。P5 的 ⑧ 已确认 P0 基线未倒挂，此建议次序不变。
