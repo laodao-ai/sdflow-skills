@@ -365,6 +365,20 @@ class TestProjectLocalSchema:
             b"# local note\r\n\r\n--- # local config\r\nschema: sdflow-spec-driven\r\ncontext: keep\r\n"
         )
 
+    def test_update_inserts_schema_after_yaml_directives_and_document_start(self, tmp_path):
+        root = self._project(tmp_path)
+        original = b"%YAML 1.2\r\n%TAG !e! tag:example.com,2020:\r\n--- # local config\r\ncontext: keep\r\n"
+        config = root / "openspec" / "config.yaml"
+        config.write_bytes(original)
+
+        status, _ = init_mod.handle_config(str(root), "update", schema=init_mod.PROJECT_SCHEMA)
+
+        assert status == "updated"
+        assert config.read_bytes() == (
+            b"%YAML 1.2\r\n%TAG !e! tag:example.com,2020:\r\n--- # local config\r\n"
+            b"schema: sdflow-spec-driven\r\ncontext: keep\r\n"
+        )
+
     def test_update_rewrites_bom_crlf_schema_once_and_preserves_other_bytes(self, tmp_path):
         root = self._project(tmp_path)
         original = b"\xef\xbb\xbfschema: spec-driven  # legacy choice\r\ncontext: keep\r\n"

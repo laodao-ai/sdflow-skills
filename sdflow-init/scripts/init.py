@@ -413,7 +413,7 @@ def _set_schema_key(root, schema):
     offset = 0
     for candidate in lines:
         stripped = candidate.strip()
-        if not stripped or stripped.startswith(b"#"):
+        if not stripped or stripped.startswith(b"#") or stripped.startswith(b"%"):
             offset += len(candidate)
             continue
         if re.match(rb"^---(?:[ \t]*(?:#.*)?)?(?:\r?\n)?$", candidate):
