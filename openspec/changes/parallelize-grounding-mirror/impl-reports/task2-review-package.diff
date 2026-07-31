@@ -1,0 +1,149 @@
+# Review package: beb00a6..c1ec61c639c224a07f181efbba67bfa70510fce8
+
+## Commits
+c1ec61c impl(task2): Step2 fan-out 编排拆为两段 dispatch 时序
+
+## Files changed
+ .../impl-reports/task2-brief.md                    | 17 ++++++++++
+ .../impl-reports/task2-fanout-dispatch.md          | 37 ++++++++++++++++++++++
+ sdflow-spec-review/SKILL.md                        | 18 +++++++++--
+ 3 files changed, 69 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-brief.md b/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-brief.md
+new file mode 100644
+index 0000000..f475c78
+--- /dev/null
++++ b/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-brief.md
+@@ -0,0 +1,17 @@
++### Task 2: Step2 fan-out 编排拆为两段 dispatch
++
++**Blocked-by:** 1
++**R-ID:** R1
++
++将 `sdflow-spec-review/SKILL.md` 第 232 行附近的 Step2 fan-out 编排段拆为两段 dispatch 描述：
++- 接地镜在 Step1 启动时（能力探针通过后）即 dispatch，与 autoplan 并行
++- 领域镜 + 对抗镜在 Step1 checkpoint 完成后 dispatch
++- 能力探针明确：在 Step1 开始时即跑（而非 Step2 前），探针结果对所有镜共用（一次探针，不重复）
++- Step3 合并逻辑不变——接地镜 findings 无论何时完成都进同一合并池
++
++验收标准：
++- [ ] fan-out 段清晰描述两段 dispatch 的时序关系
++- [ ] 能力探针时机明确为 Step1 开始时（而非 Step2 前），一次探针共用
++- [ ] 接地镜 dispatch 时序 = Step1 启动后（能力探针通过后）
++- [ ] 领域/对抗镜 dispatch 时序 = Step1 checkpoint 后
++
+diff --git a/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-fanout-dispatch.md b/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-fanout-dispatch.md
+new file mode 100644
+index 0000000..ef25622
+--- /dev/null
++++ b/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-fanout-dispatch.md
+@@ -0,0 +1,37 @@
++# Task 2 impl report: Step2 fan-out 编排拆为两段 dispatch
++
++## 改动面
++
++仅 `sdflow-spec-review/SKILL.md`，两处条款改写（均在「第二步：规划镜头 + 并行 fan-out 子代理」内，Task 1 已改写的 :197 串行纪律条款之后）：
++
++1. **能力探针段（原 :207）**：
++   - 头部措辞从「fan-out 前 MUST 先跑」改为「Step1 开始时跑一次，非 Step2 前才跑」。
++   - 新增一句显式说明：本轮全程只探测一次——早于接地镜 dispatch①（Step1 起始即派），也早于领域/对抗镜 dispatch②（Step1 checkpoint 后派）；探针结果对两段 dispatch 的全部镜（domain/adversarial/grounding）共用，MUST NOT 因分两段 dispatch 而重复探测。
++   - 探针内部判定逻辑（`$SDFLOW_HOST` 三分支、诚实边界、`unavailable` 处置、落锚格式）原样不动——brief 未要求改动这部分机制。
++
++2. **fan-out 段（原 :232 表格上方）**：
++   - 原标题「fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）」已不准确（现在不是一条消息全部派出，而是两条消息分两段派出），改为「两段 dispatch（各段各自一条消息内派出该段全部镜……）」。
++   - 表格前插入 ASCII 时序图，显式描述三段时序：
++     - `Step1 开始（能力探针通过后，与 autoplan 同时起跑）` → dispatch① 接地镜
++     - `Step1 checkpoint 完成后（autoplan amendment 已落盘）` → dispatch② 领域镜 + 对抗镜
++     - `Step3 合并去重（不变）` → 接地镜 findings（dispatch①）与领域/对抗镜 findings（dispatch②）+ outside-voice 同池合并裁决，不因完成先后单独处理或降权
++   - **fan-out 表格本身（三行：领域镜/对抗镜/接地镜的数量·职责·建议档位）原样保留，未加时序列**——按 brief 明确要求「表格本身只列镜的职责和档位，不涉及时序」。
++   - 表格下方「档位与缺省见『模型选择』节」这句之后追加一句指引，把读者引回上方时序图对应各镜的 dispatch 时点，避免表格与时序图脱节。
++
++## 未改动的面（确认一致性）
++
++- `git diff --stat` 只命中 `sdflow-spec-review/SKILL.md` 一个文件（另有 tickets.md 的 Task 1 验收框勾选，非本次改动，Task 1 完成时已由 checkpoint 打上）。
++- 全文 grep `fan-out 前|一条消息内全部派出|Step2 前` 确认改写后无残留的旧措辞引用。
++- Step3 合并/裁决段（:249 起）未改动——与 design.md「不动的面」一致：接地镜 findings 无论何时完成都进同一合并池，本次只在两段 dispatch 时序图里重申这一点，未改 Step3 正文的合并去重逻辑本身。
++- `fanout-capability` 锚格式、`lens-metric` 体系、`anchor_lint` 均未触碰。
++
++## 验收标准自查
++
++- [x] fan-out 段清晰描述两段 dispatch 的时序关系（ASCII 时序图 + 标题改写）
++- [x] 能力探针时机明确为 Step1 开始时（而非 Step2 前），一次探针共用
++- [x] 接地镜 dispatch 时序 = Step1 启动后（能力探针通过后）
++- [x] 领域/对抗镜 dispatch 时序 = Step1 checkpoint 后
++
++## 验证
++
++`git diff sdflow-spec-review/SKILL.md` 已核验，改动面与上述描述一致，无越界改动。
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index 612b34d..f9d83ec 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -197,21 +197,21 @@ description: >
+ > **串行纪律〔T20〕分治**：**领域镜 / 对抗镜 MUST 待 Step1 checkpoint 完成后才 fan-out**（多镜评审对象须含 autoplan amendment——它们依赖 autoplan 对 design/specs 的修订）；**接地镜 MAY 与 Step1 并行起跑**（读当前盘面的 design/specs + 真实代码核验代码事实，不依赖 autoplan 的设计判断产出）。autoplan amendment 后 SHALL NOT 自动补跑接地镜（amendment 新增的代码事实引用由 `sdflow-code-review` 的 grounding/history 镜兜底覆盖）。
+ 
+ **规划镜头（主 session）**：
+ 
+ - 按 `{change_dir}` 实际涉及的栈 + 内容判命中的 TG/领域 → 决定开哪几个**领域镜**（backend·go / embedded·ml307c·esp32 / frontend）。
+ - 按风险定**对抗镜**数量：普通 2 个，高风险 3 个。固定 1 个**接地镜**（机械读码核验）。
+ - 只审命中的；config 已固化的结构/占位/一致性（T/S）不进任何镜。
+ - **防重叠（1.4）**：autoplan 已含 eng 镜 → 本 skill 领域镜**不重复跑 eng 视角**，只跑本项目 `spec-checklists/domains` 里 autoplan 不碰的 R 项，别让两层重复计数。
+ - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（能力探针、fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+ 
+-**能力探针（fan-out 前 MUST 先跑，语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：
++**能力探针（Step1 开始时跑一次，非 Step2 前才跑；语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：本轮全程只探测这一次——早于接地镜的 dispatch①（Step1 起始即派）、也早于领域/对抗镜的 dispatch②（Step1 checkpoint 后派），探针结果对两段 dispatch 的全部镜（domain/adversarial/grounding）共用，MUST NOT 因分两段 dispatch 而重复探测。
+ 
+ - `$SDFLOW_HOST="claude"` → 免探，恒 `subagents="available"`。
+ - `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——第零步已判定）。
+ - `$SDFLOW_HOST="codex"` → **MUST** 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，
+   不做任何实质工作）；派不出/机制报错 → `subagents="unavailable"`；派出且收到哨兵 → `subagents="available"`。
+   **Codex 子代理授权见 AGENTS.md「Codex 子代理授权」段**（多镜 fan-out + model-tiers 构成显式 task-specific reason）。
+ - **诚实边界（MUST 显著登记，§0.0）**：探针结果由**主 session 自己**观察并落锚——「是否真派出了一次子代理、
+   是否真收到回复」无可信脚本捕获路径，`anchor_lint` 的一致性 lint 只核**锚行文法自洽**（`unavailable`
+   却报多镜的自相矛盾），**核不了它是否对应一次真 spawn**。MUST NOT 声称这是机械门。
+ - **`subagents="unavailable"` 处置（MUST）**：本轮**缩 roster 到主 session 实际独立完成的镜**（不再假装
+@@ -222,29 +222,41 @@ description: >
+ 
+   `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->`
+ 
+   `mirrors=` MUST 由本 skill 在 fan-out 决策落定时**直接写本轮实际派出/独立完成的镜清单**（去重、逗号
+   分隔，token ∈ `{domain,adversarial,grounding}`，`—`=未 fan-out）——**不经 emitter/lens-metric、不读
+   config.metrics**（GC-3，判据 always-on 于 metrics 开关，不受门控）。
+ - **残余诚实边界（§0.0，无信号⇒语义层）**：一致性 lint 只拦「机制死却报多镜」的**自相矛盾**；「机制活但
+   主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
+   **MUST NOT 声称"头号假绿（多镜静默退化）已被事前机械拦截"**。
+ 
+-**fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
++**两段 dispatch（各段各自一条消息内派出该段全部镜，各子代理 fresh context、无用户交互、返回结构化 findings）**：
++
++```
++Step1 开始（能力探针通过后，与 autoplan 同时起跑）
++└── dispatch① 接地镜 —— 读当前盘面 design/specs + 真实代码核验代码事实，不等 autoplan
++
++Step1 checkpoint 完成后（autoplan amendment 已落盘）
++└── dispatch② 领域镜 + 对抗镜 —— 评审对象须含 autoplan amendment，依赖其对 design/specs 的修订
++
++Step3 合并去重（不变）
++└── 接地镜 findings（dispatch①）与领域镜/对抗镜 findings（dispatch②）+ outside-voice 同池合并裁决——
++    无论 dispatch① 早于或晚于 dispatch② 完成，一律进同一合并池，不因先到而单独处理、不因晚到而降权
++```
+ 
+ | 镜 | 数量 | 干什么 | 建议档位 |
+ |----|------|--------|-----------|
+ | **领域镜** | 每命中领域 1 个 | 读 `{change_dir}` design/specs + 相关真实代码，逐条过 `spec-checklists/domains/<栈>` 的 **R 项**，列违反/存疑项（带文件:行证据） | 中档（判断） |
+ | **对抗镜** | 2-3 | 各从一个**不同角度**「证明这份 spec 会在实现期爆炸」：隐藏假设 / 失败模式 / 乐观估计与边界。默认 refuted=true，找不到爆点才放过 | 中档（对抗推理） |
+ | **接地镜** | 1 | grep/读真实代码，核验 spec 里**所有代码事实**（函数名/字段/API 路径/schema）是否真实存在且一致，列不符项 | 弱档（机械） |
+ 
+-> 档位与缺省见「模型选择」节。
++> 档位与缺省见「模型选择」节。上表只列各镜的职责/档位，不涉及时序——dispatch 时点见上方两段 dispatch 时序图（接地镜 = dispatch①，领域镜/对抗镜 = dispatch②）。
+ 
+ > 每个子代理 prompt 必须自带：`{change_dir}` 路径、它负责的清单/角度、"返回结构化 findings 列表（每条带：问题 / 证据 file:line / **置信度(高/中/低)** / 严重度 / 建议），**不要 AskUserQuestion**"。
+ >
+ > **🔴 每个子代理 prompt MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——见传播纪律。
+ > **设计审是通则 ③ 的最高发区**：子代理眼前只有「现在的代码/现在的设计」，漏带这三条，它**必然**把「现状不是这么做的」当成「这个设计该缩水」。**评审的基准是目标态。**
+ 
+ ## 第三步：综合 + 对抗裁决 → 决策登记进报告（主 session · 强档）
+ 
+ - 🔴 **进合并去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的合并去重。
+ - **合并去重**：把 autoplan findings（Step1）+ 各镜 findings 汇成一池，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，折叠到 canonical lens 后供第四步落锚时导出各镜`独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。

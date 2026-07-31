@@ -1,0 +1,92 @@
+# Review package (fix round): c1ec61c..8f8cf860d047f7127287313a78c3346f9efaa130
+
+## Commits
+8f8cf86 fix(spec-review): Step1 加前向指针——并行踢出接地镜
+
+## Files changed
+ .../impl-reports/task2-fanout-dispatch-fix1.md     | 47 ++++++++++++++++++++++
+ sdflow-spec-review/SKILL.md                        |  3 ++
+ 2 files changed, 50 insertions(+)
+
+## Diff
+diff --git a/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-fanout-dispatch-fix1.md b/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-fanout-dispatch-fix1.md
+new file mode 100644
+index 0000000..48d48d4
+--- /dev/null
++++ b/openspec/changes/parallelize-grounding-mirror/impl-reports/task2-fanout-dispatch-fix1.md
+@@ -0,0 +1,47 @@
++# Task 2 · Standards 轴 Finding 1 修复报告
++
++## Finding
++
++Step1 段（`sdflow-spec-review/SKILL.md` :182-193 附近）通篇未提及需在其内部同时踢出能力探针和
++接地镜 dispatch。「能力探针」和「dispatch① 接地镜」的条款物理位置在 Step2 标题（:195）之下，
++但声明应在「Step1 开始时」执行。按文档字面顺序执行的模型会先走完 Step1 再读到这些指令——此时
++并行窗口已过。
++
++## 修复内容
++
++在 `sdflow-spec-review/SKILL.md` 第一步标题（原 :182）之后、原第 1 条编号列表之前，插入一条前向
++指针 blockquote（原 :183 后新增 3 行，现文件 :184-186）：
++
++```
++> **并行前向指针**：进入本步的同时，MUST 按下方第二步「能力探针」与「两段 dispatch」的
++> dispatch① 条款并行踢出接地镜（不等本步跑完）——具体条款见第二步，此处不重复。
++```
++
++## 核验
++
++- Read 确认原文件 :182-193 只有标题 + 编号列表 1-6，无任何前向指针 → 复现 Finding 描述的问题。
++- `git diff sdflow-spec-review/SKILL.md`：仅新增上述 3 行（1 空行 + 2 行 blockquote 正文），
++  未改动其他任何字符；未重述 Step2「能力探针」「dispatch①」的详细条款内容，仅指路。
++
++```diff
++@@ -181,6 +181,9 @@
++ 
++ ## 第一步：autoplan 子步（广审·原生执行，吃其 findings）
++ 
+++> **并行前向指针**：进入本步的同时，MUST 按下方第二步「能力探针」与「两段 dispatch」的
+++> dispatch① 条款并行踢出接地镜（不等本步跑完）——具体条款见第二步，此处不重复。
+++
++ 1. **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 autoplan（其指令直接进主 session 执行，MUST NOT 派子代理读其 SKILL.md 转述模拟）。autoplan 跑自己的流程，prompt 不注入；其内部 AskUserQuestion 人类门（premise 确认 / 最终批准）按 G2/C5 适配：不弹窗，连同其自动决策一并登记进本评审报告「决策登记区」，设计门一次拍板。
++ 2. **主 session 落盘〔R5〕**：autoplan 原生机制只写 plan file，无「写任意路径」能力——执行完由**主 session** 汇总其结论 Write 落盘 `{change_dir}/gstack-review.md`（改动标 `[gstack-amendment]`），文件头 + 本报告 Step1 段各写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`；native 声明附一句侧信道佐证（如 autoplan 双声真实调用事实/运行痕迹）。
++ 3. **降级路径**：autoplan skill 不可用 → 子代理模拟广审 + 报告显式标注「模拟广审（降级模式）」+ 锚行 `mode="simulated"`，MUST NOT 伪装原生。
++```
++
++## 未改动范围
++
++- 未改动 Step2「能力探针」「两段 dispatch」段落本身（:195 起）——指针只指路，不重述条款。
++- 未改动其余任何行。
++
++## 状态
++
++- 修复已落盘，`git diff` 已核验只含预期的 3 行新增。
++- 验收复选框 / checkpoint 标签按信号权威表不由本子代理打，留待双轴审通过后由执行模式补打。
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index f9d83ec..8a0fbf7 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -174,20 +174,23 @@ description: >
+ 
+ <!-- sdflow:tier-resolution:start v1 -->
+ **MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
+ <!-- sdflow:tier-resolution:end -->
+ 
+ （与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、第二步能力探针同类；空值/unknown 分家判据同下方「skew 探测」的 fail-loud 精神——三处均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
+ 4. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探两条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。两条均探到 ⇒ 正常进入第一步。
+ 
+ ## 第一步：autoplan 子步（广审·原生执行，吃其 findings）
+ 
++> **并行前向指针**：进入本步的同时，MUST 按下方第二步「能力探针」与「两段 dispatch」的
++> dispatch① 条款并行踢出接地镜（不等本步跑完）——具体条款见第二步，此处不重复。
++
+ 1. **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 autoplan（其指令直接进主 session 执行，MUST NOT 派子代理读其 SKILL.md 转述模拟）。autoplan 跑自己的流程，prompt 不注入；其内部 AskUserQuestion 人类门（premise 确认 / 最终批准）按 G2/C5 适配：不弹窗，连同其自动决策一并登记进本评审报告「决策登记区」，设计门一次拍板。
+ 2. **主 session 落盘〔R5〕**：autoplan 原生机制只写 plan file，无「写任意路径」能力——执行完由**主 session** 汇总其结论 Write 落盘 `{change_dir}/gstack-review.md`（改动标 `[gstack-amendment]`），文件头 + 本报告 Step1 段各写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`；native 声明附一句侧信道佐证（如 autoplan 双声真实调用事实/运行痕迹）。
+ 3. **降级路径**：autoplan skill 不可用 → 子代理模拟广审 + 报告显式标注「模拟广审（降级模式）」+ 锚行 `mode="simulated"`，MUST NOT 伪装原生。
+ 4. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
+ 5. **outside-voice 复用守卫（确定性脚本门·R2）〔mlh-p4 T80〕**：复用 `gstack-review.md` 的 codex outside-voice findings 前，调守卫脚本出 reason_code——三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）的机械判定归脚本，复用/回落的**编排**归你：
+    `python3 $RULES_ROOT/tools/outside_voice_guard.py --review-path {change_dir}/gstack-review.md --change-dir {change_dir}`——脚本纯 stdlib、无 subprocess、新鲜度用源文件 fs-mtime 直比（排除评审产物自身，捕获未提交编辑；不调 git），归约出唯一 reason_code（`none|file-missing|section-not-found|zero-findings|stale|simulated-source`）落 stdout；`none` = 三前置全过、退出码 0；其余码退出码非 0（坏输入如 `step1-broad-review` 锚缺失/mode 非枚举 → stderr `[outside_voice_guard] FAIL` + 无 stdout，遵其判定 MUST NOT 静默吞）。
+    - **reason_code=`none`（退出 0）** → 复用不重开（避免双 codex），报告记「复用 autoplan outside voice N 条」。
+    - **其余 reason_code** → 打印带该原因码的显式降级日志，**回落自跑设计 outside voice**（按下方「helper 调用协议」，site="design-voice"）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（checkpoint、进 Step2 fan-out），结果在 Step3 barrier 处 collect**；诱因为 `file-missing`（文件整体缺失）时措辞 MUST 声明「仅补偿 outside-voice 切片，广审其余镜仍缺」。
+    > **C2 依赖 P2b 交叉引用〔3.2〕**：C2"复用"成立仅当 autoplan 每次都跑（P2b）；autoplan 未跑的变更本 skill MUST 自跑设计 outside voice（即守卫回落路径），不得因"复用了一个没产生的东西"漏掉整层。
+ 6. **checkpoint 提交（P2c 第 1 次）**：`~/.sdflow/hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。

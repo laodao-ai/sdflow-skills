@@ -26,9 +26,9 @@ impl-pipeline: tickets
 - 删除该条款末尾的兜底条款「若历史运行已并行…Step3 须增量核对」——并行已是接地镜的默认行为，不再是需要额外注明的例外
 
 验收标准：
-- [ ] 串行纪律条款明确区分接地镜（MAY 并行）与领域/对抗镜（MUST 等 checkpoint）
-- [ ] 兜底条款已删除
-- [ ] 条款措辞与 spec delta 的 Scenario「领域/对抗镜等待 autoplan 先行」和 Scenario「接地镜与 autoplan 并行」一致
+- [x] 串行纪律条款明确区分接地镜（MAY 并行）与领域/对抗镜（MUST 等 checkpoint）
+- [x] 兜底条款已删除
+- [x] 条款措辞与 spec delta 的 Scenario「领域/对抗镜等待 autoplan 先行」和 Scenario「接地镜与 autoplan 并行」一致
 
 ### Task 2: Step2 fan-out 编排拆为两段 dispatch
 
