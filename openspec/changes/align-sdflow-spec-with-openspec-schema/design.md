@@ -191,7 +191,8 @@ fork schema 是**跨项目共享的契约定义**。边界纪律沿用 bundle �
 3. 本仓 dogfood：跑 `sdflow-init`，核对本仓 `openspec/changes/*/` 在途 change 的 status 快照**切换前后一致**。
 4. `sdflow-spec/SKILL.md` 相位 C 改动（glob 分支、剥离、`skipped`、断言、超集表退役）。
 5. 下游随下次 `sdflow-init update` 自然切换；未过版本门者保持现状。
-- **回滚**：`openspec/config.yaml` 与 `config.template.yaml` 的 `schema:` 改回 `spec-driven`，删 `openspec/schemas/`；已按新 schema 建的 change 因 `.openspec.yaml` 已钉死而**不受影响**（它们会继续按 fork 名解析——故回滚时 MUST 保留 schema 目录直至这些 change 归档，或同步改其 `.openspec.yaml`）。
+   🔴 **[spec-review-amendment R1]**：`handle_config()` 现有 update 模式对 `config.yaml` 整段跳过（`init.py:311-316`），本步需补设计说明 `schema:` 键的机械改写机制——见 spec-review-report.md R1。
+- **回滚**（**[spec-review-amendment R3]** 重写为无歧义顺序）：① 枚举所有在途 change 的 `.openspec.yaml` 中 `schema` 字段 ② 仍指向 fork 名的逐个改回 `spec-driven`（或等待归档） ③ 确认零引用后删 `openspec/schemas/` 目录 ④ 改 `config.yaml` 与 `config.template.yaml` 的 `schema:` 回 `spec-driven`。已归档的 change 不受影响。
 
 ## Open Questions
 

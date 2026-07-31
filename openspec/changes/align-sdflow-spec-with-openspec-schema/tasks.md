@@ -17,12 +17,13 @@
 
 ## 2. sdflow-init：版本门、迁移补写、下发〔SW-SCHEMA〕
 
-- [ ] 2.1 **P0** 加 CLI 版本门：`openspec --version` < 1.7.0 ⇒ 不铺 schema、`config.yaml` 的 `schema:` 保持内置值、fail-loud 输出一行原因
-- [ ] 2.2 **P0** 加迁移补写：扫 `openspec/changes/*/`（**仅在途，不扫 `changes/archive/`**），缺 `.openspec.yaml` 者补写当前实际 schema 名；幂等
-- [ ] 2.3 **P0** 固化顺序「先补写、后切 config」，并在代码注释写明颠倒的后果（补写方会读到新 schema 名）
-- [ ] 2.4 **P1** schema 目录纳入 `copy_bundle`，采用与 `tools/` 同构的**整删重拷**收敛语义
+- [ ] 2.1 **P0** 加 CLI 版本门：`openspec --version` < 1.7.0 ⇒ 不铺 schema、`config.yaml` 的 `schema:` 保持内置值、fail-loud 输出一行原因。**[spec-review-amendment R6]** 版本比较 MUST 按 semver 数值元组比较（MUST NOT 字符串字典序），CLI 命令不存在/执行异常 → fail-closed 按不满足处理
+- [ ] 2.2 **P0** 加迁移补写：扫 `openspec/changes/*/`（**仅在途，不扫 `changes/archive/`**），缺 `.openspec.yaml` 者补写当前实际 schema 名；幂等。**[spec-review-amendment R15]** 补写前 MUST 检查 `proposal.md` 存在，跳过非 change 目录
+- [ ] 2.3 **P0** 固化顺序「先补写、后切 config」，并在代码注释写明颠倒的后果（补写方会读到新 schema 名）。**[spec-review-amendment R10]** 与 `retire_hooks` 等的 fail-safe 风格**相反**：本步任一 change 补写失败 SHALL 中止整个 run（不得继续到 config 切换）
+- [ ] 2.4 **P1** schema 目录纳入 `copy_bundle`，采用与 `tools/` 同构的**整删重拷**收敛语义。**[spec-review-amendment R7]** `copy_bundle()` 硬编码的 src/dst 不覆盖 `schemas/`——需新增拷贝路径或函数，MUST 采用 rmtree-first 整删重拷（非 `dirs_exist_ok=True` 合并）
 - [ ] 2.5 **P1** `sdflow-init/assets/workflow/config.template.yaml` 的 `schema:` 指向 `sdflow-spec-driven`
 - [ ] 2.6 **P1** 版本门与迁移补写各输出一行结论，进入既有动作汇总
+- [ ] 2.7 **P0** **[spec-review-amendment R1]** 已有 `config.yaml` 的消费仓在 update 模式下 `schema:` 键的机械改写——`handle_config()` 当前 update 模式整段跳过，需补一段窄范围 patch 逻辑只动 `schema:` 单键值（改源 + 不碰其余内容 + 配套测试）
 
 ## 3. sdflow-spec 相位 C 对齐〔SA-05 · SA-17〕
 
@@ -44,13 +45,14 @@
 
 ## 5. 测试〔SA-05 · SA-17 · SW-SCHEMA〕
 
-- [ ] 5.1 **P0** `sdflow-init/tests/` 加版本门用例：<1.7.0 不铺 + 报一行 + config 未被改写
-- [ ] 5.2 **P0** 加迁移补写用例：缺 `.openspec.yaml` 的在途 change 被补写；已有者 no-op；`changes/archive/` 不被触碰
-- [ ] 5.3 **P0** 加**顺序**用例：断言补写发生在 config 改写之前（顺序颠倒即红）
+- [ ] 5.1 **P0** `sdflow-init/tests/` 加版本门用例：<1.7.0 不铺 + 报一行 + config 未被改写。**[spec-review-amendment R6]** 加 `1.10.0 >= 1.7.0` 正例 + CLI 缺失/非数字输出 → fail-closed 用例
+- [ ] 5.2 **P0** 加迁移补写用例：缺 `.openspec.yaml` 的在途 change 被补写；已有者 no-op；`changes/archive/` 不被触碰。**[spec-review-amendment R15]** 加 stray 目录（无 `proposal.md`）不被触碰用例
+- [ ] 5.3 **P0** 加**顺序**用例：断言补写发生在 config 改写之前（顺序颠倒即红）。**[spec-review-amendment R10]** 加「单项补写失败 → config 未被切换」用例
 - [ ] 5.4 **P1** 加 `copy_bundle` 整删重拷用例：权威源删文件后消费仓不残留孤儿
 - [ ] 5.5 **P1** schema 内容契约用例：四个 `id` 与 `generates` 与内置一致；委派标记成对；`requires` 两条边符合 1.3
 - [ ] 5.6 **P0** 每条新增用例先跑「定点破坏 → 必须红」验证非恒真（承本仓既有反恒真锚纪律）
 - [ ] 5.7 **P0** 全仓 `pytest` 绿
+- [ ] 5.8 **P0** **[spec-review-amendment R1]** 加 update 模式下 `schema:` 键被改写的用例 + 只改该行其余 config 内容 byte-identical
 
 ## 6. 文档与收尾
 
