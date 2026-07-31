@@ -229,12 +229,8 @@ def copy_bundle(root, full=False, include_schema=True):
         return set()
 
     schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
-    schema_asset = os.path.join(schema_src, "schema.yaml")
-    if include_schema and not os.path.isfile(schema_asset):
-        raise RuntimeError(
-            "project-local schema 权威资产缺失："
-            f"{schema_asset}"
-        )
+    if include_schema:
+        _validate_schema_authority(schema_src)
 
     dst = os.path.join(root, "openspec", "workflow")
     if full:
@@ -277,6 +273,44 @@ def copy_bundle(root, full=False, include_schema=True):
     if include_schema and os.path.isdir(schemas_dst):
         n += sum(len(fs) for _, _, fs in os.walk(schemas_dst))
     return dst, n
+
+
+def _validate_schema_authority(schema_src):
+    """Fail before replacing the managed fork when its source is incomplete."""
+    schema_asset = os.path.join(schema_src, "schema.yaml")
+    if not os.path.isfile(schema_asset):
+        raise RuntimeError(
+            "project-local schema 权威资产缺失："
+            f"{schema_asset}"
+        )
+
+    try:
+        with open(schema_asset, encoding="utf-8") as f:
+            schema_text = f.read()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RuntimeError(
+            "project-local schema 权威资产不可读取："
+            f"{schema_asset}"
+        ) from exc
+
+    missing = []
+    template_root = os.path.normpath(os.path.join(schema_src, "templates"))
+    for match in re.finditer(r"(?m)^\s*template:\s*([^#\r\n]+?)\s*(?:#.*)?$", schema_text):
+        template = match.group(1).strip().strip("\"'")
+        template_path = os.path.normpath(os.path.join(template_root, template))
+        try:
+            inside_templates = os.path.commonpath([template_root, template_path]) == template_root
+        except ValueError:
+            inside_templates = False
+        if not template or not inside_templates or not os.path.isfile(template_path):
+            missing.append(template or "<empty template reference>")
+
+    if missing:
+        rendered = ", ".join(f"templates/{template}" for template in missing)
+        raise RuntimeError(
+            "project-local schema 权威资产缺失模板："
+            f"{rendered}"
+        )
 
 
 RULE_MARKERS = ("workflow.md", "spec-checklists", "code-checklists")

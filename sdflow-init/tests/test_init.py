@@ -4,6 +4,7 @@ Run with: python3 -m pytest sdflow-init/tests/test_init.py -v
 """
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -418,6 +419,29 @@ class TestProjectLocalSchema:
 
         assert exc.value.code == 1
         assert config.read_bytes() == original
+
+    def test_update_missing_referenced_template_does_not_prune_or_switch_config(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        config = root / "openspec" / "config.yaml"
+        original_config = config.read_bytes()
+        authority = tmp_path / "schema-authority"
+        source_schema = Path(init_mod.SCHEMAS_SRC) / init_mod.PROJECT_SCHEMA
+        shutil.copytree(source_schema, authority / init_mod.PROJECT_SCHEMA)
+        (authority / init_mod.PROJECT_SCHEMA / "templates" / "spec.md").unlink()
+        monkeypatch.setattr(init_mod, "SCHEMAS_SRC", str(authority))
+        self._version(monkeypatch)
+
+        managed = root / "openspec" / "schemas" / init_mod.PROJECT_SCHEMA
+        managed.mkdir(parents=True)
+        managed_schema = managed / "schema.yaml"
+        managed_schema.write_text("name: old-managed-fork\n", encoding="utf-8")
+
+        with pytest.raises(SystemExit) as exc:
+            init_mod.run(str(root), "update")
+
+        assert exc.value.code == 1
+        assert config.read_bytes() == original_config
+        assert managed_schema.read_text(encoding="utf-8") == "name: old-managed-fork\n"
 
 
 class TestUpdateDev:

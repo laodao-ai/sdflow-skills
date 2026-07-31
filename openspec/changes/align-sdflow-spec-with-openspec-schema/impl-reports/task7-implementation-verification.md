@@ -4,7 +4,7 @@
 
 - change：`align-sdflow-spec-with-openspec-schema`
 - 本报告只处理 Task 7；未修改 `tickets.md`，未勾选 Task 7，未创建 checkpoint。
-- 所有本轮变更相关层级命令均在同一最终 SHA `5db85c8ce3562f07665006fd55c66320656498b5` 上执行。
+- 所有本轮变更相关层级命令均在同一最终 SHA `46d8d27f88d179b1ebf0deeb0f75b9f2ab2c2ee5` 上执行。
 - Task 7 前置门：`ship_gate.py` 返回 `CONTINUE_IMPL`，`done_tasks=["1","2","3","4","5","6"]`。
 
 ## 单元层
@@ -14,7 +14,7 @@
 | 命令 | 退出码 | 结果 | SHA |
 |---|---:|---|---|
 | `timeout 90s python -m pytest -q` | `—` | **本轮未重跑**：用户已明确批准全量 pytest 超时/失败后跳过；此前已实测退出码 `124`，不宣称全仓绿色。 | `—` |
-| `python -m pytest -q sdflow-init/tests/test_init.py sdflow-init/tests/test_task5_regression.py sdflow-init/tests/test_init_contract_sync.py hack/tests/test_task3_phase_c_contract.py hack/tests/test_sdflow_spec_resident_contract.py hack/tests/test_canonical_entry_sync.py` | `0` | **通过**：`123 passed, 1 skipped`（13.34s）。 | `5db85c8` |
+| `python -m pytest -q sdflow-init/tests/test_init.py sdflow-init/tests/test_task5_regression.py sdflow-init/tests/test_init_contract_sync.py hack/tests/test_task3_phase_c_contract.py hack/tests/test_sdflow_spec_resident_contract.py hack/tests/test_canonical_entry_sync.py` | `0` | **通过**：`124 passed, 1 skipped`（19.12s）。 | `46d8d27` |
 
 单元层结论：变更相关单元/契约聚合通过；全仓 pytest 聚合未取得通过证据，保留退出码 `124` 的真实状态。
 
@@ -24,10 +24,10 @@
 
 | 命令 | 退出码 | 结果 | SHA |
 |---|---:|---|---|
-| `openspec schema validate sdflow-spec-driven` | `0` | **通过**：schema valid。 | `5db85c8` |
-| `openspec status --change align-sdflow-spec-with-openspec-schema --json` | `0` | **通过**：真实在途 change status 可读取。 | `5db85c8` |
-| `openspec instructions specs --change align-sdflow-spec-with-openspec-schema --json` | `0` | **通过**：真实 `specs` instruction payload 可生成。 | `5db85c8` |
-| `openspec instructions tasks --change align-sdflow-spec-with-openspec-schema --json` | `0` | **通过**：真实 `tasks` instruction payload 可生成。 | `5db85c8` |
+| `openspec schema validate sdflow-spec-driven` | `0` | **通过**：schema valid。 | `46d8d27` |
+| `openspec status --change align-sdflow-spec-with-openspec-schema --json` | `0` | **通过**：真实在途 change status 可读取。 | `46d8d27` |
+| `openspec instructions specs --change align-sdflow-spec-with-openspec-schema --json` | `0` | **通过**：真实 `specs` instruction payload 可生成。 | `46d8d27` |
+| `openspec instructions tasks --change align-sdflow-spec-with-openspec-schema --json` | `0` | **通过**：真实 `tasks` instruction payload 可生成。 | `46d8d27` |
 
 集成层结论：真实 CLI/schema/status/instructions 聚合通过，退出码均为 `0`。
 
