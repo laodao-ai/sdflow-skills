@@ -204,7 +204,7 @@ description: >
 - **防重叠（1.4）**：autoplan 已含 eng 镜 → 本 skill 领域镜**不重复跑 eng 视角**，只跑本项目 `spec-checklists/domains` 里 autoplan 不碰的 R 项，别让两层重复计数。
 - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（能力探针、fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
 
-**能力探针（fan-out 前 MUST 先跑，语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：
+**能力探针（Step1 开始时跑一次，非 Step2 前才跑；语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：本轮全程只探测这一次——早于接地镜的 dispatch①（Step1 起始即派）、也早于领域/对抗镜的 dispatch②（Step1 checkpoint 后派），探针结果对两段 dispatch 的全部镜（domain/adversarial/grounding）共用，MUST NOT 因分两段 dispatch 而重复探测。
 
 - `$SDFLOW_HOST="claude"` → 免探，恒 `subagents="available"`。
 - `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——第零步已判定）。
@@ -229,7 +229,19 @@ description: >
   主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
   **MUST NOT 声称"头号假绿（多镜静默退化）已被事前机械拦截"**。
 
-**fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+**两段 dispatch（各段各自一条消息内派出该段全部镜，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+
+```
+Step1 开始（能力探针通过后，与 autoplan 同时起跑）
+└── dispatch① 接地镜 —— 读当前盘面 design/specs + 真实代码核验代码事实，不等 autoplan
+
+Step1 checkpoint 完成后（autoplan amendment 已落盘）
+└── dispatch② 领域镜 + 对抗镜 —— 评审对象须含 autoplan amendment，依赖其对 design/specs 的修订
+
+Step3 合并去重（不变）
+└── 接地镜 findings（dispatch①）与领域镜/对抗镜 findings（dispatch②）+ outside-voice 同池合并裁决——
+    无论 dispatch① 早于或晚于 dispatch② 完成，一律进同一合并池，不因先到而单独处理、不因晚到而降权
+```
 
 | 镜 | 数量 | 干什么 | 建议档位 |
 |----|------|--------|-----------|
@@ -237,7 +249,7 @@ description: >
 | **对抗镜** | 2-3 | 各从一个**不同角度**「证明这份 spec 会在实现期爆炸」：隐藏假设 / 失败模式 / 乐观估计与边界。默认 refuted=true，找不到爆点才放过 | 中档（对抗推理） |
 | **接地镜** | 1 | grep/读真实代码，核验 spec 里**所有代码事实**（函数名/字段/API 路径/schema）是否真实存在且一致，列不符项 | 弱档（机械） |
 
-> 档位与缺省见「模型选择」节。
+> 档位与缺省见「模型选择」节。上表只列各镜的职责/档位，不涉及时序——dispatch 时点见上方两段 dispatch 时序图（接地镜 = dispatch①，领域镜/对抗镜 = dispatch②）。
 
 > 每个子代理 prompt 必须自带：`{change_dir}` 路径、它负责的清单/角度、"返回结构化 findings 列表（每条带：问题 / 证据 file:line / **置信度(高/中/低)** / 严重度 / 建议），**不要 AskUserQuestion**"。
 >
