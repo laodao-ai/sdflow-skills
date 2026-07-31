@@ -1,0 +1,167 @@
+# Review package: 453da65..eb51fc05ae4ab12fef4f433e5e3049d328455607
+
+## Commits
+eb51fc0 verify(spec-review): Task 3 验证一致性 + 修正 spec delta 措辞
+
+## Files changed
+ .../impl-reports/task3-brief.md                    | 19 ++++++
+ .../impl-reports/task3-verify-consistency.md       | 73 ++++++++++++++++++++++
+ .../specs/spec-workflow/spec.md                    |  2 +-
+ .../parallelize-grounding-mirror/tickets.md        |  8 +--
+ 4 files changed, 97 insertions(+), 5 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/parallelize-grounding-mirror/impl-reports/task3-brief.md b/openspec/changes/parallelize-grounding-mirror/impl-reports/task3-brief.md
+new file mode 100644
+index 0000000..a8cf7fe
+--- /dev/null
++++ b/openspec/changes/parallelize-grounding-mirror/impl-reports/task3-brief.md
+@@ -0,0 +1,19 @@
++### Task 3: 验证一致性
++
++**Blocked-by:** 2
++**R-ID:** R1
++
++通读改写后的 `sdflow-spec-review/SKILL.md`，逐条对照 spec delta 的 4 个 Scenario 确认一致：
++1. Scenario「阶段二收尾」：编排器输出一份已去重合并的报告
++2. Scenario「领域/对抗镜等待 autoplan 先行」：MUST 等 checkpoint
++3. Scenario「接地镜与 autoplan 并行」：MAY 同一时刻 dispatch
++4. Scenario「amendment 后不补跑接地镜」：SHALL NOT 补跑
++
++同时确认 anchor_lint / lens-metric / fanout-capability 锚语义不受影响（通读确认，无机械测试需新增）。
++
++验收标准：
++- [ ] 4 个 Scenario 逐条确认与 SKILL.md 条款一致
++- [ ] anchor_lint 锚行语义不受影响（mirrors= 仍包含 grounding）
++- [ ] lens-metric 体系不受影响（接地镜仍产 findings、仍被 emitter 归约）
++- [ ] fanout-capability 锚行语义不受影响（记的是「跑了哪些镜」，不是「何时跑的」）
++
+diff --git a/openspec/changes/parallelize-grounding-mirror/impl-reports/task3-verify-consistency.md b/openspec/changes/parallelize-grounding-mirror/impl-reports/task3-verify-consistency.md
+new file mode 100644
+index 0000000..5ed222a
+--- /dev/null
++++ b/openspec/changes/parallelize-grounding-mirror/impl-reports/task3-verify-consistency.md
+@@ -0,0 +1,73 @@
++# Task 3：验证一致性——核验报告
++
++## 核验范围
++
++对照 spec delta（`specs/spec-workflow/spec.md`）Requirement「阶段二产出单一合并报告」下的 4 个 Scenario，
++逐条核验改写后的 `sdflow-spec-review/SKILL.md`（Step1 第 169-197 行、Step2 第 198-260 行、Step3 第 262-274 行）是否一致。
++
++## 4 个 Scenario 逐条核验
++
++1. **Scenario「阶段二收尾」**（spec.md:11-13，输出一份已去重合并、含决策登记区的报告）
++   ✅ 一致。SKILL.md Step3 第 265 行「合并去重：把 autoplan findings（Step1）+ 各镜 findings 汇成一池，**去重**」；
++   第四步第 290 行「写 `{change_dir}/spec-review-report.md`：**决策登记区**（自动决策/需拍板/已裁掉）+ 各镜 findings
++   + 裁决」——单一报告文件、含决策登记区、已去重合并，与 Scenario 描述完全对应。
++
++2. **Scenario「领域/对抗镜等待 autoplan 先行」**（spec.md:15-17，Step2 规划镜头时 Step1 未 checkpoint ⇒ 领域镜/对抗镜 MUST 等待）
++   ✅ 一致。SKILL.md 第 200 行「**串行纪律〔T20〕分治**：**领域镜 / 对抗镜 MUST 待 Step1 checkpoint 完成后才
++   fan-out**（多镜评审对象须含 autoplan amendment——它们依赖 autoplan 对 design/specs 的修订）」；两段 dispatch
++   图（第 241-242 行）「Step1 checkpoint 完成后（autoplan amendment 已落盘）└── dispatch② 领域镜 + 对抗镜」，
++   措辞与 MUST 强度均对应。
++
++3. **Scenario「接地镜与 autoplan 并行」**（spec.md:19-21，Step1 启动时接地镜 MAY 同一时刻 dispatch，findings 在
++   Step3 与其它镜同等裁决）
++   ✅ 一致。SKILL.md 第 200 行「**接地镜 MAY 与 Step1 并行起跑**（读当前盘面的 design/specs + 真实代码核验代码
++   事实，不依赖 autoplan 的设计判断产出）」；第 184-185 行 Step1 开头的「并行前向指针」重申「进入本步的同时，
++   MUST 按…dispatch① 条款并行踢出接地镜（不等本步跑完）」；两段 dispatch 图第 238-239 行「Step1 开始…
++   dispatch① 接地镜——读当前盘面 design/specs + 真实代码核验代码事实，不等 autoplan」；第 244-247 行明确
++   「接地镜 findings（dispatch①）与领域镜/对抗镜 findings（dispatch②）+ outside-voice 同池合并裁决——无论
++   dispatch① 早于或晚于 dispatch② 完成，一律进同一合并池，不因先到而单独处理、不因晚到而降权」，与
++   Scenario「其 findings 在 Step3 合并池与其它镜同等裁决」逐字对应。
++
++4. **Scenario「amendment 后不补跑接地镜」**（spec.md:23-25，autoplan 产 amendment 且涉及新增代码事实引用 ⇒
++   接地镜 SHALL NOT 被要求补跑，缺口由 sdflow-code-review 的 grounding/history 镜兜底）
++   ✅ 一致。SKILL.md 第 200 行「autoplan amendment 后 SHALL NOT 自动补跑接地镜（amendment 新增的代码事实引用由
++   `sdflow-code-review` 的 grounding/history 镜兜底覆盖）」——用词与强度（SHALL NOT）、兜底方均对应。
++
++## 3 类锚语义核验（通读确认，无机械测试需新增）
++
++- **`anchor_lint` 锚行语义（mirrors= 仍包含 grounding）**：✅ 未受影响。SKILL.md 第 226 行
++  `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable"
++  mirrors="domain,adversarial,grounding|—" -->`，token 集合仍为 `{domain,adversarial,grounding}`，
++  本次并行化改动的是**何时** dispatch 各镜，不改**记录哪些镜**这条语义，故该锚定义未动。
++
++- **`lens-metric` 体系（接地镜仍产 findings、仍被 emitter 归约）**：✅ 未受影响。SKILL.md 第 291 行
++  roster 构造「`{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/grounding/broad +
++  outside-voice 每个调用过的 site）…]`」——grounding 仍是 roster 行键之一，findings 仍统一汇入 Step3
++  合并池（第 265 行）后经同一 `lens_metric_emit.py` 归约；接地镜产 findings 的能力与归约路径不因
++  dispatch 时点提前而改变。
++
++- **`fanout-capability` 锚行（记的是「跑了哪些镜」，不是「何时跑的」）**：✅ 未受影响，核验结论同上第一条。
++  该锚的字段设计（host/subagents/mirrors）本身不含时序维度，两段 dispatch 时序信息只体现在正文的
++  「两段 dispatch」小节（第 235-247 行）与「串行纪律」措辞（第 200 行），不落入此锚——本次改动未触碰
++  锚的 schema，语义边界保持原样。
++
++## 额外发现并修正：spec.md 内部措辞不一致（Task 1 Spec 轴 Minor）
++
++核验确认属实：`spec.md:9`（Requirement 主文）写「由 `sdflow-code-review` 的 grounding/history 镜兜底覆盖」，
++而 `spec.md:25`（Scenario「amendment 后不补跑接地镜」）原文只写「该覆盖缺口由 sdflow-code-review 的
++grounding 镜在实现完成后兜底」，缺 `/history`。
++
++交叉核实 `sdflow-code-review/SKILL.md`：该 skill 明确自述「**代码即 ground truth**（无接地镜，换历史镜 +
++置信过滤）」（第 9、597 行），即 sdflow-code-review 阶段**没有**名为 grounding 的镜，实际承担代码事实
++兜底职责的是历史镜（`历史镜`，第 260 行：`git blame` 改动行 + 读历史 PR 评论）。故 `spec.md:9` 主文的
++`grounding/history` 措辞是准确的（用 `/history` 标注"grounding 职能在下游由 history 镜承接"），`spec.md:25`
++遗漏 `/history` 属真实不一致。
++
++**已修正**：`spec.md:25` 由「grounding 镜」改为「grounding/history 镜」，与主文（spec.md:9）及
++SKILL.md 第 200 行原有措辞（三处口径已一致）对齐。
++
++## 结论
++
++4 个 Scenario 与改写后的 `sdflow-spec-review/SKILL.md` 逐条一致；3 类锚语义（anchor_lint mirrors=、
++lens-metric 体系、fanout-capability）均未受本次并行化改动影响。发现并修正 spec.md 内部一处措辞不一致
++（Scenario 25 行补 `/history`）。Task 3 验收标准 4 项全部核验通过。
+diff --git a/openspec/changes/parallelize-grounding-mirror/specs/spec-workflow/spec.md b/openspec/changes/parallelize-grounding-mirror/specs/spec-workflow/spec.md
+index 59819e2..e40a77b 100644
+--- a/openspec/changes/parallelize-grounding-mirror/specs/spec-workflow/spec.md
++++ b/openspec/changes/parallelize-grounding-mirror/specs/spec-workflow/spec.md
+@@ -15,11 +15,11 @@
+ #### Scenario: 领域/对抗镜等待 autoplan 先行
+ - **WHEN** sdflow-spec-review 执行 Step2 规划镜头时 Step1 autoplan 尚未 checkpoint
+ - **THEN** 领域镜与对抗镜 MUST 等待其完成后再 fan-out（评审对象须含 amendment）
+ 
+ #### Scenario: 接地镜与 autoplan 并行
+ - **WHEN** sdflow-spec-review 启动 Step1 autoplan
+ - **THEN** 接地镜 MAY 在同一时刻 dispatch，读当前盘面的 design/specs + 真实代码核验代码事实；其 findings 在 Step3 合并池与其它镜同等裁决
+ 
+ #### Scenario: amendment 后不补跑接地镜
+ - **WHEN** autoplan 产出 `[gstack-amendment]` 且 amendment 涉及新增代码事实引用
+-- **THEN** 接地镜 SHALL NOT 被要求补跑——该覆盖缺口由 sdflow-code-review 的 grounding 镜在实现完成后兜底
++- **THEN** 接地镜 SHALL NOT 被要求补跑——该覆盖缺口由 sdflow-code-review 的 grounding/history 镜在实现完成后兜底
+diff --git a/openspec/changes/parallelize-grounding-mirror/tickets.md b/openspec/changes/parallelize-grounding-mirror/tickets.md
+index 4eccf47..b6d338c 100644
+--- a/openspec/changes/parallelize-grounding-mirror/tickets.md
++++ b/openspec/changes/parallelize-grounding-mirror/tickets.md
+@@ -35,24 +35,24 @@ impl-pipeline: tickets
+ **Blocked-by:** 1
+ **R-ID:** R1
+ 
+ 将 `sdflow-spec-review/SKILL.md` 第 232 行附近的 Step2 fan-out 编排段拆为两段 dispatch 描述：
+ - 接地镜在 Step1 启动时（能力探针通过后）即 dispatch，与 autoplan 并行
+ - 领域镜 + 对抗镜在 Step1 checkpoint 完成后 dispatch
+ - 能力探针明确：在 Step1 开始时即跑（而非 Step2 前），探针结果对所有镜共用（一次探针，不重复）
+ - Step3 合并逻辑不变——接地镜 findings 无论何时完成都进同一合并池
+ 
+ 验收标准：
+-- [ ] fan-out 段清晰描述两段 dispatch 的时序关系
+-- [ ] 能力探针时机明确为 Step1 开始时（而非 Step2 前），一次探针共用
+-- [ ] 接地镜 dispatch 时序 = Step1 启动后（能力探针通过后）
+-- [ ] 领域/对抗镜 dispatch 时序 = Step1 checkpoint 后
++- [x] fan-out 段清晰描述两段 dispatch 的时序关系
++- [x] 能力探针时机明确为 Step1 开始时（而非 Step2 前），一次探针共用
++- [x] 接地镜 dispatch 时序 = Step1 启动后（能力探针通过后）
++- [x] 领域/对抗镜 dispatch 时序 = Step1 checkpoint 后
+ 
+ ### Task 3: 验证一致性
+ 
+ **Blocked-by:** 2
+ **R-ID:** R1
+ 
+ 通读改写后的 `sdflow-spec-review/SKILL.md`，逐条对照 spec delta 的 4 个 Scenario 确认一致：
+ 1. Scenario「阶段二收尾」：编排器输出一份已去重合并的报告
+ 2. Scenario「领域/对抗镜等待 autoplan 先行」：MUST 等 checkpoint
+ 3. Scenario「接地镜与 autoplan 并行」：MAY 同一时刻 dispatch
