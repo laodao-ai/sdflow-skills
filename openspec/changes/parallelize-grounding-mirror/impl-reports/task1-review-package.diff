@@ -1,0 +1,98 @@
+# Review package: 7474cb7..4c46aefb3e3ebe32d737451ae1f2f0e4f8efd6b7
+
+## Commits
+4c46aef feat(spec-review): Task 1 串行纪律分治——接地镜 MAY 并行
+
+## Files changed
+ .../impl-reports/task1-brief.md                    | 15 ++++++++++
+ .../impl-reports/task1-serial-discipline.md        | 32 ++++++++++++++++++++++
+ sdflow-spec-review/SKILL.md                        |  2 +-
+ 3 files changed, 48 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/openspec/changes/parallelize-grounding-mirror/impl-reports/task1-brief.md b/openspec/changes/parallelize-grounding-mirror/impl-reports/task1-brief.md
+new file mode 100644
+index 0000000..17faf40
+--- /dev/null
++++ b/openspec/changes/parallelize-grounding-mirror/impl-reports/task1-brief.md
+@@ -0,0 +1,15 @@
++### Task 1: 串行纪律条款改写——分治接地镜与领域/对抗镜
++
++**Blocked-by:** none
++**R-ID:** R1
++
++将 `sdflow-spec-review/SKILL.md` 第 197 行附近的串行纪律条款〔T20〕从「全部镜 MUST 等 Step1 完成」改为分治：
++- 接地镜：MAY 与 Step1 并行起跑（读当前盘面的 design/specs + 真实代码核验代码事实）
++- 领域/对抗镜：MUST 仍等 Step1 checkpoint 完成（它们依赖 autoplan amendment 对 design/specs 的修订）
++- 删除该条款末尾的兜底条款「若历史运行已并行…Step3 须增量核对」——并行已是接地镜的默认行为，不再是需要额外注明的例外
++
++验收标准：
++- [ ] 串行纪律条款明确区分接地镜（MAY 并行）与领域/对抗镜（MUST 等 checkpoint）
++- [ ] 兜底条款已删除
++- [ ] 条款措辞与 spec delta 的 Scenario「领域/对抗镜等待 autoplan 先行」和 Scenario「接地镜与 autoplan 并行」一致
++
+diff --git a/openspec/changes/parallelize-grounding-mirror/impl-reports/task1-serial-discipline.md b/openspec/changes/parallelize-grounding-mirror/impl-reports/task1-serial-discipline.md
+new file mode 100644
+index 0000000..3546e1d
+--- /dev/null
++++ b/openspec/changes/parallelize-grounding-mirror/impl-reports/task1-serial-discipline.md
+@@ -0,0 +1,32 @@
++# Task 1 实现报告：串行纪律条款改写——分治接地镜与领域/对抗镜
++
++## 改动
++
++`sdflow-spec-review/SKILL.md:197`（第二步开篇的串行纪律〔T20〕引用块），单处替换：
++
++**改前**：
++
++> **串行纪律〔T20〕**：**MUST 待 Step1 checkpoint 完成后才 fan-out，禁止与 Step1 并行**（多镜评审对象须含 autoplan amendment）；若历史运行已并行，Step3 裁决须 diff autoplan amendment 增量核对并在报告注明。
++
++**改后**：
++
++> **串行纪律〔T20〕分治**：**领域镜 / 对抗镜 MUST 待 Step1 checkpoint 完成后才 fan-out**（多镜评审对象须含 autoplan amendment——它们依赖 autoplan 对 design/specs 的修订）；**接地镜 MAY 与 Step1 并行起跑**（读当前盘面的 design/specs + 真实代码核验代码事实，不依赖 autoplan 的设计判断产出）。autoplan amendment 后 SHALL NOT 自动补跑接地镜（amendment 新增的代码事实引用由 `sdflow-code-review` 的 grounding/history 镜兜底覆盖）。
++
++## 验收标准核对
++
++- [x] 串行纪律条款明确区分接地镜（MAY 并行）与领域/对抗镜（MUST 等 checkpoint）——改后条款用粗体分句写清两类镜的时序规则。
++- [x] 兜底条款已删除——「若历史运行已并行，Step3 裁决须 diff autoplan amendment 增量核对并在报告注明」整句已移除，未保留任何变体。
++- [x] 条款措辞与 spec delta 的 Scenario 一致——逐条对照 `openspec/changes/parallelize-grounding-mirror/specs/spec-workflow/spec.md`：
++  - Scenario「领域/对抗镜等待 autoplan 先行」（MUST 等待 checkpoint 完成后再 fan-out，评审对象须含 amendment）⇔ 改后条款前半句原样对应。
++  - Scenario「接地镜与 autoplan 并行」（MAY 在同一时刻 dispatch，读当前盘面 design/specs + 真实代码核验代码事实）⇔ 改后条款接地镜半句原样对应（措辞「读当前盘面的 design/specs + 真实代码核验代码事实」直接取自该 Scenario）。
++  - Scenario「amendment 后不补跑接地镜」（SHALL NOT 被要求补跑，覆盖缺口由 code-review 的 grounding 镜兜底）⇔ 改后条款末句原样对应。
++
++## 改动面确认
++
++`git diff` 只命中 `sdflow-spec-review/SKILL.md` 一处 hunk（第 197 行该条款所在段落），未涉及脚本/测试/其它 SKILL 文件，符合 Global Constraints「改动面仅 `sdflow-spec-review/SKILL.md` 一个文件，三处条款改写」中的第一处。
++
++未改动 Step2 fan-out 编排段（:232 上方的 dispatch 时序描述）与能力探针段（:207-230）——这两处分别是 Task 2、Task 2 的验收范围（tickets.md 里 Task 2 blocked-by Task 1），不在本 Task 1 scope 内。
++
++## 状态
++
++DONE — 一行摘要：T20 条款已按 spec delta 分治改写（接地镜 MAY 并行、领域/对抗镜 MUST 等 checkpoint），兜底条款已删除，措辞与 3 个相关 Scenario 逐句对齐，改动面仅此一处 hunk。
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index 1569df6..612b34d 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -187,21 +187,21 @@ description: >
+ 4. **吃其 findings**：读 `gstack-review.md`，把 autoplan 的 findings + 自动决策纳入 Step3 的合并池（autoplan 的自动决策也登记进报告决策区）。
+ 5. **outside-voice 复用守卫（确定性脚本门·R2）〔mlh-p4 T80〕**：复用 `gstack-review.md` 的 codex outside-voice findings 前，调守卫脚本出 reason_code——三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）的机械判定归脚本，复用/回落的**编排**归你：
+    `python3 $RULES_ROOT/tools/outside_voice_guard.py --review-path {change_dir}/gstack-review.md --change-dir {change_dir}`——脚本纯 stdlib、无 subprocess、新鲜度用源文件 fs-mtime 直比（排除评审产物自身，捕获未提交编辑；不调 git），归约出唯一 reason_code（`none|file-missing|section-not-found|zero-findings|stale|simulated-source`）落 stdout；`none` = 三前置全过、退出码 0；其余码退出码非 0（坏输入如 `step1-broad-review` 锚缺失/mode 非枚举 → stderr `[outside_voice_guard] FAIL` + 无 stdout，遵其判定 MUST NOT 静默吞）。
+    - **reason_code=`none`（退出 0）** → 复用不重开（避免双 codex），报告记「复用 autoplan outside voice N 条」。
+    - **其余 reason_code** → 打印带该原因码的显式降级日志，**回落自跑设计 outside voice**（按下方「helper 调用协议」，site="design-voice"）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（checkpoint、进 Step2 fan-out），结果在 Step3 barrier 处 collect**；诱因为 `file-missing`（文件整体缺失）时措辞 MUST 声明「仅补偿 outside-voice 切片，广审其余镜仍缺」。
+    > **C2 依赖 P2b 交叉引用〔3.2〕**：C2"复用"成立仅当 autoplan 每次都跑（P2b）；autoplan 未跑的变更本 skill MUST 自跑设计 outside voice（即守卫回落路径），不得因"复用了一个没产生的东西"漏掉整层。
+ 6. **checkpoint 提交（P2c 第 1 次）**：`~/.sdflow/hack/checkpoint-commit.sh spec-review-autoplan "autoplan 广审 + gstack-amendment"`。
+ 
+ ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目标准）
+ 
+-> **串行纪律〔T20〕**：**MUST 待 Step1 checkpoint 完成后才 fan-out，禁止与 Step1 并行**（多镜评审对象须含 autoplan amendment）；若历史运行已并行，Step3 裁决须 diff autoplan amendment 增量核对并在报告注明。
++> **串行纪律〔T20〕分治**：**领域镜 / 对抗镜 MUST 待 Step1 checkpoint 完成后才 fan-out**（多镜评审对象须含 autoplan amendment——它们依赖 autoplan 对 design/specs 的修订）；**接地镜 MAY 与 Step1 并行起跑**（读当前盘面的 design/specs + 真实代码核验代码事实，不依赖 autoplan 的设计判断产出）。autoplan amendment 后 SHALL NOT 自动补跑接地镜（amendment 新增的代码事实引用由 `sdflow-code-review` 的 grounding/history 镜兜底覆盖）。
+ 
+ **规划镜头（主 session）**：
+ 
+ - 按 `{change_dir}` 实际涉及的栈 + 内容判命中的 TG/领域 → 决定开哪几个**领域镜**（backend·go / embedded·ml307c·esp32 / frontend）。
+ - 按风险定**对抗镜**数量：普通 2 个，高风险 3 个。固定 1 个**接地镜**（机械读码核验）。
+ - 只审命中的；config 已固化的结构/占位/一致性（T/S）不进任何镜。
+ - **防重叠（1.4）**：autoplan 已含 eng 镜 → 本 skill 领域镜**不重复跑 eng 视角**，只跑本项目 `spec-checklists/domains` 里 autoplan 不碰的 R 项，别让两层重复计数。
+ - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（能力探针、fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+ 
+ **能力探针（fan-out 前 MUST 先跑，语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：
