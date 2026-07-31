@@ -77,8 +77,8 @@ laodao-skills 的两个物理副本，把"改规则的人"与"用规则的人"�
 _Avoid_: 把两者当"同一目录的两种模式"（是两个物理 clone）；把 dev/release 隔离归给 resolver（隔离来自 checkout 边界；resolver 只是让开发 checkout 能 local-first dogfood）
 
 **盘面即状态 (State-on-Disk)**:
-编排/索引类机制的进度与结论 MUST 从**已存在的产物盘面**推导（产物文件、git 历史、机器锚行），MUST NOT 另设可变 state 文件当第二真相源——第二真相源与盘面必然漂移（INDEX 手改漂移、SDD ledger gitignored 失联皆其实例）。机判锚点须是**确定性产出**（模板写死的机器注释行、checkpoint 标签约定），不押模型自由生成的自然语言措辞（grill 实证：结论行正则对真实存档全 miss）。实例：`reindex` 拿 item 池当 ground truth、`ship_gate` 以 change 产物+锚行+checkpoint 标签判步序。
-_Avoid_: 把"状态文件"当省事方案（它是漂移源）；把自然语言行当机判契约（措辞属概率空间）
+编排/索引类机制的进度与结论 MUST 从**已存在的产物盘面**推导（产物文件、git 历史、机器锚行），MUST NOT 另设可变 state 文件当第二真相源——第二真相源与盘面必然漂移（INDEX 手改漂移、SDD ledger gitignored 失联皆其实例）。机判锚点须是**确定性产出**（模板写死的机器注释行、checkpoint 标签约定），不押模型自由生成的自然语言措辞（grill 实证：结论行正则对真实存档全 miss）。实例：`reindex` 拿 item 池当 ground truth、`ship_gate` 以 change 产物+锚行+checkpoint 标签判步序、**返工循环的边界取确定信息**（中间轮测试范围按层的成本分档 + 上轮失败用例记录，熔断按轮次计数，复审按硬上限——均不取"哪层受影响 / 是不是同一个问题"这类当场判断，见 `adr/0035`）。
+_Avoid_: 把"状态文件"当省事方案（它是漂移源）；把自然语言行当机判契约（措辞属概率空间）；**把"让模型判断并写明依据"当可靠化手段**（要求解释一个不可靠判断，只会得到一个有说服力的错误判断——`adr/0035` 反例）
 
 **机队锚定 (Fleet-anchored Model Baseline)**:
 workflow 的能力目标按**实际执行机队**（opus / sonnet / gpt-5.5 等多家族混编）的最弱可靠档设定，**不按开发 workflow 时恰好在用的更强模型**。两条派生：①规则文件里"强/弱模型"一律是**相对机队的档位词**（强档跑 verify / 对抗裁决 / final 终审；中档跑领域镜 / 生成；弱档只跑纯机械步），"档位→模型"映射在消费仓 `config.yaml`；②凡机械 prose 协议（路径解析、回落链、步末固定动作）MUST 脚本化 / 结构化——弱档模型跑 prose 协议的典型失效 = **静默跳步**，与反静默守卫正面冲突且无痕迹。见 `adr/0006`。
