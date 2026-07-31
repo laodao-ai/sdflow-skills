@@ -1,7 +1,7 @@
 # Code review · domain 镜 · fix6
 
-审查对象：`align-sdflow-spec-with-openspec-schema`  
-审查盘面：`423f9a8cb117e7bcb75a5b9652e3c974cd5d256b`  
+审查对象：`align-sdflow-spec-with-openspec-schema`
+审查盘面：`423f9a8cb117e7bcb75a5b9652e3c974cd5d256b`
 范围：project-local schema 的分发、迁移前置及 `config.yaml` 窄改写。仅只读复审；未修改业务代码或 `code-review-report.md`。
 
 ## 范围与清单

@@ -394,6 +394,17 @@ class TestProjectLocalSchema:
         assert actual.startswith(b"\xef\xbb\xbf")
         assert actual.count(b"schema:") == 1
 
+    def test_update_preserves_schema_key_spacing_before_colon(self, tmp_path):
+        root = self._project(tmp_path)
+        config = root / "openspec" / "config.yaml"
+        config.write_bytes(b"schema : spec-driven  # legacy\r\ncontext: keep\r\n")
+
+        status, _ = init_mod.handle_config(str(root), "update", schema=init_mod.PROJECT_SCHEMA)
+
+        assert status == "updated"
+        assert config.read_bytes() == b"schema : sdflow-spec-driven  # legacy\r\ncontext: keep\r\n"
+        assert config.read_bytes().count(b"schema") == 1
+
     def test_schema_bundle_prunes_orphans(self, tmp_path):
         root = tmp_path / "project"
         dst = root / "openspec" / "schemas" / "sdflow-spec-driven"

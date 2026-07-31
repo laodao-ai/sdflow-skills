@@ -375,7 +375,7 @@ def _schema_from_config(root):
         # Treat a UTF-8 BOM as an encoding prefix, not as part of the first YAML key.
         with open(cfg, encoding="utf-8-sig") as f:
             for line in f:
-                match = re.match(r"^schema:\s*([^#\s]+)", line)
+                match = re.match(r"^schema\s*:\s*([^#\s]+)", line)
                 if match:
                     return match.group(1)
     except (OSError, UnicodeDecodeError):
@@ -393,7 +393,7 @@ def _set_schema_key(root, schema):
     lines = body.splitlines(keepends=True)
     for i, line in enumerate(lines):
         # 仅替换 value；冒号后的空白、inline comment、行尾及其它字节原样保留。
-        match = re.match(rb"^(schema:)([ \t]*)(.*?)(\r?\n)?$", line)
+        match = re.match(rb"^(schema[ \t]*:)([ \t]*)(.*?)(\r?\n)?$", line)
         if match:
             prefix, spacing, content, newline = match.groups()
             if content.startswith(b"#"):
