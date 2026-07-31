@@ -86,8 +86,8 @@ review package 侧：fix 轮 review package 构造改为只打包「上轮已审
 
 依赖 Task 2 的理由：闸门回指要求 ⑤ 的闸门文案已先落地（Task 2 产出）。
 
-- [ ] verification-patterns.md 增「格式解析手段对照表」一节
-- [ ] ⑤ 闸门文案回指该对照表
+- [x] verification-patterns.md 增「格式解析手段对照表」一节
+- [x] ⑤ 闸门文案回指该对照表
 
 ### Task 5: 实现验证（收尾，不计入 3–6 预算）
 
@@ -100,8 +100,8 @@ review package 侧：fix 轮 review package 构造改为只打包「上轮已审
 
 运行 `openspec validate curb-rework-loop-cost --strict --type change` 确认四件套格式合规。
 
-- [ ] 单元测试证据齐全并通过
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] Success Metrics 逐条自检通过
-- [ ] openspec validate 通过
+- [x] 单元测试证据齐全并通过
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] Success Metrics 逐条自检通过
+- [x] openspec validate 通过
