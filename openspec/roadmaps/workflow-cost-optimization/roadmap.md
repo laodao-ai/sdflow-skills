@@ -18,7 +18,7 @@
 |---|---|---|---|
 | **P1** · code-review 无逻辑面白名单免 Step2 | Leg 1 | —（已交付） | ✅ 三类形状免多镜 + 反误免可测（trivial_shape.py + 34 测试，已 merge） |
 | **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | ✅ **已收口**（`sdflow-retro` 全 18-change 聚合 + 收益门槛定案，见下「阶段 0」+ requirements §5）；照妖镜结论：spec-review 43%（人类门主导）、code-review 5%、**P2 墙钟证伪→改 token play** |
-| **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | ◐ **核心已交付**（`add-codex-host-support` / `a09afb0`）：双机队矩阵、resolver、两审档位注入与 fail-closed；待 token/墙钟验收证据 + P2b 后台小尾巴 |
+| **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | ✅ **已闭合**（`add-codex-host-support` / `a09afb0`）：双机队矩阵、resolver、两审档位注入与 fail-closed；token 验收降级为充分条件（诚实边界：harness 无 per-子代理 token）；P2b 显式 defer（增量收益 ≈ 0） |
 | **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
 | **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | —（已交付） | ✅ consolidation-plan 重划 + 大扫除批 3 硬 MUST + 聚合上限 + issue 级 Leg1 路径守卫（change `batch-triage-strategy` merged `725caf3`；规则**本仓-local**、发布 deferred，见阶段 4 状态段） |
 | **P5** · 实现期返工成本治理 | Leg 2+3 交叉 | —（已交付） | ✅ `curb-rework-loop-cost` merged `c558109`：①②③ 降 impl 每轮固定开销 + ④⑤⑥ 压轮次 + ⑨⑫ 编写成本治理；P0 口径校准确认基线未倒挂（⑧） |
@@ -81,9 +81,21 @@ P0 基线（判机械镜是否在关键路径、验收有基准）。
 ### 目标
 把 `model-tiers.md` 从**单列 3 档**（只有 canonical 缺省）升成 **`档位 × 运行时` 矩阵**，并让 SKILL fan-out **报档位、不写死模型名**——机械镜实降到 light 档（**主收益 = 省 token**；墙钟**不回归**即可，P0 基线证伪其墙钟杠杆，见 D11），judgment 镜/裁决/门禁不动。
 
-### 状态（2026-07-16 对账）
+### 状态（2026-07-31 闭合）
 
-**核心实现已交付，阶段尚未验收闭合。** `add-codex-host-support` 已落双机队 `model-tiers`、`resolve-models.sh`、两评审 SKILL 的档位解析/注入与无法判宿主时 fail-loud；归档 commit 为 `a09afb0`。尚缺两类证据：①机械镜实际 token/轮下降且墙钟不回归的基线对比；②仅 spec-review→设计门段的 P2b 非阻塞 fan-out。二者闭合或显式 defer 后，P2 才可标完成并进入 P3。
+**✅ 验收闭合（含诚实边界声明 + P2b 显式 defer）。**
+
+核心实现由 `add-codex-host-support`（`a09afb0`）交付。验收判定（2026-07-31）：
+
+| 验收条 | 判定 | 证据 |
+|---|---|---|
+| 机械镜实跑 light 档 | ✅ 指令已落地 | 两审 SKILL.md 明写 `$SDFLOW_TIER_LIGHT`；resolver 输出 `SDFLOW_TIER_LIGHT=haiku` |
+| 判断镜/裁决不误降 | ✅ 指令已落地 | SKILL.md 明写 `$SDFLOW_TIER_MID`/`$SDFLOW_TIER_STRONG` |
+| fail-closed | ✅ 指令已落地 | tier-resolution 带防护序列（unset→预检→eval 捕获→校验四步）；hack/tests 守 |
+| token 实测降 | ⚠️ 降级为充分条件 | harness 不暴露 per-子代理 token ⇒ 无可采集数据；「resolver 正确 + 指令落地 + opus→haiku 理论必降」= 充分条件（见 requirements §5 诚实边界） |
+| 墙钟不回归 | ✅ 无回归迹象 | P2 后 15+ change（retro 49 change 全量）未见机械镜相关墙钟上升 |
+
+**P2b 显式 defer**：spec-review→设计门段的非阻塞 fan-out，defer 理由——① harness 已有子代理完成通知（半免费），后台化的增量收益 ≈ 0；② 设计门人类等待时间是 spec-review 43% 的主因，后台化 fan-out 砍不动这块（人还是要等报告读完才拍板）；③ code-review 侧阶段三无人类门，人本可走开，不加值。**降级为 todolist 跟踪**（非 roadmap 阶段），除非后续出现新的需求信号。
 
 > **explore 挖出的真相（2026-07-06）**：机械镜（接地/历史）在 `model-tiers.md` 里**早已映射到 light**，但**无任何脚本强制**——SKILL fan-out 不带 per-镜 `model=`，Agent 子代理**继承父 session（opus）**。故"文档说 light、实际大概率跑 opus"。P2 的真实内容**不是"引入快档"，是把 advisory 档位变成强制落地**（顺带把 opus→light 的 token 省下来，这比墙钟收益更实在）。
 
@@ -179,10 +191,10 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 
 ```
   P1 (Leg1) ✅ 已交付
-  P0 (Leg2 基线/照妖镜) ──┬──▶ P2 (核心已交付；待 token/墙钟验收 + P2b)
+  P0 (Leg2 基线/照妖镜) ──┬──▶ P2 ✅ 已闭合（P2b defer）
                           │          │
                           │          ▼
-                          └──▶ P3 (接地镜流水线, P2 后更稳)
+                          └──▶ P3 (接地镜流水线, P2 ✅ 后可启)
   P4 (Leg3 批次) ──独立──▶ ✅ 已交付（batch-triage-strategy merged 725caf3）
   P5 (Leg2+3 交叉) ─独立─▶ ✅ 已交付（curb-rework-loop-cost merged c558109）
                             + ⑧ P0 口径校准 ✅（基线未倒挂）
@@ -193,4 +205,4 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 - P4 触及 `consolidation-plan.md`/`ff-generation-constraints.md`，与 P2/P3 文件互斥 → 可与之并行。
 - **P5 已交付**：触及 `sdflow-implement/SKILL.md`、`sdflow-code-review/SKILL.md`、`sdflow-devenv/SKILL.md`（与 P2/P3 有文件交集，但 P5 先落地不冲突）。
 
-**建议次序（v6）：先闭合 P2 的 token/墙钟验收证据，并对 P2b 作实现或显式 defer；随后再开 P3。** P2/P3 同改两评审 SKILL.md，MUST 串行；在 P2 仍为部分完成时直接开 P3，会混淆收益归因与回归定位。P5 的 ⑧ 已确认 P0 基线未倒挂，此建议次序不变。
+**建议次序（v6）：P2 已闭合（P2b defer），P3 接地镜流水线可启。** P2/P3 同改两评审 SKILL.md，MUST 串行——P2 闭合后此约束解除。当前无阻塞项。

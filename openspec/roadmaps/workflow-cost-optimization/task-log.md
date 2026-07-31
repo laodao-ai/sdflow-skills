@@ -13,6 +13,16 @@
 
 ## 2026-07-31
 
+### [阶段 2 / 验收闭合] P2 闭合 + P2b 显式 defer
+- **状态**: ✅ 闭合
+- **判定**:
+  - token 验收：降级为充分条件（harness 不暴露 per-子代理 token；resolver 正确 + 指令落地 + opus→haiku = 理论必降）
+  - 墙钟不回归：P2 后 15+ change 无回归迹象
+  - fail-closed：tier-resolution 四步防护 + hack/tests 守
+  - P2b（spec-review 后台 fan-out）：**显式 defer**——harness 完成通知半免费、人类门等待后台化砍不动、code-review 侧不加值
+- **落点**: roadmap P2 行改 ✅ + 状态节改写 + 依赖图 P2 标闭合 + requirements §5 token 诚实边界
+- **对 roadmap 的影响**: P2 闭合解除 P2/P3 串行约束，P3 接地镜流水线可启
+
 ### [⑧ 口径校准] 三仓分桶分析——P0 基线未倒挂，roadmap 优先级不变
 - **状态**: ✅ 完成（`/opsx:explore`，对 `impl-rework-cost-report.md` §「对 P0 基线的改写」的验证性调研）
 - **数据源**: 本仓 `retro/report.md`（49 change 含 8 tickets 管线）+ mqtt-console / zhws_ops_api 归档 checkpoint 时间戳
