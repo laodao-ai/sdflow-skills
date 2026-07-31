@@ -19,12 +19,14 @@ CANONICAL_ENTRIES = [line for line in CANONICAL.splitlines() if line]
 
 def _stub_run_dependencies(monkeypatch):
     monkeypatch.setattr(INIT, "ensure_dirs", lambda _root: [])
-    monkeypatch.setattr(INIT, "copy_bundle", lambda _root, full=False: ("workflow", 0))
+    # 宽松签名（同 inject 那行）：本测试测的是 gitignore 合并，copy_bundle 只是被 stub 掉的
+    # 无关依赖，不应因它新增关键字参数（如 include_schema）而红。
+    monkeypatch.setattr(INIT, "copy_bundle", lambda *_args, **_kwargs: ("workflow", 0))
     monkeypatch.setattr(INIT, "ensure_global_hooks", lambda: "")
     monkeypatch.setattr(INIT, "retire_hooks", lambda: "")
     monkeypatch.setattr(INIT, "retire_deploy_files", lambda _root: "")
     monkeypatch.setattr(INIT, "stale_shadow_warnings", lambda _root: [])
-    monkeypatch.setattr(INIT, "handle_config", lambda _root, _mode: ("unchanged", "noop"))
+    monkeypatch.setattr(INIT, "handle_config", lambda *_args, **_kwargs: ("unchanged", "noop"))
     monkeypatch.setattr(INIT, "inject", lambda *_args, **_kwargs: "noop")
     monkeypatch.setattr(INIT, "read_snippet", lambda _name: "")
 
