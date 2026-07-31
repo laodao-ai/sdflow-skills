@@ -275,7 +275,8 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
   best-effort 展示且**不作判定依据**。该判据**覆盖伪装形态**——不仅匹配「扫描 / 识别 / 拒绝某
   形态 / 指纹」这类显式措辞，**还匹配「在某格式文件中定位 / 插入 / 修改某处」**（"只动一个键
   值"听起来不像解析，但"找到那个键"本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为
-  机械保证**（CLAUDE.md 基准 5：无界语法禁手搓）。
+  机械保证**（CLAUDE.md 基准 5：无界语法禁手搓）。被拦下的场景参见
+  `sdflow-devenv/references/verification-patterns.md` §8「格式解析手段对照表」获取替代手段。
 - **「本票声明的 e2e 场景」的表达方式**〔spec-review-amendment M7〕：验收标准复选框中**标注为
   `[e2e]`** 的条目即该票声明的 e2e 场景（如 `- [ ] [e2e] 用户提交表单后收到确认邮件`）；未标注
   `[e2e]` 的条目不算 e2e。**该票没有任何一条标 `[e2e]` ⇒ 该票无 e2e 场景**——implementer 只跑

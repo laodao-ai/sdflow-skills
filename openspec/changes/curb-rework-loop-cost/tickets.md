@@ -69,9 +69,9 @@ review package 侧：fix 轮 review package 构造改为只打包「上轮已审
 
 依赖 Task 2 的理由：消除文档分叉要求 sdflow-implement 侧的措辞已先落地（Task 2 落地熔断与 fix 循环相关条款），否则两侧对齐的目标措辞尚不确定。
 
-- [ ] sdflow-code-review 新增复审边界规定（一轮、只审修复 diff、硬上限 1、残差 defer + 标注）
-- [ ] 对比表右列措辞对齐（统一为「存在复审循环，硬上限 1 轮」）
-- [ ] 全仓 grep 确认无「无 re-review 紧闭环」残存表述
+- [x] sdflow-code-review 新增复审边界规定（一轮、只审修复 diff、硬上限 1、残差 defer + 标注）
+- [x] 对比表右列措辞对齐（统一为「存在复审循环，硬上限 1 轮」）
+- [x] 全仓 grep 确认无「无 re-review 紧闭环」残存表述
 
 ### Task 4: 格式解析手段对照表（⑫）
 
