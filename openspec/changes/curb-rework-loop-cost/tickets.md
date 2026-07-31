@@ -50,11 +50,11 @@ review package 侧：fix 轮 review package 构造改为只打包「上轮已审
 
 一致性核对：核对 Tests are code 措辞与 IO-2 spec 表述一致（实现已在 d1aa607，只做核对不重实现）。
 
-- [ ] 熔断规则增加判据 (b) + subsume 声明 + 计数窗口 + 账本持久化 + 仲裁累积 diff
-- [ ] 出票语法面有界性闸门（含伪装形态判据 + 非机械保证标注）
-- [ ] red-before-green 扩展到补断言/改断言场景
-- [ ] review package fix 轮增量化
-- [ ] Tests are code 一致性核对
+- [x] 熔断规则增加判据 (b) + subsume 声明 + 计数窗口 + 账本持久化 + 仲裁累积 diff
+- [x] 出票语法面有界性闸门（含伪装形态判据 + 非机械保证标注）
+- [x] red-before-green 扩展到补断言/改断言场景
+- [x] review package fix 轮增量化
+- [x] Tests are code 一致性核对
 
 ### Task 3: 代码审复审边界与文档分叉消除（⑥）
 

@@ -34,7 +34,7 @@ flowchart LR
         B1["生成循环内 · 命中即派 fix + re-review 闭环<br/>reviewer 冷 / controller 热"]
     end
     subgraph S["第二遍 · 本 skill（事后）"]
-        S1["全部实现完成后 · 完全冷独立<br/>出报告 → 编排器修（无紧闭环）"]
+        S1["全部实现完成后 · 完全冷独立<br/>出报告 → 编排器修 → 存在复审循环，硬上限 1 轮"]
     end
     B -.->|即时修复确认，便宜早修| MERGE
     S -.->|独立兜底网，抓被说服放过的真问题| MERGE["并存不是重复"]

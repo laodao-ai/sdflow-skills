@@ -178,7 +178,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
   第一遍: subagent-dev 终审 + 注入点B        第二遍: 本 skill（事后 sdflow-code-review）
   ────────────────────────────────────────────────────────────────
   时机   生成循环内                          全部实现完成后
-  机制   命中即派 fix 子代理修 + re-review 闭环  出报告 → 编排器修（无 re-review 紧闭环）
+  机制   命中即派 fix 子代理修 + re-review 闭环  出报告 → 编排器修 → 存在复审循环，硬上限 1 轮（只审修复 diff）
   独立性 reviewer 冷,controller 热(在循环内)   完全冷独立(脱 controller)
   职责   即时修复确认(shift-left,便宜早修)    独立兜底网(实测能抓真问题)
 ```
@@ -290,6 +290,21 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 - **修不了 / genuinely 拿不准**：defer → 写 buglist（本 change 引入的代码 bug）/ todolist（改进/关注点），
   本 change 不处理，交 hand-off 引导另开清理 change。
 - **绝不 AskUserQuestion**（阶段三无人类门）。
+- **自动修复后的复审边界（硬上限 1 轮）**〔curb-rework-loop-cost · adr/0035〕：Step4 的自动修复**改的
+  正是被审的源码盘面**，而报告 `reviewed_sha` 锚的是修复后的盘面——那份修复本身未经任何镜审查，
+  须由一轮受限复审闭合该缺口：
+  - **有自动修复 ⇒ MUST 复审一轮**，范围**限定为本轮修复 diff**（Step5 第 3 步「仅源码」checkpoint
+    提交本身），**MUST NOT 重新打包整个分支 diff 重审**。
+  - **硬上限 = 1 轮**：该轮复审若仍报出 Critical/Important，**MUST NOT 自发进入第三轮**——全部
+    defer 进 buglist，并在 `code-review-report.md` 显式标注「复审上限已达，N 项残差已 defer」。
+    残差兜底责任在 `sdflow-done` 的 verify（位于所有修复之后）与 issues 池的异步再入口，**MUST NOT**
+    靠延长本循环来兜。
+  - **无自动修复时不触发本复审**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，本就自洽）。
+  - **两侧表述统一**：本 skill 与 `sdflow-implement` 关于「code-review 是否存在 fix 循环」的描述
+    SHALL 一致，统一为「**存在复审循环，硬上限 1 轮**」——**MUST NOT** 出现「无 re-review 闭环」
+    类相反表述（见上「与注入点 B 的关系」对比表）。
+  - **诚实边界**：本条是**指令层约束**，由编排器自报遵守；`ship_gate` 不为复审轮数新增机械门，
+    **MUST NOT** 将其表述为机械保证。
 - **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕〔impl-review-fix mlh-p4〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg`
   各独立计数）的裁决结果**构造进** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/history/broad +
   outside-voice 每个调用过的 site）——若 Step2 能力探针判 `subagents="unavailable"` 已缩 roster，此处 MUST 同步只含实际
@@ -317,11 +332,17 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
    自锁。
    `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审自动修复"`。
    **无自动修复时跳过本步**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，同样自洽）。
-4. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 上一步的修复提交（或无修复时的被审
-   基线），即报告 frontmatter 的 `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是
-   写报告的时刻」）。**报告写盘 MUST 在本步之后、下一步之前**——第 3 步的「仅源码」承诺要
-   成立，报告文件在第 3 步提交那一刻就不能已经存在于工作树。
-5. **写报告** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区
+4. **复审一轮（硬上限 1，仅当上一步产生了修复提交时触发）**〔curb-rework-loop-cost · adr/0035〕：
+   派一轮复审，输入 diff 范围**限定为上一步 checkpoint 提交本身**（本轮修复 diff），MUST NOT 重新
+   打包整个分支 diff 重审。仍报出 Critical/Important → MUST NOT 自发进入第三轮，全部 defer 进
+   buglist，第 6 步写报告时显式标注「复审上限已达，N 项残差已 defer」。**上一步因无自动修复而
+   跳过时，本步同样跳过**（详见 Step4「自动修复后的复审边界」）。
+5. **取锚**：`git rev-parse HEAD` 的完整 40 位小写 OID = 第 3 步的修复提交（或无修复时的被审
+   基线）——第 4 步的复审不产生新的源码改动，锚仍是同一个提交，即报告 frontmatter 的
+   `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是写报告的时刻」）。**报告写盘 MUST
+   在本步之后、下一步之前**——第 3 步的「仅源码」承诺要成立，报告文件在第 3 步提交那一刻就不能
+   已经存在于工作树。
+6. **写报告** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区
    + 裁决 + 修复/defer 台账 + 度量锚），frontmatter 带上一步取得的 `reviewed_sha`：
    - **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
      构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
@@ -350,14 +371,14 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
      的机械显著提示由 `/sdflow-retro` 聚合（跑 `sdflow-retro/scripts/lens_metric_aggregate.py` 只读聚合所有归档报告）；
      是否保留/降采样/收紧触发/淘汰某镜**一律人决，本 skill MUST NOT 自动执行**（阶段三无人类门管的是修复/裁决，
      不含评审架构本身的取舍）。
-6. **checkpoint 提交（第二段，report-only）**：
+7. **checkpoint 提交（第二段，report-only）**：
    🔴 **工作树纪律〔1.6b〕**：`checkpoint-commit.sh` 用 `git add -A` 全量暂存 ⇒ 跑本步**前** MUST 先
    `git status --porcelain` 确认工作树**只剩报告文件**（`code-review-report.md` 及其 `.outside-voice/` 等评审产物），
    否则第 3 步之后残留的、与本轮修复无关的改动会被卷进 report commit。若有残留 ⇒ 先处置（提交或撤回）再落报告。
    `~/.sdflow/hack/checkpoint-commit.sh impl-review "多镜代码审报告"`。
    **该两段时序在本设计下天然可行（已实测）**：code 域比较**排除 `openspec` 顶层条目**，而报告落在 `openspec/` 内
    ⇒ report-only 提交不改任何非 openspec 顶层条目 ⇒ 不触发 code 域失鲜。
-7. **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
+8. **收敛口**：结尾一句——建议进 `/sdflow-done`（verify → hand-off → archive → commit → merge）。
 
 ---
 
