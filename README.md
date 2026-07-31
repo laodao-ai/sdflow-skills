@@ -28,6 +28,12 @@ git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && 
 > 没装 `sdflow-spec` 的项目沿用旧三步 `opsx:explore → opsx:ff → /grill-with-docs`；
 > 两条分支的选择规则见 `sdflow-init/assets/workflow/generation-process.md` §四。
 
+阶段一的 project-local schema 由 `sdflow-init` 从 `sdflow-init/assets/schemas/sdflow-spec-driven/`
+下发到消费项目。它负责四件套结构、依赖、`skip_specs` 和委派提示；委派只是提示层引流，不能替代
+`/sdflow-spec` 的人类触发与入口规则。CLI 版本门未通过时保持内置 `spec-driven`；迁移必须先补写
+在途 change 的 schema，再切换配置。当前不提供 fork 漂移的机械检测或自动 rebase，该边界已记录为
+后续 todo。
+
 ## Skills 列表
 
 | 分类 | Skill | 说明 |

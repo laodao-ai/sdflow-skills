@@ -390,6 +390,7 @@
 | T245 | todo | OPEN | main |
 | T246 | todo | OPEN | main |
 | T256 | todo | OPEN | main |
+| T264 | todo | PROPOSED | align-sdflow-spec-with-openspec-schema |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 

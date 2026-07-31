@@ -98,10 +98,10 @@ impl-pipeline: tickets
 
 仓库使用说明和路线图反映 project-local schema 的最终流程，明确委派只有提示层效果；已知的 fork 漂移缺口被记录为后续事项，未把本 change 扩展到 roadmap 的 P2/P3。
 
-- [ ] 阶段一入口文档说明 project-local schema 与提示层边界
-- [ ] roadmap P1 标记为已交付
-- [ ] fork 漂移无机械门记录到 todolist，且本 change 不实现该能力
-- [ ] 文档中的 schema、委派、fallback 和迁移顺序与前述 ticket 语义一致
+- [x] 阶段一入口文档说明 project-local schema 与提示层边界
+- [x] roadmap P1 标记为已交付
+- [x] fork 漂移无机械门记录到 todolist，且本 change 不实现该能力
+- [x] 文档中的 schema、委派、fallback 和迁移顺序与前述 ticket 语义一致
 
 ### Task 7: 实现验证（收尾，不计入 3–6 预算）
 

@@ -64,6 +64,18 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
 它 `disable-model-invocation: true`，**只能人触发**。出口序列由该 skill 原样贴出（`/clear` → 换档 →
 `/sdflow-spec-review`，对 [workflow.md](./workflow.md) §三.2 的 G1 构成一处具名例外，理由见该处）。
 
+### project-local schema 的作用边界
+
+本仓及由 bundle 下发的消费项目使用 `sdflow-spec-driven` project-local schema（CLI 版本门通过时）。
+schema 是阶段一入口的**结构与提示层**：它声明四件套的 artifact、依赖、委派 instruction 与
+`skip_specs` 状态；官方入口读到委派 instruction 后，应提示人触发 `/sdflow-spec`。委派只改变提示
+与引流，**不是模型执行的机械保证**，因此仍须遵守本节入口规则。
+
+版本门未通过时，安装器保持内置 `spec-driven`，并以 fail-loud 结果说明未铺设 project-local schema；
+不得把旧路径默认为已经具备委派能力。迁移时必须先完成在途 change 的 schema 补写，再切换
+`config.schema`，顺序不可颠倒；补写失败不得切换配置。schema fork 是一次性快照：上游
+`spec-driven` 后续更新不会自动同步，本仓当前不实现 fork 漂移检测或自动 rebase。
+
 ### 分支 B —— 未装 `sdflow-spec`：旧三步（沿用，未被删除）
 
 ```
@@ -116,6 +128,7 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
 ## 八、检查清单（用 ③ 时）
 
 - [ ] 装了 `sdflow-spec` 吗？装了就走**分支 A 单入口**；走旧三步须命中 §四 三种例外之一并在报告说明
+- [ ] project-local schema 已通过版本门吗？确认委派是提示层效果，并核对迁移顺序（先补写、后切配置）
 - [ ] 问题/方向是否清晰？不清晰先 `opsx:explore`，别直接 ff（分支 B）
 - [ ] 生成后是否做过**对抗压测**（grill），而不止机械自检？
 - [ ] 设计是否过 HARD-GATE（用户批准）后才进 apply？

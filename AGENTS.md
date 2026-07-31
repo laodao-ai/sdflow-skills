@@ -110,6 +110,10 @@ git diff --check                                      # 检查空白错误
 
 ## 阶段一入口：`/sdflow-spec` 使用路径 · 四入口选择规则 · 旧入口 sunset 条件
 
+阶段一在 CLI 版本门通过时使用 `sdflow-spec-driven` project-local schema；它负责四件套结构、依赖和委派提示，
+委派只是提示层，不能替代 `/sdflow-spec` 的人类触发。版本门未通过时保持内置 `spec-driven`；迁移先补写在途
+change 的 schema，再切换配置，补写失败不得切换。schema fork 漂移检测与自动 rebase 属于已记录遗留边界。
+
 > **本节是非托管区（手写维护）。同一条规则的 AI 读侧在 canonical bundle**：
 > `sdflow-init/assets/workflow/generation-process.md` §四（分支 A/B + 四入口选择规则）、
 > `workflow.md` §一/§二步骤表/§三.2（G1 具名例外）、`openspec/specs/spec-workflow/spec.md`

@@ -46,7 +46,7 @@ grammar 对齐锚（CLI 1.7.0 实跑）：接受 `100` / `9` / `a1` / `1a-b` / `
 
 | # | change | 含 | 依赖 | 状态 |
 |---|---|---|---|---|
-| **P1** | sdflow-spec × openspec schema 契约面重整 | A1 A2 A3 **A4** · E1 E2 E3 | 无 | 🔵 进行中 |
+| **P1** | sdflow-spec × openspec schema 契约面重整 | A1 A2 A3 **A4** · E1 E2 E3 | 无 | ✅ 已交付（本 change） |
 | **P2** | prevention 层扩到 apply/archive | B1 B2 C2 | 无 | ⬜ 未开 |
 | **P3** | sdflow-done archive 现代化 | D1 D2 **D3** | 无 | ⬜ 未开 |
 | ~~Q1~~ | ~~是否采纳 `skip_specs`~~ | — | — | ✅ **已拍板：采纳**（见 D-3） |
@@ -57,7 +57,9 @@ P2 触 `config.yaml` + `config.template.yaml`；P3 触 `sdflow-done/SKILL.md`。
 
 ---
 
-## P1 · sdflow-spec × openspec schema 契约面重整
+## P1 · sdflow-spec × openspec schema 契约面重整（✅ 已交付）
+
+**交付状态**：本 change 已完成 P1 范围；全量 `pytest` 因 Windows/Git Bash 环境长时间无输出，按用户批准未作为本 change 的放行证据。
 
 **目标态一句话**：让 `sdflow-spec` 与 openspec CLI 1.7.0 的契约面对齐，并通过 project-local
 schema 把它从「靠指令层自律才不被绕过的旁路」变成 **schema 层的默认路径**（含下游项目）。
@@ -352,7 +354,8 @@ unchanged」，而 `sdflow-spec` 全是硬编码。这是**有意的窄化**（�
 
 ## 遗留 todo（不在本批解决）
 
-- **fork 漂移无机械门**：上游 `spec-driven` 更新时，没有任何东西提醒本仓的 fork 已经落后。
+- **fork 漂移无机械门**：上游 `spec-driven` 更新时，没有任何东西提醒本仓的 fork 已经落后；本 change
+  只记录边界，不实现检测或自动 rebase（见 todolist T264）。
 
 ---
 
