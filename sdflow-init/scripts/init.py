@@ -376,8 +376,15 @@ def _set_schema_key(root, schema):
 
     newline = b"\r\n" if b"\r\n" in raw else b"\n"
     insert_at = 0
-    if lines and re.match(rb"^---(?:[ \t]*(?:#.*)?)?(?:\r?\n)?$", lines[0]):
-        insert_at = len(lines[0])
+    offset = 0
+    for candidate in lines:
+        stripped = candidate.strip()
+        if not stripped or stripped.startswith(b"#"):
+            offset += len(candidate)
+            continue
+        if re.match(rb"^---(?:[ \t]*(?:#.*)?)?(?:\r?\n)?$", candidate):
+            insert_at = offset + len(candidate)
+        break
     new = bom + body[:insert_at] + b"schema: " + schema.encode("utf-8") + newline + body[insert_at:]
     _atomic_write(cfg, new, ".config.")
     return True
