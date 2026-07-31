@@ -261,6 +261,24 @@ class TestProjectLocalSchema:
         init_mod.run(str(root), "update")
         assert marker.read_text(encoding="utf-8") == "schema: spec-driven\n"
 
+    def test_update_accepts_existing_fork_bound_change(self, tmp_path, monkeypatch):
+        root = self._project(tmp_path)
+        self._version(monkeypatch)
+        init_mod.run(str(root), "update")
+
+        fork_bound = root / "openspec" / "changes" / "new-fork-bound"
+        fork_bound.mkdir()
+        (fork_bound / "proposal.md").write_text("# proposal\n", encoding="utf-8")
+        marker = fork_bound / ".openspec.yaml"
+        marker.write_text(f"schema: {init_mod.PROJECT_SCHEMA}\n", encoding="utf-8")
+
+        init_mod.run(str(root), "update")
+
+        assert marker.read_text(encoding="utf-8") == f"schema: {init_mod.PROJECT_SCHEMA}\n"
+        assert (root / "openspec" / "config.yaml").read_text(encoding="utf-8").startswith(
+            f"schema: {init_mod.PROJECT_SCHEMA}"
+        )
+
     @pytest.mark.parametrize("content", ["schema: ", "schema: unexpected\n", "not-schema: value\n"])
     def test_migration_rejects_invalid_or_mismatched_existing_marker(self, tmp_path, content):
         root = self._project(tmp_path)

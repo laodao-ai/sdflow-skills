@@ -48,6 +48,7 @@ SCHEMAS_SRC = os.path.join(ASSETS, "schemas")
 SNIPPETS = os.path.join(ASSETS, "snippets")
 PROJECT_SCHEMA = "sdflow-spec-driven"
 BUILTIN_SCHEMA = "spec-driven"
+VALID_CHANGE_MARKER_SCHEMAS = {BUILTIN_SCHEMA, PROJECT_SCHEMA}
 MIN_SCHEMA_CLI = (1, 7, 0)
 
 MARK_DOC = ("<!-- opsx-init:start —— 由 sdflow-init 维护，勿手改本区块 -->",
@@ -443,7 +444,7 @@ def migrate_changes(root, schema=BUILTIN_SCHEMA):
             continue
         marker = os.path.join(path, ".openspec.yaml")
         if os.path.exists(marker):
-            if _marker_schema(marker) != schema:
+            if _marker_schema(marker) not in VALID_CHANGE_MARKER_SCHEMAS:
                 raise RuntimeError(f"在途 change 的 schema marker 非法或不匹配：{marker}")
             continue
         _atomic_write(marker, f"schema: {schema}\n".encode("utf-8"), ".openspec.")

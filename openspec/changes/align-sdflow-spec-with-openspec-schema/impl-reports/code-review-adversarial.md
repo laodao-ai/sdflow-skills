@@ -1,7 +1,7 @@
 # Code review · adversarial 镜
 
-审查对象：`align-sdflow-spec-with-openspec-schema`  
-盘面：`bed0c093eac91b0e998e0d623f8011c186f00e2e`  
+审查对象：`align-sdflow-spec-with-openspec-schema`
+盘面：`bed0c093eac91b0e998e0d623f8011c186f00e2e`
 范围：相对 `bf026aa63a8dc6833029e81c9b91f2a91c76152b` 的实现；重点覆盖迁移、版本门、安装刷新与跨平台错误路径。未改业务代码。
 
 ## Findings（置信 ≥80）

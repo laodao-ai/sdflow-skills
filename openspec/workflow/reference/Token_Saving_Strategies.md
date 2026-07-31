@@ -8,8 +8,8 @@
 
 ### 1. 关闭 `explanatory-output-style` 插件
 
-**效果**：每次回复少生成 `★ Insight` 教育说明块，直接减少输出 token。  
-**影响范围**：全局每条回复。插件 README 自带 WARNING: "token cost"。  
+**效果**：每次回复少生成 `★ Insight` 教育说明块，直接减少输出 token。
+**影响范围**：全局每条回复。插件 README 自带 WARNING: "token cost"。
 **操作**：
 
 ```bash
@@ -18,8 +18,8 @@
 
 ### 2. 关闭 `learning-output-style` 插件
 
-**效果**：同 explanatory，叠加了"互动教学"功能，token 消耗更重。若未装可忽略；若装了必须关。  
-**说明**：官方 README 警告更强——同时包含 explanatory 全部功能 + 互动学习，是耗 token 最重的 style 插件。  
+**效果**：同 explanatory，叠加了"互动教学"功能，token 消耗更重。若未装可忽略；若装了必须关。
+**说明**：官方 README 警告更强——同时包含 explanatory 全部功能 + 互动学习，是耗 token 最重的 style 插件。
 **操作**：
 
 ```bash
@@ -28,9 +28,9 @@
 
 ### 3. 关闭 `superpowers:using-superpowers`
 
-**效果**：减少每次对话开始时加载的 prompt 体积（该 skill 主要作用是提醒 Claude "先查 skill 再行动"）。  
-**适用场景**：已熟悉工作流、会主动调用所需 skill（如 `write-plans`、`subagent-driven-development`）的用户。  
-**注意**：`using-superpowers` 是 `superpowers` plugin 的一部分，不能在 plugin 级别单独关闭，需通过 `skillOverrides` 覆盖。  
+**效果**：减少每次对话开始时加载的 prompt 体积（该 skill 主要作用是提醒 Claude "先查 skill 再行动"）。
+**适用场景**：已熟悉工作流、会主动调用所需 skill（如 `write-plans`、`subagent-driven-development`）的用户。
+**注意**：`using-superpowers` 是 `superpowers` plugin 的一部分，不能在 plugin 级别单独关闭，需通过 `skillOverrides` 覆盖。
 **全局关闭**（写入 `~/.claude/settings.json`）：
 
 ```json
@@ -47,9 +47,9 @@
 
 ### 5. `/caveman` — 超压缩回复模式
 
-**效果**：官方数据约省 ~75% 输出 token。去除冠词、口头禅、客套话，保留全部技术内容。  
-**来源**：自建 skill，已安装到 `~/.skills/caveman/SKILL.md`，symlink 到 `~/.claude/skills/caveman`。  
-**官方市场**：无同类 style 插件（已验证 `anthropics/claude-plugins-official`，两个官方 style 插件均为加 token，非减）。  
+**效果**：官方数据约省 ~75% 输出 token。去除冠词、口头禅、客套话，保留全部技术内容。
+**来源**：自建 skill，已安装到 `~/.skills/caveman/SKILL.md`，symlink 到 `~/.claude/skills/caveman`。
+**官方市场**：无同类 style 插件（已验证 `anthropics/claude-plugins-official`，两个官方 style 插件均为加 token，非减）。
 **操作**：
 
 ```bash
@@ -71,8 +71,8 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 
 ### 6. 运行 `fewer-permission-prompts`
 
-**效果**：扫描会话历史，把常见的只读 Bash/MCP 调用（`ls`、`rg`、`git log` 等）批量加入项目 `.claude/settings.json` 白名单，之后不再弹权限提示。  
-**适用场景**：在一个项目工作一段时间后，权限提示反复出现时运行一次。  
+**效果**：扫描会话历史，把常见的只读 Bash/MCP 调用（`ls`、`rg`、`git log` 等）批量加入项目 `.claude/settings.json` 白名单，之后不再弹权限提示。
+**适用场景**：在一个项目工作一段时间后，权限提示反复出现时运行一次。
 **操作**：
 
 ```bash
@@ -85,8 +85,8 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 
 ### 7. 执行类 Skill 切换 Haiku 模型
 
-**效果**：Haiku 4.5 token 成本约为 Sonnet 的 1/5，对流程明确的执行任务表现够用。  
-**适用 Skill**：`/tag`、`/ssh-tunnel`、`/tdd`、`/commit-message` 等步骤固定的流程 skill。  
+**效果**：Haiku 4.5 token 成本约为 Sonnet 的 1/5，对流程明确的执行任务表现够用。
+**适用 Skill**：`/tag`、`/ssh-tunnel`、`/tdd`、`/commit-message` 等步骤固定的流程 skill。
 **操作**：
 
 ```
@@ -97,9 +97,9 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 
 ### 8. `/sdflow-done` — OpenSpec 收尾自动派发 Haiku 子 agent
 
-**效果**：verify → archive → git commit → (可选) merge to main 四步机械操作全部由 Haiku 子 agent 执行，主 session 上下文隔离，不触发 model 切换 / cache reload。  
-**原理**：skill 调用 Agent tool 时指定 `model: haiku`，子 agent 只接收任务 prompt，不携带主 session 的大上下文。  
-**来源**：自建 skill，位于 `~/.skills/sdflow-skills/sdflow-done/SKILL.md`，symlink 到 `~/.claude/skills/sdflow-done`。  
+**效果**：verify → archive → git commit → (可选) merge to main 四步机械操作全部由 Haiku 子 agent 执行，主 session 上下文隔离，不触发 model 切换 / cache reload。
+**原理**：skill 调用 Agent tool 时指定 `model: haiku`，子 agent 只接收任务 prompt，不携带主 session 的大上下文。
+**来源**：自建 skill，位于 `~/.skills/sdflow-skills/sdflow-done/SKILL.md`，symlink 到 `~/.claude/skills/sdflow-done`。
 **操作**：
 
 ```bash
@@ -119,7 +119,7 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 
 ### 8. 明确 scope，避免 skill 扫描全 codebase
 
-**效果**：越具体的 prompt → skill 读取的上下文越少 → token 越少。  
+**效果**：越具体的 prompt → skill 读取的上下文越少 → token 越少。
 **示例**：
 
 ```
@@ -132,7 +132,7 @@ ln -s ../../.skills/caveman ~/.claude/skills/caveman
 
 ### 9. 避免触发重型 skill 组合
 
-`/review`（本地 diff）和 `/code-review`（远程 PR）都会开子 agent，组合使用 token 消耗很高。  
+`/review`（本地 diff）和 `/code-review`（远程 PR）都会开子 agent，组合使用 token 消耗很高。
 - 本地开发阶段：只用 `/review`
 - 需要远程 PR 评审时：再用 `/code-review`
 - 低优先级改动：`/code-review low`（低 effort，只看高置信度问题）

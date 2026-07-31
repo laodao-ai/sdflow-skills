@@ -1,7 +1,7 @@
 # Code review · domain 镜
 
-审查对象：`align-sdflow-spec-with-openspec-schema`  
-审查盘面：`bed0c093eac91b0e998e0d623f8011c186f00e2e`  
+审查对象：`align-sdflow-spec-with-openspec-schema`
+审查盘面：`bed0c093eac91b0e998e0d623f8011c186f00e2e`
 宿主：Codex；本镜为 fresh、只读审查，未改业务代码，未写总报告。
 
 ## 范围与清单
