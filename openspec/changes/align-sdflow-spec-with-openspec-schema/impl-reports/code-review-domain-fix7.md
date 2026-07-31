@@ -1,7 +1,7 @@
 # Code review · domain 镜 · fix7
 
-审查对象：`align-sdflow-spec-with-openspec-schema`  
-审查盘面：`fc24e97e9f4912644fb2d2a5404ae2cd5c5735ed`  
+审查对象：`align-sdflow-spec-with-openspec-schema`
+审查盘面：`fc24e97e9f4912644fb2d2a5404ae2cd5c5735ed`
 范围：project-local schema 的分发、在途 change migration、`config.yaml` 的受限写入，以及权威 schema/template 完整性。仅做只读复审；未修改业务代码或 `code-review-report.md`。
 
 ## 清单与复核范围
