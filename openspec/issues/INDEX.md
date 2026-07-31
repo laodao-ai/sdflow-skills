@@ -27,6 +27,12 @@
 |----|------|--------|------------|
 | T239 | todo | PROPOSED | add-sdflow-spec |
 
+### 批次：align-sdflow-spec-with-openspec-schema
+
+| ID | Pool | Status | 关联Change |
+|----|------|--------|------------|
+| T264 | todo | PROPOSED | align-sdflow-spec-with-openspec-schema |
+
 ### 批次：cross-model-outside-voice
 
 | ID | Pool | Status | 关联Change |
@@ -390,7 +396,6 @@
 | T245 | todo | OPEN | main |
 | T246 | todo | OPEN | main |
 | T256 | todo | OPEN | main |
-| T264 | todo | PROPOSED | align-sdflow-spec-with-openspec-schema |
 | T56 | todo | OPEN | adaptive-workflow-routing |
 | T57 | todo | OPEN | main |
 

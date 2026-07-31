@@ -272,3 +272,9 @@
 优先级: <待填>
 计划: <待填>
 
+### align-sdflow-spec-with-openspec-schema — align-sdflow-spec-with-openspec-schema
+状态: PLANNED
+成员: (生成) T264
+优先级: <待填>
+计划: <待填>
+
