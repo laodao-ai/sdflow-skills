@@ -2,11 +2,23 @@
 """sad_schema.py — SAD 格式常量与解析单一源（DEC-1）。
 
 scaffold（写侧）/ lint（读侧）共享本模块；各自只做消费方语义校验，
-MUST NOT 另写解析器（adr/0011）。纯 stdlib。
+MUST NOT 另写解析器（adr/0011）。
 解析口径：行锚定 + fence-aware 覆盖全部正文扫描（DEC-2）。
 节标题锚 v1 中文单语（DEC-12③）。
+
+[shared-yaml-subset-parser] frontmatter 的 YAML **取值**核心委托给外部 yq 二进制
+（mikefarah/yq，同 git 的外部二进制先例，见 `_yq()`），MUST NOT `import yaml`（零依赖
+不变量）；`TOP_KEYS`/`FACT_KEYS`/`FACT_VALUES` 白名单校验仍在 Python 侧对 yq 解出的
+dict 做业务判断。`frontmatter_end` 保留纯文本定界符定位（不委托 yq）——它被
+`sad_scaffold.py` 用于**行级原地改写**（如 `_rewrite_top_key`），需要的是"第几行是
+闭合定界符"这一位置信息，yq 是值抽取器、不回答位置问题；顺带也充当"闭合性预扫描"
+（防 yq 对未闭合 frontmatter 的已知静默接受，见 `_yq()` 上方注释），两个用途共用同一
+次定位、不重复实现。
 """
+import json
 import re
+import shutil
+import subprocess
 import unicodedata
 
 SAD_SCHEMA_VERSION = 1
@@ -95,67 +107,174 @@ def body_lines(text):
     return out
 
 
-def _to_int(key, raw):
-    if not re.fullmatch(r"-?\d+", raw.strip()):
-        raise SadParseError(f"bad-type: {key} 须为整数，得到 {raw!r}")
-    return int(raw)
-
-
 def frontmatter_end(lines):
     """frontmatter 结束定界行索引（顶格精确，无 strip）——[impl-review-fix] A3：防缩进
     `  ---` 被当结束定界（实测把 facts 块内一行 `  ---` 误判为边界，assumptions_open 读 0）。
-    无闭合返回 None。scaffold 下一波用此共享 helper 替换其 `_frontmatter_end` 复刻（DEC-1）。"""
+    无闭合返回 None。scaffold 用此共享 helper 做**行级原地改写**定位（DEC-1）；
+    `parse_frontmatter` 也复用它做闭合性预扫描（见该函数与 `_yq()` 的说明）——两个消费方
+    都要的是"第几行是定界符"这一位置信息，不是 YAML 语义值，故本函数保留纯文本扫描，
+    不委托 yq（yq 是值抽取器、不回答行位置问题；basis-5：这是有界字面定界符定位，非
+    无界 YAML 解析）。"""
     return next((i for i in range(1, len(lines)) if lines[i] == "---"), None)
 
 
+# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
+# [shared-yaml-subset-parser] `parse_frontmatter` 的 YAML **取值**核心委托给外部 yq 二进制
+# （同 git 的外部二进制先例）。本文件自己内联一份 `_yq()`（各脚本各自内联，不跨脚本
+# import，见 sdflow-ship/scripts/ship_gate.py 同名函数的姊妹实现）；因所有调用点都是
+# 内存中的 `text`（`parse_frontmatter(text)` 从不接收文件路径——`sad_scaffold.py`/
+# `sad_lint.py` 均先自行读文件/`git show` 再把文本传入），采用 ship_gate.py 同款
+# `text=` stdin 模式，不新增落临时文件的开销。
+#
+# 【yq 已知局限，实测确认（本机 yq v4.53.3）】`--front-matter=extract` 对没有第二个 `---`
+# 的文件，会把首行 `---` 之后的**全部内容**当同一份 YAML 文档处理，若该内容恰好合法会
+# 静默"解析成功"——`parse_frontmatter` 借 `frontmatter_end` 的闭合性预扫描堵住这个口子
+# （见下方函数体）。
+_yq_bin = None  # 进程内缓存
+
+
+def _dedupe_object_pairs(pairs):
+    """`json.JSONDecoder(object_pairs_hook=...)` 钩子：任一层 JSON 对象内出现重复键 → raise。
+
+    【为什么这能work、而不是又一次手搓解析】yq 对 YAML 顶层/嵌套 mapping 里的重复键采用
+    "语义上静默取最后值"，但它吐出的 **JSON 文本**里重复键会被**原样双写**（实测确认：
+    `{"sad_status": "draft", "sad_status": "draft"}`，两个键字面都在）。Python `json`
+    模块允许把这类"语法合法、语义有歧义"的重复键对喂给一个自定义 hook（该 hook 收到
+    **该层全部** (key, value) pair，含重复项）——这是消费 yq 已产出的 JSON 结构化数据，
+    不是解析 YAML 语法本身，故不违反 basis-5。之前的手搓实现能在扫描时报
+    `duplicate-key: <key>`；此处对齐保留同一失败模式（不同层级/字段名不再逐一分类，
+    统一在 `parse_frontmatter` 侧包装为 `SadParseError`）。
+    """
+    seen = set()
+    out = {}
+    for k, v in pairs:
+        if k in seen:
+            raise RuntimeError(f"duplicate-key: {k!r}")
+        seen.add(k)
+        out[k] = v
+    return out
+
+
+def _yq(expression, file=None, *, text=None, front_matter=False, in_place=False, default=None):
+    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现 + F3 多文档防御 + 重复键检测，
+    对齐 ship_gate.py 的 `text=` stdin 支持）。`file`=路径 或 `text`=字符串（走 stdin），二选一。
+
+    [R7/F2] exit≠0 恒 raise RuntimeError（不吞、不因 default 静默）——「键不存在」（exit 0 +
+    stdout=null，走 default）与「解析失败」（exit≠0，含 yq 未安装/身份不对/文件不可读/语法
+    错误/重复键）是两条不同分支。
+    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）。
+    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
+    [F3] 多文档防御：stdout 含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
+    [R5/F4] frontmatter 模式下、调用方传了非 None 的 `default`（意味着期望 dict 形状）时，
+    校验解出的顶层结构须为 dict，非 dict → 视为坏块，返回 default（不静默当作合法标量）。
+    """
+    global _yq_bin
+    if _yq_bin is None:
+        yq = shutil.which("yq")
+        if not yq:
+            raise RuntimeError(
+                "yq 未安装。安装方式：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
+        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        if "mikefarah" not in vr.stdout:
+            raise RuntimeError(
+                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                "  请卸载后安装正确版本：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
+        _yq_bin = yq
+    cmd = [_yq_bin]
+    if front_matter:
+        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
+    if in_place:
+        cmd.append("-i")
+    else:
+        cmd += ["-o", "json"]
+    cmd.append(expression)
+    stdin_input = None
+    if text is not None:
+        cmd.append("-")
+        stdin_input = text
+    else:
+        cmd.append(str(file))
+    r = subprocess.run(cmd, capture_output=True, text=True, input=stdin_input,
+                       encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        raise RuntimeError(f"yq failed: {r.stderr.strip()}")
+    if in_place:
+        return None
+    raw = r.stdout.strip()
+    if not raw or raw == "null":
+        return default
+    decoder = json.JSONDecoder(object_pairs_hook=_dedupe_object_pairs)
+    parsed, idx = decoder.raw_decode(raw)
+    if raw[idx:].strip():
+        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
+    if front_matter and not in_place and default is not None:
+        if not isinstance(parsed, dict):
+            return default
+    return parsed
+
+
+def _require_int(key, value):
+    """业务层类型校验（yq 已把标量类型化，这里只做 bool≠int 的排除 + 非 int 拒绝）。"""
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise SadParseError(f"bad-type: {key} 须为整数，得到 {value!r}")
+    return value
+
+
 def parse_frontmatter(text):
+    """解析首块 frontmatter 为 dict（DEC-1 单一源）。
+
+    [shared-yaml-subset-parser] YAML **语法层**（缩进/冒号/引号/注释剥离/重复键/多文档
+    判定）全部委托 `_yq('.', text=text, front_matter=True)`；本函数只做**业务层**判断：
+    `TOP_KEYS`/`FACT_KEYS`/`FACT_VALUES` 白名单、必需键、枚举、整数类型。
+    """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         raise SadParseError("frontmatter 缺失：首行须为 ---")
-    end = frontmatter_end(lines)   # [impl-review-fix] A3 顶格精确
+    end = frontmatter_end(lines)   # [impl-review-fix] A3 顶格精确 + yq 未闭合静默接受的预扫描
     if end is None:
         raise SadParseError("frontmatter 未闭合：缺结束 ---")
-    fm, facts, in_facts = {}, {}, False
-    for raw in lines[1:end]:
-        if not raw.strip():
-            continue
-        if raw.startswith("\t") or (raw != raw.lstrip() and "\t" in raw[:len(raw) - len(raw.lstrip())]):
-            raise SadParseError(f"tab-indent: frontmatter 禁用 tab 缩进: {raw!r}")
-        if raw.startswith("  ") and in_facts:
-            k, _, v = raw.strip().partition(":")
-            k, v = k.strip(), v.strip()
-            if k not in FACT_KEYS:
-                raise SadParseError(f"out-of-domain: facts 未知子键 {k!r}")
-            if k in facts:
-                raise SadParseError(f"duplicate-key: facts.{k}")
-            if v not in FACT_VALUES:
-                raise SadParseError(f"out-of-domain: facts.{k} 值须∈{FACT_VALUES}，得到 {v!r}")
-            facts[k] = v
-            continue
-        in_facts = False
-        k, sep, v = raw.partition(":")
-        k, v = k.strip(), v.strip()
-        if not sep or raw != raw.lstrip():
-            raise SadParseError(f"frontmatter 不可解析行: {raw!r}")
-        if k not in TOP_KEYS:
-            raise SadParseError(f"out-of-domain: 未知键 {k!r}（白名单 {TOP_KEYS}）")
-        if k in fm or (k == "facts" and facts):
-            raise SadParseError(f"duplicate-key: {k}")
-        if k == "facts":
-            if v:
-                raise SadParseError("facts 须为嵌套块，不接受内联标量")
-            in_facts = True
-            fm["facts"] = facts
-            continue
-        fm[k] = v
+    try:
+        fm = _yq(".", text=text, front_matter=True, default={})
+    except RuntimeError as e:
+        raise SadParseError(f"frontmatter 解析失败: {e}") from e
+    if not isinstance(fm, dict):
+        raise SadParseError(f"frontmatter 顶层结构非 dict: {fm!r}")
+
+    unknown = [k for k in fm if k not in TOP_KEYS]
+    if unknown:
+        raise SadParseError(f"out-of-domain: 未知键 {unknown!r}（白名单 {TOP_KEYS}）")
     if "sad_schema" not in fm or "sad_status" not in fm:
         raise SadParseError("frontmatter 缺必需键 sad_schema / sad_status")
-    fm["sad_schema"] = _to_int("sad_schema", fm["sad_schema"])
+
+    schema_val = _require_int("sad_schema", fm["sad_schema"])
     if fm["sad_status"] not in STATUS_ENUM:
         raise SadParseError(f"out-of-domain: sad_status 须∈{STATUS_ENUM}，得到 {fm['sad_status']!r}")
-    fm["assumptions_open"] = _to_int("assumptions_open", fm.get("assumptions_open", "0"))
-    fm.setdefault("facts", facts)   # 缺失 ≡ 全 missing（锁 draft 方向，不崩溃）
-    return fm
+
+    facts_raw = fm.get("facts", {})
+    if not isinstance(facts_raw, dict):
+        raise SadParseError("facts 须为嵌套块，不接受内联标量")
+    bad_fact_keys = [k for k in facts_raw if k not in FACT_KEYS]
+    if bad_fact_keys:
+        raise SadParseError(f"out-of-domain: facts 未知子键 {bad_fact_keys!r}")
+    for k, v in facts_raw.items():
+        if v not in FACT_VALUES:
+            raise SadParseError(f"out-of-domain: facts.{k} 值须∈{FACT_VALUES}，得到 {v!r}")
+
+    assumptions_open = _require_int("assumptions_open", fm.get("assumptions_open", 0))
+
+    return {
+        "sad_schema": schema_val,
+        "sad_status": fm["sad_status"],
+        "facts": facts_raw,   # 缺失键即缺席（消费方按 .get(k, "missing") 兜底，语义不变）
+        "assumptions_open": assumptions_open,
+    }
 
 
 def _section_spans(text):

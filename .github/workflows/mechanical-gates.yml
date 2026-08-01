@@ -50,6 +50,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+      # yq(mikefarah) —— 7 份 `_yq()` 消费点（shared-yaml-subset-parser）的运行依赖，
+      # 全部 4 条泳道都要装（ubuntu ×3 + macOS ×1，pytest 全量都会跑到这些脚本）。
+      # 🔴 **钉死版本**（同下方第「MUST NOT 用浮动版本」的既有取舍）：从 GitHub Releases
+      # 直接下载对应平台/架构的二进制装进 PATH，不用 apt/brew/snap 的"最新版"——三者版本
+      # 随时间漂移会让 CI 的绿依赖于时点；且 ubuntu runner 的 snapd 在 Actions 环境里不总
+      # 可靠、`brew install` 拿到的是当天的最新版而非固定版本。用 `uname -m` 自适应架构而非
+      # 写死 amd64——GitHub 已把 `macos-latest` 指向 Apple Silicon（arm64）runner，且该指向
+      # 会随时间推移改变。版本与本仓开发环境实测通过的版本一致（v4.53.3，mikefarah/yq）。
+      - name: Install yq (mikefarah/yq, pinned v4.53.3)
+        run: |
+          set -eu
+          YQ_VERSION="v4.53.3"
+          OS="$(uname -s | tr '[:upper:]' '[:lower:]')"   # linux / darwin
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            x86_64) YQ_ARCH="amd64" ;;
+            arm64|aarch64) YQ_ARCH="arm64" ;;
+            *) echo "unsupported arch: $ARCH"; exit 1 ;;
+          esac
+          BIN="yq_${OS}_${YQ_ARCH}"
+          curl -sSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${BIN}" -o /tmp/yq
+          chmod +x /tmp/yq
+          sudo mv /tmp/yq /usr/local/bin/yq
+          yq --version
+
       # pytest>=8 是硬下限：仓根 conftest.py 用 `@pytest.hookimpl(wrapper=True)`（8+ 才有）。
       # 裸 `pip install pytest` 今天恰好装到 8.x，但那是**当下 PyPI 的最新版碰巧满足**，
       # 不是约束——pin 住下限，别让 CI 的绿依赖于时点。与 pytest.ini 的 minversion 成对。

@@ -6,7 +6,9 @@
 stdlib-only, 确定性（无墙钟/随机）, fail-closed.
 """
 import argparse
+import json
 import re
+import shutil
 import subprocess
 import sys
 
@@ -14,6 +16,82 @@ for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
 from pathlib import Path
+
+
+# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
+# [shared-yaml-subset-parser] `read_verify_state` 的 frontmatter **取值**核心委托给外部
+# yq 二进制（同 git 的外部二进制先例），MUST NOT `import yaml`（零依赖不变量）。本文件自己
+# 内联一份 `_yq()`（各脚本各自内联，不跨脚本 import，见 sdflow-ship/scripts/ship_gate.py
+# 同名函数的姊妹实现）。
+#
+# 【yq 已知局限，实测确认（本机 yq v4.53.3）】`--front-matter=extract` 对没有第二个 `---`
+# 的文件，会把首行 `---` 之后的**全部内容**当同一份 YAML 文档处理——若该内容恰好是合法
+# YAML（如本文件的 verify-report.md 片段 `ship-gate:\n  verify: PASS\n`），yq **不报错**、
+# 静默判定"解析成功"。这与 `read_verify_state` 的既有契约（未闭合 frontmatter → malformed）
+# 不兼容，故调 yq **之前**先做一次顶格 `---` 闭合性文本预扫描（`read_verify_state` 内联，
+# 非 YAML 解析，只是字面定界符定位——同 sad_schema.frontmatter_end 的定位性质）。
+_yq_bin = None  # 进程内缓存
+
+
+def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
+    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现 + F3 多文档防御，
+    对齐 ship_gate.py/impl_route.py/init.py 的加固版）。
+
+    [R7/F2] exit≠0 恒 raise RuntimeError（不吞、不因 default 静默）——「键不存在」（exit 0 +
+    stdout=null，走 default）与「解析失败」（exit≠0，含 yq 未安装/身份不对/文件不可读/语法
+    错误）是两条不同分支。
+    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）。
+    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
+    [F3] 多文档防御：stdout 含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
+    [R5/F4] frontmatter 模式下、调用方传了非 None 的 `default`（意味着期望 dict 形状）时，
+    校验解出的顶层结构须为 dict，非 dict → 视为坏块，返回 default（不静默当作合法标量）。
+    本文件唯一调用点查询叶子标量 `.ship-gate.verify`（default=None），此分支实际不触发，
+    保留是为了与其余脚本 `_yq()` 的参考签名一致（Task 5 golden test 的比对面）。
+    """
+    global _yq_bin
+    if _yq_bin is None:
+        yq = shutil.which("yq")
+        if not yq:
+            raise RuntimeError(
+                "yq 未安装。安装方式：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
+        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        if "mikefarah" not in vr.stdout:
+            raise RuntimeError(
+                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                "  请卸载后安装正确版本：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
+        _yq_bin = yq
+    cmd = [_yq_bin]
+    if front_matter:
+        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
+    if in_place:
+        cmd.append("-i")
+    else:
+        cmd += ["-o", "json"]
+    cmd += [expression, str(file)]
+    r = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
+    if in_place:
+        return None
+    raw = r.stdout.strip()
+    if not raw or raw == "null":
+        return default
+    decoder = json.JSONDecoder()
+    parsed, idx = decoder.raw_decode(raw)
+    if raw[idx:].strip():
+        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
+    if front_matter and not in_place and default is not None:
+        if not isinstance(parsed, dict):
+            return default
+    return parsed
 
 # change 名前缀 implement-{roadmap}-pN-* ; roadmap 可含横杠, -p\d+ 作定界, 可选尾缀
 PREFIX_RE = re.compile(r"^implement-(?P<roadmap>.+)-p(?P<phase>\d+)(?:-.+)?$")
@@ -156,10 +234,15 @@ def read_verify_state(change_dir):
     """读 verify-report.md 首块 frontmatter 里**顶层 ship-gate: 的直接子键** verify.
     返回 (state, value): state ∈ {good, absent, malformed}.
     absent=文件缺/无首块 frontmatter; malformed=未闭合/无顶层 ship-gate 块/该块下无
-    verify 直接子键/重复键/坏枚举/文件不可读(FIX-6).
-    [impl-review-fix] FIX-3: 不再用宽松 `^\\s*verify:` 扫全块(会误采纳嵌套非 ship-gate
-    直接子键的 verify, 如 `note:\\n  verify: PASS`)——只认顶层 ship-gate: 块、且缩进
-    恰为其直接子键层的 verify 行(更深嵌套/其它顶层键下的 verify 一律不采纳)."""
+    verify 直接子键/坏枚举/文件不可读(FIX-6).
+
+    [shared-yaml-subset-parser] YAML **取值**核心委托给 `_yq()`（design.md 决定），
+    Python 侧只保留：① frontmatter 闭合性文本预扫描（防 yq 对未闭合块的已知静默接受，
+    见 `_yq()` 上方注释）② PASS/FAIL 枚举校验。**不再区分**"无顶层 ship-gate 块"
+    "重复键"这两类具体成因——`.ship-gate.verify` 查不到值时统一落 `default=None`，
+    校验只看最终值是否 ∈ {PASS,FAIL}；两者原本就映射到同一个 malformed 状态，行为不变
+    （yq 方案下诊断精度下降为既定代价，见 impl-report）。
+    """
     path = Path(change_dir) / "verify-report.md"
     try:
         text = path.read_text(encoding="utf-8")
@@ -171,39 +254,19 @@ def read_verify_state(change_dir):
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return ("absent", None)
-    fm, closed = [], False
-    for line in lines[1:]:
-        if line.strip() == "---":
-            closed = True
-            break
-        fm.append(line)
+    # 顶格 `---` 闭合性预扫描（字面定界符定位，非 YAML 解析）——yq 对没有第二个 `---`
+    # 的文件会把首行之后全部内容当同一份文档解析，若恰好合法会静默"解析成功"。
+    closed = any(ln.strip() == "---" for ln in lines[1:])
     if not closed:
         return ("malformed", None)
-    gate_idx = None
-    for i, ln in enumerate(fm):
-        if re.match(r"^ship-gate:\s*$", ln):
-            gate_idx = i
-            break
-    if gate_idx is None:
-        return ("malformed", None)  # 无顶层 ship-gate 块 → 不采纳任何嵌套 verify
-    child_indent = None
-    block = []
-    for ln in fm[gate_idx + 1:]:
-        if ln.strip() == "":
-            continue
-        indent = len(ln) - len(ln.lstrip(" "))
-        if indent == 0:
-            break  # 遇到下一个顶层键, ship-gate 块结束
-        if child_indent is None:
-            child_indent = indent
-        if indent == child_indent:
-            block.append(ln)  # 只收直接子键层; 更深嵌套(如 note.verify)忽略
-    vals = [m.group(1) for m in (re.match(r"^\s*verify:\s*(\S+)\s*$", ln) for ln in block) if m]
-    if len(vals) != 1:
-        return ("malformed", None)  # 0=无字段, >1=重复键
-    if vals[0] not in ("PASS", "FAIL"):
-        return ("malformed", None)  # 坏枚举
-    return ("good", vals[0])
+    try:
+        verify_value = _yq(".ship-gate.verify", path, front_matter=True, default=None)
+    except RuntimeError as e:
+        sys.stderr.write("VERIFY_REPORT_MALFORMED %s: %s\n" % (path, e))
+        return ("malformed", None)
+    if verify_value not in ("PASS", "FAIL"):
+        return ("malformed", None)  # 无 ship-gate 块 / 无 verify 子键 / 坏枚举, 统一归类
+    return ("good", verify_value)
 
 
 def read_tasks_completion(change_dir):
