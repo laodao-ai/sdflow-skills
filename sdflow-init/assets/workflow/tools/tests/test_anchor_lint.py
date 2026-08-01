@@ -93,29 +93,29 @@ def _write_config(tmp_path, body):
     (d / "config.yaml").write_text(body, encoding="utf-8"); return tmp_path
 
 def test_metrics_file_absent_false(tmp_path):
-    al = _mod(); assert al.read_metrics_enabled(tmp_path) is False        # ① 无文件
+    al = _mod(); assert al._metrics_enabled(tmp_path) is False        # ① 无文件
 
 def test_metrics_no_block_false(tmp_path):                                # ② 消费仓常态
     al = _mod(); root = _write_config(tmp_path, "schema: spec-driven\ncontext: |\n  x\n")
-    assert al.read_metrics_enabled(root) is False
+    assert al._metrics_enabled(root) is False
 
 def test_metrics_block_illegal_raises(tmp_path):                          # ③ 块在值非法
     al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: yes\n")
     import pytest
     with pytest.raises(al.MetricsError):
-        al.read_metrics_enabled(root)
+        al._metrics_enabled(root)
 
 def test_metrics_true(tmp_path):                                          # ④
     al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: true\n")
-    assert al.read_metrics_enabled(root) is True
+    assert al._metrics_enabled(root) is True
 
 def test_metrics_block_boundary(tmp_path):                                # 块边界：另一段的 enabled 不误读
     al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: false\nother:\n  enabled: true\n")
-    assert al.read_metrics_enabled(root) is False
+    assert al._metrics_enabled(root) is False
 
 def test_metrics_top_comment_between(tmp_path):        # [impl-review-fix] F3 补测：顶层注释/空行不误判块边界
     al = _mod(); root = _write_config(tmp_path, "metrics:\n# 注释\n  enabled: true\n")
-    assert al.read_metrics_enabled(root) is True
+    assert al._metrics_enabled(root) is True
 
 
 # --- shared-yaml-subset-parser Task 2：`_yq()` 薄封装（design.md §1 参考实现）------------------

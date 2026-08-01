@@ -181,7 +181,7 @@ class MetricsError(Exception):
     pass
 
 
-def read_metrics_enabled(root):
+def _metrics_enabled(root):
     """真四态（yq 委托版）：①config.yaml 不存在→False（先于 _yq 调用短路，避免 yq 对缺失文件报错）
     ②有文件但 metrics.enabled 键不存在（无 metrics: 块或块内无 enabled 子键）→yq 返回 null→default False
     （消费仓常态放行）③metrics.enabled 存在但非合法布尔（如 "yes" 被 YAML 1.2 解成字符串而非布尔）
@@ -839,7 +839,7 @@ def main(argv=None):
         print(json.dumps({"result": "ERROR", "reason": "enums"}, ensure_ascii=False))
         return EXIT_ERROR
     try:
-        metrics_on = read_metrics_enabled(args.root)
+        metrics_on = _metrics_enabled(args.root)
     except MetricsError as e:
         print(f"[anchor_lint] ERROR config metrics 块坏: {e}", file=sys.stderr)
         print(json.dumps({"result": "ERROR", "reason": "metrics-block-bad"}, ensure_ascii=False))
