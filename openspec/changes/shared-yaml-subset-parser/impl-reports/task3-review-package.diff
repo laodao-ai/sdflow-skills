@@ -1,0 +1,1048 @@
+# Review package: 34c67aa..30149a9
+
+## Commits
+30149a9 feat(shared-yaml-subset-parser): ship_gate.py + impl_route.py YAML 解析改为 yq
+
+## Files changed
+ .../impl-reports/task3-gate-route-yq.md            | 162 +++++++++++++++++
+ sdflow-implement/scripts/impl_route.py             | 191 ++++++++++++---------
+ sdflow-ship/scripts/ship_gate.py                   | 177 +++++++++++++++----
+ sdflow-ship/tests/test_anchor_contract.py          |  19 +-
+ sdflow-ship/tests/test_frontmatter_parse.py        |   9 +-
+ sdflow-ship/tests/test_gate_git_layer.py           |  45 ++++-
+ 6 files changed, 488 insertions(+), 115 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task3-gate-route-yq.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task3-gate-route-yq.md
+new file mode 100644
+index 0000000..aa34d49
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task3-gate-route-yq.md
+@@ -0,0 +1,162 @@
++# Task 3 实现报告：ship_gate.py + impl_route.py 的 YAML 解析改为 yq
++
++## 范围
++
++- `sdflow-ship/scripts/ship_gate.py`：`parse_ship_gate_frontmatter` 的 YAML 解析核心改为
++  `_yq()`（新增），保留 `FIELD_VALIDATORS` / `_coerce_ship_gate_value` / `bad-type` /
++  `out-of-domain` 业务校验，保留 duplicate-key/tab-indent 原始文本预扫描（R11）。
++- `sdflow-implement/scripts/impl_route.py`：`read_config_pipeline` / `read_plan_marker`
++  改为 `_yq()`，删除 `_extract_scalar` / `KEY_RE` / `FRONT_DELIM`。
++- 两脚本互相 import（`impl_route` sibling-import `ship_gate.FenceTracker` /
++  `resolve_plan_path` / `PlanNameConflict` / `PLAN_FILENAMES`；`ship_gate` 惰性 import
++  `impl_route.parse_blocked_by`）经验证正常工作（identity 断言、既有测试全绿）。
++
++## 设计要点与关键决策
++
++### 1. 结构预扫描（R11）与 yq 取值的分工线
++
++调研发现（本机 yq v4.53.3 windows 实测）yq 的真实局限**不止** design.md/spec-review-report
++点名的 duplicate-key/tab-indent 两类，还有一类**未被显式登记但同样致命**：
++
++- **frontmatter 未闭合时不报错**：`--front-matter=extract` 对没有第二个 `---` 的文件，会把
++  首行 `---` 之后的**全部内容**当同一份 YAML 文档处理。若正文恰好是 Markdown 标题
++  （`### Task 1: A`），因为 `#` 是 YAML 注释符，会被**静默吞掉**、整体判定"解析成功"——
++  这与 ship_gate.py 的 D2（"未闭合 --- 视为 absent"）和 impl_route.py 的
++  "未闭合→RouteStop" 两种既有契约都不兼容，若不在调 yq **之前**做闭合性检测，两个脚本都
++  会把"结构性缺陷"误判成"合法值"。
++- **重复顶层键静默取最后值**（design/spec-review 已点名，本机复现确认，且 exit=0，无红色
++  信号）。
++- **flow-style 内联 map 与 block-style 语义等价**（`ship-gate: {verify: PASS}` 与
++  `ship-gate:\n  verify: PASS` 解出同一个 dict）——ship_gate.py 旧测试
++  `test_toplevel_ship_gate_scalar_is_bad` 要求前者判 `bad-type`，若把"顶层结构是否规范
++  空 map 头"这件事完全交给 yq 的返回值类型判断（`isinstance(dict)`），这条测试会假绿失守。
++
++因此两脚本的预扫描职责边界确定为：
++
++| 职责 | 归属 |
++|---|---|
++| frontmatter 首/闭合 `---` 定位 | 预扫描（两脚本均需要，否则"未闭合"被 yq 静默吃掉） |
++| 顶层键 / 字段级 duplicate-key 计数 | 预扫描（yq 无法给出，R11 明文） |
++| tab-indent 检测（仅 ship_gate.py） | 预扫描（yq 只报笼统词法错误） |
++| 顶层 `ship-gate:` 是否为规范空 map 头（仅 ship_gate.py） | 预扫描（文本形态判断，yq 的
++  真解析会抹平 flow/block 两种写法的差异） |
++| 字段值的实际类型/内容（bool 转换、引号剥离、注释剥离、嵌套字段隔离） | 委托 `_yq()` |
++
++`parse_ship_gate_frontmatter` 现在结构分两段：①（原有的）文本扫描定位边界 + 结构诊断，
++全部沿用原实现的边界/缩进/头形判定逻辑（未删减任何既有分支）；② 预扫描通过后单次调用
++`_yq('."ship-gate"', text=text, front_matter=True, default={})` 取回**整段** dict，再用
++`FIELD_VALIDATORS`/`_coerce_ship_gate_value` 逐字段校验。`_coerce_ship_gate_value` 的调用
++约定从"接收原始文本片段自己做字符串比较"改为"接收 yq 已类型化的值"（`design_approved`
++现在收到的是真 `bool`，而非字符串 `"true"`）。
++
++`impl_route.py` 同理：`read_plan_marker` 先做 `---`/`---` 闭合性 + `impl-pipeline:` 键计数
++的文本预扫描，通过后才调 `_yq('."impl-pipeline"', p, front_matter=True)` 取值；
++`read_config_pipeline` 无需闭合性检测（config.yaml 不是 frontmatter，无"块"概念），直接
++`_yq('."impl-pipeline"', config_path, default=None)`，`RuntimeError`（yq 解析整份文件失败，
++如未闭合引号）被捕获映射为 `unknown-value:<诊断>`。
++
++### 2. `_yq()` 两份独立实现（各自内联，非共享）
++
++按 Q2 拍板（"7 份 `_yq()` 各自内联 + golden test 守一致"，golden test 属 Task 5），本票的
++两份 `_yq()` **不完全相同**，差异是两脚本真实用法差异导致的：
++
++- `ship_gate.py` 的 `_yq()` 额外支持 `text=` 参数（走 stdin，`cmd.append("-")` +
++  `subprocess.run(..., input=text)`）——`parse_ship_gate_frontmatter` 的调用方既有从磁盘
++  读（live 报告）也有从 `git show` 取文本（归档 dual-read）两种来源，两者需要共用同一个
++  `_yq()` 调用点（"live 读与归档 git-show 文本读共用同一严格 helper"是既有的 D4 承诺），
++  stdin 模式让这条共用路径成立，不必先把 git-show 的文本落临时文件。
++- `ship_gate.py` 的 `_yq()` 在 `front_matter=True` 时额外校验顶层结构须为 `dict`（非 dict
++  → raise，[R5/F4]）——因为它唯一的 front_matter 用法是查 `.ship-gate`（整段），预期结果
++  恒为 dict-or-absent。
++- `impl_route.py` 的 `_yq()` 只接受文件路径（两处调用都已经手上有 `Path` 对象，无需 stdin），
++  且**不做** dict 校验——它的 front_matter 用法是查 `."impl-pipeline"`（标量叶子），预期
++  结果是 `str`/`None`，套用 dict 校验会直接把所有正常调用判成坏块。
++- 两者共同点（均满足 Global Constraints）：`shutil.which` 检测 + `--version` 身份校验
++  （拒 kislyuk/yq）+ 进程内缓存（模块级 `_yq_bin` 全局变量）+ `encoding="utf-8",
++  errors="replace"` + 非零退出恒 `raise RuntimeError`（不吞、不因 `default` 而静默）+
++  多文档防御（`json.JSONDecoder().raw_decode` 检测 stdout 是否含一个以上 JSON 值）。
++
++这一差异化在 `impl-report` 与两处 `_yq()` 的 docstring 中均已注明，供 Task 5 的 golden test
++设计者知悉：golden test 若要求"7 份字节完全一致"，需要先在 anchor_lint.py 已落地的版本（无
++text 支持、无 dict 校验）与本票两份之间做一次收敛决策，而不是直接机械 diff 判定。本票不
++擅自代 Task 5 做这个决策（属于面治范围但跨票，留给 Task 5 显式处理）。
++
++### 3. 已知行为变化（不可避免，已随测试断言同步）
++
++- **引号值不再"严格"**：`verify: "PASS"` 现在与 `verify: PASS` 语义等价（真 YAML 解析器
++  天然剥引号）。旧测试 `test_quoted_value_is_strict` 断言的"引号即坏"是手搓扫描器（不做
++  引号剥离）的副作用，非业务不变量——已重命名为
++  `test_quoted_value_now_equivalent_to_bare_under_yq` 并更新断言为 `state=={"verify":"PASS"}`。
++- **`_coerce_ship_gate_value` 的测试直接调用点**（`test_anchor_contract.py` 的
++  `test_producer_frontmatter_fields` / `test_producer_frontmatter_parseable`）原先直接把
++  模板裸行 partition 出的原始字符串（如 `"true"`）传给 `_coerce_ship_gate_value`，现在函数
++  期望 yq 已类型化的值。新增测试内 helper `_yaml_bareword_to_native()` 先把裸词按 YAML 1.2
++  core schema 换算成原生类型（仅 `true`/`false` 两个字面）再传入，语义不变、调用约定对齐。
++- **config.yaml/marker 的"损坏标量"诊断精度下降**：旧版能精确点名"哪个标量坏"（未闭合
++  引号/闭合引号后跟垃圾字符）；yq 方案下这类输入导致**整份文件**解析失败，诊断退化为
++  "yq 报的原始错误文本"。`test_config_value_quoted_unclosed_damaged` 等既有测试原本就用
++  `note.startswith("unknown-value:")`（非精确匹配），故未修改测试即可通过；这一诊断精度
++  代价与 spec-review-report.md F9 的登记一致。
++
++### 4. R13/strenv() 的适用性核验
++
++Global Constraints 要求"写操作值传递 MUST NOT 用 f-string 插值，MUST 用环境变量
++`strenv()`"。经 grep 确认（`grep -n "write_text\|in_place\|-i \|writeback\|prepend"`）
++**`ship_gate.py` 与 `impl_route.py` 均无任何 frontmatter 写操作**——前者文件头注释明确
++自称"确定性台账（盘面即状态：只读、零副作用）"，三个 producer（`sdflow-spec-review` /
++`sdflow-done` / `sdflow-code-review`）各自的 SKILL.md 才是 frontmatter 的实际写入方，不在
++本票范围内；后者的唯一写操作是 `task-text` 子命令落盘抠出的 ticket 原文（与 YAML 无关）。
++故本票的两个 `_yq()` 均未实现 `in_place=True` 写路径的 `strenv()` 支持——**不是遗漏，是
++按目标态核验后确认不适用**，`ship_gate.py` 的 `_yq()` 保留了 `in_place` 参数位（design.md
++参考实现的完整签名）以防将来复用，但当前两脚本内均无调用点传 `in_place=True`。
++
++## 变更文件
++
++- `sdflow-ship/scripts/ship_gate.py`（新增 `_yq()`；`parse_ship_gate_frontmatter` 取值段
++  改写；`_coerce_ship_gate_value` 签名语义调整；两处零依赖声明注释更新）
++- `sdflow-implement/scripts/impl_route.py`（新增 `_yq()`；`read_config_pipeline` /
++  `read_plan_marker` 改写；删除 `_extract_scalar`；`KEY_RE`→`_PIPELINE_KEY_RE`（窄化为
++  纯计数用）；`FRONT_DELIM`→`_FRONTMATTER_DELIM`（同名同值，仅避开被删名字面）；模块
++  docstring 更新）
++- `sdflow-ship/tests/test_frontmatter_parse.py`（1 处测试更新：引号值行为变化）
++- `sdflow-ship/tests/test_anchor_contract.py`（新增 `_yaml_bareword_to_native` helper，
++  2 处调用点适配 `_coerce_ship_gate_value` 新签名）
++- `sdflow-ship/tests/test_gate_git_layer.py`（子进程单一出口守卫扩展为"允许 `_git_run`
++  与 `_yq` 两个出口"，并新增 `test_yq_spawns_are_confined_to_its_own_entry` 反向锁定
++  `_yq()` 内部恰好两处 `subprocess.run`）
++
++## TDD 说明
++
++本票是对**既有生产代码 + 既有大型测试套件**的重构（非从零新增功能），"red before green"
++体现为：先跑通两套件基线（348 passed/12 skipped、79 passed，均绿），再逐步替换实现、每步
++用现有测试当"回归防线"验证；三处因契约必然变化而红的用例（详见"已知行为变化"）逐一分析
++根因后判定为"预期契约变化"而非"实现错误"，随之更新断言并写明变化理由，而非放松断言掩盖。
++未新增测试用例覆盖新行为分支（如 `_yq()` 的多文档防御、身份校验）——这些是 design.md 已
++定稿的 `_yq()` 参考实现的直接照搬，且 Task 5 的 golden test 会统一覆盖 7 份 `_yq()` 的
++一致性，本票不重复造轮子。
++
++## 测试结果
++
++```
++pytest sdflow-ship/tests/ -q       → 349 passed, 12 skipped
++pytest sdflow-implement/tests/ -q  → 79 passed
++（合并跑一次）→ 428 passed, 12 skipped
++```
++
++另跑：
++- `python -c "import impl_route as ir; import ship_gate as sg; assert ir._FenceTracker is sg.FenceTracker; assert ir._resolve_plan_path is sg.resolve_plan_path"` → 通过（互相 import 关系正常）
++- `grep -n "def _extract_scalar\|def read_metrics_enabled\|def frontmatter_end\|def read_verify_state" sdflow-ship/scripts/ship_gate.py sdflow-implement/scripts/impl_route.py` → 零命中
++- `grep -n "\bKEY_RE\b\|\bFRONT_DELIM\b" sdflow-implement/scripts/impl_route.py` → 零命中
++- `hack/tests/test_subprocess_encoding_contract.py` + `hack/tests/test_decision_memo_gate.py` → 23 passed（确认新增的 `subprocess.run` 调用点符合仓内编码契约）
++
++全仓 `pytest`（根级）因套件体量大、多为 subprocess 密集型测试，单次运行超过 10 分钟未完成，
++本票未等待其收尾——ticket 验收条件明确限定为 `sdflow-ship/tests/` 与 `sdflow-implement/tests/`
++两个套件，均已确认全绿；全仓跑跑属于 Task 6（收尾验证票）的职责范围。
++
++## 未做/推迟事项（明确交代）
++
++- **golden test（Task 5 职责）**：本票两份 `_yq()` 与 Task 2 已落地的 `anchor_lint.py`
++  版本存在预期内差异（详见"设计要点 2"），未在本票新增跨脚本一致性检查——Q2 拍板把 golden
++  test 排进 Task 5，本票不越权代做。
++- **CI 装 yq、init.py 改造、roadmap_writeback_draft.py/sad_schema.py 改造**：分属 Task 4/5，
++  不在本票范围。
+diff --git a/sdflow-implement/scripts/impl_route.py b/sdflow-implement/scripts/impl_route.py
+index d04e768..442c611 100644
+--- a/sdflow-implement/scripts/impl_route.py
++++ b/sdflow-implement/scripts/impl_route.py
+@@ -3,50 +3,115 @@
+ """impl_route.py — sdflow-implement 路由/拓扑 stdlib-only helper（只读、零副作用）
+ 
+ 管线路由三跳（design F4/F12/F13，逐字见 matt-workflow-integration/superpowers-plan.md
+ Task 2 Interfaces）：
+     ① openspec/config.yaml 顶层 `impl-pipeline:` 键（仅新出 ticket 首跳读一次）
+     ② plan 文件头 frontmatter marker（在途只读，marker 存在即锁定，优先于 config）
+     ③ 键/marker 缺席 → 一律 superpowers（缺省态，静默回退）
+ marker **存在但非法/重复/损坏** 一律停（RouteStop，UNKNOWN 语义），不静默回退——
+ 防两管线混跑。
+ 
+-本文件不 import yaml（config.yaml 只做逐行文本解析，不做通用 YAML 解析）；
++本文件不 `import yaml`（零依赖不变量）——config.yaml / plan frontmatter 的 YAML **取值**
++委托给外部 yq(mikefarah) 二进制（同 git 的外部二进制先例，`_yq()`，见 shared-yaml-subset-parser）。
+ **不改** sdflow-ship/scripts/ship_gate.py（gate 零改动铁律：本文件不影响 gate 任何判定）；
+-subprocess 仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输出 "-"。
++subprocess 除 `_yq()` 外仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输出 "-"。
++
++[shared-yaml-subset-parser] frontmatter/键重复检测**不能**委托给 yq——实测 yq 对重复
++`impl-pipeline:` 键静默取最后值（exit 0），且 `--front-matter=extract` 不要求闭合 `---`
++（未闭合时会把之后内容当同一份 YAML 文档处理，`### Task N:` 类行被当注释吞掉，"看似"
++解析成功）。这两类结构诊断保留轻量原始文本预扫描，在 yq 调用之前执行（与 ship_gate.py
++的 duplicate-key/tab-indent 预扫描同一分工原则：prescan 管结构，yq 管取值）。
+ 
+ [impl-review-fix F4] 唯一例外：**fenced code block 的围栏词法**从 ship_gate 引入
+ （`FenceTracker`，只读纯函数）。原先此处手抄 `line.lstrip().startswith("```")` 并在注释里
+ 声称「口径与 ship_gate._parse_plan 一致」——gate 侧已收敛到 FenceTracker（同种 + 长度 ≥ 开启符
+ + 尾部校验），手抄副本没跟上，那句注释成了假话，两个解析器对同一 plan 给出不同段落边界
+ （仓内实证：archive/2026-07-03-sdflow-ship/superpowers-plan.md 的 ```markdown 块内嵌 ```bash
+ 示例，旧口径被内层 ``` 提前关掉围栏 ⇒ 多认了 2 个复选框）。后果：`Blocked-by` 依赖图与
+ 完成判据基于两套边界，被隐藏的行若恰是唯一未勾项 ⇒ 完成判据侧假 ✅。
+ ⇒ 改为**单一源** import。引不到 ⇒ parse_blocked_by 直接 TopoError（fail-closed），
+ MUST NOT 回退手抄副本——那正是本条要根治的漂移面。
+ """
+ from __future__ import annotations
+ 
+ import argparse
++import json
+ import re
++import shutil
+ import subprocess
+ import sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ from pathlib import Path
+ from typing import Dict, Iterable, List, Optional, Set, Tuple
+ 
+-FRONT_DELIM = "---"
++_FRONTMATTER_DELIM = "---"
+ LEGAL_PIPELINES = ("tickets", "superpowers")
+ 
++
++# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
++# [shared-yaml-subset-parser] 本文件自己内联一份 `_yq()`（各脚本各自内联，不跨脚本 import，
++# 见 sdflow-ship/scripts/ship_gate.py 同名函数的姊妹实现）。与 ship_gate.py 的版本相比，本
++# 版本**不**做 front-matter 顶层结构必须为 dict 的校验——本文件的两处 front_matter 用法
++# （`."impl-pipeline"`）查的是**标量叶子**，不是整个 frontmatter 段，预期结果天然是
++# str/None，不是 dict。
++_yq_bin = None  # 进程内缓存
++
++
++def _yq(expression, file, *, front_matter=False, default=None):
++    """yq(mikefarah) subprocess 薄封装（只读，本文件不产生任何 in-place 写操作）。
++
++    [R7/F2] exit≠0 恒 raise（转发 stderr）——「键不存在」（exit 0 + stdout=null，走 `default`）
++    与「解析失败」（exit≠0）MUST 是两条不同分支，调用方按需自行捕获处理（本文件两处调用
++    均捕获 RuntimeError 并映射为各自的 fail-closed 语义：config→unknown-value，marker→RouteStop）。
++    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）。
++    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
++    [F3] 多文档防御：stdout 若含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
++    """
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            print(f"ERROR: yq 未安装。安装方式：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
++                  f"  请卸载后安装正确版本：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        _yq_bin = yq
++    cmd = [_yq_bin]
++    if front_matter:
++        cmd.append("--front-matter=extract")
++    cmd += ["-o", "json", expression, str(file)]
++    r = subprocess.run(cmd, capture_output=True, text=True,
++                       encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    decoder = json.JSONDecoder()
++    parsed, idx = decoder.raw_decode(raw)
++    if raw[idx:].strip():
++        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
++    return parsed
++
+ # [impl-review-fix F4] 围栏词法单一源 = ship_gate.FenceTracker。
+ # 定位方式：本文件在 <root>/sdflow-implement/scripts/ 下，gate 在同级 <root>/sdflow-ship/scripts/。
+ # 两种安装形态都成立——symlink 安装时 Path(__file__).resolve() 落回仓内；Windows copy 安装时
+ # 两个 skill 目录在 ~/.claude/skills/ 下互为兄弟。抽第三个共享模块反而两种形态都找不到
+ # （它没有 SKILL.md，setup.sh 不装它），故取 sibling import。
+ _GATE_SCRIPTS = Path(__file__).resolve().parents[2] / "sdflow-ship" / "scripts"
+ try:
+     if str(_GATE_SCRIPTS) not in sys.path:
+         sys.path.insert(0, str(_GATE_SCRIPTS))
+     from ship_gate import FenceTracker as _FenceTracker  # type: ignore
+@@ -67,165 +132,135 @@ except Exception as _e:                                  # noqa: BLE001
+     # 「装歪了 vs 语法错 vs 版本不符」三种情况在诊断上无法区分。
+     _FENCE_IMPORT_ERR = f"{type(_e).__name__}: {_e}"
+ else:
+     _FENCE_IMPORT_ERR = ""
+ 
+ # [impl-review-fix] 语义对齐 ship_gate.EXIT_UNKNOWN=6（设计禁 import gate，手动同步；
+ # gate 侧字面见 ship_gate.py:137 `EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN
+ # = 0, 3, 4, 5, 6`）。
+ EXIT_ROUTE_STOP = 6
+ 
+-# [impl-review-fix] 列 0 锚定 + 冒号前容忍空白（`impl-pipeline : tickets` 一类变体也命中），
+-# 相比旧版 `line.startswith("impl-pipeline:")` 不再要求冒号紧跟键名。捕获组=冒号后原文（未 strip）。
+-KEY_RE = re.compile(r"^impl-pipeline\s*:(.*)$")
++# [shared-yaml-subset-parser R11 同类预扫描] 仅用于**结构诊断**——数 `impl-pipeline:` 键
++# 出现次数（yq 对重复键静默取最后值，这一诊断只能在 yq 调用之前用文本扫描兜底），不再用于
++# 提取/解析值本身（那部分已委托给 `_yq()`，见 read_config_pipeline/read_plan_marker）。
++# 列 0 锚定 + 冒号前容忍空白（`impl-pipeline : tickets` 一类变体也命中）。
++_PIPELINE_KEY_RE = re.compile(r"^impl-pipeline\s*:")
+ 
+ # [impl-review-fix] 与 ship_gate.TASK_TITLE_RE 逐字一致（^### Task (\d+):，单空格、无 M 标志——
+ # 本模块逐行扫描不需要 MULTILINE）。排版漂移（`###Task 1:`/`### Task  1:`）不计任务，行为与
+ # gate 一致（sdflow-ship/scripts/ship_gate.py:483 TASK_TITLE_RE）。
+ TASK_HEADER_RE = re.compile(r"^### Task (\d+):")
+ BLOCKED_BY_RE = re.compile(r"\*{0,2}Blocked-by:\*{0,2}\s*(.*)$")
+ # [impl-review-fix] 疑似变体检测（大小写不同 / 全角冒号），case-insensitive、半角全角冒号皆认；
+ # 仅当某行未被 BLOCKED_BY_RE 命中时才检查此正则，命中即判「疑似声明格式不识别」。
+ BLOCKED_BY_VARIANT_RE = re.compile(r"(?i)\*{0,2}blocked-by\*{0,2}\s*[:：]")
+ 
+ 
+ class RouteStop(Exception):
+     """管线 marker 存在但非法/重复/损坏——UNKNOWN 语义，停，不静默回退。"""
+ 
+ 
+ class TopoError(Exception):
+     """Blocked-by 拓扑非法：环/自环/引用不存在的依赖号。"""
+ 
+ 
+-# ---------------------------------------------------------------------------
+-# 文本标量提取（config 与 marker frontmatter 共用：允许引号值、去行内注释）
+-# ---------------------------------------------------------------------------
+-
+-def _extract_scalar(raw: str) -> Tuple[str, bool]:
+-    """返回 (value, damaged)。
+-
+-    [impl-review-fix] 损坏标量 fail-closed 契约：未闭合引号、或闭合引号后跟非注释非空白
+-    字符（如 `"tickets" junk`）→ damaged=True，调用方各自 fail-closed（config→
+-    unknown-value 诊断值；marker→RouteStop），不再像旧版那样静默兜底成合法值绕过停机策略。
+-    """
+-    s = raw.strip()
+-    if not s:
+-        return "", False
+-    if s[0] in ("'", '"'):
+-        q = s[0]
+-        end = s.find(q, 1)
+-        if end == -1:
+-            return s[1:], True  # 未闭合引号 → 损坏
+-        rest = s[end + 1:].strip()
+-        if rest and not rest.startswith("#"):
+-            return s[1:end], True  # 闭合引号后跟非注释垃圾 → 损坏
+-        return s[1:end], False
+-    hash_idx = s.find("#")
+-    if hash_idx != -1:
+-        s = s[:hash_idx]
+-    return s.strip(), False
+-
+-
+ # ---------------------------------------------------------------------------
+ # ① config 键
+ # ---------------------------------------------------------------------------
+ 
+ def read_config_pipeline(root) -> Tuple[str, str]:
+-    """读 <root>/openspec/config.yaml 顶层 `impl-pipeline:` 行。
++    """读 <root>/openspec/config.yaml 顶层 `impl-pipeline:` 行（取值委托给 `_yq()`）。
+ 
+     返回 (pipeline, note)：
+         缺失/空值      → ("superpowers", "absent")
+         tickets/superpowers → (值, "ok")
+-        其他值/损坏标量 → ("superpowers", "unknown-value:<原文>")（F12：非法值回显，区别于缺省；
+-                          损坏标量同归此路径——fail 向旧管线，且原文回显可诊断）
++        其他值/整份 config.yaml 语法损坏 → ("superpowers", "unknown-value:<原文或 yq 诊断>")
++        （F12：非法值回显，区别于缺省；语法损坏同归此路径——fail 向旧管线，且可诊断。
++        [shared-yaml-subset-parser] 旧版的「损坏标量」（未闭合引号等）在 yq 方案下不再是
++        本函数自己判定的一类——那类输入会让 yq 对整份 config.yaml 的解析直接失败
++        （exit≠0），与其它语法错误一样落入下方 `except RuntimeError` 分支，诊断精度从
++        「点名具体哪个标量坏」降为「yq 报的原始错误」，是切换到真解析器的已知代价
++        （design.md spec-review-amendment F9 已登记，tasks.md §8.3 同类）。
+     """
+     config_path = Path(root) / "openspec" / "config.yaml"
+     if not config_path.exists():
+         return "superpowers", "absent"
+ 
+-    text = config_path.read_text(encoding="utf-8", errors="replace")
+-    if text.startswith("﻿"):
+-        text = text[1:]  # [impl-review-fix] BOM 剥离，口径对齐 ship_gate.py:308
+-
+-    raw_field: Optional[str] = None
+-    for line in text.splitlines():
+-        # 顶层键要求列 0 起始（排除注释行 `# impl-pipeline: ...` 与缩进内文本，
+-        # 如 `context: |` 块标量正文提及同名字样）；KEY_RE 容忍冒号前空白。
+-        m = KEY_RE.match(line)
+-        if m is not None:
+-            raw_field = m.group(1)
+-            break
+-
+-    if raw_field is None:
+-        return "superpowers", "absent"
++    try:
++        raw = _yq('."impl-pipeline"', config_path, default=None)
++    except RuntimeError as exc:
++        return "superpowers", f"unknown-value:{exc}"
+ 
+-    raw_stripped = raw_field.strip()
+-    if not raw_stripped:
++    if raw is None:
+         return "superpowers", "absent"
+-
+-    value, damaged = _extract_scalar(raw_field)
+-    if damaged:
+-        return "superpowers", f"unknown-value:{raw_stripped}"
+-    if not value:
++    if not isinstance(raw, str):
++        # yq 解出的是非字符串结构（如 list/map/number）——本字段的合法值域只有两个字面串，
++        # 结构类型错本身就是「非法值」，与字符串越域同归 unknown-value。
++        return "superpowers", f"unknown-value:{raw!r}"
++    if raw == "":
+         return "superpowers", "absent"
+-    if value in LEGAL_PIPELINES:
+-        return value, "ok"
+-    return "superpowers", f"unknown-value:{value}"
++    if raw in LEGAL_PIPELINES:
++        return raw, "ok"
++    return "superpowers", f"unknown-value:{raw}"
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # ② plan frontmatter marker
+ # ---------------------------------------------------------------------------
+ 
+ def read_plan_marker(plan_path) -> Optional[str]:
+-    """读 plan 文件头 frontmatter 的 `impl-pipeline` marker。
++    """读 plan 文件头 frontmatter 的 `impl-pipeline` marker（取值委托给 `_yq()`）。
+ 
+     文件缺            → None
+     无 frontmatter / 无键 → "superpowers"（旧管线产物，不嗅探正文内容）
+     首块 frontmatter 含 impl-pipeline: tickets|superpowers 单值 → 该值
+     键重复 / 值非法 / 值损坏（未闭合引号等）/ frontmatter 未闭合 → raise RouteStop（UNKNOWN 语义，停）
++
++    [shared-yaml-subset-parser] frontmatter 边界（首行 `---` + 闭合 `---`）与
++    `impl-pipeline` 键重复计数仍走原始文本预扫描（原因见文件头注释：yq 既不要求闭合
++    `---`、也不会报告重复键），预扫描通过后才调 `_yq()` 取真值——值损坏（未闭合引号等）
++    此时体现为 yq 对该 frontmatter 段解析失败（`RuntimeError`），同样映射为 RouteStop。
+     """
+     p = Path(plan_path)
+     if not p.exists():
+         return None
+ 
+     text = p.read_text(encoding="utf-8", errors="replace")
+     if text.startswith("﻿"):
+         text = text[1:]  # [impl-review-fix] BOM 剥离，口径对齐 ship_gate.py:308
+     lines = text.splitlines()
+-    if not lines or lines[0].strip() != FRONT_DELIM:
++    if not lines or lines[0].strip() != _FRONTMATTER_DELIM:
+         return "superpowers"  # 无 frontmatter
+ 
+     close_idx: Optional[int] = None
+     for i in range(1, len(lines)):
+-        if lines[i].strip() == FRONT_DELIM:
++        if lines[i].strip() == _FRONTMATTER_DELIM:
+             close_idx = i
+             break
+     if close_idx is None:
++        # 必须在调用 yq 之前短路：`--front-matter=extract` 不要求闭合 `---`——未闭合时会把
++        # 之后全部内容当同一份 YAML 文档处理（`### Task N:` 类行被当注释吞掉），从而对
++        # 「未闭合」这一结构性契约缺陷"看似"解析成功，掩盖掉本该 raise 的 RouteStop。
+         raise RouteStop(f"plan frontmatter 未闭合: {p}")
+ 
+-    raw_fields: List[str] = []
+-    for line in lines[1:close_idx]:
+-        m = KEY_RE.match(line)  # [impl-review-fix] 容忍冒号前空白
+-        if m is not None:
+-            raw_fields.append(m.group(1))
+-
+-    if not raw_fields:
++    key_hits = sum(1 for line in lines[1:close_idx] if _PIPELINE_KEY_RE.match(line))
++    if key_hits == 0:
+         return "superpowers"  # frontmatter 在，但无 impl-pipeline 键
+-    if len(raw_fields) > 1:
++    if key_hits > 1:
+         raise RouteStop(f"plan frontmatter impl-pipeline 键重复: {p}")
+ 
+-    value, damaged = _extract_scalar(raw_fields[0])
+-    if damaged:
++    try:
++        value = _yq('."impl-pipeline"', p, front_matter=True, default=None)
++    except RuntimeError as exc:
+         raise RouteStop(
+-            f"plan frontmatter impl-pipeline 值损坏: {raw_fields[0].strip()!r} ({p})")
+-    if value not in LEGAL_PIPELINES:
++            f"plan frontmatter impl-pipeline 值损坏（yq 解析失败: {exc}）: {p}") from exc
++    if not isinstance(value, str) or value not in LEGAL_PIPELINES:
+         raise RouteStop(f"plan frontmatter impl-pipeline 值非法: {value!r} ({p})")
+     return value
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # 路由合成：marker 存在（非 None）优先（在途锁定）；marker 为 None（plan 缺）→ 用 config（首跳）
+ # ---------------------------------------------------------------------------
+ 
+ def resolve_pipeline(config_pipeline: str, marker: Optional[str]) -> str:
+     if marker is None:
+diff --git a/sdflow-ship/scripts/ship_gate.py b/sdflow-ship/scripts/ship_gate.py
+index c641c84..6567da0 100644
+--- a/sdflow-ship/scripts/ship_gate.py
++++ b/sdflow-ship/scripts/ship_gate.py
+@@ -180,28 +180,111 @@ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-lay
+ #   「首行 --- 无闭合 × 归档 verify-report 正文独占一行 inline PASS 锚」杂交形态——
+ #   改判 absent 后 archived_verify_state 会回退 inline 扫到独占行 PASS → 判 pass。
+ #   但此形态**无 producer 产出**：目标态 producer 写 frontmatter 不写 inline，旧 producer
+ #   首行恒 '#' 非 '---'。须手工伪造归档才能构造 = 显式越权（git 留痕可审计，adr/0008/0011）。
+ #   目标态论证：迁移期评估安全锚 producer 契约而非现存语料快照（见 design ADR-4）。
+ import argparse
+ import json
+ import os
+ import re
+ import shlex
++import shutil
+ import subprocess
+ import sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ from pathlib import Path
+ 
++# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
++# [shared-yaml-subset-parser] `parse_ship_gate_frontmatter` 的 YAML **取值**核心委托给外部
++# yq 二进制（同 git 的外部二进制先例），MUST NOT `import yaml`（零依赖不变量）。
++#
++# duplicate-key/tab-indent 精细诊断 yq 给不出（实测：重复键静默取最后值，exit 0；tab 缩进
++# 只报笼统 go-yaml 词法错误，无法反解析出 tab-indent 这个分类）——R11 显式要求这两类检测
++# 保留原始文本预扫描、在 yq 调用**之前**执行。分工：prescan 管结构诊断（dup-key/tab-indent/
++# 顶层 `ship-gate:` 头是否为规范空 map 形），yq 管取值（真 YAML 语义：布尔类型/引号剥离/
++# 注释剥离/嵌套结构），见 `parse_ship_gate_frontmatter`。
++_yq_bin = None  # 进程内缓存
++
++
++def _yq(expression, file=None, *, text=None, front_matter=False, in_place=False, default=None):
++    """yq(mikefarah) subprocess 薄封装。`file`=路径 或 `text`=字符串（走 stdin），二选一——
++    `parse_ship_gate_frontmatter` 的调用方既有从磁盘读（live）也有从 `git show` 取文本
++    （归档 dual-read）两种来源，`text` 模式让两者共用同一 yq 调用点，不必先落临时文件。
++
++    [R7/F2] exit≠0 恒 raise（转发 stderr）——「键不存在」（exit 0 + stdout=null，走 `default`）
++    与「解析失败」（exit≠0）MUST 是两条不同分支，调用方不得把两者混为一谈、不得吞非零退出。
++    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容，误调会
++    产生词不达意的报错）。
++    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
++    [F3] 多文档防御：stdout 若含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
++    [R5/F4] `front_matter=True` 时，解出的顶层结构非 dict（且非 null/键缺席，那两种已在
++    default 分支短路返回）→ 视为坏块 raise，不静默当作合法标量返回。
++    [F11] 已联网核实（mikefarah/yq Windows 已知行为）：`--front-matter` 在 Windows 上每次
++    调用都会在 stderr 打一行 `Failed to remove temp file` 噪音（yq 自身的临时文件清理失败，
++    不影响正确性）——本函数只信 `returncode`，不检查 stderr 内容。
++    """
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            print(f"ERROR: yq 未安装。安装方式：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
++                  f"  请卸载后安装正确版本：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        _yq_bin = yq
++    cmd = [_yq_bin]
++    if front_matter:
++        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
++    if in_place:
++        cmd.append("-i")
++    else:
++        cmd += ["-o", "json"]
++    cmd.append(expression)
++    stdin_input = None
++    if text is not None:
++        cmd.append("-")
++        stdin_input = text
++    else:
++        cmd.append(str(file))
++    r = subprocess.run(cmd, capture_output=True, text=True, input=stdin_input,
++                       encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise RuntimeError(f"yq failed: {r.stderr.strip()}")
++    if in_place:
++        return None
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    decoder = json.JSONDecoder()
++    parsed, idx = decoder.raw_decode(raw)
++    if raw[idx:].strip():
++        # [F3] 多文档 YAML → yq 逐文档各吐一个 JSON 值拼接；json.loads 前若不检测单值，
++        # 会静默用第一个文档的值掩盖后续文档的存在（已联网核实：mikefarah/yq issue 讨论）。
++        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
++    if front_matter and not isinstance(parsed, dict):
++        raise RuntimeError(f"yq front-matter 顶层结构非 dict（坏块）: {raw!r}")
++    return parsed
++
++
+ # [T75] design/code-review inline 锚常量已随 Task6 live inline 读半场退役而删除；
+ # 仅 verify 锚保留——archived_verify_state 的归档 dual-read 兜底旧 inline 现役唯一在用。
+ ANCHOR_VERIFY_PASS = "<!-- ship-gate: verify=PASS -->"
+ ANCHOR_VERIFY_FAIL = "<!-- ship-gate: verify=FAIL -->"
+ ALL_ANCHORS = [ANCHOR_VERIFY_PASS, ANCHOR_VERIFY_FAIL]
+ 
+ EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN = 0, 3, 4, 5, 6
+ 
+ 
+ # [harden-gate-git-layer Task1 · ADR-1/3.5] 判定不能的结构化信号。
+@@ -883,22 +966,24 @@ def _line_scoped_hits(text, candidates):
+     fence = FenceTracker()
+     for line in text.splitlines():
+         if fence.feed(line) or fence.inside:
+             continue
+         s = line.strip()
+         if s in cand:
+             hit.add(s)
+     return [a for a in candidates if a in hit], fence.inside
+ 
+ 
+-# [mlh-p5] frontmatter 状态解析（手写 stdlib，不 import yaml——保零依赖不变量）。
+-# live 读与归档 git-show 文本读共用此单一核心（防漂移，D4）。
++# [mlh-p5][shared-yaml-subset-parser R9] frontmatter 状态解析：结构预扫描仍是手写 stdlib
++# （duplicate-key/tab-indent，R11），**取值**委托给外部 yq(mikefarah) 二进制（`_yq()`）——
++# 不 `import yaml`，零依赖不变量指的是不引入 Python 侧 YAML 解析库依赖，非不依赖任何外部工具
++# （同 git 的外部二进制先例）。live 读与归档 git-show 文本读共用此单一核心（防漂移，D4）。
+ FIELD_ENUMS = {
+     "design_approved": (True, False),   # bool
+     "verify": ("PASS", "FAIL"),
+     "code_review": ("pass", "blocked"),
+ }
+ 
+ # [harden-gate-git-layer Task1 · tasks 1.1/1.2] 字段校验从「有限枚举」升级为「字段 → 校验函数」。
+ # 理由：`reviewed_sha` 的值域是「任意 40 位 hex」，装不进 FIELD_ENUMS 的元组——直接往
+ # FIELD_ENUMS 加字段会让每个真 sha 都判 out-of-domain（= 新锚永远读不到）。
+ # FIELD_ENUMS 保留为枚举字段的数据源（三 producer 模板契约测试仍按它比对定义域）。
+@@ -929,117 +1014,151 @@ FIELD_VALIDATORS["reviewed_sha"] = _is_full_oid
+ 
+ 
+ def parse_ship_gate_frontmatter(text):
+     """解析报告 frontmatter 的 ship-gate 状态。返回 (state, error)：
+       state: {field: value}（已过 FIELD_VALIDATORS 校验）；{} = absent（无 frontmatter / 无 ship-gate 键）
+       error: None（干净）或 (field|'frontmatter', category)
+              category ∈ duplicate-key|out-of-domain|bad-type|tab-indent
+     D2 只认文件首块：首行须 '---'（去 BOM）；正文 --- 横线不参与。
+     D3 坏≠无：absent(state={},error=None) vs 坏(error!=None) 由调用方分流退出码。
+     D5 重复键→duplicate-key（枚举全部同名键计数，非取最后一个）。
+-    [impl-review-fix FIX-1] 只认 ship-gate 直接子键（首个非空子行的缩进层级）；深于该层级的行
+-    是嵌套子树，跳过不扫（不参与 FIELD_VALIDATORS 匹配）——杜绝 `note:` 下嵌套 design_approved 假过门。
+-    [impl-review-fix FIX-2] 顶层 `ship-gate:` 后带非空内容（内联标量/inline map）→ bad-type（非
+-    absent），防归档路径把它当 absent 回退 inline 造成假 SHIPPED。
+-    [impl-review-fix FIX-3] 支持 YAML `#` 注释：块内独占注释行整行跳过；值行尾部 ` #` 注释剥离。"""
++
++    [shared-yaml-subset-parser] 分两段：① 原始文本预扫描（R11）只做**结构诊断**——
++    定位首块边界、检测顶层 `ship-gate:` 头 / 直接子字段的 duplicate-key 与 tab-indent、
++    判断顶层头是否为规范空 map 形（`ship-gate:` 独占一行）。这几类诊断 yq 给不出：
++    实测 yq 对重复键静默取最后值（exit 0）、对 tab 缩进只报笼统 go-yaml 词法错误、对
++    flow-style `ship-gate: {verify: PASS}` 会解出与 block-style 相同的 dict（丢失「是否
++    规范块头」这个信息）。② 预扫描通过后，**取值**委托给 `_yq()`——真 YAML 语义（布尔
++    类型、引号剥离、注释剥离、嵌套结构隔离）交给它，比手搓 partition/strip 更正确
++    （如 `note:` 下嵌套的 `design_approved` 天然不会被解到顶层，无需再手动分层跳过）。
++
++    [impl-review-fix FIX-2] 顶层 `ship-gate:` 后带非空内容（内联标量/inline map）→ bad-type
++    （非 absent），防归档路径把它当 absent 回退 inline 造成假 SHIPPED——本函数在①阶段
++    以文本形式判定（`header.rstrip() != "ship-gate:"`），故 flow-style 内联 map 同样落
++    bad-type（不会因为 yq 把它解析成合法 dict 而被误采信，见上段）。
++    [已知不覆盖，见 Compliance 段] 引号值不再严格区分（`verify: "PASS"` 与 `verify: PASS`
++    经真 YAML 解析等价，均判 in-domain）——这是切换到 yq 真解析器的必然代价，旧手搓扫描器
++    的「引号即坏」是手搓副作用而非业务不变量，测试断言已同步调整（见 impl-report）。
++    """
+     if text.startswith("﻿"):
+         text = text[1:]
+     lines = text.splitlines()               # 统一 \r\n/\n（值不残留 \r）
+     if not lines or lines[0].strip() != "---":
+         return {}, None                     # absent：无首块 frontmatter
+     end = None
+     for i in range(1, len(lines)):
+         if lines[i].strip() == "---":
+             end = i
+             break
+     if end is None:
+         # [T74] 首行 --- 但全文无第二个 --- → 首块不闭合 → 不构成 frontmatter block，
+         # 首行 --- 视作正文/markdown 水平线 → absent（走既有无锚语义），非坏、非 fail-closed。
+         # 与「D2 只认文件首块」定义统一：无闭合 --- 不成块。
++        # [R11] 这一步是**边界检测**，不是 YAML 值解析——yq 的 `--front-matter=extract` 不要求
++        # 闭合 `---`（实测：会把首行之后的全部内容当一份 YAML 文档处理，`###` 之类行被当
++        # 注释吞掉），若不在此短路直接调 yq，"未闭合" 会被误判为"已解析成功"。
+         return {}, None
+     block = lines[1:end]
+     # 找顶层 ship-gate: 键，统计出现次数（重复→坏）。
+-    # [impl-review-fix FIX-2/FIX-4] 顶层探测识别**任何以 ship-gate: 起始的行**（不再只认整行
+-    # == "ship-gate:" 的规范空 map 头）：tab 缩进 → tab-indent 坏（FIX-4，与字段行 tab 检测对称）；
+-    # 空格缩进 = 嵌套键（非顶层），忽略；0 缩进 = 真顶层键——若其后 rstrip 还有非空内容（内联标量/
+-    # inline map，如 `ship-gate: []`/`ship-gate: true`）→ bad-type（FIX-2，杜绝归档误回退 inline）。
++    # [impl-review-fix FIX-2/FIX-4][R11] 顶层探测识别**任何以 ship-gate: 起始的行**（不再只认
++    # 整行 == "ship-gate:" 的规范空 map 头）：tab 缩进 → tab-indent 坏（FIX-4，与字段行 tab
++    # 检测对称，yq 对此只报笼统词法错误、给不出 tab-indent 这个分类）；空格缩进 = 嵌套键
++    # （非顶层），忽略；0 缩进 = 真顶层键——若其后 rstrip 还有非空内容（内联标量/inline map，
++    # 如 `ship-gate: []`/`ship-gate: true`）→ bad-type（FIX-2，杜绝归档误回退 inline）。
+     top_hdrs = []                            # [(index, line)]，0 缩进的顶层 ship-gate: 行
+     for i, ln in enumerate(block):
+         if not ln.lstrip().startswith("ship-gate:"):
+             continue
+         indent_ws = ln[:len(ln) - len(ln.lstrip())]
+         if "\t" in indent_ws:
+             return {}, ("frontmatter", "tab-indent")   # FIX-4：tab 缩进顶层键
+         if indent_ws:
+             continue                         # 空格缩进 = 嵌套键，非顶层，忽略
+         top_hdrs.append((i, ln))
+     if len(top_hdrs) == 0:
+         return {}, None                     # absent：有 frontmatter 但无 ship-gate 键
+     if len(top_hdrs) > 1:
+         return {}, ("ship-gate", "duplicate-key")
+     header_idx, header = top_hdrs[0]
+     if header.rstrip() != "ship-gate:":     # FIX-2：非规范空 map 头（带内联标量值）→ 坏
+         return {}, ("ship-gate", "bad-type")
+-    # 收集 ship-gate: 下方缩进的 field: value（下一个 0 缩进非空行为界）。
+-    # [impl-review-fix FIX-1] 只认 ship-gate 直接子键：首个非空子行的缩进 = 直接子键层级；
+-    # 缩进深于该层级的行是嵌套子树，跳过不扫（不参与 FIELD_VALIDATORS 匹配，杜绝嵌套字段假过门）。
++    # [R11] 直接子字段的 duplicate-key/tab-indent 预扫描：只计数/查 tab，不解析取值
++    # （取值交给下方 `_yq()`）。缩进层级判定（FIX-1 的分层跳过）仍需要，因为本段只做
++    # **结构诊断**（哪些行算"直接子字段"），与"这些字段的值是什么"（yq 的职责）分离。
+     start = header_idx + 1
+-    state, seen = {}, {}
++    seen = {}
+     direct_indent = None
+     for ln in block[start:]:
+         if ln.strip() == "":
+             continue
+         if not ln[:1].isspace():
+             break                           # 回到 0 缩进 = ship-gate 块结束
+         # [impl-review-fix FIX-3a] 块内独占注释行（strip 后以 # 起始）跳过——放在 tab/冒号检测之前
+         if ln.strip().startswith("#"):
+             continue
+         indent_ws = ln[:len(ln) - len(ln.lstrip())]
+         indent = len(indent_ws)
+         if direct_indent is None:
+             direct_indent = indent          # 首个非空非注释子行定直接子键层级
+         if indent > direct_indent:
+             continue                         # FIX-1：嵌套子树（深于直接层级），跳过不扫
+         if "\t" in indent_ws:
+             return {}, ("frontmatter", "tab-indent")
+         body = ln.strip()
+         if ":" not in body:
+             return {}, ("frontmatter", "bad-type")
+-        field, _, raw = body.partition(":")
++        field, _, _raw = body.partition(":")
+         field = field.strip()
+-        # [impl-review-fix FIX-3b] 值行尾部 # 注释在枚举比对前剥离（enum 值均不含 #，安全）
+-        raw = raw.split(" #", 1)[0].strip()
+         if field not in FIELD_VALIDATORS:
+             continue                         # 非本 schema 字段（外来 metadata），忽略
+         seen[field] = seen.get(field, 0) + 1
+         if seen[field] > 1:
+             return {}, (field, "duplicate-key")
+-        val = _coerce_ship_gate_value(field, raw)
+-        if val is _BAD_TYPE:
++
++    # ── 预扫描通过（结构干净）：委托 yq 做真正的 YAML 取值 ──
++    try:
++        parsed = _yq('."ship-gate"', text=text, front_matter=True, default={})
++    except RuntimeError:
++        # yq 语法级解析失败（如字段值内未闭合引号）——预扫描管不到值内部语法，交给 yq
++        # 自己报错；本函数只需把"取不出"折成 bad-type，不需要复述 yq 的原始错误文本
++        # （错误文本对 (field, category) 这个契约无意义，且会让同一坏因产生不同措辞）。
++        return {}, ("frontmatter", "bad-type")
++    if not isinstance(parsed, dict):
++        # [R5/F4] 理论不可达的双保险——`_yq()` 已对 front_matter 模式做过 dict 校验；
++        # 本函数自己的①阶段头形检测（FIX-2）本就先于此拦下所有非规范头形态。
++        return {}, ("ship-gate", "bad-type")
++
++    state = {}
++    for field, val in parsed.items():
++        if field not in FIELD_VALIDATORS:
++            continue                         # 非本 schema 字段/嵌套子树，忽略（yq 的真解析
++                                              # 已天然把嵌套字段留在其父键下，不会冒到顶层）
++        coerced = _coerce_ship_gate_value(field, val)
++        if coerced is _BAD_TYPE:
+             return {}, (field, "bad-type")
+-        if not FIELD_VALIDATORS[field](val):
++        if not FIELD_VALIDATORS[field](coerced):
+             return {}, (field, "out-of-domain")
+-        state[field] = val
++        state[field] = coerced
+     return state, None
+ 
+ 
+ _BAD_TYPE = object()
+ 
+ 
+-def _coerce_ship_gate_value(field, raw):
++def _coerce_ship_gate_value(field, val):
++    """`val` 现为 yq 真解析出的类型化值（bool/str/…），非旧版的原始文本片段。"""
+     if field == "design_approved":
+-        if raw == "true":
+-            return True
+-        if raw == "false":
+-            return False
+-        return _BAD_TYPE                     # yes/1/True 等非规范 bool → 坏
+-    return raw                               # verify/code_review：字符串，交枚举校验
++        if isinstance(val, bool):
++            return val
++        return _BAD_TYPE                     # "yes"/1/"True" 等非规范 bool 经 YAML 解析后
++                                              # 落成字符串/整数，非 Python bool → 坏
++    return val                               # verify/code_review/reviewed_sha：交枚举/正则校验
+ 
+ 
+ # [T26/SR-1；mlh-p5 Task6 D11] 熔断状态集合判据：判据 = 该步 ship-gate **frontmatter 状态集合**
+ # 是否变化（非 HEAD/mtime、非 inline 锚行）。两个纯函数/无状态 helper：不落地文件、无副作用，
+ # 供上层熔断逻辑（人工/skill 层，非本文件）对比"上一次快照"与"本次重跑"的状态集，判有无实质进展。
+ def anchor_set(text):
+     """返回该报告 frontmatter 的 ship-gate 状态集合（frozenset of (field, value) 对）。
+     [mlh-p5 Task6 D11] 迁 frontmatter：复用 parse_ship_gate_frontmatter 提取状态 dict（与 live
+     读点单核一致，防漂移），键值对集合作快照；坏 frontmatter → 空集（保守，无净变化倾向判无进展）。
+     inline 锚已随 live 读点退役，不再参与熔断进展判据（正文残留 inline 锚被忽略）。"""
+diff --git a/sdflow-ship/tests/test_anchor_contract.py b/sdflow-ship/tests/test_anchor_contract.py
+index 1256110..a430631 100644
+--- a/sdflow-ship/tests/test_anchor_contract.py
++++ b/sdflow-ship/tests/test_anchor_contract.py
+@@ -55,20 +55,35 @@ def _adr1_anchor_line():
+                 if lines[i].startswith("### ")), len(lines))
+     hits = [ln.strip() for ln in lines[start:end] if ln.strip().startswith("reviewed_sha:")]
+     assert len(hits) == 1, \
+         f"design.md ADR-1 节内 `reviewed_sha:` 示例行须恰好一条，实得 {len(hits)} 条：{hits}"
+     return hits[0]
+ 
+ 
+ ADR1_ANCHOR_LINE = _adr1_anchor_line()
+ 
+ 
++def _yaml_bareword_to_native(raw):
++    """[shared-yaml-subset-parser] 把模板裸行的原始文本（partition 出来的字符串）还原成
++    「若被真 YAML 解析器（yq）解析会得到的原生类型」——`_coerce_ship_gate_value` 的调用
++    约定已随迁移改变：它现在期望**已由 yq 类型化**的值（bool/str），不再是原始文本片段
++    （旧版自己做 `raw == "true"` 字符串比较）。本测试从模板字面文本反推预期值，须先按
++    YAML 1.2 core schema 的裸词语义换算（只有 true/false 两个布尔字面），才能喂给
++    `_coerce_ship_gate_value` 做同口径比较，否则会拿字符串 "true" 去比对函数已改为
++    期望 bool 的新约定，产生与迁移无关的假红。"""
++    if raw == "true":
++        return True
++    if raw == "false":
++        return False
++    return raw
++
++
+ def test_producer_templates_declare_reviewed_sha_verbatim():
+     # [fix1 · F3] 粒度 MUST 是**每个结论模板块**，不是「每文件出现过一次即可」。
+     # 原实现只查文件级存在性 ⇒ 5 个结论模板块里，`verify: FAIL` 与 `code_review: blocked`
+     # 两块（正是 FAIL/blocked 半场）删掉锚行也全绿——评审方实做变异证实。
+     # 后果不是纸面的：负面结论块少了 reviewed_sha，producer 照模板落盘就写不出锚，
+     # reader 侧 anchor-missing → UNKNOWN(6)，负面半场整个走不通。
+     #
+     # [fix2] 遍历范畴 MUST 是 `_extract_frontmatter_blocks` 抽出的**全部块**，不是硬编码的
+     # PRODUCER_FRONTMATTER.value_lines。上一版按 value_lines 反查块，粒度只降到「每已知枚举
+     # 值」——将来 producer 新增一个结论块（如 `design_approved: false`，它是 FIELD_ENUMS 里
+@@ -133,21 +148,21 @@ def test_producer_frontmatter_fields():
+         text = (REPO / rel).read_text(encoding="utf-8")
+         lines = [ln.strip() for ln in text.splitlines()]
+         assert "ship-gate:" in lines, f"{rel} 缺 frontmatter 顶层 `ship-gate:` 键裸行"
+         for value_line in value_lines:
+             assert value_line in lines, \
+                 f"{rel} 模板缺 frontmatter 字段裸行 {value_line!r}（迁移未完成或字段名/值漂移）"
+         # 枚举值须在 FIELD_ENUMS 定义域内（双向钉死：模板值不可越出解析器承认的域）
+         for value_line in value_lines:
+             _, _, raw = value_line.partition(":")
+             raw = raw.strip()
+-            coerced = ship_gate._coerce_ship_gate_value(field, raw)
++            coerced = ship_gate._coerce_ship_gate_value(field, _yaml_bareword_to_native(raw))
+             assert coerced in ship_gate.FIELD_ENUMS[field], \
+                 f"{rel} 模板值 {raw!r} 不在 {field} 的 FIELD_ENUMS 定义域 {ship_gate.FIELD_ENUMS[field]}"
+ 
+ 
+ # [mlh-p5 Task4 fix, Finding 2] 从真实 SKILL.md 抽取字面 frontmatter 模板块的核心。
+ # 提取方式（保持可维护，锚点故意宽松/不要求列 0——若模板重新被缩进破坏，锚点仍应找到块，
+ # 让下面 parse 调用吃到"坏"的字面文本从而真的判 absent 并让断言变红，而不是让提取器本身
+ # 因为找不到锚点而以另一种方式静默跳过）：
+ #   1. 逐行找 `ln.strip() == "ship-gate:"` 的锚点行（HTML/prose 不会写出这个裸行，来自
+ #      三 SKILL 各自维护的 ship-gate frontmatter 模板，工程上唯一）；
+@@ -187,21 +202,21 @@ def test_producer_frontmatter_parseable():
+                 f"{rel} 未找到声明 {value_line!r} 的模板块（字段/值漂移，或该模板块整体缺失）"
+             for block in matching:
+                 state, err = ship_gate.parse_ship_gate_frontmatter(block)
+                 assert err is None, \
+                     f"{rel} 声明 {value_line!r} 的模板块解析出错: {err}\n--- 抽取的原始块 ---\n{block}"
+                 assert field in state, (
+                     f"{rel} 模板块声明 {value_line!r} 但 parse_ship_gate_frontmatter 未解析出字段 "
+                     f"{field!r}（返回 state={state!r}）——模板缩进很可能破坏了 `ship-gate:` 须列 0 的契约"
+                     f"\n--- 抽取的原始块 ---\n{block}"
+                 )
+-                want = ship_gate._coerce_ship_gate_value(field, want_raw)
++                want = ship_gate._coerce_ship_gate_value(field, _yaml_bareword_to_native(want_raw))
+                 assert state[field] == want, \
+                     f"{rel} 解析出的 {field}={state[field]!r} 与模板声明 {value_line!r} 不符"
+ 
+ 
+ def test_no_hyphenated_field_name_in_producer_templates():
+     # [防漂移] 三 SKILL 模板不得残留旧连字符字段名（design-approved / code-review 作为
+     # frontmatter 字段名，而非历史 prose 提及），杜绝下划线/连字符两套并存混淆机判。
+     for rel, _field, _value_lines in PRODUCER_FRONTMATTER:
+         text = (REPO / rel).read_text(encoding="utf-8")
+         lines = [ln.strip() for ln in text.splitlines()]
+diff --git a/sdflow-ship/tests/test_frontmatter_parse.py b/sdflow-ship/tests/test_frontmatter_parse.py
+index 0e7f985..ce8cb3e 100644
+--- a/sdflow-ship/tests/test_frontmatter_parse.py
++++ b/sdflow-ship/tests/test_frontmatter_parse.py
+@@ -99,23 +99,26 @@ def test_comment_line_skipped():
+     state, err = P("---\nship-gate:\n  # 待复核\n  verify: PASS\n---\n")
+     assert state == {"verify": "PASS"} and err is None
+ 
+ 
+ def test_trailing_comment_on_value():
+     # [impl-review-fix FIX-3b] 值行尾部 # 注释在枚举比对前剥离。
+     state, err = P("---\nship-gate:\n  verify: PASS  # confirmed\n---\n")
+     assert state == {"verify": "PASS"} and err is None
+ 
+ 
+-def test_quoted_value_is_strict():
+-    # [impl-review-fix FIX-6] 引号值严格：verify: "PASS" → out-of-domain（有意，enum 严格匹配）。
++def test_quoted_value_now_equivalent_to_bare_under_yq():
++    # [shared-yaml-subset-parser] 取值改委托 yq 真 YAML 解析后，`verify: "PASS"` 与
++    # `verify: PASS` 语义等价（真解析器天然剥引号）——旧断言 test_quoted_value_is_strict
++    # 断言的「引号即坏」是手搓扫描器（不做引号剥离）的副作用，非业务不变量，随本次迁移
++    # 接受为已知行为变化（design.md Compliance 段已登记）。
+     state, err = P('---\nship-gate:\n  verify: "PASS"\n---\n')
+-    assert err is not None and err[0] == "verify" and err[1] == "out-of-domain"
++    assert state == {"verify": "PASS"} and err is None
+ 
+ 
+ def test_second_frontmatter_block_ignored_by_design():
+     # [impl-review-fix FIX-6 A1] D2「只认首块」自指免疫：首块 PASS + 正文第二块 FAIL → 读首块 PASS。
+     # 有意的自指免疫权衡（报告正文可含 ship-gate frontmatter 示例块），MUST NOT 改为「第二块→fail」。
+     txt = ("---\nship-gate:\n  verify: PASS\n---\n# 报告正文\n\n"
+            "示例第二块：\n---\nship-gate:\n  verify: FAIL\n---\n")
+     state, err = P(txt)
+     assert state == {"verify": "PASS"} and err is None
+diff --git a/sdflow-ship/tests/test_gate_git_layer.py b/sdflow-ship/tests/test_gate_git_layer.py
+index 3647612..447b231 100644
+--- a/sdflow-ship/tests/test_gate_git_layer.py
++++ b/sdflow-ship/tests/test_gate_git_layer.py
+@@ -350,42 +350,81 @@ def test_env_is_a_denylist_not_an_allowlist(monkeypatch):
+     assert "GIT_PROBE" not in env
+     assert env["GIT_CONFIG_GLOBAL"] == os.devnull, "外部 GIT_CONFIG_GLOBAL 未被本进程覆盖"
+     injected = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"}
+     dropped = {k for k in os.environ if k not in env}
+     assert dropped == {k for k in os.environ if k.startswith("GIT_")} - injected, \
+         "剔除面不等于 GIT_ 前缀集（allowlist 化或漏剔）"
+ 
+ 
+ # ── 3.4：加固面单一出口 ────────────────────────────────────────────────
+ 
++def _spawn_calls_in(node):
++    """收集某 AST 子树内的裸子进程调用点限定名列表（`模块.属性` 形，见 `_SPAWN_CALLS`）。"""
++    hits = []
++    for n in ast.walk(node):
++        if not isinstance(n, ast.Call):
++            continue
++        f = n.func
++        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
++            qualified = f"{f.value.id}.{f.attr}"
++            if qualified in _SPAWN_CALLS:
++                hits.append(qualified)
++    return hits
++
++
+ def test_all_git_calls_go_through_the_single_hardened_entry():
+     # 加固（timeout + env 清理 + 失败映射）靠单出口保证；新增裸子进程调用点
+-    # = 一条没被加固的通路。允许出现的只有 `_git_run` 内那一处。
++    # = 一条没被加固的通路。允许出现的只有 `_git_run` 内那一处，以及
++    # [shared-yaml-subset-parser] `_yq()`——它是**另一个**外部二进制（yq）的单一出口，
++    # 与 git 平行、有自己的加固需求（身份校验 + encoding），不共用 `_git_run`（那是
++    # git 专属的 env-denylist/timeout 加固，yq 不需要、也不该被迫套用）。
+     # [fix1 M2] 只数 `subprocess.run(` 是点补：`Popen` / `call` / `check_output` / `os.system`
+     # 同样能起子进程且同样绕过加固，面治 MUST 一次覆盖整片写法。
+     #
+     # [fix2] **用 ast 而非正则**（CLAUDE.md 基准 5「让工具自己回答」）：正则扫的是源码
+     # 文本，注释与字符串里的写法照样计数——本文件的 docstring 里就有 4 处提到
+     # `subprocess`，是活雷（实测往 ship_gate.py 加一行注释 `MUST NOT 用
+     # subprocess.check_output(...)` 即可让本守卫无故变红）。Python 的语法有官方
+     # parser，调它即可零解析、零误伤地只数**真实调用节点**。
+     src = GATE.read_text(encoding="utf-8")
++    tree = ast.parse(src)
++    allowed_fn_names = {"_git_run", "_yq"}
++    allowed_node_ids = set()
++    for node in ast.walk(tree):
++        if isinstance(node, ast.FunctionDef) and node.name in allowed_fn_names:
++            for sub in ast.walk(node):
++                allowed_node_ids.add(id(sub))
+     spawns = []
+-    for node in ast.walk(ast.parse(src)):
++    for node in ast.walk(tree):
++        if id(node) in allowed_node_ids:
++            continue
+         if not isinstance(node, ast.Call):
+             continue
+         f = node.func
+         if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+             qualified = f"{f.value.id}.{f.attr}"
+             if qualified in _SPAWN_CALLS:
+                 spawns.append(qualified)
+-    assert spawns == ["subprocess.run"], f"存在绕过 _git_run 的裸子进程调用点：{spawns}"
++    assert spawns == [], f"存在绕过 _git_run/_yq 的裸子进程调用点：{spawns}"
++
++
++def test_yq_spawns_are_confined_to_its_own_entry():
++    # [shared-yaml-subset-parser] `_yq()` 对 yq 二进制的角色等价于 `_git_run` 对 git——
++    # 身份校验（`--version` 探测）+ 实际取值调用两处 `subprocess.run` 均须落在 `_yq`
++    # 函数体内，不得散到别处（否则「单一出口」的加固承诺对 yq 这条通路名存实亡）。
++    src = GATE.read_text(encoding="utf-8")
++    tree = ast.parse(src)
++    yq_fn = next(n for n in ast.walk(tree)
++                 if isinstance(n, ast.FunctionDef) and n.name == "_yq")
++    spawns = _spawn_calls_in(yq_fn)
++    assert spawns == ["subprocess.run", "subprocess.run"], \
++        f"_yq() 内裸子进程调用点数量/写法与预期不符：{spawns}"
+ 
+ 
+ # ── impl-review-fix F3：报告文件 read_text 的 OSError 面 ───────────────────
+ # `read_reviewed_sha` / `live_ship_gate_state` / `_unclosed_frontmatter_hint` 三个报告读点
+ # 此前只捕获语法/语义级坏形态（坏 frontmatter / 缺字段 / 锚不可解析），不捕获
+ # `path.read_text()` 自身抛出的裸 `OSError`（权限不足 / TOCTOU：is_file() 确认存在之后、
+ # 真正读取之前文件被删或改权限）——与 Task2 已修的 `UnicodeEncodeError` 逸出同类，逸出后
+ # 退出码落在契约集 `{0,3,4,5,6}` 之外。chmod 000 构造真实 `PermissionError`（POSIX 语义，
+ # root 下权限位不拦读，故 root/非 POSIX 一并 skip）。
+ 
