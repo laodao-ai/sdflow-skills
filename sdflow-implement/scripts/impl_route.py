@@ -65,7 +65,10 @@ def _yq(expression, file, *, front_matter=False, default=None):
     [R7/F2] exit≠0 恒 raise（转发 stderr）——「键不存在」（exit 0 + stdout=null，走 `default`）
     与「解析失败」（exit≠0）MUST 是两条不同分支，调用方按需自行捕获处理（本文件两处调用
     均捕获 RuntimeError 并映射为各自的 fail-closed 语义：config→unknown-value，marker→RouteStop）。
-    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）。
+    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）；
+    未安装 / 身份校验不过同样走 `raise RuntimeError`（不 `sys.exit`），与「解析失败」同一
+    异常类型，交调用方按既有 fail-closed 语义映射——env 级失败不该绕过该映射直接落进程退出，
+    否则会在 exit-code 契约集 `{0, EXIT_ROUTE_STOP}` 之外裸吐 Python 默认退出码 1。
     [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
     [F3] 多文档防御：stdout 若含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
     """
@@ -73,20 +76,20 @@ def _yq(expression, file, *, front_matter=False, default=None):
     if _yq_bin is None:
         yq = shutil.which("yq")
         if not yq:
-            print(f"ERROR: yq 未安装。安装方式：\n"
-                  f"  macOS:   brew install yq\n"
-                  f"  Windows: winget install --id MikeFarah.yq\n"
-                  f"  Linux:   snap install yq\n", file=sys.stderr)
-            sys.exit(1)
+            raise RuntimeError(
+                "yq 未安装。安装方式：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
         vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
                             encoding="utf-8", errors="replace")
         if "mikefarah" not in vr.stdout:
-            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
-                  f"  请卸载后安装正确版本：\n"
-                  f"  macOS:   brew install yq\n"
-                  f"  Windows: winget install --id MikeFarah.yq\n"
-                  f"  Linux:   snap install yq\n", file=sys.stderr)
-            sys.exit(1)
+            raise RuntimeError(
+                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                "  请卸载后安装正确版本：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
         _yq_bin = yq
     cmd = [_yq_bin]
     if front_matter:

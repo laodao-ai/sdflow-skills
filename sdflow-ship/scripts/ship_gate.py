@@ -229,20 +229,22 @@ def _yq(expression, file=None, *, text=None, front_matter=False, in_place=False,
     if _yq_bin is None:
         yq = shutil.which("yq")
         if not yq:
-            print(f"ERROR: yq 未安装。安装方式：\n"
-                  f"  macOS:   brew install yq\n"
-                  f"  Windows: winget install --id MikeFarah.yq\n"
-                  f"  Linux:   snap install yq\n", file=sys.stderr)
-            sys.exit(1)
+            raise GateIndeterminate(
+                "yq 未安装。安装方式：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq",
+                CAUSE_YQ_UNAVAILABLE)
         vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
                             encoding="utf-8", errors="replace")
         if "mikefarah" not in vr.stdout:
-            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
-                  f"  请卸载后安装正确版本：\n"
-                  f"  macOS:   brew install yq\n"
-                  f"  Windows: winget install --id MikeFarah.yq\n"
-                  f"  Linux:   snap install yq\n", file=sys.stderr)
-            sys.exit(1)
+            raise GateIndeterminate(
+                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                "  请卸载后安装正确版本：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq",
+                CAUSE_YQ_UNAVAILABLE)
         _yq_bin = yq
     cmd = [_yq_bin]
     if front_matter:
@@ -297,6 +299,7 @@ CAUSE_ANCHOR_MISSING = "anchor-missing"       # reviewed_sha 字段缺失（含�
 CAUSE_ANCHOR_INVALID = "anchor-invalid"       # reviewed_sha 语法非法（缩写 SHA / HEAD / 坏 hex）
 CAUSE_ANCHOR_UNRESOLVABLE = "anchor-unresolvable"   # 对象不存在 / 不是 commit（blob/tree）
 CAUSE_READ_FAILED = "read-failed"             # 仓损坏 / 权限（Task3/4 接入）
+CAUSE_YQ_UNAVAILABLE = "yq-unavailable"       # yq 未安装 / 检测到非 mikefarah/yq（身份校验失败）
 
 
 class GateIndeterminate(Exception):
@@ -1910,6 +1913,8 @@ _INDETERMINATE_ADVICE = {
     CAUSE_ANCHOR_UNRESOLVABLE: "reviewed_sha 在本仓解析不到 commit 对象"
                                " → 可能 force-push 改写了历史，需人工排查该锚指向何处",
     CAUSE_READ_FAILED: "读取失败（仓损坏 / 权限）→ 检查仓完整性",
+    CAUSE_YQ_UNAVAILABLE: "yq 未安装或版本不对（须 mikefarah/yq，非 kislyuk/yq）"
+                          " → 按错误信息中的安装方式装好后重跑",
 }
 
 
