@@ -237,11 +237,8 @@ def read_verify_state(change_dir):
     verify 直接子键/坏枚举/文件不可读(FIX-6).
 
     [shared-yaml-subset-parser] YAML **取值**核心委托给 `_yq()`（design.md 决定），
-    Python 侧只保留：① frontmatter 闭合性文本预扫描（防 yq 对未闭合块的已知静默接受，
-    见 `_yq()` 上方注释）② PASS/FAIL 枚举校验。**不再区分**"无顶层 ship-gate 块"
-    "重复键"这两类具体成因——`.ship-gate.verify` 查不到值时统一落 `default=None`，
-    校验只看最终值是否 ∈ {PASS,FAIL}；两者原本就映射到同一个 malformed 状态，行为不变
-    （yq 方案下诊断精度下降为既定代价，见 impl-report）。
+    Python 侧保留：① frontmatter 闭合性文本预扫描 ② ship-gate 块内 verify 重复键
+    预扫描（yq 对重复键静默取最后值，不加预扫描会 fail-open）③ PASS/FAIL 枚举校验。
     """
     path = Path(change_dir) / "verify-report.md"
     try:
@@ -254,10 +251,35 @@ def read_verify_state(change_dir):
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return ("absent", None)
-    # 顶格 `---` 闭合性预扫描（字面定界符定位，非 YAML 解析）——yq 对没有第二个 `---`
-    # 的文件会把首行之后全部内容当同一份文档解析，若恰好合法会静默"解析成功"。
+    # 顶格 `---` 闭合性预扫描
     closed = any(ln.strip() == "---" for ln in lines[1:])
     if not closed:
+        return ("malformed", None)
+    # [impl-review-fix] 重复键预扫描：yq 对重复键静默取最后值，需在 yq 之前拦截。
+    # 只扫 frontmatter 块内 ship-gate: 块的直接子键 verify:
+    _in_fm = False
+    _in_shipgate = False
+    _verify_count = 0
+    for ln in lines:
+        stripped = ln.strip()
+        if stripped == "---":
+            if not _in_fm:
+                _in_fm = True
+                continue
+            else:
+                break
+        if not _in_fm:
+            continue
+        if ln.startswith("ship-gate:"):
+            _in_shipgate = True
+            continue
+        if _in_shipgate:
+            if ln and not ln[0].isspace():
+                _in_shipgate = False
+                continue
+            if ln.startswith("  verify:") and not ln.startswith("    "):
+                _verify_count += 1
+    if _verify_count > 1:
         return ("malformed", None)
     try:
         verify_value = _yq(".ship-gate.verify", path, front_matter=True, default=None)
@@ -265,7 +287,7 @@ def read_verify_state(change_dir):
         sys.stderr.write("VERIFY_REPORT_MALFORMED %s: %s\n" % (path, e))
         return ("malformed", None)
     if verify_value not in ("PASS", "FAIL"):
-        return ("malformed", None)  # 无 ship-gate 块 / 无 verify 子键 / 坏枚举, 统一归类
+        return ("malformed", None)
     return ("good", verify_value)
 
 

@@ -26,20 +26,20 @@ def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
     if _yq_bin is None:
         yq = shutil.which("yq")
         if not yq:
-            print(f"ERROR: yq 未安装。安装方式：\n"
-                  f"  macOS:   brew install yq\n"
-                  f"  Windows: winget install --id MikeFarah.yq\n"
-                  f"  Linux:   snap install yq\n", file=sys.stderr)
-            sys.exit(1)
+            raise RuntimeError(  # [impl-review-fix] sys.exit(1) → raise，对齐 ship_gate 模式
+                "yq 未安装。安装方式：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
         vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
                             encoding="utf-8", errors="replace")
         if "mikefarah" not in vr.stdout:
-            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
-                  f"  请卸载后安装正确版本：\n"
-                  f"  macOS:   brew install yq\n"
-                  f"  Windows: winget install --id MikeFarah.yq\n"
-                  f"  Linux:   snap install yq\n", file=sys.stderr)
-            sys.exit(1)
+            raise RuntimeError(  # [impl-review-fix] sys.exit(1) → raise，对齐 ship_gate 模式
+                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                "  请卸载后安装正确版本：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
         _yq_bin = yq
     cmd = [_yq_bin]
     if front_matter:
@@ -189,7 +189,10 @@ def _metrics_enabled(root):
     cfg = Path(root) / "openspec" / "config.yaml"
     if not cfg.exists():
         return False                                        # ①
-    val = _yq(".metrics.enabled", cfg, default=False)
+    try:
+        val = _yq(".metrics.enabled", cfg, default=False)
+    except RuntimeError as e:  # [impl-review-fix] yq 失败归入 MetricsError，对齐 EXIT_ERROR(2)
+        raise MetricsError(f"config.yaml 解析失败: {e}") from e
     if not isinstance(val, bool):
         raise MetricsError(f"metrics.enabled 不是合法布尔值: {val!r}")
     return val
