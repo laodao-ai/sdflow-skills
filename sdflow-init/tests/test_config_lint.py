@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
 
@@ -152,7 +154,10 @@ class TestConfigLintModelTiersFleetKeyed:
 """)
         r = _run_lint(tmp_path)
         assert r.returncode != 0
-        assert "flat.mid" in r.stderr
+        # 反引号在真 YAML 语法下是 "found character that cannot start any token"——整份文档
+        # 解析失败，不再是 config_lint 精确点名到 flat.mid 的语义校验（yq 迁移的既定诊断精度
+        # 代价，见 model_tiers_cases.py 文件头 Task 4 说明）。
+        assert "解析失败" in r.stderr
 
     def test_empty_value_nonzero(self, tmp_path):
         _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
@@ -181,13 +186,19 @@ class TestConfigLintModelTiersSharedFixture:
                     assert substr in r.stderr, f"{case['name']}: missing {substr!r} in {r.stderr}"
 
 
-class TestConfigLintLeafMissingColonNoPoison:
-    """Task 6 复评 r2 Important：叶子层漏冒号笔误 MUST NOT 毒化整个 fleet 块——后续合法叶子
-    仍须被 attribute + validate（fail-closed 结构门不被一个笔误整段静默放行）。"""
+class TestConfigLintWholeDocumentParseFailure:
+    """shared-yaml-subset-parser 迁 yq 之后的行为变化（见 impl-report task4-init-yq.md）：
+    旧版行扫描器能局部容错「叶子层漏冒号笔误」，之后合法叶子仍被 attribute+validate
+    （Task 6 复评 r2 Important 的原始诉求）。yq 是真 YAML 解析器——`strong opus`（无冒号的
+    裸标量行，出现在期望是 mapping 的上下文里）是**语法级非法 YAML**
+    （`mapping values are not allowed in this context`），会让**整份 config.yaml**
+    解析失败，不再有「局部容错、后续叶子仍被校验」这件事——`claude.mid` 后续叶子根本读不到，
+    因为文档级读取（`_yq('.', cfg_path)`）本身就失败了。这不是本次改动引入的新缺陷，而是
+    yq 委托的既定代价（spec-review F9/decision-memo：诊断精度下降换取「不手搓 YAML 解析器」）。"""
 
-    def test_missing_colon_does_not_poison_following_leaf_validation(self, tmp_path):
-        """漏冒号 strong 行之后的 `mid: <非法值>` MUST 被校验到——证明 fleet_ctx 未被毒化成 None。
-        若毒化（老 bug），mid 从不 attribute ⇒ 非法值静默放行 ⇒ stderr 无 claude.mid。"""
+    def test_missing_colon_leaf_is_a_whole_document_parse_failure(self, tmp_path):
+        """漏冒号叶子行 MUST 被 yq 判定整份文档语法错误（非零退出 + 通用「解析失败」reason），
+        MUST NOT 静默放行、也不再有精确到 `claude.mid` 的局部诊断。"""
         _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
   claude:
     strong opus
@@ -195,38 +206,38 @@ class TestConfigLintLeafMissingColonNoPoison:
 """)
         r = _run_lint(tmp_path)
         assert r.returncode != 0
-        assert "claude.mid" in r.stderr, f"漏冒号毒化了后续 mid 叶子的校验: {r.stderr}"
+        assert "解析失败" in r.stderr, r.stderr
 
 
-class TestParseModelTiersBlockAttribution:
-    """白盒锁（直测 `_parse_model_tiers_block` 的 entries 归属）——config_lint 只对外报违规
-    存在性，无法从 CLI 侧观察「后续叶子归给了哪个 fleet」。这两条直测 entries dict，锁住两处
-    与 resolver 同口径的关键 reset/sustain 行为（防未来重构悄悄回归、成无测试锁的死码）。"""
+class TestModelTiersFromDict:
+    """白盒锁（直测 `_model_tiers_from_dict` 的 entries/bad_headers 归属）——config_lint 只对外
+    报违规存在性，无法从 CLI 侧观察「叶子归给了哪个 fleet」。语法层已交给 yq；本函数只处理
+    yq 已解析出的 dict，故这里直接构造 Python dict 输入（不再需要构造原始 YAML 文本行）。"""
 
     @staticmethod
-    def _parse(yaml_block):
+    def _parse(raw):
         import init  # scripts/ 已在 sys.path（本文件顶部 line 14）
-        lines = (VALID_RULES_BLOCK + yaml_block).splitlines()
-        blk = init._find_top_level_block(lines, "model-tiers")
-        return init._parse_model_tiers_block(lines, *blk)
+        return init._model_tiers_from_dict(raw)
 
-    def test_missing_colon_leaf_sustains_fleet_attribution(self):
-        """漏冒号叶子后的合法叶子仍归当前 fleet（entries 含 claude.mid），fleet_ctx 未被毒化。"""
+    def test_fleet_and_flat_entries_attributed_correctly(self):
         entries, bad, bad_headers = self._parse(
-            "model-tiers:\n  claude:\n    strong opus\n    mid: sonnet-real\n")
-        assert entries.get("claude.mid") == "sonnet-real", entries
-        # 漏冒号那行被记 bad（config_lint 更严格），但不清空后续归属
-        assert any("strong opus" in b for b in bad), bad
+            {"claude": {"strong": "opus", "mid": "sonnet"}, "codex": {"strong": "gpt"}})
+        assert entries == {"claude.strong": "opus", "claude.mid": "sonnet", "codex.strong": "gpt"}
+        assert not bad and not bad_headers
 
-    def test_trailing_content_header_resets_fleet_no_crosstalk(self):
-        """`claude: rogue`（带值畸形头）后的叶子 MUST NOT 归前一个 fleet（codex）——reset 生效。
-        锁住 bad_headers 分支的 fleet_ctx=None（防其成无测试的死码/串扰回归）。"""
+    def test_scalar_fleet_header_is_bad_header_no_crosstalk(self):
+        """`claude: rogue`（fleet 名当标量误用，值非 dict）MUST 记 bad_headers，且 MUST NOT
+        产生任何 `claude.*` entries——锁住 bad_headers 分支（防其成无测试的死码/回归）。"""
         entries, bad, bad_headers = self._parse(
-            "model-tiers:\n  codex:\n    strong: codex-real\n  claude: rogue\n    strong: claude-leak\n")
-        assert entries.get("codex.strong") == "codex-real", entries
-        # claude-leak MUST NOT 覆盖 codex.strong（若 reset 缺失，stale codex fleet 会把它读进 codex）
-        assert entries.get("codex.strong") != "claude-leak", entries
+            {"codex": {"strong": "codex-real"}, "claude": "rogue"})
+        assert entries == {"codex.strong": "codex-real"}
         assert any("claude: rogue" in h for h in bad_headers), bad_headers
+
+    def test_none_leaf_value_maps_to_empty_string(self):
+        """yq 对空值叶子（如 `light:`）给出 None——须映射为空串以保留旧版
+        「空值即无效模型ID」语义（`_valid_model_id("")` 恒 False）。"""
+        entries, bad, bad_headers = self._parse({"codex": {"light": None}})
+        assert entries == {"codex.light": ""}
 
 
 class TestConfigLintMetrics:
@@ -302,6 +313,88 @@ class TestConfigLintGitRootAutoProbe:
             encoding="utf-8",
             errors="replace",)
         assert r.returncode == 0, r.stderr
+
+
+class TestYqWrapper:
+    """直测 `_yq()`/`_check_yq()` 本体（shared-yaml-subset-parser Task 4）——config-lint 的
+    CLI 断言只能间接观察 yq 委托的效果，这里直接锁住薄封装自身的关键契约：default 分支、
+    非零退出 raise、未安装/非 mikefarah 时 fail-loud，与 anchor_lint.py 已落地的同类用例
+    对齐（design.md §1 参考实现的核验面）。"""
+
+    def _mod(self):
+        """每次都用一个独立的模块实例，避免 `_yq_bin` 进程内缓存跨用例互相污染
+        （同 anchor_lint.py 的 test_anchor_lint.py 既有范式）。"""
+        import importlib
+        import init as init_mod_local
+        return importlib.reload(init_mod_local)
+
+    def test_yq_default_for_missing_key(self, tmp_path):
+        mod = self._mod()
+        cfg = tmp_path / "x.yaml"
+        cfg.write_text("schema: spec-driven\n", encoding="utf-8")
+        assert mod._yq(".nope", str(cfg), default="fallback") == "fallback"
+
+    def test_yq_reads_typed_value(self, tmp_path):
+        mod = self._mod()
+        cfg = tmp_path / "x.yaml"
+        cfg.write_text("metrics:\n  enabled: true\n", encoding="utf-8")
+        assert mod._yq(".metrics.enabled", str(cfg)) is True
+
+    def test_yq_raises_on_nonzero_exit(self, tmp_path):
+        mod = self._mod()
+        cfg = tmp_path / "bad.yaml"
+        cfg.write_text('key: "unterminated\n', encoding="utf-8")
+        with pytest.raises(RuntimeError):
+            mod._yq(".", str(cfg))
+
+    def test_yq_not_installed_raises(self, tmp_path, monkeypatch):
+        mod = self._mod()
+        monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+        cfg = tmp_path / "x.yaml"
+        cfg.write_text("schema: spec-driven\n", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="未安装"):
+            mod._yq(".schema", str(cfg))
+
+    def test_yq_identity_check_rejects_non_mikefarah(self, tmp_path, monkeypatch):
+        mod = self._mod()
+        monkeypatch.setattr(mod.shutil, "which", lambda name: "/usr/bin/yq")
+
+        class FakeProc:
+            stdout = "yq 2.x (kislyuk/yq)\n"
+            stderr = ""
+            returncode = 0
+
+        monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: FakeProc())
+        cfg = tmp_path / "x.yaml"
+        cfg.write_text("schema: spec-driven\n", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="mikefarah"):
+            mod._yq(".schema", str(cfg))
+
+    def test_check_yq_not_installed_returns_reason_not_raise(self, monkeypatch):
+        mod = self._mod()
+        monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+        ok, reason = mod._check_yq()
+        assert ok is False
+        assert "未安装" in reason
+
+    def test_check_yq_ok_when_available(self):
+        mod = self._mod()
+        ok, reason = mod._check_yq()
+        assert ok is True
+        assert reason is None
+
+    def test_lint_config_reports_reason_when_yq_missing(self, tmp_path, monkeypatch):
+        """`lint_config` 的入口门（`_check_yq()`）在 yq 不可用时返回 reason 列表，不崩溃/
+        不退出——这是它与 `run()` 路径（靠既有 `except RuntimeError: _die()` 兜底）的
+        唯一差异化处理，见 `_check_yq()` docstring。"""
+        mod = self._mod()
+        monkeypatch.setattr(mod.shutil, "which", lambda name: None)
+        osdir = tmp_path / "openspec"
+        osdir.mkdir(parents=True)
+        (osdir / "config.yaml").write_text("schema: spec-driven\n", encoding="utf-8")
+        reasons = mod.lint_config(str(tmp_path))
+        assert len(reasons) == 1
+        assert "未安装" in reasons[0]
 
 
 class TestConfigLintCliSmoke:

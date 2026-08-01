@@ -163,12 +163,25 @@ class TestBundleToolsOnly:
 
 class TestProjectLocalSchema:
     def _version(self, monkeypatch, value="1.7.0\n", returncode=0):
+        """Fake only the `openspec --version` probe (`_openspec_cli_version`'s subprocess
+        call) — MUST NOT blanket-replace `subprocess.run` for the whole module: `_yq()`
+        (shared-yaml-subset-parser) also calls `subprocess.run` (yq's own `--version`
+        identity check + the actual yq invocation), and a blanket stub would feed those
+        calls the same fake "openspec version" stdout, corrupting yq's real output."""
         class Proc:
             stdout = value
             stderr = ""
             pass
         Proc.returncode = returncode
-        monkeypatch.setattr(init_mod.subprocess, "run", lambda *a, **k: Proc())
+        real_run = init_mod.subprocess.run
+
+        def fake_run(cmd, *a, **k):
+            is_yq = isinstance(cmd, list) and cmd and "yq" in os.path.basename(cmd[0]).lower()
+            if isinstance(cmd, list) and cmd and cmd[-1] == "--version" and not is_yq:
+                return Proc()
+            return real_run(cmd, *a, **k)
+
+        monkeypatch.setattr(init_mod.subprocess, "run", fake_run)
 
     def _project(self, tmp_path):
         root = tmp_path / "project"

@@ -14,6 +14,16 @@
   resolver            每条 = {host, strong, mid, light}：该 host 下 resolve-models.sh 最终解析
                        出的三档位期望值（覆盖生效则为覆盖值，否则为该机队缺省）
   injection_marker    可选：若这条用例是恶意值回归，marker 文件名——断言 eval 后该文件未被创建
+
+〔shared-yaml-subset-parser Task 4〕`config_lint` 侧的解析层已从手搓行扫描迁到 yq（真 YAML
+解析器）；`resolve-models.sh` 侧不受影响（纯 shell、非本次改动范围）。四条用例
+（`leaf_missing_colon_sustains_fleet` / `fleet_header_trailing_content_rogue` /
+`injection_backtick` / `injection_double_quote`）在真 YAML 语法下其实是**整份文档级语法
+错误**（`mapping values are not allowed in this context` 等）——`lint_clean` 仍为 False
+（不变：语法错误当然不算「干净」），但 `lint_reason_substrs` 已从「精确点名哪个 fleet.tier
+键」改为通用的 `"解析失败"` 标记（yq 是整份文档解析，语法错误让**任何**查询表达式同等失败，
+诊断精度必然下降——spec-review F9/decision-memo 已接受的既定代价）。`resolver` 字段对这四条
+不受影响（resolve-models.sh 仍按其自身 shell 逻辑独立判定，与本次 yq 迁移无关），未改动。
 """
 
 CASES = [
@@ -82,7 +92,9 @@ CASES = [
     strong: `touch INJECTED_B`
 """,
         lint_clean=False,
-        lint_reason_substrs=["codex.strong"],
+        # 反引号在真 YAML 语法下是 "found character that cannot start any token"——整份文档
+        # 解析失败（非 config_lint 精确点名到 codex.strong 的语义校验），见文件头 Task 4 说明。
+        lint_reason_substrs=["解析失败"],
         resolver=[
             dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
         ],
@@ -108,7 +120,9 @@ CASES = [
     light: "haiku" && touch INJECTED_D
 ''',
         lint_clean=False,
-        lint_reason_substrs=["claude.light"],
+        # 引号字符串后跟裸尾随内容在真 YAML 语法下 "did not find expected key"——整份文档
+        # 解析失败（非 config_lint 精确点名到 claude.light 的语义校验），见文件头 Task 4 说明。
+        lint_reason_substrs=["解析失败"],
         resolver=[
             dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
         ],
@@ -176,7 +190,10 @@ CASES = [
     strong: claude-leak
 """,
         lint_clean=False,
-        lint_reason_substrs=["claude"],
+        # `claude: rogue` 后紧跟更深缩进的 `strong:` 行在真 YAML 语法下
+        # "mapping values are not allowed in this context"——整份文档解析失败（非
+        # config_lint 精确点名到 claude 键的语义校验），见文件头 Task 4 说明。
+        lint_reason_substrs=["解析失败"],
         resolver=[
             dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
             dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
@@ -209,10 +226,12 @@ CASES = [
     strong opus
     mid: sonnet-real
 """,
-        # config_lint 比 resolver 更严格（既定不对称，见 out-of-domain 叶子键先例）：漏冒号叶子
-        # 记进 bad 报违规；但 fleet_ctx MUST 保持 ⇒ 后续 `mid: sonnet-real` 仍归 claude 并被校验。
+        # 〔Task 4 起：yq 迁移后行为变化，见文件头说明〕`strong opus`（漏冒号裸标量行）在真
+        # YAML 语法下 "mapping values are not allowed in this context"——整份文档解析失败，
+        # 不再有「fleet_ctx 保持、后续 mid 仍被校验」这件事（旧版行扫描器的局部容错语义，
+        # 现已被真解析器的整份失败取代）。
         lint_clean=False,
-        lint_reason_substrs=["strong opus"],
+        lint_reason_substrs=["解析失败"],
         resolver=[
             # claude host：strong 那行漏冒号被跳过 ⇒ strong 回落缺省 opus；mid 沿用 claude ⇒ sonnet-real
             dict(host="claude", strong="opus", mid="sonnet-real", light="haiku"),
