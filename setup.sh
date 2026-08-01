@@ -521,7 +521,7 @@ check_dependencies() {
   # yq（mikefarah/yq，>= 4.16.0）
   if command -v yq >/dev/null 2>&1; then
     local yqv yqnum
-    yqv="$(yq --version 2>&1)"
+    yqv="$(yq --version 2>&1)" || true
     if printf '%s' "$yqv" | grep -q "mikefarah"; then
       yqnum="$(printf '%s' "$yqv" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
       if [ -n "$yqnum" ] && _version_ge "$yqnum" "$_YQ_MIN_VERSION"; then
@@ -557,10 +557,22 @@ check_dependencies() {
   if [ ${#missing[@]} -gt 0 ]; then
     echo ""
     echo "  缺少/不满足必要依赖：${missing[*]}"
-    echo "  yq 安装／升级："
-    echo "    macOS:   brew install yq          （升级：brew upgrade yq）"
-    echo "    Windows: winget install --id MikeFarah.yq   （升级：winget upgrade --id MikeFarah.yq）"
-    echo "    Linux:   snap install yq          （升级：snap refresh yq）"
+    for m in "${missing[@]}"; do
+      case "$m" in
+        python3*)
+          echo "  python3 安装：https://python.org 或系统包管理器（apt/brew/winget 等）"
+          ;;
+        git)
+          echo "  git 安装：https://git-scm.com 或系统包管理器（apt/brew/winget 等）"
+          ;;
+        yq*)
+          echo "  yq 安装／升级："
+          echo "    macOS:   brew install yq          （升级：brew upgrade yq）"
+          echo "    Windows: winget install --id MikeFarah.yq   （升级：winget upgrade --id MikeFarah.yq）"
+          echo "    Linux:   snap install yq          （升级：snap refresh yq）"
+          ;;
+      esac
+    done
   fi
 }
 
