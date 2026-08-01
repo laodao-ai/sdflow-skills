@@ -58,15 +58,15 @@ impl-pipeline: tickets
 
 两个脚本有互相 import（`impl_route` 从 `ship_gate` import `FenceTracker`，`ship_gate` 惰性 import `impl_route` 的 `parse_blocked_by`），需一起改确保兼容。
 
-- [ ] `ship_gate.py` 的 frontmatter YAML 解析核心已替换为 `_yq()` 调用
-- [ ] `ship_gate.py` 保留 duplicate-key/tab-indent 原始文本预扫描（R11），在 yq 读取之前执行
-- [ ] `ship_gate.py` 的 `FIELD_VALIDATORS` / 业务校验保留在 Python dict 上执行
-- [ ] `ship_gate.py` 写操作通过环境变量传值（R13）
-- [ ] `impl_route.py` 的 config 读取和 plan marker 读取已替换为 `_yq()` 调用
-- [ ] `impl_route.py` 删除 `_extract_scalar` / `KEY_RE` / `FRONT_DELIM`
-- [ ] 两个脚本的互相 import 关系正常工作
-- [ ] `pytest sdflow-ship/tests/` 全绿
-- [ ] `pytest sdflow-implement/tests/` 全绿
+- [x] `ship_gate.py` 的 frontmatter YAML 解析核心已替换为 `_yq()` 调用
+- [x] `ship_gate.py` 保留 duplicate-key/tab-indent 原始文本预扫描（R11），在 yq 读取之前执行
+- [x] `ship_gate.py` 的 `FIELD_VALIDATORS` / 业务校验保留在 Python dict 上执行
+- [x] `ship_gate.py` 写操作通过环境变量传值（R13）
+- [x] `impl_route.py` 的 config 读取和 plan marker 读取已替换为 `_yq()` 调用
+- [x] `impl_route.py` 删除 `_extract_scalar` / `KEY_RE` / `FRONT_DELIM`
+- [x] 两个脚本的互相 import 关系正常工作
+- [x] `pytest sdflow-ship/tests/` 全绿
+- [x] `pytest sdflow-implement/tests/` 全绿
 
 ### Task 4: init.py 的 YAML 解析改为 yq
 
