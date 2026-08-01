@@ -3,13 +3,66 @@
 盘面即状态：只读报告，退出码承载判定，双输出（human + JSON）。
     0=CLEAN  1=VIOLATION  2=ERROR(fail-closed)
 枚举单一源 = 契约 lens-metric-contract.md 的 `lens-metric-enums` 机读块（同 workflow bundle）。
-fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。"""
-import argparse, json, re, sys
+fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。
+零依赖不变量：本文件 MUST NOT `import yaml`/pyyaml；唯一的 YAML 读取点（metrics.enabled）委托给
+外部 yq 二进制（mikefarah/yq，同 git 的外部二进制先例，见 `_yq()`），不手搓解析（shared-yaml-subset-parser）。"""
+import argparse, json, re, shutil, subprocess, sys
 
 for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
 from pathlib import Path
+
+
+_yq_bin = None  # 进程内缓存
+
+
+def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
+    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现）：shutil.which 检测 + `--version`
+    身份校验（拒 kislyuk/yq）+ 进程内缓存 + fail-loud。exit≠0（解析失败/文件不可读）MUST raise，
+    不吞——「键不存在」（exit 0 + stdout=null，走 default）与「解析失败」（exit≠0，走 raise）
+    是两条不同分支 [R7/F2]。"""
+    global _yq_bin
+    if _yq_bin is None:
+        yq = shutil.which("yq")
+        if not yq:
+            print(f"ERROR: yq 未安装。安装方式：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        if "mikefarah" not in vr.stdout:
+            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                  f"  请卸载后安装正确版本：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        _yq_bin = yq
+    cmd = [_yq_bin]
+    if front_matter:
+        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
+    if in_place:
+        cmd.append("-i")
+    else:
+        cmd += ["-o", "json"]
+    cmd += [expression, str(file)]
+    r = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
+    if in_place:
+        return None
+    raw = r.stdout.strip()
+    if not raw or raw == "null":
+        return default
+    parsed = json.loads(raw)
+    if front_matter and not in_place and default is not None:
+        if not isinstance(parsed, dict):
+            return default
+    return parsed
 
 
 EXIT_CLEAN, EXIT_VIOLATION, EXIT_ERROR = 0, 1, 2
@@ -128,32 +181,18 @@ class MetricsError(Exception):
     pass
 
 
-_ENABLED = re.compile(r'^\s+enabled:\s*(true|false)\s*$')  # metrics 块内合法布尔（仅小写 true/false）
-
-
 def read_metrics_enabled(root):
-    """真四态：①文件不存在→False ②有文件无顶层 metrics: 块→False（消费仓常态放行）
-    ③metrics: 块在但块内(至下一顶层键前)解不出合法 enabled: true|false→MetricsError(fail-closed)
-    ④解出→bool。块边界=先定位 ^metrics: 再限范围到下一顶层键。"""
+    """真四态（yq 委托版）：①config.yaml 不存在→False（先于 _yq 调用短路，避免 yq 对缺失文件报错）
+    ②有文件但 metrics.enabled 键不存在（无 metrics: 块或块内无 enabled 子键）→yq 返回 null→default False
+    （消费仓常态放行）③metrics.enabled 存在但非合法布尔（如 "yes" 被 YAML 1.2 解成字符串而非布尔）
+    →MetricsError(fail-closed) ④解出合法布尔→该值。"""
     cfg = Path(root) / "openspec" / "config.yaml"
-    try:
-        lines = cfg.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
+    if not cfg.exists():
         return False                                        # ①
-    except (OSError, UnicodeDecodeError) as e:               # [impl-review-fix] F2 fail-open→fail-closed
-        raise MetricsError(f"config 读取失败(非缺失): {e}")
-    idx = next((i for i, ln in enumerate(lines) if ln.rstrip() == "metrics:" or ln.startswith("metrics:")), None)
-    if idx is None:
-        return False                                        # ②
-    for ln in lines[idx + 1:]:                              # ③④ 块内至下一顶层键
-        if ln.strip() == "" or ln.strip().startswith("#"):   # [impl-review-fix] F3 跳注释/空行
-            continue
-        if not ln.startswith((" ", "\t")):                    # 下一顶层键（非缩进）
-            break
-        m = _ENABLED.match(ln)
-        if m:
-            return m.group(1) == "true"
-    raise MetricsError("metrics: 块存在但解不出合法 enabled: true|false")
+    val = _yq(".metrics.enabled", cfg, default=False)
+    if not isinstance(val, bool):
+        raise MetricsError(f"metrics.enabled 不是合法布尔值: {val!r}")
+    return val
 
 
 MANDATORY = ("outside-voice", "hr-tg", "step1-broad-review")

@@ -118,6 +118,59 @@ def test_metrics_top_comment_between(tmp_path):        # [impl-review-fix] F3 �
     assert al.read_metrics_enabled(root) is True
 
 
+# --- shared-yaml-subset-parser Task 2：`_yq()` 薄封装（design.md §1 参考实现）------------------
+
+def test_yq_reads_scalar_true(tmp_path):
+    al = _mod()
+    p = tmp_path / "c.yaml"; p.write_text("metrics:\n  enabled: true\n", encoding="utf-8")
+    assert al._yq(".metrics.enabled", p, default=False) is True
+
+def test_yq_default_for_null(tmp_path):                # 键不存在 → stdout=null exit0 → default 参数返回
+    al = _mod()
+    p = tmp_path / "c.yaml"; p.write_text("other: 1\n", encoding="utf-8")
+    assert al._yq(".metrics.enabled", p, default="sentinel") == "sentinel"
+
+def test_yq_raises_on_nonzero_exit(tmp_path):           # YAML 语法错误 → exit≠0 → raise，不吞
+    al = _mod()
+    p = tmp_path / "bad.yaml"; p.write_text('a: "unterminated\n', encoding="utf-8")
+    with pytest.raises(RuntimeError):
+        al._yq(".a", p, default=None)
+
+def test_yq_not_installed_fails_loud(monkeypatch, tmp_path):
+    al = _mod()
+    monkeypatch.setattr(al.shutil, "which", lambda name: None)
+    p = tmp_path / "c.yaml"; p.write_text("a: 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        al._yq(".a", p, default=None)
+
+def test_yq_identity_check_rejects_non_mikefarah(monkeypatch, tmp_path):
+    al = _mod()
+    monkeypatch.setattr(al.shutil, "which", lambda name: "/usr/bin/yq")
+    class _FakeResult:
+        def __init__(self, stdout): self.stdout, self.stderr, self.returncode = stdout, "", 0
+    def fake_run(cmd, **kw):
+        assert "--version" in cmd, "身份校验须先于业务调用"
+        return _FakeResult("yq (https://github.com/kislyuk/yq/) version 3.5.1")
+    monkeypatch.setattr(al.subprocess, "run", fake_run)
+    p = tmp_path / "c.yaml"; p.write_text("a: 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        al._yq(".a", p, default=None)
+
+def test_yq_version_check_runs_once_then_cached(tmp_path):
+    al = _mod()
+    calls = {"version": 0}
+    orig_run = al.subprocess.run
+    def spy_run(cmd, **kw):
+        if "--version" in cmd:
+            calls["version"] += 1
+        return orig_run(cmd, **kw)
+    al.subprocess.run = spy_run
+    p = tmp_path / "c.yaml"; p.write_text("a: 1\nb: 2\n", encoding="utf-8")
+    al._yq(".a", p, default=None)
+    al._yq(".b", p, default=None)
+    assert calls["version"] == 1
+
+
 def test_existence_missing_mandatory(tmp_path):
     al = _mod()
     report = '<!-- sdflow:hr-tg v1 hit="none" -->\n<!-- sdflow:step1-broad-review v1 mode="native" -->\n'  # 缺 outside-voice
@@ -716,11 +769,19 @@ def test_ov_lens_row_same_family_fallback_legal_clean():       # 合法同族 fa
 def test_anchor_lint_does_not_reference_resolve_models():
     """ADR-1：宿主判定只在产出侧需要；anchor_lint 只校验锚行内部一致性（host/runner/reason_code 都写在锚里）。
     MUST NOT import/调 resolve-models.sh（否则把宿主判定双实现进校验器，与 ADR-1 冲突）。
-    锁**代码**（剥注释后）——注释里为解释 ADR-1 而提及文件名不算违规。"""
+    锁**代码**（剥注释后）——注释里为解释 ADR-1 而提及文件名不算违规。
+    [shared-yaml-subset-parser Task 2 更新] `subprocess` 已合法引入（`_yq()` 起 yq 子进程读 YAML，
+    非判宿主）——旧断言「根本不起子进程」的字面检查随之失真，改为锁住真正的 ADR-1 意图：
+    subprocess 调用的第一个参数只能是 `yq`/`_yq_bin`，MUST NOT 出现 resolve-models.sh 的调用形态。"""
     code_only = "\n".join(ln.split("#", 1)[0] for ln in SCRIPT.read_text(encoding="utf-8").splitlines())
     assert "resolve-models" not in code_only          # 无 shell-out 调宿主脚本
     assert "resolve_models" not in code_only          # 无 python 双实现
-    assert "subprocess" not in code_only              # anchor_lint 纯解析、根本不起子进程（无处调宿主脚本）
+    assert "subprocess.run([yq" in code_only or "subprocess.run([_yq_bin" in code_only  # 唯一起子进程点=起 yq
+    import re as _re
+    subprocess_run_calls = _re.findall(r'subprocess\.run\(\[([^\]]*)', code_only)
+    assert subprocess_run_calls, "预期至少一处 subprocess.run([...] 调用（_yq 内部）"
+    for call_args in subprocess_run_calls:
+        assert "resolve-models" not in call_args and "resolve_models" not in call_args
 
 
 # --- Step 7：fan-out always-on 一致性 lint（读 mirrors=，MUST NOT 数 lens-metric 行）------------
