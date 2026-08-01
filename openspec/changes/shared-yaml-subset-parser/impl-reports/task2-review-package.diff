@@ -1,0 +1,599 @@
+# Review package: 41e858d..e5fed38
+
+## Commits
+e5fed38 feat(anchor_lint): replace hand-rolled YAML with yq subprocess
+
+## Files changed
+ .../impl-reports/task2-anchor-lint-yq.md           | 166 +++++++++++++++++++++
+ .../impl-reports/task2-brief.md                    |  13 ++
+ openspec/workflow/tools/anchor_lint.py             |  89 +++++++----
+ sdflow-init/assets/workflow/tools/anchor_lint.py   |  89 +++++++----
+ .../workflow/tools/tests/test_anchor_lint.py       |  65 +++++++-
+ 5 files changed, 370 insertions(+), 52 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task2-anchor-lint-yq.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task2-anchor-lint-yq.md
+new file mode 100644
+index 0000000..3a5c522
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task2-anchor-lint-yq.md
+@@ -0,0 +1,166 @@
++# Task 2 实现报告 · anchor_lint.py 的 YAML 解析改为 yq
++
++## 状态：DONE
++
++## 做了什么
++
++两份 `anchor_lint.py`（`openspec/workflow/tools/anchor_lint.py` 与
++`sdflow-init/assets/workflow/tools/anchor_lint.py`）：
++
++1. 新增 `_yq()` 薄封装（design.md §1 参考实现逐字照抄，仅按 R6 精神去掉本文件用不到的
++   `os` import——本文件只读、无 `in_place`/环境变量写路径，保留会是死代码）：
++   `shutil.which` 检测 → `--version` 身份校验（`mikefarah` 字符串命中，拒 kislyuk/yq）→
++   进程内缓存（`_yq_bin` 模块级变量）→ `subprocess.run` 起 yq 子进程，`encoding="utf-8",
++   errors="replace"` → exit≠0 一律 `raise RuntimeError`（不吞）→ `stdout` 为空/`"null"`
++   走 `default` 参数、否则 `json.loads`。
++2. `read_metrics_enabled` 改为：
++   ```python
++   def read_metrics_enabled(root):
++       cfg = Path(root) / "openspec" / "config.yaml"
++       if not cfg.exists():
++           return False                                        # ①
++       val = _yq(".metrics.enabled", cfg, default=False)
++       if not isinstance(val, bool):
++           raise MetricsError(f"metrics.enabled 不是合法布尔值: {val!r}")
++       return val
++   ```
++   删除了手搓的 `_ENABLED` 正则（`^\s+enabled:\s*(true|false)\s*$`）与整段逐行扫描
++   （定位 `metrics:` 顶层键 → 扫到下一顶层键前找 `enabled:` 行）。
++3. 更新模块顶部零依赖声明注释（此前该文件从未有此类注释——新增一条，非改写旧的）：
++   > 零依赖不变量：本文件 MUST NOT `import yaml`/pyyaml；唯一的 YAML 读取点（metrics.enabled）
++   > 委托给外部 yq 二进制（mikefarah/yq，同 git 的外部二进制先例，见 `_yq()`），不手搓解析。
++4. 两份副本 `diff` 确认字节一致。
++
++## 关于「真四态」语义在 yq 委托下的保真度（TDD 过程中定位的关键决策点）
++
++先探明了本机 yq（mikefarah v4.53.3，通过 winget 安装，见下方「环境准备」）在四态输入下的
++实际返回值（`yqtest/` 临时探针，见 `git status` 确认未纳入仓库）：
++
++| 输入 | yq `.metrics.enabled` 返回 | 旧实现（正则）行为 |
++|---|---|---|
++| 文件不存在 | exit 1（yq 报错，非 exit0+null） | return False |
++| 无 `metrics:` 顶层键 | `null`（exit 0） | return False |
++| `enabled: yes` | JSON 字符串 `"yes"`（YAML 1.2 不认 `yes` 为布尔，与旧正则拒绝的原因不同但结论一致） | raise MetricsError |
++| `enabled: true` | JSON 布尔 `true` | return True |
++| 同级另一段 `other:\n  enabled: true` 干扰 | yq 路径查询天然按 `.metrics.enabled` 定位，不受干扰 | return False（旧实现靠"下一顶层键"扫描做到） |
++| `metrics:\n# 注释\n  enabled: true` | `true`（yq 原生跳过注释） | return True |
++
++**文件不存在**这一态与 yq 原生行为冲突（yq 对不存在的文件是 exit 1 而非 exit0+null）——
++若直接 `_yq(".metrics.enabled", cfg, default=False)` 不做前置判断，会在消费仓
++"从未生成过 `openspec/config.yaml`"这一**最常见路径**上把 `RuntimeError` 意外抛给
++调用方（`main()` 目前只 catch `MetricsError`，不会 catch 到会导致未处理异常直接崩溃）。
++故保留了 `cfg.exists()` 前置短路——这是 Python 侧的文件存在性判断，不是 YAML 解析逻辑，
++不违反"YAML 解析全部委托 yq"的约束（R6：业务逻辑保留在 Python 侧）。
++
++**`enabled: yes` 仍须 raise**（`test_metrics_block_illegal_raises` 既有测试断言）——但 yq
++不会因为 `"yes"` 而报错（它是合法 YAML 标量，只是类型不是布尔）。故在 `_yq()` 调用之后加了
++一行 `isinstance(val, bool)` 校验，非法则 raise `MetricsError`。这是本票在"最简单替换"
++（design.md 原话）之上唯一必要的补充逻辑，理由：不加此行，`test_metrics_block_illegal_raises`
++（既有测试，覆盖 mlh-p2-anchor-lint 原始设计意图"metrics.enabled 只接受严格小写
++true/false"）会变红——而 ticket 验收要求"两份 `anchor_lint.py` 全绿"，且该测试并非本票
++要删除或改写的范围（design.md 未点名它需要重写，不同于 tasks.md Task 8.3 明确点名的
++`test_impl_route.py` 等）。
++
++## 已知行为漂移（诚实边界，非缺陷，未被任何现有测试覆盖）
++
++- `enabled: True`（首字母大写）：旧正则严格要求全小写 `true`，`True` 会被拒（raise）；
++  yq 遵循 YAML 1.2 Core Schema，`True`/`TRUE` 均解析为合法布尔 `true`，因此新实现
++  **放行**（不 raise）。这比旧实现更贴合 YAML 规范语义，且未被任何现有测试锁定为
++  "必须拒绝"，判断为可接受的漂移（基准④：低概率、影响小、完美复刻旧字符串级怪癖的
++  成本不成比例）。
++- `metrics:` 顶层键存在但块内完全没有 `enabled` 子键（如 `metrics: {}`）：旧实现的
++  "从下一顶层键前扫描"逻辑找不到匹配行会 `raise MetricsError`；新实现里 `.metrics.enabled`
++  对 yq 而言等价于"键不存在"（`null`），委托给 `default=False`，**不 raise**、直接返回
++  `False`。同样未被任何现有测试覆盖（现有测试只覆盖"无 `metrics:` 键"和"`enabled` 值非法"
++  两种，未覆盖"`metrics:` 键在但空/无子键"）。保守方向仍是"默认不开度量"（False），
++  未放宽任何 fail-closed 语义（该字段本身是 opt-in 开关，非安全关卡）。
++
++## 附带修复：`test_anchor_lint_does_not_reference_resolve_models` 的字面断言过严
++
++该既有测试（ADR-1 边界锁）字面断言 `"subprocess" not in code_only`——其真实意图是
++"MUST NOT 起子进程调 resolve-models.sh 判宿主"，但字面实现把"起子进程"本身当作
++代理信号，在当时（anchor_lint.py 从不起子进程）等价成立。引入 `_yq()` 后该代理信号
++不再成立（yq 是合法子进程调用，与判宿主无关）。已改写该测试：保留
++`resolve-models`/`resolve_models` 字符串缺席断言不变，把子进程检查改为"提取所有
++`subprocess.run([...` 调用的参数列表，逐一断言不含 `resolve-models`/`resolve_models`"——
++真正核验 ADR-1 意图（子进程只用来起 yq，不用来判宿主），而非"根本不起子进程"这个
++已被本票合法推翻的更强断言。
++
++## 环境准备（仅为跑测试，不影响仓库内容）
++
++开发机（Windows）此前未装 `yq`：`shutil.which("yq")` 返回 None，导致所有走 `_run()`
++CLI 路径（子进程调 `anchor_lint.py`）的既有测试都会在 `read_metrics_enabled` 内
++`sys.exit(1)`。经 `winget list --id MikeFarah.yq` 确认 winget 已装 4.53.3 但未在
++PATH（未生成 `WinGet/Links` 符号链接），复制
++`.../WinGet/Packages/MikeFarah.yq_.../yq.exe` 到已在 PATH 上的 `~/bin/yq.exe`
++使其可用。此为本机环境操作，未改动仓库任何文件。
++
++## TDD 过程
++
++1. Red：在既有测试文件追加 6 个 `_yq()` 专项测试（读值/default/非零退出 raise/未安装
++   fail-loud/身份校验拒绝 kislyuk/进程内缓存只做一次身份校验），跑
++   `pytest -k yq` 确认全部因 `AttributeError: module 'anchor_lint' has no attribute
++   '_yq'`/`'shutil'`/`'subprocess'` 报红（`_mod()` 每次都新建独立模块实例，
++   monkeypatch 互不污染）。
++2. Green：实现 `_yq()` + 改写 `read_metrics_enabled` + 删 `_ENABLED` 正则，
++   跑整个测试文件：142/143 绿，1 红（`test_anchor_lint_does_not_reference_resolve_models`
++   的字面 `"subprocess" not in code_only` 断言，见上节分析）。
++3. 按上节分析改写该测试的核验方式（保留真实意图、去掉已被合法推翻的字面断言），
++   复跑：143/143 绿。
++4. 同步两份副本、`diff` 确认字节一致，重跑一遍确认。
++
++## 测试
++
++新增 6 个 `_yq()` 专项测试（`sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py`）：
++
++- `test_yq_reads_scalar_true` — 真实 yq 读 `metrics.enabled: true` → `True`
++- `test_yq_default_for_null` — 键不存在（stdout=null, exit0）→ `default` 参数原样返回
++- `test_yq_raises_on_nonzero_exit` — 畸形 YAML（未闭合引号）→ 真实 yq exit 1 → `RuntimeError`
++- `test_yq_not_installed_fails_loud` — monkeypatch `shutil.which` 返回 None → `SystemExit`
++- `test_yq_identity_check_rejects_non_mikefarah` — monkeypatch `subprocess.run` 伪造
++  kislyuk/yq 的 `--version` 输出 → `SystemExit`（且断言身份校验先于业务调用）
++- `test_yq_version_check_runs_once_then_cached` — spy 包一层 `subprocess.run`，连续两次
++  `_yq()` 调用只触发一次含 `--version` 的子进程（证明进程内缓存生效，非仅"变量非 None"
++  的弱断言）
++
++既有 137 个测试（含 `test_metrics_*` 六个真四态用例）全部保留、无删减，全绿。
++
++改写 1 个既有测试（`test_anchor_lint_does_not_reference_resolve_models`，见上节说明）。
++
++## 验证证据
++
++| 命令 | 结果 |
++|---|---|
++| `python -m pytest sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py -q` | **143 passed** |
++| `diff openspec/workflow/tools/anchor_lint.py sdflow-init/assets/workflow/tools/anchor_lint.py` | 无输出（字节一致） |
++| `grep -rn "_ENABLED\b" --include="*.py" .` | 无匹配（手搓正则确认清除，全仓） |
++| `git status --short` | 仅 3 个文件被改：两份 `anchor_lint.py` + 1 份测试文件 |
++
++全仓 `pytest`（跑其余 skills 的测试）已在后台发起，尚未回收结果；本票改动范围严格限于
++`anchor_lint.py` 及其唯一测试文件，其余 skill 的测试逻辑上不应受影响（`read_metrics_enabled`/
++`_yq()` 均为该文件私有符号，无任何跨文件 import）。
++
++## Global Constraints 符合性
++
++- 零依赖不变量：`yq` 是外部二进制（同 git 先例），`subprocess` 调用不违反
++  `MUST NOT import yaml`——本文件全程未 `import yaml`/pyyaml。
++- GC-2 边界锁：不受影响——`_yq()` 内联于本文件，未跨脚本 import，也未被其他脚本 import。
++- `_yq()` 薄封装含 `shutil.which` 检测 + `--version` 身份校验（`mikefarah`）+ 进程内缓存
++  （`_yq_bin` 模块级变量）+ fail-loud（`sys.exit(1)`）+ `encoding="utf-8",
++  errors="replace"`。
++- yq 非零退出 raise（`RuntimeError`），不吞；键不存在（exit0+null）与解析失败（exit≠0）
++  是两条独立分支（`if r.returncode != 0: raise` 在前，`if not raw or raw == "null":
++  return default` 在后，互斥触达）。
++- 业务逻辑（`isinstance(val, bool)` 校验、`cfg.exists()` 前置短路）保留在 Python 侧，
++  YAML 解析本身全部委托 yq。
++
++## 未做 / 超出范围说明
++
++- 未新增 `os` import——design.md §1 的参考实现签名含 `in_place`/环境变量写路径用得到
++  `os`，但本文件只读 `.metrics.enabled`，不含任何写操作，保留会是死代码（基准④简化，
++  且 Task 8.2 提到的"7 份封装核心逻辑字节一致"golden test 尚未落地，无法预先验证是否会
++  因此产生假红；若未来该 golden test 要求连 import 行也字节一致，届时按其实际比对范围
++  调整，不在本票预先加宽）。
++- 未触碰其余 6 个待迁移脚本（`init.py`/`ship_gate.py`/`impl_route.py`/
++  `roadmap_writeback_draft.py`/`sad_schema.py`/`setup.sh` 依赖预检已在 Task 1 完成）——
++  均为 tasks.md 其余任务的范围。
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task2-brief.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task2-brief.md
+new file mode 100644
+index 0000000..464592c
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task2-brief.md
+@@ -0,0 +1,13 @@
++### Task 2: anchor_lint.py 的 YAML 解析改为 yq
++
++**Blocked-by:** none
++**R-ID:** R3, R7, R9, R10
++
++两份 `anchor_lint.py`（`openspec/workflow/tools/anchor_lint.py` 与 `sdflow-init/assets/workflow/tools/anchor_lint.py`）的 `read_metrics_enabled` 函数替换为 `_yq('.metrics.enabled', config_path, default=False)`。新增 `_yq()` 薄封装（含身份校验 + fail-loud）。删除被替代的手搓 YAML 读取代码。同步更新零依赖声明注释。两份副本保持字节一致。
++
++- [ ] `read_metrics_enabled` 改为通过 `_yq()` 读取
++- [ ] `_yq()` 封装含 `shutil.which` 检测 + `--version` 身份校验 + 进程内缓存 + fail-loud
++- [ ] 两份 `anchor_lint.py` 副本字节一致
++- [ ] `pytest sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` 全绿
++- [ ] 零依赖声明注释已更新
++
+diff --git a/openspec/workflow/tools/anchor_lint.py b/openspec/workflow/tools/anchor_lint.py
+index f5aed37..7f3ec79 100644
+--- a/openspec/workflow/tools/anchor_lint.py
++++ b/openspec/workflow/tools/anchor_lint.py
+@@ -1,24 +1,77 @@
+ #!/usr/bin/env python3
+ """anchor_lint — 评审报告锚自检确定性门（mlh-p2-anchor-lint）。
+ 盘面即状态：只读报告，退出码承载判定，双输出（human + JSON）。
+     0=CLEAN  1=VIOLATION  2=ERROR(fail-closed)
+ 枚举单一源 = 契约 lens-metric-contract.md 的 `lens-metric-enums` 机读块（同 workflow bundle）。
+-fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。"""
+-import argparse, json, re, sys
++fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。
++零依赖不变量：本文件 MUST NOT `import yaml`/pyyaml；唯一的 YAML 读取点（metrics.enabled）委托给
++外部 yq 二进制（mikefarah/yq，同 git 的外部二进制先例，见 `_yq()`），不手搓解析（shared-yaml-subset-parser）。"""
++import argparse, json, re, shutil, subprocess, sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ from pathlib import Path
+ 
+ 
++_yq_bin = None  # 进程内缓存
++
++
++def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
++    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现）：shutil.which 检测 + `--version`
++    身份校验（拒 kislyuk/yq）+ 进程内缓存 + fail-loud。exit≠0（解析失败/文件不可读）MUST raise，
++    不吞——「键不存在」（exit 0 + stdout=null，走 default）与「解析失败」（exit≠0，走 raise）
++    是两条不同分支 [R7/F2]。"""
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            print(f"ERROR: yq 未安装。安装方式：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
++                  f"  请卸载后安装正确版本：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        _yq_bin = yq
++    cmd = [_yq_bin]
++    if front_matter:
++        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
++    if in_place:
++        cmd.append("-i")
++    else:
++        cmd += ["-o", "json"]
++    cmd += [expression, str(file)]
++    r = subprocess.run(cmd, capture_output=True, text=True,
++                       encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
++    if in_place:
++        return None
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    parsed = json.loads(raw)
++    if front_matter and not in_place and default is not None:
++        if not isinstance(parsed, dict):
++            return default
++    return parsed
++
++
+ EXIT_CLEAN, EXIT_VIOLATION, EXIT_ERROR = 0, 1, 2
+ 
+ ANCHOR_PREFIXES = {
+     "<!-- sdflow:outside-voice v1": "outside-voice",
+     "<!-- sdflow:hr-tg v1": "hr-tg",
+     "<!-- sdflow:step1-broad-review v1": "step1-broad-review",
+     "<!-- sdflow:lens-metric v1": "lens-metric",
+     "<!-- sdflow:fanout-capability v1": "fanout-capability",   # add-codex-host-support：会话级探针锚，always-on 一致性 lint 判据源
+     "<!-- sdflow:declared-sites v1": "declared-sites",         # async-outside-voice：本层「应有锚站点集」声明，per-site 完整性核判据源
+ }
+@@ -121,46 +174,32 @@ def anchor_prefix(line):
+             rest = s[len(pref):]                              # [impl-review-fix] F5 token 边界
+             if rest == "" or rest[0].isspace() or rest.startswith("-->"):
+                 return name
+     return None
+ 
+ 
+ class MetricsError(Exception):
+     pass
+ 
+ 
+-_ENABLED = re.compile(r'^\s+enabled:\s*(true|false)\s*$')  # metrics 块内合法布尔（仅小写 true/false）
+-
+-
+ def read_metrics_enabled(root):
+-    """真四态：①文件不存在→False ②有文件无顶层 metrics: 块→False（消费仓常态放行）
+-    ③metrics: 块在但块内(至下一顶层键前)解不出合法 enabled: true|false→MetricsError(fail-closed)
+-    ④解出→bool。块边界=先定位 ^metrics: 再限范围到下一顶层键。"""
++    """真四态（yq 委托版）：①config.yaml 不存在→False（先于 _yq 调用短路，避免 yq 对缺失文件报错）
++    ②有文件但 metrics.enabled 键不存在（无 metrics: 块或块内无 enabled 子键）→yq 返回 null→default False
++    （消费仓常态放行）③metrics.enabled 存在但非合法布尔（如 "yes" 被 YAML 1.2 解成字符串而非布尔）
++    →MetricsError(fail-closed) ④解出合法布尔→该值。"""
+     cfg = Path(root) / "openspec" / "config.yaml"
+-    try:
+-        lines = cfg.read_text(encoding="utf-8").splitlines()
+-    except FileNotFoundError:
++    if not cfg.exists():
+         return False                                        # ①
+-    except (OSError, UnicodeDecodeError) as e:               # [impl-review-fix] F2 fail-open→fail-closed
+-        raise MetricsError(f"config 读取失败(非缺失): {e}")
+-    idx = next((i for i, ln in enumerate(lines) if ln.rstrip() == "metrics:" or ln.startswith("metrics:")), None)
+-    if idx is None:
+-        return False                                        # ②
+-    for ln in lines[idx + 1:]:                              # ③④ 块内至下一顶层键
+-        if ln.strip() == "" or ln.strip().startswith("#"):   # [impl-review-fix] F3 跳注释/空行
+-            continue
+-        if not ln.startswith((" ", "\t")):                    # 下一顶层键（非缩进）
+-            break
+-        m = _ENABLED.match(ln)
+-        if m:
+-            return m.group(1) == "true"
+-    raise MetricsError("metrics: 块存在但解不出合法 enabled: true|false")
++    val = _yq(".metrics.enabled", cfg, default=False)
++    if not isinstance(val, bool):
++        raise MetricsError(f"metrics.enabled 不是合法布尔值: {val!r}")
++    return val
+ 
+ 
+ MANDATORY = ("outside-voice", "hr-tg", "step1-broad-review")
+ MIN_LENS_ROWS = ("broad", "outside-voice")
+ 
+ 
+ def check_existence(report_text, layer, metrics_on):
+     outside = list(fence_outside_lines(report_text))
+     present, lens_rows = set(), set()
+     for ln in outside:
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index f5aed37..7f3ec79 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -1,24 +1,77 @@
+ #!/usr/bin/env python3
+ """anchor_lint — 评审报告锚自检确定性门（mlh-p2-anchor-lint）。
+ 盘面即状态：只读报告，退出码承载判定，双输出（human + JSON）。
+     0=CLEAN  1=VIOLATION  2=ERROR(fail-closed)
+ 枚举单一源 = 契约 lens-metric-contract.md 的 `lens-metric-enums` 机读块（同 workflow bundle）。
+-fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。"""
+-import argparse, json, re, sys
++fence-aware 行级核脚本内重实现（禁跨 skill import lens_metric_aggregate/ship_gate——消费仓无 sdflow-retro）。
++零依赖不变量：本文件 MUST NOT `import yaml`/pyyaml；唯一的 YAML 读取点（metrics.enabled）委托给
++外部 yq 二进制（mikefarah/yq，同 git 的外部二进制先例，见 `_yq()`），不手搓解析（shared-yaml-subset-parser）。"""
++import argparse, json, re, shutil, subprocess, sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ from pathlib import Path
+ 
+ 
++_yq_bin = None  # 进程内缓存
++
++
++def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
++    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现）：shutil.which 检测 + `--version`
++    身份校验（拒 kislyuk/yq）+ 进程内缓存 + fail-loud。exit≠0（解析失败/文件不可读）MUST raise，
++    不吞——「键不存在」（exit 0 + stdout=null，走 default）与「解析失败」（exit≠0，走 raise）
++    是两条不同分支 [R7/F2]。"""
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            print(f"ERROR: yq 未安装。安装方式：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
++                  f"  请卸载后安装正确版本：\n"
++                  f"  macOS:   brew install yq\n"
++                  f"  Windows: winget install --id MikeFarah.yq\n"
++                  f"  Linux:   snap install yq\n", file=sys.stderr)
++            sys.exit(1)
++        _yq_bin = yq
++    cmd = [_yq_bin]
++    if front_matter:
++        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
++    if in_place:
++        cmd.append("-i")
++    else:
++        cmd += ["-o", "json"]
++    cmd += [expression, str(file)]
++    r = subprocess.run(cmd, capture_output=True, text=True,
++                       encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
++    if in_place:
++        return None
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    parsed = json.loads(raw)
++    if front_matter and not in_place and default is not None:
++        if not isinstance(parsed, dict):
++            return default
++    return parsed
++
++
+ EXIT_CLEAN, EXIT_VIOLATION, EXIT_ERROR = 0, 1, 2
+ 
+ ANCHOR_PREFIXES = {
+     "<!-- sdflow:outside-voice v1": "outside-voice",
+     "<!-- sdflow:hr-tg v1": "hr-tg",
+     "<!-- sdflow:step1-broad-review v1": "step1-broad-review",
+     "<!-- sdflow:lens-metric v1": "lens-metric",
+     "<!-- sdflow:fanout-capability v1": "fanout-capability",   # add-codex-host-support：会话级探针锚，always-on 一致性 lint 判据源
+     "<!-- sdflow:declared-sites v1": "declared-sites",         # async-outside-voice：本层「应有锚站点集」声明，per-site 完整性核判据源
+ }
+@@ -121,46 +174,32 @@ def anchor_prefix(line):
+             rest = s[len(pref):]                              # [impl-review-fix] F5 token 边界
+             if rest == "" or rest[0].isspace() or rest.startswith("-->"):
+                 return name
+     return None
+ 
+ 
+ class MetricsError(Exception):
+     pass
+ 
+ 
+-_ENABLED = re.compile(r'^\s+enabled:\s*(true|false)\s*$')  # metrics 块内合法布尔（仅小写 true/false）
+-
+-
+ def read_metrics_enabled(root):
+-    """真四态：①文件不存在→False ②有文件无顶层 metrics: 块→False（消费仓常态放行）
+-    ③metrics: 块在但块内(至下一顶层键前)解不出合法 enabled: true|false→MetricsError(fail-closed)
+-    ④解出→bool。块边界=先定位 ^metrics: 再限范围到下一顶层键。"""
++    """真四态（yq 委托版）：①config.yaml 不存在→False（先于 _yq 调用短路，避免 yq 对缺失文件报错）
++    ②有文件但 metrics.enabled 键不存在（无 metrics: 块或块内无 enabled 子键）→yq 返回 null→default False
++    （消费仓常态放行）③metrics.enabled 存在但非合法布尔（如 "yes" 被 YAML 1.2 解成字符串而非布尔）
++    →MetricsError(fail-closed) ④解出合法布尔→该值。"""
+     cfg = Path(root) / "openspec" / "config.yaml"
+-    try:
+-        lines = cfg.read_text(encoding="utf-8").splitlines()
+-    except FileNotFoundError:
++    if not cfg.exists():
+         return False                                        # ①
+-    except (OSError, UnicodeDecodeError) as e:               # [impl-review-fix] F2 fail-open→fail-closed
+-        raise MetricsError(f"config 读取失败(非缺失): {e}")
+-    idx = next((i for i, ln in enumerate(lines) if ln.rstrip() == "metrics:" or ln.startswith("metrics:")), None)
+-    if idx is None:
+-        return False                                        # ②
+-    for ln in lines[idx + 1:]:                              # ③④ 块内至下一顶层键
+-        if ln.strip() == "" or ln.strip().startswith("#"):   # [impl-review-fix] F3 跳注释/空行
+-            continue
+-        if not ln.startswith((" ", "\t")):                    # 下一顶层键（非缩进）
+-            break
+-        m = _ENABLED.match(ln)
+-        if m:
+-            return m.group(1) == "true"
+-    raise MetricsError("metrics: 块存在但解不出合法 enabled: true|false")
++    val = _yq(".metrics.enabled", cfg, default=False)
++    if not isinstance(val, bool):
++        raise MetricsError(f"metrics.enabled 不是合法布尔值: {val!r}")
++    return val
+ 
+ 
+ MANDATORY = ("outside-voice", "hr-tg", "step1-broad-review")
+ MIN_LENS_ROWS = ("broad", "outside-voice")
+ 
+ 
+ def check_existence(report_text, layer, metrics_on):
+     outside = list(fence_outside_lines(report_text))
+     present, lens_rows = set(), set()
+     for ln in outside:
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index b74260e..a4d70b1 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -111,20 +111,73 @@ def test_metrics_true(tmp_path):                                          # ④
+ 
+ def test_metrics_block_boundary(tmp_path):                                # 块边界：另一段的 enabled 不误读
+     al = _mod(); root = _write_config(tmp_path, "metrics:\n  enabled: false\nother:\n  enabled: true\n")
+     assert al.read_metrics_enabled(root) is False
+ 
+ def test_metrics_top_comment_between(tmp_path):        # [impl-review-fix] F3 补测：顶层注释/空行不误判块边界
+     al = _mod(); root = _write_config(tmp_path, "metrics:\n# 注释\n  enabled: true\n")
+     assert al.read_metrics_enabled(root) is True
+ 
+ 
++# --- shared-yaml-subset-parser Task 2：`_yq()` 薄封装（design.md §1 参考实现）------------------
++
++def test_yq_reads_scalar_true(tmp_path):
++    al = _mod()
++    p = tmp_path / "c.yaml"; p.write_text("metrics:\n  enabled: true\n", encoding="utf-8")
++    assert al._yq(".metrics.enabled", p, default=False) is True
++
++def test_yq_default_for_null(tmp_path):                # 键不存在 → stdout=null exit0 → default 参数返回
++    al = _mod()
++    p = tmp_path / "c.yaml"; p.write_text("other: 1\n", encoding="utf-8")
++    assert al._yq(".metrics.enabled", p, default="sentinel") == "sentinel"
++
++def test_yq_raises_on_nonzero_exit(tmp_path):           # YAML 语法错误 → exit≠0 → raise，不吞
++    al = _mod()
++    p = tmp_path / "bad.yaml"; p.write_text('a: "unterminated\n', encoding="utf-8")
++    with pytest.raises(RuntimeError):
++        al._yq(".a", p, default=None)
++
++def test_yq_not_installed_fails_loud(monkeypatch, tmp_path):
++    al = _mod()
++    monkeypatch.setattr(al.shutil, "which", lambda name: None)
++    p = tmp_path / "c.yaml"; p.write_text("a: 1\n", encoding="utf-8")
++    with pytest.raises(SystemExit):
++        al._yq(".a", p, default=None)
++
++def test_yq_identity_check_rejects_non_mikefarah(monkeypatch, tmp_path):
++    al = _mod()
++    monkeypatch.setattr(al.shutil, "which", lambda name: "/usr/bin/yq")
++    class _FakeResult:
++        def __init__(self, stdout): self.stdout, self.stderr, self.returncode = stdout, "", 0
++    def fake_run(cmd, **kw):
++        assert "--version" in cmd, "身份校验须先于业务调用"
++        return _FakeResult("yq (https://github.com/kislyuk/yq/) version 3.5.1")
++    monkeypatch.setattr(al.subprocess, "run", fake_run)
++    p = tmp_path / "c.yaml"; p.write_text("a: 1\n", encoding="utf-8")
++    with pytest.raises(SystemExit):
++        al._yq(".a", p, default=None)
++
++def test_yq_version_check_runs_once_then_cached(tmp_path):
++    al = _mod()
++    calls = {"version": 0}
++    orig_run = al.subprocess.run
++    def spy_run(cmd, **kw):
++        if "--version" in cmd:
++            calls["version"] += 1
++        return orig_run(cmd, **kw)
++    al.subprocess.run = spy_run
++    p = tmp_path / "c.yaml"; p.write_text("a: 1\nb: 2\n", encoding="utf-8")
++    al._yq(".a", p, default=None)
++    al._yq(".b", p, default=None)
++    assert calls["version"] == 1
++
++
+ def test_existence_missing_mandatory(tmp_path):
+     al = _mod()
+     report = '<!-- sdflow:hr-tg v1 hit="none" -->\n<!-- sdflow:step1-broad-review v1 mode="native" -->\n'  # 缺 outside-voice
+     v = al.check_existence(report, "code-review", metrics_on=False)
+     assert any(x["kind"] == "missing-anchor" and "outside-voice" in x["detail"] for x in v)
+ 
+ def test_existence_min_required_rows(tmp_path):
+     al = _mod()
+     # metrics 开：有 domain lens-metric 但缺 broad+outside-voice 行
+     report = ('<!-- sdflow:outside-voice v1 site="x" -->\n<!-- sdflow:hr-tg v1 hit="none" -->\n'
+@@ -709,25 +762,33 @@ def test_ov_lens_row_same_family_fallback_legal_clean():       # 合法同族 fa
+     v = al.check_lens_metric(_lm(host="claude", lens="outside-voice", runner="claude", findings="2", site="code-voice"),
+                              "code-review", _enums())
+     assert v == []
+ 
+ 
+ # --- Step 6：🔒 边界锁——anchor_lint 不判宿主（ADR-1），MUST NOT import/调 resolve-models.sh -------
+ 
+ def test_anchor_lint_does_not_reference_resolve_models():
+     """ADR-1：宿主判定只在产出侧需要；anchor_lint 只校验锚行内部一致性（host/runner/reason_code 都写在锚里）。
+     MUST NOT import/调 resolve-models.sh（否则把宿主判定双实现进校验器，与 ADR-1 冲突）。
+-    锁**代码**（剥注释后）——注释里为解释 ADR-1 而提及文件名不算违规。"""
++    锁**代码**（剥注释后）——注释里为解释 ADR-1 而提及文件名不算违规。
++    [shared-yaml-subset-parser Task 2 更新] `subprocess` 已合法引入（`_yq()` 起 yq 子进程读 YAML，
++    非判宿主）——旧断言「根本不起子进程」的字面检查随之失真，改为锁住真正的 ADR-1 意图：
++    subprocess 调用的第一个参数只能是 `yq`/`_yq_bin`，MUST NOT 出现 resolve-models.sh 的调用形态。"""
+     code_only = "\n".join(ln.split("#", 1)[0] for ln in SCRIPT.read_text(encoding="utf-8").splitlines())
+     assert "resolve-models" not in code_only          # 无 shell-out 调宿主脚本
+     assert "resolve_models" not in code_only          # 无 python 双实现
+-    assert "subprocess" not in code_only              # anchor_lint 纯解析、根本不起子进程（无处调宿主脚本）
++    assert "subprocess.run([yq" in code_only or "subprocess.run([_yq_bin" in code_only  # 唯一起子进程点=起 yq
++    import re as _re
++    subprocess_run_calls = _re.findall(r'subprocess\.run\(\[([^\]]*)', code_only)
++    assert subprocess_run_calls, "预期至少一处 subprocess.run([...] 调用（_yq 内部）"
++    for call_args in subprocess_run_calls:
++        assert "resolve-models" not in call_args and "resolve_models" not in call_args
+ 
+ 
+ # --- Step 7：fan-out always-on 一致性 lint（读 mirrors=，MUST NOT 数 lens-metric 行）------------
+ 
+ def test_fanout_unavailable_multi_mirror_blocked():            # unavailable + mirrors 列 3 镜 → dead-fanout-multi-mirror
+     al = _mod()
+     r = _fc(host="codex", subagents="unavailable", mirrors="domain,adversarial,grounding") + "\n"
+     assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
+ 
+ def test_fanout_unavailable_single_mirror_ok():               # unavailable + 1 镜 → 放行
