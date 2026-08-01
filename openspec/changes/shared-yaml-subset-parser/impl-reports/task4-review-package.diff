@@ -1,0 +1,1229 @@
+# Review package: 938ea7c..b23580c
+
+## Commits
+b23580c feat(shared-yaml-subset-parser): init.py YAML 解析改为 yq
+
+## Files changed
+ .../impl-reports/task4-brief.md                    |  14 +
+ .../impl-reports/task4-init-yq.md                  | 188 ++++++++++
+ sdflow-init/scripts/init.py                        | 410 +++++++++++----------
+ sdflow-init/tests/fixtures/model_tiers_cases.py    |  31 +-
+ sdflow-init/tests/test_config_lint.py              | 153 ++++++--
+ sdflow-init/tests/test_init.py                     |  15 +-
+ 6 files changed, 583 insertions(+), 228 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task4-brief.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task4-brief.md
+new file mode 100644
+index 0000000..92c3d76
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task4-brief.md
+@@ -0,0 +1,14 @@
++### Task 4: init.py 的 YAML 解析改为 yq
++
++**Blocked-by:** 2
++**R-ID:** R3, R4, R6, R7, R9, R10, R13
++
++`init.py` 是改动量最大的脚本（~175 行手搓 YAML 解析）。`_schema_from_config` / `_set_schema_key` / `_marker_schema` / `_find_top_level_block` / `_second_level_keys` / `_parse_model_tiers_block` / `_valid_model_id` / `_validate_schema_authority` / `lint_config` 的 YAML 部分全部替换为 `_yq()` 调用。`_parse_model_tiers_block` 的业务逻辑（fleet_ctx 状态机、越域键检测、畸形头检测）从 YAML 解析中分离：yq 读到 JSON dict 后 Python 侧做键集验证。`_set_schema_key` 写操作用 `strenv()` 传值。删除全部被替代的手搓函数并更新零依赖声明注释。`lint_config` 入口前新增 `_check_yq()` 门。
++
++- [ ] 全部手搓 YAML 解析函数已删除并替换为 `_yq()` 调用
++- [ ] `_parse_model_tiers_block` 的业务逻辑在 yq 返回的 Python dict 上执行
++- [ ] `_set_schema_key` 写操作通过环境变量传值（R13）
++- [ ] `lint_config` 入口前有 yq 可用性检测
++- [ ] 零依赖声明注释已更新
++- [ ] `pytest sdflow-init/tests/` 全绿
++
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task4-init-yq.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task4-init-yq.md
+new file mode 100644
+index 0000000..1b1093f
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task4-init-yq.md
+@@ -0,0 +1,188 @@
++# Task 4 实现报告 · init.py 的 YAML 解析改为 yq
++
++## 状态：DONE（含两处对 design.md 字面指令的证据驱动偏离，见下）
++
++## 做了什么
++
++`sdflow-init/scripts/init.py` 新增 `_yq()` 薄封装 + `_check_yq()` 探测门，把以下函数的
++YAML **语法层**解析迁到 yq，Python 侧只保留业务判断：
++
++- `_marker_schema` → `_yq('.', marker, default={})` + Python 校验（恰一个 `schema` 键、
++  非空字符串），语义与旧版手搓正则一致。
++- `_validate_schema_authority` → `_yq('[.artifacts[].template]', schema_asset, default=[])`
++  + 模板路径存在性校验（业务逻辑不变）。
++- `lint_config` → **一次性** `_yq('.', cfg_path, default={})` 读出整份 config.yaml 为
++  dict，随后对 `schema`/`rules`/`model-tiers`/`metrics` 四项做 Python 侧结构校验（不再
++  按键路径分别调用——任何一处语法错误都会让 yq 对同一文件的任何查询同等失败，一次读出
++  更简单也更快）。
++- `_parse_model_tiers_block`（行扫描 fleet_ctx 状态机）→ `_model_tiers_from_dict`（在 yq
++  已解析出的 dict 上做 fleet/tier 键集校验、越域键检测、畸形头检测），设计上采用
++  design.md §2「分离设计」的思路。
++- 删除：`_strip_inline_comment` / `_find_top_level_block` / `_second_level_keys` /
++  `_parse_model_tiers_block`（全部调用点已确认清空，见下方验证证据）。
++- `lint_config` 入口前新增 `_check_yq()` 门：yq 不可用（未装/非 mikefarah）时返回一条
++  带安装指引的 reason（不崩溃/不退出），与 `run()`（init/update）路径依赖既有
++  `except (..., RuntimeError): _die()` 兜底的处理方式有意区分——`lint_config` 的公开
++  契约是「返回 reason 列表」。
++- 零依赖声明注释已更新（`_yq()` 定义处 + config-lint 小节头部两处）。
++
++## 两处对 design.md 字面指令的偏离（证据驱动，均已用真实 yq 二进制验证）
++
++### 偏离 1：`_schema_from_config` / `_set_schema_key` 保留既有字节级正则实现，未接入 yq
++
++**design.md 字面指令**：`_schema_from_config` → `_yq('.schema', ...)`；`_set_schema_key` →
++`_yq(f'.schema = "{schema}"', ..., in_place=True)` + `strenv()`。
++
++**实测证据**（本机 yq v4.53.3 winget 安装，Windows）：
++
++1. **写路径会破坏数据，不只是格式**：`yq -i` 对
++   `--- # local config\ncontext: keep\n` 执行 `.schema = "x"` 后，输出
++   `# local configcontext: keep\nschema: x`——`context: keep` 被合并进注释行，
++   `context` 键从此在语义上消失（`yq -o=json '.' <file>` 复读验证：`{"schema": "x"}`，
++   `context` 彻底丢失）。这超出 spec-review-report.md F14「yq -i 静默 CRLF→LF，记为已知
++   边角」已接受的范围——F14 讨论的是换行风格差异（cosmetic），这里是键级数据丢失
++   （semantic）。
++2. **读路径同样受影响，且两个缓解方向互斥**：mikefarah/yq 的 `--header-preprocess`
++   （管理文档头部注释/分隔符的预处理特性）在「`--- # 注释` 紧跟一个真实内容行」的输入上
++   会把**该内容行整体吞并进注释**，那一行在解析结果里彻底消失（非格式差异）：
++   - 默认 `true`：`--- # local config\nschema: x\ncontext: keep\n` 查 `.` 得到
++     `{"context": "keep"}`——`schema` 键消失。
++   - 显式传 `--header-preprocess=false`：确实修好了上面这个场景，但会让含
++     `%YAML 1.2` / `%TAG` 文档指令的文件直接解析失败
++     （`yaml: found incompatible YAML document`），而这正是本文件已有测试
++     `test_update_inserts_schema_after_yaml_directives_and_document_start` 覆盖的场景。
++   两个设置各打破一类本文件测试套件已锁定的真实场景，**没有能同时满足两者的单一 flag**
++   （已尝试寻找第三条路，未找到；yq 也没有更细粒度的开关）。
++3. `_schema_from_config` 与 `_set_schema_key` 是一对读写搭档（`handle_config` 用前者做
++   「是否需要写」的比较基准，二者语义耦合），保持两者同为既有实现，逻辑最简单也最一致。
++
++**为什么这不违反基准 5（无界不手搓）**：这两个函数处理的语法面是「一个固定字面量键
++`schema:`」的定位与原地替换，是**有界**语法面（穷举得完：BOM 前缀、大小写、行内注释、
++键前空白、文档起始符——本文件已有测试把这些边界全部枚举并锁定），不是通用 YAML 递归
++结构解析器。基准 5 警戒的是「无界语法面手搓」，这里恰恰相反：继续手搓是因为**手搓已经
++正确、且比 yq 更正确**（yq 在这个具体场景上有确认的缺陷）。
++
++**影响面**：`_set_schema_key` 写操作因此**未**改用 `strenv()` 传值（ticket 验收项之一
++未按字面完成）——但该函数从未经过 subprocess/shell，是纯 Python 正则替换，本来就没有
++`strenv()` 要防护的注入面（R13 针对的是「值经 shell 命令行/yq 表达式插值」的注入风险，
++这里根本不成立）。
++
++### 偏离 2：`_yq()` 统一附加 `--header-preprocess=false`
++
++design.md §1 参考实现没有这个 flag。为保证 `_marker_schema`/`_validate_schema_authority`/
++`lint_config` 三处消费点（marker 文件、schema.yaml 资产、任意用户 config.yaml）在
++「文档以 `--- # 注释` 起始」时不触发上述吞行 bug，`_yq()` 统一附加该 flag。三处消费点
++的实际文件形状均不含 YAML 指令（`%YAML`/`%TAG`），故不会撞上该 flag 的另一侧代价。
++`lint_config` 现有测试语料未覆盖「config.yaml 以 `--- # 注释` 起始」这一形状，但保留该
++flag 是纯粹的防御性加固（不会让任何现有测试变红，见验证证据）。
++
++### 未偏离但值得记录：`_validate_schema_authority` 未采用 ticket 字面表达式
++
++ticket 与 design.md 均写 `_validate_schema_authority` → `_yq('.template', schema_yaml_path)`。
++实测该表达式对真实 `schema.yaml`（`template:` 键嵌套在 `artifacts[].template`，非顶层）
++恒返回 `null`——若照抄会让本函数**永远检测不到缺失模板**（`test_schema_bundle_missing_
++authority_fails_loudly` 与 `test_update_missing_referenced_template_does_not_prune_or_
++switch_config` 两个既有测试会假绿放行）。改用 `_yq('[.artifacts[].template]', ...)`
++（数组包裹回避 F3 多文档防御误判，见函数 docstring），两个既有测试均已验证通过。
++
++## `_parse_model_tiers_block` → `_model_tiers_from_dict` 的行为变化（既定代价，非缺陷）
++
++旧版行扫描器能局部容错两类语法错误（漏冒号叶子、机队头带尾随内容+更深缩进子块），
++在真实 YAML 语法下二者都是 `mapping values are not allowed in this context` /
++`found character that cannot start any token` 级别的**整份文档语法错误**——yq 委托后，
++这类输入会让 `_yq('.', cfg_path)` 直接对**整份 config.yaml**报错（不只是 model-tiers
++段），`lint_config` 相应给出一条通用「解析失败」reason，不再有旧版「fleet_ctx 保持、
++局部诊断」的能力。已确认涉及测试：
++
++- `sdflow-init/tests/test_config_lint.py::TestConfigLintWholeDocumentParseFailure`
++  （重写自原 `TestConfigLintLeafMissingColonNoPoison`）。
++- `sdflow-init/tests/test_config_lint.py::TestModelTiersFromDict`（新增，替代原直测
++  `_parse_model_tiers_block`/`_find_top_level_block` 的白盒测试）。
++- `sdflow-init/tests/fixtures/model_tiers_cases.py` 四条用例（`leaf_missing_colon_
++  sustains_fleet` / `fleet_header_trailing_content_rogue` / `injection_backtick` /
++  `injection_double_quote`）的 `lint_reason_substrs` 改为通用 `"解析失败"`
++  （`lint_clean` 不变，仍为 False）——`resolver`/`injection_marker` 字段未动，
++  `test_resolve_models.py` 消费方式不受影响（已验证 31 passed）。
++- `test_config_lint.py::TestConfigLintModelTiersFleetKeyed::test_flat_invalid_model_id_
++  value_nonzero`（反引号值，同一根因，同一处理）。
++
++这是 spec-review-report.md F9/decision-memo 已接受的既定代价（yq 委托换取「不手搓 YAML
++解析器」，诊断精度必然下降到「整文件解析失败」粒度），不是本票引入的新缺陷。
++
++## 附带发现的测试基础设施问题（已修复）
++
++`test_init.py::TestProjectLocalSchema._version()` 辅助方法原先**无差别**把
++`init_mod.subprocess.run` 换成一个恒返回假 `openspec --version` 输出的 stub——这在
++`_yq()` 引入之前是安全的（`_openspec_cli_version` 是模块内唯一的 `subprocess.run`
++调用点），但 `_yq()` 加入后，同一 mock 会截获 yq 自身的 `subprocess.run` 调用（版本
++身份校验 + 实际查询），把假的 "1.7.0\n" 当作 yq 输出去解析，导致
++`_validate_schema_authority` 等函数报「不可读取」。已改为按命令行是否指向 yq 二进制
++分流（`"yq" in os.path.basename(cmd[0]).lower()` 则放行给真实 `subprocess.run`），
++只在探测 `openspec --version` 时才返回假 Proc。5 个此前受影响的测试
++（`test_semver_numeric_gate_accepts_1_10` 等）修复后全绿。
++
++## 测试
++
++```
++pytest sdflow-init/tests/test_config_lint.py -q          → 31 passed
++pytest sdflow-init/tests/test_init.py -q                 → 70 passed, 1 skipped
++pytest sdflow-init/tests/test_init_hardening.py \
++       sdflow-init/tests/test_init_contract_sync.py -q   → 10 passed, 2 skipped
++pytest sdflow-init/tests/test_task5_regression.py -q     → 8 passed
++pytest sdflow-init/tests/test_resolve_models.py -q       → 31 passed（共享 fixture 未破坏）
++pytest sdflow-init/tests/test_runtime_gitignore.py \
++       sdflow-init/tests/test_setup_failsafe.py -q       → 16 passed
++pytest sdflow-init/tests/ -q                              → 2 failed, 379 passed, 20 skipped
++```
++
++**关于全仓 `pytest sdflow-init/tests/` 的 2 个失败（如实报告，非本票引入）**：
++
++1. `test_hack_shell_multibyte_guard.py::test_no_unbraced_variable_before_non_ascii[setup.sh]`
++   ——`setup.sh:530`（Task 1 新增的 `check_dependencies()` yq 版本检测代码：
++   `echo "... ($yqv，需 >= ..."`）里一个中文全角逗号紧跟 `$yqv`，触发 bash 3.2 下
++   `set -u` 的变量名吞字节风险。**已用 `git stash` 验证 baseline（无本票任何改动）同样
++   失败**——与 Task 4/init.py 无关，是 Task 1 遗留、本票范围外的问题。
++2. `test_outside_voice_utf8.py::test_pure_ascii_loses_zero_bytes`（或同文件另一测试，两次
++   独立全量跑分别在不同用例上超时）——300 秒 bash 子进程超时，该测试对
++   `outside-voice.sh` 的 `utf8_head_trim`/`utf8_tail_skip` 做 O(n) 次逐字节 bash 子进程
++   扫描（n≈300+），与 init.py/yq 无任何交集（该文件不 `import init`）。两次全量跑
++   （分别耗时 26 分钟、25 分钟）命中的具体超时用例不同，指向系统负载导致的非确定性超时，
++   而非确定性回归——本次开发过程中长期有多个并行 yq/pytest 子进程在跑，推高了系统负载。
++
++两者均已确认**不在本票改动范围内**（`grep "import init"` 两文件均无命中）。逐文件隔离跑
++（见上方列表）覆盖了本票实际改动的全部消费面，均 100% 绿；仅供参考的全量跑因这两个
++无关问题非 100% 绿，如实记录，非隐瞒。
++
++## TDD 说明
++
++本票是对既有生产代码 + 既有大型测试套件的重构（非从零新增功能）。流程：先跑通基线，
++逐函数替换实现，每步用现有测试当回归防线验证；红→绿的转折点逐一分析根因（yq 语义 vs
++旧手搓语义的必然差异 / 真实 yq 缺陷 / 测试基础设施的隐藏耦合），归类为「预期契约变化」
++（已更新断言并写明理由）或「需要保留旧实现」（已在上方偏离 1/2 中详述证据），而非放松
++断言掩盖或强行削足适履。新增测试覆盖 `_yq()`/`_check_yq()` 本体（default 分支、非零
++退出 raise、未安装 fail-loud、身份校验拒绝 kislyuk）与 `_model_tiers_from_dict`
++（entries 归属、bad_headers 分支、None→空串映射）。
++
++## Global Constraints 符合性
++
++- 零依赖不变量：`yq` 是外部二进制，`subprocess` 调用不违反 `MUST NOT import yaml`。
++- GC-2 边界锁：`_yq()` 内联于本文件，未跨脚本 import。
++- `_yq()` 含 `shutil.which` 检测 + `--version` 身份校验（拒 kislyuk/yq）+ 进程内缓存 +
++  fail-loud（`raise RuntimeError`，非 `sys.exit`——遵循 init.py 自身既有的错误处理模式：
++  `run()` 路径靠既有 `except (..., RuntimeError): _die()` 统一兜底，`lint_config` 路径
++  经 `_check_yq()`/`try-except` 转成 reason 字符串，两条路径都不需要 `_yq()` 自己
++  `sys.exit`）。
++- yq 非零退出恒 `raise`，不吞；键不存在（exit0+null）与解析失败（exit≠0）两条独立分支。
++- `_set_schema_key` 写操作**未**接入 `strenv()`（见「偏离 1」——保留纯 Python 实现，
++  无 subprocess/shell 注入面，R13 的防护对象不成立）。
++- 业务逻辑（fleet/tier 键集校验、模板路径存在性、marker 单键校验）保留在 Python 侧。
++
++## 未做 / 明确交代
++
++- `_set_schema_key` 未迁 yq（偏离 1，证据见上）。
++- `_schema_from_config` 未迁 yq（同一偏离，二者是读写搭档）。
++- 全仓 `pytest`（Task 7.2 收尾票职责）与 CI yq 钉版本（Task 8.1）不在本票范围。
++- Task 5 的 golden test（7 份 `_yq()` 核心逻辑一致性）需要知悉：本文件的 `_yq()` 比
++  anchor_lint.py 的版本多了 F3 多文档防御 + `--header-preprocess=false`，比
++  ship_gate.py/impl_route.py 的版本少了 `text=` stdin 支持（本文件所有调用点都有磁盘
++  文件路径，无需从 git-show 取文本）——差异原因已在 `_yq()` docstring 中说明。
+diff --git a/sdflow-init/scripts/init.py b/sdflow-init/scripts/init.py
+index ddb499d..32e45a4 100644
+--- a/sdflow-init/scripts/init.py
++++ b/sdflow-init/scripts/init.py
+@@ -269,48 +269,57 @@ def copy_bundle(root, full=False, include_schema=True):
+         if not os.path.isfile(os.path.join(schema_dst, "schema.yaml")):
+             raise RuntimeError("project-local schema 复制后缺少 schema.yaml")
+     n = sum(len(fs) for _, _, fs in os.walk(dst))
+     schemas_dst = os.path.join(root, "openspec", "schemas")
+     if include_schema and os.path.isdir(schemas_dst):
+         n += sum(len(fs) for _, _, fs in os.walk(schemas_dst))
+     return dst, n
+ 
+ 
+ def _validate_schema_authority(schema_src):
+-    """Fail before replacing the managed fork when its source is incomplete."""
++    """Fail before replacing the managed fork when its source is incomplete.
++
++    `template:` 键嵌套在 `artifacts[].template`（非顶层）——`[.artifacts[].template]`
++    包一层数组是刻意的：不包裹时 yq 对多个匹配值逐个吐独立 JSON 标量（换行拼接），会被
++    `_yq()` 的 F3 多文档防御误判成「多文档 YAML」而 raise；包成单一 JSON 数组回避这个假阳，
++    一次调用取回全部 template 引用。"""
+     schema_asset = os.path.join(schema_src, "schema.yaml")
+     if not os.path.isfile(schema_asset):
+         raise RuntimeError(
+             "project-local schema 权威资产缺失："
+             f"{schema_asset}"
+         )
+ 
+     try:
+-        with open(schema_asset, encoding="utf-8") as f:
+-            schema_text = f.read()
+-    except (OSError, UnicodeDecodeError) as exc:
++        templates = _yq("[.artifacts[].template]", schema_asset, default=[])
++    except RuntimeError as exc:
+         raise RuntimeError(
+             "project-local schema 权威资产不可读取："
+             f"{schema_asset}"
+         ) from exc
++    if not isinstance(templates, list):
++        templates = []
+ 
+     missing = []
+     template_root = os.path.normpath(os.path.join(schema_src, "templates"))
+-    for match in re.finditer(r"(?m)^\s*template:\s*([^#\r\n]+?)\s*(?:#.*)?$", schema_text):
+-        template = match.group(1).strip().strip("\"'")
++    for template in templates:
++        if not isinstance(template, str) or not template.strip():
++            missing.append(template if isinstance(template, str) and template else "<empty template reference>")
++            continue
++        template = template.strip()
+         template_path = os.path.normpath(os.path.join(template_root, template))
+         try:
+             inside_templates = os.path.commonpath([template_root, template_path]) == template_root
+         except ValueError:
+             inside_templates = False
+-        if not template or not inside_templates or not os.path.isfile(template_path):
+-            missing.append(template or "<empty template reference>")
++        if not inside_templates or not os.path.isfile(template_path):
++            missing.append(template)
+ 
+     if missing:
+         rendered = ", ".join(f"templates/{template}" for template in missing)
+         raise RuntimeError(
+             "project-local schema 权威资产缺失模板："
+             f"{rendered}"
+         )
+ 
+ 
+ RULE_MARKERS = ("workflow.md", "spec-checklists", "code-checklists")
+@@ -362,21 +371,136 @@ def ensure_dirs(root):
+     made = []
+     for d in CORE_DIRS:
+         p = os.path.join(root, "openspec", d)
+         if not os.path.isdir(p):
+             os.makedirs(p, exist_ok=True)
+             open(os.path.join(p, ".gitkeep"), "a").close()
+             made.append(f"openspec/{d}/")
+     return made
+ 
+ 
++# ── yq(mikefarah) subprocess 薄封装（shared-yaml-subset-parser）─────────────────
++#
++# 本文件此前手搓 ~175 行 YAML 解析（_strip_inline_comment / _find_top_level_block /
++# _second_level_keys / _parse_model_tiers_block 等）。语法层（缩进/冒号/引号/注释剥离/
++# 多文档判定）全部委托外部 yq 二进制（mikefarah/yq，同 git 的外部二进制先例）；Python 侧
++# 只做业务判断（fleet/tier 键集校验、越域键检测、畸形头检测）。零依赖不变量（MUST NOT
++# `import yaml`/PyYAML——本脚本被 symlink 进消费仓，消费仓多数无 PyYAML，import 会
++# ImportError 崩溃，与 fail-closed 相悖）因此收窄为「不 import 解析库」而非「不依赖外部
++# YAML 工具」，代价见 openspec/adr/0036。
++
++_YQ_INSTALL_HINT = (
++    "安装方式：\n"
++    "  macOS:   brew install yq\n"
++    "  Windows: winget install --id MikeFarah.yq\n"
++    "  Linux:   snap install yq"
++)
++
++_yq_bin = None  # 进程内缓存
++
++
++def _check_yq():
++    """轻量探测 yq 可用性 + 身份（不触碰 `_yq()` 的进程内缓存 `_yq_bin`——两者是独立探测
++    路径），专供 `lint_config` 入口前调用（design.md §3）：`lint_config` 的公开契约是「返回
++    reason 字符串列表」而非崩溃/退出，yq 缺失时需要一条能塞进 reasons 列表的人读提示，而不是
++    任由 `_yq()` 首次调用时的 RuntimeError 未被捕获地穿透（`cmd_config_lint`/`main()` 均不
++    catch 异常）。`run()`（init/update）路径不需要这道门——那条路径下 `_yq()` 失败自然被既有
++    的 `except (..., RuntimeError): _die(...)` 统一兜底，与其它文件系统错误同一套处理。
++    返回 (ok, reason)：ok=True 时 reason=None。"""
++    yq = shutil.which("yq")
++    if not yq:
++        return False, f"yq 未安装。{_YQ_INSTALL_HINT}"
++    vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                        encoding="utf-8", errors="replace")
++    if "mikefarah" not in vr.stdout:
++        return False, (
++            "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq），请卸载后安装正确版本。"
++            f"{_YQ_INSTALL_HINT}")
++    return True, None
++
++
++def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
++    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现 + spec-review F3 多文档防御——
++    对齐 ship_gate.py/impl_route.py 的加固版，而非 anchor_lint.py 的早期版：config.yaml 的
++    `context:` 块字面量段若贴入时丢缩进可意外产生多文档，是本文件的直接风险场景 [F3/D2 HIGH]）。
++
++    本文件目前只读、且只用于「工具自己控制形状」的 YAML（marker 文件 / schema.yaml 资产 /
++    `lint_config` 的结构校验）——`_schema_from_config`/`_set_schema_key` 这对 schema 字段
++    读写搭档刻意保留既有字节级正则实现、未接入这里（见二者各自 docstring 的实测证据：yq
++    在「文档起始 `--- # 注释`」这类用户可能手写的 config.yaml 形状上，读写两侧都有尚未找到
++    统一规避手段的缺陷，超出 spec-review F14 已接受的「CRLF→LF 一次性 diff 噪音」范围）。
++    `front_matter`/`in_place` 参数因此保留但未被本文件任何调用点以 True 传入——保留是为了
++    与其余脚本的 `_yq()` 参考签名一致（Task 5 golden test 的比对面），非死码堆料。
++
++    [R7] exit≠0 恒 raise RuntimeError（不吞、不因 default 静默）——「键不存在」（exit 0 +
++    stdout=null，走 default）与「解析失败」（exit≠0，含 yq 未安装/身份不对/文件不可读/语法
++    错误）是两条不同分支。
++    [F3] 多文档防御：stdout 含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
++
++    `--header-preprocess=false`〔实测证据，见 impl-report〕：mikefarah/yq 默认
++    `--header-preprocess=true` 在「文档起始 `--- # 注释`」后紧跟内容行的场景下有静默吞行 bug
++    ——`--- # local config\nschema: x\ncontext: keep\n` 用默认设置查 `.schema` 得到 `null`
++    （`schema` 键被吞掉，`context` 幸存），本仓真实存在这种「模版首行是带注释的 `---`」
++    config.yaml 写法（见 `config.template.yaml`/相关测试）。禁用该预处理后两个键都能正确读到，
++    代价仅是不再特殊处理文档头部注释与 `---` 分隔符的位置关系——本文件不消费那类位置信息。
++    """
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            raise RuntimeError(f"yq 未安装。{_YQ_INSTALL_HINT}")
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            raise RuntimeError(
++                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq），请卸载后安装正确版本。"
++                f"{_YQ_INSTALL_HINT}")
++        _yq_bin = yq
++    cmd = [_yq_bin, "--header-preprocess=false"]
++    if front_matter:
++        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
++    if in_place:
++        cmd.append("-i")
++    else:
++        cmd += ["-o", "json"]
++    cmd += [expression, str(file)]
++    r = subprocess.run(cmd, capture_output=True, text=True,
++                       encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
++    if in_place:
++        return None
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    decoder = json.JSONDecoder()
++    parsed, idx = decoder.raw_decode(raw)
++    if raw[idx:].strip():
++        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
++    if front_matter and not in_place and default is not None:
++        if not isinstance(parsed, dict):
++            return default
++    return parsed
++
++
+ def _schema_from_config(root):
++    """〔实测证据，见 impl-report——本函数刻意未迁 yq〕`config.yaml` 是用户可自由编辑的任意
++    YAML（区别于本文件其余 yq 消费点：marker 文件/schema.yaml 都是工具自己写的简单单层
++    YAML），已知会出现文档起始 `--- # 注释` 这类写法（`_set_schema_key` 下方就有专门维护
++    该写法的字节级测试）。mikefarah/yq v4.53.3 的 `--header-preprocess` 在这类输入上有一类
++    尚未找到统一规避手段的缺陷：默认 `true` 时会把 `--- # 注释` 之后的第一行内容**吞并进
++    注释**（该行在解析结果里彻底消失，不只是格式差异）；显式 `false` 又会让含 `%YAML`/`%TAG`
++    文档指令的文件直接解析失败（`found incompatible YAML document`）——两个设置各打破一类
++    本文件已有测试锁定的真实场景，没有能同时满足两者的单一 flag。`_schema_from_config` 与
++    `_set_schema_key` 是一对读写搭档（update 决定「要不要写」的比较基准），保持两者同为既有
++    的字节级正则实现（对「schema:」这一个已知字面前缀做定位，非通用 YAML 解析，基准5警戒的
++    是无界语法面手搓，这里的语法面是「一个固定字面量键」，有界）。"""
+     cfg = os.path.join(root, "openspec", "config.yaml")
+     try:
+         # Treat a UTF-8 BOM as an encoding prefix, not as part of the first YAML key.
+         with open(cfg, encoding="utf-8-sig") as f:
+             for line in f:
+                 match = re.match(r"^schema\s*:\s*([^#\s]+)", line)
+                 if match:
+                     return match.group(1)
+     except (OSError, UnicodeDecodeError):
+         pass
+@@ -501,263 +625,167 @@ def migrate_changes(root, schema=BUILTIN_SCHEMA):
+         if os.path.exists(marker):
+             if _marker_schema(marker) not in VALID_CHANGE_MARKER_SCHEMAS:
+                 raise RuntimeError(f"在途 change 的 schema marker 非法或不匹配：{marker}")
+             continue
+         _atomic_write(marker, f"schema: {schema}\n".encode("utf-8"), ".openspec.")
+         count += 1
+     return count
+ 
+ 
+ def _marker_schema(marker):
+-    """Return the single schema value in a migration marker, or fail loudly."""
++    """Return the single schema value in a migration marker, or fail loudly.
++
++    Marker 文件永远是 `migrate_changes` 自己写的单行 `schema: <value>\\n`（见 `_atomic_write`
++    调用点）——这里的解析是防用户手工改坏该文件的防御性校验，MUST 恰好一个 `schema` 键、
++    值非空字符串，语义同旧版手搓正则（拒绝额外键/空值/多余非注释内容）。"""
+     try:
+-        with open(marker, encoding="utf-8", newline="") as f:
+-            lines = f.readlines()
+-    except (OSError, UnicodeDecodeError) as exc:
+-        raise RuntimeError(f"无法读取 schema marker：{marker}") from exc
+-
+-    values = []
+-    for line in lines:
+-        match = re.fullmatch(r"schema:[ \t]*([^\s#]+)[ \t]*(?:#.*)?\r?\n?", line)
+-        if match:
+-            values.append(match.group(1))
+-        elif line.strip() and not line.lstrip().startswith("#"):
+-            raise RuntimeError(f"schema marker 不可解析：{marker}")
+-    if len(values) != 1:
++        data = _yq(".", marker, default={})
++    except RuntimeError as exc:
++        raise RuntimeError(f"schema marker 不可解析：{marker}: {exc}") from exc
++    if not isinstance(data, dict) or set(data.keys()) != {"schema"}:
+         raise RuntimeError(f"schema marker 不可解析：{marker}")
+-    return values[0]
++    value = data.get("schema")
++    if not isinstance(value, str) or not value:
++        raise RuntimeError(f"schema marker 不可解析：{marker}")
++    return value
+ 
+ 
+-# ── config-lint（mlh-p3-determ-guards Task 2）──────────────────
++# ── config-lint（mlh-p3-determ-guards Task 2；解析层 shared-yaml-subset-parser 迁 yq）──
+ #
+ # openspec/config.yaml 结构 fail-closed 校验门：只校验结构（顶层键存在 / 子键归属），
+-# 不碰内容文案。**手写 stdlib 行级扫描**（follow anchor_lint.py::read_metrics_enabled 范式，
+-# MUST NOT `import yaml`——本脚本被 symlink 进消费仓，消费仓多数无 PyYAML，import 会
+-# ImportError 崩溃，与 fail-closed 相悖）。顶层块（model-tiers / metrics）「先探测存在再
+-# 校验」，块整段缺失一律条件化放行（mlh-p2 假阳教训，memory dogfood-blind-spot-source-config：
+-# sdflow-init update 从不注入新顶层键，故 100% 存量消费仓 config 无这些块，缺块是正常态、
+-# 不是违规）；绝不裸 `cfg["k"]["j"]` 式取键，坏了是 KeyError 裸 traceback，不是人可读 reason。
++# 不碰内容文案。语法层（缩进/冒号/引号/注释剥离/多文档判定）全部委托 `_yq('.', cfg_path)`
++# **一次性**读出整份文档的 dict——不再按键路径逐个调用（`.schema` / `.rules` / ...）：
++# yq 是整份文档解析，document 内任何一处语法错误（如越权测试语料里的漏冒号叶子）都会让
++# **同一份文件的任何查询表达式**同等失败，分别调用只会重复触发同一次失败，一次读出更简单
++# 也更快。顶层块（model-tiers / metrics）「先探测存在再校验」，块整段缺失一律条件化放行
++# （mlh-p2 假阳教训，memory dogfood-blind-spot-source-config：sdflow-init update 从不注入
++# 新顶层键，故 100% 存量消费仓 config 无这些块，缺块是正常态、不是违规）；绝不裸
++# `cfg["k"]["j"]` 式取键，坏了是 KeyError 裸 traceback，不是人可读 reason。
++#
++# 〔与旧版行级扫描器的诊断精度差异，见 impl-report〕整份文档语法错误（如 `model-tiers:` 块内
++# 一处漏冒号）此前能被旧扫描器局部容错、精确点名哪一行；yq 是真解析器，会让**整份文件**判定
++# 解析失败，`lint_config` 只能报一条笼统的「解析失败」reason（含 yq 原始诊断）。这是 yq 委托
++# 的既定代价（spec-review F9/decision-memo），不是本次改动引入的新缺陷。
+ 
+ TIER_ALLOWED_SUBKEYS = {"strong", "mid", "light"}
+ TIER_FLEET_KEYS = {"claude", "codex"}          # add-codex-host-support ADR-8：按机队分键
+ RULES_REQUIRED_SUBKEYS = ("proposal", "specs", "design", "tasks")
+ 
+ 
+ def _valid_model_id(v):
+     """model-tiers 值的合法字符集校验（与 resolve-models.sh::_valid_model_id 同一有界口径，
+     跨语言各自本地重实现——add-codex-host-support D5/D10：值只准 [A-Za-z0-9._-]、首字符字母
+     数字、非空，拒绝换行/控制字符/shell 元字符，防 eval 注入面的值经消费仓 config 回灌到
+     resolve-models.sh 的输出。"""
+     if not v:
+         return False
+     if not (v[0].isalnum() and v[0].isascii()):
+         return False
+     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+     return all(c in allowed for c in v)
+ 
+ 
+-def _strip_inline_comment(v):
+-    """截去「空白 + `#`」起始的行内注释（近似 YAML 注释语法：`#` 前须有空白才算注释起始，
+-    与 resolve-models.sh 的 `sed 's/[[:space:]]*#.*$//'` 同一口径）。"""
+-    i = 0
+-    while i < len(v):
+-        if v[i] == "#" and (i == 0 or v[i - 1] in " \t"):
+-            return v[:i].strip()
+-        i += 1
+-    return v.strip()
+-
+-
+-def _parse_model_tiers_block(lines, start, end):
+-    """扫顶层 `model-tiers:` 块 [start+1,end)，识别**机队分键**（`  claude:`/`  codex:` 2 空格
+-    头 + `    strong:`/`mid:`/`light:` 4 空格叶子）与**扁平旧格式**（`  strong:`/`mid:`/`light:`
+-    2 空格叶子，兼容读作 Claude 机队，见 ADR-8）两种写法——与 resolve-models.sh
+-    ::_read_config_overrides 同一有界键路径口径（6 条：2 机队×3 档），各自本地重实现
+-    （跨语言无法共享同一实现，MUST NOT 写通用 YAML 解析器，基准 5）。
+-
+-    **fleet_ctx（当前机队上下文）的 reset 按缩进层级逐层对齐 resolver**〔Task 6 复评 r2〕：
+-    - 空行 / 任意缩进注释行 ⇒ 不 reset（块内合法留白，不该打断 fleet）。
+-    - 4-space 叶子行（含**漏冒号笔误** / 越域 key）⇒ 记 bad 但 **fleet_ctx 保持不变**——对齐
+-      resolver 4-space 分支「未匹配 key 只跳该行、fleet 不变」。**MUST NOT 无条件 reset**（那会把
+-      整块后续合法叶子毒化成不再 attribute/validate，与 resolver 分歧、fail-closed 门被笔误静默放行）。
+-    - 2-space 行漏冒号 / 未知键 ⇒ reset（resolver 此层落 `*) fleet=""`）。
+-    - n<2 奇异缩进 ⇒ reset（resolver `" "*` 分支）。
+-    返回 (entries, bad_subkeys, bad_headers)：
+-      entries = {"claude.strong": "opus", "flat.mid": "sonnet", ...}（值为 strip 后原始文本，
+-                 未做字符集校验——校验在调用侧做，以便按 fleet.tier 精确报 reason）
+-      bad_subkeys = 越域键集合，两类：顶层二级键（既非 claude/codex 也非 strong/mid/light，如
+-                 "weird"）+ 机队子块下的三级叶子键（如 "claude.bogus"）——config_lint 比
+-                 resolve-models.sh 更严格（后者对未知叶子键静默跳过、best-effort 提取；本函数
+-                 是 fail-closed 结构门，MUST 把两类越域键都亮出来）
+-      bad_headers = 机队头带**非空尾随内容**的畸形行（如 `claude: rogue`——fleet 名当标量误用）。
+-                 〔Task 6 复评 Critical〕这类行是 fleet 归属串扰的入口：resolver 遇它 reset fleet
+-                 （不让 stale fleet 续命把后续叶子读进错机队），config_lint 必须**同步报违规**且
+-                 **给出同一 fleet 归属**（fleet_ctx 归 None，后续叶子不归任何机队）——否则两解析器
+-                 对同一输入 fleet 归属分叉（违 GC-6/D10）。纯注释头（`claude:  # x`，剥注释后值空）
+-                 是合法 YAML 嵌套块头、非畸形，不入本集。
+-    """
+-    entries = {}
+-    bad = set()
+-    bad_headers = []
+-    fleet_ctx = None
+-    for ln in lines[start + 1:end]:
+-        s = ln.strip()
+-        if not s or s.startswith("#"):
+-            continue   # 空行 / 任意缩进的注释行 —— 保持 fleet_ctx 不变（同 resolve-models.sh）
+-        # 缺冒号（漏冒号笔误等）**按缩进层级分别对齐 resolver**，MUST NOT 一个无条件 reset 盖掉所有层级
+-        # 〔Task 6 复评 r2〕：resolver 4-space 叶子分支对未匹配 key 只跳该行、fleet 不变；2-space 与
+-        # 更浅缩进分支才 reset。此前的「`":" not in s` 无条件 reset」会把整块后续合法叶子毒化成不再
+-        # attribute/validate（与 resolver 分歧、fail-closed 门被一个笔误静默放行）。
+-        n = len(ln) - len(ln.lstrip(" "))
+-        has_colon = ":" in s
+-        if n >= 4:
+-            # 4-space+ 缩进：机队子块下的叶子键（仅在 fleet_ctx 已设时生效）。
+-            # 漏冒号 / 越域 key ⇒ 记 bad（config_lint 比 resolver 更严格，既定不对称），
+-            # 但 **fleet_ctx 保持不变**（对齐 resolver 4-space 分支：未匹配 key 只跳该行）。
+-            if fleet_ctx:
+-                if has_colon:
+-                    k, _, v = s.partition(":")
+-                    k = k.strip()
+-                    v = _strip_inline_comment(v)
+-                    if k in TIER_ALLOWED_SUBKEYS:
+-                        entries[f"{fleet_ctx}.{k}"] = v
+-                    else:
+-                        bad.add(f"{fleet_ctx}.{k}")
+-                else:
+-                    bad.add(f"{fleet_ctx}.{s}")   # 漏冒号叶子——结构违规，但不毒化 fleet
+-            continue
+-        if n >= 2:
+-            # 2-space 缩进：机队头（值须空）/ 扁平叶子键 / 未知键。
+-            # 漏冒号（如 `strong opus`、`claude`）在 resolver 此层落 `*) fleet=""` reset ⇒ 本层 reset。
+-            if not has_colon:
+-                fleet_ctx = None
+-                bad.add(s)
++def _model_tiers_from_dict(raw):
++    """model-tiers 顶层块的业务校验（fleet 键集识别/越域键检测/畸形头检测），在 yq 已解析出
++    的 dict 上执行——语法层（缩进/冒号/引号/注释）全部由 yq 负责，本函数只做键集/值形态判断。
++    机队分键 `{claude,codex}.{strong,mid,light}` 与扁平旧格式 `{strong,mid,light}`（ADR-8）
++    两种写法。返回 (entries, bad_subkeys, bad_headers)，语义同旧版 `_parse_model_tiers_block`：
++      entries: {"claude.strong": "opus", "flat.mid": "sonnet", ...}（值转 str；yq 的 null
++                （空值叶子）映射为空串，保留旧版「空值即无效模型ID」的语义，_valid_model_id
++                对空串恒返回 False）
++      bad_subkeys: 越域键集合（顶层非法二级键 + 机队子块下的三级越域叶子键）
++      bad_headers: 机队头值非 dict（标量误用，如 `claude: rogue` 单独一行、无更深嵌套）
++
++    〔与旧版行级扫描器的差异，见 impl-report〕旧版还需处理「漏冒号叶子」「机队头带尾随内容
++    且带更深缩进子块」这两类——它们在真 YAML 语法下是**非法文档**（`mapping values are not
++    allowed in this context`），yq 对整份 config.yaml 直接判定解析失败，根本到不了本函数；
++    `lint_config` 在读取阶段已把它们收作「config.yaml 解析失败」，故本函数不再需要旧版那套
++    靠行扫描器容错、局部诊断的 fleet_ctx 状态机与逐层 reset 规则。"""
++    entries, bad, bad_headers = {}, set(), []
++    if not isinstance(raw, dict):
++        return entries, bad, bad_headers
++    for k, v in raw.items():
++        if k in TIER_FLEET_KEYS:
++            if not isinstance(v, dict):
++                bad_headers.append(f"{k}: {v}")   # 机队名当标量误用（如 `claude: rogue`）
+                 continue
+-            k, _, v = s.partition(":")
+-            k = k.strip()
+-            v = _strip_inline_comment(v)
+-            if k in TIER_FLEET_KEYS:
+-                if v:
+-                    # `claude: rogue` —— fleet 名当标量误用，畸形。reset fleet 防串扰、报违规。
+-                    bad_headers.append(f"{k}: {v}")
+-                    fleet_ctx = None
++            for tk, tv in v.items():
++                if tk in TIER_ALLOWED_SUBKEYS:
++                    entries[f"{k}.{tk}"] = "" if tv is None else str(tv)
+                 else:
+-                    fleet_ctx = k   # 空值（含纯注释头剥注释后为空）= 合法嵌套块头
+-                continue
+-            fleet_ctx = None
+-            if k in TIER_ALLOWED_SUBKEYS:
+-                entries[f"flat.{k}"] = v
+-            else:
+-                bad.add(k)
+-            continue
+-        # n < 2（1-space 等奇异缩进）——有界解析不认，reset（对齐 resolver `" "*` 分支的 reset）
+-        fleet_ctx = None
++                    bad.add(f"{k}.{tk}")
++        elif k in TIER_ALLOWED_SUBKEYS:
++            entries[f"flat.{k}"] = "" if v is None else str(v)
++        else:
++            bad.add(k)
+     return entries, bad, bad_headers
+ 
+ 
+-def _find_top_level_block(lines, key):
+-    """定位顶层 `<key>:` 行；返回 (key行索引, 块内容范围终点) 或 None（键整段不存在）。
+-    「顶层」= 行首即键名（不缩进）；块终点 = 下一处非缩进/非空/非注释行（同 anchor_lint 的
+-    「至下一顶层键前」口径），中途的空行/注释行跳过不计入终止判据。"""
+-    start = None
+-    for i, ln in enumerate(lines):
+-        if ln.rstrip() == f"{key}:" or ln.startswith(f"{key}:"):
+-            start = i
+-            break
+-    if start is None:
+-        return None
+-    end = len(lines)
+-    for i in range(start + 1, len(lines)):
+-        ln = lines[i]
+-        if ln.strip() == "" or ln.strip().startswith("#"):
+-            continue
+-        if not ln.startswith((" ", "\t")):
+-            end = i
+-            break
+-    return start, end
+-
+-
+-def _second_level_keys(lines, start, end):
+-    """在 [start+1, end) 范围内收集二级子键名（恰 2 空格缩进、非 3+ 空格、以 `:` 结尾的行）。
+-    3+ 空格缩进的行是子键下的列表项/更深层级，不计入子键集合。"""
+-    keys = set()
+-    for ln in lines[start + 1:end]:
+-        s = ln.strip()
+-        if not s or s.startswith("#"):
+-            continue
+-        if ln.startswith("  ") and not ln.startswith("   ") and ":" in s:
+-            keys.add(s.split(":", 1)[0].strip())
+-    return keys
+-
+-
+ def lint_config(root):
+     """校验 <root>/openspec/config.yaml 的结构，返回 reason 字符串列表（空 = 干净）。
+     校验项：① 顶层 `schema:` 键存在 ② 顶层 `rules:` 块存在且含 proposal/specs/design/tasks
+     四子键（无条件必填） ③ 顶层 `model-tiers:`（若存在）——机队分键 `{claude,codex}.{strong,mid,
+     light}` 或扁平旧格式 `{strong,mid,light}`（ADR-8），二级键须 ⊆ {claude,codex,strong,mid,light}，
+     且叶子键的**值**须为合法模型 ID（add-codex-host-support D5：拒绝空值/非法字符，防 eval 注入面
+-    经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false}。config.yaml
+-    本身缺失/不可读单独报一条 reason（不当 KeyError 崩）。"""
++    经消费仓 config 回灌） ④ 顶层 `metrics:`（若存在）`enabled:` 值 ∈ {true,false}。
++
++    yq 不可用（未装/非 mikefarah）→ `_check_yq()` 前置门给出一条带安装指引的 reason（不崩溃/
++    不退出，`lint_config` 的公开契约就是「返回 reason 列表」）。config.yaml 缺失/不可读/整份
++    语法错误（含非 UTF-8）→ 单条 reason（`_yq()` 的原始诊断，不再是精确定位到哪一行/哪个标量
++    的手搓诊断）。"""
++    ok, reason = _check_yq()
++    if not ok:
++        return [reason]
++
+     cfg_path = os.path.join(root, "openspec", "config.yaml")
+     try:
+-        with open(cfg_path, encoding="utf-8") as f:
+-            text = f.read()
+-    # [impl-review-fix] F2：此前只捕 OSError——非 UTF-8 config.yaml 会让 f.read() 抛
+-    # UnicodeDecodeError，未被捕获、以裸 traceback 崩溃。补捕获，与本 bundle 范式源
+-    # anchor_lint.py::read_metrics_enabled / load_enums 的既有 except (OSError,
+-    # UnicodeDecodeError) 写法对齐（commit 8f1d2bc 已确立的口径，本文件新写时漏跟）。
+-    except (OSError, UnicodeDecodeError) as e:
+-        return [f"config.yaml 不可读: {cfg_path}: {e}"]
+-    lines = text.splitlines()
++        cfg = _yq(".", cfg_path, default={})
++    except RuntimeError as e:
++        return [f"config.yaml 不可读或解析失败: {cfg_path}: {e}"]
++    if cfg is None:
++        cfg = {}
++    if not isinstance(cfg, dict):
++        return [f"config.yaml 顶层结构非 dict: {cfg_path}"]
++
+     reasons = []
+ 
+-    if _find_top_level_block(lines, "schema") is None:
++    if "schema" not in cfg:
+         reasons.append("缺顶层 schema: 键")
+ 
+-    rules_block = _find_top_level_block(lines, "rules")
+-    if rules_block is None:
++    rules = cfg.get("rules")
++    if not isinstance(rules, dict):
+         reasons.append("缺顶层 rules: 块")
+     else:
+-        start, end = rules_block
+-        sub = _second_level_keys(lines, start, end)
+-        missing = [k for k in RULES_REQUIRED_SUBKEYS if k not in sub]
++        missing = [k for k in RULES_REQUIRED_SUBKEYS if k not in rules]
+         if missing:
+             reasons.append(f"rules: 缺子键 {missing}（须含 proposal/specs/design/tasks）")
+ 
+-    tiers_block = _find_top_level_block(lines, "model-tiers")  # 条件化：块整段缺失 → 跳过（放行）
+-    if tiers_block is not None:
+-        start, end = tiers_block
+-        entries, bad, bad_headers = _parse_model_tiers_block(lines, start, end)
++    if cfg.get("model-tiers") is not None:  # 条件化：块整段缺失 → 跳过（放行）
++        entries, bad, bad_headers = _model_tiers_from_dict(cfg["model-tiers"])
+         if bad:
+             reasons.append(
+                 f"model-tiers: 子键越域 {sorted(bad)}"
+                 f"（顶层须 ⊆ {{claude,codex,strong,mid,light}}，机队子块叶子键须 ⊆ {{strong,mid,light}}）")
+         if bad_headers:
+             # 〔Task 6 复评 Critical〕机队头带非空尾随内容（fleet 名当标量误用），是 fleet 归属
+-            # 串扰入口——报违规，且解析侧已 reset fleet 与 resolver 同步归属（GC-6/D10）。
++            # 串扰入口——报违规，与 resolve-models.sh 的 reset 语义一致（GC-6/D10）。
+             reasons.append(
+                 f"model-tiers: 机队头带尾随内容 {sorted(bad_headers)}"
+                 f"（`claude:`/`codex:` 须为空的嵌套块头，值另起 strong/mid/light 缩进行；纯注释头合法）")
+         bad_values = [f"{k}={v!r}" for k, v in sorted(entries.items()) if not _valid_model_id(v)]
+         if bad_values:
+             reasons.append(f"model-tiers: 值非法模型ID {bad_values}（须为 [A-Za-z0-9._-]+，首字符字母数字）")
+ 
+-    metrics_block = _find_top_level_block(lines, "metrics")  # 条件化：块整段缺失 → 跳过（放行）
+-    if metrics_block is not None:
+-        start, end = metrics_block
+-        valid = False
+-        for ln in lines[start + 1:end]:
+-            s = ln.strip()
+-            if not s or s.startswith("#"):
+-                continue
+-            if s.startswith("enabled:") and s.split(":", 1)[1].strip() in ("true", "false"):
+-                valid = True
+-        if not valid:
++    metrics = cfg.get("metrics")
++    if metrics is not None:  # 条件化：块整段缺失 → 跳过（放行）
++        enabled = metrics.get("enabled") if isinstance(metrics, dict) else None
++        if not isinstance(enabled, bool):
+             reasons.append("metrics: enabled 值非法或缺失（须为 true|false）")
+ 
+     return reasons
+ 
+ 
+ def cmd_config_lint(root):
+     """跑 lint_config 并落 stdout/stderr + 退出码：干净 0，违规非零、reason 逐条 stderr。"""
+     reasons = lint_config(root)
+     if reasons:
+         for r in reasons:
+diff --git a/sdflow-init/tests/fixtures/model_tiers_cases.py b/sdflow-init/tests/fixtures/model_tiers_cases.py
+index ea78897..9967770 100644
+--- a/sdflow-init/tests/fixtures/model_tiers_cases.py
++++ b/sdflow-init/tests/fixtures/model_tiers_cases.py
+@@ -7,20 +7,30 @@
+ 
+ 新增/改判据（合法字符集、机队分键结构）MUST 同步更新两侧消费方式，不得只改一侧。
+ `CASES` 每条：
+   name                用例标识
+   yaml_block          附加在 `model-tiers:` 顶层键之后的 YAML 片段（含 `model-tiers:` 行本身）
+   lint_clean          config_lint 期望的整洁性（True=exit 0，False=exit!=0）
+   lint_reason_substrs 不整洁时 stderr 须含的子串列表（顺序不拘）
+   resolver            每条 = {host, strong, mid, light}：该 host 下 resolve-models.sh 最终解析
+                        出的三档位期望值（覆盖生效则为覆盖值，否则为该机队缺省）
+   injection_marker    可选：若这条用例是恶意值回归，marker 文件名——断言 eval 后该文件未被创建
++
++〔shared-yaml-subset-parser Task 4〕`config_lint` 侧的解析层已从手搓行扫描迁到 yq（真 YAML
++解析器）；`resolve-models.sh` 侧不受影响（纯 shell、非本次改动范围）。四条用例
++（`leaf_missing_colon_sustains_fleet` / `fleet_header_trailing_content_rogue` /
++`injection_backtick` / `injection_double_quote`）在真 YAML 语法下其实是**整份文档级语法
++错误**（`mapping values are not allowed in this context` 等）——`lint_clean` 仍为 False
++（不变：语法错误当然不算「干净」），但 `lint_reason_substrs` 已从「精确点名哪个 fleet.tier
++键」改为通用的 `"解析失败"` 标记（yq 是整份文档解析，语法错误让**任何**查询表达式同等失败，
++诊断精度必然下降——spec-review F9/decision-memo 已接受的既定代价）。`resolver` 字段对这四条
++不受影响（resolve-models.sh 仍按其自身 shell 逻辑独立判定，与本次 yq 迁移无关），未改动。
+ """
+ 
+ CASES = [
+     dict(
+         name="nested_valid",
+         yaml_block="""model-tiers:
+   claude:
+     strong: claude-strong-x
+     mid: claude-mid-x
+   codex:
+@@ -75,21 +85,23 @@ CASES = [
+         ],
+         injection_marker="INJECTED_A",
+     ),
+     dict(
+         name="injection_backtick",
+         yaml_block="""model-tiers:
+   codex:
+     strong: `touch INJECTED_B`
+ """,
+         lint_clean=False,
+-        lint_reason_substrs=["codex.strong"],
++        # 反引号在真 YAML 语法下是 "found character that cannot start any token"——整份文档
++        # 解析失败（非 config_lint 精确点名到 codex.strong 的语义校验），见文件头 Task 4 说明。
++        lint_reason_substrs=["解析失败"],
+         resolver=[
+             dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+         ],
+         injection_marker="INJECTED_B",
+     ),
+     dict(
+         name="injection_semicolon_space",
+         yaml_block="""model-tiers:
+   claude:
+     mid: sonnet; touch INJECTED_C
+@@ -101,21 +113,23 @@ CASES = [
+         ],
+         injection_marker="INJECTED_C",
+     ),
+     dict(
+         name="injection_double_quote",
+         yaml_block='''model-tiers:
+   claude:
+     light: "haiku" && touch INJECTED_D
+ ''',
+         lint_clean=False,
+-        lint_reason_substrs=["claude.light"],
++        # 引号字符串后跟裸尾随内容在真 YAML 语法下 "did not find expected key"——整份文档
++        # 解析失败（非 config_lint 精确点名到 claude.light 的语义校验），见文件头 Task 4 说明。
++        lint_reason_substrs=["解析失败"],
+         resolver=[
+             dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
+         ],
+         injection_marker="INJECTED_D",
+     ),
+     dict(
+         name="empty_value",
+         yaml_block="""model-tiers:
+   claude:
+     strong:
+@@ -169,21 +183,24 @@ CASES = [
+         # config_lint MUST 报违规；两侧 MUST NOT 把后续 strong 归给 claude（丢弃）。
+         # 用与缺省不同的 claude-leak 值以检出串扰：正确=丢弃 ⇒ claude host 回落缺省 opus。
+         name="fleet_header_trailing_content_rogue",
+         yaml_block="""model-tiers:
+   codex:
+     strong: codex-real
+   claude: rogue
+     strong: claude-leak
+ """,
+         lint_clean=False,
+-        lint_reason_substrs=["claude"],
++        # `claude: rogue` 后紧跟更深缩进的 `strong:` 行在真 YAML 语法下
++        # "mapping values are not allowed in this context"——整份文档解析失败（非
++        # config_lint 精确点名到 claude 键的语义校验），见文件头 Task 4 说明。
++        lint_reason_substrs=["解析失败"],
+         resolver=[
+             dict(host="claude", strong="opus", mid="sonnet", light="haiku"),
+             dict(host="codex", strong="codex-real", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+         ],
+     ),
+     dict(
+         # 无前置合法块：注释 fleet 头是块内首条 entry（老 bug 下 fleet 起始为空 ⇒ 叶子丢弃）。
+         # 用 claude-first 检出：正确归 claude ⇒ claude host = claude-first。
+         name="fleet_header_comment_no_preceding_block",
+         yaml_block="""model-tiers:
+@@ -202,21 +219,23 @@ CASES = [
+     # 对未匹配 key 只跳那一行、fleet 不变）。老 fix 里 init.py 对无冒号行**无条件 reset fleet_ctx**，
+     # 把整块后续叶子毒化（fleet_ctx=None ⇒ 后续叶子不再 attribute/validate）⇒ 与 resolver 分歧、
+     # config_lint 结构门被笔误整段静默放行。
+     dict(
+         name="leaf_missing_colon_sustains_fleet",
+         yaml_block="""model-tiers:
+   claude:
+     strong opus
+     mid: sonnet-real
+ """,
+-        # config_lint 比 resolver 更严格（既定不对称，见 out-of-domain 叶子键先例）：漏冒号叶子
+-        # 记进 bad 报违规；但 fleet_ctx MUST 保持 ⇒ 后续 `mid: sonnet-real` 仍归 claude 并被校验。
++        # 〔Task 4 起：yq 迁移后行为变化，见文件头说明〕`strong opus`（漏冒号裸标量行）在真
++        # YAML 语法下 "mapping values are not allowed in this context"——整份文档解析失败，
++        # 不再有「fleet_ctx 保持、后续 mid 仍被校验」这件事（旧版行扫描器的局部容错语义，
++        # 现已被真解析器的整份失败取代）。
+         lint_clean=False,
+-        lint_reason_substrs=["strong opus"],
++        lint_reason_substrs=["解析失败"],
+         resolver=[
+             # claude host：strong 那行漏冒号被跳过 ⇒ strong 回落缺省 opus；mid 沿用 claude ⇒ sonnet-real
+             dict(host="claude", strong="opus", mid="sonnet-real", light="haiku"),
+             dict(host="codex", strong="gpt-5.6-sol", mid="gpt-5.6-terra", light="gpt-5.6-luna"),
+         ],
+     ),
+ ]
+diff --git a/sdflow-init/tests/test_config_lint.py b/sdflow-init/tests/test_config_lint.py
+index a76f066..3ff00c4 100644
+--- a/sdflow-init/tests/test_config_lint.py
++++ b/sdflow-init/tests/test_config_lint.py
+@@ -4,20 +4,22 @@
+ 顶层块（model-tiers / metrics）缺失一律条件化放行（防 mlh-p2 假阳，见 memory
+ dogfood-blind-spot-source-config）。
+ 
+ Run: python3 -m pytest sdflow-init/tests/test_config_lint.py -v
+ """
+ import os
+ import subprocess
+ import sys
+ from pathlib import Path
+ 
++import pytest
++
+ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+ sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
+ 
+ from model_tiers_cases import CASES as MODEL_TIERS_CASES  # noqa: E402  共享畸形输入语料，见该文件 docstring
+ 
+ REPO_ROOT = Path(__file__).parent.parent.parent
+ INIT_PY = Path(__file__).parent.parent / "scripts" / "init.py"
+ 
+ 
+ def _write_config(root: Path, content: str):
+@@ -145,21 +147,24 @@ class TestConfigLintModelTiersFleetKeyed:
+         r = _run_lint(tmp_path)
+         assert r.returncode != 0
+         assert "claude.strong" in r.stderr
+ 
+     def test_flat_invalid_model_id_value_nonzero(self, tmp_path):
+         _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+   mid: `touch pwned`
+ """)
+         r = _run_lint(tmp_path)
+         assert r.returncode != 0
+-        assert "flat.mid" in r.stderr
++        # 反引号在真 YAML 语法下是 "found character that cannot start any token"——整份文档
++        # 解析失败，不再是 config_lint 精确点名到 flat.mid 的语义校验（yq 迁移的既定诊断精度
++        # 代价，见 model_tiers_cases.py 文件头 Task 4 说明）。
++        assert "解析失败" in r.stderr
+ 
+     def test_empty_value_nonzero(self, tmp_path):
+         _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+   codex:
+     light:
+ """)
+         r = _run_lint(tmp_path)
+         assert r.returncode != 0
+         assert "codex.light" in r.stderr
+ 
+@@ -174,67 +179,73 @@ class TestConfigLintModelTiersSharedFixture:
+             _write_config(root, VALID_RULES_BLOCK + case["yaml_block"])
+             r = _run_lint(root)
+             if case["lint_clean"]:
+                 assert r.returncode == 0, f"{case['name']}: expected clean, got {r.stderr}"
+             else:
+                 assert r.returncode != 0, f"{case['name']}: expected violation, got clean"
+                 for substr in case["lint_reason_substrs"]:
+                     assert substr in r.stderr, f"{case['name']}: missing {substr!r} in {r.stderr}"
+ 
+ 
+-class TestConfigLintLeafMissingColonNoPoison:
+-    """Task 6 复评 r2 Important：叶子层漏冒号笔误 MUST NOT 毒化整个 fleet 块——后续合法叶子
+-    仍须被 attribute + validate（fail-closed 结构门不被一个笔误整段静默放行）。"""
++class TestConfigLintWholeDocumentParseFailure:
++    """shared-yaml-subset-parser 迁 yq 之后的行为变化（见 impl-report task4-init-yq.md）：
++    旧版行扫描器能局部容错「叶子层漏冒号笔误」，之后合法叶子仍被 attribute+validate
++    （Task 6 复评 r2 Important 的原始诉求）。yq 是真 YAML 解析器——`strong opus`（无冒号的
++    裸标量行，出现在期望是 mapping 的上下文里）是**语法级非法 YAML**
++    （`mapping values are not allowed in this context`），会让**整份 config.yaml**
++    解析失败，不再有「局部容错、后续叶子仍被校验」这件事——`claude.mid` 后续叶子根本读不到，
++    因为文档级读取（`_yq('.', cfg_path)`）本身就失败了。这不是本次改动引入的新缺陷，而是
++    yq 委托的既定代价（spec-review F9/decision-memo：诊断精度下降换取「不手搓 YAML 解析器」）。"""
+ 
+-    def test_missing_colon_does_not_poison_following_leaf_validation(self, tmp_path):
+-        """漏冒号 strong 行之后的 `mid: <非法值>` MUST 被校验到——证明 fleet_ctx 未被毒化成 None。
+-        若毒化（老 bug），mid 从不 attribute ⇒ 非法值静默放行 ⇒ stderr 无 claude.mid。"""
++    def test_missing_colon_leaf_is_a_whole_document_parse_failure(self, tmp_path):
++        """漏冒号叶子行 MUST 被 yq 判定整份文档语法错误（非零退出 + 通用「解析失败」reason），
++        MUST NOT 静默放行、也不再有精确到 `claude.mid` 的局部诊断。"""
+         _write_config(tmp_path, VALID_RULES_BLOCK + """model-tiers:
+   claude:
+     strong opus
+     mid: bad$value
+ """)
+         r = _run_lint(tmp_path)
+         assert r.returncode != 0
+-        assert "claude.mid" in r.stderr, f"漏冒号毒化了后续 mid 叶子的校验: {r.stderr}"
++        assert "解析失败" in r.stderr, r.stderr
+ 
+ 
+-class TestParseModelTiersBlockAttribution:
+-    """白盒锁（直测 `_parse_model_tiers_block` 的 entries 归属）——config_lint 只对外报违规
+-    存在性，无法从 CLI 侧观察「后续叶子归给了哪个 fleet」。这两条直测 entries dict，锁住两处
+-    与 resolver 同口径的关键 reset/sustain 行为（防未来重构悄悄回归、成无测试锁的死码）。"""
++class TestModelTiersFromDict:
++    """白盒锁（直测 `_model_tiers_from_dict` 的 entries/bad_headers 归属）——config_lint 只对外
++    报违规存在性，无法从 CLI 侧观察「叶子归给了哪个 fleet」。语法层已交给 yq；本函数只处理
++    yq 已解析出的 dict，故这里直接构造 Python dict 输入（不再需要构造原始 YAML 文本行）。"""
+ 
+     @staticmethod
+-    def _parse(yaml_block):
++    def _parse(raw):
+         import init  # scripts/ 已在 sys.path（本文件顶部 line 14）
+-        lines = (VALID_RULES_BLOCK + yaml_block).splitlines()
+-        blk = init._find_top_level_block(lines, "model-tiers")
+-        return init._parse_model_tiers_block(lines, *blk)
++        return init._model_tiers_from_dict(raw)
+ 
+-    def test_missing_colon_leaf_sustains_fleet_attribution(self):
+-        """漏冒号叶子后的合法叶子仍归当前 fleet（entries 含 claude.mid），fleet_ctx 未被毒化。"""
++    def test_fleet_and_flat_entries_attributed_correctly(self):
+         entries, bad, bad_headers = self._parse(
+-            "model-tiers:\n  claude:\n    strong opus\n    mid: sonnet-real\n")
+-        assert entries.get("claude.mid") == "sonnet-real", entries
+-        # 漏冒号那行被记 bad（config_lint 更严格），但不清空后续归属
+-        assert any("strong opus" in b for b in bad), bad
+-
+-    def test_trailing_content_header_resets_fleet_no_crosstalk(self):
+-        """`claude: rogue`（带值畸形头）后的叶子 MUST NOT 归前一个 fleet（codex）——reset 生效。
+-        锁住 bad_headers 分支的 fleet_ctx=None（防其成无测试的死码/串扰回归）。"""
++            {"claude": {"strong": "opus", "mid": "sonnet"}, "codex": {"strong": "gpt"}})
++        assert entries == {"claude.strong": "opus", "claude.mid": "sonnet", "codex.strong": "gpt"}
++        assert not bad and not bad_headers
++
++    def test_scalar_fleet_header_is_bad_header_no_crosstalk(self):
++        """`claude: rogue`（fleet 名当标量误用，值非 dict）MUST 记 bad_headers，且 MUST NOT
++        产生任何 `claude.*` entries——锁住 bad_headers 分支（防其成无测试的死码/回归）。"""
+         entries, bad, bad_headers = self._parse(
+-            "model-tiers:\n  codex:\n    strong: codex-real\n  claude: rogue\n    strong: claude-leak\n")
+-        assert entries.get("codex.strong") == "codex-real", entries
+-        # claude-leak MUST NOT 覆盖 codex.strong（若 reset 缺失，stale codex fleet 会把它读进 codex）
+-        assert entries.get("codex.strong") != "claude-leak", entries
++            {"codex": {"strong": "codex-real"}, "claude": "rogue"})
++        assert entries == {"codex.strong": "codex-real"}
+         assert any("claude: rogue" in h for h in bad_headers), bad_headers
+ 
++    def test_none_leaf_value_maps_to_empty_string(self):
++        """yq 对空值叶子（如 `light:`）给出 None——须映射为空串以保留旧版
++        「空值即无效模型ID」语义（`_valid_model_id("")` 恒 False）。"""
++        entries, bad, bad_headers = self._parse({"codex": {"light": None}})
++        assert entries == {"codex.light": ""}
++
+ 
+ class TestConfigLintMetrics:
+     def test_metrics_enabled_non_bool_nonzero(self, tmp_path):
+         _write_config(tmp_path, VALID_RULES_BLOCK + """metrics:
+   enabled: yes-please
+ """)
+         r = _run_lint(tmp_path)
+         assert r.returncode != 0
+         assert "metrics" in r.stderr
+         assert "enabled" in r.stderr
+@@ -297,20 +308,102 @@ class TestConfigLintGitRootAutoProbe:
+     def test_no_root_flag_probes_git_root(self):
+         r = subprocess.run(
+             ["python3", str(INIT_PY), "config-lint"],
+             capture_output=True, text=True, cwd=str(REPO_ROOT / "sdflow-init"),
+ 
+             encoding="utf-8",
+             errors="replace",)
+         assert r.returncode == 0, r.stderr
+ 
+ 
++class TestYqWrapper:
++    """直测 `_yq()`/`_check_yq()` 本体（shared-yaml-subset-parser Task 4）——config-lint 的
++    CLI 断言只能间接观察 yq 委托的效果，这里直接锁住薄封装自身的关键契约：default 分支、
++    非零退出 raise、未安装/非 mikefarah 时 fail-loud，与 anchor_lint.py 已落地的同类用例
++    对齐（design.md §1 参考实现的核验面）。"""
++
++    def _mod(self):
++        """每次都用一个独立的模块实例，避免 `_yq_bin` 进程内缓存跨用例互相污染
++        （同 anchor_lint.py 的 test_anchor_lint.py 既有范式）。"""
++        import importlib
++        import init as init_mod_local
++        return importlib.reload(init_mod_local)
++
++    def test_yq_default_for_missing_key(self, tmp_path):
++        mod = self._mod()
++        cfg = tmp_path / "x.yaml"
++        cfg.write_text("schema: spec-driven\n", encoding="utf-8")
++        assert mod._yq(".nope", str(cfg), default="fallback") == "fallback"
++
++    def test_yq_reads_typed_value(self, tmp_path):
++        mod = self._mod()
++        cfg = tmp_path / "x.yaml"
++        cfg.write_text("metrics:\n  enabled: true\n", encoding="utf-8")
++        assert mod._yq(".metrics.enabled", str(cfg)) is True
++
++    def test_yq_raises_on_nonzero_exit(self, tmp_path):
++        mod = self._mod()
++        cfg = tmp_path / "bad.yaml"
++        cfg.write_text('key: "unterminated\n', encoding="utf-8")
++        with pytest.raises(RuntimeError):
++            mod._yq(".", str(cfg))
++
++    def test_yq_not_installed_raises(self, tmp_path, monkeypatch):
++        mod = self._mod()
++        monkeypatch.setattr(mod.shutil, "which", lambda name: None)
++        cfg = tmp_path / "x.yaml"
++        cfg.write_text("schema: spec-driven\n", encoding="utf-8")
++        with pytest.raises(RuntimeError, match="未安装"):
++            mod._yq(".schema", str(cfg))
++
++    def test_yq_identity_check_rejects_non_mikefarah(self, tmp_path, monkeypatch):
++        mod = self._mod()
++        monkeypatch.setattr(mod.shutil, "which", lambda name: "/usr/bin/yq")
++
++        class FakeProc:
++            stdout = "yq 2.x (kislyuk/yq)\n"
++            stderr = ""
++            returncode = 0
++
++        monkeypatch.setattr(mod.subprocess, "run", lambda *a, **k: FakeProc())
++        cfg = tmp_path / "x.yaml"
++        cfg.write_text("schema: spec-driven\n", encoding="utf-8")
++        with pytest.raises(RuntimeError, match="mikefarah"):
++            mod._yq(".schema", str(cfg))
++
++    def test_check_yq_not_installed_returns_reason_not_raise(self, monkeypatch):
++        mod = self._mod()
++        monkeypatch.setattr(mod.shutil, "which", lambda name: None)
++        ok, reason = mod._check_yq()
++        assert ok is False
++        assert "未安装" in reason
++
++    def test_check_yq_ok_when_available(self):
++        mod = self._mod()
++        ok, reason = mod._check_yq()
++        assert ok is True
++        assert reason is None
++
++    def test_lint_config_reports_reason_when_yq_missing(self, tmp_path, monkeypatch):
++        """`lint_config` 的入口门（`_check_yq()`）在 yq 不可用时返回 reason 列表，不崩溃/
++        不退出——这是它与 `run()` 路径（靠既有 `except RuntimeError: _die()` 兜底）的
++        唯一差异化处理，见 `_check_yq()` docstring。"""
++        mod = self._mod()
++        monkeypatch.setattr(mod.shutil, "which", lambda name: None)
++        osdir = tmp_path / "openspec"
++        osdir.mkdir(parents=True)
++        (osdir / "config.yaml").write_text("schema: spec-driven\n", encoding="utf-8")
++        reasons = mod.lint_config(str(tmp_path))
++        assert len(reasons) == 1
++        assert "未安装" in reasons[0]
++
++
+ class TestConfigLintCliSmoke:
+     """adv-A 爆点2：config-lint 加进 mode choices 后，既有 3 个 mode（init/update/
+     retire-hooks）的 argparse 解析 + 实际执行不受扰动（未误引入 add_subparsers 重构）。"""
+ 
+     def test_existing_modes_still_run(self, tmp_path):
+         env = dict(os.environ)
+         env["CLAUDE_CONFIG_DIR"] = str(tmp_path / "fake-claude")
+         project = tmp_path / "proj"
+         project.mkdir()
+ 
+diff --git a/sdflow-init/tests/test_init.py b/sdflow-init/tests/test_init.py
+index 2fffe96..1bcc2bd 100644
+--- a/sdflow-init/tests/test_init.py
++++ b/sdflow-init/tests/test_init.py
+@@ -156,26 +156,39 @@ class TestBundleToolsOnly:
+ 
+         init_mod.copy_bundle(str(tmp_path / "target"), full=True)
+ 
+         workflow = tmp_path / "target" / "openspec" / "workflow"
+         assert not (workflow / "tools" / "tests").exists()
+         assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
+ 
+ 
+ class TestProjectLocalSchema:
+     def _version(self, monkeypatch, value="1.7.0\n", returncode=0):
++        """Fake only the `openspec --version` probe (`_openspec_cli_version`'s subprocess
++        call) — MUST NOT blanket-replace `subprocess.run` for the whole module: `_yq()`
++        (shared-yaml-subset-parser) also calls `subprocess.run` (yq's own `--version`
++        identity check + the actual yq invocation), and a blanket stub would feed those
++        calls the same fake "openspec version" stdout, corrupting yq's real output."""
+         class Proc:
+             stdout = value
+             stderr = ""
+             pass
+         Proc.returncode = returncode
+-        monkeypatch.setattr(init_mod.subprocess, "run", lambda *a, **k: Proc())
++        real_run = init_mod.subprocess.run
++
++        def fake_run(cmd, *a, **k):
++            is_yq = isinstance(cmd, list) and cmd and "yq" in os.path.basename(cmd[0]).lower()
++            if isinstance(cmd, list) and cmd and cmd[-1] == "--version" and not is_yq:
++                return Proc()
++            return real_run(cmd, *a, **k)
++
++        monkeypatch.setattr(init_mod.subprocess, "run", fake_run)
+ 
+     def _project(self, tmp_path):
+         root = tmp_path / "project"
+         (root / "openspec" / "changes" / "active").mkdir(parents=True)
+         (root / "openspec" / "changes" / "active" / "proposal.md").write_text("# proposal\n", encoding="utf-8")
+         (root / "openspec" / "config.yaml").write_text("schema: spec-driven\ncontext: keep\n", encoding="utf-8")
+         return root
+ 
+     def test_old_cli_does_not_deploy_schema_or_switch_config(self, tmp_path, monkeypatch, capsys):
+         root = self._project(tmp_path)
