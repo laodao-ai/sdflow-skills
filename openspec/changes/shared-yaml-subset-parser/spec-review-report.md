@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 561f32bde3af7e77d434a79c9cd58d3c38547ecf
+---
+
 # spec-review-report · shared-yaml-subset-parser
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
@@ -210,4 +216,13 @@ yq 的 merge-anchor 默认行为计划翻转。当前 config.yaml 未使用 merg
 **10 条采纳 findings（2 CRITICAL + 8 HIGH）、2 条需拍板、2 条已裁掉、11 条修订。**
 
 建议进设计 HARD-GATE：本 change 的方向正确（与基准5 高度自洽），但 design/spec 存在两处结构性缺陷（duplicate-key 信息丢失、`_yq()` 错误处理逻辑错误）需要在实现前修正。
-设计门拍板时请一并裁决 Q1/Q2 两个需拍板项。
+
+---
+
+## 设计门拍板记录
+
+设计门已拍板批准，日期 2026-08-01。
+
+- Q1 → **A（保留轻量原始文本预扫描）**：ship_gate.py 的 duplicate-key/tab-indent 预扫描保留在 yq 读取之前
+- Q2 → **A（各自抄 + golden test 守一致）**：7 份 `_yq()` 各自内联 + golden test 机械守一致
+- 11 条 `[spec-review-amendment]` 已落入四件套（提交 `561f32b`）
