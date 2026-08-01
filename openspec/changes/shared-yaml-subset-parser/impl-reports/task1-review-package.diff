@@ -1,0 +1,435 @@
+# Review package: a8cf0e5..fc9a079
+
+## Commits
+fc9a079 feat(setup): add check_dependencies() for unified runtime dep detection
+
+## Files changed
+ hack/tests/test_check_dependencies.py              | 174 +++++++++++++++++++++
+ .../impl-reports/task1-deps-check.md               | 111 +++++++++++++
+ setup.sh                                           |  95 +++++++++++
+ 3 files changed, 380 insertions(+)
+
+## Diff
+diff --git a/hack/tests/test_check_dependencies.py b/hack/tests/test_check_dependencies.py
+new file mode 100644
+index 0000000..c895239
+--- /dev/null
++++ b/hack/tests/test_check_dependencies.py
+@@ -0,0 +1,174 @@
++"""`setup.sh check_dependencies()` 的依赖预检契约（shared-yaml-subset-parser · Task 1 · R1/R2）。
++
++统一检测并报告全部运行依赖：python3 >= 3.7 / git / yq(mikefarah, >= 4.16.0) / openspec（可选）/
++pytest（开发可选）。调用点在 `install_sdflow` 之后、门禁检查之前；不中止 setup.sh
++——降级汇报，与既有 `skipped[]` 范式一致（同 `install_agents` 的既定取向）。
++
++【怎么跑】沿用 `test_install_agents.py` 的既定模式：`tmp_path` 当假 `HOME` 真跑 `bash setup.sh`。
++yq 分支（mikefarah / kislyuk / 版本过低 / 未安装）通过在 `PATH` 前置一个假 `yq` 可执行脚本来
++确定性复现——同 `test_sdflow_spec_agents.py::_scan_with_broken_grep` 注入假 `grep` 的手法。
++
++【本文件照不到的面（诚实边界）】
++- 不断言 openspec / pytest 分支的 ✓/· 具体取值——那取决于本机是否装了这两样，
++  本文件只断言「有且仅有一行状态」，不锁死本机环境的偶然状态。
++- 不测试 `_py`（python3 候选选择本身，[T48]）——那段功能性逻辑早于 `install_sdflow` 运行，
++  是脚本自身的执行前提（`install_sdflow` 消费 `$_py`），不能挪到 `check_dependencies()` 之后；
++  本文件只守「报告不重复」，不守选择算法本身。
++"""
++import os
++import re
++import shutil
++import subprocess
++from pathlib import Path
++
++import pytest
++
++from test_support.windows import bash_executable, bash_path
++
++REPO = Path(__file__).resolve().parents[2]
++SETUP = REPO / "setup.sh"
++
++
++def _path_without_yq():
++    """把真实 PATH 中含可解析 `yq` 的目录剔除——让"未安装"分支在任何机器上都确定性复现。"""
++    real_yq = shutil.which("yq")
++    raw = os.environ.get("PATH", "")
++    if not real_yq:
++        return raw
++    yq_dir = os.path.normcase(os.path.normpath(os.path.dirname(real_yq)))
++    parts = [p for p in raw.split(os.pathsep)
++             if os.path.normcase(os.path.normpath(p)) != yq_dir]
++    return os.pathsep.join(parts)
++
++
++def _fake_yq(bin_dir, version_line):
++    """造一个假 `yq`：`--version` 时打印 `version_line`，其余调用恒 exit 0。"""
++    bin_dir.mkdir(exist_ok=True)
++    fake = bin_dir / "yq"
++    fake.write_text(f"#!/bin/sh\necho '{version_line}'\nexit 0\n", encoding="utf-8")
++    fake.chmod(0o755)
++    return fake
++
++
++def _deps_section(stdout):
++    """截出 `check_dependencies()` 的输出块（"运行依赖预检：" 到下一个 "退役 hook 清理" 之间）。
++
++    🔴 **不能对整份 stdout 做子串/正则匹配**——`tmp_path` 由 pytest 按测试函数名生成，
++    像 `test_mikefarah_yq_with_sufficient_version_reports_ok` 这样的用例名本身就含 "yq"，
++    会被安装/清理汇总段落里打印的临时路径（如 `.../test_mikefarah_yq_with_suffici0/...`）
++    意外命中，产生假阳性/假阴性。调用点顺序固定为 `check_dependencies` 后紧跟 retire-hooks
++    段，故用后者的标题行做右边界，是稳定可依赖的锚点。
++    """
++    start = stdout.index("运行依赖预检：")
++    end = stdout.index("退役 hook 清理", start)
++    return stdout[start:end]
++
++
++def _run_setup(home, path=None):
++    """用假 HOME（+ 可选自定义 PATH）真跑一次 setup.sh。"""
++    env = dict(os.environ)
++    env["HOME"] = str(home)
++    env.pop("SDFLOW_HOME", None)  # 否则 install_sdflow 会写到真实 ~/.sdflow
++    if path is not None:
++        env["PATH"] = path
++    return subprocess.run(
++        [bash_executable(), bash_path(SETUP)], cwd=str(REPO), env=env,
++        capture_output=True, text=True, timeout=300, encoding="utf-8", errors="replace",
++    )
++
++
++@pytest.fixture
++def fake_home(tmp_path):
++    home = tmp_path / "home"
++    home.mkdir()
++    return home
++
++
++def test_reports_a_status_line_for_each_of_the_five_dependencies(fake_home):
++    """① python3 / git / yq / openspec / pytest 各恰好一行状态（✓/✗/·），且不中止 setup。"""
++    r = _run_setup(fake_home)
++    assert r.returncode == 0, r.stdout + r.stderr
++
++    deps = _deps_section(r.stdout)
++    # python3 与 git 是本仓测试自身运行的前提，本机必然存在 ⇒ 可断言为 ✓。
++    assert re.search(r"✓ python3", deps), deps
++    assert re.search(r"✓ git", deps), deps
++    # yq / openspec / pytest 的具体取值取决于本机环境，只断言「行存在且恰好一行」——
++    # 用行首锚定（`^  [✓✗·] <label>\b`），避免匹配到别的行里偶然带出的同名子串。
++    for label in ("yq", "openspec", "pytest"):
++        matches = re.findall(rf"^  [✓✗·] {label}\b.*$", deps, re.MULTILINE)
++        assert len(matches) == 1, f"{label} 状态行应恰好一条，实际 {matches}\n{deps}"
++
++
++def test_python3_status_line_is_not_duplicated(fake_home):
++    """② 既有 python3 检测逻辑迁入 `check_dependencies()`，不重复——全输出中只有一条 python3 状态行。
++
++    回归的是「既有 `_py` 检测/报告散落多处」的失效模式：若某处又单独 echo 了一条
++    `✓ python3` / `✗ python3`，这里会从 1 变成 ≥2。
++    """
++    r = _run_setup(fake_home)
++    assert r.returncode == 0, r.stdout + r.stderr
++    matches = re.findall(r"^  [✓✗] python3\b.*$", _deps_section(r.stdout), re.MULTILINE)
++    assert len(matches) == 1, f"python3 状态行重复或缺失：{matches}\n{r.stdout}"
++
++
++def test_missing_yq_reports_cross_and_three_platform_install_commands(fake_home):
++    """③ yq 未安装 ⇒ `✗ yq` + 三平台安装命令，且 setup.sh 不中止。"""
++    r = _run_setup(fake_home, path=_path_without_yq())
++    assert r.returncode == 0, r.stdout + r.stderr
++
++    deps = _deps_section(r.stdout)
++    assert "✗ yq" in deps, deps
++    assert "brew install yq" in deps
++    assert "winget install --id MikeFarah.yq" in deps
++    assert "snap install yq" in deps
++    # 末尾汇总也要点名缺了 yq（不中止，但要让人看到）
++    assert re.search(r"缺.*yq", deps), "末尾汇总没有提到 yq 缺失\n" + deps
++
++
++def test_kislyuk_yq_warns_and_gives_correct_install_guidance(fake_home, tmp_path):
++    """④ 已安装但是 kislyuk/yq（无 `mikefarah` 字样）⇒ 警告 + 正确版本安装指引，不中止。"""
++    bin_dir = tmp_path / "fake-bin-kislyuk"
++    _fake_yq(bin_dir, "yq 3.4.1")
++    path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
++
++    r = _run_setup(fake_home, path=path)
++    assert r.returncode == 0, r.stdout + r.stderr
++
++    deps = _deps_section(r.stdout)
++    assert "⚠" in deps and "yq" in deps
++    assert "kislyuk" in deps, deps
++    assert "brew install yq" in deps
++    assert "winget install --id MikeFarah.yq" in deps
++    assert "snap install yq" in deps
++    assert "✓ yq" not in deps
++
++
++def test_mikefarah_yq_with_sufficient_version_reports_ok(fake_home, tmp_path):
++    """⑤ mikefarah/yq 且版本 >= 4.16.0 ⇒ `✓ yq`，不告警。"""
++    bin_dir = tmp_path / "fake-bin-ok"
++    _fake_yq(bin_dir, "yq (https://github.com/mikefarah/yq/) version v4.44.3")
++    path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
++
++    r = _run_setup(fake_home, path=path)
++    assert r.returncode == 0, r.stdout + r.stderr
++
++    deps = _deps_section(r.stdout)
++    assert "✓ yq" in deps, deps
++    assert "版本过低" not in deps
++    assert not re.search(r"⚠[^\n]*yq", deps), deps
++
++
++def test_mikefarah_yq_below_min_version_warns_upgrade(fake_home, tmp_path):
++    """⑥ mikefarah/yq 但版本 < 4.16.0（`--front-matter` 支持下限，spec R1）⇒ 版本过低警告 + 升级指引。"""
++    bin_dir = tmp_path / "fake-bin-old"
++    _fake_yq(bin_dir, "yq (https://github.com/mikefarah/yq/) version v4.9.2")
++    path = f"{bin_dir}{os.pathsep}{_path_without_yq()}"
++
++    r = _run_setup(fake_home, path=path)
++    assert r.returncode == 0, r.stdout + r.stderr
++
++    deps = _deps_section(r.stdout)
++    assert "版本过低" in deps, deps
++    assert "4.16" in deps
++    assert "✓ yq" not in deps
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task1-deps-check.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task1-deps-check.md
+new file mode 100644
+index 0000000..27c833e
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task1-deps-check.md
+@@ -0,0 +1,111 @@
++# Task 1 实现报告 · setup.sh 依赖预检系统
++
++## 状态：DONE
++
++## 做了什么
++
++`setup.sh` 新增 `_version_ge()` 辅助函数 + `check_dependencies()` 函数（`setup.sh:473-565`），
++调用点在 `install_agents` / `install_sdflow` 之后、retire-hooks 段与四道门禁检查之前
++（`setup.sh:573` 的 `check_dependencies` 调用）。
++
++统一检测并报告 5 项运行依赖：
++
++| 依赖 | 检测方式 | 缺失/不满足时的行为 |
++|---|---|---|
++| python3 >= 3.7 | 复用 `[T48]` 已选出的 `$_py`（不重新检测，见下方"既有逻辑迁入"） | `✗` + 计入 `missing[]` |
++| git | `command -v git` | `✗` + 计入 `missing[]` |
++| yq (mikefarah, >= 4.16.0) | `command -v yq` + `--version` 输出含 `mikefarah` + 正则提取版本号与 `_version_ge` 比较 | 未安装 → `✗` + 三平台安装命令；kislyuk/yq → `⚠` + 卸载重装指引；版本 < 4.16.0 → `⚠` 版本过低 + 升级指引；三种情形均计入 `missing[]` |
++| openspec（可选） | `command -v openspec` | `·` 提示 npm 安装命令，**不计入** `missing[]` |
++| pytest（开发可选） | `$_py -m pytest --version` | `·` 提示 pip 安装命令，**不计入** `missing[]` |
++
++`missing[]` 非空时在预检块末尾输出汇总（含 yq 的三平台安装/升级命令），**不调用 `exit`**，
++函数返回后脚本照常往下执行 retire-hooks → Summary → 四道机械门禁。
++
++## 关于「既有 python3 检测逻辑迁入 check_dependencies()，不重复」
++
++design.md 给出的 `check_dependencies()` 参考实现就是**消费**已选出的 `$_py`（`if [ -n "$_py" ]`），
++不是重新跑一遍候选检测。核实后确认这是唯一可行读法：`[T48]` 的候选选择循环（`setup.sh:465-471`，
++在 `python3`/`python` 间选首个 3.7+ 解释器）是脚本自身的**功能性前提**——`install_sdflow`
++（写 capability manifest）与 retire-hooks 段都消费 `$_py`，且两者都跑在 `check_dependencies`
++调用点**之前**；把候选选择本身挪到 `check_dependencies()` 内部会让这两处拿不到 `$_py`。
++
++因此本实现的处理是：**候选选择循环原地不动**（它本就在 `install_sdflow` 之前），
++`check_dependencies()` 只做统一的**状态报告**——这是此前脚本里从未存在过的（原来只有
++`$_py` 的选择，没有任何地方把结果 echo 成一行状态供用户看）。「不重复」验证为：
++全脚本运行一次的 stdout 中，`python3` 状态行（`✓`/`✗` 开头）**只出现一次**——测试
++`test_python3_status_line_is_not_duplicated` 机械核验此点。脚本尾部四道机械门禁各自独立的
++`command -v python3` 守卫（如 `sync_principles.py` 门前的检测）保持不动：那是各门禁调用
++Python 脚本前的**防御性存在性检查**，与"给用户看的依赖状态报告"是不同性质的东西，
++改动它们超出本 ticket 范围（不加宽）。
++
++## 关于 yq 版本门（spec-review-amendment F5）
++
++`tickets.md` Task 1 的验收复选框未逐字列出版本检测，但 `specs/yq-yaml-operations/spec.md`
++Requirement R1（Task 1 的 R-ID 之一）在 spec-review-amendment F5 后明确要求：
++
++> WHEN yq 已安装且为 mikefarah/yq 但版本 < 4.16.0 THEN 输出版本过低警告 + 升级指引
++
++`spec-review-report.md` F5：`--front-matter` 选项在 yq v4.16+ 才可用，只查 `mikefarah` 不查
++版本号会让"检测通过但实际用不了"的组合悄悄放行。design.md 的参考实现是 F5 裁决**之前**写的，
++未反映这条修正；因为 R1 是本任务的权威需求源（且已定稿），本实现在 design.md 参考代码基础上
++补上了版本比较（`_version_ge` + 正则提取 `--version` 输出中的 `X.Y.Z`）。
++
++## TDD 过程
++
++1. 先写 `hack/tests/test_check_dependencies.py`（6 个用例），跑 `pytest` 确认全部 RED
++   （`check_dependencies` 不存在，函数调用点缺失）。
++2. 按 design.md 参考实现 + F5 版本门实现 `check_dependencies()`，跑测试：4/6 绿，2 个失败
++   ——**失败原因是测试自身的正则过宽**（`re.findall(r"[✓✗·][^\n]*openspec", stdout)` 命中了
++   汇总段里 `sdflow-spec` / `openspec-upgrade` 等无关行；另一处 `⚠[^\n]*yq` 命中了 pytest
++   为该测试函数生成的临时目录路径 `.../test_mikefarah_yq_with_suffici0/...`，因为该路径**字面包含**
++   `"yq"` 子串）。修正：新增 `_deps_section()` 辅助函数，把断言范围收窄到
++   `"运行依赖预检："` 到下一个 `"退役 hook 清理"` 标题之间的输出块，并把正则改为行首锚定
++   （`^  [✓✗·] <label>\b`）。
++3. 复跑：6/6 绿。
++4. 追加跑 `hack/tests/` 全量（含 `test_install_agents.py` 等其余 6 个消费 `setup.sh` 的测试文件）
++   核验无回归——见下方「验证证据」。
++
++## 测试
++
++新增 `hack/tests/test_check_dependencies.py`（6 用例，均通过）：
++
++- `test_reports_a_status_line_for_each_of_the_five_dependencies` — 5 项依赖各恰好一行状态
++- `test_python3_status_line_is_not_duplicated` — python3 状态行不重复（核验「既有逻辑迁入」验收项）
++- `test_missing_yq_reports_cross_and_three_platform_install_commands` — yq 未安装 → `✗` + 三平台命令 + 不中止
++- `test_kislyuk_yq_warns_and_gives_correct_install_guidance` — kislyuk/yq → 警告 + 正确安装指引 + 不中止
++- `test_mikefarah_yq_with_sufficient_version_reports_ok` — mikefarah + >=4.16.0 → `✓`，无告警
++- `test_mikefarah_yq_below_min_version_warns_upgrade` — mikefarah 但 <4.16.0 → 版本过低告警 + 升级指引（F5）
++
++沿用仓内既定的 `setup.sh` 测试范式（`tmp_path` 当假 `HOME` 真跑 `bash setup.sh`，子进程），
++yq 各分支通过在 `PATH` 前置一个假 `yq` 可执行脚本确定性复现（同
++`test_sdflow_spec_agents.py::_scan_with_broken_grep` 注入假 `grep` 的手法）；"未安装"分支通过
++`_path_without_yq()` 从真实 `PATH` 剔除含可解析 `yq` 的目录来复现（本机开发环境本就未装 yq，
++该辅助函数对本机是恒等变换，对可能装了 yq 的 CI/其他机器仍具确定性）。
++
++## 验证证据
++
++| 层 | 命令原文 | 退出码 |
++|---|---|---|
++| 单元/集成（子进程真跑 setup.sh） | `python3 -m pytest hack/tests/test_check_dependencies.py -v` | 0（6 passed，137.61s） |
++| 回归（同目录其余 setup.sh 消费方 + 全部 hack/tests） | `python3 -m pytest hack/tests/ -q` | 0（369 passed, 6 skipped，169.10s；6 个 skip 为既有 Windows 平台边界跳过，与本次改动无关） |
++| Shell 语法 | `bash -n setup.sh` | 0（syntax OK） |
++
++`git status --short` 确认改动范围只有 `setup.sh`（修改）+
++`hack/tests/test_check_dependencies.py`（新增）+ 本报告，测试运行未污染仓外真实
++`~/.claude/` / `~/.sdflow/`（`_run_setup` 全程走假 `HOME`）。
++
++## Global Constraints 符合性
++
++- 未新增 Python 入口脚本，`reconfigure` 前导要求不触发（本任务纯 shell）。
++- `resolve-models.sh` 未改动。
++- 未把 yq 打包进 `~/.sdflow/bin/`，检测逻辑只做 `shutil.which`/`command -v` 判定 + 提示，
++  不下载不安装。
++- 不重构依赖管理为框架——`check_dependencies()` 是单一函数、五个独立分支，无抽象层。
++
++## 已知边界（诚实声明，非缺陷）
++
++- `_version_ge` 只处理 `X.Y.Z` 三段整数比较，不处理预发布标签（如 `4.16.0-rc1`）——
++  yq 官方 release 版本号不带此类后缀，正则 `[0-9]+\.[0-9]+\.[0-9]+` 会跳过不匹配的候选，
++  此时 `yqnum` 为空，判定分支降级为"版本过低"（保守方向，不会误判为满足）。
++- 四道机械门禁（`sync_principles.py` 等）各自的 `command -v python3` 防御性检查保持不动，
++  不属于本任务范围（见上方说明）。
+diff --git a/setup.sh b/setup.sh
+index c41a2bb..5d9f2f5 100644
+--- a/setup.sh
++++ b/setup.sh
+@@ -463,26 +463,121 @@ install_sdflow() {
+ # 下限为什么是 3.7 而非 init.py 所需的 3.6：这个 `_py` 还要跑 outside-voice-job.py，
+ # 而它用 `subprocess.run(capture_output=…)`（3.7 才有）——闸门取两个消费者的**上确界**。
+ _py=""
+ for _cand in python3 python; do
+   if command -v "$_cand" >/dev/null 2>&1 \
+      && "$_cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)' >/dev/null 2>&1; then
+     _py="$_cand"; break
+   fi
+ done
+ 
++# ─── 运行依赖预检（shared-yaml-subset-parser · R1/R2）────────────────────
++# 统一检测并报告全部运行依赖：python3 >= 3.7 / git / yq(mikefarah) / openspec（可选）/
++# pytest（开发可选）。**不中止 setup.sh**——降级汇报，与全文既定的 skipped[] 范式一致
++# （同「set -e 面治」节的取向：检测本身不是安装的必要步，缺失只影响下游脚本能不能跑）。
++#
++# yq 最低版本 4.16.0 = `--front-matter` 选项的支持下限 [spec-review-amendment F5]——
++# 低于此版本即便是 mikefarah/yq 也用不了本 change 引入的 frontmatter 读写路径。
++_YQ_MIN_VERSION="4.16.0"
++
++# 版本号大小比较（"X.Y.Z" 形式，缺位按 0 补）。不用 `sort -V`——那是把判定外包给
++# coreutils 的另一种手搓，两行整数比较就能穷举 semver 三段，犯不上多一个工具依赖。
++_version_ge() {
++  local IFS=.
++  local -a v1=($1) v2=($2)
++  local i a b
++  for i in 0 1 2; do
++    a="${v1[i]:-0}"; b="${v2[i]:-0}"
++    case "$a" in ''|*[!0-9]*) a=0 ;; esac
++    case "$b" in ''|*[!0-9]*) b=0 ;; esac
++    if [ "$a" -gt "$b" ]; then return 0; fi
++    if [ "$a" -lt "$b" ]; then return 1; fi
++  done
++  return 0
++}
++
++check_dependencies() {
++  echo ""
++  echo "运行依赖预检："
++  local missing=()
++
++  # python3 >= 3.7 —— 复用上面 [T48] 已选出的 $_py，这里只统一【报告】，不重新检测。
++  # （_py 的候选选择必须留在此处**之前**：install_sdflow 与 retire-hooks 都消费它，
++  #  两者都跑在 check_dependencies 调用点之前，把选择本身挪到这里会让它们拿不到 $_py。）
++  if [ -n "$_py" ]; then
++    echo "  ✓ python3 ($("$_py" --version 2>&1))"
++  else
++    echo "  ✗ python3 >= 3.7 — 未找到"
++    missing+=("python3>=3.7")
++  fi
++
++  # git
++  if command -v git >/dev/null 2>&1; then
++    echo "  ✓ git ($(git --version 2>&1))"
++  else
++    echo "  ✗ git — 未找到"
++    missing+=("git")
++  fi
++
++  # yq（mikefarah/yq，>= 4.16.0）
++  if command -v yq >/dev/null 2>&1; then
++    local yqv yqnum
++    yqv="$(yq --version 2>&1)"
++    if printf '%s' "$yqv" | grep -q "mikefarah"; then
++      yqnum="$(printf '%s' "$yqv" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
++      if [ -n "$yqnum" ] && _version_ge "$yqnum" "$_YQ_MIN_VERSION"; then
++        echo "  ✓ yq ($yqv)"
++      else
++        echo "  ⚠ yq 版本过低（$yqv，需 >= $_YQ_MIN_VERSION —— --front-matter 支持下限）"
++        echo "    升级：macOS brew upgrade yq | Windows winget upgrade --id MikeFarah.yq | Linux snap refresh yq"
++        missing+=("yq>=$_YQ_MIN_VERSION")
++      fi
++    else
++      echo "  ⚠ yq 已安装但不是 mikefarah/yq（可能是 kislyuk/yq，jq 语法不兼容）——请卸载后安装正确版本"
++      missing+=("yq(mikefarah)")
++    fi
++  else
++    echo "  ✗ yq — 未找到"
++    missing+=("yq")
++  fi
++
++  # openspec（部分 skill 需要，setup.sh 本身不强依赖）
++  if command -v openspec >/dev/null 2>&1; then
++    echo "  ✓ openspec ($(openspec --version 2>&1))"
++  else
++    echo "  · openspec — 未找到（部分 skill 需要：npm i -g @fission-ai/openspec）"
++  fi
++
++  # pytest（开发可选，跑测试才需要）
++  if [ -n "$_py" ] && "$_py" -m pytest --version >/dev/null 2>&1; then
++    echo "  ✓ pytest ($("$_py" -m pytest --version 2>&1))"
++  else
++    echo "  · pytest — 未找到（跑测试需要：pip install pytest）"
++  fi
++
++  if [ ${#missing[@]} -gt 0 ]; then
++    echo ""
++    echo "  缺少/不满足必要依赖：${missing[*]}"
++    echo "  yq 安装／升级："
++    echo "    macOS:   brew install yq          （升级：brew upgrade yq）"
++    echo "    Windows: winget install --id MikeFarah.yq   （升级：winget upgrade --id MikeFarah.yq）"
++    echo "    Linux:   snap install yq          （升级：snap refresh yq）"
++  fi
++}
++
+ for d in "${TARGET_DIRS[@]}"; do
+   install_into "$d"
+   cleanup_orphans "$d"
+ done
+ install_agents
+ install_sdflow
++check_dependencies
+ 
+ # ─── retire deregistered global hooks (T44) ─────────────────────
+ # 死 hook（change-review-stub.py）每次 Bash 调用都 fire 报错，直到被反注册。把自愈焊进
+ # 工具链升级路径，令 /sdflow-upgrade 即时清掉，不必等某项目跑 sdflow-init update。
+ # fail-safe：绝不中止 setup（清理是尽力而为，非安装必要步）。
+ # 解释器已在上面（install_sdflow 之前）挑好——manifest 与本步共用同一个 $_py。
+ if [ -z "$_py" ]; then
+   echo "  ⚠ retire-hooks 跳过：PATH 无 Python 3.7+（init.py 需 f-string，非致命）"
+ else
+   { "$_py" "$REPO_DIR/sdflow-init/scripts/init.py" retire-hooks ; } || echo "  ⚠ retire-hooks 跳过（非致命）"

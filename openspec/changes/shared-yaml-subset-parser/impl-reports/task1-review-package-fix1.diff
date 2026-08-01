@@ -1,0 +1,78 @@
+# Review package (fix round): fc9a079..cc5d558
+
+## Commits
+cc5d558 fix(setup.sh): yq 探测容错 + 依赖安装指引按缺项精确输出
+
+## Files changed
+ setup.sh | 22 +++++++++++++++++-----
+ 1 file changed, 17 insertions(+), 5 deletions(-)
+
+## Diff
+diff --git a/setup.sh b/setup.sh
+index 5d9f2f5..f790791 100644
+--- a/setup.sh
++++ b/setup.sh
+@@ -514,21 +514,21 @@ check_dependencies() {
+   if command -v git >/dev/null 2>&1; then
+     echo "  ✓ git ($(git --version 2>&1))"
+   else
+     echo "  ✗ git — 未找到"
+     missing+=("git")
+   fi
+ 
+   # yq（mikefarah/yq，>= 4.16.0）
+   if command -v yq >/dev/null 2>&1; then
+     local yqv yqnum
+-    yqv="$(yq --version 2>&1)"
++    yqv="$(yq --version 2>&1)" || true
+     if printf '%s' "$yqv" | grep -q "mikefarah"; then
+       yqnum="$(printf '%s' "$yqv" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+       if [ -n "$yqnum" ] && _version_ge "$yqnum" "$_YQ_MIN_VERSION"; then
+         echo "  ✓ yq ($yqv)"
+       else
+         echo "  ⚠ yq 版本过低（$yqv，需 >= $_YQ_MIN_VERSION —— --front-matter 支持下限）"
+         echo "    升级：macOS brew upgrade yq | Windows winget upgrade --id MikeFarah.yq | Linux snap refresh yq"
+         missing+=("yq>=$_YQ_MIN_VERSION")
+       fi
+     else
+@@ -550,24 +550,36 @@ check_dependencies() {
+   # pytest（开发可选，跑测试才需要）
+   if [ -n "$_py" ] && "$_py" -m pytest --version >/dev/null 2>&1; then
+     echo "  ✓ pytest ($("$_py" -m pytest --version 2>&1))"
+   else
+     echo "  · pytest — 未找到（跑测试需要：pip install pytest）"
+   fi
+ 
+   if [ ${#missing[@]} -gt 0 ]; then
+     echo ""
+     echo "  缺少/不满足必要依赖：${missing[*]}"
+-    echo "  yq 安装／升级："
+-    echo "    macOS:   brew install yq          （升级：brew upgrade yq）"
+-    echo "    Windows: winget install --id MikeFarah.yq   （升级：winget upgrade --id MikeFarah.yq）"
+-    echo "    Linux:   snap install yq          （升级：snap refresh yq）"
++    for m in "${missing[@]}"; do
++      case "$m" in
++        python3*)
++          echo "  python3 安装：https://python.org 或系统包管理器（apt/brew/winget 等）"
++          ;;
++        git)
++          echo "  git 安装：https://git-scm.com 或系统包管理器（apt/brew/winget 等）"
++          ;;
++        yq*)
++          echo "  yq 安装／升级："
++          echo "    macOS:   brew install yq          （升级：brew upgrade yq）"
++          echo "    Windows: winget install --id MikeFarah.yq   （升级：winget upgrade --id MikeFarah.yq）"
++          echo "    Linux:   snap install yq          （升级：snap refresh yq）"
++          ;;
++      esac
++    done
+   fi
+ }
+ 
+ for d in "${TARGET_DIRS[@]}"; do
+   install_into "$d"
+   cleanup_orphans "$d"
+ done
+ install_agents
+ install_sdflow
+ check_dependencies
