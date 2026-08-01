@@ -187,6 +187,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -194,6 +195,88 @@ for _s in (sys.stdout, sys.stderr):
     try: _s.reconfigure(encoding="utf-8", errors="replace")
     except Exception: pass
 from pathlib import Path
+
+# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
+# [shared-yaml-subset-parser] `parse_ship_gate_frontmatter` 的 YAML **取值**核心委托给外部
+# yq 二进制（同 git 的外部二进制先例），MUST NOT `import yaml`（零依赖不变量）。
+#
+# duplicate-key/tab-indent 精细诊断 yq 给不出（实测：重复键静默取最后值，exit 0；tab 缩进
+# 只报笼统 go-yaml 词法错误，无法反解析出 tab-indent 这个分类）——R11 显式要求这两类检测
+# 保留原始文本预扫描、在 yq 调用**之前**执行。分工：prescan 管结构诊断（dup-key/tab-indent/
+# 顶层 `ship-gate:` 头是否为规范空 map 形），yq 管取值（真 YAML 语义：布尔类型/引号剥离/
+# 注释剥离/嵌套结构），见 `parse_ship_gate_frontmatter`。
+_yq_bin = None  # 进程内缓存
+
+
+def _yq(expression, file=None, *, text=None, front_matter=False, in_place=False, default=None):
+    """yq(mikefarah) subprocess 薄封装。`file`=路径 或 `text`=字符串（走 stdin），二选一——
+    `parse_ship_gate_frontmatter` 的调用方既有从磁盘读（live）也有从 `git show` 取文本
+    （归档 dual-read）两种来源，`text` 模式让两者共用同一 yq 调用点，不必先落临时文件。
+
+    [R7/F2] exit≠0 恒 raise（转发 stderr）——「键不存在」（exit 0 + stdout=null，走 `default`）
+    与「解析失败」（exit≠0）MUST 是两条不同分支，调用方不得把两者混为一谈、不得吞非零退出。
+    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容，误调会
+    产生词不达意的报错）。
+    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
+    [F3] 多文档防御：stdout 若含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
+    [R5/F4] `front_matter=True` 时，解出的顶层结构非 dict（且非 null/键缺席，那两种已在
+    default 分支短路返回）→ 视为坏块 raise，不静默当作合法标量返回。
+    [F11] 已联网核实（mikefarah/yq Windows 已知行为）：`--front-matter` 在 Windows 上每次
+    调用都会在 stderr 打一行 `Failed to remove temp file` 噪音（yq 自身的临时文件清理失败，
+    不影响正确性）——本函数只信 `returncode`，不检查 stderr 内容。
+    """
+    global _yq_bin
+    if _yq_bin is None:
+        yq = shutil.which("yq")
+        if not yq:
+            print(f"ERROR: yq 未安装。安装方式：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        if "mikefarah" not in vr.stdout:
+            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                  f"  请卸载后安装正确版本：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        _yq_bin = yq
+    cmd = [_yq_bin]
+    if front_matter:
+        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
+    if in_place:
+        cmd.append("-i")
+    else:
+        cmd += ["-o", "json"]
+    cmd.append(expression)
+    stdin_input = None
+    if text is not None:
+        cmd.append("-")
+        stdin_input = text
+    else:
+        cmd.append(str(file))
+    r = subprocess.run(cmd, capture_output=True, text=True, input=stdin_input,
+                       encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        raise RuntimeError(f"yq failed: {r.stderr.strip()}")
+    if in_place:
+        return None
+    raw = r.stdout.strip()
+    if not raw or raw == "null":
+        return default
+    decoder = json.JSONDecoder()
+    parsed, idx = decoder.raw_decode(raw)
+    if raw[idx:].strip():
+        # [F3] 多文档 YAML → yq 逐文档各吐一个 JSON 值拼接；json.loads 前若不检测单值，
+        # 会静默用第一个文档的值掩盖后续文档的存在（已联网核实：mikefarah/yq issue 讨论）。
+        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
+    if front_matter and not isinstance(parsed, dict):
+        raise RuntimeError(f"yq front-matter 顶层结构非 dict（坏块）: {raw!r}")
+    return parsed
+
 
 # [T75] design/code-review inline 锚常量已随 Task6 live inline 读半场退役而删除；
 # 仅 verify 锚保留——archived_verify_state 的归档 dual-read 兜底旧 inline 现役唯一在用。
@@ -890,8 +973,10 @@ def _line_scoped_hits(text, candidates):
     return [a for a in candidates if a in hit], fence.inside
 
 
-# [mlh-p5] frontmatter 状态解析（手写 stdlib，不 import yaml——保零依赖不变量）。
-# live 读与归档 git-show 文本读共用此单一核心（防漂移，D4）。
+# [mlh-p5][shared-yaml-subset-parser R9] frontmatter 状态解析：结构预扫描仍是手写 stdlib
+# （duplicate-key/tab-indent，R11），**取值**委托给外部 yq(mikefarah) 二进制（`_yq()`）——
+# 不 `import yaml`，零依赖不变量指的是不引入 Python 侧 YAML 解析库依赖，非不依赖任何外部工具
+# （同 git 的外部二进制先例）。live 读与归档 git-show 文本读共用此单一核心（防漂移，D4）。
 FIELD_ENUMS = {
     "design_approved": (True, False),   # bool
     "verify": ("PASS", "FAIL"),
@@ -936,11 +1021,24 @@ def parse_ship_gate_frontmatter(text):
     D2 只认文件首块：首行须 '---'（去 BOM）；正文 --- 横线不参与。
     D3 坏≠无：absent(state={},error=None) vs 坏(error!=None) 由调用方分流退出码。
     D5 重复键→duplicate-key（枚举全部同名键计数，非取最后一个）。
-    [impl-review-fix FIX-1] 只认 ship-gate 直接子键（首个非空子行的缩进层级）；深于该层级的行
-    是嵌套子树，跳过不扫（不参与 FIELD_VALIDATORS 匹配）——杜绝 `note:` 下嵌套 design_approved 假过门。
-    [impl-review-fix FIX-2] 顶层 `ship-gate:` 后带非空内容（内联标量/inline map）→ bad-type（非
-    absent），防归档路径把它当 absent 回退 inline 造成假 SHIPPED。
-    [impl-review-fix FIX-3] 支持 YAML `#` 注释：块内独占注释行整行跳过；值行尾部 ` #` 注释剥离。"""
+
+    [shared-yaml-subset-parser] 分两段：① 原始文本预扫描（R11）只做**结构诊断**——
+    定位首块边界、检测顶层 `ship-gate:` 头 / 直接子字段的 duplicate-key 与 tab-indent、
+    判断顶层头是否为规范空 map 形（`ship-gate:` 独占一行）。这几类诊断 yq 给不出：
+    实测 yq 对重复键静默取最后值（exit 0）、对 tab 缩进只报笼统 go-yaml 词法错误、对
+    flow-style `ship-gate: {verify: PASS}` 会解出与 block-style 相同的 dict（丢失「是否
+    规范块头」这个信息）。② 预扫描通过后，**取值**委托给 `_yq()`——真 YAML 语义（布尔
+    类型、引号剥离、注释剥离、嵌套结构隔离）交给它，比手搓 partition/strip 更正确
+    （如 `note:` 下嵌套的 `design_approved` 天然不会被解到顶层，无需再手动分层跳过）。
+
+    [impl-review-fix FIX-2] 顶层 `ship-gate:` 后带非空内容（内联标量/inline map）→ bad-type
+    （非 absent），防归档路径把它当 absent 回退 inline 造成假 SHIPPED——本函数在①阶段
+    以文本形式判定（`header.rstrip() != "ship-gate:"`），故 flow-style 内联 map 同样落
+    bad-type（不会因为 yq 把它解析成合法 dict 而被误采信，见上段）。
+    [已知不覆盖，见 Compliance 段] 引号值不再严格区分（`verify: "PASS"` 与 `verify: PASS`
+    经真 YAML 解析等价，均判 in-domain）——这是切换到 yq 真解析器的必然代价，旧手搓扫描器
+    的「引号即坏」是手搓副作用而非业务不变量，测试断言已同步调整（见 impl-report）。
+    """
     if text.startswith("﻿"):
         text = text[1:]
     lines = text.splitlines()               # 统一 \r\n/\n（值不残留 \r）
@@ -955,13 +1053,17 @@ def parse_ship_gate_frontmatter(text):
         # [T74] 首行 --- 但全文无第二个 --- → 首块不闭合 → 不构成 frontmatter block，
         # 首行 --- 视作正文/markdown 水平线 → absent（走既有无锚语义），非坏、非 fail-closed。
         # 与「D2 只认文件首块」定义统一：无闭合 --- 不成块。
+        # [R11] 这一步是**边界检测**，不是 YAML 值解析——yq 的 `--front-matter=extract` 不要求
+        # 闭合 `---`（实测：会把首行之后的全部内容当一份 YAML 文档处理，`###` 之类行被当
+        # 注释吞掉），若不在此短路直接调 yq，"未闭合" 会被误判为"已解析成功"。
         return {}, None
     block = lines[1:end]
     # 找顶层 ship-gate: 键，统计出现次数（重复→坏）。
-    # [impl-review-fix FIX-2/FIX-4] 顶层探测识别**任何以 ship-gate: 起始的行**（不再只认整行
-    # == "ship-gate:" 的规范空 map 头）：tab 缩进 → tab-indent 坏（FIX-4，与字段行 tab 检测对称）；
-    # 空格缩进 = 嵌套键（非顶层），忽略；0 缩进 = 真顶层键——若其后 rstrip 还有非空内容（内联标量/
-    # inline map，如 `ship-gate: []`/`ship-gate: true`）→ bad-type（FIX-2，杜绝归档误回退 inline）。
+    # [impl-review-fix FIX-2/FIX-4][R11] 顶层探测识别**任何以 ship-gate: 起始的行**（不再只认
+    # 整行 == "ship-gate:" 的规范空 map 头）：tab 缩进 → tab-indent 坏（FIX-4，与字段行 tab
+    # 检测对称，yq 对此只报笼统词法错误、给不出 tab-indent 这个分类）；空格缩进 = 嵌套键
+    # （非顶层），忽略；0 缩进 = 真顶层键——若其后 rstrip 还有非空内容（内联标量/inline map，
+    # 如 `ship-gate: []`/`ship-gate: true`）→ bad-type（FIX-2，杜绝归档误回退 inline）。
     top_hdrs = []                            # [(index, line)]，0 缩进的顶层 ship-gate: 行
     for i, ln in enumerate(block):
         if not ln.lstrip().startswith("ship-gate:"):
@@ -979,11 +1081,11 @@ def parse_ship_gate_frontmatter(text):
     header_idx, header = top_hdrs[0]
     if header.rstrip() != "ship-gate:":     # FIX-2：非规范空 map 头（带内联标量值）→ 坏
         return {}, ("ship-gate", "bad-type")
-    # 收集 ship-gate: 下方缩进的 field: value（下一个 0 缩进非空行为界）。
-    # [impl-review-fix FIX-1] 只认 ship-gate 直接子键：首个非空子行的缩进 = 直接子键层级；
-    # 缩进深于该层级的行是嵌套子树，跳过不扫（不参与 FIELD_VALIDATORS 匹配，杜绝嵌套字段假过门）。
+    # [R11] 直接子字段的 duplicate-key/tab-indent 预扫描：只计数/查 tab，不解析取值
+    # （取值交给下方 `_yq()`）。缩进层级判定（FIX-1 的分层跳过）仍需要，因为本段只做
+    # **结构诊断**（哪些行算"直接子字段"），与"这些字段的值是什么"（yq 的职责）分离。
     start = header_idx + 1
-    state, seen = {}, {}
+    seen = {}
     direct_indent = None
     for ln in block[start:]:
         if ln.strip() == "":
@@ -1004,35 +1106,52 @@ def parse_ship_gate_frontmatter(text):
         body = ln.strip()
         if ":" not in body:
             return {}, ("frontmatter", "bad-type")
-        field, _, raw = body.partition(":")
+        field, _, _raw = body.partition(":")
         field = field.strip()
-        # [impl-review-fix FIX-3b] 值行尾部 # 注释在枚举比对前剥离（enum 值均不含 #，安全）
-        raw = raw.split(" #", 1)[0].strip()
         if field not in FIELD_VALIDATORS:
             continue                         # 非本 schema 字段（外来 metadata），忽略
         seen[field] = seen.get(field, 0) + 1
         if seen[field] > 1:
             return {}, (field, "duplicate-key")
-        val = _coerce_ship_gate_value(field, raw)
-        if val is _BAD_TYPE:
+
+    # ── 预扫描通过（结构干净）：委托 yq 做真正的 YAML 取值 ──
+    try:
+        parsed = _yq('."ship-gate"', text=text, front_matter=True, default={})
+    except RuntimeError:
+        # yq 语法级解析失败（如字段值内未闭合引号）——预扫描管不到值内部语法，交给 yq
+        # 自己报错；本函数只需把"取不出"折成 bad-type，不需要复述 yq 的原始错误文本
+        # （错误文本对 (field, category) 这个契约无意义，且会让同一坏因产生不同措辞）。
+        return {}, ("frontmatter", "bad-type")
+    if not isinstance(parsed, dict):
+        # [R5/F4] 理论不可达的双保险——`_yq()` 已对 front_matter 模式做过 dict 校验；
+        # 本函数自己的①阶段头形检测（FIX-2）本就先于此拦下所有非规范头形态。
+        return {}, ("ship-gate", "bad-type")
+
+    state = {}
+    for field, val in parsed.items():
+        if field not in FIELD_VALIDATORS:
+            continue                         # 非本 schema 字段/嵌套子树，忽略（yq 的真解析
+                                              # 已天然把嵌套字段留在其父键下，不会冒到顶层）
+        coerced = _coerce_ship_gate_value(field, val)
+        if coerced is _BAD_TYPE:
             return {}, (field, "bad-type")
-        if not FIELD_VALIDATORS[field](val):
+        if not FIELD_VALIDATORS[field](coerced):
             return {}, (field, "out-of-domain")
-        state[field] = val
+        state[field] = coerced
     return state, None
 
 
 _BAD_TYPE = object()
 
 
-def _coerce_ship_gate_value(field, raw):
+def _coerce_ship_gate_value(field, val):
+    """`val` 现为 yq 真解析出的类型化值（bool/str/…），非旧版的原始文本片段。"""
     if field == "design_approved":
-        if raw == "true":
-            return True
-        if raw == "false":
-            return False
-        return _BAD_TYPE                     # yes/1/True 等非规范 bool → 坏
-    return raw                               # verify/code_review：字符串，交枚举校验
+        if isinstance(val, bool):
+            return val
+        return _BAD_TYPE                     # "yes"/1/"True" 等非规范 bool 经 YAML 解析后
+                                              # 落成字符串/整数，非 Python bool → 坏
+    return val                               # verify/code_review/reviewed_sha：交枚举/正则校验
 
 
 # [T26/SR-1；mlh-p5 Task6 D11] 熔断状态集合判据：判据 = 该步 ship-gate **frontmatter 状态集合**

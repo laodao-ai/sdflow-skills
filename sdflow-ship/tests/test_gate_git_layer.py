@@ -357,9 +357,26 @@ def test_env_is_a_denylist_not_an_allowlist(monkeypatch):
 
 # ── 3.4：加固面单一出口 ────────────────────────────────────────────────
 
+def _spawn_calls_in(node):
+    """收集某 AST 子树内的裸子进程调用点限定名列表（`模块.属性` 形，见 `_SPAWN_CALLS`）。"""
+    hits = []
+    for n in ast.walk(node):
+        if not isinstance(n, ast.Call):
+            continue
+        f = n.func
+        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+            qualified = f"{f.value.id}.{f.attr}"
+            if qualified in _SPAWN_CALLS:
+                hits.append(qualified)
+    return hits
+
+
 def test_all_git_calls_go_through_the_single_hardened_entry():
     # 加固（timeout + env 清理 + 失败映射）靠单出口保证；新增裸子进程调用点
-    # = 一条没被加固的通路。允许出现的只有 `_git_run` 内那一处。
+    # = 一条没被加固的通路。允许出现的只有 `_git_run` 内那一处，以及
+    # [shared-yaml-subset-parser] `_yq()`——它是**另一个**外部二进制（yq）的单一出口，
+    # 与 git 平行、有自己的加固需求（身份校验 + encoding），不共用 `_git_run`（那是
+    # git 专属的 env-denylist/timeout 加固，yq 不需要、也不该被迫套用）。
     # [fix1 M2] 只数 `subprocess.run(` 是点补：`Popen` / `call` / `check_output` / `os.system`
     # 同样能起子进程且同样绕过加固，面治 MUST 一次覆盖整片写法。
     #
@@ -369,8 +386,17 @@ def test_all_git_calls_go_through_the_single_hardened_entry():
     # subprocess.check_output(...)` 即可让本守卫无故变红）。Python 的语法有官方
     # parser，调它即可零解析、零误伤地只数**真实调用节点**。
     src = GATE.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    allowed_fn_names = {"_git_run", "_yq"}
+    allowed_node_ids = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in allowed_fn_names:
+            for sub in ast.walk(node):
+                allowed_node_ids.add(id(sub))
     spawns = []
-    for node in ast.walk(ast.parse(src)):
+    for node in ast.walk(tree):
+        if id(node) in allowed_node_ids:
+            continue
         if not isinstance(node, ast.Call):
             continue
         f = node.func
@@ -378,7 +404,20 @@ def test_all_git_calls_go_through_the_single_hardened_entry():
             qualified = f"{f.value.id}.{f.attr}"
             if qualified in _SPAWN_CALLS:
                 spawns.append(qualified)
-    assert spawns == ["subprocess.run"], f"存在绕过 _git_run 的裸子进程调用点：{spawns}"
+    assert spawns == [], f"存在绕过 _git_run/_yq 的裸子进程调用点：{spawns}"
+
+
+def test_yq_spawns_are_confined_to_its_own_entry():
+    # [shared-yaml-subset-parser] `_yq()` 对 yq 二进制的角色等价于 `_git_run` 对 git——
+    # 身份校验（`--version` 探测）+ 实际取值调用两处 `subprocess.run` 均须落在 `_yq`
+    # 函数体内，不得散到别处（否则「单一出口」的加固承诺对 yq 这条通路名存实亡）。
+    src = GATE.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    yq_fn = next(n for n in ast.walk(tree)
+                 if isinstance(n, ast.FunctionDef) and n.name == "_yq")
+    spawns = _spawn_calls_in(yq_fn)
+    assert spawns == ["subprocess.run", "subprocess.run"], \
+        f"_yq() 内裸子进程调用点数量/写法与预期不符：{spawns}"
 
 
 # ── impl-review-fix F3：报告文件 read_text 的 OSError 面 ───────────────────

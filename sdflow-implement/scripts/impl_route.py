@@ -10,9 +10,16 @@ Task 2 Interfaces）：
 marker **存在但非法/重复/损坏** 一律停（RouteStop，UNKNOWN 语义），不静默回退——
 防两管线混跑。
 
-本文件不 import yaml（config.yaml 只做逐行文本解析，不做通用 YAML 解析）；
+本文件不 `import yaml`（零依赖不变量）——config.yaml / plan frontmatter 的 YAML **取值**
+委托给外部 yq(mikefarah) 二进制（同 git 的外部二进制先例，`_yq()`，见 shared-yaml-subset-parser）。
 **不改** sdflow-ship/scripts/ship_gate.py（gate 零改动铁律：本文件不影响 gate 任何判定）；
-subprocess 仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输出 "-"。
+subprocess 除 `_yq()` 外仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输出 "-"。
+
+[shared-yaml-subset-parser] frontmatter/键重复检测**不能**委托给 yq——实测 yq 对重复
+`impl-pipeline:` 键静默取最后值（exit 0），且 `--front-matter=extract` 不要求闭合 `---`
+（未闭合时会把之后内容当同一份 YAML 文档处理，`### Task N:` 类行被当注释吞掉，"看似"
+解析成功）。这两类结构诊断保留轻量原始文本预扫描，在 yq 调用之前执行（与 ship_gate.py
+的 duplicate-key/tab-indent 预扫描同一分工原则：prescan 管结构，yq 管取值）。
 
 [impl-review-fix F4] 唯一例外：**fenced code block 的围栏词法**从 ship_gate 引入
 （`FenceTracker`，只读纯函数）。原先此处手抄 `line.lstrip().startswith("```")` 并在注释里
@@ -27,7 +34,9 @@ MUST NOT 回退手抄副本——那正是本条要根治的漂移面。
 from __future__ import annotations
 
 import argparse
+import json
 import re
+import shutil
 import subprocess
 import sys
 
@@ -37,8 +46,64 @@ for _s in (sys.stdout, sys.stderr):
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
-FRONT_DELIM = "---"
+_FRONTMATTER_DELIM = "---"
 LEGAL_PIPELINES = ("tickets", "superpowers")
+
+
+# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
+# [shared-yaml-subset-parser] 本文件自己内联一份 `_yq()`（各脚本各自内联，不跨脚本 import，
+# 见 sdflow-ship/scripts/ship_gate.py 同名函数的姊妹实现）。与 ship_gate.py 的版本相比，本
+# 版本**不**做 front-matter 顶层结构必须为 dict 的校验——本文件的两处 front_matter 用法
+# （`."impl-pipeline"`）查的是**标量叶子**，不是整个 frontmatter 段，预期结果天然是
+# str/None，不是 dict。
+_yq_bin = None  # 进程内缓存
+
+
+def _yq(expression, file, *, front_matter=False, default=None):
+    """yq(mikefarah) subprocess 薄封装（只读，本文件不产生任何 in-place 写操作）。
+
+    [R7/F2] exit≠0 恒 raise（转发 stderr）——「键不存在」（exit 0 + stdout=null，走 `default`）
+    与「解析失败」（exit≠0）MUST 是两条不同分支，调用方按需自行捕获处理（本文件两处调用
+    均捕获 RuntimeError 并映射为各自的 fail-closed 语义：config→unknown-value，marker→RouteStop）。
+    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）。
+    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
+    [F3] 多文档防御：stdout 若含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
+    """
+    global _yq_bin
+    if _yq_bin is None:
+        yq = shutil.which("yq")
+        if not yq:
+            print(f"ERROR: yq 未安装。安装方式：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        if "mikefarah" not in vr.stdout:
+            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                  f"  请卸载后安装正确版本：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        _yq_bin = yq
+    cmd = [_yq_bin]
+    if front_matter:
+        cmd.append("--front-matter=extract")
+    cmd += ["-o", "json", expression, str(file)]
+    r = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
+    raw = r.stdout.strip()
+    if not raw or raw == "null":
+        return default
+    decoder = json.JSONDecoder()
+    parsed, idx = decoder.raw_decode(raw)
+    if raw[idx:].strip():
+        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
+    return parsed
 
 # [impl-review-fix F4] 围栏词法单一源 = ship_gate.FenceTracker。
 # 定位方式：本文件在 <root>/sdflow-implement/scripts/ 下，gate 在同级 <root>/sdflow-ship/scripts/。
@@ -74,9 +139,11 @@ else:
 # = 0, 3, 4, 5, 6`）。
 EXIT_ROUTE_STOP = 6
 
-# [impl-review-fix] 列 0 锚定 + 冒号前容忍空白（`impl-pipeline : tickets` 一类变体也命中），
-# 相比旧版 `line.startswith("impl-pipeline:")` 不再要求冒号紧跟键名。捕获组=冒号后原文（未 strip）。
-KEY_RE = re.compile(r"^impl-pipeline\s*:(.*)$")
+# [shared-yaml-subset-parser R11 同类预扫描] 仅用于**结构诊断**——数 `impl-pipeline:` 键
+# 出现次数（yq 对重复键静默取最后值，这一诊断只能在 yq 调用之前用文本扫描兜底），不再用于
+# 提取/解析值本身（那部分已委托给 `_yq()`，见 read_config_pipeline/read_plan_marker）。
+# 列 0 锚定 + 冒号前容忍空白（`impl-pipeline : tickets` 一类变体也命中）。
+_PIPELINE_KEY_RE = re.compile(r"^impl-pipeline\s*:")
 
 # [impl-review-fix] 与 ship_gate.TASK_TITLE_RE 逐字一致（^### Task (\d+):，单空格、无 M 标志——
 # 本模块逐行扫描不需要 MULTILINE）。排版漂移（`###Task 1:`/`### Task  1:`）不计任务，行为与
@@ -97,79 +164,43 @@ class TopoError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# 文本标量提取（config 与 marker frontmatter 共用：允许引号值、去行内注释）
-# ---------------------------------------------------------------------------
-
-def _extract_scalar(raw: str) -> Tuple[str, bool]:
-    """返回 (value, damaged)。
-
-    [impl-review-fix] 损坏标量 fail-closed 契约：未闭合引号、或闭合引号后跟非注释非空白
-    字符（如 `"tickets" junk`）→ damaged=True，调用方各自 fail-closed（config→
-    unknown-value 诊断值；marker→RouteStop），不再像旧版那样静默兜底成合法值绕过停机策略。
-    """
-    s = raw.strip()
-    if not s:
-        return "", False
-    if s[0] in ("'", '"'):
-        q = s[0]
-        end = s.find(q, 1)
-        if end == -1:
-            return s[1:], True  # 未闭合引号 → 损坏
-        rest = s[end + 1:].strip()
-        if rest and not rest.startswith("#"):
-            return s[1:end], True  # 闭合引号后跟非注释垃圾 → 损坏
-        return s[1:end], False
-    hash_idx = s.find("#")
-    if hash_idx != -1:
-        s = s[:hash_idx]
-    return s.strip(), False
-
-
-# ---------------------------------------------------------------------------
 # ① config 键
 # ---------------------------------------------------------------------------
 
 def read_config_pipeline(root) -> Tuple[str, str]:
-    """读 <root>/openspec/config.yaml 顶层 `impl-pipeline:` 行。
+    """读 <root>/openspec/config.yaml 顶层 `impl-pipeline:` 行（取值委托给 `_yq()`）。
 
     返回 (pipeline, note)：
         缺失/空值      → ("superpowers", "absent")
         tickets/superpowers → (值, "ok")
-        其他值/损坏标量 → ("superpowers", "unknown-value:<原文>")（F12：非法值回显，区别于缺省；
-                          损坏标量同归此路径——fail 向旧管线，且原文回显可诊断）
+        其他值/整份 config.yaml 语法损坏 → ("superpowers", "unknown-value:<原文或 yq 诊断>")
+        （F12：非法值回显，区别于缺省；语法损坏同归此路径——fail 向旧管线，且可诊断。
+        [shared-yaml-subset-parser] 旧版的「损坏标量」（未闭合引号等）在 yq 方案下不再是
+        本函数自己判定的一类——那类输入会让 yq 对整份 config.yaml 的解析直接失败
+        （exit≠0），与其它语法错误一样落入下方 `except RuntimeError` 分支，诊断精度从
+        「点名具体哪个标量坏」降为「yq 报的原始错误」，是切换到真解析器的已知代价
+        （design.md spec-review-amendment F9 已登记，tasks.md §8.3 同类）。
     """
     config_path = Path(root) / "openspec" / "config.yaml"
     if not config_path.exists():
         return "superpowers", "absent"
 
-    text = config_path.read_text(encoding="utf-8", errors="replace")
-    if text.startswith("﻿"):
-        text = text[1:]  # [impl-review-fix] BOM 剥离，口径对齐 ship_gate.py:308
+    try:
+        raw = _yq('."impl-pipeline"', config_path, default=None)
+    except RuntimeError as exc:
+        return "superpowers", f"unknown-value:{exc}"
 
-    raw_field: Optional[str] = None
-    for line in text.splitlines():
-        # 顶层键要求列 0 起始（排除注释行 `# impl-pipeline: ...` 与缩进内文本，
-        # 如 `context: |` 块标量正文提及同名字样）；KEY_RE 容忍冒号前空白。
-        m = KEY_RE.match(line)
-        if m is not None:
-            raw_field = m.group(1)
-            break
-
-    if raw_field is None:
+    if raw is None:
         return "superpowers", "absent"
-
-    raw_stripped = raw_field.strip()
-    if not raw_stripped:
+    if not isinstance(raw, str):
+        # yq 解出的是非字符串结构（如 list/map/number）——本字段的合法值域只有两个字面串，
+        # 结构类型错本身就是「非法值」，与字符串越域同归 unknown-value。
+        return "superpowers", f"unknown-value:{raw!r}"
+    if raw == "":
         return "superpowers", "absent"
-
-    value, damaged = _extract_scalar(raw_field)
-    if damaged:
-        return "superpowers", f"unknown-value:{raw_stripped}"
-    if not value:
-        return "superpowers", "absent"
-    if value in LEGAL_PIPELINES:
-        return value, "ok"
-    return "superpowers", f"unknown-value:{value}"
+    if raw in LEGAL_PIPELINES:
+        return raw, "ok"
+    return "superpowers", f"unknown-value:{raw}"
 
 
 # ---------------------------------------------------------------------------
@@ -177,12 +208,17 @@ def read_config_pipeline(root) -> Tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 def read_plan_marker(plan_path) -> Optional[str]:
-    """读 plan 文件头 frontmatter 的 `impl-pipeline` marker。
+    """读 plan 文件头 frontmatter 的 `impl-pipeline` marker（取值委托给 `_yq()`）。
 
     文件缺            → None
     无 frontmatter / 无键 → "superpowers"（旧管线产物，不嗅探正文内容）
     首块 frontmatter 含 impl-pipeline: tickets|superpowers 单值 → 该值
     键重复 / 值非法 / 值损坏（未闭合引号等）/ frontmatter 未闭合 → raise RouteStop（UNKNOWN 语义，停）
+
+    [shared-yaml-subset-parser] frontmatter 边界（首行 `---` + 闭合 `---`）与
+    `impl-pipeline` 键重复计数仍走原始文本预扫描（原因见文件头注释：yq 既不要求闭合
+    `---`、也不会报告重复键），预扫描通过后才调 `_yq()` 取真值——值损坏（未闭合引号等）
+    此时体现为 yq 对该 frontmatter 段解析失败（`RuntimeError`），同样映射为 RouteStop。
     """
     p = Path(plan_path)
     if not p.exists():
@@ -192,33 +228,32 @@ def read_plan_marker(plan_path) -> Optional[str]:
     if text.startswith("﻿"):
         text = text[1:]  # [impl-review-fix] BOM 剥离，口径对齐 ship_gate.py:308
     lines = text.splitlines()
-    if not lines or lines[0].strip() != FRONT_DELIM:
+    if not lines or lines[0].strip() != _FRONTMATTER_DELIM:
         return "superpowers"  # 无 frontmatter
 
     close_idx: Optional[int] = None
     for i in range(1, len(lines)):
-        if lines[i].strip() == FRONT_DELIM:
+        if lines[i].strip() == _FRONTMATTER_DELIM:
             close_idx = i
             break
     if close_idx is None:
+        # 必须在调用 yq 之前短路：`--front-matter=extract` 不要求闭合 `---`——未闭合时会把
+        # 之后全部内容当同一份 YAML 文档处理（`### Task N:` 类行被当注释吞掉），从而对
+        # 「未闭合」这一结构性契约缺陷"看似"解析成功，掩盖掉本该 raise 的 RouteStop。
         raise RouteStop(f"plan frontmatter 未闭合: {p}")
 
-    raw_fields: List[str] = []
-    for line in lines[1:close_idx]:
-        m = KEY_RE.match(line)  # [impl-review-fix] 容忍冒号前空白
-        if m is not None:
-            raw_fields.append(m.group(1))
-
-    if not raw_fields:
+    key_hits = sum(1 for line in lines[1:close_idx] if _PIPELINE_KEY_RE.match(line))
+    if key_hits == 0:
         return "superpowers"  # frontmatter 在，但无 impl-pipeline 键
-    if len(raw_fields) > 1:
+    if key_hits > 1:
         raise RouteStop(f"plan frontmatter impl-pipeline 键重复: {p}")
 
-    value, damaged = _extract_scalar(raw_fields[0])
-    if damaged:
+    try:
+        value = _yq('."impl-pipeline"', p, front_matter=True, default=None)
+    except RuntimeError as exc:
         raise RouteStop(
-            f"plan frontmatter impl-pipeline 值损坏: {raw_fields[0].strip()!r} ({p})")
-    if value not in LEGAL_PIPELINES:
+            f"plan frontmatter impl-pipeline 值损坏（yq 解析失败: {exc}）: {p}") from exc
+    if not isinstance(value, str) or value not in LEGAL_PIPELINES:
         raise RouteStop(f"plan frontmatter impl-pipeline 值非法: {value!r} ({p})")
     return value
 

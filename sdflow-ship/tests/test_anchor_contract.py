@@ -62,6 +62,21 @@ def _adr1_anchor_line():
 ADR1_ANCHOR_LINE = _adr1_anchor_line()
 
 
+def _yaml_bareword_to_native(raw):
+    """[shared-yaml-subset-parser] 把模板裸行的原始文本（partition 出来的字符串）还原成
+    「若被真 YAML 解析器（yq）解析会得到的原生类型」——`_coerce_ship_gate_value` 的调用
+    约定已随迁移改变：它现在期望**已由 yq 类型化**的值（bool/str），不再是原始文本片段
+    （旧版自己做 `raw == "true"` 字符串比较）。本测试从模板字面文本反推预期值，须先按
+    YAML 1.2 core schema 的裸词语义换算（只有 true/false 两个布尔字面），才能喂给
+    `_coerce_ship_gate_value` 做同口径比较，否则会拿字符串 "true" 去比对函数已改为
+    期望 bool 的新约定，产生与迁移无关的假红。"""
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    return raw
+
+
 def test_producer_templates_declare_reviewed_sha_verbatim():
     # [fix1 · F3] 粒度 MUST 是**每个结论模板块**，不是「每文件出现过一次即可」。
     # 原实现只查文件级存在性 ⇒ 5 个结论模板块里，`verify: FAIL` 与 `code_review: blocked`
@@ -140,7 +155,7 @@ def test_producer_frontmatter_fields():
         for value_line in value_lines:
             _, _, raw = value_line.partition(":")
             raw = raw.strip()
-            coerced = ship_gate._coerce_ship_gate_value(field, raw)
+            coerced = ship_gate._coerce_ship_gate_value(field, _yaml_bareword_to_native(raw))
             assert coerced in ship_gate.FIELD_ENUMS[field], \
                 f"{rel} 模板值 {raw!r} 不在 {field} 的 FIELD_ENUMS 定义域 {ship_gate.FIELD_ENUMS[field]}"
 
@@ -194,7 +209,7 @@ def test_producer_frontmatter_parseable():
                     f"{field!r}（返回 state={state!r}）——模板缩进很可能破坏了 `ship-gate:` 须列 0 的契约"
                     f"\n--- 抽取的原始块 ---\n{block}"
                 )
-                want = ship_gate._coerce_ship_gate_value(field, want_raw)
+                want = ship_gate._coerce_ship_gate_value(field, _yaml_bareword_to_native(want_raw))
                 assert state[field] == want, \
                     f"{rel} 解析出的 {field}={state[field]!r} 与模板声明 {value_line!r} 不符"
 

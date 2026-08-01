@@ -106,10 +106,13 @@ def test_trailing_comment_on_value():
     assert state == {"verify": "PASS"} and err is None
 
 
-def test_quoted_value_is_strict():
-    # [impl-review-fix FIX-6] 引号值严格：verify: "PASS" → out-of-domain（有意，enum 严格匹配）。
+def test_quoted_value_now_equivalent_to_bare_under_yq():
+    # [shared-yaml-subset-parser] 取值改委托 yq 真 YAML 解析后，`verify: "PASS"` 与
+    # `verify: PASS` 语义等价（真解析器天然剥引号）——旧断言 test_quoted_value_is_strict
+    # 断言的「引号即坏」是手搓扫描器（不做引号剥离）的副作用，非业务不变量，随本次迁移
+    # 接受为已知行为变化（design.md Compliance 段已登记）。
     state, err = P('---\nship-gate:\n  verify: "PASS"\n---\n')
-    assert err is not None and err[0] == "verify" and err[1] == "out-of-domain"
+    assert state == {"verify": "PASS"} and err is None
 
 
 def test_second_frontmatter_block_ignored_by_design():
