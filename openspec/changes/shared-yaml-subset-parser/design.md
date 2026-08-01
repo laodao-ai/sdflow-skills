@@ -24,17 +24,32 @@
 而 ~10 行的封装也不值得共享）：
 
 ```python
-import subprocess, json, shutil, sys
+import subprocess, json, shutil, sys, os
+
+_yq_bin = None  # 进程内缓存
 
 def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
-    yq = shutil.which("yq")
-    if not yq:
-        print(f"ERROR: yq 未安装。安装方式：\n"
-              f"  macOS:   brew install yq\n"
-              f"  Windows: winget install --id MikeFarah.yq\n"
-              f"  Linux:   snap install yq\n", file=sys.stderr)
-        sys.exit(1)
-    cmd = [yq]
+    global _yq_bin
+    if _yq_bin is None:
+        yq = shutil.which("yq")
+        if not yq:
+            print(f"ERROR: yq 未安装。安装方式：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        # 身份校验：确认是 mikefarah/yq [spec-review-amendment F6]
+        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        if "mikefarah" not in vr.stdout:
+            print(f"ERROR: 检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+                  f"  请卸载后安装正确版本：\n"
+                  f"  macOS:   brew install yq\n"
+                  f"  Windows: winget install --id MikeFarah.yq\n"
+                  f"  Linux:   snap install yq\n", file=sys.stderr)
+            sys.exit(1)
+        _yq_bin = yq
+    cmd = [_yq_bin]
     if front_matter:
         cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
     if in_place:
@@ -42,17 +57,34 @@ def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
     else:
         cmd += ["-o", "json"]
     cmd += [expression, str(file)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    # 写操作通过环境变量传值 [spec-review-amendment F7]
+    r = subprocess.run(cmd, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")  # [spec-review-amendment F10]
     if r.returncode != 0:
-        if default is not None:
-            return default
+        # exit≠0 = 解析失败，必须 raise，不吞 [spec-review-amendment F2]
         raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
     if in_place:
         return None
     raw = r.stdout.strip()
     if not raw or raw == "null":
         return default
-    return json.loads(raw)
+    parsed = json.loads(raw)
+    # frontmatter 模式下校验顶层类型 [spec-review-amendment F4]
+    if front_matter and not in_place and default is not None:
+        if not isinstance(parsed, dict):
+            return default
+    return parsed
+```
+
+### 写操作值传递 [spec-review-amendment F7]
+
+写操作 MUST NOT 用 f-string 插值。改用环境变量：
+
+```python
+# 旧（有注入风险）：_yq(f'.schema = "{new_schema}"', config_path, in_place=True)
+# 新（安全）：
+os.environ["_YQ_VAL"] = new_schema
+_yq('.schema = strenv(_YQ_VAL)', config_path, in_place=True)
 ```
 
 ### 读操作示例
@@ -71,13 +103,16 @@ gate = _yq(".ship-gate", report_path, front_matter=True, default={})
 # gate = {"design_approved": True, "reviewed_sha": "abc123"}
 ```
 
-### 写操作示例
+### 写操作示例 [spec-review-amendment F7]
 
 ```python
-# config.yaml 写入（保留注释）
-_yq(f'.schema = "{new_schema}"', config_path, in_place=True)
+import os
 
-# Markdown frontmatter 写入（保留正文）
+# config.yaml 写入（保留注释，通过环境变量传值避免注入）
+os.environ["_YQ_VAL"] = new_schema
+_yq('.schema = strenv(_YQ_VAL)', config_path, in_place=True)
+
+# Markdown frontmatter 写入（保留正文，布尔值无需环境变量）
 _yq('.ship-gate.design_approved = true', report_path, front_matter=True, in_place=True)
 ```
 
@@ -86,7 +121,7 @@ _yq('.ship-gate.design_approved = true', report_path, front_matter=True, in_plac
 | 脚本 | 删除 | 替换为 | 特殊处理 |
 |---|---|---|---|
 | `init.py` | `_strip_inline_comment` / `_find_top_level_block` / `_second_level_keys` / `_schema_from_config` / `_set_schema_key` / `_marker_schema` / `_parse_model_tiers_block` / `_valid_model_id` / `_validate_schema_authority` / `lint_config` 的 YAML 部分 | `_yq()` 调用 | `_parse_model_tiers_block` 的**业务逻辑**（fleet_ctx 状态机、越域键检测、畸形头检测）从 YAML 解析中分离：yq 读到 JSON dict 后，Python 侧做键集验证 |
-| `ship_gate.py` | `parse_ship_gate_frontmatter` 的 YAML 解析核心（`---` 定位 / 缩进扫描 / 注释剥离） | `_yq(".ship-gate", path, front_matter=True)` | **业务逻辑保留**：`FIELD_VALIDATORS` 校验、`_coerce_ship_gate_value`、duplicate-key 检测（yq 读出 dict 后做）、`bad-type` / `tab-indent` 等特化错误类型。错误分类从「解析时发现」变为「yq 读出后验证发现」 |
+| `ship_gate.py` | `parse_ship_gate_frontmatter` 的 YAML 解析核心（`---` 定位 / 缩进扫描 / 注释剥离），**但保留 duplicate-key/tab-indent 原始文本预扫描** | `_yq(".ship-gate", path, front_matter=True)` | **业务逻辑保留**：`FIELD_VALIDATORS` 校验、`_coerce_ship_gate_value`、`bad-type` 等。**duplicate-key/tab-indent 预扫描保留在 yq 读取之前**（R11）——yq 对重复键静默取最后值，dict 不保留重复信息，故此检测不可委托给 yq [spec-review-amendment F1·Q1] |
 | `impl_route.py` | `_extract_scalar` / `read_config_pipeline` 的 YAML 扫描 / `read_plan_marker` 的 frontmatter 解析 | `_yq()` 调用 | `damaged` 标量检测（未闭合引号等）——yq 会直接报错（非零退出码），映射为 `RouteStop` |
 | `anchor_lint.py` (×2) | `read_metrics_enabled` | `_yq(".metrics.enabled", config_path, default=False)` | 最简单的替换 |
 | `roadmap_writeback_draft.py` | `read_verify_state` 的 frontmatter 解析 | `_yq(".ship-gate.verify", path, front_matter=True)` | 保留 `PASS`/`FAIL` 枚举校验 |

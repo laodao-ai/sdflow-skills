@@ -57,10 +57,11 @@ YAML 解析，脚本通过 subprocess 调用 yq，零依赖不变量不破（yq 
 
 ## Success Metrics
 
-1. 全部 7 个脚本中无任何手搓 YAML 解析代码（`grep -rn` 验证无 `partition(":")` 式 YAML 解析模式）
+1. 全部 7 个脚本中无任何手搓 YAML 解析代码（`grep -rn` 验证无 `partition(":")` 式 YAML 解析模式），但 ship_gate.py 的 duplicate-key/tab-indent 原始文本预扫描除外（R11）
 2. 既有测试全绿（每个 skill 的 `tests/` 目录）
 3. `setup.sh` 运行时输出依赖检测汇总（含 yq 状态）
 4. yq 不可用时 fail-loud（明确报错 + 安装指引），不静默降级
+5. yq 安装后端到端读写验证通过（config.yaml 读写 + frontmatter 读写 + 注释保留）[spec-review-amendment C10]
 
 ## Non-Goals
 

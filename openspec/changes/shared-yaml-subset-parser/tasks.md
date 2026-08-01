@@ -29,12 +29,13 @@
 - [ ] 3.4 删除 `_extract_scalar` / KEY_RE / FRONT_DELIM
 - [ ] 3.5 跑 `pytest sdflow-implement/tests/` 全绿
 
-## 4. ship_gate.py frontmatter 解析改为 yq [R5, R6, R7, R10]
+## 4. ship_gate.py frontmatter 解析改为 yq [R5, R6, R7, R10, R11]
 
-- [ ] 4.1 新增 `_yq()` 薄封装
-- [ ] 4.2 `parse_ship_gate_frontmatter` → `_yq('.ship-gate', path, front_matter=True)` + `FIELD_VALIDATORS` 校验保留
-- [ ] 4.3 保留错误分类（`duplicate-key` / `out-of-domain` / `bad-type` / `tab-indent`）——在 yq 读出的 dict 上验证
-- [ ] 4.4 跑 `pytest sdflow-ship/tests/` 全绿
+- [ ] 4.1 新增 `_yq()` 薄封装（含身份校验 + encoding="utf-8"）
+- [ ] 4.2 保留 duplicate-key/tab-indent 原始文本预扫描（R11）——在 yq 读取**之前**用轻量文本扫描检测重复顶层键和 tab 缩进，通过后再走 yq
+- [ ] 4.3 `parse_ship_gate_frontmatter` 的 YAML 解析核心改为 `_yq('.ship-gate', path, front_matter=True)` + `FIELD_VALIDATORS` 校验保留
+- [ ] 4.4 `bad-type` / `out-of-domain` 错误分类在 yq 读出的 dict 上验证（这两类不依赖原始文本）
+- [ ] 4.5 跑 `pytest sdflow-ship/tests/` 全绿
 
 ## 5. anchor_lint.py YAML 解析改为 yq [R3, R7, R10]
 
@@ -50,6 +51,15 @@
 
 ## 7. ADR + 收尾 [R8, R9]
 
-- [ ] 7.1 新增 `openspec/adr/0036-yq-replaces-hand-rolled-yaml.md`
+- [ ] 7.1 新增 `openspec/adr/0036-yq-replaces-hand-rolled-yaml.md`（含零依赖不变量精神收窄的代价陈述）[spec-review-amendment F13]
 - [ ] 7.2 全仓 `pytest` 全绿
-- [ ] 7.3 `grep` 验证目标脚本中无手搓 YAML 解析函数残留（R10 scenario）
+- [ ] 7.3 `grep` 验证目标脚本中无手搓 YAML 解析函数残留（R10 scenario，注意 `parse_ship_gate_frontmatter` 的 duplicate-key/tab-indent 预扫描部分由 R11 保留）
+
+## 8. CI + golden test + 测试修订 [R12, spec-review-amendment F8/F9]
+
+- [ ] 8.1 `mechanical-gates.yml` 显式安装 + 钉版本 yq [spec-review-amendment F8]
+- [ ] 8.2 新增 `_yq()` 一致性 golden test——机械检查 7 份封装核心逻辑字节一致 [R12]
+- [ ] 8.3 重写以下测试断言（yq 方案下精确诊断不可复现）[spec-review-amendment F9]：
+  - `test_impl_route.py` 的 `unknown-value:` 前缀断言——改为验证 yq 整体解析失败的行为
+  - 其他依赖手搓逐行扫描器局部诊断的断言——逐一核查并调整
+- [ ] 8.4 proposal Success Metrics 增第5条：yq 安装 + 端到端读写验证 [spec-review-amendment C10]
