@@ -91,14 +91,14 @@ impl-pipeline: tickets
 
 新增 ADR `openspec/adr/0036-yq-replaces-hand-rolled-yaml.md`（Context / Decision / Consequences 三节）。CI `mechanical-gates.yml` 显式安装 + 钉版本 yq。新增 `_yq()` 一致性 golden test 检查 7 份封装核心逻辑字节一致。重写依赖手搓逐行扫描器诊断的测试断言（yq 方案下精确诊断不可复现）。`grep` 验证目标脚本中无手搓 YAML 解析函数残留。
 
-- [ ] `roadmap_writeback_draft.py` 的 frontmatter 解析已替换为 `_yq()` + 枚举校验保留
-- [ ] `sad_schema.py` 的 frontmatter 解析已替换为 `_yq()` + 白名单校验保留
-- [ ] `pytest sdflow-done/tests/` 全绿
-- [ ] `pytest sdflow-architecture/tests/` 全绿
-- [ ] ADR-0036 存在且含 Context / Decision / Consequences 三节
-- [ ] `mechanical-gates.yml` 显式安装 yq（钉版本）
-- [ ] `_yq()` golden test 检查 7 份封装一致性
-- [ ] `grep` 验证目标脚本无手搓 YAML 解析函数残留（R11 预扫描除外）
+- [x] `roadmap_writeback_draft.py` 的 frontmatter 解析已替换为 `_yq()` + 枚举校验保留
+- [x] `sad_schema.py` 的 frontmatter 解析已替换为 `_yq()` + 白名单校验保留
+- [x] `pytest sdflow-done/tests/` 全绿
+- [x] `pytest sdflow-architecture/tests/` 全绿
+- [x] ADR-0036 存在且含 Context / Decision / Consequences 三节
+- [x] `mechanical-gates.yml` 显式安装 yq（钉版本）
+- [x] `_yq()` golden test 检查 7 份封装一致性
+- [x] `grep` 验证目标脚本无手搓 YAML 解析函数残留（R11 预扫描除外）
 
 ### Task 6: 实现验证（收尾，不计入 3–6 预算）
 
