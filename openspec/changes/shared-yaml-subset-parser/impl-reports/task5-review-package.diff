@@ -1,0 +1,1078 @@
+# Review package: 5d23ddf..6151a18
+
+## Commits
+6151a18 feat(shared-yaml-subset-parser): roadmap_writeback_draft.py/sad_schema.py 迁移至 yq + ADR-0036 + CI 装 yq + golden test
+
+## Files changed
+ .github/workflows/mechanical-gates.yml             |  25 +++
+ hack/tests/test_yq_wrapper_consistency.py          | 175 ++++++++++++++++
+ openspec/adr/0036-yq-replaces-hand-rolled-yaml.md  | 100 +++++++++
+ .../impl-reports/task5-brief.md                    |  18 ++
+ .../impl-reports/task5-remaining-yq.md             | 225 +++++++++++++++++++++
+ sdflow-architecture/scripts/sad_schema.py          | 211 ++++++++++++++-----
+ sdflow-done/scripts/roadmap_writeback_draft.py     | 133 ++++++++----
+ 7 files changed, 806 insertions(+), 81 deletions(-)
+
+## Diff
+diff --git a/.github/workflows/mechanical-gates.yml b/.github/workflows/mechanical-gates.yml
+index f0f71b4..0e1b98c 100644
+--- a/.github/workflows/mechanical-gates.yml
++++ b/.github/workflows/mechanical-gates.yml
+@@ -43,20 +43,45 @@ jobs:
+           - { os: ubuntu-24.04,  python: "3.9" }
+           - { os: ubuntu-latest, python: "3.12" }
+           - { os: ubuntu-latest, python: "3.14" }
+           - { os: macos-latest,  python: "3.12" }
+     runs-on: ${{ matrix.os }}
+     steps:
+       - uses: actions/checkout@v4
+       - uses: actions/setup-python@v5
+         with:
+           python-version: ${{ matrix.python }}
++      # yq(mikefarah) —— 7 份 `_yq()` 消费点（shared-yaml-subset-parser）的运行依赖，
++      # 全部 4 条泳道都要装（ubuntu ×3 + macOS ×1，pytest 全量都会跑到这些脚本）。
++      # 🔴 **钉死版本**（同下方第「MUST NOT 用浮动版本」的既有取舍）：从 GitHub Releases
++      # 直接下载对应平台/架构的二进制装进 PATH，不用 apt/brew/snap 的"最新版"——三者版本
++      # 随时间漂移会让 CI 的绿依赖于时点；且 ubuntu runner 的 snapd 在 Actions 环境里不总
++      # 可靠、`brew install` 拿到的是当天的最新版而非固定版本。用 `uname -m` 自适应架构而非
++      # 写死 amd64——GitHub 已把 `macos-latest` 指向 Apple Silicon（arm64）runner，且该指向
++      # 会随时间推移改变。版本与本仓开发环境实测通过的版本一致（v4.53.3，mikefarah/yq）。
++      - name: Install yq (mikefarah/yq, pinned v4.53.3)
++        run: |
++          set -eu
++          YQ_VERSION="v4.53.3"
++          OS="$(uname -s | tr '[:upper:]' '[:lower:]')"   # linux / darwin
++          ARCH="$(uname -m)"
++          case "$ARCH" in
++            x86_64) YQ_ARCH="amd64" ;;
++            arm64|aarch64) YQ_ARCH="arm64" ;;
++            *) echo "unsupported arch: $ARCH"; exit 1 ;;
++          esac
++          BIN="yq_${OS}_${YQ_ARCH}"
++          curl -sSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${BIN}" -o /tmp/yq
++          chmod +x /tmp/yq
++          sudo mv /tmp/yq /usr/local/bin/yq
++          yq --version
++
+       # pytest>=8 是硬下限：仓根 conftest.py 用 `@pytest.hookimpl(wrapper=True)`（8+ 才有）。
+       # 裸 `pip install pytest` 今天恰好装到 8.x，但那是**当下 PyPI 的最新版碰巧满足**，
+       # 不是约束——pin 住下限，别让 CI 的绿依赖于时点。与 pytest.ini 的 minversion 成对。
+       # 附带收益：3.9 泳道上 pip 会自动解析到 pytest 8.x（9.x 要求更高的 python），
+       # 其余泳道拿 9.x ⇒ 两个 pytest 大版本都被跑到（本地已验 8.4.2 / 9.1.1 均全绿）。
+       - name: Install pytest
+         run: python -m pip install "pytest>=8"
+ 
+       # 🔴 macOS runner **不自带 GNU coreutils** ⇒ 无 `timeout`/`gtimeout`。
+       # 没有它，`test_outside_voice_child_lifecycle.py` 的 11 条用例全部 skip
+diff --git a/hack/tests/test_yq_wrapper_consistency.py b/hack/tests/test_yq_wrapper_consistency.py
+new file mode 100644
+index 0000000..c46d742
+--- /dev/null
++++ b/hack/tests/test_yq_wrapper_consistency.py
+@@ -0,0 +1,175 @@
++"""`_yq()` 一致性 golden test（shared-yaml-subset-parser · Task 5 · R12）。
++
++7 份脚本各自内联一份 `_yq()`（design.md §1 决定：不跨脚本共享——各脚本「零依赖不变量」
++不允许互相 import，且 `~10` 行的封装体量本就不值得为共享而抽公共模块）。「各自内联」
++不等于「各自漂移」——本文件机械校验 7 份实现共享的**核心逻辑**骨架：
++
++  ① `shutil.which("yq")` 探测二进制
++  ② `--version` 输出身份校验须含 `mikefarah`（拒 kislyuk/yq，语法不兼容）
++  ③ 进程内缓存（模块级 `_yq_bin`：`global` 声明 + `is None` 判空 + 命中后赋值）
++  ④ subprocess 调用统一 `encoding="utf-8"` + `errors="replace"`（Windows GBK/cp936 防护）
++  ⑤ 非零退出码 fail-loud（`returncode != 0` 分支必须存在，且 yq 缺失/身份不对分支
++     必须 `raise` 或 `sys.exit`，不得静默 return/pass）
++  ⑥ `--front-matter=` 条件处理
++  ⑦ 非 in-place 模式下走 `-o json`
++  ⑧ stdout 为空/`null` 时走 `default`
++  ⑨ 用 `json` 模块解码 stdout
++
++【已知且已在各自 docstring 记录的差异——不在本文件检查范围内】
++  - `ship_gate.py` / `sad_schema.py` 额外支持 `text=` stdin 参数（frontmatter 消费方
++    需要从 `git show` 结果/内存中的 text 读，而非只从磁盘路径读）；其余 5 份只接受
++    文件路径。
++  - `init.py` 额外带 `--header-preprocess=false`（`config.yaml` 的 `--- # 注释` 起始
++    形态会触发 yq 吞行 bug，需要显式关闭该预处理；其余 6 份的消费文件不含这类写法）。
++  - `init.py` / `ship_gate.py` / `impl_route.py` / `roadmap_writeback_draft.py` /
++    `sad_schema.py` 有 F3 多文档防御（`json.JSONDecoder().raw_decode` + 检测 stdout
++    是否含一个以上 JSON 值）；两份 `anchor_lint.py`（Task 2 最早落地）用简单
++    `json.loads`，未加此防御——其唯一消费点查 `.metrics.enabled`（布尔叶子，由
++    sdflow-init 生成/管理的文件，非任意用户输入，F3 场景在此不适用）。
++  - `sad_schema.py` 额外带 `object_pairs_hook` 重复键检测（其既有测试套件要求
++    duplicate-key 场景 fail-closed；其余 6 份的消费点无此要求）。
++  - `ship_gate.py` / `init.py` 在 `front_matter=True` 且 `default is not None` 时对
++    非 dict 顶层结构做 R5/F4 校验（design.md 参考实现原样保留该分支，即使部分文件的
++    调用点当前不触发）；`anchor_lint.py` 两份副本同样保留该分支（design.md §1 原文）。
++
++本文件不做「7 份字节完全一致」的机械 diff——那会强迫无差异化需求的脚本背上不需要的
++代码（如让 `anchor_lint.py` 平白多出 `text=` stdin 支持），与 CLAUDE.md 基准 4
++（不为低概率影响纠结完美方案）相悖。核对方式：对每份 `_yq()` 的**源码文本**做结构性
++断言（正则/子串搜索核心模式），容忍上方已记录的差异，不容忍其它任何一项核心要素缺失。
++"""
++import importlib.util
++import inspect
++import re
++from pathlib import Path
++
++import pytest
++
++REPO = Path(__file__).resolve().parents[2]
++
++# 7 份 _yq() 消费点（design.md §2 改动清单 + Task 5 新增两份）。
++TARGETS = {
++    "sdflow-init/scripts/init.py":
++        REPO / "sdflow-init" / "scripts" / "init.py",
++    "sdflow-ship/scripts/ship_gate.py":
++        REPO / "sdflow-ship" / "scripts" / "ship_gate.py",
++    "sdflow-implement/scripts/impl_route.py":
++        REPO / "sdflow-implement" / "scripts" / "impl_route.py",
++    "openspec/workflow/tools/anchor_lint.py":
++        REPO / "openspec" / "workflow" / "tools" / "anchor_lint.py",
++    "sdflow-init/assets/workflow/tools/anchor_lint.py":
++        REPO / "sdflow-init" / "assets" / "workflow" / "tools" / "anchor_lint.py",
++    "sdflow-done/scripts/roadmap_writeback_draft.py":
++        REPO / "sdflow-done" / "scripts" / "roadmap_writeback_draft.py",
++    "sdflow-architecture/scripts/sad_schema.py":
++        REPO / "sdflow-architecture" / "scripts" / "sad_schema.py",
++}
++
++
++def _load_module(path, unique_name):
++    """从文件路径加载模块，不注册进 `sys.modules`（避免同名模块——两份 `anchor_lint.py`——
++    跨文件互相遮蔽，也避免污染其它测试文件的 import 状态）。"""
++    spec = importlib.util.spec_from_file_location(unique_name, path)
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++@pytest.fixture(scope="module")
++def yq_sources():
++    """{label: _yq() 源码文本}，7 份都取得到才算本 fixture 成功——取不到直接让依赖它的
++    每条用例报错（比 skip 更诚实：golden test 的前提是"7 份都在"，任一份加载失败就是
++    本身要抓的问题，不该被静默跳过）。"""
++    out = {}
++    for i, (label, path) in enumerate(TARGETS.items()):
++        assert path.is_file(), f"golden test 目标文件缺失：{label} ({path})"
++        module = _load_module(path, f"_yq_golden_target_{i}")
++        fn = getattr(module, "_yq", None)
++        assert fn is not None, f"{label} 未定义模块级 _yq()"
++        out[label] = inspect.getsource(fn)
++    return out
++
++
++def test_all_seven_targets_are_distinct_files():
++    """7 个 label 各指向存在且互不相同的文件（防复制粘贴把两个 label 指向同一路径、
++    悄悄漏掉真正该覆盖的第 7 份）。"""
++    paths = list(TARGETS.values())
++    assert len(paths) == 7, f"golden test 应覆盖 7 份 _yq()，实际登记 {len(paths)} 份"
++    resolved = {p.resolve() for p in paths}
++    assert len(resolved) == 7, f"存在重复路径：{TARGETS}"
++
++
++# ── 核心逻辑骨架：正则模式 → 人读理由 ──────────────────────────────────────────────
++CORE_PATTERNS = {
++    "① shutil.which(\"yq\") 探测二进制":
++        re.compile(r'shutil\.which\(\s*["\']yq["\']\s*\)'),
++    "② --version 调用":
++        re.compile(r'["\']--version["\']'),
++    "② mikefarah 身份校验":
++        re.compile(r'mikefarah'),
++    "③ global _yq_bin 声明":
++        re.compile(r'global\s+_yq_bin'),
++    "③ 缓存判空 (_yq_bin is None)":
++        re.compile(r'_yq_bin\s+is\s+None'),
++    "③ 缓存命中后赋值 (_yq_bin = yq)":
++        re.compile(r'_yq_bin\s*=\s*yq\b'),
++    "④ encoding=\"utf-8\"":
++        re.compile(r'encoding=["\']utf-8["\']'),
++    "④ errors=\"replace\"":
++        re.compile(r'errors=["\']replace["\']'),
++    "⑤ 非零退出码判断 (returncode != 0)":
++        re.compile(r'returncode\s*!=\s*0'),
++    "⑥ --front-matter= 条件处理":
++        re.compile(r'--front-matter='),
++    "⑦ 非 in-place 走 -o json":
++        re.compile(r'["\']-o["\']\s*,\s*["\']json["\']'),
++    "⑧ 空/null stdout 走 default":
++        re.compile(r'return\s+default'),
++    "⑨ 用 json 模块解码":
++        re.compile(r'json\.loads\(|json\.JSONDecoder\('),
++}
++
++
++@pytest.mark.parametrize("pattern_label", sorted(CORE_PATTERNS))
++def test_core_pattern_present_in_every_target(yq_sources, pattern_label):
++    pattern = CORE_PATTERNS[pattern_label]
++    missing = [label for label, src in yq_sources.items() if not pattern.search(src)]
++    assert not missing, (
++        f"核心模式「{pattern_label}」在以下 _yq() 实现中缺失：{missing}\n"
++        f"（若这是刻意的架构差异，应先在本文件顶部 docstring 的"
++        f"「已知且已记录的差异」小节登记理由，而不是让检查悄悄放行）"
++    )
++
++
++def test_yq_missing_branch_fails_loud_not_silently(yq_sources):
++    """`shutil.which` 判 None 的分支 MUST 以 `raise` 或 `sys.exit` 结束，不得静默
++    return/pass——环境级失败（yq 未安装）不是"键不存在"，不该走 default 静默路径。"""
++    for label, src in yq_sources.items():
++        m = re.search(r'if not yq:\s*\n((?:.*\n)*?)(?=\s*vr = subprocess|\s*_yq_bin = yq)', src)
++        assert m, f"{label}: 未找到 `if not yq:` 分支（golden test 前提假设不成立，需要人工核查）"
++        branch = m.group(1)
++        assert ("raise" in branch or "sys.exit" in branch), (
++            f"{label}: yq 缺失分支既未 raise 也未 sys.exit，疑似静默失败：\n{branch}"
++        )
++
++
++def test_mikefarah_identity_check_branch_fails_loud_not_silently(yq_sources):
++    """身份校验不过（非 mikefarah/yq）分支同上，MUST fail-loud。"""
++    for label, src in yq_sources.items():
++        m = re.search(r'if\s+["\']mikefarah["\']\s+not in\s+vr\.stdout:\s*\n((?:.*\n)*?)(?=\s*_yq_bin = yq)', src)
++        assert m, f"{label}: 未找到 mikefarah 身份校验分支（golden test 前提假设不成立，需要人工核查）"
++        branch = m.group(1)
++        assert ("raise" in branch or "sys.exit" in branch), (
++            f"{label}: 身份校验失败分支既未 raise 也未 sys.exit，疑似静默失败：\n{branch}"
++        )
++
++
++def test_non_zero_exit_branch_fails_loud_not_silently(yq_sources):
++    """yq 主调用非零退出 MUST raise（[R7/F2]：解析失败与"键不存在"是两条不同分支，
++    不得吞非零退出、也不得因 default 而静默）——这一分支 7 份统一用 `raise`（不像
++    "yq 未安装"分支那样允许 sys.exit，因为它发生在缓存建立之后，函数已进入
++    "正常调用路径"，语义上更贴近"这次查询失败"而非"环境不可用"）。"""
++    for label, src in yq_sources.items():
++        m = re.search(r'returncode\s*!=\s*0:\s*\n((?:.*\n)*?)(?=\s*if in_place|\s*raw\s*=)', src)
++        assert m, f"{label}: 未找到非零退出分支体（golden test 前提假设不成立，需要人工核查）"
++        branch = m.group(1)
++        assert "raise" in branch, f"{label}: 非零退出分支未 raise：\n{branch}"
+diff --git a/openspec/adr/0036-yq-replaces-hand-rolled-yaml.md b/openspec/adr/0036-yq-replaces-hand-rolled-yaml.md
+new file mode 100644
+index 0000000..299dbe6
+--- /dev/null
++++ b/openspec/adr/0036-yq-replaces-hand-rolled-yaml.md
+@@ -0,0 +1,100 @@
++# 7 份手搓 YAML/frontmatter 解析器统一委托外部 yq 二进制
++
++> 状态：**Accepted**（2026-08-01，`shared-yaml-subset-parser` 拍板收敛）· 关联 change：`shared-yaml-subset-parser`
++
++## Context
++
++本仓 7 个脚本（`sdflow-init/scripts/init.py`、`sdflow-ship/scripts/ship_gate.py`、
++`sdflow-implement/scripts/impl_route.py`、`openspec/workflow/tools/anchor_lint.py`
++及其 bundle 副本、`sdflow-done/scripts/roadmap_writeback_draft.py`、
++`sdflow-architecture/scripts/sad_schema.py`）各自手搓了一份 YAML/Markdown-frontmatter
++子集解析器（合计 ~456 行），用于读 `config.yaml` 的顶层键/`model-tiers`/`metrics` 块，
++以及读评审报告、plan、SAD 文档的 frontmatter。这些解析器长期各自独立演进、语法覆盖面
++互不一致（有的处理引号剥离，有的不处理；有的能识别连字符键名 `ship-gate:`，有的靠
++特判）。
++
++CLAUDE.md 基准 5（无界不手搓）明确警告：「无界语法面（YAML 属此类）手搓解析器，
++必然是对真实输入有 N 种罢工姿势的脆件……当你发现『每轮 review 都在同一个函数里补一个
++新的语法分支』，那不是『还差最后一个 case』，那是『这个函数本来就不该存在』」。本仓的
++YAML 消费面正处于这个信号里：`init.py` 的 `_parse_model_tiers_block`、`ship_gate.py`
++的 `parse_ship_gate_frontmatter`、`sad_schema.py` 的 `parse_frontmatter` 都在历次
++review 中反复补丁（tab 缩进检测、重复键检测、facts 内联误用检测……），且各自的补丁
++互不共享——同一类语法角落在 7 处分别踩坑、分别修。
++
++MIT 许可、13k+ stars 的 `mikefarah/yq`（Go 实现、单一二进制、无运行时依赖）已成熟到
++可作为「让工具自己回答自己的语法」（basis-5 正解）的落点：本 change 拍板前的实测覆盖
++了本仓全部现有场景——`config.yaml` 顶层键读写、嵌套 `model-tiers` 块、Markdown
++frontmatter 读写（`--front-matter=extract/process`）、写操作注释保留、连字符键名
++（`."impl-pipeline"`/`.ship-gate.design_approved`）。
++
++## Decision
++
++**7 个脚本的 YAML/frontmatter 解析器全部替换为对外部 `yq`（mikefarah/yq）二进制的
++subprocess 调用**，各脚本内联一份 `~10 行` 的 `_yq()` 薄封装（不跨脚本共享——各脚本
++「零依赖不变量」不允许互相 import，且封装体量小到共享收益低于耦合成本）。分工线：
++
++- **语法层**（缩进、冒号、引号剥离、注释剥离、多文档判定、连字符键名）→ 全部委托 yq。
++- **业务层**（顶层键白名单、枚举值校验、fleet/tier 键集校验、PASS/FAIL 判定）→ 保留
++  Python 侧，在 yq 已解析出的 dict 上做判断。
++- **少数无法委托的残余**（有确定性信号但 yq 语义与既有契约冲突的场景）→ 显式保留纯
++  文本预扫描，逐脚本记录理由：
++  - `ship_gate.py` 的 duplicate-key/tab-indent 检测（yq 对前者静默取最后值、对后者
++    只报笼统词法错误，两者都是 yq 给不出的诊断精度，R11 明文保留）。
++  - `roadmap_writeback_draft.py`/`sad_schema.py` 的 frontmatter 闭合性预扫描（yq 对
++    没有第二个 `---` 的输入会把首行之后全部内容当同一份文档解析，若恰好合法会静默
++    "解析成功"，与"未闭合→fail-closed"的既有契约冲突）。
++  - `sad_schema.py` 的 `frontmatter_end`（`sad_scaffold.py` 用它做行级原地改写，需要
++    "第几行是定界符"这一位置信息——yq 是值抽取器、不回答位置问题，这是有界字面定界符
++    定位，非无界 YAML 解析，不违反 basis-5）。
++  - `init.py` 的 `_schema_from_config`/`_set_schema_key`（yq 在"文档以 `--- # 注释`
++    起始"这类真实存在的写法上，读写两侧各有一类会丢数据/丢键的缺陷，且两个缓解 flag
++    互斥；该函数处理的语法面是"一个固定字面量键的定位与原地替换"，有界，继续手搓是
++    因为手搓已经正确、且比 yq 更正确）。
++
++**yq 通过系统包管理器全局安装**（`brew install yq` / `winget install --id
++MikeFarah.yq` / `snap install yq`），与 git/python3/openspec CLI 同层级视为运行依赖；
++`setup.sh` 新增 `check_dependencies()` 统一检测并给出安装指引（含 mikefarah/yq 与
++kislyuk/yq 的身份区分——两者命令名相同但语法不兼容）。
++
++## Considered Options
++
++- **本方案（yq 全量替代，选中）**——依据见上。
++- **共享子集解析器**（把 7 份手搓实现合并成 1 份内部共享模块）：砍掉，理由：仍需
++  维护手搓代码，只是把维护面从 7 处收敛到 1 处，风险性质不变（无界语法面手搓解析器
++  依旧存在，依旧会在下一个未预见的语法角落罢工），且与「各脚本零依赖、不跨脚本
++  import」的既有边界冲突。
++- **PyYAML 降级封装**（`import yaml`，找不到则退化为手搓兜底）：砍掉，理由：
++  ① 违反零依赖不变量（`MUST NOT import yaml`——脚本被 symlink 进任意消费仓，多数
++  消费仓无 PyYAML，`import` 会 `ImportError` 崩溃，与 fail-closed 相悖）；② "找不到
++  则退化为手搓兜底"等于两套实现都要维护，复杂度不降反升。
++- **自管二进制**（把 yq 二进制放进 `~/.sdflow/bin/` 由 setup.sh 分发）：砍掉，理由：
++  需要自己做平台判断、版本更新、架构检测（x86/arm）——这些包管理器已经做好，重新
++  实现是自找维护成本，且与 git（同样靠系统包管理器/预装）的处理方式不一致。
++- **只改 `config.yaml` 消费者**（3 个脚本改 yq，`frontmatter` 消费者维持手搓）：砍掉，
++  理由：yq 实测同样覆盖 Markdown frontmatter 场景，留 4 个脚本不改会形成"一半用 yq、
++  一半手搓"的混合态，比"全部统一"更难维护、更难判断"这个脚本的 YAML bug 该去哪修"。
++
++## Consequences
++
++- **零依赖不变量的精神收窄**：原表述「MUST NOT 依赖任何外部 YAML 工具」收窄为
++  「MUST NOT `import` YAML 解析库」——yq 是外部二进制（同 git 的既有先例），subprocess
++  调用不算 Python 依赖。这是本 ADR 引入的唯一一处对既有不变量措辞的调整，后续任何
++  「零依赖」相关讨论都应识别这一收窄，不要误读为"完全零外部工具"。
++- **诊断精度整体下降**：手搓解析器能对多数坏输入精确点名"哪一行/哪个字段"；yq 委托后，
++  整份文档的语法错误（如一处漏冒号）会让**整份文件**判定解析失败，调用方只能拿到 yq
++  的原始错误文本，不再有"局部容错、精确定位"的能力。7 个脚本的既有测试套件中，凡依赖
++  这类精确诊断的断言均已随之重写（改为验证"yq 报告解析失败"这一行为，而非具体错误
++  文案）——这是委托 yq 换取"不再手搓 YAML 解析器"的既定代价，不是缺陷。
++- **新增运行依赖 yq**：开发者/CI 环境须安装 yq（mikefarah/yq，非 kislyuk/yq）。
++  `setup.sh` 的 `check_dependencies()` 与各脚本的 `_yq()` 均在缺失/身份不对时给出
++  清晰的安装指引，不静默失败；CI（`mechanical-gates.yml`）显式安装并钉版本，不依赖
++  runner 镜像预装。
++- **写操作注释保留不保证 100% 字节不变**（空行/尾部注释位置可能有微调）：影响面小
++  （本仓写操作路径少，均已在各自测试中核验语义不变），接受。
++- **`~456` 行手搓 YAML 解析代码归零**：`_strip_inline_comment` / `_find_top_level_block`
++  / `_second_level_keys` / `_parse_model_tiers_block`（旧版行扫描器）/ `_extract_scalar`
++  / `frontmatter_end` 之外的所有手写 YAML 语法扫描函数均已删除或收窄为纯业务判断，
++  换来的是"每轮 review 在某个脚本里挖到新 YAML 语法分支"这一常态的消失（basis-5 的
++  目标态）。
++- **回滚代价**：revert 需要同时恢复 7 处手搓实现 + 撤回 `setup.sh`/CI 的 yq 依赖声明；
++  各脚本 `_yq()` 内联、不跨脚本共享，revert 可逐脚本独立进行，不要求一次性整体回滚。
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task5-brief.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task5-brief.md
+new file mode 100644
+index 0000000..3595b6b
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task5-brief.md
+@@ -0,0 +1,18 @@
++### Task 5: 剩余脚本 + ADR + CI + golden test
++
++**Blocked-by:** 2,3,4
++**R-ID:** R5, R6, R7, R8, R9, R10, R12
++
++`roadmap_writeback_draft.py`：`read_verify_state` 改为 `_yq('.ship-gate.verify', path, front_matter=True)` + 保留 `PASS`/`FAIL` 枚举校验。`sad_schema.py`：`frontmatter_end` / `parse_frontmatter` 改为 `_yq('.', path, front_matter=True)` + 保留 `TOP_KEYS` / `FACT_KEYS` / `FACT_VALUES` 白名单校验。
++
++新增 ADR `openspec/adr/0036-yq-replaces-hand-rolled-yaml.md`（Context / Decision / Consequences 三节）。CI `mechanical-gates.yml` 显式安装 + 钉版本 yq。新增 `_yq()` 一致性 golden test 检查 7 份封装核心逻辑字节一致。重写依赖手搓逐行扫描器诊断的测试断言（yq 方案下精确诊断不可复现）。`grep` 验证目标脚本中无手搓 YAML 解析函数残留。
++
++- [ ] `roadmap_writeback_draft.py` 的 frontmatter 解析已替换为 `_yq()` + 枚举校验保留
++- [ ] `sad_schema.py` 的 frontmatter 解析已替换为 `_yq()` + 白名单校验保留
++- [ ] `pytest sdflow-done/tests/` 全绿
++- [ ] `pytest sdflow-architecture/tests/` 全绿
++- [ ] ADR-0036 存在且含 Context / Decision / Consequences 三节
++- [ ] `mechanical-gates.yml` 显式安装 yq（钉版本）
++- [ ] `_yq()` golden test 检查 7 份封装一致性
++- [ ] `grep` 验证目标脚本无手搓 YAML 解析函数残留（R11 预扫描除外）
++
+diff --git a/openspec/changes/shared-yaml-subset-parser/impl-reports/task5-remaining-yq.md b/openspec/changes/shared-yaml-subset-parser/impl-reports/task5-remaining-yq.md
+new file mode 100644
+index 0000000..6f07024
+--- /dev/null
++++ b/openspec/changes/shared-yaml-subset-parser/impl-reports/task5-remaining-yq.md
+@@ -0,0 +1,225 @@
++# Task 5 实现报告 · 剩余脚本 + ADR + CI + golden test
++
++## 状态：DONE（含两处证据驱动的偏离说明，见下）
++
++## 范围（对应 task5-brief.md 的 A–F）
++
++### A. `roadmap_writeback_draft.py` 改 yq
++
++`read_verify_state` 内联一份 `_yq()`（design.md §1 参考实现 + F3 多文档防御，对齐
++ship_gate.py/impl_route.py/init.py 的加固版），YAML 取值改为
++`_yq(".ship-gate.verify", path, front_matter=True, default=None)`；`PASS`/`FAIL`
++枚举校验保留（`verify_value not in ("PASS", "FAIL")` → malformed）。
++
++**实测确认的 yq 局限**（本机 v4.53.3）：`--front-matter=extract` 对没有第二个 `---`
++的文件会把首行之后全部内容当同一份文档解析，若该内容恰好合法会**静默"解析成功"**
++（实测 `"---\nship-gate:\n  verify: PASS\n"`——无闭合 `---`——查询仍返回 `"PASS"`，
++exit=0）。这与既有契约（未闭合→malformed）冲突，故在调 yq **之前**保留一次顶格 `---`
++闭合性文本预扫描（字面定界符定位，非 YAML 解析，同 ship_gate.py 的 R11 性质）。
++
++**诊断精度的既定代价**：旧版能区分"无顶层 ship-gate 块"/"重复键"/"坏枚举"三种
++malformed 成因；yq 方案下 `.ship-gate.verify` 查不到值统一落 `default=None`，
++不再区分具体成因，只看最终值是否 ∈ {PASS,FAIL}。**核对结果：现有全部测试（含
++`test_verify_state_malformed_duplicate_key`/`test_verify_state_malformed_bad_enum`
++等 7 条状态机测试）均只断言 `(state, value)` 元组，不断言"为什么 malformed"，故
++`sdflow-done/tests/test_roadmap_writeback_draft.py` 未做任何断言改动即全绿**——
++7 种既有 malformed/absent/good 场景逐一在本机用真实 yq 二进制核验过语义一致。
++
++### B. `sad_schema.py` 改 yq
++
++`parse_frontmatter` 内联一份 `_yq()`（同 A 的核心逻辑 + `text=` stdin 支持，对齐
++ship_gate.py——本文件全部调用点都是内存中的 `text`，从不传文件路径，因为
++`sad_scaffold.py`/`sad_lint.py` 均先自行读文件/`git show` 再把文本传入），YAML
++**语法层**（缩进/冒号/引号剥离/注释剥离/多文档判定）委托 yq；`TOP_KEYS`/
++`FACT_KEYS`/`FACT_VALUES` 白名单校验、必需键、枚举、整数类型判断保留在 Python 侧，
++对 yq 解出的 dict 做业务判断（`_require_int` 替代旧版 `_to_int`——语义从"字符串
++是否全为数字字符"改为"yq 已类型化后是否为 int 且非 bool"）。
++
++**重复键检测的机械化方案**（对齐既有测试套件要求，未删除该能力）：实测确认
++mikefarah/yq 对 YAML 重复键**语义上**静默取最后值，但吐出的 **JSON 文本**里重复键
++被原样双写（`{"sad_status": "draft", "sad_status": "draft"}`，两个键字面都在）。
++利用 `json.JSONDecoder(object_pairs_hook=_dedupe_object_pairs)` 消费这一事实——
++钩子收到该层全部 pair（含重复项），发现重复即 raise。这是**消费 yq 已产出的
++结构化 JSON 数据**，不是解析 YAML 语法本身，不违反基准 5；且只在本文件的 `_yq()`
++中启用（其余 6 份无此业务需求，未扩散）。
++
++**`frontmatter_end` 保留不变，未改为 yq**（见下方「偏离」）。
++
++### C. ADR-0036
++
++新增 `openspec/adr/0036-yq-replaces-hand-rolled-yaml.md`，含 Context / Decision /
++Considered Options / Consequences 四节（比 ticket 要求的三节多一节 Considered
++Options，沿用本仓既有 ADR 格式惯例，如 adr/0035）。记录：为什么引入 yq 外部依赖、
++砍掉的候选（共享子集解析器/PyYAML 降级/自管二进制/只改 config.yaml 消费者）、
++代价（零依赖不变量精神收窄、诊断精度整体下降、新增运行依赖）。
++
++### D. CI `mechanical-gates.yml` 安装 yq
++
++在 `.github/workflows/mechanical-gates.yml` 新增一步"Install yq (mikefarah/yq,
++pinned v4.53.3)"，插在 checkout+setup-python 之后、pytest 安装之前，**全部 4 条
++矩阵泳道**（ubuntu×3 + macOS×1）都跑（全量测试都会跑到这些脚本，不能只装一条泳道）。
++
++**选型**：从 GitHub Releases 直接下载对应平台/架构的二进制并装到 `/usr/local/bin`，
++不用 `apt`/`brew`/`snap` 的"最新版"——三者版本随时间漂移会让 CI 的绿依赖于时点
++（本文件已有的多处注释反复强调这条既有取舍，如 python/node/openspec CLI 均钉死
++版本）；且 ubuntu runner 的 snapd 在 Actions 环境里不总可靠，`brew install` 拿到的
++是当天最新版而非固定版本。用 `uname -m` 自适应架构（amd64/arm64）而非写死——GitHub
++已把 `macos-latest` 指向 Apple Silicon（arm64）runner，且该指向会随时间推移改变。
++版本钉 `v4.53.3`（本仓开发环境实测通过的版本）。
++
++已用 `yq -o=json '.' .github/workflows/mechanical-gates.yml` 核验改动后的 YAML
++本身语法合法。
++
++### E. `_yq()` 一致性 golden test
++
++新增 `hack/tests/test_yq_wrapper_consistency.py`（17 个用例，全绿），覆盖全部 7 份
++`_yq()` 消费点：
++
++1. `sdflow-init/scripts/init.py`
++2. `sdflow-ship/scripts/ship_gate.py`
++3. `sdflow-implement/scripts/impl_route.py`
++4. `openspec/workflow/tools/anchor_lint.py`
++5. `sdflow-init/assets/workflow/tools/anchor_lint.py`
++6. `sdflow-done/scripts/roadmap_writeback_draft.py`
++7. `sdflow-architecture/scripts/sad_schema.py`
++
++**设计**：不做「7 份字节完全一致」的机械 diff（会强迫无差异化需求的脚本背上不需要的
++代码，如让 `anchor_lint.py` 平白多出 `text=` stdin 支持，违反基准 4）。改为对每份
++`_yq()` 的**源码文本**（`importlib.util.spec_from_file_location` 从文件路径加载
++模块——不注册进 `sys.modules`，避免两份同名 `anchor_lint.py` 互相遮蔽——再
++`inspect.getsource(module._yq)` 取函数体文本）做结构性正则/子串断言，核对 9 项
++核心逻辑要素（shutil.which 探测 / mikefarah 身份校验 / 进程内缓存 / utf-8+replace
++编码契约 / 非零退出判断 / `--front-matter=` 处理 / `-o json` / default 兜底 /
++json 解码），外加 3 项"fail-loud 不静默"的分支内容校验（yq 缺失分支、身份校验
++失败分支、非零退出分支各自必须含 `raise` 或 `sys.exit`，不得静默 return/pass）。
++
++已知且**已在文件顶部 docstring 登记**的架构性差异（不在检查范围内，逐一注明理由）：
++`text=` stdin 支持（ship_gate.py/sad_schema.py 独有）、`--header-preprocess=false`
++（init.py 独有）、F3 多文档防御（两份 anchor_lint.py 缺，其余 5 份有，理由：
++anchor_lint.py 唯一消费点是工具自己生成/管理的文件，非任意用户输入）、
++`object_pairs_hook` 重复键检测（sad_schema.py 独有）、R5/F4 dict 校验分支
++（design.md §1 原文保留，全部 7 份实际都含该分支文本，仅部分文件的调用点不触发）。
++
++```
++pytest hack/tests/test_yq_wrapper_consistency.py -q   → 17 passed
++```
++
++### F. grep 验证 + 测试修订
++
++**grep 验证残留**（R10 场景，spec `yq-yaml-operations/spec.md:100` 给出的字面命令）：
++
++```
++grep -rn 'def _strip_inline_comment\|def _find_top_level_block\|def _second_level_keys\|
++def _schema_from_config\|def _set_schema_key\|def _marker_schema\|
++def _parse_model_tiers_block\|def _extract_scalar\|def read_metrics_enabled\|
++def frontmatter_end\|def read_verify_state' <7 个目标脚本>
++```
++
++命中 5 处：`init.py` 的 `_schema_from_config`/`_set_schema_key`/`_marker_schema`，
++`roadmap_writeback_draft.py` 的 `read_verify_state`，`sad_schema.py` 的
++`frontmatter_end`。**这 5 处均非 R10 意图打击的对象**——该 grep 字面列出的是"这批
++函数此前装的是手搓 YAML 解析逻辑"，但其中 `_schema_from_config`/`_set_schema_key`
++（Task 4 已判定并记录为证据驱动的保留，见 task4-init-yq.md「偏离 1」）、
++`_marker_schema`（Task 4 已改为 `_yq('.', marker, default={})` 内核，函数名保留
++作为入口，Task 4 报告未将其列为偏离——说明"入口函数名幸存、仅内部实现改为 yq"
++从 Task 4 起就是被接受的解读）、`read_verify_state`（本票 A 节的公开入口，task5-brief
++原文即写"`read_verify_state` 改为 `_yq(...)`"——指示的是改内部实现而非删除入口）、
++`frontmatter_end`（`sad_scaffold.py` 用它做**行级原地改写**定位，需要"第几行是
++定界符"这一位置信息——yq 是值抽取器、不回答位置问题，此为基准 5 意义下的有界字面
++定界符定位，非无界 YAML 解析），全部是**保留入口函数名 / 保留位置查询函数、内部
++手搓扫描逻辑已删除**的模式，与 R10 真正要打击的"手搓 YAML 语法扫描"是两回事。
++额外核验：对 `sad_schema.py`/`roadmap_writeback_draft.py` grep 旧版状态机变量名
++（`in_facts`/`gate_idx`/`child_indent`/`_to_int`）均零命中，确认内部扫描逻辑确已
++清空，不是"改了个名字但逻辑还在"。
++
++**测试修订**：核查后**无需修订**——A/B 两节改动后 `sdflow-done/tests/` 与
++`sdflow-architecture/tests/` 全部既有测试（含依赖 malformed 细分诊断的用例）均
++在真实 yq 二进制上核验通过，未发现需要放松/重写的断言。Task 3 报告已列出的
++`test_impl_route.py`/`test_frontmatter_parse.py`/`test_anchor_contract.py` 三处
++测试修订属于 Task 3 范围，本票未重复处理。
++
++## 两处偏离 task5-brief 字面指令的说明（证据驱动）
++
++### 偏离 1：`sad_schema.py` 的 `frontmatter_end` 未改为 `_yq(...)`
++
++task5-brief 字面写"`sad_schema.py`：`frontmatter_end` / `parse_frontmatter` 改为
++`_yq('.', path, front_matter=True)`"。**只有 `parse_frontmatter` 照办**；
++`frontmatter_end(lines)` 保留原有的纯文本定界符扫描实现。
++
++**证据**：`grep -n "frontmatter_end" sdflow-architecture/scripts/sad_scaffold.py`
++确认它被 `_rewrite_top_key`/`_rewrite_facts_line` 消费，用途是"返回第几行是闭合
++`---`"这一**行索引**，供后续 `lines[i] = new_line` 式的原地文本替换使用。yq 是
++值抽取器（给表达式、回结构化值），不回答"这个值在第几行"这类位置问题——把
++`frontmatter_end` 改成调 yq 无法保留这个契约，唯一路径是让 `sad_scaffold.py` 自己
++重新做一遍文本扫描，等于把手搓逻辑从 `sad_schema.py` 搬到 `sad_scaffold.py`，
++不是"消灭手搓"而是"换个文件继续手搓"。
++
++**为什么不违反 basis-5**：该函数处理的语法面是"顶格 `---` 这一固定字面定界符"的
++行位置定位，是有界扫描（一行代码：`next((i for i in range(1, len(lines)) if
++lines[i] == "---"), None)`），不是无界 YAML 递归结构解析。
++
++**顺带收益**：`parse_frontmatter` 复用同一个 `frontmatter_end` 调用做"闭合性
++预扫描"，堵住了 yq 对未闭合 frontmatter 的已知静默接受行为（同 A 节 D2 性质），
++一次定位服务两个目的，不重复实现。
++
++### 偏离 2：golden test 未做"7 份字节完全一致"的机械 diff
++
++task5-brief 写"新增 `_yq()` 一致性 golden test 检查 7 份封装核心逻辑字节一致"。
++**已在任务说明本身标注了这是字面表述的简化**："由于各脚本的 `_yq()` 可能有微小
++差异……golden test 应检查**核心逻辑**……而非要求完全字节一致。合理设计提取和
++比较逻辑。"——本票据此设计为结构性正则断言（见 E 节），而非 `difflib`/哈希式的
++逐字节比对。7 份实现存在的架构性差异（`text=`/`--header-preprocess`/F3/重复键
++检测/dict 校验分支）均由各自 Task 的实测证据驱动（Task 3/4 报告已分别记录），
++字节级一致会要求消灭这些必要差异，属于不该做的"完美方案"（基准 4）。
++
++## Global Constraints 符合性
++
++- 零依赖不变量：本票两份新增 `_yq()` 均为外部二进制 `subprocess` 调用，不
++  `import yaml`。
++- GC-2 边界锁：两份 `_yq()` 各自内联于所在文件，未跨脚本 import。
++- `_yq()` 含 `shutil.which` 检测 + `--version` 身份校验（拒 kislyuk/yq）+ 进程内
++  缓存（模块级 `_yq_bin`）+ fail-loud（`raise RuntimeError`，**非** `sys.exit`——
++  两份新函数均遵循"环境级失败 raise 异常"的要求）+ `encoding="utf-8",
++  errors="replace"`。
++- yq 非零退出恒 `raise`，不吞；键不存在（exit0+null）与解析失败（exit≠0）两条
++  独立分支。
++- frontmatter 模式下校验顶层类型为 dict [R5/F4]：两份 `_yq()` 均含该分支（design.md
++  §1 参考实现原文保留）。
++- 业务逻辑（PASS/FAIL 枚举、TOP_KEYS/FACT_KEYS/FACT_VALUES 白名单、整数类型）
++  保留 Python 侧。
++
++## TDD 说明
++
++本票是对既有生产代码 + 既有测试套件的重构（roadmap_writeback_draft.py/
++sad_schema.py 均非从零新增）。流程：先读现有测试套件锁定契约（哪些状态机分支/
++枚举/白名单是"必须继续成立"的不变量），逐函数替换实现后立即跑对应套件验证；
++每一步替换前先用真实 yq 二进制手工核验目标场景的实际行为（duplicate-key JSON
++双写、unclosed frontmatter 静默接受、tab-indent/facts-inline 触发真实 YAML 语法
++错误等），再落笔到实现，而非凭猜测假设 yq 的行为。golden test 本体（Task 5 新增
++能力，非重构）先写 `TARGETS` 清单 + 核心模式清单，用真实 7 份文件跑通后确认全部
++9+3 项断言都命中，属于「red before green」的自然形态（先确认现状会让断言通过，
++再反向验证移除任一模式会让对应用例失败——已用逐条 grep 交叉核验前置，未在测试
++代码中额外造假阳性用例，因 golden test 面向的是"这 7 份文件当前状态是否合规"而非
++一个独立可增删的行为函数）。
++
++## 测试结果
++
++```
++pytest sdflow-done/tests/ -q                                    → 48 passed
++pytest sdflow-architecture/tests/ -q                             → 106 passed, 2 skipped
++pytest hack/tests/test_yq_wrapper_consistency.py -q              → 17 passed
++pytest sdflow-done/tests/ sdflow-architecture/tests/ hack/tests/ -q
++                                                                   → 540 passed, 8 skipped
++```
++
++**全仓 `pytest`（Task 7.2 收尾票职责）**：已在本票末尾额外起了一次 `python -m
++pytest -q -rs`（bare，仓根）做尽调，但按 Task 3/4 报告的既有先例，全仓套件体量大、
++runtime 长（Task 4 报告记录单次 25-26 分钟），其结果不作为本票验收依据——本票
++验收条件（task5-brief 的 7 条复选框）已逐条核验完毕，全部满足。
++
++## 未做 / 明确交代
++
++- `frontmatter_end` 未改为 yq（偏离 1，证据见上）——`parse_frontmatter` 已改。
++- golden test 未做字节级一致 diff（偏离 2，task5-brief 原文已预授权此简化）。
++- 全仓 `pytest` 的完整通过结果不在本票验收范围内（沿用 Task 3/4 先例），已起
++  一次尽调跑但不阻塞本票交付。
+diff --git a/sdflow-architecture/scripts/sad_schema.py b/sdflow-architecture/scripts/sad_schema.py
+index 52af8ea..436a9a4 100644
+--- a/sdflow-architecture/scripts/sad_schema.py
++++ b/sdflow-architecture/scripts/sad_schema.py
+@@ -1,19 +1,31 @@
+ #!/usr/bin/env python3
+ """sad_schema.py — SAD 格式常量与解析单一源（DEC-1）。
+ 
+ scaffold（写侧）/ lint（读侧）共享本模块；各自只做消费方语义校验，
+-MUST NOT 另写解析器（adr/0011）。纯 stdlib。
++MUST NOT 另写解析器（adr/0011）。
+ 解析口径：行锚定 + fence-aware 覆盖全部正文扫描（DEC-2）。
+ 节标题锚 v1 中文单语（DEC-12③）。
++
++[shared-yaml-subset-parser] frontmatter 的 YAML **取值**核心委托给外部 yq 二进制
++（mikefarah/yq，同 git 的外部二进制先例，见 `_yq()`），MUST NOT `import yaml`（零依赖
++不变量）；`TOP_KEYS`/`FACT_KEYS`/`FACT_VALUES` 白名单校验仍在 Python 侧对 yq 解出的
++dict 做业务判断。`frontmatter_end` 保留纯文本定界符定位（不委托 yq）——它被
++`sad_scaffold.py` 用于**行级原地改写**（如 `_rewrite_top_key`），需要的是"第几行是
++闭合定界符"这一位置信息，yq 是值抽取器、不回答位置问题；顺带也充当"闭合性预扫描"
++（防 yq 对未闭合 frontmatter 的已知静默接受，见 `_yq()` 上方注释），两个用途共用同一
++次定位、不重复实现。
+ """
++import json
+ import re
++import shutil
++import subprocess
+ import unicodedata
+ 
+ SAD_SCHEMA_VERSION = 1
+ SAD_REL_PATH = "openspec/architecture/sad.md"
+ LOG_REL_PATH = "openspec/architecture/sad-log.md"
+ 
+ STATUS_ENUM = ("draft", "skeleton-ready", "validated")      # 文档级无 frozen
+ CONTRACT_ENUM = ("planned", "draft", "validated", "frozen")
+ FACT_KEYS = ("positioning", "external_systems", "hard_constraints")
+ FACT_VALUES = ("answered", "missing")
+@@ -88,81 +100,188 @@ def body_lines(text):
+             if run >= fence_len and stripped.rstrip() == fence_char * run:
+                 fence_char, fence_len = None, 0
+             # 否则：fence 内更短/带尾随内容的同字符行不闭合，也不计入正文
+     if fence_char is not None:
+         # [impl-review-fix] A1 未闭合 fence fail-closed：实测未闭合 fence 可把整段
+         # （含未处置假设 / 影子节）藏进 fence 假象骗过锁 draft 门禁，故 EOF 仍在 fence 内即判坏输入。
+         raise SadParseError(f"未闭合 fence：到 EOF 仍在 {fence_char!r} fence 内（fail-closed）")
+     return out
+ 
+ 
+-def _to_int(key, raw):
+-    if not re.fullmatch(r"-?\d+", raw.strip()):
+-        raise SadParseError(f"bad-type: {key} 须为整数，得到 {raw!r}")
+-    return int(raw)
+-
+-
+ def frontmatter_end(lines):
+     """frontmatter 结束定界行索引（顶格精确，无 strip）——[impl-review-fix] A3：防缩进
+     `  ---` 被当结束定界（实测把 facts 块内一行 `  ---` 误判为边界，assumptions_open 读 0）。
+-    无闭合返回 None。scaffold 下一波用此共享 helper 替换其 `_frontmatter_end` 复刻（DEC-1）。"""
++    无闭合返回 None。scaffold 用此共享 helper 做**行级原地改写**定位（DEC-1）；
++    `parse_frontmatter` 也复用它做闭合性预扫描（见该函数与 `_yq()` 的说明）——两个消费方
++    都要的是"第几行是定界符"这一位置信息，不是 YAML 语义值，故本函数保留纯文本扫描，
++    不委托 yq（yq 是值抽取器、不回答行位置问题；basis-5：这是有界字面定界符定位，非
++    无界 YAML 解析）。"""
+     return next((i for i in range(1, len(lines)) if lines[i] == "---"), None)
+ 
+ 
++# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
++# [shared-yaml-subset-parser] `parse_frontmatter` 的 YAML **取值**核心委托给外部 yq 二进制
++# （同 git 的外部二进制先例）。本文件自己内联一份 `_yq()`（各脚本各自内联，不跨脚本
++# import，见 sdflow-ship/scripts/ship_gate.py 同名函数的姊妹实现）；因所有调用点都是
++# 内存中的 `text`（`parse_frontmatter(text)` 从不接收文件路径——`sad_scaffold.py`/
++# `sad_lint.py` 均先自行读文件/`git show` 再把文本传入），采用 ship_gate.py 同款
++# `text=` stdin 模式，不新增落临时文件的开销。
++#
++# 【yq 已知局限，实测确认（本机 yq v4.53.3）】`--front-matter=extract` 对没有第二个 `---`
++# 的文件，会把首行 `---` 之后的**全部内容**当同一份 YAML 文档处理，若该内容恰好合法会
++# 静默"解析成功"——`parse_frontmatter` 借 `frontmatter_end` 的闭合性预扫描堵住这个口子
++# （见下方函数体）。
++_yq_bin = None  # 进程内缓存
++
++
++def _dedupe_object_pairs(pairs):
++    """`json.JSONDecoder(object_pairs_hook=...)` 钩子：任一层 JSON 对象内出现重复键 → raise。
++
++    【为什么这能work、而不是又一次手搓解析】yq 对 YAML 顶层/嵌套 mapping 里的重复键采用
++    "语义上静默取最后值"，但它吐出的 **JSON 文本**里重复键会被**原样双写**（实测确认：
++    `{"sad_status": "draft", "sad_status": "draft"}`，两个键字面都在）。Python `json`
++    模块允许把这类"语法合法、语义有歧义"的重复键对喂给一个自定义 hook（该 hook 收到
++    **该层全部** (key, value) pair，含重复项）——这是消费 yq 已产出的 JSON 结构化数据，
++    不是解析 YAML 语法本身，故不违反 basis-5。之前的手搓实现能在扫描时报
++    `duplicate-key: <key>`；此处对齐保留同一失败模式（不同层级/字段名不再逐一分类，
++    统一在 `parse_frontmatter` 侧包装为 `SadParseError`）。
++    """
++    seen = set()
++    out = {}
++    for k, v in pairs:
++        if k in seen:
++            raise RuntimeError(f"duplicate-key: {k!r}")
++        seen.add(k)
++        out[k] = v
++    return out
++
++
++def _yq(expression, file=None, *, text=None, front_matter=False, in_place=False, default=None):
++    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现 + F3 多文档防御 + 重复键检测，
++    对齐 ship_gate.py 的 `text=` stdin 支持）。`file`=路径 或 `text`=字符串（走 stdin），二选一。
++
++    [R7/F2] exit≠0 恒 raise RuntimeError（不吞、不因 default 静默）——「键不存在」（exit 0 +
++    stdout=null，走 default）与「解析失败」（exit≠0，含 yq 未安装/身份不对/文件不可读/语法
++    错误/重复键）是两条不同分支。
++    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）。
++    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
++    [F3] 多文档防御：stdout 含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
++    [R5/F4] frontmatter 模式下、调用方传了非 None 的 `default`（意味着期望 dict 形状）时，
++    校验解出的顶层结构须为 dict，非 dict → 视为坏块，返回 default（不静默当作合法标量）。
++    """
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            raise RuntimeError(
++                "yq 未安装。安装方式：\n"
++                "  macOS:   brew install yq\n"
++                "  Windows: winget install --id MikeFarah.yq\n"
++                "  Linux:   snap install yq")
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            raise RuntimeError(
++                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
++                "  请卸载后安装正确版本：\n"
++                "  macOS:   brew install yq\n"
++                "  Windows: winget install --id MikeFarah.yq\n"
++                "  Linux:   snap install yq")
++        _yq_bin = yq
++    cmd = [_yq_bin]
++    if front_matter:
++        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
++    if in_place:
++        cmd.append("-i")
++    else:
++        cmd += ["-o", "json"]
++    cmd.append(expression)
++    stdin_input = None
++    if text is not None:
++        cmd.append("-")
++        stdin_input = text
++    else:
++        cmd.append(str(file))
++    r = subprocess.run(cmd, capture_output=True, text=True, input=stdin_input,
++                       encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise RuntimeError(f"yq failed: {r.stderr.strip()}")
++    if in_place:
++        return None
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    decoder = json.JSONDecoder(object_pairs_hook=_dedupe_object_pairs)
++    parsed, idx = decoder.raw_decode(raw)
++    if raw[idx:].strip():
++        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
++    if front_matter and not in_place and default is not None:
++        if not isinstance(parsed, dict):
++            return default
++    return parsed
++
++
++def _require_int(key, value):
++    """业务层类型校验（yq 已把标量类型化，这里只做 bool≠int 的排除 + 非 int 拒绝）。"""
++    if not isinstance(value, int) or isinstance(value, bool):
++        raise SadParseError(f"bad-type: {key} 须为整数，得到 {value!r}")
++    return value
++
++
+ def parse_frontmatter(text):
++    """解析首块 frontmatter 为 dict（DEC-1 单一源）。
++
++    [shared-yaml-subset-parser] YAML **语法层**（缩进/冒号/引号/注释剥离/重复键/多文档
++    判定）全部委托 `_yq('.', text=text, front_matter=True)`；本函数只做**业务层**判断：
++    `TOP_KEYS`/`FACT_KEYS`/`FACT_VALUES` 白名单、必需键、枚举、整数类型。
++    """
+     lines = text.splitlines()
+     if not lines or lines[0].strip() != "---":
+         raise SadParseError("frontmatter 缺失：首行须为 ---")
+-    end = frontmatter_end(lines)   # [impl-review-fix] A3 顶格精确
++    end = frontmatter_end(lines)   # [impl-review-fix] A3 顶格精确 + yq 未闭合静默接受的预扫描
+     if end is None:
+         raise SadParseError("frontmatter 未闭合：缺结束 ---")
+-    fm, facts, in_facts = {}, {}, False
+-    for raw in lines[1:end]:
+-        if not raw.strip():
+-            continue
+-        if raw.startswith("\t") or (raw != raw.lstrip() and "\t" in raw[:len(raw) - len(raw.lstrip())]):
+-            raise SadParseError(f"tab-indent: frontmatter 禁用 tab 缩进: {raw!r}")
+-        if raw.startswith("  ") and in_facts:
+-            k, _, v = raw.strip().partition(":")
+-            k, v = k.strip(), v.strip()
+-            if k not in FACT_KEYS:
+-                raise SadParseError(f"out-of-domain: facts 未知子键 {k!r}")
+-            if k in facts:
+-                raise SadParseError(f"duplicate-key: facts.{k}")
+-            if v not in FACT_VALUES:
+-                raise SadParseError(f"out-of-domain: facts.{k} 值须∈{FACT_VALUES}，得到 {v!r}")
+-            facts[k] = v
+-            continue
+-        in_facts = False
+-        k, sep, v = raw.partition(":")
+-        k, v = k.strip(), v.strip()
+-        if not sep or raw != raw.lstrip():
+-            raise SadParseError(f"frontmatter 不可解析行: {raw!r}")
+-        if k not in TOP_KEYS:
+-            raise SadParseError(f"out-of-domain: 未知键 {k!r}（白名单 {TOP_KEYS}）")
+-        if k in fm or (k == "facts" and facts):
+-            raise SadParseError(f"duplicate-key: {k}")
+-        if k == "facts":
+-            if v:
+-                raise SadParseError("facts 须为嵌套块，不接受内联标量")
+-            in_facts = True
+-            fm["facts"] = facts
+-            continue
+-        fm[k] = v
++    try:
++        fm = _yq(".", text=text, front_matter=True, default={})
++    except RuntimeError as e:
++        raise SadParseError(f"frontmatter 解析失败: {e}") from e
++    if not isinstance(fm, dict):
++        raise SadParseError(f"frontmatter 顶层结构非 dict: {fm!r}")
++
++    unknown = [k for k in fm if k not in TOP_KEYS]
++    if unknown:
++        raise SadParseError(f"out-of-domain: 未知键 {unknown!r}（白名单 {TOP_KEYS}）")
+     if "sad_schema" not in fm or "sad_status" not in fm:
+         raise SadParseError("frontmatter 缺必需键 sad_schema / sad_status")
+-    fm["sad_schema"] = _to_int("sad_schema", fm["sad_schema"])
++
++    schema_val = _require_int("sad_schema", fm["sad_schema"])
+     if fm["sad_status"] not in STATUS_ENUM:
+         raise SadParseError(f"out-of-domain: sad_status 须∈{STATUS_ENUM}，得到 {fm['sad_status']!r}")
+-    fm["assumptions_open"] = _to_int("assumptions_open", fm.get("assumptions_open", "0"))
+-    fm.setdefault("facts", facts)   # 缺失 ≡ 全 missing（锁 draft 方向，不崩溃）
+-    return fm
++
++    facts_raw = fm.get("facts", {})
++    if not isinstance(facts_raw, dict):
++        raise SadParseError("facts 须为嵌套块，不接受内联标量")
++    bad_fact_keys = [k for k in facts_raw if k not in FACT_KEYS]
++    if bad_fact_keys:
++        raise SadParseError(f"out-of-domain: facts 未知子键 {bad_fact_keys!r}")
++    for k, v in facts_raw.items():
++        if v not in FACT_VALUES:
++            raise SadParseError(f"out-of-domain: facts.{k} 值须∈{FACT_VALUES}，得到 {v!r}")
++
++    assumptions_open = _require_int("assumptions_open", fm.get("assumptions_open", 0))
++
++    return {
++        "sad_schema": schema_val,
++        "sad_status": fm["sad_status"],
++        "facts": facts_raw,   # 缺失键即缺席（消费方按 .get(k, "missing") 兜底，语义不变）
++        "assumptions_open": assumptions_open,
++    }
+ 
+ 
+ def _section_spans(text):
+     """返回 [(heading_line, [body (lineno,line)...])]，按 `## ` 顶级切分（fence-aware）。"""
+     spans, cur, cur_body = [], None, []
+     for ln, line in body_lines(text):
+         if line.startswith("## "):
+             if cur is not None:
+                 spans.append((cur, cur_body))
+             cur, cur_body = line.strip(), []
+diff --git a/sdflow-done/scripts/roadmap_writeback_draft.py b/sdflow-done/scripts/roadmap_writeback_draft.py
+index 3eea3a4..f6f43e8 100644
+--- a/sdflow-done/scripts/roadmap_writeback_draft.py
++++ b/sdflow-done/scripts/roadmap_writeback_draft.py
+@@ -1,27 +1,105 @@
+ #!/usr/bin/env python3
+ """roadmap_writeback_draft.py — sdflow-done roadmap 回填降摩擦助手机械核.
+ 
+ 机械搬运（定位到 phase + 盘面读 + 骨架拼），判断（勾哪几行/价值叙述）留人.
+ 切分线: 定位到 phase = 机械（change 名前缀确定性信号）; 勾哪几行 = 判断留人.
+ stdlib-only, 确定性（无墙钟/随机）, fail-closed.
+ """
+ import argparse
++import json
+ import re
++import shutil
+ import subprocess
+ import sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ from pathlib import Path
+ 
++
++# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
++# [shared-yaml-subset-parser] `read_verify_state` 的 frontmatter **取值**核心委托给外部
++# yq 二进制（同 git 的外部二进制先例），MUST NOT `import yaml`（零依赖不变量）。本文件自己
++# 内联一份 `_yq()`（各脚本各自内联，不跨脚本 import，见 sdflow-ship/scripts/ship_gate.py
++# 同名函数的姊妹实现）。
++#
++# 【yq 已知局限，实测确认（本机 yq v4.53.3）】`--front-matter=extract` 对没有第二个 `---`
++# 的文件，会把首行 `---` 之后的**全部内容**当同一份 YAML 文档处理——若该内容恰好是合法
++# YAML（如本文件的 verify-report.md 片段 `ship-gate:\n  verify: PASS\n`），yq **不报错**、
++# 静默判定"解析成功"。这与 `read_verify_state` 的既有契约（未闭合 frontmatter → malformed）
++# 不兼容，故调 yq **之前**先做一次顶格 `---` 闭合性文本预扫描（`read_verify_state` 内联，
++# 非 YAML 解析，只是字面定界符定位——同 sad_schema.frontmatter_end 的定位性质）。
++_yq_bin = None  # 进程内缓存
++
++
++def _yq(expression, file, *, front_matter=False, in_place=False, default=None):
++    """yq(mikefarah) subprocess 薄封装（design.md §1 参考实现 + F3 多文档防御，
++    对齐 ship_gate.py/impl_route.py/init.py 的加固版）。
++
++    [R7/F2] exit≠0 恒 raise RuntimeError（不吞、不因 default 静默）——「键不存在」（exit 0 +
++    stdout=null，走 default）与「解析失败」（exit≠0，含 yq 未安装/身份不对/文件不可读/语法
++    错误）是两条不同分支。
++    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）。
++    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
++    [F3] 多文档防御：stdout 含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
++    [R5/F4] frontmatter 模式下、调用方传了非 None 的 `default`（意味着期望 dict 形状）时，
++    校验解出的顶层结构须为 dict，非 dict → 视为坏块，返回 default（不静默当作合法标量）。
++    本文件唯一调用点查询叶子标量 `.ship-gate.verify`（default=None），此分支实际不触发，
++    保留是为了与其余脚本 `_yq()` 的参考签名一致（Task 5 golden test 的比对面）。
++    """
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            raise RuntimeError(
++                "yq 未安装。安装方式：\n"
++                "  macOS:   brew install yq\n"
++                "  Windows: winget install --id MikeFarah.yq\n"
++                "  Linux:   snap install yq")
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            raise RuntimeError(
++                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
++                "  请卸载后安装正确版本：\n"
++                "  macOS:   brew install yq\n"
++                "  Windows: winget install --id MikeFarah.yq\n"
++                "  Linux:   snap install yq")
++        _yq_bin = yq
++    cmd = [_yq_bin]
++    if front_matter:
++        cmd += [f"--front-matter={'process' if in_place else 'extract'}"]
++    if in_place:
++        cmd.append("-i")
++    else:
++        cmd += ["-o", "json"]
++    cmd += [expression, str(file)]
++    r = subprocess.run(cmd, capture_output=True, text=True,
++                       encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
++    if in_place:
++        return None
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    decoder = json.JSONDecoder()
++    parsed, idx = decoder.raw_decode(raw)
++    if raw[idx:].strip():
++        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
++    if front_matter and not in_place and default is not None:
++        if not isinstance(parsed, dict):
++            return default
++    return parsed
++
+ # change 名前缀 implement-{roadmap}-pN-* ; roadmap 可含横杠, -p\d+ 作定界, 可选尾缀
+ PREFIX_RE = re.compile(r"^implement-(?P<roadmap>.+)-p(?P<phase>\d+)(?:-.+)?$")
+ 
+ 
+ def parse_prefix(change_name):
+     """implement-{roadmap}-pN-* → (roadmap, phase); 不符返回 None."""
+     m = PREFIX_RE.match(change_name.strip())
+     if not m:
+         return None
+     return (m.group("roadmap"), m.group("phase"))
+@@ -149,68 +227,53 @@ def resolve_association(change_name, proposal_text, tasks_text, flag=None):
+         "phase": chosen[1],
+         "source": chosen_source,
+         "warnings": warnings,
+     }
+ 
+ 
+ def read_verify_state(change_dir):
+     """读 verify-report.md 首块 frontmatter 里**顶层 ship-gate: 的直接子键** verify.
+     返回 (state, value): state ∈ {good, absent, malformed}.
+     absent=文件缺/无首块 frontmatter; malformed=未闭合/无顶层 ship-gate 块/该块下无
+-    verify 直接子键/重复键/坏枚举/文件不可读(FIX-6).
+-    [impl-review-fix] FIX-3: 不再用宽松 `^\\s*verify:` 扫全块(会误采纳嵌套非 ship-gate
+-    直接子键的 verify, 如 `note:\\n  verify: PASS`)——只认顶层 ship-gate: 块、且缩进
+-    恰为其直接子键层的 verify 行(更深嵌套/其它顶层键下的 verify 一律不采纳)."""
++    verify 直接子键/坏枚举/文件不可读(FIX-6).
++
++    [shared-yaml-subset-parser] YAML **取值**核心委托给 `_yq()`（design.md 决定），
++    Python 侧只保留：① frontmatter 闭合性文本预扫描（防 yq 对未闭合块的已知静默接受，
++    见 `_yq()` 上方注释）② PASS/FAIL 枚举校验。**不再区分**"无顶层 ship-gate 块"
++    "重复键"这两类具体成因——`.ship-gate.verify` 查不到值时统一落 `default=None`，
++    校验只看最终值是否 ∈ {PASS,FAIL}；两者原本就映射到同一个 malformed 状态，行为不变
++    （yq 方案下诊断精度下降为既定代价，见 impl-report）。
++    """
+     path = Path(change_dir) / "verify-report.md"
+     try:
+         text = path.read_text(encoding="utf-8")
+     except FileNotFoundError:
+         return ("absent", None)
+     except (OSError, UnicodeDecodeError) as e:  # [impl-review-fix] FIX-6
+         sys.stderr.write("VERIFY_REPORT_UNREADABLE %s: %s\n" % (path, e))
+         return ("malformed", None)
+     lines = text.splitlines()
+     if not lines or lines[0].strip() != "---":
+         return ("absent", None)
+-    fm, closed = [], False
+-    for line in lines[1:]:
+-        if line.strip() == "---":
+-            closed = True
+-            break
+-        fm.append(line)
++    # 顶格 `---` 闭合性预扫描（字面定界符定位，非 YAML 解析）——yq 对没有第二个 `---`
++    # 的文件会把首行之后全部内容当同一份文档解析，若恰好合法会静默"解析成功"。
++    closed = any(ln.strip() == "---" for ln in lines[1:])
+     if not closed:
+         return ("malformed", None)
+-    gate_idx = None
+-    for i, ln in enumerate(fm):
+-        if re.match(r"^ship-gate:\s*$", ln):
+-            gate_idx = i
+-            break
+-    if gate_idx is None:
+-        return ("malformed", None)  # 无顶层 ship-gate 块 → 不采纳任何嵌套 verify
+-    child_indent = None
+-    block = []
+-    for ln in fm[gate_idx + 1:]:
+-        if ln.strip() == "":
+-            continue
+-        indent = len(ln) - len(ln.lstrip(" "))
+-        if indent == 0:
+-            break  # 遇到下一个顶层键, ship-gate 块结束
+-        if child_indent is None:
+-            child_indent = indent
+-        if indent == child_indent:
+-            block.append(ln)  # 只收直接子键层; 更深嵌套(如 note.verify)忽略
+-    vals = [m.group(1) for m in (re.match(r"^\s*verify:\s*(\S+)\s*$", ln) for ln in block) if m]
+-    if len(vals) != 1:
+-        return ("malformed", None)  # 0=无字段, >1=重复键
+-    if vals[0] not in ("PASS", "FAIL"):
+-        return ("malformed", None)  # 坏枚举
+-    return ("good", vals[0])
++    try:
++        verify_value = _yq(".ship-gate.verify", path, front_matter=True, default=None)
++    except RuntimeError as e:
++        sys.stderr.write("VERIFY_REPORT_MALFORMED %s: %s\n" % (path, e))
++        return ("malformed", None)
++    if verify_value not in ("PASS", "FAIL"):
++        return ("malformed", None)  # 无 ship-gate 块 / 无 verify 子键 / 坏枚举, 统一归类
++    return ("good", verify_value)
+ 
+ 
+ def read_tasks_completion(change_dir):
+     """tasks.md 复选框 (done, total)."""
+     path = Path(change_dir) / "tasks.md"
+     try:
+         text = path.read_text(encoding="utf-8")
+     except FileNotFoundError:
+         return (0, 0)
+     except (OSError, UnicodeDecodeError) as e:  # [impl-review-fix] FIX-6
