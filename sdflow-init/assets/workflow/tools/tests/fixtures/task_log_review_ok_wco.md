@@ -1,4 +1,4 @@
-<!-- FIXTURE 来源：openspec/roadmaps/workflow-cost-optimization/task-log.md（真实 in-repo task-log，行 1-71 摘录，采纳表截断至 A1-A2）。
+<!-- FIXTURE 来源：openspec/roadmaps/archive/workflow-cost-optimization/task-log.md（真实 in-repo task-log，行 1-71 摘录，采纳表截断至 A1-A2）。
      用途：section-ok-DISPOSITION-UNCHECKED 正例 + 收尾声明句自指陷阱负例。
      陷阱点：blockquote 收尾声明「无「未处置」」（行 69）含子串「未处置」——结构感知校验器 MUST NOT 假阳。-->
 # workflow 成本优化 任务日志

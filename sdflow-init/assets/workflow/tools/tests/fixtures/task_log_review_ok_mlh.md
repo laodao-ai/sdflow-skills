@@ -1,4 +1,4 @@
-<!-- FIXTURE 来源：openspec/roadmaps/mechanical-layer-hardening/task-log.md（真实 in-repo task-log，行 1-53 摘录，表格截断至 F1-F2）。
+<!-- FIXTURE 来源：openspec/roadmaps/archive/mechanical-layer-hardening/task-log.md（真实 in-repo task-log，行 1-53 摘录，表格截断至 F1-F2）。
      用途：section-ok-DISPOSITION-UNCHECKED 正例 + 收尾声明句自指陷阱负例。
      陷阱点：blockquote 组头「不存在「未处置」状态」（行 35 变体）+ bullet「无「未处置」状态条目」（行 53 变体），
      均含子串「未处置」——结构感知校验器 MUST NOT 因此假阳。使用约定含 ```markdown fence（内有 `## YYYY-MM-DD`）测 fence 感知。-->

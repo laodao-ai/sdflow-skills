@@ -5,12 +5,38 @@ sdflow-issues:
   mode: overlay
   items:
     T2: {"module":"`recorder`","summary":"字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性）","type":"代码质量","status":"DONE","time":"2026-07-03 00:26","change":"issues-pool-batch-mgmt","batch":"issues-pool-hardening"}
+    T8: {"module":"`impl-review/SKILL.md`","summary":"置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核","type":"功能增强","status":"WONTDO","time":"2026-07-03 13:58","change":"minimize-repo-footprint","batch":"minimize-repo-footprint"}
+    T19: {"module":"`workflow.md + generation-process.md（权威源）`","summary":"重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户","type":"可观测性","status":"WONTDO","time":"2026-07-03 17:38","change":"sdflow-rebrand","batch":"sdflow-rebrand"}
+    T27: {"module":"`openspec/workflow + resolve-workflow.sh`","summary":"workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突","type":"基础设施","status":"WONTDO","time":"2026-07-04 09:57","change":"minimize-repo-footprint","batch":"rec2-obs-readability"}
+    T28: {"module":"`sdflow-init/assets/workflow/workflow.md + 各编排 skill 收尾段`","summary":"每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行）","type":"功能增强","status":"WONTDO","time":"2026-07-04 10:51","change":"cross-model-outside-voice","batch":"rec2-obs-readability"}
+    T30: {"module":"`sdflow-init/assets/hack/outside-voice.sh + tests`","summary":"helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖","type":"代码质量","status":"DONE","time":"2026-07-04 12:46","change":"cross-model-outside-voice","batch":"cross-model-outside-voice"}
     T47: {"module":"`sdflow-init/assets/workflow/tools/engine.js`","summary":"engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice)","type":"代码质量","status":"WONTDO","time":"2026-07-05 19:14","change":"review-tool-followups","batch":"review-tool-followups"}
+    T50: {"module":"`sdflow-spec-review/SKILL.md 决策登记区 ASCII 框`","summary":"Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义","type":"代码质量","status":"WONTDO","time":"2026-07-05 21:08","change":"three-lens-decision-framework","batch":"rec2-obs-readability"}
     T66: {"module":"`cmd_scan(buglist/todolist) + cmd_batch_rename(issues)`","summary":"recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化","type":"性能优化","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
     T67: {"module":"`cmd_add id 校验(buglist/todolist)`","summary":"显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55)","type":"代码质量","status":"DONE","time":"2026-07-07 13:03","change":"issues-pool-hardening","batch":"issues-pool-hardening"}
+    T70: {"module":"`init.py config-lint`","summary":"config_lint 的 _second_level_keys/块扫描仅识别两空格缩进，tab 缩进的 model-tiers 子键隐形→越域非法子键 fail-open 静默通过（对抗A实测复现，边缘 YAML）","type":"代码质量","status":"DONE","time":"2026-07-07 20:30","change":"mlh-p3-determ-guards","batch":"mlh-p3-determ-guards"}
+    T71: {"module":"`test_mirror_consistency.py`","summary":"_ast_no_doc 对剥 docstring 后空体函数坍塌：两个仅含 docstring 的同名 stub AST 相等→理论假过（当前 11+6 helper 均有真逻辑不可利用，加固可标记空体）","type":"代码质量","status":"DONE","time":"2026-07-07 20:30","change":"mlh-p3-determ-guards","batch":"mlh-p3-determ-guards"}
+    T73: {"module":"`anchor_lint.py + init.py config-lint`","summary":"metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定","type":"功能增强","status":"DONE","time":"2026-07-07 20:30","change":"mlh-p3-determ-guards","batch":"mlh-p3-determ-guards"}
+    T77: {"module":"`openspec/specs/spec-workflow spec.md`","summary":"「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留）","type":"代码质量","status":"WONTDO","time":"2026-07-08 13:10","change":"mlh-p5-parser-cleanup","batch":"mechanical-layer-hardening"}
     T85: {"module":"`roadmap mechanical-layer-hardening / recorder`","summary":"P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块","type":"基础设施","status":"DONE","time":"2026-07-08 15:55","change":null,"batch":"mlh-p4-target-state"}
-    T132: {"module":"`openspec/workflow/ + sdflow-spec-review 起手 fail-closed 门`","summary":"未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。","type":"代码质量","status":"OPEN","time":"2026-07-11 08:59","change":null,"batch":null}
+    T87: {"module":"`lens_metric_emit.py load_enums + anchor_lint.py`","summary":"lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试","type":"代码质量","status":"DONE","time":"2026-07-08 20:52","change":"implement-mechanical-layer-hardening-p4-lens-metric-emit","batch":"implement-mechanical-layer-hardening-p4-lens-metric-emit"}
+    T88: {"module":"`仓库 CI/pre-commit`","summary":"无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并","type":"基础设施","status":"DONE","time":"2026-07-08 20:52","change":"implement-mechanical-layer-hardening-p4-lens-metric-emit","batch":"implement-mechanical-layer-hardening-p4-lens-metric-emit"}
+    T97: {"module":"`model-tiers`","summary":"档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1）","type":"性能优化","status":"WONTDO","time":"2026-07-10 16:54","change":null,"batch":"opt-p0"}
+    T98: {"module":"`评审编排`","summary":"prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2）","type":"性能优化","status":"WONTDO","time":"2026-07-10 16:54","change":null,"batch":"opt-p0"}
+    T99: {"module":"`code-review`","summary":"确定性检查前置准入门：pytest/lint/typecheck 未绿不进 fan-out（04 提案 §2.3）","type":"性能优化","status":"WONTDO","time":"2026-07-10 16:54","change":null,"batch":"opt-p0"}
+    T100: {"module":"`workflow`","summary":"微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4）","type":"功能增强","status":"WONTDO","time":"2026-07-10 16:54","change":null,"batch":"opt-p0"}
+    T101: {"module":"`spec-review`","summary":"设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1）","type":"功能增强","status":"WONTDO","time":"2026-07-10 16:54","change":null,"batch":"opt-p0"}
+    T102: {"module":"`评审编排`","summary":"对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5）","type":"代码质量","status":"WONTDO","time":"2026-07-10 16:54","change":null,"batch":"opt-p0"}
+    T118: {"module":"`writing-plans`","summary":"tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1）","type":"功能增强","status":"DONE","time":"2026-07-10 16:54","change":null,"batch":"matt-workflow-integration"}
+    T120: {"module":"`bundle`","summary":"expand-contract 宽重构协议进 bundle（04 提案 §5.3）","type":"功能增强","status":"WONTDO","time":"2026-07-10 16:54","change":null,"batch":"matt-workflow-integration"}
+    T125: {"module":"`评审编排`","summary":"议题：fan-out 子代理产物默认落临时文件、返回只带路径——动机是交接可靠性（防最终文本截断/结构化输出失配/compaction 丢失），比 T121（超阈值才写文件）更进一步；讨论点：默认落盘 vs 阈值触发、临时文件生命周期与清理、主审读文件的路径契约（2026-07-10 探索会提出）","type":"基础设施","status":"WONTDO","time":"2026-07-10 17:47","change":null,"batch":"matt-workflow-integration"}
+    T126: {"module":"`bundle`","summary":"wayfinder→ff 衔接契约 + 主流程三段分流入口：清晰直接 ff / 单 session 模糊走 explore / 超单 session 大雾走 wayfinder；契约三条=ff 起手逐区读 map（Destination→proposal 动机+D-5、Decisions-so-far 逐行 zoom 决议全文防 make-reasonable-decisions 重决歪、Out-of-scope→D-3 假设）+ TG 判命中前置到 chart 写 map Notes + proposal 回链 map（2026-07-10 探索会，调研代理 file:line 已接地）","type":"功能增强","status":"DONE","time":"2026-07-10 17:58","change":null,"batch":"matt-workflow-integration"}
+    T127: {"module":"`bundle`","summary":"grill 瘦跑规则：上游 wayfinder 已决分支引 resolution comment 快速核对即过、新生成/未决部分照常死磕——grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling 票（生成前决策）非冗余、不可整跳（2026-07-10 探索会）","type":"功能增强","status":"WONTDO","time":"2026-07-10 17:58","change":null,"batch":"matt-workflow-integration"}
+    T132: {"module":"`openspec/workflow/ + sdflow-spec-review 起手 fail-closed 门`","summary":"未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。","type":"代码质量","status":"WONTDO","time":"2026-07-11 08:59","change":null,"batch":null}
+    T133: {"module":"`grill 提示自动生成（sdflow-spec-review 门 / 阶段提示）`","summary":"提示/触发 grill 时自动生成完整可复制 prompt，但须『脚手架完整+内容轻播种』校准：grill-with-docs=/grilling(relentless逐branch独立走设计树,一次一问,每问给推荐,事实自查决策抛人)+/domain-modeling。auto-prompt 只应含调用脚手架(change dir/全深度非wayfinder/MUST NOT skip/doc路径 adr→openspec/adr·术语→CONTEXT.md·INDEX/[grill-amendment]/收敛才提交)；MUST NOT 预装已分析的弱点清单+推荐(会 anchor+短路 grilling 独立发现盲点的核心价值,让它只 validate 我的结论而非找第6条)。至多给一句非绑定怀疑点并注明『非边界,去找我漏的』。关联 T132(grill 未跑 fail-closed 门,该门 REFUSE 时正好 emit 此 prompt)+T28(下一阶段附完整可复制 prompt)。","type":"代码质量","status":"WONTDO","time":"2026-07-11 09:14","change":null,"batch":null}
     T135: {"module":"`sdflow-implement`","summary":"superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化","type":"代码质量","status":"DONE","time":"2026-07-11 12:48","change":null,"batch":null}
+    T136: {"module":"`anchor_lint`","summary":"anchor_lint 只校验 hr-tg 锚字段在场、不重算交集——手改 hit=none/declared=TG-04 可绕过必开 cross-model（codex 冷审 high）","type":"基础设施","status":"DONE","time":"2026-07-11 13:58","change":"mlh-p4-reason-code-validators","batch":"mlh-p4-reason-code-validators"}
+    T138: {"module":"`hr_tg_intersect`","summary":"hr_tg parse_tg_set 静默吞空 token（'TG-04,,TG-16'/',' 都过）+ catalog 成员用宽松 TG-\\d+（'TG-04x'→TG-04）（codex medium）","type":"代码质量","status":"DONE","time":"2026-07-11 13:58","change":"mlh-p4-reason-code-validators","batch":"mlh-p4-reason-code-validators"}
     T146: {"module":"`sdflow-skills 工具族`","summary":"扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥）","type":"代码质量","status":"DONE","time":"2026-07-12 18:34","change":"add-sdflow-architecture","batch":"add-sdflow-architecture"}
     T153: {"module":"sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py","summary":"更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义","type":"代码质量","status":"DONE","time":"2026-07-17 12:06","change":"mlh-p6-recorder-frontmatter","batch":null}
     T154: {"module":"sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py","summary":"actual Windows local-disk smoke 未执行验证（SW-RI-2 recorder lock 兼容目标，deferred）","type":"基础设施","status":"DONE","time":"2026-07-17 16:14","change":"mlh-p6-recorder-frontmatter","batch":null}
@@ -29,7 +55,7 @@ sdflow-issues:
     T167: {"module":"openspec/changes/async-outside-voice","summary":"【archive 阶段 MUST 做】四件套仍描述旧协议（裸哨兵/单条件 async），与代码审后的实现不自洽——delta spec 必须同步","type":"代码质量","status":"OPEN","time":"2026-07-18 20:24","change":"async-outside-voice","batch":null}
     T168: {"module":"sdflow-spec-review","summary":"async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner","type":"基础设施","status":"PROPOSED","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T169: {"module":"openspec/changes","summary":"done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30)","type":"代码质量","status":"PROPOSED","time":"2026-07-19 00:00","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
-    T170: {"module":"sdflow-issues+buglist+todolist","summary":"recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）","type":"基础设施","status":"PROPOSED","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
+    T170: {"module":"sdflow-issues+buglist+todolist","summary":"recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选）","type":"基础设施","status":"DONE","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T171: {"module":"sdflow-spec-review+code-review","summary":"R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题","type":"可观测性","status":"PROPOSED","time":"2026-07-19 00:26","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T172: {"module":"openspec/workflow/lens-metric","summary":"lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献","type":"可观测性","status":"PROPOSED","time":"2026-07-19 00:33","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
     T173: {"module":"sdflow-init/assets/hack/outside-voice.sh","summary":"ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷）","type":"代码质量","status":"PROPOSED","time":"2026-07-19 02:08","change":"fix-mechanical-layer-silent-failures","batch":"fix-mechanical-layer-silent-failures"}
@@ -46,24 +72,24 @@ sdflow-issues:
     T184: {"module":"workflow/outside-voice","summary":"两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval \"$(~/.sdflow/hack/resolve-models.sh --root ...)\" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。","type":"基础设施","status":"PROPOSED","time":"2026-07-19 23:27","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
     T185: {"module":"recorder/repo_root","summary":"repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice","type":"可观测性","status":"PROPOSED","time":"2026-07-20 00:31","change":"harden-repo-root-fail-closed","batch":"harden-repo-root-fail-closed"}
     T186: {"module":"sdflow-ship/ship_gate.py","summary":"merge 帧在 live 路径取不到文件列表 → design 域逐 parent 豁免分支不可达（evil-merge 面）","type":"代码质量","status":"DONE","time":"2026-07-20 14:17","change":"fix-design-gate-freshness-proxy","batch":null}
-    T187: {"module":"sdflow-ship/tests/test_gate_freshness.py","summary":"_stale_after 的 empty_subject 布尔旗标是 flag-argument smell（subject 须传 None 且被忽略）","type":"代码质量","status":"PROPOSED","time":"2026-07-20 15:23","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
+    T187: {"module":"sdflow-ship/tests/test_gate_freshness.py","summary":"_stale_after 的 empty_subject 布尔旗标是 flag-argument smell（subject 须传 None 且被忽略）","type":"代码质量","status":"DONE","time":"2026-07-20 15:23","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T188: {"module":"仓根 pytest 收集","summary":"跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守","type":"基础设施","status":"PROPOSED","time":"2026-07-20 15:54","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T189: {"module":"sdflow-ship/ship_gate.py","summary":"基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单","type":"代码质量","status":"PROPOSED","time":"2026-07-20 16:58","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
-    T190: {"module":"sdflow-ship/ship_gate.py","summary":"run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞","type":"基础设施","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
+    T190: {"module":"sdflow-ship/ship_gate.py","summary":"run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞","type":"基础设施","status":"DONE","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T191: {"module":"openspec/changes/*/impl-reports/","summary":"评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档）","type":"代码质量","status":"PROPOSED","time":"2026-07-20 17:01","change":"fix-design-gate-freshness-proxy","batch":"fix-design-gate-freshness-proxy"}
     T192: {"module":"workflow/tools/lens_metric_emit","summary":"emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行","type":"基础设施","status":"PROPOSED","time":"2026-07-21 00:17","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T193: {"module":"openspec/changes/harden-gate-git-layer","summary":"本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举）","type":"基础设施","status":"DONE","time":"2026-07-21 00:49","change":"harden-gate-git-layer","batch":null}
-    T194: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T194: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移","type":"代码质量","status":"DONE","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T195: {"module":"sdflow-ship/tests/conftest.py","summary":"git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T196: {"module":"sdflow-spec-review/SKILL.md","summary":"三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T197: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"annotated tag OID 经 ^{commit} peel 被接受，spec 措辞是「是 commit 对象」","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
-    T198: {"module":"openspec/changes/harden-gate-git-layer","summary":"tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底","type":"代码质量","status":"PROPOSED","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T198: {"module":"openspec/changes/harden-gate-git-layer","summary":"tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底","type":"代码质量","status":"DONE","time":"2026-07-21 00:57","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T199: {"module":"CLAUDE.md / 开发环境","summary":"CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest","type":"基础设施","status":"PROPOSED","time":"2026-07-21 01:09","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
-    T200: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验","type":"代码质量","status":"PROPOSED","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T200: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验","type":"代码质量","status":"DONE","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T201: {"module":"openspec/changes/harden-gate-git-layer/specs","summary":"实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐","type":"代码质量","status":"DONE","time":"2026-07-21 01:54","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T202: {"module":"openspec/changes/harden-gate-git-layer/design.md","summary":"Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐","type":"代码质量","status":"DONE","time":"2026-07-21 02:35","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T203: {"module":"sdflow-ship/tests + CI 配置","summary":"门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立","type":"基础设施","status":"PROPOSED","time":"2026-07-21 03:41","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
-    T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"PROPOSED","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
+    T204: {"module":"openspec/changes/harden-gate-git-layer/proposal.md","summary":"A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计","type":"代码质量","status":"DONE","time":"2026-07-21 04:39","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T205: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale","type":"基础设施","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T206: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致","type":"代码质量","status":"PROPOSED","time":"2026-07-21 05:31","change":"harden-gate-git-layer","batch":"harden-gate-git-layer"}
     T207: {"module":"docs","summary":"T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。","type":"代码质量","status":"PROPOSED","time":"2026-07-22 13:34","change":"dedupe-issues-scripts-shared-layer","batch":"dedupe-issues-scripts-shared-layer"}
@@ -106,7 +132,7 @@ sdflow-issues:
     T244: {"module":"sdflow-ship/scripts/ship_gate.py","summary":"sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造","type":"基础设施","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
     T245: {"module":"sdflow-implement/SKILL.md","summary":"fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制","type":"功能增强","status":"OPEN","time":"2026-07-27 18:31","change":"main","batch":null}
     T246: {"module":"sdflow-implement/SKILL.md + model-tiers.md","summary":"按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号","type":"性能优化","status":"OPEN","time":"2026-07-27 18:32","change":"main","batch":null}
-    T247: {"module":"sdflow-spec/SKILL.md","summary":"B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步","type":"代码质量","status":"PROPOSED","time":"2026-07-27 22:30","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
+    T247: {"module":"sdflow-spec/SKILL.md","summary":"B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步","type":"代码质量","status":"DONE","time":"2026-07-27 22:30","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
     T248: {"module":"sdflow-spec/agents/（sdflow-local-researcher / sdflow-web-researcher）","summary":"两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议","type":"基础设施","status":"PROPOSED","time":"2026-07-27 22:51","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
     T249: {"module":"sdflow-implement/SKILL.md","summary":"票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本","type":"代码质量","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
     T250: {"module":"sdflow-implement/tests/test_tickets_plan_golden.py","summary":"golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」)","type":"代码质量","status":"PROPOSED","time":"2026-07-28 10:39","change":"harden-implement-review-loop","batch":"harden-implement-review-loop"}
@@ -324,6 +350,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T8 -->
 ## T8: 置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核
 
 | 属性 | 值 |
@@ -340,6 +367,8 @@ sdflow-issues:
 
 **备注**：涉及 impl-review SKILL.md Step3 置信过滤段；实施时走 change 落地
 
+> 2026-08 状态：PROPOSED → WONTDO（对抗镜复核模式）
+<!-- sdflow-issue-block:end id=T8 -->
 ---
 
 ## T9: 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核
@@ -446,6 +475,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T19 -->
 ## T19: 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户
 
 | 属性 | 值 |
@@ -462,6 +492,8 @@ sdflow-issues:
 
 **备注**：用户反馈原话：grill 很重要，是对前面 explore 讨论结果的再次审视，不能轻易跳过；本次 change 放行
 
+> 2026-08 状态：PROPOSED → WONTDO（sdflow-spec 分支 A）
+<!-- sdflow-issue-block:end id=T19 -->
 ---
 
 ## T20: 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项
@@ -579,6 +611,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T27 -->
 ## T27: workflow 规则在项目 openspec(/workflow) 下提供可参考副本（便于 @ 引用与复制 prompt）——须先消解与「仓内不留规则副本防 pin 遮蔽」拍板的冲突
 
 | 属性 | 值 |
@@ -595,8 +628,11 @@ sdflow-issues:
 
 **备注**：提出于 cross-model-outside-voice 会话，内容上属 minimize-repo-footprint 后续
 
+> 2026-08 状态：PROPOSED → WONTDO（resolve-workflow.sh 全局解析）
+<!-- sdflow-issue-block:end id=T27 -->
 ---
 
+<!-- sdflow-issue-block:start id=T28 -->
 ## T28: 每阶段结束后按 workflow 给出下一阶段提示，并附完整可复制 prompt（用户可参考/复制，或选择后直接按该 prompt 执行）
 
 | 属性 | 值 |
@@ -613,6 +649,8 @@ sdflow-issues:
 
 **备注**：提出于 cross-model-outside-voice spec-review 进行中；属 workflow bundle 级改进，非本 change scope
 
+> 2026-08 状态：PROPOSED → WONTDO（sdflow-spec 分支 A）
+<!-- sdflow-issue-block:end id=T28 -->
 ---
 
 ## T29: 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总
@@ -643,6 +681,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T30 -->
 ## T30: helper 健壮性小项×4（final review triage record-as-debt）：OV_MAX 非数值校验 / flag 缺值 shift 2 死循环护栏 / mktemp 返回值检查 / fake timeout stub 时序依赖
 
 | 属性 | 值 |
@@ -657,6 +696,8 @@ sdflow-issues:
 
 **思路**：一次小清理：①OV_MAX_CONTEXT_BYTES 数值校验否则回落默认；②while 参数解析对缺值 flag 直接 usage exit 2；③mktemp 失败即 die；④fake timeout stub 换确定性信号同步
 
+> 2026-08 状态：PROPOSED → DONE（outside-voice.sh L207-219,L875/890/893,L715,test_outside_voice.py L25-66）
+<!-- sdflow-issue-block:end id=T30 -->
 ---
 
 ## T31: voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8）
@@ -916,6 +957,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T50 -->
 ## T50: Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义
 
 | 属性 | 值 |
@@ -930,6 +972,8 @@ sdflow-issues:
 
 **思路**：缩短 Q1 行文案或整框加宽6行，二选一
 
+> 2026-08 状态：PROPOSED → WONTDO（cosmetic）
+<!-- sdflow-issue-block:end id=T50 -->
 ---
 
 ## T43: producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1）
@@ -1249,6 +1293,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T87 -->
 ## T87: lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试
 
 | 属性 | 值 |
@@ -1261,8 +1306,11 @@ sdflow-issues:
 
 **备注**：code-review CR-D2
 
+> 2026-08 状态：PROPOSED → DONE（lens_metric_emit.py:80 + :150 EmitError 重复键）
+<!-- sdflow-issue-block:end id=T87 -->
 ---
 
+<!-- sdflow-issue-block:start id=T88 -->
 ## T88: 无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并
 
 | 属性 | 值 |
@@ -1275,6 +1323,8 @@ sdflow-issues:
 
 **备注**：code-review CR-D3（治理层）
 
+> 2026-08 状态：PROPOSED → DONE（.github/workflows/mechanical-gates.yml + windows-recorder-smoke.yml）
+<!-- sdflow-issue-block:end id=T88 -->
 ---
 
 ## T89: probe_format 全文扫描非限定 phase：混合格式 roadmap 会误判 checkbox，目标 phase 是表格式时不 fail-loud 反空匹配误诊断（修法:probe 增 phase 参数只扫该 phase 行段）
@@ -1374,6 +1424,7 @@ sdflow-issues:
 <!-- sdflow-issue-block:end id=T135 -->
 ---
 
+<!-- sdflow-issue-block:start id=T136 -->
 ## T136: anchor_lint 重算 hr-tg 交集以堵手改绕过 cross-model
 
 | 属性 | 值 |
@@ -1388,6 +1439,8 @@ sdflow-issues:
 
 **思路**：让 anchor_lint 接 --trigger-catalog 路径，严格解析 declared、重算 declared∩HR-TG、要求 hit 与结果完全一致，并拒重复/畸形 hr-tg 锚。注意这是把 anchor_lint 从'字段在场校验'扩到'重算校验'，越出本 change 的机械-presence 设计边界，需先定夺是否愿意扩 anchor_lint 职责（adr/0018 机械/判断切分）。
 
+> 2026-08 状态：PROPOSED → DONE（anchor_lint.py:445 hr-tg M2 declared∩HR-TG 数值序逐元素比较）
+<!-- sdflow-issue-block:end id=T136 -->
 ---
 
 ## T137: config impl-pipeline 翻键 blast radius 与注释不符，需定夺全局切换 vs 仅试点
@@ -1407,6 +1460,7 @@ sdflow-issues:
 
 ---
 
+<!-- sdflow-issue-block:start id=T138 -->
 ## T138: hr_tg_intersect 收紧坏输入解析（空 token/前后逗号/宽松成员正则）
 
 | 属性 | 值 |
@@ -1421,6 +1475,8 @@ sdflow-issues:
 
 **思路**：仅允许原始空串表示空集；CSV 出现空单元/前后逗号即 EmitError；成员行改边界严格 token 解析，残余/畸形文本 fail-closed。
 
+> 2026-08 状态：PROPOSED → DONE（hr_tg_intersect.py:144 parse_tg_set 空 cell EmitError fail-closed）
+<!-- sdflow-issue-block:end id=T138 -->
 ---
 
 ## T139: outside_voice_guard 双 step1 锚一致性校验
@@ -1727,6 +1783,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 **关联**：B11（sweep 对 canonical/overlay 视而不见，P1 VERIFIED）· B12（版本偏斜下 reindex
 覆盖权威 INDEX 且 exit 0，P1）· adr/0025（本条是其「三个自包含脚本各写一份」决策的推翻候选）·
 `harden-repo-root-fail-closed/spec-review-report.md` 的 Q2。
+> 2026-08 状态：PROPOSED → DONE（dedupe-issues-scripts-shared-layer change 归档 2026-07-22）
 <!-- sdflow-issue-block:end id=T170 -->
 
 <!-- sdflow-issue-block:start id=T171 -->
@@ -1853,6 +1910,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：Task3 双轴审唯一发现，两轴均 PASS。
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-08 状态：PROPOSED → DONE（commit c99f677 _stale_after 整体退役，is_stale 改 ls-tree 映射比较）
 <!-- sdflow-issue-block:end id=T187 -->
 
 <!-- sdflow-issue-block:start id=T188 -->
@@ -1895,6 +1953,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：低置信、非本 change 引入；与 B20（git 缺失异常）同属 run_git* 系列的健壮性面，宜一并治。
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-08 状态：PROPOSED → DONE（commit 2291f1d GIT_TIMEOUT_SECONDS=30 + _git_run 统一出口）
 <!-- sdflow-issue-block:end id=T190 -->
 
 <!-- sdflow-issue-block:start id=T191 -->
@@ -1927,6 +1986,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 ## T194: UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移
 > UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-08 状态：PROPOSED → DONE（ship_gate.py:1907-1908 f-string GIT_TIMEOUT_SECONDS :339 标[T194]）
 <!-- sdflow-issue-block:end id=T194 -->
 
 <!-- sdflow-issue-block:start id=T195 -->
@@ -1951,6 +2011,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 ## T198: tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底
 > tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-08 状态：PROPOSED → DONE（archive/harden-gate-git-layer/hand-off.md §1 + tasks.md 1.9 已勾）
 <!-- sdflow-issue-block:end id=T198 -->
 
 <!-- sdflow-issue-block:start id=T199 -->
@@ -1963,6 +2024,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 ## T200: CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验
 > CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-08 状态：PROPOSED → DONE（ship_gate.py:507,617,627,660 四处生产触发路径）
 <!-- sdflow-issue-block:end id=T200 -->
 
 <!-- sdflow-issue-block:start id=T201 -->
@@ -1989,6 +2051,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 ## T204: A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计
 > A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-08 状态：PROPOSED → DONE（impl-reports/task6-wrapup.md:60-67 A2 全历史核验结论）
 <!-- sdflow-issue-block:end id=T204 -->
 
 <!-- sdflow-issue-block:start id=T205 -->
@@ -2461,6 +2524,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 > 分支 A 需要身份、hash 与必填节有效的 `decision-memo.md` 加 `checkpoint(sdflow-spec-grill)`；分支 B 需要既有 `checkpoint(grill)` 或未来 gate 明确认可的 `sdflow:grill-done` 锚；无信号才 `REFUSE_START`。T132 保持 OPEN。
 
 **备注**：2026-07-27 由 `harden-sdflow-spec-followups` 仅订正未来输入契约；本 change 不实现或关闭该门。
+> 2026-08 状态：OPEN → WONTDO（sdflow-spec 分支 A 内建拷问相位）
 <!-- sdflow-issue-block:end id=T132 -->
 
 <!-- sdflow-issue-block:start id=T244 -->
@@ -2508,6 +2572,7 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 
 **备注**：涉及文件:sdflow-spec/SKILL.md 的相位 B 部分(B.6/B.7)
 > 2026-07 状态：OPEN → PROPOSED
+> 2026-08 状态：PROPOSED → DONE（sdflow-spec/SKILL.md:364-375 B.7 收敛前检查段 commit 71a3b2b）
 <!-- sdflow-issue-block:end id=T247 -->
 
 <!-- sdflow-issue-block:start id=T248 -->
@@ -2675,10 +2740,106 @@ Markdown 搬到 Python 代码：canonical helper 源 → 生成脚本 vendoring 
 ## T264: project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。
 > project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。
 
-**关联文档**：`openspec/roadmaps/openspec-1.7.0-followup/roadmap.md`、`sdflow-init/assets/workflow/generation-process.md`
+**关联文档**：`openspec/roadmaps/archive/openspec-1.7.0-followup/roadmap.md`、`sdflow-init/assets/workflow/generation-process.md`
 
 **动机**：schema fork 的 instruction、模板与依赖图不会随上游自动更新，长期可能造成消费项目契约漂移。
 
 **思路**：另开 change 设计并实现 fork 与上游的版本/内容比较、告警或 fail-closed 门；本 change 保持现状并在阶段一文档与 roadmap 明确该边界。
 > 2026-07 状态：OPEN → PROPOSED
 <!-- sdflow-issue-block:end id=T264 -->
+
+<!-- sdflow-issue-block:start id=T118 -->
+## T118: tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1）
+> tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1）
+> 2026-08 状态：PROPOSED → DONE（impl_route.py:554 frontier + SKILL.md:488 宿主条件化受限并行）
+<!-- sdflow-issue-block:end id=T118 -->
+
+<!-- sdflow-issue-block:start id=T70 -->
+## T70: config_lint 的 _second_level_keys/块扫描仅识别两空格缩进，tab 缩进的 model-tiers 子键隐形→越域非法子键 fail-open 静默通过（对抗A实测复现，边缘 YAML）
+> config_lint 的 _second_level_keys/块扫描仅识别两空格缩进，tab 缩进的 model-tiers 子键隐形→越域非法子键 fail-open 静默通过（对抗A实测复现，边缘 YAML）
+> 2026-08 状态：PROPOSED → DONE（init.py:383-384 _second_level_keys 退役，委托 yq）
+<!-- sdflow-issue-block:end id=T70 -->
+
+<!-- sdflow-issue-block:start id=T71 -->
+## T71: _ast_no_doc 对剥 docstring 后空体函数坍塌：两个仅含 docstring 的同名 stub AST 相等→理论假过（当前 11+6 helper 均有真逻辑不可利用，加固可标记空体）
+> _ast_no_doc 对剥 docstring 后空体函数坍塌：两个仅含 docstring 的同名 stub AST 相等→理论假过（当前 11+6 helper 均有真逻辑不可利用，加固可标记空体）
+> 2026-08 状态：PROPOSED → DONE（_ast_no_doc/test_mirror_consistency 整体退役 test_determinism_guards.py:1-4）
+<!-- sdflow-issue-block:end id=T71 -->
+
+<!-- sdflow-issue-block:start id=T73 -->
+## T73: metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定
+> metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定
+> 2026-08 状态：PROPOSED → DONE（anchor_lint.py _yq + init.py 委托 yq 原生支持 YAML 行内注释）
+<!-- sdflow-issue-block:end id=T73 -->
+
+<!-- sdflow-issue-block:start id=T126 -->
+## T126: wayfinder→ff 衔接契约 + 主流程三段分流入口：清晰直接 ff / 单 session 模糊走 explore / 超单 session 大雾走 wayfinder；契约三条=ff 起手逐区读 map（Destination→proposal 动机+D-5、Decisions-so-far 逐行 zoom 决议全文防 make-reasonable-decisions 重决歪、Out-of-scope→D-3 假设）+ TG 判命中前置到 chart 写 map Notes + proposal 回链 map（2026-07-10 探索会，调研代理 file:line 已接地）
+> wayfinder→ff 衔接契约 + 主流程三段分流入口：清晰直接 ff / 单 session 模糊走 explore / 超单 session 大雾走 wayfinder；契约三条=ff 起手逐区读 map（Destination→proposal 动机+D-5、Decisions-so-far 逐行 zoom 决议全文防 make-reasonable-decisions 重决歪、Out-of-scope→D-3 假设）+ TG 判命中前置到 chart 写 map Notes + proposal 回链 map（2026-07-10 探索会，调研代理 file:line 已接地）
+> 2026-08 状态：PROPOSED → DONE（ff-generation-constraints.md:38-59 wayfinder→ff 三条衔接契约）
+<!-- sdflow-issue-block:end id=T126 -->
+
+<!-- sdflow-issue-block:start id=T127 -->
+## T127: grill 瘦跑规则：上游 wayfinder 已决分支引 resolution comment 快速核对即过、新生成/未决部分照常死磕——grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling 票（生成前决策）非冗余、不可整跳（2026-07-10 探索会）
+> grill 瘦跑规则：上游 wayfinder 已决分支引 resolution comment 快速核对即过、新生成/未决部分照常死磕——grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling 票（生成前决策）非冗余、不可整跳（2026-07-10 探索会）
+> 2026-08 状态：PROPOSED → WONTDO（generation-process.md:101 / workflow.md:90）
+<!-- sdflow-issue-block:end id=T127 -->
+
+<!-- sdflow-issue-block:start id=T97 -->
+## T97: 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1）
+> 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1）
+> 2026-08 状态：PROPOSED → WONTDO（wco roadmap P0-P5 全交付）
+<!-- sdflow-issue-block:end id=T97 -->
+
+<!-- sdflow-issue-block:start id=T98 -->
+## T98: prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2）
+> prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2）
+> 2026-08 状态：PROPOSED → WONTDO（wco roadmap P0-P5 全交付）
+<!-- sdflow-issue-block:end id=T98 -->
+
+<!-- sdflow-issue-block:start id=T99 -->
+## T99: 确定性检查前置准入门：pytest/lint/typecheck 未绿不进 fan-out（04 提案 §2.3）
+> 确定性检查前置准入门：pytest/lint/typecheck 未绿不进 fan-out（04 提案 §2.3）
+> 2026-08 状态：PROPOSED → WONTDO（wco roadmap P0-P5 全交付）
+<!-- sdflow-issue-block:end id=T99 -->
+
+<!-- sdflow-issue-block:start id=T100 -->
+## T100: 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4）
+> 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4）
+> 2026-08 状态：PROPOSED → WONTDO（wco roadmap P0-P5 全交付）
+<!-- sdflow-issue-block:end id=T100 -->
+
+<!-- sdflow-issue-block:start id=T101 -->
+## T101: 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1）
+> 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1）
+> 2026-08 状态：PROPOSED → WONTDO（wco roadmap P0-P5 全交付）
+<!-- sdflow-issue-block:end id=T101 -->
+
+<!-- sdflow-issue-block:start id=T102 -->
+## T102: 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5）
+> 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5）
+> 2026-08 状态：PROPOSED → WONTDO（wco roadmap P0-P5 全交付）
+<!-- sdflow-issue-block:end id=T102 -->
+
+<!-- sdflow-issue-block:start id=T120 -->
+## T120: expand-contract 宽重构协议进 bundle（04 提案 §5.3）
+> expand-contract 宽重构协议进 bundle（04 提案 §5.3）
+> 2026-08 状态：PROPOSED → WONTDO（matt-workflow-integration change）
+<!-- sdflow-issue-block:end id=T120 -->
+
+<!-- sdflow-issue-block:start id=T125 -->
+## T125: 议题：fan-out 子代理产物默认落临时文件、返回只带路径——动机是交接可靠性（防最终文本截断/结构化输出失配/compaction 丢失），比 T121（超阈值才写文件）更进一步；讨论点：默认落盘 vs 阈值触发、临时文件生命周期与清理、主审读文件的路径契约（2026-07-10 探索会提出）
+> 议题：fan-out 子代理产物默认落临时文件、返回只带路径——动机是交接可靠性（防最终文本截断/结构化输出失配/compaction 丢失），比 T121（超阈值才写文件）更进一步；讨论点：默认落盘 vs 阈值触发、临时文件生命周期与清理、主审读文件的路径契约（2026-07-10 探索会提出）
+> 2026-08 状态：PROPOSED → WONTDO（T121）
+<!-- sdflow-issue-block:end id=T125 -->
+
+<!-- sdflow-issue-block:start id=T133 -->
+## T133: 提示/触发 grill 时自动生成完整可复制 prompt，但须『脚手架完整+内容轻播种』校准：grill-with-docs=/grilling(relentless逐branch独立走设计树,一次一问,每问给推荐,事实自查决策抛人)+/domain-modeling。auto-prompt 只应含调用脚手架(change dir/全深度非wayfinder/MUST NOT skip/doc路径 adr→openspec/adr·术语→CONTEXT.md·INDEX/[grill-amendment]/收敛才提交)；MUST NOT 预装已分析的弱点清单+推荐(会 anchor+短路 grilling 独立发现盲点的核心价值,让它只 validate 我的结论而非找第6条)。至多给一句非绑定怀疑点并注明『非边界,去找我漏的』。关联 T132(grill 未跑 fail-closed 门,该门 REFUSE 时正好 emit 此 prompt)+T28(下一阶段附完整可复制 prompt)。
+> 提示/触发 grill 时自动生成完整可复制 prompt，但须『脚手架完整+内容轻播种』校准：grill-with-docs=/grilling(relentless逐branch独立走设计树,一次一问,每问给推荐,事实自查决策抛人)+/domain-modeling。auto-prompt 只应含调用脚手架(change dir/全深度非wayfinder/MUST NOT skip/doc路径 adr→openspec/adr·术语→CONTEXT.md·INDEX/[grill-amendment]/收敛才提交)；MUST NOT 预装已分析的弱点清单+推荐(会 anchor+短路 grilling 独立发现盲点的核心价值,让它只 validate 我的结论而非找第6条)。至多给一句非绑定怀疑点并注明『非边界,去找我漏的』。关联 T132(grill 未跑 fail-closed 门,该门 REFUSE 时正好 emit 此 prompt)+T28(下一阶段附完整可复制 prompt)。
+> 2026-08 状态：OPEN → WONTDO（sdflow-spec 分支 A 内建拷问相位）
+<!-- sdflow-issue-block:end id=T133 -->
+
+<!-- sdflow-issue-block:start id=T77 -->
+## T77: 「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留）
+> 「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留）
+> 2026-08 状态：OPEN → WONTDO（mlh-p5-parser-cleanup 已归档）
+<!-- sdflow-issue-block:end id=T77 -->

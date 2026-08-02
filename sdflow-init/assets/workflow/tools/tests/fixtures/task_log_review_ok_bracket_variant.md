@@ -1,4 +1,4 @@
-<!-- FIXTURE 来源：openspec/roadmaps/mechanical-layer-hardening/task-log.md 行 53 收尾声明句的**括号变体**——
+<!-- FIXTURE 来源：openspec/roadmaps/archive/mechanical-layer-hardening/task-log.md 行 53 收尾声明句的**括号变体**——
      真实句用「」（角括号）；此处逐字换成『』（双角括号）以覆盖 spec.md 场景「本小节无『未处置』状态条目」的括号变体。
      用途：section-ok-DISPOSITION-UNCHECKED 正例 + 证明校验器括号无关（根本不匹配「未处置」子串，无论何种括号均不假阳）。-->
 # workflow 机械层固化 任务日志

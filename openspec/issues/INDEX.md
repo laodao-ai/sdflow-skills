@@ -37,7 +37,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T30 | todo | PROPOSED | cross-model-outside-voice |
 | T31 | todo | PROPOSED | cross-model-outside-voice |
 
 ### 批次：dedupe-issues-scripts-shared-layer
@@ -89,12 +88,8 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| B19 | bug | PROPOSED | fix-design-gate-freshness-proxy |
-| B20 | bug | PROPOSED | fix-design-gate-freshness-proxy |
-| T187 | todo | PROPOSED | fix-design-gate-freshness-proxy |
 | T188 | todo | PROPOSED | fix-design-gate-freshness-proxy |
 | T189 | todo | PROPOSED | fix-design-gate-freshness-proxy |
-| T190 | todo | PROPOSED | fix-design-gate-freshness-proxy |
 | T191 | todo | PROPOSED | fix-design-gate-freshness-proxy |
 
 ### 批次：fix-mechanical-layer-silent-failures
@@ -102,11 +97,9 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | B12 | bug | PROPOSED | fix-mechanical-layer-silent-failures |
-| B13 | bug | PROPOSED | fix-mechanical-layer-silent-failures |
 | B14 | bug | PROPOSED | fix-mechanical-layer-silent-failures |
 | T168 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
 | T169 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
-| T170 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
 | T171 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
 | T172 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
 | T173 | todo | PROPOSED | fix-mechanical-layer-silent-failures |
@@ -134,15 +127,11 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T192 | todo | PROPOSED | harden-gate-git-layer |
-| T194 | todo | PROPOSED | harden-gate-git-layer |
 | T195 | todo | PROPOSED | harden-gate-git-layer |
 | T196 | todo | PROPOSED | harden-gate-git-layer |
 | T197 | todo | PROPOSED | harden-gate-git-layer |
-| T198 | todo | PROPOSED | harden-gate-git-layer |
 | T199 | todo | PROPOSED | harden-gate-git-layer |
-| T200 | todo | PROPOSED | harden-gate-git-layer |
 | T203 | todo | PROPOSED | harden-gate-git-layer |
-| T204 | todo | PROPOSED | harden-gate-git-layer |
 | T205 | todo | PROPOSED | harden-gate-git-layer |
 | T206 | todo | PROPOSED | harden-gate-git-layer |
 
@@ -150,7 +139,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T247 | todo | PROPOSED | harden-implement-review-loop |
 | T248 | todo | PROPOSED | harden-implement-review-loop |
 | T249 | todo | PROPOSED | harden-implement-review-loop |
 | T250 | todo | PROPOSED | harden-implement-review-loop |
@@ -191,25 +179,12 @@
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
 | T86 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
-| T87 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
-| T88 | todo | PROPOSED | implement-mechanical-layer-hardening-p4-lens-metric-emit |
 
 ### 批次：matt-workflow-integration
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T118 | todo | PROPOSED | - |
-| T120 | todo | PROPOSED | - |
-| T125 | todo | PROPOSED | - |
-| T126 | todo | PROPOSED | - |
-| T127 | todo | PROPOSED | - |
 | T128 | todo | PROPOSED | matt-workflow-integration |
-
-### 批次：mechanical-layer-hardening
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T77 | todo | OPEN | mlh-p5-parser-cleanup |
 
 ### 批次：minimize-repo-footprint
 
@@ -222,7 +197,6 @@
 | T18 | todo | PROPOSED | minimize-repo-footprint |
 | T6 | todo | PROPOSED | minimize-repo-footprint |
 | T7 | todo | PROPOSED | minimize-repo-footprint |
-| T8 | todo | PROPOSED | minimize-repo-footprint |
 | T9 | todo | PROPOSED | minimize-repo-footprint |
 
 ### 批次：mlh-p2-anchor-lint
@@ -236,10 +210,7 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T70 | todo | PROPOSED | mlh-p3-determ-guards |
-| T71 | todo | PROPOSED | mlh-p3-determ-guards |
 | T72 | todo | PROPOSED | mlh-p3-determ-guards |
-| T73 | todo | PROPOSED | mlh-p3-determ-guards |
 
 ### 批次：mlh-p4-maintain-scan
 
@@ -254,8 +225,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T136 | todo | PROPOSED | mlh-p4-reason-code-validators |
-| T138 | todo | PROPOSED | mlh-p4-reason-code-validators |
 | T139 | todo | PROPOSED | mlh-p4-reason-code-validators |
 | T140 | todo | PROPOSED | mlh-p4-reason-code-validators |
 
@@ -274,17 +243,6 @@
 | T104 | todo | PROPOSED | - |
 | T105 | todo | PROPOSED | - |
 | T124 | todo | PROPOSED | - |
-
-### 批次：opt-p0
-
-| ID | Pool | Status | 关联Change |
-|----|------|--------|------------|
-| T100 | todo | PROPOSED | - |
-| T101 | todo | PROPOSED | - |
-| T102 | todo | PROPOSED | - |
-| T97 | todo | PROPOSED | - |
-| T98 | todo | PROPOSED | - |
-| T99 | todo | PROPOSED | - |
 
 ### 批次：opt-review-reliability
 
@@ -324,12 +282,9 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T27 | todo | PROPOSED | minimize-repo-footprint |
-| T28 | todo | PROPOSED | cross-model-outside-voice |
 | T29 | todo | PROPOSED | cross-model-outside-voice |
 | T41 | todo | PROPOSED | gate-anchor-line-scoped |
 | T42 | todo | PROPOSED | gate-anchor-line-scoped |
-| T50 | todo | PROPOSED | three-lens-decision-framework |
 
 ### 批次：sdflow-init-hardening
 
@@ -342,7 +297,6 @@
 
 | ID | Pool | Status | 关联Change |
 |----|------|--------|------------|
-| T19 | todo | PROPOSED | sdflow-rebrand |
 | T23 | todo | PROPOSED | sdflow-rebrand |
 | T24 | todo | PROPOSED | sdflow-rebrand |
 
@@ -365,12 +319,9 @@
 |----|------|--------|------------|
 | B10 | bug | VERIFIED | async-outside-voice |
 | B11 | bug | VERIFIED | async-outside-voice |
-| B23 | bug | OPEN | main |
 | B7 | bug | OPEN | - |
 | B8 | bug | VERIFIED | async-outside-voice |
 | B9 | bug | VERIFIED | async-outside-voice |
-| T132 | todo | OPEN | - |
-| T133 | todo | OPEN | - |
 | T134 | todo | OPEN | - |
 | T141 | todo | OPEN | - |
 | T142 | todo | OPEN | - |
@@ -401,4 +352,4 @@
 
 ## 已闭合（终态）摘要
 
-- 共 74 项已闭合（bug: 6，todo: 68）
+- 共 113 项已闭合（bug: 10，todo: 103）

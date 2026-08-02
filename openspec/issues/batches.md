@@ -129,7 +129,7 @@
 计划: 已由 `mlh-p5-parser-cleanup` 完成：T74 parser 首行裸 `---` 处理与 T75 live inline 死代码清理。
 
 ### mechanical-layer-hardening — 机械层固化（adr/0006：脚本化 + 去字符串化）
-状态: PLANNED
+状态: DONE
 成员: (生成) T76, T77
 优先级: P2（原口语「中」归一化到 P 级；冷审残差 defer，非关键）
 计划: roadmap mechanical-layer-hardening 各阶段冷审残差 defer 归集（T76 归档盲区硬化/T77 spec 整洁性等）
@@ -159,7 +159,7 @@
 计划: maintain-scan 低风险硬化：三份 RULE_MARKERS 跨语言漂移、告警文案复述、测试缺依赖降级与非 kebab 命名漏报。
 
 ### opt-p0 — 工作流优化 P0 速赢（成本+门体验）
-状态: PLANNED
+状态: DONE
 成员: (生成) T100, T101, T102, T97, T98, T99
 优先级: P0
 计划: 档位强制/缓存前缀/前置准入/微变更通道/三层摘要头/对抗镜措辞——docs/sdflow-fable5/04 §1
