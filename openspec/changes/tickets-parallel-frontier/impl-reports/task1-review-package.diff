@@ -1,0 +1,93 @@
+# Review package: d9a80b4..1ee39b9073384f477dd439dbdb160ecdace646fe
+
+## Commits
+1ee39b9 feat(sdflow-implement): 出票模式追加并行安全生成约束
+
+## Files changed
+ .../impl-reports/task1-brief.md                        | 15 +++++++++++++++
+ .../impl-reports/task1-parallel-safety.md              | 18 ++++++++++++++++++
+ sdflow-implement/SKILL.md                              | 11 +++++++++++
+ 3 files changed, 44 insertions(+)
+
+## Diff
+diff --git a/openspec/changes/tickets-parallel-frontier/impl-reports/task1-brief.md b/openspec/changes/tickets-parallel-frontier/impl-reports/task1-brief.md
+new file mode 100644
+index 0000000..3cd9143
+--- /dev/null
++++ b/openspec/changes/tickets-parallel-frontier/impl-reports/task1-brief.md
+@@ -0,0 +1,15 @@
++### Task 1: 出票模式追加并行安全生成约束
++
++**Blocked-by:** none
++**R-ID:** R2
++
++在 `sdflow-implement/SKILL.md` 的「产出：3–6 张 tracer-bullet 垂直切片」段末（`[e2e]` 表达方式段之后、「宽重构例外」段之前）追加一段并行安全约束条款。内容须覆盖：
++
++1. 对 `Blocked-by` 声明使得 `next_ready` 可能同时返回的一组 ticket，出票方 MUST 确认——行为边界不重叠（不改同一模块的同一接口）、一个的产出不是另一个的输入、有疑问时保守声明依赖（宁可串行不可误并行）
++2. 收尾节点唯一约束：若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的 `Blocked-by`，确保收尾节点唯一
++3. 标注为指令层语义约束（出票方的模型判断），并说明兜底为 worktree 隔离下 `git merge` 原生冲突检测
++
++- [ ] 在 SKILL.md 出票模式的垂直切片段末（`[e2e]` 段后、宽重构例外前）追加并行安全约束段落
++- [ ] 约束内容与 delta spec「出 ticket 模式并行安全生成约束」Requirement 一致
++- [ ] 含收尾节点唯一约束（多张全阻塞票须声明互相 Blocked-by）
++
+diff --git a/openspec/changes/tickets-parallel-frontier/impl-reports/task1-parallel-safety.md b/openspec/changes/tickets-parallel-frontier/impl-reports/task1-parallel-safety.md
+new file mode 100644
+index 0000000..797ed20
+--- /dev/null
++++ b/openspec/changes/tickets-parallel-frontier/impl-reports/task1-parallel-safety.md
+@@ -0,0 +1,18 @@
++# Task 1: 出票模式追加并行安全生成约束 — impl-report
++
++## Status: DONE
++
++## What was done
++
++在 `sdflow-implement/SKILL.md` 的「产出：3–6 张 tracer-bullet 垂直切片」段末（`[e2e]` 表达方式段之后、「宽重构例外」段之前，行 284 之后）追加并行安全约束条款。
++
++## Changes
++
++- `sdflow-implement/SKILL.md`: 在垂直切片 bullet list 末尾追加 `- **并行安全约束**:` 段落（11 行）
++
++## Verification
++
++- 约束内容覆盖 delta spec 的三项 Requirement：行为边界不重叠、产出不互为输入、保守声明依赖
++- 含收尾节点唯一约束（多张全阻塞票须声明互相 Blocked-by）
++- 标注为指令层语义约束 + worktree merge 原生冲突检测兜底
++- 插入位置正确：`[e2e]` 段后、宽重构例外前
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index fa51649..0f9df48 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -275,20 +275,31 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任
+   best-effort 展示且**不作判定依据**。该判据**覆盖伪装形态**——不仅匹配「扫描 / 识别 / 拒绝某
+   形态 / 指纹」这类显式措辞，**还匹配「在某格式文件中定位 / 插入 / 修改某处」**（"只动一个键
+   值"听起来不像解析，但"找到那个键"本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为
+   机械保证**（CLAUDE.md 基准 5：无界语法禁手搓）。被拦下的场景参见
+   `sdflow-devenv/references/verification-patterns.md` §8「格式解析手段对照表」获取替代手段。
+ - **「本票声明的 e2e 场景」的表达方式**〔spec-review-amendment M7〕：验收标准复选框中**标注为
+   `[e2e]`** 的条目即该票声明的 e2e 场景（如 `- [ ] [e2e] 用户提交表单后收到确认邮件`）；未标注
+   `[e2e]` 的条目不算 e2e。**该票没有任何一条标 `[e2e]` ⇒ 该票无 e2e 场景**——implementer 只跑
+   单元 + `Blocked-by` 链上集成，不必臆造 e2e 用例（详细执行契约见下方「每 ticket 派 fresh
+   implementer」节的测试范围段）。
++- **并行安全约束**：出票时，对 `Blocked-by` 声明使得 `next_ready` 可能同时返回的一组 ticket
++  （即它们的 `Blocked-by` 集合是 `done` 集的子集时会同时出现在 ready 列表中），MUST 确认：
++  - 它们的行为边界不重叠（不改同一模块的同一接口）
++  - 一个的产出不是另一个的输入
++  - 有疑问时保守声明依赖（宁可串行不可误并行）
++  - 若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的
++    `Blocked-by`，确保收尾节点唯一（`next_ready` 只返回一个收尾候选）
++
++  该约束为指令层语义约束（出票方的模型判断）。兜底为 worktree 隔离下 `git merge --no-ff` 的原生
++  冲突检测（真正的 fail-loud）——即使出票判断失误（两票改同一文件），各自 commit 到独立 worktree
++  分支，merge 回主分支时 git 正常冲突检测会 fail-loud。
+ 
+ **宽重构例外〔T120〕**：单一机械改动、blast radius 扫全仓的宽重构（批量改名、改共享类型签名等）
+ **MUST NOT** 强行拆成垂直切片；改走 **expand–contract** 序列：
+ 1. 1 张 expand ticket（新旧形态并存，不破坏任何调用点）；
+ 2. 若干迁移批次 ticket（各自 `Blocked-by: <expand ticket 号>`，按包/目录切批，批数由 blast radius
+    决定，可任意多张）；
+ 3. 1 张 contract ticket（`Blocked-by:` 全部迁移批次号，删旧形态）。
+ 
+ **迁移批次 ticket 不占 3–6 张垂直切片预算**〔E5〕——只有 expand 与 contract 两端计入预算。
+ 
