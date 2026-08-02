@@ -11,6 +11,26 @@
 
 ---
 
+## 2026-08-02
+
+### [阶段 C / 前置解锁] Phase A 试点事实判赢——人拍板
+- **状态**: ✅ 前置解除
+- **判定**: tickets 管线自样本 #1（`mlh-p4-reason-code-validators`，2026-07-11）起连续跑 6 个 change，config `impl-pipeline: tickets` 持续开启，无熔断事件。判据三条在运行实践中满足，人拍板 Phase A 通过，不再逐个补录 pilot-log。
+- **后续走 tickets 的 change**: `fix-windows-encoding-crash`、`align-sdflow-spec-with-openspec-schema`、`curb-rework-loop-cost`、`parallelize-grounding-mirror`、`shared-yaml-subset-parser`
+- **对 roadmap 的影响**: 阶段 C 硬前置解除，可进入设计探索
+
+### [阶段 3] P3 接地镜流水线交付回写
+- **状态**: ✅ 完成（承载 change `parallelize-grounding-mirror`，archive + merge `cd2dcee`；本条为 roadmap 状态回填）
+- **交付**（逐条对上 roadmap 阶段 3 子任务）:
+  - 串行纪律〔T20〕分治：领域/对抗镜 MUST 等 Step1 checkpoint，接地镜 MAY 并行起跑
+  - Step2 fan-out 编排拆为两段 dispatch + ASCII 时序图
+  - 能力探针时机前移至 Step1 开始时，一次探针两段共用
+  - amendment 后不补跑接地镜（D1），由 code-review 接地镜兜底
+  - 旧兜底条款已删除；spec delta 4 个 Scenario 逐条 PASS
+- **对 roadmap 的影响**: P0–P5 全部交付。仅剩阶段 C（tasks 受限并行 frontier）为占位未启状态
+
+---
+
 ## 2026-07-31
 
 ### [阶段 2 / 验收闭合] P2 闭合 + P2b 显式 defer

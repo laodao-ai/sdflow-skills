@@ -65,4 +65,13 @@
 
 ---
 
-*样本 #2 起后续追加于此。*
+## Phase A 判定（2026-08-02，人拍板）
+
+**事实上已通过。** tickets 管线自样本 #1 起连续跑 6 个 change（`fix-windows-encoding-crash`、`align-sdflow-spec-with-openspec-schema`、`curb-rework-loop-cost`、`parallelize-grounding-mirror`、`shared-yaml-subset-parser`），config `impl-pipeline: tickets` 持续开启，无熔断事件、无 verify FAIL、无 Critical 逃逸。
+
+判据三条在运行实践中满足：
+- **②** Critical/严重 findings 不升——6 个 change 全部 verify PASS
+- **③** 哨兵未触发熔断——无「本应被每票审拦住的严重项」逃逸
+- **①** 墙钟方向性——无回归信号（curb-rework-loop-cost 的治理措施在同期落地）
+
+人拍板 Phase A 通过，不再按 pilot-briefing 格式逐个补录样本 #2–#6。硬前置解除，阶段 C（受限并行 frontier）可进入设计探索。

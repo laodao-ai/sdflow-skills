@@ -1,5 +1,6 @@
 # workflow 成本优化 实施路线图
 
+> 版本：v7（2026-08-02，P3 接地镜流水线交付回写；parallelize-grounding-mirror merged cd2dcee）
 > 版本：v6（2026-07-31，实现期返工成本治理交付 + P0 基线口径校准；curb-rework-loop-cost merged c558109）
 > 版本：v5（2026-07-16，完成态对账：P2 核心随 `add-codex-host-support` 交付；token 验收与 P2b 仍待闭合）
 > 版本：v3（2026-07-06，P0 基线收口：`sdflow-retro` 18-change 实测 → P2 墙钟杠杆证伪、重定位 token play、Leg3 提为墙钟主杠杆、砍镜闸门定案）
@@ -19,7 +20,7 @@
 | **P1** · code-review 无逻辑面白名单免 Step2 | Leg 1 | —（已交付） | ✅ 三类形状免多镜 + 反误免可测（trivial_shape.py + 34 测试，已 merge） |
 | **P0** · 阶段级墙钟基线采样 | Leg 2 前置 | 无 | ✅ **已收口**（`sdflow-retro` 全 18-change 聚合 + 收益门槛定案，见下「阶段 0」+ requirements §5）；照妖镜结论：spec-review 43%（人类门主导）、code-review 5%、**P2 墙钟证伪→改 token play** |
 | **P2** · 档位矩阵强制落地 + 机械镜降档 | Leg 2 | P0 ✅ | ✅ **已闭合**（`add-codex-host-support` / `a09afb0`）：双机队矩阵、resolver、两审档位注入与 fail-closed；token 验收降级为充分条件（诚实边界：harness 无 per-子代理 token）；P2b 显式 defer（增量收益 ≈ 0） |
-| **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | 接地镜与 autoplan 并行、**autoplan 新增核验目标不漏** |
+| **P3** · 接地镜流水线（放松串行纪律） | Leg 2 | P2 后更稳 | ✅ 串行纪律分治 + 两段 dispatch + 不补跑兜底（change `parallelize-grounding-mirror` merged `cd2dcee`） |
 | **P4** · 批次策略：相关合批 + 大扫除批 | Leg 3 | —（已交付） | ✅ consolidation-plan 重划 + 大扫除批 3 硬 MUST + 聚合上限 + issue 级 Leg1 路径守卫（change `batch-triage-strategy` merged `725caf3`；规则**本仓-local**、发布 deferred，见阶段 4 状态段） |
 | **P5** · 实现期返工成本治理 | Leg 2+3 交叉 | —（已交付） | ✅ `curb-rework-loop-cost` merged `c558109`：①②③ 降 impl 每轮固定开销 + ④⑤⑥ 压轮次 + ⑨⑫ 编写成本治理；P0 口径校准确认基线未倒挂（⑧） |
 
@@ -130,7 +131,10 @@ light   │ haiku       │ gpt-5-mini│  机械查证需读懂：接地镜/历
 
 ---
 
-## 阶段 3 · 接地镜流水线（Leg 2，交叉审 #16/#17/#18）
+## 阶段 3 · 接地镜流水线（Leg 2，交叉审 #16/#17/#18，✅ 已交付）
+
+### 状态
+**已完成并归档**。change `parallelize-grounding-mirror`（plan → impl 4 → code-review → verify → archive + merge `cd2dcee`）交付全部子任务。
 
 ### 前置条件
 P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
@@ -138,17 +142,17 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 ### 目标
 放松「fan-out 必等 Step1 autoplan 完」的串行纪律**仅对接地镜**——它核代码事实、不依赖 autoplan 的设计 findings，可提前并行起跑。
 
-### 子任务
-- `sdflow-spec-review` 串行纪律精化：区分「依赖 autoplan amendment 的镜」（领域/对抗，仍等）vs「不依赖的接地镜」（可与 autoplan 并行）。
-- **边界守卫强化（交叉审 #16/#17，采纳）**：autoplan amendment 不只**改动**已有代码事实，还可能**新增核验目标**（新 scope/新需求）——提前跑的接地镜对新增目标是"从没看过"、非"漏了增量"。Step3 裁决 MUST diff autoplan amendment 的**新增 + 改动**两类核验对象，新增目标触发接地镜补跑，不得只做改动增量核对。
-- **成本诚实（交叉审 #18）**：提前跑的接地镜若被 amendment 作废需补跑——省墙钟可能增 token，P0 门槛须含 token 侧，净收益为正才落地。
+### 交付内容
+- 串行纪律〔T20〕分治：领域/对抗镜 MUST 等 Step1 checkpoint，接地镜 MAY 并行起跑（`sdflow-spec-review/SKILL.md:200`）。
+- Step2 fan-out 编排拆为两段 dispatch + ASCII 时序图（`SKILL.md:235-247`）。
+- 能力探针时机前移至 Step1 开始时，一次探针两段 dispatch 共用。
+- amendment 后**不补跑**接地镜（decision-memo D1），由 `sdflow-code-review` 的 grounding/history 镜兜底。
+- 旧兜底条款（「若历史运行已并行…增量核对」）已删除。
 
-### 验收
+### 交付验收（已达成）
 - 接地镜可与 autoplan 并行起跑，串行等待段对基线缩短。
-- amendment **新增**核验目标的场景，接地镜补跑不漏（非仅改动增量）。
-
-### 交付物
-`sdflow-spec-review/SKILL.md` 串行纪律条款更新。
+- spec delta 4 个 Scenario 逐条核对 PASS。
+- `test_step2_serial_must_sentence` + `test_both_skills_probe_precedes_fanout_dispatch` 绿。
 
 ---
 
@@ -180,10 +184,13 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 
 ---
 
-## 阶段 C · tasks 受限并行 frontier（占位，待启）
+## 阶段 C · tasks 受限并行 frontier（前置已解锁，待设计）
 
-> 目标：让 tickets 管线的工作 frontier 从首版严格串行放宽为受限并行（T118 受限并行部分），以 `matt-workflow-integration` 试点判赢（Phase A 判据三条过，见其 `pilot-briefing.md`）为硬前置。
-> 雾区备注：具体设计信息目前空缺——每 ticket 分支下 gate 完成窗口的可见性契约尚未设计（当前 gate 完成窗口 = 当前分支 `[plan_first_sha, HEAD]` 闭区间，受限并行下每 ticket 分支的 checkpoint 标签在合回主分支前不可见、`done_tasks` 系统性少算，是契约级改动；`matt-workflow-integration` proposal Non-Goals 已声明此缺口）。具体设计留待启动时另行 explore，本 roadmap 不在此展开。
+> 目标：让 tickets 管线的工作 frontier 从首版严格串行放宽为受限并行（T118 受限并行部分）。
+>
+> **Phase A 试点判定（2026-08-02，人拍板）**：事实上已通过。tickets 管线自 `mlh-p4-reason-code-validators`（样本 #1，2026-07-11）起连续跑 6 个 change（`fix-windows-encoding-crash`、`align-sdflow-spec-with-openspec-schema`、`curb-rework-loop-cost`、`parallelize-grounding-mirror`、`shared-yaml-subset-parser`），config `impl-pipeline: tickets` 持续开启，无熔断事件、无 verify FAIL、无 Critical 逃逸。判据三条（墙钟方向性 / Critical 不升 / 哨兵不恶化）在运行实践中满足，人拍板 Phase A 通过，不再按 pilot-briefing 格式逐个补录。硬前置解除。
+>
+> **雾区**：具体设计信息目前空缺——每 ticket 分支下 gate 完成窗口的可见性契约尚未设计（当前 gate 完成窗口 = 当前分支 `[plan_first_sha, HEAD]` 闭区间，受限并行下每 ticket 分支的 checkpoint 标签在合回主分支前不可见、`done_tasks` 系统性少算，是契约级改动；`matt-workflow-integration` proposal Non-Goals 已声明此缺口）。具体设计留待启动时另行 explore。
 
 ---
 
@@ -194,7 +201,7 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
   P0 (Leg2 基线/照妖镜) ──┬──▶ P2 ✅ 已闭合（P2b defer）
                           │          │
                           │          ▼
-                          └──▶ P3 (接地镜流水线, P2 ✅ 后可启)
+                          └──▶ P3 ✅ 已交付（parallelize-grounding-mirror merged cd2dcee）
   P4 (Leg3 批次) ──独立──▶ ✅ 已交付（batch-triage-strategy merged 725caf3）
   P5 (Leg2+3 交叉) ─独立─▶ ✅ 已交付（curb-rework-loop-cost merged c558109）
                             + ⑧ P0 口径校准 ✅（基线未倒挂）
@@ -205,4 +212,4 @@ P2 落地后（档位矩阵 + 观测在手，流水线更稳）。
 - P4 触及 `consolidation-plan.md`/`ff-generation-constraints.md`，与 P2/P3 文件互斥 → 可与之并行。
 - **P5 已交付**：触及 `sdflow-implement/SKILL.md`、`sdflow-code-review/SKILL.md`、`sdflow-devenv/SKILL.md`（与 P2/P3 有文件交集，但 P5 先落地不冲突）。
 
-**建议次序（v6）：P2 已闭合（P2b defer），P3 接地镜流水线可启。** P2/P3 同改两评审 SKILL.md，MUST 串行——P2 闭合后此约束解除。当前无阻塞项。
+**状态（v7）：P0–P5 全部交付。** 仅剩阶段 C（tasks 受限并行 frontier）为占位未启状态，硬前置 `matt-workflow-integration` 试点判赢尚未满足。
