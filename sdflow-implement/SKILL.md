@@ -501,8 +501,8 @@ impl-pipeline: tickets
   - `next_ready` 返回单个候选时行为与串行模式一致（两宿主一致）。
 - **并行 dispatch 约束（Claude 宿主）**：
   - 每个 implementer 在独立 worktree 中工作，有独立 `.git/index` 和工作树——不存在 index 竞态。
-  - implementer dispatch prompt MAY 建议按文件名 `git add <具体文件>`（最佳实践），但不再是
-    MUST——worktree 隔离下通配暂存不会带入别人的改动。
+  - implementer dispatch prompt MAY 建议按文件名 `git add <具体文件>`（最佳实践）——worktree
+    隔离下通配暂存不会带入别人的改动。
   - 双轴审 SHALL 串行执行（不同票之间亦不并行）——反向变异共享工作树会交叉感染。
   - 收尾 ticket（`Blocked-by` = 全部功能票号）`next_ready` 只返回它一个，始终单独串行执行。
 - **review-package 生成（并行批次，Claude 宿主）**：merge 回主分支后，每个 merge commit 天然
