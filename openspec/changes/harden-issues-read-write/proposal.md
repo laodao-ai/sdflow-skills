@@ -9,11 +9,13 @@ issues 台账的读取路径存在三处诚实性缺陷 + 一个数据丢失 bug
 
 阻塞已解除：dedupe-issues-scripts-shared-layer（2026-07-22 归档）把三脚本合一为 `sdflow_issues_core`，原「要加两份镜像补丁」的理由不再成立。
 
-## What Changes
+## What Changes [spec-review-amendment]
 
-- `sdflow_issues_core/__init__.py` 读取路径补 status/type/priority 词表校验：脏值 → `problems.append`（显红），不 `_die`（不罢工）
-- `issues.py` 的 `_reindex_core` 写盘前读旧 INDEX 总项数，新 < 旧 → fail-closed 拒覆盖（总项数只增不减是精确不变量）
-- 删 `_bug_triage` / `_todo_triage` 的 `open_untriaged` 强推链：batch add 只改批次归属，不碰 status
+- `sdflow_issues_core/__init__.py` 读取路径补 status/type/priority 词表校验：脏值 → `problems.append`（显红），不中止
+- `issues.py` 的 `validate_scan_envelope` 枚举漂移校验同步降级：不 raise，收进 problems（consumer 边界与 core 层对称）
+- `issues.py` 的 `_reindex_core` 写盘前两段式解析旧 INDEX 总项数（open 行数 + closed 聚合数），新 < 旧 → fail-closed 拒覆盖
+- `_bug_triage` / `_todo_triage` 加 `promote` 参数 + `triage` CLI 新增 `--batch-only` flag；`cmd_sweep` 改用 `triage --batch-only`（归批次不推进状态）
+- `SKILL.md` 同步更新 triage/sweep 文档
 - 对应 pytest 测试
 
 ## Capabilities
@@ -28,7 +30,7 @@ issues 台账的读取路径存在三处诚实性缺陷 + 一个数据丢失 bug
 
 ## Impact
 
-- 改动文件：`sdflow-issues/scripts/sdflow_issues_core/__init__.py` + `sdflow-issues/scripts/issues.py` + 测试
+- 改动文件：`sdflow-issues/scripts/sdflow_issues_core/__init__.py` + `sdflow-issues/scripts/issues.py` + `sdflow-issues/SKILL.md` + 测试 [spec-review-amendment]
 - 写入路径（cmd_add / set-status）的 `_die` 不动——拒绝非法写入是正当防护
 - 不做 §3 normalize（已被 `migrate_legacy.py` de549f4 根治）
 
