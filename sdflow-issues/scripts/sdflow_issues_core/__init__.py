@@ -615,10 +615,8 @@ def _validated_recorder_model(model, normalize_empty=False):
                     _frontmatter_error(f"{item_id}.{field} 非 canonical empty", "必须写 JSON null")
         _validate_unicode_scalar(item[specific_field], specific_field, item_id)
         _validate_unicode_scalar(item["status"], "status", item_id)
-        if item[specific_field] not in specific_values:
-            _frontmatter_error(f"{item_id}.{specific_field} 枚举越域", repr(item[specific_field]))
-        if item["status"] not in status_values:
-            _frontmatter_error(f"{item_id}.status 枚举越域", repr(item["status"]))
+        # [impl-review-fix] status/specific_field 枚举校验移至 _build_effective_snapshot
+        # 统一降级（problems.append 而非硬 raise），覆盖 legacy + frontmatter 两种格式。
         normalized["items"][item_id] = item
     return normalized
 

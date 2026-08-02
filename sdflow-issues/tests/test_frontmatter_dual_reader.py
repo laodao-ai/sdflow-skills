@@ -413,17 +413,22 @@ def test_surrogate_empty_required_and_enum_drift_are_fatal():
         "module": "core", "summary": "valid", "priority": "P2", "status": "OPEN",
         "time": "2026-07-17 10:00", "change": None, "batch": None,
     }
+    # [impl-review-fix] 结构性错误仍硬 raise
     for mutation, expected in [
         ({"summary": "bad\ud800"}, "surrogate"),
         ({"module": " \t"}, "required string"),
-        ({"priority": "PX"}, "枚举越域"),
-        ({"status": "DONE"}, "枚举越域"),
     ]:
         item = {**base, **mutation}
         with pytest.raises(ValueError, match=expected):
             BUG.render_recorder_namespace(
                 {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
             )
+    # [impl-review-fix] 枚举漂移已移至 _build_effective_snapshot 软降级，不再硬 raise
+    for mutation in [{"priority": "PX"}, {"status": "DONE"}]:
+        item = {**base, **mutation}
+        BUG.render_recorder_namespace(
+            {"schema": 1, "pool": "bug", "mode": "canonical", "items": {"B1": item}}
+        )
     missing = dict(base)
     missing.pop("batch")
     with pytest.raises(ValueError, match="字段集合"):

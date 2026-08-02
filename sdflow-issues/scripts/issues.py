@@ -623,7 +623,7 @@ def _count_index_items(index_path):
     文件不存在、或 closed 聚合行缺失（格式损坏/非本工具生成）→ 返回 0（视为"无旧基线"，
     守卫据此跳过校验，不阻塞首次 reindex 或从损坏文件恢复）。"""
     try:
-        with open(index_path, "r", encoding="utf-8") as f:
+        with open(index_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
     except OSError:
         return 0
@@ -651,6 +651,12 @@ def _reindex_core(root, snapshot=None):
         problems = list(snapshot.get("problems", []))
     index_path = os.path.join(root, "openspec", "issues", "INDEX.md")
     old_count = _count_index_items(index_path)
+    # [impl-review-fix] R2: 旧 INDEX 存在但不可解析（old_count=0）时记 problem 警告
+    if old_count == 0 and os.path.exists(index_path):
+        problems.append(
+            f"count-guard: 旧 INDEX.md 存在但总项数解析为 0（格式损坏或非本工具生成），"
+            "本次跳过骤降校验"
+        )
     new_count = len(items)
     if old_count > 0 and new_count < old_count:
         raise ReindexStageError(
