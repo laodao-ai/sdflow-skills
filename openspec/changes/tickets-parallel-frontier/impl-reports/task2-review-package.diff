@@ -1,0 +1,219 @@
+# Review package: b9c5c03..1367b90fe03804e8773db23c39a84be390b9fdee
+
+## Commits
+1367b90 feat(sdflow-implement): 执行模式 frontier 从严格串行改为宿主条件化受限并行
+
+## Files changed
+ .../impl-reports/task2-brief.md                    | 30 ++++++++++++++++
+ .../impl-reports/task2-parallel-frontier.md        | 24 +++++++++++++
+ .../changes/tickets-parallel-frontier/tickets.md   |  6 ++--
+ sdflow-implement/SKILL.md                          | 42 ++++++++++++++++++----
+ 4 files changed, 92 insertions(+), 10 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/tickets-parallel-frontier/impl-reports/task2-brief.md b/openspec/changes/tickets-parallel-frontier/impl-reports/task2-brief.md
+new file mode 100644
+index 0000000..1fa09dd
+--- /dev/null
++++ b/openspec/changes/tickets-parallel-frontier/impl-reports/task2-brief.md
+@@ -0,0 +1,30 @@
++### Task 2: 执行模式 frontier 从严格串行改为宿主条件化受限并行
++
++**Blocked-by:** none
++**R-ID:** R1
++
++将 `sdflow-implement/SKILL.md` 的「### frontier 严格串行」段改为「### frontier 宿主条件化受限并行」，按 delta spec 的「执行模式宿主条件化受限并行工作 frontier」Requirement 实现。同时同步更新 frontmatter `description`（第 4-9 行）和引言段（第 155-158 行）中的"串行"表述。具体改动：
++
++1. 标题改名：`### frontier 严格串行` → `### frontier 宿主条件化受限并行`
++2. 宿主分支判据：`host=claude` 并行 + worktree 隔离，`host=codex`/`unknown` 退化串行
++3. Claude 宿主并行 dispatch 时序：`isolation: "worktree"` → 收集全部返回 → 逐票 merge `git merge --no-ff` → 串行双轴审 → checkpoint
++4. review-package 并行批次规则：merge commit 天然隔离，`merge_parent1..merge_commit`
++5. fix 轮 diff 显式声明沿用既有规则（串行审阶段单线程，无并发）
++6. 异常处理：BLOCKED 票 worktree 直接丢弃不 merge，完成票正常审
++7. merge conflict 处理：`git merge --no-ff` 冲突时上报人介入
++8. 同步更新 frontmatter description 中"串行"→"宿主条件化受限并行"
++9. 同步更新引言段（第 155-158 行）中"串行"表述
++10. dispatch prompt `git add` 按文件名 MUST 降为建议性最佳实践（如存在该约束）
++
++- [ ] 将 `### frontier 严格串行` 改为 `### frontier 宿主条件化受限并行`
++- [ ] 描述宿主分支判据（`$SDFLOW_HOST` 第零步已 resolve）
++- [ ] Claude 宿主：并行 dispatch 时序（`isolation: "worktree"` → 收集 → 逐票 merge → 串行审+checkpoint）
++- [ ] Codex/unknown 宿主：退化为串行（按号序逐个派发，行为不变）
++- [ ] review-package：并行批次用 `merge_parent1..merge_commit` 天然隔离，串行票沿用既有规则
++- [ ] fix 轮 diff 显式声明沿用既有规则（串行审阶段单线程，无并发）
++- [ ] 异常处理说明（BLOCKED 票 worktree 直接丢弃不 merge，完成票正常审）
++- [ ] merge conflict 处理（`git merge --no-ff` 冲突时上报人介入）
++- [ ] 同步更新 frontmatter `description`（第 4-9 行）中"串行"表述
++- [ ] 同步更新引言段（第 155-158 行）中"串行"表述
++- [ ] dispatch prompt `git add` 按文件名约束降为建议性最佳实践
++
+diff --git a/openspec/changes/tickets-parallel-frontier/impl-reports/task2-parallel-frontier.md b/openspec/changes/tickets-parallel-frontier/impl-reports/task2-parallel-frontier.md
+new file mode 100644
+index 0000000..349d319
+--- /dev/null
++++ b/openspec/changes/tickets-parallel-frontier/impl-reports/task2-parallel-frontier.md
+@@ -0,0 +1,24 @@
++# Task 2: 执行模式 frontier 从严格串行改为宿主条件化受限并行 — impl-report
++
++## Status: DONE
++
++## What was done
++
++三处改动，均在 `sdflow-implement/SKILL.md`：
++
++1. **frontmatter description**（行 4-9）：「串行派 fresh implementer」→「宿主条件化受限并行派 fresh implementer」
++2. **引言段**（行 155-156）：「frontier 串行 + 每 ticket 双轴审」→「frontier 宿主条件化受限并行 + 每 ticket 双轴审」
++3. **frontier 段**（行 487-495）：标题 + 正文全段重写
++   - 标题：`### frontier 严格串行` → `### frontier 宿主条件化受限并行`
++   - 宿主分支判据：`host=claude` 并行 + worktree 隔离，`host=codex`/`unknown` 退化串行
++   - Claude 宿主并行 dispatch 时序：`isolation: "worktree"` → 收集全部返回 → 逐票 merge `git merge --no-ff` → 串行双轴审 → checkpoint
++   - 并行 dispatch 约束：独立 worktree、`git add` 降为 MAY、双轴审串行、收尾票始终串行
++   - review-package 并行批次规则：`merge_parent1..merge_commit` 天然隔离；串行票沿用既有；fix 轮沿用既有
++   - 异常处理：BLOCKED 票 worktree 直接丢弃不 merge，完成票正常审
++   - merge conflict 处理：`git merge --no-ff` 冲突时 halt envelope 上报人介入
++
++## Verification
++
++- 全部 11 条验收标准逐一覆盖
++- `git add` MUST 约束在当前 SKILL.md 中不存在（无需降级），已在新段落中用 MAY 建议性表述
++- delta spec R1 的 6 个 Scenario 逐一有对应 prose 覆盖
+diff --git a/openspec/changes/tickets-parallel-frontier/tickets.md b/openspec/changes/tickets-parallel-frontier/tickets.md
+index 84428b0..445669f 100644
+--- a/openspec/changes/tickets-parallel-frontier/tickets.md
++++ b/openspec/changes/tickets-parallel-frontier/tickets.md
+@@ -18,23 +18,23 @@ impl-pipeline: tickets
+ 
+ **Blocked-by:** none
+ **R-ID:** R2
+ 
+ 在 `sdflow-implement/SKILL.md` 的「产出：3–6 张 tracer-bullet 垂直切片」段末（`[e2e]` 表达方式段之后、「宽重构例外」段之前）追加一段并行安全约束条款。内容须覆盖：
+ 
+ 1. 对 `Blocked-by` 声明使得 `next_ready` 可能同时返回的一组 ticket，出票方 MUST 确认——行为边界不重叠（不改同一模块的同一接口）、一个的产出不是另一个的输入、有疑问时保守声明依赖（宁可串行不可误并行）
+ 2. 收尾节点唯一约束：若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的 `Blocked-by`，确保收尾节点唯一
+ 3. 标注为指令层语义约束（出票方的模型判断），并说明兜底为 worktree 隔离下 `git merge` 原生冲突检测
+ 
+-- [ ] 在 SKILL.md 出票模式的垂直切片段末（`[e2e]` 段后、宽重构例外前）追加并行安全约束段落
+-- [ ] 约束内容与 delta spec「出 ticket 模式并行安全生成约束」Requirement 一致
+-- [ ] 含收尾节点唯一约束（多张全阻塞票须声明互相 Blocked-by）
++- [x] 在 SKILL.md 出票模式的垂直切片段末（`[e2e]` 段后、宽重构例外前）追加并行安全约束段落
++- [x] 约束内容与 delta spec「出 ticket 模式并行安全生成约束」Requirement 一致
++- [x] 含收尾节点唯一约束（多张全阻塞票须声明互相 Blocked-by）
+ 
+ ### Task 2: 执行模式 frontier 从严格串行改为宿主条件化受限并行
+ 
+ **Blocked-by:** none
+ **R-ID:** R1
+ 
+ 将 `sdflow-implement/SKILL.md` 的「### frontier 严格串行」段改为「### frontier 宿主条件化受限并行」，按 delta spec 的「执行模式宿主条件化受限并行工作 frontier」Requirement 实现。同时同步更新 frontmatter `description`（第 4-9 行）和引言段（第 155-158 行）中的"串行"表述。具体改动：
+ 
+ 1. 标题改名：`### frontier 严格串行` → `### frontier 宿主条件化受限并行`
+ 2. 宿主分支判据：`host=claude` 并行 + worktree 隔离，`host=codex`/`unknown` 退化串行
+diff --git a/sdflow-implement/SKILL.md b/sdflow-implement/SKILL.md
+index 0f9df48..1d746b2 100644
+--- a/sdflow-implement/SKILL.md
++++ b/sdflow-implement/SKILL.md
+@@ -1,17 +1,18 @@
+ ---
+ name: sdflow-implement
+ description: >
+   tickets 实现管线双模式编排器——由 /sdflow-ship 按 gate 判定编排调用；含出 ticket + 执行双模式：
+   RUN_PLAN → 出 ticket 模式（从 design.md/tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket，落盘
+-  即返回，不直通执行）；CONTINUE_IMPL(done_tasks) → 执行模式（按 Blocked-by frontier 串行派 fresh
+-  implementer 子代理 + 每 ticket 双轴审）。仅当仓 openspec/config.yaml 的 impl-pipeline 键（或在途
++  即返回，不直通执行）；CONTINUE_IMPL(done_tasks) → 执行模式（按 Blocked-by frontier 宿主条件化
++  受限并行派 fresh implementer 子代理 + 每 ticket 双轴审）。仅当仓 openspec/config.yaml 的
++  impl-pipeline 键（或在途
+   plan 的 frontmatter marker）取值为 tickets 时，才由 sdflow-ship 链序以显式
+   mode=tickets-plan|tickets-exec 字面参数派发；不要在此之外单独触发，也不要作为子代理派发调用。
+ ---
+ 
+ # sdflow-implement — tickets 实现管线双模式编排器
+ 
+ <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
+ ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
+ 
+ 这四条约束的是**你自主决策时的默认取向**。**真人用户明确指示优先**——真人用户明确要求扩大范围、
+@@ -146,21 +147,21 @@ description: >
+ （`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
+ **MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+ 
+ > **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+ > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
+ > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
+ 
+ <!-- sdflow:principles:end -->
+ 
+ tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出可执行的垂直切片）与执行（frontier
+-串行 + 每 ticket 双轴审）共享一个 skill、两种互斥模式，由 gate 判定的 RUN_PLAN/CONTINUE_IMPL 两态
++宿主条件化受限并行 + 每 ticket 双轴审）共享一个 skill、两种互斥模式，由 gate 判定的 RUN_PLAN/CONTINUE_IMPL 两态
+ 经 `/sdflow-ship` 链序以显式参数路由——两态的 gate 插入点力学与旧 writing-plans/subagent-dev 管线
+ 等价（D1/D2）。
+ 
+ 本 skill 由 ship 主 session 经 Skill **inline 执行**——**MUST NOT 作为子代理派发**：子代理无法再派
+ 子代理，而执行模式需要派发 implementer / 双轴审子代理，这个能力只在主 session 位置成立。
+ 
+ `ship_gate.py` **零改动**——本 skill 只是产出 / 消费 gate 已识别的「试验期外衣」契约
+ （`tickets.md` 文件名 + `### Task N:` 标题集 + checkpoint 标签∪复选框双通道完成判据），
+ 不触碰 gate 脚本本身，也不读 `openspec/config.yaml`（config 只在 ship 首跳读一次，见路由说明）。
+ 计划文件名按轨分列〔D5/adr-0033〕：superpowers 轨保持 `superpowers-plan.md` 不变，两名经共享
+@@ -477,29 +478,56 @@ impl-pipeline: tickets
+    ```
+    这条 checkpoint 的 slug（`plan`）**不带 `task<N>-` 前缀，不计入任何 ticket 的完成数**——它只
+    建立 `[sha, HEAD]` 闭区间的起点，供后续每张 ticket 的 `checkpoint(<change>:task<N>-<slug>)`
+    落在窗口内被 gate 识别。
+ 4. **返回编排层（ship）**：checkpoint 提交完成后才返回，**MUST NOT** 在同一次调用内继续派发
+    implementer 或直通执行——必须保留 `ship_gate` 在"落盘之后 / 执行之前"对 fence / 标题 / 重号的
+    三道校验插入点，让 gate 重新裁决一次是否可以进入 `CONTINUE_IMPL`。
+ 
+ ## 执行模式（`mode=tickets-exec`）
+ 
+-### frontier 严格串行
++### frontier 宿主条件化受限并行
+ 
+ - 调用 frontier helper，用透传的 `done_tasks` 算出下一批 next-ready ticket 号：
+   ```
+   python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/tickets.md --done {done_tasks}
+   ```
+-- **严格串行**——同一时刻至多一个 implementer 子代理在工作，**MUST NOT** 并行派发多个
+-  implementer（首版红线，design D4/Non-Goal）。next-ready 若一次给出多个候选，仍按号序逐个派发、
+-  逐个走完双轴审再派下一个。
++- **宿主分支**（`$SDFLOW_HOST` 第零步已 resolve）：
++  - **`host=claude`**：`next_ready` 返回多个候选时 SHALL 并行派发 implementer 子代理，**每个
++    implementer SHALL 使用 `isolation: "worktree"`**（Agent tool 原生参数，harness 自动创建独立
++    git worktree）。所有 implementer 返回后，编排层 SHALL **逐票按号序串行**执行：merge worktree
++    分支回主分支（`git merge --no-ff`）→ 双轴审 → fix 循环（如有）→ checkpoint commit。
++  - **`host=codex` / `host=unknown`**：`next_ready` 返回多个候选时 SHALL **按号序逐个派发**
++    （退化为串行），行为与改动前完全一致。Codex 无原生 worktree 隔离且进程回收模型不兼容并行。
++  - `next_ready` 返回单个候选时行为与串行模式一致（两宿主一致）。
++- **并行 dispatch 约束（Claude 宿主）**：
++  - 每个 implementer 在独立 worktree 中工作，有独立 `.git/index` 和工作树——不存在 index 竞态。
++  - implementer dispatch prompt MAY 建议按文件名 `git add <具体文件>`（最佳实践），但不再是
++    MUST——worktree 隔离下通配暂存不会带入别人的改动。
++  - 双轴审 SHALL 串行执行（不同票之间亦不并行）——反向变异共享工作树会交叉感染。
++  - 收尾 ticket（`Blocked-by` = 全部功能票号）`next_ready` 只返回它一个，始终单独串行执行。
++- **review-package 生成（并行批次，Claude 宿主）**：merge 回主分支后，每个 merge commit 天然
++  隔离各票改动。审第 N 票时：
++  - `before-sha` = merge commit 的第一父（merge 前主分支 HEAD）
++  - `after-sha` = merge commit 自身
++  - `git diff <merge_parent1>..<merge_commit> -U10` 天然只含该票改动，Commits/Stat/Diff 三段
++    均自然收窄到该票范围，无需额外文件过滤
++  - review-package 头部写 `# Review package: <merge_parent1>..<merge_commit> (Task N worktree merge)`
++  - 串行票的 review-package 沿用既有 `<before-sha>..<after-sha>` 规则不变
++  - fix 轮的 `<before-sha>` 沿用既有规则不变（fix commit 在串行审阶段单线程产生，无并发写入）
++- **异常处理（并行 implementer，Claude 宿主）**：并行 implementer 中某个返回 BLOCKED /
++  NEEDS_CONTEXT 时，harness 无中途取消能力，编排层 SHALL 等全部返回后逐个处理状态。BLOCKED 票的
++  worktree 直接丢弃（不 merge 回主分支），无脏改动污染。完成态票据正常走完 merge+审+checkpoint，
++  不因兄弟票 BLOCKED 而搁置。白跑成本为可接受边角。
++- **merge conflict 处理（Claude 宿主）**：`git merge --no-ff` 冲突时，编排层 SHALL 上报人介入
++  （halt envelope 五要素）——worktree 隔离下 merge conflict 是**真正的 fail-loud**（git merge 的
++  原生冲突检测），比原方案的"不存在的 fail-loud"严格更强。
+ 
+ ### 每 ticket 派 fresh implementer
+ 
+ 派发前先机械抠出该票原文（附录 B 有出处说明）：
+ 
+ ```
+ python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py task-text --plan {change_dir}/tickets.md --task {N}
+ ```
+ 
+ 默认落盘 `{change_dir}/impl-reports/task<N>-brief.md`。
