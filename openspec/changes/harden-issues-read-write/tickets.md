@@ -21,12 +21,12 @@ impl-pipeline: tickets
 
 在 consumer 边界 `validate_scan_envelope`（`issues.py:437-440`）将 status 和 specific_field 枚举漂移的硬 `raise ValueError` 降级为收进 problems + 继续。
 
-- [ ] `_build_effective_snapshot` 自检段追加 `item["status"] not in spec.status_values` → `problems.append`
-- [ ] `_build_effective_snapshot` 自检段追加 `item[spec.specific_field] not in spec.specific_values` → `problems.append`
-- [ ] `validate_scan_envelope` status/specific_field 枚举漂移的硬 raise 改为收进 problems + 继续
-- [ ] 测试：构造脏 status 的 legacy 行 → 断言 problems 非空 + 项仍在 items 中 + scan 正常返回
-- [ ] 测试：构造脏 specific_field 的 legacy 行 → 断言 problems 非空 + 项仍在 items 中
-- [ ] 测试：构造脏 status 项 → 跑 `issues.py reindex` 端到端 → 断言不崩 + problems 非空
+- [x] `_build_effective_snapshot` 自检段追加 `item["status"] not in spec.status_values` → `problems.append`
+- [x] `_build_effective_snapshot` 自检段追加 `item[spec.specific_field] not in spec.specific_values` → `problems.append`
+- [x] `validate_scan_envelope` status/specific_field 枚举漂移的硬 raise 改为收进 problems + 继续
+- [x] 测试：构造脏 status 的 legacy 行 → 断言 problems 非空 + 项仍在 items 中 + scan 正常返回
+- [x] 测试：构造脏 specific_field 的 legacy 行 → 断言 problems 非空 + 项仍在 items 中
+- [x] 测试：构造脏 status 项 → 跑 `issues.py reindex` 端到端 → 断言不崩 + problems 非空
 
 ### Task 2: reindex 总项数只增不减守卫
 
@@ -37,12 +37,12 @@ impl-pipeline: tickets
 
 `_reindex_core` 写盘前调用该函数，新扫描总项数 < 旧总项数 → `raise ReindexStageError` 拒绝覆盖。
 
-- [ ] 新增 `_count_index_items(index_path)` 函数：两段式解析 open 行数 + closed 聚合数
-- [ ] `_reindex_core` 写盘前调用，`new_count < old_count` 且 `old_count > 0` → raise ReindexStageError
-- [ ] 测试：旧 INDEX 有 N 项（含 closed 聚合行）、新扫描 < N → 断言 raise + INDEX 未被覆盖
-- [ ] 测试：旧 INDEX 只有 closed 项（open=0、closed>0）、新扫描丢了 closed 项 → 断言 raise
-- [ ] 测试：首次建（旧不存在）→ 正常写入不触发守卫
-- [ ] 测试：旧 INDEX 格式损坏 → 返回 0 跳过校验，不卡死 reindex
+- [x] 新增 `_count_index_items(index_path)` 函数：两段式解析 open 行数 + closed 聚合数
+- [x] `_reindex_core` 写盘前调用，`new_count < old_count` 且 `old_count > 0` → raise ReindexStageError
+- [x] 测试：旧 INDEX 有 N 项（含 closed 聚合行）、新扫描 < N → 断言 raise + INDEX 未被覆盖
+- [x] 测试：旧 INDEX 只有 closed 项（open=0、closed>0）、新扫描丢了 closed 项 → 断言 raise
+- [x] 测试：首次建（旧不存在）→ 正常写入不触发守卫
+- [x] 测试：旧 INDEX 格式损坏 → 返回 0 跳过校验，不卡死 reindex
 
 ### Task 3: sweep 路径 triage 状态解耦 + 文档同步
 
@@ -51,15 +51,15 @@ impl-pipeline: tickets
 
 给 `_bug_triage` / `_todo_triage` 加 `promote` 参数（默认 `True`）。`promote=False` 时跳过 `open_untriaged` 推进逻辑（`new_status = old_status`）。`triage` CLI 子命令新增 `--batch-only` flag 映射到 `promote=False`。`cmd_sweep` 的子进程调用改为 `triage --batch-only`。SKILL.md 同步更新 triage/sweep 文档。
 
-- [ ] `_bug_triage` 加 `promote` 参数（默认 True），`promote=False` 时 `new_status = old_status`
-- [ ] `_todo_triage` 加 `promote` 参数（默认 True），`promote=False` 时 `new_status = old_status`
-- [ ] `triage` CLI 新增 `--batch-only` flag → args 传递到 `_cmd_triage` → `promote=False`
-- [ ] `cmd_sweep` 子进程调用改为 `triage --batch-only --id X --批次 Y`
-- [ ] 测试：直接 triage OPEN 项（无 --batch-only）→ 断言 status 变为 PROPOSED（原行为不变）
-- [ ] 测试：triage --batch-only OPEN 项 → 断言 status 仍为 OPEN + batch 已更新
-- [ ] 测试：cmd_sweep 端到端 → 断言被 sweep 项 status 保持原样
-- [ ] SKILL.md:495-496 triage 命令表：补充 `--batch-only` 说明
-- [ ] SKILL.md:505 sweep 协议描述：注明 sweep 使用 `--batch-only`
+- [x] `_bug_triage` 加 `promote` 参数（默认 True），`promote=False` 时 `new_status = old_status`
+- [x] `_todo_triage` 加 `promote` 参数（默认 True），`promote=False` 时 `new_status = old_status`
+- [x] `triage` CLI 新增 `--batch-only` flag → args 传递到 `_cmd_triage` → `promote=False`
+- [x] `cmd_sweep` 子进程调用改为 `triage --batch-only --id X --批次 Y`
+- [x] 测试：直接 triage OPEN 项（无 --batch-only）→ 断言 status 变为 PROPOSED（原行为不变）
+- [x] 测试：triage --batch-only OPEN 项 → 断言 status 仍为 OPEN + batch 已更新
+- [x] 测试：cmd_sweep 端到端 → 断言被 sweep 项 status 保持原样
+- [x] SKILL.md:495-496 triage 命令表：补充 `--batch-only` 说明
+- [x] SKILL.md:505 sweep 协议描述：注明 sweep 使用 `--batch-only`
 
 ### Task 4: 实现验证（收尾，不计入 3–6 预算）
 
@@ -69,6 +69,6 @@ impl-pipeline: tickets
 按「聚合套件发现契约」运行本 change 的单元+集成+e2e 测试套件并全部通过，证据落
 `impl-reports/task4-verification.md`（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）。
 
-- [ ] 单元测试证据齐全并通过
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 单元测试证据齐全并通过
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
