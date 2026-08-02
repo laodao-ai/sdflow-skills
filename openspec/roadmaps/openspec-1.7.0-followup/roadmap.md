@@ -47,10 +47,10 @@ grammar 对齐锚（CLI 1.7.0 实跑）：接受 `100` / `9` / `a1` / `1a-b` / `
 | # | change | 含 | 依赖 | 状态 |
 |---|---|---|---|---|
 | **P1** | sdflow-spec × openspec schema 契约面重整 | A1 A2 A3 **A4** · E1 E2 E3 | 无 | ✅ 已交付（本 change） |
-| **P2** | prevention 层扩到 apply/archive | B1 B2 C2 | 无 | ⬜ 未开 |
-| **P3** | sdflow-done archive 现代化 | D1 D2 **D3** | 无 | ⬜ 未开 |
+| **P2** | prevention 层扩到 apply/archive | B1 B2 C2 | 无 | ✅ 已交付（change `complete-openspec-170-followup`） |
+| **P3** | sdflow-done archive 现代化 | D1 D2 **D3** | 无 | ✅ 已交付（change `complete-openspec-170-followup`） |
 | ~~Q1~~ | ~~是否采纳 `skip_specs`~~ | — | — | ✅ **已拍板：采纳**（见 D-3） |
-| **Q2** | amendment 双向 coherence | F1 | — | ❓ 待拍板 |
+| **Q2** | amendment 双向 coherence | F1 | — | ✅ 已拍板+已交付（change `complete-openspec-170-followup`） |
 
 **P1/P2/P3 改文件集不相交，可并行**：P1 触 `sdflow-spec/SKILL.md` + `sdflow-init`（schema 下发）；
 P2 触 `config.yaml` + `config.template.yaml`；P3 触 `sdflow-done/SKILL.md`。
