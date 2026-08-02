@@ -472,6 +472,161 @@ class TestReindexGeneratesIndexMd:
         assert not (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
 
 
+class TestCountIndexItems:
+    """Task 2：`_count_index_items` 两段式解析旧 `INDEX.md` 总项数
+    （open 表格行数 + closed 聚合行的 N），供 reindex 写盘前的只增不减守卫使用。"""
+
+    def test_returns_zero_when_file_missing(self, tmp_path):
+        missing = tmp_path / "openspec" / "issues" / "INDEX.md"
+        assert issues_mod._count_index_items(str(missing)) == 0
+
+    def test_returns_zero_when_closed_summary_line_missing(self, tmp_path):
+        """closed 聚合行是 `generate_index_md` 无条件写出的标记（即便 0 项也写）——
+        缺失即视为该文件不是本工具生成的合法 INDEX.md，格式损坏，返回 0。"""
+        path = tmp_path / "INDEX.md"
+        path.write_text("# 随便一些内容\n\n| B1 | bug | OPEN | - |\n", encoding="utf-8")
+        assert issues_mod._count_index_items(str(path)) == 0
+
+    def test_counts_open_rows_plus_closed_aggregate(self, tmp_path):
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+            {"id": "B2", "status": "FIXED", "change": "x", "batch": ""},
+        ])
+        _write_todo_file(tmp_path, "2026-01", [
+            {"id": "T1", "status": "DONE", "change": "x", "batch": ""},
+        ])
+        _run_reindex(tmp_path)
+        assert issues_mod._count_index_items(str(_index_path(tmp_path))) == 3
+
+    def test_open_zero_closed_positive_still_counted(self, tmp_path):
+        """旧 INDEX 只有 closed 项（open=0）时，总数仍须含 closed 聚合数——
+        不能因为 open 表格没有数据行就误判为 0。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "FIXED", "change": "x", "batch": ""},
+        ])
+        _write_todo_file(tmp_path, "2026-01", [
+            {"id": "T1", "status": "DONE", "change": "x", "batch": ""},
+        ])
+        _run_reindex(tmp_path)
+        content = _read_index(tmp_path)
+        assert "（无 open 项）" in content
+        assert issues_mod._count_index_items(str(_index_path(tmp_path))) == 2
+
+    def test_table_header_and_separator_rows_not_miscounted_as_open_items(self, tmp_path):
+        """表头 `| ID | Pool | ... |` 与分隔行 `|----|...` 不应被误判为数据行
+        （只有 `| [A-Z]\\d+ | ...` 形态才计数）。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        _run_reindex(tmp_path)
+        assert issues_mod._count_index_items(str(_index_path(tmp_path))) == 1
+
+
+class TestReindexCountGuard:
+    """Task 2：reindex 总项数只增不减守卫——新扫描总项数低于旧 `INDEX.md` 记录的总项数时
+    拒绝覆盖（防止误删 dated 文件、或 scan 异常截断时静默吞掉存量项）。"""
+
+    def test_raises_and_preserves_index_when_new_scan_has_fewer_items_than_old(self, tmp_path):
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+            {"id": "B2", "status": "FIXED", "change": "x", "batch": ""},
+        ])
+        _write_todo_file(tmp_path, "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        _run_reindex(tmp_path)
+        before = _read_index_bytes(tmp_path)
+        assert issues_mod._count_index_items(str(_index_path(tmp_path))) == 3
+
+        # 模拟"误删/scan 异常截断"：新一轮扫描只剩 B1，B2 与整个 todo 文件都不见了
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        (tmp_path / "openspec" / "issues" / "todolist" / "2026-01-todolist.md").unlink()
+
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
+            capture_output=True, text=True,
+
+            encoding="utf-8",
+            errors="replace",)
+
+        assert proc.returncode != 0
+        assert proc.stderr.strip() != ""
+        after = _read_index_bytes(tmp_path)
+        assert after == before  # 拒绝覆盖，旧 INDEX.md 原样保留
+
+    def test_raises_when_old_index_has_only_closed_items_and_new_scan_loses_them(self, tmp_path):
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "FIXED", "change": "x", "batch": ""},
+        ])
+        _write_todo_file(tmp_path, "2026-01", [
+            {"id": "T1", "status": "DONE", "change": "x", "batch": ""},
+        ])
+        _run_reindex(tmp_path)
+        before = _read_index_bytes(tmp_path)
+        assert issues_mod._count_index_items(str(_index_path(tmp_path))) == 2
+
+        # 新扫描丢了 T1（todo 文件被清空为只剩表头）
+        (tmp_path / "openspec" / "issues" / "todolist" / "2026-01-todolist.md").write_text(
+            "# 2026-01 TODO\n\n> 项目：test\n\n## 状态总览\n\n"
+            "| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |\n"
+            "|----|------|------|------|------|------|------------|------|\n",
+            encoding="utf-8",
+        )
+
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
+            capture_output=True, text=True,
+
+            encoding="utf-8",
+            errors="replace",)
+
+        assert proc.returncode != 0
+        after = _read_index_bytes(tmp_path)
+        assert after == before
+
+    def test_first_reindex_on_empty_root_not_blocked_by_guard(self, tmp_path):
+        """旧 INDEX.md 不存在（首次建）→ `_count_index_items` 返回 0 → 守卫跳过校验，
+        正常写入。"""
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        assert not (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
+
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
+            capture_output=True, text=True,
+
+            encoding="utf-8",
+            errors="replace",)
+
+        assert proc.returncode == 0, proc.stderr
+        assert (tmp_path / "openspec" / "issues" / "INDEX.md").exists()
+
+    def test_corrupted_old_index_returns_zero_and_does_not_block_reindex(self, tmp_path):
+        """旧 INDEX.md 格式损坏（非本工具生成、缺 closed 聚合行）→ `_count_index_items`
+        返回 0 → 守卫跳过校验，不卡死 reindex（正常重建覆盖损坏文件）。"""
+        index_path = _index_path(tmp_path)
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text("this is not a valid generated INDEX.md at all\n", encoding="utf-8")
+
+        _write_bug_file(tmp_path, "2026-01-01", [
+            {"id": "B1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+
+        proc = subprocess.run(
+            [sys.executable, SCRIPT, "--root", str(tmp_path), "reindex"],
+            capture_output=True, text=True,
+
+            encoding="utf-8",
+            errors="replace",)
+
+        assert proc.returncode == 0, proc.stderr
+        content = index_path.read_text(encoding="utf-8")
+        assert content.startswith(issues_mod.INDEX_BANNER)
+
+
 class TestReindexProblemsEcho:
     """Task 5（T1）：`_scan_pool` 此前静默丢弃两池 `scan --json` 各自的 `problems`
     （表↔块不一致等一致性自检结果）——reindex 应把它们回显到 stderr，默认仍 exit 0
