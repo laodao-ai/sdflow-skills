@@ -42,6 +42,7 @@ rules:
   specs:
     - 每个 Requirement 必挂 #### Scenario(WHEN/THEN)，Requirement 有稳定 ID（schema 已要求，强调不得遗漏）
     - 验收标准可观察、可测试，不得只写"测试通过"
+    - 新能力 delta spec MUST 以 `## Purpose` 开头（≥50 字符）；1.7.0 archive 抬升此段进主 spec，缺则写 TBD 占位符
   design:
     - 无条件必含小节，英文标题：`## Compliance`（规则/边界合规声明，遵守或显式豁免，禁沉默例外）
     - 按 trigger-catalog 命中加节：TG-04→v_old/v_new 对照表、TG-05→数据模型与生命周期、TG-07→请求/响应 JSON 示例、TG-08→失败模式表+可观测性、TG-15→可观测性、TG-16→NFR 数字化、TG-17→安全与数据保护、TG-23→决策记录 ADR、TG-13/14→组件清单
@@ -102,6 +103,14 @@ rules:
 #     full: "make integration"   # 未分档，quick 亦取此命令
 #   e2e:
 #     full: "make e2e"
+
+# operations（可选段）——按操作类型（如 archive）下沉给执行子代理的硬约束指引。
+# guidance 形状为字符串数组（非字符串），否则 CLI 拒绝并打警告。
+operations:
+  archive:
+    guidance:
+      - "归档 MUST 走 openspec archive CLI（它同步 delta→openspec/specs/ + 更新 INDEX + 校验），禁手动 mv（漏 spec 同步）"
+      - "archive 前 MUST 先 reconcile tasks.md 复选框（否则 CLI 报 N/M incomplete 警告 + verify 误判）"
 
 # 评审价值度量（lens-metric）开关：低频消费仓默认关（避免零收益期背记账+硬阻塞）；
 # 高频仓可改 true 开启。契约见 lens-metric-contract.md。
