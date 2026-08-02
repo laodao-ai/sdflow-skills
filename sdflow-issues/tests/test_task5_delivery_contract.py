@@ -153,17 +153,45 @@ def _reference_canonical_rows(path, pool):
 
 DOGFOOD_OVERLAY_DELTAS = {
     "T2": {},
-    "T47": {"status": ("PROPOSED", "WONTDO")},  # drop-review-html-viewer：engine.js 删除→该 todo 失对象，legacy 行冻结、overlay 置 WONTDO
+    "T8": {"status": ("PROPOSED", "WONTDO")},
+    "T19": {"status": ("PROPOSED", "WONTDO")},
+    "T27": {"status": ("PROPOSED", "WONTDO")},
+    "T28": {"status": ("PROPOSED", "WONTDO")},
+    "T30": {"status": ("PROPOSED", "DONE")},
+    "T47": {"status": ("PROPOSED", "WONTDO")},
+    "T50": {"status": ("PROPOSED", "WONTDO")},
     "T66": {"status": ("PROPOSED", "DONE")},
     "T67": {"status": ("PROPOSED", "DONE")},
+    "T70": {"status": ("PROPOSED", "DONE")},
+    "T71": {"status": ("PROPOSED", "DONE")},
+    "T73": {"status": ("PROPOSED", "DONE")},
+    "T77": {"status": ("OPEN", "WONTDO")},
     "T85": {"status": ("PROPOSED", "DONE")},
-    # harden-sdflow-spec-followups：只订正未来 gate 的 A/B 输入契约，T132 仍 OPEN。
-    "T132": {"summary": (
-        "grill 相位防静默跳过：spec-review 起手机械核验『grill 已收敛』信号（workflow.md:83 已强制的 grill checkpoint-commit，或 design.md 内补 <!-- sdflow:grill-done --> 锚），无信号→REFUSE_START 提示先跑 grill。grill 本身是人类对话岛不能自动跑，但『跑没跑』可机械断言——同 ship_gate 设计门新鲜度 fail-closed 先例，把判断从模型记性挪到脚本。属 mechanical-layer-hardening 家族。关联 T19（T19 定何时可跳；本条定跳了就机械拦）。信号载体（commit-tag vs design.md 锚）待其自身 design 定。",
-        "未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。",
-    )},
-    "T146": {"status": ("PROPOSED", "DONE")},
+    "T87": {"status": ("PROPOSED", "DONE")},
+    "T88": {"status": ("PROPOSED", "DONE")},
+    "T97": {"status": ("PROPOSED", "WONTDO")},
+    "T98": {"status": ("PROPOSED", "WONTDO")},
+    "T99": {"status": ("PROPOSED", "WONTDO")},
+    "T100": {"status": ("PROPOSED", "WONTDO")},
+    "T101": {"status": ("PROPOSED", "WONTDO")},
+    "T102": {"status": ("PROPOSED", "WONTDO")},
+    "T118": {"status": ("PROPOSED", "DONE")},
+    "T120": {"status": ("PROPOSED", "WONTDO")},
+    "T125": {"status": ("PROPOSED", "WONTDO")},
+    "T126": {"status": ("PROPOSED", "DONE")},
+    "T127": {"status": ("PROPOSED", "WONTDO")},
+    "T132": {
+        "status": ("OPEN", "WONTDO"),
+        "summary": (
+            "grill 相位防静默跳过：spec-review 起手机械核验『grill 已收敛』信号（workflow.md:83 已强制的 grill checkpoint-commit，或 design.md 内补 <!-- sdflow:grill-done --> 锚），无信号→REFUSE_START 提示先跑 grill。grill 本身是人类对话岛不能自动跑，但『跑没跑』可机械断言——同 ship_gate 设计门新鲜度 fail-closed 先例，把判断从模型记性挪到脚本。属 mechanical-layer-hardening 家族。关联 T19（T19 定何时可跳；本条定跳了就机械拦）。信号载体（commit-tag vs design.md 锚）待其自身 design 定。",
+            "未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。",
+        ),
+    },
+    "T133": {"status": ("OPEN", "WONTDO")},
     "T135": {"status": ("OPEN", "DONE")},
+    "T136": {"status": ("PROPOSED", "DONE")},
+    "T138": {"status": ("PROPOSED", "DONE")},
+    "T146": {"status": ("PROPOSED", "DONE")},
 }
 
 
