@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 70a9d7e7c49be78de6d91ac8e7c8354dbbf291af
+---
+
 # Spec Review Report — complete-openspec-170-followup
 
 ## 评审概要
@@ -140,3 +146,7 @@ Task 2.2 的验收标准 "读 fallback 段确认不再提及 REMOVED abort" 在�
 F-SR1/F-SR2/F-SR3 是三个高置信高严重度 finding，均有多镜收敛 + 源码实证。建议设计门前**先做 amendment 修正这三条**，然后进 HARD-GATE 拍板。
 
 是否建议进设计 HARD-GATE：**是**，修正三条高危 finding 后即可拍板。
+
+## 拍板记录
+
+设计门已拍板批准，日期 2026-08-02。Q1-Q5 全部接受推荐方案。
