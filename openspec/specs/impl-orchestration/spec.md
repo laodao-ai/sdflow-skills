@@ -52,6 +52,18 @@ sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 �
 
 出票落盘前 SHALL 做一次全 ticket 语义一致性自扫（拓扑之外的语义矛盾，如某票假设的接口形状被另一票废弃）；发现矛盾按 `T10-choice` 三级决策协议处理（①有客观判据自动选并**按三镜 + 主次**记理由；②无客观判据派 **strong 档**对抗镜复核；③复核不过或无从复核则停并上抛），不批量问人，仲裁记录同样落 `impl-reports/planning-decisions.md`。
 
+**出票时 SHALL 评估并行安全性**〔spec-review-amendment〕：对 `Blocked-by` 声明使得 `next_ready` 可能同时返回的一组 ticket（即它们的 `Blocked-by` 集合是 `done` 集的子集，会同时出现在 ready 列表中），出票方 SHALL 确认——① 它们的行为边界不重叠（不改同一模块的同一接口）；② 一个的产出不是另一个的输入；③ 有疑问时 SHALL 保守声明依赖（宁可串行不可误并行）；④ 若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的 `Blocked-by`，确保收尾节点唯一（`next_ready` 只返回一个收尾候选）。该约束为指令层语义约束（出票方的模型判断）；兜底为 worktree 隔离下 `git merge --no-ff` 的原生冲突检测（真正的 fail-loud）——即使出票判断失误（两票改同一文件），各自 commit 到独立 worktree 分支，merge 回主分支时 git 正常冲突检测会 fail-loud（见「执行模式宿主条件化受限并行工作 frontier 并以文件交接」需求）。
+
+#### Scenario: 并行安全的 ticket 不声明互相 Blocked-by
+
+- **WHEN** 某 change 有 3 张功能 ticket，T2 改脚本 A，T3 改脚本 B，T4 改 SKILL.md 的不同段，三者均只 Blocked-by T1
+- **THEN** 出票方判定三者行为边界不重叠、产出不互为输入，保留 `Blocked-by: 1` 不加互相依赖
+
+#### Scenario: 有数据流依赖时保守声明串行
+
+- **WHEN** T2 新增一个函数，T3 的验收标准调用该函数
+- **THEN** 出票方 SHALL 让 T3 声明 `Blocked-by: 1,2`，确保 T3 在 T2 完成后才执行
+
 #### Scenario: 出 ticket 后 gate 先行校验再执行
 
 - **WHEN** 出 ticket 模式完成落盘并返回
@@ -126,14 +138,51 @@ ticket 文件 SHALL 写入 change 目录的 `superpowers-plan.md`（试验期外
 - **WHEN** 某 ticket 双轴审通过、执行模式按契约补打完成标签并勾框
 - **THEN** 既有 ship_gate（未改动）经 checkpoint 标签 ∪ 复选框双通道判定该 Task 号 done，CONTINUE_IMPL 的 done_tasks 集合正确携带；审前中断 resume 时该 ticket 不在 done_tasks 中、进入续审〔spec-review-amendment F1〕
 
-### Requirement: 执行模式串行工作 frontier 并以文件交接
+### Requirement: 执行模式宿主条件化受限并行工作 frontier 并以文件交接
 
-执行模式 SHALL 按 Blocked-by 拓扑串行工作 frontier（首版 MUST NOT 并行派发 implementer）；每 ticket 派发 fresh implementer 子代理，契约为 TDD at pre-agreed seams、定期 typecheck、**单元测试 + 本 ticket 声明的 e2e 场景 + 本 ticket `Blocked-by` 链上模块的集成测试**（MUST NOT 跑**与本票无依赖关系**的集成/e2e 套件——聚合回归由「实现验证」收尾 ticket 承担，见「出 ticket 模式产出 tracer-bullet ticket 并落盘即返回」需求）、完成信号双写；「本 ticket 声明的 e2e 场景」SHALL 由 ticket 验收标准中标注为 e2e 的条目界定，未标注即该票无 e2e 场景〔spec-review-amendment M7〕；implementer 状态词表为 DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED——NEEDS_CONTEXT SHALL 由编排层从盘面（design.md/specs/ticket 文本）自答，答不出走 defer 或停，MUST NOT 编造；BLOCKED 无法消解 SHALL 停并上抛。子代理产物 SHALL 以文件交接：implementer 全量报告写 report file（按 ticket 名命名）只返回状态摘要；reviewer 输入 diff 经 review-package 式文件传递，MUST NOT 把大产物粘贴进 dispatch prompt。审出的 cannot-verify-from-diff 项（需求活在未改动代码或跨 ticket）SHALL 由编排层亲自消解，且 SHALL 设预算上界：需触碰超过 3 个文件、或从盘面（design/specs/ticket 文本）不可直接解答时，MUST 按「确认缺口退回 implementer」处理〔spec-review-amendment F7〕。frontier 的 next-ready 判定 SHALL 由确定性 helper 计算（解析 Blocked-by + gate done_tasks 拓扑排序，stdlib-only）〔F8〕。一切停机（BLOCKED/依赖缺失/gate 拒绝）SHALL 以统一 halt envelope 呈现：错误码、ticket 号与名、已核证据、已写盘副作用、精确恢复步骤〔F7〕；BLOCKED 的 blocker 记录 SHALL 落盘 report file（change 目录内、git-tracked，防 compaction 蒸发）〔F7〕。DONE_WITH_CONCERNS SHALL 与 DONE 同路径进双轴审，implementer 所述 concerns 逐字附给两轴〔F7〕。
+执行模式 SHALL 按 Blocked-by 拓扑计算工作 frontier（`next_ready` 返回所有前置已完成的 ticket 号集合）；行为按宿主分支（`$SDFLOW_HOST` 第零步已 resolve）〔spec-review-amendment〕：
 
-#### Scenario: frontier 串行推进
+- **`host=claude`**：`next_ready` 返回多个候选时 SHALL 并行派发 implementer 子代理，**每个 implementer SHALL 使用 `isolation: "worktree"`**（Agent tool 原生参数，harness 自动创建独立 git worktree）。所有 implementer 返回后，编排层 SHALL **逐票按号序串行** merge worktree 分支回主分支（`git merge --no-ff`）→ 双轴审 → fix 循环（如有）→ checkpoint commit。
+- **`host=codex` / `host=unknown`**：`next_ready` 返回多个候选时 SHALL **按号序逐个派发**（退化为串行），行为与改动前完全一致——Codex 无原生 worktree 隔离且进程回收模型不兼容并行。
+- `next_ready` 返回单个候选时行为与串行模式一致（两宿主一致）。
 
-- **WHEN** ticket 2、ticket 3 均 Blocked-by ticket 1 且 ticket 1 完成
-- **THEN** 编排层按 ticket 号序先派 ticket 2，完成后再派 ticket 3，同一时刻至多一个 implementer 在工作
+**并行 dispatch 约束（Claude 宿主）**：每个 implementer 在独立 worktree 中工作，有独立 `.git/index` 和工作树，不存在 index 竞态；dispatch prompt MAY 建议按文件名 `git add <具体文件>`（最佳实践，非 MUST——worktree 隔离下通配暂存不会带入别人的改动）；双轴审 SHALL 串行执行（不同票之间亦不并行，反向变异共享工作树会交叉感染）；收尾 ticket（`Blocked-by` = 全部功能票号）`next_ready` 只返回它一个，始终单独串行执行。
+
+**review-package 生成（并行批次，Claude 宿主）**：merge 回主分支后，每个 merge commit 天然隔离各票改动——审第 N 票时 `before-sha` = merge commit 的第一父（merge 前主分支 HEAD）、`after-sha` = merge commit 自身，`git diff <merge_parent1>..<merge_commit>` 天然只含该票改动；串行票的 review-package 沿用既有 `<before-sha>..<after-sha>` 规则不变；fix 轮的 `<before-sha>` 沿用既有规则不变（fix commit 在串行审阶段单线程产生，无并发写入）。
+
+**异常处理（Claude 宿主）**：并行 implementer 中某个返回 BLOCKED / NEEDS_CONTEXT 时，harness 无中途取消能力，编排层 SHALL 等全部返回后逐个处理状态；BLOCKED 票的 worktree 直接丢弃（不 merge 回主分支），无脏改动污染；完成态票据正常走完 merge+审+checkpoint，不因兄弟票 BLOCKED 而搁置，白跑成本为可接受边角。`git merge --no-ff` 冲突时编排层 SHALL 上报人介入（halt envelope 五要素）——worktree 隔离下 merge conflict 是**真正的 fail-loud**。
+
+其余契约不变：每 ticket 派发 fresh implementer 子代理，契约为 TDD at pre-agreed seams、定期 typecheck、**单元测试 + 本 ticket 声明的 e2e 场景 + 本 ticket `Blocked-by` 链上模块的集成测试**（MUST NOT 跑**与本票无依赖关系**的集成/e2e 套件——聚合回归由「实现验证」收尾 ticket 承担，见「出 ticket 模式产出 tracer-bullet ticket 并落盘即返回」需求）、完成信号双写；「本 ticket 声明的 e2e 场景」SHALL 由 ticket 验收标准中标注为 e2e 的条目界定，未标注即该票无 e2e 场景〔spec-review-amendment M7〕；implementer 状态词表为 DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED——NEEDS_CONTEXT SHALL 由编排层从盘面（design.md/specs/ticket 文本）自答，答不出走 defer 或停，MUST NOT 编造；BLOCKED 无法消解 SHALL 停并上抛。子代理产物 SHALL 以文件交接：implementer 全量报告写 report file（按 ticket 名命名）只返回状态摘要；reviewer 输入 diff 经 review-package 式文件传递，MUST NOT 把大产物粘贴进 dispatch prompt。审出的 cannot-verify-from-diff 项（需求活在未改动代码或跨 ticket）SHALL 由编排层亲自消解，且 SHALL 设预算上界：需触碰超过 3 个文件、或从盘面（design/specs/ticket 文本）不可直接解答时，MUST 按「确认缺口退回 implementer」处理〔spec-review-amendment F7〕。frontier 的 next-ready 判定 SHALL 由确定性 helper 计算（解析 Blocked-by + gate done_tasks 拓扑排序，stdlib-only）〔F8〕。一切停机（BLOCKED/依赖缺失/gate 拒绝）SHALL 以统一 halt envelope 呈现：错误码、ticket 号与名、已核证据、已写盘副作用、精确恢复步骤〔F7〕；BLOCKED 的 blocker 记录 SHALL 落盘 report file（change 目录内、git-tracked，防 compaction 蒸发）〔F7〕。DONE_WITH_CONCERNS SHALL 与 DONE 同路径进双轴审，implementer 所述 concerns 逐字附给两轴〔F7〕。
+
+#### Scenario: Claude 宿主 frontier 受限并行推进（worktree 隔离）
+
+- **WHEN** `$SDFLOW_HOST=claude`，ticket 2、ticket 3 均 Blocked-by ticket 1 且 ticket 1 完成
+- **THEN** 编排层并行派发 ticket 2 和 ticket 3 的 implementer（各自 `isolation: "worktree"`）；两者全部返回后，merge worktree-2 回主分支 → 审 ticket 2 → checkpoint，merge worktree-3 回主分支 → 审 ticket 3 → checkpoint
+
+#### Scenario: Codex 宿主退化为串行
+
+- **WHEN** `$SDFLOW_HOST=codex`，ticket 2、ticket 3 均 Blocked-by ticket 1 且 ticket 1 完成
+- **THEN** 编排层按号序先派 ticket 2（无 worktree 隔离）→ 审 → checkpoint，再派 ticket 3 → 审 → checkpoint
+
+#### Scenario: 依赖图为线性链时退化为串行
+
+- **WHEN** 每 ticket 的 Blocked-by 严格指向前一 ticket（1→2→3→4→5）
+- **THEN** `next_ready` 每次只返回一个候选，行为与改动前完全一致（两宿主一致）
+
+#### Scenario: 并行 implementer 的 review-package 隔离（Claude 宿主）
+
+- **WHEN** ticket 2 和 ticket 3 并行执行完毕（各在独立 worktree），编排层进入串行 merge+审
+- **THEN** merge ticket 2 的 worktree 分支后，审 ticket 2 的 review-package diff = `merge_parent1..merge_commit`，天然只含 ticket 2 的改动
+
+#### Scenario: 并行 implementer 某个 BLOCKED（Claude 宿主）
+
+- **WHEN** ticket 2、ticket 3、ticket 4 并行派发（各自 worktree），ticket 3 返回 BLOCKED
+- **THEN** 编排层等全部返回后，逐个处理：merge ticket 2 和 ticket 4 的 worktree 分支回主分支并正常进审+checkpoint；ticket 3 的 worktree 直接丢弃（不 merge），按 BLOCKED halt envelope 处理
+
+#### Scenario: 并行 implementer 碰同一文件时 merge conflict fail-loud
+
+- **WHEN** ticket 2 和 ticket 3 并行执行后各自改了同一文件的不同段
+- **THEN** merge ticket 2 后无冲突；merge ticket 3 时 `git merge --no-ff` 报冲突，编排层 SHALL 上报人介入
 
 #### Scenario: NEEDS_CONTEXT 从盘面自答
 
@@ -272,7 +321,7 @@ implementer、Standards 轴、Spec 轴、fix 子代理派发 SHALL 引用本次�
 
 ### Requirement: fix 轮的 review package 只含本轮修复 diff
 
-双轴审的 reviewer 输入经 review-package 式文件传递（见「执行模式串行工作 frontier 并以文件交接」需求）。**fix 轮次的 review package SHALL 只含该轮的修复 diff**（`上轮已审 SHA..HEAD`），MUST NOT 重新打包自 ticket 起点以来的累积全量 diff。
+双轴审的 reviewer 输入经 review-package 式文件传递（见「执行模式宿主条件化受限并行工作 frontier 并以文件交接」需求）。**fix 轮次的 review package SHALL 只含该轮的修复 diff**（`上轮已审 SHA..HEAD`），MUST NOT 重新打包自 ticket 起点以来的累积全量 diff。
 
 理由：fix 轮的评审命题是「这次修复对不对」，不是「重新全审这张票」；累积打包会让同一段 diff 被反复读入 reviewer context（实测单包最大达 1,356KB）。首轮 review package 的范围不变。
 
@@ -283,7 +332,7 @@ implementer、Standards 轴、Spec 轴、fix 子代理派发 SHALL 引用本次�
 
 ### Requirement: 往既有测试补断言或修改既有断言同样适用 red-before-green
 
-implementer 的 TDD 契约为 red-before-green（见「执行模式串行工作 frontier 并以文件交接」需求）。该纪律 SHALL 同样适用于**往既有测试文件补一条断言或修改既有断言的期望值/判定逻辑**的场景，而不限于新写测试：**补一条断言或修改既有断言时 SHALL 先确认它会红**——当场破坏被测点、确认该断言失败，再恢复。
+implementer 的 TDD 契约为 red-before-green（见「执行模式宿主条件化受限并行工作 frontier 并以文件交接」需求）。该纪律 SHALL 同样适用于**往既有测试文件补一条断言或修改既有断言的期望值/判定逻辑**的场景，而不限于新写测试：**补一条断言或修改既有断言时 SHALL 先确认它会红**——当场破坏被测点、确认该断言失败，再恢复。
 
 理由：恒真断言（needle 被别的门满足，或压根没有用例走到该行）在写入时无成本可验，在事后 review 时才被发现，届时已需一整轮返工。修改期望值同理——改后仍恒真的断言同样是假绿。该自检成本为一次聚焦运行。
 
