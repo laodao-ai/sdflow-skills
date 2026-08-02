@@ -16,11 +16,12 @@ WHEN `openspec/config.yaml` has `operations.archive.guidance` configured
 AND `openspec instructions archive --change X --json` is called
 THEN the response SHALL contain `operationGuidance` array with the configured entries
 
-#### Scenario: downstream projects receive guidance via template
+#### Scenario: new projects receive guidance via template [spec-review-amendment]
 
-WHEN `sdflow-init update` runs on a downstream project
-THEN `openspec/workflow/config.template.yaml` SHALL contain the same `operations.archive.guidance` entries
-AND the downstream `openspec/config.yaml` SHALL be updated accordingly
+WHEN a new project runs `sdflow-init` (init mode, generating config.yaml from template)
+THEN the generated `openspec/config.yaml` SHALL contain the `operations.archive.guidance` entries from `config.template.yaml`
+
+Note: `sdflow-init update` does not merge new config keys into existing `config.yaml` (by design — `init.py:handle_config` only touches `schema:` on update). Already-provisioned projects receive a "next steps" prompt to manually merge the `operations` section.
 
 ### Requirement: purpose-rule-in-specs
 
@@ -41,15 +42,15 @@ WHEN the archive sub-agent runs `openspec archive` with `--json` flag
 THEN warnings SHALL be read from the JSON `warnings` array
 AND text-based pattern matching on `tail` output SHALL NOT be used
 
-### Requirement: fallback-ladder-slim
+### Requirement: fallback-ladder-slim [spec-review-amendment]
 
-The `sdflow-done` archive fallback description SHALL remove references to REMOVED-requirement abort as a trigger condition (fixed in CLI 1.7.0), while preserving the Chinese legacy format fallback path.
+The `sdflow-done` archive fallback description SHALL accurately reflect CLI 1.7.0 behavior: REMOVED-requirement abort was fixed in the CLI itself (no longer triggers abort), and `sdflow-done/SKILL.md` never referenced this condition. The Chinese legacy format fallback path SHALL be preserved.
 
 #### Scenario: fallback triggers documented accurately
 
 WHEN reading `sdflow-done/SKILL.md` archive fallback section
-THEN the documented trigger conditions SHALL NOT mention REMOVED-requirement abort
-AND Chinese legacy format validation errors SHALL remain as a valid fallback trigger
+THEN the documented trigger conditions SHALL only reference Chinese legacy format validation errors (the sole remaining trigger)
+AND no changes to existing fallback text are required (REMOVED-abort was a CLI behavior fix, not a SKILL.md text change)
 
 ### Requirement: archive-recognizes-skipped
 

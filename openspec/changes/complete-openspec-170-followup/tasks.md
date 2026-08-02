@@ -20,9 +20,9 @@
   - Requirement: archive-json-warnings
   - 验证：读 `sdflow-done/SKILL.md` 确认 prompt 使用 `--json` 且读 JSON warnings
 
-- [ ] **Task 2.2**: fallback 阶梯瘦身——去掉 REMOVED abort 相关描述
+- [ ] **Task 2.2**: fallback 阶梯确认——确认现有文本不提及 REMOVED abort（已核实无需改动）[spec-review-amendment]
   - Requirement: fallback-ladder-slim
-  - 验证：读 fallback 段确认不再提及 REMOVED abort，保留中文遗留格式触发
+  - 验证：grep "REMOVED" sdflow-done/SKILL.md → 零命中即通过（恒真确认，不做文本修改）
 
 - [ ] **Task 2.3**: archive 侧认 skipped 态
   - Requirement: archive-recognizes-skipped

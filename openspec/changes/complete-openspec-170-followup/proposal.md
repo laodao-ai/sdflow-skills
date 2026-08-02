@@ -34,7 +34,7 @@ P1（schema 契约面重整）已交付，本 change 完成剩余三块跟进：
 - `openspec instructions archive --json` 在配置 `operations.archive.guidance` 后返回 `operationGuidance` 数组
 - `sdflow-done` archive 步能正确处理 `archive --json` 的 `warnings[]` 输出
 - `sdflow-spec-review` 的 amendment 写回明确覆盖 proposal/tasks（不止 design/specs）
-- 下游项目 `sdflow-init update` 后获得 `operations` 段和 `## Purpose` 规则
+- 新项目 `sdflow-init` (init 模式) 后获得 `operations` 段和 `## Purpose` 规则；已铺设项目按 update 提示手动合并 [spec-review-amendment]
 
 ## Non-Goals
 

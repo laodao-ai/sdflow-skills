@@ -32,7 +32,7 @@ operations:
 
 ## P3: sdflow-done archive 步现代化
 
-### 改动 4: archive 子代理 prompt 改用 `--json`
+### 改动 4: archive 子代理 prompt 改用 `--json` [spec-review-amendment]
 
 `sdflow-done/SKILL.md` 第三步的 archive 子代理 prompt 中，将：
 ```
@@ -42,20 +42,28 @@ openspec archive {change_name} -y 2>&1 | tail -30
 ```
 openspec archive {change_name} -y --json
 ```
-并改判断逻辑为读 JSON 输出的 `warnings` 数组（如存在），替代文本匹配。
 
-### 改动 5: fallback 阶梯瘦身
+并**完整重写 SKILL.md:376-380 的成功/失败判据**为基于 JSON 结构的版本：
 
-`sdflow-done/SKILL.md:378-380` 的 fallback 触发条件描述中，去掉 REMOVED abort 的相关说明
-（1.7.0 已修：REMOVED 需求不再导致 abort，改为 warn + 按已应用处理）。
-保留中文遗留格式导致的 Validation error 作为 fallback 的主要触发条件。
+- **成功**: exit 0 且 JSON 的 `archive` 字段非 null → 归档+同步完成；如 `archive.warnings` 数组存在且非空，展示警告
+- **失败**: exit ≠ 0 或 `archive` 为 null → 走第 2 节 fallback。失败 JSON 形状为 `{"archive": null, "status": [{"code": "archive_validation_failed", ...}]}`，**不含 `warnings` 字段**
+- 旧的文本匹配判据（`"archived as ..."` / `"Validation error"` / `"incomplete task(s)"`）在 `--json` 模式下**不出现在 stdout**（被 `if (!json)` 守卫），MUST 全部替换为 JSON 字段判据
 
-同批 1.7.0 修复的其他 fallback 原因：
+依赖的 JSON 字段清单（CLI 1.7.0 archive.js）：`archive`（null=失败）、`archive.warnings`（可选数组）、`archive.specsUpdated`（布尔）、`status`（失败时的结构化错误数组）。CLI 未声明该 schema 为稳定 API，但 JSON 严格优于文本匹配。
+
+### 改动 5: fallback 阶梯确认（无实际文本改动）[spec-review-amendment]
+
+`sdflow-done/SKILL.md:378-380` 的 fallback 触发条件描述**已经只提中文遗留格式一种触发原因**，
+通篇不提 REMOVED abort（grep 实证零命中）。1.7.0 修复的是 CLI 自身行为（REMOVED 需求不再
+导致 abort），不是 SKILL.md 文本中存在这段话待删。
+
+∴ 本改动 = **确认现有描述准确，无需文本改动**。保留中文遗留格式导致的 Validation error
+作为 fallback 的唯一触发条件。
+
+同批 1.7.0 修复的其他 CLI 行为（收窄了 fallback 的触发面，但均不影响 SKILL.md 文本）：
 - delta 里非 `### Requirement:` 的分隔标题不再被当幽灵需求告警
 - `## REMOVED Requirements` 不再被报「缺 scenario」
 - symlink 化的 `specs/<cap>/spec.md` 不再被静默丢弃
-
-这些修复进一步收窄了 fallback 的触发面，但中文遗留格式仍是不可消除的触发源。
 
 ### 改动 6: archive 侧认 skipped 态
 
