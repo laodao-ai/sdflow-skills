@@ -4,7 +4,7 @@
 
 | 层 | 命令原文 | 退出码 | SHA |
 |---|---|---|---|
-| unit | `/usr/bin/python3 -m pytest sdflow-issues/tests/ sdflow-init/tests/ sdflow-maintain/tests/ sdflow-architecture/tests/ sdflow-devenv/tests/ --tb=short -q` | 0 (1711 passed, 1 failed pre-existing, 11 skipped, 3 xfailed) | 475b670 |
+| unit | `/usr/bin/python3 -m pytest sdflow-issues/tests/ sdflow-init/tests/ sdflow-maintain/tests/ sdflow-architecture/tests/ sdflow-devenv/tests/ --tb=short -q` | 1 (1711 passed, 1 failed pre-existing, 11 skipped, 3 xfailed) [impl-review-fix] | 475b670 |
 | integration | — | 未覆盖 | 本仓无集成测试层（纯 Markdown skill 集合仓，无服务/API/数据库） |
 | e2e | — | 未覆盖 | 本仓无 e2e 测试层（同上） |
 
