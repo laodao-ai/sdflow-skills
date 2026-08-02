@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 0e4efcb851909b9c103483a1ffbae18796347650
+---
+
 # spec-review-report — harden-issues-read-write
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
@@ -216,12 +222,13 @@ Claude-CEO/Codex-CEO。裁掉理由：属 roadmap 级别决策，不在本 chang
 <!-- sdflow:outside-voice v1 site="design-voice" guard="section-not-found" host="claude" runner="codex" reason_code="ok" findings="2" truncated="false" -->
 <!-- sdflow:declared-sites v1 declared="design-voice" -->
 
-## 收敛建议
+## 拍板记录
 
-本报告发现 3 条高严重度架构缺陷（R1/R2/R3），均被 ≥3 个独立镜子收敛命中。**不建议原样拍板进入实现**。
+设计门已拍板批准，日期 2026-08-02。
 
-建议流程：
-1. 人工拍板 Q1/Q2/Q3 三个决策点
-2. 据拍板结果执行上述 amendment
-3. 拍板批准 → 进设计 HARD-GATE
+**Q1**：方案 (a') — 给 triage 加 `--batch-only` flag，sweep 调用时传入
+**Q2**：方案 (a) — 两段式反解析（open 行数 + closed 聚合数）
+**Q3**：不扩大 overlay 词表检查
+
+四件套已据拍板结果完成 amendment（`reviewed_sha: 0e4efcb`）。
 
