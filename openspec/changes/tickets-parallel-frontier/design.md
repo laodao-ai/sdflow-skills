@@ -7,14 +7,15 @@ tickets 管线首版（`matt-workflow-integration`）有意选择严格串行 fr
 ## Goals / Non-Goals
 
 **Goals:**
-- `next_ready` 返回多个候选时并行派发 implementer 子代理
+- `next_ready` 返回多个候选时并行派发 implementer 子代理（Claude 宿主用 worktree 隔离，Codex 宿主退化为串行）
 - 出票时确保同层级 ticket 的行为边界不重叠
 - review-package 在并行场景下正确隔离每票 diff
 
 **Non-Goals:**
 - 双轴审并行（留后续优化，见 decision-memo D1）
-- 子分支/worktree 隔离（gate 契约重写成本过高）
 - 文件路径声明或机械冲突检测
+
+[spec-review-amendment] ~~子分支/worktree 隔离~~：原 Non-Goal 已升级为 Goal——调研确认 `ship_gate.py` 的 `done_task_ids`（`git log sha..HEAD --no-merges`，无 `--first-parent`）能穿透 merge commit 看到被 merge 进来的分支上的 checkpoint 标签，gate 契约零改动。Claude Code 的 `isolation: "worktree"` 是 harness 原生能力，零脚本改动。Codex 无原生 worktree 能力且进程回收模型不兼容并行——退化为串行。
 
 ## Decisions
 
@@ -22,29 +23,33 @@ tickets 管线首版（`matt-workflow-integration`）有意选择严格串行 fr
 
 ## Risks / Trade-offs
 
-- **并行 implementer 文件冲突**（C2 诚实边界）：语义约束非机械门，出票时模型判断 + 执行时 `git add` fail-loud 兜底。概率低（vertical-slice 设计），后果可控（fail-loud 不静默）
 - **BLOCKED 白跑**（C3）：并行 implementer 某个 BLOCKED 时其余已跑完的 token 浪费。harness 无取消能力，成本天花板 = 2-3 个 implementer token
+- **Codex 宿主无并行收益**：Codex 无原生 worktree 隔离且进程回收模型不兼容并行 → 退化为串行，行为与改动前一致，无风险但也无收益
+
+[spec-review-amendment] ~~并行 implementer 文件冲突~~：原风险项（"语义约束 + git add fail-loud 兜底"）已被 worktree 隔离结构性消除。6 镜收敛确认"git add fail-loud"不是事务边界、不构成兜底——但 worktree 给每个 implementer 独立 `.git/index`，竞态不再存在。
 
 ## Design
 
 ### 执行时序
 
 ```
-串行（现状）：
+串行（现状 / Codex 宿主退化态）：
   frontier(done=1) → [2] → impl T2 → 审 T2 → ckpt T2
   → frontier(done=1,2) → [3] → impl T3 → 审 T3 → ckpt T3
   → frontier(done=1,2,3) → [4] → impl T4 → 审 T4 → ckpt T4
   → frontier(done=1,2,3,4) → [5] → impl T5(收尾) → 审 T5 → ckpt T5
   墙钟 = sum(impl+审, all tickets)
 
-并行（目标态）：
-  frontier(done=1) → [2,3,4] → ┌ impl T2 ┐
-                                 ├ impl T3 ├ 并行
-                                 └ impl T4 ┘
+并行（Claude 宿主目标态，per-ticket worktree 隔离）：
+  frontier(done=1) → [2,3,4] → ┌ impl T2 (worktree-2) ┐
+                                 ├ impl T3 (worktree-3) ├ 并行，各自独立 .git/index
+                                 └ impl T4 (worktree-4) ┘
   → 收集全部返回 →
-  → 审 T2 → ckpt T2 → 审 T3 → ckpt T3 → 审 T4 → ckpt T4  （串行）
+  → merge worktree-2 回主分支 → 审 T2 → ckpt T2
+  → merge worktree-3 回主分支 → 审 T3 → ckpt T3
+  → merge worktree-4 回主分支 → 审 T4 → ckpt T4  （串行）
   → frontier(done=1,2,3,4) → [5] → impl T5(收尾) → 审 T5 → ckpt T5
-  墙钟 = max(impl T2,T3,T4) + sum(审, all tickets) + impl T1 + impl T5
+  墙钟 = max(impl T2,T3,T4) + sum(merge+审, all tickets) + impl T1 + impl T5
 ```
 
 ### 出票模式改动
@@ -58,36 +63,42 @@ tickets 管线首版（`matt-workflow-integration`）有意选择严格串行 fr
 
 ### 执行模式改动
 
-**frontier 段**：「严格串行」改为「受限并行」——
+**frontier 段**：「严格串行」改为「宿主条件化受限并行」——
 
-- `next_ready` 返回 1 个 → 串行派发（行为不变）
-- `next_ready` 返回多个 → 并行派发全部（一条消息内多个 Agent 调用）
-- 所有 implementer 返回后，逐票按号序串行：双轴审 → fix 循环（如有）→ checkpoint commit
+- **宿主分支**（`$SDFLOW_HOST` 第零步已 resolve）：
+  - `host=claude`：`next_ready` 返回多个 → 并行派发，每个 implementer 用 `isolation: "worktree"`（Agent tool 原生参数）
+  - `host=codex` / `host=unknown`：退化为串行（`next_ready` 返回多个时仍按号序逐个派发），行为与改动前一致
+- `next_ready` 返回 1 个 → 串行派发（行为不变，两宿主一致）
+- 所有 implementer 返回后，编排层逐票按号序串行：merge worktree 分支回主分支（`git merge --no-ff`）→ 双轴审 → fix 循环（如有）→ checkpoint commit
 - 收尾 ticket（`Blocked-by` = 全部功能票号）始终单独串行执行（`next_ready` 只返回它一个）
 
-**dispatch prompt 新增约束**：
-
-- implementer MUST 按文件名 `git add <具体文件>`，MUST NOT 用 `git add .` / `git add -A` / `git add -u`（并行 implementer 共享工作树，通配暂存会带入别人的改动）
+[spec-review-amendment] ~~dispatch prompt 的 `git add` 按文件名约束~~：worktree 隔离下每个 implementer 有独立 `.git/index`，不存在通配暂存带入别人改动的问题。该约束降为建议性最佳实践（非 MUST），dispatch prompt 不再强制。
 
 **review-package 生成变化**：
 
-- 串行票（`next_ready` 返回 1 个）：行为不变，`<before-sha>..<after-sha>` 同现有
-- 并行批次：编排层在并行 dispatch 前记录 `PARALLEL_BASE = HEAD`，每个 implementer 返回后从 `git log` 识别其 commit。审第 N 票时：
+- 串行票（`next_ready` 返回 1 个，或 Codex 退化串行）：行为不变，`<before-sha>..<after-sha>` 同现有
+- 并行批次（Claude 宿主）：merge 回主分支后，每个 merge commit 清晰划分了各票的 commit 集。审第 N 票时：
   ```bash
-  # 取该 implementer 改过的文件列表
-  TICKET_FILES=$(git diff --name-only <ticket_commits>)
-  # 用文件范围隔离 diff
-  git diff PARALLEL_BASE..HEAD -- $TICKET_FILES
+  # merge commit 的第二父链即该票的 worktree 分支
+  # before-sha = merge commit 的第一父（merge 前主分支 HEAD）
+  # after-sha = merge commit 自身
+  git diff <merge_parent1>..<merge_commit> -U10
   ```
-  review-package 头部仍写 `# Review package: PARALLEL_BASE..HEAD (scoped to Task N files)`
+  review-package 头部写 `# Review package: <merge_parent1>..<merge_commit> (Task N worktree merge)`
+  Commits/Files-changed/Diff 三段均自然收窄到该票范围，无需额外文件过滤
 
 ### gate 影响分析
 
-无。同分支方案下：
-- checkpoint 标签由编排层在串行审阶段补打（`SKILL.md:547`），不受 impl 并行影响
-- `done_task_ids` 扫 `[plan_first_sha, HEAD]` 窗口内的 checkpoint 标签，全部可见
-- `checkbox_done_ids` 扫 `tickets.md` 的复选框，与并行无关
-- 失鲜判据的求值窗口不受影响（只在 RUN_SOP/RUN_PLAN/CONTINUE_IMPL 入口求值）
+零改动。`done_task_ids`（`ship_gate.py:1478-1496`）使用 `git log sha..HEAD --no-merges --format=%s`：
+- **无 `--first-parent`** → 遍历穿透 merge commit，看到被 merge 进来的 worktree 分支上的全部 commit
+- **`--no-merges`** → 只跳过 merge commit 本身（其 subject 不含 checkpoint 标签），不影响遍历路径
+- checkpoint 标签打在普通 commit 上 → **穿透 merge 正常识别**
+
+[spec-review-amendment] 以上穿透性已由调研验证（读码 `ship_gate.py:1478-1496`），Non-Goal 2 原声称的"gate 契约重写成本过高"不成立。
+
+其余不变：
+- `checkbox_done_ids` 扫 `tickets.md` 的复选框，与并行/merge 无关
+- 失鲜判据的求值窗口不受影响
 
 ## Compliance
 
