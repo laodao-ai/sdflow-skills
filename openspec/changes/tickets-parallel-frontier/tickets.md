@@ -25,9 +25,9 @@ impl-pipeline: tickets
 2. 收尾节点唯一约束：若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的 `Blocked-by`，确保收尾节点唯一
 3. 标注为指令层语义约束（出票方的模型判断），并说明兜底为 worktree 隔离下 `git merge` 原生冲突检测
 
-- [ ] 在 SKILL.md 出票模式的垂直切片段末（`[e2e]` 段后、宽重构例外前）追加并行安全约束段落
-- [ ] 约束内容与 delta spec「出 ticket 模式并行安全生成约束」Requirement 一致
-- [ ] 含收尾节点唯一约束（多张全阻塞票须声明互相 Blocked-by）
+- [x] 在 SKILL.md 出票模式的垂直切片段末（`[e2e]` 段后、宽重构例外前）追加并行安全约束段落
+- [x] 约束内容与 delta spec「出 ticket 模式并行安全生成约束」Requirement 一致
+- [x] 含收尾节点唯一约束（多张全阻塞票须声明互相 Blocked-by）
 
 ### Task 2: 执行模式 frontier 从严格串行改为宿主条件化受限并行
 

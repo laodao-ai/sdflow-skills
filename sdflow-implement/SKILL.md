@@ -3,8 +3,9 @@ name: sdflow-implement
 description: >
   tickets 实现管线双模式编排器——由 /sdflow-ship 按 gate 判定编排调用；含出 ticket + 执行双模式：
   RUN_PLAN → 出 ticket 模式（从 design.md/tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket，落盘
-  即返回，不直通执行）；CONTINUE_IMPL(done_tasks) → 执行模式（按 Blocked-by frontier 串行派 fresh
-  implementer 子代理 + 每 ticket 双轴审）。仅当仓 openspec/config.yaml 的 impl-pipeline 键（或在途
+  即返回，不直通执行）；CONTINUE_IMPL(done_tasks) → 执行模式（按 Blocked-by frontier 宿主条件化
+  受限并行派 fresh implementer 子代理 + 每 ticket 双轴审）。仅当仓 openspec/config.yaml 的
+  impl-pipeline 键（或在途
   plan 的 frontmatter marker）取值为 tickets 时，才由 sdflow-ship 链序以显式
   mode=tickets-plan|tickets-exec 字面参数派发；不要在此之外单独触发，也不要作为子代理派发调用。
 ---
@@ -153,7 +154,7 @@ description: >
 <!-- sdflow:principles:end -->
 
 tickets 实现管线的唯一编排入口：出 ticket（从 design/tasks 产出可执行的垂直切片）与执行（frontier
-串行 + 每 ticket 双轴审）共享一个 skill、两种互斥模式，由 gate 判定的 RUN_PLAN/CONTINUE_IMPL 两态
+宿主条件化受限并行 + 每 ticket 双轴审）共享一个 skill、两种互斥模式，由 gate 判定的 RUN_PLAN/CONTINUE_IMPL 两态
 经 `/sdflow-ship` 链序以显式参数路由——两态的 gate 插入点力学与旧 writing-plans/subagent-dev 管线
 等价（D1/D2）。
 
@@ -484,15 +485,42 @@ impl-pipeline: tickets
 
 ## 执行模式（`mode=tickets-exec`）
 
-### frontier 严格串行
+### frontier 宿主条件化受限并行
 
 - 调用 frontier helper，用透传的 `done_tasks` 算出下一批 next-ready ticket 号：
   ```
   python3 ~/.claude/skills/sdflow-implement/scripts/impl_route.py frontier --plan {change_dir}/tickets.md --done {done_tasks}
   ```
-- **严格串行**——同一时刻至多一个 implementer 子代理在工作，**MUST NOT** 并行派发多个
-  implementer（首版红线，design D4/Non-Goal）。next-ready 若一次给出多个候选，仍按号序逐个派发、
-  逐个走完双轴审再派下一个。
+- **宿主分支**（`$SDFLOW_HOST` 第零步已 resolve）：
+  - **`host=claude`**：`next_ready` 返回多个候选时 SHALL 并行派发 implementer 子代理，**每个
+    implementer SHALL 使用 `isolation: "worktree"`**（Agent tool 原生参数，harness 自动创建独立
+    git worktree）。所有 implementer 返回后，编排层 SHALL **逐票按号序串行**执行：merge worktree
+    分支回主分支（`git merge --no-ff`）→ 双轴审 → fix 循环（如有）→ checkpoint commit。
+  - **`host=codex` / `host=unknown`**：`next_ready` 返回多个候选时 SHALL **按号序逐个派发**
+    （退化为串行），行为与改动前完全一致。Codex 无原生 worktree 隔离且进程回收模型不兼容并行。
+  - `next_ready` 返回单个候选时行为与串行模式一致（两宿主一致）。
+- **并行 dispatch 约束（Claude 宿主）**：
+  - 每个 implementer 在独立 worktree 中工作，有独立 `.git/index` 和工作树——不存在 index 竞态。
+  - implementer dispatch prompt MAY 建议按文件名 `git add <具体文件>`（最佳实践），但不再是
+    MUST——worktree 隔离下通配暂存不会带入别人的改动。
+  - 双轴审 SHALL 串行执行（不同票之间亦不并行）——反向变异共享工作树会交叉感染。
+  - 收尾 ticket（`Blocked-by` = 全部功能票号）`next_ready` 只返回它一个，始终单独串行执行。
+- **review-package 生成（并行批次，Claude 宿主）**：merge 回主分支后，每个 merge commit 天然
+  隔离各票改动。审第 N 票时：
+  - `before-sha` = merge commit 的第一父（merge 前主分支 HEAD）
+  - `after-sha` = merge commit 自身
+  - `git diff <merge_parent1>..<merge_commit> -U10` 天然只含该票改动，Commits/Stat/Diff 三段
+    均自然收窄到该票范围，无需额外文件过滤
+  - review-package 头部写 `# Review package: <merge_parent1>..<merge_commit> (Task N worktree merge)`
+  - 串行票的 review-package 沿用既有 `<before-sha>..<after-sha>` 规则不变
+  - fix 轮的 `<before-sha>` 沿用既有规则不变（fix commit 在串行审阶段单线程产生，无并发写入）
+- **异常处理（并行 implementer，Claude 宿主）**：并行 implementer 中某个返回 BLOCKED /
+  NEEDS_CONTEXT 时，harness 无中途取消能力，编排层 SHALL 等全部返回后逐个处理状态。BLOCKED 票的
+  worktree 直接丢弃（不 merge 回主分支），无脏改动污染。完成态票据正常走完 merge+审+checkpoint，
+  不因兄弟票 BLOCKED 而搁置。白跑成本为可接受边角。
+- **merge conflict 处理（Claude 宿主）**：`git merge --no-ff` 冲突时，编排层 SHALL 上报人介入
+  （halt envelope 五要素）——worktree 隔离下 merge conflict 是**真正的 fail-loud**（git merge 的
+  原生冲突检测），比原方案的"不存在的 fail-loud"严格更强。
 
 ### 每 ticket 派 fresh implementer
 
