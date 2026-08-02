@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: ff307a7d4dd3f28a4902b35f7f6b1f3f3ffa85f5
+---
+
 # spec-review-report.md — tickets-parallel-frontier
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
@@ -219,6 +225,8 @@ S3 指出 `git add -A` 在 BLOCKED 票有脏改动时会污染 checkpoint。两�
 5. 补 S6/S7 的 tasks 遗漏项
 
 修订后建议进设计 HARD-GATE 拍板。
+
+**设计门已拍板批准，日期 2026-08-02。** 拍板决策：采纳宿主条件化 worktree 隔离方案（Q1→选项 B worktree 隔离，Q2→不再需要，Q3→不再需要——worktree 隔离结构性消除了 S1/S2/S3/S4 全部四条 high+ findings）。四件套已修订。
 
 ---
 
