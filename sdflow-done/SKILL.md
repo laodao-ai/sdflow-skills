@@ -371,13 +371,23 @@ python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
 你是 OpenSpec 归档助手。工作目录：{项目根目录}。语言中文。
 任务：归档 change `{change_name}` 并把它的 delta 同步进主 specs。
 
-## 1. 先试 CLI（它会自动同步 delta→openspec/specs/ + 更新 INDEX + 校验）
-openspec archive {change_name} -y 2>&1 | tail -30
-- 输出 "archived as ..." 且无 Validation error → 归档+同步完成，跳到第 3 节核对。
-- "incomplete task(s)" 警告（-y 会继续）→ 可接受（复选框已对账）。
-- **Validation error / Aborted**（常见：某 MODIFIED 的主 spec 是中文遗留格式——
-  用 `### 需求:`/`#### 场景:`、缺 `## Purpose`/`## Requirements`——CLI 重建它时校验失败）
-  → 走第 2 节 fallback。
+## 0. 先查 specs artifact 状态（判断 skip_specs 是否正常）
+openspec status --change {change_name} --json
+- 若 specs artifact 的 status 为 `skipped`：本 change 无 delta 可同步——这是**正常**情况，
+  **MUST NOT** 把「没有 delta」当成异常、也 **MUST NOT** 因此判走第 2 节 fallback。
+  归档命令（第 1 节）照常执行；CLI 对无 delta 的 change 会正常完成同步（等价于空操作）。
+
+## 1. 先试 CLI（它会自动同步 delta→openspec/specs/ + 更新 INDEX + 校验，--json 输出结构化结果）
+openspec archive {change_name} -y --json
+判据基于 JSON 结构（**不再做文本匹配**）：
+- **成功**：exit code 0 且顶层 `archive` 字段**非 null** → 归档+同步完成，跳到第 3 节核对。
+  - 若 `archive.warnings` 是非空数组（如 incomplete task(s) 一类警告）→ 可接受，在报告里展示这些警告。
+  - `archive.specsUpdated`（布尔）标出本次是否真的更新了主 specs（skip_specs 场景下预期为 false/无 delta，不算异常，见 0 节）。
+- **失败**：exit code ≠ 0，或顶层 `archive` 字段为 **null** → 走第 2 节 fallback。
+  失败时的 JSON 形状形如 `{"archive": null, "status": [{"code": "archive_validation_failed", ...}]}`
+  （无 `warnings` 字段）；`status` 数组里的结构化错误码/消息即失败原因，用于报告与判断是否可 fallback 修复
+  （常见：某 MODIFIED 的主 spec 是中文遗留格式——用 `### 需求:`/`#### 场景:`、缺 `## Purpose`/`## Requirements`
+  ——CLI 重建它时校验失败）。
 
 ## 2. fallback：--skip-specs + 手动同步
 openspec archive {change_name} --skip-specs -y   # 只移归档+更新 active，不碰主 specs
