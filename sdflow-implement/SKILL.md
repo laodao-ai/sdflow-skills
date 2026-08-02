@@ -282,6 +282,17 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
   `[e2e]` 的条目不算 e2e。**该票没有任何一条标 `[e2e]` ⇒ 该票无 e2e 场景**——implementer 只跑
   单元 + `Blocked-by` 链上集成，不必臆造 e2e 用例（详细执行契约见下方「每 ticket 派 fresh
   implementer」节的测试范围段）。
+- **并行安全约束**：出票时，对 `Blocked-by` 声明使得 `next_ready` 可能同时返回的一组 ticket
+  （即它们的 `Blocked-by` 集合是 `done` 集的子集时会同时出现在 ready 列表中），MUST 确认：
+  - 它们的行为边界不重叠（不改同一模块的同一接口）
+  - 一个的产出不是另一个的输入
+  - 有疑问时保守声明依赖（宁可串行不可误并行）
+  - 若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的
+    `Blocked-by`，确保收尾节点唯一（`next_ready` 只返回一个收尾候选）
+
+  该约束为指令层语义约束（出票方的模型判断）。兜底为 worktree 隔离下 `git merge --no-ff` 的原生
+  冲突检测（真正的 fail-loud）——即使出票判断失误（两票改同一文件），各自 commit 到独立 worktree
+  分支，merge 回主分支时 git 正常冲突检测会 fail-loud。
 
 **宽重构例外〔T120〕**：单一机械改动、blast radius 扫全仓的宽重构（批量改名、改共享类型签名等）
 **MUST NOT** 强行拆成垂直切片；改走 **expand–contract** 序列：
