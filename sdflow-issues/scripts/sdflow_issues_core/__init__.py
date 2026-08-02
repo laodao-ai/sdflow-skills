@@ -893,6 +893,19 @@ def _build_effective_snapshot(result, expected_pool):
         for item_id, info in legacy_owned.items()
     }
     effective_items.update(frontmatter_items)
+    # harden-issues-read-write Task 1 (1a)：读取路径两层词表校验的 core 层——status /
+    # specific_field（priority|type）越出 POOL_SPEC 词表时只记 problem，不 raise、不丢项
+    # （脏值项仍留在 effective_items 里，交上层 reindex/scan 显红而非整体崩溃）。
+    for item_id, item in effective_items.items():
+        if item["status"] not in spec.status_values:
+            problems.append(
+                f"{item_id}: status {item['status']!r} 不在词表 {sorted(spec.status_values)}"
+            )
+        if item[spec.specific_field] not in spec.specific_values:
+            problems.append(
+                f"{item_id}: {spec.specific_field} {item[spec.specific_field]!r} "
+                f"不在词表 {sorted(spec.specific_values)}"
+            )
     result.update({
         "effective_items": effective_items,
         "effective_occurrences": occurrences,
