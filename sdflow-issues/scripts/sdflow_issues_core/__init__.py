@@ -1798,7 +1798,7 @@ def _todo_set_status(args, spec):
     )
 
 
-def _bug_triage(args, spec):
+def _bug_triage(args, spec, promote=True):
     root = args.root
     batch = getattr(args, "批次")
 
@@ -1807,8 +1807,11 @@ def _bug_triage(args, spec):
     _reject_document_mutation(document, path)
     canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
     old_status = item["status"]
-    open_untriaged = set(spec.status_values) - set(spec.terminal_set) - {"PROPOSED"}
-    new_status = "PROPOSED" if old_status in open_untriaged else old_status
+    if promote:
+        open_untriaged = set(spec.status_values) - set(spec.terminal_set) - {"PROPOSED"}
+        new_status = "PROPOSED" if old_status in open_untriaged else old_status
+    else:
+        new_status = old_status
     item["status"] = new_status
     item["batch"] = batch or None
     model = _prepare_overlay_model(document, spec.pool, canonical, item)
@@ -1837,7 +1840,7 @@ def _bug_triage(args, spec):
     )
 
 
-def _todo_triage(args, spec):
+def _todo_triage(args, spec, promote=True):
     root = args.root
     batch = getattr(args, "批次")
 
@@ -1846,8 +1849,11 @@ def _todo_triage(args, spec):
     _reject_document_mutation(document, path)
     canonical = _canonical_from_key(_legacy_semantic_id_key(raw_id))
     old_status = item["status"]
-    open_untriaged = set(spec.status_values) - set(spec.terminal_set) - {"PROPOSED"}
-    new_status = "PROPOSED" if old_status in open_untriaged else old_status
+    if promote:
+        open_untriaged = set(spec.status_values) - set(spec.terminal_set) - {"PROPOSED"}
+        new_status = "PROPOSED" if old_status in open_untriaged else old_status
+    else:
+        new_status = old_status
     item["status"] = new_status
     item["batch"] = batch or None
     model = _prepare_overlay_model(document, spec.pool, canonical, item)
@@ -2096,7 +2102,7 @@ def _cmd_set_status(args, spec, strat):
 
 
 def _cmd_triage(args, spec, strat):
-    strat.triage(args, spec)
+    strat.triage(args, spec, promote=not args.batch_only)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2130,6 +2136,8 @@ def build_parser(spec, strat):
     s = sub.add_parser("triage", help="赋批次 + 未分诊开放态→PROPOSED（幂等，D7）")
     s.add_argument("--id", required=True)
     s.add_argument("--批次", dest="批次", required=True, help="批次名（清理 change 名）")
+    s.add_argument("--batch-only", dest="batch_only", action="store_true",
+                   help="只赋批次，跳过未分诊开放态→PROPOSED 的状态推进（供 sweep 复用）")
     s.set_defaults(func=_cmd_triage)
 
     s = sub.add_parser("scan", help=strat.scan_help)

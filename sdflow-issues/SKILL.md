@@ -403,12 +403,15 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change
 ```
 
 语义：把「源 == X ∧ 非终态 ∧ 批次空」的 bug/todo 一次性归入批次 X——即 `sdflow-done` §2.1 原手写 4 步
-循环（scan 两池 → 逐项 triage → batch add → reindex）的一键封装，内部全走子进程 CLI（不直调 `cmd_*`），
-对外只暴露一个单一入口（**非原子**——见下）。
+循环（scan 两池 → 逐项 `triage --batch-only` → batch add → reindex）的一键封装，内部全走子进程 CLI（不直调
+`cmd_*`），对外只暴露一个单一入口（**非原子**——见下）。
 
 - **扫描口径 `--open-ungrouped`**：等价于 `scan --change X --open-ungrouped --json`——非终态（非
   CLOSED/VERIFIED 等终态）∧ 批次空，**不是** `--status OPEN`（后者漏非 OPEN 的非终态项、也不过滤批次空）。
-- **幂等**：`batch add` 内部固定带 `--if-exists skip` + `triage` 对已 PROPOSED/已终态项 no-op +
+- **只赋批次、不推进状态**：sweep 固定传 `triage --batch-only`——被 sweep 的项只写批次列，
+  `status` 原样保留（不像人工 `triage` 那样把「未分诊开放态」推进到 `PROPOSED`）；状态推进留给人工
+  triage 或后续独立流程判断，sweep 只负责"归批次"这一件事。
+- **幂等**：`batch add` 内部固定带 `--if-exists skip` + `triage --batch-only` 对已归批次项 no-op +
   `reindex` 确定性重建——同一 `--change` 连跑多次，第二次 exit 0 且盘面无净变化。
 - **空 change 入口守卫**：`--change` 为空/纯空白，或未过 `_reject_batch_key_unsafe`（含 `|`/换行/` — `/
   首尾空白）→ 先于任何写盘 `_die`，防止把源 = `""` 的孤儿项误纳进空批次。
@@ -493,7 +496,8 @@ reindex` 把该批次同步判/标 `DONE`；reindex 的自动判据**不会**把
 
 `add` / `scan`（bug：`--status`/`--change`/`--批次`/`--open-ungrouped`；todo：另有 `--type`） /
 `set-status` / `triage`（赋批次 + 把「未分诊开放态」（即 `OPEN`）推进到 `PROPOSED`，幂等——已
-`PROPOSED`/已终态都 no-op，不倒退状态） / `next-id`。全部命令 dual-read 新旧两目录。
+`PROPOSED`/已终态都 no-op，不倒退状态；`--batch-only` 只赋批次、跳过状态推进，供自动化 sweep
+路径复用，人工 triage 不传该 flag 时原行为不变） / `next-id`。全部命令 dual-read 新旧两目录。
 
 **跨两池**（`issues.py`，独占跨 bug+todo 的命令）：`reindex` / `batch add|set-status|rename` / `sweep`
 （详见上方「跨池」段）。
@@ -502,9 +506,11 @@ reindex` 把该批次同步判/标 `DONE`；reindex 的自动判据**不会**把
 
 `sdflow-done` 生成 hand-off 那一步跑 sweep：以 **源==本change ∧ status 非终态 ∧ 批次==空** 为界，只分诊
 **本 change 自己新增**的未分诊 OPEN 项——显式传 `--change {本change}`（不靠 `detect_change` 猜，从源头减少
-假孤儿）→ `triage` 分诊入批次 → `batches.md` 登记 `PLANNED` → 末尾跑 `issues.py reindex` 刷新 INDEX →
-hand-off 引用这次 sweep 结果。已在各自 change 分诊过的老 OPEN 项不被重诊；**源为空的孤儿项不归本次 sweep**，
-交独立的通用清理流程兜底（`scan --open-ungrouped` → `triage` → 另开 cleanup change）。
+假孤儿）→ `triage --batch-only` 分诊入批次（**只赋批次，不推进状态**——sweep 是自动化收尾步，状态推进是
+人工 triage 的职责，两者解耦：被 sweep 的 IN_PROGRESS/BLOCKED 等项原状态原样保留）→ `batches.md` 登记
+`PLANNED` → 末尾跑 `issues.py reindex` 刷新 INDEX → hand-off 引用这次 sweep 结果。已在各自 change 分诊过的
+老 OPEN 项不被重诊；**源为空的孤儿项不归本次 sweep**，交独立的通用清理流程兜底（`scan --open-ungrouped` →
+`triage`（人工，推进状态）→ 另开 cleanup change）。
 
 ### batches.md 字段级 grammar（半手维护，跨两池）
 
