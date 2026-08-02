@@ -677,6 +677,21 @@ class TestTriage:
         assert proc.returncode != 0
         assert "ERROR" in proc.stderr
 
+    def test_batch_only_triage_does_not_promote_open_status(self, tmp_path):
+        """harden-issues-read-write Task 3：`--batch-only` 只赋批次，不推进
+        未分诊开放态→PROPOSED（sweep 复用同一 CLI，须与人工 triage 解耦）。"""
+        _write_mixed_file(tmp_path / "openspec" / "issues" / "todolist", "2026-01", [
+            {"id": "T1", "status": "OPEN", "change": "x", "batch": ""},
+        ])
+        result = _triage(tmp_path, "T1", "clear-foo", batch_only=True)
+        assert result["old_status"] == "OPEN"
+        assert result["new_status"] == "OPEN"
+        assert result["batch"] == "clear-foo"
+        scanned = _scan_json(tmp_path, [])
+        t1 = [b for b in scanned["items"] if b["id"] == "T1"][0]
+        assert t1["status"] == "OPEN"
+        assert t1["batch"] == "clear-foo"
+
 
 class TestSetStatus:
     """T5（本次任务）补测：cmd_set_status 此前无任何测试覆盖——补 WONTDO 门禁分支
@@ -808,9 +823,12 @@ def _set_status_raw(root, item_id, to, *extra_args):
         errors="replace",)
 
 
-def _triage(root, item_id, batch):
+def _triage(root, item_id, batch, batch_only=False):
+    argv = [sys.executable, SCRIPT, "--root", str(root), "triage", "--id", item_id, "--批次", batch]
+    if batch_only:
+        argv.append("--batch-only")
     proc = subprocess.run(
-        [sys.executable, SCRIPT, "--root", str(root), "triage", "--id", item_id, "--批次", batch],
+        argv,
         capture_output=True, text=True,
 
         encoding="utf-8",

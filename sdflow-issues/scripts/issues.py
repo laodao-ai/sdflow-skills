@@ -1126,7 +1126,7 @@ def cmd_sweep(args):
             iid = it["id"]
             tp = subprocess.run(
                 [sys.executable, script, "--root", root, "triage",
-                 "--id", iid, "--批次", change],
+                 "--batch-only", "--id", iid, "--批次", change],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 env=recorder_child_env("triage"),
             )

@@ -1475,7 +1475,11 @@ class TestSweep:
 
     def test_sweep_open_ungrouped(self, tmp_path):
         """--open-ungrouped 口径 = 源==X ∧ 非终态 ∧ 批次空——非 OPEN 的非终态项
-        （IN_PROGRESS）也要被纳入 triage（不因 --status OPEN 漏掉）。"""
+        （IN_PROGRESS）也要被纳入 triage（不因 --status OPEN 漏掉）。
+
+        harden-issues-read-write Task 3：sweep 复用 `triage --batch-only`，
+        只赋批次、不推进状态——被 sweep 项的原始状态须保持不变（OPEN/IN_PROGRESS
+        分别原样保留），推进状态是人工 triage 的职责，与自动 sweep 解耦。"""
         _write_bug_file(tmp_path, "2026-01-01", [
             {"id": "B1", "status": "OPEN", "change": "chg-x", "batch": ""},
             {"id": "B2", "status": "IN_PROGRESS", "change": "chg-x", "batch": ""},
@@ -1487,9 +1491,11 @@ class TestSweep:
         proc = _run_sweep(tmp_path, ["--change", "chg-x"])
         assert proc.returncode == 0, proc.stderr
 
-        for iid in ("B1", "B2", "T1"):
+        for iid in ("B1", "T1"):
             assert _item_batch(tmp_path, iid) == "chg-x"
-            assert _item_status(tmp_path, iid) == "PROPOSED"
+            assert _item_status(tmp_path, iid) == "OPEN"
+        assert _item_batch(tmp_path, "B2") == "chg-x"
+        assert _item_status(tmp_path, "B2") == "IN_PROGRESS"
 
         batches_content = _read_batches(tmp_path)
         assert "### chg-x —" in batches_content  # batches.md 有该批次条目
@@ -1699,8 +1705,9 @@ class TestSweep:
 
         assert _item_batch(tmp_path, "B1") == "chg-g"
         assert _item_batch(tmp_path, "B2") == "chg-g"
-        assert _item_status(tmp_path, "B1") == "PROPOSED"
-        assert _item_status(tmp_path, "B2") == "PROPOSED"
+        # harden-issues-read-write Task 3：sweep 走 --batch-only，只赋批次不推进状态
+        assert _item_status(tmp_path, "B1") == "OPEN"
+        assert _item_status(tmp_path, "B2") == "OPEN"
         assert "### chg-g —" in _read_batches(tmp_path)
         assert "chg-g" in _read_index(tmp_path)
 
