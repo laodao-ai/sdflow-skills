@@ -458,6 +458,46 @@ def test_real_scan_calls_document_parser_once_per_file(tmp_path, monkeypatch, ca
     json.loads(capsys.readouterr().out)
 
 
+def test_legacy_row_dirty_status_downgrades_to_problem_not_raise(tmp_path, capsys):
+    """harden-issues-read-write Task 1 (1a)：legacy 行 status 越出词表时，
+    `_build_effective_snapshot` 只记 problem，不 raise、不丢项——scan 正常返回。
+    用 todo 池（`requires_block=False`）避免缺详细块的噪音 problem 掩盖本测试意图。"""
+    directory = tmp_path / "openspec/issues/todolist"
+    directory.mkdir(parents=True)
+    table = _legacy_table("todo", "T1").replace(" OPEN ", " BOGUS_STATUS ")
+    assert "BOGUS_STATUS" in table  # 防回归：replace 未命中会让本测试静默变恒真
+    (directory / "2026-07-todolist.md").write_text(table, encoding="utf-8")
+
+    TODO.cmd_scan(SimpleNamespace(
+        root=str(tmp_path), status=None, change=None, 批次=None, open_ungrouped=False, json=True,
+    ))
+    payload = json.loads(capsys.readouterr().out)
+
+    assert any("status" in p and "BOGUS_STATUS" in p for p in payload["problems"]), payload["problems"]
+    assert [item["id"] for item in payload["items"]] == ["T1"], "脏值项 MUST NOT 被丢弃"
+    assert payload["items"][0]["status"] == "BOGUS_STATUS"
+
+
+def test_legacy_row_dirty_specific_field_downgrades_to_problem_not_raise(tmp_path, capsys):
+    """harden-issues-read-write Task 1 (1a)：legacy 行 specific_field（priority/type）越出词表时，
+    `_build_effective_snapshot` 只记 problem，不 raise、不丢项——scan 正常返回。
+    用 todo 池（`requires_block=False`）避免缺详细块的噪音 problem 掩盖本测试意图。"""
+    directory = tmp_path / "openspec/issues/todolist"
+    directory.mkdir(parents=True)
+    table = _legacy_table("todo", "T1").replace("性能优化", "BOGUS_TYPE")
+    assert "BOGUS_TYPE" in table  # 防回归：replace 未命中会让本测试静默变恒真
+    (directory / "2026-07-todolist.md").write_text(table, encoding="utf-8")
+
+    TODO.cmd_scan(SimpleNamespace(
+        root=str(tmp_path), status=None, change=None, 批次=None, open_ungrouped=False, json=True,
+    ))
+    payload = json.loads(capsys.readouterr().out)
+
+    assert any("type" in p and "BOGUS_TYPE" in p for p in payload["problems"]), payload["problems"]
+    assert [item["id"] for item in payload["items"]] == ["T1"], "脏值项 MUST NOT 被丢弃"
+    assert payload["items"][0]["type"] == "BOGUS_TYPE"
+
+
 def test_indented_namespace_ownership_variant_is_fatal():
     raw = b"---\n  sdflow-issues:\n---\n" + _legacy_table("bug", "B1").encode()
     with pytest.raises(ValueError, match="ownership"):

@@ -434,10 +434,16 @@ def validate_scan_envelope(payload, pool):
                         f"ERROR: scan item[{index}].{field} 值域非法; cause: {exc}; "
                         "fix: repair/reinstall the recorder producer and retry"
                     ) from None
+        # harden-issues-read-write Task 1 (1b)：status/specific_field 枚举漂移不再硬 raise
+        # 中止 reindex——降级为收进 problems + 继续，脏值项仍原样留在 items 里。
         if item[specific_field] not in specific_values:
-            raise ValueError(f"ERROR: scan item[{index}].{specific_field} 枚举漂移; cause: {item[specific_field]!r}; fix: repair/reinstall the recorder producer and retry")
+            data["problems"].append(
+                f"scan item[{index}].{specific_field} 枚举漂移: {item[specific_field]!r}"
+            )
         if item["status"] not in status_values:
-            raise ValueError(f"ERROR: scan item[{index}].status 枚举漂移; cause: {item['status']!r}; fix: repair/reinstall the recorder producer and retry")
+            data["problems"].append(
+                f"scan item[{index}].status 枚举漂移: {item['status']!r}"
+            )
     return data[items_key], data["problems"]
 
 

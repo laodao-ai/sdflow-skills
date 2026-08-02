@@ -49,12 +49,25 @@ def _valid_bug_item(**overrides):
         (json.dumps({"bugs": []}), "problems"),
         (json.dumps({"bugs": {}, "problems": []}), "bugs"),
         (json.dumps({"bugs": [_valid_bug_item(file=None)], "problems": []}), "file"),
-        (json.dumps({"bugs": [_valid_bug_item(priority="P9")], "problems": []}), "priority"),
     ],
 )
 def test_validate_scan_envelope_rejects_protocol_drift(payload, needle):
     with pytest.raises(ValueError, match=needle):
         validate_scan_envelope(payload, "bug")
+
+
+def test_validate_scan_envelope_downgrades_status_and_specific_field_drift_to_problems():
+    """T231/harden-issues-read-write Task 1 (1b)：status/specific_field 枚举漂移不再硬 raise
+    ——收进 problems + 继续，脏值项仍原样留在 items 里（不丢弃、不清洗）。"""
+    item = _valid_bug_item(priority="P9", status="NEW_ENUM")
+
+    items, problems = validate_scan_envelope(
+        json.dumps({"bugs": [item], "problems": []}), "bug"
+    )
+
+    assert items == [item]
+    assert any("priority" in p and "P9" in p for p in problems)
+    assert any("status" in p and "NEW_ENUM" in p for p in problems)
 
 
 def test_validate_scan_envelope_returns_items_and_problems():
@@ -126,7 +139,6 @@ def test_validate_scan_envelope_rejects_noncanonical_empty_values(pool, field, v
         json.dumps({"bugs": []}),
         json.dumps({"bugs": {}, "problems": []}),
         json.dumps({"bugs": [_valid_bug_item(file=None)], "problems": []}),
-        json.dumps({"bugs": [_valid_bug_item(status="NEW_ENUM")], "problems": []}),
     ],
 )
 def test_reindex_consumer_drift_preserves_existing_index_and_batches(
@@ -151,6 +163,40 @@ def test_reindex_consumer_drift_preserves_existing_index_and_batches(
 
     assert index.read_bytes() == b"old-index\n"
     assert batches.read_bytes() == b"old-batches\n"
+
+
+def test_reindex_downgrades_status_drift_end_to_end_instead_of_crashing(
+    tmp_path, monkeypatch, scan_only_run
+):
+    """harden-issues-read-write Task 1 (1.5)：脏 status 项经 `validate_scan_envelope`
+    降级后，`issues.py reindex` 端到端不再因单个脏值项整体崩溃——items 里仍带着这个脏值项，
+    problems 非空，INDEX.md 正常写盘。"""
+    issues_dir = tmp_path / "openspec" / "issues"
+    issues_dir.mkdir(parents=True)
+
+    dirty_bug_payload = json.dumps(
+        {"bugs": [_valid_bug_item(status="NEW_ENUM")], "problems": []}
+    )
+    empty_todo_payload = json.dumps({"items": [], "problems": []})
+
+    class Proc:
+        def __init__(self, stdout):
+            self.returncode = 0
+            self.stdout = stdout
+            self.stderr = ""
+
+    def handler(command):
+        if BUGLIST_SCRIPT in command:
+            return Proc(dirty_bug_payload)
+        return Proc(empty_todo_payload)
+
+    monkeypatch.setattr(issues_mod.subprocess, "run", scan_only_run(handler))
+
+    items, problems = _reindex_core(str(tmp_path))
+
+    assert [item["id"] for item in items] == ["B1"]
+    assert any("status" in p for p in problems)
+    assert (issues_dir / "INDEX.md").exists()
 
 
 @pytest.mark.parametrize("bad_id", [None, 7, [], {}])
