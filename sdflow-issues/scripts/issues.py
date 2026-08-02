@@ -607,17 +607,58 @@ def _reject_batch_key_unsafe(key):
         )
 
 
+_INDEX_OPEN_ROW_RE = re.compile(r"^\|\s*[A-Z]\d+\s*\|")
+_INDEX_CLOSED_SUMMARY_RE = re.compile(r"共\s*(\d+)\s*项已闭合")
+
+
+def _count_index_items(index_path):
+    """两段式解析旧 `INDEX.md` 的总项数（open 表格行数 + closed 聚合行的 N），供
+    `_reindex_core` 写盘前的"总项数只增不减"守卫使用：
+
+    - open：数 `_render_item_table` 渲染出的数据行（`| [A-Z]\\d+ | ... |`）——表头/分隔行
+      不匹配该模式，安全跳过。
+    - closed：`generate_index_md` 无条件写出的"共 N 项已闭合"聚合摘要行（即便 N=0 也写），
+      正则未命中即视为该文件不是本工具生成的合法 INDEX.md。
+
+    文件不存在、或 closed 聚合行缺失（格式损坏/非本工具生成）→ 返回 0（视为"无旧基线"，
+    守卫据此跳过校验，不阻塞首次 reindex 或从损坏文件恢复）。"""
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return 0
+    closed_match = _INDEX_CLOSED_SUMMARY_RE.search(content)
+    if closed_match is None:
+        return 0
+    closed_count = int(closed_match.group(1))
+    open_count = sum(
+        1 for line in content.splitlines() if _INDEX_OPEN_ROW_RE.match(line.strip())
+    )
+    return open_count + closed_count
+
+
 def _reindex_core(root, snapshot=None):
     """reindex 核心逻辑：`read_pool`（内含 D9 跨池 ID 冲突检测）→ `generate_index_md` 纯函数
-    重建全文 → `atomic_write` 原子落盘 INDEX.md → `sync_batches_md`。返回 `(items, problems)`。"""
+    重建全文 → `atomic_write` 原子落盘 INDEX.md → `sync_batches_md`。返回 `(items, problems)`。
+
+    写盘前先跑总项数只增不减守卫（`_count_index_items` 读旧 INDEX.md）：新扫描总项数低于
+    旧总项数即拒绝覆盖（旧总项数为 0——含首次建、含旧文件不可解析——时跳过校验）。"""
     if snapshot is None:
         problems = []
         items = read_pool(root, problems)
     else:
         items = list(snapshot["items"])
         problems = list(snapshot.get("problems", []))
-    content = generate_index_md(items)
     index_path = os.path.join(root, "openspec", "issues", "INDEX.md")
+    old_count = _count_index_items(index_path)
+    new_count = len(items)
+    if old_count > 0 and new_count < old_count:
+        raise ReindexStageError(
+            "count-guard",
+            f"reindex 总项数只增不减守卫触发：旧 INDEX.md 共 {old_count} 项，"
+            f"本次新扫描仅 {new_count} 项，拒绝覆盖（疑似误删 dated 文件或 scan 异常截断）",
+        )
+    content = generate_index_md(items)
     try:
         atomic_write(index_path, content)
     except Exception as exc:
