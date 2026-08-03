@@ -140,7 +140,7 @@ def test_yq_not_installed_fails_loud(monkeypatch, tmp_path):
     al = _mod()
     monkeypatch.setattr(al.shutil, "which", lambda name: None)
     p = tmp_path / "c.yaml"; p.write_text("a: 1\n", encoding="utf-8")
-    with pytest.raises(SystemExit):
+    with pytest.raises(RuntimeError, match="yq 未安装"):
         al._yq(".a", p, default=None)
 
 def test_yq_identity_check_rejects_non_mikefarah(monkeypatch, tmp_path):
@@ -153,7 +153,7 @@ def test_yq_identity_check_rejects_non_mikefarah(monkeypatch, tmp_path):
         return _FakeResult("yq (https://github.com/kislyuk/yq/) version 3.5.1")
     monkeypatch.setattr(al.subprocess, "run", fake_run)
     p = tmp_path / "c.yaml"; p.write_text("a: 1\n", encoding="utf-8")
-    with pytest.raises(SystemExit):
+    with pytest.raises(RuntimeError, match="不是 mikefarah/yq"):
         al._yq(".a", p, default=None)
 
 def test_yq_version_check_runs_once_then_cached(tmp_path):

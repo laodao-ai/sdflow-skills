@@ -192,6 +192,7 @@ DOGFOOD_OVERLAY_DELTAS = {
     "T136": {"status": ("PROPOSED", "DONE")},
     "T138": {"status": ("PROPOSED", "DONE")},
     "T146": {"status": ("PROPOSED", "DONE")},
+    "B7": {"status": ("OPEN", "FIXED")},
 }
 
 

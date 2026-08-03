@@ -21,10 +21,13 @@ class MaintainScanError(Exception):
 
 
 def find_repo_root(start):
-    """从 start 向上找含 .git 的目录，返回其绝对路径；找不到 raise MaintainScanError。"""
-    cur = os.path.abspath(start)
+    """从 start 向上找含 .git 的目录（含 linked worktree 的 .git 文件），返回其绝对路径；找不到 raise MaintainScanError。"""
+    try:
+        cur = os.path.abspath(start)
+    except OSError:
+        raise MaintainScanError(f"仓根探测起点不可达（从 {start}）") from None
     while True:
-        if os.path.isdir(os.path.join(cur, ".git")):
+        if os.path.exists(os.path.join(cur, ".git")):
             return cur
         parent = os.path.dirname(cur)
         if parent == cur:
@@ -368,7 +371,11 @@ def main(argv=None):
     ap.add_argument("--root", default=None, help="仓根，缺省自动探测 git 根")
     args = ap.parse_args(argv)
     try:
-        root = args.root or find_repo_root(os.getcwd())
+        try:
+            cwd = os.getcwd()
+        except OSError:
+            raise MaintainScanError("进程当前工作目录已不存在或不可访问") from None
+        root = args.root or find_repo_root(cwd)
         report = run_scan(root)
     except MaintainScanError as e:
         print(f"[maintain_scan] ERROR {e}", file=sys.stderr)

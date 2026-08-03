@@ -527,7 +527,7 @@ check_dependencies() {
       if [ -n "$yqnum" ] && _version_ge "$yqnum" "$_YQ_MIN_VERSION"; then
         echo "  ✓ yq ($yqv)"
       else
-        echo "  ⚠ yq 版本过低（$yqv，需 >= $_YQ_MIN_VERSION —— --front-matter 支持下限）"
+        echo "  ⚠ yq 版本过低（${yqv}，需 >= ${_YQ_MIN_VERSION} —— --front-matter 支持下限）"
         echo "    升级：macOS brew upgrade yq | Windows winget upgrade --id MikeFarah.yq | Linux snap refresh yq"
         missing+=("yq>=$_YQ_MIN_VERSION")
       fi

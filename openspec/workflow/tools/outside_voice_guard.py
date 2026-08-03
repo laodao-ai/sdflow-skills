@@ -150,7 +150,7 @@ def parse_codex_findings(text):
         host = attrs.get("host", "claude")                # v1 兼容：无 host= → claude（GC-9）
         reason_code = attrs.get("reason_code", "ok")       # v1 兼容：无 reason_code= → ok（GC-9）
         raw = attrs.get("findings")
-        findings_val = int(raw) if (raw is not None and raw.isdigit()) else None
+        findings_val = int(raw) if (raw is not None and raw.isascii() and raw.isdigit()) else None
         cat = classify_combo(host, runner, reason_code, findings_val)
         if cat == "cross-model":
             if findings_val is not None:                   # findings 畸形的 cross-model 锚不贡献计数（C1：不复用、回落）
