@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 266f53f373a77249c12f897eb29f5ca00ed192ab
+---
+
 # Spec Review Report: issues-v2-single-file-model
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
@@ -261,3 +267,7 @@ hr-tg（同族 fallback，reason_code=exec-error，HR-TG∩={TG-09}）：6 条 f
 - CR-3（spec-workflow）和 CR-4（CI workflow）需要扩充 Impact/tasks
 
 建议：先按 CR-1~5 + H-1~10 修改四件套 → 窄复核 → 再拍板进设计门。
+
+---
+
+**设计门已拍板批准，日期 2026-08-03。** CR-1~5 和 H-1~10 已回流修改四件套（commit 266f53f，标 `[spec-review-amendment]`），Q1~Q4 均按推荐方案裁定。
