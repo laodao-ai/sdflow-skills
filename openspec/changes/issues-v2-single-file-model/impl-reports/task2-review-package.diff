@@ -1,0 +1,849 @@
+# Review package: Task 2 (migrate tool) staged changes
+
+## Files changed
+ .../impl-reports/task2-brief.md                    |  35 ++
+ .../impl-reports/task2-migrate.md                  | 127 +++++++
+ sdflow-issues/scripts/issues_v2.py                 | 386 ++++++++++++++++++++-
+ sdflow-issues/tests/test_issues_v2.py              | 367 ++++++++++++++++++++
+ 4 files changed, 913 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/sdflow-issues/scripts/issues_v2.py b/sdflow-issues/scripts/issues_v2.py
+index 7bf7c3d..39f6c3a 100644
+--- a/sdflow-issues/scripts/issues_v2.py
++++ b/sdflow-issues/scripts/issues_v2.py
+@@ -2,26 +2,32 @@
+ """issues_v2.py — issues-v2-single-file-model 的单入口 CLI（Task 1）。
+ 
+ 一个 issue 一个 `.md` 文件（YAML frontmatter 为权威数据源，body 为自由格式 Markdown），
+ `open/` / `closed/` 两目录按状态分层，`INDEX.md` / `CLOSED.md` 为 `reindex` 再生的派生物。
+ 
+ **与 v1（`issues.py` + `sdflow_issues_core`）架构脱钩**（design.md「与 v1 的架构差异」）：
+ 本文件不 import `sdflow_issues_core`——单文件模型下 pool 差异收窄为几个内联常量，
+ 无需 POOL_SPEC 注入模式或跨脚本共享包。Task 3 会删除 v1 的三脚本 + 共享包；本文件
+ 从第一天起就是独立可用的，不依赖即将被删除的东西。
+ 
+-命令：`add` / `set-status` / `scan` / `reindex` / `next-id`。
+-迁移命令 `migrate`（v1 → v2 一次性转换）在本 change 的 Task 2 实现，不在本文件范围内。
++命令：`add` / `set-status` / `scan` / `reindex` / `next-id` / `migrate`。
++
++`migrate`（Task 2）是 v1 → v2 的一次性转换工具，自成一体地内联了 v1 双格式（legacy 表格 +
++frontmatter overlay）的**只读**解析——不 import `sdflow_issues_core`（Task 3 会连同 v1 三脚本一并
++删除该包；本文件从第一天起就不能依赖即将消失的东西，见上方模块级架构说明）。它复用的是
++`_build_effective_snapshot` 的 **shadow 算法**（先收 legacy 表格行、frontmatter overlay 同 ID 覆盖），
++不是那份代码本身——迁移只读旧文件、不回写，故不需要 core 里写路径相关的锁 / 校验 / 转义机器。
+ """
+ 
+ import argparse
+ import datetime
++import glob
+ import json
+ import os
+ import re
+ import subprocess
+ import sys
+ import tempfile
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+@@ -706,20 +712,393 @@ def cmd_reindex(args):
+ 
+ 
+ # ══════════════════════════════════════════════════════════════════════════════
+ # cmd_next_id
+ # ══════════════════════════════════════════════════════════════════════════════
+ 
+ def cmd_next_id(args):
+     print(next_id(args.root, args.pool))
+ 
+ 
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_migrate —— v1 → v2 一次性迁移（design.md「migrate 命令」/「字段映射」）
++#
++# 只读解析 v1 两种格式（legacy 表格 / frontmatter overlay），逐 item 去重
++# （frontmatter 覆盖同 ID 的 legacy 表格行——shadow 算法，MIG-01），字段映射到 v2
++# schema（MIG-02），已存在的目标文件幂等跳过（MIG-03），完成后自动 reindex
++# （MIG-04），PLANNED 批次计划文本搬入成员 issue body（MIG-05）。
++# ══════════════════════════════════════════════════════════════════════════════
++
++_V1_ITEM_LINE_RE = re.compile(r'^    ([A-Z][1-9][0-9]*): (\{.*\})$')
++_V1_TABLE_HDR_RE = re.compile(r'^\s*\|\s*ID\s*\|')
++_V1_ROW_ID_RE = re.compile(r'^\s*\|\s*([A-Z][1-9][0-9]*)\s*\|')
++_V1_MARKER_RE = re.compile(r'^<!-- sdflow-issue-block:(start|end) id=([A-Z][1-9][0-9]*) -->\s*$')
++_V1_HEADING_RE = re.compile(r'^##\s+([A-Z][1-9][0-9]*)\s*:')
++_V1_BUGLIST_NAME_RE = re.compile(r'(\d{4}-\d{2}-\d{2})-buglist\.md$')
++_V1_TODOLIST_NAME_RE = re.compile(r'(\d{4}-\d{2})-todolist\.md$')
++_V1_HIST_LINE_RE = re.compile(
++    r'^>\s*(?P<date>\S+)\s*状态[:：]\s*\S+\s*→\s*(?P<new>[A-Z_]+)(?:（(?P<note>.*)）)?\s*$',
++    re.MULTILINE,
++)
++_V1_CHANGE_TOKEN_RE = re.compile(r'^(?:change\s+)?([a-z][a-z0-9]*(?:-[a-z0-9]+)+)')
++_V1_ISO_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
++_V1_BATCH_BLOCK_RE = re.compile(
++    r'^### (?P<key>\S+) — .*\n'
++    r'状态: (?P<status>\S+)\n'
++    r'成员: \(生成\)(?P<members>.*)\n'
++    r'优先级: .*\n'
++    r'计划: (?P<plan>.*)$',
++    re.MULTILINE,
++)
++
++
++def _v1_collect_files(root):
++    """扫描 `openspec/issues/buglist/*.md` + `openspec/issues/todolist/*.md`，返回
++    `[(path, pool), ...]`（各自按文件名排序，buglist 在前）。"""
++    files = []
++    bug_dir = os.path.join(root, "openspec", "issues", "buglist")
++    todo_dir = os.path.join(root, "openspec", "issues", "todolist")
++    if os.path.isdir(bug_dir):
++        files += [(p, "bug") for p in sorted(glob.glob(os.path.join(bug_dir, "*.md")))]
++    if os.path.isdir(todo_dir):
++        files += [(p, "todo") for p in sorted(glob.glob(os.path.join(todo_dir, "*.md")))]
++    return files
++
++
++def _v1_file_date(path):
++    """date 字段来源（design.md 字段映射表）：buglist 从文件名 `YYYY-MM-DD` 取；
++    todolist 从文件名 `YYYY-MM` 取，补 `-01`。"""
++    name = os.path.basename(path)
++    m = _V1_BUGLIST_NAME_RE.search(name)
++    if m:
++        return m.group(1)
++    m = _V1_TODOLIST_NAME_RE.search(name)
++    if m:
++        return m.group(1) + "-01"
++    _fail(
++        f"文件名不含可识别日期: {name}", "既不匹配 buglist 也不匹配 todolist 命名约定",
++        "文件名须为 YYYY-MM-DD-buglist.md 或 YYYY-MM-todolist.md",
++    )
++
++
++def _v1_split_frontmatter(text):
++    """有 `sdflow-issues:` frontmatter 则返回 `(items_dict, body_after_fm)`；
++    否则返回 `({}, text)`（纯 legacy 格式，MIG-01 Scenario 1）。"""
++    header = "---\nsdflow-issues:\n"
++    if not text.startswith(header):
++        return {}, text
++    close = text.find("\n---\n", 4)
++    if close < 0:
++        _fail("v1 frontmatter envelope 非法", "找不到闭合的 `---` 围栏", "补全闭合围栏后重试")
++    fm_text = text[4:close]
++    body = text[close + len("\n---\n"):]
++    items = {}
++    for line in fm_text.splitlines():
++        m = _V1_ITEM_LINE_RE.match(line)
++        if not m:
++            continue  # schema/pool/mode/items: 等 header 行——迁移不校验（只读，best-effort）
++        item_id, payload = m.group(1), m.group(2)
++        try:
++            items[item_id] = json.loads(payload)
++        except json.JSONDecodeError as exc:
++            _fail(f"item {item_id} JSON 非法", str(exc), "修正该行 JSON 后重试")
++    return items, body
++
++
++def _v1_legacy_table_rows(lines, pool):
++    """解析 `## 状态总览` 表格行，返回 `{id: fields_dict}`（MIG-01 Scenario 1）。
++    只认第一个 `状态总览` 区域（真实语料每文件恰一个）。"""
++    specific_field = "priority" if pool == "bug" else "type"
++    rows = {}
++    for i, line in enumerate(lines):
++        if not re.match(r'^##\s+状态总览', line):
++            continue
++        hdr_idx = None
++        for j in range(i + 1, min(len(lines), i + 6)):
++            if not lines[j].strip():
++                continue
++            if _V1_TABLE_HDR_RE.match(lines[j]):
++                hdr_idx = j
++            break
++        if hdr_idx is None:
++            continue
++        k = hdr_idx + 2
++        while k < len(lines) and lines[k].lstrip().startswith("|"):
++            m = _V1_ROW_ID_RE.match(lines[k])
++            if m:
++                cells = [c.strip() for c in lines[k].strip().strip("|").split("|")]
++                rows[m.group(1)] = {
++                    "module": cells[1] if len(cells) > 1 else "",
++                    "summary": cells[2] if len(cells) > 2 else "",
++                    specific_field: cells[3] if len(cells) > 3 else None,
++                    "status": cells[4] if len(cells) > 4 else "",
++                    "change": (
++                        cells[6] if len(cells) > 6 and cells[6] not in ("", "-") else None
++                    ),
++                }
++            k += 1
++        break
++    return rows
++
++
++def _v1_marker_block_bodies(lines):
++    """成对 marker（`<!-- sdflow-issue-block:start/end id=X -->`）之间的原文，去掉 marker
++    标签本身（design.md 字段映射表：「marker block 内容 → body 原样搬入（去掉 marker 标签）」）。"""
++    bodies = {}
++    active = None
++    start_idx = None
++    for idx, line in enumerate(lines):
++        m = _V1_MARKER_RE.match(line.rstrip("\n"))
++        if not m:
++            continue
++        kind, item_id = m.group(1), m.group(2)
++        if kind == "start":
++            active, start_idx = item_id, idx
++        elif kind == "end" and active == item_id:
++            bodies[item_id] = "".join(lines[start_idx + 1:idx])
++            active, start_idx = None, None
++    return bodies
++
++
++def _v1_heading_block_bodies(lines):
++    """`## {ID}: ...` 标题块（含标题行本身）到下一个 `---` 或下一个标题为止的原文
++    （legacy-owned item 的 detail section，MIG-01 Scenario 1）。"""
++    starts = []
++    for i, line in enumerate(lines):
++        m = _V1_HEADING_RE.match(line)
++        if m:
++            starts.append((i, m.group(1)))
++    bodies = {}
++    for i, item_id in starts:
++        end = len(lines)
++        for j in range(i + 1, len(lines)):
++            if lines[j].strip() == "---" or _V1_HEADING_RE.match(lines[j]):
++                end = j
++                break
++        bodies[item_id] = "".join(lines[i:end])
++    return bodies
++
++
++def _v1_pick_body(item_id, marker_blocks, heading_blocks):
++    if item_id in marker_blocks:
++        return marker_blocks[item_id]
++    if item_id in heading_blocks:
++        return heading_blocks[item_id]
++    return ""
++
++
++def _v1_parse_file(path, pool):
++    """解析单个 v1 文件，返回 `(items, shadowed_count)`；`items` = `{id: entry}`，
++    entry = `{"pool", "fields", "body", "file_date", "source_file"}`。
++
++    逐 item 去重（MIG-01）：先收 legacy 表格行，frontmatter overlay 同 ID 覆盖
++    （shadow 算法，被覆盖的 legacy 行计入 shadowed_count 但不进入 items）。"""
++    with open(path, encoding="utf-8") as f:
++        text = f.read()
++    frontmatter_items, body_text = _v1_split_frontmatter(text)
++    lines = body_text.splitlines(keepends=True)
++    legacy_rows = _v1_legacy_table_rows(lines, pool)
++    marker_blocks = _v1_marker_block_bodies(lines)
++    heading_blocks = _v1_heading_block_bodies(lines)
++    file_date = _v1_file_date(path)
++
++    fm_keys = set(frontmatter_items)
++    shadowed = 0
++    items = {}
++    for row_id, fields in legacy_rows.items():
++        if row_id in fm_keys:
++            shadowed += 1
++            continue
++        items[row_id] = {
++            "pool": pool, "fields": fields,
++            "body": _v1_pick_body(row_id, marker_blocks, heading_blocks),
++            "file_date": file_date, "source_file": path,
++        }
++    for fm_id, fields in frontmatter_items.items():
++        items[fm_id] = {
++            "pool": pool, "fields": fields,
++            "body": _v1_pick_body(fm_id, marker_blocks, heading_blocks),
++            "file_date": file_date, "source_file": path,
++        }
++    return items, shadowed
++
++
++def _v1_last_terminal_history_match(body, pool):
++    """扫 body 里 `> {date} 状态：X → Y（note）` 历史行，返回**最后一条**新状态落在该 pool
++    终态集里的 `(date, note)`；none 则无匹配（closed_date/resolved_by 均 best-effort，MIG-02）。"""
++    result = None
++    for m in _V1_HIST_LINE_RE.finditer(body):
++        if m.group("new") in TERMINAL_STATUSES[pool]:
++            result = (m.group("date"), m.group("note"))
++    return result
++
++
++def _v1_extract_change_token(note):
++    """从历史行的括注文本提取形如 `fix-xxx` 的 change 名（kebab-case，≥2 段）；
++    提取不到（如中文散文、无连字符）返回 None（resolved_by 提取不到则 null）。"""
++    if not note:
++        return None
++    m = _V1_CHANGE_TOKEN_RE.match(note.strip())
++    return m.group(1) if m else None
++
++
++def _v1_build_v2_issue(item_id, entry, stats):
++    """字段映射（design.md 字段映射表）：v1 fields + body → v2 (frontmatter, body)。
++    映射失败（status 越出 v2 词表 / 值含 CR/LF/NUL）时 raise，调用方负责跳过。"""
++    pool = entry["pool"]
++    fields = entry["fields"]
++    body = entry["body"]
++    file_date = entry["file_date"]
++    specific_field = "priority" if pool == "bug" else "type"
++
++    status = fields.get("status")
++    if status not in STATUS_VALUES[pool]:
++        _fail(
++            f"{item_id} status 非法", f"{status!r} 不在 v2 词表 {sorted(STATUS_VALUES[pool])}",
++            "人工核对该条历史 status 后手动迁移，或先在 v1 侧修正",
++        )
++
++    terminal = status in TERMINAL_STATUSES[pool]
++    resolved_by = None
++    closed_date = None
++    closed_reason = None
++    if terminal:
++        closed_date = file_date  # best-effort 兜底（design.md：格式不匹配或不存在则取文件日期）
++        match = _v1_last_terminal_history_match(body, pool)
++        if match is None:
++            stats["resolved_by"]["no_history_line"] += 1
++        else:
++            date_str, note = match
++            if date_str and _V1_ISO_DATE_RE.match(date_str):
++                closed_date = date_str
++            token = _v1_extract_change_token(note)
++            if token:
++                resolved_by = token
++                stats["resolved_by"]["matched"] += 1
++            else:
++                stats["resolved_by"]["note_no_token"] += 1
++            if status in ("WONTFIX", "WONTDO") and note:
++                closed_reason = note
++
++    module = fields.get("module") or ""
++    summary = fields.get("summary") or ""
++    specific_value = fields.get(specific_field) or None
++    source_change = fields.get("change") or None
++
++    for value, name in (
++        (module, "module"), (summary, "summary"), (specific_value, specific_field),
++        (source_change, "source_change"), (resolved_by, "resolved_by"),
++        (closed_reason, "closed_reason"),
++    ):
++        _reject_line_unsafe(value, name)
++
++    frontmatter = {
++        "id": item_id, "pool": pool, "status": status,
++        "priority": specific_value if pool == "bug" else None,
++        "type": specific_value if pool == "todo" else None,
++        "date": file_date,
++        "source_change": source_change,
++        "module": module, "summary": summary,
++        "resolved_by": resolved_by, "closed_date": closed_date,
++        "closed_reason": closed_reason,
++    }
++    return frontmatter, body
++
++
++def _v1_planned_batch_notes(root):
++    """解析 `batches.md`，返回 `{member_id: [{"key", "plan"}, ...]}`——只含 PLANNED 批次
++    （MIG-05）。文件缺失则返回空 dict（batches.md 是可选历史产物）。"""
++    path = os.path.join(root, "openspec", "issues", "batches.md")
++    notes = {}
++    if not os.path.isfile(path):
++        return notes
++    with open(path, encoding="utf-8") as f:
++        text = f.read()
++    for m in _V1_BATCH_BLOCK_RE.finditer(text):
++        if m.group("status") != "PLANNED":
++            continue
++        key = m.group("key")
++        plan = m.group("plan").strip()
++        for raw in m.group("members").split(","):
++            member_id = raw.strip()
++            if ID_RE.match(member_id):
++                notes.setdefault(member_id, []).append({"key": key, "plan": plan})
++    return notes
++
++
++def _v1_id_sort_key(item_id):
++    m = ID_RE.match(item_id)
++    return (m.group(1), int(m.group(2))) if m else (item_id, 0)
++
++
++def cmd_migrate(args):
++    root = args.root
++    stats = {
++        "files_scanned": 0, "parse_errors": 0, "shadowed": 0,
++        "migrated": 0, "skipped_existing": 0, "mapping_errors": 0,
++        "batch_notes_applied": 0,
++        "resolved_by": {"matched": 0, "note_no_token": 0, "no_history_line": 0},
++    }
++    all_items = {}
++    for path, pool in _v1_collect_files(root):
++        stats["files_scanned"] += 1
++        try:
++            file_items, shadowed = _v1_parse_file(path, pool)
++        except ValueError as exc:
++            print(f"WARNING: 跳过不可解析文件 {path}: {exc}", file=sys.stderr)
++            stats["parse_errors"] += 1
++            continue
++        stats["shadowed"] += shadowed
++        for item_id, entry in file_items.items():
++            if item_id in all_items:
++                print(
++                    f"WARNING: ID {item_id} 跨文件重复（"
++                    f"{all_items[item_id]['source_file']} 与 {path}），保留先出现者",
++                    file=sys.stderr,
++                )
++                continue
++            all_items[item_id] = entry
++
++    batch_notes = _v1_planned_batch_notes(root)
++
++    for item_id in sorted(all_items, key=_v1_id_sort_key):
++        entry = all_items[item_id]
++        try:
++            frontmatter, body = _v1_build_v2_issue(item_id, entry, stats)
++        except ValueError as exc:
++            print(f"WARNING: 跳过字段映射失败 {item_id}: {exc}", file=sys.stderr)
++            stats["mapping_errors"] += 1
++            continue
++
++        pool = frontmatter["pool"]
++        terminal = frontmatter["status"] in TERMINAL_STATUSES[pool]
++        location = "closed" if terminal else "open"
++        path = os.path.join(_issues_dir(root, location), f"{item_id}.md")
++        if os.path.isfile(path):
++            stats["skipped_existing"] += 1
++            continue
++
++        notes = batch_notes.get(item_id)
++        if notes:
++            if body and not body.endswith("\n"):
++                body += "\n"
++            for note in notes:
++                body += f"\n> [迁移自批次 {note['key']}] 原计划: {note['plan']}\n"
++            stats["batch_notes_applied"] += 1
++
++        write_issue(path, frontmatter, body, create=True)
++        stats["migrated"] += 1
++
++    cmd_reindex(args)
++    print(json.dumps(stats, ensure_ascii=False, indent=2))
++
++
+ # ══════════════════════════════════════════════════════════════════════════════
+ # main
+ # ══════════════════════════════════════════════════════════════════════════════
+ 
+ def main():
+     p = argparse.ArgumentParser(description="issues_v2 — 单文件 issue 存储模型 CLI")
+     p.add_argument("--root", default=None, help="目标项目根；默认自动探测 git 根")
+     sub = p.add_subparsers(dest="cmd", required=True)
+ 
+     sa = sub.add_parser("add", help="创建新 issue 到 open/")
+@@ -743,20 +1122,23 @@ def main():
+     sc.add_argument("--json", action="store_true", help="JSON 列表输出")
+     sc.set_defaults(func=cmd_scan)
+ 
+     sr = sub.add_parser("reindex", help="再生 INDEX.md + CLOSED.md")
+     sr.set_defaults(func=cmd_reindex)
+ 
+     sn = sub.add_parser("next-id", help="输出下一个可用 ID")
+     sn.add_argument("--pool", required=True, choices=["bug", "todo"])
+     sn.set_defaults(func=cmd_next_id)
+ 
++    sm = sub.add_parser("migrate", help="v1（buglist/todolist）→ v2（open/closed）一次性迁移")
++    sm.set_defaults(func=cmd_migrate)
++
+     args = p.parse_args()
+     try:
+         args.root = repo_root(args.root)
+         args.func(args)
+     except ValueError as exc:
+         print(str(exc), file=sys.stderr)
+         raise SystemExit(2) from None
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/sdflow-issues/tests/test_issues_v2.py b/sdflow-issues/tests/test_issues_v2.py
+index 9b36385..de76e5c 100644
+--- a/sdflow-issues/tests/test_issues_v2.py
++++ b/sdflow-issues/tests/test_issues_v2.py
+@@ -617,10 +617,377 @@ def test_detect_change_returns_empty_when_ambiguous(tmp_path):
+     (repo / "openspec" / "changes" / "change-b").mkdir(parents=True)
+     assert v2.detect_change(str(repo)) == ""
+ 
+ 
+ def test_set_status_rejects_path_traversal_id(tmp_path):
+     repo = _init_repo(tmp_path / "repo")
+     r = _run_cli(repo, "set-status", "--id", "../../../../etc/hosts", "--to", "FIXED",
+                  "--evidence", "x")
+     assert r.returncode != 0
+     assert "ID 格式非法" in r.stderr
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_migrate (Task 2) —— v1 → v2 一次性迁移
++#
++# v1 fixture 格式取自真实语料（openspec/issues/buglist/2026-07-*.md、
++# openspec/issues/todolist/2026-07-todolist.md）：legacy 表格（无 frontmatter）、
++# frontmatter overlay（`sdflow-issues: items:` + marker block）、两者同文件共存。
++# ══════════════════════════════════════════════════════════════════════════════
++
++def _write(path, text):
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(text, encoding="utf-8")
++
++
++def _migrate_stats(proc):
++    assert proc.returncode == 0, proc.stderr
++    return json.loads(proc.stdout[proc.stdout.index("{"):])
++
++
++def _v1_buglist_pure_legacy(item_id="B1", status="FIXED", change="some-change",
++                             hist="> 2026-07-05 状态：PROPOSED → FIXED（change fix-something 归档，one line summary）"):
++    return f"""# 2026-07-04 Buglist
++
++> 来源：<未注明>
++> 创建日期：2026-07-04
++
++## 状态总览
++
++| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |
++|----|------|----------|--------|------|------|------------|------|
++| {item_id} | mod-a | summary of {item_id} | P2 | {status} | 13:12 | {change} | - |
++
++---
++
++## {item_id}: summary of {item_id}
++
++**关联文档**：`openspec/changes/{change}/design.md`
++
++**现象**：something happened
++
++**修复方案**：did something
++{hist}
++"""
++
++
++def test_migrate_parses_pure_legacy_table_format(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
++           _v1_buglist_pure_legacy())
++
++    proc = _run_cli(repo, "migrate")
++    stats = _migrate_stats(proc)
++    assert stats["migrated"] == 1
++    assert stats["shadowed"] == 0
++
++    closed_path = repo / "openspec" / "issues" / "closed" / "B1.md"
++    assert closed_path.is_file()
++    fm, body = v2.read_issue(str(closed_path))
++    assert fm["module"] == "mod-a"
++    assert fm["summary"] == "summary of B1"
++    assert fm["priority"] == "P2"
++    assert fm["type"] is None
++    assert fm["status"] == "FIXED"
++    assert fm["date"] == "2026-07-04"  # 文件名日期
++    assert fm["source_change"] == "some-change"  # legacy 表格「关联Change」列
++    assert fm["resolved_by"] == "fix-something"  # 从 body 历史行提取，非 change 字段
++    assert fm["closed_date"] == "2026-07-05"  # 历史行日期，非文件日期
++    assert "## B1: summary of B1" in body
++    assert "**现象**：something happened" in body
++
++
++def test_migrate_parses_pure_frontmatter_overlay_format(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """---
++sdflow-issues:
++  schema: 1
++  pool: todo
++  mode: overlay
++  items:
++    T5: {"module":"mod","summary":"desc for t5","type":"基础设施","status":"OPEN","time":"2026-07-01 00:00","change":"src-change","batch":null}
++---
++# 2026-07 TODO
++
++> 项目：<未注明>
++
++<!-- sdflow-issue-block:start id=T5 -->
++## T5: desc for t5
++
++some marker body content line
++<!-- sdflow-issue-block:end id=T5 -->
++""")
++
++    proc = _run_cli(repo, "migrate")
++    stats = _migrate_stats(proc)
++    assert stats["migrated"] == 1
++    assert stats["shadowed"] == 0
++
++    open_path = repo / "openspec" / "issues" / "open" / "T5.md"
++    assert open_path.is_file()
++    fm, body = v2.read_issue(str(open_path))
++    assert fm["module"] == "mod"
++    assert fm["type"] == "基础设施"
++    assert fm["priority"] is None
++    assert fm["status"] == "OPEN"
++    assert fm["source_change"] == "src-change"
++    assert fm["date"] == "2026-07-01"  # todolist 文件名 YYYY-MM → 补 -01
++    assert fm["closed_date"] is None
++    assert "some marker body content line" in body
++
++
++def test_migrate_frontmatter_shadows_legacy_row_same_id(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """---
++sdflow-issues:
++  schema: 1
++  pool: todo
++  mode: overlay
++  items:
++    T67: {"module":"m","summary":"s67","type":"代码质量","status":"DONE","time":"2026-07-10 00:00","change":"cA","batch":null}
++---
++# 2026-07 TODO
++
++> 项目：<未注明>
++
++## 状态总览
++
++| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
++|----|------|------|------|------|------|------------|------|
++| T67 | m | s67 | 代码质量 | PROPOSED | 2026-07-05 00:00 | cA | - |
++| T68 | m | s68 | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
++
++---
++
++<!-- sdflow-issue-block:start id=T67 -->
++## T67: s67
++
++body for shadowed T67, from frontmatter marker block
++> 2026-07-11 状态：PROPOSED → DONE（change some-fix-change 完成）
++<!-- sdflow-issue-block:end id=T67 -->
++
++## T68: s68
++
++legacy-only body for T68
++""")
++
++    proc = _run_cli(repo, "migrate")
++    stats = _migrate_stats(proc)
++    assert stats["migrated"] == 2
++    assert stats["shadowed"] == 1  # legacy 表格行 T67 被 frontmatter 同 ID 覆盖
++
++    closed_t67 = repo / "openspec" / "issues" / "closed" / "T67.md"
++    assert closed_t67.is_file()
++    fm67, body67 = v2.read_issue(str(closed_t67))
++    assert fm67["status"] == "DONE"  # 取 frontmatter 值，非 legacy 表格的 PROPOSED
++    assert fm67["resolved_by"] == "some-fix-change"
++    assert "body for shadowed T67" in body67
++
++    open_t68 = repo / "openspec" / "issues" / "open" / "T68.md"
++    assert open_t68.is_file()
++    fm68, body68 = v2.read_issue(str(open_t68))
++    assert fm68["status"] == "OPEN"
++    assert fm68["source_change"] is None  # legacy 表格「-」占位符 → null
++    assert "legacy-only body for T68" in body68
++
++
++def test_migrate_closed_date_falls_back_to_file_date_when_no_history_line(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
++           _v1_buglist_pure_legacy(item_id="B2", hist="just prose, no arrow pattern here."))
++
++    proc = _run_cli(repo, "migrate")
++    stats = _migrate_stats(proc)
++    assert stats["resolved_by"]["no_history_line"] == 1
++
++    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / "B2.md"))
++    assert fm["closed_date"] == "2026-07-04"  # 无匹配历史行 → 兜底文件日期
++    assert fm["resolved_by"] is None
++
++
++def test_migrate_planned_batch_note_appended_only_for_planned_batches(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """# 2026-07 TODO
++
++> 项目：<未注明>
++
++## 状态总览
++
++| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
++|----|------|------|------|------|------|------------|------|
++| T30 | m | planned-member | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
++| T31 | m | done-batch-member | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
++
++---
++
++## T30: planned-member
++
++body for T30
++
++## T31: done-batch-member
++
++body for T31
++""")
++    _write(repo / "openspec" / "issues" / "batches.md", """# Issues 批次注册表
++
++### my-batch — my-batch
++状态: PLANNED
++成员: (生成) T30
++优先级: P2
++计划: 这是 my-batch 的原计划文本
++
++### finished-batch — finished-batch
++状态: DONE
++成员: (生成) T31
++优先级: P3
++计划: 这是已完成批次的计划文本，不应迁入
++""")
++
++    proc = _run_cli(repo, "migrate")
++    stats = _migrate_stats(proc)
++    assert stats["batch_notes_applied"] == 1
++
++    _, body30 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "T30.md"))
++    assert "> [迁移自批次 my-batch] 原计划: 这是 my-batch 的原计划文本" in body30
++
++    _, body31 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "T31.md"))
++    assert "迁移自批次" not in body31  # DONE 批次不迁移
++
++
++def test_migrate_idempotent_skips_existing_target_file(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
++           _v1_buglist_pure_legacy(item_id="B3"))
++
++    # 预置一个已存在的目标文件（模拟此前已迁移过），内容故意不同（哨兵值）
++    sentinel_fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    sentinel_fm.update({"id": "B3", "pool": "bug", "status": "FIXED", "date": "2026-01-01",
++                         "module": "sentinel", "summary": "sentinel-summary"})
++    closed_dir = repo / "openspec" / "issues" / "closed"
++    v2.write_issue(str(closed_dir / "B3.md"), sentinel_fm, "sentinel body\n", create=True)
++
++    proc = _run_cli(repo, "migrate")
++    stats = _migrate_stats(proc)
++    assert stats["skipped_existing"] == 1
++    assert stats["migrated"] == 0
++
++    fm, body = v2.read_issue(str(closed_dir / "B3.md"))
++    assert fm["module"] == "sentinel"  # 未被迁移覆盖
++    assert body == "sentinel body\n"
++
++
++def test_migrate_rerun_is_fully_idempotent(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
++           _v1_buglist_pure_legacy(item_id="B4"))
++
++    first = _migrate_stats(_run_cli(repo, "migrate"))
++    assert first["migrated"] == 1
++    second = _migrate_stats(_run_cli(repo, "migrate"))
++    assert second["migrated"] == 0
++    assert second["skipped_existing"] == 1
++
++
++def test_migrate_reindexes_open_and_closed_after_migration(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
++           _v1_buglist_pure_legacy(item_id="B5"))  # FIXED → closed
++    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """# 2026-07 TODO
++
++> 项目：<未注明>
++
++## 状态总览
++
++| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
++|----|------|------|------|------|------|------------|------|
++| T40 | m | open-item | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
++
++---
++
++## T40: open-item
++
++body for T40
++""")
++
++    proc = _run_cli(repo, "migrate")
++    assert proc.returncode == 0, proc.stderr
++
++    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
++    closed_text = _read(repo / "openspec" / "issues" / "CLOSED.md")
++    assert v2.INDEX_BANNER in index_text
++    assert "T40" in index_text
++    assert "B5" not in index_text
++    assert "B5" in closed_text
++
++
++def test_migrate_skips_item_with_status_outside_v2_vocabulary(tmp_path):
++    """v1 bug 词表含 v2 未收纳的 BLOCKED/VERIFIED/IN_PROGRESS——越出的单项跳过并计入
++    mapping_errors，不阻断同批次其余合法项迁移（部分失败可恢复，MIG-02 之外的防御分支）。"""
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md", """# 2026-07-04 Buglist
++
++> 来源：<未注明>
++> 创建日期：2026-07-04
++
++## 状态总览
++
++| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |
++|----|------|----------|--------|------|------|------------|------|
++| B6 | mod-a | blocked item | P2 | BLOCKED | 13:12 | - | - |
++| B7 | mod-a | valid item | P2 | OPEN | 13:12 | - | - |
++
++---
++
++## B6: blocked item
++
++body
++
++## B7: valid item
++
++body
++""")
++
++    proc = _run_cli(repo, "migrate")
++    stats = _migrate_stats(proc)
++    assert stats["mapping_errors"] == 1
++    assert stats["migrated"] == 1
++    assert not (repo / "openspec" / "issues" / "open" / "B6.md").exists()
++    assert not (repo / "openspec" / "issues" / "closed" / "B6.md").exists()
++    assert (repo / "openspec" / "issues" / "open" / "B7.md").is_file()
++
++
++def test_migrate_stats_report_shape(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
++           _v1_buglist_pure_legacy(item_id="B8"))
++    stats = _migrate_stats(_run_cli(repo, "migrate"))
++    assert set(stats) == {
++        "files_scanned", "parse_errors", "shadowed", "migrated", "skipped_existing",
++        "mapping_errors", "batch_notes_applied", "resolved_by",
++    }
++    assert set(stats["resolved_by"]) == {"matched", "note_no_token", "no_history_line"}
++
++
++# ── 内部 helper 单元测试（v1 解析原语） ──────────────────────────────────────────
++
++def test_v1_pick_body_prefers_marker_over_heading_block():
++    assert v2._v1_pick_body("T1", {"T1": "marker-body"}, {"T1": "heading-body"}) == "marker-body"
++    assert v2._v1_pick_body("T1", {}, {"T1": "heading-body"}) == "heading-body"
++    assert v2._v1_pick_body("T1", {}, {}) == ""
++
++
++def test_v1_extract_change_token_handles_change_prefix_and_bare_kebab():
++    assert v2._v1_extract_change_token("change fix-something 归档，说明") == "fix-something"
++    assert v2._v1_extract_change_token("mlh-p6-recorder-frontmatter（根治兑现）") == "mlh-p6-recorder-frontmatter"
++    assert v2._v1_extract_change_token("平台行为，非本仓代码可修") is None
++    assert v2._v1_extract_change_token(None) is None
++
++
++def test_v1_file_date_extracts_from_buglist_and_todolist_names():
++    assert v2._v1_file_date("/x/openspec/issues/buglist/2026-07-19-buglist.md") == "2026-07-19"
++    assert v2._v1_file_date("/x/openspec/issues/todolist/2026-07-todolist.md") == "2026-07-01"
++
++
++def test_v1_split_frontmatter_returns_empty_items_for_pure_legacy_text():
++    items, body = v2._v1_split_frontmatter("# just a heading\nno frontmatter here\n")
++    assert items == {}
++    assert body == "# just a heading\nno frontmatter here\n"

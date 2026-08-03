@@ -624,3 +624,370 @@ def test_set_status_rejects_path_traversal_id(tmp_path):
                  "--evidence", "x")
     assert r.returncode != 0
     assert "ID 格式非法" in r.stderr
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# cmd_migrate (Task 2) —— v1 → v2 一次性迁移
+#
+# v1 fixture 格式取自真实语料（openspec/issues/buglist/2026-07-*.md、
+# openspec/issues/todolist/2026-07-todolist.md）：legacy 表格（无 frontmatter）、
+# frontmatter overlay（`sdflow-issues: items:` + marker block）、两者同文件共存。
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _write(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _migrate_stats(proc):
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout[proc.stdout.index("{"):])
+
+
+def _v1_buglist_pure_legacy(item_id="B1", status="FIXED", change="some-change",
+                             hist="> 2026-07-05 状态：PROPOSED → FIXED（change fix-something 归档，one line summary）"):
+    return f"""# 2026-07-04 Buglist
+
+> 来源：<未注明>
+> 创建日期：2026-07-04
+
+## 状态总览
+
+| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |
+|----|------|----------|--------|------|------|------------|------|
+| {item_id} | mod-a | summary of {item_id} | P2 | {status} | 13:12 | {change} | - |
+
+---
+
+## {item_id}: summary of {item_id}
+
+**关联文档**：`openspec/changes/{change}/design.md`
+
+**现象**：something happened
+
+**修复方案**：did something
+{hist}
+"""
+
+
+def test_migrate_parses_pure_legacy_table_format(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
+           _v1_buglist_pure_legacy())
+
+    proc = _run_cli(repo, "migrate")
+    stats = _migrate_stats(proc)
+    assert stats["migrated"] == 1
+    assert stats["shadowed"] == 0
+
+    closed_path = repo / "openspec" / "issues" / "closed" / "B1.md"
+    assert closed_path.is_file()
+    fm, body = v2.read_issue(str(closed_path))
+    assert fm["module"] == "mod-a"
+    assert fm["summary"] == "summary of B1"
+    assert fm["priority"] == "P2"
+    assert fm["type"] is None
+    assert fm["status"] == "FIXED"
+    assert fm["date"] == "2026-07-04"  # 文件名日期
+    assert fm["source_change"] == "some-change"  # legacy 表格「关联Change」列
+    assert fm["resolved_by"] == "fix-something"  # 从 body 历史行提取，非 change 字段
+    assert fm["closed_date"] == "2026-07-05"  # 历史行日期，非文件日期
+    assert "## B1: summary of B1" in body
+    assert "**现象**：something happened" in body
+
+
+def test_migrate_parses_pure_frontmatter_overlay_format(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """---
+sdflow-issues:
+  schema: 1
+  pool: todo
+  mode: overlay
+  items:
+    T5: {"module":"mod","summary":"desc for t5","type":"基础设施","status":"OPEN","time":"2026-07-01 00:00","change":"src-change","batch":null}
+---
+# 2026-07 TODO
+
+> 项目：<未注明>
+
+<!-- sdflow-issue-block:start id=T5 -->
+## T5: desc for t5
+
+some marker body content line
+<!-- sdflow-issue-block:end id=T5 -->
+""")
+
+    proc = _run_cli(repo, "migrate")
+    stats = _migrate_stats(proc)
+    assert stats["migrated"] == 1
+    assert stats["shadowed"] == 0
+
+    open_path = repo / "openspec" / "issues" / "open" / "T5.md"
+    assert open_path.is_file()
+    fm, body = v2.read_issue(str(open_path))
+    assert fm["module"] == "mod"
+    assert fm["type"] == "基础设施"
+    assert fm["priority"] is None
+    assert fm["status"] == "OPEN"
+    assert fm["source_change"] == "src-change"
+    assert fm["date"] == "2026-07-01"  # todolist 文件名 YYYY-MM → 补 -01
+    assert fm["closed_date"] is None
+    assert "some marker body content line" in body
+
+
+def test_migrate_frontmatter_shadows_legacy_row_same_id(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """---
+sdflow-issues:
+  schema: 1
+  pool: todo
+  mode: overlay
+  items:
+    T67: {"module":"m","summary":"s67","type":"代码质量","status":"DONE","time":"2026-07-10 00:00","change":"cA","batch":null}
+---
+# 2026-07 TODO
+
+> 项目：<未注明>
+
+## 状态总览
+
+| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
+|----|------|------|------|------|------|------------|------|
+| T67 | m | s67 | 代码质量 | PROPOSED | 2026-07-05 00:00 | cA | - |
+| T68 | m | s68 | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
+
+---
+
+<!-- sdflow-issue-block:start id=T67 -->
+## T67: s67
+
+body for shadowed T67, from frontmatter marker block
+> 2026-07-11 状态：PROPOSED → DONE（change some-fix-change 完成）
+<!-- sdflow-issue-block:end id=T67 -->
+
+## T68: s68
+
+legacy-only body for T68
+""")
+
+    proc = _run_cli(repo, "migrate")
+    stats = _migrate_stats(proc)
+    assert stats["migrated"] == 2
+    assert stats["shadowed"] == 1  # legacy 表格行 T67 被 frontmatter 同 ID 覆盖
+
+    closed_t67 = repo / "openspec" / "issues" / "closed" / "T67.md"
+    assert closed_t67.is_file()
+    fm67, body67 = v2.read_issue(str(closed_t67))
+    assert fm67["status"] == "DONE"  # 取 frontmatter 值，非 legacy 表格的 PROPOSED
+    assert fm67["resolved_by"] == "some-fix-change"
+    assert "body for shadowed T67" in body67
+
+    open_t68 = repo / "openspec" / "issues" / "open" / "T68.md"
+    assert open_t68.is_file()
+    fm68, body68 = v2.read_issue(str(open_t68))
+    assert fm68["status"] == "OPEN"
+    assert fm68["source_change"] is None  # legacy 表格「-」占位符 → null
+    assert "legacy-only body for T68" in body68
+
+
+def test_migrate_closed_date_falls_back_to_file_date_when_no_history_line(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
+           _v1_buglist_pure_legacy(item_id="B2", hist="just prose, no arrow pattern here."))
+
+    proc = _run_cli(repo, "migrate")
+    stats = _migrate_stats(proc)
+    assert stats["resolved_by"]["no_history_line"] == 1
+
+    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / "B2.md"))
+    assert fm["closed_date"] == "2026-07-04"  # 无匹配历史行 → 兜底文件日期
+    assert fm["resolved_by"] is None
+
+
+def test_migrate_planned_batch_note_appended_only_for_planned_batches(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """# 2026-07 TODO
+
+> 项目：<未注明>
+
+## 状态总览
+
+| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
+|----|------|------|------|------|------|------------|------|
+| T30 | m | planned-member | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
+| T31 | m | done-batch-member | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
+
+---
+
+## T30: planned-member
+
+body for T30
+
+## T31: done-batch-member
+
+body for T31
+""")
+    _write(repo / "openspec" / "issues" / "batches.md", """# Issues 批次注册表
+
+### my-batch — my-batch
+状态: PLANNED
+成员: (生成) T30
+优先级: P2
+计划: 这是 my-batch 的原计划文本
+
+### finished-batch — finished-batch
+状态: DONE
+成员: (生成) T31
+优先级: P3
+计划: 这是已完成批次的计划文本，不应迁入
+""")
+
+    proc = _run_cli(repo, "migrate")
+    stats = _migrate_stats(proc)
+    assert stats["batch_notes_applied"] == 1
+
+    _, body30 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "T30.md"))
+    assert "> [迁移自批次 my-batch] 原计划: 这是 my-batch 的原计划文本" in body30
+
+    _, body31 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "T31.md"))
+    assert "迁移自批次" not in body31  # DONE 批次不迁移
+
+
+def test_migrate_idempotent_skips_existing_target_file(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
+           _v1_buglist_pure_legacy(item_id="B3"))
+
+    # 预置一个已存在的目标文件（模拟此前已迁移过），内容故意不同（哨兵值）
+    sentinel_fm = {k: None for k in v2.FRONTMATTER_FIELDS}
+    sentinel_fm.update({"id": "B3", "pool": "bug", "status": "FIXED", "date": "2026-01-01",
+                         "module": "sentinel", "summary": "sentinel-summary"})
+    closed_dir = repo / "openspec" / "issues" / "closed"
+    v2.write_issue(str(closed_dir / "B3.md"), sentinel_fm, "sentinel body\n", create=True)
+
+    proc = _run_cli(repo, "migrate")
+    stats = _migrate_stats(proc)
+    assert stats["skipped_existing"] == 1
+    assert stats["migrated"] == 0
+
+    fm, body = v2.read_issue(str(closed_dir / "B3.md"))
+    assert fm["module"] == "sentinel"  # 未被迁移覆盖
+    assert body == "sentinel body\n"
+
+
+def test_migrate_rerun_is_fully_idempotent(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
+           _v1_buglist_pure_legacy(item_id="B4"))
+
+    first = _migrate_stats(_run_cli(repo, "migrate"))
+    assert first["migrated"] == 1
+    second = _migrate_stats(_run_cli(repo, "migrate"))
+    assert second["migrated"] == 0
+    assert second["skipped_existing"] == 1
+
+
+def test_migrate_reindexes_open_and_closed_after_migration(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
+           _v1_buglist_pure_legacy(item_id="B5"))  # FIXED → closed
+    _write(repo / "openspec" / "issues" / "todolist" / "2026-07-todolist.md", """# 2026-07 TODO
+
+> 项目：<未注明>
+
+## 状态总览
+
+| ID | 模块 | 描述 | 类型 | 状态 | 时间 | 关联Change | 批次 |
+|----|------|------|------|------|------|------------|------|
+| T40 | m | open-item | 基础设施 | OPEN | 2026-07-06 00:00 | - | - |
+
+---
+
+## T40: open-item
+
+body for T40
+""")
+
+    proc = _run_cli(repo, "migrate")
+    assert proc.returncode == 0, proc.stderr
+
+    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
+    closed_text = _read(repo / "openspec" / "issues" / "CLOSED.md")
+    assert v2.INDEX_BANNER in index_text
+    assert "T40" in index_text
+    assert "B5" not in index_text
+    assert "B5" in closed_text
+
+
+def test_migrate_skips_item_with_status_outside_v2_vocabulary(tmp_path):
+    """v1 bug 词表含 v2 未收纳的 BLOCKED/VERIFIED/IN_PROGRESS——越出的单项跳过并计入
+    mapping_errors，不阻断同批次其余合法项迁移（部分失败可恢复，MIG-02 之外的防御分支）。"""
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md", """# 2026-07-04 Buglist
+
+> 来源：<未注明>
+> 创建日期：2026-07-04
+
+## 状态总览
+
+| ID | 模块 | 问题摘要 | 优先级 | 状态 | 时间 | 关联Change | 批次 |
+|----|------|----------|--------|------|------|------------|------|
+| B6 | mod-a | blocked item | P2 | BLOCKED | 13:12 | - | - |
+| B7 | mod-a | valid item | P2 | OPEN | 13:12 | - | - |
+
+---
+
+## B6: blocked item
+
+body
+
+## B7: valid item
+
+body
+""")
+
+    proc = _run_cli(repo, "migrate")
+    stats = _migrate_stats(proc)
+    assert stats["mapping_errors"] == 1
+    assert stats["migrated"] == 1
+    assert not (repo / "openspec" / "issues" / "open" / "B6.md").exists()
+    assert not (repo / "openspec" / "issues" / "closed" / "B6.md").exists()
+    assert (repo / "openspec" / "issues" / "open" / "B7.md").is_file()
+
+
+def test_migrate_stats_report_shape(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
+           _v1_buglist_pure_legacy(item_id="B8"))
+    stats = _migrate_stats(_run_cli(repo, "migrate"))
+    assert set(stats) == {
+        "files_scanned", "parse_errors", "shadowed", "migrated", "skipped_existing",
+        "mapping_errors", "batch_notes_applied", "resolved_by",
+    }
+    assert set(stats["resolved_by"]) == {"matched", "note_no_token", "no_history_line"}
+
+
+# ── 内部 helper 单元测试（v1 解析原语） ──────────────────────────────────────────
+
+def test_v1_pick_body_prefers_marker_over_heading_block():
+    assert v2._v1_pick_body("T1", {"T1": "marker-body"}, {"T1": "heading-body"}) == "marker-body"
+    assert v2._v1_pick_body("T1", {}, {"T1": "heading-body"}) == "heading-body"
+    assert v2._v1_pick_body("T1", {}, {}) == ""
+
+
+def test_v1_extract_change_token_handles_change_prefix_and_bare_kebab():
+    assert v2._v1_extract_change_token("change fix-something 归档，说明") == "fix-something"
+    assert v2._v1_extract_change_token("mlh-p6-recorder-frontmatter（根治兑现）") == "mlh-p6-recorder-frontmatter"
+    assert v2._v1_extract_change_token("平台行为，非本仓代码可修") is None
+    assert v2._v1_extract_change_token(None) is None
+
+
+def test_v1_file_date_extracts_from_buglist_and_todolist_names():
+    assert v2._v1_file_date("/x/openspec/issues/buglist/2026-07-19-buglist.md") == "2026-07-19"
+    assert v2._v1_file_date("/x/openspec/issues/todolist/2026-07-todolist.md") == "2026-07-01"
+
+
+def test_v1_split_frontmatter_returns_empty_items_for_pure_legacy_text():
+    items, body = v2._v1_split_frontmatter("# just a heading\nno frontmatter here\n")
+    assert items == {}
+    assert body == "# just a heading\nno frontmatter here\n"

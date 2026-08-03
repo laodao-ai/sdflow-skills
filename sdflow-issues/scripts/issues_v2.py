@@ -9,12 +9,18 @@
 无需 POOL_SPEC 注入模式或跨脚本共享包。Task 3 会删除 v1 的三脚本 + 共享包；本文件
 从第一天起就是独立可用的，不依赖即将被删除的东西。
 
-命令：`add` / `set-status` / `scan` / `reindex` / `next-id`。
-迁移命令 `migrate`（v1 → v2 一次性转换）在本 change 的 Task 2 实现，不在本文件范围内。
+命令：`add` / `set-status` / `scan` / `reindex` / `next-id` / `migrate`。
+
+`migrate`（Task 2）是 v1 → v2 的一次性转换工具，自成一体地内联了 v1 双格式（legacy 表格 +
+frontmatter overlay）的**只读**解析——不 import `sdflow_issues_core`（Task 3 会连同 v1 三脚本一并
+删除该包；本文件从第一天起就不能依赖即将消失的东西，见上方模块级架构说明）。它复用的是
+`_build_effective_snapshot` 的 **shadow 算法**（先收 legacy 表格行、frontmatter overlay 同 ID 覆盖），
+不是那份代码本身——迁移只读旧文件、不回写，故不需要 core 里写路径相关的锁 / 校验 / 转义机器。
 """
 
 import argparse
 import datetime
+import glob
 import json
 import os
 import re
@@ -714,6 +720,379 @@ def cmd_next_id(args):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# cmd_migrate —— v1 → v2 一次性迁移（design.md「migrate 命令」/「字段映射」）
+#
+# 只读解析 v1 两种格式（legacy 表格 / frontmatter overlay），逐 item 去重
+# （frontmatter 覆盖同 ID 的 legacy 表格行——shadow 算法，MIG-01），字段映射到 v2
+# schema（MIG-02），已存在的目标文件幂等跳过（MIG-03），完成后自动 reindex
+# （MIG-04），PLANNED 批次计划文本搬入成员 issue body（MIG-05）。
+# ══════════════════════════════════════════════════════════════════════════════
+
+_V1_ITEM_LINE_RE = re.compile(r'^    ([A-Z][1-9][0-9]*): (\{.*\})$')
+_V1_TABLE_HDR_RE = re.compile(r'^\s*\|\s*ID\s*\|')
+_V1_ROW_ID_RE = re.compile(r'^\s*\|\s*([A-Z][1-9][0-9]*)\s*\|')
+_V1_MARKER_RE = re.compile(r'^<!-- sdflow-issue-block:(start|end) id=([A-Z][1-9][0-9]*) -->\s*$')
+_V1_HEADING_RE = re.compile(r'^##\s+([A-Z][1-9][0-9]*)\s*:')
+_V1_BUGLIST_NAME_RE = re.compile(r'(\d{4}-\d{2}-\d{2})-buglist\.md$')
+_V1_TODOLIST_NAME_RE = re.compile(r'(\d{4}-\d{2})-todolist\.md$')
+_V1_HIST_LINE_RE = re.compile(
+    r'^>\s*(?P<date>\S+)\s*状态[:：]\s*\S+\s*→\s*(?P<new>[A-Z_]+)(?:（(?P<note>.*)）)?\s*$',
+    re.MULTILINE,
+)
+_V1_CHANGE_TOKEN_RE = re.compile(r'^(?:change\s+)?([a-z][a-z0-9]*(?:-[a-z0-9]+)+)')
+_V1_ISO_DATE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+_V1_BATCH_BLOCK_RE = re.compile(
+    r'^### (?P<key>\S+) — .*\n'
+    r'状态: (?P<status>\S+)\n'
+    r'成员: \(生成\)(?P<members>.*)\n'
+    r'优先级: .*\n'
+    r'计划: (?P<plan>.*)$',
+    re.MULTILINE,
+)
+
+
+def _v1_collect_files(root):
+    """扫描 `openspec/issues/buglist/*.md` + `openspec/issues/todolist/*.md`，返回
+    `[(path, pool), ...]`（各自按文件名排序，buglist 在前）。"""
+    files = []
+    bug_dir = os.path.join(root, "openspec", "issues", "buglist")
+    todo_dir = os.path.join(root, "openspec", "issues", "todolist")
+    if os.path.isdir(bug_dir):
+        files += [(p, "bug") for p in sorted(glob.glob(os.path.join(bug_dir, "*.md")))]
+    if os.path.isdir(todo_dir):
+        files += [(p, "todo") for p in sorted(glob.glob(os.path.join(todo_dir, "*.md")))]
+    return files
+
+
+def _v1_file_date(path):
+    """date 字段来源（design.md 字段映射表）：buglist 从文件名 `YYYY-MM-DD` 取；
+    todolist 从文件名 `YYYY-MM` 取，补 `-01`。"""
+    name = os.path.basename(path)
+    m = _V1_BUGLIST_NAME_RE.search(name)
+    if m:
+        return m.group(1)
+    m = _V1_TODOLIST_NAME_RE.search(name)
+    if m:
+        return m.group(1) + "-01"
+    _fail(
+        f"文件名不含可识别日期: {name}", "既不匹配 buglist 也不匹配 todolist 命名约定",
+        "文件名须为 YYYY-MM-DD-buglist.md 或 YYYY-MM-todolist.md",
+    )
+
+
+def _v1_split_frontmatter(text):
+    """有 `sdflow-issues:` frontmatter 则返回 `(items_dict, body_after_fm)`；
+    否则返回 `({}, text)`（纯 legacy 格式，MIG-01 Scenario 1）。"""
+    header = "---\nsdflow-issues:\n"
+    if not text.startswith(header):
+        return {}, text
+    close = text.find("\n---\n", 4)
+    if close < 0:
+        _fail("v1 frontmatter envelope 非法", "找不到闭合的 `---` 围栏", "补全闭合围栏后重试")
+    fm_text = text[4:close]
+    body = text[close + len("\n---\n"):]
+    items = {}
+    for line in fm_text.splitlines():
+        m = _V1_ITEM_LINE_RE.match(line)
+        if not m:
+            continue  # schema/pool/mode/items: 等 header 行——迁移不校验（只读，best-effort）
+        item_id, payload = m.group(1), m.group(2)
+        try:
+            items[item_id] = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            _fail(f"item {item_id} JSON 非法", str(exc), "修正该行 JSON 后重试")
+    return items, body
+
+
+def _v1_legacy_table_rows(lines, pool):
+    """解析 `## 状态总览` 表格行，返回 `{id: fields_dict}`（MIG-01 Scenario 1）。
+    只认第一个 `状态总览` 区域（真实语料每文件恰一个）。"""
+    specific_field = "priority" if pool == "bug" else "type"
+    rows = {}
+    for i, line in enumerate(lines):
+        if not re.match(r'^##\s+状态总览', line):
+            continue
+        hdr_idx = None
+        for j in range(i + 1, min(len(lines), i + 6)):
+            if not lines[j].strip():
+                continue
+            if _V1_TABLE_HDR_RE.match(lines[j]):
+                hdr_idx = j
+            break
+        if hdr_idx is None:
+            continue
+        k = hdr_idx + 2
+        while k < len(lines) and lines[k].lstrip().startswith("|"):
+            m = _V1_ROW_ID_RE.match(lines[k])
+            if m:
+                cells = [c.strip() for c in lines[k].strip().strip("|").split("|")]
+                rows[m.group(1)] = {
+                    "module": cells[1] if len(cells) > 1 else "",
+                    "summary": cells[2] if len(cells) > 2 else "",
+                    specific_field: cells[3] if len(cells) > 3 else None,
+                    "status": cells[4] if len(cells) > 4 else "",
+                    "change": (
+                        cells[6] if len(cells) > 6 and cells[6] not in ("", "-") else None
+                    ),
+                }
+            k += 1
+        break
+    return rows
+
+
+def _v1_marker_block_bodies(lines):
+    """成对 marker（`<!-- sdflow-issue-block:start/end id=X -->`）之间的原文，去掉 marker
+    标签本身（design.md 字段映射表：「marker block 内容 → body 原样搬入（去掉 marker 标签）」）。"""
+    bodies = {}
+    active = None
+    start_idx = None
+    for idx, line in enumerate(lines):
+        m = _V1_MARKER_RE.match(line.rstrip("\n"))
+        if not m:
+            continue
+        kind, item_id = m.group(1), m.group(2)
+        if kind == "start":
+            active, start_idx = item_id, idx
+        elif kind == "end" and active == item_id:
+            bodies[item_id] = "".join(lines[start_idx + 1:idx])
+            active, start_idx = None, None
+    return bodies
+
+
+def _v1_heading_block_bodies(lines):
+    """`## {ID}: ...` 标题块（含标题行本身）到下一个 `---` 或下一个标题为止的原文
+    （legacy-owned item 的 detail section，MIG-01 Scenario 1）。"""
+    starts = []
+    for i, line in enumerate(lines):
+        m = _V1_HEADING_RE.match(line)
+        if m:
+            starts.append((i, m.group(1)))
+    bodies = {}
+    for i, item_id in starts:
+        end = len(lines)
+        for j in range(i + 1, len(lines)):
+            if lines[j].strip() == "---" or _V1_HEADING_RE.match(lines[j]):
+                end = j
+                break
+        bodies[item_id] = "".join(lines[i:end])
+    return bodies
+
+
+def _v1_pick_body(item_id, marker_blocks, heading_blocks):
+    if item_id in marker_blocks:
+        return marker_blocks[item_id]
+    if item_id in heading_blocks:
+        return heading_blocks[item_id]
+    return ""
+
+
+def _v1_parse_file(path, pool):
+    """解析单个 v1 文件，返回 `(items, shadowed_count)`；`items` = `{id: entry}`，
+    entry = `{"pool", "fields", "body", "file_date", "source_file"}`。
+
+    逐 item 去重（MIG-01）：先收 legacy 表格行，frontmatter overlay 同 ID 覆盖
+    （shadow 算法，被覆盖的 legacy 行计入 shadowed_count 但不进入 items）。"""
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    frontmatter_items, body_text = _v1_split_frontmatter(text)
+    lines = body_text.splitlines(keepends=True)
+    legacy_rows = _v1_legacy_table_rows(lines, pool)
+    marker_blocks = _v1_marker_block_bodies(lines)
+    heading_blocks = _v1_heading_block_bodies(lines)
+    file_date = _v1_file_date(path)
+
+    fm_keys = set(frontmatter_items)
+    shadowed = 0
+    items = {}
+    for row_id, fields in legacy_rows.items():
+        if row_id in fm_keys:
+            shadowed += 1
+            continue
+        items[row_id] = {
+            "pool": pool, "fields": fields,
+            "body": _v1_pick_body(row_id, marker_blocks, heading_blocks),
+            "file_date": file_date, "source_file": path,
+        }
+    for fm_id, fields in frontmatter_items.items():
+        items[fm_id] = {
+            "pool": pool, "fields": fields,
+            "body": _v1_pick_body(fm_id, marker_blocks, heading_blocks),
+            "file_date": file_date, "source_file": path,
+        }
+    return items, shadowed
+
+
+def _v1_last_terminal_history_match(body, pool):
+    """扫 body 里 `> {date} 状态：X → Y（note）` 历史行，返回**最后一条**新状态落在该 pool
+    终态集里的 `(date, note)`；none 则无匹配（closed_date/resolved_by 均 best-effort，MIG-02）。"""
+    result = None
+    for m in _V1_HIST_LINE_RE.finditer(body):
+        if m.group("new") in TERMINAL_STATUSES[pool]:
+            result = (m.group("date"), m.group("note"))
+    return result
+
+
+def _v1_extract_change_token(note):
+    """从历史行的括注文本提取形如 `fix-xxx` 的 change 名（kebab-case，≥2 段）；
+    提取不到（如中文散文、无连字符）返回 None（resolved_by 提取不到则 null）。"""
+    if not note:
+        return None
+    m = _V1_CHANGE_TOKEN_RE.match(note.strip())
+    return m.group(1) if m else None
+
+
+def _v1_build_v2_issue(item_id, entry, stats):
+    """字段映射（design.md 字段映射表）：v1 fields + body → v2 (frontmatter, body)。
+    映射失败（status 越出 v2 词表 / 值含 CR/LF/NUL）时 raise，调用方负责跳过。"""
+    pool = entry["pool"]
+    fields = entry["fields"]
+    body = entry["body"]
+    file_date = entry["file_date"]
+    specific_field = "priority" if pool == "bug" else "type"
+
+    status = fields.get("status")
+    if status not in STATUS_VALUES[pool]:
+        _fail(
+            f"{item_id} status 非法", f"{status!r} 不在 v2 词表 {sorted(STATUS_VALUES[pool])}",
+            "人工核对该条历史 status 后手动迁移，或先在 v1 侧修正",
+        )
+
+    terminal = status in TERMINAL_STATUSES[pool]
+    resolved_by = None
+    closed_date = None
+    closed_reason = None
+    if terminal:
+        closed_date = file_date  # best-effort 兜底（design.md：格式不匹配或不存在则取文件日期）
+        match = _v1_last_terminal_history_match(body, pool)
+        if match is None:
+            stats["resolved_by"]["no_history_line"] += 1
+        else:
+            date_str, note = match
+            if date_str and _V1_ISO_DATE_RE.match(date_str):
+                closed_date = date_str
+            token = _v1_extract_change_token(note)
+            if token:
+                resolved_by = token
+                stats["resolved_by"]["matched"] += 1
+            else:
+                stats["resolved_by"]["note_no_token"] += 1
+            if status in ("WONTFIX", "WONTDO") and note:
+                closed_reason = note
+
+    module = fields.get("module") or ""
+    summary = fields.get("summary") or ""
+    specific_value = fields.get(specific_field) or None
+    source_change = fields.get("change") or None
+
+    for value, name in (
+        (module, "module"), (summary, "summary"), (specific_value, specific_field),
+        (source_change, "source_change"), (resolved_by, "resolved_by"),
+        (closed_reason, "closed_reason"),
+    ):
+        _reject_line_unsafe(value, name)
+
+    frontmatter = {
+        "id": item_id, "pool": pool, "status": status,
+        "priority": specific_value if pool == "bug" else None,
+        "type": specific_value if pool == "todo" else None,
+        "date": file_date,
+        "source_change": source_change,
+        "module": module, "summary": summary,
+        "resolved_by": resolved_by, "closed_date": closed_date,
+        "closed_reason": closed_reason,
+    }
+    return frontmatter, body
+
+
+def _v1_planned_batch_notes(root):
+    """解析 `batches.md`，返回 `{member_id: [{"key", "plan"}, ...]}`——只含 PLANNED 批次
+    （MIG-05）。文件缺失则返回空 dict（batches.md 是可选历史产物）。"""
+    path = os.path.join(root, "openspec", "issues", "batches.md")
+    notes = {}
+    if not os.path.isfile(path):
+        return notes
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+    for m in _V1_BATCH_BLOCK_RE.finditer(text):
+        if m.group("status") != "PLANNED":
+            continue
+        key = m.group("key")
+        plan = m.group("plan").strip()
+        for raw in m.group("members").split(","):
+            member_id = raw.strip()
+            if ID_RE.match(member_id):
+                notes.setdefault(member_id, []).append({"key": key, "plan": plan})
+    return notes
+
+
+def _v1_id_sort_key(item_id):
+    m = ID_RE.match(item_id)
+    return (m.group(1), int(m.group(2))) if m else (item_id, 0)
+
+
+def cmd_migrate(args):
+    root = args.root
+    stats = {
+        "files_scanned": 0, "parse_errors": 0, "shadowed": 0,
+        "migrated": 0, "skipped_existing": 0, "mapping_errors": 0,
+        "batch_notes_applied": 0,
+        "resolved_by": {"matched": 0, "note_no_token": 0, "no_history_line": 0},
+    }
+    all_items = {}
+    for path, pool in _v1_collect_files(root):
+        stats["files_scanned"] += 1
+        try:
+            file_items, shadowed = _v1_parse_file(path, pool)
+        except ValueError as exc:
+            print(f"WARNING: 跳过不可解析文件 {path}: {exc}", file=sys.stderr)
+            stats["parse_errors"] += 1
+            continue
+        stats["shadowed"] += shadowed
+        for item_id, entry in file_items.items():
+            if item_id in all_items:
+                print(
+                    f"WARNING: ID {item_id} 跨文件重复（"
+                    f"{all_items[item_id]['source_file']} 与 {path}），保留先出现者",
+                    file=sys.stderr,
+                )
+                continue
+            all_items[item_id] = entry
+
+    batch_notes = _v1_planned_batch_notes(root)
+
+    for item_id in sorted(all_items, key=_v1_id_sort_key):
+        entry = all_items[item_id]
+        try:
+            frontmatter, body = _v1_build_v2_issue(item_id, entry, stats)
+        except ValueError as exc:
+            print(f"WARNING: 跳过字段映射失败 {item_id}: {exc}", file=sys.stderr)
+            stats["mapping_errors"] += 1
+            continue
+
+        pool = frontmatter["pool"]
+        terminal = frontmatter["status"] in TERMINAL_STATUSES[pool]
+        location = "closed" if terminal else "open"
+        path = os.path.join(_issues_dir(root, location), f"{item_id}.md")
+        if os.path.isfile(path):
+            stats["skipped_existing"] += 1
+            continue
+
+        notes = batch_notes.get(item_id)
+        if notes:
+            if body and not body.endswith("\n"):
+                body += "\n"
+            for note in notes:
+                body += f"\n> [迁移自批次 {note['key']}] 原计划: {note['plan']}\n"
+            stats["batch_notes_applied"] += 1
+
+        write_issue(path, frontmatter, body, create=True)
+        stats["migrated"] += 1
+
+    cmd_reindex(args)
+    print(json.dumps(stats, ensure_ascii=False, indent=2))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # main
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -749,6 +1128,9 @@ def main():
     sn = sub.add_parser("next-id", help="输出下一个可用 ID")
     sn.add_argument("--pool", required=True, choices=["bug", "todo"])
     sn.set_defaults(func=cmd_next_id)
+
+    sm = sub.add_parser("migrate", help="v1（buglist/todolist）→ v2（open/closed）一次性迁移")
+    sm.set_defaults(func=cmd_migrate)
 
     args = p.parse_args()
     try:

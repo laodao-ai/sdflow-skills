@@ -52,16 +52,16 @@ impl-pipeline: tickets
 - `cmd_reindex` 再生集成测试
 - `cmd_next_id` 跨目录单元测试
 
-- [ ] `parse_frontmatter` 正确解析双引号值和 null
-- [ ] `write_issue` 创建新文件使用 O_CREAT|O_EXCL，并发写同 ID 时后到者 FileExistsError
-- [ ] `cmd_add` 创建 issue 到 open/，frontmatter 含所有必填字段，detect_change 自动填 source_change
-- [ ] `cmd_set_status` 终态时填 closed_date/resolved_by + 追加 body 历史行 + git mv（含 tracked 检查）
-- [ ] `cmd_set_status` 非 git 仓终态降级为 os.rename
-- [ ] `cmd_set_status` todo DONE 缺 evidence 被拒（非零退出码）
-- [ ] `cmd_scan` 默认只输出 open/，--all 含 closed/，--source-change 正确过滤
-- [ ] `cmd_reindex` 再生的 INDEX.md/CLOSED.md 含全部 issue 且按 ID 排序
-- [ ] `cmd_next_id` 跨 open+closed 正确取 max+1
-- [ ] 全部单元+集成测试通过
+- [x] `parse_frontmatter` 正确解析双引号值和 null
+- [x] `write_issue` 创建新文件使用 O_CREAT|O_EXCL，并发写同 ID 时后到者 FileExistsError
+- [x] `cmd_add` 创建 issue 到 open/，frontmatter 含所有必填字段，detect_change 自动填 source_change
+- [x] `cmd_set_status` 终态时填 closed_date/resolved_by + 追加 body 历史行 + git mv（含 tracked 检查）
+- [x] `cmd_set_status` 非 git 仓终态降级为 os.rename
+- [x] `cmd_set_status` todo DONE 缺 evidence 被拒（非零退出码）
+- [x] `cmd_scan` 默认只输出 open/，--all 含 closed/，--source-change 正确过滤
+- [x] `cmd_reindex` 再生的 INDEX.md/CLOSED.md 含全部 issue 且按 ID 排序
+- [x] `cmd_next_id` 跨 open+closed 正确取 max+1
+- [x] 全部单元+集成测试通过
 
 ### Task 2: 迁移工具 migrate + 测试
 
