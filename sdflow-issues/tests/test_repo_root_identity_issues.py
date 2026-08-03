@@ -9,8 +9,12 @@
 bare repo、git 不可用才回落。「最近」二字同样是 cr-fix1 加的：祖先校验 + worktree marker
 对**外层祖先仓库**（core.worktree 指祖先仓 / PATH 上的 fake git）双双放行。
 
-本文件与 sdflow-issues/tests 下的 test_repo_root_identity_{buglist,todolist}.py 逐条对应（三薄入口
-经唯一共享源 `sdflow_issues_core` 取同一 `repo_root`；本组测试各自经其入口验证解析身份一致）。
+（issues-v2-single-file-model · Task 3 改造）v1 时代本文件与 sdflow-issues/tests 下的
+test_repo_root_identity_{buglist,todolist}.py 逐条对应（三薄入口经唯一共享源
+`sdflow_issues_core` 取同一 `repo_root`）；v2 单文件模型下三薄入口合一为 `issues_v2.py`，
+另两份重复文件已删除，本文件是 `repo_root` 身份校验的唯一留存副本，改指向 `issues_v2.py`。
+v1 的仓级 `recorder_lock` / participant / delegation-chain 跨进程锁协议在 v2 已整体移除
+（v2 无仓级锁），依赖该机制的用例（单点解析的跨进程委派锚）随之删除，不做迁移。
 
 方法论约束（design ADR-2 / Risks）：负例 **MUST NOT** mock `os.path.isabs` /
 `isdir` / `realpath` —— mock 掉判据本身等于没测。除「git 输出内容」与「git 挂死」这两个
@@ -20,7 +24,6 @@ Run with: python3 -m pytest sdflow-issues/tests/test_repo_root_identity_issues.p
 """
 
 import ast
-import json
 import os
 import subprocess
 import sys
@@ -29,14 +32,13 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
-import issues as rec_mod
-from issues import repo_root
+import issues_v2 as rec_mod
+from issues_v2 import repo_root
 
-SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues.py")
+SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues_v2.py")
 
-# 单点解析用例（Task 3）用的子命令：本 recorder 上一条读路径 + 一条合法委派边。
+# 单点解析用例用的子命令：issues_v2.py 上一条只读路径（reindex）。
 SINGLE_POINT_CMD = ["reindex"]
-SINGLE_POINT_CHILD_COMMAND = "reindex"
 
 # 仓库/工作树发现类变量——测试前一律清空，确保用例断言的是 repo_root 自身的判据，
 # 而不是宿主环境残留（CI 的 git hook 场景会真的导出它们）。
@@ -79,13 +81,15 @@ def _commit_empty(path):
 def _fake_git_stdout(monkeypatch, stdout):
     """把 git 的 **stdout 内容**换掉（rc=0），其余一切判据仍走真实文件系统。
 
-    只替换外部依赖的输出，不碰 `os.path.*` 判据——后者正是被测对象。
+    只替换外部依赖的输出，不碰 `os.path.*` 判据——后者正是被测对象。`issues_v2.py` 的
+    `repo_root` 不传 `text=True`（Windows 编码陷阱，见 CLAUDE.md），故 `subprocess.run`
+    返回 bytes stdout；调用方一律传 `str`，这里统一编码成 utf-8 bytes 以匹配契约。
     """
     calls = []
 
     def fake_run(cmd, **kwargs):
         calls.append((cmd, kwargs))
-        return subprocess.CompletedProcess(cmd, 0, stdout, "")
+        return subprocess.CompletedProcess(cmd, 0, stdout.encode("utf-8"), b"")
 
     monkeypatch.setattr(rec_mod.subprocess, "run", fake_run)
     return calls
@@ -150,7 +154,7 @@ def test_deleted_process_cwd_yields_controlled_failure(tmp_path):
     program = (
         "import os, sys\n"
         "sys.path.insert(0, sys.argv[1])\n"
-        "from issues import repo_root\n"
+        "from issues_v2 import repo_root\n"
         "os.chdir(sys.argv[2])\n"
         "os.rmdir(sys.argv[2])\n"
         "assert os.path.isdir('.') is True, 'premise: isdir(\\'.\\') 仍为 True'\n"
@@ -828,11 +832,6 @@ def _script_ast():
     return ast.parse(Path(SCRIPT).read_text(encoding="utf-8"))
 
 
-def _core_ast():
-    _core_path = Path(__file__).parent.parent / "scripts" / "sdflow_issues_core" / "__init__.py"
-    return ast.parse(_core_path.read_text(encoding="utf-8"))
-
-
 def test_diagnostics_never_recommend_explicit_root(request):
     """诊断的 `fix:` MUST NOT 把「显式指定 --root」当修复手段（cr-fix2 · F5）。
 
@@ -848,7 +847,7 @@ def test_diagnostics_never_recommend_explicit_root(request):
     本用例当场判红。
     """
     fn = next(
-        (n for n in ast.walk(_core_ast())
+        (n for n in ast.walk(_script_ast())
          if isinstance(n, ast.FunctionDef) and n.name == "repo_root"),
         None,
     )
@@ -881,10 +880,10 @@ def test_diagnostics_never_recommend_explicit_root(request):
 def test_repo_root_is_resolved_once_per_process_and_only_in_main():
     """R2：仓根在单次调用（边界=进程）内只解析一次。
 
-    本脚本全文 MUST 只剩 1 个 `repo_root(` Call 节点，且它 MUST 位于 `main()`——
-    三份 recorder 合计 3 个（改造前 19 个）。`cmd_*` / `_*_snapshot` 一律直接消费
-    `args.root`。理由见 ADR-5：两次解析之间目标若失去 `.git`，第二次会静默爬升到外层
-    祖先仓库，于是锁建在一个根、数据写进另一个根。
+    v2 单文件模型下本脚本全文 MUST 只剩 1 个 `repo_root(` Call 节点，且它 MUST 位于
+    `main()`——单入口合一后不再有「三份 recorder 各一次」的累计口径。`cmd_*` 一律直接
+    消费 `args.root`。理由见 ADR-5：两次解析之间目标若失去 `.git`，第二次会静默爬升到
+    外层祖先仓库，于是数据写进错误的根。
     """
     tree = _script_ast()
     calls = _repo_root_calls(tree)
@@ -967,56 +966,11 @@ def test_child_root_drift_premise_climbs_to_outer(tmp_path):
     )
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "R2 Scenario「子进程解析出不同的根时响亮失败」当前**不成立**（实测三份 recorder 一致）。"
-    "design ADR-5 假定 validate_recorder_participant 的 path/token 绑定会兜底，但 "
-    "recorder_lock 在它抛 RecorderLockError 时 `except RecorderLockError: participant = None` "
-    "吞掉异常、回落为 owner 模式 ⇒ 子进程在自己解析出的**外层根**上新建锁、makedirs、rc=0。"
-    "堵这个洞须给锁协议增加 owner-root 绑定（把父进程已解析的根随 token 一起下传），"
-    "而那会与既有契约测试 test_invalid_participant_env_falls_back_to_owner_or_conflict "
-    "（显式断言坏 participant env 回落 owner + exit 0）直接冲突 ⇒ 属设计门议题，"
-    "Task 3 不就地改协议。本用例是该缺口的机械锚：绑定一旦补上它会 XPASS，"
-    "strict 模式当场变红，强制回来删掉本标记。"
-))
-def test_child_resolving_a_different_root_must_fail_loudly(tmp_path):
-    """1.11：跨进程二次解析的兜底锚定。
-
-    构造：outer 是仓、inner 是 outer 里的嵌套仓。父进程在 inner 上持锁并以
-    `--root <inner>` 拉起子进程；两次解析之间 inner 失去 `.git` ⇒ 子进程的
-    `repo_root(inner)` 沿目录树上爬、静默返回 **outer**（rc=0、过全部身份校验）。
-
-    此时子进程 MUST 响亮失败，MUST NOT 在 outer 上落任何东西。
-    """
-    outer = _init_repo(tmp_path / "outer")
-    inner = _init_repo(outer / "proj")
-
-    with rec_mod.recorder_lock(str(inner), "sweep") as owner:
-        subprocess.run(["rm", "-rf", str(inner / ".git")], check=True)
-
-        # 前提核验**不在这里**——已提到 xfail 之外的
-        # test_child_root_drift_premise_climbs_to_outer。写在本函数体内的断言会被
-        # xfail 吞成绿：前提烂掉（_init_repo 变形 / rm -rf 失败 / repo_root 不再上爬）时
-        # 断言失败 → 计入 xfail → XFAIL 摘要照旧打印 R2 说明，锚已空壳却无人知道。
-        # 实测：本函数体首行插 `assert False` ⇒ `1 xfailed`（绿）。
-
-        env = dict(os.environ)
-        env[rec_mod.RECORDER_LOCK_ENV] = owner.token
-        env[rec_mod.RECORDER_DELEGATION_CHAIN_ENV] = json.dumps(
-            ["sweep", SINGLE_POINT_CHILD_COMMAND]
-        )
-        child = subprocess.run(
-            [sys.executable, SCRIPT, "--root", str(inner), *SINGLE_POINT_CMD],
-            capture_output=True, text=True, env=env, cwd=str(tmp_path),
-
-            encoding="utf-8",
-            errors="replace",)
-
-    assert child.returncode != 0, (
-        "子进程解析出不同的根却静默成功: rc=%d stdout=%r" % (child.returncode, child.stdout)
-    )
-    assert not (outer / "openspec").exists(), (
-        "MUST NOT 在自行解析出的外层根上具现任何目录"
-    )
+# v1 的 test_child_resolving_a_different_root_must_fail_loudly（跨进程 recorder_lock 委派链
+# 二次解析防护，xfail 锚）已随本文件改造删除：它断言的是仓级 `recorder_lock` +
+# participant/owner token + delegation-chain 协议的缺口，而 v2 单文件模型整体移除了该锁协议
+# （issues_v2.py 无 recorder_lock / RECORDER_LOCK_ENV / RECORDER_DELEGATION_CHAIN_ENV），
+# 场景前提在 v2 architecture 下不成立，不做迁移。
 
 
 # ── ⑥ 解码：git stdout 不可解码时 MUST 走受控失败路径 ──────────────────────

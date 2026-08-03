@@ -88,15 +88,15 @@ impl-pipeline: tickets
 - 幂等跳过集成测试
 - PLANNED 批次信息迁移集成测试
 
-- [ ] 解析纯 legacy 表格格式，从表格行+detail section 提取全部字段
-- [ ] 解析纯 frontmatter overlay 格式，从 frontmatter+marker block 提取
-- [ ] 同文件双格式共存时 frontmatter 优先于 legacy 表格行（ID 冲突去重）
-- [ ] 字段映射正确：resolved_by 从 body 提取、closed_date best-effort、date 从文件名
-- [ ] 活跃 issue 到 open/，已关闭到 closed/
-- [ ] PLANNED 批次的计划文本迁移进成员 issue body
-- [ ] 幂等：已存在的目标文件跳过，统计报告含 skipped 数
-- [ ] 迁移后自动 reindex，INDEX.md/CLOSED.md 完整
-- [ ] 统计报告含 shadowed ID 数和 resolved_by 来源分桶
+- [x] 解析纯 legacy 表格格式，从表格行+detail section 提取全部字段
+- [x] 解析纯 frontmatter overlay 格式，从 frontmatter+marker block 提取
+- [x] 同文件双格式共存时 frontmatter 优先于 legacy 表格行（ID 冲突去重）
+- [x] 字段映射正确：resolved_by 从 body 提取、closed_date best-effort、date 从文件名
+- [x] 活跃 issue 到 open/，已关闭到 closed/
+- [x] PLANNED 批次的计划文本迁移进成员 issue body
+- [x] 幂等：已存在的目标文件跳过，统计报告含 skipped 数
+- [x] 迁移后自动 reindex，INDEX.md/CLOSED.md 完整
+- [x] 统计报告含 shadowed ID 数和 resolved_by 来源分桶
 
 ### Task 3: 本仓数据迁移 + 旧文件清理 + 测试调整
 
