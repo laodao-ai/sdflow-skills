@@ -1,0 +1,372 @@
+# Review package: 3ee8e504736a6d06fcc5bc7590b4af1387e7c732..a392fe7810c78aecce63b1c3081dd8bf8485cc20 (Task 3 serial)
+
+## Commits
+a392fe7 docs(fix-voice-quoting-and-mirror-vocab): task3 报告修正全仓回归表述
+560ec77 fix(fix-voice-quoting-and-mirror-vocab): code-review mirrors= 真名替换 + spec 枚举扩展 + 反漂移锁测试更新
+
+## Files changed
+ .../impl-reports/task3-brief.md                    | 20 +++++++
+ .../impl-reports/task3-skill-spec-tests.md         | 70 ++++++++++++++++++++++
+ openspec/specs/host-adaptive-execution/spec.md     |  8 +--
+ openspec/specs/spec-workflow/spec.md               |  2 +-
+ openspec/specs/workflow-metrics/spec.md            |  2 +-
+ sdflow-code-review/SKILL.md                        |  9 +--
+ .../tests/test_codex_subagent_authorization.py     | 40 +++++++------
+ 7 files changed, 121 insertions(+), 30 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task3-brief.md b/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task3-brief.md
+new file mode 100644
+index 0000000..350e7c7
+--- /dev/null
++++ b/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task3-brief.md
+@@ -0,0 +1,20 @@
++### Task 3: code-review SKILL 真名替换 + spec SHALL 条款 + 反漂移锁测试
++
++**Blocked-by:** 2
++**R-ID:** R2, R3
++
++把 code-review SKILL.md 的 `mirrors=` 模板从借用 `grounding` 改为真名 `history`；重写 L244-248（保留 MUST 规范语句，token 集改为 `{domain,adversarial,history}`，删除借用叙事）；L545 示例同步。
++
++三份主 spec 的 SHALL 条款枚举从 `{domain,adversarial,grounding}` 扩展到 `{domain,adversarial,grounding,history}`。
++
++更新反漂移锁测试：拆分共享循环为按文件区分预期（spec-review 期望 `grounding`、code-review 期望 `history`）；重写借用文档测试为验证真名行为。
++
++- [ ] code-review SKILL.md `mirrors=` 模板改为 `"domain,adversarial,history"`
++- [ ] L244-248 重写：保留 MUST 规范语句 + token 集 `{domain,adversarial,history}` + 删借用叙事
++- [ ] L545 示例 `mirrors=` 同步更新
++- [ ] `openspec/specs/host-adaptive-execution/spec.md` 四处 SHALL 条款扩展
++- [ ] `openspec/specs/workflow-metrics/spec.md` 一处扩展
++- [ ] `openspec/specs/spec-workflow/spec.md` 一处扩展
++- [ ] 反漂移锁测试拆分：spec-review 期望 `grounding`、code-review 期望 `history`
++- [ ] 借用文档测试改为验证真名（断言 `mirrors=` 含 `history`、旧借用措辞不再出现）
++
+diff --git a/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task3-skill-spec-tests.md b/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task3-skill-spec-tests.md
+new file mode 100644
+index 0000000..0493ef3
+--- /dev/null
++++ b/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task3-skill-spec-tests.md
+@@ -0,0 +1,70 @@
++# Task 3 impl report：code-review SKILL 真名替换 + spec SHALL 条款 + 反漂移锁测试
++
++**Blocked-by:** 2（已满足——`anchor_lint._FANOUT_MIRRORS` 已含 `history`，见 commit `3ee8e50`）
++**R-ID:** R2, R3
++
++## 变更清单
++
++### 2.3 `sdflow-code-review/SKILL.md`
++
++- L242：`mirrors=` 锚模板 `"domain,adversarial,grounding|—"` → `"domain,adversarial,history|—"`
++- L244-248：重写。保留 L244 开头的 MUST 规范语句（`mirrors=` MUST 由本 skill 在 fan-out 决策落定时直接
++  写本轮实际派出/独立完成的镜清单），token 集改为 `{domain,adversarial,history}`，删除借用叙事
++  （原「`anchor_lint._FANOUT_MIRRORS` 是跨层共用的固定三 token 词表……本 skill 第三镜借用既有 token
++  `grounding` 记该镜跑过」整段——T148 已让 `_FANOUT_MIRRORS` 扩至四 token，code-review 不再需要借用）
++- L545：`mirrors=` 示例锚同步为 `"domain,adversarial,history|—"`
++
++`sdflow-spec-review/SKILL.md` 未改动——它的第三镜是接地镜，`mirrors="domain,adversarial,grounding"`
++语义本就正确（design.md「不改的文件」段明示）。
++
++### 2.4 三份主 spec 的 SHALL 条款扩展
++
++`{domain,adversarial,grounding}` → `{domain,adversarial,grounding,history}`：
++
++- `openspec/specs/host-adaptive-execution/spec.md`：L157（锚模板示例）、L159（取值文法 XOR 子集）、
++  L161（去重计数集）、L174（Scenario 去重计数集）共四处
++- `openspec/specs/workflow-metrics/spec.md`：L37（Scenario 去重计数集）一处
++- `openspec/specs/spec-workflow/spec.md`：L890（per-lens 完整性集，`domain/adversarial/grounding`
++  → `domain/adversarial/grounding/history`）一处
++
++三份均直接改主 spec（非 delta → archive），依据 `specs/host-adaptive-execution/spec.md`
++[spec-review-amendment S1/Q1] 已定的先例。
++
++### 2.5 反漂移锁测试更新（`sdflow-init/tests/test_codex_subagent_authorization.py`）
++
++- `test_mirrors_tokens_are_subset_of_anchor_lint_vocabulary`：原来两份 SKILL 共享同一条断言
++  （`"domain,adversarial,grounding" in t`），现按文件拆成 `{SPEC_REVIEW_SKILL: "domain,adversarial,
++  grounding", CODE_REVIEW_SKILL: "domain,adversarial,history"}` 的映射循环，各自断言自己的字面
++  token 串、且该 token 集合仍是 `anchor_lint._FANOUT_MIRRORS`（现四 token）的子集。
++- `test_code_review_history_mirror_alias_honestly_documented`：重写为验证真名行为——断言
++  code-review SKILL.md 的 `mirrors=` 字面含 `'mirrors="domain,adversarial,history'`，且旧借用措辞
++  `"借用既有 token"` 不再出现在文档里。
++- 顺带修正模块顶部 docstring（L17-22）「固定三 token 词表（domain/adversarial/grounding）」的过期
++  描述，改为四 token 并说明两份 SKILL 按文件区分预期 token 串的原因（避免文档自身与代码产生新漂移）。
++
++## 验证
++
++```
++pytest sdflow-init/tests/test_codex_subagent_authorization.py -v
++```
++
++11 passed（含两条改写的测试 `test_mirrors_tokens_are_subset_of_anchor_lint_vocabulary`、
++`test_code_review_history_mirror_alias_honestly_documented`）。
++
++TDD 纪律：先确认旧断言在改动前描述的是「三 token 借用」事实（读码验证 `grounding` 字面确实在
++code-review 旧文档中），改字面之后旧断言字符串（`"借用既有 token"`、`` '`grounding` 记该镜跑过' ``）
++已不在文件中出现——若未重写测试，旧断言会因文档字面消失而红，从而确认测试确实在守真实内容而非
++恒真。
++
++另跑了一轮全仓 `pytest`（含 `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` 等 Task 2
++产出的测试）作面级核验；该轮包含若干 subprocess 起 `claude`/`codex` CLI 的慢测试，耗时较长，
++在本报告落盘时尚未跑完（非任务验收要求项，Task 3 验收清单只要求跑
++`test_codex_subagent_authorization.py`，已确认绿）。
++
++## 未改动 / 不在本票范围
++
++- `openspec/changes/archive/**` 下的历史归档报告（`code-review-report.md` / `spec-review-report.md`
++  / `design.md` / `tasks.md` 等）里出现的 `mirrors="domain,adversarial,grounding"` 字面——按 DOC-1
++  与「目标态导向」，这些是已归档变更的历史快照，不回溯改写。
++- `openspec/issues/todolist/2026-07-todolist.md` 的 T148 条目——是否在本 change 内标 DONE 不在
++  Task 3 的验收清单里，留给该 change 的收尾阶段处理。
+diff --git a/openspec/specs/host-adaptive-execution/spec.md b/openspec/specs/host-adaptive-execution/spec.md
+index b7958ce..92d0857 100644
+--- a/openspec/specs/host-adaptive-execution/spec.md
++++ b/openspec/specs/host-adaptive-execution/spec.md
+@@ -147,38 +147,38 @@ Codex 宿主下向 `spawn_agent` 显式指定 `model` SHALL 附理由「本工
+ #### Scenario: 受控 fail-closed 只护「新 emitter × 旧调用方」，不护「旧 emitter」〔spec-review-r3 C3/D1 诚实拆分〕
+ - **WHEN** 调用方（旧 SKILL）不传 `--host` 给**新** `lens_metric_emit.py`
+ - **THEN** 新 emitter SHALL `parse_known_args` + 缺 `--host` 受控 fail-closed（可读错误、非 argparse 崩栈，且 `if extras: fail-closed`），MUST NOT 默认填 `claude`。**注**：此兜底**只对新 emitter 成立**；「新 SKILL × **已部署旧 emitter**」方向旧 emitter 代码不会因本 change 改变，**只能靠上方 SKILL 侧探测拦截**（parse_known_args 够不着旧文件），MUST NOT 声称此兜底覆盖后者
+ 
+ ### Requirement: 子代理不可用时镜数如实降级（探针语义核验 + always-on 一致性 lint，逐镜留语义层）
+ 
+ Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`sdflow-init` 铺给消费项目的 AGENTS.md 段与两个评审 SKILL SHALL 显式声明该授权。
+ 
+ 子代理确实不可用时，评审 SHALL **把 roster 缩到实际跑过的镜**并在报告显著标注「单镜降级」，MUST NOT 按计划的镜数照落 lens-metric 锚。
+ 
+-**探针 = 语义核验（非机械门）+ always-on 一致性 lint（spec-review-amendment Q1，adr/0023 已降格）**：「fan-out 机制活着没」有信号、**但无可机械捕获路径**——探针（trivial 子代理看回不回哨兵）只能由**主 session 自己**调用观察、把 `subagents=` 写进锚，`anchor_lint` 读那行锚**无从核验它对应一次真 spawn**（经被监管方自报，§0.0 防伪一侧）。∴ 探针 SHALL 作**机制活着的语义核验**、MUST NOT 冒充机械门。`SDFLOW_HOST=codex` ⇒ **MUST 探**；`claude` ⇒ 免探恒 available；`unknown` ⇒ 不 fan-out。结果落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->`，该锚 **MUST 落进被 `anchor_lint` 校验的那份报告文件内**（D8-orig：落别处则 lint 看不见）；`host=codex` 的报告中该锚**必须在场**（缺锚不得绕过）。**`mirrors=` = 本轮实际 fan-out 镜清单**〔spec-review-r2 C2〕，由 SHALL 由 SKILL 在 fan-out 时直接落**、不经 emitter/lens-metric 管线、不读 `config.metrics`**，故 `metrics.enabled=false` 时也在场。
++**探针 = 语义核验（非机械门）+ always-on 一致性 lint（spec-review-amendment Q1，adr/0023 已降格）**：「fan-out 机制活着没」有信号、**但无可机械捕获路径**——探针（trivial 子代理看回不回哨兵）只能由**主 session 自己**调用观察、把 `subagents=` 写进锚，`anchor_lint` 读那行锚**无从核验它对应一次真 spawn**（经被监管方自报，§0.0 防伪一侧）。∴ 探针 SHALL 作**机制活着的语义核验**、MUST NOT 冒充机械门。`SDFLOW_HOST=codex` ⇒ **MUST 探**；`claude` ⇒ 免探恒 available；`unknown` ⇒ 不 fan-out。结果落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding,history|—" -->`，该锚 **MUST 落进被 `anchor_lint` 校验的那份报告文件内**（D8-orig：落别处则 lint 看不见）；`host=codex` 的报告中该锚**必须在场**（缺锚不得绕过）。**`mirrors=` = 本轮实际 fan-out 镜清单**〔spec-review-r2 C2〕，由 SHALL 由 SKILL 在 fan-out 时直接落**、不经 emitter/lens-metric 管线、不读 `config.metrics`**，故 `metrics.enabled=false` 时也在场。
+ 
+-**`fanout-capability` 锚严格文法 + 缺字段 fail-closed〔spec-review-r3 C5-mirrors · r3-narrow #5〕**（否则 C2 仍能诚实空转）：`fanout-capability` 锚 SHALL **每轮恰好一条**（重复锚 / 重复 KV → fail-closed）；**`subagents=` SHALL 必填且严格 ∈ `{available,unavailable}`**——**`subagents=""` / 未知值 / 缺字段 SHALL fail-closed 报错，MUST NOT 视作"非 unavailable"而放行**（否则坏 `subagents` 值携多镜绕过一致性 lint 的 `unavailable` 分支，r3-narrow #5）；**capability 锚的 `host=` SHALL 与报告 outside-voice/lens-metric 锚的 `host=` 唯一一致**，否则 fail-closed（防 `host="claude"` capability 锚混入 Codex 报告只为满足"锚存在"）；`mirrors=` 为 `host=codex` 报告的**必填字段**，取值文法 SHALL 为 **`—`（未 fan-out）XOR 非空的 `{domain,adversarial,grounding}` 逗号分隔子集**；`anchor_lint` 对 **缺 `mirrors=` / 空值 / 未知 token / 重复 token** SHALL **fail-closed 报错**，MUST NOT 把缺失/坏值静默过滤成空集（否则 `subagents="unavailable"` + 空 `mirrors` 又判 CLEAN、C2 空转复发）。
++**`fanout-capability` 锚严格文法 + 缺字段 fail-closed〔spec-review-r3 C5-mirrors · r3-narrow #5〕**（否则 C2 仍能诚实空转）：`fanout-capability` 锚 SHALL **每轮恰好一条**（重复锚 / 重复 KV → fail-closed）；**`subagents=` SHALL 必填且严格 ∈ `{available,unavailable}`**——**`subagents=""` / 未知值 / 缺字段 SHALL fail-closed 报错，MUST NOT 视作"非 unavailable"而放行**（否则坏 `subagents` 值携多镜绕过一致性 lint 的 `unavailable` 分支，r3-narrow #5）；**capability 锚的 `host=` SHALL 与报告 outside-voice/lens-metric 锚的 `host=` 唯一一致**，否则 fail-closed（防 `host="claude"` capability 锚混入 Codex 报告只为满足"锚存在"）；`mirrors=` 为 `host=codex` 报告的**必填字段**，取值文法 SHALL 为 **`—`（未 fan-out）XOR 非空的 `{domain,adversarial,grounding,history}` 逗号分隔子集**；`anchor_lint` 对 **缺 `mirrors=` / 空值 / 未知 token / 重复 token** SHALL **fail-closed 报错**，MUST NOT 把缺失/坏值静默过滤成空集（否则 `subagents="unavailable"` + 空 `mirrors` 又判 CLEAN、C2 空转复发）。
+ 
+-`anchor_lint` SHALL 增一条 **always-on 一致性 lint**（**判据数据源亦独立于 `metrics.enabled`**，D7 + spec-review-r2 C2）：`subagents="unavailable"` 时，**`fanout-capability` 锚自身的 `mirrors=` 清单**中 `∈ {domain,adversarial,grounding}` 的去重计数 **MUST ≤ 1**，否则报错阻塞（违规类型 `dead-fanout-multi-mirror`）。**判据 MUST 读 `mirrors=`，MUST NOT 数 lens-metric 行**〔C2 纠正首轮致命洞：lens-metric 锚在生产端受 `metrics.enabled` 门控（默认消费仓 `metrics.enabled=false` ⇒ 零行 ⇒ lint 永判 CLEAN 空转）；`mirrors=` 由 SKILL 直接落、不受该门控〕。**它拦的是锚行自身的自相矛盾（诚实记录错误），不是伪造**——`mirrors=`/`subagents=` 仍是主 session 自报，写 `subagents="available"` 或只列 1 镜即绕过（无机械交叉核验，如实登记）；且是否触发仍受 `host` 自报信任边界约束（谎报 `host=claude` 则不要求该锚，与 ADR-1 同根、非本条新增）。此校验及其判据数据 MUST always-on，MUST 独立成函数、不接受 `metrics_on` 参数（D11）。
++`anchor_lint` SHALL 增一条 **always-on 一致性 lint**（**判据数据源亦独立于 `metrics.enabled`**，D7 + spec-review-r2 C2）：`subagents="unavailable"` 时，**`fanout-capability` 锚自身的 `mirrors=` 清单**中 `∈ {domain,adversarial,grounding,history}` 的去重计数 **MUST ≤ 1**，否则报错阻塞（违规类型 `dead-fanout-multi-mirror`）。**判据 MUST 读 `mirrors=`，MUST NOT 数 lens-metric 行**〔C2 纠正首轮致命洞：lens-metric 锚在生产端受 `metrics.enabled` 门控（默认消费仓 `metrics.enabled=false` ⇒ 零行 ⇒ lint 永判 CLEAN 空转）；`mirrors=` 由 SKILL 直接落、不受该门控〕。**它拦的是锚行自身的自相矛盾（诚实记录错误），不是伪造**——`mirrors=`/`subagents=` 仍是主 session 自报，写 `subagents="available"` 或只列 1 镜即绕过（无机械交叉核验，如实登记）；且是否触发仍受 `host` 自报信任边界约束（谎报 `host=claude` 则不要求该锚，与 ADR-1 同根、非本条新增）。此校验及其判据数据 MUST always-on，MUST 独立成函数、不接受 `metrics_on` 参数（D11）。
+ 
+ **残余诚实边界（§0.0，无信号 ⇒ 语义层）**：① 探针为 available 之后「某镜是否真独立跑过」**无信号**（主 session 可谎报自代）；② `available` 且主 session 自代多镜（同「报告 N 镜实跑 1」症状）**一致性 lint 拦不住**（`available` 分支不触发）。∴ **这两半残余归语义层**，MUST NOT 声称有机械保证；机械层仅提供**事后可发现性**（`host` 进锚 ⇒ 复盘按 host 分组，独立率异常可见）。**MUST NOT 声称"头号假绿已事前拦截"**——一致性 lint 只拦「机制死变体」的自相矛盾，不拦「机制活+偷懒自代变体」。
+ 
+ #### Scenario: 授权声明存在
+ - **WHEN** `sdflow-init` 在消费项目铺设 AGENTS.md
+ - **THEN** 该文件 SHALL 含 Codex 子代理授权段，明示多镜 fan-out 与 model-tiers 构成 codex 要求的 task-specific reason
+ 
+ #### Scenario: Codex 宿主 fan-out 前探能力并落锚（语义核验）
+ - **WHEN** `SDFLOW_HOST=codex` 且评审即将 fan-out
+ - **THEN** SHALL 先派 trivial 探针子代理判定能力，落 `sdflow:fanout-capability` 锚（`subagents="available"|"unavailable"` + `mirrors=` 本轮实际镜清单）到被 lint 的报告文件内；`SDFLOW_HOST=claude` 时免探针、锚记 `subagents="available"`；探针值为主 session 自报（trust-based，非机械核验）
+ 
+ #### Scenario: 机制死却报多镜被一致性 lint 拦截（always-on，判据读 mirrors=）〔spec-review-r2 C2〕
+-- **WHEN** `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而**同锚 `mirrors=`** 清单中 `∈ {domain,adversarial,grounding}`（按值去重）的计数 > 1
++- **WHEN** `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而**同锚 `mirrors=`** 清单中 `∈ {domain,adversarial,grounding,history}`（按值去重）的计数 > 1
+ - **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——此为锚行自身的自相矛盾（机制死却报多镜）；判据 MUST 读 `mirrors=`、MUST NOT 数受 metrics 门控的 lens-metric 行；此校验及其数据源 MUST always-on、不受 `metrics.enabled` 门控
+ 
+ #### Scenario: metrics 关闭时一致性 lint 仍生效（解耦锁）〔spec-review-r2 C2〕
+ - **WHEN** `metrics.enabled=false`（默认消费仓）、`subagents="unavailable"` 且 `mirrors=` 列 >1 镜
+ - **THEN** `anchor_lint` SHALL 照常报错阻塞——因判据 `mirrors=` 由 SKILL 直接落、不经 emitter，`metrics.enabled=false` 不影响其在场；MUST NOT 因该轮无 lens-metric 行而放行
+ 
+ #### Scenario: host=codex 报告缺 fanout-capability 锚则报错
+ - **WHEN** `host="codex"`（可从 lens-metric/outside-voice 锚的 host 字段读到）的报告中**无** `sdflow:fanout-capability` 锚
+ - **THEN** `anchor_lint` SHALL 报错——否则"不落锚"即可绕过一致性 lint
+ 
+diff --git a/openspec/specs/spec-workflow/spec.md b/openspec/specs/spec-workflow/spec.md
+index 2782bcd..3e7bb0e 100644
+--- a/openspec/specs/spec-workflow/spec.md
++++ b/openspec/specs/spec-workflow/spec.md
+@@ -880,21 +880,21 @@ spec-review Step3 / code-review Step5 的**评审报告锚自检**（四类 v1 
+ - **THEN** 脚本 SHALL 判 `enabled=false` 并以退出码 0 返回——lens-metric 一类整体不校验不阻塞。**「无 `metrics:` 块」与「文件缺失」同属放行分支**（消费仓默认 false），MUST NOT 因未配置 metrics 而 ERROR 阻塞（否则 100% 未配置 metrics 的消费仓每轮评审假阻塞）
+ 
+ #### Scenario: metrics 块存在但值非法 fail-closed
+ 
+ - **WHEN** `config.yaml` 存在且有顶层 `metrics:` 块，但该块内（至下一顶层键前）**解不出合法 `enabled: true|false`**（拼错 / 非法布尔拼写 / 结构损坏）
+ - **THEN** 脚本 SHALL 以非零退出码（ERROR）返回、拒绝认证——MUST NOT 因 config 读取静默失败而悄悄跳过整类 lens-metric 校验（反静默）。「坏」严格限于**块在但值非法**；块**不在**走上一 Scenario 放行。块边界判定 MUST 先定位 `metrics:` 行再限范围至下一顶层键（防多段 config 误配对）
+ 
+ #### Scenario: metrics 启用时缺 broad 或 outside-voice 度量行被拦
+ 
+ - **WHEN** `metrics.enabled` 为 true，报告含若干 `sdflow:lens-metric` 锚但**缺 `lens="broad"` 或缺 `lens="outside-voice"` 行**（两者对应恒跑的 Step1 广审与 outside-voice）
+-- **THEN** 脚本 SHALL 非零退出并点名缺失 lens——metrics 启用时这两行为最小必有行；其余 per-lens（domain/adversarial/grounding）完整性 SHALL 属主 session 信任边界、脚本不强制（报告机读不出「本轮跑了哪些镜」）
++- **THEN** 脚本 SHALL 非零退出并点名缺失 lens——metrics 启用时这两行为最小必有行；其余 per-lens（domain/adversarial/grounding/history）完整性 SHALL 属主 session 信任边界、脚本不强制（报告机读不出「本轮跑了哪些镜」）
+ 
+ #### Scenario: lens-metric 行内 layer 与 CLI --layer 不符被拦
+ 
+ - **WHEN** `anchor_lint --layer code-review` 运行，但某 fence 外 `sdflow:lens-metric` 锚的 `layer="spec-review"`（错层，如从另一 layer 报告误贴）
+ - **THEN** 脚本 SHALL 非零退出并点名错层锚——fence 外真 lens-metric 锚的 `layer` MUST 等于 CLI `--layer`，MUST NOT 仅因 `layer` 在枚举域内就放过错层锚
+ 
+ #### Scenario: 计数字段非非负整数被拦
+ 
+ - **WHEN** 某 `sdflow:lens-metric` 锚的 `findings`/`采纳`/`裁掉`/`defer`/`独立` 任一取负数 / 浮点串 / 空串 / 中文数字等非十进制非负整数值
+ - **THEN** 脚本 SHALL 非零退出并点名违规字段——五计数字段 MUST 校验为十进制非负整数，前置拦截坏值进聚合（不依赖下游 aggregator `_int` 兜底）
+diff --git a/openspec/specs/workflow-metrics/spec.md b/openspec/specs/workflow-metrics/spec.md
+index bd3ee53..093aec3 100644
+--- a/openspec/specs/workflow-metrics/spec.md
++++ b/openspec/specs/workflow-metrics/spec.md
+@@ -27,21 +27,21 @@ TBD - created by archiving change workflow-metrics-loop. Update Purpose after ar
+ 
+ #### Scenario: 锚字段缺失或取值越域被自检阻塞
+ - **WHEN** 出报告后机械核验发现某镜锚缺必填字段（如漏 `独立` 或**漏 `host`**），**或 `layer`/`lens`/`host`/`runner`/`sev` 取值不在枚举域/子格式内**（如 `lens=对抗镜1` 未折叠成 `adversarial`，或 `runner=claude-fallback` 用了已废弃的值）
+ - **THEN** 本步 SHALL 报错阻塞（复用现有锚存在性自检机制扩一类，**含枚举域 + sev 子格式校验**），MUST NOT 静默放行
+ 
+ #### Scenario: 自审锚行被自检阻塞〔add-codex-host-support · spec-review-amendment D1/D2〕
+ - **WHEN** 某 **`sdflow:outside-voice` 锚**（**非 lens-metric 锚**——只有 outside-voice 锚同时承载 `runner`/`host`/`reason_code`；绑到无 `reason_code` 的 lens-metric 锚会使红线静默永不触发）的 `runner == host` 且 `reason_code ∉ {not-installed, preflight-error, timeout, exec-error}`（即非合法同族降级、却声称拿到跨模型第二意见）
+ - **THEN** `anchor_lint` SHALL 报错阻塞——`runner == host` 的 voice 依定义**不是**跨模型，MUST NOT 作为跨模型证据落账（此即**合法组合矩阵**同族行子句，spec-review-r2 C1）。**合法降级码集 SHALL 钉死为 `{not-installed, preflight-error, timeout, exec-error}`**〔D2：grill G5 初钉漏了 `preflight-error`；`missing-deps` 现定死归约入 `preflight-error`（D7），不留实现期裁量〕；成功跨模型路径 `reason_code="ok"`（D5，非 none）；`anchor_lint` SHALL **新增 outside-voice 锚的 KV 字段解析**（现状零字段解析）；此校验 **MUST always-on、独立成函数、不受 `metrics.enabled` 门控**（D7/D11：读真实性信号）
+ 
+ #### Scenario: fan-out 机制死却报多镜被一致性 lint 阻塞（always-on，判据读 mirrors=）〔add-codex-host-support · spec-review-amendment Q1 · adr/0023 · spec-review-r2 C2〕
+-- **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而**同锚 `mirrors=`** 清单中 `∈ {domain,adversarial,grounding}`（**按值去重**）的计数 > 1
++- **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而**同锚 `mirrors=`** 清单中 `∈ {domain,adversarial,grounding,history}`（**按值去重**）的计数 > 1
+ - **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——这是**锚行自身的自相矛盾**（机制死却报多镜），**不是伪造拦截**（主 session 写 `subagents="available"` 或只列 1 镜即绕过）；判据 **MUST 读 `fanout-capability` 锚的 `mirrors=`、MUST NOT 数 lens-metric 行**〔spec-review-r2 C2 纠正首轮致命洞：lens-metric 行在生产端受 `metrics.enabled` 门控，默认消费仓 metrics=false ⇒ 零行 ⇒ lint 空转；`mirrors=` 由 SKILL 直接落、不受该门控〕；此校验及其判据数据 **MUST always-on、与 `metrics.enabled` 解耦**。MUST NOT 声称「头号假绿事前拦截」——只拦机制死变体，机制活+偷懒自代变体留语义层
+ 
+ #### Scenario: 宿主分组可事后区分真跨模型与自审轮次〔add-codex-host-support〕
+ - **WHEN** 复盘聚合器读取跨 change 的 lens-metric 锚
+ - **THEN** SHALL 可按 `host` 分组统计，使 Codex 宿主轮次与 Claude 宿主轮次的采纳率/独立率分别可见，MUST NOT 混算（混算会让一方的自审数据污染另一方的真跨模型信号）
+ 
+ ### Requirement: 独立贡献在 Step3 去重时导出，塌进 per-镜锚
+ 
+ 主 session 在 Step3 去重（同一问题多镜命中合并）时 SHALL 记录每条 finding 的命中镜集合，据此为每（canonical）镜导出 `独立` 标量（该镜类型单独抓到且被采纳的条数），MUST NOT 要求 per-finding 独立锚（过度插桩）。`独立` 是「淘汰哪镜」的唯一非冗余真轴，与采纳率（精度）并存回答两个不同问题。`独立` 对 dedup 合并粒度敏感（「同一问题」无 ground truth，合并松紧影响计数），故 SHALL 作 **N 轮噪声 flag** 供人复评，MUST NOT 作单轮自动砍镜依据。
+ 
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index 0879e8d..fc7fe90 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -232,27 +232,24 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**
+   **Codex 子代理授权见 AGENTS.md「Codex 子代理授权」段**（多镜 fan-out + model-tiers 构成显式 task-specific reason）。
+ - **诚实边界（MUST 显著登记，§0.0）**：探针结果由**主 session 自己**观察并落锚——「是否真派出了一次子代理、
+   是否真收到回复」无可信脚本捕获路径，`anchor_lint` 的一致性 lint 只核**锚行文法自洽**（`unavailable`
+   却报多镜的自相矛盾），**核不了它是否对应一次真 spawn**。MUST NOT 声称这是机械门。
+ - **`subagents="unavailable"` 处置（MUST）**：本轮**缩 roster 到主 session 实际独立完成的镜**（不再假装
+   派了子代理）；报告本段**显著标注**「⚠️ 单镜降级（子代理不可用，host=codex）」；第五步 lens-metric roster
+   （若 `metrics.enabled`）与下方 `mirrors=` **只含实际独立完成的镜**，MUST NOT 为未独立跑过的镜落锚
+   （承 spec「子代理不可用则缩 roster」Scenario）。
+ - **落锚（每轮恰好一条，落进本报告文件供 `anchor_lint` 读，`host=codex` 报告该锚必填）**：
+ 
+-  `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->`
++  `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,history|—" -->`
+ 
+   `mirrors=` MUST 由本 skill 在 fan-out 决策落定时**直接写本轮实际派出/独立完成的镜清单**（去重、逗号
+-  分隔，token ∈ `{domain,adversarial,grounding}`——`anchor_lint._FANOUT_MIRRORS` 是**跨层共用的固定
+-  三 token 词表**，不按层各自命名第三镜；本 skill 第三镜（历史镜）落 `mirrors=` 时借用既有 token
+-  `grounding` 记该镜跑过（仅表示"第三个 fan-out 镜跑了"，非声称"这是接地镜"——镜的精确身份仍由
+-  lens-metric 的 `lens="history"` 各自记录，二者不是同一件事、不互相替代），`—`=未 fan-out）——
++  分隔，token ∈ `{domain,adversarial,history}`，`—`=未 fan-out）——
+   **不经 emitter/lens-metric、不读 config.metrics**（GC-3，判据 always-on 于 metrics 开关，不受门控）。
+ - **残余诚实边界（§0.0，无信号⇒语义层）**：一致性 lint 只拦「机制死却报多镜」的**自相矛盾**；「机制活但
+   主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
+   **MUST NOT 声称"头号假绿（多镜静默退化）已被事前机械拦截"**。
+ 
+ **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+ 
+ | 镜 | 数量 | 干什么 | 建议档位 |
+ |----|------|--------|-----------|
+ | **领域镜** | 每命中领域 1 个 | 读 `DIFF_BASE..HEAD` diff + 相关真实代码，逐条过 `code-review-base.md` CR-01~09 + `domains/<栈>` CR-* 项，列违反/存疑项（带 `file:line`） | 中档（判断） |
+@@ -535,21 +532,21 @@ ship-gate:
+ 40 位小写 OID（缩写 SHA / `HEAD` 字面 / 大写一律被 gate 判非法 → UNKNOWN(6)）。语义是「**本次代码审
+ 放行的是哪一份盘面**」，不是「写报告的时刻」——gate 据此判「放行之后源码有没有被改」。
+ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆两次 Edit）。
+ 若文件已有首块 frontmatter，MUST 合并 `ship-gate:` 键进已有块（不新开第二块）；若无则新建。头部之后紧接下方正文（含人读结论行，不可省略）：
+ 
+ ```
+ ## code-review 报告 — {change}
+ ### 命中范围
+   栈: backend·go / embedded·ml307c …   清单: CR-01~09 + CR-GO-* + …   gstack/review: scope-drift/完成度 结论
+ ### 子代理能力锚（host=codex 报告必填，语义核验非机械门，见 Step2「能力探针」）
+-  <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->
++  <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,history|—" -->
+   subagents="unavailable" 时本报告 MUST 显著标注「⚠️ 单镜降级」（见命中范围/结论区）。
+ ### Findings（置信 ≥80）
+   [严重度] CR-04 资源泄漏 | file.go:42 | 错误路径未释放 conn | 置信 90 | 已修[impl-review-fix] / defer→buglist
+ ### 已裁掉（反静默压制，可审计）
+   X1  reviewer 原始发现 + 主 session 裁掉理由；<80 滤除项一行带过
+ ### 修复 / defer 台账
+   自动修 N 项[impl-review-fix]；自动选推荐 M 项(按三镜+主次附理由)；defer K 项 → buglist/todolist
+   T10-choice复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附
+ ### 度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步/第五步）
+   domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（gstack/review Step1）
+diff --git a/sdflow-init/tests/test_codex_subagent_authorization.py b/sdflow-init/tests/test_codex_subagent_authorization.py
+index 94960e2..41f7783 100644
+--- a/sdflow-init/tests/test_codex_subagent_authorization.py
++++ b/sdflow-init/tests/test_codex_subagent_authorization.py
+@@ -8,24 +8,26 @@ Codex 宿主默认**不**派子代理（安全默认）——两个评审 SKILL
+ Codex 宿主下的评审要么每次都拿不到子代理权限、要么在没有能力核验的情况下裸 fan-out——
+ 两者都不是本 change 想要的目标态，故须机验存在性。
+ 
+ 【探针的诚实边界，本文件同样守住】
+ 探针（trivial 子代理判定"机制活着没"）是**语义核验，非机械门**（ADR-4/adr/0023，§0.0）——
+ 「是否真派出了一次子代理」无可信脚本捕获路径。SKILL.md MUST 显著登记这条边界，MUST NOT
+ 把探针包装成"头号假绿已被事前机械拦截"。这条诚实声明本身也是铺设产物的一部分，漏写 =
+ 把一个语义核验的东西悄悄冒充成机械保证——本文件同样守住这条声明"在不在"。
+ 
+ 【mirrors= 词表反漂移】
+-`anchor_lint.py` 的 `_FANOUT_MIRRORS` 是跨两个评审层共用的固定三 token 词表
+-（domain/adversarial/grounding），SKILL.md 文档字面量若与它漂移，Codex 宿主下落的锚会被
++`anchor_lint.py` 的 `_FANOUT_MIRRORS` 是跨两个评审层共用的固定四 token 词表
++（domain/adversarial/grounding/history），SKILL.md 文档字面量若与它漂移，Codex 宿主下落的锚会被
+ `anchor_lint` fail-closed 拒收（unknown-token）。本文件直接 import 真实工具、断言 SKILL.md
+-写的 token 集合是它的**子集**，防止「文档说的」和「工具认的」各写一套。
++写的 token 集合是它的**子集**，防止「文档说的」和「工具认的」各写一套。两份 SKILL 的第三镜身份
++不同——spec-review 是接地镜（`grounding`），code-review 是历史镜（`history`，T148 真名替换后不再
++借用 `grounding`）——故按文件区分预期 token 串。
+ """
+ import importlib.util
+ from pathlib import Path
+ 
+ REPO = Path(__file__).resolve().parents[2]
+ ASSETS = Path(__file__).resolve().parents[1] / "assets"
+ SNIPPET = ASSETS / "snippets" / "claude-section.md"
+ AGENTS = REPO / "AGENTS.md"
+ SPEC_REVIEW_SKILL = REPO / "sdflow-spec-review" / "SKILL.md"
+ CODE_REVIEW_SKILL = REPO / "sdflow-code-review" / "SKILL.md"
+@@ -143,43 +145,45 @@ def test_mirrors_field_not_coupled_to_metrics():
+     （一致性 lint 的判据源须 always-on，不受 metrics 开关门控）。"""
+     for path in (SPEC_REVIEW_SKILL, CODE_REVIEW_SKILL):
+         t = _skill_text(path)
+         assert "不经 emitter/lens-metric、不读" in t
+         assert "config.metrics" in t
+ 
+ 
+ def test_mirrors_tokens_are_subset_of_anchor_lint_vocabulary():
+     """反漂移锁：SKILL.md 文档字面写的 mirrors= token 集合 MUST 是 anchor_lint._FANOUT_MIRRORS
+     的子集——否则 Codex 宿主真落锚时会被 anchor_lint 判 unknown-token fail-closed，
+-    评审直接罢工。直接 import 真实工具校验，而非各写一份可能漂移的复制。"""
++    评审直接罢工。直接 import 真实工具校验，而非各写一份可能漂移的复制。
++
++    两份 SKILL 的第三镜身份不同（spec-review=接地镜/grounding，code-review=历史镜/history，
++    真名替换后 T148），故按文件区分预期 token 串，而非共享同一个字面量循环。"""
+     al = _anchor_lint_mod()
+     vocab = al._FANOUT_MIRRORS
+-    for path in (SPEC_REVIEW_SKILL, CODE_REVIEW_SKILL):
++    expected = {
++        SPEC_REVIEW_SKILL: "domain,adversarial,grounding",
++        CODE_REVIEW_SKILL: "domain,adversarial,history",
++    }
++    for path, literal in expected.items():
+         t = _skill_text(path)
+-        # 文档正文出现的 "domain,adversarial,grounding" 字面 token 串
+-        assert "domain,adversarial,grounding" in t
+-        tokens = {tok.strip() for tok in "domain,adversarial,grounding".split(",")}
++        assert literal in t
++        tokens = {tok.strip() for tok in literal.split(",")}
+         assert tokens <= vocab, f"{path}: 文档 token 集合 {tokens} 不是 anchor_lint 词表 {vocab} 的子集"
+ 
+ 
+ def test_code_review_history_mirror_alias_honestly_documented():
+-    """code-review 的第三镜叫「历史镜/history」，但 anchor_lint 的 mirrors= 词表是跨层共用的
+-    固定三 token（domain/adversarial/grounding，无 history）——该skill 借用既有 token
+-    `grounding` 记录"第三个 fan-out 镜跑了"这件事。这是一处真实的命名不对齐，MUST 在文档里
+-    诚实注明（非声称"grounding=接地镜"），否则未来读者会误以为 code-review 真有接地镜，
+-    或误以为 history 镜完全没被 mirrors= 追踪。"""
++    """code-review 的第三镜是历史镜/history——T148 后 anchor_lint._FANOUT_MIRRORS 已扩至
++    四 token（domain/adversarial/grounding/history），code-review 不再需要借用 `grounding`
++    这个不属于自己的 token 来记录"第三个 fan-out 镜跑了"。本测试断言 mirrors= 字面已改为真名
++    `history`，且旧的借用措辞（"借用既有 token"）不再出现——防止真名替换后残留过期的借用叙事。"""
+     t = _skill_text(CODE_REVIEW_SKILL)
+-    assert "历史镜" in t
+-    assert "借用既有 token" in t
+-    assert '`grounding` 记该镜跑过' in t
+-    assert "非声称" in t
+-    assert 'lens="history"' in t  # 精确身份仍由 lens-metric 的 lens= 各自记录
++    assert 'mirrors="domain,adversarial,history' in t
++    assert "借用既有 token" not in t
+ 
+ 
+ def test_fanout_capability_anchor_prefix_matches_real_tool():
+     """反漂移锁：SKILL.md 里手写的锚前缀字符串 MUST 与 anchor_lint.ANCHOR_PREFIXES 实际
+     识别的 key 一致——防止文档写错前缀（如漏 v1/多空格）导致锚在真实 lint 里不被识别。"""
+     al = _anchor_lint_mod()
+     assert "<!-- sdflow:fanout-capability v1" in al.ANCHOR_PREFIXES
+     for path in (SPEC_REVIEW_SKILL, CODE_REVIEW_SKILL):
+         t = _skill_text(path)
+         assert "<!-- sdflow:fanout-capability v1" in t

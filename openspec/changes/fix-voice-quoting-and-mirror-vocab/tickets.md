@@ -36,11 +36,11 @@ async-branch 内改动 MUST 两份 SKILL 字节对称。marker 外 `mkdir -p` �
 
 `_FANOUT_MIRRORS` frozenset 加入 `"history"` token，同步 docstring 硬编码枚举，然后跑 `sdflow-init update` 刷新本仓消费拷贝。
 
-- [ ] `anchor_lint.py:672` `_FANOUT_MIRRORS` 加 `"history"`
-- [ ] `check_fanout_consistency()` docstring 的硬编码枚举同步更新
-- [ ] 跑 `sdflow-init update` 刷新 `openspec/workflow/tools/anchor_lint.py`
-- [ ] `_parse_mirrors("history")` 返回合法结果（非 unknown-token）
-- [ ] 补 `test_anchor_lint.py` 功能测试：`history` token 接受 + `mirrors="domain,history"` 加 `subagents="unavailable"` 触发 `dead-fanout-multi-mirror`
+- [x] `anchor_lint.py:672` `_FANOUT_MIRRORS` 加 `"history"`
+- [x] `check_fanout_consistency()` docstring 的硬编码枚举同步更新
+- [x] 跑 `sdflow-init update` 刷新 `openspec/workflow/tools/anchor_lint.py`
+- [x] `_parse_mirrors("history")` 返回合法结果（非 unknown-token）
+- [x] 补 `test_anchor_lint.py` 功能测试：`history` token 接受 + `mirrors="domain,history"` 加 `subagents="unavailable"` 触发 `dead-fanout-multi-mirror`
 
 ### Task 3: code-review SKILL 真名替换 + spec SHALL 条款 + 反漂移锁测试
 
