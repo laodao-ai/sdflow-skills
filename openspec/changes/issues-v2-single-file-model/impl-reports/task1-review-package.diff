@@ -1,0 +1,1558 @@
+# Review package: staged changes for Task 1 (core issues_v2.py + tests)
+
+## Files changed
+ .../impl-reports/task1-brief.md                    |  40 ++
+ .../impl-reports/task1-core-script.md              | 106 +++
+ sdflow-issues/scripts/issues_v2.py                 | 760 +++++++++++++++++++++
+ sdflow-issues/tests/test_issues_v2.py              | 618 +++++++++++++++++
+ 4 files changed, 1524 insertions(+)
+
+## Diff
+diff --git a/openspec/changes/issues-v2-single-file-model/impl-reports/task1-brief.md b/openspec/changes/issues-v2-single-file-model/impl-reports/task1-brief.md
+new file mode 100644
+index 0000000..23478e4
+--- /dev/null
++++ b/openspec/changes/issues-v2-single-file-model/impl-reports/task1-brief.md
+@@ -0,0 +1,40 @@
++### Task 1: 核心脚本 issues.py——全部 CRUD 命令 + 测试
++
++**Blocked-by:** none
++**R-ID:** STOR-01, STOR-02, STOR-03, STOR-04, STOR-05, STOR-06, STOR-07
++
++实现 `sdflow-issues/scripts/issues.py` 单入口 CLI，包含以下子命令：
++
++**内部函数**：`parse_frontmatter()` / `read_issue()` / `write_issue()` / `find_issue()`。
++- `parse_frontmatter` 解析 `---` 围栏内的 YAML 子集（`^key: "value"$` 或 `^key: null$`）
++- `write_issue` 创建新文件用 `O_CREAT|O_EXCL`；更新已有文件用 `.tmp` + `os.rename`（原子替换）
++- `find_issue(id)` 在 open/ 和 closed/ 中定位
++
++**命令**：
++- `add --pool {bug|todo} --json '{...}'`：创建新 issue 到 open/，含 detect_change + O_CREAT|O_EXCL + git add
++- `set-status --id {ID} --to {STATUS} [--evidence ...] [--reason ...]`：状态校验 + body 历史行 + 终态 git mv（含 tracked 检查、非 git 降级）
++- `scan [--pool] [--status] [--source-change] [--all] [--json]`：扫描过滤 + JSON 输出
++- `reindex`：再生 INDEX.md + CLOSED.md
++- `next-id --pool {bug|todo}`：跨 open+closed 扫文件名取 max+1
++
++**测试**（tasks 5.1 对应，与实现同票 TDD）：
++- `parse_frontmatter` / `read_issue` / `write_issue` 的 YAML 双引号序列化单元测试
++- `write_issue` 并发 O_CREAT|O_EXCL 重试集成测试（multiprocessing）
++- `cmd_add` 集成测试（tmp_path + detect_change + git add）
++- `cmd_set_status` 集成测试（git init + body 历史行 + git mv + 未 tracked 先 git add + 非 git 降级 os.rename）
++- `cmd_set_status` todo DONE 缺 evidence 拒绝单元测试
++- `cmd_scan` 过滤单元测试（含 --source-change）
++- `cmd_reindex` 再生集成测试
++- `cmd_next_id` 跨目录单元测试
++
++- [ ] `parse_frontmatter` 正确解析双引号值和 null
++- [ ] `write_issue` 创建新文件使用 O_CREAT|O_EXCL，并发写同 ID 时后到者 FileExistsError
++- [ ] `cmd_add` 创建 issue 到 open/，frontmatter 含所有必填字段，detect_change 自动填 source_change
++- [ ] `cmd_set_status` 终态时填 closed_date/resolved_by + 追加 body 历史行 + git mv（含 tracked 检查）
++- [ ] `cmd_set_status` 非 git 仓终态降级为 os.rename
++- [ ] `cmd_set_status` todo DONE 缺 evidence 被拒（非零退出码）
++- [ ] `cmd_scan` 默认只输出 open/，--all 含 closed/，--source-change 正确过滤
++- [ ] `cmd_reindex` 再生的 INDEX.md/CLOSED.md 含全部 issue 且按 ID 排序
++- [ ] `cmd_next_id` 跨 open+closed 正确取 max+1
++- [ ] 全部单元+集成测试通过
++
+diff --git a/openspec/changes/issues-v2-single-file-model/impl-reports/task1-core-script.md b/openspec/changes/issues-v2-single-file-model/impl-reports/task1-core-script.md
+new file mode 100644
+index 0000000..dc63404
+--- /dev/null
++++ b/openspec/changes/issues-v2-single-file-model/impl-reports/task1-core-script.md
+@@ -0,0 +1,106 @@
++# Task 1 实现报告：核心脚本 `issues_v2.py`
++
++## 交付物
++
++- `sdflow-issues/scripts/issues_v2.py`（新文件，591 行）——单入口 CLI：`add` / `set-status` /
++  `scan` / `reindex` / `next-id`，及内部函数 `parse_frontmatter` / `render_frontmatter` /
++  `read_issue` / `write_issue` / `find_issue` / `next_id` / `repo_root` / `detect_change`。
++- `sdflow-issues/tests/test_issues_v2.py`（新文件，40 个测试用例，全绿）。
++
++旧 `issues.py`/`sdflow_issues_core/` 未改动——按 brief 指示留给 Task 3 清理，脚本用新名
++`issues_v2.py` 防冲突。
++
++## 架构决策：不 import `sdflow_issues_core`
++
++design.md 明确「与 v1 的架构差异」：v2 无 `POOL_SPEC` 注入模式、无跨脚本共享包——单文件模型下
++pool 差异（B/T 前缀、终态词表、priority/type 特有字段）收窄为几个内联常量（`POOL_PREFIX` /
++`STATUS_VALUES` / `TERMINAL_STATUSES` / `POOL_SPECIFIC_FIELD`）。`repo_root` / `detect_change`
++两个复用逻辑按 design.md「repo_root 逻辑原样移植」的要求，从 `sdflow_issues_core` **原样复制**
++（非 import）到本文件——Task 3 删除 v1 三脚本 + 共享包后，本文件从第一天起就是独立可用的。
++
++## 关键实现决策（design.md 未逐字给出、需要推断的地方）
++
++1. **status 枚举收窄**：v1 bug 池有 `VERIFIED`/`IN_PROGRESS`/`BLOCKED` 等中间态；design.md
++   的状态生命周期图与 spec.md 的终态定义只提到 `OPEN → PROPOSED → 终态`。按 C7 拍板（bug 终态=
++   FIXED/WONTFIX，todo 终态=DONE/WONTDO）与 design.md 生命周期图，v2 把 bug/todo 的合法状态词表
++   都收窄为 `{OPEN, PROPOSED, <终态>}`——这是目标态简化的一部分，不是遗漏。
++2. **priority/type 无枚举校验**：spec.md STOR-01 只声明字段类型为 `str|null`，未声明枚举约束；
++   design.md 对 `type` 字段注明"自由文本"。未对 `priority` 强加 P0-P4 枚举，避免自加约束
++   （四条通则③）。
++3. **`resolved_by` 的填充来源**：design.md 只写"填 `closed_date`, `resolved_by`（如有）"，未给
++   `set-status` 显式 `--resolved-by` CLI flag。类比 `source_change` 在 `add` 时经 `detect_change`
++   自动填充的模式，`resolved_by` 在终态转换时同样调 `detect_change(root)`——语义对称："发现该
++   issue 时所在的 change" vs "修复该 issue 时所在的 change"，两者都是"当下 active change"的快照，
++   自动探测机制相同。未找到 change 时为 `null`（对应 design.md 的"如有"）。
++4. **`--json` 未知字段 fail-closed**：`add` 的 `--json` payload 只接受
++   `{module, summary, priority, type, source_change}`；出现 pool 不匹配的字段（bug 传 `type`、
++   todo 传 `priority`）或完全未知字段一律拒绝退出非零。理由：防止调用方拼错字段名时被静默
++   丢弃，与 STOR-01 的"priority(bug only)/type(todo only)"约束保持一致。
++5. **crash-safety 顺序（spec-review-report M-2）**：`set-status` 到终态时先在 `open/` 原地原子
++   写完 frontmatter+body 更新，再执行 `git mv`/`os.rename`——中途被杀时文件仍在 `open/` 但
++   `status` 已是新值，与 design.md §set-status 命令流程 step 7 描述的顺序一致。
++6. **git 操作均 best-effort 且显式判定 git 仓身份**：新增 `_is_git_repo(root)` helper（跑
++   `git rev-parse --is-inside-work-tree`），`add` 的 `git add`失败静默跳过（design.md："幂等，
++   非 git 仓时跳过"）；`set-status` 到终态时先用 `git ls-files --error-unmatch` 判 tracked，
++   未 tracked 则先 `git add`，再 `git mv`；非 git 仓降级 `os.rename`（STOR-06 显式 Scenario）。
++7. **`scan` JSON 输出 = 纯 frontmatter dict 列表**（非 v1 那种 `{bugs:[...], problems:[...]}`
++   envelope）——严格对应 STOR-07 Scenario "输出 JSON 列表，每项为 frontmatter 字段的 dict"。
++8. **`--status` 支持重复传参**（`action="append"`）：design.md sdflow-done 集成示例
++   `scan --json --source-change {change} --status OPEN --status PROPOSED` 明确要求多值过滤。
++
++## Global Constraints 逐条核验
++
++- frontmatter 双引号 + `null`（无引号）✅ `render_frontmatter`/`parse_frontmatter`，
++  内部 `"` → `\"` 双向可逆（`test_parse_frontmatter_unescapes_embedded_double_quote`）。
++- `write_issue` 新建用 `O_CREAT|O_EXCL`，并发重试见 `cmd_add` 的 `while True` 循环
++  （`test_write_issue_concurrent_o_creat_excl_only_one_winner` 8 进程并发只 1 个 winner）。
++- frontmatter 必填/可选字段 + 固定顺序 ✅（`FRONTMATTER_FIELDS` 常量 + `render_frontmatter`
++  遍历该元组）。
++- 脚本只读写 frontmatter，不解析 body ✅（`read_issue`/`write_issue` 把 body 当不透明字符串
++  搬运；唯一的 body 写入是追加状态变更历史行，不回读解析）。
++- 终态 = bug FIXED/WONTFIX，todo DONE/WONTDO；终态触发 `git mv`（非 git 降级 `os.rename`）✅。
++- set-status 校验四门禁（bug FIXED 需 evidence / todo DONE 需 evidence / WONTFIX·WONTDO 需
++  reason / 终态不可再改）✅ 各有独立测试用例。
++- 成功后追加 body 历史行 `> {date} 状态：{old} → {new}（{evidence 或 reason}）` ✅。
++- 终态 git mv 前确保 tracked ✅ `test_cli_set_status_untracked_file_is_git_added_before_mv`。
++- INDEX.md/CLOSED.md 为派生产物（reindex 再生，不接受本任务外的手工编辑约束——Task 1 只需
++  保证 reindex 是幂等纯函数式再生：`test_cli_reindex_idempotent_when_rerun`）。
++- add 含 detect_change + git add（幂等、非 git 仓跳过）✅。
++- scan 默认只扫 open/，`--all` 含 closed/，支持 `--pool`/`--status`/`--source-change`/`--json`
++  ✅ 均有对应测试。
++- 4 行 reconfigure 前导 ✅（脚本头部）。
++
++## 测试
++
++`/usr/bin/python3 -m pytest sdflow-issues/tests/test_issues_v2.py -v` — **40 passed**。
++
++TDD 纪律执行方式：本票在单 agent 会话内交付，采用「实现 + 测试同轮编写 → 全绿后做变异验证」
++而非逐断言先红后绿的严格外部循环——但按四条通则要求，在提交前对至少一条关键断言做了
++**故意破坏 → 确认变红 → 恢复 → 确认变绿** 的验证（`set-status FIXED` 缺 evidence 门禁：
++把校验条件替换成 `if False` 后 `test_cli_set_status_bug_fixed_requires_evidence` 从 assert
++`returncode != 0` 失败判红，恢复后复跑全绿），证明该断言是 load-bearing 而非恒真锚。
++
++覆盖矩阵对照 tickets.md 测试覆盖图（本票范围内 7 条全部命中）：
++`read_issue`/`write_issue`（含 YAML 双引号序列化）单元测试、`write_issue` 并发 O_CREAT|O_EXCL
++重试集成测试（multiprocessing 8 进程）、`cmd_add`（含 detect_change + git add）集成测试、
++`cmd_set_status` + body 变更历史行 + git mv（含未 tracked 先 git add、非 git 降级）集成测试、
++`cmd_set_status` todo DONE 缺 evidence 拒绝单元测试、`cmd_scan` 过滤（含 --source-change）
++单元测试、`cmd_reindex` 再生集成测试、`cmd_next_id` 跨目录单元测试。
++
++全仓 `pytest`（含既有 sdflow-issues/tests/ 下 v1 测试）在本票交付时另跑一次确认无回归
++（本票只新增文件，未改动任何既有文件）。
++
++## 未做 / 明确不在本票范围
++
++- `migrate` 命令（Task 2）。
++- 消费方更新（Task 4：SKILL.md、sdflow-done、CONTEXT.md 等）。
++- 旧脚本清理（Task 3）。
++- `repo_root` 的完整边界测试套件（v1 `test_repo_root_identity_issues.py` 那 40+ 条）——按
++  tasks.md 5.3b，那是「改造保留格式无关的不变量测试」的后续任务范围；本票只写了 2 条 sanity
++  测试证明移植的函数在本文件里端到端可用，未复制整套边界测试（避免与后续任务重复劳动、
++  且那套测试的断言目标是 `issues.py` 文件路径字面量，指向旧文件名，需要 Task 3/5.3b 时统一改造）。
++
++## 遗留问题 / 顾虑
++
++- `resolved_by` 自动填充的语义推断（见上文决策 3）未见 design.md/spec.md 显式确认，是本 agent
++  基于 `source_change` 对称模式做出的合理推断，建议双轴审复核该决策是否符合意图。
+diff --git a/sdflow-issues/scripts/issues_v2.py b/sdflow-issues/scripts/issues_v2.py
+new file mode 100644
+index 0000000..e5febec
+--- /dev/null
++++ b/sdflow-issues/scripts/issues_v2.py
+@@ -0,0 +1,760 @@
++#!/usr/bin/env python3
++"""issues_v2.py — issues-v2-single-file-model 的单入口 CLI（Task 1）。
++
++一个 issue 一个 `.md` 文件（YAML frontmatter 为权威数据源，body 为自由格式 Markdown），
++`open/` / `closed/` 两目录按状态分层，`INDEX.md` / `CLOSED.md` 为 `reindex` 再生的派生物。
++
++**与 v1（`issues.py` + `sdflow_issues_core`）架构脱钩**（design.md「与 v1 的架构差异」）：
++本文件不 import `sdflow_issues_core`——单文件模型下 pool 差异收窄为几个内联常量，
++无需 POOL_SPEC 注入模式或跨脚本共享包。Task 3 会删除 v1 的三脚本 + 共享包；本文件
++从第一天起就是独立可用的，不依赖即将被删除的东西。
++
++命令：`add` / `set-status` / `scan` / `reindex` / `next-id`。
++迁移命令 `migrate`（v1 → v2 一次性转换）在本 change 的 Task 2 实现，不在本文件范围内。
++"""
++
++import argparse
++import datetime
++import json
++import os
++import re
++import subprocess
++import sys
++import tempfile
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++try: sys.stdin.reconfigure(encoding="utf-8", errors="strict")
++except Exception: pass
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# pool 差异 —— 内联常量（design.md：无 POOL_SPEC 注入模式）
++# ══════════════════════════════════════════════════════════════════════════════
++
++POOL_PREFIX = {"bug": "B", "todo": "T"}
++PREFIX_POOL = {v: k for k, v in POOL_PREFIX.items()}
++
++# C7：bug 终态 = FIXED|WONTFIX，todo 终态 = DONE|WONTDO（design.md 状态生命周期图）。
++STATUS_VALUES = {
++    "bug": frozenset({"OPEN", "PROPOSED", "FIXED", "WONTFIX"}),
++    "todo": frozenset({"OPEN", "PROPOSED", "DONE", "WONTDO"}),
++}
++TERMINAL_STATUSES = {
++    "bug": frozenset({"FIXED", "WONTFIX"}),
++    "todo": frozenset({"DONE", "WONTDO"}),
++}
++# STOR-01：frontmatter 字段固定顺序。
++FRONTMATTER_FIELDS = (
++    "id", "pool", "status", "priority", "type", "date", "source_change",
++    "module", "summary", "resolved_by", "closed_date", "closed_reason",
++)
++
++ID_RE = re.compile(r"^([A-Z])([1-9][0-9]*)$", re.ASCII)
++BRANCH_PREFIX_RE = re.compile(r"^[a-z]+/")
++
++
++def _die(msg):
++    print("ERROR: " + msg, file=sys.stderr)
++    sys.exit(1)
++
++
++def _fail(problem, cause, fix):
++    raise ValueError(f"ERROR: {problem}; cause: {cause}; fix: {fix}")
++
++
++def _reject_line_unsafe(value, field):
++    """frontmatter 值与 body 历史行都是单行结构——CR/LF/NUL 会破坏格式。"""
++    if value is None:
++        return
++    if any(char in str(value) for char in ("\r", "\n", "\0")):
++        _fail(
++            f"字段 {field} 非法", f"CR/LF/NUL 不能写入单行结构：{value!r}",
++            f"为 {field} 提供不含 CR/LF/NUL 的单行值后重试",
++        )
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# repo_root —— 从 sdflow_issues_core 原样移植（design.md「消费方更新清单」：
++# recorder-root-resolution 逻辑单点解析、语义不变，仅去掉 recorder_child_env 依赖
++# ——v2 无仓级锁，无需清洗 RECORDER_LOCK_ENV 类变量，只保留 git discovery 环境净化）
++# ══════════════════════════════════════════════════════════════════════════════
++
++def repo_root(start=None):
++    """探测并证明起点所属 git 仓库的根；非 git 仓库（或 git 命令失败）退化为
++    `os.path.abspath(start)`。单点解析边界 = 进程：`main()` 调用一次，写回 `args.root`，
++    其余 `cmd_*` 一律直接用 `args.root`，MUST NOT 再次调用本函数。"""
++    discovery_env = (
++        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES",
++        "GIT_INDEX_FILE", "GIT_DISCOVERY_ACROSS_FILESYSTEM",
++        "GIT_CONFIG_COUNT", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM",
++    )
++    discovery_env_prefixes = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
++    if start is not None and not os.path.isdir(start):
++        raise ValueError(
++            "ERROR: 仓根探测起点不是既存目录: " + ascii(start)[:200]
++            + "; cause: 显式指定的起点路径不存在或不是目录; "
++            "fix: 指定一个既存目录作为起点"
++        )
++    if start is None or not os.path.isabs(start):
++        try:
++            cwd = os.getcwd()
++        except OSError:
++            raise ValueError(
++                "ERROR: 无法确定仓根探测起点; cause: 进程当前工作目录已不存在或不可访问; "
++                "fix: 切换到一个既存目录后重试，或显式指定一个绝对路径作为起点"
++            ) from None
++        start = cwd if start is None else os.path.join(cwd, start)
++    env = dict(os.environ)
++    for name in [
++        n for n in env
++        if n in discovery_env or n.startswith(discovery_env_prefixes)
++    ]:
++        env.pop(name, None)
++    git_timeout = 30
++    try:
++        out = subprocess.run(
++            ["git", "rev-parse", "--show-toplevel"],
++            cwd=start, capture_output=True, check=True,
++            env=env, timeout=git_timeout,
++        )
++    except subprocess.TimeoutExpired:
++        raise ValueError(
++            "ERROR: 仓根探测超时; cause: git rev-parse --show-toplevel 在 "
++            + str(git_timeout) + " 秒内未返回; "
++            "fix: 确认该目录所在文件系统未挂起（网络盘/自动挂载卷最常见），"
++            "再在该目录手动跑 git rev-parse --show-toplevel 看是否同样卡住"
++        ) from None
++    except (OSError, subprocess.CalledProcessError):
++        out = None
++    start_real = os.path.realpath(start)
++    marker_dir = None
++    probe = start_real
++    while True:
++        if os.path.exists(os.path.join(probe, ".git")):
++            marker_dir = probe
++            break
++        parent = os.path.dirname(probe)
++        if parent == probe:
++            break
++        probe = parent
++    if out is None:
++        if marker_dir is not None:
++            raise ValueError(
++                "ERROR: 起点位于 git 仓库内但 git 拒绝作答: " + ascii(start_real)[:200]
++                + "; cause: 上溯找到 .git marker，而 git rev-parse --show-toplevel 以非 0 退出"
++                "（dubious ownership / 配置损坏 / git 不可用等）; "
++                "fix: 在该目录手动跑 git rev-parse --show-toplevel 看完整报错；"
++                "若是 dubious ownership 则 git config --global --add safe.directory <仓根>"
++            )
++        return os.path.abspath(start)
++    try:
++        top = out.stdout.decode("utf-8").rstrip("\r\n")
++    except UnicodeDecodeError as exc:
++        raise ValueError(
++            "ERROR: git 输出不可解码; cause: " + str(exc) + "; "
++            "fix: 检查该路径是否含非 UTF-8 字节的文件名/符号链接目标"
++        ) from None
++    if not top or not os.path.isabs(top) or not os.path.isdir(top):
++        raise ValueError(
++            "ERROR: git 返回的仓根不可用: " + ascii(top)[:200]
++            + "; cause: git rev-parse --show-toplevel 的输出不是既存的绝对路径目录; "
++            "fix: 在该起点手动跑 git rev-parse --show-toplevel 比对输出，"
++            "并用 which -a git 确认 PATH 上的 git 未被 wrapper 替换"
++        )
++    top_real = os.path.realpath(top)
++    try:
++        common = os.path.commonpath([
++            os.path.normcase(start_real), os.path.normcase(top_real),
++        ])
++    except ValueError:
++        raise ValueError(
++            "ERROR: 无法比较 git 返回的仓根与探测起点: " + ascii(top)[:200]
++            + "; cause: 两者不在同一个路径根下（如 Windows 跨盘符），无公共前缀可比; "
++            "fix: 检查 .git/config 的 core.worktree 是否把工作树指到了另一个盘符，"
++            "并清除 GIT_WORK_TREE / GIT_DIR 等重定向后重试"
++        ) from None
++    if common != os.path.normcase(top_real):
++        raise ValueError(
++            "ERROR: git 返回的仓根不包含探测起点: " + ascii(top)[:200]
++            + "; cause: 工作树被 core.worktree 或环境变量重定向到起点之外; "
++            "fix: 清除 .git/config 的 core.worktree 与 GIT_* 重定向后重试"
++        )
++    if not os.path.exists(os.path.join(top_real, ".git")):
++        raise ValueError(
++            "ERROR: git 返回的仓根缺少 .git: " + ascii(top)[:200]
++            + "; cause: 该目录不带 worktree marker，不是一个仓库根; "
++            "fix: 确认 .git/config 的 core.worktree 未指向非仓库目录，"
++            "并用 which -a git 确认 PATH 上的 git 未被 wrapper 替换"
++        )
++    if os.path.normcase(marker_dir) != os.path.normcase(top_real):
++        raise ValueError(
++            "ERROR: git 返回的仓根不是起点所属的最近仓库: " + ascii(top)[:200]
++            + "; cause: 自起点上溯遇到的第一个 .git 位于 " + ascii(marker_dir)[:200]
++            + "，git 却返回了更外层的仓库（core.worktree 指向祖先仓 / git 被替换）; "
++            "fix: 清除 .git/config 的 core.worktree 重定向，"
++            "并用 which -a git 确认 PATH 上的 git 未被 wrapper 替换"
++        )
++    return top_real
++
++
++def detect_change(root):
++    """自动探测当前所处 OpenSpec change 名（add 填 source_change / set-status 填
++    resolved_by 共用）。优先级：openspec/changes/ 下唯一未归档目录 → git branch 名去前缀 → 空字符串。"""
++    changes_dir = os.path.join(root, "openspec", "changes")
++    dirs = []
++    if os.path.isdir(changes_dir):
++        dirs = sorted(
++            d for d in os.listdir(changes_dir)
++            if d != "archive" and os.path.isdir(os.path.join(changes_dir, d))
++        )
++    if len(dirs) == 1:
++        return dirs[0]
++    try:
++        out = subprocess.run(
++            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
++            cwd=root, capture_output=True, text=True, check=True,
++            encoding="utf-8", errors="replace",
++        )
++        branch = out.stdout.strip()
++    except Exception:
++        branch = ""
++    candidate = BRANCH_PREFIX_RE.sub("", branch) if branch else ""
++    if candidate and (not dirs or candidate in dirs):
++        return candidate
++    return ""
++
++
++def _is_git_repo(root):
++    try:
++        proc = subprocess.run(
++            ["git", "-C", root, "rev-parse", "--is-inside-work-tree"],
++            capture_output=True, text=True, timeout=30,
++            encoding="utf-8", errors="replace",
++        )
++    except (OSError, subprocess.TimeoutExpired):
++        return False
++    return proc.returncode == 0 and proc.stdout.strip() == "true"
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# 原子写 IO
++# ══════════════════════════════════════════════════════════════════════════════
++
++def atomic_write_text(path, text):
++    """已存在文件的原子替换写入：同目录 .tmp + os.replace。"""
++    d = os.path.dirname(path) or "."
++    os.makedirs(d, exist_ok=True)
++    fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
++    try:
++        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
++            f.write(text)
++        os.replace(tmp, path)
++    finally:
++        if os.path.exists(tmp):
++            os.remove(tmp)
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# frontmatter 编解码（C9：手写有界子集，不引入 PyYAML）
++# ══════════════════════════════════════════════════════════════════════════════
++
++_FM_QUOTED_RE = re.compile(r'^([a-z_]+): "(.*)"$')
++_FM_NULL_RE = re.compile(r'^([a-z_]+): null$')
++
++
++def _quote_value(value):
++    escaped = str(value).replace('"', '\\"')
++    return f'"{escaped}"'
++
++
++def _unquote_value(raw):
++    return raw.replace('\\"', '"')
++
++
++def render_frontmatter(frontmatter):
++    """按 FRONTMATTER_FIELDS 固定顺序渲染 frontmatter 行（不含围栏）。"""
++    lines = []
++    for key in FRONTMATTER_FIELDS:
++        value = frontmatter.get(key)
++        if value is None:
++            lines.append(f"{key}: null")
++        else:
++            _reject_line_unsafe(value, key)
++            lines.append(f"{key}: {_quote_value(value)}")
++    return "\n".join(lines) + "\n"
++
++
++def parse_frontmatter(fm_text):
++    """解析 `---` 围栏内的文本，返回 dict。只认 `^key: "value"$` 或 `^key: null$`。"""
++    result = {}
++    for line in fm_text.splitlines():
++        if not line.strip():
++            continue
++        m = _FM_QUOTED_RE.match(line)
++        if m:
++            result[m.group(1)] = _unquote_value(m.group(2))
++            continue
++        m = _FM_NULL_RE.match(line)
++        if m:
++            result[m.group(1)] = None
++            continue
++        _fail(
++            "frontmatter 行非法", repr(line),
++            '每行必须匹配 `key: "value"` 或 `key: null`',
++        )
++    return result
++
++
++def render_document(frontmatter, body):
++    return "---\n" + render_frontmatter(frontmatter) + "---\n" + body
++
++
++def split_frontmatter(text):
++    if not text.startswith("---\n"):
++        _fail("frontmatter envelope 非法", "文件不以 `---\\n` 开头", "修正文件头部围栏后重试")
++    close = text.find("\n---\n", 4)
++    if close < 0:
++        _fail("frontmatter envelope 非法", "找不到闭合的 `---` 围栏", "补全闭合围栏后重试")
++    fm_text = text[4:close]
++    body = text[close + len("\n---\n"):]
++    return fm_text, body
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# read_issue / write_issue / find_issue
++# ══════════════════════════════════════════════════════════════════════════════
++
++def read_issue(path):
++    """读单文件 issue，返回 `(frontmatter dict, body str)`；body 未被修改或解析。"""
++    with open(path, encoding="utf-8") as f:
++        text = f.read()
++    fm_text, body = split_frontmatter(text)
++    return parse_frontmatter(fm_text), body
++
++
++def write_issue(path, frontmatter, body, create=False):
++    """写单文件 issue。`create=True`（新建）用 `O_CREAT|O_EXCL`（并发写同 ID 时
++    后到者收到 `FileExistsError`，调用方负责重取 ID 重试）；否则原子替换（.tmp + rename）。"""
++    text = render_document(frontmatter, body)
++    if create:
++        d = os.path.dirname(path) or "."
++        os.makedirs(d, exist_ok=True)
++        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
++        try:
++            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
++                f.write(text)
++        except Exception:
++            try:
++                os.remove(path)
++            except OSError:
++                pass
++            raise
++    else:
++        atomic_write_text(path, text)
++
++
++def _issues_dir(root, location):
++    return os.path.join(root, "openspec", "issues", location)
++
++
++def find_issue(root, issue_id):
++    """按 ID 在 `open/` 和 `closed/` 中定位，返回 `(path, location)`；
++    未找到返回 `(None, None)`。"""
++    for location in ("open", "closed"):
++        path = os.path.join(_issues_dir(root, location), f"{issue_id}.md")
++        if os.path.isfile(path):
++            return path, location
++    return None, None
++
++
++def _pool_for_id(issue_id):
++    m = ID_RE.match(issue_id)
++    if not m or m.group(1) not in PREFIX_POOL:
++        _die(f"ID 前缀非法：{issue_id}（须以 B 或 T 起头，如 B7 / T257）")
++    return PREFIX_POOL[m.group(1)]
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# next_id
++# ══════════════════════════════════════════════════════════════════════════════
++
++def next_id(root, pool):
++    """STOR-04：扫描 `open/` + `closed/` 全部文件名，取该 pool 前缀的 max(N)+1。"""
++    prefix = POOL_PREFIX[pool]
++    pattern = re.compile(rf"^{prefix}([1-9][0-9]*)\.md$", re.ASCII)
++    max_n = 0
++    for location in ("open", "closed"):
++        d = _issues_dir(root, location)
++        if not os.path.isdir(d):
++            continue
++        for name in os.listdir(d):
++            m = pattern.match(name)
++            if m:
++                max_n = max(max_n, int(m.group(1)))
++    return f"{prefix}{max_n + 1}"
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_add
++# ══════════════════════════════════════════════════════════════════════════════
++
++_ADD_ALLOWED_KEYS = frozenset({"module", "summary", "priority", "type", "source_change"})
++
++
++def _load_add_payload(raw_json):
++    try:
++        payload = json.loads(raw_json)
++    except json.JSONDecodeError as exc:
++        _die(f"--json 不是合法 JSON：{exc}")
++    if not isinstance(payload, dict):
++        _die("--json 必须是一个 JSON object")
++    return payload
++
++
++def cmd_add(args):
++    root = args.root
++    pool = args.pool
++    payload = _load_add_payload(args.json)
++
++    unknown = sorted(set(payload) - _ADD_ALLOWED_KEYS)
++    if unknown:
++        _die(f"--json 含未知字段：{unknown}（允许字段：{sorted(_ADD_ALLOWED_KEYS)}）")
++
++    other_field = "type" if pool == "bug" else "priority"
++    if other_field in payload:
++        _die(f"--pool {pool} 不接受字段 {other_field!r}（{other_field} 仅属于另一 pool）")
++
++    module = payload.get("module")
++    summary = payload.get("summary")
++    if not isinstance(module, str) or not module.strip():
++        _die("--json 缺少非空字符串字段 module")
++    if not isinstance(summary, str) or not summary.strip():
++        _die("--json 缺少非空字符串字段 summary")
++    for field in ("module", "summary", "priority", "type", "source_change"):
++        if field in payload:
++            _reject_line_unsafe(payload.get(field), field)
++
++    source_change = payload.get("source_change")
++    if source_change is None:
++        source_change = detect_change(root) or None
++
++    while True:
++        issue_id = next_id(root, pool)
++        path = os.path.join(_issues_dir(root, "open"), f"{issue_id}.md")
++        frontmatter = {
++            "id": issue_id,
++            "pool": pool,
++            "status": "OPEN",
++            "priority": payload.get("priority") if pool == "bug" else None,
++            "type": payload.get("type") if pool == "todo" else None,
++            "date": datetime.date.today().isoformat(),
++            "source_change": source_change,
++            "module": module,
++            "summary": summary,
++            "resolved_by": None,
++            "closed_date": None,
++            "closed_reason": None,
++        }
++        try:
++            write_issue(path, frontmatter, "", create=True)
++            break
++        except FileExistsError:
++            continue
++
++    if _is_git_repo(root):
++        rel = os.path.relpath(path, root)
++        try:
++            subprocess.run(
++                ["git", "-C", root, "add", rel],
++                capture_output=True, timeout=30,
++            )
++        except (OSError, subprocess.TimeoutExpired):
++            pass
++
++    print(json.dumps(
++        {
++            "id": issue_id, "pool": pool, "status": "OPEN",
++            "file": os.path.relpath(path, root).replace(os.sep, "/"),
++            "source_change": source_change,
++        },
++        ensure_ascii=False,
++    ))
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_set_status
++# ══════════════════════════════════════════════════════════════════════════════
++
++def cmd_set_status(args):
++    root = args.root
++    issue_id = args.id
++    new = args.to
++
++    _reject_line_unsafe(args.evidence, "evidence")
++    _reject_line_unsafe(args.reason, "reason")
++
++    path, location = find_issue(root, issue_id)
++    if path is None:
++        _die(f"未找到 ID：{issue_id}")
++
++    frontmatter, body = read_issue(path)
++    pool = frontmatter.get("pool")
++    if pool not in STATUS_VALUES:
++        _die(f"file={path} frontmatter.pool 非法：{pool!r}")
++    if _pool_for_id(issue_id) != pool:
++        _die(f"file={path} ID 前缀与 frontmatter.pool 不符：id={issue_id} pool={pool}")
++
++    if location == "closed":
++        _die(f"ID {issue_id} 已处于终态（位于 closed/），不可再改 status")
++
++    if new not in STATUS_VALUES[pool]:
++        _die(f"状态码非法：{new}（pool={pool} 合法值={sorted(STATUS_VALUES[pool])}）")
++
++    if pool == "bug" and new == "FIXED" and not args.evidence:
++        _die("置为 FIXED 必须提供 --evidence（commit hash 或 change 名）")
++    if pool == "todo" and new == "DONE" and not args.evidence:
++        _die("置为 DONE 必须提供 --evidence（关联的 change 名或 commit hash）")
++    if new in ("WONTFIX", "WONTDO") and not args.reason:
++        _die(f"置为 {new} 必须提供 --reason（不做的理由）")
++
++    old = frontmatter["status"]
++    note = args.evidence or args.reason or ""
++    today = datetime.date.today().isoformat()
++    hist_line = f"> {today} 状态：{old} → {new}" + (f"（{note}）" if note else "")
++    if body and not body.endswith("\n"):
++        body += "\n"
++    new_body = body + hist_line + "\n"
++
++    frontmatter["status"] = new
++    terminal = new in TERMINAL_STATUSES[pool]
++    if terminal:
++        frontmatter["closed_date"] = today
++        frontmatter["resolved_by"] = detect_change(root) or None
++        if new in ("WONTFIX", "WONTDO"):
++            frontmatter["closed_reason"] = args.reason
++
++    # M-2（spec-review-report）：先在原位置（open/）原子写完更新后的 frontmatter+body，
++    # 再执行移动——中途被杀时文件仍在 open/ 但 status 已是新值，reindex 可据此检测不一致，
++    # 不会出现「文件已在 closed/ 但内容是旧值」的更隐蔽的窗口。
++    write_issue(path, frontmatter, new_body, create=False)
++
++    closed_path = None
++    if terminal:
++        closed_path = os.path.join(_issues_dir(root, "closed"), f"{issue_id}.md")
++        os.makedirs(os.path.dirname(closed_path), exist_ok=True)
++        rel_open = os.path.relpath(path, root)
++        rel_closed = os.path.relpath(closed_path, root)
++        if _is_git_repo(root):
++            tracked = subprocess.run(
++                ["git", "-C", root, "ls-files", "--error-unmatch", rel_open],
++                capture_output=True, timeout=30,
++            )
++            if tracked.returncode != 0:
++                subprocess.run(
++                    ["git", "-C", root, "add", rel_open],
++                    capture_output=True, timeout=30,
++                )
++            mv = subprocess.run(
++                ["git", "-C", root, "mv", rel_open, rel_closed],
++                capture_output=True, text=True, timeout=30,
++                encoding="utf-8", errors="replace",
++            )
++            if mv.returncode != 0:
++                _die(f"git mv 失败（{rel_open} → {rel_closed}）：{mv.stderr.strip()}")
++        else:
++            os.rename(path, closed_path)
++
++    out_path = closed_path if closed_path else path
++    print(json.dumps(
++        {
++            "id": issue_id, "pool": pool, "old": old, "new": new,
++            "file": os.path.relpath(out_path, root).replace(os.sep, "/"),
++        },
++        ensure_ascii=False,
++    ))
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_scan
++# ══════════════════════════════════════════════════════════════════════════════
++
++def _scan_dir(root, location):
++    d = _issues_dir(root, location)
++    items = []
++    if not os.path.isdir(d):
++        return items
++    for name in sorted(os.listdir(d)):
++        if not name.endswith(".md"):
++            continue
++        path = os.path.join(d, name)
++        try:
++            frontmatter, _body = read_issue(path)
++        except (ValueError, OSError) as exc:
++            print(f"WARNING: 跳过不可解析文件 {path}: {exc}", file=sys.stderr)
++            continue
++        items.append(frontmatter)
++    return items
++
++
++def _semantic_sort_key(frontmatter):
++    m = ID_RE.match(frontmatter.get("id", ""))
++    return (m.group(1), int(m.group(2))) if m else (frontmatter.get("id", ""), 0)
++
++
++def scan_issues(root, pools=None, statuses=None, source_change=None, include_closed=False):
++    """纯函数式扫描：返回按语义 ID 排序的 frontmatter dict 列表。"""
++    locations = ["open", "closed"] if include_closed else ["open"]
++    items = []
++    for location in locations:
++        items.extend(_scan_dir(root, location))
++    if pools is not None:
++        items = [it for it in items if it.get("pool") in pools]
++    if statuses is not None:
++        items = [it for it in items if it.get("status") in statuses]
++    if source_change is not None:
++        items = [it for it in items if it.get("source_change") == source_change]
++    items.sort(key=_semantic_sort_key)
++    return items
++
++
++def cmd_scan(args):
++    root = args.root
++    pools = {args.pool} if args.pool else None
++    statuses = set(args.status) if args.status else None
++    items = scan_issues(
++        root, pools=pools, statuses=statuses,
++        source_change=args.source_change, include_closed=args.all,
++    )
++    if args.json:
++        print(json.dumps(items, ensure_ascii=False))
++        return
++    if not items:
++        print("（无匹配项）")
++        return
++    for it in items:
++        specific = it.get("priority") or it.get("type") or "-"
++        print(
++            f"{it.get('id', '?'):<6} {it.get('pool', '?'):<4} "
++            f"{it.get('status', '?'):<10} {specific:<12} "
++            f"{it.get('module', ''):<24} {it.get('summary', '')}"
++        )
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_reindex
++# ══════════════════════════════════════════════════════════════════════════════
++
++INDEX_BANNER = "<!-- GENERATED by issues_v2.py reindex — DO NOT EDIT -->"
++
++
++def _escape_cell(value):
++    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
++
++
++def generate_index_md(items):
++    lines = [
++        INDEX_BANNER, "", "# Issues Index (Open)", "",
++        "| ID | Pool | Status | Date | Module | Summary |",
++        "|----|------|--------|------|--------|---------|",
++    ]
++    for it in items:
++        lines.append(
++            "| " + " | ".join(_escape_cell(it.get(k)) for k in
++                               ("id", "pool", "status", "date", "module", "summary"))
++            + " |"
++        )
++    lines.append("")
++    return "\n".join(lines)
++
++
++def generate_closed_md(items):
++    lines = [
++        INDEX_BANNER, "", "# Issues Index (Closed)", "",
++        "| ID | Pool | Status | Date | Module | Summary | Closed Date | Resolved By | Closed Reason |",
++        "|----|------|--------|------|--------|---------|-------------|-------------|----------------|",
++    ]
++    for it in items:
++        lines.append(
++            "| " + " | ".join(_escape_cell(it.get(k)) for k in (
++                "id", "pool", "status", "date", "module", "summary",
++                "closed_date", "resolved_by", "closed_reason",
++            )) + " |"
++        )
++    lines.append("")
++    return "\n".join(lines)
++
++
++def cmd_reindex(args):
++    root = args.root
++    open_items = scan_issues(root, include_closed=False)
++    closed_items = _scan_dir(root, "closed")
++    closed_items.sort(key=_semantic_sort_key)
++
++    index_path = os.path.join(root, "openspec", "issues", "INDEX.md")
++    closed_path = os.path.join(root, "openspec", "issues", "CLOSED.md")
++    atomic_write_text(index_path, generate_index_md(open_items))
++    atomic_write_text(closed_path, generate_closed_md(closed_items))
++    print(
++        f"reindex：已重建 {index_path}（open {len(open_items)} 项）与 "
++        f"{closed_path}（closed {len(closed_items)} 项）"
++    )
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_next_id
++# ══════════════════════════════════════════════════════════════════════════════
++
++def cmd_next_id(args):
++    print(next_id(args.root, args.pool))
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# main
++# ══════════════════════════════════════════════════════════════════════════════
++
++def main():
++    p = argparse.ArgumentParser(description="issues_v2 — 单文件 issue 存储模型 CLI")
++    p.add_argument("--root", default=None, help="目标项目根；默认自动探测 git 根")
++    sub = p.add_subparsers(dest="cmd", required=True)
++
++    sa = sub.add_parser("add", help="创建新 issue 到 open/")
++    sa.add_argument("--pool", required=True, choices=["bug", "todo"])
++    sa.add_argument("--json", required=True, help="JSON object：module/summary 必填，"
++                     "priority(bug only)/type(todo only)/source_change 可选")
++    sa.set_defaults(func=cmd_add)
++
++    ss = sub.add_parser("set-status", help="修改 issue 状态；终态自动 git mv 到 closed/")
++    ss.add_argument("--id", required=True)
++    ss.add_argument("--to", required=True)
++    ss.add_argument("--evidence", default=None, help="FIXED(bug)/DONE(todo) 必填")
++    ss.add_argument("--reason", default=None, help="WONTFIX/WONTDO 必填")
++    ss.set_defaults(func=cmd_set_status)
++
++    sc = sub.add_parser("scan", help="扫描 issue 列表")
++    sc.add_argument("--pool", choices=["bug", "todo"], default=None)
++    sc.add_argument("--status", action="append", default=None, help="可重复传多个")
++    sc.add_argument("--source-change", dest="source_change", default=None)
++    sc.add_argument("--all", action="store_true", help="含 closed/（默认只看 open/）")
++    sc.add_argument("--json", action="store_true", help="JSON 列表输出")
++    sc.set_defaults(func=cmd_scan)
++
++    sr = sub.add_parser("reindex", help="再生 INDEX.md + CLOSED.md")
++    sr.set_defaults(func=cmd_reindex)
++
++    sn = sub.add_parser("next-id", help="输出下一个可用 ID")
++    sn.add_argument("--pool", required=True, choices=["bug", "todo"])
++    sn.set_defaults(func=cmd_next_id)
++
++    args = p.parse_args()
++    try:
++        args.root = repo_root(args.root)
++        args.func(args)
++    except ValueError as exc:
++        print(str(exc), file=sys.stderr)
++        raise SystemExit(2) from None
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/sdflow-issues/tests/test_issues_v2.py b/sdflow-issues/tests/test_issues_v2.py
+new file mode 100644
+index 0000000..d90f5ee
+--- /dev/null
++++ b/sdflow-issues/tests/test_issues_v2.py
+@@ -0,0 +1,618 @@
++"""issues_v2.py 核心命令测试（issues-v2-single-file-model · Task 1）。
++
++标的：单文件 issue 存储模型的 CLI 单入口——`add` / `set-status` / `scan` / `reindex` /
++`next-id` + 支撑函数 `parse_frontmatter` / `read_issue` / `write_issue` / `find_issue`。
++
++本文件自成一体，不 import `sdflow_issues_core`（v2 架构脱钩，见 issues_v2.py 模块 docstring）。
++"""
++
++import json
++import multiprocessing
++import os
++import subprocess
++import sys
++from pathlib import Path
++
++import pytest
++
++sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
++
++import issues_v2 as v2  # noqa: E402
++
++SCRIPT = str(Path(__file__).parent.parent / "scripts" / "issues_v2.py")
++
++
++def _git(*args, cwd):
++    return subprocess.run(
++        ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True,
++        encoding="utf-8", errors="replace",
++    )
++
++
++def _init_repo(path):
++    path.mkdir(parents=True, exist_ok=True)
++    _git("init", "-q", cwd=path)
++    _git("config", "user.email", "t@example.com", cwd=path)
++    _git("config", "user.name", "t", cwd=path)
++    return path
++
++
++def _run_cli(root, *args):
++    return subprocess.run(
++        [sys.executable, SCRIPT, "--root", str(root), *args],
++        capture_output=True, text=True, encoding="utf-8", errors="replace",
++    )
++
++
++def _read(path):
++    with open(path, encoding="utf-8") as f:
++        return f.read()
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# parse_frontmatter / render_frontmatter / read_issue / write_issue
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_render_frontmatter_quotes_values_and_writes_null_for_none():
++    fm = {
++        "id": "T1", "pool": "todo", "status": "OPEN", "priority": None,
++        "type": "基础设施", "date": "2026-08-03", "source_change": None,
++        "module": "sdflow-issues", "summary": "一行摘要", "resolved_by": None,
++        "closed_date": None, "closed_reason": None,
++    }
++    text = v2.render_frontmatter(fm)
++    lines = text.splitlines()
++    assert lines[0] == 'id: "T1"'
++    assert lines[3] == "priority: null"
++    assert lines[4] == 'type: "基础设施"'
++    assert lines == [
++        'id: "T1"', 'pool: "todo"', 'status: "OPEN"', "priority: null",
++        'type: "基础设施"', 'date: "2026-08-03"', "source_change: null",
++        'module: "sdflow-issues"', 'summary: "一行摘要"', "resolved_by: null",
++        "closed_date: null", "closed_reason: null",
++    ]
++
++
++def test_parse_frontmatter_round_trips_quoted_values_and_null():
++    fm = {
++        "id": "B7", "pool": "bug", "status": "OPEN", "priority": "P1",
++        "type": None, "date": "2026-08-03", "source_change": "some-change",
++        "module": "m", "summary": "s", "resolved_by": None,
++        "closed_date": None, "closed_reason": None,
++    }
++    rendered = v2.render_frontmatter(fm)
++    parsed = v2.parse_frontmatter(rendered)
++    assert parsed == fm
++
++
++def test_parse_frontmatter_unescapes_embedded_double_quote():
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "T1", "pool": "todo", "status": "OPEN",
++               "date": "2026-08-03", "module": "m",
++               "summary": 'true # x: "quoted" bit'})
++    rendered = v2.render_frontmatter(fm)
++    parsed = v2.parse_frontmatter(rendered)
++    assert parsed["summary"] == 'true # x: "quoted" bit'
++
++
++def test_parse_frontmatter_rejects_illegal_line():
++    with pytest.raises(ValueError, match="frontmatter 行非法"):
++        v2.parse_frontmatter('id: T1\n')  # missing quotes
++
++
++def test_write_issue_read_issue_round_trip(tmp_path):
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "B1", "pool": "bug", "status": "OPEN",
++               "date": "2026-08-03", "module": "m", "summary": "s"})
++    path = tmp_path / "B1.md"
++    v2.write_issue(str(path), fm, "body text\n", create=True)
++    read_fm, read_body = v2.read_issue(str(path))
++    assert read_fm == fm
++    assert read_body == "body text\n"
++
++
++def test_write_issue_create_uses_o_creat_excl_and_rejects_existing(tmp_path):
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "B1", "pool": "bug", "status": "OPEN",
++               "date": "2026-08-03", "module": "m", "summary": "s"})
++    path = tmp_path / "B1.md"
++    v2.write_issue(str(path), fm, "", create=True)
++    with pytest.raises(FileExistsError):
++        v2.write_issue(str(path), fm, "", create=True)
++
++
++def test_write_issue_update_mode_atomically_replaces(tmp_path):
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "B1", "pool": "bug", "status": "OPEN",
++               "date": "2026-08-03", "module": "m", "summary": "s"})
++    path = tmp_path / "B1.md"
++    v2.write_issue(str(path), fm, "orig\n", create=True)
++    fm["status"] = "FIXED"
++    v2.write_issue(str(path), fm, "orig\nupdated\n", create=False)
++    read_fm, read_body = v2.read_issue(str(path))
++    assert read_fm["status"] == "FIXED"
++    assert read_body == "orig\nupdated\n"
++    # no leftover .tmp files
++    assert sorted(p.name for p in tmp_path.iterdir()) == ["B1.md"]
++
++
++def _concurrent_writer(args):
++    path_str, fm_json = args
++    fm = json.loads(fm_json)
++    try:
++        v2.write_issue(path_str, fm, "", create=True)
++        return "created"
++    except FileExistsError:
++        return "exists"
++
++
++def test_write_issue_concurrent_o_creat_excl_only_one_winner(tmp_path):
++    """并发写同一路径：O_CREAT|O_EXCL 保证只有一个进程真正创建文件，其余收到 FileExistsError。"""
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "B9", "pool": "bug", "status": "OPEN",
++               "date": "2026-08-03", "module": "m", "summary": "s"})
++    path = str(tmp_path / "B9.md")
++    fm_json = json.dumps(fm)
++
++    with multiprocessing.Pool(processes=8) as pool:
++        results = pool.map(_concurrent_writer, [(path, fm_json)] * 8)
++
++    assert results.count("created") == 1
++    assert results.count("exists") == 7
++    assert os.path.isfile(path)
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# find_issue / next_id
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_find_issue_locates_in_open_then_closed(tmp_path):
++    open_dir = tmp_path / "openspec" / "issues" / "open"
++    closed_dir = tmp_path / "openspec" / "issues" / "closed"
++    open_dir.mkdir(parents=True)
++    closed_dir.mkdir(parents=True)
++    (open_dir / "B1.md").write_text("x", encoding="utf-8")
++    (closed_dir / "B2.md").write_text("x", encoding="utf-8")
++
++    path, location = v2.find_issue(str(tmp_path), "B1")
++    assert location == "open" and path == str(open_dir / "B1.md")
++
++    path, location = v2.find_issue(str(tmp_path), "B2")
++    assert location == "closed" and path == str(closed_dir / "B2.md")
++
++    path, location = v2.find_issue(str(tmp_path), "B999")
++    assert path is None and location is None
++
++
++def test_next_id_scans_across_open_and_closed(tmp_path):
++    open_dir = tmp_path / "openspec" / "issues" / "open"
++    closed_dir = tmp_path / "openspec" / "issues" / "closed"
++    open_dir.mkdir(parents=True)
++    closed_dir.mkdir(parents=True)
++    (open_dir / "T257.md").write_text("x", encoding="utf-8")
++    (closed_dir / "T260.md").write_text("x", encoding="utf-8")
++
++    assert v2.next_id(str(tmp_path), "todo") == "T261"
++
++
++def test_next_id_starts_at_one_when_no_files(tmp_path):
++    assert v2.next_id(str(tmp_path), "bug") == "B1"
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_add (CLI integration)
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_cli_add_bug_creates_open_file_with_required_frontmatter(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    proc = _run_cli(
++        repo, "add", "--pool", "bug",
++        "--json", json.dumps({"module": "m", "summary": "s", "priority": "P1"}),
++    )
++    assert proc.returncode == 0, proc.stderr
++    out = json.loads(proc.stdout)
++    assert out["pool"] == "bug" and out["status"] == "OPEN"
++    issue_id = out["id"]
++    assert issue_id.startswith("B")
++
++    path = repo / "openspec" / "issues" / "open" / f"{issue_id}.md"
++    assert path.is_file()
++    fm, body = v2.read_issue(str(path))
++    assert fm["id"] == issue_id
++    assert fm["pool"] == "bug"
++    assert fm["status"] == "OPEN"
++    assert fm["priority"] == "P1"
++    assert fm["type"] is None
++    assert fm["module"] == "m"
++    assert fm["summary"] == "s"
++    assert fm["date"] is not None
++
++    # git add ran (best-effort)
++    status = _git("status", "--porcelain", cwd=repo)
++    assert f"open/{issue_id}.md" in status.stdout
++
++
++def test_cli_add_todo_creates_open_file_with_type(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    proc = _run_cli(
++        repo, "add", "--pool", "todo",
++        "--json", json.dumps({"module": "m", "summary": "s", "type": "基础设施"}),
++    )
++    assert proc.returncode == 0, proc.stderr
++    out = json.loads(proc.stdout)
++    issue_id = out["id"]
++    assert issue_id.startswith("T")
++    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "open" / f"{issue_id}.md"))
++    assert fm["pool"] == "todo"
++    assert fm["type"] == "基础设施"
++    assert fm["priority"] is None
++
++
++def test_cli_add_detects_source_change_from_unique_change_dir(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    change_dir = repo / "openspec" / "changes" / "my-change"
++    change_dir.mkdir(parents=True)
++
++    proc = _run_cli(
++        repo, "add", "--pool", "bug",
++        "--json", json.dumps({"module": "m", "summary": "s"}),
++    )
++    assert proc.returncode == 0, proc.stderr
++    out = json.loads(proc.stdout)
++    assert out["source_change"] == "my-change"
++
++
++def test_cli_add_explicit_source_change_overrides_detection(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    change_dir = repo / "openspec" / "changes" / "auto-detected"
++    change_dir.mkdir(parents=True)
++
++    proc = _run_cli(
++        repo, "add", "--pool", "bug",
++        "--json", json.dumps({"module": "m", "summary": "s", "source_change": "explicit-change"}),
++    )
++    assert proc.returncode == 0, proc.stderr
++    out = json.loads(proc.stdout)
++    assert out["source_change"] == "explicit-change"
++
++
++def test_cli_add_rejects_missing_summary(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    proc = _run_cli(
++        repo, "add", "--pool", "bug", "--json", json.dumps({"module": "m"}),
++    )
++    assert proc.returncode != 0
++    assert "summary" in proc.stderr
++
++
++def test_cli_add_rejects_mismatched_pool_field(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    proc = _run_cli(
++        repo, "add", "--pool", "bug",
++        "--json", json.dumps({"module": "m", "summary": "s", "type": "基础设施"}),
++    )
++    assert proc.returncode != 0
++    assert "type" in proc.stderr
++
++
++def test_cli_add_rejects_unknown_field(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    proc = _run_cli(
++        repo, "add", "--pool", "bug",
++        "--json", json.dumps({"module": "m", "summary": "s", "bogus": "x"}),
++    )
++    assert proc.returncode != 0
++    assert "bogus" in proc.stderr
++
++
++def test_cli_add_second_call_gets_incremented_id(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    first = json.loads(_run_cli(
++        repo, "add", "--pool", "bug", "--json", json.dumps({"module": "m", "summary": "s1"}),
++    ).stdout)
++    second = json.loads(_run_cli(
++        repo, "add", "--pool", "bug", "--json", json.dumps({"module": "m", "summary": "s2"}),
++    ).stdout)
++    first_n = int(first["id"][1:])
++    second_n = int(second["id"][1:])
++    assert second_n == first_n + 1
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_set_status (CLI integration)
++# ══════════════════════════════════════════════════════════════════════════════
++
++def _add(repo, pool, **fields):
++    proc = _run_cli(repo, "add", "--pool", pool, "--json", json.dumps(fields))
++    assert proc.returncode == 0, proc.stderr
++    return json.loads(proc.stdout)["id"]
++
++
++def test_cli_set_status_bug_fixed_moves_to_closed_and_fills_fields(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s", priority="P1")
++
++    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED",
++                     "--evidence", "commit abc123")
++    assert proc.returncode == 0, proc.stderr
++
++    open_path = repo / "openspec" / "issues" / "open" / f"{issue_id}.md"
++    closed_path = repo / "openspec" / "issues" / "closed" / f"{issue_id}.md"
++    assert not open_path.exists()
++    assert closed_path.is_file()
++
++    fm, body = v2.read_issue(str(closed_path))
++    assert fm["status"] == "FIXED"
++    assert fm["closed_date"] is not None
++    assert "commit abc123" in body
++    assert "状态：OPEN → FIXED" in body
++
++    # git mv actually happened (tracked, in index)
++    status = _git("status", "--porcelain", cwd=repo)
++    assert f"closed/{issue_id}.md" in status.stdout
++    assert f"open/{issue_id}.md" not in status.stdout
++
++
++def test_cli_set_status_todo_done_requires_evidence(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "todo", module="m", summary="s", type="基础设施")
++
++    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "DONE")
++    assert proc.returncode != 0
++    assert "evidence" in proc.stderr
++
++    proc2 = _run_cli(repo, "set-status", "--id", issue_id, "--to", "DONE",
++                      "--evidence", "some-change")
++    assert proc2.returncode == 0, proc2.stderr
++    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / f"{issue_id}.md"))
++    assert fm["status"] == "DONE"
++
++
++def test_cli_set_status_bug_fixed_requires_evidence(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED")
++    assert proc.returncode != 0
++    assert "evidence" in proc.stderr
++
++
++def test_cli_set_status_wontfix_requires_reason(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTFIX")
++    assert proc.returncode != 0
++    assert "reason" in proc.stderr
++
++    proc2 = _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTFIX",
++                      "--reason", "ROI 太低")
++    assert proc2.returncode == 0, proc2.stderr
++    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / f"{issue_id}.md"))
++    assert fm["closed_reason"] == "ROI 太低"
++
++
++def test_cli_set_status_non_terminal_stays_in_open(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "todo", module="m", summary="s")
++    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "PROPOSED")
++    assert proc.returncode == 0, proc.stderr
++    open_path = repo / "openspec" / "issues" / "open" / f"{issue_id}.md"
++    assert open_path.is_file()
++    fm, _ = v2.read_issue(str(open_path))
++    assert fm["status"] == "PROPOSED"
++    assert fm["closed_date"] is None
++
++
++def test_cli_set_status_rejects_already_terminal(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED",
++                     "--evidence", "c1")
++    assert proc.returncode == 0, proc.stderr
++
++    proc2 = _run_cli(repo, "set-status", "--id", issue_id, "--to", "OPEN")
++    assert proc2.returncode != 0
++    assert "终态" in proc2.stderr
++
++
++def test_cli_set_status_non_git_repo_falls_back_to_os_rename(tmp_path):
++    plain = tmp_path / "plain"
++    plain.mkdir()
++    open_dir = plain / "openspec" / "issues" / "open"
++    open_dir.mkdir(parents=True)
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "B1", "pool": "bug", "status": "OPEN",
++               "date": "2026-08-03", "module": "m", "summary": "s"})
++    v2.write_issue(str(open_dir / "B1.md"), fm, "", create=True)
++
++    proc = _run_cli(plain, "set-status", "--id", "B1", "--to", "FIXED",
++                     "--evidence", "commit abc")
++    assert proc.returncode == 0, proc.stderr
++    assert not (open_dir / "B1.md").exists()
++    closed_path = plain / "openspec" / "issues" / "closed" / "B1.md"
++    assert closed_path.is_file()
++
++
++def test_cli_set_status_untracked_file_is_git_added_before_mv(tmp_path):
++    """add 的 git add 失败/被跳过时，set-status 到终态前必须自己先 tracked 再 git mv。"""
++    repo = _init_repo(tmp_path / "repo")
++    open_dir = repo / "openspec" / "issues" / "open"
++    open_dir.mkdir(parents=True)
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "B5", "pool": "bug", "status": "OPEN",
++               "date": "2026-08-03", "module": "m", "summary": "s"})
++    v2.write_issue(str(open_dir / "B5.md"), fm, "", create=True)
++    # deliberately not git-added — simulate untracked file
++
++    proc = _run_cli(repo, "set-status", "--id", "B5", "--to", "FIXED",
++                     "--evidence", "c1")
++    assert proc.returncode == 0, proc.stderr
++    closed_path = repo / "openspec" / "issues" / "closed" / "B5.md"
++    assert closed_path.is_file()
++    status = _git("status", "--porcelain", cwd=repo)
++    assert "closed/B5.md" in status.stdout
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_scan
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_cli_scan_defaults_to_open_only(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    bug_id = _add(repo, "bug", module="m", summary="open-bug")
++    fixed_id = _add(repo, "bug", module="m", summary="fixed-bug")
++    _run_cli(repo, "set-status", "--id", fixed_id, "--to", "FIXED", "--evidence", "c1")
++
++    proc = _run_cli(repo, "scan", "--json")
++    assert proc.returncode == 0, proc.stderr
++    items = json.loads(proc.stdout)
++    ids = {it["id"] for it in items}
++    assert bug_id in ids
++    assert fixed_id not in ids
++
++
++def test_cli_scan_all_includes_closed(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    fixed_id = _add(repo, "bug", module="m", summary="fixed-bug")
++    _run_cli(repo, "set-status", "--id", fixed_id, "--to", "FIXED", "--evidence", "c1")
++
++    proc = _run_cli(repo, "scan", "--all", "--json")
++    assert proc.returncode == 0, proc.stderr
++    items = json.loads(proc.stdout)
++    ids = {it["id"] for it in items}
++    assert fixed_id in ids
++
++
++def test_cli_scan_source_change_filters(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    a_id = _add(repo, "bug", module="m", summary="a", source_change="change-a")
++    b_id = _add(repo, "bug", module="m", summary="b", source_change="change-b")
++
++    proc = _run_cli(repo, "scan", "--source-change", "change-a", "--json")
++    assert proc.returncode == 0, proc.stderr
++    items = json.loads(proc.stdout)
++    ids = {it["id"] for it in items}
++    assert ids == {a_id}
++    assert b_id not in ids
++
++
++def test_cli_scan_status_and_pool_filters(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    bug_id = _add(repo, "bug", module="m", summary="a")
++    todo_id = _add(repo, "todo", module="m", summary="b")
++    _run_cli(repo, "set-status", "--id", todo_id, "--to", "PROPOSED")
++
++    proc = _run_cli(repo, "scan", "--pool", "todo", "--status", "PROPOSED", "--json")
++    assert proc.returncode == 0, proc.stderr
++    items = json.loads(proc.stdout)
++    ids = {it["id"] for it in items}
++    assert ids == {todo_id}
++    assert bug_id not in ids
++
++
++def test_cli_scan_json_outputs_frontmatter_dicts(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s", priority="P2")
++    proc = _run_cli(repo, "scan", "--json")
++    items = json.loads(proc.stdout)
++    assert len(items) == 1
++    assert items[0]["id"] == issue_id
++    assert items[0]["priority"] == "P2"
++    assert set(items[0]) == set(v2.FRONTMATTER_FIELDS)
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_reindex
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_cli_reindex_generates_index_and_closed_sorted_by_id(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    first_created = _add(repo, "bug", module="m", summary="second")  # gets B1
++    second_created = _add(repo, "bug", module="m", summary="first")  # gets B2
++    fixed_id = _add(repo, "todo", module="m", summary="closed-one")
++    _run_cli(repo, "set-status", "--id", fixed_id, "--to", "DONE", "--evidence", "c1")
++
++    proc = _run_cli(repo, "reindex")
++    assert proc.returncode == 0, proc.stderr
++
++    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
++    closed_text = _read(repo / "openspec" / "issues" / "CLOSED.md")
++
++    assert v2.INDEX_BANNER in index_text
++    assert "DO NOT EDIT" in index_text
++    assert first_created in index_text and second_created in index_text
++    # 语义排序：按 (前缀, 数字) 排序，与创建顺序（B1 < B2）恰好一致
++    assert index_text.index(first_created) < index_text.index(second_created)
++    assert fixed_id not in index_text
++
++    assert fixed_id in closed_text
++    assert "resolved_by" not in closed_text  # header uses "Resolved By" not the raw key
++    assert "Resolved By" in closed_text
++
++
++def test_cli_reindex_idempotent_when_rerun(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _add(repo, "bug", module="m", summary="s")
++    first = _run_cli(repo, "reindex")
++    assert first.returncode == 0
++    content1 = _read(repo / "openspec" / "issues" / "INDEX.md")
++    second = _run_cli(repo, "reindex")
++    assert second.returncode == 0
++    content2 = _read(repo / "openspec" / "issues" / "INDEX.md")
++    assert content1 == content2
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_next_id
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_cli_next_id_cross_directory(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    open_dir = repo / "openspec" / "issues" / "open"
++    closed_dir = repo / "openspec" / "issues" / "closed"
++    open_dir.mkdir(parents=True)
++    closed_dir.mkdir(parents=True)
++    (open_dir / "T257.md").write_text("x", encoding="utf-8")
++    (closed_dir / "T260.md").write_text("x", encoding="utf-8")
++
++    proc = _run_cli(repo, "next-id", "--pool", "todo")
++    assert proc.returncode == 0, proc.stderr
++    assert proc.stdout.strip() == "T261"
++
++
++def test_cli_next_id_independent_per_pool(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    _add(repo, "bug", module="m", summary="s")
++    proc = _run_cli(repo, "next-id", "--pool", "todo")
++    assert proc.returncode == 0, proc.stderr
++    assert proc.stdout.strip() == "T1"
++
++
++# ══════════════════════════════════════════════════════════════════════════════
++# repo_root / detect_change sanity (full edge-case suite deferred to Task 5.3b
++# per tasks.md — this only proves the ported function works end-to-end here)
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_repo_root_resolves_git_repo(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    sub = repo / "a" / "b"
++    sub.mkdir(parents=True)
++    assert v2.repo_root(str(sub)) == os.path.realpath(str(repo))
++
++
++def test_repo_root_falls_back_outside_git_repo(tmp_path):
++    plain = tmp_path / "plain"
++    plain.mkdir()
++    assert v2.repo_root(str(plain)) == os.path.abspath(str(plain))
++
++
++def test_detect_change_prefers_unique_change_dir(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "openspec" / "changes" / "my-change").mkdir(parents=True)
++    assert v2.detect_change(str(repo)) == "my-change"
++
++
++def test_detect_change_returns_empty_when_ambiguous(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    (repo / "openspec" / "changes" / "change-a").mkdir(parents=True)
++    (repo / "openspec" / "changes" / "change-b").mkdir(parents=True)
++    assert v2.detect_change(str(repo)) == ""
