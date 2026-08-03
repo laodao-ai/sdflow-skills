@@ -144,14 +144,14 @@ impl-pipeline: tickets
 11. `openspec/specs/recorder-root-resolution/spec.md`：补 MODIFIED delta（三薄入口→单入口）
 12. `.github/workflows/windows-recorder-smoke.yml`：更新硬编码测试路径
 
-- [ ] sdflow-issues/SKILL.md 更新完成（数据模型 + 命令文档 + 路由/触发逻辑）
-- [ ] sdflow-done/SKILL.md §2.1 重写完成（sweep → scan --source-change + hand-off 列 ID）
-- [ ] hack/tests/ 中 TODO_SCRIPT 路径更新
-- [ ] CLAUDE.md / README.md 命令示例更新
-- [ ] AGENTS.md / claude-section.md / CONTEXT.md 路径引用更新
-- [ ] spec-workflow/determinism-guards/recorder-root-resolution 三个 spec 的 delta 补完
-- [ ] windows-recorder-smoke.yml 测试路径更新
-- [ ] 全仓 `pytest` 绿（无红测）
+- [x] sdflow-issues/SKILL.md 更新完成（数据模型 + 命令文档 + 路由/触发逻辑）
+- [x] sdflow-done/SKILL.md §2.1 重写完成（sweep → scan --source-change + hand-off 列 ID）
+- [x] hack/tests/ 中 TODO_SCRIPT 路径更新
+- [x] CLAUDE.md / README.md 命令示例更新
+- [x] AGENTS.md / claude-section.md / CONTEXT.md 路径引用更新
+- [x] spec-workflow/determinism-guards/recorder-root-resolution 三个 spec 的 delta 补完
+- [x] windows-recorder-smoke.yml 测试路径更新
+- [x] 全仓 `pytest` 绿（无红测）
 
 ### Task 5: 实现验证（收尾，不计入 3–6 预算）
 
