@@ -37,11 +37,17 @@ async-branch marker 外（各 SKILL 独立，不受 parity 约束）：
 
 ### 安全分析（TG-17）
 
-**攻击面**：路径由 `mktemp -d` 输出（安全）+ change 名（用户输入，`openspec new change` 可能
-接受含空格的名称）+ 仓根路径（macOS 允许 `/Users/First Last/`）。当前系统路径无空格，但
-按通则③不拿现状反驳目标——目标态 producer（任意用户在任意机器跑评审）会产出含空格路径。
+**攻击面**：路径由 `mktemp -d` 输出（安全）+ 仓根路径（macOS 允许 `/Users/First Last/`，
+且 codex-host 分支要求代入绝对路径，隐式携带仓根）。change 名由 `openspec new change`
+强制 kebab-case（`/^[a-z0-9]+(?:-[a-z0-9]+)*$/`，不接受空格），不是真实注入向量。
+按通则③不拿现状反驳目标——目标态 producer（任意用户在任意机器跑评审）会产出含空格的仓根路径。
+[spec-review-amendment S4：修正前提——change 名被 CLI 硬校验挡死，非真实攻击面]
 
-**修法影响**：纯模板层，只加引号。`<T>` 和 `<site>` 不需要（clamped integer / controlled enum）。
+**修法影响**：纯模板层，只加引号——防止空格导致的参数拆分与 glob 展开。
+双引号不防 `$(...)` 命令替换，但 repo-root 来自真实 git clone 路径，正常使用不含 `$()`，
+此残余属可接受风险（基准④五问：低概率、自伤场景、完美成本过高）。
+`<T>` 和 `<site>` 不需要（clamped integer / controlled enum）。
+[spec-review-amendment S7：明确防护范围与残留边界]
 
 ## T148 · 镜名词汇扩展
 
