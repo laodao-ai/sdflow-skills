@@ -32,11 +32,18 @@
 
 - **sdflow-issues/scripts/**：`buglist.py`、`todolist.py`、`sdflow_issues_core/` 全部替换为新 `issues.py`
 - **sdflow-issues/SKILL.md**：触发路由、命令示例、数据模型文档全面更新
-- **sdflow-done/SKILL.md**：sweep 调用路径改为 `issues.py scan`
-- **sdflow-issues/tests/**：全部重写（现有测试与旧格式深度耦合）
+- **sdflow-done/SKILL.md**：§2.1 重写（sweep→scan + hand-off 改列 ID）[spec-review-amendment]
+- **sdflow-issues/tests/**：全部重写（现有测试与旧格式深度耦合）；格式无关的不变量测试（仓根解析、Windows 编码、覆盖率门禁）改造后保留 [spec-review-amendment]
 - **openspec/issues/**：目录结构重组（`buglist/` + `todolist/` → `open/` + `closed/`）
 - **hack/tests/**：引用 `todolist.py` 的测试需同步更新（`test_harden_sdflow_spec_followup_closure.py` 等）
 - **CLAUDE.md / README.md**：命令示例和路径引用更新
+- **AGENTS.md**：issues 路径引用更新 [spec-review-amendment]
+- **sdflow-init/assets/snippets/claude-section.md**：issues 路径引用更新（推给消费仓的模版）[spec-review-amendment]
+- **openspec/CONTEXT.md**：领域术语更新 [spec-review-amendment]
+- **openspec/specs/spec-workflow/spec.md**：补 MODIFIED delta（batch/sweep/buglist.py 硬编码断言）[spec-review-amendment]
+- **openspec/specs/determinism-guards/spec.md**：补 MODIFIED/REMOVED delta [spec-review-amendment]
+- **openspec/specs/recorder-root-resolution/spec.md**：补 MODIFIED delta [spec-review-amendment]
+- **.github/workflows/windows-recorder-smoke.yml**：更新硬编码测试路径 [spec-review-amendment]
 
 ## Success Metrics
 

@@ -88,13 +88,20 @@ bug 使用 B 前缀，todo 使用 T 前缀，各自独立编号。
 - **WHEN** `issues.py add --pool todo --json '{"module":"m","summary":"s","type":"基础设施"}'` 执行
 - **THEN** `open/T{next}.md` 被创建，frontmatter 含 `pool: todo`, `status: OPEN`, `type: 基础设施`
 
-### Requirement: STOR-06 set-status 校验
+### Requirement: STOR-06 set-status 校验 [spec-review-amendment]
 
 `set-status` SHALL 校验：
 1. 终态 issue 不可再改 status（文件已在 closed/）
 2. bug 的 FIXED 必须有 `--evidence`
-3. WONTFIX/WONTDO 必须有 `--reason`
-4. 终态词表按池校验（bug 不可 DONE，todo 不可 FIXED）
+3. **todo 的 DONE 必须有 `--evidence`**（沿用 v1 行为）
+4. WONTFIX/WONTDO 必须有 `--reason`
+5. 终态词表按池校验（bug 不可 DONE，todo 不可 FIXED）
+
+`set-status` SHALL 在成功更新 status 后追加状态变更历史行到 body：
+`> {date} 状态：{old} → {new}（{evidence 或 reason}）`。evidence/reason 的持久化落点即此 body 行。
+
+`set-status` 到终态时 `git mv` 前 SHALL 确保文件已 tracked（未 tracked 则先 `git add`）。
+非 git 仓 SHALL 降级为 `os.rename`（不 fatal）。
 
 #### Scenario: 终态 issue 拒绝再改
 
@@ -106,10 +113,20 @@ bug 使用 B 前缀，todo 使用 T 前缀，各自独立编号。
 - **WHEN** `issues.py set-status --id B7 --to FIXED` 执行（未传 `--evidence`）
 - **THEN** 命令以非零退出码失败
 
-### Requirement: STOR-07 scan 命令
+#### Scenario: todo DONE 缺 evidence 被拒 [spec-review-amendment]
+
+- **WHEN** `issues.py set-status --id T5 --to DONE` 执行（未传 `--evidence`）
+- **THEN** 命令以非零退出码失败
+
+#### Scenario: 非 git 仓终态降级为 os.rename [spec-review-amendment]
+
+- **WHEN** `issues.py set-status --id B7 --to FIXED --evidence "commit abc"` 在非 git 仓执行
+- **THEN** `open/B7.md` 被 `os.rename` 移到 `closed/B7.md`（不调 `git mv`）
+
+### Requirement: STOR-07 scan 命令 [spec-review-amendment]
 
 `scan` SHALL 默认扫描 `open/` 目录，支持 `--all` 扫描 open + closed。
-支持 `--pool`, `--status`, `--json` 过滤和输出格式选项。
+支持 `--pool`, `--status`, `--source-change`, `--json` 过滤和输出格式选项。
 
 #### Scenario: 默认 scan 只看 open
 
@@ -125,3 +142,8 @@ bug 使用 B 前缀，todo 使用 T 前缀，各自独立编号。
 
 - **WHEN** `issues.py scan --json` 执行
 - **THEN** 输出 JSON 列表，每项为 frontmatter 字段的 dict
+
+#### Scenario: scan --source-change 过滤 [spec-review-amendment]
+
+- **WHEN** `issues.py scan --source-change my-change --status OPEN --json` 执行
+- **THEN** 只输出 `source_change == "my-change"` 且 `status == OPEN` 的 issue
