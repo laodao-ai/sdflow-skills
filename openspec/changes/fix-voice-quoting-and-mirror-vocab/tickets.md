@@ -53,14 +53,14 @@ async-branch 内改动 MUST 两份 SKILL 字节对称。marker 外 `mkdir -p` �
 
 更新反漂移锁测试：拆分共享循环为按文件区分预期（spec-review 期望 `grounding`、code-review 期望 `history`）；重写借用文档测试为验证真名行为。
 
-- [ ] code-review SKILL.md `mirrors=` 模板改为 `"domain,adversarial,history"`
-- [ ] L244-248 重写：保留 MUST 规范语句 + token 集 `{domain,adversarial,history}` + 删借用叙事
-- [ ] L545 示例 `mirrors=` 同步更新
-- [ ] `openspec/specs/host-adaptive-execution/spec.md` 四处 SHALL 条款扩展
-- [ ] `openspec/specs/workflow-metrics/spec.md` 一处扩展
-- [ ] `openspec/specs/spec-workflow/spec.md` 一处扩展
-- [ ] 反漂移锁测试拆分：spec-review 期望 `grounding`、code-review 期望 `history`
-- [ ] 借用文档测试改为验证真名（断言 `mirrors=` 含 `history`、旧借用措辞不再出现）
+- [x] code-review SKILL.md `mirrors=` 模板改为 `"domain,adversarial,history"`
+- [x] L244-248 重写：保留 MUST 规范语句 + token 集 `{domain,adversarial,history}` + 删借用叙事
+- [x] L545 示例 `mirrors=` 同步更新
+- [x] `openspec/specs/host-adaptive-execution/spec.md` 四处 SHALL 条款扩展
+- [x] `openspec/specs/workflow-metrics/spec.md` 一处扩展
+- [x] `openspec/specs/spec-workflow/spec.md` 一处扩展
+- [x] 反漂移锁测试拆分：spec-review 期望 `grounding`、code-review 期望 `history`
+- [x] 借用文档测试改为验证真名（断言 `mirrors=` 含 `history`、旧借用措辞不再出现）
 
 ### Task 4: 实现验证（收尾，不计入 3–6 预算）
 
@@ -69,6 +69,6 @@ async-branch 内改动 MUST 两份 SKILL 字节对称。marker 外 `mkdir -p` �
 
 按「聚合套件发现契约」运行本 change 的单元+集成+e2e 测试套件并全部通过，证据落 `impl-reports/task4-verify.md`（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）。
 
-- [ ] 单元测试证据齐全并通过
-- [ ] parity 守卫证据齐全并通过
-- [ ] `openspec validate` 证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 单元测试证据齐全并通过
+- [x] parity 守卫证据齐全并通过
+- [x] `openspec validate` 证据齐全并通过（或记「未覆盖」+ 判定依据）
