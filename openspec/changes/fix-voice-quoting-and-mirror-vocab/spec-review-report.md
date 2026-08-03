@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 29e6110658e87da971579835c6c99467f6cc96f7
+---
+
 # spec-review-report: fix-voice-quoting-and-mirror-vocab
 
 ## 评审元数据
@@ -169,10 +175,9 @@ design.md `--context-file <f>` 行号列 `436,496 / 432,492`，但 codex-host di
 - **D2**：Codex concern fallback 行 marker 内外矛盾 → tasks.md 1.4 已正确标注 marker 外独立改，design 分两表，不矛盾
 - **D3**：对抗镜1 F5 面治缺口（marker 外 outside_voice_guard/anchor_lint 调用行的 `{change_dir}` 未引号）→ 本 change scope = async 调度段 + mkdir，其他行虽同类但属不同功能段，按基准④记 todo 不扩范围
 
-### [需拍板]
+### [已拍板]
 
-- **Q1**：delta spec 修法——是修正标题+补齐全部现有 Scenario（工作量中等），还是删掉 delta spec 改为直接修主 spec（workflow-metrics / spec-workflow 已是这条路径，三个一起走）？
-  **推荐 Q1-B**：三份 spec 统一走直接改主 spec，在 tasks.md 显式声明此决策。理由：改动只是枚举值放宽（从三值到四值），不改变既有条款语义，且这样避免了 delta 必须携带全部现有 Scenario 的重量。系统镜：delta 修正工作量远大于直接改；用户镜：无差异；开发循环镜：直接改更简、一致性更好。主次判定：开发循环镜支配。
+- **Q1**：三份 spec 统一走直接改主 spec（Q1-B）。**已批准**，2026-08-03。
 
 ### [已裁掉]
 
