@@ -941,7 +941,7 @@ def _v1_extract_change_token(note):
     return m.group(1) if m else None
 
 
-def _v1_build_v2_issue(item_id, entry, stats):
+def _v1_build_v2_issue(item_id, entry, stats, known_changes=frozenset()):
     """字段映射（design.md 字段映射表）：v1 fields + body → v2 (frontmatter, body)。
     映射失败（status 越出 v2 词表 / 值含 CR/LF/NUL）时 raise，调用方负责跳过。"""
     pool = entry["pool"]
@@ -971,7 +971,7 @@ def _v1_build_v2_issue(item_id, entry, stats):
             if date_str and _V1_ISO_DATE_RE.match(date_str):
                 closed_date = date_str
             token = _v1_extract_change_token(note)
-            if token:
+            if token and (not known_changes or token in known_changes):
                 resolved_by = token
                 stats["resolved_by"]["matched"] += 1
             else:
@@ -1060,10 +1060,21 @@ def cmd_migrate(args):
 
     batch_notes = _v1_planned_batch_notes(root)
 
+    known_changes = set()
+    for d in (os.path.join(root, "openspec", "changes"),
+              os.path.join(root, "openspec", "changes", "archive")):
+        if os.path.isdir(d):
+            for e in os.listdir(d):
+                if os.path.isdir(os.path.join(d, e)) and not e.startswith("."):
+                    known_changes.add(e)
+                    stripped = re.sub(r"^\d{4}-\d{2}-\d{2}-", "", e)
+                    if stripped != e:
+                        known_changes.add(stripped)
+
     for item_id in sorted(all_items, key=_v1_id_sort_key):
         entry = all_items[item_id]
         try:
-            frontmatter, body = _v1_build_v2_issue(item_id, entry, stats)
+            frontmatter, body = _v1_build_v2_issue(item_id, entry, stats, known_changes)
         except ValueError as exc:
             print(f"WARNING: 跳过字段映射失败 {item_id}: {exc}", file=sys.stderr)
             stats["mapping_errors"] += 1
