@@ -298,7 +298,7 @@ def test_codex_sync_300s_compat_branch_is_deleted():
 # 改成 `submit`、丢掉 `--repo-root`、把 `--effort high` 改成 `medium` 之后依然全绿。
 _DISPATCH_COMMAND_LINE = (
     '`python3 ~/.sdflow/hack/outside-voice-job.py dispatch '
-    '--run-dir {run-dir} --site <site> --context-file <f> --repo-root <repo-root> '
+    '--run-dir "{run-dir}" --site <site> --context-file "<f>" --repo-root "<repo-root>" '
     '--runner "$SDFLOW_VOICE_RUNNER" --model "$SDFLOW_VOICE_MODEL" '
     '--effort high --timeout <T>`'
 )
@@ -353,7 +353,7 @@ def test_codex_branch_gates_auto_fallback_on_unknown_cost():
         for need in (
             "`unknown_cost=true`",
             "`orphan_warning`",
-            "cleanup --run-dir <d> --site <s> --cancel",
+            'cleanup --run-dir "<d>" --site <s> --cancel',
             "`fallback_allowed=true`",
             # 🔴 锚形 MUST 钉死：不钉死则该站点落不出**合法**锚 ——
             # (host, none, exec-error, 0) 被 anchor_lint 判 illegal，
