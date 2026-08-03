@@ -34,7 +34,7 @@ TBD - created by archiving change workflow-metrics-loop. Update Purpose after ar
 - **THEN** `anchor_lint` SHALL 报错阻塞——`runner == host` 的 voice 依定义**不是**跨模型，MUST NOT 作为跨模型证据落账（此即**合法组合矩阵**同族行子句，spec-review-r2 C1）。**合法降级码集 SHALL 钉死为 `{not-installed, preflight-error, timeout, exec-error}`**〔D2：grill G5 初钉漏了 `preflight-error`；`missing-deps` 现定死归约入 `preflight-error`（D7），不留实现期裁量〕；成功跨模型路径 `reason_code="ok"`（D5，非 none）；`anchor_lint` SHALL **新增 outside-voice 锚的 KV 字段解析**（现状零字段解析）；此校验 **MUST always-on、独立成函数、不受 `metrics.enabled` 门控**（D7/D11：读真实性信号）
 
 #### Scenario: fan-out 机制死却报多镜被一致性 lint 阻塞（always-on，判据读 mirrors=）〔add-codex-host-support · spec-review-amendment Q1 · adr/0023 · spec-review-r2 C2〕
-- **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而**同锚 `mirrors=`** 清单中 `∈ {domain,adversarial,grounding}`（**按值去重**）的计数 > 1
+- **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而**同锚 `mirrors=`** 清单中 `∈ {domain,adversarial,grounding,history}`（**按值去重**）的计数 > 1
 - **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——这是**锚行自身的自相矛盾**（机制死却报多镜），**不是伪造拦截**（主 session 写 `subagents="available"` 或只列 1 镜即绕过）；判据 **MUST 读 `fanout-capability` 锚的 `mirrors=`、MUST NOT 数 lens-metric 行**〔spec-review-r2 C2 纠正首轮致命洞：lens-metric 行在生产端受 `metrics.enabled` 门控，默认消费仓 metrics=false ⇒ 零行 ⇒ lint 空转；`mirrors=` 由 SKILL 直接落、不受该门控〕；此校验及其判据数据 **MUST always-on、与 `metrics.enabled` 解耦**。MUST NOT 声称「头号假绿事前拦截」——只拦机制死变体，机制活+偷懒自代变体留语义层
 
 #### Scenario: 宿主分组可事后区分真跨模型与自审轮次〔add-codex-host-support〕

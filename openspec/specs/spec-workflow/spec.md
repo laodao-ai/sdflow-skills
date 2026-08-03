@@ -887,7 +887,7 @@ spec-review Step3 / code-review Step5 的**评审报告锚自检**（四类 v1 �
 #### Scenario: metrics 启用时缺 broad 或 outside-voice 度量行被拦
 
 - **WHEN** `metrics.enabled` 为 true，报告含若干 `sdflow:lens-metric` 锚但**缺 `lens="broad"` 或缺 `lens="outside-voice"` 行**（两者对应恒跑的 Step1 广审与 outside-voice）
-- **THEN** 脚本 SHALL 非零退出并点名缺失 lens——metrics 启用时这两行为最小必有行；其余 per-lens（domain/adversarial/grounding）完整性 SHALL 属主 session 信任边界、脚本不强制（报告机读不出「本轮跑了哪些镜」）
+- **THEN** 脚本 SHALL 非零退出并点名缺失 lens——metrics 启用时这两行为最小必有行；其余 per-lens（domain/adversarial/grounding/history）完整性 SHALL 属主 session 信任边界、脚本不强制（报告机读不出「本轮跑了哪些镜」）
 
 #### Scenario: lens-metric 行内 layer 与 CLI --layer 不符被拦
 

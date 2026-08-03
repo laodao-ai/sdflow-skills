@@ -239,13 +239,10 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
   （承 spec「子代理不可用则缩 roster」Scenario）。
 - **落锚（每轮恰好一条，落进本报告文件供 `anchor_lint` 读，`host=codex` 报告该锚必填）**：
 
-  `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->`
+  `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,history|—" -->`
 
   `mirrors=` MUST 由本 skill 在 fan-out 决策落定时**直接写本轮实际派出/独立完成的镜清单**（去重、逗号
-  分隔，token ∈ `{domain,adversarial,grounding}`——`anchor_lint._FANOUT_MIRRORS` 是**跨层共用的固定
-  三 token 词表**，不按层各自命名第三镜；本 skill 第三镜（历史镜）落 `mirrors=` 时借用既有 token
-  `grounding` 记该镜跑过（仅表示"第三个 fan-out 镜跑了"，非声称"这是接地镜"——镜的精确身份仍由
-  lens-metric 的 `lens="history"` 各自记录，二者不是同一件事、不互相替代），`—`=未 fan-out）——
+  分隔，token ∈ `{domain,adversarial,history}`，`—`=未 fan-out）——
   **不经 emitter/lens-metric、不读 config.metrics**（GC-3，判据 always-on 于 metrics 开关，不受门控）。
 - **残余诚实边界（§0.0，无信号⇒语义层）**：一致性 lint 只拦「机制死却报多镜」的**自相矛盾**；「机制活但
   主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
@@ -542,7 +539,7 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
 ### 命中范围
   栈: backend·go / embedded·ml307c …   清单: CR-01~09 + CR-GO-* + …   gstack/review: scope-drift/完成度 结论
 ### 子代理能力锚（host=codex 报告必填，语义核验非机械门，见 Step2「能力探针」）
-  <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding|—" -->
+  <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,history|—" -->
   subagents="unavailable" 时本报告 MUST 显著标注「⚠️ 单镜降级」（见命中范围/结论区）。
 ### Findings（置信 ≥80）
   [严重度] CR-04 资源泄漏 | file.go:42 | 错误路径未释放 conn | 置信 90 | 已修[impl-review-fix] / defer→buglist

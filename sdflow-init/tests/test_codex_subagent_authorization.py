@@ -15,10 +15,12 @@ Codex 宿主下的评审要么每次都拿不到子代理权限、要么在没�
 把一个语义核验的东西悄悄冒充成机械保证——本文件同样守住这条声明"在不在"。
 
 【mirrors= 词表反漂移】
-`anchor_lint.py` 的 `_FANOUT_MIRRORS` 是跨两个评审层共用的固定三 token 词表
-（domain/adversarial/grounding），SKILL.md 文档字面量若与它漂移，Codex 宿主下落的锚会被
+`anchor_lint.py` 的 `_FANOUT_MIRRORS` 是跨两个评审层共用的固定四 token 词表
+（domain/adversarial/grounding/history），SKILL.md 文档字面量若与它漂移，Codex 宿主下落的锚会被
 `anchor_lint` fail-closed 拒收（unknown-token）。本文件直接 import 真实工具、断言 SKILL.md
-写的 token 集合是它的**子集**，防止「文档说的」和「工具认的」各写一套。
+写的 token 集合是它的**子集**，防止「文档说的」和「工具认的」各写一套。两份 SKILL 的第三镜身份
+不同——spec-review 是接地镜（`grounding`），code-review 是历史镜（`history`，T148 真名替换后不再
+借用 `grounding`）——故按文件区分预期 token 串。
 """
 import importlib.util
 from pathlib import Path
@@ -150,29 +152,31 @@ def test_mirrors_field_not_coupled_to_metrics():
 def test_mirrors_tokens_are_subset_of_anchor_lint_vocabulary():
     """反漂移锁：SKILL.md 文档字面写的 mirrors= token 集合 MUST 是 anchor_lint._FANOUT_MIRRORS
     的子集——否则 Codex 宿主真落锚时会被 anchor_lint 判 unknown-token fail-closed，
-    评审直接罢工。直接 import 真实工具校验，而非各写一份可能漂移的复制。"""
+    评审直接罢工。直接 import 真实工具校验，而非各写一份可能漂移的复制。
+
+    两份 SKILL 的第三镜身份不同（spec-review=接地镜/grounding，code-review=历史镜/history，
+    真名替换后 T148），故按文件区分预期 token 串，而非共享同一个字面量循环。"""
     al = _anchor_lint_mod()
     vocab = al._FANOUT_MIRRORS
-    for path in (SPEC_REVIEW_SKILL, CODE_REVIEW_SKILL):
+    expected = {
+        SPEC_REVIEW_SKILL: "domain,adversarial,grounding",
+        CODE_REVIEW_SKILL: "domain,adversarial,history",
+    }
+    for path, literal in expected.items():
         t = _skill_text(path)
-        # 文档正文出现的 "domain,adversarial,grounding" 字面 token 串
-        assert "domain,adversarial,grounding" in t
-        tokens = {tok.strip() for tok in "domain,adversarial,grounding".split(",")}
+        assert literal in t
+        tokens = {tok.strip() for tok in literal.split(",")}
         assert tokens <= vocab, f"{path}: 文档 token 集合 {tokens} 不是 anchor_lint 词表 {vocab} 的子集"
 
 
 def test_code_review_history_mirror_alias_honestly_documented():
-    """code-review 的第三镜叫「历史镜/history」，但 anchor_lint 的 mirrors= 词表是跨层共用的
-    固定三 token（domain/adversarial/grounding，无 history）——该skill 借用既有 token
-    `grounding` 记录"第三个 fan-out 镜跑了"这件事。这是一处真实的命名不对齐，MUST 在文档里
-    诚实注明（非声称"grounding=接地镜"），否则未来读者会误以为 code-review 真有接地镜，
-    或误以为 history 镜完全没被 mirrors= 追踪。"""
+    """code-review 的第三镜是历史镜/history——T148 后 anchor_lint._FANOUT_MIRRORS 已扩至
+    四 token（domain/adversarial/grounding/history），code-review 不再需要借用 `grounding`
+    这个不属于自己的 token 来记录"第三个 fan-out 镜跑了"。本测试断言 mirrors= 字面已改为真名
+    `history`，且旧的借用措辞（"借用既有 token"）不再出现——防止真名替换后残留过期的借用叙事。"""
     t = _skill_text(CODE_REVIEW_SKILL)
-    assert "历史镜" in t
-    assert "借用既有 token" in t
-    assert '`grounding` 记该镜跑过' in t
-    assert "非声称" in t
-    assert 'lens="history"' in t  # 精确身份仍由 lens-metric 的 lens= 各自记录
+    assert 'mirrors="domain,adversarial,history' in t
+    assert "借用既有 token" not in t
 
 
 def test_fanout_capability_anchor_prefix_matches_real_tool():
