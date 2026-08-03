@@ -56,8 +56,10 @@ code-review 旧文档中），改字面之后旧断言字符串（`"借用既有
 已不在文件中出现——若未重写测试，旧断言会因文档字面消失而红，从而确认测试确实在守真实内容而非
 恒真。
 
-全仓 `pytest`（含 `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` 等 Task 2 产出的测试）
-另行跑一轮作为面级核验，结果见下方「附：全仓回归」。
+另跑了一轮全仓 `pytest`（含 `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` 等 Task 2
+产出的测试）作面级核验；该轮包含若干 subprocess 起 `claude`/`codex` CLI 的慢测试，耗时较长，
+在本报告落盘时尚未跑完（非任务验收要求项，Task 3 验收清单只要求跑
+`test_codex_subagent_authorization.py`，已确认绿）。
 
 ## 未改动 / 不在本票范围
 
