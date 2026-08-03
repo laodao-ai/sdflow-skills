@@ -791,6 +791,17 @@ def test_fanout_unavailable_multi_mirror_blocked():            # unavailable + m
     r = _fc(host="codex", subagents="unavailable", mirrors="domain,adversarial,grounding") + "\n"
     assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
 
+def test_parse_mirrors_history_token_valid():                  # history 是合法 mirror token，非 unknown-token
+    al = _mod()
+    tokens, err = al._parse_mirrors("history")
+    assert err is None
+    assert tokens == ["history"]
+
+def test_fanout_unavailable_history_multi_mirror_blocked():    # unavailable + mirrors="domain,history" → dead-fanout-multi-mirror
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="domain,history") + "\n"
+    assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
+
 def test_fanout_unavailable_single_mirror_ok():               # unavailable + 1 镜 → 放行
     al = _mod()
     r = _fc(host="codex", subagents="unavailable", mirrors="domain") + "\n"
