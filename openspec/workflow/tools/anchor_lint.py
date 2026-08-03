@@ -669,7 +669,7 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
     return v
 
 
-_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
+_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
 _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
 _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
 
@@ -699,7 +699,7 @@ def _parse_mirrors(raw):
 def check_fanout_consistency(report_text):
     """🔴 fan-out always-on 一致性 lint（不接受 metrics_on）。**判据读 `sdflow:fanout-capability` 锚的
     `mirrors=`，MUST NOT 数 lens-metric 行**（C2：lens-metric 受 metrics 门控、默认消费仓零行 → 空转）。
-    subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
+    subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding,history} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
     严格文法 fail-closed：重复锚 / 重复 KV / subagents 空·未知·缺 / capability host 与报告 host 不一致 /
     mirrors 缺·空·未知 token·重复 token / host=codex 报告缺该锚 → 报错。
     诚实边界：只拦「机制死却报多镜」的**自相矛盾**，MUST NOT 声称拦住伪造——mirrors=/subagents= 仍主 session
