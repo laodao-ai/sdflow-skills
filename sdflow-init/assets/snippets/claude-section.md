@@ -98,7 +98,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
 
 > 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
-> 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
+> 同样来自 sdflow-skills，写入 `openspec/issues/open|closed/`（一个 issue 一个文件）。
 
 ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
 

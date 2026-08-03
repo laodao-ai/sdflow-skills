@@ -118,11 +118,11 @@ impl-pipeline: tickets
 - 清理格式耦合的旧测试（表格解析、marker block 双写一致性等）
 - 改造保留格式无关的不变量测试：`test_repo_root_identity_*`（仓根解析）、`test_task2_windows_local_fs_smoke`（Windows 编码）、`test_task6_coverage_gate`（覆盖率门禁）——改指向 v2 的 issues.py
 
-- [ ] 迁移完成，open/ + closed/ 文件数之和 = 287
-- [ ] INDEX.md 列出 open/ 中全部 issue，CLOSED.md 列出 closed/ 中全部
-- [ ] 旧文件（buglist/、todolist/、batches.md 等）和旧脚本（buglist.py、todolist.py、sdflow_issues_core/、migrate_legacy.py）已删除
-- [ ] 格式耦合的旧测试已清理
-- [ ] 格式无关的不变量测试改造后通过（仓根解析、Windows 编码、覆盖率门禁）
+- [x] 迁移完成，open/ + closed/ 文件数之和 = 287
+- [x] INDEX.md 列出 open/ 中全部 issue，CLOSED.md 列出 closed/ 中全部
+- [x] 旧文件（buglist/、todolist/、batches.md 等）和旧脚本（buglist.py、todolist.py、sdflow_issues_core/、migrate_legacy.py）已删除
+- [x] 格式耦合的旧测试已清理
+- [x] 格式无关的不变量测试改造后通过（仓根解析、Windows 编码、覆盖率门禁）
 
 ### Task 4: 消费方全部更新 + 全仓 pytest 绿
 

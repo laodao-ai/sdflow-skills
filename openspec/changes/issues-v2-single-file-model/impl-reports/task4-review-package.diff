@@ -1,0 +1,979 @@
+# Review package: Task 4 (consumer updates)
+
+## Files changed
+ .github/workflows/windows-recorder-smoke.yml       |  13 +-
+ AGENTS.md                                          |   2 +-
+ CLAUDE.md                                          |   4 +-
+ README.md                                          |  14 +-
+ .../test_harden_sdflow_spec_followup_closure.py    |  24 +-
+ openspec/CONTEXT.md                                |  44 +-
+ .../impl-reports/task4-brief.md                    |  29 ++
+ .../impl-reports/task4-consumers.md                |  90 ++++
+ .../specs/determinism-guards/spec.md               |  44 ++
+ .../specs/recorder-root-resolution/spec.md         |  85 ++++
+ .../specs/spec-workflow/spec.md                    | 139 ++++++
+ .../changes/issues-v2-single-file-model/tickets.md |  10 +-
+ sdflow-done/SKILL.md                               |  30 +-
+ sdflow-init/assets/snippets/claude-section.md      |   2 +-
+ sdflow-issues/SKILL.md                             | 477 ++++++++-------------
+ 15 files changed, 643 insertions(+), 364 deletions(-)
+
+## Diff (code changes only, excluding data/large files)
+diff --git a/.github/workflows/windows-recorder-smoke.yml b/.github/workflows/windows-recorder-smoke.yml
+index a1048cd..db7c5d3 100644
+--- a/.github/workflows/windows-recorder-smoke.yml
++++ b/.github/workflows/windows-recorder-smoke.yml
+@@ -73,24 +73,33 @@ jobs:
+           ! grep -Eq 'UnicodeEncodeError|Traceback' <<<"$output"
+           python3 hack/check_encoding_hygiene.py
+       - name: Run init update with a forced GBK child process
+         shell: bash
+         run: |
+           probe="$RUNNER_TEMP/init-encoding-probe"
+           mkdir -p "$probe"
+           git -C "$probe" init
+           python3 sdflow-init/scripts/init.py init --root "$probe"
+           PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$probe"
+-      - name: Exercise seven UTF-8 text subprocess call sites and invalid-byte replacement
++      - name: Exercise UTF-8 text subprocess call sites (issues_v2.py, retro_report.py, ship_gate.py) and invalid-byte replacement
+         shell: bash
+         run: |
+-          PYTHONIOENCODING=gbk py -m pytest -q sdflow-issues/tests/test_task5_delivery_contract.py::test_sweep_cli_executes_all_four_utf8_subprocess_sites -W error
++          probe="$RUNNER_TEMP/issues-v2-encoding-probe"
++          mkdir -p "$probe/openspec/issues/open" "$probe/openspec/issues/closed"
++          git -C "$probe" init -q
++          git -C "$probe" config user.email test@example.com
++          git -C "$probe" config user.name test
++          git -C "$probe" commit -q --allow-empty -m init
++          add_out="$(PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" add --pool bug --json '{"module":"m","summary":"s","priority":"P1"}')"
++          issue_id="$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['id'])" "$add_out")"
++          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" set-status --id "$issue_id" --to FIXED --evidence "smoke"
++          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" reindex
+           PYTHONIOENCODING=gbk python3 sdflow-retro/scripts/retro_report.py --root .
+           set +e
+           PYTHONIOENCODING=gbk python3 sdflow-ship/scripts/ship_gate.py --root . --change fix-windows-encoding-crash
+           gate_status=$?
+           set -e
+           test "$gate_status" -eq 0 -o "$gate_status" -eq 3 -o "$gate_status" -eq 4 -o "$gate_status" -eq 5 -o "$gate_status" -eq 6
+           python3 -c 'import subprocess, sys; r = subprocess.run([sys.executable, "-c", "import sys; sys.stdout.buffer.write(bytes([0x80]))"], capture_output=True, text=True, encoding="utf-8", errors="replace"); assert r.stdout == "\ufffd"'
+       - name: Exercise cp936 console and redirected setup output without PYTHONIOENCODING
+         shell: bash
+         run: |
+diff --git a/AGENTS.md b/AGENTS.md
+index 70ba33d..9d544dc 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -271,21 +271,21 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
+ 
+ | skill | 在流程中的角色 |
+ |---|---|
+ | `/sdflow-spec` | 阶段一**产 spec 单一入口**（分支 A）——澄清 → 拷问 → 生成三相位，产四件套 + `decision-memo.md`；只能人触发 |
+ | `/sdflow-spec-review` | 设计审**主审**——并行多镜，按 `spec-checklists/domains` + 对抗 + 接地读码 |
+ | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
+ | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
+ 
+ > 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+-> 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
++> 同样来自 sdflow-skills，写入 `openspec/issues/open|closed/`（一个 issue 一个文件）。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+ 
+ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权（host-adaptive-execution 能力「子代理不可用
+ 时镜数如实降级」）。**本节即该授权**：
+ 
+ - **授权范围**：`/sdflow-spec-review`、`/sdflow-code-review` 两个评审编排器在 Codex 宿主下的**多镜
+   fan-out**（领域镜 / 对抗镜 / 接地镜或历史镜等并行子代理）与各自的 outside-voice 同族 fallback
+   子代理，以及 `sdflow-implement` 在 Codex 宿主下派发的 implementer / Standards 轴 / Spec 轴 / fix
+   子代理，**MUST 视为已授权**。仅限这三处——不是对任意 skill 无限制放开 `spawn_agent`。
+diff --git a/CLAUDE.md b/CLAUDE.md
+index d87c92b..98b0e85 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -93,21 +93,21 @@ Unix 用**绝对路径 symlink**（改源即时生效，无需重装）；Window
+ ### 运行测试
+ 
+ 测试各 skill **自包含**在 `<skill>/tests/`；仓根另有**两个**根级 pytest 文件，只承载全仓通用的
+ cwd 副作用断言——`conftest.py`（断言本体）+ `pytest.ini`（把 rootdir 钉在仓根，否则从仓外跑时
+ conftest 收集止于塌缩后的 rootdir、断言静默失效）。**两者缺一即失效，别只留其一**；也 MUST NOT
+ 往它们塞其他共享配置。用 pytest 直接跑：
+ 
+ ```bash
+ pytest                                                  # 发现并运行全部 test_*.py
+ pytest sdflow-issues/tests/                             # 单个 skill
+-pytest sdflow-issues/tests/test_buglist.py::test_xxx -v      # 单个用例
++pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
+ ```
+ 
+ 带脚本+测试的 skill 仅这几个：`sdflow-issues`、
+ `sdflow-init`、`sdflow-retro`、`sdflow-maintain`、`sdflow-architecture`、`sdflow-devenv`。其余为纯 Markdown 编排类，无自动化测试。
+ <!-- [impl-review-fix] C8：清单失鲜补 sdflow-architecture（已有 scripts/ + tests/，此前遗漏） -->
+ 
+ ## 架构
+ 
+ ### Skill 目录约定
+ 
+@@ -434,21 +434,21 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回
+ **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
+ 
+ | skill | 在流程中的角色 |
+ |---|---|
+ | `/sdflow-spec` | 阶段一**产 spec 单一入口**（分支 A）——澄清 → 拷问 → 生成三相位，产四件套 + `decision-memo.md`；只能人触发 |
+ | `/sdflow-spec-review` | 设计审**主审**——并行多镜，按 `spec-checklists/domains` + 对抗 + 接地读码 |
+ | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
+ | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
+ 
+ > 另有记录类配套 skill（按需）：`/sdflow-issues`（bug 缺陷 + todo 改进池，两池一个触发面），
+-> 同样来自 sdflow-skills，写入 `openspec/issues/buglist|todolist/`。
++> 同样来自 sdflow-skills，写入 `openspec/issues/open|closed/`（一个 issue 一个文件）。
+ 
+ ## Codex 子代理授权（fan-out · model-tiers 即 task-specific reason）
+ 
+ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权（host-adaptive-execution 能力「子代理不可用
+ 时镜数如实降级」）。**本节即该授权**：
+ 
+ - **授权范围**：`/sdflow-spec-review`、`/sdflow-code-review` 两个评审编排器在 Codex 宿主下的**多镜
+   fan-out**（领域镜 / 对抗镜 / 接地镜或历史镜等并行子代理）与各自的 outside-voice 同族 fallback
+   子代理，以及 `sdflow-implement` 在 Codex 宿主下派发的 implementer / Standards 轴 / Spec 轴 / fix
+   子代理，**MUST 视为已授权**。仅限这三处——不是对任意 skill 无限制放开 `spawn_agent`。
+diff --git a/README.md b/README.md
+index 87416f9..cc948a0 100644
+--- a/README.md
++++ b/README.md
+@@ -99,37 +99,39 @@ bash setup.sh
+ 
+ - **每个 skill 是一个自包含目录**：`SKILL.md`（frontmatter + 指令，唯一被 `setup.sh` 识别的标志）
+   + 可选 `scripts/`（Python/Shell）+ `tests/`（pytest）+ `assets/` / `references/`。
+ - **安装机制**：`setup.sh` 遍历仓库根下所有目录，仅安装含 `SKILL.md` 的（故 `openspec/`、`docs/`、
+   `hack/` 不会被当 skill）。
+   - **Unix**：绝对路径 symlink —— 改源即时生效，仅新增/删 skill 后才需重跑。
+   - **Windows**：复制目录 + 写 `.sdflow-skills` 标记文件用于更新检测（名单内目录的存量 `.laodao-skills` 旧 marker 同样识别为自属并可刷新）。
+ 
+ ### Recorder 存储契约
+ 
+-`sdflow-issues` 的 bug/todo 两池共用 versioned **Shared Frontmatter Envelope**：
+-新 item 的机器索引只写 `sdflow-issues` namespace，历史 Markdown 总览表永久只读；首次修改历史 item
+-会在同文件生成 overlay，保留旧表 bytes。两池 CLI（三薄入口共唯一 `sdflow_issues_core`）用仓级 exclusive snapshot lock 串行权威读写，batch
+-rename 以 registry provenance 支持重跑原命令收敛。完整契约、POSIX/Windows 本地盘、network FS、
+-power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md`。
++`sdflow-issues` 的 bug/todo 两池共用**单文件模型**：一个 issue 一个 `.md` 文件（YAML frontmatter 为
++唯一权威数据源，12 个扁平字段；body 为自由格式 Markdown，脚本只追加状态变更历史、不反解析）；
++`open/` / `closed/` 两目录按终态分层，`INDEX.md` / `CLOSED.md` 是 `reindex` 再生的派生物。并发安全靠
++文件名级 `O_CREAT|O_EXCL`（新建同 ID 时后到者 `FileExistsError` 自动重试），不需要仓级快照锁——单一
++入口 `issues_v2.py` 详见 `sdflow-issues/SKILL.md`。零依赖 YAML 子集写读（沿用
++`openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md` 的零依赖原则，不引入
++PyYAML；该 ADR 记录的 overlay/snapshot-lock 架构本身已随本次单文件模型改造替换）。
+   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
+ - **spec 工作流 bundle 的权威源**：`sdflow-init/assets/workflow/` 是铺给其他项目的
+   `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `sdflow-init update`
+   推到下游**，禁止只改某个下游项目的 `openspec/workflow/` 后忘记回灌。
+ - **dogfooding**：仓库根的 `openspec/`（`workflow/` 规则 + `changes/specs/issues/config.yaml`）
+   是本仓库自身跑这套 OpenSpec 流程的实例；变更走 propose → 设计审 → 代码审 → `sdflow-done` 归档。
+ 
+ ## 开发
+ 
+ 数据类 skill 的测试自包含在各自 `tests/` 下，用 pytest 运行：
+ 
+ ```bash
+ pytest                                                       # 全部
+ pytest sdflow-issues/tests/                                 # 单个 skill
+-pytest sdflow-issues/tests/test_buglist.py::test_xxx -v     # 单个用例
++pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v   # 单个用例
+ ```
+ 
+ 面向 AI 协作者的项目级指令见 [CLAUDE.md](./CLAUDE.md) / [AGENTS.md](./AGENTS.md)。
+ 
+ ## 许可
+ 
+ MIT
+diff --git a/hack/tests/test_harden_sdflow_spec_followup_closure.py b/hack/tests/test_harden_sdflow_spec_followup_closure.py
+index 36427cb..e366878 100644
+--- a/hack/tests/test_harden_sdflow_spec_followup_closure.py
++++ b/hack/tests/test_harden_sdflow_spec_followup_closure.py
+@@ -20,22 +20,21 @@ def _resolve_change_root(changes_root: Path) -> Path:
+     if live.is_dir():
+         return live
+     archived = sorted((changes_root / "archive").glob(f"*-{CHANGE_NAME}"))
+     if len(archived) != 1:
+         raise AssertionError(
+             f"expected exactly one live-or-archived {CHANGE_NAME}, got {archived}"
+         )
+     return archived[0]
+ 
+ 
+-TODO_SCRIPT = ROOT / "sdflow-issues/scripts/todolist.py"
+-TODO_LEDGER = ROOT / "openspec/issues/todolist/2026-07-todolist.md"
++TODO_SCRIPT = ROOT / "sdflow-issues/scripts/issues_v2.py"
+ INDEX = ROOT / "openspec/issues/INDEX.md"
+ SPEC_AUTHORING = ROOT / "openspec/specs/spec-authoring/spec.md"
+ SPEC_WORKFLOW = ROOT / "openspec/specs/spec-workflow/spec.md"
+ ARCHIVE = ROOT / "openspec/changes/archive/2026-07-26-add-sdflow-spec"
+ CHANGE = _resolve_change_root(ROOT / "openspec/changes")
+ DELTA_AUTHORING = CHANGE / "specs/spec-authoring/spec.md"
+ TASKS = CHANGE / "tasks.md"
+ PLAN = CHANGE / "superpowers-plan.md"
+ SDFLOW_SPEC = ROOT / "sdflow-spec/SKILL.md"
+ RESIDENT_TEST = ROOT / "hack/tests/test_sdflow_spec_resident_contract.py"
+@@ -50,38 +49,47 @@ def test_change_root_resolver_survives_archive(tmp_path: Path) -> None:
+     assert _resolve_change_root(changes) == live
+ 
+     archived = changes / "archive" / f"2026-07-27-{CHANGE_NAME}"
+     archived.parent.mkdir()
+     live.rename(archived)
+     assert _resolve_change_root(changes) == archived
+ 
+ 
+ def _todos() -> dict[str, dict[str, object]]:
+     proc = subprocess.run(
+-        ["python3", str(TODO_SCRIPT), "--root", str(ROOT), "scan", "--json"],
++        ["python3", str(TODO_SCRIPT), "--root", str(ROOT), "scan", "--pool", "todo", "--all", "--json"],
+         check=True,
+         capture_output=True,
+         text=True,
+ 
+         encoding="utf-8",
+         errors="replace",)
+     payload = json.loads(proc.stdout)
+     items = payload if isinstance(payload, list) else payload["items"]
+     return {item["id"]: item for item in items}
+ 
+ 
++def _issue_file(item_id: str) -> Path:
++    """v2 单文件模型：一个 issue 一个文件，先 open/ 后 closed/ 定位。"""
++    for sub in ("open", "closed"):
++        candidate = ROOT / "openspec/issues" / sub / f"{item_id}.md"
++        if candidate.is_file():
++            return candidate
++    raise AssertionError(f"{item_id} 在 open/ 与 closed/ 均未找到 v2 issue 文件")
++
++
+ def _block(item_id: str) -> str:
+-    ledger = TODO_LEDGER.read_text(encoding="utf-8")
+-    start = f"<!-- sdflow-issue-block:start id={item_id} -->"
+-    end = f"<!-- sdflow-issue-block:end id={item_id} -->"
+-    assert start in ledger and end in ledger, f"{item_id} 缺少可追溯 marker block"
+-    return ledger.split(start, 1)[1].split(end, 1)[0]
++    """v2 无 marker block——直接返回 frontmatter 之后的 body（含状态变更历史行）。"""
++    text = _issue_file(item_id).read_text(encoding="utf-8")
++    parts = text.split("---\n", 2)
++    assert len(parts) == 3, f"{item_id} frontmatter 结构异常：{text[:80]!r}"
++    return parts[2]
+ 
+ 
+ ARCHIVE_CLOSURES = {
+     "T232": ("specs/spec-authoring/spec.md", "只覆盖 delta spec"),
+     "T238": ("specs/spec-authoring/spec.md", "枚举 `sonnet|opus|haiku|fable`"),
+     "T240": ("design.md", "`setup.sh` 无 uninstall 分支"),
+     "T241": ("tasks.md", "❌ **回退分支**"),
+ }
+ 
+ 
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index 3817e6a..b248fae 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -293,52 +293,48 @@ ship-gate:
+ 
+ ---
+ 
+ ## 第二步：产出 hand-off.md（P3g，verify 之后 / archive 之前）
+ 
+ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_dir}/hand-off.md`——**异步人类再入口 + 下个 change 种子**，随归档一起进 `archive/`。主 session 直接写（它有本 change 的 why 与 defer 上下文）或派中档子代理。
+ 
+ **三段内容**：
+ 
+ 1. **✅ 完成了什么**：引 verify-report 的 done 项。**P3h-c：不直接搬运 verify 的 ✅**——每条至少复核锚点存在性（测试名 / commit / 文件:行 真的在），再写进"完成"；无锚点的不写成完成。
+-2. **⏳ 未完成 / 延后**：本 change 新增的 buglist/todolist（sdflow-code-review defer 的，已按下方 §2.1 sweep 分诊进批次 `{change_name}`，见 `openspec/issues/batches.md`）+ 被延后的 ≥2 方案决策（附当时自动选了什么 / 为何拿不准）+ verify 的 Minor 缺口。
++2. **⏳ 未完成 / 延后**：本 change 新增的 bug/todo（sdflow-code-review defer 的，已按下方 §2.1 scan 出的 ID 列表，各自见 `openspec/issues/open/{ID}.md`）+ 被延后的 ≥2 方案决策（附当时自动选了什么 / 为何拿不准）+ verify 的 Minor 缺口。
+ 3. **▶ 下一阶段建议**：建议开哪个清理 change、优先级；哪些 defer 项该一起清。
+ 
+ > **为何独立成步、不并进 verify 或 archive**：verify 判"完整性"、hand-off 是"给人的高层交接 + 下阶段种子"，altitude 不同；时机必须在 verify **之后**（引其权威结论）、archive **之前**（随归档留档）。sdflow-done 是自制 skill，加此步无碍。
+ 
+-### 2.1 issues sweep 子步（先于上面「三段内容」撰写，I5/I6）
++### 2.1 issues scan 子步（先于上面「三段内容」撰写，只读查询）
+ 
+-verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的未分诊 OPEN 项归入一个批次——这样上面第 2 段能引批次号，而不是逐条罗列裸 ID。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了中档子代理，由该子代理顺带执行）。
++verify 判完之后、写 hand-off 正文之前，只读扫描**本 change 新增**的未闭合 bug/todo——这样上面第 2 段能直接列 ID，而不是引批次号。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了中档子代理，由该子代理顺带执行）。
+ 
+-**脚本路径**：buglist.py / todolist.py / issues.py 现同属**一个 skill `sdflow-issues`** 的三个薄入口（共唯一共享源 `sdflow_issues_core`），随 sdflow-skills `setup.sh` 整目录一次 symlink 到 `~/.claude/skills/sdflow-issues/`——三者同目录 co-located，无跨 skill 依赖：
++**脚本路径**：`issues_v2.py` 是 skill `sdflow-issues` 的单一入口（v2 单文件模型：一个 issue 一个文件，砍掉 v1 的 `buglist.py`/`todolist.py` 两个薄入口与共享核心包），随 sdflow-skills `setup.sh` 整目录 symlink 到 `~/.claude/skills/sdflow-issues/`：
+ 
+ ```
+-~/.claude/skills/sdflow-issues/scripts/buglist.py
+-~/.claude/skills/sdflow-issues/scripts/todolist.py
+-~/.claude/skills/sdflow-issues/scripts/issues.py
++~/.claude/skills/sdflow-issues/scripts/issues_v2.py
+ ```
+ 
+-若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.codex/skills/`、或本仓库内 `find . -name buglist.py` 兜底定位，找不到就停下问用户脚本在哪。
++若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.codex/skills/`、或本仓库内 `find . -name issues_v2.py` 兜底定位，找不到就停下问用户脚本在哪。
+ 
+-以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。原手写 4 步循环（scan 两池 → 逐项 triage → batch add → reindex）已固化为 `issues.py` 的一键封装子命令 `sweep`〔impl-review-fix：措辞订正，非原子、fail-closed、可重跑收敛〕，一行跑完：
++以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。v1 的写操作 sweep（scan 两池 → 逐项 triage → batch add → reindex）在 v2 已砍——batch/triage 机制随单文件模型消解，收尾只需一次只读查询：
+ 
+ ```bash
+-python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change {change_name}
++python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py --root . scan --json --source-change {change_name} --status OPEN --status PROPOSED
+ ```
+ 
+-**必须显式传 `--change {本change}`（D4）**——不靠 `detect_change` 猜；sweep 内部即用该值扫描 `--open-ungrouped`（非终态 ∧ 批次空）、逐项 triage 进同一批次、`batch add --if-exists skip`、末尾 `reindex`。**hand-off 引用该批次**：上面「三段内容」第 2 段写批次号 `{change_name}`（指向 `openspec/issues/batches.md` 对应条目 + `openspec/issues/INDEX.md`），不再逐条罗列裸 ID。
++**必须显式传 `--source-change {本change}`（沿用 D4 精神）**——不靠 `detect_change` 猜；等价于 v1 `scan --change --open-ungrouped` 的圈定范围（按来源 change 过滤非终态项）。**hand-off 直接列 ID**：上面「三段内容」第 2 段把这条命令输出里每个 `id` 各列一条（每个 ID 即文件名 `openspec/issues/open/{ID}.md`，比批次号更直观），不再建批次、不再引批次号。
+ 
+-**执行纪律（D6）**：宜串行跑本步、勿与手动 triage 交叉——sweep 写窗口比单条命令更长（N 次 triage 写 + batch add + reindex）；此为操作建议、非防腐坏硬约束：并发安全由仓级 `recorder_lock` 保证——sweep 作 lock owner 持锁、其子步（triage / batch add / reindex）作 participant 加入同一锁域，并发的独立命令 fail-closed 拒锁（`lock occupied`）而非交叉腐坏〔mlh-p6 T146〕。
++**只读、天然幂等、无需加锁**：v2 `scan` 是纯读操作，不写盘、不涉及仓级锁；同一条命令可重复执行，结果确定——v1 依赖 `recorder_lock` 保护的写窗口在 v2 不存在。
+ 
+-**失败语义（非原子、fail-closed、重跑收敛）**：sweep 不是真原子——任一子步（scan/triage/batch add/reindex）非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/哪个 pool/已 tag 的 id 列表），不静默继续；已 tag 项在重跑时被「批次空」过滤天然排除，故半途失败后**直接重跑同一条命令即可收敛到完成**，无需手工回滚。
+-
+-**范围边界（design §4.2，不在本 sweep 内）**：sweep 只圈**源 == 本 change**的未分诊非终态项（`--open-ungrouped` 口径）。孤儿项（源 = `""`，多 change 并行、`detect_change` 探不出归属的）**不归本 sweep 管**——由独立的通用「清 bug/todo」工作流兜底（`scan --open-ungrouped` → `triage` → 另开 cleanup change），不因 sweep 窄而无声蒸发；sweep 本身保持窄而确定，别为了兜孤儿放宽 `--change` 过滤。
++**范围边界（design §4.2，不在本查询内）**：只圈**源 == 本 change**的非终态项（`OPEN`/`PROPOSED`）。孤儿项（`source_change` 为空，多 change 并行、`detect_change` 探不出归属的）**不归本查询管**——由独立的通用「清 bug/todo」工作流兜底（`scan` 全量扫 + 人工核实归属 → 另开 cleanup change），不因本查询窄而无声蒸发。
+ 
+ ### 2.2 roadmap 回填降摩擦助手子步（§2.1 之后、写 hand-off 三段之前）〔done-roadmap-writeback〕
+ 
+ verify 判完之后，跑 roadmap 回填助手机械核生成回填草稿，供人异步确认回填 roadmap（切分线：**定位到 phase 机械、勾哪几行判断留人**）。主 session 直接跑（纯机械脚本）。
+ 
+ **脚本路径**（sibling 约定，同 §2.1）：`~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py`（兜底 `~/.codex/skills/…` 或本仓 `find . -name roadmap_writeback_draft.py`）。
+ 
+ ```bash
+ python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
+   --change {change_name} --root . 2>/tmp/rwd_err.$$; echo "exit=$?"; cat /tmp/rwd_err.$$
+@@ -513,22 +509,22 @@ sdflow-done 完成
+ - **串行门禁**：每步失败即中止；verify FAIL（核心缺口）不归档。
+ - **model 按本步性质（独立子代理无耦合）**：verify=强档（唯一终门），archive=中档（判断），commit=弱档（机械）；merge 留主 session（单向 git、缺省执行）。
+ - **归档必同步 spec**：用 `openspec archive` CLI；它做 spec 同步 + INDEX + 校验。手动 `mv` 是错的。
+ - **中文遗留 spec**：`--skip-specs` + 手动同步（匹配遗留风格、按实况写、修自己引入的 invalid）。
+ - **复选框对账要诚实**：勾真实完成的，未完成的留 `[ ]` + 说明。
+ - **默认分支检测**：勿假设 main。
+ - **merge 缺省执行**（ff-only）；仅当调用时明确 opt-out 才跳过；ff 不可行/冲突则停下交用户；**不自动 push**。
+ - **verify 必产 `verify-report.md`** 存 change 目录（随归档留档）。
+ - **verify 防假✅（P3h）**：每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；强档 + Do-Not-Trust 冷启（阶段三去人类门后 verify 是唯一终门，禁降档）。见 design §7.3.1 / adr/0001。
+ - **hand-off.md（P3g）**：verify 之后 / archive 之前产出（done/not-done + 延后项 + 下阶段建议），随归档留档，作异步人类再入口 + 下个 change 种子；**不直接搬运 verify 的 ✅**（复核锚点存在性）。
+-- **issues sweep 子步（§2.1，D3/D4）**〔impl-review-fix：本条订正——旧版描述手写 4 步循环，§2.1 已改用 sweep 一键封装〕：写 hand-off 正文前先跑 `issues.py sweep --change {本change}` 一键调用（内部固化 scan 两池 → 逐项 triage → batch add → reindex 全部子步，不再手写 4 步循环）；**显式传 `--change {本change}`**（不靠 `detect_change` 猜，D4）；只建 **1 个批次、key=本 change 名**（Q2 保守，禁跨 change 合并）；内部末尾跑 `reindex`（D3）刷新 INDEX + 同步批次状态；只圈 `源==本change` 的未分诊 OPEN 项，孤儿（源=""）不归本 sweep，交独立清理流程兜底；非原子、fail-closed，半途失败直接重跑同一条命令收敛。
+-- **roadmap 回填助手（§2.2，done-roadmap-writeback）**：verify 之后跑 `roadmap_writeback_draft.py` 生成 roadmap 回填草稿进 hand-off + 第六步摘要抬一行（merge 时点可见）；**与 §2.1 issues sweep 同位不同性**——同为 done 收尾盘面消费，但 sweep 机械终写机器独占文件（INDEX）、roadmap 回填**助人确认**（完成判定含判断，写入语义相反，不诱导复用 sweep 自动落盘）。切分线：定位到 phase=机械（change 名前缀确定性信号）、勾哪几行=判断留人；archive/merge 预测值留占位不预填（P-1）；detection fence-aware 防自指（P-5）；非复选框格式 fail-loud（P-3）。**残差登记**：草稿产出即止、apply 由人异步、不保证（经 /sdflow-ship 全自动链人被支走时尤然）。
++- **issues scan 子步（§2.1）**：写 hand-off 正文前先跑 `issues_v2.py scan --json --source-change {本change} --status OPEN --status PROPOSED` 只读查询（v2 单文件模型已砍 batch/triage/sweep 机制，不再是写操作）；**显式传 `--source-change {本change}`**（不靠 `detect_change` 猜）；hand-off 直接列出命令返回的每个 ID（各即 `openspec/issues/open/{ID}.md`），不再建批次；只读、天然幂等、无需仓级锁；只圈 `源==本change` 的非终态项，孤儿（`source_change` 为空）不归本查询，交独立清理流程兜底。
++- **roadmap 回填助手（§2.2，done-roadmap-writeback）**：verify 之后跑 `roadmap_writeback_draft.py` 生成 roadmap 回填草稿进 hand-off + 第六步摘要抬一行（merge 时点可见）；**与 §2.1 issues scan 同位不同性**——同为 done 收尾盘面消费，但 scan 机械只读、roadmap 回填**助人确认**（完成判定含判断，写入语义相反，不诱导复用 scan 自动落盘）。切分线：定位到 phase=机械（change 名前缀确定性信号）、勾哪几行=判断留人；archive/merge 预测值留占位不预填（P-1）；detection fence-aware 防自指（P-5）；非复选框格式 fail-loud（P-3）。**残差登记**：草稿产出即止、apply 由人异步、不保证（经 /sdflow-ship 全自动链人被支走时尤然）。
+ 
+ ## 模型选择（按本步性质，逐步定）
+ 
+ > 档位与缺省见规则根 `model-tiers.md`（按机队分列，经 `~/.sdflow/hack/resolve-workflow.sh` 解析；config.yaml 的 model-tiers 段可按机队分键覆盖）。**取值 MUST 引用第零步 0.4 同一次 `eval "$(resolve-models.sh)"` 导出的 `$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`**（已按当前宿主机队解析好的具体模型 id）派子代理，**MUST NOT 内联具体模型 id（各机队缺省专名，见 `model-tiers.md` 机读块）**。
+ 
+ **关键前提**：本 skill 步骤**固定**（不是运行时动态路由），且每步**独立子代理**（各自上下文）。所以——
+ - **混用 model 无干扰**：弱档-commit 与中档-verify 上下文隔离，互不污染；混用没有耦合代价。
+ - **无运行时误分类**：「误分类风险」是**动态路由**的事（高频循环里运行时按难度挑模型才会挑错）；固定步骤在写 skill 时一次定死，不存在该风险。
+ 
+ 因此 model 就是**纯粹的「这一步配不配」**，逐步独立判：
+diff --git a/sdflow-issues/SKILL.md b/sdflow-issues/SKILL.md
+index 931853f..a0ef202 100644
+--- a/sdflow-issues/SKILL.md
++++ b/sdflow-issues/SKILL.md
+@@ -1,29 +1,28 @@
+ ---
+ name: sdflow-issues
+ description: >
+-  issues 台账的唯一 skill——owns 整个 `openspec/issues/` 台账：**两池记录 + 跨池管理**。
++  issues 台账的唯一 skill——owns 整个 `openspec/issues/` 台账：**两池记录 + reindex**。
+   **① 记 bug（缺陷）**：烧板验证、日志分析、代码审查、调试中确认了 bug 或缺陷，或用户说
+-  "记一下这个 bug / 这个问题记到 buglist / 标记 Bxx 已修 / 列一下还没修的 bug"→ 落
+-  `openspec/issues/buglist/YYYY-MM-DD-buglist.md`（每天一文件）。**② 记 todo（非缺陷）**：
++  "记一下这个 bug / 这个问题记到台账 / 标记 Bxx 已修 / 列一下还没修的 bug"→ 落
++  `openspec/issues/open/{ID}.md`（一个 issue 一个文件）。**② 记 todo（非缺陷）**：
+   冒出"以后可以改进 / 这里能优化 / 这是个技术债 / 记个 TODO / 加进待办池"的想法，或用户说
+-  "记一下这个优化 / 标记 Txx 已完成 / 列一下待办"→ 落 `openspec/issues/todolist/YYYY-MM-todolist.md`
+-  （每月一文件）。**③ 跨池管理**：`reindex` 重建 `openspec/issues/INDEX.md` + 同步
+-  `openspec/issues/batches.md` 批次状态；`batch add/set-status/rename` 维护批次注册表；
+-  `sweep` 一键分诊本 change 未分批非终态项——主要由 `sdflow-done` 收尾自动调用。全局唯一
+-  ID（B=bug / T=todo）不撞号、versioned frontmatter 与 marker block 一致、终态门禁（FIXED
+-  必带根因+证据 / DONE 必带 change|commit）全部交脚本兜底。本 skill 自包含整套 issues 台账约定，
+-  是该约定的唯一真相源。**bug（坏了）vs todo（没坏但可更好）的分池判据见正文「骑墙判定」段。**
+-  Trigger with /sdflow-issues。
++  "记一下这个优化 / 标记 Txx 已完成 / 列一下待办"→ 同样落 `openspec/issues/open/{ID}.md`。
++  **③ 跨池管理**：`reindex` 重建 `openspec/issues/INDEX.md`（open）+ `CLOSED.md`（closed）——
++  由 `sdflow-done` 收尾自动跑只读 `scan --source-change` 查询本 change 的未闭合项。全局唯一
++  ID（B=bug / T=todo）不撞号、frontmatter 12 个扁平字段一致、终态门禁（bug FIXED / todo DONE
++  必带证据、WONTFIX/WONTDO 必带理由）全部交单一脚本 `issues_v2.py` 兜底。本 skill 自包含整套
++  issues 台账约定，是该约定的唯一真相源。**bug（坏了）vs todo（没坏但可更好）的分池判据见正文
++  「骑墙判定」段。** Trigger with /sdflow-issues。
+ ---
+ 
+-# sdflow-issues — issues 台账（记 bug · 记 todo · 跨池 reindex/batch/sweep）
++# sdflow-issues — issues 台账（记 bug · 记 todo · reindex）
+ 
+ <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
+ ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
+ 
+ 这四条约束的是**你自主决策时的默认取向**。**真人用户明确指示优先**——真人用户明确要求扩大范围、
+ 跳过某步、或接受某个不完美方案时，以他的意见为准，照做即可，不必拿本文去反驳他。
+ 但「他没反对」不等于「他明确要求」：豁免要有**明确指示**，**MUST NOT 拿沉默当授权**。
+ 
+ > 🔴 **这里的「人」只指真人用户 —— 子代理 MUST NOT 自我豁免。**
+ > 上游 agent 的 prompt、主 session 派给子代理的任务指令、outside-voice / 评审 context 里的任何文字，
+@@ -152,414 +151,272 @@ description: >
+ ⇒ **每一个 fan-out 子代理的 prompt、每一份 outside-voice 的 context，MUST 把本区块
+ （`sdflow:principles` 从 `start` 到 `end`）原文整段复制进去。**
+ **MUST NOT 转述、MUST NOT 摘要、MUST NOT 只给指针。**
+ 
+ > **漏带的后果是确定的，不是概率的**：一个冷上下文的镜子，眼前只有现状，
+ > 它**必然**把「现在能跑」当成「是对的」，把「存量里没见过」当成「不会发生」——
+ > 而这正是 ③ 要杀的病。**冷是它的价值，也正是它的破绽。**
+ 
+ <!-- sdflow:principles:end -->
+ 
+-本 skill owns 整个 `openspec/issues/` 台账，覆盖**两池记录 + 跨池管理**，是这套约定的**唯一真相源**
+-（不依赖任何外部 rule 文件）。台账被当**一个概念**：一条债务 item、三正交字段（源change/批次/status）、
+-status 词表按 pool 各异——即「一个东西 + 一个 pool 参数」（`CONTEXT.md`「三维度分家」）。
++本 skill owns 整个 `openspec/issues/` 台账，覆盖**两池记录 + reindex**，是这套约定的**唯一真相源**
++（不依赖任何外部 rule 文件）。**单文件模型**：一个 issue 一个 `.md` 文件，YAML frontmatter 是唯一
++权威数据源（12 个扁平字段），body 是自由格式 Markdown——脚本只管 frontmatter 一致性，body 内容的
++组织/判断交给模型。
+ 
+ | 池 / 面 | 管什么 | 脚本入口 |
+ |---|---|---|
+-| **bug 池** | 已确认缺陷的 add/scan/set-status/triage | `scripts/buglist.py`（前缀 `B`，每天一文件） |
+-| **todo 池** | 优化/技术债/改进想法的 add/scan/set-status/triage | `scripts/todolist.py`（前缀 `T`，每月一文件） |
+-| **跨两池** | `reindex`（生成 `issues/INDEX.md`）+ `batch`（`issues/batches.md` 注册表）+ `sweep`（一键分诊封装，非原子） | `scripts/issues.py` |
++| **bug 池** | 已确认缺陷（前缀 `B`） | `scripts/issues_v2.py add --pool bug` |
++| **todo 池** | 优化/技术债/改进想法（前缀 `T`） | `scripts/issues_v2.py add --pool todo` |
++| **跨两池** | `reindex`（生成 `issues/INDEX.md` + `issues/CLOSED.md`） | `scripts/issues_v2.py reindex` |
+ 
+-三个脚本同在 `sdflow-issues/scripts/` 下、随本 skill 整目录 symlink 分发；`issues.py` 用**同目录**
+-路径 spawn `buglist.py`/`todolist.py` 子进程（`os.path.join(SCRIPT_DIR, ...)`，与 `--root` 无关）。
++单一入口 `issues_v2.py` 同在 `sdflow-issues/scripts/` 下、随本 skill 整目录 symlink 分发——不再有
++per-pool 薄入口，两池共用同一脚本的 `--pool` 参数区分。
+ 
+-> **为什么要脚本**：两池 ID 语义唯一、frontmatter ↔ marker 关系一致、终态门禁（FIXED 必带根因+证据 /
+-> DONE 必带 change|commit）——这些手工做极易出错（撞号、破坏 shared envelope、只写完成没写为什么）。
+-> 脚本把它们变成确定性操作，模型省下来的注意力用在真正需要判断的地方：这是不是真 bug、现象 vs 根因、
+-> 定几级、这值不值得记、归哪个类型、**落 bug 池还是 todo 池**。
++> **为什么要脚本**：ID 语义唯一、frontmatter schema 一致、终态门禁（bug FIXED / todo DONE 必带证据、
++> WONTFIX/WONTDO 必带理由）——这些手工做极易出错（撞号、字段漏填、只写完成没写为什么）。脚本把它们
++> 变成确定性操作，模型省下来的注意力用在真正需要判断的地方：这是不是真 bug、现象 vs 根因、定几级、
++> 这值不值得记、归哪个类型、**落 bug 池还是 todo 池**。
+ 
+-`python scripts/{buglist,todolist,issues}.py --help` 查各命令。
++`python3 scripts/issues_v2.py --help` 查全部命令，`python3 scripts/issues_v2.py {cmd} --help` 查子命令参数。
+ 
+ ---
+ 
+ ## 🔀 骑墙判定：bug（坏了）还是 todo（没坏但可更好）？
+ 
+-**触发面只有一个 `/sdflow-issues`。** 落哪个池由模型在 skill 内按下面的判据判定 pool，再走对应脚本
+-入口——∴ 从自然语言起手记录时存在 NL 误判风险，下面的判据用于把它压低。
++**触发面只有一个 `/sdflow-issues`。** 落哪个池由模型在 skill 内按下面的判据判定 `--pool` 参数，
++再统一走 `issues_v2.py add` ——∴ 从自然语言起手记录时存在 NL 误判风险，下面的判据用于把它压低。
+ 
+ **核心判据 =「坏了没」**：
+ 
+-| 问 | 是 → **bug 池**（`buglist.py`，前缀 B） | 否 → **todo 池**（`todolist.py`，前缀 T） |
++| 问 | 是 → **bug 池**（`--pool bug`，前缀 B） | 否 → **todo 池**（`--pool todo`，前缀 T） |
+ |---|---|---|
+ | 存在偏离预期的**可观察故障 / 错误行为**吗？ | 有明确故障：崩溃、数据错、逻辑走错、契约违背、性能**违反 SLA/预期的可测退化** | 当前行为**符合预期**，只是"能更好/更快/更清晰"——优化、技术债、增强 |
+-| 需要**根因 + 修复**吗？ | 需要（现象 vs 根因分开，定优先级 P0–P4） | 不需要（按价值/成本排 type，不紧迫） |
++| 需要**根因 + 修复**吗？ | 需要（现象 vs 根因分开，定优先级） | 不需要（按价值/成本排 type，不紧迫） |
+ 
+ **骑墙举例**（AD-6 点名的高误判点）：
+ 
+ - 「**性能退化**」——若是相对基线**可观测的退化**且违反性能预期/SLA（本来达标、现在不达标）→ **bug**
+   （坏了）；若只是"还能更快"、当前速度本就在预期内 → **todo**（`type=性能优化`，没坏但可更好）。
+ - 「日志不够」——服务本身工作正常，只是想更好诊断 → **todo**（`type=可观测性`）；若因为缺日志导致
+   某故障**无法定位/复现是已知障碍** → 该故障本身是 **bug**，加日志是它的 fix 项。
+ - 「命名乱 / 结构该重构」→ **todo**（`type=代码质量`），除非当前命名已导致**实际调用错误** → bug。
+-- 「spec 与 impl 不一致」→ 看**哪边错**：impl 违背 spec 契约 → **bug**（P3）；spec 只是可写得更清楚、
++- 「spec 与 impl 不一致」→ 看**哪边错**：impl 违背 spec 契约 → **bug**；spec 只是可写得更清楚、
+   impl 行为正确 → **todo**。
+ 
+-> 知道 pool 的**调用方**（如 `sdflow-done`、自动化脚本）直接走**显式入口**（`buglist.py add` /
+-> `todolist.py add`），不经 NL 路由、不受本判据影响。骑墙判定只用于**人/模型从自然语言起手**记录时。
++> 知道 pool 的**调用方**（如 `sdflow-done`、自动化脚本）直接走**显式 `--pool`**，不经 NL 路由、不受
++> 本判据影响。骑墙判定只用于**人/模型从自然语言起手**记录时。
+ 
+ ### ⚠️ 已知代价：误判落错池不可机械恢复
+ 
+ 分池由模型 NL 判定承担。**残余缺口（记为已知代价，非阻断）**：骑墙输入被误判 →
+-item 落错池，拿错前缀（B↔T）/文件粒度（日↔月）/schema（`priority`↔`type`）/状态词表；而 CLI **无
+-`move`/`reclassify` 命令** → 纠正须**手删 + 重 add**，会
+-**丢原 ID 与历史**。降误判率靠上面的判据 + 举例；跨池 `move --to-pool` 搬运命令为 nice-to-have，
+-显式 defer（换前缀+粒度文件+schema+保 provenance，将来另开）。
++item 落错池，拿错前缀（B↔T）/schema（`priority`↔`type`）/状态词表；而 CLI **无
++`move`/`reclassify` 命令** → 纠正须**手删 + 重 add**，会**丢原 ID、原 `source_change` 与 body 里已写的
++状态历史**（需手抄）。降误判率靠上面的判据 + 举例；跨池 `move --to-pool` 搬运命令为 nice-to-have，
++显式 defer（换前缀 + 改 pool 字段 + 保 provenance，将来另开）。
+ 
+ ---
+ 
+ ## 何时用 / 何时不用
+ 
+-- ✅ **发现即记录**：烧板、日志分析、代码审查、调试中确认 bug → 当天落 bug 池；冒出优化/技术债/
+-  改进想法 → 当月落 todo 池。别靠记忆。
++- ✅ **发现即记录**：烧板、日志分析、代码审查、调试中确认 bug → 落 bug 池；冒出优化/技术债/
++  改进想法 → 落 todo 池。别靠记忆。
+ - ✅ **状态跟踪**：被某 change 包入（PROPOSED）、修完/做完（FIXED / DONE）、决定不修/不做
+-  （WONTFIX / WONTDO）→ 回写。
+-- ✅ **盘点**：列未闭合项、按优先级/类型/状态筛、检查一致性。
+-- ✅ **跨池管理 & sweep**：重建 INDEX、建/推进/改名批次、盘点批次完成度 → `issues.py`；`sdflow-done`
+-  收尾自动跑 `sweep`+`reindex`。
++  （WONTFIX / WONTDO）→ `set-status` 回写。
++- ✅ **盘点**：`scan` 列未闭合项、按 pool/status/来源 change 筛、`--all` 含已闭合。
++- ✅ **收尾查询**：`sdflow-done` 收尾自动跑只读 `scan --source-change {change}` 查本 change 新增的
++  未闭合项（不再有 sweep/batch 写操作，见 §跨池 reindex）；`reindex` 重建 INDEX/CLOSED。
+ - ⚠️ **change review 阶段发现的问题/改进默认不进台账**：直接在该 change 内修掉 / 处理，或写进它的
+   deferred 列表。只有用户明确说"这个也记一笔"时才记——记前先确认，避免噪音。
+-- ⚠️ **不要手改 `issues/INDEX.md`**：首行固定 `<!-- GENERATED by issues.py reindex — DO NOT EDIT -->`
+-  banner，全量确定性重建（禁读旧 INDEX，D3），手改内容不会被合并、只会在下次 reindex 时被无条件覆盖。
++- ⚠️ **不要手改 `issues/INDEX.md` / `issues/CLOSED.md`**：首行固定
++  `<!-- GENERATED by issues_v2.py reindex — DO NOT EDIT -->` banner，全量确定性重建，手改内容不会
++  被合并、只会在下次 `reindex` 时被无条件覆盖。
+ 
+ ---
+ 
+ ## 记录 / 回写 / 扫描
+ 
+-### bug 池：记录新 bug（`buglist.py add`）
++### 记录新 issue（`issues_v2.py add`）
+ 
+-先判断（模型的活）：这是不是真 bug（见骑墙判定）？**现象**（外在可观察）与**根因**（代码层因果）分开；
+-定**优先级**。然后把结构化内容交给脚本——它负责定位今日文件（缺则建目录+头部）、在仓级 snapshot lock
+-内扫描两池并分配 ID，把 canonical frontmatter item + marker block 一次写齐。
++先判断（模型的活）：这是不是真 bug（见骑墙判定）？bug 需分清**现象**（外在可观察）与**根因**（代码层
++因果）；todo 需归好**类型**。然后把最小结构化字段交给脚本——它负责分配 ID、写 frontmatter、必要时
++`git add`；**body（现象/根因/修复方案/动机/思路等自由说明）留给模型在脚本创建文件后直接补**（v2 schema
++只有 12 个扁平字段，无结构化子字段，脚本 SHALL 只读写 frontmatter、MUST NOT 解析 body）。
+ 
+ ```bash
+-echo '{
++# bug：module/summary 必填，priority 可选（约定 P1|P2|P3，脚本不做词表校验）
++python3 scripts/issues_v2.py add --pool bug --json '{
+   "module": "data_publish.c:120",
+   "summary": "DATA/LOG envelope type 字段为空",
+-  "priority": "P1",
+-  "status": "OPEN",
+-  "phenomenon": "服务端收到的 envelope.type 恒为空字符串",
+-  "rootcause": "publish 前未从 ctx 取 type，结构体零值直接发出",
+-  "fix": ["发送前用 ctx->msg_type 填充 envelope.type", "加单测覆盖三种 type"],
+-  "impact": "所有 DATA/LOG 上行；server 侧无法路由",
+-  "source": "0628 烧板日志",
+-  "change": "add-envelope-type",
+-  "doc": ["changes/add-envelope-type/design.md", "rules/envelope-format.md"]
+-}' | python scripts/buglist.py add
++  "priority": "P1"
++}'
++
++# todo：module/summary 必填，type 可选（自由文本，无受控词表；沿用惯例如 性能优化/可观测性/代码质量/功能增强/基础设施）
++python3 scripts/issues_v2.py add --pool todo --json '{
++  "module": "meter_collect.c",
++  "summary": "温度采样改 DMA 批量读取",
++  "type": "性能优化"
++}'
+ ```
+ 
+-- 输入走 **stdin 或 `--json <file>`**（多行内容用 JSON 天然安全）。
+-- 必填：`module` / `summary` / `priority` / `phenomenon`。`rootcause`/`fix`/`impact` 缺省留占位。
+-- `source` 只在**新建当日文件**时用作头部「来源」。
+-- 不传 `id` 则自动分配（默认前缀 `B`，要 `A`/其它分类用 `--prefix A`）。
+-- **时间**自动记录当前 `HH:MM`（当日文件已含日期），需要回填历史用 `--time HH:MM` 覆盖。
+-- **摘要 vs 标题**：frontmatter 的 `summary` 讲现象（不是根因），可含 `|`、换行、Unicode；详细块标题默认
+-  取其单行投影，要不同可加 `"title"`。额外字段（触发路径/时序/前置条件/验证方式）放 `"optional": {...}`。
+-- 脚本回 `{"id","file","status","time","change"}`——把分到的 ID 告诉用户。
+-
+-### todo 池：记录新 TODO（`todolist.py add`）
+-
+-先判断（模型的活）：这值得记吗（见骑墙判定，确认是"没坏但可更好"而非 bug）？归哪个**类型**？需不需要
+-写动机/思路？然后交给脚本——它定位当月文件（缺则建）、在仓级 snapshot lock 内扫描两池并分配 ID、写
+-canonical frontmatter item；**只有给了动机/思路/备注（或显式 `doc`）才建 marker block**；轻量项只有
+-frontmatter item，不建 prose block。
+-
+-```bash
+-# 简单项：只写一个 frontmatter item，不建 prose block
+-echo '{"module":"meter_collect.c","summary":"温度采样改 DMA 批量读取","type":"性能优化","project":"smartrelay-4g"}' \
+-  | python scripts/todolist.py add
+-
+-# 需要说明的项：带动机/思路 → 自动建详细块
+-echo '{
+-  "module":"meter_collect.c","summary":"温度采样改 DMA 批量读取","type":"性能优化",
+-  "motivation":"当前 4 步逐次 ADC 读取 ~1.2s，DMA 可降至 <100ms",
+-  "approach":"配置 ADC DMA 连续转换，一次读 4 通道",
+-  "note":"需确认 ML307C ADC 是否支持 DMA"
+-}' | python scripts/todolist.py add
+-```
+-
+-- 输入走 **stdin 或 `--json <file>`**。必填：`module` / `summary`（描述）/ `type`。
+-- **类型**（受控词表）：`性能优化` `可观测性` `代码质量` `功能增强` `基础设施`。
+-- 可选块字段：`motivation`（动机）/ `approach`（思路）/ `note`（备注）——任一存在才建块。
+-- `project` 只在**新建当月文件**时写入头部。不传 `id` 则自动分配（默认前缀 `T`）。
+-- **时间**自动记录 `YYYY-MM-DD HH:MM`（当月文件不含日，需完整时间戳定位是哪天），回填历史用 `--time` 覆盖。
+-- **显式**传 `doc` 会强制建块（哪怕没写动机/思路/备注），否则这行没地方放；轻量项即便 `change` 恰好探测到
+-  文档，仍只写 frontmatter item、不建块——不让随手记的轻量 TODO 被悄悄升级成带块的项。
+-
+-### 两池共有的字段
+-
+-- **关联Change**（`change`，可选）：不传时脚本自动探测——优先取 `openspec/changes/` 下唯一未归档目录名，
+-  找不到再退化到当前 git branch 名（去 `feat/`/`fix/` 前缀）；**多个 change 并行时脚本探测不到，模型应
+-  结合当前 session 上下文判断在哪个 change 里冒出来的，显式传 `change` 覆盖**。
+-- **关联文档**（`doc`，可选，string 或 list[string]）：填对格式后 review 工具里能直接点开。路径不带
+-  `openspec/` 前缀会自动补上；写进详细块的 **关联文档** 行（多路径用「、」分隔）。路径不存在只警告不阻断。
+-  不传时若能从 `change` 探测到 `design.md`/`proposal.md`（含已归档的 `changes/archive/*-{change}/`）会
+-  尝试自动带上。
++- `--json` 是一段**字面 JSON**（不是 stdin/文件），必填 `module`/`summary`（非空字符串）；`priority`
++  仅 bug 池接受、`type` 仅 todo 池接受（跨池传错字段直接拒绝）；未知字段拒绝。
++- `source_change`（可选）：不传时脚本自动探测——优先取 `openspec/changes/` 下唯一未归档目录名，
++  找不到再退化到当前 git branch 名（去 `feat/`/`fix/` 等前缀）；多 change 并行时探测不到，模型应
++  结合当前 session 上下文判断在哪个 change 里冒出来的，显式传 `source_change` 覆盖。
++- 脚本流程：`next-id` 取下一个可用 ID（扫 `open/`+`closed/` 全部文件名，对应前缀取 max+1）→
++  `O_CREAT|O_EXCL` 原子写 `open/{ID}.md`（并发撞同一 ID 时后到者 `FileExistsError` → 自动重试
++  新 ID，无需仓级锁）→ 非空 git 仓自动 `git add`（幂等）。
++- 输出 `{"id","pool","status","file","source_change"}` JSON——把分到的 ID 告诉用户。
++- **需要写现象/根因/修复方案/动机/思路时**：`add` 之后直接 Read + Edit `open/{ID}.md`，在 frontmatter
++  之后的 body 里写自由格式 Markdown（脚本不会反解析，往后 `set-status` 只会**追加**状态变更历史行，
++  不会覆盖已写内容）；轻量项可以不补 body，只留 frontmatter 摘要。
+ 
+ ### 回写状态（`set-status`）
+ 
+-状态变更只更新 frontmatter 机器索引，并在 marker block **追加一条人读历史**（不写可变状态副本）。legacy
+-item 首次触碰时 same-file promotion 为 overlay，旧表 bytes 不变。带门禁：
++状态变更只更新 frontmatter 机器字段，并在 body **追加**一条人读历史（不改已有内容）。带门禁：
+ 
+ ```bash
+-# bug 池
+-python scripts/buglist.py set-status --id B17 --to FIXED --evidence "commit a1b2c3d"
+-python scripts/buglist.py set-status --id B4  --to WONTFIX --reason "硬件限制，3.0 板子才有"
+-# todo 池
+-python scripts/todolist.py set-status --id T1 --to DONE   --evidence "commit a1b2c3d"
+-python scripts/todolist.py set-status --id T7 --to WONTDO --reason "ROI 太低，硬件下一版才支持"
++python3 scripts/issues_v2.py set-status --id B17 --to FIXED  --evidence "commit a1b2c3d"
++python3 scripts/issues_v2.py set-status --id B4  --to WONTFIX --reason "硬件限制，3.0 板子才有"
++python3 scripts/issues_v2.py set-status --id T1  --to DONE   --evidence "commit a1b2c3d"
++python3 scripts/issues_v2.py set-status --id T7  --to WONTDO --reason "ROI 太低，硬件下一版才支持"
+ ```
+ 
+-- **bug FIXED 门禁**：必须 `--evidence`（commit/change）且详细块**根因已补全**（非空、非 `<...>` 占位）——
+-  挡住"只写已修、没写为什么"；根因还空先补根因再回写。**bug WONTFIX 门禁**：必须 `--reason`。
+-- **todo DONE 门禁**：必须 `--evidence`（关联 change 名或 commit）——挡住"只标完成、不留线索"。
+-  **todo WONTDO 门禁**：必须 `--reason`。
+-- 状态码：bug = `OPEN VERIFIED PROPOSED IN_PROGRESS FIXED WONTFIX BLOCKED`；todo = `OPEN PROPOSED DONE WONTDO`。
++- **bug FIXED / todo DONE 门禁**：必须 `--evidence`（commit hash 或 change 名）——挡住"只标完成、
++  不留线索"。**WONTFIX / WONTDO 门禁**：必须 `--reason`。
++- 成功后 body 追加一行：`> {date} 状态：{old} → {new}（{evidence 或 reason}）`。
++- 转入终态（bug=`FIXED`/`WONTFIX`，todo=`DONE`/`WONTDO`）时自动填 `closed_date`（今天）、
++  `resolved_by`（同 `source_change` 的自动探测逻辑）、`closed_reason`（WONTFIX/WONTDO 时=`--reason`），
++  并 `git mv open/{ID}.md → closed/{ID}.md`（非 git 仓降级 `os.rename`；未 tracked 的文件先自动
++  `git add`）。
++- 已在 `closed/` 的终态 issue **不可再改 status**（拒绝并报非零退出码）。
+ 
+ ### 扫描 / 盘点（`scan`）
+ 
+ ```bash
+-python scripts/buglist.py scan --status OPEN      # bug，只看未修（默认按优先级排）
+-python scripts/todolist.py scan --type 性能优化    # todo，按类型筛（默认按状态排）
+-python scripts/buglist.py scan --json             # 机器可读（两池皆有 --json）
+-```
+-
+-末尾自动做 **frontmatter/marker/未提升 legacy 表**关系自检。盘点或交接前先跑一次。
+-
+-### 少量历史数据迁移（`migrate_legacy.py`）
+-
+-旧表中的空字符串/破折号占位、历史分类或旧状态若不符合当前 schema，用维护工具定向提升为 same-file
+-overlay；已经提升到 frontmatter 的历史破折号占位也会归一化。**旧表 bytes 永久不改**。默认先 `audit`，
+-历史枚举必须显式映射，不做语义猜测：
+-
+-```bash
+-python scripts/migrate_legacy.py --root . \
+-  --specific-map-json '{"todo":{"技术债":"代码质量"}}' \
+-  --status-map-json '{"todo":{"wontfix":"WONTDO"}}' audit
+-
+-# 确认报告无 unresolved 后执行；成功后自动 reindex
+-python scripts/migrate_legacy.py --root . \
+-  --specific-map-json '{"todo":{"技术债":"代码质量"}}' \
+-  --status-map-json '{"todo":{"wontfix":"WONTDO"}}' apply
+-```
+-
+-`apply` 在仓级 recorder lock 内全量 preflight，按文件原子写 overlay；默认随后调用同目录 `issues.py reindex`。
+-修复脚本或测试需要只验证迁移层时可显式传 `apply --no-reindex`。
+-
+----
+-
+-## 跨池：`reindex` / `batch` / `sweep`（`issues.py`）
+-
+-这些命令**独占**跨 bug+todo 两池、owns `issues/INDEX.md` + `issues/batches.md`。安装后可用绝对路径调：
+-
+-### 1. `reindex`——重建 INDEX + 同步批次状态
+-
+-```bash
+-python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . reindex
++python3 scripts/issues_v2.py scan                                   # 全部 open（bug+todo）
++python3 scripts/issues_v2.py scan --pool bug --status OPEN          # 只看 open 的 bug
++python3 scripts/issues_v2.py scan --status OPEN --status PROPOSED   # --status 可重复传多个
++python3 scripts/issues_v2.py scan --all                             # 含 closed/
++python3 scripts/issues_v2.py scan --source-change {change_name}     # 按来源 change 过滤
++python3 scripts/issues_v2.py scan --json                            # 机器可读（JSON 列表）
+ ```
+ 
+-流程：`read_pool`（子进程调**同目录** `buglist.py scan --json` + `todolist.py scan --json` join 两池，
+-join 前先做 D9 跨池 ID 冲突检测，冲突即报错中止、不生成半截 INDEX）→ 纯函数式重建 `issues/INDEX.md`
+-（open 项按批次分组的物化板 + 已闭合项计数摘要，幂等——相同输入两次跑逐字节输出相同）→ 原子写落盘 →
+-同步 `issues/batches.md` 的 `成员:`/`状态:` 生成行（D1 完成判据、Q3 不越权纠正、Q2 orphan 报警）。
++默认只扫 `open/`；`--all` 含 `closed/`。盘点或交接前先跑一次；`sdflow-done` 收尾用
++`scan --json --source-change {change} --status OPEN --status PROPOSED` 只读查询本 change 新增的
++未闭合项（详见 `sdflow-done` §2.1）。
+ 
+-### 2. `batch add / set-status / rename`——批次注册表操作
++### next-id / reindex
+ 
+ ```bash
+-# 新建批次（状态=PLANNED，成员空占位；人写字段缺省留占位符）
+-python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch add {change_name} \
+-  --title "清理项标题" --优先级 P1 --计划 "一句范围"
+-
+-# 批次进入实施阶段（人工权限，reindex 只会把它推到 DONE，不会推 PLANNED→IN_PROGRESS）
+-python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch set-status {change_name} IN_PROGRESS
+-
+-# 批次改名（同步 bug+todo 两池所有该批次成员的批次 tag；不做跨 change 合并；
+-# 任一阶段失败均 non-zero，修正故障后重跑原命令）
+-python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . batch rename {old_key} {new_key}
++python3 scripts/issues_v2.py next-id --pool bug   # 输出下一个可用 ID，如 B25
++python3 scripts/issues_v2.py reindex              # 重建 INDEX.md（open）+ CLOSED.md（closed）
+ ```
+ 
+-- `batch add` 对已存在的 key 是**报错**而非静默 no-op（`_die`）——add 是"新建"语义，撞号多半是误操作；
+-  需要 ensure 语义的自动化调用方必须显式传 `--if-exists skip`。`sweep` 固定使用该选项，撞号时由脚本按
+-  幂等成功处理，调用方不得解析错误文案猜测结果。
+-- `batch rename` 刻意不复用 per-type 脚本的 `triage` 子命令改批次列，因为 `triage` 会顺带把"未分诊
+-  开放态"状态推进到 `PROPOSED`——`rename` 只该改标签本身，不该有这个副作用。
+-- `batch rename` 先在 registry 写 target + machine-owned `重命名自: old` provenance，再用每池一次
+-  direct-bytes snapshot retag dated items，最后由同一更新后 snapshot 写 INDEX/batches。任一阶段未收敛均
+-  non-zero，并报告阶段、原始命令与"重跑原命令"；同一命令可从全 old、混合或全 new 盘面继续。无 provenance
+-  的 `old missing/new exists` 仍 fail-closed，不吸收 orphan。
++### 历史迁移工具（`migrate`，一次性，本仓已执行过）
+ 
+-### 3. `sweep --change X`——一键分诊本 change 未分批非终态项（sdflow-done §2.1 的一行封装）
+-
+-```bash
+-python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change {change_name}
+-```
+-
+-语义：把「源 == X ∧ 非终态 ∧ 批次空」的 bug/todo 一次性归入批次 X——即 `sdflow-done` §2.1 原手写 4 步
+-循环（scan 两池 → 逐项 `triage --batch-only` → batch add → reindex）的一键封装，内部全走子进程 CLI（不直调
+-`cmd_*`），对外只暴露一个单一入口（**非原子**——见下）。
+-
+-- **扫描口径 `--open-ungrouped`**：等价于 `scan --change X --open-ungrouped --json`——非终态（非
+-  CLOSED/VERIFIED 等终态）∧ 批次空，**不是** `--status OPEN`（后者漏非 OPEN 的非终态项、也不过滤批次空）。
+-- **只赋批次、不推进状态**：sweep 固定传 `triage --batch-only`——被 sweep 的项只写批次列，
+-  `status` 原样保留（不像人工 `triage` 那样把「未分诊开放态」推进到 `PROPOSED`）；状态推进留给人工
+-  triage 或后续独立流程判断，sweep 只负责"归批次"这一件事。
+-- **幂等**：`batch add` 内部固定带 `--if-exists skip` + `triage --batch-only` 对已归批次项 no-op +
+-  `reindex` 确定性重建——同一 `--change` 连跑多次，第二次 exit 0 且盘面无净变化。
+-- **空 change 入口守卫**：`--change` 为空/纯空白，或未过 `_reject_batch_key_unsafe`（含 `|`/换行/` — `/
+-  首尾空白）→ 先于任何写盘 `_die`，防止把源 = `""` 的孤儿项误纳进空批次。
+-- **非原子、fail-closed、重跑收敛**：任一子步非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/
+-  哪个 pool/已 tag 的 id 列表）；已 tag 项因「批次空」过滤在重跑时天然被排除，故半途失败后**直接重跑同一条
+-  命令即可收敛**，不需手工回滚。reindex 失败也判整体失败；INDEX 未刷新即闭环未完成。
+-- **exclusive owner + participant 委派**：`sweep` 顶层持有仓级 snapshot lock，scan/triage/batch-add/reindex
+-  子命令只沿 allowlist delegation chain 作为 participant 进入同一锁域；其他 cooperative recorder 命令在整个
+-  写窗口 fail-closed 冲突退出。token 不是安全边界，非 cooperative writer 仍属明确不承诺的 TOCTOU 边界。
+-- 孤儿项（源 = `""`）不归 sweep 管，仍由独立的 `scan --open-ungrouped` 兜底工作流处理。
++`migrate` 是 v1（`buglist/`+`todolist/` 双格式）→ v2（`open/`+`closed/` 单文件）一次性转换工具。
++本仓已迁移完成（287 个 issue 全部迁移，v1 数据文件/脚本已删除），日常使用不再需要调用；仅供其它
++仍在 v1 格式的仓库迁移用：`python3 scripts/issues_v2.py migrate`（无需额外参数，`--root` 缺省当前
++git 根；幂等，已存在的目标文件按 ID 跳过）。
+ 
+ ---
+ 
+ ## 约定速查（本 skill 即真相源）
+ 
+-> issues 结构标准（目录/schema/状态/命令/sweep/D9）的**唯一真相源**就是本段——不另起 rules 文件。
++> issues 结构标准（目录/schema/状态/命令）的**唯一真相源**就是本段——不另起 rules 文件。
+ 
+ ### 目录结构
+ 
+-- **bug 池**：`openspec/issues/buglist/YYYY-MM-DD-buglist.md`，每天一个，当天所有 bug 追加进去，不拆分。
+-- **todo 池**：`openspec/issues/todolist/YYYY-MM-todolist.md`，每月一个，当月所有 TODO 追加进去。
+-- 过渡期兼容旧路径 `openspec/buglists/`·`openspec/todolists/`——`next-id`/`scan`/`set-status`/`triage`
+-  全部 **dual-read**（新旧两目录都扫）；**新记录只写新路径的 canonical frontmatter**。自定义 prefix 的
+-  `next-id`/自动 add/显式 ID 查重都在同一仓级 exclusive snapshot lock 内读取 bug+todo 两池全集。跨新旧
+-  路径撞同一 ID 会在 `next-id` 时打 WARNING，提示尽快迁移旧数据。
+-
+-**跨两池共享文件**（owner = `scripts/issues.py`）：
+-
+-- `openspec/issues/INDEX.md`——`issues.py reindex` 从 bug+todo 两池全部 dated 文件重建，首行固定 banner
+-  `<!-- GENERATED by issues.py reindex — DO NOT EDIT -->`。**只生成、禁手改**——手改内容会在下次 reindex
+-  时被无条件覆盖，不做任何合并。
+-- `openspec/issues/batches.md`——批次注册表，**半手维护**（`状态:`/`成员:` 两条生成行归脚本管，`优先级:`/
+-  `计划:` 等是人写行，reindex/batch 绝不覆写人写行），格式契约见下方「batches.md 字段级 grammar」。
+-
+-### 三维度 schema
+-
+-每条 item 三个独立维度，互不覆盖：
++- `openspec/issues/open/{ID}.md` —— 活跃 issue，**一个 issue 一个文件**。
++- `openspec/issues/closed/{ID}.md` —— 已闭合 issue（终态见下方状态词表）。
++- `openspec/issues/INDEX.md` —— `reindex` 从 `open/` 全量重建，首行固定 banner
++  `<!-- GENERATED by issues_v2.py reindex — DO NOT EDIT -->`。**只生成、禁手改**——手改内容会在
++  下次 `reindex` 时被无条件覆盖，不做任何合并。
++- `openspec/issues/CLOSED.md` —— `reindex` 从 `closed/` 全量重建，同 banner，比 INDEX 多
++  `closed_date`/`resolved_by`/`closed_reason` 三列。
++- 无过渡期兼容路径、无 dual-read——v1 的 `buglist/`/`todolist/`/`batches.md` 已删除，本仓已完成
++  一次性迁移（`migrate`），不再有历史遗留目录需要兼容扫描。
+ 
+-| 维度 | 落点 | 可变性 | 含义 |
+-|---|---|---|---|
+-| 源change（关联Change） | frontmatter item `change` | **不可变**（provenance） | 在哪个 change 里发现/冒出来的 |
+-| 批次 | frontmatter item `batch` | 可变 | 被哪个「清理 change」包走去修/做（批次 key = 清理 change 名） |
+-| status | frontmatter item `status` | 生命周期 | 见下方状态词表；marker prose 只追加历史，不是状态真相源 |
++### frontmatter schema（12 个扁平字段，固定顺序，唯一权威数据源）
+ 
+-新写结构是 shared frontmatter envelope 下唯一 `sdflow-issues` namespace（短键 `schema/pool/mode/items`）；
+-新文件 `mode=canonical`。历史 8 列表永久只读，活跃 legacy item 首次 mutation 以 `mode=overlay` shadow 旧
+-row，旧表与旧 block 内部 bytes 不改。reader 在 namespace 在场但损坏时 fail-closed，只有 namespace 不存在
+-才回退 legacy parser。
+-
+-### 特定字段（按 pool 各异）
+-
+-**bug 优先级**：
++```yaml
++---
++id: T257                      # 前缀+数字，文件名即 ID：{ID}.md
++pool: todo                    # todo | bug
++status: OPEN                  # 见下方状态词表
++priority: null                # bug only：约定 P1|P2|P3（脚本不做词表校验）
++type: null                    # todo only：自由文本类型（无受控词表）
++date: "2026-08-03"            # 创建日期
++source_change: some-change    # 发现该 issue 的 change（provenance，可 null，不可变）
++module: sdflow-ship           # 涉及模块
++summary: "一行摘要"
++resolved_by: null             # 修复该 issue 的 change（关闭时自动填）
++closed_date: null             # 关闭日期（关闭时自动填）
++closed_reason: null           # WONTFIX/WONTDO 必填理由（关闭时填）
++---
+ 
+-| 级 | 定义 |
+-|----|------|
+-| P0 | 阻塞交付 / 不可用（Silent Reset、数据全丢） |
+-| P1 | 严重功能缺陷（核心异常、栈溢出风险、数据错误） |
+-| P2 | 中等 / 有绕过（精度偏差、需服务端配合） |
+-| P3 | 低 / 已知豁免（spec/impl 不一致、编译警告） |
+-| P4 | hygiene（残留、风格、纯清理） |
++自由格式 Markdown body（现象、根因、修复方案、动机、思路等，无结构化子字段）
++```
+ 
+-**todo 类型标签**（受控词表）：`性能优化`（提速/降资源） `可观测性`（日志/metrics/诊断） `代码质量`
+-（重构/命名/结构） `功能增强`（新能力/扩展） `基础设施`（构建/CI/工具链）。
++`set-status` 只在 body **追加**一行状态变更历史（`> {date} 状态：{old} → {new}（...）`），MUST NOT
++反解析或覆盖已有 body 内容。frontmatter 写出值一律双引号包裹（`key: "value"`，`null` 写字面 `null`
++不加引号），零依赖手写解析，不引入 PyYAML（ADR-0025）。
+ 
+ ### 状态词表 + 终态集（按 pool 各异）
+ 
+ | pool | 状态码 | 终态集 |
+ |---|---|---|
+-| bug | `OPEN`(已识别未排期) `VERIFIED`(复现确认真 bug) `PROPOSED`(被 change 包入) `IN_PROGRESS`(实现中) `FIXED`(commit+验证) `WONTFIX`(评估不修) `BLOCKED`(等外部依赖) | `{FIXED, WONTFIX}` |
+-| todo | `OPEN`(已记录未排期) `PROPOSED`(被 change 包入) `DONE`(已完成) `WONTDO`(评估放弃) | `{DONE, WONTDO}` |
+-
+-进入终态即"这条债/待办不再挂着"（WONTFIX/WONTDO 是"决定不修/不做"的合法闭合，和 FIXED/DONE 一样从
+-INDEX 的 open 板消失）。**批次完成判据**：批次**成员数 ≥ 1** 且**全部成员 ∈ 该池终态集** → `issues.py
+-reindex` 把该批次同步判/标 `DONE`；reindex 的自动判据**不会**把 0 成员批次判/标为 `DONE`（保持 `PLANNED`，
+-防"空集全称为真"的 vacuous-truth 假 DONE）——但人可用 `batch set-status` 手动标任意状态（含 0 成员标
+-`DONE`），reindex 不越权纠正，只在状态与成员终态不一致时追加 `⚠️ 不一致` 警告。**两池终态集不同，reindex
+-按各自 pool 判定，不硬编码字面 `"DONE"`**（对 bug 池根本不成立）。
++| bug | `OPEN` `PROPOSED` `FIXED` `WONTFIX` | `{FIXED, WONTFIX}` |
++| todo | `OPEN` `PROPOSED` `DONE` `WONTDO` | `{DONE, WONTDO}` |
+ 
+-### 命令面
++进入终态即"这条债/待办不再挂着"（WONTFIX/WONTDO 是"决定不修/不做"的合法闭合，和 FIXED/DONE 一样）；
++文件从 `open/` 移到 `closed/`，从 INDEX.md 消失、出现在 CLOSED.md。非终态回退（如 `PROPOSED → OPEN`）
++文件留在 `open/`（本脚本命令面未提供反向转换命令，如需手工回退需直接编辑 frontmatter）。
+ 
+-**per-pool**（`buglist.py` 只管 bug 池、`todolist.py` 只管 todo 池，互不碰对方）：
++### 命令面（单一入口 `issues_v2.py`，全部命令共用）
+ 
+-`add` / `scan`（bug：`--status`/`--change`/`--批次`/`--open-ungrouped`；todo：另有 `--type`） /
+-`set-status` / `triage`（赋批次 + 把「未分诊开放态」（即 `OPEN`）推进到 `PROPOSED`，幂等——已
+-`PROPOSED`/已终态都 no-op，不倒退状态；`--batch-only` 只赋批次、跳过状态推进，供自动化 sweep
+-路径复用，人工 triage 不传该 flag 时原行为不变） / `next-id`。全部命令 dual-read 新旧两目录。
++`add --pool {bug|todo} --json '{...}'` / `set-status --id {ID} --to {STATUS} [--evidence] [--reason]` /
++`scan [--pool] [--status]* [--source-change] [--all] [--json]` / `reindex` / `next-id --pool {bug|todo}` /
++`migrate`（一次性迁移，见上）。原 `buglist.py`/`todolist.py`（per-pool 薄入口）与
++`issues.py`（跨池薄入口：`reindex`/`batch`/`sweep`）三脚本已合一，`batch`/`sweep`/`triage` 机制随单文件
++模型消解（v1 的 legacy 表格 + frontmatter overlay 双格式、marker block、仓级 `recorder_lock`、批次
++注册表 `batches.md` 均已随本次改造砍除，见下方「并发安全」）。
+ 
+-**跨两池**（`issues.py`，独占跨 bug+todo 的命令）：`reindex` / `batch add|set-status|rename` / `sweep`
+-（详见上方「跨池」段）。
++### ID 两池语义唯一
+ 
+-### sweep 协议（每个 change 收尾时）
+-
+-`sdflow-done` 生成 hand-off 那一步跑 sweep：以 **源==本change ∧ status 非终态 ∧ 批次==空** 为界，只分诊
+-**本 change 自己新增**的未分诊 OPEN 项——显式传 `--change {本change}`（不靠 `detect_change` 猜，从源头减少
+-假孤儿）→ `triage --batch-only` 分诊入批次（**只赋批次，不推进状态**——sweep 是自动化收尾步，状态推进是
+-人工 triage 的职责，两者解耦：被 sweep 的 IN_PROGRESS/BLOCKED 等项原状态原样保留）→ `batches.md` 登记
+-`PLANNED` → 末尾跑 `issues.py reindex` 刷新 INDEX → hand-off 引用这次 sweep 结果。已在各自 change 分诊过的
+-老 OPEN 项不被重诊；**源为空的孤儿项不归本次 sweep**，交独立的通用清理流程兜底（`scan --open-ungrouped` →
+-`triage`（人工，推进状态）→ 另开 cleanup change）。
+-
+-### batches.md 字段级 grammar（半手维护，跨两池）
+-
+-```
+-### {批次key} — {标题}
+-状态: PLANNED            ← 生成行（issues.py reindex / batch set-status 维护）
+-成员: (生成) B1, T2      ← 生成行（reindex 拿 item 池当 ground truth 回填）
+-优先级: P1               ← 人写行（reindex/batch 绝不覆写）
+-计划: 一句范围           ← 人写行（同上）
+-```
++默认 bug=`B`、todo=`T`，各自独立编号。`next-id` 扫 `open/`+`closed/` 全部文件名，取对应前缀 max+1；
++文件名即 ID：`{ID}.md`。ID 正则 `^[A-Z][1-9][0-9]*$`。
+ 
+-`状态:`/`成员:` 两个固定前缀是**生成行**；其余（含条目里额外追加的字段）都是**人写行**。reindex **只精确
+-patch 生成行**，绝不覆写人写行；发现「人写 `状态: DONE` 但成员未全进终态集」不会越权纠正这个值，只在条目尾
+-追加一行 `⚠️ 不一致` 警告，等人工核实后自己用 `batch set-status` 改回或补完成员状态。批次 tag 指向
+-`batches.md` 里不存在的 key（orphan）也只报警、不静默生成 ghost 条目。批次生命周期 `PLANNED → IN_PROGRESS
+-→ DONE`（`PLANNED→IN_PROGRESS` 由人在真正开 cleanup change 时手动 `set-status`；`→DONE` 通常由 reindex
+-按完成判据被动同步）。
++### 并发安全（O_CREAT|O_EXCL，无需仓级锁）
+ 
+-### ID 两池语义唯一〔ADR-0025 / D9〕
++v2 用文件名级 `O_CREAT|O_EXCL` 写保护，不需要 v1 的仓级 `.recorder.lock`：
+ 
+-默认 bug=`B`、todo=`T`，公开的单字母自定义 `--prefix` 保留。ID semantic key 是 `(uppercase ASCII prefix,
+-decimal integer)` 且**不含 pool**，因此 `A007`/`A7` 及 bug/todo 的 `A7` 均冲突。`next-id`、自动 add 与
+-显式 ID 查重必须在同一 snapshot lock 内读两池全集；`reindex` 仍作 fail-closed 防护网（join 前跨池 ID 冲突
+-检测），但不承担事后修复。
++- `add` 创建新文件用 `os.open(path, O_WRONLY|O_CREAT|O_EXCL)`，并发写同 ID 时后到者拿到
++  `FileExistsError` → 自动重试 `next-id`。
++- v2 单文件模型下，文件名 `{ID}.md` 即互斥粒度。
++- `set-status`/`reindex` 操作各自独立的单文件，无跨文件竞争。
+ 
+ ### 铁律（脚本已替你守住大半）
+ 
+-① ID 在 bug+todo 两池语义全局唯一；② frontmatter 是机器真相源，legacy 表永久只读；③ 状态追加式、不删历史
+-（脚本追加历史行）；④ 终态门禁——bug FIXED 必带根因+证据、todo DONE 必带关联 change/commit（脚本门禁）；
+-⑤ 机器索引只写 frontmatter，marker prose 不反解析；⑥ `issues/INDEX.md` 只生成禁手改（issues.py 兜底无
+-条件覆盖重建）；⑦ 轻量优先——todo 简单项只写 frontmatter item，要说明动机/思路才建块；⑧ 实施走 change——
+-台账只是记录/收集池，真做时通过 OpenSpec change 落地，不在此直接改代码。
++① ID 在 bug+todo 两池语义全局唯一；② frontmatter 是唯一权威数据源，body 只追加不反解析；
++③ 终态门禁——bug FIXED / todo DONE 必带证据，WONTFIX/WONTDO 必带理由（脚本门禁）；④ `issues/INDEX.md`
+++ `issues/CLOSED.md` 只生成禁手改（`reindex` 兜底无条件覆盖重建）；⑤ 文件名级 `O_CREAT|O_EXCL` 即
++并发互斥粒度，无需仓级锁；⑥ 实施走 change——台账只是记录/收集池，真做时通过 OpenSpec change 落地，
++不在此直接改代码。
+ 
+ ---
+ 
+ ## `--root` 与 git 根
+ 
+-三个脚本（`buglist.py`/`todolist.py`/`issues.py`）统一探测 **git 仓库根**（`git rev-parse --show-toplevel`），
+-非 git 仓库时退化为 `os.path.abspath(--root)`——`--root` 可指向仓库内任意子目录，不要求必须是仓库根本身；
+-`reindex`/`batch add/set-status/rename` 等命令都会先 resolve 到 git 根再拼 `openspec/issues/...` 路径，且
+-`read_pool` 调 `buglist.py`/`todolist.py` 子进程时会把这个已 resolve 的根通过 `--root` 传下去，保证三脚本
+-落到同一目录、不会因调用时的 cwd/子目录不同而把文件散落到不同位置。
++`issues_v2.py` 探测 **git 仓库根**（`git rev-parse --show-toplevel`），非 git 仓库时退化为
++`os.path.abspath(--root)`——`--root` 可指向仓库内任意子目录，不要求必须是仓库根本身；全部命令都会
++先 resolve 到 git 根再拼 `openspec/issues/...` 路径。
+ 
+ ## 注意
+ 
+-- **并发与耐久边界**：三 recorder 的权威读/写共用 `openspec/issues/.recorder.lock` exclusive snapshot lock；
+-  owner/participant token 只协调 cooperative CLI，不是安全边界。支持本地 POSIX 自动门与 Windows 本地盘 smoke；
+-  network FS、完整 power-loss durability 及非 cooperative writer 的 TOCTOU 不承诺。process crash 留锁时先停该
+-  repo 全部 recorder，再删除错误中给出的精确 lock path，随后重跑原命令（break-glass）；不提供 TTL/自动偷锁。
++- **并发边界**：见上方「并发安全」——`O_CREAT|O_EXCL` 只保护 `add` 的新文件创建，`set-status`/
++  `reindex` 各自作用于独立文件，天然无跨文件竞争；不承诺 network FS 的完整 power-loss durability。
+ - 一个 bug/想法一条 ID；后续进展走 `set-status`，不要新开 ID。
+-- 模型的核心价值在**判断**：这是不是真 bug、落哪个池、定几级/归哪类、该不该建/改批次——命令本身是确定性
+-  操作，交给脚本。拒绝把 review 期琐碎问题、还没确认的猜测、太琐碎/重复的想法记进台账（噪音比漏记更难清理）。
++- 模型的核心价值在**判断**：这是不是真 bug、落哪个池、定几级/归哪类——命令本身是确定性操作，交给
++  脚本。拒绝把 review 期琐碎问题、还没确认的猜测、太琐碎/重复的想法记进台账（噪音比漏记更难清理）。

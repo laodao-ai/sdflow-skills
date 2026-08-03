@@ -106,11 +106,13 @@ bash setup.sh
 
 ### Recorder 存储契约
 
-`sdflow-issues` 的 bug/todo 两池共用 versioned **Shared Frontmatter Envelope**：
-新 item 的机器索引只写 `sdflow-issues` namespace，历史 Markdown 总览表永久只读；首次修改历史 item
-会在同文件生成 overlay，保留旧表 bytes。两池 CLI（三薄入口共唯一 `sdflow_issues_core`）用仓级 exclusive snapshot lock 串行权威读写，batch
-rename 以 registry provenance 支持重跑原命令收敛。完整契约、POSIX/Windows 本地盘、network FS、
-power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md`。
+`sdflow-issues` 的 bug/todo 两池共用**单文件模型**：一个 issue 一个 `.md` 文件（YAML frontmatter 为
+唯一权威数据源，12 个扁平字段；body 为自由格式 Markdown，脚本只追加状态变更历史、不反解析）；
+`open/` / `closed/` 两目录按终态分层，`INDEX.md` / `CLOSED.md` 是 `reindex` 再生的派生物。并发安全靠
+文件名级 `O_CREAT|O_EXCL`（新建同 ID 时后到者 `FileExistsError` 自动重试），不需要仓级快照锁——单一
+入口 `issues_v2.py` 详见 `sdflow-issues/SKILL.md`。零依赖 YAML 子集写读（沿用
+`openspec/adr/0025-recorder-versioned-frontmatter-overlay-and-snapshot-lock.md` 的零依赖原则，不引入
+PyYAML；该 ADR 记录的 overlay/snapshot-lock 架构本身已随本次单文件模型改造替换）。
   - 安全兜底：绝不覆盖非本仓库拥有的同名目录；清理源已删除的孤儿链接。
 - **spec 工作流 bundle 的权威源**：`sdflow-init/assets/workflow/` 是铺给其他项目的
   `openspec/workflow/` 的**唯一来源**。改动这套规则集，一律**先改 assets、再用 `sdflow-init update`
@@ -125,7 +127,7 @@ power-loss、TOCTOU 与 break-glass 边界见 `openspec/adr/0025-recorder-versio
 ```bash
 pytest                                                       # 全部
 pytest sdflow-issues/tests/                                 # 单个 skill
-pytest sdflow-issues/tests/test_buglist.py::test_xxx -v     # 单个用例
+pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v   # 单个用例
 ```
 
 面向 AI 协作者的项目级指令见 [CLAUDE.md](./CLAUDE.md) / [AGENTS.md](./AGENTS.md)。

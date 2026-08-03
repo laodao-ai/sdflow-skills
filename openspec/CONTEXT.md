@@ -51,22 +51,30 @@ _Avoid_: 笼统说"不依赖 gstack"（会误伤合法的产出物复用）
 
 > **元原则（贯穿 假✅ / 反静默守卫 / 反静默压制）**：**任何一层评审覆盖不得无声蒸发。** 一层结论要么到达人眼、要么留下可审计痕迹；"没找到 / 被裁掉 / 没落实 / 悄悄用了旧的”都必须显形，绝不静默通过。见 `adr/0001`、`adr/0002`。
 
-**批次 (Batch)**:
-一组归到同一个"清理 change"里一起清的债务 item 的容器；本质是"一个还没出生的 change"。有独立生命周期 `PLANNED → IN_PROGRESS → DONE`，登记在 `batches.md`。是独立于"源"与"status"的第三维度。
-_Avoid_: 把批次塞进 item 的 status 列（三维度须分家）
+**批次 (Batch)** 〔**已随 `issues-v2-single-file-model` 退役**，本条留档备史〕:
+v1 里一组归到同一个"清理 change"里一起清的债务 item 的容器；本质是"一个还没出生的 change"，有独立
+生命周期 `PLANNED → IN_PROGRESS → DONE`，登记在 `batches.md`。单文件模型（一个 issue 一个 `.md`
+文件）下**批次机制整体消解**——`batch`/`triage`/`sweep` 三个命令随之砍除；PLANNED 批次的计划文本在
+迁移时搬入对应 issue 的 body（`> [迁移自批次 {batch_key}] 原计划: ...`），不再有独立容器。
+_Avoid_: 认为当前台账仍有"批次"这一层（现状只剩「源 change」与「status」两个维度，见下条）
 
-**三维度分家 (源 / 批次 / status)**:
-一条债务 item 的三个正交字段：**源 change**（哪个 change 发现的，provenance，不可变）/ **批次**（归入哪个清理 change，triage 结果，可变）/ **status**（生命周期，回归干净、不塞批次；**词表按 recorder 各异**——bug: `OPEN→…→FIXED/WONTFIX`，todo: `OPEN→PROPOSED→DONE/WONTDO`）。混用是旧 smell 的根因。
+**两维度分家 (源 / status)** 〔原「三维度分家」，批次维度随单文件模型退役〕:
+一条 issue 的两个正交 frontmatter 字段：**源 change**（`source_change`，哪个 change 发现的，
+provenance，不可变）/ **status**（生命周期；**词表按 pool 各异**——bug: `OPEN→PROPOSED→FIXED/WONTFIX`，
+todo: `OPEN→PROPOSED→DONE/WONTDO`）。修复/完成该 issue 的 change 记在 `resolved_by`（终态时自动填，
+语义与 `source_change` 相反：后者是发现处、前者是解决处），同样不是"批次"。
+_Avoid_: 把 `source_change` 与 `resolved_by` 混为一个字段（前者不可变 provenance、后者关闭时才填）
 
 **终态集 (Terminal Set)**:
-一个 recorder 里表示"这条债不再挂着"的状态码集合——**buglist: {FIXED, WONTFIX}，todolist: {DONE, WONTDO}**（含 WONT\*：决定不修/不做也是合法闭合）。批次"完成"判据 = 成员**全部进入各自终态集**，reindex 据此判批次 DONE。存在的原因：两 recorder 词表不同，不能硬编码字面 "DONE"（bug 根本没有 DONE）。
+一个 pool 里表示"这条债不再挂着"的状态码集合——**bug: {FIXED, WONTFIX}，todo: {DONE, WONTDO}**（含
+WONT\*：决定不修/不做也是合法闭合）。终态触发文件从 `openspec/issues/open/{ID}.md` 移到
+`closed/{ID}.md`。存在的原因：两 pool 词表不同，不能硬编码字面 "DONE"（bug 根本没有 DONE）。
 _Avoid_: 用单个 "DONE" 指代所有完成（bug 侧是 FIXED；WONT\* 也是终态、不是"没做完"）
 
-**分诊 / sweep (Triage / Sweep)**:
-把 OPEN 债务 item 归入某批次并转 PROPOSED 的动作。挂在 opsx-done 生成 hand-off 那步，每 change 完成后**只诊本 change 新增**的 OPEN 项（老项各自 change 时已诊过）。
-
 **reindex（重建索引）**:
-从 dated 文件 + batches.md 重建 `issues/INDEX.md` 的命令。INDEX 只生成禁手改，杜绝第三漂移源；reindex 顺带**拿 item 池当 ground truth 同步批次状态**（成员全部进入各自 recorder 终态集→批次 DONE、不一致标出）。
+从 `openspec/issues/open/` 全量重建 `issues/INDEX.md`、从 `closed/` 全量重建 `issues/CLOSED.md` 的
+命令（`issues_v2.py reindex`）。两文件只生成禁手改，杜绝第三漂移源。v1 版本还需从 `batches.md`
+同步批次完成态，v2 无批次机制，`reindex` 收窄为两次纯扫描重建。
 
 **设计层连续 vs 编排层连续 (Design-level vs Orchestration-level Continuity)**:
 工作流"连续"分两层。**设计层连续** = 去掉逼人重来的断点（`/clear`、阶段三人类门），让阶段之间**没有非做不可的中断**；已由本工作流达成。**编排层连续** = 各步不再靠人**逐个 copy prompt 手动触发**，而由一个 orchestrator 顺序驱动；阶段三的这层由 `opsx-ship` 补上（见 `adr/0004`）。二者正交：设计层扫清了"该不该停"，编排层扫清了"谁来按下一步"。
@@ -220,6 +228,17 @@ _Avoid_: 把「层」当**测试类型分类法**（「vitest 算 unit 还是 in
 **`已实现` / `人工` 两词已废弃**：`已实现` 实指「有脚手架」（其定义只要求泳道 ≥ `scaffolded` = 写了但**没验**）⇒ 用户读到「集成测试：已实现」会以为它跑得起来，**这个词在装**；`人工` 与泳道的 `executor: human` **双写**。
 _Avoid_: 手写层状态（它是投影，手写即可伪造可漂移）；用「已实现」描述一个从未跑绿的层。
 
+> 🔴 **下方 11 条（「共享 frontmatter envelope」…「单一源共享 core」）描述的是 `adr/0025`
+> （`mlh-p6-recorder-frontmatter`）与 `adr/0027`（`dedupe-issues-scripts-shared-layer`）落地的
+> **v1 台账架构**——dated 总览表 + versioned frontmatter overlay + marker-framed prose block +
+> 仓级 `.recorder.lock` exclusive snapshot lock + `buglist.py`/`todolist.py`/`issues.py` 三薄入口
+> 共享 `core.py`（`POOL_SPEC` 参数注入）。**`issues-v2-single-file-model` 改为单文件模型**（一个
+> issue 一个 `.md` 文件，YAML frontmatter 唯一权威数据源）后，这套 v1 机制**整体不再是当前实现**：
+> 无 dated 总览表、无 overlay/legacy 双格式、无 marker block（body 是自由 Markdown）、无仓级锁
+> （靠文件名级 `O_CREAT|O_EXCL`）、无 `POOL_SPEC`/`core.py`（单一入口 `issues_v2.py` 内联少量池
+> 差异常量）。下方 11 条**留档备史**（两份 ADR 仍是已 Accepted 的历史决策记录），当前架构见
+> `sdflow-issues/SKILL.md`「约定速查」段与本文件上方「两维度分家」「终态集」「reindex」条目。
+
 **共享 frontmatter envelope (Shared Frontmatter Envelope)** 〔grill/spec-review · mlh-p6-recorder-frontmatter · `adr/0025`，设计期〕 `[grill-amendment]` `[spec-review-amendment]`:
 Markdown 文件 byte 0（可紧随 UTF-8 BOM）的 frontmatter block 是多个 metadata producer 共用的**容器**，不是任一工具的私产；正文中的 `---` 不算 envelope。每个 producer 只拥有一个唯一顶层 namespace；recorder 的所有权边界是 `sdflow-issues` 整棵子树，内部使用短键 `schema/pool/mode/items`。读取只校验自有子树、写入只 splice 自有 span；“opaque”仅指 sibling 所有权/bytes 保真，整个 envelope 仍须满足 v1 lexical profile（column-0 plain ASCII key + 缩进 continuation），超出 profile fail-closed。所有合规 producer 因整文件 replace 共享同一 dated-document lock，不能“namespace 分家、锁也分家”后互相 lost update。
 _Avoid_: recorder 重渲染整个 envelope；把内部键展平为多个 `sdflow-issues-*` 顶层键；让多个工具共同拥有 `sdflow:` 父树。
@@ -276,7 +295,7 @@ _Avoid_: 把 pool 知识写进 `core` 的条件分支（把镜像换成分叉、
 
 ## Flagged ambiguities
 
-- 「recorder 镜像一致性」曾靠 `determinism-guards` 的「三份剥 docstring AST 等价 + THREE_WAY/TWO_WAY roster」守——该守法**以「三 skill 各自内联、独立分发」为前提**（D4：`MUST NOT 抽公共运行时模块`）。`dedupe-issues-scripts-shared-layer` **撤销该前提**（三 skill 合一为 `sdflow-issues`、恒一起装、无人单装）⇒ 镜像 AST 守整体退役，共享逻辑收敛为唯一物理源 `core.py`，守法改为「`core` 无 pool 分支 + `POOL_SPEC` 完备」（见 `adr/0027`、「单一源共享 core」）。`determinism-guards` 的 `config.yaml` 结构 lint / `batches.md` grammar lint / scan-envelope 校验不受影响。
+- 「recorder 镜像一致性」曾靠 `determinism-guards` 的「三份剥 docstring AST 等价 + THREE_WAY/TWO_WAY roster」守——该守法**以「三 skill 各自内联、独立分发」为前提**（D4：`MUST NOT 抽公共运行时模块`）。`dedupe-issues-scripts-shared-layer` **撤销该前提**（三 skill 合一为 `sdflow-issues`、恒一起装、无人单装）⇒ 镜像 AST 守整体退役，共享逻辑收敛为唯一物理源 `core.py`，守法改为「`core` 无 pool 分支 + `POOL_SPEC` 完备」（见 `adr/0027`、「单一源共享 core」）。`determinism-guards` 的 `config.yaml` 结构 lint / `batches.md` grammar lint / scan-envelope 校验不受影响。**`issues-v2-single-file-model` 进一步撤销「单一源共享 core」本身的前提**：单文件模型下 pool 差异收窄为单文件 `issues_v2.py` 内的几个内联常量，连 `core.py`/`POOL_SPEC` 参数注入这层间接都不再需要；`determinism-guards` 与 `spec-workflow` 的 `config.yaml`/`batches.md` grammar lint 等与该薄入口耦合的机械守卫随 `batches.md`/`buglist.py`/`todolist.py`/`core.py` 一并退役（`openspec/specs/determinism-guards/spec.md` 的对应 delta 见该 change）。
 - 「门」曾笼统指一切停顿——已分 **人类门（阻塞、需人判断）** vs **verify 终门（自动、机验）** vs **hand-off（异步、非阻塞的人类再入口）** 三种，勿混（见 `adr/0001-phase3-no-gate-verify-anchors.md`）。
 - 「✅」在评审/verify 语境下曾被无条件信任——现约束为**必附证据锚点**方成立，否则是假✅。
 - 「镜」单字曾可能被误读成「镜子/mirror」——已钉死为「镜头/**review lens**」（聚焦单一角度的独立 reviewer 子代理），非映照。
@@ -297,3 +316,4 @@ _Avoid_: 把 pool 知识写进 `core` 的条件分支（把镜像换成分叉、
 - 「skill 删源」曾是归位模式的一个动作——**已禁**（`adr/0022`）：**skill MUST NOT 删除用户的任何文件**（爆炸半径不受控，引用可能在仓外）。**可改内容**：整体失效 → 顶部加标记内容留着；部分失效 → **真删那段**（失效范围须由「不存在」界定）。
 - 「求值窗口 (Evaluation Window)」〔`adr/0026`〕：门禁判据 MUST **只在它保护的风险真实存在的阶段求值**。实证：失鲜判定长期全阶段求值，而代码审期的 `[impl-review-fix]` 修订、done 期 `opsx:verify` 的「revise design.md to match reality」都是工作流**明文正解**——在那些阶段判失鲜产出的只有噪声。**为噪声造豁免会长出一整套补偿机制**（起草期实际发生过：语义分诊层 → 重锚协议 → 重锚留痕 → 不可变锚字段），而**限定窗口把这一整套证明成不必要的**，判定得以保持全机械。**配套判据**：① 豁免按**内容**切、不按阶段切（`tasks.md` 勾选的写入方是 agent 自由行为、不受阶段约束，按阶段切会立刻假失鲜——前序 change 假设表 A1′ 已证）；② 「监视集」（盯哪些路径）承重，「枚举」（从 git 管道推断哪些路径被碰过）只是手段且是缺陷产地，**砍枚举、留监视集**；③ **MUST NOT** 因「精确率难做」而引入语义层——精确率的问题大部分是窗口画错了，不是判据不够聪明。
 - 「T10」曾被当作放之四海而皆准的单一决策协议引用——已按决策语义拆成两条**具名**规则（`harden-implement-review-loop`/`adr/0031`）：`T10-choice`（"阶段三遇 ≥2 方案自动选"，canonical 场景，`workflow.md`/`sdflow-ship`/`sdflow-code-review`/`spec-workflow` spec.md/`impl-orchestration` spec.md「粒度争议」「矛盾裁决」等落点共享，②步统一派 strong 档对抗镜）与 `review-loop-breaker`（`sdflow-implement` 的"熔断仲裁"，同一发现连续 2 轮 re-review 仍未消解，身份键为「同文件 + 规范化问题指纹」、行号只作定位不作身份，三级处置收敛到互斥终态）——两者处置形状相似（自动选/复核/defer）但触发条件本质不同，**MUST NOT 互相引用**。**"T10" 保留为历史别名**：分析类文档提及"T10 三级协议"不算陈旧，无需扫改；规范性落点（skill 指令/bundle 规则/spec）一律使用具名规则。
+- 「分诊 / sweep (Triage / Sweep)」〔已随 `issues-v2-single-file-model` 退役〕：v1 里指把 OPEN 债务 item 归入某批次并转 PROPOSED 的动作，挂在 `sdflow-done`（原 `opsx-done`）生成 hand-off 那步，`issues.py sweep --change {name}` 一键封装（scan 两池 → 逐项 triage → batch add → reindex）。单文件模型下**批次机制整体消解**（见「批次 (Batch)」条）⇒ `sweep`/`triage`/`batch` 三个命令随之砍除；`sdflow-done` §2.1 改为只读查询 `issues_v2.py scan --json --source-change {change} --status OPEN --status PROPOSED`，hand-off 直接列查到的 ID（不再引批次号）。见 `sdflow-done/SKILL.md` §2.1、`sdflow-issues/SKILL.md`「何时用」段。

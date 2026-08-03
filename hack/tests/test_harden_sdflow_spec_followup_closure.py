@@ -27,8 +27,7 @@ def _resolve_change_root(changes_root: Path) -> Path:
     return archived[0]
 
 
-TODO_SCRIPT = ROOT / "sdflow-issues/scripts/todolist.py"
-TODO_LEDGER = ROOT / "openspec/issues/todolist/2026-07-todolist.md"
+TODO_SCRIPT = ROOT / "sdflow-issues/scripts/issues_v2.py"
 INDEX = ROOT / "openspec/issues/INDEX.md"
 SPEC_AUTHORING = ROOT / "openspec/specs/spec-authoring/spec.md"
 SPEC_WORKFLOW = ROOT / "openspec/specs/spec-workflow/spec.md"
@@ -57,7 +56,7 @@ def test_change_root_resolver_survives_archive(tmp_path: Path) -> None:
 
 def _todos() -> dict[str, dict[str, object]]:
     proc = subprocess.run(
-        ["python3", str(TODO_SCRIPT), "--root", str(ROOT), "scan", "--json"],
+        ["python3", str(TODO_SCRIPT), "--root", str(ROOT), "scan", "--pool", "todo", "--all", "--json"],
         check=True,
         capture_output=True,
         text=True,
@@ -69,12 +68,21 @@ def _todos() -> dict[str, dict[str, object]]:
     return {item["id"]: item for item in items}
 
 
+def _issue_file(item_id: str) -> Path:
+    """v2 单文件模型：一个 issue 一个文件，先 open/ 后 closed/ 定位。"""
+    for sub in ("open", "closed"):
+        candidate = ROOT / "openspec/issues" / sub / f"{item_id}.md"
+        if candidate.is_file():
+            return candidate
+    raise AssertionError(f"{item_id} 在 open/ 与 closed/ 均未找到 v2 issue 文件")
+
+
 def _block(item_id: str) -> str:
-    ledger = TODO_LEDGER.read_text(encoding="utf-8")
-    start = f"<!-- sdflow-issue-block:start id={item_id} -->"
-    end = f"<!-- sdflow-issue-block:end id={item_id} -->"
-    assert start in ledger and end in ledger, f"{item_id} 缺少可追溯 marker block"
-    return ledger.split(start, 1)[1].split(end, 1)[0]
+    """v2 无 marker block——直接返回 frontmatter 之后的 body（含状态变更历史行）。"""
+    text = _issue_file(item_id).read_text(encoding="utf-8")
+    parts = text.split("---\n", 2)
+    assert len(parts) == 3, f"{item_id} frontmatter 结构异常：{text[:80]!r}"
+    return parts[2]
 
 
 ARCHIVE_CLOSURES = {

@@ -300,38 +300,34 @@ verify 判定完（它才权威定完整性）后、归档前，产出 `{change_
 **三段内容**：
 
 1. **✅ 完成了什么**：引 verify-report 的 done 项。**P3h-c：不直接搬运 verify 的 ✅**——每条至少复核锚点存在性（测试名 / commit / 文件:行 真的在），再写进"完成"；无锚点的不写成完成。
-2. **⏳ 未完成 / 延后**：本 change 新增的 buglist/todolist（sdflow-code-review defer 的，已按下方 §2.1 sweep 分诊进批次 `{change_name}`，见 `openspec/issues/batches.md`）+ 被延后的 ≥2 方案决策（附当时自动选了什么 / 为何拿不准）+ verify 的 Minor 缺口。
+2. **⏳ 未完成 / 延后**：本 change 新增的 bug/todo（sdflow-code-review defer 的，已按下方 §2.1 scan 出的 ID 列表，各自见 `openspec/issues/open/{ID}.md`）+ 被延后的 ≥2 方案决策（附当时自动选了什么 / 为何拿不准）+ verify 的 Minor 缺口。
 3. **▶ 下一阶段建议**：建议开哪个清理 change、优先级；哪些 defer 项该一起清。
 
 > **为何独立成步、不并进 verify 或 archive**：verify 判"完整性"、hand-off 是"给人的高层交接 + 下阶段种子"，altitude 不同；时机必须在 verify **之后**（引其权威结论）、archive **之前**（随归档留档）。sdflow-done 是自制 skill，加此步无碍。
 
-### 2.1 issues sweep 子步（先于上面「三段内容」撰写，I5/I6）
+### 2.1 issues scan 子步（先于上面「三段内容」撰写，只读查询）
 
-verify 判完之后、写 hand-off 正文之前，先把**本 change 新增**的未分诊 OPEN 项归入一个批次——这样上面第 2 段能引批次号，而不是逐条罗列裸 ID。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了中档子代理，由该子代理顺带执行）。
+verify 判完之后、写 hand-off 正文之前，只读扫描**本 change 新增**的未闭合 bug/todo——这样上面第 2 段能直接列 ID，而不是引批次号。主 session 直接跑（纯机械 bash，无需额外派子代理；若第二步整体交给了中档子代理，由该子代理顺带执行）。
 
-**脚本路径**：buglist.py / todolist.py / issues.py 现同属**一个 skill `sdflow-issues`** 的三个薄入口（共唯一共享源 `sdflow_issues_core`），随 sdflow-skills `setup.sh` 整目录一次 symlink 到 `~/.claude/skills/sdflow-issues/`——三者同目录 co-located，无跨 skill 依赖：
+**脚本路径**：`issues_v2.py` 是 skill `sdflow-issues` 的单一入口（v2 单文件模型：一个 issue 一个文件，砍掉 v1 的 `buglist.py`/`todolist.py` 两个薄入口与共享核心包），随 sdflow-skills `setup.sh` 整目录 symlink 到 `~/.claude/skills/sdflow-issues/`：
 
 ```
-~/.claude/skills/sdflow-issues/scripts/buglist.py
-~/.claude/skills/sdflow-issues/scripts/todolist.py
-~/.claude/skills/sdflow-issues/scripts/issues.py
+~/.claude/skills/sdflow-issues/scripts/issues_v2.py
 ```
 
-若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.codex/skills/`、或本仓库内 `find . -name buglist.py` 兜底定位，找不到就停下问用户脚本在哪。
+若该固定路径不存在（非常规安装/裸源码检出），在 `~/.claude/skills/`、`~/.codex/skills/`、或本仓库内 `find . -name issues_v2.py` 兜底定位，找不到就停下问用户脚本在哪。
 
-以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。原手写 4 步循环（scan 两池 → 逐项 triage → batch add → reindex）已固化为 `issues.py` 的一键封装子命令 `sweep`〔impl-review-fix：措辞订正，非原子、fail-closed、可重跑收敛〕，一行跑完：
+以下命令在 `{项目根目录}`（cwd）下执行，`--root` 缺省即当前目录，脚本自动探测 git 根。v1 的写操作 sweep（scan 两池 → 逐项 triage → batch add → reindex）在 v2 已砍——batch/triage 机制随单文件模型消解，收尾只需一次只读查询：
 
 ```bash
-python3 ~/.claude/skills/sdflow-issues/scripts/issues.py --root . sweep --change {change_name}
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py --root . scan --json --source-change {change_name} --status OPEN --status PROPOSED
 ```
 
-**必须显式传 `--change {本change}`（D4）**——不靠 `detect_change` 猜；sweep 内部即用该值扫描 `--open-ungrouped`（非终态 ∧ 批次空）、逐项 triage 进同一批次、`batch add --if-exists skip`、末尾 `reindex`。**hand-off 引用该批次**：上面「三段内容」第 2 段写批次号 `{change_name}`（指向 `openspec/issues/batches.md` 对应条目 + `openspec/issues/INDEX.md`），不再逐条罗列裸 ID。
+**必须显式传 `--source-change {本change}`（沿用 D4 精神）**——不靠 `detect_change` 猜；等价于 v1 `scan --change --open-ungrouped` 的圈定范围（按来源 change 过滤非终态项）。**hand-off 直接列 ID**：上面「三段内容」第 2 段把这条命令输出里每个 `id` 各列一条（每个 ID 即文件名 `openspec/issues/open/{ID}.md`，比批次号更直观），不再建批次、不再引批次号。
 
-**执行纪律（D6）**：宜串行跑本步、勿与手动 triage 交叉——sweep 写窗口比单条命令更长（N 次 triage 写 + batch add + reindex）；此为操作建议、非防腐坏硬约束：并发安全由仓级 `recorder_lock` 保证——sweep 作 lock owner 持锁、其子步（triage / batch add / reindex）作 participant 加入同一锁域，并发的独立命令 fail-closed 拒锁（`lock occupied`）而非交叉腐坏〔mlh-p6 T146〕。
+**只读、天然幂等、无需加锁**：v2 `scan` 是纯读操作，不写盘、不涉及仓级锁；同一条命令可重复执行，结果确定——v1 依赖 `recorder_lock` 保护的写窗口在 v2 不存在。
 
-**失败语义（非原子、fail-closed、重跑收敛）**：sweep 不是真原子——任一子步（scan/triage/batch add/reindex）非零退出即整体非零退出，stderr 报明失败步 + 失败点位（第 i 项/哪个 pool/已 tag 的 id 列表），不静默继续；已 tag 项在重跑时被「批次空」过滤天然排除，故半途失败后**直接重跑同一条命令即可收敛到完成**，无需手工回滚。
-
-**范围边界（design §4.2，不在本 sweep 内）**：sweep 只圈**源 == 本 change**的未分诊非终态项（`--open-ungrouped` 口径）。孤儿项（源 = `""`，多 change 并行、`detect_change` 探不出归属的）**不归本 sweep 管**——由独立的通用「清 bug/todo」工作流兜底（`scan --open-ungrouped` → `triage` → 另开 cleanup change），不因 sweep 窄而无声蒸发；sweep 本身保持窄而确定，别为了兜孤儿放宽 `--change` 过滤。
+**范围边界（design §4.2，不在本查询内）**：只圈**源 == 本 change**的非终态项（`OPEN`/`PROPOSED`）。孤儿项（`source_change` 为空，多 change 并行、`detect_change` 探不出归属的）**不归本查询管**——由独立的通用「清 bug/todo」工作流兜底（`scan` 全量扫 + 人工核实归属 → 另开 cleanup change），不因本查询窄而无声蒸发。
 
 ### 2.2 roadmap 回填降摩擦助手子步（§2.1 之后、写 hand-off 三段之前）〔done-roadmap-writeback〕
 
@@ -520,8 +516,8 @@ sdflow-done 完成
 - **verify 必产 `verify-report.md`** 存 change 目录（随归档留档）。
 - **verify 防假✅（P3h）**：每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；强档 + Do-Not-Trust 冷启（阶段三去人类门后 verify 是唯一终门，禁降档）。见 design §7.3.1 / adr/0001。
 - **hand-off.md（P3g）**：verify 之后 / archive 之前产出（done/not-done + 延后项 + 下阶段建议），随归档留档，作异步人类再入口 + 下个 change 种子；**不直接搬运 verify 的 ✅**（复核锚点存在性）。
-- **issues sweep 子步（§2.1，D3/D4）**〔impl-review-fix：本条订正——旧版描述手写 4 步循环，§2.1 已改用 sweep 一键封装〕：写 hand-off 正文前先跑 `issues.py sweep --change {本change}` 一键调用（内部固化 scan 两池 → 逐项 triage → batch add → reindex 全部子步，不再手写 4 步循环）；**显式传 `--change {本change}`**（不靠 `detect_change` 猜，D4）；只建 **1 个批次、key=本 change 名**（Q2 保守，禁跨 change 合并）；内部末尾跑 `reindex`（D3）刷新 INDEX + 同步批次状态；只圈 `源==本change` 的未分诊 OPEN 项，孤儿（源=""）不归本 sweep，交独立清理流程兜底；非原子、fail-closed，半途失败直接重跑同一条命令收敛。
-- **roadmap 回填助手（§2.2，done-roadmap-writeback）**：verify 之后跑 `roadmap_writeback_draft.py` 生成 roadmap 回填草稿进 hand-off + 第六步摘要抬一行（merge 时点可见）；**与 §2.1 issues sweep 同位不同性**——同为 done 收尾盘面消费，但 sweep 机械终写机器独占文件（INDEX）、roadmap 回填**助人确认**（完成判定含判断，写入语义相反，不诱导复用 sweep 自动落盘）。切分线：定位到 phase=机械（change 名前缀确定性信号）、勾哪几行=判断留人；archive/merge 预测值留占位不预填（P-1）；detection fence-aware 防自指（P-5）；非复选框格式 fail-loud（P-3）。**残差登记**：草稿产出即止、apply 由人异步、不保证（经 /sdflow-ship 全自动链人被支走时尤然）。
+- **issues scan 子步（§2.1）**：写 hand-off 正文前先跑 `issues_v2.py scan --json --source-change {本change} --status OPEN --status PROPOSED` 只读查询（v2 单文件模型已砍 batch/triage/sweep 机制，不再是写操作）；**显式传 `--source-change {本change}`**（不靠 `detect_change` 猜）；hand-off 直接列出命令返回的每个 ID（各即 `openspec/issues/open/{ID}.md`），不再建批次；只读、天然幂等、无需仓级锁；只圈 `源==本change` 的非终态项，孤儿（`source_change` 为空）不归本查询，交独立清理流程兜底。
+- **roadmap 回填助手（§2.2，done-roadmap-writeback）**：verify 之后跑 `roadmap_writeback_draft.py` 生成 roadmap 回填草稿进 hand-off + 第六步摘要抬一行（merge 时点可见）；**与 §2.1 issues scan 同位不同性**——同为 done 收尾盘面消费，但 scan 机械只读、roadmap 回填**助人确认**（完成判定含判断，写入语义相反，不诱导复用 scan 自动落盘）。切分线：定位到 phase=机械（change 名前缀确定性信号）、勾哪几行=判断留人；archive/merge 预测值留占位不预填（P-1）；detection fence-aware 防自指（P-5）；非复选框格式 fail-loud（P-3）。**残差登记**：草稿产出即止、apply 由人异步、不保证（经 /sdflow-ship 全自动链人被支走时尤然）。
 
 ## 模型选择（按本步性质，逐步定）
 

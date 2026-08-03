@@ -80,10 +80,19 @@ jobs:
           git -C "$probe" init
           python3 sdflow-init/scripts/init.py init --root "$probe"
           PYTHONIOENCODING=gbk python3 sdflow-init/scripts/init.py update --root "$probe"
-      - name: Exercise seven UTF-8 text subprocess call sites and invalid-byte replacement
+      - name: Exercise UTF-8 text subprocess call sites (issues_v2.py, retro_report.py, ship_gate.py) and invalid-byte replacement
         shell: bash
         run: |
-          PYTHONIOENCODING=gbk py -m pytest -q sdflow-issues/tests/test_task5_delivery_contract.py::test_sweep_cli_executes_all_four_utf8_subprocess_sites -W error
+          probe="$RUNNER_TEMP/issues-v2-encoding-probe"
+          mkdir -p "$probe/openspec/issues/open" "$probe/openspec/issues/closed"
+          git -C "$probe" init -q
+          git -C "$probe" config user.email test@example.com
+          git -C "$probe" config user.name test
+          git -C "$probe" commit -q --allow-empty -m init
+          add_out="$(PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" add --pool bug --json '{"module":"m","summary":"s","priority":"P1"}')"
+          issue_id="$(python3 -c "import json,sys; print(json.loads(sys.argv[1])['id'])" "$add_out")"
+          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" set-status --id "$issue_id" --to FIXED --evidence "smoke"
+          PYTHONIOENCODING=gbk python3 sdflow-issues/scripts/issues_v2.py --root "$probe" reindex
           PYTHONIOENCODING=gbk python3 sdflow-retro/scripts/retro_report.py --root .
           set +e
           PYTHONIOENCODING=gbk python3 sdflow-ship/scripts/ship_gate.py --root . --change fix-windows-encoding-crash
