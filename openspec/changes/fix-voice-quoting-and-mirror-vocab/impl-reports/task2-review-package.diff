@@ -1,0 +1,204 @@
+# Review package: 3a9293877136e69347639583ecfd20bdac2e6ef7..4739563fd8acd81e8fc70ab24ef0052efa002f03 (Task 2 worktree merge)
+
+## Commits
+4739563 merge: Task 2 anchor_lint enum expansion (worktree)
+61ec9dd fix(anchor-lint): _FANOUT_MIRRORS 加入 history token
+
+## Files changed
+ .../impl-reports/task2-anchor-lint-enum.md         | 48 ++++++++++++++++++++++
+ openspec/workflow/tools/anchor_lint.py             |  4 +-
+ sdflow-init/assets/workflow/tools/anchor_lint.py   |  4 +-
+ .../workflow/tools/tests/test_anchor_lint.py       | 11 +++++
+ 4 files changed, 63 insertions(+), 4 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task2-anchor-lint-enum.md b/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task2-anchor-lint-enum.md
+new file mode 100644
+index 0000000..f847b4c
+--- /dev/null
++++ b/openspec/changes/fix-voice-quoting-and-mirror-vocab/impl-reports/task2-anchor-lint-enum.md
+@@ -0,0 +1,48 @@
++# Task 2 impl report — anchor_lint 枚举扩展 + 消费拷贝刷新
++
++## 改动
++
++- `sdflow-init/assets/workflow/tools/anchor_lint.py:672`
++  `_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding"})`
++  → `frozenset({"domain", "adversarial", "grounding", "history"})`。
++- 同文件 `check_fanout_consistency()` docstring（约 L702）硬编码枚举同步：
++  `∈{domain,adversarial,grounding}` → `∈{domain,adversarial,grounding,history}`。
++- 跑 `python3 sdflow-init/scripts/init.py update --dev` 刷新本仓消费拷贝
++  `openspec/workflow/tools/anchor_lint.py`（两处枚举与源一致）。
++  该次 `--dev` 整刷同时带出两处**与本票无关的预存漂移**（`openspec/workflow/config.template.yaml`
++  新增 `test-suites`/`operations` 段落说明、`Token_Saving_Strategies.md` 尾随空格规范化）——
++  这是 bundle 整刷的既有机制副作用（源已比消费拷贝新），不是本票引入，未回滚。
++
++## 测试
++
++`sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` 新增两条（紧邻既有
++`test_fanout_unavailable_multi_mirror_blocked` 之后）：
++
++- `test_parse_mirrors_history_token_valid`：直接单测 `_parse_mirrors("history")` →
++  `(["history"], None)`，非 `unknown-token`。
++- `test_fanout_unavailable_history_multi_mirror_blocked`：
++  `mirrors="domain,history"` + `subagents="unavailable"` → 命中 `dead-fanout-multi-mirror`。
++
++## 验证
++
++```
++/usr/bin/python3 -m pytest sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py -q
++```
++
++143 passed / 2 failed（`test_yq_not_installed_fails_loud`、
++`test_yq_identity_check_rejects_non_mikefarah`）。经 `git stash` 回退到改动前重跑同两条用例
++确认**改动前已同样失败**（本机装的是 `kislyuk/yq` 而非 `mikefarah/yq`，环境问题，与本票无关）。
++
++按 `-k "fanout or mirror"` 单独跑：29 passed，0 failed。
++
++## MUST NOT 事项核对
++
++未勾 `tasks.md`/`tickets.md` 验收复选框，未打 checkpoint 标签（该目录在本 worktree 不可见，见下）。
++
++## 已知限制
++
++本 agent 运行在 git worktree 隔离环境
++（`/Users/cheneyzhao/Documents/04-sdflow-skills/.claude/worktrees/agent-a68de0084d0ac600e`），
++该 change 目录（`proposal.md`/`design.md`/`tasks.md`/`tickets.md`/`decision-memo.md` 等）在共享
++主 checkout 中处于**未 track 状态**，worktree 天然看不到未 track 文件——本报告及测试改动只落在
++本 worktree 的文件系统里，需由上游编排把该 worktree 的产物合并回主 checkout。
+diff --git a/openspec/workflow/tools/anchor_lint.py b/openspec/workflow/tools/anchor_lint.py
+index 0d30b08..07090ad 100644
+--- a/openspec/workflow/tools/anchor_lint.py
++++ b/openspec/workflow/tools/anchor_lint.py
+@@ -662,21 +662,21 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
+         v.append({"anchor": anchor, "field": "declared", "kind": "declared-not-expected",
+                   "detail": f"declared={sorted(set(declared))} expected={sorted(expected)}"})
+     # ④ declared ↔ 实落站点集比对（本票核心：并发 2 站点漏收一个 → site-missing-anchor）
+     for s in sorted(set(declared) - actual):
+         v.append({"kind": "site-missing-anchor", "detail": s})
+     for s in sorted(actual - set(declared)):
+         v.append({"kind": "site-unexpected-anchor", "detail": s})
+     return v
+ 
+ 
+-_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
++_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
+ _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
+ _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
+ 
+ 
+ def _parse_mirrors(raw):
+     """严格文法解析 `mirrors=`：返回 (tokens, err)。tokens 为去重后合法子集（`—` → 空 list 哨兵）；
+     err ∈ {'missing','empty','empty-token','unknown-token','dup-token'} 或 None。fail-closed：MUST NOT 把
+     缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。"""
+     if raw is None:
+         return None, "missing"
+@@ -692,21 +692,21 @@ def _parse_mirrors(raw):
+         if t not in _FANOUT_MIRRORS:
+             return None, "unknown-token"
+     if len(tokens) != len(set(tokens)):
+         return None, "dup-token"
+     return tokens, None
+ 
+ 
+ def check_fanout_consistency(report_text):
+     """🔴 fan-out always-on 一致性 lint（不接受 metrics_on）。**判据读 `sdflow:fanout-capability` 锚的
+     `mirrors=`，MUST NOT 数 lens-metric 行**（C2：lens-metric 受 metrics 门控、默认消费仓零行 → 空转）。
+-    subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
++    subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding,history} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
+     严格文法 fail-closed：重复锚 / 重复 KV / subagents 空·未知·缺 / capability host 与报告 host 不一致 /
+     mirrors 缺·空·未知 token·重复 token / host=codex 报告缺该锚 → 报错。
+     诚实边界：只拦「机制死却报多镜」的**自相矛盾**，MUST NOT 声称拦住伪造——mirrors=/subagents= 仍主 session
+     自报，写 available 或只列 1 镜即绕过（无机械交叉核验，残余留语义层）；且是否触发受 host 自报信任边界约束
+     （谎报 host=claude 则不要求该锚，与 ADR-1 同根）。"""
+     v = []
+     outside = list(fence_outside_lines(report_text))
+     report_hosts, cap_anchors = set(), []
+     for ln in outside:
+         name = anchor_prefix(ln)
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index 0d30b08..07090ad 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -662,21 +662,21 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
+         v.append({"anchor": anchor, "field": "declared", "kind": "declared-not-expected",
+                   "detail": f"declared={sorted(set(declared))} expected={sorted(expected)}"})
+     # ④ declared ↔ 实落站点集比对（本票核心：并发 2 站点漏收一个 → site-missing-anchor）
+     for s in sorted(set(declared) - actual):
+         v.append({"kind": "site-missing-anchor", "detail": s})
+     for s in sorted(actual - set(declared)):
+         v.append({"kind": "site-unexpected-anchor", "detail": s})
+     return v
+ 
+ 
+-_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
++_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
+ _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
+ _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
+ 
+ 
+ def _parse_mirrors(raw):
+     """严格文法解析 `mirrors=`：返回 (tokens, err)。tokens 为去重后合法子集（`—` → 空 list 哨兵）；
+     err ∈ {'missing','empty','empty-token','unknown-token','dup-token'} 或 None。fail-closed：MUST NOT 把
+     缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。"""
+     if raw is None:
+         return None, "missing"
+@@ -692,21 +692,21 @@ def _parse_mirrors(raw):
+         if t not in _FANOUT_MIRRORS:
+             return None, "unknown-token"
+     if len(tokens) != len(set(tokens)):
+         return None, "dup-token"
+     return tokens, None
+ 
+ 
+ def check_fanout_consistency(report_text):
+     """🔴 fan-out always-on 一致性 lint（不接受 metrics_on）。**判据读 `sdflow:fanout-capability` 锚的
+     `mirrors=`，MUST NOT 数 lens-metric 行**（C2：lens-metric 受 metrics 门控、默认消费仓零行 → 空转）。
+-    subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
++    subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding,history} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
+     严格文法 fail-closed：重复锚 / 重复 KV / subagents 空·未知·缺 / capability host 与报告 host 不一致 /
+     mirrors 缺·空·未知 token·重复 token / host=codex 报告缺该锚 → 报错。
+     诚实边界：只拦「机制死却报多镜」的**自相矛盾**，MUST NOT 声称拦住伪造——mirrors=/subagents= 仍主 session
+     自报，写 available 或只列 1 镜即绕过（无机械交叉核验，残余留语义层）；且是否触发受 host 自报信任边界约束
+     （谎报 host=claude 则不要求该锚，与 ADR-1 同根）。"""
+     v = []
+     outside = list(fence_outside_lines(report_text))
+     report_hosts, cap_anchors = set(), []
+     for ln in outside:
+         name = anchor_prefix(ln)
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index db195db..3ce3894 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -784,20 +784,31 @@ def test_anchor_lint_does_not_reference_resolve_models():
+         assert "resolve-models" not in call_args and "resolve_models" not in call_args
+ 
+ 
+ # --- Step 7：fan-out always-on 一致性 lint（读 mirrors=，MUST NOT 数 lens-metric 行）------------
+ 
+ def test_fanout_unavailable_multi_mirror_blocked():            # unavailable + mirrors 列 3 镜 → dead-fanout-multi-mirror
+     al = _mod()
+     r = _fc(host="codex", subagents="unavailable", mirrors="domain,adversarial,grounding") + "\n"
+     assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
+ 
++def test_parse_mirrors_history_token_valid():                  # history 是合法 mirror token，非 unknown-token
++    al = _mod()
++    tokens, err = al._parse_mirrors("history")
++    assert err is None
++    assert tokens == ["history"]
++
++def test_fanout_unavailable_history_multi_mirror_blocked():    # unavailable + mirrors="domain,history" → dead-fanout-multi-mirror
++    al = _mod()
++    r = _fc(host="codex", subagents="unavailable", mirrors="domain,history") + "\n"
++    assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
++
+ def test_fanout_unavailable_single_mirror_ok():               # unavailable + 1 镜 → 放行
+     al = _mod()
+     r = _fc(host="codex", subagents="unavailable", mirrors="domain") + "\n"
+     assert al.check_fanout_consistency(r) == []
+ 
+ def test_fanout_available_multi_mirror_ok():                  # available + N 镜 → 放行（残余留语义层，不拦偷懒自代）
+     al = _mod()
+     r = _fc(host="codex", subagents="available", mirrors="domain,adversarial,grounding") + "\n"
+     assert al.check_fanout_consistency(r) == []
+ 

@@ -23,11 +23,11 @@ async-branch 内改动 MUST 两份 SKILL 字节对称。marker 外 `mkdir -p` �
 
 验收后跑 parity 守卫确认。
 
-- [ ] code-review SKILL.md async-branch 内所有路径模板加双引号（`<f>` → `"<f>"`、`{run-dir}` → `"{run-dir}"`、`<repo-root>` → `"<repo-root>"`、`<d>` → `"<d>"`、`<确切目录>` → `"<确切目录>"`）
-- [ ] spec-review SKILL.md async-branch 内做字节对称的同样修改
-- [ ] 两份 SKILL.md 的 `mkdir -p` 行加引号：`{change_dir}` → `"{change_dir}"`
-- [ ] 两份 SKILL.md 的 fallback 行加引号：`--context-file <f>` → `--context-file "<f>"`
-- [ ] `python3 hack/check_async_branch_parity.py` 通过
+- [x] code-review SKILL.md async-branch 内所有路径模板加双引号（`<f>` → `"<f>"`、`{run-dir}` → `"{run-dir}"`、`<repo-root>` → `"<repo-root>"`、`<d>` → `"<d>"`、`<确切目录>` → `"<确切目录>"`）
+- [x] spec-review SKILL.md async-branch 内做字节对称的同样修改
+- [x] 两份 SKILL.md 的 `mkdir -p` 行加引号：`{change_dir}` → `"{change_dir}"`
+- [x] 两份 SKILL.md 的 fallback 行加引号：`--context-file <f>` → `--context-file "<f>"`
+- [x] `python3 hack/check_async_branch_parity.py` 通过
 
 ### Task 2: anchor_lint 枚举扩展 + 消费拷贝刷新
 
