@@ -14,27 +14,35 @@ L947-960：`tmp = settings + ".tmp"` 固定名。持锁时安全（串行化）�
 
 ### 修法
 
-对齐同文件 `_atomic_write()` L551 的做法：
+对齐同文件 `_atomic_write()` L551 的做法，**但保持本函数的 fail-safe 契约**（OSError → 返回 False，绝不中止 retire_hooks 循环 / setup.sh）：
 
 ```python
-fd, tmp = tempfile.mkstemp(prefix=".settings-", dir=os.path.dirname(settings))
+# [spec-review-amendment] CR-1: mkstemp 必须在 try 内——本函数契约是 fail-open（返回 False），
+# 与 _atomic_write 的 fail-closed（finally 清理后裸抛）不同。mkstemp 底层是 open(O_CREAT|O_EXCL)，
+# 权限拒绝/只读/满盘时抛 OSError，放在 try 外会让异常逃逸击穿 FB-3 契约。
 try:
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    os.replace(tmp, settings)
-except OSError:
-    # 清理残留 tmp（mkstemp 已创建文件）
+    fd, tmp = tempfile.mkstemp(prefix=".settings-", dir=os.path.dirname(settings))
     try:
-        os.unlink(tmp)
-    except OSError:
-        pass
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, settings)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+except OSError:
     return False
 return True
 ```
 
-- `mkstemp` 返回 fd + 唯一路径，`os.fdopen` 包装后写入
-- 失败时 `os.unlink(tmp)` 清理残留（固定名方案靠下次覆盖，唯一名方案须显式清理）
+- `mkstemp` 在外层 `try` 内——任何 OSError（含 mkstemp 自身失败）都被捕获返回 False
+- 内层 `try/except BaseException` 确保 mkstemp 成功后的残留 tmp 被清理
+- `flush()` + `os.fsync()` 对齐 `_atomic_write()` 风格 [spec-review-amendment] CR-7
 - `os.replace` 语义不变（POSIX + Windows 同卷原子）
 
 ## T149 · `lint_config()` 顶层重复键检测
@@ -52,14 +60,16 @@ def _detect_duplicate_top_keys(cfg_path):
     """行级扫描 YAML 顶层键（缩进=0 的 `key:` 行），返回重复键列表。"""
     seen = {}
     try:
-        with open(cfg_path, encoding="utf-8") as f:
+        # [spec-review-amendment] CR-3: utf-8-sig 处理 BOM，对齐同文件 _schema_from_config()
+        # [spec-review-amendment] CR-2: 捕获 UnicodeDecodeError（非 OSError 子类）
+        with open(cfg_path, encoding="utf-8-sig") as f:
             for lineno, line in enumerate(f, 1):
                 if line and not line[0].isspace() and not line.startswith("#"):
                     m = re.match(r"([A-Za-z_][\w-]*):", line)
                     if m:
                         key = m.group(1)
                         seen.setdefault(key, []).append(lineno)
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return []
     return [f"{k}（行 {','.join(map(str, lns))}）" for k, lns in seen.items() if len(lns) > 1]
 ```
