@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v6（2026-08-04，B8 完成）
-> 总量：108 条 open todo（0 条 open bug）
+> 版本：v7（2026-08-04，全部排期批次完成）
+> 总量：104 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -23,7 +23,7 @@
 | ~~B7~~ | ~~hack/ 测试守卫补全~~ | ~~7~~ | -- | -- | ✅ 全部已关（4 直接修 DONE + 3 WONTDO） |
 | ~~B8~~ | ~~ship_gate 小修集~~ | ~~4~~ | -- | -- | ✅ 全部已关（1 直接修 DONE + 3 WONTDO） |
 | ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
-| **B10** | lens-metric 体系补全 | 4 | 中 | 中 | 可立即开 |
+| ~~B10~~ | ~~lens-metric 体系补全~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
 | **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / 文档… | ~95 | 低-中 | 中-大 | 条件触发 |
 
 ---
@@ -151,14 +151,16 @@ issues-v2-single-file-model change 已删除 `sdflow_issues_core`、v1 三脚本
 
 ---
 
-### B10 · lens-metric 体系补全（4 条）
+### ~~B10~~ · lens-metric 体系补全 — ✅ 全部 WONTDO
 
-| ID | 摘要 |
-|---|---|
-| T192 | emitter 输入 JSON 未落盘（SR-M 门后重算不可执行） |
-| T254 | 行键无法表达 broad 层内跨模型双声 |
-| T172 | 采纳/defer 二分无法表达边界变更 |
-| T55 | 聚合器 glob 空 vs archive 不存在无法区分 |
+四条均为度量体系设计级增强（非正确性），当前精度够用，触发条件=retro 跑出度量盲区时再议。
+
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T192 | emitter 输入 JSON 未落盘（SR-M 门后重算不可执行） | ✅ WONTDO |
+| T254 | 行键无法表达 broad 层内跨模型双声 | ✅ WONTDO |
+| T172 | 采纳/defer 二分无法表达边界变更 | ✅ WONTDO |
+| T55 | 聚合器 glob 空 vs archive 不存在无法区分 | ✅ WONTDO |
 
 ---
 
@@ -202,7 +204,7 @@ B7 (hack测试) ─── ✅ 全部已关
      │
 B8 (ship_gate) ─── ✅ 全部已关
      │
-B10 (lens) ──── 最后一批
+B10 (lens) ─── ✅ 全部已关
 ```
 
-B1–B8、B9 已全关。仅剩 B10（lens-metric 4 条）。
+**全部 10 个排期批次已关闭。** 剩余 104 条 open todo 在延后池，条件触发时再捞。
