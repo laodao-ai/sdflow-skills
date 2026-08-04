@@ -385,6 +385,41 @@ def test_usage_exec_timeout_non_numeric_exit2(tmp_path):
     assert r.returncode == 2
 
 
+# ── harden-outside-voice-scripts T176: --timeout 0 rejection ───────────────
+
+@pytest.mark.parametrize("zero_value", ["0", "00", "000"])
+def test_usage_exec_timeout_zero_exit2(tmp_path, zero_value):
+    # PATH 故意不放任何假 runner——若解析没在 usage() 前拦下就会走到 do_exec 并尝试
+    # spawn 一个不存在的 codex（另一种失败形态），exit 2 只可能来自 usage() 本身，
+    # 结构上即证明 runner 从未启动。
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+    r = run(["exec", "--context-file", str(ctx), "--timeout", zero_value],
+            env={"PATH": path_without_codex(), "SDFLOW_VOICE_RUNNER": "codex"})
+    assert r.returncode == 2
+
+
+def test_exec_timeout_leading_zero_accepted(tmp_path):
+    # "01" 十进制 = 1，非零，MUST NOT 被误拒；用 hang 模式跑满真超时(exit 124)
+    # 来证明解析确实放行并把值传给了 runner（而不是巧合地在别处提前退出）。
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+    r = run(["exec", "--context-file", str(ctx), "--timeout", "01"],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                 "FAKE_CODEX_MODE": "hang"})
+    assert r.returncode == 124
+
+
+def test_exec_timeout_normal_value_unaffected(tmp_path):
+    # 既有正常值（如 300）行为不受新增零值校验影响。
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+    r = run(["exec", "--context-file", str(ctx), "--timeout", "300"],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                 "FAKE_CODEX_MODE": "ok"})
+    assert r.returncode == 0
+    assert r.stdout.strip() == "FAKE_FINDINGS"
+
+
 def test_usage_render_prompt_bogus_flag_exit2():
     r = run(["render-prompt", "--bogus", "x"])
     assert r.returncode == 2
