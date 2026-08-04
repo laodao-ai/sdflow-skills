@@ -34,7 +34,7 @@ outside-voice.sh 存在 1 处运行时安全缺陷 + 2 处廉价加固缺口（T
 
 - 不改 outside-voice-job.py 的 cmd_worker 信号转发（T227，设计级加固，前提未验，退回延后池）
 - 不补 KILL 兜底路径测试（T173，已有 test_runner_ignoring_term_dies_under_group_kill_escalation 覆盖，WONTDO）
-- 不补磁盘满测试（T178，macOS CI 泳道已覆盖 hdiutil ramdisk 测试，WONTDO）
+- 不补磁盘满测试（T178，本地 macOS 开发机已覆盖 hdiutil ramdisk 测试（CI=true 时 skip），WONTDO）[spec-review-amendment]
 
 ## Priority
 

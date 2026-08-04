@@ -16,9 +16,9 @@
 
 ### D1 · `--timeout 0` 拒绝方式
 
-`outside-voice.sh:893` 的 `case "$2"` 分支，在既有 `''|*[!0-9]*)` 之后加 `0)` 分支，exit 2（与 usage 一致）。
+`outside-voice.sh:893` 的 `case "$2"` 分支，在既有 `''|*[!0-9]*)` 纯数字校验**之后**，加数值比较 `[ "$((10#$2))" -eq 0 ] && usage`，exit 2。`10#` 强制十进制解析，正确捕获 `0`/`00`/`000` 等所有前导零变体（shell `case` 的字面 `0)` 只匹配 `"0"`，不匹配 `"00"`）。[spec-review-amendment]
 
-**砍掉的候选**：改为最小值下限（如 `[ "$tmo" -lt 1 ]`）— 过度设计，0 是唯一的危险值（GNU timeout `DURATION=0` = 禁用超时），负数已被 `*[!0-9]*` 拦。
+**砍掉的候选**：① 字面 case `0)` 分支 — 只匹配字符串 "0"，"00"/"000" 绕过（spec-review F1）；② 最小值下限（`[ "$tmo" -lt 1 ]`）— 过度设计，0 是唯一的危险值，负数已被 `*[!0-9]*` 拦。
 
 ### D2 · 出境 stdout 大小限制
 
@@ -26,7 +26,14 @@
 
 ```bash
 ov_outsize=$(wc -c 2>/dev/null < "$workdir/last-message.md" | tr -d ' ')
-if [ "${ov_outsize:-0}" -gt "$OV_MAX_CONTEXT_BYTES" ]; then
+# [spec-review-amendment] wc 失败时 fail-closed（安全默认=强制截断），不静默放行
+case "${ov_outsize:-}" in
+  ''|*[!0-9]*)
+    echo "OV_OUTPUT_SIZE_CHECK_FAILED=1" >&2
+    ov_outsize="$((OV_MAX_CONTEXT_BYTES + 1))"
+    ;;
+esac
+if [ "$ov_outsize" -gt "$OV_MAX_CONTEXT_BYTES" ]; then
     echo "OV_OUTPUT_TRUNCATED=1 original_bytes=$ov_outsize limit=$OV_MAX_CONTEXT_BYTES" >&2
     head -c "$OV_MAX_CONTEXT_BYTES" "$workdir/last-message.md"
 else
@@ -34,7 +41,7 @@ else
 fi
 ```
 
-复用入境同一个 `OV_MAX_CONTEXT_BYTES`（200KB 默认）。截断按字节、不做 UTF-8 回扫（模型输出大概率 ASCII/英文，且下游做文本匹配非字节验证；入境回扫的 stdout 协议与此不同，复用代价过高）。
+复用入境同一个 `OV_MAX_CONTEXT_BYTES`（200KB 默认）。截断按字节、不做 UTF-8 回扫——接受截断可能在最后一个多字节字符（中文 CJK 3 字节）处产生非法 UTF-8（概率中等，非"大概率 ASCII"），但影响低：只影响 200KB 边界处末尾 1-3 字节，下游 `errors="replace"` 不会崩溃。D2 scope 是"bounded published evidence"（cap stdout 通道），非"bounded resource usage"（runner 已写完 last-message.md）。[spec-review-amendment]
 
 ### D3 · fake-timeout 非整数兼容
 
