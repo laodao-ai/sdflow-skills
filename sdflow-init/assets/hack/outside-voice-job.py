@@ -184,7 +184,7 @@ NONCE_LOOKUP_GRACE_SECONDS = 5.0
 # 单次 claude CLI 探针的上限（秒）：preflight 两条探针与 nonce 核验轮询共用同一口径。
 # 本机实测 `claude --version` 0.06s、`claude agents --all --json` 0.17s ⇒ 5 秒已是极宽上限；
 # 旧值 30 秒会让「5 秒级诚实降级」在 CLI 卡死时退化到 ~60 秒（preflight 两条串行）。
-CLI_PROBE_TIMEOUT_SECONDS = 5
+CLI_PROBE_TIMEOUT_SECONDS = int(os.environ.get("SDFLOW_CLI_PROBE_TIMEOUT", "5"))
 
 # worker 启动的**独立**短 deadline（秒）：与 worker 自身的 timeout 分开，避免用 dispatch
 # 时刻误杀排队中的合法 worker。只写进 job metadata 供 Task 2 的 status 派生消费。
@@ -1094,7 +1094,7 @@ def parse_utc_iso(value):
     try:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
             tzinfo=timezone.utc).timestamp()
-    except Exception:
+    except (ValueError, TypeError):
         return None
 
 
@@ -2287,7 +2287,9 @@ def run_collect(run_dir, site, timeout_override=None):
     # startup deadline）——worker 可能只是慢，随后仍会发布 rc + 真实 findings。
     # 把它们落成见证 = 把一次**已经计费**的 voice 永久丢弃（二次 collect 只会原样回放
     # LOST）。无 rc 的终态一律**只返回、不落盘**，交 reconcile 处置。
-    if kind == "ok" and status.get("rc") is not None:
+    rc_present = status.get("rc") is not None
+    rc_file_exists = os.path.isfile(os.path.join(run_dir, site + ".rc"))
+    if kind == "ok" and (rc_present or rc_file_exists):
         _first_writer_wins_json(collected_path(run_dir, site), payload)
         stored_kind, stored, _ = load_collected(run_dir, site, job)
         if stored_kind == "ok":

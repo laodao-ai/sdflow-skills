@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v3（2026-08-04，B5 WONTDO）
-> 总量：127 条 open todo（0 条 open bug）
+> 版本：v4（2026-08-04，B6 完成）
+> 总量：119 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -19,7 +19,7 @@
 | ~~B3~~ | ~~setup.sh 安全加固（所有权/覆盖/告警）~~ | ~~5~~ | -- | -- | ✅ 全部 DONE |
 | ~~B4~~ | ~~sdflow-init 读写路径~~ | ~~4~~ | -- | -- | ✅ 全部 DONE |
 | ~~B5~~ | ~~recorder repo_root 四合一~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
-| **B6** | outside-voice-job 零碎硬化 | 8 | 中 | 小 | 可立即开 |
+| ~~B6~~ | ~~outside-voice-job 零碎硬化~~ | ~~8~~ | -- | -- | ✅ 全部已关（3 已修 DONE + 5 直接修 DONE） |
 | **B7** | hack/ 测试守卫补全 | 7 | 中 | 小 | 可立即开 |
 | **B8** | ship_gate 小修集 | 4 | 中 | 中 | 可立即开 |
 | ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
@@ -100,18 +100,20 @@ v2 迁移后 recorder 三份同步面已消失（只剩 `issues_v2.py` 一份）
 
 ---
 
-### B6 · outside-voice-job 零碎硬化（8 条）
+### ~~B6~~ · outside-voice-job 零碎硬化 — ✅ 全部已关
 
-| ID | 摘要 |
-|---|---|
-| T212 | nonce 核验补 cwd==repo_root 同一性约束 |
-| T213 | CLI_PROBE_TIMEOUT_SECONDS 改可调 |
-| T217 | except Exception 收窄为 (ValueError, TypeError) |
-| T218 | rc_bad(CORRUPT) 路径重复非逐字节一致 |
-| T219 | cmd_worker 不校验 effort |
-| T215 | 删除近似恒真旧断言 |
-| T216 | collect 幂等双路径缺单路径回归锚 |
-| T220 | docstring 两处同族漏网 |
+3 条在后续 change 中已修（T212/T219/T216），5 条直接修复（T213/T217/T218/T215/T220），333 passed。
+
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T212 | nonce 核验补 cwd==repo_root 同一性约束 | ✅ DONE（已有四项 identity 校验） |
+| T213 | CLI_PROBE_TIMEOUT_SECONDS 改可调 | ✅ DONE（改环境变量 SDFLOW_CLI_PROBE_TIMEOUT） |
+| T217 | except Exception 收窄为 (ValueError, TypeError) | ✅ DONE |
+| T218 | rc_bad(CORRUPT) 路径重复非逐字节一致 | ✅ DONE（冻结条件扩展到 rc 文件存在即冻结） |
+| T219 | cmd_worker 不校验 effort | ✅ DONE（已有 EFFORT_VALUES 校验） |
+| T215 | 删除近似恒真旧断言 | ✅ DONE（删除） |
+| T216 | collect 幂等双路径缺单路径回归锚 | ✅ DONE（已有完整单路径测试） |
+| T220 | docstring 两处同族漏网 | ✅ DONE（订正判据⑤ + 组信号限定） |
 
 ---
 
@@ -192,9 +194,11 @@ B4 (init)      ─── ✅ 全部已关
      │
 B5 (repo_root) ─── ✅ 全部已关
      │
-  ┌─ B6 (voice-job) ──┬── B8 (ship_gate) ──── 可并行
+B6 (voice-job) ─── ✅ 全部已关
+     │
+  ┌─ B7 (hack测试) ──┬── B8 (ship_gate) ──── 可并行
   │                    │
-  └─ B7 (hack测试) ──B10 (lens) ──── 可并行
+  └─ B10 (lens) ──── 可并行
 ```
 
-B1–B5、B9 已全关。下一步 B6–B8、B10 按需并行。
+B1–B6、B9 已全关。下一步 B7、B8、B10 按需并行。
