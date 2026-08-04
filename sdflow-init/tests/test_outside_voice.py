@@ -96,6 +96,7 @@ def make_fake_codex(tmp_path, mode="ok", with_timeout=True):
           empty) exit 0 ;;
           err_with_output) echo "transient error" >&2; [ -n "$out" ] && printf 'FAKE_PARTIAL\\n' > "$out"; exit 1 ;;
           secret_output) [ -n "$out" ] && printf 'finding: leaked AKIA%s\\n' AAAAAAAAAAAAAAAA > "$out"; exit 0 ;;
+          big_output) [ -n "$out" ] && head -c "${FAKE_CODEX_OUTPUT_BYTES:-1000}" /dev/zero | tr '\\0' 'A' > "$out"; exit 0 ;;
         esac
         """), encoding="utf-8")
     fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
@@ -336,6 +337,73 @@ def test_exec_output_side_secret_scan_claude_exit3(tmp_path):
     assert r.returncode == 3
     assert "AKIA" not in r.stdout
     assert "secret-hit" in r.stderr
+
+
+# ── D2: 出境 stdout 大小限制（design.md D2 · task2-brief）───────────────────
+# secret_scan 已过，runner 回传的 findings 体量仍可能超限（runner 输出不受我方控制）；
+# 复用入境同一个 OV_MAX_CONTEXT_BYTES 上限，超限截断 + 告警，wc 失败 fail-closed。
+def test_exec_output_truncated_over_limit(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                 "FAKE_CODEX_MODE": "big_output", "FAKE_CODEX_OUTPUT_BYTES": "5000",
+                 "OV_MAX_CONTEXT_BYTES": "1000"})
+    assert r.returncode == 0
+    assert len(r.stdout) == 1000                      # 截断到限长
+    assert r.stdout == "A" * 1000
+    assert "OV_OUTPUT_TRUNCATED=1" in r.stderr
+    assert "original_bytes=5000" in r.stderr
+    assert "limit=1000" in r.stderr
+
+
+def test_exec_output_exact_limit_not_truncated(tmp_path):
+    bin_dir = make_fake_codex(tmp_path)
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                 "FAKE_CODEX_MODE": "big_output", "FAKE_CODEX_OUTPUT_BYTES": "1000",
+                 "OV_MAX_CONTEXT_BYTES": "1000"})
+    assert r.returncode == 0
+    assert len(r.stdout) == 1000
+    assert r.stdout == "A" * 1000
+    assert "OV_OUTPUT_TRUNCATED" not in r.stderr        # 恰好等于上限，不算超限，不告警
+
+
+def test_exec_output_wc_failure_fails_closed(tmp_path):
+    """egress `wc -c` 失败（非权限拒读——那条路已被更早的 secret_scan_or_exit 挡住；这里
+    模拟资源耗尽/竞态等场景）时 fail-closed：强制截断 + stderr `OV_OUTPUT_SIZE_CHECK_FAILED=1`，
+    不静默把整份未知大小的输出放行出去。
+
+    用一个有状态的假 `wc`：第 1 次调用是 render_prompt 的【入境】ctx 体积检查（正常放行），
+    第 2 次调用是本 change 的【出境】last-message.md 体积检查（模拟失败：空输出、非零退出）。
+    两次调用之间无并发，计数用普通文件即可。
+    """
+    bin_dir = make_fake_codex(tmp_path)
+    counter = tmp_path / "wc_calls"
+    fake_wc = Path(bin_dir) / "wc"
+    fake_wc.write_text(textwrap.dedent(f"""\
+        #!/usr/bin/env bash
+        n=0
+        [ -f "{counter}" ] && n=$(cat "{counter}")
+        n=$((n + 1))
+        echo "$n" > "{counter}"
+        if [ "$n" -ge 2 ]; then
+          exit 1
+        fi
+        exec command -p wc "$@"
+        """), encoding="utf-8")
+    fake_wc.chmod(fake_wc.stat().st_mode | stat.S_IEXEC)
+
+    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+    r = run(["exec", "--context-file", str(ctx)],
+            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
+                 "FAKE_CODEX_MODE": "big_output", "FAKE_CODEX_OUTPUT_BYTES": "10",
+                 "OV_MAX_CONTEXT_BYTES": "1000"})
+    assert r.returncode == 0
+    assert "OV_OUTPUT_SIZE_CHECK_FAILED=1" in r.stderr
+    assert "OV_OUTPUT_TRUNCATED=1" in r.stderr           # fail-closed 分支同样强制截断
+    assert len(r.stdout) <= 1000                          # 被截到（原始判定失败后的）上限内
 
 
 # ── B1: secret_scan regex additions [impl-review-fix] ──────────────────────

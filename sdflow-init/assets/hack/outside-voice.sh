@@ -687,7 +687,7 @@ ov_cleanup() {  # $1=触发来源标签（EXIT|INT|TERM|HUP|SIGNAL——最后�
 }
 
 do_exec() {  # $1=context file  $2=timeout 秒
-  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner ov_effort
+  local ctx="$1" tmo="$2" rc repo_root workdir ov_timeout_bin runner ov_effort ov_outsize
   runner="${SDFLOW_VOICE_RUNNER:-}"
   if [ -z "$runner" ]; then
     echo 'SDFLOW_VOICE_RUNNER 未设置（host=unknown，无法确定跨模型 runner）——不跑 voice；调用方 SHALL 落 reason_code="host-unknown" 并跳过本次调用' >&2
@@ -829,7 +829,22 @@ do_exec() {  # $1=context file  $2=timeout 秒
   # （注入成功后经返回通道带出密钥）。两 runner 路径共用此 emit 点，一处兜底：回传含密钥形状 →
   # 拒发 exit 3（D8 脱敏 stderr、密钥 MUST NOT 进 stdout findings 通道），语义同入境 secret-hit。
   secret_scan_or_exit "$workdir/last-message.md"
-  cat "$workdir/last-message.md"
+  # D2 出境 stdout 大小限制：复用入境同一个 OV_MAX_CONTEXT_BYTES 上限（承重约束 C2）——
+  # secret_scan 已过，findings 干净，但体量仍可能超限（runner 输出不受我方控制）。
+  # wc 失败 fail-closed（安全默认=强制截断，不静默放行整份 last-message.md）。
+  ov_outsize=$(wc -c 2>/dev/null < "$workdir/last-message.md" | tr -d ' ')
+  case "${ov_outsize:-}" in
+    ''|*[!0-9]*)
+      echo "OV_OUTPUT_SIZE_CHECK_FAILED=1" >&2
+      ov_outsize="$((OV_MAX_CONTEXT_BYTES + 1))"
+      ;;
+  esac
+  if [ "$ov_outsize" -gt "$OV_MAX_CONTEXT_BYTES" ]; then
+    echo "OV_OUTPUT_TRUNCATED=1 original_bytes=$ov_outsize limit=$OV_MAX_CONTEXT_BYTES" >&2
+    head -c "$OV_MAX_CONTEXT_BYTES" "$workdir/last-message.md"
+  else
+    cat "$workdir/last-message.md"
+  fi
 }
 
 # 测试接缝：`_OV_TEST_LIB_ONLY=1 . outside-voice.sh` = 只加载函数、不派发命令
