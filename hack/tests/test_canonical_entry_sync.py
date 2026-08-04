@@ -559,3 +559,36 @@ def test_docs_stage_one_carriers_present_branch_a():
                 f"{name} 里找不到同时含 {needles!r} 的单行 —— 该文档的这一处仍只呈现"
                 "旧三步，人从它读到的入口与 canonical 分叉（D10 / SA-11）"
             )
+
+
+# ── Codex 子代理授权段 parity（T260）──────────────────────────────────────────
+
+CODEX_AUTH_HEADING = "## Codex 子代理授权"
+
+
+def _codex_auth_section(p):
+    text = p.read_text(encoding="utf-8")
+    start = text.find(CODEX_AUTH_HEADING)
+    if start < 0:
+        return None
+    end = text.find("\n## ", start + 1)
+    section = text[start:] if end < 0 else text[start:end]
+    return re.sub(r"<!--\s*opsx-init:\w+\s*-->", "", section)
+
+
+def test_codex_auth_section_parity():
+    sources = {
+        "CLAUDE.md": REPO / "CLAUDE.md",
+        "AGENTS.md": REPO / "AGENTS.md",
+        "claude-section.md": CLAUDE_SECTION,
+    }
+    sections = {}
+    for name, path in sources.items():
+        sec = _codex_auth_section(path)
+        assert sec is not None, f"{name} 里没有「{CODEX_AUTH_HEADING}」这一节"
+        sections[name] = sec
+    canonical = flat(sections["CLAUDE.md"])
+    for name, sec in sections.items():
+        assert flat(sec) == canonical, (
+            f"{name} 的 Codex 子代理授权段与 CLAUDE.md 不一致（压掉空白后比对）"
+        )

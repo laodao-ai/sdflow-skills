@@ -680,3 +680,12 @@ def test_verify_is_pure(tmp_path):
     snapshot = copy.deepcopy(ev)
     CE.verify(ev)
     assert ev == snapshot
+
+
+def test_verify_rejects_non_dict_top_level():
+    assert CE.verify([1, 2, 3]) == ["证据顶层不是对象"]
+
+
+def test_check_site_shape_rejects_non_dict_site():
+    ev = _evidence(sites=[_site(), "junk"])
+    assert any("不是对象" in f for f in CE.verify(ev))

@@ -74,7 +74,7 @@ def extract(path):
     lines = Path(path).read_text(encoding="utf-8").splitlines(keepends=True)
 
     starts = [i for i, l in enumerate(lines) if _is_start(l)]
-    ends = [i for i, l in enumerate(lines) if l.startswith(END_LINE)]
+    ends = [i for i, l in enumerate(lines) if l.rstrip() == END_LINE]
 
     if len(starts) != 1 or len(ends) != 1:
         raise MarkerError(

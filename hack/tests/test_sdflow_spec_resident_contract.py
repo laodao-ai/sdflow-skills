@@ -128,7 +128,7 @@ def _assert_reference_routes(entry: str) -> None:
         condition = contract["condition"]
         route = re.compile(
             rf"(?m)^- {re.escape(condition)}\s+"
-            rf"\[`{re.escape(path)}`\]\({re.escape(path)}\)"
+            rf"\[[^\]]+\]\({re.escape(path)}\)"
         )
         assert route.search(entry), (
             f"{category} reference 必须由同一列表项中的加载条件和非空标签相对链接共同路由"
