@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 34de39d2655ba011a8cb06cfecaa6cee0ddb44d1
+---
+
 # spec-review-report — harden-outside-voice-scripts
 
 > 评审模式：原生 autoplan（广审）+ 并行多镜（接地 + 对抗 ×2）+ 跨模型 outside-voice（design-voice）
@@ -127,10 +133,10 @@ design-voice（跨模型，codex runner）返回 2 条 findings：
 ## lens-metric 度量锚
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="5" 采纳="4" 裁掉="1" defer="0" 独立="0" sev="致1/高2/中1/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="10" 采纳="6" 裁掉="3" defer="1" 独立="2" sev="致1/高2/中1/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="10" 采纳="7" 裁掉="3" defer="0" 独立="2" sev="致1/高2/中1/低3" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="2" 采纳="1" 裁掉="0" defer="1" 独立="0" sev="致1/高0/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="2" 采纳="2" 裁掉="0" defer="0" 独立="0" sev="致1/高0/中0/低1" -->
 
 ## 拍板记录区
 
-（设计门拍板后由主 session 填写）
+设计门已拍板批准，日期 2026-08-04。Q1 → B (WONTDO)。
