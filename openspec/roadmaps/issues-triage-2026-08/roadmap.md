@@ -1,7 +1,7 @@
 # 156 条 Open Issues 分批清理路线图
 
 > 版本：v1（2026-08-04，初始规划）
-> 总量：156 条 open todo（0 条 open bug）
+> 总量：146 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -14,7 +14,7 @@
 
 | 批次 | 主题 | Issue 数 | 影响 | 难度 | 就绪度 |
 |---|---|---|---|---|---|
-| **B1** | outside-voice 协议修复（环境变量必炸） | 7 | 高 | 中 | 可立即开 |
+| **B1** | outside-voice 协议修复（环境变量必炸） | 7→1 | 高 | 中 | 6 条已关（5 DONE + 1 WONTDO），剩 T150 |
 | **B2** | 机械门补缺（verify/gate/anchor 假绿面） | 5 | 高 | 中 | 可立即开 |
 | **B3** | setup.sh 安全加固（所有权/覆盖/告警） | 5 | 高-中 | 小 | 可立即开 |
 | **B4** | sdflow-init 读写路径 | 4 | 中 | 中 | 可立即开 |
@@ -22,7 +22,7 @@
 | **B6** | outside-voice-job 零碎硬化 | 8 | 中 | 小 | 可立即开 |
 | **B7** | hack/ 测试守卫补全 | 7 | 中 | 小 | 可立即开 |
 | **B8** | ship_gate 小修集 | 4 | 中 | 中 | 可立即开 |
-| **B9** | sdflow-issues 脚本改造 | 4 | 中 | 中-大 | 可立即开 |
+| ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
 | **B10** | lens-metric 体系补全 | 4 | 中 | 中 | 可立即开 |
 | **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / 文档… | ~104 | 低-中 | 中-大 | 条件触发 |
 
@@ -30,21 +30,19 @@
 
 ## 批次详情
 
-### B1 · outside-voice 协议修复（7 条）
+### B1 · outside-voice 协议修复 — 6/7 已关
 
-**痛点**：harness 每次 Bash 调用是独立 shell，`$SDFLOW_VOICE_RUNNER` 等环境变量跨调用必丢，voice 每次都报 `host=unknown` exit 1。实测同一坑踩中多次。
+核验后发现 T175/T255/T168 是同一根因的三次独立发现、T159 早已实质修好、T184(b) 被 ADR-9 机械锁禁止。
 
-| ID | 摘要 |
-|---|---|
-| T175 | 两 SKILL async 段漏写 env 变量 MUST 内联 eval |
-| T184 | 协议节漏了 $SDFLOW_VOICE_RUNNER 的「同一次调用内自足」纪律 |
-| T255 | spec-review 协议假设 env 跨调用存活 |
-| T168 | async dispatch 与 ADR-9 env 读取互相矛盾 |
-| T222 | 止损行「走 unknown-cost 处置」指代不准 |
-| T159 | HELPER 变量同属「shell 变量不跨调用」失效类 |
-| T150 | preflight 未真探针（CLI 未认证/模型无效仍 ready） |
-
-**修法**：把 exec 命令改成同一次调用内 `eval "$(resolve-models.sh)" && outside-voice.sh exec ...`，outside-voice.sh 自己也兜底调 resolve-models.sh。
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T175 | dispatch 模板改占位符 + claude-host exec 加内联环境变量前缀 | ✅ DONE |
+| T255 | 与 T175 同一缺口 | ✅ DONE |
+| T168 | 与 T175 同一根因（ADR-9 矛盾面） | ✅ DONE |
+| T222 | 止损行改直接指名条款 | ✅ DONE |
+| T159 | HELPER 变量——后续调用已全改字面路径 + MUST NOT 禁令 | ✅ DONE（核验时已修） |
+| T184 | (a) 被 T175 修法覆盖；(b) 被 ADR-9 机械锁禁止 | ✅ WONTDO |
+| **T150** | preflight 只 command-v + timeout 检查，无真认证/模型探针 | **仍 open** |
 
 ---
 
@@ -136,14 +134,10 @@
 
 ---
 
-### B9 · sdflow-issues 脚本改造（4 条）
+### ~~B9~~ · sdflow-issues 脚本改造 — ✅ 全部 WONTDO
 
-| ID | 摘要 |
-|---|---|
-| T208 | sdflow_issues_core god-module 拆 cohesive 子模块 |
-| T209 | move --to-pool 跨池搬运命令 |
-| T210 | CLI 等价 smoke 前向硬化 |
-| T211 | 进程级全局 token/chain 会串（多池并发） |
+issues-v2-single-file-model change 已删除 `sdflow_issues_core`、v1 三脚本、等价测试，
+四条的标的代码全部消失。T209（move 命令）经三仓实查零误判，不为从未发生的场景建命令。
 
 ---
 

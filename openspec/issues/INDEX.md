@@ -81,7 +81,6 @@
 | [T156](open/todo/T156.md) | todo | OPEN | 2026-07-01 | sdflow-devenv（配 CI 载体层：SKILL.md + references/testing-framework.md） | sdflow-devenv 配 CI 的 P2 决策示范清一色 GitHub Actions、且未显式化「硬门/软门」降级边界——对「不管什么项目都能配」的承诺留了平台假设漏洞（用 workflow 的消费仓不一定在 GitHub） |
 | [T157](open/todo/T157.md) | todo | OPEN | 2026-07-01 | openspec/changes/async-outside-voice | proposal.md:27 仍写旧 .outside-voice/<site>-context.md 形态，与 design/tasks 的 per-run 口径分叉；实现期改四件套触设计门失鲜，须在 archive 阶段一并校正 |
 | [T158](open/todo/T158.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review + sdflow-code-review | run-id 新鲜度可机械化：manifest 存在性是确定性信号，宜加 anchor_lint 家族核而非永久留诚实边界 |
-| [T159](open/todo/T159.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review + sdflow-code-review | 协议节 HELPER=~/.sdflow/hack/outside-voice.sh 同属「shell 变量不跨调用存活」失效类，宜改字面路径 |
 | [T160](open/todo/T160.md) | todo | OPEN | 2026-07-01 | openspec/changes/async-outside-voice | 3600 上界依据应回写 design ADR-3 免二源；DOC-1 理由入 SKILL 正文一条待设计门拍板 |
 | [T161](open/todo/T161.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review + sdflow-code-review | 等值门只覆盖 marker 段；圈外 preflight/fallback/锚行段两层也高度相似但漂了不会红 |
 | [T162](open/todo/T162.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review / sdflow-code-review（outside-voice 调度层） | Codex 宿主方向的跨模型 voice efficacy=0：架构性无法离开关键路径，待 codex deferred_executor 稳定或外部 claude daemon 方案再议 |
@@ -89,13 +88,11 @@
 | [T165](open/todo/T165.md) | todo | OPEN | 2026-07-01 | openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段 | R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动 |
 | [T166](open/todo/T166.md) | todo | OPEN | 2026-07-01 | hack/check_async_branch_parity.py | end marker 边界未与 start 侧对称硬化；且尝试硬化时遇到无法解释的 extract 行为矛盾，需专门查 |
 | [T167](open/todo/T167.md) | todo | OPEN | 2026-07-01 | openspec/changes/async-outside-voice | 【archive 阶段 MUST 做】四件套仍描述旧协议（裸哨兵/单条件 async），与代码审后的实现不自洽——delta spec 必须同步 |
-| [T168](open/todo/T168.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review | async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner |
 | [T169](open/todo/T169.md) | todo | PROPOSED | 2026-07-01 | openspec/changes | done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30) |
 | [T171](open/todo/T171.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review+code-review | R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题 |
 | [T172](open/todo/T172.md) | todo | PROPOSED | 2026-07-01 | openspec/workflow/lens-metric | lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献 |
 | [T173](open/todo/T173.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice.sh | ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷） |
 | [T174](open/todo/T174.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/tests/test_outside_voice.py | fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错 |
-| [T175](open/todo/T175.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review / sdflow-code-review | 两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑 |
 | [T176](open/todo/T176.md) | todo | PROPOSED | 2026-07-01 | outside-voice | outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时 |
 | [T177](open/todo/T177.md) | todo | PROPOSED | 2026-07-01 | sdflow-buglist | buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守 |
 | [T178](open/todo/T178.md) | todo | PROPOSED | 2026-07-01 | outside-voice | M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败 |
@@ -103,7 +100,6 @@
 | [T181](open/todo/T181.md) | todo | PROPOSED | 2026-07-01 | recorder/repo_root | repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入） |
 | [T182](open/todo/T182.md) | todo | PROPOSED | 2026-07-01 | recorder/repo_root | repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面） |
 | [T183](open/todo/T183.md) | todo | PROPOSED | 2026-07-01 | recorder/repo_root | repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed |
-| [T184](open/todo/T184.md) | todo | PROPOSED | 2026-07-01 | workflow/outside-voice | 两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval "$(~/.sdflow/hack/resolve-models.sh --root ...)" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。 |
 | [T185](open/todo/T185.md) | todo | PROPOSED | 2026-07-01 | recorder/repo_root | repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice |
 | [T188](open/todo/T188.md) | todo | PROPOSED | 2026-07-01 | 仓根 pytest 收集 | 跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守 |
 | [T189](open/todo/T189.md) | todo | PROPOSED | 2026-07-01 | sdflow-ship/ship_gate.py | 基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单 |
@@ -117,10 +113,6 @@
 | [T205](open/todo/T205.md) | todo | PROPOSED | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale |
 | [T206](open/todo/T206.md) | todo | PROPOSED | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致 |
 | [T207](open/todo/T207.md) | todo | PROPOSED | 2026-07-01 | docs | T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。 |
-| [T208](open/todo/T208.md) | todo | PROPOSED | 2026-07-01 | sdflow-issues/scripts/sdflow_issues_core/__init__.py | sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程 |
-| [T209](open/todo/T209.md) | todo | PROPOSED | 2026-07-01 | sdflow-issues/scripts/issues.py | move --to-pool 跨池搬运命令（误判落错池的机械恢复路径） |
-| [T210](open/todo/T210.md) | todo | PROPOSED | 2026-07-01 | sdflow-issues/tests | 冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。 |
-| [T211](open/todo/T211.md) | todo | PROPOSED | 2026-07-01 | sdflow-issues/scripts/sdflow_issues_core | 冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。 |
 | [T212](open/todo/T212.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束 |
 | [T213](open/todo/T213.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调 |
 | [T214](open/todo/T214.md) | todo | PROPOSED | 2026-07-01 | openspec/changes/enable-codex-background-outside-voice/specs/outside-voice-background-jobs/spec.md | OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace |
@@ -131,7 +123,6 @@
 | [T219](open/todo/T219.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | cmd_worker 自身不校验 effort（钉死只在 dispatch 一层） |
 | [T220](open/todo/T220.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/tests/test_outside_voice_job.py | probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导） |
 | [T221](open/todo/T221.md) | todo | PROPOSED | 2026-07-01 | openspec/specs/host-adaptive-execution + anchor_lint | fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值 |
-| [T222](open/todo/T222.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md | 止损行「走下一条的 unknown-cost 处置」指代不准 |
 | [T223](open/todo/T223.md) | todo | PROPOSED | 2026-07-01 | hack/tests/test_async_branch_parity.py | _the_line_with 的「恰好 1 行」是双向判据，良性新增会假红 |
 | [T224](open/todo/T224.md) | todo | PROPOSED | 2026-07-01 | hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py | 面治枚举漏 2 条 isinstance 早退分支（无独立锚） |
 | [T225](open/todo/T225.md) | todo | PROPOSED | 2026-07-01 | hack/check_codex_efficacy_evidence.py + openspec/changes/enable-codex-background-outside-voice(已归档) | 补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并） |
@@ -151,7 +142,6 @@
 | [T252](open/todo/T252.md) | todo | PROPOSED | 2026-07-01 | openspec/adr/0031-t10-label-split-by-decision-semantics.md | adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次 |
 | [T253](open/todo/T253.md) | todo | PROPOSED | 2026-07-01 | openspec/CONTEXT.md | 「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名 |
 | [T254](open/todo/T254.md) | todo | PROPOSED | 2026-07-01 | openspec/workflow/lens-metric-contract.md | lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行 |
-| [T255](open/todo/T255.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review/SKILL.md | outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能 |
 | [T256](open/todo/T256.md) | todo | OPEN | 2026-07-01 | sdflow-ship/SKILL.md + ~/.claude/hooks/ | 用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做） |
 | [T258](open/todo/T258.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement/SKILL.md` 文件交接节 · review-package | 双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold |
 | [T259](open/todo/T259.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement/SKILL.md` review-loop-breaker ①档 | 熔断规则的①档「有客观判据 → 自动选并记理由后关闭」可在**未修复**的前提下关闭一个仍然成立的 Critical/Important——与同文件「不带着未修 Critical/Important 推进下一 ticket」直接冲突。D2b 的「互斥终态」修正只覆盖了②③档，①档留着旧形状（只回答 finding 是否成立、不产生修复动作）。修法：①档的客观判据只能决定「已解决 / 仍成立」——已解决才关闭；仍成立则走 strong fixer + 仅复验一次，失败即 defer 并停。来源：harden-implement-review-loop 冷层代码审跨模型 outside-voice(codex) 独家。**需改 delta spec 措辞，故不在本 change 修**（改四件套会触发 design 域失鲜） |

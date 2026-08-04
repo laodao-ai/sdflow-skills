@@ -386,8 +386,8 @@ HELPER=~/.sdflow/hack/outside-voice.sh
 [ -x "$HELPER" ] 不成立 → 显式提示「outside-voice.sh 未安装——先跑 bash setup.sh」+ 直接派 fallback 子代理（不静默）
 版本核对：$HELPER version 输出与本 SKILL 预期主版本(1.x)不符 → 告警"helper 疑似陈旧，重跑 setup.sh"后继续
 $SDFLOW_HOST="unknown"（第零步 resolve-models.sh 判不出宿主）→ 不调用本 helper、不跑 voice；锚行 host="unknown" runner="none" reason_code="host-unknown"（ADR-7），报告显著标注本轮无跨模型第二意见
-以下分支仅在 $SDFLOW_HOST∈{claude,codex} 时适用；helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL，MUST NOT 自行重判宿主（ADR-9）：
-preflight：stdout 仅精确匹配 "ready" 走目标 runner（$SDFLOW_VOICE_RUNNER）；"not_installed" → fallback（reason_code="not-installed"）；"missing-deps" → fallback 且 MUST 映射锚 reason_code="preflight-error"（D7，MUST NOT 原样落 reason_code="missing-deps"——该值不在契约 reason_code 枚举内，会被 anchor_lint 矩阵判 illegal-combo）；任何畸形输出/非零退出 → fallback（reason_code="preflight-error"）
+以下分支仅在 $SDFLOW_HOST∈{claude,codex} 时适用；helper 需要 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL（第零步 eval 解析出的值），MUST NOT 自行重判宿主（ADR-9）。🔴 **这两个值的传递纪律与 $HELPER / run-id 相同：MUST 代入第零步取回的字面值，MUST NOT 写 `$SDFLOW_VOICE_RUNNER` / `$SDFLOW_VOICE_MODEL` shell 变量引用**——harness 每次 Bash 调用是独立 shell，第零步 eval 的 export 到不了后续调用：
+preflight：stdout 仅精确匹配 "ready" 走目标 runner（第零步取得的 <runner> 字面值）；"not_installed" → fallback（reason_code="not-installed"）；"missing-deps" → fallback 且 MUST 映射锚 reason_code="preflight-error"（D7，MUST NOT 原样落 reason_code="missing-deps"——该值不在契约 reason_code 枚举内，会被 anchor_lint 矩阵判 illegal-combo）；任何畸形输出/非零退出 → fallback（reason_code="preflight-error"）
 context 构造（摘录规则定死，不现场发挥）：本轮**起手先占一个 run 目录**，本轮所有站点共用、定后不再变；context 写 {change_dir}/.outside-voice/<run-id>/<site>-context.md
   **run-id 生成 + 占坑（唯一性交给 OS 判，不靠自觉）**：MUST 逐字跑下面这两条——`mktemp -d` **原子地建目录并保证唯一**，唯一性由它负责，不靠时间戳精度、不靠自觉。前缀带 UTC 时间戳只为人读排序；后缀 `XXXXXX` 由 `mktemp` 填随机位，故**同秒起的两轮并行评审也必得不同目录**。
     `mkdir -p "{change_dir}/.outside-voice"`
@@ -430,15 +430,15 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     ⏱ **sync 那一行的外层超时（调用方 MUST，防假超时）**：exec 是长命令（helper 内部 `timeout -k 10` 300s + 10s grace）——MUST 把外层 Bash/shell 工具超时设为 **≥330000ms**，MUST NOT 用 harness 默认（常 120s）：外层短于内层会在 helper 正常干活时先 kill，造成"假超时→重跑"浪费（reason_code 会误落 timeout、实则未真超时）。**指令层约束**（外层超时由调用方逐调用设、helper 作被调方无法机械强制，同 host 解析 eval 那类诚实边界）。
   **④ 命令形态（每条路径各自唯一形态，MUST 逐字照搬，MUST NOT 现场发挥）**：
     · **claude-host（async·harness 与 sync 共用同一哨兵 envelope）**：整条命令 MUST 逐字为——
-      `~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file "<f>"; printf '%s' "$?" > "{run-dir}/<site>.rc"`
+      `SDFLOW_VOICE_RUNNER=<runner> SDFLOW_VOICE_MODEL=<model> ~/.sdflow/hack/outside-voice.sh exec --timeout <T> --context-file "<f>"; printf '%s' "$?" > "{run-dir}/<site>.rc"`
       🔴 **退出码 MUST 走 runner 写不了的 sidecar，MUST NOT 走 stdout 哨兵**：`{run-dir}` 代入 context 构造节的字面 run 目录，`<site>` 为本站点名。
       **为什么不能用 stdout 里的哨兵串**（含带 run-id nonce 的版本，均已废弃）：runner 被授予**仓库读取能力**（claude 侧 `--tools "Read,Grep,Glob"`、codex 侧 read-only sandbox 内可读仓库）⇒ 它**无需猜** nonce，枚举 `.outside-voice/` 目录即可得；进程列表亦可能暴露含 nonce 的祖先命令。∴ 把认证建立在「模型读得到的字符串」上是无效的——**stdout 是模型能写的通道，任何写在那里的退出码都可被顶替**（wrapper 被回收未发时，正文里伪造的那行会成为唯一来源 ⇒ 被杀的运行拿到 `ok` 信用）。
       sidecar 之所以可信：四旗承重墙只给 runner **只读**工具集、无 Write/Bash ⇒ 它**写不了**该文件。且「文件缺席」本身是有意义的信号（任务被回收 ⇒ `printf` 从未执行 ⇒ 无 `.rc`）。
       （`<T>` 代入本分支内层秒数的**字面值**，`<f>` 代入 context 文件**字面路径**；**MUST 代入 `~/.sdflow/hack/outside-voice.sh` 字面路径、MUST NOT 写 `$HELPER`**——harness 每次 Bash 调用是独立 shell，上一次调用设的变量在这里必为空）
       async·harness 分支：该命令**以 run_in_background 派出**，立刻记下返回的后台任务标识（见 ⑧）；sync 分支：前台跑，当场即得退出码。
     · **codex-host（async·后台作业）**：整条命令 MUST 逐字为——
-      `python3 ~/.sdflow/hack/outside-voice-job.py dispatch --run-dir "{run-dir}" --site <site> --context-file "<f>" --repo-root "<repo-root>" --runner "$SDFLOW_VOICE_RUNNER" --model "$SDFLOW_VOICE_MODEL" --effort high --timeout <T>`
-      **MUST NOT** 自己拼 `claude --bg --exec`、**MUST NOT** 自己写 `<site>.rc`、**MUST NOT** 自造轮询——reservation（外部副作用之前建、同 site 唯一 + 本 run ≤2 slot）、5 秒 deadline、canonical job id 核验、metadata 与 rc 的原子发布**全在 helper 里**；`<T>` 同样代入 ① clamp 后的**字面值**，`{run-dir}` / `<f>` / `<repo-root>` 一律代入**绝对路径字面值**（MUST NOT 用 shell 变量）。
+      `python3 ~/.sdflow/hack/outside-voice-job.py dispatch --run-dir "{run-dir}" --site <site> --context-file "<f>" --repo-root "<repo-root>" --runner <runner> --model <model> --effort high --timeout <T>`
+      **MUST NOT** 自己拼 `claude --bg --exec`、**MUST NOT** 自己写 `<site>.rc`、**MUST NOT** 自造轮询——reservation（外部副作用之前建、同 site 唯一 + 本 run ≤2 slot）、5 秒 deadline、canonical job id 核验、metadata 与 rc 的原子发布**全在 helper 里**；`<T>` 同样代入 ① clamp 后的**字面值**，`{run-dir}` / `<f>` / `<repo-root>` / `<runner>` / `<model>` 一律代入**字面值**（MUST NOT 写 `$SDFLOW_VOICE_RUNNER` 等 shell 变量——harness 每次 Bash 调用是独立 shell，上一次调用的 export 在这里必为空）。
       dispatch stdout 是**单行 JSON**：成功（exit 0）含 `job_id` / `attempt_nonce` / `site` / `run_dir` / `dispatched_at` / `timeout_seconds` / `runner` / `model` / `effort`；MUST 就地记进 ⑧ 的记账表，并按 context 构造节把 `job_id` 与 `attempt_nonce` 追加落盘 `dispatch-manifest.tsv`。
       **exit≠0 时 MUST 先读 `fallback_allowed`，MUST NOT 一律 fallback**：
         `fallback_allowed=true`（preflight 未过 / 外部 job 根本没产生、reservation 已被 helper 回收）→ **立即同族 fallback**，`reason_code` 取 payload 的 `reason_code`。
@@ -458,7 +458,7 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
       · **Step3 是 barrier**：每个**实际 dispatch 过的**站点，其结果 MUST 已在手、或已按 ⑦ 降级完毕，才可进综合裁决。
     · **codex-host —— 有界 await**：对每个 dispatch 过的站点跑 `python3 ~/.sdflow/hack/outside-voice-job.py await --run-dir "{run-dir}" --site <site>`（helper 内部自定上界 = 可信 `started_at` + 内层 timeout + 30 秒 grace，并独立节流 liveness 探针）。**MUST NOT 自造轮询循环**、MUST NOT 单次长 sleep、MUST NOT 用 `--max-wait` 把它截短成早退。
       await 返回 `terminal=false` **∧ `unknown_cost=false`**（仍 STARTING / RUNNING）⇒ **MUST 再调一次 await**；MUST NOT 就此落 `timeout`——「外层调用返回了」不是终态证据。
-      🔴 `terminal=false` **∧ `unknown_cost=true`** ⇒ **MUST NOT 再调 await**：该形态是 RESERVED（dispatch 已受理、metadata 从未发布），helper 明写它**永远不会自行到达终态** ⇒ 再等就是无限循环。直接走下一条的 unknown-cost 处置。
+      🔴 `terminal=false` **∧ `unknown_cost=true`** ⇒ **MUST NOT 再调 await**：该形态是 RESERVED（dispatch 已受理、metadata 从未发布），helper 明写它**永远不会自行到达终态** ⇒ 再等就是无限循环。直接走 ⑥ 下方 🔴 `unknown_cost=true` 条款的处置。
       🔴 **外层等待被回收 ≠ 后台任务死了**：supervisor 托管的 worker 仍在跑 ⇒ MUST 用**同一** run-dir + site 重新 `await` / `collect`，**MUST NOT 重新 dispatch**（重派 = 第二次计费）。若整轮评审 session 已丢失，只能由人显式跑 `reconcile --run-dir "<确切目录>"`，**MUST NOT 扫描"最新目录"猜恢复目标**。
       🔴 **`unknown_cost=true` ⇒ MUST NOT 自动同族 fallback**（它覆盖**每一个** LOST 站点与残留 reservation）：rc 从未发布 ⇒ 子树是否退出**未经核验**、成本未知，自动 fallback 会在一次**已计费**的 voice 上再叠一次。此时 MUST 把 payload 的 `orphan_warning` 原样报进报告本段，并提示人跑 `outside-voice-job.py cleanup --run-dir "<d>" --site <s> --cancel`（identity 核验 → stop → 子树终止核验 → rm）；只有核验通过、helper 返回 `fallback_allowed=true` 之后才可 fallback。在此之前该站点 MUST 落锚行 host="$SDFLOW_HOST" runner="none" findings="0" reason_code="fallback-unavailable"（**没有任何执行段、也没有同族 fallback 跑过** ⇒ runner MUST NOT 写成 host，那是谎称跑过；anchor_lint 矩阵判 no-exec 合法），MUST NOT 落 `ok`，MUST NOT 落 `timeout`，MUST NOT 落 `exec-error`（后者属同族降级码集，与 runner="none" 组合矩阵判 illegal）。
       · **收完即清**：已取得 `reason_code` 的站点 MUST 跑一次 `python3 ~/.sdflow/hack/outside-voice-job.py cleanup --run-dir "{run-dir}" --site <site>` 回收 supervisor roster；cleanup 失败只报 warning 与 job id，**MUST NOT** 因清理失败把已成功的 findings 改判失败，**MUST NOT** 静默声称已清理。
@@ -470,7 +470,7 @@ exec（host 分支：**只读第零步已 export 的 $SDFLOW_HOST，MUST NOT 在
     **安全（MUST）**：collect **只取「结构化退出状态 + 成功时的 stdout findings」**。helper 在 exit≠0 时把 runner **原始 stderr + 未扫描的 final-message 前 3 行**写 stderr，该段**绕过出境 `secret_scan`**（既有缺口），而后台化把它落进了持久化载体（claude-host 是 harness 的后台任务输出文件，codex-host 是 run 目录里 0600 的 `<site>.stderr`）⇒ **MUST NOT 把这些文件里的原始 stderr 当 findings 采信**。
     🔴 **写出面同样受限（勿留逃逸口）**：锚行外正文允许写的**只有结构化字段**——`reason_code`、退出码、stderr 行数/字节数。**MUST NOT 逐字转录、摘录、或复述 stderr 的内容文本**：报告文件是 git-tracked、随 checkpoint 永久入库，而这段 stderr **未过出境 `secret_scan`** ⇒ 逐字转录 = 把可能含凭证的未扫描文本永久写进版本库，正是 `.gitignore` 的 `**/.outside-voice/` 那条要防的载体。要诊断细节的人去读那些文件本身（不入库），MUST NOT 经由报告正文搬运。
   **⑦ 退出码 → 去向 / reason_code（两宿主同一张表，无遗漏；未知码 MUST NOT 读作 ok）**：
-    exit 0   → stdout 即 findings 进合并池；锚行 host="$SDFLOW_HOST" runner="$SDFLOW_VOICE_RUNNER" reason_code="ok"（唯一合法跨模型第二意见，矩阵判 cross-model）
+    exit 0   → stdout 即 findings 进合并池；锚行 host="<host>" runner="<runner>" reason_code="ok"（`<host>` / `<runner>` 代入第零步取回的字面值；唯一合法跨模型第二意见，矩阵判 cross-model）
     exit 124 → fallback（reason_code="timeout"）——**仅当真观测到 124**，见 ⑥ 正向 barrier 语义
     exit 1   → fallback（reason_code="exec-error"，stderr 摘要写锚行外正文）
     exit 2   → 用法错 / context 不可读 → fallback（reason_code="exec-error"；`2` 不在 reason_code 枚举内，**并入 exec-error**，枚举不新增）
