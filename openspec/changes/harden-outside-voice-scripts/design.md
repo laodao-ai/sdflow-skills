@@ -43,15 +43,9 @@ fi
 
 复用入境同一个 `OV_MAX_CONTEXT_BYTES`（200KB 默认）。截断按字节、不做 UTF-8 回扫——接受截断可能在最后一个多字节字符（中文 CJK 3 字节）处产生非法 UTF-8（概率中等，非"大概率 ASCII"），但影响低：只影响 200KB 边界处末尾 1-3 字节，下游 `errors="replace"` 不会崩溃。D2 scope 是"bounded published evidence"（cap stdout 通道），非"bounded resource usage"（runner 已写完 last-message.md）。[spec-review-amendment]
 
-### D3 · fake-timeout 非整数兼容
+### ~~D3 · fake-timeout 非整数兼容~~ — WONTDO [spec-review-amendment]
 
-测试桩 `sdflow-init/tests/test_outside_voice.py:53` 的 `lim=$(( sec * 10 ))` 改为：
-
-```bash
-lim=$(awk "BEGIN{printf \"%d\", $sec * 10}")
-```
-
-当前没有代码路径会传非整数 sec（argparse `type=int` + outside-voice.sh 只接受纯数字），但改一行 awk 的成本≈0，消除测试桩的理论脆性。
+WONTDO。理由：① 非整数 sec 不可达（argparse `type=int` + shell `*[!0-9]*` 双重校验）；② awk `printf "%d"` 截断而非四舍五入，`sec=0.05 → lim=0 → 看门狗立即杀进程`，引入新语义错误；③ 设计门拍板 Q1→B。
 
 ## Risks / Trade-offs
 

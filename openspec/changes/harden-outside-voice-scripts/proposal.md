@@ -6,7 +6,7 @@ outside-voice.sh 存在 1 处运行时安全缺陷 + 2 处廉价加固缺口（T
 
 - **拒绝 `--timeout 0`**（T176）：outside-voice.sh 的 `--timeout` 参数校验加排 0（GNU timeout `DURATION=0` = 禁用超时）
 - **出境 stdout 加上限**（T230）：do_exec 的 `cat last-message.md` 前加 `wc -c` 检查，超 OV_MAX_CONTEXT_BYTES 时截断 + stderr 告警
-- **fake-timeout 非整数兼容**（T174）：测试桩的 `$(( sec * 10 ))` 改为支持浮点数输入
+- ~~**fake-timeout 非整数兼容**（T174）~~：WONTDO — 非整数 sec 不可达（argparse `type=int` + shell `*[!0-9]*` 双重校验），且 awk `printf "%d"` 截断会引入新语义错误（`0.05→0→立即杀进程`） [spec-review-amendment]
 
 ## Capabilities
 
@@ -21,13 +21,13 @@ outside-voice.sh 存在 1 处运行时安全缺陷 + 2 处廉价加固缺口（T
 ## Impact
 
 - `sdflow-init/assets/hack/outside-voice.sh`（2 处修改：timeout 校验 + 出境截断）
-- `sdflow-init/tests/test_outside_voice.py`（1 处修改：fake-timeout 取整）
+- `sdflow-init/tests/test_outside_voice.py`（新增 D1/D2 专项测试）[spec-review-amendment]
 
 无 API 变更，无外部依赖变更。
 
 ## Success Metrics
 
-- 3 条 issue 全部可关闭（DONE + evidence）
+- 2 条 issue 可关闭（T176/T230 DONE + evidence），T174 WONTDO [spec-review-amendment]
 - 既有测试全绿（`/usr/bin/python3 -m pytest sdflow-init/tests/`）
 
 ## Non-Goals
