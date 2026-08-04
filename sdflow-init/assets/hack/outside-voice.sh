@@ -892,6 +892,9 @@ case "$cmd" in
         --timeout)
           [ $# -ge 2 ] || usage
           case "$2" in ''|*[!0-9]*) usage ;; esac
+          # `10#` 强制十进制解析，正确捕获 0/00/000 等所有前导零变体（承重约束 C1：
+          # --timeout 0 必须与既有非法值同样 exit 2，不得放行到 do_exec 才在别处报错）。
+          [ "$((10#$2))" -eq 0 ] && usage
           tmo="$2"; shift 2 ;;
         *) usage ;;
       esac
