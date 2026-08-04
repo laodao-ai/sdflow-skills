@@ -140,6 +140,10 @@
 #             `$workdir/render.meta`，事后由 do_exec 回灌），do_exec 在回灌为空时补一条
 #             【不经过 workdir 磁盘路径】、直写真实 stderr 的固定诊断行，保证「非零退出 ⇒
 #             stderr 必有可辨识原因」不因同一块满盘而失效。
+#             〔harden-outside-voice-scripts D2〕出境 stdout 超 OV_MAX_CONTEXT_BYTES ⇒ 打
+#             `OV_OUTPUT_TRUNCATED=1 original_bytes=<N> limit=<N>`（结构化字段），stdout
+#             截断到 limit 字节输出。wc -c 取出境大小失败（空/非数字）⇒ 打
+#             `OV_OUTPUT_SIZE_CHECK_FAILED=1`，fail-closed 强制截断（安全默认）。
 #     exit 0=成功 | 1=runner 报错/空输出/命令缺失/timeout 工具缺失/SDFLOW_VOICE_RUNNER 未设/
 #            SDFLOW_VOICE_MODEL 未设(claude)/未知 runner 值/UTF-8 边界回扫不可用(code-review-fix1
 #            M1，render_prompt fail-loud，见上方 render-prompt 段) | 124=超时 | 3=secret-hit |

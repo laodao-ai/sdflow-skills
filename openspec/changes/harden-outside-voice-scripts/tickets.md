@@ -22,11 +22,11 @@ impl-pipeline: tickets
 - `--timeout 0`、`--timeout 00`、`--timeout 000` 均 exit 2 且不启动 runner
 - `--timeout 01` 等非零前导零值正常接受（不误拒）
 
-- [ ] `--timeout 0` exit 2（不启动 runner）
-- [ ] `--timeout 00` exit 2（不启动 runner）
-- [ ] `--timeout 000` exit 2（不启动 runner）
-- [ ] `--timeout 01` 正常接受、不报错
-- [ ] 既有 `--timeout` 正常值（如 300）行为不受影响
+- [x] `--timeout 0` exit 2（不启动 runner）
+- [x] `--timeout 00` exit 2（不启动 runner）
+- [x] `--timeout 000` exit 2（不启动 runner）
+- [x] `--timeout 01` 正常接受、不报错
+- [x] 既有 `--timeout` 正常值（如 300）行为不受影响
 
 ### Task 2: 出境 stdout 大小限制 + 专项测试
 
