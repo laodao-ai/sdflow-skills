@@ -4,7 +4,6 @@
 
 | ID | Pool | Status | Date | Module | Summary |
 |----|------|--------|------|--------|---------|
-| [T6](open/todo/T6.md) | todo | PROPOSED | 2026-07-01 | `opsx-project-init/scripts/init.py` | 两个全局 hook 仅装 Claude 侧、Codex 会话静默不生效 |
 | [T7](open/todo/T7.md) | todo | PROPOSED | 2026-07-01 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 |
 | [T9](open/todo/T9.md) | todo | PROPOSED | 2026-07-01 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 |
 | [T12](open/todo/T12.md) | todo | PROPOSED | 2026-07-01 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） |
@@ -21,8 +20,6 @@
 | [T56](open/todo/T56.md) | todo | OPEN | 2026-07-01 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 |
 | [T57](open/todo/T57.md) | todo | OPEN | 2026-07-01 | `workflow/model-tiers` | 档位矩阵新增「升级档」（更高档，延后） |
 | [T62](open/todo/T62.md) | todo | PROPOSED | 2026-07-01 | `sdflow-retro/retro_report._run_git` | T60 留痕在系统性 git 损坏下无节流放大：seed_mass_shas 对每个 sha 调 _run_git，仓库整体损坏时每 commit rc≠0 各写一行 stderr，O(commits) 无去重无节流。低危(仅真故障下噪声非虚警;view-only不中断)。改法:同一 subcmd 失败去重,或 seed 循环 per-sha 失败聚合成一条 |
-| [T63](open/todo/T63.md) | todo | PROPOSED | 2026-07-01 | `sdflow-init/scripts/init.py:inject/_find_all_marker_lines` | inject 多块收敛须 fence-aware + start/end 配对校验（naive collapse 已回退） |
-| [T64](open/todo/T64.md) | todo | PROPOSED | 2026-07-01 | `sdflow-init/scripts/init.py:_atomic_write_settings` | settings.json 原子写 tmp 改唯一名（tempfile.mkstemp）关闭无锁降级路径撕裂 |
 | [T68](open/todo/T68.md) | todo | PROPOSED | 2026-07-01 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 |
 | [T69](open/todo/T69.md) | todo | PROPOSED | 2026-07-01 | `sdflow-init/copy_bundle` | 缺 pin 消费仓 update 端到端交叉不变量测试（workflow.md/spec-checklists/code-checklists 原封不动、仅 tools+契约刷新） |
 | [T72](open/todo/T72.md) | todo | PROPOSED | 2026-07-01 | `issues.py batch lint` | batch 条目整行缺失 优先级:/计划: 字段（非空值而是整行删除）当前不校验（实现有意窄化到值语法层，对抗A确认为文档化边界）——考虑补结构完整性校验抓手改腐坏 |
@@ -68,7 +65,6 @@
 | [T143](open/todo/T143.md) | todo | PROPOSED | 2026-07-01 | `sdflow-architecture` | frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言） |
 | [T144](open/todo/T144.md) | todo | PROPOSED | 2026-07-01 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） |
 | [T145](open/todo/T145.md) | todo | PROPOSED | 2026-07-01 | `sdflow-roadmap` | 观察 description 追加 SAD 指路句后的触发精度（架构类查询是否误触 roadmap） |
-| [T149](open/todo/T149.md) | todo | PROPOSED | 2026-07-01 | `sdflow-init/scripts/init.py` | lint_config 对 metrics.enabled 重复键无告警(true+false并存时valid恒True,anchor_lint取首值);未如parse_kv_strict收紧,潜在一致性盲点 |
 | [T151](open/todo/T151.md) | todo | OPEN | 2026-07-01 | `sdflow-buglist/tests/test_mirror_consistency.py` | 扩展 recorder three-way parity guard，覆盖共享 lock 常量与 RecorderLockState/RecorderLockError 类型定义 |
 | [T152](open/todo/T152.md) | todo | OPEN | 2026-07-01 | `openspec/changes/mlh-p6-recorder-frontmatter/impl-reports` | 规范实现报告的 git diff --check 记录：机械 review package 含原样 trailing whitespace 时显式写 exclude 命令与范围 |
 | [T155](open/todo/T155.md) | todo | OPEN | 2026-07-01 | .github/workflows/（全仓 -W error CI 门） | 全仓 pytest -W error 常态化为持久 CI 守卫（防未来再引入未关闭文件/ResourceWarning 类存量债） |

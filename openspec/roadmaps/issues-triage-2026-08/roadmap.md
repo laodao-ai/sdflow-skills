@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v1（2026-08-04，初始规划）
-> 总量：146 条 open todo（0 条 open bug）
+> 版本：v2（2026-08-04，B4 完成）
+> 总量：131 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -17,7 +17,7 @@
 | ~~B1~~ | ~~outside-voice 协议修复（环境变量必炸）~~ | ~~7~~ | -- | -- | ✅ 全部已关（5 DONE + 2 WONTDO） |
 | ~~B2~~ | ~~机械门补缺（verify/gate/anchor 假绿面）~~ | ~~5~~ | -- | -- | ✅ 全部已关（5 DONE） |
 | ~~B3~~ | ~~setup.sh 安全加固（所有权/覆盖/告警）~~ | ~~5~~ | -- | -- | ✅ 全部 DONE |
-| **B4** | sdflow-init 读写路径 | 4 | 中 | 中 | 可立即开 |
+| ~~B4~~ | ~~sdflow-init 读写路径~~ | ~~4~~ | -- | -- | ✅ 全部 DONE |
 | **B5** | recorder repo_root 四合一 | 4 | 中 | 中 | 可立即开 |
 | **B6** | outside-voice-job 零碎硬化 | 8 | 中 | 小 | 可立即开 |
 | **B7** | hack/ 测试守卫补全 | 7 | 中 | 小 | 可立即开 |
@@ -73,14 +73,16 @@ T150 经五问分诊 WONTDO：失效方向安全（fail-loud 不假绿）、真�
 
 ---
 
-### B4 · sdflow-init 读写路径（4 条）
+### ~~B4~~ · sdflow-init 读写路径 — ✅ 全部 DONE
 
-| ID | 摘要 |
-|---|---|
-| T63 | inject 多块收敛须 fence-aware + start/end 配对校验 |
-| T64 | settings.json 原子写改唯一名关闭无锁降级 |
-| T149 | lint_config 对重复键无告警 |
-| T6 | 两个全局 hook 仅装 Claude 侧 |
+change `sdflow-init-readwrite-paths` 一次完成四条，归档于 2026-08-04。
+
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T63 | inject 多块收敛须 fence-aware + start/end 配对校验 | ✅ DONE |
+| T64 | settings.json 原子写改唯一名关闭无锁降级 | ✅ DONE |
+| T149 | lint_config 对重复键无告警 | ✅ DONE |
+| T6 | 两个全局 hook 仅装 Claude 侧 | ✅ DONE |
 
 ---
 
@@ -183,9 +185,11 @@ B2 (假绿门)    ─── ✅ 全部已关
      │
 B3 (setup 安全) ─── ✅ 全部已关
      │
-  ┌─ B4 (init) ──┬── B5 (repo_root) ──┬── B6 (voice-job) ──── 可并行
-  │              │                    │
-  └─ B7 (hack测试)──B8 (ship_gate) ──B10 (lens) ──── 可并行
+B4 (init)      ─── ✅ 全部已关
+     │
+  ┌─ B5 (repo_root) ──┬── B6 (voice-job) ──── 可并行
+  │                    │
+  └─ B7 (hack测试) ──B8 (ship_gate) ──B10 (lens) ──── 可并行
 ```
 
-B1、B2、B3、B9 已全关。下一步 B4-B10 按需并行。
+B1–B4、B9 已全关。下一步 B5–B8、B10 按需并行。
