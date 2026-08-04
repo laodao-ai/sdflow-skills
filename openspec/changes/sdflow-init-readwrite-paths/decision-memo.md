@@ -44,3 +44,7 @@ B4 原 4 条缩为 3 条。T63 无真实攻击面，WONTDO 并关闭。
 ### D2 · T149 只扫顶层键
 
 嵌套键重复（如 `metrics.enabled` 出现两次）不做检测——概率极低、影响低、检测成本不对称（要追踪缩进层级）。按通则④可接受的简化。
+
+### D3 · T64 mkstemp 权限收窄可接受 [spec-review-amendment]
+
+`tempfile.mkstemp` 默认创建 0600 文件，`os.replace` 后权限跟源 inode，`settings.json` 会从典型 0644 收窄到 0600。对单用户机器影响极小（owner 自己在用），且 0600 更安全（敏感配置默认收紧权限）。接受此行为变化，不额外 `os.chmod`。

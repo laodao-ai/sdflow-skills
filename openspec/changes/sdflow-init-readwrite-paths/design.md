@@ -95,12 +95,14 @@ L891-893：逐个调 `ensure_global_hook(spec)` 装到 `~/.claude/`。Codex 无 
 在 `ensure_global_hooks()` 末尾追加检测：
 
 ```python
+# [spec-review-amendment] CR-5: 弱化文案——~/.codex/ 存在仅表示曾安装过，不等于当前活跃会话
 codex_home = os.path.expanduser("~/.codex")
 if os.path.isdir(codex_home):
-    lines.append("  ⚠ hook 仅 Claude 侧生效，Codex 会话无 branch-guard")
+    lines.append("  ⚠ 检测到 Codex 环境，如使用 Codex 会话请注意：hook 仅 Claude 侧生效")
 ```
 
 - 仅当 `~/.codex/` 存在时告警（不存在 = 未装 Codex，无需提醒）
+- 已知局限：`~/.codex/` 存在 = 曾安装过（`setup.sh` 会 `mkdir -p ~/.codex/skills`），不等于当前活跃会话；文案用「检测到 Codex 环境，如使用请注意」降低确定性语气，避免狼来了效应
 - 不尝试安装到 Codex 侧（无等价机制）
 - 告警文本出现在 `sdflow-init init/update` 输出的 hook 安装汇总里
 
