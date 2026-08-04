@@ -1,18 +1,10 @@
 ---
 name: sdflow-issues
 description: >
-  issues 台账的唯一 skill——owns 整个 `openspec/issues/` 台账：**两池记录 + reindex**。
-  **① 记 bug（缺陷）**：烧板验证、日志分析、代码审查、调试中确认了 bug 或缺陷，或用户说
-  "记一下这个 bug / 这个问题记到台账 / 标记 Bxx 已修 / 列一下还没修的 bug"→ 落
-  `openspec/issues/open/{ID}.md`（一个 issue 一个文件）。**② 记 todo（非缺陷）**：
-  冒出"以后可以改进 / 这里能优化 / 这是个技术债 / 记个 TODO / 加进待办池"的想法，或用户说
-  "记一下这个优化 / 标记 Txx 已完成 / 列一下待办"→ 同样落 `openspec/issues/open/{ID}.md`。
-  **③ 跨池管理**：`reindex` 重建 `openspec/issues/INDEX.md`（open）+ `CLOSED.md`（closed）——
-  由 `sdflow-done` 收尾自动跑只读 `scan --source-change` 查询本 change 的未闭合项。全局唯一
-  ID（B=bug / T=todo）不撞号、frontmatter 12 个扁平字段一致、终态门禁（bug FIXED / todo DONE
-  必带证据、WONTFIX/WONTDO 必带理由）全部交单一脚本 `issues_v2.py` 兜底。本 skill 自包含整套
-  issues 台账约定，是该约定的唯一真相源。**bug（坏了）vs todo（没坏但可更好）的分池判据见正文
-  「骑墙判定」段。** Trigger with /sdflow-issues。
+  issues 台账（bug + todo 两池）的唯一 skill——记录、更新状态、扫描、reindex。
+  当用户说"记一下这个 bug"、"记到台账"、"记个 TODO"、"记一下这个优化"、"加进待办池"、
+  "标记 Bxx 已修"、"把 Txx 关了"、"关掉这个 issue"、"更新 issue 状态"、
+  "列一下还没修的 bug"、"列一下待办"、"issues reindex"时触发。
 ---
 
 # sdflow-issues — issues 台账（记 bug · 记 todo · reindex）
@@ -165,9 +157,9 @@ description: >
 
 | 池 / 面 | 管什么 | 脚本入口 |
 |---|---|---|
-| **bug 池** | 已确认缺陷（前缀 `B`） | `scripts/issues_v2.py add --pool bug` |
-| **todo 池** | 优化/技术债/改进想法（前缀 `T`） | `scripts/issues_v2.py add --pool todo` |
-| **跨两池** | `reindex`（生成 `issues/INDEX.md` + `issues/CLOSED.md`） | `scripts/issues_v2.py reindex` |
+| **bug 池** | 已确认缺陷（前缀 `B`） | `~/.claude/skills/sdflow-issues/scripts/issues_v2.py add --pool bug` |
+| **todo 池** | 优化/技术债/改进想法（前缀 `T`） | `~/.claude/skills/sdflow-issues/scripts/issues_v2.py add --pool todo` |
+| **跨两池** | `reindex`（生成 `issues/INDEX.md` + `issues/CLOSED.md`） | `~/.claude/skills/sdflow-issues/scripts/issues_v2.py reindex` |
 
 单一入口 `issues_v2.py` 同在 `sdflow-issues/scripts/` 下、随本 skill 整目录 symlink 分发——不再有
 per-pool 薄入口，两池共用同一脚本的 `--pool` 参数区分。
@@ -177,7 +169,7 @@ per-pool 薄入口，两池共用同一脚本的 `--pool` 参数区分。
 > 变成确定性操作，模型省下来的注意力用在真正需要判断的地方：这是不是真 bug、现象 vs 根因、定几级、
 > 这值不值得记、归哪个类型、**落 bug 池还是 todo 池**。
 
-`python3 scripts/issues_v2.py --help` 查全部命令，`python3 scripts/issues_v2.py {cmd} --help` 查子命令参数。
+`python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py --help` 查全部命令，`python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py {cmd} --help` 查子命令参数。
 
 ---
 
@@ -218,7 +210,7 @@ item 落错池，拿错前缀（B↔T）/schema（`priority`↔`type`）/状态�
 
 ## 何时用 / 何时不用
 
-- ✅ **发现即记录**：烧板、日志分析、代码审查、调试中确认 bug → 落 bug 池；冒出优化/技术债/
+- ✅ **发现即记录**：代码审查、调试中确认 bug → 落 bug 池；冒出优化/技术债/
   改进想法 → 落 todo 池。别靠记忆。
 - ✅ **状态跟踪**：被某 change 包入（PROPOSED）、修完/做完（FIXED / DONE）、决定不修/不做
   （WONTFIX / WONTDO）→ `set-status` 回写。
@@ -244,14 +236,14 @@ item 落错池，拿错前缀（B↔T）/schema（`priority`↔`type`）/状态�
 
 ```bash
 # bug：module/summary 必填，priority 可选（约定 P1|P2|P3，脚本不做词表校验）
-python3 scripts/issues_v2.py add --pool bug --json '{
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py add --pool bug --json '{
   "module": "data_publish.c:120",
   "summary": "DATA/LOG envelope type 字段为空",
   "priority": "P1"
 }'
 
 # todo：module/summary 必填，type 可选（自由文本，无受控词表；沿用惯例如 性能优化/可观测性/代码质量/功能增强/基础设施）
-python3 scripts/issues_v2.py add --pool todo --json '{
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py add --pool todo --json '{
   "module": "meter_collect.c",
   "summary": "温度采样改 DMA 批量读取",
   "type": "性能优化"
@@ -276,10 +268,10 @@ python3 scripts/issues_v2.py add --pool todo --json '{
 状态变更只更新 frontmatter 机器字段，并在 body **追加**一条人读历史（不改已有内容）。带门禁：
 
 ```bash
-python3 scripts/issues_v2.py set-status --id B17 --to FIXED  --evidence "commit a1b2c3d"
-python3 scripts/issues_v2.py set-status --id B4  --to WONTFIX --reason "硬件限制，3.0 板子才有"
-python3 scripts/issues_v2.py set-status --id T1  --to DONE   --evidence "commit a1b2c3d"
-python3 scripts/issues_v2.py set-status --id T7  --to WONTDO --reason "ROI 太低，硬件下一版才支持"
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id B17 --to FIXED  --evidence "commit a1b2c3d"
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id B4  --to WONTFIX --reason "硬件限制，3.0 板子才有"
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id T1  --to DONE   --evidence "commit a1b2c3d"
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id T7  --to WONTDO --reason "ROI 太低，硬件下一版才支持"
 ```
 
 - **bug FIXED / todo DONE 门禁**：必须 `--evidence`（commit hash 或 change 名）——挡住"只标完成、
@@ -294,12 +286,12 @@ python3 scripts/issues_v2.py set-status --id T7  --to WONTDO --reason "ROI 太�
 ### 扫描 / 盘点（`scan`）
 
 ```bash
-python3 scripts/issues_v2.py scan                                   # 全部 open（bug+todo）
-python3 scripts/issues_v2.py scan --pool bug --status OPEN          # 只看 open 的 bug
-python3 scripts/issues_v2.py scan --status OPEN --status PROPOSED   # --status 可重复传多个
-python3 scripts/issues_v2.py scan --all                             # 含 closed/
-python3 scripts/issues_v2.py scan --source-change {change_name}     # 按来源 change 过滤
-python3 scripts/issues_v2.py scan --json                            # 机器可读（JSON 列表）
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan                                   # 全部 open（bug+todo）
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --pool bug --status OPEN          # 只看 open 的 bug
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --status OPEN --status PROPOSED   # --status 可重复传多个
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --all                             # 含 closed/
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --source-change {change_name}     # 按来源 change 过滤
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json                            # 机器可读（JSON 列表）
 ```
 
 默认只扫 `open/`；`--all` 含 `closed/`。盘点或交接前先跑一次；`sdflow-done` 收尾用
@@ -309,114 +301,20 @@ python3 scripts/issues_v2.py scan --json                            # 机器可�
 ### next-id / reindex
 
 ```bash
-python3 scripts/issues_v2.py next-id --pool bug   # 输出下一个可用 ID，如 B25
-python3 scripts/issues_v2.py reindex              # 重建 INDEX.md（open）+ CLOSED.md（closed）
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py next-id --pool bug   # 输出下一个可用 ID，如 B25
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reindex              # 重建 INDEX.md（open）+ CLOSED.md（closed）
 ```
 
 ### 历史迁移工具（`migrate`，一次性，本仓已执行过）
 
 `migrate` 是 v1（`buglist/`+`todolist/` 双格式）→ v2（`open/`+`closed/` 单文件）一次性转换工具。
 本仓已迁移完成（287 个 issue 全部迁移，v1 数据文件/脚本已删除），日常使用不再需要调用；仅供其它
-仍在 v1 格式的仓库迁移用：`python3 scripts/issues_v2.py migrate`（无需额外参数，`--root` 缺省当前
+仍在 v1 格式的仓库迁移用：`python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py migrate`（无需额外参数，`--root` 缺省当前
 git 根；幂等，已存在的目标文件按 ID 跳过）。
 
 ---
 
-## 约定速查（本 skill 即真相源）
+## 约定速查
 
-> issues 结构标准（目录/schema/状态/命令）的**唯一真相源**就是本段——不另起 rules 文件。
-
-### 目录结构
-
-- `openspec/issues/open/{ID}.md` —— 活跃 issue，**一个 issue 一个文件**。
-- `openspec/issues/closed/{ID}.md` —— 已闭合 issue（终态见下方状态词表）。
-- `openspec/issues/INDEX.md` —— `reindex` 从 `open/` 全量重建，首行固定 banner
-  `<!-- GENERATED by issues_v2.py reindex — DO NOT EDIT -->`。**只生成、禁手改**——手改内容会在
-  下次 `reindex` 时被无条件覆盖，不做任何合并。
-- `openspec/issues/CLOSED.md` —— `reindex` 从 `closed/` 全量重建，同 banner，比 INDEX 多
-  `closed_date`/`resolved_by`/`closed_reason` 三列。
-- 无过渡期兼容路径、无 dual-read——v1 的 `buglist/`/`todolist/`/`batches.md` 已删除，本仓已完成
-  一次性迁移（`migrate`），不再有历史遗留目录需要兼容扫描。
-
-### frontmatter schema（12 个扁平字段，固定顺序，唯一权威数据源）
-
-```yaml
----
-id: T257                      # 前缀+数字，文件名即 ID：{ID}.md
-pool: todo                    # todo | bug
-status: OPEN                  # 见下方状态词表
-priority: null                # bug only：约定 P1|P2|P3（脚本不做词表校验）
-type: null                    # todo only：自由文本类型（无受控词表）
-date: "2026-08-03"            # 创建日期
-source_change: some-change    # 发现该 issue 的 change（provenance，可 null，不可变）
-module: sdflow-ship           # 涉及模块
-summary: "一行摘要"
-resolved_by: null             # 修复该 issue 的 change（关闭时自动填）
-closed_date: null             # 关闭日期（关闭时自动填）
-closed_reason: null           # WONTFIX/WONTDO 必填理由（关闭时填）
----
-
-自由格式 Markdown body（现象、根因、修复方案、动机、思路等，无结构化子字段）
-```
-
-`set-status` 只在 body **追加**一行状态变更历史（`> {date} 状态：{old} → {new}（...）`），MUST NOT
-反解析或覆盖已有 body 内容。frontmatter 写出值一律双引号包裹（`key: "value"`，`null` 写字面 `null`
-不加引号），零依赖手写解析，不引入 PyYAML（ADR-0025）。
-
-### 状态词表 + 终态集（按 pool 各异）
-
-| pool | 状态码 | 终态集 |
-|---|---|---|
-| bug | `OPEN` `PROPOSED` `FIXED` `WONTFIX` | `{FIXED, WONTFIX}` |
-| todo | `OPEN` `PROPOSED` `DONE` `WONTDO` | `{DONE, WONTDO}` |
-
-进入终态即"这条债/待办不再挂着"（WONTFIX/WONTDO 是"决定不修/不做"的合法闭合，和 FIXED/DONE 一样）；
-文件从 `open/` 移到 `closed/`，从 INDEX.md 消失、出现在 CLOSED.md。非终态回退（如 `PROPOSED → OPEN`）
-文件留在 `open/`（本脚本命令面未提供反向转换命令，如需手工回退需直接编辑 frontmatter）。
-
-### 命令面（单一入口 `issues_v2.py`，全部命令共用）
-
-`add --pool {bug|todo} --json '{...}'` / `set-status --id {ID} --to {STATUS} [--evidence] [--reason]` /
-`scan [--pool] [--status]* [--source-change] [--all] [--json]` / `reindex` / `next-id --pool {bug|todo}` /
-`migrate`（一次性迁移，见上）。原 `buglist.py`/`todolist.py`（per-pool 薄入口）与
-`issues.py`（跨池薄入口：`reindex`/`batch`/`sweep`）三脚本已合一，`batch`/`sweep`/`triage` 机制随单文件
-模型消解（v1 的 legacy 表格 + frontmatter overlay 双格式、marker block、仓级 `recorder_lock`、批次
-注册表 `batches.md` 均已随本次改造砍除，见下方「并发安全」）。
-
-### ID 两池语义唯一
-
-默认 bug=`B`、todo=`T`，各自独立编号。`next-id` 扫 `open/`+`closed/` 全部文件名，取对应前缀 max+1；
-文件名即 ID：`{ID}.md`。ID 正则 `^[A-Z][1-9][0-9]*$`。
-
-### 并发安全（O_CREAT|O_EXCL，无需仓级锁）
-
-v2 用文件名级 `O_CREAT|O_EXCL` 写保护，不需要 v1 的仓级 `.recorder.lock`：
-
-- `add` 创建新文件用 `os.open(path, O_WRONLY|O_CREAT|O_EXCL)`，并发写同 ID 时后到者拿到
-  `FileExistsError` → 自动重试 `next-id`。
-- v2 单文件模型下，文件名 `{ID}.md` 即互斥粒度。
-- `set-status`/`reindex` 操作各自独立的单文件，无跨文件竞争。
-
-### 铁律（脚本已替你守住大半）
-
-① ID 在 bug+todo 两池语义全局唯一；② frontmatter 是唯一权威数据源，body 只追加不反解析；
-③ 终态门禁——bug FIXED / todo DONE 必带证据，WONTFIX/WONTDO 必带理由（脚本门禁）；④ `issues/INDEX.md`
-+ `issues/CLOSED.md` 只生成禁手改（`reindex` 兜底无条件覆盖重建）；⑤ 文件名级 `O_CREAT|O_EXCL` 即
-并发互斥粒度，无需仓级锁；⑥ 实施走 change——台账只是记录/收集池，真做时通过 OpenSpec change 落地，
-不在此直接改代码。
-
----
-
-## `--root` 与 git 根
-
-`issues_v2.py` 探测 **git 仓库根**（`git rev-parse --show-toplevel`），非 git 仓库时退化为
-`os.path.abspath(--root)`——`--root` 可指向仓库内任意子目录，不要求必须是仓库根本身；全部命令都会
-先 resolve 到 git 根再拼 `openspec/issues/...` 路径。
-
-## 注意
-
-- **并发边界**：见上方「并发安全」——`O_CREAT|O_EXCL` 只保护 `add` 的新文件创建，`set-status`/
-  `reindex` 各自作用于独立文件，天然无跨文件竞争；不承诺 network FS 的完整 power-loss durability。
-- 一个 bug/想法一条 ID；后续进展走 `set-status`，不要新开 ID。
-- 模型的核心价值在**判断**：这是不是真 bug、落哪个池、定几级/归哪类——命令本身是确定性操作，交给
-  脚本。拒绝把 review 期琐碎问题、还没确认的猜测、太琐碎/重复的想法记进台账（噪音比漏记更难清理）。
+详见 [references/conventions.md](references/conventions.md)（目录结构、frontmatter schema、状态词表、
+命令面、ID 唯一性、并发安全、铁律、`--root` 与 git 根、注意事项）。需要查 schema 或状态码时再读该文件。
