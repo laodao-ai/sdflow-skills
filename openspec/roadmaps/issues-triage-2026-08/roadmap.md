@@ -1,4 +1,4 @@
-# 156 条 Open Issues 分批清理路线图
+# Open Issues 分批清理路线图
 
 > 版本：v1（2026-08-04，初始规划）
 > 总量：146 条 open todo（0 条 open bug）
@@ -24,7 +24,7 @@
 | **B8** | ship_gate 小修集 | 4 | 中 | 中 | 可立即开 |
 | ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
 | **B10** | lens-metric 体系补全 | 4 | 中 | 中 | 可立即开 |
-| **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / 文档… | ~104 | 低-中 | 中-大 | 条件触发 |
+| **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / 文档… | ~95 | 低-中 | 中-大 | 条件触发 |
 
 ---
 
@@ -176,7 +176,7 @@ issues-v2-single-file-model change 已删除 `sdflow_issues_core`、v1 三脚本
 ## 建议执行顺序
 
 ```
-B1 (voice 协议) ─── 最高频痛点，每次评审都踩
+B1 (voice 协议) ─── ✅ 6/7 已关，剩 T150
      │
 B2 (假绿门)    ─── 安全面，漏过去的都是假绿
      │
@@ -184,7 +184,7 @@ B3 (setup 安全) ─── 小改动大收益
      │
   ┌─ B4 (init) ──┬── B5 (repo_root) ──┬── B6 (voice-job) ──── 可并行
   │              │                    │
-  └─ B7 (hack测试)──B8 (ship_gate) ──B9 (issues) ──B10 (lens) ── 可并行
+  └─ B7 (hack测试)──B8 (ship_gate) ──B10 (lens) ──── 可并行
 ```
 
-B1→B2→B3 串行优先做完（共 17 条，预估 3 个 change），之后 B4-B10 按需并行。
+B1 已基本完成（剩 T150 独立问题），B9 已全关。下一步 B2→B3（共 10 条），之后 B4-B10 按需并行。
