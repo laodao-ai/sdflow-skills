@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 9ef7523ea9cf24e2ede67e5a55f245eacb9109d4
+---
+
 # Spec Review Report — sdflow-init-readwrite-paths
 
 <!-- sdflow:fanout-capability v1 host="claude" subagents="available" mirrors="grounding,adversarial" -->
@@ -99,10 +105,10 @@ design-voice 调用：run-id=`20260804T071308Z-RZqPu3`，exit 0，4 条 findings
 
 ## Lens Metric 度量锚
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="7" 采纳="5" 裁掉="0" defer="2" 独立="3" sev="致0/高2/中1/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="7" 采纳="7" 裁掉="0" defer="0" 独立="3" sev="致0/高2/中2/低3" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="3" 采纳="2" 裁掉="1" defer="0" 独立="1" sev="致0/高0/中0/低2" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="1" 裁掉="2" defer="2" 独立="0" sev="致0/高1/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="3" 裁掉="2" defer="0" 独立="0" sev="致0/高1/中1/低1" -->
 
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 
@@ -111,3 +117,10 @@ design-voice 调用：run-id=`20260804T071308Z-RZqPu3`，exit 0，4 条 findings
 **CR-1（高）和 CR-2（高）须在设计门拍板前修正 design.md**——两条都是实现期必定爆炸的设计伪代码错误（try 边界 + 异常捕获缺口），且有实测复现。CR-3（中）建议同步修正（一行改动）。
 
 修正后建议进设计 HARD-GATE。
+
+## 设计门拍板
+
+设计门已拍板批准，日期 2026-08-04。
+
+- Q1（CR-4 权限收窄）→ B：decision-memo 补接受声明（D3）
+- Q2（CR-5 Codex 告警信号）→ B：弱化文案，已修正 design.md
