@@ -90,12 +90,33 @@ install_into() {
           continue
         fi
       fi
-      # 裸 `ln -snf` 在此失败即中止全脚本（并发 EEXIST / 落点只读）——见本节顶部注释。
+      # 既有软链所有权校验：非自属软链不覆盖（同 cleanup_orphans 的 readlink 判据）。
+      # 自属 = readlink 目标路径含 $REPO_NAME 或 sdflow-skills（开发/运行 checkout 目录名可能不同）。
+      if [ -L "$target" ]; then
+        local old_link
+        old_link="$(readlink "$target" 2>/dev/null || true)"
+        case "$old_link" in
+          "$REPO_NAME"/*|*/"$REPO_NAME"/*|*/sdflow-skills/*|sdflow-skills/*)
+            # 自属——允许覆盖，下面会打接管提示
+            ;;
+          *)
+            if [ -n "$old_link" ]; then
+              skipped+=("$skill_name @ $dest — 非自属软链（→ ${old_link}），未覆盖")
+              continue
+            fi
+            ;;
+        esac
+      fi
+      # old_link 在上面 -L 分支已赋值；target 不存在时为空
       if ! ln -snf "$REPO_DIR/$skill_name" "$target" 2>/dev/null; then
         skipped+=("$skill_name @ $dest — 软链建不出来（落点只读？与另一个 setup 并发？），未铺设")
         continue
       fi
-      installed+=("$skill_name @ $dest")
+      if [ -n "${old_link:-}" ] && [ "$old_link" != "$REPO_DIR/$skill_name" ]; then
+        installed+=("$skill_name @ $dest — 接管：$old_link → $REPO_DIR/$skill_name")
+      else
+        installed+=("$skill_name @ $dest")
+      fi
     fi
   done
 }
@@ -353,6 +374,19 @@ install_sdflow() {
   fi
 
   if [ "$IS_WINDOWS" -eq 1 ]; then
+    if [ -f "$sdflow/workflow-path" ]; then
+      local existing_path
+      existing_path="$(cat "$sdflow/workflow-path" 2>/dev/null || true)"
+      if [ -n "$existing_path" ] && [ "$existing_path" != "$bundle" ]; then
+        case "$existing_path" in
+          */"$REPO_NAME"/*|"$REPO_NAME"/*)
+            ;; # 自属，允许覆盖
+          *)
+            skipped+=("workflow-path @ $sdflow — 非自属指针（→ ${existing_path}），未覆盖")
+            return 0 ;;  # 跳过整个 Windows workflow-path 段，不影响后续 hack 脚本安装
+        esac
+      fi
+    fi
     if ! printf '%s\n' "$bundle" > "$sdflow/workflow-path" 2>/dev/null; then
       skipped+=("workflow-path @ $sdflow — 写不进去（只读？磁盘满？），未铺设")
     else
@@ -611,7 +645,7 @@ fi
 if [ ${#skipped[@]} -gt 0 ]; then
   echo ""
   echo "  skipped (${#skipped[@]}):"
-  for s in "${skipped[@]}"; do echo "    ⚠ $s — already exists, not managed by sdflow-skills"; done
+  for s in "${skipped[@]}"; do echo "    ⚠ $s"; done
 fi
 
 if [ ${#cleaned[@]} -gt 0 ]; then
@@ -630,33 +664,33 @@ fi
 # ─── 四条通则一致性门（真相源在 sdflow-init/assets/，投放面数量由脚本自己报）───
 # 【为什么放在 setup.sh 里】：一个「存在但没人跑」的门 = 不存在的门。
 # 装的时候顺手跑一次 —— 漂了当场看见，而不是等到某个 skill 带着旧通则跑了半天。
-if command -v python3 >/dev/null 2>&1 && [ -f "$REPO_DIR/hack/sync_principles.py" ]; then
+if [ -n "$_py" ] && [ -f "$REPO_DIR/hack/sync_principles.py" ]; then
   echo ""
-  if ! python3 "$REPO_DIR/hack/sync_principles.py" --check; then
+  if ! "$_py" "$REPO_DIR/hack/sync_principles.py" --check; then
     echo ""
-    echo "  ⚠️ 四条通则有漂移（上面列了）。修：python3 hack/sync_principles.py --apply"
+    echo "  ⚠️ 四条通则有漂移（上面列了）。修：$_py hack/sync_principles.py --apply"
   fi
   # 人读手册是 workflow.md + prompts/ 的生成物 —— 漂了就是「手册在教人跑一段已废的 prompt」
-  if ! python3 "$REPO_DIR/hack/gen_workflow_guide.py" --check; then
-    echo "  ⚠️ 修：python3 hack/gen_workflow_guide.py --write"
+  if ! "$_py" "$REPO_DIR/hack/gen_workflow_guide.py" --check; then
+    echo "  ⚠️ 修：$_py hack/gen_workflow_guide.py --write"
   fi
 fi
 
 # 两个评审 SKILL 的 async host 调度段必须逐字节相同 —— 漂了 = 一个宿主路径静默行为分叉。
 # 【独立守卫】：本门只依赖自己那个脚本存在，MUST NOT 挂在 sync_principles.py 的条件下
 # （否则 sync_principles.py 一缺失，本门就静默不跑 = 不存在的门）。
-if command -v python3 >/dev/null 2>&1 && \
+if [ -n "$_py" ] && \
    [ -f "$REPO_DIR/hack/check_async_branch_parity.py" ]; then
-  if ! python3 "$REPO_DIR/hack/check_async_branch_parity.py"; then
+  if ! "$_py" "$REPO_DIR/hack/check_async_branch_parity.py"; then
     echo "  ⚠️ async host 调度段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
   fi
 fi
 
 # 四个编排 SKILL（implement/done/code-review/spec-review）的宿主/档位解析核心段必须逐字节相同 ——
 # 漂了 = 某个 skill 的档位解析静默行为分叉。独立守卫，同上不挂在 sync_principles.py 条件下。
-if command -v python3 >/dev/null 2>&1 && \
+if [ -n "$_py" ] && \
    [ -f "$REPO_DIR/hack/check_tier_resolution_parity.py" ]; then
-  if ! python3 "$REPO_DIR/hack/check_tier_resolution_parity.py"; then
+  if ! "$_py" "$REPO_DIR/hack/check_tier_resolution_parity.py"; then
     echo "  ⚠️ 宿主/档位解析核心段漂移（上面指了首个不同行）。修：以一侧为准整段原样复制"
   fi
 fi
@@ -664,9 +698,9 @@ fi
 # 第五道机械门：每个 Python 入口都必须在模块顶层重配 stdout/stderr，避免 Windows
 # GBK 控制台在打印 Unicode 状态信息时把真实成功误报为崩溃。它与其余四门独立：
 # 不依赖任何别的门是否存在或是否通过，失败详情由检查器逐文件列出并指向 CLAUDE.md 模板。
-if command -v python3 >/dev/null 2>&1 && \
+if [ -n "$_py" ] && \
    [ -f "$REPO_DIR/hack/check_encoding_hygiene.py" ]; then
-  if ! python3 "$REPO_DIR/hack/check_encoding_hygiene.py"; then
+  if ! "$_py" "$REPO_DIR/hack/check_encoding_hygiene.py"; then
     echo "  ⚠️ Python 入口编码前导缺失（上面列了逐文件修复项）。修：按 CLAUDE.md“修改本仓库的注意”中的 4 行模板补齐。"
   fi
 fi

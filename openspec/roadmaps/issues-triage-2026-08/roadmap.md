@@ -16,7 +16,7 @@
 |---|---|---|---|---|---|
 | ~~B1~~ | ~~outside-voice 协议修复（环境变量必炸）~~ | ~~7~~ | -- | -- | ✅ 全部已关（5 DONE + 2 WONTDO） |
 | ~~B2~~ | ~~机械门补缺（verify/gate/anchor 假绿面）~~ | ~~5~~ | -- | -- | ✅ 全部已关（5 DONE） |
-| **B3** | setup.sh 安全加固（所有权/覆盖/告警） | 5 | 高-中 | 小 | 可立即开 |
+| ~~B3~~ | ~~setup.sh 安全加固（所有权/覆盖/告警）~~ | ~~5~~ | -- | -- | ✅ 全部 DONE |
 | **B4** | sdflow-init 读写路径 | 4 | 中 | 中 | 可立即开 |
 | **B5** | recorder repo_root 四合一 | 4 | 中 | 中 | 可立即开 |
 | **B6** | outside-voice-job 零碎硬化 | 8 | 中 | 小 | 可立即开 |
@@ -61,15 +61,15 @@ T150 经五问分诊 WONTDO：失效方向安全（fail-loud 不假绿）、真�
 
 ---
 
-### B3 · setup.sh 安全加固（5 条）
+### ~~B3~~ · setup.sh 安全加固 — ✅ 全部 DONE
 
-| ID | 摘要 |
-|---|---|
-| T24 | install_into 对既有软链零所有权校验（同名异物被 ln -snf 无声覆盖） |
-| T14 | Windows 指针分支补所有权检查 |
-| T18 | skills 软链切换无指向变更提示 |
-| T16 | install_sdflow 告警独立打印分支 |
-| T263 | Python3 probe 统一（command -v 不一致） |
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T24 | install_into 对既有软链零所有权校验（同名异物被 ln -snf 无声覆盖） | ✅ DONE（readlink 判据匹配自属 checkout） |
+| T14 | Windows 指针分支补所有权检查 | ✅ DONE（读现有 workflow-path 内容判自属） |
+| T18 | skills 软链切换无指向变更提示 | ✅ DONE（接管提示 旧→新） |
+| T16 | install_sdflow 告警独立打印分支 | ✅ DONE（去掉冗余英文尾缀） |
+| T263 | Python3 probe 统一（command -v 不一致） | ✅ DONE（统一用 $_py） |
 
 ---
 
@@ -181,11 +181,11 @@ B1 (voice 协议) ─── ✅ 全部已关
      │
 B2 (假绿门)    ─── ✅ 全部已关
      │
-B3 (setup 安全) ─── 小改动大收益
+B3 (setup 安全) ─── ✅ 全部已关
      │
   ┌─ B4 (init) ──┬── B5 (repo_root) ──┬── B6 (voice-job) ──── 可并行
   │              │                    │
   └─ B7 (hack测试)──B8 (ship_gate) ──B10 (lens) ──── 可并行
 ```
 
-B1、B2、B9 已全关。下一步 B3（5 条），之后 B4-B10 按需并行。
+B1、B2、B3、B9 已全关。下一步 B4-B10 按需并行。
