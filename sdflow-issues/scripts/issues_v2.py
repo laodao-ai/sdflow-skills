@@ -361,15 +361,27 @@ def write_issue(path, frontmatter, body, create=False):
         atomic_write_text(path, text)
 
 
-def _issues_dir(root, location):
-    return os.path.join(root, "openspec", "issues", location)
+def _issues_dir(root, location, pool=None):
+    base = os.path.join(root, "openspec", "issues", location)
+    if pool is not None:
+        return os.path.join(base, pool)
+    return base
+
+
+def _pool_subdir(issue_id):
+    """ID 前缀 → pool 子目录名（T→todo, B→bug）。"""
+    m = ID_RE.match(issue_id)
+    if m and m.group(1) in PREFIX_POOL:
+        return PREFIX_POOL[m.group(1)]
+    return None
 
 
 def find_issue(root, issue_id):
     """按 ID 在 `open/` 和 `closed/` 中定位，返回 `(path, location)`；
     未找到返回 `(None, None)`。"""
+    pool = _pool_subdir(issue_id)
     for location in ("open", "closed"):
-        path = os.path.join(_issues_dir(root, location), f"{issue_id}.md")
+        path = os.path.join(_issues_dir(root, location, pool), f"{issue_id}.md")
         if os.path.isfile(path):
             return path, location
     return None, None
@@ -392,7 +404,7 @@ def next_id(root, pool):
     pattern = re.compile(rf"^{prefix}([1-9][0-9]*)\.md$", re.ASCII)
     max_n = 0
     for location in ("open", "closed"):
-        d = _issues_dir(root, location)
+        d = _issues_dir(root, location, pool)
         if not os.path.isdir(d):
             continue
         for name in os.listdir(d):
@@ -448,7 +460,7 @@ def cmd_add(args):
 
     while True:
         issue_id = next_id(root, pool)
-        path = os.path.join(_issues_dir(root, "open"), f"{issue_id}.md")
+        path = os.path.join(_issues_dir(root, "open", pool), f"{issue_id}.md")
         frontmatter = {
             "id": issue_id,
             "pool": pool,
@@ -551,7 +563,7 @@ def cmd_set_status(args):
 
     closed_path = None
     if terminal:
-        closed_path = os.path.join(_issues_dir(root, "closed"), f"{issue_id}.md")
+        closed_path = os.path.join(_issues_dir(root, "closed", pool), f"{issue_id}.md")
         os.makedirs(os.path.dirname(closed_path), exist_ok=True)
         rel_open = os.path.relpath(path, root)
         rel_closed = os.path.relpath(closed_path, root)
@@ -590,20 +602,21 @@ def cmd_set_status(args):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _scan_dir(root, location):
-    d = _issues_dir(root, location)
     items = []
-    if not os.path.isdir(d):
-        return items
-    for name in sorted(os.listdir(d)):
-        if not name.endswith(".md"):
+    for pool in ("bug", "todo"):
+        d = _issues_dir(root, location, pool)
+        if not os.path.isdir(d):
             continue
-        path = os.path.join(d, name)
-        try:
-            frontmatter, _body = read_issue(path)
-        except (ValueError, OSError) as exc:
-            print(f"WARNING: 跳过不可解析文件 {path}: {exc}", file=sys.stderr)
-            continue
-        items.append(frontmatter)
+        for name in sorted(os.listdir(d)):
+            if not name.endswith(".md"):
+                continue
+            path = os.path.join(d, name)
+            try:
+                frontmatter, _body = read_issue(path)
+            except (ValueError, OSError) as exc:
+                print(f"WARNING: 跳过不可解析文件 {path}: {exc}", file=sys.stderr)
+                continue
+            items.append(frontmatter)
     return items
 
 
@@ -662,6 +675,11 @@ def _escape_cell(value):
     return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ")
 
 
+def _id_link(issue_id, location):
+    pool = _pool_subdir(issue_id) or "unknown"
+    return f"[{issue_id}]({location}/{pool}/{issue_id}.md)"
+
+
 def generate_index_md(items):
     lines = [
         INDEX_BANNER, "", "# Issues Index (Open)", "",
@@ -669,11 +687,11 @@ def generate_index_md(items):
         "|----|------|--------|------|--------|---------|",
     ]
     for it in items:
-        lines.append(
-            "| " + " | ".join(_escape_cell(it.get(k)) for k in
-                               ("id", "pool", "status", "date", "module", "summary"))
-            + " |"
-        )
+        cells = [_id_link(it["id"], "open")] + [
+            _escape_cell(it.get(k)) for k in
+            ("pool", "status", "date", "module", "summary")
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
     lines.append("")
     return "\n".join(lines)
 
@@ -685,12 +703,13 @@ def generate_closed_md(items):
         "|----|------|--------|------|--------|---------|-------------|-------------|----------------|",
     ]
     for it in items:
-        lines.append(
-            "| " + " | ".join(_escape_cell(it.get(k)) for k in (
-                "id", "pool", "status", "date", "module", "summary",
+        cells = [_id_link(it["id"], "closed")] + [
+            _escape_cell(it.get(k)) for k in (
+                "pool", "status", "date", "module", "summary",
                 "closed_date", "resolved_by", "closed_reason",
-            )) + " |"
-        )
+            )
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
     lines.append("")
     return "\n".join(lines)
 
@@ -709,6 +728,53 @@ def cmd_reindex(args):
         f"reindex：已重建 {index_path}（open {len(open_items)} 项）与 "
         f"{closed_path}（closed {len(closed_items)} 项）"
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# cmd_reorganize — flat → pool 子目录一次性迁移
+# ══════════════════════════════════════════════════════════════════════════════
+
+def cmd_reorganize(args):
+    root = args.root
+    is_git = _is_git_repo(root)
+    moved = 0
+    for location in ("open", "closed"):
+        base = _issues_dir(root, location)
+        if not os.path.isdir(base):
+            continue
+        for name in sorted(os.listdir(base)):
+            if not name.endswith(".md"):
+                continue
+            src = os.path.join(base, name)
+            if not os.path.isfile(src):
+                continue
+            issue_id = name[:-3]
+            pool = _pool_subdir(issue_id)
+            if pool is None:
+                print(f"WARNING: 跳过无法识别 pool 的文件 {name}", file=sys.stderr)
+                continue
+            dest_dir = _issues_dir(root, location, pool)
+            dest = os.path.join(dest_dir, name)
+            if os.path.exists(dest):
+                continue
+            os.makedirs(dest_dir, exist_ok=True)
+            rel_src = os.path.relpath(src, root)
+            rel_dest = os.path.relpath(dest, root)
+            if is_git:
+                mv = subprocess.run(
+                    ["git", "-C", root, "mv", rel_src, rel_dest],
+                    capture_output=True, text=True, timeout=30,
+                    encoding="utf-8", errors="replace",
+                )
+                if mv.returncode != 0:
+                    print(f"WARNING: git mv 失败 {rel_src} → {rel_dest}: {mv.stderr.strip()}",
+                          file=sys.stderr)
+                    continue
+            else:
+                os.rename(src, dest)
+            moved += 1
+    cmd_reindex(args)
+    print(f"reorganize：已移动 {moved} 个文件到 pool 子目录")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1083,10 +1149,12 @@ def cmd_migrate(args):
         pool = frontmatter["pool"]
         terminal = frontmatter["status"] in TERMINAL_STATUSES[pool]
         location = "closed" if terminal else "open"
-        path = os.path.join(_issues_dir(root, location), f"{item_id}.md")
-        if os.path.isfile(path):
+        fname = f"{item_id}.md"
+        if os.path.isfile(os.path.join(_issues_dir(root, "open", pool), fname)) or \
+           os.path.isfile(os.path.join(_issues_dir(root, "closed", pool), fname)):
             stats["skipped_existing"] += 1
             continue
+        path = os.path.join(_issues_dir(root, location, pool), fname)
 
         notes = batch_notes.get(item_id)
         if notes:
@@ -1142,6 +1210,9 @@ def main():
 
     sm = sub.add_parser("migrate", help="v1（buglist/todolist）→ v2（open/closed）一次性迁移")
     sm.set_defaults(func=cmd_migrate)
+
+    so = sub.add_parser("reorganize", help="flat → pool 子目录一次性迁移（open/T*.md → open/todo/T*.md）")
+    so.set_defaults(func=cmd_reorganize)
 
     args = p.parse_args()
     try:

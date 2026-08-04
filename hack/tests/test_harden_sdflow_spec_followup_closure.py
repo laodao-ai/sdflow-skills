@@ -69,9 +69,10 @@ def _todos() -> dict[str, dict[str, object]]:
 
 
 def _issue_file(item_id: str) -> Path:
-    """v2 单文件模型：一个 issue 一个文件，先 open/ 后 closed/ 定位。"""
+    """v2 单文件模型：一个 issue 一个文件，按 pool 子目录定位。"""
+    pool = "bug" if item_id.startswith("B") else "todo"
     for sub in ("open", "closed"):
-        candidate = ROOT / "openspec/issues" / sub / f"{item_id}.md"
+        candidate = ROOT / "openspec/issues" / sub / pool / f"{item_id}.md"
         if candidate.is_file():
             return candidate
     raise AssertionError(f"{item_id} 在 open/ 与 closed/ 均未找到 v2 issue 文件")

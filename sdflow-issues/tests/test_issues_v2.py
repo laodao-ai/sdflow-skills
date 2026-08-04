@@ -167,30 +167,30 @@ def test_write_issue_concurrent_o_creat_excl_only_one_winner(tmp_path):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_find_issue_locates_in_open_then_closed(tmp_path):
-    open_dir = tmp_path / "openspec" / "issues" / "open"
-    closed_dir = tmp_path / "openspec" / "issues" / "closed"
-    open_dir.mkdir(parents=True)
-    closed_dir.mkdir(parents=True)
-    (open_dir / "B1.md").write_text("x", encoding="utf-8")
-    (closed_dir / "B2.md").write_text("x", encoding="utf-8")
+    open_bug = tmp_path / "openspec" / "issues" / "open" / "bug"
+    closed_bug = tmp_path / "openspec" / "issues" / "closed" / "bug"
+    open_bug.mkdir(parents=True)
+    closed_bug.mkdir(parents=True)
+    (open_bug / "B1.md").write_text("x", encoding="utf-8")
+    (closed_bug / "B2.md").write_text("x", encoding="utf-8")
 
     path, location = v2.find_issue(str(tmp_path), "B1")
-    assert location == "open" and path == str(open_dir / "B1.md")
+    assert location == "open" and path == str(open_bug / "B1.md")
 
     path, location = v2.find_issue(str(tmp_path), "B2")
-    assert location == "closed" and path == str(closed_dir / "B2.md")
+    assert location == "closed" and path == str(closed_bug / "B2.md")
 
     path, location = v2.find_issue(str(tmp_path), "B999")
     assert path is None and location is None
 
 
 def test_next_id_scans_across_open_and_closed(tmp_path):
-    open_dir = tmp_path / "openspec" / "issues" / "open"
-    closed_dir = tmp_path / "openspec" / "issues" / "closed"
-    open_dir.mkdir(parents=True)
-    closed_dir.mkdir(parents=True)
-    (open_dir / "T257.md").write_text("x", encoding="utf-8")
-    (closed_dir / "T260.md").write_text("x", encoding="utf-8")
+    open_todo = tmp_path / "openspec" / "issues" / "open" / "todo"
+    closed_todo = tmp_path / "openspec" / "issues" / "closed" / "todo"
+    open_todo.mkdir(parents=True)
+    closed_todo.mkdir(parents=True)
+    (open_todo / "T257.md").write_text("x", encoding="utf-8")
+    (closed_todo / "T260.md").write_text("x", encoding="utf-8")
 
     assert v2.next_id(str(tmp_path), "todo") == "T261"
 
@@ -215,7 +215,7 @@ def test_cli_add_bug_creates_open_file_with_required_frontmatter(tmp_path):
     issue_id = out["id"]
     assert issue_id.startswith("B")
 
-    path = repo / "openspec" / "issues" / "open" / f"{issue_id}.md"
+    path = repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"
     assert path.is_file()
     fm, body = v2.read_issue(str(path))
     assert fm["id"] == issue_id
@@ -229,7 +229,7 @@ def test_cli_add_bug_creates_open_file_with_required_frontmatter(tmp_path):
 
     # git add ran (best-effort)
     status = _git("status", "--porcelain", cwd=repo)
-    assert f"open/{issue_id}.md" in status.stdout
+    assert f"open/bug/{issue_id}.md" in status.stdout
 
 
 def test_cli_add_todo_creates_open_file_with_type(tmp_path):
@@ -242,7 +242,7 @@ def test_cli_add_todo_creates_open_file_with_type(tmp_path):
     out = json.loads(proc.stdout)
     issue_id = out["id"]
     assert issue_id.startswith("T")
-    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "open" / f"{issue_id}.md"))
+    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "todo" / f"{issue_id}.md"))
     assert fm["pool"] == "todo"
     assert fm["type"] == "基础设施"
     assert fm["priority"] is None
@@ -336,8 +336,8 @@ def test_cli_set_status_bug_fixed_moves_to_closed_and_fills_fields(tmp_path):
                      "--evidence", "commit abc123")
     assert proc.returncode == 0, proc.stderr
 
-    open_path = repo / "openspec" / "issues" / "open" / f"{issue_id}.md"
-    closed_path = repo / "openspec" / "issues" / "closed" / f"{issue_id}.md"
+    open_path = repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"
+    closed_path = repo / "openspec" / "issues" / "closed" / "bug" / f"{issue_id}.md"
     assert not open_path.exists()
     assert closed_path.is_file()
 
@@ -349,8 +349,8 @@ def test_cli_set_status_bug_fixed_moves_to_closed_and_fills_fields(tmp_path):
 
     # git mv actually happened (tracked, in index)
     status = _git("status", "--porcelain", cwd=repo)
-    assert f"closed/{issue_id}.md" in status.stdout
-    assert f"open/{issue_id}.md" not in status.stdout
+    assert f"closed/bug/{issue_id}.md" in status.stdout
+    assert f"open/bug/{issue_id}.md" not in status.stdout
 
 
 def test_cli_set_status_todo_done_requires_evidence(tmp_path):
@@ -364,7 +364,7 @@ def test_cli_set_status_todo_done_requires_evidence(tmp_path):
     proc2 = _run_cli(repo, "set-status", "--id", issue_id, "--to", "DONE",
                       "--evidence", "some-change")
     assert proc2.returncode == 0, proc2.stderr
-    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / f"{issue_id}.md"))
+    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / "todo" / f"{issue_id}.md"))
     assert fm["status"] == "DONE"
 
 
@@ -386,7 +386,7 @@ def test_cli_set_status_wontfix_requires_reason(tmp_path):
     proc2 = _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTFIX",
                       "--reason", "ROI 太低")
     assert proc2.returncode == 0, proc2.stderr
-    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / f"{issue_id}.md"))
+    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / "bug" / f"{issue_id}.md"))
     assert fm["closed_reason"] == "ROI 太低"
 
 
@@ -395,7 +395,7 @@ def test_cli_set_status_non_terminal_stays_in_open(tmp_path):
     issue_id = _add(repo, "todo", module="m", summary="s")
     proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "PROPOSED")
     assert proc.returncode == 0, proc.stderr
-    open_path = repo / "openspec" / "issues" / "open" / f"{issue_id}.md"
+    open_path = repo / "openspec" / "issues" / "open" / "todo" / f"{issue_id}.md"
     assert open_path.is_file()
     fm, _ = v2.read_issue(str(open_path))
     assert fm["status"] == "PROPOSED"
@@ -417,7 +417,7 @@ def test_cli_set_status_rejects_already_terminal(tmp_path):
 def test_cli_set_status_non_git_repo_falls_back_to_os_rename(tmp_path):
     plain = tmp_path / "plain"
     plain.mkdir()
-    open_dir = plain / "openspec" / "issues" / "open"
+    open_dir = plain / "openspec" / "issues" / "open" / "bug"
     open_dir.mkdir(parents=True)
     fm = {k: None for k in v2.FRONTMATTER_FIELDS}
     fm.update({"id": "B1", "pool": "bug", "status": "OPEN",
@@ -428,14 +428,14 @@ def test_cli_set_status_non_git_repo_falls_back_to_os_rename(tmp_path):
                      "--evidence", "commit abc")
     assert proc.returncode == 0, proc.stderr
     assert not (open_dir / "B1.md").exists()
-    closed_path = plain / "openspec" / "issues" / "closed" / "B1.md"
+    closed_path = plain / "openspec" / "issues" / "closed" / "bug" / "B1.md"
     assert closed_path.is_file()
 
 
 def test_cli_set_status_untracked_file_is_git_added_before_mv(tmp_path):
     """add 的 git add 失败/被跳过时，set-status 到终态前必须自己先 tracked 再 git mv。"""
     repo = _init_repo(tmp_path / "repo")
-    open_dir = repo / "openspec" / "issues" / "open"
+    open_dir = repo / "openspec" / "issues" / "open" / "bug"
     open_dir.mkdir(parents=True)
     fm = {k: None for k in v2.FRONTMATTER_FIELDS}
     fm.update({"id": "B5", "pool": "bug", "status": "OPEN",
@@ -446,10 +446,10 @@ def test_cli_set_status_untracked_file_is_git_added_before_mv(tmp_path):
     proc = _run_cli(repo, "set-status", "--id", "B5", "--to", "FIXED",
                      "--evidence", "c1")
     assert proc.returncode == 0, proc.stderr
-    closed_path = repo / "openspec" / "issues" / "closed" / "B5.md"
+    closed_path = repo / "openspec" / "issues" / "closed" / "bug" / "B5.md"
     assert closed_path.is_file()
     status = _git("status", "--porcelain", cwd=repo)
-    assert "closed/B5.md" in status.stdout
+    assert "closed/bug/B5.md" in status.stdout
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -567,12 +567,12 @@ def test_cli_reindex_idempotent_when_rerun(tmp_path):
 
 def test_cli_next_id_cross_directory(tmp_path):
     repo = _init_repo(tmp_path / "repo")
-    open_dir = repo / "openspec" / "issues" / "open"
-    closed_dir = repo / "openspec" / "issues" / "closed"
-    open_dir.mkdir(parents=True)
-    closed_dir.mkdir(parents=True)
-    (open_dir / "T257.md").write_text("x", encoding="utf-8")
-    (closed_dir / "T260.md").write_text("x", encoding="utf-8")
+    open_todo = repo / "openspec" / "issues" / "open" / "todo"
+    closed_todo = repo / "openspec" / "issues" / "closed" / "todo"
+    open_todo.mkdir(parents=True)
+    closed_todo.mkdir(parents=True)
+    (open_todo / "T257.md").write_text("x", encoding="utf-8")
+    (closed_todo / "T260.md").write_text("x", encoding="utf-8")
 
     proc = _run_cli(repo, "next-id", "--pool", "todo")
     assert proc.returncode == 0, proc.stderr
@@ -680,7 +680,7 @@ def test_migrate_parses_pure_legacy_table_format(tmp_path):
     assert stats["migrated"] == 1
     assert stats["shadowed"] == 0
 
-    closed_path = repo / "openspec" / "issues" / "closed" / "B1.md"
+    closed_path = repo / "openspec" / "issues" / "closed" / "bug" / "B1.md"
     assert closed_path.is_file()
     fm, body = v2.read_issue(str(closed_path))
     assert fm["module"] == "mod-a"
@@ -722,7 +722,7 @@ some marker body content line
     assert stats["migrated"] == 1
     assert stats["shadowed"] == 0
 
-    open_path = repo / "openspec" / "issues" / "open" / "T5.md"
+    open_path = repo / "openspec" / "issues" / "open" / "todo" / "T5.md"
     assert open_path.is_file()
     fm, body = v2.read_issue(str(open_path))
     assert fm["module"] == "mod"
@@ -775,14 +775,14 @@ legacy-only body for T68
     assert stats["migrated"] == 2
     assert stats["shadowed"] == 1  # legacy 表格行 T67 被 frontmatter 同 ID 覆盖
 
-    closed_t67 = repo / "openspec" / "issues" / "closed" / "T67.md"
+    closed_t67 = repo / "openspec" / "issues" / "closed" / "todo" / "T67.md"
     assert closed_t67.is_file()
     fm67, body67 = v2.read_issue(str(closed_t67))
     assert fm67["status"] == "DONE"  # 取 frontmatter 值，非 legacy 表格的 PROPOSED
     assert fm67["resolved_by"] == "some-fix-change"
     assert "body for shadowed T67" in body67
 
-    open_t68 = repo / "openspec" / "issues" / "open" / "T68.md"
+    open_t68 = repo / "openspec" / "issues" / "open" / "todo" / "T68.md"
     assert open_t68.is_file()
     fm68, body68 = v2.read_issue(str(open_t68))
     assert fm68["status"] == "OPEN"
@@ -799,7 +799,7 @@ def test_migrate_closed_date_falls_back_to_file_date_when_no_history_line(tmp_pa
     stats = _migrate_stats(proc)
     assert stats["resolved_by"]["no_history_line"] == 1
 
-    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / "B2.md"))
+    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "closed" / "bug" / "B2.md"))
     assert fm["closed_date"] == "2026-07-04"  # 无匹配历史行 → 兜底文件日期
     assert fm["resolved_by"] is None
 
@@ -846,10 +846,10 @@ body for T31
     stats = _migrate_stats(proc)
     assert stats["batch_notes_applied"] == 1
 
-    _, body30 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "T30.md"))
+    _, body30 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "todo" / "T30.md"))
     assert "> [迁移自批次 my-batch] 原计划: 这是 my-batch 的原计划文本" in body30
 
-    _, body31 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "T31.md"))
+    _, body31 = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "todo" / "T31.md"))
     assert "迁移自批次" not in body31  # DONE 批次不迁移
 
 
@@ -862,15 +862,15 @@ def test_migrate_idempotent_skips_existing_target_file(tmp_path):
     sentinel_fm = {k: None for k in v2.FRONTMATTER_FIELDS}
     sentinel_fm.update({"id": "B3", "pool": "bug", "status": "FIXED", "date": "2026-01-01",
                          "module": "sentinel", "summary": "sentinel-summary"})
-    closed_dir = repo / "openspec" / "issues" / "closed"
-    v2.write_issue(str(closed_dir / "B3.md"), sentinel_fm, "sentinel body\n", create=True)
+    closed_bug = repo / "openspec" / "issues" / "closed" / "bug"
+    v2.write_issue(str(closed_bug / "B3.md"), sentinel_fm, "sentinel body\n", create=True)
 
     proc = _run_cli(repo, "migrate")
     stats = _migrate_stats(proc)
     assert stats["skipped_existing"] == 1
     assert stats["migrated"] == 0
 
-    fm, body = v2.read_issue(str(closed_dir / "B3.md"))
+    fm, body = v2.read_issue(str(closed_bug / "B3.md"))
     assert fm["module"] == "sentinel"  # 未被迁移覆盖
     assert body == "sentinel body\n"
 
@@ -950,9 +950,31 @@ body
     stats = _migrate_stats(proc)
     assert stats["mapping_errors"] == 1
     assert stats["migrated"] == 1
-    assert not (repo / "openspec" / "issues" / "open" / "B6.md").exists()
-    assert not (repo / "openspec" / "issues" / "closed" / "B6.md").exists()
-    assert (repo / "openspec" / "issues" / "open" / "B7.md").is_file()
+    assert not (repo / "openspec" / "issues" / "open" / "bug" / "B6.md").exists()
+    assert not (repo / "openspec" / "issues" / "closed" / "bug" / "B6.md").exists()
+    assert (repo / "openspec" / "issues" / "open" / "bug" / "B7.md").is_file()
+
+
+def test_migrate_skips_item_moved_to_other_side_after_first_migration(tmp_path):
+    """迁移后 set-status 把 issue 从 open 移到 closed（或反之），再跑 migrate 不应重复生成。"""
+    repo = _init_repo(tmp_path / "repo")
+    _write(repo / "openspec" / "issues" / "buglist" / "2026-07-04-buglist.md",
+           _v1_buglist_pure_legacy(item_id="B90", status="OPEN", change="-",
+                                   hist=""))
+
+    first = _migrate_stats(_run_cli(repo, "migrate"))
+    assert first["migrated"] == 1
+    assert (repo / "openspec" / "issues" / "open" / "bug" / "B90.md").is_file()
+
+    _run_cli(repo, "set-status", "--id", "B90", "--to", "FIXED",
+             "--evidence", "fixed in commit abc123")
+    assert (repo / "openspec" / "issues" / "closed" / "bug" / "B90.md").is_file()
+    assert not (repo / "openspec" / "issues" / "open" / "bug" / "B90.md").is_file()
+
+    second = _migrate_stats(_run_cli(repo, "migrate"))
+    assert second["migrated"] == 0
+    assert second["skipped_existing"] == 1
+    assert not (repo / "openspec" / "issues" / "open" / "bug" / "B90.md").is_file()
 
 
 def test_migrate_stats_report_shape(tmp_path):
@@ -965,6 +987,43 @@ def test_migrate_stats_report_shape(tmp_path):
         "mapping_errors", "batch_notes_applied", "resolved_by",
     }
     assert set(stats["resolved_by"]) == {"matched", "note_no_token", "no_history_line"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# cmd_reorganize — flat → pool 子目录迁移
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_cli_reorganize_moves_flat_files_into_pool_subdirs(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    open_dir = repo / "openspec" / "issues" / "open"
+    closed_dir = repo / "openspec" / "issues" / "closed"
+    open_dir.mkdir(parents=True)
+    closed_dir.mkdir(parents=True)
+
+    fm_t = {k: None for k in v2.FRONTMATTER_FIELDS}
+    fm_t.update({"id": "T1", "pool": "todo", "status": "OPEN", "date": "2026-08-04",
+                 "module": "m", "summary": "s"})
+    v2.write_issue(str(open_dir / "T1.md"), fm_t, "", create=True)
+
+    fm_b = {k: None for k in v2.FRONTMATTER_FIELDS}
+    fm_b.update({"id": "B1", "pool": "bug", "status": "FIXED", "date": "2026-08-04",
+                 "module": "m", "summary": "s", "closed_date": "2026-08-04"})
+    v2.write_issue(str(closed_dir / "B1.md"), fm_b, "", create=True)
+
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-m", "init", cwd=repo)
+
+    proc = _run_cli(repo, "reorganize")
+    assert proc.returncode == 0, proc.stderr
+    assert "2" in proc.stdout  # moved 2 files
+
+    assert (open_dir / "todo" / "T1.md").is_file()
+    assert not (open_dir / "T1.md").exists()
+    assert (closed_dir / "bug" / "B1.md").is_file()
+    assert not (closed_dir / "B1.md").exists()
+
+    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
+    assert "[T1](open/todo/T1.md)" in index_text
 
 
 # ── 内部 helper 单元测试（v1 解析原语） ──────────────────────────────────────────
