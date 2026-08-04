@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v8（2026-08-04，B1-B10 完成，新排期 B11-B16 + WONTDO 9 条）
-> 总量：95 条 open todo（0 条 open bug）
+> 版本：v9（2026-08-04，B1-B10 完成，新排期 B11-B16 + WONTDO 11 条）
+> 总量：93 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -24,14 +24,14 @@
 | ~~B8~~ | ~~ship_gate 小修集~~ | ~~4~~ | -- | -- | ✅ 全部已关（1 直接修 DONE + 3 WONTDO） |
 | ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
 | ~~B10~~ | ~~lens-metric 体系补全~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
-| **BW** | **过时关闭（v8 新增 WONTDO）** | **9** | -- | -- | ✅ 全部 WONTDO |
-| **B11** | **outside-voice 脚本修复** | **6** | 中-高 | 中 | 就绪 |
+| **BW** | **过时关闭（v8/v9 WONTDO）** | **11** | -- | -- | ✅ 全部 WONTDO |
+| **B11** | **outside-voice 脚本修复** | **3** | 中 | 小 | 就绪 |
 | **B12** | **workflow/tools 工具修复** | **5** | 中 | 中 | 就绪 |
 | **B13** | **sdflow-maintain 扫描器硬化** | **4** | 中 | 小 | 就绪 |
 | **B14** | **sdflow-implement 小修** | **3** | 中 | 小 | 就绪 |
 | **B15** | **文档 + 术语 + spec 订正** | **6** | 低 | 小 | 就绪 |
 | **B16** | **sdflow-init 小修集** | **5** | 低-中 | 小-中 | 就绪 |
-| **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / Codex… | ~66 | 低-中 | 中-大 | 条件触发 |
+| **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / Codex… | ~67 | 低-中 | 中-大 | 条件触发 |
 
 ---
 
@@ -186,6 +186,8 @@ v8 分诊：标的代码已删（v2 合并消除前提）、源 change 已归档
 | T177 | buglist add 必填校验不含根因 | ✅ WONTDO（sdflow-buglist 已删，v2 统一模型设计不同） |
 | T180 | recorder 缺追加证据命令 | ✅ WONTDO（sdflow-todolist/buglist 已删，v2 set-status 有 --evidence） |
 | T214 | OVBG-01 措辞对齐 5s deadline | ✅ WONTDO（与 T229 重叠，T229 更完整覆盖 OVBG-01+05） |
+| T173 | ov_cleanup kill -KILL 兜底行无测试覆盖 | ✅ WONTDO（已有 test_runner_ignoring_term_dies_under_group_kill_escalation 覆盖） |
+| T178 | M3 磁盘满诊断锁 CI 无人看守 | ✅ WONTDO（macOS CI 泳道已覆盖 hdiutil ramdisk 测试） |
 
 ---
 
@@ -193,17 +195,16 @@ v8 分诊：标的代码已删（v2 合并消除前提）、源 change 已归档
 
 ### B11 · outside-voice 脚本修复
 
-**痛点**：voice 脚本有两个运行时安全面（timeout 禁用 + 进程杀不死）+ 四处正确性/测试缺口。
-改 `sdflow-init/assets/hack/outside-voice.sh` + `outside-voice-job.py` + tests。
+**痛点**：voice 脚本有 1 处运行时安全面（timeout=0 禁用超时）+ 2 处廉价加固。
+改 `sdflow-init/assets/hack/outside-voice.sh` + tests。
+T227（worker 信号转发）调研后判为设计级加固（前提未验 + 需改 spec），退回延后池。
+T173/T178 调研后 WONTDO（已有测试覆盖）。
 
 | ID | 摘要 | 危险度 |
 |---|---|---|
 | T176 | `--timeout 0` 不拒绝 → GNU timeout 语义禁用超时 = 进程挂死 | 高 |
-| T227 | worker 无信号转发 + cleanup 不终止 runner_pid：取消杀不死计费进程 | 高 |
-| T174 | fake-timeout 看门狗 `$(( sec * 10 ))` 遇非整数 sec 算术错 | 中 |
-| T173 | ov_cleanup kill -KILL 兜底行无测试覆盖 | 中 |
-| T230 | 出境 stdout 落盘无大小上限 | 低-中 |
-| T178 | M3 磁盘满诊断锁 CI 无人看守 | 低-中 |
+| T230 | 出境 stdout 落盘无大小上限 | 低 |
+| T174 | fake-timeout 看门狗 `$(( sec * 10 ))` 遇非整数 sec 算术错（测试桩） | 低 |
 
 ---
 
@@ -311,7 +312,7 @@ B15 (文档清理) ── 文案/命名
 | spec/架构 skill | 3 | T143, T144, T264 | 各自条件触发 |
 | 度量体系 | 4 | T29, T54, T104, T108 | retro 再跑一轮看缺口 |
 | Codex/跨模型 | 3 | T111, T162, T221 | codex deferred_executor 稳定 |
-| outside-voice 设计级 | 3 | T31, T165, T256 | voice 成本/功能再触底 |
+| outside-voice 设计级 | 4 | T31, T165, T227, T256 | voice 成本/功能再触底；T227 需先验 `claude stop` 信号行为 |
 | embedded-test-sop 脚本化 | 2 | T83, T84 | 真实 embedded 消费仓出现 |
 | roadmap/流程增强 | 5 | T122, T129, T141, T145, T169 | 各自条件触发 |
 | 报告截断/产物归档 | 1 | T171 | 截断频繁影响审计时 |

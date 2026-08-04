@@ -72,10 +72,8 @@
 | [T165](open/todo/T165.md) | todo | OPEN | 2026-07-01 | openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段 | R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动 |
 | [T169](open/todo/T169.md) | todo | PROPOSED | 2026-07-01 | openspec/changes | done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30) |
 | [T171](open/todo/T171.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review+code-review | R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题 |
-| [T173](open/todo/T173.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice.sh | ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷） |
 | [T174](open/todo/T174.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/tests/test_outside_voice.py | fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错 |
 | [T176](open/todo/T176.md) | todo | PROPOSED | 2026-07-01 | outside-voice | outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时 |
-| [T178](open/todo/T178.md) | todo | PROPOSED | 2026-07-01 | outside-voice | M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败 |
 | [T188](open/todo/T188.md) | todo | PROPOSED | 2026-07-01 | 仓根 pytest 收集 | 跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守 |
 | [T191](open/todo/T191.md) | todo | PROPOSED | 2026-07-01 | openspec/changes/*/impl-reports/ | 评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档） |
 | [T196](open/todo/T196.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review/SKILL.md | 三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文 |
