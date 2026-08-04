@@ -720,6 +720,22 @@ def _model_tiers_from_dict(raw):
     return entries, bad, bad_headers
 
 
+def _detect_duplicate_top_keys(cfg_path):
+    """行级扫描 YAML 顶层键（缩进=0 的 key: 行），返回重复键列表。"""
+    seen = {}
+    try:
+        with open(cfg_path, encoding="utf-8-sig") as f:
+            for lineno, line in enumerate(f, 1):
+                if line and not line[0].isspace() and not line.startswith("#"):
+                    m = re.match(r"([A-Za-z_][\w-]*):", line)
+                    if m:
+                        key = m.group(1)
+                        seen.setdefault(key, []).append(lineno)
+    except (OSError, UnicodeDecodeError):
+        return []
+    return [f"{k}（行 {','.join(map(str, lns))}）" for k, lns in seen.items() if len(lns) > 1]
+
+
 def lint_config(root):
     """校验 <root>/openspec/config.yaml 的结构，返回 reason 字符串列表（空 = 干净）。
     校验项：① 顶层 `schema:` 键存在 ② 顶层 `rules:` 块存在且含 proposal/specs/design/tasks
@@ -737,6 +753,9 @@ def lint_config(root):
         return [reason]
 
     cfg_path = os.path.join(root, "openspec", "config.yaml")
+    dups = _detect_duplicate_top_keys(cfg_path)
+    if dups:
+        return [f"config.yaml 顶层键重复: {'; '.join(dups)}（yq 会 last-wins 静默合并）"]
     try:
         cfg = _yq(".", cfg_path, default={})
     except RuntimeError as e:
@@ -890,7 +909,11 @@ def _register_hook_in_settings_locked(settings, spec):
 
 def ensure_global_hooks():
     """按 HOOKS 逐个幂等安装，返回多行汇总。"""
-    return "\n".join(f"  · {spec['name']}：{ensure_global_hook(spec)}" for spec in HOOKS)
+    lines = [f"  · {spec['name']}：{ensure_global_hook(spec)}" for spec in HOOKS]
+    codex_home = os.path.expanduser("~/.codex")
+    if os.path.isdir(codex_home):
+        lines.append("  ⚠ 检测到 Codex 环境，如使用 Codex 会话请注意：hook 仅 Claude 侧生效")
+    return "\n".join(lines)
 
 
 def _home_claude():
@@ -947,14 +970,22 @@ def _release_settings_lock(fd):
 def _atomic_write_settings(settings, data):
     """[F-C] 原子写 settings.json（tmp + os.replace）——deregister 与 register 共用同一写口径。
     **须在持 <settings>.lock 下调用**。写成功返回 True；OSError（只读/满盘/权限）→ 不裸抛、
-    返回 False（FB-3：绝不中止 retire_hooks 循环 / setup.sh，坏则跳过）。tmp 用固定名
-    `<settings>.tmp`，失败残渣下次成功写覆盖消费（唯一名 tempfile 化已 defer todolist）。"""
+    返回 False（FB-3：绝不中止 retire_hooks 循环 / setup.sh，坏则跳过）。"""
     try:
-        tmp = settings + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-        os.replace(tmp, settings)   # 原子替换（POSIX + Windows 同名卷内保证）
+        fd, tmp = tempfile.mkstemp(prefix=".settings-", dir=os.path.dirname(settings))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, settings)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     except OSError:
         return False
     return True

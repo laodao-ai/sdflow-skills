@@ -431,3 +431,34 @@ class TestConfigLintCliSmoke:
             encoding="utf-8",
             errors="replace",)
         assert r_retire.returncode == 0, r_retire.stderr
+
+
+class TestDuplicateTopKeys:
+    """T149: lint_config() 顶层重复键检测。"""
+
+    def test_duplicate_top_key_detected(self, tmp_path):
+        _write_config(tmp_path, "schema: spec-driven\nrules:\n  proposal:\n    - a\n  specs:\n    - b\n  design:\n    - c\n  tasks:\n    - d\nschema: other\n")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "重复" in r.stderr
+
+    def test_no_duplicate_passes(self, tmp_path):
+        _write_config(tmp_path, VALID_RULES_BLOCK)
+        r = _run_lint(tmp_path)
+        assert r.returncode == 0, r.stderr
+
+    def test_non_utf8_no_crash(self, tmp_path):
+        osdir = tmp_path / "openspec"
+        osdir.mkdir(parents=True)
+        (osdir / "config.yaml").write_bytes(b"\xff\xfe invalid utf8\n")
+        r = _run_lint(tmp_path)
+        assert "Traceback" not in r.stderr
+
+    def test_bom_first_key_detected(self, tmp_path):
+        osdir = tmp_path / "openspec"
+        osdir.mkdir(parents=True)
+        content = "schema: spec-driven\nrules:\n  proposal:\n    - a\n  specs:\n    - b\n  design:\n    - c\n  tasks:\n    - d\nschema: other\n"
+        (osdir / "config.yaml").write_text(content, encoding="utf-8-sig")
+        r = _run_lint(tmp_path)
+        assert r.returncode != 0
+        assert "重复" in r.stderr

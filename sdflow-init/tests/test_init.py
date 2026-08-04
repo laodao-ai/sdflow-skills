@@ -982,3 +982,48 @@ class TestRetireHooksCli:
         monkeypatch.setattr(init_mod.os, "replace",
                             lambda *a, **k: (_ for _ in ()).throw(OSError("readonly")))
         assert init_mod._deregister_hook_in_settings(str(settings), "change-review-stub.py") is False
+
+
+class TestAtomicWriteSettingsMkstemp:
+    """T64: _atomic_write_settings() 改为 tempfile.mkstemp 唯一名。"""
+
+    def test_tmp_file_uses_mkstemp_prefix(self, tmp_path, monkeypatch):
+        settings = str(tmp_path / "settings.json")
+        replaced_sources = []
+        original_replace = os.replace
+        def spy_replace(src, dst):
+            replaced_sources.append(src)
+            return original_replace(src, dst)
+        monkeypatch.setattr(os, "replace", spy_replace)
+        data = {"hooks": {}}
+        assert init_mod._atomic_write_settings(settings, data) is True
+        assert len(replaced_sources) == 1
+        src_basename = os.path.basename(replaced_sources[0])
+        assert src_basename.startswith(".settings-")
+        with open(settings, encoding="utf-8") as f:
+            written = json.load(f)
+        assert written == data
+
+    def test_mkstemp_oserror_returns_false(self, tmp_path, monkeypatch):
+        import tempfile as tempfile_mod
+        settings = str(tmp_path / "settings.json")
+        monkeypatch.setattr(tempfile_mod, "mkstemp", lambda **kw: (_ for _ in ()).throw(OSError("disk full")))
+        assert init_mod._atomic_write_settings(settings, {"x": 1}) is False
+
+
+class TestEnsureGlobalHooksCodexWarning:
+    """T6: ensure_global_hooks() Codex 降级告警。"""
+
+    def test_codex_dir_present_shows_warning(self, tmp_path, monkeypatch):
+        codex_home = tmp_path / ".codex"
+        codex_home.mkdir()
+        monkeypatch.setattr(os.path, "expanduser", lambda p: str(codex_home) if p == "~/.codex" else os.path.expanduser.__wrapped__(p) if hasattr(os.path.expanduser, '__wrapped__') else str(tmp_path / p.replace("~/", "")))
+        monkeypatch.setattr(os.path, "isdir", lambda p: True if p == str(codex_home) else os.path.isdir.__wrapped__(p) if hasattr(os.path.isdir, '__wrapped__') else os.path.isdir(p))
+        output = init_mod.ensure_global_hooks()
+        assert "⚠" in output
+        assert "Codex" in output
+
+    def test_codex_dir_absent_no_warning(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(os.path, "expanduser", lambda p: str(tmp_path / "nonexistent") if p == "~/.codex" else str(tmp_path / p.replace("~/", "")))
+        output = init_mod.ensure_global_hooks()
+        assert "⚠" not in output
