@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v2（2026-08-04，B4 完成）
-> 总量：131 条 open todo（0 条 open bug）
+> 版本：v3（2026-08-04，B5 WONTDO）
+> 总量：127 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -18,7 +18,7 @@
 | ~~B2~~ | ~~机械门补缺（verify/gate/anchor 假绿面）~~ | ~~5~~ | -- | -- | ✅ 全部已关（5 DONE） |
 | ~~B3~~ | ~~setup.sh 安全加固（所有权/覆盖/告警）~~ | ~~5~~ | -- | -- | ✅ 全部 DONE |
 | ~~B4~~ | ~~sdflow-init 读写路径~~ | ~~4~~ | -- | -- | ✅ 全部 DONE |
-| **B5** | recorder repo_root 四合一 | 4 | 中 | 中 | 可立即开 |
+| ~~B5~~ | ~~recorder repo_root 四合一~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
 | **B6** | outside-voice-job 零碎硬化 | 8 | 中 | 小 | 可立即开 |
 | **B7** | hack/ 测试守卫补全 | 7 | 中 | 小 | 可立即开 |
 | **B8** | ship_gate 小修集 | 4 | 中 | 中 | 可立即开 |
@@ -86,14 +86,17 @@ change `sdflow-init-readwrite-paths` 一次完成四条，归档于 2026-08-04�
 
 ---
 
-### B5 · recorder repo_root 四合一（4 条）
+### ~~B5~~ · recorder repo_root 四合一 — ✅ 全部 WONTDO
 
-| ID | 摘要 |
-|---|---|
-| T181 | 回落分支 lexical abspath != git 实际探测目录 |
-| T182 | stdout 无界读入（DoS 面） |
-| T183 | TOCTOU 窗口（isdir 与 subprocess 之间被删） |
-| T185 | stderr 同样无界读入 |
+v2 迁移后 recorder 三份同步面已消失（只剩 `issues_v2.py` 一份），四条全属低概率边角（DoS/竞态/symlink 回落），
+已有 timeout=30 + realpath 缓解，修法代价（Popen+定量读+进程组回收）与可利用性不成比例。
+
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T181 | 回落分支 lexical abspath != git 实际探测目录 | ✅ WONTDO（recorder_lock realpath 已兜） |
+| T182 | stdout 无界读入（DoS 面） | ✅ WONTDO（timeout=30 限时窗） |
+| T183 | TOCTOU 窗口（isdir 与 subprocess 之间被删） | ✅ WONTDO（走回落非假绿） |
+| T185 | stderr 同样无界读入 | ✅ WONTDO（与 T182 同族） |
 
 ---
 
@@ -187,9 +190,11 @@ B3 (setup 安全) ─── ✅ 全部已关
      │
 B4 (init)      ─── ✅ 全部已关
      │
-  ┌─ B5 (repo_root) ──┬── B6 (voice-job) ──── 可并行
+B5 (repo_root) ─── ✅ 全部已关
+     │
+  ┌─ B6 (voice-job) ──┬── B8 (ship_gate) ──── 可并行
   │                    │
-  └─ B7 (hack测试) ──B8 (ship_gate) ──B10 (lens) ──── 可并行
+  └─ B7 (hack测试) ──B10 (lens) ──── 可并行
 ```
 
-B1–B4、B9 已全关。下一步 B5–B8、B10 按需并行。
+B1–B5、B9 已全关。下一步 B6–B8、B10 按需并行。
