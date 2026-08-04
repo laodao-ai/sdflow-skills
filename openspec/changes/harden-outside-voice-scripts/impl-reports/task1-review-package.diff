@@ -1,0 +1,158 @@
+# Review package: ead0dfc..e0f3eaf (Task 1 worktree merge)
+
+## Commits
+e0f3eaf merge(task1): --timeout 0 rejection from worktree
+a6a37f8 fix(outside-voice): reject --timeout 0 (and leading-zero variants)
+
+## Files changed
+ .../impl-reports/task1-timeout-zero.md             | 51 ++++++++++++++++++++++
+ sdflow-init/assets/hack/outside-voice.sh           |  3 ++
+ sdflow-init/tests/test_outside_voice.py            | 35 +++++++++++++++
+ 3 files changed, 89 insertions(+)
+
+## Diff
+diff --git a/openspec/changes/harden-outside-voice-scripts/impl-reports/task1-timeout-zero.md b/openspec/changes/harden-outside-voice-scripts/impl-reports/task1-timeout-zero.md
+new file mode 100644
+index 0000000..449643d
+--- /dev/null
++++ b/openspec/changes/harden-outside-voice-scripts/impl-reports/task1-timeout-zero.md
+@@ -0,0 +1,51 @@
++# Task 1: --timeout 0 拒绝 + 专项测试
++
++## 变更
++
++`sdflow-init/assets/hack/outside-voice.sh` `render-prompt|exec)` 分支的 `--timeout` 参数解析
++（既有纯数字校验 `case "$2" in ''|*[!0-9]*) usage ;; esac` 之后、`tmo="$2"` 赋值之前）新增一行：
++
++```sh
++[ "$((10#$2))" -eq 0 ] && usage
++```
++
++`10#` 前缀强制 shell 算术按十进制解析 `$2`，正确捕获 `0`/`00`/`000` 等所有前导零变体（不加
++`10#` 会被 bash 算术当八进制解析，`008`/`009` 这类值会直接算术求值报错而非按预期落进 usage()）。
++命中即 `usage()` → `exit 2`，与既有非法值（空/含非数字字符）行为一致（承重约束 C1）。
++
++## 测试
++
++在 `sdflow-init/tests/test_outside_voice.py` 新增 4 个用例（B2 usage negatives 段落之后）：
++
++- `test_usage_exec_timeout_zero_exit2`（parametrize `0`/`00`/`000`）—— PATH 故意不放任何假
++  runner；若解析未在 `usage()` 前拦下会走到 `do_exec` 并因 `timeout/gtimeout 未安装` 报 exit 1
++  （另一种失败形态），故 exit 2 只可能来自 `usage()` 本身，结构上即证明 runner 从未启动。
++- `test_exec_timeout_leading_zero_accepted`（`--timeout 01`）—— 用 `FAKE_CODEX_MODE=hang` 跑满
++  真超时（exit 124），证明 `01`（十进制 = 1，非零）被解析放行并把值传给了 runner，不误拒。
++- `test_exec_timeout_normal_value_unaffected`（`--timeout 300` + ok 模式）—— 既有正常值行为
++  不受新增零值校验影响。
++
++### Red → Green
++
++修复前跑新增的 3 个零值用例：均以 `AssertionError: assert 1 == 2` 失败（实际 exit 1
++`timeout/gtimeout 未安装`，证明当时确实放行到了 `do_exec`），确认测试有效捕获缺陷后再实现修复。
++
++修复后：
++
++```
++$ /usr/bin/python3 -m pytest sdflow-init/tests/test_outside_voice.py -v -k "timeout"
++...
++9 passed, 58 deselected in 5.36s
++```
++
++```
++$ /usr/bin/python3 -m pytest sdflow-init/tests/test_outside_voice.py
++...
++65 passed, 2 skipped in 19.89s
++```
++
++2 个 skip 为既有的系统 timeout/gtimeout 存在时才跳过的分支测试（与本次改动无关，pre-existing）。
++
++## 范围声明
++
++Task 2（出境 stdout 大小限制）与 Task 3（收尾验证）不在本票范围内，未涉及。
+diff --git a/sdflow-init/assets/hack/outside-voice.sh b/sdflow-init/assets/hack/outside-voice.sh
+index 2802caf..140a05e 100755
+--- a/sdflow-init/assets/hack/outside-voice.sh
++++ b/sdflow-init/assets/hack/outside-voice.sh
+@@ -885,20 +885,23 @@ case "$cmd" in
+   render-prompt|exec)
+     ctx=""; tmo=300
+     while [ $# -gt 0 ]; do
+       case "$1" in
+         --context-file)
+           [ $# -ge 2 ] || usage
+           ctx="$2"; shift 2 ;;
+         --timeout)
+           [ $# -ge 2 ] || usage
+           case "$2" in ''|*[!0-9]*) usage ;; esac
++          # `10#` 强制十进制解析，正确捕获 0/00/000 等所有前导零变体（承重约束 C1：
++          # --timeout 0 必须与既有非法值同样 exit 2，不得放行到 do_exec 才在别处报错）。
++          [ "$((10#$2))" -eq 0 ] && usage
+           tmo="$2"; shift 2 ;;
+         *) usage ;;
+       esac
+     done
+     [ -n "$ctx" ] || usage
+     if [ "$cmd" = "render-prompt" ]; then
+       render_prompt "$ctx"
+     else
+       do_exec "$ctx" "$tmo"
+     fi
+diff --git a/sdflow-init/tests/test_outside_voice.py b/sdflow-init/tests/test_outside_voice.py
+index c850d7a..f0a5e66 100644
+--- a/sdflow-init/tests/test_outside_voice.py
++++ b/sdflow-init/tests/test_outside_voice.py
+@@ -378,20 +378,55 @@ def test_usage_render_prompt_no_args_exit2():
+     r = run(["render-prompt"])
+     assert r.returncode == 2
+ 
+ 
+ def test_usage_exec_timeout_non_numeric_exit2(tmp_path):
+     ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
+     r = run(["exec", "--context-file", str(ctx), "--timeout", "abc"])
+     assert r.returncode == 2
+ 
+ 
++# ── harden-outside-voice-scripts T176: --timeout 0 rejection ───────────────
++
++@pytest.mark.parametrize("zero_value", ["0", "00", "000"])
++def test_usage_exec_timeout_zero_exit2(tmp_path, zero_value):
++    # PATH 故意不放任何假 runner——若解析没在 usage() 前拦下就会走到 do_exec 并尝试
++    # spawn 一个不存在的 codex（另一种失败形态），exit 2 只可能来自 usage() 本身，
++    # 结构上即证明 runner 从未启动。
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
++    r = run(["exec", "--context-file", str(ctx), "--timeout", zero_value],
++            env={"PATH": path_without_codex(), "SDFLOW_VOICE_RUNNER": "codex"})
++    assert r.returncode == 2
++
++
++def test_exec_timeout_leading_zero_accepted(tmp_path):
++    # "01" 十进制 = 1，非零，MUST NOT 被误拒；用 hang 模式跑满真超时(exit 124)
++    # 来证明解析确实放行并把值传给了 runner（而不是巧合地在别处提前退出）。
++    bin_dir = make_fake_codex(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
++    r = run(["exec", "--context-file", str(ctx), "--timeout", "01"],
++            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
++                 "FAKE_CODEX_MODE": "hang"})
++    assert r.returncode == 124
++
++
++def test_exec_timeout_normal_value_unaffected(tmp_path):
++    # 既有正常值（如 300）行为不受新增零值校验影响。
++    bin_dir = make_fake_codex(tmp_path)
++    ctx = tmp_path / "ctx.md"; ctx.write_text("diff\n", encoding="utf-8")
++    r = run(["exec", "--context-file", str(ctx), "--timeout", "300"],
++            env={"PATH": f"{bin_dir}:{path_without_codex()}", "SDFLOW_VOICE_RUNNER": "codex",
++                 "FAKE_CODEX_MODE": "ok"})
++    assert r.returncode == 0
++    assert r.stdout.strip() == "FAKE_FINDINGS"
++
++
+ def test_usage_render_prompt_bogus_flag_exit2():
+     r = run(["render-prompt", "--bogus", "x"])
+     assert r.returncode == 2
+ 
+ 
+ def test_usage_exec_context_file_missing_value_exit2():
+     # --context-file as the last token, no value following: MUST NOT hang
+     # (locks the `[ $# -ge 2 ] || usage` guard before `shift 2`; run() also
+     # has its own subprocess timeout as a second line of defense).
+     r = run(["exec", "--context-file"])
