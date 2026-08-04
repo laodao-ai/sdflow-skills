@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v7（2026-08-04，全部排期批次完成）
-> 总量：104 条 open todo（0 条 open bug）
+> 版本：v8（2026-08-04，B1-B10 完成，新排期 B11-B16 + WONTDO 9 条）
+> 总量：95 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -24,11 +24,18 @@
 | ~~B8~~ | ~~ship_gate 小修集~~ | ~~4~~ | -- | -- | ✅ 全部已关（1 直接修 DONE + 3 WONTDO） |
 | ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
 | ~~B10~~ | ~~lens-metric 体系补全~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
-| **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / 文档… | ~95 | 低-中 | 中-大 | 条件触发 |
+| **BW** | **过时关闭（v8 新增 WONTDO）** | **9** | -- | -- | ✅ 全部 WONTDO |
+| **B11** | **outside-voice 脚本修复** | **6** | 中-高 | 中 | 就绪 |
+| **B12** | **workflow/tools 工具修复** | **5** | 中 | 中 | 就绪 |
+| **B13** | **sdflow-maintain 扫描器硬化** | **4** | 中 | 小 | 就绪 |
+| **B14** | **sdflow-implement 小修** | **3** | 中 | 小 | 就绪 |
+| **B15** | **文档 + 术语 + spec 订正** | **6** | 低 | 小 | 就绪 |
+| **B16** | **sdflow-init 小修集** | **5** | 低-中 | 小-中 | 就绪 |
+| **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / Codex… | ~66 | 低-中 | 中-大 | 条件触发 |
 
 ---
 
-## 批次详情
+## 已完成批次详情
 
 ### ~~B1~~ · outside-voice 协议修复 — ✅ 全部已关
 
@@ -54,7 +61,7 @@ T150 经五问分诊 WONTDO：失效方向安全（fail-loud 不假绿）、真�
 | ID | 摘要 | 判定 |
 |---|---|---|
 | T262 | verify 子代理漏写 frontmatter 锚，无即时机械门 | ✅ DONE（sdflow-done §1.1 机械校验步骤） |
-| T205 | code 域排除整个 openspec/（改 workflow/tools/*.py 不判 stale） | ✅ DONE（ship_gate 额外比较 workflow/tools/） |
+| T205 | code 域排除整个 openspec/（改 workflow/tools/ 不判 stale） | ✅ DONE（ship_gate 额外比较 workflow/tools/） |
 | T86 | anchor_lint 未闭合 fence 不 fail-closed | ✅ DONE（一行 closed flag 检查） |
 | T228 | secret_scan 含 NUL 字节漏判 | ✅ DONE（grep -a 强制文本模式） |
 | T259 | review-loop-breaker ①档逻辑冲突（未修复也能关 Critical） | ✅ DONE（①档措辞修正：区分已解决/仍成立两条出口） |
@@ -164,47 +171,148 @@ issues-v2-single-file-model change 已删除 `sdflow_issues_core`、v1 三脚本
 
 ---
 
-### 延后池（~104 条）
+### BW · 过时关闭（v8 新增 WONTDO） — ✅ 全部 WONTDO
 
-不排期，条件触发时再捞：
+v8 分诊：标的代码已删（v2 合并消除前提）、源 change 已归档（四件套不再修改）、与更完整 issue 重叠。
 
-| 类别 | 典型 issue | 触发条件 |
+| ID | 摘要 | 判定 |
 |---|---|---|
-| 评审编排层大改（effort scaling / 去偏 / 跨模型终局） | T103, T107, T112, T113, T106 | 评审成本再成为瓶颈时 |
-| sdflow-implement 重构（票数 / 选档 / review-package） | T245, T246, T249, T251, T258 | tickets 管线再跑几轮积累样本 |
-| bundle 规则/模版增强 | T110, T114, T115, T124, T119 | 规则维护循环触发 |
-| 度量体系 | T29, T54, T104, T108 | retro 再跑一轮看缺口 |
-| sdflow-roadmap 存量迁移 | T129 | 首个新流程 roadmap SHIPPED |
-| embedded-test-sop 脚本化 | T83, T84 | 真实 embedded 消费仓出现 |
-| Codex voice 架构性阻塞 | T162 | codex deferred_executor 稳定 |
-| 文档/注释/术语对齐 | T199, T142, T134, T253, T252… | 顺手改或定期扫 |
-| 四件套考古层清理 | T157, T167, T169, T160 | 对应 change 做 done 时顺带 |
-| sdflow-done merge 检查精确化 | T51, T52 | merge 前误停频繁时 |
-| 评审 SKILL 协议 DRY | T163, T161, T196, T158 | 协议再漂移一轮时 |
-| 测试/CI | T188, T155, T203, T151, T152, T56 | 偶发失败再现时 |
+| T72 | batch lint 整行缺字段不校验 | ✅ WONTDO（issues.py 已被 v2 取代，旧 batch 格式已不存在） |
+| T151 | recorder three-way parity guard 扩展 | ✅ WONTDO（sdflow-buglist/ 已删，v2 合并为 sdflow-issues） |
+| T152 | 规范 mlh-p6 impl-reports 的 diff --check | ✅ WONTDO（源 change 已归档，impl-reports 是历史文档） |
+| T157 | async-outside-voice proposal 仍写旧形态 | ✅ WONTDO（源 change 已完整归档） |
+| T160 | 3600 上界依据应回写 design ADR-3 | ✅ WONTDO（源 change 已归档） |
+| T167 | 四件套仍描述旧协议需 delta 同步 | ✅ WONTDO（归档已完成，delta sync 时机已过） |
+| T177 | buglist add 必填校验不含根因 | ✅ WONTDO（sdflow-buglist 已删，v2 统一模型设计不同） |
+| T180 | recorder 缺追加证据命令 | ✅ WONTDO（sdflow-todolist/buglist 已删，v2 set-status 有 --evidence） |
+| T214 | OVBG-01 措辞对齐 5s deadline | ✅ WONTDO（与 T229 重叠，T229 更完整覆盖 OVBG-01+05） |
+
+---
+
+## 新排期批次详情
+
+### B11 · outside-voice 脚本修复
+
+**痛点**：voice 脚本有两个运行时安全面（timeout 禁用 + 进程杀不死）+ 四处正确性/测试缺口。
+改 `sdflow-init/assets/hack/outside-voice.sh` + `outside-voice-job.py` + tests。
+
+| ID | 摘要 | 危险度 |
+|---|---|---|
+| T176 | `--timeout 0` 不拒绝 → GNU timeout 语义禁用超时 = 进程挂死 | 高 |
+| T227 | worker 无信号转发 + cleanup 不终止 runner_pid：取消杀不死计费进程 | 高 |
+| T174 | fake-timeout 看门狗 `$(( sec * 10 ))` 遇非整数 sec 算术错 | 中 |
+| T173 | ov_cleanup kill -KILL 兜底行无测试覆盖 | 中 |
+| T230 | 出境 stdout 落盘无大小上限 | 低-中 |
+| T178 | M3 磁盘满诊断锁 CI 无人看守 | 低-中 |
+
+---
+
+### B12 · workflow/tools 工具修复
+
+改 `anchor_lint.py` + `trivial_shape.py` + `outside_voice_guard.py` + 仓级测试配置。
+
+| ID | 摘要 |
+|---|---|
+| T139 | outside_voice_guard 双锚不校验一致性 |
+| T140 | anchor_lint declared= 必填无向后兼容（旧格式锚 exit1） |
+| T68 | anchor_lint load_enums fence 提前闭合（fail-closed 安全侧） |
+| T56 | trivial_shape tests/ 排除不覆盖 tests/plugins/* |
+| T188 | 跨 skill 同 basename 测试文件中断仓根全局收集 |
+
+---
+
+### B13 · sdflow-maintain 扫描器硬化
+
+改 `maintain_scan.py` + `resolve-workflow.sh` + tests。
+
+| ID | 摘要 |
+|---|---|
+| T93 | RULE_MARKERS bash 副本跨语言漂移无机验 |
+| T94 | 告警文案跨脚本复述漂移 |
+| T95 | test 缺 importorskip 降级 |
+| T96 | 链接正则与目录名字符集不对称 → 非规范命名静默漏报 |
+
+---
+
+### B14 · sdflow-implement 小修
+
+改 `sdflow-implement/SKILL.md` + `impl_route.py` + tests。
+
+| ID | 摘要 |
+|---|---|
+| T261 | 两处引用已归档 change 路径死链（补 `archive/2026-07-10-` 前缀） |
+| T250 | golden fixture 补收尾票形状覆盖 |
+| T128 | PIPELINE_RECEIPT marker 无法区分显式声明与隐式缺省 |
+
+---
+
+### B15 · 文档 + 术语 + spec 订正
+
+改 docs/ + CLAUDE.md + CONTEXT.md + openspec/specs/。
+
+| ID | 摘要 |
+|---|---|
+| T199 | CLAUDE.md 写的 `pytest` 命令本机不可用 |
+| T207 | docs/ 旧 skill 名（sdflow-buglist/todolist）刷新到 sdflow-issues |
+| T142 | workflow-map.md 广度刷新（补 5 脚本 + hr-tg 三字段） |
+| T229 | OVBG-01/05 spec 措辞已被实现证伪，需订正 |
+| T252 | adr/0031 T10 单一源化补追踪条目 |
+| T253 | 「第三类场景」命名脱钩 T10 |
+
+---
+
+### B16 · sdflow-init 小修集
+
+改 `init.py` + `resolve-workflow.sh` + `assets/workflow/` 规则文件 + tests。
+
+| ID | 摘要 |
+|---|---|
+| T12 | canonical 陈旧可观测（commit hash + 距上次 pull 天数） |
+| T15 | update --dev 误报陈旧遮蔽告警 |
+| T69 | copy_bundle 缺消费仓 update 端到端交叉不变量测试 |
+| T130 | ff-generation-constraints.md「四件套」→「三件套」术语 |
+| T131 | workflow.md wayfinder 硬编码 Claude 单宿主路径 |
 
 ---
 
 ## 建议执行顺序
 
 ```
-B1 (voice 协议) ─── ✅ 全部已关
-     │
-B2 (假绿门)    ─── ✅ 全部已关
-     │
-B3 (setup 安全) ─── ✅ 全部已关
-     │
-B4 (init)      ─── ✅ 全部已关
-     │
-B5 (repo_root) ─── ✅ 全部已关
-     │
-B6 (voice-job) ─── ✅ 全部已关
-     │
-B7 (hack测试) ─── ✅ 全部已关
-     │
-B8 (ship_gate) ─── ✅ 全部已关
-     │
-B10 (lens) ─── ✅ 全部已关
+B1-B10 ─── ✅ 全部已关
+  │
+BW (过时关闭) ─── ✅ 全部 WONTDO
+  │
+B11 (voice 脚本) ── 安全面：timeout 禁用 + 进程杀不死
+  │
+B12 (workflow/tools) ── 假阴 + 兼容性
+  │
+B13 (maintain 扫描器) ── 跨语言漂移
+  │
+B14 (implement 小修) ── 死链 + fixture
+  │
+B16 (sdflow-init) ── 可观测 + 术语
+  │
+B15 (文档清理) ── 文案/命名
 ```
 
-**全部 10 个排期批次已关闭。** 剩余 104 条 open todo 在延后池，条件触发时再捞。
+---
+
+### 延后池（~61 条）
+
+不排期，条件触发时再捞：
+
+| 类别 | 条数 | 代表 ID | 触发条件 |
+|---|---|---|---|
+| 评审编排大改（effort/去偏/裁决/跨模型） | 13 | T7, T41, T103, T106-T113, T121 | 评审成本再成瓶颈时 |
+| 评审 SKILL 协议 DRY | 4 | T158, T161, T163, T196 | 协议再漂移一轮时 |
+| bundle 规则/模版增强 | 10 | T9, T42, T57, T105, T109-T110, T114-T116, T119, T124 | 规则维护循环触发 |
+| sdflow-implement 重构 | 7 | T191, T244-T246, T249, T251, T258 | tickets 管线跑够样本 |
+| sdflow-done merge 精确化 | 2 | T51, T52 | merge 误停频繁时 |
+| spec/架构 skill | 3 | T143, T144, T264 | 各自条件触发 |
+| 度量体系 | 4 | T29, T54, T104, T108 | retro 再跑一轮看缺口 |
+| Codex/跨模型 | 3 | T111, T162, T221 | codex deferred_executor 稳定 |
+| outside-voice 设计级 | 3 | T31, T165, T256 | voice 成本/功能再触底 |
+| embedded-test-sop 脚本化 | 2 | T83, T84 | 真实 embedded 消费仓出现 |
+| roadmap/流程增强 | 5 | T122, T129, T141, T145, T169 | 各自条件触发 |
+| 报告截断/产物归档 | 1 | T171 | 截断频繁影响审计时 |
+| 其他零散 | 4 | T23, T62, T123, T134, T248 | 各自条件触发 |
