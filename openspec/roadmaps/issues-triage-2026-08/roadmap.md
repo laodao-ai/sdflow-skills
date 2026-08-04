@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v5（2026-08-04，B7 完成）
-> 总量：112 条 open todo（0 条 open bug）
+> 版本：v6（2026-08-04，B8 完成）
+> 总量：108 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -21,7 +21,7 @@
 | ~~B5~~ | ~~recorder repo_root 四合一~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
 | ~~B6~~ | ~~outside-voice-job 零碎硬化~~ | ~~8~~ | -- | -- | ✅ 全部已关（3 已修 DONE + 5 直接修 DONE） |
 | ~~B7~~ | ~~hack/ 测试守卫补全~~ | ~~7~~ | -- | -- | ✅ 全部已关（4 直接修 DONE + 3 WONTDO） |
-| **B8** | ship_gate 小修集 | 4 | 中 | 中 | 可立即开 |
+| ~~B8~~ | ~~ship_gate 小修集~~ | ~~4~~ | -- | -- | ✅ 全部已关（1 直接修 DONE + 3 WONTDO） |
 | ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
 | **B10** | lens-metric 体系补全 | 4 | 中 | 中 | 可立即开 |
 | **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / 文档… | ~95 | 低-中 | 中-大 | 条件触发 |
@@ -133,14 +133,14 @@ v2 迁移后 recorder 三份同步面已消失（只剩 `issues_v2.py` 一份）
 
 ---
 
-### B8 · ship_gate 小修集（4 条）
+### ~~B8~~ · ship_gate 小修集 — ✅ 全部已关
 
-| ID | 摘要 |
-|---|---|
-| T189 | checkbox normalize 已第 4 轮补语法分支，反转为白名单 |
-| T197 | annotated tag OID 经 ^{commit} peel 被接受 |
-| T206 | archived_verify_state 的 strip 口径不一致 |
-| T195 | conftest helper 三处重复 subprocess.run |
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T189 | checkbox normalize 已第 4 轮补语法分支，反转为白名单 | ✅ WONTDO（趋势信号非缺陷，白名单重构代价不成比例） |
+| T197 | annotated tag OID 经 ^{commit} peel 被接受 | ✅ WONTDO（peel 是 git 标准做法，实现正确） |
+| T206 | archived_verify_state 的 strip 口径不一致 | ✅ WONTDO（strip 只去尾部换行，无实际影响） |
+| T195 | conftest helper 三处重复 subprocess.run | ✅ DONE（收口到 `_git`） |
 
 ---
 
@@ -200,9 +200,9 @@ B6 (voice-job) ─── ✅ 全部已关
      │
 B7 (hack测试) ─── ✅ 全部已关
      │
-  ┌─ B8 (ship_gate) ──── 可并行
-  │
-  └─ B10 (lens) ──── 可并行
+B8 (ship_gate) ─── ✅ 全部已关
+     │
+B10 (lens) ──── 最后一批
 ```
 
-B1–B7、B9 已全关。下一步 B8、B10 按需并行。
+B1–B8、B9 已全关。仅剩 B10（lens-metric 4 条）。

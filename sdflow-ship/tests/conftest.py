@@ -28,14 +28,12 @@ def _git_env():
 
 
 def _git(root, *args):
-    subprocess.run(["git", "-C", str(root), *args], check=True,
-                   capture_output=True, text=True, env=_git_env(), encoding="utf-8", errors="replace")
+    return subprocess.run(["git", "-C", str(root), *args], check=True,
+                          capture_output=True, text=True, env=_git_env(), encoding="utf-8", errors="replace")
 
 @pytest.fixture
 def repo(tmp_path):
-    _git_init = ["init", "-q", "-b", "main"]
-    subprocess.run(["git", "-C", str(tmp_path), *_git_init], check=True,
-                   capture_output=True, text=True, env=_git_env(), encoding="utf-8", errors="replace")
+    _git(tmp_path, "init", "-q", "-b", "main")
     _git(tmp_path, "config", "user.name", "t")
     _git(tmp_path, "config", "user.email", "t@t")
     # 整片禁读之外**再钉死这两项**：`GIT_CONFIG_*=/dev/null` 只管 fixture 自己起的进程，
@@ -60,9 +58,7 @@ def mkchange(root, name="demo"):
 # 表达「四件套先落盘 → 读出 sha → 报告后落盘」的两段提交。
 
 def head_sha(root):
-    out = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
-                         check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    return out.stdout.strip()
+    return _git(root, "rev-parse", "HEAD").stdout.strip()
 
 def sg_frontmatter(sha=None, **fields):
     """构造报告头部 ship-gate frontmatter 文本。
