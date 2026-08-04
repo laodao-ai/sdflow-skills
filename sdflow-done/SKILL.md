@@ -288,8 +288,20 @@ ship-gate:
 先 Read 再 Edit。报告**不可省**——没有 verify-report.md 视为 verify 未完成。
 ```
 
-- **PASS**（含「PASS + Minor 缺口」）→ 继续第二步
+- **PASS**（含「PASS + Minor 缺口」）→ 走下方 1.1 机械校验后继续第二步
 - **FAIL**（核心缺口）→ 停止，展示原因，等修复后重新触发
+
+### 1.1 verify-report frontmatter 机械校验（主 session 亲跑，verify 子代理返回后立即执行）
+
+verify 子代理是指令驱动——漏写 frontmatter 无法事前阻止，但可以**事后秒级拦截**。
+主 session 在 verify 子代理返回后、进入第二步前，MUST 执行以下检查：
+
+1. Read `openspec/changes/{change_name}/verify-report.md`
+2. 检查文件开头是否有合法的 ship-gate frontmatter（`---` 包裹的 YAML 块、含 `ship-gate.verify` 键且值 ∈ {PASS,FAIL}、含 `ship-gate.reviewed_sha` 键且值为 40 位十六进制）
+3. **缺文件 / 无 frontmatter / 字段缺失或非法 → 硬停**：报「verify-report.md 缺 ship-gate frontmatter，verify 子代理漏写——请重跑第一步」，MUST NOT 继续第二步
+4. frontmatter 的 `verify` 值与子代理的 PASS/FAIL 末行输出不一致 → 同样硬停并报不一致
+
+此检查是**机械门**（主 session 亲读文件判字段存在性），不依赖子代理自报。
 
 ---
 

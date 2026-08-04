@@ -14,8 +14,8 @@
 
 | 批次 | 主题 | Issue 数 | 影响 | 难度 | 就绪度 |
 |---|---|---|---|---|---|
-| **B1** | outside-voice 协议修复（环境变量必炸） | 7→1 | 高 | 中 | 6 条已关（5 DONE + 1 WONTDO），剩 T150 |
-| **B2** | 机械门补缺（verify/gate/anchor 假绿面） | 5 | 高 | 中 | 可立即开 |
+| ~~B1~~ | ~~outside-voice 协议修复（环境变量必炸）~~ | ~~7~~ | -- | -- | ✅ 全部已关（5 DONE + 2 WONTDO） |
+| ~~B2~~ | ~~机械门补缺（verify/gate/anchor 假绿面）~~ | ~~5~~ | -- | -- | ✅ 全部已关（5 DONE） |
 | **B3** | setup.sh 安全加固（所有权/覆盖/告警） | 5 | 高-中 | 小 | 可立即开 |
 | **B4** | sdflow-init 读写路径 | 4 | 中 | 中 | 可立即开 |
 | **B5** | recorder repo_root 四合一 | 4 | 中 | 中 | 可立即开 |
@@ -30,9 +30,10 @@
 
 ## 批次详情
 
-### B1 · outside-voice 协议修复 — 6/7 已关
+### ~~B1~~ · outside-voice 协议修复 — ✅ 全部已关
 
 核验后发现 T175/T255/T168 是同一根因的三次独立发现、T159 早已实质修好、T184(b) 被 ADR-9 机械锁禁止。
+T150 经五问分诊 WONTDO：失效方向安全（fail-loud 不假绿）、真探针需 API 调用成本过高、review SKILL 已显式记录 preflight 是必要不充分条件。
 
 | ID | 摘要 | 判定 |
 |---|---|---|
@@ -42,21 +43,21 @@
 | T222 | 止损行改直接指名条款 | ✅ DONE |
 | T159 | HELPER 变量——后续调用已全改字面路径 + MUST NOT 禁令 | ✅ DONE（核验时已修） |
 | T184 | (a) 被 T175 修法覆盖；(b) 被 ADR-9 机械锁禁止 | ✅ WONTDO |
-| **T150** | preflight 只 command-v + timeout 检查，无真认证/模型探针 | **仍 open** |
+| T150 | preflight 只 command-v + timeout 检查，无真认证/模型探针 | ✅ WONTDO（fail-loud 兜底安全） |
 
 ---
 
-### B2 · 机械门补缺（5 条）
+### ~~B2~~ · 机械门补缺 — ✅ 全部已关
 
 **痛点**：verify/gate/anchor 路径有假绿面——该拦的没拦住。
 
-| ID | 摘要 |
-|---|---|
-| T262 | verify 子代理漏写 frontmatter 锚，无即时机械门 |
-| T259 | review-loop-breaker ①档逻辑冲突（未修复也能关 Critical） |
-| T205 | code 域排除整个 openspec/（改 workflow/tools/*.py 不判 stale） |
-| T86 | anchor_lint 未闭合 fence 不 fail-closed |
-| T228 | secret_scan 含 NUL 字节漏判 |
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T262 | verify 子代理漏写 frontmatter 锚，无即时机械门 | ✅ DONE（sdflow-done §1.1 机械校验步骤） |
+| T205 | code 域排除整个 openspec/（改 workflow/tools/*.py 不判 stale） | ✅ DONE（ship_gate 额外比较 workflow/tools/） |
+| T86 | anchor_lint 未闭合 fence 不 fail-closed | ✅ DONE（一行 closed flag 检查） |
+| T228 | secret_scan 含 NUL 字节漏判 | ✅ DONE（grep -a 强制文本模式） |
+| T259 | review-loop-breaker ①档逻辑冲突（未修复也能关 Critical） | ✅ DONE（①档措辞修正：区分已解决/仍成立两条出口） |
 
 ---
 
@@ -176,9 +177,9 @@ issues-v2-single-file-model change 已删除 `sdflow_issues_core`、v1 三脚本
 ## 建议执行顺序
 
 ```
-B1 (voice 协议) ─── ✅ 6/7 已关，剩 T150
+B1 (voice 协议) ─── ✅ 全部已关
      │
-B2 (假绿门)    ─── 安全面，漏过去的都是假绿
+B2 (假绿门)    ─── ✅ 全部已关
      │
 B3 (setup 安全) ─── 小改动大收益
      │
@@ -187,4 +188,4 @@ B3 (setup 安全) ─── 小改动大收益
   └─ B7 (hack测试)──B8 (ship_gate) ──B10 (lens) ──── 可并行
 ```
 
-B1 已基本完成（剩 T150 独立问题），B9 已全关。下一步 B2→B3（共 10 条），之后 B4-B10 按需并行。
+B1、B2、B9 已全关。下一步 B3（5 条），之后 B4-B10 按需并行。

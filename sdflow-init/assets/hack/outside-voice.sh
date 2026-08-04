@@ -250,7 +250,7 @@ secret_scan() {  # $1=file；命中只报"规则类型+行号"到 stderr（D8 �
     #   = 出境直接放行（实测：注入恒返回 2 的 grep 后，`secret-scan` 对任意文件都得 rc=0）。
     #   这与 `_ov_bytes_at` 的 M2 修法同族：**成败信号不经管道尾端转手**。
     #   ∴ 三分：0=命中 / 1=无匹配 / ≥2=命令错误 ⇒ 整个扫描 fail-closed 返回 2。
-    raw=$(grep -nE -- "$pattern" "$file" 2>/dev/null)
+    raw=$(grep -anE -- "$pattern" "$file" 2>/dev/null)
     rc=$?
     if [ "$rc" -ge 2 ]; then
       printf 'secret-scan 扫描器失败（fail-closed 拒发）: 规则=%s grep_rc=%s 文件=%s\n' \

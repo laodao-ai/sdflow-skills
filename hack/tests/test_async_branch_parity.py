@@ -299,7 +299,7 @@ def test_codex_sync_300s_compat_branch_is_deleted():
 _DISPATCH_COMMAND_LINE = (
     '`python3 ~/.sdflow/hack/outside-voice-job.py dispatch '
     '--run-dir "{run-dir}" --site <site> --context-file "<f>" --repo-root "<repo-root>" '
-    '--runner "$SDFLOW_VOICE_RUNNER" --model "$SDFLOW_VOICE_MODEL" '
+    '--runner <runner> --model <model> '
     '--effort high --timeout <T>`'
 )
 

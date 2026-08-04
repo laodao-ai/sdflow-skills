@@ -951,9 +951,16 @@ def is_stale(root, rel, scope, change):
     head_top = ls_tree_map(root, "HEAD", recursive=False)
     anchor_code = {p: v for p, v in anchor_top.items() if p != b"openspec"}
     head_code = {p: v for p, v in head_top.items() if p != b"openspec"}
-    if anchor_code == head_code:
-        return False, "fresh"
-    return True, "stale"
+    if anchor_code != head_code:
+        return True, "stale"
+    # openspec/workflow/tools/ 含真运行代码（anchor_lint.py 等），排除整棵 openspec 会漏判。
+    # 额外比较该子路径：done 流程不改这些 .py，不会假阳。
+    tools_spec = (b"openspec/workflow/tools/",)
+    anchor_tools = ls_tree_map(root, sha, pathspecs=tools_spec, recursive=True)
+    head_tools = ls_tree_map(root, "HEAD", pathspecs=tools_spec, recursive=True)
+    if anchor_tools != head_tools:
+        return True, "stale"
+    return False, "fresh"
 
 
 
