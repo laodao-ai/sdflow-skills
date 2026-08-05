@@ -269,10 +269,10 @@ fold 判据），**MUST NOT** 沿用「因本次改动才孤立」的旧因果�
 - 🔴 `tasks.md` 6.9（archive 后对提升进主 spec 的结果重扫词表 + 逐 Requirement 与 SKILL.md 对码）
   依赖 archive 步，**本票不执行**——在报告中写明它由 `sdflow-done` 的 archive 步承接。
 
-- [ ] 单元测试证据齐全，判据为「相对 merge-base 无新增失败」并附 baseline 已知失败的复核结论
-- [ ] 集成测试证据齐全并通过（或记「未覆盖（本仓无此层）」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖（本仓无此层）」+ 判定依据）
-- [ ] `python3 hack/sync_principles.py --check` 单独跑，退出码 0（6.3）
-- [ ] `openspec validate refactor-roadmap-internalize-deps --strict --type change` 通过（6.7）
-- [ ] 所有判「通过」的证据行锚同一个最终 SHA
-- [ ] 6.9 与 4.5 两项 hand-off 承接已在报告中写明
+- [x] 单元测试证据齐全，判据为「相对 merge-base 无新增失败」并附 baseline 已知失败的复核结论
+- [x] 集成测试证据齐全并通过（或记「未覆盖（本仓无此层）」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖（本仓无此层）」+ 判定依据）
+- [x] `python3 hack/sync_principles.py --check` 单独跑，退出码 0（6.3）
+- [x] `openspec validate refactor-roadmap-internalize-deps --strict --type change` 通过（6.7）
+- [x] 所有判「通过」的证据行锚同一个最终 SHA
+- [x] 6.9 与 4.5 两项 hand-off 承接已在报告中写明

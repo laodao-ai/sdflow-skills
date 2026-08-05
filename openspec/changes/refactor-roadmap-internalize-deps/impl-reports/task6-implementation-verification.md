@@ -184,7 +184,9 @@ merge-base 的红**，而是本机 `.claude/worktrees/` 是否存在导致的扫
 > （相对 merge-base 无新增失败），但**读者应以下方收口节为准**——本节保留仅为审计轨迹，
 > MUST NOT 作为「最终 SHA」引用。
 
-**（以下为 implementer 原文，盘面已被取代，保留备查）** 所有判「通过」的证据行锚同一个最终 SHA：`379de3405a07fc7b23a16bb7a7282e2cf0982b6d`
+**（以下为 implementer 原文，盘面已被取代，保留备查）**
+
+**所有判「通过」的证据行锚同一个最终 SHA**：`379de3405a07fc7b23a16bb7a7282e2cf0982b6d`
 （`git rev-parse HEAD`——这是本报告写入前、全部测试与机械门实际执行时的 SHA；本票不写产品代码，
 豁免 red-before-green，未产生任何产品代码 commit，聚合套件证据锚定于测试执行当时的 SHA，
 非本报告文件自身提交后的 SHA）。

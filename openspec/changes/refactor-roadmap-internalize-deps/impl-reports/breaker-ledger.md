@@ -8,3 +8,5 @@
 1 | AGENTS.md | roadmaps行不存在未说明 | Minor
 1 | impl-reports/task5-residue-scan-drills.md | 合计算式漏列DEFERRED项 | Important
 1 | docs/external-dependencies.md | 行号引用脆弱耦合(defer T265) | Minor
+1 | impl-reports/task6-implementation-verification.md | 旧结论段缺反向指针 | Important
+1 | impl-reports/task6-implementation-verification.md | 两个最终SHA并存未声明取代 | Minor
