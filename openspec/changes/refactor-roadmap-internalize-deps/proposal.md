@@ -33,7 +33,8 @@ sdflow-spec 已实证「内化拷问 + 纪要增量落盘」能用一个文件�
   与 sdflow-spec B.6/B.7 同构）。
 - **B 相位落盘协议**：B 起手即定名、判 create/continue/replan（判定前移）、建
   `openspec/roadmaps/{name}/` + 草稿 memo.md；重入探测（memo 存在且未定稿 ⇒ 问人续/新开）；
-  拷问中途放弃删包目录（continue/replan 场景只删本次新增）。
+  拷问中途放弃：create 场景先复述路径再删包目录，**continue/replan 场景不自动删、只记 task-log 一行**
+  〔spec-review-amendment SR-5：「本次新增」在 append-only 的 memo 上无可执行归属判据〕。
 - **术语改名**：「结晶」→「生成」（相位名对齐 sdflow-spec）；「产品/商业野心信号」→
   「商业化信号」（词表不变）；「考古层」（roadmap 语境）→「历史存档」（DOC-1 语境的
   「考古层」是另一概念，不改）。「相位 A/B/C」保留。

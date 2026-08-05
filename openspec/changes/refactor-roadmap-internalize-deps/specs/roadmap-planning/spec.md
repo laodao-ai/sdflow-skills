@@ -24,7 +24,7 @@
 #### Scenario: gate-0 未过的新产品/新项目〔spec-review-amendment SR-34〕
 
 - **WHEN** 新产品 / 新项目类请求 gate-0 任一项未通过
-- **THEN** 进入相位 B 并跑满七维中的 ①②④⑤⑥⑦，MUST NOT 因「技术判断已清楚」而只跑技术侧维度
+- **THEN** 进入相位 B 并跑**六个维度 ①②④⑤⑥⑦**（③ 阶段划分压力测试按裁剪基准对该类型不选入），MUST NOT 因「技术判断已清楚」而进一步只跑技术侧维度〔窄复核 NR-4：原文「跑满七维中的 ①②④⑤⑥⑦」自相矛盾，六维不是七维〕
 
 #### Scenario: gate-0 未过且商业化信号命中时维度①加重〔spec-review-amendment SR-34〕
 
@@ -40,7 +40,7 @@
 
 进入相位 B SHALL 起手完成三步：确定 kebab-case `{name}` → 判定同名包 create / continue / replan（**包生命周期判定前移至 B 起手**）→ 建 `openspec/roadmaps/{name}/` 并落盘草稿 memo.md。
 
-**memo 头部与定稿标记〔spec-review-amendment SR-2〕**：memo.md 头部 SHALL 记包名 + 日期，并 SHALL 保留一行**状态标记** `状态：DRAFT`（B 起手写）/ `状态：FINAL`（B 收敛定稿时改写，并附定稿日期）——**该行即「定稿标记」判据的唯一实现载体**，重入探测与本 Requirement 全部「未定稿」表述一律以它为准。除此之外 memo **无 frontmatter、无 hash、无 schema 机械核验字段**（状态位不是机械核验层）。重入探测扫到 **≥2 个** `状态：DRAFT` 的包时 SHALL 逐个呈现由操作者选择其一；操作者选「新开」时既有 draft **SHALL 原样保留**（MUST NOT 静默删除或改写），并提示其后续可再次重入。
+**memo 头部与定稿标记〔spec-review-amendment SR-2 · 窄复核 NR-1 订正写入时机〕**：memo.md 头部 SHALL 记包名 + 日期，并 SHALL 保留一行**状态标记** `状态：DRAFT` / `状态：FINAL`——**该行即「定稿标记」判据的唯一实现载体**，重入探测与本 Requirement 全部「未定稿」表述一律以它为准。**写入时机**：B 起手写 `DRAFT`；🔴 **`FINAL` SHALL 只在收尾 checklist 四项全过之后写入**（附定稿日期），**MUST NOT 在 B 收敛时就改写**——B 收敛之后还要走相位 C 生成与 review 处置，此间中断（如三件套只写出 1-2 个）若已置 `FINAL`，重入探测（只扫 `DRAFT`）就再也认不出这个半成品包。换言之 `DRAFT` 覆盖「B 拷问中 / C 生成中 / review 待处置」全部未完成态；「B 已收敛」这件事由 memo 正文的收敛记录表达，**不占用状态位**。除此之外 memo **无 frontmatter、无 hash、无 schema 机械核验字段**（状态位不是机械核验层）。重入探测扫到 **≥2 个** `状态：DRAFT` 的包时 SHALL 逐个呈现由操作者选择其一；操作者选「新开」时既有 draft **SHALL 原样保留**（MUST NOT 静默删除或改写），并提示其后续可再次重入。
 
 拷问期间每条站稳的承重结论与拍板决策 SHALL 当场追加写入 memo.md（增量落盘），MUST NOT 等收敛后一次性落盘；中断损失窗口 = 两次落盘之间，SHALL 如实声明、MUST NOT 声称零损失。
 
@@ -48,7 +48,7 @@
 
 **未决项清单〔spec-review-amendment SR-4 · 设计门 Q2 拍板 A〕**：memo.md SHALL 含一个 `## 未决项` 小节，承接被删除的 wayfinder frontier 的**清单职能**——凡① 维度终态为 `显式延后` 者、② 拷问中冒出但本次不解决的问题，SHALL 逐条落入该小节并附**再触发条件**（什么信息到位 / 什么时点应重新处理它）。该小节 MUST NOT 因「三件套已写完」而被清空，它随包长期存在、跨 session 可读。**承接边界（如实声明）**：本小节承接的是「当前还剩什么没决定」的**清单**，**MUST NOT** 被表述为等价于 wayfinder 票据模型——后者的 `Blocked-by` 依赖图与 `claimed` 并发语义**本 change 明确不承接**（roadmap 为单人操作场景，不需要）。
 
-拷问中的术语与 ADR SHALL 走提议制：命中 ADR 三条件（难逆转 + 缺上下文会意外 + 有真实权衡）或术语冲突时向操作者提议，未经确认 MUST NOT 写入 `openspec/CONTEXT.md` / `openspec/adr/`。**写入时机与留痕〔spec-review-amendment SR-9 · SR-10 · SR-11〕**：经确认的条目 SHALL **先记入 memo.md**、待**相位 C 三件套生成并经操作者确认终稿后**才写入全局文件——B 相位中途 MUST NOT 直写全局（否则被放弃的规划会把临时判断永久留在全局真相源里，而收尾对账只发生在三件套完成后，覆盖不到中途放弃）。memo 中的每条全局写入记录 SHALL 以可辨识固定前缀落行（`[提议]` / `[确认]`）并记全 **目标路径 + 精确条目名 + 写入前版本锚**（如该文件当前 `git log -1 --format=%h` 输出）——收尾对账（checklist ④）SHALL 只对**版本锚仍匹配**的条目执行 supersede / revert，不匹配即停下交操作者裁决，MUST NOT 盲改（防撤销他人或并发写入的结论）。
+拷问中的术语与 ADR SHALL 走提议制：命中 ADR 三条件（难逆转 + 缺上下文会意外 + 有真实权衡）或术语冲突时向操作者提议，未经确认 MUST NOT 写入 `openspec/CONTEXT.md` / `openspec/adr/`。**写入时机与留痕〔spec-review-amendment SR-9 · SR-10 · SR-11〕**：经确认的条目 SHALL **先记入 memo.md**、待**相位 C 三件套生成并经操作者确认终稿后**才写入全局文件——B 相位中途 MUST NOT 直写全局（否则被放弃的规划会把临时判断永久留在全局真相源里，而收尾对账只发生在三件套完成后，覆盖不到中途放弃）。memo 中的每条全局写入记录 SHALL 以可辨识固定前缀落行（`[提议]` / `[确认]`）并记全 **目标路径 + 精确条目名 + 写入前版本锚**——收尾对账（checklist ④）SHALL 只对**版本锚仍匹配**的条目执行 supersede / revert，不匹配即停下交操作者裁决，MUST NOT 盲改。**版本锚的取值与边界**〔窄复核 NR-3〕：目标文件**已存在**时取其 `git log -1 --format=%h -- <路径>` 输出；目标**尚不存在**（如本次要新建的 ADR）时 SHALL 记显式 sentinel `新建`，收尾时以「该路径此前确实不存在」为匹配条件。🔴 **诚实边界**：该锚**只检测已提交的改动**——工作树内未提交的修改不会让它变化，故它 **MUST NOT 被表述为并发修改保护**，只是「本次讨论期间该条目有没有被别的提交动过」的弱信号；真并发写同一文件仍属 decision-memo 已显式接受的边角。
 
 **重入**：新 session 触发本 skill 时 SHALL 探测未定稿 memo（`openspec/roadmaps/*/memo.md` 存在且状态标记为 `DRAFT`），命中则呈现包名 + memo 摘要由操作者选择「继续 B / 新开」，MUST NOT 静默复用。
 
