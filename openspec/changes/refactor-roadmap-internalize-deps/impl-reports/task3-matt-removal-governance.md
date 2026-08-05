@@ -134,3 +134,38 @@ python3 sdflow-issues/scripts/issues_v2.py reindex                              
   归档阶段的范围。
 - Task 6（验证）的全量 grep 残留扫描（6.1，词表含 `openspec/matt`）、主 spec
   提升后核验（6.9）等收尾任务由后续票承担，未在本票范围内执行。
+
+---
+
+## 双轴审后补充披露〔编排层追加，非 implementer 原文〕
+
+### 1. `reindex` 副作用：INDEX.md / CLOSED.md 夹带 25 条预存漂移（Standards 轴 Important）
+
+本票为关闭 T134 跑了一次 `reindex`。`reindex` 是**全量重建单一源**，因此除 T134 外，还把
+此前已积累但快照未刷新的约 25 条历史条目一并同步进本次 diff（T12/T15/T56/T68/T69/
+T93-T96/T128/T130/T131/T139/T140/T174/T176/T188/T199/T207/T229/T230/T250/T252/T253/T261）。
+
+**这些 issue 与本票无关**——它们早已由更早的提交关闭、文件早已存在于
+`openspec/issues/closed/todo/` 磁盘上，只是 `INDEX.md` / `CLOSED.md` 的快照落后于磁盘。
+
+编排层核实（非采信自述）：
+- `git ls-tree -r --name-only main | grep "issues/closed/todo/T12.md"` 等抽样（T12 / T56 / T229）
+  → 三者在 `main` 上即已位于 `closed/`，命中数各 1。
+- `git diff --name-status 5262e21..fc221e4 -- openspec/issues/` → 文件级改动**只有** T134 一条
+  `R062 open/todo/T134.md → closed/todo/T134.md`，其余仅 `CLOSED.md` / `INDEX.md` 两个快照文件。
+
+⇒ 属**正确的机械行为**（单一源重建），不是本票误动了 25 个 issue。此处显式披露，避免未来读
+`git blame` / diff 的人误判本票范围。
+
+### 2. `AGENTS.md` 无「roadmaps 目录描述行」可改（Spec 轴 Minor）
+
+`tasks.md` 3.2 要求「roadmaps 目录描述行去 footage 措辞（两文件同步改）」。实测该描述行
+**本就只存在于 `CLAUDE.md`**，`AGENTS.md` 中无对应内容（`grep 'openspec/roadmaps/{name}' AGENTS.md`
+零命中）。∴ AGENTS.md 侧「无可改之物」而非「漏改」；matt 三区块的删除两文件均已完成。
+
+### 3. 两项 `cannot-verify-from-diff` 的编排层消解
+
+| 项 | 消解方式 | 结论 |
+|---|---|---|
+| `reindex` 输出（INDEX open 66 / CLOSED closed 221） | 编排层改为核验**结果一致性**而非命令回显：见上第 1 节的两条 git 证据，双写与磁盘状态一致 | 已消解 |
+| `pytest` 相对 merge-base 无新增失败 | **不在本票消解**——转由「实现验证」收尾票（Task 6）承担全量聚合回归，并在那里复核 baseline 已知失败清单（`tasks.md` 6.2 只登记 1 条，Task 2 与 Task 3 两票各自独立用 `git stash` 复现出**第 2 条** `test_subprocess_encoding_contract.py`，该差异 MUST 在 Task 6 证据行如实记录） | 转 Task 6 |
