@@ -90,6 +90,6 @@ impl-pipeline: tickets
 
 按「聚合套件发现契约」运行本 change 的单元+集成+e2e 测试套件并全部通过，证据落 `impl-reports/task6-verify.md`（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）。全仓残留引用扫描：`grep -rn "embedded-test-sop\|RUN_SOP\|wayfinder\|分支 B\|分支B\|disable-model-invocation" --include="*.md" --include="*.py" --include="*.yaml"` 只允许 allowlist（workflow-history.md、本 change 目录内、归档 change、ADR 历史引用、issue/roadmap）。`bash setup.sh` 运行正常。
 
-- [ ] `pytest` 全仓全绿（证据含命令原文、退出码、SHA）
-- [ ] `bash setup.sh` 运行正常
-- [ ] 残留引用扫描通过（仅 allowlist 内存在）
+- [x] `pytest` 全仓全绿（证据含命令原文、退出码、SHA）
+- [x] `bash setup.sh` 运行正常
+- [x] 残留引用扫描通过（仅 allowlist 内存在）
