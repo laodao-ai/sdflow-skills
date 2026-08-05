@@ -16,15 +16,31 @@ matt tracker 五个外部依赖并整体移除 `openspec/matt/`，review 层外�
 
 ## 承重约束
 
-- **C1 · matt 无其他运行时消费方**：全仓 grep，`sdflow-implement` 的 matt 引用全是出处注释
-  （SKILL.md:228/459/561-562/788/797-798、impl_route.py:5/420/431），无代码读
-  `openspec/matt/` 路径；活消费方仅 sdflow-roadmap wayfinder preflight（本次删）+
-  CLAUDE.md/AGENTS.md matt 区块 + roadmap-planning spec（本次改）。⇒ D2 可行。
+- **C1 · matt 的消费方盘点〔spec-review-amendment SR-1：原表述「无其他运行时消费方」已被证伪，改写〕**：
+  **仓内**部分成立——全仓 grep，`sdflow-implement` 的 matt 引用全是出处注释
+  （SKILL.md:228/459/561-562/788/797-798、impl_route.py:5/420/431），无代码读 `openspec/matt/` 路径。
+  🔴 **但仓外有 4 个活消费方**：`openspec/matt/issue-tracker.md:16` 明文把 `to-tickets` / `triage` /
+  `to-spec` / `qa` 列为消费方，实测 `~/.claude/skills/` 下**这四个 skill 全部已安装**；
+  它们靠 `CLAUDE.md` / `AGENTS.md` 的「## Agent skills」三段找到路径，其中「### Domain docs」
+  一段（指向 `openspec/CONTEXT.md` 与 `openspec/adr/`）**与 wayfinder 完全无关**。
+  ⇒ 原 C1 的检验方法（仓内 grep 路径字符串）对**仓外安装、指令驱动**的消费方结构性失明。
+  **移除仍可行，但依据要换**（见 C1b）；范围是否含「Domain docs」一段属人拍板项（评审报告 Q1）。
+- **C1b · matt 早于本 change 已事实废弃〔SR-33〕**：git log 实测，`sdflow-issues` 生于本仓
+  **首个 commit（2026-07-03）**，早于 `openspec/matt/` 建立（2026-07-10）**一周**；
+  本仓自始至终用的是 `sdflow-issues`（T1…T230），matt 的 issue-tracker 角色**从未真正投入使用**。
+  ⇒ D2 的正确论证是「**matt 是历史遗留死配置，独立可删；与本 change 同批做的理由是操作成本低 +
+  避免半改状态**」，**不是**「因本次改动才使其孤立」。
 - **C2 · roadmap-planning spec 是最大牵连面**：`openspec/specs/roadmap-planning/spec.md`
   （176 行）至少 4 个 Requirement 锚定被删机制——讨论层路由（:49-81）、footage 落盘与引用
   边界（:83-110）、review 分档（:112-129）、收尾 checklist（:131-148）。delta 必须覆盖。
-- **C3 · 存量 footage 真实存在**：`openspec/roadmaps/issues-triage-2026-08/` + archive 下
-  wco/mlh 两包含 footage 引用 ⇒ 兼容冻结条款必须有（D7）。
+- **C3 · 冻结条款的依据 = 目标态 producer，不是本仓存量〔spec-review-amendment SR-4：原表述
+  「存量 footage 真实存在」已被证伪，改写〕**：实测 `find . -type d -name footage` **全仓零命中**；
+  原文引的「archive 下 wco/mlh 含 footage 引用」实为 `archive/workflow-cost-optimization/memo.md:1`
+  标题里的比喻词「（memo · 考古 footage）」，不是 wayfinder 产出。
+  🔴 **但冻结条款仍必须有**——判据不是「本仓现在有没有」，而是「**目标态的 producer 会不会产出这种形态**」：
+  本 skill 经全局 symlink 分发给一切消费仓，**旧版 skill 确实产出过 `footage/`**，消费仓存量不可见但必然存在。
+  ⇒ D7 结论不变，依据从「本仓实证」换成「目标态 producer 契约 + 跨仓分发事实」。
+  **连带**：验证不能拿本仓包演练（无 footage 可触发），须构造 fixture（tasks 6.4 已改）。
 - **C4 ·「历史记录」被 task-log 语境占用**：现 SKILL.md:252-253 replan 条款明文
   「保留既有 task-log.md 的历史记录」⇒ D8 弃「历史记录」选「历史存档」。
 - **C5 ·「考古层」同串双语义**：DOC-1 语境（rules/doc-authoring.md:63-66、BASE-30、T169、
@@ -34,8 +50,13 @@ matt tracker 五个外部依赖并整体移除 `openspec/matt/`，review 层外�
 - **C7 · office-hours 六问结构核实**：Q1-Q6 在 office-hours/SKILL.md:1096-1155，自带按
   项目阶段裁剪路由表（:1089-1092，`Pure engineering/infra → Q2, Q4 only`）⇒ 七维吸收映射
   成立；handoff 漏列 Q3（绝望具体度），吸收时补入维度①的追问弹药。
-- **C8 · bundle 牵连仅一处规则 + 一处史录**：`ff-generation-constraints.md:46-47`
-  （`wayfinder-resolved:` 前缀禁混用）+ `workflow-history.md:27-32`（A3 演进史）⇒ D10。
+- **C8 · bundle 牵连是三处，不是两处〔spec-review-amendment SR-13：原表述「仅一处规则 + 一处史录」
+  已被证伪，改写〕**：`ff-generation-constraints.md:46-47`（`wayfinder-resolved:` 前缀禁混用）
+  + `workflow-history.md:27-32`（A3 演进史）**+ `config.template.yaml:41,51`**
+  ——后者两行注入规则引用 `ff-generation-constraints.md` 的「wayfinder→ff 衔接契约」章节，
+  而该章节在当前文件里 grep **0 命中**（既存陈旧引用）。
+  🔴 **它是消费仓 `config.yaml` 的生成模版**，改动会随 init 注入每个新下游仓 ⇒ 是**活传播面**，
+  按基准 4 的 fold 判据（同片文件、低 blast radius）随本次一并订正。D10 范围相应扩到三处。
 - **C9 · review 层降级路径已焊**：现 SKILL.md:449「未审待恢复」不静默条款 ⇒ D1 保留外部
   依赖不新增风险。
 - **C10 · 增量落盘同构先例**：sdflow-spec B.4（B 轮数无上界，一次性落盘 = 收敛前中断全损）
@@ -114,8 +135,9 @@ memo.md + 存量 footage/ 的统称改为「历史存档」。候选「历史记
 
 ### D9：B 起手即建包目录 + 草稿 memo，放弃即删目录（人已拍板 2026-08-05）
 
-- B 起手四步：判定进 B → 定 `{name}` → 判同名包 create/continue/replan（**判定前移到 B 起手**）
-  → 建 `openspec/roadmaps/{name}/` + 落草稿 memo.md。
+- B 起手**三步**〔spec-review-amendment SR-28：与 spec/tasks 统一口径，「判定进 B」是进入前提而非步骤〕：
+  定 `{name}` → 判同名包 create/continue/replan（**判定前移到 B 起手**）
+  → 建 `openspec/roadmaps/{name}/` + 落草稿 memo.md（含 `状态：DRAFT`）。
 - 重入协议：新 session 探测 `openspec/roadmaps/*/memo.md` 存在且无定稿标记 ⇒ 呈现包 +
   memo 摘要，问人「继续 B 还是新开」（与 sdflow-spec 0.3 同构）。
 - 直接生成路径（gate-0 过 ∧ 无商业化信号）：维持生成时建目录，memo 可不存在。
@@ -129,10 +151,14 @@ memo.md + 存量 footage/ 的统称改为「历史存档」。候选「历史记
 标注**（消费仓存量 footage 仍可能被溯源，不能删）；`workflow-history.md` 追加一条
 wayfinder 路径移除的演进记录。bundle 改动后按 dev checkout 纪律跑 setup.sh。
 
-### D11：T134 随本 change 关 OBSOLETE（自决 2026-08-05，已向人声明无异议）
+### D11：T134 随本 change 关 `WONTDO`（自决 2026-08-05；状态码经评审订正）
 
 前提消解：重构后本仓工作流无 domain-modeling 调用点，matt/domain.md 随 D2 删除。
-实现期以 sdflow-issues set-status 处置并附 evidence。
+实现期以 `sdflow-issues` 的 `set-status --to WONTDO --reason "<前提消解说明>"` 处置。
+🔴 **原文写的 `OBSOLETE` 是非法状态码**〔spec-review-amendment SR-3，实跑复现〕：
+`issues_v2.py:46-49` 的 todo 池只接受 `OPEN|PROPOSED|DONE|WONTDO`；
+且 `--evidence` 只服务 `FIXED`/`DONE`，`WONTDO` 必须配 `--reason`。
+根因 = 把自然语言「已过时」当成了机器状态值。
 
 ### D12：explore 移出讨论层内部路由（自决 2026-08-05）
 
@@ -150,12 +176,15 @@ wayfinder 路径移除的演进记录。bundle 改动后按 dev checkout 纪律�
   删 wayfinder/grilling/domain-modeling 依赖节）；handoff 草稿实现后删除。
 - 判定留痕总则三判定点保留、随新结构重编号（①三态路由 ②review 分档 ③收尾 checklist 四项）。
 
-### D14：ADR 一条 + CONTEXT.md 词条两处，实现期落（人已确认 2026-08-05）
+### D14：ADR 一条 + CONTEXT.md 词条**三处**，实现期落（人已确认 2026-08-05；第三处经评审补入）
 
 - ADR：「sdflow-roadmap 讨论层内化与 matt 套件移除」——三条件全中（难逆转 / 缺上下文会
   意外（存量 footage 无产出机制）/ 真实权衡（内化分界线：讨论过程是内在职责、冷审价值恰在
   外部性 ⇒ 讨论层内化、review 层留外））。
-- CONTEXT.md：① footage 词条重写为「历史存档」定义；② 新增「商业化信号」词条。
+- CONTEXT.md：① footage 词条重写为「历史存档」定义（其正文含「决策**结晶**」，一并改「生成」）；
+  ② 新增「商业化信号」词条；③〔spec-review-amendment SR-15〕**`ticket（实现分解单位）` 词条**——
+  正文「matt 套件中 wayfinder 的讨论 ticket（map 的 `issues/<NN>`）是另一种 ticket，需限定词区分」
+  与 `_Avoid_` 行的同类表述，改为历史存档语境。
 - 时机均放实现期（进 tasks.md），避免全局共享文件领先实际形态。
 
 ## 接受的边角
@@ -167,10 +196,53 @@ wayfinder 路径移除的演进记录。bundle 改动后按 dev checkout 纪律�
 - **⑤ 简化后的盲区**（D7 诚实边界）：绕过提议制手改 CONTEXT.md/adr 的写入收尾门查不到——
   属指令层约束固有边界，原 git 基线机制也只覆盖长档路径，非本次新增缺口。
 - **拷问中途放弃未删目录**：残留半途包由下次重入探测呈现给人处置，不设自动清扫。
+- **并发两 session 写同一包**〔spec-review-amendment SR-30：原为沉默遗漏，此处补显式裁定〕：
+  本 skill 无锁机制，后写覆盖前写。**根因** = 无进程间协调层；**概率**低（单人操作场景）；
+  **影响**可逆（三镜：系统镜——无状态损坏，git 可追溯回滚；用户镜——最多丢一次拷问的增量；
+  开发循环镜——无）；**完美成本** = 引入 lockfile + 心跳，与「零机械层」的 D4 取向冲突；
+  **简化方案** = 不做，如实写进 SKILL.md 让操作者知情。**主次：开发循环镜为主，不做。**
+- **建了目录但草稿 memo 写失败**〔SR-30〕：下次重入扫不到 `状态：DRAFT` 行 ⇒ 呈现为「已存在的空包」，
+  走 continue/replan 分支，操作者可见可处置。概率低、影响可逆、无需额外机制。**接受。**
+- **重入命中多个未定稿包**〔SR-30〕：**不再是遗漏**——delta spec 已补规范（逐个呈现由操作者选其一，
+  未选者原样保留）。
+- **直接生成路径的半成品不被重入覆盖**〔SR-27〕：该路径允许 memo 不存在，而重入只扫未定稿 memo。
+  概率低（C 相位连续写盘、无人类往返）、影响可逆（残包可见可手删）、完美成本 = 给直接生成路径
+  也强制建 memo（与 D6 的轻量意图冲突）。**接受，如实声明不称已覆盖。**
 
 ## 三镜代价
 
-D1（review 层保留外部依赖 vs 内化）为本次唯一实质方案选择：
+〔spec-review-amendment SR-23〕本次命中 TG-23（≥2 合理方案）的决策共 **4 条**：D1 / D4 / D5 / D8。
+原文只写满了 D1，其余三条的三镜与主次判定补如下（内容原本散在各自「依据」段，此处按 BASE-12 结构化）。
+
+### D4（memo 轻量纪要 vs 搬 sdflow-spec 的 schema+hash 机械层）
+
+- **系统镜**：不搬 ⇒ 无 frontmatter/hash 解析面、无第二份 schema 要维护；代价是**失去身份核验**
+  （跨 session 续错包无机械拦）。🔴 注意：hash 在 sdflow-spec 是**一物两用**（身份 + draft/final 状态位），
+  只砍身份核验、**状态位必须留**（见 SR-2 的 `状态：DRAFT/FINAL`）。
+- **用户镜**：memo 保持可手写、可随手读，不因机械字段变成「工具产物」。
+- **开发循环镜**：省掉一整套 emit/verify 脚本与其测试；roadmap 无 ship gate、无 CLI 载荷消费 memo，
+  搬过来的机械层没有下游消费者。
+- **主次判定：开发循环镜为主**——机械层的价值全部来自下游消费者，而 roadmap 侧没有；
+  身份核验的残余风险由 create/continue/replan 显式确认承接（低概率、生成前有人门）。
+
+### D5（术语改名：「商业化信号」vs「产品化信号」；「相位」保留 vs 换「阶段/步骤/环节」）
+
+- **系统镜**：消费面已 grep 全仓核过——「野心信号」无 `.py`/`.sh` 硬编码，改名零机械风险；
+  而「相位」若换成「环节」需动 30+ 文件 + 6 个 `.py` 测试锚（跨文件类型的重命名面，风险量级完全不同）。
+- **用户镜**：「商业化信号」比「产品/商业野心信号」短且自明；「结晶」是比喻词、不自明，「生成」对齐兄弟 skill。
+- **开发循环镜**：前两个改名的消费面全在本次重写范围内，额外成本≈0；「相位」改名属独立 change 的量级。
+- **主次判定：系统镜为主**——决定「改哪个不改哪个」的是消费面大小与是否跨文件类型，不是措辞好坏。
+  ⇒ 改前两个、保留「相位」。
+
+### D8（「历史存档」vs「历史记录」）
+
+- **系统镜**：「历史记录」已被 task-log 语境占用（replan 条款明文「保留既有 task-log.md 的历史记录」），
+  同文件一词两义 ⇒ 未来任何针对该词的检索/改名都会误伤。
+- **用户镜**：两个词可读性相当，无实质差别。
+- **开发循环镜**：选「历史存档」可安全地做范围限定替换；选「历史记录」则每次都要人工判语境。
+- **主次判定：系统镜为主**——一词两义的代价在检索与改名时反复付，且不可机械消解。
+
+### D1（review 层保留外部依赖 vs 内化）
 - **系统镜**：仓库继续保留 `/plan-eng-review` + `/autoplan` 两个 gstack 依赖（降级路径已焊，
   失效不静默）；耦合面不变、无新增。
 - **用户镜**：新机器未装 gstack 时 review 走「未审待恢复」提示，多一步安装动作。

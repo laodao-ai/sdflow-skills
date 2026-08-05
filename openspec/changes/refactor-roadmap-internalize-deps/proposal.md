@@ -3,8 +3,16 @@
 ## Why
 
 `sdflow-roadmap` 的讨论层押在五个外部依赖上（wayfinder / grilling / domain-modeling /
-office-hours / matt tracker doc），每个都拖着宿主探测、降级路径、语义漂移告警的维护面——
-Codex 宿主接地实测无 wayfinder，降级路径常驻生效，「长档持久化保护」对半数宿主是空头承诺。
+office-hours / matt tracker doc）。**两类性质不同，分开说**〔spec-review-amendment SR-31〕：
+
+- **wayfinder / grilling / domain-modeling / matt tracker doc** —— 拖着宿主探测、降级路径、
+  语义漂移告警的维护面。Codex 宿主接地实测**无**这三个 skill，降级路径常驻生效，
+  「长档持久化保护」对半数宿主是空头承诺。
+- **office-hours** —— **双宿主皆可用**（实测 `~/.codex/skills/gstack-office-hours` 存在），
+  且现行 SKILL.md 的 office-hours 分支**没有任何宿主探测/降级逻辑**。
+  它被内化的理由是**另一个**：结构对齐三相位 + 维护面精简（六问在 roadmap 场景本就要裁剪，
+  裁剪后的执行体就是 B 相位的拷问维度，外置一个 skill 只多一层调用）。
+
 sdflow-spec 已实证「内化拷问 + 纪要增量落盘」能用一个文件消除长档持久化的全部外部依赖。
 本次将讨论层能力内化、整体结构对齐 sdflow-spec 三相位；matt 套件随之在本仓失去全部活消费方
 （sdflow-implement 的 matt 引用均为出处注释，无运行时依赖），一并移除。
@@ -39,8 +47,10 @@ sdflow-spec 已实证「内化拷问 + 纪要增量落盘」能用一个文件�
   long-flow-skill-paradigm.md 的 wayfinder 段改历史注记；`docs/external-dependencies.md`
   更新（删 wayfinder/grilling/domain-modeling 依赖节）；SKILL.md frontmatter description
   重写（触发面去 wayfinder）。
-- **配套治理**：ADR 一条（讨论层内化与 matt 移除）+ CONTEXT.md 词条两处（footage 词条
-  重写为「历史存档」、新增「商业化信号」）；T134 关 OBSOLETE（前提消解）。
+- **配套治理**：ADR 一条（讨论层内化与 matt 移除）+ CONTEXT.md 词条**三处**〔spec-review-amendment
+  SR-15：footage 词条重写为「历史存档」、新增「商业化信号」、**`ticket` 词条**里的
+  「matt 套件中 wayfinder 的讨论 ticket…需限定词区分」改历史存档语境〕；
+  T134 关 **`WONTDO`**〔SR-3：`OBSOLETE` 非合法状态码〕。
 - **review 层不动**：`/plan-eng-review` + `/autoplan` 外部依赖与降级路径原样保留。
 
 ## Capabilities
@@ -67,7 +77,9 @@ sdflow-spec 已实证「内化拷问 + 纪要增量落盘」能用一个文件�
   roadmaps 目录描述行去 footage）
 - `sdflow-init/assets/workflow/ff-generation-constraints.md`、`workflow-history.md`
   （bundle 改动，改后按 dev checkout 纪律重跑 setup.sh 并推下游）
-- `openspec/CONTEXT.md`（词条两处）、`openspec/adr/`（新增一条）、
+- `openspec/CONTEXT.md`（词条**三处**〔SR-15〕）、`openspec/adr/`（新增一条）、
+  `sdflow-init/assets/workflow/config.template.yaml`（陈旧 wayfinder 引用订正〔SR-13〕）、
+  `docs/sdflow-fable5/02-module-reference.md` §4.6（活文档，非豁免历史文档〔SR-16〕）、
   `openspec/issues/`（T134 处置）、`docs/external-dependencies.md`、
   `docs/drafts/roadmap-refactor-handoff.md`（实现后删除）
 - 不涉及：服务/固件/前端（TG-01/02/03 均不命中）；review 层 skill 接口
@@ -78,10 +90,18 @@ sdflow-spec 已实证「内化拷问 + 纪要增量落盘」能用一个文件�
   仅剩历史注记（存量兼容条款、long-flow-skill-paradigm 历史注记），无活跃调用路径。
 - `openspec/matt/` 不存在；CLAUDE.md / AGENTS.md 无 matt 区块；全仓无 `openspec/matt` 活引用
   （docs/ 历史文档除外）。
-- 全仓 `python3 -m pytest` 绿；`python3 hack/sync_principles.py --check` 绿
-  （SKILL.md 重写保留 `sdflow:principles` 托管块）。
+- `/usr/bin/python3 -m pytest` **相对 merge-base 无新增失败**〔spec-review-amendment SR-18：
+  baseline 已有 1 个先于本分支存在的无关红（`test_harden_sdflow_spec_followup_closure`），
+  故不能写「全仓绿」〕；`python3 hack/sync_principles.py --check` 绿（SKILL.md 重写保留托管块）。
 - `openspec validate refactor-roadmap-internalize-deps --strict --type change` 通过。
-- 存量包续跑演练（`issues-triage-2026-08`）不报错、至多一行冻结提示。
+- **构造 fixture** 的 footage 冻结演练通过〔SR-4：本仓无任何 `footage/` 目录，
+  原定演练对象 `issues-triage-2026-08` 只有一个 `roadmap.md`，是恒真锚〕；
+  真实单文件包（`issues-triage-2026-08`）的缺件兼容演练通过。
+
+> 🔴 **本节的诚实边界**〔spec-review-amendment SR-19〕：以上四条量的是「残留字符串清干净了 /
+> 门禁绿 / 结构合法」，**都不检验规划器行为是否正确**。`sdflow-roadmap` 无 `scripts/`、无 `tests/`
+> ⇒ 三态路由、七维裁剪、增量落盘、重入、放弃清理这些**本次真正的改动面没有任何自动化测试**。
+> Success Metrics 全绿 **MUST NOT** 被读作「新流程可用」——那一层的唯一防线是终审人读 + 场景核对清单（tasks 6.6）。
 
 ## Non-Goals
 
@@ -102,16 +122,26 @@ sdflow-spec 已实证「内化拷问 + 纪要增量落盘」能用一个文件�
 
 ## 利益相关方与外部依赖〔TG-20〕
 
-- **下游消费仓**：skill 经全局 symlink 即时生效（运行 checkout pull + setup.sh）；bundle
-  改动需 `sdflow-init update` 推送。存量 wayfinder footage 由冻结条款兼容。
+- **下游消费仓**〔spec-review-amendment SR-14：原表述「bundle 改动需 `sdflow-init update` 推送」
+  与实际机制不符，改写〕：skill 与 bundle 规则**走同一条通道**——运行 checkout `git pull` + `setup.sh`
+  之后，`~/.sdflow/workflow/` 软链即指向新内容，消费仓经全局 canonical 解析立即拿到。
+  `sdflow-init update` 在消费仓**默认只刷新 `tools/` 子树**（`init.py:213`），**不推送规则文件**。
+  ⇒ 真正会滞后的是**持有本地 `openspec/workflow/` 规则副本（pin）的消费仓**：它遮蔽全局且
+  `update` 不刷新，由既有「陈旧遮蔽」告警（`init.py:329`）提示，本 change 不新增机制。
+  存量 wayfinder footage 由冻结条款兼容。
 - **gstack review skills**（`/plan-eng-review`、`/autoplan`）：调用契约不变，零影响。
 - **matt 套件**：本仓移除配置面；全局安装与其他项目使用不受影响。
 
 ## 假设〔TG-22〕
 
 - **假设**：没有消费仓存在「进行中的 wayfinder 长档讨论」（半途 map 未收敛）。
-  **失效影响**：该仓续跑时长档分支已不存在——按存量 footage 冻结条款处置，讨论要点从 map
-  手工转录进 memo 继续；影响小、有明确兜底路径，不阻塞。
+  **失效影响**〔spec-review-amendment SR-20：原称「有明确兜底路径」，实为**无自动化兜底**，如实改写〕：
+  该仓续跑时长档分支已不存在，走「包已存在 → continue」进 B 相位**从零拷问**——
+  `footage/map.md` 里的历史讨论**对执行 agent 不可见**（spec 的冻结 Requirement 只说「不报错、不迁移」，
+  没有任何一句要求 agent 去读 map 提炼要点）。
+  ⇒ **靠操作者自己记得手工转录**，无工程化兜底。影响：一次重复讨论；不阻塞，但不该说成「有明确兜底路径」。
+  **可选收紧**（未采纳，记此备查）：spec 补一条 Scenario——「包含 `footage/` 但无三件套 ⇒ continue 判定前
+  SHALL 提示操作者是否先摘要 map 要点写入 memo」。
 
 ## Compliance
 

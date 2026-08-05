@@ -66,7 +66,7 @@ after:
 | `sdflow-init/assets/workflow/workflow-history.md` | 追加 | 一条移除记录 |
 | `openspec/CONTEXT.md` | 词条 | footage → 历史存档定义；新增商业化信号（D14） |
 | `openspec/adr/` | 新增 | 讨论层内化与 matt 移除（D14） |
-| `openspec/issues/`（T134） | 关闭 | OBSOLETE + evidence（D11） |
+| `openspec/issues/`（T134） | 关闭 | `WONTDO` + `--reason`（D11；`OBSOLETE` 非合法状态码〔SR-3〕） |
 | `docs/external-dependencies.md` | 更新 | 删 wayfinder/grilling/domain-modeling 节 |
 
 ### 新 SKILL.md 骨架
@@ -75,7 +75,8 @@ frontmatter（触发面重写，去 wayfinder）→ principles 托管块（原�
 三相位总览 + 判定留痕总则（三判定点重编号）→ 硬性规则 1–5（规则 3 改「历史存档」）→
 产出模式（存量兼容 ×2 / 逃生舱 / create·continue·replan——判定前移至 B 起手）→
 相位 A（澄清 + gate-0 + 商业化信号检查 → 三态路由，判定点①）→
-相位 B（起手四步 / 七维拷问与裁剪表 / 术语·ADR 提议制 / 增量落盘 / 停止条件 / 重入 / 放弃清理）→
+**第零步：重入探测**（独立标题、置于三态路由之前，与 sdflow-spec 同构）〔SR-36〕→
+相位 B（起手**三步** / 七维拷问与裁剪表 / 术语·ADR 提议制 / 增量落盘 / 停止条件 / 放弃清理）→
 相位 C（生成三件套 / 近细远雾，保留）→ review 分档（判定点②，仅改术语）→
 收尾 checklist 四项（判定点③）→ 命名规范 / 下游阶段实施（保留）→ 常见陷阱（删 7、改 3）→
 CLAUDE.md 配合（去 footage 行）→ 参考模板。
@@ -116,10 +117,86 @@ absent ──A收束，B起手：定名 + 生命周期判定(create/continue/rep
 - **既有包**（continue/replan）：生命周期判定在 B 起手完成（前移，D9），replan 先落
   task-log 重规划记录再动文件（现行条款保留）。
 
+### 与 sdflow-spec 的实际分叉表〔spec-review-amendment SR-35〕
+
+原文曾称「逐节同构，差异只保留在两处」——实测**至少五处**，成表如下（读过 sdflow-spec 的人按此对照，
+避免带错误心智模型来用 roadmap）：
+
+| # | 维度 | `sdflow-spec` | `sdflow-roadmap`（本设计） | 是否有意为之 |
+|---|---|---|---|---|
+| 1 | 产物形态 | 四件套经 OpenSpec CLI | 三件套直写 | ✅ 有意（规则 4） |
+| 2 | memo 机械层 | frontmatter + `decision_hash`（身份 + 状态双职责） | 仅 `状态：DRAFT/FINAL` 一行状态位，无身份核验 | ✅ 有意（D4），**但状态位不可再砍**（SR-2） |
+| 3 | B 相位可否跳过 | **不可跳过** | 三态路由第①态可跳过（gate-0 过 ∧ 无商业化信号） | ✅ 有意（D6） |
+| 4 | 重入探测覆盖面 | 全部在途 change | 仅未定稿 memo——**不覆盖直接生成路径的半成品**（见 Risks） | ⚠️ 已知缺口 |
+| 5 | 指令密度策略 | 5 个 `references/*.md` 按需加载，主文件只留骨架 | 骨架全内联 | ⚠️ 分叉，未论证 |
+| 6 | 提议制防线层数 | B.6 惰性钩子 **+** B.7 收敛前逐条回扫（原文自述「B.6 漏掉的在此兜底」） | 仅一层（B 相位提议制） | ⚠️ 从两层退化为一层，未论证 |
+
 ## Decisions
 
 本 change 的决策全文、依据与砍掉的候选见 [`decision-memo.md`](./decision-memo.md)
 （D1–D14，承重约束 C1–C10，三镜代价见其「三镜代价」节）。
+
+## 失败模式表〔TG-08 · BASE-06 · spec-review-amendment SR-21〕
+
+| 码路 / 状态 | 会出什么错 | 操作者看到什么 | 处置 | 有测? |
+|---|---|---|---|---|
+| B 起手建目录 | 目录建成、草稿 memo 写失败 | 下次重入探测扫不到（无 `状态：DRAFT` 行）⇒ 呈现为「已存在的空包」，走 continue/replan 分支 | 接受（见 decision-memo「接受的边角」） | N |
+| B 增量落盘 | 两次落盘之间中断 | 已落盘内容无损，中间讨论丢 | 已声明「非零损失」 | N |
+| 重入探测 | 命中 ≥2 个 `状态：DRAFT` 包 | 逐个呈现，操作者选其一；未选的原样保留 | spec 已定义（SR-2） | N |
+| 重入探测 | memo 存在但无状态行（旧格式） | 视为未定稿，按 DRAFT 处置 | 兼容路径 | N |
+| C 生成部分失败 | 三件套只写出 1-2 个 | ⚠️ **不被重入探测覆盖**（该路径 memo 可不存在） | **接受的已知缺口**，见 Risks | N |
+| 两 session 同名并发 | 后写覆盖前写 | 无提示 | **接受**（无锁；概率低、git 可追溯、完美成本=引入锁） | N |
+| B 中途放弃（create） | — | 先复述完整路径再删目录 | spec 已定义（SR-39） | N |
+| B 中途放弃（continue/replan） | 「本次新增」不可判定 | 不自动删，task-log 记一行 | spec 已定义（SR-5） | N |
+| review 依赖不可用 | 未审 | 「未审待恢复」+ 修复步骤，**阻塞收尾** | spec 已定义（SR-12） | N |
+| 存量 footage 包续跑 | — | 至多一行冻结提示 | spec 已定义 | 6.4 fixture |
+| 存量四件套包续跑 | — | 至多一行兼容提示 | spec 已定义 | N |
+| 存量**缺件**包续跑 | 收尾 ② 引用完整性必然缺项 | 一行「缺件包，仅对现存文件核验」 | spec 已定义（SR-25） | 6.5 |
+| 全局写入版本锚不匹配 | 条目被他人/并发改过 | 停下交操作者裁决 | spec 已定义（SR-11） | N |
+
+## 可观测性〔TG-08 · BASE-11 · spec-review-amendment SR-21〕
+
+本 skill 无服务、无日志/指标/追踪面。**它的全部可观测面 = 三个人读留痕点**，如实列出：
+
+1. **判定点①②③的显式陈述行**（对话中单独一行 + 补记 task-log.md）——唯一能事后看出「路由怎么走的、
+   裁剪选了哪几维、review 分了什么档、收尾四项过没过」的地方。
+2. **memo.md 的增量落盘**——B 相位的过程可观测面；`[提议]`/`[确认]` 前缀行是全局写入的审计线索。
+3. **task-log.md 的状态字段**（`ACTIVE` / `review-waived` / `未审待恢复`）+「Review 处置」小节。
+
+**诚实边界**：以上三者**全部由执行 agent 自己写**，无任何机械捕获路径（本 skill 无脚本）。
+⇒ 「判定有没有真做」在事后不可机械核验，只能靠留痕行是否在场做弱推断。这是**合法的残余划分**，
+MUST NOT 被表述为「有可观测性保证」。
+
+## 契约文档套件 scope-check 表〔TG-25 · BASE-29 · spec-review-amendment SR-22〕
+
+> BASE-29 强调：**未列入**（清单里根本没有该文件）比**未完成**更危险——下次升级仍不会被想起。
+> 故本表枚举**全套**，包括不改的，且不改必须给理由。
+
+| 文件 | 本 change 是否改 | 不改的理由 |
+|---|---|---|
+| `sdflow-roadmap/SKILL.md` | ✓ 重写 | — |
+| `references/memo-template.md` | ✓ 重写（**保留 `状态：DRAFT/FINAL` 行**） | — |
+| `references/design-template.md` | ✓ 核对 | 实测零命中待改术语，仅核对不改 |
+| `references/roadmap-template.md` | ✓ 术语改（`:27`/`:123` 两处「产品/商业野心信号」） | — |
+| `references/task-log-template.md` | ✓ 术语改（`:86`「考古层」→「历史存档」） | — |
+| `references/long-flow-skill-paradigm.md` | ✓ wayfinder 段改历史注记 | — |
+| `openspec/specs/roadmap-planning/spec.md` | ✓ delta 覆盖 8 个 Requirement 中的 6 个 | 「design.md 需求与目标态伸缩头部章」与「新项目起步的架构先行指路」**不引用任何被删机制**，维持不动 |
+| `openspec/matt/`（4 文件） | ✓ 整体删除（**待 Q1 拍板**） | — |
+| `CLAUDE.md` / `AGENTS.md` | ✓ 删 matt 三区块（**待 Q1**） | — |
+| `sdflow-init/assets/workflow/ff-generation-constraints.md` | ✓ 加 legacy 标注 | 前缀规则本身保留（D10：消费仓存量 footage 仍可能被溯源） |
+| `sdflow-init/assets/workflow/workflow-history.md` | ✓ 追加一条 | — |
+| **`sdflow-init/assets/workflow/config.template.yaml`** | ✓ **订正**〔SR-13〕 | 原为**未列入**——`:41`/`:51` 引用的「wayfinder→ff 衔接契约」章节已不存在；且它是消费仓 config 的**生成模版**，会注入每个新下游仓 |
+| `openspec/CONTEXT.md` | ✓ **三处**词条（footage / 商业化信号 / ticket） | — |
+| `openspec/INDEX.md` | ✓ `:52` 整句重写 | — |
+| `openspec/adr/` | ✓ 新增 `0037-` | — |
+| `openspec/issues/open/todo/T134.md` | ✓ 关 `WONTDO` | — |
+| `docs/external-dependencies.md` | ✓ 删 §5 + 同步 §8 依赖图 | — |
+| **`docs/sdflow-fable5/02-module-reference.md`** | ✓ **§4.6 更新**〔SR-16〕 | 原为**未列入**——`:6` 自述「本文是活文档（非冻结快照）」，不属 Non-Goals 豁免的历史文档 |
+| `docs/drafts/roadmap-refactor-handoff.md` | ✓ 删除 | — |
+| `docs/workflow-skills/*` | ✗ | D13：历史文档、非规则源，明确不追改 |
+| `openspec/roadmaps/*`（存量包） | ✗ | 冻结条款覆盖；Non-Goals 明列「存量包结构不迁移」（T129 受控延后） |
+| `.claude/settings.local.json` | ✗ | `"office-hours": "name-only"` 是本机工具授权，与本 skill 的 office-hours 分支无关 |
+| `openspec/issues/`（T134 之外） | ✗ | 历史决策引用，非现役契约 |
 
 ## Risks / Trade-offs
 
@@ -131,9 +208,23 @@ absent ──A收束，B起手：定名 + 生命周期判定(create/continue/rep
   实施任务显式含「dev checkout 跑 `bash setup.sh`」步骤（CLAUDE.md 纪律）。
 - **[存量包续跑回归]** 冻结条款写漏某接触点（如 checklist ③ 未覆盖 footage/）→ 以
   `issues-triage-2026-08` 包做一次续跑演练（Success Metrics 第 5 条）。
-- **[下游消费仓漂移]** 下游先 pull skill（symlink 即时）后 update bundle ⇒ 短期内旧
-  `wayfinder-resolved:` 规则原文与新 SKILL 并存 → 前缀规则本身保留只加注（D10），两态兼容，
-  无行为冲突。
+- **[下游分发链路——原风险模型是错的，已订正〔spec-review-amendment SR-14〕]**
+  原文假设「bundle 改动经 `sdflow-init update` 推下游」，与实际机制不符：
+  `sdflow-init/scripts/init.py:213` 明写「**默认只铺 `tools/` 子树**（规则经全局 canonical 解析，
+  不复制进消费仓）；`full=True` 整 bundle 铺设**仅供 toolkit 源仓 `update --dev`**」
+  ⇒ 消费仓跑 `update` **根本收不到** `ff-generation-constraints.md` / `workflow-history.md` /
+  `config.template.yaml` 的改动；它们经 `~/.sdflow/workflow/`（软链到运行 checkout）解析，
+  **与 skill symlink 走同一条通道** ⇒ 「skill 即时 vs bundle 手工」的非原子窗口**在默认拓扑下不存在**。
+  **真正的风险面是另一个**：持有本地 `openspec/workflow/` 规则副本（pin）的消费仓——它遮蔽全局
+  且 `update` 不刷新（`init.py:329` 的「反静默守卫·陈旧遮蔽」正为此而设）。这类仓会长期停在旧规则上。
+  处置：前缀规则保留只加注（D10）两态兼容；pin 仓由既有陈旧遮蔽告警提示，本 change 不新增机制。
+- **[直接生成路径的半成品无人认领]** gate-0 过 ∧ 无商业化信号的路径允许 memo 不存在，而重入探测
+  只扫未定稿 memo ⇒ C 相位写到一半中断留下的残包不被任何机制发现（见失败模式表）。
+  **接受**：概率低（C 相位是连续写盘、无人类往返）、影响可逆（残包可见、可手删）、
+  完美成本 = 给直接生成路径也强制建 memo（与 D6「直接生成」的轻量意图冲突）。如实声明，不称已覆盖。
+- **[七维 B 相位的摩擦增量未量化〔SR-40〕]** 新增七维拷问对「gate-0 未过」的请求是净增交互轮次，
+  四件套未给出任何量化或体感评估。**接受**：目标态本就要求把 office-hours 的验证能力内化，
+  摩擦是该能力的成本而非缺陷；但收尾时应回看一次实际轮次，若显著超预期则调裁剪基准。
 - **[术语改名遗漏]** 「野心/结晶」残留 → 收尾 grep 不带 `--include` 全量扫（含 .py/.sh/.yml），
   历史文档（docs/、archive/）白名单排除。
 

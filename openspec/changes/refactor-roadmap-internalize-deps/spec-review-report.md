@@ -472,7 +472,27 @@ $ grep -c "SA-14" openspec/specs/spec-authoring/spec.md   → 0
 
 ---
 
-## 五、收敛口
+## 五、已应用的订正（Step4）
+
+**已改**：37 条 findings 的修复已直接落进四件套，改动处标 `[spec-review-amendment SR-N]`
+（共 **59 处**标记：spec delta 22 / tasks 18 / decision-memo 8 / proposal 6 / design 5）。
+改后 `openspec validate --strict --type change` **仍绿**。要点：
+
+| 文件 | 主要订正 |
+|---|---|
+| `specs/roadmap-planning/spec.md` | memo 定稿标记 `状态：DRAFT/FINAL`（SR-2）· B 停止条件三态终态（SR-6）· continue/replan 改为**不自动删**（SR-5）· 提议制**先记 memo、终稿后才写全局** + `[提议]`/`[确认]` 前缀 + 版本锚（SR-9/10/11）· 判定点①改「先陈述、建包后补记」（SR-26）· 未审待恢复**阻塞收尾**（SR-12）· 缺件存量包条款（SR-25）· 删除前复述路径（SR-39）· 维度裁剪覆盖口（SR-41）· **新增 8 个 Scenario**（create 主干 / 停止条件 / 提议写入时机 / continue 放弃 / 新产品全七维 / ①加重跨态 / 未审阻塞 / 整体 plan 话术） |
+| `tasks.md` | 5.3 `OBSOLETE`→`WONTDO` + `--reason`（SR-3）· 6.2 改「相对 merge-base 无新增失败」并写明 baseline 已有无关红（SR-18）· 6.4 改构造 fixture（SR-4）· 6.1 词表加 `footage`/`三分支路由`/`Tracker root`、白名单改**规则化**并显式列 7 类（SR-7/16）· 新增 4.3 `config.template.yaml` / 4.5 还原步 / 5.6 活文档 / 6.5 缺件演练 / 6.6「保留」节逐句核对 / 6.8 主 spec 提升后核验 / 1.9 七处内嵌残留 / 1.10 实战案例显式处置 · 测试覆盖图加「是不是机械门」列 + 诚实边界（SR-19） |
+| `decision-memo.md` | C1 改写（仓外 4 个消费方）+ 新增 C1b（时间线）· C3 改写为目标态论证 · C8 改写为三处 · D9 三步 · D11 状态码 · **补 4 类边角显式裁定**（SR-30/27）· **补 D4/D5/D8 三镜 + 主次判定**（SR-23） |
+| `design.md` | 补**失败模式表**（13 行）+ **可观测性**节（SR-21）· 补 **BASE-29 scope-check 表**（23 行，含 2 个「未列入」项）（SR-22）· 补**与 sdflow-spec 分叉表**（6 行）（SR-35）· Risks 分发模型订正（SR-14）· 第零步重入探测提级（SR-36） |
+| `proposal.md` | Why 段拆两类依赖（SR-31，含 office-hours 双宿主实测）· TG-20 分发模型订正（SR-14）· TG-22 兜底改为「无自动化兜底」（SR-20）· Success Metrics 订正 + 诚实边界（SR-18/19）· Impact 补三处遗漏文件 |
+
+**未改（6 条，等你拍板）**：`Q1` 与 `Q2` 本身，及依赖它们的
+D2 论证措辞、`tasks.md` 第 3 节（matt 删除）的去留、`proposal.md` BREAKING 段、
+`design.md` 组件表 matt 行、ADR（D14）内容、以及 Q2 若选 A 需在 spec 补的「未决项」小节。
+
+🔴 **这意味着当前盘面已不同于镜子审过的 `c78c02c`** —— 见收敛口第 3 步。
+
+## 六、收敛口
 
 **不建议直接进设计 HARD-GATE 放行。** 建议序列：
 
