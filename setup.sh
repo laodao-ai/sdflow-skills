@@ -23,11 +23,18 @@ skipped=()
 cleaned=()
 
 # marker 兼容收窄（D5）：.sdflow-skills 一律自属；.laodao-skills 仅限我方名单（防误伤 laodao misc 拷贝）
-OUR_LEGACY_NAMES=" opsx-project-init opsx-done opsx-maintain opsx-roadmap-planner spec-review impl-review buglist-recorder todolist-recorder issues-recorder sdflow-init sdflow-done sdflow-maintain sdflow-roadmap sdflow-spec-review sdflow-code-review sdflow-buglist sdflow-todolist sdflow-issues embedded-test-sop openspec-upgrade sdflow-upgrade "
+OUR_LEGACY_NAMES=" opsx-project-init opsx-done opsx-maintain opsx-roadmap-planner spec-review impl-review buglist-recorder todolist-recorder issues-recorder sdflow-init sdflow-done sdflow-maintain sdflow-roadmap sdflow-spec-review sdflow-code-review sdflow-buglist sdflow-todolist sdflow-issues sdflow-upgrade "
+# 已迁至 laodao-skills。旧安装器只回收仍指向本仓的安装项，不接管新仓的链接或副本。
+MIGRATED_SKILL_NAMES=" openspec-upgrade embedded-test-sop "
 is_our_marker_copy() {  # $1 = 目录路径
   local name="$(basename "$1")"
   [ -f "$1/.sdflow-skills" ] && return 0
   [ -f "$1/.laodao-skills" ] && case "$OUR_LEGACY_NAMES" in *" $name "*) return 0 ;; esac
+  return 1
+}
+
+is_migrated_skill() {  # $1 = skill 名称
+  case "$MIGRATED_SKILL_NAMES" in *" $1 "*) return 0 ;; esac
   return 1
 }
 
@@ -165,6 +172,36 @@ cleanup_orphans() {
       fi
     fi
   done < <(find "$dest" -mindepth 1 -maxdepth 1)
+}
+
+# ─── Remove source-owned installs for skills migrated to laodao-skills ──────
+cleanup_migrated_skills() {
+  local dest="$1" skill_name target link_dest
+  [ -d "$dest" ] || return 0
+
+  for skill_name in $MIGRATED_SKILL_NAMES; do
+    target="$dest/$skill_name"
+    [ -e "$target" ] || [ -L "$target" ] || continue
+
+    if [ -L "$target" ]; then
+      link_dest="$(readlink "$target" 2>/dev/null || true)"
+      case "$link_dest" in
+        "$REPO_NAME"/*|*/"$REPO_NAME"/*|*/sdflow-skills/*|sdflow-skills/*)
+          ;;
+        *)
+          continue
+          ;;
+      esac
+    elif ! is_our_marker_copy "$target"; then
+      continue
+    fi
+
+    if ! rm -rf "$target" 2>/dev/null; then
+      skipped+=("$skill_name @ $dest — 已迁至 laodao-skills，但旧安装项删不掉（只读？权限？）")
+      continue
+    fi
+    cleaned+=("$skill_name @ $dest — 已迁至 laodao-skills")
+  done
 }
 
 # ─── Agent definitions → ~/.claude/agents/ (D11) ─────────────
@@ -612,6 +649,7 @@ check_dependencies() {
 
 for d in "${TARGET_DIRS[@]}"; do
   install_into "$d"
+  cleanup_migrated_skills "$d"
   cleanup_orphans "$d"
 done
 install_agents

@@ -2,7 +2,7 @@
 
 围绕 **OpenSpec 规格驱动流程（spec-driven flow）** 的 Claude Code / Codex 自建 skills 集合，
 隶属老刀AI码场自建 skills 体系。提供一条从「铺工作流 → 生成变更 → 设计审 → 代码审 → 收尾归档」
-的规格驱动开发（SDD）闭环，外加缺陷 / 待办 / 批次的记录工具与嵌入式测试 SOP 生成。
+的规格驱动开发（SDD）闭环，外加缺陷 / 待办 / 批次的记录工具。
 
 本仓库同时是这套 spec 工作流 bundle 的 **权威源**（见下方[工作原理](#工作原理)），
 既产出工作流资产、又用它管理自身变更（dogfooding）。
@@ -40,7 +40,6 @@ git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && 
 |------|-------|------|
 | 工作流铺设/维护 | `sdflow-init` | 一键把整套 OpenSpec spec 工作流 bundle 铺进任意项目（本仓库是该 bundle 权威源） |
 | 工作流铺设/维护 | `sdflow-maintain` | 扫描 openspec 目录状态、对比 INDEX、报告差异并修复 |
-| 工作流铺设/维护 | `openspec-upgrade` | 升级 openspec CLI（`@fission-ai/openspec`）并刷新项目内 openspec skills |
 | 工作流铺设/维护 | `sdflow-upgrade` | 运行 checkout 一键升级：pull → setup → 版本展示（堵 pull→setup 窗口期） |
 | 生成（阶段一） | `sdflow-spec` | 阶段一·产 spec 单一入口：澄清 → 拷问 → 生成三相位一次连续跑，拷问结构性前置于成文；产四件套 + 承重的 `decision-memo.md`（`/clear` 无损）。只能人手动触发 |
 | 评审（主审） | `sdflow-spec-review` | 阶段二·设计审主审：并行多镜（领域+对抗+接地读码）→ 一份 spec-review-report |
@@ -53,10 +52,14 @@ git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && 
 | 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，直写产出 design/roadmap/task-log 三件套（可选 memo），不经 change 壳 |
 | 记录（issues 台账） | `sdflow-issues` | issues 台账单一 skill：bug 池（缺陷记录 + 状态回写 OPEN→VERIFIED→FIXED，B-ID）+ todo 池（改进 / 技术债，T-ID）两池记录，跨池 `issues/INDEX.md` 重建与批次注册表维护，保证 ID 不撞号、总览/详情双写一致 |
 | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
-| 测试 | `embedded-test-sop` | 为嵌入式固件功能生成手动测试 SOP + 配套日志自动分析规则（log-checks.yaml） |
 
 > `sdflow-issues`、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**（带 `scripts/` + `tests/`），
 > 由脚本保证确定性；其余（含 `sdflow-roadmap`）为纯 Markdown 编排类。
+
+> **已迁出 skills**：`openspec-upgrade` 与 `embedded-test-sop` 由
+> [laodao-skills](https://github.com/laodao-ai/laodao-skills) 维护。更新本仓后运行一次
+> `bash setup.sh` 会仅清理仍指向本仓的旧安装项；随后在 laodao-skills 运行
+> `bash setup.sh` 完成接管。
 
 > **曾用名对照**（改名于 `sdflow-rebrand`，历史 PR / issue / 本地记忆若引用旧名，按此表换算）：
 >
