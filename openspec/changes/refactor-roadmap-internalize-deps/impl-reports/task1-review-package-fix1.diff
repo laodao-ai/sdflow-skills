@@ -1,0 +1,126 @@
+# Review package: 492be1d..41c81ee (Task 1 fix round 1, 增量)
+
+## Commits
+41c81ee fix(sdflow-roadmap): 补 FINAL 写入指令 + 消除裁剪规则重复
+
+## Files changed
+ .../impl-reports/task1-skill-rewrite-fix1.md       | 57 ++++++++++++++++++++++
+ sdflow-roadmap/SKILL.md                            |  6 +--
+ 2 files changed, 60 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task1-skill-rewrite-fix1.md b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task1-skill-rewrite-fix1.md
+new file mode 100644
+index 0000000..dbaea60
+--- /dev/null
++++ b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task1-skill-rewrite-fix1.md
+@@ -0,0 +1,57 @@
++# Task 1 — 双轴审 fix 轮（FIX-1 / FIX-2）
++
++修复对象：`sdflow-roadmap/SKILL.md`。对应首轮报告 `task1-skill-rewrite.md`（不覆盖，本文件是追加的 fix 记录）。
++
++## FIX-1（Critical，Spec 轴）：`状态：FINAL` 写入指令全文缺失
++
++**权威依据**（改前已打开核实）：
++- `openspec/changes/refactor-roadmap-internalize-deps/specs/roadmap-planning/spec.md:43` —— 「**写入时机**：B 起手写 `DRAFT`；🔴 **`FINAL` SHALL 只在收尾 checklist 四项全过之后写入**（附定稿日期），**MUST NOT 在 B 收敛时就改写**」
++- `openspec/changes/refactor-roadmap-internalize-deps/design.md:120` —— 状态机图「定稿包 ◀──收尾四项过（判定点③）+ memo 置 FINAL ──」
++
++**修法与落点**：`sdflow-roadmap/SKILL.md:517`（收尾 checklist 四项软门节，紧接第④项之后、原「软提示纳入版本控制」句之前）新增一条 SHALL 指令：
++
++> 四项全部通过后，**SHALL** 将该包 `memo.md` 头部的 `状态：DRAFT` 改写为 `状态：FINAL`（附定稿日期）——该行是第零步重入探测唯一识别的定稿标记，四项软门通过即视为定稿。**MUST NOT 在相位 B 收敛时就提前改写**：B 收敛之后还要走相位 C 生成与 review 处置，此间若中断（如三件套只写出 1-2 个）而已置 `FINAL`，重入探测（只扫 `状态：DRAFT`）就再也认不出这个半成品包，直接击穿第零步机制自身要保护的目标。
++
++未扩写该节其余内容，仅补这一条缺失指令。
++
++## FIX-2（Minor，Standards 轴）：裁剪规则两处逐字重复
++
++**修法与落点**：`sdflow-roadmap/SKILL.md:319`（相位 A 三态路由 ASCII 图注，原 :319-321 三行具体维度组合）改为一行指针句：
++
++> 裁剪规则见下文「七维拷问与裁剪表」
++
++只保留三态状态编号（①②③）与流转箭头，不再复述「技术重构 → ②③④⑤⑦」「新产品/新项目 → ①②④⑤⑥⑦」「商业化信号命中 → ① 加重逼问」三条具体维度组合。相位 B「七维拷问与裁剪表」（:356-361，权威源）原样保持不动。
++
++**未处理的第三处同串命中（不在本次 finding 范围内，如实记录）**：`grep -n "②③④⑤⑦"` 改后仍有 2 处命中（`:356` 权威表 + `:332`）。`:332` 位于「路由对照表（自检基准）」节（相位 A 三态路由自检示例表，:330-338），是一行**示例行**（"帮我做一个未来半年的博客重建 roadmap……" → "状态③：相位 B 按技术重构裁剪基准跑 ②③④⑤⑦"），用于说明"给定开场白应落哪个路由状态"，不是本次 finding 指认的「逐字重复同一条规则陈述」的第二个位置（finding 明确指认的两处是 :319-320 图注 与 :358-359 表侧）。该行是否也应改为指针句不在本轮授权范围内（编排层 finding 未提及、非我自行扩权判断），故未动。如需处理需回编排层确认范围。
++
++## 核验（亲跑，实际输出）
++
++1. `python3 hack/sync_principles.py --check`
++   ```
++   [sync_principles] ✅ 20 个投放面全部与真相源一致
++   ```
++   退出码 = 0。托管块未被碰。
++
++2. `grep -n "FINAL" sdflow-roadmap/SKILL.md`
++   ```
++   517:四项全部通过后，**SHALL** 将该包 `memo.md` 头部的 `状态：DRAFT` 改写为 `状态：FINAL`（附定稿日期）——...
++   ```
++   命中且在收尾 checklist 节内（四项之后、版本控制软提示之前）。
++
++3. `grep -n "②③④⑤⑦" sdflow-roadmap/SKILL.md`
++   ```
++   332:| "帮我做一个未来半年的博客重建 roadmap，从选主题到迁移" | ... | 状态③：相位 B 按技术重构裁剪基准跑 ②③④⑤⑦ |
++   356:| 技术重构 | ②③④⑤⑦ 为主，①⑥按需 |
++   ```
++   图注侧（原 :319-320）的具体维度组合已清空、改为指针句；`:356` 表侧权威源保持不动；`:332` 为自检示例表的既有内容，不在本次 finding 范围内（见上节说明），非漏改。
++
++4. `git diff --stat` / `git diff sdflow-roadmap/SKILL.md`
++   ```
++    sdflow-roadmap/SKILL.md | 6 +++---
++    1 file changed, 3 insertions(+), 3 deletions(-)
++   ```
++   两处改动均已落盘（图注三行 → 一行指针句；收尾节新增一段 FINAL 写入指令）。
++
++## 状态
++
++`DONE`
+diff --git a/sdflow-roadmap/SKILL.md b/sdflow-roadmap/SKILL.md
+index 3e041b3..9fb0f15 100644
+--- a/sdflow-roadmap/SKILL.md
++++ b/sdflow-roadmap/SKILL.md
+@@ -309,23 +309,21 @@ roadmap 的质量 100% 取决于讨论是否充分。相位 A 收束前 **SHALL*
+ 信号词表（与 review 分档共用同一张表）：**外部用户、变现、获客、"用户画像未定"、"要不要做这个产品"**。典型例子：面向外部用户的 SaaS、社区、付费工具。**不触发**的场景（绝大多数）：技术重构、内部工具、基础设施、博客/文档工程、个人项目。
+ 
+ ### 三态路由（判定点①）
+ 
+ ```
+ 相位 A：澄清 → gate-0 五项 + 商业化信号检查（两关独立）
+   │
+   ├─ ① gate-0 过 ∧ 无商业化信号 ──────────────▶ 相位 C 直接生成
+   ├─ ② gate-0 过 ∧ 商业化信号命中 ─▶ 相位 B（裁剪到维度①，startup 味逼问）─▶ 相位 C
+   └─ ③ gate-0 未过 ──────────────▶ 相位 B（按信号裁剪七维）──────────────▶ 相位 C
+-                                      技术重构 → ②③④⑤⑦ 为主（①⑥按需）
+-                                      新产品/新项目 → ①②④⑤⑥⑦（六维；③ 不选入）
+-                                      商业化信号命中（跨②③两态）→ ① 加重逼问
++                                      裁剪规则见下文「七维拷问与裁剪表」
+ ```
+ 
+ **MUST NOT** 依赖事前轮数预估——判据只认信号，不认计数。
+ 
+ 判定依据 **SHALL** 在对话中单独一行显式陈述（不埋进长消息，含本次实际选入的拷问维度子集）。**留痕时点**：相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，故该行 **SHALL** 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记进 task-log.md，**MUST NOT** 要求在包尚不存在时写入该文件。
+ 
+ **操作者覆盖**：操作者显式要求增删本次拷问维度（如「这次不用问⑦」「把⑤也加上」）时 **SHALL** 遵从，并把偏离与理由记入判定点①的留痕行——与 review 分档的「显式覆盖」先例同构。
+ 
+ ### 路由对照表（自检基准）
+ 
+@@ -509,20 +507,22 @@ review 产出的每条 issue **SHALL** 在 task-log.md「## Review 处置」小
+    - **本项通过 =** 脚本判 `section-ok-DISPOSITION-UNCHECKED`（退出 0）**且**你复核小节内每条 issue 均标了上文「review 结果如何处理」的状态枚举之一、无遗留未处置条目。
+ 
+ **② 三件套相互引用完整（最小引用图判定）**：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次；task-log.md 每条完成记录关联 roadmap.md 阶段；design 头部章与决策段无同值重复（只准互相引用，不准复述）。**不通过时报出具体文件与行号**，**MUST NOT** 笼统宣称「完整/不完整」。已细化阶段的回指采用「（见 design.md 决策 N）」锚点句式（`references/roadmap-template.md` 已含示例注释）。存量四件套包/逃生舱包（见「产出模式」节）本项判定范围 = 三件套两两引用 + `requirements.md` 按其历史约定核对；「头部章无重复」子判据对无头部章的 legacy 包记 `N/A`（`N/A` 为合法第三态，须显式陈述，不计入不通过）。**缺件存量包**（见「产出模式」节）判定标准对缺失文件（design.md / task-log.md）记「不适用」而非「不通过」，并输出一行「存量缺件包（缺 X），引用完整性仅对现存文件核验」提示——`N/A` 为合法第三态。
+ 
+ **③ 历史存档未被引用**：存量 `footage/`（如有）与包根 `memo.md`（如有）均未被三件套引用。
+ 
+ **④ memo 对账 + 未决项闭环**：
+ - **memo 对账**：相位 B 期间经提议制确认的全局写入条目——即 memo.md 中带 `[确认]` 固定前缀、记有目标路径 / 精确条目名 / 写入前版本锚的那些行——逐条对照三件套终稿：与终稿一致者此时才实际写入 `openspec/CONTEXT.md` / `openspec/adr/`；被终稿推翻者标 `superseded`（或 revert）并在 task-log.md 记一行，**MUST NOT** 让讨论期临时判断以定稿姿态留存全局共享文件。**归属核验**：对已存在的条目执行 supersede / revert 前 **SHALL** 先比对其版本锚是否仍匹配，不匹配（说明该条目在本次讨论期间被他人或并发流程改过）**SHALL** 停下交操作者裁决，**MUST NOT** 盲改。未经提议制的写入不在本项核对范围（指令层约束的诚实边界，**SHALL** 如实声明而非宣称机械保证）。
+ - **未决项闭环**：memo.md 的 `## 未决项` 小节非空时，**SHALL** 逐条标 `已决` / `显式延后`（附再触发条件）/ `放弃`（附理由）之一——**MUST NOT** 带未处置的未决项宣告定稿；操作者坚持越过时 **SHALL** 在 task-log.md 记一行「带 N 条未决项定稿」+ 理由（显式越权留痕），**MUST NOT** 静默通过。
+ 
++四项全部通过后，**SHALL** 将该包 `memo.md` 头部的 `状态：DRAFT` 改写为 `状态：FINAL`（附定稿日期）——该行是第零步重入探测唯一识别的定稿标记，四项软门通过即视为定稿。**MUST NOT 在相位 B 收敛时就提前改写**：B 收敛之后还要走相位 C 生成与 review 处置，此间若中断（如三件套只写出 1-2 个）而已置 `FINAL`，重入探测（只扫 `状态：DRAFT`）就再也认不出这个半成品包，直接击穿第零步机制自身要保护的目标。
++
+ 四项通过后，**SHALL** 软提示将包纳入版本控制（`git add`/`git commit`，软提示而非强制，与 recorder 先例对齐）。
+ 
+ ---
+ 
+ ## 命名规范
+ 
+ - **kebab-case**，语义化
+ - 动词开头优先（表达"要做什么"）
+ - 长度建议 ≤ 30 字符
+ - 例：`rebuild-blog-v2`、`migrate-to-postgres`、`unify-auth-system`、`add-analytics-pipeline`
