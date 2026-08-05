@@ -36,7 +36,17 @@ grep -rlE 'wayfinder|office-hours|grilling|domain-modeling|openspec/matt|footage
 | LEGIT — 已按本 change 其它票要求更新到位（含 `footage`/`历史存档`/`商业化信号` 等目标态术语的正确留用） | 9 | `CLAUDE.md`（:183-184 DOC-1 语境「考古层」原样、:190「存量 footage 冻结包」为目标态正确术语）、`openspec/CONTEXT.md`（5.2 三词条）、`openspec/INDEX.md`（5.5 摘要行）、`docs/sdflow-fable5/02-module-reference.md`（5.6 §4.6）、`docs/external-dependencies.md`（5.4，另见下方残留#2）、`sdflow-roadmap/references/long-flow-skill-paradigm.md`（2.3 历史注记）、`sdflow-roadmap/references/task-log-template.md`（2.2 术语改）、`sdflow-roadmap/SKILL.md`（1.x 重写，另见下方残留#1） |
 | DEFERRED（明确不在本票范围） | 1 | `openspec/specs/roadmap-planning/spec.md`——**主 spec**（非本 change 的 delta 副本），delta 尚未经 `sdflow-done` archive 步合入，当前内容合法地仍是旧态；`tasks.md` 6.9 已明文将「归档后重扫此文件」列为独立后续任务，由 archive 步承接，本票不改 |
 
-**合计** 56+22+12+3+2+2+1+1+1+1+1+1 = 103（白名单/同形异义/越域/deferred 类） + 9（LEGIT，含 2 处发现并已修复的真残留）= 113 ✓
+**合计** 56+22+12+3+2+2+1+1+1+1+1+1+1 = 104（白名单/同形异义/越域/deferred 类，**13 项**）
++ 9（LEGIT，含 2 处发现并已修复的真残留）= **113** ✓
+
+> 〔双轴审 Spec 轴 Important 订正〕原算式写作 `…+1+1 = 103`，只列了 **12** 个数——**漏掉 `DEFERRED` 那一项**
+> （上表 14 行类别中除 LEGIT 外共 13 项），故 `103 + 9 = 112 ≠ 113`，自查 ✓ 在字面上站不住。
+> 订正后：非 LEGIT 13 项求和 = 104，`104 + 9 = 113`，与总命中数一致。
+> **总数 113 本身未受影响**——编排层已用 `git --no-pager grep -lIE '<同一词表>' | wc -l` 在当前 HEAD 独立复算得 113。
+>
+> ⚠️ 该总数会**随本 change 自身产物落盘而单调增长**（报告、review-package、brief 等文件本身含词表词），
+> 属自指增长、非真实残留：Task 5 Standards 轴 reviewer 在更晚的时点复算得 115，差值即为扫描后新落盘的
+> 两个文件。**复算时 MUST 记录复算时点的 HEAD**，否则数字对不上会被误判为漏记。
 
 ### 发现并已修复的真残留（2 条，均超出七条白名单，判定为需修复的悬空引用）
 
