@@ -7,15 +7,9 @@ WF = _WFDIR / "workflow.md"
 STEP6 = _WFDIR / "prompts" / "step6-writing-plans.md"
 
 def test_orchestrator_entry_row():
-    """`/sdflow-ship` 编排层入口行须点名它驱动的 gate 步骤范围。
-
-    simplify-workflow 删掉了条件步骤 5.5（embedded-test-sop/RUN_SOP）后，阶段三步骤表从
-    5-8（写计划 → SDD → 代码审 → done）连续编号，不再有半号步骤——"5.5" 不该再出现在
-    workflow.md 里，锚改为当前真实的驱动区间 "5→8"（与 workflow.md §二 步骤表、
-    sdflow-ship/SKILL.md description 三处同源）。
-    """
+    """`/sdflow-ship` 在步骤表中作为阶段三的唯一顶层步骤（步骤 5）。"""
     t = WF.read_text(encoding="utf-8")
-    assert "/sdflow-ship" in t and "5→8" in t
+    assert "/sdflow-ship" in t
     assert "5.5" not in t, "workflow.md 不该再出现已退役的条件步骤 5.5（embedded-test-sop）"
 
 def test_decision4_no_self_confidence():

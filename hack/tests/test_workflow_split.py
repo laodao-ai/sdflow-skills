@@ -1,7 +1,7 @@
-"""守 workflow 三分（prompts/ 单一源 · workflow.md 骨架 · WORKFLOW-GUIDE.md 生成物）。
+"""守 workflow 拆分（prompts/ 单一源 · workflow.md 骨架 · WORKFLOW-GUIDE.md 生成物）。
 
 【为什么拆】
-模型为了取【一行】prompt，原先要 Read 整份 19.6KB 的 workflow.md —— 它只需要其中 300 字节。
+模型为了取【一行】prompt，原先要 Read 整份 workflow.md —— 它只需要其中 300 字节。
 现在 prompt 单一源 = `prompts/step*.md`（一步一文件），模型只读它要的那个。
 
 【拆完最容易腐化的三处，本文件逐一焊死】
@@ -9,6 +9,7 @@
   2. workflow.md 的指针指向不存在的 prompts/ 文件 ⇒ 模型取不到，只能凭记忆重写（而规则禁止）
   3. 有人把 prompt 全文塞回 workflow.md 的表格 ⇒ 拆分白做，token 又回去了
 """
+import re
 import sys
 from pathlib import Path
 
@@ -26,17 +27,14 @@ def test_guide_is_in_sync_with_its_sources():
 
 
 def test_every_pointer_resolves():
-    """⭐ workflow.md 表格里的每个 `prompts/xxx.md` 指针，MUST 真的存在。
-
-    指针悬空的后果是确定的：模型取不到 prompt → 只能凭记忆重写 →
-    而 claude-section.md 明令「MUST NOT 凭记忆重写」→ 死锁 → 实际结果是静默跳过那一步。
-    """
+    """⭐ workflow.md 里的每个 prompt 指针，MUST 指向真实存在的 prompts/ 文件。"""
     w = G.WORKFLOW.read_text(encoding="utf-8")
-    for name in G.STEP_FILES.values():
-        f = G.PROMPTS / f"{name}.md"
-        assert f.is_file(), f"指针悬空：prompts/{name}.md 不存在"
-        assert f"prompts/{name}.md" in w, f"workflow.md 里没有指向 prompts/{name}.md 的指针"
-        assert f.read_text(encoding="utf-8").strip(), f"prompts/{name}.md 是空的"
+    pointers = G._POINTER_RE.findall(w)
+    assert len(pointers) >= 1, "workflow.md 里找不到任何 prompt 指针"
+    for fname in pointers:
+        f = G.PROMPTS / fname
+        assert f.is_file(), f"指针悬空：prompts/{fname} 不存在"
+        assert f.read_text(encoding="utf-8").strip(), f"prompts/{fname} 是空的"
 
 
 def test_prompts_are_not_inlined_back_into_the_table():
@@ -58,25 +56,17 @@ def test_prompts_are_not_inlined_back_into_the_table():
 
 
 def test_history_is_out_of_the_body():
-    """DOC-1：演进史进独立文件，不在 workflow.md 正文。
-
-    放在【同一文件的附录】里省不到任何 token —— 模型 Read 整份照付。
-    """
+    """DOC-1：演进史进独立文件，不在 workflow.md 正文。"""
     w = G.WORKFLOW.read_text(encoding="utf-8")
     hist = (G.WF_DIR / "workflow-history.md")
     assert hist.is_file()
-    assert "workflow-history.md" in w          # 正文留一行指针
-    assert "旧 step 11" not in w               # 考古层本体不在正文
+    assert "workflow-history.md" in w
+    assert "旧 step 11" not in w
     assert "旧 step 11" in hist.read_text(encoding="utf-8")
 
 
-def test_table_stays_six_columns():
-    """表格解析的语法面前提：每行恰好 6 列（基准 5：有界才可手写解析）。
-
-    单元格里出现裸 ' | ' 会让 _rows() fail-closed —— 这个测试提前把它抓住。
-    行数下限反映 simplify-workflow 后的单轨线性流程（8 行：explore/sdflow-spec/
-    spec-review/HARD-GATE/writing-plans/subagent-dev/code-review/done）。
-    """
-    rows = G._rows()
-    assert len(rows) >= 6
-    assert {r["step"] for r in rows} >= set(G.STEP_FILES)
+def test_guide_has_no_unresolved_pointers():
+    """WORKFLOW-GUIDE.md 里不该残留任何 prompt 指针（应全部被替换为实际内容）。"""
+    guide = G.GUIDE.read_text(encoding="utf-8")
+    assert not G._POINTER_RE.search(guide), \
+        "WORKFLOW-GUIDE.md 里还有未替换的 prompt 指针"

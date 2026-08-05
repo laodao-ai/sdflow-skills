@@ -1,6 +1,6 @@
 ---
 name: sdflow-ship
-description: 阶段三编排器——对已过设计门的 OpenSpec change 一次调用驱动 5→8（实现管线 → sdflow-code-review → sdflow-done→merge）。触发：「/sdflow-ship」「ship 这个 change」「阶段三跑到 merge」「过完设计门了，跑起来」。不含裸"ship"泛化触发。
+description: 阶段三编排器——对已过设计门的 OpenSpec change 一次调用驱动到底（实现管线 → sdflow-code-review → sdflow-done→merge）。触发：「/sdflow-ship」「ship 这个 change」「阶段三跑到 merge」「过完设计门了，跑起来」。不含裸"ship"泛化触发。
 ---
 
 # sdflow-ship — 阶段三编排器（盘面即状态）
