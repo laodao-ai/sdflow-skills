@@ -186,7 +186,7 @@ def test_live_unclosed_design_refuse_with_hint(repo):
     # [T74 1.5/3.1b] 首行 --- 无闭合的 spec-review-report → design 读点 absent → REFUSE_START(3)，
     # 且 emit reason 含结构提示子串（提醒补闭合行）。
     d = mkchange(repo)
-    d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")  # 非嵌入式避 RUN_SOP
+    d.joinpath("proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     d.joinpath("spec-review-report.md").write_text(UNCLOSED, encoding="utf-8")
     commit_all(repo, "seed")
     code, js, _ = run_gate(repo)

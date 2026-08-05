@@ -25,8 +25,8 @@ ship-gate frontmatter 字段（下划线命名，防与旧 inline 锚字面连�
         fail-closed，**MUST NOT** 回退任何反推式锚（旧 `report_last_sha` 已退役）。
         〔impl-review-fix F1〕此校验对 code / verify 两域**无条件**成立——`decide()` 每次经过
         对应分支都会调 `is_stale` 求值。对 design 域（spec-review-report.md）**不是普遍保证，
-        只是窗口内保证**：`is_stale` 唯一由 `emit_windowed`/`guard_design_freshness` 在 RUN_SOP /
-        RUN_PLAN / CONTINUE_IMPL 三入口各自 emit 前调用（ADR-3 限定求值窗口）；窗口关闭后
+        只是窗口内保证**：`is_stale` 唯一由 `emit_windowed`/`guard_design_freshness` 在
+        RUN_PLAN / CONTINUE_IMPL 两入口各自 emit 前调用（ADR-3 限定求值窗口）；窗口关闭后
         （code-review-report.md 出现起）design 报告即便整份缺 `reviewed_sha` 也不再被读取或
         校验，可正常随 SHIPPED 判定过门。「窗口右边界间隙」（见下文已知不覆盖条目）内，连
         `reviewed_sha` 字段存不存在都不在窗口外检查。
@@ -42,7 +42,6 @@ inline 锚行字面集（grep -F 语义，零正则；Task6 后**仅归档读半
 
 verdict × exit × next 契约表:
     REFUSE_START     3  -                  未过设计门（补锚）｜change 不存在（active 与 archive 均无）〔B3〕
-    RUN_SOP          0  embedded-test-sop  TG-02 命中且 {change}-sop.md 缺
     RUN_PLAN         0  writing-plans      计划文件缺（tickets.md / superpowers-plan.md 均未找到）
     CONTINUE_IMPL    0  subagent-dev       plan_ids⊄done_ids〔B4 集合归属〕（JSON done_tasks=计划内已完成号集，SDD 勿重派）
     RUN_CODE_REVIEW  0  sdflow-code-review code-review-report.md 缺
@@ -79,8 +78,8 @@ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-lay
         归一化后逐行等值；**常开、按内容切、不按阶段切**，勾选框写入方是 agent 自由行为非 SKILL 契约）；
         其余任何差异（含 tasks.md 单侧缺失，属合法「缺失」信号，MUST NOT 混作读失败）⇒ stale。
         `-z` MUST NOT 省略（同时关路径 C-quote）；解析按 \0 切记录、首个 \t 切分，path 保持原始字节。
-    design **求值窗口**〔ADR-3 限定窗口〕: design 域失鲜**只在**实现窗口（RUN_SOP / RUN_PLAN /
-        CONTINUE_IMPL）三入口各自 emit 前求值（`emit_windowed` 是唯一实现点）；进入代码审后不再求值——
+    design **求值窗口**〔ADR-3 限定窗口〕: design 域失鲜**只在**实现窗口（RUN_PLAN /
+        CONTINUE_IMPL）两入口各自 emit 前求值（`emit_windowed` 是唯一实现点）；进入代码审后不再求值——
         判据只在它保护的风险（照着已变的设计继续建）真实存在的阶段求值。代码审期 / done 期对四件套的
         修订是文档对账、非「目标在移动」，落窗口外。
     code（verify / code_review 锚）〔ADR-2 比内容〕: 比锚与 HEAD 的**顶层条目**浅层映射
@@ -142,8 +141,6 @@ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-lay
     〔ADR-5〕互斥锚对（verify PASS/FAIL）若遇未闭合 ``` fence 吞掉负锚，
         不得因此误判 pass——保守判 none（archived，
         archived_verify_state），宁可判定不能也不假阳；
-    〔ADR-6〕tg02_hit 触发检测 = 声明式匹配全角括号头注 `〔TG-02`（ff 强制格式），非裸子串——
-        描述性提及/代码引用/否定句（如提及 "TG-01/02/03"）不再误触发 RUN_SOP；
     多行 HTML 注释内嵌锚不解析：不判断锚是否落在更大的 `<!-- ... -->` 多行注释块「内部」被
         整体注释掉——模板锚本身即单行注释，独占一行等值已足；多行嵌套锚属人为构造，归
         「显式越权同权级」（git 留痕可审计）；
@@ -157,7 +154,7 @@ D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-lay
         是因为 CommonMark 缩进代码块的精确判定依赖段落/列表上下文（无界，禁手搓）；
         代价 = 缩进 ≥4 列的**真嵌套任务项**翻转也判失鲜（假失鲜，保守方向，接受）。
         本闸门只加在 `_normalize_checkbox_lines`（豁免面），MUST NOT 顺手推到 `_parse_plan`
-        / `tg02_hit` / `_line_scoped_hits`——那三处的安全方向各不相同，改动须各自论证。
+        / `_line_scoped_hits`——那两处的安全方向各不相同，改动须各自论证。
     〔mlh-p5 Q4；Task6 退役 live inline 后收敛〕live 读**只认 frontmatter**：好 frontmatter
         判定后不看正文任何 inline 锚，absent 亦不回退 inline（正文残留 inline 锚被完全忽略，
         无假过风险，B4/B5 根治）。归档读 dual-read 侧仍保留旧语义：好 frontmatter 判定后不再
@@ -662,8 +659,8 @@ def read_blob_bytes(root, ref, path, label):
 
 
 # ────────────────────────────── fenced code block 围栏识别（单一源） ──────────────────────────
-# [fix1 Important-1] 本仓四个 fence 追踪点（_normalize_checkbox_lines / _line_scoped_hits /
-# tg02_hit / _parse_plan）**全部**经由下面这一组函数 + FenceTracker 判定围栏，MUST NOT 再各自
+# [fix1 Important-1] 本仓三个 fence 追踪点（_normalize_checkbox_lines / _line_scoped_hits /
+# _parse_plan）**全部**经由下面这一组函数 + FenceTracker 判定围栏，MUST NOT 再各自
 # 手抄 `line.lstrip().startswith("```")`——旧手抄口径只认 ``` ⇒ `~~~` 块内的实质改动被当成
 # 「块外普通行」，在勾选框豁免侧是 fail-open（放行未批准的设计改动），在归档锚读侧是假 SHIPPED。
 #
@@ -1204,14 +1201,14 @@ def emit(verdict, exit_code, next_step, reason, **extra):
 # [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5/2.6/2.7] 求值窗口的**唯一**实现点。
 #
 # 🔴 为什么是「窗口内 emit 的包装」而不是「step 7 之后加一次检查」：
-# `RUN_SOP`(step 5.5) / `RUN_PLAN`(step 6) 两条路径在到达 step 7 之前就 `emit()`，而 `emit()`
-# 内部是 `sys.exit()` —— 硬 early-return。把检查放在 step 7 之后，这两条路径**完全逃出检查**，
-# 方向 fail-open（正是本 change 要治的那类洞）。∴ 检查 MUST 挂在**三个分支各自的 emit 之前**。
+# `RUN_PLAN`(step 6) 这条路径在到达 step 7 之前就 `emit()`，而 `emit()`
+# 内部是 `sys.exit()` —— 硬 early-return。把检查放在 step 7 之后，这条路径**完全逃出检查**，
+# 方向 fail-open（正是本 change 要治的那类洞）。∴ 检查 MUST 挂在**两个分支各自的 emit 之前**。
 #
-# 反向的捷径同样错：把检查留在 step 5.5 之前（= 旧实现 `:1263` 的位置）等于没做窗口限定——
+# 反向的捷径同样错：把检查放在最前（= 旧实现 `:1263` 的位置，unconditional）等于没做窗口限定——
 # 代码审期/收尾期修订四件套（全仓 14 个历史提交、`opsx:verify` step 7 明文允许）会被误拦。
 #
-# 窗口 = `RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL` 三个「进入实现期」的判定。窗口右边界是
+# 窗口 = `RUN_PLAN` / `CONTINUE_IMPL` 两个「进入实现期」的判定。窗口右边界是
 # 「代码审报告出现」而非「最后一个任务打勾」——代码审过程中本来就会改代码与文档。
 def guard_design_freshness(root, change, report):
     """窗口内求值 design 域失鲜；stale ⇒ `REFUSE_START` 并**带出锚值**〔ADR-4〕。
@@ -1241,8 +1238,8 @@ def guard_design_freshness(root, change, report):
 def emit_windowed(root, change, report, verdict, exit_code, next_step, reason, **extra):
     """求值窗口内的 `emit`：先过 design 域失鲜闸门，再 emit 本分支的判定。
 
-    三个入口（`RUN_SOP` / `RUN_PLAN` / `CONTINUE_IMPL`）**各自**调用本函数 —— 这是
-    「三分支各自接入、各自无旁路」的实现形态：拆掉任何**一处**的包装，只有该分支的用例变红。
+    两个入口（`RUN_PLAN` / `CONTINUE_IMPL`）**各自**调用本函数 —— 这是
+    「两分支各自接入、各自无旁路」的实现形态：拆掉任何**一处**的包装，只有该分支的用例变红。
     """
     guard_design_freshness(root, change, report)
     emit(verdict, exit_code, next_step, reason, **extra)
@@ -1324,36 +1321,6 @@ TASK_TITLE_RE = re.compile(r"^### Task (\d+):", re.M)   # 计数用；锚行才�
 # `checkpoint($step)`，不校验形状），**非格式源**。
 # SR-4 checklist：改此正则前先 grep workflow.md 里的格式串样例是否需要同步更新。
 TAG_RE = re.compile(r"checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-")  # [T32] 可选命名空间组
-
-
-def tg02_hit(cdir):
-    p = cdir / "proposal.md"
-    if not p.is_file():
-        return False
-    text = p.read_text(encoding="utf-8", errors="replace")  # 非 UTF-8 防崩
-    # [ADR-6] 声明式匹配（全角括号头注 〔TG-NN：，ff 强制格式），非裸子串——
-    # 描述性提及/代码引用/否定句(TG-01/02/03)不触发假 RUN_SOP（dogfood B4 类）
-    # [ADR-6/A3] 只在头部声明区（开头→首个 "## " 前）找声明式 〔TG-02——
-    # 正文对 TG-02 的文档性提及不触发假 RUN_SOP（dogfood：讨论 tg02 的 proposal 正文含示例声明串）
-    # [impl-review-fix] 头部声明区检测须 fence-aware（对齐 _line_scoped_hits/_parse_plan 口径）+ 声明行匹配：
-    # ①fenced 块（```）内的 `## ` 不算头部边界、内容不计（对抗镜1 假阴/假阳）；
-    # ②只认 strip 后以「〔TG」起始的声明行（排除「技术栈…均不命中」描述行/反引号提及，codex OV-code-2）。
-    fence = FenceTracker()
-    for line in text.splitlines():
-        if fence.feed(line) or fence.inside:
-            continue
-        if line.startswith("## "):   # 真 H2 标题（非 fence 内）= 头部区结束
-            break
-        s = line.strip()
-        if s.startswith("〔TG") and "〔TG-02" in s:   # 声明行（非描述散文）且含 TG-02
-            return True
-    # [fix2 Important] 围栏未闭合 ⇒ 头部声明区的可见性判定不可信（悬空围栏会吞掉声明行，
-    # 方向是 fail-open：静默跳过 embedded-test-sop 门）。与另三个 fence 调用点
-    # （_normalize_checkbox_lines / _parse_plan / _line_scoped_hits「看不清就保守」）方向对齐：
-    # 看不清 ⇒ 保守要求跑 SOP。
-    if fence.inside:
-        return True
-    return False
 
 
 # [harden-implement-review-loop D5 / adr/0033 · Task 3] 计划文件名共享 resolver——
@@ -1743,15 +1710,6 @@ def decide(root, change):
     vfile = cdir / "verify-report.md"
     if vfile.is_file():
         live_ship_gate_state(vfile, "verify")   # 坏→UNKNOWN(6) 早停；live 只读 frontmatter
-    # ── step 5.5：条件步（TG-02 声明式 〔TG-02 匹配，非裸子串；细判归模型）──
-    sop_note = ""
-    if tg02_hit(cdir):
-        if not (cdir / f"{change}-sop.md").is_file():
-            # [Task4 · tasks 2.6] 窗口入口①
-            emit_windowed(root, change, report,
-                          "RUN_SOP", EXIT_OK, "embedded-test-sop", "TG-02 命中且 sop 产物缺")
-    else:
-        sop_note = "SKIP_SOP(非嵌入式不触发); "
     # ── step 6/7：plan 与完成判据〔Q2 窗口主锚〕──────────────────
     # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名经共享 resolver 定位；
     # 双存在 → fail-closed UNKNOWN（不猜哪个有效，提示人工删除其一）。
@@ -1760,10 +1718,10 @@ def decide(root, change):
     except PlanNameConflict as exc:
         emit("UNKNOWN", EXIT_UNKNOWN, None, str(exc))
     if plan is None:
-        # [Task4 · tasks 2.6] 窗口入口②
+        # [Task4 · tasks 2.6] 窗口入口①
         emit_windowed(root, change, report,
                       "RUN_PLAN", EXIT_OK, "writing-plans",
-                      sop_note + "计划文件缺（tickets.md / superpowers-plan.md 均未找到）")
+                      "计划文件缺（tickets.md / superpowers-plan.md 均未找到）")
     # [impl-review-fix CR-F1] 未闭合 fenced code block（悬空 ```）→ 悬空围栏会吞掉真实
     # 未勾项与 Task 标题（假✅/漏 task）→ plan 无法可靠解析 → fail-safe UNKNOWN（先于其余判据）。
     if plan_unbalanced_fence(plan):
@@ -1810,7 +1768,7 @@ def decide(root, change):
         if not sha and not plan_has_any_checkbox(plan):
             emit("UNKNOWN", EXIT_UNKNOWN, None,
                  (plan_note + "；" if plan_note else "") + "plan 未提交且无复选框，双通道皆不可判")
-        # [Task4 · tasks 2.6] 窗口入口③
+        # [Task4 · tasks 2.6] 窗口入口②
         emit_windowed(root, change, report,
                       "CONTINUE_IMPL", EXIT_OK, "subagent-dev",
                       (plan_note + "；" if plan_note else "")

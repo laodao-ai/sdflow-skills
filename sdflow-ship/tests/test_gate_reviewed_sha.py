@@ -55,7 +55,7 @@ def test_missing_anchor_does_not_fall_back_to_inferred_anchor(repo):
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (no anchor)")
     code, js, _ = run_gate(repo)
-    assert js["verdict"] not in ("RUN_PLAN", "RUN_SOP", "CONTINUE_IMPL"), \
+    assert js["verdict"] not in ("RUN_PLAN", "CONTINUE_IMPL"), \
         "缺锚竟被放行——存在回退到反推锚（或静默判 fresh）的通路"
     assert code == 6
 
