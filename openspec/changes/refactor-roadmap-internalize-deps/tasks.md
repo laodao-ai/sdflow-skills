@@ -9,9 +9,10 @@
 - [ ] 1.2 写三相位总览 + 三态路由节：gate-0 与商业化信号两关独立、三态图、判定点①显式留痕、explore 上游指路一句〔A·讨论层三态路由〕
 - [ ] 1.3 写相位 B 节：起手**三步**（定名 → create/continue/replan 前移判定 → 建目录 + 草稿 memo 含 `状态：DRAFT`）、七维拷问与裁剪表（词表内联，含操作者覆盖口）、术语/ADR 提议制（**确认后先记 memo、终稿后才写全局**，`[提议]`/`[确认]` 固定前缀 + 目标路径 + 条目名 + 版本锚）、增量落盘、**停止条件（每个选入维度落 已决/显式延后/不适用 三态之一）**、重入协议、放弃清理（create 删目录**并先复述路径** / **continue·replan 不自动删、只记 task-log**）〔A·B 相位拷问与增量落盘 · SR-2/5/6/9/10/11/39/41〕
       🔴 **重入探测 SHALL 提到独立的「第零步」标题、置于三态路由之前**——与 `sdflow-spec` 同构；埋在 B 相位长节子项里会被线性执行的 agent 跳过〔spec-review-amendment SR-36〕
+      🔴 **memo 的 `## 未决项` 小节**〔spec-review-amendment SR-4 · 设计门 Q2 拍板 A〕：维度终态为「显式延后」者 + 拷问中冒出但本次不解决的问题，逐条落该小节并附**再触发条件**；小节随包长期存在、不因三件套写完而清空。承接边界如实写：只承接 frontier 的**清单**职能，**不承接** wayfinder 票的 `Blocked-by` 依赖图与 `claimed` 并发语义
 - [ ] 1.4 写相位 C 生成节：三件套直写（改「结晶」→「生成」全文）、包生命周期条款改判定时点（B 起手 / 直接生成路径落盘前）、近细远雾节改术语〔M·三件套直写产出 / M·roadmap.md 近细远雾分层〕
 - [ ] 1.5 写历史存档节：定义（memo + 存量 footage 统称）、规则 3 改写、存量 footage 冻结条款（一行提示）、陷阱 3 改写〔A·历史存档引用边界与存量 footage 冻结〕
-- [ ] 1.6 写 review 分档节（术语改「商业化信号」，契约原样）+ 收尾 checklist 四项（③ 覆盖历史存档、④ memo 对账含诚实边界声明）+ 判定点②③留痕〔A·review 按商业化信号分档 / M·收尾 checklist 软门〕
+- [ ] 1.6 写 review 分档节（术语改「商业化信号」，契约原样 + **`未审待恢复` 阻塞收尾**〔SR-12〕）+ 收尾 checklist 四项（③ 覆盖历史存档；④ memo 对账 = 全局写入按版本锚对账〔SR-11〕 **+ 未决项闭环**〔SR-4·Q2〕 + 诚实边界声明）+ 判定点②③留痕〔A·review 按商业化信号分档 / M·收尾 checklist 软门〕
 - [ ] 1.7 删除 wayfinder 全部机械：三分支路由节、footage 节、map 再入、tracker preflight、基线记录、原 checklist ④、陷阱 7、路由对照表重写为三态版〔R·讨论层按规模分档路由 / R·footage 落盘位置与引用边界〕
 - [ ] 1.8 核验 `sdflow:principles` 托管块零字节未动（重写以「块外全重写、块内不动」执行）。核过：本文件仅 **1 个**区块（`:15`–`:154`），`sync_principles.py` 的多区块坑不适用
 - [ ] 1.9 **清理「保留」节里内嵌的待删机制**〔spec-review-amendment SR-7〕——骨架标「保留/只改 X」的节里嵌着 wayfinder/footage 引用，逐处处置：
@@ -26,7 +27,7 @@
 
 ## 2. references 模板（P1）
 
-- [ ] 2.1 重写 memo-template.md：B 相位纪要模板（头部包名+日期，承重结论/拍板决策小节，历史存档定位声明）〔A·B 相位拷问与增量落盘〕
+- [ ] 2.1 重写 memo-template.md：B 相位纪要模板——头部含包名 + 日期 + **`状态：DRAFT / FINAL` 一行**（🔴 该行现已存在于 `memo-template.md:27`，**MUST 保留**，它是「定稿标记」判据的唯一实现载体〔SR-2〕）；正文小节 = 承重结论 / 拍板决策 / **`## 未决项`**（附再触发条件）〔SR-4·Q2〕/ `[提议]`·`[确认]` 全局写入记录（含目标路径 + 条目名 + 版本锚）〔SR-9/11〕；历史存档定位声明〔A·B 相位拷问与增量落盘〕
 - [ ] 2.2 design/roadmap/task-log 三模板术语改（商业化信号 ×2、生成、历史存档），结构不动〔M·roadmap.md 近细远雾分层〕
 - [ ] 2.3 long-flow-skill-paradigm.md 的 wayfinder/footage 段落改历史注记
 
@@ -45,7 +46,7 @@
 
 ## 5. 治理收尾（P2）
 
-- [ ] 5.1 新增 ADR：讨论层内化与 matt 套件移除（权衡：内化分界线——讨论过程内在职责 vs 冷审外部性）。**格式**：参照 `openspec/adr/` 现有 36 个文件的命名规则（4 位零填充序号 + kebab-case 标题），取下一个可用编号 `0037-`；无 template 文件，小节结构从现有 ADR 归纳〔spec-review-amendment SR-37〕
+- [ ] 5.1 新增 ADR：讨论层内化与 matt 套件移除。**权衡要写两条**：① 内化分界线——讨论过程是内在职责、冷审价值恰在外部性 ⇒ 讨论层内化、review 层留外；② **能力承接边界**〔设计门 Q2〕——memo + `## 未决项` 小节承接 wayfinder frontier 的**清单**职能，**不承接** `Blocked-by` 依赖图与 `claimed` 并发语义（单人操作场景不需要），如实写进「当前方案代价」。**matt 移除的论证按订正后的 D2 写**（历史遗留死配置、独立可删、与本 change 无因果，同批做是 fold 判据），**MUST NOT** 沿用「因本次改动才孤立」的旧因果〔SR-1/SR-33〕。**格式**：参照 `openspec/adr/` 现有 36 个文件的命名规则（4 位零填充序号 + kebab-case 标题），取下一个可用编号 `0037-`；无 template 文件，小节结构从现有 ADR 归纳〔SR-37〕
 - [ ] 5.2 CONTEXT.md 词条**三处**〔spec-review-amendment SR-15〕：① footage 词条重写为「历史存档」定义（其正文含「决策**结晶**」，一并改「生成」）；② 新增「商业化信号」词条；③ **`ticket（实现分解单位）` 词条**——正文「matt 套件中 wayfinder 的讨论 ticket（map 的 `issues/<NN>`）是另一种 ticket，需限定词区分」与 `_Avoid_` 行的同类表述，改为历史存档语境（「matt 套件已移除；存量冻结 footage 中的历史讨论票沿用该定义」）
 - [ ] 5.3 T134 关 **`WONTDO`** + **`--reason`**（前提消解：重构后本仓工作流无 domain-modeling 调用点）。用本仓 `sdflow-issues/scripts/`，勿用全局 symlink 旧版。🔴 **`OBSOLETE` 不是合法状态码**——`issues_v2.py:46-49` 的 todo 池只接受 `OPEN|PROPOSED|DONE|WONTDO`，且 `--evidence` 只服务 `FIXED`/`DONE`、`WONTDO` 必须配 `--reason`〔spec-review-amendment SR-3，实跑复现〕
 - [ ] 5.4 更新 `docs/external-dependencies.md`：删 §5 Wayfinder 依赖节，**并同步 §8「内部跨 Skill 依赖」的依赖图**（`:148` 仍有 `/grilling、/domain-modeling`）；gstack review 节保留〔spec-review-amendment SR-14〕

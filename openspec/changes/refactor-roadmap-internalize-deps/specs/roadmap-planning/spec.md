@@ -46,6 +46,8 @@
 
 **停止条件〔spec-review-amendment SR-6〕**：B 相位 SHALL 以「**最小充分条件**」收敛，MUST NOT 用形容词、MUST NOT 以「问了 N 轮」为判据——本次**被裁剪进来的每一个维度**都 SHALL 落一个终态：`已决`（有证据或操作者拍板）/ `显式延后`（须附再触发条件）/ `不适用`（须附一句理由）；全部选入维度均有终态时方可进入相位 C。终态逐条记入 memo.md。
 
+**未决项清单〔spec-review-amendment SR-4 · 设计门 Q2 拍板 A〕**：memo.md SHALL 含一个 `## 未决项` 小节，承接被删除的 wayfinder frontier 的**清单职能**——凡① 维度终态为 `显式延后` 者、② 拷问中冒出但本次不解决的问题，SHALL 逐条落入该小节并附**再触发条件**（什么信息到位 / 什么时点应重新处理它）。该小节 MUST NOT 因「三件套已写完」而被清空，它随包长期存在、跨 session 可读。**承接边界（如实声明）**：本小节承接的是「当前还剩什么没决定」的**清单**，**MUST NOT** 被表述为等价于 wayfinder 票据模型——后者的 `Blocked-by` 依赖图与 `claimed` 并发语义**本 change 明确不承接**（roadmap 为单人操作场景，不需要）。
+
 拷问中的术语与 ADR SHALL 走提议制：命中 ADR 三条件（难逆转 + 缺上下文会意外 + 有真实权衡）或术语冲突时向操作者提议，未经确认 MUST NOT 写入 `openspec/CONTEXT.md` / `openspec/adr/`。**写入时机与留痕〔spec-review-amendment SR-9 · SR-10 · SR-11〕**：经确认的条目 SHALL **先记入 memo.md**、待**相位 C 三件套生成并经操作者确认终稿后**才写入全局文件——B 相位中途 MUST NOT 直写全局（否则被放弃的规划会把临时判断永久留在全局真相源里，而收尾对账只发生在三件套完成后，覆盖不到中途放弃）。memo 中的每条全局写入记录 SHALL 以可辨识固定前缀落行（`[提议]` / `[确认]`）并记全 **目标路径 + 精确条目名 + 写入前版本锚**（如该文件当前 `git log -1 --format=%h` 输出）——收尾对账（checklist ④）SHALL 只对**版本锚仍匹配**的条目执行 supersede / revert，不匹配即停下交操作者裁决，MUST NOT 盲改（防撤销他人或并发写入的结论）。
 
 **重入**：新 session 触发本 skill 时 SHALL 探测未定稿 memo（`openspec/roadmaps/*/memo.md` 存在且状态标记为 `DRAFT`），命中则呈现包名 + memo 摘要由操作者选择「继续 B / 新开」，MUST NOT 静默复用。
@@ -173,7 +175,7 @@ roadmap 规划工作流 SHALL 将三件套（design.md / roadmap.md / task-log.m
 
 ### Requirement: 收尾 checklist 软门
 
-规划工作流收尾 SHALL 执行 checklist 确认**四项**〔本 change 由五项收编：④ wayfinder 闭环随 wayfinder 移除删除，⑤ 简化为 memo 对账〕：① task-log.md「Review 处置」小节不存在未处置条目；② 三件套相互引用完整——判定标准钉死为最小引用图：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次、task-log.md 每条完成记录关联 roadmap.md 阶段、design 头部章与决策段无同值重复（只准互相引用）；不通过时 SHALL 报出具体文件与行号，MUST NOT 笼统宣称「完整/不完整」；③ 历史存档（包根 memo.md 与存量 footage/，如有）无被三件套引用；④ **memo 对账**：相位 B 期间经提议制确认的全局写入条目——即 memo.md 中带 `[确认]` 固定前缀、记有目标路径 / 精确条目名 / 写入前版本锚的那些行〔spec-review-amendment SR-9〕——逐条对照三件套终稿：与终稿一致者此时才实际写入 `openspec/CONTEXT.md` / `openspec/adr/`；被终稿推翻者标 superseded（或 revert）并在 task-log.md 记一行，MUST NOT 让讨论期临时判断以定稿姿态留存全局共享文件。**归属核验**〔SR-11〕：对已存在的条目执行 supersede / revert 前 SHALL 先比对其**版本锚是否仍匹配**，不匹配（说明该条目在本次讨论期间被他人或并发流程改过）SHALL 停下交操作者裁决，MUST NOT 盲改。未经提议制的写入不在本项核对范围（指令层约束的诚实边界，SHALL 如实声明而非宣称机械保证）。checklist 任一项不通过 SHALL 提示补齐后再收尾，MUST NOT 静默跳过。收尾通过后 SHALL 提示将包纳入版本控制（软提示，与 recorder 先例对齐）〔SR-12〕。
+规划工作流收尾 SHALL 执行 checklist 确认**四项**〔本 change 由五项收编：④ wayfinder 闭环随 wayfinder 移除删除，⑤ 简化为 memo 对账〕：① task-log.md「Review 处置」小节不存在未处置条目；② 三件套相互引用完整——判定标准钉死为最小引用图：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次、task-log.md 每条完成记录关联 roadmap.md 阶段、design 头部章与决策段无同值重复（只准互相引用）；不通过时 SHALL 报出具体文件与行号，MUST NOT 笼统宣称「完整/不完整」；③ 历史存档（包根 memo.md 与存量 footage/，如有）无被三件套引用；④ **memo 对账**：相位 B 期间经提议制确认的全局写入条目——即 memo.md 中带 `[确认]` 固定前缀、记有目标路径 / 精确条目名 / 写入前版本锚的那些行〔spec-review-amendment SR-9〕——逐条对照三件套终稿：与终稿一致者此时才实际写入 `openspec/CONTEXT.md` / `openspec/adr/`；被终稿推翻者标 superseded（或 revert）并在 task-log.md 记一行，MUST NOT 让讨论期临时判断以定稿姿态留存全局共享文件。**归属核验**〔SR-11〕：对已存在的条目执行 supersede / revert 前 SHALL 先比对其**版本锚是否仍匹配**，不匹配（说明该条目在本次讨论期间被他人或并发流程改过）SHALL 停下交操作者裁决，MUST NOT 盲改。未经提议制的写入不在本项核对范围（指令层约束的诚实边界，SHALL 如实声明而非宣称机械保证）。**未决项闭环**〔spec-review-amendment SR-4 · 设计门 Q2〕：memo.md 的 `## 未决项` 小节非空时，SHALL 逐条标 `已决` / `显式延后`（附再触发条件）/ `放弃`（附理由）之一——**MUST NOT 带未处置的未决项宣告定稿**；操作者坚持越过时 SHALL 在 task-log.md 记一行「带 N 条未决项定稿」+ 理由（显式越权留痕），MUST NOT 静默通过。checklist 任一项不通过 SHALL 提示补齐后再收尾，MUST NOT 静默跳过。收尾通过后 SHALL 提示将包纳入版本控制（软提示，与 recorder 先例对齐）〔SR-12〕。
 
 #### Scenario: 有未处置 review 条目
 
@@ -184,6 +186,11 @@ roadmap 规划工作流 SHALL 将三件套（design.md / roadmap.md / task-log.m
 
 - **WHEN** 收尾 memo 对账发现相位 B 经确认写入的某 adr 条目与三件套最终结论不一致
 - **THEN** 该 adr 标 superseded（或 revert）并在 task-log 记一行，MUST NOT 静默留存
+
+#### Scenario: 带未处置的未决项不得定稿〔spec-review-amendment SR-4 · 设计门 Q2〕
+
+- **WHEN** 收尾时 memo.md 的 `## 未决项` 小节存在既未标 `已决`、也未标 `显式延后` 或 `放弃` 的条目
+- **THEN** 收尾暂停并列出这些条目，逐条处置后方可完成；操作者坚持越过时在 task-log.md 记一行「带 N 条未决项定稿」与理由
 
 #### Scenario: 存量包收尾不含 wayfinder 闭环项
 

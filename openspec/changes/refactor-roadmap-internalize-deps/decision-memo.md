@@ -59,8 +59,14 @@ matt tracker 五个外部依赖并整体移除 `openspec/matt/`，review 层外�
   按基准 4 的 fold 判据（同片文件、低 blast radius）随本次一并订正。D10 范围相应扩到三处。
 - **C9 · review 层降级路径已焊**：现 SKILL.md:449「未审待恢复」不静默条款 ⇒ D1 保留外部
   依赖不新增风险。
-- **C10 · 增量落盘同构先例**：sdflow-spec B.4（B 轮数无上界，一次性落盘 = 收敛前中断全损）
-  ⇒ D4/D9 的结构论据；wayfinder「map 先建、票增量 resolve」本质同模式。
+- **C10 · 增量落盘同构先例（范围已收窄）**：sdflow-spec B.4（B 轮数无上界，一次性落盘 =
+  收敛前中断全损）⇒ D4/D9 的结构论据。
+  🔴 **原文「wayfinder『map 先建、票增量 resolve』本质同模式」是过度声称**
+  〔spec-review-amendment SR-4〕：**落盘节奏**同模式（都是先建载体、再增量写），
+  但**状态语义不同**——票有 open/claimed/resolved/abandoned 状态机 + Blocked-by 依赖图 + frontier 查询，
+  memo 是纯追加文本。⇒ 本 change 只承接**落盘节奏**与 frontier 的**清单**职能
+  （经 Q2 拍板补 memo 的 `## 未决项` 小节 + 收尾 ④ 闭环），
+  **明确不承接** Blocked-by 依赖图与 claim 并发语义（roadmap 场景单人操作，不需要）。
 
 ## 拍板决策
 
@@ -71,12 +77,28 @@ matt tracker 五个外部依赖并整体移除 `openspec/matt/`，review 层外�
 依据：① review 价值在独立冷视角，内化进同 session = 产者自审；② 拆分标准——讨论层内化
 已是完整内聚交付物，review 层是另一个能力面；③ gstack 是用户长期维护的自建套件，非脆弱三方。
 
-### D2：openspec/matt/ 整体移除（人已拍板 2026-08-05）
+### D2：openspec/matt/ 整体移除（人已拍板 2026-08-05；论证经设计门复核订正 2026-08-05）
 
-roadmap 重构后本仓再无 matt 套件的活消费方（sdflow-implement 的 matt 引用全是出处注释，
-无运行时依赖）。移除 `openspec/matt/` 目录 + CLAUDE.md / AGENTS.md 的 matt 区块
-（Issue tracker / Triage labels / Domain docs）。
-牵连：T134（domain-modeling 读 matt/domain.md）前提变化，随本 change 处置。
+移除 `openspec/matt/` 目录 + CLAUDE.md / AGENTS.md 的 matt 区块
+（Issue tracker / Triage labels / Domain docs）。**范围不变、结论不变**（设计门 Q1 复核后确认照原样删）。
+
+🔴 **论证已订正**〔spec-review-amendment SR-1 / SR-33〕。原论证「roadmap 重构后本仓再无 matt 的
+活消费方」**不成立**，正确论证是：
+
+1. **matt 早于本 change 已事实废弃**（C1b）：`sdflow-issues` 生于本仓首个 commit（2026-07-03），
+   早于 `openspec/matt/` 建立（2026-07-10）一周；本仓自始至终用 `sdflow-issues`（T1…T230），
+   matt 的 issue-tracker 角色**从未真正投入使用**。⇒ 它是**历史遗留死配置，独立可删**，
+   删它与 roadmap 重构**无因果关系**；与本 change 同批做的理由是 **操作成本低 + 避免半改状态**
+   （基准 4 的 fold 判据：相关、低 blast radius、执行中撞到就做掉）。
+2. **仓外确有 4 个消费方，但它们从未在本仓生效**（C1）：`issue-tracker.md:16` 把
+   `to-tickets` / `triage` / `to-spec` / `qa` 列为消费方，这四个 skill 本机已安装。
+   删配置面 = 它们在本仓失去落点——**但按第 1 条，它们在本仓本来就没被用过**，
+   移除不改变任何既有工作方式。若将来要在本仓用其中某个，重新铺配置即可（低成本、可逆）。
+3. **「Domain docs」一段（指向 `openspec/CONTEXT.md` 与 `openspec/adr/`）虽与 wayfinder 无关，
+   仍随之删除**——它的内容（单一上下文布局）已由本仓 `CLAUDE.md` 的 OpenSpec 托管区块承载，
+   保留一份 matt 语境的重复指路只会成为第二个漂移面。
+
+牵连：T134（domain-modeling 读 matt/domain.md）前提变化，随本 change 处置（D11）。
 
 ### D3：change 名 = refactor-roadmap-internalize-deps（人已确认 2026-08-05）
 
@@ -118,7 +140,17 @@ handoff 的「二路径」图据此修正为三态。
 
 - ①（Review 处置，含机械脚本门）②（三件套引用完整）③（历史存档未被引用）原样保留；
   ③ 的「历史存档」覆盖包根 memo.md 与存量 footage/。
-- ④（wayfinder 闭环）整项删除——检查对象不复存在。
+- ④（wayfinder 闭环）整项删除——检查对象（wayfinder 票）不复存在。
+  🔴 **但「未决项闭环」这个能力必须有承接物**〔spec-review-amendment SR-4·设计门 Q2 拍板 A〕：
+  wayfinder 的 map + 票承载的是 open/claimed/resolved/abandoned + Blocked-by + frontier 查询，
+  即「**当前还剩什么没决定**」本身是结构化、可查询、跨 session 可恢复的；而 memo 是纯追加日志，
+  只记「已站稳的结论」。删掉 ④ 而不补，等于把未决的规划风险变成 memo 正文里的一句话。
+  这对 roadmap **尤其要命**——它的定位明确是「超出单次 change、可跨月」，正是票据模型伺候的场景。
+  ⇒ **最简补法（不建新机械层）**：memo 增一个 `## 未决项` 小节（B 相位「显式延后」的维度终态
+  与拷问中冒出的悬而未决问题都落在这里），收尾 checklist ④ 扩一句「未决项小节非空时须逐条标
+  已决 / 显式延后（附再触发条件）/ 放弃（附理由），MUST NOT 带未决项定稿」。
+  **C10 的等价性断言相应改写**：memo + 未决项小节承接的是 frontier 的「清单」职能，
+  **不承接** Blocked-by 依赖图与 claim 并发语义——那两项本 change **明确不承接**，如实声明。
 - ⑤ 简化为「memo 对账」：B 相位写 CONTEXT.md/adr 走提议制 + 人确认（同 sdflow-spec B.6/B.7），
   确认写入均在 memo 留痕 ⇒ 收尾逐条对照 memo 写入记录与三件套终稿，废弃 git 基线 diff 机制。
   诚实边界：绕过提议制手改 CONTEXT.md 的场景查不到（指令层约束固有边界，如实声明）。

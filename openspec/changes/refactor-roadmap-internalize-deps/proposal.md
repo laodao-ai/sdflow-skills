@@ -37,8 +37,12 @@ sdflow-spec 已实证「内化拷问 + 纪要增量落盘」能用一个文件�
 - **术语改名**：「结晶」→「生成」（相位名对齐 sdflow-spec）；「产品/商业野心信号」→
   「商业化信号」（词表不变）；「考古层」（roadmap 语境）→「历史存档」（DOC-1 语境的
   「考古层」是另一概念，不改）。「相位 A/B/C」保留。
-- **收尾 checklist 五项 → 四项**：①②③ 保留（③ 覆盖 memo.md + 存量 footage/），④ 删除，
-  ⑤ 简化为 memo 对账（提议制写入记录逐条对照终稿，废弃 git 基线 diff）。
+- **收尾 checklist 五项 → 四项**：①②③ 保留（③ 覆盖 memo.md + 存量 footage/），原 ④（wayfinder 闭环）删除，
+  ⑤ 简化为 memo 对账并**收编为新的 ④**——含三件事：提议制写入记录逐条对照终稿（废弃 git 基线 diff，
+  改用 memo 内的**版本锚**做归属核验〔SR-11〕）+ **未决项闭环**〔SR-4·设计门 Q2〕。
+- **未决项清单**〔设计门 Q2 拍板〕：memo 增 `## 未决项` 小节，承接被删 wayfinder frontier 的**清单**职能
+  （维度「显式延后」终态 + 拷问中冒出不解决的问题，各附再触发条件）；
+  **不承接** `Blocked-by` 依赖图与 `claimed` 并发语义（单人场景不需要，如实声明）。
 - **BREAKING（仓内配置面）**：移除 `openspec/matt/` 目录 + CLAUDE.md / AGENTS.md 的 matt
   区块（Issue tracker / Triage labels / Domain docs）。
 - **bundle 同步**：`ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀禁混用规则
