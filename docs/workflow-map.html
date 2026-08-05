@@ -347,18 +347,18 @@
           <div class="stage-left">
             <div class="stage-tag">STAGE 1</div>
             <div class="stage-name">propose 生成</div>
-            <span class="stage-skill">/sdflow-spec（分支 A · 默认）· /opsx:ff · /opsx:new（分支 B）</span>
+            <span class="stage-skill">/sdflow-spec（唯一入口）</span>
           </div>
           <div class="stage-body">
-            <div class="row-line"><span class="row-k">入口</span><span class="row-v"><b>分支 A（默认）</b>：装了 <code>sdflow-spec</code> ⇒ 人敲 <code>/sdflow-spec</code>，澄清→拷问→生成一次连续跑（拷问前置于成文）。<b>分支 B</b>：未装、或命中三种例外（wayfinder 铺图 / 用户要求分步 / 环境不可用）⇒ 旧三步 <code>opsx:explore → opsx:ff → grill-with-docs</code>。规则见 <code>generation-process.md</code> §四</span></div>
+            <div class="row-line"><span class="row-k">入口</span><span class="row-v"><b>唯一线性路径</b>：explore(条件) → <code>/sdflow-spec</code>（模型在人示意收敛时自动 invoke），澄清→拷问→生成一次连续跑。规则见 <code>generation-process.md</code></span></div>
             <div class="row-line"><span class="row-k">门禁</span><span class="row-v"><b>FF-0 三分支判定</b>：保护分支先 <code>git checkout -b feat/{change}</code>；已在 <code>feat/{本 change}</code> 跳过；在其它 feature 分支 halt 问人。按 <code>trigger-catalog</code> 判 TG 命中激活生成约束</span></div>
             <div class="row-line"><span class="row-k">产物</span><span class="row-v art">proposal · design · specs/ · tasks.md（四件套）</span></div>
           </div>
         </div>
 
         <div class="gate-band">
-          <span class="g-label">▲ 人类门 ①</span>
-          <span class="g-text">grill / 前提确认 —— <code>sdflow-ship</code> 窄 scope <b>不跨此门</b>（adr/0004 红线，过门后才起跑）</span>
+          <span class="g-label">▲ /clear</span>
+          <span class="g-text">阶段一→二 cache 隔离 + 产/审错档</span>
         </div>
 
         <div class="stage is-human">
@@ -383,18 +383,6 @@
           <div class="ship-banner">
             <span class="sb-title">▚ 阶段三 · ship（gate 驱动 · 无人类门 P3e）</span>
             <span class="sb-note"><code>sdflow-ship</code> meta-orchestrator：每步前后 <b>MUST 调 ship_gate</b>，禁 prose 记忆步序（adr/0006b）· ship 零 git 写</span>
-          </div>
-
-          <div class="stage">
-            <div class="stage-left">
-              <div class="stage-tag">3a · 条件</div>
-              <div class="stage-name">SOP</div>
-              <span class="stage-skill">embedded-test-sop</span>
-            </div>
-            <div class="stage-body">
-              <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_SOP · 0</span> TG-02 命中且 sop 缺（<code>tg02_hit</code> 声明式）</span></div>
-              <div class="row-line"><span class="row-k">产物</span><span class="row-v art">{change}-sop.md</span></div>
-            </div>
           </div>
 
           <div class="stage">
@@ -494,7 +482,6 @@
       <p class="sec-sub"><code>ship_gate.py</code> 从盘面（committed 产物 + frontmatter 锚）确定性推导下一步。退出码承载门禁语义：<b>0</b> 可推进 · <b>3/4</b> 拒绝/阻塞 · <b>5</b> verify 失败 · <b>6</b> 判定不能。契约表 <code>ship_gate.py:32-44</code>。</p>
       <div class="verdict-grid">
         <div class="verdict"><div class="v-top"><span class="v-name">REFUSE_START</span><span class="code-chip c-blocked">3</span></div><div class="v-desc">未过设计门 / change 不存在</div></div>
-        <div class="verdict"><div class="v-top"><span class="v-name">RUN_SOP</span><span class="code-chip c-ok">0</span></div><div class="v-desc">TG-02 命中且 sop 缺</div></div>
         <div class="verdict"><div class="v-top"><span class="v-name">RUN_PLAN</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 缺 → writing-plans</div></div>
         <div class="verdict"><div class="v-top"><span class="v-name">CONTINUE_IMPL</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 号集 ⊄ 完成集</div></div>
         <div class="verdict"><div class="v-top"><span class="v-name">RUN_CODE_REVIEW</span><span class="code-chip c-ok">0</span></div><div class="v-desc">代码审报告缺</div></div>
@@ -687,7 +674,7 @@
             <tr style="opacity:.72">
               <td><span class="sname">log_check.py</span><br><span class="floc">roadmap P5 候选</span></td>
               <td class="chk">（计划未建）</td>
-              <td><span class="skl">拟 embedded-test-sop</span></td>
+              <td><span class="skl">（已删除）</span></td>
               <td class="chk">拟：<code>--log serial.log --rules *.yaml</code>·时间窗·must_contain/not/before·severity rollup</td>
               <td class="chk"><span class="tag-b tag-planned">尚未建 · 按需排</span></td>
               <td><span class="tag-b tag-planned">拟 bundle</span></td>

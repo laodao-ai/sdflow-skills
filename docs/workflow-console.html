@@ -284,8 +284,8 @@
       <div class="stg">
         <div class="ph">阶段一 · 生成</div>
         <h4>人类对话岛</h4>
-        <div class="role">分支 A（默认）= <code>/sdflow-spec</code> 一个入口跑完澄清→拷问→生成；分支 B（未装 / 三种例外）= 旧三步，grill 是人对着设计死磕</div>
-        <div class="chips"><span class="chip">sdflow-spec</span><span class="chip">opsx:explore</span><span class="chip">opsx:ff</span><span class="chip">grill-with-docs</span></div>
+        <div class="role">唯一线性路径：explore(条件) → <code>/sdflow-spec</code>（模型自动触发）→ 澄清→拷问→生成一次连续跑</div>
+        <div class="chips"><span class="chip">sdflow-spec</span><span class="chip">opsx:explore</span></div>
       </div>
       <div class="stg">
         <div class="ph">阶段二 · 设计审</div>
@@ -365,7 +365,6 @@
         </div>
         <div class="routes">
           <div class="route stop"><div><div class="verdict">REFUSE_START</div><div class="act">未过设计门 / change 不存在</div></div><span class="ec">exit 3</span></div>
-          <div class="route go"><div><div class="verdict">RUN_SOP</div><div class="act">TG-02 命中且 sop 缺</div></div><span class="ec">exit 0</span></div>
           <div class="route go"><div><div class="verdict">RUN_PLAN</div><div class="act">writing-plans → SDD</div></div><span class="ec">exit 0</span></div>
           <div class="route go"><div><div class="verdict">CONTINUE_IMPL</div><div class="act">传 done_tasks，勿重派</div></div><span class="ec">exit 0</span></div>
           <div class="route go"><div><div class="verdict">RUN_CODE_REVIEW</div><div class="act">实现完成，进代码审</div></div><span class="ec">exit 0</span></div>
@@ -422,8 +421,8 @@
       <h3>自制编排器</h3>
       <div class="matrix">
         <div class="skill">
-          <div class="top"><span class="nm">grill-with-docs</span><span class="kind">自制 / 对话岛</span></div>
-          <div class="role">对抗压测设计、对齐术语、查码揭穿、按需落 ADR/术语表。刻意不机械化保开放性。</div>
+          <div class="top"><span class="nm">grill-with-docs</span><span class="kind">自制 / 对话岛（已从流程移除，skill 保留）</span></div>
+          <div class="role">对抗压测设计。已由 sdflow-spec 相位 B 内建拷问替代，不再是流程中的独立步骤。</div>
           <div class="io"><span><b>进</b> design + 代码</span><span><b>出</b> design/ADR/CONTEXT</span></div>
           <div class="foot"><span class="pill adv">几乎全建议式</span><span class="pill enf">下游设计门审计</span></div>
         </div>
