@@ -1147,19 +1147,18 @@ def test_repo_fixture_pins_byte_and_mode_semantics(repo, key, want):
     assert got == want, f"{key}={got!r}，基座未钉死（期望 {want!r}）"
 
 
-# ══ [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5/2.6/2.7 · 测试 5.3a–d] 求值窗口 ══
+# ══ [harden-gate-git-layer Task4 · ADR-3 · tasks 2.5/2.6/2.7 · 测试 5.3b/c/d] 求值窗口 ══
 #
 # 判据只在它保护的风险真实存在的阶段求值：design 域失鲜保护的是「照着一份已经变了的设计
-# 继续建」，该风险**只在实现期存在**。∴ 三个「进入实现期」的入口 MUST 各自求值（5.3a–c），
+# 继续建」，该风险**只在实现期存在**。∴ 两个「进入实现期」的入口 MUST 各自求值（5.3b–c），
 # 窗口之外（代码审期 / 收尾期）MUST NOT 求值（5.3d）。
 #
-# 🔴 **三组 MUST 各自独立**：三个用例分别只穿过一个入口分支——
-#   5.3a：tg02 命中 + 无 sop ⇒ 只到 RUN_SOP 就 emit，够不着 RUN_PLAN / CONTINUE_IMPL
-#   5.3b：tg02 不命中 + 无 plan ⇒ 跳过 SOP 分支，只到 RUN_PLAN
-#   5.3c：有 plan + 有未完成任务 ⇒ 跳过前两者，只到 CONTINUE_IMPL
+# 🔴 **两组 MUST 各自独立**：两个用例分别只穿过一个入口分支——
+#   5.3b：无 plan ⇒ 只到 RUN_PLAN
+#   5.3c：有 plan + 有未完成任务 ⇒ 跳过前者，只到 CONTINUE_IMPL
 # ∴ 拆掉任一入口的 `emit_windowed` 包装，**只有对应的那一个用例变红**（变异独立性已实测，
-# 结果见 impl-reports/task4-eval-window.md）。写成共享同一条触发路径的三个用例会「三个一起
-# 红或一个都不红」，那样的「三组独立」是假的（期望集取错范畴）。
+# 结果见 impl-reports/task4-eval-window.md）。写成共享同一条触发路径的两个用例会「两个一起
+# 红或一个都不红」，那样的「两组独立」是假的（期望集取错范畴）。
 
 def _anchor_of(d):
     """从 spec-review-report.md 的 frontmatter 读出锚（= gate 会拿来比的那个 sha）。"""
@@ -1183,18 +1182,10 @@ def _assert_windowed_refusal(repo, d):
     for p in _sg.design_pathspecs(BASE):
         assert p in js["reason"], f"差异命令漏了监视集成员 {p}"
 
-# ── 5.3a RUN_SOP 分支 ────────────────────────────────────────────────
-
-def test_window_run_sop_evaluates_design_freshness(repo):
-    d = approved_change(repo, tg02=True)          # 无 sop 产物 ⇒ 判定停在 RUN_SOP
-    assert run_gate(repo)[1]["verdict"] == "RUN_SOP"   # 前提校准：确实走这条分支
-    _revise_design(d, repo)
-    _assert_windowed_refusal(repo, d)
-
 # ── 5.3b RUN_PLAN 分支 ───────────────────────────────────────────────
 
 def test_window_run_plan_evaluates_design_freshness(repo):
-    d = approved_change(repo, tg02=False)         # 无 plan ⇒ 判定停在 RUN_PLAN
+    d = approved_change(repo)                     # 无 plan ⇒ 判定停在 RUN_PLAN
     assert run_gate(repo)[1]["verdict"] == "RUN_PLAN"
     _revise_design(d, repo)
     _assert_windowed_refusal(repo, d)

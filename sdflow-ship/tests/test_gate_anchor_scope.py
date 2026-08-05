@@ -79,7 +79,7 @@ def test_decide_b4_board_refuse_start(tmp_path):
     _git(tmp_path, "init", "-q", "-b", "main")
     _git(tmp_path, "config", "user.name", "t"); _git(tmp_path, "config", "user.email", "t@t")
     d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text("〔TG-25：契约〕\n", encoding="utf-8")   # 非嵌入式，避免 RUN_SOP
+    d.joinpath("proposal.md").write_text("〔TG-25：契约〕\n", encoding="utf-8")
     d.joinpath("spec-review-report.md").write_text(
         f"拍板后才写 `{DESIGN}`（当前未获批）。\n", encoding="utf-8")
     commit_all(tmp_path, "seed")

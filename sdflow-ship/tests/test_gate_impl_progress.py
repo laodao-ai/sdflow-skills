@@ -1,9 +1,13 @@
-import subprocess, sys, json
+import subprocess, sys
 from pathlib import Path
 from conftest import commit_all, mkchange, head_sha, write_report
 from test_gate_preflight import run_gate
 
-# Load ship_gate module for direct function testing
+# Load ship_gate module for direct function testing.
+# 🔴 `_sg` 是共享 re-export 点：test_gate_freshness.py / test_gate_git_layer.py /
+# test_gate_reviewed_sha.py 均经 `from test_gate_impl_progress import ... _sg` 取用，
+# 本文件内虽已无 `_sg.` 直接调用（tg02_hit 单测已删），MUST NOT 移除本导入
+# （rename-string-consumers-span-file-types 同类教训：改共享导入点先 grep 全部消费方）。
 _scripts_path = str(Path(__file__).parent.parent / "scripts")
 if _scripts_path not in sys.path:
     sys.path.insert(0, _scripts_path)
@@ -19,21 +23,18 @@ PLAN2_TICKETS = (
     "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"
 )
 
-def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor="head"):
+def approved_change(repo, plan=None, revise=None, anchor="head"):
     # [mlh-p5 Task5 D6] live fixture 迁 frontmatter（原 inline `<!-- ship-gate: design-approved -->`）。
     # [harden-gate-git-layer Task1 · tasks 4.1/4.1b] 迁**两段提交模型**：报告 frontmatter 现须带
     # `reviewed_sha`（被批准的盘面），而旧单次 commit_all 让报告与其审查对象同属根提交 ⇒ 结构上
     # 没有先于报告的盘面可填。分段：
-    #   ① 四件套（+ 可选 plan/sop）落盘提交 → 这就是「被批准的盘面」
+    #   ① 四件套（+ 可选 plan）落盘提交 → 这就是「被批准的盘面」
     #   ② 可选第三段〔4.1b〕revise=callable(d)：拍板前二次修订，单独提交（ADR-7(b) 场景）
     #   ③ 读出 HEAD → 写携带该 sha 的 spec-review-report → 单独提交
     # anchor: "head"（默认，锚指被批准盘面）｜"pre-revision"（锚指修订**之前**的提交，用于
     #   验 ADR-7(b) 自锁：拍板刚完成即失鲜）｜None（不写 reviewed_sha，缺锚负例）｜显式 sha 串。
     d = mkchange(repo)
-    prop = "# p\n〔TG-02：嵌入式〕\n" if tg02 else "# p\n〔TG-01：工具链〕\n"
-    (d / "proposal.md").write_text(prop, encoding="utf-8")
-    if sop:
-        (d / "demo-sop.md").write_text("sop\n", encoding="utf-8")
+    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     if plan is not None:
         # 🔴 共享 fixture：`approved_change` 被 6 个测试文件 import（test_gate_namespace.py /
         # test_gate_git_layer.py / test_plan_resolver.py / test_gate_reviewed_sha.py /
@@ -51,16 +52,6 @@ def approved_change(repo, plan=None, sop=False, tg02=False, revise=None, anchor=
                  body="# 设计审报告\n", design_approved="true")
     commit_all(repo, "spec-review report (approved)")   # ③ 报告单独提交
     return d
-
-def test_tg02_hit_sop_missing(repo):
-    approved_change(repo, tg02=True)
-    code, js, _ = run_gate(repo)
-    assert code == 0 and js["verdict"] == "RUN_SOP" and js["next"] == "embedded-test-sop"
-
-def test_no_tg02_plan_missing_run_plan(repo):
-    approved_change(repo, tg02=False)
-    code, js, _ = run_gate(repo)
-    assert js["verdict"] == "RUN_PLAN" and "SKIP_SOP" in js["reason"]
 
 def test_continue_impl_with_done_set(repo):
     approved_change(repo, plan=PLAN2)
@@ -158,12 +149,6 @@ def test_uncommitted_plan_no_checkbox_unknown(repo):
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN" and "双通道" in js["reason"]
 
-def test_tg02_hit_sop_exists_falls_through(repo):
-    # tg02 命中且 sop 产物已在 → 不再 RUN_SOP，继续往下判（plan 缺 → RUN_PLAN）
-    approved_change(repo, tg02=True, sop=True)
-    code, js, _ = run_gate(repo)
-    assert code == 0 and js["verdict"] == "RUN_PLAN"
-
 def test_plan_zero_titles_unknown(repo):
     approved_change(repo, plan="# 空计划，无任务标题\n")
     code, js, _ = run_gate(repo)
@@ -252,110 +237,8 @@ def test_non_git_root_unknown(tmp_path_factory):
     assert code == 6 and js["verdict"] == "UNKNOWN"
 
 
-# [Task 4: tg02_hit 声明式匹配] —— 防止描述性提及/代码引用/否定句触发假 RUN_SOP
-def test_tg02_descriptive_mention_not_hit(tmp_path):
-    """描述性提及 / 代码引用 / 否定句，无 〔TG-02 声明 → tg02_hit False"""
-    d = mkchange(tmp_path, "demo")
-    # 讨论 `"TG-02" in` 检测；技术栈 TG-01/02/03 均不命中。无 〔TG-02 声明
-    d.joinpath("proposal.md").write_text(
-        '讨论 `"TG-02" in` 检测；技术栈 TG-01/02/03 均不命中。\n', encoding="utf-8")
-    assert _sg.tg02_hit(d) is False
-
-
-def test_tg02_declaration_hit(tmp_path):
-    """声明式 〔TG-02：…〕 格式 → tg02_hit True"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text("〔TG-02：嵌入式固件变更〕\n", encoding="utf-8")
-    assert _sg.tg02_hit(d) is True
-
-
-# [Task 6/A3: tg02_hit 头部区域限定] —— 正文（首个 "## " 之后）文档性提及声明串不触发假 RUN_SOP
-def test_tg02_body_mention_not_hit(tmp_path):
-    """正文 `## ` 段内含 〔TG-02： 声明串（文档性提及/示例引用）→ tg02_hit False
-
-    活体复现：本 change（gate-anchor-line-scoped）proposal.md 正文
-    「正例（`〔TG-02：` 头注）」讨论示例，整体子串匹配会误命中。
-    """
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# t\n\n〔TG-25：契约〕\n\n## What\n正例（`〔TG-02：` 头注）示例\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is False
-
-
-def test_tg02_header_declaration_hit(tmp_path):
-    """头部（首个 `## ` 之前）声明式 〔TG-02：…〕 → tg02_hit True"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# t\n\n〔TG-02：嵌入式固件变更〕\n\n## What\n正文无关内容\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is True
-
-
-# [impl-review-fix 修A] tg02_hit 头部扫描 fence-aware + 声明行匹配回归覆盖
-def test_tg02_fenced_heading_in_header_still_hits(tmp_path):
-    """头部区 fenced 围栏内的 `## Example` 不算头部边界——围栏后（仍在首个真 `## ` 前）
-    的真声明行 〔TG-02：…〕 须命中（对抗镜1 假阴修复：旧裸循环遇围栏内 `## ` 误 break）。"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n```\n## Example\n```\n〔TG-02：嵌入式固件变更〕\n## Real Section\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is True
-
-
-def test_tg02_fenced_example_in_header_not_hit(tmp_path):
-    """头部区 fenced 围栏内展示 〔TG-02：嵌入式〕 作为示例，真声明行是 〔TG-25：契约〕
-    → tg02_hit False（对抗镜1 假阳修复：旧裸子串匹配把围栏内示例也计入 header_lines）。"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n```\n〔TG-02：嵌入式〕\n```\n〔TG-25：契约〕\n## Real\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is False
-
-
-def test_tg02_header_descriptive_mention_not_hit(tmp_path):
-    """头部区描述性散文提及 〔TG-02： （反引号引用格式说明），真声明行是 〔TG-25：契约〕
-    → tg02_hit False（codex OV-code-2：声明行须以「〔TG」起始，排除描述提及）。"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n说明：正例形如 `〔TG-02：`\n〔TG-25：契约〕\n## Real\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is False
-
-
-# [fix2 Important] tg02_hit 围栏未闭合 ⇒ 保守判命中（原本是四个 fence 调用点里唯一 fail-open 的：
-# 悬空围栏吞掉真声明行 → tg02_hit False → SKIP_SOP → 静默跳过 embedded-test-sop 门）。
-# 三例形态取自复审实测（未闭合 ``` / 未闭合 ~~~ / 长游程 ~~~~~~~~ 分隔线出现在声明行之前）。
-def test_tg02_unclosed_backtick_fence_conservative_hit(tmp_path):
-    """头部区未闭合 ``` 吞掉其后的真声明行 〔TG-02 ⇒ 判定不可信 ⇒ 保守返回 True"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n```\n示例内容\n〔TG-02：嵌入式固件变更〕\n## Real\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is True
-
-
-def test_tg02_unclosed_tilde_fence_conservative_hit(tmp_path):
-    """头部区未闭合 ~~~ 同理 ⇒ 保守返回 True"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n~~~\n示例内容\n〔TG-02：嵌入式固件变更〕\n## Real\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is True
-
-
-def test_tg02_long_tilde_run_before_declaration_conservative_hit(tmp_path):
-    """一行 `~~~~~~~~`（本意是水平分隔线）出现在声明行之前 —— 按 CommonMark 它是围栏开启符，
-    后续声明行被吞、且直到 EOF 未闭合 ⇒ 保守返回 True（旧行为：False → 静默 SKIP_SOP）。"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n~~~~~~~~\n〔TG-02：嵌入式固件变更〕\n## Real\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is True
-
-
 # ══════════════════════════════════════════════════════════════════════════
-# [fix1 Important-1] fence 单一源在 plan 解析侧（_parse_plan）与 tg02_hit 侧的独立举证。
+# [fix1 Important-1] fence 单一源在 plan 解析侧（_parse_plan）的举证。
 # 旧口径只认 ```，`~~~` 块内的伪复选框/伪 Task 标题会被当真 ⇒ 假✅ / 误判重号。
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -395,21 +278,3 @@ def test_t34_backtick_cannot_close_tilde_fence(repo):
     approved_change(repo, plan=plan)
     code, js, _ = run_gate(repo)
     assert code == 6 and js["verdict"] == "UNKNOWN"
-
-
-def test_tg02_tilde_fenced_example_in_header_not_hit(tmp_path):
-    """头部区 `~~~` 围栏内的 〔TG-02 示例不得命中（旧口径只认 ``` ⇒ 假 RUN_SOP）。"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n~~~\n〔TG-02：嵌入式〕\n~~~\n〔TG-25：契约〕\n## Real\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is False
-
-
-def test_tg02_tilde_fenced_heading_in_header_still_hits(tmp_path):
-    """`~~~` 围栏内的 `## Example` 不算头部边界 ⇒ 围栏后的真声明行仍须命中。"""
-    d = mkchange(tmp_path, "demo")
-    d.joinpath("proposal.md").write_text(
-        "# p\n~~~\n## Example\n~~~\n〔TG-02：嵌入式固件变更〕\n## Real Section\n正文\n",
-        encoding="utf-8")
-    assert _sg.tg02_hit(d) is True
