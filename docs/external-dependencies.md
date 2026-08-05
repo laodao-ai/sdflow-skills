@@ -74,8 +74,8 @@
 | Skill | 用途 | 调用处 | 缺失时行为 |
 |-------|------|--------|-----------|
 | **gstack `/review`** | 代码审的 scope-drift + 完成度审计（Step1） | `sdflow-code-review/SKILL.md:206-209` | 显式降级为子代理模拟 + 标注 `mode="simulated"` |
-| **gstack `/autoplan`** | 设计审的广审层（CEO/Eng/Design 三连） | `sdflow-spec-review/SKILL.md`、`sdflow-roadmap/SKILL.md:426` | 显式提示 + 留「未审待恢复」痕迹 |
-| **`/plan-eng-review`** | roadmap 的技术评审（默认档） | `sdflow-roadmap/SKILL.md:425` | 同上 |
+| **gstack `/autoplan`** | 设计审的广审层（CEO/Eng/Design 三连） | `sdflow-spec-review/SKILL.md`、`sdflow-roadmap/SKILL.md:460` | 显式提示 + 留「未审待恢复」痕迹 |
+| **`/plan-eng-review`** | roadmap 的技术评审（默认档） | `sdflow-roadmap/SKILL.md:459` | 同上 |
 
 > `/grill-with-docs` 已被 `sdflow-spec` 内置取代（`sdflow-spec/SKILL.md:10`），不再是外部依赖。
 > `/grilling`、`/domain-modeling`（原 wayfinder 票内依赖）已随 `refactor-roadmap-internalize-deps`

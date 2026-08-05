@@ -405,7 +405,7 @@ B 相位 **SHALL** 以「**最小充分条件**」收敛，**MUST NOT** 用形�
 
 每个文件使用 `references/` 下对应的模板骨架。读对应模板，按项目实际内容填充。
 
-三态路由收敛后**直写**三件套、**不经 change 生产路径**（`/sdflow-spec` · `opsx:ff`，两条都不经）——「wayfinder→ff 衔接契约」（`ff-generation-constraints.md`）属 change 生产路径，与本 skill 的直写路径互斥不叠加。
+三态路由收敛后**直写**三件套、**不经 change 生产路径**（`/sdflow-spec` · `opsx:ff`，两条都不经）——`ff-generation-constraints.md` 定义的生成硬约束（FF-0 开分支 + D-1~D-6）属 change 生产路径专属机制，与本 skill 的直写路径互斥不叠加。
 
 | 文件 | 内容核心 | 模板 |
 |---|---|---|
