@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: efba4a849658a4bd432727970f3e0b47cff89985
+---
+
 # Spec Review Report — simplify-workflow
 
 评审层：spec-review | 宿主：claude | 镜头：autoplan(CEO+Eng) + grounding + adversarial×2 + outside-voice(design)
@@ -176,6 +182,10 @@ decision-memo D2 直接删除观察窗+三档阈值，未跑实测。sdflow-spec
 - **B**：只对新初始化项目默认 tickets，已有项目 pin 当前值
 - 三面后果：系统镜（A 更简单统一；B 需在 sdflow-init 里加 pin 逻辑）· 用户镜（A 15 个项目静默切换；B 无感知）· 开发循环镜（B 增加维护面）
 - 主次：tickets 是超集不退化 + 有 marker 锁定在途 change → 推荐 A
+
+### 设计门拍板记录
+
+设计门已拍板批准，日期 2026-08-05。Q1→A（跑 retro 补数据）、Q2→A（不加确认步 + 措辞已修正）、Q3→A（翻转 + 补核验痕迹）。
 
 ### [已裁掉] X1 — "低频不是嵌入式 SOP 正确删除依据"（Codex CEO）
 
