@@ -62,6 +62,16 @@ worktree 里不存在。核验 `git merge-base --is-ancestor HEAD feat/simplify-
      「缺省即 tickets」。未触碰流程图/步骤表的整体结构（那是另一张更大票——tasks.md 第
      54 项「流程图改为线性单轨；步骤表精简...删全部 wayfinder/embedded-test-sop/分支 B
      引用」——的范围，本票只纠正 impl-pipeline 缺省值的文字描述）。
+   - 连带重跑 `python3 hack/gen_workflow_guide.py --write` 重生成
+     `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md`（单一源同步机械门，`hack/tests/
+     test_workflow_split.py::test_guide_is_in_sync_with_its_sources` 要求 GUIDE 与
+     workflow.md+prompts/ 保持一致，改 workflow.md 不重生成会转红——已用 baseline worktree
+     核验此为本票改动引入，非既有失败）。
+   - **未触碰** `openspec/workflow/workflow.md`（本仓「本地 pin」副本，同样残留旧文案）——
+     tickets.md 明确把「处理 openspec/workflow/ 本地 pin：删除规则文件恢复全局解析或同步刷新」
+     列为另一票（README/AGENTS.md 那一组任务），本票越界处理会侵犯该票范围；
+     `hack/tests/test_workflow_split.py` 也只校验 `sdflow-init/assets/workflow/` 权威源一侧，
+     未覆盖本地 pin，机械层不会因此转红。
 
 ## 未改动项 + 原因（premise-verification）
 
@@ -75,15 +85,31 @@ worktree 里不存在。核验 `git merge-base --is-ancestor HEAD feat/simplify-
 
 ## 测试结果
 
-`pytest sdflow-implement/tests/`：**79 passed**（含改动前 10 个用例先红验证，改动后全绿）。
-
-全仓 `pytest`（含改动前已有用例）另行跑过，结果见下方补充（若本报告落盘时仍在跑，以
-commit 前最终一次结果为准；`openspec/config.yaml` 改动仅删两行 wayfinder 规则引用 +
-改一段注释，不改变任何机械可测的字段，预期不影响其他 skill 测试）。
+- `pytest sdflow-implement/tests/`：**79 passed**（改动前 10 个用例先跑一遍确认转红，逐一对应
+  `read_config_pipeline`/CLI route 期望值改动点；实现翻转后复跑转绿）。
+- 全仓 `pytest -q`：**2489 passed, 10 skipped, 3 failed**（首次跑）。逐一核验 3 个失败：
+  1. `hack/tests/test_workflow_split.py::test_guide_is_in_sync_with_its_sources` ——
+     **本票引入**（改了 `workflow.md` 未同步重生成 GUIDE）。已修：跑
+     `python3 hack/gen_workflow_guide.py --write`，复跑转绿。
+  2. `sdflow-init/tests/test_setup_sdflow.py::TestBrandAndMarkerNarrowing::
+     test_legacy_marker_recognized_only_for_our_names` —— **既有失败，非本票引入**。用
+     `git worktree add <tmp> 30f10e6 --detach`（本票改动前的 merge 基线）核验：该用例在
+     30f10e6 上同样红（`embedded-test-sop` 孤儿目录未被清理），与本票 impl_route.py/config
+     改动无关，源头是更早一次 ff-merge 已删除 `embedded-test-sop/SKILL.md` 但清理逻辑未跟上，
+     属于另一票（embedded-test-sop 移除相关）范围。
+  3. `hack/tests/test_subprocess_encoding_contract.py::
+     test_text_mode_subprocesses_declare_utf8_and_replace` —— **既有失败，非本票引入**，同一
+     baseline worktree 核验为 30f10e6 上已红（全仓 subprocess 调用点计数 187 < 200 门槛，
+     与本票无关，同样是前序 SKILL 目录删除的连带效应）。
+  修复 #1 后复跑 `pytest hack/tests/test_workflow_split.py sdflow-implement/tests/`：
+  **84 passed**。最终一次全仓 `pytest -q` 复核：仅剩 #2/#3 两个既有失败（详见下方 Global
+  Constraints 核验行）。
 
 ## Global Constraints 核验
 
 - impl_route.py 改动后 `pytest sdflow-implement/tests/` 全绿 ✅（79 passed）
 - 未触碰 `sdflow-ship/scripts/ship_gate.py`（gate 零改动铁律，本票未涉及）
-- workflow bundle 权威源改动（`sdflow-init/assets/workflow/`）已同步；本仓 `openspec/config.yaml`
-  改动仅影响本仓，未误推到模版。
+- workflow bundle 权威源改动（`sdflow-init/assets/workflow/`）已同步（含 WORKFLOW-GUIDE.md 重生成）；
+  本仓 `openspec/config.yaml` 改动仅影响本仓，未误推到模版。
+- 全仓 `pytest -q` 最终态：本票改动引入的失败已全部修复归零；残留 2 个失败均已用 30f10e6
+  baseline worktree 核验为既有失败（与本票无关，不阻塞本票交付）。
