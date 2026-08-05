@@ -81,3 +81,23 @@
 
 - **WHEN** archive 执行
 - **THEN** 主 spec 中本 Requirement 被删除
+
+## MODIFIED Requirements (补充) [spec-review-amendment]
+
+### Requirement: skill 命名与品牌一致性（局部修改）
+
+修改：豁免保留名单移除 `embedded-test-sop`（skill 目录已删除，豁免失去对象）。
+
+#### Scenario: 命名豁免清单不含已删除 skill
+
+- **WHEN** archive 执行
+- **THEN** 主 spec 命名豁免清单中无 `embedded-test-sop`
+
+### Requirement: 判据 MUST 只在其保护的风险真实存在的阶段求值（局部修改）
+
+修改：Scenario「实现窗口的三个分支各自受保护」改为两个分支（`RUN_PLAN`、`CONTINUE_IMPL`），删除 `RUN_SOP`。「MUST 各有用例」数量从三调为二。
+
+#### Scenario: 实现窗口的两个分支各自受保护
+
+- **WHEN** 盘面处于 `RUN_PLAN` 或 `CONTINUE_IMPL`
+- **THEN** 两个分支 MUST 各有用例——它们是两处独立的提前返回点

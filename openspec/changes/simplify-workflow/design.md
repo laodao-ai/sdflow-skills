@@ -44,7 +44,7 @@
 |------|----------|
 | `sdflow-init/assets/workflow/workflow.md` | 流程图改为线性单轨；步骤表从 10 行降到 6 行；§三设计决策精简（G1 分析移入附录）；删除 wayfinder/embedded-test-sop/分支 B 全部引用 |
 | `sdflow-init/assets/workflow/generation-process.md` | 删 §四 分支 B + 四入口选择规则；简化为单入口描述（explore 条件 → sdflow-spec 默认）；删手动限制语言 |
-| `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md` | 删步骤 1b/2/3/5.5；重编号 |
+| `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md` | **生成物，MUST NOT 手改**——改 workflow.md 步骤表 + 更新 `hack/gen_workflow_guide.py` 的 STEP_FILES 字典（重编号键）→ `python3 hack/gen_workflow_guide.py --write` 重新生成 [spec-review-amendment] |
 | `sdflow-init/assets/workflow/ff-generation-constraints.md` | 删 §wayfinder→ff 衔接契约（≈30 行） |
 | `CLAUDE.md`（本仓） | 删「四入口选择规则」段；删「旧入口 sunset 条件」段；删 grill-with-docs 段落；更新 impl-pipeline 缺省描述；删手动限制引用 |
 | `sdflow-init/assets/snippets/claude-section.md` | 同步 CLAUDE.md 的删改（此为下推给消费项目的模板） |
@@ -82,7 +82,7 @@ RUN_SOP 在 gate 状态机中的角色：
 | config.yaml `impl-pipeline: tickets` | 走 tickets | 走 tickets（不变） |
 | config.yaml `impl-pipeline: superpowers` | 走 superpowers | 走 superpowers（不变） |
 
-翻转点在 `sdflow-ship/scripts/impl_route.py`（`route` 子命令的缺省值）和 `sdflow-ship/SKILL.md`（文档描述）。
+翻转点在 `sdflow-implement/scripts/impl_route.py`（`route` 子命令的缺省值，9 处 `return "superpowers"` 硬编码 + `_cmd_route` 的展示折叠逻辑需对称翻转）和 `sdflow-ship/SKILL.md`（文档描述）。[spec-review-amendment: 路径修正 + 复杂度补充]
 
 ### 5. sdflow-spec 自动触发规则
 
@@ -98,7 +98,7 @@ RUN_SOP 在 gate 状态机中的角色：
 
 - **下游静默翻转**：15 个无显式 `impl-pipeline` 键的项目在 `sdflow-init update` 后从 superpowers 翻到 tickets。风险可接受（tickets 是超集，不退化；需旧管线显式加 `impl-pipeline: superpowers`）。
 - **embedded-test-sop 不可恢复**：skill 目录和 gate 代码同时删除，`git revert` 是唯一恢复路径。
-- **sdflow-spec 误触发**：模型可能在不恰当时机自动触发 sdflow-spec。缓解：规则要求人的示意信号，HARD-GATE 兜底。
+- **sdflow-spec 误触发**：模型可能在不恰当时机自动触发 sdflow-spec。诚实边界：唯一兜底是指令层自报，无机械门；副作用（分支/文件）在 HARD-GATE 之前已产生，误报后果是需要人工清理（分支可删、change 目录可删，纯本地可逆），而非被 HARD-GATE 拦截。五问速算：概率低、影响小可逆、完美成本高 → 接受。[spec-review-amendment: 修正 HARD-GATE 兜底措辞为诚实边界]
 
 ## Compliance
 

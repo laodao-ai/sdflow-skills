@@ -17,7 +17,7 @@ sdflow 工作流当前有双轨入口（分支 A: sdflow-spec / 分支 B: explor
 - workflow.md 步骤表从 10 行降到 6 行
 - generation-process.md 从 §四 两个分支合并为单一入口描述
 - CLAUDE.md 的「阶段一入口」「sunset 条件」「grill-with-docs」段落全部删除（≈80 行）
-- ship_gate.py 删除 RUN_SOP 分支（17 处代码 + 21 处测试），测试全绿
+- ship_gate.py 删除 RUN_SOP 分支，pytest sdflow-ship/tests/ 全绿 [spec-review-amendment: 原数字不准确（实测 15 处代码 / 20 个测试函数），改为自证型指标]
 - 全流程只有一个人类停点（HARD-GATE），不再需要人手动敲 `/sdflow-spec` 或 `/grill-with-docs`
 
 ## Non-Goals
@@ -40,14 +40,20 @@ N/A
 ### Modified Capabilities
 
 - `spec-workflow`: 删除双轨入口、wayfinder 引用、embedded-test-sop 自动触发；解除 sdflow-spec 手动限制；翻转 impl-pipeline 缺省
+- `spec-authoring`: 修改 SA-01（删除 disable-model-invocation 要求）、废止 SA-14（四入口选择规则随双轨合并失去前提） [spec-review-amendment]
+- `impl-orchestration`: 修改缺省路由（缺键→tickets） [spec-review-amendment]
 
 ## Impact
 
 - **workflow bundle（权威源，推给所有下游项目）**：workflow.md、generation-process.md、ff-generation-constraints.md、WORKFLOW-GUIDE.md 重写/删段；prompts/ 下 3 个文件删除
 - **snippets（注入下游 CLAUDE.md）**：claude-section.md 删分支 B/wayfinder/手动限制段落
-- **sdflow-ship**：SKILL.md 删 RUN_SOP 描述；ship_gate.py 删 RUN_SOP verdict + tg02_hit 检测（17 处代码 + 21 处测试）
+- **sdflow-ship**：SKILL.md 删 RUN_SOP 描述；ship_gate.py 删 RUN_SOP verdict + tg02_hit 检测
 - **sdflow-spec**：SKILL.md 删 `disable-model-invocation: true`
 - **embedded-test-sop**：整个 skill 目录删除
-- **本仓 CLAUDE.md**：重写入口规则、删 sunset 条件、删 grill-with-docs 段落
-- **本仓 openspec/config.yaml**：更新 impl-pipeline 注释
+- **本仓 CLAUDE.md + AGENTS.md**：重写入口规则、删 sunset 条件、删 grill-with-docs 段落 [spec-review-amendment: AGENTS.md 遗漏]
+- **本仓 openspec/config.yaml**：更新 impl-pipeline 注释 + 删除 wayfinder 规则引用 [spec-review-amendment]
+- **本仓 openspec/workflow/**：删除本地 pin 规则文件（恢复全局解析）或同步刷新 [spec-review-amendment: 48 文件本地 pin 遗漏]
+- **config.template.yaml**：更新缺省说明（superpowers→tickets） [spec-review-amendment]
+- **gen_workflow_guide.py**：更新 STEP_FILES 字典 + 重新生成 WORKFLOW-GUIDE.md [spec-review-amendment]
+- **companion 文档**：docs/workflow-map.md、docs/workflow-overview.md、docs/criteria-mechanization-tracker.md、docs/sdflow-fable5/02-module-reference.md 同步 [spec-review-amendment]
 - **下游 15 个无显式 impl-pipeline 键的项目**：sdflow-init update 后行为从 superpowers 翻到 tickets
