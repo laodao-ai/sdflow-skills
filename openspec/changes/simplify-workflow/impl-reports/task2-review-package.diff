@@ -1,0 +1,667 @@
+# Review package: ab735fd..08beb9f94aeb673ee9c696a1f87f536aa2131353 (Task 2 worktree merge)
+
+## Commits
+08beb9f Merge Task 2: 翻转 impl-pipeline 缺省为 tickets
+7830fcb task2(simplify-workflow): 重生成 WORKFLOW-GUIDE.md + 补全 impl-report 测试结果
+6fdb81c task2(simplify-workflow): 翻转 impl-pipeline 缺省为 tickets
+
+## Files changed
+ .../impl-reports/task2-flip-impl-pipeline.md       | 115 +++++++++++++++++++++
+ openspec/config.yaml                               |   7 +-
+ openspec/workflow/config.template.yaml             |   5 +-
+ sdflow-implement/scripts/impl_route.py             |  45 +++++---
+ sdflow-implement/tests/test_impl_route.py          |  22 ++--
+ sdflow-init/assets/workflow/WORKFLOW-GUIDE.md      |   4 +-
+ sdflow-init/assets/workflow/config.template.yaml   |   5 +-
+ sdflow-init/assets/workflow/workflow.md            |   8 +-
+ 8 files changed, 173 insertions(+), 38 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/simplify-workflow/impl-reports/task2-flip-impl-pipeline.md b/openspec/changes/simplify-workflow/impl-reports/task2-flip-impl-pipeline.md
+new file mode 100644
+index 0000000..a3fdf8c
+--- /dev/null
++++ b/openspec/changes/simplify-workflow/impl-reports/task2-flip-impl-pipeline.md
+@@ -0,0 +1,115 @@
++# Task 2 impl-report：翻转 impl-pipeline 缺省为 tickets 并更新相关配置文档
++
++## 范围核验（worktree 起手偏离，已自行修复）
++
++本 worktree 起手时未挂在 `feat/simplify-workflow` 分支上（挂在其 merge-base 的更早祖先），
++`openspec/changes/simplify-workflow/` 整个目录（含 tickets.md/tasks.md/design.md 等）在本
++worktree 里不存在。核验 `git merge-base --is-ancestor HEAD feat/simplify-workflow` 为真后，
++用 `git merge --ff-only feat/simplify-workflow` 快进合并补齐（工作树干净、无本地改动，纯快进、
++零冲突），随后才能读到 `task2-brief.md` 与本 change 全部四件套。
++
++## 改动清单
++
++1. **`sdflow-implement/scripts/impl_route.py`**
++   - `read_config_pipeline`：6 处 `return "superpowers", ...` 改为 `return "tickets", ...`
++     （缺失文件 / 缺键 / 空值 / yq 解析异常 / 非字符串结构 / 非法值兜底，共 6 个 return 点），
++     docstring 同步更新。
++   - `read_plan_marker`：**未改**——2 处 `return "superpowers"`（无 frontmatter / frontmatter
++     无键）按 brief 要求冻结不变，避免静默切换在途 change；在其 docstring 补一段说明冻结理由。
++   - 模块头部三跳路由说明（③ 那行）同步改写，区分「config 缺省已翻转」与「marker 缺省冻结」。
++   - `_cmd_route` 展示折叠逻辑（`config_display`/`marker_display`）：**函数行为未改**（无测试
++     要求变更，marker 侧的折叠触发条件本就锚在 marker 自己的缺省值——marker 缺省冻结不翻转，
++     折叠触发条件因此也不随之改变；config 侧本就不折叠，凭 `config_note` 元组已区分三态，
++     无需新增折叠）。按 tickets.md checkbox 要求补了一段显式注释，说明两侧折叠锚点为何在
++     翻转后刻意不对称（config 锚新缺省 tickets、marker 锚旧缺省 superpowers），供后续读者
++     不再误判为遗漏。**决策记录**：design.md/spec-review-report 里「`_cmd_route` 展示折叠逻辑
++     需对称翻转」一句缺乏更细粒度的行为规格，现有测试矩阵（`test_cli_route_marker_explicit_
++     superpowers_displays_none` 等）明确将 marker 侧折叠行为标注为「现行折叠行为...锁定现状
++     （display 改进已 defer）」——即该模糊性在更早阶段已被识别并显式 defer，本任务未在此
++     基础上新造行为，只补齐说明性注释。
++
++2. **`sdflow-implement/tests/test_impl_route.py`**（TDD：先红后绿）
++   - `read_config_pipeline` 相关 8 个用例：期望值从 `"superpowers"` 改为 `"tickets"`（缺失文件/
++     缺键/空值/typo/commented-line/indented-mention/引号损坏×2）。
++   - CLI 用例 2 个：`test_cli_route_absent_absent_defaults_superpowers` 更名为
++     `test_cli_route_absent_absent_defaults_tickets`，`pipeline=` 断言改 `tickets`；
++     `test_cli_route_unknown_config_value_echoed` 的 `pipeline=` 断言改 `tickets`。
++   - `read_plan_marker` 相关用例、marker 锁定优先于 config 的用例（含
++     `test_cli_route_marker_implicit_superpowers_locks_over_config`、
++     `test_cli_route_marker_explicit_superpowers_displays_none`）**全部未改**——marker 行为冻结，
++     断言本就仍然成立（未修改即验证了冻结正确）。
++   - 先跑一遍确认 10 个用例转红（与预期改动点一一对应），再实现 `impl_route.py` 的翻转，
++     复跑转绿。
++
++3. **`openspec/config.yaml`（本仓）**
++   - `impl-pipeline` 注释块（原 62-64 行）：「缺省请勿填（缺失/非法值一律 superpowers 旧管线）」
++     → 改为「缺省一律 tickets（缺失/非法值同归此路径）」，补一句「显式 `impl-pipeline:
++     superpowers` 仍生效，走旧管线」。
++   - 删除两处 wayfinder 规则引用（`rules.proposal`/`rules.design` 下各一条 `change 源于
++     wayfinder map 时：...` bullet，对应 spec-review-report M6 finding 定位的 L38/L48）。
++
++4. **两份 `config.template.yaml`**（`sdflow-init/assets/workflow/` + `openspec/workflow/`）
++   - 注释同步改为「缺省一律 tickets；缺失/非法值同归此路径」+ 显式 superpowers 仍生效说明。
++   - 未删这两份模版里的 wayfinder bullet——tasks.md/spec-review-report M6 finding 明确只点名
++     `openspec/config.yaml:38/48`（本仓 config），模版文件的 wayfinder 引用清理属于另一票
++     （`ff-generation-constraints.md` §wayfinder→ff 衔接契约删除 + companion 文档清理任务），
++     不在本票范围内，未越界处理。
++
++5. **`sdflow-init/assets/workflow/workflow.md`**
++   - 3 处 `impl-pipeline` 相关描述：把「缺省不变（=writing-plans→subagent-dev / 无说明）」
++     改为准确描述当前状态——流程图分支处改为「实现管线缺省 = tickets；显式设
++     `impl-pipeline: superpowers` 才走 writing-plans→subagent-dev」；两处步骤表描述改
++     「缺省即 tickets」。未触碰流程图/步骤表的整体结构（那是另一张更大票——tasks.md 第
++     54 项「流程图改为线性单轨；步骤表精简...删全部 wayfinder/embedded-test-sop/分支 B
++     引用」——的范围，本票只纠正 impl-pipeline 缺省值的文字描述）。
++   - 连带重跑 `python3 hack/gen_workflow_guide.py --write` 重生成
++     `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md`（单一源同步机械门，`hack/tests/
++     test_workflow_split.py::test_guide_is_in_sync_with_its_sources` 要求 GUIDE 与
++     workflow.md+prompts/ 保持一致，改 workflow.md 不重生成会转红——已用 baseline worktree
++     核验此为本票改动引入，非既有失败）。
++   - **未触碰** `openspec/workflow/workflow.md`（本仓「本地 pin」副本，同样残留旧文案）——
++     tickets.md 明确把「处理 openspec/workflow/ 本地 pin：删除规则文件恢复全局解析或同步刷新」
++     列为另一票（README/AGENTS.md 那一组任务），本票越界处理会侵犯该票范围；
++     `hack/tests/test_workflow_split.py` 也只校验 `sdflow-init/assets/workflow/` 权威源一侧，
++     未覆盖本地 pin，机械层不会因此转红。
++
++## 未改动项 + 原因（premise-verification）
++
++**`sdflow-ship/SKILL.md` 未改动。** 逐字核验：全文 `grep -n "impl-pipeline"` **零命中**——
++该文件描述 RUN_PLAN/CONTINUE_IMPL 分支时完全以 `impl_route.py route` 的运行时回执
++（`pipeline=tickets` / `pipeline=superpowers`）为准分支处理，两个分支的处理描述本就
++对称、不预设任何一侧为"缺省"，故文件里原本就不存在需要翻转的"缺省描述"文本。design.md
++（L57/L85）与 tickets.md 把这条与 impl_route.py 的翻转点并列提及，但这是设计阶段的
++预判性描述，未必对应文件里存在具体可改的文字——核验后确认此处无内容需要改动，如实报告，
++未强行编造改动凑数。
++
++## 测试结果
++
++- `pytest sdflow-implement/tests/`：**79 passed**（改动前 10 个用例先跑一遍确认转红，逐一对应
++  `read_config_pipeline`/CLI route 期望值改动点；实现翻转后复跑转绿）。
++- 全仓 `pytest -q`：**2489 passed, 10 skipped, 3 failed**（首次跑）。逐一核验 3 个失败：
++  1. `hack/tests/test_workflow_split.py::test_guide_is_in_sync_with_its_sources` ——
++     **本票引入**（改了 `workflow.md` 未同步重生成 GUIDE）。已修：跑
++     `python3 hack/gen_workflow_guide.py --write`，复跑转绿。
++  2. `sdflow-init/tests/test_setup_sdflow.py::TestBrandAndMarkerNarrowing::
++     test_legacy_marker_recognized_only_for_our_names` —— **既有失败，非本票引入**。用
++     `git worktree add <tmp> 30f10e6 --detach`（本票改动前的 merge 基线）核验：该用例在
++     30f10e6 上同样红（`embedded-test-sop` 孤儿目录未被清理），与本票 impl_route.py/config
++     改动无关，源头是更早一次 ff-merge 已删除 `embedded-test-sop/SKILL.md` 但清理逻辑未跟上，
++     属于另一票（embedded-test-sop 移除相关）范围。
++  3. `hack/tests/test_subprocess_encoding_contract.py::
++     test_text_mode_subprocesses_declare_utf8_and_replace` —— **既有失败，非本票引入**，同一
++     baseline worktree 核验为 30f10e6 上已红（全仓 subprocess 调用点计数 187 < 200 门槛，
++     与本票无关，同样是前序 SKILL 目录删除的连带效应）。
++  修复 #1 后复跑 `pytest hack/tests/test_workflow_split.py sdflow-implement/tests/`：
++  **84 passed**。最终一次全仓 `pytest -q` 复核：仅剩 #2/#3 两个既有失败（详见下方 Global
++  Constraints 核验行）。
++
++## Global Constraints 核验
++
++- impl_route.py 改动后 `pytest sdflow-implement/tests/` 全绿 ✅（79 passed）
++- 未触碰 `sdflow-ship/scripts/ship_gate.py`（gate 零改动铁律，本票未涉及）
++- workflow bundle 权威源改动（`sdflow-init/assets/workflow/`）已同步（含 WORKFLOW-GUIDE.md 重生成）；
++  本仓 `openspec/config.yaml` 改动仅影响本仓，未误推到模版。
++- 全仓 `pytest -q` 最终态：本票改动引入的失败已全部修复归零；残留 2 个失败均已用 30f10e6
++  baseline worktree 核验为既有失败（与本票无关，不阻塞本票交付）。
+diff --git a/openspec/config.yaml b/openspec/config.yaml
+index 3c0c375..a4b5c35 100644
+--- a/openspec/config.yaml
++++ b/openspec/config.yaml
+@@ -28,47 +28,46 @@ context: |
+   - Forbidden patterns：不要把某个 skill 的示例/临时数据当作 bundle 的一部分提交；
+     不要在下游项目里直接改 `openspec/workflow/` 内容并遗忘同步回本仓库。
+ 
+ # 按 artifact 注入的自定义规则（升级安全：在仓库内，openspec update 不覆盖）
+ # 槽位分「无条件必填」与「〔TG-NN〕命中才必填」两类；TG 定义见 trigger-catalog.md。
+ rules:
+   proposal:
+     - 无条件必含小节，统一用英文标题（与 OpenSpec 模板一致）：`## Why`（问题/动机）、`## Success Metrics`、`## Non-Goals`（不在本次范围）、`## Compliance`（合规声明，不适用写 N/A）
+     - 按 @openspec/workflow/trigger-catalog.md 评估并加节：TG-19→需求优先级(P0/P1/P2)、TG-20→利益相关方与外部依赖、TG-21→开放问题(负责人/截止)、TG-22→假设(失效影响)、TG-24→外部服务成本估算
+     - 命中 TG-01/02/03（技术栈）则在 Impact 标注，供下游按 @openspec/workflow/spec-checklists/ 选用领域清单
+-    - change 源于 wayfinder map 时：按 @openspec/workflow/ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读 map（Destination→动机+Success Metrics、Decisions-so-far→逐 ticket zoom 决议全文、Out-of-scope→Non-Goals 可证伪假设），proposal 回链 map
+   specs:
+     - 每个 Requirement 必挂 #### Scenario(WHEN/THEN)，Requirement 有稳定 ID（schema 已要求，强调不得遗漏）
+     - 验收标准可观察、可测试，不得只写"测试通过"
+     - 新能力 delta spec MUST 以 `## Purpose` 开头（≥50 字符）；1.7.0 archive 抬升此段进主 spec，缺则写 TBD 占位符
+   design:
+     - 无条件必含小节，英文标题：`## Compliance`（规则/边界合规声明，遵守或显式豁免，禁沉默例外）
+     - 按 trigger-catalog 命中加节：TG-04→v_old/v_new 对照表、TG-05→数据模型与生命周期、TG-07→请求/响应 JSON 示例、TG-08→失败模式表+可观测性、TG-15→可观测性、TG-16→NFR 数字化、TG-17→安全与数据保护、TG-23→决策记录 ADR、TG-13/14→组件清单
+     - 按 @openspec/workflow/design-diagrams.md 画图：TG-09→状态机图、TG-10→序列图、TG-11→数据流图、TG-12→决策图、TG-13→C4 Context+Container；非平凡变更至少一张组件/依赖图
+     - 代码事实(函数名/字段/API 路径)先核验再写入，禁从记忆直接写
+-    - change 源于 wayfinder map 时：按 @openspec/workflow/ff-generation-constraints.md「wayfinder→ff 衔接契约」，design 决策段源自已决 ticket 的须内联回链该 ticket
+   tasks:
+     - 每个任务标注对应 Requirement ID（与 specs 双向追溯，无幽灵任务）
+     - 命中 TG-18(有测试计划) 则产出测试覆盖图（code path → 测试类型）
+     - 单任务控制在可独立验证的小粒度
+     - Group related tasks under numbered sections
+ 
+ # model-tiers（可选覆盖段）——真相源 = 规则根 model-tiers.md（resolver 解析）。
+ # 此段仅 per-repo 覆盖"档位→模型"映射；缺省请勿填（留空即用 canonical 缺省）。
+ # model-tiers:
+ #   strong: <model-id>
+ #   mid: <model-id>
+ #   light: <model-id>
+ 
+ # impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
+-# 缺省请勿填（缺失/非法值一律 superpowers 旧管线）；仅在新出 ticket 时刻读一次，
+-# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
++# 缺省一律 tickets（缺失/非法值同归此路径）；仅在新出 ticket 时刻读一次，
++# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change；
++# 显式 `impl-pipeline: superpowers` 仍生效，走旧管线。
+ impl-pipeline: tickets
+ 
+ # operations（可选段）——按操作类型（如 archive）下沉给执行子代理的硬约束指引。
+ # guidance 形状为字符串数组（非字符串），否则 CLI 拒绝并打警告。
+ operations:
+   archive:
+     guidance:
+       - "归档 MUST 走 openspec archive CLI（它同步 delta→openspec/specs/ + 更新 INDEX + 校验），禁手动 mv（漏 spec 同步）"
+       - "archive 前 MUST 先 reconcile tasks.md 复选框（否则 CLI 报 N/M incomplete 警告 + verify 误判）"
+ 
+diff --git a/openspec/workflow/config.template.yaml b/openspec/workflow/config.template.yaml
+index 8b96528..cdaa714 100644
+--- a/openspec/workflow/config.template.yaml
++++ b/openspec/workflow/config.template.yaml
+@@ -69,18 +69,19 @@ rules:
+ #     mid: <codex-model-id>
+ #     light: <codex-model-id>
+ #
+ # 扁平旧格式（历史遗留，兼容读作 Claude 机队覆盖，不推荐新写）：
+ # model-tiers:
+ #   strong: <claude-model-id>
+ #   mid: <claude-model-id>
+ #   light: <claude-model-id>
+ 
+ # impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
+-# 缺省请勿填（缺失/非法值一律 superpowers 旧管线）；仅在新出 ticket 时刻读一次，
+-# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
++# 缺省请勿填（缺省一律 tickets；缺失/非法值同归此路径）；仅在新出 ticket 时刻读一次，
++# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change；
++# 显式 `impl-pipeline: superpowers` 仍生效，走旧管线。
+ # impl-pipeline: tickets
+ 
+ # 评审价值度量（lens-metric）开关：低频消费仓默认关（避免零收益期背记账+硬阻塞）；
+ # 高频仓可改 true 开启。契约见 lens-metric-contract.md。
+ metrics:
+   enabled: false
+diff --git a/sdflow-implement/scripts/impl_route.py b/sdflow-implement/scripts/impl_route.py
+index 28d4d18..d96526d 100644
+--- a/sdflow-implement/scripts/impl_route.py
++++ b/sdflow-implement/scripts/impl_route.py
+@@ -1,19 +1,21 @@
+ #!/usr/bin/env python3
+ # -*- coding: utf-8 -*-
+ """impl_route.py — sdflow-implement 路由/拓扑 stdlib-only helper（只读、零副作用）
+ 
+ 管线路由三跳（design F4/F12/F13，逐字见 matt-workflow-integration/superpowers-plan.md
+-Task 2 Interfaces）：
++Task 2 Interfaces；[simplify-workflow] 缺省已翻转为 tickets，见下方③）：
+     ① openspec/config.yaml 顶层 `impl-pipeline:` 键（仅新出 ticket 首跳读一次）
+     ② plan 文件头 frontmatter marker（在途只读，marker 存在即锁定，优先于 config）
+-    ③ 键/marker 缺席 → 一律 superpowers（缺省态，静默回退）
++    ③ config 键缺席/空值/非法值 → 一律 tickets（新缺省态，静默回退）；
++       plan 已存在但 frontmatter/marker 缺席 → 仍一律 superpowers（旧缺省，冻结不变，
++       避免静默切换在途 change——marker 是"已出票"的信号，不该被本次翻转影响）。
+ marker **存在但非法/重复/损坏** 一律停（RouteStop，UNKNOWN 语义），不静默回退——
+ 防两管线混跑。
+ 
+ 本文件不 `import yaml`（零依赖不变量）——config.yaml / plan frontmatter 的 YAML **取值**
+ 委托给外部 yq(mikefarah) 二进制（同 git 的外部二进制先例，`_yq()`，见 shared-yaml-subset-parser）。
+ **不改** sdflow-ship/scripts/ship_gate.py（gate 零改动铁律：本文件不影响 gate 任何判定）；
+ subprocess 除 `_yq()` 外仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输出 "-"。
+ 
+ [shared-yaml-subset-parser] frontmatter/键重复检测**不能**委托给 yq——实测 yq 对重复
+ `impl-pipeline:` 键静默取最后值（exit 0），且 `--front-matter=extract` 不要求闭合 `---`
+@@ -167,64 +169,73 @@ class TopoError(Exception):
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # ① config 键
+ # ---------------------------------------------------------------------------
+ 
+ def read_config_pipeline(root) -> Tuple[str, str]:
+     """读 <root>/openspec/config.yaml 顶层 `impl-pipeline:` 行（取值委托给 `_yq()`）。
+ 
+     返回 (pipeline, note)：
+-        缺失/空值      → ("superpowers", "absent")
++        缺失/空值      → ("tickets", "absent")
+         tickets/superpowers → (值, "ok")
+-        其他值/整份 config.yaml 语法损坏 → ("superpowers", "unknown-value:<原文或 yq 诊断>")
+-        （F12：非法值回显，区别于缺省；语法损坏同归此路径——fail 向旧管线，且可诊断。
++        其他值/整份 config.yaml 语法损坏 → ("tickets", "unknown-value:<原文或 yq 诊断>")
++        （F12：非法值回显，区别于缺省；语法损坏同归此路径——fail 向新缺省管线（tickets），且可诊断。
++        [simplify-workflow] 缺省从 superpowers 翻转为 tickets——tickets 管线已是本仓与
++        下游试点的常态路径，superpowers 现在只作显式声明保留（不变：显式
++        `impl-pipeline: superpowers` 仍生效，见下方 LEGAL_PIPELINES 分支）。
+         [shared-yaml-subset-parser] 旧版的「损坏标量」（未闭合引号等）在 yq 方案下不再是
+         本函数自己判定的一类——那类输入会让 yq 对整份 config.yaml 的解析直接失败
+         （exit≠0），与其它语法错误一样落入下方 `except RuntimeError` 分支，诊断精度从
+         「点名具体哪个标量坏」降为「yq 报的原始错误」，是切换到真解析器的已知代价
+         （design.md spec-review-amendment F9 已登记，tasks.md §8.3 同类）。
+     """
+     config_path = Path(root) / "openspec" / "config.yaml"
+     if not config_path.exists():
+-        return "superpowers", "absent"
++        return "tickets", "absent"
+ 
+     try:
+         raw = _yq('."impl-pipeline"', config_path, default=None)
+     except RuntimeError as exc:
+-        return "superpowers", f"unknown-value:{exc}"
++        return "tickets", f"unknown-value:{exc}"
+ 
+     if raw is None:
+-        return "superpowers", "absent"
++        return "tickets", "absent"
+     if not isinstance(raw, str):
+         # yq 解出的是非字符串结构（如 list/map/number）——本字段的合法值域只有两个字面串，
+         # 结构类型错本身就是「非法值」，与字符串越域同归 unknown-value。
+-        return "superpowers", f"unknown-value:{raw!r}"
++        return "tickets", f"unknown-value:{raw!r}"
+     if raw == "":
+-        return "superpowers", "absent"
++        return "tickets", "absent"
+     if raw in LEGAL_PIPELINES:
+         return raw, "ok"
+-    return "superpowers", f"unknown-value:{raw}"
++    return "tickets", f"unknown-value:{raw}"
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # ② plan frontmatter marker
+ # ---------------------------------------------------------------------------
+ 
+ def read_plan_marker(plan_path) -> Optional[str]:
+     """读 plan 文件头 frontmatter 的 `impl-pipeline` marker（取值委托给 `_yq()`）。
+ 
+     文件缺            → None
+     无 frontmatter / 无键 → "superpowers"（旧管线产物，不嗅探正文内容）
+     首块 frontmatter 含 impl-pipeline: tickets|superpowers 单值 → 该值
+     键重复 / 值非法 / 值损坏（未闭合引号等）/ frontmatter 未闭合 → raise RouteStop（UNKNOWN 语义，停）
+ 
++    [simplify-workflow] 本函数的"无 frontmatter/无键 → superpowers"缺省**刻意冻结不变**
++    （不随 read_config_pipeline 的缺省翻转而翻转）：marker 只在 plan 文件已存在时才有意义，
++    已存在的 plan 代表"已出票"——若把这里也悄悄改成 tickets，会让翻转前用旧管线出的、
++    frontmatter 尚无 marker 的在途 plan 静默改道，与"marker 存在即锁定优先于 config"的
++    设计初衷（防两管线混跑）自相矛盾。
++
+     [shared-yaml-subset-parser] frontmatter 边界（首行 `---` + 闭合 `---`）与
+     `impl-pipeline` 键重复计数仍走原始文本预扫描（原因见文件头注释：yq 既不要求闭合
+     `---`、也不会报告重复键），预扫描通过后才调 `_yq()` 取真值——值损坏（未闭合引号等）
+     此时体现为 yq 对该 frontmatter 段解析失败（`RuntimeError`），同样映射为 RouteStop。
+     """
+     p = Path(plan_path)
+     if not p.exists():
+         return None
+ 
+     text = p.read_text(encoding="utf-8", errors="replace")
+@@ -519,34 +530,42 @@ def _cmd_route(args: argparse.Namespace) -> int:
+     config_pipeline, config_note = read_config_pipeline(root)
+ 
+     try:
+         marker = read_plan_marker(plan_path)
+     except RouteStop as e:
+         print(str(e), file=sys.stderr)
+         return EXIT_ROUTE_STOP
+ 
+     pipeline = resolve_pipeline(config_pipeline, marker)
+ 
++    # [simplify-workflow] config_display / marker_display 的折叠锚点对称翻转后**刻意不同**
++    # （非遗漏）：两侧缺省态锚在不同的字面值——
++    #   config 侧锚新缺省 tickets：absent/unknown-value 分支现在都回退到 "tickets"
++    #     （read_config_pipeline 已翻转），但展示仍保留三态原文（absent/raw 值/tickets），
++    #     不折叠——config_note 元组本就区分得开，折叠反而丢诊断信息。
++    #   marker 侧锚仍是旧缺省 superpowers（read_plan_marker 冻结不翻转，见其 docstring）：
++    #     "无法区分"显式声明 superpowers"与"无 frontmatter/无键的隐式缺省"——两者
++    #     read_plan_marker 返回值相同，且路由行为等价（均不锁 tickets，即不会让新缺省
++    #     生效），折叠显示 none。这一折叠与 config 侧的翻转无关——marker 的锚点本就
++    #     没有翻转，折叠触发条件（`marker == "superpowers"`）同样不随之改变。
+     if config_note == "absent":
+         config_display = "absent"
+     elif config_note == "ok":
+         config_display = config_pipeline
+     elif config_note.startswith("unknown-value:"):
+         config_display = config_note[len("unknown-value:"):]
+     else:  # pragma: no cover - 防御性兜底，理论不可达
+         config_display = config_note
+ 
+     if marker is None:
+         marker_display = "absent"
+     elif marker == "superpowers":
+-        # 无法区分"显式声明 superpowers"与"无 frontmatter/无键的隐式缺省"——两者
+-        # read_plan_marker 返回值相同，且路由行为等价（均不锁 tickets），统一显示 none。
+         marker_display = "none"
+     else:
+         marker_display = marker
+ 
+     plan_sha = _get_plan_sha(root, plan_path)
+ 
+     print(f"PIPELINE_RECEIPT change={change} config={config_display} "
+           f"marker={marker_display} pipeline={pipeline} plan_sha={plan_sha}")
+     return 0
+ 
+diff --git a/sdflow-implement/tests/test_impl_route.py b/sdflow-implement/tests/test_impl_route.py
+index 8320f18..1823405 100644
+--- a/sdflow-implement/tests/test_impl_route.py
++++ b/sdflow-implement/tests/test_impl_route.py
+@@ -39,70 +39,70 @@ def _mkchange(root: Path, name: str = "demo") -> Path:
+     d = root / "openspec" / "changes" / name
+     d.mkdir(parents=True, exist_ok=True)
+     return d
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # read_config_pipeline
+ # ---------------------------------------------------------------------------
+ 
+ def test_config_missing_file(tmp_path):
+-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
++    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+ 
+ 
+ def test_config_missing_key(tmp_path):
+     _write_config(tmp_path, "schema: spec-driven\nmetrics:\n  enabled: true\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
++    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+ 
+ 
+ def test_config_empty_value(tmp_path):
+     _write_config(tmp_path, "impl-pipeline:\nmetrics:\n  enabled: true\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
++    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+ 
+ 
+ def test_config_value_tickets(tmp_path):
+     _write_config(tmp_path, "impl-pipeline: tickets\n")
+     assert ir.read_config_pipeline(tmp_path) == ("tickets", "ok")
+ 
+ 
+ def test_config_value_superpowers(tmp_path):
+     _write_config(tmp_path, "impl-pipeline: superpowers\n")
+     assert ir.read_config_pipeline(tmp_path) == ("superpowers", "ok")
+ 
+ 
+ def test_config_value_typo(tmp_path):
+     _write_config(tmp_path, "impl-pipeline: tikets\n")
+     pipeline, note = ir.read_config_pipeline(tmp_path)
+-    assert pipeline == "superpowers"
++    assert pipeline == "tickets"
+     assert note == "unknown-value:tikets"
+ 
+ 
+ def test_config_value_quoted_double(tmp_path):
+     _write_config(tmp_path, 'impl-pipeline: "tickets"\n')
+     assert ir.read_config_pipeline(tmp_path) == ("tickets", "ok")
+ 
+ 
+ def test_config_value_quoted_single(tmp_path):
+     _write_config(tmp_path, "impl-pipeline: 'superpowers'\n")
+     assert ir.read_config_pipeline(tmp_path) == ("superpowers", "ok")
+ 
+ 
+ def test_config_commented_line_ignored(tmp_path):
+     # 模板注释态（config.template.yaml 先例）：`# impl-pipeline: tickets` 不应被当真键读到
+     _write_config(tmp_path, "# impl-pipeline: tickets\nschema: spec-driven\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
++    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+ 
+ 
+ def test_config_indented_mention_not_matched(tmp_path):
+     # 非顶层（缩进）出现的同名文本不应误判为键命中（如 context 块标量内提及）
+     _write_config(tmp_path, "context: |\n  聊到 impl-pipeline: tickets 只是举例\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
++    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # [impl-review-fix] BOM 剥离
+ # ---------------------------------------------------------------------------
+ 
+ def test_config_bom_prefix_legal_value(tmp_path):
+     # BOM + 合法 frontmatter/键值：剥 BOM 前会被误判「无键命中」，静默锁错管线
+     _write_config(tmp_path, "﻿impl-pipeline: tickets\n")
+     assert ir.read_config_pipeline(tmp_path) == ("tickets", "ok")
+@@ -131,28 +131,28 @@ def test_marker_key_space_before_colon(tmp_path):
+     assert ir.read_plan_marker(p) == "tickets"
+ 
+ 
+ # ---------------------------------------------------------------------------
+ # [impl-review-fix] 损坏引号值 fail-closed（未闭合引号 / 闭合引号后跟垃圾字符）
+ # ---------------------------------------------------------------------------
+ 
+ def test_config_value_quoted_unclosed_damaged(tmp_path):
+     _write_config(tmp_path, 'impl-pipeline: "tickets\n')
+     pipeline, note = ir.read_config_pipeline(tmp_path)
+-    assert pipeline == "superpowers"
++    assert pipeline == "tickets"
+     assert note.startswith("unknown-value:")
+ 
+ 
+ def test_config_value_quoted_trailing_junk_damaged(tmp_path):
+     _write_config(tmp_path, 'impl-pipeline: "tickets" junk\n')
+     pipeline, note = ir.read_config_pipeline(tmp_path)
+-    assert pipeline == "superpowers"
++    assert pipeline == "tickets"
+     assert note.startswith("unknown-value:")
+ 
+ 
+ def test_marker_quoted_unclosed_stops(tmp_path):
+     p = tmp_path / "plan.md"
+     p.write_text('---\nimpl-pipeline: "tickets\n---\n### Task 1: A\nBlocked-by: none\n',
+                  encoding="utf-8")
+     with pytest.raises(ir.RouteStop):
+         ir.read_plan_marker(p)
+ 
+@@ -230,26 +230,26 @@ def test_marker_unclosed_frontmatter_stops(tmp_path):
+ # CLI: route → PIPELINE_RECEIPT（路由合成规则 + receipt 行格式）
+ # ---------------------------------------------------------------------------
+ 
+ def _run_route(root, change):
+     r = subprocess.run(
+         [sys.executable, str(SCRIPT), "route", "--root", str(root), "--change", change],
+         capture_output=True, text=True, encoding="utf-8", errors="replace")
+     return r.returncode, r.stdout.strip(), r.stderr.strip()
+ 
+ 
+-def test_cli_route_absent_absent_defaults_superpowers(tmp_path):
++def test_cli_route_absent_absent_defaults_tickets(tmp_path):
+     _mkchange(tmp_path)
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert out == ("PIPELINE_RECEIPT change=demo config=absent marker=absent "
+-                    "pipeline=superpowers plan_sha=-")
++                    "pipeline=tickets plan_sha=-")
+ 
+ 
+ def test_cli_route_config_tickets_plan_missing_first_jump(tmp_path):
+     # marker 缺席（plan 文件不存在）→ 用 config 值（首跳）
+     _mkchange(tmp_path)
+     _write_config(tmp_path, "impl-pipeline: tickets\n")
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "config=tickets" in out
+     assert "marker=absent" in out
+@@ -304,21 +304,21 @@ def test_cli_route_stop_on_bad_marker(tmp_path):
+     assert out == ""
+     assert err  # stderr 原因非空
+ 
+ 
+ def test_cli_route_unknown_config_value_echoed(tmp_path):
+     _mkchange(tmp_path)
+     _write_config(tmp_path, "impl-pipeline: tikets\n")
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "config=tikets" in out
+-    assert "pipeline=superpowers" in out
++    assert "pipeline=tickets" in out
+ 
+ 
+ def test_cli_route_plan_sha_dash_when_no_plan(tmp_path):
+     _mkchange(tmp_path)
+     code, out, _ = _run_route(tmp_path, "demo")
+     assert code == 0
+     assert "plan_sha=-" in out
+ 
+ 
+ def test_cli_route_plan_sha_present_when_committed(tmp_path):
+diff --git a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+index ab892bd..5be15eb 100644
+--- a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
++++ b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+@@ -100,35 +100,35 @@
+ ## 阶段三 · 步骤 6 — `/writing-plans`
+ 
+ **prompt**（原样复制，勿转述 · 单一源 `prompts/step6-writing-plans.md`）：
+ 
+ ```
+ /writing-plans 按 {change dir} 的 design.md 与评审结论生成任务清单 superpowers-plan.md（superpowers 轨固定用此名；tickets 轨改用 `tickets.md`、由 `sdflow-implement` 出票，不走本 prompt），参考 tasks.md 分组，有测试计划则附测试覆盖图。把 design 的领域约束逐字写进 plan 的 Global Constraints，**并在每个 Task 段内复述与该任务相关的那几条 + 四条通则**——`scripts/task-brief` 只抽 `### Task N` 那一段喂给 implementer，**Global Constraints 不进 brief，写在那里 implementer 一个字都看不到**。plan 每任务的 commit 步 MUST 显式写 `bash ~/.sdflow/hack/checkpoint-commit.sh <change>:task<N>-<slug> "<描述>"`（<change> = 本 change 的 openspec kebab slug），由 implementer 自己执行——该标签是 /sdflow-ship gate 的完成判据主锚，格式不合会导致 gate 数不到。生成后自动以 subagent-driven-development 执行，自动完成全部任务，每任务完成跑测试套件确认无 warning；逐任务 checkpoint；final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析）作额外 review lens 附给 reviewer；无法自动解决的记入 buglists 或 todolists。
+ ```
+ 
+ **产出物**：superpowers-plan.md + 代码
+ 
+-**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
++**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
+ 
+ ## 阶段三 · 步骤 7 — `/subagent-driven-development`
+ 
+ （由步骤 6 自动触发）
+ 
+ **prompt**（原样复制，勿转述 · 单一源 `prompts/step7-subagent-dev.md`）：
+ 
+ ```
+ /subagent-driven-development 自动完成全部任务，每任务完成跑测试套件确认无 warning；逐任务 checkpoint；final whole-branch 终审 dispatch 时把 code-checklists/domains/<命中栈>（规则根经 ~/.sdflow/hack/resolve-workflow.sh 解析） 作额外 review lens 附给 reviewer；无法自动解决的记入 buglists 或 todolists。
+ ```
+ 
+ **产出物**：代码
+ 
+-**规则 · 条件**：quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序）
++**规则 · 条件**：quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序）
+ 
+ ## 阶段三 · 步骤 8 — `/sdflow-code-review`
+ 
+ **prompt**（原样复制，勿转述 · 单一源 `prompts/step8-code-review.md`）：
+ 
+ ```
+ /sdflow-code-review 每次全跑独立审查 {change dir} 的代码变更（并入 gstack/review 的 scope-drift+完成度审计；能修的自动修标 [impl-review-fix]、修不了/拿不准的记 buglists/todolists；汇总一份 code-review-report.md）。完成后 checkpoint-commit sdflow-code-review。
+ ```
+ 
+ **产出物**：code-review-report.md
+diff --git a/sdflow-init/assets/workflow/config.template.yaml b/sdflow-init/assets/workflow/config.template.yaml
+index 9406fdb..c08d20a 100644
+--- a/sdflow-init/assets/workflow/config.template.yaml
++++ b/sdflow-init/assets/workflow/config.template.yaml
+@@ -70,22 +70,23 @@ rules:
+ #     mid: <codex-model-id>
+ #     light: <codex-model-id>
+ #
+ # 扁平旧格式（历史遗留，兼容读作 Claude 机队覆盖，不推荐新写）：
+ # model-tiers:
+ #   strong: <claude-model-id>
+ #   mid: <claude-model-id>
+ #   light: <claude-model-id>
+ 
+ # impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
+-# 缺省请勿填（缺失/非法值一律 superpowers 旧管线）；仅在新出 ticket 时刻读一次，
+-# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
++# 缺省请勿填（缺省一律 tickets；缺失/非法值同归此路径）；仅在新出 ticket 时刻读一次，
++# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change；
++# 显式 `impl-pipeline: superpowers` 仍生效，走旧管线。
+ # impl-pipeline: tickets
+ 
+ # test-suites（可选段）——sdflow-implement「聚合套件发现契约」的命令来源，优先于该票
+ # implementer 运行时判定。缺省请勿填（未配置层由该票 implementer 依仓内既有约定判定）。
+ # 具体命令因项目而异，由 sdflow-devenv 运行时调研测试基础设施后推荐写入（已有配置时保留不覆盖），
+ # 本模版只示范两种合法形状；旧形状（字符串）是新形状（映射）的子集，未分档的消费仓行为不变。
+ #
+ # 形状一：字符串——quick 与 full 两档同命令（今日形状，继续有效）：
+ # test-suites:
+ #   unit: "go test ./..."
+diff --git a/sdflow-init/assets/workflow/workflow.md b/sdflow-init/assets/workflow/workflow.md
+index ac7d15e..cdb364d 100644
+--- a/sdflow-init/assets/workflow/workflow.md
++++ b/sdflow-init/assets/workflow/workflow.md
+@@ -45,22 +45,22 @@
+      └─ fresh 子代理替代 /clear 保独立；中途不 AskUserQuestion(决策登记进报告)
+      └─ 内部 2×[checkpoint]（autoplan 子步 / sdflow-spec-review 子步）
+         │
+    〔HARD-GATE：用户批准设计〕            ★全流程唯一人类门——过一份 spec-review-report.md 拍板
+         │
+    〔嵌入式+SOP测试需求〕embedded-test-sop  条件触发(TG-02 ∧ 高风险/TG-18,见步骤表)
+         │
+  阶段三·实现+代码审+收尾 ── 过设计门后连续跑到 merge,无人类门 ────────
+    〔入口前 SHALL /clear（G1 交界例外之二，见 §三.2）；调 /sdflow-ship 时重述 merge 意图〕
+    writing-plans → subagent-driven-development   原子任务 TDD + 注入点B(code-checklists/domains 附终审)
+-     └─ 〔可选〕实现管线可经 openspec/config.yaml 可选键 `impl-pipeline: tickets` 路由至 sdflow-implement
+-        （缺省不变=本行 writing-plans→subagent-dev），路由细则见 sdflow-ship/SKILL.md 链序
++     └─ 实现管线缺省 = tickets（路由至 sdflow-implement）；显式设 `impl-pipeline: superpowers`
++        才走本行 writing-plans→subagent-dev（旧管线），路由细则见 sdflow-ship/SKILL.md 链序
+      └─ 领域问题在生成循环内命中即 fix子代理+re-review 即时闭环
+      └─ 逐任务 [checkpoint]（subagent-dev 现状已有）
+         │  (无 /clear——子 agent 调度中本就禁清；评审 fan-out 的 fresh 子代理即独立性)
+    sdflow-code-review 编排器               每次全跑·独立冷视角·强制主审
+      └─ 并入 gstack/review(scope-drift+完成度)+领域镜+对抗镜+历史镜+置信过滤
+      └─ 能修自动修[impl-review-fix]、修不了/拿不准 defer→buglist/todolist；一份 code-review-report.md
+      └─ [checkpoint]
+         │
+    sdflow-done                             verify(防假✅,证据锚点) → hand-off.md → archive(+delta 对码核验/同步) → commit → merge
+         │
+@@ -84,22 +84,22 @@
+ | 阶段 | 步 | command/skill | prompt（可复制） | 产出物 | 规则·条件 |
+ |---|---|---|---|---|---|
+ | 一 | 0 | /sdflow-spec | **默认入口（装了就走这条，取代步 1/1b/2/3）**：一次跑完 澄清(A)→拷问(B)→生成(C)。只能人手动敲（`disable-model-invocation: true`）——模型 MUST NOT 代唤起，也 MUST NOT 改用 `opsx:ff` 绕过拷问，而 SHALL 提示用户触发本步 | proposal/design/specs/tasks + decision-memo.md | generation-process §四 分支 A + 四入口选择规则；出口序列 = `/clear` → 换档 → `/sdflow-spec-review`（对 G1 的具名例外，见 §三.2）；**未装本 skill 或命中三种例外情形 → 走步 1~3（分支 B）** |
+ | 一 | 1 | /opsx:explore | **→ [`prompts/step1-explore.md`](./prompts/step1-explore.md)**（原样复制，勿转述） | — | **〔分支 B〕** generation-process ③发散；**单 session 可收敛的模糊才跑**（问题清晰直接 ff；事中判定超单 session 转 wayfinder，见 1b） |
+ | 一 | 1b | wayfinder chart | 事中判定超单 session（讨论已跨 session/跨天，或经历 /clear/压缩仍未收敛）才切入；铺图逐 ticket 决议；TG 判命中前置写入 map Notes（**增强非转移**：ff 起手判触发纪律不变，Notes 有则核对、无则照常全判，缺失不硬卡）；缺装（`~/.claude/skills/wayfinder` 不存在）→ 显式降级 opsx:explore | map.md + issues/*.md | **〔分支 B〕** T126/D6；三档判据事中可观察 |
+ | 一 | 2 | /opsx:ff | **→ [`prompts/step2-ff.md`](./prompts/step2-ff.md)**（原样复制，勿转述） | proposal/design/specs/tasks | **〔分支 B〕** ff-generation-constraints(FF-0 三分支判定)+config；**分支 B 内必跑** |
+ | 一 | 3 | /grill-with-docs | **→ [`prompts/step3-grill.md`](./prompts/step3-grill.md)**（原样复制，勿转述） | design/ADR/CONTEXT 更新 | **〔分支 B〕** generation-process ③对抗；分支 B 内非平凡变更必跑。**grill 是独立审视，一律全深度**——MUST NOT 因上游（explore / wayfinder 已决 ticket）已经想过就瘦跑或跳过某条分支；拿上游产出给自己松绑，二次审视就退化成盖章（见 ff-generation-constraints.md 的回链锚条款）。 |
+ | 二 | 4 | /sdflow-spec-review | **→ [`prompts/step4-spec-review.md`](./prompts/step4-spec-review.md)**（原样复制，勿转述） | spec-review-report.md | 编排器：内部 autoplan→并行多镜→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 2×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）** |
+ | 二 | 5 | HARD-GATE | 人工过 **一份** `spec-review-report.md`（决策登记区已摊开选项+推荐+三面后果(系统/用户/开发循环)+主次判定）→ 批准设计 | （人工：批准后才进实现） | generation-process 门；**★全流程唯一人类门** |
+ | 二 | 5.5 | /embedded-test-sop | **→ [`prompts/step5_5-embedded-sop.md`](./prompts/step5_5-embedded-sop.md)**（原样复制，勿转述） | {change}-sop.md + log-checks.yaml | 嵌入式专属条件触发：TG-02(嵌入式固件) **∧**（启动/复位·状态机·协议 等高风险 **∨** TG-18 有测试计划）；非嵌入式天然不触发 |
+-| 三 | 6 | /writing-plans | **→ [`prompts/step6-writing-plans.md`](./prompts/step6-writing-plans.md)**（原样复制，勿转述） | superpowers-plan.md + 代码 | **本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位） |
+-| 三 | 7 | /subagent-driven-development | （由步骤 6 自动触发）**→ [`prompts/step7-subagent-dev.md`](./prompts/step7-subagent-dev.md)**（原样复制，勿转述） | 代码 | quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序） |
++| 三 | 6 | /writing-plans | **→ [`prompts/step6-writing-plans.md`](./prompts/step6-writing-plans.md)**（原样复制，勿转述） | superpowers-plan.md + 代码 | **本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位） |
++| 三 | 7 | /subagent-driven-development | （由步骤 6 自动触发）**→ [`prompts/step7-subagent-dev.md`](./prompts/step7-subagent-dev.md)**（原样复制，勿转述） | 代码 | quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序） |
+ | 三 | 8 | /sdflow-code-review | **→ [`prompts/step8-code-review.md`](./prompts/step8-code-review.md)**（原样复制，勿转述） | code-review-report.md | 编排器：**每次全跑·独立冷·强制主审**〔P3c〕；清单逐条+对抗+历史镜+置信过滤；阶段三无人类门（自动修/裁/defer，不 AskUserQuestion）+ 跨模型 outside voice（always code voice + HR-TG 领域 cross-model） |
+ | 三 | 9 | /sdflow-done | **→ [`prompts/step9-done.md`](./prompts/step9-done.md)**（原样复制，勿转述） | verify-report + hand-off + 归档 + 提交 + 合并 | sdflow-done skill；verify(防假✅证据锚点)→**issues sweep 子步(§2.1,已就位：分诊本change OPEN项入批次→reindex)**→hand-off.md→archive(+delta 同步)→commit→merge；**必跑（闭环）** |
+ 
+ ## 三、关键设计决策
+ 
+ 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
+ 2. **评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供（G1）**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+    - 🔴 **本条只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。旧措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
+    - 🔴 **阶段交界 SHALL 用一次 `/clear`（两处，理由各自都在本条射程之外）**：
+      - **阶段一 → 阶段二**（`/sdflow-spec` 出口序列 `/clear` → 换档 → `/sdflow-spec-review`）：① **cache 按模型隔离**——拖着阶段一的旧上下文切换模型档位 = 缓存作废、全价重付；② **产 / 审错档纪律**——阶段一的产出档与阶段二的评审档本就不同，换档才是这次 `/clear` 的真实动因。
