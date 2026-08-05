@@ -107,7 +107,7 @@
 
 **产出物**：superpowers-plan.md + 代码
 
-**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
+**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
 
 ## 阶段三 · 步骤 7 — `/subagent-driven-development`
 
@@ -121,7 +121,7 @@
 
 **产出物**：代码
 
-**规则 · 条件**：quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省不变，细则见 sdflow-ship/SKILL.md 链序）
+**规则 · 条件**：quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序）
 
 ## 阶段三 · 步骤 8 — `/sdflow-code-review`
 

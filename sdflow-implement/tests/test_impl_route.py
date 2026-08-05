@@ -46,17 +46,17 @@ def _mkchange(root: Path, name: str = "demo") -> Path:
 # ---------------------------------------------------------------------------
 
 def test_config_missing_file(tmp_path):
-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
+    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
 
 
 def test_config_missing_key(tmp_path):
     _write_config(tmp_path, "schema: spec-driven\nmetrics:\n  enabled: true\n")
-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
+    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
 
 
 def test_config_empty_value(tmp_path):
     _write_config(tmp_path, "impl-pipeline:\nmetrics:\n  enabled: true\n")
-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
+    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
 
 
 def test_config_value_tickets(tmp_path):
@@ -72,7 +72,7 @@ def test_config_value_superpowers(tmp_path):
 def test_config_value_typo(tmp_path):
     _write_config(tmp_path, "impl-pipeline: tikets\n")
     pipeline, note = ir.read_config_pipeline(tmp_path)
-    assert pipeline == "superpowers"
+    assert pipeline == "tickets"
     assert note == "unknown-value:tikets"
 
 
@@ -89,13 +89,13 @@ def test_config_value_quoted_single(tmp_path):
 def test_config_commented_line_ignored(tmp_path):
     # 模板注释态（config.template.yaml 先例）：`# impl-pipeline: tickets` 不应被当真键读到
     _write_config(tmp_path, "# impl-pipeline: tickets\nschema: spec-driven\n")
-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
+    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
 
 
 def test_config_indented_mention_not_matched(tmp_path):
     # 非顶层（缩进）出现的同名文本不应误判为键命中（如 context 块标量内提及）
     _write_config(tmp_path, "context: |\n  聊到 impl-pipeline: tickets 只是举例\n")
-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "absent")
+    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
 
 
 # ---------------------------------------------------------------------------
@@ -138,14 +138,14 @@ def test_marker_key_space_before_colon(tmp_path):
 def test_config_value_quoted_unclosed_damaged(tmp_path):
     _write_config(tmp_path, 'impl-pipeline: "tickets\n')
     pipeline, note = ir.read_config_pipeline(tmp_path)
-    assert pipeline == "superpowers"
+    assert pipeline == "tickets"
     assert note.startswith("unknown-value:")
 
 
 def test_config_value_quoted_trailing_junk_damaged(tmp_path):
     _write_config(tmp_path, 'impl-pipeline: "tickets" junk\n')
     pipeline, note = ir.read_config_pipeline(tmp_path)
-    assert pipeline == "superpowers"
+    assert pipeline == "tickets"
     assert note.startswith("unknown-value:")
 
 
@@ -237,12 +237,12 @@ def _run_route(root, change):
     return r.returncode, r.stdout.strip(), r.stderr.strip()
 
 
-def test_cli_route_absent_absent_defaults_superpowers(tmp_path):
+def test_cli_route_absent_absent_defaults_tickets(tmp_path):
     _mkchange(tmp_path)
     code, out, _ = _run_route(tmp_path, "demo")
     assert code == 0
     assert out == ("PIPELINE_RECEIPT change=demo config=absent marker=absent "
-                    "pipeline=superpowers plan_sha=-")
+                    "pipeline=tickets plan_sha=-")
 
 
 def test_cli_route_config_tickets_plan_missing_first_jump(tmp_path):
@@ -311,7 +311,7 @@ def test_cli_route_unknown_config_value_echoed(tmp_path):
     code, out, _ = _run_route(tmp_path, "demo")
     assert code == 0
     assert "config=tikets" in out
-    assert "pipeline=superpowers" in out
+    assert "pipeline=tickets" in out
 
 
 def test_cli_route_plan_sha_dash_when_no_plan(tmp_path):
