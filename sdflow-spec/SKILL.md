@@ -1,6 +1,5 @@
 ---
 name: sdflow-spec
-disable-model-invocation: true
 description: >
   阶段一「产 spec」单一入口——把 澄清（A）→ 拷问（B）→ 生成（C）三相位编排成一次连续跑，产出
   标准四件套（proposal / design / specs / tasks）+ 一份承重的 `decision-memo.md`。**拷问结构性
@@ -10,7 +9,7 @@ description: >
   承重约束站稳一条就增量落盘一条 ⇒ `/clear` 无损，崩溃只丢「上一次保存之后」那一段。出口原样贴
   `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:ff` + `/grill-with-docs` 两入口拼接
   （成文+拷问合体；`opsx:explore` 的发散探索不在本 skill 范围——想法尚未成形时先 explore 再本 skill）。
-  由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
+  Trigger with /sdflow-spec。
 ---
 
 # sdflow-spec — 阶段一产 spec 单一入口
