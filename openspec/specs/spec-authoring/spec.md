@@ -5,11 +5,16 @@
 ## Requirements
 ### Requirement: SA-01 单一入口三相位管线，拷问前置且为内建默认路径
 
-`sdflow-spec` SHALL 以单一入口驱动「澄清（A）→ 拷问（B）→ 生成（C）」三相位管线。相位 A 可在需求已成熟时由主 session 判断提前收束，但相位 B SHALL 是管线的内建默认路径——任何进入相位 C 的路径 SHALL 先产出非空决策纪要。skill SHALL 声明 `disable-model-invocation: true`，并把“只能人触发”表述限定为**已由当前宿主执行面验证的事实**。
+`sdflow-spec` SHALL 以单一入口驱动「澄清（A）→ 拷问（B）→ 生成（C）」三相位管线。相位 A 可在需求已成熟时由主 session 判断提前收束，但相位 B SHALL 是管线的内建默认路径——任何进入相位 C 的路径 SHALL 先产出非空决策纪要。模型 SHALL 在人示意收敛时自动 invoke `/sdflow-spec`，MUST NOT 自主判断「该开 change 了」——须有人的示意信号；相位 B 的拷问协议不因触发方式改变而改变〔simplify-workflow：删除 `disable-model-invocation: true` 要求，触发方式由只能人触发改为模型可自动触发〕。
 
 **诚实边界（MUST NOT 冒充机械门）** [spec-review-amendment]：本 requirement 提供的是**结构性改善**，不是机械保证——跳过须主动偏离指令，而指令层约束由执行方自报。机械可验的只有「决策纪要存在且必填小节非空」这一条 grep 门，它**不能证明发生过对抗拷问**。MUST NOT 在任何文档中声称「跳过风险结构性消灭」。
 
 宿主未提供模型可调用的 Skill 接口时，文档 SHALL 记录该验证缺口，MUST NOT 把接口缺席表述成模型调用被拒。
+
+#### Scenario: 模型在人示意时自动触发
+
+- **WHEN** 用户在 explore 中表达收敛信号或描述需求且需要开 change
+- **THEN** 模型自动 invoke `/sdflow-spec`，无需手动敲斜杠命令
 
 #### Scenario: Codex 无模型调用接口时如实降级声明
 - **WHEN** Codex 宿主只能观察到用户显式触发 skill，且本 session 没有可供模型调用的 Skill 接口
@@ -336,26 +341,6 @@ openspec CLI 不可用、报错或 schema 不兼容 SHALL fail-closed 中止并�
 #### Scenario: 中途放弃后的残留
 - **WHEN** 用户在相位 B 中途放弃
 - **THEN** 已增量落盘的 memo 草稿保留在 feature 分支内；删分支即净（**前提是 B 收敛时工作树曾经干净**，否则用户的无关改动已被裹挟进 checkpoint）
-
-### Requirement: SA-14 四入口选择规则（写进 spec，不留自由文字）
-
-三个原入口（`opsx:explore` / `opsx:ff` / `grill-with-docs`）在本 change 后仍然存活且**模型可唤起**，而 `sdflow-spec` 声明 `disable-model-invocation: true`（只能人触发）。本 change SHALL 定义一条可执行的入口选择规则，MUST NOT 只把它写在 CLAUDE.md 非托管区的自由文字里——那个载体本身会漂移，正是本 change 要消除的问题形态 [窄复核 F-17]。
-
-规则 SHALL 为：
-
-- **默认走 `/sdflow-spec`**（单入口三相位管线）。
-- **仅在下列情形用旧三步**：① 需要 wayfinder 跨会话铺图（`sdflow-spec` 不覆盖该职责）；② 用户明确要求分步执行；③ `sdflow-spec` 因环境原因不可用（未跑 setup / Codex 宿主降级不可接受）。
-- **模型侧**：模型 MUST NOT 自行选择 `opsx:ff` 绕过拷问；若模型判断需要开 change，SHALL 提示用户触发 `/sdflow-spec`，MUST NOT 直接调 `opsx:ff`。
-
-该规则 SHALL 同时落在：本仓 CLAUDE.md/AGENTS.md 非托管区（人读）**与** canonical 的阶段一流程分支（SA-11 第 1 项，AI 读）。
-
-#### Scenario: 默认入口
-- **WHEN** 用户说「开个 change 做 X」而未指定入口
-- **THEN** 提示触发 `/sdflow-spec`；MUST NOT 直接调 `opsx:ff` 生成四件套
-
-#### Scenario: 旧入口的合法使用
-- **WHEN** 用户明确要求分步执行，或需要 wayfinder 跨会话铺图
-- **THEN** 旧三步组合为合法路径，且该次运行 SHALL 在完成报告中说明为何未走单入口
 
 ### Requirement: SA-16 入口常驻契约与按需资料分层
 

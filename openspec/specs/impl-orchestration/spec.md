@@ -5,12 +5,22 @@ TBD - created by archiving change matt-workflow-integration. Update Purpose afte
 ## Requirements
 ### Requirement: 管线路由为手动确定值，零模型自动判断
 
-实现管线选择 SHALL 仅由手改/落盘的确定值决定，路由三跳为：① `openspec/config.yaml` 可选键 `impl-pipeline`（人手编辑，仅在新出 ticket 时刻读一次）；② plan 文件头 frontmatter 管线 marker（出 ticket 落盘后只读，锁定在途 change 归属）；③ 键缺失或值不识别 → 一律 superpowers 管线。MUST NOT 引入任何模型自由裁量的管线判断；改 config MUST NOT 影响任何已出 ticket 在途 change 的续跑。ship_gate MUST NOT 读取 config（保零依赖不变量）。键与 marker 的读取 SHALL 落确定性脚本（stdlib-only enum reader / route helper，不触 gate）〔spec-review-amendment F4〕；ship 派发 sdflow-implement 时 SHALL 以显式字面 args 传递模式与 done_tasks（SKILL.md 与 ship 链序两处共享同一契约串）〔F4〕。marker **存在但非法/重复/损坏** SHALL 停（UNKNOWN 语义）并留痕，MUST NOT 静默回退旧管线（防两管线混跑）——静默回退仅适用「键/marker 缺席」的缺省态〔F4〕。路由结果 SHALL 产出一行 PIPELINE_RECEIPT（读到的键值/选定管线/marker/plan sha）进当轮输出与判赢材料〔F3a〕。
+实现管线选择 SHALL 仅由手改/落盘的确定值决定，路由三跳为：① `openspec/config.yaml` 可选键 `impl-pipeline`（人手编辑，仅在新出 ticket 时刻读一次）；② plan 文件头 frontmatter 管线 marker（出 ticket 落盘后只读，锁定在途 change 归属）；③ 键缺失或值不识别 → 一律 **tickets** 管线（`sdflow-implement`；新缺省，原为 superpowers）〔simplify-workflow：缺省翻转〕。显式 `impl-pipeline: superpowers` 仍路由到旧管线（`writing-plans → subagent-driven-development`）；已有 plan 文件的 marker 锁定优先于 config 缺省。MUST NOT 引入任何模型自由裁量的管线判断；改 config MUST NOT 影响任何已出 ticket 在途 change 的续跑。ship_gate MUST NOT 读取 config（保零依赖不变量）。键与 marker 的读取 SHALL 落确定性脚本（stdlib-only enum reader / route helper，不触 gate）〔spec-review-amendment F4〕；ship 派发 sdflow-implement 时 SHALL 以显式字面 args 传递模式与 done_tasks（SKILL.md 与 ship 链序两处共享同一契约串）〔F4〕。marker **存在但非法/重复/损坏** SHALL 停（UNKNOWN 语义）并留痕，MUST NOT 静默回退旧管线（防两管线混跑）——静默回退仅适用「键/marker 缺席」的缺省态〔F4〕。路由结果 SHALL 产出一行 PIPELINE_RECEIPT（读到的键值/选定管线/marker/plan sha）进当轮输出与判赢材料〔F3a〕。
 
-#### Scenario: 缺省与非法值 fail 向旧管线
+#### Scenario: 无 impl-pipeline 键默认走 tickets〔simplify-workflow〕
 
-- **WHEN** config 无 `impl-pipeline` 键、键值拼错、或键值为 `superpowers`
-- **THEN** RUN_PLAN 路由到 superpowers:writing-plans，行为与本变更前完全一致；键**存在而值不识别**时另回显一行提示（区别于缺省缺席）〔spec-review-amendment F12〕
+- **WHEN** 项目 config.yaml 不含 `impl-pipeline` 键
+- **THEN** `impl_route.py route` 输出 `pipeline=tickets`
+
+#### Scenario: 非法值/YAML 损坏回退〔simplify-workflow〕
+
+- **WHEN** 项目 config.yaml 的 `impl-pipeline` 值不识别或 YAML 损坏
+- **THEN** `impl_route.py route` 回退到 `tickets`（新缺省），并在 stderr 报告诊断信息
+
+#### Scenario: 显式 superpowers 不受影响
+
+- **WHEN** 项目 config.yaml 含 `impl-pipeline: superpowers`
+- **THEN** `impl_route.py route` 输出 `pipeline=superpowers`，行为与本变更前一致
 
 #### Scenario: 在途 change 不受 config 切换影响
 
