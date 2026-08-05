@@ -6,7 +6,7 @@
 >
 > **叙事伴读**：想按「阶段故事」而非「字段速查」理解全流程 → [workflow-overview.md](workflow-overview.md)（人类向详解）· [workflow-console.html](workflow-console.html)（可视化控制台）。本文侧重结构化映射（字段 × 脚本 × 判据），那两份侧重流程叙事，互补不重叠。
 
-**速览**：14 确定性脚本 · 3 报告 frontmatter 字段 · 4 类正文 v1 锚 · 12 ship_gate 裁决 · 2 人类门 · 判官 `ship_gate.py`（只读零副作用）。
+**速览**：14 确定性脚本 · 3 报告 frontmatter 字段 · 4 类正文 v1 锚 · 11 ship_gate 裁决 · 2 人类门 · 判官 `ship_gate.py`（只读零副作用）。
 
 ---
 
@@ -18,17 +18,17 @@
  阶段          编排 skill                    脚本门 / 门禁                        产物 + frontmatter 锚
 ════════════════════════════════════════════════════════════════════════════════════════════════════
  explore  ──▶  /opsx:explore                （无门）                              探索笔记
-              〔分支 B 才走〕                                                    ※ 分支 A 无此步
-                   │
+              〔条件：问题模糊/方向未定〕                                        清晰则跳过，直接进 propose
+                   │  人示意收敛 → 模型自动 invoke /sdflow-spec
+                   ▼
  propose  ──▶  /sdflow-spec       ──FF-0──▶ trigger-catalog TG 判定             proposal/design/specs/tasks
-              〔分支 A · 默认〕              git checkout -b feat/{change}       + decision-memo.md
-              /opsx:ff / :new〔分支 B〕
+                                   git checkout -b feat/{change}       + decision-memo.md
                    │
                    ▼
               ┏━━━━━━━━━━━━━━━┓
    人类门①    ┃  拷问 / 前提确认  ┃  ◀── ship 不跨此门 (adr/0004)
               ┗━━━━━━━━━━━━━━━┛
-              〔A: /sdflow-spec 相位 B · B: grill-with-docs〕
+              〔/sdflow-spec 相位 B，拷问结构性前置于成文〕
                    │
  spec-review ─▶ sdflow-spec-review  ──▶  anchor_lint.py --layer spec-review ✅#1  spec-review-report.md
   (设计审)    autoplan+领域/对抗/接地镜        outside-voice.sh · HR-TG cross-model    └─ frontmatter:
@@ -44,7 +44,6 @@
   (meta-orch)      │      │ 步前:「NEXT 谁+前置缺啥」 步后:「产物落没+门禁结论」      │
                    │      └──────────────────────────────────────────────────────┘
                    │
-     RUN_SOP(0)────▶ embedded-test-sop        tg02_hit (TG-02 声明式)             {change}-sop.md
      RUN_PLAN(0)───▶ writing-plans            TAG_RE checkpoint 契约              superpowers-plan.md
    CONTINUE_IMPL(0)▶ subagent-driven-dev      done_ids⊇plan_ids (集合归属)        checkpoint(task<N>-) 提交
                    │                          注入点B 即时修复闭环
@@ -69,21 +68,20 @@
 
 | # | 阶段 | 编排 skill | 脚本门 / 门禁 | ship_gate verdict（exit） | 产物 + frontmatter 字段 | anchor-lint |
 |---|------|-----------|--------------|--------------------------|----------------------|-------------|
-| 0 | explore | `/opsx:explore`〔分支 B〕 | 无门 | —（不覆盖） | 探索笔记 | — |
-| 1 | propose | **`/sdflow-spec`〔分支 A · 默认〕** · `/opsx:new` `/opsx:ff`〔分支 B〕 | FF-0 三分支判定 + TG 判定 | — | proposal/design/specs/tasks（分支 A 另出 decision-memo.md） | — |
-| — | **人类门①** grill | （propose/explore 内） | 人类拍板 | ship 不跨（adr/0004） | grill 记录进正文 | — |
+| 0 | explore | `/opsx:explore`〔条件：问题模糊/方向未定〕 | 无门 | —（不覆盖） | 探索笔记 | — |
+| 1 | propose | **`/sdflow-spec`**（唯一入口；人可直接触发，模型在人示意收敛时自动 invoke） | FF-0 三分支判定 + TG 判定 | — | proposal/design/specs/tasks + decision-memo.md | — |
+| — | **人类门①** 拷问 | （`/sdflow-spec` 相位 B 内） | 人类拍板 | ship 不跨（adr/0004） | 拷问记录进 decision-memo.md | — |
 | 2 | **spec-review 设计审** | `sdflow-spec-review` | `anchor_lint --layer spec-review` ✅#1 · outside-voice · HR-TG | 未过 → **REFUSE_START(3)** | `spec-review-report.md` → `design_approved: true` + lens-metric 锚 | ✅ #1 |
 | — | **人类门②** 设计 HARD-GATE | `sdflow-spec-review` 收敛口 | `design_approved: true`（机判锚） | REFUSE_START(3) 若未过 | 拍板后 prepend 头部 frontmatter | — |
-| 3a | ship·条件 SOP | `embedded-test-sop` | `tg02_hit`（TG-02 声明式） | **RUN_SOP(0)** | `{change}-sop.md` | — |
-| 3b | ship·plan | `superpowers:writing-plans` | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `superpowers-plan.md` | — |
-| 3c | ship·实现 | `subagent-driven-development` | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交 | — |
-| 3d | ship·代码审 | `sdflow-code-review` | `anchor_lint --layer code-review` ✅#2 · `trivial_shape` · outside-voice | **RUN_CODE_REVIEW(0)**；blocked → **BLOCKED_UPSTREAM(4)** | `code-review-report.md` → `code_review: pass\|blocked` | ✅ #2 |
-| 3e | ship·收尾 | `sdflow-done` | verify=唯一终门（每 ✅ 须机验锚点）· `issues.py sweep` · `openspec archive` · merge 前 untracked 硬检查 | **RUN_VERIFY(0)**；FAIL → **VERIFY_FAIL(5)**；陈旧 → **RERUN_STALE(0)** | `verify-report.md` → `verify: PASS\|FAIL` + `hand-off.md` | — |
+| 3a | ship·plan | `superpowers:writing-plans` | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `superpowers-plan.md`（缺省 tickets 轨路由 sdflow-implement，不产出本文件） | — |
+| 3b | ship·实现 | `subagent-driven-development` | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交 | — |
+| 3c | ship·代码审 | `sdflow-code-review` | `anchor_lint --layer code-review` ✅#2 · `trivial_shape` · outside-voice | **RUN_CODE_REVIEW(0)**；blocked → **BLOCKED_UPSTREAM(4)** | `code-review-report.md` → `code_review: pass\|blocked` | ✅ #2 |
+| 3d | ship·收尾 | `sdflow-done` | verify=唯一终门（每 ✅ 须机验锚点）· `issues.py sweep` · `openspec archive` · merge 前 untracked 硬检查 | **RUN_VERIFY(0)**；FAIL → **VERIFY_FAIL(5)**；陈旧 → **RERUN_STALE(0)** | `verify-report.md` → `verify: PASS\|FAIL` + `hand-off.md` | — |
 | 4 | archive + merge | `sdflow-done`（内部） | `openspec archive` + ff-only | active 缺席+base可达+PASS → **SHIPPED(0)**；异常 → **UNKNOWN(6)** | `archive/{date}-{change}/` | — |
 | 5a | retro 复盘 | `sdflow-retro`（只读） | `retro_report.py` / `lens_metric_aggregate.py` | 不受 ship_gate 管 | `openspec/retro/report.md`（D12 待复评区块） | — |
 | 5b | maintain 一致性 | `sdflow-maintain` | 扫目录 vs INDEX · 改前 AskUserQuestion | 不受 ship_gate 管 | `openspec/INDEX.md`（+N −M） | — |
 
-**两个人类门**：① grill（前提确认，ship 不跨，adr/0004 红线）；② 设计 HARD-GATE（`design_approved: true`，`/sdflow-ship` pre-flight 唯一机判锚）。**阶段三过设计门后无人类门（P3e）**——能修当场修、≥2 方案按 T10 三级协议自动选、拿不准 defer；`sdflow-done` verify 是去人类门后的唯一终门（强档 + Do-Not-Trust 冷启堵假 ✅）。
+**两个人类门**：① 拷问（`/sdflow-spec` 相位 B，前提确认，ship 不跨，adr/0004 红线）；② 设计 HARD-GATE（`design_approved: true`，`/sdflow-ship` pre-flight 唯一机判锚）。**阶段三过设计门后无人类门（P3e）**——能修当场修、≥2 方案按 T10 三级协议自动选、拿不准 defer；`sdflow-done` verify 是去人类门后的唯一终门（强档 + Do-Not-Trust 冷启堵假 ✅）。
 
 ---
 
@@ -94,7 +92,6 @@
 | verdict | exit | 含义 |
 |---------|:----:|------|
 | REFUSE_START | **3** | 未过设计门 / change 不存在 |
-| RUN_SOP | 0 | TG-02 命中且 sop 缺 |
 | RUN_PLAN | 0 | plan 缺 → writing-plans |
 | CONTINUE_IMPL | 0 | plan 号集 ⊄ 完成集 |
 | RUN_CODE_REVIEW | 0 | 代码审报告缺 |
@@ -178,7 +175,7 @@
 | **resolve-workflow.sh** | setup（规则根解析） | 各 skill 前置 | `--root`；本地 pin vs 全局 canonical bundle | **0** 成功 / **2** 降级 / **64** 用法 | bundle/hack | `:5-7`,`:69` |
 | **outside-voice.sh** | spec-review / code-review | 两审 outside-voice 镜 | `--context-file` · secret_scan · codex read-only · timeout 300 | preflight/exec；**0** / **1** err / **3** secret / **124** timeout | bundle/hack | `:5-15`,`:45` |
 | **checkpoint-commit.sh** | 全阶段（过场提交） | 各编排 skill | `<step>`+描述 · `git status --porcelain` · 固定 message | 无变更静默跳过；**0** / **2** 用法/非仓 | bundle/hack | `:7-20`,`:39` |
-| **log_check.py** | （计划未建） | 拟 embedded-test-sop | 拟：`--log serial.log --rules *.yaml` · 时间窗 · must_contain/not/before · severity rollup | **尚未建**（roadmap mechanical-layer-hardening 阶段4 · 子任务 4.A，按需排；survey 内部编号 P5，勿与已交付的「阶段5 gate→frontmatter」撞号） | 拟 bundle | roadmap:118 |
+| **log_check.py** | （计划未建） | 拟：TG-02 相关工具（原设想宿主 `embedded-test-sop` 已随 simplify-workflow 删除，消费方待定） | 拟：`--log serial.log --rules *.yaml` · 时间窗 · must_contain/not/before · severity rollup | **尚未建**（roadmap mechanical-layer-hardening 阶段4 · 子任务 4.A，按需排；survey 内部编号 P5，勿与已交付的「阶段5 gate→frontmatter」撞号） | 拟 bundle | roadmap:118 |
 
 ---
 

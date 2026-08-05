@@ -1,1 +1,0 @@
-/opsx:ff {change}。先过 FF-0 三分支判定：在保护分支（main/master）则 git checkout -b feat/{change}；已在 feat/{change} 则跳过；在其它 feature 分支则停下问我（从当前切出 / 回 base 切出 / 就地继续）。若 change 源于 wayfinder map：调用语显式携带 map 路径（如 @openspec/roadmaps/{name}/map.md）并按 ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读取。完成后 checkpoint-commit ff。

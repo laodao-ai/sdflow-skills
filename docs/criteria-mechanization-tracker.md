@@ -27,12 +27,11 @@
 | 1.6 | D-1 代码事实先 grep 再写（准确性）| 🟡 | — | 接地镜（spec-review 期）| "是否 grep 过"难机验；但"spec 代码事实 vs 真实代码"可脚本比对（接地镜半机械）|
 | 1.7 | D-3 每处"不在范围"附可证伪假设 | 🔵 | — | — | 假设质量属判断 |
 
-## 2. 人类门① grill
+## 2. 人类门① 拷问（`/sdflow-spec` 相位 B）
 | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
 |---|---|---|---|---|---|
 | 2.1 | 是否达成共识 / 分支死磕到底 | 🔵 | — | — | 对话岛，纯判断 |
 | 2.2 | ADR 值不值得立（难逆/意外/真权衡三判据）| 🔵 | — | — | 判断 |
-| 2.3 | grill 瘦跑：某分支是否 wayfinder 已决 | 🟢 | `〔wayfinder-resolved: …#ticket-N〕` 锚 | grep 该前缀（无则全深度）| ff-generation-constraints 衔接契约 |
 
 ## 3. 人类门② 设计 HARD-GATE
 | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
@@ -57,16 +56,10 @@
 ## 5. ship·路由 + 判官（ship_gate 全程）
 | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
 |---|---|---|---|---|---|
-| 5.1 | 下一步是谁（12 verdict 推导）| 🟢 | 盘面（四件套/三报告 frontmatter/checkpoint）| `ship_gate.py`（`:32-44`,`:647`；exit 0/3/4/5/6）| 阶段三判官核心 |
+| 5.1 | 下一步是谁（11 verdict 推导）| 🟢 | 盘面（四件套/三报告 frontmatter/checkpoint）| `ship_gate.py`（`:32-44`,`:647`；exit 0/3/4/5/6）| 阶段三判官核心 |
 | 5.2 | 管线路由（config→marker→缺省）| 🟢 | `PIPELINE_RECEIPT`（route emit）+ plan frontmatter marker | `impl_route.py route`（回显+机判）| tickets/superpowers |
 | 5.3 | 坏 frontmatter 分类（越域/重复键/bad-type/tab/absent）| 🟢 | — | `ship_gate.py:295-345`（live→UNKNOWN(6)/归档→fail-safe none）| — |
 | 5.4 | 熔断无进展（STEP_IN_PROGRESS / RERUN_STALE）| 🟢 | 报告 frontmatter 状态集快照 | `ship_gate.py` `anchor_set`/`breaker_no_progress`（单 invocation 持有）| mlh-p5 |
-
-## 5a. ship·SOP（条件）
-| # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
-|---|---|---|---|---|---|
-| 5a.1 | TG-02 命中（嵌入式固件）| 🔵 | — | — | 命中判断归模型 |
-| 5a.2 | sop 是否缺 → RUN_SOP | 🟢 | `{change}-sop.md` | `ship_gate` tg02_hit | 声明式 |
 
 ## 5b. ship·plan（tickets/superpowers）
 | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
@@ -126,9 +119,9 @@
 
 | 档 | 计数（约）| 典型 |
 |---|---|---|
-| 🟢 已结构化 | ~22 | ship_gate 全链 · anchor_lint · frontmatter 三门 · hr_tg_intersect/outside_voice_guard · trivial_shape · frontier · issues sweep · untracked 检查 |
+| 🟢 已结构化 | ~20 | ship_gate 全链 · anchor_lint · frontmatter 三门 · hr_tg_intersect/outside_voice_guard · trivial_shape · frontier · issues sweep · untracked 检查 |
 | 🟡 可结构化（候选）| ~7 | 1.3 TG→约束注入器 · 1.5 Success Metrics 在场 lint · 1.6/4.9 数值/接地半机械 · 5d.4 置信切点 · 6.3 遗留 spec 同步 |
-| 🔵 可语义（残余）| ~18 | 命中哪些 TG(1.2/4.2) · declared 正确性(4.4 S1) · verify 结论(5e.1) · 各对抗裁决/置信 · ADR 值不值 · 砍镜取舍 |
+| 🔵 可语义（残余）| ~17 | 命中哪些 TG(1.2/4.2) · declared 正确性(4.4 S1) · verify 结论(5e.1) · 各对抗裁决/置信 · ADR 值不值 · 砍镜取舍 |
 
 **跟踪法**：后续每推进一条 🟡→🟢，本表更新该行档位 + 补写/用锚点 `file:line`；🔵 项保持诚实标注、不强行机械化（避免假绿）。目标态 = 所有**有确定性信号**的判据（🟡）逐步清零进 🟢，🔵 稳定收敛为真残余。**上表计数为当前 shipped 态**——不含下方 ⏳pending 项（未 ship 不提前记账，守本表自身诚实纪律）。
 

@@ -15,7 +15,7 @@ SKILL = REPO / "sdflow-spec" / "SKILL.md"
 
 
 RESIDENT_CONTRACT = {
-    "frontmatter": ("name: sdflow-spec", "disable-model-invocation: true"),
+    "frontmatter": ("name: sdflow-spec",),
     "principles": (
         "<!-- sdflow:principles:start",
         "### ① 能查的自己查，能调研的自己调研",
@@ -111,7 +111,10 @@ def test_frontmatter_is_the_real_document_frontmatter():
     assert match, "入口缺 YAML frontmatter"
     frontmatter = match.group("body")
     assert re.search(r"^name:\s*sdflow-spec$", frontmatter, flags=re.MULTILINE)
-    assert re.search(r"^disable-model-invocation:\s*true$", frontmatter, flags=re.MULTILINE)
+    assert not re.search(r"^disable-model-invocation:\s*true$", frontmatter, flags=re.MULTILINE), (
+        "sdflow-spec 已解除手动触发限制（simplify-workflow）——frontmatter MUST NOT 再声明"
+        " disable-model-invocation: true"
+    )
     assert re.search(r"^description:\s*>$", frontmatter, flags=re.MULTILINE)
 
 

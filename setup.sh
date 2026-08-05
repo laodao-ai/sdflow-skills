@@ -29,7 +29,12 @@ MIGRATED_SKILL_NAMES=" openspec-upgrade embedded-test-sop "
 is_our_marker_copy() {  # $1 = 目录路径
   local name="$(basename "$1")"
   [ -f "$1/.sdflow-skills" ] && return 0
-  [ -f "$1/.laodao-skills" ] && case "$OUR_LEGACY_NAMES" in *" $name "*) return 0 ;; esac
+  # .laodao-skills 认 OUR_LEGACY_NAMES ∪ MIGRATED_SKILL_NAMES——后者不能省：
+  # cleanup_migrated_skills() 的 marker-copy 分支复用本判据回收旧 Windows 拷贝安装，
+  # 若只认 OUR_LEGACY_NAMES，已迁出名单（现不在该名单）永远判非自属，marker 拷贝清不掉。
+  if [ -f "$1/.laodao-skills" ]; then
+    case "$OUR_LEGACY_NAMES$MIGRATED_SKILL_NAMES" in *" $name "*) return 0 ;; esac
+  fi
   return 1
 }
 

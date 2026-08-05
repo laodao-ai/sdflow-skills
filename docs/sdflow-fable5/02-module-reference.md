@@ -1,7 +1,7 @@
 # sdflow 全模块参考：全部 skill 的设计与实现
 
-> **本文是模块级参考**：仓库解剖 → skill 总表 → 四大编排器详解 → 规则 bundle → 数据类六件套 → 调用拓扑。
-> 与既有文档分工：[workflow-overview.md](../workflow-overview.md) 讲阶段叙事、[workflow-map.md](../workflow-map.md) 讲字段×判据速查；本文讲**每个模块内部怎么设计、怎么实现**，并覆盖旧详解未收录的模块（ship / roadmap / init / recorder 三件套 / retro / maintain / embedded-test-sop）。
+> **本文是模块级参考**：仓库解剖 → skill 总表 → 四大编排器详解 → 规则 bundle → 数据类五件套 → 调用拓扑。
+> 与既有文档分工：[workflow-overview.md](../workflow-overview.md) 讲阶段叙事、[workflow-map.md](../workflow-map.md) 讲字段×判据速查；本文讲**每个模块内部怎么设计、怎么实现**，并覆盖旧详解未收录的模块（ship / roadmap / init / recorder 三件套 / retro / maintain）。
 > 数据基线：**混基线，如实登记**——大部分数字取自 git HEAD `fc1b98b` 快照；`add-sdflow-spec` 触及的两片已按**当前 HEAD** 重取：① 阶段一入口（分支 A `/sdflow-spec` / 分支 B 旧三步）；② recorder skill 名册合并后的 `sdflow-issues` 一行（SKILL.md 行数 / 脚本行数 / 用例数）。全部论断接地自源码（关键处附 file:line）。
 > 本文是**活文档**（非冻结快照）：数字与实况漂了以实况为准，重取用 `wc -l` / `pytest <skill>/tests/` 实测，勿凭本文回写代码。
 
@@ -24,7 +24,7 @@ sdflow-skills/
 
 | 类型 | 成员 | 确定性来源 |
 |---|---|---|
-| 编排类（纯 Markdown） | sdflow-ship¹ · sdflow-spec-review · sdflow-code-review · sdflow-done¹ · sdflow-roadmap · embedded-test-sop · openspec-upgrade · sdflow-upgrade | SKILL.md 指令驱动主 session 调度子代理；机械门外置到脚本 |
+| 编排类（纯 Markdown） | sdflow-ship¹ · sdflow-spec-review · sdflow-code-review · sdflow-done¹ · sdflow-roadmap · openspec-upgrade · sdflow-upgrade | SKILL.md 指令驱动主 session 调度子代理；机械门外置到脚本 |
 | 数据类（Markdown + Python） | sdflow-issues · sdflow-init · sdflow-retro · sdflow-maintain · sdflow-architecture · sdflow-devenv | `scripts/` owns 不变量 + pytest（用例数以 `pytest <skill>/tests/` 实测为准，勿在此写死） |
 
 ¹ ship/done 带自有脚本（ship_gate.py / roadmap_writeback_draft.py），介于两类之间。
@@ -68,7 +68,6 @@ flowchart LR
 | sdflow-ship | 元编排 | 47 | 842（ship_gate.py） | 20 文件 | 阶段三·总控 5.5→9 | 人工（过设计门后一次调用） |
 | sdflow-code-review | 评审主审 | 250 | 0（外部化） | — | 阶段三·步8 | ship（RUN_CODE_REVIEW）/人工 |
 | sdflow-done | 闭环 | 360 | 368（roadmap_writeback_draft.py） | 32 | 阶段三·步9 | ship（RUN_VERIFY）/人工 |
-| embedded-test-sop | 测试 | 362 | 0 | 0 | 阶段三·步5.5（条件） | ship（RUN_SOP）/人工 |
 | sdflow-issues | 记录 | 559 | 1746 | 679 | 全阶段 + 收尾批次管理 | 人工 + **done §2.1 sweep 自动调** |
 | sdflow-retro | 复盘 | 104 | 799（2 脚本） | 71 | 闭环之外（只读） | 人工 + maintain 薄指针 |
 | sdflow-maintain | 维护 | 67 | 314（maintain_scan.py） | 38 | 归档后/合并上游后 | 人工 |
@@ -85,7 +84,7 @@ flowchart LR
 
 **设计要点**：SKILL.md 仅 47 行（全仓最短），因为**判定逻辑全部下沉 `ship_gate.py`（842 行）**——「SKILL 薄、脚本厚」是刻意的：主 session 不承担步序记忆（盘面即状态），SKILL 只描述「每步前后 MUST 调 gate、照 verdict 跑」。
 
-- **自身 fan-out = 0**：纯 chain 子 skill（embedded-test-sop → writing-plans/SDD → sdflow-code-review → sdflow-done），扇出发生在被链 skill 内部。
+- **自身 fan-out = 0**：纯 chain 子 skill（writing-plans/SDD → sdflow-code-review → sdflow-done），扇出发生在被链 skill 内部。
 - **零产物、零 git 写**（D8）：不 commit/merge/push，写锚由各子 skill 自己负责。
 - **resume 语义**：零跨步内存状态，中断后重调即从盘面推导缺口续跑；gate 不辨产者（人工手跑某步的报告同样被认，人机同权）。
 
@@ -95,8 +94,7 @@ flowchart LR
 flowchart TD
     S0["git 健全性"] --> S1["D3 归档终态短路<br/>（active 缺席→查归档：SHIPPED / UNKNOWN / RUN_VERIFY）"]
     S1 --> S2["pre-flight 设计门<br/>design_approved≠true 或失鲜 → REFUSE_START(3)"]
-    S2 --> S3["TG-02 且 sop 缺 → RUN_SOP"]
-    S3 --> S4["plan 缺 → RUN_PLAN；plan_ids ⊄ done → CONTINUE_IMPL(带 done_tasks)"]
+    S2 --> S4["plan 缺 → RUN_PLAN；plan_ids ⊄ done → CONTINUE_IMPL(带 done_tasks)"]
     S4 --> S5["code-review 报告缺→RUN_CODE_REVIEW；blocked→BLOCKED_UPSTREAM(4)；<br/>absent 锚→STEP_IN_PROGRESS；陈旧→RERUN_STALE"]
     S5 --> S6["verify 缺→RUN_VERIFY；FAIL→VERIFY_FAIL(5)；陈旧→RERUN_STALE"]
     S6 --> S7["active 存在+PASS → 恒 RUN_VERIFY（收尾未完）<br/>真 SHIPPED 只由 D3 短路给出"]
@@ -206,7 +204,7 @@ flowchart TD
 
 ---
 
-## 5. 数据类六件套详解
+## 5. 数据类五件套详解
 
 ### 5.1 recorder 三件套（buglist / todolist / issues）：一个内聚子系统
 
@@ -244,10 +242,6 @@ flowchart LR
 
 `maintain_scan.py`（314 行）纯读、fail-closed、零写：fence 未闭合 / 托管块 marker 不配对 / 目录不可读 → 一律报错**绝不输出「一致」**（防假一致——与防假✅同族）。四分节差异报告（新增未索引/已删未清理/过时引用/陈旧遮蔽）；修复只改 `openspec/INDEX.md` 一个文件且须经用户确认。与 init 共享的判据常量保自包含副本、靠 `test_marker_consistency.py` 机验一致（adr/0016：跨 skill 共享常量用一致性守卫而非物理单一源）。
 
-### 5.4 embedded-test-sop：数据类的反例（纯规范 skill）
-
-全仓唯一「无脚本、无测试、362 行 SKILL.md 就是执行核心」的 skill：为嵌入式固件生成手工测试 SOP + `log-checks.yaml` 自动分析规则。确定性靠文字硬约束（等待时间必标来源公式、日志关键词从源码字面量复制不转述、动态字段用占位符禁硬编码）。模式 B（日志验证）所需的 `log_check.py` 判定脚本**计划中未建**（mechanical-layer-hardening 阶段4 子任务 4.A）——当前日志比对仍靠模型执行 yaml 规则，是机械层的已知缺口。
-
 ---
 
 ## 6. 机械门脚本速查（who-calls-what）
@@ -271,17 +265,14 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    RM["sdflow-roadmap<br/>（多阶段规划）"] -.每阶段.-> FF
+    RM["sdflow-roadmap<br/>（多阶段规划）"] -.每阶段.-> EX
     subgraph 阶段一
-        SP["/sdflow-spec<br/>（分支 A · 默认，只能人敲）"]
-        EX["opsx:explore"] --> FF["opsx:ff<br/>（config.yaml + TG 注入）"] --> GR["grill（人类对话岛）"]
+        EX["opsx:explore<br/>（条件：问题模糊/方向未定）"] -.人示意收敛，模型自动 invoke.-> SP["/sdflow-spec<br/>（澄清→拷问→生成，人可直接触发）"]
     end
-    SP --> SR
-    GR --> SR["sdflow-spec-review"]
+    SP --> SR["sdflow-spec-review"]
     SR -->|"autoplan 原生并入"| SR
     SR --> GATE{{"设计 HARD-GATE<br/>design_approved: true"}}
     GATE --> SHIP["sdflow-ship（gate 循环）"]
-    SHIP -->|RUN_SOP| SOP["embedded-test-sop"]
     SHIP -->|RUN_PLAN| WP["writing-plans → SDD<br/>（注入点 A/B）"]
     SHIP -->|RUN_CODE_REVIEW| CR["sdflow-code-review<br/>（gstack/review 原生并入）"]
     SHIP -->|RUN_VERIFY| DN["sdflow-done"]

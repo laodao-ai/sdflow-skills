@@ -273,7 +273,8 @@ class TestBrandAndMarkerNarrowing:
         for name in self._GONE_NAMES:
             assert not (skills / name).exists(), name
 
-        # 现存名（9 新名 + embedded-test-sop/openspec-upgrade/sdflow-upgrade，源仍在仓内）：
+        # 现存名（9 新名 + openspec-upgrade/sdflow-upgrade，源仍在仓内；embedded-test-sop
+        # 已随 simplify-workflow 删除仓内源目录，落入上面的 _GONE_NAMES 桶）：
         # 识别自属 → 刷新换链为指向仓内源目录的软链
         for name in self._EXISTING_NAMES:
             assert (skills / name).is_symlink(), name

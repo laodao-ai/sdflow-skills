@@ -13,24 +13,22 @@
 git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && bash setup.sh
 ```
 
-装完在**你的项目**里，逐条敲（`/sdflow-spec` 与 `/grill-with-docs` 只能人手动敲，模型唤不起）：
+装完在**你的项目**里，逐条敲（问题模糊先 `opsx:explore`，清晰直接进 `/sdflow-spec`；`/sdflow-spec`
+人可直接触发，人示意收敛时模型也会自动 invoke）：
 
 ```text
 /sdflow-init            # 只做一次：把 spec 工作流 bundle 铺进这个项目
 /sdflow-spec            # 阶段一：澄清 → 拷问 → 生成四件套 + decision-memo.md
-/clear                  # ↓ 出口序列（G1 的唯一具名例外：cache 按模型隔离 + 产/审错档）
+/clear                  # ↓ 出口序列（G1 的具名例外之一：cache 按模型隔离 + 产/审错档）
                         #   切换到评审档模型
 /sdflow-spec-review     # 阶段二：并行多镜设计审 → 一份 spec-review-report.md
                         #   ★ 人在这里过一次报告拍板（全流程唯一人类门）
 /sdflow-ship {change}   # 阶段三：实现 → 代码审 → done → merge，一路连续跑
 ```
 
-> 没装 `sdflow-spec` 的项目沿用旧三步 `opsx:explore → opsx:ff → /grill-with-docs`；
-> 两条分支的选择规则见 `sdflow-init/assets/workflow/generation-process.md` §四。
-
 阶段一的 project-local schema 由 `sdflow-init` 从 `sdflow-init/assets/schemas/sdflow-spec-driven/`
 下发到消费项目。它负责四件套结构、依赖、`skip_specs` 和委派提示；委派只是提示层引流，不能替代
-`/sdflow-spec` 的人类触发与入口规则。CLI 版本门未通过时保持内置 `spec-driven`；迁移必须先补写
+`/sdflow-spec` 的入口规则。CLI 版本门未通过时保持内置 `spec-driven`；迁移必须先补写
 在途 change 的 schema，再切换配置。当前不提供 fork 漂移的机械检测或自动 rebase，该边界已记录为
 后续 todo。
 

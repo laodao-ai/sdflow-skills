@@ -79,20 +79,20 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
   子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
-- **阶段一入口二选一（`generation-process.md` §四 的四入口选择规则）**：装了 `sdflow-spec` ⇒ **默认走 `/sdflow-spec`**（分支 A 单入口，拷问前置于成文）；未装、或命中三种例外（需 wayfinder 跨会话铺图 / 用户明确要求分步 / 环境不可用）⇒ 走旧三步 `explore → ff → grill`（分支 B）。**模型 MUST NOT 自行选 `opsx:ff` 绕过拷问**——判断需要开 change 时提示用户敲 `/sdflow-spec`。
+- **阶段一入口为唯一线性路径**：问题模糊/方向未定先 `opsx:explore` 发散，清晰则直接进 `/sdflow-spec`。
+  人可直接触发；**人示意收敛**（如"开搞"/"做吧"/"开 change"）时**模型 SHALL 自动 invoke `/sdflow-spec`**。
+  **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发，触发方式的改变不缩减
+  相位 B 拷问的深度（generation-process.md §四）。
 - **开分支 = FF-0 三分支判定**：保护分支 → `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
-- 🔴 **ff 之后是 grill，不是 spec-review**（**本条只管分支 B**——走 `/sdflow-spec` 时拷问已在管线内、且在成文之前，本条不适用）：`opsx:ff` 产出四件套后，**MUST 提示下一步 = `/grill-with-docs`**
-  （阶段一的对抗层），**MUST NOT 直接跳到 `/sdflow-spec-review`**。
-  **且 MUST 把 `workflow/prompts/step3-grill.md` 原样贴出来**给用户复制（整个文件就是那段 prompt，**只有 500 字节，别去读 workflow.md**）——
-  `grill-with-docs` **只能人手动触发**（`disable-model-invocation: true`），**光说「下一步跑 grill」等于没提示**。
-  **MUST NOT 转述、精简、或凭记忆重写那段 prompt**（单一源 = `workflow/prompts/step3-grill.md`，照抄）。
+- **实现管线缺省 = tickets**：仓 `config.yaml` 无 `impl-pipeline` 键时路由至 `sdflow-implement`（tickets 轨）；
+  显式设 `impl-pipeline: superpowers` 才走 writing-plans → subagent-driven-development（旧管线）。
 - **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
 
 **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
 
 | skill | 在流程中的角色 |
 |---|---|
-| `/sdflow-spec` | 阶段一**产 spec 单一入口**（分支 A）——澄清 → 拷问 → 生成三相位，产四件套 + `decision-memo.md`；只能人触发 |
+| `/sdflow-spec` | 阶段一**产 spec 单一入口**——澄清 → 拷问 → 生成三相位，产四件套 + `decision-memo.md`；人可直接触发，模型按自动触发规则在人示意收敛时自动 invoke |
 | `/sdflow-spec-review` | 设计审**主审**——并行多镜，按 `spec-checklists/domains` + 对抗 + 接地读码 |
 | `/sdflow-code-review` | 代码审**主审**——并行多镜，按 `code-checklists/domains` + 对抗 + 置信过滤 |
 | `/sdflow-done` | **闭环**——verify → archive（delta 对码核验同步）→ commit → merge |
@@ -121,13 +121,3 @@ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权�
 - **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
   （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
   跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
-
-> **`/grill-with-docs`（分支 B 的阶段一对抗层）**——**走分支 B 时，ff 之后、设计审之前的必经步**。
-> 它来自 **Matt Pocock 的 skills 集合**（`~/.agents/skills`，仓外、非 git 管理、更新即覆盖），**不是 sdflow-skills、也不是 superpowers 插件**。
-> 它 **`disable-model-invocation: true`，只能人手动触发**：模型唤不起它，只能**把 prompt 贴给人、由人敲**。
-> 因此它极易被静默跳过——**跳过 grill = 把一份没被拷问过的设计直接送进设计审**，
-> 而 spec-review 的多镜是在**已有设计的框架内**找问题，**不会替你质疑这个框架本身**。
->
-> **分支 A（`/sdflow-spec`）不依赖它**：拷问是那条管线的内建相位 B，且**在成文之前**跑
-> （改想法比改四份成文便宜）。⚠️ 这是**结构性改善，不是机械保证**——跳过须主动偏离指令，
-> 而指令层约束由执行方自报；机械可验的只有「`decision-memo.md` 存在且必填小节非空」这一条门。
