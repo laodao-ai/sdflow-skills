@@ -161,6 +161,34 @@ class TestBundleToolsOnly:
         assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
 
 
+class TestPinConsumerUpdateInvariant:
+    """T69：pin 消费仓跑 update（非 dev）→ 规则文件不被触碰、仅 tools+契约刷新。"""
+
+    def test_update_preserves_pinned_rules(self, tmp_path):
+        wf = tmp_path / "openspec" / "workflow"
+        wf.mkdir(parents=True)
+        # 模拟 pin：消费仓 openspec/workflow/ 已有规则文件
+        (wf / "workflow.md").write_text("# pinned rules v1\n", encoding="utf-8")
+        (wf / "spec-checklists").mkdir()
+        (wf / "spec-checklists" / "base.md").write_text("# base\n", encoding="utf-8")
+        (wf / "code-checklists").mkdir()
+        (wf / "code-checklists" / "base.md").write_text("# base\n", encoding="utf-8")
+        # 记录 pin 文件的原始内容
+        pin_before = {
+            "workflow.md": (wf / "workflow.md").read_bytes(),
+            "spec-checklists/base.md": (wf / "spec-checklists" / "base.md").read_bytes(),
+            "code-checklists/base.md": (wf / "code-checklists" / "base.md").read_bytes(),
+        }
+        # 跑 update（非 dev = full=False）
+        copy_bundle(str(tmp_path))
+        # 规则文件字节不变
+        assert (wf / "workflow.md").read_bytes() == pin_before["workflow.md"]
+        assert (wf / "spec-checklists" / "base.md").read_bytes() == pin_before["spec-checklists/base.md"]
+        assert (wf / "code-checklists" / "base.md").read_bytes() == pin_before["code-checklists/base.md"]
+        # tools/ 已刷新
+        assert (wf / "tools" / "anchor_lint.py").is_file()
+
+
 class TestProjectLocalSchema:
     def _version(self, monkeypatch, value="1.7.0\n", returncode=0):
         """Fake only the `openspec --version` probe (`_openspec_cli_version`'s subprocess

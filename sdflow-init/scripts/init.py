@@ -1122,8 +1122,10 @@ def run(root, mode, dev=False):
         report.append("退役部署文件清理：\n" + retire_deploy_files(root))
 
         # init 与 update 都跑：fresh init 无残留自然零告警；老仓误跑 init 不再假绿（B2-F3）。
-        for w in stale_shadow_warnings(root):
-            report.append(w)
+        # T15：--dev 模式跳过——dev 刻意铺规则进 openspec/workflow/，告警是误报。
+        if not dev:
+            for w in stale_shadow_warnings(root):
+                report.append(w)
 
         cstat, cmsg = handle_config(root, mode, schema=target_schema)
         report.append(f"config.yaml：{cmsg}")

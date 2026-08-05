@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v11（2026-08-05，B1-B14 完成，新排期 B15-B16 + WONTDO 11 条）
-> 总量：78 条 open todo（0 条 open bug）
+> 版本：v12（2026-08-05，B1-B16 全部完成 + WONTDO 11 条）
+> 总量：67 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -28,8 +28,8 @@
 | ~~B11+B12~~ | ~~voice 脚本 + workflow/tools 合批~~ | ~~8~~ | -- | -- | ✅ 全部已关（4 DONE + 1 WONTDO + 3 先前 DONE） |
 | ~~B13~~ | ~~sdflow-maintain 扫描器硬化~~ | ~~4~~ | -- | -- | ✅ 全部已关（2 DONE + 2 WONTDO） |
 | ~~B14~~ | ~~sdflow-implement 小修~~ | ~~3~~ | -- | -- | ✅ 全部已关（2 DONE + 1 WONTDO） |
-| **B15** | **文档 + 术语 + spec 订正** | **6** | 低 | 小 | 就绪 |
-| **B16** | **sdflow-init 小修集** | **5** | 低-中 | 小-中 | 就绪 |
+| ~~B15~~ | ~~文档 + 术语 + spec 订正~~ | ~~6~~ | -- | -- | ✅ 全部已关（3 DONE + 3 WONTDO + 先前无变更视为消解） |
+| ~~B16~~ | ~~sdflow-init 小修集~~ | ~~5~~ | -- | -- | ✅ 全部已关（3 DONE + 2 先前 DONE） |
 | **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / Codex… | ~67 | 低-中 | 中-大 | 条件触发 |
 
 ---
@@ -232,53 +232,37 @@ B12 五条中 T68 已在后续 change 中修复（load_enums fence 匹配已加 
 
 ---
 
-### B15 · 文档 + 术语 + spec 订正
+### ~~B15~~ · 文档 + 术语 + spec 订正 — ✅ 全部已关
 
-改 docs/ + CLAUDE.md + CONTEXT.md + openspec/specs/。
-
-| ID | 摘要 |
-|---|---|
-| T199 | CLAUDE.md 写的 `pytest` 命令本机不可用 |
-| T207 | docs/ 旧 skill 名（sdflow-buglist/todolist）刷新到 sdflow-issues |
-| T142 | workflow-map.md 广度刷新（补 5 脚本 + hr-tg 三字段） |
-| T229 | OVBG-01/05 spec 措辞已被实现证伪，需订正 |
-| T252 | adr/0031 T10 单一源化补追踪条目 |
-| T253 | 「第三类场景」命名脱钩 T10 |
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T199 | CLAUDE.md 写的 `pytest` 命令本机不可用 | ✅ WONTDO（本机 PATH 环境事实，非文档错误） |
+| T207 | docs/ 旧 skill 名（sdflow-buglist/todolist）刷新到 sdflow-issues | ✅ DONE（workflow-map.md 标注已废弃） |
+| T142 | workflow-map.md 广度刷新（补 5 脚本 + hr-tg 三字段） | ✅ DONE（§4 补 5 脚本，hr-tg 三字段已由先前 change 修完） |
+| T229 | OVBG-01/05 spec 措辞已被实现证伪 | ✅ DONE（OVBG-01 dispatch+nonce 独立 grace；OVBG-05 canonical-id 肯定核验+其余矛盾否决） |
+| T252 | adr/0031 T10 单一源化补追踪条目 | ✅ WONTDO（90 处引用，单一源化超出清理批次） |
+| T253 | 「第三类场景」命名脱钩 T10 | ✅ WONTDO（issue 自述属加宽） |
 
 ---
 
-### B16 · sdflow-init 小修集
+### ~~B16~~ · sdflow-init 小修集 — ✅ 全部已关
 
-改 `init.py` + `resolve-workflow.sh` + `assets/workflow/` 规则文件 + tests。
-
-| ID | 摘要 |
-|---|---|
-| T12 | canonical 陈旧可观测（commit hash + 距上次 pull 天数） |
-| T15 | update --dev 误报陈旧遮蔽告警 |
-| T69 | copy_bundle 缺消费仓 update 端到端交叉不变量测试 |
-| T130 | ff-generation-constraints.md「四件套」→「三件套」术语 |
-| T131 | workflow.md wayfinder 硬编码 Claude 单宿主路径 |
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T12 | canonical 陈旧可观测（commit hash + 距上次 pull 天数） | ✅ DONE（maintain_scan.py _canonical_staleness 报告尾部） |
+| T15 | update --dev 误报陈旧遮蔽告警 | ✅ DONE（init.py dev 模式跳过 stale_shadow_warnings） |
+| T69 | copy_bundle 缺消费仓 update 端到端交叉不变量测试 | ✅ DONE（test_init.py TestPinConsumerUpdateInvariant） |
+| T130 | ff-generation-constraints.md「四件套」→「三件套」术语 | ✅ DONE（ab8f746 重写时已消解） |
+| T131 | workflow.md wayfinder 硬编码 Claude 单宿主路径 | ✅ DONE（ab8f746 重写时已清理） |
 
 ---
 
 ## 建议执行顺序
 
 ```
-B1-B10 ─── ✅ 全部已关
+B1-B16 ─── ✅ 全部已关（2026-08-05 完成）
   │
-BW (过时关闭) ─── ✅ 全部 WONTDO
-  │
-B11 (voice 脚本) ── 安全面：timeout 禁用 + 进程杀不死
-  │
-B12 (workflow/tools) ── 假阴 + 兼容性
-  │
-B13 (maintain 扫描器) ── 跨语言漂移
-  │
-B14 (implement 小修) ── 死链 + fixture
-  │
-B16 (sdflow-init) ── 可观测 + 术语
-  │
-B15 (文档清理) ── 文案/命名
+延后池 ── 67 条，条件触发
 ```
 
 ---

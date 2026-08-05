@@ -220,6 +220,34 @@ def scan_claude_refs(root, fs_specs, fs_rules):
 RULE_MARKERS = ("workflow.md", "spec-checklists", "code-checklists")
 
 
+def _canonical_staleness():
+    """T12：全局 canonical 陈旧可观测——commit hash + 距上次 pull 天数。纯可观测，非告警。"""
+    import subprocess, time
+    canon = os.path.expanduser("~/.sdflow/workflow")
+    if not os.path.isdir(canon):
+        return None
+    real = os.path.realpath(canon)
+    git_dir = real
+    while git_dir and git_dir != "/":
+        if os.path.isdir(os.path.join(git_dir, ".git")):
+            break
+        git_dir = os.path.dirname(git_dir)
+    else:
+        return None
+    try:
+        sha = subprocess.run(
+            ["git", "-C", git_dir, "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=5).stdout.strip()
+        fetch_head = os.path.join(git_dir, ".git", "FETCH_HEAD")
+        if os.path.isfile(fetch_head):
+            days = int((time.time() - os.path.getmtime(fetch_head)) / 86400)
+            return f"canonical → {sha}（{days} 天前 pull）"
+        return f"canonical → {sha}（FETCH_HEAD 缺失，pull 天数未知）"
+    except Exception:
+        return None
+
+
 def scan_stale_shadow(root):
     """周期性兜底：openspec/workflow/ 残留规则本体 → 遮蔽全局 canonical。仅报告，绝不删。
     canonical 判据 = init.py:RULE_MARKERS（本副本经一致性守卫测试机验，见 test_marker_consistency）。"""
@@ -312,6 +340,7 @@ def _check_non_kebab(fs):
 def run_scan(root):
     fs = {"spec": scan_fs_specs(root), "rule": scan_fs_rules(root)}
     non_kebab = _check_non_kebab(fs)
+    staleness = _canonical_staleness()
     body, mgr_warns = split_managed_block(_read_index(root))
     indexed = parse_index_entries(body)
     diff = set_diff(fs, indexed)
@@ -320,10 +349,10 @@ def run_scan(root):
     stale_shadow = scan_stale_shadow(root)
     devenv = scan_devenv(root)
     return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=stale_shadow,
-                        devenv=devenv, non_kebab=non_kebab)
+                        devenv=devenv, non_kebab=non_kebab, staleness=staleness)
 
 
-def build_report(diff, mgr_warns, claude_refs, stale_shadow, devenv=("absent", ""), non_kebab=None):
+def build_report(diff, mgr_warns, claude_refs, stale_shadow, devenv=("absent", ""), non_kebab=None, staleness=None):
     lines = ["# maintain_scan 差异报告", ""]
     if non_kebab is None:
         non_kebab = []
@@ -380,6 +409,8 @@ def build_report(diff, mgr_warns, claude_refs, stale_shadow, devenv=("absent", "
         else:
             # 【原样】并入 —— 一个字都不改（commit 锚、待定横幅、blocked_by 全带着）
             lines += ["", text]
+    if staleness:
+        lines.append(f"\n{staleness}")
     return "\n".join(lines)
 
 

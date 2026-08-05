@@ -5,7 +5,7 @@ Codex 宿主下把跨模型 outside voice（`outside-voice.sh exec`）从同步�
 ## Requirements
 ### Requirement: Codex-host Claude voice 由经探测的 research-preview supervisor 托管 **[spec-review-amendment]**
 
-**Requirement ID: OVBG-01.** Codex 宿主的 Claude outside voice **SHALL** 通过 Claude Code `2.1.169+` 本机验证过的 `claude --bg --exec '<command>'` research-preview 执行形态派发，由 per-user supervisor 托管现有 `outside-voice.sh exec` 命令；版本只构成必要条件，真实 dispatch **MUST** 是最终 capability probe。dispatch **MUST** 在 monotonic 5 秒 deadline 内返回可审计的 canonical job id，超时 SHALL 回收 spawn 进程树；实现 **MUST NOT** 把 review prompt 直接交给交互式 `claude --bg '<prompt>'`，亦 **MUST NOT** 依赖 `nohup`、`setsid` 或 Codex shell 子进程在命令返回后存活。**[grill-amendment] 2.1.169 是 `--bg --exec`、`--safe-mode` 与含 `--all`/`id`/`state` agents JSON 的共同能力下限。** **[spec-review-amendment]**
+**Requirement ID: OVBG-01.** Codex 宿主的 Claude outside voice **SHALL** 通过 Claude Code `2.1.169+` 本机验证过的 `claude --bg --exec '<command>'` research-preview 执行形态派发，由 per-user supervisor 托管现有 `outside-voice.sh exec` 命令；版本只构成必要条件，真实 dispatch **MUST** 是最终 capability probe。dispatch（spawn + 首次 communicate）**MUST** 在 monotonic 5 秒 deadline 内完成，超时 SHALL 回收 spawn 进程树；canonical job id 的核验另有独立 nonce lookup grace（不受 dispatch 5 秒 deadline 约束），端到端上界 = dispatch deadline + nonce lookup grace；实现 **MUST NOT** 把 review prompt 直接交给交互式 `claude --bg '<prompt>'`，亦 **MUST NOT** 依赖 `nohup`、`setsid` 或 Codex shell 子进程在命令返回后存活。**[grill-amendment] 2.1.169 是 `--bg --exec`、`--safe-mode` 与含 `--all`/`id`/`state` agents JSON 的共同能力下限。** **[spec-review-amendment]**
 
 后台命令 **SHALL** 调用同一份已安装 `~/.sdflow/hack/outside-voice.sh exec`，使 prompt rendering、入境/出境 secret scan、context 截断、最终 stdout 与退出码继续由既有权威实现产生。preflight **SHALL** 校验 job helper、shell helper 与所需 data file 的同代 capability manifest/hash；不一致时 fail-closed 为 `preflight-error`。v1 background transport 只支持已通过 quoting/injection golden 的 POSIX shell；其他平台 SHALL 快速同族 fallback，MUST NOT 用 `shlex.quote` 声称跨平台安全。**[spec-review-amendment]**
 
@@ -89,7 +89,7 @@ worker stdout 只有在 `.rc=0` 后才可进入 findings 池；stderr **MUST** �
 
 ### Requirement: 完成、失败与取消任务可清理
 
-**Requirement ID: OVBG-05.** 每个 terminal job 在结果已 collect 后 **SHALL** 调用 `claude rm <canonical-id>` 清理 supervisor roster/job 状态；人工中止或 deadline+grace 失效 SHALL 按 `核验完整 identity → claude stop → 核验 worker/inner child process tree 已退出 → claude rm` 顺序执行。清理失败或子树终止不可证 **MUST** 作为 orphan warning 可见，并抑制会叠加费用的自动 fallback；不得删除 `.outside-voice/<run-id>/` 的本轮审计证据，也不得改写已经取得的 rc。**[spec-review-amendment]**
+**Requirement ID: OVBG-05.** 每个 terminal job 在结果已 collect 后 **SHALL** 调用 `claude rm <canonical-id>` 清理 supervisor roster/job 状态；人工中止或 deadline+grace 失效 SHALL 按 `核验 identity → claude stop → 核验 worker/inner child process tree 已退出 → claude rm` 顺序执行。identity 核验判据：canonical job id **MUST** 肯定核验（缺失即拒绝操作）；repo/site/attempt 三项采用「矛盾即一票否决、缺席不阻塞」策略（真机 `state=done` roster 条目缺 name 字段，四项均要求肯定证据会导致正常完成的 job 永远无法清理）。清理失败或子树终止不可证 **MUST** 作为 orphan warning 可见，并抑制会叠加费用的自动 fallback；不得删除 `.outside-voice/<run-id>/` 的本轮审计证据，也不得改写已经取得的 rc。**[spec-review-amendment]**
 
 #### Scenario: 正常 collect 后无活动残留
 - **WHEN** 一个 SUCCEEDED/TIMED_OUT/FAILED job 已完成 collect

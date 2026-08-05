@@ -158,19 +158,24 @@
 
 ## 4. 确定性脚本清单
 
-14 个脚本（含 1 个计划未建）。**bundle** = 经 `sdflow-init update` 铺进消费仓 `openspec/workflow/tools/`；**skill-local** = 仅本仓 skill 目录、走 symlink。注意 `ship_gate.py` 是 skill-local（不随 bundle 回灌）。
+19 个脚本（含 1 个计划未建、2 个已废弃）。**bundle** = 经 `sdflow-init update` 铺进消费仓 `openspec/workflow/tools/`；**skill-local** = 仅本仓 skill 目录、走 symlink。注意 `ship_gate.py` 是 skill-local（不随 bundle 回灌）。
 
 | 脚本 | 阶段 | 触发 skill | 检查字段/输入 | 判据 & 退出码 | 分发 | file:line |
 |------|------|-----------|--------------|--------------|------|-----------|
 | **ship_gate.py** | ship（全程判官） | sdflow-ship | 四件套路径 · plan 号集 · 三报告 frontmatter · checkpoint/复选框完成集 · 归档 verify 锚 | 顺序门链；**0** 推进 / **3** REFUSE / **4** BLOCKED / **5** VFAIL / **6** UNKNOWN | skill-local | `:32-44`,`:647` |
 | **anchor_lint.py** | spec-review / code-review | 两审 | 报告文本 + `--layer` + 必需 `--trigger-catalog`（缺传→fail-closed）；4 类锚 + lens-metric 字段/enum/sev/计数；hr-tg 锚 M1（`hit=`/`declared=` 在场）+ M2（重算 `hit == declared∩HR-TG`）+ M4（`hit≠none ⟹ evidence` 非空）+ M-new（`declared`/`hit` 每 TG ∈ trigger-catalog 全集） | fence-aware 行级；**0** CLEAN / **1** 违规 / **2** fail-closed | bundle | `:138`,`:163`,`:365` |
 | **trivial_shape.py** | code-review（Step2 前） | sdflow-code-review | `git diff` 形状 · 行为面路径清单 · 文档扩展名 | 保守偏 NOT_EXEMPT；**0** EXEMPT / **1** 必跑 / **2** ERR→必跑 | bundle | `:183` |
+| **hr_tg_intersect.py** | spec-review / code-review | 两审（anchor_lint 同源 import） | `--trigger-catalog` · `--hr-tg-file` · 求交 HR∩TG | 交集 JSON；**0** / **1** ERR | bundle | — |
+| **outside_voice_guard.py** | code-review（Step2 前） | sdflow-code-review | 报告文本 · change 目录 · step1 mode 锚 | 六 reason_code 归约；**EmitError** fail-closed | bundle | — |
+| **review_disposition_check.py** | code-review | sdflow-code-review | 报告文本 · disposition 锚 | 按 finding 校验 disposition 合法性；**0** / **1** 违规 | bundle | — |
+| **lens_metric_emit.py** | spec-review / code-review | 两审 | 报告文本 · `--layer` · `--host` · `--runner` | 锚行发射+累加；**0** / **1** ERR | bundle | — |
+| **maintain_scan.py** | maintain | sdflow-maintain | `openspec/` 目录 · INDEX.md · CLAUDE.md | 四节差异报告；**0** | skill-local | — |
 | **lens_metric_aggregate.py** | retro | sdflow-retro（import） | 归档 lens-metric 锚 · layer/lens enum · 五计数 | fence-aware 聚合，view-only（0） | skill-local | `:50`,`:70` |
 | **retro_report.py** | retro | sdflow-retro | git 历史（墙钟）· checkpoint→stage 映射 · lens-metric/hr-tg 锚 | 成本×价值 join，只呈现不决策（0） | skill-local | `:146`,`:356` |
 | **init.py**（config-lint mode） | setup / maintain | sdflow-init | `config.yaml`：schema · rules(4 子键) · model-tiers ⊆{strong,mid,light} · metrics.enabled ∈{true,false} | fail-closed（条件块缺→放行）；**0** / **1** 违规 | skill-local | `:295`,`:351` |
 | **issues.py** | done 收尾 / maintain | sdflow-issues（done sweep 调） | 两池 item(id/status/change/batch) · batches.md · 跨池撞号 | reindex 全量重建 INDEX(幂等) · sweep 非原子可重跑；`_die`→1 | skill-local | `:244`,`:1156` |
-| **buglist.py** | 全阶段（记 bug） | sdflow-buglist | STATUS · B-ID 自增 · 表↔块一致 | FIXED 必带 evidence+根因；WONTFIX 必带理由；`_die`→1 | skill-local | `:56`,`:481` |
-| **todolist.py** | 全阶段（记债/优化） | sdflow-todolist | STATUS · T-ID 自增 · 表↔块一致 | DONE 必带关联 change/commit；`_die`→1 | skill-local | `:56`,`:336` |
+| ~~**buglist.py**~~ | ~~全阶段~~ | ~~sdflow-buglist~~ | （v2 合并为 issues_v2.py，见 sdflow-issues） | 已废弃 | — | — |
+| ~~**todolist.py**~~ | ~~全阶段~~ | ~~sdflow-todolist~~ | （v2 合并为 issues_v2.py，见 sdflow-issues） | 已废弃 | — | — |
 | **test_mirror_consistency.py** | maintain / CI | pytest（守卫） | 三脚本同名 helper 源码 → 剥 docstring 后 `ast.dump` 等价 | 仅真实逻辑分叉拉红（THREE_WAY 6 + TWO_WAY） | skill-local | `:41`,`:87` |
 | **resolve-workflow.sh** | setup（规则根解析） | 各 skill 前置 | `--root`；本地 pin vs 全局 canonical bundle | **0** 成功 / **2** 降级 / **64** 用法 | bundle/hack | `:5-7`,`:69` |
 | **outside-voice.sh** | spec-review / code-review | 两审 outside-voice 镜 | `--context-file` · secret_scan · codex read-only · timeout 300 | preflight/exec；**0** / **1** err / **3** secret / **124** timeout | bundle/hack | `:5-15`,`:45` |
