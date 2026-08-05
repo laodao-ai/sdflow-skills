@@ -76,8 +76,9 @@ rules:
 #   light: <claude-model-id>
 
 # impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
-# 缺省请勿填（缺失/非法值一律 superpowers 旧管线）；仅在新出 ticket 时刻读一次，
-# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change。
+# 缺省请勿填（缺省一律 tickets；缺失/非法值同归此路径）；仅在新出 ticket 时刻读一次，
+# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change；
+# 显式 `impl-pipeline: superpowers` 仍生效，走旧管线。
 # impl-pipeline: tickets
 
 # 评审价值度量（lens-metric）开关：低频消费仓默认关（避免零收益期背记账+硬阻塞）；

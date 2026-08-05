@@ -3,10 +3,12 @@
 """impl_route.py — sdflow-implement 路由/拓扑 stdlib-only helper（只读、零副作用）
 
 管线路由三跳（design F4/F12/F13，逐字见 matt-workflow-integration/superpowers-plan.md
-Task 2 Interfaces）：
+Task 2 Interfaces；[simplify-workflow] 缺省已翻转为 tickets，见下方③）：
     ① openspec/config.yaml 顶层 `impl-pipeline:` 键（仅新出 ticket 首跳读一次）
     ② plan 文件头 frontmatter marker（在途只读，marker 存在即锁定，优先于 config）
-    ③ 键/marker 缺席 → 一律 superpowers（缺省态，静默回退）
+    ③ config 键缺席/空值/非法值 → 一律 tickets（新缺省态，静默回退）；
+       plan 已存在但 frontmatter/marker 缺席 → 仍一律 superpowers（旧缺省，冻结不变，
+       避免静默切换在途 change——marker 是"已出票"的信号，不该被本次翻转影响）。
 marker **存在但非法/重复/损坏** 一律停（RouteStop，UNKNOWN 语义），不静默回退——
 防两管线混跑。
 
@@ -174,10 +176,13 @@ def read_config_pipeline(root) -> Tuple[str, str]:
     """读 <root>/openspec/config.yaml 顶层 `impl-pipeline:` 行（取值委托给 `_yq()`）。
 
     返回 (pipeline, note)：
-        缺失/空值      → ("superpowers", "absent")
+        缺失/空值      → ("tickets", "absent")
         tickets/superpowers → (值, "ok")
-        其他值/整份 config.yaml 语法损坏 → ("superpowers", "unknown-value:<原文或 yq 诊断>")
-        （F12：非法值回显，区别于缺省；语法损坏同归此路径——fail 向旧管线，且可诊断。
+        其他值/整份 config.yaml 语法损坏 → ("tickets", "unknown-value:<原文或 yq 诊断>")
+        （F12：非法值回显，区别于缺省；语法损坏同归此路径——fail 向新缺省管线（tickets），且可诊断。
+        [simplify-workflow] 缺省从 superpowers 翻转为 tickets——tickets 管线已是本仓与
+        下游试点的常态路径，superpowers 现在只作显式声明保留（不变：显式
+        `impl-pipeline: superpowers` 仍生效，见下方 LEGAL_PIPELINES 分支）。
         [shared-yaml-subset-parser] 旧版的「损坏标量」（未闭合引号等）在 yq 方案下不再是
         本函数自己判定的一类——那类输入会让 yq 对整份 config.yaml 的解析直接失败
         （exit≠0），与其它语法错误一样落入下方 `except RuntimeError` 分支，诊断精度从
@@ -186,24 +191,24 @@ def read_config_pipeline(root) -> Tuple[str, str]:
     """
     config_path = Path(root) / "openspec" / "config.yaml"
     if not config_path.exists():
-        return "superpowers", "absent"
+        return "tickets", "absent"
 
     try:
         raw = _yq('."impl-pipeline"', config_path, default=None)
     except RuntimeError as exc:
-        return "superpowers", f"unknown-value:{exc}"
+        return "tickets", f"unknown-value:{exc}"
 
     if raw is None:
-        return "superpowers", "absent"
+        return "tickets", "absent"
     if not isinstance(raw, str):
         # yq 解出的是非字符串结构（如 list/map/number）——本字段的合法值域只有两个字面串，
         # 结构类型错本身就是「非法值」，与字符串越域同归 unknown-value。
-        return "superpowers", f"unknown-value:{raw!r}"
+        return "tickets", f"unknown-value:{raw!r}"
     if raw == "":
-        return "superpowers", "absent"
+        return "tickets", "absent"
     if raw in LEGAL_PIPELINES:
         return raw, "ok"
-    return "superpowers", f"unknown-value:{raw}"
+    return "tickets", f"unknown-value:{raw}"
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +222,12 @@ def read_plan_marker(plan_path) -> Optional[str]:
     无 frontmatter / 无键 → "superpowers"（旧管线产物，不嗅探正文内容）
     首块 frontmatter 含 impl-pipeline: tickets|superpowers 单值 → 该值
     键重复 / 值非法 / 值损坏（未闭合引号等）/ frontmatter 未闭合 → raise RouteStop（UNKNOWN 语义，停）
+
+    [simplify-workflow] 本函数的"无 frontmatter/无键 → superpowers"缺省**刻意冻结不变**
+    （不随 read_config_pipeline 的缺省翻转而翻转）：marker 只在 plan 文件已存在时才有意义，
+    已存在的 plan 代表"已出票"——若把这里也悄悄改成 tickets，会让翻转前用旧管线出的、
+    frontmatter 尚无 marker 的在途 plan 静默改道，与"marker 存在即锁定优先于 config"的
+    设计初衷（防两管线混跑）自相矛盾。
 
     [shared-yaml-subset-parser] frontmatter 边界（首行 `---` + 闭合 `---`）与
     `impl-pipeline` 键重复计数仍走原始文本预扫描（原因见文件头注释：yq 既不要求闭合
@@ -526,6 +537,16 @@ def _cmd_route(args: argparse.Namespace) -> int:
 
     pipeline = resolve_pipeline(config_pipeline, marker)
 
+    # [simplify-workflow] config_display / marker_display 的折叠锚点对称翻转后**刻意不同**
+    # （非遗漏）：两侧缺省态锚在不同的字面值——
+    #   config 侧锚新缺省 tickets：absent/unknown-value 分支现在都回退到 "tickets"
+    #     （read_config_pipeline 已翻转），但展示仍保留三态原文（absent/raw 值/tickets），
+    #     不折叠——config_note 元组本就区分得开，折叠反而丢诊断信息。
+    #   marker 侧锚仍是旧缺省 superpowers（read_plan_marker 冻结不翻转，见其 docstring）：
+    #     "无法区分"显式声明 superpowers"与"无 frontmatter/无键的隐式缺省"——两者
+    #     read_plan_marker 返回值相同，且路由行为等价（均不锁 tickets，即不会让新缺省
+    #     生效），折叠显示 none。这一折叠与 config 侧的翻转无关——marker 的锚点本就
+    #     没有翻转，折叠触发条件（`marker == "superpowers"`）同样不随之改变。
     if config_note == "absent":
         config_display = "absent"
     elif config_note == "ok":
@@ -538,8 +559,6 @@ def _cmd_route(args: argparse.Namespace) -> int:
     if marker is None:
         marker_display = "absent"
     elif marker == "superpowers":
-        # 无法区分"显式声明 superpowers"与"无 frontmatter/无键的隐式缺省"——两者
-        # read_plan_marker 返回值相同，且路由行为等价（均不锁 tickets），统一显示 none。
         marker_display = "none"
     else:
         marker_display = marker
