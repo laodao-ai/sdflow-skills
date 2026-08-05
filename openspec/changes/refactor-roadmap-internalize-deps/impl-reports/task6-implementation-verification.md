@@ -225,3 +225,30 @@ merge-base 的红**，而是本机 `.claude/worktrees/` 是否存在导致的扫
 
 ⇒ 已记 **`B24`**（`openspec/issues/open/bug/B24.md`，P2，`source_change=refactor-roadmap-internalize-deps`），本 change **不修**
 （本 change 不改任何 `.py`，修它属加宽 —— 通则③）。
+
+### 编排层收口全量跑（worktree 污染清除后的干净盘面）
+
+本票 implementer 跑全量时 `.claude/worktrees/` 下尚有 3 个 worktree（扫描口径被污染，见上）。
+编排层清理后**重跑一次干净全量**，作为本票的收口证据：
+
+| 层 | 命令原文 | 退出码 | 测试时 `git rev-parse HEAD` |
+|---|---|---:|---|
+| unit | `/usr/bin/python3 -m pytest -q` | 1（**非新增回归**，2 条均为 baseline，见下） | `e1459716832c598f4eeb18e46e5db71dc08e59c9` |
+| integration | — | 未覆盖 | 本仓无独立集成层：无 `make integration`/`tox`/CI 分层 job，全部 `test_*.py` 由同一条 pytest 入口收集 |
+| e2e | — | 未覆盖 | 本仓无 e2e 层：无浏览器/端到端 harness，无对应 runner 或 fixture |
+
+**实测结果**：`2 failed, 2449 passed, 10 skipped in 290.78s`
+
+**2 条失败逐条定性**（两条**都**是 baseline，均非本 change 引入）：
+
+| # | 用例全名 | 定性 | 核实方式 |
+|---|---|---|---|
+| ① | `hack/tests/test_harden_sdflow_spec_followup_closure.py::test_spec_authoring_requirement_ids_and_resident_identity_are_consistent` | baseline，**`tasks.md` 6.2 已登记** | 断言 `SA-14` 存在于 `openspec/specs/spec-authoring/spec.md`，实测 grep 0 命中；本 change 未触碰该 spec |
+| ② | `hack/tests/test_subprocess_encoding_contract.py::test_text_mode_subprocesses_declare_utf8_and_replace` | baseline，**`tasks.md` 6.2 漏记** | `assert sites >= 200` 实测 189；本 change 自 merge-base 起 `.py` 改动为 **0** ⇒ 扫描输入集逐字节相同 ⇒ merge-base 上必然同红。详见上方「编排层订正」节 |
+
+**结论**：**相对 merge-base 无新增失败** ⇒ 满足 `tasks.md` 6.2 判据〔SR-18〕。
+SIGINT/SIGHUP 两条 flaky 在本次干净全量跑中**未复现**，印证其 flaky 定性。
+
+> ⚠️ `tasks.md` 6.2 的 baseline 登记清单（当前只有 ①）**应回填 ②**。
+> 实现期 MUST NOT 改 `tasks.md`（它在 `ship_gate` 的 design 域失鲜监视集内，实现期改会触发
+> `REFUSE_START`）⇒ **该回填转 hand-off，由 `sdflow-done` 的 archive 阶段承接**。
