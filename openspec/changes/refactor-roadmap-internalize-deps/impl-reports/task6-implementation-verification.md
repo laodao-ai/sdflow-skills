@@ -182,3 +182,46 @@ merge-base 的红**，而是本机 `.claude/worktrees/` 是否存在导致的扫
 - 本票 MUST NOT 勾 `tickets.md` 复选框、MUST NOT 打 `checkpoint(...)` 标签、MUST NOT 改
   `proposal.md` / `design.md` / `tasks.md` / `specs/`——均未触碰，`tasks.md` 6.2 登记差异仅记录于
   本报告，交编排层裁决是否需要回填登记。
+
+---
+
+## 🔴 编排层订正：② 的定性错误（`test_subprocess_encoding_contract.py`）
+
+本票原文把 ② 判为「环境态 flaky、本轮实测为绿」。**该观察真实，但根因判反了，结论应订正为：
+② 是一条真实的 baseline 红，`tasks.md` 6.2 确实漏记了它。**
+
+### 订正依据（编排层亲跑，确定性）
+
+| # | 观察 | 命令 / 证据 |
+|---|---|---|
+| 1 | 本票跑测试时，`.claude/worktrees/` 下**仍存在 3 个并行 implementer 的 worktree**（内容已 merge，但目录未被 harness 回收——它只在工作区无改动时自动清理） | `git worktree list` → 主工作树 + 3 个 `agent-*` |
+| 2 | worktree **存在时**单独跑该文件：**4 passed**（绿） | `/usr/bin/python3 -m pytest hack/tests/test_subprocess_encoding_contract.py -q` |
+| 3 | 编排层清理 3 个 worktree（`git worktree remove`，分支保留）**之后**再跑：**1 failed, 3 passed**（红） | 同上命令 |
+| 4 | 失败原因是**硬编码数量阈值**：`assert sites >= 200`，实测 **189** | `hack/tests/test_subprocess_encoding_contract.py:98`，`AssertionError: assert 189 >= 200` |
+| 5 | 本 change 自 merge-base 起 **0 个 `.py` 改动** | `git diff --name-status f464e9b..HEAD -- '*.py'` → **0 行** |
+
+### 推论（为什么这足以定性，而不需要 checkout 回 merge-base 复跑）
+
+该测试的输入集 = `_python_files(REPO)`，**只扫 `.py`**。既然 merge-base..HEAD 之间 `.py` 改动为 0
+（证据 5），扫描输入集在两个盘面上**逐字节相同** ⇒ `sites` 必然同为 189 ⇒ **merge-base 上同样红**。
+∴ 属 baseline，非本 change 引入的回归。
+
+### 方向订正
+
+- ❌ 原判：「worktree 的存在**导致**该测试红」
+- ✅ 实测：「worktree 的存在**掩盖**了该测试的红」——3 份仓库副本被一并扫入，`sites` 计数约翻 4 倍，
+  轻松越过 200 阈值；worktree 一清理，真实数字 189 就暴露出来。
+
+> **这个方向差异不影响本票的最终判据**（「相对 merge-base 无新增失败」仍然成立，② 两侧同红），
+> 但**必须订正**：留一份根因判反的分析在报告里，下一个读它的人会据此得出错误结论。
+
+### 连带暴露的仓库级问题（非本 change 引入，已记 todo）
+
+1. `assert sites >= 200` 是**硬编码数量阈值**，真实值 189 —— 它此刻就是红的，且随仓库增删 `.py` 漂移。
+2. `_python_files()` 的排除清单**不含 `.claude`** ⇒ 只要本机存在 agent worktree，扫描口径就被污染，
+   同一 commit 可以既绿又红。**这也解释了 Task 2 / Task 3 两个 implementer 为何各自"复现"出这条红**
+   ——它们在自己的 worktree 内跑，扫描口径与主工作树不同。它们报「baseline 红」这个**结论是对的**，
+   只是当时无人知道口径会漂。
+
+⇒ 已记 **`B24`**（`openspec/issues/open/bug/B24.md`，P2，`source_change=refactor-roadmap-internalize-deps`），本 change **不修**
+（本 change 不改任何 `.py`，修它属加宽 —— 通则③）。
