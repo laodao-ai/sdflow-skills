@@ -175,15 +175,15 @@ fold 判据），**MUST NOT** 沿用「因本次改动才孤立」的旧因果�
 🔴 T134 关闭用 **`WONTDO` + `--reason`**——`OBSOLETE` 不是合法状态码；且须用**本仓**
 `sdflow-issues/scripts/`，勿用全局 symlink 旧版（旧 writer 撞号）。
 
-- [ ] `openspec/matt/` 整目录（4 文件）已删除（3.1）
-- [ ] `CLAUDE.md` 与 `AGENTS.md` 的 matt 三区块已删、roadmaps 目录描述行去 footage 措辞，两文件同步（3.2）
-- [ ] 新增 ADR `0037-`（4 位零填充 + kebab-case，小节结构从现有 ADR 归纳），含两条权衡，matt 论证按订正后 D2（5.1）
-- [ ] `openspec/CONTEXT.md` 三处词条到位：历史存档（含「结晶」→「生成」）/ 新增商业化信号 / ticket 词条改历史存档语境（5.2）
-- [ ] T134 已关 `WONTDO` 且带 `--reason`，用本仓脚本执行（5.3）
-- [ ] `docs/external-dependencies.md` 删 §5 且同步 §8 依赖图，gstack review 节保留（5.4）
-- [ ] `openspec/INDEX.md:52` roadmap-planning 摘要行整句重写为新结构（三态路由 / 历史存档 / checklist 四项）（5.5）
-- [ ] `docs/sdflow-fable5/02-module-reference.md` §4.6 已按新结构更新（5.6）
-- [ ] `docs/drafts/roadmap-refactor-handoff.md` 已删除（5.7）
+- [x] `openspec/matt/` 整目录（4 文件）已删除（3.1）
+- [x] `CLAUDE.md` 与 `AGENTS.md` 的 matt 三区块已删、roadmaps 目录描述行去 footage 措辞，两文件同步（3.2）
+- [x] 新增 ADR `0037-`（4 位零填充 + kebab-case，小节结构从现有 ADR 归纳），含两条权衡，matt 论证按订正后 D2（5.1）
+- [x] `openspec/CONTEXT.md` 三处词条到位：历史存档（含「结晶」→「生成」）/ 新增商业化信号 / ticket 词条改历史存档语境（5.2）
+- [x] T134 已关 `WONTDO` 且带 `--reason`，用本仓脚本执行（5.3）
+- [x] `docs/external-dependencies.md` 删 §5 且同步 §8 依赖图，gstack review 节保留（5.4）
+- [x] `openspec/INDEX.md:52` roadmap-planning 摘要行整句重写为新结构（三态路由 / 历史存档 / checklist 四项）（5.5）
+- [x] `docs/sdflow-fable5/02-module-reference.md` §4.6 已按新结构更新（5.6）
+- [x] `docs/drafts/roadmap-refactor-handoff.md` 已删除（5.7）
 
 ### Task 4: workflow bundle 同步与安装链路生效
 

@@ -1,0 +1,1216 @@
+# Review package: 5262e21..fc221e4 (Task 3 worktree merge)
+
+## Commits
+fc221e4 merge(refactor-roadmap-internalize-deps): Task 3 matt 移除与治理面收口
+ddb48bf docs(refactor-roadmap-internalize-deps): task 3 实现报告
+7cc21e7 chore(refactor-roadmap-internalize-deps): matt 套件移除与治理面收口（task 3）
+
+## Files changed
+ AGENTS.md                                          |  13 --
+ CLAUDE.md                                          |  17 +--
+ docs/drafts/roadmap-refactor-handoff.md            |  98 ---------------
+ docs/external-dependencies.md                      |  12 +-
+ docs/sdflow-fable5/02-module-reference.md          |  11 +-
+ openspec/CONTEXT.md                                |  16 ++-
+ openspec/INDEX.md                                  |   2 +-
+ ...ssion-layer-internalization-and-matt-removal.md | 112 +++++++++++++++++
+ .../impl-reports/task3-matt-removal-governance.md  | 136 +++++++++++++++++++++
+ openspec/issues/CLOSED.md                          |  27 ++++
+ openspec/issues/INDEX.md                           |  27 ----
+ openspec/issues/{open => closed}/todo/T134.md      |   9 +-
+ openspec/matt/domain.md                            |  27 ----
+ openspec/matt/issue-tracker.md                     |  58 ---------
+ openspec/matt/setup-matt-pocock-skills-handoff.md  | 133 --------------------
+ openspec/matt/triage-labels.md                     |  13 --
+ 16 files changed, 306 insertions(+), 405 deletions(-)
+
+## Diff
+diff --git a/AGENTS.md b/AGENTS.md
+index c667d02..4c7feec 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -258,23 +258,10 @@ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权
+   `sdflow-implement` 引用 `$SDFLOW_TIER_STRONG` / `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理
+   时直接以此为由，不必另编说辞。
+ - **能力探针（语义核验，非机械门）**：评审 SKILL 在 fan-out 前先派一个 trivial 探针子代理判定
+   「子代理机制活着没」——探针值是主 session 自报，无可信脚本捕获路径，MUST NOT 被当作机械保证。
+   子代理不可用 ⇒ **缩 roster 到主 session 实际独立完成的镜**，报告显著标注「单镜降级」，MUST NOT
+   为未独立跑过的镜落锚。
+ - **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
+   （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
+   跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
+ <!-- opsx-init:end -->
+-## Agent skills
+-
+-### Issue tracker
+-
+-工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-tracker.md`。
+-
+-### Triage labels
+-
+-使用默认的五种 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `openspec/matt/triage-labels.md`。
+-
+-### Domain docs
+-
+-单一上下文布局：`openspec/CONTEXT.md` 与 `openspec/adr/`。详见 `openspec/matt/domain.md`。
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 76768c5..bcb04d3 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -179,22 +179,22 @@ pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
+ - **`openspec/rules/`** — **项目级写作/工程规则的单一源**（区别于 `openspec/workflow/`：那是流程规则 bundle，
+   会推给下游项目；`rules/` 是本仓自己的）。引用时只写编号 + 路径，**MUST NOT 复制规则文本**。
+   - **`doc-authoring.md`（DOC-1）** — **正文即最终态，演进史进附录**。一切设计/决策类文档适用
+     （`docs/sad/*`、change 四件套、`adr/*`、`SKILL.md`…）。判据：**「只有读过上一版的人才需要的句子，不属于正文」**。
+     代价实证：`07` 的正文塞满考古层 ⇒ **四轮评审 18 镜全在废弃分支里做优化，无一看见起手式错了**——
+     考古层给了错误方向一层虚假的正当性。
+   - **`premise-verification.md`（无文档级编号，引用写路径 + 内部「规则 N」）** — 写断言之前先验证
+     它依赖的外部事实。一切 proposal / design / specs / tasks / 评审报告 / impl-report 适用。
+ - **`openspec/roadmaps/{name}/`** — 项目级 roadmap 文档包（长期真相源，`sdflow-roadmap` 铺设）：
+   design/roadmap/task-log 三件套 + 可选 memo，直写落盘、不经 `plan-{topic}` change 壳；比单次 change
+-  更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。roadmap 类 wayfinding 落
+-  `openspec/roadmaps/{name}/footage/`（长讨论考古层；三件套不引用）。现有 `workflow-cost-optimization`
++  更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。长讨论的历史存档（memo 增量落盘 +
++  存量 footage 冻结包）不进三件套引用。现有 `workflow-cost-optimization`
+   （评审工作流成本优化三腿四阶段）、`mechanical-layer-hardening`（adr/0006 机械层固化：脚本化 +
+   去字符串化两腿六阶段）沿用存量四件套格式（迁移受控延后，Q-C）。
+ - **`.claude/skills/openspec-*` 与 `.codex/skills/openspec-*`** — openspec CLI（`@fission-ai/openspec`）
+   init 时生成的官方 change-workflow skills，随仓库提交，**非本仓库维护的源**，勿在此手改。
+ - **`openspec/retro/report.md`** — `sdflow-retro` 只读再生的全 change 成本×价值复盘活文档
+   （阶段墙钟 join per-镜 lens-metric 锚，只呈现不决策），随仓库提交（tracked，view-only，
+   跑 `python3 sdflow-retro/scripts/retro_report.py --root .` 再生覆盖，勿手改）。
+ 
+ ### `hack/`
+ 
+@@ -421,23 +421,10 @@ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权
+   `sdflow-implement` 引用 `$SDFLOW_TIER_STRONG` / `$SDFLOW_TIER_MID` / `$SDFLOW_TIER_LIGHT` 派子代理
+   时直接以此为由，不必另编说辞。
+ - **能力探针（语义核验，非机械门）**：评审 SKILL 在 fan-out 前先派一个 trivial 探针子代理判定
+   「子代理机制活着没」——探针值是主 session 自报，无可信脚本捕获路径，MUST NOT 被当作机械保证。
+   子代理不可用 ⇒ **缩 roster 到主 session 实际独立完成的镜**，报告显著标注「单镜降级」，MUST NOT
+   为未独立跑过的镜落锚。
+ - **`sdflow-implement` 的降级路径不同构**：它同样先派一个 trivial 探针子代理核验「机制活着没」
+   （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
+   跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
+ <!-- opsx-init:end -->
+-## Agent skills
+-
+-### Issue tracker
+-
+-工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-tracker.md`。roadmap 类 wayfinding effort 的落盘根为 `openspec/roadmaps/{name}/footage/`（条件分流详见 tracker doc）。
+-
+-### Triage labels
+-
+-使用默认的五种 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `openspec/matt/triage-labels.md`。
+-
+-### Domain docs
+-
+-单一上下文布局：`openspec/CONTEXT.md` 与 `openspec/adr/`。详见 `openspec/matt/domain.md`。
+diff --git a/docs/drafts/roadmap-refactor-handoff.md b/docs/drafts/roadmap-refactor-handoff.md
+deleted file mode 100644
+index 8804e82..0000000
+--- a/docs/drafts/roadmap-refactor-handoff.md
++++ /dev/null
+@@ -1,98 +0,0 @@
+-# Hand-off：重构 sdflow-roadmap skill
+-
+-## 状态
+-
+-- **阶段**：sdflow-spec 相位 A 进行中，共识已基本形成，尚未进入相位 B
+-- **分支**：main（未建 change 分支）
+-- **无在途 change**
+-
+-## 目标
+-
+-重构 `sdflow-roadmap/SKILL.md`，将外部 skill 依赖的能力内化到 roadmap 自身，整体结构对齐 sdflow-spec 的三相位模式。
+-
+-## 已确认的共识
+-
+-### 1. 要消除的外部依赖（4 个 skill + 1 个基础设施）
+-
+-| 外部依赖 | 当前用途 | 内化方式 |
+-|---------|---------|---------|
+-| **wayfinder** | 长档讨论持久化（map + 结构化票） | 用 memo.md 增量落盘替代；去掉整个分支 B |
+-| **grilling** | wayfinder 票内的方案拷问 | 内化为 Phase B 拷问（与 sdflow-spec 同构） |
+-| **domain-modeling** | wayfinder 票内的术语/ADR 建模 | 内化为 Phase B 术语澄清环节 |
+-| **office-hours** | 需求真实性前置验证（六问） | 按场景裁剪后融入 Phase B 拷问维度 |
+-| **matt tracker doc** | wayfinder 的 preflight 检查 | 随 wayfinder 一并删除 |
+-
+-### 2. 保留不动的部分
+-
+-- **review 层**：`/plan-eng-review`（默认）和 `/autoplan`（野心信号），有降级路径——**待确认是否也要内化或简化**（上一 session 未拍板）
+-- **结晶流程**：三件套（design/roadmap/task-log）直写到 `openspec/roadmaps/{name}/`
+-- **收尾 checklist**：保留 ①②③⑤，删 ④（wayfinder 闭环），⑤ 简化（不再依赖 wayfinder 基线记录）
+-- **产出模式**：create/continue/replan 生命周期、规则 1-5、命名规范、下游阶段实施
+-
+-### 3. 重构后的三相位结构
+-
+-```
+-Phase A  澄清
+-  吃透规模、识别目标、判定是否需要 roadmap
+-  gate-0 五项通过 → 跳过 B 直接结晶
+-
+-Phase B  拷问（核心变更）
+-  7 维拷问（按信号裁剪，不是都跑）：
+-  ① 需求真实性（office-hours Q1 适配）
+-  ② 现状分析（office-hours Q2 适配）
+-  ③ 阶段划分压力测试（roadmap 原生）
+-  ④ 最小可行首阶段（office-hours Q4 适配）
+-  ⑤ 架构路线对比（office-hours Phase 4 适配）
+-  ⑥ 术语/概念澄清（原 domain-modeling）
+-  ⑦ 前提质疑（office-hours Phase 3 适配）
+-  
+-  按信号裁剪：
+-  ├─ 技术重构 → ②③④⑤⑦ 为主
+-  ├─ 新产品/新项目 → ①②④⑤⑥⑦ 全跑
+-  └─ 野心信号命中 → ① 加重（startup 味逼问）
+-  
+-  每条承重结论站稳即写 memo.md（增量落盘，同 sdflow-spec）
+-
+-Phase C  结晶
+-  从 memo 一次性生成三件套
+-  design/roadmap/task-log
+-```
+-
+-### 4. 讨论层简化
+-
+-```
+-当前：三分支路由
+-├─ 分支 A：/opsx:explore
+-├─ 分支 B：wayfinder chart（长档）  ← 删
+-└─ 分支 C：/office-hours（野心验证） ← 内化
+-
+-目标：二路径
+-├─ gate-0 通过 → 直接结晶
+-└─ gate-0 未通过 → Phase B 拷问 → 结晶
+-```
+-
+-### 5. office-hours 的吸收细节
+-
+-office-hours 的核心价值是拷问方法论（非独立 skill），可吸收的部件：
+-- **Phase 2A 六个逼问**：Q1-Q6，按 roadmap 场景裁剪（不全跑）
+-- **Phase 3 Premise Challenge**：前提质疑，直接作为拷问维度 ⑦
+-- **Phase 4 Alternatives Generation**：方案对比，作为拷问维度 ⑤
+-- **不吸收**：Phase 3.5 Cross-Model Second Opinion（review 层已有）、Builder Mode（roadmap 不需要）、Visual Design Exploration
+-
+-## 待确认事项（下一 session 需拍板）
+-
+-1. **review 层处理方式**：保留 `/plan-eng-review` + `/autoplan` 外部依赖（有降级）？还是也内化/简化？
+-2. **change 名**：建议 `refactor-roadmap-internalize-deps`
+-
+-## 关键文件
+-
+-- `sdflow-roadmap/SKILL.md`（635 行，主要改动目标）
+-- `sdflow-roadmap/references/`（模板文件，可能需要新增 memo 模板）
+-- `docs/external-dependencies.md`（本 session 已创建，需随重构更新）
+-- `CLAUDE.md`（引用了 sdflow-roadmap 的 wayfinder 相关内容，需同步更新）
+-
+-## 参考资料（已读）
+-
+-- `/Users/cheneyzhao/.claude/skills/office-hours/SKILL.md`（1698 行，六问方法论在 Phase 2A）
+-- `sdflow-spec/SKILL.md`（三相位结构的参照）
+-- 本 session 的 explore 讨论（依赖图分析、吸收策略、三相位映射）
+diff --git a/docs/external-dependencies.md b/docs/external-dependencies.md
+index 79ed0dd..fbc2e59 100644
+--- a/docs/external-dependencies.md
++++ b/docs/external-dependencies.md
+@@ -70,28 +70,23 @@
+ ## 5. 三方 Skill 依赖
+ 
+ ### 评审流程依赖（gstack 系列）
+ 
+ | Skill | 用途 | 调用处 | 缺失时行为 |
+ |-------|------|--------|-----------|
+ | **gstack `/review`** | 代码审的 scope-drift + 完成度审计（Step1） | `sdflow-code-review/SKILL.md:206-209` | 显式降级为子代理模拟 + 标注 `mode="simulated"` |
+ | **gstack `/autoplan`** | 设计审的广审层（CEO/Eng/Design 三连） | `sdflow-spec-review/SKILL.md`、`sdflow-roadmap/SKILL.md:426` | 显式提示 + 留「未审待恢复」痕迹 |
+ | **`/plan-eng-review`** | roadmap 的技术评审（默认档） | `sdflow-roadmap/SKILL.md:425` | 同上 |
+ 
+-### Wayfinder 依赖（仅 sdflow-roadmap 使用）
+-
+-| Skill | 用途 | 调用处 | 缺失时行为 |
+-|-------|------|--------|-----------|
+-| **`/grilling`** | wayfinder 票内的计划拷问 | `sdflow-roadmap/SKILL.md:306` | 降级为普通对话式讨论 |
+-| **`/domain-modeling`** | wayfinder 票内的术语/ADR 建模 | `sdflow-roadmap/SKILL.md:312` | 同上 |
+-
+ > `/grill-with-docs` 已被 `sdflow-spec` 内置取代（`sdflow-spec/SKILL.md:10`），不再是外部依赖。
++> `/grilling`、`/domain-modeling`（原 wayfinder 票内依赖）已随 `refactor-roadmap-internalize-deps`
++> 内化进 `sdflow-roadmap` 自身的三相位结构，不再是外部依赖。
+ >
+ > 所有三方 skill 都设计了显式降级路径——缺失时报告但不中断工作流。
+ 
+ ---
+ 
+ ## 6. Claude Code / Codex 运行时依赖
+ 
+ | 依赖 | 用途 | 出处 |
+ |------|------|------|
+ | **Claude Code** harness | Skill tool、Agent tool、Bash tool 等核心机制 | 全仓 SKILL.md |
+@@ -137,22 +132,21 @@ sdflow-ship（阶段三编排器）
+ └── sdflow-done（闭环）
+ 
+ sdflow-spec-review（设计审编排器）
+ ├── gstack /autoplan（外部，广审层）
+ └── 并行多镜子代理
+ 
+ sdflow-spec（阶段一产 spec）
+ └── 内置澄清→拷问→生成三相位
+ 
+ sdflow-roadmap
+-├── /plan-eng-review 或 /autoplan（外部，review 分档）
+-└── /grilling、/domain-modeling（外部，wayfinder 票内可选）
++└── /plan-eng-review 或 /autoplan（外部，review 分档；讨论层已内化，无其他外部依赖）
+ ```
+ 
+ ---
+ 
+ ## 9. 快速检查清单
+ 
+ 新机器 / 新环境首次使用前：
+ 
+ ```bash
+ # 1. 必须
+diff --git a/docs/sdflow-fable5/02-module-reference.md b/docs/sdflow-fable5/02-module-reference.md
+index 535dd96..c99d12a 100644
+--- a/docs/sdflow-fable5/02-module-reference.md
++++ b/docs/sdflow-fable5/02-module-reference.md
+@@ -192,21 +192,30 @@ flowchart TD
+ ### 4.5 sdflow-init：铺设与升级
+ 
+ - **init**：建骨架 + 拷 bundle（默认只落 `tools/` + lens-metric-contract.md）+ 模版生成 config.yaml + 注入 INDEX/CLAUDE.md 托管块 + 装全局 FF-0 hook。
+ - **update**：重拉 bundle + 重注入托管块，**不动 config.yaml 用户内容**。
+ - 幂等注入按 marker token 定位（改名后旧区块仍被命中替换）、逐行 offset 定位（防 inline 嵌入 marker 锚错位）；settings 写入有 flock + 原子写；退役 hook 自愈（`RETIRED_HOOKS` 外科式摘除）。
+ - **config 合并刻意留给模型**（block scalar 脚本硬改易碎）——机械/判断切分线的又一实例。
+ - config-lint：手写 stdlib 行扫描（**禁 import yaml**，消费仓无 PyYAML），fail-closed。
+ 
+ ### 4.6 sdflow-roadmap：闭环之上的规划层
+ 
+-三件套 = design（HOW+WHY，头部含「需求与目标态」伸缩章）/ roadmap（WHEN+每阶段验收）/ task-log（DID），+ 可选 memo（短档讨论备忘，考古用，三件套不引用）；长讨论（跨 session/跨天/压缩仍未收敛）改落 wayfinder footage/（`openspec/roadmaps/{name}/footage/`，同样不被三件套引用）。硬性规则：固定存 `openspec/roadmaps/{name}/`；每个子任务粒度 = **恰好一次 `/opsx:new` 能完成**；产出直写，不经 OpenSpec change 壳承载；只规划不实施；review 按野心信号分档——默认 `/plan-eng-review`，外部用户/变现/获客类野心信号才 `/autoplan` 三连。存量四件套包（含独立 requirements.md）冻结为合法历史形态，续跑兼容不强迁。
++三件套 = design（HOW+WHY，头部含「需求与目标态」伸缩章）/ roadmap（WHEN+每阶段验收）/ task-log（DID）。
++与 `sdflow-spec` 同构的三相位结构（第零步重入探测 → A 澄清+gate-0+商业化信号检查 →
++B 七维拷问按信号裁剪+memo 增量落盘 → C 生成三件套），wayfinder / grilling / domain-modeling /
++office-hours 四个外部依赖已内化（`refactor-roadmap-internalize-deps`）；三态路由：
++gate-0 过∧无商业化信号 → 直接生成，gate-0 过∧信号命中 → B 裁剪到维度①，gate-0 未过 →
++B 按信号七维裁剪。memo（B 相位纪要，含 `## 未决项` 小节）+ 存量 footage（此前产出的包，
++冻结兼容续跑）统称「历史存档」，三件套不引用。硬性规则：固定存 `openspec/roadmaps/{name}/`；
++每个子任务粒度 = **恰好一次 `/opsx:new` 能完成**；产出直写，不经 OpenSpec change 壳承载；
++只规划不实施；review 按商业化信号分档——默认 `/plan-eng-review`，信号命中才 `/autoplan` 三连；
++收尾 checklist 四项软门。存量四件套包（含独立 requirements.md）冻结为合法历史形态，续跑兼容不强迁。
+ 方法论出处 `references/long-flow-skill-paradigm.md`：「skill 是助产士非 orchestrator」，契约可验证性 A/B/C 三级、目标全升 C。
+ 
+ ---
+ 
+ ## 5. 数据类五件套详解
+ 
+ ### 5.1 recorder 三件套（buglist / todolist / issues）：一个内聚子系统
+ 
+ ```mermaid
+ flowchart LR
+diff --git a/openspec/CONTEXT.md b/openspec/CONTEXT.md
+index 4046b38..96f8f32 100644
+--- a/openspec/CONTEXT.md
++++ b/openspec/CONTEXT.md
+@@ -169,27 +169,31 @@ _Avoid_: 把它做成无人干预机械镜像 tasks→roadmap（越界判断，
+ 
+ **机械校验器输出诚实 (Validator Output Honesty)** 〔grill-amendment · adr/0018〕:
+ 输出信号被下游决策消费的机械校验器，当裁决被**不可机械验证的输入**界定时，MUST 把该界定编码进信号本身，MUST NOT emit 与「已完整验证」不可区分的裸通过码——三形态：**暴露输入依据**（`hr_tg_intersect` 出 `none｜依据已声明:[...]` 使欠声明可审）、**在码里点名未核边界**（`review_disposition_check` 出 `section-ok-DISPOSITION-UNCHECKED` 而非裸 `present`）、**朝「漏判有害」方向 fail-safe**（`outside_voice_guard` 工作树 dirty→`stale-dirty-tree` 重跑，重跑只是成本、复用陈旧才是危害）。是「报告工具反静默方向」（adr/0016）从只读报告推广到**消费型信号校验器的输出诚实**、「假✅」防线在校验器自身输出的落点。区别于 fail-closed（坏输入→EXIT_FAIL）：**可读但不可验**的输入走信号内诚实，非崩溃非静默通过。
+ _Avoid_: 用裸二态码把不可验界定藏进消费方会过度信任的干净信号（假绿/假阴/假新鲜温床）；让脚本用子串/正则兜底完整性判断（制造新假阳假阴）——完整性强制（声明 vs 实际、逐条处置）属模型/spec-review，非机械校验器职责。
+ _Avoid_: 把报告工具 fail-closed 锚「畸形当空」（锚错方向，放过真正的「误读→假一致」）；把「读到 0 条」当失败（那是响亮自纠态）；照搬门的 all-or-nothing 到报告工具（有差异≠该 fail）
+ 
+ **maintain / init 的 INDEX 分治 (Maintain vs Init INDEX Division)** 〔grill-amendment · adr/0016〕:
+ `openspec/INDEX.md` 里「rules」撞两义须分治：**workflow bundle 规则**（`openspec/workflow/*.md`）索引在 `<!-- opsx-init:rules:start..end -->` **托管块**、归 **sdflow-init**（`update` 刷新）；**消费仓通用规则**（`openspec/rules/*.md`，可选目录，缺失=合法空）在托管块之外、归 **sdflow-maintain** 的 set-diff。maintain 解析 INDEX MUST **用机器锚行界定、跳过 init 托管块**（不跳则 bundle 条目被误当「已删未清理」+ 诱导越界改 init 领地）。maintain 依赖 init 两常量（`RULE_MARKERS`/`MARK_IDX`）：**canonical 留 `init.py`、maintain 保自包含副本 + 跨脚本一致性守卫 pytest**（跨 skill import 破自包含且运行时脆、物理单一源不可达）——T17 的真闭合 = 机验同步（守卫测试），非删到一份；跨语言副本（bash）难同守则 defer 登记。
+ _Avoid_: maintain set-diff 时把 init 托管块条目当自己领地（越界+误报）；跨 skill import 取「物理单一源」（破自包含、运行时脆）；把「删到只剩一份」当 T17 闭合（跨 skill 不可达，机验同步才是）
+ 
+-**footage（讨论过程考古层）** 〔grill-amendment · rebuild-sdflow-roadmap-v2〕:
+-roadmap 规划中「决策形成过程」的原始素材层，与「决策结晶」（三件套正文）相对——血统类比：footage 是毛片、design §决策是成片（词源即本仓 sdflow-roadmap 的既有措辞，非 matt 套件概念）。物理形态两种：**长档** wayfinder 的 map+tickets 落 `roadmaps/{name}/footage/` 目录；**短档**可选 memo 保持包根 `memo.md`（既有落位不迁）。引用纪律统一：三件套 MUST NOT 引用任何考古层内容（`footage/` 或 `memo.md`），有价值结论须精炼后写入正文。
+-_Avoid_: 把 footage 当 wayfinder 专属产物（它是考古层统称，memo 亦属之，短档没跑 wayfinder 也适用同一引用禁令）；「详见 footage/memo」类表述（考古层是草稿证据、非权威源）
++**历史存档（memo 增量落盘 + 存量 footage 统称）** 〔grill-amendment · rebuild-sdflow-roadmap-v2；术语订正 refactor-roadmap-internalize-deps〕:
++roadmap 规划中「决策形成过程」的原始素材层，与「决策生成」（三件套正文）相对——血统类比：历史存档是毛片、design §决策是成片。物理形态两种：**当前形态** B 相位纪要 `memo.md` 在包根增量落盘；**存量形态**（`refactor-roadmap-internalize-deps` 之前产出的包）保留 wayfinder 的 map+tickets 落 `roadmaps/{name}/footage/` 目录，按冻结条款兼容续跑、不再新增。引用纪律统一：三件套 MUST NOT 引用任何历史存档内容（`footage/` 或 `memo.md`），有价值结论须精炼后写入正文。
++_Avoid_: 把历史存档当 wayfinder 专属产物（memo 同属，未跑过 wayfinder 的包同样适用同一引用禁令）；「详见 footage/memo」类表述（历史存档是草稿证据、非权威源）；与 DOC-1 语境的「考古层」（文档正文演进史，见 `openspec/rules/doc-authoring.md`）混用改名——两者是不同概念，本词条改名不涉及 DOC-1 语境
+ 
+-**ticket（实现分解单位）** 〔grill-amendment · matt-workflow-integration〕:
+-tickets 实现管线的实现分解单位 = **tracer-bullet 垂直切片**（一条打穿全层、可独立验证的行为级路径），英文原词不译。在 plan 文件与 ship_gate 契约中以 **Task 号**呈现（`### Task N:` 标题 / `checkpoint(<change>:task<N>-)` 标签），一 ticket = 一 Task 号；ticket 内验收复选框 = **实现期完成信号**（implementer 与 checkpoint 标签**双写**）。与既有两层复选框的分工：roadmap 复选框 = 规划粒度、归档后镜像回写；change tasks.md 复选框 = 需求追溯层（R-ID 载体，ticket 由它派生但不取代它）、**archive 阶段才勾**。matt 套件中 wayfinder 的讨论 ticket（map 的 issues/<NN>）是另一种 ticket（讨论单位，非实现分解），需限定词区分。
+-_Avoid_: 「票」「任务」混称（tasks.md 的「任务」与 ticket 勾选时机**相反**：归档期 vs 实现期，混称会让 ship-tasks-flip 失鲜坑换面目重现）；把 wayfinder 讨论 ticket 与实现 ticket 混为一谈
++**商业化信号（原「产品/商业野心信号」）** 〔术语订正 refactor-roadmap-internalize-deps〕:
++`sdflow-roadmap` 相位 A 里与 gate-0 独立判定的另一关，命中即三态路由裁剪到七维拷问的维度①「需求真实性」并加重（startup 味逼问）。词表：外部用户、变现、获客、用户画像未定、"要不要做这个产品"。gate-0 验讨论充分度，商业化信号验需求真实性，两关独立——gate-0 五项全过不能免除该检查。
++_Avoid_: 与 gate-0 混为一谈（一个验讨论深度、一个验需求方向）；沿用旧称「产品/商业野心信号」或「野心信号」（本仓已改名，历史文档除外）
++
++**ticket（实现分解单位）** 〔grill-amendment · matt-workflow-integration；语境订正 refactor-roadmap-internalize-deps〕:
++tickets 实现管线的实现分解单位 = **tracer-bullet 垂直切片**（一条打穿全层、可独立验证的行为级路径），英文原词不译。在 plan 文件与 ship_gate 契约中以 **Task 号**呈现（`### Task N:` 标题 / `checkpoint(<change>:task<N>-)` 标签），一 ticket = 一 Task 号；ticket 内验收复选框 = **实现期完成信号**（implementer 与 checkpoint 标签**双写**）。与既有两层复选框的分工：roadmap 复选框 = 规划粒度、归档后镜像回写；change tasks.md 复选框 = 需求追溯层（R-ID 载体，ticket 由它派生但不取代它）、**archive 阶段才勾**。matt 套件已移除；存量冻结历史存档（`footage/`）中的历史讨论票（map 的 `issues/<NN>`）是另一种 ticket（讨论单位，非实现分解），沿用该定义需限定词区分。
++_Avoid_: 「票」「任务」混称（tasks.md 的「任务」与 ticket 勾选时机**相反**：归档期 vs 实现期，混称会让 ship-tasks-flip 失鲜坑换面目重现）；把历史存档中的讨论 ticket 与实现 ticket 混为一谈
+ 
+ **SAD（系统架构设计文档 System Architecture Document）** 〔grill · add-sdflow-architecture，设计期〕:
+ 消费仓 `openspec/architecture/sad.md` 的**项目级单例 live 文档**（per-system 非 per-effort——roadmap 包是 effort 的、SAD 是系统的：一仓可多 roadmap，系统真相只一份）。十节骨架承载 HOW-structure（子系统/contract/横切）；与 roadmap 三件套三分：design.md=WHY-product、SAD=HOW-structure、roadmap.md=WHEN，互引不复述。由 `sdflow-architecture` 产出，**直写不经 change 壳**（先例 = roadmap 规则 4 直写）。
+ _Avoid_: 把 SAD 当 roadmap design.md 的同义词（三分各有其职）；把 SAD 放 `roadmaps/{name}/` 包内（effort 归档了系统还活着）
+ 
+ **skeleton-ready** 〔grill · add-sdflow-architecture，设计期〕:
+ SAD 的交棒完成态——「**够切出骨架 change**」即合格；纸上 contract 全是假设，骨架真实调用验证之前**不存在 approved/定稿**。状态机 `draft → skeleton-ready → validated →（逐条）frozen`；升级门槛 = 事实三问齐 + 假设逐条处置。此 DoD 结构性降低对人的索取（价值类可占位）与文档完成度要求（contract 骨架前只强制语法/所有权/错误语义三层主干）。
+ _Avoid_: 「approved SAD / 定稿」（伪严谨、倒逼 day-0 过度索取——被否记录见 change 附录）
+ 
+ **骨架 change（Walking Skeleton Change）** 〔grill · add-sdflow-architecture，设计期〕:
+diff --git a/openspec/INDEX.md b/openspec/INDEX.md
+index 5434d03..5a2d009 100644
+--- a/openspec/INDEX.md
++++ b/openspec/INDEX.md
+@@ -42,21 +42,21 @@
+ | `host-adaptive-execution` | [specs/host-adaptive-execution/spec.md](./specs/host-adaptive-execution/spec.md) | 工作流跨 Claude/Codex 双宿主适配：`resolve-models.sh` 靠正信号判宿主（`CLAUDECODE=1`/`CODEX_THREAD_ID` 非空，两者皆无 fail-loud 落 `unknown`、不猜测）；outside voice 恒为另一机队强档（反向 `claude -p` 四旗只读全仓承重墙对称 codex）；两宿主 dispatch 均秒返（Claude-host harness `run_in_background`、Codex-host `claude --bg --exec` supervisor 后台 job）、内层 timeout 由 `outside-voice.async-timeout-seconds` 统一，能力不可用各自诚实同步/快速降级；`anchor_lint` 合法组合矩阵（跨模型/同族 fallback/无执行）为「跨模型性」唯一单一源，两工具各自重实现 + 全笛卡尔 golden 守漂移；出境安全三件套（secret_scan/FRAME/200KB 截断）两路径共用同一实现；模型档位按机队分列（`SDFLOW_TIER_*` 变量，eval 注入防护）；tools 陈旧探测 fail-loud 硬停在落锚之前；Codex 子代理不可用探针语义核验 + always-on 一致性 lint 缩 roster |
+ | `outside-voice-background-jobs` | [specs/outside-voice-background-jobs/spec.md](./specs/outside-voice-background-jobs/spec.md) | Codex 宿主跨模型 outside voice 经 Claude Code research-preview `claude --bg --exec` supervisor 托管为后台 job：per-site 独立 reservation/job/started/terminal/rc sidecar 原子发布、状态只从盘面不可变终态派生（`claude agents`/`logs` 仅作 liveness、MUST NOT 定状态）、barrier 有界 await（`outside-voice.async-timeout-seconds` 统一内层天花板）、复用 `outside-voice.sh exec` 四旗与出境安全三件套零降级、outer supervisor logs 不成第二出境面、终态 collect 后清理 supervisor roster 且失败可见（orphan warning）、abandoned run 只按显式 `reconcile --run-dir` 处理 |
+ | `workflow-metrics` | [specs/workflow-metrics/spec.md](./specs/workflow-metrics/spec.md) | 评审价值度量回路：`lens-metric v1` 结构化锚（layer/lens/runner/site 四元组）+ 只读可重生聚合（`sdflow-retro/scripts/lens_metric_aggregate.py`）+ per-镜数据驱动反馈，砍镜/降采样由人决不自动 |
+ | `lens-metric-emit` | [specs/lens-metric-emit/spec.md](./specs/lens-metric-emit/spec.md) | `lens_metric_emit.py`：从结构化 findings + 行键 roster 确定性归约出合规 `lens-metric` 锚行（折叠/归属/独立/sev-rollup 机械化，去重/裁决/定级仍归模型）；坏输入 fail-closed all-or-nothing，契约枚举/折叠单一源读取，不 import ship_gate/lens_metric_aggregate |
+ | `workflow-retro` | [specs/workflow-retro/spec.md](./specs/workflow-retro/spec.md) | `sdflow-retro` 只读再生全项目 change 成本×价值复盘：change 边界靠提交路径检测（非 tag 格式）、时间维仅到阶段级并诚实标注含人决策时间、价值维扫 active+archive 两源合并 spec/code 双报告锚、N≥10 待复评镜机械显著呈现、供数不供裁决 |
+ | `retro-report` | [retro/report.md](./retro/report.md)（`/sdflow-retro` 再生）| 全 change 成本×价值复盘活文档：git 提交阶段墙钟（成本维）+ lens-metric 锚聚合（价值维）合成 per-change 明细/阶段占比/成本双峰/per-镜价值表；view-only 再生，不做任何取舍决策 |
+ | `batch-triage` | [specs/batch-triage/spec.md](./specs/batch-triage/spec.md) | issues 池待处理项分诊三分类（相关合批/大扫除批/单开）：大扫除批硬边界（禁装逻辑面）+ issue 级 pre-diff fail-closed 判据（无自动兜底）+ 同类 Leg1 行为面路径守卫 + 聚合上限（MUST 有上限 + 生成物隔离）+ 一项一 commit 执行协议；本仓-local 不进 bundle |
+ | `determinism-guards` | [specs/determinism-guards/spec.md](./specs/determinism-guards/spec.md) | 机械层确定性守卫：`sdflow-issues` 三薄入口（`buglist.py`/`todolist.py`/`issues.py`）共享逻辑合一为唯一命名 package `sdflow_issues_core` 后，原三向/两向 AST 镜像一致性测试退役，改由「无 pool 分支守（AST 级）+ POOL_SPEC 封闭 schema 守 + 薄入口 thinness 同一性守」维持；`init.py config-lint`（手写 stdlib、条件化放行、fail-closed）、`issues.py batch lint`（优先级/计划占位符豁免 + 前导 token 后缀不校验）；direct↔scan golden 降级为「同源两 code-path 接线守」（不再宣称抓 rule 遗漏）；均只判机械可判的一致性/语法，不越权判内容 |
+ | `maintain-scan` | [specs/maintain-scan/spec.md](./specs/maintain-scan/spec.md) | `maintain_scan.py`：只读四类差异报告（specs/rules↔INDEX 双向 set-diff、CLAUDE.md 过时引用、workflow bundle 陈旧遮蔽告警、跨脚本判据一致性守卫）；INDEX 解析限表格行 + 链接目标路径 join-key、CLAUDE.md 引用改直查 fs 存在性、`.git` 精确剪枝、三处围栏未闭合 fail-closed（防假一致），零写文件，归组/是否修复留人 |
+ | `impl-orchestration` | [specs/impl-orchestration/spec.md](./specs/impl-orchestration/spec.md) | tickets 实现管线规范：手动路由三跳（config 键→plan marker→缺省 superpowers，零模型判断、损坏 marker fail-closed 停）、出 ticket 契约（tracer-bullet 垂直切片/Blocked-by/并行安全生成约束/外衣 `tickets.md`〔superpowers 轨保留 `superpowers-plan.md`，两名经共享 resolver 定位，双存在 fail-closed，D5/adr-0033〕/落盘即返回）、执行契约（frontier 宿主条件化受限并行〔Claude 宿主 worktree 隔离并行派发+逐票串行 merge，Codex/unknown 退化串行〕/后置双写+双信号核对/双轴审+注入点 B/halt envelope/文件交接）、机制裁剪边界（无 warm 终审/ledger/task-brief）、试点回退与熔断哨兵；ship_gate 零改动外衣兼容（adr/0017） |
+-| `roadmap-planning` | [specs/roadmap-planning/spec.md](./specs/roadmap-planning/spec.md) | `sdflow-roadmap` 分阶段规划工作流规范：三件套（design/roadmap/task-log）直写 `openspec/roadmaps/{name}/`（MUST NOT 走 OpenSpec 变更、MUST NOT 独立 requirements.md，存量四件套兼容）、design.md 需求与目标态伸缩头部章、讨论层双判据路由（explore/wayfinder/office-hours）、footage 落盘位置与引用边界（含票状态机 open/claimed/resolved/abandoned）、review 按野心分档（plan-eng-review/autoplan）、收尾 checklist 五项软门（含 wayfinder 闭环全目录扫描）、roadmap.md 近细远雾分层 |
++| `roadmap-planning` | [specs/roadmap-planning/spec.md](./specs/roadmap-planning/spec.md) | `sdflow-roadmap` 分阶段规划工作流规范：三件套（design/roadmap/task-log）直写 `openspec/roadmaps/{name}/`（MUST NOT 走 OpenSpec 变更、MUST NOT 独立 requirements.md，存量四件套兼容）、design.md 需求与目标态伸缩头部章、与 sdflow-spec 同构的三相位结构（A 澄清 → B 七维拷问按 gate-0/商业化信号裁剪 + memo 增量落盘 → C 生成，第零步重入探测独立前置）、三态路由（gate-0 过∧无商业化信号直接生成 / gate-0 过∧信号命中裁剪到维度① / gate-0 未过按信号七维裁剪）、历史存档引用边界与存量 footage 冻结（memo 增量落盘 + 存量 footage 统称，三件套 MUST NOT 引用，存量包续跑兼容）、review 按商业化信号分档（plan-eng-review/autoplan）、收尾 checklist 四项软门、roadmap.md 近细远雾分层 |
+ | `hr-tg-intersection-check` | [specs/hr-tg-intersection-check/spec.md](./specs/hr-tg-intersection-check/spec.md) | `hr_tg_intersect.py`：吃模型判好的命中 TG 集（不自扫声明）与 HR-TG 子集求交，输出带「依据模型判定」的 `hit/none` + 规范锚（不 emit 裸 none，adr/0018）；HR-TG 清单从 trigger-catalog 单一源读（禁硬编码、禁 `__file__` 推导）；纯 stdlib、门控外置、坏输入/单一源损坏 fail-closed |
+ | `outside-voice-reuse-guard` | [specs/outside-voice-reuse-guard/spec.md](./specs/outside-voice-reuse-guard/spec.md) | `outside_voice_guard.py`：spec-review 复用 codex outside-voice 三前置（来源 mode/新鲜度 fs-mtime/结构 codex 段）按序归约唯一 reason_code（六枚举 none｜file-missing｜section-not-found｜zero-findings｜stale｜simulated-source）；新鲜度用源文件 fs-mtime 直比（排除评审产物自身）、纯 stdlib 无 subprocess、fence-aware 锚解析、坏输入 fail-closed |
+ | `outside-voice-exec-integrity` | [specs/outside-voice-exec-integrity/spec.md](./specs/outside-voice-exec-integrity/spec.md) | `outside-voice.sh`：截断切点 UTF-8 字符边界回扫（头段回退/尾段跳过 continuation 字节，只处理 UTF-8、不做通用编码嗅探）保证送出 prompt 恒合法；父进程被 SIGINT/TERM/HUP 回收时经组级 KILL 升级令 runner 子树随之终止（含自杀风险守卫与降级哨兵 `OV_GROUP_KILL_DEGRADED=1`）；诚实登记三类不可消除残余——父进程 SIGKILL 强杀（(a)）、PID 记录/回收窗口（(b)(c)）、以及高频×多类型混合信号风暴可整体击穿 trap 机制（D2.2 (d\*)，实测 67% 复现，登记为设计级残余、不宣称已根治） |
+ | `roadmap-review-reconcile` | [specs/roadmap-review-reconcile/spec.md](./specs/roadmap-review-reconcile/spec.md) | `review_disposition_check.py`：fence/结构感知断言 roadmap task-log `## Review 处置` 小节存在且非空，归约三枚举（section-missing｜section-empty｜section-ok-DISPOSITION-UNCHECKED）；不裸子串匹配「未处置」（防收尾声明句假阳）、逐条处置显式交模型（码尾缀 -DISPOSITION-UNCHECKED 防假绿）、坏输入 fail-closed |
+ | `architecture-design` | [specs/architecture-design/spec.md](./specs/architecture-design/spec.md) | `sdflow-architecture` 系统架构设计文档（SAD）编排规范：事实三问采集 fail-closed 锁 draft、十节骨架 + 重复锚/重名子系统检测、拆分规则集与反模式自检、假设/数值显影溯源（含畸形附录行检测）、文档状态机（`sad_scaffold.py` 唯一写路径，迁移前全量不变式复检 + 仓级互斥锁原子写）、冷走查（留痕存在性前置）与按信号升档、skeleton-ready 交棒切片建议节、ADR/术语分家落位、lint 结构通过≠语义核验诚实标注；空间轴能力，时间轴规划见 `roadmap-planning` |
+ | `devenv-provisioning` | [specs/devenv-provisioning/spec.md](./specs/devenv-provisioning/spec.md) | `sdflow-devenv` 过程轴环境搭建规范：三层（单元/集成/e2e）测试策略框架一层不许留白（结构骨架 fail-closed、内容留白只报不拦）、六槽逐层问（第⑤槽状态机械投影不问）、层状态由泳道**取最弱**投影（MUST NOT 手写，A29：一条绿不能染绿整层）、状态迁移证据只能由 `verify-lane`/`confirm-lane` 产出（`set-lane --status verified` 一律拒绝 exit 5）、执行「不伤害」边界（人门先行/超时/不 debug/不装依赖/不烧板）、落地物零解析 Makefile/shell（让工具自己判）、零删除能力、路径 containment 强制校验、数据模型零 digest 零封闭枚举（除 layer）、`testing-strategy.md`/`environments.md` 测试-非测试切线、lint 只报不拦代价可见、五步固定流程（核心承诺在②步）、冷审 vacuous 镜+盲区镜、独立 marker 注入、触发分工与 sdflow-init/roadmap/architecture 互不重叠 |
+ | `recorder-root-resolution` | [specs/recorder-root-resolution/spec.md](./specs/recorder-root-resolution/spec.md) | `sdflow-issues/scripts/` 下三薄入口（`issues.py`/`buglist.py`/`todolist.py`）`repo_root` 九步 fail-closed 校验序列（起点可信性→环境净化→调 git→最近 marker 上溯→git 失败裁决→形状校验→祖先校验→worktree marker→最近根一致）；回落判据是「上溯一层 marker 都找不到」而非「git rc≠0」；单进程内单点解析（`cmd_*` MUST NOT 重调）；三薄入口经共享 `sdflow_issues_core` 收敛为唯一物理源，一致性由「单一源 + thinness 同一性守」维持（原三向 AST 镜像断言已退役）；仓根 `conftest.py`+`pytest.ini` 两文件联合机械保证测试套件无 cwd 顶层副作用（hook wrapper 非 autouse fixture）；reindex 假绿防护。⚠️ 跨进程根分裂兜底当前不成立（B15，P1，`xfail(strict=True)` 锚死，修法待独立设计门） |
+ | `issues-scripts-shared-core` | [specs/issues-scripts-shared-core/spec.md](./specs/issues-scripts-shared-core/spec.md) | `sdflow-issues/scripts/sdflow_issues_core/` 唯一命名 package：三薄入口（`buglist.py`/`todolist.py`/`issues.py`）共享的执行逻辑单一物理源（`adr/0027`），承载 `repo_root`/pool 无关公共逻辑/`POOL_SPEC` 封闭 schema，薄入口经同目录 `from sdflow_issues_core import` 获得同一实现、禁 shadow |
+ | `spec-authoring` | [specs/spec-authoring/spec.md](./specs/spec-authoring/spec.md) | `sdflow-spec` 单一入口三相位管线（澄清/拷问/生成）取代原三分离入口（explore+ff+仓外 grill）：拷问前置为内建默认路径、决策纪要相位 B 内增量落盘、生成经 openspec CLI 完成态/合格态分开判定、终审核产物一致性；当前交付为**阶段一薄编排**（agent 定义外派因阶段二 A/B 验收门回退而未启用，保留为待激活资产） |
+ | `yq-yaml-operations` | [specs/yq-yaml-operations/spec.md](./specs/yq-yaml-operations/spec.md) | 7 个脚本（init.py/ship_gate.py/impl_route.py/anchor_lint.py×2/roadmap_writeback_draft.py/sad_schema.py）的 `config.yaml`/Markdown frontmatter YAML 子集解析统一委托外部 `mikefarah/yq` 二进制（adr/0036），业务判断留 Python 侧；`_yq()` 7 份内联封装由 golden test 守一致；记录在案的有界语法面例外——`init.py` schema 键读写（yq header-preprocess 数据丢失缺陷，保留既有正则）、`ship_gate.py` duplicate-key/tab-indent 预扫描、frontmatter 闭合性预扫描、`sad_schema.py` 行位置定位 |
+diff --git a/openspec/adr/0037-roadmap-discussion-layer-internalization-and-matt-removal.md b/openspec/adr/0037-roadmap-discussion-layer-internalization-and-matt-removal.md
+new file mode 100644
+index 0000000..15c982a
+--- /dev/null
++++ b/openspec/adr/0037-roadmap-discussion-layer-internalization-and-matt-removal.md
+@@ -0,0 +1,112 @@
++# 讨论层内化进 sdflow-roadmap（review 层留外），openspec/matt 作为历史遗留死配置随之移除
++
++> 状态：**Accepted**（2026-08-05，`refactor-roadmap-internalize-deps` 拷问阶段收敛，人已拍板）·
++> 关联 change：`refactor-roadmap-internalize-deps`
++
++## Context
++
++`sdflow-roadmap`（635 行）此前的讨论层是三分支路由（explore / wayfinder 长档 / office-hours
++前置验证），外部依赖 `wayfinder` / `grilling` / `domain-modeling` / `office-hours` 四个第三方
++skill，其中 wayfinder 一支携带宿主探测 + 三层降级路径 + `openspec/matt/issue-tracker.md`
++preflight 校验，机械面（footage 落盘、map 再入、tracker preflight、基线记录）约 150+ 行。
++同构参照 `sdflow-spec/SKILL.md` 已把「B 轮数无上界 ⇒ 增量落盘收窄中断损失」的三相位结构
++（A 澄清 → B 拷问 + 纪要增量落盘 → C 生成）在 change 生产路径实证过。
++
++与此并行，`openspec/matt/` 目录（4 文件：`issue-tracker.md` / `triage-labels.md` /
++`domain.md` / `setup-matt-pocock-skills-handoff.md`）是 2026-07-10 铺设的第三方套件
++（matt Pocock workflow）消费约定文件，`CLAUDE.md` / `AGENTS.md` 各有三个托管区块
++（Issue tracker / Triage labels / Domain docs）指向它。
++
++设计阶段评审（spec-review-amendment）证伪了两处原始论证：
++
++- 〔SR-1〕原表述「matt 无其他运行时消费方」不成立——`issue-tracker.md:16` 明文把
++  `to-tickets` / `triage` / `to-spec` / `qa` 列为消费方，这四个 skill 在本机 `~/.claude/skills/`
++  下**全部已安装**。「无消费方」类断言的检验面必须跨出仓库边界，指令驱动的消费方不会在
++  仓内 grep 里现形。
++- 〔SR-33〕原表述「roadmap 重构后 matt 失去全部活消费方，因而一并移除」的**因果关系不准**：
++  `git log` 实测 `sdflow-issues` 生于本仓首个 commit（2026-07-03），早于 `openspec/matt/`
++  建立（2026-07-10）**一周**；本仓自始至终用 `sdflow-issues`（T1…T230）追踪工作项，
++  matt 的 issue-tracker 角色**从未真正投入使用**。删它与 roadmap 重构**无因果关系**。
++
++## Decision
++
++**两条独立但同批处置的决策，理由各自成立：**
++
++### ① 讨论层内化（sdflow-roadmap 重构核心）
++
++wayfinder / grilling / domain-modeling / matt tracker preflight 四个外部依赖被吸收进
++`sdflow-roadmap` 自身的三相位结构（对齐 sdflow-spec 词汇与节奏，但非逐节同构——
++见 `design.md`「与 sdflow-spec 的实际分叉表」）；office-hours 六问吸收为七维拷问表的
++维度①。**review 层（`/plan-eng-review` + `/autoplan`）保留为外部依赖，不内化。**
++
++**权衡点一（内化分界线）**：讨论过程是本 skill 的内在职责（拷问、裁剪、增量落盘都发生在
++产出决策本身的同一条主线上），而 review 的价值恰恰在于**外部性**——同一 session 内化 review
++等于让产者自审，失去独立冷视角。拆分标准（CLAUDE.md 基准 4）也支持这条线：讨论层内化本身
++已是一个完整内聚的交付物，review 是另一个能力面，不该混在一起内化或简化。
++
++### ② openspec/matt/ 整体移除
++
++删除 `openspec/matt/` 整目录（4 文件）+ `CLAUDE.md` / `AGENTS.md` 的三个托管区块。
++
++**matt 移除论证（按订正后的 D2，替换原「因本次改动才孤立」的因果表述）**：
++
++1. **历史遗留死配置，独立可删**——matt 早于本 change 已事实废弃（见 Context 的 SR-33
++   证据）：本仓自始至终用 `sdflow-issues` 追踪工作项，matt 的 issue-tracker 角色从未真正
++   投入使用。**这条论证不依赖 roadmap 重构是否发生**——即便不做本次重构，matt 同样是可以
++   独立删除的死配置。
++2. **仓外确有 4 个已安装消费方，但它们在本仓从未生效**（见 Context 的 SR-1 证据）：
++   `to-tickets` / `triage` / `to-spec` / `qa` 靠 `CLAUDE.md` 三区块找到 `openspec/matt/`
++   路径，但按第 1 点，本仓的实际工作流从未走过这条路径。移除**不改变任何既有工作方式**；
++   若将来要在本仓用其中某个 skill，重新铺配置即可（低成本、可逆）。
++3. **「Domain docs」一段与 wayfinder 无关，仍随之删除**——其内容（单一上下文布局：
++   `openspec/CONTEXT.md` + `openspec/adr/`）已由 `CLAUDE.md` 的 OpenSpec 托管区块承载，
++   保留一份 matt 语境的重复指路只会成为第二个漂移面。
++4. **与本 change 同批做的理由 = 操作成本低 + 避免半改状态**（CLAUDE.md 基准 4 的 fold
++   判据：相关、低 blast radius、执行中撞到就做掉），**不是**「roadmap 重构导致它孤立」。
++   任务拆分上 matt 移除是 `tasks.md` 独立的第 3 节（3.1/3.2），不是混在 SKILL.md 重写细节
++   里的顺手改动，符合基准 4「一个 change 一个完整阶段结果」的拆分标准——两条决策各自独立
++   成立，只是共享同一次落盘窗口。
++
++**权衡点二（能力承接边界）**：wayfinder 的 frontier（`issues/<NN>`）在其票状态机上
++承载两类职能——① 未解决问题的**清单**（哪些还没做完）② `Blocked-by` **依赖图** +
++`claimed` **并发语义**（多票协作、认领防冲突）。内化后的 `memo.md` 新增 `## 未决项`
++小节，**只承接①**：维度终态为「显式延后」者与拷问中冒出但本次不解决的问题，逐条落该
++小节并附再触发条件。**明确不承接②**——`Blocked-by` 依赖图与 `claimed` 并发语义服务的是
++「多票并发、需要防冲突协调」的场景，而 roadmap 场景是**单人操作**（一个人在一个包里拷问、
++落盘、生成），不需要这层协调机制。这一边界如实写进「当前方案代价」，不是疏漏。
++
++## Considered Options
++
++- **本方案（讨论层内化 + review 层留外，matt 整体移除，选中）**：依据见上。
++- **讨论层内化时把 review 层一并内化**（砍掉）：与权衡点一冲突——review 的独立冷视角价值
++  会被同 session 产者自审吞掉；且 gstack 是用户长期维护的自建套件、非脆弱三方，没有内化
++  它的必要性压力。
++- **matt 只删仓外确有消费方为 0 的部分，保留「Domain docs」段**（砍掉）：`openspec/CONTEXT.md`
++  + `openspec/adr/` 的布局说明已在 `CLAUDE.md` 托管区块里存在一份，保留 matt 语境的第二份
++  会形成漂移面，且违反本仓一贯的单一源纪律。
++- **matt 不随本 change 处置、另开单独 change**（砍掉）：按基准 4 的 fold 判据，matt 移除
++  与本 change 相关（同属治理面收口）、blast radius 低（4 个仓外消费方从未在本仓生效）、
++  执行中已撞到（roadmap 重构本就要清理 `openspec/matt/issue-tracker.md` preflight 引用）
++  ⇒ 应 fold 进当前 change，不 defer。**注意**：fold 的理由是操作成本与执行时机，
++  **不是**「因本次改动才使其孤立」——那条因果已被 SR-33 证伪，是本 ADR 要订正的核心。
++- **memo 的 `## 未决项` 承接完整 frontier 语义（含 Blocked-by 图 + claimed 并发）**（砍掉）：
++  roadmap 场景单人操作，不存在票并发冲突的真实需求；承接完整语义等于给一个没有多人协作
++  压力的场景搬来协作工具的复杂度，属于 CLAUDE.md 基准④「简化只能砍防御深度、不能砍目标
++  范围」中可以合法砍掉的低概率边角（这里连边角都算不上——场景本身不产生该需求）。
++
++## Consequences
++
++- **仓外 4 个已安装 skill（`to-tickets` / `triage` / `to-spec` / `qa`）在本仓失去落点**：
++  它们此前从未在本仓真正被使用（结论已由 SR-33 的 git log 证据支撑），移除不改变任何既有
++  工作方式；未来若要启用，重新铺配置即可（低成本、可逆），不视为破坏性变更。
++- **T134**（`domain-modeling` 不识别 `openspec/matt/domain.md` 路径配置）的前提消解——
++  `matt/domain.md` 随本 change 删除，该 issue 关 `WONTDO`（详见 `decision-memo.md` D11）。
++- **memo 的未决项承接能力有边界**：多票并发协作场景（若未来 roadmap 场景演变出这类需求）
++  不由 `sdflow-roadmap` 自身解决，需要另一层机制；本 ADR 不预留该扩展点，按 CLAUDE.md
++  基准④「不为低概率、影响小的问题纠结完美方案」处理。
++- **回滚代价**：单分支未合并前 `git checkout main` 即净；合并后回滚 = revert merge commit——
++  `openspec/matt/` 目录与 `CLAUDE.md` / `AGENTS.md` 三区块随 revert 恢复，无不可逆动作
++  （matt 目录本身不含任何本仓生成的活数据，删除前的最后状态即历史快照）。
++- **`sdflow-roadmap/SKILL.md` 的实际重写（三相位骨架、七维拷问表、三态路由等）不在本 ADR
++  范围内**——本 ADR 只记录「内化 vs 留外」的分界线决策与 matt 移除的治理论证，实现细节的
++  权衡记录见本 change `decision-memo.md`（D1、D2、D9/C10）。
+diff --git a/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task3-matt-removal-governance.md b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task3-matt-removal-governance.md
+new file mode 100644
+index 0000000..79ccfec
+--- /dev/null
++++ b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task3-matt-removal-governance.md
+@@ -0,0 +1,136 @@
++# Task 3 实现报告：matt 套件移除与治理面收口
++
++commit: `7cc21e7`（`worktree-agent-a3f534f3bee37f6fe` 分支，基于 `4d156ec`）
++
++## 做了什么
++
++### 3.1 · openspec/matt/ 整目录删除
++`git rm -r openspec/matt/`（4 文件：`domain.md` / `issue-tracker.md` /
++`triage-labels.md` / `setup-matt-pocock-skills-handoff.md`）。删前 grep 全仓
++（不带 `--include`）确认消费方：`sdflow-roadmap/SKILL.md:308,384` 仍有引用
++（Task 1 SKILL.md 重写范围，本票 MUST NOT 触碰）；`docs/workflow-skills/*` 三份
++历史文档、`openspec/specs/roadmap-planning/spec.md`（主 spec，Task 1/archive
++范围）、`archive/` 下多个归档 change 有历史引用——均属 D13 拍板的「docs/ 历史
++文档不追改」与「归档件不改」范围，本票不动。`.py` 测试文件全仓 grep 零命中
++`openspec/matt` 或被删的 CLAUDE.md 三区块字面。
++
++### 3.2 · CLAUDE.md / AGENTS.md
++两文件的「## Agent skills」标题 + 三个子节（Issue tracker / Triage labels /
++Domain docs）整体删除——确认该区块位于 `<!-- opsx-init:end -->` **之后**，
++不在任何 `sdflow:*` / `opsx-init:*` 托管区块内，删除安全。CLAUDE.md 额外处理
++「roadmaps 目录描述行去 footage 措辞」（原 `### OpenSpec 的双重角色` 节中
++`openspec/roadmaps/{name}/` 条目的 「footage/」措辞改为「历史存档」中性表述），
++该行同样在托管区块外。删后跑 `python3 hack/sync_principles.py --check` 退出码
++0（20 个投放面全部一致），确认 principles 托管块零字节未动。
++
++### 5.1 · 新增 ADR 0037
++`openspec/adr/0037-roadmap-discussion-layer-internalization-and-matt-removal.md`，
++编号取现有 36 个 ADR（`0001`–`0036`）之后的下一个可用号；小节结构（Context /
++Decision / Considered Options / Consequences）从近期 ADR（0034/0035/0036）
++归纳，无 template 文件可循。内容两条权衡：
++- **权衡①内化分界线**：讨论过程是内在职责 ⇒ 内化；review 价值恰在外部性
++  （独立冷视角）⇒ 留外。
++- **权衡②能力承接边界**：memo 的 `## 未决项` 小节只承接 wayfinder frontier
++  的**清单**职能，明确不承接 `Blocked-by` 依赖图与 `claimed` 并发语义
++  （roadmap 场景单人操作，不需要）。
++
++matt 移除论证按订正后的 D2 写：① matt 早于本 change 已事实废弃（`sdflow-issues`
++生于本仓首个 commit 2026-07-03，早于 `openspec/matt/` 建立 2026-07-10 一周，
++matt 的 issue-tracker 角色从未真正投入使用）② 独立可删、与本 change 无因果
++③ 与本 change 同批做的理由是操作成本低 + 避免半改状态（fold 判据，tasks 拆成
++独立第 3 节佐证不违基准 4）。**未沿用「因本次改动才孤立」的旧因果**（SR-1 /
++SR-33 订正点）。
++
++### 5.2 · CONTEXT.md 三处词条
++- `footage（讨论过程考古层）` 词条重写为 `历史存档（memo 增量落盘 + 存量
++  footage 统称）`，正文「决策结晶」改「决策生成」；`_Avoid_` 行补一条禁止与
++  DOC-1 语境「考古层」混用改名（C5 范围限定）。
++- 新增 `商业化信号（原「产品/商业野心信号」）` 词条，定义 gate-0 独立判定关系
++  与词表。
++- `ticket（实现分解单位）` 词条正文与 `_Avoid_` 行的 matt/wayfinder 讨论
++  ticket 表述改为历史存档语境（「matt 套件已移除；存量冻结历史存档
++  （`footage/`）中的历史讨论票……」）。
++
++### 5.3 · T134 关闭
++用**本仓** `sdflow-issues/scripts/issues_v2.py`（非全局 symlink）：
++```
++python3 sdflow-issues/scripts/issues_v2.py set-status --id T134 --to WONTDO \
++  --reason "前提消解：refactor-roadmap-internalize-deps 移除 openspec/matt/ 与讨论层四个外部依赖，domain-modeling 不再是本仓工作流的调用点，matt/domain.md 已随 D2 删除"
++```
++输出 `{"id": "T134", "pool": "todo", "old": "OPEN", "new": "WONTDO", "file": "openspec/issues/closed/todo/T134.md"}`，
++随后跑 `reindex` 子命令重建 `INDEX.md`（open 66 项）与 `CLOSED.md`（closed 221
++项），确认 T134 已从 INDEX.md 移出、出现在 CLOSED.md 且 `closed_reason` 字段
++正确落盘。
++
++### 5.4 · docs/external-dependencies.md
++删除「### Wayfinder 依赖（仅 sdflow-roadmap 使用）」子节（`/grilling` /
++`/domain-modeling` 两行），改为一句说明「已随本 change 内化，不再是外部依赖」；
++`## 5. 三方 Skill 依赖`下的 gstack 系列子节原样保留。同步 §8「内部跨 Skill 依赖」
++的依赖图，删去 `sdflow-roadmap` 分支下的 `/grilling、/domain-modeling` 行，
++改为「讨论层已内化，无其他外部依赖」的单行注记。
++
++### 5.5 · openspec/INDEX.md:52
++`roadmap-planning` 摘要行整句重写（非局部替词）：三相位结构（第零步重入探测
++→ A 澄清+gate-0/商业化信号 → B 七维拷问按信号裁剪+memo 增量落盘 → C 生成）、
++三态路由三分支、历史存档引用边界与存量 footage 冻结、review 按商业化信号分档、
++收尾 checklist 四项软门。
++
++### 5.6 · docs/sdflow-fable5/02-module-reference.md §4.6
++按新结构重写：删「wayfinder footage」「野心信号」等旧表述，改为三相位结构 +
++三态路由 + 历史存档定义 + 商业化信号分档 + checklist 四项。
++
++### 5.7 · docs/drafts/roadmap-refactor-handoff.md 删除
++`git rm`。删前 grep 全仓确认仅本 change 四件套（proposal/design/tasks/
++tickets/task3-brief）引用它作为「已被取代」的历史指向，无其他活消费方。
++
++## 验收标准逐条核验证据
++
++| # | 验收标准 | 证据 |
++|---|---|---|
++| 1 | `openspec/matt/` 4 文件已删除 | `git status` 显示 4 个 `D`；`find openspec/matt` 无结果（目录不存在） |
++| 2 | CLAUDE.md/AGENTS.md matt 三区块已删、roadmaps 描述行去 footage，两文件同步 | `grep -rn "openspec/matt" CLAUDE.md AGENTS.md` 零命中；两文件均删除「## Agent skills」整节；CLAUDE.md :190 footage 措辞已改「历史存档」 |
++| 3 | ADR 0037，两条权衡，matt 论证按订正后 D2 | 文件已建，见上文摘要；MUST NOT 沿用旧因果——已核对不含「因本次改动才孤立」表述 |
++| 4 | CONTEXT.md 三处词条 | `grep -n "历史存档\|商业化信号" openspec/CONTEXT.md` 命中新增/改写的三个词条块 |
++| 5 | T134 关 WONTDO 带 --reason，用本仓脚本 | 见上文命令输出 + `openspec/issues/closed/todo/T134.md` frontmatter `status: "WONTDO"` |
++| 6 | external-dependencies.md 删 §5 + 同步 §8，gstack 节保留 | `grep -n "grilling\|domain-modeling" docs/external-dependencies.md` 仅剩说明性提示句（非表格行）；`### 评审流程依赖（gstack 系列）` 子节表格原样保留 |
++| 7 | INDEX.md:52 整句重写 | 已核对新行含「三相位」「三态路由」「历史存档」「checklist 四项」关键词，不含「wayfinder」「野心」「footage 落盘位置」等旧词 |
++| 8 | 02-module-reference.md §4.6 按新结构更新 | 已核对新段落含三相位/三态路由/历史存档/商业化信号/checklist 四项 |
++| 9 | roadmap-refactor-handoff.md 已删除 | `git status` 显示 `D docs/drafts/roadmap-refactor-handoff.md` |
++
++## 跑过的命令与退出码
++
++```
++python3 hack/sync_principles.py --check          # exit 0（20 个投放面一致）
++python3 sdflow-issues/scripts/issues_v2.py set-status --id T134 --to WONTDO --reason "..."   # exit 0
++python3 sdflow-issues/scripts/issues_v2.py reindex                                            # exit 0
++/usr/bin/python3 -m pytest hack/tests/ sdflow-issues/tests/ -q   # exit 1（2 failed, 482 passed, 6 skipped）
++```
++
++`pytest` 的 2 个失败均为**先于本票存在的 baseline 失败**，与本票无关：
++
++1. `hack/tests/test_harden_sdflow_spec_followup_closure.py::test_spec_authoring_requirement_ids_and_resident_identity_are_consistent`
++   —— `tasks.md` 6.2 已明文记录为「当前 baseline 已有 1 个先于本分支存在的失败……
++   与本 change 无关，不在本 change 修复范围」。
++2. `hack/tests/test_subprocess_encoding_contract.py::test_text_mode_subprocesses_declare_utf8_and_replace`
++   —— 未在 `tasks.md` 中预先记录，但已用 `git stash` 隔离核验：**本票的改动
++   （全部为 Markdown / 一次 issue 状态迁移）落地前跑同一测试同样失败**
++   （`git stash` 恢复到 `4d156ec` 状态后单独跑该测试，`189 >= 200` 断言同样
++   失败，输出完全一致）。确认这是与本票无关的既有 baseline 失败（该测试统计
++   全仓 Python 文件的 subprocess 调用点数量，我的改动零处涉及 `.py` 文件）。
++
++两个失败**相对 merge-base 无新增**，符合 tasks.md 6.2「相对 merge-base 无新增
++失败（非全仓绿）」的验收口径。
++
++## Concerns
++
++无。本票范围内改动全部完成，未发现需要上抛编排层的设计缺口或范围外发现。
++
++## 遗留说明（非本票范围，供编排层知悉）
++
++- `sdflow-roadmap/SKILL.md:308,384` 仍引用 `openspec/matt/issue-tracker.md`
++  preflight 校验——这是 Task 1（SKILL.md 重写）的范围，本票未触碰该文件。
++- `openspec/specs/roadmap-planning/spec.md`（主 spec，非本 change 的 delta）
++  仍有 `openspec/matt` 引用——delta spec 覆盖与 archive 阶段同步是 Task 1 /
++  归档阶段的范围。
++- Task 6（验证）的全量 grep 残留扫描（6.1，词表含 `openspec/matt`）、主 spec
++  提升后核验（6.9）等收尾任务由后续票承担，未在本票范围内执行。
+diff --git a/openspec/issues/CLOSED.md b/openspec/issues/CLOSED.md
+index ee13ea9..c26f376 100644
+--- a/openspec/issues/CLOSED.md
++++ b/openspec/issues/CLOSED.md
+@@ -29,22 +29,24 @@
+ | [B23](closed/bug/B23.md) | bug | FIXED | 2026-07-28 | hack/*.py + 各 skill scripts/*.py（Windows stdout 编码） | Windows(GBK) 下 Python 脚本 print emoji 崩溃：setup.sh 四道一致性门在打印成功消息时自爆，被判成「有漂移」的假红 | 2026-08-02 | fix-windows-encoding-crash |  |
+ | [T1](closed/todo/T1.md) | todo | DONE | 2026-07-01 | `issues.py` | reindex 回显子进程 scan 的 problems 到 stderr（补齐独立跑 reindex 时表↔块不一致的可见性，D5 承诺） | 2026-07-01 | issues-pool-hardening |  |
+ | [T2](closed/todo/T2.md) | todo | DONE | 2026-07-01 | `recorder` | 字段含 ｜ 破 markdown 表：统一转义或拒绝含 ｜ 的字段（module/summary/批次名等，防位置解析读错列的数据腐蚀，系统性） | 2026-07-01 | mlh-p6-recorder-frontmatter |  |
+ | [T3](closed/todo/T3.md) | todo | DONE | 2026-07-01 | `issues.py` | 加终态集跨脚本一致性守卫测试（issues.py TERMINAL_STATUSES ⊆ 对应 recorder STATUS_CODES，防未来改终态码漂移） | 2026-07-01 | issues-pool-hardening |  |
+ | [T4](closed/todo/T4.md) | todo | DONE | 2026-07-01 | `issues.py` | batch add 加 --if-exists skip 幂等选项；batch rename 后自动 reindex（或 SKILL 提示 rename 后跑 reindex） | 2026-07-01 | issues-pool-hardening |  |
+ | [T5](closed/todo/T5.md) | todo | DONE | 2026-07-01 | `recorder` | 补 WONTDO / 0成员人标IN_PROGRESS 分支测试；抽 _find_row_file 消除 triage 与 set-status 定位逻辑重复（4处） | 2026-07-01 | issues-pool-hardening |  |
+ | [T6](closed/todo/T6.md) | todo | DONE | 2026-07-01 | `opsx-project-init/scripts/init.py` | 两个全局 hook 仅装 Claude 侧、Codex 会话静默不生效 | 2026-08-04 | sdflow-init-readwrite-paths |  |
+ | [T8](closed/todo/T8.md) | todo | WONTDO | 2026-07-01 | `impl-review/SKILL.md` | 置信过滤阈值 <80 跨模型不可比——阈值进 config 按档位调，或改判据为对抗镜复核 | 2026-07-01 |  | 对抗镜复核模式 |
+ | [T10](closed/todo/T10.md) | todo | DONE | 2026-07-01 | `workflow.md 决策4 + opsx-ship(待开)` | 阶段三「≥2 方案有把握自动选推荐」的判据脱离自评置信——改对抗镜复核推荐项，或缺把握一律 defer | 2026-07-01 | sdflow-ship |  |
+ | [T11](closed/todo/T11.md) | todo | DONE | 2026-07-01 | `config.template.yaml + opsx-done/verify` | adr/0006 档位→模型映射落进 config.template.yaml（认领：opsx-ship 首选，footprint 顺带亦可） | 2026-07-01 | sdflow-ship |  |
++| [T12](closed/todo/T12.md) | todo | DONE | 2026-07-01 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） | 2026-08-05 | main |  |
+ | [T13](closed/todo/T13.md) | todo | DONE | 2026-07-01 | `opsx-project-init/tests/` | resolver/setup 测试断言补强：unreadable-pointer 补 stdout 空断言、root-missing 补 stderr 文案断言、--dev+init _die 补 subprocess 测试、setup idempotent 重跑补 hack 脚本/链目标断言 | 2026-07-01 |  |  |
+ | [T14](closed/todo/T14.md) | todo | DONE | 2026-07-01 | `setup.sh` | Windows 指针分支补所有权检查（workflow-path 被异物占位时停手告警，同 Unix 分支） | 2026-08-04 | main |  |
++| [T15](closed/todo/T15.md) | todo | DONE | 2026-07-01 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） | 2026-08-05 | main |  |
+ | [T16](closed/todo/T16.md) | todo | DONE | 2026-07-01 | `setup.sh` | install_sdflow 告警独立打印分支，不复用 skipped 数组（现输出中英文案叠加） | 2026-08-04 | main |  |
+ | [T17](closed/todo/T17.md) | todo | DONE | 2026-07-01 | `opsx-maintain/SKILL.md + init.py` | 陈旧遮蔽判据两处（RULE_MARKERS 常量 vs SKILL prose 复述）无同步机制，改常量会漂——考虑 opsx-maintain 兜底扫描改调脚本 | 2026-07-01 | mlh-p4-maintain-scan |  |
+ | [T18](closed/todo/T18.md) | todo | DONE | 2026-07-01 | `setup.sh install_into` | skills 软链切换（install_into 对既有软链 ln -snf）无指向变更提示——与 canonical 接管可见化(impl-review-fix)对齐 | 2026-08-04 | main |  |
+ | [T19](closed/todo/T19.md) | todo | WONTDO | 2026-07-01 | `workflow.md + generation-process.md（权威源）` | 重新评估 grill 轮的跳过条件（默认必跑？何种前提可跳？）——后续单独评估再定规则；唯一先行共识 = 跳过类判定必须显著呈现给用户 | 2026-07-01 | sdflow-spec | sdflow-spec 分支 A |
+ | [T20](closed/todo/T20.md) | todo | DONE | 2026-07-01 | `spec-review/SKILL.md（现 sdflow-spec-review）` | 固化 spec-review 编排顺序：autoplan 先行落 amendment 后再 fan-out 多镜——顺序是设计性质（多镜复审 autoplan 改动）而非可并行的优化项 | 2026-07-01 | sdflow-ship |  |
+ | [T21](closed/todo/T21.md) | todo | DONE | 2026-07-01 | `sdflow-init/scripts/init.py` | inject() 畸形态加固：多重复旧 marker 区块只修第一个 + _find_marker_line 的 text.index 在行内嵌相同 marker 文本时可能锚错位 | 2026-07-01 | sdflow-init-hardening |  |
+ | [T22](closed/todo/T22.md) | todo | DONE | 2026-07-01 | `sdflow-init/scripts/init.py` | open().read() 统一改 with open()（-W error 下 19 个 PytestUnraisableExceptionWarning，pre-existing 模式） | 2026-07-01 | sdflow-init-hardening |  |
+ | [T24](closed/todo/T24.md) | todo | DONE | 2026-07-01 | `setup.sh install_into 软链分支` | install_into 对既有软链零所有权校验——同名异物软链被 ln -snf 无声覆盖（已复现）；需专门设计「何为自属目标」再修，与 T18（可见性）分立 | 2026-08-04 | main |  |
+ | [T25](closed/todo/T25.md) | todo | DONE | 2026-07-01 | `sdflow-spec-review/SKILL.md Step1 + sdflow-code-review Step1（gstack/review 同病）` | autoplan/gstack-review 原生流程被「子代理读 SKILL.md 模拟执行」替换——须修复为真实调用，或把模拟显式定义为降级模式并标注 | 2026-07-01 | cross-model-outside-voice |  |
+ | [T26](closed/todo/T26.md) | todo | DONE | 2026-07-01 | `sdflow-ship/SKILL.md` | 熔断重试计数脚本化方案探索（gate 零副作用约束下的计数下沉） | 2026-07-01 | gate-checkpoint-hardening |  |
+@@ -63,138 +65,163 @@
+ | [T43](closed/todo/T43.md) | todo | DONE | 2026-07-01 | `sdflow-code-review/SKILL.md + sdflow-spec-review/SKILL.md（报告格式展示块）` | producer 模板展示的机器锚收紧为独占 bare line（现带反引号/同行尾注）——与真产报告一致，防未来报告照抄模板致 gate 行锚定不认锚（code-voice OV-code-1） | 2026-07-01 | gate-checkpoint-hardening |  |
+ | [T44](closed/todo/T44.md) | todo | DONE | 2026-07-01 | `sdflow-init/scripts/init.py + setup.sh` | 退役 hook 自愈(retire_hooks)未接进 toolkit 标准更新路径(setup.sh/README) | 2026-07-01 | review-tool-followups |  |
+ | [T45](closed/todo/T45.md) | todo | DONE | 2026-07-01 | `sdflow-init/assets/workflow/tools/engine.js` | 根查看器缺 scoped 深链——恢复 /review.html#/changes/X/ hash 路由首屏 | 2026-07-01 | review-tool-followups |  |
+ | [T46](closed/todo/T46.md) | todo | DONE | 2026-07-01 | `workflow bundle: spec-checklists/spec-quality-base.md(BASE-12) + workflow.md(G2) + sdflow-code-review/SKILL.md(Step4)` | 把「三镜决策框架(系统/用户/开发循环+定主次)」焊进 workflow，让决策分析不依赖私有记忆、跨 session/子代理稳定生效 | 2026-07-01 | three-lens-decision-framework |  |
+ | [T47](closed/todo/T47.md) | todo | WONTDO | 2026-07-01 | `sdflow-init/assets/workflow/tools/engine.js` | engine.js 深链逻辑零单测——抽 resolveInitialDir + bootstrap 分派为可注入 mock 的纯函数补单测(hash 边界/404回落/notice) | 2026-07-01 |  | engine.js 已被 drop-review-html-viewer 整体删除，其深链单测的载体不存在——该 todo 失去对象 |
+ | [T48](closed/todo/T48.md) | todo | DONE | 2026-07-01 | `setup.sh + 全仓 python 调用点` | python3/python 探测无版本校验——可能落 Python2 致 init.py f-string 解析期报错；全仓(sdflow-*/init.py)系统性缺 sys.version_info 守卫 | 2026-07-01 | sdflow-init-hardening |  |
+ | [T49](closed/todo/T49.md) | todo | DONE | 2026-07-01 | `sdflow-init/scripts/init.py:_deregister_hook_in_settings` | settings.json 原子写仍有并发 lost-update TOCTOU 窗口(两进程各基于旧内容读→写→os.replace，一次修改被静默覆盖) | 2026-07-01 | sdflow-init-hardening |  |
+ | [T50](closed/todo/T50.md) | todo | WONTDO | 2026-07-01 | `sdflow-spec-review/SKILL.md 决策登记区 ASCII 框` | Q1 行加长(+三面后果+主次判定)后超边框宽度，右│视觉参差(cosmetic)；整框加宽须动6行、结构未破不影响语义 | 2026-07-01 |  | cosmetic |
+ | [T53](closed/todo/T53.md) | todo | DONE | 2026-07-01 | `workflow 度量 + sdflow-grill/spec-review/code-review` | 建立 review 价值度量机制:量化每轮评审(grill/spec-review/code-review 及各镜/层/codex-vs-claude)的价值——findings 产出数·采纳[impl-review-fix]/裁掉/defer 分桶·致命/高/中/低分布·独立(非重复)贡献;评审运行时落度量记录(泛化现有 voice 分桶+10次采纳率复评到全镜);据累积数据数据驱动决定各层/镜/触发条件的必要性(保留/降采样/收紧触发/淘汰低价值镜) | 2026-07-01 | workflow-metrics-loop |  |
+ | [T55](closed/todo/T55.md) | todo | WONTDO | 2026-07-01 | `lens_metric_aggregate.py` | 聚合器易用性/健壮性观察(code-review X3/X4 defer,低危):glob 空表 vs archive 不存在无法区分;转义引号 site 值截断产生多余分组行(site 不校验已契约注明) | 2026-08-04 | main | 低危易用性，code-review 已 defer；glob 空与 archive 不存在的区分无实际影响 |
++| [T56](closed/todo/T56.md) | todo | DONE | 2026-07-01 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 | 2026-08-05 | fix-b11-b12-tools-hardening |  |
+ | [T58](closed/todo/T58.md) | todo | DONE | 2026-07-01 | `sdflow-retro/lens_metric_aggregate` | fence-aware 只支持反引号 fence，不支持 CommonMark ~~~ tilde fence | 2026-07-01 | sdflow-retro-cleanup |  |
+ | [T59](closed/todo/T59.md) | todo | DONE | 2026-07-01 | `sdflow-retro/retro_report+lens_metric_aggregate` | ≥10 待复评阈值 10 硬编码两处(surfacing_block + render_table)无共享常量 | 2026-07-01 | sdflow-retro-cleanup |  |
+ | [T60](closed/todo/T60.md) | todo | DONE | 2026-07-01 | `sdflow-retro/retro_report` | _run_git 不检查 returncode，git 失败与真无提交不可区分 | 2026-07-01 | sdflow-retro-cleanup |  |
+ | [T61](closed/todo/T61.md) | todo | DONE | 2026-07-01 | `sdflow-retro/retro_report` | build_report/surfacing_block 包 LMA.aggregate 的 except 是死防御(glob 缺目录不抛)+注释误导 | 2026-07-01 | sdflow-retro-cleanup |  |
+ | [T63](closed/todo/T63.md) | todo | WONTDO | 2026-07-01 | `sdflow-init/scripts/init.py:inject/_find_all_marker_lines` | inject 多块收敛须 fence-aware + start/end 配对校验（naive collapse 已回退） | 2026-08-04 | sdflow-init-readwrite-paths | fence-aware 无真实攻击面（4 个消费仓 marker 全在 fence 外），多块收敛无真实场景（每文件仅 1 对 marker）；sync_principles.py 有独立 _blocks() 不走 inject() |
+ | [T64](closed/todo/T64.md) | todo | DONE | 2026-07-01 | `sdflow-init/scripts/init.py:_atomic_write_settings` | settings.json 原子写 tmp 改唯一名（tempfile.mkstemp）关闭无锁降级路径撕裂 | 2026-08-04 | sdflow-init-readwrite-paths |  |
+ | [T65](closed/todo/T65.md) | todo | DONE | 2026-07-01 | `sdflow-init/assets/workflow/tools/ship_gate.py + 报告模版` | gate 状态锚（家族①）迁 YAML frontmatter，根除 B4/B5 inline 歧义类 | 2026-07-01 |  |  |
+ | [T66](closed/todo/T66.md) | todo | DONE | 2026-07-01 | `cmd_scan(buglist/todolist) + cmd_batch_rename(issues)` | recorder 效率:cmd_scan 对同批行双切(OV-1 arity+OV-3 dup)可合一次循环; batch rename 跑两次 read_pool(4子进程scan)可优化 | 2026-07-01 | mlh-p6-recorder-frontmatter |  |
+ | [T67](closed/todo/T67.md) | todo | DONE | 2026-07-01 | `cmd_add id 校验(buglist/todolist)` | 显式id前导零歧义:B007≠B7按字面共存不判重,语义同号两字面ID人工识别混淆(code-review对抗A置信55) | 2026-07-01 | mlh-p6-recorder-frontmatter |  |
++| [T68](closed/todo/T68.md) | todo | DONE | 2026-07-01 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 | 2026-08-05 | main |  |
++| [T69](closed/todo/T69.md) | todo | DONE | 2026-07-01 | `sdflow-init/copy_bundle` | 缺 pin 消费仓 update 端到端交叉不变量测试（workflow.md/spec-checklists/code-checklists 原封不动、仅 tools+契约刷新） | 2026-08-05 | main |  |
+ | [T70](closed/todo/T70.md) | todo | DONE | 2026-07-01 | `init.py config-lint` | config_lint 的 _second_level_keys/块扫描仅识别两空格缩进，tab 缩进的 model-tiers 子键隐形→越域非法子键 fail-open 静默通过（对抗A实测复现，边缘 YAML） | 2026-07-01 |  |  |
+ | [T71](closed/todo/T71.md) | todo | DONE | 2026-07-01 | `test_mirror_consistency.py` | _ast_no_doc 对剥 docstring 后空体函数坍塌：两个仅含 docstring 的同名 stub AST 相等→理论假过（当前 11+6 helper 均有真逻辑不可利用，加固可标记空体） | 2026-07-01 |  |  |
+ | [T72](closed/todo/T72.md) | todo | WONTDO | 2026-07-01 | `issues.py batch lint` | batch 条目整行缺失 优先级:/计划: 字段（非空值而是整行删除）当前不校验（实现有意窄化到值语法层，对抗A确认为文档化边界）——考虑补结构完整性校验抓手改腐坏 | 2026-08-04 | main | issues.py 已被 v2 取代，旧 batch section 格式已不存在 |
+ | [T73](closed/todo/T73.md) | todo | DONE | 2026-07-01 | `anchor_lint.py + init.py config-lint` | metrics.enabled 两校验器均拒绝合法 YAML 行内注释(enabled: true # x)——当前一致的有意严格；若要容忍需两处同步改（防分歧），是设计级决定 | 2026-07-01 |  |  |
+ | [T74](closed/todo/T74.md) | todo | DONE | 2026-07-01 | `sdflow-ship` | ship_gate parser 裸---首行(无闭合)误判 unterminated 致 UNKNOWN | 2026-07-01 | mlh-p5-parser-cleanup |  |
+ | [T75](closed/todo/T75.md) | todo | DONE | 2026-07-01 | `sdflow-ship` | ship_gate 清理 live inline 死代码 anchors_in/pick_exclusive/ANCHOR_DESIGN/ANCHOR_CR_* | 2026-07-01 | mlh-p5-parser-cleanup |  |
+ | [T76](closed/todo/T76.md) | todo | WONTDO | 2026-07-01 | `ship_gate.py archived_verify_state` | 归档杂交盲区硬化后续（设计门已接受净负、登记为已知盲区）：冷代码审对抗镜给出比「仅手工伪造」更锋利的可达性论证——迁移半成品编辑残留独占行 inline PASS 锚、自指文档独占行引用（呼应 gate-substring-dogfood 自指坑）；建议未来加**非语义** lint/监控扫「归档 verify-report 首行 --- 无闭合」形态告警（不改 parser 语义、不重开设计门 adr/0004），据此复评「给归档侧特殊 fail-safe」ROI（design L121 当前选①绝） | 2026-07-01 |  | 已复评(explore 2026-07-08)：①绝 HOLD 且被迁移完成强化。冷代码审对抗镜给的最锋利可达路径「迁移半成品编辑残留独占行 inline PASS 锚」是【迁移窗专属】论据——T75 删净 live inline 死码、三 producer 全迁后迁移窗已闭，无待迁 producer 即无半成品可残留，该路径失效。稳态下要凑齐「首行 --- 无闭合 × 正文独占行 inline PASS」杂交形态只能人手伪造 git-committed 畸形归档=adr/0008 显式越权(git 可审计)。非语义 monitor 三点不成立：(1)稳态恒零命中=纯仪式(producer 只写 frontmatter 不产②)；(2)非安全边界——有 git 写权的越权者能同样手改绕过，adr/0008 立场=git 写靠历史审计非运行时防；(3)开发循环镜主导判主次，系统镜给 monitor 的「外部无漂移」一分被压过。已在位 mitigation(头注册 ship_gate.py:118-123 + 目标态回归测试 test_archived_unclosed_*)足够。未来 P6 等新迁移窗的 insurance 价值由「目标态回归测试 per 迁移」成熟模式兜底(P5 即如此)，不需常驻 monitor。故 ①绝 不建 monitor，无代码产出。 |
+ | [T77](closed/todo/T77.md) | todo | WONTDO | 2026-07-01 | `openspec/specs/spec-workflow spec.md` | 「过渡期 live 未迁 producer 回退 inline」Scenario 迁移窗已闭（T75 删净 live inline 死码后 live 恒只读 frontmatter）——宜在未来 spec 维护中标为历史或收敛该 Scenario；其终态子句「退役后 live MUST 只读 frontmatter」已 governing、与代码无活跃冲突，纯整洁性（归档 dual-read 是另一独立 Scenario、正确保留） | 2026-07-01 | mlh-p5-parser-cleanup | mlh-p5-parser-cleanup 已归档 |
+ | [T78](closed/todo/T78.md) | todo | DONE | 2026-07-01 | `sdflow-code-review/spec-review SKILL + lens_metric_emit.py(新)` | P4·4.C lens-metric 数值一致性从模型手数下沉为脚本归约：吃已判结构化 findings(带命中镜集+裁决+sev)→机械归约计数+锚行；去重/对抗裁决留模型。闭合 requirements §1.2 痛点#2『手数信任边界』、adr/0006 硬约束——目标态该做(原按快照压为按需,已翻案) | 2026-07-01 | implement-mechanical-layer-hardening-p4-lens-metric-emit |  |
+ | [T79](closed/todo/T79.md) | todo | DONE | 2026-07-01 | `sdflow-maintain + maintain_scan.py(新)` | P4·4.B maintain INDEX↔文件系统 set-diff 只读报告脚本化(+CLAUDE.md 过时引用+bundle 陈旧告警)；归哪组/是否修留人。纯机械集合求差、每次 maintain 都跑、dogfood 可测——目标态该做 | 2026-07-01 | mlh-p4-maintain-scan |  |
+ | [T80](closed/todo/T80.md) | todo | DONE | 2026-07-01 | `两审 outside-voice 小校验器(新)` | P4·4.D.1 outside-voice 复用守卫脚本化：锚 mode+时间戳+结构三判→reason_code 退出码 | 2026-07-01 | mlh-p4-reason-code-validators |  |
+ | [T81](closed/todo/T81.md) | todo | DONE | 2026-07-01 | `两审 HR-TG 小校验器(新)` | P4·4.D.2 HR-TG 交集判定脚本化：TG 集∩HR-TG 子集→hit 列表/none+规范锚串，清单从 trigger-catalog 单一源读(tg02_hit 先例) | 2026-07-01 | mlh-p4-reason-code-validators |  |
+ | [T82](closed/todo/T82.md) | todo | DONE | 2026-07-01 | `roadmap 对账小校验器(新)` | P4·4.D.4 roadmap task-log『Review 处置』对账脚本化：parse 小节断言无『未处置』状态 | 2026-07-01 | mlh-p4-reason-code-validators |  |
+ | [T85](closed/todo/T85.md) | todo | DONE | 2026-07-01 | `roadmap mechanical-layer-hardening / recorder` | P6 recorder 索引→frontmatter（**端态 A 已定 2026-07-08**）：用户拍板根治(YAML 转义使 `｜` 腐蚀类结构上不可能)否决 B(治标·永久守脆弱表·手编辑洞)。约束①历史文档不迁使成本≈P5 dual-read 成熟范式(新写 frontmatter+历史表冻结只读)。实现=改 3 recorder 写路径+consumer dual-read 读+测试套,压轴排 ★P4 后。A 删写侧(`_reject_cell_unsafe`/`_render_item_table`/双写表半场),历史读 `parse_table_rows` 冻结保留。理由全档见 roadmap P6 端态块 | 2026-07-01 | mlh-p6-recorder-frontmatter |  |
+ | [T86](closed/todo/T86.md) | todo | DONE | 2026-07-01 | `anchor_lint.py load_enums` | 未闭合 fence 不 fail-closed（与 emitter _read_block_pairs 同盲区，本 change 已修 emitter 侧）——EOF 前无闭合围栏时静默把剩余全文当块体；契约受版本控制利用面低，但两侧同错致等价性测试假绿风险 | 2026-08-04 | main |  |
+ | [T87](closed/todo/T87.md) | todo | DONE | 2026-07-01 | `lens_metric_emit.py load_enums + anchor_lint.py` | lens-metric-enums 重复键静默后写覆盖（dict()），与 fold 块重复 raw 键 fail-closed 口径不一致；建议 enums 块也逐项拒绝重复 layer/lens/runner/sev-format 键 + 负例测试 | 2026-07-01 |  |  |
+ | [T88](closed/todo/T88.md) | todo | DONE | 2026-07-01 | `仓库 CI/pre-commit` | 无 CI/pre-commit → 单一源守卫测试（load_enums 等价/aggregator enum/MIN_LENS_ROWS 一致性）仅手动 pytest 生效，契约或硬编码常量漂移需下次跑测试才暴露、期间可正常提交合并 | 2026-07-01 |  |  |
++| [T93](closed/todo/T93.md) | todo | DONE | 2026-07-01 | `resolve-workflow.sh` | bash 第3份 RULE_MARKERS 内联副本（resolve-workflow.sh）跨语言难与 init.py/maintain_scan.py 同守——一致性守卫只覆盖两份 Python 副本，bash 副本漂移不被机验 | 2026-08-05 | main |  |
++| [T94](closed/todo/T94.md) | todo | WONTDO | 2026-07-01 | `maintain_scan.py + init.py` | 陈旧遮蔽告警文案第三处跨脚本复述 + checkpoint 孤儿路径：R-guard 不机验文案（文案守卫脆），maintain 抄 init 文案仅语义等价、漂移不被捕获——已知残差 | 2026-08-05 | main | 文案守卫脆(R-guard不机验文案)+两处受众不同(maintain报告vs init终端),统一反降可读性;已知残差 |
++| [T95](closed/todo/T95.md) | todo | WONTDO | 2026-07-01 | `sdflow-maintain/tests/test_marker_consistency.py` | 守卫加载用 assert os.path.isfile + exec_module hard-fail；sdflow-init 目录整体缺席场景可加 importorskip 更优雅降级（当前 path-assert 直接 fail，defer 兜底优化） | 2026-08-05 | main | 硬失败是正确设计(注释写缺席=硬失败非跳过);importorskip会让守卫静默跳过,违背守卫初衷 |
++| [T96](closed/todo/T96.md) | todo | DONE | 2026-07-01 | `maintain_scan.py _SPEC_LINK/_RULE_LINK` | 链接正则 [a-z0-9-]+ 与 scan_fs_specs/rules 目录名零字符集限制不对称：非规范命名(大写/下划线)的 spec/rule 被删且 INDEX 仍链接时，链接不命中正则→静默归②b排除→不进 stale→漏报已删未清理。openspec 强制 kebab 故低概率，彻底修需 scan_fs 也检非规范命名 | 2026-08-05 | main |  |
+ | [T97](closed/todo/T97.md) | todo | WONTDO | 2026-07-01 | `model-tiers` | 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1） | 2026-07-01 |  | wco roadmap P0-P5 全交付 |
+ | [T98](closed/todo/T98.md) | todo | WONTDO | 2026-07-01 | `评审编排` | prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2） | 2026-07-01 |  | wco roadmap P0-P5 全交付 |
+ | [T99](closed/todo/T99.md) | todo | WONTDO | 2026-07-01 | `code-review` | 确定性检查前置准入门：pytest/lint/typecheck 未绿不进 fan-out（04 提案 §2.3） | 2026-07-01 |  | wco roadmap P0-P5 全交付 |
+ | [T100](closed/todo/T100.md) | todo | WONTDO | 2026-07-01 | `workflow` | 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4） | 2026-07-01 |  | wco roadmap P0-P5 全交付 |
+ | [T101](closed/todo/T101.md) | todo | WONTDO | 2026-07-01 | `spec-review` | 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1） | 2026-07-01 |  | wco roadmap P0-P5 全交付 |
+ | [T102](closed/todo/T102.md) | todo | WONTDO | 2026-07-01 | `评审编排` | 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5） | 2026-07-01 |  | wco roadmap P0-P5 全交付 |
+ | [T118](closed/todo/T118.md) | todo | DONE | 2026-07-01 | `writing-plans` | tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1） | 2026-07-01 |  |  |
+ | [T120](closed/todo/T120.md) | todo | WONTDO | 2026-07-01 | `bundle` | expand-contract 宽重构协议进 bundle（04 提案 §5.3） | 2026-07-01 | matt-workflow-integration | matt-workflow-integration change |
+ | [T125](closed/todo/T125.md) | todo | WONTDO | 2026-07-01 | `评审编排` | 议题：fan-out 子代理产物默认落临时文件、返回只带路径——动机是交接可靠性（防最终文本截断/结构化输出失配/compaction 丢失），比 T121（超阈值才写文件）更进一步；讨论点：默认落盘 vs 阈值触发、临时文件生命周期与清理、主审读文件的路径契约（2026-07-10 探索会提出） | 2026-07-01 |  | T121 |
+ | [T126](closed/todo/T126.md) | todo | DONE | 2026-07-01 | `bundle` | wayfinder→ff 衔接契约 + 主流程三段分流入口：清晰直接 ff / 单 session 模糊走 explore / 超单 session 大雾走 wayfinder；契约三条=ff 起手逐区读 map（Destination→proposal 动机+D-5、Decisions-so-far 逐行 zoom 决议全文防 make-reasonable-decisions 重决歪、Out-of-scope→D-3 假设）+ TG 判命中前置到 chart 写 map Notes + proposal 回链 map（2026-07-10 探索会，调研代理 file:line 已接地） | 2026-07-01 |  |  |
+ | [T127](closed/todo/T127.md) | todo | WONTDO | 2026-07-01 | `bundle` | grill 瘦跑规则：上游 wayfinder 已决分支引 resolution comment 快速核对即过、新生成/未决部分照常死磕——grill 对象是 ff 烘焙产物 vs 代码 ground truth，与 wayfinder grilling 票（生成前决策）非冗余、不可整跳（2026-07-10 探索会） | 2026-07-01 |  | generation-process.md:101 / workflow.md:90 |
++| [T128](closed/todo/T128.md) | todo | WONTDO | 2026-07-01 | `sdflow-implement` | impl_route.py PIPELINE_RECEIPT 的 marker 显示折叠：显式 `impl-pipeline: superpowers` 与无 frontmatter/无键的隐式缺省均显示 marker=none，路由行为等价但 receipt 可诊断性受损（F3a 判赢留档核对时无法分辨是否显式声明过）——需 read_plan_marker 返回值携带来源注记再区分显示（code-review defer，display-only 无路由风险） | 2026-08-05 | main | impl_route.py:546-549已刻意记录此折叠为设计决策(路由行为等价marker锚没翻转);display-only无路由风险;改返回类型代价不成比例 |
++| [T130](closed/todo/T130.md) | todo | DONE | 2026-07-01 | `bundle` | ff-generation-constraints.md:43 衔接契约边界句「requirements/design/roadmap/task-log 四件套」→「三件套」术语同步——matt-workflow-integration Task7 写入时 rebuild-sdflow-roadmap-v2 未落地所致漂移；属 assets/workflow 权威源（rebuild change Compliance 声明零 assets 改动故未扫），一词修正独立小改，改后消费仓经 sdflow-init update 获得 | 2026-08-05 | main |  |
++| [T131](closed/todo/T131.md) | todo | DONE | 2026-07-01 | `bundle` | workflow.md 阶段一 wayfinder 缺装探测硬编码 Claude 单宿主路径（~/.claude/skills/wayfinder）——未同步 sdflow-roadmap SKILL.md 本轮新增的宿主中立探测口径（按当前宿主 Claude/Codex 分别探测，MUST NOT 以 Claude 路径代理全局）；Codex 宿主跑 mainflow 阶段一会重犯同款误判。属 assets/workflow 权威源（rebuild change Compliance 零 assets 改动故未扫），改后经 sdflow-init update 分发 | 2026-08-05 | main |  |
+ | [T132](closed/todo/T132.md) | todo | WONTDO | 2026-07-01 | `openspec/workflow/ + sdflow-spec-review 起手 fail-closed 门` | 未来 spec-review 起手 grill 收敛门（尚未实现）：分支 A 需要身份、hash 与必填节有效的 decision-memo.md 加 checkpoint(sdflow-spec-grill)；分支 B 需要既有 checkpoint(grill) 或未来 gate 明确认可的 sdflow:grill-done 锚；无信号才 REFUSE_START。T132 保持 OPEN。 | 2026-07-01 | sdflow-spec | sdflow-spec 分支 A 内建拷问相位 |
+ | [T133](closed/todo/T133.md) | todo | WONTDO | 2026-07-01 | `grill 提示自动生成（sdflow-spec-review 门 / 阶段提示）` | 提示/触发 grill 时自动生成完整可复制 prompt，但须『脚手架完整+内容轻播种』校准：grill-with-docs=/grilling(relentless逐branch独立走设计树,一次一问,每问给推荐,事实自查决策抛人)+/domain-modeling。auto-prompt 只应含调用脚手架(change dir/全深度非wayfinder/MUST NOT skip/doc路径 adr→openspec/adr·术语→CONTEXT.md·INDEX/[grill-amendment]/收敛才提交)；MUST NOT 预装已分析的弱点清单+推荐(会 anchor+短路 grilling 独立发现盲点的核心价值,让它只 validate 我的结论而非找第6条)。至多给一句非绑定怀疑点并注明『非边界,去找我漏的』。关联 T132(grill 未跑 fail-closed 门,该门 REFUSE 时正好 emit 此 prompt)+T28(下一阶段附完整可复制 prompt)。 | 2026-07-01 | sdflow-spec | sdflow-spec 分支 A 内建拷问相位 |
++| [T134](closed/todo/T134.md) | todo | WONTDO | 2026-07-01 | `domain-modeling / grill-with-docs 领域文档路径感知` | domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。 | 2026-08-05 | refactor-roadmap-internalize-deps | 前提消解：refactor-roadmap-internalize-deps 移除 openspec/matt/ 与讨论层四个外部依赖，domain-modeling 不再是本仓工作流的调用点，matt/domain.md 已随 D2 删除 |
+ | [T135](closed/todo/T135.md) | todo | DONE | 2026-07-01 | `sdflow-implement` | superpowers-plan.md 文件名硬编码在 ship_gate 契约里，tickets 管线被迫借壳穿这个误导性文件名——应参数化 | 2026-07-01 | harden-implement-review-loop |  |
+ | [T136](closed/todo/T136.md) | todo | DONE | 2026-07-01 | `anchor_lint` | anchor_lint 只校验 hr-tg 锚字段在场、不重算交集——手改 hit=none/declared=TG-04 可绕过必开 cross-model（codex 冷审 high） | 2026-07-01 |  |  |
+ | [T137](closed/todo/T137.md) | todo | DONE | 2026-07-01 | `config.yaml` | impl-pipeline:tickets 翻键注释写'首个试点(mlh-p4)'误导——mlh-p4 已由 plan marker 自锁，翻键实际只影响 scoped-test-per-task 及未来 change（对抗镜 medium） | 2026-07-01 |  |  |
+ | [T138](closed/todo/T138.md) | todo | DONE | 2026-07-01 | `hr_tg_intersect` | hr_tg parse_tg_set 静默吞空 token（'TG-04,,TG-16'/',' 都过）+ catalog 成员用宽松 TG-\d+（'TG-04x'→TG-04）（codex medium） | 2026-07-01 |  |  |
++| [T139](closed/todo/T139.md) | todo | DONE | 2026-07-01 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） | 2026-08-05 | fix-b11-b12-tools-hardening |  |
++| [T140](closed/todo/T140.md) | todo | WONTDO | 2026-07-01 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） | 2026-08-05 | fix-b11-b12-tools-hardening | 旧报告不走重lint路径:anchor_lint只被评审SKILL在当轮新报告上调用,不重lint归档旧报告;加grace反而弱化M1字段校验拦截力 |
++| [T142](closed/todo/T142.md) | todo | DONE | 2026-07-01 | `docs/workflow-map.md` | workflow-map.md 广度刷新：补 mlh-p4 后 5 脚本 + hr-tg schema 回灌 | 2026-08-05 | main |  |
+ | [T146](closed/todo/T146.md) | todo | DONE | 2026-07-01 | `sdflow-skills 工具族` | 扫描-max+1 无锁并发面统一：todolist.py/buglist.py 与 sad_scaffold 锁面方案对齐（O_CREAT+O_EXCL 仓级互斥） | 2026-07-01 | mlh-p6-recorder-frontmatter |  |
+ | [T147](closed/todo/T147.md) | todo | DONE | 2026-07-01 | `openspec/workflow/` | openspec/workflow/ 下 v1 孤儿 debris：lens-metric-contract.md（无 host/reason_code）+ tools/anchor_lint.py（REQUIRED_FIELDS 缺 host）/lens_metric_emit.py（无 --host）/outside_voice_guard.py（:93 仍 runner!="codex" 裸判）均为 add-codex-host-support 改前的 v1 旧副本——非 pin 遮蔽（resolve-workflow.sh 因本地缺 workflow.md/spec-checklists/code-checklists 三个 pin 判据文件，判定非本地 pin，runtime 恒走全局 canonical ~/.sdflow/workflow）；待本仓自身跑 sdflow-init update 或手动清空该目录 | 2026-07-01 | add-codex-host-support |  |
+ | [T148](closed/todo/T148.md) | todo | DONE | 2026-07-01 | `tools/anchor_lint.py` | anchor_lint._FANOUT_MIRRORS={domain,adversarial,grounding} 缺 code-review 真名 history；现 code-review 借用 grounding token 记历史镜（不污染 retro：聚合只读 lens-metric 锚不读 fanout-capability，lens-metric 用真 lens=history）。正修 = _FANOUT_MIRRORS 加 history + 同步 spec.md/design.md 三处 SHALL 条款——触已过三轮收敛的 spec 文本，需另开 change 走 spec-review（非本 change fold 范围） | 2026-07-01 |  |  |
+ | [T149](closed/todo/T149.md) | todo | DONE | 2026-07-01 | `sdflow-init/scripts/init.py` | lint_config 对 metrics.enabled 重复键无告警(true+false并存时valid恒True,anchor_lint取首值);未如parse_kv_strict收紧,潜在一致性盲点 | 2026-08-04 | sdflow-init-readwrite-paths |  |
+ | [T150](closed/todo/T150.md) | todo | WONTDO | 2026-07-01 | `sdflow-init/assets/hack/outside-voice.sh` | preflight 只 command-v + timeout 检查,未按 ADR-6「真跑一次」补低成本真探针(CLI未认证/模型无效/参数不支持仍返回ready,失效漏到exec归exec-error) | 2026-08-04 | main | 失效方向安全（fail-loud 不假绿）；真探针需 API 调用成本过高；review SKILL 已显式记录 preflight 是必要不充分条件；exec 阶段秒级报错即兜底 |
+ | [T151](closed/todo/T151.md) | todo | WONTDO | 2026-07-01 | `sdflow-buglist/tests/test_mirror_consistency.py` | 扩展 recorder three-way parity guard，覆盖共享 lock 常量与 RecorderLockState/RecorderLockError 类型定义 | 2026-08-04 | main | sdflow-buglist/ 已删（v2 合并为 sdflow-issues），test_mirror_consistency.py 已消失 |
+ | [T152](closed/todo/T152.md) | todo | WONTDO | 2026-07-01 | `openspec/changes/mlh-p6-recorder-frontmatter/impl-reports` | 规范实现报告的 git diff --check 记录：机械 review package 含原样 trailing whitespace 时显式写 exclude 命令与范围 | 2026-08-04 | main | 源 change mlh-p6-recorder-frontmatter 已归档，impl-reports 是历史文档 |
+ | [T153](closed/todo/T153.md) | todo | DONE | 2026-07-01 | sdflow-buglist/scripts/buglist.py, sdflow-todolist/scripts/todolist.py | 更新 triage mutation docstring，移除已退役表格双写描述，改为 effective ownership、promotion 与 marker history 语义 | 2026-07-01 |  |  |
+ | [T154](closed/todo/T154.md) | todo | DONE | 2026-07-01 | sdflow-buglist/tests/test_task2_windows_local_fs_smoke.py | actual Windows local-disk smoke 未执行验证（SW-RI-2 recorder lock 兼容目标，deferred） | 2026-07-01 |  |  |
+ | [T157](closed/todo/T157.md) | todo | WONTDO | 2026-07-01 | openspec/changes/async-outside-voice | proposal.md:27 仍写旧 .outside-voice/<site>-context.md 形态，与 design/tasks 的 per-run 口径分叉；实现期改四件套触设计门失鲜，须在 archive 阶段一并校正 | 2026-08-04 | main | 源 change async-outside-voice 已完整归档 |
+ | [T159](closed/todo/T159.md) | todo | DONE | 2026-07-01 | sdflow-spec-review + sdflow-code-review | 协议节 HELPER=~/.sdflow/hack/outside-voice.sh 同属「shell 变量不跨调用存活」失效类，宜改字面路径 | 2026-08-04 | main |  |
+ | [T160](closed/todo/T160.md) | todo | WONTDO | 2026-07-01 | openspec/changes/async-outside-voice | 3600 上界依据应回写 design ADR-3 免二源；DOC-1 理由入 SKILL 正文一条待设计门拍板 | 2026-08-04 | main | 源 change async-outside-voice 已归档，design ADR-3 回写无意义 |
+ | [T164](closed/todo/T164.md) | todo | DONE | 2026-07-01 | sdflow-spec-review / sdflow-code-review 的 async 调度段 ④ 命令形态（context 路径拼接） | outside-voice exec 的 --context-file 路径直接拼进 shell 命令且未加引号：路径含空格/shell 元字符时会参数拆分或执行非预期命令（跨模型 voice 独立提出，Task 5 报告 §10 第 2 条，本票未处理） | 2026-07-01 |  |  |
+ | [T166](closed/todo/T166.md) | todo | DONE | 2026-07-01 | hack/check_async_branch_parity.py | end marker 边界未与 start 侧对称硬化；且尝试硬化时遇到无法解释的 extract 行为矛盾，需专门查 | 2026-08-04 | main |  |
+ | [T167](closed/todo/T167.md) | todo | WONTDO | 2026-07-01 | openspec/changes/async-outside-voice | 【archive 阶段 MUST 做】四件套仍描述旧协议（裸哨兵/单条件 async），与代码审后的实现不自洽——delta spec 必须同步 | 2026-08-04 | main | 归档已完成，delta sync 时机已过 |
+ | [T168](closed/todo/T168.md) | todo | DONE | 2026-07-01 | sdflow-spec-review | async voice dispatch 命令形态与 ADR-9 的 env 读取要求在 harness 下互相矛盾，按字面执行必然拿不到 runner | 2026-08-04 | main |  |
+ | [T170](closed/todo/T170.md) | todo | DONE | 2026-07-01 | sdflow-issues+buglist+todolist | recorder 三份物理复制 parser + 双取数路径的结构问题，与 B11/B12 统一处理（adr/0025 推翻候选） | 2026-07-01 | dedupe-issues-scripts-shared-layer |  |
+ | [T172](closed/todo/T172.md) | todo | WONTDO | 2026-07-01 | openspec/workflow/lens-metric | lens-metric 的采纳/defer 二分无法表达『finding 改变了 change 边界』，导致最高价值发现被记成零贡献 | 2026-08-04 | main | 度量模型扩展需新增分类+所有消费方适配，当前二分够用 |
+ | [T173](closed/todo/T173.md) | todo | WONTDO | 2026-07-01 | sdflow-init/assets/hack/outside-voice.sh | ov_cleanup 的 kill -KILL 兜底行无测试覆盖（未锁行为，非缺陷） | 2026-08-04 | harden-outside-voice-scripts | 已有测试覆盖：test_runner_ignoring_term_dies_under_group_kill_escalation 验证 KILL 升级路径 |
++| [T174](closed/todo/T174.md) | todo | DONE | 2026-07-01 | sdflow-init/tests/test_outside_voice.py | fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错 | 2026-08-05 | fix-b11-b12-tools-hardening |  |
+ | [T175](closed/todo/T175.md) | todo | DONE | 2026-07-01 | sdflow-spec-review / sdflow-code-review | 两层评审 SKILL 的 async 段漏写「$SDFLOW_VOICE_RUNNER 等环境变量 MUST 内联 eval」——harness 每次 Bash 调用是独立 shell，voice 必然拒跑 | 2026-08-04 | main |  |
++| [T176](closed/todo/T176.md) | todo | DONE | 2026-07-01 | outside-voice | outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时 | 2026-08-05 | main |  |
+ | [T177](closed/todo/T177.md) | todo | WONTDO | 2026-07-01 | sdflow-buglist | buglist.py add 的必填校验不含「根因」，缺省写入 <待分析> 即可入库——最该落盘的分析反而没有机械门守 | 2026-08-04 | main | sdflow-buglist 已删，v2 统一模型设计不同 |
+ | [T178](closed/todo/T178.md) | todo | WONTDO | 2026-07-01 | outside-voice | M3 磁盘满诊断的锁在 CI 无人看守 —— 长期正解是可注入 workdir 的测试接缝 + chmod 500 让写入以 EACCES 确定性失败 | 2026-08-04 | harden-outside-voice-scripts | macOS CI 泳道已覆盖 M3 磁盘满测试（hdiutil ramdisk） |
+ | [T179](closed/todo/T179.md) | todo | WONTDO | 2026-07-01 | sdflow-done / sdflow-ship | archive 步骤可能打断测试，而其后无人重跑全套件 —— gate 判 SHIPPED 时 main 实际是红的 | 2026-07-01 |  | dogfood-only 场景（仅本仓测试对 openspec/changes 结构敏感），通用 skill 改动性价比低 |
+ | [T180](closed/todo/T180.md) | todo | WONTDO | 2026-07-01 | sdflow-todolist/scripts/todolist.py + sdflow-buglist/scripts/buglist.py | recorder 缺「给已存在 item 追加证据/思路」的命令：add 会撞新 ID、set-status 只收状态转换，补料只能手工编辑 prose 块 | 2026-08-04 | main | sdflow-todolist/buglist 已删，v2 set-status 有 --evidence |
+ | [T181](closed/todo/T181.md) | todo | WONTDO | 2026-07-01 | recorder/repo_root | repo_root 回落分支返回 lexical 的 os.path.abspath(start)，可能 != git 实际探测的目录（symlink + `..` 起点实测：git 在内核解析目录下探测，回落却返回 link 自身父目录）。改为 realpath 须先改 spec——spec 明文 MUST 返回 abspath。来源：harden-repo-root-fail-closed Task 2 第三轮接缝复审 F1（存量，非本次引入） | 2026-08-04 | main | v2 迁移后 recorder 三份同步面已消失（只剩 issues_v2.py），回落分支极低概率触发（symlink+..+git 拒绝），且 recorder_lock 入口即 realpath 已兜住 |
+ | [T182](closed/todo/T182.md) | todo | WONTDO | 2026-07-01 | recorder/repo_root | repo_root 不限制 git stdout 读取量：capture_output=True 无界读入，坏 wrapper 吐超大输出可在形状校验之前耗尽内存（DoS 面，非正确性面） | 2026-08-04 | main | DoS 面非正确性面，需 PATH 上 git 被替换为恶意 wrapper 才触发，timeout=30 已限住时间窗，Popen+定量读的修法复杂度与可利用性不成比例 |
+ | [T183](closed/todo/T183.md) | todo | WONTDO | 2026-07-01 | recorder/repo_root | repo_root 起点校验存在 TOCTOU 窗口：isdir(start) 与 subprocess.run(cwd=start) 之间 start 被删 ⇒ 落回落分支而非 fail-closed | 2026-08-04 | main | isdir 到 subprocess.run 之间目录被删的竞态窗口几乎不可能触发，走回落返回有效绝对路径（非假绿），spec 未要求处置 |
+ | [T184](closed/todo/T184.md) | todo | WONTDO | 2026-07-01 | workflow/outside-voice | 两个评审 SKILL 的 outside-voice 协议说『helper 只读第零步已 export 的 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL』，但 harness 每次 Bash 调用是独立 shell ⇒ 第零步的 eval 到不了 exec 那次调用，helper 必然报『SDFLOW_VOICE_RUNNER 未设置（host=unknown）』exit 1。实测本 session 内同一坑踩中两次（阶段二 spec-review 的 hr-tg 站点、阶段三 code-review 的两个站点），每次都要弃用一个 run-id 重来。协议对 $RUN_DIR 和 $HELPER 都写了『MUST 代入字面值、MUST NOT 用 shell 变量』的警告，唯独漏了 $SDFLOW_VOICE_RUNNER —— 而它是唯一一个必须由 eval 注入、无法代入字面值的。修法二选一：(a) 协议里把 exec 命令形态改成 `eval "$(~/.sdflow/hack/resolve-models.sh --root ...)" && ~/.sdflow/hack/outside-voice.sh exec ...`（与 run-id/HELPER 同款的『同一次调用内自足』纪律）；(b) 让 outside-voice.sh 在 $SDFLOW_VOICE_RUNNER 缺失时自己调 resolve-models.sh 兜底，而非直接判 host-unknown —— (b) 更稳（调用方零心智负担），但要确认不会掩盖真正的 host-unknown。建议 (a)+(b) 都做：(a) 修文档、(b) 修兜底。 | 2026-08-04 | main | (a) exec 自足化已由 T175 修法覆盖(内联环境变量前缀)；(b) helper 自己调 resolve-models.sh 被 ADR-9/GC-7 机械锁禁止(TestOutsideVoiceDoesNotSelfResolve) |
+ | [T185](closed/todo/T185.md) | todo | WONTDO | 2026-07-01 | recorder/repo_root | repo_root 的 capture_output=True 对 stderr 同样无界读入，而 design Non-Goals 只把 stdout 列为 DoS 面。坏 git wrapper 可持续输出 stderr，在 30s 超时前耗尽内存。与 tasks 4.8（stdout 无界）同族，应合并处置：改有界读取时须并行排空 stdout/stderr 两条流，超限立即终止并回收整个进程组（注意 timeout 当前只 kill 直接子进程、不 kill 进程组，孙进程会被孤儿化——对抗镜 A 实测 6 个 reparent 到 PID 1；但 git rev-parse 不派生子进程，真实触发面薄，不建议单为此改 start_new_session+killpg）。来源：harden-repo-root-fail-closed 代码审 hr-tg outside-voice | 2026-08-04 | main | 与 T182 同族（stderr 侧），同理 DoS 面+极低概率+timeout 已兜，修法代价不成比例 |
+ | [T186](closed/todo/T186.md) | todo | DONE | 2026-07-01 | sdflow-ship/ship_gate.py | merge 帧在 live 路径取不到文件列表 → design 域逐 parent 豁免分支不可达（evil-merge 面） | 2026-07-01 |  |  |
+ | [T187](closed/todo/T187.md) | todo | DONE | 2026-07-01 | sdflow-ship/tests/test_gate_freshness.py | _stale_after 的 empty_subject 布尔旗标是 flag-argument smell（subject 须传 None 且被忽略） | 2026-07-01 |  |  |
++| [T188](closed/todo/T188.md) | todo | DONE | 2026-07-01 | 仓根 pytest 收集 | 跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守 | 2026-08-05 | fix-b11-b12-tools-hardening |  |
+ | [T189](closed/todo/T189.md) | todo | WONTDO | 2026-07-01 | sdflow-ship/ship_gate.py | 基准 5 警号：_normalize_checkbox_lines 已第 4 轮往同一函数补语法分支，口径应反转为白名单 | 2026-08-04 | main | 趋势信号非当前缺陷，黑名单经四轮硬化+三重围栏止损可接受，白名单重构是设计级改动代价不成比例 |
+ | [T190](closed/todo/T190.md) | todo | DONE | 2026-07-01 | sdflow-ship/ship_gate.py | run_git* 系列 git 子进程无 timeout，某次调用挂起会让 gate 判定无限阻塞 | 2026-07-01 |  |  |
+ | [T192](closed/todo/T192.md) | todo | WONTDO | 2026-07-01 | workflow/tools/lens_metric_emit | emitter 输入 JSON 未落盘 ⇒ SR-M 门后重算结构上不可执行 | 2026-08-04 | main | 度量审计便利性增强，非正确性问题；触发条件=retro 跑出度量盲区时再议 |
+ | [T193](closed/todo/T193.md) | todo | DONE | 2026-07-01 | openspec/changes/harden-gate-git-layer | 本 change 自身的 spec-review-report.md 缺 reviewed_sha，须在 Task 6 收尾前补（自举） | 2026-07-01 |  |  |
+ | [T194](closed/todo/T194.md) | todo | DONE | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | UNKNOWN advice 串硬编码 >30s，与 Task2 的 timeout 常量天然漂移 | 2026-07-01 |  |  |
+ | [T195](closed/todo/T195.md) | todo | DONE | 2026-07-01 | sdflow-ship/tests/conftest.py | git 调用 helper 三处重复手写 subprocess.run，_git 已存在只是丢弃 stdout | 2026-08-04 | main |  |
+ | [T197](closed/todo/T197.md) | todo | WONTDO | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | annotated tag OID 经 ^{commit} peel 被接受，spec 措辞是「是 commit 对象」 | 2026-08-04 | main | ^{commit} peel annotated tag 是 git 标准做法，实现正确；spec 措辞微偏不影响行为 |
+ | [T198](closed/todo/T198.md) | todo | DONE | 2026-07-01 | openspec/changes/harden-gate-git-layer | tasks 1.9 后半「hand-off 写明存量报告须重审」未做，6.4 有重复条目兜底 | 2026-07-01 |  |  |
++| [T199](closed/todo/T199.md) | todo | WONTDO | 2026-07-01 | CLAUDE.md / 开发环境 | CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest | 2026-08-05 | main | 本机PATH环境事实(pytest解到无pytest的~/.local/bin),非文档错误;CLAUDE.md面向标准环境,memory已记录 |
+ | [T200](closed/todo/T200.md) | todo | DONE | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | CAUSE_READ_FAILED 暂无生产触发点，Task 4 收口时须回验 | 2026-07-01 |  |  |
+ | [T201](closed/todo/T201.md) | todo | DONE | 2026-07-01 | openspec/changes/harden-gate-git-layer/specs | 实现分 6 类 cause，spec 措辞写的是 5 类，归档同步 delta 时对齐 | 2026-07-01 |  |  |
+ | [T202](closed/todo/T202.md) | todo | DONE | 2026-07-01 | openspec/changes/harden-gate-git-layer/design.md | Task3 两处 fail-closed 收紧偏离 design 字面，归档同步 delta 时按代码实况对齐 | 2026-07-01 |  |  |
+ | [T204](closed/todo/T204.md) | todo | DONE | 2026-07-01 | openspec/changes/harden-gate-git-layer/proposal.md | A2 全历史核验：strict 口径三例仍全，宽口径下另有 2 清楚+1 无门记 post-approval 例，A2 低计 | 2026-07-01 |  |  |
+ | [T205](closed/todo/T205.md) | todo | DONE | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | code 域排除整个 openspec/，含 workflow/tools/*.py 等真实运行代码——改这些文件后不判 stale | 2026-08-04 | main |  |
+ | [T206](closed/todo/T206.md) | todo | WONTDO | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | archived_verify_state 走 run_git_rc(strip) 读归档报告，前导空行被规范化，与 live 读口径不一致 | 2026-08-04 | main | strip() 只去 git show 附加的尾部换行，frontmatter 解析不受影响，无实际行为差异 |
++| [T207](closed/todo/T207.md) | todo | DONE | 2026-07-01 | docs | T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。 | 2026-08-05 | main |  |
+ | [T208](closed/todo/T208.md) | todo | WONTDO | 2026-07-01 | sdflow-issues/scripts/sdflow_issues_core/__init__.py | sdflow_issues_core god-module 拆 cohesive 子模块 + 消 issues 自调用子进程 | 2026-08-04 | main | issues-v2-single-file-model 已删除 sdflow_issues_core，god-module 不存在了 |
+ | [T209](closed/todo/T209.md) | todo | WONTDO | 2026-07-01 | sdflow-issues/scripts/issues.py | move --to-pool 跨池搬运命令（误判落错池的机械恢复路径） | 2026-08-04 | main | 三仓历史零误判，手动 delete+re-add 成本可接受，不为从未发生的场景建命令 |
+ | [T210](closed/todo/T210.md) | todo | WONTDO | 2026-07-01 | sdflow-issues/tests | 冷代码审 cross-model voice F2：test_task6_cli_equivalence_harness 现为新实现 happy-path smoke（断言 token 形状/字段存在/子串 + 落盘字节），非 before/after 或冻结 golden；字段增删/格式漂移/错误路径非零→零可能漏过。等价性已在 T2 byte-identical smoke 证过、旧脚本已删无法 live before/after，故此为前向 test 硬化。 | 2026-08-04 | main | v1 测试文件已删，v2 有 107 个测试 + coverage gate 守卫，等价性问题随 v1 消失 |
+ | [T211](closed/todo/T211.md) | todo | WONTDO | 2026-07-01 | sdflow-issues/scripts/sdflow_issues_core | 冷代码审 hr-tg cross-model voice V1：委派 token/chain 现为 sdflow_issues_core 进程级共享全局。F1(try/finally+conftest autouse)已修异常残留的错误路径泄漏，但 in-process 多池并发/嵌套仍会串：两仓同进程后者覆盖前者(实测 child env 得 token-repo-B)、嵌套调用结束把外层合法态清成 None。 | 2026-08-04 | main | sdflow_issues_core 全局 token/chain 已随 v2 架构消失，v2 是纯 CLI 无进程级共享状态 |
+ | [T212](closed/todo/T212.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | nonce 核验的 job-id 通道补 cwd==repo_root 同一性约束 | 2026-08-04 | main |  |
+ | [T213](closed/todo/T213.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | CLI_PROBE_TIMEOUT_SECONDS 由常量改为可调 | 2026-08-04 | main |  |
+ | [T214](closed/todo/T214.md) | todo | WONTDO | 2026-07-01 | openspec/changes/enable-codex-background-outside-voice/specs/outside-voice-background-jobs/spec.md | OVBG-01 措辞对齐实现：5s spawn deadline + 有界核验 grace | 2026-08-04 | main | 与 T229 重叠（T229 更完整覆盖 OVBG-01+05），独立无意义 |
+ | [T215](closed/todo/T215.md) | todo | DONE | 2026-07-01 | sdflow-init/tests/test_outside_voice_job.py | 删除 dispatch_duration_seconds <= elapsed 的近似恒真旧断言 | 2026-08-04 | main |  |
+ | [T216](closed/todo/T216.md) | todo | DONE | 2026-07-01 | sdflow-init/tests/test_outside_voice_job.py | collect 幂等的两条冗余路径缺单路径回归锚 | 2026-08-04 | main |  |
+ | [T217](closed/todo/T217.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | parse_utc_iso 的 except Exception 收窄为 (ValueError, TypeError) | 2026-08-04 | main |  |
+ | [T218](closed/todo/T218.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | rc_bad(CORRUPT) 路径重复 collect 非逐字节一致 | 2026-08-04 | main |  |
+ | [T219](closed/todo/T219.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py | cmd_worker 自身不校验 effort（钉死只在 dispatch 一层） | 2026-08-04 | main |  |
+ | [T220](closed/todo/T220.md) | todo | DONE | 2026-07-01 | sdflow-init/tests/test_outside_voice_job.py | probe_subtree 相关 docstring 两处同族漏网（含跨票交接锚，描述误导） | 2026-08-04 | main |  |
+ | [T222](closed/todo/T222.md) | todo | DONE | 2026-07-01 | sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md | 止损行「走下一条的 unknown-cost 处置」指代不准 | 2026-08-04 | main |  |
+ | [T223](closed/todo/T223.md) | todo | WONTDO | 2026-07-01 | hack/tests/test_async_branch_parity.py | _the_line_with 的「恰好 1 行」是双向判据，良性新增会假红 | 2026-08-04 | main | 非缺陷，fail-closed 设计方向正确，issue 自述'登记备查'；绊到时再改 |
+ | [T224](closed/todo/T224.md) | todo | DONE | 2026-07-01 | hack/check_codex_efficacy_evidence.py + hack/tests/test_codex_efficacy_evidence.py | 面治枚举漏 2 条 isinstance 早退分支（无独立锚） | 2026-08-04 | main |  |
+ | [T225](closed/todo/T225.md) | todo | WONTDO | 2026-07-01 | hack/check_codex_efficacy_evidence.py + openspec/changes/enable-codex-background-outside-voice(已归档) | 补跑真实 Codex 宿主 background outside-voice efficacy 三门（本 change 因额度封锁未证、经人拍板 A 降级合并） | 2026-08-04 | main | 外部条件未就绪（Codex 额度封锁），T162 保留追踪；本 session 无法完成 |
+ | [T226](closed/todo/T226.md) | todo | WONTDO | 2026-07-01 | hack/check_codex_efficacy_evidence.py: check 子命令 | 给 check 补 --run-dir 逐站点交叉核验（当前只核 evidence.json 内部自洽，手写 JSON 即可让三门全过） | 2026-08-04 | main | 与 T225 绑定（需真实 run-dir 才验得了），单独做无意义；T162 保留追踪 |
+ | [T228](closed/todo/T228.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hack/outside-voice.sh: secret_scan | 含 NUL 字节的输入让 secret_scan 漏判，且命中二进制文件时 stderr 打印 Binary file <path> matches 而非纯行号 | 2026-08-04 | main |  |
++| [T229](closed/todo/T229.md) | todo | DONE | 2026-07-01 | openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞) | 两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离） | 2026-08-05 | main |  |
++| [T230](closed/todo/T230.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧 | 200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限 | 2026-08-05 | main |  |
+ | [T231](closed/todo/T231.md) | todo | DONE | 2026-07-01 | sdflow-issues 读取路径（core cmd_scan 自检 / issues.py validate_scan_envelope / _bug_triage·_todo_triage） | 重开 harden-issues-read-path change：读取路径诚实化（显红 + reindex 不罢工 + triage 解耦），砍掉已被 migrate_legacy 取代的 normalize；分支 feat/harden-issues-read-path 已过期不可直接续用 | 2026-07-01 | harden-issues-read-write |  |
+ | [T232](closed/todo/T232.md) | todo | DONE | 2026-07-01 | openspec/changes/add-sdflow-spec | SA-05 Scenario 与 design 失败模式表点名 design.md 的 validate 断言恒假：openspec validate --strict 只读 delta spec | 2026-07-01 |  |  |
+ | [T233](closed/todo/T233.md) | todo | DONE | 2026-07-01 | sdflow-spec/SKILL.md（`disable-model-invocation` 的宿主语义） | `disable-model-invocation: true` 在 Codex 宿主下的语义未核：Claude 宿主已有实测（archive/2026-07-10-matt-workflow-integration/impl-notes.md §4.1，两次独立实证 —— 主 session 经 Skill tool 调用被 harness 直接拒绝，报 `Skill X cannot be used with Skill tool due to disable-model-invocation`，须人手敲 `/x` 才执行）。sdflow-spec 把「只能人触发」当作 SA-01 的承重前提，但该前提在 Codex 宿主下**从未实测**——若 Codex 忽略该旗标，模型即可自行唤起 sdflow-spec，「拷问是内建默认路径」这条结构性改善在该宿主上不成立。核法：Codex 宿主下让模型尝试唤起一个带该旗标的 skill，观察是否被拒；结果不论正负都回写 SKILL.md 的诚实边界段 | 2026-07-01 | harden-sdflow-spec-followups |  |
+ | [T234](closed/todo/T234.md) | todo | DONE | 2026-07-01 | openspec/issues/todolist 的 T132（spec-review 起手 grill 已收敛门） | T132 的信号载体枚举与行号锚已被 add-sdflow-spec 改过时，须订正后再实现：①T132 只枚举了两个载体（`workflow.md:83` 强制的 grill checkpoint-commit / design.md 内的 `<!-- sdflow:grill-done -->` 锚），而阶段一默认入口改为 `/sdflow-spec` 后，新增两个更强的载体 —— `checkpoint(sdflow-spec-grill)` 提交标签 + change 目录内非空 `decision-memo.md`（后者已有机械门 `hack/tests/test_decision_memo_gate.py::check_decision_memo`，可直接复用，不必另造锚）；②`workflow.md:83` 这个行号锚已因 Task 2 在 §流程表插入 `/sdflow-spec` 行而漂移，T132 正文按行号找不到原条款。⇒ 实现 T132 前 MUST 先按四入口现状重列信号载体（分支 A 走 sdflow-spec 锚、分支 B 走旧 grill 锚），否则门会对分支 A 的正常跑动误判 REFUSE_START | 2026-07-01 | harden-sdflow-spec-followups |  |
+ | [T235](closed/todo/T235.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hooks/ff0-branch-guard.py（+ 已铺设的 ~/.claude/hooks/ 副本） | FF-0 守卫按 PreToolUse payload 的 `cwd`（= session 工作目录）判分支，而非命令实际作用的仓 ⇒ 命令形如 `cd <另一个仓> && openspec …` 建变更时，守卫判的是**错的仓**。实测（add-sdflow-spec Task 3 dogfood，沙箱克隆落在 scratchpad）：沙箱仓已在 `feat/harden-issues-read-path`（守卫自身判据下的分支②「真幂等」，本应放行），守卫仍报「当前在 feature 分支 `feat/add-sdflow-spec`」并 deny，且 deny 文案给出的哨兵路径指向**主仓** `openspec/.ff0-ack`。双向失效：假拒（本例）与假放（session cwd 恰在 `feat/X`、而命令在另一个仓的 main 上建同名变更）。附带发现：NEW_CHANGE_RE 匹配的是整条命令串，故**散文里出现该命令字面量也会被 deny**（本票登记本条时即被自己拦下一次，改用 `--json <file>` 绕开）。修法 MUST NOT 去解析命令串里的 `cd`（基准 5：shell 语法面无界）——可行方向是判定前先确认「payload cwd 的仓 == 命令要写入的仓」这一前提是否成立，不成立即 fail-open 并在 reason 里说明它没判（当前是 fail-closed 到错的仓上） | 2026-07-01 | harden-sdflow-spec-followups |  |
+ | [T236](closed/todo/T236.md) | todo | DONE | 2026-07-01 | sdflow-spec/SKILL.md 终审段的「中间态判据」 | 终审判据「纪要中『砍掉的候选 + 砍的理由』在产物里**完全消失**才算判断性偏差」与本 skill 自己的架构（纪要 MUST NOT 并入 design.md、design 的 Decisions 只留一行指针，见 references/decision-memo-schema.md §5）存在张力：按该架构，砍掉的候选**本来就只住在纪要里**，四件套里「完全消失」是设计的正常态而非偏差。dogfood 实测（add-sdflow-spec Task 3）：3 个被砍候选中，`--lenient` 那条在四件套四份产物里 grep 命中数全 0，按字面判据应判为判断性偏差，按架构意图则应放过。⇒ 判据的检查范围须写明是「纪要 ∪ 四件套」这个整体、还是仅四件套；当前措辞两可，不同评审者会得出相反结论。修法倾向：把判据改述为『在 change 目录内（含 decision-memo.md）不可追溯才算偏差』，并点明 design 指针是合法的追溯路径 | 2026-07-01 | harden-sdflow-spec-followups |  |
+ | [T237](closed/todo/T237.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/hooks/ff0-branch-guard.py（`change_name` 的 fail-open 分支） | FF-0 守卫的「取不到 change 名 ⇒ 放行」fail-open 是**模型自己就能触发、且不留任何审计痕**的绕过口，与哨兵逃生口不同级：哨兵至少要落一个文件、是 transcript 里可审计的一次有意动作，而本 fail-open 只需让命令里的 change 名 token 含 `$`（或反引号 / 通配符 / 其它使 CHANGE_NAME_OK_RE 不匹配的字符），守卫即不展开、不猜、直接放行，盘上不留任何痕迹。实测（add-sdflow-spec Task 3 dogfood）：本轮正是走这条 fail-open 绕过了分支③ 的 MUST-halt（SA-05 Scenario 「在其它 feature 分支上创建变更 → MUST halt 问人」），当轮虽已原地披露、且目标仓内 FF-0 规则实际满足，但**这条路径在设计上对模型是完全敞开的**。它与 T235 的 mis-scope 是**两个独立缺陷**：T235 是判据锚错了仓（判得不对），本条是判据被合法跳过（根本没判）。fail-open 本身是既有纪律（基准 5：shell 语法面无界，守卫拿不准时不挡人干活），MUST NOT 改成解析命令串 —— 但「拿不准」和「已被绕过」在 reason 与审计面上目前完全不可区分 | 2026-07-01 | harden-sdflow-spec-followups |  |
+ | [T238](closed/todo/T238.md) | todo | DONE | 2026-07-01 | openspec/changes/add-sdflow-spec | SA-07 写「model 填具体模型 id」与实测不符：Agent 工具的 model 是枚举 sonnet\|opus\|haiku\|fable，完整版本化 id 被 InputValidationError 拒 | 2026-07-01 |  |  |
+ | [T239](closed/todo/T239.md) | todo | DONE | 2026-07-01 | sdflow-init/assets/workflow（canonical bundle）+ 下游消费项目的 openspec/workflow/ | add-sdflow-spec 的 canonical 七处改动只落在源仓、未经 `sdflow-init update` 推给下游消费项目 ⇒ 下游 AI 侧读到的仍是旧的阶段一入口规则（explore→ff→grill，无 /sdflow-spec 分支、无 G1 具名例外）。原属 tasks 8.2（阶段三），因阶段二验收门判回退、阶段三整体不执行而搁置。推法：本 change merge 后，在每个已铺 workflow bundle 的消费项目跑 `sdflow-init update`，核验其 openspec/workflow/ 的 generation-process.md §四已含分支 A/B、workflow.md §三.2 与 reference/quality-layering.md 已含 G1 具名例外；由人在 merge 后择机执行 | 2026-07-01 |  |  |
+ | [T240](closed/todo/T240.md) | todo | DONE | 2026-07-01 | openspec/changes/add-sdflow-spec/design.md（Migration Plan · 回滚段） | 回滚正确顺序第①步写「先跑 uninstall 分支移除 agents」，但 setup.sh 从来没有 uninstall 开关（全文零命中，task6 实测）。实际可执行的等价动作 = 删 sdflow-spec/agents/ 后仍在新版 installer 上跑一次 setup.sh（孤儿清理已改为源目录消失时照跑，test_orphans_are_cleaned_even_when_the_whole_source_dir_is_gone 守）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】把 Migration Plan 的措辞校正为实际动作 | 2026-07-01 |  |  |
+ | [T241](closed/todo/T241.md) | todo | DONE | 2026-07-01 | openspec/changes/add-sdflow-spec/tasks.md（阶段三验收门，:96） | 阶段三验收门只有 ✅ 分支（8.1-8.4 全过 + 下游实跑 update ⇒ 可进 /sdflow-done），没有 ❌/回退分支。而阶段二验收门判回退 ⇒ 阶段三整体不执行 ⇒ 该门的 ✅ 前件永远不成立，「回退形态下本 change 能不能进 /sdflow-done」在票面上无书面出处（对照阶段二验收门就同时写了 ✅/❌ 两支，§9 也在窄复核时被从阶段三下移出以免随阶段二失败搁浅）。四件套在实现期禁改 ⇒ 【archive 阶段 MUST 做】给阶段三验收门补 ❌/回退分支：明确回退形态下哪些条目仍须完成、以及据此可否进 /sdflow-done | 2026-07-01 |  |  |
+ | [T242](closed/todo/T242.md) | todo | DONE | 2026-07-01 | openspec/changes/add-sdflow-spec/tasks.md 2.10 + design.md D12（SKILL.md ≤600 行体量门） | 体量门以 `wc -l` 计 ⇒ 可由**重排软换行**规避而不删任何内容：task6 加了一段后到 604 行，仅把同节软换行重排为更长的行即回到 598，内容一字未减。∴ 该门对 sdflow-spec/SKILL.md 已无实际约束力（该文件既有最长行 200+ 字符，长行是既有形态、无行宽门可依）。且它当前**无机械覆盖**——只有 tasks 2.10 里一句人跑 `wc -l`。修法候选（择一，需人拍板）：① 改计字符/字节数；② 加行宽上限与 `wc -l` 联判；③ 承认它只是软提示、从验收门降级为注记。本轮**不改门**（改门是设计决策） | 2026-07-01 | harden-sdflow-spec-followups |  |
+ | [T243](closed/todo/T243.md) | todo | DONE | 2026-07-01 | hack/tests/test_sdflow_spec_resident_contract.py | 放宽 reference 路由测试的非空链接标签格式 | 2026-08-04 | main |  |
+ | [T247](closed/todo/T247.md) | todo | DONE | 2026-07-01 | sdflow-spec/SKILL.md | B.6(ADR/术语惰性提议钩子)缺少收敛前显式检查，应比照 B.5 补一道收敛前检查步 | 2026-07-01 | sdflow-spec |  |
++| [T250](closed/todo/T250.md) | todo | DONE | 2026-07-01 | sdflow-implement/tests/test_tickets_plan_golden.py | golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」) | 2026-08-05 | main |  |
++| [T252](closed/todo/T252.md) | todo | WONTDO | 2026-07-01 | openspec/adr/0031-t10-label-split-by-decision-semantics.md | adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次 | 2026-08-05 | main | T10-choice 90处引用,单一源化超出清理批次;追踪条目本身就是这条issue;adr/0031已拆分具名规则 |
++| [T253](closed/todo/T253.md) | todo | WONTDO | 2026-07-01 | openspec/CONTEXT.md | 「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名 | 2026-08-05 | main | issue自述属加宽(通则③不做);给第三类场景命名与定义超出清理范围 |
+ | [T254](closed/todo/T254.md) | todo | WONTDO | 2026-07-01 | openspec/workflow/lens-metric-contract.md | lens-metric 契约的行键模型无法表达「broad 层内部含跨模型双声」，导致 autoplan 的 Codex voice 贡献被折叠进 runner=claude 行 | 2026-08-04 | main | 行键模型扩展涉及 emitter+anchor_lint+retro 三处联动，当前折叠不影响正确性 |
+ | [T255](closed/todo/T255.md) | todo | DONE | 2026-07-01 | sdflow-spec-review/SKILL.md | outside-voice 协议假设 $SDFLOW_VOICE_RUNNER/$SDFLOW_VOICE_MODEL 能跨 harness Bash 调用存活，实际不能 | 2026-08-04 | main |  |
+ | [T257](closed/todo/T257.md) | todo | WONTDO | 2026-07-01 | `ship_gate.py plan_was_renamed` | plan_was_renamed 内部已算出不带 --follow 的首次新增 sha，紧随其后的 plan_first_sha 又对同一 plan_rel 重发一次完全相同的 git log --diff-filter=A（decide() 每次判定多一次 subprocess）。修法：plan_was_renamed 返回 (renamed, no_follow_first)，或在 decide() 里算一次分别传给两处复用。非阻断，正确性不受影响。来源：harden-implement-review-loop Task 3 fix 轮 Standards 轴 re-review（Duplicated Code） | 2026-07-01 |  | 5587d07 |
+ | [T259](closed/todo/T259.md) | todo | DONE | 2026-07-01 | `sdflow-implement/SKILL.md` review-loop-breaker ①档 | 熔断规则的①档「有客观判据 → 自动选并记理由后关闭」可在**未修复**的前提下关闭一个仍然成立的 Critical/Important——与同文件「不带着未修 Critical/Important 推进下一 ticket」直接冲突。D2b 的「互斥终态」修正只覆盖了②③档，①档留着旧形状（只回答 finding 是否成立、不产生修复动作）。修法：①档的客观判据只能决定「已解决 / 仍成立」——已解决才关闭；仍成立则走 strong fixer + 仅复验一次，失败即 defer 并停。来源：harden-implement-review-loop 冷层代码审跨模型 outside-voice(codex) 独家。**需改 delta spec 措辞，故不在本 change 修**（改四件套会触发 design 域失鲜） | 2026-08-04 | main |  |
+ | [T260](closed/todo/T260.md) | todo | DONE | 2026-07-01 | `hack/tests/test_canonical_entry_sync.py` | CLAUDE.md / AGENTS.md / sdflow-init/assets/snippets/claude-section.md 三处的「## Codex 子代理授权」段本次改后逐字节相同(各1045字符)，但无任何机械守卫：test_canonical_entry_sync.py 只对「阶段一入口」小节做 CLAUDE.md==AGENTS.md 等值断言，claude-section.md 完全未纳入。下次只改一处而漏另两处，pytest 与 setup.sh 都不会红，纯靠人工记得。修法：把等值断言扩到该段，或复用 check_tier_resolution_parity.py 的 marker 机制。来源：harden-implement-review-loop 冷层代码审对抗镜#2（结构性风险，非本 change 引入的退化） | 2026-08-04 | main |  |
++| [T261](closed/todo/T261.md) | todo | DONE | 2026-07-01 | `sdflow-implement/SKILL.md` · `sdflow-implement/scripts/impl_route.py` | 两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2 | 2026-08-05 | main |  |
+ | [T262](closed/todo/T262.md) | todo | DONE | 2026-07-01 | `sdflow-done/SKILL.md` 第一步 verify · `ship_gate.py` archived_verify_state | verify 子代理漏写 ship-gate frontmatter 锚而无任何即时机械门：本轮 verify 写了人读结论行「结论：PASS」与核验 SHA，却漏了 SKILL 明令的 frontmatter（`ship-gate: verify: PASS` + `reviewed_sha`），一路过 hand-off/archive/commit/merge 都无人发现，直到最末 ship_gate 判 UNKNOWN 才暴露（fail-safe 正确、未假绿，但发现点太晚——此时已 merge 进 base，只能事后补录锚，落成一次显式越权留痕）。对比 code-review 层有 anchor_lint.py 在出报告后立刻机验四类锚，verify 层无对等门。修法二选一：①给 verify 加同款出报告后自检（复用 anchor_lint 或新增轻量 frontmatter 校验），在 archive 之前拦住；②让 sdflow-done 第二步(hand-off)/第三步(archive) 起手先校验 verify-report frontmatter 存在且合法，缺则回退重跑 verify。来源：harden-implement-review-loop 实跑实证 | 2026-08-04 | main |  |
+ | [T263](closed/todo/T263.md) | todo | DONE | 2026-07-01 | setup.sh | Unify the remaining command -v python3 probes behind the validated Python 3.7+ interpreter selection so setup gates do not use inconsistent interpreter availability checks. | 2026-08-04 | main |  |
+diff --git a/openspec/issues/INDEX.md b/openspec/issues/INDEX.md
+index 9278935..53022d8 100644
+--- a/openspec/issues/INDEX.md
++++ b/openspec/issues/INDEX.md
+@@ -1,99 +1,72 @@
+ <!-- GENERATED by issues_v2.py reindex — DO NOT EDIT -->
+ 
+ # Issues Index (Open)
+ 
+ | ID | Pool | Status | Date | Module | Summary |
+ |----|------|--------|------|--------|---------|
+ | [T7](open/todo/T7.md) | todo | PROPOSED | 2026-07-01 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 |
+ | [T9](open/todo/T9.md) | todo | PROPOSED | 2026-07-01 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 |
+-| [T12](open/todo/T12.md) | todo | PROPOSED | 2026-07-01 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） |
+-| [T15](open/todo/T15.md) | todo | PROPOSED | 2026-07-01 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） |
+ | [T23](open/todo/T23.md) | todo | PROPOSED | 2026-07-01 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） |
+ | [T29](open/todo/T29.md) | todo | PROPOSED | 2026-07-01 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 |
+ | [T31](open/todo/T31.md) | todo | PROPOSED | 2026-07-01 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） |
+ | [T41](open/todo/T41.md) | todo | PROPOSED | 2026-07-01 | `sdflow-spec-review/SKILL.md + sdflow-code-review/SKILL.md` | 评审结束输出一条可点击链接(报告路径→file:// 或网页视图)，点开即看结果，免手动找 report |
+ | [T42](open/todo/T42.md) | todo | PROPOSED | 2026-07-01 | `workflow bundle: generation-process.md / design-diagrams.md / 产物模版` | 文档除条目化描述(主给 AI/程序)外，尽量用多图+多表从多角度描述(给人看)；考虑人读层/机读层分离；不拘一问题一图表 |
+ | [T51](open/todo/T51.md) | todo | PROPOSED | 2026-07-01 | `sdflow-done/SKILL.md commit步 + merge检查` | tracked 非-openspec 改动被 commit 步 git add -u 先提交、绕过 merge 前 untracked 硬检查的"停下问"——需 commit 步暂存策略与 merge 卫生检查对齐(gate-checkpoint-hardening SR-2 缩简版只覆盖 untracked,tracked 一路 defer) |
+ | [T52](open/todo/T52.md) | todo | PROPOSED | 2026-07-01 | `sdflow-done/SKILL.md merge untracked 检查` | merge 前 untracked 检查现为机械"任何 ??→halt 人工triage"(CR-4);精确区分"本 change 新产 vs 既有 debris"需在分支切出点落 untracked baseline 快照再 diff,可减少既有 debris 的误停——脚本化探索 |
+ | [T54](open/todo/T54.md) | todo | PROPOSED | 2026-07-01 | `workflow 度量 / grill amendment 存活率` | grill amendment-下游存活率 度量 |
+-| [T56](open/todo/T56.md) | todo | OPEN | 2026-07-01 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 |
+ | [T57](open/todo/T57.md) | todo | OPEN | 2026-07-01 | `workflow/model-tiers` | 档位矩阵新增「升级档」（更高档，延后） |
+ | [T62](open/todo/T62.md) | todo | PROPOSED | 2026-07-01 | `sdflow-retro/retro_report._run_git` | T60 留痕在系统性 git 损坏下无节流放大：seed_mass_shas 对每个 sha 调 _run_git，仓库整体损坏时每 commit rc≠0 各写一行 stderr，O(commits) 无去重无节流。低危(仅真故障下噪声非虚警;view-only不中断)。改法:同一 subcmd 失败去重,或 seed 循环 per-sha 失败聚合成一条 |
+-| [T68](open/todo/T68.md) | todo | PROPOSED | 2026-07-01 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 |
+-| [T69](open/todo/T69.md) | todo | PROPOSED | 2026-07-01 | `sdflow-init/copy_bundle` | 缺 pin 消费仓 update 端到端交叉不变量测试（workflow.md/spec-checklists/code-checklists 原封不动、仅 tools+契约刷新） |
+ | [T83](open/todo/T83.md) | todo | PROPOSED | 2026-07-01 | `embedded-test-sop + log_check.py(新)` | P4·4.A 串口日志规则判定脚本化：时间窗+must_contain/not/before+severity rollup 输出 PASS/FAIL，平台需人眼项留模型。目标态该做,正当排后——本仓无 embedded producer 契约可 dogfood,待真实 embedded 消费仓需求(producer 契约就绪度,非痛感) |
+ | [T84](open/todo/T84.md) | todo | PROPOSED | 2026-07-01 | `embedded-test-sop SOP模式A 小校验器(新)` | P4·4.D.3 SOP 模式A 源码常量/TAG 收割脚本化：正则 emit 常量表 name/值/来源:行。同 embedded 排后 |
+ | [T89](open/todo/T89.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | probe_format 全文扫描非限定 phase：混合格式 roadmap 会误判 checkbox，目标 phase 是表格式时不 fail-loud 反空匹配误诊断（修法:probe 增 phase 参数只扫该 phase 行段） |
+ | [T90](open/todo/T90.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） |
+ | [T91](open/todo/T91.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） |
+ | [T92](open/todo/T92.md) | todo | PROPOSED | 2026-07-01 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 |
+-| [T93](open/todo/T93.md) | todo | PROPOSED | 2026-07-01 | `resolve-workflow.sh` | bash 第3份 RULE_MARKERS 内联副本（resolve-workflow.sh）跨语言难与 init.py/maintain_scan.py 同守——一致性守卫只覆盖两份 Python 副本，bash 副本漂移不被机验 |
+-| [T94](open/todo/T94.md) | todo | PROPOSED | 2026-07-01 | `maintain_scan.py + init.py` | 陈旧遮蔽告警文案第三处跨脚本复述 + checkpoint 孤儿路径：R-guard 不机验文案（文案守卫脆），maintain 抄 init 文案仅语义等价、漂移不被捕获——已知残差 |
+-| [T95](open/todo/T95.md) | todo | PROPOSED | 2026-07-01 | `sdflow-maintain/tests/test_marker_consistency.py` | 守卫加载用 assert os.path.isfile + exec_module hard-fail；sdflow-init 目录整体缺席场景可加 importorskip 更优雅降级（当前 path-assert 直接 fail，defer 兜底优化） |
+-| [T96](open/todo/T96.md) | todo | PROPOSED | 2026-07-01 | `maintain_scan.py _SPEC_LINK/_RULE_LINK` | 链接正则 [a-z0-9-]+ 与 scan_fs_specs/rules 目录名零字符集限制不对称：非规范命名(大写/下划线)的 spec/rule 被删且 INDEX 仍链接时，链接不命中正则→静默归②b排除→不进 stale→漏报已删未清理。openspec 强制 kebab 故低概率，彻底修需 scan_fs 也检非规范命名 |
+ | [T103](open/todo/T103.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） |
+ | [T104](open/todo/T104.md) | todo | PROPOSED | 2026-07-01 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） |
+ | [T105](open/todo/T105.md) | todo | PROPOSED | 2026-07-01 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） |
+ | [T106](open/todo/T106.md) | todo | PROPOSED | 2026-07-01 | `code-review` | 裁决二元化 pass/fail+critique 替代连续置信分，retro 收敛校准（04 提案 §4.1） |
+ | [T107](open/todo/T107.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 位置去偏：HIGH 级裁决换序重跑+fan-out 输入顺序打散（04 提案 §4.2） |
+ | [T108](open/todo/T108.md) | todo | PROPOSED | 2026-07-01 | `retro` | 镜价值指标升级 resolution rate+假阳模式沉淀回 checklist（04 提案 §4.3） |
+ | [T109](open/todo/T109.md) | todo | PROPOSED | 2026-07-01 | `code-checklists` | 测试大改=红旗 硬规则+intake diff 体积提示（04 提案 §4.4） |
+ | [T110](open/todo/T110.md) | todo | PROPOSED | 2026-07-01 | `bundle` | 明码自动决策原则清单 decision-principles.md，T10 第①级引用（04 提案 §5.6） |
+ | [T111](open/todo/T111.md) | todo | PROPOSED | 2026-07-01 | `outside-voice` | injection 前缀：发 codex 的 context 冠不读 skill 定义目录（04 提案 §4.7） |
+ | [T112](open/todo/T112.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 弱档 validator 复核层：置信过滤后复核 findings 引用真实性（04 提案 §4.6） |
+ | [T113](open/todo/T113.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | HIGH 级终局裁决跨模型双栈：outside-voice 延伸到裁决层（04 提案 §4.6） |
+ | [T114](open/todo/T114.md) | todo | PROPOSED | 2026-07-01 | `bundle` | 规则条款元维护：条款触发证据扫描，零触发列待复评（04 提案 §6.3） |
+ | [T115](open/todo/T115.md) | todo | PROPOSED | 2026-07-01 | `bundle` | spec 模版增强：EARS 句式+三必填槽+测试 seam 决策槽（04 提案 §3.2/§3.3） |
+ | [T116](open/todo/T116.md) | todo | PROPOSED | 2026-07-01 | `workflow` | 高危路径升级例外：HR-TG 类修复 defer-to-human 异步（04 提案 §3.5） |
+ | [T117](open/todo/T117.md) | todo | PROPOSED | 2026-07-01 | `机械层` | 跨工件一致性检查 artifact_consistency.py 设计门前置（04 提案 §3.4） |
+ | [T119](open/todo/T119.md) | todo | PROPOSED | 2026-07-01 | `roadmap` | fog-of-war 进 roadmap 模版：远期阶段留雾区（04 提案 §5.2） |
+ | [T121](open/todo/T121.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 大产物文件交接：镜报告超阈值写文件、返回只带路径（04 提案 §5.7） |
+ | [T122](open/todo/T122.md) | todo | PROPOSED | 2026-07-01 | `skills` | done/ship/init 加 disable-model-invocation 触发层硬开关（04 提案 §5.4） |
+ | [T123](open/todo/T123.md) | todo | PROPOSED | 2026-07-01 | `issues` | 动作抽象层：recorder tracker 后端可插拔，仅当需求出现（04 提案 §5.5） |
+ | [T124](open/todo/T124.md) | todo | PROPOSED | 2026-07-01 | `bundle` | 规则注入策略分界落地：小而稳定且每镜必用的核心 rubric 运行时读一次全文贴入（可缓存稳定前缀），大部头/高频演进 delta 保持引用+anchor_lint；SKILL.md 禁静态内联不变（04 提案 §4.8，2026-07-10 拍板） |
+-| [T128](open/todo/T128.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement` | impl_route.py PIPELINE_RECEIPT 的 marker 显示折叠：显式 `impl-pipeline: superpowers` 与无 frontmatter/无键的隐式缺省均显示 marker=none，路由行为等价但 receipt 可诊断性受损（F3a 判赢留档核对时无法分辨是否显式声明过）——需 read_plan_marker 返回值携带来源注记再区分显示（code-review defer，display-only 无路由风险） |
+ | [T129](open/todo/T129.md) | todo | PROPOSED | 2026-07-01 | `sdflow-roadmap` | 存量 wco/mlh 两包 requirements.md 并入 design.md 迁移（tasks 5.1-5.3 受控延后项，Q-C 拍板前置②）——触发条件：首个新流程 roadmap SHIPPED 且目标包无在飞 change；操作序列以归档 change rebuild-sdflow-roadmap-v2 的 tasks.md 5.1-5.3 + design Migration step3 为准（全节清点表/考古注记四要素/头部章不占编号序列/清点表落盘随 commit/per 包 maintain_scan） |
+-| [T130](open/todo/T130.md) | todo | PROPOSED | 2026-07-01 | `bundle` | ff-generation-constraints.md:43 衔接契约边界句「requirements/design/roadmap/task-log 四件套」→「三件套」术语同步——matt-workflow-integration Task7 写入时 rebuild-sdflow-roadmap-v2 未落地所致漂移；属 assets/workflow 权威源（rebuild change Compliance 声明零 assets 改动故未扫），一词修正独立小改，改后消费仓经 sdflow-init update 获得 |
+-| [T131](open/todo/T131.md) | todo | PROPOSED | 2026-07-01 | `bundle` | workflow.md 阶段一 wayfinder 缺装探测硬编码 Claude 单宿主路径（~/.claude/skills/wayfinder）——未同步 sdflow-roadmap SKILL.md 本轮新增的宿主中立探测口径（按当前宿主 Claude/Codex 分别探测，MUST NOT 以 Claude 路径代理全局）；Codex 宿主跑 mainflow 阶段一会重犯同款误判。属 assets/workflow 权威源（rebuild change Compliance 零 assets 改动故未扫），改后经 sdflow-init update 分发 |
+-| [T134](open/todo/T134.md) | todo | OPEN | 2026-07-01 | `domain-modeling / grill-with-docs 领域文档路径感知` | domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。 |
+-| [T139](open/todo/T139.md) | todo | PROPOSED | 2026-07-01 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） |
+-| [T140](open/todo/T140.md) | todo | PROPOSED | 2026-07-01 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） |
+ | [T141](open/todo/T141.md) | todo | OPEN | 2026-07-01 | `workflow bundle (roadmap/ff/spec-review/implement/code-review)` | 把「拆分标准=一个change一个完整阶段结果」融入 workflow 三处触发 |
+-| [T142](open/todo/T142.md) | todo | OPEN | 2026-07-01 | `docs/workflow-map.md` | workflow-map.md 广度刷新：补 mlh-p4 后 5 脚本 + hr-tg schema 回灌 |
+ | [T143](open/todo/T143.md) | todo | PROPOSED | 2026-07-01 | `sdflow-architecture` | frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言） |
+ | [T144](open/todo/T144.md) | todo | PROPOSED | 2026-07-01 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） |
+ | [T145](open/todo/T145.md) | todo | PROPOSED | 2026-07-01 | `sdflow-roadmap` | 观察 description 追加 SAD 指路句后的触发精度（架构类查询是否误触 roadmap） |
+ | [T155](open/todo/T155.md) | todo | OPEN | 2026-07-01 | .github/workflows/（全仓 -W error CI 门） | 全仓 pytest -W error 常态化为持久 CI 守卫（防未来再引入未关闭文件/ResourceWarning 类存量债） |
+ | [T156](open/todo/T156.md) | todo | OPEN | 2026-07-01 | sdflow-devenv（配 CI 载体层：SKILL.md + references/testing-framework.md） | sdflow-devenv 配 CI 的 P2 决策示范清一色 GitHub Actions、且未显式化「硬门/软门」降级边界——对「不管什么项目都能配」的承诺留了平台假设漏洞（用 workflow 的消费仓不一定在 GitHub） |
+ | [T158](open/todo/T158.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review + sdflow-code-review | run-id 新鲜度可机械化：manifest 存在性是确定性信号，宜加 anchor_lint 家族核而非永久留诚实边界 |
+ | [T161](open/todo/T161.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review + sdflow-code-review | 等值门只覆盖 marker 段；圈外 preflight/fallback/锚行段两层也高度相似但漂了不会红 |
+ | [T162](open/todo/T162.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review / sdflow-code-review（outside-voice 调度层） | Codex 宿主方向的跨模型 voice efficacy=0：架构性无法离开关键路径，待 codex deferred_executor 稳定或外部 claude daemon 方案再议 |
+ | [T163](open/todo/T163.md) | todo | OPEN | 2026-07-01 | sdflow-spec-review / sdflow-code-review + hack/check_async_branch_parity.py | async host 调度段的 DRY 全抽取：把 marker 段抽成单一源注入两 SKILL，替代当前「两份副本 + 机械等值门」 |
+ | [T165](open/todo/T165.md) | todo | OPEN | 2026-07-01 | openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段 | R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动 |
+ | [T169](open/todo/T169.md) | todo | PROPOSED | 2026-07-01 | openspec/changes | done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30) |
+ | [T171](open/todo/T171.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review+code-review | R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题 |
+-| [T174](open/todo/T174.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/tests/test_outside_voice.py | fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错 |
+-| [T176](open/todo/T176.md) | todo | PROPOSED | 2026-07-01 | outside-voice | outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时 |
+-| [T188](open/todo/T188.md) | todo | PROPOSED | 2026-07-01 | 仓根 pytest 收集 | 跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守 |
+ | [T191](open/todo/T191.md) | todo | PROPOSED | 2026-07-01 | openspec/changes/*/impl-reports/ | 评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档） |
+ | [T196](open/todo/T196.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review/SKILL.md | 三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文 |
+-| [T199](open/todo/T199.md) | todo | PROPOSED | 2026-07-01 | CLAUDE.md / 开发环境 | CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest |
+ | [T203](open/todo/T203.md) | todo | PROPOSED | 2026-07-01 | sdflow-ship/tests + CI 配置 | 门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立 |
+-| [T207](open/todo/T207.md) | todo | PROPOSED | 2026-07-01 | docs | T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。 |
+ | [T221](open/todo/T221.md) | todo | PROPOSED | 2026-07-01 | openspec/specs/host-adaptive-execution + anchor_lint | fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值 |
+ | [T227](open/todo/T227.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py: cmd_worker + run_cleanup | worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程 |
+-| [T229](open/todo/T229.md) | todo | PROPOSED | 2026-07-01 | openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞) | 两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离） |
+-| [T230](open/todo/T230.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧 | 200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限 |
+ | [T244](open/todo/T244.md) | todo | OPEN | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造 |
+ | [T245](open/todo/T245.md) | todo | OPEN | 2026-07-01 | sdflow-implement/SKILL.md | fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制 |
+ | [T246](open/todo/T246.md) | todo | OPEN | 2026-07-01 | sdflow-implement/SKILL.md + model-tiers.md | 按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号 |
+ | [T248](open/todo/T248.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec/agents/（sdflow-local-researcher / sdflow-web-researcher） | 两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议 |
+ | [T249](open/todo/T249.md) | todo | PROPOSED | 2026-07-01 | sdflow-implement/SKILL.md | 票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本 |
+-| [T250](open/todo/T250.md) | todo | PROPOSED | 2026-07-01 | sdflow-implement/tests/test_tickets_plan_golden.py | golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」) |
+ | [T251](open/todo/T251.md) | todo | PROPOSED | 2026-07-01 | sdflow-implement/SKILL.md | 纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义 |
+-| [T252](open/todo/T252.md) | todo | PROPOSED | 2026-07-01 | openspec/adr/0031-t10-label-split-by-decision-semantics.md | adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次 |
+-| [T253](open/todo/T253.md) | todo | PROPOSED | 2026-07-01 | openspec/CONTEXT.md | 「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名 |
+ | [T256](open/todo/T256.md) | todo | OPEN | 2026-07-01 | sdflow-ship/SKILL.md + ~/.claude/hooks/ | 用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做） |
+ | [T258](open/todo/T258.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement/SKILL.md` 文件交接节 · review-package | 双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold |
+-| [T261](open/todo/T261.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement/SKILL.md` · `sdflow-implement/scripts/impl_route.py` | 两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2 |
+ | [T264](open/todo/T264.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/schemas/sdflow-spec-driven/ + openspec-1.7.0-followup roadmap | project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。 |
+diff --git a/openspec/issues/open/todo/T134.md b/openspec/issues/closed/todo/T134.md
+similarity index 62%
+rename from openspec/issues/open/todo/T134.md
+rename to openspec/issues/closed/todo/T134.md
+index 33676b0..e4393a0 100644
+--- a/openspec/issues/open/todo/T134.md
++++ b/openspec/issues/closed/todo/T134.md
+@@ -1,14 +1,15 @@
+ ---
+ id: "T134"
+ pool: "todo"
+-status: "OPEN"
++status: "WONTDO"
+ priority: null
+ type: "代码质量"
+ date: "2026-07-01"
+ source_change: null
+ module: "`domain-modeling / grill-with-docs 领域文档路径感知`"
+ summary: "domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。"
+-resolved_by: null
+-closed_date: null
+-closed_reason: null
++resolved_by: "refactor-roadmap-internalize-deps"
++closed_date: "2026-08-05"
++closed_reason: "前提消解：refactor-roadmap-internalize-deps 移除 openspec/matt/ 与讨论层四个外部依赖，domain-modeling 不再是本仓工作流的调用点，matt/domain.md 已随 D2 删除"
+ ---
++> 2026-08-05 状态：OPEN → WONTDO（前提消解：refactor-roadmap-internalize-deps 移除 openspec/matt/ 与讨论层四个外部依赖，domain-modeling 不再是本仓工作流的调用点，matt/domain.md 已随 D2 删除）
+diff --git a/openspec/matt/domain.md b/openspec/matt/domain.md
+deleted file mode 100644
+index 4a32241..0000000
+--- a/openspec/matt/domain.md
++++ /dev/null
+@@ -1,27 +0,0 @@
+-# 领域文档
+-
+-本仓库采用单一上下文布局。Engineering skills 在探索代码库或产出工作项前，按任务范围读取以下文档：
+-
+-- `openspec/CONTEXT.md`：跨 change 复用的领域术语、边界和约束。
+-- `openspec/adr/`：与当前工作区域相关的架构决策记录。
+-
+-本仓不使用 `CONTEXT-MAP.md`，也不需要查找多个上下文目录。
+-
+-## 使用规则
+-
+-- 在工作项标题、设计、假设或测试名称中，使用 `openspec/CONTEXT.md` 已定义的术语，避免无意引入同义词。
+-- 若输出与既有 ADR 冲突，显式指出冲突及重新评估的理由，不要静默推翻原决策。
+-- 新增或调整稳定的领域术语时，更新 `openspec/CONTEXT.md`；新增或调整架构取舍时，在 `openspec/adr/` 新增或更新相应记录。
+-- 若上述文件在某个分支或历史版本中暂不存在，继续当前工作，不因缺失而阻塞。
+-
+-## 文件结构
+-
+-```text
+-openspec/
+-├── CONTEXT.md
+-├── adr/
+-└── matt/
+-    ├── issue-tracker.md
+-    ├── triage-labels.md
+-    └── domain.md
+-```
+diff --git a/openspec/matt/issue-tracker.md b/openspec/matt/issue-tracker.md
+deleted file mode 100644
+index 67a03b3..0000000
+--- a/openspec/matt/issue-tracker.md
++++ /dev/null
+@@ -1,58 +0,0 @@
+-# 工作项跟踪：本地 Markdown
+-
+-本仓库的工作项和 PRD 使用本地 Markdown，不使用 GitHub 或 GitLab Issues。
+-
+-## 路径约定
+-
+-- 工作项根目录：`openspec/matt/`
+-- 一个功能对应一个目录：`openspec/matt/<feature>/`
+-- 功能 PRD：`openspec/matt/<feature>/PRD.md`
+-- 实现工作项：`openspec/matt/<feature>/issues/<NN>-<slug>.md`，从 `01` 开始编号
+-- 在工作项文件顶部用 `Status:` 记录 triage 状态；状态词见 `triage-labels.md`
+-- 讨论和补充按时间追加到文件末尾的 `## Comments` 区块
+-
+-## Skill 操作规则
+-
+-当 `to-tickets`、`triage`、`to-spec` 或 `qa` 需要发布、读取或更新工作项时：
+-
+-- 在 `openspec/matt/<feature>/` 下创建、读取或更新 Markdown 文件；必要时先创建目录。
+-- 接收已给出的功能目录、文件路径或工作项编号作为定位依据。
+-- 不调用 `gh` 或 `glab`，也不将外部 PR 作为 triage 输入。
+-
+-## Wayfinding 约定（Wayfinding operations）
+-
+-`wayfinder` 使用一个 map 文件和多个子工作项文件；下文路径统一用 `<root>` 表示落盘根目录。
+-
+-**`<root>` 条件分流**：若调用语以固定字面量声明了 map 路径（形如 `openspec/roadmaps/{name}/footage/map.md`），或本次 wayfinder 由 `sdflow-roadmap` 发起并指定该路径——该 effort 属 **roadmap 类**，`<root>` = `openspec/roadmaps/{name}/footage/`；其余情况 `<root>` 默认 = `openspec/matt/<effort>/`。
+-
+-- map：`<root>map.md`，记录 Notes、Decisions-so-far 和 Fog。
+-- 子工作项：`<root>issues/<NN>-<slug>.md`。顶部使用 `Type:` 记录 `research`、`prototype`、`grilling` 或 `task`，使用 `Status:` 记录状态机 `open → claimed → resolved | abandoned`（新建票初态 `open`；`claimed` 为领取；`resolved` 为决议落盘；`abandoned` 为显式放弃留痕）。
+-- 依赖：顶部以 `Blocked by: NN, NN` 列出依赖；列出的工作项全部为 `resolved` 后才解除阻塞。
+-- frontier：在 `<root>issues/` 中查找未阻塞、未领取且未解决的工作项，按编号优先。
+-- claim：先写入 `Status: claimed` 并保存，再开始工作。
+-- resolve：在 `## Answer` 下追加答案，写入 `Status: resolved`，再把上下文指针追加至 `<root>map.md` 的 Decisions-so-far。
+-
+-### map 持久字段
+-
+-`<root>map.md` 头部持久化两个字段，续跑（新 session 续用某 effort）一律从字段派生路径，不重新做语义判别。roadmap 类 effort（`<root>` = `openspec/roadmaps/{name}/footage/`）字面为：
+-
+-```
+-Tracker root: openspec/roadmaps/{name}/footage/
+-Effort kind: roadmap
+-```
+-
+-`<root>` 落在默认根（`openspec/matt/<effort>/`）时同样持久化 `Tracker root:` 字段（写默认根字面量），`Effort kind:` 按实际 effort 类型填写。
+-
+-### stale claim 重认领
+-
+-发现某票 `Status: claimed` 但其 session 已中断（压缩/崩溃），长期无进展：在票尾追加一行中断注记后，可改回 `open` 或由新会话直接重新 `claim` 继续处理——claimed 票不得永久掉出 frontier 无人问津。
+-
+-### map 再入约定
+-
+-同一 effort 二次 chart（如远期阶段补细讨论）不得覆写既有 `<root>map.md`：钉死为**单 map 分批续用**——同一个 `map.md` 在其生命周期内允许多批次追加票，无需每次讨论都新开 map；**满 30 票时**归档当前 map 为 `<root>map-N.md`（`N` 从 1 起算）并新起一份 `map.md`，新 map 头部记一行「承接自 map-(N-1).md」，票号不复用（从旧 map 最大编号 +1 续起）。
+-
+-### 边界声明
+-
+-- footage/ 下内容不进 triage 扫描。
+-- 三件套（design.md / roadmap.md / task-log.md）MUST NOT 引用 footage/ 下任何内容。
+-- 路由回退误落默认根（`openspec/matt/<effort>/`）的 wayfinder 票 MUST NOT 被 triage 贴五态标签或改写 Status 字段（两套状态机语义不兼容）。
+diff --git a/openspec/matt/setup-matt-pocock-skills-handoff.md b/openspec/matt/setup-matt-pocock-skills-handoff.md
+deleted file mode 100644
+index 7050b68..0000000
+--- a/openspec/matt/setup-matt-pocock-skills-handoff.md
++++ /dev/null
+@@ -1,133 +0,0 @@
+-# 交接：setup-matt-pocock-skills 配置  openspec/matt/setup-matt-pocock-skills-handoff.md
+-
+-## 目标
+-
+-为本仓库配置 Matt Pocock engineering skills 的工作项位置、triage 标签与领域文档路径，并同步根目录 `AGENTS.md` 与
+-`CLAUDE.md`。
+-
+-## 已确认的决策
+-
+-### Issue tracker
+-
+-- 类型：本地 Markdown
+-- 工作项根目录：`openspec/matt/`
+-- 单个功能的工作项目录：`openspec/matt/<feature>/`
+-- 不使用 GitHub/GitLab Issues。
+-- 外部 PR 不作为 triage 输入。
+-
+-### Triage 标签
+-
+-保持五个默认标签：
+-
+-- `needs-triage`
+-- `needs-info`
+-- `ready-for-agent`
+-- `ready-for-human`
+-- `wontfix`
+-
+-### 领域文档
+-
+-- 布局：单一上下文
+-- 领域上下文：`openspec/CONTEXT.md`
+-- 架构决策记录：`openspec/adr/`
+-- 不使用 `CONTEXT-MAP.md`。
+-
+-### 配置说明文件位置
+-
+-用户要求简化默认的 `docs/agents/` 布局，将三份说明文件直接放到 `openspec/matt/`：
+-
+-- `openspec/matt/issue-tracker.md`
+-- `openspec/matt/triage-labels.md`
+-- `openspec/matt/domain.md`
+-
+-## 待写入内容
+-
+-### `AGENTS.md` 和 `CLAUDE.md`
+-
+-两个文件均应新增或原位更新以下区块，不覆盖周边用户内容：
+-
+-  ```markdown
+-  ## Agent skills
+-
+-  ### Issue tracker
+-
+-  工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-
+-  tracker.md`。
+-
+-  ### Triage labels
+-
+-  使用默认的五种 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见
+-  `openspec/matt/triage-labels.md`。
+-
+-  ### Domain docs
+-
+-  单一上下文布局：`openspec/CONTEXT.md` 与 `openspec/adr/`。详见 `openspec/matt/domain.md`。
+-
+-  ### openspec/matt/issue-tracker.md
+-
+-  应说明：
+-
+-  - 工作项采用本地 Markdown。
+-  - 根目录为 openspec/matt/。
+-  - 每个功能使用 openspec/matt/<feature>/。
+-  - to-tickets、triage、to-spec、qa 应在该位置读写工作项。
+-  - 不调用 gh 或 glab，也不处理外部 PR。
+-
+-  ### openspec/matt/triage-labels.md
+-
+-  应记录五个 canonical role 与同名标签的映射：
+-
+-   角色            标签
+-  ━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━
+-   待评估          needs-triage
+-  ──────────────  ─────────────────
+-   等待补充信息    needs-info
+-  ──────────────  ─────────────────
+-   可交给 agent    ready-for-agent
+-  ──────────────  ─────────────────
+-   需人工处理      ready-for-human
+-  ──────────────  ─────────────────
+-   不处理          wontfix
+-
+-  ### openspec/matt/domain.md
+-
+-  应说明：
+-
+-  - 本仓采用单一上下文。
+-  - 使用前先阅读 openspec/CONTEXT.md。
+-  - 涉及既有架构取舍时，按需阅读 openspec/adr/。
+-  - 不使用 CONTEXT-MAP.md。
+-  - 新增或调整领域术语、决策记录时，应更新相应文件。
+-
+-  ## 当前阻塞
+-
+-  未对仓库做任何写入或可靠的状态检查。
+-
+-  所有本地命令均在启动 shell 前失败，错误为：
+-
+-  failed to spawn code-mode host /opt/homebrew/bin/codex-code-mode-host:
+-  No such file or directory
+-
+-  这说明 Codex 运行时所需的辅助程序不存在、被移动，或当前会话仍引用旧安装路径；与仓库内容、权限和本次配置无关。
+-
+-  ## 重启后续作
+-
+-  1. 验证运行时：
+-
+-     ls -l /opt/homebrew/bin/codex-code-mode-host
+-     which codex
+-     codex --version
+-
+-  2. 在仓库根目录执行 git status --short，保护既有改动。
+-  3. 按 setup-matt-pocock-skills 的 Explore 阶段复查：
+-      - git remote -v、.git/config
+-      - AGENTS.md、CLAUDE.md
+-      - openspec/CONTEXT.md、openspec/adr/
+-      - openspec/matt/ 既有内容
+-
+-  4. 读取该 skill 的模板后，按上述已确认路径写入三份 Markdown，并同步更新 AGENTS.md 与 CLAUDE.md。
+-  5. 检查引用路径和 git diff，再向用户报告完成情况。
+-
+-  ## 备注
+-
+-  handoff skill 的本地说明文件同样因上述运行时错误而无法读取；本交接文档依据本次对话中用户已确认的决策整理。
+\ No newline at end of file
+diff --git a/openspec/matt/triage-labels.md b/openspec/matt/triage-labels.md
+deleted file mode 100644
+index 4c8de23..0000000
+--- a/openspec/matt/triage-labels.md
++++ /dev/null
+@@ -1,13 +0,0 @@
+-# Triage 标签
+-
+-Engineering skills 使用五个 canonical triage role。下表将它们映射到本仓库本地 Markdown 工作项中的状态词。
+-
+-| 角色 | 标签 | 含义 |
+-| --- | --- | --- |
+-| 待评估 | `needs-triage` | 维护者需要评估该工作项 |
+-| 等待补充信息 | `needs-info` | 等待提出者补充信息 |
+-| 可交给 agent | `ready-for-agent` | 已完整定义，可由 AFK agent 执行 |
+-| 需人工处理 | `ready-for-human` | 需要人工实现或决策 |
+-| 不处理 | `wontfix` | 不再推进 |
+-
+-当 skill 指向某个 canonical role 时，在工作项的 `Status:` 行使用上表对应的标签字符串。
