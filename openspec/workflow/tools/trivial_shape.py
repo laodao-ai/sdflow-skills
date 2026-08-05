@@ -148,9 +148,9 @@ def classify_file(f):
 
     in_tests = path.startswith("tests/") or "/tests/" in path
 
-    # ② 仅新增 tests/ 文件（排除 import 副作用 conftest/__init__）
+    # ② 仅新增 tests/ 文件（排除 import 副作用 conftest/__init__/plugins/*）
     if f["is_new"]:
-        if in_tests and base not in ("conftest.py", "__init__.py"):
+        if in_tests and base not in ("conftest.py", "__init__.py") and "tests/plugins/" not in path:
             return True, f"new-test:{path}"
         if is_doc_file(path):
             return True, f"new-doc:{path}"

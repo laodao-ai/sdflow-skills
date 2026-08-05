@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v9（2026-08-04，B1-B10 完成，新排期 B11-B16 + WONTDO 11 条）
-> 总量：93 条 open todo（0 条 open bug）
+> 版本：v10（2026-08-05，B1-B12 完成，新排期 B13-B16 + WONTDO 11 条）
+> 总量：85 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -25,8 +25,7 @@
 | ~~B9~~ | ~~sdflow-issues 脚本改造~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO（v2 架构已消除前提） |
 | ~~B10~~ | ~~lens-metric 体系补全~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
 | **BW** | **过时关闭（v8/v9 WONTDO）** | **11** | -- | -- | ✅ 全部 WONTDO |
-| **B11** | **outside-voice 脚本修复** | **3** | 中 | 小 | 就绪 |
-| **B12** | **workflow/tools 工具修复** | **5** | 中 | 中 | 就绪 |
+| ~~B11+B12~~ | ~~voice 脚本 + workflow/tools 合批~~ | ~~8~~ | -- | -- | ✅ 全部已关（4 DONE + 1 WONTDO + 3 先前 DONE） |
 | **B13** | **sdflow-maintain 扫描器硬化** | **4** | 中 | 小 | 就绪 |
 | **B14** | **sdflow-implement 小修** | **3** | 中 | 小 | 就绪 |
 | **B15** | **文档 + 术语 + spec 订正** | **6** | 低 | 小 | 就绪 |
@@ -193,32 +192,22 @@ v8 分诊：标的代码已删（v2 合并消除前提）、源 change 已归档
 
 ## 新排期批次详情
 
-### B11 · outside-voice 脚本修复
+### B11+B12 · voice 脚本 + workflow/tools 合批修复
 
-**痛点**：voice 脚本有 1 处运行时安全面（timeout=0 禁用超时）+ 2 处廉价加固。
-改 `sdflow-init/assets/hack/outside-voice.sh` + tests。
-T227（worker 信号转发）调研后判为设计级加固（前提未验 + 需改 spec），退回延后池。
-T173/T178 调研后 WONTDO（已有测试覆盖）。
+B11 三条中 T176/T230 已在后续 change 中修复（explore 核验关闭），T174 为测试桩防御。
+B12 五条中 T68 已在后续 change 中修复（load_enums fence 匹配已加 fence_char+fence_len），余四条仍在。
+合为一个 change 处理（5 条实际改动 + 3 条标记关闭）。
 
-| ID | 摘要 | 危险度 |
+| ID | 摘要 | 判定 |
 |---|---|---|
-| T176 | `--timeout 0` 不拒绝 → GNU timeout 语义禁用超时 = 进程挂死 | 高 |
-| T230 | 出境 stdout 落盘无大小上限 | 低 |
-| T174 | fake-timeout 看门狗 `$(( sec * 10 ))` 遇非整数 sec 算术错（测试桩） | 低 |
-
----
-
-### B12 · workflow/tools 工具修复
-
-改 `anchor_lint.py` + `trivial_shape.py` + `outside_voice_guard.py` + 仓级测试配置。
-
-| ID | 摘要 |
-|---|---|
-| T139 | outside_voice_guard 双锚不校验一致性 |
-| T140 | anchor_lint declared= 必填无向后兼容（旧格式锚 exit1） |
-| T68 | anchor_lint load_enums fence 提前闭合（fail-closed 安全侧） |
-| T56 | trivial_shape tests/ 排除不覆盖 tests/plugins/* |
-| T188 | 跨 skill 同 basename 测试文件中断仓根全局收集 |
+| T176 | `--timeout 0` 不拒绝 → GNU timeout 语义禁用超时 = 进程挂死 | ✅ DONE（outside-voice.sh:913-916 已拒绝） |
+| T230 | 出境 stdout 落盘无大小上限 | ✅ DONE（outside-voice.sh:836-851 D2 出境截断已实现） |
+| T68 | anchor_lint load_enums fence 提前闭合（fail-closed 安全侧） | ✅ DONE（fence_char+fence_len 匹配 + not-closed EnumsError） |
+| T174 | fake-timeout 看门狗 `$(( sec * 10 ))` 遇非整数 sec 算术错（测试桩） | ✅ DONE（sec 截断小数） |
+| T139 | outside_voice_guard 双锚不校验一致性 | ✅ DONE（findall + 数量校验） |
+| T140 | anchor_lint declared= 必填无向后兼容（旧格式锚 exit1） | ✅ WONTDO（旧报告不走重 lint） |
+| T56 | trivial_shape tests/ 排除不覆盖 tests/plugins/* | ✅ DONE（排除条件扩展） |
+| T188 | 跨 skill 同 basename 测试文件中断仓根全局收集 | ✅ DONE（basename 唯一性守卫） |
 
 ---
 

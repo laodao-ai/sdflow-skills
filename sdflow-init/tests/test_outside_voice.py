@@ -39,7 +39,7 @@ def _write_fake_timeout(bin_dir):
         # 是不是那个进程」的机械判别器——只断言"是个十进制数"锁不住取错 pid。
         [ -n "${FAKE_TIMEOUT_PID_FILE:-}" ] && echo $$ > "${FAKE_TIMEOUT_PID_FILE}"
         if [ "$1" = "-k" ]; then shift 2; fi
-        sec="$1"; shift
+        sec="$1"; sec="${sec%%.*}"; shift
         stdin_tmp=$(mktemp)
         cat > "$stdin_tmp"
         "$@" < "$stdin_tmp" &

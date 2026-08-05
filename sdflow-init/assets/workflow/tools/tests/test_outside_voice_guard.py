@@ -414,3 +414,23 @@ def test_matrix_cross_tool_golden_full_cartesian():
     assert mismatches == [], f"矩阵分类跨工具漂移（前 20 条）: {mismatches[:20]}"
     # 全笛卡尔积须真正覆盖全部 5 类完整分类，防测试域退化成只测到部分分支（假绿）
     assert categories_seen == {"cross-model", "same-family", "no-exec", "self-review", "illegal"}
+
+
+# --- T139 parse_mode 多锚 fail-closed ---
+
+def test_duplicate_step1_anchors_fail_closed(tmp_path):
+    """fence 外出现 2 条 step1-broad-review 锚 → EmitError（T139）。"""
+    m = _mod()
+    rp, cd = _make_change(tmp_path, codex=False)
+    body = _mode_anchor("native") + "\n" + _mode_anchor("simulated") + "\n# review\n" + _ov_anchor(1) + "\n"
+    rp.write_text(body, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
+    with pytest.raises(m.EmitError, match="重复"):
+        m.parse_mode(rp.read_text(encoding="utf-8"))
+
+
+def test_single_step1_anchor_returns_mode(tmp_path):
+    """fence 外恰好 1 条 step1 锚 → 正常返回 mode（T139 回归守卫）。"""
+    m = _mod()
+    rp, cd = _make_change(tmp_path)
+    mode = m.parse_mode(rp.read_text(encoding="utf-8"))
+    assert mode == "native"

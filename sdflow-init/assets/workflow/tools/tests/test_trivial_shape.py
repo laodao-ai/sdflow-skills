@@ -208,6 +208,10 @@ def test_new_tests_init_not_exempt():  # F6: __init__.py import 副作用
     d = _diff("tests/__init__.py", added=["from x import *"], new=True)
     assert _verdict(d) == "NOT_EXEMPT"
 
+def test_new_tests_plugins_not_exempt():  # T56: tests/plugins/ import 副作用
+    d = _diff("tests/plugins/my_plugin.py", added=["def pytest_configure(): ..."], new=True)
+    assert _verdict(d) == "NOT_EXEMPT"
+
 def test_version_still_exempt_after_refine():  # 回归: VERSION 仍免
     d = _diff("VERSION", added=["v0.9.1"], removed=["v0.9.0"])
     assert _verdict(d) == "EXEMPT"

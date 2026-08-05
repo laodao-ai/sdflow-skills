@@ -92,11 +92,15 @@ def _fence_outside_text(text):
 
 def parse_mode(text):
     """抓 step1-broad-review 锚 mode（我们的锚，严格）。锚缺失/缺 mode/mode 非枚举 → EmitError。
-    仅匹配 fence 外锚——fence 内的示例锚（文档演示）不得被取（与 parse_codex_findings 同口径）。"""
-    m = _S1_RE.search(_fence_outside_text(text))
-    if not m:
+    仅匹配 fence 外锚——fence 内的示例锚（文档演示）不得被取（与 parse_codex_findings 同口径）。
+    多锚（native/simulated 双锚）fail-closed（T139）。"""
+    outside = _fence_outside_text(text)
+    matches = _S1_RE.findall(outside)
+    if len(matches) == 0:
         raise EmitError("step1-broad-review 锚缺失或格式不符")
-    mode = dict(_ATTR_RE.findall(m.group(1))).get("mode")
+    if len(matches) > 1:
+        raise EmitError(f"step1-broad-review 锚重复（{len(matches)} 条），须恰好 1 条")
+    mode = dict(_ATTR_RE.findall(matches[0])).get("mode")
     if mode is None:
         raise EmitError("step1-broad-review 锚缺 mode 属性")
     if mode not in VALID_MODES:
