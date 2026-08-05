@@ -36,8 +36,13 @@
 `sdflow-roadmap` 原按规模三分支路由（explore / wayfinder 铺图 / office-hours），wayfinder 分支
 产出 `openspec/roadmaps/{name}/footage/` map + ticket 票（`open/claimed/resolved/abandoned` 状态机）。
 `refactor-roadmap-internalize-deps` 将讨论层内化为单一 memo 载体（三态 create/continue/replan +
-七维拷问），删除该三分支路由与 footage 落盘机制；`openspec/matt/` 套件（issue tracker / triage
-labels / domain docs）随之整体移除（前提消解：无 wayfinder 调用点）。
+七维拷问），删除该三分支路由与 footage 落盘机制。
+
+**同批（非同因）移除**：`openspec/matt/` 套件（issue tracker / triage labels / domain docs）在同一
+change 内一并删除，但**与本次讨论层重构无因果关系**——`git log` 实测 `sdflow-issues` 生于本仓首个
+commit（2026-07-03），早于 `openspec/matt/` 建立（2026-07-10）一周；本仓自始至终用 `sdflow-issues`
+追踪工作项，matt 的 issue-tracker 角色**从未真正投入使用**，属历史遗留死配置、独立可删。同批处置
+的理由是 fold 判据（相关且低成本），不是依赖关系。详见 `openspec/adr/0037-roadmap-discussion-layer-internalization-and-matt-removal.md`。
 
 `ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀溯源规则**保留但标 legacy**——消费仓
 **存量**（重构前生成）footage 仍可能被该前缀溯源引用；新建 roadmap 包不再产生此前缀的新实例。
