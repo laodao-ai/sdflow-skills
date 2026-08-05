@@ -64,12 +64,14 @@ Skill 不应依赖"持续驻留上下文"来保证各阶段的一致性。真正
 | 中（10-30 轮） | 结束时一次 flush |
 | 长（>30 轮、跨 `/clear`、跨天） | **强制**骨架 + 增量 append |
 
-**判别不确定时向上一档取**——多留 footage（讨论考古材料）的成本远低于丢推理过程。
+**判别不确定时向上一档取**——多留讨论痕迹的成本远低于丢推理过程。
 
-<!-- 2026-07 迭代的落地映射：短/中档由 memo.md 承载（可选、包根落位、单档不迁）；
-     长档由 wayfinder chart 承载，落盘 `footage/`（这也是"footage"一词后来被固化为具体目录名的来源）——
-     具体分档判据见 SKILL.md「讨论层：三分支路由」。本文所述"强制骨架 + 增量 append"的抽象要求，
-     在长档场景下由 wayfinder 的 map + 票机制实现；抽象准则不变，仅落地机制随迭代演进。 -->
+<!-- 历史注记：2026-07 迭代（rebuild-sdflow-roadmap-v2）曾把长档路径落到 wayfinder chart
+     （`footage/` 目录，"footage"一词由此固化为目录名），短/中档落 memo.md（可选、包根落位、
+     单档不迁）。2026-08 迭代（refactor-roadmap-internalize-deps）已将 wayfinder 全部移除——
+     现行机制不再按讨论规模分档，memo.md 是相位 B 唯一的纪要载体，B 起手即建、全程增量
+     append，不区分短/中/长档。本文所述"强制骨架 + 增量 append"的抽象要求由现行 memo.md
+     机制承接；具体见 `sdflow-roadmap/SKILL.md` 相位 B 一节。 -->
 
 ### 准则 2：契约条目要求结构化状态
 
@@ -110,10 +112,13 @@ Skill 不应依赖"持续驻留上下文"来保证各阶段的一致性。真正
 | 跳过 review 无痕迹 | 准则 3 | 强制"跳过即留痕，归档前再确认" |
 | verify ≡ 质量的混淆 | 准则 3（诚实） | 3.4 明标"人工复核项，verify 不扫" |
 
-<!-- 后续 2026-07 迭代（rebuild-sdflow-roadmap-v2）在此基础上进一步拆分："讨论规模预估"这一档判据
-     不再只落 memo.md 一种机制——长档（跨 session/跨天/压缩仍未收敛）改落 wayfinder chart（footage/），
-     memo.md 收窄为短档专用；产出侧同步从"四件套"（含独立 requirements.md）收敛为"三件套"
-     （design.md 头部并入需求与目标态章）。本节历史表述保留原貌，当前落地口径见 SKILL.md。 -->
+<!-- 历史注记：2026-07 迭代（rebuild-sdflow-roadmap-v2）曾进一步拆分——"讨论规模预估"判据
+     不再只落 memo.md 一种机制，长档（跨 session/跨天/压缩仍未收敛）改落 wayfinder chart
+     （footage/），memo.md 收窄为短档专用；产出侧同步从"四件套"（含独立 requirements.md）
+     收敛为"三件套"（design.md 头部并入需求与目标态章）。2026-08 迭代
+     （refactor-roadmap-internalize-deps）已将 wayfinder/footage 机制整体移除，memo.md
+     不再区分短/长档，收敛为相位 B 唯一纪要载体。本节保留原貌作历史演进记录，
+     现行机制见 `sdflow-roadmap/SKILL.md`。 -->
 
 ## 对其他长流程 skill 的推论
 
