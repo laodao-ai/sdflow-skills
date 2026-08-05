@@ -30,3 +30,14 @@
 
 **理由**：瘦跑本身就在破坏 grill 的独立性——拿上游产出给自己松绑，二次审视就退化成盖章。
 `ff-generation-constraints.md` 的 `wayfinder-resolved:` 锚现在**只用于溯源**，不再是任何减负判据。
+
+### A4 · `sdflow-roadmap` 讨论层的 wayfinder 三分支路由已移除（2026-08-06）
+
+`sdflow-roadmap` 原按规模三分支路由（explore / wayfinder 铺图 / office-hours），wayfinder 分支
+产出 `openspec/roadmaps/{name}/footage/` map + ticket 票（`open/claimed/resolved/abandoned` 状态机）。
+`refactor-roadmap-internalize-deps` 将讨论层内化为单一 memo 载体（三态 create/continue/replan +
+七维拷问），删除该三分支路由与 footage 落盘机制；`openspec/matt/` 套件（issue tracker / triage
+labels / domain docs）随之整体移除（前提消解：无 wayfinder 调用点）。
+
+`ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀溯源规则**保留但标 legacy**——消费仓
+**存量**（重构前生成）footage 仍可能被该前缀溯源引用；新建 roadmap 包不再产生此前缀的新实例。

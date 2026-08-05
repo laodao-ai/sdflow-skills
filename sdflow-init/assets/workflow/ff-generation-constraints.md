@@ -46,6 +46,11 @@
 切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀——该前缀留给 roadmap wayfinding 效力范围内
 的已决 ticket 溯源（`openspec/roadmaps/{name}/footage/`），混用会让溯源指向错误的出处。
 
+> 🔴 **legacy**：`sdflow-roadmap` 的三分支路由 / footage 落盘机制已随
+> `refactor-roadmap-internalize-deps` 移除（讨论层内化为 memo 单载体），**新建 roadmap 包不再产生
+> `footage/`，本前缀不再有新的产出方**。规则本身保留，仅因消费仓**存量** footage（重构前生成）仍
+> 可能被溯源引用；无存量 footage 的仓可忽略本条。
+
 ## 背景
 
 D-1~D-5 原本以纯文本形式内嵌在早期工作流文档的 `/opsx:ff` 命令 prompt 单元格里
