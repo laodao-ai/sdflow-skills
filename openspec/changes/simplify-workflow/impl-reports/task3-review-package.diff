@@ -1,0 +1,244 @@
+# Review package: 1b3fb46..4f56404d32d97fe606e82c54563a25d500b0d91f (Task 3 worktree merge)
+
+## Commits
+4f56404 Merge Task 3: 解除 sdflow-spec 手动触发限制 + 删旧 prompts
+62a2f68 task3(simplify-workflow): 解除 sdflow-spec 手动触发限制 + 删旧 prompts
+
+## Files changed
+ .../impl-reports/task3-remove-manual-trigger.md    |  61 ++++++++++++
+ sdflow-init/assets/workflow/prompts/step2-ff.md    |   1 -
+ sdflow-init/assets/workflow/prompts/step3-grill.md |   1 -
+ .../workflow/prompts/step5_5-embedded-sop.md       |   1 -
+ sdflow-init/tests/test_grill_handoff.py            | 105 ---------------------
+ sdflow-spec/SKILL.md                               |   3 +-
+ 6 files changed, 62 insertions(+), 110 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/simplify-workflow/impl-reports/task3-remove-manual-trigger.md b/openspec/changes/simplify-workflow/impl-reports/task3-remove-manual-trigger.md
+new file mode 100644
+index 0000000..9cd3a61
+--- /dev/null
++++ b/openspec/changes/simplify-workflow/impl-reports/task3-remove-manual-trigger.md
+@@ -0,0 +1,61 @@
++# Task 3 impl-report：解除 sdflow-spec 手动触发限制并删除旧 workflow prompts
++
++## 改动
++
++1. **`sdflow-spec/SKILL.md`**
++   - 删除 frontmatter 行 `disable-model-invocation: true`。
++   - description 末句「由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。」
++     改为「Trigger with /sdflow-spec。」。
++   - 全文 grep `disable-model-invocation|由人显式触发|只能人触发|人手动|唤不起` 复核，改动后无残留。
++
++2. **删除三个旧步骤 prompt 文件**（`git rm`）：
++   - `sdflow-init/assets/workflow/prompts/step2-ff.md`
++   - `sdflow-init/assets/workflow/prompts/step3-grill.md`
++   - `sdflow-init/assets/workflow/prompts/step5_5-embedded-sop.md`
++
++3. **删除回归门测试**（`git rm`）：
++   - `sdflow-init/tests/test_grill_handoff.py`
++
++## 验收对照（tickets.md Task 3 复选框）
++
++- [x] `sdflow-spec/SKILL.md` frontmatter 无 `disable-model-invocation: true`
++- [x] `sdflow-spec/SKILL.md` description 无手动触发限制语言
++- [x] `prompts/step2-ff.md`、`prompts/step3-grill.md`、`prompts/step5_5-embedded-sop.md` 已删除
++- [x] `sdflow-init/tests/test_grill_handoff.py` 已删除
++
++（本报告仅记录工作产物，不代表实现期打勾——tickets.md 复选框由双轴审通过后的执行模式补打，非
++implementer 自行勾选。）
++
++## 范围边界
++
++- 本票不改 `sdflow-init/assets/workflow/workflow.md`、`generation-process.md` 等权威源文档里对
++  分支 B / 四入口选择规则 / grill-with-docs 的引用——tickets.md 明确该项属 Task 4（Blocked-by:
++  1,2,3）。同理不改 `CLAUDE.md`「旧入口 sunset 条件」段——属 Task 5（Blocked-by: 4）。
++- 三个旧入口本身（`opsx:ff`、`opsx:explore`、`grill-with-docs`）不删除，符合 Global Constraints
++  第 15 条（两个是 CLI 生成物、一个在仓外）——本票也未触碰它们的文件。
++- `sdflow-init/assets/workflow/prompts/` 目录下未删除的文件（`step1-explore.md`、
++  `step4-spec-review.md`、`step6-writing-plans.md`、`step7-subagent-dev.md`、
++  `step8-code-review.md`、`step9-done.md`）保留不动——brief 只点名删三个。
++
++## 已知遗留（留给 Task 4/5/6 处理，非本票 blocker）
++
++- 全仓仍有对已删文件路径/`disable-model-invocation`字符串的引用（如
++  `sdflow-init/assets/workflow/workflow.md` 提及 `step3-grill.md`、`CLAUDE.md` 引用
++  `grill-with-docs` 手动触发段落），Task 6 的「残留引用扫描」步骤会核对；这些不在 Task 3 的
++  Global Constraints 授权范围内，未主动改动。
++- 未运行 `bash setup.sh`（该项由 Task 1 的 embedded-test-sop 删除引出，Task 6 会统一跑一次并核验
++  `~/.claude/skills/` 无孤儿链接）；本票删除的是 `sdflow-init/assets/workflow/prompts/`（bundle
++  内部资产，非顶层 skill 目录），setup.sh 不感知其存在，故不需要为本票单独跑。
++
++## 测试
++
++- 本票为纯删除/frontmatter 编辑，无新代码，未新增/修改测试。
++- `/usr/bin/python3 -m pytest sdflow-init/tests/ -q`（含删除 `test_grill_handoff.py` 后的剩余套件）：
++  **782 passed, 4 skipped in 193.82s**，exit code 0，无失败无残留报错。
++
++## 工作目录说明
++
++本次任务在独立 git worktree（`worktree-agent-ac0f3d9ce80ba64ce` 分支）中执行，该分支的 fork 点
++（`2e159e4`）是 `feat/simplify-workflow` 的祖先且未被后续提交触碰过本票涉及的四个文件（已用
++`git diff HEAD feat/simplify-workflow -- <paths>` 核实无差异），故本 worktree 上的改动可直接合并
++回 `feat/simplify-workflow`，无冲突风险。
+diff --git a/sdflow-init/assets/workflow/prompts/step2-ff.md b/sdflow-init/assets/workflow/prompts/step2-ff.md
+deleted file mode 100644
+index f266742..0000000
+--- a/sdflow-init/assets/workflow/prompts/step2-ff.md
++++ /dev/null
+@@ -1 +0,0 @@
+-/opsx:ff {change}。先过 FF-0 三分支判定：在保护分支（main/master）则 git checkout -b feat/{change}；已在 feat/{change} 则跳过；在其它 feature 分支则停下问我（从当前切出 / 回 base 切出 / 就地继续）。若 change 源于 wayfinder map：调用语显式携带 map 路径（如 @openspec/roadmaps/{name}/map.md）并按 ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读取。完成后 checkpoint-commit ff。
+diff --git a/sdflow-init/assets/workflow/prompts/step3-grill.md b/sdflow-init/assets/workflow/prompts/step3-grill.md
+deleted file mode 100644
+index d1d99e7..0000000
+--- a/sdflow-init/assets/workflow/prompts/step3-grill.md
++++ /dev/null
+@@ -1 +0,0 @@
+-/grill-with-docs 死磕 {change dir} 的 design.md（连 proposal/specs/tasks）。守四条通则——尤其：拷问的基准是【目标态】，MUST NOT 用「现在代码不是这么写的 / 存量里没出现过」否决设计（现状只用来核事实，不用来定对错）；事实自己查（grep 得到的别问）；≥2 方案先调研再给推荐，别把选项丢回来。落档：ADR→openspec/adr/、术语→openspec/CONTEXT.md；文档改动标 [grill-amendment]。收敛后 checkpoint-commit grill（多轮中途不提交）。
+diff --git a/sdflow-init/assets/workflow/prompts/step5_5-embedded-sop.md b/sdflow-init/assets/workflow/prompts/step5_5-embedded-sop.md
+deleted file mode 100644
+index c750cdf..0000000
+--- a/sdflow-init/assets/workflow/prompts/step5_5-embedded-sop.md
++++ /dev/null
+@@ -1 +0,0 @@
+-/embedded-test-sop 基于 {change dir} 的 specs/ + 评审结论生成 {change}-sop.md 手工测试文档 + log-checks.yaml，存到 {change dir}。
+diff --git a/sdflow-init/tests/test_grill_handoff.py b/sdflow-init/tests/test_grill_handoff.py
+deleted file mode 100644
+index 19295cd..0000000
+--- a/sdflow-init/tests/test_grill_handoff.py
++++ /dev/null
+@@ -1,105 +0,0 @@
+-"""守「ff 之后是 grill，不是 spec-review」这条交棒规则。
+-
+-【为什么需要机械守】
+-`grill-with-docs` 是 `disable-model-invocation: true` 的第三方 skill —— **模型唤不起它**，
+-只能把 prompt 贴给人、由人手敲。而它在消费仓 CLAUDE.md 里【原本一次都没出现过】，
+-于是 ff 跑完，模型自然跳到它唯一看得见的下一个 skill = /sdflow-spec-review。
+-
+-结果：一份**没被拷问过**的设计直接进设计审。而 spec-review 的多镜是在**已有设计的框架内**
+-找问题——**它不会替你质疑这个框架本身**。这正是 07 的教训（18 面镜全在废弃分支里做优化）。
+-
+-∴ 两件事都得守：
+-  1. 消费仓 CLAUDE.md 托管块里，这条交棒规则在不在
+-  2. 它指向的那段 grill prompt，在 workflow.md 里还在不在（指针不能悬空）
+-"""
+-from pathlib import Path
+-
+-ASSETS = Path(__file__).resolve().parents[1] / "assets"
+-SNIPPET = ASSETS / "snippets" / "claude-section.md"
+-WORKFLOW = ASSETS / "workflow" / "workflow.md"
+-PROMPTS = ASSETS / "workflow" / "prompts"
+-
+-
+-def test_snippet_routes_ff_to_grill_not_spec_review():
+-    """CLAUDE.md 托管块 MUST 写死：ff 之后是 grill，且 MUST 贴 prompt。"""
+-    t = SNIPPET.read_text(encoding="utf-8")
+-    assert "ff 之后是 grill" in t
+-    assert "grill-with-docs" in t
+-    assert "MUST NOT 直接跳到" in t and "sdflow-spec-review" in t
+-    # 光说「下一步跑 grill」没用 —— 必须把 prompt 贴出来（它唤不起，只能人敲）
+-    assert "原样贴出来" in t
+-    assert "只能人手动触发" in t
+-
+-
+-def test_grill_prompt_pointer_is_not_dangling():
+-    """托管块让人去 workflow.md 步骤 3 取 prompt —— 那段 prompt MUST 真的在那里。
+-
+-    指针悬空 = 模型取不到 → 只能凭记忆重写 → 而托管块明令 MUST NOT 凭记忆重写
+-    → 死锁，实际结果就是静默跳过 grill。
+-    """
+-    assert "workflow/prompts/step3-grill.md" in SNIPPET.read_text(encoding="utf-8")
+-    f = PROMPTS / "step3-grill.md"
+-    assert f.is_file(), "指针悬空：prompts/step3-grill.md 不存在"
+-    assert f.read_text(encoding="utf-8").startswith("/grill-with-docs 死磕")
+-
+-
+-def test_grill_prompt_carries_the_principles_landing():
+-    """grill 是通则③（拿现状反驳目标）的最高发场景 —— prompt MUST 当场点名。
+-
+-    通则正文（CLAUDE.md 托管块）是通用表述；grill 场景下它有特定形态：
+-    「现在代码不是这么写的，所以这个设计不对」。
+-    而 grill 手边唯一的实证材料就是现状代码 ⇒ 这是它的【默认失效模式】，不是偶发。
+-    """
+-    assert "现状只用来核事实，不用来定对错" in (PROMPTS / "step3-grill.md").read_text(encoding="utf-8")
+-
+-
+-def test_grill_is_always_full_depth():
+-    """grill 是独立审视 —— MUST NOT 因上游（explore / wayfinder 已决）就瘦跑。
+-
+-    拿上游产出给自己松绑，二次审视就退化成盖章。
+-    回归：`wayfinder-resolved:` 锚曾被用作「grill 瘦跑判据」，已废除（锚只剩溯源用途）。
+-    """
+-    w = WORKFLOW.read_text(encoding="utf-8")
+-    assert "一律全深度" in w
+-
+-    ff = (ASSETS / "workflow" / "ff-generation-constraints.md").read_text(encoding="utf-8")
+-    assert "锚的用途只有溯源" in ff
+-    assert "瘦跑以该前缀为唯一判据" not in ff   # 死条款已清
+-
+-
+-# ---------- superpowers 的 task-brief 断口（靠读第三方源码才发现的）----------
+-
+-def test_plan_constraints_land_where_implementer_can_see_them():
+-    """⭐ 领域约束 MUST 落在【每个 Task 段内】，不能只写 plan 头部的 Global Constraints。
+-
+-    【这个洞是怎么发现的】（读 superpowers 6.1.1 源码）：
+-      - `subagent-driven-development/scripts/task-brief` 的 awk 【只抽 `### Task N` 那一段】；
+-      - 其 SKILL.md dispatch 契约白纸黑字：brief 是 "the single source of requirements"，
+-        且 "Exact values … appear **only in the brief**"，五项必含里【没有 Global Constraints】；
+-      - 而 `writing-plans` 的模版却写着 "Every task's requirements **implicitly** include
+-        this section" —— **这个 implicitly 在 subagent-dev 的执行路径上是假的**。
+-
+-    ⇒ 「把 design 的领域约束逐字写进 Global Constraints」曾是一条【悬空的 MUST】：
+-       写进去了，implementer 一个字都看不到（同 07 附录 A22 那类病 —— MUST 无承载）。
+-
+-    ⚠️ 这条断口在 superpowers 侧，我们改不了；只能让 plan 把约束【也】写进 Task 段。
+-       升级 superpowers 后若 task-brief 改成抽全文，本测试可以放宽 —— 但【先去读它的源码再放宽】。
+-    """
+-    s6 = (PROMPTS / "step6-writing-plans.md").read_text(encoding="utf-8")
+-    assert "每个 Task 段内复述" in s6
+-    assert "task-brief" in s6 and "不进 brief" in s6
+-
+-
+-def test_dispatch_sites_carry_the_principles():
+-    """两条实现管线的 dispatch 点，都 MUST 点名「原文携带四条通则」。
+-
+-    子代理 fresh context —— 看不见 CLAUDE.md，也看不见 SKILL.md。
+-    通则块自带传播纪律，但【声明在通则里】拦不住【dispatch 那一行忘了带】——
+-    所以每个 dispatch 站点上都要点名（同 spec-review / code-review 的 fan-out）。
+-    """
+-    w = WORKFLOW.read_text(encoding="utf-8")
+-    assert "dispatch prompt MUST 原文携带四条通则" in w        # superpowers 路径（步骤 7）
+-
+-    impl = (Path(__file__).resolve().parents[2] / "sdflow-implement" / "SKILL.md") \
+-        .read_text(encoding="utf-8")
+-    assert "「四条通则」区块全文" in impl                        # tickets 路径
+diff --git a/sdflow-spec/SKILL.md b/sdflow-spec/SKILL.md
+index 4432fb8..83fbee7 100644
+--- a/sdflow-spec/SKILL.md
++++ b/sdflow-spec/SKILL.md
+@@ -1,23 +1,22 @@
+ ---
+ name: sdflow-spec
+-disable-model-invocation: true
+ description: >
+   阶段一「产 spec」单一入口——把 澄清（A）→ 拷问（B）→ 生成（C）三相位编排成一次连续跑，产出
+   标准四件套（proposal / design / specs / tasks）+ 一份承重的 `decision-memo.md`。**拷问结构性
+   前置于成文**：memo 是单一源、Phase C 全量生成四件套——消除旧流程「ff→grill→局部改」导致的
+   四件套内部不一致（修改互引文档比从单一源整体生成更容易出错，这是工程事实不是概率论据）。
+   主 session 亲自做全部判断（澄清 / 拷问 / 纪要 / 终审）；相位 B 起手就建分支、change 目录与草稿纪要，
+   承重约束站稳一条就增量落盘一条 ⇒ `/clear` 无损，崩溃只丢「上一次保存之后」那一段。出口原样贴
+   `/clear` → 换档 → `/sdflow-spec-review`。取代 `opsx:ff` + `/grill-with-docs` 两入口拼接
+   （成文+拷问合体；`opsx:explore` 的发散探索不在本 skill 范围——想法尚未成形时先 explore 再本 skill）。
+-  由人显式触发（`disable-model-invocation: true`）。Trigger with /sdflow-spec。
++  Trigger with /sdflow-spec。
+ ---
+ 
+ # sdflow-spec — 阶段一产 spec 单一入口
+ 
+ <!-- sdflow:principles:start —— 真相源 sdflow-init/assets/hack/skill-principles.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
+ ## 🟢 四条通则（所有 sdflow skill 共用 · 违反即本次运行失败）
+ 
+ 这四条约束的是**你自主决策时的默认取向**。**真人用户明确指示优先**——真人用户明确要求扩大范围、
+ 跳过某步、或接受某个不完美方案时，以他的意见为准，照做即可，不必拿本文去反驳他。
+ 但「他没反对」不等于「他明确要求」：豁免要有**明确指示**，**MUST NOT 拿沉默当授权**。
