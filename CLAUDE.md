@@ -186,8 +186,8 @@ pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
     它依赖的外部事实。一切 proposal / design / specs / tasks / 评审报告 / impl-report 适用。
 - **`openspec/roadmaps/{name}/`** — 项目级 roadmap 文档包（长期真相源，`sdflow-roadmap` 铺设）：
   design/roadmap/task-log 三件套 + 可选 memo，直写落盘、不经 `plan-{topic}` change 壳；比单次 change
-  更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。roadmap 类 wayfinding 落
-  `openspec/roadmaps/{name}/footage/`（长讨论考古层；三件套不引用）。现有 `workflow-cost-optimization`
+  更大的层级，统摄多阶段规划（每阶段 → 一次未来 change）。长讨论的历史存档（memo 增量落盘 +
+  存量 footage 冻结包）不进三件套引用。现有 `workflow-cost-optimization`
   （评审工作流成本优化三腿四阶段）、`mechanical-layer-hardening`（adr/0006 机械层固化：脚本化 +
   去字符串化两腿六阶段）沿用存量四件套格式（迁移受控延后，Q-C）。
 - **`.claude/skills/openspec-*` 与 `.codex/skills/openspec-*`** — openspec CLI（`@fission-ai/openspec`）
@@ -428,16 +428,3 @@ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权�
   （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
   跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
 <!-- opsx-init:end -->
-## Agent skills
-
-### Issue tracker
-
-工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-tracker.md`。roadmap 类 wayfinding effort 的落盘根为 `openspec/roadmaps/{name}/footage/`（条件分流详见 tracker doc）。
-
-### Triage labels
-
-使用默认的五种 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `openspec/matt/triage-labels.md`。
-
-### Domain docs
-
-单一上下文布局：`openspec/CONTEXT.md` 与 `openspec/adr/`。详见 `openspec/matt/domain.md`。

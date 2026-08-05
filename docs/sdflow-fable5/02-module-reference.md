@@ -199,7 +199,16 @@ flowchart TD
 
 ### 4.6 sdflow-roadmap：闭环之上的规划层
 
-三件套 = design（HOW+WHY，头部含「需求与目标态」伸缩章）/ roadmap（WHEN+每阶段验收）/ task-log（DID），+ 可选 memo（短档讨论备忘，考古用，三件套不引用）；长讨论（跨 session/跨天/压缩仍未收敛）改落 wayfinder footage/（`openspec/roadmaps/{name}/footage/`，同样不被三件套引用）。硬性规则：固定存 `openspec/roadmaps/{name}/`；每个子任务粒度 = **恰好一次 `/opsx:new` 能完成**；产出直写，不经 OpenSpec change 壳承载；只规划不实施；review 按野心信号分档——默认 `/plan-eng-review`，外部用户/变现/获客类野心信号才 `/autoplan` 三连。存量四件套包（含独立 requirements.md）冻结为合法历史形态，续跑兼容不强迁。
+三件套 = design（HOW+WHY，头部含「需求与目标态」伸缩章）/ roadmap（WHEN+每阶段验收）/ task-log（DID）。
+与 `sdflow-spec` 同构的三相位结构（第零步重入探测 → A 澄清+gate-0+商业化信号检查 →
+B 七维拷问按信号裁剪+memo 增量落盘 → C 生成三件套），wayfinder / grilling / domain-modeling /
+office-hours 四个外部依赖已内化（`refactor-roadmap-internalize-deps`）；三态路由：
+gate-0 过∧无商业化信号 → 直接生成，gate-0 过∧信号命中 → B 裁剪到维度①，gate-0 未过 →
+B 按信号七维裁剪。memo（B 相位纪要，含 `## 未决项` 小节）+ 存量 footage（此前产出的包，
+冻结兼容续跑）统称「历史存档」，三件套不引用。硬性规则：固定存 `openspec/roadmaps/{name}/`；
+每个子任务粒度 = **恰好一次 `/opsx:new` 能完成**；产出直写，不经 OpenSpec change 壳承载；
+只规划不实施；review 按商业化信号分档——默认 `/plan-eng-review`，信号命中才 `/autoplan` 三连；
+收尾 checklist 四项软门。存量四件套包（含独立 requirements.md）冻结为合法历史形态，续跑兼容不强迁。
 方法论出处 `references/long-flow-skill-paradigm.md`：「skill 是助产士非 orchestrator」，契约可验证性 A/B/C 三级、目标全升 C。
 
 ---

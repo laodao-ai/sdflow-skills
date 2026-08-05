@@ -265,16 +265,3 @@ Codex 宿主默认**不**派子代理——须由项目指令文件显式授权�
   （同上，语义核验非机械门），但子代理不可用时 **fail-loud 硬停**而非缩 roster——它不 fan-out 就
   跑不了任何 ticket，implementer / Standards 轴 / Spec 轴 / fix 没有等价的单 session 替代路径。
 <!-- opsx-init:end -->
-## Agent skills
-
-### Issue tracker
-
-工作项使用本地 Markdown，存放在 `openspec/matt/<feature>/`；外部 PR 不作为 triage 输入。详见 `openspec/matt/issue-tracker.md`。
-
-### Triage labels
-
-使用默认的五种 triage 标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `openspec/matt/triage-labels.md`。
-
-### Domain docs
-
-单一上下文布局：`openspec/CONTEXT.md` 与 `openspec/adr/`。详见 `openspec/matt/domain.md`。
