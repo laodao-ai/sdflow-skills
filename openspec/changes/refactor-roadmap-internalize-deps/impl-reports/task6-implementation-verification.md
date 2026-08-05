@@ -8,6 +8,22 @@
 
 ---
 
+> # 🔴 阅读须知：本报告的最终结论在文末，不在前半部分
+>
+> 本文件分**两层**，后一层推翻了前一层的部分定性：
+>
+> | 层 | 作者 | 盘面 | 状态 |
+> |---|---|---|---|
+> | 前半（至「## 结论」止） | 本票 implementer | SHA `379de34`，**3 条失败**，`.claude/worktrees/` 下尚有 3 个 agent worktree（**扫描类测试口径被污染**） | ⚠️ **部分已被推翻，勿单独引用** |
+> | 后半（「## 🔴 编排层订正」起） | 编排层 | SHA `e145971`，**2 条失败**（均 baseline），worktree 已清理（口径干净） | ✅ **权威结论** |
+>
+> **最终结论**：相对 merge-base **无新增失败**；2 条失败均为 baseline，其中
+> `test_subprocess_encoding_contract.py` 是 **`tasks.md` 6.2 漏记的一条**（**不是** flaky——
+> 前半的 flaky 定性是错的，worktree 在**掩盖**而非制造这条红）。
+>
+> 〔本导航块由双轴审 Standards 轴 `Important` + Spec 轴 `Minor` 促成：两轴各自指出被推翻的旧结论
+> 缺反向指针，只读到前半的人会带走过时数字。按面治一次补全**所有**受影响段落，非只补被点穿处。〕
+
 ## 聚合套件发现契约（Q6：MUST NOT 解析构建文件，命令来源优先级②）
 
 `openspec/config.yaml` 顶层实测**无 `test-suites` 键**（① 不适用）。走 ②：依仓内既有约定判定，
@@ -32,6 +48,8 @@
 ---
 
 ## 三层证据
+
+> ⚠️ **本节盘面已被文末「编排层收口全量跑」取代**（该节 3 条失败 → 干净盘面 2 条；② 定性已订正为 baseline）。**勿单独引用本节数字。**
 
 | 层 | 命令原文 | 退出码 | SHA |
 |---|---|---:|---|
@@ -67,6 +85,8 @@ assert '### Requirement: SA-14 四入口选择规则' in authoring   # grep 0 �
 这两个文件，与本 change 无关，**登记准确，非漏记**。
 
 ### ② `hack/tests/test_subprocess_encoding_contract.py::test_text_mode_subprocesses_declare_utf8_and_replace`（编排层通知的「Task 2/3 独立复现的第 2 条」）
+
+> ⚠️ **本节盘面已被文末「编排层收口全量跑」取代**（该节 3 条失败 → 干净盘面 2 条；② 定性已订正为 baseline）。**勿单独引用本节数字。**
 
 **独立核实结论：与编排层通知的预期不同——这条不是稳定锚在 merge-base 的红测，是环境态 flaky，本轮实测未在全仓跑中失败。**
 
@@ -131,6 +151,8 @@ sdflow-init/tests/test_outside_voice_child_lifecycle.py::test_runner_subtree_die
 
 ### baseline 清单差异小结（编排层要求的显式对照）
 
+> ⚠️ **本节盘面已被文末「编排层收口全量跑」取代**（该节 3 条失败 → 干净盘面 2 条；② 定性已订正为 baseline）。**勿单独引用本节数字。**
+
 `tasks.md` 6.2 只登记 1 条（①，SA-14）。编排层通知另有 Task2/Task3 独立复现的「第 2 条」
 （指向 `test_subprocess_encoding_contract.py`）——本票独立复核后发现：**它不是一个可稳定归因于
 merge-base 的红**，而是本机 `.claude/worktrees/` 是否存在导致的扫描口径 flaky（②，根因已定位到
@@ -153,7 +175,16 @@ merge-base 的红**，而是本机 `.claude/worktrees/` 是否存在导致的扫
 
 ## 证据锚定 SHA
 
-**所有判「通过」的证据行锚同一个最终 SHA**：`379de3405a07fc7b23a16bb7a7282e2cf0982b6d`
+> 🔴 **本节已被下方「编排层收口全量跑」节取代**〔双轴审 Spec 轴 Minor 订正〕。
+> **最终锚定 SHA = `e1459716832c598f4eeb18e46e5db71dc08e59c9`**，最终失败集 = **2 条**（均 baseline）。
+>
+> 本节记录的是 implementer 执行时的盘面（SHA `379de34`、3 条失败），彼时 `.claude/worktrees/`
+> 下尚有 3 个 agent worktree，**扫描类测试口径被污染**（详见上方「编排层订正」节）。编排层清理
+> worktree 后重跑了一次干净全量，那次才是本票的收口证据。**两节的最终判据结论一致**
+> （相对 merge-base 无新增失败），但**读者应以下方收口节为准**——本节保留仅为审计轨迹，
+> MUST NOT 作为「最终 SHA」引用。
+
+**（以下为 implementer 原文，盘面已被取代，保留备查）** 所有判「通过」的证据行锚同一个最终 SHA：`379de3405a07fc7b23a16bb7a7282e2cf0982b6d`
 （`git rev-parse HEAD`——这是本报告写入前、全部测试与机械门实际执行时的 SHA；本票不写产品代码，
 豁免 red-before-green，未产生任何产品代码 commit，聚合套件证据锚定于测试执行当时的 SHA，
 非本报告文件自身提交后的 SHA）。
@@ -172,6 +203,8 @@ merge-base 的红**，而是本机 `.claude/worktrees/` 是否存在导致的扫
 ---
 
 ## 结论
+
+> ⚠️ **本节盘面已被文末「编排层收口全量跑」取代**（该节 3 条失败 → 干净盘面 2 条；② 定性已订正为 baseline）。**勿单独引用本节数字。**
 
 - 单元层：相对 merge-base **无新增失败**——3 条失败逐条核实完毕（① 已知 baseline 稳定复现于
   merge-base；② 编排层预期的「第 2 条」经独立核实实为环境态 flaky 且本次实测为绿；③ 两条新发现的
