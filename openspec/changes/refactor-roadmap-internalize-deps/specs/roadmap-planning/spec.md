@@ -168,6 +168,11 @@ roadmap 规划工作流 SHALL 将三件套（design.md / roadmap.md / task-log.m
 - **WHEN** 新版 skill 被用于更新一个含 requirements.md 的存量包（本仓或任何消费仓）
 - **THEN** 按四件套既有结构继续工作，不删除、不迁移、不告警刷屏（至多一行「存量四件套形态，兼容模式」提示）
 
+#### Scenario: 缺件存量包续跑与收尾判定〔spec-review-amendment SR-25 · 窄复核 NR-8〕
+
+- **WHEN** 续跑一个只有 `roadmap.md`、缺 design.md / task-log.md 的存量包
+- **THEN** 按现存文件继续工作、不报错、不因缺件拒绝；收尾 checklist ② 的「三件套相互引用完整」对缺失文件判**不适用**（而非不通过），并输出一行「存量缺件包（缺 X），引用完整性仅对现存文件核验」
+
 #### Scenario: 同名包已存在〔spec-review-amendment SR-3〕
 
 - **WHEN** 相位 B 起手（或直接生成路径的落盘前）发现 `openspec/roadmaps/{name}/` 已存在
