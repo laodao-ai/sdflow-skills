@@ -207,11 +207,11 @@ fold 判据），**MUST NOT** 沿用「因本次改动才孤立」的旧因果�
 🔴 4.5 是**合并后**才能执行的 hand-off 项（运行 checkout `~/.skills/sdflow-skills` 重跑 `setup.sh`
 / `/sdflow-upgrade`）——本票**不执行**它，只在实现记录中写明它待 hand-off 承接。
 
-- [ ] `ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀规则保留且加 legacy 标注（4.1）
-- [ ] `workflow-history.md` 追加一条 wayfinder 路径移除记录（4.2）
-- [ ] `config.template.yaml` 的 `:41` / `:51` 两行陈旧章节引用已订正（4.3）
-- [ ] dev checkout 跑过 `bash setup.sh`，且**单独**跑 `python3 hack/sync_principles.py --check` 退出码为 0（4.4）
-- [ ] 4.5（合并后运行 checkout 还原）已在实现记录中写明为 hand-off 项，未在本票执行（4.5）
+- [x] `ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀规则保留且加 legacy 标注（4.1）
+- [x] `workflow-history.md` 追加一条 wayfinder 路径移除记录（4.2）
+- [x] `config.template.yaml` 的 `:41` / `:51` 两行陈旧章节引用已订正（4.3）
+- [x] dev checkout 跑过 `bash setup.sh`，且**单独**跑 `python3 hack/sync_principles.py --check` 退出码为 0（4.4）
+- [x] 4.5（合并后运行 checkout 还原）已在实现记录中写明为 hand-off 项，未在本票执行（4.5）
 
 ### Task 5: 残留扫描与存量包兼容演练
 

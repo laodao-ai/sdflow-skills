@@ -1,0 +1,267 @@
+# Review package: cc41cb3..fb232d4 (Task 4, 串行主工作树)
+
+## Commits
+fb232d4 fix(refactor-roadmap-internalize-deps): workflow bundle 同步 —— wayfinder 前缀 legacy 标注 + 演进记录 + 陈旧引用订正
+
+## Files changed
+ .../impl-reports/task4-brief.md                    |  28 +++++
+ .../impl-reports/task4-bundle-sync.md              | 121 +++++++++++++++++++++
+ sdflow-init/assets/workflow/config.template.yaml   |   2 -
+ .../assets/workflow/ff-generation-constraints.md   |   5 +
+ sdflow-init/assets/workflow/workflow-history.md    |  11 ++
+ 5 files changed, 165 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task4-brief.md b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task4-brief.md
+new file mode 100644
+index 0000000..fb16ed6
+--- /dev/null
++++ b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task4-brief.md
+@@ -0,0 +1,28 @@
++### Task 4: workflow bundle 同步与安装链路生效
++
++**Blocked-by:** 1, 2, 3
++**R-ID:** R2
++
++工作流规则 bundle 与本次讨论层重构对齐：`wayfinder-resolved:` 前缀规则保留但标为 legacy（消费仓
++存量 footage 仍可能被溯源）、演进史留下一条移除记录、消费仓 config 生成模版中指向已不存在章节的
++陈旧引用被订正；改动经安装链路生效到全局 canonical。
++
++行为上可观察的结果：新下游仓由 `sdflow-init` 生成的 `config.yaml` 不再引用不存在的
++「wayfinder→ff 衔接契约」章节；本机 `~/.sdflow/workflow/` 解析到的规则即改动后版本。
++
++依据：`tasks.md` §4（4.1–4.5）。
++
++🔴 **本票在主工作树串行执行**（`Blocked-by` 覆盖全部并行票 ⇒ `next_ready` 只返回它一个）——
++`setup.sh` 建的是**绝对路径 symlink**，在临时 worktree 中执行会把全局 skill 链接指向随后即被删除的
++路径。若发现自己不在主工作树，`BLOCKED` 上抛，MUST NOT 就地跑 `setup.sh`。
++🔴 4.4 的**验收动作 = 单独跑 `python3 hack/sync_principles.py --check` 看 exit code**——`setup.sh`
++里那一处是 `if ! …; then echo "⚠️…"; fi`，**不是 fail-closed 门**，警告会淹没在大段输出里。
++🔴 4.5 是**合并后**才能执行的 hand-off 项（运行 checkout `~/.skills/sdflow-skills` 重跑 `setup.sh`
++/ `/sdflow-upgrade`）——本票**不执行**它，只在实现记录中写明它待 hand-off 承接。
++
++- [ ] `ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀规则保留且加 legacy 标注（4.1）
++- [ ] `workflow-history.md` 追加一条 wayfinder 路径移除记录（4.2）
++- [ ] `config.template.yaml` 的 `:41` / `:51` 两行陈旧章节引用已订正（4.3）
++- [ ] dev checkout 跑过 `bash setup.sh`，且**单独**跑 `python3 hack/sync_principles.py --check` 退出码为 0（4.4）
++- [ ] 4.5（合并后运行 checkout 还原）已在实现记录中写明为 hand-off 项，未在本票执行（4.5）
++
+diff --git a/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task4-bundle-sync.md b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task4-bundle-sync.md
+new file mode 100644
+index 0000000..4f06f4f
+--- /dev/null
++++ b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task4-bundle-sync.md
+@@ -0,0 +1,121 @@
++# Task 4：workflow bundle 同步与安装链路生效 —— 实现记录
++
++## 范围（tasks.md §4，4.1–4.5）
++
++本票只改 `sdflow-init/assets/workflow/` 下 3 个 bundle 文件，跑一次 `setup.sh` 令改动经安装链路
++生效到全局 canonical。无产品代码改动，无新增/修改测试文件（本票测试面见下方「核验」）。
++
++## 4.1 · `ff-generation-constraints.md`：`wayfinder-resolved:` 前缀保留 + 加 legacy 标注
++
++- 位置：`:46` 后新增一段（D10 拍板：规则本身**不删**，只加注）。
++- 内容：声明 `sdflow-roadmap` 的三分支路由 / footage 落盘机制已随本 change 移除，新建 roadmap 包
++  不再产生 `footage/`，本前缀不再有新的产出方；规则保留仅为消费仓**存量**（重构前生成）footage
++  仍可能被溯源引用。
++- 未删除任何既有文字，`git diff` 为纯新增（+5 行）。
++
++## 4.2 · `workflow-history.md` 追加移除记录
++
++- 新增 `### A4 · sdflow-roadmap 讨论层的 wayfinder 三分支路由已移除（2026-08-06）` 一节，紧随
++  既有 A3（grill 瘦跑废除）之后，格式与既有条目一致（背景 + 理由/现状两段）。
++- 内容涵盖：原三分支路由（explore / wayfinder 铺图 / office-hours）→ 内化为单一 memo 载体；
++  `openspec/matt/` 套件随之整体移除（前提消解）；`wayfinder-resolved:` 前缀保留但 legacy 的结论
++  与 4.1 呼应。
++
++## 4.3 · `config.template.yaml` `:41` / `:51` 陈旧引用订正
++
++**核查过程（落笔前先证伪，通则①）**：
++
++1. `grep -n "wayfinder" sdflow-init/assets/workflow/ff-generation-constraints.md` 只命中
++   `wayfinder-resolved:` 前缀那一处（4.1 改动处）——**「wayfinder→ff 衔接契约」章节确实不存在**。
++2. `git log -S"wayfinder→ff 衔接契约" -- sdflow-init/assets/workflow/ff-generation-constraints.md`
++   定位到该章节在更早的 `ab8f746 task4(simplify-workflow)` 提交中被**整段删除**（连同「逐区读 map /
++   TG 判命中前置 / 回链」等具体机制说明一起删掉，只保留了「切片建议」小节里的前缀禁混用一句）。
++   `config.template.yaml` 当时未同步，形成陈旧引用（即 spec-review-amendment SR-13 指出的问题）。
++3. `grep -rn "wayfinder" sdflow-init/assets/workflow/*.md *.yaml` 确认 bundle 内再无任何「wayfinder
++   map」结构的产出方描述——本 change 的 1.8 也把 sdflow-roadmap 侧的 map 结构整体删除。⇒ 目标态下
++   「change 源于 wayfinder map」这个前提**不会再发生**（不是「存量少见」，是 producer 已不存在）。
++
++**处置**：删除两条规则（`proposal:` 段一条、`design:` 段一条），不改写为指向别处——因为没有等价
++替代目标可指。这是最小订正：既消除了指向不存在章节的死链接，也不留下描述已失效机制的说明文字
++（该模板会被 `sdflow-init` 注入每个新建下游仓的 `config.yaml`，留着等于给新仓塞入永远不会命中的
++死规则）。`git diff` 为纯删除（-2 行），未触碰同段其余行。
++
++## 4.4 · dev checkout 跑 `setup.sh` + 单独跑 `sync_principles.py --check`
++
++前置核实（编排层已告知，仍本地复核）：`~/.claude/skills/sdflow-roadmap` symlink 已指向本开发
++checkout，故本机处于「知情临时指 dev」状态，跑 `setup.sh` 不改变该指向。
++
++```
++$ bash setup.sh
++...
++sdflow-skills v1.0.0-93-gcc41cb3-dirty ready → /Users/cheneyzhao/.claude/skills /Users/cheneyzhao/.codex/skills
++  installed (39): ...
++    ✓ workflow @ /Users/cheneyzhao/.sdflow — 接管：.../sdflow-init/assets/workflow → /Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-init/assets/workflow
++    ...
++[sync_principles] ✅ 20 个投放面全部与真相源一致
++[gen_workflow_guide] ✅ WORKFLOW-GUIDE.md 与单一源一致
++[async-branch-parity] ✅ 2 处 async host 调度段逐字节一致
++[tier-resolution-parity] ✅ 4 处宿主/档位解析核心段逐字节一致
++[encoding-hygiene] ✅ 所有入口脚本均满足编码前导契约
++```
++
++按 tasks.md 4.4 明文要求，`setup.sh` 内 `sync_principles.py --check` 那一处是 `if ! …; then echo
++"⚠️…"; fi`（非 fail-closed，警告可能淹没在大段输出里），故**单独**再跑一次看 exit code：
++
++```
++$ python3 hack/sync_principles.py --check
++[sync_principles] ✅ 20 个投放面全部与真相源一致
++$ echo $?
++0
++```
++
++**exit code = 0**。本票未改任何 SKILL.md，principles 托管块本就不受影响；此步是安装链路的完整性
++核验，非「本票引入了 principles 漂移」。
++
++### 安装链路指向核对（如实贴出）
++
++```
++$ ls -l ~/.sdflow/workflow
++lrwxr-xr-x ... /Users/cheneyzhao/.sdflow/workflow -> /Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-init/assets/workflow
++
++$ ls -l ~/.claude/skills/sdflow-roadmap
++lrwxr-xr-x ... /Users/cheneyzhao/.claude/skills/sdflow-roadmap -> /Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-roadmap
++```
++
++两条 symlink 均指向本开发 checkout（`/Users/cheneyzhao/Documents/04-sdflow-skills`），未指向任何
++奇怪路径；本机当前全局 canonical = 改动后的 bundle 版本。
++
++## 4.5 · hand-off 项（本票不执行）
++
++按 tasks.md 明文：4.5（合并后在运行 checkout `~/.skills/sdflow-skills` 重跑 `setup.sh` /
++`/sdflow-upgrade` 还原）是**合并后**才能执行的步骤，**本票 MUST NOT 执行**。特此记录：
++
++> 🔴 **待办（hand-off 给合并后步骤）**：本 change 合并进 `main` 后，须在运行 checkout
++> `~/.skills/sdflow-skills` 执行 `git pull` + `bash setup.sh`（或 `/sdflow-upgrade`），使
++> `~/.sdflow/workflow` 与 `~/.claude/skills/sdflow-roadmap` 等全局 symlink 从当前「临时指向本开发
++> checkout」状态还原为指向运行 checkout——这是 CLAUDE.md「dev/runtime checkout 纪律」的标准收尾，
++> 本票未执行、不代表遗漏。
++
++## 核验清单（逐项对应 tickets.md 验收复选框）
++
++| # | 验收动作 | 结果 |
++|---|---|---|
++| 4.1 | `wayfinder-resolved:` 前缀规则保留且加 legacy 标注 | ✅ 规则原文零改动，纯新增一段 legacy 说明 |
++| 4.2 | `workflow-history.md` 追加一条 wayfinder 路径移除记录 | ✅ 新增 A4 节 |
++| 4.3 | `config.template.yaml` `:41`/`:51` 陈旧引用订正 | ✅ 两条死引用规则已删除（无等价替代目标可指） |
++| 4.4 | dev checkout 跑 `setup.sh`，单独跑 `sync_principles.py --check` exit 0 | ✅ 见上方命令输出，exit code 0 |
++| 4.5 | 合并后 hand-off 项已记录、未在本票执行 | ✅ 见上节 |
++
++## 三个特殊约束逐条自查
++
++1. **4.4 验收动作独立跑 `--check` 看 exit code**——已照做，未依赖 `setup.sh` 输出里的告警行。
++2. **4.5 是 hand-off 项，本票不执行**——已确认未在本机对 `~/.skills/sdflow-skills` 做任何操作。
++3. **`wayfinder-resolved:` 前缀规则本身保留**（D10）——4.1 的 diff 是纯新增，未删除/未改写原有
++   前缀禁混用规则的任何一个字。
++
++## 未触碰范围确认
++
++`git status --porcelain` 显示本次改动只涉及 3 个 bundle 文件（另有编排层预先落盘的
++`task4-brief.md` 一并入本次提交，属 ticket 可见性前置产物、非本票工作内容）；未改动任何
++`.py` 文件；未改动 `proposal.md` / `design.md` / `tasks.md` / `specs/`；未勾选 `tickets.md`
++复选框；未打 `checkpoint(...)` 标签。
+diff --git a/sdflow-init/assets/workflow/config.template.yaml b/sdflow-init/assets/workflow/config.template.yaml
+index c08d20a..c8e0967 100644
+--- a/sdflow-init/assets/workflow/config.template.yaml
++++ b/sdflow-init/assets/workflow/config.template.yaml
+@@ -31,31 +31,29 @@ context: |
+   ## 本项目｜tech stack / 约定（每个项目自填；新项目替换本段）
+   <在此填写：Tech stack / API style / DB 访问 / Forbidden patterns / 详见 CLAUDE.md 等>
+ 
+ # 按 artifact 注入的自定义规则（升级安全：在仓库内，openspec update 不覆盖）
+ # 槽位分「无条件必填」与「〔TG-NN〕命中才必填」两类；TG 定义见 trigger-catalog.md。
+ rules:
+   proposal:
+     - 无条件必含小节，统一用英文标题（与 OpenSpec 模板一致）：`## Why`（问题/动机）、`## Success Metrics`、`## Non-Goals`（不在本次范围）、`## Compliance`（合规声明，不适用写 N/A）
+     - 按 @openspec/workflow/trigger-catalog.md 评估并加节：TG-19→需求优先级(P0/P1/P2)、TG-20→利益相关方与外部依赖、TG-21→开放问题(负责人/截止)、TG-22→假设(失效影响)、TG-24→外部服务成本估算
+     - 命中 TG-01/02/03（技术栈）则在 Impact 标注，供下游按 @openspec/workflow/spec-checklists/ 选用领域清单
+-    - change 源于 wayfinder map 时：按 @openspec/workflow/ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读 map（Destination→动机+Success Metrics、Decisions-so-far→逐 ticket zoom 决议全文、Out-of-scope→Non-Goals 可证伪假设），proposal 回链 map
+   specs:
+     - 每个 Requirement 必挂 #### Scenario(WHEN/THEN)，Requirement 有稳定 ID（schema 已要求，强调不得遗漏）
+     - 验收标准可观察、可测试，不得只写"测试通过"
+     - 新能力 delta spec MUST 以 `## Purpose` 开头（≥50 字符）；1.7.0 archive 抬升此段进主 spec，缺则写 TBD 占位符
+   design:
+     - 无条件必含小节，英文标题：`## Compliance`（规则/边界合规声明，遵守或显式豁免，禁沉默例外）
+     - 按 trigger-catalog 命中加节：TG-04→v_old/v_new 对照表、TG-05→数据模型与生命周期、TG-07→请求/响应 JSON 示例、TG-08→失败模式表+可观测性、TG-15→可观测性、TG-16→NFR 数字化、TG-17→安全与数据保护、TG-23→决策记录 ADR、TG-13/14→组件清单
+     - 按 @openspec/workflow/design-diagrams.md 画图：TG-09→状态机图、TG-10→序列图、TG-11→数据流图、TG-12→决策图、TG-13→C4 Context+Container；非平凡变更至少一张组件/依赖图
+     - 代码事实(函数名/字段/API 路径)先核验再写入，禁从记忆直接写
+-    - change 源于 wayfinder map 时：按 @openspec/workflow/ff-generation-constraints.md「wayfinder→ff 衔接契约」，design 决策段源自已决 ticket 的须内联回链该 ticket
+   tasks:
+     - 每个任务标注对应 Requirement ID（与 specs 双向追溯，无幽灵任务）
+     - 命中 TG-18(有测试计划) 则产出测试覆盖图（code path → 测试类型）
+     - 单任务控制在可独立验证的小粒度
+     - Group related tasks under numbered sections
+ 
+ # model-tiers（可选覆盖段）——真相源 = 规则根 model-tiers.md（resolve-models.sh 按宿主机队解析）。
+ # 此段仅 per-repo 覆盖"档位→模型"映射，MUST 按机队分键（add-codex-host-support · ADR-8）：
+ # model-tiers.{claude,codex}.{strong,mid,light}；resolve-models.sh 按当前宿主所属机队读对应段，
+ # 无该段回落机队缺省。扁平旧格式（无机队分键，见下）兼容读作 Claude 机队覆盖，仅在 Claude 宿主下
+diff --git a/sdflow-init/assets/workflow/ff-generation-constraints.md b/sdflow-init/assets/workflow/ff-generation-constraints.md
+index c6fd86e..37a9438 100644
+--- a/sdflow-init/assets/workflow/ff-generation-constraints.md
++++ b/sdflow-init/assets/workflow/ff-generation-constraints.md
+@@ -39,20 +39,25 @@
+ 
+ 仓的实现管线为 tickets（`openspec/config.yaml` 无 `impl-pipeline` 键即缺省命中；显式设
+ `impl-pipeline: superpowers` 时不适用）时，design.md 决策区 **MAY** 含「切片建议」节
+ （初步 ticket 划分 + 阻塞边草图）。出 ticket 模式（`sdflow-implement`）消费该节的语义是**建议，
+ 非契约**——节缺席时自主出 ticket；对切片粒度的争议走既有 `T10-choice` 三级决策协议（无客观判据档
+ 派 **strong 档**对抗镜复核）。
+ 
+ 切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀——该前缀留给 roadmap wayfinding 效力范围内
+ 的已决 ticket 溯源（`openspec/roadmaps/{name}/footage/`），混用会让溯源指向错误的出处。
+ 
++> 🔴 **legacy**：`sdflow-roadmap` 的三分支路由 / footage 落盘机制已随
++> `refactor-roadmap-internalize-deps` 移除（讨论层内化为 memo 单载体），**新建 roadmap 包不再产生
++> `footage/`，本前缀不再有新的产出方**。规则本身保留，仅因消费仓**存量** footage（重构前生成）仍
++> 可能被溯源引用；无存量 footage 的仓可忽略本条。
++
+ ## 背景
+ 
+ D-1~D-5 原本以纯文本形式内嵌在早期工作流文档的 `/opsx:ff` 命令 prompt 单元格里
+ （在多个 ff 调用点各一份完整复制），其余多处（工作流概览、对比表、附录模板、判定速查）
+ 仅以裸编号引用、不含定义。
+ 
+ 根本问题：**定义无单一权威源**——1 份定义被复制成 2 份 + 4 处裸引用。
+ 2026-06-27 新增 D-5（commit b60f21b）时，只更新了两处完整定义，未同步裸引用处的编号清单，
+ 导致对比表/附录/速查仍写「D-1/D-3/D-4」漏掉 D-5，定义与引用漂移。本规范抽出单一源以根除漂移。
+ 
+diff --git a/sdflow-init/assets/workflow/workflow-history.md b/sdflow-init/assets/workflow/workflow-history.md
+index eb5c79d..c08d95b 100644
+--- a/sdflow-init/assets/workflow/workflow-history.md
++++ b/sdflow-init/assets/workflow/workflow-history.md
+@@ -23,10 +23,21 @@
+ 现在 prompt 的**单一源 = `prompts/step*.md`**，一步一文件；表格只留指针；
+ 人读完整版 = **`WORKFLOW-GUIDE.md`（生成物，prompt 全文内联）**，由 `hack/gen_workflow_guide.py` 从
+ 本文件 + `prompts/` 机械拼装，**MUST NOT 手改**（改了会被下次生成覆盖，且与单一源漂移）。
+ 
+ ### A3 · grill 的 wayfinder「瘦跑」已废除（2026-07-14）
+ 
+ 原 grill prompt 有一段：「上游 wayfinder 已决分支：引 resolution 快速核对即过」。**已整段删除。**
+ 
+ **理由**：瘦跑本身就在破坏 grill 的独立性——拿上游产出给自己松绑，二次审视就退化成盖章。
+ `ff-generation-constraints.md` 的 `wayfinder-resolved:` 锚现在**只用于溯源**，不再是任何减负判据。
++
++### A4 · `sdflow-roadmap` 讨论层的 wayfinder 三分支路由已移除（2026-08-06）
++
++`sdflow-roadmap` 原按规模三分支路由（explore / wayfinder 铺图 / office-hours），wayfinder 分支
++产出 `openspec/roadmaps/{name}/footage/` map + ticket 票（`open/claimed/resolved/abandoned` 状态机）。
++`refactor-roadmap-internalize-deps` 将讨论层内化为单一 memo 载体（三态 create/continue/replan +
++七维拷问），删除该三分支路由与 footage 落盘机制；`openspec/matt/` 套件（issue tracker / triage
++labels / domain docs）随之整体移除（前提消解：无 wayfinder 调用点）。
++
++`ff-generation-constraints.md` 的 `wayfinder-resolved:` 前缀溯源规则**保留但标 legacy**——消费仓
++**存量**（重构前生成）footage 仍可能被该前缀溯源引用；新建 roadmap 包不再产生此前缀的新实例。
