@@ -41,6 +41,7 @@ MANAGED_TOKEN_END = "opsx-init:rules:end"
 # 链接目标路径 join-key（H3/D1）：只纳 specs/{name}/spec.md 与 rules/{name}.md
 _SPEC_LINK = re.compile(r"specs/([a-z0-9-]+)/spec\.md")
 _RULE_LINK = re.compile(r"rules/([a-z0-9-]+)\.md")
+_KEBAB_RE = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
 _ANY_LINK = re.compile(r"\]\(([^)]+)\)")  # markdown 链接 target
 
 
@@ -298,8 +299,19 @@ def scan_devenv(root):
     return ("ok" if ok else "bad"), text
 
 
+def _check_non_kebab(fs):
+    """T96：非 kebab 命名的 spec/rule 会被链接正则静默漏报——在此告警。"""
+    warns = []
+    for kind in ("spec", "rule"):
+        for name in sorted(fs[kind]):
+            if not _KEBAB_RE.match(name):
+                warns.append(f"⚠ {kind} 目录名 '{name}' 非 kebab-case——INDEX 链接正则无法匹配，删除后不会被报 stale")
+    return warns
+
+
 def run_scan(root):
     fs = {"spec": scan_fs_specs(root), "rule": scan_fs_rules(root)}
+    non_kebab = _check_non_kebab(fs)
     body, mgr_warns = split_managed_block(_read_index(root))
     indexed = parse_index_entries(body)
     diff = set_diff(fs, indexed)
@@ -308,14 +320,16 @@ def run_scan(root):
     stale_shadow = scan_stale_shadow(root)
     devenv = scan_devenv(root)
     return build_report(diff, mgr_warns, claude_refs=claude_refs, stale_shadow=stale_shadow,
-                        devenv=devenv)
+                        devenv=devenv, non_kebab=non_kebab)
 
 
-def build_report(diff, mgr_warns, claude_refs, stale_shadow, devenv=("absent", "")):
+def build_report(diff, mgr_warns, claude_refs, stale_shadow, devenv=("absent", ""), non_kebab=None):
     lines = ["# maintain_scan 差异报告", ""]
+    if non_kebab is None:
+        non_kebab = []
     any_diff = (
         any(diff[k][t] for k in ("new", "stale") for t in ("spec", "rule"))
-        or bool(claude_refs) or bool(stale_shadow) or bool(mgr_warns)
+        or bool(claude_refs) or bool(stale_shadow) or bool(mgr_warns) or bool(non_kebab)
         # [impl-review-fix] mgr_warns（疑似 spec 误置托管块内等）纳入 has_diff 判定，
         # 否则该告警会与「一致，无差异」并存，自相矛盾。
     )
@@ -341,6 +355,10 @@ def build_report(diff, mgr_warns, claude_refs, stale_shadow, devenv=("absent", "
         lines.append(f"- {w}")
     if not stale_shadow:
         lines.append("- 无")
+    if non_kebab:
+        lines.append("## 非 kebab 命名")
+        for w in non_kebab:
+            lines.append(f"- {w}")
     if not any_diff:
         lines.append("")
         lines.append("一致，无差异")

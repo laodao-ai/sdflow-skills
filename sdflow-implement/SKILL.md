@@ -225,7 +225,7 @@ sdflow-implement mode=tickets-exec change={change} done_tasks={逗号分隔任�
 
 `RUN_PLAN` → 出 ticket 模式（`mode=tickets-plan`）；`CONTINUE_IMPL(done_tasks)` → 执行模式
 （`mode=tickets-exec`，`done_tasks` 原样透传，不重算不猜测）。以上两串与
-`openspec/changes/matt-workflow-integration/superpowers-plan.md` 头部 Global Constraints 节逐字
+`openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md` 头部 Global Constraints 节逐字
 一致——改一处两处一起改，禁止任一侧漂移出独立措辞。
 
 ## 依赖的确定性 helper（machine-verifiable，本 skill 不重新发明判断逻辑）

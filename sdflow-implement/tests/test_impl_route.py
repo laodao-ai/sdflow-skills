@@ -510,10 +510,10 @@ def test_fence_dangling_raises_topoerror_cross_script_golden():
 
 
 def test_golden_plan_parses_cleanly_cross_script():
-    # golden fixture 三张票均有 canonical Blocked-by 行——三态契约收紧后 golden 仍须全绿。
+    # golden fixture 四张票（含收尾票 T250）均有 canonical Blocked-by 行——三态契约收紧后 golden 仍须全绿。
     text = (SHIP_FIXTURES / "tickets_plan_golden.md").read_text(encoding="utf-8")
     deps = ir.parse_blocked_by(text)
-    assert deps == {1: set(), 2: {1}, 3: {1, 2}}
+    assert deps == {1: set(), 2: {1}, 3: {1, 2}, 4: {1, 2, 3}}
 
 
 # ---------------------------------------------------------------------------

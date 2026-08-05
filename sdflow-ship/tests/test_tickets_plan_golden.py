@@ -25,9 +25,9 @@ FENCED_HEADER = FIXTURES / "tickets_plan_fenced_header.md"
 
 
 def test_golden_task_ids():
-    # 3 张真实 ticket（### Task 1/2/3:），frontmatter 的 `impl-pipeline: tickets` 单键行
-    # 不匹配 TASK_TITLE_RE，不产生幻影任务号。
-    assert plan_task_ids(GOLDEN) == {"1", "2", "3"}
+    # 4 张 ticket（### Task 1/2/3/4:），含收尾票（T250）；frontmatter 的 `impl-pipeline: tickets`
+    # 单键行不匹配 TASK_TITLE_RE，不产生幻影任务号。
+    assert plan_task_ids(GOLDEN) == {"1", "2", "3", "4"}
 
 
 def test_golden_no_unbalanced_fence():
@@ -49,6 +49,25 @@ def test_fenced_header_does_not_leak_task_id():
     task_ids = plan_task_ids(FENCED_HEADER)
     assert "9" not in task_ids
     assert task_ids == {"1", "2", "3"}
+
+
+def test_golden_closing_ticket_blocked_by_all(tmp_path):
+    """T250：收尾票 Blocked-by 列出全部前置票号。"""
+    text = GOLDEN.read_text(encoding="utf-8")
+    import re
+    blocked_by_lines = re.findall(r"\*\*Blocked-by:\*\*\s*(.+)", text)
+    # 最后一张（Task 4）的 Blocked-by 须包含所有前置票号
+    last_blocked = blocked_by_lines[-1]
+    for tid in ("1", "2", "3"):
+        assert tid in last_blocked, f"收尾票 Blocked-by 未包含 Task {tid}"
+
+
+def test_golden_closing_ticket_rid_all():
+    """T250：收尾票 R-ID 为 all。"""
+    text = GOLDEN.read_text(encoding="utf-8")
+    import re
+    rid_lines = re.findall(r"\*\*R-ID:\*\*\s*(.+)", text)
+    assert rid_lines[-1].strip() == "all"
 
 
 def test_fence_dangling_detected_unbalanced():

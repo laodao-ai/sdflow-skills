@@ -1,7 +1,7 @@
 # Open Issues 分批清理路线图
 
-> 版本：v10（2026-08-05，B1-B12 完成，新排期 B13-B16 + WONTDO 11 条）
-> 总量：85 条 open todo（0 条 open bug）
+> 版本：v11（2026-08-05，B1-B14 完成，新排期 B15-B16 + WONTDO 11 条）
+> 总量：78 条 open todo（0 条 open bug）
 
 ## 原则
 
@@ -26,8 +26,8 @@
 | ~~B10~~ | ~~lens-metric 体系补全~~ | ~~4~~ | -- | -- | ✅ 全部 WONTDO |
 | **BW** | **过时关闭（v8/v9 WONTDO）** | **11** | -- | -- | ✅ 全部 WONTDO |
 | ~~B11+B12~~ | ~~voice 脚本 + workflow/tools 合批~~ | ~~8~~ | -- | -- | ✅ 全部已关（4 DONE + 1 WONTDO + 3 先前 DONE） |
-| **B13** | **sdflow-maintain 扫描器硬化** | **4** | 中 | 小 | 就绪 |
-| **B14** | **sdflow-implement 小修** | **3** | 中 | 小 | 就绪 |
+| ~~B13~~ | ~~sdflow-maintain 扫描器硬化~~ | ~~4~~ | -- | -- | ✅ 全部已关（2 DONE + 2 WONTDO） |
+| ~~B14~~ | ~~sdflow-implement 小修~~ | ~~3~~ | -- | -- | ✅ 全部已关（2 DONE + 1 WONTDO） |
 | **B15** | **文档 + 术语 + spec 订正** | **6** | 低 | 小 | 就绪 |
 | **B16** | **sdflow-init 小修集** | **5** | 低-中 | 小-中 | 就绪 |
 | **延后池** | 评审编排大改 / implement 重构 / bundle 增强 / 度量 / Codex… | ~67 | 低-中 | 中-大 | 条件触发 |
@@ -211,28 +211,24 @@ B12 五条中 T68 已在后续 change 中修复（load_enums fence 匹配已加 
 
 ---
 
-### B13 · sdflow-maintain 扫描器硬化
+### ~~B13~~ · sdflow-maintain 扫描器硬化 — ✅ 全部已关
 
-改 `maintain_scan.py` + `resolve-workflow.sh` + tests。
-
-| ID | 摘要 |
-|---|---|
-| T93 | RULE_MARKERS bash 副本跨语言漂移无机验 |
-| T94 | 告警文案跨脚本复述漂移 |
-| T95 | test 缺 importorskip 降级 |
-| T96 | 链接正则与目录名字符集不对称 → 非规范命名静默漏报 |
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T93 | RULE_MARKERS bash 副本跨语言漂移无机验 | ✅ DONE（test_resolve_workflow_bash_markers_match_python） |
+| T94 | 告警文案跨脚本复述漂移 | ✅ WONTDO（文案守卫脆 + 两处受众不同） |
+| T95 | test 缺 importorskip 降级 | ✅ WONTDO（硬失败是正确设计） |
+| T96 | 链接正则与目录名字符集不对称 → 非规范命名静默漏报 | ✅ DONE（_check_non_kebab + 报告新节） |
 
 ---
 
-### B14 · sdflow-implement 小修
+### ~~B14~~ · sdflow-implement 小修 — ✅ 全部已关
 
-改 `sdflow-implement/SKILL.md` + `impl_route.py` + tests。
-
-| ID | 摘要 |
-|---|---|
-| T261 | 两处引用已归档 change 路径死链（补 `archive/2026-07-10-` 前缀） |
-| T250 | golden fixture 补收尾票形状覆盖 |
-| T128 | PIPELINE_RECEIPT marker 无法区分显式声明与隐式缺省 |
+| ID | 摘要 | 判定 |
+|---|---|---|
+| T261 | 两处引用已归档 change 路径死链 | ✅ DONE（补 archive/2026-07-10- 前缀） |
+| T250 | golden fixture 补收尾票形状覆盖 | ✅ DONE（Task 4 收尾票 + 3 个新断言） |
+| T128 | PIPELINE_RECEIPT marker 无法区分显式声明与隐式缺省 | ✅ WONTDO（代码已刻意记录为设计决策，display-only） |
 
 ---
 

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """impl_route.py — sdflow-implement 路由/拓扑 stdlib-only helper（只读、零副作用）
 
-管线路由三跳（design F4/F12/F13，逐字见 matt-workflow-integration/superpowers-plan.md
+管线路由三跳（design F4/F12/F13，逐字见 archive/2026-07-10-matt-workflow-integration/superpowers-plan.md
 Task 2 Interfaces；[simplify-workflow] 缺省已翻转为 tickets，见下方③）：
     ① openspec/config.yaml 顶层 `impl-pipeline:` 键（仅新出 ticket 首跳读一次）
     ② plan 文件头 frontmatter marker（在途只读，marker 存在即锁定，优先于 config）

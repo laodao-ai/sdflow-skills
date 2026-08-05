@@ -1,8 +1,10 @@
 """跨脚本共享判据一致性守卫（R-guard，闭 T17）。
 canonical = sdflow-init/scripts/init.py；maintain_scan 保自包含副本，此处机验相等。
-加载失败 hard-fail 非 silent-skip（M2/D5）；init 目录整体缺席用 path-assert 先判。"""
+加载失败 hard-fail 非 silent-skip（M2/D5）；init 目录整体缺席用 path-assert 先判。
+T93：bash resolve-workflow.sh 内联副本同守。"""
 import importlib.util
 import os
+import re
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 INIT_PATH = os.path.join(REPO, "sdflow-init", "scripts", "init.py")
@@ -17,6 +19,8 @@ def _load(name, path):
     return mod
 
 
+RW_PATH = os.path.join(REPO, "sdflow-init", "assets", "hack", "resolve-workflow.sh")
+
 INIT = _load("_guard_init", INIT_PATH)
 MS = _load("_guard_ms", MS_PATH)
 
@@ -29,6 +33,19 @@ def test_managed_token_matches_init_mark_idx():
     # maintain 的 token == init.MARK_IDX[0] 第二个空白分隔词（镜像 init.split()[1] 口径）
     init_token = INIT.MARK_IDX[0].split()[1]
     assert MS.MANAGED_TOKEN_START == init_token, "托管块 token 与 init.MARK_IDX 漂移"
+
+
+def test_resolve_workflow_bash_markers_match_python():
+    """T93：resolve-workflow.sh 内联的三个标记名与 Python RULE_MARKERS 一致。"""
+    assert os.path.isfile(RW_PATH), f"守卫前置：{RW_PATH} 必须存在"
+    text = open(RW_PATH, encoding="utf-8").read()
+    # 提取 `[ -f "$LOCAL/workflow.md" ]` 和 `[ -d "$LOCAL/spec-checklists" ]` 形式的标记名
+    bash_markers = tuple(
+        m.group(1) for m in re.finditer(r'\[ -[fd] "\$LOCAL/([^"]+)" \]', text)
+    )
+    assert bash_markers == INIT.RULE_MARKERS, (
+        f"resolve-workflow.sh 内联标记 {bash_markers} 与 Python RULE_MARKERS {INIT.RULE_MARKERS} 漂移"
+    )
 
 
 def test_end_to_end_real_index_managed_block_skipped(tmp_path):
