@@ -1,0 +1,472 @@
+# Review package: ef07c14..7d4982e (Task 2 worktree merge)
+
+## Commits
+7d4982e merge(refactor-roadmap-internalize-deps): Task 2 references 模板对齐
+696a736 refactor(roadmap): references 模板对齐新三相位协议（Task 2）
+
+## Files changed
+ .../impl-reports/task2-references-templates.md     | 112 ++++++++++++++
+ .../references/long-flow-skill-paradigm.md         |  23 +--
+ sdflow-roadmap/references/memo-template.md         | 165 +++++++--------------
+ sdflow-roadmap/references/roadmap-template.md      |   4 +-
+ sdflow-roadmap/references/task-log-template.md     |   2 +-
+ 5 files changed, 181 insertions(+), 125 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task2-references-templates.md b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task2-references-templates.md
+new file mode 100644
+index 0000000..14249ac
+--- /dev/null
++++ b/openspec/changes/refactor-roadmap-internalize-deps/impl-reports/task2-references-templates.md
+@@ -0,0 +1,112 @@
++# Task 2 实现报告：references 模板对齐新相位协议
++
++## 做了什么
++
++按 `tasks.md` §2（2.1–2.3）重写/术语改 `sdflow-roadmap/references/` 下四个模板文件，
++使其与新三相位协议（A 澄清 → B 拷问 → C 生成，wayfinder/footage 外部依赖移除）一致。
++未触碰 `sdflow-roadmap/SKILL.md`（Task 1 范围）与 `openspec/matt/` / `CLAUDE.md` / `AGENTS.md`
++/ `openspec/` 治理文件（Task 3 范围）。
++
++### 2.1 `memo-template.md` — 全量重写
++
++旧模板定位「短档考古用、可选补充、长档降级为 wayfinder footage」，全部改写为
++「相位 B 拷问期间**唯一**的决策纪要载体（角色对齐 sdflow-spec 的 `decision-memo.md`）」：
++
++- 头部三行：`> 包名：<name>` / `> 日期：<yyyy-mm-dd>` / `> 状态：DRAFT / FINAL`
++  —— **`状态：DRAFT / FINAL` 逐字保留原有行**（design.md 明确要求 MUST 保留，未新造格式），
++  新增「包名」字段（旧模板缺失，任务验收项要求「含包名 + 日期 + 状态位」三项）。
++- 正文四小节，与 tasks.md 2.1 验收项一一对应：`## 承重结论` / `## 拍板决策` /
++  `## 未决项`（H2 精确匹配 spec 原文引用的标题字符串，附「再触发条件」占位）/
++  `## 全局写入记录`（`[提议]`/`[确认]` 固定前缀行，每行含目标路径 + 精确条目名 + 写入前版本锚，
++  并注明版本锚取值规则：已存在文件取 `git log -1 --format=%h`，新建文件记 sentinel「新建」）。
++- 头部新增「历史存档定位声明」引用块，声明本文件属于历史存档、保持包根落位、
++  三件套 MUST NOT 引用。
++- 「使用方法」节改写为写入时机说明：B 起手三步的第三步立即建包写 memo、拷问期间增量追加、
++  `DRAFT`→`FINAL` 只在收尾 checklist 四项全过之后才写入（呼应 spec 「B 收敛后还要走 C 生成
++  与 review 处置，中断若提前置 FINAL 会让重入探测认不出半成品包」的论证）。
++- 删除的旧内容：短/长档二分、wayfinder 降级模式例外、压缩前 flush 例外、
++  「是否产出是可选的」框架（memo 现在是 B 起手强制建的载体，不再可选）、
++  候选方向对比矩阵/深度讨论 Q&A 等旧「讨论备忘」结构、「为什么保留/为什么允许删除 memo」两个附录
++  （其内容已被「历史存档定位声明」与新用途说明取代，避免正文堆演进史，遵 DOC-1）。
++
++### 2.2 design/roadmap/task-log 三模板术语改
++
++- `design-template.md`：**核对，未改**——实测对 `野心|结晶|考古层|wayfinder|footage|三分支路由|Tracker root`
++  全词表 grep 零命中，与 design.md scope-check 表「实测零命中待改术语，仅核对不改」一致。
++- `roadmap-template.md`：两处「命中产品/商业野心信号」→「命中商业化信号」
++  （原 `:27`/`:123`，D5 术语改名，词表不变，仅措辞对齐 spec Requirement 用词）。
++- `task-log-template.md`：一处「考古层文件 memo.md / footage/」→
++  「历史存档文件 memo.md（及存量包可能有的 footage/）」（原 `:86`，「考古层」→「历史存档」
++  为 roadmap 语境改名，DOC-1 语境的「考古层」不在改名范围——本文件与 DOC-1/BASE-30 无关，
++  改动安全）。三文件结构均未动，仅替换措辞。
++
++### 2.3 `long-flow-skill-paradigm.md` — wayfinder/footage 段落改历史注记
++
++两处内嵌 `<!-- -->` 注释块原本以「当前落地口径」的语气描述 wayfinder chart / footage 机制
++（且其中一处引用了已被移除的 `SKILL.md「讨论层：三分支路由」`——过期引用，Task 1 重写后该节
++不再存在），改写为显式「历史注记」框架：标注 2026-07 迭代（rebuild-sdflow-roadmap-v2）曾引入
++wayfinder/footage 分档机制，2026-08 迭代（本 change）已整体移除，现行机制统一为
++「memo.md 是相位 B 唯一纪要载体、不分短中长档」，并把过期的 SKILL.md 内部引用改为泛指
++「`sdflow-roadmap/SKILL.md` 相位 B 一节」。同时把正文中一处非注释的「多留 footage（讨论考古材料）」
++措辞改为「多留讨论痕迹」，避免在非历史注记的正文行里使用已退役的 loanword。
++保留 `footage/`、`wayfinder chart` 等词面（因为这两段本身就是在**解释这些词的历史来源**），
++但均已限定在明确标注「历史注记」的语境内。
++
++## 每条验收标准的核验证据
++
++| tasks.md 2.x 验收项 | 证据 |
++|---|---|
++| memo 模板含包名 + 日期 + `状态：DRAFT / FINAL` 一行状态位（保留既有行，不新造格式） | `memo-template.md:26-28`（`> 包名：<name>` / `> 日期：<yyyy-mm-dd>` / `> 状态：DRAFT / FINAL`，最后一行字符串与旧模板逐字相同） |
++| memo 模板正文小节 = 承重结论 / 拍板决策 / `## 未决项` / `[提议]`·`[确认]` 全局写入记录 | `memo-template.md` 依次含 `## 承重结论`（:32）/ `## 拍板决策`（:38）/ `## 未决项`（:52）/ `## 全局写入记录`（:63），全局写入记录小节示例行含 `[提议]`/`[确认]` 前缀 + 目标路径 + 条目名 + 版本锚三要素 |
++| memo 模板含历史存档定位声明 | `memo-template.md:29-31`（`> **历史存档定位声明**：...`） |
++| design/roadmap/task-log 三模板术语改到位，结构未动 | `git diff --stat`：`design-template.md` 无改动；`roadmap-template.md` +2/-2（仅措辞替换）；`task-log-template.md` +1/-1（仅措辞替换）；无小节增删 |
++| `long-flow-skill-paradigm.md` 的 wayfinder/footage 段落已改为历史注记 | `git diff sdflow-roadmap/references/long-flow-skill-paradigm.md`：两处 `<!-- -->` 注释块均改写为「历史注记：...2026-08 迭代已整体移除...」框架 |
++
++## 跑过的命令与退出码
++
++```
++$ grep -n -E '野心|结晶|考古层|wayfinder|footage|三分支路由|Tracker root' sdflow-roadmap/references/design-template.md
++（无输出，exit=1）
++
++$ grep -rn -E '野心|结晶|考古层|wayfinder|footage|三分支路由|Tracker root' sdflow-roadmap/references/
++task-log-template.md:86（历史存档文件 ... footage/，合法历史形态引用）
++long-flow-skill-paradigm.md:69-71,116-119（历史注记块内，含义已限定为历史语境）
++
++$ /usr/bin/python3 -m pytest hack/tests/ -q
++375 passed, 2 failed（27.57s，exit=1）
++  - test_harden_sdflow_spec_followup_closure.py::test_spec_authoring_requirement_ids_and_resident_identity_are_consistent
++    —— tasks.md 6.2 已记录的既存 baseline 失败（SA-14 不在 spec-authoring/spec.md），与本 change 无关
++  - test_subprocess_encoding_contract.py::test_text_mode_subprocesses_declare_utf8_and_replace
++    —— 经 `git stash` 核验：stash 掉本票全部改动后重跑，此测试在 merge-base（4d156ec）上
++       同样以 "189 >= 200" 失败，确认为本 worktree 既存 baseline 失败、与本票的 4 处 Markdown
++       模板改动无因果关系（未触碰任何 .py 文件）
++
++$ python3 hack/sync_principles.py --check
++[sync_principles] ✅ 20 个投放面全部与真相源一致（exit=0，本票未触碰 SKILL.md，符合预期不受影响）
++```
++
++## 改动文件清单
++
++- `sdflow-roadmap/references/memo-template.md`（全量重写）
++- `sdflow-roadmap/references/roadmap-template.md`（术语改 ×2）
++- `sdflow-roadmap/references/task-log-template.md`（术语改 ×1）
++- `sdflow-roadmap/references/long-flow-skill-paradigm.md`（两处注释块改历史注记 + 一处正文措辞）
++- `sdflow-roadmap/references/design-template.md`（核对，未改动）
++
++## Concerns
++
++无阻塞性 concern。以下两点如实记录供编排层/终审参考：
++
++1. **`hack/tests/test_subprocess_encoding_contract.py` 的 baseline 失败未见于 tasks.md 6.2 的
++   已知清单**（该清单只登记了 `test_harden_sdflow_spec_followup_closure.py` 一条）。已用
++   `git stash` 核验此失败在合并本票改动前（merge-base 4d156ec）就已存在、且本票未触碰任何
++   `.py` 文件，故与本票无因果。是否需要更新 tasks.md 6.2 的已知失败清单以纳入这一条，
++   留给收尾/编排层判断（本票不越权改 tasks.md）。
++2. **worktree 初始状态异常**：本 worktree 起始 HEAD（`f464e9b`）落在
++   `feat/refactor-roadmap-internalize-deps` 分支的 merge-base 上，比该分支实际 tip
++   （`4d156ec`，含本 change 四件套 + task2-brief.md）落后 12 个提交——`openspec/changes/
++   refactor-roadmap-internalize-deps/` 目录在起始状态下不存在，无法读取 brief/tasks/design/spec。
++   已执行 `git merge --ff-only feat/refactor-roadmap-internalize-deps`（纯快进，0 冲突、
++   0 新增提交、无破坏性操作）补齐到 tip 后开始实现。如实记录此前置步骤，供编排层核实
++   该 worktree 的创建流程是否需要修正（其它 sibling worktree `agent-acf1f578ab22ed715`
++   起始状态即正确落在 tip）。
+diff --git a/sdflow-roadmap/references/long-flow-skill-paradigm.md b/sdflow-roadmap/references/long-flow-skill-paradigm.md
+index c17627c..c816a4d 100644
+--- a/sdflow-roadmap/references/long-flow-skill-paradigm.md
++++ b/sdflow-roadmap/references/long-flow-skill-paradigm.md
+@@ -57,26 +57,28 @@ Skill 不应依赖"持续驻留上下文"来保证各阶段的一致性。真正
+ 不产出文档的阶段 = 最脆弱的阶段。讨论、探索、头脑风暴这些"软阶段"最容易被当成"可以不留痕"，但它们产生的"为什么选 X 而不是 Y"是后期最难复原、最有价值的信息。
+ 
+ **历史判据（已废弃）**：轮数阈值不可事前观测，现行判据为信号式分档（起手显性信号/事中触发），见 sdflow-roadmap/SKILL.md 讨论层。
+ 
+ | 历史版本分档（存档参考，勿作现行判据） | 文档策略 |
+ |---------|---------|
+ | 短（<10 轮、单 session） | 文档可选 |
+ | 中（10-30 轮） | 结束时一次 flush |
+ | 长（>30 轮、跨 `/clear`、跨天） | **强制**骨架 + 增量 append |
+ 
+-**判别不确定时向上一档取**——多留 footage（讨论考古材料）的成本远低于丢推理过程。
++**判别不确定时向上一档取**——多留讨论痕迹的成本远低于丢推理过程。
+ 
+-<!-- 2026-07 迭代的落地映射：短/中档由 memo.md 承载（可选、包根落位、单档不迁）；
+-     长档由 wayfinder chart 承载，落盘 `footage/`（这也是"footage"一词后来被固化为具体目录名的来源）——
+-     具体分档判据见 SKILL.md「讨论层：三分支路由」。本文所述"强制骨架 + 增量 append"的抽象要求，
+-     在长档场景下由 wayfinder 的 map + 票机制实现；抽象准则不变，仅落地机制随迭代演进。 -->
++<!-- 历史注记：2026-07 迭代（rebuild-sdflow-roadmap-v2）曾把长档路径落到 wayfinder chart
++     （`footage/` 目录，"footage"一词由此固化为目录名），短/中档落 memo.md（可选、包根落位、
++     单档不迁）。2026-08 迭代（refactor-roadmap-internalize-deps）已将 wayfinder 全部移除——
++     现行机制不再按讨论规模分档，memo.md 是相位 B 唯一的纪要载体，B 起手即建、全程增量
++     append，不区分短/中/长档。本文所述"强制骨架 + 增量 append"的抽象要求由现行 memo.md
++     机制承接；具体见 `sdflow-roadmap/SKILL.md` 相位 B 一节。 -->
+ 
+ ### 准则 2：契约条目要求结构化状态
+ 
+ 把"做了吗"升级为"做的结果是什么"：
+ 
+ - ❌ `- [ ] 处理 review issues`
+ - ✅ `- [ ] 每条 issue 标 ✅采纳（改动位置）/❌拒绝（理由）/⏭延后（去哪处理）`
+ 
+ 后者让 apply 必须产出结构化 artifact，verify/人工能机械检查完整度。
+ 
+@@ -103,24 +105,27 @@ Skill 不应依赖"持续驻留上下文"来保证各阶段的一致性。真正
+ 
+ 本范式直接从 `sdflow-roadmap` 的失效案例抽象而来：
+ 
+ | 原缺口 | 对应准则 | 修法 |
+ |--------|---------|------|
+ | 讨论阶段无 memo 留痕 | 准则 1 | 新增"memo.md 策略：讨论规模预估"章节 |
+ | review 条目只打勾 | 准则 2 | tasks.md 3.x 从 A 级升到 C 级 |
+ | 跳过 review 无痕迹 | 准则 3 | 强制"跳过即留痕，归档前再确认" |
+ | verify ≡ 质量的混淆 | 准则 3（诚实） | 3.4 明标"人工复核项，verify 不扫" |
+ 
+-<!-- 后续 2026-07 迭代（rebuild-sdflow-roadmap-v2）在此基础上进一步拆分："讨论规模预估"这一档判据
+-     不再只落 memo.md 一种机制——长档（跨 session/跨天/压缩仍未收敛）改落 wayfinder chart（footage/），
+-     memo.md 收窄为短档专用；产出侧同步从"四件套"（含独立 requirements.md）收敛为"三件套"
+-     （design.md 头部并入需求与目标态章）。本节历史表述保留原貌，当前落地口径见 SKILL.md。 -->
++<!-- 历史注记：2026-07 迭代（rebuild-sdflow-roadmap-v2）曾进一步拆分——"讨论规模预估"判据
++     不再只落 memo.md 一种机制，长档（跨 session/跨天/压缩仍未收敛）改落 wayfinder chart
++     （footage/），memo.md 收窄为短档专用；产出侧同步从"四件套"（含独立 requirements.md）
++     收敛为"三件套"（design.md 头部并入需求与目标态章）。2026-08 迭代
++     （refactor-roadmap-internalize-deps）已将 wayfinder/footage 机制整体移除，memo.md
++     不再区分短/长档，收敛为相位 B 唯一纪要载体。本节保留原貌作历史演进记录，
++     现行机制见 `sdflow-roadmap/SKILL.md`。 -->
+ 
+ ## 对其他长流程 skill 的推论
+ 
+ 以下长流程 skill 都应该自审是否具备"契约闭环"：
+ 
+ - `/ship`、`/land-and-deploy`：跨越本地 → PR → 合并 → 部署 → canary，每一步的成功/失败凭证是否固化到文件？
+ - `/qa`、`/investigate`：多轮修复时，"每个 bug 的处置状态"是否落到文件？
+ - `/autoplan`：跑完 CEO/eng/design 三者，分歧点是否有结构化决策日志？
+ 
+ ## 契约体检清单
+diff --git a/sdflow-roadmap/references/memo-template.md b/sdflow-roadmap/references/memo-template.md
+index c473618..e3d49c8 100644
+--- a/sdflow-roadmap/references/memo-template.md
++++ b/sdflow-roadmap/references/memo-template.md
+@@ -1,135 +1,74 @@
+-# memo.md 模板（讨论备忘 — 短档考古用）
+-
+-用途：保留决策形成过程的对话式讨论痕迹。**非三件套成员**（design.md / roadmap.md / task-log.md），不被三件套引用。
+-
+-**定位**：memo 只承载**短档**讨论——单 session、无跨天/跨压缩场景的讨论备忘，保持包根 `memo.md` 落位不迁。**长档**讨论（跨 session、跨天、经历上下文压缩仍未收敛）改用 wayfinder chart 落盘 `footage/`（map + 票），不靠 memo 硬撑——memo 与 footage 是同一职能（讨论考古层）在不同规模下的两种落盘形态，二选一，不叠加；具体分档判据见 `SKILL.md`「讨论层：三分支路由」。
+-
+-**例外：无 wayfinder 的长档降级模式**——当前宿主无 wayfinder（`SKILL.md` 宿主中立探测判定后走的降级路径）时，长档讨论无法落 `footage/`，此时 memo 转为**必需且持续更新**的长档考古层，区别于上文短档场景下 memo 可选定位的默认态，这是一条例外态；恢复 wayfinder 后要点可转录进 map，不双写。
+-
+-**是否产出 memo 是可选的**——如果讨论过程有足够多的"对话现场感"、方案矩阵、打分对比值得保留为考古证据，就产出；如果讨论很简单直接得出结论，可以不产出。
+-
+-**例外：压缩前 flush 场景（此时 memo 转为必需）**〔spec-review-amendment SR-5〕：`/opsx:explore` 起步的讨论若检测到上下文压缩将要/刚刚发生、而 wayfinder map 尚未建立，**SHALL** 立即把当前推理要点 flush 进 memo.md——不追求打磨完整，抢救优先；避免"压缩后才想起留痕、能抢救的已是有损摘要"。flush 后再判定是否需要升级 wayfinder chart；若判定升级，memo 已有内容后续精炼转录进 map 的 Decisions-so-far / 票 Notes。
+-
+-使用方法：当讨论过程中产生了以下类型的内容时，产出 memo：
+-- 多个候选方向的详细对比矩阵
+-- 逐项打分 / 评估的过程
+-- 被否决方案的完整推演（"当初为啥不用 X" 的长期争议防御）
+-- 关键假设的修正过程
+-- 跨多轮对话的讨论演化
+-- **上下文压缩将/刚发生、且 wayfinder map 尚未建立**（此项触发即必须产出，非可选，见上文"压缩前 flush 场景"）
+-
+-把本模板内容 Write 到 `openspec/roadmaps/<name>/memo.md`，按实际讨论内容填充。
++# memo.md 模板（相位 B 纪要 — 承重结论与拍板决策的增量载体）
++
++用途：memo.md 是相位 B（拷问）期间**唯一**的决策纪要载体（角色对齐 sdflow-spec 的
++`decision-memo.md`）。拷问期间每条站稳的承重结论与拍板决策当场追加写入本文件（增量落盘），
++不等收敛后一次性落盘。memo.md 属于**历史存档**（决策形成过程的记录，与三件套定稿正文相对），
++保持包根落位，MUST NOT 迁移；三件套（`design.md` / `roadmap.md` / `task-log.md`）
++MUST NOT 引用本文件任何内容——需要的内容精炼后复制进正式文档正文。
++
++使用方法：
++- B 起手三步的第三步——建 `openspec/roadmaps/<name>/` 目录后**立即**把本模板内容 Write 到
++  `openspec/roadmaps/<name>/memo.md`（含包名、日期、`状态：DRAFT`），MUST NOT 拖到拷问收敛后才建。
++- 拷问期间每条站稳（有证据支持或经操作者拍板）的承重结论 / 拍板决策，当场追加写入本文件，
++  不预写、不等收敛后批量补记；中断损失窗口 = 两次落盘之间，如实声明，不称零损失。
++- 头部状态位写入时机：B 起手写 `状态：DRAFT`；`状态：FINAL`（附定稿日期）**只在**收尾
++  checklist 四项**全部**通过之后才写入——MUST NOT 在 B 收敛时提前改写（B 收敛之后还要走
++  相位 C 生成与 review 处置，此间中断若已置 FINAL，重入探测——只扫 `状态：DRAFT`——会认不出
++  这个半成品包）。`DRAFT` 覆盖「B 拷问中 / C 生成中 / review 待处置」全部未完成态。
+ 
+ ---
+ 
+-# <项目名> 讨论备忘
++# <项目名> 讨论纪要
+ 
++> 包名：<name>
+ > 日期：<yyyy-mm-dd>
+ > 状态：DRAFT / FINAL
+ >
+-> ⚠️ **本文件仅作参考**：记录决策形成过程的对话式讨论痕迹。正式文档（`design.md` / `roadmap.md` / `task-log.md`）**不引用本文件**。
+->
+-> 阅读指引：
+-> - 想看最终决策结论 → 读 `design.md` §决策 和 §已决议档案
+-> - 想看需求与目标态 → 读 `design.md` 头部「需求与目标态」章
+-> - 想看阶段计划 → 读 `roadmap.md`
+-> - 本文件保留讨论现场感，作为"决策考古证据"
+-
+----
+-
+-## 1. 摘要
+-
+-<!-- 整个项目/重构的一句话总结，给读者快速建立上下文 -->
+-
+-## 2. 问题陈述
+-
+-<!-- 为什么要做这件事。如果是重构，列旧方案的结构性痛点；如果是新项目，讲问题的发现过程 -->
+-
+-## 3. 新方案的探索过程
+-
+-### 3.1 候选方向的完整对比
+-
+-<!-- 如果有多个候选方向（例 A/B/C/D），在这里用表格列出详细对比 -->
+-
+-|  | 方向 A | 方向 B | 方向 C | 方向 D |
+-|---|---|---|---|---|
+-| <维度 1> | | | | |
+-| <维度 2> | | | | |
+-| <推荐度> | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐ |
++> **历史存档定位声明**：本文件属于历史存档（决策形成过程的记录），保持包根落位、
++> MUST NOT 迁移；正式文档（`design.md` / `roadmap.md` / `task-log.md`）**不引用**本文件，
++> 需要的内容精炼后复制进正式文档正文。
+ 
+-### 3.2 为什么选 <方向 X>
++## 承重结论
+ 
+-<!-- 展开讲推荐方向的理由 -->
++<!-- 拷问期间每条站稳（有证据支持或经操作者拍板）的结论，当场追加一条，不等收敛后补记。 -->
+ 
+-### 3.3 关键认知
++- <yyyy-mm-dd> <结论 1，附简短依据>
++- <yyyy-mm-dd> <结论 2>
+ 
+-<!-- 讨论中产生的顿悟、重要的视角转换 -->
++## 拍板决策
+ 
+-## 4. 核心决策（快照）
++<!-- 命中 ADR 三条件（难逆转 + 缺上下文会意外 + 有真实权衡）或术语冲突时的提议/确认，
++     以及其余拷问中的拍板决策，按 decision-memo 惯例记「决策 + 依据」；
++     有 ≥2 个合理候选时补替代方案对比，避免未来重提时重新论证一遍。 -->
+ 
+-<!-- 决策的一句话列表。最终完整版在 design.md §决策 -->
+-
+-- **<决策 1>**: <一句话>
+-- **<决策 2>**: <一句话>
+-
+-## 5. 路线图设想（快照）
+-
+-<!-- 阶段划分的初步构思和里程碑。最终版在 roadmap.md -->
+-
+-## 6. 深度讨论 / Open Questions
+-
+-<!-- 讨论过程中产生的需要专项决策的问题。
+-     每个问题保留 "方案矩阵 / 打分对比 / 推荐理由" 的讨论现场。
+-     最终决策写到 design.md §已决议档案 -->
+-
+-### Q1 <问题>
+-
+-#### 方案矩阵
+-
+-| 方案 | 形式 | 优缺点 |
+-|---|---|---|
+-| A | | |
+-| B | | |
+-
+-#### 推荐：<方案 X>
+-
+-<!-- 推荐理由、权衡、反面论证 -->
+-
+-### Q2 <问题>
+-
+-<!-- 同 Q1 结构 -->
+-
+-## 7. 决策汇总（快照）
+-
+-<!-- 所有决策点的最终状态表 -->
+-
+-| 议题 | 决策 | 状态 |
+-|---|---|---|
+-| <议题 1> | | ✅ 已定 |
+-| <议题 2> | | ✅ 已定 |
+-
+----
++### D1：<决策标题>
+ 
+-## 附录 A：为什么保留这份文件
++**决策**：<一句话>
+ 
+-memo 的独特价值在于保留**决策形成过程**的对话语气和考古痕迹：
++**依据**：<为什么这么选，如需可附替代方案对比>
+ 
+-- 哪些方案被考虑过然后被否决
+-- 哪些假设在讨论中被修正
+-- 哪些取舍是在什么语境下做出的
+-- 哪些直觉/偏好推动了最终方向
++### D2：...
+ 
+-这些信息在正式文档（结晶形态）里必然丢失。当未来争议或回顾时（"当初为啥不用 X？"），memo 是唯一能给出答案的地方。
++## 未决项
+ 
+-**但**：memo 是草稿，未经打磨。正式文档（`design.md` / `roadmap.md` / `task-log.md`）**不引用** memo（避免"引用了草稿就把草稿当权威源"）。需要的内容应该精炼后复制到正式文档中。
++<!-- SHALL 含本小节。凡① 本次拷问维度终态为「显式延后」者、② 拷问中冒出但本次不解决的问题，
++     逐条落入本小节并附**再触发条件**（什么信息到位 / 什么时点应重新处理它）。
++     本小节 MUST NOT 因三件套写完而被清空，随包长期存在、跨 session 可读。
++     收尾时逐条须标：已决 / 显式延后（附再触发条件）/ 放弃（附理由）——
++     MUST NOT 带未处置条目定稿；操作者坚持越过时须在 task-log.md 记一行
++     「带 N 条未决项定稿」+ 理由（显式越权留痕）。 -->
+ 
+-## 附录 B：为什么允许删除 memo
++- <未决项 1> —— 再触发条件：<什么信息到位 / 什么时点应重新处理>
+ 
+-如果未来某次整理觉得 memo 的价值已经完全被 `design.md §决策` 和 `§已决议档案` 吸收（比如 memo 里的方案矩阵已经完整迁移过去了），可以删除 memo。
++## 全局写入记录
+ 
+-这个决定应由作者判断，而非自动化。**删除前先检查**：
+-- memo 里是否还有 design.md 没有的独特内容？
+-- memo 里的"对话语气"是否有叙事价值（比如将来要写博客复盘）？
+-- 是否有未来可能重提的被否决方案？
++<!-- 拷问中命中 ADR/术语提议、经操作者确认者，逐条记录，以固定前缀落行：
++     `[提议]` = 已向操作者提出、待确认；`[确认]` = 操作者已确认（此时仍 MUST NOT 直写全局
++     文件，待相位 C 三件套终稿经操作者确认后才实际写入 openspec/CONTEXT.md / openspec/adr/，
++     写入动作与对账记于收尾 checklist ④）。每行须含：目标路径 + 精确条目名 + 写入前版本锚。
++     版本锚取值：目标文件已存在 → `git log -1 --format=%h -- <路径>` 输出；
++     目标尚不存在（如本次要新建的 ADR）→ 记显式 sentinel「新建」，收尾时以「该路径此前确实
++     不存在」为匹配条件。诚实边界：该锚只检测已提交的改动，不是并发修改保护，只是弱信号。 -->
+ 
+-如果三个问题都是"否"，memo 可以删。否则保留。
++- [提议] <目标路径> · <条目名> · 版本锚：<锚值 或「新建」>
++- [确认] <目标路径> · <条目名> · 版本锚：<锚值 或「新建」>
+diff --git a/sdflow-roadmap/references/roadmap-template.md b/sdflow-roadmap/references/roadmap-template.md
+index 6c2bdac..8ce0f7e 100644
+--- a/sdflow-roadmap/references/roadmap-template.md
++++ b/sdflow-roadmap/references/roadmap-template.md
+@@ -17,21 +17,21 @@
+ >
+ > 相关文档（全部位于 `openspec/roadmaps/<name>/` 下）：
+ > - 整体设计：`design.md`
+ > - 任务日志：`task-log.md`（每完成一个子任务追加一条记录）
+ 
+ ## 概览
+ 
+ <!-- 近细远雾〔spec-review-amendment SR-14〕：只对近期 1-2 个阶段写满五节
+      （前置条件/目标/子任务/验收标准/交付物）；更远阶段仅写"阶段目标一句 + 雾区备注"，
+      MUST NOT 预写子任务分解与验收细节。远期阶段在其成为下一个待实施阶段时才补全五节
+-     （补细内容命中产品/商业野心信号、或改变范围/不可逆承诺/验收判据时，SHALL 重新过一遍
++     （补细内容命中商业化信号、或改变范围/不可逆承诺/验收判据时，SHALL 重新过一遍
+      review 分档判定，结果记入 task-log.md〔SR-8〕）。
+      长周期依赖例外：远期阶段若涉及长交付周期前置（采购/合规/外部契约类），允许且应当
+      提前写"前置条件"一节，其余四节仍留雾——见下方阶段 3/4 示例注释。 -->
+ 
+ <!-- 近期阶段数选择理由（近期取 1 还是 2 个阶段写满五节，SHALL 写明理由——如并行依赖、
+      交付节奏〔SR-14〕；下方示例假设选了阶段 1+2，仅选 1 个时删掉阶段 2 的"近期"标注并把它降级为雾区） -->
+ 
+ **近期范围**：阶段 1（+ 阶段 2，如适用）。**理由**：<如"阶段 1、2 间存在并行依赖，交付节奏需同步规划"，或"阶段 1 单独构成可交付里程碑，阶段 2 待其验收后再细化，仅阶段 1 近期全写">
+ 
+ 四阶段演进，每阶段独立可交付。每阶段的里程碑都是明确的"对外交付点"，下一阶段推迟也不阻塞已有成果。
+@@ -113,21 +113,21 @@
+ ### 交付物
+ 
+ ---
+ 
+ ## 阶段 3 · <阶段名称>
+ 
+ <!-- 远期阶段（雾区骨架）〔spec-review-amendment SR-14〕：只写"阶段目标一句 + 雾区备注"，
+      MUST NOT 预写子任务分解与验收细节（不含"### 子任务"“### 验收标准”节）。
+      雾区备注 SHALL 写明"缺什么信息才能细化"，不是空泛的"待细化"。
+      成为下一个待实施阶段时（前序阶段全部交付，或残余子任务均已终局处置〔SR-8〕）补全五节
+-     （前置条件/目标/子任务/验收标准/交付物，可经一次短讨论）；补细内容若命中产品/商业野心信号、
++     （前置条件/目标/子任务/验收标准/交付物，可经一次短讨论）；补细内容若命中商业化信号、
+      或改变范围/不可逆承诺/验收判据，SHALL 重新过一遍 review 分档判定，结果记入 task-log.md。 -->
+ 
+ **阶段目标**：<一句话，例如"完成数据库从 MySQL 到 Postgres 的读写切换">
+ 
+ **雾区备注**：缺 <具体信息，如"阶段 2 实测的迁移耗时与故障率数据"> 信息，到 frontier 补细。
+ 
+ <!-- 长周期依赖例外〔SR-14〕：若本阶段涉及长交付周期前置（采购/合规/外部契约类，
+      如"需提前数月申请的资质/许可证"），允许且应当提前写"前置条件"一节，其余四节仍留雾。
+      不适用时删除以下示例：
+ 
+diff --git a/sdflow-roadmap/references/task-log-template.md b/sdflow-roadmap/references/task-log-template.md
+index 688aff9..fd1d309 100644
+--- a/sdflow-roadmap/references/task-log-template.md
++++ b/sdflow-roadmap/references/task-log-template.md
+@@ -76,21 +76,21 @@
+ <!-- 日志条目从这里开始，最新的放最上面 -->
+ 
+ ## YYYY-MM-DD
+ 
+ ### [阶段 0 / 规划] <项目名> roadmap 文档包产出完成
+ 
+ <!-- 阶段 0 记录关联 roadmap.md 概览节（规划期无实施阶段可挂，属 checklist ② 的声明式例外）。 -->
+ 
+ - **状态**: ✅ 完成
+ - **实际耗时**: ~<N>h（含讨论）
+-<!-- 产出清单只列三件套本身；包内可另有考古层文件 memo.md / footage/，不列入正式产出清单、不被三件套引用——规则 3 -->
++<!-- 产出清单只列三件套本身；包内可另有历史存档文件 memo.md（及存量包可能有的 footage/），不列入正式产出清单、不被三件套引用——规则 3 -->
+ - **产出**:
+   - `openspec/roadmaps/<name>/design.md` — 整体设计（含头部「需求与目标态」章 + 架构决策 + Q&A 已决议）
+   - `openspec/roadmaps/<name>/roadmap.md` — 实施路线图（<N> 阶段 × <M> 子任务）
+   - `openspec/roadmaps/<name>/task-log.md` — 任务日志（本文件）
+ - **关键决策回顾**（完整档案见 `design.md` §3 和 §10）:
+   - <决策 1 一句话>
+   - <决策 2 一句话>
+   - <决策 N 一句话>
+ - **下一步**:
+   - `/opsx:new implement-<roadmap-name>-p1` 开新变更进入阶段 1 实施（命名 MUST 用 `-p<N>`，与 sdflow-done 回填解析器契约一致）
