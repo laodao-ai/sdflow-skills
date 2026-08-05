@@ -26,7 +26,7 @@
 调用方在 ff prompt 第一句注入：
 `先过 FF-0 三分支判定（保护分支则 git checkout -b feat/{change}；已在本 change 分支则跳过；在其它 feature 分支则停下问我），再按 config + trigger-catalog 生成`。
 
-> **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard`、`/sdflow-spec`（分支 A，相位 B ③ 建 change 目录）殊途同归调它——**分支 A 与分支 B 同样受管辖**，没有哪条入口绕得过）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。
+> **硬强制已配套**：FF-0 分支守卫 hook（PreToolUse·Bash）拦 `openspec new change` 的所有入口（`/opsx:new`、`/opsx:propose`、`/opsx:ff`、`/opsx:onboard`、`/sdflow-spec`（相位 B ③ 建 change 目录）殊途同归调它——**所有入口无一绕得过**）。**全局安装一次**（`~/.claude/hooks/` + `~/.claude/settings.json`，由 sdflow-init init/update 幂等确保），跨所有项目生效；非 openspec 项目里命令不匹配即放行。
 > hook 只在整条命令完整匹配**单条直接 literal** 创建 grammar 时，才把 payload `cwd` 当作作用仓执行三分支。
 > 有限正向 grammar 仅含 `openspec new change <合法字面量>` 与 `openspec change new <合法字面量>`，容忍水平空白、单/双引号及单个 `--json` 变体。
 > 只要未命中该 grammar——包括 wrapper、目录切换、compound、换行、前后散文、无效 literal/option 或动态名——一律记录 `command-unverifiable`，不尝试细分原因或解释 shell。
@@ -35,40 +35,16 @@
 > **残留令牌是真实的绕过口，如实登记**：人若在自己的终端里敲 `openspec new change`（hook 根本不触发），哨兵**永不被消费**，会留在盘上静默放行下一次调用。缓解只做两件**有界**的事：① 哨兵带**有界时效**，超窗即失效并自动删除（把「常驻绕过口」压成一个短窗口）——窗口长度的**单一源** = hook 的 `ACK_TTL_SECONDS`，deny 文案按 `// 60` 自报分钟数，**本文与 hook 散文一律不写死数字**（手抄一份即与常量分叉、改常量不会红）；判据是**双边**的 `0 ≤ now − mtime ≤ TTL`——单边式在 mtime 落在未来（时钟回拨 / 从备份恢复保留 mtime）时恒真，窗口形同虚设；② `/openspec/.ff0-ack` 进 canonical runtime gitignore（`assets/snippets/runtime-gitignore.txt`），防 `checkpoint-commit.sh` 的 `git add -A` 把它提交入库、让每个 clone 都带一个。窗口内的残留仍是真洞，本 hook **MUST NOT 声称堵死它**——它从来不是安全边界，真正的防线是纪律 + review。
 > Git 探测异常一律 silent fail-open；命令语义未判定则按上述无决策 context 诚实显形。文档级强制（调用方注入 + review 核对）作为补充层。
 
-## wayfinder→ff 衔接契约（条件：change 源于 wayfinder map）
+## 切片建议（条件：仓走 tickets 管线——缺省即命中，除非显式 `impl-pipeline: superpowers`）
 
-> 本节是**条件契约**，非 D-1~D-6 硬约束——只在 change 源于 wayfinder map 时生效，不占用 D 编号
-> （按下文「约束集设计判据」④：无关变更应条件触发，命中才注入）。
-> 调用方（`config.yaml` rules 自动注入、`workflow/workflow.md` ff 步骤）**只引用本节标题「wayfinder→ff 衔接契约」，
-> 不复制条款文本**——与 D-1~D-6 的单一源纪律同构。
+仓的实现管线为 tickets（`openspec/config.yaml` 无 `impl-pipeline` 键即缺省命中；显式设
+`impl-pipeline: superpowers` 时不适用）时，design.md 决策区 **MAY** 含「切片建议」节
+（初步 ticket 划分 + 阻塞边草图）。出 ticket 模式（`sdflow-implement`）消费该节的语义是**建议，
+非契约**——节缺席时自主出 ticket；对切片粒度的争议走既有 `T10-choice` 三级决策协议（无客观判据档
+派 **strong 档**对抗镜复核）。
 
-change 若源于 wayfinder map（即由 wayfinder chart 铺图逐 ticket 决议收敛后触发 `opsx:ff`），ff 起手须遵守：
-
-1. **逐区读 map**：
-   - Destination → 喂 proposal 动机与 Success Metrics（D-5）；
-   - Decisions-so-far → **逐 ticket zoom 到决议全文**，MUST NOT 只读摘要行（防 ff「prefer making reasonable decisions」对已决项重新决歪）；zoom 设上界 **≤8 张展开全文**，超出按与本 change 的相关性截断，并在 proposal 中注明截断；
-   - Out-of-scope → 喂 Non-Goals 可证伪假设（D-3）。
-2. **TG 判命中前置**：TG（触发目录）判命中前置到 chart 阶段，写入 map Notes；此为**增强非转移**——ff 起手判触发纪律不变（Notes 有则核对、无则照常全判），Notes 缺失不构成失败态、不硬卡。
-3. **回链**：proposal SHALL 回链 map 供溯源；design 决策段源自已决 ticket 的 SHALL 内联回链该 ticket——
-   机器可 grep 的锚格式：`〔wayfinder-resolved: <map路径>#ticket-<N>〕`（固定前缀 `wayfinder-resolved:`）。
-   **锚的用途只有溯源**（这个决策当初是在哪个 ticket 上决的）。
-   > 🔴 **MUST NOT 用它给 grill 减负**：grill 是**独立**审视，**一律全深度**，
-   > **MUST NOT** 因为「上游 wayfinder 已经决过」就瘦跑或跳过某条分支。
-   > 拿上游产出给自己松绑，grill 就从「二次审视」退化成「盖章」——而它的全部价值就是那个二次。
-
-**边界**：本契约只约束「wayfinder → opsx:ff 出 change」路径；roadmap 结晶直写 requirements/design/roadmap/task-log 四件套不经 ff，不受此节约束。
-
-## 切片建议（条件：仓 `impl-pipeline: tickets`）
-
-> 本条款与上节条件不同，勿混——上节条件是「change 源于 wayfinder map」，本条款条件是
-> 「仓 `openspec/config.yaml` 顶层键 `impl-pipeline: tickets`」，两者互不蕴含。
-
-仓已开 `impl-pipeline: tickets` 时，design.md 决策区 **MAY** 含「切片建议」节（初步 ticket 划分 + 阻塞边草图）。
-出 ticket 模式（`sdflow-implement`）消费该节的语义是**建议，非契约**——节缺席时自主出 ticket；
-对切片粒度的争议走既有 `T10-choice` 三级决策协议（无客观判据档派 **strong 档**对抗镜复核）。
-
-切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀（两类「ticket」语义须物理区分——本节的
-「切片建议 ticket」与上节 wayfinder map 的「已决 ticket」不是一回事，混用会让溯源指向错误的出处）。
+切片建议内容 **MUST NOT** 使用 `wayfinder-resolved:` 前缀——该前缀留给 roadmap wayfinding 效力范围内
+的已决 ticket 溯源（`openspec/roadmaps/{name}/footage/`），混用会让溯源指向错误的出处。
 
 ## 背景
 

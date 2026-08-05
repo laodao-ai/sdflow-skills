@@ -47,7 +47,6 @@ def test_prompts_are_not_inlined_back_into_the_table():
     """
     w = G.WORKFLOW.read_text(encoding="utf-8")
     fingerprints = {
-        "step3-grill": "现状只用来核事实，不用来定对错",
         "step6-writing-plans": "Global Constraints 不进 brief",
         "step8-code-review": "并入 gstack/review 的 scope-drift",
     }
@@ -75,7 +74,9 @@ def test_table_stays_six_columns():
     """表格解析的语法面前提：每行恰好 6 列（基准 5：有界才可手写解析）。
 
     单元格里出现裸 ' | ' 会让 _rows() fail-closed —— 这个测试提前把它抓住。
+    行数下限反映 simplify-workflow 后的单轨线性流程（8 行：explore/sdflow-spec/
+    spec-review/HARD-GATE/writing-plans/subagent-dev/code-review/done）。
     """
     rows = G._rows()
-    assert len(rows) >= 9
+    assert len(rows) >= 6
     assert {r["step"] for r in rows} >= set(G.STEP_FILES)

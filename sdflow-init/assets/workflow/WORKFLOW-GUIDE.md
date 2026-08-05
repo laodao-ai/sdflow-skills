@@ -13,14 +13,6 @@
 
 ---
 
-## 阶段一 · 步骤 0 — `/sdflow-spec`
-
-**默认入口（装了就走这条，取代步 1/1b/2/3）**：一次跑完 澄清(A)→拷问(B)→生成(C)。只能人手动敲（`disable-model-invocation: true`）——模型 MUST NOT 代唤起，也 MUST NOT 改用 `opsx:ff` 绕过拷问，而 SHALL 提示用户触发本步
-
-**产出物**：proposal/design/specs/tasks + decision-memo.md
-
-**规则 · 条件**：generation-process §四 分支 A + 四入口选择规则；出口序列 = `/clear` → 换档 → `/sdflow-spec-review`（对 G1 的具名例外，见 §三.2）；**未装本 skill 或命中三种例外情形 → 走步 1~3（分支 B）**
-
 ## 阶段一 · 步骤 1 — `/opsx:explore`
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step1-explore.md`）：
@@ -31,41 +23,17 @@
 
 **产出物**：—
 
-**规则 · 条件**：**〔分支 B〕** generation-process ③发散；**单 session 可收敛的模糊才跑**（问题清晰直接 ff；事中判定超单 session 转 wayfinder，见 1b）
+**规则 · 条件**：条件：问题 / 方向模糊、方案未定时先跑；问题清晰直接进步 2。人示意收敛（如"开搞"/"做吧"/"开 change"）→ 模型自动 invoke `/sdflow-spec`（generation-process §四 自动触发规则）
 
-## 阶段一 · 步骤 1b — `wayfinder chart`
+## 阶段一 · 步骤 2 — `/sdflow-spec`
 
-事中判定超单 session（讨论已跨 session/跨天，或经历 /clear/压缩仍未收敛）才切入；铺图逐 ticket 决议；TG 判命中前置写入 map Notes（**增强非转移**：ff 起手判触发纪律不变，Notes 有则核对、无则照常全判，缺失不硬卡）；缺装（`~/.claude/skills/wayfinder` 不存在）→ 显式降级 opsx:explore
+一次跑完 澄清(A)→拷问(B)→生成(C)。人可直接触发；模型 SHALL 在人示意收敛或用户描述需求且需要开 change 时自动 invoke，MUST NOT 自主判断"该开 change 了"
 
-**产出物**：map.md + issues/*.md
+**产出物**：proposal/design/specs/tasks + decision-memo.md
 
-**规则 · 条件**：**〔分支 B〕** T126/D6；三档判据事中可观察
+**规则 · 条件**：generation-process §四；出口序列 = `/clear` → 换档 → `/sdflow-spec-review`（对 G1 的具名例外，见 §三.2）
 
-## 阶段一 · 步骤 2 — `/opsx:ff`
-
-**prompt**（原样复制，勿转述 · 单一源 `prompts/step2-ff.md`）：
-
-```
-/opsx:ff {change}。先过 FF-0 三分支判定：在保护分支（main/master）则 git checkout -b feat/{change}；已在 feat/{change} 则跳过；在其它 feature 分支则停下问我（从当前切出 / 回 base 切出 / 就地继续）。若 change 源于 wayfinder map：调用语显式携带 map 路径（如 @openspec/roadmaps/{name}/map.md）并按 ff-generation-constraints.md「wayfinder→ff 衔接契约」逐区读取。完成后 checkpoint-commit ff。
-```
-
-**产出物**：proposal/design/specs/tasks
-
-**规则 · 条件**：**〔分支 B〕** ff-generation-constraints(FF-0 三分支判定)+config；**分支 B 内必跑**
-
-## 阶段一 · 步骤 3 — `/grill-with-docs`
-
-**prompt**（原样复制，勿转述 · 单一源 `prompts/step3-grill.md`）：
-
-```
-/grill-with-docs 死磕 {change dir} 的 design.md（连 proposal/specs/tasks）。守四条通则——尤其：拷问的基准是【目标态】，MUST NOT 用「现在代码不是这么写的 / 存量里没出现过」否决设计（现状只用来核事实，不用来定对错）；事实自己查（grep 得到的别问）；≥2 方案先调研再给推荐，别把选项丢回来。落档：ADR→openspec/adr/、术语→openspec/CONTEXT.md；文档改动标 [grill-amendment]。收敛后 checkpoint-commit grill（多轮中途不提交）。
-```
-
-**产出物**：design/ADR/CONTEXT 更新
-
-**规则 · 条件**：**〔分支 B〕** generation-process ③对抗；分支 B 内非平凡变更必跑。**grill 是独立审视，一律全深度**——MUST NOT 因上游（explore / wayfinder 已决 ticket）已经想过就瘦跑或跳过某条分支；拿上游产出给自己松绑，二次审视就退化成盖章（见 ff-generation-constraints.md 的回链锚条款）。
-
-## 阶段二 · 步骤 4 — `/sdflow-spec-review`
+## 阶段二 · 步骤 3 — `/sdflow-spec-review`
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step4-spec-review.md`）：
 
@@ -77,7 +45,7 @@
 
 **规则 · 条件**：编排器：内部 autoplan→并行多镜→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 2×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）**
 
-## 阶段二 · 步骤 5 — `HARD-GATE`
+## 阶段二 · 步骤 4 — `HARD-GATE`
 
 人工过 **一份** `spec-review-report.md`（决策登记区已摊开选项+推荐+三面后果(系统/用户/开发循环)+主次判定）→ 批准设计
 
@@ -85,19 +53,7 @@
 
 **规则 · 条件**：generation-process 门；**★全流程唯一人类门**
 
-## 阶段二 · 步骤 5.5 — `/embedded-test-sop`
-
-**prompt**（原样复制，勿转述 · 单一源 `prompts/step5_5-embedded-sop.md`）：
-
-```
-/embedded-test-sop 基于 {change dir} 的 specs/ + 评审结论生成 {change}-sop.md 手工测试文档 + log-checks.yaml，存到 {change dir}。
-```
-
-**产出物**：{change}-sop.md + log-checks.yaml
-
-**规则 · 条件**：嵌入式专属条件触发：TG-02(嵌入式固件) **∧**（启动/复位·状态机·协议 等高风险 **∨** TG-18 有测试计划）；非嵌入式天然不触发
-
-## 阶段三 · 步骤 6 — `/writing-plans`
+## 阶段三 · 步骤 5 — `/writing-plans`
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step6-writing-plans.md`）：
 
@@ -107,11 +63,11 @@
 
 **产出物**：superpowers-plan.md + 代码
 
-**规则 · 条件**：**本步骤只管 superpowers 轨，产出文件名不变**；superpowers + quality-layering 注入点 A；**必跑（计划→实现自动化）**；实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出改名为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
+**规则 · 条件**：**仅当仓显式设 `impl-pipeline: superpowers` 时走本行**（superpowers 轨：writing-plans → subagent-driven-development，产出文件名不变；superpowers + quality-layering 注入点 A）；**缺省（无该键）走 tickets 轨**，不产出本步骤文件，路由至 sdflow-implement 出票执行（细则见 sdflow-ship/SKILL.md 链序；tickets 轨产出为 `tickets.md`〔D5/adr-0033〕，两轨计划文件名分列，gate/route 经共享 resolver 定位）
 
-## 阶段三 · 步骤 7 — `/subagent-driven-development`
+## 阶段三 · 步骤 6 — `/subagent-driven-development`
 
-（由步骤 6 自动触发）
+（由步骤 5 自动触发，**仅 superpowers 轨**）
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step7-subagent-dev.md`）：
 
@@ -121,9 +77,9 @@
 
 **产出物**：代码
 
-**规则 · 条件**：quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。实现管线可经 config.yaml `impl-pipeline: tickets` 键路由至 sdflow-implement（缺省即 tickets，细则见 sdflow-ship/SKILL.md 链序）
+**规则 · 条件**：quality-layering 注入点 B（领域审前移进生成循环，即时 fix+re-review 闭环）。**🔴 派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，**看不见 CLAUDE.md**；且 `scripts/task-brief` 只抽 `### Task N` 段，plan 的 Global Constraints 与 Context 都不进 brief。漏带 ⇒ implementer 眼前只有现状代码，**必然**把「现有代码不是这么写的」当成「那就按现状来」（通则③）。tickets 轨的等价执行见 sdflow-implement 编排器（缺省即 tickets）
 
-## 阶段三 · 步骤 8 — `/sdflow-code-review`
+## 阶段三 · 步骤 7 — `/sdflow-code-review`
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step8-code-review.md`）：
 
@@ -135,7 +91,7 @@
 
 **规则 · 条件**：编排器：**每次全跑·独立冷·强制主审**〔P3c〕；清单逐条+对抗+历史镜+置信过滤；阶段三无人类门（自动修/裁/defer，不 AskUserQuestion）+ 跨模型 outside voice（always code voice + HR-TG 领域 cross-model）
 
-## 阶段三 · 步骤 9 — `/sdflow-done`
+## 阶段三 · 步骤 8 — `/sdflow-done`
 
 **prompt**（原样复制，勿转述 · 单一源 `prompts/step9-done.md`）：
 

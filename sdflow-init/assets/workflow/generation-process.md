@@ -48,91 +48,70 @@ config 固化①②后，brainstorming 的机械步被吸收（方案落 BASE-12
 
 结论：**brainstorming 是"产设计"的收敛器，grill 是"锤设计"的对抗器。** 结构与约束已被 config 守住后，真正稀缺的是**对抗压测**——grill 比再跑一遍 brainstorming 的机械自检更值钱。
 
-## 四、推荐流水线（**两条分支，先判装没装 `sdflow-spec`**）
-
-### 分支 A —— 已装 `sdflow-spec`：单入口（**默认路径**）
+## 四、推荐流水线（唯一入口）
 
 ```
+  opsx:explore〔条件：问题模糊 / 方向未定〕   发散,想清要不要 / 是什么
+        ↓ 问题已清晰则跳过
+        ↓ 人示意收敛(如"开搞"/"做吧"/"开 change") → 模型自动 invoke
   /sdflow-spec                          澄清(A) → 拷问(B) → 生成(C) 一次连续跑
         ↓                               拷问结构性前置于成文；产四件套 + decision-memo.md
   HARD-GATE 批准                        保留「未批准不实现」门禁
         ↓
-  opsx:apply
+  /sdflow-ship（sdflow-implement 等）
 ```
 
 `sdflow-spec` 把「发散 + 对抗 + 生成」收进一个入口，且**拷问在成文之前**——改想法比改四份成文便宜。
-它 `disable-model-invocation: true`，**只能人触发**。出口序列由该 skill 原样贴出（`/clear` → 换档 →
-`/sdflow-spec-review`，对 [workflow.md](./workflow.md) §三.2 的 G1 构成一处具名例外，理由见该处）。
+出口序列由该 skill 原样贴出（`/clear` → 换档 → `/sdflow-spec-review`，对 [workflow.md](./workflow.md)
+§三.2 的 G1 构成一处具名例外，理由见该处）。
+
+### 自动触发规则（explore → sdflow-spec）
+
+模型 SHALL 在以下情形自动 invoke `/sdflow-spec`：
+① explore 中人示意收敛（如「开搞」「做吧」「开 change」）；
+② 用户描述需求且判断需要开 change 时。
+
+**模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发；explore 讨论仍在发散、用户
+未表达收敛信号时，MUST NOT 自动跳转。触发方式的改变**不影响**相位 B 的拷问协议（一次一问、承重
+约束逐条站稳、停止信号需证据锚）——见 spec-authoring 的 SA-01。
+
+### 何时跳过 explore
+
+问题已经清晰（无需 reframe、只有一种合理框定）时，直接触发 `/sdflow-spec`，不必先过 explore。
+`opsx:explore` 与 `/sdflow-spec` 互补不重叠：前者是发散工具（想清楚"要不要 / 是什么"），
+后者是收敛管线（拷问结构性前置于成文的生成管线）。
 
 ### project-local schema 的作用边界
 
 本仓及由 bundle 下发的消费项目使用 `sdflow-spec-driven` project-local schema（CLI 版本门通过时）。
 schema 是阶段一入口的**结构与提示层**：它声明四件套的 artifact、依赖、委派 instruction 与
-`skip_specs` 状态；官方入口读到委派 instruction 后，应提示人触发 `/sdflow-spec`。委派只改变提示
-与引流，**不是模型执行的机械保证**，因此仍须遵守本节入口规则。
+`skip_specs` 状态；官方入口读到委派 instruction 后，应按上方自动触发规则决定直接 invoke 或提示人
+触发 `/sdflow-spec`。委派只改变提示与引流，**不是模型执行的机械保证**，因此仍须遵守本节规则。
 
 版本门未通过时，安装器保持内置 `spec-driven`，并以 fail-loud 结果说明未铺设 project-local schema；
 不得把旧路径默认为已经具备委派能力。迁移时必须先完成在途 change 的 schema 补写，再切换
 `config.schema`，顺序不可颠倒；补写失败不得切换配置。schema fork 是一次性快照：上游
 `spec-driven` 后续更新不会自动同步，本仓当前不实现 fork 漂移检测或自动 rebase。
 
-### 分支 B —— 未装 `sdflow-spec`：旧三步（沿用，未被删除）
-
-```
-  〔问题模糊 / 方向未定〕opsx:explore     发散,想清要不要 / 是什么
-        ↓
-  opsx:ff（config 守①②）               生成,结构 + 约束已固化
-        ↓
-  grill-with-docs                       对抗压测:死磕分支 + 对齐术语 + 查代码 + 落 ADR
-        ↓                               （吃掉 brainstorming 大部分剩余价值）
-  HARD-GATE 批准                        保留 brainstorming 的「未批准不实现」门禁
-        ↓
-  opsx:apply
-```
-
-净分工（分支 B 内）：**explore 发散（条件）· grill 对抗（主力）· brainstorming 收窄为「产设计 + 把门」。**
-
-### 四入口选择规则（**规则，不是建议**）
-
-- **想法尚未成形**（问题模糊 / 方向未定 / 多种框定）⇒ 先 `opsx:explore` 发散探索，想清楚了再 `/sdflow-spec`。`opsx:explore` 是发散工具，`/sdflow-spec` 是收敛管线（= 增强版 ff + 内建 grill），两者互补不替代。
-- **想法已成形** ⇒ **默认走 `/sdflow-spec`**：装了它就用它；MUST NOT 默认拿 `opsx:ff` 起手。
-- **仅下列三种情形用旧三步**：① 需要 wayfinder 跨会话铺图（`sdflow-spec` 不覆盖该职责）；② 用户明确要求分步执行；③ `sdflow-spec` 因环境原因不可用（未跑 setup / Codex 宿主降级不可接受）。走旧三步的那次运行 SHALL 在完成报告里说明为何未走单入口。
-- **模型侧**：模型 MUST NOT 自行选 `opsx:ff` 绕过拷问；判断需要开 change 时 SHALL 提示用户触发 `/sdflow-spec`，MUST NOT 直接调 `opsx:ff`。
-- **旧三步仍是合法路径**：三个原入口未被删除；分支 B 里 grill 一律全深度，MUST NOT 因「反正以后会换单入口」而瘦跑。
-
 ## 五、各 skill 何时用
 
 | skill | 触发 / 选择条件 |
 |------|----------------|
-| `/sdflow-spec` | **默认**（装了就用）：一个入口跑完澄清 → 拷问 → 生成，拷问前置于成文。只能人触发 |
-| `opsx:explore` | **条件**：问题 / 方向模糊、有多种框定、方案未定。清晰的变更跳过。走分支 B 时用 |
-| `brainstorming` | 需要从零产出设计 + 要 HARD-GATE 时；config 固化后**瘦着跑**（只做澄清/选方案/把门，跳过机械自检） |
-| `grill-me` | 无领域文档基建时的轻量对抗压测（纯拷问） |
-| `grill-with-docs` | 有领域文档（术语表 / ADR）时：对抗压测 + 对齐术语/领域模型/代码 + 落档（维护长期真相源） |
+| `/sdflow-spec` | **唯一生成入口**：一个入口跑完澄清 → 拷问 → 生成，拷问前置于成文。人可直接触发，模型按上方自动触发规则在人示意收敛时自动 invoke |
+| `opsx:explore` | **条件**：问题 / 方向模糊、有多种框定、方案未定时先跑。清晰的变更跳过 |
 
-## 六、grill-with-docs 路径适配（重要）
-
-`grill-with-docs` 默认领域文档约定为 `CONTEXT.md`（术语表）+ `docs/adr/`（ADR）。
-**复用到本框架前，先把它的路径约定对齐到你的 repo 结构**，否则它会另起一套 `docs/adr/`，
-与你已有的 ADR / 术语源形成**第二套真相源**（正是我们一路在消除的漂移）。
-
-> 本仓库示例：ADR 在 `docs/gstack/`（如 Product_Boundary_ADR）、术语 / 规格在 `openspec/specs/`、
-> 设计强制规范索引在 `openspec/INDEX.md`。用 grill-with-docs 时让它读写这些位置，而非新建 `docs/adr/`。
-
-## 七、与体系其余部分的关系
+## 六、与体系其余部分的关系
 
 - **①② 在 `config.yaml`，③ 在本文**：三杠杆分工不重叠（结构+约束守机械正确，过程守判断正确+人把门）。
 - **explore 的"问题模糊"是过程决策，不入 [`trigger-catalog.md`](./trigger-catalog.md)**（TG 是"按变更内容"的触发；相位选择是"按不确定性"的元决策，性质不同）。
 - **grill 落的产物回流标准**：ADR ↔ BASE-12、术语 ↔ BASE-09、代码核验 ↔ D-1。grill 是这些 R 项的**对话执行器**。
 
-## 八、检查清单（用 ③ 时）
+## 七、检查清单（用 ③ 时）
 
-- [ ] 装了 `sdflow-spec` 吗？装了就走**分支 A 单入口**；走旧三步须命中 §四 三种例外之一并在报告说明
+- [ ] 问题 / 方向是否清晰？不清晰先 `opsx:explore`，人示意收敛才自动接 `/sdflow-spec`
 - [ ] project-local schema 已通过版本门吗？确认委派是提示层效果，并核对迁移顺序（先补写、后切配置）
-- [ ] 问题/方向是否清晰？不清晰先 `opsx:explore`，别直接 ff（分支 B）
-- [ ] 生成后是否做过**对抗压测**（grill），而不止机械自检？
-- [ ] 设计是否过 HARD-GATE（用户批准）后才进 apply？
-- [ ] grill-with-docs 是否读写本 repo 的 ADR/术语位置，未另起第二套？
-- [ ] brainstorming 是否"瘦着跑"（未与 config 的机械自检重复）？
+- [ ] `/sdflow-spec` 触发方式（人手动 / 模型自动）是否有明确的人示意信号？模型未自主判断「该开 change」？
+- [ ] 相位 B 的拷问是否照常全深度执行（触发方式改变不缩减拷问），而不止机械自检？
+- [ ] 设计是否过 HARD-GATE（用户批准）后才进阶段三？
 
 *规则 v1 · 项目无关 · 配套 trigger-catalog.md / config.yaml / ff-generation-constraints.md*

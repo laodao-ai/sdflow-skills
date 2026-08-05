@@ -50,10 +50,9 @@ BANNER = """<!-- 本文件由 hack/gen_workflow_guide.py 从 workflow.md + promp
 
 # 表格 prompt 列里的指针 → 对应文件
 STEP_FILES = {
-    "1": "step1-explore", "2": "step2-ff", "3": "step3-grill",
-    "4": "step4-spec-review", "5.5": "step5_5-embedded-sop",
-    "6": "step6-writing-plans", "7": "step7-subagent-dev",
-    "8": "step8-code-review", "9": "step9-done",
+    "1": "step1-explore", "3": "step4-spec-review",
+    "5": "step6-writing-plans", "6": "step7-subagent-dev",
+    "7": "step8-code-review", "8": "step9-done",
 }
 
 
