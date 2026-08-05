@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 575885be30af06d0907df98d1e284180d3936268
+---
+
 # 设计评审报告 · refactor-roadmap-internalize-deps
 
 > **阶段二编排评审**（`/sdflow-spec-review`）。Step1 autoplan 广审（原生）→ Step2 并行多镜 →
@@ -454,12 +460,18 @@ $ grep -c "SA-14" openspec/specs/spec-authoring/spec.md   → 0
 
 ## 四、镜子价值度量
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="13" 采纳="12" 裁掉="1" defer="0" 独立="10" sev="致1/高6/中3/低2" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="25" 采纳="21" 裁掉="3" defer="1" 独立="14" sev="致1/高7/中10/低3" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="17" 采纳="16" 裁掉="1" defer="0" 独立="14" sev="致1/高6/中6/低3" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="25" 采纳="22" 裁掉="3" defer="0" 独立="15" sev="致1/高8/中10/低3" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="3" sev="致0/高2/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="0" sev="致0/高1/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="3" 采纳="3" 裁掉="0" defer="0" 独立="3" sev="致0/高3/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="7" 采纳="7" 裁掉="0" defer="0" 独立="7" sev="致0/高6/中1/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="0" sev="致1/高2/中1/低0" -->
+
+> **门后最终化〔SR-M〕**：以上为**设计门拍板后**重算的终值，非 Step3 的 pre-gate 临时值。
+> 两处变化：① Q2 拍板 A ⇒ 原 `defer="1"`（能力等价性/未决项闭环）转 `采纳`；
+> ② 并入窄复核 8 条（NR-1~4 → design-voice 第二轮；NR-5~8 → 冷对抗镜），
+> 故 `adversarial` 13→17、`design-voice` 3→7。
+> **本重算无任何下游机械校验**（聚合器分不清草稿值与终值）——这是 SR-M 已知的诚实边界。
 
 **诚实边界**：分类正确性（某条 finding 该归哪个 lens）、roster 完备性、findings JSON 誊写准确
 **仍是主 session 的信任边界**，emitter 只保证「给定输入的确定性归约」。
@@ -534,6 +546,16 @@ NR-4 六处措辞统一 · NR-5 Goals 原句改写为指向分叉表 · NR-6 骨
 **如实声明，不称「已全面复核」。**
 
 ## 七、收敛口
+
+### 拍板记录
+
+**设计门已拍板批准，2026-08-05**（人：「批准」）。
+批准的盘面 = `575885be30af06d0907df98d1e284180d3936268`（`checkpoint(spec-review): 窄复核结论并入报告`）
+——该 commit 是四件套最后一次改动 `57f1fa7` 的后代，工作树拍板时干净。
+机判锚已写入本报告头部 frontmatter 的 `ship-gate` 块（`design_approved` 与 `reviewed_sha`
+同一次写入落盘）。
+
+**出口**：`/clear` → `/sdflow-ship`。
 
 ### 已完成的序列
 
