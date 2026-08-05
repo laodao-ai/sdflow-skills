@@ -77,14 +77,9 @@
 | **gstack `/autoplan`** | 设计审的广审层（CEO/Eng/Design 三连） | `sdflow-spec-review/SKILL.md`、`sdflow-roadmap/SKILL.md:426` | 显式提示 + 留「未审待恢复」痕迹 |
 | **`/plan-eng-review`** | roadmap 的技术评审（默认档） | `sdflow-roadmap/SKILL.md:425` | 同上 |
 
-### Wayfinder 依赖（仅 sdflow-roadmap 使用）
-
-| Skill | 用途 | 调用处 | 缺失时行为 |
-|-------|------|--------|-----------|
-| **`/grilling`** | wayfinder 票内的计划拷问 | `sdflow-roadmap/SKILL.md:306` | 降级为普通对话式讨论 |
-| **`/domain-modeling`** | wayfinder 票内的术语/ADR 建模 | `sdflow-roadmap/SKILL.md:312` | 同上 |
-
 > `/grill-with-docs` 已被 `sdflow-spec` 内置取代（`sdflow-spec/SKILL.md:10`），不再是外部依赖。
+> `/grilling`、`/domain-modeling`（原 wayfinder 票内依赖）已随 `refactor-roadmap-internalize-deps`
+> 内化进 `sdflow-roadmap` 自身的三相位结构，不再是外部依赖。
 >
 > 所有三方 skill 都设计了显式降级路径——缺失时报告但不中断工作流。
 
@@ -144,8 +139,7 @@ sdflow-spec（阶段一产 spec）
 └── 内置澄清→拷问→生成三相位
 
 sdflow-roadmap
-├── /plan-eng-review 或 /autoplan（外部，review 分档）
-└── /grilling、/domain-modeling（外部，wayfinder 票内可选）
+└── /plan-eng-review 或 /autoplan（外部，review 分档；讨论层已内化，无其他外部依赖）
 ```
 
 ---

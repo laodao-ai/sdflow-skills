@@ -6,8 +6,6 @@
 |----|------|--------|------|--------|---------|
 | [T7](open/todo/T7.md) | todo | PROPOSED | 2026-07-01 | `spec-review/SKILL.md + impl-review/SKILL.md` | 评审报告「决策登记区」改必填 section（无决策点也显式写无）+ 主审 checklist 加核验项 |
 | [T9](open/todo/T9.md) | todo | PROPOSED | 2026-07-01 | `workflow.md + trigger-catalog.md` | 「非平凡」给 TG 可判的硬定义，判「平凡」须在 ff 产物显式声明一行供设计门核 |
-| [T12](open/todo/T12.md) | todo | PROPOSED | 2026-07-01 | `opsx-maintain / resolve-workflow.sh` | 全局侧陈旧可观测：canonical 指向的 commit hash/距上次 pull 天数一行提示（运行 checkout 长期未 pull 无感知） |
-| [T15](open/todo/T15.md) | todo | PROPOSED | 2026-07-01 | `opsx-project-init/scripts/init.py` | update --dev 时跳过陈旧遮蔽告警或换文案（dogfood 源仓每次 --dev 见两条误报⚠） |
 | [T23](open/todo/T23.md) | todo | PROPOSED | 2026-07-01 | `setup.sh Windows copy 分支` | Windows 分支（IS_WINDOWS=1）marker 换写 .sdflow-skills 无直接测试（沙箱恒 Unix；名单判定函数已双向测试） |
 | [T29](open/todo/T29.md) | todo | PROPOSED | 2026-07-01 | `workflow 度量（ship_gate/checkpoint 时间戳 + 各编排 skill 报告）` | 记录每个 agent 花费时长 + workflow 各子阶段时长（spec-review、ship 的分层子阶段）+ 各阶段汇总 |
 | [T31](open/todo/T31.md) | todo | PROPOSED | 2026-07-01 | `outside-voice.sh + 两 SKILL 协议节 + setup.sh` | voice 层后续硬化池（code-review 多镜确认、本轮未修的 defer 项 ×8） |
@@ -16,21 +14,14 @@
 | [T51](open/todo/T51.md) | todo | PROPOSED | 2026-07-01 | `sdflow-done/SKILL.md commit步 + merge检查` | tracked 非-openspec 改动被 commit 步 git add -u 先提交、绕过 merge 前 untracked 硬检查的"停下问"——需 commit 步暂存策略与 merge 卫生检查对齐(gate-checkpoint-hardening SR-2 缩简版只覆盖 untracked,tracked 一路 defer) |
 | [T52](open/todo/T52.md) | todo | PROPOSED | 2026-07-01 | `sdflow-done/SKILL.md merge untracked 检查` | merge 前 untracked 检查现为机械"任何 ??→halt 人工triage"(CR-4);精确区分"本 change 新产 vs 既有 debris"需在分支切出点落 untracked baseline 快照再 diff,可减少既有 debris 的误停——脚本化探索 |
 | [T54](open/todo/T54.md) | todo | PROPOSED | 2026-07-01 | `workflow 度量 / grill amendment 存活率` | grill amendment-下游存活率 度量 |
-| [T56](open/todo/T56.md) | todo | OPEN | 2026-07-01 | `trivial_shape.py / workflow-cost-opt Leg1` | 判器残余(F6): tests/ 免多镜仅排 conftest/__init__,未盖 tests/plugins/* 等 import 副作用;更严可限 test_*.py。另 更宽有逻辑面轻量化已证不可做(diff前不可机判/HR-TG语义),留 roadmap design 放弃项 |
 | [T57](open/todo/T57.md) | todo | OPEN | 2026-07-01 | `workflow/model-tiers` | 档位矩阵新增「升级档」（更高档，延后） |
 | [T62](open/todo/T62.md) | todo | PROPOSED | 2026-07-01 | `sdflow-retro/retro_report._run_git` | T60 留痕在系统性 git 损坏下无节流放大：seed_mass_shas 对每个 sha 调 _run_git，仓库整体损坏时每 commit rc≠0 各写一行 stderr，O(commits) 无去重无节流。低危(仅真故障下噪声非虚警;view-only不中断)。改法:同一 subcmd 失败去重,或 seed 循环 per-sha 失败聚合成一条 |
-| [T68](open/todo/T68.md) | todo | PROPOSED | 2026-07-01 | `anchor_lint` | load_enums 契约 lens-metric-enums 块内若未来加裸 ``` 行会提前闭合致 EnumsError；当前块内容无裸 fence 未触发，fail-closed 安全侧 |
-| [T69](open/todo/T69.md) | todo | PROPOSED | 2026-07-01 | `sdflow-init/copy_bundle` | 缺 pin 消费仓 update 端到端交叉不变量测试（workflow.md/spec-checklists/code-checklists 原封不动、仅 tools+契约刷新） |
 | [T83](open/todo/T83.md) | todo | PROPOSED | 2026-07-01 | `embedded-test-sop + log_check.py(新)` | P4·4.A 串口日志规则判定脚本化：时间窗+must_contain/not/before+severity rollup 输出 PASS/FAIL，平台需人眼项留模型。目标态该做,正当排后——本仓无 embedded producer 契约可 dogfood,待真实 embedded 消费仓需求(producer 契约就绪度,非痛感) |
 | [T84](open/todo/T84.md) | todo | PROPOSED | 2026-07-01 | `embedded-test-sop SOP模式A 小校验器(新)` | P4·4.D.3 SOP 模式A 源码常量/TAG 收割脚本化：正则 emit 常量表 name/值/来源:行。同 embedded 排后 |
 | [T89](open/todo/T89.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | probe_format 全文扫描非限定 phase：混合格式 roadmap 会误判 checkbox，目标 phase 是表格式时不 fail-loud 反空匹配误诊断（修法:probe 增 phase 参数只扫该 phase 行段） |
 | [T90](open/todo/T90.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） |
 | [T91](open/todo/T91.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） |
 | [T92](open/todo/T92.md) | todo | PROPOSED | 2026-07-01 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 |
-| [T93](open/todo/T93.md) | todo | PROPOSED | 2026-07-01 | `resolve-workflow.sh` | bash 第3份 RULE_MARKERS 内联副本（resolve-workflow.sh）跨语言难与 init.py/maintain_scan.py 同守——一致性守卫只覆盖两份 Python 副本，bash 副本漂移不被机验 |
-| [T94](open/todo/T94.md) | todo | PROPOSED | 2026-07-01 | `maintain_scan.py + init.py` | 陈旧遮蔽告警文案第三处跨脚本复述 + checkpoint 孤儿路径：R-guard 不机验文案（文案守卫脆），maintain 抄 init 文案仅语义等价、漂移不被捕获——已知残差 |
-| [T95](open/todo/T95.md) | todo | PROPOSED | 2026-07-01 | `sdflow-maintain/tests/test_marker_consistency.py` | 守卫加载用 assert os.path.isfile + exec_module hard-fail；sdflow-init 目录整体缺席场景可加 importorskip 更优雅降级（当前 path-assert 直接 fail，defer 兜底优化） |
-| [T96](open/todo/T96.md) | todo | PROPOSED | 2026-07-01 | `maintain_scan.py _SPEC_LINK/_RULE_LINK` | 链接正则 [a-z0-9-]+ 与 scan_fs_specs/rules 目录名零字符集限制不对称：非规范命名(大写/下划线)的 spec/rule 被删且 INDEX 仍链接时，链接不命中正则→静默归②b排除→不进 stale→漏报已删未清理。openspec 强制 kebab 故低概率，彻底修需 scan_fs 也检非规范命名 |
 | [T103](open/todo/T103.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） |
 | [T104](open/todo/T104.md) | todo | PROPOSED | 2026-07-01 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） |
 | [T105](open/todo/T105.md) | todo | PROPOSED | 2026-07-01 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） |
@@ -51,15 +42,8 @@
 | [T122](open/todo/T122.md) | todo | PROPOSED | 2026-07-01 | `skills` | done/ship/init 加 disable-model-invocation 触发层硬开关（04 提案 §5.4） |
 | [T123](open/todo/T123.md) | todo | PROPOSED | 2026-07-01 | `issues` | 动作抽象层：recorder tracker 后端可插拔，仅当需求出现（04 提案 §5.5） |
 | [T124](open/todo/T124.md) | todo | PROPOSED | 2026-07-01 | `bundle` | 规则注入策略分界落地：小而稳定且每镜必用的核心 rubric 运行时读一次全文贴入（可缓存稳定前缀），大部头/高频演进 delta 保持引用+anchor_lint；SKILL.md 禁静态内联不变（04 提案 §4.8，2026-07-10 拍板） |
-| [T128](open/todo/T128.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement` | impl_route.py PIPELINE_RECEIPT 的 marker 显示折叠：显式 `impl-pipeline: superpowers` 与无 frontmatter/无键的隐式缺省均显示 marker=none，路由行为等价但 receipt 可诊断性受损（F3a 判赢留档核对时无法分辨是否显式声明过）——需 read_plan_marker 返回值携带来源注记再区分显示（code-review defer，display-only 无路由风险） |
 | [T129](open/todo/T129.md) | todo | PROPOSED | 2026-07-01 | `sdflow-roadmap` | 存量 wco/mlh 两包 requirements.md 并入 design.md 迁移（tasks 5.1-5.3 受控延后项，Q-C 拍板前置②）——触发条件：首个新流程 roadmap SHIPPED 且目标包无在飞 change；操作序列以归档 change rebuild-sdflow-roadmap-v2 的 tasks.md 5.1-5.3 + design Migration step3 为准（全节清点表/考古注记四要素/头部章不占编号序列/清点表落盘随 commit/per 包 maintain_scan） |
-| [T130](open/todo/T130.md) | todo | PROPOSED | 2026-07-01 | `bundle` | ff-generation-constraints.md:43 衔接契约边界句「requirements/design/roadmap/task-log 四件套」→「三件套」术语同步——matt-workflow-integration Task7 写入时 rebuild-sdflow-roadmap-v2 未落地所致漂移；属 assets/workflow 权威源（rebuild change Compliance 声明零 assets 改动故未扫），一词修正独立小改，改后消费仓经 sdflow-init update 获得 |
-| [T131](open/todo/T131.md) | todo | PROPOSED | 2026-07-01 | `bundle` | workflow.md 阶段一 wayfinder 缺装探测硬编码 Claude 单宿主路径（~/.claude/skills/wayfinder）——未同步 sdflow-roadmap SKILL.md 本轮新增的宿主中立探测口径（按当前宿主 Claude/Codex 分别探测，MUST NOT 以 Claude 路径代理全局）；Codex 宿主跑 mainflow 阶段一会重犯同款误判。属 assets/workflow 权威源（rebuild change Compliance 零 assets 改动故未扫），改后经 sdflow-init update 分发 |
-| [T134](open/todo/T134.md) | todo | OPEN | 2026-07-01 | `domain-modeling / grill-with-docs 领域文档路径感知` | domain-modeling(grill-with-docs 内包)裸 SKILL.md 硬编码根 docs/adr/+CONTEXT.md，不读 openspec/matt/domain.md(setup-matt-pocock-skills 写的路径配置)——靠本 session CLAUDE.md ## Agent skills 块覆盖赢冲突，脆：skill-local 硬编码是强 pull,万一某次赢了就在根建 docs/adr/=第二真相源(正是 generation-process §六 警告的漂移)。硬化:让 domain-modeling domain.md-path-aware(或加 matt 包装),从根免掉每次 grill prompt 手塞路径重定向。未修前 grill prompt 保留 ADR→openspec/adr/ 重定向作 belt-and-suspenders(几字成本换掉冲突风险)。关联 T133(该重定向属 auto-prompt 脚手架,非分析 seed,不违 T133 校准)。 |
-| [T139](open/todo/T139.md) | todo | PROPOSED | 2026-07-01 | `outside_voice_guard` | outside_voice_guard parse_mode 用 .search 取首个 step1 锚——native/simulated 双锚静默取前者，不校验数量/一致性（codex+对抗镜 low） |
-| [T140](open/todo/T140.md) | todo | PROPOSED | 2026-07-01 | `anchor_lint` | check_hr_tg 把 declared 列为 hr-tg 锚必填、无向后兼容——旧格式锚(hit=+evidence=无declared)重 lint 会 exit1（对抗镜 low） |
 | [T141](open/todo/T141.md) | todo | OPEN | 2026-07-01 | `workflow bundle (roadmap/ff/spec-review/implement/code-review)` | 把「拆分标准=一个change一个完整阶段结果」融入 workflow 三处触发 |
-| [T142](open/todo/T142.md) | todo | OPEN | 2026-07-01 | `docs/workflow-map.md` | workflow-map.md 广度刷新：补 mlh-p4 后 5 脚本 + hr-tg schema 回灌 |
 | [T143](open/todo/T143.md) | todo | PROPOSED | 2026-07-01 | `sdflow-architecture` | frozen-diff lint：frozen contract 有 diff 无新 ADR 关联报错（需 git 对比，超 v1 纯文件断言） |
 | [T144](open/todo/T144.md) | todo | PROPOSED | 2026-07-01 | `sdflow-architecture` | sad_schema 常量单向生成 JSON schema 工件（跨语言消费方出现时触发） |
 | [T145](open/todo/T145.md) | todo | PROPOSED | 2026-07-01 | `sdflow-roadmap` | 观察 description 追加 SAD 指路句后的触发精度（架构类查询是否误触 roadmap） |
@@ -72,28 +56,17 @@
 | [T165](open/todo/T165.md) | todo | OPEN | 2026-07-01 | openspec/changes/async-outside-voice/specs（R1 Scenario 1）+ 两评审 SKILL 的 async 调度段 | R1 Scenario 1 的 WHEN（voice 时长 > 外层同步窗口）在本 change 全程未被满足 ⇒ async 的收益面未获端到端实证；补证需要一次 voice 真实耗时 > 300s 的评审跑动 |
 | [T169](open/todo/T169.md) | todo | PROPOSED | 2026-07-01 | openspec/changes | done 前清理四件套正文的考古层：正文留结论、演进史迁附录(DOC-1/BASE-30) |
 | [T171](open/todo/T171.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review+code-review | R7 截断覆盖面诚实（truncated ⇒ 报告须声明覆盖残缺）退出本次 change，需独立成题 |
-| [T174](open/todo/T174.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/tests/test_outside_voice.py | fake-timeout 看门狗 lim=$(( sec * 10 )) 遇非整数 sec 会抛算术错 |
-| [T176](open/todo/T176.md) | todo | PROPOSED | 2026-07-01 | outside-voice | outside-voice.sh 的 --timeout 只校验全数字、不拒 0，而 GNU timeout 语义下 DURATION=0 是【禁用】超时 |
-| [T188](open/todo/T188.md) | todo | PROPOSED | 2026-07-01 | 仓根 pytest 收集 | 跨 skill 的同 basename 测试文件会中断仓根全局收集（tests/ 无 __init__.py），无机械守 |
 | [T191](open/todo/T191.md) | todo | PROPOSED | 2026-07-01 | openspec/changes/*/impl-reports/ | 评审 diff 包被 checkpoint 的 git add -A 带进版本库（约 1600 行纯派生内容，随 change 永久归档） |
 | [T196](open/todo/T196.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec-review/SKILL.md | 三个评审 SKILL 的同写入纪律散文措辞漂移，机械守只锁锚行不锁散文 |
-| [T199](open/todo/T199.md) | todo | PROPOSED | 2026-07-01 | CLAUDE.md / 开发环境 | CLAUDE.md 写的 `pytest` 与默认 python3 在非交互 shell 均不可用，实际须用 /usr/bin/python3 -m pytest |
 | [T203](open/todo/T203.md) | todo | PROPOSED | 2026-07-01 | sdflow-ship/tests + CI 配置 | 门禁用例 test_pure_checkbox_flip_is_fresh_in_every_phase 曾偶发失败 1/21，traceback 丢失、归因未建立 |
-| [T207](open/todo/T207.md) | todo | PROPOSED | 2026-07-01 | docs | T5 把 docs/** 整目录进机械引用守卫 allowlist（非 fail-closed 承重点），旧 skill 名（sdflow-buglist/todolist）连贯刷新到目标态显式后置。 |
 | [T221](open/todo/T221.md) | todo | PROPOSED | 2026-07-01 | openspec/specs/host-adaptive-execution + anchor_lint | fallback-unavailable 是否需为「被成本闸门禁止」独立枚举值 |
 | [T227](open/todo/T227.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice-job.py: cmd_worker + run_cleanup | worker 无信号转发 + cleanup 从不终止 runner_pid：取消路径能诚实报告、但终止不了真正在计费的进程 |
-| [T229](open/todo/T229.md) | todo | PROPOSED | 2026-07-01 | openspec/specs/outside-voice-background-jobs/spec.md (OVBG-01 / OVBG-05 措辞) | 两处 spec 措辞已被实现证伪，archive 阶段的 delta 同步 MUST 一并订正（否则主 spec 与代码长期背离） |
-| [T230](open/todo/T230.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/hack/outside-voice.sh: do_exec 出境侧 | 200KB 截断只作用于入境 context，出境 stdout 落 <site>.stdout 无任何大小上限 |
 | [T244](open/todo/T244.md) | todo | OPEN | 2026-07-01 | sdflow-ship/scripts/ship_gate.py | sdflow-implement ticket 存储改造为「index+per-ticket-file 混合模型」需要的 ship_gate.py 六函数改造 |
 | [T245](open/todo/T245.md) | todo | OPEN | 2026-07-01 | sdflow-implement/SKILL.md | fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers subagent-driven-development 的第4-5轮机制 |
 | [T246](open/todo/T246.md) | todo | OPEN | 2026-07-01 | sdflow-implement/SKILL.md + model-tiers.md | 按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development 的 Model Selection 复杂度信号 |
 | [T248](open/todo/T248.md) | todo | PROPOSED | 2026-07-01 | sdflow-spec/agents/（sdflow-local-researcher / sdflow-web-researcher） | 两个调研子代理定义暂缓删除，也暂不做成通用 skill——保留为未启用资产，等真实需求或更合适的实验样本再议 |
 | [T249](open/todo/T249.md) | todo | PROPOSED | 2026-07-01 | sdflow-implement/SKILL.md | 票数预算 3-6 被两个后门掏空(expand-contract 迁移批次 + 实现验证收尾票)，改为约束总执行单元或总 frontier 成本 |
-| [T250](open/todo/T250.md) | todo | PROPOSED | 2026-07-01 | sdflow-implement/tests/test_tickets_plan_golden.py | golden fixture 钉住新增的实现验证收尾票形状(现为 3 票，未覆盖「末尾一张 Blocked-by 全部前置票」) |
 | [T251](open/todo/T251.md) | todo | PROPOSED | 2026-07-01 | sdflow-implement/SKILL.md | 纯 expand-contract 类 change(0 张垂直切片)下「Blocked-by 全部功能票」的语义未定义 |
-| [T252](open/todo/T252.md) | todo | PROPOSED | 2026-07-01 | openspec/adr/0031-t10-label-split-by-decision-semantics.md | adr/0031 承诺的「T10 单一源化留待独立立项」未落成任何 todolist 条目，而该类漂移已真实发生过一次 |
-| [T253](open/todo/T253.md) | todo | PROPOSED | 2026-07-01 | openspec/CONTEXT.md | 「第三类场景」(问题问出来但盘面查不到答案，天然跳过①②直取③)尚未命名，两处仍贴 T10 别名 |
 | [T256](open/todo/T256.md) | todo | OPEN | 2026-07-01 | sdflow-ship/SKILL.md + ~/.claude/hooks/ | 用 PreCompact hook 把「只活在对话里」的易失状态落盘，让上下文压缩随时发生都无害（先答清单问题再决定做不做） |
 | [T258](open/todo/T258.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement/SKILL.md` 文件交接节 · review-package | 双轴审的 review-package 是 git diff 的逐字快照，SKILL 规定落 {change_dir}/impl-reports/ 而 checkpoint 的 add -A 会把它提交进仓：① 每票约 20-100KB 纯重复 git 历史、可一条命令再生，5 票即 ~250KB 永久留仓；② 快照会把已豁免文件（如 openspec/issues/** 台账行）的内容原样搬进未豁免路径，绕过内容守卫的 allowlist 意图（harden-implement-review-loop 实跑触红 test_downstream_reference_guard，已按范畴给 impl-reports/ 补豁免）。可选修法：SKILL 明确 review-package 为不入库的瞬态产物（.gitignore 或落 scratchpad），或明确它是审计资产、接受体积。属产物契约层面决策，未 fold |
-| [T261](open/todo/T261.md) | todo | PROPOSED | 2026-07-01 | `sdflow-implement/SKILL.md` · `sdflow-implement/scripts/impl_route.py` | 两处 docstring/正文引用 `openspec/changes/matt-workflow-integration/superpowers-plan.md`，该 change 早已于 91a097c 归档为 `openspec/changes/archive/2026-07-10-matt-workflow-integration/superpowers-plan.md`，路径已死链。对照：impl_route.py 另一处引用 archive/2026-07-03-sdflow-ship/... 正确带了 archive/ 前缀，说明「引用要带归档前缀」是本仓惯例，这两处是漏网。属预存漂移（归档早于本 change 起点 aba5547），非本次引入，故未 fold。修法：两处一起补 archive/2026-07-10- 前缀。来源：harden-implement-review-loop 冷层代码审对抗镜#2 |
 | [T264](open/todo/T264.md) | todo | PROPOSED | 2026-07-01 | sdflow-init/assets/schemas/sdflow-spec-driven/ + openspec-1.7.0-followup roadmap | project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。 |
