@@ -1,0 +1,824 @@
+# Review package: 66bf4c5cb76ebcdd65683aa7cbadce65e7db3db8..ee5b4f4ffc9a54047bee276ce54760a7bdcf23b9 (Task 5 serial)
+
+## Commits
+ee5b4f4 impl(absorb-gstack-review): docs 与提示词同步新提法
+
+## Files changed
+ docs/external-dependencies.md                      |   6 +-
+ docs/workflow-console.html                         |   8 +-
+ docs/workflow-overview.md                          |   6 +-
+ docs/workflow-skills/gstack-review.md              |  18 ++-
+ docs/workflow-skills/sdflow-code-review.md         |  14 +-
+ hack/tests/test_workflow_split.py                  |   2 +-
+ .../impl-reports/task5-brief.md                    |  23 ++++
+ .../impl-reports/task5-docs-sync.md                | 152 +++++++++++++++++++++
+ sdflow-init/assets/workflow/WORKFLOW-GUIDE.md      |   6 +-
+ .../assets/workflow/prompts/step8-code-review.md   |   2 +-
+ .../assets/workflow/reference/quality-layering.md  |  10 +-
+ sdflow-init/assets/workflow/workflow.md            |   6 +-
+ 12 files changed, 215 insertions(+), 38 deletions(-)
+
+## Diff
+diff --git a/docs/external-dependencies.md b/docs/external-dependencies.md
+index f291d11..4258619 100644
+--- a/docs/external-dependencies.md
++++ b/docs/external-dependencies.md
+@@ -66,27 +66,29 @@
+ 跨模型 voice 机制：当前宿主是 Claude 时调 `codex` 做第二意见，反之亦然。两者均缺失时降级为同族 fallback 子代理（`runner==host`），voice 层 efficacy 归零但 skill 不中断。
+ 
+ ---
+ 
+ ## 5. 三方 Skill 依赖
+ 
+ ### 评审流程依赖（gstack 系列）
+ 
+ | Skill | 用途 | 调用处 | 缺失时行为 |
+ |-------|------|--------|-----------|
+-| **gstack `/review`** | 代码审的 scope-drift + 完成度审计（Step1） | `sdflow-code-review/SKILL.md:206-209` | 显式降级为子代理模拟 + 标注 `mode="simulated"` |
+ | **gstack `/autoplan`** | 设计审的广审层（CEO/Eng/Design 三连） | `sdflow-spec-review/SKILL.md`、`sdflow-roadmap/SKILL.md:460` | 显式提示 + 留「未审待恢复」痕迹 |
+ | **`/plan-eng-review`** | roadmap 的技术评审（默认档） | `sdflow-roadmap/SKILL.md:459` | 同上 |
+ 
+ > `/grill-with-docs` 已被 `sdflow-spec` 内置取代（`sdflow-spec/SKILL.md:10`），不再是外部依赖。
+ > `/grilling`、`/domain-modeling`（原 wayfinder 票内依赖）已随 `refactor-roadmap-internalize-deps`
+ > 内化进 `sdflow-roadmap` 自身的三相位结构，不再是外部依赖。
++> `gstack /review`（代码审 Step1 的 scope-drift + 完成度审计）已随 `absorb-gstack-review` change
++> 内化为 `sdflow-code-review` 自持 fresh 子代理，不再是外部依赖；`/review` 说明文档保留在
++> [`docs/workflow-skills/gstack-review.md`](./workflow-skills/gstack-review.md) 作非运行时依赖的第三方 skill 参考。
+ >
+ > 所有三方 skill 都设计了显式降级路径——缺失时报告但不中断工作流。
+ 
+ ---
+ 
+ ## 6. Claude Code / Codex 运行时依赖
+ 
+ | 依赖 | 用途 | 出处 |
+ |------|------|------|
+ | **Claude Code** harness | Skill tool、Agent tool、Bash tool 等核心机制 | 全仓 SKILL.md |
+@@ -121,21 +123,21 @@ Codex 宿主额外要求：
+ ---
+ 
+ ## 8. 内部跨 Skill 依赖（本仓库内）
+ 
+ 本仓库的 skill 之间存在编排调用关系：
+ 
+ ```
+ sdflow-ship（阶段三编排器）
+ ├── sdflow-implement（实现管线）
+ ├── sdflow-code-review（代码审）
+-│   └── gstack /review（外部，Step1 并入）
++│   └── Step1 自持 scope 审计（fresh 子代理，无外部依赖）
+ └── sdflow-done（闭环）
+ 
+ sdflow-spec-review（设计审编排器）
+ ├── gstack /autoplan（外部，广审层）
+ └── 并行多镜子代理
+ 
+ sdflow-spec（阶段一产 spec）
+ └── 内置澄清→拷问→生成三相位
+ 
+ sdflow-roadmap
+diff --git a/docs/workflow-console.html b/docs/workflow-console.html
+index c2ca9f5..1d526b0 100644
+--- a/docs/workflow-console.html
++++ b/docs/workflow-console.html
+@@ -391,26 +391,20 @@
+         <strong>自制编排器</strong>（sdflow-* / grill）。每张卡标注「本 workflow 注入是建议式还是强制」的主基调。</p>
+ 
+       <h3>外部黑盒</h3>
+       <div class="matrix">
+         <div class="skill">
+           <div class="top"><span class="nm">gstack · autoplan</span><span class="kind">外部 / 广审</span></div>
+           <div class="role">四审（CEO/Design/Eng/DX）顺序跑 + 6 决策原则自动决策 + 审计留盘 + 最终门交人。</div>
+           <div class="io"><span><b>进</b> 计划文件</span><span><b>出</b> 增补计划 + gstack-review.md</span></div>
+           <div class="foot"><span class="pill adv">注入多为建议式</span><span class="pill enf">下游锚兜底</span></div>
+         </div>
+-        <div class="skill">
+-          <div class="top"><span class="nm">gstack · /review</span><span class="kind">外部 / 代码审</span></div>
+-          <div class="role">落地前 diff 结构性审 + fix-first。本机变体单模型单遍、无 specialist fan-out。</div>
+-          <div class="io"><span><b>进</b> diff BASE..HEAD</span><span><b>出</b> findings + review-log</span></div>
+-          <div class="foot"><span class="pill adv">scope+完成度本内建</span><span class="pill adv">进合并池靠外层</span></div>
+-        </div>
+         <div class="skill">
+           <div class="top"><span class="nm">superpowers · writing-plans</span><span class="kind">外部 / 计划</span></div>
+           <div class="role">拆成原子任务 TDD 计划。纯文本产物、<strong>零机械校验</strong>，三道自觉护栏。</div>
+           <div class="io"><span><b>进</b> design + 评审</span><span><b>出</b> superpowers-plan.md</span></div>
+           <div class="foot"><span class="pill adv">全建议式</span><span class="pill enf">ship_gate 读标签强制</span></div>
+         </div>
+         <div class="skill">
+           <div class="top"><span class="nm">superpowers · subagent-dev</span><span class="kind">外部 / 实现</span></div>
+           <div class="role">逐任务 fresh 实现 + 双裁决审 + fix 闭环 + 整支终审；台账 resume 抗 compaction。</div>
+           <div class="io"><span><b>进</b> plan</span><span><b>出</b> commits + progress.md</span></div>
+@@ -427,21 +421,21 @@
+           <div class="foot"><span class="pill adv">几乎全建议式</span><span class="pill enf">下游设计门审计</span></div>
+         </div>
+         <div class="skill">
+           <div class="top"><span class="nm">sdflow-spec-review</span><span class="kind">自制 / 设计门主审</span></div>
+           <div class="role">autoplan 广审 + 领域/对抗/接地多镜 → 一份报告 → 设计 HARD-GATE 拍板。</div>
+           <div class="io"><span><b>进</b> 四件套</span><span><b>出</b> spec-review-report.md</span></div>
+           <div class="foot"><span class="pill enf">anchor_lint + frontmatter design_approved</span></div>
+         </div>
+         <div class="skill">
+           <div class="top"><span class="nm">sdflow-code-review</span><span class="kind">自制 / 代码审主审</span></div>
+-          <div class="role">每次全跑 · 独立冷 · 强制主审：gstack/review + 多镜 + code-voice + 置信过滤。</div>
++          <div class="role">每次全跑 · 独立冷 · 强制主审：Step1 自持 scope 审计 + 多镜 + code-voice + 置信过滤。</div>
+           <div class="io"><span><b>进</b> diff + 代码</span><span><b>出</b> code-review-report.md</span></div>
+           <div class="foot"><span class="pill enf">anchor_lint + frontmatter code_review</span></div>
+         </div>
+         <div class="skill">
+           <div class="top"><span class="nm">sdflow-done</span><span class="kind">自制 / 收尾闭环</span></div>
+           <div class="role">verify（强档终门）→ hand-off → archive（CLI 同步）→ commit → ff-merge。</div>
+           <div class="io"><span><b>进</b> 实现 + 四件套</span><span><b>出</b> 归档 + merge</span></div>
+           <div class="foot"><span class="pill enf">verify 锚 + archive CLI + git --ff-only</span></div>
+         </div>
+       </div>
+diff --git a/docs/workflow-overview.md b/docs/workflow-overview.md
+index 9e1c8ea..33c8aef 100644
+--- a/docs/workflow-overview.md
++++ b/docs/workflow-overview.md
+@@ -2,21 +2,22 @@
+ 
+ > **定位**：这份文档给**人**看——用流程图/状态图 + 表格把 sdflow OpenSpec 工作流「最底层的骨架」讲清楚：
+ > 从需求到 merge 一共几步、每步**目标**是什么、有哪些**注意事项**。
+ >
+ > **与真相源的分工**：机器/AI 向的规则真相源是 `sdflow-init/assets/workflow/workflow.md`（端到端）+ 各规则文件；
+ > 本文**不重复规则细节**，只做人读的可视化梳理。规则改动以真相源为准，本文随后同步。
+ >
+ > **展开文档（[workflow-skills/](./workflow-skills/)）**：主流程涉及的每个 skill 都有一份「详解」——
+ > 内部流程图 + 内部再调度的子 skill + **本 workflow 注入规则是建议式还是强制**。步骤表与 §5 表内均有「详解」链接直达。
+ >
+-> - **外部黑盒**（本文只画契约、详解展内部）：[gstack autoplan](./workflow-skills/gstack-autoplan.md) · [gstack /review](./workflow-skills/gstack-review.md) · [superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)（`opsx:ff` 暂未展开）
++> - **外部黑盒**（本文只画契约、详解展内部）：[gstack autoplan](./workflow-skills/gstack-autoplan.md) · [superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)（`opsx:ff` 暂未展开）
++> - **第三方 skill 参考（非运行时依赖）**：[gstack /review](./workflow-skills/gstack-review.md)（`sdflow-code-review` Step1 已改自持，不再调用；文档保留供参考）
+ > - **自制编排器**：[grill-with-docs](./workflow-skills/grill-with-docs.md) · [sdflow-spec-review](./workflow-skills/sdflow-spec-review.md) · [sdflow-code-review](./workflow-skills/sdflow-code-review.md) · [sdflow-done](./workflow-skills/sdflow-done.md)
+ > - **横向提炼**：[自建 Skill 最佳实践](./skill-authoring-best-practices.md)（从上述 skill 提炼可迁移做法 + 我们的补强项）
+ > - **可视化控制台**：[workflow-console.html](./workflow-console.html)（本文的视觉/精简版，同 session 产出——本文是其内容超集）
+ > - **字段 / 脚本映射速查**：[workflow-map.html](./workflow-map.html) · [workflow-map.md](./workflow-map.md)（阶段 × skill × 脚本 × frontmatter 字段全景，本次新增）
+ > - **深度调研文档集**：[sdflow-fable5/](./sdflow-fable5/)（2026-07-10：设计动机 / 全模块参考 / 自改进闭环 / 优化建议）
+ 
+ ---
+ 
+ ## 0. 一句话与全局形态
+ 
+@@ -156,21 +157,21 @@ flowchart TD
+     P --> CR["sdflow-code-review<br/>每次全跑 · 独立冷 · 强制主审"]
+     CR --> DN["sdflow-done<br/>verify → hand-off → archive → commit → merge"]
+     DN --> OUT(["merged ✅"])
+     OUT -.异步.-> HO["人类读 hand-off.md"]
+ ```
+ 
+ | 步 | skill | 目标 | 产出 | 注意事项 |
+ |---|---|---|---|---|
+ | 6 | `writing-plans` 🔒 [详解](./workflow-skills/superpowers-writing-plans.md) | 把 design 拆成**原子任务 TDD 计划** | `superpowers-plan.md` | design 领域约束**逐字**进 plan 的 Global Constraints；每任务 commit 步 MUST 用命名空间标签 `checkpoint-commit.sh <change>:task<N>-<slug>`（gate 完成判据主锚） |
+ | 7 | `subagent-driven-development` 🔒 [详解](./workflow-skills/superpowers-subagent-dev.md) | fresh 子代理**逐任务实现 + 逐任务审**，末尾整支终审 | 代码 + 逐任务 checkpoint | **注入点B**：领域清单 `code-checklists/domains/<栈>` 附给终审 reviewer（领域审前移进循环，即时 fix + re-review 闭环） |
+-| 8 | `sdflow-code-review` [详解](./workflow-skills/sdflow-code-review.md) | **每次全跑的独立冷主审**：并入 [gstack/review](./workflow-skills/gstack-review.md)（scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤 | `code-review-report.md` | **P3c**：非「高风险才跑」，是每次全跑（实测能抓循环内被说服放过的真问题）；与注入点B **并存不是重复**（前者循环内即时、后者事后独立兜底）；能修自动修 `[impl-review-fix]`、拿不准 defer |
++| 8 | `sdflow-code-review` [详解](./workflow-skills/sdflow-code-review.md) | **每次全跑的独立冷主审**：Step1 自持 scope 审计（fresh 子代理，scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤 | `code-review-report.md` | **P3c**：非「高风险才跑」，是每次全跑（实测能抓循环内被说服放过的真问题）；与注入点B **并存不是重复**（前者循环内即时、后者事后独立兜底）；能修自动修 `[impl-review-fix]`、拿不准 defer |
+ | 9 | `sdflow-done` [详解](./workflow-skills/sdflow-done.md) | **闭环**：verify → hand-off → archive → commit → merge | verify-report + hand-off.md + 归档 + commit + merge | verify **防假✅**（每 ✅ 附锚点）；archive 走 `openspec archive` CLI **同步 delta 到主 specs**（禁手动 `mv`）；含 **issues sweep 子步**（分诊本 change OPEN 项入批次 → reindex）；merge 缺省 ff-only、**不自动 push** |
+ 
+ > 🔒 = 黑盒：`writing-plans` / `subagent-driven-development` 的内部循环（implementer/reviewer 派发、review-package、ledger）本文不展开，
+ > 只认其契约：**进** = design + plan；**出** = 带命名空间 checkpoint 标签的代码 commit。
+ 
+ ### 4.2 底座：ship_gate 判定机（阶段三最底层）
+ 
+ `ship_gate` 从**盘面（产物 + frontmatter 锚 + checkpoint 标签）**推导「下一步是谁」，每个执行完的步都**回到 gate 再问**——这就是「盘面即状态、gate 驱动非记忆」。
+ 
+ ```mermaid
+@@ -215,21 +216,20 @@ flowchart LR
+ ---
+ 
+ ## 5. 外部 skill 黑盒边界一览
+ 
+ 主流程把下列外部 skill 当黑盒；它们各自的输入/输出契约如下，供理解接缝。**每个的内部流程 + 内部再调度的子 skill + 本 workflow 注入是建议式/强制，见「详解」链接**。
+ 
+ | 黑盒 skill | 在流程里的角色 | 进（输入） | 出（产出契约） | 详解 |
+ |---|---|---|---|---|
+ | `opsx:ff` | 旧入口（保留不删，不在默认管线内）；默认由自制 `/sdflow-spec` 承担生成，非黑盒 | 需求 + config.yaml + trigger-catalog | 四件套 + feature 分支 | （暂未展开） |
+ | gstack `autoplan` | spec-review Step1 广审 | 四件套 | findings + 双声 outside-voice（落 `gstack-review.md`） | [→](./workflow-skills/gstack-autoplan.md) |
+-| gstack `/review` | code-review Step1 scope-drift/完成度 | diff `BASE..HEAD` | scope-drift + 完成度缺口 findings | [→](./workflow-skills/gstack-review.md) |
+ | superpowers `writing-plans` | 阶段三 plan 生成 | design + 评审结论 | `superpowers-plan.md`（含命名空间 commit 步） | [→](./workflow-skills/superpowers-writing-plans.md) |
+ | superpowers `subagent-driven-development` | 阶段三逐任务实现 | plan | 带 `<change>:task<N>-` checkpoint 标签的代码 commit | [→](./workflow-skills/superpowers-subagent-dev.md) |
+ 
+ ---
+ 
+ ## 6. 支撑机制：三级决策协议 · checkpoint · 状态锚
+ 
+ ### 6.1 阶段三三级决策协议 `T10-choice`（取代「有把握自动选」；"T10" 保留为历史别名）
+ 
+ 阶段三无人类门，遇 ≥2 方案时**禁以自评置信为唯一依据**，按此三级：
+diff --git a/docs/workflow-skills/gstack-review.md b/docs/workflow-skills/gstack-review.md
+index 5a589a4..a065f18 100644
+--- a/docs/workflow-skills/gstack-review.md
++++ b/docs/workflow-skills/gstack-review.md
+@@ -1,29 +1,30 @@
+ # 外部 skill 展开 · gstack `/review`
+ 
+-> 属 [工作流总览](../workflow-overview.md) 的黑盒展开。`/review` 是**阶段三代码审**的 Step1「scope-drift + 完成度」载体——
+-> 由 `sdflow-code-review` 编排器**原生执行**，结论纳入其合并池。
++> **定位：非运行时依赖的第三方 skill 参考**——`sdflow-code-review` 编排器的 Step1（scope-drift + 完成度）
++> 已改为自持 fresh 子代理实现（见 [sdflow-code-review 详解](./sdflow-code-review.md)），不再原生调用本 skill。
++> 本文保留作为 `/review` 自身设计的参考资料。
+ >
+ > **一句话**：落地前（pre-landing）**本地 diff 结构性审查 + 就地修复（fix-first）**——专抓测试抓不到、prevention 焊不住的结构性缺陷。
+ 
+ > ⚠️ **重要事实（本仓 Codex checkout 的实际形态）**：本机安装的这个 `/review` 变体是
+ > **单模型、主 agent 单遍审 + fix-first，没有 specialist 子代理 fan-out、审查主体内不调 codex 第二意见**
+ > （checklist 里名义列了 7 类 specialist，但 `review/specialists/` 目录不存在，主体也无 dispatch 章节 → 降级）。
+ > **本 workflow 的「跨模型第二意见」不靠 /review 内建**，而靠外层 `sdflow-code-review` 自己的 outside-voice + 多镜。
+ 
+ ---
+ 
+ ## 1. 在本 workflow 中的位置与契约
+ 
+ | 维度 | 内容 |
+ |---|---|
+-| 谁调它 | `sdflow-code-review` 第一步（阶段三 · 代码审），原生执行 |
++| 谁调它 | **无**（本仓当前无 skill 运行时调用它；`sdflow-code-review` 第一步已改为自持子代理，见上方定位说明） |
+ | 进（输入） | 无 args schema；调用方 prompt 即「任务」。实际消费 `git diff $(git merge-base origin/<base> HEAD)`（含已提交 + 未提交） |
+ | 意图来源 | 多路兜底：conversation plan → `~/.gstack`/`~/.claude/plans` 等搜索 → commit messages → `TODOS.md` → `gh pr view` |
+ | 出（产物） | findings 行 `[SEVERITY] (confidence: N/10) file:line — desc`；报告头 `Pre-Landing Review: N issues`；就地 AUTO-FIX / ASK；写 `gstack-review-log`（供 `/ship` 识别本分支已过 Eng Review） |
+ | **从不做** | commit / push / 建 PR —— 「that's /ship's job」 |
+ 
+ ---
+ 
+ ## 2. 内部流程
+ 
+ ```mermaid
+@@ -78,30 +79,35 @@ flowchart TD
+ |---|---|
+ | `checklist.md` | 审查维度权威源；读不到即 STOP |
+ | `greptile-triage.md` | Greptile 评论 fetch/filter/回帖（无 PR 静默跳） |
+ | `gstack-review-read` / `gstack-review-log` | 读历史（dedup 用户 skip 过的）/ 写本次结果供 `/ship` |
+ | `gstack-learnings-search/log` | 跨会话学习检索/记录（跨模型共识记 `cross-model` 标签） |
+ | `slop:diff` / `gstack-next-version` | AI 异味扫描 / queue 空位（均 advisory） |
+ | `/codex review` | **平级独立 skill，非本 skill 调用**（跨模型要另跑或靠外层编排） |
+ 
+ ---
+ 
+-## 5. ★ 本 workflow 注入的规则/prompt 如何影响 /review —— 建议式 vs 强制
++## 5. ★ 本 workflow 曾经的注入设计（历史，已不适用）—— 建议式 vs 强制
++
++> 本节记录 `sdflow-code-review` **原生调用** `/review` 时代的注入关系，**已随 Step1 自持化失效**——
++> 现无 skill 向 `/review` 注入任何规则/prompt。保留供理解第三方 skill 的注入面设计。
+ 
+ **统一判据**见[总览 §注入的强制性](../workflow-overview.md#8-外部-skill-的注入强制性建议式-vs-强制统一规律)。`/review` **无 args schema**（`openai.yaml` 只有 `default_prompt` + `allow_implicit_invocation`），调用方 prompt 就是「任务本体」→ 一切注入靠模型的一般指令遵循，**无结构化强制**；而 skill 自身用 MUST/STOP 锁死的硬不变量外部难覆盖。
+ 
+ | 注入项（来自 sdflow-code-review） | 注入方式 | 建议式 / 强制 | 靠什么 |
+ |---|---|---|---|
+ | 「必须含 scope-drift + 计划完成度缺口」 | prompt 注入 | **建议式（且本就内建）** | 恰是 /review 原生 Step1.5 + Plan Completion Audit → 注入=强化既有；但默认 **INFORMATIONAL 不阻断**，想让它「阻断」需 prompt 显式改停走语义 |
+ | 「结论并入 sdflow 合并池」 | 编排层消费 | **非 /review 强制** | /review 输出硬编码进 `gstack-review-log`，无重定向参数 → 靠**外层 sdflow-code-review** 消费其输出再合并（编排器模式），非让 /review 改写持久化目标 |
+ | 「不可用则降级 simulated + 显式日志」 | sdflow 侧规则 | **强制（在 sdflow 侧）** | sdflow-code-review Step1 写 `mode="native\|simulated"` 锚行 + 出报告后 grep 自检 |
+ | 「跳过 checklist / 直接 commit」（假想的冲突注入） | — | **不可覆盖** | 撞 skill 硬不变量：「读不到 checklist 就 STOP」「never commit/push——that's /ship's job」「引不出原码就强制降级」（MUST/STOP 措辞） |
+ 
+ **结论**：外部 prompt 的影响力只落在 /review **没用 MUST/STOP 锁死的软缝**——主要是「多审什么维度」「结论如何额外呈现/转交」；而「读不到 checklist 就停」「引不出原码就降级」「不 commit」是措辞强制的硬缝，注入推不翻。本 workflow 让 /review 的结论「进合并池 + 并入独立冷主审」**不是靠强制 /review 内部**，而是把它当 **Step1 子步、由 sdflow-code-review 编排器在更高层消费**——这正是「注入处建议式、编排层兜底」的范式。
+ 
+ ---
+ 
+ ## 6. 小结
+ 
+ - 本机 `/review` 实为**单模型单遍 + fix-first**；跨模型/specialist 在本 checkout 未激活。
+-- 它原生就做 **scope-drift + 计划完成度审计**，正是本 workflow 要它出的；但默认不阻断。
+-- 我们对它的注入基本建议式；「进合并池 + 独立主审兜底」由**外层 sdflow-code-review 编排**实现，不靠改 /review 内部。
++- 它原生就做 **scope-drift + 计划完成度审计**——`sdflow-code-review` 的 Step1 曾借道它执行，`absorb-gstack-review`
++  change 起改为自持 fresh 子代理实现，本 skill 不再是运行时依赖。
++- 本文作为**非运行时依赖的第三方 skill 参考**保留，记录 `/review` 自身的设计（结构性审查维度、置信校准、
++  fix-first 结论形态），供未来对照或复用其思路时查阅。
+diff --git a/docs/workflow-skills/sdflow-code-review.md b/docs/workflow-skills/sdflow-code-review.md
+index 52e7266..df01f82 100644
+--- a/docs/workflow-skills/sdflow-code-review.md
++++ b/docs/workflow-skills/sdflow-code-review.md
+@@ -1,17 +1,17 @@
+ # 自制 skill 展开 · `sdflow-code-review`
+ 
+ > 属 [工作流总览](../workflow-overview.md) 的展开。这是**阶段三代码审的主审编排器**（第 8 步）——
+ > **每次全跑 · 独立冷视角 · 强制主审**，出**一份** `code-review-report.md`。
+ >
+-> **一句话**：Step1 [gstack/review](./gstack-review.md)（scope-drift + 完成度）→ Step2 并行多镜（领域/对抗/历史，前置 trivial_shape 机判豁免）→
+-> Step3 置信过滤 + 对抗裁决 → Step4 自动修/裁/defer → Step5 一份报告。
++> **一句话**：Step1 自持 scope 审计（fresh 中档子代理，以本 change 四件套为确定性意图源做 scope-drift + 完成度）→
++> Step2 并行多镜（领域/对抗/历史，前置 trivial_shape 机判豁免）→ Step3 置信过滤 + 对抗裁决 → Step4 自动修/裁/defer → Step5 一份报告。
+ 
+ > **定位（P3c，须知情）**：本 skill **不是**「高风险才跑的边际残差」——那是旧 `quality-layering §五` 的结论，**已被否决**。
+ > 它是**每次全跑的独立强制主审**，实测能抓生成循环内被 controller 说服放过的真问题。
+ 
+ ---
+ 
+ ## 1. 位置与契约
+ 
+ | 维度 | 内容 |
+ |---|---|
+@@ -40,32 +40,32 @@ flowchart LR
+     S -.->|独立兜底网，抓被说服放过的真问题| MERGE["并存不是重复"]
+ ```
+ 
+ ---
+ 
+ ## 2. 内部流程
+ 
+ ```mermaid
+ flowchart TD
+     S0["Step0 · 确认 + diff base + resolve-workflow 读 code-checklists（CR-01~09）"]
+-    S1["Step1 · gstack/review 原生执行<br/>scope-drift + 完成度缺口（mode 锚）"]
++    S1["Step1 · 自持 scope 审计（fresh 中档子代理）<br/>scope-drift + 完成度缺口（mode 锚）"]
+     S2["Step2 · 前置 trivial_shape.py 机判（EXEMPT=免 fan-out）<br/>规划镜头 + fan-out：领域镜 + 对抗镜×2~3 + 历史镜×1 + HR-TG cross-model"]
+     S25["Step2.5 · code outside voice（always, 全量 diff）"]
+     S3["Step3 · 置信过滤(<80滤) + 综合 + 对抗裁决<br/>outside-voice 豁免直通 · 反静默压制"]
+     S4["Step4 · 自动修[impl-review-fix] / 自动裁(记理由) / defer→buglist·todolist"]
+     S5["Step5 · 一份 code-review-report.md + lens_metric_emit 落度量锚<br/>+ anchor_lint 自检 + checkpoint + 收敛口"]
+     S0 --> S1 --> S2 --> S25 --> S3 --> S4 --> S5
+ ```
+ 
+ | 步 | 目标 | 注意事项 |
+ |---|---|---|
+-| 1 | scope-drift + 完成度 | 原生执行 gstack/review，写 `mode="native\|simulated"` 锚；降级须显式日志不静默 |
++| 1 | scope-drift + 完成度 | 自持 scope 审计（fresh 中档子代理，以四件套为确定性意图源），写 `mode="subagent\|main-session"` 锚；降级（子代理不可用）须显式日志不静默 |
+ | 2前 | trivial_shape 机判豁免 | fan-out 前跑 `trivial_shape.py --base "$DIFF_BASE"`：**exit 0=EXEMPT**（diff 仅无逻辑面白名单形状——代码内注释 / README·CHANGELOG·docs·VERSION 等约定文档路径 / 仅新增 `tests/`；多镜结构上零产出）→ **免本步 fan-out**，报告 Step2 段注明豁免 + 判器 JSON `reason`（Step1 scope-drift 恒跑守卫伪装逻辑）；**1=NOT_EXEMPT**（有逻辑面 / 命中行为面路径 bundle·SKILL.md·workflow.md·ship_gate.py，即便纯 markdown）/ **2=ERROR** → 保守照常 fan-out；**判器缺失/不可执行视同 NOT_EXEMPT**（不静默免）。默认开、仅机判无逻辑面才关，非「高风险才跑」 |
+ | 2 | 并行多镜 | 领域镜（CR-01~09 + domains）/ 对抗镜（证明运行期爆：竞态/泄漏/错误路径）/ 历史镜（git blame + 旧 review 意见）；linter/typechecker 能抓的不进镜 |
+ | 2.5 | 跨模型第二意见 | **always** 跑 code-voice（不受清单约束、不占镜位）；「10 次后按采纳率复评降采样」条款已泛化到 per-(层,镜)、判据升采纳率+独立率双列，surfacing 由 `/sdflow-retro` 机械触发，砍/降采样人决（详见 SKILL.md 第五步「反馈回路」） |
+ | 3 | 置信过滤 + 裁决 | 每条 0-100 **滤 <80**（可下放弱档打分）；**outside-voice 豁免**：被 `anchor_lint` 合法组合矩阵判「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，MUST NOT 自写 `runner≠host` 或按 runner 值硬编码——旧 `runner=codex` 判据在 Codex 宿主下恰是自审）的 findings 跳过 <80 直通；**反静默压制**：<80 滤除也一行带过，不静默丢 |
+ | 4 | 自动修/裁/defer | 能修自动修 `[impl-review-fix]`；≥2 方案按 **T10 三级**（有客观判据自动选/无则派对抗镜复核/复核不过 defer）；**裁决分桶**（按 `site` 分：code-voice/hr-tg 各记采纳/裁掉/defer；`claude-fallback` 枚举值已废弃，同族 fallback 由 `runner==host` 表达） |
+ | 5 | 出报告 + 收敛 | 度量锚经 `lens_metric_emit.py` **exit 0 才落**；`anchor_lint.py --layer code-review` 机验**四类 v1 锚**（非 0 即阻塞）；checkpoint；建议进 `/sdflow-done`——两道脚本门细节见下 |
+ 
+ **Step5 两道脚本门细节**：
+ 
+ - **度量锚落锚**（受 config `metrics.enabled` 门控，缺省/`false` 整体跳过）：用 Step4 裁决计数构造的 roster+findings 调
+@@ -91,21 +91,21 @@ flowchart TD
+ | 历史镜 / 置信过滤（打分机械） | 弱档 |
+ 
+ > 与 sdflow-spec-review 唯一结构差异：**代码即 ground truth**（直接读 diff，不设接地镜），换成**历史镜 + 置信过滤**。
+ 
+ ---
+ 
+ ## 4. 内部调度的子 skill / 子代理 / 脚本
+ 
+ | 被调 | 类型 | 角色 |
+ |---|---|---|
+-| [`gstack/review`](./gstack-review.md) | 原生执行（Step1） | scope-drift + 完成度审计，结论进合并池 |
++| Step1 scope 审计子代理 | fresh-context 子代理（中档） | 以四件套为确定性意图源做 scope-drift + 完成度审计，结论进合并池 |
+ | 领域/对抗/历史镜 | fresh-context 子代理 | 一条消息全派出，返回结构化 findings，禁 AskUserQuestion |
+ | `trivial_shape.py` | 确定性脚本（Step2 前置） | 无逻辑面白名单机判豁免：`--base "$DIFF_BASE"`，**0=EXEMPT** 免 fan-out / **1=NOT_EXEMPT** 照跑 / **2=ERROR** 保守照跑；判器缺失视同 NOT_EXEMPT |
+ | `outside-voice.sh` | 确定性脚本 | code-voice（always）+ HR-TG（命中）跨模型；退出码契约同 spec-review |
+ | `lens_metric_emit.py` / `anchor_lint.py` | 确定性脚本（Step5） | 度量锚归约（**exit 0 才落**，禁手拼）/ 四类 v1 锚机验门（`--layer code-review --trigger-catalog ...`，非 0 阻塞） |
+ | 官方 `/code-review` | 插件能力**内部借用** | P3d 弃用为独立 step；仅供历史镜/置信过滤内部借用，不再独立 gh 回帖 |
+ | `buglist.py`/`todolist.py` | 脚本 | defer 落档（本 change 引入的代码 bug / 改进关注点） |
+ | `resolve-workflow.sh` / `checkpoint-commit.sh` | 脚本 | 规则解析 / 过场提交 |
+ 
+ ---
+ 
+@@ -121,29 +121,29 @@ flowchart TD
+ 
+ | 项 | 类型 | 靠什么 |
+ |---|---|---|
+ | **锚行自检**（四类 v1 锚，`anchor_lint.py --layer code-review --trigger-catalog ...`） | **强制（确定性脚本门）** | Step5 调脚本，非 0（1=违规/2=fail-closed）即报错阻塞；数值一致性仍属主 session 信任边界 |
+ | **frontmatter `ship-gate.code_review: pass\|blocked` 机判锚** | **强制（下游门读）** | `ship_gate` 读报告**头部 frontmatter 首块**判「可进 done」；blocked=BLOCKED_UPSTREAM 不放行；坏 frontmatter live 读 fail-closed UNKNOWN(6) |
+ | **trivial_shape 无逻辑面豁免**（Step2 前置） | **强制（退出码脚本）** | exit 0 才免 fan-out；1/2/判器缺失一律照跑（保守偏 NOT_EXEMPT） |
+ | **lens-metric 度量锚经 emitter 落锚** | **强制（脚本 fail-closed）** | `lens_metric_emit.py` exit 0 才落、禁手拼；受 config `metrics.enabled` 门控 |
+ | **outside-voice.sh 调用契约** | **强制（退出码脚本）** | preflight/exec/exit 码；豁免规则 runner 标签驱动分桶 |
+ | **buglist FIXED 门禁 / issues reindex 判据** | **强制（脚本）** | defer 落档走 `buglist.py`（FIXED 必带根因+证据）、批次判据走 `issues.py` |
+ | checkpoint 提交 | **强制（脚本）** | `checkpoint-commit.sh impl-review` |
+-| 「gstack/review 原生执行 + 含 scope+完成度」 | **半强制** | mode 锚 + 主 session 遵从；scope+完成度本是 gstack/review 内建 |
++| 「Step1 自持 scope 审计 + 含 scope+完成度」 | **半强制** | mode 锚（`subagent\|main-session`）+ 主 session 遵从；scope+完成度审计协议内建于 SKILL.md 第一步 |
+ | **每次全跑（P3c）非高风险才跑** | **建议式（架构纪律）** | 无脚本强制「这次必须跑」；靠 workflow 排序 + `ship_gate` 的 `RUN_CODE_REVIEW` 判定驱动 |
+ | **置信 <80 过滤 / 对抗裁决 / T10 三级** | **建议式** | 强档主 session 判断；打分可下放弱档但无机械校验阈值 |
+ | **反静默压制 / 裁决分桶** | **建议式** | 靠主 session 遵从铁律；分桶计数无脚本强制 |
+ | 注入点 B 与本 skill「并存不重复」 | **建议式（设计约束）** | 靠维护者不「优化掉」任一层；无机制阻止误删 |
+ 
+ **结论**：与 spec-review 同构——**流程完整性**由机械门兜底（**anchor_lint 锚行自检**抓漏镜、**frontmatter `code_review: pass` 机判锚**卡下游、**trivial_shape 豁免判器**控成本、**checkpoint/buglist/issues 脚本**）；**判断质量**（置信过滤、对抗裁决、T10、反静默压制）是**自觉纪律**。特别地，「**每次全跑**」本身不是脚本强制，而由 **workflow 排序 + `ship_gate` 的 `RUN_CODE_REVIEW` 判定**驱动——gate 在盘面缺 `code_review: pass` frontmatter 时不放行，等价于「不跑就卡住」，这是**下游门把建议式变强制**的又一例（trivial_shape 豁免也同律：exit 0 的机判才免跑，判器缺失回落照跑）。
+ 
+ ---
+ 
+ ## 7. 小结
+ 
+-- 结构 = gstack/review + 多镜（前置 trivial_shape 机判豁免）+ code-voice → 置信过滤 + 对抗裁决 → 自动修/裁/defer → 一份报告。
++- 结构 = Step1 自持 scope 审计 + 多镜（前置 trivial_shape 机判豁免）+ code-voice → 置信过滤 + 对抗裁决 → 自动修/裁/defer → 一份报告。
+ - **机械兜底**：anchor_lint 锚行自检（四类 v1 锚）、frontmatter `code_review` 机判锚（gate 读）、trivial_shape 豁免判器、lens_metric_emit（exit 0 才落）、outside-voice.sh、buglist/issues 脚本、checkpoint。
+ - **自觉纪律**：每次全跑、置信过滤、对抗裁决、T10、反静默压制——靠强档主 session；「每次全跑」的强制性由 ship_gate 判定兜底。
+ 
+ ---
+ 
+ *接地基线（2026-07-10）：`sdflow-code-review/SKILL.md`（trivial_shape 前置 :62-70 · 第五步 emit+anchor_lint :118-148 · frontmatter 模板 :174-192）· `sdflow-ship/scripts/ship_gate.py`（`FIELD_ENUMS` :288-292 · `parse_ship_gate_frontmatter` :295-386）· `sdflow-init/assets/workflow/tools/trivial_shape.py`（docstring 退出码）· 口径对照 [workflow-map.md §3](../workflow-map.md)。*
+diff --git a/hack/tests/test_workflow_split.py b/hack/tests/test_workflow_split.py
+index 3975273..010d29a 100644
+--- a/hack/tests/test_workflow_split.py
++++ b/hack/tests/test_workflow_split.py
+@@ -39,21 +39,21 @@ def test_every_pointer_resolves():
+ 
+ def test_prompts_are_not_inlined_back_into_the_table():
+     """⭐ 回归：MUST NOT 把 prompt 全文塞回 workflow.md 的表格。
+ 
+     塞回去 = 拆分白做（模型又要为取一行读整份）。判据：表格的 prompt 列只许是指针。
+     每个 prompt 各挑一个【只在它自己那份里出现】的特征串来测。
+     """
+     w = G.WORKFLOW.read_text(encoding="utf-8")
+     fingerprints = {
+         "step6-writing-plans": "Global Constraints 不进 brief",
+-        "step8-code-review": "并入 gstack/review 的 scope-drift",
++        "step8-code-review": "Step1 自持 scope 审计的 scope-drift",
+     }
+     for name, fp in fingerprints.items():
+         assert fp in (G.PROMPTS / f"{name}.md").read_text(encoding="utf-8"), \
+             f"prompts/{name}.md 丢了特征串「{fp}」——测试本身失鲜了，先核对再改"
+         assert fp not in w, \
+             f"prompt 全文被塞回 workflow.md 了（命中「{fp}」）—— 拆分白做"
+ 
+ 
+ def test_history_is_out_of_the_body():
+     """DOC-1：演进史进独立文件，不在 workflow.md 正文。"""
+diff --git a/openspec/changes/absorb-gstack-review/impl-reports/task5-brief.md b/openspec/changes/absorb-gstack-review/impl-reports/task5-brief.md
+new file mode 100644
+index 0000000..0b36c6f
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-review/impl-reports/task5-brief.md
+@@ -0,0 +1,23 @@
++### Task 5: 提示词与全量文档同步到自持 scope 审计的新提法
++
++**Blocked-by:** 3
++**R-ID:** SW-1
++
++工作流文档、质量分层参考、编排器提示词、以及 docs 下的技能说明与总览（含 HTML 控制台页），
++凡把第一步描述为「借道第三方 skill 原生执行」的地方，一律改述为自持 scope 审计——措辞与
++Task 3 在 SKILL 里定下的提法一致，不各写各的。提示词改动对应的 needle 断言同步更新。
++
++第三方 skill 的说明文档本身**保留**，但定位改述为「非运行时依赖的第三方 skill 参考」，
++而不是删除。扫残留时不能只扫 `.md`：`.py` / `.sh` / `.html` 里同样有硬编码提法。
++
++需要区分「必须改」与「合法保留」：本 change 只移除**代码审侧**的运行时依赖，设计审侧的
++autoplan 依赖、归档件、ADR 等历史文件里的提法一律不动。
++
++- [ ] 工作流主文档三处（编排器描述 / 代码侧质量层 / checklist 勾选项）改述为自持 scope 审计
++- [ ] 质量分层参考里的相关行同步改述
++- [ ] 编排器提示词删去第三方 skill 提法，且 `hack/tests/test_workflow_split.py` 的 needle 断言同步更新并通过
++- [ ] docs 下代码审技能说明、外部依赖说明、工作流总览、以及 HTML 控制台页中描述第一步的段落全部更新
++- [ ] 第三方 review skill 的说明文档保留，定位改述为「非运行时依赖的第三方 skill 参考」
++- [ ] 用不带 `--include` 限定的全量 grep 复扫一遍，逐条判定残留是「必须改」还是「合法保留」（设计审侧依赖 / 归档 / ADR / 历史文档），并在报告里列出判定依据
++- [ ] 本票新提法与 Task 3 在 SKILL 中使用的提法一致（报告里给出对照）
++
+diff --git a/openspec/changes/absorb-gstack-review/impl-reports/task5-docs-sync.md b/openspec/changes/absorb-gstack-review/impl-reports/task5-docs-sync.md
+new file mode 100644
+index 0000000..f730200
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-review/impl-reports/task5-docs-sync.md
+@@ -0,0 +1,152 @@
++# Task 5 impl-report：提示词与全量文档同步到自持 scope 审计的新提法
++
++## 做了什么
++
++把工作流文档、质量分层参考、编排器提示词、以及 `docs/` 下的技能说明 / 外部依赖说明 / 工作流总览 /
++HTML 控制台页里，把 `sdflow-code-review` Step1 描述为「借道第三方 gstack `/review` skill 原生执行」的
++地方，一律改述为「自持 scope 审计（fresh 子代理，以本 change 四件套为确定性意图源做 scope-drift +
++完成度）」——措辞对齐 Task 3 在 `sdflow-code-review/SKILL.md` 中定下的提法。第三方 `/review` 说明文档
++（`docs/workflow-skills/gstack-review.md`）保留，定位改述为「非运行时依赖的第三方 skill 参考」。
++
++改动文件（10 个，均在本票文件所有权边界内）：
++
++1. `sdflow-init/assets/workflow/workflow.md`（3 处：编排器描述 §三.B / 代码侧质量层 §三.6 / checklist 勾选项 §六）
++2. `sdflow-init/assets/workflow/reference/quality-layering.md`（4 处：表格两行 §二 / 结构描述 §五 / checklist 勾选项 §六）
++3. `sdflow-init/assets/workflow/prompts/step8-code-review.md`（唯一一行提示词）
++4. `hack/tests/test_workflow_split.py`（needle fingerprint 同步；见下方 TDD 自检）
++5. `docs/workflow-skills/sdflow-code-review.md`（技能说明：一句话 / mermaid 节点 / 步骤表 / 内部调度表 / 建议式-强制表 / 小结，共 6 处）
++6. `docs/workflow-skills/gstack-review.md`（第三方 skill 说明文档：定位改述 + §1 契约表 + §5/§6 历史化标注，共 5 处）
++7. `docs/workflow-overview.md`（工作流总览：外部黑盒清单拆分 / 步骤表第 8 步 / 黑盒边界表删行，共 3 处）
++8. `docs/workflow-console.html`（HTML 控制台页：删 gstack/review 卡片 + 更新 sdflow-code-review 角色描述，共 2 处）
++9. `docs/external-dependencies.md`（评审流程依赖表删行 + 加降级说明 / 内部依赖树改述，共 2 处）
++10. `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md`（生成物，`python3 hack/gen_workflow_guide.py --write` 同步再生，非手改）
++
++`CLAUDE.md` 无 code-review 侧 gstack 提法（`grep -n "gstack" CLAUDE.md` 零命中），无需改动。
++
++## 7 条验收标准逐条证据
++
++1. **工作流主文档三处** —— `workflow.md`：
++   - 编排器描述：`编排器：**每次全跑·独立冷·强制主审**〔P3c〕。Step1 自持 scope 审计（scope-drift + 完成度审计）+ 领域镜 + ...`
++   - 代码侧质量层：`事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c ...`
++   - checklist 勾选项：`sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、置信过滤）？`
++   - `grep -n "gstack" sdflow-init/assets/workflow/workflow.md` → 零命中。
++
++2. **质量分层参考同步** —— `quality-layering.md`：表格两行（spec 合规 / scope-drift 计划完成度）、
++   §五结构描述、§六 checklist 勾选项均已改述；`grep -n "gstack" .../reference/quality-layering.md` → 零命中。
++
++3. **编排器提示词 + needle 断言** —— `prompts/step8-code-review.md` 唯一行改为
++   `/sdflow-code-review 独立审查 {change dir} 的代码变更（Step1 自持 scope 审计的 scope-drift+完成度审计；...）`；
++   `hack/tests/test_workflow_split.py` fingerprint 同步为 `"Step1 自持 scope 审计的 scope-drift"`。
++   **TDD 自检**（改断言前先破坏、确认红）：改完提示词、改断言前先跑
++   `/usr/bin/python3 -m pytest hack/tests/test_workflow_split.py -v` → 2 个测试红
++   （`test_guide_is_in_sync_with_its_sources` + `test_prompts_are_not_inlined_back_into_the_table`，
++   后者报 `prompts/step8-code-review.md 丢了特征串「并入 gstack/review 的 scope-drift」`）——
++   证明该 needle 确实在盯这处改动。随后同步 fingerprint + 跑
++   `python3 hack/gen_workflow_guide.py --write` 再生 `WORKFLOW-GUIDE.md`，复跑同一测试文件 → **5 passed**。
++
++4. **docs 下代码审技能说明 / 外部依赖说明 / 工作流总览 / HTML 控制台页** —— 见上方改动文件 5/7/8/9；
++   `docs/workflow-skills/sdflow-code-review.md` 复扫 `grep -n "gstack"` → 零命中（原 6 处全清）。
++
++5. **第三方 review skill 说明文档保留，定位改述** —— `docs/workflow-skills/gstack-review.md` 未删除，
++   顶部改为：
++   ```
++   > **定位：非运行时依赖的第三方 skill 参考**——`sdflow-code-review` 编排器的 Step1（scope-drift + 完成度）
++   > 已改为自持 fresh 子代理实现（见 [sdflow-code-review 详解](./sdflow-code-review.md)），不再原生调用本 skill。
++   > 本文保留作为 `/review` 自身设计的参考资料。
++   ```
++   §1 契约表「谁调它」行改为「无（本仓当前无 skill 运行时调用它...）」；§5 标题加「（历史，已不适用）」
++   并加历史化说明块；§6 小结第三条明确「非运行时依赖的第三方 skill 参考」定位。
++
++6. **全量 grep 复扫 + 逐条判定表** —— 见下方完整表格（不带 `--include` 限定，覆盖 `.md`/`.py`/`.sh`/`.html`）。
++
++7. **与 Task 3 提法对照** —— 见下方对照表，措辞逐字一致。
++
++## 与 Task 3 提法对照表
++
++| 维度 | Task 3（`sdflow-code-review/SKILL.md`） | Task 5（本票，docs/workflow 侧） |
++|---|---|---|
++| 步骤标题 | `## 第一步：自持 scope 审计（fresh 中档子代理，恒跑守卫）` | `Step1 自持 scope 审计（fresh 中档子代理）` / `Step1 自持 scope 审计` |
++| 一句话摘要 | `Step1 自持 scope 审计（scope-drift + 完成度）→ Step2 并行多镜...` | `Step1 自持 scope 审计（fresh 中档子代理，以本 change 四件套为确定性意图源做 scope-drift + 完成度）→ Step2 并行多镜...` |
++| 机制描述 | `不借道第三方 skill 的原生执行，而是自己派一个 fresh 子代理，以本 change 目录的四件套为确定性意图源` | `以四件套为确定性意图源，做 scope-drift + 完成度审计` |
++| 锚行 mode 枚举 | `mode="subagent\|main-session"`（新枚举，`native\|simulated` 退役） | 同步改用 `mode="subagent\|main-session"`（`sdflow-code-review.md` 步骤表 / 建议式-强制表两处） |
++| 报告落款 | `Step1 自持 scope 审计: scope-drift/完成度 结论`（命中范围行） | 未涉及报告模板本体（不在本票文件所有权边界内） |
++| 度量锚描述 | `broad（Step1 自持 scope 审计）` | 未改动（`lens-metric-contract.md` 属 Task 2 所有权，本票未触碰） |
++
++措辞核对方法：`grep -n "自持 scope 审计\|scope-drift" sdflow-code-review/SKILL.md` 逐行核对后手工对齐，
++未发现本票新造与 Task 3 冲突的措辞。
++
++## 全量 grep 复扫 + 逐条判定表
++
++命令：`grep -rln "gstack" . --exclude-dir=.git --exclude-dir=archive --exclude-dir=.claude`
++（不带 `--include`，覆盖全部文件类型；`--exclude-dir=.claude` 排除另一 ticket 遗留的 worktree 副本
++`.claude/worktrees/agent-*/`，其内容与仓根重复、非本票所有权范围）。
++
++改动前命中 68 个文件，改动后剩余 62 个（本票清除的 6 个：`sdflow-init/assets/workflow/workflow.md`、
++`.../reference/quality-layering.md`、`.../prompts/step8-code-review.md`、`hack/tests/test_workflow_split.py`、
++`docs/workflow-skills/sdflow-code-review.md`，以及生成物 `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md`）。
++
++| 文件 | 判定 | 依据 |
++|---|---|---|
++| `docs/external-dependencies.md` | **本票已改** | 代码审侧运行时依赖表行 + 内部依赖树，见上文 |
++| `docs/workflow-console.html` | **本票已改** | task5-brief 5.3 明确点名防 .html 漏扫 |
++| `docs/workflow-overview.md` | **本票已改** | brief 明确点名「工作流总览」 |
++| `docs/workflow-skills/gstack-review.md` | **本票已改（保留+改定位）** | 验收标准 5：第三方文档保留、改述为非运行时依赖参考 |
++| `docs/workflow-skills/sdflow-code-review.md` | **本票已改** | brief 明确点名「代码审技能说明」 |
++| `hack/tests/test_workflow_split.py` | **本票已改** | needle fingerprint 同步 |
++| `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md` | **本票已改（生成物）** | `gen_workflow_guide.py --write` 再生同步，非手改 |
++| `sdflow-init/assets/workflow/prompts/step8-code-review.md` | **本票已改** | 编排器提示词本体 |
++| `sdflow-init/assets/workflow/reference/quality-layering.md` | **本票已改** | brief 明确点名「质量分层参考」 |
++| `sdflow-init/assets/workflow/workflow.md` | **本票已改** | brief 明确点名「工作流主文档三处」 |
++| `docs/sdflow-fable5/01-goals-and-rationale.md` | 合法保留 | `docs/sdflow-fable5/` 明确列入「已实测的分布」历史文档白名单（2026-07-10 深度调研文档集），DOC-1 演进史进 archive 类比 |
++| `docs/sdflow-fable5/02-module-reference.md` | 合法保留 | 同上；含旧六步流描述（`gstack/review 原生并入`），是该调研文档的历史快照，非当前流程真相源 |
++| `docs/sdflow-fable5/04-optimization-proposal.md` | 合法保留 | 同上；引用 gstack pre-emit gate 作设计灵感来源，非描述当前依赖关系 |
++| `docs/sdflow-fable5/20260717.md` | 合法保留 | 同上；日期戳快照（2026-07-17 会话记录），历史事实陈述 |
++| `docs/skill-authoring-best-practices.md` | 合法保留 | 从 gstack 设计中提炼「可迁移做法」的横向总结文档，不描述 Step1 当前运行时依赖 |
++| `docs/superpowers/plans/2026-07-08-lens-metric-emit.md` | 合法保留 | `docs/superpowers/` 明确列入历史文档白名单；含旧 fold 名 `gstack-adv: broad`，是该规划文档的历史快照 |
++| `docs/workflow-skills/gstack-autoplan.md` | 合法保留（Non-Goals） | 设计审侧 autoplan 依赖，proposal Non-Goals 明写不动 |
++| `docs/workflow-skills/gstack-document-generate.md` | 合法保留 | 无关的第三方 skill（文档生成），与代码审 Step1 无关 |
++| `docs/workflow-skills/matt-pocock-workflow.md` | 合法保留 | 仅作对比参照（frontmatter 风格两极对比），非描述 Step1 依赖 |
++| `docs/workflow-skills/sdflow-spec-review.md` | 合法保留（Non-Goals） | 设计审侧 autoplan 依赖及其产物 `gstack-review.md`（autoplan 落盘文件名，非本票范围） |
++| `openspec/adr/0002-gstack-boundary-reuse-output-not-internals.md` | 合法保留 | ADR，归档决策记录 |
++| `openspec/adr/0012-lens-metric-fold-machine-readable-and-emitter-input-roster.md` | 合法保留 | ADR，归档决策记录 |
++| `openspec/adr/0037-roadmap-discussion-layer-internalization-and-matt-removal.md` | 合法保留 | ADR，与 roadmap/matt 相关，与代码审 Step1 无关 |
++| `openspec/changes/absorb-gstack-review/*`（decision-memo/design/proposal/specs/tasks/tickets/gstack-review.md/spec-review-report.md/impl-reports/*） | 合法保留（禁改） | 本 change 自身四件套 + 决策纪要 + 评审报告 + 其它 task 的 impl-report，均是本 change 的工作产物本体（讨论「吸收 gstack」正是其主题），brief 明确「不要改四件套」 |
++| `openspec/CONTEXT.md` | 合法保留 | 记录「读 gstack 产出物合法、调内部非法」的合规边界原则，非描述 Step1 当前依赖 |
++| `openspec/issues/CLOSED.md` `openspec/issues/closed/todo/T20.md` `T25.md` | 合法保留 | 已关闭 issue 台账，历史记录 |
++| `openspec/specs/{issues-scripts-shared-core,outside-voice-reuse-guard,spec-workflow,workflow-metrics}/spec.md` | 合法保留（archive 时机） | 主 specs 仅在 `sdflow-done` 归档时由 delta 同步刷新；本 change 尚在实现期，`openspec/changes/absorb-gstack-review/specs/*.md` 才是当前权威 delta（Task 1 所有权），不在本票范围 |
++| `openspec/workflow/lens-metric-contract.md` `openspec/workflow/WORKFLOW-GUIDE.md` | 合法保留（预期漂移） | repo-root pin 副本，仅 `sdflow-init update` 时从 `sdflow-init/assets/workflow/` 权威源刷新；已核实权威源（Task 2 已改 `gstack-adv→scope-audit`）正确、repo-root 副本按纪律预期滞后，非本票范围 |
++| `openspec/workflow/tools/outside_voice_guard.py` | 合法保留（Non-Goals） | proposal 显式「不动 `outside_voice_guard.py`」（spec-review 姊妹依赖，记 todo 另行处置） |
++| `sdflow-init/assets/hack/outside-voice.sh` | 合法保留 | 注释「零 gstack 内部依赖」，描述本脚本自身零依赖这一事实，非 Step1 依赖 |
++| `sdflow-init/assets/workflow/design-diagrams.md` | 合法保留 | 引用 gstack `plan-eng-review` 的画图纪律作设计灵感，与代码审 Step1 无关 |
++| `sdflow-init/assets/workflow/lens-metric-contract.md` | 合法保留（权威源已改） | Task 2 已改 `gstack-adv→scope-audit`；复核 `grep -n "gstack-adv" .../lens-metric-contract.md` 零命中，仅保留在「历史注记」括注中提及旧名作对照，合规 |
++| `sdflow-init/assets/workflow/reference/Spec_Quality_Collaboration.md` | 合法保留 | superpowers vs gstack 的对比分析文档，历史调研性质 |
++| `sdflow-init/assets/workflow/tools/{anchor_lint,lens_metric_emit,outside_voice_guard}.py` `.../tests/test_{anchor_lint,hr_tg_intersect,lens_metric_emit,outside_voice_guard}.py` | 合法保留（Task 1/2 已完成/Non-Goals） | 工具脚本与其测试，brief 明确「不要改 tools/*.py」 |
++| `sdflow-init/assets/workflow/workflow-history.md` | 合法保留 | 演进史文件本身（DOC-1 附录承载体），按定义应含历史提法 |
++| `sdflow-init/tests/test_resolve_workflow.py` | 合法保留 | 注释引用一处历史 bug 编号（"gstack 5.3 缺口"），与 Step1 依赖无关 |
++| `sdflow-retro/SKILL.md` | 合法保留 | 引用 gstack `retro`（团队周度复盘会，完全不同的 gstack 子 skill），非本票范围 |
++| `sdflow-spec-review/SKILL.md` | 合法保留（Non-Goals） | autoplan 依赖 + 产物落盘文件名 `gstack-review.md`，proposal Non-Goals 明写不动 |
++
++## 跑过的测试
++
++```
++/usr/bin/python3 -m pytest hack/tests/test_workflow_split.py -v
++# 改断言前（TDD 自检）：2 failed, 3 passed
++# 改断言 + 再生 WORKFLOW-GUIDE.md 后：5 passed
++
++python3 hack/gen_workflow_guide.py --check
++# ✅ WORKFLOW-GUIDE.md 与单一源一致
++
++/usr/bin/python3 -m pytest
++# 2466 passed, 10 skipped in 298.50s
++```
++
++## Concerns
++
++- `docs/workflow-skills/sdflow-code-review.md` 尾部「接地基线」脚注引用的 SKILL.md 行号
++  （如 `trivial_shape 前置 :62-70`）未核对是否因 Task 3 改动而漂移——**不在本票验收标准范围内**
++  （与 gstack 提法无关，属该文档另一处独立的接地基线维护问题），未动。
++- `openspec/specs/*` 主 specs 目录仍保留旧 gstack/review 提法（见判定表），这是归档时机问题而非
++  遗漏——待 `sdflow-done` 归档本 change 时由 delta 同步刷新，非本票（也非任何实现期票）职责。
++- `openspec/workflow/`（repo-root pin 副本）与其权威源 `sdflow-init/assets/workflow/` 存在已知预期
++  漂移（本仓 memory 已记录此模式：`deployed-copy-drift-surfaces-only-on-update.md`），仅 `sdflow-init update`
++  时刷新，非本票范围。
+diff --git a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+index 6cce96b..16db39b 100644
+--- a/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
++++ b/sdflow-init/assets/workflow/WORKFLOW-GUIDE.md
+@@ -69,36 +69,36 @@
+ `/sdflow-ship {change dir}` 经 ship_gate 确定性台账驱动，内部按序执行三个子步骤（阶段内部无 `/clear`、无人类门）：
+ 
+ #### A. 实现管线
+ 
+ - **缺省（tickets 轨）**：路由至 `sdflow-implement` 出票执行（产出 `tickets.md`〔D5/adr-0033〕）；逐 ticket checkpoint。
+ - **显式 `impl-pipeline: superpowers`**：走 writing-plans → subagent-driven-development（产出 `superpowers-plan.md`）；quality-layering 注入点 A/B；逐任务 checkpoint。
+ - 🔴 **派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，看不见 CLAUDE.md。
+ 
+ #### B. sdflow-code-review
+ 
+-编排器：**每次全跑·独立冷·强制主审**〔P3c〕。并入 gstack/review（scope-drift + 完成度审计）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤。能修自动修标 `[impl-review-fix]`、修不了/拿不准 defer → buglist/todolist；汇总一份 `code-review-report.md`。跨模型 outside voice（always code voice + HR-TG 领域 cross-model）。checkpoint。
++编排器：**每次全跑·独立冷·强制主审**〔P3c〕。Step1 自持 scope 审计（scope-drift + 完成度审计）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤。能修自动修标 `[impl-review-fix]`、修不了/拿不准 defer → buglist/todolist；汇总一份 `code-review-report.md`。跨模型 outside voice（always code voice + HR-TG 领域 cross-model）。checkpoint。
+ 
+ #### C. sdflow-done
+ 
+ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 change OPEN 项入批次 → reindex）→ hand-off.md → archive（+ delta 对码核验/同步）→ commit → merge。**必跑（闭环）**。
+ 
+ ## 三、关键设计决策
+ 
+ 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
+ 2. **`/clear` 只在两处阶段交界用，阶段内部不用（G1）**：阶段内部不用 `/clear`（评审独立性由 fresh 子代理提供，依据 [quality-layering.md](./reference/quality-layering.md)）。两处阶段交界 SHALL `/clear`：**阶段一 → 阶段二**（cache 按模型隔离 + 产/审错档纪律）、**阶段二 → 阶段三**（盘面纪律 + 产物自足性检验 + 去作者偏置）。完整推导（为什么恰是这两处、每条理由的证据、边界）见[附录 A](#附录-ag1-完整分析clear-纪律为何如此设计)。
+ 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
+ 4. **只在阶段二设计门停一次人类**：拷问是对话岛（人类对抗，不折叠，见 `/sdflow-spec` 相位 B）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议 `T10-choice`〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
+ 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
+ 6. **评审两层、不重复**：
+    - **设计侧**：sdflow-spec-review 编排器 = autoplan（广审 CEO/design/eng/DX）+ 本项目多镜（领域镜+对抗镜+接地镜）合成一份报告。**autoplan 已含 eng 镜 → 多镜不重复跑 eng**。
+-   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（并入 gstack/review scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
++   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
+ 7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 [reference/quality-layering.md](./reference/quality-layering.md)。
+ 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
+ 9. **深度按 TG / 风险**：explore（模糊才跑）；不分 S/M/L 档。〔Phase C 补：outside voice 默认开，命中 HR-TG 单开领域 cross-model〕
+ 
+ ## 四、生成 ↔ 评审 的对称
+ 
+ ```
+   生成侧(Prevention)            评审侧(Detection)
+   ──────────────────────────────────────────────
+   ①结构 → config 槽       ┐
+@@ -116,21 +116,21 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本
+ 
+ ## 六、检查清单（跑一个变更时）
+ 
+ - [ ] 问题 / 方向清晰否？不清晰先 `opsx:explore`，人示意收敛才自动接 `/sdflow-spec`
+ - [ ] 生成起手是否过 **FF-0 三分支判定**（保护分支建 / 本 change 分支跳过 / 其它 feature 分支 halt 问人）？每步是否 checkpoint-commit？
+ - [ ] `sdflow-spec` 相位 B 拷问是否照常全深度执行（触发方式改变不缩减拷问）？
+ - [ ] `/clear` 只在**两处阶段交界**用过（阶段一→阶段二、阶段二→阶段三；G1 具名例外）？**阶段内部**全程无 `/clear`？
+ - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
+ - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
+ - [ ] 阶段三实现管线是否按 impl-pipeline 缺省正确路由（缺省 tickets → sdflow-implement；显式 `superpowers` → writing-plans/subagent-dev）？
+-- [ ] sdflow-code-review 是否**每次全跑**（并入 gstack/review scope+完成度、领域 code-checklists、对抗、置信过滤）？
++- [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、置信过滤）？
+ - [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
+ - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
+ 
+ ## 附录 A：G1 完整分析（`/clear` 纪律为何如此设计）
+ 
+ > 本节是**演进推导**（DOC-1 附录）：正文（§三.2）只留结论，这里留完整论证。**跑流程不用读本节**——
+ > 只在需要理解「为什么恰是这两处，不多不少」时查。
+ 
+ **评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+ 
+diff --git a/sdflow-init/assets/workflow/prompts/step8-code-review.md b/sdflow-init/assets/workflow/prompts/step8-code-review.md
+index ba8f961..f1da37a 100644
+--- a/sdflow-init/assets/workflow/prompts/step8-code-review.md
++++ b/sdflow-init/assets/workflow/prompts/step8-code-review.md
+@@ -1 +1 @@
+-/sdflow-code-review 独立审查 {change dir} 的代码变更（并入 gstack/review 的 scope-drift+完成度审计；能修的自动修标 [impl-review-fix]、修不了/拿不准的记 bug/todo；汇总一份 code-review-report.md）。完成后 checkpoint-commit sdflow-code-review。
++/sdflow-code-review 独立审查 {change dir} 的代码变更（Step1 自持 scope 审计的 scope-drift+完成度审计；能修的自动修标 [impl-review-fix]、修不了/拿不准的记 bug/todo；汇总一份 code-review-report.md）。完成后 checkpoint-commit sdflow-code-review。
+diff --git a/sdflow-init/assets/workflow/reference/quality-layering.md b/sdflow-init/assets/workflow/reference/quality-layering.md
+index 96ae2d9..864c78a 100644
+--- a/sdflow-init/assets/workflow/reference/quality-layering.md
++++ b/sdflow-init/assets/workflow/reference/quality-layering.md
+@@ -23,24 +23,24 @@
+ **生成期内部已经有了**。事后 `/clear + /sdflow-code-review` 再加的独立性只是"脱离 controller 的全冷独立"，边际收益。
+ 
+ ## 二、但它们查的是**通用 rubric**，不是我们的领域清单
+ 
+ task-reviewer / final-reviewer 的检查项是 `clean separation / error handling / DRY / edge cases /
+ tests verify real behavior / architecture / security`——**纯通用**。它们**完全不碰**
+ `code-checklists/domains/` 的领域 CR-*（嵌入式看门狗/flash 寿命/ISR、芯片 AT 超时、并发锁序…）。
+ 
+ | 维度 | 生成期已做? | 事后 review 重复? |
+ |---|---|---|
+-| spec 合规（建的=要的） | ✅ task-reviewer Part 1 | gstack/review **部分重复** |
++| spec 合规（建的=要的） | ✅ task-reviewer Part 1 | Step1 自持 scope 审计 **部分重复** |
+ | 通用代码质量（CR-01~09 base） | ✅ 三层都查 | /sdflow-code-review base **大幅重复** |
+ | **领域规则（CR-EMB/ML307C/ESP32/GO）** | ❌ 通用 rubric 盲区 | **真残差** ← 唯一不可替代 |
+-| scope-drift / 计划完成度 | ⚠️ 部分 | gstack/review 补全 |
++| scope-drift / 计划完成度 | ⚠️ 部分 | Step1 自持 scope 审计补全 |
+ | 全冷独立（脱离 controller） | ❌ 终审仍 controller 裁决 | /sdflow-code-review 补，但边际 |
+ | PR 级 DB/API/Auth 改动 | ❌ | 官方 code-review |
+ 
+ **结论**：后置 review 的**通用质量部分是冗余**；真正残差只剩 **领域规则 + scope-drift + PR 风险 + 一点冷独立**。
+ 
+ ## 三、机会：两个 shift-left 注入点（把标准前移进生成期）
+ 
+ `writing-plans` / `subagent-driven-development` **自带两个官方注入口**：
+ 
+ ```
+@@ -95,22 +95,22 @@ tests verify real behavior / architecture / security`——**纯通用**。它
+ ## 五、对 workflow 的影响：sdflow-code-review 是每次全跑的独立强制主审（P3c）
+ 
+ > **〔grill-amendment / P3c〕** 本节早前据注入点 B 推出"事后 sdflow-code-review 缩成薄残差、高风险才跑冷独立抽查"——
+ > **此推论已被否决**。注入点 B 确实把领域审前移进生成循环（即时 fix+re-review 闭环），但那**不使事后
+ > sdflow-code-review 变边际**。
+ 
+ - **sdflow-code-review 每次全跑·独立冷·强制主审**：实测能抓出生成循环内被 hot controller 说服放过的真问题——这是
+   shift-left 消不掉的价值（循环内 reviewer 冷、但 controller 热；事后 sdflow-code-review 完全脱 controller）。
+ - **注入点 B 与 sdflow-code-review 并存不是重复**（见 workflow.md §三.6 / design §7.2）：前者循环内即时闭环、便宜早修；
+   后者事后独立兜底网。机制/职责不同，**别把任一个优化掉**。
+-- shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 sdflow-code-review 本身。sdflow-code-review 编排器还并入
+-  `gstack/review`（scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤，合成一份 code-review-report.md。
++- shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 sdflow-code-review 本身。sdflow-code-review 编排器
++  Step1 自持 scope 审计（scope-drift + 完成度），Step2 并入领域镜 + 对抗镜 + 历史镜 + 置信过滤，合成一份 code-review-report.md。
+ - **无 `/clear`（G1）**：独立性由评审 fan-out 的 fresh 子代理给，不由 `/clear` 给。
+   - 🔴 **本条的射程仅限「评审独立性」，MUST NOT 据此推出「全流程不用 `/clear`」**——`/clear` 还有本条谈不到的其它作用（见下面两处交界例外的理由）。
+   - 🔴 **具名例外（两处，均在阶段交界：一处是 `/sdflow-spec` 的出口，一处是 `/sdflow-ship` 的入口）**：
+     - **`/sdflow-spec` 的「阶段一→阶段二」交界**——出口序列 `/clear` → 换档 → `/sdflow-spec-review` 里那次 `/clear` 是**允许的**。
+       **理由两条，都在 G1 的论证范围之外**：① **cache 按模型隔离**（拖着阶段一旧上下文切档 = 全价重付）；
+       ② **产 / 审错档纪律**（阶段一产出档 ≠ 阶段二评审档，换档才是真实动因）。
+     - **设计门 →「阶段三」交界**（`/sdflow-ship` 之前）——**理由三条，同样在 G1 射程之外**：① **盘面纪律**（阶段三「零跨步内存状态」，
+       `NEEDS_CONTEXT` MUST 仅从盘面自答；热编排器会拿对话记忆替代盘面，而 **fresh 子代理防不住这一条**——implementer 冷、回答它的编排器热）；
+       ② **产物自足性检验**（冷启动是对四件套/tickets 够不够用的真实检验，热 session 会无声补上、缺口永不暴露）；③ **去作者偏置**。
+       **代价**：编排器需重读 SKILL 与产物，且 MUST 在调 `/sdflow-ship` 时重述 merge 意图（不在盘上）。
+@@ -121,16 +121,16 @@ tests verify real behavior / architecture / security`——**纯通用**。它
+     调度期间、code-review→done 交接）；阶段三内部需控上下文用 **`/compact` 而非 `/clear`**（merge 意图不在盘上、`VERIFY_FAIL` 恢复要重建理解，
+     而 done 的 verify 本就是冷子代理）。
+ 
+ TG 驱动的是**领域镜的选取 + outside voice 是否走 cross-model**（命中 HR-TG 才单开领域 cross-model），
+ **不是"sdflow-code-review 跑不跑"**——sdflow-code-review 每次都跑。
+ 
+ ## 六、检查清单（用 superpowers 跑实现时）
+ 
+ - [ ] design 的领域约束是否确实进了 plan 的 **Global Constraints**（注入点 A）？
+ - [ ] 终审 dispatch 是否把 rubric 增强为 **通用模板 + 命中栈 code-checklists/domains**（注入点 B）？
+-- [ ] sdflow-code-review 是否**每次全跑**（P3c 独立冷强制主审，非高风险才跑）？并入 `gstack/review` 的 scope-drift + 完成度？
++- [ ] sdflow-code-review 是否**每次全跑**（P3c 独立冷强制主审，非高风险才跑）？Step1 自持 scope 审计的 scope-drift + 完成度？
+ - [ ] 是否**没有**在**阶段内部**依赖 `/clear`（G1：fresh 子代理即独立性；子 agent 调度中禁清）？
+       **例外 = 两处阶段交界**：① `/sdflow-spec` 的阶段一→阶段二那一次（理由 = cache 按模型隔离 + 产/审错档）；
+       ② 设计门→阶段三那一次（理由 = 盘面纪律 + 产物自足性检验 + 去作者偏置）。两处**都不是**「主审需冷视角」。
+ 
+ *方法论 v2（P3c：sdflow-code-review 每次全跑强制主审）· 项目无关 · 配套 spec-review.md（设计侧残差）/ code-checklists/（领域清单）/ workflow.md（编排）*
+diff --git a/sdflow-init/assets/workflow/workflow.md b/sdflow-init/assets/workflow/workflow.md
+index 32e7cab..b6cc943 100644
+--- a/sdflow-init/assets/workflow/workflow.md
++++ b/sdflow-init/assets/workflow/workflow.md
+@@ -66,36 +66,36 @@
+ `/sdflow-ship {change dir}` 经 ship_gate 确定性台账驱动，内部按序执行三个子步骤（阶段内部无 `/clear`、无人类门）：
+ 
+ #### A. 实现管线
+ 
+ - **缺省（tickets 轨）**：路由至 `sdflow-implement` 出票执行（产出 `tickets.md`〔D5/adr-0033〕）；逐 ticket checkpoint。
+ - **显式 `impl-pipeline: superpowers`**：走 writing-plans → subagent-driven-development（产出 `superpowers-plan.md`）；quality-layering 注入点 A/B；逐任务 checkpoint。
+ - 🔴 **派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，看不见 CLAUDE.md。
+ 
+ #### B. sdflow-code-review
+ 
+-编排器：**每次全跑·独立冷·强制主审**〔P3c〕。并入 gstack/review（scope-drift + 完成度审计）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤。能修自动修标 `[impl-review-fix]`、修不了/拿不准 defer → buglist/todolist；汇总一份 `code-review-report.md`。跨模型 outside voice（always code voice + HR-TG 领域 cross-model）。checkpoint。
++编排器：**每次全跑·独立冷·强制主审**〔P3c〕。Step1 自持 scope 审计（scope-drift + 完成度审计）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤。能修自动修标 `[impl-review-fix]`、修不了/拿不准 defer → buglist/todolist；汇总一份 `code-review-report.md`。跨模型 outside voice（always code voice + HR-TG 领域 cross-model）。checkpoint。
+ 
+ #### C. sdflow-done
+ 
+ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 change OPEN 项入批次 → reindex）→ hand-off.md → archive（+ delta 对码核验/同步）→ commit → merge。**必跑（闭环）**。
+ 
+ ## 三、关键设计决策
+ 
+ 1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
+ 2. **`/clear` 只在两处阶段交界用，阶段内部不用（G1）**：阶段内部不用 `/clear`（评审独立性由 fresh 子代理提供，依据 [quality-layering.md](./reference/quality-layering.md)）。两处阶段交界 SHALL `/clear`：**阶段一 → 阶段二**（cache 按模型隔离 + 产/审错档纪律）、**阶段二 → 阶段三**（盘面纪律 + 产物自足性检验 + 去作者偏置）。完整推导（为什么恰是这两处、每条理由的证据、边界）见[附录 A](#附录-ag1-完整分析clear-纪律为何如此设计)。
+ 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
+ 4. **只在阶段二设计门停一次人类**：拷问是对话岛（人类对抗，不折叠，见 `/sdflow-spec` 相位 B）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议 `T10-choice`〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
+ 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
+ 6. **评审两层、不重复**：
+    - **设计侧**：sdflow-spec-review 编排器 = autoplan（广审 CEO/design/eng/DX）+ 本项目多镜（领域镜+对抗镜+接地镜）合成一份报告。**autoplan 已含 eng 镜 → 多镜不重复跑 eng**。
+-   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（并入 gstack/review scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
++   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
+ 7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 [reference/quality-layering.md](./reference/quality-layering.md)。
+ 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
+ 9. **深度按 TG / 风险**：explore（模糊才跑）；不分 S/M/L 档。〔Phase C 补：outside voice 默认开，命中 HR-TG 单开领域 cross-model〕
+ 
+ ## 四、生成 ↔ 评审 的对称
+ 
+ ```
+   生成侧(Prevention)            评审侧(Detection)
+   ──────────────────────────────────────────────
+   ①结构 → config 槽       ┐
+@@ -113,21 +113,21 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本
+ 
+ ## 六、检查清单（跑一个变更时）
+ 
+ - [ ] 问题 / 方向清晰否？不清晰先 `opsx:explore`，人示意收敛才自动接 `/sdflow-spec`
+ - [ ] 生成起手是否过 **FF-0 三分支判定**（保护分支建 / 本 change 分支跳过 / 其它 feature 分支 halt 问人）？每步是否 checkpoint-commit？
+ - [ ] `sdflow-spec` 相位 B 拷问是否照常全深度执行（触发方式改变不缩减拷问）？
+ - [ ] `/clear` 只在**两处阶段交界**用过（阶段一→阶段二、阶段二→阶段三；G1 具名例外）？**阶段内部**全程无 `/clear`？
+ - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
+ - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
+ - [ ] 阶段三实现管线是否按 impl-pipeline 缺省正确路由（缺省 tickets → sdflow-implement；显式 `superpowers` → writing-plans/subagent-dev）？
+-- [ ] sdflow-code-review 是否**每次全跑**（并入 gstack/review scope+完成度、领域 code-checklists、对抗、置信过滤）？
++- [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、置信过滤）？
+ - [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
+ - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
+ 
+ ## 附录 A：G1 完整分析（`/clear` 纪律为何如此设计）
+ 
+ > 本节是**演进推导**（DOC-1 附录）：正文（§三.2）只留结论，这里留完整论证。**跑流程不用读本节**——
+ > 只在需要理解「为什么恰是这两处，不多不少」时查。
+ 
+ **评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+ 

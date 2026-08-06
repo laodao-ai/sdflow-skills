@@ -81,7 +81,11 @@ HTML 控制台页里，把 `sdflow-code-review` Step1 描述为「借道第三�
 （不带 `--include`，覆盖全部文件类型；`--exclude-dir=.claude` 排除另一 ticket 遗留的 worktree 副本
 `.claude/worktrees/agent-*/`，其内容与仓根重复、非本票所有权范围）。
 
-改动前命中 68 个文件，改动后剩余 62 个（本票清除的 6 个：`sdflow-init/assets/workflow/workflow.md`、
+改动后剩余 **65** 个文件（含本票自身新增的 3 份产物：`task5-brief.md` / `task5-docs-sync.md` /
+`task5-review-package.diff`，它们讨论 gstack 故字面命中）。〔impl-review-fix：原写「改动前 68 →
+改动后 62」，双轴审 Spec 轴独立复扫实测为 65，本行汇总数字与判定表不符——**判定表本身逐条完整
+准确、无遗漏无多余**，仅此汇总句算术有误，已订正。数字随产物增减而变，以上方命令实跑为准。〕
+本票清除的 6 个：`sdflow-init/assets/workflow/workflow.md`、
 `.../reference/quality-layering.md`、`.../prompts/step8-code-review.md`、`hack/tests/test_workflow_split.py`、
 `docs/workflow-skills/sdflow-code-review.md`，以及生成物 `sdflow-init/assets/workflow/WORKFLOW-GUIDE.md`）。
 
