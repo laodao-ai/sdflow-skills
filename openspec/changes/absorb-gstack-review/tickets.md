@@ -132,20 +132,20 @@ Step1 的执行位如实写进 `step1-broad-review` 锚的 mode 值（新枚举 
 
 本票收尾时，本 SKILL 正文里不得再有任何 gstack 提法——包括分工表、报告格式区、命中范围行。
 
-- [ ] `grep -n "gstack" sdflow-code-review/SKILL.md` 无输出（严格归零，不留「历史注记」豁免）
-- [ ] Step1 描述为恒跑 fresh 中档子代理的 scope 审计，输入明列 proposal/tasks/design + `DIFF_BASE..HEAD` diff，且要求 prompt 原文携带四条通则区块与「不 AskUserQuestion」声明
-- [ ] Step1 审计两轴写明：scope-drift（出圈改动逐条列 SCOPE CREEP，Non-Goals 被实现算 creep）+ 完成度五态，且五态判定纪律逐条钉死（DONE 从严 / CHANGED 从宽 / UNVERIFIABLE 诚实 / PARTIAL=部分子项有 diff 内证据 / NOT DONE=diff 内无任何相关证据）
-- [ ] Step1 产出含逐 task 五态表（DONE/CHANGED 也在列）+ 负向态 findings，并明写不勾 tasks.md、不替代 verify 终审、Step4 自动修后复审一轮纳入 scope-drift 维度
-- [ ] 能力探针段落位于第零步（与档位解析同位），文中声明 Step1/Step2 共用同一次探针结果、`fanout-capability` 锚每轮恰一条
-- [ ] 并行边界写明：EXEMPT 候选形状下 Step2 免除判定阻塞等 Step1 结果，非白名单形状才并行
-- [ ] 降级分支写明主 session 亲做 + 报告显著标注「⚠️ scope 审计降级（存在自查偏置）」；恒跑守卫（EXEMPT 时照跑、揭出隐藏逻辑则 EXEMPT 作废）语义保留
-- [ ] 锚 mode 枚举为 `subagent|main-session`
-- [ ] 报告格式区：mirrors 说明含 `broad` token；lens-metric 的 `findings[].hits[].raw` 用 `scope-audit`，roster 行仍写 canonical `lens="broad"`
-- [ ] 领域镜选择段含一行 `TG-27 → domains/llm.md`
-- [ ] skew 探测段追加两个新信号（contract 折叠块含 `scope-audit:` 行；anchor_lint 支持 `broad` token），任一探不到沿用既有「硬停 + 提示先跑 `sdflow-init update`」文案
-- [ ] Step2 子代理 prompt 模板含引文纪律全文（含非局部 finding 的可复核证据包替代路径），并声明「产出纪律非机械门」
-- [ ] Step3 置信过滤含「既无引文又无证据包 ⇒ 置信上限 50 ⇒ 落已裁掉区一行留痕」，明确滤除类目扩两条 Suppressions（阈值/常量不强制求注释；无害冗余助可读性不标）
-- [ ] `sdflow:principles` / `sdflow:tier-resolution` / `sdflow:async-branch` 托管区块字节级未变
+- [x] `grep -n "gstack" sdflow-code-review/SKILL.md` 无输出（严格归零，不留「历史注记」豁免）
+- [x] Step1 描述为恒跑 fresh 中档子代理的 scope 审计，输入明列 proposal/tasks/design + `DIFF_BASE..HEAD` diff，且要求 prompt 原文携带四条通则区块与「不 AskUserQuestion」声明
+- [x] Step1 审计两轴写明：scope-drift（出圈改动逐条列 SCOPE CREEP，Non-Goals 被实现算 creep）+ 完成度五态，且五态判定纪律逐条钉死（DONE 从严 / CHANGED 从宽 / UNVERIFIABLE 诚实 / PARTIAL=部分子项有 diff 内证据 / NOT DONE=diff 内无任何相关证据）
+- [x] Step1 产出含逐 task 五态表（DONE/CHANGED 也在列）+ 负向态 findings，并明写不勾 tasks.md、不替代 verify 终审、Step4 自动修后复审一轮纳入 scope-drift 维度
+- [x] 能力探针段落位于第零步（与档位解析同位），文中声明 Step1/Step2 共用同一次探针结果、`fanout-capability` 锚每轮恰一条
+- [x] 并行边界写明：EXEMPT 候选形状下 Step2 免除判定阻塞等 Step1 结果，非白名单形状才并行
+- [x] 降级分支写明主 session 亲做 + 报告显著标注「⚠️ scope 审计降级（存在自查偏置）」；恒跑守卫（EXEMPT 时照跑、揭出隐藏逻辑则 EXEMPT 作废）语义保留
+- [x] 锚 mode 枚举为 `subagent|main-session`
+- [x] 报告格式区：mirrors 说明含 `broad` token；lens-metric 的 `findings[].hits[].raw` 用 `scope-audit`，roster 行仍写 canonical `lens="broad"`
+- [x] 领域镜选择段含一行 `TG-27 → domains/llm.md`
+- [x] skew 探测段追加两个新信号（contract 折叠块含 `scope-audit:` 行；anchor_lint 支持 `broad` token），任一探不到沿用既有「硬停 + 提示先跑 `sdflow-init update`」文案
+- [x] Step2 子代理 prompt 模板含引文纪律全文（含非局部 finding 的可复核证据包替代路径），并声明「产出纪律非机械门」
+- [x] Step3 置信过滤含「既无引文又无证据包 ⇒ 置信上限 50 ⇒ 落已裁掉区一行留痕」，明确滤除类目扩两条 Suppressions（阈值/常量不强制求注释；无害冗余助可读性不标）
+- [x] `sdflow:principles` / `sdflow:tier-resolution` / `sdflow:async-branch` 托管区块字节级未变
 
 ### Task 4: code-checklists 吸收五类缺口并新建 LLM 领域清单
 
