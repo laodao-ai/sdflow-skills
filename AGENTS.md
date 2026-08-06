@@ -104,6 +104,10 @@ git diff --check                                      # 检查空白错误
 
 仓库未设数值覆盖率门槛，但数据类 skill 的 `scripts/` 改动必须附带回归测试。先跑受影响目录，再在提交前跑全量 `pytest`。仓根 `conftest.py` 和 `pytest.ini` 共同保证从仓外调用时仍加载全局副作用断言，两者不可拆分或塞入无关共享配置。纯 Markdown skill 重点核对 frontmatter、触发条件、命令和引用路径。修改 `sdflow-init/assets/workflow/`、`sdflow-init/assets/hack/` 或新增/删除 skill 后还需运行 `bash setup.sh`，确认全局 bundle、复制资产和 symlink 状态。
 
+### 开发期测试三层（影响面递增，能用低层就不开高层）
+
+纪律态下全局指针（`~/.sdflow/workflow`、`~/.claude/skills`、`~/.codex/skills` 软链）全指运行 checkout，开发树改动是惰性的。测试按影响面选层：①**机械层（pytest）——零全局影响**：init 测试 `tmp_path` + monkeypatch `BUNDLE_SRC`；`setup.sh` 测试假 HOME 真跑 bash（`hack/tests/test_install_agents.py` 模式）；`resolve-workflow.sh` 用 `SDFLOW_HOME` 重定向；日常开发只跑这层。②**沙盒消费仓层——零全局影响**：用**开发树**的 `init.py` 铺设/update 一个 scratch 消费仓；测新规则把规则副本拷进沙盒仓 `openspec/workflow/` 形成本地 pin（`resolve-workflow.sh` 步 1 pin 优先于全局 canonical）；`--dev` 有守卫只准源仓自身用。③**全局窗口层（开发 checkout 跑 `setup.sh`）——机器级影响、时间盒**：仅当改 SKILL.md 语义且需真跑 skill 全链路时才开（`~/.claude/skills` 是全局命名空间，无 per-project pin）；窗口期本机所有项目仓（含本仓项目侧）都吃开发版，正式 change 流程避开窗口；还原 MUST 在运行 checkout **重跑 setup**（`~/.sdflow/hack/` 是拷贝不是软链，只改软链还原不了）。护栏：`resolve-workflow.sh` 的 `sane()` fail-loud（半坏态不静默广播）；任意仓可留规则副本形成 pin 免疫全局翻动。
+
 ## 提交与 Pull Request 规范
 
 提交历史采用 `feat(scope):`、`fix(scope):`、`docs(scope):`、`chore(scope):`；阶段性实现可用 `checkpoint(<change>:<stage>):`。标题应说明结果和范围。PR 需写明动机、主要改动、关联的 OpenSpec change/issue，以及实际执行的验证命令与结果；仅在可视化输出变化时附截图。工作流规则改动必须先落到 canonical assets，并说明下游更新影响。

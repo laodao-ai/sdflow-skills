@@ -206,11 +206,35 @@ pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
 - **运行 checkout** = `~/.skills/sdflow-skills`：只 `git pull` + `setup.sh`，日常一键用 `/sdflow-upgrade`；
   remote 必须 = `laodao-ai/sdflow-skills.git`。
 - **开发 checkout** = 本仓：编辑 skill / bundle。本仓不再保留规则副本（规则经全局 canonical 解析），
-  故改 **skill、assets/workflow 规则或 assets/hack/ 脚本**都须在开发 checkout 跑一次 `setup.sh`
-  才测得到——知情临时指 dev，测完/合并后在运行 checkout 重跑 setup 还原。
+  故要**真跑**改过的 skill / 规则 / hack 脚本全链路，须在开发 checkout 跑一次 `setup.sh`——
+  知情临时指 dev，测完/合并后在运行 checkout 重跑 setup 还原。但这是测试三层里的**最后一层**，
+  能用低层就别翻全局，见下方「开发期测试三层」。
 - **发布边界** = push（开发）→ pull（运行）→ **立即** setup（pull 与 setup 之间是"新 SKILL 调旧脚本"的窗口期）。
 - **反向窗口**：pull 后既有 SKILL 路由（如 ship 链序）即生效（symlink 即时），而新增 skill 的链接须 setup 后才存在——已开 `impl-pipeline: tickets` 的仓在窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement；故 pull 与 setup 之间勿跑阶段三。
 - **回滚** = 运行 checkout `git checkout <上一已知良好 commit>` + 重跑 setup.sh。
+
+### 开发期测试三层（影响面递增，能用低层就不开高层）
+
+背景：纪律态下全局指针（canonical `~/.sdflow/workflow`、`~/.claude/skills`、`~/.codex/skills` 软链）
+全指运行 checkout ⇒ 开发树的改动是**惰性**的，本仓项目侧与其他项目仓都吃已发布旧版。测试按影响面选层：
+
+1. **机械层（pytest）——零全局影响**。脚本与 `setup.sh` 的测试全部沙盒化：init 测试
+   `tmp_path` + monkeypatch `BUNDLE_SRC`；`setup.sh` 测试用**假 HOME 真跑 bash**
+   （`hack/tests/test_install_agents.py` 模式，带「真实 `~/.claude/agents` 未被动过」snapshot 护栏）；
+   `resolve-workflow.sh` 用 `SDFLOW_HOME` 重定向（契约明写「绝不写真实 $HOME」）。日常开发只跑这层。
+2. **沙盒消费仓层（端到端规则/铺设）——零全局影响**。建 scratch 消费仓，用**开发树**的
+   `init.py` 对它铺设/update；测新规则把规则副本拷进沙盒仓 `openspec/workflow/` 形成**本地 pin**
+   （`resolve-workflow.sh` 步 1 pin 优先于全局 canonical ⇒ 全局不动）。`--dev` 有守卫只准在
+   源仓自身用，沙盒走手动拷贝成 pin。
+3. **全局窗口层（开发 checkout 跑 `setup.sh`）——机器级影响，时间盒**。唯一翻全局指针的动作
+   （canonical + 全部 skill 软链 + `~/.sdflow/hack/` 拷贝一起翻到开发树）。仅当改 SKILL.md 语义
+   且需真跑 skill 全链路时才开——`~/.claude/skills` 是全局命名空间，无 per-project pin，这部分
+   没有零影响测法。窗口期**本机所有项目仓（含本仓项目侧）都吃开发版**：挑不在其他仓干活的时段，
+   正式 change 流程避开窗口（或去第 2 层）；还原 MUST 在运行 checkout **重跑 setup**
+   （`hack/` 是拷贝不是软链，只改软链还原不了）。
+
+护栏：`resolve-workflow.sh` 的 `sane()` fail-loud（半坏态不静默广播，消费方显式降级告警）；
+任意仓可留规则副本形成 pin 免疫全局翻动（`stale_shadow_warnings` 明写的逃生口）。
 
 ## 阶段一入口：`/sdflow-spec` 使用路径（唯一线性路径）
 
