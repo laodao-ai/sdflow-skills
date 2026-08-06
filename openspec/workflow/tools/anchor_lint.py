@@ -671,15 +671,21 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
     return v
 
 
-_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
+_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # dead-fanout-multi-mirror 去重计数域（不含 broad——
+                                                                                  # broad 有主 session 亲做的合法降级路径，机制死却报 broad 不构成自相矛盾）
+_MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # absorb-gstack-review：`mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
+                                                          # 改名即断链——design.md:106 已钉死该名）
 _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
 _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
+_MIRRORS_UPGRADE_HINT = "若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update"
 
 
 def _parse_mirrors(raw):
     """严格文法解析 `mirrors=`：返回 (tokens, err)。tokens 为去重后合法子集（`—` → 空 list 哨兵）；
     err ∈ {'missing','empty','empty-token','unknown-token','dup-token'} 或 None。fail-closed：MUST NOT 把
-    缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。"""
+    缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。
+    合法性判据是 `_MIRRORS_LEGAL`（含 broad）——MUST NOT 用 `_FANOUT_MIRRORS`（那是计数域，不是合法集），
+    否则 broad 会被误判 unknown-token。"""
     if raw is None:
         return None, "missing"
     s = raw.strip()
@@ -691,7 +697,7 @@ def _parse_mirrors(raw):
     for t in tokens:
         if t == "":
             return None, "empty-token"
-        if t not in _FANOUT_MIRRORS:
+        if t not in _MIRRORS_LEGAL:
             return None, "unknown-token"
     if len(tokens) != len(set(tokens)):
         return None, "dup-token"
@@ -760,7 +766,10 @@ def check_fanout_consistency(report_text):
         return v                                        # host≠codex 无 mirrors：免探，无从跑镜数 lint
     tokens, err = _parse_mirrors(mirrors_raw)
     if err:
-        v.append({"anchor": anchor, "field": "mirrors", "kind": f"mirrors-{err}"})
+        item = {"anchor": anchor, "field": "mirrors", "kind": f"mirrors-{err}"}
+        if err == "unknown-token":                      # 陌生 token 名附可操作指引，不让消费者对着它发呆
+            item["detail"] = _MIRRORS_UPGRADE_HINT
+        v.append(item)
         return v                                        # fail-closed，不静默滤成空集
     if sub == "unavailable" and len(set(tokens) & _FANOUT_MIRRORS) > 1:
         v.append({"anchor": anchor, "kind": "dead-fanout-multi-mirror"})
