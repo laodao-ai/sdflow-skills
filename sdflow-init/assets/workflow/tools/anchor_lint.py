@@ -102,7 +102,7 @@ def load_enums(contract_path=None):
     except (OSError, UnicodeDecodeError) as e:  # [impl-review-fix] F4
         raise EnumsError(f"契约不可读: {p}: {e}")
     lines = text.splitlines()
-    body, in_block, fence_char, fence_len = [], False, None, 0
+    body, in_block, fence_char, fence_len, closed = [], False, None, 0, False
     for ln in lines:
         if not in_block:
             m = _ENUM_BLOCK.match(ln)
@@ -111,10 +111,12 @@ def load_enums(contract_path=None):
             continue
         c = _FENCE.match(ln)
         if c and c.group(1)[0] == fence_char and len(c.group(1)) >= fence_len and ln[c.end():].strip() == "":
-            break                                           # 闭合
+            closed = True; break
         body.append(ln)
     if not in_block:
         raise EnumsError(f"契约缺 lens-metric-enums 机读块: {p}")
+    if not closed:
+        raise EnumsError(f"lens-metric-enums 块未闭合（EOF 前无匹配闭合围栏）: {p}")
     kv = {}
     for ln in body:
         if ":" in ln:

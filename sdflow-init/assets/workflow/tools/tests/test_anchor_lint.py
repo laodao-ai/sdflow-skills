@@ -69,6 +69,19 @@ def test_load_enums_missing_block_raises(tmp_path):
     with pytest.raises(al.EnumsError):
         al.load_enums(bad)
 
+def test_load_enums_unclosed_block_raises(tmp_path):
+    """T86：块开了但 EOF 前无匹配闭合围栏 ⇒ 后续正文被当枚举吞进来，取值域不可信 ⇒ fail-closed。
+    MUST NOT 静默按「读到 EOF 为止」当合法块处理。"""
+    al = _mod()
+    # 各键齐全（否则 §解析空/缺项 那道门会先红 ⇒ 本用例变恒真、测不到未闭合这条）
+    bad = tmp_path / "c.md"
+    bad.write_text("```lens-metric-enums\nlayer: spec-review,code-review\nlens: domain\n"
+                   "host: claude\nrunner: claude\nreason_code: ok\nsev-format: 致N/高N/中N/低N\n"
+                   "\n## 后面的散文正文（没有闭合围栏）\n", encoding="utf-8")
+    import pytest
+    with pytest.raises(al.EnumsError):
+        al.load_enums(bad)
+
 def test_fence_outside_excludes_demo_anchor():
     al = _mod()
     text = "real\n<!-- sdflow:lens-metric v1 layer=\"x\" -->\n```\n<!-- sdflow:lens-metric v1 layer=\"demo\" -->\n```\n"
