@@ -229,7 +229,13 @@ def test_spec_authoring_requirement_ids_and_resident_identity_are_consistent() -
 
     resident_heading = "### Requirement: SA-16 入口常驻契约与按需资料分层"
     assert authoring.count(resident_heading) == 1
-    assert "### Requirement: SA-14 四入口选择规则" in authoring
+    # 本断言原为身份门：「SA-16 是新增 Requirement，不是把 SA-14 改名」⇒ 故要求两者并存。
+    # simplify-workflow（archive/2026-08-05-simplify-workflow：proposal「废止 SA-14」、
+    # verify-report「REMOVED: SA-14 四入口选择规则」）随双轨合并正式退役了 SA-14 ——
+    # 参照系已变，「SA-14 必须在场」不再是当前契约，故退役该断言。
+    # 身份门本身由下面的 resident_task_lines 断言承接（常驻契约的任务行只许挂 [SA-16]），
+    # 且 SA-14 不得复活：
+    assert "SA-14" not in authoring, "SA-14 已随 simplify-workflow 退役，MUST NOT 在主规格复活"
 
     delta = DELTA_AUTHORING.read_text(encoding="utf-8")
     assert delta.count(resident_heading) == 1

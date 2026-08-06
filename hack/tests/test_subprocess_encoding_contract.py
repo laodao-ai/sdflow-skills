@@ -95,7 +95,12 @@ def test_text_mode_subprocesses_declare_utf8_and_replace():
     """Every authored text subprocess site is locale-independent and loss-tolerant."""
     sites, misses = _scan(_python_files(REPO), REPO)
 
-    assert sites >= 200, "repository scan unexpectedly missed most subprocess sites"
+    # 本行是**防塌陷哨兵**，不是清点契约：它只防「扫描器坏了 / 文件发现坏了 ⇒ sites≈0 ⇒
+    # `not misses` 恒真通过」。真契约是下面那条。绝对值会随归档删文件自然下走
+    # （曾 200+，simplify-workflow / refactor-roadmap-internalize-deps 归档后为 189），
+    # 故取一个留足余量的下限；**MUST NOT 把它当「本仓应有多少个站点」来维护**——
+    # 每次删文件都回来抬数字，只会让这条哨兵变成周期性假红。
+    assert sites >= 120, f"repository scan unexpectedly missed most subprocess sites (got {sites})"
     assert not misses, "\n".join(misses)
 
 
