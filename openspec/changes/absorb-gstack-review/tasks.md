@@ -30,7 +30,7 @@
 
 - [ ] 5.1 `sdflow-init/assets/workflow/workflow.md` 三处（§编排器描述 / §代码侧质量层 / §checklist 勾选项）改述为自持 scope 审计〔Req: proposal·机械消费点同步〕
 - [ ] 5.2 `sdflow-init/assets/workflow/reference/quality-layering.md` 相关行（gstack/review 补全 / 并入提法）同步〔Req: 同上〕
-- [ ] 5.3 `docs/workflow-skills/`（sdflow-code-review.md、gstack-review.md 去留处置）、`docs/external-dependencies.md`、`docs/workflow-overview.md`、**`docs/workflow-console.html`（:390-526 多处 Step1=gstack 叙述，显式点名防 .html 漏扫**〔spec-review-amendment〕**）**提法更新；本仓 CLAUDE.md 若有 gstack/review 提法一并扫（`grep -rn "gstack" --include="*.md"` 全量核，改共享字符串纪律：不带 --include 限定再扫一次含 .py/.sh/.html）〔Req: 同上〕
+- [ ] 5.3 `docs/workflow-skills/`（sdflow-code-review.md 提法更新；gstack-review.md **保留**〔设计门拍板 Q4〕，仅改述为「非运行时依赖的第三方 skill 参考」定位）、`docs/external-dependencies.md`、`docs/workflow-overview.md`、**`docs/workflow-console.html`（:390-526 多处 Step1=gstack 叙述，显式点名防 .html 漏扫**〔spec-review-amendment〕**）**提法更新；本仓 CLAUDE.md 若有 gstack/review 提法一并扫（`grep -rn "gstack" --include="*.md"` 全量核，改共享字符串纪律：不带 --include 限定再扫一次含 .py/.sh/.html）〔Req: 同上〕
 
 ## 6. 验证与收尾（P0-P2 共用出口）
 

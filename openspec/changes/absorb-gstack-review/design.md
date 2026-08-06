@@ -118,7 +118,7 @@ docs/（workflow.md · quality-layering.md · workflow-skills/* · external-depe
 | `code-review-base.md` | **CR-10 命令/代码注入** | 变量插值进 shell 串（subprocess shell=True / os.system / 反引号拼接）→ 参数数组；eval/exec 执行模型或外部输入生成的代码须沙箱/白名单 |
 | `code-review-base.md` | **CR-11 枚举/取值完备性** | 新增枚举值/状态串/类型常量 ⇒ 逐消费者 trace（**必须读 diff 外代码**，grep 兄弟值找全消费点后逐个读）；allowlist/过滤数组核对；case/if-else 链 fall-through 到错误默认 |
 | `domains/backend.md` | **CR-BE-03 DB 层竞态** | find-or-create 无唯一索引防并发重复；check-then-set 用原子 `WHERE 旧值` UPDATE；状态迁移非原子导致跳变/双跳；绕过模型校验的直写 DB |
-| `domains/backend.md` | **CR-BE-02 扩点** | 检查点追加：用户可控数据进不安全 HTML 渲染（html_safe / dangerouslySetInnerHTML / v-html / \|safe）防 XSS |
+| `domains/backend.md` | **CR-BE-02 扩点** | 检查点追加：用户可控数据进不安全 HTML 渲染防 XSS——**仅服务端模板场景（html_safe / \|safe）**；客户端框架（dangerouslySetInnerHTML / v-html）待 frontend domain，见 proposal Non-Goals〔设计门拍板 Q3〕 |
 | `domains/llm.md`（新） | **CR-LLM-01 输出信任边界** | LLM 生成值（email/URL/名称/结构化对象）持久化/外发前格式与 shape 校验；LLM 生成 URL 外呼前 allowlist 防 SSRF；LLM 输出入知识库/向量库前防存储型 prompt 注入 |
 | `domains/llm.md`（新） | **CR-LLM-02 prompt 一致性** | prompt 列表用 1-indexed；prompt 声称的工具/能力与实际 wiring 一致；限额/约束多处声明防漂移 |
 | SKILL Step3 滤除类目 | Suppressions 扩两条 | 阈值/常量不强制求注释（调参即腐）；无害冗余助可读性不标 |

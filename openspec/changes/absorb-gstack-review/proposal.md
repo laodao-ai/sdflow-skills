@@ -88,6 +88,8 @@ commit-message 猜意图——最想要的能力在本工作流里恰是残废�
   VERSION-CHANGELOG 一致性放弃（低频/栈不匹配/已有部分覆盖）。
 - 不迁移归档报告中的旧 `mode="native|simulated"` 锚与 `gstack-adv` raw 名（冻结审计件）。
 - 不建 python.md domain、不动 frontend domain 占位。
+- 〔设计门拍板 Q3〕客户端框架 XSS（`dangerouslySetInnerHTML` / `v-html`）待 frontend domain 建立后补——
+  本次 CR-BE-02 扩点仅覆盖**服务端模板渲染**场景（`html_safe` / `|safe`），不声称覆盖客户端框架面。
 - 〔spec-review-amendment〕不吸收 gstack `/review` 全量流程中的 **Prior Learnings 跨会话学习检索**
   （`gstack-learnings-search`，本机确有真实学习记录）与 **Search-before-recommending 联网核对**两项
   附带能力——评审知识沉淀由本仓 memory / issues 池 / retro 承载，联网核对由评审子代理按四条通则②
