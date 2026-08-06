@@ -163,16 +163,16 @@ Step1 的执行位如实写进 `step1-broad-review` 锚的 mode 值（新枚举 
 
 ID 一律新号，不复用不重排。
 
-- [ ] base 清单含新条目：命令/代码注入（shell 串插值 → 参数数组；eval/exec 执行模型或外部输入生成的代码须沙箱/白名单）
-- [ ] base 清单含新条目：枚举/取值完备性（新值逐消费者 trace 且明写「必须读 diff 外代码」；allowlist 数组核对；case 链 fall-through 到错误默认）
-- [ ] backend 领域含新条目：DB 层竞态（find-or-create 无唯一索引 / check-then-set 原子 WHERE / 状态迁移非原子 / 绕过模型校验直写）
-- [ ] backend 既有 XSS 相关条目扩点覆盖服务端模板渲染场景，并注明客户端框架面待 frontend domain（不声称覆盖）
-- [ ] 新建 LLM 领域清单，含输出信任边界（持久化/外发前格式与 shape 校验、URL allowlist 防 SSRF、入库防存储型 prompt 注入）与 prompt 一致性（1-indexed、工具声明与 wiring 一致、限额单一声明）两条
-- [ ] 清单注册表登记 LLM 领域行（extends base，ID 前缀 `CR-LLM-`）
-- [ ] 选用规则示例块含 `TG-27 → llm.md` 映射行
-- [ ] 触发目录领域清单段含 TG-27 行，措辞为「代码消费 LLM/agent 产出并持久化/执行/外呼」，含排除句，且行内注明 code-review-only domain
-- [ ] 触发目录 HR-TG 成员行追加 TG-27，且 `hr_tg_intersect.py` 实跑能正确 parse 出该成员（零代码改动）
-- [ ] 全部新条目为新 ID，未复用或重排既有 ID
+- [x] base 清单含新条目：命令/代码注入（shell 串插值 → 参数数组；eval/exec 执行模型或外部输入生成的代码须沙箱/白名单）
+- [x] base 清单含新条目：枚举/取值完备性（新值逐消费者 trace 且明写「必须读 diff 外代码」；allowlist 数组核对；case 链 fall-through 到错误默认）
+- [x] backend 领域含新条目：DB 层竞态（find-or-create 无唯一索引 / check-then-set 原子 WHERE / 状态迁移非原子 / 绕过模型校验直写）
+- [x] backend 既有 XSS 相关条目扩点覆盖服务端模板渲染场景，并注明客户端框架面待 frontend domain（不声称覆盖）
+- [x] 新建 LLM 领域清单，含输出信任边界（持久化/外发前格式与 shape 校验、URL allowlist 防 SSRF、入库防存储型 prompt 注入）与 prompt 一致性（1-indexed、工具声明与 wiring 一致、限额单一声明）两条
+- [x] 清单注册表登记 LLM 领域行（extends base，ID 前缀 `CR-LLM-`）
+- [x] 选用规则示例块含 `TG-27 → llm.md` 映射行
+- [x] 触发目录领域清单段含 TG-27 行，措辞为「代码消费 LLM/agent 产出并持久化/执行/外呼」，含排除句，且行内注明 code-review-only domain
+- [x] 触发目录 HR-TG 成员行追加 TG-27，且 `hr_tg_intersect.py` 实跑能正确 parse 出该成员（零代码改动）
+- [x] 全部新条目为新 ID，未复用或重排既有 ID
 
 ### Task 5: 提示词与全量文档同步到自持 scope 审计的新提法
 

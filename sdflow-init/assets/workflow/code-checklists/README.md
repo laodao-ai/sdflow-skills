@@ -42,6 +42,7 @@
 | `CR-BE-NN` / `CR-GO-NN` | 后端通用 / Go delta |
 | `CR-EMB-NN` | 嵌入式通用 |
 | `CR-ML307C-NN` / `CR-ESP32-NN` | 芯片 delta |
+| `CR-LLM-NN` | LLM 集成面（code-review-only domain） |
 
 ID 一经分配不复用、不重排。
 
