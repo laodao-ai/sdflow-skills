@@ -143,11 +143,11 @@ def test_f7_hr_tg_must_subset_full_set(tmp_path):
 
 
 def test_reads_real_catalog_members(tmp_path):
-    """从真实权威源 trigger-catalog.md 读，成员集须 = 文档声明的 8 个。"""
+    """从真实权威源 trigger-catalog.md 读，成员集须 = 文档声明的 9 个（absorb-gstack-review 追加 TG-27）。"""
     m = _mod()
     real_cat = TOOLS.parent / "trigger-catalog.md"
     subset = m.load_hr_tg_subset(real_cat)
-    assert subset == {"TG-04", "TG-06", "TG-07", "TG-08", "TG-09", "TG-16", "TG-17", "TG-26"}
+    assert subset == {"TG-04", "TG-06", "TG-07", "TG-08", "TG-09", "TG-16", "TG-17", "TG-26", "TG-27"}
 
 
 # --- 单一源损坏 fail-closed（不静默按空子集放行）---

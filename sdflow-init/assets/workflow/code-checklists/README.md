@@ -31,6 +31,7 @@
   命中 TG-01(后端) → code-review-base + backend(+go)
   命中 TG-02(嵌入式) → code-review-base + embedded(+芯片 delta)
   命中 TG-03(前端) → code-review-base + frontend（如有）
+  命中 TG-27(LLM 集成面) → code-review-base + llm
 ```
 
 ## ID 约定
@@ -61,5 +62,6 @@ ID 一经分配不复用、不重排。
 | `domains/embedded.md` | base | RTOS+C | `CR-EMB-` |
 | `domains/embedded-ml307c.md` | embedded | ML307C | `CR-ML307C-` |
 | `domains/embedded-esp32.md` | embedded | ESP32-C3 | `CR-ESP32-` |
+| `domains/llm.md` | base | LLM 集成面（代码消费 LLM/agent 产出） | `CR-LLM-` |
 
 *规则集 v1 · 项目无关 · 代码审查（/review 阶段）*
