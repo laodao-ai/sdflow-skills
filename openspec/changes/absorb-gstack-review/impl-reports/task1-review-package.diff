@@ -1,0 +1,272 @@
+# Review package: 2445355c160fe2ab5ae5a0b5d735c669fd480f10..e5fa936f06332bc9a68251eac46ee4357b7b36d7 (Task 1 worktree merge)
+
+## Commits
+e5fa936 merge(absorb-gstack-review): Task 1 anchor_lint broad token
+b352793 impl(absorb-gstack-review): anchor_lint 接纳 broad token 不污染 dead-fanout 计数集
+
+## Files changed
+ .../impl-reports/task1-anchor-lint-broad.md        | 100 +++++++++++++++++++++
+ sdflow-init/assets/workflow/tools/anchor_lint.py   |  17 +++-
+ .../workflow/tools/tests/test_anchor_lint.py       |  47 ++++++++++
+ 3 files changed, 160 insertions(+), 4 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/absorb-gstack-review/impl-reports/task1-anchor-lint-broad.md b/openspec/changes/absorb-gstack-review/impl-reports/task1-anchor-lint-broad.md
+new file mode 100644
+index 0000000..6953610
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-review/impl-reports/task1-anchor-lint-broad.md
+@@ -0,0 +1,100 @@
++# Task 1: anchor_lint 接纳 broad 镜而不误判降级为自相矛盾
++
++## 环境前置说明
++
++本 worktree 初始时未包含 `openspec/changes/absorb-gstack-review/` 目录（分支
++`worktree-agent-a706bba930029dd5c` 的起点 `9a7e09d` 是 `feat/absorb-gstack-review`
++的父提交，落该 change 四件套 + tickets.md 的提交 `2445355`
++`checkpoint(absorb-gstack-review:plan): 出 ticket 落盘（B1 窗口锚）` 未同步进本 worktree），
++且 `impl-reports/task1-brief.md` 在任何分支上都不存在——不是本 worktree 独有的缺失。
++
++处置：确认 `feat/absorb-gstack-review` 相对本 worktree HEAD 的唯一差异是该提交且**纯新增
++文件**（`git diff --stat` 核实，12 个文件、只新增不改动任何已有代码），执行
++`git merge --ff-only feat/absorb-gstack-review` 补齐（fast-forward，非破坏性、不改写任何历史）。
++补齐后以 `tickets.md`「### Task 1」段（第 68–88 行）为本票权威来源——它是比缺失的
++`task1-brief.md` 更上游的定稿材料（tasks.md 2.2/2.3/2.5 的展开版），并非我自拟的替代品。
++
++## 做了什么
++
++修改 `sdflow-init/assets/workflow/tools/anchor_lint.py`（权威源）：
++
++1. 把原来身兼两职的单一常量 `_FANOUT_MIRRORS` 拆成两个独立常量：
++   - `_FANOUT_MIRRORS`（值不变，仍是 `{domain,adversarial,grounding,history}`）——继续专职
++     `check_fanout_consistency` 里 dead-fanout-multi-mirror 的去重计数域。
++   - 新增 `_MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}`——专职 `_parse_mirrors` 的合法性判据，
++     常量名按 `design.md:106` / `tickets.md:87` 钉死为 `_MIRRORS_LEGAL`（供 Task 3 的 skew 探测
++     信号读此常量名）。
++2. `_parse_mirrors` 的 unknown-token 判据从 `_FANOUT_MIRRORS` 改读 `_MIRRORS_LEGAL`——`broad`
++   进合法集,`check_fanout_consistency` 第 774 行的计数逻辑仍读原值不变的 `_FANOUT_MIRRORS`，
++   两者互不影响。
++3. `mirrors-unknown-token` 违规新增 `detail` 字段（新常量 `_MIRRORS_UPGRADE_HINT`），文案：
++   「若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update」。
++
++`step1-broad-review` 锚的 `mode=` 值本来就不被 `check_existence` 校验（只校验锚族存在性，
++不解析 `mode=` 的值），故「lint 不校验 mode 值」这条不变量无需改代码，只需补一条回归锁测试。
++
++## 每条验收标准的证据
++
++| 验收标准 | 证据 |
++|---|---|
++| `mirrors=` 含 `broad` 时 lint 判合法通过 | `test_parse_mirrors_broad_token_valid`：`_parse_mirrors("broad")` → `(["broad"], None)` |
++| `subagents="unavailable"` + `mirrors="broad,history"` 不触发 dead-fanout | `test_fanout_unavailable_broad_history_not_dead_fanout`：`check_fanout_consistency(...) == []` |
++| `subagents="unavailable"` + `mirrors="broad,domain,history"` 仍触发 dead-fanout | `test_fanout_unavailable_broad_domain_history_still_dead_fanout`：命中 `dead-fanout-multi-mirror` |
++| `step1-broad-review` 锚 `mode="subagent"` 时 lint 通过（锁定不变量） | `test_step1_broad_review_mode_subagent_lint_passes`：`check_existence(...) == []` |
++| mirrors-unknown-token 报错文案含升级指引 | `test_fanout_mirrors_unknown_token_hint_mentions_sdflow_init_update`：断言 `detail` 含 `"sdflow-init update"` |
++| 合法集与计数集为两个独立常量，改前者不影响后者，且合法集常量名钉死为 `_MIRRORS_LEGAL` | `test_mirrors_legal_and_fanout_constants_split`：`"broad" in _MIRRORS_LEGAL`、`"broad" not in _FANOUT_MIRRORS`、两者 `!=` |
++| `test_anchor_lint.py` 既有用例全绿 | 见下方测试输出（152 passed，含 146 条既有 + 6 条新增） |
++
++## 部署副本判定（仓根 `openspec/workflow/tools/anchor_lint.py`）
++
++**判定：不动。** 已 grep 全仓所有 `.py`/`.sh`/`.yml` 对
++`openspec/workflow/tools/anchor_lint.py` 的引用：
++
++- `hack/tests/test_yq_wrapper_consistency.py`——只做 `_yq()` 辅助函数的结构性 golden 校验，
++  不触及 `mirrors`/`_FANOUT_MIRRORS`/`check_fanout_consistency` 任何逻辑。
++- `sdflow-ship/scripts/ship_gate.py` / `hack/check_encoding_hygiene.py` /
++  `hack/tests/test_encoding_hygiene.py`——只按路径前缀做「是否为真运行代码/编码卫生」判断，
++  不解析文件内容语义。
++- `sdflow-init/tests/test_init_contract_sync.py` / `test_task5_regression.py`——用
++  `tmp_path` 沙盒验证 `sdflow-init` 铺设/更新机制本身能把 bundle 的 `tools/anchor_lint.py`
++  拷进消费仓，不断言该文件的具体内容与本仓根副本一致。
++
++即：仓根这份是 `sdflow-init update` 托管的部署副本（CLAUDE.md 明文：`sdflow-init update` 托管刷新，
++勿手改），本仓测试没有任何一处直接消费它的 mirrors/fanout 逻辑。按 CLAUDE.md「改规则先改 assets、
++再 `sdflow-init update` 推下游」的纪律，本票不手动同步这份副本——它会在 Task 6 dogfood 开全局
++窗口时随 `sdflow-init update`（或本 change 收尾时的常规刷新）自然对齐，手改反而会形成
++「仓根有本地改动，掩盖 sdflow-init update 应有的回灌路径」的假同步。
++
++## 测试命令与输出
++
++```
++$ /usr/bin/python3 -m pytest sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py -q
++........................................................................ [ 49%]
++........................................................................ [ 98%]
++......                                                                   [100%]
++152 passed in 0.66s
++```
++
++（红→绿：加测试后先跑一次确认 5 条新增用例失败——`test_mirrors_legal_and_fanout_constants_split`
++`AttributeError: no attribute '_MIRRORS_LEGAL'`、`test_parse_mirrors_broad_token_valid`
++`unknown-token`、两条 dead-fanout broad 用例、hint 文案用例；`test_step1_broad_review_mode_subagent_lint_passes`
++作为既有行为的回归锁测试，写下即绿属预期——它验证的是「本来就不校验 mode 值」这条不变量，
++非本票新增代码。实现后重跑，5 条转绿 + 既有 146 条无回归 = 152 passed。）
++
++```
++$ /usr/bin/python3 -m pytest sdflow-init/tests/test_codex_subagent_authorization.py -q
++...........
++11 passed in 0.02s
++```
++
++（该文件含对 `_FANOUT_MIRRORS` 值的反漂移锁——`_FANOUT_MIRRORS` 值本身未变，确认无回归。）
++
++按 TDD 契约，本票 `Blocked-by: none` ⇒ 只需单元层，MUST NOT 跑与本票无依赖关系的集成/e2e 套件——
++全仓 `pytest -q` 含其它 change 的 outside-voice 真子进程 dispatch/worker/await 集成测试（900s 级
++timeout），与本票无依赖关系，故未等待其跑完/未作为本票证据；本票证据以上方两条定向测试
++（`test_anchor_lint.py` 全量 + `test_codex_subagent_authorization.py`，后者是 `_FANOUT_MIRRORS`
++值的既有反漂移锁，用于确认本次拆分未改变其值）为准。
++
++## Concerns
++
++无。范围内五条验收标准 + 既有回归全部核验通过；仓根部署副本判定为"不动"并已写明依据。
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index 68e348b..83dd33b 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -664,41 +664,47 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
+         v.append({"anchor": anchor, "field": "declared", "kind": "declared-not-expected",
+                   "detail": f"declared={sorted(set(declared))} expected={sorted(expected)}"})
+     # ④ declared ↔ 实落站点集比对（本票核心：并发 2 站点漏收一个 → site-missing-anchor）
+     for s in sorted(set(declared) - actual):
+         v.append({"kind": "site-missing-anchor", "detail": s})
+     for s in sorted(actual - set(declared)):
+         v.append({"kind": "site-unexpected-anchor", "detail": s})
+     return v
+ 
+ 
+-_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # 可 fan-out 的 lens 类型（一致性 lint 去重计数域）
++_FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # dead-fanout-multi-mirror 去重计数域（不含 broad——
++                                                                                  # broad 有主 session 亲做的合法降级路径，机制死却报 broad 不构成自相矛盾）
++_MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # absorb-gstack-review：`mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
++                                                          # 改名即断链——design.md:106 已钉死该名）
+ _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
+ _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
++_MIRRORS_UPGRADE_HINT = "若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update"
+ 
+ 
+ def _parse_mirrors(raw):
+     """严格文法解析 `mirrors=`：返回 (tokens, err)。tokens 为去重后合法子集（`—` → 空 list 哨兵）；
+     err ∈ {'missing','empty','empty-token','unknown-token','dup-token'} 或 None。fail-closed：MUST NOT 把
+-    缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。"""
++    缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。
++    合法性判据是 `_MIRRORS_LEGAL`（含 broad）——MUST NOT 用 `_FANOUT_MIRRORS`（那是计数域，不是合法集），
++    否则 broad 会被误判 unknown-token。"""
+     if raw is None:
+         return None, "missing"
+     s = raw.strip()
+     if s == _MIRRORS_SENTINEL:
+         return [], None                                  # 未 fan-out，合法空
+     if s == "":
+         return None, "empty"
+     tokens = [t.strip() for t in s.split(",")]
+     for t in tokens:
+         if t == "":
+             return None, "empty-token"
+-        if t not in _FANOUT_MIRRORS:
++        if t not in _MIRRORS_LEGAL:
+             return None, "unknown-token"
+     if len(tokens) != len(set(tokens)):
+         return None, "dup-token"
+     return tokens, None
+ 
+ 
+ def check_fanout_consistency(report_text):
+     """🔴 fan-out always-on 一致性 lint（不接受 metrics_on）。**判据读 `sdflow:fanout-capability` 锚的
+     `mirrors=`，MUST NOT 数 lens-metric 行**（C2：lens-metric 受 metrics 门控、默认消费仓零行 → 空转）。
+     subagents='unavailable' 且 mirrors 中 ∈{domain,adversarial,grounding,history} 去重计数 >1 ⇒ dead-fanout-multi-mirror。
+@@ -753,21 +759,24 @@ def check_fanout_consistency(report_text):
+         v.append({"anchor": anchor, "field": "subagents", "kind": "bad-subagents"})
+         return v
+     effective_host = cap_host or report_host
+     mirrors_raw = kv.get("mirrors")
+     if mirrors_raw is None:
+         if effective_host == "codex":                   # host=codex 报告 mirrors= 必填
+             v.append({"anchor": anchor, "field": "mirrors", "kind": "mirrors-missing"})
+         return v                                        # host≠codex 无 mirrors：免探，无从跑镜数 lint
+     tokens, err = _parse_mirrors(mirrors_raw)
+     if err:
+-        v.append({"anchor": anchor, "field": "mirrors", "kind": f"mirrors-{err}"})
++        item = {"anchor": anchor, "field": "mirrors", "kind": f"mirrors-{err}"}
++        if err == "unknown-token":                      # 陌生 token 名附可操作指引，不让消费者对着它发呆
++            item["detail"] = _MIRRORS_UPGRADE_HINT
++        v.append(item)
+         return v                                        # fail-closed，不静默滤成空集
+     if sub == "unavailable" and len(set(tokens) & _FANOUT_MIRRORS) > 1:
+         v.append({"anchor": anchor, "kind": "dead-fanout-multi-mirror"})
+     return v
+ 
+ 
+ def check_lens_metric(report_text, cli_layer, enums):
+     """校验 fence 外真 lens-metric 锚的字段完整性/枚举归属/layer==--layer/sev 子格式/五计数 int≥0。
+     `site` 字段 MUST NOT 校验（契约 CF-补2，任意值合法）。数值一致性（findings vs 实收数）不校验（脚本不兜）。"""
+     v = []
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index fc4c965..6284f5e 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -930,20 +930,67 @@ def test_fanout_unknown_mixed_single_real_host_not_conflict():
+     v = al.check_fanout_consistency(r)
+     assert not _has(v, "conflicting-report-host")
+     assert v == []
+ 
+ def test_fanout_in_fence_not_checked():                       # fence 内示例锚不校验
+     al = _mod()
+     r = 'real\n```\n' + _fc(host="codex", subagents="unavailable", mirrors="domain,adversarial") + '\n```\n'
+     assert al.check_fanout_consistency(r) == []
+ 
+ 
++# --- absorb-gstack-review Task 1：mirrors 合法 token 集扩 broad，不污染 dead-fanout 计数集 --------
++
++def test_mirrors_legal_and_fanout_constants_split():
++    """🔒 design.md §2 钉死常量名：合法集 `_MIRRORS_LEGAL` 含 broad，计数集 `_FANOUT_MIRRORS` 不含 broad——
++    两者必须是不同对象，防止未来把 broad 直接塞回 `_FANOUT_MIRRORS` 顺带污染计数域。"""
++    al = _mod()
++    assert "broad" in al._MIRRORS_LEGAL
++    assert "broad" not in al._FANOUT_MIRRORS
++    assert al._MIRRORS_LEGAL != al._FANOUT_MIRRORS
++
++def test_parse_mirrors_broad_token_valid():                    # broad 是合法 mirrors token
++    al = _mod()
++    tokens, err = al._parse_mirrors("broad")
++    assert err is None
++    assert tokens == ["broad"]
++
++def test_fanout_unavailable_broad_history_not_dead_fanout():
++    """unavailable + mirrors="broad,history" → broad 不进计数集，去重计数域只剩 history（1 个）→ 不触发。"""
++    al = _mod()
++    r = _fc(host="codex", subagents="unavailable", mirrors="broad,history") + "\n"
++    assert al.check_fanout_consistency(r) == []
++
++def test_fanout_unavailable_broad_domain_history_still_dead_fanout():
++    """unavailable + mirrors="broad,domain,history" → 计数域仍是 {domain,history}（2 个）→ 触发，broad 未被误算但也未误免责。"""
++    al = _mod()
++    r = _fc(host="codex", subagents="unavailable", mirrors="broad,domain,history") + "\n"
++    assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
++
++def test_step1_broad_review_mode_subagent_lint_passes():
++    """🔒 锁定「lint 不校验 step1-broad-review 的 mode 值」不变量：新枚举值 mode="subagent" 不应触发任何
++    与 mode 相关的校验（只校验锚族存在性）。"""
++    al = _mod()
++    r = ('<!-- sdflow:step1-broad-review v1 mode="subagent" -->\n'
++         + _ov(host="claude", runner="codex", reason_code="ok") + "\n"
++         + '<!-- sdflow:hr-tg v1 hit="none" -->\n')
++    assert al.check_existence(r, "code-review", metrics_on=False) == []
++
++def test_fanout_mirrors_unknown_token_hint_mentions_sdflow_init_update():
++    """mirrors-unknown-token 报错须自带可操作指引：旧版 bundle 遇到未来新增 token 时不应让人对着陌生
++    token 名发呆——文案须提示先跑 `sdflow-init update`。"""
++    al = _mod()
++    r = _fc(host="codex", subagents="unavailable", mirrors="domain,bogus") + "\n"
++    v = al.check_fanout_consistency(r)
++    hit = [x for x in v if x["kind"] == "mirrors-unknown-token"]
++    assert hit and "sdflow-init update" in hit[0].get("detail", "")
++
++
+ # --- 解耦锁（metrics=false 时矩阵红线 + 一致性 lint 仍生效，端到端）------------------------------
+ 
+ def test_matrix_self_review_blocks_when_metrics_off(tmp_path):
+     """🔒 解耦锁：metrics.enabled=false（默认消费仓、无 lens-metric 行）时，矩阵自审红线仍端到端拦截。"""
+     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+     rpt = (_ov(host="claude", runner="claude", reason_code="ok") + "\n"   # 自审
+            + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+            '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+     rpt_path = tmp_path / "r.md"; rpt_path.write_text(rpt, encoding="utf-8")
+     r = _run(rpt_path, "code-review", root)

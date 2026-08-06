@@ -79,13 +79,13 @@ MUST ∈ lens enum，raw 名只出现在 `findings[].hits[].raw`）。
 另外，当消费仓的 workflow bundle 是旧版（不认识 `broad`）时，lint 报出的 unknown-token 错误
 须自带可操作的修法指引，而不是让使用者对着一个陌生 token 名发呆。
 
-- [ ] `mirrors=` 含 `broad` 时 lint 判合法通过
-- [ ] `subagents="unavailable"` + `mirrors="broad,history"` 不触发 dead-fanout-multi-mirror
-- [ ] `subagents="unavailable"` + `mirrors="broad,domain,history"` 仍触发 dead-fanout-multi-mirror
-- [ ] `step1-broad-review` 锚取新枚举值 `mode="subagent"` 时 lint 通过（锁定「lint 不校验 mode 值」不变量）
-- [ ] mirrors-unknown-token 报错文案含「若本仓 `openspec/workflow/` 为旧版，请先跑 `sdflow-init update`」
-- [ ] 合法 token 集与 dead-fanout 计数集为两个独立常量，改前者不影响后者（有测试佐证）；**合法集常量名钉死为 `_MIRRORS_LEGAL`**（`design.md:106` 已按此名声明 SKILL 侧 skew 探测信号，Task 3 据此写探测段——改名即断链）
-- [ ] `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` 既有用例全绿
+- [x] `mirrors=` 含 `broad` 时 lint 判合法通过
+- [x] `subagents="unavailable"` + `mirrors="broad,history"` 不触发 dead-fanout-multi-mirror
+- [x] `subagents="unavailable"` + `mirrors="broad,domain,history"` 仍触发 dead-fanout-multi-mirror
+- [x] `step1-broad-review` 锚取新枚举值 `mode="subagent"` 时 lint 通过（锁定「lint 不校验 mode 值」不变量）
+- [x] mirrors-unknown-token 报错文案含「若本仓 `openspec/workflow/` 为旧版，请先跑 `sdflow-init update`」
+- [x] 合法 token 集与 dead-fanout 计数集为两个独立常量，改前者不影响后者（有测试佐证）；**合法集常量名钉死为 `_MIRRORS_LEGAL`**（`design.md:106` 已按此名声明 SKILL 侧 skew 探测信号，Task 3 据此写探测段——改名即断链）
+- [x] `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py` 既有用例全绿
 
 ### Task 2: lens-metric 折叠源改认 scope-audit 并给出旧版修法指引
 
