@@ -161,28 +161,41 @@ class TestBundleToolsOnly:
         assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
 
     @pytest.mark.parametrize("full", [False, True])
-    def test_pycache_is_never_deployed(self, tmp_path, monkeypatch, full):
-        """`__pycache__` 是「本机执行过」的副产物，不是 bundle 资产。
+    def test_local_tool_caches_are_never_deployed(self, tmp_path, monkeypatch, full):
+        """本机跑工具的残渣（`__pycache__` / `.pytest_cache` / …）不是 bundle 资产。
 
-        .pyc 不入库 ⇒ 跨机器传不过去；但同机会：canonical `~/.sdflow/workflow` 指向运行 checkout
-        的 assets/workflow，那里的 tools/*.py 一被执行就在资产侧堆出 .pyc，copytree 再搬进项目仓。
-        实害是 **update 报告的文件数不稳定**（同一次 update 从跑过 pytest 的 dev checkout 跑报 30、
-        从运行 checkout 跑报 19），而 `.gitignore` 有 `__pycache__/` ⇒ 差值在 git 里不显形。
+        不入库 ⇒ 跨机器传不过去；但同机会：canonical `~/.sdflow/workflow` 指向运行 checkout 的
+        assets/workflow，那里的 tools/*.py 一被执行/被 pytest 收集就在资产侧堆出这些目录，
+        copytree 再搬进项目仓。可观测症状 = `update` 报的"铺 bundle N 文件"随「从哪个 checkout 跑」
+        漂移（实测 30 vs 19 → 只修 __pycache__ 后仍 18 vs 13 ← 剩的正是 .pytest_cache）。
+        ∴ 本用例遍历整个 LOCAL_TOOL_CACHES，**不是只测当初被点穿的那一个**。
         两个模式都得干净：非 full 是消费仓路径，full 是 `--dev` dogfood 路径。"""
+        # 🔴 造垃圾与断言一律用**字面清单**驱动，MUST NOT 遍历 init_mod.LOCAL_TOOL_CACHES：
+        # 那样 fixture 和断言由同一个常量驱动 ⇒ 把常量清空，循环体不执行、既不造垃圾也不断言
+        # ⇒ 用例恒真（实测：清空 LOCAL_TOOL_CACHES 后仍绿）。
+        dir_junk = ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache")
+        file_junk = (".DS_Store",)
         source = tmp_path / "bundle"
-        (source / "tools" / "__pycache__").mkdir(parents=True)
-        (source / "tools" / "__pycache__" / "anchor_lint.cpython-312.pyc").write_bytes(b"\x00compiled")
-        (source / "tools" / "nested" / "__pycache__").mkdir(parents=True)
-        (source / "tools" / "nested" / "__pycache__" / "x.cpython-312.pyc").write_bytes(b"\x00compiled")
+        (source / "tools").mkdir(parents=True)
         (source / "tools" / "anchor_lint.py").write_text("# real asset\n", encoding="utf-8")
+        for name in dir_junk:
+            (source / "tools" / name).mkdir()
+            (source / "tools" / name / "junk").write_bytes(b"\x00junk")
+            (source / "tools" / "nested" / name).mkdir(parents=True)   # 嵌一层深的也得挡
+            (source / "tools" / "nested" / name / "junk").write_bytes(b"\x00junk")
+        for name in file_junk:
+            (source / "tools" / name).write_bytes(b"\x00junk")
         monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(source))
 
         dst, _ = init_mod.copy_bundle(str(tmp_path / "target"), full=full, include_schema=False)
 
         deployed = Path(dst)
-        assert (deployed / "tools" / "anchor_lint.py").is_file()      # 真资产照铺
-        assert list(deployed.rglob("__pycache__")) == []              # 编译产物零残留
+        assert (deployed / "tools" / "anchor_lint.py").is_file()       # 真资产照铺
+        for name in dir_junk + file_junk:
+            assert list(deployed.rglob(name)) == [], f"{name} 被铺进了部署侧"
         assert list(deployed.rglob("*.pyc")) == []
+        # 拒绝清单只许长不许缩：本用例的字面清单 MUST 全在常量里，否则等于偷偷退役了一格
+        assert set(dir_junk) | set(file_junk) <= set(init_mod.LOCAL_TOOL_CACHES)
 
 
 class TestPinConsumerUpdateInvariant:

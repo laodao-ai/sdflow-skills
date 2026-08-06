@@ -209,6 +209,23 @@ def read_snippet(name):
 
 # ── bundle 铺设 ──────────────────────────────────────────────
 
+# 本机跑工具留下的残渣，MUST NOT 当 bundle 资产铺进项目仓。
+#
+# 成因（不是"跨机器污染"——.pyc/.pytest_cache 都不入库，git pull 拉不到）：canonical
+# `~/.sdflow/workflow` 指向运行 checkout 的 `assets/workflow`，那里的 `tools/*.py` 一被执行/
+# 被 pytest 收集，就在**资产侧**堆出这些目录；copytree 再把它们搬进项目仓 `openspec/workflow/`。
+#
+# 危害很小（都被 .gitignore 挡在库外，.pyc 还带解释器版本 tag、不匹配不会被误用），但有一个
+# **可观测症状**：`update` 报告的"铺 bundle N 文件"随「从哪个 checkout 跑」漂移
+# （实测 30 vs 19 → 修 __pycache__ 后仍 18 vs 13 ← 剩的正是 .pytest_cache）。
+#
+# 🔴 这是**拒绝清单**，不是穷举证明：新工具随时会发明新的缓存目录名，漏一个不会 fail-closed，
+# 只会让上面那个计数重新开始漂。**发现计数又不稳，先来这里加名字，别再去逐个现场补。**
+LOCAL_TOOL_CACHES = frozenset({
+    "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".DS_Store",
+})
+
+
 def copy_bundle(root, full=False, include_schema=True):
     """R-MRF-1 分层部署：默认只铺 tools/ 子树（规则经全局 canonical 解析，不复制进消费仓）。
     full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用；同样
@@ -224,21 +241,10 @@ def copy_bundle(root, full=False, include_schema=True):
     脚本本体仍随 tools/ 正常部署。full 模式也要清除既有遗留副本，保证重复执行收敛。"""
     def ignore_tools_tests(source, _names):
         """仅忽略 bundle tools/ 直属 tests；其他运行时 tests 必须随完整 bundle 铺设。
-
-        `__pycache__` 一律不铺：它是**本机执行过**的副产物，不是 bundle 资产。
-
-        .pyc 不入库 ⇒ **跨机器传不过去**（git pull 拉不到，别指望"别人机器的字节码"这种说法）。
-        但**同机**照样发生：canonical `~/.sdflow/workflow` 指向运行 checkout 的 assets/workflow，
-        那里的 tools/*.py 一被执行就在**资产侧**堆出 .pyc（实测运行 checkout 里有一批
-        cpython-314），copytree 再把它们搬进项目仓的 openspec/workflow/tools/。
-
-        字节码本身无功能风险（.pyc 带解释器版本 tag，不匹配不会被误用），纯垃圾。实害只有一条、
-        但真咬过人：**update 报告的文件数不稳定** —— 同一次 update 从跑过 pytest 的 dev checkout
-        跑报 30 个文件、从运行 checkout 跑报 19 个，而 `.gitignore` 有 `__pycache__/` ⇒ 这个差
-        在 git 里完全不显形，只能从这行计数察觉。"""
+        另忽略 LOCAL_TOOL_CACHES（本机跑工具的残渣，不是 bundle 资产）——见其定义处。"""
         if os.path.normpath(source) == os.path.normpath(os.path.join(BUNDLE_SRC, "tools")):
-            return {"tests", "__pycache__"}
-        return {"__pycache__"}
+            return {"tests"} | LOCAL_TOOL_CACHES
+        return set(LOCAL_TOOL_CACHES)
 
     schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
     if include_schema:
