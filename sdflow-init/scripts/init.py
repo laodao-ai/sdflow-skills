@@ -223,10 +223,22 @@ def copy_bundle(root, full=False, include_schema=True):
     测试模块复制到本仓 dogfood instance，仓根 pytest 会收集两份并报 import file mismatch。
     脚本本体仍随 tools/ 正常部署。full 模式也要清除既有遗留副本，保证重复执行收敛。"""
     def ignore_tools_tests(source, _names):
-        """仅忽略 bundle tools/ 直属 tests；其他运行时 tests 必须随完整 bundle 铺设。"""
+        """仅忽略 bundle tools/ 直属 tests；其他运行时 tests 必须随完整 bundle 铺设。
+
+        `__pycache__` 一律不铺：它是**本机执行过**的副产物，不是 bundle 资产。
+
+        .pyc 不入库 ⇒ **跨机器传不过去**（git pull 拉不到，别指望"别人机器的字节码"这种说法）。
+        但**同机**照样发生：canonical `~/.sdflow/workflow` 指向运行 checkout 的 assets/workflow，
+        那里的 tools/*.py 一被执行就在**资产侧**堆出 .pyc（实测运行 checkout 里有一批
+        cpython-314），copytree 再把它们搬进项目仓的 openspec/workflow/tools/。
+
+        字节码本身无功能风险（.pyc 带解释器版本 tag，不匹配不会被误用），纯垃圾。实害只有一条、
+        但真咬过人：**update 报告的文件数不稳定** —— 同一次 update 从跑过 pytest 的 dev checkout
+        跑报 30 个文件、从运行 checkout 跑报 19 个，而 `.gitignore` 有 `__pycache__/` ⇒ 这个差
+        在 git 里完全不显形，只能从这行计数察觉。"""
         if os.path.normpath(source) == os.path.normpath(os.path.join(BUNDLE_SRC, "tools")):
-            return {"tests"}
-        return set()
+            return {"tests", "__pycache__"}
+        return {"__pycache__"}
 
     schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
     if include_schema:

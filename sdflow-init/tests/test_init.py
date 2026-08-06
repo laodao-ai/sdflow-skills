@@ -160,6 +160,30 @@ class TestBundleToolsOnly:
         assert not (workflow / "tools" / "tests").exists()
         assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
 
+    @pytest.mark.parametrize("full", [False, True])
+    def test_pycache_is_never_deployed(self, tmp_path, monkeypatch, full):
+        """`__pycache__` 是「本机执行过」的副产物，不是 bundle 资产。
+
+        .pyc 不入库 ⇒ 跨机器传不过去；但同机会：canonical `~/.sdflow/workflow` 指向运行 checkout
+        的 assets/workflow，那里的 tools/*.py 一被执行就在资产侧堆出 .pyc，copytree 再搬进项目仓。
+        实害是 **update 报告的文件数不稳定**（同一次 update 从跑过 pytest 的 dev checkout 跑报 30、
+        从运行 checkout 跑报 19），而 `.gitignore` 有 `__pycache__/` ⇒ 差值在 git 里不显形。
+        两个模式都得干净：非 full 是消费仓路径，full 是 `--dev` dogfood 路径。"""
+        source = tmp_path / "bundle"
+        (source / "tools" / "__pycache__").mkdir(parents=True)
+        (source / "tools" / "__pycache__" / "anchor_lint.cpython-312.pyc").write_bytes(b"\x00compiled")
+        (source / "tools" / "nested" / "__pycache__").mkdir(parents=True)
+        (source / "tools" / "nested" / "__pycache__" / "x.cpython-312.pyc").write_bytes(b"\x00compiled")
+        (source / "tools" / "anchor_lint.py").write_text("# real asset\n", encoding="utf-8")
+        monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(source))
+
+        dst, _ = init_mod.copy_bundle(str(tmp_path / "target"), full=full, include_schema=False)
+
+        deployed = Path(dst)
+        assert (deployed / "tools" / "anchor_lint.py").is_file()      # 真资产照铺
+        assert list(deployed.rglob("__pycache__")) == []              # 编译产物零残留
+        assert list(deployed.rglob("*.pyc")) == []
+
 
 class TestPinConsumerUpdateInvariant:
     """T69：pin 消费仓跑 update（非 dev）→ 规则文件不被触碰、仅 tools+契约刷新。"""

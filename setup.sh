@@ -157,16 +157,27 @@ cleanup_orphans() {
     # Marker file (Windows copies)
     is_our_marker_copy "$entry" && is_ours=1
 
-    # Ours, but the link now dangles (source skill removed) → clean up.
-    # Use a resolve check (-e follows the symlink) so VALID links are kept,
-    # including nested sub-skills like config-setup/config-plugins whose source
-    # is not a top-level $REPO_DIR/<name> dir.
+    # Ours, but the source is no longer an installable skill → clean up.
+    # Two ways that happens; both must be caught, and the criterion MUST mirror
+    # install_into's ("dir contains SKILL.md") — an asymmetric criterion leaves a
+    # gap: a source dir that still EXISTS but is no longer a skill gets neither
+    # installed nor cleaned, so the link lives in the global namespace forever.
+    # (Real case: sdflow-buglist/sdflow-todolist merged into sdflow-issues; their
+    # SKILL.md went away but a leftover scripts/__pycache__/*.pyc kept the dir
+    # alive, so a `-d` check said "source still there" and the links survived.)
+    # Probe SKILL.md THROUGH the link, not at $REPO_DIR/<name>, so valid links
+    # whose source is not a top-level dir (nested sub-skills like
+    # config-setup/config-plugins) are still kept.
     if [ "$is_ours" -eq 1 ]; then
       local gone=0
       if [ -L "$dest/$entry_name" ]; then
-        [ ! -e "$dest/$entry_name" ] && gone=1          # dangling symlink
-      elif [ ! -d "$REPO_DIR/$entry_name" ]; then
-        gone=1                                          # Windows marker copy, source gone
+        if [ ! -e "$dest/$entry_name" ]; then
+          gone=1                                        # dangling symlink
+        elif [ ! -f "$dest/$entry_name/SKILL.md" ]; then
+          gone=1                                        # resolves, but no longer a skill
+        fi
+      elif [ ! -f "$REPO_DIR/$entry_name/SKILL.md" ]; then
+        gone=1                                          # Windows marker copy, source gone / no longer a skill
       fi
       if [ "$gone" -eq 1 ]; then
         if ! rm -rf "$dest/$entry_name" 2>/dev/null; then

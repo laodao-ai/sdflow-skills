@@ -104,6 +104,75 @@ class TestCleanupOrphansDangling:
         assert (skills / "alien-skill").is_symlink()               # 非自属不动（红线）
 
 
+def _farm_repo(tmp_path, extra_dirs):
+    """可写的 REPO_DIR 替身：顶层条目全部软链回真仓，另加 `extra_dirs` 指定的真目录。
+    需要它是因为 REPO_DIR 由 `dirname $0` 决定 —— 本用例要造「源目录还在、但已不是 skill」
+    这个形态，不造替身就得往真仓里塞目录。"""
+    farm = tmp_path / "farm-repo"
+    farm.mkdir()
+    for entry in REPO.iterdir():
+        os.symlink(str(entry), str(farm / entry.name))
+    for name, files in extra_dirs.items():
+        for rel, content in files.items():
+            p = farm / name / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(content)
+    return farm
+
+
+class TestCleanupOrphansNonSkillSource:
+    """清理判据 MUST 与安装判据同源（「目录含 SKILL.md」）。
+
+    判据不对称的后果：安装看 SKILL.md、清理看目录是否存在 ⇒ **源还在、但已不是 skill** 的
+    目录既不被安装、也不被清理，软链永久留在全局名册里。实例：sdflow-buglist /
+    sdflow-todolist 三合一进 sdflow-issues 后 SKILL.md 已删，但残留的
+    `scripts/__pycache__/*.pyc` 把目录撑着（git pull 删不掉未跟踪文件）⇒ `-d` 判「源还在」
+    ⇒ 两条链在 ~/.claude/skills 与 ~/.codex/skills 各活一条。
+
+    定点删门法：把 `cleanup_orphans` 里的 `[ ! -f "$dest/$entry_name/SKILL.md" ]` 分支删掉
+    ⇒ 本用例必须红。"""
+
+    def test_link_to_existing_but_no_longer_skill_source_is_cleaned(self, tmp_path):
+        farm = _farm_repo(tmp_path, {
+            # 只剩 scripts/__pycache__，无 SKILL.md —— 正是 buglist/todolist 的现场形态
+            "sdflow-legacylist": {"scripts/__pycache__/legacylist.cpython-314.pyc": b"\x00compiled"},
+        })
+        home = tmp_path / "home"
+        skills = home / ".claude" / "skills"
+        skills.mkdir(parents=True)
+        (skills / "sdflow-legacylist").symlink_to(farm / "sdflow-legacylist")
+        env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+
+        r = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm),
+                           env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert (farm / "sdflow-legacylist").is_dir(), "源目录 MUST NOT 被碰（只清链，不删源）"
+        # lexists：不跟随软链 —— 链被清才算过，链还在（哪怕悬空）就算没清。
+        # 别用 Path.exists(follow_symlinks=False)：那是 3.12+ 的签名，本机系统 python 是 3.9。
+        assert not os.path.lexists(str(skills / "sdflow-legacylist")), \
+            "源已不是 skill（无 SKILL.md）⇒ 自属链 MUST 被清"
+        assert "sdflow-legacylist" in (r.stdout + r.stderr)        # cleaned orphans 榜上有名
+
+    def test_valid_skill_link_is_kept(self, tmp_path):
+        """反向：源仍是 skill（有 SKILL.md）⇒ 一条都不许清 —— 防新判据把活链误伤。"""
+        farm = _farm_repo(tmp_path, {})
+        home = tmp_path / "home"
+        skills = home / ".claude" / "skills"
+        skills.mkdir(parents=True)
+        env = dict(os.environ, HOME=str(home), SDFLOW_HOME=str(home / ".sdflow"))
+
+        r = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm),
+                           env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert (skills / "sdflow-init" / "SKILL.md").is_file()     # 真 skill 铺好了
+
+        again = subprocess.run([bash_executable(), bash_path(farm / "setup.sh")], cwd=str(farm),
+                               env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert again.returncode == 0, again.stdout + again.stderr
+        assert (skills / "sdflow-init").is_symlink()               # 重跑不自伤
+
+
 class TestRenameEndToEnd:
     def test_rename_scenario_old_links_cleaned_new_links_made(self, tmp_path):
         """跨改名端到端：预置 9 个指向本仓已不存在旧目录的自属链 → setup → 旧清新立。"""
