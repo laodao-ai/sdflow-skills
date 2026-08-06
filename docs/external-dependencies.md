@@ -73,13 +73,15 @@
 
 | Skill | 用途 | 调用处 | 缺失时行为 |
 |-------|------|--------|-----------|
-| **gstack `/review`** | 代码审的 scope-drift + 完成度审计（Step1） | `sdflow-code-review/SKILL.md:206-209` | 显式降级为子代理模拟 + 标注 `mode="simulated"` |
 | **gstack `/autoplan`** | 设计审的广审层（CEO/Eng/Design 三连） | `sdflow-spec-review/SKILL.md`、`sdflow-roadmap/SKILL.md:460` | 显式提示 + 留「未审待恢复」痕迹 |
 | **`/plan-eng-review`** | roadmap 的技术评审（默认档） | `sdflow-roadmap/SKILL.md:459` | 同上 |
 
 > `/grill-with-docs` 已被 `sdflow-spec` 内置取代（`sdflow-spec/SKILL.md:10`），不再是外部依赖。
 > `/grilling`、`/domain-modeling`（原 wayfinder 票内依赖）已随 `refactor-roadmap-internalize-deps`
 > 内化进 `sdflow-roadmap` 自身的三相位结构，不再是外部依赖。
+> `gstack /review`（代码审 Step1 的 scope-drift + 完成度审计）已随 `absorb-gstack-review` change
+> 内化为 `sdflow-code-review` 自持 fresh 子代理，不再是外部依赖；`/review` 说明文档保留在
+> [`docs/workflow-skills/gstack-review.md`](./workflow-skills/gstack-review.md) 作非运行时依赖的第三方 skill 参考。
 >
 > 所有三方 skill 都设计了显式降级路径——缺失时报告但不中断工作流。
 
@@ -128,7 +130,7 @@ Codex 宿主额外要求：
 sdflow-ship（阶段三编排器）
 ├── sdflow-implement（实现管线）
 ├── sdflow-code-review（代码审）
-│   └── gstack /review（外部，Step1 并入）
+│   └── Step1 自持 scope 审计（fresh 子代理，无外部依赖）
 └── sdflow-done（闭环）
 
 sdflow-spec-review（设计审编排器）

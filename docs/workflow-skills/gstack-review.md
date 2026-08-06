@@ -1,7 +1,8 @@
 # 外部 skill 展开 · gstack `/review`
 
-> 属 [工作流总览](../workflow-overview.md) 的黑盒展开。`/review` 是**阶段三代码审**的 Step1「scope-drift + 完成度」载体——
-> 由 `sdflow-code-review` 编排器**原生执行**，结论纳入其合并池。
+> **定位：非运行时依赖的第三方 skill 参考**——`sdflow-code-review` 编排器的 Step1（scope-drift + 完成度）
+> 已改为自持 fresh 子代理实现（见 [sdflow-code-review 详解](./sdflow-code-review.md)），不再原生调用本 skill。
+> 本文保留作为 `/review` 自身设计的参考资料。
 >
 > **一句话**：落地前（pre-landing）**本地 diff 结构性审查 + 就地修复（fix-first）**——专抓测试抓不到、prevention 焊不住的结构性缺陷。
 
@@ -16,7 +17,7 @@
 
 | 维度 | 内容 |
 |---|---|
-| 谁调它 | `sdflow-code-review` 第一步（阶段三 · 代码审），原生执行 |
+| 谁调它 | **无**（本仓当前无 skill 运行时调用它；`sdflow-code-review` 第一步已改为自持子代理，见上方定位说明） |
 | 进（输入） | 无 args schema；调用方 prompt 即「任务」。实际消费 `git diff $(git merge-base origin/<base> HEAD)`（含已提交 + 未提交） |
 | 意图来源 | 多路兜底：conversation plan → `~/.gstack`/`~/.claude/plans` 等搜索 → commit messages → `TODOS.md` → `gh pr view` |
 | 出（产物） | findings 行 `[SEVERITY] (confidence: N/10) file:line — desc`；报告头 `Pre-Landing Review: N issues`；就地 AUTO-FIX / ASK；写 `gstack-review-log`（供 `/ship` 识别本分支已过 Eng Review） |
@@ -85,7 +86,10 @@ flowchart TD
 
 ---
 
-## 5. ★ 本 workflow 注入的规则/prompt 如何影响 /review —— 建议式 vs 强制
+## 5. ★ 本 workflow 曾经的注入设计（历史，已不适用）—— 建议式 vs 强制
+
+> 本节记录 `sdflow-code-review` **原生调用** `/review` 时代的注入关系，**已随 Step1 自持化失效**——
+> 现无 skill 向 `/review` 注入任何规则/prompt。保留供理解第三方 skill 的注入面设计。
 
 **统一判据**见[总览 §注入的强制性](../workflow-overview.md#8-外部-skill-的注入强制性建议式-vs-强制统一规律)。`/review` **无 args schema**（`openai.yaml` 只有 `default_prompt` + `allow_implicit_invocation`），调用方 prompt 就是「任务本体」→ 一切注入靠模型的一般指令遵循，**无结构化强制**；而 skill 自身用 MUST/STOP 锁死的硬不变量外部难覆盖。
 
@@ -103,5 +107,7 @@ flowchart TD
 ## 6. 小结
 
 - 本机 `/review` 实为**单模型单遍 + fix-first**；跨模型/specialist 在本 checkout 未激活。
-- 它原生就做 **scope-drift + 计划完成度审计**，正是本 workflow 要它出的；但默认不阻断。
-- 我们对它的注入基本建议式；「进合并池 + 独立主审兜底」由**外层 sdflow-code-review 编排**实现，不靠改 /review 内部。
+- 它原生就做 **scope-drift + 计划完成度审计**——`sdflow-code-review` 的 Step1 曾借道它执行，`absorb-gstack-review`
+  change 起改为自持 fresh 子代理实现，本 skill 不再是运行时依赖。
+- 本文作为**非运行时依赖的第三方 skill 参考**保留，记录 `/review` 自身的设计（结构性审查维度、置信校准、
+  fix-first 结论形态），供未来对照或复用其思路时查阅。

@@ -30,10 +30,10 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 
 | 维度 | 生成期已做? | 事后 review 重复? |
 |---|---|---|
-| spec 合规（建的=要的） | ✅ task-reviewer Part 1 | gstack/review **部分重复** |
+| spec 合规（建的=要的） | ✅ task-reviewer Part 1 | Step1 自持 scope 审计 **部分重复** |
 | 通用代码质量（CR-01~09 base） | ✅ 三层都查 | /sdflow-code-review base **大幅重复** |
 | **领域规则（CR-EMB/ML307C/ESP32/GO）** | ❌ 通用 rubric 盲区 | **真残差** ← 唯一不可替代 |
-| scope-drift / 计划完成度 | ⚠️ 部分 | gstack/review 补全 |
+| scope-drift / 计划完成度 | ⚠️ 部分 | Step1 自持 scope 审计补全 |
 | 全冷独立（脱离 controller） | ❌ 终审仍 controller 裁决 | /sdflow-code-review 补，但边际 |
 | PR 级 DB/API/Auth 改动 | ❌ | 官方 code-review |
 
@@ -102,8 +102,8 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
   shift-left 消不掉的价值（循环内 reviewer 冷、但 controller 热；事后 sdflow-code-review 完全脱 controller）。
 - **注入点 B 与 sdflow-code-review 并存不是重复**（见 workflow.md §三.6 / design §7.2）：前者循环内即时闭环、便宜早修；
   后者事后独立兜底网。机制/职责不同，**别把任一个优化掉**。
-- shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 sdflow-code-review 本身。sdflow-code-review 编排器还并入
-  `gstack/review`（scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤，合成一份 code-review-report.md。
+- shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 sdflow-code-review 本身。sdflow-code-review 编排器
+  Step1 自持 scope 审计（scope-drift + 完成度），Step2 并入领域镜 + 对抗镜 + 历史镜 + 置信过滤，合成一份 code-review-report.md。
 - **无 `/clear`（G1）**：独立性由评审 fan-out 的 fresh 子代理给，不由 `/clear` 给。
   - 🔴 **本条的射程仅限「评审独立性」，MUST NOT 据此推出「全流程不用 `/clear`」**——`/clear` 还有本条谈不到的其它作用（见下面两处交界例外的理由）。
   - 🔴 **具名例外（两处，均在阶段交界：一处是 `/sdflow-spec` 的出口，一处是 `/sdflow-ship` 的入口）**：
@@ -128,7 +128,7 @@ TG 驱动的是**领域镜的选取 + outside voice 是否走 cross-model**（�
 
 - [ ] design 的领域约束是否确实进了 plan 的 **Global Constraints**（注入点 A）？
 - [ ] 终审 dispatch 是否把 rubric 增强为 **通用模板 + 命中栈 code-checklists/domains**（注入点 B）？
-- [ ] sdflow-code-review 是否**每次全跑**（P3c 独立冷强制主审，非高风险才跑）？并入 `gstack/review` 的 scope-drift + 完成度？
+- [ ] sdflow-code-review 是否**每次全跑**（P3c 独立冷强制主审，非高风险才跑）？Step1 自持 scope 审计的 scope-drift + 完成度？
 - [ ] 是否**没有**在**阶段内部**依赖 `/clear`（G1：fresh 子代理即独立性；子 agent 调度中禁清）？
       **例外 = 两处阶段交界**：① `/sdflow-spec` 的阶段一→阶段二那一次（理由 = cache 按模型隔离 + 产/审错档）；
       ② 设计门→阶段三那一次（理由 = 盘面纪律 + 产物自足性检验 + 去作者偏置）。两处**都不是**「主审需冷视角」。

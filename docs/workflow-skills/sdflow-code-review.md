@@ -3,8 +3,8 @@
 > 属 [工作流总览](../workflow-overview.md) 的展开。这是**阶段三代码审的主审编排器**（第 8 步）——
 > **每次全跑 · 独立冷视角 · 强制主审**，出**一份** `code-review-report.md`。
 >
-> **一句话**：Step1 [gstack/review](./gstack-review.md)（scope-drift + 完成度）→ Step2 并行多镜（领域/对抗/历史，前置 trivial_shape 机判豁免）→
-> Step3 置信过滤 + 对抗裁决 → Step4 自动修/裁/defer → Step5 一份报告。
+> **一句话**：Step1 自持 scope 审计（fresh 中档子代理，以本 change 四件套为确定性意图源做 scope-drift + 完成度）→
+> Step2 并行多镜（领域/对抗/历史，前置 trivial_shape 机判豁免）→ Step3 置信过滤 + 对抗裁决 → Step4 自动修/裁/defer → Step5 一份报告。
 
 > **定位（P3c，须知情）**：本 skill **不是**「高风险才跑的边际残差」——那是旧 `quality-layering §五` 的结论，**已被否决**。
 > 它是**每次全跑的独立强制主审**，实测能抓生成循环内被 controller 说服放过的真问题。
@@ -47,7 +47,7 @@ flowchart LR
 ```mermaid
 flowchart TD
     S0["Step0 · 确认 + diff base + resolve-workflow 读 code-checklists（CR-01~09）"]
-    S1["Step1 · gstack/review 原生执行<br/>scope-drift + 完成度缺口（mode 锚）"]
+    S1["Step1 · 自持 scope 审计（fresh 中档子代理）<br/>scope-drift + 完成度缺口（mode 锚）"]
     S2["Step2 · 前置 trivial_shape.py 机判（EXEMPT=免 fan-out）<br/>规划镜头 + fan-out：领域镜 + 对抗镜×2~3 + 历史镜×1 + HR-TG cross-model"]
     S25["Step2.5 · code outside voice（always, 全量 diff）"]
     S3["Step3 · 置信过滤(<80滤) + 综合 + 对抗裁决<br/>outside-voice 豁免直通 · 反静默压制"]
@@ -58,7 +58,7 @@ flowchart TD
 
 | 步 | 目标 | 注意事项 |
 |---|---|---|
-| 1 | scope-drift + 完成度 | 原生执行 gstack/review，写 `mode="native\|simulated"` 锚；降级须显式日志不静默 |
+| 1 | scope-drift + 完成度 | 自持 scope 审计（fresh 中档子代理，以四件套为确定性意图源），写 `mode="subagent\|main-session"` 锚；降级（子代理不可用）须显式日志不静默 |
 | 2前 | trivial_shape 机判豁免 | fan-out 前跑 `trivial_shape.py --base "$DIFF_BASE"`：**exit 0=EXEMPT**（diff 仅无逻辑面白名单形状——代码内注释 / README·CHANGELOG·docs·VERSION 等约定文档路径 / 仅新增 `tests/`；多镜结构上零产出）→ **免本步 fan-out**，报告 Step2 段注明豁免 + 判器 JSON `reason`（Step1 scope-drift 恒跑守卫伪装逻辑）；**1=NOT_EXEMPT**（有逻辑面 / 命中行为面路径 bundle·SKILL.md·workflow.md·ship_gate.py，即便纯 markdown）/ **2=ERROR** → 保守照常 fan-out；**判器缺失/不可执行视同 NOT_EXEMPT**（不静默免）。默认开、仅机判无逻辑面才关，非「高风险才跑」 |
 | 2 | 并行多镜 | 领域镜（CR-01~09 + domains）/ 对抗镜（证明运行期爆：竞态/泄漏/错误路径）/ 历史镜（git blame + 旧 review 意见）；linter/typechecker 能抓的不进镜 |
 | 2.5 | 跨模型第二意见 | **always** 跑 code-voice（不受清单约束、不占镜位）；「10 次后按采纳率复评降采样」条款已泛化到 per-(层,镜)、判据升采纳率+独立率双列，surfacing 由 `/sdflow-retro` 机械触发，砍/降采样人决（详见 SKILL.md 第五步「反馈回路」） |
@@ -98,7 +98,7 @@ flowchart TD
 
 | 被调 | 类型 | 角色 |
 |---|---|---|
-| [`gstack/review`](./gstack-review.md) | 原生执行（Step1） | scope-drift + 完成度审计，结论进合并池 |
+| Step1 scope 审计子代理 | fresh-context 子代理（中档） | 以四件套为确定性意图源做 scope-drift + 完成度审计，结论进合并池 |
 | 领域/对抗/历史镜 | fresh-context 子代理 | 一条消息全派出，返回结构化 findings，禁 AskUserQuestion |
 | `trivial_shape.py` | 确定性脚本（Step2 前置） | 无逻辑面白名单机判豁免：`--base "$DIFF_BASE"`，**0=EXEMPT** 免 fan-out / **1=NOT_EXEMPT** 照跑 / **2=ERROR** 保守照跑；判器缺失视同 NOT_EXEMPT |
 | `outside-voice.sh` | 确定性脚本 | code-voice（always）+ HR-TG（命中）跨模型；退出码契约同 spec-review |
@@ -128,7 +128,7 @@ flowchart TD
 | **outside-voice.sh 调用契约** | **强制（退出码脚本）** | preflight/exec/exit 码；豁免规则 runner 标签驱动分桶 |
 | **buglist FIXED 门禁 / issues reindex 判据** | **强制（脚本）** | defer 落档走 `buglist.py`（FIXED 必带根因+证据）、批次判据走 `issues.py` |
 | checkpoint 提交 | **强制（脚本）** | `checkpoint-commit.sh impl-review` |
-| 「gstack/review 原生执行 + 含 scope+完成度」 | **半强制** | mode 锚 + 主 session 遵从；scope+完成度本是 gstack/review 内建 |
+| 「Step1 自持 scope 审计 + 含 scope+完成度」 | **半强制** | mode 锚（`subagent\|main-session`）+ 主 session 遵从；scope+完成度审计协议内建于 SKILL.md 第一步 |
 | **每次全跑（P3c）非高风险才跑** | **建议式（架构纪律）** | 无脚本强制「这次必须跑」；靠 workflow 排序 + `ship_gate` 的 `RUN_CODE_REVIEW` 判定驱动 |
 | **置信 <80 过滤 / 对抗裁决 / T10 三级** | **建议式** | 强档主 session 判断；打分可下放弱档但无机械校验阈值 |
 | **反静默压制 / 裁决分桶** | **建议式** | 靠主 session 遵从铁律；分桶计数无脚本强制 |
@@ -140,7 +140,7 @@ flowchart TD
 
 ## 7. 小结
 
-- 结构 = gstack/review + 多镜（前置 trivial_shape 机判豁免）+ code-voice → 置信过滤 + 对抗裁决 → 自动修/裁/defer → 一份报告。
+- 结构 = Step1 自持 scope 审计 + 多镜（前置 trivial_shape 机判豁免）+ code-voice → 置信过滤 + 对抗裁决 → 自动修/裁/defer → 一份报告。
 - **机械兜底**：anchor_lint 锚行自检（四类 v1 锚）、frontmatter `code_review` 机判锚（gate 读）、trivial_shape 豁免判器、lens_metric_emit（exit 0 才落）、outside-voice.sh、buglist/issues 脚本、checkpoint。
 - **自觉纪律**：每次全跑、置信过滤、对抗裁决、T10、反静默压制——靠强档主 session；「每次全跑」的强制性由 ship_gate 判定兜底。
 

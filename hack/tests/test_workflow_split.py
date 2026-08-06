@@ -46,7 +46,7 @@ def test_prompts_are_not_inlined_back_into_the_table():
     w = G.WORKFLOW.read_text(encoding="utf-8")
     fingerprints = {
         "step6-writing-plans": "Global Constraints 不进 brief",
-        "step8-code-review": "并入 gstack/review 的 scope-drift",
+        "step8-code-review": "Step1 自持 scope 审计的 scope-drift",
     }
     for name, fp in fingerprints.items():
         assert fp in (G.PROMPTS / f"{name}.md").read_text(encoding="utf-8"), \
