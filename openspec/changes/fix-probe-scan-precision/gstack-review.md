@@ -1,280 +1,487 @@
 <!-- sdflow:step1-broad-review v1 mode="native" -->
 
-# Step1 广审报告 · fix-probe-scan-precision
+# autoplan 广审 · fix-probe-scan-precision
 
-**执行方式**：`mode="native"` —— autoplan 经 Skill 机制原生执行于主 session（其 SKILL.md 指令直接进主
-session 执行，未派子代理转述模拟）。
-**native 声明的侧信道佐证**：autoplan 的 preamble bash 真跑并回显 `BRANCH: feat/fix-probe-scan-precision` /
-`REPO_MODE: solo` / `SLUG: laodao-ai-sdflow-skills`；Phase 0 restore point 真落盘
-`~/.gstack/projects/laodao-ai-sdflow-skills/feat-fix-probe-scan-precision-autoplan-restore-20260806-180448.md`
-（500 行）；Phase 0.5 codex preflight 真跑并回显 `codex-cli 0.146.1` / `CODEX_AVAILABLE=true`。
-
-## 相位覆盖与如实降级
-
-| autoplan 相位 | 本轮是否跑 | 说明 |
-|---|---|---|
-| Phase 0 intake + restore point | ✅ 跑了 | restore point 落盘（上方路径） |
-| Phase 0.5 codex preflight | ✅ 跑了 | `CODEX_AVAILABLE=true`，codex-cli 0.146.1 |
-| Phase 1 CEO（codex voice） | ✅ 跑了 | 9 条 finding，见下 |
-| Phase 1 CEO（Claude 独立子代理） | ✅ 跑了 | 见下 |
-| Phase 2 Design | ⏭️ 跳过 | UI scope 未命中。grep 到的 `form` 等命中经逐条核验为假阳（`--format=%H` 里的 `format`），本 change 零 UI 面 |
-| Phase 3 Eng（codex voice） | ✅ 跑了 | 见下 |
-| Phase 3 Eng（Claude 独立子代理） | ❌ **未跑（如实降级）** | 见下方「本轮明示偏离」 |
-| Phase 3.5 DX（双声） | ❌ **未跑（如实降级）** | 见下方「本轮明示偏离」 |
-
-## 🔴 本轮明示偏离 autoplan 标准流程（两条，均非静默）
-
-**偏离①：Phase 1/3 的两把声音改为并发起跑，未按 autoplan 的「先子代理、后 codex，均前台」串行。**
-理由：autoplan 要求两把声音串行的落点是「both must complete before building the consensus table」，
-而 Claude 子代理被明确要求 **NO prior-phase context**（设计上就独立于 codex 那把），
-∴ 并发不破坏它要保的性质，只省墙钟。已实测本机主 session 的后台任务不会被轮次终结回收。
-**代价**：无（consensus table 仍在两把都回来之后才建）。
-
-**偏离②：Phase 3 的 Claude 子代理与整个 Phase 3.5（DX 双声）未跑。**
-理由（④ 简化 + 止损）：CEO 相位已产出 **2 条 critical + 4 条 high**，且每一条都经主 session
-**独立读码复核确认**（非采信 voice 自述），设计已确定需要返工；在一份即将返工的设计上再加两对声音，
-边际价值低于其成本。
-**代价（如实登记）**：DX 镜的「报错文案是否 actionable」这一维度未被独立跑过——
-但该维度已由 F5（不等分支文案指错方向）从 CEO/Eng 侧覆盖到；
-Eng 侧的 Claude 独立视角缺失，其覆盖面由 codex Eng 声 + 接地镜 + Step2 的对抗镜替代。
-**⚠️ 本报告 MUST NOT 被读作「autoplan 全相位已跑」。** 设计返工后若需要，这两处可单独补跑。
+> **执行方式（native 佐证）**：本轮 autoplan 由主 session 经 Skill 机制**原生执行**（其 SKILL.md 指令直接进主
+> session，未派子代理转述模拟）。侧信道佐证：preamble 实跑（`BRANCH: feat/fix-probe-scan-precision`、
+> `REPO_MODE: solo`、`SLUG=laodao-ai-sdflow-skills`）、restore point 实落
+> `~/.gstack/projects/laodao-ai-sdflow-skills/feat-fix-probe-scan-precision-autoplan-restore-20260806-232404.md`（627 行）、
+> 四次 `codex exec` 真实调用（CEO/eng/DX 三次 + 探针）与三次 Agent 派发均有运行痕迹。
+>
+> **G2 适配**：autoplan 的两处人类门（premise 确认 · 最终批准）按 `sdflow-spec-review` 的 G2/C5 不弹窗，
+> 连同全部自动决策登记进本文「决策登记」节与 `spec-review-report.md` 的决策登记区，人在设计 HARD-GATE 一次拍板。
 
 ---
 
-## CODEX SAYS（CEO — strategy challenge）
+## Phase 0 · Intake
 
-**runner**：codex / gpt-5.6-sol · exit 0 · 108,743 tokens
-**结论原文**：「当前计划不应批准。它没有可靠探测目标 skew，反而会同时制造假绿和高频误停。」
+**评审对象**：`openspec/changes/fix-probe-scan-precision/` 四件套 + `decision-memo.md`（305 行，D1–D16 / C1–C18）。
 
-9 条 finding（原文摘要，主 session 复核结论见括号）：
+**盘面新鲜度**：四件套 mtime 23:16（commit `0f8b0a3` 相位 C 重写），存量 `spec-review-report.md` mtime 18:48 —— **早于重写**，
+故本轮为对**重写后盘面**的重新评审，不复用上一轮结论。
 
-1. **[critical] 全局版本记录的不是「当前 SKILL 所期待的版本」** —— `~/.sdflow/bundle-version` 只在
-   `setup.sh` 时更新，SKILL 经 symlink 在 `git pull` 后立即变化 ⇒「pull 后、setup 前」窗口两侧旧版本
-   仍相等 ⇒ **假绿**。证据 `design.md:71` vs `setup.sh:163`/`setup.sh:503`。
-   （**主 session 复核：确认成立**，见下方 F1。）
-2. **[critical] 判据比较的不是本轮真正执行的 tools** —— `resolve-workflow.sh` 对非 pin 消费仓解析到
-   全局 canonical，实际执行的是全局 tools；设计却无条件读消费仓 `.bundle-version`。
-   证据 `resolve-workflow.sh:37/53`、`design.md:87`。（**主 session 复核：确认成立**，见 F2。）
-3. **[high] 「整个 bundle 的 SHA」被写给一个只复制部分 bundle 的产物** —— 版本取整个
-   `assets/workflow/`，非 full 模式只拷 `tools/` + contract + guide。证据 `design.md:56`、
-   `init.py:229/260-278`。（**确认成立**，见 F3。）
-4. **[high] Commit SHA 不证明内容相同，更不证明能力兼容** —— dirty 假绿 / rebase 假红 /
-   `unknown==unknown` 保护消失。（**部分成立**：dirty 与 `unknown` 两项 ADR 已显式接受并登记；
-   「新 SKILL 忘实现工具能力」属单提交内自洽性 bug，非 skew 探测应负责的面 ⇒ 主 session 降级为 medium，
-   见 X1。）
-5. **[high] 误报率高到足以训练出「无脑 update」肌肉记忆** —— codex 实测近 30 天 33/97（34%）硬停中
-   `update` 不改变任何既有部署文件。（**确认成立且被独立复现**：主 session 另一口径实测近 200 提交
-   19 个动 bundle、其中 10 个不动 `tools/` ⇒ 约 53% 属纯仪式停。见 F3。）
-6. **[high] 10 倍收益的「消灭双链」方案根本没进候选集** —— 且 `adr/0003` 当初保留消费仓 tools 的
-   承重理由是 HTML viewer/server 路径，而同一 ADR 顶部已声明该 viewer 整体移除。
-   （**确认成立，且这是本轮最重的一条**，见 Q1。）
-7. **[medium] 「全文件指纹」被草率否掉** —— ADR 以 O(n) 为由砍掉，但 bundle 仅 64 个非测试文件
-   / ≈566 KB，对一次多代理评审可忽略。（**成立**，见 Q2。）
-8. **[high] 版本戳没有失败事务语义，会给半复制现场签绿** —— `copy_bundle()` 先 rmtree 后 copytree；
-   仓内既有 `capability-manifest` 已确立「先删、最后写」，本计划声称复用该模式却漏了最重要的事务规则。
-   证据 `init.py:261`、`setup.sh:513`。（**确认成立**，见 F4。）
-9. **[medium] 新方案仍没机械守住真正的判定逻辑** —— 判据仍是散文、复制进两个 SKILL、由 agent 自行解释；
-   测试只守写入点。证据 `design.md:120`、`tasks.md:37/74`。（**确认成立且升为 high**，见 F6。）
+**plan 摘要**：评审工具经两条更新方式不同的分发链落地（SKILL 走 symlink，`openspec/workflow/tools/` 走拷贝），
+两个评审 SKILL 各写了一段手工 skew 探测散文。本 change 不修探测器，而是**消灭被探测的对象**：
+resolver 删本地 pin 步、`copy_bundle` 停铺 tools/contract、两个 SKILL 删探测段、`ship_gate` 退役 `tools_spec` 腿、
+`--dev`/`full` 退役、本仓 `openspec/workflow/` 下删 7 个文件。
 
-**战略盲点总结（原文）**：「这个计划在给错误的系统边界加版本戳。它比较的是『上次 setup』与『上次 update』，
-不是『当前 SKILL』与『本轮实际执行工具』。」
+**scope 检测**：
+- **UI scope：无**。`grep -oiE "component|screen|form|button|modal|layout|dashboard|sidebar|nav|dialog"` 命中全部落在
+  评审产物（`gstack-review.md`/`spec-review-report.md`/`decision-memo.md`）里的中文词英文子串，四件套本体零命中 ⇒ **Phase 2 跳过**。
+- **DX scope：有**。开发者工具链（SKILL.md / CLI / agent / 升级路径 / 错误文案）55 处命中 ⇒ **Phase 3.5 执行**。
 
-## CLAUDE SUBAGENT（CEO — strategic independence）
+**Codex preflight**：`codex-cli 0.146.1`、auth OK ⇒ 三个阶段双声齐全，无降级。
 
-**runner**：claude / sonnet 档 · fresh context · 无前序相位 context（独立性设计使然）· 27 次工具调用
+**基线事实**：`/usr/bin/python3 -m pytest` = **2469 passed, 10 skipped**（全绿，296s）；
+`openspec validate fix-probe-scan-precision --strict --type change` = valid。
 
-5 条 finding + scope 结论：
+---
 
-1. **[critical] 新判据自身犯了它要根治的那种「精度错误」——版本 SHA 的 scope 比实际可漂移集合更宽。**
-   非 full 分支只拷 `tools/` + `lens-metric-contract.md` + `WORKFLOW-GUIDE.md`；而版本取整个
-   `assets/workflow/`。**独立实测**：`git log -- assets/workflow/` = 129 个提交，
-   其中只碰"会被拷进消费仓那部分"的 = 84 ⇒ **35%（45/129）的版本变更只碰从不拷贝的规则文件**。
-   「`design.md:60-62` 已用同一手法否决了整仓 HEAD，却没把同一逻辑推到底——bundle 目录本身
-   也不是最小可漂移集合」。修法零成本：同一条 `git log` 换 pathspec。
-2. **[high] ADR 砍候选③（`skew_probe.sh`）的理由张冠李戴** —— 该理由描述的是"脚本里逐特性写 grep"
-   这一种**实现**，不是"脚本化"路径本身的必然结果；而「恰好 scope 到拷贝集合的 SHA」这个
-   **选中方案的更精确变体**从未作为独立候选被比较过。
-3. **[medium] 「杀掉拷贝链」这个 reframe 被正确放弃了，但暴露面从未追到底。**
-   → 见下方 **TENSION-1**（本条与 codex CEO #6 正面冲突）。
-   同时独立得出与 codex #2 相同的结论：非 pin 消费仓 `$RULES_ROOT` 恒 = 全局 canonical，
-   本地拷贝**在真正会执行的路径上从头到尾没被读过** ⇒ 实际暴露面只有两类：
-   ① 显式本地 pin 的仓；② **本仓自己的 dev-checkout dogfood 循环**
-   （`docs/sdflow-fable5/20260717.md:193` 已实锚过一次真实漂移事故）。
-   ⇒ proposal 的「每个未 update 消费仓的每轮评审」**高估了覆盖面**。
-4. **[medium] 伪阳性率比 memo 承认的更糟**：近 30 天 1083 提交中 97 个（9%）动 bundle；
-   历史 35% 的 bundle 提交只碰非拷贝文件 ⇒ 约每 33 个提交 1 次**功能上完全不必要**的硬停。
-   memo 把该代价估低了，因为没把 scope 错配计入。
-5. **[low] 「检测到不等直接自动跑 update」从未进候选集**，也没记"为何不自动修"的一行论证
-   （可能撞 `init.py:234-236` R-MRF-1 的"绝不自动改消费仓文件"纪律）。建议补一行，省得下次重新纠结。
+## 执行偏离（如实登记）
 
-**scope 校准结论**：**范围本身没问题**。把「机制替换(P0) + CLAUDE.md 订正(P1) + 关闭 T269/T270(P1)」
-折进同一 change 符合本仓既有 fold-vs-defer 纪律，**未发现拆碎或混入不相干功能**。
-「真正的问题是精度不够，不是装的东西不该在这里。」
+autoplan 规定「双声顺序前台跑、Phase 逐个完成再进下一个」。本轮为控墙钟做了一处偏离：
+**Phase 3（Eng）与 Phase 3.5（DX）的双声在 Phase 1 的 codex CEO 归位后即并发起跑**，
+而非等 Phase 1 的 Claude 镜也归位。补偿：① eng/DX 的 prompt 已注入 codex CEO 的实质发现；
+② 各阶段共识表仍在**两声均归位后**才构建；③ 跨阶段综合由主 session 在全部五镜归位后统一做。
+**未偏离的部分**：每个阶段的两个声音都真实独立跑过，无一镜是主 session 代笔。
 
-## CODEX SAYS（Eng — architecture challenge）
+---
 
-**runner**：codex / gpt-5.6-sol · exit 0 · 137,387 tokens
-**结论原文**：「这份计划不应进入实现。除已知 5 条外，仍有 2 个可导致数据破坏的边界和多条稳定假绿路径。」
+## Phase 1 · CEO Review（模式：SELECTIVE EXPANSION）
 
-9 条 finding（主 session 复核结论见括号）：
+### 0A 前提拷问
 
-1. **[critical] `copy_bundle()` 会沿消费仓软链删除仓外目录** —— `init.py:253` 直接拼
-   `dst = root/openspec/workflow` 未做 `lstat`/containment，随后 `rmtree(dst/tools)`；
-   若 `openspec/workflow/` 是软链，可删掉全局 canonical 或任意仓外目录。`--dev` 守卫只校验仓根。
-   （**成立，但属既存 bug、非本 change 引入** ⇒ 主 session 按 BASE-18 的 AND 门判 **defer + 记 bug**，
-   见 X2。）
-2. **[high] Windows 下两侧不可能稳定取得同一个 Git 版本** —— Windows 装的是 skill **副本**
-   （`setup.sh` `cp -r`），`init.py:44-46` 的 `BUNDLE_SRC` 由 `__file__` 推导 ⇒ 副本不在任何 checkout 内
-   ⇒ 消费仓侧只能得 `unknown`，而 `setup.sh` 在源码仓得 SHA ⇒ **永久 `SHA != unknown` ⇒ Windows 永久硬停**。
-   （**确认成立，且主 session 复核发现一个 codex 没点出的更坏变体**，见 F8。）
-3. **[high] 新版本戳没有安装状态机，会和 canonical、capability manifest 裂脑** —— Unix canonical
-   更新失败只记 `skipped` 并继续（`setup.sh:495-510`）⇒ 版本戳可能给**未切换成功**的 canonical
-   签发「最新」证明。（**确认成立**，见 F4 的同族，合并入 F4。）
-4. **[high] shallow clone / 无路径历史会写出空版本，两份空文件被当作同步** ——
-   `git log ... || echo unknown` 只处理**非零退出**；路径在浅历史中无可见提交时 git **成功退出但输出为空**。
-   （**主 session 本机实跑复现**：`rc=0 stdout_len=0` ⇒ 见 F9。）
-5. **[high] 拷贝并不收敛，却会发布「当前版本」证明** —— full 模式 `dirs_exist_ok=True` 不删上游已移除文件；
-   非-full 对 contract/guide 是「源存在才覆盖」，源删除时旧副本永久残留，而版本戳照写当前 SHA。
-   （**确认成立**，见 F10。）
-6. **[high] 写入方支持 `SDFLOW_HOME`，读取方却硬编码 `~/.sdflow`** —— `setup.sh:468`
-   `${SDFLOW_HOME:-$HOME/.sdflow}`、`resolve-workflow.sh:8-12` 把该变量列为正式契约
-   （「测试用它重定向，**绝不写真实 $HOME**」），而 `design.md:84-89` 固定读 `~/.sdflow/bundle-version`。
-   （**确认成立，且后果比 codex 说的更重**，见 F6。）
-7. **[high] 第 3 节测试存在恒真锚，守不住 1.1/1.3** —— 只断言「像版本」「两边相等」⇒
-   两边恒写 `unknown`、恒写整仓 HEAD、甚至恒写固定 SHA **都能全绿**。
-   并引本仓既有先例 `test_init.py:163-175`「fixture 与断言共用一个常量会恒真」。
-   **公允之处**：它同时指出 `full=True` 的位置断言**确实**能在「写到调用点」时变红（task 3.2 对该目的有效），
-   只是守不住版本来源与准确性。（**确认成立**，见 F11。）
-8. **[high] 失败注入矩阵缺失** —— 自动化只有三条成功态断言，相等/不等/缺失全留人工实测。
-   给出 10 条具体注入用例（并发双 setup / 双 update、`/dev/full` 注 ENOSPC、只读落点、
-   foreign canonical 真实目录、`EACCES`、Windows CRLF、shallow clone、空值/畸形/单侧 unknown，
-   且**每个失败态都要断言「没有可被判绿的旧戳」**）。（**确认成立**，见 F11。）
-9. **[high] Dogfood 不会永久锁死本仓，但会在最关键的开发窗口假绿** ——
-   **这条纠正了主 session 自己的一个错误假设**（我此前推演的是"本仓被永久锁在评审之外"）。
-   codex 的逐步推演结论：dev setup 后首次会硬停（本仓无 `.bundle-version`）→ 跑一次 update 即解除
-   → **此后再编辑未提交的 bundle，两个 Git SHA 都不变 ⇒ 判据假绿**，而 local pin 已陈旧。
-   「主问题不是『把自己锁在评审之外』，而是**在真正开发 bundle 的窗口无法识别陈旧 dogfood 副本**。」
-   （**确认成立，且这一条推翻了 memo 对「手改不回灌」概率的估计**，见 F5。）
+本 change 的**承重前提**只有一条：**「skew 的唯一成因是消费仓副本；删掉 local-pin 步，skew 结构上不再可能。」**
 
-## ENG DUAL VOICES — CONSENSUS TABLE
+拷问结果：**该前提在「稳态 Unix × 完整成功的 setup × 无 override」下成立，在其余状态下不成立。** 三条反例：
 
-```
-ENG DUAL VOICES — CONSENSUS TABLE:
-═══════════════════════════════════════════════════════════════
-  Dimension                            Claude  Codex  Consensus
-  ──────────────────────────────────── ─────── ─────── ─────────
-  1. Architecture sound?               N/A     NO      单声（Claude Eng 未跑，见「本轮明示偏离②」）
-  2. Test coverage sufficient?         N/A     NO      单声
-  3. Performance risks addressed?      N/A     N/A     N/A（无性能面）
-  4. Security threats covered?         N/A     NO      单声（#1 软链越界删除）
-  5. Error paths handled?               N/A     NO      单声
-  6. Deployment risk manageable?       N/A     NO      单声
-═══════════════════════════════════════════════════════════════
-⚠️ Eng 相位为**单声降级**（只有 codex 一把）。按 autoplan 口径「Missing voice = N/A，不算 CONFIRMED」，
-   本表 6 项**无一条达到 CONFIRMED**；但「单一 voice 的 critical finding 照样上报」，
-   且下方 6 条已由主 session **独立读码复核**（复核实据见「主 session 的独立读码复核」表的第二批）。
-```
+1. **部署期窗口**：SKILL 走 symlink（`git pull` 即生效），`resolve-workflow.sh` 走 `cp`（须 `bash setup.sh`，`setup.sh:536-545`）
+   ⇒ pull 与 setup 之间是「新 SKILL（已无探测）× 旧 resolver（步①还在）」。
+2. **`SDFLOW_HOME` 官方复活该组合**：delta spec 把它立为冻结规则版本的唯一路径，即「新 SKILL × 自备旧 bundle」。
+3. **部分安装是被支持的成功态**：`setup.sh` 把每一处安装失败降级为 `skipped[]` 并 exit 0（`setup.sh:98-164`、`:471-484`）。
 
-## 主 session 独立读码复核（第二批 · Eng 相位）
+**防御性反驳（Eng 镜独立核验后提出，已采纳为限定条件）**：对**非 pin 仓**（本机 2/3）窗口期行为完全不受影响——
+旧 resolver 的步②/③ 未变，而 canonical 是软链、内容已随 pull 变新。∴ 窗口的实际受害面 = **存量 pin 仓**，本机恰好 1 个。
 
-| 复核项 | 命令 / 文件 | 实测结果 |
+**可辩护的表述**（建议 proposal/design 改用）：
+> 删除 local-pin 消除的是「消费仓副本 skew」，且该消除在**完整成功的 setup 之后**生效。
+> 它不消除 `~/.sdflow/hack/` 拷贝链的失鲜，也不消除 Windows 的 SKILL 快照失鲜。
+
+### 0B 既有代码杠杆（What already exists）
+
+| 子问题 | 已存在的东西 | 本 change 是否复用 |
 |---|---|---|
-| 空版本假绿（Eng #4） | `V="$(git log -1 --format=%H -- no/such/path 2>/dev/null \|\| echo unknown)"` | **`V=[] len=0`** —— rc=0 ⇒ `\|\| echo unknown` **不触发** ⇒ 写出**空文件**；spec 只定义「缺失」与字面 `unknown` 两态，**无「存在但空/畸形」态** ⇒ 两份空文件相等 ⇒ 放行 |
-| `BUNDLE_SRC` 推导（Eng #2） | `init.py:44-46` | `SKILL_DIR = dirname(dirname(abspath(__file__)))` → `BUNDLE_SRC = SKILL_DIR/assets/workflow`（**由 `__file__` 推导，非仓根**） |
-| Unix 侧是否可行 | `git -C ~/.claude/skills/sdflow-init/assets/workflow rev-parse --show-toplevel` | → `~/.skills/sdflow-skills`，取值 `ee5b4f4…` ✅ **Unix 可行**（目录级 symlink 被 git 解析穿透） |
-| Windows 侧 | `setup.sh` Windows 分支 `cp -r "$skill_dir" "$target"` | 副本**不在任何 checkout 内** ⇒ 见下方 F8 的**加重结论** |
-| `~/.claude` 是否 git 仓（本机） | `git -C ~/.claude rev-parse --show-toplevel` | `fatal: not a git repository` ⇒ 本机无误落风险，但**这是本机偶然事实、非契约** |
-| `SDFLOW_HOME` 契约（Eng #6） | `setup.sh:468`、`resolve-workflow.sh:8-12` | 写入方走 `${SDFLOW_HOME:-...}`；resolver 契约明写「测试用它重定向，**绝不写真实 $HOME**」；而 design 固定读 `~/.sdflow` |
-| 拷贝不收敛（Eng #5） | `init.py:254-259` / `:268-278` | full 用 `dirs_exist_ok=True`；contract/guide 仅 `if os.path.isfile(src)` 才 copy ⇒ **上游删除后下游永久残留**，确认 |
-| 恒真锚先例（Eng #7） | `sdflow-init/tests/test_init.py:163-175` | 该文件确有「fixture 与断言共用常量会恒真」的既有告警先例，codex 引用属实 |
-| 命中 TG 的模版必填槽 | `design-diagrams.md:39/85`、`spec-quality-base.md` BASE-06/11 | TG-10 命中 ⇒ **MUST 有序列图**（`:39`「跨 3+ 组件协作 → **序列图**」、`:85` 自检项）；TG-12 ⇒ 流程/决策图；TG-15 ⇒ 失败模式表(BASE-06)+可观测性(BASE-11)。**design.md 三者全无**（只有一张静态依赖图） |
+| 全局规则解析 | `resolve-workflow.sh` 步②（canonical，两平台回落已实现并已测） | ✅ 复用，只删步① |
+| 半坏 canonical 拦截 | `sane()`（`:69-73`） | ⚠️ 复用但**未随职责扩张而扩面**（见 F16） |
+| 显式降级 | `exit 2` + 固定告警（`:82`） | ✅ 复用，不新增码位 |
+| 残留告警 | `stale_shadow_warnings()`（`init.py:346`）+ `maintain_scan` | ✅ 复用，只改文案 |
+| 冻结规则版本 | `SDFLOW_HOME`（`:8` 契约已明写，第 1 层测试已在用） | ⚠️ 复用但**它同时是 `setup.sh` 的安装根**（见 F4） |
+| 托管子树整删重拷 | `copy_bundle` 非-full 分支的 `rmtree(tools_dst)`（`init.py:260-265`），`spec-workflow:194` 已授权 | ❌ **未考虑**（见 F38） |
+| hack 链失鲜守卫 | `capability-manifest.json`（成员仅 3 项） | ❌ **被误当作已覆盖**（见 F1） |
 
-## 🔀 TENSION-1（两把 CEO 声音正面冲突 —— MUST NOT 静默采纳任一方）
+### 0C Dream state
 
-**冲突点**：能不能直接**删掉消费仓的 `openspec/workflow/tools/` 拷贝**，从根上消灭 skew 这一整类问题？
+```
+  CURRENT STATE                    THIS PLAN                      12-MONTH IDEAL
+  两条分发链（bundle 拷贝链 +      删掉 bundle 拷贝链；            一条链、一个版本身份：
+  hack 拷贝链），一个手工探测器    hack 链原样保留、探测器归零     SKILL/resolver/tools 同代且可机验
+  ──────────────────────────  ──▶  ────────────────────────  ──▶  ──────────────────────────
+  skew 面 2 · 探测器 1             skew 面 1 · 探测器 0            skew 面 1 · 机验 1
+```
 
-- **codex CEO #6（主张删）**：`adr/0003:8` 保留该拷贝的承重理由是 review HTML 服务器根
-  （「不落地即 404」），而 `adr/0003:3` 已声明该 viewer **整体移除**；`:18` 砍掉「连 tools 也不落地」
-  的唯一理由是「省 serve.sh 重写」——**serve.sh 已不存在**。∴ 原始承重理由已死，应优先删拷贝，
-  让 SKILL / tools / contract 原子同源。「只有证明这条路不可行后，才批准 skew 探测器。」
-- **Claude CEO F3（主张留）**：**不能删，且这不是疏忽**。`ship_gate.py:953-955` 需要
-  `openspec/workflow/tools/` 在**消费仓自己的 git 历史里**真实存在——它用 `git ls-tree`
-  对比锚 commit 与 HEAD 做 code 域失鲜判定。这是一条**新的**承重理由，
-  `adr/0003` 与本 change 都没写过（本 change 只引用了已作废的"服务器根"理由）。
+**Dream state delta**：本 plan 把 skew **面**从 2 减到 1，同时把 skew **探测**从 1 减到 0。
+净方向对（消灭对象优于探测对象），但它在**仅存的那条链上恰好写入了新语义**（resolver 步①删除），
+而那条链此刻既无探测也无机验。距 12-月理想的缺口 = 「一个 O(1)、可机械守的同代断言」。
 
-**主 session 裁决**：**两边都对了一半，且 codex 的结论不能直接照做。**
-主 session 独立复核 `ship_gate.py:953-957` 确认：它对 `tools_spec` 做 `ls_tree_map(root, sha)` 与
-`ls_tree_map(root, "HEAD")` 两次比对。**若拷贝被删，两侧都返回空集 ⇒ 该失鲜腿静默退化为恒真锚**
-（永远判"没漂移"），而不是报错——即「删拷贝」有一个 codex 没算到的具体爆炸半径。
-∴ 删拷贝**可行但不免费**：须同时给 ship_gate 的 tools 失鲜信号重新安家。
-**这超出本 change 的 scope，且 MUST NOT 由我自行加宽（通则③）** ⇒ 升 `Q1` 交人拍板。
+### 0C-bis 实现备选（MANDATORY）
 
-## CEO DUAL VOICES — CONSENSUS TABLE
+```
+APPROACH A：照原样交付（plan 现状）
+  Summary: 删双链、删探测、不做任何替代。
+  Effort: M   Risk: Med
+  Pros: 净删除；终结「新增特性要不要补探测信号」这个问题；符合人拍板的方向（D13）。
+  Cons: 承重论证有事实错误（F1）；窗口期对 pin 仓从「起手硬停」降级为「末步裸崩」；
+        `SDFLOW_HOME` 替代不成立（F4/F5）。
+  Reuses: resolver 步②、sane()、exit 2、stale_shadow_warnings。
+
+APPROACH B（推荐）：照原样交付 + 三处**零新机制**的收口
+  Summary: 方向、范围、删除集全部不动；只做 ①订正 F1 的事实错误（改为"该链目前无守，登记为诚实边界"）
+           ②扩 sane() 覆盖 tools/contract（它此后是唯一交付路径，扩面是目标态的必然推论，非加宽）
+           ③把 `stale_shadow_warnings` 文案从绝对断言改为带前置条件的表述。
+  Effort: M（比 A 多 ~1 天 CC ~20 分钟）   Risk: Low
+  Pros: 不新建任何机制、不改 scope；把三条"会在 6 个月后咬人"的假陈述在落笔前修掉；
+        ②本身就是 F16 指出的目标态缺口，不做才是缩水。
+  Cons: sane() 扩面需要一份"runtime 必需成员"清单，该清单会随 tools 增删而维护（低频）。
+  Reuses: 同 A，全部既有机制。
+
+APPROACH C：codex 提的「版本化原子安装 + 仓级 `workflow-release` 键」
+  Summary: `~/.sdflow/releases/<id>/` + `current` 指针原子切换；仓级配置键选 release。
+  Effort: XL   Risk: High
+  Pros: 真正解决 release 一致性；`workflow-release` 是 pin 的真替代（有仓级 producer）。
+  Cons: **加宽**——人拍的板是"去掉 pin、规则共享"，不是"建版本化发布系统"；
+        新建两套机制、跨平台原子性另是一个 change。命中通则③「不加宽」与④「不为低概率纠结完美方案」。
+  Reuses: 几乎不。
+```
+
+**RECOMMENDATION：B。** 依据：它把 A 的三处**假陈述**修成真陈述而**不动目标范围**——
+通则④说简化只能砍防御深度、不能砍目标范围；反过来，"论证里的事实错误"和"目标态下必然要覆盖的健全性面"
+都不属于可简化的边角。C 被否：人已明确拍板方向（D13 证据锚「去掉 pin 仓这个逻辑，所有规则文件都应该是共享的」），
+C 是替他重新定义目标。
+
+### 0D SELECTIVE EXPANSION 分析
+
+**复杂度检查**：本 change 触 8+ 文件、跨 5 个组件，但**几乎全是删除**，不新增类/服务 ⇒ 不触发"超 8 文件即 smell"的实质关切。
+
+**最小达成集**：P0 四项（resolver 删步① · `copy_bundle` 停铺 · 两 SKILL 删探测段 · 对应测试）。
+
+**扩张候选（cherry-pick，全部按 6 原则自动决策，不弹窗）**：
+
+| # | 候选 | 效果 | 自动决策 | 依据 |
+|---|---|---|---|---|
+| X1 | 扩 `capability-manifest` 成员到安装目录全体 + 评审第零步无条件验一次 | 消灭 F1/F2 的根因 | **DEFER**（记 todo） | 是**另一条链**的问题（proposal Non-Goals 已明写不动 hack 链）；本 change 只需**不谎称它已被守**。P2 边界 |
+| X2 | 扩 `sane()` 覆盖 tools/contract | 消灭 F16 | **ACCEPT** | 目标态下 canonical 是唯一 tools 源 ⇒ 健全性面必须跟着扩；不扩=缩水（通则③） |
+| X3 | 最后一次 update 清删消费仓 `tools/`+contract 再停铺 | 终态零死码 | **需拍板**（见 Q2） | 既有 spec 已授权整删重拷，但触及"不自动删"的措辞边界，人拍板 |
+| X4 | `--dev` 留一版 tombstone（识别参数 → fail-loud 给新命令） | 迁移引导 | **ACCEPT** | 成本 ~5 行；否则老用法只得 argparse generic error |
+| X5 | resolver 加 `--help` | `SDFLOW_HOME` 可发现性 | **DEFER**（记 todo） | 与本 change 目标正交，属独立 DX 改进 |
+| X6 | 仓级 `workflow-root` / `workflow-release` 配置键 | 给冻结能力一个真 producer | **REJECT** | 加宽，人未要求（同 APPROACH C 之否） |
+
+### 0E 时序拷问（实现期该现在定的事）
+
+| 阶段 | 实现者会撞到什么 | 现在该定 |
+|---|---|---|
+| HOUR 1 | 删 `copy_bundle` 的 tools copytree 后，`openspec/workflow/` 没人创建 | **F15**：3.1 必须显式加 `os.makedirs(dst, exist_ok=True)` |
+| HOUR 2-3 | 跑 pytest 发现一批"tasks 没提过"的红测试 | **F10–F14**：把 6 个文件写进 tasks，并把检测方法从 grep 换成"直接跑 pytest" |
+| HOUR 4-5 | 改 `CLAUDE.md:401/404/419` 后发现它们在托管块内 | **F17**：6.4 的动作对象是 `assets/snippets/claude-section.md`，不是 CLAUDE.md |
+| HOUR 6+ | 归档时发现 4 个主 spec 与新契约矛盾 | **F6–F9**：现在就补 delta |
+
+### 0F 模式确认
+
+**SELECTIVE EXPANSION**（autoplan override）。已接受 X2/X4，DEFER X1/X5，REJECT X6，X3 交人。
+选定实现路径 = **APPROACH B**。
+
+### Step 0.5 · CEO 双声
+
+**CODEX SAYS（CEO — strategy challenge）** — verdict: *Do not approve as written*。六节：
+① "structurally impossible" 被仓库自身证伪（4 条路径：pull-without-setup 窗口 · `SDFLOW_HOME` 官方复活该组合 ·
+部分安装被当成功 · capability-manifest 不含 `resolve-workflow.sh`）；② 探测器经济学不可信（无分母、n=1、
+成本相等是断言非测量、"其余 tools fail-closed"未验却被 delta 当既成事实）；③ `SDFLOW_HOME` 是降级不是替代
+（列出 pin 的 6 条属性 vs SDFLOW_HOME 的 6 条对立属性）；④ big-bang 捆绑是 release engineering 失败，
+回滚不是 `git revert`；⑤ 备选被过快否决（版本戳 ≠ 整 bundle SHA；字节比对有界不撞基准 5；
+pin-only 的弱点是"任一文件即 pin"的隐式激活而非 pin 本身；原子版本化安装从未被认真考虑）；
+⑥ 老 checkout / Windows / 离线三类风险。
+
+**CLAUDE SUBAGENT（CEO — strategic independence）** — 13 条 findings（C-1…C-13），实读代码 + 实跑 glob 变异验证。
+最强五条：C-1（manifest 事实错误，critical）· C-2（部署窗口精确命中唯一存量 pin 仓）· C-3（`SDFLOW_HOME` 无仓级
+producer，且 agent 宿主 Bash 不跨调用保留环境变量）· C-4（三条 live spec 条款未被 delta 覆盖）· C-11（encoding
+排除分支**今天就已是**不可达死码，其守卫用例是恒真锚——实跑证实候选集只有权威源那一份）。
 
 ```
 CEO DUAL VOICES — CONSENSUS TABLE:
-═══════════════════════════════════════════════════════════════
-  Dimension                            Claude  Codex  Consensus
-  ──────────────────────────────────── ─────── ─────── ─────────
-  1. Premises valid?                   NO      NO      CONFIRMED(否)
-  2. Right problem to solve?           YES     NO      DISAGREE → TENSION-1
-  3. Scope calibration correct?        YES     NO      DISAGREE → TENSION-1
-  4. Alternatives sufficiently explored?NO     NO      CONFIRMED(否)
-  5. Competitive/market risks covered? N/A     N/A     N/A（本地开发工具链，无市场面）
-  6. 6-month trajectory sound?         NO      NO      CONFIRMED(否)
-═══════════════════════════════════════════════════════════════
-CONFIRMED = 两把声音一致。DISAGREE = 分歧 → 升 TENSION/决策登记区。
+═══════════════════════════════════════════════════════════════════════
+  Dimension                              Claude    Codex     Consensus
+  ─────────────────────────────────────  ────────  ────────  ──────────
+  1. Premises valid?                     NO        NO        CONFIRMED-NO
+  2. Right problem to solve?             方向对    方向对    CONFIRMED-YES(方向)
+  3. Scope calibration correct?          是        否        DISAGREE
+  4. Alternatives sufficiently explored? NO        NO        CONFIRMED-NO
+  5. Competitive/market risks covered?   N/A       N/A       N/A(内部工具链)
+  6. 6-month trajectory sound?           NO        NO        CONFIRMED-NO
+═══════════════════════════════════════════════════════════════════════
+5/6 有效维度中 4 项 CONFIRMED，1 项 DISAGREE（scope 是否切错）。
+DISAGREE 裁决：Claude 镜对（scope 由人拍板、删除集内聚）；codex 的"应拆成 5 个 release"是加宽，
+且其第 3 步（保留探测跑一版）在 global-only 解析下探测恒过，零收益。→ 归入决策登记，不改 scope。
 ```
 
-**跨声音收敛（两把独立声音 + 主 session 各自到达同一结论 ⇒ 高置信）**：
+### CEO Sections 1–11
 
-| 结论 | codex CEO | Claude CEO | 主 session 实测 |
+**S1 架构**。依赖图（目标态）：
+
+```
+运行 checkout ──symlink──▶ ~/.claude/skills/*        （即时）
+     │        ──symlink──▶ ~/.sdflow/workflow        （即时，canonical）
+     └────────── cp ──────▶ ~/.sdflow/hack/*.sh      （须 setup.sh）★ 仅存的失鲜面
+消费仓 openspec/workflow/ ──▶ 只剩 WORKFLOW-GUIDE.md
+```
+**耦合变化**：解耦 —— 消费仓不再耦合 bundle 版本。**新增单点**：canonical 成为 tools 的**唯一**来源，
+而守它的 `sane()` 不查 tools ⇒ **F16**。**回滚姿态**：`git revert` + 每台机 setup + 每仓 update，
+顺序不可颠倒且**无处记载** ⇒ **F28**。四路径（happy/nil/empty/error）：resolver 三码语义不变，
+nil/empty 由 `sane()` 兜——但兜的面不含 tools（F16）。
+
+**S2 错误与救援图**。本 change 净删除，新增可失败路径为零；但**既有救援的文案**被目标态改变：
+
+| 路径 | 会出什么错 | 现行救援 | change 后是否仍正确 |
 |---|---|---|---|
-| 版本 scope 比实际部署集宽 ⇒ 纯仪式硬停 | #3 + #5（33/97 ≈ 34%） | F1 + F4（45/129 ≈ 35%） | 10/19 ≈ 53%（近 200 提交口径） |
-| 非 pin 仓 `$RULES_ROOT` = 全局 ⇒ 判据对象错 | #2（critical） | F3 | `resolve-workflow.sh --root .` → `~/.sdflow/workflow` |
-| ADR 砍候选③ 的理由不成立 | #9 | F2 | ADR 原文比对确认 |
+| `resolve-workflow.sh` exit 2 | canonical 不可达/半坏 | stderr「跑 `bash setup.sh`」 | ❌ `SDFLOW_HOME` 自定义场景指错方向（F31） |
+| `stale_shadow_warnings` | 残留副本 | 「删=跟全局/留=显式 pin」 | ❌ 新文案在部署窗口内**是假的**（F3） |
+| tools 自身 fail-closed | 旧工具被新 SKILL 调 | 「先跑 `sdflow-init update`」 | ❌ 该命令 change 后对 workflow 已无作用（F21） |
+| fresh init | `openspec/workflow/` 不存在 | 无 | ❌ **新 GAP** — `FileNotFoundError`（F15） |
 
-**三个口径的数字不同（34% / 35% / 53%）但方向一致**——差异来自统计窗口不同
-（30 天 / 历史全量 / 近 200 提交），非互相矛盾。三者独立得出同一结论 ⇒ 该 finding 置信度**高**。
+**S3 安全**。攻击面**收缩**（Eng 镜独立发现，本 change 未记）：删步①后，对不可信仓跑评审不再可能执行
+该仓自带的 `openspec/workflow/tools/*.py` ⇒ 消灭一个"克隆不可信仓 + 跑评审 = 执行仓自带代码"的供应链点。
+建议 proposal 正面记一笔（**F39**，正向）。无新增攻击面。
 
-## 主 session 的独立读码复核（不是采信 voice 自述）
+**S4 数据流与交互边界**。无用户可见交互。数据流唯一新形态 = fresh init 的 `openspec/workflow/` 创建路径（F15）。
 
-每一条被采信的 voice finding 都由主 session 亲自打开文件复核过。复核实据：
+**S5 代码质量**。删除为主，无新抽象、无 DRY 违规、无复杂度上升。
+一处 DRY 正向：`resolve-workflow.sh` 内联的第三份 `RULE_MARKERS` 副本随步①消失（其守卫测试应整条删而非改写，F11）。
 
-| 复核项 | 命令 / 文件 | 实测结果 |
+**S6 测试**。新增/变化的 codepath → 覆盖：
+
+| codepath | 测试类型 | 现状 | 错实现会不会红 |
+|---|---|---|---|
+| resolver 忽略仓内副本 | pytest 假 HOME 真跑 bash | tasks 2.3 已列 | ✅ |
+| `SDFLOW_HOME` 冻结 | 同上 | tasks 2.4 已列 | ⚠️ 只测直接调脚本，**测不到真实消费路径**（F5） |
+| `copy_bundle` 只铺 GUIDE | pytest 全集断言 | tasks 3.4 已列 | ✅ |
+| fresh init 目录创建 | pytest | **缺** | ❌ **F15** |
+| canonical 缺 tools | pytest | **缺** | ❌ **F16** |
+| `ship_gate` 腿退役 | pytest | tasks 5.3 只有正向 | ❌ **单向锚**，留着旧腿也绿（F23） |
+| 6 个必红测试文件 | pytest | **tasks 未提** | ❌ **F10–F14** |
+
+🔴 **面级结论**：tasks 用 `grep` 枚举「哪些测试依赖将被删的东西」，而 grep 对
+Python path-join（`wf / "tools"`）、`full=False`、函数名下划线写法、以及**目录范围外**的文件结构性失明。
+这命中 CLAUDE.md **基准 5** 的同构形态：**正解是让 pytest 自己回答**（先跑一遍看谁红），而不是用字符串匹配去猜。
+
+**S7 性能**。N/A —— 无循环、无 IO 热点、无数据结构变化。删除只会更快（少一次 `copytree`）。
+
+**S8 可观测性**。design 自述「无新增日志、无新增落盘产物」——成立。但**既有可观测面的真值被削弱**：
+`resolve-workflow.sh --explain` 的 `source=` 是判断"resolver 换代没有"的唯一信号，而它没有被写进任何
+升级验收步骤（DX 镜给出了完整 runbook，见 Phase 3.5）。
+
+**S9 部署与灰度**。**这是本 change 最弱的一节**。Migration Plan 排的是**源码编辑顺序**，不是**部署生效顺序**；
+`setup.sh` 的部分失败被降级为 `skipped[]` + exit 0；回滚顺序有要求但无载体（F28）。
+
+**S10 长期轨迹**。技术债：净减。路径依赖：`SDFLOW_HOME` 若不修（F4/F5），会把"冻结规则版本"这个能力
+悄悄变成一条**写在 spec 里但没有生产者的 SHALL**——这是最典型的文档债。
+**可逆性：4/5**（几乎全是删除，`git revert` 可复原，但消费仓需重跑 update）。
+
+**S11 设计/UX**。跳过（无 UI scope）。
+
+---
+
+## Phase 2 · Design Review
+
+**跳过 —— 无 UI scope**（依据见 Phase 0 的 grep 证据）。
+
+---
+
+## Phase 3 · Eng Review
+
+**CODEX SAYS（eng — architecture challenge）** — verdict: *阻断实现*。9 条，其中 6 条 high/critical：
+①Migration Plan 顺序不保证运行态安全（列出 5 种可达半态）；②`sane()` 不验它即将独家提供的工具；
+③**Task 3.1 直接改会让 fresh init 报 ENOENT**；④`SDFLOW_HOME` 既是冻结选择器又是安装目标，会自毁冻结；
+⑤delta spec 对存量 tools 的处理自相矛盾（:68/:73/:83-85）；⑥至少四个主 spec 被违反却无 delta；
+⑦tasks 的 grep 漏掉多组必红测试；⑧改 CLAUDE.md 会被 canonical snippet 覆盖回去；
+⑨Task 5.3 只能证明顶层腿有效、证不出旧腿已退役。
+
+**CLAUDE SUBAGENT（eng — independent review）** — 6 条，**实跑了 tasks 自己 prescribe 的两条 grep 并核对命中集**：
+E-1（`test_resolve_models.py` 整文件 ~25 用例靠 local-pin 注入测试 bundle，两条 grep 只命中一行中文注释，**critical**）·
+E-2（`test_marker_consistency.py` 连 grep 的**目录范围**都进不去）· E-3（`test_init.py` 两个测试类 +
+两个整文件必红，grep 漏检过半）· E-4/E-5（maintain-scan / yq 主 spec 未声明）·
+**E-6（反向核验，非缺陷）**：Migration Plan 对非 pin 仓的半态安全性**独立成立**，且本仓自身当前解析为
+`global-canonical`、`openspec/workflow/` 无规则本体 ⇒ task 6.1 对本仓评审零行为影响。
+
+```
+ENG DUAL VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════════════
+  Dimension                              Claude    Codex     Consensus
+  ─────────────────────────────────────  ────────  ────────  ──────────
+  1. Architecture sound?                 部分      NO        DISAGREE
+  2. Test coverage sufficient?           NO        NO        CONFIRMED-NO
+  3. Performance risks addressed?        N/A       N/A       N/A
+  4. Security threats covered?           YES(+改善) YES      CONFIRMED-YES
+  5. Error paths handled?                NO        NO        CONFIRMED-NO
+  6. Deployment risk manageable?         部分      NO        DISAGREE
+═══════════════════════════════════════════════════════════════════════
+DISAGREE(1,6) 裁决：两镜差异源于**受害面口径**——codex 按"任意可达半态"论，Claude 镜按"实际受影响仓"论。
+主 session 裁定：架构本身 sound（删除为主、耦合下降），**部署论证不 sound**；
+受害面限定为「存量 pin 仓 × pull-without-setup 窗口」，本机 1 个仓、窗口可由纪律关闭。
+⇒ 采纳 codex 的"论证需修正"，不采纳其"阻断实现/拆 5 个 release"。
+```
+
+**架构图（S1 已给）· 测试图（S6 已给）· 失败模式（S2 已给）** —— 不重复。
+
+---
+
+## Phase 3.5 · DX Review
+
+**CODEX SAYS（DX — developer experience challenge）** — verdict: *不通过，实现前补齐*。7 条：
+①**新告警在"已 pull、未成功 setup"状态下是假的（critical）**；②升级路径没有"机器 × 消费仓"可验证 runbook
+（并给出了完整的分步 runbook）；③真正下发给消费仓的托管文档源没进任务清单；④`SDFLOW_HOME`/`--dev`
+替代路径不足以让开发者照着做；⑤回滚说明缺机器级步骤且放错位置；⑥`exit 2` 固定文案在 `SDFLOW_HOME` 场景指错方向；
+⑦文档与主规格残留远多于 tasks 列出的两行（含 ADR 0003/0005/0019/0036）。
+
+**CLAUDE SUBAGENT（DX — independent review）** — 12 条（D-1…D-12）。独家发现：
+D-2（`CLAUDE.md:401/404` 两处"规则副本则用之"不在 6.4 四项清单内）·
+D-3（`stale_shadow_warnings` 的**第二条**告警仍含 pin 措辞，4.1/4.3 只覆盖第一条）·
+**D-5（`WORKFLOW-GUIDE.md` —— 消费仓唯一常驻人读文档 —— 对 `SDFLOW_HOME` 零次提及，实测 `grep -c` = 0）**·
+D-7（design 要求的"revert 说明"无任何任务产出，且 design 归档后不是应急回滚会翻的地方）·
+D-8/D-9/D-10/D-11（`workflow-map.html` 5 处 + `workflow-map.md` 另 2 处 + `sdflow-spec-review.md:83` + `ROADMAP.md:34`）。
+
+```
+DX DUAL VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════════════
+  Dimension                              Claude    Codex     Consensus
+  ─────────────────────────────────────  ────────  ────────  ──────────
+  1. 升级路径可照做?                     NO        NO        CONFIRMED-NO
+  2. 命令/参数可猜?                      部分      NO        DISAGREE(轻)
+  3. 错误/告警文案 actionable?           NO        NO        CONFIRMED-NO
+  4. 文档可找到且完整?                   NO        NO        CONFIRMED-NO
+  5. 升级/回滚路径安全?                  NO        NO        CONFIRMED-NO
+  6. 开发环境无摩擦?                     NO        NO        CONFIRMED-NO
+═══════════════════════════════════════════════════════════════════════
+6 维中 5 项 CONFIRMED-NO。DX 是本 change 最薄的一面——这不是巧合：
+change 把"人手动一步"从流程里删掉了（好事），但**它自己的落地恰恰需要人手动两步**（pull→setup、逐仓 update），
+而这两步没有被写成 runbook。
+```
+
+**DX 记分卡**：升级路径 3/10 · 错误文案 3/10 · 逃生口可发现性 2/10 · 回滚 3/10 ·
+开发期测试三层第②层可执行性 2/10 · 文档一致性 3/10 · `--dev` 迁移引导 1/10 · 综合 **2.4/10**。
+
+**TTHW（这里 = 「从 merge 到我确信所有仓都对了」的时间）**：当前无 runbook ⇒ 不可估；
+补上 DX codex 给的 runbook 后 ≈ 每机 3 分钟 + 每仓 2 分钟。
+
+---
+
+## 跨阶段主题（2+ 阶段独立命中 = 高置信信号）
+
+| 主题 | 命中阶段 | 判定 |
 |---|---|---|
-| resolver 的 pin 判据 | `resolve-workflow.sh:37-53` | pin ⇔ `workflow.md` / `spec-checklists/` / `code-checklists/` 三者之一在；注释明写「**不查 openspec/workflow/ 目录——tools/ 使其恒存在**」 |
-| 本仓实际 RULES_ROOT | `~/.sdflow/hack/resolve-workflow.sh --root .` | `/Users/cheneyzhao/.sdflow/workflow`（**全局 canonical，非仓内副本**） |
-| canonical 是否实时 | `readlink ~/.sdflow/workflow` | `→ ~/.skills/sdflow-skills/sdflow-init/assets/workflow`（**软链 = 实时跟随运行 checkout 工作树**） |
-| 工具执行路径是否都经 resolver | `grep -rn 'RULES_ROOT/tools' --include=SKILL.md` | 11 处**全部**经 resolver；无任何执行路径硬编码消费仓副本 |
-| 消费仓副本的唯一非执行消费方 | `ship_gate.py:953-955` | `tools_spec = (b"openspec/workflow/tools/",)`，仅作 git pathspec 参与 code 域失鲜判定，**不执行** |
-| 非 full 实际拷贝集 | `init.py:257-278` | `tools/`（去 tests）+ `lens-metric-contract.md` + `WORKFLOW-GUIDE.md`，**不含规则** |
-| rmtree-then-copytree | `init.py:262-264` | `if os.path.isdir(tools_dst): shutil.rmtree(...)` 然后 `copytree(...)` —— 确认无事务语义 |
-| manifest 的「先删最后写」先例 | `setup.sh:513-524` | 注释明写「🔴 **先删 manifest、最后才写**……MUST NOT 留一份『自洽但陈旧』的快照」+ `cap_broken` 记账 |
-| adr/0003 的承重理由是否已死 | `adr/0003:3` 与 `:8`/`:18` | `:8` 「故 tools/ 是唯一不得不留的机械副本」，理由 = review 服务器根不落地即 404；`:3` 「该 viewer **已整体移除**」；`:18` 砍「连 tools 也不落地」的唯一理由是「省 serve.sh 重写」——**serve.sh 已不存在** |
-| bundle churn（误报率） | `git log --format=%H -200` ∩ bundle | 200 提交中 19 动 bundle（9.5%）、9 动 `tools/`（4.5%）⇒ **约 10/19 ≈ 53% 的硬停不涉及任何被部署文件** |
-| D6 的 bundle 作用域仍成立 | `git log -1 --format=%H -- sdflow-init/assets/workflow/` | `ee5b4f4…` vs `HEAD=fc0f1ae…` ⇒ 二者确实不同，D6 前提**成立**（memo 记的 `0d024ae` 已因两个新提交过期，属时点测量、非缺陷） |
-| 删除面是否已扫全（面治） | `grep -rn "skew 探测" --include=SKILL.md` | 仅 `sdflow-code-review`、`sdflow-spec-review` 两处 ⇒ **删除面完整**，无第三份遗留 |
-| `.bundle-version` 会否触 ship_gate 失鲜 | `ship_gate.py:95/955` | 监视集限于 `openspec/workflow/tools/`，`.bundle-version` 不在其下 ⇒ **不会**触发 |
+| **T-A：承重论证里有事实错误（manifest 覆盖面）** | CEO(双) · Eng(codex) · DX(codex) | 三阶段五镜中四镜独立命中 ⇒ **最高置信** |
+| **T-B：`SDFLOW_HOME` 不是 pin 的替代** | CEO(双) · Eng(codex) · DX(双) | 三阶段全命中，且各自给出**不同**的破法（无仓级 producer / 与安装根同名 / 不可发现） |
+| **T-C：tasks 用 grep 枚举消费者 ⇒ 结构性漏检** | Eng(双) · DX(双) | 两阶段四镜；命中 CLAUDE.md 基准 5 的同构形态 |
+| **T-D：未声明的主 spec 分叉（4 份）** | CEO(claude) · Eng(双) · DX(codex) | 三阶段四镜 |
+| **T-E：托管块/文档面只点补不面治** | CEO(claude) · Eng(codex) · DX(双) | 三阶段四镜；且 `claude-section.md` 是**推给下游**的源 |
 
-## outside-voice 复用守卫（Step1.5）—— 判定复用不成立，已回落自跑
+---
 
-```
-python3 $RULES_ROOT/tools/outside_voice_guard.py --review-path .../gstack-review.md --change-dir ...
-→ stdout: section-not-found    rc=1
-```
+## 决策登记（autoplan 自动决策 + 需拍板 + 已裁掉）
 
-**遵其判定，未静默吞**：`reason_code != none` ⇒ **回落自跑设计 outside voice**（site=`design-voice`），
-未复用本文件里的 codex 段。该自跑的 findings 不进本文件，进 `spec-review-report.md` 的合并池，
-锚行落在那里（本层的 `declared-sites` 亦在那里）。
+### 自动决策（默认接受，可在设计门覆盖）
 
-## 被复核后**驳回 / 降级**的输入（反静默压制）
+| # | 决策 | 分类 | 原则 | 理由 |
+|---|---|---|---|---|
+| A1 | 模式 = SELECTIVE EXPANSION | Mechanical | — | autoplan override |
+| A2 | Phase 2（Design）跳过 | Mechanical | — | 无 UI scope，grep 证据在 Phase 0 |
+| A3 | Phase 3.5（DX）执行 | Mechanical | — | DX scope 命中 |
+| A4 | 实现路径 = APPROACH B | Taste | P1 完整性 + P5 显式 | 只修假陈述与目标态缺口，不动 scope |
+| A5 | X2（扩 `sane()` 覆盖 tools/contract）**接受进 scope** | Taste | P1 | canonical 成唯一 tools 源 ⇒ 健全性面必须跟着扩，不扩=缩水 |
+| A6 | X4（`--dev` tombstone 一版）**接受进 scope** | Mechanical | P5 | ~5 行；否则老用法只得 argparse generic error |
+| A7 | X1（扩 capability-manifest）**DEFER 记 todo** | Taste | P2 边界 | 属 hack 链，proposal Non-Goals 已声明不动；本 change 只需不谎称它已被守 |
+| A8 | X5（resolver `--help`）**DEFER 记 todo** | Mechanical | P3 | 与本 change 目标正交 |
+| A9 | X6 / codex 的 `workflow-release` + 版本化原子安装 **拒绝** | Taste | P2/通则③ | 加宽；人拍的板是"去掉 pin、规则共享" |
+| A10 | codex 的"拆 5 个 release 分阶段迁移"**拒绝** | Taste | P3/P6 | 其第 3 步（保留探测跑一版）在 global-only 解析下探测恒过，零收益 |
+| A11 | Eng-Claude E-6 vs CEO-C2 冲突：**分治采纳** | Taste | P1 | 非 pin 仓 E-6 对；pin 仓窗口期 C-2 对（从起手硬停降为末步裸崩） |
+| A12 | 「其余 tools 未验 fail-closed」前提**当场结掉** | Mechanical | 通则① | 6 个 tool 全 argparse `required=True` 无静默默认；只有 3 个读版本化契约，恰为已核那 3 个 |
 
-- **接地镜（haiku 档）自相矛盾的结论**：它一方面正确报告「仓内无 `.bundle-version` 实现（设计未落地）」，
-  另一方面又断言「Success Metrics 的归零条件**已满足**，SKILL:180/206 是**新版本对比逻辑**」。
-  主 session 实跑 `grep -n "lens-metric-enums\|scope-audit:\|_MIRRORS_LEGAL"` 复核：
-  180/206 两行**仍是旧的逐能力内容信号原文**（code-review 四条、spec-review 两条），
-  归零条件**尚未满足**（本 change 未实现，这是预期状态）。
-  ⇒ **该条结论被驳回**，不进合并池。（其余 17 项事实核验经抽查为真，予以采信。）
-- **接地镜报的 `anchor_lint.py:148`** —— 主 session 复核：实际 `MANDATORY` 定义在 **`:203`**，
-  `:148` 是 fence 解析代码。⇒ 该偏差**被采信**并升格为 F7（delta spec 引用错行号）。
+### 需拍板（人在设计 HARD-GATE 决）
+
+- **Q1｜删掉探测器后，仅存的 hack 拷贝链要不要留一条机验？**
+  三镜（CEO×2、Eng-codex）独立给出同一建议：扩 `capability-manifest` 成员到安装目录全体 + 第零步无条件验一次（<10 行 + 一条 pytest）。
+  **推荐：不做（A7 DEFER），但 MUST 订正 design.md:109-111 的事实错误。**
+  三镜代价 —— 系统镜：做=新增一条跨 change 的机验依赖，不做=仅存链无守但**失败形态是响的**（旧 resolver 语义未变）；
+  用户镜：做=窗口期得到 actionable 硬停，不做=pin 仓窗口期从"起手硬停"降为"末步裸崩"（本机 1 个仓）；
+  开发循环镜：做=多一个 change 的 scope，不做=零成本。**主次：开发循环镜为主**（受害面 1 个仓 × 一个可由纪律关闭的窗口）。
+- **Q2｜要不要在停铺前做「最后一次托管子树清删」（X3）？**
+  既有 `spec-workflow:194` 已授权 `tools/` 整删重拷，`copy_bundle` 现在每次 update 都在 `rmtree` 它 ⇒
+  "最后一次 update 删掉托管子树再停铺"完全在既有授权内，终态零死码。红线（"不自动删除"）的对象是**规则副本**，非托管子树。
+  **推荐：做。** 三镜 —— 系统镜：终态零死码 vs 每仓永久留一份可执行死 `.py`；用户镜：少一次"这些文件要不要删"的判断；
+  开发循环镜：`copy_bundle` 保留一次性 rmtree，代价近零（revert 后需重跑 update，而 design.md:172 **已经**要求这一步）。
+  **主次：系统镜为主。** 备选（照原样）：接受每仓永久死码 + 靠告警提示。
+- **Q3｜`adr/0038` 留还是删？**
+  它在**本分支**新建（commit `164bb88`）、从未进 main、其 Decision（版本对比机制）从未实现，现在同一 change 内标 Superseded。
+  而 tasks 6.5 已要求 0039 的取舍段涵盖被砍候选（含版本戳）⇒ 内容会重复一份。
+  **推荐：删除 0038，只落 0039**，理由写进 0039 取舍段。三镜 —— 系统镜：少一份"描述从未存在过的机制"的档案；
+  用户镜：未来读者不会被一条 born-superseded 的 ADR 误导；开发循环镜：少一次 supersede 记账。
+  **主次：用户镜为主**（DOC-1「正文即最终态」的同构）。**备选**（保留并标 Superseded）：ADR 追加不删是常规，
+  但**若保留，理由 MUST 改为「起手前提被证伪 ⇒ 决策撤销，机制从未实现」，MUST NOT 写「问题域消失」**（F32）。
+- **Q4｜`SDFLOW_HOME` 这条"冻结规则版本"的能力，是修还是撤？**
+  现状：spec 里写着一条**没有生产者**的 SHALL（F5），且它与 `setup.sh` 的安装根同名会自毁冻结（F4）。
+  **推荐：撤 —— 把「仓级冻结规则版本」明写进 Non-Goals，delta 删掉那条 SHALL 与对应 Scenario；
+  `SDFLOW_HOME` 恢复为它原本的定位（测试隔离）。** 依据：本机唯一已知的 pin 仓（05-sarvelo）实际诉求是**跟全局最新**，
+  不是冻结；为一个无人要的能力写一条做不到的 SHALL，比不写更坏。
+  **备选**：给它真 producer（`openspec/config.yaml` 加 `workflow-root` 键，~10 行行锚定 shell）——但那是加宽（A9 已拒）。
+  三镜 —— 系统镜：撤=删一条假 SHALL；用户镜：撤=CLAUDE.md 测试三层第②层需要另写替代（见 F30/DX-D6）；
+  开发循环镜：撤=零成本。**主次：系统镜为主。**
+
+### 已裁掉（反静默压制：原始发现 + 裁掉理由，可审计）
+
+| # | 原始发现（镜） | 裁掉理由 |
+|---|---|---|
+| X-1 | codex-CEO：「应改为 `~/.sdflow/releases/<id>/` + `current` 原子指针」 | 加宽。人拍板方向是"去掉 pin、规则共享"，不是建版本化发布系统。通则③ |
+| X-2 | codex-CEO：「分 5 个 release staged migration，第 3 步保留探测」 | 其第 3 步在 global-only 解析下探测**恒过**（canonical tools 恒新）⇒ 多一个 release 周期换零收益。通则④ |
+| X-3 | codex-CEO：「pin 有 6 条属性，`SDFLOW_HOME` 全不满足 ⇒ 应保留 pin」 | 属性对比成立（已采纳为 F5 的论据），但**结论**不采纳：删 pin 是人的明确指示（D13 证据锚）。改为"如实登记能力损失"（Q4） |
+| X-4 | codex-eng：「blocking，先修 1–8 再批准」 | "阻断"是 codex 的建议不是裁决；本报告改为把 F1–F17 列为**拍板前必修**，人拍板即可放行。流程上等价、不越权 |
+| X-5 | Eng-Claude E-6 的「pin 仓不算退化」 | 部分裁掉：解析**结果**确实不变，但**失败形态**从"起手 actionable 硬停"降为"末步裸崩"，是退化。保留其"非 pin 仓无影响"的正确部分（A11 分治） |
+| X-6 | codex-DX：「`stale_shadow_warnings` 应实调 resolver 验 `source=global-canonical` 再宣称死件」 | 降级为备选。让告警函数去 exec 另一个脚本引入新耦合；**更简的等价解**=文案不写绝对断言（"评审一律走全局；若刚 `git pull` 还没跑 `setup.sh`，先跑 setup 再判断"）。通则④ |
+| X-7 | codex-eng：「`setup.sh` 关键项 skipped 应非零退出」 | 超本 change scope（改 `setup.sh` 的失败语义是独立 change）。记 todo |
+
+---
+
+## Findings 汇总（39 条，供 Step 3 合并）
+
+见 `spec-review-report.md` 的合并池；本节仅给 ID ↔ 命中镜的归属，供去重与独立率计算。
+
+| ID | 一句话 | 严重度 | 命中镜 |
+|---|---|---|---|
+| F1 | design.md:109-111「hack 链由 capability-manifest 守」是事实错误（成员只 3 项，不含 resolve-workflow.sh） | critical | CEO-codex · CEO-claude · 主session |
+| F2 | 部署窗口「新 SKILL × 旧 resolver」对 pin 仓从起手硬停降为末步裸崩 | high | CEO-codex · CEO-claude · eng-codex · DX-codex |
+| F3 | `stale_shadow_warnings` 新文案「已无任何生效路径」在该窗口内是假的 | critical | DX-codex |
+| F4 | `SDFLOW_HOME` 同时是冻结选择器与 `setup.sh` 安装根 ⇒ 跑 setup 静默解冻 | high | eng-codex |
+| F5 | `SDFLOW_HOME` 无仓级 producer（SKILL 裸调用 + harness Bash 不跨调用留 env）⇒ 一条无生产者的 SHALL | high | CEO-claude · CEO-codex · DX-claude |
+| F6 | `spec-workflow:871`/`:935-938` 另一条 Requirement 仍规定 contract 与 tools 同批下发 + pin Scenario，无 delta | high | CEO-claude · eng-codex · DX-codex |
+| F7 | `maintain-scan/spec.md:61/63` + Scenario「仅剩 tools 判干净」与 task 4.2 冲突，无 delta | high | eng-codex · eng-claude |
+| F8 | `workflow-metrics/spec.md:62` 明写 `ignore_patterns("tests")` MUST 保留，task 3.2 要删，无 delta | high | CEO-claude · eng-codex · 主session |
+| F9 | `yq-yaml-operations` 的「7 个脚本」计数在 6.2 后失真，无 delta | medium | eng-claude · eng-codex · 主session |
+| F10 | `test_resolve_models.py` 整文件 ~25 用例靠 local-pin 注入 bundle，两条 prescribed grep 只命中一行注释 | critical | eng-claude |
+| F11 | `sdflow-maintain/tests/test_marker_consistency.py:38-48` 必红，且该**目录**不在 task 2.5 的 grep 范围 | high | eng-claude · eng-codex |
+| F12 | `test_init.py` 两个测试类 + `test_init_contract_sync.py` + `test_task5_regression.py` 必红，grep 对 path-join/`full=False` 失明 | high | eng-claude · eng-codex · 主session |
+| F13 | `hack/tests/test_async_branch_parity.py:464` 硬断言 `sdflow-init update` ⇒ task 1.4 必红，不在 Impact | high | CEO-claude |
+| F14 | `test_maintain_scan.py:220-229` `test_stale_shadow_only_tools_clean` 与新语义冲突 | high | eng-codex |
+| F15 | task 3.1 删 tools copytree ⇒ fresh init 无人创建 `openspec/workflow/` ⇒ `copy2(GUIDE)` FileNotFoundError | high | eng-codex |
+| F16 | `sane()` 不校验它此后独家交付的 tools/contract ⇒ 半坏 canonical 仍 exit 0 | high | eng-codex |
+| F17 | `assets/snippets/claude-section.md:71/74/89`（推给下游的托管块源）仍写"仓内副本优先"；改 CLAUDE.md 会被 update 覆盖回去 | high | eng-codex · DX-codex · DX-claude · 主session |
+| F18 | `AGENTS.md:109/218/221/236` 四处未进 tasks | high | CEO-claude · DX-claude |
+| F19 | `workflow-map.html`(5) + `workflow-map.md`另2 + `02-module-reference.md` + `sdflow-spec-review.md:83` + `ROADMAP.md:34` 全 stale，6.9 只点 2 个行号 | medium | DX-claude · eng-codex · DX-codex · 主session |
+| F20 | ADR 0003/0005/0019/0036 核心结论仍是 local-first/tools 副本/pin，只 supersede 0038 不够 | medium | DX-codex · eng-codex |
+| F21 | 「修法文案」面（`lens_metric_emit.py:104`、`resolve-models.sh:74`、`sdflow-upgrade/SKILL.md:160`、`README.md:119`）仍指向已失效的 `sdflow-init update` | medium | CEO-claude |
+| F22 | task 4.1 自相矛盾：「判据函数不动」vs「检测范围扩到 tools/contract」（必须动 `RULE_MARKERS`） | medium | CEO-claude |
+| F23 | task 5.3 是单向锚：留着 `tools_spec` 腿也照绿，证不出退役 | medium | eng-codex |
+| F24 | tasks 1.1/1.2 错标悬空指代位置（真正的在 `code-review:204`/`spec-review:179` 的档位解析步） | medium | 主session |
+| F25 | `stale_shadow_warnings` 的**第二条**告警仍含 pin 措辞，4.1/4.3 只覆盖第一条 | medium | DX-claude |
+| F26 | encoding 排除分支**今天就已**不可达（`TARGET_GLOBS` 全 root-anchored），delta 称"镜像消失后才成死码"是错的；守卫用例是恒真锚 | medium | CEO-claude |
+| F27 | delta spec 自相矛盾：:68/:83-85 说查看器随 tools 整删重拷清除，:73 又说不自动删 + 目标实现不再触碰 tools | medium | eng-codex |
+| F28 | design 要求的「revert 说明」无任务产出，且 design 归档后不是应急回滚会翻的地方 | medium | DX-claude · DX-codex |
+| F29 | `--dev` 直接从 argparse 删 ⇒ 老用法只得 generic error，无迁移引导 | medium | DX-codex |
+| F30 | `WORKFLOW-GUIDE.md`（消费仓唯一常驻人读文档）0 次提及 `SDFLOW_HOME` | medium | DX-claude |
+| F31 | resolver exit-2 固定文案在 `SDFLOW_HOME` 自定义场景指错方向 | medium | DX-claude · DX-codex |
+| F32 | `adr/0038` 本分支新建、同 change 内 Superseded；理由应写"起手前提被证伪"而非"问题域消失" | medium | CEO-claude · 主session |
+| F33 | tasks 3.3 的豁免行号 `:1125` 实为 `:1144-1146` | low | 接地镜 |
+| F34 | `resolve-workflow.sh` 头部契约注释 `:5`/`:37` 未列入 2.1 更新范围 | low | DX-claude |
+| F35 | 「真阳 0·假阳 1」ROI 无分母、n=1、真阳目标从未跑过评审 ⇒ 应从承重位降为旁证 | medium | CEO-codex · CEO-claude |
+| F36 | 「其余 tools 未验 fail-closed」前提当场可结（已代结，见 A12） | medium | 主session（对冲 CEO-codex） |
+| F37 | P0 捆绑理由「缺一即每仓每轮永久硬停」演绎不出来 | medium | CEO-claude |
+| F38 | 未分析的备选：既有 spec 已授权 tools/ 整删重拷 ⇒ 可"最后一次清删再停铺"，终态零死码 | medium | CEO-claude |
+| F39 | **正向**：本 change 收缩攻击面（不再执行被评审仓自带的 tools/*.py），design 未记 | low | eng-claude |
+
+---
+
+## Completion Summary
+
+| 项 | 值 |
+|---|---|
+| 阶段 | CEO ✅ · Design ⏭️(无 UI scope) · Eng ✅ · DX ✅ |
+| 双声 | 6 个声音全部真实独立跑过（codex×3 + Claude 子代理×3），零降级、零代笔 |
+| 接地镜 | 1（dispatch①，与 Step1 并行），85+ 条代码事实核验，1 条不符（F33） |
+| Findings | **39**（critical 3 · high 13 · medium 20 · low 3） |
+| 跨阶段主题 | 5（T-A…T-E），最高置信 = T-A（四镜独立命中） |
+| 自动决策 | 12（A1–A12） |
+| 需拍板 | 4（Q1–Q4） |
+| 已裁掉 | 7（X-1…X-7，全部附理由） |
+| 方向判定 | **方向成立、范围成立、论证与落地清单不成立** |
+
+**STATUS：DONE_WITH_CONCERNS。**
+本 change 的**方向**（消灭被探测的对象而非把探测做准）经六镜独立审视后无一反对，
+**范围**由人明确拍板（D13）不予改动。不成立的是两样东西：
+① **承重论证里有三处可证伪的事实陈述**（F1/F3/F26），其中 F1 被四镜独立命中；
+② **落地清单是点补而非面治**——tasks 用 `grep` 枚举消费者，而 grep 对 path-join、`full=False`、
+目录范围外的文件结构性失明，已实证漏掉 **6 个必红测试文件与 4 份主 spec**。
