@@ -41,9 +41,11 @@ outside-voice 调用的撞键，`host` 消同一 runner 在不同宿主下自审
 
 ## 折叠表（canonical 投影）
 领域镜→domain · 对抗镜1/2/3→adversarial · 接地镜/完整性镜→grounding · 历史镜→history ·
-codex/claude(任何 site，任一 runner 的 voice)→outside-voice · autoplan(CEO/Eng/DX/design)+gstack-adv→broad
+codex/claude(任何 site，任一 runner 的 voice)→outside-voice · autoplan(CEO/Eng/DX/design)+scope-audit→broad
 〔add-codex-host-support：`claude-fallback→outside-voice` 废弃行删除、新增 `claude→outside-voice`——host-adaptive
 下反向路径由 `claude` runner 执行 voice 时，原始镜名同样落 `claude`，需与 `codex` 同样折叠到 `outside-voice`〕
+〔absorb-gstack-review：`gstack-adv→broad` 行替换为 `scope-audit→broad`——code-review Step1 自持 scope
+审计取代 gstack native review，两者不共存，原始镜名同步改称〕
 
 ## 机读折叠（消费脚本单一源·勿在脚本内复制）〔mlh-p4-lens-metric-emit〕
 > 折叠单一源。格式同 `lens-metric-enums`：fence info-string 恒为 `lens-metric-fold`；每行 `原始镜名: canonical-lens`。**只列非恒等映射**——恒等（raw 已 ∈ lens enum，如 domain/grounding/history/broad）由 emitter `raw∈lens_enum` pass-through 承载、不列本块（ADR-7）。canonical 值 MUST ∈ `lens-metric-enums` 的 lens 域（emitter `load_fold` 读入即自校验）。
@@ -61,7 +63,7 @@ autoplan-ceo: broad
 autoplan-design: broad
 autoplan-eng: broad
 autoplan-dx: broad
-gstack-adv: broad
+scope-audit: broad
 ```
 
 ## 机读输入 schema（emitter 输入单一权威源·bundle 可达）〔impl-review-fix mlh-p4：ADR-6 落地〕

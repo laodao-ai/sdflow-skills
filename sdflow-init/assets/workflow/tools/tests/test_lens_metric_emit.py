@@ -91,6 +91,28 @@ def test_fold_hit_unknown_raw_fail_closed_not_broad():
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
     with pytest.raises(m.EmitError): m.fold_hit({"raw":"神秘镜"}, "claude", e, f)     # SR-E 不塞 broad
 
+def test_fold_hit_scope_audit_maps_to_broad():
+    # absorb-gstack-review：code-review Step1 自持 scope 审计的原始镜名 scope-audit 折叠到 broad
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    assert m.fold_hit({"raw":"scope-audit"}, "claude", e, f) == ("broad","claude","claude","—")
+
+def test_fold_hit_gstack_adv_no_longer_recognized():
+    # absorb-gstack-review：gstack-adv→broad 行已被 scope-audit→broad 替换（不共存），
+    # 旧 raw 名 gstack-adv 现应 fail-closed 而非静默折叠——回归防止两者共存
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    assert "gstack-adv" not in f
+    with pytest.raises(m.EmitError):
+        m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
+
+def test_fold_hit_unknown_raw_error_mentions_update_hint():
+    # 未知 raw 镜名报错须带可操作指引——这是「SKILL 已更新、消费仓 bundle 未更新」的第一现场，
+    # 报错文案须含「若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update」
+    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+    with pytest.raises(m.EmitError) as exc_info:
+        m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
+    assert "sdflow-init update" in str(exc_info.value)
+    assert "openspec/workflow/" in str(exc_info.value)
+
 def test_fold_hit_site_injection_fail_closed():
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
     with pytest.raises(m.EmitError): m.fold_hit({"raw":"codex","runner":"codex","site":'a"b'}, "claude", e, f)
@@ -122,6 +144,18 @@ def test_reduce_single_accepted():
     ov = [l for l in lines if 'lens="outside-voice"' in l][0]
     assert 'host="claude"' in ov and 'runner="codex"' in ov
     assert 'findings="0"' in ov and 'sev="致0/高0/中0/低0"' in ov and 'site="design-voice"' in ov
+
+def test_reduce_scope_audit_raw_folds_to_broad_anchor():
+    # absorb-gstack-review：code-review Step1 自持 scope 审计上报 raw="scope-audit"，
+    # emitter 归约后 MUST 落在 roster 的 canonical lens="broad" 行（下游 retro 聚合/MIN_LENS_ROWS 零感知）
+    m, e, f = _ef()
+    roster = [{"lens":"broad","runner":"claude","site":"—"},
+              {"lens":"outside-voice","runner":"codex","site":"design-voice"}]
+    findings = [{"hits":[{"raw":"scope-audit"}], "verdict":"采纳", "sev":"中"}]
+    lines = m.reduce(roster, findings, "code-review", "claude", e, f)
+    broad = [l for l in lines if 'lens="broad"' in l][0]
+    assert 'findings="1"' in broad and '采纳="1"' in broad and '独立="1"' in broad
+    assert 'sev="致0/高0/中1/低0"' in broad
 
 def test_reduce_coreport_no_independent():
     m, e, f = _ef()
