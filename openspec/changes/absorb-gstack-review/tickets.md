@@ -222,11 +222,11 @@ pytest——这是本机环境事实）。仓 `openspec/config.yaml` 若无 `tes
 `~/.codex/skills/*` 全部翻向本开发树。本票 MUST 在报告里写明还原方式（合并后在运行 checkout
 `~/.skills/sdflow-skills` 重跑 `bash setup.sh`），供收尾提示引用。
 
-- [ ] 单元测试证据齐全并通过
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] `grep -rn "gstack" sdflow-code-review/SKILL.md` 严格归零（贴命令与输出）
-- [ ] `openspec validate --strict` 绿（贴输出）
-- [ ] issues 池记三条 todo（用开发 checkout 的 `sdflow-issues/scripts`、显式传 `change` 字段）：① python.md domain（Async/Sync 混用条目落点）② spec-review 侧 autoplan 姊妹依赖处置 ③ 仓根 `openspec/workflow/` 孤儿副本清理（`lens-metric-contract.md` / `WORKFLOW-GUIDE.md`）
-- [ ] 开发 checkout 跑 `bash setup.sh` 成功，且 `readlink ~/.sdflow/workflow` 确认指向本开发树（贴输出）
-- [ ] 报告写明 dogfood 分工声明 + 待核锚清单（`mode="subagent"` 锚 / `scope-audit` 折叠出的 `lens="broad"` 行 / anchor_lint 通过）+ 全局窗口还原方式
+- [x] 单元测试证据齐全并通过
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] `grep -rn "gstack" sdflow-code-review/SKILL.md` 严格归零（贴命令与输出）
+- [x] `openspec validate --strict` 绿（贴输出）
+- [x] issues 池记三条 todo（用开发 checkout 的 `sdflow-issues/scripts`、显式传 `change` 字段）：① python.md domain（Async/Sync 混用条目落点）② spec-review 侧 autoplan 姊妹依赖处置 ③ 仓根 `openspec/workflow/` 孤儿副本清理（`lens-metric-contract.md` / `WORKFLOW-GUIDE.md`）
+- [x] 开发 checkout 跑 `bash setup.sh` 成功，且 `readlink ~/.sdflow/workflow` 确认指向本开发树（贴输出）
+- [x] 报告写明 dogfood 分工声明 + 待核锚清单（`mode="subagent"` 锚 / `scope-audit` 折叠出的 `lens="broad"` 行 / anchor_lint 通过）+ 全局窗口还原方式
