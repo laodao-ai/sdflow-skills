@@ -1,165 +1,189 @@
 ## Context
 
-见 [`proposal.md`](./proposal.md)「Why」。设计所需的现状事实（均已实查）：
+动机见 [`proposal.md` — Why](./proposal.md)。此处只列解释方案所需的现状与约束。
 
-- **两条分发链**：`sdflow-code-review/SKILL.md:557` 明写「两条分发链不可互相替代：全局 helper 与
-  SKILL 走 `bash setup.sh`（**capability manifest 正是在这一步写**）；消费仓的
-  `openspec/workflow/tools/` 走 `sdflow-init update`」。
-- **hack 链已有 manifest**：`~/.sdflow/hack/capability-manifest.json` 实内容为
-  `{"entries": {...三项 sha256...}, "generation": "...", "schema_version": 1}`，由 `setup.sh` 写、
-  `outside-voice-job.py preflight` 消费。**bundle 链无对应物** ⇒ 只好用手工内容信号补。
-- **`setup.sh:735`** 已在算 `git describe --tags --always --dirty`，但**仅用于汇总打印、未落盘**。
-- **`init.py` 的 `copy_bundle(root, full=False, include_schema=True)`**（`:229-295`）两分支共用一个出口；
-  调用点在 `:1127`（`copy_bundle(root, full=dev, include_schema=schema_enabled)`）。
-  〔spec-review-amendment：原写签名 `copy_bundle(root, full=dev)`（漏 `include_schema`）、行号 `:228-286`，
-  均与实际不符，已按实读订正〕
-- **现有探测段**：`sdflow-code-review/SKILL.md:206`（四信号）、`sdflow-spec-review/SKILL.md:180`
-  （信号①②，描述与前者逐字相同）。
-- **仓根 `openspec/workflow/tools/` 有真消费方**：`ship_gate.py:953-955`
-  `tools_spec = (b"openspec/workflow/tools/",)`，参与 code 域失鲜判定 ⇒ 不可清理。
+**现状：`$RULES_ROOT` 有两个可能来源，而只有其中一个涉及「拷贝」。**
 
-### 消费点依赖图（改动面一览）
+`~/.sdflow/hack/resolve-workflow.sh` 的三步链（实读 `:38-83`）：
 
-```
-版本产出侧
-  ├─ setup.sh（刷 canonical 时）────────▶ 全局侧版本落点
-  └─ init.py copy_bundle()（内部）──────▶ 消费仓 openspec/workflow/ 版本落点
-        └─ 两分支：full=True（源仓 --dev 整刷）· full=False（消费仓常规 update）
+| 步 | 判据 | 结果 | 涉及拷贝？ |
+|---|---|---|---|
+| ① | 仓内有**规则文件本体**（`workflow.md` / `spec-checklists/` / `code-checklists/` 任一） | `local-pin` = 仓内 `openspec/workflow/` | **是**（`sdflow-init update` 拷的 tools） |
+| ② | `~/.sdflow/workflow`（Unix 软链）或 `~/.sdflow/workflow-path`（Windows 指针） | `global-canonical` = **运行 checkout 内的文件树本身** | 否 |
+| ③ | 以上皆不可达 | `exit 2` → 调用方显式降级通用评审 | — |
 
-版本消费侧
-  ├─ sdflow-code-review/SKILL.md 第零步 ─▶ 删四条内容信号，换版本对比
-  └─ sdflow-spec-review/SKILL.md 第零步 ─▶ 删两条内容信号，换版本对比（同一判据，两处措辞一致）
+步②的两个平台实现**都指向活 checkout**（Unix 实测 `readlink ~/.sdflow/workflow` →
+`~/.skills/sdflow-skills/sdflow-init/assets/workflow`；Windows 由 `setup.sh:489`
+`printf '%s\n' "$bundle"` 写入活 checkout 路径）。而 SKILL 亦软链自同一 checkout ⇒
+**步②路径上 tools 与 SKILL 恒同代**。
 
-机械守
-  └─ hack/tests/ ─▶ 两处写入点真写了版本 + 相等/不等/缺失三态判定
+∴ skew 的全部存在空间 = 步①。**删掉步①，skew 无处可生。**
 
-不动（Non-Goals，显式登记防误改）
-  ├─ ~/.sdflow/hack/capability-manifest.json 及其 preflight（hack 链，与本 change 并存不合并）
-  ├─ openspec/workflow/tools/（ship_gate 消费方）与 lens-metric-contract.md / WORKFLOW-GUIDE.md
-  └─ init.py 的 bundle 拷贝范围（不为源仓/消费仓分叉）
-```
+**约束**：`spec-workflow` 既有安全红线——`sdflow-init update` **MUST NOT 自动删除**消费仓内既有
+规则文件。本设计不触碰该红线，只把「已无生效路径」的事实通过告警告知。
 
 ## Goals / Non-Goals
 
-**Goals（设计级边界）**：判据形式替换对**语义契约零改动**——fail-loud 强度、硬停时点（任何 fan-out /
-调 emitter / 落 v2 锚之前）、报错须 actionable，三者均保持既有形状，只换判据来源。
+**Goals（设计层）**
+- 规则与 tools 收敛为**全局单份**，消费仓侧零执行依赖。
+- 删除路径上**不留半态**：不存在「SKILL 已删探测 × 消费仓仍有旧副本」导致的新失败模式。
+- 存量 pin 仓的切换**可被人察觉**（告警），而非静默换了规则来源。
 
-**Non-Goals**：见 proposal；另加设计级两条——不改 `ship_gate.py`（`tools_spec` 判定不受影响）；
-不改 `outside-voice-job.py preflight` 的 manifest 消费逻辑（两条链各管各的）。
+**Non-Goals（设计层，proposal 的 Non-Goals 不重复）**
+- 不为「规则版本冻结」提供新机制——`SDFLOW_HOME` 指向自备 canonical 即可，走步②主路径。
+- 不改 `resolve-workflow.sh` 的退出码语义（`0` / `2` / `64` 三码原样保留，**不新增码位**）。
+- 不改两个评审 SKILL 对 `exit 2` 的既有降级分支（它们已实现，本 change 只是让更多情形落到它）。
+
+## 组件与依赖（最终态）
+
+```
+                    运行 checkout  (~/.skills/sdflow-skills)
+                    ├── sdflow-*/SKILL.md ──────symlink──▶ ~/.claude/skills/
+                    ├── sdflow-init/assets/workflow/  ◀──symlink── ~/.sdflow/workflow
+                    │     ├── tools/*.py            （评审机械层·全局单份）
+                    │     ├── lens-metric-contract.md（anchor_lint 机读依赖）
+                    │     ├── trigger-catalog.md 等规则
+                    │     └── WORKFLOW-GUIDE.md     （人读·仍下发）
+                    └── sdflow-init/assets/hack/resolve-workflow.sh ──cp──▶ ~/.sdflow/hack/
+
+  消费仓  openspec/
+          ├── workflow/WORKFLOW-GUIDE.md      ← 由 sdflow-init update 铺（唯一残留）
+          └── schemas/sdflow-spec-driven/     ← openspec CLI 读，非 workflow 规则
+```
+
+**被删除的边**：消费仓 `openspec/workflow/{tools/,lens-metric-contract.md}`（不再铺）·
+resolver 步① 的 `local-pin` 分支 · `ship_gate.py` 的 `tools_spec` 比较腿。
+
+## 决策图：resolver 两步链（TG-12）
+
+```
+       ┌─────────────────────────────┐
+       │ resolve-workflow.sh --root  │
+       └──────────────┬──────────────┘
+                      ▼
+        ~/.sdflow/workflow 目录存在？(Unix 软链透明命中)
+                      │
+          ┌───── 是 ──┴── 否 ─────┐
+          ▼                        ▼
+          │              ~/.sdflow/workflow-path 可读？(Windows)
+          │                  ┌── 是 ──┴── 否 ──┐
+          │                  ▼                  │
+          └────────▶  sane() 健全性检查          │
+                     (workflow.md 非空 +          │
+                      两个 checklists 目录非空)   │
+                          │                      │
+                    ┌─ 过 ┴─ 不过 ───────────────┤
+                    ▼                             ▼
+              exit 0 + stdout=路径          exit 2 + stderr 告警
+                                          （调用方显式降级通用评审）
+```
+
+🔴 **与现状的唯一差别**：入口处**没有了**「先看仓内有没有规则文件」这一步。仓内副本无论存在与否，
+都不再影响解析结果。
+
+## 时序：为什么「没有可错位的时点」（TG-10）
+
+本 change 跨 5 个组件（`resolve-workflow.sh` / `init.py` / 两个评审 SKILL / `ship_gate.py`），
+其协作的关键在于**改动传播的时点**。左为现状、右为目标态：
+
+```
+现状（两条链，两个时点）              目标态（一条链，一个时点）
+──────────────────────────────      ──────────────────────────────
+开发者 push bundle 改动               开发者 push bundle 改动
+        │                                     │
+运行 checkout: git pull ─┐            运行 checkout: git pull
+        │                │                    │
+   SKILL 立刻新 ◀────────┤              SKILL 立刻新 ─┐
+        │                │                    │        │
+        │          消费仓: sdflow-init   全局 canonical │ 同一 checkout
+        │          update  ← 人手动       立刻新 ◀──────┘   同时生效
+        │                │                    │
+        │          消费仓 tools 才新          评审读全局 tools
+        ▼                ▼                    ▼
+   ⚠ 两点之间 = skew 窗口              ✅ 无中间态，无窗口
+```
+
+**右侧没有任何「人手动」的方框 ⇒ 没有可遗漏的步骤 ⇒ 没有可错位的时点。** 这正是删除探测器的
+充分理由：探测器要探的那个窗口，在图上已经不存在了。
+
+> 附带说明：`setup.sh` 仍是必须跑的一步（它刷 `~/.sdflow/hack/` 与 canonical 软链），但那是
+> **`pull → setup` 这条既有纪律**，且 `~/.sdflow/hack/` 那条链由 `capability-manifest.json`
+> 独立守（`manifest skew`，不在本 change 范围）。
 
 ## Decisions
 
-本 change 的决策全文与砍掉的候选见 [`decision-memo.md`](./decision-memo.md)；
-判据本身的长期依据见 [`adr/0038`](../../adr/0038-bundle-skew-detected-by-version-not-capability-probes.md)。
+全部承重决策（D1–D16）与承重约束（C1–C18）见 [`decision-memo.md`](./decision-memo.md)。
+本 change 命中 TG-23（≥2 合理方案），决策记录落 `openspec/adr/0039`；`openspec/adr/0038` 同批标
+**Superseded**（其问题域随本 change 消失）。
 
-## 设计细节
+## 失败模式表（TG-08）
 
-### 1. 版本取值与形式（D3/D6）
+| # | 失败模式 | 触发条件 | 现行行为 | 本 change 后行为 |
+|---|---|---|---|---|
+| F-a | 全局 canonical 不可达 | 未跑 `setup.sh` / `~/.sdflow` 被删 | `exit 2` → 显式降级通用评审 | **不变**（唯一变化：更多情形落到这条，因为没有 pin 兜底了） |
+| F-b | 全局 canonical 半坏（`workflow.md` 空 / checklists 空） | pull 中断、磁盘满 | `sane()` 不过 → `exit 2` | **不变** |
+| F-c | 消费仓残留旧规则副本 | 存量 pin 仓 | 步① 命中 → **用旧规则** | **改用全局规则** + `stale_shadow_warnings` 告警「已无生效路径、可删」 |
+| F-d | 消费仓残留旧 `tools/` | 存量仓 | 可能被步① 路径执行 | **永不被执行**（无步①）；作为死件由告警提示 |
+| F-e | 旧 tools 被新 SKILL 调用 | 仅步① 路径可能，本 change 后**不可能** | `anchor_lint` exit 2 / `hr_tg_intersect` EmitError | **该情形消失** |
+| F-f | Windows：旧 SKILL × 新 canonical tools | `git pull` 后未跑 `setup.sh` | 无机制覆盖 | **仍无机制覆盖**（结构上不可自举，见 Risks） |
+| F-g | `resolve-workflow.sh` 自身缺失 | 未跑 `setup.sh` | 调用方 `[ -x ]` 预检 → 提示跑 `setup.sh` | **不变** |
 
-```bash
-git -C <checkout> log -1 --format=%H -- sdflow-init/assets/workflow/
-```
-
-- **bundle 作用域，非整仓 HEAD**：实测 `git rev-parse HEAD`=`0d024ae`（该 commit 改的是 `setup.sh`）
-  而 bundle 版本仍为 `ee5b4f4` ⇒ 用 HEAD 会让源仓每提交一次就得 update 一次才能评审，方案会因烦人
-  被绕过。bundle 作用域精确匹配「bundle 是不是旧的」这一探测语义。
-- **纯 40 位 commit SHA，MUST NOT 用 `git describe --dirty`**：开发时工作树常脏，`-dirty` 后缀会让
-  版本恒不相等、天天误报。
-- **非 git / 命令失败 ⇒ 字面 `unknown`**：沿用 `setup.sh:735` 现有 `|| echo "unknown"` idiom。
-
-### 2. 两个落点（D4/D7）
-
-| 侧 | 落点 | 写入方 | 时机 |
-|---|---|---|---|
-| 全局 | `~/.sdflow/bundle-version` | `setup.sh` | 刷 canonical 软链的同一步 |
-| 消费仓 | `openspec/workflow/.bundle-version` | `init.py` 的 `copy_bundle()` | 拷贝 bundle 的同一函数内 |
-
-- 单行纯文本（SHA 或 `unknown`），末尾换行。**不复用 `capability-manifest.json`**——那是 hack 链的
-  载体、语义不同，混入会让一个文件承两个职责。
-- 🔴 **`init.py` 的写入 MUST 放在 `copy_bundle()` 函数内部**，不放调用点（`:1127`）：两分支
-  （`full=True` 源仓 `--dev` 整刷 / `full=False` 消费仓常规）共用该出口，放调用点会漏掉 `--dev` 路径，
-  导致源仓铺完没版本文件、**反被自己的探测判成陈旧**。
-- **消费仓侧落点选 `openspec/workflow/.bundle-version`**（而非 `openspec/` 根）：与它描述的对象同目录，
-  且随 `tools/` 的 update 覆盖语义一起走；点号前缀避免与 bundle 内容文件混淆。
-
-### 3. 判定逻辑（D5/D8）
-
-两个评审 SKILL 第零步的 skew 探测段统一为：
-
-```
-读全局侧版本 G = cat ~/.sdflow/bundle-version
-读消费仓侧版本 L = cat <repo>/openspec/workflow/.bundle-version
-```
-
-| 情形 | 判定 | 处置 |
-|---|---|---|
-| G、L 均存在且**相等** | 同步 | 放行，进第一步 |
-| G、L 均存在但**不等** | bundle 陈旧 | **硬停**，文案含「跑 `sdflow-init update`」 |
-| **任一缺失** | 陈旧（从没跑过新版写入方） | **硬停**，文案分别指向 `bash setup.sh` / `sdflow-init update` |
-| 两者**同为 `unknown`** | 非 git 环境 | **放行**（fail-open，与 `setup.sh:735` 降级一致） |
-
-- **缺失即陈旧**（C6）：语义自洽——从没跑过新版 update 的消费仓正是陈旧态；与第零步
-  `resolve-models.sh` 的 `[ -x ]` 预检同 idiom。
-- **不等即硬停、不降级为警告**（D8）：硬停发生在起手（尚未 fan-out、未跑 voice），损失仅为重新起手；
-  放行的代价是整轮白跑。方向上宁可多报。
-- **两处 SKILL 的判定措辞 SHALL 一致**——同一判据，MUST NOT 各写一套（现状①②逐字重复已是漂移面，
-  本 change 收敛为同一段）。
-
-### 4. 删除面（面治，基准 3）
-
-- `sdflow-code-review/SKILL.md` 第零步 skew 段：**四条内容信号整段删除**（含本 change 上游
-  `absorb-gstack-review` 刚加的③④），换为上表判定。
-- `sdflow-spec-review/SKILL.md` 第零步 skew 段：**两条内容信号整段删除**，换为同一段判定。
-- 🔴 删除时 MUST 保留该段既有的**语义契约措辞**：fail-loud、硬停时点、「MUST NOT 产出无锚报告 /
-  MUST NOT 落 v1 旧锚（假绿）/ MUST NOT 静默清零本段」——这些不随判据形式改变。
-
-### 5. 机械守（C5 的正解）
-
-新增 pytest（落 `hack/tests/`，沿用 `test_install_agents.py` 的假 HOME 真跑模式）：
-
-- **写入点存在性**：`setup.sh` 跑完后全局落点有内容且形如 40-hex 或 `unknown`；
-  `init.py` 的 `copy_bundle()` 在 `full=True` / `full=False` **两分支**跑完后消费仓落点均有内容。
-- **三态判定**：构造相等 / 不等 / 缺失三种盘面，断言判定结果符合上表。
-- **诚实边界**：判定逻辑写在 SKILL 指令层（由主 session 执行），测试守的是**两个写入点与版本取值
-  命令**这两个机械面；「SKILL 是否真的照判定表执行」仍是指令层约束、由执行方自报，
-  **MUST NOT 声称机械保证**。这与现状相比是净增益——现状连写入点都没有，整条路径零机械覆盖。
-
-### 6. 文档订正（T269 的落点）
-
-`CLAUDE.md` 中「`openspec/workflow/`（仓库根）— **只保留 `tools/`**」订正为实际形态，并写明各自理由：
-`tools/`（`ship_gate` 参与 code 域失鲜判定的真代码）+ `lens-metric-contract.md`
-（`anchor_lint.py` 的运行时机读依赖，须与 tools/ 同批刷新）+ `WORKFLOW-GUIDE.md`（人读手册）
-+ 本 change 新增的 `.bundle-version`。**目的是让下一个人 `grep` 到它们时不再误判为死件**。
+**可观测性**：本机制的**全部**可观测面 = ① `resolve-workflow.sh --explain` 的
+`source=global-canonical path=…` stderr 行；② `exit 2` 时的固定告警文案；
+③ `sdflow-init` 的陈旧遮蔽告警。**无新增日志、无新增落盘产物**——本 change 净删除机制，
+不引入需要观测的新状态。
 
 ## Risks / Trade-offs
 
-- [版本不等未必真不兼容 ⇒ 误报] → 明确接受：误报成本 = 起手硬停一次 + 一次秒级 update；漏报成本 =
-  整轮评审白跑。方向上宁可多报。见 adr/0038 Consequences。
-- [手改部署副本不回灌探测不到] → **现有内容信号同样探不到**，未引入新洞；为它加内容指纹会绕回本
-  change 要消灭的形状。已由 `CLAUDE.md:172` 明令覆盖。
-- [本 change 同改 SKILL 与 bundle，自身发布即处于 skew 窗口] → 发布纪律沿用既有 push → pull →
-  **立即** `setup.sh`；消费仓 `sdflow-init update`。**本 change 合并后首次评审必然硬停一次**
-  （消费仓尚无版本文件）——这是设计内的 fail-loud，hand-off 须写明。
-- [两个 SKILL 的判定段措辞漂移] → 收敛为同一段措辞；未来若再分叉，可考虑等值门（本仓已有
-  `check_async_branch_parity.py` 先例）——**本次不加**，避免为尚未发生的漂移预付成本（基准 4）。
+- **[存量 pin 仓的规则来源被静默切换]** → 由 `stale_shadow_warnings()` 与 `maintain_scan` 的既有残留
+  检查告警覆盖（二者**行为不变、只改文案**）。但告警只在跑 `sdflow-init` / `sdflow-maintain` 时出现，
+  **不在评审起手出现** ⇒ 该仓下一轮评审会直接用全局规则而当场无提示。**接受**：规则来源切换不改变
+  评审的正确性（全局规则是权威源），且 pin 语义的取消本身就是本 change 的目标。
+- **[Windows 上「旧 SKILL × 新 tools」仍无覆盖（F-f）]** → **不缓解，登记为诚实边界**。检查者只能是
+  SKILL 自己或 `~/.sdflow/hack/` 的 helper，二者同为一次 `cp -r` 的产物（`setup.sh:119`），没跑
+  `setup.sh` 就一起旧 ⇒ **结构上不可自举**。且本仓对 Windows 分支无测试面
+  （`IS_WINDOWS` 由 `uname -s` 定、无环境变量覆盖入口，`hack/tests/test_install_agents.py:14` 自述）。
+- **[「tools 的 fail-closed 覆盖所有旧版失败形态」是未完全验证的前提]** → 已核 `anchor_lint.py`
+  （`EnumsError` → exit 2「绝不回落硬编码」）与 `hr_tg_intersect.py`（`EmitError`「不静默按空集放行」）
+  两个主要消费方；**其余 tools 未逐一核验**。缓解：本 change 后该兜底只对**步②路径不存在的失败**
+  起作用（即基本不再被触发），风险敞口随之收窄；仍在 proposal 的假设表登记。
+- **[删除范围大，半态危险]** → P0 的四项（resolver 删步① · `copy_bundle` 停铺 · 两个 SKILL 删探测段 ·
+  测试）**MUST 同批落地**。任一遗漏的最坏形态：SKILL 仍探测而副本已不铺 ⇒ **每个消费仓每轮永久硬停**。
+  Migration Plan 的顺序即为此设计。
 
 ## Migration Plan
 
-1. 单 change 内一次完成：两处写入 + 两个 SKILL 判据替换 + pytest + CLAUDE.md 订正 + 关闭 T269/T270。
-2. 发布：merge 后运行 checkout `git pull` + **立即** `bash setup.sh`（写全局侧版本）；
-   各消费仓 `sdflow-init update`（写消费仓侧版本）。**在消费仓跑 update 之前，其评审起手会硬停并
-   给出该指引**——设计内路径。
-3. 回滚：单 commit revert + 重跑 `setup.sh` / `update`；版本文件残留无害（无消费方即被忽略）。
+**顺序不可颠倒**（每一步都保证中途中断时系统仍可用）：
+
+1. **先删 SKILL 侧的探测段**（`sdflow-code-review` / `sdflow-spec-review`）。此时副本仍在、resolver
+   仍有步①——系统完全可用，只是不再做那个从未抓到真阳的检查。
+2. **再删 resolver 步①**（bundle 权威源 `sdflow-init/assets/hack/resolve-workflow.sh`）。此时所有仓
+   改走步②；存量副本变死件但无害。
+3. **再停 `copy_bundle` 铺 tools/contract**，并退役 `--dev` / `full` / T15 豁免。
+4. **最后** 退役 `ship_gate.py` 的 `tools_spec` 腿、改写告警文案、订正 CLAUDE.md / ADR / CONTEXT、
+   删除本仓 `openspec/workflow/` 下 7 个文件、关闭 T269/T270。
+   🔴 **删本仓镜像必须与两处硬编码引用同批**：`hack/tests/test_yq_wrapper_consistency.py` 的 `TARGETS`（`:57`）与 `hack/check_encoding_hygiene.py`（`:83`）的镜像排除分支——前者不处置即因文件不存在而红，后者留着是死代码。
+
+> 🔴 **步 1 必须在步 3 之前**：反序（先停铺、SKILL 仍探测）⇒ 每个消费仓每轮评审永久硬停。
+
+**发布**：push → 运行 checkout `git pull` → **立即** `bash setup.sh`（刷 `~/.sdflow/hack/` 与 canonical）。
+消费仓**不再需要** `sdflow-init update` 才能评审；跑它只为拿新的 `WORKFLOW-GUIDE.md`。
+
+**回滚**：本 change 的改动集中且**几乎全是删除** ⇒ `git revert` 即复原；复原后消费仓需重跑
+`sdflow-init update` 才能拿回 `tools/`（因为回滚后 SKILL 又会去读 `$RULES_ROOT/tools/`）。
+**该顺序须写进 revert 说明**，否则回滚后首轮评审会因缺 tools 裸崩。
 
 ## Open Questions
 
-无——三条边界（版本形式 / 比对双方 / 非 git 降级）与 bundle 作用域取值均已在相位 B 拍板，见 memo D3–D6。
+无。（`--dev` / `full` 退役后 toolkit 源仓 dogfood 的具体验证路径属实现细节，由 tasks 覆盖。）
 
 ## Compliance
 
-- 遵守 DOC-1（正文即最终态，四条内容信号的历史不留正文——其存在理由与被替换的原因写在 adr/0038）；
-  premise-verification（本设计引用的 file:line 均实查）；机械化优先基准（版本对比即确定性信号，
-  写入点可机械守）；**基准 5**（本 change 的核心动因即终止无界内容探测的补丁螺旋）。
-- 托管区块（`sdflow:principles` / `sdflow:tier-resolution` / `sdflow:async-branch`）零触碰——
-  改的 skew 段在三者 marker 之外。
-- 无豁免项。
+- **DOC-1（正文即最终态）**：本文正文只描述目标态；被推翻的中间方案（版本戳、字节比对、pin-only
+  判据）**不进正文**，其记录在 `decision-memo.md` 的 D9–D12 与 `adr/0039` 的取舍段。
+- **基准 5（无界语法禁手搓）**：本 change **不新增任何解析器**；删除的正是一段依赖 `grep`/`sed` 提取
+  markdown 内容的探测逻辑。
+- **`spec-workflow` 安全红线**：不自动删除消费仓既有规则文件，仅告警。**遵守，无豁免。**
+- **`premise-verification`**：本文引用的代码事实（`resolve-workflow.sh:38-83` · `setup.sh:119/489` ·
+  `init.py:253-288` · `ship_gate.py:947-959` · `anchor_lint.py` / `hr_tg_intersect.py` 的
+  fail-closed 路径）均在相位 B 实读或实跑核验，未从记忆写入。
