@@ -38,6 +38,41 @@ is_our_marker_copy() {  # $1 = 目录路径
   return 1
 }
 
+# 自属判据的**第二条腿：内容指纹**（路径名判据是第一条腿，见各 case 分支）。
+#
+# 【为什么必须有它】原判据只按**目录名**认自属（`$REPO_NAME` + 字面 `sdflow-skills` 兜底），
+# 而 `REPO_NAME="$(basename "$REPO_DIR")"` ⇒ 开发 checkout 叫什么名字完全由人定
+# （本机是 `04-sdflow-skills`，段名 ≠ `sdflow-skills`，glob `*/sdflow-skills/*` 不匹配）。
+# 后果是**不对称**：开发树跑 setup 时 `REPO_NAME=04-sdflow-skills`，判据同时认自己和
+# 字面 `sdflow-skills` ⇒ **抢得走**运行 checkout 的链接；反过来运行 checkout 跑 setup 时
+# 只认 `sdflow-skills` ⇒ **抢不回**开发树的链接。**「开发窗口开得出、关不上」**，
+# 而 CLAUDE.md「还原 = 在运行 checkout 重跑 setup」正是靠这条路径——它此前是断的。
+#
+# 【判据形状】不猜名字，问「这条链接的目标是不是落在一个 sdflow-skills checkout 里」——
+# checkout 根同时存在 `setup.sh` 与 `sdflow-init/assets/hack/skill-principles.md`
+# （后者是 skill 味通则的唯一真相源，本仓特征路径）。有确定性信号 ⇒ 机械判（基准 1）。
+#
+# 【这不是放宽守卫，是换成更准的】第三方目录既不叫 `sdflow-skills`、也没有这两个特征文件
+# ⇒ 仍拒；反之若某目录确实是一份 sdflow-skills checkout，把它接管回 canonical 正是期望行为。
+# 【与路径判据是 OR，不是替代】源目录已删的**悬空链** readlink 仍返回路径串、但指纹读不到
+# ⇒ 由路径判据兜底进孤儿清理，旧行为零回退。
+is_our_checkout_path() {  # $1 = readlink 目标路径（形如 <checkout>/<skill> 或更深）
+  local p="$1" d i=0
+  [ -n "$p" ] || return 1
+  case "$p" in /*) ;; *) return 1 ;; esac   # 仅判绝对路径；相对形式交路径判据
+  d="$p"
+  # 逐级上溯找 checkout 根。上界 8 层：`<checkout>/sdflow-init/assets/workflow` 这类最深
+  # 落点也只有 3 层，8 层留足余量又不会在深路径上空转。
+  while [ "$d" != "/" ] && [ -n "$d" ] && [ "$i" -lt 8 ]; do
+    if [ -f "$d/setup.sh" ] && [ -f "$d/sdflow-init/assets/hack/skill-principles.md" ]; then
+      return 0
+    fi
+    d="$(dirname "$d")"
+    i=$((i + 1))
+  done
+  return 1
+}
+
 is_migrated_skill() {  # $1 = skill 名称
   case "$MIGRATED_SKILL_NAMES" in *" $1 "*) return 0 ;; esac
   return 1
@@ -103,7 +138,10 @@ install_into() {
         fi
       fi
       # 既有软链所有权校验：非自属软链不覆盖（同 cleanup_orphans 的 readlink 判据）。
-      # 自属 = readlink 目标路径含 $REPO_NAME 或 sdflow-skills（开发/运行 checkout 目录名可能不同）。
+      # 自属 = ①路径名判据（readlink 目标含 $REPO_NAME 或字面 sdflow-skills）
+      #      ∪ ②内容指纹判据（目标落在一个 sdflow-skills checkout 内，见 is_our_checkout_path）。
+      # ② 不可省：开发 checkout 目录名任意（如 04-sdflow-skills），只有 ① 时运行 checkout
+      # 收不回自己开出的开发窗口——见 is_our_checkout_path 头注释的不对称说明。
       if [ -L "$target" ]; then
         local old_link
         old_link="$(readlink "$target" 2>/dev/null || true)"
@@ -112,7 +150,9 @@ install_into() {
             # 自属——允许覆盖，下面会打接管提示
             ;;
           *)
-            if [ -n "$old_link" ]; then
+            if is_our_checkout_path "$old_link"; then
+              : # 自属（内容指纹）——允许覆盖，下面会打接管提示
+            elif [ -n "$old_link" ]; then
               skipped+=("$skill_name @ $dest — 非自属软链（→ ${old_link}），未覆盖")
               continue
             fi
@@ -151,7 +191,11 @@ cleanup_orphans() {
       local link_dest
       link_dest="$(readlink "$dest/$entry_name" 2>/dev/null || true)"
       case "$link_dest" in
-        "$REPO_NAME"/*|*/"$REPO_NAME"/*) is_ours=1 ;;
+        # 面治：本行原先连 install_into 已有的字面 `sdflow-skills` 兜底都没有（判据更窄）
+        # ⇒ 开发 checkout 装出的链接**连孤儿都清不掉**，是同一个不对称 bug 的另一面。
+        # 此处与 install_into 对齐到同一组判据（路径名 ∪ 内容指纹）。
+        "$REPO_NAME"/*|*/"$REPO_NAME"/*|*/sdflow-skills/*|sdflow-skills/*) is_ours=1 ;;
+        *) is_our_checkout_path "$link_dest" && is_ours=1 ;;
       esac
     fi
     # Marker file (Windows copies)
@@ -205,7 +249,9 @@ cleanup_migrated_skills() {
         "$REPO_NAME"/*|*/"$REPO_NAME"/*|*/sdflow-skills/*|sdflow-skills/*)
           ;;
         *)
-          continue
+          # 同 install_into：路径名判据之外再看内容指纹，否则开发 checkout 装出的
+          # 已迁出 skill 链接回收不掉（判据不对称，见 is_our_checkout_path）。
+          is_our_checkout_path "$link_dest" || continue
           ;;
       esac
     elif ! is_our_marker_copy "$target"; then
