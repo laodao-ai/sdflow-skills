@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 0d06e6eb5b950b2d62da489496296aaa45c1c54c
+---
+
 # spec-review-report · absorb-gstack-review
 
 - 评审对象：`openspec/changes/absorb-gstack-review/` 四件套 @ 镜子审盘面 commit 3d28ded（评审后修订见「修订清单」，随本报告同批 checkpoint）
@@ -27,13 +33,18 @@ autoplan 经 Skill 机制原生进主 session 执行（CEO → Eng → DX 三相
 
 ## 决策登记区
 
+> **设计门已拍板批准，日期 2026-08-06。** Q1=维持现 scope 不拆 · Q2=维持 D3④ 直接替换 ·
+> Q3=采纳推荐（XSS 留 CR-BE-02 + Non-Goals 声明客户端框架待 frontend domain）· Q4=**保留**
+> `docs/workflow-skills/gstack-review.md`（docs/ 为纯人读参考、无运行时消费，改述定位即可不删）。
+> Q3/Q4 对应二次修订已单独 checkpoint（0d06e6e），`reviewed_sha` 锚定该盘面。
+
 ### [自动决策]（高置信，默认采纳、设计门可覆盖）
 
 - **D1** autoplan mode=SELECTIVE EXPANSION（feature enhancement 缺省档）；premise ①②（gstack 依赖真实且行为冲突、五类 checklist 缺口真实）经三方读码证实接受；premise ③（「plan 发现残废」）方向证实、幅度未回测——已按 Q1 张力呈现。
 - **D2** 20 条采纳 findings 已全部回写四件套（标 `[spec-review-amendment]`，见「修订清单」）——其中致命 1 条（delta 缺第二条 Requirement 修订）、高危 7 条、中危 7 条、低危 5 条。修订均为「补齐/钉死/显式化」性质，不改人已拍板的 D1/D2/D3 方向。
 - **D3** 裁掉 7 条（连理由见「已裁掉区」）；defer 5 条（1 条进 issues todo、4 条为需拍板项）。
 
-### [需拍板]（设计 HARD-GATE 一次拍板）
+### [需拍板]（已于设计门拍板，结果见各条目尾注）
 
 - **Q1 · User Challenge：是否拆 change / 补质量实证**〔Codex 三相位一致 + Claude CEO 子代理部分呼应；4 声〕
   Codex CEO/Eng/DX 一致主张：本 change 把「依赖移除」（有据）与「质量升级」（无历史回测/基准数据）混装，
@@ -47,20 +58,25 @@ autoplan 经 Skill 机制原生进主 session 执行（CEO → Eng → DX 三相
   用户镜——无感知差异；开发循环镜——省一整轮 change 固定成本。主次：开发循环镜为主。
   **备选**：接受拆分（后果：两轮 change 固定成本 + 吸收件长期停在「未证实」状态）。
   **若我们错了，代价是**：吸收版 Step1 静默弱于 gstack 一段时间，靠 retro 数据事后发现。
+  **〔拍板〕维持现 scope 不拆（挑战裁掉）。**
 - **Q2 · 度量可比性**〔CEO-X5/ENG-X5/DX-X6，3 声收敛〕：raw 名直接替换后新旧 Step1 在锚数据里同为
   `broad`，无法按 raw 区分。**推荐：维持 memo D3④（直接替换不共存）。** 依据：切换点是已知 change——
   retro 聚合按归档时间以本 change 为分界分段即可区分新旧（时间维度天然承载 producer 代际），无须升
   v2 加 origin 维度。**代价**：broad 桶内 autoplan 与 scope-audit 仍混计（既有事实，非本 change 引入）。
   **备选**：契约升 v2 加 origin 字段（代价：契约版本涟漪 + 所有生产者/聚合器同步改）。
+  **〔拍板〕维持 D3④（建议裁掉）。**
 - **Q3 · XSS 检查点落点**〔ENG-X7 + 对抗镜3 ADV2，2 声〕：CR-BE-02 的 XSS 例证含
   `dangerouslySetInnerHTML`/`v-html`（客户端框架），但纯前端改动只命中 TG-03、不加载 backend domain，
   且 code-checklists 无 frontend.md ⇒ 这半边例证路由不可达，「吸收后残值归零」对 XSS 一项名不副实。
   **推荐：保留 CR-BE-02 落点（服务端模板渲染 html_safe/|safe 场景），Non-Goals 补一句「客户端框架
   XSS 待 frontend domain 建立后补」。** 依据：挪 base 会让每个非前端 change 都过 XSS 项（噪声）；
   memo C7 是你确认过的映射，改落点应由你拍板。**备选**：挪 `code-review-base.md`（覆盖全但增噪）。
+  **〔拍板〕采纳推荐——落点不动，proposal Non-Goals + design C7 表已补声明（0d06e6e）。**
 - **Q4 · `docs/workflow-skills/gstack-review.md` 去留**〔DX-8〕：tasks 5.3 现留白给实现期。
   **推荐：现在拍板删除**（code-review 零 gstack 后该详解文档无编排器引用，DOC-1 精神）。备选：保留并
   改述为「未使用第三方 skill 参考」。
+  **〔拍板〕不删（推荐被否，取备选）**——docs/ 为纯人读参考、无运行时消费（全仓 grep 证实），保留并
+  改述定位；tasks 5.3 已同步（0d06e6e）。
 
 ### [已裁掉区]（反静默压制：原始发现 + 裁掉理由，供复核「裁得对不对」）
 
@@ -78,7 +94,7 @@ autoplan 经 Skill 机制原生进主 session 执行（CEO → Eng → DX 三相
 - 〔CEO-C4〕spec-review 侧姊妹依赖 defer 无优先级信号——已有 tasks 6.3 todo 承载，优先级由 issues 池分诊。
 - 〔CEO-C5〕新 checklist 措辞自身无复评检查点——lens-metric 采纳率天然覆盖（checklist 产出的 finding 被采纳与否可见），不另设机制。
 
-## 各镜 findings 与裁决（合并去重后 32 条：采纳 20 · 裁掉 7 · defer 5）
+## 各镜 findings 与裁决（合并去重后 32 条 · 拍板后终态：采纳 21 · 裁掉 10 · defer 1）
 
 > 完整原始 findings 见 `gstack-review.md`（广审层 26+19 条）与本节合并池。命中镜集合已折叠到
 > canonical lens（broad=autoplan 三相位 Claude 子代理、outside-voice=autoplan codex 三 voice（复用）、
@@ -109,17 +125,18 @@ autoplan 经 Skill 机制原生进主 session 执行（CEO → Eng → DX 三相
 | F-O1 | gstack SKILL 实为 1852 行（proposal 写 1853） | grounding | 高/低 | proposal 校正 |
 | F-O2 | needle 新措辞未明确 | grounding | 中/低 | tasks 2.4 补口径 |
 
-**defer**：孤儿副本清理（→ tasks 6.3 todo ③）+ Q1-Q4（上方需拍板区）。
+**defer（终态仅 1 条）**：孤儿副本清理（→ tasks 6.3 todo ③）。Q1-Q4 已拍板：Q3 采纳（+1 采纳）、
+Q1/Q2/Q4 裁掉（+3 裁掉），见决策登记区尾注。
 
 ## 度量锚（lens-metric）
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="12" 采纳="11" 裁掉="0" defer="1" 独立="6" sev="致1/高4/中4/低2" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="14" 采纳="10" 裁掉="1" defer="3" 独立="4" sev="致0/高4/中4/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="12" 采纳="12" 裁掉="0" defer="0" 独立="6" sev="致1/高4/中5/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="14" 采纳="10" 裁掉="3" defer="1" 独立="4" sev="致0/高4/中4/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="5" 采纳="2" 裁掉="3" defer="0" 独立="2" sev="致0/高0/中0/低2" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="12" 采纳="6" 裁掉="3" defer="3" 独立="1" sev="致0/高5/中1/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="12" 采纳="7" 裁掉="5" defer="0" 独立="1" sev="致0/高5/中2/低0" -->
 
 （emitter exit 0 产出；分类正确性 / roster 完备性 / findings 誊写准确仍是主 session 信任边界；
-门前草稿值，拍板回写时按 SR-M 最终化。）
+**已按 SR-M 于拍板回写时最终化**——Q1/Q2/Q4 裁掉、Q3 采纳计入。）
 
 ## 修订清单（[spec-review-amendment]，已全部落盘）
 
