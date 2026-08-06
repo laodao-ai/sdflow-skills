@@ -1,6 +1,6 @@
 ## Why
 
-`sdflow-code-review` 的 Step1 依赖第三方 gstack `/review` skill 原生执行（1853 行，其中约 800 行为
+`sdflow-code-review` 的 Step1 依赖第三方 gstack `/review` skill 原生执行（1852 行，其中约 800 行为
 gstack 框架样板），存在三个结构性冲突：① gstack 的 AskUserQuestion 门（Fix-First batch-ask、
 HIGH-impact gate、preamble 配置问答）与阶段三「无人类门」铁律按字面不可同时满足；② gstack 的
 Step 5b auto-fix 发生在本 skill Step4/5 两段 checkpoint 工作树纪律之前，污染提交时序；③ 其计划
@@ -71,7 +71,9 @@ commit-message 猜意图——最想要的能力在本工作流里恰是残废�
 
 ## Success Metrics
 
-- `grep -rn "gstack" sdflow-code-review/SKILL.md` 归零（历史注记除外）；code-review 全流程在未安装
+- `grep -rn "gstack" sdflow-code-review/SKILL.md` 严格归零（DOC-1 口径：正文即最终态、零残留，
+  不留「历史注记」豁免——演进史进 archive 不进 SKILL 本体）〔spec-review-amendment：原「历史注记
+  除外」豁免与 design Compliance 的 DOC-1 承诺冲突、且无机械判据，统一到严格口径〕；code-review 全流程在未安装
   gstack 的机器上可完整跑通（Step1 无降级日志）。
 - 全仓 pytest 绿（含 anchor_lint golden 新 token、test_workflow_split needle 更新）。
 - dogfood：本 change 自身的代码审报告产出 `scope-audit` raw 名 broad 镜行 + 新 mode 锚，
@@ -86,6 +88,10 @@ commit-message 猜意图——最想要的能力在本工作流里恰是残废�
   VERSION-CHANGELOG 一致性放弃（低频/栈不匹配/已有部分覆盖）。
 - 不迁移归档报告中的旧 `mode="native|simulated"` 锚与 `gstack-adv` raw 名（冻结审计件）。
 - 不建 python.md domain、不动 frontend domain 占位。
+- 〔spec-review-amendment〕不吸收 gstack `/review` 全量流程中的 **Prior Learnings 跨会话学习检索**
+  （`gstack-learnings-search`，本机确有真实学习记录）与 **Search-before-recommending 联网核对**两项
+  附带能力——评审知识沉淀由本仓 memory / issues 池 / retro 承载，联网核对由评审子代理按四条通则②
+  自主执行；显式放弃而非静默丢失（对抗镜挖出，五问过线：低频 + 已有替代承载面 + 吸收成本高）。
 
 ## Compliance
 
