@@ -2,8 +2,8 @@
 name: sdflow-code-review
 description: >
   阶段三「代码评审编排器」——**每次全跑·独立冷视角·强制主审**（非"高风险才跑的边际抽查"；实测能抓循环内被
-  controller 说服放过的真问题）。主 session（强档）协调：Step1 并入 gstack/review（scope-drift + 计划
-  完成度审计），Step2 fan-out 多个 fresh 子代理并行审本项目 code-checklists（领域镜 + 对抗镜 + 历史镜），
+  controller 说服放过的真问题）。主 session（强档）协调：Step1 自持 scope 审计（派 fresh 中档子代理，
+  以本 change 四件套为确定性意图源做 scope-drift + 计划完成度审计），Step2 fan-out 多个 fresh 子代理并行审本项目 code-checklists（领域镜 + 对抗镜 + 历史镜），
   Step3 置信过滤（<80 滤除）+ 对抗裁决，Step4 **能修的自动修**（标 [impl-review-fix]）、≥2 方案按 `T10-choice`（strong 档）三级协议自动选推荐（按三镜 + 主次记理由）、修不了/拿不准的 defer 进 buglist/todolist，Step5 汇总**一份** code-review-report.md。
   **阶段三无人类门**——不 AskUserQuestion，自动修/自动裁/defer，残差交 hand-off 异步再入口。**不依赖 /clear**
   ——子代理 fresh context 即独立性。代码即 ground truth（无接地镜，换历史镜 + 置信过滤）。出报告标
@@ -154,13 +154,14 @@ description: >
 <!-- sdflow:principles:end -->
 
 把 workflow 规则集的 `code-checklists/`（经 resolve-workflow.sh 解析，通用 base CR-01~09 + 领域 delta CR-*）操作化为一次
-**连续跑的编排代码评审**：Step1 gstack/review（scope-drift + 完成度）→ Step2 并行多镜（本项目清单）→
+**连续跑的编排代码评审**：Step1 自持 scope 审计（scope-drift + 完成度）→ Step2 并行多镜（本项目清单）→
 Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份** `code-review-report.md`。
 
 > **定位升级（P3c，须知情）**：本 skill **不是**"高风险才跑的冷独立抽查、边际残差"——那是旧
 > `quality-layering.md §五` 的结论，**已被否决**。sdflow-code-review 是**每次全跑的独立强制主审**：实测能抓出
-> 生成循环内被 controller 说服放过的真问题。它把旧 `gstack/review`（scope-drift）+ 自制多镜清单审
-> 合并成一个编排器，产出一份 `code-review-report.md`（取代旧 staff-review-report.md + impl-review-report.md 分裂）。
+> 生成循环内被 controller 说服放过的真问题。Step1 是自持能力（fresh 子代理以本 change 四件套为确定性意图源
+> 做 scope-drift + 完成度审计，意图不再靠 commit message 猜），与 Step2 的自制多镜清单审共同产出一份
+> `code-review-report.md`（取代旧 staff-review-report.md + impl-review-report.md 分裂）。
 
 ## 两条连续性铁律（阶段三自动流的前提）
 
@@ -200,13 +201,73 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 **MUST 按下述带防护次序解析**（V1：裸 `eval "$(…)"` 会被脚本缺失静默吞——`sdflow-init update` 不装 hack 脚本、须 setup.sh，skew 窗口高发；`eval ""` 返回 0 且同 shell 上一轮的 `SDFLOW_*` 旧值原样留存 ⇒ 拿旧宿主假绿）：**(a)** 先 `unset SDFLOW_HOST SDFLOW_TIER_STRONG SDFLOW_TIER_MID SDFLOW_TIER_LIGHT SDFLOW_VOICE_RUNNER SDFLOW_VOICE_MODEL` 清脏（eval 失败也只得空值、不复用上轮脏值）；**(b)** `[ -x ~/.sdflow/hack/resolve-models.sh ]` 预检，不成立 → **fail-loud 硬停本轮工作**「resolve-models.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」，MUST NOT 继续；**(c)** 捕获退出码再 eval：`MODELS_ENV="$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，退出码非 0 → fail-loud 硬停（同文案 + 原样转发 stderr）；否则 `eval "$MODELS_ENV"; EVAL_RC=$?`——**`eval` 自身的退出码 MUST 立即捕获并检查**，`EVAL_RC` 非 0 → **fail-loud 硬停**（同文案 + 注明「resolver 输出无法 eval，eval 退出码 $EVAL_RC」），**MUST NOT 带着半成品环境继续做 (d) 的变量校验**〔impl-review-fix FIX-3：resolver 输出可以**先**设好合法的 host/tiers、**再**跟一条非法命令 ⇒ eval 退出 127、而 (d) 的变量校验全 PASS ⇒ 放行一份被截断的解析结果；「非零退出**或输出无法 eval**」是同一条失败清单里的两半，只做前半等于漏了后半〕；**(d)** eval 后校验：`$SDFLOW_HOST` MUST 精确 ∈ {claude,codex,unknown} 且非空，host≠unknown 时三 `$SDFLOW_TIER_*` MUST 非空——任一不满足（尤其 `$SDFLOW_HOST` **取到空值 = resolver 根本没跑成**）→ **在任何后续动作之前 fail-loud 硬停**，**空值 MUST NOT 回落当 `host=unknown` 处置**（unknown = 跑成但判不出宿主、空 = 工具没装没跑成，把后者吸进 unknown 宽容路径又是一层假绿）。**诚实边界**：unset/eval/校验 MUST 内联本 SKILL（eval 要 export 进主 session shell，包子脚本无法把变量 export 回来）∴ 是对主 session 的**指令、非机械门**，MUST NOT 声称机械门。校验通过后取本轮 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_STRONG`/`$SDFLOW_TIER_MID`/`$SDFLOW_TIER_LIGHT`（本机队已解析好的具体模型 id，供本轮后续所有派子代理动作引用）、`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`（跨模型 voice 目标，供 outside-voice 调用协议引用；本轮不跑 outside-voice 时忽略这两个变量）。**本轮全程只 eval 这一次**——后续一切取值一律读这次导出的环境变量，MUST NOT 各自重判宿主（ADR-1/ADR-9，防信号跨调用点漂移）。
 <!-- sdflow:tier-resolution:end -->
 
-（与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、第二步能力探针同类；空值/unknown 分家判据同下方「skew 探测」的 fail-loud 精神——三处均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
-5. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探两条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。两条均探到 ⇒ 正常进入第一步。
+（与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、下方能力探针同类；空值/unknown 分家判据同下方「skew 探测」的 fail-loud 精神——三处均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
 
-## 第一步：gstack/review 子步（并入·原生执行，scope-drift + 完成度）
+5. **能力探针（本轮恰好一次，与档位解析同位，Step1 与 Step2 共用同一次结果）**〔spec-review-amendment：时序钉死 · host-adaptive-execution · 子代理不可用时镜数如实降级〕（语义核验非机械门，ADR-4/adr/0023）：
 
-- **原生执行〔T25·R5〕**：主 session 经 Skill 机制原生执行 gstack `/review` 全量流程（指令直接进主 session，MUST NOT 派子代理读其 SKILL.md 模拟；不因 prompt 措辞裁剪原生步骤），**必须含 scope-drift（顺手多改）与计划完成度缺口（建的=计划的?）**，结论纳入 Step3 合并池；报告 Step1 段写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="native" -->`。
-- **显式降级**：gstack/review 不可用 → 子代理模拟 + 显式日志（"scope/完成度审计层缺失 → 模拟降级"）+ 锚行 `mode="simulated"`，MUST NOT 伪装原生，**不静默跳过**。
+   - `$SDFLOW_HOST="claude"` → 免探，恒 `subagents="available"`。
+   - `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——上一步已判定）。
+   - `$SDFLOW_HOST="codex"` → **MUST** 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，
+     不做任何实质工作）；派不出/机制报错 → `subagents="unavailable"`；派出且收到哨兵 → `subagents="available"`。
+     **Codex 子代理授权见 AGENTS.md「Codex 子代理授权」段**（多镜 fan-out + model-tiers 构成显式 task-specific reason）。
+   - **诚实边界（MUST 显著登记，§0.0）**：探针结果由**主 session 自己**观察并落锚——「是否真派出了一次子代理、
+     是否真收到回复」无可信脚本捕获路径，`anchor_lint` 的一致性 lint 只核**锚行文法自洽**（`unavailable`
+     却报多镜的自相矛盾），**核不了它是否对应一次真 spawn**。MUST NOT 声称这是机械门。
+   - **本轮恰一次，MUST NOT 为 Step1 另探落第二条锚**：Step1（派 fresh 子代理做 scope 审计）与 Step2（fan-out 多镜）
+     共用本步判定的同一次结果——`subagents="available"` 时 Step1 派子代理、Step2 各镜也派子代理；`subagents="unavailable"`
+     时 Step1 与 Step2 均降级为主 session 亲做（各自的降级处置见对应步骤）。
+   - **`subagents="unavailable"` 处置（MUST）**：本轮**缩 roster 到主 session 实际独立完成的镜**（不再假装
+     派了子代理）；报告本段**显著标注**「⚠️ 单镜降级（子代理不可用，host=codex）」；第五步 lens-metric roster
+     （若 `metrics.enabled`）与下方 `mirrors=` **只含实际独立完成的镜**（含 Step1 的 `broad`），MUST NOT 为未独立跑过的镜落锚
+     （承 spec「子代理不可用则缩 roster」Scenario）。
+   - **落锚（每轮恰好一条，落进本报告文件供 `anchor_lint` 读，`host=codex` 报告该锚必填）**：
+
+     `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,history,broad|—" -->`
+
+     `mirrors=` MUST 由本 skill 在 fan-out 决策落定时**直接写本轮实际派出/独立完成的镜清单**（去重、逗号
+     分隔，token ∈ `{domain,adversarial,history,broad}`，`—`=未 fan-out）——
+     **不经 emitter/lens-metric、不读 config.metrics**（GC-3，判据 always-on 于 metrics 开关，不受门控）。
+   - **残余诚实边界（§0.0，无信号⇒语义层）**：一致性 lint 只拦「机制死却报多镜」的**自相矛盾**；「机制活但
+     主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
+     **MUST NOT 声称"头号假绿（多镜静默退化）已被事前机械拦截"**。
+
+6. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探四条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`；③ `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-fold` 机读块内含 `scope-audit:` 行（新 SKILL × 旧 contract 方向——本 change 引入）；④ `python3 "$RULES_ROOT/tools/anchor_lint.py" --help` 的输出或源码 grep 到 `broad` mirrors token 支持（等价信号：`_MIRRORS_LEGAL` 常量行含 `broad`）。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。依据：SKILL 走全局 symlink 瞬时生效、消费仓 tools/contract 走拷贝惰性更新——不加③④两个新信号，每个未 update 消费仓的每轮评审会在**末步** lint 才 fail-closed（整轮 fan-out + voice 成本报废）；旧①②两信号探不到这个方向。四条均探到 ⇒ 正常进入第一步。
+
+## 第一步：自持 scope 审计（fresh 中档子代理，恒跑守卫）
+
+代码审编排器的第一步不借道第三方 skill 的原生执行，而是自己派一个 fresh 子代理，以本 change 目录的
+四件套为确定性意图源，做 scope-drift 与完成度两轴审计——意图不再靠 commit message 猜。
+
+- **dispatch（复用上一步能力探针结果，MUST NOT 另探）**：`subagents="available"` → 派一个 fresh 子代理
+  （中档 `$SDFLOW_TIER_MID`）；`subagents="unavailable"` → 降级由主 session 亲做（见下「降级」）。
+- **并行边界**〔spec-review-amendment：时序钉死〕：diff 命中 Step2 前置 `trivial_shape` 白名单形状
+  （EXEMPT 候选）时，Step2 的免除判定 MUST **阻塞等待本步结果收齐后**才可定案——本步一旦揭出隐藏逻辑，
+  EXEMPT 判定作废、Step2 照跑（异步迟到的揭穿换不回已跳过的多镜，守卫空转）；diff 非白名单形状（Step2
+  反正要 fan-out）时，本步 MAY 与 Step2 fan-out 并行派发，结果同在 Step3 barrier 前收齐。
+- **输入**：`{change_dir}` 的 proposal.md（scope / Non-Goals）+ tasks.md + design.md + `DIFF_BASE..HEAD`
+  diff（`--stat` + 全量）。prompt MUST 原文携带本 SKILL.md 顶部「四条通则」区块（`sdflow:principles` 从
+  start 到 end，整段复制，不转述、不摘要），MUST 声明「不要 AskUserQuestion，返回结构化 findings」。
+- **审计两轴**：
+  - **scope-drift**：diff 改动文件 ↔ proposal scope 逐条比对——出圈改动（不在 What Changes / tasks
+    覆盖内）逐条列 `SCOPE-CREEP`；Non-Goals 被实现也算 creep。
+  - **完成度（五态）**：tasks.md 逐 task 判 `DONE / PARTIAL / NOT DONE / CHANGED / UNVERIFIABLE`，判定
+    纪律逐条钉死：**DONE** 从严（需 diff 内具体证据，碰过文件 ≠ 做了）；**CHANGED** 从宽（换路径达成
+    同目标算完成，注明差异）；**UNVERIFIABLE** 诚实（diff 证明不了的外部状态如实列出需人工核验项，宁可
+    多列不静默判 DONE）；**PARTIAL** = 部分子项有 diff 内证据其余没有；**NOT DONE** = diff 内无任何相关证据。
+- **输出**：① **逐 task 五态表**（每 task 一行：状态 + 一句证据引用；DONE/CHANGED 也在列，非仅负向态——
+  五态审计须整体可审计）；② 结构化 findings（每条：类型 `SCOPE-CREEP/NOT-DONE/PARTIAL/UNVERIFIABLE` +
+  证据 file:line 或 task 条目 + 严重度；CHANGED 由表行承载注明差异、不单独出 finding）→ 进 Step3 合并
+  池按普通 finding 走裁决/置信/自动修/defer（informational shift-left，不设门、不 AskUserQuestion）。
+  **与 verify 关系钉死**：本审计 MUST NOT 勾改 tasks.md 复选框、MUST NOT 替代 sdflow-done verify 终审
+  （verify 为最终权威）；Step4 自动修后的「复审一轮」SHALL 把 scope-drift 维度纳入复审范围（修复 diff
+  自身的越界改动可见，报告锚定的 `reviewed_sha` 才名副其实）。
+- **降级**：能力探针判 `subagents="unavailable"` ⇒ 主 session 亲做同一审计协议，报告**显著标注**
+  「⚠️ scope 审计降级（主 session 亲做，存在自查偏置）」。
+- **恒跑守卫**：`trivial_shape` 判 EXEMPT 时本步照跑；审计一旦揭出隐藏逻辑 ⇒ EXEMPT 作废、Step2 照跑
+  （见上「并行边界」）。
+- **锚**：报告 Step1 段写 v1 锚行 `<!-- sdflow:step1-broad-review v1 mode="subagent|main-session" -->`——
+  新枚举如实记执行位（`subagent`=子代理独立完成，`main-session`=降级亲做）；旧值 `native|simulated` 退役
+  （归档报告不迁移）。`anchor_lint` 零改动（只核存在性）。
 
 ## 第二步：规划镜头 + 并行 fan-out 子代理（本项目清单）
 
@@ -214,39 +275,20 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 `python3 $RULES_ROOT/tools/trivial_shape.py --base "$DIFF_BASE" --root "$(git rev-parse --show-toplevel)"`——
 退出码 **0=EXEMPT**（diff 仅无逻辑面白名单形状：代码内注释/约定文档路径 README·CHANGELOG·docs·VERSION/仅新增 tests/；
 多镜结构上零产出）→ **免本步 fan-out**，报告 Step2 段注明「无逻辑面豁免（trivial_shape EXEMPT）」并附判器 JSON 的 `reason`；
-Step1（scope-drift）已恒跑守卫伪装逻辑。**1=NOT_EXEMPT**（有逻辑面 / 命中行为面路径 bundle·SKILL.md·workflow.md·
-ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**（保守）。**默认开、仅机判无逻辑面才关，非「高风险才跑」**；
-判器缺失/不可执行 → 视同 NOT_EXEMPT 照跑（不静默免）。
+**免除判定 MUST 阻塞等待 Step1（scope 审计）结果收齐**（见 Step1「并行边界」）——Step1 揭出隐藏逻辑则本判定作废、
+照常 fan-out。**1=NOT_EXEMPT**（有逻辑面 / 命中行为面路径 bundle·SKILL.md·workflow.md·
+ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**（保守，此时 Step1 MAY 与本步 fan-out 并行）。
+**默认开、仅机判无逻辑面才关，非「高风险才跑」**；判器缺失/不可执行 → 视同 NOT_EXEMPT 照跑（不静默免）。
 
 **规划镜头（主 session）**：按 `{change_dir}` 命中的 TG/栈定**领域镜**；按风险定**对抗镜**（普通 2 / 高风险 3）；
 固定 1 个**历史镜**。linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
+**TG-27 → domains/llm.md**（代码消费 LLM/agent 产出并持久化/执行/外呼，与 TG-01→backend 同构）——命中即选该领域清单叠加。
 
-- **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（能力探针、fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+- **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
 
-**能力探针（fan-out 前 MUST 先跑，语义核验非机械门，ADR-4/adr/0023）**〔host-adaptive-execution · 子代理不可用时镜数如实降级〕：
-
-- `$SDFLOW_HOST="claude"` → 免探，恒 `subagents="available"`。
-- `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——第零步已判定）。
-- `$SDFLOW_HOST="codex"` → **MUST** 先派一个 trivial 探针子代理（prompt 只要求回复固定哨兵，如 `PROBE_OK`，
-  不做任何实质工作）；派不出/机制报错 → `subagents="unavailable"`；派出且收到哨兵 → `subagents="available"`。
-  **Codex 子代理授权见 AGENTS.md「Codex 子代理授权」段**（多镜 fan-out + model-tiers 构成显式 task-specific reason）。
-- **诚实边界（MUST 显著登记，§0.0）**：探针结果由**主 session 自己**观察并落锚——「是否真派出了一次子代理、
-  是否真收到回复」无可信脚本捕获路径，`anchor_lint` 的一致性 lint 只核**锚行文法自洽**（`unavailable`
-  却报多镜的自相矛盾），**核不了它是否对应一次真 spawn**。MUST NOT 声称这是机械门。
-- **`subagents="unavailable"` 处置（MUST）**：本轮**缩 roster 到主 session 实际独立完成的镜**（不再假装
-  派了子代理）；报告本段**显著标注**「⚠️ 单镜降级（子代理不可用，host=codex）」；第五步 lens-metric roster
-  （若 `metrics.enabled`）与下方 `mirrors=` **只含实际独立完成的镜**，MUST NOT 为未独立跑过的镜落锚
-  （承 spec「子代理不可用则缩 roster」Scenario）。
-- **落锚（每轮恰好一条，落进本报告文件供 `anchor_lint` 读，`host=codex` 报告该锚必填）**：
-
-  `<!-- sdflow:fanout-capability v1 host="$SDFLOW_HOST" subagents="available|unavailable" mirrors="domain,adversarial,history|—" -->`
-
-  `mirrors=` MUST 由本 skill 在 fan-out 决策落定时**直接写本轮实际派出/独立完成的镜清单**（去重、逗号
-  分隔，token ∈ `{domain,adversarial,history}`，`—`=未 fan-out）——
-  **不经 emitter/lens-metric、不读 config.metrics**（GC-3，判据 always-on 于 metrics 开关，不受门控）。
-- **残余诚实边界（§0.0，无信号⇒语义层）**：一致性 lint 只拦「机制死却报多镜」的**自相矛盾**；「机制活但
-  主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
-  **MUST NOT 声称"头号假绿（多镜静默退化）已被事前机械拦截"**。
+**能力探针已于第零步完成**（与档位解析同位，Step1 与本步共用同一次结果）——本步 fan-out 直接读该结果，**不另探**。
+`subagents="unavailable"` 时本轮**缩 roster 到主 session 实际独立完成的镜**，报告显著标注「⚠️ 单镜降级（子代理不可用，
+host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「能力探针」全文。
 
 **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
 
@@ -262,16 +304,27 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 > **🔴 每个子代理 prompt MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——见传播纪律。
 > **代码审是通则 ③ 的最高发区**：子代理眼前只有「已经写出来的代码」，漏带这三条，它**必然**把「它现在能跑 / 现在没出过事」当成「它是对的、不用改」。
 > **判据是「目标态下会不会出问题」，不是「现在出没出过问题」。**
+>
+> **🔴 pre-emit 引文纪律（产出纪律非机械门，C9）**：每条 finding MUST 引出触发它的具体代码行原文
+> （file:line + 逐字引文）；**非局部 finding**（缺失校验 / 跨文件数据流 / 时序竞态 / absence 类——
+> 无单一触发行者）SHALL 以**「可复核证据包」**替代单行引文（多处 file:line 逐字引文、或「应在而不在」
+> 的缺失对照——引出本应含该防护的位置原文），仍须可复核定位；**两者皆无 ⇒ 该条自报置信 MUST ≤50**。
+> 本纪律仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据。**诚实边界**：引文
+> 真实性无机械核验（子代理自报），本条是产出纪律非机械门，MUST NOT 声称机械保证。
 
 **第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（进第三步汇总），结果在 Step3 barrier 处 collect**。findings 进 Step3 合并池；v1 锚行按位点写入报告。**复评条款已泛化〔workflow-metrics-loop ADR-5，见第五步「反馈回路」〕**：原「累计 10 次后按采纳率复评降采样为 HR-only」是本条 outside-voice 专属规则，现升级为 per-(层,镜) 通用条款（本镜只是其中一个评估单元，不再单独定义判据）。
 
 ## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
 
 0. 🔴 **进汇总去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的汇总去重。
-1. 汇总 gstack/review（Step1）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
+1. 汇总 Step1（自持 scope 审计）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
    折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
 2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
-   明确滤除：CI 能抓的 / 纯 nitpick / 未改动行的既有问题 / 仅主观风格 / 已被注释显式抑制的。
+   明确滤除：CI 能抓的 / 纯 nitpick / 未改动行的既有问题 / 仅主观风格 / 已被注释显式抑制的 /
+   **阈值或常量取值不强制求注释**（调参即腐，Suppressions 扩） / **无害冗余、有助可读性的不标**（Suppressions 扩）。
+   **pre-emit 引文纪律裁决〔C9〕**：Step2 各镜 finding 既无单行引文又无可复核证据包 ⇒ 其自报置信 MUST ≤50 ⇒
+   必被本步 <80 数值滤除 → 落「已裁掉」区一行留痕（可审计，反静默压制既有条款覆盖）；本条不作用于 Step1
+   scope 审计的任务级证据（后者的证据形态由五态判定纪律独立约束）。
    **outside-voice 豁免〔R4·D8，ADR-5/C1〕**：豁免判据 = 该条 finding 所属 outside-voice 锚被 `anchor_lint` **合法组合矩阵**判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`）——**MUST NOT 自写裸 `runner≠host`**（被 `runner="none"` 击穿）、**MUST NOT 按 runner 取值硬编码**（旧规则 `runner=codex` 在 Codex 宿主下恰是自审，是本条要杀的假绿点）。矩阵判「跨模型」为真的 findings 跳过 <80 数值滤直通对抗裁决（跨模型自评不可比、异见不被同族标尺误杀）；**其余一律照过同族置信滤**——含同族 fallback（`runner==host`，`claude-fallback` 枚举值已废弃）与无执行（`runner="none"`，findings 恒 0，豁免无意义）。
 3. **对抗裁决**：对每条存活 finding 判"是否真的运行期出问题"——对抗镜反驳 ≥ 多数成立则采信。
 4. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
@@ -304,7 +357,7 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
     **MUST NOT** 将其表述为机械保证。
 - **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕〔impl-review-fix mlh-p4〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg`
   各独立计数）的裁决结果**构造进** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/history/broad +
-  outside-voice 每个调用过的 site）——若 Step2 能力探针判 `subagents="unavailable"` 已缩 roster，此处 MUST 同步只含实际
+  outside-voice 每个调用过的 site）——若第零步能力探针判 `subagents="unavailable"` 已缩 roster，此处 MUST 同步只含实际
   独立完成的行键], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见契约
   `lens-metric-contract.md` 的 `lens-metric-input-schema` 机读块——bundle 分发可达、消费仓亦可读，非手数；源仓另有 golden fixture
   示范 `tools/tests/fixtures/lens_metric_input.json`，消费仓非 full 拷贝不含 `tests/`，以契约 schema 块为准）〔impl-review-fix mlh-p4：引用改指 bundle 可达契约块〕——原「voice分桶」自由 prose 台账行已被此锚吸收
@@ -537,21 +590,24 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
 ```
 ## code-review 报告 — {change}
 ### 命中范围
-  栈: backend·go / embedded·ml307c …   清单: CR-01~09 + CR-GO-* + …   gstack/review: scope-drift/完成度 结论
-### 子代理能力锚（host=codex 报告必填，语义核验非机械门，见 Step2「能力探针」）
-  <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,history|—" -->
+  栈: backend·go / embedded·ml307c …   清单: CR-01~09 + CR-GO-* + …   Step1 自持 scope 审计: scope-drift/完成度 结论
+### 子代理能力锚（host=codex 报告必填，语义核验非机械门，见第零步「能力探针」）
+  <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,history,broad|—" -->
   subagents="unavailable" 时本报告 MUST 显著标注「⚠️ 单镜降级」（见命中范围/结论区）。
 ### Findings（置信 ≥80）
   [严重度] CR-04 资源泄漏 | file.go:42 | 错误路径未释放 conn | 置信 90 | 已修[impl-review-fix] / defer→buglist
 ### 已裁掉（反静默压制，可审计）
-  X1  reviewer 原始发现 + 主 session 裁掉理由；<80 滤除项一行带过
+  X1  reviewer 原始发现 + 主 session 裁掉理由；<80 滤除项一行带过（含无引文/无证据包 finding 的置信封顶滤除）
 ### 修复 / defer 台账
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(按三镜+主次附理由)；defer K 项 → buglist/todolist
   T10-choice复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附
 ### 度量锚（lens-metric，受 config `metrics.enabled` 门控——关闭则本段整体不落、不调 emitter，见第三步/第五步）
-  domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（gstack/review Step1）
+  domain / adversarial / history / outside-voice（同轮 site="code-voice" 与 site="hr-tg" 若均调用，各独立一行）/ broad（Step1 自持 scope 审计）
   各一行——本段内容 = Step5「度量锚落锚」调 `lens_metric_emit.py` 后 exit0 落进来的 stdout，MUST NOT 手拼：
   <!-- sdflow:lens-metric v1 layer="code-review" lens="…" host="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
+  **broad 行**：`findings[].hits[].raw` 用原始镜名 `scope-audit`（folded 到 canonical `lens="broad"`）；
+  roster 行仍为 canonical `{lens:"broad", runner:"<host>", site:—}`——raw 名只出现在 `hits[].raw`，
+  `lens=` 字段本身恒为折叠后的 `broad`。
   字段/取值域/归属/折叠规则见规则根 `lens-metric-contract.md`（唯一权威源，此处只引用不复制清单）；
   原「voice分桶」自由 prose 行已被 outside-voice 镜的此锚吸收取代。
   这些锚跨 change 归档后由 `/sdflow-retro` 聚合、按 per-(层,镜) 采纳率+独立率双列复评（见第五步「反馈回路」），
@@ -575,13 +631,13 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
 依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读 blame/打分可下放弱档。
 **不要**把综合判断委派给弱档子代理。阶段三无人类门（不 AskUserQuestion，自动修/裁/defer）。
 
-## 与 gstack/review、官方 code-review 的分工（并入 vs 弃用）
+## 与官方 code-review 的分工（弃用为独立 step）
 
-| | gstack/review | 官方 /code-review | 本 skill（sdflow-code-review 编排器） |
-|---|---|---|---|
-| 现状 | **并入本 skill Step1** | **弃用为独立 step（P3d）** | 每次全跑·独立冷·强制主审 |
-| 干什么 | scope-drift + 完成度审计 | 插件能力仅供历史镜/置信过滤**内部借用** | 清单逐条 + 对抗 + 置信过滤 + 合并出报告 |
-| 决策 | 自动（纳入合并池） | 不再独立 gh 回帖 | 主 session 对抗裁决 + 自动修/裁/defer |
+| | 官方 /code-review | 本 skill（sdflow-code-review 编排器） |
+|---|---|---|
+| 现状 | **弃用为独立 step（P3d）** | 每次全跑·独立冷·强制主审（Step1 自持 scope 审计 + Step2 多镜清单） |
+| 干什么 | 插件能力仅供历史镜/置信过滤**内部借用** | 清单逐条 + 对抗 + 置信过滤 + 合并出报告 |
+| 决策 | 不再独立 gh 回帖 | 主 session 对抗裁决 + 自动修/裁/defer |
 
 > P3d：官方 `/code-review` 不再作独立 step（subagent-dev production-readiness + 本 skill 已覆盖，
 > 本地合并无需 gh 留痕）；但保留其插件能力供历史镜 / 置信过滤内部借用。
