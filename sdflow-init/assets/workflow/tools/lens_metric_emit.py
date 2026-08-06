@@ -99,7 +99,10 @@ def fold_hit(hit, host, enums, fold_map):
     elif raw in fold_map:
         canon = fold_map[raw]
     else:
-        raise EmitError(f"未知 raw 镜名无折叠映射: {raw}")  # SR-E 不静默塞 broad
+        raise EmitError(
+            f"未知 raw 镜名无折叠映射: {raw}"
+            f"（若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update）"
+        )  # SR-E 不静默塞 broad；absorb-gstack-review：SKILL 先于消费仓 bundle 更新时的可操作指引
     if canon == "outside-voice":
         runner, site = hit.get("runner"), hit.get("site")
         if runner is None or site is None:
