@@ -937,6 +937,53 @@ def test_fanout_in_fence_not_checked():                       # fence 内示例�
     assert al.check_fanout_consistency(r) == []
 
 
+# --- absorb-gstack-review Task 1：mirrors 合法 token 集扩 broad，不污染 dead-fanout 计数集 --------
+
+def test_mirrors_legal_and_fanout_constants_split():
+    """🔒 design.md §2 钉死常量名：合法集 `_MIRRORS_LEGAL` 含 broad，计数集 `_FANOUT_MIRRORS` 不含 broad——
+    两者必须是不同对象，防止未来把 broad 直接塞回 `_FANOUT_MIRRORS` 顺带污染计数域。"""
+    al = _mod()
+    assert "broad" in al._MIRRORS_LEGAL
+    assert "broad" not in al._FANOUT_MIRRORS
+    assert al._MIRRORS_LEGAL != al._FANOUT_MIRRORS
+
+def test_parse_mirrors_broad_token_valid():                    # broad 是合法 mirrors token
+    al = _mod()
+    tokens, err = al._parse_mirrors("broad")
+    assert err is None
+    assert tokens == ["broad"]
+
+def test_fanout_unavailable_broad_history_not_dead_fanout():
+    """unavailable + mirrors="broad,history" → broad 不进计数集，去重计数域只剩 history（1 个）→ 不触发。"""
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="broad,history") + "\n"
+    assert al.check_fanout_consistency(r) == []
+
+def test_fanout_unavailable_broad_domain_history_still_dead_fanout():
+    """unavailable + mirrors="broad,domain,history" → 计数域仍是 {domain,history}（2 个）→ 触发，broad 未被误算但也未误免责。"""
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="broad,domain,history") + "\n"
+    assert _has(al.check_fanout_consistency(r), "dead-fanout-multi-mirror")
+
+def test_step1_broad_review_mode_subagent_lint_passes():
+    """🔒 锁定「lint 不校验 step1-broad-review 的 mode 值」不变量：新枚举值 mode="subagent" 不应触发任何
+    与 mode 相关的校验（只校验锚族存在性）。"""
+    al = _mod()
+    r = ('<!-- sdflow:step1-broad-review v1 mode="subagent" -->\n'
+         + _ov(host="claude", runner="codex", reason_code="ok") + "\n"
+         + '<!-- sdflow:hr-tg v1 hit="none" -->\n')
+    assert al.check_existence(r, "code-review", metrics_on=False) == []
+
+def test_fanout_mirrors_unknown_token_hint_mentions_sdflow_init_update():
+    """mirrors-unknown-token 报错须自带可操作指引：旧版 bundle 遇到未来新增 token 时不应让人对着陌生
+    token 名发呆——文案须提示先跑 `sdflow-init update`。"""
+    al = _mod()
+    r = _fc(host="codex", subagents="unavailable", mirrors="domain,bogus") + "\n"
+    v = al.check_fanout_consistency(r)
+    hit = [x for x in v if x["kind"] == "mirrors-unknown-token"]
+    assert hit and "sdflow-init update" in hit[0].get("detail", "")
+
+
 # --- 解耦锁（metrics=false 时矩阵红线 + 一致性 lint 仍生效，端到端）------------------------------
 
 def test_matrix_self_review_blocks_when_metrics_off(tmp_path):
