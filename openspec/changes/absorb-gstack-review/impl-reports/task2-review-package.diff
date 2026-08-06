@@ -1,0 +1,231 @@
+# Review package: 219dcb63f1c1287ac2d218ad02c39cb38edc921b..e0eff1f335a71e8fb896f1196180afde27b2565e (Task 2 worktree merge)
+
+## Commits
+e0eff1f merge(absorb-gstack-review): Task 2 lens-metric scope-audit
+79d337a impl(absorb-gstack-review): fold 块改认 scope-audit
+
+## Files changed
+ .../impl-reports/task2-lens-metric-scope-audit.md  | 51 ++++++++++++++++++++++
+ .../assets/workflow/lens-metric-contract.md        |  6 ++-
+ .../assets/workflow/tools/lens_metric_emit.py      |  5 ++-
+ .../workflow/tools/tests/test_lens_metric_emit.py  | 34 +++++++++++++++
+ 4 files changed, 93 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/absorb-gstack-review/impl-reports/task2-lens-metric-scope-audit.md b/openspec/changes/absorb-gstack-review/impl-reports/task2-lens-metric-scope-audit.md
+new file mode 100644
+index 0000000..333cd8d
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-review/impl-reports/task2-lens-metric-scope-audit.md
+@@ -0,0 +1,51 @@
++# Task 2: lens-metric 折叠源改认 scope-audit 并给出旧版修法指引
++
++## 做了什么
++
++三处改动，均在 `sdflow-init/assets/workflow/` 权威源（未触碰仓根 `openspec/workflow/` 部署副本，理由见「Concerns」）：
++
++1. **`lens-metric-contract.md`**
++   - `## 机读折叠` fence 块（`lens-metric-fold`）：`gstack-adv: broad` 行替换为 `scope-audit: broad`（不共存，纯替换）。
++   - `## 折叠表（canonical 投影）` 散文行同步改述：`autoplan(CEO/Eng/DX/design)+gstack-adv→broad` → `...+scope-audit→broad`；并按本文档既有惯例（如 `add-codex-host-support` 的追加式变更注记）追加一条 `〔absorb-gstack-review：...〕` 括号注记，说明本次替换的来龙去脉。
++
++2. **`tools/lens_metric_emit.py`**
++   - `fold_hit()` 内「未知 raw 镜名」fail-closed 分支（原 line 102）追加可操作指引：`（若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update）`。
++
++3. **`tools/tests/test_lens_metric_emit.py`**
++   - 新增 4 条测试（TDD：先跑基线 56 绿 → 新测试先红 1 条 → 实现 → 复跑全绿 60）：
++     - `test_fold_hit_scope_audit_maps_to_broad`：`scope-audit` 经 `fold_hit` 折叠出 `("broad", host, host, "—")`。
++     - `test_fold_hit_gstack_adv_no_longer_recognized`：`gstack-adv` 不在 fold_map 内、`fold_hit` 对它 fail-closed（回归锁「替换非新增」）。
++     - `test_fold_hit_unknown_raw_error_mentions_update_hint`：未知 raw 名报错文案含 `sdflow-init update` 与 `openspec/workflow/` 两个子串。
++     - `test_reduce_scope_audit_raw_folds_to_broad_anchor`：端到端走 `reduce()`，`raw="scope-audit"` 的 finding 归约后落在 roster 的 `lens="broad"` 行（`findings="1"` `采纳="1"` `独立="1"` `sev="致0/高0/中1/低0"`），验证下游 `lens="broad"` 锚行接口不变。
++
++## 验收标准逐条核验
++
++| # | 验收标准 | 证据 |
++|---|---|---|
++| 1 | 折叠机读块含 `scope-audit: broad` 行，且不再含 `gstack-adv` 行 | `grep -n "gstack-adv\|scope-audit" sdflow-init/assets/workflow/lens-metric-contract.md` → fence 块内仅剩 `66:scope-audit: broad`，无 `gstack-adv:` 行 |
++| 2 | 契约文档中描述折叠关系的散文与机读块一致（无 `gstack-adv` 残留） | `## 折叠表（canonical 投影）` 散文行已改 `+scope-audit→broad`；文档内剩余 `gstack-adv` 字样仅出现在新追加的历史注记括号内（`〔absorb-gstack-review：...〕`），是既有惯例的变更记录，非当前折叠关系描述——与 `add-codex-host-support` 一处保留 `claude-fallback` 的方式同构 |
++| 3 | 原始镜名 `scope-audit` 经折叠后产出 `lens="broad"` 的锚行 | `test_reduce_scope_audit_raw_folds_to_broad_anchor`（新增，绿） |
++| 4 | emitter 遇未知原始镜名时报错文案含「若本仓 `openspec/workflow/` 为旧版，请先跑 `sdflow-init update`」（有测试断言） | `test_fold_hit_unknown_raw_error_mentions_update_hint`（新增，绿）；`lens_metric_emit.py` line 99-105 |
++| 5 | `test_lens_metric_emit.py` 既有 fold 用例全绿 | 全文件 60/60 绿（56 原有 + 4 新增），见下方命令输出 |
++
++## 跑过的测试
++
++```
++/usr/bin/python3 -m pytest sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py -q
++............................................................             [100%]
++60 passed in 0.34s
++```
++
++TDD 红→绿证据：改 emitter 前单独跑新 3 条 `-k "scope_audit or gstack_adv_no_longer or update_hint"` → `1 failed, 2 passed`（`test_fold_hit_unknown_raw_error_mentions_update_hint` 断言 `"sdflow-init update" in ...` 失败，因原报错文案不含该串）；改完 → 3 条全绿。
++
++按 TDD 契约（`Blocked-by: none`）本票只跑单元层，未跑集成/e2e。另额外跑了一次全量 `sdflow-init/ hack/` 套件核对无意外回归（非本票要求，超出 TDD 契约范围但作为安全网执行）：
++
++```
++/usr/bin/python3 -m pytest sdflow-init/ hack/ -q
++（全绿，含数个 skip，exit 0）
++```
++
++## Concerns
++
++- **仓根 `openspec/workflow/lens-metric-contract.md` 与 `openspec/workflow/tools/lens_metric_emit.py` 两份部署副本未同步改动**——按票面提示先查证：`test_lens_metric_emit.py` 的 `CONTRACT`/`SCRIPT` 常量固定指向 `sdflow-init/assets/workflow/`（`TOOLS = Path(__file__).resolve().parent.parent`，即测试文件所在目录的上两级，恒为 assets 侧），不消费仓根副本，故未同步。此外本 change 自身 `tasks.md` 6.3 已把「仓根 `openspec/workflow/` 孤儿副本清理（lens-metric-contract.md / WORKFLOW-GUIDE.md，非 pin 死件、grep 假阳来源）」列为 spec-review-amendment 认领的 defer 项（issues 池 todo），确认这两份副本本就是待清理的孤儿、非当前维护对象，不属本票范围。
++- 未触碰 `anchor_lint.py` 的 `mirrors-unknown-token` 报错文案与 SKILL「skew 探测」段的新信号——tasks.md 2.5 把这两项与本票 emitter 指引并列，但本票 brief（`task2-brief.md`）的 5 条验收标准只覆盖 emitter 一处，判断这两项由其他票（SKILL.md/anchor_lint 相关）承接，未越界代做。
+diff --git a/sdflow-init/assets/workflow/lens-metric-contract.md b/sdflow-init/assets/workflow/lens-metric-contract.md
+index a750553..b0663df 100644
+--- a/sdflow-init/assets/workflow/lens-metric-contract.md
++++ b/sdflow-init/assets/workflow/lens-metric-contract.md
+@@ -34,41 +34,43 @@ sev-format: 致N/高N/中N/低N
+ findings/采纳/裁掉/defer 按「哪些镜报过该 finding」归属，共抓则每命中镜各记一次；
+ 独立 仅在「唯一报过 ∧ 被采纳」时 +1；独立在折叠到 lens 类型之后计。
+ 数值跨源一致性 = 主 session 信任边界（自做去重又写锚、自核无独立性），非机械门。
+ 〔mlh-p4〕计数由 `lens_metric_emit.py` 从结构化 findings + 行键 roster 确定性归约产出（非手数）；
+ 「独立在折叠后计」精化为「折叠到**行键 `(lens,host,runner,site)`** 后计」〔add-codex-host-support：行键由
+ `(lens,runner,site)` 升维，插入 `host`，与锚唯一键 `(layer,lens,host,runner,site,轮)` 对齐——`site` 消同轮多次
+ outside-voice 调用的撞键，`host` 消同一 runner 在不同宿主下自审 vs 跨模型的撞键〕。
+ 
+ ## 折叠表（canonical 投影）
+ 领域镜→domain · 对抗镜1/2/3→adversarial · 接地镜/完整性镜→grounding · 历史镜→history ·
+-codex/claude(任何 site，任一 runner 的 voice)→outside-voice · autoplan(CEO/Eng/DX/design)+gstack-adv→broad
++codex/claude(任何 site，任一 runner 的 voice)→outside-voice · autoplan(CEO/Eng/DX/design)+scope-audit→broad
+ 〔add-codex-host-support：`claude-fallback→outside-voice` 废弃行删除、新增 `claude→outside-voice`——host-adaptive
+ 下反向路径由 `claude` runner 执行 voice 时，原始镜名同样落 `claude`，需与 `codex` 同样折叠到 `outside-voice`〕
++〔absorb-gstack-review：`gstack-adv→broad` 行替换为 `scope-audit→broad`——code-review Step1 自持 scope
++审计取代 gstack native review，两者不共存，原始镜名同步改称〕
+ 
+ ## 机读折叠（消费脚本单一源·勿在脚本内复制）〔mlh-p4-lens-metric-emit〕
+ > 折叠单一源。格式同 `lens-metric-enums`：fence info-string 恒为 `lens-metric-fold`；每行 `原始镜名: canonical-lens`。**只列非恒等映射**——恒等（raw 已 ∈ lens enum，如 domain/grounding/history/broad）由 emitter `raw∈lens_enum` pass-through 承载、不列本块（ADR-7）。canonical 值 MUST ∈ `lens-metric-enums` 的 lens 域（emitter `load_fold` 读入即自校验）。
+ ```lens-metric-fold
+ 对抗镜1: adversarial
+ 对抗镜2: adversarial
+ 对抗镜3: adversarial
+ 领域镜: domain
+ 历史镜: history
+ 接地镜: grounding
+ 完整性镜: grounding
+ codex: outside-voice
+ claude: outside-voice
+ autoplan-ceo: broad
+ autoplan-design: broad
+ autoplan-eng: broad
+ autoplan-dx: broad
+-gstack-adv: broad
++scope-audit: broad
+ ```
+ 
+ ## 机读输入 schema（emitter 输入单一权威源·bundle 可达）〔impl-review-fix mlh-p4：ADR-6 落地〕
+ > `lens_metric_emit.py` 的输入 JSON 权威 schema。两审 SKILL 落锚步引用**本块**（bundle 分发可达，
+ > 不依赖源仓 `tools/tests/` fixture——消费仓非 full 拷贝不含 tests/）。字段名英文、取值中文。
+ ```lens-metric-input-schema
+ {
+   "roster": [
+     {"lens": "<canonical ∈ lens enum>", "runner": "<∈ runner enum>", "site": "<code-voice|hr-tg|design-voice|—>"}
+   ],
+diff --git a/sdflow-init/assets/workflow/tools/lens_metric_emit.py b/sdflow-init/assets/workflow/tools/lens_metric_emit.py
+index 814fce4..35b56d9 100644
+--- a/sdflow-init/assets/workflow/tools/lens_metric_emit.py
++++ b/sdflow-init/assets/workflow/tools/lens_metric_emit.py
+@@ -92,21 +92,24 @@ def fold_hit(hit, host, enums, fold_map):
+     outside-voice：runner 显式来自 hit，域收紧至 {claude,codex}（既不取 unknown——矩阵约束，契约「跨模型性」段；
+     也不取 none——hit 蕴含 voice 真跑过，"none"=无执行只对 roster 行合法，复评 Critical fix）。"""
+     if not isinstance(hit, dict) or "raw" not in hit or not isinstance(hit["raw"], str):
+         raise EmitError(f"hit 缺 raw/raw 非字符串: {hit!r}")
+     raw = hit["raw"]
+     if raw in enums["lens"]:
+         canon = raw                                  # 恒等 pass-through（ADR-7）
+     elif raw in fold_map:
+         canon = fold_map[raw]
+     else:
+-        raise EmitError(f"未知 raw 镜名无折叠映射: {raw}")  # SR-E 不静默塞 broad
++        raise EmitError(
++            f"未知 raw 镜名无折叠映射: {raw}"
++            f"（若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update）"
++        )  # SR-E 不静默塞 broad；absorb-gstack-review：SKILL 先于消费仓 bundle 更新时的可操作指引
+     if canon == "outside-voice":
+         runner, site = hit.get("runner"), hit.get("site")
+         if runner is None or site is None:
+             raise EmitError(f"outside-voice hit 缺 runner/site: {hit!r}")
+         if not isinstance(runner, str) or not isinstance(site, str):
+             raise EmitError(f"outside-voice hit runner/site 非字符串: {hit!r}")
+         if runner not in _OV_HIT_RUNNER_DOMAIN:
+             raise EmitError(
+                 f"outside-voice hit runner 越域(须∈{sorted(_OV_HIT_RUNNER_DOMAIN)}): {runner!r}"
+                 f"——hit 不该 runner=\"none\"，hit 蕴含该 voice 真跑过（\"none\"=无执行只对 roster 行合法）"
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py b/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py
+index e0899c4..18e6691 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py
+@@ -84,20 +84,42 @@ def test_fold_hit_ov_runner_none_fail_closed():
+ def test_fold_hit_ov_runner_unknown_fail_closed():
+     # outside-voice 行 runner 域收紧至 {claude,codex,none}，不取 unknown（矩阵约束，契约「跨模型性」段）
+     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+     with pytest.raises(m.EmitError):
+         m.fold_hit({"raw":"codex","runner":"unknown","site":"hr-tg"}, "unknown", e, f)
+ 
+ def test_fold_hit_unknown_raw_fail_closed_not_broad():
+     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+     with pytest.raises(m.EmitError): m.fold_hit({"raw":"神秘镜"}, "claude", e, f)     # SR-E 不塞 broad
+ 
++def test_fold_hit_scope_audit_maps_to_broad():
++    # absorb-gstack-review：code-review Step1 自持 scope 审计的原始镜名 scope-audit 折叠到 broad
++    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
++    assert m.fold_hit({"raw":"scope-audit"}, "claude", e, f) == ("broad","claude","claude","—")
++
++def test_fold_hit_gstack_adv_no_longer_recognized():
++    # absorb-gstack-review：gstack-adv→broad 行已被 scope-audit→broad 替换（不共存），
++    # 旧 raw 名 gstack-adv 现应 fail-closed 而非静默折叠——回归防止两者共存
++    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
++    assert "gstack-adv" not in f
++    with pytest.raises(m.EmitError):
++        m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
++
++def test_fold_hit_unknown_raw_error_mentions_update_hint():
++    # 未知 raw 镜名报错须带可操作指引——这是「SKILL 已更新、消费仓 bundle 未更新」的第一现场，
++    # 报错文案须含「若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update」
++    m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
++    with pytest.raises(m.EmitError) as exc_info:
++        m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
++    assert "sdflow-init update" in str(exc_info.value)
++    assert "openspec/workflow/" in str(exc_info.value)
++
+ def test_fold_hit_site_injection_fail_closed():
+     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+     with pytest.raises(m.EmitError): m.fold_hit({"raw":"codex","runner":"codex","site":'a"b'}, "claude", e, f)
+ 
+ def test_fold_hit_raw_unhashable_fail_closed():
+     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
+     with pytest.raises(m.EmitError):
+         m.fold_hit({"raw":["broad"]}, "claude", e, f)               # raw 非字符串（unhashable）→ 干净 EmitError 非裸 TypeError
+ 
+ def test_fold_hit_ov_site_non_str_fail_closed():
+@@ -116,20 +138,32 @@ def test_reduce_single_accepted():
+     findings = [{"hits":[{"raw":"domain"}], "verdict":"采纳", "sev":"高"}]
+     lines = m.reduce(roster, findings, "spec-review", "claude", e, f)
+     dom = [l for l in lines if 'lens="domain"' in l][0]
+     assert 'host="claude"' in dom and 'findings="1"' in dom and '采纳="1"' in dom and '独立="1"' in dom
+     assert 'sev="致0/高1/中0/低0"' in dom
+     # 零-finding 行全零
+     ov = [l for l in lines if 'lens="outside-voice"' in l][0]
+     assert 'host="claude"' in ov and 'runner="codex"' in ov
+     assert 'findings="0"' in ov and 'sev="致0/高0/中0/低0"' in ov and 'site="design-voice"' in ov
+ 
++def test_reduce_scope_audit_raw_folds_to_broad_anchor():
++    # absorb-gstack-review：code-review Step1 自持 scope 审计上报 raw="scope-audit"，
++    # emitter 归约后 MUST 落在 roster 的 canonical lens="broad" 行（下游 retro 聚合/MIN_LENS_ROWS 零感知）
++    m, e, f = _ef()
++    roster = [{"lens":"broad","runner":"claude","site":"—"},
++              {"lens":"outside-voice","runner":"codex","site":"design-voice"}]
++    findings = [{"hits":[{"raw":"scope-audit"}], "verdict":"采纳", "sev":"中"}]
++    lines = m.reduce(roster, findings, "code-review", "claude", e, f)
++    broad = [l for l in lines if 'lens="broad"' in l][0]
++    assert 'findings="1"' in broad and '采纳="1"' in broad and '独立="1"' in broad
++    assert 'sev="致0/高0/中1/低0"' in broad
++
+ def test_reduce_coreport_no_independent():
+     m, e, f = _ef()
+     roster = [{"lens":"domain","runner":"claude","site":"—"},
+               {"lens":"outside-voice","runner":"codex","site":"hr-tg"},
+               {"lens":"broad","runner":"claude","site":"—"}]
+     findings = [{"hits":[{"raw":"domain"},{"raw":"codex","runner":"codex","site":"hr-tg"}],
+                  "verdict":"采纳","sev":"中"}]
+     lines = m.reduce(roster, findings, "spec-review", "claude", e, f)
+     for lens in ("domain","outside-voice"):
+         row = [l for l in lines if f'lens="{lens}"' in l][0]

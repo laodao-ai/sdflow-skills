@@ -99,11 +99,11 @@ MUST ∈ lens enum，raw 名只出现在 `findings[].hits[].raw`）。
 同样地，emitter 遇到不认识的原始镜名而 fail-closed 时，报错须带上「bundle 可能是旧版」的
 可操作指引——这条路径正是 SKILL 已更新而消费仓 bundle 未更新时的第一现场。
 
-- [ ] 折叠机读块含 `scope-audit: broad` 行，且不再含 `gstack-adv` 行
-- [ ] 契约文档中描述折叠关系的散文与机读块一致（无 `gstack-adv` 残留）
-- [ ] 原始镜名 `scope-audit` 经折叠后产出 `lens="broad"` 的锚行
-- [ ] emitter 遇未知原始镜名时报错文案含「若本仓 `openspec/workflow/` 为旧版，请先跑 `sdflow-init update`」（有测试断言）
-- [ ] `sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py` 既有 fold 用例全绿
+- [x] 折叠机读块含 `scope-audit: broad` 行，且不再含 `gstack-adv` 行
+- [x] 契约文档中描述折叠关系的散文与机读块一致（无 `gstack-adv` 残留）
+- [x] 原始镜名 `scope-audit` 经折叠后产出 `lens="broad"` 的锚行
+- [x] emitter 遇未知原始镜名时报错文案含「若本仓 `openspec/workflow/` 为旧版，请先跑 `sdflow-init update`」（有测试断言）
+- [x] `sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py` 既有 fold 用例全绿
 
 ### Task 3: 代码审 Step1 改为自持 scope 审计，全 SKILL 去 gstack 依赖
 
