@@ -15,7 +15,9 @@
 
 - [ ] 2.1 `sdflow-code-review/SKILL.md` 第零步 skew 段：**删除四条内容信号整段**（含
   `absorb-gstack-review` 刚加的③④：contract 的 `scope-audit:` 行、anchor_lint 的 `_MIRRORS_LEGAL`
-  含 `broad`），替换为版本对比判定表（相等/不等/缺失/双 unknown 四态）〔Req: 同上·四个 Scenario〕
+  含 `broad`），替换为版本对比判定表（相等/不等/缺失/双 unknown 四态）〔Req: 同上——该 Requirement 下
+  的全部 Scenario；〔spec-review-amendment：原写「四个 Scenario」，实为 5 个，且「四态」是表格行数、
+  与 Scenario 数是两个计数维度，混用会让 task↔spec 追溯数错 ⇒ 去掉数字〕〕
 - [ ] 2.2 `sdflow-spec-review/SKILL.md` 第零步 skew 段：**删除两条内容信号整段**，替换为与 2.1
   **逐字一致**的判定表——同一判据 MUST NOT 各写一套（现状①②逐字重复已是漂移面，本 change 收敛）
   〔Req: 同上〕

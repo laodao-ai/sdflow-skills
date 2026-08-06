@@ -8,7 +8,7 @@
 
 **MUST NOT 回退为「逐能力内容探测」**（即为每个 bundle 特性各写一条「打开某文件 grep 某字符串」的检测）：该形状每加一个特性就要补一条信号（补丁螺旋），且因判据只以散文描述于 SKILL、**结构上无法被机械守**（验证「所写检测是否仍正确」需先从 markdown 提取命令 = 手写解析器）；其失效方向为假阴——已实证一次 `sed` 无行首锚定命中文件散文中对 fence 名的提及、截出散文段而误判 bundle 陈旧，几乎硬停一轮完整评审。理由全文见 `openspec/adr/0038`。
 
-**陈旧的处置 = fail-loud 硬停在落锚之前（不产出被 lint 的报告），非"产出无锚报告"〔spec-review-r3 C3-A/B：解 MANDATORY 冲突〕**：`anchor_lint` 的 outside-voice 锚是**无条件必查**（`MANDATORY`，`anchor_lint.py:148`）——∴ "陈旧则不落 v2 锚**但仍产出报告**"会撞 MANDATORY 阻塞、"落回 v1 旧锚（无 host）"又被读作 Claude 宿主 = Codex 轮次重新假绿。二者皆不可取。**正解**：探到陈旧 ⇒ 编排 SKILL 在**开始 fan-out / 落任何锚之前**硬停该评审步，**不产出待 lint 的报告**，终端/hand-off **响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」**（fail-loud、actionable、非假绿、非静默清零、不撞 MANDATORY、不落会让旧 lint 罢工的 `runner="none"` 锚）。
+**陈旧的处置 = fail-loud 硬停在落锚之前（不产出被 lint 的报告），非"产出无锚报告"〔spec-review-r3 C3-A/B：解 MANDATORY 冲突〕**：`anchor_lint` 的 outside-voice 锚是**无条件必查**（`MANDATORY`，`anchor_lint.py:203` 〔spec-review-amendment：原写 `:148`，实测该行是 fence 解析代码；`MANDATORY = ("outside-voice", "hr-tg", "step1-broad-review")` 在 `:203`〕）——∴ "陈旧则不落 v2 锚**但仍产出报告**"会撞 MANDATORY 阻塞、"落回 v1 旧锚（无 host）"又被读作 Claude 宿主 = Codex 轮次重新假绿。二者皆不可取。**正解**：探到陈旧 ⇒ 编排 SKILL 在**开始 fan-out / 落任何锚之前**硬停该评审步，**不产出待 lint 的报告**，终端/hand-off **响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」**（fail-loud、actionable、非假绿、非静默清零、不撞 MANDATORY、不落会让旧 lint 罢工的 `runner="none"` 锚）。
 
 **版本缺失即陈旧；非 git 环境 fail-open**：任一侧版本文件缺失 SHALL 判定陈旧并按上述硬停（语义自洽——从未跑过新版写入方的仓正是陈旧态），提示分别指向 `bash setup.sh`（全局侧缺）与 `sdflow-init update`（消费仓侧缺）。两侧版本**同为字面 `unknown`**（非 git 环境或取版本命令失败）SHALL 判定相等并放行（fail-open，与既有 `setup.sh` 的 `|| echo "unknown"` 降级一致；改 fail-closed 会令非 git 安装完全无法评审）。
 

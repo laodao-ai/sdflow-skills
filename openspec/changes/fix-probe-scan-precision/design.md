@@ -9,7 +9,10 @@
   `{"entries": {...三项 sha256...}, "generation": "...", "schema_version": 1}`，由 `setup.sh` 写、
   `outside-voice-job.py preflight` 消费。**bundle 链无对应物** ⇒ 只好用手工内容信号补。
 - **`setup.sh:735`** 已在算 `git describe --tags --always --dirty`，但**仅用于汇总打印、未落盘**。
-- **`init.py` 的 `copy_bundle(root, full=dev)`**（:228-286）两分支共用一个出口；调用点在 `:1127`。
+- **`init.py` 的 `copy_bundle(root, full=False, include_schema=True)`**（`:229-295`）两分支共用一个出口；
+  调用点在 `:1127`（`copy_bundle(root, full=dev, include_schema=schema_enabled)`）。
+  〔spec-review-amendment：原写签名 `copy_bundle(root, full=dev)`（漏 `include_schema`）、行号 `:228-286`，
+  均与实际不符，已按实读订正〕
 - **现有探测段**：`sdflow-code-review/SKILL.md:206`（四信号）、`sdflow-spec-review/SKILL.md:180`
   （信号①②，描述与前者逐字相同）。
 - **仓根 `openspec/workflow/tools/` 有真消费方**：`ship_gate.py:953-955`
