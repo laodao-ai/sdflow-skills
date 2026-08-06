@@ -126,7 +126,7 @@ flowchart TD
 
 ### 3.3 sdflow-code-review：阶段三代码审
 
-六步流（0 算 `DIFF_BASE=merge-base` → 1 gstack/review 原生并入 → 2 **trivial_shape 前置豁免** + fan-out → 2.5 code outside-voice（always）→ 3 置信过滤 <80 + 对抗裁决 → 4 能修自动修/T10 三级裁/defer → 5 报告+锚+checkpoint）。
+六步流（0 算 `DIFF_BASE=merge-base` + 档位/skew/探针 → 1 **自持 scope 审计**（fresh 中档子代理，四件套为意图源，scope-drift + 完成度五态）→ 2 **trivial_shape 前置豁免** + fan-out → 2.5 code outside-voice（always）→ 3 置信过滤 <80 + 对抗裁决 → 4 能修自动修/T10 三级裁/defer → 5 报告+锚+checkpoint）。
 
 与 spec-review 的镜差异：**没有接地镜**（代码本身就是 ground truth），换成**历史镜**（git blame + 旧 review 意见，查重蹈覆辙，弱档）；**有 <80 硬过滤**（代码问题 CI 能兜一部分，优化精度；outside-voice codex findings 豁免数值滤——跨模型自评不可比）。
 
@@ -283,7 +283,7 @@ flowchart TD
     SR --> GATE{{"设计 HARD-GATE<br/>design_approved: true"}}
     GATE --> SHIP["sdflow-ship（gate 循环）"]
     SHIP -->|RUN_PLAN| WP["writing-plans → SDD<br/>（注入点 A/B）"]
-    SHIP -->|RUN_CODE_REVIEW| CR["sdflow-code-review<br/>（gstack/review 原生并入）"]
+    SHIP -->|RUN_CODE_REVIEW| CR["sdflow-code-review<br/>（Step1 自持 scope 审计）"]
     SHIP -->|RUN_VERIFY| DN["sdflow-done"]
     DN -->|"§2.1 sweep"| IS["sdflow-issues<br/>（bug/todo 两池，单一触发面）"]
     DN -->|"归档+merge"| ARCH["openspec archive"]

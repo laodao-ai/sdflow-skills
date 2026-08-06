@@ -203,7 +203,9 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 
 （与「规则根解析」预检同 idiom；诚实边界与「规则根解析」预检、下方能力探针同类；空值/unknown 分家判据同下方「skew 探测」的 fail-loud 精神——三处均为「落任何 v2 锚 / fan-out / 调 emitter 之前」的硬停关口）。
 
-5. **能力探针（本轮恰好一次，与档位解析同位，Step1 与 Step2 共用同一次结果）**〔spec-review-amendment：时序钉死 · host-adaptive-execution · 子代理不可用时镜数如实降级〕（语义核验非机械门，ADR-4/adr/0023）：
+5. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑——**含下一项的能力探针本身**〔impl-review-fix：探针在 `host=codex` 下就是一次子代理派发，本步排在其后则「零 fan-out 即 fail-loud」的承诺自我违反〕）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探四条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`；③ `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-fold` 机读块内含 `scope-audit:` 行（新 SKILL × 旧 contract 方向——本 change 引入）；④ `python3 "$RULES_ROOT/tools/anchor_lint.py" --help` 的输出或源码 grep 到 `broad` mirrors token 支持（等价信号：`_MIRRORS_LEGAL` 常量行含 `broad`）。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。依据：SKILL 走全局 symlink 瞬时生效、消费仓 tools/contract 走拷贝惰性更新——不加③④两个新信号，每个未 update 消费仓的每轮评审会在**末步** lint 才 fail-closed（整轮 fan-out + voice 成本报废）；旧①②两信号探不到这个方向。四条均探到 ⇒ 正常进入第一步。 🔴 **本步 MUST 排在下一项「能力探针」之前**——`host=codex` 时探针要派一个 trivial 子代理，那已经是一次 fan-out；bundle 陈旧时本该在**任何**子代理派出前就硬停〔impl-review-fix〕。
+
+6. **能力探针（本轮恰好一次，与档位解析同位，Step1 与 Step2 共用同一次结果）**〔spec-review-amendment：时序钉死 · host-adaptive-execution · 子代理不可用时镜数如实降级〕（语义核验非机械门，ADR-4/adr/0023）：
 
    - `$SDFLOW_HOST="claude"` → 免探，恒 `subagents="available"`。
    - `$SDFLOW_HOST="unknown"` → 不 fan-out（本轮不会走到本段——上一步已判定）。
@@ -231,8 +233,6 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
      主 session 偷懒自代多镜」**无机械守，残余语义层**（事后按 host 分组独立率异常可复评）——
      **MUST NOT 声称"头号假绿（多镜静默退化）已被事前机械拦截"**。
 
-6. **skew 探测（fail-loud，MUST 在本轮任何 fan-out / 调 emitter / 落 v2 锚之前跑）**〔host-adaptive-execution · 落锚/调 emitter 前探 tools 能力〕：bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）更新不原子，存在「新 SKILL × 旧 tools」窗口——探四条具体信号：① `python3 "$RULES_ROOT/tools/lens_metric_emit.py" --help` 的输出 grep 到 `--host`；② `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-enums` 机读块内 `runner:` 行 grep 到 `none`；③ `$RULES_ROOT/lens-metric-contract.md` 的 `lens-metric-fold` 机读块内含 `scope-audit:` 行（新 SKILL × 旧 contract 方向——本 change 引入）；④ `python3 "$RULES_ROOT/tools/anchor_lint.py" --help` 的输出或源码 grep 到 `broad` mirrors token 支持（等价信号：`_MIRRORS_LEGAL` 常量行含 `broad`）。**任一探不到（陈旧）** ⇒ **在落任何 v2 锚 / fan-out / 调 emitter 之前，硬停本次评审（不产出待 lint 的报告）**，终端/hand-off 响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」——fail-loud、actionable，MUST NOT 产出无锚报告（撞 `anchor_lint` 的 outside-voice 锚 MANDATORY 硬拦）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零本段。依据：SKILL 走全局 symlink 瞬时生效、消费仓 tools/contract 走拷贝惰性更新——不加③④两个新信号，每个未 update 消费仓的每轮评审会在**末步** lint 才 fail-closed（整轮 fan-out + voice 成本报废）；旧①②两信号探不到这个方向。四条均探到 ⇒ 正常进入第一步。
-
 ## 第一步：自持 scope 审计（fresh 中档子代理，恒跑守卫）
 
 代码审编排器的第一步不借道第三方 skill 的原生执行，而是自己派一个 fresh 子代理，以本 change 目录的
@@ -254,6 +254,15 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
     纪律逐条钉死：**DONE** 从严（需 diff 内具体证据，碰过文件 ≠ 做了）；**CHANGED** 从宽（换路径达成
     同目标算完成，注明差异）；**UNVERIFIABLE** 诚实（diff 证明不了的外部状态如实列出需人工核验项，宁可
     多列不静默判 DONE）；**PARTIAL** = 部分子项有 diff 内证据其余没有；**NOT DONE** = diff 内无任何相关证据。
+  - 🔴 **轴三（条件轴，仅当 `trivial_shape` 判 EXEMPT 时 MUST 跑）：白名单形状内的隐藏逻辑检查**
+    〔impl-review-fix〕——**逐行读**被判为白名单形状的那些 diff hunk 的**内容本身**（不是只看文件路径
+    与形状），找「披着白名单外衣的逻辑改动」：注释 / 文档串里嵌的可执行片段或指令性文本、被当作数据
+    读取的配置化行为、`tests/` 里顺带改动的被测契约或断言口径、`README`/`docs` 里被机械消费的锚行与
+    机读块。**发现任一 ⇒ 立即判 EXEMPT 作废并显式上报**（下方「恒跑守卫」据此撤销免除、Step2 照跑）。
+    **本轴的存在理由（缺了它守卫就是空转）**：`trivial_shape.py` 的 docstring 明写「伪装成注释的逻辑改
+    由本判器之外的 Step1 scope-drift 守卫（判器只看 diff 形状）」——判器**有意**把内容级检测下放给本步；
+    而上面轴一（文件级 scope 比对）与轴二（task 级完成度）**都不读 hunk 内容**，∴ 若不显式声明本轴，
+    「揭出隐藏逻辑」这个信号**永远不会产生**，EXEMPT 一经机判命中即不可撤销，Step2 多镜被静默跳过。
 - **输出**：① **逐 task 五态表**（每 task 一行：状态 + 一句证据引用；DONE/CHANGED 也在列，非仅负向态——
   五态审计须整体可审计）；② 结构化 findings（每条：类型 `SCOPE-CREEP/NOT-DONE/PARTIAL/UNVERIFIABLE` +
   证据 file:line 或 task 条目 + 严重度；CHANGED 由表行承载注明差异、不单独出 finding）→ 进 Step3 合并
@@ -309,8 +318,12 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 > （file:line + 逐字引文）；**非局部 finding**（缺失校验 / 跨文件数据流 / 时序竞态 / absence 类——
 > 无单一触发行者）SHALL 以**「可复核证据包」**替代单行引文（多处 file:line 逐字引文、或「应在而不在」
 > 的缺失对照——引出本应含该防护的位置原文），仍须可复核定位；**两者皆无 ⇒ 该条自报置信 MUST ≤50**。
-> 本纪律仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据。**诚实边界**：引文
-> 真实性无机械核验（子代理自报），本条是产出纪律非机械门，MUST NOT 声称机械保证。
+> 本纪律仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据。**诚实边界（两个维度，
+> 缺一即声明不全）**：① **引文真实性**无机械核验（子代理自报）；② 🔴 **「这条是否真属非局部类」这个
+> 分类判断本身同样是子代理自报、同样无核验**〔impl-review-fix〕——一个本可给出单行 `file:line` 的普通
+> 局部 bug，只需自称「跨文件数据流 / absence 类」即可改走门槛更松的证据包路径，绕开单行逐字引文的硬
+> 要求。**MUST NOT 靠再加一层校验来"堵"这个口**（校验方同样是 LLM，只是把同一个自报判断多套一层），
+> 正解是**如实声明它**：本条是产出纪律非机械门，MUST NOT 声称机械保证。
 
 **第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（进第三步汇总），结果在 Step3 barrier 处 collect**。findings 进 Step3 合并池；v1 锚行按位点写入报告。**复评条款已泛化〔workflow-metrics-loop ADR-5，见第五步「反馈回路」〕**：原「累计 10 次后按采纳率复评降采样为 HR-only」是本条 outside-voice 专属规则，现升级为 per-(层,镜) 通用条款（本镜只是其中一个评估单元，不再单独定义判据）。
 

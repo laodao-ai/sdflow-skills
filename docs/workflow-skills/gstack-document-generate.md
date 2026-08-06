@@ -3,8 +3,9 @@
 > **一句话**：按 **Diataxis 四象限**（tutorial / how-to / reference / explanation）为一个 feature / module / 整个项目
 > 从零生成结构化文档——**先通读全量代码再动笔**，杜绝"只描述一半功能"的文档。
 
-> ⚠️ **定位澄清**：这不是 sdflow 工作流链上的一环（不像 `/review` 是 `sdflow-code-review` 的 Step1、`writing-plans`
-> 是阶段三第 6 步）。它是 **gstack 插件家族的独立通用 skill**，本仓库当前没有在 `openspec/workflow/` 或
+> ⚠️ **定位澄清**：这不是 sdflow 工作流链上的一环（不像 `writing-plans` 是阶段三第 6 步）。
+> 〔impl-review-fix：原文以「`/review` 是 `sdflow-code-review` 的 Step1」作类比——该依赖已由
+> `absorb-gstack-review` 移除，Step1 现为自持 scope 审计，故删去该例。〕它是 **gstack 插件家族的独立通用 skill**，本仓库当前没有在 `openspec/workflow/` 或
 > `sdflow-*` 编排器里调用它。可独立触发（"写文档"/"document this feature"），也可被同属 gstack 的
 > `/document-release`（发版后文档更新）在发现覆盖缺口时调用来补洞。
 

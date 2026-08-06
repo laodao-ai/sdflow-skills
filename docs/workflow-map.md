@@ -137,7 +137,7 @@
 
 | 锚 | 字段 | 取值域 |
 |----|------|--------|
-| `step1-broad-review` | `mode` | `native` \| `simulated` |
+| `step1-broad-review` | `mode` | `subagent` \| `main-session`（如实记 Step1 自持 scope 审计的执行位：`subagent`=fresh 子代理独立完成、`main-session`=探针判不可用时降级亲做。旧值 `native`\|`simulated` 已退役，归档报告不迁移；`anchor_lint` 只核该锚存在性、不校验本字段取值） |
 | `hr-tg` | `hit`, `declared`, `evidence` | `hit="TG-xx,…"` \| `"none"`（脚本重算 = `declared∩HR-TG`，M2）；`declared`=模型判定命中集（canonical，adr/0018 输入可见）；`evidence`=判据触发点（`hit≠none` 必填非空，M4） |
 | `outside-voice` | `site`,`guard`,`host`,`runner`,`reason_code`,`findings`,`truncated` | `host` ∈ `claude`\|`codex`\|`unknown`（谁在跑这次评审）；`runner` ∈ `claude`\|`codex`\|`none`（谁执行了这个镜；`claude-fallback` 已废弃——把跨模型性藏进枚举值，Codex 宿主下必然说谎）；`reason_code` ∈ `ok`\|`not-installed`\|`preflight-error`\|`timeout`\|`exec-error`\|`host-unknown`\|`secret-hit`\|`fallback-unavailable`（8 值域，仅本锚必填；成功跨模型固定哨兵 `ok`）；`guard` ∈ none\|file-missing\|section-not-found\|zero-findings\|stale\|simulated-source；`truncated` ∈ true\|false |
 | `lens-metric` | `layer`,`lens`,`host`,`runner`,`site`,`findings`,`采纳`,`裁掉`,`defer`,`独立`,`sev` | 见下表（受 config `metrics.enabled` 门控） |
