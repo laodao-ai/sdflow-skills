@@ -39,27 +39,39 @@ T269 对它成立；`WORKFLOW-GUIDE.md` 是有意为之的人读手册（「得�
 
 - **BREAKING · 取消 resolver 的本地 pin 分支**：`resolve-workflow.sh` 的三步链
   （本地 pin → 全局 canonical → 显式降级）收缩为**两步**（全局 canonical → 显式降级）。
-  仓内规则副本**不再有任何生效路径**。
+  在未显式设置 `SDFLOW_HOME` 覆盖的前提下，仓内规则副本**不再有任何生效路径**〔F42 限定〕。
+  附带的安全收益〔F39〕：对不可信仓跑评审不再可能执行该仓自带的 `openspec/workflow/tools/*.py`
+  ——消灭一个「克隆不可信仓 + 跑评审 = 执行仓自带代码」的供应链点（同受 F42 限定：`SDFLOW_HOME`
+  被指向被评审仓时该性质失效）。
 - **tools 与 `lens-metric-contract.md` 不再复制进消费仓**：`copy_bundle()` 非-full 分支删剩
   `WORKFLOW-GUIDE.md` + `openspec/schemas/<PROJECT_SCHEMA>` 两项。
 - **两个评审 SKILL 的 skew 探测段整段删除，不做任何替代**（`sdflow-code-review/SKILL.md:206` 四条 ·
   `sdflow-spec-review/SKILL.md:180` 两条）。「工具真旧了」交回 tools 自身的 fail-closed 兜底。
-- **`ship_gate.py` 的 `tools_spec` 失鲜腿退役**：它盯的 `openspec/workflow/tools/` 镜像将不复存在；
-  而它保护的东西**早已被第一条腿覆盖**——顶层条目比较（`:947-950`，仅排除 `openspec`）中，tools
-  权威源位于顶层条目 `sdflow-init` 之下，改权威源必改其 tree sha。该腿唯一多抓的情形（直接改镜像
-  而不改权威源）在副本删除后**文件不存在、动作不可能发生**。
+- **`ship_gate.py` 的 `tools_spec` 失鲜腿退役**：它盯的 `openspec/workflow/tools/` 镜像将不复存在。
+  退役理由**按仓型分开**〔F44〕：toolkit 源仓——tools 权威源位于顶层条目 `sdflow-init` 之下，顶层
+  条目比较腿（`:947-950`，仅排除 `openspec`）已覆盖，改权威源必改其 tree sha；消费仓——镜像删除后
+  「直接改镜像」动作不可能发生。消费仓侧「全局 canonical 在 review 与 done 之间变更不可见」是
+  change 前即存在的盲区（旧腿只守仓内镜像、从不守 canonical），design Risks 登记接受。
 - **`--dev` / `copy_bundle(full=True)` / T15 为其开的 `stale_shadow_warnings` 豁免三者一并退役**：
   `full=True` 自述「仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用」，而源仓 dogfood
   此后同样走全局 canonical，无需本地 instance。
-- **陈旧遮蔽告警语义升级**：`stale_shadow_warnings()` 与 `maintain_scan` 的规则残留检查行为不变，
-  但告警文案从「它遮蔽全局且不再被刷新」改为「**它已不再被任何路径读取，可安全删除**」。
-- **pin 的两个既有用途改用 `SDFLOW_HOME`**：`resolve-workflow.sh:8` 的契约**已明写**该环境变量
-  （「测试用它重定向，绝不写真实 `$HOME`」）且第 1 层测试已在用它。CLAUDE.md 的「逃生口」（`:237`）
-  与「开发期测试三层」第 2 层（`:226-228`）须同步改写。
-- **文档与记录**：`CLAUDE.md` 关于仓根 `openspec/workflow/` 与测试三层的描述订正 ·
-  新落 `openspec/adr/0039`（消灭双链）· `openspec/adr/0038` 标记为 **Superseded**（其主题
-  「bundle skew 用版本对比而非能力探测」的**问题域随本 change 整个消失**，非结论被推翻）·
-  `openspec/CONTEXT.md` 补 `skew` 术语定义（`manifest skew` 仍在用，该词继续存在）。
+- **陈旧遮蔽告警语义升级**：`stale_shadow_warnings()` 与 `maintain_scan` 的检测**判据扩员**（原
+  `RULE_MARKERS` 三项之外增查残留 `tools/` 与 `lens-metric-contract.md`），告警文案改为**带前置条件的
+  死件表述**（「对评审已无生效路径——若刚 `git pull` 还没跑 `bash setup.sh`，先跑 setup 再判断」）并
+  附**可直接复制的删除命令**；MUST NOT 用绝对断言「已无任何生效路径」（部署窗口与 `SDFLOW_HOME` 覆盖
+  下为假）。存量死件的清理由人执行该命令完成，**不新增一次性自动清删代码**〔设计门 Q2：收益规模 =
+  本机个位数仓 × 一次，不值得在 `init.py` 永久留一段迁移逻辑〕。
+- **pin 的两个既有用途分流处置**〔设计门 Q4〕：**开发期测试隔离**走 `SDFLOW_HOME` 既有契约
+  （`resolve-workflow.sh:8`「测试用它重定向，绝不写真实 `$HOME`」，第 1 层测试已在用）——CLAUDE.md
+  的「逃生口」与「开发期测试三层」第 2 层同步改写为该用法。**「仓级版本冻结」不立替代承诺**：唯一
+  存量 pin 仓（`05-sarvelo`）的实际诉求是跟全局最新而非冻结，为无人要的能力立一条 SHALL 比不立更坏
+  （它还与 `setup.sh` 安装根同名复用，天然自毁）；写进 Non-Goals。
+- **文档与记录**：牵连面由 design 的 **BASE-29 scope-check 表** + 概念词表 sweep 枚举（托管块权威源
+  `claude-section.md` / `AGENTS.md` / 修法文案面 / docs / ADR 状态注记，见 tasks 6.x）· 新落
+  `openspec/adr/0039`（消灭双链，含回滚步骤）· `openspec/adr/0038` **删除**〔设计门 Q3：本分支新建、
+  从未进 main、其机制从未实现——born-superseded 的 ADR 只会误导未来读者〕，候选与砍因并入 0039 取舍段 ·
+  `openspec/CONTEXT.md` 补 `skew` 术语定义（`manifest skew` 仍在用，该词继续存在）· `WORKFLOW-GUIDE.md`
+  生成器把 sibling 相对链接降为文字引用（GUIDE 本身**保留铺进消费仓**，D14 不动）。
 - **关闭 issues**：`T269` 分治关闭（contract 半成立、GUIDE 半误判）；`T270` 关闭理由为
   「**skew 探测段整体移除，问题对象消失**」——MUST NOT 写成「已修复」。
 
@@ -74,7 +86,15 @@ T269 对它成立；`WORKFLOW-GUIDE.md` 是有意为之的人读手册（「得�
 - `spec-workflow`：① 「规则全局解析 resolver」的三步链收缩为两步，步①（本地 pin）及其全部
   Scenario 移除；② 「workflow bundle 改在权威源、经部署下发」中 review 机械层脚本由
   「SHALL 复制进消费仓」翻转为「MUST NOT 复制」；③ 「存量消费仓迁移不自动删、陈旧遮蔽须告警」
-  的告警语义由「遮蔽全局」改为「已无生效路径、可删」（**不自动删除的安全红线不变**）。
+  的告警语义由「遮蔽全局」改为带前置条件的死件表述 + 判据扩员（**不自动删除的安全红线不变**）；
+  ④ 「评审报告锚自检由确定性脚本判定」删「契约机读块与 tools 同批部署下发」句及「防 pin 错配」
+  Scenario——契约与 tools 此后同驻全局 canonical、同代性由单一 checkout 保证〔spec-review F6〕。
+- `maintain-scan`：兜底扫描的告警语义同步（「pin 遮蔽全局」→ 死件）+ 判据扩员；「仅剩 tools 判干净」
+  Scenario 反转为「报告死件残留」〔spec-review F7〕。
+- `workflow-metrics`：删「`init.py` 的 `ignore_patterns("tests")` 排除 MUST 保留」注——tools 部署
+  整体停止后该排除逻辑随之退役，不再有部署路径需要它护〔spec-review F8〕。
+- `yq-yaml-operations`：R12 标题与正文去掉写死的「7 份」计数（改为「各内联 `_yq()` 封装」）；Purpose
+  的脚本枚举删除镜像条目（Purpose 非 Requirement，随本 change 直接订正主 spec）〔spec-review F9〕。
 - `encoding-hygiene`：入口脚本契约的目标集里「不含 `openspec/workflow/tools/**` 托管镜像」这条排除子句移除（镜像不复存在）；机械门的「bundle 源文件不被镜像排除规则连坐」Scenario 随之改写为「不再需要该豁免」——**该风险面因镜像消失而消失，保留排除分支即死代码**。
 - `host-adaptive-execution`：「落锚/调 emitter 前探 tools 能力」这条要求**整体移除**——其保护的
   失效模式（bundle 陈旧）随分发链合一而消失，且其残余形态由 tools 自身 fail-closed 承接。
@@ -83,9 +103,12 @@ T269 对它成立；`WORKFLOW-GUIDE.md` 是有意为之的人读手册（「得�
 
 - **代码/资产**：`sdflow-init/assets/hack/resolve-workflow.sh`（bundle 权威源） ·
   `sdflow-init/scripts/init.py` · `sdflow-code-review/SKILL.md` · `sdflow-spec-review/SKILL.md` ·
-  `sdflow-ship/scripts/ship_gate.py` · `CLAUDE.md`（订正） · `openspec/adr/{0038,0039}` ·
+  `sdflow-ship/scripts/ship_gate.py` · `hack/gen_workflow_guide.py`（GUIDE 链接降级）·
+  `sdflow-init/assets/snippets/claude-section.md`（托管块权威源）· `CLAUDE.md` / `AGENTS.md`（订正） ·
+  `openspec/adr/`（0038 删、0039 新落、0003/0005/0019/0036 状态注记） ·
   `openspec/CONTEXT.md` · 本仓 `openspec/workflow/` 下 **7 个文件删除**（6 个 tools + contract，
-  只留 `WORKFLOW-GUIDE.md`） · 相应 `hack/tests/` 与 `sdflow-init/tests/`。
+  只留 `WORKFLOW-GUIDE.md`） · 相应 `hack/tests/`、`sdflow-init/tests/`、`sdflow-maintain/tests/`
+  （必红集以 pytest 实跑为准，见 design BASE-29 表）。
   `hack/check_encoding_hygiene.py`（删镜像排除分支） · `hack/tests/test_yq_wrapper_consistency.py`（`TARGETS` 硬编码了 `openspec/workflow/tools/anchor_lint.py`，删文件后必红，须同批处置）。
   栈标注：bash + Python 工具 + markdown 指令资产（**不命中** TG-01/02/03 业务栈）。
 - **依赖**：无新增。**净删除远大于净新增**——pin 两用途改用既有正式契约 `SDFLOW_HOME`，不新建机制。
@@ -110,27 +133,35 @@ T269 对它成立；`WORKFLOW-GUIDE.md` 是有意为之的人读手册（「得�
 | 假设 | 若失效的影响 |
 |---|---|
 | **消费仓能可靠访问全局 canonical**（`~/.sdflow/workflow` 或 `workflow-path`） | 失效即 resolver 步③ 显式降级通用评审——**该路径已存在且已被测**，非新风险 |
-| **不存在「必须冻结规则版本」的真实需求** | 若存在，`SDFLOW_HOME` 指向自备 canonical 是替代路径；比 pin 更真实（走步②主路径而非旁路） |
-| **tools 的 fail-closed 覆盖所有「旧工具被新 SKILL 调用」的失败形态** | 若某工具在旧版下静默给出错误结果而非退出，则末步兜底失效。已核 `anchor_lint.py` / `hr_tg_intersect.py` 两个主要消费方均 fail-closed；**其余 tools 未逐一核验，登记为待验证前提** |
+| **不存在「必须冻结规则版本」的真实需求** | 已按此假设定案〔Q4〕：不立冻结承诺（唯一 pin 仓实际诉求是跟最新）。若未来出现真实需求，届时以独立 change 评估（`config.yaml` 仓级键等），MUST NOT 恢复仓内副本优先 |
+| ~~tools 的 fail-closed 覆盖所有失败形态~~ **已验证关闭**〔A12〕 | 6 个 tool 全 `argparse required=True` 无静默默认；运行时读版本化输入的 3 个（`anchor_lint`→contract · `lens_metric_emit`→contract · `hr_tg_intersect`→trigger-catalog）均 fail-closed。不再是待验证前提 |
 
 ## Success Metrics
 
-- 两个评审 SKILL 中**不再有任何 skew 探测描述**：
-  `grep -n "skew 探测\|lens-metric-enums\|scope-audit:\|_MIRRORS_LEGAL" sdflow-code-review/SKILL.md sdflow-spec-review/SKILL.md`
-  在第零步段内归零（其它段落的合法引用不计）。
-- `resolve-workflow.sh` 中**无本地 pin 分支**：`grep -c "local-pin" ` 归零。
-- 本仓 `openspec/workflow/` 下**只剩 `WORKFLOW-GUIDE.md`** 一个文件。
-- 全仓 pytest 绿，含 resolver 两步链、`copy_bundle` 新拷贝集、告警文案的新增/改写用例。
-- `openspec validate --strict` 绿。
+验收收敛为**三条闭环判据**（design「验收三判据」节，删除类 change 的完备性验收）：
+
+1. **概念词表 sweep 归零**：归零词（`local-pin` · `两条分发链` · `显式 pin` · `pin 遮蔽`）全仓 grep
+   （不带 `--include` 限定）归零，豁免表显式落 design BASE-29 节；逐条判词（`规则副本` ·
+   `sdflow-init update` · `openspec/workflow/tools`）每命中必处置或登记豁免。两个评审 SKILL 的探测段
+   删净后，`grep -n "skew 探测\|lens-metric-enums\|scope-audit:\|_MIRRORS_LEGAL"` 剩余命中恰为
+   anchor_lint 自检段的两处合法引用（tasks 1.5 精确锚定）。
+2. **全仓 pytest 绿 + 4 条反向锚用例在场**（副本忽略 / `sane()` 扩面 / 告警文案双断言 / `ship_gate`
+   腿退役反向）——「绿」单独可被删测试满足，反向锚补齐证明力。本仓 `openspec/workflow/` 下只剩
+   `WORKFLOW-GUIDE.md`。
+3. **三态真跑 + `openspec validate --strict` 绿**（tasks 7.2–7.5）。
 
 ## Non-Goals
 
 - **不自动删除消费仓既有的规则副本**——沿用 `spec-workflow` 既有安全红线（`sdflow-init update`
   MUST NOT 自动删除仓内既有规则文件），只升级告警文案。删与不删由各仓的人决定。
 - **不覆盖 Windows 上「旧 SKILL × 新 tools」的失鲜**——Windows 无 symlink，`setup.sh:119` 用 `cp -r`
-  装 SKILL ⇒ SKILL 是 setup 时快照而 canonical 指活 checkout。该面**结构上不可自举**（检查者只能是
-  SKILL 自己或 `~/.sdflow/hack/` 的 helper，二者同为一次 `cp -r` 的产物，没跑 setup 就一起旧），
-  且本仓对 Windows 分支结构性无测试面。**已知且接受的边界。**
+  装 SKILL ⇒ SKILL 是 setup 时快照而 canonical 指活 checkout。**运行时自检结构上不可自举**（检查者
+  只能是 SKILL 自己或 `~/.sdflow/hack/` 的 helper，二者同为一次 `cp -r` 的产物，没跑 setup 就一起旧）；
+  **CI 层面可测但目前未测**（`windows-recorder-smoke.yml` 已在 `windows-latest` 跑全量 pytest，补失鲜
+  回归用例记 todo）〔spec-review-amendment F48：MUST NOT 表述为「结构性无测试面」〕。**已知且接受的边界。**
+- **不提供「规则版本冻结」能力承诺**〔设计门 Q4〕——`SDFLOW_HOME` 保持既有「测试隔离重定向」契约；
+  操作者自设 env 指向自备目录属环境行为、自担后果（它同时是 `setup.sh` 安装根，对其跑 setup 会覆盖
+  内容）。需要冻结的真实需求出现时另立 change，MUST NOT 恢复仓内副本优先。
 - **不动 `~/.sdflow/hack/capability-manifest.json`** 及其 preflight 消费方——那是 hack 链的 skew 机制，
   与 bundle 链无关，`manifest skew` 在本 change 后仍然存在。
 - **不给 `WORKFLOW-GUIDE.md` 建新鲜度机制**——它纯人读、不参与执行、不被任何脚本机读，陈旧无害；

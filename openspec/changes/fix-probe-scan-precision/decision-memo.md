@@ -303,3 +303,45 @@ decision_hash: cf72d0d3da2c
   代价：开发期测试第 2 层的做法要重写（pin ⇒ `SDFLOW_HOME`），是一次性文档成本。
 - **主次判定**：**系统镜为主**——本方案的全部价值在于**消灭被探测的对象本身**，而非把探测做准；
   开发循环镜次之（终结整类问题）；用户镜为附带收益（少一道仪式）。
+
+## 设计门前修订纪要〔spec-review-amendment · 2026-08-07〕
+
+> 本节为阶段二评审（`spec-review-report.md` + `gstack-review.md`，对 commit `0f8b0a3` 盘面）后、
+> 经人同意的修订登记。上文 D1–D16 / C1–C18 的原文**不回改**（本 memo 是决策日志）；与本节冲突处
+> 以本节为准，四件套正文已按本节重写。
+
+### 新增拍板决策
+
+- **D17（Q4）｜不立「规则版本冻结」承诺** — `SDFLOW_HOME` 保持既有测试隔离契约（`resolve-workflow.sh:8`），
+  delta 撤销「冻结的唯一受支持路径」SHALL 与对应 Scenario。依据：唯一存量 pin 仓（05-sarvelo）实际
+  诉求是跟最新；该 env 同时是 `setup.sh:468` 安装根（自毁形态 F4）；为无人要的能力立做不到的 SHALL
+  比不立更坏。开发期测试三层第 2 层用既有隔离契约即可改写，无需冻结承诺。C15「pin 两用途改用
+  SDFLOW_HOME」修订为「测试隔离走既有契约；冻结不立承诺」。
+- **D18（Q2）｜存量死件清理不写自动代码** — 告警附可复制删除命令，人一次执行即达终态零死件。
+  依据（④五问）：收益规模 = 本机个位数仓 × 一次；为此在 `init.py` 永久留一段一次性 `rmtree` 迁移
+  逻辑 + 测试，持久复杂度与一次性收益倒挂。安全红线（不自动删）因此完全不被触碰。
+- **D19（Q3）｜删除 `adr/0038`** — 本分支新建（`164bb88`）、从未进 main、其版本对比机制从未实现；
+  born-superseded 的 ADR 只会误导未来读者。候选与砍因并入 0039 取舍段，引用砍因 MUST 写「起手前提
+  被证伪 ⇒ 决策撤销」，MUST NOT 写「问题域消失」（F32）。
+
+### 事实订正（评审证伪的 memo 陈述，读旧文时以此为准）
+
+- **F1**：D12/design 附带说明称「hack 链由 capability-manifest 独立守」——**错**。`MANIFEST_ENTRIES`
+  仅 3 项（`outside-voice-job.py:201`），不含 `resolve-workflow.sh`，且仅 codex 后台 voice preflight
+  消费。hack 链目前**无守**，登记诚实边界；根因项（hack 链 symlink 化）记 todo。
+- **F48**：「本仓对 Windows 分支结构性无测试面」（接受的边角 · D12①）——**过度**。准确表述：运行时
+  自检不可能（论证成立）；CI 层可测但目前未测（`windows-recorder-smoke.yml` 在 windows-latest 跑
+  全量 pytest，触发 paths 覆盖本 change 全部脚本面）。
+- **F49**：「消费仓副本是 skew 的唯一成因」——收窄为「bundle 拷贝链 skew 的成因」；hack 拷贝链与
+  Windows SKILL 快照两个失鲜面仍在。
+- **F26**：encoding 排除分支「镜像消失后才成死码」——**错**。`TARGET_GLOBS` 全 root-anchored，该分支
+  现在就已不可达；本 change 是顺带清既存死码，其守卫用例是恒真锚。
+- **A12**：C 组「其余 tools 未验 fail-closed」前提**已结**：6 tool 全 argparse `required=True`，
+  运行时读版本化输入的 3 个（anchor_lint→contract · lens_metric_emit→contract ·
+  hr_tg_intersect→trigger-catalog）均 fail-closed。
+- **A5**：`sane()` 扩面进 scope，但 MUST 形状级判据（tools/ 非空 + contract 非空），MUST NOT 成员
+  清单（防守卫内复活补丁螺旋）。
+- **验收模型**：改为三条闭环判据（概念词表 sweep 归零 + 全仓 pytest 绿含 4 反向锚 + 三态真跑），
+  BASE-29 scope-check 表落 design、由 sweep 产出。
+- **D14 追加（人已确认）**：GUIDE 保留铺进消费仓不变；其生成器把 sibling 相对链接降为文字引用
+  （F45——6 条断链会击穿 D14 的保留理由）。

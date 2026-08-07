@@ -46,7 +46,7 @@
 #### Scenario: bundle 源文件不再需要镜像排除豁免
 
 - **WHEN** `sdflow-init/assets/workflow/tools/` 下的某源文件缺前导
-- **THEN** `check_encoding_hygiene.py` SHALL 直接检出该文件；此后仓内**不存在** `openspec/workflow/tools/` 托管镜像，故该门 SHALL NOT 再保留任何针对该路径的排除分支——保留即死代码，且会把已消失的「尾段连坐」风险面留在原地
+- **THEN** `check_encoding_hygiene.py` SHALL 直接检出该文件；该门 SHALL NOT 保留任何针对 `openspec/workflow/tools/` 的排除分支。〔F26 定性订正〕该排除分支**在本 change 前就已不可达**——`TARGET_GLOBS` 五条 pattern 全部 root-anchored，从不把 `openspec/workflow/tools/**` 纳入候选集，本 change 是顺带清掉这个**既存**死码（而非"镜像消失后才成死码"）；其原守卫用例（引用 `openspec/workflow/tools/mirror.py` 者）为**恒真锚**（分支不可达 ⇒ 用例无论如何都绿），SHALL 删除或改写为对 `TARGET_GLOBS` root-anchored 锚定性的**正向**断言——判据：定点删除该断言所守的约束，用例必须变红
 
 #### Scenario: 全部入口脚本均满足三项契约
 
