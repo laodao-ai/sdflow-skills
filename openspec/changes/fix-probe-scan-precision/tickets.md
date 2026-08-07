@@ -82,20 +82,20 @@ P0 核心：在 bundle 权威源 `sdflow-init/assets/hack/resolve-workflow.sh` �
 
 退役 `ship_gate.py` 的 `tools_spec` 比较腿（正向锚 + 反向锚）。删除本仓 `openspec/workflow/` 下 7 个文件（6 tools + contract）。同批处理两处硬编码引用（yq TARGETS + encoding hygiene 排除分支）。GUIDE 生成器链接降级。托管块权威源 + 本仓 CLAUDE.md/AGENTS.md 非托管区 + ADR + docs + CONTEXT + 修法文案面——全部按 sweep 命中处置。记 todo（4 条，用开发 checkout 脚本、显式传 change 字段）。
 
-- [ ] `ship_gate.py`：删 `tools_spec` 比较腿，退役理由注释按仓型分开写
-- [ ] 正向锚：改 `sdflow-init/assets/workflow/tools/` 下文件，失鲜仍为 stale
-- [ ] 反向锚：fixture 仓在 `openspec/workflow/tools/` 造文件 → 判 fresh（腿真退役）
-- [ ] 删本仓 `openspec/workflow/` 下 7 个文件（只留 GUIDE）
-- [ ] `hack/tests/test_yq_wrapper_consistency.py` 删镜像条目
-- [ ] `hack/check_encoding_hygiene.py` 删不可达排除分支 + 测试改写
-- [ ] 托管块权威源 `claude-section.md` 订正 + 对本仓跑 `sdflow-init update` 刷新
-- [ ] `CLAUDE.md` 非托管区四处订正 + `AGENTS.md` 四处同义描述订正
-- [ ] 修法文案面统一口径（lens_metric_emit / resolve-models / sdflow-upgrade / README）
-- [ ] docs 面按 sweep 命中处置
-- [ ] ADR 面：0003/0005/0019/0036 状态注记 + 0038 删除 + 0039 新落（含回滚步骤）
-- [ ] `openspec/CONTEXT.md` 补 skew 术语 + T269 分治关闭 + T270 关闭
-- [ ] `hack/gen_workflow_guide.py` 链接降级 + 重新生成 GUIDE
-- [ ] 记 4 条 todo（hack 链 symlink 化 / resolver --help / setup.sh skipped 非零退出 / Windows 失鲜 CI）
+- [x] `ship_gate.py`：删 `tools_spec` 比较腿，退役理由注释按仓型分开写
+- [x] 正向锚：改 `sdflow-init/assets/workflow/tools/` 下文件，失鲜仍为 stale
+- [x] 反向锚：fixture 仓在 `openspec/workflow/tools/` 造文件 → 判 fresh（腿真退役）
+- [x] 删本仓 `openspec/workflow/` 下 7 个文件（只留 GUIDE）
+- [x] `hack/tests/test_yq_wrapper_consistency.py` 删镜像条目
+- [x] `hack/check_encoding_hygiene.py` 删不可达排除分支 + 测试改写
+- [x] 托管块权威源 `claude-section.md` 订正 + 对本仓跑 `sdflow-init update` 刷新
+- [x] `CLAUDE.md` 非托管区四处订正 + `AGENTS.md` 四处同义描述订正
+- [x] 修法文案面统一口径（lens_metric_emit / resolve-models / sdflow-upgrade / README）
+- [x] docs 面按 sweep 命中处置
+- [x] ADR 面：0003/0005/0019/0036 状态注记 + 0038 删除 + 0039 新落（含回滚步骤）
+- [x] `openspec/CONTEXT.md` 补 skew 术语 + T269 分治关闭 + T270 关闭
+- [x] `hack/gen_workflow_guide.py` 链接降级 + 重新生成 GUIDE
+- [x] 记 4 条 todo（hack 链 symlink 化 / resolver --help / setup.sh skipped 非零退出 / Windows 失鲜 CI）
 
 ### Task 5: 实现验证（收尾，不计入 3–6 预算）
 
