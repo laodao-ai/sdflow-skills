@@ -449,10 +449,15 @@ def test_stderr_never_reaches_findings_or_the_tracked_report():
 
 
 def test_usage_notes_cover_version_policy_preview_and_platform_boundary():
-    """使用说明各项 + 两条不可互相替代的分发链。
+    """使用说明各项 + 单链分发（capability manifest 由 `bash setup.sh` 刷新）。
 
     版本下限**从 helper 的 `MIN_CLAUDE_VERSION` 取**，MUST NOT 在这里抄字面值 ——
     抄了就成了「helper 提版后 SKILL 陈旧而 golden 照绿」（基准 1：有确定性信号 ⇒ 机械化）。
+
+    `fix-probe-scan-precision` task1：skew 探测段删除后，「两条分发链」措辞订正为单链
+    表述——consumer 仓 `openspec/workflow/tools/` 走 `sdflow-init update` 的第二条链
+    不再在本段被提及，故不再断言 `sdflow-init update`；`setup.sh` + manifest skew 修法
+    仍是本段的正文，断言改为这两个新关键词。
     """
     min_version = ".".join(str(x) for x in JOB.MIN_CLAUDE_VERSION)
     for rel, seg in _segments():
@@ -461,7 +466,8 @@ def test_usage_notes_cover_version_policy_preview_and_platform_boundary():
         assert "disableAgentView" in seg, rel
         assert "research preview" in seg or "research-preview" in seg, rel
         assert "POSIX" in seg, rel
-        assert "setup.sh" in seg and "sdflow-init update" in seg, rel
+        assert "setup.sh" in seg and "manifest skew" in seg, rel
+        assert "sdflow-init update" not in seg, rel
 
 
 # ── marker 段外：dispatch manifest 与锚行契约（两侧各自断言）──────────────────
