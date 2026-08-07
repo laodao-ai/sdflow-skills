@@ -1,0 +1,1421 @@
+# Review package: 30a5d8c..35497fdfed94983653bd261e154dfc4bd67eece7
+
+## Commits
+35497fd fix(resolver+init): 收缩两步链 + 停铺 tools/contract + 退役 --dev/full
+
+## Files changed
+ .../impl-reports/task2-resolver-init.md            | 152 +++++++++++++
+ sdflow-init/assets/hack/resolve-workflow.sh        |  36 ++--
+ sdflow-init/scripts/init.py                        | 114 +++-------
+ sdflow-init/tests/test_init.py                     | 235 ++++++---------------
+ sdflow-init/tests/test_init_contract_sync.py       |  12 --
+ sdflow-init/tests/test_resolve_models.py           |  21 +-
+ sdflow-init/tests/test_resolve_workflow.py         | 189 +++++++++++++----
+ sdflow-init/tests/test_task5_regression.py         |   8 +-
+ sdflow-maintain/tests/test_marker_consistency.py   |  21 +-
+ 9 files changed, 432 insertions(+), 356 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/fix-probe-scan-precision/impl-reports/task2-resolver-init.md b/openspec/changes/fix-probe-scan-precision/impl-reports/task2-resolver-init.md
+new file mode 100644
+index 0000000..db3f8a3
+--- /dev/null
++++ b/openspec/changes/fix-probe-scan-precision/impl-reports/task2-resolver-init.md
+@@ -0,0 +1,152 @@
++# Task 2 impl report — resolver 两步链 + 停铺 tools/contract + 退役 --dev/full
++
++## 范围
++
++`tasks.md` 第 2 节（resolver 收缩为两步链）+ 第 3 节（停止铺设 tools/contract，退役 `--dev` 与
++`full` 模式）。Task 3（`stale_shadow_warnings` 文案改写/判据扩员语义）与 Task 4（ship_gate 腿退役 +
++死件清理 + 文档面 sweep）不在本票范围，未触碰。
++
++## 生产代码改动
++
++### `sdflow-init/assets/hack/resolve-workflow.sh`
++
++- 删除步①（本地 pin 判定：`LOCAL`/`has_wf`/`has_spec`/`has_code`/`total` 及 any-of 分支 + 部分残留
++  告警）。解析直接从全局 canonical 开始，两步链：① 全局 canonical → ② 显式降级。
++- 头部契约注释（`:2` 三步链→两步链、`:5` "本地 pin 或全局 canonical"→"全局 canonical"）同批订正；
++  内部步骤编号（原步②→步①、原步③→步②）与注释引用一并顺延。
++- `sane()` 扩面：追加 `[ -d "$1/tools" ] && [ -n "$(ls -A "$1/tools")" ]` +
++  `[ -s "$1/lens-metric-contract.md" ]` 两条形状级检查——只查目录/文件存在且非空，未枚举任何
++  `.py` 成员名（design.md「sane() 扩面决策」A5 明确禁止）。
++- 退出码集不变：0（成功）/ 2（bundle 不可达或不完整）/ 64（用法错误）；`--root`/`--explain`/
++  `SDFLOW_HOME` 三个入参契约原样保留；`explain()` 的 `source=` 此后只剩 `global-canonical`。
++
++### `sdflow-init/scripts/init.py`
++
++- `copy_bundle(root, include_schema=True)`：签名去掉 `full` 参数。删除 `tools/` 整删重拷、
++  `lens-metric-contract.md` 复制、`ignore_tools_tests()`、`LOCAL_TOOL_CACHES` 常量——四者一并
++  删除（`ignore_tools_tests`/`LOCAL_TOOL_CACHES` 唯一消费者就是被删的 `full`/`tools` 分支，
++  `grep -rn` 全仓确认无其它调用方）。只保留 `WORKFLOW-GUIDE.md` 复制 + `include_schema` 时的
++  project-local schema 下发。`os.makedirs(dst, exist_ok=True)` 前置——此前 `openspec/workflow/`
++  由 `tools/` 的 `copytree` 隐式创建，删掉后 fresh init 若无此行会在 `copy2(guide_src, ...)`
++  处抛 `FileNotFoundError`（`ensure_dirs` 的 `CORE_DIRS` 只有 `changes`/`specs`）——已用
++  `TestBundleGuideAndSchemaOnly::test_fresh_init_does_not_raise` 锚住。
++- `run(root, mode)`：去掉 `dev` 关键字参数与 toolkit-仓根守卫（`if dev: ...`）；`copy_bundle`
++  调用不再传 `full=dev`；`stale_shadow_warnings(root)` 调用去掉 `if not dev:` 豁免，无条件跑
++  （--dev 退役后不再存在"刻意铺规则进 workflow/、告警是误报"的场景）。
++- `main()`：`--dev` argparse flag **保留**（含 `action="store_true"`），但改为 tombstone——
++  `if args.dev: _die("--dev 已退役：源仓 dogfood 同样走全局 canonical，无需本地 instance")`
++  在任何文件系统操作之前拦截，比 argparse 的 generic "unrecognized arguments" 更明确。
++  `run(...)` 调用点去掉 `dev=args.dev`。
++
++## 测试改动（以 pytest 实跑红名单为准，非 grep 推断）
++
++跑基线 `pytest sdflow-init/tests/ hack/tests/ sdflow-maintain/tests/` 确认改动前 1213 passed /
++4 skipped 全绿，然后按生产代码改动逐个刷红名单改写：
++
++- **`sdflow-init/tests/test_resolve_workflow.py`**：全面重写。`make_bundle()` 追加
++  `with_tools`/`with_contract` 开关（sane() 扩面反向锚用）；`make_repo()` 简化（不再需要
++  `with_rules` 参数——resolver 不再读仓内 openspec/workflow/）；新增 `make_repo_with_full_rule_copy()`
++  专供反向锚。新增两个类：
++  - `TestLocalCopyIgnored`：D13 核心不变量反向锚（task 2.3）——仓内放全套规则副本（含
++    `tools/`）+ 全局 canonical 命中 → 仍解析到全局路径，`--explain` 报 `source=global-canonical`。
++    旧实现（保留步①）在此必红（已用 `git stash` 临时回退验证过，见下「反向锚验证」）。
++  - `TestSaneExpandedShapeChecks`（task 2.5）：canonical 缺 `tools/`、`tools/` 空、缺
++    `lens-metric-contract.md`、`lens-metric-contract.md` 空四种半坏态各断言 `exit 2`；一条
++    正向对照（形状齐全仍判健全）防扩面误伤。
++  - 删除的旧用例：`test_local_pin_hit`、`test_tools_only_repo_falls_to_global_symlink`、
++    `test_partial_residue_pins_and_warns`（本地 pin 判定与部分残留告警随步①一并消失）。
++  - 保留用例（`TestEdgeCases`）全部改写 `make_bundle` 调用点补 `tools/`+contract，`explain`
++    断言从 `source=local-pin` 改为 `source=global-canonical`。
++  - `SDFLOW_HOME` 测试隔离契约（task 2.4）：既有 `test_global_canonical_symlink_hit` /
++    `test_pointer_file_fallback` 覆盖，未改语义。
++- **`sdflow-init/tests/test_resolve_models.py`**：`make_bundle_repo()` fixture 改造——bundle 从
++  `root/openspec/workflow/`（本地 pin 路径）迁到 `tmp_path/sdflow-home/workflow/`，`run_resolve`/
++  `eval_resolve` 的 `SDFLOW_HOME` 从指向不存在路径改为指向该假 sdflow-home；fixture 同步补
++  `tools/`+`lens-metric-contract.md`（否则全局 canonical 因 sane() 扩面判「不完整」exit 2，
++  26 条用例全灭）。语义不变：测的仍是 model-tiers 解析，非 pin 判定。
++- **`sdflow-maintain/tests/test_marker_consistency.py`**：删除
++  `test_resolve_workflow_bash_markers_match_python`（resolver 内联的第 3 份 `RULE_MARKERS`
++  副本随步①消失，守卫失去对象，DRY 正向收益）；同步删无用的 `RW_PATH` 常量与 `re` import。
++- **`sdflow-init/tests/test_init.py`**（全面改写以下几处，其余 65 条既有用例未改动）：
++  - `TestBundleToolsOnly` → `TestBundleGuideAndSchemaOnly`：文件全集断言（task 3.4）——
++    `openspec/workflow/` 下只有 `WORKFLOW-GUIDE.md`；新增 `test_fresh_init_does_not_raise`
++    （F15 回归锚）；删除全部 `full=True`/`LOCAL_TOOL_CACHES` 相关用例（6 条，功能已退役）。
++  - `TestPinConsumerUpdateInvariant` → `TestCopyBundleLeavesExistingWorkflowFilesAlone`：语义
++    收窄为"copy_bundle 不碰既有文件"（不再断言 tools/ 刷新——tools/ 不再部署）。
++  - `TestUpdateDev` → `TestUpdateDoesNotDeployRules`：删 `test_dev_update_deploys_full_bundle`，
++    保留 plain-update 不铺规则的断言。
++  - `TestDevRepoIdentityGuard` → `TestDevTombstone`：新增 3 条用例——`run()` 不再接受 `dev`
++    关键字（`TypeError`）、CLI 层 `--dev` fail-loud（`SystemExit(1)` + "--dev 已退役"文案）、
++    tombstone 在任何文件系统操作前拦截（不半跑一截）。
++  - `TestCopyBundleConvergence` 整体删除（`tools/` 收敛测试，功能退役后无对象）。
++- **`sdflow-init/tests/test_init_contract_sync.py`**：整文件删除（`full=False` + contract 断言，
++  两者均已退役）。
++- **`sdflow-init/tests/test_task5_regression.py:39`**：删除 `tools/anchor_lint.py` 部署断言，
++  改为断言 `openspec/workflow` 目录存在但无 `tools/`（tools/ 不再部署，但 dst 仍须
++  `os.makedirs` 创建）。
++
++## 反向锚验证（防「删测试凑绿」，task 7.1 要求的一部分）
++
++对 `TestLocalCopyIgnored` 与 `TestSaneExpandedShapeChecks` 两组新增反向锚，临时回退
++`resolve-workflow.sh` 到改动前版本（`git stash` 恢复步①/旧 `sane()`）重跑，确认：
++
++- `test_full_local_rule_copy_still_resolves_to_global_canonical`：旧实现命中步①，
++  stdout 指向仓内副本而非全局 canonical → **红**（符合预期）。
++- `test_missing_tools_dir_exits_2` / `test_missing_contract_exits_2`：旧 `sane()` 不查
++  `tools/`/contract，半坏 canonical 仍判健全、`exit 0` → **红**（符合预期）。
++
++验证后 `git stash pop` 恢复新实现，全部转绿。
++
++## 测试结果
++
++```
++/usr/bin/python3 -m pytest sdflow-init/tests/ hack/tests/ sdflow-maintain/tests/ -q
++1210 passed, 4 skipped in 229.76s
++```
++
++（基线为 1213 passed / 4 skipped；净减 3 条，构成：删除 `test_init_contract_sync.py` 1 条 + 删除
++`test_resolve_workflow_bash_markers_match_python` 1 条 + `test_init.py` 内新增/删除净减 1 条——
++`full=True`/dev 相关旧用例删除多于 tombstone 新增用例。）
++
++另跑仓库其余全部测试（`--ignore=sdflow-init --ignore=hack --ignore=sdflow-maintain`）：
++`890 passed, 6 skipped`，全绿，未见我改动波及。
++
++## 真跑验证（非 pytest，手工）
++
++- `bash sdflow-init/assets/hack/resolve-workflow.sh --explain --root .`（本仓，开发 checkout）
++  → `source=global-canonical path=/Users/.../.sdflow/workflow`，`exit 0`。
++- `eval "$(bash sdflow-init/assets/hack/resolve-models.sh --root .)"` → `HOST=claude
++  STRONG=opus MID=sonnet LIGHT=haiku`，档位解析未受影响（resolve-models.sh 内部调用
++  resolve-workflow.sh 定位 `model-tiers.md`，两步链改造后依然透明工作）。
++- `python3 -c "...import init; init.copy_bundle.__code__.co_varnames..."` 确认新签名
++  `copy_bundle(root, include_schema)` / `run(root, mode)`，`LOCAL_TOOL_CACHES` 属性已不存在。
++
++三态真跑（正常仓 / 仓内放规则副本 / `SDFLOW_HOME` 指向空目录）与全链路 `openspec validate` 属
++tasks.md 第 7 节（Task 5 "实现验证"票），未在本票执行。
++
++## 文档同步（超出 tasks.md 第 2/3 节字面清单，但直接源于本票改动，遂 fold 做掉）
++
++- `sdflow-code-review/SKILL.md:172(原197)` / `sdflow-spec-review/SKILL.md:147(原172)`："禁止自行
++  重实现三步链" → "两步链"（`sdflow:async-branch` marker 区间**之外**，无需两文件字节相同，
++  `test_async_branch_parity.py` 41 条用例复跑确认未受影响）。
++- `sdflow-init/SKILL.md`「铺设了什么」目录树：从"整套 bundle 副本（含 tools/、checklists/ 等）"
++  改为"只铺 WORKFLOW-GUIDE.md + project-local schema"，并订正"退役部署文件清理"一节里已过时的
++  "tools/ 整删重拷自动清除"表述（tools/ 已不再部署，无整删重拷动作）。这两处直接描述本票改的
++  `copy_bundle` 输出、且是用户会读到的操作指引，留着不改会误导——按四条通则的 fold 原则就地修正；
++  该文件其余"铺 28 个文件"等次要措辞未动，留给 Task 4（文档面级订正）统一处理，未扩大范围。
++
++## 未做 / 明确不在本票范围
++
++- `stale_shadow_warnings()` 判据扩员（查 `tools/`+contract 残留）与文案改写、
++  `sdflow-maintain/tests/test_maintain_scan.py` 的断言反转 —— Task 3。
++- `ship_gate.py` `tools_spec` 腿退役、本仓 `openspec/workflow/` 死件清理（`tools/` 6 个 `.py` +
++  `lens-metric-contract.md`）、ADR 状态注记、`0039` 新增、CONTEXT.md 术语补充、`docs/` 面 sweep
++  —— Task 4。
++- 概念词表全仓 sweep（task 7.6）、`openspec validate --strict`、三态真跑全链路、`setup.sh` 全局
++  窗口层真跑评审 skill —— Task 5（实现验证收尾票）。
++
++## 状态
++
++四项 P0 MUST 同批落地项（resolver 删步① / copy_bundle 停铺 tools+contract / 两个 SKILL 删探测段
++[Task 1 已完成] / 对应测试）本票范围内三项全部完成且测试绿；`--dev`/`full` 退役 + tombstone 完成；
++`sane()` 扩面完成且有正反向锚；退出码集验证不变。
+diff --git a/sdflow-init/assets/hack/resolve-workflow.sh b/sdflow-init/assets/hack/resolve-workflow.sh
+index a1512c3..5a1a81a 100755
+--- a/sdflow-init/assets/hack/resolve-workflow.sh
++++ b/sdflow-init/assets/hack/resolve-workflow.sh
+@@ -1,15 +1,16 @@
+ #!/usr/bin/env bash
+-# resolve-workflow.sh — workflow 规则根解析器（三步链的确定性执行体）
++# resolve-workflow.sh — workflow 规则根解析器（两步链的确定性执行体，fix-probe-scan-precision
++# 起本地 pin 步已删——规则解析只剩「全局 canonical → 显式降级」）
+ # 契约（minimize-repo-footprint R-MRF-2 / adr-0006 机队锚定：机械协议脚本化，skill 只调用）：
+ #   stdout : 规则根路径（唯一 stdout 输出）
+-#   exit 0 : 解析成功（本地 pin 或全局 canonical）
++#   exit 0 : 解析成功（全局 canonical）
+ #   exit 2 : 全局 bundle 不可达/不完整 → 调用方显式降级通用评审 + 转发本脚本 stderr 告警
+ #   exit 64: 用法错误
+ # env: SDFLOW_HOME（缺省 ~/.sdflow；测试用它重定向，绝不写真实 $HOME）
+ set -euo pipefail
+ 
+ SDFLOW_HOME="${SDFLOW_HOME:-$HOME/.sdflow}"
+ ROOT=""
+ EXPLAIN=0
+ 
+ while [ $# -gt 0 ]; do
+@@ -27,57 +28,46 @@ if [ -z "$ROOT" ]; then
+   if [ -z "$ROOT" ]; then
+     echo "resolve-workflow: ✗ 无法确定仓根（cwd 可能已被删除），请用 --root 显式指定" >&2
+     exit 64
+   fi
+ fi
+ 
+ explain() {
+   if [ "$EXPLAIN" -eq 1 ]; then echo "resolve-workflow: source=$1 path=$2" >&2; fi
+ }
+ 
+-# 步1：查本地"规则文件本体"（any-of 即 pin）。不查 openspec/workflow/ 目录——tools/ 使其恒存在。
+-LOCAL="$ROOT/openspec/workflow"
+-has_wf=0; has_spec=0; has_code=0
+-[ -f "$LOCAL/workflow.md" ] && has_wf=1
+-[ -d "$LOCAL/spec-checklists" ] && has_spec=1
+-[ -d "$LOCAL/code-checklists" ] && has_code=1
+-total=$((has_wf + has_spec + has_code))
+-if [ "$total" -gt 0 ]; then
+-  if [ "$total" -lt 3 ]; then
+-    echo "resolve-workflow: ⚠ 本仓规则副本部分残留（workflow.md=${has_wf} spec-checklists=${has_spec} code-checklists=${has_code}）——按 pin 处理；想跟全局请删净、想 pin 请补齐" >&2
+-  fi
+-  explain "local-pin" "$LOCAL"
+-  echo "$LOCAL"
+-  exit 0
+-fi
+-
+-# 步2：全局 canonical——试目录（Unix 软链透明命中）→ 否则读指针文件（Windows）。平台判断在此，skill 不判平台。
++# 步1：全局 canonical——试目录（Unix 软链透明命中）→ 否则读指针文件（Windows）。平台判断在此，skill 不判平台。
++# 不查仓内 openspec/workflow/：本地副本（含仓内放全套规则副本）一律忽略，规则解析恒指全局 canonical。
+ CANON=""
+ case "$SDFLOW_HOME" in
+   /*)
+     if [ -d "$SDFLOW_HOME/workflow" ]; then
+       CANON="$SDFLOW_HOME/workflow"
+     elif [ -f "$SDFLOW_HOME/workflow-path" ]; then
+-      # 读失败(权限/不存在)→CANON 空→sane 判失败→步3显式降级
++      # 读失败(权限/不存在)→CANON 空→sane 判失败→步2显式降级
+       CANON="$( (head -n1 "$SDFLOW_HOME/workflow-path" | tr -d '\r' | sed -e 's/[[:space:]]*$//') 2>/dev/null || true)"
+     fi
+     ;;
+   *)
+     echo "resolve-workflow: ⚠ SDFLOW_HOME 非绝对路径（${SDFLOW_HOME}），忽略全局 canonical" >&2
+     ;;
+ esac
+ 
+-sane() {  # 最小健全性检查：防 pull 半坏态静默广播（spec-review D2）；两个清单目录须非空（CR-F1）
++sane() {  # 最小健全性检查：防 pull 半坏态静默广播（spec-review D2）；两个清单目录须非空（CR-F1）；
++  # tools/ 目录须非空 + lens-metric-contract.md 非空（fix-probe-scan-precision 扩面，形状级判据——
++  # 只查目录/文件存在且非空，MUST NOT 枚举具体 .py 成员，防守卫里复活补丁螺旋）
+   [ -n "$1" ] && [ -s "$1/workflow.md" ] \
+     && [ -d "$1/spec-checklists" ] && [ -n "$(ls -A "$1/spec-checklists" 2>/dev/null)" ] \
+-    && [ -d "$1/code-checklists" ] && [ -n "$(ls -A "$1/code-checklists" 2>/dev/null)" ]
++    && [ -d "$1/code-checklists" ] && [ -n "$(ls -A "$1/code-checklists" 2>/dev/null)" ] \
++    && [ -d "$1/tools" ] && [ -n "$(ls -A "$1/tools" 2>/dev/null)" ] \
++    && [ -s "$1/lens-metric-contract.md" ]
+ }
+ 
+ if sane "$CANON"; then
+   explain "global-canonical" "$CANON"
+   echo "$CANON"
+   exit 0
+ fi
+ 
+-# 步3：显式降级（反静默守卫）——绝不静默当"本项目无此评审层"
++# 步2：显式降级（反静默守卫）——绝不静默当"本项目无此评审层"
+ echo "resolve-workflow: ✗ 全局 workflow bundle 不可达或不完整（SDFLOW_HOME=${SDFLOW_HOME}）。skill 应显式降级为通用评审并告警。修复：在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh" >&2
+ exit 2
+diff --git a/sdflow-init/scripts/init.py b/sdflow-init/scripts/init.py
+index 9f9d126..cb4ae1f 100644
+--- a/sdflow-init/scripts/init.py
++++ b/sdflow-init/scripts/init.py
+@@ -202,87 +202,46 @@ def inject(path, start, end, content, header=""):
+     return action
+ 
+ 
+ def read_snippet(name):
+     with open(os.path.join(SNIPPETS, name), encoding="utf-8") as f:
+         return f.read()
+ 
+ 
+ # ── bundle 铺设 ──────────────────────────────────────────────
+ 
+-# 本机跑工具留下的残渣，MUST NOT 当 bundle 资产铺进项目仓。
+-#
+-# 成因（不是"跨机器污染"——.pyc/.pytest_cache 都不入库，git pull 拉不到）：canonical
+-# `~/.sdflow/workflow` 指向运行 checkout 的 `assets/workflow`，那里的 `tools/*.py` 一被执行/
+-# 被 pytest 收集，就在**资产侧**堆出这些目录；copytree 再把它们搬进项目仓 `openspec/workflow/`。
+-#
+-# 危害很小（都被 .gitignore 挡在库外，.pyc 还带解释器版本 tag、不匹配不会被误用），但有一个
+-# **可观测症状**：`update` 报告的"铺 bundle N 文件"随「从哪个 checkout 跑」漂移
+-# （实测 30 vs 19 → 修 __pycache__ 后仍 18 vs 13 ← 剩的正是 .pytest_cache）。
+-#
+-# 🔴 这是**拒绝清单**，不是穷举证明：新工具随时会发明新的缓存目录名，漏一个不会 fail-closed，
+-# 只会让上面那个计数重新开始漂。**发现计数又不稳，先来这里加名字，别再去逐个现场补。**
+-LOCAL_TOOL_CACHES = frozenset({
+-    "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".DS_Store",
+-})
+-
+-
+-def copy_bundle(root, full=False, include_schema=True):
+-    """R-MRF-1 分层部署：默认只铺 tools/ 子树（规则经全局 canonical 解析，不复制进消费仓）。
+-    full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用；同样
+-    不部署 `tools/tests/`，因为它们是 toolkit 自测而非运行时 bundle。
+-
+-    非 full 模式收敛性：拷贝前若 dst/tools 已存在则先 rmtree 再 copytree——tools/ 是随
+-    workflow bundle 托管的子树（update 覆盖刷新语义），不落入"绝不自动删消费仓文件"红线；
+-    清后拷保收敛，上游删文件不再残留（B2-F4）。full 模式维持 dirs_exist_ok 现状不变。
+-
+-    `tools/tests/` 是 tools 脚本（如 trivial_shape.py）的内部 pytest，只服务 toolkit 源仓
+-    自身开发；任何派生到 `openspec/workflow/` 的副本都不应含它。否则 `update --dev` 会把同名
+-    测试模块复制到本仓 dogfood instance，仓根 pytest 会收集两份并报 import file mismatch。
+-    脚本本体仍随 tools/ 正常部署。full 模式也要清除既有遗留副本，保证重复执行收敛。"""
+-    def ignore_tools_tests(source, _names):
+-        """仅忽略 bundle tools/ 直属 tests；其他运行时 tests 必须随完整 bundle 铺设。
+-        另忽略 LOCAL_TOOL_CACHES（本机跑工具的残渣，不是 bundle 资产）——见其定义处。"""
+-        if os.path.normpath(source) == os.path.normpath(os.path.join(BUNDLE_SRC, "tools")):
+-            return {"tests"} | LOCAL_TOOL_CACHES
+-        return set(LOCAL_TOOL_CACHES)
+-
++def copy_bundle(root, include_schema=True):
++    """fix-probe-scan-precision 精简部署：只铺 `WORKFLOW-GUIDE.md`（人读手册）+
++    project-local schema。规则本体、`tools/`、`lens-metric-contract.md` 全部经全局 canonical
++    解析（resolve-workflow.sh 两步链：全局 canonical → 显式降级），不再复制进消费仓——
++    此前的「tools/ 子树部署」（R-MRF-1）与 `--dev`/`full=True` 整 bundle 刷新已随此次收缩退役，
++    toolkit 源仓 dogfood 同样走全局 canonical，无需本地 instance。
++
++    dst 目录须显式 `os.makedirs`——此前由 `tools/` 的 `copytree` 隐式创建；删掉 tools/ 部署后
++    若无此行，fresh init 会在 `shutil.copy2(guide_src, ...)` 处抛 `FileNotFoundError`
++    （`ensure_dirs` 的 `CORE_DIRS` 只有 `changes`/`specs`，不含 `workflow/`）。
++    """
+     schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
+     if include_schema:
+         _validate_schema_authority(schema_src)
+ 
+     dst = os.path.join(root, "openspec", "workflow")
+-    if full:
+-        shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True,
+-                        ignore=ignore_tools_tests)
+-        tests_dst = os.path.join(dst, "tools", "tests")
+-        if os.path.isdir(tests_dst):
+-            shutil.rmtree(tests_dst)
+-    else:
+-        tools_dst = os.path.join(dst, "tools")
+-        if os.path.isdir(tools_dst):
+-            shutil.rmtree(tools_dst)
+-        shutil.copytree(os.path.join(BUNDLE_SRC, "tools"), tools_dst,
+-                         ignore=ignore_tools_tests)
+-        # [mlh-p2-anchor-lint] 契约是 tools/anchor_lint.py 的运行时机读依赖（读 lens-metric-enums 块），
+-        # 须与 tools/ 同批刷新，否则本地 pin 消费仓 update 后「新脚本+旧契约无块」永久 fail-closed。
+-        contract_src = os.path.join(BUNDLE_SRC, "lens-metric-contract.md")
+-        if os.path.isfile(contract_src):
+-            shutil.copy2(contract_src, os.path.join(dst, "lens-metric-contract.md"))
+-
+-        # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联）。
+-        # 规则本身不铺进消费仓（走全局 canonical），但【人】需要一份不用跳文件的完整参考，
+-        # 且它得在自己的仓里、随仓走。它是 hack/gen_workflow_guide.py 的生成物（DO NOT EDIT），
+-        # 单一源仍是 prompts/ + workflow.md —— 拷过来的是产物，不是新的真相源。
+-        guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
+-        if os.path.isfile(guide_src):
+-            shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
++    os.makedirs(dst, exist_ok=True)
++
++    # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联）。
++    # 规则本身不铺进消费仓（走全局 canonical），但【人】需要一份不用跳文件的完整参考，
++    # 且它得在自己的仓里、随仓走。它是 hack/gen_workflow_guide.py 的生成物（DO NOT EDIT），
++    # 单一源仍是 prompts/ + workflow.md —— 拷过来的是产物，不是新的真相源。
++    guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
++    if os.path.isfile(guide_src):
++        shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
++
+     if include_schema:
+         schemas_dst = os.path.join(root, "openspec", "schemas")
+         schema_dst = os.path.join(schemas_dst, PROJECT_SCHEMA)
+         # 只托管本工具的 fork。消费仓可在 schemas/ 下维护其它 project-local schema，
+         # update 不得删除它们。
+         if os.path.isdir(schema_dst):
+             shutil.rmtree(schema_dst)
+         shutil.copytree(schema_src, schema_dst)
+         if not os.path.isfile(os.path.join(schema_dst, "schema.yaml")):
+             raise RuntimeError("project-local schema 复制后缺少 schema.yaml")
+@@ -1086,26 +1045,21 @@ def retire_hooks():
+             notes.append("摘 settings 注册")
+         if removed_file:
+             notes.append("删脚本")
+         if notes:
+             acts.append(f"{name}：" + " + ".join(notes))
+     return "\n".join(f"  · {a}" for a in acts) if acts else "  · 无退役 hook 残留"
+ 
+ 
+ # ── 主流程 ──────────────────────────────────────────────────
+ 
+-def run(root, mode, dev=False):
+-    if dev:
+-        toolkit_root = os.path.realpath(os.path.dirname(SKILL_DIR))
+-        if os.path.realpath(root) != toolkit_root:
+-            _die("--dev 仅用于 toolkit 源仓自身（防把整套规则灌进消费仓）；当前 --root 不是本脚本所在仓")
+-
++def run(root, mode):
+     try:
+         osroot = os.path.join(root, "openspec")
+         if mode == "init":
+             os.makedirs(osroot, exist_ok=True)
+         elif not os.path.isdir(osroot):
+             _die("openspec/ 不存在——update 需在已铺设的项目里跑；空项目请用 init")
+ 
+         report = []
+         made = ensure_dirs(root)
+         if made:
+@@ -1117,40 +1071,39 @@ def run(root, mode, dev=False):
+         # 迁移必须先于 config 切换：补写方读取的是当前旧 schema；颠倒会把在途
+         # change 错钉到 fork。任何一个 change 写失败都中止本次 run，避免半迁移。
+         if schema_enabled:
+             # 迁移 marker 是本 change 的旧内置 schema 锁；后续重跑时 config 已是 fork，
+             # 仍须接受此前成功写入的旧锁，而不是把它误判为异常。
+             migrated = migrate_changes(root, BUILTIN_SCHEMA)
+             report.append(f"迁移在途 change：补写 {migrated} 个（仅 proposal.md 且无 .openspec.yaml）")
+         else:
+             report.append("迁移在途 change：跳过（CLI 版本门未通过）")
+ 
+-        dst, n = copy_bundle(root, full=dev, include_schema=schema_enabled)
+-        dev_suffix = "（--dev 整刷）" if dev else ""
+-        report.append(f"铺 bundle：openspec/workflow/{dev_suffix}（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
++        dst, n = copy_bundle(root, include_schema=schema_enabled)
++        report.append(f"铺 bundle：openspec/workflow/（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
+ 
+         report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
+ 
+         report.append("全局 hooks：\n" + ensure_global_hooks())
+ 
+         # 退役 hook 反注册（ADR-1）：init 与 update 都跑，自愈存量安装（fresh 则 no-op）。
+         report.append("退役 hook 清理：\n" + retire_hooks())
+ 
+         # 退役部署文件清理（drop-review-html-viewer）：曾铺进消费仓的查看器根锚（serve.sh +
+         # review.html），签名门控删除；tools/ 下查看器资产随 copy_bundle 整删重拷自动清除。
+         report.append("退役部署文件清理：\n" + retire_deploy_files(root))
+ 
+         # init 与 update 都跑：fresh init 无残留自然零告警；老仓误跑 init 不再假绿（B2-F3）。
+-        # T15：--dev 模式跳过——dev 刻意铺规则进 openspec/workflow/，告警是误报。
+-        if not dev:
+-            for w in stale_shadow_warnings(root):
+-                report.append(w)
++        # --dev 已退役（fix-probe-scan-precision）：不再有「刻意铺规则进 openspec/workflow/」的
++        # 豁免场景，告警无条件跑。
++        for w in stale_shadow_warnings(root):
++            report.append(w)
+ 
+         cstat, cmsg = handle_config(root, mode, schema=target_schema)
+         report.append(f"config.yaml：{cmsg}")
+ 
+         runtime_snippet = os.path.join(SNIPPETS, "runtime-gitignore.txt")
+         with open(runtime_snippet, "rb") as handle:
+             runtime_action = merge_runtime_gitignore(root, handle.read())
+         report.append(f".gitignore runtime：{runtime_action}")
+ 
+         # INDEX.md 托管区块
+@@ -1188,25 +1141,26 @@ def _die(msg):
+ 
+ def main():
+     p = argparse.ArgumentParser(description="把 openspec/workflow bundle 铺进项目")
+     p.add_argument("mode", choices=["init", "update", "retire-hooks", "config-lint"],
+                    help="init=首次铺设 / update=重拉最新 bundle / retire-hooks=只反注册退役 hook（自愈，"
+                         "不碰 openspec/） / config-lint=校验 openspec/config.yaml 结构（fail-closed）")
+     p.add_argument("--root", default=None,
+                    help="目标项目根（init/update/retire-hooks 默认当前目录；config-lint 缺省探 git 仓根，"
+                         "非 git 仓降级当前目录）")
+     p.add_argument("--dev", action="store_true",
+-                   help="update 专用：整 bundle 刷新（toolkit 源仓 dogfood 用，消费仓勿用）")
++                   help="已退役（fix-probe-scan-precision）：源仓 dogfood 同样走全局 canonical，"
++                        "无需本地 instance；传入本参数将 fail-loud 报错")
+     args = p.parse_args()
++    if args.dev:  # tombstone：识别到 --dev 参数 → fail-loud 提示，而非 argparse generic error
++        _die("--dev 已退役：源仓 dogfood 同样走全局 canonical，无需本地 instance")
+     if args.mode == "config-lint":         # 早分支：mode 第 4 值，不引入 add_subparsers 重构
+         root = args.root if args.root is not None else _git_root_or_dot()
+         sys.exit(cmd_config_lint(root))
+-    if args.mode == "retire-hooks":       # A4: 早分支，先于 osroot/dev——只自愈全局 hook，与项目无关
++    if args.mode == "retire-hooks":       # A4: 早分支，先于 osroot——只自愈全局 hook，与项目无关
+         print("退役 hook 清理：\n" + retire_hooks())
+         return
+-    if args.dev and args.mode != "update":
+-        _die("--dev 仅配 update 使用")
+-    run(args.root if args.root is not None else ".", args.mode, dev=args.dev)
++    run(args.root if args.root is not None else ".", args.mode)
+ 
+ 
+ if __name__ == "__main__":
+     main()
+diff --git a/sdflow-init/tests/test_init.py b/sdflow-init/tests/test_init.py
+index bcad591..199be7c 100644
+--- a/sdflow-init/tests/test_init.py
++++ b/sdflow-init/tests/test_init.py
+@@ -77,160 +77,75 @@ class TestNoConsumerHack:
+ 
+     def test_init_module_has_no_copy_hack(self):
+         assert not hasattr(init_mod, "copy_hack")
+ 
+     def test_run_does_not_create_consumer_hack_dir(self, tmp_path, monkeypatch):
+         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+         init_mod.run(str(tmp_path / "proj"), "init")
+         assert not (tmp_path / "proj" / "hack").exists()
+ 
+ 
+-class TestBundleToolsOnly:
+-    """R-MRF-1：copy_bundle 只部署 tools/ 子树，规则文件数 = 0。"""
+-
+-    def test_deploys_only_tools_subtree(self, tmp_path):
+-        dst, n = copy_bundle(str(tmp_path))
++class TestBundleGuideAndSchemaOnly:
++    """fix-probe-scan-precision R2/R3：copy_bundle 只铺 WORKFLOW-GUIDE.md（人读手册）+
++    project-local schema。规则本体、`tools/`、`lens-metric-contract.md` 全部经全局 canonical
++    解析（resolve-workflow.sh 两步链），MUST NOT 复制进消费仓——`--dev`/`full=True` 整 bundle
++    刷新与 tools/ 子树部署（原 R-MRF-1）已随此次收缩退役。"""
++
++    def test_deploys_only_guide(self, tmp_path):
++        dst, n = copy_bundle(str(tmp_path), include_schema=False)
+         wf = tmp_path / "openspec" / "workflow"
+-        assert (wf / "tools" / "anchor_lint.py").is_file()   # 机械层脚本随 tools/ 部署
+-        # 查看器资产已移除（drop-review-html-viewer）——tools/ 下不再含 HTML 查看器文件
+-        assert not (wf / "tools" / "engine.js").exists()
+-        assert not (wf / "tools" / "review-stub.html").exists()
+-        assert not (wf / "tools" / "vendor").exists()
++        # 文件全集断言（非"包含"断言）：openspec/workflow/ 下只有 WORKFLOW-GUIDE.md 一个文件
++        all_files = {p.relative_to(wf) for p in wf.rglob("*") if p.is_file()}
++        assert all_files == {Path("WORKFLOW-GUIDE.md")}
++        # 🔴 规则本体/tools/契约 MUST NOT 被铺进来 —— 它们走全局 canonical
++        assert not (wf / "tools").exists()
+         assert not (wf / "workflow.md").exists()
++        assert not (wf / "lens-metric-contract.md").exists()
+         assert not (wf / "spec-checklists").exists()
+         assert not (wf / "code-checklists").exists()
+-        # 两个非规则的 .md 显式豁免：
+-        # [mlh-p2-anchor-lint] lens-metric-contract.md —— tools/anchor_lint.py 的运行时机读依赖
+-        #   （读 lens-metric-enums 块），须与 tools/ 同批铺。
+-        # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联），是
+-        #   hack/gen_workflow_guide.py 的【生成物】而非真相源（单一源仍是 prompts/ + workflow.md，
+-        #   都在全局 canonical，不铺进消费仓）。规则走 canonical，但【人】需要一份随仓走、
+-        #   不用跳文件的完整参考 —— 拷过来的是产物，不是新的真相源。
+-        EXEMPT = {"lens-metric-contract.md", "WORKFLOW-GUIDE.md"}
+-        md_rules = [p for p in wf.rglob("*.md")
+-                    if "tools" not in p.parts and p.name not in EXEMPT]
+-        assert md_rules == []                      # 规则文件数 = 0（两个豁免除外）
+-        assert (wf / "lens-metric-contract.md").is_file()
+-        assert (wf / "WORKFLOW-GUIDE.md").is_file()
+-
+-        # 🔴 规则本体 MUST NOT 被铺进来 —— 它们走全局 canonical（改了即时生效，无需 update）
+-        assert not (wf / "workflow.md").exists()
+         assert not (wf / "prompts").exists()
+ 
+-    def test_full_flag_restores_whole_bundle(self, tmp_path):
+-        init_mod.copy_bundle(str(tmp_path), full=True)
+-        wf = tmp_path / "openspec" / "workflow"
+-        assert (wf / "workflow.md").is_file()      # --dev 整刷用（Task 7）
+-
+-    def test_tools_tests_not_deployed_to_consumer(self, tmp_path):
+-        """[impl-review-fix CF-6]：tools/tests/（tools/ 脚本的内部 pytest，如
+-        test_trivial_shape.py）不得铺进消费仓——只污染其 pytest 收集，无实际用途。
+-        脚本本体（trivial_shape.py）仍照常部署。"""
+-        dst, _ = copy_bundle(str(tmp_path))
+-        tools_dst = Path(dst) / "tools"
+-        assert (tools_dst / "trivial_shape.py").is_file()
+-        assert not (tools_dst / "tests").exists()
+-
+-    def test_full_flag_excludes_tools_tests(self, tmp_path):
+-        """--dev dogfood instance 是派生产物，不能复制 toolkit 自测。"""
+-        init_mod.copy_bundle(str(tmp_path), full=True)
+-        wf = tmp_path / "openspec" / "workflow"
+-        assert not (wf / "tools" / "tests").exists()
+-
+-    def test_full_flag_prunes_legacy_tools_tests(self, tmp_path):
+-        """重复 --dev update 也要移除旧版留下的测试副本。"""
+-        stale = tmp_path / "openspec" / "workflow" / "tools" / "tests"
+-        stale.mkdir(parents=True)
+-        (stale / "test_stale.py").write_text("# stale\n", encoding="utf-8")
+-        init_mod.copy_bundle(str(tmp_path), full=True)
+-        assert not stale.exists()
+-
+-    def test_full_flag_preserves_tests_outside_tools(self, tmp_path, monkeypatch):
+-        """只排除 tools/tests，bundle 其他层级的 tests 是正常运行时资产。"""
+-        source = tmp_path / "bundle"
+-        (source / "tools" / "tests").mkdir(parents=True)
+-        (source / "tools" / "tests" / "test_internal.py").write_text("# toolkit test\n", encoding="utf-8")
+-        (source / "references" / "tests").mkdir(parents=True)
+-        expected = source / "references" / "tests" / "fixture.md"
+-        expected.write_text("runtime fixture\n", encoding="utf-8")
+-        monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(source))
+-
+-        init_mod.copy_bundle(str(tmp_path / "target"), full=True)
+-
+-        workflow = tmp_path / "target" / "openspec" / "workflow"
+-        assert not (workflow / "tools" / "tests").exists()
+-        assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
+-
+-    @pytest.mark.parametrize("full", [False, True])
+-    def test_local_tool_caches_are_never_deployed(self, tmp_path, monkeypatch, full):
+-        """本机跑工具的残渣（`__pycache__` / `.pytest_cache` / …）不是 bundle 资产。
+-
+-        不入库 ⇒ 跨机器传不过去；但同机会：canonical `~/.sdflow/workflow` 指向运行 checkout 的
+-        assets/workflow，那里的 tools/*.py 一被执行/被 pytest 收集就在资产侧堆出这些目录，
+-        copytree 再搬进项目仓。可观测症状 = `update` 报的"铺 bundle N 文件"随「从哪个 checkout 跑」
+-        漂移（实测 30 vs 19 → 只修 __pycache__ 后仍 18 vs 13 ← 剩的正是 .pytest_cache）。
+-        ∴ 本用例遍历整个 LOCAL_TOOL_CACHES，**不是只测当初被点穿的那一个**。
+-        两个模式都得干净：非 full 是消费仓路径，full 是 `--dev` dogfood 路径。"""
+-        # 🔴 造垃圾与断言一律用**字面清单**驱动，MUST NOT 遍历 init_mod.LOCAL_TOOL_CACHES：
+-        # 那样 fixture 和断言由同一个常量驱动 ⇒ 把常量清空，循环体不执行、既不造垃圾也不断言
+-        # ⇒ 用例恒真（实测：清空 LOCAL_TOOL_CACHES 后仍绿）。
+-        dir_junk = ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache")
+-        file_junk = (".DS_Store",)
+-        source = tmp_path / "bundle"
+-        (source / "tools").mkdir(parents=True)
+-        (source / "tools" / "anchor_lint.py").write_text("# real asset\n", encoding="utf-8")
+-        for name in dir_junk:
+-            (source / "tools" / name).mkdir()
+-            (source / "tools" / name / "junk").write_bytes(b"\x00junk")
+-            (source / "tools" / "nested" / name).mkdir(parents=True)   # 嵌一层深的也得挡
+-            (source / "tools" / "nested" / name / "junk").write_bytes(b"\x00junk")
+-        for name in file_junk:
+-            (source / "tools" / name).write_bytes(b"\x00junk")
+-        monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(source))
+-
+-        dst, _ = init_mod.copy_bundle(str(tmp_path / "target"), full=full, include_schema=False)
+-
+-        deployed = Path(dst)
+-        assert (deployed / "tools" / "anchor_lint.py").is_file()       # 真资产照铺
+-        for name in dir_junk + file_junk:
+-            assert list(deployed.rglob(name)) == [], f"{name} 被铺进了部署侧"
+-        assert list(deployed.rglob("*.pyc")) == []
+-        # 拒绝清单只许长不许缩：本用例的字面清单 MUST 全在常量里，否则等于偷偷退役了一格
+-        assert set(dir_junk) | set(file_junk) <= set(init_mod.LOCAL_TOOL_CACHES)
+-
+-
+-class TestPinConsumerUpdateInvariant:
+-    """T69：pin 消费仓跑 update（非 dev）→ 规则文件不被触碰、仅 tools+契约刷新。"""
+-
+-    def test_update_preserves_pinned_rules(self, tmp_path):
++    def test_fresh_init_does_not_raise(self, tmp_path):
++        """回归锚（F15）：GUIDE `copy2` 前若无 `os.makedirs(dst, exist_ok=True)`，fresh init
++        （裸 tmp_path，无任何既有 openspec/workflow/ 目录——此前由 tools/ 的 copytree 隐式创建）
++        会在此处抛 FileNotFoundError（ensure_dirs 的 CORE_DIRS 只有 changes/specs）。"""
++        dst, n = copy_bundle(str(tmp_path), include_schema=False)   # 不应抛异常
++        assert Path(dst).is_dir()
++        assert (Path(dst) / "WORKFLOW-GUIDE.md").is_file()
++
++    def test_include_schema_still_deploys_project_local_schema(self, tmp_path):
++        dst, n = copy_bundle(str(tmp_path), include_schema=True)
++        schema_dst = tmp_path / "openspec" / "schemas" / init_mod.PROJECT_SCHEMA / "schema.yaml"
++        assert schema_dst.is_file()
++
++
++class TestCopyBundleLeavesExistingWorkflowFilesAlone:
++    """copy_bundle 不再部署规则/tools/ 子树 ⇒ 消费仓 openspec/workflow/ 下任何既有文件
++    （历史遗留的规则副本、旧版 tools/ 等）字节不变——copy_bundle 只碰它自己铺的 GUIDE + schema。"""
++
++    def test_update_preserves_preexisting_workflow_files(self, tmp_path):
+         wf = tmp_path / "openspec" / "workflow"
+         wf.mkdir(parents=True)
+-        # 模拟 pin：消费仓 openspec/workflow/ 已有规则文件
+-        (wf / "workflow.md").write_text("# pinned rules v1\n", encoding="utf-8")
++        # 模拟历史遗留：消费仓 openspec/workflow/ 已有旧版规则文件
++        (wf / "workflow.md").write_text("# legacy rules v1\n", encoding="utf-8")
+         (wf / "spec-checklists").mkdir()
+         (wf / "spec-checklists" / "base.md").write_text("# base\n", encoding="utf-8")
+-        (wf / "code-checklists").mkdir()
+-        (wf / "code-checklists" / "base.md").write_text("# base\n", encoding="utf-8")
+-        # 记录 pin 文件的原始内容
+-        pin_before = {
++        before = {
+             "workflow.md": (wf / "workflow.md").read_bytes(),
+             "spec-checklists/base.md": (wf / "spec-checklists" / "base.md").read_bytes(),
+-            "code-checklists/base.md": (wf / "code-checklists" / "base.md").read_bytes(),
+         }
+-        # 跑 update（非 dev = full=False）
+         copy_bundle(str(tmp_path))
+-        # 规则文件字节不变
+-        assert (wf / "workflow.md").read_bytes() == pin_before["workflow.md"]
+-        assert (wf / "spec-checklists" / "base.md").read_bytes() == pin_before["spec-checklists/base.md"]
+-        assert (wf / "code-checklists" / "base.md").read_bytes() == pin_before["code-checklists/base.md"]
+-        # tools/ 已刷新
+-        assert (wf / "tools" / "anchor_lint.py").is_file()
++        # 既有文件字节不变
++        assert (wf / "workflow.md").read_bytes() == before["workflow.md"]
++        assert (wf / "spec-checklists" / "base.md").read_bytes() == before["spec-checklists/base.md"]
++        # GUIDE 正常铺入
++        assert (wf / "WORKFLOW-GUIDE.md").is_file()
+ 
+ 
+ class TestProjectLocalSchema:
+     def _version(self, monkeypatch, value="1.7.0\n", returncode=0):
+         """Fake only the `openspec --version` probe (`_openspec_cli_version`'s subprocess
+         call) — MUST NOT blanket-replace `subprocess.run` for the whole module: `_yq()`
+         (shared-yaml-subset-parser) also calls `subprocess.run` (yq's own `--version`
+         identity check + the actual yq invocation), and a blanket stub would feed those
+         calls the same fake "openspec version" stdout, corrupting yq's real output."""
+         class Proc:
+@@ -540,47 +455,35 @@ class TestProjectLocalSchema:
+         managed_schema.write_text("name: old-managed-fork\n", encoding="utf-8")
+ 
+         with pytest.raises(SystemExit) as exc:
+             init_mod.run(str(root), "update")
+ 
+         assert exc.value.code == 1
+         assert config.read_bytes() == original_config
+         assert managed_schema.read_text(encoding="utf-8") == "name: old-managed-fork\n"
+ 
+ 
+-class TestUpdateDev:
+-    """5.6：toolkit 源仓 dogfood 刷新——update --dev 整 bundle 刷 instance；普通 update 只 tools/。"""
++class TestUpdateDoesNotDeployRules:
++    """fix-probe-scan-precision：--dev/full 整 bundle 刷新已退役——普通 update 从不铺规则本体，
++    无论 init 还是 update 都只铺 GUIDE + schema。"""
+ 
+     def _seeded(self, tmp_path, monkeypatch):
+         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+         root = tmp_path / "proj"
+         init_mod.run(str(root), "init")
+         return root
+ 
+     def test_plain_update_does_not_deploy_rules(self, tmp_path, monkeypatch):
+         root = self._seeded(tmp_path, monkeypatch)
+         init_mod.run(str(root), "update")
+         assert not (root / "openspec" / "workflow" / "workflow.md").exists()
+ 
+-    def test_dev_update_deploys_full_bundle(self, tmp_path, monkeypatch):
+-        root = self._seeded(tmp_path, monkeypatch)
+-        # --dev 身份校验（B2-F2）要求 root == toolkit 源仓根；此处伪造 SKILL_DIR 令 root 过检。
+-        monkeypatch.setattr(init_mod, "SKILL_DIR", str(root / "sdflow-init"))
+-        init_mod.run(str(root), "update", dev=True)
+-        assert (root / "openspec" / "workflow" / "workflow.md").is_file()
+-        assert (root / "openspec" / "workflow" / "spec-checklists").is_dir()
+-        assert (
+-            root / "openspec" / "workflow" / "tools" / "trivial_shape.py"
+-        ).read_text(encoding="utf-8") == (
+-            Path(init_mod.BUNDLE_SRC) / "tools" / "trivial_shape.py"
+-        ).read_text(encoding="utf-8")
+-
+ 
+ class TestHandleConfigFromBundleSrc:
+     """2.5：config 模版改读 BUNDLE_SRC——消费仓无规则副本时 init 不得 FileNotFoundError。"""
+ 
+     def test_init_creates_config_without_consumer_template(self, tmp_path):
+         root = tmp_path / "proj"
+         (root / "openspec").mkdir(parents=True)    # 无 workflow/config.template.yaml
+         status, _ = init_mod.handle_config(str(root), "init")
+         assert status == "created"
+         assert (root / "openspec" / "config.yaml").is_file()
+@@ -700,71 +603,61 @@ class TestEnsureGlobalHooks:
+         spec = {
+             "name": "ff0.py", "src": str(src), "event": "PreToolUse",
+             "matcher": "Bash", "cmd": 'python3 "$HOME/.claude/hooks/ff0.py"',
+         }
+         msg = init_mod.ensure_global_hook(spec)
+         assert "已注册" in msg
+         data = json.loads(self._settings_path(home).read_text(encoding="utf-8"))
+         assert len(data["hooks"]["PreToolUse"]) == 1  # not duplicated
+ 
+ 
+-class TestDevRepoIdentityGuard:
+-    """B2-F2：--dev 只准在 toolkit 源仓自身跑，防把整套规则灌进消费仓。"""
++class TestDevTombstone:
++    """fix-probe-scan-precision：`--dev` 退役，toolkit-仓根守卫随之删除；`run()` 不再接受
++    `dev` 关键字参数（TypeError 是生产契约，非测试疏漏）。CLI 层保留一版 tombstone——
++    识别到 `--dev` 参数 → fail-loud 提示，而非 argparse 的 generic「unrecognized arguments」。"""
+ 
+-    def test_dev_pointing_elsewhere_dies(self, tmp_path, monkeypatch, capsys):
++    def test_run_no_longer_accepts_dev_kwarg(self, tmp_path):
++        with pytest.raises(TypeError):
++            init_mod.run(str(tmp_path), "update", dev=True)
++
++    def test_cli_dev_flag_fails_loud_with_retirement_message(self, tmp_path, monkeypatch, capsys):
+         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+-        other_root = tmp_path / "consumer-repo"
+-        (other_root / "openspec").mkdir(parents=True)
+-        with pytest.raises(SystemExit):
+-            init_mod.run(str(other_root), "update", dev=True)
++        monkeypatch.setattr(sys, "argv", ["init.py", "update", "--dev", "--root", str(tmp_path)])
++        with pytest.raises(SystemExit) as exc:
++            init_mod.main()
++        assert exc.value.code == 1
+         err = capsys.readouterr().err
+-        assert "仅用于 toolkit 源仓" in err
++        assert "--dev 已退役" in err
+ 
+-    def test_dev_matching_source_repo_passes_identity_check(self, tmp_path, monkeypatch):
++    def test_cli_dev_flag_does_not_touch_filesystem(self, tmp_path, monkeypatch):
++        """tombstone 须在任何文件系统操作之前拦下——不得半跑一截才报错。"""
+         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+-        fake_skill_dir = tmp_path / "some-repo" / "sdflow-init"
+-        fake_skill_dir.mkdir(parents=True)
+-        monkeypatch.setattr(init_mod, "SKILL_DIR", str(fake_skill_dir))
+-        root = tmp_path / "some-repo"
+-        (root / "openspec").mkdir()
+-        init_mod.run(str(root), "update", dev=True)  # 不应抛 SystemExit
+-        assert (root / "openspec" / "workflow" / "workflow.md").is_file()
++        monkeypatch.setattr(sys, "argv", ["init.py", "update", "--dev", "--root", str(tmp_path)])
++        with pytest.raises(SystemExit):
++            init_mod.main()
++        assert not (tmp_path / "openspec").exists()
+ 
+ 
+ class TestInitAlsoWarnsShadow:
+     """B2-F3：陈旧遮蔽告警按磁盘状态触发——init 也要跑，不再只挂 update。"""
+ 
+     def test_init_on_legacy_repo_warns_shadow(self, tmp_path, monkeypatch, capsys):
+         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+         root = tmp_path / "old"
+         wf = root / "openspec" / "workflow"
+         wf.mkdir(parents=True)
+         (wf / "workflow.md").write_text("# old rules\n", encoding="utf-8")
+         init_mod.run(str(root), "init")
+         out = capsys.readouterr().out
+         assert "遮蔽" in out
+ 
+ 
+-class TestCopyBundleConvergence:
+-    """B2-F4：非 full 模式下 tools/ 收敛——update 覆盖后，上游已删的旧文件不得残留。"""
+-
+-    def test_update_clears_legacy_files_in_tools(self, tmp_path, monkeypatch):
+-        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+-        root = tmp_path / "proj"
+-        init_mod.run(str(root), "init")
+-        legacy = root / "openspec" / "workflow" / "tools" / "legacy-removed-upstream.txt"
+-        legacy.write_text("stale\n", encoding="utf-8")
+-        assert legacy.exists()
+-        init_mod.run(str(root), "update")
+-        assert not legacy.exists()
+-
+-
+ class TestRunFsErrorGuard:
+     """B1-F2：run() 主体 FS 操作异常须走 _die 惯例，不裸抛 traceback。"""
+ 
+     def test_readonly_root_dies_with_fs_error(self, tmp_path, monkeypatch, capsys):
+         if os.name == "nt":
+             pytest.skip("Windows chmod does not enforce POSIX directory write permissions")
+         if hasattr(os, "geteuid") and os.geteuid() == 0:
+             pytest.skip("running as root — permission bits don't block writes")
+         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
+         root = tmp_path / "proj"
+diff --git a/sdflow-init/tests/test_init_contract_sync.py b/sdflow-init/tests/test_init_contract_sync.py
+deleted file mode 100644
+index 2bf77ed..0000000
+--- a/sdflow-init/tests/test_init_contract_sync.py
++++ /dev/null
+@@ -1,12 +0,0 @@
+-import sys
+-from pathlib import Path
+-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+-import init
+-
+-
+-def test_copy_bundle_refreshes_contract(tmp_path):
+-    init.copy_bundle(str(tmp_path), full=False)
+-    contract = tmp_path / "openspec" / "workflow" / "lens-metric-contract.md"
+-    assert contract.exists(), "非 full 模式须一并铺 lens-metric-contract.md"
+-    assert "lens-metric-enums" in contract.read_text(encoding="utf-8")
+-    assert (tmp_path / "openspec" / "workflow" / "tools" / "anchor_lint.py").exists()
+diff --git a/sdflow-init/tests/test_resolve_models.py b/sdflow-init/tests/test_resolve_models.py
+index 99be5cb..b94da06 100644
+--- a/sdflow-init/tests/test_resolve_models.py
++++ b/sdflow-init/tests/test_resolve_models.py
+@@ -29,68 +29,77 @@ OUTSIDE_VOICE = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice.sh"
+ JOB_PY = REPO / "sdflow-init" / "assets" / "hack" / "outside-voice-job.py"
+ 
+ # 宿主判据的**第二份实现**（Python 侧）——parity 门要拿它跟本 shell 脚本对跑。
+ _JOB_SPEC = importlib.util.spec_from_file_location("sdflow_outside_voice_job", JOB_PY)
+ JOB = importlib.util.module_from_spec(_JOB_SPEC)
+ _JOB_SPEC.loader.exec_module(JOB)
+ 
+ 
+ def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
+                       codex=("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna")):
+-    """一个自包含的本地 pin bundle（resolve-workflow.sh 的 local-pin 分支会命中它），
+-    含 model-tiers.md 机读块——resolve-models.sh 靠它定位档位缺省。"""
++    """项目根 + 一个自包含的假全局 canonical bundle（fix-probe-scan-precision：本地 pin 判定
++    已从 resolve-workflow.sh 删除，两步链只剩「全局 canonical → 显式降级」——bundle 须放进
++    `tmp_path/sdflow-home/workflow/`，经 `run_resolve`/`eval_resolve` 默认设置的 SDFLOW_HOME
++    命中）。含 model-tiers.md 机读块——resolve-models.sh 靠它定位档位缺省。sane() 扩面（同 change）
++    要求 tools/ 非空 + lens-metric-contract.md 非空，一并造好，否则全局 canonical 判「不完整」
++    exit 2，档位解析拿不到 model-tiers.md。"""
+     root = tmp_path / "repo"
+-    wf = root / "openspec" / "workflow"
++    root.mkdir(parents=True)
++    wf = tmp_path / "sdflow-home" / "workflow"
+     wf.mkdir(parents=True)
+     (wf / "workflow.md").write_text("# wf\n", encoding="utf-8")
+     (wf / "spec-checklists").mkdir()
+     (wf / "spec-checklists" / "d.md").write_text("x\n", encoding="utf-8")
+     (wf / "code-checklists").mkdir()
+     (wf / "code-checklists" / "d.md").write_text("x\n", encoding="utf-8")
++    (wf / "tools").mkdir()
++    (wf / "tools" / "x.py").write_text("# x\n", encoding="utf-8")
++    (wf / "lens-metric-contract.md").write_text("# contract\n", encoding="utf-8")
+     (wf / "model-tiers.md").write_text(
+         "# model-tiers\n\n```model-tier-defaults\n"
+         f"claude.strong: {claude[0]}\nclaude.mid: {claude[1]}\nclaude.light: {claude[2]}\n"
+         f"codex.strong: {codex[0]}\ncodex.mid: {codex[1]}\ncodex.light: {codex[2]}\n"
+         "```\n",
+         encoding="utf-8",
+     )
+     return root
+ 
+ 
+ def write_config_yaml(root, content):
+     osdir = root / "openspec"
+     osdir.mkdir(parents=True, exist_ok=True)
+     (osdir / "config.yaml").write_text(content, encoding="utf-8")
+ 
+ 
+ def run_resolve(root, env_overrides=None, no_sdflow_home=True, extra_args=()):
+     env = dict(os.environ)
+     if no_sdflow_home:
+-        # 隔离真实 ~/.sdflow：不让本机已装的全局 canonical 干扰测试（每条用例应只吃本地 pin bundle）
+-        env["SDFLOW_HOME"] = bash_path(root.parent / "no-such-sdflow-home")
++        # 隔离真实 ~/.sdflow：指向 make_bundle_repo 造好的假 bundle（`root.parent/sdflow-home`），
++        # 不让本机已装的全局 canonical 干扰测试。
++        env["SDFLOW_HOME"] = bash_path(root.parent / "sdflow-home")
+     env.pop("CLAUDECODE", None)
+     env.pop("CODEX_THREAD_ID", None)
+     if env_overrides:
+         env.update(env_overrides)
+     return subprocess.run(
+         [bash_executable(), bash_path(SCRIPT), "--root", bash_path(root), *extra_args],
+         capture_output=True, text=True, env=env, timeout=15,
+ 
+         encoding="utf-8",
+         errors="replace",)
+ 
+ 
+ def eval_resolve(root, env_overrides=None, no_sdflow_home=True, cwd=None):
+     """真正走 `eval "$(resolve-models.sh ...)"` 接口——用于恶意值回归（断言不执行）。"""
+     env = dict(os.environ)
+     if no_sdflow_home:
+-        env["SDFLOW_HOME"] = bash_path(root.parent / "no-such-sdflow-home")
++        env["SDFLOW_HOME"] = bash_path(root.parent / "sdflow-home")
+     env.pop("CLAUDECODE", None)
+     env.pop("CODEX_THREAD_ID", None)
+     if env_overrides:
+         env.update(env_overrides)
+     script = f'eval "$(bash {shlex.quote(bash_path(SCRIPT))} --root {shlex.quote(bash_path(root))})"; ' \
+              f'echo "SDFLOW_HOST=$SDFLOW_HOST"; echo "SDFLOW_TIER_STRONG=$SDFLOW_TIER_STRONG"; ' \
+              f'echo "SDFLOW_TIER_MID=$SDFLOW_TIER_MID"; echo "SDFLOW_TIER_LIGHT=$SDFLOW_TIER_LIGHT"; ' \
+              f'echo "SDFLOW_VOICE_RUNNER=$SDFLOW_VOICE_RUNNER"; echo "SDFLOW_VOICE_MODEL=$SDFLOW_VOICE_MODEL"'
+     return subprocess.run([bash_executable(), "-c", script], capture_output=True, text=True,
+                           env=env, cwd=str(cwd) if cwd else None, timeout=15, encoding="utf-8", errors="replace")
+diff --git a/sdflow-init/tests/test_resolve_workflow.py b/sdflow-init/tests/test_resolve_workflow.py
+index 6f9a2ea..b7fa98b 100644
+--- a/sdflow-init/tests/test_resolve_workflow.py
++++ b/sdflow-init/tests/test_resolve_workflow.py
+@@ -1,11 +1,15 @@
+-"""Tests for resolve-workflow.sh（三步链契约）。SDFLOW_HOME 一律重定向，绝不写真实 $HOME。"""
++"""Tests for resolve-workflow.sh（两步链契约：全局 canonical → 显式降级）。
++
++fix-probe-scan-precision：本地 pin 判定步（原「步1」）已从生产脚本删除——规则解析恒指全局
++canonical，仓内放多完整的规则副本都不再被读取。SDFLOW_HOME 一律重定向，绝不写真实 $HOME。
++"""
+ import os
+ import stat
+ import subprocess
+ from pathlib import Path
+ 
+ import pytest
+ 
+ from test_support.windows import bash_executable, bash_path
+ 
+ SCRIPT = Path(__file__).parent.parent / "assets" / "hack" / "resolve-workflow.sh"
+@@ -20,194 +24,291 @@ def _symlink_or_skip(link, target):
+         raise
+ 
+ 
+ def run_resolve(cwd, sdflow_home, args=()):
+     env = dict(os.environ, SDFLOW_HOME=bash_path(sdflow_home))
+     return subprocess.run(
+         [bash_executable(), bash_path(SCRIPT), *args],
+         cwd=str(cwd), env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+ 
+ 
+-def make_bundle(path):
+-    """一个健全的 bundle：workflow.md 非空 + 两个清单目录（各含至少一个条目，CR-F1 sane 判据）。"""
++def make_bundle(path, with_tools=True, with_contract=True):
++    """一个健全的 bundle：workflow.md 非空 + 两个清单目录（各含至少一个条目，CR-F1 sane 判据）+
++    tools/ 目录非空 + lens-metric-contract.md 非空（fix-probe-scan-precision sane() 扩面，
++    形状级判据）。`with_tools`/`with_contract` 用于反向锚——造一个缺其一的半坏 canonical。"""
+     path.mkdir(parents=True)
+     (path / "workflow.md").write_text("# wf\n", encoding="utf-8")
+     (path / "spec-checklists").mkdir()
+     (path / "spec-checklists" / "domains.md").write_text("# spec\n", encoding="utf-8")
+     (path / "code-checklists").mkdir()
+     (path / "code-checklists" / "domains.md").write_text("# code\n", encoding="utf-8")
++    if with_tools:
++        (path / "tools").mkdir()
++        (path / "tools" / "anchor_lint.py").write_text("# tool\n", encoding="utf-8")
++    if with_contract:
++        (path / "lens-metric-contract.md").write_text("# contract\n", encoding="utf-8")
+     return path
+ 
+ 
+-def make_repo(path, with_rules=False):
++def make_repo(path):
+     path.mkdir(parents=True, exist_ok=True)
+     subprocess.run(["git", "init", "-q", str(path)], check=True)
+-    wf = path / "openspec" / "workflow"
+-    (wf / "tools").mkdir(parents=True)          # tools/ 恒存在——判据必须查规则本体
+-    if with_rules:
+-        (wf / "workflow.md").write_text("# pinned\n", encoding="utf-8")
+-        (wf / "spec-checklists").mkdir()
+-        (wf / "code-checklists").mkdir()
+     return path
+ 
+ 
+-class TestHappyPaths:
+-    def test_local_pin_hit(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=True)
+-        r = run_resolve(repo, tmp_path / "nonexistent-sdflow")
+-        assert r.returncode == 0
+-        assert Path(r.stdout.strip()).resolve() == (repo / "openspec" / "workflow").resolve()
++def make_repo_with_full_rule_copy(path):
++    """仓内放一套完整规则副本（含 tools/）——反向锚 fixture：旧实现（保留步①）在此必命中
++    本地 pin 并把 stdout 指向这里；新实现（两步链）MUST NOT 读它，恒指全局 canonical。"""
++    repo = make_repo(path)
++    wf = repo / "openspec" / "workflow"
++    wf.mkdir(parents=True)
++    (wf / "workflow.md").write_text("# locally pinned copy\n", encoding="utf-8")
++    (wf / "spec-checklists").mkdir()
++    (wf / "spec-checklists" / "domains.md").write_text("# spec\n", encoding="utf-8")
++    (wf / "code-checklists").mkdir()
++    (wf / "code-checklists" / "domains.md").write_text("# code\n", encoding="utf-8")
++    (wf / "tools").mkdir()
++    (wf / "tools" / "anchor_lint.py").write_text("# local tool copy\n", encoding="utf-8")
++    (wf / "lens-metric-contract.md").write_text("# local contract copy\n", encoding="utf-8")
++    return repo
+ 
+-    def test_tools_only_repo_falls_to_global_symlink(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++
++class TestHappyPaths:
++    def test_global_canonical_symlink_hit(self, tmp_path):
++        repo = make_repo(tmp_path / "repo")
+         bundle = make_bundle(tmp_path / "bundle")
+         sdflow = tmp_path / "sdflow"
+         sdflow.mkdir()
+         _symlink_or_skip(sdflow / "workflow", bundle)
+         r = run_resolve(repo, sdflow)
+         assert r.returncode == 0
+         assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+ 
+     def test_pointer_file_fallback(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        repo = make_repo(tmp_path / "repo")
+         bundle = make_bundle(tmp_path / "bundle")
+         sdflow = tmp_path / "sdflow"
+         sdflow.mkdir()
+         (sdflow / "workflow-path").write_text(str(bundle) + "\n", encoding="utf-8")
+         r = run_resolve(repo, sdflow)
+         assert r.returncode == 0
+         assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+ 
+     def test_script_is_executable(self):
+         if os.name == "nt":
+             pytest.skip("Windows does not expose POSIX executable mode bits")
+         assert SCRIPT.stat().st_mode & stat.S_IXUSR
+ 
+ 
+-class TestEdgeCases:
+-    def test_partial_residue_pins_and_warns(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
+-        (repo / "openspec" / "workflow" / "spec-checklists").mkdir()  # 只残留一个单元
+-        r = run_resolve(repo, tmp_path / "no-sdflow")
+-        assert r.returncode == 0                      # any-of 即 pin
+-        assert Path(r.stdout.strip()).resolve() == (repo / "openspec" / "workflow").resolve()
+-        assert "部分残留" in r.stderr                  # 专门告警，不静默
++class TestLocalCopyIgnored:
++    """D13 核心不变量的反向锚（task 2.3）：仓内放全套规则副本（含 tools/）不改变解析结果——
++    旧实现（保留步①本地 pin 判定）在此必红（会把 stdout 指向仓内副本，而非全局 canonical）。"""
+ 
++    def test_full_local_rule_copy_still_resolves_to_global_canonical(self, tmp_path):
++        repo = make_repo_with_full_rule_copy(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle")
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow)
++        assert r.returncode == 0
++        resolved = Path(r.stdout.strip()).resolve()
++        assert resolved == bundle.resolve()
++        assert resolved != (repo / "openspec" / "workflow").resolve()
++
++    def test_explain_reports_global_canonical_source_even_with_local_copy(self, tmp_path):
++        repo = make_repo_with_full_rule_copy(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle")
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow, args=("--explain",))
++        assert "source=global-canonical" in r.stderr
++
++
++class TestSaneExpandedShapeChecks:
++    """task 2.5：sane() 扩面反向锚——canonical 缺 tools/（或非空）或缺 lens-metric-contract.md
++    （或非空）→ exit 2（视同「全局 bundle 不完整」，MUST NOT 仍判健全）。"""
++
++    def test_missing_tools_dir_exits_2(self, tmp_path):
++        repo = make_repo(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle", with_tools=False)
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow)
++        assert r.returncode == 2
++
++    def test_empty_tools_dir_exits_2(self, tmp_path):
++        repo = make_repo(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle")
++        (bundle / "tools" / "anchor_lint.py").unlink()  # tools/ 存在但空
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow)
++        assert r.returncode == 2
++
++    def test_missing_contract_exits_2(self, tmp_path):
++        repo = make_repo(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle", with_contract=False)
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow)
++        assert r.returncode == 2
++
++    def test_empty_contract_exits_2(self, tmp_path):
++        repo = make_repo(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle")
++        (bundle / "lens-metric-contract.md").write_text("", encoding="utf-8")  # 存在但空
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow)
++        assert r.returncode == 2
++
++    def test_full_shape_still_sane(self, tmp_path):
++        """正向对照：tools/ 与 contract 都齐全非空时仍判健全（防扩面判据误伤既有健全 bundle）。"""
++        repo = make_repo(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle")
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow)
++        assert r.returncode == 0
++
++
++class TestEdgeCases:
+     def test_global_missing_exits_2_with_guard_message(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        repo = make_repo(tmp_path / "repo")
+         r = run_resolve(repo, tmp_path / "no-sdflow")
+         assert r.returncode == 2
+         assert r.stdout == ""
+         assert "显式降级" in r.stderr and "setup.sh" in r.stderr
+ 
+     def test_insane_bundle_treated_as_missing(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        repo = make_repo(tmp_path / "repo")
+         bundle = tmp_path / "bundle"                  # 半坏：workflow.md 为空文件
+         bundle.mkdir()
+         (bundle / "workflow.md").touch()
+         (bundle / "spec-checklists").mkdir()
+         (bundle / "code-checklists").mkdir()
++        (bundle / "tools").mkdir()
++        (bundle / "tools" / "x.py").write_text("# x\n", encoding="utf-8")
++        (bundle / "lens-metric-contract.md").write_text("# c\n", encoding="utf-8")
+         sdflow = tmp_path / "sdflow"
+         sdflow.mkdir()
+         _symlink_or_skip(sdflow / "workflow", bundle)
+         r = run_resolve(repo, sdflow)
+         assert r.returncode == 2                      # 健全性不过检 = 缺失
+ 
+     def test_pointer_with_trailing_crlf_and_spaces(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        repo = make_repo(tmp_path / "repo")
+         bundle = make_bundle(tmp_path / "bun dle")    # 路径含空格
+         sdflow = tmp_path / "sdflow"
+         sdflow.mkdir()
+         (sdflow / "workflow-path").write_text(str(bundle) + "  \r\n", encoding="utf-8")
+         r = run_resolve(repo, sdflow)
+         assert r.returncode == 0
+         assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+ 
+     def test_root_flag_overrides_cwd(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=True)
++        repo = make_repo(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle")
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
+         sub = repo / "some" / "deep" / "dir"
+         sub.mkdir(parents=True)
+-        r = run_resolve(sub, tmp_path / "no-sdflow", args=("--root", str(repo)))
++        r = run_resolve(sub, sdflow, args=("--root", str(repo)))
+         assert r.returncode == 0
+-        assert Path(r.stdout.strip()).resolve() == (repo / "openspec" / "workflow").resolve()
++        assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+ 
+     def test_explain_reports_source(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=True)
+-        r = run_resolve(repo, tmp_path / "no-sdflow", args=("--explain",))
+-        assert "source=local-pin" in r.stderr
++        repo = make_repo(tmp_path / "repo")
++        bundle = make_bundle(tmp_path / "bundle")
++        sdflow = tmp_path / "sdflow"
++        sdflow.mkdir()
++        _symlink_or_skip(sdflow / "workflow", bundle)
++        r = run_resolve(repo, sdflow, args=("--explain",))
++        assert "source=global-canonical" in r.stderr
+ 
+     def test_unknown_arg_exits_64(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=True)
++        repo = make_repo(tmp_path / "repo")
+         r = run_resolve(repo, tmp_path / "no-sdflow", args=("--bogus",))
+         assert r.returncode == 64
+ 
+     def test_unreadable_pointer_degrades_not_crashes(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        repo = make_repo(tmp_path / "repo")
+         sdflow = tmp_path / "sdflow"
+         sdflow.mkdir()
+         pointer = sdflow / "workflow-path"
+         pointer.write_text(str(tmp_path / "bundle") + "\n", encoding="utf-8")
+         pointer.chmod(0o000)
+         try:
+             r = run_resolve(repo, sdflow)
+             assert r.returncode == 2
+             assert "显式降级" in r.stderr
+             assert r.stdout.strip() == ""       # T13: 降级路径不得往 stdout 吐路径（防 skill 误把告警当解析结果）
+         finally:
+             pointer.chmod(0o644)  # 允许 tmp_path 清理时删除
+ 
+     def test_root_missing_value_exits_64(self, tmp_path):
+-        repo = make_repo(tmp_path / "repo", with_rules=True)
++        repo = make_repo(tmp_path / "repo")
+         r = run_resolve(repo, tmp_path / "no-sdflow", args=("--root",))
+         assert r.returncode == 64
+         assert "--root requires a value" in r.stderr   # T13: 缺值须显式报错文案，非静默 exit
+ 
+     def test_root_flag_swallows_next_flag_exits_64(self, tmp_path):
+         """--root 后紧跟另一个 flag（如 --explain）时不得把它当值吞掉（B1-F4）。"""
+-        repo = make_repo(tmp_path / "repo", with_rules=True)
++        repo = make_repo(tmp_path / "repo")
+         r = run_resolve(repo, tmp_path / "no-sdflow", args=("--root", "--explain"))
+         assert r.returncode == 64
+ 
+     def test_deleted_cwd_exits_64(self, tmp_path):
+         """cwd 被删时不得静默 fallback 到失败的 pwd（B1-F1）——显式 exit 64 + 指引 --root。"""
+         if os.name == "nt":
+             pytest.skip("Git Bash retains a usable logical cwd after Windows removes the directory")
+         d = tmp_path / "will-be-deleted"
+         d.mkdir()
+         r = subprocess.run(
+             [bash_executable(), "-c", f'cd "{bash_path(d)}" && rmdir "{bash_path(d)}" && bash "{bash_path(SCRIPT)}" --explain'],
+             capture_output=True, text=True, encoding="utf-8", errors="replace")
+         assert r.returncode == 64
+         assert "无法确定仓根" in r.stderr
+ 
+     def test_relative_sdflow_home_exits_2_and_warns(self, tmp_path):
+-        """SDFLOW_HOME 非绝对路径时忽略全局 canonical 探测，本地无 pin → 步3降级 exit 2（B1-F3）。"""
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        """SDFLOW_HOME 非绝对路径时忽略全局 canonical 探测 → 步2降级 exit 2（B1-F3）。"""
++        repo = make_repo(tmp_path / "repo")
+         r = run_resolve(repo, "relative/sdflow/path")
+         assert r.returncode == 2
+         assert "非绝对路径" in r.stderr
+ 
+     def test_sane_rejects_empty_checklist_dir(self, tmp_path):
+         """sane() 须要求两个清单目录各至少含一个条目，防「目录存在但空」静默判健全（CR-F1）。"""
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        repo = make_repo(tmp_path / "repo")
+         bundle = tmp_path / "bundle"
+         bundle.mkdir()
+         (bundle / "workflow.md").write_text("# wf\n", encoding="utf-8")
+         (bundle / "spec-checklists").mkdir()  # 空目录
+         (bundle / "code-checklists").mkdir()
+         (bundle / "code-checklists" / "domains.md").write_text("# code\n", encoding="utf-8")
++        (bundle / "tools").mkdir()
++        (bundle / "tools" / "x.py").write_text("# x\n", encoding="utf-8")
++        (bundle / "lens-metric-contract.md").write_text("# c\n", encoding="utf-8")
+         sdflow = tmp_path / "sdflow"
+         sdflow.mkdir()
+         _symlink_or_skip(sdflow / "workflow", bundle)
+         r = run_resolve(repo, sdflow)
+         assert r.returncode == 2
+ 
+     def test_pointer_path_with_chinese_dir_resolves(self, tmp_path):
+         """指针文件指向含中文目录名的路径须能正常解析（gstack 5.3 缺口）。"""
+-        repo = make_repo(tmp_path / "repo", with_rules=False)
++        repo = make_repo(tmp_path / "repo")
+         bundle = make_bundle(tmp_path / "中文目录" / "bundle")
+         sdflow = tmp_path / "sdflow"
+         sdflow.mkdir()
+         (sdflow / "workflow-path").write_text(str(bundle) + "\n", encoding="utf-8")
+         r = run_resolve(repo, sdflow)
+         assert r.returncode == 0
+         assert Path(r.stdout.strip()).resolve() == bundle.resolve()
+diff --git a/sdflow-init/tests/test_task5_regression.py b/sdflow-init/tests/test_task5_regression.py
+index a5903b5..abaebc8 100644
+--- a/sdflow-init/tests/test_task5_regression.py
++++ b/sdflow-init/tests/test_task5_regression.py
+@@ -6,22 +6,21 @@ from pathlib import Path
+ 
+ import pytest
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+ import init as init_mod
+ 
+ 
+ def test_install_refresh_is_authoritative_and_prunes_only_its_schema_orphans(tmp_path, monkeypatch):
+     """A refresh converges the managed fork without deleting sibling schemas."""
+     bundle = tmp_path / "bundle"
+-    (bundle / "tools").mkdir(parents=True)
+-    (bundle / "tools" / "anchor_lint.py").write_text("# current\n", encoding="utf-8")
++    bundle.mkdir(parents=True)
+     schemas = tmp_path / "schemas"
+     (schemas / "sdflow-spec-driven").mkdir(parents=True)
+     (schemas / "sdflow-spec-driven" / "schema.yaml").write_text("current: true\n", encoding="utf-8")
+     monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(bundle))
+     monkeypatch.setattr(init_mod, "SCHEMAS_SRC", str(schemas))
+ 
+     root = tmp_path / "consumer"
+     managed = root / "openspec" / "schemas" / "sdflow-spec-driven"
+     managed.mkdir(parents=True)
+     (managed / "orphan.yaml").write_text("stale\n", encoding="utf-8")
+@@ -29,21 +28,24 @@ def test_install_refresh_is_authoritative_and_prunes_only_its_schema_orphans(tmp
+     sibling.mkdir()
+     (sibling / "schema.yaml").write_text("keep: true\n", encoding="utf-8")
+ 
+     init_mod.copy_bundle(str(root), include_schema=True)
+ 
+     assert not (managed / "orphan.yaml").exists()
+     assert (sibling / "schema.yaml").read_text(encoding="utf-8") == "keep: true\n"
+     assert (root / "openspec" / "schemas" / "sdflow-spec-driven" / "schema.yaml").read_text(
+         encoding="utf-8"
+     ) == "current: true\n"
+-    assert (root / "openspec" / "workflow" / "tools" / "anchor_lint.py").is_file()
++    # copy_bundle 只再铺 GUIDE + schema（fix-probe-scan-precision）——tools/ 不再随 bundle 部署，
++    # dst 目录仍须存在（os.makedirs 前置，即使源 bundle 无 WORKFLOW-GUIDE.md 也不抛异常）。
++    assert (root / "openspec" / "workflow").is_dir()
++    assert not (root / "openspec" / "workflow" / "tools").exists()
+ 
+ 
+ @pytest.mark.parametrize(
+     ("version", "allowed"),
+     [((1, 6, 9), False), ((1, 7, 0), True), ((1, 10, 0), True)],
+ )
+ def test_task5_schema_gate_uses_numeric_semver(tmp_path, monkeypatch, version, allowed):
+     monkeypatch.setattr(init_mod, "_openspec_cli_version", lambda: (version, None))
+     enabled, _ = init_mod._schema_gate(str(tmp_path))
+     assert enabled is allowed
+diff --git a/sdflow-maintain/tests/test_marker_consistency.py b/sdflow-maintain/tests/test_marker_consistency.py
+index 2b54e67..20d9910 100644
+--- a/sdflow-maintain/tests/test_marker_consistency.py
++++ b/sdflow-maintain/tests/test_marker_consistency.py
+@@ -1,60 +1,47 @@
+ """跨脚本共享判据一致性守卫（R-guard，闭 T17）。
+ canonical = sdflow-init/scripts/init.py；maintain_scan 保自包含副本，此处机验相等。
+ 加载失败 hard-fail 非 silent-skip（M2/D5）；init 目录整体缺席用 path-assert 先判。
+-T93：bash resolve-workflow.sh 内联副本同守。"""
++
++fix-probe-scan-precision：resolve-workflow.sh 的本地 pin 判定步（内联 RULE_MARKERS 第 3 份
++副本）随两步链收缩一并删除——原 T93 守卫（`test_resolve_workflow_bash_markers_match_python`）
++失去对象，整条删除（DRY 正向收益，见 tasks.md task 2.6）。"""
+ import importlib.util
+ import os
+-import re
+ 
+ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ INIT_PATH = os.path.join(REPO, "sdflow-init", "scripts", "init.py")
+ MS_PATH = os.path.join(REPO, "sdflow-maintain", "scripts", "maintain_scan.py")
+ 
+ 
+ def _load(name, path):
+     assert os.path.isfile(path), f"守卫前置：{path} 必须存在（缺席=硬失败非跳过）"
+     spec = importlib.util.spec_from_file_location(name, path)
+     mod = importlib.util.module_from_spec(spec)
+     spec.loader.exec_module(mod)  # 加载失败抛异常 → hard-fail（非 skip）
+     return mod
+ 
+ 
+-RW_PATH = os.path.join(REPO, "sdflow-init", "assets", "hack", "resolve-workflow.sh")
+-
+ INIT = _load("_guard_init", INIT_PATH)
+ MS = _load("_guard_ms", MS_PATH)
+ 
+ 
+ def test_rule_markers_equal():
+     assert MS.RULE_MARKERS == INIT.RULE_MARKERS, "RULE_MARKERS 漂移（改一处未同步）"
+ 
+ 
+ def test_managed_token_matches_init_mark_idx():
+     # maintain 的 token == init.MARK_IDX[0] 第二个空白分隔词（镜像 init.split()[1] 口径）
+     init_token = INIT.MARK_IDX[0].split()[1]
+     assert MS.MANAGED_TOKEN_START == init_token, "托管块 token 与 init.MARK_IDX 漂移"
+ 
+ 
+-def test_resolve_workflow_bash_markers_match_python():
+-    """T93：resolve-workflow.sh 内联的三个标记名与 Python RULE_MARKERS 一致。"""
+-    assert os.path.isfile(RW_PATH), f"守卫前置：{RW_PATH} 必须存在"
+-    text = open(RW_PATH, encoding="utf-8").read()
+-    # 提取 `[ -f "$LOCAL/workflow.md" ]` 和 `[ -d "$LOCAL/spec-checklists" ]` 形式的标记名
+-    bash_markers = tuple(
+-        m.group(1) for m in re.finditer(r'\[ -[fd] "\$LOCAL/([^"]+)" \]', text)
+-    )
+-    assert bash_markers == INIT.RULE_MARKERS, (
+-        f"resolve-workflow.sh 内联标记 {bash_markers} 与 Python RULE_MARKERS {INIT.RULE_MARKERS} 漂移"
+-    )
+-
+-
+ def test_end_to_end_real_index_managed_block_skipped(tmp_path):
+     # 喂真实长形 marker 的 INDEX，验托管块被识别+跳过（护匹配逻辑非只护常量字面）
+     # 链接 target 故意写成 rules/<name>.md 形态（命中 _RULE_LINK）：
+     # 若托管块剥离逻辑被破坏（未剥离/剥错），trigger-catalog 会被 parse_index_entries
+     # 收进 indexed["rule"]；而 fs 侧无 openspec/rules/trigger-catalog.md（未创建该目录/文件）
+     # → set_diff 判定"已删未清理" → 断言 fail。这样断言真依赖托管块被正确剥离（load-bearing），
+     # 而非之前 ./workflow/trigger-catalog.md 两个正则都不匹配、走②b 静默排除的假绿。
+     start = INIT.MARK_IDX[0]
+     end = INIT.MARK_IDX[1]
+     (tmp_path / ".git").mkdir()

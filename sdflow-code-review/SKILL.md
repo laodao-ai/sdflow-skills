@@ -194,7 +194,7 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
 1. 未指定变更则 `openspec list` 让用户确认。记 `{change_dir}` = `openspec/changes/{name}/`。
 2. 确认代码已实现且在 feature 分支（`git branch --show-current`）。算 diff base：
    `git fetch origin <base> --quiet && DIFF_BASE=$(git merge-base origin/<base> HEAD)`。
-3. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用代码审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用代码审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/code-checklists/README.md`（架构/选用）、`$RULES_ROOT/code-checklists/code-review-base.md`（CR-01~09）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现三步链。
+3. 规则根解析：`[ -x ~/.sdflow/hack/resolve-workflow.sh ]` 不成立 → 提示「resolve-workflow.sh 未安装——先在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh」并降级通用代码审；否则 `RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`——退出码 2 → 显式降级通用代码审并原样转发脚本 stderr 告警（绝不静默当"本项目无此评审层"）；成功 → 读 `$RULES_ROOT/code-checklists/README.md`（架构/选用）、`$RULES_ROOT/code-checklists/code-review-base.md`（CR-01~09）、`$RULES_ROOT/trigger-catalog.md`（触发）。禁止自行重实现两步链。
 4. **宿主/档位解析（每轮恰好一次，ADR-9 同源约束）**〔host-adaptive-execution · 模型档位按机队分列〕：
 
 <!-- sdflow:tier-resolution:start v1 -->

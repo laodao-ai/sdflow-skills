@@ -210,18 +210,18 @@ bash ~/.skills/sdflow-skills/setup.sh
 
 ```
 openspec/
-├── workflow/              ← 整套 bundle（assets/workflow 的副本，托管，update 会覆盖）
-│   ├── workflow.md trigger-catalog.md ff-generation-constraints.md
-│   ├── generation-process.md design-diagrams.md spec-review.md
-│   ├── config.template.yaml
-│   ├── spec-checklists/  code-checklists/   (base + domains)
-│   ├── tools/            ← 评审机械层脚本（anchor_lint.py / lens_metric_emit.py / outside_voice_guard.py 等）
-│   └── reference/         (说明类，可删)
+├── workflow/              ← 只铺一份人读手册（fix-probe-scan-precision：规则本体/tools/
+│   └── WORKFLOW-GUIDE.md    契约 MUST NOT 复制进消费仓，全经全局 canonical 解析）
+├── schemas/<PROJECT_SCHEMA>/  ← project-local schema（openspec CLI 版本门通过时铺）
 ├── config.yaml            ← init 从 config.template.yaml 生成（本项目段待填）
 ├── INDEX.md               ← 注入「工作流规则」托管区块
 ├── changes/  specs/       ← 目录骨架
 CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强制规范 + 3 配套 skill 说明）
 ```
+
+规则文件（`workflow.md` / `trigger-catalog.md` / `spec-checklists/` / `code-checklists/` / …）与
+review 机械层脚本（`tools/`）均**不进消费仓**——skill 运行时经 `resolve-workflow.sh` 两步链
+（全局 canonical → 显式降级）解析，改权威源即时对所有消费仓生效，无需逐仓 `update`。
 
 > **FF-0 hook 是全局的**：装于 `~/.claude/hooks/ff0-branch-guard.py` + 注册进 `~/.claude/settings.json`（**不写项目 `.claude/`**），init/update 幂等确保、跨所有项目生效。
 
@@ -245,6 +245,7 @@ CLAUDE.md / AGENTS.md      ← 注入「OpenSpec 工作流」托管区块（强�
   当前名单含 `change-review-stub.py`（每目录 review.html stub 生产者，已废弃）。
 - **退役部署文件清理（自愈）**：`init`/`update` 每次跑时按 `RETIRED_DEPLOY_FILES` 名单清理曾铺进消费仓
   `openspec/` 根、现已废弃的文件——**签名门控删除**（仅当文件内容含 bundle 部署签名时删，防误删用户同名文件）。
-  当前名单含查看器根锚 `serve.sh` + `review.html`（HTML 文档查看器已整体移除；`tools/` 下的查看器资产随
-  `tools/` 整删重拷自动清除）。
+  当前名单含查看器根锚 `serve.sh` + `review.html`（HTML 文档查看器已整体移除）；`tools/` 已停止
+  铺进消费仓，存量仓残留的旧 `tools/`（含其下查看器资产）不再被自动触碰，与其它规则副本死件
+  一并由残留告警提示、人按告警附带命令清除。
 - 脚本默认 `--root .`（当前目录）；务必在目标项目根跑，或用 `--root` 指定。
