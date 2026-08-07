@@ -29,6 +29,14 @@ def test_rule_markers_equal():
     assert MS.RULE_MARKERS == INIT.RULE_MARKERS, "RULE_MARKERS 漂移（改一处未同步）"
 
 
+def test_dead_residual_markers_equal():
+    assert MS.DEAD_RESIDUAL_MARKERS == INIT.DEAD_RESIDUAL_MARKERS, "DEAD_RESIDUAL_MARKERS 漂移（改一处未同步）"
+
+
+def test_stale_shadow_precondition_equal():
+    assert MS._STALE_SHADOW_PRECONDITION == INIT._STALE_SHADOW_PRECONDITION, "_STALE_SHADOW_PRECONDITION 漂移（改一处未同步）"
+
+
 def test_managed_token_matches_init_mark_idx():
     # maintain 的 token == init.MARK_IDX[0] 第二个空白分隔词（镜像 init.split()[1] 口径）
     init_token = INIT.MARK_IDX[0].split()[1]
