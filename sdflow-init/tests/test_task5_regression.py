@@ -13,8 +13,7 @@ import init as init_mod
 def test_install_refresh_is_authoritative_and_prunes_only_its_schema_orphans(tmp_path, monkeypatch):
     """A refresh converges the managed fork without deleting sibling schemas."""
     bundle = tmp_path / "bundle"
-    (bundle / "tools").mkdir(parents=True)
-    (bundle / "tools" / "anchor_lint.py").write_text("# current\n", encoding="utf-8")
+    bundle.mkdir(parents=True)
     schemas = tmp_path / "schemas"
     (schemas / "sdflow-spec-driven").mkdir(parents=True)
     (schemas / "sdflow-spec-driven" / "schema.yaml").write_text("current: true\n", encoding="utf-8")
@@ -36,7 +35,10 @@ def test_install_refresh_is_authoritative_and_prunes_only_its_schema_orphans(tmp
     assert (root / "openspec" / "schemas" / "sdflow-spec-driven" / "schema.yaml").read_text(
         encoding="utf-8"
     ) == "current: true\n"
-    assert (root / "openspec" / "workflow" / "tools" / "anchor_lint.py").is_file()
+    # copy_bundle 只再铺 GUIDE + schema（fix-probe-scan-precision）——tools/ 不再随 bundle 部署，
+    # dst 目录仍须存在（os.makedirs 前置，即使源 bundle 无 WORKFLOW-GUIDE.md 也不抛异常）。
+    assert (root / "openspec" / "workflow").is_dir()
+    assert not (root / "openspec" / "workflow" / "tools").exists()
 
 
 @pytest.mark.parametrize(

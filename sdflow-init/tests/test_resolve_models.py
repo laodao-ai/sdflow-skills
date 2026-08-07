@@ -36,16 +36,24 @@ _JOB_SPEC.loader.exec_module(JOB)
 
 def make_bundle_repo(tmp_path, claude=("opus", "sonnet", "haiku"),
                       codex=("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna")):
-    """一个自包含的本地 pin bundle（resolve-workflow.sh 的 local-pin 分支会命中它），
-    含 model-tiers.md 机读块——resolve-models.sh 靠它定位档位缺省。"""
+    """项目根 + 一个自包含的假全局 canonical bundle（fix-probe-scan-precision：本地 pin 判定
+    已从 resolve-workflow.sh 删除，两步链只剩「全局 canonical → 显式降级」——bundle 须放进
+    `tmp_path/sdflow-home/workflow/`，经 `run_resolve`/`eval_resolve` 默认设置的 SDFLOW_HOME
+    命中）。含 model-tiers.md 机读块——resolve-models.sh 靠它定位档位缺省。sane() 扩面（同 change）
+    要求 tools/ 非空 + lens-metric-contract.md 非空，一并造好，否则全局 canonical 判「不完整」
+    exit 2，档位解析拿不到 model-tiers.md。"""
     root = tmp_path / "repo"
-    wf = root / "openspec" / "workflow"
+    root.mkdir(parents=True)
+    wf = tmp_path / "sdflow-home" / "workflow"
     wf.mkdir(parents=True)
     (wf / "workflow.md").write_text("# wf\n", encoding="utf-8")
     (wf / "spec-checklists").mkdir()
     (wf / "spec-checklists" / "d.md").write_text("x\n", encoding="utf-8")
     (wf / "code-checklists").mkdir()
     (wf / "code-checklists" / "d.md").write_text("x\n", encoding="utf-8")
+    (wf / "tools").mkdir()
+    (wf / "tools" / "x.py").write_text("# x\n", encoding="utf-8")
+    (wf / "lens-metric-contract.md").write_text("# contract\n", encoding="utf-8")
     (wf / "model-tiers.md").write_text(
         "# model-tiers\n\n```model-tier-defaults\n"
         f"claude.strong: {claude[0]}\nclaude.mid: {claude[1]}\nclaude.light: {claude[2]}\n"
@@ -65,8 +73,9 @@ def write_config_yaml(root, content):
 def run_resolve(root, env_overrides=None, no_sdflow_home=True, extra_args=()):
     env = dict(os.environ)
     if no_sdflow_home:
-        # 隔离真实 ~/.sdflow：不让本机已装的全局 canonical 干扰测试（每条用例应只吃本地 pin bundle）
-        env["SDFLOW_HOME"] = bash_path(root.parent / "no-such-sdflow-home")
+        # 隔离真实 ~/.sdflow：指向 make_bundle_repo 造好的假 bundle（`root.parent/sdflow-home`），
+        # 不让本机已装的全局 canonical 干扰测试。
+        env["SDFLOW_HOME"] = bash_path(root.parent / "sdflow-home")
     env.pop("CLAUDECODE", None)
     env.pop("CODEX_THREAD_ID", None)
     if env_overrides:
@@ -83,7 +92,7 @@ def eval_resolve(root, env_overrides=None, no_sdflow_home=True, cwd=None):
     """真正走 `eval "$(resolve-models.sh ...)"` 接口——用于恶意值回归（断言不执行）。"""
     env = dict(os.environ)
     if no_sdflow_home:
-        env["SDFLOW_HOME"] = bash_path(root.parent / "no-such-sdflow-home")
+        env["SDFLOW_HOME"] = bash_path(root.parent / "sdflow-home")
     env.pop("CLAUDECODE", None)
     env.pop("CODEX_THREAD_ID", None)
     if env_overrides:

@@ -209,73 +209,32 @@ def read_snippet(name):
 
 # ── bundle 铺设 ──────────────────────────────────────────────
 
-# 本机跑工具留下的残渣，MUST NOT 当 bundle 资产铺进项目仓。
-#
-# 成因（不是"跨机器污染"——.pyc/.pytest_cache 都不入库，git pull 拉不到）：canonical
-# `~/.sdflow/workflow` 指向运行 checkout 的 `assets/workflow`，那里的 `tools/*.py` 一被执行/
-# 被 pytest 收集，就在**资产侧**堆出这些目录；copytree 再把它们搬进项目仓 `openspec/workflow/`。
-#
-# 危害很小（都被 .gitignore 挡在库外，.pyc 还带解释器版本 tag、不匹配不会被误用），但有一个
-# **可观测症状**：`update` 报告的"铺 bundle N 文件"随「从哪个 checkout 跑」漂移
-# （实测 30 vs 19 → 修 __pycache__ 后仍 18 vs 13 ← 剩的正是 .pytest_cache）。
-#
-# 🔴 这是**拒绝清单**，不是穷举证明：新工具随时会发明新的缓存目录名，漏一个不会 fail-closed，
-# 只会让上面那个计数重新开始漂。**发现计数又不稳，先来这里加名字，别再去逐个现场补。**
-LOCAL_TOOL_CACHES = frozenset({
-    "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".DS_Store",
-})
+def copy_bundle(root, include_schema=True):
+    """fix-probe-scan-precision 精简部署：只铺 `WORKFLOW-GUIDE.md`（人读手册）+
+    project-local schema。规则本体、`tools/`、`lens-metric-contract.md` 全部经全局 canonical
+    解析（resolve-workflow.sh 两步链：全局 canonical → 显式降级），不再复制进消费仓——
+    此前的「tools/ 子树部署」（R-MRF-1）与 `--dev`/`full=True` 整 bundle 刷新已随此次收缩退役，
+    toolkit 源仓 dogfood 同样走全局 canonical，无需本地 instance。
 
-
-def copy_bundle(root, full=False, include_schema=True):
-    """R-MRF-1 分层部署：默认只铺 tools/ 子树（规则经全局 canonical 解析，不复制进消费仓）。
-    full=True 整 bundle 铺设——仅供 toolkit 源仓 `update --dev` dogfood 刷新 instance 用；同样
-    不部署 `tools/tests/`，因为它们是 toolkit 自测而非运行时 bundle。
-
-    非 full 模式收敛性：拷贝前若 dst/tools 已存在则先 rmtree 再 copytree——tools/ 是随
-    workflow bundle 托管的子树（update 覆盖刷新语义），不落入"绝不自动删消费仓文件"红线；
-    清后拷保收敛，上游删文件不再残留（B2-F4）。full 模式维持 dirs_exist_ok 现状不变。
-
-    `tools/tests/` 是 tools 脚本（如 trivial_shape.py）的内部 pytest，只服务 toolkit 源仓
-    自身开发；任何派生到 `openspec/workflow/` 的副本都不应含它。否则 `update --dev` 会把同名
-    测试模块复制到本仓 dogfood instance，仓根 pytest 会收集两份并报 import file mismatch。
-    脚本本体仍随 tools/ 正常部署。full 模式也要清除既有遗留副本，保证重复执行收敛。"""
-    def ignore_tools_tests(source, _names):
-        """仅忽略 bundle tools/ 直属 tests；其他运行时 tests 必须随完整 bundle 铺设。
-        另忽略 LOCAL_TOOL_CACHES（本机跑工具的残渣，不是 bundle 资产）——见其定义处。"""
-        if os.path.normpath(source) == os.path.normpath(os.path.join(BUNDLE_SRC, "tools")):
-            return {"tests"} | LOCAL_TOOL_CACHES
-        return set(LOCAL_TOOL_CACHES)
-
+    dst 目录须显式 `os.makedirs`——此前由 `tools/` 的 `copytree` 隐式创建；删掉 tools/ 部署后
+    若无此行，fresh init 会在 `shutil.copy2(guide_src, ...)` 处抛 `FileNotFoundError`
+    （`ensure_dirs` 的 `CORE_DIRS` 只有 `changes`/`specs`，不含 `workflow/`）。
+    """
     schema_src = os.path.join(SCHEMAS_SRC, PROJECT_SCHEMA)
     if include_schema:
         _validate_schema_authority(schema_src)
 
     dst = os.path.join(root, "openspec", "workflow")
-    if full:
-        shutil.copytree(BUNDLE_SRC, dst, dirs_exist_ok=True,
-                        ignore=ignore_tools_tests)
-        tests_dst = os.path.join(dst, "tools", "tests")
-        if os.path.isdir(tests_dst):
-            shutil.rmtree(tests_dst)
-    else:
-        tools_dst = os.path.join(dst, "tools")
-        if os.path.isdir(tools_dst):
-            shutil.rmtree(tools_dst)
-        shutil.copytree(os.path.join(BUNDLE_SRC, "tools"), tools_dst,
-                         ignore=ignore_tools_tests)
-        # [mlh-p2-anchor-lint] 契约是 tools/anchor_lint.py 的运行时机读依赖（读 lens-metric-enums 块），
-        # 须与 tools/ 同批刷新，否则本地 pin 消费仓 update 后「新脚本+旧契约无块」永久 fail-closed。
-        contract_src = os.path.join(BUNDLE_SRC, "lens-metric-contract.md")
-        if os.path.isfile(contract_src):
-            shutil.copy2(contract_src, os.path.join(dst, "lens-metric-contract.md"))
+    os.makedirs(dst, exist_ok=True)
 
-        # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联）。
-        # 规则本身不铺进消费仓（走全局 canonical），但【人】需要一份不用跳文件的完整参考，
-        # 且它得在自己的仓里、随仓走。它是 hack/gen_workflow_guide.py 的生成物（DO NOT EDIT），
-        # 单一源仍是 prompts/ + workflow.md —— 拷过来的是产物，不是新的真相源。
-        guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
-        if os.path.isfile(guide_src):
-            shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
+    # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联）。
+    # 规则本身不铺进消费仓（走全局 canonical），但【人】需要一份不用跳文件的完整参考，
+    # 且它得在自己的仓里、随仓走。它是 hack/gen_workflow_guide.py 的生成物（DO NOT EDIT），
+    # 单一源仍是 prompts/ + workflow.md —— 拷过来的是产物，不是新的真相源。
+    guide_src = os.path.join(BUNDLE_SRC, "WORKFLOW-GUIDE.md")
+    if os.path.isfile(guide_src):
+        shutil.copy2(guide_src, os.path.join(dst, "WORKFLOW-GUIDE.md"))
+
     if include_schema:
         schemas_dst = os.path.join(root, "openspec", "schemas")
         schema_dst = os.path.join(schemas_dst, PROJECT_SCHEMA)
@@ -1093,12 +1052,7 @@ def retire_hooks():
 
 # ── 主流程 ──────────────────────────────────────────────────
 
-def run(root, mode, dev=False):
-    if dev:
-        toolkit_root = os.path.realpath(os.path.dirname(SKILL_DIR))
-        if os.path.realpath(root) != toolkit_root:
-            _die("--dev 仅用于 toolkit 源仓自身（防把整套规则灌进消费仓）；当前 --root 不是本脚本所在仓")
-
+def run(root, mode):
     try:
         osroot = os.path.join(root, "openspec")
         if mode == "init":
@@ -1124,9 +1078,8 @@ def run(root, mode, dev=False):
         else:
             report.append("迁移在途 change：跳过（CLI 版本门未通过）")
 
-        dst, n = copy_bundle(root, full=dev, include_schema=schema_enabled)
-        dev_suffix = "（--dev 整刷）" if dev else ""
-        report.append(f"铺 bundle：openspec/workflow/{dev_suffix}（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
+        dst, n = copy_bundle(root, include_schema=schema_enabled)
+        report.append(f"铺 bundle：openspec/workflow/（{n} 文件，{'覆盖' if mode=='update' else '写入'}）")
 
         report.append("hack 脚本：不再铺进仓（checkpoint 已全局化 → ~/.sdflow/hack/，由 setup.sh 安装）")
 
@@ -1140,10 +1093,10 @@ def run(root, mode, dev=False):
         report.append("退役部署文件清理：\n" + retire_deploy_files(root))
 
         # init 与 update 都跑：fresh init 无残留自然零告警；老仓误跑 init 不再假绿（B2-F3）。
-        # T15：--dev 模式跳过——dev 刻意铺规则进 openspec/workflow/，告警是误报。
-        if not dev:
-            for w in stale_shadow_warnings(root):
-                report.append(w)
+        # --dev 已退役（fix-probe-scan-precision）：不再有「刻意铺规则进 openspec/workflow/」的
+        # 豁免场景，告警无条件跑。
+        for w in stale_shadow_warnings(root):
+            report.append(w)
 
         cstat, cmsg = handle_config(root, mode, schema=target_schema)
         report.append(f"config.yaml：{cmsg}")
@@ -1195,17 +1148,18 @@ def main():
                    help="目标项目根（init/update/retire-hooks 默认当前目录；config-lint 缺省探 git 仓根，"
                         "非 git 仓降级当前目录）")
     p.add_argument("--dev", action="store_true",
-                   help="update 专用：整 bundle 刷新（toolkit 源仓 dogfood 用，消费仓勿用）")
+                   help="已退役（fix-probe-scan-precision）：源仓 dogfood 同样走全局 canonical，"
+                        "无需本地 instance；传入本参数将 fail-loud 报错")
     args = p.parse_args()
+    if args.dev:  # tombstone：识别到 --dev 参数 → fail-loud 提示，而非 argparse generic error
+        _die("--dev 已退役：源仓 dogfood 同样走全局 canonical，无需本地 instance")
     if args.mode == "config-lint":         # 早分支：mode 第 4 值，不引入 add_subparsers 重构
         root = args.root if args.root is not None else _git_root_or_dot()
         sys.exit(cmd_config_lint(root))
-    if args.mode == "retire-hooks":       # A4: 早分支，先于 osroot/dev——只自愈全局 hook，与项目无关
+    if args.mode == "retire-hooks":       # A4: 早分支，先于 osroot——只自愈全局 hook，与项目无关
         print("退役 hook 清理：\n" + retire_hooks())
         return
-    if args.dev and args.mode != "update":
-        _die("--dev 仅配 update 使用")
-    run(args.root if args.root is not None else ".", args.mode, dev=args.dev)
+    run(args.root if args.root is not None else ".", args.mode)
 
 
 if __name__ == "__main__":

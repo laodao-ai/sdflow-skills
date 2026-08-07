@@ -84,146 +84,61 @@ class TestNoConsumerHack:
         assert not (tmp_path / "proj" / "hack").exists()
 
 
-class TestBundleToolsOnly:
-    """R-MRF-1：copy_bundle 只部署 tools/ 子树，规则文件数 = 0。"""
+class TestBundleGuideAndSchemaOnly:
+    """fix-probe-scan-precision R2/R3：copy_bundle 只铺 WORKFLOW-GUIDE.md（人读手册）+
+    project-local schema。规则本体、`tools/`、`lens-metric-contract.md` 全部经全局 canonical
+    解析（resolve-workflow.sh 两步链），MUST NOT 复制进消费仓——`--dev`/`full=True` 整 bundle
+    刷新与 tools/ 子树部署（原 R-MRF-1）已随此次收缩退役。"""
 
-    def test_deploys_only_tools_subtree(self, tmp_path):
-        dst, n = copy_bundle(str(tmp_path))
+    def test_deploys_only_guide(self, tmp_path):
+        dst, n = copy_bundle(str(tmp_path), include_schema=False)
         wf = tmp_path / "openspec" / "workflow"
-        assert (wf / "tools" / "anchor_lint.py").is_file()   # 机械层脚本随 tools/ 部署
-        # 查看器资产已移除（drop-review-html-viewer）——tools/ 下不再含 HTML 查看器文件
-        assert not (wf / "tools" / "engine.js").exists()
-        assert not (wf / "tools" / "review-stub.html").exists()
-        assert not (wf / "tools" / "vendor").exists()
+        # 文件全集断言（非"包含"断言）：openspec/workflow/ 下只有 WORKFLOW-GUIDE.md 一个文件
+        all_files = {p.relative_to(wf) for p in wf.rglob("*") if p.is_file()}
+        assert all_files == {Path("WORKFLOW-GUIDE.md")}
+        # 🔴 规则本体/tools/契约 MUST NOT 被铺进来 —— 它们走全局 canonical
+        assert not (wf / "tools").exists()
         assert not (wf / "workflow.md").exists()
+        assert not (wf / "lens-metric-contract.md").exists()
         assert not (wf / "spec-checklists").exists()
         assert not (wf / "code-checklists").exists()
-        # 两个非规则的 .md 显式豁免：
-        # [mlh-p2-anchor-lint] lens-metric-contract.md —— tools/anchor_lint.py 的运行时机读依赖
-        #   （读 lens-metric-enums 块），须与 tools/ 同批铺。
-        # WORKFLOW-GUIDE.md —— 【给人看的】完整手册（每步 prompt 全文内联），是
-        #   hack/gen_workflow_guide.py 的【生成物】而非真相源（单一源仍是 prompts/ + workflow.md，
-        #   都在全局 canonical，不铺进消费仓）。规则走 canonical，但【人】需要一份随仓走、
-        #   不用跳文件的完整参考 —— 拷过来的是产物，不是新的真相源。
-        EXEMPT = {"lens-metric-contract.md", "WORKFLOW-GUIDE.md"}
-        md_rules = [p for p in wf.rglob("*.md")
-                    if "tools" not in p.parts and p.name not in EXEMPT]
-        assert md_rules == []                      # 规则文件数 = 0（两个豁免除外）
-        assert (wf / "lens-metric-contract.md").is_file()
-        assert (wf / "WORKFLOW-GUIDE.md").is_file()
-
-        # 🔴 规则本体 MUST NOT 被铺进来 —— 它们走全局 canonical（改了即时生效，无需 update）
-        assert not (wf / "workflow.md").exists()
         assert not (wf / "prompts").exists()
 
-    def test_full_flag_restores_whole_bundle(self, tmp_path):
-        init_mod.copy_bundle(str(tmp_path), full=True)
-        wf = tmp_path / "openspec" / "workflow"
-        assert (wf / "workflow.md").is_file()      # --dev 整刷用（Task 7）
+    def test_fresh_init_does_not_raise(self, tmp_path):
+        """回归锚（F15）：GUIDE `copy2` 前若无 `os.makedirs(dst, exist_ok=True)`，fresh init
+        （裸 tmp_path，无任何既有 openspec/workflow/ 目录——此前由 tools/ 的 copytree 隐式创建）
+        会在此处抛 FileNotFoundError（ensure_dirs 的 CORE_DIRS 只有 changes/specs）。"""
+        dst, n = copy_bundle(str(tmp_path), include_schema=False)   # 不应抛异常
+        assert Path(dst).is_dir()
+        assert (Path(dst) / "WORKFLOW-GUIDE.md").is_file()
 
-    def test_tools_tests_not_deployed_to_consumer(self, tmp_path):
-        """[impl-review-fix CF-6]：tools/tests/（tools/ 脚本的内部 pytest，如
-        test_trivial_shape.py）不得铺进消费仓——只污染其 pytest 收集，无实际用途。
-        脚本本体（trivial_shape.py）仍照常部署。"""
-        dst, _ = copy_bundle(str(tmp_path))
-        tools_dst = Path(dst) / "tools"
-        assert (tools_dst / "trivial_shape.py").is_file()
-        assert not (tools_dst / "tests").exists()
-
-    def test_full_flag_excludes_tools_tests(self, tmp_path):
-        """--dev dogfood instance 是派生产物，不能复制 toolkit 自测。"""
-        init_mod.copy_bundle(str(tmp_path), full=True)
-        wf = tmp_path / "openspec" / "workflow"
-        assert not (wf / "tools" / "tests").exists()
-
-    def test_full_flag_prunes_legacy_tools_tests(self, tmp_path):
-        """重复 --dev update 也要移除旧版留下的测试副本。"""
-        stale = tmp_path / "openspec" / "workflow" / "tools" / "tests"
-        stale.mkdir(parents=True)
-        (stale / "test_stale.py").write_text("# stale\n", encoding="utf-8")
-        init_mod.copy_bundle(str(tmp_path), full=True)
-        assert not stale.exists()
-
-    def test_full_flag_preserves_tests_outside_tools(self, tmp_path, monkeypatch):
-        """只排除 tools/tests，bundle 其他层级的 tests 是正常运行时资产。"""
-        source = tmp_path / "bundle"
-        (source / "tools" / "tests").mkdir(parents=True)
-        (source / "tools" / "tests" / "test_internal.py").write_text("# toolkit test\n", encoding="utf-8")
-        (source / "references" / "tests").mkdir(parents=True)
-        expected = source / "references" / "tests" / "fixture.md"
-        expected.write_text("runtime fixture\n", encoding="utf-8")
-        monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(source))
-
-        init_mod.copy_bundle(str(tmp_path / "target"), full=True)
-
-        workflow = tmp_path / "target" / "openspec" / "workflow"
-        assert not (workflow / "tools" / "tests").exists()
-        assert (workflow / "references" / "tests" / "fixture.md").read_text(encoding="utf-8") == "runtime fixture\n"
-
-    @pytest.mark.parametrize("full", [False, True])
-    def test_local_tool_caches_are_never_deployed(self, tmp_path, monkeypatch, full):
-        """本机跑工具的残渣（`__pycache__` / `.pytest_cache` / …）不是 bundle 资产。
-
-        不入库 ⇒ 跨机器传不过去；但同机会：canonical `~/.sdflow/workflow` 指向运行 checkout 的
-        assets/workflow，那里的 tools/*.py 一被执行/被 pytest 收集就在资产侧堆出这些目录，
-        copytree 再搬进项目仓。可观测症状 = `update` 报的"铺 bundle N 文件"随「从哪个 checkout 跑」
-        漂移（实测 30 vs 19 → 只修 __pycache__ 后仍 18 vs 13 ← 剩的正是 .pytest_cache）。
-        ∴ 本用例遍历整个 LOCAL_TOOL_CACHES，**不是只测当初被点穿的那一个**。
-        两个模式都得干净：非 full 是消费仓路径，full 是 `--dev` dogfood 路径。"""
-        # 🔴 造垃圾与断言一律用**字面清单**驱动，MUST NOT 遍历 init_mod.LOCAL_TOOL_CACHES：
-        # 那样 fixture 和断言由同一个常量驱动 ⇒ 把常量清空，循环体不执行、既不造垃圾也不断言
-        # ⇒ 用例恒真（实测：清空 LOCAL_TOOL_CACHES 后仍绿）。
-        dir_junk = ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache")
-        file_junk = (".DS_Store",)
-        source = tmp_path / "bundle"
-        (source / "tools").mkdir(parents=True)
-        (source / "tools" / "anchor_lint.py").write_text("# real asset\n", encoding="utf-8")
-        for name in dir_junk:
-            (source / "tools" / name).mkdir()
-            (source / "tools" / name / "junk").write_bytes(b"\x00junk")
-            (source / "tools" / "nested" / name).mkdir(parents=True)   # 嵌一层深的也得挡
-            (source / "tools" / "nested" / name / "junk").write_bytes(b"\x00junk")
-        for name in file_junk:
-            (source / "tools" / name).write_bytes(b"\x00junk")
-        monkeypatch.setattr(init_mod, "BUNDLE_SRC", str(source))
-
-        dst, _ = init_mod.copy_bundle(str(tmp_path / "target"), full=full, include_schema=False)
-
-        deployed = Path(dst)
-        assert (deployed / "tools" / "anchor_lint.py").is_file()       # 真资产照铺
-        for name in dir_junk + file_junk:
-            assert list(deployed.rglob(name)) == [], f"{name} 被铺进了部署侧"
-        assert list(deployed.rglob("*.pyc")) == []
-        # 拒绝清单只许长不许缩：本用例的字面清单 MUST 全在常量里，否则等于偷偷退役了一格
-        assert set(dir_junk) | set(file_junk) <= set(init_mod.LOCAL_TOOL_CACHES)
+    def test_include_schema_still_deploys_project_local_schema(self, tmp_path):
+        dst, n = copy_bundle(str(tmp_path), include_schema=True)
+        schema_dst = tmp_path / "openspec" / "schemas" / init_mod.PROJECT_SCHEMA / "schema.yaml"
+        assert schema_dst.is_file()
 
 
-class TestPinConsumerUpdateInvariant:
-    """T69：pin 消费仓跑 update（非 dev）→ 规则文件不被触碰、仅 tools+契约刷新。"""
+class TestCopyBundleLeavesExistingWorkflowFilesAlone:
+    """copy_bundle 不再部署规则/tools/ 子树 ⇒ 消费仓 openspec/workflow/ 下任何既有文件
+    （历史遗留的规则副本、旧版 tools/ 等）字节不变——copy_bundle 只碰它自己铺的 GUIDE + schema。"""
 
-    def test_update_preserves_pinned_rules(self, tmp_path):
+    def test_update_preserves_preexisting_workflow_files(self, tmp_path):
         wf = tmp_path / "openspec" / "workflow"
         wf.mkdir(parents=True)
-        # 模拟 pin：消费仓 openspec/workflow/ 已有规则文件
-        (wf / "workflow.md").write_text("# pinned rules v1\n", encoding="utf-8")
+        # 模拟历史遗留：消费仓 openspec/workflow/ 已有旧版规则文件
+        (wf / "workflow.md").write_text("# legacy rules v1\n", encoding="utf-8")
         (wf / "spec-checklists").mkdir()
         (wf / "spec-checklists" / "base.md").write_text("# base\n", encoding="utf-8")
-        (wf / "code-checklists").mkdir()
-        (wf / "code-checklists" / "base.md").write_text("# base\n", encoding="utf-8")
-        # 记录 pin 文件的原始内容
-        pin_before = {
+        before = {
             "workflow.md": (wf / "workflow.md").read_bytes(),
             "spec-checklists/base.md": (wf / "spec-checklists" / "base.md").read_bytes(),
-            "code-checklists/base.md": (wf / "code-checklists" / "base.md").read_bytes(),
         }
-        # 跑 update（非 dev = full=False）
         copy_bundle(str(tmp_path))
-        # 规则文件字节不变
-        assert (wf / "workflow.md").read_bytes() == pin_before["workflow.md"]
-        assert (wf / "spec-checklists" / "base.md").read_bytes() == pin_before["spec-checklists/base.md"]
-        assert (wf / "code-checklists" / "base.md").read_bytes() == pin_before["code-checklists/base.md"]
-        # tools/ 已刷新
-        assert (wf / "tools" / "anchor_lint.py").is_file()
+        # 既有文件字节不变
+        assert (wf / "workflow.md").read_bytes() == before["workflow.md"]
+        assert (wf / "spec-checklists" / "base.md").read_bytes() == before["spec-checklists/base.md"]
+        # GUIDE 正常铺入
+        assert (wf / "WORKFLOW-GUIDE.md").is_file()
 
 
 class TestProjectLocalSchema:
@@ -547,8 +462,9 @@ class TestProjectLocalSchema:
         assert managed_schema.read_text(encoding="utf-8") == "name: old-managed-fork\n"
 
 
-class TestUpdateDev:
-    """5.6：toolkit 源仓 dogfood 刷新——update --dev 整 bundle 刷 instance；普通 update 只 tools/。"""
+class TestUpdateDoesNotDeployRules:
+    """fix-probe-scan-precision：--dev/full 整 bundle 刷新已退役——普通 update 从不铺规则本体，
+    无论 init 还是 update 都只铺 GUIDE + schema。"""
 
     def _seeded(self, tmp_path, monkeypatch):
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
@@ -560,19 +476,6 @@ class TestUpdateDev:
         root = self._seeded(tmp_path, monkeypatch)
         init_mod.run(str(root), "update")
         assert not (root / "openspec" / "workflow" / "workflow.md").exists()
-
-    def test_dev_update_deploys_full_bundle(self, tmp_path, monkeypatch):
-        root = self._seeded(tmp_path, monkeypatch)
-        # --dev 身份校验（B2-F2）要求 root == toolkit 源仓根；此处伪造 SKILL_DIR 令 root 过检。
-        monkeypatch.setattr(init_mod, "SKILL_DIR", str(root / "sdflow-init"))
-        init_mod.run(str(root), "update", dev=True)
-        assert (root / "openspec" / "workflow" / "workflow.md").is_file()
-        assert (root / "openspec" / "workflow" / "spec-checklists").is_dir()
-        assert (
-            root / "openspec" / "workflow" / "tools" / "trivial_shape.py"
-        ).read_text(encoding="utf-8") == (
-            Path(init_mod.BUNDLE_SRC) / "tools" / "trivial_shape.py"
-        ).read_text(encoding="utf-8")
 
 
 class TestHandleConfigFromBundleSrc:
@@ -707,27 +610,31 @@ class TestEnsureGlobalHooks:
         assert len(data["hooks"]["PreToolUse"]) == 1  # not duplicated
 
 
-class TestDevRepoIdentityGuard:
-    """B2-F2：--dev 只准在 toolkit 源仓自身跑，防把整套规则灌进消费仓。"""
+class TestDevTombstone:
+    """fix-probe-scan-precision：`--dev` 退役，toolkit-仓根守卫随之删除；`run()` 不再接受
+    `dev` 关键字参数（TypeError 是生产契约，非测试疏漏）。CLI 层保留一版 tombstone——
+    识别到 `--dev` 参数 → fail-loud 提示，而非 argparse 的 generic「unrecognized arguments」。"""
 
-    def test_dev_pointing_elsewhere_dies(self, tmp_path, monkeypatch, capsys):
+    def test_run_no_longer_accepts_dev_kwarg(self, tmp_path):
+        with pytest.raises(TypeError):
+            init_mod.run(str(tmp_path), "update", dev=True)
+
+    def test_cli_dev_flag_fails_loud_with_retirement_message(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
-        other_root = tmp_path / "consumer-repo"
-        (other_root / "openspec").mkdir(parents=True)
-        with pytest.raises(SystemExit):
-            init_mod.run(str(other_root), "update", dev=True)
+        monkeypatch.setattr(sys, "argv", ["init.py", "update", "--dev", "--root", str(tmp_path)])
+        with pytest.raises(SystemExit) as exc:
+            init_mod.main()
+        assert exc.value.code == 1
         err = capsys.readouterr().err
-        assert "仅用于 toolkit 源仓" in err
+        assert "--dev 已退役" in err
 
-    def test_dev_matching_source_repo_passes_identity_check(self, tmp_path, monkeypatch):
+    def test_cli_dev_flag_does_not_touch_filesystem(self, tmp_path, monkeypatch):
+        """tombstone 须在任何文件系统操作之前拦下——不得半跑一截才报错。"""
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
-        fake_skill_dir = tmp_path / "some-repo" / "sdflow-init"
-        fake_skill_dir.mkdir(parents=True)
-        monkeypatch.setattr(init_mod, "SKILL_DIR", str(fake_skill_dir))
-        root = tmp_path / "some-repo"
-        (root / "openspec").mkdir()
-        init_mod.run(str(root), "update", dev=True)  # 不应抛 SystemExit
-        assert (root / "openspec" / "workflow" / "workflow.md").is_file()
+        monkeypatch.setattr(sys, "argv", ["init.py", "update", "--dev", "--root", str(tmp_path)])
+        with pytest.raises(SystemExit):
+            init_mod.main()
+        assert not (tmp_path / "openspec").exists()
 
 
 class TestInitAlsoWarnsShadow:
@@ -742,20 +649,6 @@ class TestInitAlsoWarnsShadow:
         init_mod.run(str(root), "init")
         out = capsys.readouterr().out
         assert "遮蔽" in out
-
-
-class TestCopyBundleConvergence:
-    """B2-F4：非 full 模式下 tools/ 收敛——update 覆盖后，上游已删的旧文件不得残留。"""
-
-    def test_update_clears_legacy_files_in_tools(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "fake-claude"))
-        root = tmp_path / "proj"
-        init_mod.run(str(root), "init")
-        legacy = root / "openspec" / "workflow" / "tools" / "legacy-removed-upstream.txt"
-        legacy.write_text("stale\n", encoding="utf-8")
-        assert legacy.exists()
-        init_mod.run(str(root), "update")
-        assert not legacy.exists()
 
 
 class TestRunFsErrorGuard:

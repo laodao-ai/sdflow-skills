@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# resolve-workflow.sh — workflow 规则根解析器（三步链的确定性执行体）
+# resolve-workflow.sh — workflow 规则根解析器（两步链的确定性执行体，fix-probe-scan-precision
+# 起本地 pin 步已删——规则解析只剩「全局 canonical → 显式降级」）
 # 契约（minimize-repo-footprint R-MRF-2 / adr-0006 机队锚定：机械协议脚本化，skill 只调用）：
 #   stdout : 规则根路径（唯一 stdout 输出）
-#   exit 0 : 解析成功（本地 pin 或全局 canonical）
+#   exit 0 : 解析成功（全局 canonical）
 #   exit 2 : 全局 bundle 不可达/不完整 → 调用方显式降级通用评审 + 转发本脚本 stderr 告警
 #   exit 64: 用法错误
 # env: SDFLOW_HOME（缺省 ~/.sdflow；测试用它重定向，绝不写真实 $HOME）
@@ -34,30 +35,15 @@ explain() {
   if [ "$EXPLAIN" -eq 1 ]; then echo "resolve-workflow: source=$1 path=$2" >&2; fi
 }
 
-# 步1：查本地"规则文件本体"（any-of 即 pin）。不查 openspec/workflow/ 目录——tools/ 使其恒存在。
-LOCAL="$ROOT/openspec/workflow"
-has_wf=0; has_spec=0; has_code=0
-[ -f "$LOCAL/workflow.md" ] && has_wf=1
-[ -d "$LOCAL/spec-checklists" ] && has_spec=1
-[ -d "$LOCAL/code-checklists" ] && has_code=1
-total=$((has_wf + has_spec + has_code))
-if [ "$total" -gt 0 ]; then
-  if [ "$total" -lt 3 ]; then
-    echo "resolve-workflow: ⚠ 本仓规则副本部分残留（workflow.md=${has_wf} spec-checklists=${has_spec} code-checklists=${has_code}）——按 pin 处理；想跟全局请删净、想 pin 请补齐" >&2
-  fi
-  explain "local-pin" "$LOCAL"
-  echo "$LOCAL"
-  exit 0
-fi
-
-# 步2：全局 canonical——试目录（Unix 软链透明命中）→ 否则读指针文件（Windows）。平台判断在此，skill 不判平台。
+# 步1：全局 canonical——试目录（Unix 软链透明命中）→ 否则读指针文件（Windows）。平台判断在此，skill 不判平台。
+# 不查仓内 openspec/workflow/：本地副本（含仓内放全套规则副本）一律忽略，规则解析恒指全局 canonical。
 CANON=""
 case "$SDFLOW_HOME" in
   /*)
     if [ -d "$SDFLOW_HOME/workflow" ]; then
       CANON="$SDFLOW_HOME/workflow"
     elif [ -f "$SDFLOW_HOME/workflow-path" ]; then
-      # 读失败(权限/不存在)→CANON 空→sane 判失败→步3显式降级
+      # 读失败(权限/不存在)→CANON 空→sane 判失败→步2显式降级
       CANON="$( (head -n1 "$SDFLOW_HOME/workflow-path" | tr -d '\r' | sed -e 's/[[:space:]]*$//') 2>/dev/null || true)"
     fi
     ;;
@@ -66,10 +52,14 @@ case "$SDFLOW_HOME" in
     ;;
 esac
 
-sane() {  # 最小健全性检查：防 pull 半坏态静默广播（spec-review D2）；两个清单目录须非空（CR-F1）
+sane() {  # 最小健全性检查：防 pull 半坏态静默广播（spec-review D2）；两个清单目录须非空（CR-F1）；
+  # tools/ 目录须非空 + lens-metric-contract.md 非空（fix-probe-scan-precision 扩面，形状级判据——
+  # 只查目录/文件存在且非空，MUST NOT 枚举具体 .py 成员，防守卫里复活补丁螺旋）
   [ -n "$1" ] && [ -s "$1/workflow.md" ] \
     && [ -d "$1/spec-checklists" ] && [ -n "$(ls -A "$1/spec-checklists" 2>/dev/null)" ] \
-    && [ -d "$1/code-checklists" ] && [ -n "$(ls -A "$1/code-checklists" 2>/dev/null)" ]
+    && [ -d "$1/code-checklists" ] && [ -n "$(ls -A "$1/code-checklists" 2>/dev/null)" ] \
+    && [ -d "$1/tools" ] && [ -n "$(ls -A "$1/tools" 2>/dev/null)" ] \
+    && [ -s "$1/lens-metric-contract.md" ]
 }
 
 if sane "$CANON"; then
@@ -78,6 +68,6 @@ if sane "$CANON"; then
   exit 0
 fi
 
-# 步3：显式降级（反静默守卫）——绝不静默当"本项目无此评审层"
+# 步2：显式降级（反静默守卫）——绝不静默当"本项目无此评审层"
 echo "resolve-workflow: ✗ 全局 workflow bundle 不可达或不完整（SDFLOW_HOME=${SDFLOW_HOME}）。skill 应显式降级为通用评审并告警。修复：在运行 checkout（~/.skills/sdflow-skills）跑 bash setup.sh" >&2
 exit 2
