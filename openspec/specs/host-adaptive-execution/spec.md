@@ -130,24 +130,6 @@ Codex 宿主下向 `spawn_agent` 显式指定 `model` SHALL 附理由「本工�
 - **THEN** `resolve-models.sh` SHALL 以可证安全的编码输出（`printf %q` / `declare -p`）并**拒绝换行/控制字符/非模型 ID 字符**；`config_lint` SHALL 校验 model-tiers 的**值**（非仅键）为合法模型 ID；MUST NOT 让覆盖值在 `eval` 时被执行（须有恶意值回归测试）。**SHOULD 优先考虑取消 `eval`**（改用 `source` 一个受控生成文件或数组读取）
 - **AND〔spec-review-r2 D10〕** `resolve-models.sh` 读嵌套 `config.yaml` 的 model-tiers 覆盖（`model-tiers.{claude,codex}.{strong,mid,light}`）SHALL 与 `config_lint` **共用同一解析实现 + 畸形输入测试**（MUST NOT 各手搓一套导致口径漂移），或把该覆盖收缩成有界机器块——这是一个**受控有界的 config 解析面**（键路径可穷举），非「无界语法禁手搓」所指的 make/shell/通用语言
 
-### Requirement: 落锚/调 emitter 前探 tools 能力，陈旧则 fail-loud 降级〔spec-review-r2 C3+D1 统一 skew 策略〕
-
-编排 SKILL SHALL 在 fan-out / 调 `lens_metric_emit` / 落 v2 锚**之前**探测本仓 tools 是否已认识 v2 契约，陈旧则 fail-loud 降级——因 bundle 内 SKILL（symlink 即时生效）与 tools（copy，须 `sdflow-init update` 刷新）**更新不原子**，存在「新 SKILL × 旧 tools」窗口，旧 tools 有两个同根罢工症状：旧 `lens_metric_emit.py` 不认 `--host`（argparse exit 2 → lens-metric 整段静默清零）；旧 `anchor_lint.py` 枚举无 `none`（`runner="none"` 锚 → out-of-enum 罢工）。
-
-**探测判据钉死（具体命令，非留白）〔spec-review-r3 C3-probe〕**：SHALL 为两条具体检测——① emitter 认不认 `--host`：`lens_metric_emit.py --help` 输出 grep `--host`；② anchor_lint 枚举含不含 `none`：读本仓 `lens-metric-contract.md` 的 `lens-metric-enums` 机读块、grep `runner:` 行是否含 `none`（与 emitter 侧 `--help` grep 同等具体度，MUST NOT 停留在"读契约块或探针"的模糊限定）。
-
-**陈旧的处置 = fail-loud 硬停在落锚之前（不产出被 lint 的报告），非"产出无锚报告"〔spec-review-r3 C3-A/B：解 MANDATORY 冲突〕**：`anchor_lint` 的 outside-voice 锚是**无条件必查**（`MANDATORY`，`anchor_lint.py:148`）——∴ "陈旧则不落 v2 锚**但仍产出报告**"会撞 MANDATORY 阻塞、"落回 v1 旧锚（无 host）"又被读作 Claude 宿主 = Codex 轮次重新假绿。二者皆不可取。**正解**：探到陈旧 ⇒ 编排 SKILL 在**开始 fan-out / 落任何锚之前**硬停该评审步，**不产出待 lint 的报告**，终端/hand-off **响亮提示「tools 陈旧，请先跑 `sdflow-init update` 再重跑评审」**（fail-loud、actionable、非假绿、非静默清零、不撞 MANDATORY、不落会让旧 lint 罢工的 `runner="none"` 锚）。
-
-**残余诚实登记（探测漏网窗口）〔spec-review-r3 C3-C〕**：SKILL 侧探测是**主守**。若探测被跳过/漏网（`metrics.enabled=false` 消费仓本就不调 emitter，此路径主要护 metrics-on 仓），旧 `lens_metric_emit.py` 撞 `--host` argparse 罢工、旧 `anchor_lint.py` 撞 `runner="none"` out-of-enum 罢工——**二者皆 fail-loud 罢工（非假绿）**，如实登记该残余窗口未被第二道机械覆盖（对比 emitter 侧：`parse_known_args` 兜底**只对新 emitter × 旧调用方成立**，对"已部署旧 emitter"结构上够不着，见下 Scenario）。
-
-#### Scenario: 探到 tools 陈旧则 fail-loud 硬停（不产出报告）
-- **WHEN** 编排 SKILL 探测发现本仓 `lens_metric_emit.py --help` 无 `--host` 或 `lens-metric-contract.md` 的 runner 枚举无 `none`（消费仓 pull 新 bundle 未 `sdflow-init update`）
-- **THEN** SHALL 在落任何 v2 锚之前**硬停该评审步、不产出待 lint 的报告**，终端/hand-off 响亮提示 `sdflow-init update`；MUST NOT 产出无锚报告（撞 MANDATORY）、MUST NOT 落 v1 旧锚（假绿）、MUST NOT 静默清零
-
-#### Scenario: 受控 fail-closed 只护「新 emitter × 旧调用方」，不护「旧 emitter」〔spec-review-r3 C3/D1 诚实拆分〕
-- **WHEN** 调用方（旧 SKILL）不传 `--host` 给**新** `lens_metric_emit.py`
-- **THEN** 新 emitter SHALL `parse_known_args` + 缺 `--host` 受控 fail-closed（可读错误、非 argparse 崩栈，且 `if extras: fail-closed`），MUST NOT 默认填 `claude`。**注**：此兜底**只对新 emitter 成立**；「新 SKILL × **已部署旧 emitter**」方向旧 emitter 代码不会因本 change 改变，**只能靠上方 SKILL 侧探测拦截**（parse_known_args 够不着旧文件），MUST NOT 声称此兜底覆盖后者
-
 ### Requirement: 子代理不可用时镜数如实降级（探针语义核验 + always-on 一致性 lint，逐镜留语义层）
 
 Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`sdflow-init` 铺给消费项目的 AGENTS.md 段与两个评审 SKILL SHALL 显式声明该授权。

@@ -5,7 +5,7 @@ TBD - created by archiving change fix-windows-encoding-crash. Update Purpose aft
 ## Requirements
 ### Requirement: 入口脚本 SHALL NOT 因 stdout/stderr 编码崩溃
 
-本仓所有含 `if __name__ == "__main__":` 的 Python 入口脚本（`hack/**`、`sdflow-*/scripts/**`、`sdflow-init/assets/{hack,hooks,workflow/tools}/**`，不含 `**/tests/**` 与 `openspec/workflow/tools/**` 托管镜像）SHALL 在 stdout/stderr 编码无法承载其输出字符时优雅降级（字符替换），而非抛出未捕获异常终止进程。
+本仓所有含 `if __name__ == "__main__":` 的 Python 入口脚本（`hack/**`、`sdflow-*/scripts/**`、`sdflow-init/assets/{hack,hooks,workflow/tools}/**`，不含 `**/tests/**`）SHALL 在 stdout/stderr 编码无法承载其输出字符时优雅降级（字符替换），而非抛出未捕获异常终止进程。
 
 #### Scenario: Windows(GBK) 环境下打印含常见符号/emoji 的成功消息
 
@@ -68,10 +68,10 @@ TBD - created by archiving change fix-windows-encoding-crash. Update Purpose aft
 
 > 这条守的是本 change 的自反性：一个为消除假红而建的门，SHALL NOT 自己制造假红。
 
-#### Scenario: bundle 源文件不被镜像排除规则连坐
+#### Scenario: bundle 源文件不再需要镜像排除豁免
 
-- **WHEN** `sdflow-init/assets/workflow/tools/` 下的某源文件缺前导（该路径与被排除的镜像路径 `openspec/workflow/tools/` 共享尾段 `workflow/tools`）
-- **THEN** `check_encoding_hygiene.py` SHALL 检出该文件，SHALL NOT 因排除规则匹配到尾段而将其一并排除
+- **WHEN** `sdflow-init/assets/workflow/tools/` 下的某源文件缺前导
+- **THEN** `check_encoding_hygiene.py` SHALL 直接检出该文件；该门 SHALL NOT 保留任何针对 `openspec/workflow/tools/` 的排除分支。〔F26 定性订正〕该排除分支**在本 change 前就已不可达**——`TARGET_GLOBS` 五条 pattern 全部 root-anchored，从不把 `openspec/workflow/tools/**` 纳入候选集，本 change 是顺带清掉这个**既存**死码（而非"镜像消失后才成死码"）；其原守卫用例（引用 `openspec/workflow/tools/mirror.py` 者）为**恒真锚**（分支不可达 ⇒ 用例无论如何都绿），SHALL 删除或改写为对 `TARGET_GLOBS` root-anchored 锚定性的**正向**断言——判据：定点删除该断言所守的约束，用例必须变红
 
 #### Scenario: 全部入口脚本均满足三项契约
 
