@@ -158,7 +158,7 @@
 
 ## 4. 确定性脚本清单
 
-19 个脚本（含 1 个计划未建、2 个已废弃）。**bundle** = 经 `sdflow-init update` 铺进消费仓 `openspec/workflow/tools/`；**skill-local** = 仅本仓 skill 目录、走 symlink。注意 `ship_gate.py` 是 skill-local（不随 bundle 回灌）。
+19 个脚本（含 1 个计划未建、2 个已废弃）。**bundle** = 全局单份共享——位于 `sdflow-init/assets/workflow/tools/`，各仓经 `resolve-workflow.sh` 两步链实时解析到全局 canonical（`~/.sdflow/workflow` 软链），**不再复制进任何消费仓**（`adr/0039` 消灭双链）；**skill-local** = 仅本仓 skill 目录、走 symlink。注意 `ship_gate.py` 是 skill-local（不随 bundle 分发）。
 
 | 脚本 | 阶段 | 触发 skill | 检查字段/输入 | 判据 & 退出码 | 分发 | file:line |
 |------|------|-----------|--------------|--------------|------|-----------|
@@ -177,7 +177,7 @@
 | ~~**buglist.py**~~ | ~~全阶段~~ | ~~sdflow-buglist~~ | （v2 合并为 issues_v2.py，见 sdflow-issues） | 已废弃 | — | — |
 | ~~**todolist.py**~~ | ~~全阶段~~ | ~~sdflow-todolist~~ | （v2 合并为 issues_v2.py，见 sdflow-issues） | 已废弃 | — | — |
 | **test_mirror_consistency.py** | maintain / CI | pytest（守卫） | 三脚本同名 helper 源码 → 剥 docstring 后 `ast.dump` 等价 | 仅真实逻辑分叉拉红（THREE_WAY 6 + TWO_WAY） | skill-local | `:41`,`:87` |
-| **resolve-workflow.sh** | setup（规则根解析） | 各 skill 前置 | `--root`；本地 pin vs 全局 canonical bundle | **0** 成功 / **2** 降级 / **64** 用法 | bundle/hack | `:5-7`,`:69` |
+| **resolve-workflow.sh** | setup（规则根解析） | 各 skill 前置 | `--root`；两步链解析全局 canonical bundle（本地 pin 分支已随 `adr/0039` 删除） | **0** 成功 / **2** 降级 / **64** 用法 | bundle/hack | `:5-7`,`:69` |
 | **outside-voice.sh** | spec-review / code-review | 两审 outside-voice 镜 | `--context-file` · secret_scan · codex read-only · timeout 300 | preflight/exec；**0** / **1** err / **3** secret / **124** timeout | bundle/hack | `:5-15`,`:45` |
 | **checkpoint-commit.sh** | 全阶段（过场提交） | 各编排 skill | `<step>`+描述 · `git status --porcelain` · 固定 message | 无变更静默跳过；**0** / **2** 用法/非仓 | bundle/hack | `:7-20`,`:39` |
 | **log_check.py** | （计划未建） | 拟：TG-02 相关工具（原设想宿主 `embedded-test-sop` 已随 simplify-workflow 删除，消费方待定） | 拟：`--log serial.log --rules *.yaml` · 时间窗 · must_contain/not/before · severity rollup | **尚未建**（roadmap mechanical-layer-hardening 阶段4 · 子任务 4.A，按需排；survey 内部编号 P5，勿与已交付的「阶段5 gate→frontmatter」撞号） | 拟 bundle | roadmap:118 |
@@ -231,7 +231,7 @@ checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-
 
 ## 6. 分发链 · fail-closed 家族 · 重实现守卫
 
-- **两条分发链**：**bundle** = `assets/workflow/tools/` → `~/.sdflow/workflow` → 消费仓 `openspec/workflow/tools/`（anchor_lint / trivial_shape）；**skill-local** = skill 目录整体软链进 `~/.skills`。`ship_gate.py` 属后者——**不随 bundle 回灌消费仓**。
+- **两个脚本来源，一条分发链**（`adr/0039` 消灭双链后）：**bundle** = `assets/workflow/tools/` → `~/.sdflow/workflow`（全局单份，各仓经 `resolve-workflow.sh` 两步链实时解析，anchor_lint / trivial_shape 等）；**skill-local** = skill 目录整体软链进 `~/.skills`。`ship_gate.py` 属后者——不属 bundle。消费仓不再持有 `openspec/workflow/tools/` 镜像。
 
 - **fence-aware 三处独立重实现**（禁跨 skill import，消费仓无 sdflow-retro）：`anchor_lint.fence_outside_lines` · `lens_metric_aggregate._fence_aware_lines` · `ship_gate._line_scoped_hits`，各自实现 CommonMark fence 语义。
 
@@ -241,7 +241,7 @@ checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-
 
 - **anchor_lint 诚实拦截力**：由**同一落锚的主 session 自跑**、非独立外部门——只挡「同会话内忘记跑这步」，挡不住「整段跳过」。数值一致性（findings/采纳/独立）是主 session 信任边界、非机械可验。
 
-- **规则解析纪律**：三编排 skill 运行时经 `resolve-workflow.sh` 解析 RULES_ROOT（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`；退出码 2 → 显式降级并转发 stderr，绝不静默。
+- **规则解析纪律**：三编排 skill 运行时经 `resolve-workflow.sh` 两步链解析 RULES_ROOT（全局 canonical；本地 pin 分支已随 `adr/0039` 删除），不硬编码 `openspec/workflow/`；退出码 2 → 显式降级并转发 stderr，绝不静默。
 
 ---
 

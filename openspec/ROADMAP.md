@@ -31,10 +31,10 @@
 把 opsx-project-init 的部署从"整 bundle 复制进消费仓"改为**按内容性质分层**，减少消费仓污染：
 
 - **规则**（`workflow/*.md` + `spec-checklists/` + `code-checklists/`，≈28 文件）→ **全局唯一**，skills 全局解析、消费仓不复制。
-- **review 机械层脚本**（`tools/` 下 `anchor_lint.py` 等确定性脚本）→ **留 `openspec/workflow/tools/` 最小**（评审流程运行时依赖）。〔注：原随此层部署的 HTML 文档查看器 `serve.sh` + `review.html` 已由 `drop-review-html-viewer` 整体移除。〕
+- **review 机械层脚本**（`tools/` 下 `anchor_lint.py` 等确定性脚本）→ **留 `openspec/workflow/tools/` 最小**（评审流程运行时依赖）。〔注：原随此层部署的 HTML 文档查看器 `serve.sh` + `review.html` 已由 `drop-review-html-viewer` 整体移除；本条「留 tools/ 最小」的部署形态已由 `fix-probe-scan-precision`/`adr/0039`（消灭双链）取消——tools 改为全局单份共享，消费仓不再持有镜像，历史决策原文不改。〕
 - **`hack/checkpoint-commit.sh`** → **全局**（同 ff0-branch-guard 全局 hook；顺带根治 `core.fileMode=false` 的 exec 位坑）。
 - **`config.yaml` / `changes/` / `specs/`** → 仓内（本体）。
-- **明确接受的代价**：消费仓失去按仓 pin 工作流规则（跟随全局 HEAD）。
+- **明确接受的代价**：消费仓失去按仓 pin 工作流规则（跟随全局 HEAD）。〔该 pin 机制本身已由 `adr/0039` 取消，历史决策原文不改。〕
 - **未决（留其 design 定）**：全局 bundle 路径解析机制——固定 `~/.skills/laodao-skills/…` 约定 vs env var；建议默认约定 + env var 覆盖。
 >
 > **grill 收敛（2026-07-03）**——上面若干点已被逐决策死磕修正（详见 change design.md + `adr/0003` grill-amendment + `adr/0005`）：①**撤提根**（canonical 间接层已解耦，"唯一权威源"约定不动）；②canonical = Unix 软链 `~/.sdflow/workflow` / Windows 指针 `~/.sdflow/workflow-path` + 回落链（原"未决路径机制"已定）；③checkpoint 全局家 = agent 中立 `~/.sdflow/hack/`、**非** `~/.claude/hooks`（修正"同两个 hook"假类比）；④dev/release 靠**两个物理 checkout** 隔（`adr/0005`）；⑤ workflow 集群抽为独立 repo **sdflow**（前缀 `sdflow-`、canonical `~/.sdflow/`，dev/runtime 两 checkout）= 派生 change `extract-sdflow-repo`；laodao-skills 留 misc grab-bag。

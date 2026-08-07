@@ -33,6 +33,6 @@
 ## Consequences
 
 - **正**：hr-tg 锚一致性获确定性机械保证（拦手改单字段绕过、手误 TG、坏输入、schema drift）；口径单一源、零妥协；诚实边界清晰。
-- **负 / 代价**：`--trigger-catalog` 必需 → 工具（`sdflow-init update`）与 SKILL（setup.sh）部署 skew 时 anchor_lint 会 fail-closed 硬失败——**这是有意的**（响亮暴露 > 静默降级），由 pull→setup 原子纪律兜（CLAUDE.md）。
+- **负 / 代价**：`--trigger-catalog` 必需 → 工具（`sdflow-init update`）与 SKILL（setup.sh）部署 skew 时 anchor_lint 会 fail-closed 硬失败——**这是有意的**（响亮暴露 > 静默降级），由 pull→setup 原子纪律兜（CLAUDE.md）。〔状态注记，2026-08，`adr/0039`〕本条所述「`sdflow-init update` 部署 tools/trigger-catalog」的部署形态已取消——tools 改为全局单份共享，`sdflow-init update` 不再铺设它们；该 skew 面已结构上消失（不再有第二份可错位的拷贝），残余仅 `adr/0039` 登记的 hack 拷贝链与 Windows SKILL 快照两个失鲜面。本文正文不改，指针见 `adr/0039`。
 - **残余**：declared 正确性仍靠模型 + git 审计（S1），非机械可保。
 - **对 adr/0018**：本 change 是 0018 首形态 dogfood 之一，落地后为 0018 升 Accepted 补实证。

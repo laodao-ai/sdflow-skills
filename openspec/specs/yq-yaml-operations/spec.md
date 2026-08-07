@@ -1,9 +1,11 @@
 # yq-yaml-operations Specification
 
 ## Purpose
-本仓 7 个脚本（`sdflow-init/scripts/init.py`、`sdflow-ship/scripts/ship_gate.py`、
-`sdflow-implement/scripts/impl_route.py`、`openspec/workflow/tools/anchor_lint.py` 及其
-bundle 副本、`sdflow-done/scripts/roadmap_writeback_draft.py`、
+本仓 6 个脚本（`sdflow-init/scripts/init.py`、`sdflow-ship/scripts/ship_gate.py`、
+`sdflow-implement/scripts/impl_route.py`、
+`sdflow-init/assets/workflow/tools/anchor_lint.py`（评审机械层权威源，全局单份共享，
+不再有消费仓镜像——见 `openspec/adr/0039-eliminate-dual-distribution-chain.md`）、
+`sdflow-done/scripts/roadmap_writeback_draft.py`、
 `sdflow-architecture/scripts/sad_schema.py`）读取 `config.yaml` 顶层键/`model-tiers`/
 `metrics` 块，以及 Markdown frontmatter（评审报告、plan、SAD 文档）。这些 YAML/frontmatter
 子集解析统一委托外部 `mikefarah/yq` 二进制（见 `openspec/adr/0036-yq-replaces-hand-rolled-yaml.md`），

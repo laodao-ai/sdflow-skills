@@ -44,17 +44,17 @@ flowchart LR
         F["~/.claude/skills/* + ~/.codex/skills/*<br/>（symlink，改源即时生效）"]
     end
     subgraph CONSUMER["消费仓 openspec/"]
-        G["workflow/tools/ + lens-metric-contract.md<br/>（sdflow-init update 刷新，仅此落地）"]
+        G["workflow/WORKFLOW-GUIDE.md<br/>（sdflow-init update 刷新，人读手册，唯一落地文件）"]
         H["config.yaml / INDEX.md / CLAUDE.md 托管块"]
     end
     A -->|"setup.sh symlink"| D
     B -->|"setup.sh copy ⚠️"| E
     C -->|"setup.sh symlink"| F
-    D -->|"resolve-workflow.sh 运行时解析"| CONSUMER
-    A -->|"sdflow-init update 只推 tools/"| G
+    D -->|"resolve-workflow.sh 运行时解析（规则+tools 均不落地）"| CONSUMER
+    A -->|"sdflow-init update 只推 GUIDE"| G
 ```
 
-- **规则不落消费仓**（adr/0003）：消费仓运行时经 `resolve-workflow.sh` 三步解析——本地 pin（有 `openspec/workflow/` 规则副本则优先）→ 全局 canonical `~/.sdflow/workflow` → 都不可达则 **exit 2 显式降级**（反静默）。
+- **规则与 tools 均不落消费仓**（`adr/0039` 消灭双链）：消费仓运行时经 `resolve-workflow.sh` 两步链解析——全局 canonical `~/.sdflow/workflow` → 不可达则 **exit 2 显式降级**（反静默）。本地 pin 分支（曾优先于全局 canonical）已随该 ADR 删除。
 - **hack 是 copy 不是 symlink**：改 `assets/hack/` 后不重跑 `setup.sh` = 新 SKILL 调旧脚本（发布边界 = push → pull → **立即** setup）。
 
 ---

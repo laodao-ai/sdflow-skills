@@ -1,6 +1,6 @@
 ---
 name: sdflow-upgrade
-description: 升级 sdflow 工具链运行 checkout（~/.skills/sdflow-skills）：git pull → bash setup.sh（skills 软链 + ~/.sdflow canonical/hack 同步刷新，堵 pull→setup 窗口期）→ 显示版本与最新变更，并提示消费仓按需跑 sdflow-init update。当用户说"升级 sdflow"、"更新 sdflow skills"、"sdflow upgrade"、"sdflow 有新版本吗"、"刷新 sdflow"，或使用 /sdflow-upgrade 时触发。
+description: 升级 sdflow 工具链运行 checkout（~/.skills/sdflow-skills）：git pull → bash setup.sh（skills 软链 + ~/.sdflow canonical/hack 同步刷新，堵 pull→setup 窗口期）→ 显示版本与最新变更；规则与评审工具全局单份共享，setup 完成后消费仓即时拿到最新版，无需额外操作，仅当消费仓要刷新人读 WORKFLOW-GUIDE.md 才按需跑 sdflow-init update。当用户说"升级 sdflow"、"更新 sdflow skills"、"sdflow upgrade"、"sdflow 有新版本吗"、"刷新 sdflow"，或使用 /sdflow-upgrade 时触发。
 ---
 
 # sdflow-upgrade — 运行 checkout 一键升级
@@ -157,7 +157,9 @@ SKILL.md 软链即时生效、`~/.sdflow/hack/` 脚本拷贝生效，只 pull �
    - 刷 skills 软链 + `~/.sdflow/workflow` canonical + `~/.sdflow/hack/{checkpoint-commit.sh,resolve-workflow.sh}`。
 3. **展示**：`git -C ~/.skills/sdflow-skills describe --tags --always --dirty` + `git -C ~/.skills/sdflow-skills log --oneline -5`，向用户汇报版本与最新变更。
    （版本由 git 自报——本仓**无 `VERSION` 文件**，手工维护的版本号必然过期。）
-4. **提示**：各消费仓如需拿最新 tools/ 或看陈旧遮蔽告警 → 在该仓跑 `sdflow-init update`（本 skill 不代跑）。
+4. **提示**：规则与评审工具全局单份共享（`adr/0039`），本步 setup 完成后各消费仓即时生效，
+   **无需**再跑任何命令；消费仓仅在要刷新人读 `WORKFLOW-GUIDE.md`、或想看仓内死件残留告警时，
+   才按需在该仓跑 `sdflow-init update`（本 skill 不代跑）。
 
 ## 回滚
 

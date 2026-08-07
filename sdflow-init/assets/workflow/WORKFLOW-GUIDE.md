@@ -1,5 +1,9 @@
 <!-- 本文件由 hack/gen_workflow_guide.py 从 workflow.md + prompts/ 机械生成。DO NOT EDIT。 -->
 <!-- 改 prompt → 改 prompts/step*.md（单一源）；改流程 → 改 workflow.md；然后跑 --write。 -->
+<!-- [fix-probe-scan-precision task4 · adr/0039] 本文件是消费仓 openspec/workflow/ 下 -->
+<!-- 唯一落地文件（tools/ 与规则均全局单份共享、不再铺设）。文中对其它规则文件的提及 -->
+<!-- （如 `quality-layering.md`）已降为纯文字引用，非本文件内的可点链接——那些文件不随 -->
+<!-- GUIDE 分发，如需查看请见 sdflow-skills 仓 sdflow-init/assets/workflow/ 对应文件。 -->
 
 # Spec 工作流（端到端总览）
 
@@ -84,15 +88,15 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 
 ## 三、关键设计决策
 
-1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 [ff-generation-constraints.md](./ff-generation-constraints.md) §FF-0。
-2. **`/clear` 只在两处阶段交界用，阶段内部不用（G1）**：阶段内部不用 `/clear`（评审独立性由 fresh 子代理提供，依据 [quality-layering.md](./reference/quality-layering.md)）。两处阶段交界 SHALL `/clear`：**阶段一 → 阶段二**（cache 按模型隔离 + 产/审错档纪律）、**阶段二 → 阶段三**（盘面纪律 + 产物自足性检验 + 去作者偏置）。完整推导（为什么恰是这两处、每条理由的证据、边界）见[附录 A](#附录-ag1-完整分析clear-纪律为何如此设计)。
+1. **git 分支在生成起手做（带守卫）= 规则 FF-0，三分支判定**：保护分支（main/master）→ `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。分支恰在生成开始时创建，spec 文件随分支落地。见 `ff-generation-constraints.md` §FF-0。
+2. **`/clear` 只在两处阶段交界用，阶段内部不用（G1）**：阶段内部不用 `/clear`（评审独立性由 fresh 子代理提供，依据 `quality-layering.md`）。两处阶段交界 SHALL `/clear`：**阶段一 → 阶段二**（cache 按模型隔离 + 产/审错档纪律）、**阶段二 → 阶段三**（盘面纪律 + 产物自足性检验 + 去作者偏置）。完整推导（为什么恰是这两处、每条理由的证据、边界）见[附录 A](#附录-ag1-完整分析clear-纪律为何如此设计)。
 3. **中途 AskUserQuestion → 决策全登记进报告（G2）**：评审撞到"≥2 方案/核验不了的事实"不中途弹窗，写进报告决策登记区（**≥2 方案**：选项+推荐+三面后果(系统/用户/开发循环)+主次判定；**核验不了的事实**：待核验证据+风险+默认处理，不强制三镜），继续跑完；人工在设计门一次性过报告拍板。评审 findings 互相独立不级联，攒到报告一次决即可。
 4. **只在阶段二设计门停一次人类**：拷问是对话岛（人类对抗，不折叠，见 `/sdflow-spec` 相位 B）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议 `T10-choice`〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
 6. **评审两层、不重复**：
    - **设计侧**：sdflow-spec-review 编排器 = autoplan（广审 CEO/design/eng/DX）+ 本项目多镜（领域镜+对抗镜+接地镜）合成一份报告。**autoplan 已含 eng 镜 → 多镜不重复跑 eng**。
    - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
-7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 [reference/quality-layering.md](./reference/quality-layering.md)。
+7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 `reference/quality-layering.md`。
 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
 9. **深度按 TG / 风险**：explore（模糊才跑）；不分 S/M/L 档。〔Phase C 补：outside voice 默认开，命中 HR-TG 单开领域 cross-model〕
 
@@ -112,7 +116,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 
 - 本文是**流程编排**；不重复各规则文件内容，只引用。
 - `config.yaml` 生成时自动守①②；本文把 explore/sdflow-spec/sdflow-spec-review/sdflow-code-review/sdflow-done **排成连续序**。
-- [reference/quality-layering.md](./reference/quality-layering.md) 管**质量分层 + shift-left 注入点**（生成期三层审、领域清单注入终审、事后 sdflow-code-review 为何是**每次全跑的强制主审**、verify 防假✅）；本文据其结论排序。
+- `reference/quality-layering.md` 管**质量分层 + shift-left 注入点**（生成期三层审、领域清单注入终审、事后 sdflow-code-review 为何是**每次全跑的强制主审**、verify 防假✅）；本文据其结论排序。
 
 ## 六、检查清单（跑一个变更时）
 
@@ -132,7 +136,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 > 本节是**演进推导**（DOC-1 附录）：正文（§三.2）只留结论，这里留完整论证。**跑流程不用读本节**——
 > 只在需要理解「为什么恰是这两处，不多不少」时查。
 
-**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 [quality-layering.md](./reference/quality-layering.md)）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 `quality-layering.md`）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
 
 🔴 **上述结论只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。曾有措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
 
@@ -147,4 +151,4 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 
 *流程 v2（三阶段连续化，单轨线性）· 配套 generation-process.md（生成）/ spec-review.md（评审）/ trigger-catalog.md（深度）/ reference/quality-layering.md（分层）*
 
-*演进史（去掉了什么、为什么这么改）→ [workflow-history.md](./workflow-history.md)——不是当前约束，跑流程不用读。*
+*演进史（去掉了什么、为什么这么改）→ `workflow-history.md`——不是当前约束，跑流程不用读。*

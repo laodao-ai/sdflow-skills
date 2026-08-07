@@ -80,7 +80,21 @@ if __name__ == "__main__":
     assert "stderr reconfigure" not in stderr
 
 
-def test_canonical_bundle_source_is_not_excluded_with_its_mirror(tmp_path, capsys):
+def test_target_globs_are_root_anchored_and_never_reach_consumer_mirror(tmp_path, capsys):
+    """[fix-probe-scan-precision task4 · F26] 原用例名为「排除消费仓镜像」，断言与已删除的
+    `openspec/workflow/tools/` 排除分支**无关**——`TARGET_GLOBS` 的 5 条 pattern 全部
+    root-anchored（`hack/**` / `sdflow-*/scripts/**` / …），从未覆盖 `openspec/workflow/`，
+    排除分支本就不可达（恒真锚，删门不红）。改写为对 root-anchored 性质本身的正向断言：
+    ① 结构断言——任一 pattern 若被改宽为非 root-anchored（如 `**/tools/**/*.py`）即刻失败；
+    ② 行为断言——消费仓镜像路径的文件即便手写标准前导也不进 `target_files()` 扫描面
+    （判据：定点把某条 pattern 改宽为可命中该镜像路径 ⇒ 本用例必红）。
+    """
+    for pattern in hygiene.TARGET_GLOBS:
+        assert not pattern.startswith("**"), (
+            f"TARGET_GLOBS 的 {pattern!r} 非 root-anchored——"
+            "可能意外命中 openspec/workflow/ 下的死件镜像路径"
+        )
+
     _write(
         tmp_path,
         "sdflow-init/assets/workflow/tools/source.py",

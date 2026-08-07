@@ -950,13 +950,16 @@ def is_stale(root, rel, scope, change):
     head_code = {p: v for p, v in head_top.items() if p != b"openspec"}
     if anchor_code != head_code:
         return True, "stale"
-    # openspec/workflow/tools/ 含真运行代码（anchor_lint.py 等），排除整棵 openspec 会漏判。
-    # 额外比较该子路径：done 流程不改这些 .py，不会假阳。
-    tools_spec = (b"openspec/workflow/tools/",)
-    anchor_tools = ls_tree_map(root, sha, pathspecs=tools_spec, recursive=True)
-    head_tools = ls_tree_map(root, "HEAD", pathspecs=tools_spec, recursive=True)
-    if anchor_tools != head_tools:
-        return True, "stale"
+    # [fix-probe-scan-precision task5 · C14 · adr/0039] `tools_spec` 比较腿已退役——
+    # **按仓型分开写理由**（MUST NOT 用「顶层腿覆盖」概括消费仓，二者机制不同）：
+    #   · toolkit 源仓：tools 权威源 `sdflow-init/assets/workflow/tools/` 位于顶层条目
+    #     `sdflow-init` 之下 ⇒ 改权威源必翻该顶层条目 tree oid ⇒ 已被上面的顶层腿
+    #     （`:947-951`）覆盖，本腿只多抓「直接改消费仓镜像而不改权威源」一种情形。
+    #   · 消费仓：镜像 `openspec/workflow/tools/` 本身**不复存在**（D13 停止铺设、
+    #     tasks 6.1 删除本仓残留），「直接改镜像」这个动作不可能发生——不是"被覆盖"，
+    #     是被比较的对象已消失。
+    # 消费仓侧「canonical 在 review 与 done 之间变更不可见」是 change 前即存在的盲区
+    # （旧腿只守仓内镜像，从不守 canonical），已在 design.md Risks 登记接受、不建替代。
     return False, "fresh"
 
 

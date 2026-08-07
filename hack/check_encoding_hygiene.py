@@ -80,8 +80,6 @@ def target_files(root=REPO):
         relative = path.relative_to(root).as_posix()
         if "/tests/" in f"/{relative}/":
             continue
-        if relative.startswith("openspec/workflow/tools/"):
-            continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         if any(
             isinstance(node, ast.If) and isinstance(node.test, ast.Compare)

@@ -105,13 +105,13 @@ def test_fold_hit_gstack_adv_no_longer_recognized():
         m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
 
 def test_fold_hit_unknown_raw_error_mentions_update_hint():
-    # 未知 raw 镜名报错须带可操作指引——这是「SKILL 已更新、消费仓 bundle 未更新」的第一现场，
-    # 报错文案须含「若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update」
+    # 未知 raw 镜名报错须带可操作指引——这是「SKILL 已更新、全局 canonical bundle 未更新」的第一
+    # 现场。[fix-probe-scan-precision task4 · 6.6 修法文案统一] 工具与规则均全局单份共享（adr/0039），
+    # 消费仓不再持有可 update 的 tools 副本，口径统一为「回运行 checkout 跑 bash setup.sh」。
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
     with pytest.raises(m.EmitError) as exc_info:
         m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
-    assert "sdflow-init update" in str(exc_info.value)
-    assert "openspec/workflow/" in str(exc_info.value)
+    assert "bash setup.sh" in str(exc_info.value)
 
 def test_fold_hit_site_injection_fail_closed():
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)

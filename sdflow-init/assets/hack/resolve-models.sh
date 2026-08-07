@@ -71,7 +71,7 @@ MT_FILE=""
 if [ -n "$WORKFLOW_ROOT" ] && [ -f "$WORKFLOW_ROOT/model-tiers.md" ]; then
   MT_FILE="$WORKFLOW_ROOT/model-tiers.md"
 else
-  echo "resolve-models: ✗ model-tiers.md 不可达（workflow bundle 未安装/未解析，修：sdflow-init update 或 setup.sh）——档位将回落为空并如实告警" >&2
+  echo "resolve-models: ✗ model-tiers.md 不可达（workflow bundle 未安装/未解析，修：回运行 checkout 跑 bash setup.sh）——档位将回落为空并如实告警" >&2
 fi
 
 # ────────────────────────────── 3. 机读缺省块读取 ──────────────────────────────

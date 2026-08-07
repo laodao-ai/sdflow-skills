@@ -1,6 +1,8 @@
 # 部署 footprint：规则走全局、消费仓只留最小副本
 
 > **部分被取代（2026-07，`drop-review-html-viewer`）**：下文「review UI 机械」层里的 HTML 文档查看器（`serve.sh` + `review.html` + `tools/{engine.js,engine.css,vendor/,review-stub.html}`）已整体移除——消费仓 `openspec/workflow/tools/` 现只留评审机械层脚本（`anchor_lint.py` 等）。分层部署的**决策本身不变**，仅「review UI」一项收缩为「review 机械层脚本」。
+>
+> **进一步被取代（2026-08，`adr/0039`）**：本条所述「review 机械层脚本 → 仍复制进 `openspec/workflow/tools/`」与 resolver 的 local-pin 分支已由 `adr/0039`（消灭双链）取消——tools/ 与规则均改为全局单份共享，消费仓不再持有任何镜像，resolver 收缩为两步链（本地 pin 分支删除）。本文正文不改，指针见 `adr/0039`。
 
 opsx-project-init 曾把整个 workflow bundle（≈34 文件）复制进每个消费仓的 `openspec/workflow/`。规则文件从不按仓定制（定制只在 `config.yaml`），却在每个消费仓留一份可观的副本。改按"内容性质"分层部署，把纯机械/纯规则的部分收归全局，消费仓只留**本身需要在仓里**的最小集。
 

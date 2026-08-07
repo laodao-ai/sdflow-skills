@@ -562,7 +562,7 @@
     <!-- ═══ 4. 脚本 ═══ -->
     <section id="scripts">
       <div class="sec-head"><span class="sec-num">04</span><h2>确定性脚本清单</h2></div>
-      <p class="sec-sub">14 个脚本（含 1 个计划未建）。<span class="tag-b tag-bundle">bundle</span> = 经 <code>sdflow-init update</code> 铺进消费仓 <code>openspec/workflow/tools/</code>；<span class="tag-b tag-local">skill-local</span> = 仅本仓 skill 目录、走 symlink。注意 <code>ship_gate.py</code> 是 skill-local（不随 bundle 回灌）。</p>
+      <p class="sec-sub">14 个脚本（含 1 个计划未建）。<span class="tag-b tag-bundle">bundle</span> = 全局单份共享——位于 <code>sdflow-init/assets/workflow/tools/</code>，各仓经 <code>resolve-workflow.sh</code> 两步链实时解析（<code>adr/0039</code> 消灭双链后不再复制进任何消费仓）；<span class="tag-b tag-local">skill-local</span> = 仅本仓 skill 目录、走 symlink。注意 <code>ship_gate.py</code> 是 skill-local（不随 bundle 分发）。</p>
       <div class="table-scroll">
         <table>
           <thead><tr><th>脚本</th><th>阶段</th><th>触发 skill</th><th>检查字段 / 输入</th><th>判据 &amp; 退出码</th><th>分发</th></tr></thead>
@@ -651,7 +651,7 @@
               <td><span class="sname">resolve-workflow.sh</span><br><span class="floc">:5-7 · :69 sane()</span></td>
               <td class="chk">setup（规则根解析）</td>
               <td><span class="skl">各 skill 前置</span></td>
-              <td class="chk"><code>--root</code>；本地 pin vs 全局 canonical bundle；最小健全性</td>
+              <td class="chk"><code>--root</code>；两步链解析全局 canonical bundle（本地 pin 分支已随 <code>adr/0039</code> 删除）；最小健全性</td>
               <td class="chk">解析规则根<div class="cell-codes"><span class="code-chip c-ok">0</span><span class="code-chip c-unknown">2 降级</span><span class="code-chip c-blocked">64 用法</span></div></td>
               <td><span class="tag-b tag-bundle">bundle/hack</span></td>
             </tr>
@@ -746,8 +746,8 @@
       <div class="sec-head"><span class="sec-num">06</span><h2>分发链 · fail-closed 家族 · 重实现守卫</h2></div>
       <div class="notes">
         <div class="note">
-          <div class="n-t">两条分发链</div>
-          <div class="n-b"><b>bundle</b>：<code>assets/workflow/tools/</code> → <code>~/.sdflow/workflow</code> → 消费仓 <code>openspec/workflow/tools/</code>（anchor_lint / trivial_shape）。<b>skill-local</b>：skill 目录整体软链进 <code>~/.skills</code>。<code>ship_gate.py</code> 属后者——不随 bundle 回灌消费仓。</div>
+          <div class="n-t">两个脚本来源，一条分发链</div>
+          <div class="n-b">（<code>adr/0039</code> 消灭双链后）<b>bundle</b>：<code>assets/workflow/tools/</code> → <code>~/.sdflow/workflow</code>（全局单份，各仓经 <code>resolve-workflow.sh</code> 两步链实时解析，anchor_lint / trivial_shape 等）。<b>skill-local</b>：skill 目录整体软链进 <code>~/.skills</code>。<code>ship_gate.py</code> 属后者——不属 bundle。消费仓不再持有 <code>openspec/workflow/tools/</code> 镜像。</div>
         </div>
         <div class="note">
           <div class="n-t">fence-aware 三处独立重实现</div>
@@ -767,7 +767,7 @@
         </div>
         <div class="note">
           <div class="n-t">规则解析纪律</div>
-          <div class="n-b">三编排 skill 运行时经 <code>resolve-workflow.sh</code> 解析 RULES_ROOT（本地 pin 或全局 canonical），不硬编码 <code>openspec/workflow/</code>；退出码 2 → 显式降级并转发 stderr，绝不静默。</div>
+          <div class="n-b">三编排 skill 运行时经 <code>resolve-workflow.sh</code> 两步链解析 RULES_ROOT（全局 canonical；本地 pin 分支已随 <code>adr/0039</code> 删除），不硬编码 <code>openspec/workflow/</code>；退出码 2 → 显式降级并转发 stderr，绝不静默。</div>
         </div>
       </div>
 

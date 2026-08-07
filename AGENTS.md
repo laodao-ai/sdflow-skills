@@ -73,7 +73,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 ## 项目结构与模块组织
 
 - 根目录下含 `SKILL.md` 的目录是可安装 skill，例如 `sdflow-init/`、`sdflow-done/`；其 `scripts/`、`tests/`、`assets/`、`references/` 必须保持自包含。
-- `sdflow-init/assets/workflow/` 是下游 OpenSpec workflow bundle 的唯一权威源；`openspec/` 是本仓 dogfooding 实例，`openspec/workflow/` 仅保留运行工具、生成文档和契约文件，不存规则真相源副本。
+- `sdflow-init/assets/workflow/` 是下游 OpenSpec workflow bundle 的唯一权威源；`openspec/` 是本仓 dogfooding 实例，`openspec/workflow/` 仅保留人读生成文档 `WORKFLOW-GUIDE.md`——评审机械层 `tools/` 与 `lens-metric-contract.md` 已随 `adr/0039`（消灭双链）停止铺设，不存任何规则或工具副本。
 - `openspec/rules/` 是本仓写作与工程规则的单一源；`openspec/changes/`、`openspec/specs/`、`openspec/issues/` 分别承载变更、主规格和问题台账。
 - `hack/` 放仓库级生成与一致性脚本，`docs/` 放架构、流程和草案文档。新增或删除顶层 skill 时同步更新 `README.md` 的 Skills 列表。
 - `sdflow-spec/agents/*.md` 是三个 agent 定义，由 `setup.sh` 的 `install_agents()` 铺进
@@ -106,7 +106,7 @@ git diff --check                                      # 检查空白错误
 
 ### 开发期测试三层（影响面递增，能用低层就不开高层）
 
-纪律态下全局指针（`~/.sdflow/workflow`、`~/.claude/skills`、`~/.codex/skills` 软链）全指运行 checkout，开发树改动是惰性的。测试按影响面选层：①**机械层（pytest）——零全局影响**：init 测试 `tmp_path` + monkeypatch `BUNDLE_SRC`；`setup.sh` 测试假 HOME 真跑 bash（`hack/tests/test_install_agents.py` 模式）；`resolve-workflow.sh` 用 `SDFLOW_HOME` 重定向；日常开发只跑这层。②**沙盒消费仓层——零全局影响**：用**开发树**的 `init.py` 铺设/update 一个 scratch 消费仓；测新规则把规则副本拷进沙盒仓 `openspec/workflow/` 形成本地 pin（`resolve-workflow.sh` 步 1 pin 优先于全局 canonical）；`--dev` 有守卫只准源仓自身用。③**全局窗口层（开发 checkout 跑 `setup.sh`）——机器级影响、时间盒**：仅当改 SKILL.md 语义且需真跑 skill 全链路时才开（`~/.claude/skills` 是全局命名空间，无 per-project pin）；窗口期本机所有项目仓（含本仓项目侧）都吃开发版，正式 change 流程避开窗口；还原 MUST 在运行 checkout **重跑 setup**（`~/.sdflow/hack/` 是拷贝不是软链，只改软链还原不了）。护栏：`resolve-workflow.sh` 的 `sane()` fail-loud（半坏态不静默广播）；任意仓可留规则副本形成 pin 免疫全局翻动。
+纪律态下全局指针（`~/.sdflow/workflow`、`~/.claude/skills`、`~/.codex/skills` 软链）全指运行 checkout，开发树改动是惰性的。测试按影响面选层：①**机械层（pytest）——零全局影响**：init 测试 `tmp_path` + monkeypatch `BUNDLE_SRC`；`setup.sh` 测试假 HOME 真跑 bash（`hack/tests/test_install_agents.py` 模式）；`resolve-workflow.sh` 用 `SDFLOW_HOME` 重定向；日常开发只跑这层。②**沙盒消费仓层——零全局影响**：用**开发树**的 `init.py` 铺设/update 一个 scratch 消费仓；测新规则把 `SDFLOW_HOME` 重定向指向自备 canonical（既有测试隔离契约，非冻结承诺——resolver 的本地规则副本判定分支已随 `adr/0039` 删除，仓内不再有规则副本）；`--dev` 有守卫只准源仓自身用。③**全局窗口层（开发 checkout 跑 `setup.sh`）——机器级影响、时间盒**：仅当改 SKILL.md 语义且需真跑 skill 全链路时才开（`~/.claude/skills` 是全局命名空间，无 per-project pin）；窗口期本机所有项目仓（含本仓项目侧）都吃开发版，正式 change 流程避开窗口；还原 MUST 在运行 checkout **重跑 setup**（`~/.sdflow/hack/` 是拷贝不是软链，只改软链还原不了）。护栏：`resolve-workflow.sh` 的 `sane()` fail-loud（半坏态不静默广播）；隔离场景改用 `SDFLOW_HOME` 重定向到自备 canonical——`pin` 免疫全局翻动的逃生口机制已随 `adr/0039` 取消，不再存在。
 
 ## 提交与 Pull Request 规范
 
@@ -215,10 +215,11 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 
 ## OpenSpec 工作流（sdflow-init 铺设）
 
-端到端流程见 workflow 规则集 `workflow.md`（真相源；本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。规则集（本仓有 `openspec/workflow/` 规则副本则用之，否则解析到全局 `~/.sdflow/workflow/`）：
+端到端流程见 workflow 规则集 `workflow.md`（真相源 = 全局 canonical `~/.sdflow/workflow/`，
+经 `resolve-workflow.sh` 两步链解析；消费仓不再持有规则副本）。规则集（同解析到全局 `~/.sdflow/workflow/`）：
 `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
 `ff-generation-constraints.md` · `design-diagrams.md` · `spec-review.md` · `generation-process.md`。
-质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。
+质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（同解析到全局 `~/.sdflow/workflow/`）。
 
 **强制操作规范**
 
@@ -233,7 +234,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 - **开分支 = FF-0 三分支判定**：保护分支 → `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
 - **实现管线缺省 = tickets**：仓 `config.yaml` 无 `impl-pipeline` 键时路由至 `sdflow-implement`（tickets 轨）；
   显式设 `impl-pipeline: superpowers` 才走 writing-plans → subagent-driven-development（旧管线）。
-- **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
+- **INDEX 同步**（仅 toolkit 源仓维护 canonical bundle 时适用）：新增/删 `sdflow-init/assets/workflow/` 下的规则文件后，同步 `openspec/INDEX.md`（消费仓不再持有规则副本，无需同步）。
 
 **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
 

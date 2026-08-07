@@ -29,12 +29,29 @@ GUIDE = WF_DIR / "WORKFLOW-GUIDE.md"
 
 BANNER = (
     "<!-- 本文件由 hack/gen_workflow_guide.py 从 workflow.md + prompts/ 机械生成。DO NOT EDIT。 -->\n"
-    "<!-- 改 prompt → 改 prompts/step*.md（单一源）；改流程 → 改 workflow.md；然后跑 --write。 -->\n\n"
+    "<!-- 改 prompt → 改 prompts/step*.md（单一源）；改流程 → 改 workflow.md；然后跑 --write。 -->\n"
+    "<!-- [fix-probe-scan-precision task4 · adr/0039] 本文件是消费仓 openspec/workflow/ 下 -->\n"
+    "<!-- 唯一落地文件（tools/ 与规则均全局单份共享、不再铺设）。文中对其它规则文件的提及 -->\n"
+    "<!-- （如 `quality-layering.md`）已降为纯文字引用，非本文件内的可点链接——那些文件不随 -->\n"
+    "<!-- GUIDE 分发，如需查看请见 sdflow-skills 仓 sdflow-init/assets/workflow/ 对应文件。 -->\n\n"
 )
 
 # 匹配 **→ [`prompts/step*.md`](./prompts/step*.md)**（原样复制，勿转述）
 _POINTER_RE = re.compile(
     r'\*\*→ \[`prompts/(step[^`]+\.md)`\]\(\./prompts/\1\)\*\*（原样复制，勿转述）'
+)
+
+# [fix-probe-scan-precision task4 · adr/0039 D14] GUIDE 是消费仓唯一落地文件，指向以下
+# sibling 规则文件的相对链接在该目录下全部断链——降为纯文字引用（去链接语法，保留可读文件名）。
+# canonical 侧的 workflow.md 原文不变（那里 sibling 文件确实同目录存在，链接有效）。
+# 有界枚举（3 个已知目标，非无界语法面，故手写正则不违反基准 5）。
+_SIBLING_LINK_TARGETS = (
+    "ff-generation-constraints.md",
+    "reference/quality-layering.md",
+    "workflow-history.md",
+)
+_SIBLING_LINK_RE = re.compile(
+    r'\[([^\]]+)\]\(\./(' + '|'.join(re.escape(t) for t in _SIBLING_LINK_TARGETS) + r')\)'
 )
 
 
@@ -47,10 +64,18 @@ def _resolve_pointer(m):
     return p.read_text(encoding="utf-8").strip()
 
 
+def _downgrade_sibling_link(m):
+    """`[quality-layering.md](./reference/quality-layering.md)` → `` `quality-layering.md` ``
+    （原展示文字保留、去掉链接语法），MUST NOT 保留 `(./...)` ——GUIDE 单独存在时那是死链接。"""
+    label = m.group(1)
+    return f"`{label}`"
+
+
 def render():
     src = WORKFLOW.read_text(encoding="utf-8")
-    out = BANNER + _POINTER_RE.sub(_resolve_pointer, src)
-    return out
+    out = _POINTER_RE.sub(_resolve_pointer, src)
+    out = _SIBLING_LINK_RE.sub(_downgrade_sibling_link, out)
+    return BANNER + out
 
 
 def main(argv=None):

@@ -297,6 +297,17 @@ _Avoid_: 凭「这个量看起来像版本/校验和/探针」就当机械保证
 issues 台账合一后，bug/todo/issues 三条 CLI 共享的执行逻辑只有一份物理文件 `sdflow-issues/scripts/core.py`；三个薄入口（`buglist.py`/`todolist.py`/`issues.py`）同目录 `import core`，pool 差异经一张 `POOL_SPEC` 参数表注入、`core` 内 MUST NOT 有 `if pool` 条件分支。一致性从「多份 AST 等价（事后拦漂移）」升级为「单份 + 参数化（结构上无从漂移）」。是「机械活交脚本、模型只做判断」在台账层的落地：唯一物理源不可漂，守法只需守「无 pool 分支 + `POOL_SPEC` 完备」。
 _Avoid_: 把 pool 知识写进 `core` 的条件分支（把镜像换成分叉、未真消重）；为「独立分发」在 `core` 之外再造副本（三 skill 已合一、无人单装，副本无理由——见 `adr/0027`）；把「AST 守现在拦得住漂移」当「不必合一」的理由（拿现状给目标松绑）。
 
+**skew（分发链偏斜）** 〔grill · fix-probe-scan-precision · `adr/0039`〕:
+本该同代（同一次改动应同时生效）的两个组件，因更新方式不同（一个走 symlink/实时解析、一个走
+`cp`/需人手动触发的拷贝）而处于不同版本。`fix-probe-scan-precision` 消灭了 bundle 拷贝链的 skew——
+resolver 删除本地 pin 判定分支，规则与评审工具改为全局单份共享，消费仓不再持有可错位的拷贝，
+该失鲜轴结构上不再存在。本变更后仓内仍在用的仅 **manifest skew** 一种：`~/.sdflow/hack/` 下各
+helper 脚本之间由 `capability-manifest.json`（`setup.sh` 生成）互相校验版本一致性，供
+`outside-voice-job.py preflight` 检测；该拷贝链本身未被本 ADR 触碰（记 todo：hack 链 symlink 化）。
+_Avoid_: 把「已消灭的 bundle 拷贝链 skew」与「仍在用的 manifest skew」混为一谈；以为消灭 bundle
+链 skew 等于消灭了本仓全部失鲜面（`~/.sdflow/hack/` 拷贝链与 Windows SKILL 快照两个面仍在，见
+`adr/0039` 的诚实边界段）。
+
 ## Flagged ambiguities
 
 - 「recorder 镜像一致性」曾靠 `determinism-guards` 的「三份剥 docstring AST 等价 + THREE_WAY/TWO_WAY roster」守——该守法**以「三 skill 各自内联、独立分发」为前提**（D4：`MUST NOT 抽公共运行时模块`）。`dedupe-issues-scripts-shared-layer` **撤销该前提**（三 skill 合一为 `sdflow-issues`、恒一起装、无人单装）⇒ 镜像 AST 守整体退役，共享逻辑收敛为唯一物理源 `core.py`，守法改为「`core` 无 pool 分支 + `POOL_SPEC` 完备」（见 `adr/0027`、「单一源共享 core」）。`determinism-guards` 的 `config.yaml` 结构 lint / `batches.md` grammar lint / scan-envelope 校验不受影响。**`issues-v2-single-file-model` 进一步撤销「单一源共享 core」本身的前提**：单文件模型下 pool 差异收窄为单文件 `issues_v2.py` 内的几个内联常量，连 `core.py`/`POOL_SPEC` 参数注入这层间接都不再需要；`determinism-guards` 与 `spec-workflow` 的 `config.yaml`/`batches.md` grammar lint 等与该薄入口耦合的机械守卫随 `batches.md`/`buglist.py`/`todolist.py`/`core.py` 一并退役（`openspec/specs/determinism-guards/spec.md` 的对应 delta 见该 change）。

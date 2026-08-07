@@ -68,10 +68,11 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 
 ## OpenSpec 工作流（sdflow-init 铺设）
 
-端到端流程见 workflow 规则集 `workflow.md`（真相源；本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。规则集（本仓有 `openspec/workflow/` 规则副本则用之，否则解析到全局 `~/.sdflow/workflow/`）：
+端到端流程见 workflow 规则集 `workflow.md`（真相源 = 全局 canonical `~/.sdflow/workflow/`，
+经 `resolve-workflow.sh` 两步链解析；消费仓不再持有规则副本）。规则集（同解析到全局 `~/.sdflow/workflow/`）：
 `trigger-catalog.md`（触发单一源 TG）· `spec-checklists/`、`code-checklists/`（设计审/代码审）·
 `ff-generation-constraints.md` · `design-diagrams.md` · `spec-review.md` · `generation-process.md`。
-质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（本仓有 `openspec/workflow/` 规则副本则用之，否则在全局 `~/.sdflow/workflow/`）。
+质量分层与升级安全见 `openspec/workflow/reference/quality-layering.md`（同解析到全局 `~/.sdflow/workflow/`）。
 
 **强制操作规范**
 
@@ -86,7 +87,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 - **开分支 = FF-0 三分支判定**：保护分支 → `git checkout -b feat/{change}`；已在 `feat/{本 change}` → 跳过（真幂等）；**在其它 feature 分支 → halt 问人**（从当前切出 / 回 base 切出 / 就地继续）。MUST NOT 沿用「已在 feature 分支就跳过」的弱判据。
 - **实现管线缺省 = tickets**：仓 `config.yaml` 无 `impl-pipeline` 键时路由至 `sdflow-implement`（tickets 轨）；
   显式设 `impl-pipeline: superpowers` 才走 writing-plans → subagent-driven-development（旧管线）。
-- **INDEX 同步**（仅规则副本 pin 仓/toolkit 源仓适用）：新增/删 `openspec/workflow/` 规则后，同步 `openspec/INDEX.md`。
+- **INDEX 同步**（仅 toolkit 源仓维护 canonical bundle 时适用）：新增/删 `sdflow-init/assets/workflow/` 下的规则文件后，同步 `openspec/INDEX.md`（消费仓不再持有规则副本，无需同步）。
 
 **配套 skill（workflow 依赖，需先安装）** — 均来自 sdflow-skills（`bash ~/.skills/sdflow-skills/setup.sh` 装到 Claude+Codex）：
 

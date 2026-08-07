@@ -1,6 +1,11 @@
 # 7 份手搓 YAML/frontmatter 解析器统一委托外部 yq 二进制
 
 > 状态：**Accepted**（2026-08-01，`shared-yaml-subset-parser` 拍板收敛）· 关联 change：`shared-yaml-subset-parser`
+>
+> **状态注记（2026-08，`adr/0039`）**：下文「7 个脚本」计数含消费仓镜像 `openspec/workflow/tools/anchor_lint.py`——
+> 该镜像已随 `adr/0039`（消灭双链）停止铺设并从本仓删除，权威源 `sdflow-init/assets/workflow/tools/anchor_lint.py`
+> 条目保留。计数应读作 **6 份**（见 `openspec/specs/yq-yaml-operations/spec.md` Purpose 与
+> `hack/tests/test_yq_wrapper_consistency.py`），本文历史计数原文不改。
 
 ## Context
 
