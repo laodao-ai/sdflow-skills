@@ -301,20 +301,35 @@ def _validate_schema_authority(schema_src):
 
 RULE_MARKERS = ("workflow.md", "spec-checklists", "code-checklists")
 
+# 死件判据扩员（fix-probe-scan-precision task 4.1）：resolver 两步链取消仓内优先后，
+# RULE_MARKERS 三项之外，残留 tools/ 目录与 lens-metric-contract.md 同为死件——只报规则
+# 本体会漏掉最大块的残留（见 spec「存量消费仓迁移不自动删、残留副本须告警」）。
+DEAD_RESIDUAL_MARKERS = RULE_MARKERS + ("tools", "lens-metric-contract.md")
+
+_STALE_SHADOW_PRECONDITION = (
+    "若刚 git pull 还没跑 bash setup.sh，先跑 setup 再判断"
+    "（部署窗口内旧 resolver 的仓内优先步可能仍生效）"
+)
+
 
 def stale_shadow_warnings(root):
-    """反静默守卫·陈旧遮蔽（R-MRF-3）：update 内联为主 + sdflow-maintain 兜底（同款判据）。只告警，绝不删。"""
+    """反静默守卫·陈旧遮蔽（R-MRF-3）死件变体：update 内联为主 + sdflow-maintain 兜底（同款判据）。
+    resolver 已取消仓内优先（adr/0039），残留副本对评审已无生效路径；只告警，绝不删，
+    MUST NOT 新增一次性自动清删代码（设计门 Q2：人执行告警附带的命令即达终态零死件）。"""
     warns = []
     wf = os.path.join(root, "openspec", "workflow")
-    found = [m for m in RULE_MARKERS if os.path.exists(os.path.join(wf, m))]
+    found = [m for m in DEAD_RESIDUAL_MARKERS if os.path.exists(os.path.join(wf, m))]
     if found:
+        rm_targets = " ".join(f"openspec/workflow/{m}" for m in found)
         warns.append(
-            "⚠ openspec/workflow/ 残留规则副本（" + "、".join(found) + "）——遮蔽全局 bundle 且不再被 update 刷新："
-            "想跟全局最新 → 手动删净；想 pin 这一版 → 留着（显式逃生口）")
+            "⚠ openspec/workflow/ 残留死件（" + "、".join(found) + "）："
+            f"{_STALE_SHADOW_PRECONDITION}，此后这些副本对评审已无生效路径（resolver 不再读仓内副本）。"
+            f"删 = 清理死件（推荐）：`rm -rf {rm_targets}`；留 = 无害但无用")
     if os.path.isfile(os.path.join(root, "hack", "checkpoint-commit.sh")):
         warns.append(
             "⚠ hack/checkpoint-commit.sh 为旧版仓内副本（checkpoint 已全局化 → ~/.sdflow/hack/）："
-            "本仓无规则副本 → 可删改用全局；若保留本地 workflow.md 副本（pin）且其仍引用仓内路径 → 勿删")
+            f"{_STALE_SHADOW_PRECONDITION}，此后本副本已无生效路径。"
+            "删 = 清理死件（推荐）：`rm -f hack/checkpoint-commit.sh`；留 = 无害但无用")
     return warns
 
 

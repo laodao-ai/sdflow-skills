@@ -490,7 +490,8 @@ class TestHandleConfigFromBundleSrc:
 
 
 class TestStaleShadowWarnings:
-    """R-MRF-3：残留规则/孤儿 checkpoint 只告警绝不删（反静默守卫·陈旧遮蔽变体）。"""
+    """R-MRF-3：残留死件（规则副本 / tools/ / lens-metric-contract.md / 孤儿 checkpoint）
+    只告警绝不删（反静默守卫·陈旧遮蔽死件变体，fix-probe-scan-precision task 4）。"""
 
     def _legacy_consumer(self, tmp_path):
         root = tmp_path / "old"
@@ -504,14 +505,54 @@ class TestStaleShadowWarnings:
     def test_warns_on_residual_rules_and_orphan_hack_without_deleting(self, tmp_path):
         root = self._legacy_consumer(tmp_path)
         warns = init_mod.stale_shadow_warnings(str(root))
-        assert any("遮蔽" in w for w in warns)
+        assert any("死件" in w for w in warns)
         assert any("checkpoint-commit.sh" in w for w in warns)
         assert (root / "openspec" / "workflow" / "workflow.md").exists()   # 绝不删
         assert (root / "hack" / "checkpoint-commit.sh").exists()
 
+    def test_truly_clean_consumer_no_warnings(self, tmp_path):
+        # 真正干净：openspec/workflow/ 下无任何 RULE_MARKERS、无 tools/、无 contract、无孤儿 hack。
+        root = tmp_path / "clean"
+        (root / "openspec" / "workflow").mkdir(parents=True)
+        assert init_mod.stale_shadow_warnings(str(root)) == []
+
+    def test_tools_only_residual_now_warns(self, tmp_path):
+        # 判据扩员（task 4.1）：tools/ 目录残留（即便无 RULE_MARKERS 规则本体）本身即死件，
+        # MUST 报警——旧实现只查 RULE_MARKERS 三项、会漏掉这块最大的残留（此用例在旧实现上必绿，
+        # 是本次判据扩员的反向锚：改回旧 RULE_MARKERS 判据会让本用例红）。
+        root = tmp_path / "tools-only"
+        wf = root / "openspec" / "workflow" / "tools"
+        wf.mkdir(parents=True)
+        (wf / "anchor_lint.py").write_text("x", encoding="utf-8")
+        warns = init_mod.stale_shadow_warnings(str(root))
+        assert any("死件" in w and "tools" in w for w in warns)
+
+    def test_lens_metric_contract_residual_now_warns(self, tmp_path):
+        # 判据扩员（task 4.1）：lens-metric-contract.md 残留同为死件。
+        root = tmp_path / "contract-only"
+        wf = root / "openspec" / "workflow"
+        wf.mkdir(parents=True)
+        (wf / "lens-metric-contract.md").write_text("# contract\n", encoding="utf-8")
+        warns = init_mod.stale_shadow_warnings(str(root))
+        assert any("死件" in w and "lens-metric-contract.md" in w for w in warns)
+
+    def test_message_wording_positive_and_negative(self, tmp_path):
+        """task 4.4：文案双断言——不含旧「显式 pin」/「遮蔽全局」措辞，含新死件关键词 + 前置条件 +
+        可复制删除命令；只断言"含新词"会让旧文案叠加新词也通过，故须双断言。"""
+        root = self._legacy_consumer(tmp_path)
+        warns = init_mod.stale_shadow_warnings(str(root))
+        joined = "\n".join(warns)
+        # 负断言：旧的「留=pin/遮蔽全局」措辞必须被清除
+        assert "显式 pin" not in joined
+        assert "遮蔽全局" not in joined
+        # 正断言：新死件文案关键词 + 前置条件提示 + 可复制删除命令
+        assert "死件" in joined
+        assert "bash setup.sh" in joined   # 前置条件：先跑 setup 再判断
+        assert "rm -rf" in joined and "rm -f" in joined   # 可复制删除命令（workflow 残留 + hack 孤儿）
+
     def test_clean_consumer_no_warnings(self, tmp_path):
         root = tmp_path / "clean"
-        (root / "openspec" / "workflow" / "tools").mkdir(parents=True)
+        os.makedirs(str(root / "openspec"))
         assert init_mod.stale_shadow_warnings(str(root)) == []
 
     def test_update_prints_warnings(self, tmp_path, monkeypatch, capsys):
@@ -519,7 +560,7 @@ class TestStaleShadowWarnings:
         root = self._legacy_consumer(tmp_path)
         init_mod.run(str(root), "update")
         out = capsys.readouterr().out
-        assert "遮蔽" in out
+        assert "死件" in out
         assert (root / "openspec" / "workflow" / "workflow.md").exists()
 
 
@@ -648,7 +689,7 @@ class TestInitAlsoWarnsShadow:
         (wf / "workflow.md").write_text("# old rules\n", encoding="utf-8")
         init_mod.run(str(root), "init")
         out = capsys.readouterr().out
-        assert "遮蔽" in out
+        assert "死件" in out
 
 
 class TestRunFsErrorGuard:

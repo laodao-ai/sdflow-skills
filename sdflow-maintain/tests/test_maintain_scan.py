@@ -217,16 +217,48 @@ def test_stale_shadow_workflow_body(tmp_path):
     assert "陈旧遮蔽" in r and "workflow.md" in r
 
 
-def test_stale_shadow_only_tools_clean(tmp_path):
+def test_stale_shadow_lens_metric_contract_now_reports_dead_file(tmp_path):
+    # [fix-probe-scan-precision task 4.1/4.3] 判据扩员：lens-metric-contract.md 残留同为死件。
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="")
+    wf = os.path.join(root, "openspec", "workflow")
+    os.makedirs(wf)
+    with open(os.path.join(wf, "lens-metric-contract.md"), "w") as f:
+        f.write("# contract\n")
+    r = _run(root)
+    seg = r.split("陈旧遮蔽")[1]
+    assert "死件" in seg and "lens-metric-contract.md" in seg
+
+
+def test_stale_shadow_message_wording_positive_and_negative(tmp_path):
+    # [fix-probe-scan-precision task 4.4] 文案双断言：不含旧「显式 pin」/「遮蔽全局」措辞，
+    # 含新死件关键词 + 前置条件提示 + 可复制删除命令。
+    root = make_repo(tmp_path, specs=[], rules=[], index_body="",
+                     workflow=["workflow.md"])
+    import pathlib
+    hack = pathlib.Path(root, "hack")
+    hack.mkdir()
+    (hack / "checkpoint-commit.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    r = _run(root)
+    seg = r.split("陈旧遮蔽")[1]
+    assert "显式 pin" not in seg
+    assert "遮蔽全局" not in seg
+    assert "死件" in seg
+    assert "bash setup.sh" in seg
+    assert "rm -rf" in seg and "rm -f" in seg
+
+
+def test_stale_shadow_only_tools_now_reports_dead_file(tmp_path):
+    # [fix-probe-scan-precision task 4.3] 断言反转：resolver 两步链取消仓内优先后，
+    # tools/-only 残留（无 RULE_MARKERS 规则本体）本身即死件，SHALL 报死件告警——
+    # 旧断言"只 tools 残留 = 干净"已随判据扩员成立前提消失。
     root = make_repo(tmp_path, specs=[], rules=[], index_body="")
     wf = os.path.join(root, "openspec", "workflow", "tools")
     os.makedirs(wf)
     with open(os.path.join(wf, "anchor_lint.py"), "w") as f:
         f.write("x")
     r = _run(root)
-    # 陈旧遮蔽节存在但无残留规则本体
     seg = r.split("陈旧遮蔽")[1]
-    assert "workflow.md" not in seg and "spec-checklists" not in seg
+    assert "死件" in seg and "tools" in seg
 
 
 def test_stale_shadow_present_not_reported_consistent(tmp_path):
