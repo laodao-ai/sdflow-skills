@@ -70,10 +70,10 @@ P0 核心：在 bundle 权威源 `sdflow-init/assets/hack/resolve-workflow.sh` �
 
 `init.py` `stale_shadow_warnings()` 判据扩员（原 `RULE_MARKERS` 三项之外增查残留 `tools/` + `lens-metric-contract.md`）+ 文案改为带前置条件的死件表述 + 可复制删除命令。清理 checkpoint 孤儿告警的旧 pin 措辞。`sdflow-maintain` 兜底扫描同步改写。
 
-- [ ] `stale_shadow_warnings()` 判据扩员 + 新文案（带前置条件 + 可复制删除命令）
-- [ ] 清理 checkpoint 孤儿告警的 pin 措辞
-- [ ] `sdflow-maintain` `test_maintain_scan.py` 按新语义断言反转（tools-only 残留 → 报死件告警）
-- [ ] 文案测试正反双断言：不含 `显式 pin`/`遮蔽全局`，含新死件文案关键词与前置条件提示
+- [x] `stale_shadow_warnings()` 判据扩员 + 新文案（带前置条件 + 可复制删除命令）
+- [x] 清理 checkpoint 孤儿告警的 pin 措辞
+- [x] `sdflow-maintain` `test_maintain_scan.py` 按新语义断言反转（tools-only 残留 → 报死件告警）
+- [x] 文案测试正反双断言：不含 `显式 pin`/`遮蔽全局`，含新死件文案关键词与前置条件提示
 
 ### Task 4: ship_gate 腿退役 + 死件清理 + 文档面级订正
 
