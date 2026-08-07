@@ -12,8 +12,8 @@
 - [ ] 1.2 删除 `sdflow-spec-review/SKILL.md` 第零步的 skew 探测整段（现 `:180` 两条信号），同样顺延步序号
 - [ ] 1.3 清理悬空指代〔F24 订正位置〕：真正的悬空指代在**档位解析步**（`sdflow-code-review/SKILL.md:204` / `sdflow-spec-review/SKILL.md:179`）——「空值/unknown 分家判据同下方『skew 探测』的 fail-loud 精神——三处均为…」随探测段删除失去指代对象，改写为不引用已删段（原 tasks 描述的「能力探针步『MUST 排在 skew 探测之后』时序理由」在两个 SKILL 中不存在——该文字在探测段自身内部、随段删除，无需单独处置）
 - [ ] 1.4 两个 SKILL 中「退出码 2 → 显式降级」的既有分支**保持不变**；逐字比对确认未被误改
-- [ ] 1.5 验收 grep〔F46 订正豁免清单〕：`grep -n "skew 探测\|lens-metric-enums\|scope-audit:\|_MIRRORS_LEGAL" sdflow-code-review/SKILL.md sdflow-spec-review/SKILL.md` 删段后的剩余命中 MUST 恰为 `sdflow-code-review:421` 与 `sdflow-spec-review:271` 两处（anchor_lint 自检段对契约机读块的**合法**引用——契约仍在 canonical，表述在 change 后依然成立，保留不动）；1.3 处置后 `:204`/`:179` 不再含「skew 探测」字样
-- [ ] 1.6 🔴 「两条分发链不可互相替代」段订正为单链表述（`sdflow-code-review/SKILL.md:557` / `sdflow-spec-review/SKILL.md:490`；manifest skew 的修法「回运行 checkout 跑 `bash setup.sh`」保留）。〔F47〕该两行位于 `sdflow:async-branch` marker 区间内（`:472–:558` / `:405–:491`），受 `hack/check_async_branch_parity.py` 逐字节等值门约束（CI `mechanical-gates` 在跑）：MUST 两文件同改；且 `hack/tests/test_async_branch_parity.py:464` 的断言 `"sdflow-init update" in seg` MUST 同批改写为断言新文案关键词〔F13〕，否则等值门/golden 必红
+- [ ] 1.5 验收 grep〔F46 订正豁免清单〕：`grep -n "skew 探测\|lens-metric-enums\|scope-audit:\|_MIRRORS_LEGAL" sdflow-code-review/SKILL.md sdflow-spec-review/SKILL.md` 删段后的剩余命中 MUST 恰为**每文件一处**——各自锚行自检段对契约机读块的**合法**引用（改前位于 `sdflow-code-review:421` / `sdflow-spec-review:271`，删段后行号前移，**以「命中数 = 各 1」为验收，勿按行号**；契约仍在 canonical，该表述 change 后依然成立，保留不动）；1.3 处置后档位解析步不再含「skew 探测」字样
+- [ ] 1.6 🔴 「两条分发链不可互相替代」段订正为单链表述（改前位于 `sdflow-code-review/SKILL.md:557` / `sdflow-spec-review/SKILL.md:490`，删探测段后行号前移，按文字定位；manifest skew 的修法「回运行 checkout 跑 `bash setup.sh`」保留）。〔F47〕该两行位于 `sdflow:async-branch` marker 区间**内**（以 marker 行定位，勿按行号），受 `hack/check_async_branch_parity.py` 逐字节等值门约束（CI `mechanical-gates` 在跑）：MUST 两文件同改；且 `hack/tests/test_async_branch_parity.py:464` 的断言 `"sdflow-init update" in seg` MUST 同批改写为断言新文案关键词〔F13〕，否则等值门/golden 必红
 
 ## 2. resolver 收缩为两步链〔Req: spec-workflow · MODIFIED「规则全局解析 resolver（全局 canonical → 显式降级）」〕
 
@@ -21,7 +21,7 @@
 - [ ] 2.2 确认退出码集**未变**（`0` / `2` / `64`），`--root`、`--explain`、`SDFLOW_HOME` 三个入参契约原样保留（`SDFLOW_HOME` 语义 = 既有测试隔离契约，见 delta）；`explain()` 的 `source=` 取值此后只剩 `global-canonical`
 - [ ] 2.3 `hack/tests/` 新增/改写「假 HOME 真跑 bash」用例：**仓内放全套规则副本 + `tools/`，断言 stdout 仍等于全局 canonical 路径**（D13 核心不变量的反向锚；旧实现在此必红）
 - [ ] 2.4 用例：`SDFLOW_HOME` 指向自备 canonical 时解析命中它并过 `sane()`（守既有**测试隔离契约**——非「冻结」承诺〔设计门 Q4〕）
-- [ ] 2.5 `sane()` 扩面〔A5 · 形状级判据〕：追加 `tools/` 目录存在且非空 + `lens-metric-contract.md` 非空两条检查；**MUST NOT 枚举具体 `.py` 成员**（理由见 design「sane() 扩面决策」——成员清单会在守卫里复活补丁螺旋）；配反向锚用例：canonical 缺 `tools/` 或 contract → `exit 2`
+- [ ] 2.5 `sane()` 扩面〔A5 · 形状级判据〕：追加 `tools/` 目录存在且非空 + `lens-metric-contract.md` 非空两条检查；**MUST NOT 枚举具体 `.py` 成员**（理由见 design「sane() 扩面决策」——成员清单会在守卫里复活补丁螺旋）；配反向锚用例：canonical 缺 `tools/` 或 contract → `exit 2`。🔴 **连带（复核补）**：一切「造假 canonical 过 sane()」的既有/新写 fixture MUST 同步补非空 `tools/` + contract——已核实 `sdflow-init/tests/test_resolve_workflow.py` 的 `make_bundle`（`:33-35`，只造 workflow.md + 两 checklists）在扩面后必红；2.4 与 2.6 的新 fixture 同理；CLAUDE.md 测试三层第 2 层的 `SDFLOW_HOME` 沙盒描述（task 6.5②）也须写明这一要求
 - [ ] 2.6 存量测试处置——**先跑 `/usr/bin/python3 -m pytest sdflow-init/tests/ hack/tests/ sdflow-maintain/tests/` 看谁红，以实跑红名单为准**。已核实的必红项〔F10/F11〕：
   - `sdflow-init/tests/test_resolve_workflow.py:136`（断言 `source=local-pin`）→ 改写为两步链契约
   - `sdflow-init/tests/test_resolve_models.py`（26 用例，`make_bundle_repo` fixture 造 local-pin bundle、`run_resolve` 把 `SDFLOW_HOME` 指向不存在路径）→ fixture 改为把 bundle 放进假 `SDFLOW_HOME` 的 `workflow/` 下、`run_resolve` 指向它（语义不变：测的是 model-tiers 解析，不是 pin）

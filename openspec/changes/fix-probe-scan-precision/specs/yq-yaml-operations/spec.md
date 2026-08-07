@@ -1,7 +1,7 @@
 ## RENAMED Requirements
 
-- FROM: `` ### Requirement: R12 — 7 份 `_yq()` 一致性 golden test ``
-- TO: `` ### Requirement: R12 — `_yq()` 一致性 golden test ``
+- FROM: `### Requirement: R12 — 7 份 `_yq()` 一致性 golden test`
+- TO: `### Requirement: R12 — `_yq()` 一致性 golden test`
 
 ## MODIFIED Requirements
 

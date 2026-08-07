@@ -26,7 +26,7 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist�
 - **THEN** resolver 直接解析全局 canonical bundle（`~/.sdflow/workflow/` 或 `workflow-path` 指针），stdout 为该路径；跟随运行 checkout 的 released HEAD
 
 #### Scenario: 仓内残留规则副本不再影响解析
-- **WHEN** 某存量消费仓 `openspec/workflow/` 下仍有全套规则副本（`workflow.md` + `spec-checklists/` + `code-checklists/`）与旧 `tools/`
+- **WHEN** 某存量消费仓 `openspec/workflow/` 下仍有全套规则副本（`workflow.md` + `spec-checklists/` + `code-checklists/`）与旧 `tools/`，且未显式设置 `SDFLOW_HOME` 覆盖
 - **THEN** resolver **忽略它们**，仍解析到全局 canonical；MUST NOT 因仓内有副本而返回仓内路径。该仓的评审此后使用全局规则与全局 tools
 
 #### Scenario: SDFLOW_HOME 重定向保持测试隔离契约
