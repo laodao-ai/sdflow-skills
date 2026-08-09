@@ -712,6 +712,72 @@ def test_matrix_single_key_still_classifies_after_strict_parse():
     assert v_xm == []                                   # 合法跨模型仍 clean
 
 
+# --- 矩阵全笛卡尔 golden 自测（absorb-gstack-autoplan task 3.2：原 test_outside_voice_guard.py Step 5
+# 的跨工具全笛卡尔 golden——两工具各自本地重实现 + 互守一致——随 outside_voice_guard.py 复用路径整体
+# 退役而失去第二实现方（host-adaptive-execution spec.md「矩阵实现收敛为 anchor_lint 单一本地实现」）。
+# 迁移改造为**单工具自测**：不再比较两份实现，而是用一份独立于 classify_combo 实现顺序的「矩阵定义
+# oracle」（下方 _matrix_oracle，逐类写成互斥谓词 + 显式互斥断言，非照抄 classify_combo 的 if/elif
+# 分支结构）复核 host×runner×reason_code×findings 全笛卡尔积（含边界 0 + mutation：越域/缺失值）逐条
+# 分类是否符合矩阵定义——MUST NOT 只比有限输入的布尔值（spec.md 用语原文）。 ---
+
+def _matrix_oracle(host, runner, reason_code, findings):
+    """矩阵定义的独立 oracle（结构上与 classify_combo 的 if/elif 分支顺序不同——四个类别各自写成
+    互斥谓词、显式断言互斥，而非早 return 链），供 golden 测试核验 classify_combo 是否符合
+    host-adaptive-execution spec.md 记录的矩阵定义（非同一份实现的重复调用）。"""
+    duos = {"claude", "codex"}
+    downgrade = {"not-installed", "preflight-error", "timeout", "exec-error"}
+    noexec_known = {"secret-hit", "fallback-unavailable"}
+
+    is_no_exec = (
+        runner == "none" and findings == 0 and (
+            (host == "unknown" and reason_code == "host-unknown")
+            or (host in duos and reason_code in noexec_known)
+        )
+    )
+    is_same_family = (
+        runner != "none" and host in duos and runner in duos
+        and runner == host and reason_code in downgrade
+    )
+    is_self_review = (
+        runner != "none" and host in duos and runner in duos
+        and runner == host and reason_code not in downgrade
+    )
+    is_cross_model = (
+        runner != "none" and host in duos and runner in duos
+        and runner != host and reason_code == "ok"
+    )
+    hits = [name for name, cond in (
+        ("no-exec", is_no_exec), ("same-family", is_same_family),
+        ("self-review", is_self_review), ("cross-model", is_cross_model),
+    ) if cond]
+    assert len(hits) <= 1, f"矩阵定义歧义（多类互斥被违反）: {(host, runner, reason_code, findings)} -> {hits}"
+    return hits[0] if hits else "illegal"
+
+
+def test_matrix_full_cartesian_golden_conforms_to_definition():
+    al = _mod()
+    enums = al.load_enums(CONTRACT)                      # 枚举域单一源：契约机读块（非脚本内复制清单）
+    hosts = sorted(enums["host"]) + ["bogus-host", None]                 # 越域 + 缺失/坏值 mutation
+    runners = sorted(enums["runner"]) + ["bogus-runner", None]
+    reason_codes = sorted(enums["reason_code"]) + ["bogus-reason", None]
+    findings_domain = [0, 1, 5, None]            # 边界(0) + 正常(1/5) + 缺失/坏值(None)
+
+    mismatches = []
+    categories_seen = set()
+    for host in hosts:
+        for runner in runners:
+            for reason_code in reason_codes:
+                for findings in findings_domain:
+                    actual = al.classify_combo(host, runner, reason_code, findings)
+                    expected = _matrix_oracle(host, runner, reason_code, findings)
+                    categories_seen.add(actual)
+                    if actual != expected:
+                        mismatches.append((host, runner, reason_code, findings, expected, actual))
+    assert mismatches == [], f"classify_combo 分类偏离矩阵定义（前 20 条）: {mismatches[:20]}"
+    # 全笛卡尔积须真正覆盖全部 5 类完整分类，防测试域退化成只测到部分分支（假绿）
+    assert categories_seen == {"cross-model", "same-family", "no-exec", "self-review", "illegal"}
+
+
 # --- Step 5：lens-metric 普通镜行级校验 -----------------------------------------------------
 
 def test_ordinary_mirror_runner_unknown_host_known_blocked():   # host=claude lens=domain runner=unknown → 拦

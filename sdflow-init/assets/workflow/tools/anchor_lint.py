@@ -462,10 +462,12 @@ _NONNEG_INT = re.compile(r'^\d+$')
 # =========================================================================================
 # add-codex-host-support：合法组合矩阵（🔴 自审红线单一源）+ fan-out 一致性 lint（读 mirrors=）
 # 两者 always-on、各自独立成函数、MUST NOT 接受 metrics_on 参数（照 check_hr_tg 先例，D11）——读真实性
-# 信号非价值度量，与 metrics.enabled 解耦。枚举域从契约机读块读（load_enums），关系式判定逻辑本地重实现
-# （GC-2：平铺 enums 块装不下 runner≠host/findings=0 等关系式谓词；outside_voice_guard 各自重实现，全笛卡尔
-# golden 守一致，见 tasks 2.3/4.5）。**MUST NOT import/调 resolve-models.sh（ADR-1：anchor_lint 不判宿主，
-# 只校验锚行自身内部一致性——host/runner/reason_code 都写在锚行里）。**
+# 信号非价值度量，与 metrics.enabled 解耦。枚举域从契约机读块读（load_enums），关系式判定逻辑本地实现
+# （GC-2：平铺 enums 块装不下 runner≠host/findings=0 等关系式谓词）。absorb-gstack-autoplan：矩阵曾由
+# outside_voice_guard.py 各自重实现、全笛卡尔 golden 互守一致，该复用路径整体退役后收敛为本文件
+# **单一本地实现**，golden 改为单工具自测（见 tests/test_anchor_lint.py 矩阵全笛卡尔 golden 自测段）。
+# **MUST NOT import/调 resolve-models.sh（ADR-1：anchor_lint 不判宿主，只校验锚行自身内部一致性——
+# host/runner/reason_code 都写在锚行里）。**
 # =========================================================================================
 
 OUTSIDE_VOICE_REQUIRED_FIELDS = ("host", "runner", "reason_code")  # D1：outside-voice 锚新增 KV 解析，reason_code 该锚必填
@@ -482,7 +484,8 @@ def classify_combo(host, runner, reason_code, findings):
       'self-review'  🔴 F6 红线：runner==host ∧ reason_code∉降级码集（同族行子句被违反，非并列规则）
       'illegal'      其余一切非法组合（catch-all；含 runner='unknown' 等在共享枚举域内却非法者）
     findings 为已解析的 int（不可解析/缺失 → None，no-exec 分支因 findings!=0 落 illegal，fail-closed）。
-    **关系式逻辑本地重实现**（GC-2），供 anchor_lint 判自审 / outside_voice_guard 判可复用共用（各自重实现 + golden 守）。"""
+    **关系式逻辑本地实现**（GC-2）。absorb-gstack-autoplan 前曾与 outside_voice_guard.py 判可复用共用
+    （各自重实现 + 全笛卡尔 golden 互守），该复用路径退役后收敛为本文件单一实现，golden 改为单工具自测。"""
     if runner == "none":
         # 无执行行：runner='none' 一律**非跨模型**（堵 C1：none≠host 恒真会把无执行误判跨模型）
         if findings == 0 and (
