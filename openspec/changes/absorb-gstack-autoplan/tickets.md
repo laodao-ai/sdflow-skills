@@ -29,13 +29,13 @@ Bundle 机械层资产全部对齐新结构,retro 归属语义修正,确保全�
 3. `sdflow-retro` `stage_walltimes`:相邻提交差由 attribute-to-previous 改为 attribute-to-next;`is_archive_rename` 判定对象由 cur 换 nxt;修正 `("sdflow-spec-generate","ff")` 映射;补新旧序列回归测试(单 checkpoint 新序列 + 含 `spec-review-autoplan` 中间标签的历史序列);`openspec/retro/report.md` 重跑再生。
 4. `anchor_lint.py` `_MIRRORS_UPGRADE_HINT` 失效指引修复:`sdflow-init update` → 「回运行 checkout 跑 `bash setup.sh`」。
 
-- [ ] fold 表四行替换为两行,fold 散文与注记同步
-- [ ] anchor_lint golden 补 broad mirrors 与 step1 mode 两枚举用例
-- [ ] retro stage_walltimes attribute-to-next 实现 + is_archive_rename 判定对象翻转
-- [ ] retro 新旧序列回归测试通过
-- [ ] retro report.md 重跑再生(49 归档 change 新口径)
-- [ ] _MIRRORS_UPGRADE_HINT 指引修复
-- [ ] 全仓 `/usr/bin/python3 -m pytest` 绿
+- [x] fold 表四行替换为两行,fold 散文与注记同步
+- [x] anchor_lint golden 补 broad mirrors 与 step1 mode 两枚举用例
+- [x] retro stage_walltimes attribute-to-next 实现 + is_archive_rename 判定对象翻转
+- [x] retro 新旧序列回归测试通过
+- [x] retro report.md 重跑再生(49 归档 change 新口径)
+- [x] _MIRRORS_UPGRADE_HINT 指引修复
+- [x] 全仓 `/usr/bin/python3 -m pytest` 绿
 
 ### Task 2: spec-review SKILL 重写与同源注入机制
 

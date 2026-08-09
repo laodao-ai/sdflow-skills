@@ -94,9 +94,11 @@ def _skill_text(path):
 def test_both_skills_probe_precedes_fanout_dispatch():
     """探针 MUST 在实际派出 fan-out 子代理之前跑——
     机验文档顺序：能力探针小节的文本位置须早于 fan-out 派发表格。
-    spec-review 用「两段 dispatch」，code-review 用「fan-out（一条消息内全部派出」。"""
+    spec-review 用「单批 dispatch（一条消息内派出本轮全部镜」（absorb-gstack-autoplan DD1：
+    旧「两段 dispatch」串行分治已退役，广审双镜与领域/对抗/接地/design-voice 单批全并行）；
+    code-review 用「fan-out（一条消息内全部派出」。"""
     fanout_needles = {
-        SPEC_REVIEW_SKILL: "两段 dispatch",
+        SPEC_REVIEW_SKILL: "单批 dispatch（一条消息内派出本轮全部镜",
         CODE_REVIEW_SKILL: "fan-out（一条消息内全部派出",
     }
     for path in (SPEC_REVIEW_SKILL, CODE_REVIEW_SKILL):

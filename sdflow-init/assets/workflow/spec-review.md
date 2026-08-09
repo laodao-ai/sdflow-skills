@@ -59,7 +59,7 @@ TG 定义见 [`trigger-catalog.md`](./trigger-catalog.md)。
 |----|--------|------|------|
 | **L0 机械扫描** | 占位符/一致性（S 项） | lint / 脚本 | 不算 review，是门禁 |
 | **L1 标准核对** | 命中 TG 的 domain 清单的 **R 项**逐条 | **独立 agent（非作者）** | spec-checklists |
-| **L2 对抗 + 接地** | refute + 读真实代码 + 决策树死磕 | autoplan 双声 / grill / 读码 | **最高价值，主力** |
+| **L2 对抗 + 接地** | refute + 读真实代码 + 决策树死磕 | strategy/plan-eng 双镜（自持）/ grill / 读码 | **最高价值，主力** |
 
 L0 机械、L1 标准、L2 判断——三层盲区不同，叠起来才不漏穿。
 
@@ -91,7 +91,7 @@ L0 机械、L1 标准、L2 判断——三层盲区不同，叠起来才不漏�
 | **brainstorming 自检**（占位/歧义/scope） | self | **退回生成期**——已被 config 吸收，review 阶段别重复 |
 | **手写 checklist**（spec-quality/review-checklist） | self | 已 = `spec-checklists/`；review 只跑**命中 TG 的 R 项**，别全 BASE-01~28 逐条 |
 | **强制画图** | self | 退化为「**验证**图存在/正确/未过时」，非重画（见 design-diagrams.md §五） |
-| **autoplan**（CEO+Eng，Claude+Codex 双声，读码） | ✅ 独立 | **保留为主力**；但「瘦着跑」——别再核对 config 已防的 T/S 项，火力集中 Validation + 读码核验 |
+| **广审双镜**（strategy/plan-eng，本 skill 自持 fresh 子代理，按 base R 项划分） | ✅ 独立 | **保留为主力**；覆盖 base 计划级 + 工程级 R 项（前提/范围/一致性/清晰度/ADR 决策/架构耦合/错误路径/NFR/安全…），火力集中 Validation + 判断，别再核对 config 已防的 T/S 项 |
 
 净分工：**review 从"三套各自全量自检"收敛成"一条独立的、trigger 驱动的、专攻 Validation+对抗+接地 的链"**。机械项交给 config/lint，判断项交给独立 agent + 对抗。与生成侧三杠杆对称。
 

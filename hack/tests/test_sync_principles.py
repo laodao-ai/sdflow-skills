@@ -202,3 +202,87 @@ def test_outside_voice_frame_carries_the_principles(tmp_path):
 
     assert "拿现状反驳目标" in out
     assert out.index("拿现状反驳目标") < out.index("BEGIN UNTRUSTED CONTEXT")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 广审镜定义投放面（absorb-gstack-autoplan · design DD7「同源机制=模板注入」）
+#
+# 第二个独立 marker 家族（sdflow:broad-mirror-def），与「四条通则」marker 同机制
+# （真相源唯一 + 注入机械化 + 漂移机械可查），但目的不同：守的是 spec-review 与
+# roadmap 两个 SKILL 的「广审镜（strategy/plan-eng）职责定义」逐字节相同——防止未来
+# 有人手改其中一份、两处口径悄悄分叉（旧候选「prose 引用」零机械守、「复制+parity」
+# 仍需人工双改，均被 design 砍掉，见 decision-memo Q2）。
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_broad_mirror_source_exists_with_markers():
+    """真相源存在，且自带本家族的 marker（与 principles 家族同机制，不同 marker 字面量）。"""
+    assert SP.SOURCE_BROAD_MIRRORS.is_file()
+    assert SP.SOURCE_BROAD_MIRRORS == (
+        SP.REPO / "sdflow-init" / "assets" / "snippets" / "broad-mirrors.md"
+    )
+
+
+def test_broad_mirror_targets_are_the_two_skills():
+    """投放面 = sdflow-spec-review 与 sdflow-roadmap 两个 SKILL.md（DD7 同源范围）。"""
+    targets = {p for p, _ in SP.broad_mirror_targets()}
+    assert targets == {
+        SP.REPO / "sdflow-spec-review" / "SKILL.md",
+        SP.REPO / "sdflow-roadmap" / "SKILL.md",
+    }
+
+
+def test_both_skills_carry_the_broad_mirror_def_byte_for_byte():
+    """⭐ 两个 SKILL.md 的托管块与真相源逐字节一致——漂了就该被 --check 抓到。"""
+    assert SP.main(["--check"]) == 0
+    body = SP.block(SP.SOURCE_BROAD_MIRRORS).strip()
+    for p, _ in SP.broad_mirror_targets():
+        lines = p.read_text(encoding="utf-8").splitlines(keepends=True)
+        spans = SP._blocks("".join(lines), SP.BROAD_MIRROR_START, SP.BROAD_MIRROR_END)
+        assert spans, f"{p.name} 没有 broad-mirror-def 托管块"
+        for s, e in spans:
+            got = "".join(lines[s:e + 1]).strip()
+            assert got == body, f"{p.name} 第 {s + 1} 行起的托管块与真相源不一致"
+
+
+def test_broad_mirror_drift_turns_check_red_and_apply_fixes_it(tmp_path):
+    """⭐⭐ 定点用例：托管块被手改坏 ⇒ `--check` MUST 变红；`--apply` MUST 修复。
+
+    与「四条通则」家族的漂移测试同构，验证的是【第二个独立 marker 家族】也接入了
+    同一套 --check/--apply 门禁——不是只有 principles 一家被守。探针落 tmp_path，
+    不碰真实工作树（同 test_a_new_agent_file_turns_check_red 的隔离纪律）。
+    """
+    probe = tmp_path / "SKILL.md"
+    probe.write_text(
+        "# probe\n\n"
+        f"{SP.BROAD_MIRROR_START} v1 -->\n旧版占位内容\n{SP.BROAD_MIRROR_END}\n",
+        encoding="utf-8",
+    )
+
+    original = SP.BROAD_MIRROR_TARGETS
+    try:
+        SP.BROAD_MIRROR_TARGETS[:] = [probe]
+        assert SP.main(["--check"]) == 1, "托管块内容与真相源不符，--check 居然是绿的"
+        assert SP.main(["--apply"]) == 0
+        assert SP.main(["--check"]) == 0, "--apply 后应恢复全绿"
+        assert "旧版占位内容" not in probe.read_text(encoding="utf-8")
+    finally:
+        SP.BROAD_MIRROR_TARGETS[:] = original
+
+
+def test_broad_mirror_render_is_idempotent():
+    """render 对新 marker 家族同样幂等（复用同一个 render() 实现，只是 marker 参数不同）。"""
+    text = f"# T\n\n{SP.BROAD_MIRROR_START} x -->\n旧内容\n{SP.BROAD_MIRROR_END}\n\n尾部\n"
+    out = SP.render(text, SP.SOURCE_BROAD_MIRRORS, SP.BROAD_MIRROR_START, SP.BROAD_MIRROR_END)
+    assert SP.render(out, SP.SOURCE_BROAD_MIRRORS, SP.BROAD_MIRROR_START, SP.BROAD_MIRROR_END) == out
+    assert "尾部" in out
+
+
+def test_setup_sh_check_message_covers_both_marker_families():
+    """setup.sh 门禁文案不应只提「四条通则」——它现在也守 broad-mirror-def 漂移。
+
+    【为什么查这个】：门禁调用点未变（仍是同一次 `sync_principles.py --check`），
+    但漂移原因可能是两个家族之一；文案若硬编码只提通则，broad-mirror-def 漂移时
+    人读到的提示会文不对题。
+    """
+    text = (SP.REPO / "setup.sh").read_text(encoding="utf-8")
+    assert "hack/sync_principles.py" in text and "--check" in text

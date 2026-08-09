@@ -22,9 +22,9 @@
      └─ 出口原样贴：/clear → 换档 → sdflow-spec-review（G1 交界例外之一，见 §三.2）
         │
  阶段二·设计审 ── 阶段内部连续,无 /clear（交界两处 SHALL 清:一→二、二→三，见 §三.2）──
-   sdflow-spec-review 编排器               Step1 autoplan(广审)→Step2 并行多镜(本项目标准)→Step3 一份 report
+   sdflow-spec-review 编排器               Step1 单批 dispatch(自持广审双镜 strategy/plan-eng+领域镜+对抗镜+接地镜+design-voice)→Step3 一份 report
      └─ fresh 子代理替代 /clear 保独立；中途不 AskUserQuestion(决策登记进报告)
-     └─ 内部 2×[checkpoint]（autoplan 子步 / sdflow-spec-review 子步）
+     └─ 内部 1×[checkpoint]（sdflow-spec-review 子步）
         │
    〔HARD-GATE：用户批准设计〕            ★全流程唯一人类门——过一份 spec-review-report.md 拍板
         │
@@ -57,7 +57,7 @@
 |---|---|---|---|---|---|
 | 一 | 1 | /opsx:explore | **→ [`prompts/step1-explore.md`](./prompts/step1-explore.md)**（原样复制，勿转述） | — | 条件：问题 / 方向模糊、方案未定时先跑；问题清晰直接进步 2。人示意收敛（如"开搞"/"做吧"/"开 change"）→ 模型自动 invoke `/sdflow-spec`（generation-process §四 自动触发规则） |
 | 一 | 2 | /sdflow-spec | 一次跑完 澄清(A)→拷问(B)→生成(C)。人可直接触发；模型 SHALL 在人示意收敛或用户描述需求且需要开 change 时自动 invoke，MUST NOT 自主判断"该开 change 了" | proposal/design/specs/tasks + decision-memo.md | generation-process §四；出口序列 = `/clear` → 换档 → `/sdflow-spec-review`（对 G1 的具名例外，见 §三.2） |
-| 二 | 3 | /sdflow-spec-review | **→ [`prompts/step4-spec-review.md`](./prompts/step4-spec-review.md)**（原样复制，勿转述） | spec-review-report.md | 编排器：内部 autoplan→并行多镜→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 2×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）** |
+| 二 | 3 | /sdflow-spec-review | **→ [`prompts/step4-spec-review.md`](./prompts/step4-spec-review.md)**（原样复制，勿转述） | spec-review-report.md | 编排器：内部单批 dispatch（自持广审双镜+领域镜+对抗镜+接地镜+design-voice）→**一份**报告；中途不 AskUserQuestion（决策登记进报告）；fresh 子代理替代 /clear；内部 1×checkpoint；改动标 [spec-review-amendment]。**非平凡必跑（主审）** |
 | 二 | 4 | HARD-GATE | 人工过 **一份** `spec-review-report.md`（决策登记区已摊开选项+推荐+三面后果(系统/用户/开发循环)+主次判定）→ 批准设计 | （人工：批准后才进实现） | generation-process 门；**★全流程唯一人类门** |
 | 三 | 5 | /sdflow-ship | **→ [`prompts/step5-ship.md`](./prompts/step5-ship.md)**（原样复制，勿转述） | tickets.md + 代码 + code-review-report.md + verify-report + hand-off + 归档 + 提交 + 合并 | 一次调用经 ship_gate 确定性台账驱动到底（实现→代码审→收尾）；阶段三无人类门（P3e）；子步骤详见 [§二.1](#二1sdflow-ship-子步骤) |
 
@@ -87,7 +87,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 4. **只在阶段二设计门停一次人类**：拷问是对话岛（人类对抗，不折叠，见 `/sdflow-spec` 相位 B）；设计门是唯一 HARD-GATE。**阶段三无人类门（P3e）**——过设计门后自动跑到 merge：遇 ≥2 方案按三级决策协议 `T10-choice`〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名〕：①有客观判据（测试/断言/基准可判）→ 自动选并按三镜 + 主次记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告）；③复核不过或无从复核 → defer 进 buglist/todolist 由 hand-off 引导清理。禁以自评置信为唯一依据。人类再入口 = 异步读 hand-off.md。
 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
 6. **评审两层、不重复**：
-   - **设计侧**：sdflow-spec-review 编排器 = autoplan（广审 CEO/design/eng/DX）+ 本项目多镜（领域镜+对抗镜+接地镜）合成一份报告。**autoplan 已含 eng 镜 → 多镜不重复跑 eng**。
+   - **设计侧**：sdflow-spec-review 编排器 = 自持广审双镜（strategy/plan-eng，按 base R 项划分）+ 本项目多镜（领域镜+对抗镜+接地镜，按 domains/ R 项划分）单批并行 dispatch 合成一份报告。base 与 domains 两层清单本就互斥，无需去重协商。
    - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
 7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 [reference/quality-layering.md](./reference/quality-layering.md)。
 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
@@ -99,7 +99,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
   生成侧(Prevention)            评审侧(Detection)
   ──────────────────────────────────────────────
   ①结构 → config 槽       ┐
-  ②约束 → config rules/D  ├─ 生成产出       sdflow-spec-review 编排器(autoplan + 多镜, 一份报告)
+  ②约束 → config rules/D  ├─ 生成产出       sdflow-spec-review 编排器(自持广审双镜 + 多镜, 一份报告)
   ③过程 → 拷问(对抗磨硬)  ┘                sdflow-code-review 编排器(每次全跑强制主审, 一份报告)
                                           sdflow-done 闭环(verify 防假✅ → hand-off)
   两侧共用 trigger-catalog(TG) 决定深度；连续跑,只在设计门停一次

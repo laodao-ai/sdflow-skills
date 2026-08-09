@@ -768,7 +768,7 @@ if [ -n "$_py" ] && [ -f "$REPO_DIR/hack/sync_principles.py" ]; then
   echo ""
   if ! "$_py" "$REPO_DIR/hack/sync_principles.py" --check; then
     echo ""
-    echo "  ⚠️ 四条通则有漂移（上面列了）。修：$_py hack/sync_principles.py --apply"
+    echo "  ⚠️ 托管块有漂移（四条通则 / 广审镜定义，上面列了）。修：$_py hack/sync_principles.py --apply"
   fi
   # 人读手册是 workflow.md + prompts/ 的生成物 —— 漂了就是「手册在教人跑一段已废的 prompt」
   if ! "$_py" "$REPO_DIR/hack/gen_workflow_guide.py" --check; then
