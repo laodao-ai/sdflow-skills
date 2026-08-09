@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 37ef5c0ac5d030f58432ecd240f7de8558754141
+---
+
 # spec-review-report · absorb-gstack-autoplan
 
 - **评审对象**:四件套 + decision-memo + 5 delta specs(评审起点盘面 fb0cbe7;Step1 产物落盘于 afcd956;本报告伴随 [spec-review-amendment] 修订)
@@ -17,6 +23,8 @@
 ---
 
 ## 一、决策登记区
+
+> **拍板记录:设计门已拍板批准,日期 2026-08-09,批准盘面 37ef5c0。** 需拍板 4 项裁定:Q1=A(retro 归属语义修正)、Q2=A(模板注入)、Q3=A(逐声边际盲测,M23 随之采纳)、Q4=维持人原方向(恒跑异议裁掉)。推荐方案此前已按人指示落进产物,拍板即生效、无遗留改动。
 
 ### [自动决策](高置信,默认采纳,设计门可覆盖)
 
@@ -117,12 +125,12 @@
 
 **第二轮(人指示「按第一性原理复推优化」后追加,均标注「设计门确认后执行」)**:tasks 1.3 重写为 retro 归属语义修正(Q1-A)、+tasks 2.5 镜定义模板注入 + 5.1 措辞(Q2-A)、+tasks 6.5 逐声边际盲测(Q3-A)、DD5/DD7 与 roadmap delta「MUST NOT 复制两份」句同步。Q1-Q3 的推荐方案已直接落进产物(人要求),**门上仍可整体或逐条否决**——否决即回退对应条目至备选。Q4 无改动。**decision-memo.md 为相位 B 冻结产物,一律未动**——其边角 4/C2/D1 口径的勘误以 design Risks 修订与本报告 M2/M21/M23 为准。
 
-## 四、度量锚(lens-metric,metrics.enabled=true;门前草稿值,拍板回写时最终化〔SR-M〕)
+## 四、度量锚(lens-metric,metrics.enabled=true;**已随拍板最终化**〔SR-M〕:Q1/Q2/Q3=采纳、Q4 异议裁掉,emitter 重算原地覆盖)
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="13" 采纳="11" 裁掉="0" defer="2" 独立="2" sev="致1/高6/中4/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="13" 采纳="9" 裁掉="1" defer="3" 独立="3" sev="致1/高2/中4/低2" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="13" 采纳="13" 裁掉="0" defer="0" 独立="3" sev="致1/高7/中5/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="13" 采纳="12" 裁掉="1" defer="0" 独立="3" sev="致1/高5/中4/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="6" 采纳="0" 裁掉="6" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="17" 采纳="9" 裁掉="4" defer="4" 独立="1" sev="致1/高5/中3/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="17" 采纳="12" 裁掉="5" defer="0" 独立="1" sev="致1/高8/中3/低0" -->
 
 **信任边界声明**:分类正确性(finding 归哪个 lens)、roster 完备性、findings JSON 誊写准确仍是主 session 信任边界;emitter 只保证给定输入的确定性归约。本轮归属约定:autoplan 各相位 Claude 子代理 → raw `autoplan-ceo/eng/dx`(fold→broad);autoplan codex 三声(经 guard 复用为本轮 design-voice)→ outside-voice/design-voice 行;对抗镜 1/2/3 → raw `对抗镜N`(fold→adversarial)。`findings=N` 与合并池数值一致性为主 session 信任边界、非机械可验。
 
