@@ -1,0 +1,532 @@
+# Review package: 3b2d073a59345669b6ccf4efeb44ceeb61416667..c1da914cadff8b48f05e3dcdfc7a8bca78b3813f (Task 4 worktree merge)
+
+## Commits
+c1da914 Merge task4: DX 吸收与 roadmap 侧重写
+fd2ec4a task4: DX 吸收与 roadmap 侧重写
+
+## Files changed
+ openspec/INDEX.md                                  |   6 +-
+ .../impl-reports/task4-dx-roadmap.md               |  54 ++++++++++
+ sdflow-init/assets/snippets/index-section.md       |   3 +-
+ .../assets/workflow/spec-checklists/README.md      |   1 +
+ .../workflow/spec-checklists/domains/devex.md      |  26 +++++
+ .../workflow/spec-checklists/domains/frontend.md   |   2 +
+ sdflow-init/assets/workflow/trigger-catalog.md     |   1 +
+ sdflow-roadmap/SKILL.md                            | 110 ++++++++++++++-------
+ 8 files changed, 164 insertions(+), 39 deletions(-)
+
+## Diff
+diff --git a/openspec/INDEX.md b/openspec/INDEX.md
+index 5a2d009..a33cfb6 100644
+--- a/openspec/INDEX.md
++++ b/openspec/INDEX.md
+@@ -6,27 +6,28 @@
+ ## OpenSpec 工作流规则（sdflow-init 维护）
+ 
+ > 本区块由 `sdflow-init` 维护——`openspec/workflow/` bundle 的规则索引。
+ > 新增/删 workflow 规则后重跑 `sdflow-init update`，或手动同步本表。
+ 
+ > 无本地规则副本的仓：下表文件位于全局 canonical `~/.sdflow/workflow/`，相对链接不可点，以文件名为准。
+ 
+ | 名称 | 文件 | 作用 |
+ |---|---|---|
+ | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：生成(ff+grill)→设计审(sdflow-spec-review 编排器)→设计 GATE→实现+代码审+收尾(subagent-dev→sdflow-code-review→sdflow-done)；去 /clear、连续跑到 merge |
+-| `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-01~24，驱动 约束/领域清单/画图/必填槽 四层 |
++| `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-01~28，驱动 约束/领域清单/画图/必填槽 四层 |
+ | `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | `opsx:ff` 起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6 |
+ | `generation-process` | [workflow/generation-process.md](./workflow/generation-process.md) | 生成过程三相位：发散(explore)/收敛(brainstorming)/对抗压测(grill) |
+ | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
+ | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |
+ | `model-tiers` | [workflow/model-tiers.md](./workflow/model-tiers.md) | 模型档位映射（强/中/弱职责 + canonical 缺省 + config 覆盖语义） |
+ 
++设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-01~30 + domains，含 devex）。
+ 代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-01~09 + domains）。
+ 说明类（可删不影响执行）：[workflow/reference/](./workflow/reference/)。
+ <!-- opsx-init:rules:end -->
+ ### 设计规则
+ 
+ | 名称 | 文件 | 主题 |
+ |---|---|---|
+ | `doc-authoring` | [rules/doc-authoring.md](./rules/doc-authoring.md) | DOC-1：设计与决策文档正文只保留当前最终态；被否决方案、演进史和元教训移入附录，避免历史噪声误导后续实现与评审。 |
+ | `premise-verification` | [rules/premise-verification.md](./rules/premise-verification.md) | 写断言之前先验证其依赖的外部事实（落笔前证伪、引用即打开、改共享物先溯源、决策落文档前先验依赖、正反双向验证）。 |
+ | `file-format-convention` | [rules/file-format-convention.md](./rules/file-format-convention.md) | 文本文件编码统一 UTF-8、换行符统一 LF、尾行换行；`.editorconfig` + `.gitattributes` 双层保证。 |
+@@ -42,21 +43,20 @@
+ | `host-adaptive-execution` | [specs/host-adaptive-execution/spec.md](./specs/host-adaptive-execution/spec.md) | 工作流跨 Claude/Codex 双宿主适配：`resolve-models.sh` 靠正信号判宿主（`CLAUDECODE=1`/`CODEX_THREAD_ID` 非空，两者皆无 fail-loud 落 `unknown`、不猜测）；outside voice 恒为另一机队强档（反向 `claude -p` 四旗只读全仓承重墙对称 codex）；两宿主 dispatch 均秒返（Claude-host harness `run_in_background`、Codex-host `claude --bg --exec` supervisor 后台 job）、内层 timeout 由 `outside-voice.async-timeout-seconds` 统一，能力不可用各自诚实同步/快速降级；`anchor_lint` 合法组合矩阵（跨模型/同族 fallback/无执行）为「跨模型性」唯一单一源，两工具各自重实现 + 全笛卡尔 golden 守漂移；出境安全三件套（secret_scan/FRAME/200KB 截断）两路径共用同一实现；模型档位按机队分列（`SDFLOW_TIER_*` 变量，eval 注入防护）；tools 陈旧探测 fail-loud 硬停在落锚之前；Codex 子代理不可用探针语义核验 + always-on 一致性 lint 缩 roster |
+ | `outside-voice-background-jobs` | [specs/outside-voice-background-jobs/spec.md](./specs/outside-voice-background-jobs/spec.md) | Codex 宿主跨模型 outside voice 经 Claude Code research-preview `claude --bg --exec` supervisor 托管为后台 job：per-site 独立 reservation/job/started/terminal/rc sidecar 原子发布、状态只从盘面不可变终态派生（`claude agents`/`logs` 仅作 liveness、MUST NOT 定状态）、barrier 有界 await（`outside-voice.async-timeout-seconds` 统一内层天花板）、复用 `outside-voice.sh exec` 四旗与出境安全三件套零降级、outer supervisor logs 不成第二出境面、终态 collect 后清理 supervisor roster 且失败可见（orphan warning）、abandoned run 只按显式 `reconcile --run-dir` 处理 |
+ | `workflow-metrics` | [specs/workflow-metrics/spec.md](./specs/workflow-metrics/spec.md) | 评审价值度量回路：`lens-metric v1` 结构化锚（layer/lens/runner/site 四元组）+ 只读可重生聚合（`sdflow-retro/scripts/lens_metric_aggregate.py`）+ per-镜数据驱动反馈，砍镜/降采样由人决不自动 |
+ | `lens-metric-emit` | [specs/lens-metric-emit/spec.md](./specs/lens-metric-emit/spec.md) | `lens_metric_emit.py`：从结构化 findings + 行键 roster 确定性归约出合规 `lens-metric` 锚行（折叠/归属/独立/sev-rollup 机械化，去重/裁决/定级仍归模型）；坏输入 fail-closed all-or-nothing，契约枚举/折叠单一源读取，不 import ship_gate/lens_metric_aggregate |
+ | `workflow-retro` | [specs/workflow-retro/spec.md](./specs/workflow-retro/spec.md) | `sdflow-retro` 只读再生全项目 change 成本×价值复盘：change 边界靠提交路径检测（非 tag 格式）、时间维仅到阶段级并诚实标注含人决策时间、价值维扫 active+archive 两源合并 spec/code 双报告锚、N≥10 待复评镜机械显著呈现、供数不供裁决 |
+ | `retro-report` | [retro/report.md](./retro/report.md)（`/sdflow-retro` 再生）| 全 change 成本×价值复盘活文档：git 提交阶段墙钟（成本维）+ lens-metric 锚聚合（价值维）合成 per-change 明细/阶段占比/成本双峰/per-镜价值表；view-only 再生，不做任何取舍决策 |
+ | `batch-triage` | [specs/batch-triage/spec.md](./specs/batch-triage/spec.md) | issues 池待处理项分诊三分类（相关合批/大扫除批/单开）：大扫除批硬边界（禁装逻辑面）+ issue 级 pre-diff fail-closed 判据（无自动兜底）+ 同类 Leg1 行为面路径守卫 + 聚合上限（MUST 有上限 + 生成物隔离）+ 一项一 commit 执行协议；本仓-local 不进 bundle |
+ | `determinism-guards` | [specs/determinism-guards/spec.md](./specs/determinism-guards/spec.md) | 机械层确定性守卫：`sdflow-issues` 三薄入口（`buglist.py`/`todolist.py`/`issues.py`）共享逻辑合一为唯一命名 package `sdflow_issues_core` 后，原三向/两向 AST 镜像一致性测试退役，改由「无 pool 分支守（AST 级）+ POOL_SPEC 封闭 schema 守 + 薄入口 thinness 同一性守」维持；`init.py config-lint`（手写 stdlib、条件化放行、fail-closed）、`issues.py batch lint`（优先级/计划占位符豁免 + 前导 token 后缀不校验）；direct↔scan golden 降级为「同源两 code-path 接线守」（不再宣称抓 rule 遗漏）；均只判机械可判的一致性/语法，不越权判内容 |
+ | `maintain-scan` | [specs/maintain-scan/spec.md](./specs/maintain-scan/spec.md) | `maintain_scan.py`：只读四类差异报告（specs/rules↔INDEX 双向 set-diff、CLAUDE.md 过时引用、workflow bundle 陈旧遮蔽告警、跨脚本判据一致性守卫）；INDEX 解析限表格行 + 链接目标路径 join-key、CLAUDE.md 引用改直查 fs 存在性、`.git` 精确剪枝、三处围栏未闭合 fail-closed（防假一致），零写文件，归组/是否修复留人 |
+ | `impl-orchestration` | [specs/impl-orchestration/spec.md](./specs/impl-orchestration/spec.md) | tickets 实现管线规范：手动路由三跳（config 键→plan marker→缺省 superpowers，零模型判断、损坏 marker fail-closed 停）、出 ticket 契约（tracer-bullet 垂直切片/Blocked-by/并行安全生成约束/外衣 `tickets.md`〔superpowers 轨保留 `superpowers-plan.md`，两名经共享 resolver 定位，双存在 fail-closed，D5/adr-0033〕/落盘即返回）、执行契约（frontier 宿主条件化受限并行〔Claude 宿主 worktree 隔离并行派发+逐票串行 merge，Codex/unknown 退化串行〕/后置双写+双信号核对/双轴审+注入点 B/halt envelope/文件交接）、机制裁剪边界（无 warm 终审/ledger/task-brief）、试点回退与熔断哨兵；ship_gate 零改动外衣兼容（adr/0017） |
+-| `roadmap-planning` | [specs/roadmap-planning/spec.md](./specs/roadmap-planning/spec.md) | `sdflow-roadmap` 分阶段规划工作流规范：三件套（design/roadmap/task-log）直写 `openspec/roadmaps/{name}/`（MUST NOT 走 OpenSpec 变更、MUST NOT 独立 requirements.md，存量四件套兼容）、design.md 需求与目标态伸缩头部章、与 sdflow-spec 同构的三相位结构（A 澄清 → B 七维拷问按 gate-0/商业化信号裁剪 + memo 增量落盘 → C 生成，第零步重入探测独立前置）、三态路由（gate-0 过∧无商业化信号直接生成 / gate-0 过∧信号命中裁剪到维度① / gate-0 未过按信号七维裁剪）、历史存档引用边界与存量 footage 冻结（memo 增量落盘 + 存量 footage 统称，三件套 MUST NOT 引用，存量包续跑兼容）、review 按商业化信号分档（plan-eng-review/autoplan）、收尾 checklist 四项软门、roadmap.md 近细远雾分层 |
++| `roadmap-planning` | [specs/roadmap-planning/spec.md](./specs/roadmap-planning/spec.md) | `sdflow-roadmap` 分阶段规划工作流规范：三件套（design/roadmap/task-log）直写 `openspec/roadmaps/{name}/`（MUST NOT 走 OpenSpec 变更、MUST NOT 独立 requirements.md，存量四件套兼容）、design.md 需求与目标态伸缩头部章、与 sdflow-spec 同构的三相位结构（A 澄清 → B 七维拷问按 gate-0/商业化信号裁剪 + memo 增量落盘 → C 生成，第零步重入探测独立前置）、三态路由（gate-0 过∧无商业化信号直接生成 / gate-0 过∧信号命中裁剪到维度① / gate-0 未过按信号七维裁剪）、历史存档引用边界与存量 footage 冻结（memo 增量落盘 + 存量 footage 统称，三件套 MUST NOT 引用，存量包续跑兼容）、review 恒跑自持 strategy/plan-eng 双镜（镜职责与 sdflow-spec-review 广审镜同源注入）+ sync-only outside voice（不再按商业化信号分档）、处置四态与未审待恢复阻塞收尾、收尾 checklist 四项软门、roadmap.md 近细远雾分层 |
+ | `hr-tg-intersection-check` | [specs/hr-tg-intersection-check/spec.md](./specs/hr-tg-intersection-check/spec.md) | `hr_tg_intersect.py`：吃模型判好的命中 TG 集（不自扫声明）与 HR-TG 子集求交，输出带「依据模型判定」的 `hit/none` + 规范锚（不 emit 裸 none，adr/0018）；HR-TG 清单从 trigger-catalog 单一源读（禁硬编码、禁 `__file__` 推导）；纯 stdlib、门控外置、坏输入/单一源损坏 fail-closed |
+-| `outside-voice-reuse-guard` | [specs/outside-voice-reuse-guard/spec.md](./specs/outside-voice-reuse-guard/spec.md) | `outside_voice_guard.py`：spec-review 复用 codex outside-voice 三前置（来源 mode/新鲜度 fs-mtime/结构 codex 段）按序归约唯一 reason_code（六枚举 none｜file-missing｜section-not-found｜zero-findings｜stale｜simulated-source）；新鲜度用源文件 fs-mtime 直比（排除评审产物自身）、纯 stdlib 无 subprocess、fence-aware 锚解析、坏输入 fail-closed |
+ | `outside-voice-exec-integrity` | [specs/outside-voice-exec-integrity/spec.md](./specs/outside-voice-exec-integrity/spec.md) | `outside-voice.sh`：截断切点 UTF-8 字符边界回扫（头段回退/尾段跳过 continuation 字节，只处理 UTF-8、不做通用编码嗅探）保证送出 prompt 恒合法；父进程被 SIGINT/TERM/HUP 回收时经组级 KILL 升级令 runner 子树随之终止（含自杀风险守卫与降级哨兵 `OV_GROUP_KILL_DEGRADED=1`）；诚实登记三类不可消除残余——父进程 SIGKILL 强杀（(a)）、PID 记录/回收窗口（(b)(c)）、以及高频×多类型混合信号风暴可整体击穿 trap 机制（D2.2 (d\*)，实测 67% 复现，登记为设计级残余、不宣称已根治） |
+ | `roadmap-review-reconcile` | [specs/roadmap-review-reconcile/spec.md](./specs/roadmap-review-reconcile/spec.md) | `review_disposition_check.py`：fence/结构感知断言 roadmap task-log `## Review 处置` 小节存在且非空，归约三枚举（section-missing｜section-empty｜section-ok-DISPOSITION-UNCHECKED）；不裸子串匹配「未处置」（防收尾声明句假阳）、逐条处置显式交模型（码尾缀 -DISPOSITION-UNCHECKED 防假绿）、坏输入 fail-closed |
+ | `architecture-design` | [specs/architecture-design/spec.md](./specs/architecture-design/spec.md) | `sdflow-architecture` 系统架构设计文档（SAD）编排规范：事实三问采集 fail-closed 锁 draft、十节骨架 + 重复锚/重名子系统检测、拆分规则集与反模式自检、假设/数值显影溯源（含畸形附录行检测）、文档状态机（`sad_scaffold.py` 唯一写路径，迁移前全量不变式复检 + 仓级互斥锁原子写）、冷走查（留痕存在性前置）与按信号升档、skeleton-ready 交棒切片建议节、ADR/术语分家落位、lint 结构通过≠语义核验诚实标注；空间轴能力，时间轴规划见 `roadmap-planning` |
+ | `devenv-provisioning` | [specs/devenv-provisioning/spec.md](./specs/devenv-provisioning/spec.md) | `sdflow-devenv` 过程轴环境搭建规范：三层（单元/集成/e2e）测试策略框架一层不许留白（结构骨架 fail-closed、内容留白只报不拦）、六槽逐层问（第⑤槽状态机械投影不问）、层状态由泳道**取最弱**投影（MUST NOT 手写，A29：一条绿不能染绿整层）、状态迁移证据只能由 `verify-lane`/`confirm-lane` 产出（`set-lane --status verified` 一律拒绝 exit 5）、执行「不伤害」边界（人门先行/超时/不 debug/不装依赖/不烧板）、落地物零解析 Makefile/shell（让工具自己判）、零删除能力、路径 containment 强制校验、数据模型零 digest 零封闭枚举（除 layer）、`testing-strategy.md`/`environments.md` 测试-非测试切线、lint 只报不拦代价可见、五步固定流程（核心承诺在②步）、冷审 vacuous 镜+盲区镜、独立 marker 注入、触发分工与 sdflow-init/roadmap/architecture 互不重叠 |
+ | `recorder-root-resolution` | [specs/recorder-root-resolution/spec.md](./specs/recorder-root-resolution/spec.md) | `sdflow-issues/scripts/` 下三薄入口（`issues.py`/`buglist.py`/`todolist.py`）`repo_root` 九步 fail-closed 校验序列（起点可信性→环境净化→调 git→最近 marker 上溯→git 失败裁决→形状校验→祖先校验→worktree marker→最近根一致）；回落判据是「上溯一层 marker 都找不到」而非「git rc≠0」；单进程内单点解析（`cmd_*` MUST NOT 重调）；三薄入口经共享 `sdflow_issues_core` 收敛为唯一物理源，一致性由「单一源 + thinness 同一性守」维持（原三向 AST 镜像断言已退役）；仓根 `conftest.py`+`pytest.ini` 两文件联合机械保证测试套件无 cwd 顶层副作用（hook wrapper 非 autouse fixture）；reindex 假绿防护。⚠️ 跨进程根分裂兜底当前不成立（B15，P1，`xfail(strict=True)` 锚死，修法待独立设计门） |
+ | `issues-scripts-shared-core` | [specs/issues-scripts-shared-core/spec.md](./specs/issues-scripts-shared-core/spec.md) | `sdflow-issues/scripts/sdflow_issues_core/` 唯一命名 package：三薄入口（`buglist.py`/`todolist.py`/`issues.py`）共享的执行逻辑单一物理源（`adr/0027`），承载 `repo_root`/pool 无关公共逻辑/`POOL_SPEC` 封闭 schema，薄入口经同目录 `from sdflow_issues_core import` 获得同一实现、禁 shadow |
+ | `spec-authoring` | [specs/spec-authoring/spec.md](./specs/spec-authoring/spec.md) | `sdflow-spec` 单一入口三相位管线（澄清/拷问/生成）取代原三分离入口（explore+ff+仓外 grill）：拷问前置为内建默认路径、决策纪要相位 B 内增量落盘、生成经 openspec CLI 完成态/合格态分开判定、终审核产物一致性；当前交付为**阶段一薄编排**（agent 定义外派因阶段二 A/B 验收门回退而未启用，保留为待激活资产） |
+ | `yq-yaml-operations` | [specs/yq-yaml-operations/spec.md](./specs/yq-yaml-operations/spec.md) | 7 个脚本（init.py/ship_gate.py/impl_route.py/anchor_lint.py×2/roadmap_writeback_draft.py/sad_schema.py）的 `config.yaml`/Markdown frontmatter YAML 子集解析统一委托外部 `mikefarah/yq` 二进制（adr/0036），业务判断留 Python 侧；`_yq()` 7 份内联封装由 golden test 守一致；记录在案的有界语法面例外——`init.py` schema 键读写（yq header-preprocess 数据丢失缺陷，保留既有正则）、`ship_gate.py` duplicate-key/tab-indent 预扫描、frontmatter 闭合性预扫描、`sad_schema.py` 行位置定位 |
+diff --git a/openspec/changes/absorb-gstack-autoplan/impl-reports/task4-dx-roadmap.md b/openspec/changes/absorb-gstack-autoplan/impl-reports/task4-dx-roadmap.md
+new file mode 100644
+index 0000000..52f6107
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-autoplan/impl-reports/task4-dx-roadmap.md
+@@ -0,0 +1,54 @@
++# Task 4: DX 吸收与 roadmap 侧重写 — 实现报告
++
++## 范围（对齐 task4-brief.md 六项）
++
++1. `trigger-catalog.md` 新增 TG-28
++2. 新建 `spec-checklists/domains/devex.md`（可判表式）
++3. `spec-checklists/domains/frontend.md` 增补 litmus/AI-slop 精华 R 项
++4. `sdflow-roadmap/SKILL.md` review 节重写（判定点②删、恒跑双镜、sync voice）
++5. Roadmap sync-only outside voice 接入
++6. `openspec/INDEX.md` 同步
++
++## 变更清单
++
++| 文件 | 改动 |
++|---|---|
++| `sdflow-init/assets/workflow/trigger-catalog.md` | 新增 TG-28 行（A. 技术栈组，紧随 TG-27），领域列 `devex`（**spec-review-only**，同 TG-27 反向先例）。**HR-TG 判定「否」**——不入 HR-TG 成员行（design DD6 明确判据：不满足「运行期爆炸/数据损坏/安全泄漏」）。 |
++| `sdflow-init/assets/workflow/spec-checklists/domains/devex.md`（新建） | DX-01~DX-05 五条，六列可判表式（ID/规则/触发条件/必需文本证据/PASS/FAIL/N.A）：TTHW 分档（附文本推导规则）、错误信息三件套、命名可猜性/默认值/渐进式披露、升级路径、Claude Code Skill DX 清单（sdflow 新作，非蒸馏，design DD6 M16 已订正出处声明）。头注声明收录判据（对着 design/specs 文本可判真伪，不收依赖外部工具/竞品/`~/.gstack/` 状态的过程方法论）。 |
++| `sdflow-init/assets/workflow/spec-checklists/domains/frontend.md` | 新增 FE-04（首屏可辨识+克制装饰，litmus 精华）、FE-05（AI-slop 视觉黑名单浓缩）。 |
++| `sdflow-init/assets/workflow/spec-checklists/README.md` | 领域注册表新增 `domains/devex.md` 行（步骤4「登记一行」，同 llm.md 先例；未动架构 ASCII 图——llm.md 加入时同样未动，先例一致）。 |
++| `sdflow-roadmap/SKILL.md` | review 节整体重写：见下方「review 节重写细节」。 |
++| `openspec/INDEX.md` + `sdflow-init/assets/snippets/index-section.md` | 移除 `outside-voice-reuse-guard` capability 行（含其"工具行"描述——同一行，非两行）；新增「设计审规则集」prose 行（含 `devex`，对称既有 code-checklists 行）；`trigger-catalog` 行的 TG 计数由过时的 `TG-01~24` 更正为 `TG-01~28`；`roadmap-planning` 行描述同步新 review 机制（恒跑双镜+sync voice+处置四态，删除已作废的"按商业化信号分档(plan-eng-review/autoplan)"表述）。 |
++
++## review 节重写细节（sdflow-roadmap/SKILL.md）
++
++- **判定留痕总则**：三判定点→两判定点（①三态路由 / ②收尾 checklist），原②（review 按商业化信号分档）已退役，显式记一句说明为何不再占用编号。
++- **工作流概览图**：review 行改为「恒跑 strategy/plan-eng 双镜 + sync-only outside voice（不分档）」；收尾 checklist 判定点号由③改②。
++- **`## review：恒跑 strategy/plan-eng 双镜 + sync-only outside voice`**（原标题「按商业化信号分档（判定点②）」）：
++  - 删除「分档判据」子节（含 `/plan-eng-review` 默认单审 / `/autoplan` 三连的分档逻辑）。
++  - 新增「双镜派发（恒跑，不分档）」子节：resolve-models 一次（取 `$SDFLOW_HOST`/`$SDFLOW_TIER_MID`/`$SDFLOW_VOICE_RUNNER`/`$SDFLOW_VOICE_MODEL`，fail-loud 硬停 + 空值/unknown 分家）→ 双镜 host-agnostic 恒跑 → voice 与双镜重叠启动（不串行）。
++  - 「把三件套作为"整体 plan"告知双镜」：原「告诉 review skill」改为「告知双镜」，措辞与调用对象同步更新，存活验收语义不变。
++  - 新增「sync-only outside voice（site=`roadmap-voice`）」子节：context（design.md Decisions + roadmap.md 全文，task-log 有意排除）、run 目录（`openspec/roadmaps/{name}/.outside-voice/<run-id>/`）、命令形态（内层 `--timeout 300`、外层 ≥330000ms）、⑦ 表映射引用（不转述，单一源 = `outside-voice.sh` 头注释 + `sdflow-spec-review/SKILL.md`）、失败 fallback（带编排方时间预算）、不落 `anchor_lint`/`lens-metric` 锚。**MUST NOT 移植 async 段**——本节未复制 dispatch manifest / collect barrier / `sdflow:async-branch` 等值门任何内容。
++  - 「跳过 review」子节保留（跳过仍需人类显式授权，`review-waived` 语义不变）；措辞去掉过期的「判定点②」编号引用。
++  - 「review 依赖不可用...」→「双镜派发失败 / voice 失败时不静默，且阻塞收尾」：失败来源改述为「双镜派发失败」或「voice 与其同族 fallback 均失败」，`未审待恢复` 阻塞收尾语义原样保留。
++  - 「review 结果如何处理」：新增第四态 🔸 未审待恢复（包级状态标记，区别于逐条 finding 的✅/❌/⏭三态）；新增 voice 留痕规则（`runner=`/`reason_code=` 一行，同族降级 MUST 含"降级"字样）。
++- 全文其余散落引用同步清理：
++  - 商业化信号词表处的"（与 review 分档共用同一张表）"括注删除，改为末尾说明该表仅供三态路由/七维裁剪使用。
++  - 判定点①「操作者覆盖」段删除"与 review 分档的显式覆盖先例同构"的失效类比。
++  - 「补细时机与重判分档」标题与正文改为「补细时机与重新触发 review」，不再提"重判分档"（无档可判）。
++  - 收尾 checklist 标题的判定点号③→②。
++  - 陷阱 6 的表现/正确描述去掉 `/plan-eng-review`/`/autoplan` 具名引用，改述新 review 机制。
++
++## 验收自证
++
++- `grep -n "autoplan\|gstack" sdflow-roadmap/SKILL.md sdflow-spec-review/SKILL.md` → 零命中。
++- `grep -n "plan-eng-review\b\|/autoplan"` sdflow-roadmap/SKILL.md → 零命中（`plan-eng` 镜名本身保留，属新内部镜名非外部 skill 调用）。
++- `python3 hack/sync_principles.py --check` → `✅ 22 个投放面全部与真相源一致`（未触碰 `sdflow:principles`/`sdflow:broad-mirror-def` 托管块内容）。
++- 全仓 `/usr/bin/python3 -m pytest -q`：**2487 passed, 10 skipped, 1 failed**（348.76s）。
++  - 失败用例：`sdflow-init/tests/test_outside_voice_job.py::test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret`——该用例受 `@pytest.mark.skipif(_REAL_CLAUDE_SKIP ...)` 门控，是真跑 `claude --bg --exec` + 轮询 `claude logs` 的**真实环境集成测试**（对照组 canary 未出现在 `claude logs` 输出里）。本票改动**零 Python 代码**，未触碰 `outside_voice_job.py`/`outside-voice.sh` 或任何后台 job 机制；该失败与本环境下 `claude` CLI 后台日志的实时可用性有关（本机 timing/CLI 版本状态），与本票内容无因果关系。已核实：该测试文件与函数均非本票改动范围。
++- `openspec/INDEX.md` 与 `sdflow-init/assets/snippets/index-section.md` 表格结构核对：无孤行/断表。
++
++## 已知边角（未在本票范围内处理，供后续/主审知悉）
++
++- **`openspec/specs/outside-voice-reuse-guard/spec.md`（主 specs 树）尚未删除**：task4-brief 第 6 条明确只要求 INDEX.md 同步（移除该 capability 行），实际脚本 `outside_voice_guard.py` 与该 capability 的正式 REMOVED 落地是任务组 3（守卫脚本退役，独立票，Blocked-by 任务组 1/2）的范围。当前状态是 INDEX 已不再列出该行、但源文件与主 specs 树条目仍在——本 change 归档前任务组 3 完成后即消解，不构成本票遗留。
++- **Codex 宿主下 roadmap 双镜的 `spawn_agent` 授权边界**：`CLAUDE.md`「Codex 子代理授权」段当前仅显式授权 `sdflow-spec-review`/`sdflow-code-review`/`sdflow-implement` 三处 fan-out；design DD7/DD8 与 `roadmap-planning` spec 均未提及扩展该授权范围给 `sdflow-roadmap`。本票按最小改动原则未触碰该授权段——roadmap 双镜派发在 `$SDFLOW_HOST=codex` 下是否需要额外显式授权是设计层遗留的空白点（不属 task4-brief 列出的六项范围），未自行扩权，如实记录供后续决策。
+diff --git a/sdflow-init/assets/snippets/index-section.md b/sdflow-init/assets/snippets/index-section.md
+index 636c3e3..d32bd1c 100644
+--- a/sdflow-init/assets/snippets/index-section.md
++++ b/sdflow-init/assets/snippets/index-section.md
+@@ -1,19 +1,20 @@
+ ## OpenSpec 工作流规则（sdflow-init 维护）
+ 
+ > 本区块由 `sdflow-init` 维护——`openspec/workflow/` bundle 的规则索引。
+ > 新增/删 workflow 规则后重跑 `sdflow-init update`，或手动同步本表。
+ 
+ > 无本地规则副本的仓：下表文件位于全局 canonical `~/.sdflow/workflow/`，相对链接不可点，以文件名为准。
+ 
+ | 名称 | 文件 | 作用 |
+ |---|---|---|
+ | `workflow` | [workflow/workflow.md](./workflow/workflow.md) | 端到端流程总览（三阶段连续化）：生成(ff+grill)→设计审(sdflow-spec-review 编排器)→设计 GATE→实现+代码审+收尾(subagent-dev→sdflow-code-review→sdflow-done)；去 /clear、连续跑到 merge |
+-| `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-01~24，驱动 约束/领域清单/画图/必填槽 四层 |
++| `trigger-catalog` | [workflow/trigger-catalog.md](./workflow/trigger-catalog.md) | 「按内容条件触发」单一权威源 TG-01~28，驱动 约束/领域清单/画图/必填槽 四层 |
+ | `ff-generation-constraints` | [workflow/ff-generation-constraints.md](./workflow/ff-generation-constraints.md) | `opsx:ff` 起手强制：FF-0 开分支 + 生成硬约束 D-1~D-6 |
+ | `generation-process` | [workflow/generation-process.md](./workflow/generation-process.md) | 生成过程三相位：发散(explore)/收敛(brainstorming)/对抗压测(grill) |
+ | `design-diagrams` | [workflow/design-diagrams.md](./workflow/design-diagrams.md) | 设计/spec 阶段画哪些图、何时画、什么形态（C4 + 行为图，触发条件化） |
+ | `spec-review` | [workflow/spec-review.md](./workflow/spec-review.md) | spec 评审（Detection 层）：只做 prevention 残差，trigger 驱动 + 独立 + 读码核验 |
+ | `model-tiers` | [workflow/model-tiers.md](./workflow/model-tiers.md) | 模型档位映射（强/中/弱职责 + canonical 缺省 + config 覆盖语义） |
+ 
++设计审规则集（`/sdflow-spec-review` 用）：[workflow/spec-checklists/](./workflow/spec-checklists/)（base BASE-01~30 + domains，含 devex）。
+ 代码审规则集（`/sdflow-code-review` 用）：[workflow/code-checklists/](./workflow/code-checklists/)（base CR-01~09 + domains）。
+ 说明类（可删不影响执行）：[workflow/reference/](./workflow/reference/)。
+diff --git a/sdflow-init/assets/workflow/spec-checklists/README.md b/sdflow-init/assets/workflow/spec-checklists/README.md
+index 3f3eaca..b0acf19 100644
+--- a/sdflow-init/assets/workflow/spec-checklists/README.md
++++ b/sdflow-init/assets/workflow/spec-checklists/README.md
+@@ -68,20 +68,21 @@ base 规则带 `落点` 标签，指明该规则最终**怎么落地执行**（
+ ## 领域注册表
+ 
+ | 领域文件 | extends | 适用栈 | ID 前缀 | 状态 |
+ |---------|---------|-------|--------|------|
+ | `domains/backend.md` | base | 后端服务（任意语言） | `BE-` | ✅ 就绪 |
+ | `domains/backend-go.md` | backend | Go | `GO-` | ✅ 就绪 |
+ | `domains/embedded.md` | base | RTOS + C 嵌入式 | `EMB-` | ✅ 就绪 |
+ | `domains/embedded-ml307c.md` | embedded | ML307C（蜂窝模组） | `ML307C-` | ✅ 就绪 |
+ | `domains/embedded-esp32.md` | embedded | ESP32-C3（WiFi SoC） | `ESP32-` | ✅ 就绪 |
+ | `domains/frontend.md` | base | 前端 / UI（任意框架） | `FE-` | ✅ 就绪 |
++| `domains/devex.md` | base | developer-facing 交付面（CLI/API/SDK/skill/配置面，TG-28，**spec-review-only**） | `DX-` | ✅ 就绪 |
+ 
+ ---
+ 
+ ## 如何新增一个领域（扩展约定）
+ 
+ 1. 在 `domains/` 建 `<domain>.md`，文件头声明 `extends: <父层>`（base 或某领域）。
+ 2. **只写本层新增规则**，每条取新 ID（前缀=领域简称）。不复制父层任何条目。
+ 3. 每条规则给出：触发条件（什么变更需要查）、检查点、为什么（防什么失效）。
+ 4. 在上方「领域注册表」登记一行。
+ 5. 不改 base、不改父层——扩展是纯增量。
+diff --git a/sdflow-init/assets/workflow/spec-checklists/domains/devex.md b/sdflow-init/assets/workflow/spec-checklists/domains/devex.md
+new file mode 100644
+index 0000000..d7b849a
+--- /dev/null
++++ b/sdflow-init/assets/workflow/spec-checklists/domains/devex.md
+@@ -0,0 +1,26 @@
++# 领域规则集：DX / 开发者体验（通用）
++
++> `extends: base` —— 只列 developer-facing 交付面（CLI 命令/flag/公共 API/SDK/skill 调用契约/配置面/
++> 错误信息文案）特有的设计审查规则；通用质量门禁见 [`../spec-quality-base.md`](../spec-quality-base.md)。
++> 触发条件见 `trigger-catalog.md` TG-28。**spec-review-only domain**：本领域清单只在设计审
++> （spec-checklists）侧登记，代码审（code-checklists）侧无对应文件（TG-27 反向先例）。
++>
++> **可判表式**：每条给「触发条件 / 必需文本证据 / PASS / FAIL / N/A」四项判据。评审时先看变更是否命中
++> 触发条件，命中则在 design/specs（或 README 等随本次变更同批更新的文档）文本中找「必需文本证据」列
++> 所指材料；**找不到该材料时判定输出 `UNVERIFIABLE`，MUST NOT 脑补 PASS**。
++>
++> **收录范围（分类判据）**：一条内容进本清单当且仅当它是「对着 design/specs 文本可判真伪的检查项」；
++> 需要跑外部工具、查竞品、或依赖 `~/.gstack/` 一类运行时状态的过程方法论一律不收（那类方法论不产出
++> 可在评审时机械核验的文本证据，与本清单的可判表式定位不兼容）。
++
++---
++
++| ID | 规则 | 触发条件 | 必需文本证据 | PASS 判据 | FAIL 判据 | N/A 判据 |
++|----|------|---------|-------------|-----------|-----------|----------|
++| DX-01 | **TTHW（Time-To-Hello-World）分档** | 新增/重大修改用户第一次上手路径（quickstart / onboarding 文档段、CLI 首次运行体验） | design/README 的 quickstart 或 onboarding 段所列步骤数与命令数，及由此推导出的 TTHW 估算值与推导规则 | 文本给出步骤数/命令数 + 明确「每步耗时假设（秒）」+ 据此算出的 TTHW 估算值，并显式标注「估算」二字；估算值 `<2min` 为 champion 达标，`>10min` 需红旗说明缓解措施 | 给出裸数字（如「TTHW ≈ 3min」）但未附推导规则——拍脑袋精确数 | 本次变更不涉及新的/被修改的用户上手路径 |
++| DX-02 | **错误信息三件套** | 新增/修改面向用户的错误提示文案 | 确切错误文案原文 + 触发条件 + problem/cause/fix 三段是否齐全 | 文案原文可引用，且 problem（说清楚出了什么错）/ cause（为什么会这样）/ fix（下一步该做什么）三段均可在文本中找到 | 文案原文可引用，但 problem/cause/fix 三段缺至少一段 | 本次变更未新增/修改任何面向用户的错误文案 |
++| DX-03 | **命名可猜性 / 默认值 / 渐进式披露** | 新增 CLI 命令 / flag / 配置键 / 公共 API 名称，或改变既有默认值 | 新增 surface 的名称 + 与相邻既有命名的对照说明 + 默认值取值与理由；若涉及进阶选项，是否默认隐藏的说明 | 新名称与既有命名风格（动宾结构/大小写/连字符习惯）一致且给出对照说明；默认值有明确理由；进阶选项默认隐藏或有理由不隐藏 | 新命名与既有风格冲突且无对照说明，或默认值无理由 | 本次变更未新增/修改任何用户可见命名或默认值 |
++| DX-04 | **升级路径** | 废弃 / 变更已有 CLI 命令、flag、配置键、公共 API | 废弃警告文案 + 迁移说明（from/to 对照）+ 混版本行为描述 | 三者（废弃警告、迁移说明、混版本行为）均可在文本中找到确切引用 | 缺失废弃警告、迁移说明、或混版本行为描述中任一项 | 本次变更未废弃/变更任何已有 developer-facing 交付面 |
++| DX-05 | **Claude Code Skill DX 清单** | 新增/修改 SKILL.md 的 `description` 或整体交互设计（sdflow skill 形态新作，非蒸馏第三方清单） | `description` 原文 + 触发场景覆盖度说明 + 失败/降级路径的提示文案 | 三者皆命中：**触发精度**——`description` 含明确触发词/场景且与其他 skill 可区分；**自包含性**——skill 不依赖未声明的外部前置状态即可独立工作；**降级路径可读性**——找不到/失败时的提示文案清晰、给出下一步动作 | 三者中至少一项缺失或文本模糊（如 description 触发词与其他已装 skill 撞车、或失败路径只报错不给下一步） | 本次变更不涉及 SKILL.md 新增或修改 |
++
++*规则集 v1 · extends base · 项目无关*
+diff --git a/sdflow-init/assets/workflow/spec-checklists/domains/frontend.md b/sdflow-init/assets/workflow/spec-checklists/domains/frontend.md
+index c798d69..56d9675 100644
+--- a/sdflow-init/assets/workflow/spec-checklists/domains/frontend.md
++++ b/sdflow-init/assets/workflow/spec-checklists/domains/frontend.md
+@@ -5,12 +5,14 @@
+ >
+ > 读前端完整规则 = `base` + `frontend` 三层并集。
+ 
+ ---
+ 
+ | ID | 规则 | 触发条件 | 检查点 |
+ |----|------|---------|--------|
+ | FE-01 | **交互边缘场景** | 新增表单 / 提交 / 异步操作 | double-click / 快速重复提交防护；操作中途离开（返回、关闭标签）的处理；慢网络（API 超时 10s 用户看到什么）；并发操作（同一表单两个标签页） |
+ | FE-02 | **加载 / 空 / 错误态** | 新增数据展示 / 列表 | 加载中、空结果、请求失败三态是否都有 UI 设计，而非只画 happy path |
+ | FE-03 | **乐观更新与回滚** | 写操作后即时反馈 | 乐观更新失败时的回滚与提示；提交中按钮禁用/loading，防重复触发 |
++| FE-04 | **首屏可辨识 + 克制装饰** | 新增/重做落地页/首屏视觉设计 | 首屏在不看 logo 的情况下能否辨认出品牌调性（非通用模板感）；每张卡片/分区是否有存在必要（能删除且不影响信息传达则删）；去掉装饰性元素后界面是否仍显专业/高级（非靠堆砌装饰堆出的"高级感"） |
++| FE-05 | **AI-slop 视觉黑名单** | 新增/重做视觉设计 | 是否落入常见"一看就是 AI 生成"的视觉套路：紫色系渐变背景、图标+圆圈+三列卡片布局滥用、全局居中排版、纯装饰性 blob/几何图形、用 emoji 充当设计元素（图标/插画）替代 |
+ 
+ *规则集 v1 · extends base · 项目无关*
+diff --git a/sdflow-init/assets/workflow/trigger-catalog.md b/sdflow-init/assets/workflow/trigger-catalog.md
+index cc9ae6e..7b0e889 100644
+--- a/sdflow-init/assets/workflow/trigger-catalog.md
++++ b/sdflow-init/assets/workflow/trigger-catalog.md
+@@ -38,20 +38,21 @@
+ > 列含义：**D 约束**=注入哪条 ff 硬约束 · **领域**=过哪个 domain 清单(段) · **画图**=必画哪张图 · **模版槽**=哪个产物出现哪个必填槽（ID 见 spec-checklists）。`—` = 不涉及。
+ 
+ ### A. 技术栈（决定过哪些领域清单）
+ 
+ | ID | 触发条件 | D约束 | 领域 | 画图 | 模版槽 |
+ |----|---------|-------|------|------|--------|
+ | TG-01 | 后端服务变更 | — | `backend`(+`backend-go`) | — | — |
+ | TG-02 | 嵌入式固件变更 | — | `embedded`(+芯片 delta) | — | — |
+ | TG-03 | 前端 / UI 变更 | — | `frontend` | — | — |
+ | TG-27 | **代码消费 LLM/agent 产出**并持久化/执行/外呼（工具 wiring、RAG/知识库写入等；排除句：评审工作流自身读取/校验同会话内受信任 agent 自报的控制面锚〔如 `<!-- sdflow:… -->`〕不算，只有消费**外部/不可信** LLM 产出（用户对话内容、RAG 检索结果、第三方 agent 产出）才算） | — | `llm`（**code-review-only domain**，spec-checklists 侧无对应文件） | — | — |
++| TG-28 | 变更**新增/修改/重命名/废弃/删除** developer-facing 交付面——CLI 命令/flag/公共 API/SDK/skill 调用契约/配置面（消费方可见的配置键与默认值，不含纯仓内实现配置）/错误信息文案 | — | `devex`（**spec-review-only domain**，code-checklists 侧无对应文件，同 TG-27 反向先例） | — | — |
+ 
+ ### B. 数据 / 持久化
+ 
+ | ID | 触发条件 | D约束 | 领域 | 画图 | 模版槽 |
+ |----|---------|-------|------|------|--------|
+ | TG-04 | **DB schema 迁移**（增/删/改 列·索引·约束·类型） | **D-2** | backend·DB 段(BE-01) | 数据流图(若管道) | design: v_old/v_new 对照表 |
+ | TG-05 | 引入 / 修改**数据对象**（实体/表/结构体/schema） | — | — | — | design: 数据模型与生命周期(BASE-24) |
+ | TG-06 | **跨产品 / 跨模块共享数据模型** 边界 | **D-6** | — | — | design: 边界合规声明(已含于 D-6) |
+ 
+ ### C. 接口 / 依赖
+diff --git a/sdflow-roadmap/SKILL.md b/sdflow-roadmap/SKILL.md
+index 2f8e945..02739af 100644
+--- a/sdflow-roadmap/SKILL.md
++++ b/sdflow-roadmap/SKILL.md
+@@ -180,29 +180,29 @@ roadmap 就是这个层级：
+ 相位 A：澄清 → gate-0 五项 + 商业化信号检查（两关独立，判定点①）
+         │
+         ├─ gate-0 过 ∧ 无商业化信号 ────────────────▶ 相位 C 直接生成
+         ├─ gate-0 过 ∧ 商业化信号命中 ─▶ 相位 B（裁剪到维度①）─▶ 相位 C
+         └─ gate-0 未过 ───────────────▶ 相位 B（按信号裁剪七维）─▶ 相位 C
+         │
+         ▼
+ 相位 C：生成三件套 → openspec/roadmaps/{name}/
+         │
+         ▼
+-review：按商业化信号分档 → /plan-eng-review（默认）或 /autoplan（商业化信号命中，判定点②）
++review：恒跑 strategy/plan-eng 双镜 + sync-only outside voice（不分档，见下方「review」节）
+         │
+         ▼
+-收尾：checklist 四项软门 → 通过后软提示纳入版本控制（判定点③）
++收尾：checklist 四项软门 → 通过后软提示纳入版本控制（判定点②）
+ ```
+ 
+ ## 判定留痕总则
+ 
+-全流程有三个判定点：**①三态路由**（直接生成 / 裁剪至维度① / 按类型裁剪七维，三选一）**②review 分档**（eng 单审/autoplan 三连）**③收尾 checklist**（四项通过与否）。三处判定 MUST 在对话中显式陈述一行（不是内心判断），并在 task-log.md 留痕——判定点①因相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，SHALL 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记。**跳过类判定必须显著呈现**——单独一行、不埋进长消息——不允许静默略过。
++全流程有两个判定点：**①三态路由**（直接生成 / 裁剪至维度① / 按类型裁剪七维，三选一）**②收尾 checklist**（四项通过与否）。两处判定 MUST 在对话中显式陈述一行（不是内心判断），并在 task-log.md 留痕——判定点①因相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，SHALL 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记。**跳过类判定必须显著呈现**——单独一行、不埋进长消息——不允许静默略过。原判定点②（review 按商业化信号分档）已退役：review 现恒跑同一套 strategy/plan-eng 双镜、不再按信号分档，故不再占用判定点序号（见下方「review」节）。
+ 
+ ## 必须遵守的硬性规则
+ 
+ 这些是本 skill 的**不可妥协点**，违反其中任何一条都会让产出失去价值：
+ 
+ ### 规则 1：保存位置硬性固定
+ 
+ - roadmap 三件套必须保存到 `openspec/roadmaps/{kebab-case-name}/`
+ - `{name}` 用 kebab-case，语义化、短小（如 `rebuild-blog-v2`、`migrate-to-pg`、`unify-auth`）
+ - **禁止**放到 `doc/blog/`、`docs/`、`plans/` 等其他位置——与 OpenSpec 工作流脱钩，未来实施变更找不到引用路径
+@@ -303,38 +303,38 @@ roadmap 的质量 100% 取决于讨论是否充分。相位 A 收束前 **SHALL*
+ ```
+ 
+ **通过阈值**〔impl-review-fix〕：**SHALL 五项全部满足方算「gate-0 过」；任一项不满足即「gate-0 未过」**
+ （走三态路由第③态，进相位 B 按信号裁剪七维）。**MUST NOT** 以「过了大多数项」判过——阈值含糊会让
+ 同一份请求在不同 session 落到不同路由分支，而两条分支的交互成本与产出深度差异很大。
+ 
+ ### 商业化信号检查
+ 
+ **与 gate-0 两关独立**——gate-0 验的是「讨论是否充分」，不验「需求是否真实」，**MUST NOT** 因 gate-0 五项全过而免除本项检查。
+ 
+-信号词表（与 review 分档共用同一张表）：**外部用户、变现、获客、"用户画像未定"、"要不要做这个产品"**。典型例子：面向外部用户的 SaaS、社区、付费工具。**不触发**的场景（绝大多数）：技术重构、内部工具、基础设施、博客/文档工程、个人项目。
++信号词表：**外部用户、变现、获客、"用户画像未定"、"要不要做这个产品"**。典型例子：面向外部用户的 SaaS、社区、付费工具。**不触发**的场景（绝大多数）：技术重构、内部工具、基础设施、博客/文档工程、个人项目。（review 已恒跑不再按此信号分档，本表仅供三态路由与七维裁剪使用。）
+ 
+ ### 三态路由（判定点①）
+ 
+ ```
+ 相位 A：澄清 → gate-0 五项 + 商业化信号检查（两关独立）
+   │
+   ├─ ① gate-0 过 ∧ 无商业化信号 ──────────────▶ 相位 C 直接生成
+   ├─ ② gate-0 过 ∧ 商业化信号命中 ─▶ 相位 B（裁剪到维度①，startup 味逼问）─▶ 相位 C
+   └─ ③ gate-0 未过 ──────────────▶ 相位 B（按信号裁剪七维）──────────────▶ 相位 C
+                                       裁剪规则见下文「七维拷问与裁剪表」
+ ```
+ 
+ **MUST NOT** 依赖事前轮数预估——判据只认信号，不认计数。
+ 
+ 判定依据 **SHALL** 在对话中单独一行显式陈述（不埋进长消息，含本次实际选入的拷问维度子集）。**留痕时点**：相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，故该行 **SHALL** 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记进 task-log.md，**MUST NOT** 要求在包尚不存在时写入该文件。
+ 
+-**操作者覆盖**：操作者显式要求增删本次拷问维度（如「这次不用问⑦」「把⑤也加上」）时 **SHALL** 遵从，并把偏离与理由记入判定点①的留痕行——与 review 分档的「显式覆盖」先例同构。
++**操作者覆盖**：操作者显式要求增删本次拷问维度（如「这次不用问⑦」「把⑤也加上」）时 **SHALL** 遵从，并把偏离与理由记入判定点①的留痕行。
+ 
+ ### 路由对照表（自检基准）
+ 
+ | 用户开场白示例 | 判定信号 | 期望路由 |
+ |---|---|---|
+ | "帮我做一个未来半年的博客重建 roadmap，从选主题到迁移" | 多阶段构思但技术路径/阶段划分未过 gate-0，无商业化信号 | 状态③：相位 B 按技术重构裁剪基准跑 ②③④⑤⑦ |
+ | "这个项目要不要做，先看看有没有人真的需要" | 商业化信号命中（需求真实性未定），gate-0 未过 | 状态③：相位 B 七维裁剪 + 维度① 额外加重逼问 |
+ | "帮我理一下这几个 bug 先后修哪个" | 规模小，gate-0 大概率直接过、无商业化信号 | 状态①：直接进入相位 C 生成（若规模确实不够，建议不必用本 skill） |
+ | "我们聊聊要不要重构鉴权模块，还没想清楚" | 起手不明确，方向未定 | 建议先 `/opsx:explore` 发散成形，再回来按其结果落入①②③其一 |
+ | "帮我规划一个面向外部用户的付费 SaaS，已想清楚分三期上线" | gate-0 过（已有分期构思）∧ 商业化信号命中（外部用户+付费） | 状态②：相位 B 裁剪到维度①（需求真实性，startup 味逼问） |
+@@ -441,23 +441,23 @@ roadmap.md     ◀── task-log.md 引用（日志记录 roadmap 的任务完
+ ## roadmap.md 近细远雾
+ 
+ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子任务/验收标准/交付物）；**近期取 1 还是 2 个 SHALL 写明选择理由**（如并行依赖、交付节奏）。
+ 
+ 更远的阶段 **SHALL 只写阶段目标一句 + 雾区备注**——雾区备注要写明「缺什么信息才能细化」，而不是空泛的"待细化"。**MUST NOT** 预写子任务分解与验收细节。
+ 
+ ### 长周期依赖例外
+ 
+ 远期阶段若涉及长交付周期前置（采购/合规/外部契约类），**允许且应当**提前写「前置条件」一节，其余四节仍留雾。
+ 
+-### 补细时机与重判分档
++### 补细时机与重新触发 review
+ 
+-远期阶段成为下一个待实施阶段时（前序阶段全部交付），**SHALL** 补全五节（可经一次短讨论）。补细内容若命中商业化信号、或改变范围/不可逆承诺/验收判据，**SHALL** 重新过一遍 review 分档判定（非强制重跑三连审），判定结果记入 task-log.md。
++远期阶段成为下一个待实施阶段时（前序阶段全部交付），**SHALL** 补全五节（可经一次短讨论）。补细内容若命中商业化信号、或改变范围/不可逆承诺/验收判据，**SHALL** 重新触发一轮 review（双镜 + sync voice，恒跑不分档），结果记入 task-log.md。
+ 
+ ### 前序放弃视为已处置
+ 
+ 前序阶段某子任务被**终局判定放弃**（非未完成、非延后）时，记入 task-log.md 后**视为已处置**，计入"前序交付"判定，不永久阻塞 frontier 推进。
+ 
+ ---
+ 
+ ## 广审镜（strategy / plan-eng）定义（同源，供下方 review 节引用）
+ 
+ <!-- sdflow:broad-mirror-def:start —— 真相源 sdflow-init/assets/snippets/broad-mirrors.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
+@@ -483,69 +483,109 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子
+ 4. 返回结构化 findings 列表（每条：问题 / 证据 file:line / 置信度(高/中/低) / 严重度 / 建议）。
+ 5. 不 AskUserQuestion。
+ 
+ **plan-eng 镜防重叠语义补句（MUST 含）**：文件归属线（base 归广审镜、domains/ 归领域镜）不足以消解话题层
+ 残余重叠——plan-eng 镜 prompt MUST 另含一句「栈特定错误处理/重试熔断（domains 的 BE-04/BE-08 类条目）由
+ 领域镜负责，本镜只审跨领域/架构级错误路径」。
+ <!-- sdflow:broad-mirror-def:end -->
+ 
+ 本 skill 场景下，上方契约的「评审对象路径」= `openspec/roadmaps/{name}/` 下 `design.md` + `roadmap.md` + `task-log.md` 三件套整体 plan（C7 契约：把三件套视为一个整体 plan 评审，不逐份割裂）。
+ 
+-## review：按商业化信号分档（判定点②）
+-
+-三件套写完就走收尾，等于"spec 没评审就交付"——能用但埋雷。按项目商业化信号分档触发 review，并显式陈述一行判定依据。
+-
+-### 分档判据（与相位 A 商业化信号检查共用同一张信号词表）
+-
+-- **默认**：单跑 `/plan-eng-review`——技术重构、内部工具类项目，无商业化信号
+-- **商业化信号命中才三连**：`/autoplan`——出现外部用户、变现、获客类信号（同相位 A 的触发词表）
+-
+-### 关键：把三件套作为"整体 plan"告诉 review skill（存活验收）
+-
+-review skill 原本设计给**单个 plan 文件**。roadmap 是**多文件三件套**。触发时必须显式说明：
+-
+-> 请把 `openspec/roadmaps/{name}/` 下的 `design.md` + `roadmap.md` + `task-log.md` 视为一个整体 plan 来 review。`roadmap.md` 是主入口，它引用 design.md 作为上下文。`task-log.md` 是执行记录，重点看"Review 处置"小节是否完整。
+-
+-不这样说，review skill 会只盯其中一份文件，遗漏跨文件的一致性问题。**缺此声明即视为该次 review 未按契约执行**，SHALL 重新触发。
++## review：恒跑 strategy/plan-eng 双镜 + sync-only outside voice
++
++三件套写完就走收尾，等于"spec 没评审就交付"——能用但埋雷。review 执行体为本 skill **自持**的
++strategy/plan-eng 双镜（镜职责定义见上方「广审镜（strategy / plan-eng）定义」小节的同源注入托管块）+
++**sync-only** 跨模型 outside voice——**恒跑，不再按商业化信号分档**（分档的存在理由是外部三连审成本
++高，review 执行体自持化后该成本前提消失；strategy 视角对技术型 roadmap 同样承重，不应按商业化信号
++才给）。
++
++### 双镜派发（恒跑，不分档）
++
++1. **resolve-models 一次**（取 host/tier/voice 变量；契约同源 `model-tiers.md` + `resolve-models.sh`，
++   不复制第二份判定逻辑，但本步从简——roadmap 是低频单人操作场景，不复刻 `sdflow-spec-review` 等四个
++   高频编排 SKILL 那套多镜反复引用的完整宿主/档位解析仪式）：`[ -x ~/.sdflow/hack/resolve-models.sh ]`
++   不成立 → fail-loud「resolve-models.sh 未安装——先在运行 checkout（`~/.skills/sdflow-skills`）跑
++   `bash setup.sh`」，MUST NOT 继续；成立 → `eval "$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，
++   取 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_MID`（双镜档位）、`$SDFLOW_VOICE_RUNNER`/
++   `$SDFLOW_VOICE_MODEL`（voice 目标）。`$SDFLOW_HOST` 取到空字符串（非 `unknown`）= resolver 根本没
++   跑成，MUST NOT 当 `unknown` 处置，同样 fail-loud 硬停。本轮全程只 eval 这一次。
++2. **双镜恒跑，host-agnostic**：strategy 镜 + plan-eng 镜以 `model: $SDFLOW_TIER_MID` 派两个并行 fresh
++   子代理，MUST NOT 按商业化信号增减镜数——两镜的存在与数量与 `$SDFLOW_HOST` 无关。
++3. **voice 与双镜重叠启动**：双镜派出后**立即**前台跑 sync voice（不串行等双镜返回再跑），墙钟
++   ≈ max(双镜, voice) 而非相加。`$SDFLOW_HOST="unknown"` 时双镜仍恒跑，但**不调 voice**（task-log 留一行
++   `runner=none reason_code=host-unknown`，见下方「review 结果如何处理」）。
++
++### 把三件套作为"整体 plan"告知双镜（存活验收）
++
++双镜 prompt 面对的是**多文件三件套**，MUST 显式声明：
++
++> 请把 `openspec/roadmaps/{name}/` 下的 `design.md` + `roadmap.md` + `task-log.md` 视为一个整体 plan 来评审。`roadmap.md` 是主入口，它引用 design.md 作为上下文。`task-log.md` 是执行记录，重点看"Review 处置"小节是否完整。
++
++不这样说，镜子会只盯其中一份文件，遗漏跨文件的一致性问题。**缺此声明即视为该次 review 未按契约执行**，SHALL 重新触发。
++
++### sync-only outside voice（site=`roadmap-voice`）
++
++命令形态、退出码 → `reason_code` 映射、同族 fallback 规则**均取 `~/.sdflow/hack/outside-voice.sh` 契约的
++同步 exec 分支**（单一源 = 该脚本头注释 + `sdflow-spec-review/SKILL.md`「outside-voice helper 调用协议」
++⑦ 表，本节只给分支决策，不转述接口细节）——**MUST NOT 移植其 async 段**（不碰 dispatch manifest /
++collect barrier / 两 SKILL 等值门，那套仪式是为 async 两条路径与高频多镜场景设计的，roadmap 低频×
++单次调用，sync 分支自足）：
++
++- **context**：`design.md`「Decisions」+ `roadmap.md` 全文（超 200KB 收敛，同全量 diff 截断纪律；
++  `task-log.md` 有意不入 context——整体 plan 契约由双镜承载，voice 只补充第二意见维度，控制出境体积）。
++- **run 目录**：`openspec/roadmaps/{name}/.outside-voice/<run-id>/`（`mktemp -d` 占坑，`.gitignore` 的
++  `**/.outside-voice/` 递归覆盖，同 spec-review helper 契约）。
++- **命令**：`SDFLOW_VOICE_RUNNER=<runner> SDFLOW_VOICE_MODEL=<model> ~/.sdflow/hack/outside-voice.sh exec --timeout 300 --context-file "<f>"`
++  ——内层 `--timeout` 恒 `300`（沿 helper sync 分支既有常量，roadmap context 量级小于全量 diff，300s
++  足；不接 `outside-voice.async-timeout-seconds` 键，该键契约限定 async 两路径）；外层 Bash 工具超时
++  MUST ≥330000ms。
++- **退出码**：按 ⑦ 表映射——`exit 0` → findings 进合并池，锚行等价物 `reason_code="ok"`；其余非零 →
++  同族 fallback。
++- **失败处置**：voice 失败（非零退出/helper 缺失）SHALL 派同族只读 fallback 子代理补第二意见，
++  **MUST 带编排方时间预算（与 sync 内层 300s 同量级）**——超预算未返回视为 fallback 亦失败，当场落
++  「未审待恢复」，MUST NOT 无界等待。
++- **不落度量锚**：本节不接 `anchor_lint`/`lens-metric`——roadmap 无度量锚体系，findings 与留痕方式见下方
++  「review 结果如何处理」。
+ 
+ ### 跳过 review（仅限人类操作者显式授权）
+ 
+ 跳过 review **仅限人类操作者显式授权**——agent 自身 **MUST NOT** 代决跳过。跳过后：
+ 
+ - 包状态记 `review-waived`，不与"已审"混同
+-- task-log.md 留一条「未做 review，风险自担」的痕迹（**判定点②的跳过类判定，须显著呈现，不埋长消息**）
+-
+-### 显式覆盖默认分档
++- task-log.md 留一条「未做 review，风险自担」的痕迹（**review 跳过判定，须显著呈现，不埋长消息**——review 恒跑不分档后本判定不再占用编号，但显式呈现纪律不变）
+ 
+-操作者显式要求覆盖默认分档（强制三连审 / 强制单审）时 **SHALL** 遵从，并在 task-log.md 记录偏离理由。
++### 双镜派发失败 / voice 失败时不静默，且阻塞收尾
+ 
+-### review 依赖不可用时不静默，且阻塞收尾
++双镜（strategy/plan-eng）派发失败，或 sync voice 与其同族 fallback 均失败（含 fallback 超编排方
++时间预算未返回）：**SHALL** 显式提示，task-log.md 留「未审待恢复」痕迹 + 给出修复/重试步骤，
++**MUST NOT** 把包当作已完成收尾（这不是"跳过"，是"故障"，两者状态不可混同）。
+ 
+-`/plan-eng-review` / `/autoplan` 未安装、调用失败或返回空时：**SHALL** 显式提示，task-log.md 留「未审待恢复」痕迹 + 给出修复/重试步骤，**MUST NOT** 把包当作已完成收尾（这不是"跳过"，是"故障"，两者状态不可混同）。
+-
+-**该状态阻塞收尾**：包状态为 `未审待恢复` 时 **SHALL** 阻塞收尾 checklist，**MUST NOT** 因「Review 处置小节无未处置条目」（此时该小节本就是空的）而误判可以收尾；只有 review 成功执行、或人类操作者显式授权 `review-waived` 两种状态方可进入 checklist。操作者按提示装好依赖重跑 review 成功后，状态转正常，收尾方可继续。
++**该状态阻塞收尾**：包状态为 `未审待恢复` 时 **SHALL** 阻塞收尾 checklist，**MUST NOT** 因「Review 处置小节无未处置条目」（此时该小节本就是空的）而误判可以收尾；只有 review 成功执行、或人类操作者显式授权 `review-waived` 两种状态方可进入 checklist。操作者按提示重跑双镜/voice 成功后，状态转正常，收尾方可继续。
+ 
+ ### review 结果如何处理
+ 
+-review 产出的每条 issue **SHALL** 在 task-log.md「## Review 处置」小节标注下列状态之一：
++双镜（strategy/plan-eng）与 sync voice 产出的 findings **同池**进 task-log.md「## Review 处置」小节，逐条标注下列四态之一：
+ 
+ - ✅ **采纳**：写明已在哪个文件哪一节改动
+ - ❌ **拒绝**：写明拒绝理由（不得空白"不采纳"，理由必须可供后人复核）
+ - ⏭ **延后**：写明延后到哪个阶段/哪个后续变更处理
++- 🔸 **未审待恢复**：双镜派发失败或 voice+fallback 均失败导致本轮 review 无产出时的**包级**状态标记（非逐条 finding 的处置，而是本轮 review 未产出时落的整体状态），附恢复步骤——见上节
++
++**voice 留痕**（不落 `anchor_lint`/`lens-metric` 锚，roadmap 无度量锚体系）：无论 voice 走成功（`reason_code="ok"`）还是同族 fallback，SHALL 在「Review 处置」小节留一行 `runner=<runner> reason_code=<code>` 痕迹；同族 fallback 成功时该行 **SHALL 含「降级」字样**（如实标注非跨模型第二意见，而是同宿主兜底）。
+ 
+ 「Review 处置」小节**不存在未处置条目**是收尾 checklist ①的硬性前提。
+ 
+ ---
+ 
+ ## 收尾 checklist：四项软门
+ 
+-收尾前 **SHALL** 执行以下四项确认，**判定点③**——显式陈述通过/不通过并写入 task-log.md；跳过类判定须显著呈现。任一项不通过 **SHALL** 提示补齐后再收尾，**MUST NOT** 静默跳过。
++收尾前 **SHALL** 执行以下四项确认，**判定点②**——显式陈述通过/不通过并写入 task-log.md；跳过类判定须显著呈现。任一项不通过 **SHALL** 提示补齐后再收尾，**MUST NOT** 静默跳过。
+ 
+ **① Review 处置无遗留**〔mlh-p4 T82〕：先调脚本机械断言「`## Review 处置` 小节存在+非空」（防真空、防子串陷阱、弱模型不可跳过），再由你判逐条——机械/判断切分：
+    - **规则根解析**：`RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`（`resolve-workflow.sh` 缺失或退出码非 0 → 显式提示「未装/解析失败，降级为人工断言小节存在+非空」并原样转发其 stderr，**MUST NOT** 静默当作「无此门」）。
+    - **调脚本**：`python3 $RULES_ROOT/tools/review_disposition_check.py --task-log openspec/roadmaps/{name}/task-log.md`——fence/结构感知地归约出唯一 reason_code：`section-missing`（小节缺失，退出码非 0，**MUST NOT** 以「小节不存在=无未处置条目」真空通过——先建小节再判）/ `section-empty`（仅脚手架注释/空白，退出码非 0）/ `section-ok-DISPOSITION-UNCHECKED`（存在+非空达成，退出码 0）。
+    - **信任边界声明（MUST 显式陈述一行）**：脚本**只断言小节存在+非空**（故输出码尾缀 `-DISPOSITION-UNCHECKED`，防 `present` 被误读为「已完整核验」=假绿）；**逐条是否真处置归你判定**——脚本不断言逐条已处置（三实例格式不统一、无字面 token、机械不可达），亦 **MUST NOT** naive-grep `未处置` 子串（收尾声明句「本小节无『未处置』条目」含该子串却恰是合规态）。
+    - **本项通过 =** 脚本判 `section-ok-DISPOSITION-UNCHECKED`（退出 0）**且**你复核小节内每条 issue 均标了上文「review 结果如何处理」的状态枚举之一、无遗留未处置条目。
+ 
+ **② 三件套相互引用完整（最小引用图判定）**：roadmap.md 每个已细化阶段至少回指 design.md 对应决策一次；task-log.md 每条完成记录关联 roadmap.md 阶段；design 头部章与决策段无同值重复（只准互相引用，不准复述）。**不通过时报出具体文件与行号**，**MUST NOT** 笼统宣称「完整/不完整」。已细化阶段的回指采用「（见 design.md 决策 N）」锚点句式（`references/roadmap-template.md` 已含示例注释）。存量四件套包/逃生舱包（见「产出模式」节）本项判定范围 = 三件套两两引用 + `requirements.md` 按其历史约定核对；「头部章无重复」子判据对无头部章的 legacy 包记 `N/A`（`N/A` 为合法第三态，须显式陈述，不计入不通过）。**缺件存量包**（见「产出模式」节）判定标准对缺失文件（design.md / task-log.md）记「不适用」而非「不通过」，并输出一行「存量缺件包（缺 X），引用完整性仅对现存文件核验」提示——`N/A` 为合法第三态。
+ 
+ **③ 历史存档未被引用**：存量 `footage/`（如有）与包根 `memo.md`（如有）均未被三件套引用。
+@@ -632,25 +672,25 @@ roadmap 完成只是起点。后续每个阶段通过独立的 OpenSpec 变更
+ ### 陷阱 5：同名包被静默覆盖
+ 
+ **表现**：生成时发现 `openspec/roadmaps/{name}/` 已存在，没有向操作者确认就直接覆写。
+ 
+ **后果**：既有 task-log.md 的历史记录、已处置的 Review 条目、既往决策全部丢失，且无人察觉——直到需要追溯时才发现。
+ 
+ **正确**：先判定 create/continue/replan（见「产出模式」一节），continue 保留历史只增量更新，replan 先在 task-log.md 落重规划记录再改写。
+ 
+ ### 陷阱 6：收尾 checklist 当成 review（把机械检查当内容质量）
+ 
+-**表现**：觉得"收尾 checklist 四项都过了就等于内容审过了"，跳过 review 分档。
++**表现**：觉得"收尾 checklist 四项都过了就等于内容审过了"，跳过 review。
+ 
+ **后果**：收尾 checklist 检查的是**结构性条件**（有没有处置记录、引用是否完整、历史存档是否被引用、memo 对账/未决项是否闭环）——**不判断内容对不对**。roadmap 里的错误架构决策、不合理阶段划分、遗漏的需求，都能通过 checklist 但在 review 里暴露。
+ 
+-**正确**：两者不重叠、都不能省——review（`/plan-eng-review` 或 `/autoplan`）= **内容质量评审**（三件套产出后、收尾前审视"承诺的东西合不合理"）；收尾 checklist = **结构性软门**（review 处置完了没有、引用断没断链、历史存档/未决项留痕全不全）。
++**正确**：两者不重叠、都不能省——review（恒跑 strategy/plan-eng 双镜 + sync-only outside voice）= **内容质量评审**（三件套产出后、收尾前审视"承诺的东西合不合理"）；收尾 checklist = **结构性软门**（review 处置完了没有、引用断没断链、历史存档/未决项留痕全不全）。
+ 
+ ---
+ 
+ ## 与 CLAUDE.md 的配合
+ 
+ 建议在项目根的 `CLAUDE.md` 的 "Directory Layout" 补一行：
+ 
+ ```markdown
+ | `openspec/roadmaps/` | 项目级 roadmap 文档包（长期真相源），按项目分子目录 |
+ ```

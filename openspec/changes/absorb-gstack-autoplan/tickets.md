@@ -70,9 +70,9 @@ spec-review SKILL 的 Step1/Step2 合并为单批 dispatch + 锚枚举换值 + g
 2. 删除 `sdflow-init/assets/workflow/tools/outside_voice_guard.py` 及其 tests。
 3. 全仓 `/usr/bin/python3 -m pytest` 绿。
 
-- [ ] 矩阵全笛卡尔 golden 已迁移到 anchor_lint 测试(含 mutation/边界)
-- [ ] outside_voice_guard.py + tests 已删除
-- [ ] 全仓 pytest 绿(guard 残留引用归零)
+- [x] 矩阵全笛卡尔 golden 已迁移到 anchor_lint 测试(含 mutation/边界)
+- [x] outside_voice_guard.py + tests 已删除
+- [x] 全仓 pytest 绿(guard 残留引用归零)
 
 ### Task 4: DX 吸收与 roadmap 侧重写
 
