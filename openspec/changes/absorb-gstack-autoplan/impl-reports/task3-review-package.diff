@@ -1,0 +1,868 @@
+# Review package: 0ad4d6f18c115d61987f934f168be3d13bad43e4..f7149226e5a701170d6f08bfdbef2748f0a36308 (Task 3 worktree merge)
+
+## Commits
+f714922 Merge task3: 守卫脚本退役与矩阵 golden 迁移
+0dec397 task3: 守卫脚本退役与矩阵 golden 迁移
+
+## Files changed
+ .../impl-reports/task3-guard-retire.md             |  39 ++
+ sdflow-init/assets/workflow/tools/anchor_lint.py   |  13 +-
+ .../assets/workflow/tools/outside_voice_guard.py   | 215 ----------
+ .../workflow/tools/tests/test_anchor_lint.py       |  66 ++++
+ .../tools/tests/test_outside_voice_guard.py        | 436 ---------------------
+ 5 files changed, 113 insertions(+), 656 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/absorb-gstack-autoplan/impl-reports/task3-guard-retire.md b/openspec/changes/absorb-gstack-autoplan/impl-reports/task3-guard-retire.md
+new file mode 100644
+index 0000000..0ad3b7c
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-autoplan/impl-reports/task3-guard-retire.md
+@@ -0,0 +1,39 @@
++### Task 3: 守卫脚本退役与矩阵 golden 迁移 — 实现报告
++
++**范围**：`openspec/changes/absorb-gstack-autoplan/tasks.md` 任务组 3（3.1/3.2）。
++
++## 做了什么
++
++1. **矩阵全笛卡尔 golden 先迁移**（在 guard 删除之前完成，`sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py`）：
++   - 新增 `_matrix_oracle(host, runner, reason_code, findings)`：独立于 `classify_combo` 分支顺序的矩阵定义 oracle（四类各写成互斥谓词 + 显式互斥断言，非照抄生产实现的 if/elif 结构），供 golden 测试核验 `anchor_lint.classify_combo` 是否符合 `host-adaptive-execution` spec.md 记录的矩阵定义。
++   - 新增 `test_matrix_full_cartesian_golden_conforms_to_definition`：对 `host×runner×reason_code×findings` 全笛卡尔积（枚举域来自 `enums["host"]`/`["runner"]`/`["reason_code"]`（真实契约机读块）+ mutation：`bogus-host`/`bogus-runner`/`bogus-reason`/`None`，findings 域 `[0, 1, 5, None]`）逐条断言 `classify_combo` 输出与 oracle 一致，并断言 `categories_seen == {cross-model, same-family, no-exec, self-review, illegal}`（防测试域退化成只测部分分支）。
++   - 迁移前原 `test_outside_voice_guard.py::test_matrix_cross_tool_golden_full_cartesian` 是**两工具互比**（`anchor_lint.classify_combo` vs `outside_voice_guard.classify_combo`）；迁移后是**单工具自测**（`anchor_lint.classify_combo` vs 独立 oracle）——与 host-adaptive-execution spec.md 「矩阵实现收敛为 anchor_lint 单一本地实现...防漂移 golden SHALL 收敛为 anchor_lint 单工具自测」的要求一致。
++   - 迁移前先跑 `pytest -k matrix` 确认新用例绿（18 passed），再执行删除，未出现「先删后测」的覆盖面丢失窗口。
++
++2. **删除守卫脚本及其测试**：
++   - `git rm sdflow-init/assets/workflow/tools/outside_voice_guard.py`（215 行）
++   - `git rm sdflow-init/assets/workflow/tools/tests/test_outside_voice_guard.py`（436 行，44 个测试函数）
++   - 全部 44 个测试中，唯一具备独立覆盖价值、且被 spec 明确要求保留的是 Step 5 矩阵全笛卡尔 golden（已迁移）；其余测试（`classify`/`parse_mode`/`source_max_mtime`/`parse_codex_findings`/CLI 契约等）覆盖的是 guard 自身的 `gstack-review.md` 读取 + 复用判定工作流——该工作流随 task 2.3（Step1 autoplan 原生执行/gstack-review.md 落盘/guard 调用/checkpoint 四环节整体删除）已失去存在依据，MUST NOT 迁移（迁移会把已退役工作流的测试面伪装成"仍活"）。
++
++3. **清理 `anchor_lint.py` 两处因 guard 删除而失真的注释**（`classify_combo` 所在模块头部注释 + docstring 末句）：原文声称"outside_voice_guard 各自重实现，golden 守一致"——guard 删除后这句话对当前代码库为假，已改写为过去时框架（"absorb-gstack-autoplan 前曾…该复用路径退役后收敛为本文件单一实现，golden 改为单工具自测"）。判断依据：这两处注释直接描述 `classify_combo` 的协作对象，若不同步会让读者对着已不存在的文件抓瞎；范围判据（fold-vs-defer）——低成本、与本任务直接相关（我正是这次删除的执行者），故当场 fold 而非另开。
++
++## 未改动 / 明确排除的范围
++
++- `lens-metric-contract.md` 的 outside_voice_guard 相关散文——task 1（已在更早的 commit 完成）已改写为"退役而并入 absorb-gstack-autoplan"的正确措辞，读码确认无需再动。
++- `sdflow-spec-review/SKILL.md` :297 的 `outside_voice_guard.py` 提法——上下文是"旧「outside-voice 复用守卫」...整体退役"的历史性描述（task 2 已完成），措辞已正确，未改动。
++- `test_review_disposition_check.py` :100 的 `outside_voice_guard` 字符串——是测试夹具里的示例 commit message 文本（用于测试 Markdown 解析行为），非代码依赖，未改动。
++- `openspec/INDEX.md`、`openspec/CONTEXT.md`、`openspec/specs/outside-voice-reuse-guard/spec.md`（主 spec REMOVED delta 同步）——分属 task 4.3 / 归档阶段 delta 同步，不在本任务范围。
++- `guard=` 字段解析——全局约束要求 anchor_lint MUST NOT 解析该字段；核验 `anchor_lint.py` 现状本就未解析 `guard=`（:555 注释明确"MUST NOT 解析 guard="），无需改动。
++
++## 验证
++
++- `pytest sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py -k matrix`：18 passed（含新迁移的全笛卡尔 golden）。
++- 全仓 `/usr/bin/python3 -m pytest -q`：**2444 passed, 10 skipped, 1 failed**。
++  - 失败用例：`sdflow-init/tests/test_outside_voice_job.py::test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret`——与本任务（outside-voice-**reuse-guard**）无关的另一模块（async outside-voice **job** supervisor），依赖真实 `claude` CLI 的 `--bg --exec` 时序探针，对照组本身未采到 canary（环境时序问题）。**在我改动前的基线跑（同一 worktree、改动前状态）已同样失败**，测试计数 2487 passed / 1 failed，与改动后 2444 passed（2487 − 44 删除 + 1 迁移新增 = 2444）精确吻合，证明该失败与本次守卫脚本退役/矩阵迁移无关，是预先存在的环境相关 flake。
++  - `grep -rn "outside_voice_guard" --include="*.py" --include="*.sh" .`：仅剩 3 处非代码引用命中（`anchor_lint.py` 的两行历史性注释 + `test_review_disposition_check.py` 的字符串夹具），均已在上节说明，无残留调用。
++
++## Checklist（供门禁核对，未勾选——由执行模式在双轴审后补打）
++
++- [x] 矩阵全笛卡尔 golden 已迁移到 anchor_lint 测试（含 mutation/边界）
++- [x] outside_voice_guard.py + tests 已删除
++- [x] 全仓 pytest 绿（guard 残留引用归零；1 个不相关预存 flake 已核实非本任务引入）
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index 24aca8f..806c3d5 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -455,41 +455,44 @@ def check_hr_tg(report_text, hr_tg_subset, all_tg_set):
+                 v.append({"anchor": anchor, "field": "evidence", "kind": "evidence-missing"})
+     return v
+ 
+ 
+ _NONNEG_INT = re.compile(r'^\d+$')
+ 
+ 
+ # =========================================================================================
+ # add-codex-host-support：合法组合矩阵（🔴 自审红线单一源）+ fan-out 一致性 lint（读 mirrors=）
+ # 两者 always-on、各自独立成函数、MUST NOT 接受 metrics_on 参数（照 check_hr_tg 先例，D11）——读真实性
+-# 信号非价值度量，与 metrics.enabled 解耦。枚举域从契约机读块读（load_enums），关系式判定逻辑本地重实现
+-# （GC-2：平铺 enums 块装不下 runner≠host/findings=0 等关系式谓词；outside_voice_guard 各自重实现，全笛卡尔
+-# golden 守一致，见 tasks 2.3/4.5）。**MUST NOT import/调 resolve-models.sh（ADR-1：anchor_lint 不判宿主，
+-# 只校验锚行自身内部一致性——host/runner/reason_code 都写在锚行里）。**
++# 信号非价值度量，与 metrics.enabled 解耦。枚举域从契约机读块读（load_enums），关系式判定逻辑本地实现
++# （GC-2：平铺 enums 块装不下 runner≠host/findings=0 等关系式谓词）。absorb-gstack-autoplan：矩阵曾由
++# outside_voice_guard.py 各自重实现、全笛卡尔 golden 互守一致，该复用路径整体退役后收敛为本文件
++# **单一本地实现**，golden 改为单工具自测（见 tests/test_anchor_lint.py 矩阵全笛卡尔 golden 自测段）。
++# **MUST NOT import/调 resolve-models.sh（ADR-1：anchor_lint 不判宿主，只校验锚行自身内部一致性——
++# host/runner/reason_code 都写在锚行里）。**
+ # =========================================================================================
+ 
+ OUTSIDE_VOICE_REQUIRED_FIELDS = ("host", "runner", "reason_code")  # D1：outside-voice 锚新增 KV 解析，reason_code 该锚必填
+ _DOWNGRADE_CODES = frozenset({"not-installed", "preflight-error", "timeout", "exec-error"})  # D2 同族 fallback 降级码集（钉死，含 preflight-error）
+ _NOEXEC_KNOWN_CODES = frozenset({"secret-hit", "fallback-unavailable"})                      # 无执行 · host∈{claude,codex}
+ _DUOS = frozenset({"claude", "codex"})                                                        # 两个真机队（谈跨模型的前提）
+ 
+ 
+ def classify_combo(host, runner, reason_code, findings):
+     """把 outside-voice 锚的 (host, runner, reason_code, findings) 分类为**完整**类别（非仅「跨模型」布尔）：
+       'cross-model'  合法跨模型第二意见：host,runner∈{claude,codex} ∧ runner≠host ∧ reason_code='ok'
+       'same-family'  合法同族降级：runner==host ∧ reason_code∈降级码集
+       'no-exec'      合法无执行：runner='none' ∧ findings==0 ∧ (host='unknown'∧rc='host-unknown' ∨ host∈{claude,codex}∧rc∈{secret-hit,fallback-unavailable})
+       'self-review'  🔴 F6 红线：runner==host ∧ reason_code∉降级码集（同族行子句被违反，非并列规则）
+       'illegal'      其余一切非法组合（catch-all；含 runner='unknown' 等在共享枚举域内却非法者）
+     findings 为已解析的 int（不可解析/缺失 → None，no-exec 分支因 findings!=0 落 illegal，fail-closed）。
+-    **关系式逻辑本地重实现**（GC-2），供 anchor_lint 判自审 / outside_voice_guard 判可复用共用（各自重实现 + golden 守）。"""
++    **关系式逻辑本地实现**（GC-2）。absorb-gstack-autoplan 前曾与 outside_voice_guard.py 判可复用共用
++    （各自重实现 + 全笛卡尔 golden 互守），该复用路径退役后收敛为本文件单一实现，golden 改为单工具自测。"""
+     if runner == "none":
+         # 无执行行：runner='none' 一律**非跨模型**（堵 C1：none≠host 恒真会把无执行误判跨模型）
+         if findings == 0 and (
+             (host == "unknown" and reason_code == "host-unknown")
+             or (host in _DUOS and reason_code in _NOEXEC_KNOWN_CODES)
+         ):
+             return "no-exec"
+         return "illegal"
+     if host in _DUOS and runner in _DUOS:
+         if runner == host:
+diff --git a/sdflow-init/assets/workflow/tools/outside_voice_guard.py b/sdflow-init/assets/workflow/tools/outside_voice_guard.py
+deleted file mode 100644
+index 2878768..0000000
+--- a/sdflow-init/assets/workflow/tools/outside_voice_guard.py
++++ /dev/null
+@@ -1,215 +0,0 @@
+-#!/usr/bin/env python3
+-"""outside_voice_guard — 确定性 outside-voice 复用守卫（mlh-p4·T80）。
+-读一份 spec-review 的 outside-voice 产物（gstack-review.md）+ 一个 change 目录，
+-按三前置（来源 mode / 新鲜度 fs-mtime / 结构 codex 段）按序归约出**唯一** reason_code（七枚举，
+-add-codex-host-support 新增 `same-family`：同族 fallback / 无执行段均不得复用）。
+-纯 stdlib、无 subprocess、门控外置（不读 config）；坏输入 fail-closed all-or-nothing。
+-新鲜度用源文件 fs-mtime 直比〔spec-review Q-C：撤销 grill 的 git 反转、纯 fs-mtime〕，
+-排除评审产物自身（gstack-review.md / spec-review-report.md / .outside-voice/）。承 4.C lens_metric_emit 形态。
+-add-codex-host-support：结构判改为引用「合法组合矩阵」的跨模型判定（`classify_combo`，本地重实现，
+-MUST NOT import anchor_lint——GC-2 边界锁），与 anchor_lint 的同名函数由全笛卡尔 golden 测试互相守一致
+-（tests/test_outside_voice_guard.py Step 5）。"""
+-import argparse, re, sys
+-
+-for _s in (sys.stdout, sys.stderr):
+-    try: _s.reconfigure(encoding="utf-8", errors="replace")
+-    except Exception: pass
+-from pathlib import Path
+-
+-EXIT_OK, EXIT_FAIL = 0, 1
+-REASON_CODES = ("none", "file-missing", "section-not-found", "zero-findings", "stale",
+-                 "simulated-source", "same-family")             # 本地常量豁免（ADR-11：输入独有、不写进锚、不跨模块共享）
+-VALID_MODES = ("native", "simulated")                           # step1-broad-review 锚 mode 枚举（我们的锚，严格 fail-closed）
+-SOURCE_FILES = ("proposal.md", "design.md", "tasks.md")         # + specs/** 递归；评审产物自身不在此列（inclusion allowlist 天然排除）
+-
+-_S1_RE = re.compile(r'<!--\s*sdflow:step1-broad-review\s+v1\b(.*?)-->')
+-_OV_ANCHOR_RE = re.compile(r'<!--\s*sdflow:outside-voice\s+v1\b(.*?)-->')
+-_ATTR_RE = re.compile(r'(\w+)="([^"]*)"')
+-_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')                 # CommonMark fence：0-3 空格缩进 + ≥3 同字符 marker
+-
+-
+-class EmitError(Exception):
+-    """坏输入 fail-closed（我们的锚缺失/mode 非枚举/单一源不可读；区别于外部 codex 段的 best-effort 降级）。"""
+-    pass
+-
+-
+-# =========================================================================================
+-# add-codex-host-support：合法组合矩阵——「跨模型」判定的本地重实现（GC-2：MUST NOT import anchor_lint，
+-# 关系式判定逻辑本文件内重实现；契约块只承载枚举域，不承载这些关系式谓词，见 lens-metric-contract.md
+-# 「跨模型性」段）。逻辑与 anchor_lint.classify_combo **逐条同构**——由全笛卡尔 golden 测试
+-# （tests/test_outside_voice_guard.py Step 5）互相守一致，任一漂移即红。
+-# =========================================================================================
+-
+-_DOWNGRADE_CODES = frozenset({"not-installed", "preflight-error", "timeout", "exec-error"})  # 同族 fallback 降级码集
+-_NOEXEC_KNOWN_CODES = frozenset({"secret-hit", "fallback-unavailable"})                      # 无执行 · host∈{claude,codex}
+-_DUOS = frozenset({"claude", "codex"})                                                        # 两个真机队（谈跨模型的前提）
+-
+-
+-def classify_combo(host, runner, reason_code, findings):
+-    """把 (host, runner, reason_code, findings) 分类为**完整**类别（本地重实现，逻辑与
+-    anchor_lint.classify_combo 逐条同构）：
+-      'cross-model'  合法跨模型第二意见：host,runner∈{claude,codex} ∧ runner≠host ∧ reason_code='ok'
+-      'same-family'  合法同族降级：runner==host ∧ reason_code∈降级码集
+-      'no-exec'      合法无执行：runner='none' ∧ findings==0 ∧ (host='unknown'∧rc='host-unknown' ∨ host∈{claude,codex}∧rc∈{secret-hit,fallback-unavailable})
+-      'self-review'  runner==host ∧ reason_code∉降级码集（同族行子句被违反）
+-      'illegal'      其余一切非法组合（catch-all）
+-    findings 为已解析的 int（不可解析/缺失 → None）。"""
+-    if runner == "none":
+-        if findings == 0 and (
+-            (host == "unknown" and reason_code == "host-unknown")
+-            or (host in _DUOS and reason_code in _NOEXEC_KNOWN_CODES)
+-        ):
+-            return "no-exec"
+-        return "illegal"
+-    if host in _DUOS and runner in _DUOS:
+-        if runner == host:
+-            return "same-family" if reason_code in _DOWNGRADE_CODES else "self-review"
+-        return "cross-model" if reason_code == "ok" else "illegal"
+-    return "illegal"
+-
+-
+-def _fence_outside_lines(text):
+-    """产出 fence 外行（CommonMark：0-3 空格缩进 + ≥3 同字符 marker 成对开合，闭合行 marker 后仅空白）。
+-    口径与姊妹校验器 anchor_lint.fence_outside_lines / review_disposition_check._annotate_lines 一致——
+-    D5 铁律：跨模块口径本文件内重实现，MUST NOT import。防 fence 内的文档示例锚被误算（adr/0018 输出诚实）。"""
+-    fence = None
+-    for ln in text.splitlines():
+-        m = _FENCE_RE.match(ln)
+-        if fence is None:
+-            if m:
+-                fence = (m.group(1)[0], len(m.group(1))); continue
+-            yield ln
+-        else:
+-            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= fence[1] and ln[m.end():].strip() == "":
+-                fence = None
+-            continue
+-
+-
+-def _fence_outside_text(text):
+-    """fence 外行 join 回文本；锚为单行、join 保行完整，fenced 锚被整块剔除（不参与匹配）。"""
+-    return "\n".join(_fence_outside_lines(text))
+-
+-
+-def parse_mode(text):
+-    """抓 step1-broad-review 锚 mode（我们的锚，严格）。锚缺失/缺 mode/mode 非枚举 → EmitError。
+-    仅匹配 fence 外锚——fence 内的示例锚（文档演示）不得被取（与 parse_codex_findings 同口径）。
+-    多锚（native/simulated 双锚）fail-closed（T139）。"""
+-    outside = _fence_outside_text(text)
+-    matches = _S1_RE.findall(outside)
+-    if len(matches) == 0:
+-        raise EmitError("step1-broad-review 锚缺失或格式不符")
+-    if len(matches) > 1:
+-        raise EmitError(f"step1-broad-review 锚重复（{len(matches)} 条），须恰好 1 条")
+-    mode = dict(_ATTR_RE.findall(matches[0])).get("mode")
+-    if mode is None:
+-        raise EmitError("step1-broad-review 锚缺 mode 属性")
+-    if mode not in VALID_MODES:
+-        raise EmitError(f"mode 非枚举值（须 native|simulated）: {mode!r}")
+-    return mode
+-
+-
+-def source_max_mtime(change_dir):
+-    """源文件（proposal/design/tasks/specs/**）最大 fs-mtime；评审产物自身天然不在 allowlist。
+-    change_dir 缺失/非目录/无源文件 → EmitError（无法判新鲜度，fail-closed）。"""
+-    if not change_dir.is_dir():
+-        raise EmitError(f"change 目录不存在或非目录: {change_dir}")
+-    mtimes = []
+-    for name in SOURCE_FILES:
+-        p = change_dir / name
+-        if p.is_file():
+-            mtimes.append(p.stat().st_mtime)
+-    specs_dir = change_dir / "specs"
+-    if specs_dir.is_dir():
+-        for p in sorted(specs_dir.rglob("*")):
+-            if p.is_file():
+-                mtimes.append(p.stat().st_mtime)
+-    if not mtimes:
+-        raise EmitError(f"change 目录无源文件（proposal/design/tasks/specs）: {change_dir}")
+-    return max(mtimes)
+-
+-
+-def parse_codex_findings(text):
+-    """best-effort 解析可复用的 outside-voice findings 计数。返回三态之一：
+-      int（含 0）           — 至少一条 cross-model 锚且其 findings 可解析；值为这些**可解析** findings 之和。
+-                              cross-model 锚 findings 畸形/缺失（不可解析）⇒ 不贡献计数（C1：MUST NOT 退去
+-                              扫无关 codex#N prose 标签补位——那会把正文一句 "codex#1" 当可复用、静默跳过
+-                              重跑跨模型评审、击穿本 guard 防假复用的唯一职责）；若无任何可解析 cross-model
+-                              findings ⇒ 落 None（不复用、回落重跑）。
+-      "same-family"（字符串哨兵） — 无可复用 cross-model findings，但存在 ≥1 条被矩阵分类为 same-family/
+-                              no-exec/self-review 的锚（同族 fallback / 无执行 / 自审——均非跨模型第二意见）
+-      None                  — 无任何可复用信号（无锚 / 仅 illegal 锚 best-effort 跳过 / cross-model 锚 findings
+-                              全畸形 / 仅 codex#N prose 标签）→ section-not-found。**prose 标签 MUST NOT 构成
+-                              可复用资格**（add-codex-host-support Step 6+C1：labels 不再是任何复用路径的旁路）。
+-    `host`/`reason_code` 缺失字段按 v1 兼容读（GC-9：MUST NOT 因缺字段 fail-closed 罢工，旧产物依然可复用）：
+-    无 `host=` → `host="claude"`；无 `reason_code=` → `reason_code="ok"`。
+-    仅匹配 fence 外锚——fence 内的文档示例锚不得计入（否则 outside-voice 层被静默当有效复用跳过，违 adr/0018）。"""
+-    text = _fence_outside_text(text)
+-    cross_total = None            # 已确认的可解析 cross-model 锚 findings 之和（无则保持 None）
+-    same_family_found = False     # 是否存在 same-family/no-exec/self-review 锚（非跨模型，但可辨识的合法态）
+-    for m in _OV_ANCHOR_RE.finditer(text):
+-        attrs = dict(_ATTR_RE.findall(m.group(1)))
+-        runner = attrs.get("runner")
+-        if runner is None:
+-            continue                                      # runner 缺失：无从分类，best-effort 跳过
+-        host = attrs.get("host", "claude")                # v1 兼容：无 host= → claude（GC-9）
+-        reason_code = attrs.get("reason_code", "ok")       # v1 兼容：无 reason_code= → ok（GC-9）
+-        raw = attrs.get("findings")
+-        findings_val = int(raw) if (raw is not None and raw.isascii() and raw.isdigit()) else None
+-        cat = classify_combo(host, runner, reason_code, findings_val)
+-        if cat == "cross-model":
+-            if findings_val is not None:                   # findings 畸形的 cross-model 锚不贡献计数（C1：不复用、回落）
+-                cross_total = (cross_total or 0) + findings_val
+-        elif cat in ("same-family", "no-exec", "self-review"):
+-            same_family_found = True                       # illegal 不计入任何一侧（畸形/垃圾，best-effort 跳过）
+-    if cross_total is not None:
+-        return cross_total
+-    if same_family_found:
+-        return "same-family"
+-    return None                                             # 无锚/仅 illegal 锚/findings 畸形/仅 prose 标签 → section-not-found
+-
+-
+-def classify(review_path, change_dir):
+-    """三前置按序（来源 > 新鲜度 > 结构）归约 → 唯一 reason_code。坏输入 → EmitError。"""
+-    # 产物存在性（file-missing 是合法判定，不需 change_dir）
+-    if not review_path.exists():
+-        return "file-missing"
+-    if not review_path.is_file():
+-        raise EmitError(f"产物路径非普通文件: {review_path}")
+-    try:
+-        text = review_path.read_text(encoding="utf-8")
+-    except (OSError, UnicodeDecodeError) as e:
+-        raise EmitError(f"产物不可读: {e}")
+-    # ①来源（mode；simulated 视同无效）
+-    if parse_mode(text) == "simulated":
+-        return "simulated-source"
+-    # ②新鲜度（fs-mtime 直比；产物早于源文件最大 mtime → stale。此处才需 change_dir）
+-    if review_path.stat().st_mtime < source_max_mtime(change_dir):
+-        return "stale"
+-    # ③结构（矩阵判「跨模型」可解析否 / 条数；same-family = 同族 fallback / 无执行段，MUST NOT 复用）
+-    n = parse_codex_findings(text)
+-    if n is None:
+-        return "section-not-found"
+-    if n == "same-family":
+-        return "same-family"
+-    if n == 0:
+-        return "zero-findings"
+-    return "none"
+-
+-
+-def main(argv=None):
+-    ap = argparse.ArgumentParser(
+-        description="outside-voice 复用守卫（确定性·纯 stdlib·fail-closed·门控外置）")
+-    ap.add_argument("--review-path", required=True, help="outside-voice 产物路径（gstack-review.md）")
+-    ap.add_argument("--change-dir", required=True, help="change 目录（openspec/changes/<name>/）")
+-    args = ap.parse_args(argv)
+-    try:
+-        code = classify(Path(args.review_path), Path(args.change_dir))
+-    except EmitError as e:
+-        print(f"[outside_voice_guard] FAIL: {e}", file=sys.stderr)   # 坏输入：stderr FAIL、无 stdout
+-        return EXIT_FAIL
+-    print(code)                                                       # reason_code 落 stdout（含 none）
+-    return EXIT_OK if code == "none" else EXIT_FAIL                   # none=可复用 exit0；其余=非零（stdout 载码，区别于 stderr FAIL）
+-
+-
+-if __name__ == "__main__":
+-    sys.exit(main())
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index a298ed9..38d9fae 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -705,20 +705,86 @@ def test_matrix_dup_key_fail_closed_not_reclassified_as_cross_model():
+ 
+ def test_matrix_single_key_still_classifies_after_strict_parse():
+     """对照：改 parse_kv_strict 后正常单键锚仍正确分类——自审仍判 self-review、跨模型仍 clean、无 dup-key。"""
+     al = _mod()
+     v_self = al.check_legal_combo(_ov(host="claude", runner="claude", reason_code="ok") + "\n", _enums())
+     assert _has(v_self, "self-review") and not _has(v_self, "dup-key")
+     v_xm = al.check_legal_combo(_ov(host="claude", runner="codex", reason_code="ok") + "\n", _enums())
+     assert v_xm == []                                   # 合法跨模型仍 clean
+ 
+ 
++# --- 矩阵全笛卡尔 golden 自测（absorb-gstack-autoplan task 3.2：原 test_outside_voice_guard.py Step 5
++# 的跨工具全笛卡尔 golden——两工具各自本地重实现 + 互守一致——随 outside_voice_guard.py 复用路径整体
++# 退役而失去第二实现方（host-adaptive-execution spec.md「矩阵实现收敛为 anchor_lint 单一本地实现」）。
++# 迁移改造为**单工具自测**：不再比较两份实现，而是用一份独立于 classify_combo 实现顺序的「矩阵定义
++# oracle」（下方 _matrix_oracle，逐类写成互斥谓词 + 显式互斥断言，非照抄 classify_combo 的 if/elif
++# 分支结构）复核 host×runner×reason_code×findings 全笛卡尔积（含边界 0 + mutation：越域/缺失值）逐条
++# 分类是否符合矩阵定义——MUST NOT 只比有限输入的布尔值（spec.md 用语原文）。 ---
++
++def _matrix_oracle(host, runner, reason_code, findings):
++    """矩阵定义的独立 oracle（结构上与 classify_combo 的 if/elif 分支顺序不同——四个类别各自写成
++    互斥谓词、显式断言互斥，而非早 return 链），供 golden 测试核验 classify_combo 是否符合
++    host-adaptive-execution spec.md 记录的矩阵定义（非同一份实现的重复调用）。"""
++    duos = {"claude", "codex"}
++    downgrade = {"not-installed", "preflight-error", "timeout", "exec-error"}
++    noexec_known = {"secret-hit", "fallback-unavailable"}
++
++    is_no_exec = (
++        runner == "none" and findings == 0 and (
++            (host == "unknown" and reason_code == "host-unknown")
++            or (host in duos and reason_code in noexec_known)
++        )
++    )
++    is_same_family = (
++        runner != "none" and host in duos and runner in duos
++        and runner == host and reason_code in downgrade
++    )
++    is_self_review = (
++        runner != "none" and host in duos and runner in duos
++        and runner == host and reason_code not in downgrade
++    )
++    is_cross_model = (
++        runner != "none" and host in duos and runner in duos
++        and runner != host and reason_code == "ok"
++    )
++    hits = [name for name, cond in (
++        ("no-exec", is_no_exec), ("same-family", is_same_family),
++        ("self-review", is_self_review), ("cross-model", is_cross_model),
++    ) if cond]
++    assert len(hits) <= 1, f"矩阵定义歧义（多类互斥被违反）: {(host, runner, reason_code, findings)} -> {hits}"
++    return hits[0] if hits else "illegal"
++
++
++def test_matrix_full_cartesian_golden_conforms_to_definition():
++    al = _mod()
++    enums = al.load_enums(CONTRACT)                      # 枚举域单一源：契约机读块（非脚本内复制清单）
++    hosts = sorted(enums["host"]) + ["bogus-host", None]                 # 越域 + 缺失/坏值 mutation
++    runners = sorted(enums["runner"]) + ["bogus-runner", None]
++    reason_codes = sorted(enums["reason_code"]) + ["bogus-reason", None]
++    findings_domain = [0, 1, 5, None]            # 边界(0) + 正常(1/5) + 缺失/坏值(None)
++
++    mismatches = []
++    categories_seen = set()
++    for host in hosts:
++        for runner in runners:
++            for reason_code in reason_codes:
++                for findings in findings_domain:
++                    actual = al.classify_combo(host, runner, reason_code, findings)
++                    expected = _matrix_oracle(host, runner, reason_code, findings)
++                    categories_seen.add(actual)
++                    if actual != expected:
++                        mismatches.append((host, runner, reason_code, findings, expected, actual))
++    assert mismatches == [], f"classify_combo 分类偏离矩阵定义（前 20 条）: {mismatches[:20]}"
++    # 全笛卡尔积须真正覆盖全部 5 类完整分类，防测试域退化成只测到部分分支（假绿）
++    assert categories_seen == {"cross-model", "same-family", "no-exec", "self-review", "illegal"}
++
++
+ # --- Step 5：lens-metric 普通镜行级校验 -----------------------------------------------------
+ 
+ def test_ordinary_mirror_runner_unknown_host_known_blocked():   # host=claude lens=domain runner=unknown → 拦
+     al = _mod()
+     v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="unknown"), "code-review", _enums())
+     assert _has(v, "ordinary-runner-host-mismatch")
+ 
+ def test_ordinary_mirror_runner_unknown_host_unknown_ok():      # host=unknown lens=domain runner=unknown → 放行
+     al = _mod()
+     v = al.check_lens_metric(_lm(host="unknown", lens="domain", runner="unknown"), "code-review", _enums())
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_outside_voice_guard.py b/sdflow-init/assets/workflow/tools/tests/test_outside_voice_guard.py
+deleted file mode 100644
+index 3a602d7..0000000
+--- a/sdflow-init/assets/workflow/tools/tests/test_outside_voice_guard.py
++++ /dev/null
+@@ -1,436 +0,0 @@
+-import subprocess, sys, ast, importlib.util, os
+-from pathlib import Path
+-import pytest
+-
+-TOOLS = Path(__file__).resolve().parent.parent
+-SCRIPT = TOOLS / "outside_voice_guard.py"
+-ANCHOR_LINT_SCRIPT = TOOLS / "anchor_lint.py"
+-
+-
+-def _mod():
+-    spec = importlib.util.spec_from_file_location("outside_voice_guard", SCRIPT)
+-    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+-
+-
+-def _anchor_lint_mod():
+-    """测试文件专属：同时 import 两工具做跨工具 golden 对比（GC-2 只锁生产代码 outside_voice_guard.py
+-    本身 MUST NOT import anchor_lint，测试文件不受此限）。"""
+-    spec = importlib.util.spec_from_file_location("anchor_lint", ANCHOR_LINT_SCRIPT)
+-    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
+-
+-
+-# --- 夹具构造：造一个 change 目录（源文件 + 一份 gstack-review.md），mtime 显式钉死 ---
+-
+-def _mode_anchor(mode="native"):
+-    return f'<!-- sdflow:step1-broad-review v1 mode="{mode}" -->'
+-
+-
+-def _ov_anchor(findings=1, runner="codex"):
+-    return (f'<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+-            f'runner="{runner}" reason_code="ok" findings="{findings}" truncated="false" -->')
+-
+-
+-def _make_change(tmp_path, mode="native", codex=True, findings=1,
+-                 src_mtime=1_000_000, product_mtime=2_000_000, extra_body=""):
+-    """返回 (review_path, change_dir)。product_mtime > src_mtime = fresh；反之 stale。"""
+-    cd = tmp_path / "changes" / "mychange"
+-    (cd / "specs" / "cap").mkdir(parents=True)
+-    for name in ("proposal.md", "design.md", "tasks.md"):
+-        f = cd / name; f.write_text(f"# {name}\n", encoding="utf-8")
+-        os.utime(f, (src_mtime, src_mtime))
+-    sp = cd / "specs" / "cap" / "spec.md"; sp.write_text("## ADDED\n", encoding="utf-8")
+-    os.utime(sp, (src_mtime, src_mtime))
+-    body = _mode_anchor(mode) + "\n# review\n" + extra_body
+-    if codex:
+-        body += "\n" + _ov_anchor(findings)
+-    rp = cd / "gstack-review.md"; rp.write_text(body + "\n", encoding="utf-8")
+-    os.utime(rp, (product_mtime, product_mtime))
+-    return rp, cd
+-
+-
+-# --- 六 reason_code 各一正例（直调核心归约函数）---
+-
+-def test_none_reusable(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path)
+-    assert m.classify(rp, cd) == "none"
+-
+-
+-def test_simulated_source(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, mode="simulated")
+-    assert m.classify(rp, cd) == "simulated-source"
+-
+-
+-def test_stale(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, product_mtime=500_000)   # 早于源 1M
+-    assert m.classify(rp, cd) == "stale"
+-
+-
+-def test_section_not_found(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    assert m.classify(rp, cd) == "section-not-found"
+-
+-
+-def test_zero_findings(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, findings=0)
+-    assert m.classify(rp, cd) == "zero-findings"
+-
+-
+-def test_file_missing(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path); rp.unlink()
+-    assert m.classify(rp, cd) == "file-missing"
+-
+-
+-def test_reason_codes_are_seven_enum():
+-    m = _mod()
+-    assert set(m.REASON_CODES) == {
+-        "none", "file-missing", "section-not-found", "zero-findings", "stale",
+-        "simulated-source", "same-family"}
+-    assert len(m.REASON_CODES) == 7
+-
+-
+-# --- Step 1（TDD）：runner==host（同族）⇒ same-family，MUST NOT 复用 ---
+-
+-def _ov_anchor_v2(host, runner, reason_code, findings=1, site="design-voice"):
+-    return (f'<!-- sdflow:outside-voice v1 site="{site}" guard="none" host="{host}" '
+-            f'runner="{runner}" reason_code="{reason_code}" findings="{findings}" truncated="false" -->')
+-
+-
+-def _write_body(rp, anchor_line, mode="native", extra_body=""):
+-    body = _mode_anchor(mode) + "\n# review\n" + extra_body + "\n" + anchor_line + "\n"
+-    rp.write_text(body, encoding="utf-8")
+-    os.utime(rp, (2_000_000, 2_000_000))
+-
+-
+-def test_same_family_runner_eq_host(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("codex", "codex", "not-installed", findings=2))
+-    assert m.classify(rp, cd) == "same-family"
+-
+-
+-# 🔴 F6 红线接线锁：self-review 子分支（runner==host ∧ reason_code="ok"，自审谎称成功）。
+-# 与上面的 same-family 用降级码不同——本例走 classify_combo 的 self-review 分支，是本 change 的核心动机。
+-# 该分支在 parse_codex_findings 归入 same_family_found ⇒ classify() 归约到 same-family（非可复用）。
+-def test_self_review_reason_ok_same_family(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("codex", "codex", "ok", findings=9))
+-    assert m.classify(rp, cd) == "same-family"   # self-review 谎称成功 → 归 same-family、MUST NOT 复用
+-
+-
+-def test_cli_self_review_reason_ok_exit_nonzero(tmp_path):
+-    rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("codex", "codex", "ok", findings=9))
+-    r = _run(rp, cd)
+-    assert r.returncode != 0 and r.stdout.strip() == "same-family" and r.stdout.strip() != "none"
+-
+-
+-def test_cli_same_family_exit_nonzero(tmp_path):
+-    rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("codex", "codex", "not-installed", findings=2))
+-    r = _run(rp, cd)
+-    assert r.returncode != 0 and r.stdout.strip() == "same-family"
+-
+-
+-# --- Step 2（TDD）：v1 旧锚（无 host=，无 reason_code=）⇒ 读作 host="claude" ⇒ 可复用，MUST NOT 罢工 ---
+-
+-def test_v1_legacy_anchor_no_host_reusable(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    v1_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+-                 'runner="codex" findings="3" truncated="false" -->')
+-    _write_body(rp, v1_anchor)
+-    assert m.classify(rp, cd) == "none"
+-
+-
+-def test_v1_legacy_anchor_zero_findings(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    v1_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+-                 'runner="codex" findings="0" truncated="false" -->')
+-    _write_body(rp, v1_anchor)
+-    assert m.classify(rp, cd) == "zero-findings"
+-
+-
+-# --- Step 4（TDD）：runner="none" 段（无执行）⇒ same-family，不复用（防 none≠host 误判，C1） ---
+-
+-def test_runner_none_no_exec_same_family(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("codex", "none", "secret-hit", findings=0))
+-    assert m.classify(rp, cd) == "same-family"
+-
+-
+-def test_runner_none_host_unknown_same_family(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("unknown", "none", "host-unknown", findings=0))
+-    assert m.classify(rp, cd) == "same-family"
+-
+-
+-def test_cli_runner_none_exit_nonzero(tmp_path):
+-    rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("codex", "none", "fallback-unavailable", findings=0))
+-    r = _run(rp, cd)
+-    assert r.returncode != 0 and r.stdout.strip() == "same-family"
+-
+-
+-# --- Step 6（TDD）：codex#N prose 标签旁路核——标签单独 MUST NOT 构成"可复用"资格 ---
+-
+-def test_prose_label_alone_insufficient_no_anchor(tmp_path):
+-    """无锚，仅 codex#N prose 标签 ⇒ 拒复用（不得单独构成可复用资格）。"""
+-    m = _mod(); rp, cd = _make_change(
+-        tmp_path, codex=False, extra_body="- codex#1 finding a\n")
+-    result = m.classify(rp, cd)
+-    assert result != "none"
+-    assert result == "section-not-found"
+-
+-
+-def test_prose_label_alone_insufficient_illegal_anchor(tmp_path):
+-    """非法锚（claude-fallback，illegal，best-effort 跳过）+ codex#1 prose 标签 ⇒ 拒复用。"""
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor(3, runner="claude-fallback"), extra_body="- codex#1 finding a\n")
+-    result = m.classify(rp, cd)
+-    assert result != "none"
+-    assert result == "section-not-found"
+-
+-
+-def test_prose_label_alone_insufficient_runner_none_anchor(tmp_path):
+-    """runner="none" 锚（无执行）+ codex#1 prose 标签 ⇒ 拒复用（same-family，非 none）。"""
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    _write_body(rp, _ov_anchor_v2("codex", "none", "secret-hit", findings=0),
+-                extra_body="- codex#1 finding a\n")
+-    result = m.classify(rp, cd)
+-    assert result != "none"
+-    assert result == "same-family"
+-
+-
+-def test_codex_hash_label_fallback(tmp_path):
+-    """标签单独不再构成复用资格（Step 6 收紧）——无 outside-voice 锚时 codex#N 标签不再豁免为 reusable。"""
+-    m = _mod(); rp, cd = _make_change(
+-        tmp_path, codex=False, extra_body="- codex#1 finding a\n- codex#2 finding b\n")
+-    assert m.classify(rp, cd) == "section-not-found"
+-
+-
+-# --- 坏输入 fail-closed（EmitError；非静默产码掩盖损坏）---
+-
+-def test_anchor_missing_fail_closed(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path)
+-    rp.write_text("# no anchor here\n" + _ov_anchor(1) + "\n", encoding="utf-8")
+-    os.utime(rp, (2_000_000, 2_000_000))
+-    with pytest.raises(m.EmitError):
+-        m.classify(rp, cd)
+-
+-
+-def test_mode_non_enum_fail_closed(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, mode="adapted")   # 非 native|simulated
+-    with pytest.raises(m.EmitError):
+-        m.classify(rp, cd)
+-
+-
+-def test_change_dir_missing_fail_closed(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path)
+-    with pytest.raises(m.EmitError):
+-        m.classify(rp, tmp_path / "nonexistent")
+-
+-
+-def test_change_dir_no_sources_fail_closed(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path)
+-    empty = tmp_path / "empty"; empty.mkdir()
+-    with pytest.raises(m.EmitError):
+-        m.classify(rp, empty)
+-
+-
+-# --- 三前置按序（来源 > 新鲜度 > 结构）---
+-
+-def test_simulated_precedes_stale(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, mode="simulated", product_mtime=500_000)
+-    assert m.classify(rp, cd) == "simulated-source"   # 来源判先于新鲜度
+-
+-
+-def test_stale_precedes_structure(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False, product_mtime=500_000)
+-    assert m.classify(rp, cd) == "stale"              # 新鲜度先于结构
+-
+-
+-# --- 新鲜度：排除评审产物自身 / specs 计入源 ---
+-
+-def test_review_artifacts_excluded_from_freshness(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path)        # product 2M > src 1M
+-    srr = cd / "spec-review-report.md"; srr.write_text("# report\n", encoding="utf-8")
+-    os.utime(srr, (9_000_000, 9_000_000))             # 评审产物远新于 product
+-    ovdir = cd / ".outside-voice"; ovdir.mkdir()
+-    ctx = ovdir / "design-voice-context.md"; ctx.write_text("ctx\n", encoding="utf-8")
+-    os.utime(ctx, (9_000_000, 9_000_000))
+-    assert m.classify(rp, cd) == "none"               # 评审产物不算源 → 不 stale
+-
+-
+-def test_specs_file_counts_as_source_stale(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path)        # product 2M, src 1M
+-    sp = cd / "specs" / "cap" / "spec.md"
+-    os.utime(sp, (5_000_000, 5_000_000))              # specs 文件新于 product → stale
+-    assert m.classify(rp, cd) == "stale"
+-
+-
+-# --- codex 段 best-effort 解析 ---
+-# （test_codex_hash_label_fallback 已移至 Step 6 段——标签单独不再构成复用资格，见上方）
+-
+-
+-def test_malformed_codex_findings_section_not_found(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    bad = _mode_anchor("native") + '\n<!-- sdflow:outside-voice v1 runner="codex" findings="oops" -->\n'
+-    rp.write_text(bad, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
+-    assert m.classify(rp, cd) == "section-not-found"  # 畸形 findings → best-effort fail-closed
+-
+-
+-# 🔴 C1 回归：cross-model 锚 findings 畸形 + 正文含 codex#N prose ⇒ 拒复用（section-not-found）。
+-# 旧 fail-open：findings 不可解析时退去全文扫无关 codex#N prose 标签补计数当可复用 ⇒ 正文一句
+-# "codex#1" 即静默判可复用、跳过重跑跨模型评审（击穿 guard 防假复用的唯一职责）。prose 标签单独
+-# MUST NOT 构成复用资格（Step 6 已定），本例锁"畸形 cross-model findings + prose"这个未覆盖组合。
+-def test_malformed_cross_model_findings_with_prose_label_not_reusable(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    bad_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+-                  'runner="codex" reason_code="ok" findings="oops" truncated="false" -->')  # host 缺省=claude ⇒ cross-model
+-    _write_body(rp, bad_anchor, extra_body="- 参考 codex#1 与 codex#2 的结论\n")
+-    assert m.classify(rp, cd) == "section-not-found"
+-
+-
+-def test_cli_malformed_cross_model_findings_with_prose_exit_nonzero(tmp_path):
+-    rp, cd = _make_change(tmp_path, codex=False)
+-    bad_anchor = ('<!-- sdflow:outside-voice v1 site="design-voice" guard="none" '
+-                  'runner="codex" reason_code="ok" findings="oops" truncated="false" -->')
+-    _write_body(rp, bad_anchor, extra_body="- 参考 codex#1 与 codex#2 的结论\n")
+-    r = _run(rp, cd)
+-    assert r.returncode != 0 and r.stdout.strip() == "section-not-found" and r.stdout.strip() != "none"
+-
+-
+-def test_claude_fallback_runner_not_codex(tmp_path):
+-    m = _mod(); rp, cd = _make_change(tmp_path, codex=False)
+-    body = _mode_anchor("native") + "\n" + _ov_anchor(3, runner="claude-fallback") + "\n"
+-    rp.write_text(body, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
+-    assert m.classify(rp, cd) == "section-not-found"  # 非 codex runner 不计入 codex 段
+-
+-
+-# --- fence 感知：fence 内的示例锚不参与匹配（与姊妹校验器 anchor_lint 同口径）---
+-
+-def test_fenced_codex_anchor_not_counted_findings(tmp_path):
+-    """fence 内的 runner=codex 示例锚（文档演示）不得计入 findings——真实无 codex 锚 → section-not-found，非 none（假绿）。"""
+-    m = _mod()
+-    fenced = "```\n" + _ov_anchor(2, runner="codex") + "\n```\n"
+-    rp, cd = _make_change(tmp_path, codex=False, extra_body=fenced)   # 无真实 codex 锚，仅 fence 内示例
+-    assert m.classify(rp, cd) == "section-not-found"
+-
+-
+-def test_fenced_step1_anchor_not_taken_as_mode(tmp_path):
+-    """fence 内的 simulated step1 示例锚不得被 parse_mode 取——fence 外真实 native 锚为准 → 不判 simulated-source。"""
+-    m = _mod(); rp, cd = _make_change(tmp_path)
+-    body = ("```\n" + _mode_anchor("simulated") + "\n```\n"
+-            + _mode_anchor("native") + "\n# review\n" + _ov_anchor(1) + "\n")
+-    rp.write_text(body, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
+-    assert m.classify(rp, cd) == "none"               # fence 内 simulated 被跳过 → 取 fence 外 native
+-
+-
+-# --- 纯 stdlib / 无 subprocess / 无 git fork（静态断言，comment/docstring 安全）---
+-
+-def test_no_subprocess_no_os_import_ast():
+-    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+-    imported = set()
+-    for node in ast.walk(tree):
+-        if isinstance(node, ast.Import):
+-            for a in node.names:
+-                imported.add(a.name.split(".")[0])
+-        elif isinstance(node, ast.ImportFrom):
+-            if node.module:
+-                imported.add(node.module.split(".")[0])
+-    assert "subprocess" not in imported    # 无 subprocess → 无 fork/exec 子进程（含 git）
+-    assert "os" not in imported            # 连 os 都不引 → 无 os.system/fork/exec/popen 通路
+-
+-
+-def test_no_exec_tokens_in_source():
+-    src = SCRIPT.read_text(encoding="utf-8")
+-    for tok in ("os.system", "os.popen", "os.fork", "os.exec", "Popen", "check_output", "check_call"):
+-        assert tok not in src
+-
+-
+-# --- CLI 契约（子进程；exit 码 + stdout reason / stderr FAIL 分流）---
+-
+-def _run(review_path, change_dir):
+-    return subprocess.run(
+-        [sys.executable, str(SCRIPT), "--review-path", str(review_path),
+-         "--change-dir", str(change_dir)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+-
+-
+-def test_cli_none_exit0(tmp_path):
+-    rp, cd = _make_change(tmp_path)
+-    r = _run(rp, cd)
+-    assert r.returncode == 0 and r.stdout.strip() == "none"
+-
+-
+-def test_cli_simulated_exit_nonzero_stdout(tmp_path):
+-    rp, cd = _make_change(tmp_path, mode="simulated")
+-    r = _run(rp, cd)
+-    assert r.returncode != 0 and r.stdout.strip() == "simulated-source" and r.stderr.strip() == ""
+-
+-
+-def test_cli_stale_exit_nonzero(tmp_path):
+-    rp, cd = _make_change(tmp_path, product_mtime=500_000)
+-    r = _run(rp, cd)
+-    assert r.returncode != 0 and r.stdout.strip() == "stale"
+-
+-
+-def test_cli_bad_input_fail_closed_stderr_no_stdout(tmp_path):
+-    rp, cd = _make_change(tmp_path, mode="adapted")
+-    r = _run(rp, cd)
+-    assert (r.returncode != 0 and r.stdout.strip() == ""
+-            and "[outside_voice_guard] FAIL" in r.stderr and "Traceback" not in r.stderr)
+-
+-
+-def test_cli_file_missing(tmp_path):
+-    rp, cd = _make_change(tmp_path); rp.unlink()
+-    r = _run(rp, cd)
+-    assert r.returncode != 0 and r.stdout.strip() == "file-missing"
+-
+-
+-# --- Step 5（TDD）🔒 矩阵跨工具全笛卡尔 golden ---
+-# guard 的 classify_combo 是本地重实现（GC-2：生产代码 MUST NOT import anchor_lint）；本测试文件
+-# 同时 import 两工具，对 host×runner×reason_code×findings 全笛卡尔积（含边界+mutation：越域/缺字段/
+-# 坏值）逐条比较两工具的**完整分类**（cross-model/same-family/no-exec/self-review/illegal，非仅
+-# 「可复用」布尔——同源同错测不出，见 r3-narrow #3），任一漂移即红。
+-
+-def test_matrix_cross_tool_golden_full_cartesian():
+-    guard = _mod()
+-    al = _anchor_lint_mod()
+-    enums = al.load_enums()                     # 枚举域单一源：契约块 lens-metric-enums（非脚本内复制清单）
+-    hosts = sorted(enums["host"]) + ["bogus-host", None]                 # 越域 + 缺失/坏值 mutation
+-    runners = sorted(enums["runner"]) + ["bogus-runner", None]
+-    reason_codes = sorted(enums["reason_code"]) + ["bogus-reason", None]
+-    findings_domain = [0, 1, 5, None]            # 边界(0) + 正常(1/5) + 缺失/坏值(None)
+-
+-    mismatches = []
+-    categories_seen = set()
+-    for host in hosts:
+-        for runner in runners:
+-            for reason_code in reason_codes:
+-                for findings in findings_domain:
+-                    a = al.classify_combo(host, runner, reason_code, findings)
+-                    b = guard.classify_combo(host, runner, reason_code, findings)
+-                    categories_seen.add(a)
+-                    if a != b:
+-                        mismatches.append((host, runner, reason_code, findings, a, b))
+-    assert mismatches == [], f"矩阵分类跨工具漂移（前 20 条）: {mismatches[:20]}"
+-    # 全笛卡尔积须真正覆盖全部 5 类完整分类，防测试域退化成只测到部分分支（假绿）
+-    assert categories_seen == {"cross-model", "same-family", "no-exec", "self-review", "illegal"}
+-
+-
+-# --- T139 parse_mode 多锚 fail-closed ---
+-
+-def test_duplicate_step1_anchors_fail_closed(tmp_path):
+-    """fence 外出现 2 条 step1-broad-review 锚 → EmitError（T139）。"""
+-    m = _mod()
+-    rp, cd = _make_change(tmp_path, codex=False)
+-    body = _mode_anchor("native") + "\n" + _mode_anchor("simulated") + "\n# review\n" + _ov_anchor(1) + "\n"
+-    rp.write_text(body, encoding="utf-8"); os.utime(rp, (2_000_000, 2_000_000))
+-    with pytest.raises(m.EmitError, match="重复"):
+-        m.parse_mode(rp.read_text(encoding="utf-8"))
+-
+-
+-def test_single_step1_anchor_returns_mode(tmp_path):
+-    """fence 外恰好 1 条 step1 锚 → 正常返回 mode（T139 回归守卫）。"""
+-    m = _mod()
+-    rp, cd = _make_change(tmp_path)
+-    mode = m.parse_mode(rp.read_text(encoding="utf-8"))
+-    assert mode == "native"

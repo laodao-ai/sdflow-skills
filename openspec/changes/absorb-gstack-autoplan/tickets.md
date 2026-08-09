@@ -51,13 +51,13 @@ spec-review SKILL 的 Step1/Step2 合并为单批 dispatch + 锚枚举换值 + g
 5. 广审镜定义真相源:`sdflow-init/assets/snippets/broad-mirrors.md` 新建;`hack/sync_principles.py` 扩展(或同构小脚本)注入 `sdflow-spec-review/SKILL.md` 与 `sdflow-roadmap/SKILL.md` 的 `sdflow:broad-mirror-def` 托管块;`setup.sh --check` 门禁。
 6. bundle 规则文档行为面改写:`spec-review.md`(L2 表 autoplan 行、瘦跑注记)、`workflow.md` 阶段二步骤表、`reference/quality-layering.md` 广审载体改述。
 
-- [ ] spec-review SKILL 中 autoplan/gstack 引用归零(grep 验证)
-- [ ] 单批 dispatch 结构(strategy/plan-eng/领域/对抗/接地一条消息并行)描述完整
-- [ ] step1-broad-review 锚 mode 枚举为 subagent|main-session
-- [ ] guard 调用/gstack-review.md/checkpoint(spec-review-autoplan) 环节已删
-- [ ] broad-mirrors.md 真相源创建 + 注入脚本扩展 + setup.sh --check 门禁
-- [ ] spec-review.md/workflow.md/quality-layering.md 规则文档同步
-- [ ] lens-metric roster/模板更新
+- [x] spec-review SKILL 中 autoplan/gstack 引用归零(grep 验证)
+- [x] 单批 dispatch 结构(strategy/plan-eng/领域/对抗/接地一条消息并行)描述完整
+- [x] step1-broad-review 锚 mode 枚举为 subagent|main-session
+- [x] guard 调用/gstack-review.md/checkpoint(spec-review-autoplan) 环节已删
+- [x] broad-mirrors.md 真相源创建 + 注入脚本扩展 + setup.sh --check 门禁
+- [x] spec-review.md/workflow.md/quality-layering.md 规则文档同步
+- [x] lens-metric roster/模板更新
 
 ### Task 3: 守卫脚本退役与矩阵 golden 迁移
 
