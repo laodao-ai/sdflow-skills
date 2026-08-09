@@ -107,11 +107,11 @@ DX 领域清单新建 + roadmap review 节重写(镜定义同源注入已在 Tas
 3. 归档盲测(逐声边际贡献):选 3-5 份含 broad 独家 findings 的归档 change,分别单独跑 strategy/plan-eng/design-voice 三声,测旧 broad 独家高危召回率与各声边际独家召回;盲测报告随 change 归档。
 4. 最终验收:`grep -rn "autoplan\|gstack" sdflow-spec-review/SKILL.md sdflow-roadmap/SKILL.md sdflow-init/assets/workflow/`(排除 reference/)归零 + 读码确认两 SKILL 无条件调用 gstack 分支;全仓 pytest 绿。
 
-- [ ] CONTEXT.md/docs/workflow-skills/WORKFLOW-GUIDE/external-dependencies/workflow-map/workflow-overview 全部 sweep 完成
-- [ ] T268 已关闭
-- [ ] 盲测报告落盘(3-5 份归档 change × 3 声)
-- [ ] grep 验收归零
-- [ ] 全仓 pytest 绿
+- [x] CONTEXT.md/docs/workflow-skills/WORKFLOW-GUIDE/external-dependencies/workflow-map/workflow-overview 全部 sweep 完成
+- [x] T268 已关闭
+- [x] 盲测报告落盘(3-5 份归档 change × 3 声)
+- [x] grep 验收归零
+- [x] 全仓 pytest 绿
 
 ### Task 6: 实现验证（收尾，不计入 3–6 预算）
 
