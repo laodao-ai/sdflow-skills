@@ -10,7 +10,7 @@
 
 ### Requirement: review 恒跑自持双镜与跨模型声
 
-三件套完成后 SHALL 执行内容质量 review:恒跑 **strategy 镜 + plan-eng 镜**(两个并行 fresh 子代理,镜职责定义与 `sdflow-spec-review` 广审镜同源引用,MUST NOT 复制两份)+ **sync-only 跨模型 outside voice**(`outside-voice.sh` 同步分支,site=`roadmap-voice`,前台执行、当场取退出码;MUST NOT 移植 async 协议段)。
+三件套完成后 SHALL 执行内容质量 review:恒跑 **strategy 镜 + plan-eng 镜**(两个并行 fresh 子代理;镜职责定义与 `sdflow-spec-review` 广审镜**同源——由单一源资产经模板注入两 SKILL 的托管 marker 块承载,机械等值由注入脚本 `--check` 门禁保证;MUST NOT 无注入守卫的手工第二份拷贝,MUST NOT 无机械守的 prose 跨 SKILL 引用**〔spec-review-amendment Q2〕)+ **sync-only 跨模型 outside voice**(`outside-voice.sh` 同步分支,site=`roadmap-voice`,前台执行、当场取退出码;MUST NOT 移植 async 协议段)。
 
 **调用契约**:触发 review 时 SHALL 显式声明「把三件套(design/roadmap/task-log)视为一个整体 plan 来 review」并指定主入口文件(roadmap.md)——缺此声明会退化为单文件审。**跳过授权**:跳过 review 仅限人类操作者显式授权(agent 自身 MUST NOT 代决跳过),产物状态记 `review-waived` 不与已审混同;task-log.md 留「未做 review,风险自担」痕迹。review 产出的每条 issue SHALL 在 task-log.md「Review 处置」小节标注 采纳/拒绝/延后 之一且附理由。
 

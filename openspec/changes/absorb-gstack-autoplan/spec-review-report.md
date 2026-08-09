@@ -32,21 +32,22 @@
 
 ### [需拍板](设计 HARD-GATE 逐条勾)
 
-**Q1 · 中间 checkpoint 去留(M5,高危)** — DD1 把 `checkpoint(spec-review-autoplan)` 退役后只剩一次 checkpoint。评审机械核验:`retro_report.py` 的 `stage_walltimes` 把相邻提交差计入**前一提交**的阶段 ⇒ 删中间检查点后「generate→spec-review」整段墙钟计入 generate,**spec-review 阶段墙钟塌缩至近零**(retro 三仓对比、复评全失真);同时丢失崩溃恢复点(单批全镜 + Step3 无中间落盘,中断即整轮重来)。
-- **A(推荐)**:保留一个改名中间 checkpoint `checkpoint(spec-review-dispatch)`(全部镜 findings 收齐后、Step3 裁决前落)——一石二鸟:墙钟归属连续(dispatch 前=generate、后=spec-review 语义不变)+ 恢复点保留;成本=每轮多一次 commit。
-- **B**:照 DD1 单 checkpoint,重定义 `stage_walltimes` 归属语义 + 新旧序列回归测试(改 retro 脚本,动到 49 个归档 change 的历史归类口径,风险高)。
-- **C**:接受墙钟断代,Risks 显式声明「本 change 前后 spec-review 阶段墙钟不可比」。
-- 三面:系统镜 A 最小侵入(标签解析前缀规则天然覆盖 `spec-review-dispatch`);用户镜 A 无感;开发循环镜 A 保 retro 复评可用性(主导面)。**主次判定:开发循环镜主导——retro 墙钟是本仓成本复盘的唯一量化面,不可静默失真。**
+**Q1 · retro 墙钟归属修正(M5,高危)〔第一性原理复推后换推荐,产物已按推荐更新、待门确认〕** — DD1 退役中间 checkpoint 后,`stage_walltimes`「相邻差计入**前一**提交阶段」的现语义会让 spec-review 阶段墙钟塌缩;复推补充核验:`("sdflow-spec-generate","ff")` ⇒ **现口径下 Step1 广审墙钟本就误归 ff 阶段(既有错账)**。
+- **A(推荐,已落 tasks 1.3 / DD5)**:改 `stage_walltimes` 为「计入**后一**提交阶段」(checkpoint=工作完成点)+ 新旧序列回归测试 + retro 报告统一重跑再生——同时修既有错账、保 DD1 单 checkpoint 零妥协成立、无需任何新标签。代价:49 归档 change 阶段数字向**正确值**统一重算(retro 为只读再生活文档)。崩溃恢复点损失按五问接受(概率低/影响=重跑镜/transcript 可捞)。
+- **B(初版推荐,复推后证伪)**:镜收齐后落 `checkpoint(spec-review-dispatch)`——attribute-to-previous 语义下 generate→dispatch 区间(=全部镜工作)仍误归 ff,**修不了账**;「评审起点空 checkpoint」亦不可行(checkpoint-commit.sh 干净树跳过)。
+- **C**:接受墙钟断代 + Risks 声明。
+- **主次判定:开发循环镜主导**——retro 墙钟是本仓成本复盘唯一量化面;A 是唯一让账本变对的方案。
 
-**Q2 · DD7/roadmap delta 的「引用不复制」机制(M6,高危,五声收敛)** — 评审核验:跨 SKILL prompt 引用零先例、`check_async_branch_parity.py` 硬编码只比两文件、跨宿主路径(`~/.claude` vs `~/.codex`)无解析器 ⇒ 按字面实现必退化为「模型凭记忆复述」,恰好重新引入要消灭的漂移。
-- **A(推荐)**:**同源复制 + marker + 机械等值守**——spec-review SKILL 的镜定义段用 `<!-- sdflow:broad-mirror-def:start/end -->` marker 包裹,roadmap SKILL 持同 marker 副本,新增(或扩展 parity 脚本)逐字节等值检查(承 `sdflow:async-branch` 先例,基准 1);需把 roadmap delta 的「MUST NOT 复制两份」改为「MUST NOT 无机械守的第二份手工拷贝」。
-- **B**:蒸馏为 bundle 数据文件经 resolver 读(引入「SKILL 运行时读 prompt 片段」新机制,重)。
-- **C**:保持 prose 引用 + Risks 记录接受漂移(零成本,漂移无守)。
-- **主次判定:开发循环镜主导**——评审 prompt 漂移=镜职责静默变形,A 的机械守成本一次性且有先例模板。
+**Q2 · 镜定义同源机制(M6,高危,五声收敛)〔复推后换推荐,产物已按推荐更新、待门确认〕** — 核验:跨 SKILL prose 引用零先例、parity 脚本硬编码两文件、跨宿主路径无解析器 ⇒ 按 delta 原文实现必退化为「凭记忆复述」。
+- **A(推荐,已落 tasks 2.5 / DD7 / roadmap delta)**:**模板注入**——真相源 `sdflow-init/assets/snippets/broad-mirrors.md`,经 sync_principles.py 扩展注入两 SKILL 的 `sdflow:broad-mirror-def` 托管块,`setup.sh --check` 门禁。已核验 sync_principles.py 结构单薄可扩(单行字面量 marker,基准 5 有界);注入=**事前预防**(只改 asset 一处),严格优于初版推荐的「复制+parity」(事后检测、仍需人工双改)与「prose 引用」(零守)。
+- **B**:复制+parity 等值检查(初版推荐,降为备选)。
+- **C**:prose 引用+接受漂移。
+- **主次判定:开发循环镜主导**——通则块同款模式已在仓内跑通多时,边际成本最低。
 
-**Q3 · 归档盲测前置(M8+M23,UC-2 用户挑战)** — 四声收敛(Claude-CEO F1 / codex-CEO#2 / codex-Eng#5 / codex-DX#7):「事前 A/B 无基准」的接受理由被证伪——仓里有 20 份含 broad 独家 findings 的归档报告,3-5 份盲测(新双镜 prompt 重跑归档 design,对照旧 broad 独家 findings 召回)成本≈一次评审。且对抗镜 1 独家发现:**C2 的证据链方向存疑**(retro 聚合 broad 独立率 33% 为全镜种最低、低于单声 scope-audit 44%;n=2 个案均出自 Codex 腿而非 persona 多样性)——「双 persona 补声」的因果依据比 memo 呈现的更弱。**此项与人已拍板的「接受的边角」第 1 条相抵,默认维持原拍板**;评审信息增量=前提证伪+证据削弱。
-- **A(推荐)**:tasks 增一条 P0 前置任务「实现 SKILL 重写后、发布前,对 3-5 份历史 change 盲测新双镜,对照旧 broad 独家 findings 召回率,报告随 change 归档」。
-- **B**:维持原拍板(retro ≥10 轮事后复评,新轮次按归档日期分段统计——M2 修订后口径)。
+**Q3 · 归档盲测(M8+M23,UC-2 用户挑战)〔复推后升级实验设计,产物已按推荐更新、待门确认〕** — 「事前 A/B 无基准」被证伪(20 份归档语料在);对抗镜 1 独家:C2 证据方向存疑(聚合 broad 独立率 33% 全镜种最低、n=2 均出自 Codex 腿)。
+- **A(推荐,已落 tasks 6.5)**:盲测升级为**逐声边际贡献**实验——同一批归档语料分别单独跑 strategy / plan-eng / design-voice,测①旧 broad 独家高危召回 ②各声边际独家召回。同价回答两个问题:能力不缩水验证 + 「第二个同模型 persona 是否值得每轮付费」的证据基线(D1 双镜形态照拍板落地不动,数据说话后再议降声)。
+- **B**:维持原拍板(仅 retro ≥10 轮事后复评,按归档日期分段)。
+- 本项重议人已拍的「接受的边角」第 1 条——A 为推荐,人否决即回 B,不阻塞。
 
 **Q4 · 恒跑成本异议(M9,UC-1 用户挑战,默认维持)** — codex-CEO 独家:spec-review 已占全流程墙钟 49%,本 change 把广审/领域/对抗/接地/voice 全恒跑并把 roadmap 升为恒跑三声,Success Metrics 无时延/token 维度;主张按边际价值配 review budget。**D1/D2 为人 2026-08-09 明确确认的方向,评审默认维持**;登记供人复核。备选=按 codex 主张重开分档讨论(不推荐——分档的存在理由「外部三连审贵」确已消失,budget 精细化属 12M 轨迹层,retro 复评即其入口)。
 
@@ -114,7 +115,7 @@
 6. `design.md`:DD2(完整划分+默认+防重叠)、DD3(诚实边界+unknown 路径)、DD6(出处+表式+TG-28 措辞+近恒命中记录)、DD7(重叠启动/300 依据/task-log 理由/Q2 指针)、Risks 两条改写(M2/M3)、Migration 5、Non-Goals 再入阈值。
 7. `tasks.md`:1.3 改写、+1.5/1.6、2.4 改写、+3.2、4.1/4.2/4.3 扩、任务组 5 加门、6.2 扩、6.4 对齐。
 
-**未动**(拍板后落):Q1(checkpoint 条款,涉 spec-workflow delta「checkpoint(spec-review-autoplan) 标签停产」句与 DD1)、Q2(roadmap delta「MUST NOT 复制两份」句与 DD7 机制)、Q3(tasks 盲测任务增项)、Q4(无改动)。**decision-memo.md 为相位 B 冻结产物,一律未动**——其边角 4/C2/D1 口径的勘误以 design Risks 修订与本报告 M2/M21/M23 为准。
+**第二轮(人指示「按第一性原理复推优化」后追加,均标注「设计门确认后执行」)**:tasks 1.3 重写为 retro 归属语义修正(Q1-A)、+tasks 2.5 镜定义模板注入 + 5.1 措辞(Q2-A)、+tasks 6.5 逐声边际盲测(Q3-A)、DD5/DD7 与 roadmap delta「MUST NOT 复制两份」句同步。Q1-Q3 的推荐方案已直接落进产物(人要求),**门上仍可整体或逐条否决**——否决即回退对应条目至备选。Q4 无改动。**decision-memo.md 为相位 B 冻结产物,一律未动**——其边角 4/C2/D1 口径的勘误以 design Risks 修订与本报告 M2/M21/M23 为准。
 
 ## 四、度量锚(lens-metric,metrics.enabled=true;门前草稿值,拍板回写时最终化〔SR-M〕)
 
@@ -134,6 +135,6 @@
 
 ## 六、收敛口
 
-**建议:带 Q1-Q4 进设计 HARD-GATE。** M1(Critical)与全部确认级 Major 已修订落盘;拍板项仅 4 个且互相独立——Q1/Q2 是 spec/design 条款的方向选择(推荐均为最小机械守方案),Q3/Q4 是对人既有拍板的重议(默认维持,采纳与否均不阻塞)。拍板后:若 Q1=A 需微调 spec-workflow delta 一句 + DD1;若 Q2=A 需改 roadmap delta 一句 + DD7;随后按拍板回写协议落 `ship-gate` frontmatter(注意:本报告已含评审期 amendment,若拍板前再改四件套,须先单独 checkpoint 再回写锚——ADR-7(b))。
+**建议:带 Q1-Q4 进设计 HARD-GATE。** M1(Critical)与全部确认级 Major 已修订落盘;Q1-Q3 经第一性原理复推后,推荐方案(retro 归属修正/模板注入/逐声盲测)已按人指示落进产物、门上确认或否决即可;Q4 默认维持人方向。拍板批准即无遗留改动,直接按拍板回写协议落 `ship-gate` frontmatter(注意:若拍板前再改四件套,须先单独 checkpoint 再回写锚——ADR-7(b))。
 
 **流程纪律提醒**:本轮评审对象含评审自身落盘的 amendment(镜子审的是 fb0cbe7 起点盘面;amendment 为裁决产物、非镜审对象)——拍板时通读第三节清单即等价于窄复核增量;若人要求二次修订,按 1.7b 先单独 checkpoint 再回写 `reviewed_sha`。
