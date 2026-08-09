@@ -22,7 +22,7 @@
 
 ## Review 处置
 
-> 阶段 3.5 交叉 review（`sdflow-spec-review` 或 `sdflow-code-review`）产出的每条 issue 在此登记，必须标注下列状态之一：
+> 阶段 3.5 交叉 review（roadmap 自持双镜 strategy/plan-eng + outside voice）产出的每条 issue 在此登记，必须标注下列状态之一：
 > - ✅ **采纳**：写明已在哪个文件哪一节改动
 > - ❌ **拒绝**：写明拒绝理由（不得空白「不采纳」）
 > - ⏭ **延后**：写明延后到哪个阶段 / 哪个后续变更
