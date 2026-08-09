@@ -1,5 +1,29 @@
 ## MODIFIED Requirements
 
+### Requirement: 锚行合法组合矩阵是「跨模型性」的机械单一源〔spec-review-r2 C1/Q1〕
+
+「跨模型性」SHALL NOT 由散落多处的 `runner ≠ host` 各判一遍——因 `runner="none"`（D6 无执行值）满足 `none ≠ host`，会被误判为跨模型（击穿本能力核心不变式）。`anchor_lint` SHALL 以一条 **always-on 的合法组合矩阵**统一定义 `sdflow:outside-voice` 锚的合法 `(host, runner, reason_code, findings)` 组合，其余组合报错阻塞；**派生语义、置信过滤豁免（`spec-workflow`）SHALL 引用矩阵的「跨模型」判定，MUST NOT 各自重写 `runner ≠ host`**。矩阵：
+
+- **跨模型 voice**：`host ∈ {claude,codex} ∧ runner ∈ {claude,codex} ∧ runner ≠ host ∧ reason_code = "ok"`（成功哨兵 `ok`，D5，不复用 `none`）
+- **同族 fallback**：`host ∈ {claude,codex} ∧ runner == host ∧ reason_code ∈ {not-installed,preflight-error,timeout,exec-error}`（`missing-deps` 归约入 `preflight-error`，D7）
+- **无执行**：`runner = "none" ∧ findings = 0 ∧ ( host="unknown" ∧ reason_code="host-unknown" ∨ host ∈ {claude,codex} ∧ reason_code ∈ {secret-hit, fallback-unavailable} )`
+
+「跨模型」判定 = 矩阵第一行成立。此校验 **MUST always-on、独立成函数、不接受 `metrics_on` 参数**（D11，照 `check_hr_tg` 先例）。
+
+**矩阵实现收敛为 anchor_lint 单一本地实现〔absorb-gstack-autoplan spec-review-amendment M1：`outside_voice_guard.py` 随复用路径退役（见 capability `outside-voice-reuse-guard` 的 REMOVED delta），「两工具各自本地重实现 + 跨工具全笛卡尔 golden 互守」条款失去第二实现方〕**：**① 枚举域**（host/runner/reason_code 各自取值集）SHALL 仍由 `lens-metric-contract.md` 机读块承载（单一源不变）；**② 矩阵的关系式判定逻辑**（三态分类 illegal/cross-model/same-family/no-exec）SHALL 由 `anchor_lint` 本地实现（原「MUST NOT 硬凑表达力不足的可 parse 块」约束保留）；**③ 防漂移 golden SHALL 收敛为 anchor_lint 单工具自测**：对 **host×runner×reason_code×findings 全笛卡尔积**（含边界 + mutation：坏值/越域/缺字段）断言 `anchor_lint` 分类逐条符合本矩阵定义（枚举域仍从契约机读块读入，契约↔实现漂移即红）。**MUST NOT** 让 golden 只比有限输入的布尔值。原跨工具 golden（`test_outside_voice_guard.py` Step 5）随 guard 测试删除，其全笛卡尔用例 SHALL 迁移/改造进 anchor_lint 测试侧，MUST NOT 随文件删除而静默丢失覆盖面。
+
+#### Scenario: 矩阵逻辑 anchor_lint 单实现且全笛卡尔 golden 守〔absorb-gstack-autoplan〕
+- **WHEN** `anchor_lint` 需要合法组合分类
+- **THEN** 其 SHALL 从契约机读块读**枚举域**、本地实现**关系式分类逻辑**；一条 golden 测试 SHALL 对 host×runner×reason_code×findings 全笛卡尔积（含 mutation）断言分类逐条符合矩阵定义，MUST NOT 只比有限输入的布尔值
+
+#### Scenario: runner="none" 不被判为跨模型
+- **WHEN** 某 outside-voice 锚 `runner="none"`（无论 host 为何）
+- **THEN** 矩阵判定「跨模型」为**假**，MUST NOT 享跨模型豁免；且 SHALL 校验 `findings=0` 与 `reason_code ∈ {host-unknown,secret-hit,fallback-unavailable}`，否则报错（如 `runner="none" findings="5"` ⇒ 违规）
+
+#### Scenario: 非法组合当场报错
+- **WHEN** 出现矩阵外的组合（如 `host="unknown" runner="claude"`、`runner="none" reason_code="ok"`、`runner==host reason_code="ok"`）
+- **THEN** `anchor_lint` SHALL 报错阻塞（合法组合矩阵违规）
+
 ### Requirement: 子代理不可用时镜数如实降级（探针语义核验 + always-on 一致性 lint，逐镜留语义层）
 
 Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`sdflow-init` 铺给消费项目的 AGENTS.md 段与两个评审 SKILL SHALL 显式声明该授权。

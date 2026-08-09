@@ -19,6 +19,10 @@
 
 (无——devex TG/清单为 workflow bundle 数据资产,不引入行为级新能力,同 absorb-gstack-review 先例)
 
+### Removed Capabilities
+
+- `outside-voice-reuse-guard`: 复用判定对象(`gstack-review.md`)与「复用 vs 重开」分支随 Step1 自持化整体消失,capability 三条 Requirements 全 REMOVED(`outside_voice_guard.py` + 测试删除;矩阵分类逻辑收敛为 `anchor_lint` 单实现,见 `host-adaptive-execution` MODIFIED delta)。[spec-review-amendment]
+
 ### Modified Capabilities
 
 - `spec-workflow`: 阶段二 Step1 实现主体由「autoplan 原生执行」改为「自持双广审镜 fan-out」;串行时序条款(领域/对抗镜等 autoplan checkpoint)退役为单批 dispatch;roadmap review 衔接提法同步。
@@ -30,20 +34,20 @@
 
 - **代码/资产**:`sdflow-spec-review/SKILL.md` · `sdflow-roadmap/SKILL.md` · `sdflow-init/assets/workflow/`(trigger-catalog.md · spec-checklists/domains/devex.md 新增 + frontend.md · lens-metric-contract.md · tools/anchor_lint.py + golden 测试 · tools/outside_voice_guard.py 删除 + 测试删除 · spec-review.md · workflow.md · WORKFLOW-GUIDE.md · reference/quality-layering.md)· `sdflow-retro/scripts/`(checkpoint 标签解析 + 测试)· `openspec/CONTEXT.md` · `docs/`。栈标注:markdown workflow 资产 + Python 工具(非 TG-01/02/03 业务栈)。
 - **依赖**:移除 spec-review/roadmap 侧对 gstack 的全部运行时依赖(本仓 gstack 运行时依赖归零);无新增外部依赖。gstack 系 skill 作为独立工具仍可手动使用。
-- **消费仓**:经 `sdflow-init update` 获得新 trigger-catalog/checklists/contract/tools;SKILL 经 setup.sh symlink 即时生效;guard 脚本消失对消费仓无感(其唯一调用点在 spec-review SKILL 内)。
+- **消费仓**:规则/checklists/contract/tools **不经 `sdflow-init update` 下发**——它们由全局 canonical(`~/.sdflow/workflow` → 运行 checkout 软链)实时解析(adr/0039;`sdflow-init update` 只刷 WORKFLOW-GUIDE/schema/托管区块);SKILL 软链与 canonical 同树,`git pull` + `bash setup.sh` 一次同代翻转,消费仓零动作即随。guard 脚本消失对消费仓无感(其唯一调用点在 spec-review SKILL 内)。[spec-review-amendment M3:原「经 update 获得新 tools」表述基于已退役部署模型]
 
 ## 需求优先级
 
-- **P0**:Step1 自持化(双镜 + 锚枚举 + T20 退役)+ C2/guard 退役 + fold 表/anchor_lint/retro 标签机械消费点同步 + spec 四 delta(依赖移除的完整闭环,缺任一即新旧混态)。
+- **P0**:Step1 自持化(双镜 + 锚枚举 + T20 退役)+ C2/guard 退役 + fold 表/anchor_lint/retro 标签机械消费点同步 + spec 五 delta(四 Modified + `outside-voice-reuse-guard` Removed;含 spec-workflow 主 spec 三处存量条款的 REMOVED/MODIFIED——依赖移除的完整闭环,缺任一即新旧混态或归档后 spec 树自相矛盾)。[spec-review-amendment]
 - **P1**:DX 吸收(devex TG + domains/devex.md)+ roadmap 侧(分档退役 + 双镜 + sync voice)(能力增强与姊妹依赖收尾,独立可验)。
 - **P2**:frontend.md litmus/AI-slop 增补 + 文档面 sweep(纯文档)。
 
 ## Success Metrics
 
-- `grep -rn "autoplan\|gstack" sdflow-spec-review/SKILL.md sdflow-roadmap/SKILL.md` 严格归零(DOC-1 口径:正文即最终态,零残留)。
-- spec-review 与 roadmap review 全流程在未安装 gstack 的机器上可完整跑通(无降级日志)。
-- 全仓 pytest 绿(含 anchor_lint golden、retro 标签测试更新、guard 测试删除)。
-- dogfood:本 change 自身的设计审报告产出 `strategy`/`plan-eng` raw 名 broad 镜行 + 新 mode 锚,`anchor_lint` 通过。
+- `grep -rn "autoplan\|gstack" sdflow-spec-review/SKILL.md sdflow-roadmap/SKILL.md sdflow-init/assets/workflow/`(排除 `reference/` 历史分析)严格归零(DOC-1 口径:正文即最终态,零残留);`docs/workflow-map.md`、`docs/workflow-overview.md` 流程图不再含 autoplan 节点/guard 工具行(人工核)。[spec-review-amendment M13:原 grep 范围窄于 sweep 声明范围]
+- 运行时依赖归零的可判形式:上项 grep 归零 + 读码确认两 SKILL 指令路径无任何条件调用 gstack 的分支 + dogfood 全流程零 gstack 调用痕迹。[spec-review-amendment M7:原「未安装 gstack 的机器上跑通」在本仓无干净机器可判,改为机械可判等价口径]
+- 全仓 pytest 绿(含 anchor_lint golden、矩阵全笛卡尔用例迁移至 anchor_lint 侧、retro 标签测试确认、guard 测试删除)。
+- dogfood:本 change 实现后自评审报告产出 `lens="broad"` 度量锚行(输入 hits 含 raw 名 `strategy`/`plan-eng`,经 emitter 折叠)+ `step1-broad-review` 锚 mode ∈ `{subagent,main-session}`,`anchor_lint` 通过。[spec-review-amendment M4:原「产出 raw 名 broad 镜行」按 emitter 契约不可实现——锚行只含 canonical lens]
 
 ## 假设
 

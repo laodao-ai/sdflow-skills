@@ -14,7 +14,7 @@
 
 **调用契约**:触发 review 时 SHALL 显式声明「把三件套(design/roadmap/task-log)视为一个整体 plan 来 review」并指定主入口文件(roadmap.md)——缺此声明会退化为单文件审。**跳过授权**:跳过 review 仅限人类操作者显式授权(agent 自身 MUST NOT 代决跳过),产物状态记 `review-waived` 不与已审混同;task-log.md 留「未做 review,风险自担」痕迹。review 产出的每条 issue SHALL 在 task-log.md「Review 处置」小节标注 采纳/拒绝/延后 之一且附理由。
 
-**voice 处置**:voice 成功(reason_code=ok)则 findings 与双镜同池进「Review 处置」;失败 SHALL 同族 fallback 只读子代理;task-log SHALL 留一行 runner/reason_code 痕迹(人读,不落 anchor_lint/lens-metric 锚——roadmap 无度量锚体系)。
+**voice 处置**:voice SHALL 在双镜派出后**立即**启动(与双镜墙钟重叠,MUST NOT 串行等双镜返回再跑)〔spec-review-amendment K-3〕;成功(reason_code=ok)则 findings 与双镜同池进「Review 处置」;失败 SHALL 同族 fallback 只读子代理——**fallback 派发 SHALL 带编排方时间预算(与 sync 内层 300s 同量级),超预算未返回视为 fallback 亦失败、当场落「未审待恢复」**,MUST NOT 无界等待(裸 Agent spawn 挂起时「未审待恢复」将永远写不出来,既无状态也无阻塞)〔spec-review-amendment M12〕;task-log SHALL 留一行 runner/reason_code 痕迹,同族 fallback 成功时该行 SHALL 含「降级」字样(如实标注非跨模型)〔spec-review-amendment M27〕(人读,不落 anchor_lint/lens-metric 锚——roadmap 无度量锚体系)。
 
 **失败处置**:双镜派发失败/voice 与 fallback 均失败/无输出时 SHALL 显式留痕「未审待恢复」并提示修复步骤,MUST NOT 静默当已完成。**该状态阻塞收尾**:包状态为 `未审待恢复` 时 SHALL 阻塞收尾 checklist,MUST NOT 因「Review 处置小节无未处置条目」而误判可以收尾;只有 review 成功执行、或人类操作者显式授权 `review-waived` 两种状态方可进入 checklist。
 
@@ -31,7 +31,12 @@
 #### Scenario: voice 失败同族 fallback 不静默
 
 - **WHEN** sync voice 执行失败(非零退出/helper 缺失)
-- **THEN** SHALL 派同族只读 fallback 子代理补第二意见,task-log 记降级原因;MUST NOT 静默当「本次无 voice」
+- **THEN** SHALL 派同族只读 fallback 子代理补第二意见(带时间预算),task-log 记降级原因与「降级」字样;MUST NOT 静默当「本次无 voice」
+
+#### Scenario: fallback 超时间预算按双败处置〔spec-review-amendment M12〕
+
+- **WHEN** 同族 fallback 子代理超出编排方时间预算仍未返回
+- **THEN** 视为「voice 与 fallback 均失败」,当场落「未审待恢复」并阻塞收尾;MUST NOT 继续无界等待
 
 #### Scenario: 跳过 review 必留痕
 
