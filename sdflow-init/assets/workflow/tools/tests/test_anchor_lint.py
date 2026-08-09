@@ -974,14 +974,48 @@ def test_step1_broad_review_mode_subagent_lint_passes():
          + '<!-- sdflow:hr-tg v1 hit="none" -->\n')
     assert al.check_existence(r, "code-review", metrics_on=False) == []
 
-def test_fanout_mirrors_unknown_token_hint_mentions_sdflow_init_update():
+def test_fanout_mirrors_unknown_token_hint_mentions_setup_sh():
     """mirrors-unknown-token 报错须自带可操作指引：旧版 bundle 遇到未来新增 token 时不应让人对着陌生
-    token 名发呆——文案须提示先跑 `sdflow-init update`。"""
+    token 名发呆——文案须提示回运行 checkout 跑 `bash setup.sh`（absorb-gstack-autoplan：`sdflow-init update`
+    指引已随 adr/0039 真实部署模型退役——消费仓规则经全局 canonical 实时解析，不再有本地 bundle 副本
+    靠 update 刷新；真正过时的是运行 checkout 未 pull+setup，见 design.md「Risks」版本 skew 段）。"""
     al = _mod()
     r = _fc(host="codex", subagents="unavailable", mirrors="domain,bogus") + "\n"
     v = al.check_fanout_consistency(r)
     hit = [x for x in v if x["kind"] == "mirrors-unknown-token"]
-    assert hit and "sdflow-init update" in hit[0].get("detail", "")
+    assert hit and "bash setup.sh" in hit[0].get("detail", "")
+    assert "sdflow-init update" not in hit[0].get("detail", "")
+
+
+# --- absorb-gstack-autoplan Task 1：spec-review 广审自持化(strategy+plan-eng→broad)新形态 + mode 新枚举值 ---
+
+def test_fanout_spec_review_single_batch_mirrors_broad_scenario():
+    """DD1 单批 dispatch:spec-review 的 strategy/plan-eng 两广审镜随领域/对抗/接地镜一次性 fan-out——
+    `mirrors=` 单行同时含 broad 与其余镜 token（两广审镜折叠为同一 `broad` token，枚举零改动，
+    只补覆盖新形态）。host=codex subagents=available 时应合法放行。"""
+    al = _mod()
+    r = (_lm(layer="spec-review", lens="broad", host="codex", runner="codex") + "\n"
+         + _fc(host="codex", subagents="available",
+               mirrors="broad,domain,adversarial,grounding,history") + "\n")
+    assert al.check_fanout_consistency(r) == []
+
+def test_fanout_spec_review_unavailable_mirrors_broad_alone_ok():
+    """spec-review 广审在子代理不可用时降级为主 session 亲做（DD3 恒跑守卫）——mirrors="broad" 单独
+    出现于 unavailable 场景须合法放行（broad 不进 dead-fanout 计数集）。"""
+    al = _mod()
+    r = (_lm(layer="spec-review", lens="broad", host="codex", runner="codex") + "\n"
+         + _fc(host="codex", subagents="unavailable", mirrors="broad") + "\n")
+    assert al.check_fanout_consistency(r) == []
+
+def test_step1_broad_review_mode_main_session_lint_passes():
+    """🔒 同 test_step1_broad_review_mode_subagent_lint_passes：新枚举值 mode="main-session"（DD3 探针判
+    子代理不可用时广审镜由主 session 亲做的降级路径）同样不应触发任何与 mode 相关的校验（只校验锚族
+    存在性，mode 值为主 session 自报、无机械枚举校验，design.md DD3 诚实边界）。"""
+    al = _mod()
+    r = ('<!-- sdflow:step1-broad-review v1 mode="main-session" -->\n'
+         + _ov(host="claude", runner="codex", reason_code="ok") + "\n"
+         + '<!-- sdflow:hr-tg v1 hit="none" -->\n')
+    assert al.check_existence(r, "code-review", metrics_on=False) == []
 
 
 # --- 解耦锁（metrics=false 时矩阵红线 + 一致性 lint 仍生效，端到端）------------------------------

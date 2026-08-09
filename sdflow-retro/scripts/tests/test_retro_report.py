@@ -216,16 +216,69 @@ def test_archive_rename_detects_done(tmp_path):
 
 
 def test_stage_walltimes_and_negative_clamp(tmp_path):
+    # absorb-gstack-autoplan：attribute-to-next（checkpoint=工作完成点，区间归其完成点）——
+    # a→b 的 600s 是「做 grill 用的时间」（b 才是 grill 完成的标记），故归 nxt=b 的阶段 grill，
+    # 不再归 cur=a 的阶段 ff（首提交 a 自身的阶段 ff 因无前驱 Δ 而不入账）。
     commits = [
         {"sha": "a", "ts": 1000, "subject": "checkpoint(ff)"},
-        {"sha": "b", "ts": 1600, "subject": "checkpoint(grill)"},       # ff→grill: 600s=10min 归 ff
-        {"sha": "c", "ts": 1500, "subject": "checkpoint(spec-review)"}, # 负 Δ → 钳 0 归 grill
+        {"sha": "b", "ts": 1600, "subject": "checkpoint(grill)"},       # ff→grill: 600s=10min 归 grill（nxt）
+        {"sha": "c", "ts": 1500, "subject": "checkpoint(spec-review)"}, # 负 Δ → 钳 0 归 spec-review（nxt）
     ]
     got = R.stage_walltimes(str(tmp_path), "foo", commits)
-    assert got["stages"]["ff"] == 10.0
-    assert got["stages"].get("grill", 0) == 0.0
+    assert got["stages"].get("ff", 0) == 0.0
+    assert got["stages"]["grill"] == 10.0
+    assert got["stages"].get("spec-review", 0) == 0.0
     assert got["reorder_suspected"] is True
     assert got["n_ckpt"] == 3
+
+
+def test_stage_walltimes_historical_spec_review_autoplan_sequence_no_longer_misattributed(tmp_path):
+    """回归测试（历史序列，含 checkpoint(spec-review-autoplan) 中间标签）：absorb-gstack-autoplan 修正
+    既有错账——旧口径 attribute-to-previous 下，generate→autoplan 区间因 cur=sdflow-spec-generate 映射
+    stage="ff" 而误归 ff（design.md「墙钟归属」段实证的错账）。attribute-to-next 后，该区间与后续
+    autoplan→spec-review 区间均归 nxt 的阶段（spec-review-autoplan/spec-review 皆映射 spec-review），
+    Step1 广审墙钟不再泄漏进 ff。"""
+    commits = [
+        {"sha": "a", "ts": 1000, "subject": "checkpoint(sdflow-spec-generate)"},
+        {"sha": "b", "ts": 1000 + 600, "subject": "checkpoint(spec-review-autoplan)"},  # Step1 广审 600s
+        {"sha": "c", "ts": 1000 + 600 + 300, "subject": "checkpoint(spec-review)"},      # Step2/3 300s
+    ]
+    got = R.stage_walltimes(str(tmp_path), "foo", commits)
+    assert got["stages"].get("ff", 0) == 0.0                 # 不再误归 ff
+    assert got["stages"]["spec-review"] == 15.0               # 600s+300s = 900s = 15min，全归 spec-review
+
+
+def test_stage_walltimes_new_single_checkpoint_sequence_attributes_to_spec_review(tmp_path):
+    """回归测试（新序列，DD1 单批 dispatch 下中间 checkpoint(spec-review-autoplan) 已退役）：
+    generate→spec-review 单一区间整体归 spec-review（本 skill 只剩一次 checkpoint(spec-review)）。"""
+    commits = [
+        {"sha": "a", "ts": 1000, "subject": "checkpoint(sdflow-spec-generate)"},
+        {"sha": "b", "ts": 1000 + 900, "subject": "checkpoint(spec-review)"},  # 单批 dispatch 900s
+    ]
+    got = R.stage_walltimes(str(tmp_path), "foo", commits)
+    assert got["stages"].get("ff", 0) == 0.0
+    assert got["stages"]["spec-review"] == 15.0
+
+
+def test_stage_walltimes_archive_rename_attributed_via_nxt_not_cur(tmp_path):
+    """`is_archive_rename` 判定对象由 cur 换 nxt：归档 rename 提交与其前一个 checkpoint 之间的墙钟
+    （真实是"做归档收尾用的时间"）现正确归 done，不再误归前一个 checkpoint 自身的阶段
+    （旧口径下 impl-review→archive 区间会误归 code-review，因 cur=impl-review 映射 code-review）。"""
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(impl-review)")
+    sha_impl = _git(root, "rev-parse", "HEAD").strip()
+    (root / "openspec/changes/archive/2026-07-06-foo").mkdir(parents=True)
+    _git(root, "mv", "openspec/changes/foo/proposal.md",
+         "openspec/changes/archive/2026-07-06-foo/proposal.md")
+    _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "chore(openspec): archive foo")
+    sha_archive = _git(root, "rev-parse", "HEAD").strip()
+    commits = [
+        {"sha": sha_impl, "ts": 1000, "subject": "checkpoint(impl-review)"},
+        {"sha": sha_archive, "ts": 1000 + 600, "subject": "chore(openspec): archive foo"},
+    ]
+    got = R.stage_walltimes(str(root), "foo", commits)
+    assert got["stages"]["done"] == 10.0
+    assert got["stages"].get("code-review", 0) == 0.0
 
 
 ANCHOR = ('<!-- sdflow:lens-metric v1 layer="{layer}" lens="domain" runner="claude" '

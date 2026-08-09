@@ -677,7 +677,7 @@ _MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # absorb-gstack-review�
                                                           # 改名即断链——design.md:106 已钉死该名）
 _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
 _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
-_MIRRORS_UPGRADE_HINT = "若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update"
+_MIRRORS_UPGRADE_HINT = "若本仓 openspec/workflow/ 为旧版，请回运行 checkout 跑 bash setup.sh"
 
 
 def _parse_mirrors(raw):

@@ -228,6 +228,12 @@ def stage_walltimes(root, name, commits):
     """
     计算相邻 commit 时间差累加到各阶段的墙钟数。
 
+    [absorb-gstack-autoplan] attribute-to-next：checkpoint 语义 = 工作完成点，
+    区间 [cur,nxt) 的墙钟归其**完成点** nxt 的阶段（不是起点 cur 的阶段）——修正既有错账：
+    旧口径下 checkpoint(sdflow-spec-generate)→checkpoint(spec-review-autoplan) 区间因
+    cur=sdflow-spec-generate 映射 stage="ff" 而把 Step1 广审墙钟误归 ff；新口径下该区间归
+    nxt 的阶段（spec-review-autoplan→spec-review），归属正确。
+
     Args:
         root: 项目根目录
         name: change 名称
@@ -239,7 +245,7 @@ def stage_walltimes(root, name, commits):
     stages = {}
     reorder = False
 
-    # 相邻提交差计入前一个提交的阶段
+    # 相邻提交差计入后一个提交（完成点）的阶段
     for i in range(len(commits) - 1):
         cur, nxt = commits[i], commits[i + 1]
         delta_s = nxt["ts"] - cur["ts"]
@@ -249,17 +255,18 @@ def stage_walltimes(root, name, commits):
             delta_s = 0
             reorder = True
 
-        # 当前提交的阶段
-        if is_archive_rename(root, cur["sha"], name):
+        # 完成本区间的提交（nxt）的阶段
+        if is_archive_rename(root, nxt["sha"], name):
             stage = "done"
         else:
-            stage = map_stage(cur["subject"])
+            stage = map_stage(nxt["subject"])
 
         # 累加到该阶段（秒转分钟）
         stages[stage] = stages.get(stage, 0.0) + delta_s / 60.0
 
-    # 末提交若是 archive rename，单独标记 done 存在（无后继 Δ）
-    if commits and is_archive_rename(root, commits[-1]["sha"], name):
+    # 首提交若是 archive rename，单独标记 done 存在（无前驱 Δ 可归属——对称于旧口径下
+    # 末提交的等价边界情形，旧口径末提交从不作为 cur、新口径首提交从不作为 nxt）
+    if commits and is_archive_rename(root, commits[0]["sha"], name):
         stages.setdefault("done", 0.0)
 
     total = sum(stages.values())
