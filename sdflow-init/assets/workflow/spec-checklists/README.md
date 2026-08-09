@@ -75,6 +75,7 @@ base 规则带 `落点` 标签，指明该规则最终**怎么落地执行**（�
 | `domains/embedded-ml307c.md` | embedded | ML307C（蜂窝模组） | `ML307C-` | ✅ 就绪 |
 | `domains/embedded-esp32.md` | embedded | ESP32-C3（WiFi SoC） | `ESP32-` | ✅ 就绪 |
 | `domains/frontend.md` | base | 前端 / UI（任意框架） | `FE-` | ✅ 就绪 |
+| `domains/devex.md` | base | developer-facing 交付面（CLI/API/SDK/skill/配置面，TG-28，**spec-review-only**） | `DX-` | ✅ 就绪 |
 
 ---
 

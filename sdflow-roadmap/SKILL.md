@@ -187,15 +187,15 @@ roadmap 就是这个层级：
 相位 C：生成三件套 → openspec/roadmaps/{name}/
         │
         ▼
-review：按商业化信号分档 → /plan-eng-review（默认）或 /autoplan（商业化信号命中，判定点②）
+review：恒跑 strategy/plan-eng 双镜 + sync-only outside voice（不分档，见下方「review」节）
         │
         ▼
-收尾：checklist 四项软门 → 通过后软提示纳入版本控制（判定点③）
+收尾：checklist 四项软门 → 通过后软提示纳入版本控制（判定点②）
 ```
 
 ## 判定留痕总则
 
-全流程有三个判定点：**①三态路由**（直接生成 / 裁剪至维度① / 按类型裁剪七维，三选一）**②review 分档**（eng 单审/autoplan 三连）**③收尾 checklist**（四项通过与否）。三处判定 MUST 在对话中显式陈述一行（不是内心判断），并在 task-log.md 留痕——判定点①因相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，SHALL 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记。**跳过类判定必须显著呈现**——单独一行、不埋进长消息——不允许静默略过。
+全流程有两个判定点：**①三态路由**（直接生成 / 裁剪至维度① / 按类型裁剪七维，三选一）**②收尾 checklist**（四项通过与否）。两处判定 MUST 在对话中显式陈述一行（不是内心判断），并在 task-log.md 留痕——判定点①因相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，SHALL 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记。**跳过类判定必须显著呈现**——单独一行、不埋进长消息——不允许静默略过。原判定点②（review 按商业化信号分档）已退役：review 现恒跑同一套 strategy/plan-eng 双镜、不再按信号分档，故不再占用判定点序号（见下方「review」节）。
 
 ## 必须遵守的硬性规则
 
@@ -310,7 +310,7 @@ roadmap 的质量 100% 取决于讨论是否充分。相位 A 收束前 **SHALL*
 
 **与 gate-0 两关独立**——gate-0 验的是「讨论是否充分」，不验「需求是否真实」，**MUST NOT** 因 gate-0 五项全过而免除本项检查。
 
-信号词表（与 review 分档共用同一张表）：**外部用户、变现、获客、"用户画像未定"、"要不要做这个产品"**。典型例子：面向外部用户的 SaaS、社区、付费工具。**不触发**的场景（绝大多数）：技术重构、内部工具、基础设施、博客/文档工程、个人项目。
+信号词表：**外部用户、变现、获客、"用户画像未定"、"要不要做这个产品"**。典型例子：面向外部用户的 SaaS、社区、付费工具。**不触发**的场景（绝大多数）：技术重构、内部工具、基础设施、博客/文档工程、个人项目。（review 已恒跑不再按此信号分档，本表仅供三态路由与七维裁剪使用。）
 
 ### 三态路由（判定点①）
 
@@ -327,7 +327,7 @@ roadmap 的质量 100% 取决于讨论是否充分。相位 A 收束前 **SHALL*
 
 判定依据 **SHALL** 在对话中单独一行显式陈述（不埋进长消息，含本次实际选入的拷问维度子集）。**留痕时点**：相位 A 收束时 `{name}` 尚未确定、包目录尚不存在，故该行 **SHALL** 在包目录建立后（相位 B 起手第三步，或直接生成路径的落盘时）补记进 task-log.md，**MUST NOT** 要求在包尚不存在时写入该文件。
 
-**操作者覆盖**：操作者显式要求增删本次拷问维度（如「这次不用问⑦」「把⑤也加上」）时 **SHALL** 遵从，并把偏离与理由记入判定点①的留痕行——与 review 分档的「显式覆盖」先例同构。
+**操作者覆盖**：操作者显式要求增删本次拷问维度（如「这次不用问⑦」「把⑤也加上」）时 **SHALL** 遵从，并把偏离与理由记入判定点①的留痕行。
 
 ### 路由对照表（自检基准）
 
@@ -448,9 +448,9 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 
 远期阶段若涉及长交付周期前置（采购/合规/外部契约类），**允许且应当**提前写「前置条件」一节，其余四节仍留雾。
 
-### 补细时机与重判分档
+### 补细时机与重新触发 review
 
-远期阶段成为下一个待实施阶段时（前序阶段全部交付），**SHALL** 补全五节（可经一次短讨论）。补细内容若命中商业化信号、或改变范围/不可逆承诺/验收判据，**SHALL** 重新过一遍 review 分档判定（非强制重跑三连审），判定结果记入 task-log.md。
+远期阶段成为下一个待实施阶段时（前序阶段全部交付），**SHALL** 补全五节（可经一次短讨论）。补细内容若命中商业化信号、或改变范围/不可逆承诺/验收判据，**SHALL** 重新触发一轮 review（双镜 + sync voice，恒跑不分档），结果记入 task-log.md。
 
 ### 前序放弃视为已处置
 
@@ -490,47 +490,87 @@ roadmap.md **只对近期 1-2 个阶段**写满五节（前置条件/目标/子�
 
 本 skill 场景下，上方契约的「评审对象路径」= `openspec/roadmaps/{name}/` 下 `design.md` + `roadmap.md` + `task-log.md` 三件套整体 plan（C7 契约：把三件套视为一个整体 plan 评审，不逐份割裂）。
 
-## review：按商业化信号分档（判定点②）
+## review：恒跑 strategy/plan-eng 双镜 + sync-only outside voice
 
-三件套写完就走收尾，等于"spec 没评审就交付"——能用但埋雷。按项目商业化信号分档触发 review，并显式陈述一行判定依据。
+三件套写完就走收尾，等于"spec 没评审就交付"——能用但埋雷。review 执行体为本 skill **自持**的
+strategy/plan-eng 双镜（镜职责定义见上方「广审镜（strategy / plan-eng）定义」小节的同源注入托管块）+
+**sync-only** 跨模型 outside voice——**恒跑，不再按商业化信号分档**（分档的存在理由是外部三连审成本
+高，review 执行体自持化后该成本前提消失；strategy 视角对技术型 roadmap 同样承重，不应按商业化信号
+才给）。
 
-### 分档判据（与相位 A 商业化信号检查共用同一张信号词表）
+### 双镜派发（恒跑，不分档）
 
-- **默认**：单跑 `/plan-eng-review`——技术重构、内部工具类项目，无商业化信号
-- **商业化信号命中才三连**：`/autoplan`——出现外部用户、变现、获客类信号（同相位 A 的触发词表）
+1. **resolve-models 一次**（取 host/tier/voice 变量；契约同源 `model-tiers.md` + `resolve-models.sh`，
+   不复制第二份判定逻辑，但本步从简——roadmap 是低频单人操作场景，不复刻 `sdflow-spec-review` 等四个
+   高频编排 SKILL 那套多镜反复引用的完整宿主/档位解析仪式）：`[ -x ~/.sdflow/hack/resolve-models.sh ]`
+   不成立 → fail-loud「resolve-models.sh 未安装——先在运行 checkout（`~/.skills/sdflow-skills`）跑
+   `bash setup.sh`」，MUST NOT 继续；成立 → `eval "$(~/.sdflow/hack/resolve-models.sh --root "$(git rev-parse --show-toplevel)")"`，
+   取 `$SDFLOW_HOST`（`claude|codex|unknown`）、`$SDFLOW_TIER_MID`（双镜档位）、`$SDFLOW_VOICE_RUNNER`/
+   `$SDFLOW_VOICE_MODEL`（voice 目标）。`$SDFLOW_HOST` 取到空字符串（非 `unknown`）= resolver 根本没
+   跑成，MUST NOT 当 `unknown` 处置，同样 fail-loud 硬停。本轮全程只 eval 这一次。
+2. **双镜恒跑，host-agnostic**：strategy 镜 + plan-eng 镜以 `model: $SDFLOW_TIER_MID` 派两个并行 fresh
+   子代理，MUST NOT 按商业化信号增减镜数——两镜的存在与数量与 `$SDFLOW_HOST` 无关。
+3. **voice 与双镜重叠启动**：双镜派出后**立即**前台跑 sync voice（不串行等双镜返回再跑），墙钟
+   ≈ max(双镜, voice) 而非相加。`$SDFLOW_HOST="unknown"` 时双镜仍恒跑，但**不调 voice**（task-log 留一行
+   `runner=none reason_code=host-unknown`，见下方「review 结果如何处理」）。
 
-### 关键：把三件套作为"整体 plan"告诉 review skill（存活验收）
+### 把三件套作为"整体 plan"告知双镜（存活验收）
 
-review skill 原本设计给**单个 plan 文件**。roadmap 是**多文件三件套**。触发时必须显式说明：
+双镜 prompt 面对的是**多文件三件套**，MUST 显式声明：
 
-> 请把 `openspec/roadmaps/{name}/` 下的 `design.md` + `roadmap.md` + `task-log.md` 视为一个整体 plan 来 review。`roadmap.md` 是主入口，它引用 design.md 作为上下文。`task-log.md` 是执行记录，重点看"Review 处置"小节是否完整。
+> 请把 `openspec/roadmaps/{name}/` 下的 `design.md` + `roadmap.md` + `task-log.md` 视为一个整体 plan 来评审。`roadmap.md` 是主入口，它引用 design.md 作为上下文。`task-log.md` 是执行记录，重点看"Review 处置"小节是否完整。
 
-不这样说，review skill 会只盯其中一份文件，遗漏跨文件的一致性问题。**缺此声明即视为该次 review 未按契约执行**，SHALL 重新触发。
+不这样说，镜子会只盯其中一份文件，遗漏跨文件的一致性问题。**缺此声明即视为该次 review 未按契约执行**，SHALL 重新触发。
+
+### sync-only outside voice（site=`roadmap-voice`）
+
+命令形态、退出码 → `reason_code` 映射、同族 fallback 规则**均取 `~/.sdflow/hack/outside-voice.sh` 契约的
+同步 exec 分支**（单一源 = 该脚本头注释 + `sdflow-spec-review/SKILL.md`「outside-voice helper 调用协议」
+⑦ 表，本节只给分支决策，不转述接口细节）——**MUST NOT 移植其 async 段**（不碰 dispatch manifest /
+collect barrier / 两 SKILL 等值门，那套仪式是为 async 两条路径与高频多镜场景设计的，roadmap 低频×
+单次调用，sync 分支自足）：
+
+- **context**：`design.md`「Decisions」+ `roadmap.md` 全文（超 200KB 收敛，同全量 diff 截断纪律；
+  `task-log.md` 有意不入 context——整体 plan 契约由双镜承载，voice 只补充第二意见维度，控制出境体积）。
+- **run 目录**：`openspec/roadmaps/{name}/.outside-voice/<run-id>/`（`mktemp -d` 占坑，`.gitignore` 的
+  `**/.outside-voice/` 递归覆盖，同 spec-review helper 契约）。
+- **命令**：`SDFLOW_VOICE_RUNNER=<runner> SDFLOW_VOICE_MODEL=<model> ~/.sdflow/hack/outside-voice.sh exec --timeout 300 --context-file "<f>"`
+  ——内层 `--timeout` 恒 `300`（沿 helper sync 分支既有常量，roadmap context 量级小于全量 diff，300s
+  足；不接 `outside-voice.async-timeout-seconds` 键，该键契约限定 async 两路径）；外层 Bash 工具超时
+  MUST ≥330000ms。
+- **退出码**：按 ⑦ 表映射——`exit 0` → findings 进合并池，锚行等价物 `reason_code="ok"`；其余非零 →
+  同族 fallback。
+- **失败处置**：voice 失败（非零退出/helper 缺失）SHALL 派同族只读 fallback 子代理补第二意见，
+  **MUST 带编排方时间预算（与 sync 内层 300s 同量级）**——超预算未返回视为 fallback 亦失败，当场落
+  「未审待恢复」，MUST NOT 无界等待。
+- **不落度量锚**：本节不接 `anchor_lint`/`lens-metric`——roadmap 无度量锚体系，findings 与留痕方式见下方
+  「review 结果如何处理」。
 
 ### 跳过 review（仅限人类操作者显式授权）
 
 跳过 review **仅限人类操作者显式授权**——agent 自身 **MUST NOT** 代决跳过。跳过后：
 
 - 包状态记 `review-waived`，不与"已审"混同
-- task-log.md 留一条「未做 review，风险自担」的痕迹（**判定点②的跳过类判定，须显著呈现，不埋长消息**）
+- task-log.md 留一条「未做 review，风险自担」的痕迹（**review 跳过判定，须显著呈现，不埋长消息**——review 恒跑不分档后本判定不再占用编号，但显式呈现纪律不变）
 
-### 显式覆盖默认分档
+### 双镜派发失败 / voice 失败时不静默，且阻塞收尾
 
-操作者显式要求覆盖默认分档（强制三连审 / 强制单审）时 **SHALL** 遵从，并在 task-log.md 记录偏离理由。
+双镜（strategy/plan-eng）派发失败，或 sync voice 与其同族 fallback 均失败（含 fallback 超编排方
+时间预算未返回）：**SHALL** 显式提示，task-log.md 留「未审待恢复」痕迹 + 给出修复/重试步骤，
+**MUST NOT** 把包当作已完成收尾（这不是"跳过"，是"故障"，两者状态不可混同）。
 
-### review 依赖不可用时不静默，且阻塞收尾
-
-`/plan-eng-review` / `/autoplan` 未安装、调用失败或返回空时：**SHALL** 显式提示，task-log.md 留「未审待恢复」痕迹 + 给出修复/重试步骤，**MUST NOT** 把包当作已完成收尾（这不是"跳过"，是"故障"，两者状态不可混同）。
-
-**该状态阻塞收尾**：包状态为 `未审待恢复` 时 **SHALL** 阻塞收尾 checklist，**MUST NOT** 因「Review 处置小节无未处置条目」（此时该小节本就是空的）而误判可以收尾；只有 review 成功执行、或人类操作者显式授权 `review-waived` 两种状态方可进入 checklist。操作者按提示装好依赖重跑 review 成功后，状态转正常，收尾方可继续。
+**该状态阻塞收尾**：包状态为 `未审待恢复` 时 **SHALL** 阻塞收尾 checklist，**MUST NOT** 因「Review 处置小节无未处置条目」（此时该小节本就是空的）而误判可以收尾；只有 review 成功执行、或人类操作者显式授权 `review-waived` 两种状态方可进入 checklist。操作者按提示重跑双镜/voice 成功后，状态转正常，收尾方可继续。
 
 ### review 结果如何处理
 
-review 产出的每条 issue **SHALL** 在 task-log.md「## Review 处置」小节标注下列状态之一：
+双镜（strategy/plan-eng）与 sync voice 产出的 findings **同池**进 task-log.md「## Review 处置」小节，逐条标注下列四态之一：
 
 - ✅ **采纳**：写明已在哪个文件哪一节改动
 - ❌ **拒绝**：写明拒绝理由（不得空白"不采纳"，理由必须可供后人复核）
 - ⏭ **延后**：写明延后到哪个阶段/哪个后续变更处理
+- 🔸 **未审待恢复**：双镜派发失败或 voice+fallback 均失败导致本轮 review 无产出时的**包级**状态标记（非逐条 finding 的处置，而是本轮 review 未产出时落的整体状态），附恢复步骤——见上节
+
+**voice 留痕**（不落 `anchor_lint`/`lens-metric` 锚，roadmap 无度量锚体系）：无论 voice 走成功（`reason_code="ok"`）还是同族 fallback，SHALL 在「Review 处置」小节留一行 `runner=<runner> reason_code=<code>` 痕迹；同族 fallback 成功时该行 **SHALL 含「降级」字样**（如实标注非跨模型第二意见，而是同宿主兜底）。
 
 「Review 处置」小节**不存在未处置条目**是收尾 checklist ①的硬性前提。
 
@@ -538,7 +578,7 @@ review 产出的每条 issue **SHALL** 在 task-log.md「## Review 处置」小�
 
 ## 收尾 checklist：四项软门
 
-收尾前 **SHALL** 执行以下四项确认，**判定点③**——显式陈述通过/不通过并写入 task-log.md；跳过类判定须显著呈现。任一项不通过 **SHALL** 提示补齐后再收尾，**MUST NOT** 静默跳过。
+收尾前 **SHALL** 执行以下四项确认，**判定点②**——显式陈述通过/不通过并写入 task-log.md；跳过类判定须显著呈现。任一项不通过 **SHALL** 提示补齐后再收尾，**MUST NOT** 静默跳过。
 
 **① Review 处置无遗留**〔mlh-p4 T82〕：先调脚本机械断言「`## Review 处置` 小节存在+非空」（防真空、防子串陷阱、弱模型不可跳过），再由你判逐条——机械/判断切分：
    - **规则根解析**：`RULES_ROOT=$(~/.sdflow/hack/resolve-workflow.sh --root "$(git rev-parse --show-toplevel)")`（`resolve-workflow.sh` 缺失或退出码非 0 → 显式提示「未装/解析失败，降级为人工断言小节存在+非空」并原样转发其 stderr，**MUST NOT** 静默当作「无此门」）。
@@ -639,11 +679,11 @@ roadmap 完成只是起点。后续每个阶段通过独立的 OpenSpec 变更�
 
 ### 陷阱 6：收尾 checklist 当成 review（把机械检查当内容质量）
 
-**表现**：觉得"收尾 checklist 四项都过了就等于内容审过了"，跳过 review 分档。
+**表现**：觉得"收尾 checklist 四项都过了就等于内容审过了"，跳过 review。
 
 **后果**：收尾 checklist 检查的是**结构性条件**（有没有处置记录、引用是否完整、历史存档是否被引用、memo 对账/未决项是否闭环）——**不判断内容对不对**。roadmap 里的错误架构决策、不合理阶段划分、遗漏的需求，都能通过 checklist 但在 review 里暴露。
 
-**正确**：两者不重叠、都不能省——review（`/plan-eng-review` 或 `/autoplan`）= **内容质量评审**（三件套产出后、收尾前审视"承诺的东西合不合理"）；收尾 checklist = **结构性软门**（review 处置完了没有、引用断没断链、历史存档/未决项留痕全不全）。
+**正确**：两者不重叠、都不能省——review（恒跑 strategy/plan-eng 双镜 + sync-only outside voice）= **内容质量评审**（三件套产出后、收尾前审视"承诺的东西合不合理"）；收尾 checklist = **结构性软门**（review 处置完了没有、引用断没断链、历史存档/未决项留痕全不全）。
 
 ---
 
