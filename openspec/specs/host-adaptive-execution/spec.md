@@ -57,7 +57,7 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 ### Requirement: 锚行合法组合矩阵是「跨模型性」的机械单一源〔spec-review-r2 C1/Q1〕
 
-「跨模型性」SHALL NOT 由散落多处的 `runner ≠ host` 各判一遍——因 `runner="none"`（D6 无执行值）满足 `none ≠ host`，会被误判为跨模型（击穿本能力核心不变式）。`anchor_lint` SHALL 以一条 **always-on 的合法组合矩阵**统一定义 `sdflow:outside-voice` 锚的合法 `(host, runner, reason_code, findings)` 组合，其余组合报错阻塞；**派生语义、置信过滤豁免（`spec-workflow`）、复用守卫（`outside-voice-reuse-guard`）SHALL 引用矩阵的「跨模型」判定，MUST NOT 各自重写 `runner ≠ host`**。矩阵：
+「跨模型性」SHALL NOT 由散落多处的 `runner ≠ host` 各判一遍——因 `runner="none"`（D6 无执行值）满足 `none ≠ host`，会被误判为跨模型（击穿本能力核心不变式）。`anchor_lint` SHALL 以一条 **always-on 的合法组合矩阵**统一定义 `sdflow:outside-voice` 锚的合法 `(host, runner, reason_code, findings)` 组合，其余组合报错阻塞；**派生语义、置信过滤豁免（`spec-workflow`）SHALL 引用矩阵的「跨模型」判定，MUST NOT 各自重写 `runner ≠ host`**。矩阵：
 
 - **跨模型 voice**：`host ∈ {claude,codex} ∧ runner ∈ {claude,codex} ∧ runner ≠ host ∧ reason_code = "ok"`（成功哨兵 `ok`，D5，不复用 `none`）
 - **同族 fallback**：`host ∈ {claude,codex} ∧ runner == host ∧ reason_code ∈ {not-installed,preflight-error,timeout,exec-error}`（`missing-deps` 归约入 `preflight-error`，D7）
@@ -65,15 +65,15 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 
 「跨模型」判定 = 矩阵第一行成立。此校验 **MUST always-on、独立成函数、不接受 `metrics_on` 参数**（D11，照 `check_hr_tg` 先例）。
 
-**矩阵为跨工具单一源：逻辑本地重实现 + 全笛卡尔 golden 守，非可 parse 的「同构 enums」块〔spec-review-r3 C2-cross-tool · r3-narrow 修正〕**：`anchor_lint`（判自审）与 `outside_voice_guard`（判可复用）是**两个独立工具**，且 `outside_voice_guard.py` 有 **`MUST NOT import`** 边界（D5 铁律：跨模块口径本文件内重实现）——∴「引用同一矩阵」做不到用共享函数。**且矩阵是关系式谓词**（`host∈{}∧runner∈{}∧runner≠host∧reason_code="ok"`、不等式、行内析取），**`lens-metric-enums` 那种平铺 `key: 逗号值` 块表达力装不下**（r3-narrow 冷层纠正 r3 初稿「与 enums 同构」的措辞错）。∴：**① 枚举域**（host/runner/reason_code 各自取值集）SHALL 由 `lens-metric-contract.md` 机读块承载（既有单一源，两工具各自读）；**② 矩阵的关系式判定逻辑**（三态分类 illegal/cross-model/same-family/no-exec）SHALL 由两工具**各自本地重实现**（承 D5「重实现非 import」，MUST NOT 硬凑一个表达力不足的可 parse 块）；**③ 防漂移靠强 golden**：一条跨工具 golden 测试 SHALL 对 **host×runner×reason_code×findings 全笛卡尔积**（含边界 + mutation：坏值/越域/缺字段）喂两工具，断言二者的**完整分类**（非仅「跨模型」布尔）逐条一致，任一漂移即红。**MUST NOT** 让 golden 只比有限输入的布尔值（那样两工具同源同错测不出，r3-narrow 冷层点名）。
+**矩阵实现收敛为 anchor_lint 单一本地实现〔absorb-gstack-autoplan spec-review-amendment M1：`outside_voice_guard.py` 随复用路径退役（见 capability `outside-voice-reuse-guard` 的 REMOVED delta），「两工具各自本地重实现 + 跨工具全笛卡尔 golden 互守」条款失去第二实现方〕**：**① 枚举域**（host/runner/reason_code 各自取值集）SHALL 仍由 `lens-metric-contract.md` 机读块承载（单一源不变）；**② 矩阵的关系式判定逻辑**（三态分类 illegal/cross-model/same-family/no-exec）SHALL 由 `anchor_lint` 本地实现（原「MUST NOT 硬凑表达力不足的可 parse 块」约束保留）；**③ 防漂移 golden SHALL 收敛为 anchor_lint 单工具自测**：对 **host×runner×reason_code×findings 全笛卡尔积**（含边界 + mutation：坏值/越域/缺字段）断言 `anchor_lint` 分类逐条符合本矩阵定义（枚举域仍从契约机读块读入，契约↔实现漂移即红）。**MUST NOT** 让 golden 只比有限输入的布尔值。原跨工具 golden（`test_outside_voice_guard.py` Step 5）随 guard 测试删除，其全笛卡尔用例 SHALL 迁移/改造进 anchor_lint 测试侧，MUST NOT 随文件删除而静默丢失覆盖面。
 
-#### Scenario: 矩阵逻辑两工具各自重实现且全笛卡尔 golden 守
-- **WHEN** `anchor_lint` 与 `outside_voice_guard` 都需要合法组合分类
-- **THEN** 二者 SHALL 从契约机读块读**枚举域**、各自本地重实现**关系式分类逻辑**（`outside_voice_guard` 承 `MUST NOT import` 边界不 import `anchor_lint`）；一条 golden 测试 SHALL 对 host×runner×reason_code×findings 全笛卡尔积（含 mutation）断言二者**完整分类**逐条一致，MUST NOT 只比有限输入的布尔值
+#### Scenario: 矩阵逻辑 anchor_lint 单实现且全笛卡尔 golden 守〔absorb-gstack-autoplan〕
+- **WHEN** `anchor_lint` 需要合法组合分类
+- **THEN** 其 SHALL 从契约机读块读**枚举域**、本地实现**关系式分类逻辑**；一条 golden 测试 SHALL 对 host×runner×reason_code×findings 全笛卡尔积（含 mutation）断言分类逐条符合矩阵定义，MUST NOT 只比有限输入的布尔值
 
 #### Scenario: runner="none" 不被判为跨模型
 - **WHEN** 某 outside-voice 锚 `runner="none"`（无论 host 为何）
-- **THEN** 矩阵判定「跨模型」为**假**，MUST NOT 享跨模型豁免 / MUST NOT 被复用守卫认作跨模型段；且 SHALL 校验 `findings=0` 与 `reason_code ∈ {host-unknown,secret-hit,fallback-unavailable}`，否则报错（如 `runner="none" findings="5"` ⇒ 违规）
+- **THEN** 矩阵判定「跨模型」为**假**，MUST NOT 享跨模型豁免；且 SHALL 校验 `findings=0` 与 `reason_code ∈ {host-unknown,secret-hit,fallback-unavailable}`，否则报错（如 `runner="none" findings="5"` ⇒ 违规）
 
 #### Scenario: 非法组合当场报错
 - **WHEN** 出现矩阵外的组合（如 `host="unknown" runner="claude"`、`runner="none" reason_code="ok"`、`runner==host reason_code="ok"`）
@@ -136,7 +136,7 @@ Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`
 
 子代理确实不可用时，评审 SHALL **把 roster 缩到实际跑过的镜**并在报告显著标注「单镜降级」，MUST NOT 按计划的镜数照落 lens-metric 锚。
 
-**探针 = 语义核验（非机械门）+ always-on 一致性 lint（spec-review-amendment Q1，adr/0023 已降格）**：「fan-out 机制活着没」有信号、**但无可机械捕获路径**——探针（trivial 子代理看回不回哨兵）只能由**主 session 自己**调用观察、把 `subagents=` 写进锚，`anchor_lint` 读那行锚**无从核验它对应一次真 spawn**（经被监管方自报，§0.0 防伪一侧）。∴ 探针 SHALL 作**机制活着的语义核验**、MUST NOT 冒充机械门。`SDFLOW_HOST=codex` ⇒ **MUST 探**；`claude` ⇒ 免探恒 available；`unknown` ⇒ 不 fan-out。结果落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding,history,broad|—" -->`，该锚 **MUST 落进被 `anchor_lint` 校验的那份报告文件内**（D8-orig：落别处则 lint 看不见）；`host=codex` 的报告中该锚**必须在场**（缺锚不得绕过）。**`mirrors=` = 本轮实际 fan-out 镜清单**〔spec-review-r2 C2〕，由 SHALL 由 SKILL 在 fan-out 时直接落**、不经 emitter/lens-metric 管线、不读 `config.metrics`**，故 `metrics.enabled=false` 时也在场。code-review 层的 Step1 scope 审计（broad 镜）为被派子代理时 SHALL 计入 `mirrors=`（token `broad`）。
+**探针 = 语义核验（非机械门）+ always-on 一致性 lint（spec-review-amendment Q1，adr/0023 已降格）**：「fan-out 机制活着没」有信号、**但无可机械捕获路径**——探针（trivial 子代理看回不回哨兵）只能由**主 session 自己**调用观察、把 `subagents=` 写进锚，`anchor_lint` 读那行锚**无从核验它对应一次真 spawn**（经被监管方自报，§0.0 防伪一侧）。∴ 探针 SHALL 作**机制活着的语义核验**、MUST NOT 冒充机械门。`SDFLOW_HOST=codex` ⇒ **MUST 探**；`claude` ⇒ 免探恒 available；`unknown` ⇒ 不 fan-out。结果落会话级锚 `<!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,grounding,history,broad|—" -->`，该锚 **MUST 落进被 `anchor_lint` 校验的那份报告文件内**（D8-orig：落别处则 lint 看不见）；`host=codex` 的报告中该锚**必须在场**（缺锚不得绕过）。**`mirrors=` = 本轮实际 fan-out 镜清单**〔spec-review-r2 C2〕，由 SHALL 由 SKILL 在 fan-out 时直接落**、不经 emitter/lens-metric 管线、不读 `config.metrics`**，故 `metrics.enabled=false` 时也在场。**两评审层的 broad 镜——code-review 的 Step1 scope 审计与 spec-review 的广审镜（strategy/plan-eng）——为被派子代理时 SHALL 计入 `mirrors=`（token `broad`）**〔absorb-gstack-autoplan：spec-review 广审自持化后与 code-review 同口径〕。
 
 **`fanout-capability` 锚严格文法 + 缺字段 fail-closed〔spec-review-r3 C5-mirrors · r3-narrow #5〕**（否则 C2 仍能诚实空转）：`fanout-capability` 锚 SHALL **每轮恰好一条**（重复锚 / 重复 KV → fail-closed）；**`subagents=` SHALL 必填且严格 ∈ `{available,unavailable}`**——**`subagents=""` / 未知值 / 缺字段 SHALL fail-closed 报错，MUST NOT 视作"非 unavailable"而放行**（否则坏 `subagents` 值携多镜绕过一致性 lint 的 `unavailable` 分支，r3-narrow #5）；**capability 锚的 `host=` SHALL 与报告 outside-voice/lens-metric 锚的 `host=` 唯一一致**，否则 fail-closed（防 `host="claude"` capability 锚混入 Codex 报告只为满足"锚存在"）；`mirrors=` 为 `host=codex` 报告的**必填字段**，取值文法 SHALL 为 **`—`（未 fan-out）XOR 非空的 `{domain,adversarial,grounding,history,broad}` 逗号分隔子集**；`anchor_lint` 对 **缺 `mirrors=` / 空值 / 未知 token / 重复 token** SHALL **fail-closed 报错**，MUST NOT 把缺失/坏值静默过滤成空集（否则 `subagents="unavailable"` + 空 `mirrors` 又判 CLEAN、C2 空转复发）。
 
@@ -157,7 +157,7 @@ Codex 宿主默认不派子代理（须由 AGENTS.md / SKILL 显式授权）。`
 - **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——此为锚行自身的自相矛盾（机制死却报多镜）；判据 MUST 读 `mirrors=`、MUST NOT 数受 metrics 门控的 lens-metric 行；此校验及其数据源 MUST always-on、不受 `metrics.enabled` 门控
 
 #### Scenario: unavailable 时 mirrors 含 broad 不触发 dead-fanout（降级合法路径）
-- **WHEN** `subagents="unavailable"` 且 `mirrors="broad,history"`（broad 由主 session 降级亲做、另有一镜独立完成）
+- **WHEN** `subagents="unavailable"` 且 `mirrors="broad,history"`（broad 由主 session 降级亲做——code-review 层为 scope 审计、spec-review 层为广审，两层同为恒跑守卫——另有一镜独立完成）
 - **THEN** `anchor_lint` SHALL 判合法不阻塞——`broad` 不在 dead-fanout 计数集内（计数集内仅 `history` 一项，≤1）；`mirrors="broad,domain,history"` 时计数集内为 2 项，SHALL 照常报错
 
 #### Scenario: metrics 关闭时一致性 lint 仍生效（解耦锁）〔spec-review-r2 C2〕

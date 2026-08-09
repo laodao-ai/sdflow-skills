@@ -11,7 +11,7 @@ TBD - created by archiving change workflow-metrics-loop. Update Purpose after ar
 
 **「跨模型性」SHALL 为派生量、由能力 `host-adaptive-execution` 的合法组合矩阵机械判定（`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`），MUST NOT 编码进 `runner` 枚举值、亦 MUST NOT 简写为裸 `runner ≠ host`**〔add-codex-host-support · spec-review-r2 C1：裸 `runner≠host` 被 `runner="none"`（`none≠host` 恒真）击穿〕。`claude-fallback` **枚举值废弃**——它把"跨模型性"藏进了枚举值，在 Codex 宿主下必然说谎。矩阵三态：跨模型第二意见（上式）/ 同族 fallback（`runner==host`）/ 无执行（`runner="none" ∧ findings=0`，非跨模型）。
 
-`lens` 字段 SHALL 为 **canonical 投影**（非报告「源」列逐字）：按规范映射折叠——完整性镜并入 `grounding`、编号对抗镜（对抗镜1/2/3）折叠到 `adversarial`、autoplan 各子声与 code-review 的 scope 审计（raw 名 `scope-audit`）折叠到 `broad`、**任一 runner 的 outside voice 折叠到 `outside-voice`**（映射表见契约 `lens-metric-fold` 机读块；raw 名 `gstack-adv` 已随 code-review Step1 自持化退役，由 `scope-audit` 替换——归档报告的锚行为 canonical 值不受影响）。`独立` SHALL 在**折叠到类型之后**计算。
+`lens` 字段 SHALL 为 **canonical 投影**（非报告「源」列逐字）：按规范映射折叠——完整性镜并入 `grounding`、编号对抗镜（对抗镜1/2/3）折叠到 `adversarial`、**spec-review 广审镜（raw 名 `strategy`/`plan-eng`）与 code-review 的 scope 审计（raw 名 `scope-audit`）折叠到 `broad`**、**任一 runner 的 outside voice 折叠到 `outside-voice`**（映射表见契约 `lens-metric-fold` 机读块；raw 名 `gstack-adv` 已随 code-review Step1 自持化退役、由 `scope-audit` 替换，raw 名 `autoplan-ceo`/`autoplan-design`/`autoplan-eng`/`autoplan-dx` 已随 spec-review Step1 自持化退役、由 `strategy`/`plan-eng` 替换——归档报告的既有 canonical 锚行不受影响）。`独立` SHALL 在**折叠到类型之后**计算。
 
 **归属规则 MUST 钉死**：`findings/采纳/裁掉/defer` 按「哪些镜报过该 finding」归属，共抓则每命中镜各记一次；`独立` 仅在「唯一报过 ∧ 被采纳」时 +1。`sev` 子格式 MUST 钉死为 `致N/高N/中N/低N` 四级**定序、零也写 0、分隔符恒 `/`**（禁省略某级或改序，防自由子格式脆弱——F1-T2 类）〔spec-review-amendment SR-I〕。
 
@@ -35,11 +35,15 @@ TBD - created by archiving change workflow-metrics-loop. Update Purpose after ar
 
 #### Scenario: fan-out 机制死却报多镜被一致性 lint 阻塞（always-on，判据读 mirrors=）〔add-codex-host-support · spec-review-amendment Q1 · adr/0023 · spec-review-r2 C2〕
 - **WHEN** 会话级 `sdflow:fanout-capability` 锚记 `subagents="unavailable"`，而**同锚 `mirrors=`** 清单中 `∈ {domain,adversarial,grounding,history}`（**按值去重**）的计数 > 1
-- **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——这是**锚行自身的自相矛盾**（机制死却报多镜），**不是伪造拦截**（主 session 写 `subagents="available"` 或只列 1 镜即绕过）；判据 **MUST 读 `fanout-capability` 锚的 `mirrors=`、MUST NOT 数 lens-metric 行**〔spec-review-r2 C2 纠正首轮致命洞：lens-metric 行在生产端受 `metrics.enabled` 门控，默认消费仓 metrics=false ⇒ 零行 ⇒ lint 空转；`mirrors=` 由 SKILL 直接落、不受该门控〕；此校验及其判据数据 **MUST always-on、与 `metrics.enabled` 解耦**。MUST NOT 声称「头号假绿事前拦截」——只拦机制死变体，机制活+偷懒自代变体留语义层。`broad`（Step1 scope 审计）不入计数集——其主 session 降级为设计内合法路径，见能力 `host-adaptive-execution`
+- **THEN** `anchor_lint` SHALL 报错阻塞（违规类型 `dead-fanout-multi-mirror`）——这是**锚行自身的自相矛盾**（机制死却报多镜），**不是伪造拦截**（主 session 写 `subagents="available"` 或只列 1 镜即绕过）；判据 **MUST 读 `fanout-capability` 锚的 `mirrors=`、MUST NOT 数 lens-metric 行**〔spec-review-r2 C2 纠正首轮致命洞：lens-metric 行在生产端受 `metrics.enabled` 门控，默认消费仓 metrics=false ⇒ 零行 ⇒ lint 空转；`mirrors=` 由 SKILL 直接落、不受该门控〕；此校验及其判据数据 **MUST always-on、与 `metrics.enabled` 解耦**。MUST NOT 声称「头号假绿事前拦截」——只拦机制死变体，机制活+偷懒自代变体留语义层。`broad`（code-review scope 审计、spec-review 广审镜）不入计数集——其主 session 降级为设计内合法路径，见能力 `host-adaptive-execution`
 
 #### Scenario: 宿主分组可事后区分真跨模型与自审轮次〔add-codex-host-support〕
 - **WHEN** 复盘聚合器读取跨 change 的 lens-metric 锚
 - **THEN** SHALL 可按 `host` 分组统计，使 Codex 宿主轮次与 Claude 宿主轮次的采纳率/独立率分别可见，MUST NOT 混算（混算会让一方的自审数据污染另一方的真跨模型信号）
+
+#### Scenario: 广审镜新 raw 名折叠到 broad〔absorb-gstack-autoplan〕
+- **WHEN** spec-review 报告的 findings 命中镜为 raw 名 `strategy` 或 `plan-eng`
+- **THEN** emitter 按 fold 表折叠到 canonical `broad` 落锚；旧 raw 名 `autoplan-*` 不再在 fold 表内，emitter 对其 fail-closed（非静默塞 broad），归档报告的既有 canonical 锚行不受影响
 
 ### Requirement: 独立贡献在 Step3 去重时导出，塌进 per-镜锚
 

@@ -37,29 +37,35 @@
 - **WHEN** 评审 / grill 过程中发现当前 change 未覆盖的新需求或修复
 - **THEN** 是否并入当前 change SHALL 按【对当前 change 工作的影响 + workflow 循环固定成本高】判——related 信号（紧耦合 / 一致性修复 / blast-radius 小）使其进入 fold 候选，候选再经**防吸积 AND 门（同 capability ∧ 高耦合 ∧ 低增量，三者皆满足）**才 fold 进当前 change、任一不满足则 defer 另开——此判定走三镜（开发循环镜通常主导），MUST NOT 反射式以「change 单一职责」教条拆分（拆 change 有一整轮循环固定成本）；判据成文于 BASE-18〔impl-review-fix F4/CV4：与 BASE-18 防吸积 AND 门口径一致，消除「任一即 fold」宽版二义〕
 
-### Requirement: 阶段二产出单一合并报告
+### Requirement: 阶段二自持广审并单批 dispatch 产出单一合并报告
 
-阶段二 SHALL 由 `sdflow-spec-review` 编排器串起 autoplan 与多镜评审并产出**单一** `spec-review-report.md`，MUST NOT 要求人工手动合并多份报告。**执行序按镜类分治**〔T20 修订〕：
+阶段二 SHALL 由 `sdflow-spec-review` 编排器把**自持广审镜**与多镜评审合并产出**单一** `spec-review-report.md`，MUST NOT 要求人工手动合并多份报告。
 
-- **领域镜 / 对抗镜** MUST 待 Step1 autoplan 完成并 checkpoint 之后 fan-out——它们的评审对象须包含 autoplan 的 `[gstack-amendment]` 改动（设计约束、scope 修订）。
-- **接地镜** MAY 与 Step1 autoplan 并行起跑——它核的是代码事实（函数名/字段/API 路径是否真实存在），不依赖 autoplan 的设计判断产出。
-- autoplan amendment 后 SHALL NOT 自动补跑接地镜——amendment 新增的代码事实引用由 `sdflow-code-review` 的 grounding/history 镜兜底覆盖。
+广审 SHALL 由两个恒跑 fresh 子代理承载——**strategy 镜**（计划级战略审：前提站得住吗/范围校准/长期轨迹/后悔场景，过 base 清单计划级 R 项）与 **plan-eng 镜**（计划级工程审：架构耦合/错误路径完备/测试计划/隐藏复杂度，过 base 清单工程 R 项）；raw 名 `strategy`/`plan-eng`，canonical 折叠 `broad`。二者 SHALL 只返回结构化 findings，**MUST NOT 原地修订四件套**——amendment 统一在 Step3 裁决后落盘并标 `[spec-review-amendment]`。广审镜与领域镜的分工线：base 清单 R 项归广审镜，`domains/` 栈特定 R 项归领域镜。
+
+全部镜（广审/领域/对抗/接地）SHALL **单批并行 dispatch**（能力探针在 dispatch 前恒跑一次，结果对全部镜共用）——旧「领域/对抗镜等待广审先行并 checkpoint」的串行纪律随 autoplan amendment 环节退役而废止，`checkpoint(spec-review-autoplan)` 标签停产（历史归档标签仍被 retro 解析识别）。
+
+`step1-broad-review` 锚保留，mode SHALL ∈ `{subagent, main-session}`：`subagent` = 广审镜正常派发；`main-session` = 探针判 `subagents="unavailable"` 时主 session 亲做广审（恒跑守卫，MUST NOT 因子代理不可用而跳过广审层）。
 
 #### Scenario: 阶段二收尾
-- **WHEN** autoplan 与 spec-review 镜均完成
+- **WHEN** 全部镜与 outside-voice collect 完成
 - **THEN** 编排器输出一份已去重合并、含决策登记区的 spec-review-report.md，供设计 HARD-GATE 人工一次性评审
 
-#### Scenario: 领域/对抗镜等待 autoplan 先行
-- **WHEN** sdflow-spec-review 执行 Step2 规划镜头时 Step1 autoplan 尚未 checkpoint
-- **THEN** 领域镜与对抗镜 MUST 等待其完成后再 fan-out（评审对象须含 amendment）
+#### Scenario: 单批并行 dispatch
+- **WHEN** 编排器完成规划镜头（TG 判定、镜 roster、能力探针）
+- **THEN** 广审镜/领域镜/对抗镜/接地镜 SHALL 在一条消息内并行派出，MUST NOT 为广审设置前置 checkpoint 或让其它镜等待广审完成
 
-#### Scenario: 接地镜与 autoplan 并行
-- **WHEN** sdflow-spec-review 启动 Step1 autoplan
-- **THEN** 接地镜 MAY 在同一时刻 dispatch，读当前盘面的 design/specs + 真实代码核验代码事实；其 findings 在 Step3 合并池与其它镜同等裁决
+#### Scenario: 广审镜不修订盘面
+- **WHEN** strategy 或 plan-eng 镜发现设计缺陷
+- **THEN** 该发现作为结构化 findings（问题/证据/置信/严重度/建议）返回，进 Step3 合并池同池裁决；子代理 MUST NOT 直接编辑四件套
 
-#### Scenario: amendment 后不补跑接地镜
-- **WHEN** autoplan 产出 `[gstack-amendment]` 且 amendment 涉及新增代码事实引用
-- **THEN** 接地镜 SHALL NOT 被要求补跑——该覆盖缺口由 sdflow-code-review 的 grounding/history 镜在实现完成后兜底
+#### Scenario: 子代理不可用时广审降级不缺席
+- **WHEN** 能力探针判 `subagents="unavailable"`
+- **THEN** 广审由主 session 亲做，锚记 `mode="main-session"`，`mirrors=` 计入 `broad`（合法降级）；MUST NOT 静默跳过广审层；报告广审段 SHALL 显式声明「strategy/plan-eng 本轮由主 session 单一上下文亲做，为同源单一意见、非独立双检」——MUST NOT 以两栏分列呈现造成「两次独立交叉确认」的误读〔spec-review-amendment M11：main-session 路径的独立性损失须显著可见〕
+
+#### Scenario: 广审镜个体 spawn 失败不与零发现同形〔spec-review-amendment M10〕
+- **WHEN** 探针判 `subagents="available"` 但某个广审镜（strategy 或 plan-eng）个体派发失败/超出编排方时间预算未返回/返回不可解析内容
+- **THEN** 编排器 SHALL 重试一次；仍失败则该镜由主 session 亲做**该镜职责**并在报告显式标注「<镜名> 个体失败，主 session 代做（非独立）」；MUST NOT 以空 findings + `mode="subagent"` 冒充该镜已独立跑过——「个体失败代做」与「独立跑过且 0 发现」MUST 在报告正文可区分（锚行文法不区分此二态，为既有诚实边界，区分义务在正文层）
 
 ### Requirement: sdflow-code-review 为每次全跑的独立强制主审
 
@@ -173,7 +179,7 @@
 workflow bundle（`workflow/*.md` / `trigger-catalog.md` / `spec-checklists/` / `code-checklists/` / review 机械层脚本（`tools/`）/ hooks / checkpoint 脚本）与自制 skill 的改动 MUST 在权威源（sdflow-skills 的 bundle 公共家与 skill 目录）进行，MUST NOT 只改消费仓副本。部署 SHALL **按内容性质分层**，而非整 bundle 复制：
 
 - **规则**（`workflow/*.md` + `spec-checklists/` + `code-checklists/`）MUST **不再复制进消费仓**，改由 skills 从全局 canonical bundle 解析（见「规则解析 resolver」需求）。
-- **review 机械层脚本**（`tools/` 下 `anchor_lint.py` / `lens_metric_emit.py` / `outside_voice_guard.py` / `hr_tg_intersect.py` / `review_disposition_check.py` / `trivial_shape.py` 等确定性脚本）MUST **不再复制进消费仓**，与规则同样由 skills 从全局 canonical bundle 解析（`$RULES_ROOT/tools/…`）。理由〔F49 限定〕：消费仓副本是 **bundle 拷贝链** skew 的成因（当前已知的主要 skew 来源），且它在 `global-canonical` 路径下从不被读取；取消复制即消灭**该类**问题（见 `adr/0039`）——该消除在完整 `git pull` + `bash setup.sh` 之后生效，不消灭 `~/.sdflow/hack/` 拷贝链与 Windows SKILL 快照的失鲜。`tools/` 下同样 MUST NOT 含任何 HTML 文档查看器资产（`engine.js` / `engine.css` / `vendor/` / `review-stub.html`）。**不再提供任何浏览器文档查看面**——`serve.sh` / `review.html` 及其查看器已从权威源整体移除；浏览 change / spec / roadmap 直接读 Markdown 文件。
+- **review 机械层脚本**（`tools/` 下 `anchor_lint.py` / `lens_metric_emit.py` / `hr_tg_intersect.py` / `review_disposition_check.py` / `trivial_shape.py` 等确定性脚本）MUST **不再复制进消费仓**，与规则同样由 skills 从全局 canonical bundle 解析（`$RULES_ROOT/tools/…`）。理由〔F49 限定〕：消费仓副本是 **bundle 拷贝链** skew 的成因（当前已知的主要 skew 来源），且它在 `global-canonical` 路径下从不被读取；取消复制即消灭**该类**问题（见 `adr/0039`）——该消除在完整 `git pull` + `bash setup.sh` 之后生效，不消灭 `~/.sdflow/hack/` 拷贝链与 Windows SKILL 快照的失鲜。`tools/` 下同样 MUST NOT 含任何 HTML 文档查看器资产（`engine.js` / `engine.css` / `vendor/` / `review-stub.html`）。**不再提供任何浏览器文档查看面**——`serve.sh` / `review.html` 及其查看器已从权威源整体移除；浏览 change / spec / roadmap 直接读 Markdown 文件。
 - **人读手册 `WORKFLOW-GUIDE.md`** SHALL 仍复制进消费仓 `openspec/workflow/`——它**纯人读、不参与任何执行、不被任何脚本机读** ⇒ 结构上不可能 skew，陈旧无害；其价值正是「随仓走、不用跳文件」。它是消费仓 `openspec/workflow/` 下**唯一**的托管文件。
 
 - **退役部署文件自愈**：`sdflow-init` MUST 维护一份**退役部署文件名单**（含曾铺进消费仓 `openspec/` 根的 `serve.sh` + `review.html`）并在 `init/update` 每次运行时对其**签名门控删除**——仅当目标文件内容含该文件的 bundle 部署签名（`review.html` 含 `__OPENSPEC_PROJECT_NAME__`、`serve.sh` 含 `openspec-review-serve-`）时才删，MUST NOT 删除不含签名的用户同名文件（防误删）。删除幂等、存量安装自愈、fresh 安装 no-op；机制与退役 hook 反注册同构（承 adr/0022 精神：只删自己确知铺设过的文件，不猜用户文件内容）。`tools/` 下的查看器资产不入该名单〔F27 订正〕——目标实现**不再触碰**消费仓 `tools/`（停铺后无整删重拷动作），存量仓残留的查看器资产与其它 tools 死件同类：由残留告警提示、人执行告警附带的删除命令一并清除，MUST NOT 依赖不复存在的整删重拷路径。
@@ -609,7 +615,7 @@ design 域监视集 SHALL 保持固定四件套不变。豁免 SHALL 仅覆盖**
 
 ### Requirement: 跨模型 outside voice 默认开、失败回落且非阻塞
 
-sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside voice（**另一个机队**的「找漏」第二意见）：sdflow-code-review 每次自带 code outside voice；sdflow-spec-review 复用 autoplan 产物中的 outside-voice findings（见反静默守卫 Requirement）。
+sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside voice（**另一个机队**的「找漏」第二意见）：sdflow-code-review 每次自带 code outside voice；**sdflow-spec-review 每次自带 design outside voice（design-voice 恒自跑——autoplan 产物复用路径已随 ADR 0040 退役）**〔spec-review-amendment M1：原文「复用 autoplan 产物中的 outside-voice findings」失效〕。
 
 **runner MUST 由宿主决定，MUST NOT 硬编码**〔add-codex-host-support〕：runner 恒为**当前宿主之外的另一个机队的强档**（Claude 宿主 → Codex；Codex 宿主 → Claude）。`preflight` MUST 探测**目标 runner 的 CLI**，而非固定探测 codex——固定探测 codex 会在 Codex 宿主下返回 ready 并导致 **codex 自审 codex**，是必须杜绝的假绿。是否启用由环境决定——目标 runner CLI 未安装即天然关停（工作层不设软 off-switch，〔grill-amendment Q3〕）；目标 runner 不可用（未装/未认证/报错/超时）时 MUST fallback 到同 prompt 的 fresh **同宿主**只读子代理，且该轮 `runner == host`（如实标为非跨模型）；宿主判不出（`host="unknown"`）时 MUST NOT 跑 voice（无从确定"另一个机队"）。一切失败均为 informational，MUST NOT 阻塞评审流程。
 
@@ -639,20 +645,9 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 - **WHEN** `CLAUDECODE` 与 `CODEX_THREAD_ID` 两个正信号皆无（或同时存在，信号冲突）
 - **THEN** 本轮 MUST NOT 跑 outside voice；锚行记 `host="unknown" runner="none" reason_code="host-unknown"`（D6）；报告显著标注本轮无跨模型第二意见，MUST NOT 任选一个 runner 跑了充作跨模型
 
-### Requirement: outside-voice 复用挂反静默守卫
-sdflow-spec-review 复用 autoplan 产出的 `gstack-review.md` outside-voice findings 时，SHALL 校验产物有效性，按序判定：①**来源**——`step1-broad-review` 锚行为 `simulated` 则产物一律视同无效（模拟广审可臆造格式合规的 codex 段，结构性检查挡不住）〔spec-review-amendment〕；②**新鲜度**——产物早于 change 最新改动视同缺失（guard=stale）〔spec-review-amendment〕；③**结构**——文件缺失 / 解析不出 codex 段（解析锚定 adr/0002 的 `codex#N` 标签约定）/ findings 为 0 条。任一不过 MUST 打印带原因码（file-missing / section-not-found / zero-findings / stale / simulated-source）的显式降级日志并回落自跑 codex 设计 outside voice，MUST NOT 静默当「本次无 voice」跑过；诱因为文件整体缺失时措辞 MUST 声明「仅补偿 outside-voice 切片，广审其余镜仍缺」〔spec-review-amendment〕。C2 复用的前提是 autoplan 每次都跑（P2b）；若 autoplan 未跑，spec-review MUST 自跑设计 outside voice。
-
-#### Scenario: autoplan 产物有效则复用不重开
-- **WHEN** `gstack-review.md` 来源为 native、晚于 change 最新改动、且解析出 ≥1 条 codex outside-voice finding
-- **THEN** 直接纳入合并池，不重复调 codex（避免双 codex），报告记「复用 autoplan outside voice N 条」
-
-#### Scenario: 产物缺失或 0 条触发守卫回落
-- **WHEN** `gstack-review.md` 缺失 / 解析不出 codex 段 / codex findings 为 0 条
-- **THEN** 打印带原因码的降级日志并自跑 codex 设计 voice，锚行记 guard 原因
-
-#### Scenario: 模拟来源或过期产物不得复用〔spec-review-amendment〕
-- **WHEN** `gstack-review.md` 的 step1 锚行为 `simulated`，或其内容早于 change 最新改动
-- **THEN** 视同产物无效（guard=simulated-source / stale），回落自跑，MUST NOT 因其格式完整而复用
+#### Scenario: spec-review 层 design-voice 恒自跑
+- **WHEN** 一轮 sdflow-spec-review 进行至 outside-voice 环节
+- **THEN** design-voice SHALL 无条件按调用协议自跑（无复用判定分支），站点集按 per-site 完整性声明落锚；失败按既有 fallback/锚行契约处理
 
 ### Requirement: 高风险领域 cross-model 由 HR-TG 子集判定并留痕
 
@@ -697,31 +692,6 @@ outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdf
 #### Scenario: Codex 宿主下的 codex findings 不再误享豁免〔add-codex-host-support〕
 - **WHEN** `host="codex"` 且某条 finding 的 `runner="codex"`（同族 fallback 产物）
 - **THEN** 照过同族置信滤，MUST NOT 因 `runner` 值恰为 `codex` 而豁免（旧规则的假绿点）
-
-### Requirement: 广审层原生执行，模拟必须显式标注降级
-
-〔spec-review-amendment：本 Requirement 原文点名「sdflow-code-review 的 gstack /review」并把锚 mode 钉死为 `native|simulated`——code-review Step1 自持化后该措辞与上方 Requirement 自相矛盾，本 delta 将其收窄为仅 spec-review 侧；code-review 层 Step1 的执行位与 mode 枚举（`subagent|main-session`）由「sdflow-code-review 为每次全跑的独立强制主审」Requirement 独立承载。〕
-
-**sdflow-spec-review 的 Step1 广审（autoplan）**SHALL 由主 session 经 Skill 机制原生执行（其指令直接进主 session，非子代理读 SKILL.md 转述模拟）。原生执行完成后由主 session 汇总结论落盘 `gstack-review.md`（广审工具自身无「写任意路径」机制，落盘责任在编排方）〔spec-review-amendment〕。原生执行不可用时 MUST 降级为模拟广审，且报告与运行日志 MUST 显式标注「模拟广审（降级模式）」，MUST NOT 把模拟呈现为原生运行；报告 Step1 段 MUST 含 v1 机器锚行 `<!-- sdflow:step1-broad-review v1 mode="native|simulated" -->`（此枚举仅约束 spec-review 层的 `gstack-review.md` 产物），native 声明建议附侧信道佐证（如广审工具自身的运行痕迹）〔grill-amendment Q5 + spec-review-amendment〕。
-
-#### Scenario: 正常路径原生执行 autoplan
-- **WHEN** sdflow-spec-review Step1 启动且 autoplan skill 可用
-- **THEN** 主 session 原生执行 autoplan（含其 preamble/telemetry/自动决策全流程），产出 `gstack-review.md`
-
-#### Scenario: 原生不可用显式降级
-- **WHEN** autoplan skill 不可用（未安装等）
-- **THEN** 以子代理模拟广审，报告显式标注「模拟广审（降级模式）」及原因
-
-### Requirement: gstack 边界守恒——读产出物合法、依赖内部禁止
-自制 outside-voice 机制（共享 helper、spec-review 回落自跑、code-review code voice）SHALL 只依赖 codex CLI 本身，MUST NOT 调用、复制或修改 gstack/superpowers 内部 bin、探针、config；gstack 自家 skill（autoplan / gstack review）的原生 outside voice 原样不动。读取 gstack 的产出物（如 `gstack-review.md`）合法，不属内部依赖。
-
-#### Scenario: 实现不触碰 gstack 内部
-- **WHEN** 本 change 实现完成
-- **THEN** 变更 diff 不含任何 gstack 安装目录/内部文件；helper 源码 grep 不到 gstack 内部路径引用
-
-#### Scenario: 无 codex 无 gstack 环境审查不中断
-- **WHEN** 在既无 codex CLI 也无 gstack 的环境运行两评审 skill
-- **THEN** outside voice 退化为 fresh-context Claude 子代理（独立性保留、丢跨模型），评审完整跑完
 
 ### Requirement: checkpoint 标签 producer→parser 契约测试
 
