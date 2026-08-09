@@ -2,7 +2,7 @@
 
 > **定位**：规定**设计 / spec 阶段该画哪些图、何时画、什么形态**。是
 > [`spec-checklists/spec-quality-base.md`](./spec-checklists/spec-quality-base.md) 中
-> **BASE-19 图表完备性**的展开与强制细则，并把 gstack `plan-eng-review` 的「强制画图」
+> **BASE-19 图表完备性**的展开与强制细则，并把外部工程实践中「review 期强制画图」的检查点
 > 从 review 期前移到设计期。项目无关、可复用。
 
 ---
@@ -94,7 +94,7 @@ C4 仅借其**分层思路**（Context / Container / Component），渲染成 AS
 
 - **BASE-19** 图表完备性（本规则是其展开；base 留维度，本规则给细则）
 - 领域 T 项：嵌入式 **EMB-08** 状态机图、后端 **BE-01** v_old/v_new 对照（表形态）
-- gstack **plan-eng-review**：review 期强制画图（序列 / 状态 / 数据流 + 测试覆盖图），本规则将其前移到设计期
+- 外部工程实践中 review 期强制画图（序列 / 状态 / 数据流 + 测试覆盖图）的检查点，本规则将其前移到设计期
 
 ## 参考来源
 

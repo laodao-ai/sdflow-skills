@@ -9,8 +9,8 @@
 > **展开文档（[workflow-skills/](./workflow-skills/)）**：主流程涉及的每个 skill 都有一份「详解」——
 > 内部流程图 + 内部再调度的子 skill + **本 workflow 注入规则是建议式还是强制**。步骤表与 §5 表内均有「详解」链接直达。
 >
-> - **外部黑盒**（本文只画契约、详解展内部）：[gstack autoplan](./workflow-skills/gstack-autoplan.md) · [superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)（`opsx:ff` 暂未展开）
-> - **第三方 skill 参考（非运行时依赖）**：[gstack /review](./workflow-skills/gstack-review.md)（`sdflow-code-review` Step1 已改自持，不再调用；文档保留供参考）
+> - **外部黑盒**（本文只画契约、详解展内部）：[superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)（`opsx:ff` 暂未展开）
+> - **第三方 skill 参考（非运行时依赖）**：[gstack /review](./workflow-skills/gstack-review.md)（`sdflow-code-review` Step1 已改自持，不再调用）· [gstack autoplan](./workflow-skills/gstack-autoplan.md)（`sdflow-spec-review`/`sdflow-roadmap` 广审已改自持双镜，不再调用）——两者均文档保留供了解设计脉络参考
 > - **自制编排器**：[grill-with-docs](./workflow-skills/grill-with-docs.md) · [sdflow-spec-review](./workflow-skills/sdflow-spec-review.md) · [sdflow-code-review](./workflow-skills/sdflow-code-review.md) · [sdflow-done](./workflow-skills/sdflow-done.md)
 > - **横向提炼**：[自建 Skill 最佳实践](./skill-authoring-best-practices.md)（从上述 skill 提炼可迁移做法 + 我们的补强项）
 > - **可视化控制台**：[workflow-console.html](./workflow-console.html)（本文的视觉/精简版，同 session 产出——本文是其内容超集）
@@ -115,31 +115,29 @@ flowchart LR
 
 ## 3. 阶段二 · 设计审（连续，无 /clear）
 
-**编排器 `sdflow-spec-review` 内部把「广审 → 并行多镜 → 一份报告」串成一次连续跑。**
+**编排器 `sdflow-spec-review` 内部把「单批 dispatch → 对抗裁决 → 一份报告」串成一次连续跑。**
 
 ```mermaid
 flowchart TD
-    IN(["四件套 + decision-memo.md"]) --> S1["Step1 · autoplan 广审 🔒黑盒<br/>吃其 findings + 双声 outside-voice"]
-    S1 --> CP1["[checkpoint] spec-review-autoplan"]
-    CP1 --> S2["Step2 · 并行多镜 fan-out<br/>领域镜 + 对抗镜×2~3 + 接地镜"]
-    S2 --> S3["Step3 · 对抗裁决 + 决策登记<br/>合并去重 → 一份 spec-review-report.md"]
+    IN(["四件套 + decision-memo.md"]) --> S1["Step1 · 能力探针 + 单批 dispatch<br/>自持广审双镜(strategy/plan-eng) + 领域镜 + 对抗镜×2~3 + 接地镜 + design-voice"]
+    S1 --> S3["Step3 · 对抗裁决 + 决策登记<br/>合并去重 → 一份 spec-review-report.md"]
     S3 --> CP2["[checkpoint] spec-review"]
     CP2 --> GATE{{"★ 设计 HARD-GATE<br/>人工过一份报告拍板"}}
     GATE -->|批准| FM["拍板回写 frontmatter<br/>design_approved: true"]
-    GATE -->|打回| S2
+    GATE -->|打回| S1
     FM --> OUT(["→ 进阶段三"])
 ```
 
 | 步 | skill | 目标 | 产出 | 注意事项 |
 |---|---|---|---|---|
-| 4 | `sdflow-spec-review` [详解](./workflow-skills/sdflow-spec-review.md) | **设计门主审**：广审（[autoplan](./workflow-skills/gstack-autoplan.md)）+ 领域/对抗/接地多镜，合成**一份**报告 | `spec-review-report.md`（含决策登记区）+ 改动标 `[spec-review-amendment]` | 中途**不 AskUserQuestion**（决策登记进报告）；autoplan 已含 eng 镜 → 多镜**不重复跑 eng**；**必须读真实代码**（接地镜专司）；命中 HR-TG 单开领域 cross-model |
+| 4 | `sdflow-spec-review` [详解](./workflow-skills/sdflow-spec-review.md) | **设计门主审**：自持广审双镜（strategy/plan-eng）+ 领域/对抗/接地多镜 + design-voice，一条消息内单批并行 dispatch，合成**一份**报告 | `spec-review-report.md`（含决策登记区）+ 改动标 `[spec-review-amendment]` | 中途**不 AskUserQuestion**（决策登记进报告）；base 与 domains 两层清单本就互斥，无需去重协商；**必须读真实代码**（接地镜专司）；命中 HR-TG 单开领域 cross-model |
 | 5 | **HARD-GATE** | 人工过**一份**报告拍板批准设计 | 批准动作 → 报告头部 frontmatter 回写 `design_approved: true` | **★全流程唯一人类门**；决策登记区已摊开「选项 + 推荐 + 两方后果」；拍板**发生后**主 session 立即在报告头部 prepend YAML 首块回写（这是 `/sdflow-ship` pre-flight 唯一机判依据） |
 
 **决策登记区四类条目**（取代中途弹窗）
 
 | 标记 | 含义 | 人类门时怎么处理 |
 |---|---|---|
-| `[自动决策]` | autoplan/裁决已定，附理由 | 默认接受，可覆盖 |
+| `[自动决策]` | 某镜发现/裁决已定，附理由 | 默认接受，可覆盖 |
 | `[需拍板]` | ≥2 方案 / 核验不了的事实 | 人工勾选 / 确认 |
 | `[已裁掉]` | reviewer 原始发现 + 裁掉理由 | 复核「裁得对不对」（反静默压制） |
 
@@ -222,7 +220,6 @@ flowchart LR
 | 黑盒 skill | 在流程里的角色 | 进（输入） | 出（产出契约） | 详解 |
 |---|---|---|---|---|
 | `opsx:ff` | 旧入口（保留不删，不在默认管线内）；默认由自制 `/sdflow-spec` 承担生成，非黑盒 | 需求 + config.yaml + trigger-catalog | 四件套 + feature 分支 | （暂未展开） |
-| gstack `autoplan` | spec-review Step1 广审 | 四件套 | findings + 双声 outside-voice（落 `gstack-review.md`） | [→](./workflow-skills/gstack-autoplan.md) |
 | superpowers `writing-plans` | 阶段三 plan 生成 | design + 评审结论 | `superpowers-plan.md`（含命名空间 commit 步） | [→](./workflow-skills/superpowers-writing-plans.md) |
 | superpowers `subagent-driven-development` | 阶段三逐任务实现 | plan | 带 `<change>:task<N>-` checkpoint 标签的代码 commit | [→](./workflow-skills/superpowers-subagent-dev.md) |
 
@@ -308,8 +305,8 @@ flowchart LR
 
 | 注入项 | 目标 skill | 建议式 / 强制 | 强制靠的下游载体 |
 |---|---|---|---|
-| 人类门登记进报告（不弹窗） | autoplan | 建议式（与其硬不变量张力，主 session 承接） | sdflow 编排层锚行自检 + 设计门 HARD-GATE |
-| findings 落盘 + 进合并池 | autoplan / review | 编排层强制（非 skill 内部） | 主 session 落盘 + sdflow grep 锚行自检 |
+| 人类门登记进报告（不弹窗） | 广审双镜（strategy/plan-eng） | 建议式（与其硬不变量张力，主 session 承接） | sdflow 编排层锚行自检 + 设计门 HARD-GATE |
+| findings 落盘 + 进合并池 | 广审双镜 / review | 编排层强制（非 skill 内部） | 主 session 落盘 + sdflow grep 锚行自检 |
 | 必审 scope-drift + 完成度 | review | 建议式（本就内建、默认不阻断） | —（想阻断需 prompt 显式改停走） |
 | checkpoint 命名空间标签 `<change>:task<N>-<slug>` | writing-plans / SDD | 建议式（无 commit-msg 校验） | **`ship_gate` 读 git 标签作完成判据 → 写错卡 gate** |
 | design 约束逐字进 Global Constraints | writing-plans | 建议式（无校验漏抄不抓） | —（靠模型自觉 + 下游 reviewer lens） |

@@ -10,7 +10,7 @@
 |---|---|
 | 两个 `/clear` 会话断点 | **删** —— 独立性由子代理 fresh context 给，不由 `/clear` 给（§三.2） |
 | 旧 step 7「手动合并两份报告」 | **删** —— `sdflow-spec-review` 编排器内部合成一份 |
-| 旧 step 11 独立 `gstack/review` | **并入** `sdflow-code-review` 的 Step1 |
+| 旧 step 11 独立第三方广审工具 review 步骤 | **并入** `sdflow-code-review` 的 Step1 |
 | 旧 step 12「`sdflow-code-review` 高风险才跑」 | **升级为每次全跑**〔P3c〕 |
 | 旧 step 13 官方 `/code-review` 独立 step | **弃用**〔P3d〕——插件能力仅内部借用 |
 | 旧 step 14 人类门 | **删** —— 阶段三无人类门〔P3e〕 |

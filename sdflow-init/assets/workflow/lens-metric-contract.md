@@ -17,10 +17,10 @@
 - sev = 致N/高N/中N/低N（四级定序、零也写 0、分隔符恒 /；仅采纳项计入）
 
 ### 跨模型性 = 派生量，MUST NOT 编码进枚举值、MUST NOT 简写裸 `runner≠host`〔add-codex-host-support · spec-review-r2 C1〕
-「跨模型性」（本轮是否拿到另一机队的真第二意见）SHALL 由**合法组合矩阵**（design TG-05「数据模型与生命周期」段；能力 `host-adaptive-execution`）统一判定：`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`。**矩阵的关系式判定逻辑 MUST NOT 落成本文件的可 parse 机读块**——平铺 `key: 逗号分隔值` 结构装不下 `runner≠host`、`findings=0` 这类关系式谓词（r3-narrow 修正）；本文件的机读块**只承载枚举域**，矩阵逻辑收敛为 `anchor_lint` 单一本地实现、以全笛卡尔 golden 自测防漂移（`outside_voice_guard` 的跨工具重实现随其复用路径退役而并入，absorb-gstack-autoplan）。**MUST NOT 简写为裸 `runner≠host`**——`runner="none"` 时 `none≠host` 恒真，会把一切无执行轮次误判为跨模型（C1 击穿）；矩阵要求 `host,runner` 均落在 `{claude,codex}` 内才谈跨模型。
+「跨模型性」（本轮是否拿到另一机队的真第二意见）SHALL 由**合法组合矩阵**（design TG-05「数据模型与生命周期」段；能力 `host-adaptive-execution`）统一判定：`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`。**矩阵的关系式判定逻辑 MUST NOT 落成本文件的可 parse 机读块**——平铺 `key: 逗号分隔值` 结构装不下 `runner≠host`、`findings=0` 这类关系式谓词（r3-narrow 修正）；本文件的机读块**只承载枚举域**，矩阵逻辑收敛为 `anchor_lint` 单一本地实现、以全笛卡尔 golden 自测防漂移（`outside_voice_guard` 的跨工具重实现随其复用路径退役而并入）。**MUST NOT 简写为裸 `runner≠host`**——`runner="none"` 时 `none≠host` 恒真，会把一切无执行轮次误判为跨模型（C1 击穿）；矩阵要求 `host,runner` 均落在 `{claude,codex}` 内才谈跨模型。
 
 ## 机读取值域（消费脚本单一源·勿在脚本内复制）
-> 机读枚举权威区〔mlh-p2-anchor-lint grill〕。格式钉死：fence info-string 恒为 `lens-metric-enums`；块内每行 `key: 逗号分隔值`（`sev-format` 为字面模板，`N` 表任意非负整数）。`site` **不入本块**——它不受越域自检约束（CF-补2），消费脚本 MUST NOT 校验 site 取值。**合法组合矩阵的关系式判定逻辑（`runner≠host`、`findings=0` 等谓词）同样不入本块**——本块只承载**枚举域**，关系式逻辑由 `anchor_lint` 单一本地实现（见上「跨模型性」段、design TG-05）〔add-codex-host-support；absorb-gstack-autoplan：`outside_voice_guard` 跨工具重实现随其复用路径退役而并入〕。新增/改枚举 MUST 只改此块（散文注记同步更新），并按 §enum 扩展治理 升版本。
+> 机读枚举权威区〔mlh-p2-anchor-lint grill〕。格式钉死：fence info-string 恒为 `lens-metric-enums`；块内每行 `key: 逗号分隔值`（`sev-format` 为字面模板，`N` 表任意非负整数）。`site` **不入本块**——它不受越域自检约束（CF-补2），消费脚本 MUST NOT 校验 site 取值。**合法组合矩阵的关系式判定逻辑（`runner≠host`、`findings=0` 等谓词）同样不入本块**——本块只承载**枚举域**，关系式逻辑由 `anchor_lint` 单一本地实现（见上「跨模型性」段、design TG-05）〔add-codex-host-support〕。新增/改枚举 MUST 只改此块（散文注记同步更新），并按 §enum 扩展治理 升版本。
 ```lens-metric-enums
 layer: spec-review, code-review
 lens: domain, adversarial, grounding, history, outside-voice, broad
@@ -44,10 +44,6 @@ outside-voice 调用的撞键，`host` 消同一 runner 在不同宿主下自审
 codex/claude(任何 site，任一 runner 的 voice)→outside-voice · strategy/plan-eng+scope-audit→broad
 〔add-codex-host-support：`claude-fallback→outside-voice` 废弃行删除、新增 `claude→outside-voice`——host-adaptive
 下反向路径由 `claude` runner 执行 voice 时，原始镜名同样落 `claude`，需与 `codex` 同样折叠到 `outside-voice`〕
-〔absorb-gstack-review：`gstack-adv→broad` 行替换为 `scope-audit→broad`——code-review Step1 自持 scope
-审计取代 gstack native review，两者不共存，原始镜名同步改称〕
-〔absorb-gstack-autoplan：`autoplan-ceo/design/eng/dx→broad` 四行替换为 `strategy→broad` + `plan-eng→broad`
-（直接替换不共存）——spec-review Step1 广审自持化为 strategy/plan-eng 两镜，autoplan 原始镜名退役〕
 
 ## 机读折叠（消费脚本单一源·勿在脚本内复制）〔mlh-p4-lens-metric-emit〕
 > 折叠单一源。格式同 `lens-metric-enums`：fence info-string 恒为 `lens-metric-fold`；每行 `原始镜名: canonical-lens`。**只列非恒等映射**——恒等（raw 已 ∈ lens enum，如 domain/grounding/history/broad）由 emitter `raw∈lens_enum` pass-through 承载、不列本块（ADR-7）。canonical 值 MUST ∈ `lens-metric-enums` 的 lens 域（emitter `load_fold` 读入即自校验）。

@@ -712,7 +712,7 @@ def test_matrix_single_key_still_classifies_after_strict_parse():
     assert v_xm == []                                   # 合法跨模型仍 clean
 
 
-# --- 矩阵全笛卡尔 golden 自测（absorb-gstack-autoplan task 3.2：原 test_outside_voice_guard.py Step 5
+# --- 矩阵全笛卡尔 golden 自测（原 test_outside_voice_guard.py Step 5
 # 的跨工具全笛卡尔 golden——两工具各自本地重实现 + 互守一致——随 outside_voice_guard.py 复用路径整体
 # 退役而失去第二实现方（host-adaptive-execution spec.md「矩阵实现收敛为 anchor_lint 单一本地实现」）。
 # 迁移改造为**单工具自测**：不再比较两份实现，而是用一份独立于 classify_combo 实现顺序的「矩阵定义
@@ -1003,7 +1003,7 @@ def test_fanout_in_fence_not_checked():                       # fence 内示例�
     assert al.check_fanout_consistency(r) == []
 
 
-# --- absorb-gstack-review Task 1：mirrors 合法 token 集扩 broad，不污染 dead-fanout 计数集 --------
+# --- mirrors 合法 token 集扩 broad，不污染 dead-fanout 计数集 --------
 
 def test_mirrors_legal_and_fanout_constants_split():
     """🔒 design.md §2 钉死常量名：合法集 `_MIRRORS_LEGAL` 含 broad，计数集 `_FANOUT_MIRRORS` 不含 broad——
@@ -1042,7 +1042,7 @@ def test_step1_broad_review_mode_subagent_lint_passes():
 
 def test_fanout_mirrors_unknown_token_hint_mentions_setup_sh():
     """mirrors-unknown-token 报错须自带可操作指引：旧版 bundle 遇到未来新增 token 时不应让人对着陌生
-    token 名发呆——文案须提示回运行 checkout 跑 `bash setup.sh`（absorb-gstack-autoplan：`sdflow-init update`
+    token 名发呆——文案须提示回运行 checkout 跑 `bash setup.sh`（`sdflow-init update`
     指引已随 adr/0039 真实部署模型退役——消费仓规则经全局 canonical 实时解析，不再有本地 bundle 副本
     靠 update 刷新；真正过时的是运行 checkout 未 pull+setup，见 design.md「Risks」版本 skew 段）。"""
     al = _mod()
@@ -1053,7 +1053,7 @@ def test_fanout_mirrors_unknown_token_hint_mentions_setup_sh():
     assert "sdflow-init update" not in hit[0].get("detail", "")
 
 
-# --- absorb-gstack-autoplan Task 1：spec-review 广审自持化(strategy+plan-eng→broad)新形态 + mode 新枚举值 ---
+# --- spec-review 广审自持化(strategy+plan-eng→broad)新形态 + mode 新枚举值 ---
 
 def test_fanout_spec_review_single_batch_mirrors_broad_scenario():
     """DD1 单批 dispatch:spec-review 的 strategy/plan-eng 两广审镜随领域/对抗/接地镜一次性 fan-out——

@@ -92,17 +92,17 @@ def test_fold_hit_unknown_raw_fail_closed_not_broad():
     with pytest.raises(m.EmitError): m.fold_hit({"raw":"神秘镜"}, "claude", e, f)     # SR-E 不塞 broad
 
 def test_fold_hit_scope_audit_maps_to_broad():
-    # absorb-gstack-review：code-review Step1 自持 scope 审计的原始镜名 scope-audit 折叠到 broad
+    # code-review Step1 自持 scope 审计的原始镜名 scope-audit 折叠到 broad
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
     assert m.fold_hit({"raw":"scope-audit"}, "claude", e, f) == ("broad","claude","claude","—")
 
-def test_fold_hit_gstack_adv_no_longer_recognized():
-    # absorb-gstack-review：gstack-adv→broad 行已被 scope-audit→broad 替换（不共存），
-    # 旧 raw 名 gstack-adv 现应 fail-closed 而非静默折叠——回归防止两者共存
+def test_fold_hit_legacy_native_adv_no_longer_recognized():
+    # 旧 raw 名（历史遗留的原生对抗镜名，已被 scope-audit→broad 替换、不共存）
+    # 现应 fail-closed 而非静默折叠——回归防止历史命名复活
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
-    assert "gstack-adv" not in f
+    assert "legacy-native-adv" not in f
     with pytest.raises(m.EmitError):
-        m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
+        m.fold_hit({"raw":"legacy-native-adv"}, "claude", e, f)
 
 def test_fold_hit_unknown_raw_error_mentions_update_hint():
     # 未知 raw 镜名报错须带可操作指引——这是「SKILL 已更新、全局 canonical bundle 未更新」的第一
@@ -110,7 +110,7 @@ def test_fold_hit_unknown_raw_error_mentions_update_hint():
     # 消费仓不再持有可 update 的 tools 副本，口径统一为「回运行 checkout 跑 bash setup.sh」。
     m = _mod(); e = m.load_enums(CONTRACT); f = m.load_fold(CONTRACT, e)
     with pytest.raises(m.EmitError) as exc_info:
-        m.fold_hit({"raw":"gstack-adv"}, "claude", e, f)
+        m.fold_hit({"raw":"legacy-native-adv"}, "claude", e, f)
     assert "bash setup.sh" in str(exc_info.value)
 
 def test_fold_hit_site_injection_fail_closed():
@@ -146,7 +146,7 @@ def test_reduce_single_accepted():
     assert 'findings="0"' in ov and 'sev="致0/高0/中0/低0"' in ov and 'site="design-voice"' in ov
 
 def test_reduce_scope_audit_raw_folds_to_broad_anchor():
-    # absorb-gstack-review：code-review Step1 自持 scope 审计上报 raw="scope-audit"，
+    # code-review Step1 自持 scope 审计上报 raw="scope-audit"，
     # emitter 归约后 MUST 落在 roster 的 canonical lens="broad" 行（下游 retro 聚合/MIN_LENS_ROWS 零感知）
     m, e, f = _ef()
     roster = [{"lens":"broad","runner":"claude","site":"—"},

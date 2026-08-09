@@ -463,7 +463,7 @@ _NONNEG_INT = re.compile(r'^\d+$')
 # add-codex-host-support：合法组合矩阵（🔴 自审红线单一源）+ fan-out 一致性 lint（读 mirrors=）
 # 两者 always-on、各自独立成函数、MUST NOT 接受 metrics_on 参数（照 check_hr_tg 先例，D11）——读真实性
 # 信号非价值度量，与 metrics.enabled 解耦。枚举域从契约机读块读（load_enums），关系式判定逻辑本地实现
-# （GC-2：平铺 enums 块装不下 runner≠host/findings=0 等关系式谓词）。absorb-gstack-autoplan：矩阵曾由
+# （GC-2：平铺 enums 块装不下 runner≠host/findings=0 等关系式谓词）。矩阵曾由
 # outside_voice_guard.py 各自重实现、全笛卡尔 golden 互守一致，该复用路径整体退役后收敛为本文件
 # **单一本地实现**，golden 改为单工具自测（见 tests/test_anchor_lint.py 矩阵全笛卡尔 golden 自测段）。
 # **MUST NOT import/调 resolve-models.sh（ADR-1：anchor_lint 不判宿主，只校验锚行自身内部一致性——
@@ -484,7 +484,7 @@ def classify_combo(host, runner, reason_code, findings):
       'self-review'  🔴 F6 红线：runner==host ∧ reason_code∉降级码集（同族行子句被违反，非并列规则）
       'illegal'      其余一切非法组合（catch-all；含 runner='unknown' 等在共享枚举域内却非法者）
     findings 为已解析的 int（不可解析/缺失 → None，no-exec 分支因 findings!=0 落 illegal，fail-closed）。
-    **关系式逻辑本地实现**（GC-2）。absorb-gstack-autoplan 前曾与 outside_voice_guard.py 判可复用共用
+    **关系式逻辑本地实现**（GC-2）。此前曾与 outside_voice_guard.py 判可复用共用
     （各自重实现 + 全笛卡尔 golden 互守），该复用路径退役后收敛为本文件单一实现，golden 改为单工具自测。"""
     if runner == "none":
         # 无执行行：runner='none' 一律**非跨模型**（堵 C1：none≠host 恒真会把无执行误判跨模型）
@@ -676,7 +676,7 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
 
 _FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # dead-fanout-multi-mirror 去重计数域（不含 broad——
                                                                                   # broad 有主 session 亲做的合法降级路径，机制死却报 broad 不构成自相矛盾）
-_MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # absorb-gstack-review：`mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
+_MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # `mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
                                                           # 改名即断链——design.md:106 已钉死该名）
 _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
 _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）

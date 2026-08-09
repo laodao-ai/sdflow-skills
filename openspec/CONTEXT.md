@@ -26,7 +26,7 @@ _Avoid_: 审批、确认（人类门特指"阻塞、非人不放行"，区别于
 把"修不了 / 需拍板拿不准"的残差记进 buglist/todolist，本 change 不处理，交由 hand-off 引导另开清理 change。区别于"当场自动修"。
 
 **镜 (Review Lens)**:
-并行评审里一个**聚焦单一角度的独立 reviewer 子代理**。fan-out 时每个镜 fresh context、只审一个面向：领域镜（过某领域清单 R/CR 项）/ 对抗镜（从一个角度证明会爆）/ 接地镜（读真实代码核验 spec 主张，spec 侧专有）/ 历史镜（git blame + 旧 PR 意见，code 侧专有）。autoplan 的"四镜"（CEO/design/eng/DX）同源。英文原词 `review lens`（镜 = 镜头 = lens），价值在多镜盲区互补（瑞士奶酪的洞错开），比单 session 顺序审更独立。
+并行评审里一个**聚焦单一角度的独立 reviewer 子代理**。fan-out 时每个镜 fresh context、只审一个面向：领域镜（过某领域清单 R/CR 项）/ 对抗镜（从一个角度证明会爆）/ 接地镜（读真实代码核验 spec 主张，spec 侧专有）/ 历史镜（git blame + 旧 PR 意见，code 侧专有）/ 广审双镜（strategy/plan-eng，`sdflow-spec-review`/`sdflow-roadmap` 自持，同源）。英文原词 `review lens`（镜 = 镜头 = lens），价值在多镜盲区互补（瑞士奶酪的洞错开），比单 session 顺序审更独立。
 _Avoid_: 镜子 / mirror（是"镜头 / lens"，聚焦单一角度，非映照）；reviewer（太泛——镜特指"一个角度"，非泛指审查者）
 
 **Outside Voice（外部第二意见）**:

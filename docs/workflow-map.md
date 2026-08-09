@@ -6,7 +6,7 @@
 >
 > **叙事伴读**：想按「阶段故事」而非「字段速查」理解全流程 → [workflow-overview.md](workflow-overview.md)（人类向详解）· [workflow-console.html](workflow-console.html)（可视化控制台）。本文侧重结构化映射（字段 × 脚本 × 判据），那两份侧重流程叙事，互补不重叠。
 
-**速览**：14 确定性脚本 · 3 报告 frontmatter 字段 · 4 类正文 v1 锚 · 11 ship_gate 裁决 · 2 人类门 · 判官 `ship_gate.py`（只读零副作用）。
+**速览**：13 确定性脚本 · 3 报告 frontmatter 字段 · 4 类正文 v1 锚 · 11 ship_gate 裁决 · 2 人类门 · 判官 `ship_gate.py`（只读零副作用）。
 
 ---
 
@@ -31,7 +31,7 @@
               〔/sdflow-spec 相位 B，拷问结构性前置于成文〕
                    │
  spec-review ─▶ sdflow-spec-review  ──▶  anchor_lint.py --layer spec-review ✅#1  spec-review-report.md
-  (设计审)    autoplan+领域/对抗/接地镜        outside-voice.sh · HR-TG cross-model    └─ frontmatter:
+  (设计审)    自持广审双镜+领域/对抗/接地镜     outside-voice.sh · HR-TG cross-model    └─ frontmatter:
                    │                                                                    ship-gate.design_approved: true
                    ▼
               ┏━━━━━━━━━━━━━━━━━━━━━━┓
@@ -158,7 +158,7 @@
 
 ## 4. 确定性脚本清单
 
-19 个脚本（含 1 个计划未建、2 个已废弃）。**bundle** = 全局单份共享——位于 `sdflow-init/assets/workflow/tools/`，各仓经 `resolve-workflow.sh` 两步链实时解析到全局 canonical（`~/.sdflow/workflow` 软链），**不再复制进任何消费仓**（`adr/0039` 消灭双链）；**skill-local** = 仅本仓 skill 目录、走 symlink。注意 `ship_gate.py` 是 skill-local（不随 bundle 分发）。
+18 个脚本（含 1 个计划未建、2 个已废弃）。**bundle** = 全局单份共享——位于 `sdflow-init/assets/workflow/tools/`，各仓经 `resolve-workflow.sh` 两步链实时解析到全局 canonical（`~/.sdflow/workflow` 软链），**不再复制进任何消费仓**（`adr/0039` 消灭双链）；**skill-local** = 仅本仓 skill 目录、走 symlink。注意 `ship_gate.py` 是 skill-local（不随 bundle 分发）。
 
 | 脚本 | 阶段 | 触发 skill | 检查字段/输入 | 判据 & 退出码 | 分发 | file:line |
 |------|------|-----------|--------------|--------------|------|-----------|
@@ -166,7 +166,6 @@
 | **anchor_lint.py** | spec-review / code-review | 两审 | 报告文本 + `--layer` + 必需 `--trigger-catalog`（缺传→fail-closed）；4 类锚 + lens-metric 字段/enum/sev/计数；hr-tg 锚 M1（`hit=`/`declared=` 在场）+ M2（重算 `hit == declared∩HR-TG`）+ M4（`hit≠none ⟹ evidence` 非空）+ M-new（`declared`/`hit` 每 TG ∈ trigger-catalog 全集） | fence-aware 行级；**0** CLEAN / **1** 违规 / **2** fail-closed | bundle | `:138`,`:163`,`:365` |
 | **trivial_shape.py** | code-review（Step2 前） | sdflow-code-review | `git diff` 形状 · 行为面路径清单 · 文档扩展名 | 保守偏 NOT_EXEMPT；**0** EXEMPT / **1** 必跑 / **2** ERR→必跑 | bundle | `:183` |
 | **hr_tg_intersect.py** | spec-review / code-review | 两审（anchor_lint 同源 import） | `--trigger-catalog` · `--hr-tg-file` · 求交 HR∩TG | 交集 JSON；**0** / **1** ERR | bundle | — |
-| **outside_voice_guard.py** | code-review（Step2 前） | sdflow-code-review | 报告文本 · change 目录 · step1 mode 锚 | 六 reason_code 归约；**EmitError** fail-closed | bundle | — |
 | **review_disposition_check.py** | code-review | sdflow-code-review | 报告文本 · disposition 锚 | 按 finding 校验 disposition 合法性；**0** / **1** 违规 | bundle | — |
 | **lens_metric_emit.py** | spec-review / code-review | 两审 | 报告文本 · `--layer` · `--host` · `--runner` | 锚行发射+累加；**0** / **1** ERR | bundle | — |
 | **maintain_scan.py** | maintain | sdflow-maintain | `openspec/` 目录 · INDEX.md · CLAUDE.md | 四节差异报告；**0** | skill-local | — |

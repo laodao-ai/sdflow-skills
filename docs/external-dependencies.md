@@ -69,21 +69,23 @@
 
 ## 5. 三方 Skill 依赖
 
-### 评审流程依赖（gstack 系列）
+### 评审流程——已全部自持化，零外部依赖
 
-| Skill | 用途 | 调用处 | 缺失时行为 |
-|-------|------|--------|-----------|
-| **gstack `/autoplan`** | 设计审的广审层（CEO/Eng/Design 三连） | `sdflow-spec-review/SKILL.md`、`sdflow-roadmap/SKILL.md:460` | 显式提示 + 留「未审待恢复」痕迹 |
-| **`/plan-eng-review`** | roadmap 的技术评审（默认档） | `sdflow-roadmap/SKILL.md:459` | 同上 |
+设计审（`sdflow-spec-review`）的广审层（`strategy`/`plan-eng` 双镜）、roadmap（`sdflow-roadmap`）的
+review（同一套 `strategy`/`plan-eng` 双镜）、代码审（`sdflow-code-review`）的 scope 审计，均已内化为
+各 SKILL 自持的 fresh 子代理，**不再调用任何外部第三方评审 skill**。
 
 > `/grill-with-docs` 已被 `sdflow-spec` 内置取代（`sdflow-spec/SKILL.md:10`），不再是外部依赖。
 > `/grilling`、`/domain-modeling`（原 wayfinder 票内依赖）已随 `refactor-roadmap-internalize-deps`
 > 内化进 `sdflow-roadmap` 自身的三相位结构，不再是外部依赖。
-> `gstack /review`（代码审 Step1 的 scope-drift + 完成度审计）已随 `absorb-gstack-review` change
-> 内化为 `sdflow-code-review` 自持 fresh 子代理，不再是外部依赖；`/review` 说明文档保留在
+> 代码审 Step1 的 scope-drift + 完成度审计已随 `absorb-gstack-review` change
+> 内化为 `sdflow-code-review` 自持 fresh 子代理；说明文档保留在
 > [`docs/workflow-skills/gstack-review.md`](./workflow-skills/gstack-review.md) 作非运行时依赖的第三方 skill 参考。
+> 设计审广审层与 roadmap review 双镜已随 `absorb-gstack-autoplan` change 内化为自持 fresh 子代理；
+> 说明文档保留在
+> [`docs/workflow-skills/gstack-autoplan.md`](./workflow-skills/gstack-autoplan.md) 作非运行时依赖的第三方 skill 参考。
 >
-> 所有三方 skill 都设计了显式降级路径——缺失时报告但不中断工作流。
+> 以上参考文档均已降级为非运行时参考——仅供了解设计脉络，不构成任何调用关系。
 
 ---
 
@@ -134,14 +136,13 @@ sdflow-ship（阶段三编排器）
 └── sdflow-done（闭环）
 
 sdflow-spec-review（设计审编排器）
-├── gstack /autoplan（外部，广审层）
-└── 并行多镜子代理
+└── 单批 dispatch：strategy/plan-eng 双镜（自持广审）+ 领域/对抗/接地镜 + design-voice（均并行 fresh 子代理，无外部依赖）
 
 sdflow-spec（阶段一产 spec）
 └── 内置澄清→拷问→生成三相位
 
 sdflow-roadmap
-└── /plan-eng-review 或 /autoplan（外部，review 分档；讨论层已内化，无其他外部依赖）
+└── review：恒跑 strategy/plan-eng 双镜（自持）+ sync-only outside voice（无外部依赖）
 ```
 
 ---

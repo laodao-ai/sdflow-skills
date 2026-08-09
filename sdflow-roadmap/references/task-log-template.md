@@ -61,7 +61,7 @@
 
 ## Review 处置
 
-<!-- review（/plan-eng-review 或 /autoplan）产出的每条 issue 在此逐条追加一行，状态 ∈ 三态之一：
+<!-- review（`sdflow-spec-review` 或 `sdflow-code-review`）产出的每条 issue 在此逐条追加一行，状态 ∈ 三态之一：
      - ✅ 采纳：写明已在哪个文件哪一节改动
      - ❌ 拒绝：写明拒绝理由（不得空白"不采纳"，理由必须可供后人复核）
      - ⏭ 延后：写明延后到哪个阶段/哪个后续变更处理

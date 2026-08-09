@@ -88,12 +88,12 @@ DX 领域清单新建 + roadmap review 节重写(镜定义同源注入已在 Tas
 5. Roadmap sync-only outside voice 接入:site=roadmap-voice,context=design.md Decisions+roadmap.md(>200KB 收敛),run 目录 `.outside-voice/<run-id>/`,前台 --timeout 300 外层 ≥330000ms,⑦ 表映射,失败同族 fallback 带时间预算,task-log 一行 runner/reason_code 留痕。
 6. `openspec/INDEX.md` 同步:devex.md 行新增;移除 outside-voice-reuse-guard capability 行与 outside_voice_guard.py 工具行。
 
-- [ ] TG-28 已加入 trigger-catalog.md
-- [ ] devex.md 创建且条目为可判表式
-- [ ] frontend.md litmus/AI-slop 条目已增补
-- [ ] roadmap SKILL 中 autoplan/gstack 引用归零(grep 验证)
-- [ ] roadmap review 恒跑双镜 + sync voice 描述完整
-- [ ] INDEX.md 同步(新增 devex + 移除 guard 相关行)
+- [x] TG-28 已加入 trigger-catalog.md
+- [x] devex.md 创建且条目为可判表式
+- [x] frontend.md litmus/AI-slop 条目已增补
+- [x] roadmap SKILL 中 autoplan/gstack 引用归零(grep 验证)
+- [x] roadmap review 恒跑双镜 + sync voice 描述完整
+- [x] INDEX.md 同步(新增 devex + 移除 guard 相关行)
 
 ### Task 5: 文档 sweep 与验收
 

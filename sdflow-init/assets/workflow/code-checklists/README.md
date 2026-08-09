@@ -25,7 +25,7 @@
 
 ## 选用规则（与 spec-checklists 同源 TG）
 
-`/review` 按变更**命中的 TG**（见 trigger-catalog）选领域，与设计期 autoplan 选 spec 领域**同一套触发**：
+`/review` 按变更**命中的 TG**（见 trigger-catalog）选领域，与设计期 sdflow-spec-review 选 spec 领域**同一套触发**：
 
 ```
   命中 TG-01(后端) → code-review-base + backend(+go)
@@ -49,7 +49,7 @@ ID 一经分配不复用、不重排。
 ## 与 spec-checklists 的关系
 
 ```
-  设计期(autoplan) → spec-checklists/   "设计对不对"
+  设计期(sdflow-spec-review) → spec-checklists/   "设计对不对"
   代码期(/review)  → code-checklists/   "实现对不对"
   两者共用 trigger-catalog 决定领域；互不重复（一个审 spec，一个审 code）
 ```

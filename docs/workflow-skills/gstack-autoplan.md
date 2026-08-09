@@ -1,7 +1,9 @@
 # 外部 skill 展开 · gstack `autoplan`
 
-> 属 [工作流总览](../workflow-overview.md) 的黑盒展开。`autoplan` 是**阶段二设计审**的 Step1「广审」载体——
-> 由 `sdflow-spec-review` 编排器**原生执行**（指令直接进主 session，不派子代理转述）。
+> **定位：非运行时依赖的第三方 skill 参考**——`sdflow-spec-review`/`sdflow-roadmap` 的广审层已改为
+> 自持 fresh 子代理实现的 strategy/plan-eng 双镜（单批 dispatch，见
+> [sdflow-spec-review 详解](./sdflow-spec-review.md)），不再原生调用本 skill。本文保留作为
+> `autoplan` 自身设计的参考资料。
 >
 > **一句话**：一条命令，把粗略计划跑成一份被 **CEO / Design / Eng / DX 四道审**深度审过的计划——
 > 方法论/严格度与手动逐个跑这四个审**完全相同**，唯一区别是中间的 AskUserQuestion 被 **6 条决策原则**自动决策，
@@ -9,14 +11,14 @@
 
 ---
 
-## 1. 在本 workflow 中的位置与契约
+## 1. 在本 workflow 中的位置与契约（历史形态，已退役）
 
 | 维度 | 内容 |
 |---|---|
-| 谁调它 | `sdflow-spec-review` 第一步（阶段二 · 设计审），原生执行 |
+| 谁调它 | **无**（本仓当前无 skill 运行时调用它；广审已改为 `sdflow-spec-review`/`sdflow-roadmap` 自持双镜，见上方定位说明） |
 | 进（输入） | 一个**计划文件** + 仓库上下文（CLAUDE.md / TODOS.md / git log / git diff / 已有 design） |
 | 出（产物） | 计划文件**原地增补**（各 phase review 章节 + consensus 表 + `## Decision Audit Trail` 审计表 + 聚合任务表）；restore point 外置；per-phase 任务 JSONL；review logs |
-| 本 workflow 如何接 | 主 session 汇总其结论落盘 `{change_dir}/gstack-review.md`，findings 纳入 spec-review 的合并池 |
+| 历史接入方式（已废止） | 曾由主 session 汇总其结论落盘 `{change_dir}/gstack-review.md`，findings 纳入 spec-review 的合并池 |
 
 ---
 
@@ -104,13 +106,13 @@ flowchart LR
     end
 ```
 
-> **本 workflow 的适配**：`sdflow-spec-review` 走连续自动流（G2「中途不 AskUserQuestion」），
-> 于是把 autoplan 的 premise/challenge/最终门**登记进 spec-review-report.md 决策登记区**，等阶段二设计门一次拍板——
-> 详见 §6 该注入是「建议式还是强制」。
+> **历史适配（已随本 skill 退役而失效）**：`sdflow-spec-review` 曾走连续自动流（G2「中途不 AskUserQuestion」），
+> 把 autoplan 的 premise/challenge/最终门**登记进 spec-review-report.md 决策登记区**，等阶段二设计门一次拍板——
+> 详见 §6（历史设计说明，现由自持双镜 + Step3 决策登记区直接承接，不再经由 autoplan）。
 
 ---
 
-## 6. ★ 本 workflow 注入的规则/prompt 如何影响 autoplan —— 建议式 vs 强制
+## 6. ★ 历史设计说明：本 workflow 曾如何注入规则/prompt 影响 autoplan —— 建议式 vs 强制
 
 **统一判据**（见[总览 §注入的强制性](../workflow-overview.md#8-外部-skill-的注入强制性建议式-vs-强制统一规律)）：autoplan 是 **prompt 驱动**（磁盘读 skill 当指令跟随），本 workflow 的注入也在 **prompt 层** → **默认建议式**；只有背后有**确定性载体**（脚本 / 文件 / 被下游门读取的 git 产物）才转强制。autoplan **没有对「调用方注入指令」做特权分级**——注入的要求与 skill 正文同级混入模型上下文。
 
@@ -128,5 +130,6 @@ flowchart LR
 ## 7. 小结
 
 - autoplan = **四审顺序跑 + 6 原则自动决策 + 审计留盘 + 最终门交人**，把 15-30 个中间问题压成一次审批。
-- 在本 workflow 里它是 spec-review 的「广审层」，其 eng 镜与我们的多镜**不重复**（总览 §3）。
-- 我们对它的注入**几乎全是建议式**；强制来自 **sdflow 编排层锚行自检** 与 **下游设计门**，不来自「控制 autoplan 内部」。
+- **历史形态**：在本 workflow 曾用作 spec-review 的「广审层」；现已由 `sdflow-spec-review`/`sdflow-roadmap`
+  自持的 strategy/plan-eng 双镜取代，不再调用。
+- 上述「注入建议式/强制」分析属历史设计说明，供了解退役前的机制脉络参考。

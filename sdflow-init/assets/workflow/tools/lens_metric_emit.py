@@ -102,7 +102,7 @@ def fold_hit(hit, host, enums, fold_map):
         raise EmitError(
             f"未知 raw 镜名无折叠映射: {raw}"
             f"（工具与规则均全局单份共享——若判定过期，请回运行 checkout 跑 `bash setup.sh`）"
-        )  # SR-E 不静默塞 broad；absorb-gstack-review：SKILL 先于全局 canonical bundle 更新时的可操作指引
+        )  # SR-E 不静默塞 broad；SKILL 先于全局 canonical bundle 更新时的可操作指引
     if canon == "outside-voice":
         runner, site = hit.get("runner"), hit.get("site")
         if runner is None or site is None:
