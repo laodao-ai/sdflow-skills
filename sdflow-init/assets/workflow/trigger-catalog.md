@@ -45,6 +45,7 @@
 | TG-02 | 嵌入式固件变更 | — | `embedded`(+芯片 delta) | — | — |
 | TG-03 | 前端 / UI 变更 | — | `frontend` | — | — |
 | TG-27 | **代码消费 LLM/agent 产出**并持久化/执行/外呼（工具 wiring、RAG/知识库写入等；排除句：评审工作流自身读取/校验同会话内受信任 agent 自报的控制面锚〔如 `<!-- sdflow:… -->`〕不算，只有消费**外部/不可信** LLM 产出（用户对话内容、RAG 检索结果、第三方 agent 产出）才算） | — | `llm`（**code-review-only domain**，spec-checklists 侧无对应文件） | — | — |
+| TG-28 | 变更**新增/修改/重命名/废弃/删除** developer-facing 交付面——CLI 命令/flag/公共 API/SDK/skill 调用契约/配置面（消费方可见的配置键与默认值，不含纯仓内实现配置）/错误信息文案 | — | `devex`（**spec-review-only domain**，code-checklists 侧无对应文件，同 TG-27 反向先例） | — | — |
 
 ### B. 数据 / 持久化
 
