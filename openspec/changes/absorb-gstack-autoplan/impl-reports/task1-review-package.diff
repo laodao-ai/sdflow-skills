@@ -1,0 +1,887 @@
+# Review package: 9625203..483d6e83d974ef8f31517399b2aa377b171f45cc
+
+## Commits
+483d6e8 task1: bundle 机械层同步与 retro 归属修正
+
+## Files changed
+ .../impl-reports/task1-brief.md                    |  20 ++
+ .../impl-reports/task1-bundle-sync.md              | 118 +++++++++
+ openspec/retro/report.md                           | 292 ++++++++++++---------
+ .../assets/workflow/lens-metric-contract.md        |  14 +-
+ sdflow-init/assets/workflow/tools/anchor_lint.py   |   2 +-
+ .../workflow/tools/tests/test_anchor_lint.py       |  40 ++-
+ sdflow-retro/scripts/retro_report.py               |  19 +-
+ sdflow-retro/scripts/tests/test_retro_report.py    |  61 ++++-
+ 8 files changed, 426 insertions(+), 140 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/absorb-gstack-autoplan/impl-reports/task1-brief.md b/openspec/changes/absorb-gstack-autoplan/impl-reports/task1-brief.md
+new file mode 100644
+index 0000000..5cf0b51
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-autoplan/impl-reports/task1-brief.md
+@@ -0,0 +1,20 @@
++### Task 1: Bundle 机械层同步与 retro 归属修正
++
++**Blocked-by:** none
++**R-ID:** R-workflow-metrics, R-host-adaptive-execution, R-spec-workflow
++
++Bundle 机械层资产全部对齐新结构,retro 归属语义修正,确保全仓 pytest 绿:
++
++1. `lens-metric-contract.md` fold 块:将 `autoplan-ceo/design/eng/dx: broad` 四行替换为 `strategy: broad` + `plan-eng: broad`(直接替换不共存);散文段同步(「跨模型性」段 autoplan 例名换新 raw 名,双实现表述改为 anchor_lint 单实现)。
++2. `anchor_lint` golden 测试补用例:spec-review 报告 `mirrors=` 含 `broad` token 的场景、`step1-broad-review` 锚 `mode="subagent"` 与 `mode="main-session"` 两枚举值(枚举常量零改动,只补用例覆盖新形态)。
++3. `sdflow-retro` `stage_walltimes`:相邻提交差由 attribute-to-previous 改为 attribute-to-next;`is_archive_rename` 判定对象由 cur 换 nxt;修正 `("sdflow-spec-generate","ff")` 映射;补新旧序列回归测试(单 checkpoint 新序列 + 含 `spec-review-autoplan` 中间标签的历史序列);`openspec/retro/report.md` 重跑再生。
++4. `anchor_lint.py` `_MIRRORS_UPGRADE_HINT` 失效指引修复:`sdflow-init update` → 「回运行 checkout 跑 `bash setup.sh`」。
++
++- [ ] fold 表四行替换为两行,fold 散文与注记同步
++- [ ] anchor_lint golden 补 broad mirrors 与 step1 mode 两枚举用例
++- [ ] retro stage_walltimes attribute-to-next 实现 + is_archive_rename 判定对象翻转
++- [ ] retro 新旧序列回归测试通过
++- [ ] retro report.md 重跑再生(49 归档 change 新口径)
++- [ ] _MIRRORS_UPGRADE_HINT 指引修复
++- [ ] 全仓 `/usr/bin/python3 -m pytest` 绿
++
+diff --git a/openspec/changes/absorb-gstack-autoplan/impl-reports/task1-bundle-sync.md b/openspec/changes/absorb-gstack-autoplan/impl-reports/task1-bundle-sync.md
+new file mode 100644
+index 0000000..b7e3f88
+--- /dev/null
++++ b/openspec/changes/absorb-gstack-autoplan/impl-reports/task1-bundle-sync.md
+@@ -0,0 +1,118 @@
++# Task 1：Bundle 机械层同步与 retro 归属修正 — 实现报告
++
++## 范围
++
++`openspec/changes/absorb-gstack-autoplan/impl-reports/task1-brief.md` 全 7 项验收，逐项完成。
++
++## 1. `lens-metric-contract.md` fold 块 + 散文同步
++
++文件：`sdflow-init/assets/workflow/lens-metric-contract.md`
++
++- **机读折叠块**（`lens-metric-fold` fence）：`autoplan-ceo/design/eng/dx: broad` 四行直接替换为
++  `strategy: broad` + `plan-eng: broad`（不共存），`scope-audit: broad` 保留。
++- **折叠表散文注记**（§折叠表）：示例句 `autoplan(CEO/Eng/DX/design)+scope-audit→broad` 改为
++  `strategy/plan-eng+scope-audit→broad`；新增一条 `absorb-gstack-autoplan` 沿革注记（比照既有
++  `absorb-gstack-review` 注记先例），说明四行→两行替换的语义（自持化为 strategy/plan-eng 两镜）。
++- **跨模型性段（§跨模型性，:19-20 附近）**：原文声称矩阵关系式判定逻辑由「`anchor_lint` 与
++  `outside_voice_guard` 各自本地重实现」（双实现表述）——改为「收敛为 `anchor_lint` 单一本地实现」，
++  并注记 `outside_voice_guard` 的跨工具重实现随其复用路径退役（本 change 后续 task 3.1/3.2）而并入。
++- **机读取值域块的同款回声（§机读取值域，:23 附近）**：该段原样重复了「`anchor_lint`/`outside_voice_guard`
++  各自本地重实现」的说法并显式引用「见上「跨模型性」段」——若只改 :20 不改 :23，文档会自相矛盾（:23
++  仍声称 :20 说了双实现）。判定为同一事实在同文件内的两处回声，非独立范围扩张，一并同步修正为
++  「`anchor_lint` 单一本地实现」。tasks.md 1.5 原文只显式点了 :19/:44 两处，但基于 DOC-1（正文一致性）
++  与规则①（改一处先 grep 影响面）判定 :23 必须同步，否则归档后文档内部矛盾。
++
++## 2. `anchor_lint` golden 测试补用例
++
++文件：`sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py`（新增于
++「absorb-gstack-autoplan Task 1」小节，紧接既有「absorb-gstack-review Task 1」小节之后）
++
++枚举常量（`_MIRRORS_LEGAL`/`_FANOUT_MIRRORS`）零改动，仅补测试覆盖新形态：
++
++- `test_fanout_spec_review_single_batch_mirrors_broad_scenario`：DD1 单批 dispatch 下，spec-review
++  报告 `mirrors=` 同时含 `broad,domain,adversarial,grounding,history`、`subagents="available"` 时合法放行。
++- `test_fanout_spec_review_unavailable_mirrors_broad_alone_ok`：spec-review 广审降级为主 session 亲做
++  （DD3）时，`mirrors="broad"` 单独出现于 `unavailable` 场景合法放行（不进 dead-fanout 计数集）。
++- `test_step1_broad_review_mode_main_session_lint_passes`：`step1-broad-review` 锚新枚举值
++  `mode="main-session"`（对照既有 `mode="subagent"` 测试）不触发任何与 mode 相关的校验——lint 只验
++  锚族存在性，mode 值为主 session 自报、无机械枚举校验（design.md DD3 诚实边界）。
++
++同时把既有 `test_fanout_mirrors_unknown_token_hint_mentions_sdflow_init_update` 改名为
++`..._mentions_setup_sh` 并更新断言（见第 4 项）。
++
++## 3. `sdflow-retro` `stage_walltimes` 归属语义修正
++
++文件：`sdflow-retro/scripts/retro_report.py` + `sdflow-retro/scripts/tests/test_retro_report.py`
++
++- **attribute-to-next**：相邻提交差 `[cur,nxt)` 原计入 `cur`（前一提交）的阶段，改为计入 `nxt`
++  （后一提交，checkpoint 语义=工作完成点）的阶段。修正既有错账：旧口径下
++  `checkpoint(sdflow-spec-generate)→checkpoint(spec-review-autoplan)` 区间因 `cur` 映射
++  `stage="ff"` 而把 Step1 广审墙钟误归 `ff`；新口径下该区间归 `nxt` 的阶段（`spec-review-autoplan`/
++  `spec-review` 均映射 `spec-review`），归属正确。
++- **`is_archive_rename` 判定对象**由 `cur` 换 `nxt`（主循环内），归档 rename 提交与前一 checkpoint
++  之间的墙钟正确归 `done`，不再误归前一 checkpoint 自身的阶段。
++- 边界特例：原「末提交若是 archive rename，单独标记 done 存在（无后继 Δ）」对称翻转为
++  「首提交若是 archive rename，单独标记 done 存在（无前驱 Δ）」——旧口径下末提交从不作为 `cur`、
++  新口径下首提交从不作为 `nxt`，两者是同一类边界情形在语义翻转后的对称位置。
++- `_STAGE_RULES` 枚举本身零改动——task1-brief 中「修正 `("sdflow-spec-generate","ff")` 映射」核实
++  为 tasks.md 1.3 对**根因**的描述（该映射规则 + 旧 attribute-to-previous 语义组合导致误账），不是要求
++  改映射规则的取值；attribute-to-next 语义切换后误账自动消失，规则本身继续有效（`sdflow-spec-generate`
++  checkpoint 自身代表的仍是 ff 阶段工作，只是其归属机制变为由「谁在其之后完成」决定）。
++- 补 4 个回归测试：
++  - `test_stage_walltimes_and_negative_clamp`（既有测试，按新语义更新断言——TDD 先改断言确认在旧实现
++    下会红，再改实现使其转绿）。
++  - `test_stage_walltimes_historical_spec_review_autoplan_sequence_no_longer_misattributed`：历史序列
++    （含 `checkpoint(spec-review-autoplan)` 中间标签）不再误归 ff。
++  - `test_stage_walltimes_new_single_checkpoint_sequence_attributes_to_spec_review`：新序列（DD1 退役
++    中间 checkpoint 后的单 checkpoint 形态）整体归 spec-review。
++  - `test_stage_walltimes_archive_rename_attributed_via_nxt_not_cur`：真实 git 仓库场景验证
++    `is_archive_rename` 的 cur→nxt 翻转（归档收尾墙钟不再误归前一 checkpoint 的阶段）。
++- `openspec/retro/report.md` 已重跑再生（`python3 sdflow-retro/scripts/retro_report.py --root .`）。
++  覆盖从设计文档撰写时的 49 归档 change 增长为当前 68 归档 + 1 活动 = 69（正常时间推移导致，非本次
++  改动引入）；已验证再生幂等（连续跑两次 diff 无变化）。
++
++## 4. `_MIRRORS_UPGRADE_HINT` 失效指引修复
++
++文件：`sdflow-init/assets/workflow/tools/anchor_lint.py`
++
++`"若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update"` 改为
++`"若本仓 openspec/workflow/ 为旧版，请回运行 checkout 跑 bash setup.sh"`（真实部署模型 adr/0039 下，
++消费仓规则经全局 canonical 实时解析，不再有本地 bundle 副本靠 `update` 刷新；真正过时的是运行 checkout
++未 `git pull` + `bash setup.sh`）。对应测试改名为
++`test_fanout_mirrors_unknown_token_hint_mentions_setup_sh` 并更新断言（含反向断言
++`"sdflow-init update" not in detail`，防止改一半留旧文案残留）。
++
++## TDD 纪律记录
++
++- `_MIRRORS_UPGRADE_HINT` 文案：先改测试断言 → 跑确认红（旧文案 `sdflow-init update` 命中断言失败）
++  → 改实现 → 转绿。
++- `stage_walltimes` attribute-to-next：先改 4 个测试（1 个既有断言更新 + 3 个新增）→ 跑确认全部 4 个红
++  （旧实现下断言值不符）→ 改实现（cur→nxt 双处翻转）→ 全部转绿。
++- anchor_lint 新增的 3 个 golden 用例针对**零代码改动**的既有行为（枚举/判定逻辑本就支持 broad 与
++  `main-session`），非 TDD 意义上的红→绿新增行为，而是补测试覆盖面——补充前已确认对应生产代码路径
++  （`_parse_mirrors`/`check_fanout_consistency`/`check_existence` 对 `step1-broad-review` 只验族存在性）
++  确实未变，新用例是纯覆盖面而非实现变更。
++
++## 验证
++
++```
++/usr/bin/python3 -m pytest sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py -q   # 155 passed
++/usr/bin/python3 -m pytest sdflow-retro/scripts/tests/test_retro_report.py -q               # 45 passed
++/usr/bin/python3 -m pytest -q                                                                # 2481 passed, 10 skipped, 1 failed
++```
++
++全仓跑出 1 个失败：`sdflow-init/tests/test_outside_voice_job.py::
++test_supervisor_transcript_and_state_carry_no_context_stdout_or_secret`。已核实与本票改动**无关**——
++`git stash` 掉本票全部改动后单独重跑该测试，**同样失败**、报错文本完全一致（对照组 `claude --bg --exec`
++的裸输出在本沙盒环境里未出现在 `claude logs` 中，是该测试自身对沙盒环境 `claude` CLI 行为的前置假设
++不成立，与 fold 表 / anchor_lint / retro 归属逻辑无任何耦合）。这是本仓 pre-existing 环境相关失败，
++不在本票 blocked-by 链范围内，未做处理。
++
++## 改动文件清单
++
++- `sdflow-init/assets/workflow/lens-metric-contract.md`
++- `sdflow-init/assets/workflow/tools/anchor_lint.py`
++- `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py`
++- `sdflow-retro/scripts/retro_report.py`
++- `sdflow-retro/scripts/tests/test_retro_report.py`
++- `openspec/retro/report.md`（再生产物）
+diff --git a/openspec/retro/report.md b/openspec/retro/report.md
+index 3d560a9..445571e 100644
+--- a/openspec/retro/report.md
++++ b/openspec/retro/report.md
+@@ -1,203 +1,257 @@
+ # 全项目 change 成本×价值复盘（view-only 再生）
+ 
+-> 覆盖 49 change / 有真锚 31 / 边界不可解析 6
++> 覆盖 69 change / 有真锚 50 / 边界不可解析 7
+ > 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。
+ 
+ ⚠️ 待复评: 以下镜出现轮数≥10、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:
+-  - adversarial（layer=code-review host=claude runner=claude site=—，出现轮数 25）
+-  - broad（layer=code-review host=claude runner=claude site=—，出现轮数 21）
+-  - domain（layer=code-review host=claude runner=claude site=—，出现轮数 24）
+-  - history（layer=code-review host=claude runner=claude site=—，出现轮数 24）
+-  - outside-voice（layer=code-review host=claude runner=codex site=code-voice，出现轮数 25）
+-  - outside-voice（layer=code-review host=claude runner=codex site=hr-tg，出现轮数 13）
+-  - adversarial（layer=spec-review host=claude runner=claude site=—，出现轮数 20）
+-  - broad（layer=spec-review host=claude runner=claude site=—，出现轮数 20）
+-  - domain（layer=spec-review host=claude runner=claude site=—，出现轮数 10）
+-  - grounding（layer=spec-review host=claude runner=claude site=—，出现轮数 20）
+-  - outside-voice（layer=spec-review host=claude runner=codex site=design-voice，出现轮数 19）
++  - adversarial（layer=code-review host=claude runner=claude site=—，出现轮数 35）
++  - broad（layer=code-review host=claude runner=claude site=—，出现轮数 31）
++  - domain（layer=code-review host=claude runner=claude site=—，出现轮数 33）
++  - history（layer=code-review host=claude runner=claude site=—，出现轮数 34）
++  - outside-voice（layer=code-review host=claude runner=codex site=code-voice，出现轮数 31）
++  - outside-voice（layer=code-review host=claude runner=codex site=hr-tg，出现轮数 16）
++  - adversarial（layer=spec-review host=claude runner=claude site=—，出现轮数 38）
++  - broad（layer=spec-review host=claude runner=claude site=—，出现轮数 38）
++  - domain（layer=spec-review host=claude runner=claude site=—，出现轮数 17）
++  - grounding（layer=spec-review host=claude runner=claude site=—，出现轮数 38）
++  - outside-voice（layer=spec-review host=claude runner=claude site=design-voice，出现轮数 11）
++  - outside-voice（layer=spec-review host=claude runner=codex site=design-voice，出现轮数 30）
++  - outside-voice（layer=spec-review host=claude runner=codex site=hr-tg，出现轮数 12）
+ 
+ ## 一览
+ 
+ | 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |
+ |---|---|---|---|
+-| 49 | ~460.3 hr | 31 | 11 |
++| 69 | ~595.6 hr | 50 | 13 |
+ 
+-本轮复盘覆盖 **49 个 change**，累计评审墙钟约 **460.3 hr**（其中 31 个带真实度量锚、可参与价值统计）。评审时间集中在 设计审 49%、未归类 19%（两者合计 67%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审对抗镜（198 条，采纳率 92%）。另有 11 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
++本轮复盘覆盖 **69 个 change**，累计评审墙钟约 **595.6 hr**（其中 50 个带真实度量锚、可参与价值统计）。评审时间集中在 收尾 27%、设计审 25%（两者合计 52%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审广审镜（402 条，采纳率 87%）。另有 13 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
+ 
+ ## per-change 明细
+ 
+ | change | 总墙钟(min) | spec-rev Δ | impl Δ | code-rev Δ | done Δ | #ckpt | spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | 状态 |
+ |---|---|---|---|---|---|---|---|---|---|---|---|---|
+-| adaptive-workflow-routing | 111.1 | 83.8 | 10.1 | 3.0 | 0.5 | 7 | none | none | 28 | 0.96 | 19 | archived |
+-| add-codex-host-support | 5026.3 | 433.6 | 979.8 | 124.2 | 140.8 | 20 | TG-06,TG-08,TG-17 | TG-04,TG-06,TG-07,TG-08,TG-17 | 14 | 0.86 | 10 | archived |
+-| add-sdflow-architecture | 378.4 | 54.4 | 228.6 | 15.4 | — | 9 | TG-06,TG-08,TG-09 | TG-06,TG-08,TG-09 | 108 | 0.83 | 35 | archived |
+-| add-sdflow-devenv | 1808.5 | 298.6 | 466.5 | — | — | 18 | TG-08,TG-09,TG-17,TG-26 | — | 22 | 0.64 | 8 | archived |
+-| add-sdflow-spec | 685.7 | 123.6 | 75.6 | — | — | 23 | TG-08,TG-17 | — | 69 | 0.94 | 12 | in-progress |
+-| async-outside-voice | 411.5 | 161.4 | 94.7 | 10.5 | — | 29 | TG-09,TG-17,TG-26 | TG-06,TG-08,TG-09,TG-16,TG-17,TG-26 | 57 | 0.93 | 19 | archived |
+-| batch-triage-strategy | 107.4 | 41.9 | 50.0 | 10.8 | — | 8 | none | none | 29 | 0.9 | 11 | archived |
+-| checkpoint-tag-single-source | 753.8 | 678.1 | 68.7 | 7.0 | — | 6 | none | none | — | 无度量锚 | — | archived |
+-| cross-model-outside-voice | 229.7 | 71.6 | 76.0 | 24.6 | — | 12 | — | TG-08,TG-17 | — | 无度量锚 | — | archived |
+-| dedupe-issues-scripts-shared-layer | 1336.2 | 975.3 | 178.5 | 37.5 | — | 26 | TG-06 | TG-06,TG-26 | 38 | 0.89 | 7 | archived |
+-| done-roadmap-writeback | 193.4 | 120.4 | 31.8 | 6.9 | — | 13 | none | none | 52 | 0.94 | 10 | archived |
+-| drop-per-dir-review-stub | 53.8 | — | 32.6 | — | — | 5 | — | none | — | 无度量锚 | — | archived |
++| absorb-gstack-autoplan | 168.1 | 148.3 | — | — | — | 7 | none | — | 49 | 0.76 | 7 | in-progress |
++| absorb-gstack-review | 313.5 | 138.2 | 40.3 | 39.8 | 19.7 | 24 | none | TG-06,TG-08 | 51 | 0.71 | 18 | archived |
++| adaptive-workflow-routing | 111.1 | 50.9 | 46.6 | 10.1 | 3.5 | 7 | none | none | 28 | 0.96 | 19 | archived |
++| add-codex-host-support | 5026.3 | 260.3 | 190.3 | 1074.7 | 29.3 | 20 | TG-06,TG-08,TG-17 | TG-04,TG-06,TG-07,TG-08,TG-17 | 14 | 0.86 | 10 | archived |
++| add-sdflow-architecture | 378.4 | 59.1 | 169.3 | 77.8 | 15.4 | 9 | TG-06,TG-08,TG-09 | TG-06,TG-08,TG-09 | 108 | 0.83 | 35 | archived |
++| add-sdflow-devenv | 1808.5 | 158.2 | 1453.4 | — | 37.2 | 18 | TG-08,TG-09,TG-17,TG-26 | — | 22 | 0.64 | 8 | archived |
++| add-sdflow-spec | 1139.2 | 168.2 | 48.3 | 66.6 | 20.8 | 40 | TG-08,TG-17 | TG-08,TG-17 | 77 | 0.94 | 19 | archived |
++| align-sdflow-spec-with-openspec-schema | 698.7 | 450.6 | 110.3 | 62.4 | 12.6 | 23 | TG-06,TG-08 | — | 26 | 0.92 | 8 | archived |
++| async-outside-voice | 411.5 | 189.2 | 14.7 | 25.4 | 10.5 | 29 | TG-09,TG-17,TG-26 | TG-06,TG-08,TG-09,TG-16,TG-17,TG-26 | 57 | 0.93 | 19 | archived |
++| batch-triage-strategy | 107.4 | 37.0 | 9.6 | 53.5 | 7.3 | 8 | none | none | 29 | 0.9 | 11 | archived |
++| checkpoint-tag-single-source | 753.8 | 55.4 | 681.3 | 10.1 | 7.0 | 6 | none | none | — | 无度量锚 | — | archived |
++| complete-openspec-170-followup | 76.9 | 24.2 | 12.5 | 13.4 | 5.9 | 15 | none | none | 9 | 0.78 | 3 | archived |
++| cross-model-outside-voice | 229.7 | 78.1 | 57.1 | 57.0 | 5.8 | 12 | — | TG-08,TG-17 | — | 无度量锚 | — | archived |
++| curb-rework-loop-cost | 247.6 | 146.1 | 51.2 | 22.0 | 6.9 | 15 | none | none | 31 | 0.45 | 8 | archived |
++| dedupe-issues-scripts-shared-layer | 1336.2 | 955.2 | 51.5 | 34.1 | 20.3 | 26 | TG-06 | TG-06,TG-26 | 38 | 0.89 | 7 | archived |
++| done-roadmap-writeback | 193.4 | 118.2 | 11.6 | 31.8 | 6.9 | 13 | none | none | 52 | 0.94 | 10 | archived |
++| drop-per-dir-review-stub | 53.8 | — | 36.9 | — | 12.8 | 5 | — | none | — | 无度量锚 | — | archived |
+ | drop-review-html-viewer | 0.0（边界不可解析） | — | — | — | — | 1 | — | — | — | 无度量锚 | — | archived |
+ | enable-codex-background-outside-voice | 0.0（边界不可解析） | — | — | — | — | 1 | TG-08,TG-09,TG-16,TG-17,TG-26 | TG-08,TG-09,TG-16,TG-17,TG-26 | 40 | 0.72 | 9 | archived |
+-| fix-design-gate-freshness-proxy | 447.5 | 181.0 | 85.1 | 22.6 | — | 26 | none | TG-17 | 46 | 0.83 | 22 | archived |
+-| fix-mechanical-layer-silent-failures | 999.7 | 55.1 | 495.0 | 150.6 | — | 19 | TG-08,TG-17 | TG-08,TG-09,TG-17,TG-26 | 42 | 0.83 | 27 | archived |
+-| gate-anchor-line-scoped | 7.0 | — | — | 7.0 | — | 9 | none | none | — | 无度量锚 | — | archived |
+-| gate-checkpoint-hardening | 87.8 | 17.9 | 26.7 | 7.3 | — | 10 | none | none | — | 无度量锚 | — | archived |
+-| harden-gate-git-layer | 617.1 | 202.2 | 111.1 | 14.6 | — | 36 | TG-17 | TG-17 | 54 | 0.8 | 37 | archived |
+-| harden-hr-tg-anchor-consistency | 183.6 | 51.2 | 104.4 | 7.2 | — | 6 | none | none | 24 | 1.0 | 20 | archived |
+-| harden-repo-root-fail-closed | 522.4 | 142.2 | 123.5 | 19.3 | — | 28 | TG-08 | TG-08 | 54 | 0.83 | 32 | archived |
+-| implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 97.8 | 77.5 | 7.6 | — | 9 | TG-06 | TG-06 | 67 | 0.88 | 13 | archived |
++| fix-b11-b12-tools-hardening | 0.0（边界不可解析） | — | — | — | — | 1 | — | — | — | 无度量锚 | — | archived |
++| fix-design-gate-freshness-proxy | 447.5 | 227.7 | 28.6 | 23.0 | 10.5 | 26 | none | TG-17 | 46 | 0.83 | 22 | archived |
++| fix-mechanical-layer-silent-failures | 999.7 | 52.8 | 98.0 | 532.8 | 38.5 | 19 | TG-08,TG-17 | TG-08,TG-09,TG-17,TG-26 | 42 | 0.83 | 27 | archived |
++| fix-probe-scan-precision | 1173.9 | 719.5 | 22.3 | 9.8 | 22.0 | 23 | TG-07,TG-17 | none | 48 | 0.96 | 46 | archived |
++| fix-voice-quoting-and-mirror-vocab | 316.7 | 239.8 | 17.6 | 9.7 | 11.6 | 18 | TG-17 | TG-17 | 21 | 0.86 | 6 | archived |
++| fix-windows-encoding-crash | 875.6 | 769.6 | 26.3 | — | 6.5 | 34 | none | none | 48 | 0.94 | 13 | archived |
++| gate-anchor-line-scoped | 7.0 | — | — | — | 7.0 | 9 | none | none | — | 无度量锚 | — | archived |
++| gate-checkpoint-hardening | 87.8 | 27.6 | 17.1 | 13.8 | 7.3 | 10 | none | none | — | 无度量锚 | — | archived |
++| harden-gate-git-layer | 617.0 | 253.9 | 52.3 | 10.1 | 13.4 | 36 | TG-17 | TG-17 | 54 | 0.8 | 37 | archived |
++| harden-hr-tg-anchor-consistency | 183.6 | 55.3 | 16.7 | 104.4 | 7.2 | 6 | none | none | 24 | 1.0 | 20 | archived |
++| harden-implement-review-loop | 1203.0 | 758.5 | 83.0 | 48.5 | 24.3 | 26 | none | none | 61 | 0.82 | 42 | archived |
++| harden-issues-read-write | 148.2 | 94.1 | 9.2 | 12.0 | 7.3 | 17 | none | TG-06 | 25 | 0.8 | 4 | archived |
++| harden-outside-voice-scripts | 119.6 | 47.7 | 12.3 | 10.3 | 7.4 | 16 | none | none | 21 | 0.62 | 2 | archived |
++| harden-repo-root-fail-closed | 522.4 | 160.7 | 53.0 | 7.3 | 19.3 | 28 | TG-08 | TG-08 | 54 | 0.83 | 32 | archived |
++| harden-sdflow-spec-followups | 353.4 | 85.3 | 18.4 | 20.9 | 17.6 | 34 | none | TG-08,TG-17 | 28 | 0.64 | 6 | archived |
++| implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 110.6 | 70.6 | 23.1 | 7.6 | 9 | TG-06 | TG-06 | 67 | 0.88 | 13 | archived |
+ | issues-pool-batch-mgmt | 0.0（边界不可解析） | — | — | — | — | 0 | — | — | — | 无度量锚 | — | archived |
+-| issues-pool-hardening | 206.3 | 40.5 | — | 8.8 | — | 10 | none | none | 28 | 0.86 | 9 | archived |
++| issues-pool-hardening | 206.3 | 37.8 | — | 116.8 | 8.8 | 10 | none | none | 28 | 0.86 | 9 | archived |
++| issues-v2-single-file-model | 204.3 | 44.8 | 118.8 | 13.8 | 11.9 | 15 | TG-09 | none | 36 | 1.0 | 11 | archived |
+ | matt-workflow-integration | 0.0（边界不可解析） | — | — | — | — | 1 | TG-06,TG-08 | TG-06,TG-08 | 70 | 0.79 | 21 | archived |
+-| minimize-repo-footprint | 136.5 | 21.4 | 103.9 | 11.2 | — | 10 | — | — | — | 无度量锚 | — | archived |
+-| mlh-p1-issues-sweep | 42.7 | 10.9 | 24.6 | 7.2 | — | 6 | none | none | 36 | 0.81 | 8 | archived |
+-| mlh-p2-anchor-lint | 90.2 | 5.4 | — | 7.2 | — | 6 | none | none | 38 | 0.82 | 18 | archived |
+-| mlh-p3-determ-guards | 166.8 | 91.4 | 64.5 | 10.9 | — | 5 | none | none | 37 | 0.86 | 10 | archived |
+-| mlh-p4-maintain-scan | 221.7 | 29.1 | 106.3 | 8.4 | — | 7 | none | none | 39 | 0.97 | 17 | archived |
+-| mlh-p4-reason-code-validators | 310.3 | 62.8 | 60.6 | 9.2 | — | 19 | TG-08 | none | 39 | 0.74 | 14 | archived |
+-| mlh-p5-gate-frontmatter | 161.6 | 32.1 | 37.3 | 8.2 | — | 6 | TG-04,TG-08 | TG-04,TG-08 | 49 | 0.86 | 18 | archived |
+-| mlh-p5-parser-cleanup | 145.9 | 57.8 | 45.1 | 7.7 | — | 7 | none | none | 16 | 0.69 | 8 | archived |
++| minimize-repo-footprint | 136.5 | 34.5 | 60.2 | 32.1 | 9.7 | 10 | — | — | — | 无度量锚 | — | archived |
++| mlh-p1-issues-sweep | 42.7 | 2.6 | 15.6 | 17.4 | 7.2 | 6 | none | none | 36 | 0.81 | 8 | archived |
++| mlh-p2-anchor-lint | 90.2 | 29.9 | — | 32.1 | 7.2 | 6 | none | none | 38 | 0.82 | 18 | archived |
++| mlh-p3-determ-guards | 166.8 | 1.9 | 89.4 | 64.5 | 10.9 | 5 | none | none | 37 | 0.86 | 10 | archived |
++| mlh-p4-maintain-scan | 221.7 | 38.8 | 14.3 | 106.3 | 8.4 | 7 | none | none | 39 | 0.97 | 17 | archived |
++| mlh-p4-reason-code-validators | 310.3 | 98.3 | 15.7 | 6.6 | 9.2 | 19 | TG-08 | none | 39 | 0.74 | 14 | archived |
++| mlh-p5-gate-frontmatter | 161.6 | 15.3 | 84.0 | 37.3 | 8.2 | 6 | TG-04,TG-08 | TG-04,TG-08 | 49 | 0.86 | 18 | archived |
++| mlh-p5-parser-cleanup | 145.9 | 70.0 | 23.1 | 45.1 | 7.7 | 7 | none | none | 16 | 0.69 | 8 | archived |
+ | mlh-p6-recorder-frontmatter | 0.0（边界不可解析） | — | — | — | — | 1 | TG-06,TG-16,TG-26 | — | 34 | 0.85 | 16 | archived |
+-| plan-mechanical-layer-hardening | 0.2 | — | — | — | — | 2 | — | — | — | 无度量锚 | — | archived |
+-| plan-workflow-cost-optimization | 23.8 | — | — | — | — | 3 | — | — | — | 无度量锚 | — | archived |
+-| rebuild-sdflow-roadmap-v2 | 534.9 | 170.4 | 38.8 | 10.6 | — | 11 | TG-06,TG-08 | TG-06,TG-08 | 99 | 0.78 | 27 | archived |
+-| review-tool-followups | 70.4 | 22.6 | 30.4 | 8.0 | — | 8 | none | none | — | 无度量锚 | — | archived |
+-| scoped-test-per-task | 9927.2 | 8883.8 | — | — | — | 3 | none | — | — | 无度量锚 | — | archived |
+-| sdflow-init-hardening | 37.2 | — | 31.3 | 5.9 | — | 3 | — | TG-26 | 13 | 0.85 | 4 | archived |
+-| sdflow-rebrand | 253.0 | 14.6 | 191.5 | 29.6 | — | 14 | — | — | — | 无度量锚 | — | archived |
+-| sdflow-retro | 279.6 | 40.3 | 177.6 | 12.9 | — | 8 | none | none | 49 | 0.82 | 20 | archived |
+-| sdflow-retro-cleanup | 37.2 | — | 14.9 | 15.4 | — | 4 | — | none | 8 | 0.62 | 3 | archived |
+-| sdflow-ship | 290.8 | 24.9 | 86.2 | 8.4 | — | 10 | — | — | — | 无度量锚 | — | archived |
+-| ship-gate-hardening | 180.8 | 79.6 | — | 8.2 | — | 8 | TG-09 | TG-09 | — | 无度量锚 | — | archived |
+-| ship-gate-hardening-2 | 110.0 | 25.2 | 25.2 | 7.2 | — | 8 | none | none | — | 无度量锚 | — | archived |
++| parallelize-grounding-mirror | 142.4 | 39.7 | 43.1 | 12.6 | 10.5 | 16 | none | none | 17 | 1.0 | 4 | archived |
++| plan-mechanical-layer-hardening | 0.2 | — | — | — | 0.2 | 2 | — | — | — | 无度量锚 | — | archived |
++| plan-workflow-cost-optimization | 23.8 | — | — | — | 0.5 | 3 | — | — | — | 无度量锚 | — | archived |
++| rebuild-sdflow-roadmap-v2 | 534.9 | 80.7 | 32.4 | 28.2 | 10.6 | 11 | TG-06,TG-08 | TG-06,TG-08 | 99 | 0.78 | 27 | archived |
++| refactor-roadmap-internalize-deps | 296.1 | 92.7 | 36.0 | 27.8 | 20.5 | 34 | TG-08,TG-09 | TG-08,TG-09 | 73 | 0.85 | 42 | archived |
++| review-tool-followups | 70.4 | 24.3 | 19.2 | 18.8 | 8.0 | 8 | none | none | — | 无度量锚 | — | archived |
++| scoped-test-per-task | 9927.2 | 1043.3 | — | — | 8883.8 | 3 | none | — | — | 无度量锚 | — | archived |
++| sdflow-init-hardening | 37.2 | — | — | 31.3 | 5.9 | 3 | — | TG-26 | 13 | 0.85 | 4 | archived |
++| sdflow-init-readwrite-paths | 282.2 | 70.8 | 81.9 | 14.5 | 14.6 | 11 | none | none | 15 | 0.8 | 4 | archived |
++| sdflow-rebrand | 253.0 | 29.4 | 170.3 | 43.8 | 9.5 | 14 | — | — | — | 无度量锚 | — | archived |
++| sdflow-retro | 279.6 | 29.5 | 14.8 | 177.6 | 12.9 | 8 | none | none | 49 | 0.82 | 20 | archived |
++| sdflow-retro-cleanup | 37.2 | — | 6.9 | 14.9 | 15.4 | 4 | — | none | 8 | 0.62 | 3 | archived |
++| sdflow-ship | 290.8 | 44.8 | 94.3 | 34.7 | 8.4 | 10 | — | — | — | 无度量锚 | — | archived |
++| shared-yaml-subset-parser | 626.8 | 65.6 | 107.0 | 112.8 | 40.0 | 26 | TG-08 | none | 23 | 0.78 | 14 | archived |
++| ship-gate-hardening | 180.8 | 94.5 | — | 33.1 | 8.2 | 8 | TG-09 | TG-09 | — | 无度量锚 | — | archived |
++| ship-gate-hardening-2 | 110.0 | 39.4 | 16.1 | 17.2 | 7.2 | 8 | none | none | — | 无度量锚 | — | archived |
++| simplify-workflow | 231.3 | 61.1 | 17.8 | 3.8 | 20.3 | 25 | none | none | 23 | 0.87 | 12 | archived |
+ | streamline-workflow-automation | 0.0（边界不可解析） | — | — | — | — | 0 | — | — | — | 无度量锚 | — | archived |
+-| three-lens-decision-framework | 75.3 | 29.6 | 22.4 | 5.2 | — | 10 | none | none | — | 无度量锚 | — | archived |
+-| workflow-metrics-loop | 119.2 | 12.8 | 78.2 | 10.5 | — | 6 | none | none | 16 | 0.94 | 10 | archived |
++| three-lens-decision-framework | 75.3 | 35.5 | 13.5 | 16.1 | 5.2 | 10 | none | none | — | 无度量锚 | — | archived |
++| tickets-parallel-frontier | 188.4 | 135.0 | 8.4 | 10.9 | 7.8 | 15 | none | TG-04,TG-17 | 21 | 1.0 | 6 | archived |
++| workflow-metrics-loop | 119.2 | 21.6 | 8.9 | 78.2 | 10.5 | 6 | none | none | 16 | 0.94 | 10 | archived |
+ 
+ ## 聚合① 阶段占比
+ 
+ | 阶段 | 墙钟(min) | 占比 |
+ |---|---|---|
+-| spec-review | 13445.6 | 49% |
+-| unknown | 5112.9 | 19% |
+-| impl | 4455.2 | 16% |
+-| ff | 2609.5 | 9% |
+-| grill | 682.9 | 2% |
+-| code-review | 676.9 | 2% |
+-| other | 492.4 | 2% |
+-| done | 141.2 | 1% |
++| done | 9618.6 | 27% |
++| spec-review | 8922.0 | 25% |
++| unknown | 6446.3 | 18% |
++| impl | 4602.2 | 13% |
++| code-review | 3552.9 | 10% |
++| grill | 1825.0 | 5% |
++| other | 577.1 | 2% |
++| ff | 192.7 | 1% |
+ 
+ ## 聚合② 成本双峰（总墙钟 x / code-review 占比% y）
+ 
+ | change | 总墙钟(min) | code-review 占比 |
+ |---|---|---|
+-| adaptive-workflow-routing | 111.1 | 3% |
+-| add-codex-host-support | 5026.3 | 2% |
+-| add-sdflow-architecture | 378.4 | 4% |
++| absorb-gstack-autoplan | 168.1 | 0% |
++| absorb-gstack-review | 313.5 | 13% |
++| adaptive-workflow-routing | 111.1 | 9% |
++| add-codex-host-support | 5026.3 | 21% |
++| add-sdflow-architecture | 378.4 | 21% |
+ | add-sdflow-devenv | 1808.5 | 0% |
+-| add-sdflow-spec | 685.7 | 0% |
+-| async-outside-voice | 411.5 | 3% |
+-| batch-triage-strategy | 107.4 | 10% |
++| add-sdflow-spec | 1139.2 | 6% |
++| align-sdflow-spec-with-openspec-schema | 698.7 | 9% |
++| async-outside-voice | 411.5 | 6% |
++| batch-triage-strategy | 107.4 | 50% |
+ | checkpoint-tag-single-source | 753.8 | 1% |
+-| cross-model-outside-voice | 229.7 | 11% |
++| complete-openspec-170-followup | 76.9 | 17% |
++| cross-model-outside-voice | 229.7 | 25% |
++| curb-rework-loop-cost | 247.6 | 9% |
+ | dedupe-issues-scripts-shared-layer | 1336.2 | 3% |
+-| done-roadmap-writeback | 193.4 | 4% |
++| done-roadmap-writeback | 193.4 | 16% |
+ | drop-per-dir-review-stub | 53.8 | 0% |
+ | drop-review-html-viewer | 0.0 | — |
+ | enable-codex-background-outside-voice | 0.0 | — |
++| fix-b11-b12-tools-hardening | 0.0 | — |
+ | fix-design-gate-freshness-proxy | 447.5 | 5% |
+-| fix-mechanical-layer-silent-failures | 999.7 | 15% |
+-| gate-anchor-line-scoped | 7.0 | 100% |
+-| gate-checkpoint-hardening | 87.8 | 8% |
+-| harden-gate-git-layer | 617.1 | 2% |
+-| harden-hr-tg-anchor-consistency | 183.6 | 4% |
+-| harden-repo-root-fail-closed | 522.4 | 4% |
+-| implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 3% |
++| fix-mechanical-layer-silent-failures | 999.7 | 53% |
++| fix-probe-scan-precision | 1173.9 | 1% |
++| fix-voice-quoting-and-mirror-vocab | 316.7 | 3% |
++| fix-windows-encoding-crash | 875.6 | 0% |
++| gate-anchor-line-scoped | 7.0 | 0% |
++| gate-checkpoint-hardening | 87.8 | 16% |
++| harden-gate-git-layer | 617.0 | 2% |
++| harden-hr-tg-anchor-consistency | 183.6 | 57% |
++| harden-implement-review-loop | 1203.0 | 4% |
++| harden-issues-read-write | 148.2 | 8% |
++| harden-outside-voice-scripts | 119.6 | 9% |
++| harden-repo-root-fail-closed | 522.4 | 1% |
++| harden-sdflow-spec-followups | 353.4 | 6% |
++| implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 10% |
+ | issues-pool-batch-mgmt | 0.0 | — |
+-| issues-pool-hardening | 206.3 | 4% |
++| issues-pool-hardening | 206.3 | 57% |
++| issues-v2-single-file-model | 204.3 | 7% |
+ | matt-workflow-integration | 0.0 | — |
+-| minimize-repo-footprint | 136.5 | 8% |
+-| mlh-p1-issues-sweep | 42.7 | 17% |
+-| mlh-p2-anchor-lint | 90.2 | 8% |
+-| mlh-p3-determ-guards | 166.8 | 7% |
+-| mlh-p4-maintain-scan | 221.7 | 4% |
+-| mlh-p4-reason-code-validators | 310.3 | 3% |
+-| mlh-p5-gate-frontmatter | 161.6 | 5% |
+-| mlh-p5-parser-cleanup | 145.9 | 5% |
++| minimize-repo-footprint | 136.5 | 24% |
++| mlh-p1-issues-sweep | 42.7 | 41% |
++| mlh-p2-anchor-lint | 90.2 | 36% |
++| mlh-p3-determ-guards | 166.8 | 39% |
++| mlh-p4-maintain-scan | 221.7 | 48% |
++| mlh-p4-reason-code-validators | 310.3 | 2% |
++| mlh-p5-gate-frontmatter | 161.6 | 23% |
++| mlh-p5-parser-cleanup | 145.9 | 31% |
+ | mlh-p6-recorder-frontmatter | 0.0 | — |
++| parallelize-grounding-mirror | 142.4 | 9% |
+ | plan-mechanical-layer-hardening | 0.2 | 0% |
+ | plan-workflow-cost-optimization | 23.8 | 0% |
+-| rebuild-sdflow-roadmap-v2 | 534.9 | 2% |
+-| review-tool-followups | 70.4 | 11% |
++| rebuild-sdflow-roadmap-v2 | 534.9 | 5% |
++| refactor-roadmap-internalize-deps | 296.1 | 9% |
++| review-tool-followups | 70.4 | 27% |
+ | scoped-test-per-task | 9927.2 | 0% |
+-| sdflow-init-hardening | 37.2 | 16% |
+-| sdflow-rebrand | 253.0 | 12% |
+-| sdflow-retro | 279.6 | 5% |
+-| sdflow-retro-cleanup | 37.2 | 41% |
+-| sdflow-ship | 290.8 | 3% |
+-| ship-gate-hardening | 180.8 | 5% |
+-| ship-gate-hardening-2 | 110.0 | 7% |
++| sdflow-init-hardening | 37.2 | 84% |
++| sdflow-init-readwrite-paths | 282.2 | 5% |
++| sdflow-rebrand | 253.0 | 17% |
++| sdflow-retro | 279.6 | 64% |
++| sdflow-retro-cleanup | 37.2 | 40% |
++| sdflow-ship | 290.8 | 12% |
++| shared-yaml-subset-parser | 626.8 | 18% |
++| ship-gate-hardening | 180.8 | 18% |
++| ship-gate-hardening-2 | 110.0 | 16% |
++| simplify-workflow | 231.3 | 2% |
+ | streamline-workflow-automation | 0.0 | — |
+-| three-lens-decision-framework | 75.3 | 7% |
+-| workflow-metrics-loop | 119.2 | 9% |
++| three-lens-decision-framework | 75.3 | 21% |
++| tickets-parallel-frontier | 188.4 | 6% |
++| workflow-metrics-loop | 119.2 | 66% |
+ 
+ ## 聚合③ per-镜价值表（lens-metric 聚合，扫 archive）
+ 
+ | layer | lens | host | runner | site | 出现轮数 | Σfindings | Σ采纳 | Σ裁掉 | Σdefer | Σ独立 | 采纳率 | 独立率 | flag |
+ |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+ | code-review | adversarial | claude | claude | guard-bypass | 1 | 2 | 2 | 0 | 0 | 1 | 100% | 50% | — |
+ | code-review | adversarial | claude | claude | none | 1 | 5 | 3 | 1 | 1 | 1 | 60% | 20% | — |
+ | code-review | adversarial | claude | claude | parse-edge+blast-radius | 1 | 1 | 0 | 0 | 1 | 0 | 0% | 0% | — |
+ | code-review | adversarial | claude | claude | refactor-honesty | 1 | 3 | 1 | 0 | 2 | 0 | 33% | 0% | — |
+-| code-review | adversarial | claude | claude | — | 25 | 175 | 132 | 13 | 30 | 94 | 75% | 54% | ≥10待复评 |
++| code-review | adversarial | claude | claude | — | 35 | 191 | 140 | 16 | 35 | 100 | 73% | 52% | ≥10待复评 |
++| code-review | adversarial | codex | codex | — | 2 | 2 | 2 | 0 | 0 | 0 | 100% | 0% | — |
+ | code-review | broad | claude | claude | native | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | code-review | broad | claude | claude | none | 1 | 1 | 1 | 0 | 0 | 1 | 100% | 100% | — |
+ | code-review | broad | claude | claude | step1 | 2 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+-| code-review | broad | claude | claude | — | 21 | 16 | 12 | 3 | 1 | 7 | 75% | 44% | ≥10待复评 |
++| code-review | broad | claude | claude | — | 31 | 18 | 13 | 4 | 1 | 8 | 72% | 44% | ≥10待复评 |
+ | code-review | broad | claude | native | scope-drift | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
++| code-review | broad | codex | codex | — | 2 | 2 | 2 | 0 | 0 | 2 | 100% | 100% | — |
+ | code-review | domain | claude | claude | backend | 1 | 4 | 3 | 0 | 1 | 2 | 75% | 50% | — |
+ | code-review | domain | claude | claude | checklist | 1 | 2 | 0 | 1 | 1 | 0 | 0% | 0% | — |
+ | code-review | domain | claude | claude | none | 1 | 3 | 3 | 0 | 0 | 2 | 100% | 67% | — |
+-| code-review | domain | claude | claude | — | 24 | 70 | 50 | 11 | 9 | 24 | 71% | 34% | ≥10待复评 |
++| code-review | domain | claude | claude | — | 33 | 77 | 54 | 14 | 9 | 25 | 70% | 32% | ≥10待复评 |
++| code-review | domain | codex | codex | — | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
++| code-review | grounding | codex | codex | — | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | code-review | history | claude | claude | blame | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | code-review | history | claude | claude | git-blame | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | code-review | history | claude | claude | none | 1 | 2 | 1 | 1 | 0 | 0 | 50% | 0% | — |
+-| code-review | history | claude | claude | — | 24 | 17 | 12 | 4 | 1 | 6 | 71% | 35% | ≥10待复评 |
+-| code-review | outside-voice | claude | claude | code-voice | 2 | 5 | 3 | 1 | 1 | 2 | 60% | 40% | — |
+-| code-review | outside-voice | claude | codex | code-voice | 25 | 88 | 74 | 3 | 11 | 42 | 84% | 48% | ≥10待复评 |
+-| code-review | outside-voice | claude | codex | hr-tg | 13 | 46 | 35 | 2 | 10 | 19 | 74% | 41% | ≥10待复评 |
++| code-review | history | claude | claude | — | 34 | 21 | 12 | 8 | 1 | 6 | 57% | 29% | ≥10待复评 |
++| code-review | history | codex | codex | — | 2 | 1 | 0 | 1 | 0 | 0 | 0% | 0% | — |
++| code-review | outside-voice | claude | claude | code-voice | 5 | 7 | 4 | 1 | 2 | 3 | 57% | 43% | — |
++| code-review | outside-voice | claude | claude | hr-tg | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
++| code-review | outside-voice | claude | codex | code-voice | 31 | 105 | 85 | 5 | 15 | 51 | 81% | 49% | ≥10待复评 |
++| code-review | outside-voice | claude | codex | hr-tg | 16 | 54 | 41 | 4 | 10 | 23 | 75% | 43% | ≥10待复评 |
++| code-review | outside-voice | claude | none | code-voice | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
++| code-review | outside-voice | claude | none | hr-tg | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
++| code-review | outside-voice | codex | claude | code-voice | 1 | 6 | 1 | 5 | 0 | 1 | 17% | 17% | — |
++| code-review | outside-voice | codex | claude | hr-tg | 1 | 5 | 0 | 5 | 0 | 0 | 0% | 0% | — |
++| code-review | outside-voice | codex | codex | code-voice | 1 | 2 | 2 | 0 | 0 | 0 | 100% | 0% | — |
+ | spec-review | adversarial | claude | claude | - | 1 | 8 | 8 | 0 | 0 | 4 | 100% | 50% | — |
+ | spec-review | adversarial | claude | claude | d1-t2 | 1 | 5 | 4 | 1 | 0 | 2 | 80% | 40% | — |
+ | spec-review | adversarial | claude | claude | d2-d3-scope | 1 | 4 | 4 | 0 | 0 | 2 | 100% | 50% | — |
+ | spec-review | adversarial | claude | claude | none | 2 | 30 | 28 | 2 | 0 | 9 | 93% | 30% | — |
+-| spec-review | adversarial | claude | claude | — | 20 | 198 | 182 | 11 | 5 | 97 | 92% | 49% | ≥10待复评 |
+-| spec-review | adversarial | codex | codex | — | 2 | 17 | 17 | 0 | 0 | 9 | 100% | 53% | — |
++| spec-review | adversarial | claude | claude | — | 38 | 365 | 337 | 20 | 8 | 173 | 92% | 47% | ≥10待复评 |
++| spec-review | adversarial | codex | codex | — | 3 | 23 | 23 | 0 | 0 | 10 | 100% | 43% | — |
+ | spec-review | broad | claude | claude | - | 1 | 3 | 3 | 0 | 0 | 1 | 100% | 33% | — |
+ | spec-review | broad | claude | claude | autoplan-adapted | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | spec-review | broad | claude | claude | none | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+-| spec-review | broad | claude | claude | — | 20 | 166 | 149 | 11 | 6 | 55 | 90% | 33% | ≥10待复评 |
++| spec-review | broad | claude | claude | — | 38 | 402 | 349 | 34 | 19 | 169 | 87% | 42% | ≥10待复评 |
+ | spec-review | broad | claude | grill-substituted | design | 1 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
+-| spec-review | broad | codex | codex | — | 2 | 20 | 16 | 4 | 0 | 5 | 80% | 25% | — |
++| spec-review | broad | codex | codex | — | 3 | 26 | 22 | 4 | 0 | 6 | 85% | 23% | — |
+ | spec-review | domain | claude | claude | backend | 1 | 5 | 5 | 0 | 0 | 1 | 100% | 20% | — |
+ | spec-review | domain | claude | claude | none | 2 | 12 | 12 | 0 | 0 | 3 | 100% | 25% | — |
+-| spec-review | domain | claude | claude | — | 10 | 52 | 50 | 0 | 2 | 25 | 96% | 48% | ≥10待复评 |
++| spec-review | domain | claude | claude | — | 17 | 82 | 79 | 1 | 2 | 35 | 96% | 43% | ≥10待复评 |
+ | spec-review | grounding | claude | claude | - | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | spec-review | grounding | claude | claude | code-facts | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | spec-review | grounding | claude | claude | none | 2 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
+-| spec-review | grounding | claude | claude | — | 20 | 51 | 41 | 9 | 0 | 18 | 82% | 35% | ≥10待复评 |
+-| spec-review | grounding | codex | codex | — | 2 | 9 | 9 | 0 | 0 | 3 | 100% | 33% | — |
+-| spec-review | outside-voice | claude | claude | design-voice | 4 | 25 | 23 | 0 | 2 | 5 | 92% | 20% | — |
+-| spec-review | outside-voice | claude | claude | hr-tg | 1 | 8 | 7 | 1 | 0 | 2 | 88% | 25% | — |
+-| spec-review | outside-voice | claude | codex | design-voice | 19 | 135 | 103 | 23 | 9 | 24 | 76% | 18% | ≥10待复评 |
+-| spec-review | outside-voice | claude | codex | hr-tg | 9 | 38 | 35 | 0 | 3 | 12 | 92% | 32% | — |
++| spec-review | grounding | claude | claude | — | 38 | 74 | 58 | 15 | 0 | 24 | 79% | 32% | ≥10待复评 |
++| spec-review | grounding | codex | codex | — | 3 | 13 | 13 | 0 | 0 | 5 | 100% | 38% | — |
++| spec-review | outside-voice | claude | claude | design-voice | 11 | 42 | 37 | 1 | 4 | 10 | 88% | 24% | ≥10待复评 |
++| spec-review | outside-voice | claude | claude | hr-tg | 4 | 20 | 19 | 1 | 0 | 8 | 95% | 40% | — |
++| spec-review | outside-voice | claude | codex | design-voice | 30 | 202 | 159 | 32 | 11 | 41 | 79% | 20% | ≥10待复评 |
++| spec-review | outside-voice | claude | codex | hr-tg | 12 | 50 | 47 | 0 | 3 | 17 | 94% | 34% | ≥10待复评 |
+ | spec-review | outside-voice | codex | codex | design-voice | 2 | 6 | 4 | 2 | 0 | 2 | 67% | 33% | — |
+ | spec-review | outside-voice | codex | codex | hr-tg | 2 | 8 | 8 | 0 | 0 | 2 | 100% | 25% | — |
++| spec-review | outside-voice | codex | none | design-voice | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ 
+-> 无锚样本 31 份（旧格式,不纳入；份=报告文件数，每 change 常含 spec/code 两份，非 change 数；去重后 18 个 change）: 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-streamline-workflow-automation, 2026-07-03-minimize-repo-footprint, 2026-07-03-minimize-repo-footprint, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-ship, 2026-07-03-sdflow-ship, 2026-07-04-cross-model-outside-voice, 2026-07-04-cross-model-outside-voice, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening-2, 2026-07-04-ship-gate-hardening-2, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-review-tool-followups, 2026-07-05-review-tool-followups, 2026-07-05-three-lens-decision-framework, 2026-07-05-three-lens-decision-framework, 2026-07-05-workflow-metrics-loop, 2026-07-16-add-codex-host-support, 2026-07-16-scoped-test-per-task, 2026-07-19-fix-mechanical-layer-silent-failures
++> 无锚样本 38 份（旧格式,不纳入；份=报告文件数，每 change 常含 spec/code 两份，非 change 数；去重后 25 个 change）: 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-streamline-workflow-automation, 2026-07-03-minimize-repo-footprint, 2026-07-03-minimize-repo-footprint, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-ship, 2026-07-03-sdflow-ship, 2026-07-04-cross-model-outside-voice, 2026-07-04-cross-model-outside-voice, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening-2, 2026-07-04-ship-gate-hardening-2, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-review-tool-followups, 2026-07-05-review-tool-followups, 2026-07-05-three-lens-decision-framework, 2026-07-05-three-lens-decision-framework, 2026-07-05-workflow-metrics-loop, 2026-07-16-add-codex-host-support, 2026-07-16-scoped-test-per-task, 2026-07-19-fix-mechanical-layer-silent-failures, 2026-07-31-align-sdflow-spec-with-openspec-schema, 2026-07-31-curb-rework-loop-cost, 2026-08-01-parallelize-grounding-mirror, 2026-08-02-harden-issues-read-write, 2026-08-04-issues-v2-single-file-model, 2026-08-05-simplify-workflow, 2026-08-07-fix-probe-scan-precision
+ > 解析失败 0 份（编码/IO 错误，已跳过未计入聚合，不拖垮全局）: 无
+ > 独立率跨轮不保证同口径（dedup 合并尺度可能漂移），复评时校验最近几轮尺度一致。
+ 
+diff --git a/sdflow-init/assets/workflow/lens-metric-contract.md b/sdflow-init/assets/workflow/lens-metric-contract.md
+index b0663df..7087951 100644
+--- a/sdflow-init/assets/workflow/lens-metric-contract.md
++++ b/sdflow-init/assets/workflow/lens-metric-contract.md
+@@ -10,66 +10,66 @@
+ - host  ∈ {claude, codex, unknown}（**谁在跑这次评审**，由 `resolve-models.sh` 按正信号判定；`unknown` = 两个正信号都无）〔add-codex-host-support〕
+ - runner∈ {claude, codex, none, unknown}（**谁执行了这个镜，只记机队家族**；`claude-fallback` **废弃**——它把跨模型性藏进了枚举值，Codex 宿主下必然说谎，见 §跨模型性。`none` = 该轮无执行〔D6：host-unknown/secret-hit/fallback-unavailable 用之，MUST 伴 `findings=0`〕；`unknown` = `host=unknown` 时普通镜的主审机队，**仅合法于非-outside-voice 普通镜行 ∧ `host=unknown`**——`sdflow:outside-voice` 锚的 `runner` 恒 ∈{claude,codex,none}，不取 `unknown`）〔add-codex-host-support〕
+ - reason_code ∈ {ok, not-installed, preflight-error, timeout, exec-error, host-unknown, secret-hit, fallback-unavailable}（**仅 `sdflow:outside-voice` 锚必填，`sdflow:lens-metric` 锚无此字段**——本轮 voice 结局：成功跨模型固定哨兵 `ok`〔不复用 `none`，防与 `runner="none"` 词面重载混判〕；同族降级 ∈{not-installed,preflight-error,timeout,exec-error}；无执行 ∈{host-unknown,secret-hit,fallback-unavailable}）〔add-codex-host-support〕
+ - site  ∈ {code-voice, hr-tg, design-voice, —}（可选消歧，仅 outside-voice，不进 lens enum；非 outside-voice 用 —）
+   **〔impl-review-fix CF-补2〕site 仅分组消歧、不纳入越域自检**：任意取值只多一个分组行，不阻塞（与 layer/lens/host/runner/sev
+   五个受自检约束的必检字段不同，两 SKILL 的锚行存在性自检 MUST NOT 因 site 值另类而报错）。
+ - findings/采纳/裁掉/defer/独立 = int≥0
+ - sev = 致N/高N/中N/低N（四级定序、零也写 0、分隔符恒 /；仅采纳项计入）
+ 
+ ### 跨模型性 = 派生量，MUST NOT 编码进枚举值、MUST NOT 简写裸 `runner≠host`〔add-codex-host-support · spec-review-r2 C1〕
+-「跨模型性」（本轮是否拿到另一机队的真第二意见）SHALL 由**合法组合矩阵**（design TG-05「数据模型与生命周期」段；能力 `host-adaptive-execution`）统一判定：`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`。**矩阵的关系式判定逻辑 MUST NOT 落成本文件的可 parse 机读块**——平铺 `key: 逗号分隔值` 结构装不下 `runner≠host`、`findings=0` 这类关系式谓词（r3-narrow 修正）；本文件的机读块**只承载枚举域**，矩阵逻辑由 `anchor_lint` 与 `outside_voice_guard` 各自本地重实现、以全笛卡尔 golden 互相守一致（见 tasks 2.3/4.5）。**MUST NOT 简写为裸 `runner≠host`**——`runner="none"` 时 `none≠host` 恒真，会把一切无执行轮次误判为跨模型（C1 击穿）；矩阵要求 `host,runner` 均落在 `{claude,codex}` 内才谈跨模型。
++「跨模型性」（本轮是否拿到另一机队的真第二意见）SHALL 由**合法组合矩阵**（design TG-05「数据模型与生命周期」段；能力 `host-adaptive-execution`）统一判定：`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`。**矩阵的关系式判定逻辑 MUST NOT 落成本文件的可 parse 机读块**——平铺 `key: 逗号分隔值` 结构装不下 `runner≠host`、`findings=0` 这类关系式谓词（r3-narrow 修正）；本文件的机读块**只承载枚举域**，矩阵逻辑收敛为 `anchor_lint` 单一本地实现、以全笛卡尔 golden 自测防漂移（`outside_voice_guard` 的跨工具重实现随其复用路径退役而并入，absorb-gstack-autoplan）。**MUST NOT 简写为裸 `runner≠host`**——`runner="none"` 时 `none≠host` 恒真，会把一切无执行轮次误判为跨模型（C1 击穿）；矩阵要求 `host,runner` 均落在 `{claude,codex}` 内才谈跨模型。
+ 
+ ## 机读取值域（消费脚本单一源·勿在脚本内复制）
+-> 机读枚举权威区〔mlh-p2-anchor-lint grill〕。格式钉死：fence info-string 恒为 `lens-metric-enums`；块内每行 `key: 逗号分隔值`（`sev-format` 为字面模板，`N` 表任意非负整数）。`site` **不入本块**——它不受越域自检约束（CF-补2），消费脚本 MUST NOT 校验 site 取值。**合法组合矩阵的关系式判定逻辑（`runner≠host`、`findings=0` 等谓词）同样不入本块**——本块只承载**枚举域**，关系式逻辑由 `anchor_lint`/`outside_voice_guard` 各自本地重实现（见上「跨模型性」段、design TG-05）〔add-codex-host-support〕。新增/改枚举 MUST 只改此块（散文注记同步更新），并按 §enum 扩展治理 升版本。
++> 机读枚举权威区〔mlh-p2-anchor-lint grill〕。格式钉死：fence info-string 恒为 `lens-metric-enums`；块内每行 `key: 逗号分隔值`（`sev-format` 为字面模板，`N` 表任意非负整数）。`site` **不入本块**——它不受越域自检约束（CF-补2），消费脚本 MUST NOT 校验 site 取值。**合法组合矩阵的关系式判定逻辑（`runner≠host`、`findings=0` 等谓词）同样不入本块**——本块只承载**枚举域**，关系式逻辑由 `anchor_lint` 单一本地实现（见上「跨模型性」段、design TG-05）〔add-codex-host-support；absorb-gstack-autoplan：`outside_voice_guard` 跨工具重实现随其复用路径退役而并入〕。新增/改枚举 MUST 只改此块（散文注记同步更新），并按 §enum 扩展治理 升版本。
+ ```lens-metric-enums
+ layer: spec-review, code-review
+ lens: domain, adversarial, grounding, history, outside-voice, broad
+ host: claude, codex, unknown
+ runner: claude, codex, none, unknown
+ reason_code: ok, not-installed, preflight-error, timeout, exec-error, host-unknown, secret-hit, fallback-unavailable
+ sev-format: 致N/高N/中N/低N
+ ```
+ 
+ ## 归属规则（钉死）
+ findings/采纳/裁掉/defer 按「哪些镜报过该 finding」归属，共抓则每命中镜各记一次；
+ 独立 仅在「唯一报过 ∧ 被采纳」时 +1；独立在折叠到 lens 类型之后计。
+ 数值跨源一致性 = 主 session 信任边界（自做去重又写锚、自核无独立性），非机械门。
+ 〔mlh-p4〕计数由 `lens_metric_emit.py` 从结构化 findings + 行键 roster 确定性归约产出（非手数）；
+ 「独立在折叠后计」精化为「折叠到**行键 `(lens,host,runner,site)`** 后计」〔add-codex-host-support：行键由
+ `(lens,runner,site)` 升维，插入 `host`，与锚唯一键 `(layer,lens,host,runner,site,轮)` 对齐——`site` 消同轮多次
+ outside-voice 调用的撞键，`host` 消同一 runner 在不同宿主下自审 vs 跨模型的撞键〕。
+ 
+ ## 折叠表（canonical 投影）
+ 领域镜→domain · 对抗镜1/2/3→adversarial · 接地镜/完整性镜→grounding · 历史镜→history ·
+-codex/claude(任何 site，任一 runner 的 voice)→outside-voice · autoplan(CEO/Eng/DX/design)+scope-audit→broad
++codex/claude(任何 site，任一 runner 的 voice)→outside-voice · strategy/plan-eng+scope-audit→broad
+ 〔add-codex-host-support：`claude-fallback→outside-voice` 废弃行删除、新增 `claude→outside-voice`——host-adaptive
+ 下反向路径由 `claude` runner 执行 voice 时，原始镜名同样落 `claude`，需与 `codex` 同样折叠到 `outside-voice`〕
+ 〔absorb-gstack-review：`gstack-adv→broad` 行替换为 `scope-audit→broad`——code-review Step1 自持 scope
+ 审计取代 gstack native review，两者不共存，原始镜名同步改称〕
++〔absorb-gstack-autoplan：`autoplan-ceo/design/eng/dx→broad` 四行替换为 `strategy→broad` + `plan-eng→broad`
++（直接替换不共存）——spec-review Step1 广审自持化为 strategy/plan-eng 两镜，autoplan 原始镜名退役〕
+ 
+ ## 机读折叠（消费脚本单一源·勿在脚本内复制）〔mlh-p4-lens-metric-emit〕
+ > 折叠单一源。格式同 `lens-metric-enums`：fence info-string 恒为 `lens-metric-fold`；每行 `原始镜名: canonical-lens`。**只列非恒等映射**——恒等（raw 已 ∈ lens enum，如 domain/grounding/history/broad）由 emitter `raw∈lens_enum` pass-through 承载、不列本块（ADR-7）。canonical 值 MUST ∈ `lens-metric-enums` 的 lens 域（emitter `load_fold` 读入即自校验）。
+ ```lens-metric-fold
+ 对抗镜1: adversarial
+ 对抗镜2: adversarial
+ 对抗镜3: adversarial
+ 领域镜: domain
+ 历史镜: history
+ 接地镜: grounding
+ 完整性镜: grounding
+ codex: outside-voice
+ claude: outside-voice
+-autoplan-ceo: broad
+-autoplan-design: broad
+-autoplan-eng: broad
+-autoplan-dx: broad
++strategy: broad
++plan-eng: broad
+ scope-audit: broad
+ ```
+ 
+ ## 机读输入 schema（emitter 输入单一权威源·bundle 可达）〔impl-review-fix mlh-p4：ADR-6 落地〕
+ > `lens_metric_emit.py` 的输入 JSON 权威 schema。两审 SKILL 落锚步引用**本块**（bundle 分发可达，
+ > 不依赖源仓 `tools/tests/` fixture——消费仓非 full 拷贝不含 tests/）。字段名英文、取值中文。
+ ```lens-metric-input-schema
+ {
+   "roster": [
+     {"lens": "<canonical ∈ lens enum>", "runner": "<∈ runner enum>", "site": "<code-voice|hr-tg|design-voice|—>"}
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index 83dd33b..24aca8f 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -670,21 +670,21 @@ def check_declared_sites(report_text, layer, hr_tg_subset):
+         v.append({"kind": "site-unexpected-anchor", "detail": s})
+     return v
+ 
+ 
+ _FANOUT_MIRRORS = frozenset({"domain", "adversarial", "grounding", "history"})  # dead-fanout-multi-mirror 去重计数域（不含 broad——
+                                                                                   # broad 有主 session 亲做的合法降级路径，机制死却报 broad 不构成自相矛盾）
+ _MIRRORS_LEGAL = _FANOUT_MIRRORS | {"broad"}             # absorb-gstack-review：`mirrors=` 合法 token 集（供 skew 探测信号读此常量名，
+                                                           # 改名即断链——design.md:106 已钉死该名）
+ _SUBAGENTS_VALUES = frozenset({"available", "unavailable"})
+ _MIRRORS_SENTINEL = "—"                                  # 未 fan-out（host=unknown）
+-_MIRRORS_UPGRADE_HINT = "若本仓 openspec/workflow/ 为旧版，请先跑 sdflow-init update"
++_MIRRORS_UPGRADE_HINT = "若本仓 openspec/workflow/ 为旧版，请回运行 checkout 跑 bash setup.sh"
+ 
+ 
+ def _parse_mirrors(raw):
+     """严格文法解析 `mirrors=`：返回 (tokens, err)。tokens 为去重后合法子集（`—` → 空 list 哨兵）；
+     err ∈ {'missing','empty','empty-token','unknown-token','dup-token'} 或 None。fail-closed：MUST NOT 把
+     缺/坏值静默滤成空集（否则 subagents='unavailable'+空 mirrors 又判 CLEAN、C2 空转复发）。
+     合法性判据是 `_MIRRORS_LEGAL`（含 broad）——MUST NOT 用 `_FANOUT_MIRRORS`（那是计数域，不是合法集），
+     否则 broad 会被误判 unknown-token。"""
+     if raw is None:
+         return None, "missing"
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index 6284f5e..a298ed9 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -967,28 +967,62 @@ def test_fanout_unavailable_broad_domain_history_still_dead_fanout():
+ 
+ def test_step1_broad_review_mode_subagent_lint_passes():
+     """🔒 锁定「lint 不校验 step1-broad-review 的 mode 值」不变量：新枚举值 mode="subagent" 不应触发任何
+     与 mode 相关的校验（只校验锚族存在性）。"""
+     al = _mod()
+     r = ('<!-- sdflow:step1-broad-review v1 mode="subagent" -->\n'
+          + _ov(host="claude", runner="codex", reason_code="ok") + "\n"
+          + '<!-- sdflow:hr-tg v1 hit="none" -->\n')
+     assert al.check_existence(r, "code-review", metrics_on=False) == []
+ 
+-def test_fanout_mirrors_unknown_token_hint_mentions_sdflow_init_update():
++def test_fanout_mirrors_unknown_token_hint_mentions_setup_sh():
+     """mirrors-unknown-token 报错须自带可操作指引：旧版 bundle 遇到未来新增 token 时不应让人对着陌生
+-    token 名发呆——文案须提示先跑 `sdflow-init update`。"""
++    token 名发呆——文案须提示回运行 checkout 跑 `bash setup.sh`（absorb-gstack-autoplan：`sdflow-init update`
++    指引已随 adr/0039 真实部署模型退役——消费仓规则经全局 canonical 实时解析，不再有本地 bundle 副本
++    靠 update 刷新；真正过时的是运行 checkout 未 pull+setup，见 design.md「Risks」版本 skew 段）。"""
+     al = _mod()
+     r = _fc(host="codex", subagents="unavailable", mirrors="domain,bogus") + "\n"
+     v = al.check_fanout_consistency(r)
+     hit = [x for x in v if x["kind"] == "mirrors-unknown-token"]
+-    assert hit and "sdflow-init update" in hit[0].get("detail", "")
++    assert hit and "bash setup.sh" in hit[0].get("detail", "")
++    assert "sdflow-init update" not in hit[0].get("detail", "")
++
++
++# --- absorb-gstack-autoplan Task 1：spec-review 广审自持化(strategy+plan-eng→broad)新形态 + mode 新枚举值 ---
++
++def test_fanout_spec_review_single_batch_mirrors_broad_scenario():
++    """DD1 单批 dispatch:spec-review 的 strategy/plan-eng 两广审镜随领域/对抗/接地镜一次性 fan-out——
++    `mirrors=` 单行同时含 broad 与其余镜 token（两广审镜折叠为同一 `broad` token，枚举零改动，
++    只补覆盖新形态）。host=codex subagents=available 时应合法放行。"""
++    al = _mod()
++    r = (_lm(layer="spec-review", lens="broad", host="codex", runner="codex") + "\n"
++         + _fc(host="codex", subagents="available",
++               mirrors="broad,domain,adversarial,grounding,history") + "\n")
++    assert al.check_fanout_consistency(r) == []
++
++def test_fanout_spec_review_unavailable_mirrors_broad_alone_ok():
++    """spec-review 广审在子代理不可用时降级为主 session 亲做（DD3 恒跑守卫）——mirrors="broad" 单独
++    出现于 unavailable 场景须合法放行（broad 不进 dead-fanout 计数集）。"""
++    al = _mod()
++    r = (_lm(layer="spec-review", lens="broad", host="codex", runner="codex") + "\n"
++         + _fc(host="codex", subagents="unavailable", mirrors="broad") + "\n")
++    assert al.check_fanout_consistency(r) == []
++
++def test_step1_broad_review_mode_main_session_lint_passes():
++    """🔒 同 test_step1_broad_review_mode_subagent_lint_passes：新枚举值 mode="main-session"（DD3 探针判
++    子代理不可用时广审镜由主 session 亲做的降级路径）同样不应触发任何与 mode 相关的校验（只校验锚族
++    存在性，mode 值为主 session 自报、无机械枚举校验，design.md DD3 诚实边界）。"""
++    al = _mod()
++    r = ('<!-- sdflow:step1-broad-review v1 mode="main-session" -->\n'
++         + _ov(host="claude", runner="codex", reason_code="ok") + "\n"
++         + '<!-- sdflow:hr-tg v1 hit="none" -->\n')
++    assert al.check_existence(r, "code-review", metrics_on=False) == []
+ 
+ 
+ # --- 解耦锁（metrics=false 时矩阵红线 + 一致性 lint 仍生效，端到端）------------------------------
+ 
+ def test_matrix_self_review_blocks_when_metrics_off(tmp_path):
+     """🔒 解耦锁：metrics.enabled=false（默认消费仓、无 lens-metric 行）时，矩阵自审红线仍端到端拦截。"""
+     root = _write_config(tmp_path, "metrics:\n  enabled: false\n")
+     rpt = (_ov(host="claude", runner="claude", reason_code="ok") + "\n"   # 自审
+            + '<!-- sdflow:hr-tg v1 hit="none" declared="" -->\n'
+            '<!-- sdflow:step1-broad-review v1 mode="native" -->\n')
+diff --git a/sdflow-retro/scripts/retro_report.py b/sdflow-retro/scripts/retro_report.py
+index 24f9803..7e0a6ff 100644
+--- a/sdflow-retro/scripts/retro_report.py
++++ b/sdflow-retro/scripts/retro_report.py
+@@ -221,52 +221,59 @@ def is_archive_rename(root, sha, name):
+             moved_out = True
+         if status == "A" and any(archive_pat.search(p) for p in paths):
+             into_archive = True
+     return moved_out and into_archive
+ 
+ 
+ def stage_walltimes(root, name, commits):
+     """
+     计算相邻 commit 时间差累加到各阶段的墙钟数。
+ 
++    [absorb-gstack-autoplan] attribute-to-next：checkpoint 语义 = 工作完成点，
++    区间 [cur,nxt) 的墙钟归其**完成点** nxt 的阶段（不是起点 cur 的阶段）——修正既有错账：
++    旧口径下 checkpoint(sdflow-spec-generate)→checkpoint(spec-review-autoplan) 区间因
++    cur=sdflow-spec-generate 映射 stage="ff" 而把 Step1 广审墙钟误归 ff；新口径下该区间归
++    nxt 的阶段（spec-review-autoplan→spec-review），归属正确。
++
+     Args:
+         root: 项目根目录
+         name: change 名称
+         commits: 升序 commit list，每个包含 {"sha", "ts", "subject"}
+ 
+     Returns:
+         {"stages": {stage: minutes}, "total_min": float, "n_ckpt": int, "reorder_suspected": bool}
+     """
+     stages = {}
+     reorder = False
+ 
+-    # 相邻提交差计入前一个提交的阶段
++    # 相邻提交差计入后一个提交（完成点）的阶段
+     for i in range(len(commits) - 1):
+         cur, nxt = commits[i], commits[i + 1]
+         delta_s = nxt["ts"] - cur["ts"]
+ 
+         # 负数 → 钳 0 且标记 reorder
+         if delta_s < 0:
+             delta_s = 0
+             reorder = True
+ 
+-        # 当前提交的阶段
+-        if is_archive_rename(root, cur["sha"], name):
++        # 完成本区间的提交（nxt）的阶段
++        if is_archive_rename(root, nxt["sha"], name):
+             stage = "done"
+         else:
+-            stage = map_stage(cur["subject"])
++            stage = map_stage(nxt["subject"])
+ 
+         # 累加到该阶段（秒转分钟）
+         stages[stage] = stages.get(stage, 0.0) + delta_s / 60.0
+ 
+-    # 末提交若是 archive rename，单独标记 done 存在（无后继 Δ）
+-    if commits and is_archive_rename(root, commits[-1]["sha"], name):
++    # 首提交若是 archive rename，单独标记 done 存在（无前驱 Δ 可归属——对称于旧口径下
++    # 末提交的等价边界情形，旧口径末提交从不作为 cur、新口径首提交从不作为 nxt）
++    if commits and is_archive_rename(root, commits[0]["sha"], name):
+         stages.setdefault("done", 0.0)
+ 
+     total = sum(stages.values())
+     return {
+         "stages": stages,
+         "total_min": round(total, 1),
+         "n_ckpt": len(commits),
+         "reorder_suspected": reorder
+     }
+ 
+diff --git a/sdflow-retro/scripts/tests/test_retro_report.py b/sdflow-retro/scripts/tests/test_retro_report.py
+index 3d54b84..dde2655 100644
+--- a/sdflow-retro/scripts/tests/test_retro_report.py
++++ b/sdflow-retro/scripts/tests/test_retro_report.py
+@@ -209,32 +209,85 @@ def test_archive_rename_detects_done(tmp_path):
+     # 用 git mv 模拟归档
+     (root / "openspec/changes/archive/2026-07-06-foo").mkdir(parents=True)
+     _git(root, "mv", "openspec/changes/foo/proposal.md",
+          "openspec/changes/archive/2026-07-06-foo/proposal.md")
+     _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "chore(openspec): archive foo")
+     sha = _git(root, "rev-parse", "HEAD").strip()
+     assert R.is_archive_rename(str(root), sha, "foo") is True
+ 
+ 
+ def test_stage_walltimes_and_negative_clamp(tmp_path):
++    # absorb-gstack-autoplan：attribute-to-next（checkpoint=工作完成点，区间归其完成点）——
++    # a→b 的 600s 是「做 grill 用的时间」（b 才是 grill 完成的标记），故归 nxt=b 的阶段 grill，
++    # 不再归 cur=a 的阶段 ff（首提交 a 自身的阶段 ff 因无前驱 Δ 而不入账）。
+     commits = [
+         {"sha": "a", "ts": 1000, "subject": "checkpoint(ff)"},
+-        {"sha": "b", "ts": 1600, "subject": "checkpoint(grill)"},       # ff→grill: 600s=10min 归 ff
+-        {"sha": "c", "ts": 1500, "subject": "checkpoint(spec-review)"}, # 负 Δ → 钳 0 归 grill
++        {"sha": "b", "ts": 1600, "subject": "checkpoint(grill)"},       # ff→grill: 600s=10min 归 grill（nxt）
++        {"sha": "c", "ts": 1500, "subject": "checkpoint(spec-review)"}, # 负 Δ → 钳 0 归 spec-review（nxt）
+     ]
+     got = R.stage_walltimes(str(tmp_path), "foo", commits)
+-    assert got["stages"]["ff"] == 10.0
+-    assert got["stages"].get("grill", 0) == 0.0
++    assert got["stages"].get("ff", 0) == 0.0
++    assert got["stages"]["grill"] == 10.0
++    assert got["stages"].get("spec-review", 0) == 0.0
+     assert got["reorder_suspected"] is True
+     assert got["n_ckpt"] == 3
+ 
+ 
++def test_stage_walltimes_historical_spec_review_autoplan_sequence_no_longer_misattributed(tmp_path):
++    """回归测试（历史序列，含 checkpoint(spec-review-autoplan) 中间标签）：absorb-gstack-autoplan 修正
++    既有错账——旧口径 attribute-to-previous 下，generate→autoplan 区间因 cur=sdflow-spec-generate 映射
++    stage="ff" 而误归 ff（design.md「墙钟归属」段实证的错账）。attribute-to-next 后，该区间与后续
++    autoplan→spec-review 区间均归 nxt 的阶段（spec-review-autoplan/spec-review 皆映射 spec-review），
++    Step1 广审墙钟不再泄漏进 ff。"""
++    commits = [
++        {"sha": "a", "ts": 1000, "subject": "checkpoint(sdflow-spec-generate)"},
++        {"sha": "b", "ts": 1000 + 600, "subject": "checkpoint(spec-review-autoplan)"},  # Step1 广审 600s
++        {"sha": "c", "ts": 1000 + 600 + 300, "subject": "checkpoint(spec-review)"},      # Step2/3 300s
++    ]
++    got = R.stage_walltimes(str(tmp_path), "foo", commits)
++    assert got["stages"].get("ff", 0) == 0.0                 # 不再误归 ff
++    assert got["stages"]["spec-review"] == 15.0               # 600s+300s = 900s = 15min，全归 spec-review
++
++
++def test_stage_walltimes_new_single_checkpoint_sequence_attributes_to_spec_review(tmp_path):
++    """回归测试（新序列，DD1 单批 dispatch 下中间 checkpoint(spec-review-autoplan) 已退役）：
++    generate→spec-review 单一区间整体归 spec-review（本 skill 只剩一次 checkpoint(spec-review)）。"""
++    commits = [
++        {"sha": "a", "ts": 1000, "subject": "checkpoint(sdflow-spec-generate)"},
++        {"sha": "b", "ts": 1000 + 900, "subject": "checkpoint(spec-review)"},  # 单批 dispatch 900s
++    ]
++    got = R.stage_walltimes(str(tmp_path), "foo", commits)
++    assert got["stages"].get("ff", 0) == 0.0
++    assert got["stages"]["spec-review"] == 15.0
++
++
++def test_stage_walltimes_archive_rename_attributed_via_nxt_not_cur(tmp_path):
++    """`is_archive_rename` 判定对象由 cur 换 nxt：归档 rename 提交与其前一个 checkpoint 之间的墙钟
++    （真实是"做归档收尾用的时间"）现正确归 done，不再误归前一个 checkpoint 自身的阶段
++    （旧口径下 impl-review→archive 区间会误归 code-review，因 cur=impl-review 映射 code-review）。"""
++    root = _init_repo(tmp_path)
++    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(impl-review)")
++    sha_impl = _git(root, "rev-parse", "HEAD").strip()
++    (root / "openspec/changes/archive/2026-07-06-foo").mkdir(parents=True)
++    _git(root, "mv", "openspec/changes/foo/proposal.md",
++         "openspec/changes/archive/2026-07-06-foo/proposal.md")
++    _git(root, "add", "-A"); _git(root, "commit", "-q", "-m", "chore(openspec): archive foo")
++    sha_archive = _git(root, "rev-parse", "HEAD").strip()
++    commits = [
++        {"sha": sha_impl, "ts": 1000, "subject": "checkpoint(impl-review)"},
++        {"sha": sha_archive, "ts": 1000 + 600, "subject": "chore(openspec): archive foo"},
++    ]
++    got = R.stage_walltimes(str(root), "foo", commits)
++    assert got["stages"]["done"] == 10.0
++    assert got["stages"].get("code-review", 0) == 0.0
++
++
+ ANCHOR = ('<!-- sdflow:lens-metric v1 layer="{layer}" lens="domain" runner="claude" '
+           'site="—" findings="{f}" 采纳="{a}" 裁掉="0" defer="0" 独立="{ind}" '
+           'sev="致0/高1/中0/低0" -->')
+ 
+ 
+ def test_lens_value_active_change_has_anchor(tmp_path):
+     d = tmp_path / "openspec/changes/live"
+     d.mkdir(parents=True)
+     (d / "spec-review-report.md").write_text(
+         ANCHOR.format(layer="spec-review", f=9, a=9, ind=6) + "\n", encoding="utf-8")
