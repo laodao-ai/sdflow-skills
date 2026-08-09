@@ -1,5 +1,8 @@
 # gstack 边界：复用产出物、不依赖内部实现
 
+> **Superseded by [adr/0040](./0040-gstack-runtime-dependency-full-retirement.md)**(gstack 运行时依赖全退役)——
+> 「复用产出物」边界随其最后一个实例(spec-review 的 autoplan 复用)退役而废止。本条留档备史。
+
 自制 skill 与 gstack/superpowers 的边界按一条线切：**读它们的产出物（output artifact）合法，依赖它们的内部实现非法。**
 
 - gstack 自家 skill（autoplan、gstack review）的能力**原样不动、照常使用**，包括读它们产出的文件（如 `gstack-review.md`）。spec-review "复用" autoplan 的设计 outside voice = 读 `gstack-review.md` 里 `codex#N`-标签的 findings，属**复用产出物**，合规。
