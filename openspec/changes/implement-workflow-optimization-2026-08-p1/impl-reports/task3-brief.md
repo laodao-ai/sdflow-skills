@@ -21,4 +21,3 @@
 - [ ] checkpoint-commit.sh 接线（gate 后 add 前）
 - [ ] 假 HOME 沙盒集成测试（7 场景）
 - [ ] [e2e] setup.sh 分发后 dogfood 验收：真实 checkpoint 产出 anchor=true 快照行
-
