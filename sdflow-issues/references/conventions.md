@@ -49,11 +49,14 @@ closed_reason: null           # WONTFIX/WONTDO 必填理由（关闭时填）
 
 进入终态即"这条债/待办不再挂着"（WONTFIX/WONTDO 是"决定不修/不做"的合法闭合，和 FIXED/DONE 一样）；
 文件从 `open/` 移到 `closed/`，从 INDEX.md 消失、出现在 CLOSED.md。非终态回退（如 `PROPOSED → OPEN`）
-文件留在 `open/`（本脚本命令面未提供反向转换命令，如需手工回退需直接编辑 frontmatter）。
+文件留在 `open/`，直接 `set-status --to OPEN` 即可，无需专用命令。终态的回退（`closed/` → `open/`）
+不走 `set-status`（其对 `closed/` 的守卫原样保留、硬拒）——唯一受控逆转换是专用命令 `reopen`
+（见 SKILL.md「重开已关闭项」）。
 
 ## 命令面（单一入口 `issues_v2.py`，全部命令共用）
 
 `add --pool {bug|todo} --json '{...}'` / `set-status --id {ID} --to {STATUS} [--evidence] [--reason]` /
+`reopen --id {ID} --reason {理由} [--to OPEN|PROPOSED]`（终态唯一受控逆转换，命令内自动 reindex）/
 `scan [--pool] [--status]* [--source-change] [--all] [--json]` / `reindex` / `next-id --pool {bug|todo}` /
 `migrate`（一次性迁移）。原 `buglist.py`/`todolist.py`（per-pool 薄入口）与
 `issues.py`（跨池薄入口：`reindex`/`batch`/`sweep`）三脚本已合一，`batch`/`sweep`/`triage` 机制随单文件

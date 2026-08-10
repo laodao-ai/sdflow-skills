@@ -49,6 +49,19 @@ def _read(path):
         return f.read()
 
 
+def _snapshot_issue_files(repo):
+    """`openspec/issues/` 下全部 `.md`（issue 文件 + INDEX.md/CLOSED.md）内容快照，
+    用于拒绝面用例断言「文件与索引零变更」。"""
+    root = Path(repo)
+    issues_dir = root / "openspec" / "issues"
+    if not issues_dir.is_dir():
+        return {}
+    return {
+        str(p.relative_to(root)): p.read_text(encoding="utf-8")
+        for p in issues_dir.rglob("*.md")
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # parse_frontmatter / render_frontmatter / read_issue / write_issue
 # ══════════════════════════════════════════════════════════════════════════════
@@ -450,6 +463,231 @@ def test_cli_set_status_untracked_file_is_git_added_before_mv(tmp_path):
     assert closed_path.is_file()
     status = _git("status", "--porcelain", cwd=repo)
     assert "closed/bug/B5.md" in status.stdout
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# cmd_reopen (CLI integration) —— 终态唯一受控逆转换（R-IS1）
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_cli_reopen_roundtrip_returns_issue_to_open_with_cleared_fields(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "todo", module="m", summary="s", type="基础设施")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTDO", "--reason", "ROI 太低")
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "情况变了，重新处理")
+    assert proc.returncode == 0, proc.stderr
+    # 命令内自动 reindex 的成功文案也写 stdout，JSON 结果行在其后——取最后一个 `{` 起始段
+    out = json.loads(proc.stdout[proc.stdout.rindex("{"):])
+    assert out["id"] == issue_id
+    assert out["old"] == "WONTDO"
+    assert out["new"] == "OPEN"
+
+    open_path = repo / "openspec" / "issues" / "open" / "todo" / f"{issue_id}.md"
+    closed_path = repo / "openspec" / "issues" / "closed" / "todo" / f"{issue_id}.md"
+    assert open_path.is_file()
+    assert not closed_path.exists()
+
+    fm, body = v2.read_issue(str(open_path))
+    assert fm["status"] == "OPEN"
+    assert fm["closed_date"] is None
+    assert fm["closed_reason"] is None
+    assert fm["resolved_by"] is None
+    assert "状态：WONTDO → OPEN" in body
+    assert "reopen：情况变了，重新处理" in body
+    assert "原 closed_reason：ROI 太低" in body
+
+    _run_cli(repo, "reindex")
+    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
+    closed_text = _read(repo / "openspec" / "issues" / "CLOSED.md")
+    assert issue_id in index_text
+    assert issue_id not in closed_text
+
+    status = _git("status", "--porcelain", cwd=repo)
+    assert f"open/todo/{issue_id}.md" in status.stdout
+    assert f"closed/todo/{issue_id}.md" not in status.stdout
+
+
+def test_cli_reopen_command_auto_reindexes(tmp_path):
+    """reopen 命令内自动 reindex（不需额外手动跑 reindex），INDEX/CLOSED 即刻一致。"""
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "revisit")
+    assert proc.returncode == 0, proc.stderr
+
+    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
+    closed_text = _read(repo / "openspec" / "issues" / "CLOSED.md")
+    assert issue_id in index_text
+    assert issue_id not in closed_text
+
+
+def test_cli_reopen_to_proposed_sets_non_default_status(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "x", "--to", "PROPOSED")
+    assert proc.returncode == 0, proc.stderr
+    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"))
+    assert fm["status"] == "PROPOSED"
+
+
+def test_cli_reopen_writes_placeholder_when_original_closed_reason_empty(tmp_path):
+    """FIXED/DONE 路径不写 closed_reason——原值为空时历史行写占位符，不渲染 null/空串。"""
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "重新核实")
+    assert proc.returncode == 0, proc.stderr
+    _, body = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"))
+    assert "原 closed_reason：（无 closed_reason）" in body
+    assert "null" not in body.lower()
+
+
+def test_cli_reopen_non_git_repo_falls_back_to_os_rename(tmp_path):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    closed_dir = plain / "openspec" / "issues" / "closed" / "bug"
+    closed_dir.mkdir(parents=True)
+    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
+    fm.update({"id": "B1", "pool": "bug", "status": "WONTFIX", "date": "2026-08-03",
+               "module": "m", "summary": "s", "closed_date": "2026-08-03",
+               "closed_reason": "hw limit"})
+    v2.write_issue(str(closed_dir / "B1.md"), fm, "", create=True)
+
+    proc = _run_cli(plain, "reopen", "--id", "B1", "--reason", "revisit")
+    assert proc.returncode == 0, proc.stderr
+    assert not (closed_dir / "B1.md").exists()
+    open_path = plain / "openspec" / "issues" / "open" / "bug" / "B1.md"
+    assert open_path.is_file()
+
+
+# ── 拒绝面（三例）：均验「文件与索引零变更」 ──────────────────────────────────────
+
+def test_cli_reopen_rejects_open_item_and_leaves_files_unchanged(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _run_cli(repo, "reindex")
+    before = _snapshot_issue_files(repo)
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "x")
+    assert proc.returncode != 0
+    assert "不在终态" in proc.stderr
+
+    assert _snapshot_issue_files(repo) == before
+
+
+def test_cli_reopen_rejects_missing_reason_and_leaves_files_unchanged(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
+    _run_cli(repo, "reindex")
+    before = _snapshot_issue_files(repo)
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id)
+    assert proc.returncode != 0
+    assert "reason" in proc.stderr
+
+    assert _snapshot_issue_files(repo) == before
+
+
+def test_cli_reopen_rejects_terminal_to_value_and_leaves_files_unchanged(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "todo", module="m", summary="s", type="基础设施")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "DONE", "--evidence", "c1")
+    _run_cli(repo, "reindex")
+    before = _snapshot_issue_files(repo)
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "x", "--to", "DONE")
+    assert proc.returncode != 0
+    assert "非终态状态" in proc.stderr
+
+    assert _snapshot_issue_files(repo) == before
+
+
+# ── 其余守卫（对齐 set-status 已有的 ID 校验纪律，不单独在 brief 列出但同族） ──────────
+
+def test_cli_reopen_rejects_path_traversal_id(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    proc = _run_cli(repo, "reopen", "--id", "../../../../etc/hosts", "--reason", "x")
+    assert proc.returncode != 0
+    assert "ID 格式非法" in proc.stderr
+
+
+def test_cli_reopen_rejects_unknown_id(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    proc = _run_cli(repo, "reopen", "--id", "B999", "--reason", "x")
+    assert proc.returncode != 0
+    assert "未找到" in proc.stderr
+
+
+# ── 中断残留幂等恢复 ────────────────────────────────────────────────────────────
+
+def test_cli_reopen_recovers_from_interrupted_residue_without_duplicate_history(tmp_path):
+    """模拟 M-2 原子序中断：原位原子写（字段清理 + 历史行）已完成，`git mv` 未执行——
+    closed/ 内文件残留非终态 status。重跑 reopen 须幂等续跑迁移，不重复清字段/追加历史行。"""
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "todo", module="m", summary="s")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTDO", "--reason", "ROI 太低")
+
+    closed_path = repo / "openspec" / "issues" / "closed" / "todo" / f"{issue_id}.md"
+    fm, body = v2.read_issue(str(closed_path))
+    # 手工重放 cmd_reopen 的「原位原子写」半步（未跑 git mv）——精确模拟中断点
+    fm["status"] = "OPEN"
+    fm["closed_date"] = None
+    fm["closed_reason"] = None
+    fm["resolved_by"] = None
+    hist_line = "> 2026-08-10 状态：WONTDO → OPEN（reopen：first attempt；原 closed_reason：ROI 太低）"
+    new_body = body + hist_line + "\n"
+    v2.write_issue(str(closed_path), fm, new_body, create=False)
+    assert closed_path.is_file()  # 仍留在 closed/——git mv 从未发生，这就是「残留」
+
+    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "second attempt")
+    assert proc.returncode == 0, proc.stderr
+
+    open_path = repo / "openspec" / "issues" / "open" / "todo" / f"{issue_id}.md"
+    assert open_path.is_file()
+    assert not closed_path.exists()
+
+    fm2, body2 = v2.read_issue(str(open_path))
+    assert fm2["status"] == "OPEN"
+    assert fm2["closed_date"] is None
+    assert fm2["closed_reason"] is None
+    assert fm2["resolved_by"] is None
+    # 不重复追加历史行：只有一条 reopen 相关记录，且是第一次尝试留下的那条
+    assert body2.count("reopen：") == 1
+    assert "first attempt" in body2
+    assert "second attempt" not in body2
+
+
+def test_reindex_warns_on_closed_non_terminal_residue(tmp_path):
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTFIX", "--reason", "x")
+    closed_path = repo / "openspec" / "issues" / "closed" / "bug" / f"{issue_id}.md"
+    fm, body = v2.read_issue(str(closed_path))
+    fm["status"] = "OPEN"  # 模拟残留：status 已翻转，文件仍在 closed/
+    v2.write_issue(str(closed_path), fm, body, create=False)
+
+    proc = _run_cli(repo, "reindex")
+    assert proc.returncode == 0, proc.stderr
+    assert "WARNING" in proc.stderr
+    assert issue_id in proc.stderr
+
+
+# ── 既有守卫零回归 ──────────────────────────────────────────────────────────────
+
+def test_cli_set_status_still_rejects_closed_after_reopen_command_exists(tmp_path):
+    """reopen 命令的存在本身不弱化 set-status 的终态守卫（C1 承重约束）。"""
+    repo = _init_repo(tmp_path / "repo")
+    issue_id = _add(repo, "bug", module="m", summary="s")
+    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
+
+    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "OPEN")
+    assert proc.returncode != 0
+    assert "终态" in proc.stderr
 
 
 # ══════════════════════════════════════════════════════════════════════════════
