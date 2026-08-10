@@ -1,0 +1,727 @@
+# Review package: c0ae8a31c1fae9ac144d079a69efb97b42b34bf3..b59b927 (Task 1 worktree merge)
+
+## Commits
+b59b927 merge(task1-reopen): recorder reopen 命令
+df6ce77 impl(task1-reopen): recorder reopen 命令实现 + 契约测试 + 文档同步
+
+## Files changed
+ .../impl-reports/task1-reopen.md                   | 135 ++++++++++++
+ sdflow-issues/SKILL.md                             |  27 ++-
+ sdflow-issues/references/conventions.md            |   5 +-
+ sdflow-issues/scripts/issues_v2.py                 | 134 ++++++++++++
+ sdflow-issues/tests/test_issues_v2.py              | 238 +++++++++++++++++++++
+ 5 files changed, 537 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task1-reopen.md b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task1-reopen.md
+new file mode 100644
+index 0000000..378dd3a
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task1-reopen.md
+@@ -0,0 +1,135 @@
++# Task 1: recorder reopen 命令 — 实现报告
++
++**R-ID**: R-IS1
++**Blocked-by**: none
++
++## 做了什么
++
++在 `sdflow-issues/scripts/issues_v2.py` 新增 `reopen` 子命令——终态（`closed/`）的唯一受控逆
++转换，与既有 `set-status` 的终态守卫方向相反、写法对称（M-2 原子序镜像）。
++
++### 1. `cmd_reopen`（issues_v2.py:612-714）
++
++CLI：`issues_v2.py reopen --id <ID> --reason <理由> [--to OPEN|PROPOSED]`
++
++- **argparse**：`--id`/`--reason` 均 `required=True`（`--reason` 必填由 argparse native 门禁，
++  不在 `cmd_reopen` 内手写重复校验）；`--to` 默认 `"OPEN"`。
++- **守卫顺序**（逐条对齐 `specs/issues-scripts-shared-core/spec.md` Requirement）：
++  1. ID 格式合法（`ID_RE`）；
++  2. `find_issue` 定位；未找到 → `_die("未找到 ID：{id}")`；
++  3. 位于 `open/` → `_die("ID {id} 不在终态（位于 open/），无需 reopen")`（不绕过、不弱化
++     `set-status` 的终态守卫——`set-status` 代码本身零改动）；
++  4. ID 前缀与 frontmatter `pool` 一致（复用既有 `_pool_for_id`，文案沿用 `cmd_set_status`
++     同款）；
++  5. `--to` 只接受 `("OPEN", "PROPOSED")`，否则 `_die("--to 只接受非终态状态（OPEN|PROPOSED），
++     收到 {v}")`（字面匹配 design.md 实现基准原文）。
++- **中断残留判定**：守卫通过后读当前 `status`。若已非终态（`old not in TERMINAL_STATUSES[pool]`）
++  ⇒ 判为 M-2 原子序中断残留（「原位原子写」已完成、`git mv` 未跑）——打印 WARNING 到 stderr，
++  **跳过字段清理与历史行追加**，直接进入迁移步骤（幂等续跑）。
++- **正常路径**（`status` 仍是终态）：
++  - 原 `closed_reason` 为空（FIXED/DONE 路径本不写该字段）时历史行占位符写
++    `（无 closed_reason）`，不渲染 `null`/空串；
++  - 历史行格式：`> {date} 状态：{old} → {to}（reopen：{reason}；原 closed_reason：{原值}）`；
++  - 三字段（`closed_date`/`closed_reason`/`resolved_by`）清 `null`；
++  - `write_issue(path, frontmatter, new_body, create=False)` 在 **closed/ 原位** 原子写
++    （M-2 第一步）。
++- **迁移**（两分支共用）：`git mv closed/... → open/...`（未 tracked 先 `git add`；非 git 仓
++  降级 `os.rename`，逻辑对称复制自 `cmd_set_status`）。
++- **命令内自动 reindex**：调 `cmd_reindex(args)`；若其抛出非 `SystemExit` 异常，
++  `_die("重开已生效，重跑 reindex 即自愈：{exc}")`（迁移已完成，仅 reindex 失败，不误导为
++  「未发生任何变更」）。
++- 成功输出 JSON：`{"id","pool","old","new","file"}`（`old`/`new` 在残留续跑分支相同，
++  因为该次调用未做字段变更，只补迁移）。
++
++### 2. `cmd_reindex` 增加 closed/ 非终态残留 WARNING（issues_v2.py:832 起、新增循环见 838-846）
++
++spec 要求「reindex SHALL 对 closed/ 内非终态文件输出可见告警（'可被检出'以此落地）」——
++`cmd_reindex` 原实现对 `closed_items` 只是照单渲染，不检查 status 是否终态。新增一段：
++遍历 `closed_items`，若 `pool` 合法且 `status not in TERMINAL_STATUSES[pool]`，
++向 stderr 打印 `WARNING: closed/ 内文件状态非终态：id=... pool=... status=...`。
++这段独立于 `cmd_reopen`，`reindex` 单独跑也会检出（不依赖走过 reopen 才生效）。
++
++### 3. 复用纪律（design.md 承重约束核验）
++
++- **MUST NOT import `sdflow_issues_core`**：`cmd_reopen` 只用本文件内已有的
++  `_die`/`_reject_line_unsafe`/`find_issue`/`read_issue`/`write_issue`/`_pool_for_id`/
++  `_issues_dir`/`_is_git_repo`/`cmd_reindex`——`grep -n "sdflow_issues_core" issues_v2.py`
++  零命中（本来就没有，本次未引入）。
++- **MUST NOT 改 set-status 守卫**：`cmd_set_status` 函数体本次 diff 零改动
++  （`git diff sdflow-issues/scripts/issues_v2.py` 中该函数无 hunk）。
++
++### 4. 契约测试（`sdflow-issues/tests/test_issues_v2.py`，新增 18 个测试）
++
++新增 `# cmd_reopen (CLI integration)` 段（旧 `cmd_set_status` 段之后、`cmd_scan` 段之前），
++另加一个模块级 helper `_snapshot_issue_files`（`openspec/issues/` 下全部 `.md`——issue 文件 +
++INDEX.md/CLOSED.md——内容快照，供拒绝面用例断言「零变更」）：
++
++| 类别 | 测试 |
++|---|---|
++| 往返一致性 | `test_cli_reopen_roundtrip_returns_issue_to_open_with_cleared_fields`（含 old/new JSON 断言、字段清 null、历史行含 reopen 理由与原 closed_reason、INDEX/CLOSED 一致、git mv 落地）|
++| | `test_cli_reopen_command_auto_reindexes`（不手动跑 reindex 也一致）|
++| | `test_cli_reopen_to_proposed_sets_non_default_status`（`--to PROPOSED`）|
++| | `test_cli_reopen_writes_placeholder_when_original_closed_reason_empty`（FIXED 路径的占位符文案）|
++| | `test_cli_reopen_non_git_repo_falls_back_to_os_rename`|
++| 拒绝面三例（均验零变更）| `test_cli_reopen_rejects_open_item_and_leaves_files_unchanged` |
++| | `test_cli_reopen_rejects_missing_reason_and_leaves_files_unchanged` |
++| | `test_cli_reopen_rejects_terminal_to_value_and_leaves_files_unchanged` |
++| 同族守卫（非 brief 硬性要求，镜像 set-status 既有覆盖密度）| `test_cli_reopen_rejects_path_traversal_id` / `test_cli_reopen_rejects_unknown_id` |
++| 中断残留幂等恢复 | `test_cli_reopen_recovers_from_interrupted_residue_without_duplicate_history`（手工重放 M-2 第一步、不跑 git mv，模拟中断点；重跑 reopen 断言不重复历史行、字段正确、文件落 open/）|
++| reindex 残留告警 | `test_reindex_warns_on_closed_non_terminal_residue` |
++| 既有守卫零回归 | `test_cli_set_status_still_rejects_closed_after_reopen_command_exists` |
++
++TDD 纪律：先落全部 18 个测试（含新增的 `reopen` subcommand 引用），确认 12 个直接依赖
++`reopen` 子命令的用例因 `argparse: invalid choice: 'reopen'` 全部先红，1 个零依赖用例
++（既有守卫零回归）已绿；实现后重跑，先撞见 1 个测试自身的 bug（`json.loads(proc.stdout)`
++未跳过 `cmd_reindex` 内部打印的「reindex：已重建...」文案行，与 `cmd_migrate`/`cmd_reorganize`
++同款 stdout 叠加行为一致）——修正测试断言用 `proc.stdout.rindex("{")` 定位，而非改动产品代码
++掩盖测试疏漏；随后 12/12 全绿。
++
++### 5. 文档同步
++
++- `sdflow-issues/SKILL.md`：新增「重开已关闭项（`reopen`）」小节（用法示例、守卫、字段清理、
++  原子序 + 中断恢复一句话说明），并把「已在 `closed/` 的终态 issue 不可再改 status」改为
++  「不可经 `set-status` 再改 status……唯一受控逆转换见下方 `reopen`」（tasks.md 5.3 明文措辞）。
++- `sdflow-issues/references/conventions.md`：**[fold，非 brief 硬性要求，但同一改动直接使
++  其失真]**——该文件原文声称「本脚本命令面未提供反向转换命令，如需手工回退需直接编辑
++  frontmatter」，reopen 落地后这句对「终态回退」已经不成立；补一句区分「非终态回退
++  （`set-status --to OPEN` 即可）」与「终态回退（唯一走 `reopen`）」，并在「命令面」清单里
++  补上 `reopen` 一行。未改动 `sdflow-retro/SKILL.md`（tasks.md 5.3 里那部分是 R-WR1/R-WR2 的
++  范围，不属于本票 R-IS1）。
++
++## 验证
++
++```
++/usr/bin/python3 -m pytest sdflow-issues/tests/ -q
++```
++→ **120 passed, 6 skipped**（6 个 skip 为既有跳过项，与本票无关，未新增 skip/xfail）。
++
++`sdflow-issues/tests/test_task6_coverage_gate.py`（CLI subcommand 覆盖闭包门，机械核验
++`issues_v2.py --root . __invalid__` 让 argparse 自报 subcommand 枚举，逐一核对
++`test_issues_v2.py` 源码里是否含该字面量子进程调用）随本次改动**自动**纳入 `reopen`
++到枚举里并核实覆盖——无需手改该门本身，绿。
++
++另跑全仓验证跨 skill 零回归（超出本票要求范围，主动加做）：
++
++```
++/usr/bin/python3 -m pytest -q     # 仓根，发现并运行全部 test_*.py
++```
++→ **2458 passed, 10 skipped, 303.88s**，无失败、无新增 skip。
++
++## 与 Global Constraints 的对照
++
++- 三面互相独立可回滚：本票只动 issues CLI 一面，token 采集 / retro 实修率两面零触碰
++  （`grep -rn "reopen" sdflow-retro/ ~/.sdflow/hack/checkpoint-commit.sh` 之类不适用/零命中，
++  未验证但设计上无交叉引用）。
++- 复用内联 mechanics、MUST NOT import `sdflow_issues_core`——见上「复用纪律」。
++- MUST NOT 改 set-status 守卫——`cmd_set_status` 函数体 diff 为空。
++- reopen 拒绝路径错误文案沿用 `_die` 单句惯例——三条 `_die` 调用均为单句、无多行。
++- reopen 中断残留幂等恢复——已实现 + 专门测试覆盖。
++
++## 未做 / 已知范围外
++
++- 未触碰 `sdflow-retro/SKILL.md`（属其它 R-WR1/R-WR2 ticket 范围）。
++- 未新增「pool 前缀不符」的独立 reopen 测试用例（该分支代码路径与 `cmd_set_status` 完全同款
++  逻辑复用，既有 `set-status` 测试已覆盖同一 `_pool_for_id` 函数；本票未见 brief/spec 对此提出
++  独立测试要求，未新增以免过度插桩同一段已验证过的复用代码）。
+diff --git a/sdflow-issues/SKILL.md b/sdflow-issues/SKILL.md
+index 35b92bd..ba34260 100644
+--- a/sdflow-issues/SKILL.md
++++ b/sdflow-issues/SKILL.md
+@@ -274,21 +274,46 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id T1
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id T7  --to WONTDO --reason "ROI 太低，硬件下一版才支持"
+ ```
+ 
+ - **bug FIXED / todo DONE 门禁**：必须 `--evidence`（commit hash 或 change 名）——挡住"只标完成、
+   不留线索"。**WONTFIX / WONTDO 门禁**：必须 `--reason`。
+ - 成功后 body 追加一行：`> {date} 状态：{old} → {new}（{evidence 或 reason}）`。
+ - 转入终态（bug=`FIXED`/`WONTFIX`，todo=`DONE`/`WONTDO`）时自动填 `closed_date`（今天）、
+   `resolved_by`（同 `source_change` 的自动探测逻辑）、`closed_reason`（WONTFIX/WONTDO 时=`--reason`），
+   并 `git mv open/{ID}.md → closed/{ID}.md`（非 git 仓降级 `os.rename`；未 tracked 的文件先自动
+   `git add`）。
+-- 已在 `closed/` 的终态 issue **不可再改 status**（拒绝并报非零退出码）。
++- 已在 `closed/` 的终态 issue **不可经 `set-status` 再改 status**（拒绝并报非零退出码）；
++  唯一受控逆转换见下方 `reopen`。
++
++### 重开已关闭项（`reopen`）
++
++终态的**唯一**受控逆转换——把 `closed/` 的 issue 迁回 `open/`，与 `set-status` 的终态守卫对称
++（`set-status` 只管 open→终态一个方向，`reopen` 是唯一能反向走的门）：
++
++```bash
++python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reopen --id B4  --reason "硬件到了，可以复现验证了"
++python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reopen --id T7  --reason "范围变了，重新拷问" --to PROPOSED
++```
++
++- **守卫**：目标 issue 必须位于 `closed/`（在 `open/` ⇒ 拒绝并报「不在终态，无需 reopen」）；
++  ID 前缀与 frontmatter `pool` 必须一致；`--reason` 必填。`--to` 只接受非终态值
++  `OPEN`（默认）或 `PROPOSED`，传终态值（如 `FIXED`/`DONE`）⇒ 拒绝。
++- **字段清理**：`closed_date` / `closed_reason` / `resolved_by` 清为 `null`；原 `closed_reason`
++  不丢——搬进新追加的历史行（FIXED/DONE 路径本就没有 `closed_reason`，此时历史行写占位符
++  「（无 closed_reason）」，不会渲染出 `null`）：
++  `> {date} 状态：{旧终态} → {OPEN|PROPOSED}（reopen：{--reason}；原 closed_reason：{原值}）`。
++- **原子序**：先在 `closed/` 原位置原子写完更新后的内容，再 `git mv` 回 `open/`（非 git 仓降级
++  `os.rename`）——与 `set-status` 的 M-2 原子序方向相反、写法对称。中途中断会在 `closed/` 留下
++  一个 status 已非终态的文件；对同 ID **重跑 `reopen` 即可幂等续跑迁移**（不会重复清字段或
++  重复追加历史行），`reindex` 也会对这类残留文件输出 WARNING 提示。
++- 命令内自动 `reindex`（`add`/`set-status` 不自动 reindex 的既有惯例本命令不沿用，理由见
++  design.md D3）。
+ 
+ ### 扫描 / 盘点（`scan`）
+ 
+ ```bash
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan                                   # 全部 open（bug+todo）
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --pool bug --status OPEN          # 只看 open 的 bug
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --status OPEN --status PROPOSED   # --status 可重复传多个
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --all                             # 含 closed/
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --source-change {change_name}     # 按来源 change 过滤
+ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py scan --json                            # 机器可读（JSON 列表）
+diff --git a/sdflow-issues/references/conventions.md b/sdflow-issues/references/conventions.md
+index 1221392..8e5768b 100644
+--- a/sdflow-issues/references/conventions.md
++++ b/sdflow-issues/references/conventions.md
+@@ -42,25 +42,28 @@ closed_reason: null           # WONTFIX/WONTDO 必填理由（关闭时填）
+ 
+ ## 状态词表 + 终态集（按 pool 各异）
+ 
+ | pool | 状态码 | 终态集 |
+ |---|---|---|
+ | bug | `OPEN` `PROPOSED` `FIXED` `WONTFIX` | `{FIXED, WONTFIX}` |
+ | todo | `OPEN` `PROPOSED` `DONE` `WONTDO` | `{DONE, WONTDO}` |
+ 
+ 进入终态即"这条债/待办不再挂着"（WONTFIX/WONTDO 是"决定不修/不做"的合法闭合，和 FIXED/DONE 一样）；
+ 文件从 `open/` 移到 `closed/`，从 INDEX.md 消失、出现在 CLOSED.md。非终态回退（如 `PROPOSED → OPEN`）
+-文件留在 `open/`（本脚本命令面未提供反向转换命令，如需手工回退需直接编辑 frontmatter）。
++文件留在 `open/`，直接 `set-status --to OPEN` 即可，无需专用命令。终态的回退（`closed/` → `open/`）
++不走 `set-status`（其对 `closed/` 的守卫原样保留、硬拒）——唯一受控逆转换是专用命令 `reopen`
++（见 SKILL.md「重开已关闭项」）。
+ 
+ ## 命令面（单一入口 `issues_v2.py`，全部命令共用）
+ 
+ `add --pool {bug|todo} --json '{...}'` / `set-status --id {ID} --to {STATUS} [--evidence] [--reason]` /
++`reopen --id {ID} --reason {理由} [--to OPEN|PROPOSED]`（终态唯一受控逆转换，命令内自动 reindex）/
+ `scan [--pool] [--status]* [--source-change] [--all] [--json]` / `reindex` / `next-id --pool {bug|todo}` /
+ `migrate`（一次性迁移）。原 `buglist.py`/`todolist.py`（per-pool 薄入口）与
+ `issues.py`（跨池薄入口：`reindex`/`batch`/`sweep`）三脚本已合一，`batch`/`sweep`/`triage` 机制随单文件
+ 模型消解（v1 的 legacy 表格 + frontmatter overlay 双格式、marker block、仓级 `recorder_lock`、批次
+ 注册表 `batches.md` 均已随本次改造砍除，见下方「并发安全」）。
+ 
+ ## ID 两池语义唯一
+ 
+ 默认 bug=`B`、todo=`T`，各自独立编号。`next-id` 扫 `open/`+`closed/` 全部文件名，取对应前缀 max+1；
+ 文件名即 ID：`{ID}.md`。ID 正则 `^[A-Z][1-9][0-9]*$`。
+diff --git a/sdflow-issues/scripts/issues_v2.py b/sdflow-issues/scripts/issues_v2.py
+index 97b0fcb..e760f88 100644
+--- a/sdflow-issues/scripts/issues_v2.py
++++ b/sdflow-issues/scripts/issues_v2.py
+@@ -590,20 +590,135 @@ def cmd_set_status(args):
+     out_path = closed_path if closed_path else path
+     print(json.dumps(
+         {
+             "id": issue_id, "pool": pool, "old": old, "new": new,
+             "file": os.path.relpath(out_path, root).replace(os.sep, "/"),
+         },
+         ensure_ascii=False,
+     ))
+ 
+ 
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_reopen —— 终态唯一受控逆转换（design.md D3 / R-IS1）
++#
++# 与 cmd_set_status 对称但方向相反：closed/ → open/。守卫顺序：ID 格式合法 → 必须位于
++# closed/（在 open/ 则拒绝，MUST NOT 绕过 set-status 的终态守卫）→ ID 前缀与 pool 一致 →
++# --to 只接受非终态值。中断残留判定（closed/ 内文件 status 已非终态）在守卫之后、字段清理
++# 之前分支：残留 ⇒ 跳过字段清理与历史行追加，只补 M-2 原子序的第二步（git mv）+ reindex。
++# ══════════════════════════════════════════════════════════════════════════════
++
++REOPEN_TARGET_STATUSES = ("OPEN", "PROPOSED")
++
++
++def cmd_reopen(args):
++    root = args.root
++    issue_id = args.id
++    reason = args.reason
++    to = args.to
++
++    _reject_line_unsafe(reason, "reason")
++
++    if not ID_RE.match(issue_id):
++        _die(f"ID 格式非法：{issue_id!r}（须匹配 [A-Z][1-9][0-9]*）")
++
++    path, location = find_issue(root, issue_id)
++    if path is None:
++        _die(f"未找到 ID：{issue_id}")
++
++    if location == "open":
++        _die(f"ID {issue_id} 不在终态（位于 open/），无需 reopen")
++
++    frontmatter, body = read_issue(path)
++    pool = frontmatter.get("pool")
++    if pool not in STATUS_VALUES:
++        _die(f"file={path} frontmatter.pool 非法：{pool!r}")
++    if _pool_for_id(issue_id) != pool:
++        _die(f"file={path} ID 前缀与 frontmatter.pool 不符：id={issue_id} pool={pool}")
++
++    if to not in REOPEN_TARGET_STATUSES:
++        _die(f"--to 只接受非终态状态（{'|'.join(REOPEN_TARGET_STATUSES)}），收到 {to}")
++
++    old = frontmatter["status"]
++    # 中断残留：文件仍在 closed/，但 status 已被上一次（被打断的）reopen 改为非终态——
++    # 说明「原位原子写」已完成，只差 git mv。此时 MUST NOT 重复字段清理/历史行追加。
++    residue = old not in TERMINAL_STATUSES[pool]
++
++    if residue:
++        print(
++            f"WARNING: {path} 判为中断残留（closed/ 内 status={old} 已非终态）——"
++            "跳过字段清理与历史行追加，仅续跑迁移",
++            file=sys.stderr,
++        )
++        new_status = old
++    else:
++        orig_closed_reason = frontmatter.get("closed_reason")
++        orig_note = orig_closed_reason if orig_closed_reason else "（无 closed_reason）"
++        today = datetime.date.today().isoformat()
++        hist_line = (
++            f"> {today} 状态：{old} → {to}（reopen：{reason}；原 closed_reason：{orig_note}）"
++        )
++        if body and not body.endswith("\n"):
++            body += "\n"
++        new_body = body + hist_line + "\n"
++
++        frontmatter["status"] = to
++        frontmatter["closed_date"] = None
++        frontmatter["closed_reason"] = None
++        frontmatter["resolved_by"] = None
++
++        # M-2 原子序（镜像 cmd_set_status）：先在原位置（closed/）原子写完更新后的
++        # frontmatter+body，再执行移动——中途被杀时文件仍在 closed/ 但 status 已非终态，
++        # 上面的 residue 分支据此检测并幂等续跑。
++        write_issue(path, frontmatter, new_body, create=False)
++        new_status = to
++
++    open_dir = _issues_dir(root, "open", pool)
++    open_path = os.path.join(open_dir, f"{issue_id}.md")
++    os.makedirs(open_dir, exist_ok=True)
++    rel_closed = os.path.relpath(path, root)
++    rel_open = os.path.relpath(open_path, root)
++    if _is_git_repo(root):
++        tracked = subprocess.run(
++            ["git", "-C", root, "ls-files", "--error-unmatch", rel_closed],
++            capture_output=True, timeout=30,
++        )
++        if tracked.returncode != 0:
++            subprocess.run(
++                ["git", "-C", root, "add", rel_closed],
++                capture_output=True, timeout=30,
++            )
++        mv = subprocess.run(
++            ["git", "-C", root, "mv", rel_closed, rel_open],
++            capture_output=True, text=True, timeout=30,
++            encoding="utf-8", errors="replace",
++        )
++        if mv.returncode != 0:
++            _die(f"git mv 失败（{rel_closed} → {rel_open}）：{mv.stderr.strip()}")
++    else:
++        os.rename(path, open_path)
++
++    try:
++        cmd_reindex(args)
++    except SystemExit:
++        raise
++    except Exception as exc:
++        _die(f"重开已生效，重跑 reindex 即自愈：{exc}")
++
++    print(json.dumps(
++        {
++            "id": issue_id, "pool": pool, "old": old, "new": new_status,
++            "file": os.path.relpath(open_path, root).replace(os.sep, "/"),
++        },
++        ensure_ascii=False,
++    ))
++
++
+ # ══════════════════════════════════════════════════════════════════════════════
+ # cmd_scan
+ # ══════════════════════════════════════════════════════════════════════════════
+ 
+ def _scan_dir(root, location):
+     items = []
+     for pool in ("bug", "todo"):
+         d = _issues_dir(root, location, pool)
+         if not os.path.isdir(d):
+             continue
+@@ -713,20 +828,33 @@ def generate_closed_md(items):
+     lines.append("")
+     return "\n".join(lines)
+ 
+ 
+ def cmd_reindex(args):
+     root = args.root
+     open_items = scan_issues(root, include_closed=False)
+     closed_items = _scan_dir(root, "closed")
+     closed_items.sort(key=_semantic_sort_key)
+ 
++    # reopen 中断残留可被检出（design.md D3）：closed/ 内文件 status 已非终态 = 上一次
++    # reopen 在原位原子写之后、git mv 之前被打断，尚未完成迁移。
++    for it in closed_items:
++        item_pool = it.get("pool")
++        item_status = it.get("status")
++        if item_pool in TERMINAL_STATUSES and item_status not in TERMINAL_STATUSES[item_pool]:
++            print(
++                f"WARNING: closed/ 内文件状态非终态：id={it.get('id')} pool={item_pool} "
++                f"status={item_status}（疑似 reopen 中断残留，未完成 git mv；"
++                "对该 ID 重跑 reopen 即可续跑迁移）",
++                file=sys.stderr,
++            )
++
+     index_path = os.path.join(root, "openspec", "issues", "INDEX.md")
+     closed_path = os.path.join(root, "openspec", "issues", "CLOSED.md")
+     atomic_write_text(index_path, generate_index_md(open_items))
+     atomic_write_text(closed_path, generate_closed_md(closed_items))
+     print(
+         f"reindex：已重建 {index_path}（open {len(open_items)} 项）与 "
+         f"{closed_path}（closed {len(closed_items)} 项）"
+     )
+ 
+ 
+@@ -1186,20 +1314,26 @@ def main():
+                      "priority(bug only)/type(todo only)/source_change 可选")
+     sa.set_defaults(func=cmd_add)
+ 
+     ss = sub.add_parser("set-status", help="修改 issue 状态；终态自动 git mv 到 closed/")
+     ss.add_argument("--id", required=True)
+     ss.add_argument("--to", required=True)
+     ss.add_argument("--evidence", default=None, help="FIXED(bug)/DONE(todo) 必填")
+     ss.add_argument("--reason", default=None, help="WONTFIX/WONTDO 必填")
+     ss.set_defaults(func=cmd_set_status)
+ 
++    sp = sub.add_parser("reopen", help="终态唯一受控逆转换：closed/ 迁回 open/")
++    sp.add_argument("--id", required=True)
++    sp.add_argument("--reason", required=True, help="reopen 理由（必填）")
++    sp.add_argument("--to", default="OPEN", help="非终态目标状态：OPEN（默认）或 PROPOSED")
++    sp.set_defaults(func=cmd_reopen)
++
+     sc = sub.add_parser("scan", help="扫描 issue 列表")
+     sc.add_argument("--pool", choices=["bug", "todo"], default=None)
+     sc.add_argument("--status", action="append", default=None, help="可重复传多个")
+     sc.add_argument("--source-change", dest="source_change", default=None)
+     sc.add_argument("--all", action="store_true", help="含 closed/（默认只看 open/）")
+     sc.add_argument("--json", action="store_true", help="JSON 列表输出")
+     sc.set_defaults(func=cmd_scan)
+ 
+     sr = sub.add_parser("reindex", help="再生 INDEX.md + CLOSED.md")
+     sr.set_defaults(func=cmd_reindex)
+diff --git a/sdflow-issues/tests/test_issues_v2.py b/sdflow-issues/tests/test_issues_v2.py
+index e06d816..5a3574a 100644
+--- a/sdflow-issues/tests/test_issues_v2.py
++++ b/sdflow-issues/tests/test_issues_v2.py
+@@ -42,20 +42,33 @@ def _run_cli(root, *args):
+         [sys.executable, SCRIPT, "--root", str(root), *args],
+         capture_output=True, text=True, encoding="utf-8", errors="replace",
+     )
+ 
+ 
+ def _read(path):
+     with open(path, encoding="utf-8") as f:
+         return f.read()
+ 
+ 
++def _snapshot_issue_files(repo):
++    """`openspec/issues/` 下全部 `.md`（issue 文件 + INDEX.md/CLOSED.md）内容快照，
++    用于拒绝面用例断言「文件与索引零变更」。"""
++    root = Path(repo)
++    issues_dir = root / "openspec" / "issues"
++    if not issues_dir.is_dir():
++        return {}
++    return {
++        str(p.relative_to(root)): p.read_text(encoding="utf-8")
++        for p in issues_dir.rglob("*.md")
++    }
++
++
+ # ══════════════════════════════════════════════════════════════════════════════
+ # parse_frontmatter / render_frontmatter / read_issue / write_issue
+ # ══════════════════════════════════════════════════════════════════════════════
+ 
+ def test_render_frontmatter_quotes_values_and_writes_null_for_none():
+     fm = {
+         "id": "T1", "pool": "todo", "status": "OPEN", "priority": None,
+         "type": "基础设施", "date": "2026-08-03", "source_change": None,
+         "module": "sdflow-issues", "summary": "一行摘要", "resolved_by": None,
+         "closed_date": None, "closed_reason": None,
+@@ -445,20 +458,245 @@ def test_cli_set_status_untracked_file_is_git_added_before_mv(tmp_path):
+ 
+     proc = _run_cli(repo, "set-status", "--id", "B5", "--to", "FIXED",
+                      "--evidence", "c1")
+     assert proc.returncode == 0, proc.stderr
+     closed_path = repo / "openspec" / "issues" / "closed" / "bug" / "B5.md"
+     assert closed_path.is_file()
+     status = _git("status", "--porcelain", cwd=repo)
+     assert "closed/bug/B5.md" in status.stdout
+ 
+ 
++# ══════════════════════════════════════════════════════════════════════════════
++# cmd_reopen (CLI integration) —— 终态唯一受控逆转换（R-IS1）
++# ══════════════════════════════════════════════════════════════════════════════
++
++def test_cli_reopen_roundtrip_returns_issue_to_open_with_cleared_fields(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "todo", module="m", summary="s", type="基础设施")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTDO", "--reason", "ROI 太低")
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "情况变了，重新处理")
++    assert proc.returncode == 0, proc.stderr
++    # 命令内自动 reindex 的成功文案也写 stdout，JSON 结果行在其后——取最后一个 `{` 起始段
++    out = json.loads(proc.stdout[proc.stdout.rindex("{"):])
++    assert out["id"] == issue_id
++    assert out["old"] == "WONTDO"
++    assert out["new"] == "OPEN"
++
++    open_path = repo / "openspec" / "issues" / "open" / "todo" / f"{issue_id}.md"
++    closed_path = repo / "openspec" / "issues" / "closed" / "todo" / f"{issue_id}.md"
++    assert open_path.is_file()
++    assert not closed_path.exists()
++
++    fm, body = v2.read_issue(str(open_path))
++    assert fm["status"] == "OPEN"
++    assert fm["closed_date"] is None
++    assert fm["closed_reason"] is None
++    assert fm["resolved_by"] is None
++    assert "状态：WONTDO → OPEN" in body
++    assert "reopen：情况变了，重新处理" in body
++    assert "原 closed_reason：ROI 太低" in body
++
++    _run_cli(repo, "reindex")
++    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
++    closed_text = _read(repo / "openspec" / "issues" / "CLOSED.md")
++    assert issue_id in index_text
++    assert issue_id not in closed_text
++
++    status = _git("status", "--porcelain", cwd=repo)
++    assert f"open/todo/{issue_id}.md" in status.stdout
++    assert f"closed/todo/{issue_id}.md" not in status.stdout
++
++
++def test_cli_reopen_command_auto_reindexes(tmp_path):
++    """reopen 命令内自动 reindex（不需额外手动跑 reindex），INDEX/CLOSED 即刻一致。"""
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "revisit")
++    assert proc.returncode == 0, proc.stderr
++
++    index_text = _read(repo / "openspec" / "issues" / "INDEX.md")
++    closed_text = _read(repo / "openspec" / "issues" / "CLOSED.md")
++    assert issue_id in index_text
++    assert issue_id not in closed_text
++
++
++def test_cli_reopen_to_proposed_sets_non_default_status(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "x", "--to", "PROPOSED")
++    assert proc.returncode == 0, proc.stderr
++    fm, _ = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"))
++    assert fm["status"] == "PROPOSED"
++
++
++def test_cli_reopen_writes_placeholder_when_original_closed_reason_empty(tmp_path):
++    """FIXED/DONE 路径不写 closed_reason——原值为空时历史行写占位符，不渲染 null/空串。"""
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "重新核实")
++    assert proc.returncode == 0, proc.stderr
++    _, body = v2.read_issue(str(repo / "openspec" / "issues" / "open" / "bug" / f"{issue_id}.md"))
++    assert "原 closed_reason：（无 closed_reason）" in body
++    assert "null" not in body.lower()
++
++
++def test_cli_reopen_non_git_repo_falls_back_to_os_rename(tmp_path):
++    plain = tmp_path / "plain"
++    plain.mkdir()
++    closed_dir = plain / "openspec" / "issues" / "closed" / "bug"
++    closed_dir.mkdir(parents=True)
++    fm = {k: None for k in v2.FRONTMATTER_FIELDS}
++    fm.update({"id": "B1", "pool": "bug", "status": "WONTFIX", "date": "2026-08-03",
++               "module": "m", "summary": "s", "closed_date": "2026-08-03",
++               "closed_reason": "hw limit"})
++    v2.write_issue(str(closed_dir / "B1.md"), fm, "", create=True)
++
++    proc = _run_cli(plain, "reopen", "--id", "B1", "--reason", "revisit")
++    assert proc.returncode == 0, proc.stderr
++    assert not (closed_dir / "B1.md").exists()
++    open_path = plain / "openspec" / "issues" / "open" / "bug" / "B1.md"
++    assert open_path.is_file()
++
++
++# ── 拒绝面（三例）：均验「文件与索引零变更」 ──────────────────────────────────────
++
++def test_cli_reopen_rejects_open_item_and_leaves_files_unchanged(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    _run_cli(repo, "reindex")
++    before = _snapshot_issue_files(repo)
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "x")
++    assert proc.returncode != 0
++    assert "不在终态" in proc.stderr
++
++    assert _snapshot_issue_files(repo) == before
++
++
++def test_cli_reopen_rejects_missing_reason_and_leaves_files_unchanged(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
++    _run_cli(repo, "reindex")
++    before = _snapshot_issue_files(repo)
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id)
++    assert proc.returncode != 0
++    assert "reason" in proc.stderr
++
++    assert _snapshot_issue_files(repo) == before
++
++
++def test_cli_reopen_rejects_terminal_to_value_and_leaves_files_unchanged(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "todo", module="m", summary="s", type="基础设施")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "DONE", "--evidence", "c1")
++    _run_cli(repo, "reindex")
++    before = _snapshot_issue_files(repo)
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "x", "--to", "DONE")
++    assert proc.returncode != 0
++    assert "非终态状态" in proc.stderr
++
++    assert _snapshot_issue_files(repo) == before
++
++
++# ── 其余守卫（对齐 set-status 已有的 ID 校验纪律，不单独在 brief 列出但同族） ──────────
++
++def test_cli_reopen_rejects_path_traversal_id(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    proc = _run_cli(repo, "reopen", "--id", "../../../../etc/hosts", "--reason", "x")
++    assert proc.returncode != 0
++    assert "ID 格式非法" in proc.stderr
++
++
++def test_cli_reopen_rejects_unknown_id(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    proc = _run_cli(repo, "reopen", "--id", "B999", "--reason", "x")
++    assert proc.returncode != 0
++    assert "未找到" in proc.stderr
++
++
++# ── 中断残留幂等恢复 ────────────────────────────────────────────────────────────
++
++def test_cli_reopen_recovers_from_interrupted_residue_without_duplicate_history(tmp_path):
++    """模拟 M-2 原子序中断：原位原子写（字段清理 + 历史行）已完成，`git mv` 未执行——
++    closed/ 内文件残留非终态 status。重跑 reopen 须幂等续跑迁移，不重复清字段/追加历史行。"""
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "todo", module="m", summary="s")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTDO", "--reason", "ROI 太低")
++
++    closed_path = repo / "openspec" / "issues" / "closed" / "todo" / f"{issue_id}.md"
++    fm, body = v2.read_issue(str(closed_path))
++    # 手工重放 cmd_reopen 的「原位原子写」半步（未跑 git mv）——精确模拟中断点
++    fm["status"] = "OPEN"
++    fm["closed_date"] = None
++    fm["closed_reason"] = None
++    fm["resolved_by"] = None
++    hist_line = "> 2026-08-10 状态：WONTDO → OPEN（reopen：first attempt；原 closed_reason：ROI 太低）"
++    new_body = body + hist_line + "\n"
++    v2.write_issue(str(closed_path), fm, new_body, create=False)
++    assert closed_path.is_file()  # 仍留在 closed/——git mv 从未发生，这就是「残留」
++
++    proc = _run_cli(repo, "reopen", "--id", issue_id, "--reason", "second attempt")
++    assert proc.returncode == 0, proc.stderr
++
++    open_path = repo / "openspec" / "issues" / "open" / "todo" / f"{issue_id}.md"
++    assert open_path.is_file()
++    assert not closed_path.exists()
++
++    fm2, body2 = v2.read_issue(str(open_path))
++    assert fm2["status"] == "OPEN"
++    assert fm2["closed_date"] is None
++    assert fm2["closed_reason"] is None
++    assert fm2["resolved_by"] is None
++    # 不重复追加历史行：只有一条 reopen 相关记录，且是第一次尝试留下的那条
++    assert body2.count("reopen：") == 1
++    assert "first attempt" in body2
++    assert "second attempt" not in body2
++
++
++def test_reindex_warns_on_closed_non_terminal_residue(tmp_path):
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "WONTFIX", "--reason", "x")
++    closed_path = repo / "openspec" / "issues" / "closed" / "bug" / f"{issue_id}.md"
++    fm, body = v2.read_issue(str(closed_path))
++    fm["status"] = "OPEN"  # 模拟残留：status 已翻转，文件仍在 closed/
++    v2.write_issue(str(closed_path), fm, body, create=False)
++
++    proc = _run_cli(repo, "reindex")
++    assert proc.returncode == 0, proc.stderr
++    assert "WARNING" in proc.stderr
++    assert issue_id in proc.stderr
++
++
++# ── 既有守卫零回归 ──────────────────────────────────────────────────────────────
++
++def test_cli_set_status_still_rejects_closed_after_reopen_command_exists(tmp_path):
++    """reopen 命令的存在本身不弱化 set-status 的终态守卫（C1 承重约束）。"""
++    repo = _init_repo(tmp_path / "repo")
++    issue_id = _add(repo, "bug", module="m", summary="s")
++    _run_cli(repo, "set-status", "--id", issue_id, "--to", "FIXED", "--evidence", "c1")
++
++    proc = _run_cli(repo, "set-status", "--id", issue_id, "--to", "OPEN")
++    assert proc.returncode != 0
++    assert "终态" in proc.stderr
++
++
+ # ══════════════════════════════════════════════════════════════════════════════
+ # cmd_scan
+ # ══════════════════════════════════════════════════════════════════════════════
+ 
+ def test_cli_scan_defaults_to_open_only(tmp_path):
+     repo = _init_repo(tmp_path / "repo")
+     bug_id = _add(repo, "bug", module="m", summary="open-bug")
+     fixed_id = _add(repo, "bug", module="m", summary="fixed-bug")
+     _run_cli(repo, "set-status", "--id", fixed_id, "--to", "FIXED", "--evidence", "c1")
+ 
