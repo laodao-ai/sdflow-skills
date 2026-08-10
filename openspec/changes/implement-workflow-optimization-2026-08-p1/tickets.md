@@ -111,9 +111,9 @@ impl-pipeline: tickets
 - 列旁恒加脚注「数值为各会话累计口径聚合，tickets 管线下多为独立短会话的首行全额之和，非严格阶段增量」
 - 测试（`sdflow-retro/scripts/tests/`）：合成 token-log 用例（多 session/跨 change 同 session 不双计数/降级行/缺文件/含损坏行不崩）+ 全仓再生冒烟（存量 change 全「—」不崩）
 
-- [ ] token-log 读取与 Δ 归属计算（全局 session 分组 + 差分）
-- [ ] per-change tokens 列渲染（四计数紧凑串 + 脚注）
-- [ ] 测试：合成 jsonl 单元 + 全仓再生冒烟
+- [x] token-log 读取与 Δ 归属计算（全局 session 分组 + 差分）
+- [x] per-change tokens 列渲染（四计数紧凑串 + 脚注）
+- [x] 测试：合成 jsonl 单元 + 全仓再生冒烟
 
 ### Task 5: 收尾集成与文档同步
 
@@ -129,10 +129,10 @@ impl-pipeline: tickets
 - CONTEXT.md「实修率」词条按用户拍板结果处置（未确认 MUST NOT 写入）
 - `sdflow-retro/SKILL.md` 补聚合④实修率段与 per-change tokens 列的一句说明
 
-- [ ] 全仓 pytest 绿
-- [ ] report.md 再生并验证聚合④与 tokens 列在场
-- [ ] roadmap task-log.md 追加 1.B 交付记录
-- [ ] SKILL.md 文档同步（sdflow-retro）
+- [x] 全仓 pytest 绿
+- [x] report.md 再生并验证聚合④与 tokens 列在场
+- [x] roadmap task-log.md 追加 1.B 交付记录
+- [x] SKILL.md 文档同步（sdflow-retro）
 
 ### Task 6: 实现验证（收尾，不计入 3–6 预算）
 
