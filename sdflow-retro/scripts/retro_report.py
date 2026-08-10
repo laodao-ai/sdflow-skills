@@ -9,6 +9,7 @@ for _s in (sys.stdout, sys.stderr):
     except Exception: pass
 import tempfile
 from collections import defaultdict
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lens_metric_aggregate as LMA  # 复用其 fence-aware 锚解析（parse_report + _int），不重实现
@@ -327,6 +328,230 @@ def lens_value_for_change(info):
     }
 
 
+# ============================ 聚合④ per-镜实修率（历史回算）============================
+# [implement-workflow-optimization-2026-08-p1 task2] 从归档评审报告 finding 行机械提取
+# fix-status（三态+未知）与 lens 归属（封闭关键词表，仅有界记号内查），按 (layer,lens)
+# 聚合可判定/实修/未修/defer 计数。窄文法两轴均「宁缺毋假」——任一维度不可判定即入未知桶，
+# MUST NOT 猜。复用 LMA._fence_aware_lines 滤围栏示范锚；不改 LMA 任何既有函数签名（只读
+# 消费方）。真语料试算（task2.0，一次性脚本，非本文件）显示密度低（可判定样本多数 <5），
+# 与 design.md 已接受的风险一致（"覆盖率低的镜标「参考」"）。
+
+FIXRATE_MIN_SAMPLE = 5  # [T2] 阈值单一源：可判定数 < 此值标「参考」，不作砍留依据
+
+_FR_NEEDLE = "已修[impl-review-fix]"
+# defer 类标注：词边界 + 非紧跟 ="（防误命中 lens-metric 锚 `defer="N"` KV 字段——真实语料
+# 实证：锚行含 `采纳="0"` `defer="0"` 等字段名，裸子串匹配会把锚行误判命中处置动词/裸串）。
+_FR_DEFER_RE = re.compile(r'(?i)\bdefer\b(?!=")')
+_FR_BARE = "impl-review-fix"
+_FR_VERBS = ("已修", "采纳", "自动修")
+
+# 镜关键词 → LMA.LENS_ENUM 同源 canonical 值；"域" 仅作"领域"别名（仅在有界记号内识别）；
+# "outside-voice"/"voice" 是同一 canonical 值的两种拼写（非两个镜，不构成歧义）。
+_FR_LENS_MAP = {
+    "对抗": "adversarial", "领域": "domain", "域": "domain",
+    "接地": "grounding", "历史": "history",
+    "outside-voice": "outside-voice", "voice": "outside-voice",
+    "广审": "broad",
+}
+_FR_LENS_KEYS = sorted(_FR_LENS_MAP, key=len, reverse=True)  # 长键优先（outside-voice 先于 voice，非必要但显式）
+
+_FR_TABLE_ROW = re.compile(r'^\s*\|(.*)\|\s*$')
+_FR_TABLE_SEP = re.compile(r'^\s*\|[\s:|-]+\|\s*$')
+_FR_BRACKET = re.compile(r'〔([^〕]*)〕|【([^】]*)】')
+_FR_SECTION_HDR = re.compile(r'^#{2,4}\s+')
+
+
+def _fr_lens_hits(text):
+    """text 内命中的 canonical lens 值去重集合（封闭关键词表，MUST NOT 猜）。"""
+    return {_FR_LENS_MAP[kw] for kw in _FR_LENS_KEYS if kw in text}
+
+
+def _fr_table_cols(lines, idx):
+    """idx 指向疑似表格数据行；解析其所属表的表头，取「来源」列与「处置」列同位置 cell。
+    返回 (来源cell_or_None, 处置cell_or_None, is_data_row)；非法/非表格/表头/分隔行本身
+    → (None, None, False)。「处置」列存在是 not_fixed 分支的候选门（见 extract_fixrate_
+    samples）——真语料试算证实：缺此门会把「决策登记区」〔〕散文标签、「已裁掉」表
+    （用「裁掉理由」列非「处置」列）大量误判未修，双双被此结构信号排除。"""
+    start = idx
+    while start > 0 and _FR_TABLE_ROW.match(lines[start - 1]):
+        start -= 1
+    if start + 1 >= len(lines) or not _FR_TABLE_SEP.match(lines[start + 1]):
+        return None, None, False
+    if idx == start or idx == start + 1:
+        return None, None, False
+    header_cells = [c.strip().strip("*").strip() for c in lines[start].strip().strip("|").split("|")]
+    src_idx = next((i for i, c in enumerate(header_cells) if "来源" in c), None)
+    disp_idx = next((i for i, c in enumerate(header_cells) if "处置" in c), None)
+    cur_cells = [c.strip() for c in lines[idx].strip().strip("|").split("|")]
+    src_cell = cur_cells[src_idx] if src_idx is not None and src_idx < len(cur_cells) else None
+    disp_cell = cur_cells[disp_idx] if disp_idx is not None and disp_idx < len(cur_cells) else None
+    return src_cell, disp_cell, True
+
+
+def _fr_classify_status(line):
+    """fix-status 三态 + 未修兜底。[spec-review-amendment] 宁缺毋假方向修正：裸
+    `impl-review-fix` 串或处置动词（已修/采纳/自动修）但不命中精确 needle → unknown_disposal
+    （MUST NOT 判未修——语料实测 67% 变体不命中精确 needle，默认判未修会方向性压低实修率）。"""
+    if _FR_NEEDLE in line:
+        return "fixed"
+    if _FR_DEFER_RE.search(line):
+        return "defer"
+    if _FR_BARE in line or any(v in line for v in _FR_VERBS):
+        return "unknown_disposal"
+    return "not_fixed"
+
+
+def extract_fixrate_samples(text):
+    """对单份报告文本逐行窄文法提取，产出 (lens_or_None, status) 元组 list。
+    status ∈ {"fixed","defer","not_fixed","unknown_disposal"}；lens 由有界来源记号
+    （表格「来源」列 cell + 全部〔…〕/【…】括号内容）解析，精确命中一个 canonical 值才
+    非 None，零个或多个命中 → None（未知，不猜）。
+
+    机械锚行（`<!-- sdflow:` 前缀）与 section 标题行（`##`/`###`/`####`）跳过——前者
+    KV 字段名（`采纳=`/`defer=`）假阳命中处置动词/裸串，后者本身可能带裸 `impl-review-fix`
+    字面量（如 "Findings（置信 ≥80，均已自动修 [impl-review-fix]）" 标题），均非 finding 行。
+
+    候选门：① 行含处置信号（needle/defer/裸串/处置动词之一）——覆盖 bullet 与表格两种
+    finding 形态；② 或行是「处置」列表格的数据行（结构信号，仅用于 not_fixed 分支候选，
+    见 _fr_table_cols 注释）。二者皆不满足 → 不是候选，跳过（不计入未知，因为它压根
+    不是 finding 行）。
+    """
+    out = []
+    lines = list(LMA._fence_aware_lines(text))
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith("<!-- sdflow:") or _FR_SECTION_HDR.match(s):
+            continue
+        regions = [(m.group(1) if m.group(1) is not None else m.group(2)) for m in _FR_BRACKET.finditer(line)]
+        table_src = table_disp = None
+        is_row = False
+        if _FR_TABLE_ROW.match(line) and not _FR_TABLE_SEP.match(line):
+            table_src, table_disp, is_row = _fr_table_cols(lines, i)
+            if table_src is not None:
+                regions.append(table_src)
+        status = _fr_classify_status(line)
+        has_disposal = status != "not_fixed"
+        is_disposition_row = is_row and table_disp is not None
+        if not has_disposal and not is_disposition_row:
+            continue
+        hits = _fr_lens_hits(" ".join(regions))
+        lens = next(iter(hits)) if len(hits) == 1 else None
+        out.append((lens, status))
+    return out
+
+
+def _change_has_fix_commit(root, name):
+    """change 边界内是否存在 impl-review-fix 类修复 commit（commit subject 子串匹配，
+    宽松/不精确——D2 拍板：commit 主键降为佐证 flag，不参与判定，仅展示）。查两条路径：
+    裸 pre-archive 路径（历史性可达，同 boundary_for_change 的裸路径必查惯例）+ archive
+    路径（磁盘枚举匹配 `*-<name>` 后缀，git pathspec 原生不支持 shell glob）。"""
+    out = _run_git(root, "log", "--format=%s", "--", f"openspec/changes/{name}")
+    if any(_FR_BARE in s for s in out.splitlines()):
+        return True
+    archive_dir = os.path.join(root, "openspec", "changes", "archive")
+    if os.path.isdir(archive_dir):
+        for entry in os.listdir(archive_dir):
+            if entry.endswith(f"-{name}"):
+                rel = os.path.relpath(os.path.join(archive_dir, entry), root)
+                out = _run_git(root, "log", "--format=%s", "--", rel)
+                if any(_FR_BARE in s for s in out.splitlines()):
+                    return True
+    return False
+
+
+def fixrate_aggregate(root):
+    """扫 archive 全部 `*-review-report.md`，跑窄文法回算，返回
+    (rows: {(layer,lens): {"可判定":n,"实修":n,"未修":n,"defer":n,"未知":n,"佐证":bool}},
+     lens_unknown: {layer: n})。
+
+    两级未知桶：① lens 已解析但 fix-status 不可判（unknown_disposal）→ 计入该 (layer,lens)
+    行自身的 "未知" 字段（我们知道是哪面镜，只是不知道修没修）；② lens 本身不可解析
+    （0/2+ 命中或无有界记号）→ 计入 lens_unknown[layer]（跨该 layer 全部镜共享，无法
+    归属到具体某面镜）。可判定 = 实修+未修+defer；覆盖率 = 可判定/(可判定+①的未知)。
+
+    「佐证」flag：该 (layer,lens) 有 ≥1 贡献样本所属 change 的 git 历史含 impl-review-fix
+    类修复 commit（懒惰求值 + 按 change 名缓存，避免 O(rows×changes) 重复 git 调用）。
+    坏文件（IO/解码错误）fail-safe 跳过，不拖垮整体聚合——同 LMA.aggregate 的处理口径。
+    """
+    archive_root = os.path.join(root, "openspec", "changes", "archive")
+    rows = defaultdict(lambda: {"可判定": 0, "实修": 0, "未修": 0, "defer": 0, "未知": 0, "佐证": False})
+    lens_unknown = defaultdict(int)
+    contributing = defaultdict(set)  # (layer,lens) -> {change_name,...}
+    try:
+        if not Path(archive_root).is_dir():
+            return {}, {}
+        reports = sorted(Path(archive_root).glob("**/*-review-report.md"))
+    except OSError:
+        return {}, {}
+
+    for report in reports:
+        if report.name == "code-review-report.md":
+            layer = "code-review"
+        elif report.name == "spec-review-report.md":
+            layer = "spec-review"
+        else:
+            continue
+        m = _DATE_PREFIX.match(report.parent.name)
+        change_name = m.group(1) if m else report.parent.name
+        try:
+            text = report.read_text(encoding="utf-8", errors="replace")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for lens, status in extract_fixrate_samples(text):
+            if lens is None:
+                lens_unknown[layer] += 1
+                continue
+            key = (layer, lens)
+            if status == "unknown_disposal":
+                rows[key]["未知"] += 1
+                continue
+            rows[key]["可判定"] += 1
+            if status == "fixed":
+                rows[key]["实修"] += 1
+            elif status == "defer":
+                rows[key]["defer"] += 1
+            elif status == "not_fixed":
+                rows[key]["未修"] += 1
+            contributing[key].add(change_name)
+
+    fix_commit_cache = {}
+    for key, names in contributing.items():
+        for name in names:
+            if name not in fix_commit_cache:
+                fix_commit_cache[name] = _change_has_fix_commit(root, name)
+            if fix_commit_cache[name]:
+                rows[key]["佐证"] = True
+                break
+    return dict(rows), dict(lens_unknown)
+
+
+def render_fixrate_table(rows, lens_unknown):
+    """聚合④ per-镜实修率（历史回算）markdown 渲染。每镜可判定/未知/覆盖率三数 + 实修率
+    （可判定<阈值标「参考」，MUST NOT 作砍留依据）+ 佐证 flag（不参与判定，纯展示）。"""
+    lines = ["| layer | lens | 可判定 | 实修 | defer | 未修 | 未知(本镜) | 覆盖率 | 实修率 | 佐证 |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
+    if not rows:
+        lines.append("| — | — | 0 | 0 | 0 | 0 | 0 | — | — | — |")
+    for (layer, lens), d in sorted(rows.items()):
+        denom = d["可判定"]
+        covered_pool = denom + d["未知"]
+        coverage = f"{denom / covered_pool:.0%}" if covered_pool else "—"
+        rate = f"{d['实修'] / denom:.0%}" if denom else "—"
+        if denom and denom < FIXRATE_MIN_SAMPLE:
+            rate += "（参考）"
+        evid = "有 commit 佐证" if d["佐证"] else "—"
+        lines.append(f"| {layer} | {lens} | {denom} | {d['实修']} | {d['defer']} | {d['未修']} | "
+                     f"{d['未知']} | {coverage} | {rate} | {evid} |")
+    lines.append("")
+    layer_unk_str = ", ".join(f"{k}={v}" for k, v in sorted(lens_unknown.items())) or "无"
+    lines.append(f"> 「未知(本镜)」= fix-status 不可判（裸 impl-review-fix/处置动词但不命中精确 "
+                 f"needle）但 lens 已解析的样本，计入该镜自身；lens 本身不可解析（0/2+ 命中或无"
+                 f"有界记号）的样本无法归属具体镜，按 layer 汇总另计：{layer_unk_str}。")
+    lines.append(f"> 可判定 < {FIXRATE_MIN_SAMPLE}（单一源阈值）标「参考」，MUST NOT 作砍留依据；"
+                 f"窄文法宁缺毋假，MUST NOT 为提覆盖率放宽文法猜测归属。")
+    return "\n".join(lines)
+
+
 def _read_hr_hit(base, report_name):
     """读单个报告文件的 hr-tg 锚。
     [impl-review-fix F2] 坏文件（权限拒绝/IO 错误）fail-safe 返回 "—"，不崩，
@@ -621,6 +846,13 @@ def build_report(root):
     # rows 产出仅含表头 + 空样本脚注的合法表——无需防御性 try/except（原 catch 不可达）。
     agg_rows, no_anchor, parse_failed = LMA.aggregate(archive_root)
     lines.append(LMA.render_table(agg_rows, no_anchor, parse_failed))
+    lines.append("")
+
+    # 聚合④ per-镜实修率（历史回算，窄文法扫 archive finding 行）
+    lines.append("## 聚合④ per-镜实修率（历史回算）")
+    lines.append("")
+    fr_rows, fr_lens_unknown = fixrate_aggregate(root)
+    lines.append(render_fixrate_table(fr_rows, fr_lens_unknown))
     lines.append("")
 
     return "\n".join(lines) + "\n"
