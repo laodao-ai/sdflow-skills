@@ -539,7 +539,7 @@ def render_fixrate_table(rows, lens_unknown):
         covered_pool = denom + d["未知"]
         coverage = f"{denom / covered_pool:.0%}" if covered_pool else "—"
         rate = f"{d['实修'] / denom:.0%}" if denom else "—"
-        if denom and denom < FIXRATE_MIN_SAMPLE:
+        if denom < FIXRATE_MIN_SAMPLE:
             rate += "（参考）"
         evid = "有 commit 佐证" if d["佐证"] else "—"
         lines.append(f"| {layer} | {lens} | {denom} | {d['实修']} | {d['defer']} | {d['未修']} | "
