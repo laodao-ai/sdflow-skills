@@ -55,6 +55,33 @@ voice 留痕：`runner=codex reason_code=ok`（跨模型第二意见，gpt-5.6-s
 
 ## 2026-08-10
 
+### [阶段 1 / 任务 1.B] 度量补全四子任务交付完成（change `implement-workflow-optimization-2026-08-p1`）
+
+- **状态**: ✅ 完成
+- **实际耗时**: —（定性口径，见附录 B P4 采纳「删除数字」）
+- **产出**:
+  - 1.B.1 T108 实修率指标：`sdflow-retro/scripts/retro_report.py` 新增聚合④「per-镜实修率
+    （历史回算）」——窄文法从归档评审报告机械提取 fix-status 三态 + lens 归属，按
+    (layer,lens) 输出可判定/实修/未修/defer/未知/覆盖率/实修率/佐证；`FIXRATE_MIN_SAMPLE=5`
+    阈值，未达阈值标「（参考）」不入砍留依据（design.md 假设 A1 落地）
+  - 1.B.2 T104 token 维度量：定案自报路径（`token_snapshot.py` 写 checkpoint 级 token 快照
+    锚，`anchor` 字段区分真实/降级），非机械 hook 路径（宿主无 per-子代理 token 捕获能力，
+    design.md 假设 A2 已记）
+  - 1.B.3 retro 报告模版增列：per-change 表新增 `tokens` 列（`out/in/cc/cr` 四计数紧凑串，
+    MUST NOT 合成总分），跨 change 同 session 按 ts 排序差分不双计数；存量 change 无
+    token-log 显式「—」
+  - 1.B.4 recorder 增强：`sdflow-issues/scripts/issues_v2.py` 新增 `reopen` 命令
+    （closed→open 原子迁移 + 终态字段清理 + 历史追加 + reindex），带契约测试，是 1.A.1
+    重开 T98/T99/T101/T102 的前置依赖
+- **验证**:
+  - 全仓 `/usr/bin/python3 -m pytest -q`：2513 passed, 10 skipped
+  - `openspec/retro/report.md` 再生（`retro_report.py --root .`）：聚合④实修率段在场
+    （7 行 (layer,lens) 数据，低样本量格标「（参考）」）+ per-change tokens 列在场
+    （本 change 显真实四计数，存量 change 显「—」），已提交
+- **下一步**: 阶段 1 剩余 1.A 池对账（1.A.1 依赖本任务 1.B.4 交付的 `reopen` 命令，可开始
+  执行）；阶段 2 前置条件（实修率样本量阈值判定）已具备可用数据源
+- **备注**: CONTEXT.md「实修率」词条按 tasks.md 明文要求未写入（未经用户确认）
+
 ### [阶段 0 / 规划] workflow-optimization-2026-08 roadmap 文档包产出完成
 
 <!-- 阶段 0 记录关联 roadmap.md 概览节（规划期无实施阶段可挂，属 checklist ② 的声明式例外）。 -->

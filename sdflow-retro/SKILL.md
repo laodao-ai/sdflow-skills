@@ -209,8 +209,13 @@ python3 ~/.codex/skills/sdflow-retro/scripts/retro_report.py --root "$(git rev-p
    D12 待复评区块、**一览段**（精简指标卡「复盘 change / 总墙钟 / 有真锚 / 待复评镜」+
    语义化中文段落，把下方表格里的数字提炼成一眼可读的描述——只呈现不决策：只做占比/极值/
    谁最多的描述性复述，不含「说明/建议/该砍」等解读或决策词；指标卡只放纯计数，不放
-   会掩盖双峰分布真相的平均值）、per-change 明细表（含 hr-tg 双列 + in-progress/archived 状态）、
-   阶段占比、成本双峰（总墙钟 vs code-review 占比）、per-镜价值表。
+   会掩盖双峰分布真相的平均值）、per-change 明细表（含 hr-tg 双列 + in-progress/archived 状态、
+   `tokens` 列——各会话累计口径的 `out/in/cc/cr` 四计数紧凑串，跨 change 同 session 按 ts
+   排序差分不双计数，存量 change 无 token-log 显式「—」）、阶段占比、成本双峰（总墙钟 vs
+   code-review 占比）、per-镜价值表、**聚合④ per-镜实修率（历史回算）**——窄文法从归档
+   评审报告机械提取 fix-status 三态（实修/未修/defer）与 lens 归属，按 (layer,lens) 输出
+   可判定/未知/覆盖率/实修率，样本量低于阈值（5）标「（参考）」不入砍留依据，宁缺毋假、
+   MUST NOT 猜测归属。
 
 ## 跑完之后
 
