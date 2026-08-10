@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import subprocess
 import pytest
 from pathlib import Path
@@ -909,3 +910,218 @@ def test_fixrate_real_repo_smoke_flagged_lenses_readable():
             denom = d["可判定"]
             rate_str = f"{d['实修'] / denom:.0%}" if denom else "—"
             assert rate_str  # 非空、非崩溃即可读
+
+
+# ============================ task4: per-change tokens 列（读 token-log.jsonl）============================
+# Δ 归属口径：读侧全局按 session 跨 change 分组差分（设计门 Q1 拍板=A）。四计数缩写对照：
+# out=output / in=input / cc=cache_creation / cr=cache_read（design.md §口径）。
+
+def _tok_line(session, step, ts, inp, out, cr, cc, anchor=True, reason="ok"):
+    obj = {"v": 1, "ts": ts, "step": step, "session": session, "host": "claude",
+           "anchor": anchor, "reason": reason}
+    if anchor:
+        obj["usage"] = {"input": inp, "output": out, "cache_read": cr,
+                         "cache_creation": cc, "messages": 1}
+    return json.dumps(obj)
+
+
+def test_parse_token_log_line_no_colon_offset_matches_real_producer_format():
+    """token_snapshot.py 用 `time.strftime("%Y-%m-%dT%H:%M:%S%z")` 产出「无冒号」偏移量
+    （如 "+0800"，非 design.md 示例文档里手写的 "+08:00"）——本仓真实 token-log.jsonl 实测证实
+    该格式。`datetime.fromisoformat` 在本机 Python 3.9 上对无冒号偏移量抛异常；读侧 MUST 用
+    `strptime(...,"%z")` 兼容两种偏移写法，否则真实数据全行被误判 anchor=false（静默丢失全部
+    计数，且不会在任何合成测试语料里暴露——唯有对真实生产者格式断言才能拦住）。
+    """
+    line = _tok_line("s1", "step1", "2026-08-10T15:36:47+0800", 10, 20, 30, 40)
+    row = R._parse_token_log_line(line)
+    assert row is not None
+    assert row["usage"] == {"out": 20, "in": 10, "cc": 40, "cr": 30}
+    # 带冒号的偏移量（design.md 文档示例形态）也须兼容
+    line2 = _tok_line("s1", "step2", "2026-08-10T15:36:47+08:00", 10, 20, 30, 40)
+    assert R._parse_token_log_line(line2) is not None
+
+
+def test_parse_token_log_line_rejects_anchor_false():
+    line = _tok_line("s1", "step1", "2026-08-10T10:00:00+0800", 0, 0, 0, 0,
+                      anchor=False, reason="no-transcript")
+    assert R._parse_token_log_line(line) is None
+
+
+def test_parse_token_log_line_rejects_negative_usage():
+    bad = ('{"v":1,"ts":"2026-08-10T10:00:00+0800","step":"s","session":"s1",'
+           '"anchor":true,"usage":{"input":-1,"output":1,"cache_read":1,"cache_creation":1}}')
+    assert R._parse_token_log_line(bad) is None
+
+
+def test_parse_token_log_line_rejects_malformed_json():
+    assert R._parse_token_log_line("{not valid json") is None
+
+
+def test_read_token_log_missing_file_returns_empty(tmp_path):
+    assert R.read_token_log(str(tmp_path / "nope.jsonl")) == []
+
+
+def test_read_token_log_skips_corrupted_and_degraded_lines_without_crashing(tmp_path):
+    """含损坏行不崩：截断半行/坏 JSON/降级行/字段非法行逐行跳过，其余合法行照常计入。"""
+    p = tmp_path / "token-log.jsonl"
+    body = "\n".join([
+        _tok_line("s1", "step1", "2026-08-10T10:00:00+0800", 1, 2, 3, 4),
+        "{truncated half line",
+        _tok_line("s1", "step2", "2026-08-10T10:05:00+0800", 0, 0, 0, 0,
+                   anchor=False, reason="no-transcript"),
+        ('{"v":1,"ts":"2026-08-10T10:10:00+0800","step":"step3","session":"s1",'
+         '"anchor":true,"usage":{"input":-1,"output":1,"cache_read":1,"cache_creation":1}}'),
+        _tok_line("s1", "step4", "2026-08-10T10:15:00+0800", 5, 6, 7, 8),
+        "",
+    ])
+    p.write_text(body, encoding="utf-8")
+    rows = R.read_token_log(str(p))
+    assert [r["step"] for r in rows] == ["step1", "step4"]
+
+
+def test_compute_token_deltas_single_change_first_row_full_then_delta(tmp_path):
+    d = tmp_path / "openspec/changes/foo"
+    d.mkdir(parents=True)
+    body = "\n".join([
+        _tok_line("s1", "a", "2026-08-10T10:00:00+0800", 100, 200, 300, 400),
+        _tok_line("s1", "b", "2026-08-10T10:05:00+0800", 150, 260, 380, 470),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    changes = {"foo": {"active": True, "active_dir": str(d), "archive_dir": None}}
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    # 首行全额 200/100/400/300 + Δ(第二行-第一行) 60/50/70/80
+    assert deltas["foo"] == {"out": 260, "in": 150, "cc": 470, "cr": 380}
+
+
+def test_compute_token_deltas_cross_change_session_no_double_count(tmp_path):
+    """[Q1=A 反证] 同一 session 先在 change A 落一行、后在 change B 落一行：B 的该行须对 A
+    末行差分入账（非全额计入 B），否则同一用量区间被双计——两 change 之和须等于末次累计值。"""
+    da = tmp_path / "openspec/changes/A"
+    db = tmp_path / "openspec/changes/B"
+    da.mkdir(parents=True)
+    db.mkdir(parents=True)
+    (da / "token-log.jsonl").write_text(
+        _tok_line("s1", "a1", "2026-08-10T10:00:00+0800", 100, 200, 300, 400) + "\n",
+        encoding="utf-8")
+    (db / "token-log.jsonl").write_text(
+        _tok_line("s1", "b1", "2026-08-10T10:05:00+0800", 150, 260, 380, 470) + "\n",
+        encoding="utf-8")
+    changes = {
+        "A": {"active": True, "active_dir": str(da), "archive_dir": None},
+        "B": {"active": True, "active_dir": str(db), "archive_dir": None},
+    }
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    assert deltas["A"] == {"out": 200, "in": 100, "cc": 400, "cr": 300}  # 全局首行全额计入 A
+    assert deltas["B"] == {"out": 60, "in": 50, "cc": 70, "cr": 80}      # B 首行对 A 末行差分
+    total = {k: deltas["A"][k] + deltas["B"][k] for k in deltas["A"]}
+    assert total == {"out": 260, "in": 150, "cc": 470, "cr": 380}       # 无双计
+
+
+def test_compute_token_deltas_anchor_false_rows_excluded(tmp_path):
+    d = tmp_path / "openspec/changes/foo"
+    d.mkdir(parents=True)
+    body = "\n".join([
+        _tok_line("s1", "a", "2026-08-10T10:00:00+0800", 0, 0, 0, 0,
+                   anchor=False, reason="no-transcript"),
+        _tok_line("s1", "b", "2026-08-10T10:05:00+0800", 10, 20, 30, 40),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    changes = {"foo": {"active": True, "active_dir": str(d), "archive_dir": None}}
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    # 降级行不入计数 → b 视为（对该 session 而言的）首行，全额计入
+    assert deltas["foo"] == {"out": 20, "in": 10, "cc": 40, "cr": 30}
+
+
+def test_compute_token_deltas_missing_token_log_no_entry(tmp_path):
+    d = tmp_path / "openspec/changes/bare"
+    d.mkdir(parents=True)
+    changes = {"bare": {"active": True, "active_dir": str(d), "archive_dir": None}}
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    assert "bare" not in deltas
+
+
+def test_compute_token_deltas_multiple_sessions_independent(tmp_path):
+    d = tmp_path / "openspec/changes/foo"
+    d.mkdir(parents=True)
+    body = "\n".join([
+        _tok_line("s1", "a", "2026-08-10T10:00:00+0800", 10, 10, 10, 10),
+        _tok_line("s2", "b", "2026-08-10T10:01:00+0800", 5, 5, 5, 5),
+        _tok_line("s1", "c", "2026-08-10T10:02:00+0800", 20, 20, 20, 20),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    changes = {"foo": {"active": True, "active_dir": str(d), "archive_dir": None}}
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    # s1: 首行全额10 + Δ(20-10)=10 → 20；s2: 首行全额5；互不干扰，求和 25
+    assert deltas["foo"] == {"out": 25, "in": 25, "cc": 25, "cr": 25}
+
+
+def test_compute_token_deltas_reads_archive_dir_too(tmp_path):
+    d = tmp_path / "openspec/changes/archive/2026-07-01-foo"
+    d.mkdir(parents=True)
+    (d / "token-log.jsonl").write_text(
+        _tok_line("s1", "a", "2026-08-10T10:00:00+0800", 1, 2, 3, 4) + "\n", encoding="utf-8")
+    changes = {"foo": {"active": False, "active_dir": None, "archive_dir": str(d)}}
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    assert deltas["foo"] == {"out": 2, "in": 1, "cc": 4, "cr": 3}
+
+
+def test_fmt_compact_count():
+    assert R._fmt_compact_count(500) == "500"
+    assert R._fmt_compact_count(12300) == "12.3k"
+    assert R._fmt_compact_count(4500) == "4.5k"
+    assert R._fmt_compact_count(89000) == "89k"
+    assert R._fmt_compact_count(1200000) == "1.2M"
+
+
+def test_format_tokens_cell_examples():
+    cell = R.format_tokens_cell({"out": 12300, "in": 4500, "cc": 89000, "cr": 1200000})
+    assert cell == "out 12.3k / in 4.5k / cc 89k / cr 1.2M"
+    assert R.format_tokens_cell(None) == "—"
+    assert R.format_tokens_cell({}) == "—"
+
+
+def test_build_report_tokens_column_and_footnote(tmp_path):
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    d = root / "openspec/changes/foo"
+    body = "\n".join([
+        _tok_line("s1", "a", "2026-08-10T10:00:00+0800", 100, 200, 300, 400),
+        _tok_line("s1", "b", "2026-08-10T10:05:00+0800", 150, 260, 380, 470),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    md = R.build_report(str(root))
+    assert "tokens" in md
+    assert "out 260 / in 150 / cc 470 / cr 380" in md
+    assert "首行全额之和" in md  # 恒加脚注
+
+
+def test_build_report_tokens_dash_when_no_token_log(tmp_path):
+    """存量 change（本机制引入前归档，无 token-log.jsonl）tokens 列须显式「—」，不崩、不留空、
+    不以零冒充；全仓再生冒烟场景的最小复现。"""
+    root = _init_repo(tmp_path)
+    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+    md = R.build_report(str(root))
+    assert "tokens" in md
+    # per-change 明细表行以状态收尾（in-progress/archived），区别于聚合②成本双峰表同前缀行
+    detail_lines = [ln for ln in md.splitlines()
+                     if ln.startswith("| foo |") and ln.rstrip().endswith("in-progress |")]
+    assert len(detail_lines) == 1
+    # tokens 列（状态列之前）须显式「—」
+    assert detail_lines[0].rstrip().endswith("| — | in-progress |")
+
+
+def test_token_deltas_real_repo_smoke_no_crash():
+    """全仓再生冒烟：真仓 active+archive 全部 change 的 token-log.jsonl（含真实 %z 无冒号偏移
+    时间戳格式 "+0800"）跑 compute_token_deltas 不崩，产出的每个 change 四计数均为非负整数。"""
+    changes = R.discover_changes(str(_REPO))
+    deltas = R.compute_token_deltas(str(_REPO), changes)
+    for name, d in deltas.items():
+        for k in ("out", "in", "cc", "cr"):
+            assert isinstance(d[k], int) and d[k] >= 0, f"{name}.{k} = {d[k]!r}"
+
+
+def test_build_report_real_repo_tokens_column_smoke():
+    """真仓再生冒烟：build_report 含 tokens 表头列 + 脚注，存量无 token-log 的 change 不崩。"""
+    md = R.build_report(str(_REPO))
+    assert "tokens" in md
+    assert "首行全额之和" in md

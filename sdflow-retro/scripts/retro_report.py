@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -9,6 +10,7 @@ for _s in (sys.stdout, sys.stderr):
     except Exception: pass
 import tempfile
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -634,6 +636,150 @@ def _stage_col(wt, stage):
     return round(v, 1) if v else "—"
 
 
+# ============================ task4: per-change tokens 列（读 token-log.jsonl）============================
+# [implement-workflow-optimization-2026-08-p1 task4] Δ 归属口径（读侧全局按 session 跨 change
+# 分组差分，设计门 Q1 拍板=A）：token-log.jsonl 写侧只追加 session 累计 usage（token_snapshot.py
+# 无状态、不做区间差分），Δ 完全由此处读侧算。逐行防御解析——无法解析/字段非法的行按
+# anchor=false 等价处理并跳过，不中断该 change 及其余 change 的报告生成（design.md Risks
+# 「token-log 单行损坏拖垮整仓报告」）。MUST NOT 合成四计数的总分（四者计价不同）。
+
+_TOKEN_TS_FMTS = ("%Y-%m-%dT%H:%M:%S%z",)  # strptime("%z") 原生兼容 "+0800" 与 "+08:00" 两种偏移写法
+
+
+def _parse_token_log_line(raw_line):
+    """单行 token-log.jsonl → 规范化 dict，或 None（等价 anchor=false，逐行跳过不抛）。
+
+    只接受 anchor=true 且 usage 四计数（input/output/cache_read/cache_creation）均为非负整数、
+    session/step 非空字符串、ts 可解析的行；其余（anchor=false 降级行、坏 JSON、截断半行、
+    字段缺失/类型错）一律返回 None——调用方据此过滤，不参与 Δ 计算，也不中断整行扫描。
+    ts 用 `datetime.strptime(...,"%z")` 解析（非 `fromisoformat`）——真实生产者
+    `token_snapshot.py` 用 `time.strftime("%Y-%m-%dT%H:%M:%S%z")` 产出「无冒号」偏移量
+    （如 "+0800"），`fromisoformat` 在 Python<3.11 上无法解析该格式，会把真实数据全行
+    误判 anchor=false（本仓当前活动 change 的真实 token-log.jsonl 已实测证实该格式）。
+    """
+    try:
+        obj = json.loads(raw_line)
+    except Exception:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    if obj.get("anchor") is not True:
+        return None
+    session = obj.get("session")
+    step = obj.get("step")
+    ts_raw = obj.get("ts")
+    if not isinstance(session, str) or not session:
+        return None
+    if not isinstance(step, str) or not step:
+        return None
+    if not isinstance(ts_raw, str) or not ts_raw:
+        return None
+    ts = None
+    for fmt in _TOKEN_TS_FMTS:
+        try:
+            ts = datetime.strptime(ts_raw, fmt)
+            break
+        except Exception:
+            continue
+    if ts is None:
+        return None
+    usage = obj.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    counts = {}
+    for dst, src in (("out", "output"), ("in", "input"),
+                      ("cc", "cache_creation"), ("cr", "cache_read")):
+        v = usage.get(src)
+        if isinstance(v, bool) or not isinstance(v, int) or v < 0:
+            return None
+        counts[dst] = v
+    return {"session": session, "step": step, "ts": ts, "usage": counts}
+
+
+def read_token_log(path):
+    """读单个 token-log.jsonl，逐行防御解析；文件缺失/IO 错误 → 空列表（不崩、不中断调用方）。"""
+    rows = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                row = _parse_token_log_line(line)
+                if row is not None:
+                    rows.append(row)
+    except OSError:
+        return []
+    return rows
+
+
+def compute_token_deltas(root, changes):
+    """全局按 session 分组差分，返回 `{change_name: {"out","in","cc","cr"}}`（只含 ≥1 贡献行
+    的 change；无 token-log 或全降级/全损坏的 change 不在返回 dict 中，调用方据此渲染「—」）。
+
+    先按 change 名升序扫全部 change 目录（活动 + 归档）的 token-log.jsonl 读入全部合法行，
+    同 session 的行全体按 ts 稳定排序（同 ts 时保留扫描顺序，即 change 名升序 + 文件内追加序，
+    tie-break 确定性）；组内首行（该 session 的全局最早合法行）全额计入其所在 change，其余
+    每行对同组内紧邻前一行差分（Δ 负值钳 0，防御 usage 非严格单调场景）、归属自身所在 change
+    ——这天然实现「跨 change 同 session：后一文件首行对前一文件末行差分」（Q1=A），因为排序后
+    两个文件的行在时间线上自然相邻，无需额外的「文件边界」特判。
+    """
+    all_rows = []
+    for name, info in sorted(changes.items()):
+        for base in (info.get("active_dir"), info.get("archive_dir")):
+            if not base:
+                continue
+            path = os.path.join(base, "token-log.jsonl")
+            for row in read_token_log(path):
+                row = dict(row)
+                row["change"] = name
+                all_rows.append(row)
+
+    groups = defaultdict(list)
+    for row in all_rows:
+        groups[row["session"]].append(row)
+
+    deltas = defaultdict(lambda: {"out": 0, "in": 0, "cc": 0, "cr": 0})
+    for rows in groups.values():
+        ordered = sorted(rows, key=lambda r: r["ts"])
+        prev = None
+        for row in ordered:
+            u = row["usage"]
+            target = deltas[row["change"]]
+            if prev is None:
+                for k in target:
+                    target[k] += u[k]
+            else:
+                pu = prev["usage"]
+                for k in target:
+                    target[k] += max(0, u[k] - pu[k])
+            prev = row
+    return dict(deltas)
+
+
+_TOKEN_FOOTNOTE = ("> tokens 列：数值为各会话累计口径聚合，tickets 管线下多为独立短会话的首行"
+                    "全额之和，非严格阶段增量。")
+
+
+def _fmt_compact_count(n):
+    """紧凑计数格式：≥1M 显 `X.XM`，≥1k 显 `X.Xk`（去掉多余的 `.0`），否则原样整数。"""
+    if n >= 1_000_000:
+        s = f"{n / 1_000_000:.1f}"
+        return f"{s[:-2] if s.endswith('.0') else s}M"
+    if n >= 1_000:
+        s = f"{n / 1_000:.1f}"
+        return f"{s[:-2] if s.endswith('.0') else s}k"
+    return str(n)
+
+
+def format_tokens_cell(d):
+    """per-change 表 tokens 列单元格：四计数紧凑串，MUST NOT 合成总分；无数据显「—」。"""
+    if not d:
+        return "—"
+    return (f"out {_fmt_compact_count(d['out'])} / in {_fmt_compact_count(d['in'])} / "
+            f"cc {_fmt_compact_count(d['cc'])} / cr {_fmt_compact_count(d['cr'])}")
+
+
 # ============================ 一览（语义化总结）============================
 # 阶段/镜 内部键→中文可读名。仅影响顶部「一览」段的呈现，不改动下方明细表口径
 # （明细表沿用内部键，便于与 lens-metric 锚逐字核对）。
@@ -792,9 +938,12 @@ def build_report(root):
     # [impl-review-fix F12] 补 design.md schema（约 103-105 行）承诺的 4 个阶段 Δ 列，
     # 插在 总墙钟 与 #ckpt 之间（对齐 design 列序）——F1 修复边界解析后 wt["stages"]
     # 现在对归档 change 有真实非零值，此列才变得有意义。
+    # [task4] tokens 列（读 token-log.jsonl，Δ 归属见 compute_token_deltas）——插在 独立Σ 与
+    # 状态 之间，紧邻其余度量列，状态列殿后。
     lines.append("| change | 总墙钟(min) | spec-rev Δ | impl Δ | code-rev Δ | done Δ | #ckpt | "
-                 "spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | 状态 |")
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+                 "spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | tokens | 状态 |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    token_deltas = compute_token_deltas(root, changes)
     for name, info, b, wt, val, hr in rows:
         status = "in-progress" if info["active"] and not info["archive_dir"] else "archived"
         note = "（边界不可解析）" if b["unresolved"] else ""
@@ -803,13 +952,16 @@ def build_report(root):
         # 对同一批坏锚的呈现口径一致——不能一张表打 flag、另一张悄悄看着正常。
         if val["has_anchor"] and val.get("num_bad"):
             rate += " ⚠数值非法"
+        tokens_cell = format_tokens_cell(token_deltas.get(name))
         lines.append(f'| {name} | {wt["total_min"]}{note} | '
                      f'{_stage_col(wt, "spec-review")} | {_stage_col(wt, "impl")} | '
                      f'{_stage_col(wt, "code-review")} | {_stage_col(wt, "done")} | '
                      f'{wt["n_ckpt"]} | '
                      f'{hr["spec_hr_tg"]} | {hr["code_hr_tg"]} | '
                      f'{val["sum_findings"] if val["has_anchor"] else "—"} | {rate} | '
-                     f'{val["sum_independent"] if val["has_anchor"] else "—"} | {status} |')
+                     f'{val["sum_independent"] if val["has_anchor"] else "—"} | {tokens_cell} | {status} |')
+    lines.append("")
+    lines.append(_TOKEN_FOOTNOTE)
     lines.append("")
 
     # 聚合①阶段占比

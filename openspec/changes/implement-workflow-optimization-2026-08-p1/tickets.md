@@ -91,10 +91,10 @@ impl-pipeline: tickets
 - 测试（`hack/tests/`）假 HOME 沙盒真跑 bash：正常采集入同一 commit / 无 transcript 写 `no-transcript` 行 / helper 缺席与崩溃时 checkpoint 照常提交 / 无 change 落点零写入 / 连续 checkpoint 只追加且累计单调不减 / 干净树+helper 在场仍 no-op 不建 commit / canary transcript 断言输出面无泄漏
 - 重跑 `bash setup.sh` 分发，dogfood 验收：本 change 下一次真实 checkpoint 产出 anchor=true 快照行
 
-- [ ] token_snapshot.py 实现（定位/累加/v1 行/降级/超时/文法校验/封闭 schema）
-- [ ] checkpoint-commit.sh 接线（gate 后 add 前）
-- [ ] 假 HOME 沙盒集成测试（7 场景）
-- [ ] [e2e] setup.sh 分发后 dogfood 验收：真实 checkpoint 产出 anchor=true 快照行
+- [x] token_snapshot.py 实现（定位/累加/v1 行/降级/超时/文法校验/封闭 schema）
+- [x] checkpoint-commit.sh 接线（gate 后 add 前）
+- [x] 假 HOME 沙盒集成测试（7 场景）
+- [x] [e2e] setup.sh 分发后 dogfood 验收：真实 checkpoint 产出 anchor=true 快照行
 
 ### Task 4: retro token 列渲染
 
