@@ -281,7 +281,32 @@ python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py set-status --id T7  
   `resolved_by`（同 `source_change` 的自动探测逻辑）、`closed_reason`（WONTFIX/WONTDO 时=`--reason`），
   并 `git mv open/{ID}.md → closed/{ID}.md`（非 git 仓降级 `os.rename`；未 tracked 的文件先自动
   `git add`）。
-- 已在 `closed/` 的终态 issue **不可再改 status**（拒绝并报非零退出码）。
+- 已在 `closed/` 的终态 issue **不可经 `set-status` 再改 status**（拒绝并报非零退出码）；
+  唯一受控逆转换见下方 `reopen`。
+
+### 重开已关闭项（`reopen`）
+
+终态的**唯一**受控逆转换——把 `closed/` 的 issue 迁回 `open/`，与 `set-status` 的终态守卫对称
+（`set-status` 只管 open→终态一个方向，`reopen` 是唯一能反向走的门）：
+
+```bash
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reopen --id B4  --reason "硬件到了，可以复现验证了"
+python3 ~/.claude/skills/sdflow-issues/scripts/issues_v2.py reopen --id T7  --reason "范围变了，重新拷问" --to PROPOSED
+```
+
+- **守卫**：目标 issue 必须位于 `closed/`（在 `open/` ⇒ 拒绝并报「不在终态，无需 reopen」）；
+  ID 前缀与 frontmatter `pool` 必须一致；`--reason` 必填。`--to` 只接受非终态值
+  `OPEN`（默认）或 `PROPOSED`，传终态值（如 `FIXED`/`DONE`）⇒ 拒绝。
+- **字段清理**：`closed_date` / `closed_reason` / `resolved_by` 清为 `null`；原 `closed_reason`
+  不丢——搬进新追加的历史行（FIXED/DONE 路径本就没有 `closed_reason`，此时历史行写占位符
+  「（无 closed_reason）」，不会渲染出 `null`）：
+  `> {date} 状态：{旧终态} → {OPEN|PROPOSED}（reopen：{--reason}；原 closed_reason：{原值}）`。
+- **原子序**：先在 `closed/` 原位置原子写完更新后的内容，再 `git mv` 回 `open/`（非 git 仓降级
+  `os.rename`）——与 `set-status` 的 M-2 原子序方向相反、写法对称。中途中断会在 `closed/` 留下
+  一个 status 已非终态的文件；对同 ID **重跑 `reopen` 即可幂等续跑迁移**（不会重复清字段或
+  重复追加历史行），`reindex` 也会对这类残留文件输出 WARNING 提示。
+- 命令内自动 `reindex`（`add`/`set-status` 不自动 reindex 的既有惯例本命令不沿用，理由见
+  design.md D3）。
 
 ### 扫描 / 盘点（`scan`）
 
