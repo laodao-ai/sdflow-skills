@@ -38,7 +38,7 @@ retro 报告 SHALL 新增「聚合④ per-镜实修率（历史回算）」独�
 
 ### Requirement: per-change token 维 join（读快照锚，缺锚显式）
 
-retro 的 per-change 表 SHALL 新增 tokens 列：读取各 change 目录（活动或归档）的 token-log.jsonl，按 session 分组、组内相邻 `anchor=true` 行差分并归属后一行的 step（attribute-to-next），session 首行全额计入其 step；列值呈现 output / input / cache_creation / cache_read 四计数（紧凑串，缩写对照 `out`/`in`/`cc`/`cr` [spec-review-amendment]），MUST NOT 合成单一总分（四者计价不同）。change 无 token-log 或全为降级行时 SHALL 显式呈现「—」（无锚），MUST NOT 留空或以零冒充。`anchor=false` 行 MUST NOT 计入任何计数。[spec-review-amendment] 无法解析的行（截断/坏 JSON）SHALL 按 `anchor=false` 等价处理并逐行跳过，MUST NOT 让单行损坏中断该 change 或整份报告的生成。
+retro 的 per-change 表 SHALL 新增 tokens 列：先扫描**全部** change 目录（活动或归档）的 token-log.jsonl，按 session **全局**分组、组内相邻 `anchor=true` 行差分并归属后一行的 step（attribute-to-next）——同一 session 出现在多个 change 文件时，后一文件首行 SHALL 对前一文件末行差分、Δ 落该行所在 change，MUST NOT 双计数；仅 session 全局首行全额计入其 step [spec-review-amendment 设计门 Q1 拍板=A]；列值呈现 output / input / cache_creation / cache_read 四计数（紧凑串，缩写对照 `out`/`in`/`cc`/`cr` [spec-review-amendment]），MUST NOT 合成单一总分（四者计价不同）。change 无 token-log 或全为降级行时 SHALL 显式呈现「—」（无锚），MUST NOT 留空或以零冒充。`anchor=false` 行 MUST NOT 计入任何计数。[spec-review-amendment] 无法解析的行（截断/坏 JSON）SHALL 按 `anchor=false` 等价处理并逐行跳过，MUST NOT 让单行损坏中断该 change 或整份报告的生成。
 
 #### Scenario: 有锚 change 呈现四计数
 
@@ -49,6 +49,11 @@ retro 的 per-change 表 SHALL 新增 tokens 列：读取各 change 目录（活
 
 - **WHEN** 某 change（如本机制引入前归档的存量 change）无 token-log.jsonl
 - **THEN** tokens 列显示「—」，报告其余列不受影响
+
+#### Scenario: 跨 change session 不双计数 [spec-review-amendment 设计门 Q1 拍板=A]
+
+- **WHEN** 同一 session 的 `anchor=true` 快照行先后落在 change A 与 change B 的 token-log.jsonl
+- **THEN** change B 的该 session 首行以对 change A 末行的差分入账，同一用量区间只计入一个 change 的 tokens 列
 
 #### Scenario: 降级行不入计数
 

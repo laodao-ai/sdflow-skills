@@ -25,9 +25,9 @@
 
 ## 4. retro token 列（R-WR2，P2，依赖任务 3 落锚）
 
-- [ ] 4.1 `retro_report.py` 读 token-log.jsonl：session 分组、组内相邻 anchor=true 行差分归后行 step（attribute-to-next）、session 首行全额计入（跨 change 双计数修法按设计门 Q1 拍板结果实现 [spec-review-amendment]）、anchor=false 行不入计数、无法解析行逐行跳过不中断整报 [spec-review-amendment]【R-WR2】
+- [ ] 4.1 `retro_report.py` 读 token-log.jsonl：先扫全部 change 的 token-log、session **全局**分组（跨 change 时后一文件首行对前一文件末行差分、Δ 落行所在 change，不双计数——设计门 Q1 拍板=A [spec-review-amendment]）、组内相邻 anchor=true 行差分归后行 step（attribute-to-next）、仅全局首行全额计入、anchor=false 行不入计数、无法解析行逐行跳过不中断整报 [spec-review-amendment]【R-WR2】
 - [ ] 4.2 per-change 表 tokens 列渲染：out/in/cc/cr 四计数紧凑串（缩写对照见 design [spec-review-amendment]）、MUST NOT 合成总分、无锚显「—」、列旁累计口径脚注【R-WR2】
-- [ ] 4.3 测试：合成 token-log 用例（多 session / 降级行 / 缺文件 / 含损坏行不崩 [spec-review-amendment]）+ 全仓再生冒烟（存量 change 全「—」不崩）【R-WR2】
+- [ ] 4.3 测试：合成 token-log 用例（多 session / 跨 change 同 session 不双计数 [spec-review-amendment] / 降级行 / 缺文件 / 含损坏行不崩 [spec-review-amendment]）+ 全仓再生冒烟（存量 change 全「—」不崩）【R-WR2】
 
 ## 5. 收尾
 

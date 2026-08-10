@@ -118,6 +118,9 @@
       复核
 - [ ] 2.A.4 lens-metric emitter 输入 schema 兼容 + retro 再生冒烟（裁决输出格式变更不得
       破坏度量锚）
+- [ ] 2.A.5 评估在 sdflow-done 收尾（verify/archive/merge）加终态 token 快照——p1 设计门
+      Q2 拍板遗留：最后一次 checkpoint 之后的用量对每个 change 系统性缺失（稳定同向偏差，
+      p1 已脚注呈现）；评估结论可为「做」或「明确不做并记因」
 
 ### 验收标准
 
