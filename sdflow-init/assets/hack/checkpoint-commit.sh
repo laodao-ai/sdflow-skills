@@ -41,6 +41,11 @@ if [ -z "$(git status --porcelain)" ]; then
   exit 0
 fi
 
+# token 快照采集（design.md D1）：只在「本次确定要提交」时机采，接线位置钉死在判空 gate 之后、
+# git add -A 之前——保持干净树静默跳过、不建 commit 的既有语义逐字节不变。`|| true`：失败/缺席/
+# 挂起（helper 内部自设超时）一律不得影响 checkpoint 主功能。
+python3 ~/.sdflow/hack/token_snapshot.py --step "$step" || true
+
 # 拼 message：坑① 决定只用单行 subject（无 `\` 续行、无 heredoc、无 body 多行拼接）
 if [ -n "$desc" ]; then
   subject="checkpoint($step): $desc"
