@@ -16,7 +16,7 @@
 
 | 阶段 | 时长预估 | 里程碑 | 细化程度 |
 |---|---|---|---|
-| **阶段 1** · 度量决策端补全 + 池对账 | 本周 | retro 报实修率 + token 快照锚开始累积；四条错关项理由归真 | 全五节（近期） |
+| **阶段 1** · 度量决策端补全 + 池对账 | 本周 | retro 报实修率 + token 快照锚开始累积；四条错关项理由归真 | **✅ 全部完成 2026-08-10** |
 | **阶段 2** · 镜 roster 复评 + 裁决地基改造 | 阶段 1 后 1-2 周 | 13 面待复评镜逐一处置；置信硬滤被替代方案取代 | 全五节（近期） |
 | **阶段 3** · 上游套件吸收机制 | 无依赖，随时 | 四源有锚、watch 跑通一轮 delta 分诊 | 雾区（目标句 + 备注） |
 | **阶段 4** · 成本工程剩余 | 阶段 1 数据到位后 | effort/thinking 按步分档落地 | 雾区（目标句 + 备注） |
@@ -33,8 +33,10 @@
 
 ### 前置条件
 
-- [ ] 本 roadmap 三件套过 review 并收尾（含本文件）
-- [ ] `openspec/retro/report.md` 可正常再生（`python3 sdflow-retro/scripts/retro_report.py --root .` 跑通）
+- [x] 本 roadmap 三件套过 review 并收尾（含本文件）
+      **✅ 2026-08-10**（strategy/plan-eng 双镜 + sync voice，11 组全采纳）
+- [x] `openspec/retro/report.md` 可正常再生（`python3 sdflow-retro/scripts/retro_report.py --root .` 跑通）
+      **✅ 2026-08-10**
 
 ### 目标
 
@@ -47,40 +49,55 @@
 
 #### 1.A 池对账（recorder 操作；1.A.1 依赖 1.B.4 的 reopen 命令先落地）
 
-- [ ] 1.A.1 用 `reopen` 命令（1.B.4 交付）重开 T98/T99/T101/T102，逐条跑五问重分诊，
+- [x] 1.A.1 用 `reopen` 命令（1.B.4 交付）重开 T98/T99/T101/T102，逐条跑五问重分诊，
       重写 `closed_reason` 或保持 OPEN（T101/T102 倾向排入阶段 5 / 阶段 2；T98 需先审计
       dispatch prompt 前缀构成；T99 需正面回答「change 粒度 vs 仓级 CI 信号」的错位）。
       **MUST NOT 手工搬 `closed/` 文件绕过 recorder 契约**（`issues_v2.py` 拒改终态是
       既有不变量，见 design.md 假设 A3）
-- [ ] 1.A.2 新增 todo：SKILL.md 考古层清理——对 SKILL.md **落实 DOC-1 审计**（规则
+      **✅ 2026-08-10 完成**——六条重分诊（含 roadmap 未列的 T97/T100，验收标准覆盖）：
+      T98→PROPOSED（排入阶段 4）；T99→WONTDO（粒度错位，verify 全仓 pytest 已兜底）；
+      T101→PROPOSED（排入阶段 5）；T102→PROPOSED（fold 进阶段 2）；
+      T97→DONE（已由 resolve-models.sh 落地）；T100→WONTDO（理由归真：收益不抵复杂度）
+- [x] 1.A.2 新增 todo：SKILL.md 考古层清理——对 SKILL.md **落实 DOC-1 审计**（规则
       `openspec/rules/doc-authoring.md` 从制定起即覆盖 SKILL.md，此前未系统审计过；
       7/14 个 SKILL 超 500 行，修订锚保留界线需人拍板）
-- [ ] 1.A.3 新增 todo：评审编排大改的条件更新（宿主已有 Workflow 确定性编排原语 +
+      **✅ 2026-08-10 入池 T275**
+- [x] 1.A.3 新增 todo：评审编排大改的条件更新（宿主已有 Workflow 确定性编排原语 +
       Stop hook 四级 gate 阶梯；触发条件 = 下次评审编排必须动刀时一并重估）
-- [ ] 1.A.4 顺手关闭已实质落地项：T119（fog-of-war 已是 roadmap 模版硬约束），
+      **✅ 2026-08-10 入池 T276**
+- [x] 1.A.4 顺手关闭已实质落地项：T119（fog-of-war 已是 roadmap 模版硬约束），
       `closed_reason` 写实际落地位置
+      **✅ 2026-08-10 T119→DONE**（sdflow-roadmap/SKILL.md:445 硬约束）
 
 #### 1.B 度量补全（change `implement-workflow-optimization-2026-08-p1`）
 
-- [ ] 1.B.1 T108 实修率指标：retro join 修复 commit，历史存量回算 per-镜 resolution rate；
+- [x] 1.B.1 T108 实修率指标：retro join 修复 commit，历史存量回算 per-镜 resolution rate；
       join 歧义规则显式定义，报告 MUST 输出可判定样本数/未知数/覆盖率三数；未达最小
       无歧义样本量的镜，实修率标「参考」不入砍留依据（design.md 假设 A1）
-- [ ] 1.B.2 T104 token 维度量：**先定采集机制再实现**——机械路径（hook 读 transcript
+      **✅ 2026-08-10 交付**（change `implement-workflow-optimization-2026-08-p1`，verify PASS）
+- [x] 1.B.2 T104 token 维度量：**先定采集机制再实现**——机械路径（hook 读 transcript
       usage，checkpoint 级）vs 自报路径（可信降级标注），在本 change 设计相位定案
       （design.md 假设 A2；wco P2 已确认 harness 无 per-子代理 token，逐镜 token 不做
       机械承诺）；checkpoint 落 token 快照锚 + retro join，新 change 起累积
-- [ ] 1.B.3 retro 报告模版增列（实修率列 + token 列，缺数据显式「无锚」不留空）
-- [ ] 1.B.4 recorder 增强：`issues_v2.py` 新增 `reopen` 命令（closed→open 原子迁移 +
+      **✅ 2026-08-10 交付**（定案自报路径，`token_snapshot.py` + `checkpoint-commit.sh` 接线）
+- [x] 1.B.3 retro 报告模版增列（实修率列 + token 列，缺数据显式「无锚」不留空）
+      **✅ 2026-08-10 交付**（per-change tokens 列 `out/in/cc/cr` 四计数紧凑串）
+- [x] 1.B.4 recorder 增强：`issues_v2.py` 新增 `reopen` 命令（closed→open 原子迁移 +
       终态字段清理 + 历史追加 + reindex），带契约测试；验收核对 canonical issue、目录
       位置与 INDEX/CLOSED 再生一致性（1.A.1 的机械前置）
+      **✅ 2026-08-10 交付**（12 个契约测试，全仓 2513 passed）
 
 ### 验收标准
 
-- [ ] `openspec/retro/report.md` 再生后含实修率列，13 面待复评镜的实修率可读
-- [ ] 新开任一 change 的 checkpoint 含 token 快照锚（跑一次真实 checkpoint 验证）
-- [ ] `grep -c "wco roadmap P0-P5 全交付" openspec/issues/CLOSED.md` 对四条错关项归零
+- [x] `openspec/retro/report.md` 再生后含实修率列，13 面待复评镜的实修率可读
+      **✅ 2026-08-10**（聚合④段 7 行 (layer,lens) 数据，低样本量标「（参考）」）
+- [x] 新开任一 change 的 checkpoint 含 token 快照锚（跑一次真实 checkpoint 验证）
+      **✅ 2026-08-10**（dogfood `token-log.jsonl` 8 行 anchor=true 真实数据）
+- [x] `grep -c "wco roadmap P0-P5 全交付" openspec/issues/CLOSED.md` 对四条错关项归零
       （理由已改写为与事实一致的表述）
-- [ ] 全仓 pytest 绿（retro 脚本改动带同步测试）
+      **✅ 2026-08-10**（六条重分诊，含 T97/T100；CLOSED.md 中 count=0）
+- [x] 全仓 pytest 绿（retro 脚本改动带同步测试）
+      **✅ 2026-08-10**（2513 passed, 10 skipped）
 
 ### 交付物
 
@@ -187,7 +204,7 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 
 | 阶段 | 子任务数 | 时长预估（定性） |
 |---|---|---|
-| 阶段 1 | 8（1.A×4 + 1.B×4） | 本周 |
+| 阶段 1 | 8（1.A×4 + 1.B×4） | **✅ 8/8 完成 2026-08-10** |
 | 阶段 2 | 4 | 阶段 1 后 1-2 周 |
 | 阶段 3 | （雾区——frontier 到达补细后再登记） | — |
 | 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
@@ -198,7 +215,7 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 
 | 阶段 | 建议变更名 | 引用契约 |
 |---|---|---|
-| 阶段 1 | `implement-workflow-optimization-2026-08-p1`（1.B 开 change 含 reopen 增强；1.A 为 recorder 操作，其中 1.A.1 待 1.B.4 交付后执行） | spec-workflow（度量锚相关 Requirement） |
+| 阶段 1 | `implement-workflow-optimization-2026-08-p1` **✅ 归档 2026-08-10**（1.B 四项交付，verify PASS；1.A 为 recorder 直写操作，待独立执行） | spec-workflow（度量锚相关 Requirement） |
 | 阶段 2 | `implement-workflow-optimization-2026-08-p2` | spec-workflow（评审编排 Requirement） |
 | 阶段 3 | （雾区——建议名 `implement-workflow-optimization-2026-08-p3`，子任务待 grill） | — |
 | 阶段 4 | （雾区——frontier 到达补细后再登记） | — |

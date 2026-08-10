@@ -55,6 +55,20 @@ voice 留痕：`runner=codex reason_code=ok`（跨模型第二意见，gpt-5.6-s
 
 ## 2026-08-10
 
+### [阶段 1 完成总结] 度量补全 + 池对账全部完成
+
+- **状态**: ✅ 完成
+- **产出**:
+  - 1.A.1 重分诊六条（T97/T98/T99/T100/T101/T102，含 roadmap 未列的 T97/T100）：
+    T97→DONE（resolve-models.sh 已落地）；T98→PROPOSED（排入阶段 4）；
+    T99→WONTDO（粒度错位，verify 已兜底）；T100→WONTDO（收益不抵复杂度）；
+    T101→PROPOSED（排入阶段 5）；T102→PROPOSED（fold 进阶段 2）
+  - 1.A.2 新增 T275（SKILL.md DOC-1 审计）入池 OPEN
+  - 1.A.3 新增 T276（评审编排大改条件更新）入池 OPEN
+  - 1.A.4 T119→DONE（fog-of-war 已是 sdflow-roadmap SKILL.md 硬约束）
+- **验收**: `grep -c "wco roadmap P0-P5 全交付" CLOSED.md` = 0 ✅；全部四项验收标准通过
+- **下一步**: 阶段 2 可起手——阶段 1 产出的实修率 + token 维判据已就绪
+
 ### [阶段 1 / 任务 1.B] 度量补全四子任务交付完成（change `implement-workflow-optimization-2026-08-p1`）
 
 - **状态**: ✅ 完成

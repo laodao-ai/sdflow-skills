@@ -23,6 +23,11 @@
 | [T90](open/todo/T90.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） |
 | [T91](open/todo/T91.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） |
 | [T92](open/todo/T92.md) | todo | PROPOSED | 2026-07-01 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 |
+| [T97](open/todo/T97.md) | todo | OPEN | 2026-07-01 | `model-tiers` | 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1） |
+| [T98](open/todo/T98.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2） |
+| [T100](open/todo/T100.md) | todo | OPEN | 2026-07-01 | `workflow` | 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4） |
+| [T101](open/todo/T101.md) | todo | PROPOSED | 2026-07-01 | `spec-review` | 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1） |
+| [T102](open/todo/T102.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5） |
 | [T103](open/todo/T103.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） |
 | [T104](open/todo/T104.md) | todo | PROPOSED | 2026-07-01 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） |
 | [T105](open/todo/T105.md) | todo | PROPOSED | 2026-07-01 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） |
@@ -38,7 +43,6 @@
 | [T115](open/todo/T115.md) | todo | PROPOSED | 2026-07-01 | `bundle` | spec 模版增强：EARS 句式+三必填槽+测试 seam 决策槽（04 提案 §3.2/§3.3） |
 | [T116](open/todo/T116.md) | todo | PROPOSED | 2026-07-01 | `workflow` | 高危路径升级例外：HR-TG 类修复 defer-to-human 异步（04 提案 §3.5） |
 | [T117](open/todo/T117.md) | todo | PROPOSED | 2026-07-01 | `机械层` | 跨工件一致性检查 artifact_consistency.py 设计门前置（04 提案 §3.4） |
-| [T119](open/todo/T119.md) | todo | PROPOSED | 2026-07-01 | `roadmap` | fog-of-war 进 roadmap 模版：远期阶段留雾区（04 提案 §5.2） |
 | [T121](open/todo/T121.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 大产物文件交接：镜报告超阈值写文件、返回只带路径（04 提案 §5.7） |
 | [T122](open/todo/T122.md) | todo | PROPOSED | 2026-07-01 | `skills` | done/ship/init 加 disable-model-invocation 触发层硬开关（04 提案 §5.4） |
 | [T123](open/todo/T123.md) | todo | PROPOSED | 2026-07-01 | `issues` | 动作抽象层：recorder tracker 后端可插拔，仅当需求出现（04 提案 §5.5） |
@@ -78,3 +82,5 @@
 | [T272](open/todo/T272.md) | todo | OPEN | 2026-08-07 | sdflow-init/assets/hack/resolve-workflow.sh | resolve-workflow.sh 补 --help（X5，spec-review A8 DEFER）——现仅支持 --root/--explain/SDFLOW_HOME，无 usage 输出；与 fix-probe-scan-precision 本次目标（消灭双链）正交，DEFER 记 todo 单独处理。 |
 | [T273](open/todo/T273.md) | todo | OPEN | 2026-08-07 | setup.sh | setup.sh 关键项 skipped 应非零退出（X-7，spec-review 裁掉记 todo）——如 install_agents() 因所有权守卫跳过关键条目时，当前只落 skipped[] 汇总、退出码仍 0，调用方（如 CI）无法据退出码判定装成没装全；改失败语义属独立 change（超本 change scope）。 |
 | [T274](open/todo/T274.md) | todo | OPEN | 2026-08-07 | .github/workflows/windows-recorder-smoke.yml | 补 Windows 失鲜 CI 回归用例（Q5 备选，spec-review-report.md Q5）——验证「旧 SKILL（cp -r 快照）× 新 canonical tools」场景：checkout 旧版→setup→checkout 新版但不重跑 setup→断言评审失败是响的（非静默）。当前四件套已订正措辞为「运行时自检不可能、CI 层面可测但目前未测」，本条补上那条缺的 CI 用例；按通则④五问（概率低×失败形态已是响的）暂不在 fix-probe-scan-precision 内做。 |
+| [T275](open/todo/T275.md) | todo | OPEN | 2026-08-10 | `SKILL.md` | SKILL.md DOC-1 审计：14 个 SKILL.md 落实 doc-authoring.md（正文即最终态，演进史进附录），7/14 超 500 行，修订锚保留界线需人拍板 |
+| [T276](open/todo/T276.md) | todo | OPEN | 2026-08-10 | `评审编排` | 评审编排大改条件更新：宿主已有 Workflow 确定性编排原语 + Stop hook 四级 gate 阶梯；触发条件=下次评审编排必须动刀时一并重估 |
