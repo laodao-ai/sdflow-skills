@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: a4918517ab0e991d6674875444ad76fdbc18236f
+---
+
 # spec-review-report — implement-workflow-optimization-2026-08-p1
 
 - 评审日期：2026-08-10 · host=claude（强档主审 opus / 中档镜 sonnet / 接地镜 haiku）
@@ -35,7 +41,9 @@ TG 命中（模型判定，交 `hr_tg_intersect.py` 机械交集）：TG-05/09/1
 - **D12 · M15 SKILL.md 文档面**：`sdflow-issues`/`sdflow-retro` 两处 SKILL.md 未随交付更新则新能力对使用者不可见。tasks 新增 5.3。
 - **D13 · 小项打包采纳**：M7b tokens 列累计口径脚注（低）；M14 closed_reason 空值历史行文案（低）；M16 reopen 拒绝路径错误文案原文落 design（低）；M17 缩写 `cw`→`cc` 对照钉死（低）；M18 BASE-25 组件清单表补齐（低）；M19 D2 信号源收窄补显式标注（低）；M20 BASE-18 fold 判定确认——三域合并系继承 roadmap 1.B 阶段分解决策、非本 change 独立判断，设计门确认即可不拆分（低）；M21 「单人串行为主」论证措辞修正（低）。
 
-### [需拍板]（设计门勾选，默认推荐已给）
+> **设计门已拍板批准，日期 2026-08-10**：Q1=A（读侧全局按 session 跨 change 分组差分）、Q2=A（本 change 接受 + design 边角显式收录 + roadmap 2.A.5 记 todo）、Q3=A（接受 (layer,lens) 粒度 + 试算先行）、Q4=保留明文。拍板前二次修订已单独 checkpoint（a4918517，design/specs/tasks/roadmap 四处，标 [spec-review-amendment]），`reviewed_sha` 锚指向该盘面。
+
+### [需拍板]（已拍板，勾选结果见上方记录行；原选项分析保留供追溯）
 
 - **Q1 · token 跨 change 双计数修法（M7，对抗镜C）**——「首行全额 + attribute-to-next」在 session 横跨两 change 时前段用量真实双计数；「与 stage_walltimes 同构」类比被读码证伪（walltime 是 delta-only、首提交贡献 0）。
   - 选项 A（**推荐**）：读侧全局按 session 跨 change 分组——retro 先扫全部 token-log，同 session 出现在多个 change 文件时，后一文件首行对前一文件末行差分，落行所在 change。依据：数据已在盘、纯读侧、彻底消双计数。代价：retro join 多一层全局分组。备选 B：首行归 0（与 walltime 严格同构，但单 session 单 change 的常见场景会整段漏计首段用量）。备选 C：维持现状 + 双计数 flag（数值仍失真）。
@@ -106,14 +114,14 @@ TG 命中（模型判定，交 `hr_tg_intersect.py` 机械交集）：TG-05/09/1
 
 **建议进入设计 HARD-GATE**：4 条致命项与全部高危项均已修订落盘，剩余 Q1–Q4 为口径/取舍类拍板（均附推荐），无未修订的结构性缺陷。人工过本报告：勾 Q1–Q4 → 批准后按拍板回写协议落 `ship-gate.design_approved` frontmatter（若勾选结果引发四件套二次修订，先单独 checkpoint 再回写锚——ADR-7(b)）。
 
-## lens-metric 度量锚（Step3 裁决草稿值，拍板回写时最终化〔SR-M〕）
+## lens-metric 度量锚（已按设计门拍板最终化〔SR-M〕，2026-08-10：M7→采纳/高、M8→采纳/中、M4b→defer 出 change、M10c→裁掉）
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="13" 采纳="12" 裁掉="0" defer="1" 独立="5" sev="致3/高4/中2/低3" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="13" 采纳="13" 裁掉="0" defer="0" 独立="6" sev="致3/高5/中2/低3" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="8" 采纳="7" 裁掉="1" defer="0" 独立="4" sev="致2/高2/中0/低3" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="3" sev="致0/高1/中1/低2" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="1" 采纳="1" 裁掉="0" defer="0" 独立="0" sev="致0/高1/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="6" 采纳="4" 裁掉="0" defer="2" 独立="0" sev="致1/高2/中1/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="4" 采纳="2" 裁掉="1" defer="1" 独立="1" sev="致0/高2/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="6" 采纳="5" 裁掉="0" defer="1" 独立="1" sev="致1/高2/中2/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="4" 采纳="2" 裁掉="2" defer="0" 独立="1" sev="致0/高2/中0/低0" -->
 
 > 保留残余信任边界声明：分类正确性（finding 归哪个 lens）、roster 完备性、findings JSON 誊写准确仍是主 session 信任边界；emitter 只保证给定输入的确定性归约。`findings=N` 与合并池实收数的数值一致性同为主 session 信任边界、非机械可验。
 
