@@ -2,8 +2,8 @@
 schema_version: 1
 change: implement-workflow-optimization-2026-08-p1
 branch: feat/implement-workflow-optimization-2026-08-p1
-generated_at: 2026-08-10T11:07:51+08:00
-decision_hash: dea625e8acd7
+generated_at: 2026-08-10T11:10:25+08:00
+decision_hash: 2508953fda3c
 ---
 
 # 决策纪要 · implement-workflow-optimization-2026-08-p1
@@ -90,7 +90,17 @@ retro 报告具备镜砍留拍板的两个判据（per-镜实修率历史回算 
 
 ## 三镜代价
 
-D1 命中方案选择：系统镜——checkpoint 脚本是全局资产（`sdflow-init/assets/hack/` 真相源，
+（三决策均命中 TG-23，逐条写满。）
+
+**D1**：系统镜——checkpoint 脚本是全局资产（`sdflow-init/assets/hack/` 真相源，
 改后须重跑 setup.sh），影响所有用 checkpoint 的仓，故 helper 失败必须静默降级不挡 commit；
 用户镜——无感（快照随 checkpoint 自动落，无新手工步骤）；开发循环镜——retro join 同构于
 读报告文件，零新增解析面。**主次判定**：系统镜为主——采集失败绝不能破坏 checkpoint 主功能。
+
+**D2**：系统镜——纯读侧新函数，报告列可删即回滚，零持久状态；用户镜——报告多两列 +
+三数注记，读表成本微增；开发循环镜——「采而未修」从此可见，评审假绿有了机械暴露面。
+**主次判定**：开发循环镜为主——判据缺失正是决策端欠账的根因（承 roadmap design 决策 1）。
+
+**D3**：系统镜——纯新增子命令，零触碰既有命令路径（set-status 终态守卫原样保留），
+可整体回滚；用户镜——一条新命令，help 一行学习成本；开发循环镜——1.A.1 池对账当即解锁，
+理由归真让未来分诊记录恢复可信。**主次判定**：系统镜为主——不破坏既有终态契约是硬约束。
