@@ -48,9 +48,9 @@ impl-pipeline: tickets
 - 契约测试（`sdflow-issues/tests/`）：往返（add→终态→reopen→字段/目录/INDEX/CLOSED 全一致）、拒绝面三例（open 项 / 缺 reason / --to 终态值，均验「文件与索引零变更」）、中断残留幂等恢复用例（原位写后 mv 前中断 → 重跑收敛且不重复历史行）、既有守卫零回归（set-status 对 closed/ 仍拒 + 全量既有测试绿）
 - SKILL.md 文档同步：`sdflow-issues/SKILL.md` 补 `reopen` 用法块并修正措辞
 
-- [ ] reopen 子命令实现（守卫 + 字段清理 + M-2 原子序 + 自动 reindex + 中断残留恢复）
-- [ ] 契约测试：往返 + 拒绝面三例 + 中断残留幂等 + 既有守卫零回归
-- [ ] SKILL.md 文档同步
+- [x] reopen 子命令实现（守卫 + 字段清理 + M-2 原子序 + 自动 reindex + 中断残留恢复）
+- [x] 契约测试：往返 + 拒绝面三例 + 中断残留幂等 + 既有守卫零回归
+- [x] SKILL.md 文档同步
 
 ### Task 2: 实修率历史回算
 

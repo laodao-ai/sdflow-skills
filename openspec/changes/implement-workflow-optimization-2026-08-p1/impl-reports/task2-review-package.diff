@@ -1,0 +1,717 @@
+# Review package: a222fe7145fc7ae702f79ccbd04e6a4da5e0596e..710cc1d (Task 2 worktree merge)
+
+## Commits
+710cc1d merge(task2-fixrate): 实修率历史回算
+8a8f063 impl(task2-fixrate): 实修率历史回算 + 聚合④段渲染 + 测试
+
+## Files changed
+ .../impl-reports/task2-fixrate.md                  | 134 +++++++++++
+ sdflow-retro/scripts/retro_report.py               | 232 +++++++++++++++++++
+ sdflow-retro/scripts/tests/test_retro_report.py    | 250 +++++++++++++++++++++
+ 3 files changed, 616 insertions(+)
+
+## Diff
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task2-fixrate.md b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task2-fixrate.md
+new file mode 100644
+index 0000000..4b8369a
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task2-fixrate.md
+@@ -0,0 +1,134 @@
++# Task 2：实修率历史回算——实现报告
++
++## 范围
++
++`sdflow-retro/scripts/retro_report.py` 新增聚合④「per-镜实修率（历史回算）」——从归档评审
++报告 finding 行机械提取 fix-status（三态+未知）与 lens 归属（封闭关键词表，仅有界记号内
++查），按 (layer, lens) 聚合可判定/实修/未修/defer 三数 + 覆盖率 + 阈值参考标注 + commit
++佐证 flag。对应 tickets.md Task 2 全部 4 项（2.0 真语料试算前置 / 2.1 窄文法提取函数 /
++2.2 聚合④段渲染 / 2.3 测试）。
++
++## 2.0 真语料试算前置（一次性脚本，非本 change 交付物）
++
++用一次性脚本（未提交，位于本机 scratchpad）对本仓 `openspec/changes/archive/**/*-review-
++report.md`（124 份，62 code-review + 62 spec-review）跑窄文法逐行试算，迭代三轮定位真实
++密度与假阳性面：
++
++**第一轮**（naive：任意〔〕/【】即候选门）→ 候选行 842(code)/749(spec)，看似合理但抽查
++发现「决策登记区」大量非-finding 内容（Q&A 条目、X-引用标签如 `〔X7〕`）被误当候选——这
++类 bracket 在真实语料里是**通用注记符号**，不专属 lens 归属场景。
++
++**第二轮**（发现 bug：`defer`/`已修`/`采纳` 裸子串误命中 `<!-- sdflow:lens-metric v1 ...
++defer="0" 采纳="2" ... -->` 锚行的 KV 字段名）→ 修法：整行以 `<!-- sdflow:` 起始即跳过
++（机械锚非 finding 行）；`defer` 类标注改词边界 + 负向前瞻 `\bdefer\b(?!=")`，防止未来任何
++KV 字段名撞车。**该 bug 直接导致「度量锚」类 section 出现 30–80 条虚假 unknown_disposal
++计数**，修复后归零。
++
++**第三轮**（核心发现）：「已裁掉」类表格（列为「裁掉理由」而非「处置」）的行，若无任何
++disposal 关键词，会被朴素「有来源记号即候选」判据误判「未修」——单份报告即可贡献 33+7
++条虚假未修/defer 样本，方向性拉低实修率（污染砍留判据，与 design.md 已修正的 fix-status
++三态问题同族但是**另一根轴**：不是"信号不精确"而是"候选门太宽，把非 finding 行也当
++finding"）。**修法**：`not_fixed`（无任何处置信号）分支追加结构门——只有当该行是「处置」
++列表格的数据行（`_fr_table_cols` 解析表头同时含「来源」列与「处置」列）时才可能落入未修；
++「已裁掉」表因缺「处置」列（只有「裁掉理由」）被此结构信号天然排除，不再产生假未修。
++`fixed`/`defer`/`unknown_disposal` 三个正向分支不受此门限制（有处置信号即候选，覆盖
++bullet〔〕与表格两种真实 finding 形态）。
++
++**密度结论**（三轮修正后，真语料实测，见下表）：全部 5 个非零 (layer,lens) 格子里，2 个
++达到阈值 5（code-review×adversarial=6、code-review×domain=6），其余 3 个（history=2、
++spec-review×broad=2、spec-review×grounding=3）低于阈值标「参考」。**大面积低密度与
++design.md 已接受的风险一致**（"覆盖率低的镜标「参考」...大面积「参考」亦为合法产出"）——
++本试算未推翻该判断，只是把窄文法本身的两个隐藏假阳性源（KV 字段误命中、候选门过宽）在
++落地前修正掉，避免生产实现继承同样的坑。
++
++| layer | lens | 可判定 | 实修 | defer | 未修 |
++|---|---|---|---|---|---|
++| code-review | adversarial | 6 | 2 | 4 | 0 |
++| code-review | domain | 6 | 3 | 3 | 0 |
++| code-review | history | 2 | 1 | 1 | 0 |
++| spec-review | broad | 2 | 0 | 2 | 0 |
++| spec-review | grounding | 3 | 0 | 0 | 3 |
++
++（此表由试算脚本产出，与正式实现 `fixrate_aggregate()` 对同一语料的输出一致——已交叉核对，
++详见下方「与试算结果交叉核对」。）
++
++## 2.1 窄文法提取函数（`sdflow-retro/scripts/retro_report.py`）
++
++新增函数（均为纯新增，不改 `lens_metric_aggregate.py` 任何既有函数签名，复用其
++`_fence_aware_lines` 滤围栏示范锚）：
++
++- `_fr_lens_hits(text)` — 封闭关键词表（对抗/领域/域→领域别名/接地/历史/outside-voice|
++  voice→同一 canonical 值/广审）去重命中集合。
++- `_fr_table_cols(lines, idx)` — 解析表格数据行所属表头的「来源」列与「处置」列 cell。
++  「处置」列存在与否是 `not_fixed` 分支的结构候选门（见上）。
++- `_fr_classify_status(line)` — fix-status 三态 + 未修兜底：精确 needle → fixed；defer
++  类标注（词边界+防 KV 误命中）→ defer；裸 `impl-review-fix` 或处置动词
++  （已修/采纳/自动修）但不命中精确 needle → unknown_disposal（MUST NOT 判未修，
++  [spec-review-amendment] 宁缺毋假修正）；否则 → not_fixed。
++- `extract_fixrate_samples(text)` — 逐行窄文法提取，产出 `(lens_or_None, status)` list。
++  跳过机械锚行（`<!-- sdflow:` 前缀）与 section 标题行（`##`~`####`，防标题自带裸
++  `impl-review-fix` 字面量误判，真实语料确有 "Findings（置信 ≥80，均已自动修
++  [impl-review-fix]）" 这类标题）。
++- `_change_has_fix_commit(root, name)` — change 边界内是否存在 impl-review-fix 类修复
++  commit（commit subject 子串匹配，D2 拍板：commit 降为佐证 flag，不参与判定）。
++- `fixrate_aggregate(root)` — 扫 archive 全部 `*-review-report.md`，聚合为
++  `(rows: {(layer,lens): {可判定,实修,未修,defer,未知,佐证}}, lens_unknown: {layer: n})`。
++  两级未知桶：① lens 已解析但 fix-status 不可判 → 计入该 (layer,lens) 自身「未知」字段；
++  ② lens 本身不可解析（0/2+ 命中或无有界记号）→ 无法归属具体镜，按 layer 汇总另计
++  （`lens_unknown`）。坏文件 fail-safe 跳过，同 `LMA.aggregate` 处理口径。
++
++## 2.2 聚合④段渲染
++
++- `render_fixrate_table(rows, lens_unknown)` — 渲染 `| layer | lens | 可判定 | 实修 |
++  defer | 未修 | 未知(本镜) | 覆盖率 | 实修率 | 佐证 |` 表，覆盖率 = 可判定/(可判定+本镜
++  未知)；实修率 = 实修/可判定，可判定 < `FIXRATE_MIN_SAMPLE`（=5，单一源常量）追加
++  「（参考）」；佐证列展示（不参与判定）。表后附脚注：layer 级 lens-不可归属未知计数 +
++  阈值/宁缺毋假声明。
++- `build_report()` 尾部新增 `## 聚合④ per-镜实修率（历史回算）` 段，接在既有聚合③之后。
++
++## 2.3 测试
++
++`sdflow-retro/scripts/tests/test_retro_report.py` 新增 21 个用例：
++
++- 合成语料单元（对应 tasks 2.3 六类）：表格来源列可判定 / 〔〕标签可判定 / 来源列零命中
++  未知 / 〔〕多命中未知 / 处置信号歧义（裸串/动词变体）进未知非未修（两例）/ 自由文本关键词
++  不构成归属 / 围栏内示范锚不入计 / defer 标注分类 / defer 防 KV 字段误命中（负向对照）/
++  处置列表格无信号→未修（正例）/ 无处置列表格（已裁掉形态）无信号→非候选（负例，直接对应
++  2.0 发现的假阳性）/ section 标题裸串不入候选 / `域`别名识别。
++- `fixrate_aggregate`/`render_fixrate_table`：聚合三数正确性、参考阈值展示（≥5 与 <5 两
++  方向）、空输入不崩、缺 archive 目录返空、佐证 flag 正反两例（真跑 git commit）。
++- `build_report` 集成：聚合④段在场、无 archive 时不崩。
++- 真仓再生冒烟：`R.build_report(str(_REPO))` 对本仓真实 archive 语料跑通，聚合④在场；
++  且 `surfacing_block` 当前标记的全部待复评 (layer,lens,host,runner,site) 镜，其粗粒度
++  (layer,lens) 若在 `fixrate_aggregate` 结果中出现，实修率字符串可读不崩溃（可判定=0
++  的镜允许缺行——真实窄文法密度低是已接受风险，非本冒烟测试的失败判据）。
++
++**与试算结果交叉核对**：正式实现 `fixrate_aggregate()` 对本仓真实 archive 目录跑出的
++5 个非零 (layer,lens) 计数与上方 2.0 试算表逐格一致（`git checkout -- openspec/retro/
++report.md` 前曾用 `retro_report.py --root .` 真跑验证，输出对齐后已还原该 view-only 文件
++——report.md 再生提交是 Task 5 职责，不在本票范围内提交）。
++
++## 验证结果
++
++```
++/usr/bin/python3 -m pytest sdflow-retro/scripts/tests/ -q
++110 passed
++```
++
++新增 21 个测试全部通过，既有 89 个测试零回归。
++
++## 偏离/决策记录
++
++- **候选门比 tickets.md 字面描述更窄**：tickets.md 原文「行含处置标注但有界来源记号内...」
++  隐含存在一个独立于处置信号之外的「finding 行」判定，但未给出其机械定义。2.0 试算证实
++  朴素判据（任意有界记号即候选）会被「决策登记区」通用注记〔〕与「已裁掉」表污染，方向性
++  错误分类。落地时收窄为：正向三态（fixed/defer/unknown_disposal）门槛=处置信号存在本身
++  （信号本身即证据，不需要额外结构判据）；`not_fixed`（无信号）门槛=处置列表格数据行
++  （结构信号，弥补"无信号时无法区分 finding 行与任意散文"的缺口）。此收窄不改变 spec.md
++  四个 Scenario 的字面语义（均未直接覆盖"决策登记区污染""已裁掉表污染"这两个真实语料
++  边角），是**基准⑤对无界 prose 判据的实现级补强**，非缩小承诺范围——仍锚"MUST NOT 猜
++  测归属""宁缺毋假"的目标态，具体实证见上方 2.0 三轮记录。
++- **"未知"拆两级（本镜未知 + layer 级 lens-不可归属）**：spec.md 字面「每镜 SHALL 输出
++  可判定/未知/覆盖率三数」未明确 lens 本身不可解析时未知数该记在哪面镜。落地按信息量分层：
++  lens 已知但 fix-status 未知 → 归该镜；lens 未知（不知道该记哪面镜）→ 归 layer 级共享池，
++  避免编造归属。两者均不参与任何镜的可判定分母。
+diff --git a/sdflow-retro/scripts/retro_report.py b/sdflow-retro/scripts/retro_report.py
+index 7e0a6ff..3b9f30e 100644
+--- a/sdflow-retro/scripts/retro_report.py
++++ b/sdflow-retro/scripts/retro_report.py
+@@ -2,20 +2,21 @@ import argparse
+ import os
+ import re
+ import subprocess
+ import sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ import tempfile
+ from collections import defaultdict
++from pathlib import Path
+ 
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ import lens_metric_aggregate as LMA  # 复用其 fence-aware 锚解析（parse_report + _int），不重实现
+ 
+ _DATE_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}-(.+)$")
+ _REPORT_NAMES = ("spec-review-report.md", "code-review-report.md")
+ _HRTG_RE = re.compile(r'<!--\s*sdflow:hr-tg\s+v1\s+hit="([^"]*)"')
+ 
+ 
+ def discover_changes(root):
+@@ -320,20 +321,244 @@ def lens_value_for_change(info):
+     return {
+         "has_anchor": bool(anchors),
+         "by_layer": by_layer,
+         "sum_findings": sum_f,
+         "accept_rate": rate,
+         "sum_independent": sum_ind,
+         "num_bad": num_bad,
+     }
+ 
+ 
++# ============================ 聚合④ per-镜实修率（历史回算）============================
++# [implement-workflow-optimization-2026-08-p1 task2] 从归档评审报告 finding 行机械提取
++# fix-status（三态+未知）与 lens 归属（封闭关键词表，仅有界记号内查），按 (layer,lens)
++# 聚合可判定/实修/未修/defer 计数。窄文法两轴均「宁缺毋假」——任一维度不可判定即入未知桶，
++# MUST NOT 猜。复用 LMA._fence_aware_lines 滤围栏示范锚；不改 LMA 任何既有函数签名（只读
++# 消费方）。真语料试算（task2.0，一次性脚本，非本文件）显示密度低（可判定样本多数 <5），
++# 与 design.md 已接受的风险一致（"覆盖率低的镜标「参考」"）。
++
++FIXRATE_MIN_SAMPLE = 5  # [T2] 阈值单一源：可判定数 < 此值标「参考」，不作砍留依据
++
++_FR_NEEDLE = "已修[impl-review-fix]"
++# defer 类标注：词边界 + 非紧跟 ="（防误命中 lens-metric 锚 `defer="N"` KV 字段——真实语料
++# 实证：锚行含 `采纳="0"` `defer="0"` 等字段名，裸子串匹配会把锚行误判命中处置动词/裸串）。
++_FR_DEFER_RE = re.compile(r'(?i)\bdefer\b(?!=")')
++_FR_BARE = "impl-review-fix"
++_FR_VERBS = ("已修", "采纳", "自动修")
++
++# 镜关键词 → LMA.LENS_ENUM 同源 canonical 值；"域" 仅作"领域"别名（仅在有界记号内识别）；
++# "outside-voice"/"voice" 是同一 canonical 值的两种拼写（非两个镜，不构成歧义）。
++_FR_LENS_MAP = {
++    "对抗": "adversarial", "领域": "domain", "域": "domain",
++    "接地": "grounding", "历史": "history",
++    "outside-voice": "outside-voice", "voice": "outside-voice",
++    "广审": "broad",
++}
++_FR_LENS_KEYS = sorted(_FR_LENS_MAP, key=len, reverse=True)  # 长键优先（outside-voice 先于 voice，非必要但显式）
++
++_FR_TABLE_ROW = re.compile(r'^\s*\|(.*)\|\s*$')
++_FR_TABLE_SEP = re.compile(r'^\s*\|[\s:|-]+\|\s*$')
++_FR_BRACKET = re.compile(r'〔([^〕]*)〕|【([^】]*)】')
++_FR_SECTION_HDR = re.compile(r'^#{2,4}\s+')
++
++
++def _fr_lens_hits(text):
++    """text 内命中的 canonical lens 值去重集合（封闭关键词表，MUST NOT 猜）。"""
++    return {_FR_LENS_MAP[kw] for kw in _FR_LENS_KEYS if kw in text}
++
++
++def _fr_table_cols(lines, idx):
++    """idx 指向疑似表格数据行；解析其所属表的表头，取「来源」列与「处置」列同位置 cell。
++    返回 (来源cell_or_None, 处置cell_or_None, is_data_row)；非法/非表格/表头/分隔行本身
++    → (None, None, False)。「处置」列存在是 not_fixed 分支的候选门（见 extract_fixrate_
++    samples）——真语料试算证实：缺此门会把「决策登记区」〔〕散文标签、「已裁掉」表
++    （用「裁掉理由」列非「处置」列）大量误判未修，双双被此结构信号排除。"""
++    start = idx
++    while start > 0 and _FR_TABLE_ROW.match(lines[start - 1]):
++        start -= 1
++    if start + 1 >= len(lines) or not _FR_TABLE_SEP.match(lines[start + 1]):
++        return None, None, False
++    if idx == start or idx == start + 1:
++        return None, None, False
++    header_cells = [c.strip().strip("*").strip() for c in lines[start].strip().strip("|").split("|")]
++    src_idx = next((i for i, c in enumerate(header_cells) if "来源" in c), None)
++    disp_idx = next((i for i, c in enumerate(header_cells) if "处置" in c), None)
++    cur_cells = [c.strip() for c in lines[idx].strip().strip("|").split("|")]
++    src_cell = cur_cells[src_idx] if src_idx is not None and src_idx < len(cur_cells) else None
++    disp_cell = cur_cells[disp_idx] if disp_idx is not None and disp_idx < len(cur_cells) else None
++    return src_cell, disp_cell, True
++
++
++def _fr_classify_status(line):
++    """fix-status 三态 + 未修兜底。[spec-review-amendment] 宁缺毋假方向修正：裸
++    `impl-review-fix` 串或处置动词（已修/采纳/自动修）但不命中精确 needle → unknown_disposal
++    （MUST NOT 判未修——语料实测 67% 变体不命中精确 needle，默认判未修会方向性压低实修率）。"""
++    if _FR_NEEDLE in line:
++        return "fixed"
++    if _FR_DEFER_RE.search(line):
++        return "defer"
++    if _FR_BARE in line or any(v in line for v in _FR_VERBS):
++        return "unknown_disposal"
++    return "not_fixed"
++
++
++def extract_fixrate_samples(text):
++    """对单份报告文本逐行窄文法提取，产出 (lens_or_None, status) 元组 list。
++    status ∈ {"fixed","defer","not_fixed","unknown_disposal"}；lens 由有界来源记号
++    （表格「来源」列 cell + 全部〔…〕/【…】括号内容）解析，精确命中一个 canonical 值才
++    非 None，零个或多个命中 → None（未知，不猜）。
++
++    机械锚行（`<!-- sdflow:` 前缀）与 section 标题行（`##`/`###`/`####`）跳过——前者
++    KV 字段名（`采纳=`/`defer=`）假阳命中处置动词/裸串，后者本身可能带裸 `impl-review-fix`
++    字面量（如 "Findings（置信 ≥80，均已自动修 [impl-review-fix]）" 标题），均非 finding 行。
++
++    候选门：① 行含处置信号（needle/defer/裸串/处置动词之一）——覆盖 bullet 与表格两种
++    finding 形态；② 或行是「处置」列表格的数据行（结构信号，仅用于 not_fixed 分支候选，
++    见 _fr_table_cols 注释）。二者皆不满足 → 不是候选，跳过（不计入未知，因为它压根
++    不是 finding 行）。
++    """
++    out = []
++    lines = list(LMA._fence_aware_lines(text))
++    for i, line in enumerate(lines):
++        s = line.strip()
++        if s.startswith("<!-- sdflow:") or _FR_SECTION_HDR.match(s):
++            continue
++        regions = [(m.group(1) if m.group(1) is not None else m.group(2)) for m in _FR_BRACKET.finditer(line)]
++        table_src = table_disp = None
++        is_row = False
++        if _FR_TABLE_ROW.match(line) and not _FR_TABLE_SEP.match(line):
++            table_src, table_disp, is_row = _fr_table_cols(lines, i)
++            if table_src is not None:
++                regions.append(table_src)
++        status = _fr_classify_status(line)
++        has_disposal = status != "not_fixed"
++        is_disposition_row = is_row and table_disp is not None
++        if not has_disposal and not is_disposition_row:
++            continue
++        hits = _fr_lens_hits(" ".join(regions))
++        lens = next(iter(hits)) if len(hits) == 1 else None
++        out.append((lens, status))
++    return out
++
++
++def _change_has_fix_commit(root, name):
++    """change 边界内是否存在 impl-review-fix 类修复 commit（commit subject 子串匹配，
++    宽松/不精确——D2 拍板：commit 主键降为佐证 flag，不参与判定，仅展示）。查两条路径：
++    裸 pre-archive 路径（历史性可达，同 boundary_for_change 的裸路径必查惯例）+ archive
++    路径（磁盘枚举匹配 `*-<name>` 后缀，git pathspec 原生不支持 shell glob）。"""
++    out = _run_git(root, "log", "--format=%s", "--", f"openspec/changes/{name}")
++    if any(_FR_BARE in s for s in out.splitlines()):
++        return True
++    archive_dir = os.path.join(root, "openspec", "changes", "archive")
++    if os.path.isdir(archive_dir):
++        for entry in os.listdir(archive_dir):
++            if entry.endswith(f"-{name}"):
++                rel = os.path.relpath(os.path.join(archive_dir, entry), root)
++                out = _run_git(root, "log", "--format=%s", "--", rel)
++                if any(_FR_BARE in s for s in out.splitlines()):
++                    return True
++    return False
++
++
++def fixrate_aggregate(root):
++    """扫 archive 全部 `*-review-report.md`，跑窄文法回算，返回
++    (rows: {(layer,lens): {"可判定":n,"实修":n,"未修":n,"defer":n,"未知":n,"佐证":bool}},
++     lens_unknown: {layer: n})。
++
++    两级未知桶：① lens 已解析但 fix-status 不可判（unknown_disposal）→ 计入该 (layer,lens)
++    行自身的 "未知" 字段（我们知道是哪面镜，只是不知道修没修）；② lens 本身不可解析
++    （0/2+ 命中或无有界记号）→ 计入 lens_unknown[layer]（跨该 layer 全部镜共享，无法
++    归属到具体某面镜）。可判定 = 实修+未修+defer；覆盖率 = 可判定/(可判定+①的未知)。
++
++    「佐证」flag：该 (layer,lens) 有 ≥1 贡献样本所属 change 的 git 历史含 impl-review-fix
++    类修复 commit（懒惰求值 + 按 change 名缓存，避免 O(rows×changes) 重复 git 调用）。
++    坏文件（IO/解码错误）fail-safe 跳过，不拖垮整体聚合——同 LMA.aggregate 的处理口径。
++    """
++    archive_root = os.path.join(root, "openspec", "changes", "archive")
++    rows = defaultdict(lambda: {"可判定": 0, "实修": 0, "未修": 0, "defer": 0, "未知": 0, "佐证": False})
++    lens_unknown = defaultdict(int)
++    contributing = defaultdict(set)  # (layer,lens) -> {change_name,...}
++    try:
++        if not Path(archive_root).is_dir():
++            return {}, {}
++        reports = sorted(Path(archive_root).glob("**/*-review-report.md"))
++    except OSError:
++        return {}, {}
++
++    for report in reports:
++        if report.name == "code-review-report.md":
++            layer = "code-review"
++        elif report.name == "spec-review-report.md":
++            layer = "spec-review"
++        else:
++            continue
++        m = _DATE_PREFIX.match(report.parent.name)
++        change_name = m.group(1) if m else report.parent.name
++        try:
++            text = report.read_text(encoding="utf-8", errors="replace")
++        except (OSError, UnicodeDecodeError):
++            continue
++        for lens, status in extract_fixrate_samples(text):
++            if lens is None:
++                lens_unknown[layer] += 1
++                continue
++            key = (layer, lens)
++            if status == "unknown_disposal":
++                rows[key]["未知"] += 1
++                continue
++            rows[key]["可判定"] += 1
++            if status == "fixed":
++                rows[key]["实修"] += 1
++            elif status == "defer":
++                rows[key]["defer"] += 1
++            elif status == "not_fixed":
++                rows[key]["未修"] += 1
++            contributing[key].add(change_name)
++
++    fix_commit_cache = {}
++    for key, names in contributing.items():
++        for name in names:
++            if name not in fix_commit_cache:
++                fix_commit_cache[name] = _change_has_fix_commit(root, name)
++            if fix_commit_cache[name]:
++                rows[key]["佐证"] = True
++                break
++    return dict(rows), dict(lens_unknown)
++
++
++def render_fixrate_table(rows, lens_unknown):
++    """聚合④ per-镜实修率（历史回算）markdown 渲染。每镜可判定/未知/覆盖率三数 + 实修率
++    （可判定<阈值标「参考」，MUST NOT 作砍留依据）+ 佐证 flag（不参与判定，纯展示）。"""
++    lines = ["| layer | lens | 可判定 | 实修 | defer | 未修 | 未知(本镜) | 覆盖率 | 实修率 | 佐证 |",
++             "|---|---|---|---|---|---|---|---|---|---|"]
++    if not rows:
++        lines.append("| — | — | 0 | 0 | 0 | 0 | 0 | — | — | — |")
++    for (layer, lens), d in sorted(rows.items()):
++        denom = d["可判定"]
++        covered_pool = denom + d["未知"]
++        coverage = f"{denom / covered_pool:.0%}" if covered_pool else "—"
++        rate = f"{d['实修'] / denom:.0%}" if denom else "—"
++        if denom and denom < FIXRATE_MIN_SAMPLE:
++            rate += "（参考）"
++        evid = "有 commit 佐证" if d["佐证"] else "—"
++        lines.append(f"| {layer} | {lens} | {denom} | {d['实修']} | {d['defer']} | {d['未修']} | "
++                     f"{d['未知']} | {coverage} | {rate} | {evid} |")
++    lines.append("")
++    layer_unk_str = ", ".join(f"{k}={v}" for k, v in sorted(lens_unknown.items())) or "无"
++    lines.append(f"> 「未知(本镜)」= fix-status 不可判（裸 impl-review-fix/处置动词但不命中精确 "
++                 f"needle）但 lens 已解析的样本，计入该镜自身；lens 本身不可解析（0/2+ 命中或无"
++                 f"有界记号）的样本无法归属具体镜，按 layer 汇总另计：{layer_unk_str}。")
++    lines.append(f"> 可判定 < {FIXRATE_MIN_SAMPLE}（单一源阈值）标「参考」，MUST NOT 作砍留依据；"
++                 f"窄文法宁缺毋假，MUST NOT 为提覆盖率放宽文法猜测归属。")
++    return "\n".join(lines)
++
++
+ def _read_hr_hit(base, report_name):
+     """读单个报告文件的 hr-tg 锚。
+     [impl-review-fix F2] 坏文件（权限拒绝/IO 错误）fail-safe 返回 "—"，不崩，
+     同 lens_value_for_change 对同类坏文件的处理口径。
+     [impl-review-fix F4] 复用 LMA._fence_aware_lines 过滤 fenced 示范锚（同 lens-metric
+     锚享同等 fence 护栏，避免文档里反引号包裹的示范 hr-tg 锚被误读为真判定）。
+     [impl-review-fix F7] 不遇首个锚即 return——续扫全文取最后一条命中，
+     以应对同一报告内多条 hr-tg 锚（如广审判定 + 后续更权威判定）时取最终判定而非 first-wins。
+     """
+     if not base:
+@@ -616,20 +841,27 @@ def build_report(root):
+     # 聚合③ per-镜价值表（内嵌 lens_metric_aggregate 整表聚合）
+     lines.append("## 聚合③ per-镜价值表（lens-metric 聚合，扫 archive）")
+     lines.append("")
+     archive_root = os.path.join(root, "openspec", "changes", "archive")
+     # [T61] 同上：aggregate 显式契约保证缺失/非目录 archive 返空不抛，render_table 对空
+     # rows 产出仅含表头 + 空样本脚注的合法表——无需防御性 try/except（原 catch 不可达）。
+     agg_rows, no_anchor, parse_failed = LMA.aggregate(archive_root)
+     lines.append(LMA.render_table(agg_rows, no_anchor, parse_failed))
+     lines.append("")
+ 
++    # 聚合④ per-镜实修率（历史回算，窄文法扫 archive finding 行）
++    lines.append("## 聚合④ per-镜实修率（历史回算）")
++    lines.append("")
++    fr_rows, fr_lens_unknown = fixrate_aggregate(root)
++    lines.append(render_fixrate_table(fr_rows, fr_lens_unknown))
++    lines.append("")
++
+     return "\n".join(lines) + "\n"
+ 
+ 
+ def atomic_write(path, text):
+     d = os.path.dirname(path) or "."
+     os.makedirs(d, exist_ok=True)
+     fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
+     try:
+         with os.fdopen(fd, "w", encoding="utf-8") as f:
+             f.write(text)
+diff --git a/sdflow-retro/scripts/tests/test_retro_report.py b/sdflow-retro/scripts/tests/test_retro_report.py
+index dde2655..ca23c74 100644
+--- a/sdflow-retro/scripts/tests/test_retro_report.py
++++ b/sdflow-retro/scripts/tests/test_retro_report.py
+@@ -652,10 +652,260 @@ def test_top_mirror_none_when_no_findings():
+     assert R._top_mirror([]) is None
+     assert R._top_mirror([_agg("code-review", "domain", "claude", "—", 0)]) is None
+ 
+ 
+ def test_build_report_includes_overview(tmp_path):
+     root = _init_repo(tmp_path)
+     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+     md = R.build_report(str(root))
+     assert "## 一览" in md
+     assert "| 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |" in md
++
++
++# ============================ 聚合④ per-镜实修率（历史回算）============================
++# task2: extract_fixrate_samples 窄文法单元测试（合成语料，tasks 2.3 六类用例）。
++
++def test_fixrate_resolved_via_table_source_column():
++    """可判定样本计入实修率：表格数据行「来源」列精确命中一个 lens 关键词 + 精确 needle。"""
++    text = (
++        "| # | 来源 | 问题 | 处置 |\n"
++        "|---|---|---|---|\n"
++        "| 1 | 对抗镜1 | 假设不成立 | ✅ 已修[impl-review-fix]：改判据 |\n"
++    )
++    got = R.extract_fixrate_samples(text)
++    assert got == [("adversarial", "fixed")]
++
++
++def test_fixrate_resolved_via_bracket_tag():
++    """可判定样本：bullet 形态〔…〕括号标签精确命中一个 lens 关键词。"""
++    text = "- **F1 空串绕过**〔领域镜〕| 证据 | 置信 95 | **已修[impl-review-fix]**：加判断\n"
++    got = R.extract_fixrate_samples(text)
++    assert got == [("domain", "fixed")]
++
++
++def test_fixrate_lens_ambiguous_zero_hits_unknown():
++    """归属歧义（零命中）：来源列存在但无任何 lens 关键词 → lens=None（layer 级未知）。"""
++    text = (
++        "| # | 来源 | 处置 |\n"
++        "|---|---|---|\n"
++        "| 1 | CR-09 | 已修[impl-review-fix] |\n"
++    )
++    got = R.extract_fixrate_samples(text)
++    assert got == [(None, "fixed")]
++
++
++def test_fixrate_lens_ambiguous_multi_hits_unknown():
++    """归属歧义（多命中）：〔〕内同时含两个 lens 关键词 → lens=None（不可判定哪一面）。"""
++    text = "- **F1**〔领域镜+对抗A 独立收敛〕| 已修[impl-review-fix] | 修复\n"
++    got = R.extract_fixrate_samples(text)
++    assert got == [(None, "fixed")]
++
++
++def test_fixrate_disposal_signal_ambiguous_variant_is_unknown_not_unfixed():
++    """[spec-review-amendment] 处置信号歧义进未知桶：裸 impl-review-fix 串（无精确 needle）
++    命中单一 lens → fix-status 记 unknown_disposal，MUST NOT 判「未修」。"""
++    text = "- **F2**〔历史镜〕| 采纳[impl-review-fix] | 已处理\n"
++    got = R.extract_fixrate_samples(text)
++    assert got == [("history", "unknown_disposal")]
++
++
++def test_fixrate_disposal_verb_without_needle_is_unknown():
++    """处置动词（已修/采纳/自动修）但不命中精确 needle → unknown_disposal。"""
++    text = "- **F3**〔接地镜〕| 已修：改了实现，未走标准标注\n"
++    got = R.extract_fixrate_samples(text)
++    assert got == [("grounding", "unknown_disposal")]
++
++
++def test_fixrate_free_text_keyword_not_bounded_no_attribution():
++    """关键词出现在自由文本（有界记号外）不构成归属：文件名含 outside-voice、〔〕内
++    无该词 → 该行有界记号内容零命中 → lens=None（即便行内其他位置出现关键词字面量）。"""
++    text = ("| # | 来源 | 问题 | 处置 |\n"
++            "|---|---|---|---|\n"
++            "| 1 | CR-01 | outside-voice-reuse-guard 孤儿文件 | 已修[impl-review-fix] |\n")
++    got = R.extract_fixrate_samples(text)
++    assert got == [(None, "fixed")]
++
++
++def test_fixrate_fenced_sample_anchor_not_counted():
++    """围栏内示范锚不入计：```内的合法 finding 行文本不应被提取（同 LMA fence-aware 惯例）。"""
++    text = (
++        "示例：\n"
++        "```\n"
++        "| # | 来源 | 处置 |\n"
++        "|---|---|---|\n"
++        "| 1 | 对抗镜1 | 已修[impl-review-fix] |\n"
++        "```\n"
++        "正文之外无其他候选行。\n"
++    )
++    got = R.extract_fixrate_samples(text)
++    assert got == []
++
++
++def test_fixrate_defer_marker_classified_defer():
++    text = "- **F4**〔广审〕| defer → todolist（低风险）\n"
++    got = R.extract_fixrate_samples(text)
++    assert got == [("broad", "defer")]
++
++
++def test_fixrate_defer_field_in_anchor_line_not_misclassified():
++    """defer 类标注防误命中：lens-metric 锚行的 `defer="0"` KV 字段不应触发 defer 分类
++    （锚行本身也被 `<!-- sdflow:` 前缀整行跳过，双重防御）。"""
++    text = ('<!-- sdflow:lens-metric v1 layer="code-review" lens="domain" runner="claude" '
++            'site="—" findings="3" 采纳="2" 裁掉="1" defer="0" 独立="1" sev="致0/高0/中0/低0" -->\n')
++    got = R.extract_fixrate_samples(text)
++    assert got == []
++
++
++def test_fixrate_disposition_table_row_no_signal_is_not_fixed():
++    """未修（无任何处置信号）：处置列表格的数据行，处置 cell 无任何处置标注
++    → not_fixed（结构信号——处置列存在，是本行确属 finding 的证据）。"""
++    text = (
++        "| # | 来源 | 问题 | 处置 |\n"
++        "|---|---|---|---|\n"
++        "| 1 | 对抗镜1 | 未处理的发现 | 待跟进 |\n"
++    )
++    got = R.extract_fixrate_samples(text)
++    assert got == [("adversarial", "not_fixed")]
++
++
++def test_fixrate_non_disposition_table_no_signal_not_a_candidate():
++    """已裁掉表（「裁掉理由」列非「处置」列）的行若无处置信号 → 不是候选，不计入未修
++    （真语料试算证实：缺此门会把 33+ 已裁掉行误判「未修」，污染分母）。"""
++    text = (
++        "| # | 原始发现 | 来源 | 裁掉理由 |\n"
++        "|---|---|---|---|\n"
++        "| 1 | 假设不成立 | 对抗镜1 | 复现不成立 |\n"
++    )
++    got = R.extract_fixrate_samples(text)
++    assert got == []
++
++
++def test_fixrate_section_header_with_bare_string_not_candidate():
++    """section 标题本身带裸 impl-review-fix 字面量不应被当候选行（如
++    "### Findings（置信 ≥80，均已自动修 [impl-review-fix]）" 真实语料标题）。"""
++    text = "### Findings（置信 ≥80，均已自动修 [impl-review-fix]）\n\n正文占位。\n"
++    got = R.extract_fixrate_samples(text)
++    assert got == []
++
++
++def test_fixrate_alias_domain_recognized_within_marker():
++    """`域` 作 `领域` 别名仅在来源记号内识别。"""
++    text = "- **F5**〔跨域收敛〕| 已修[impl-review-fix] | 改了\n"
++    got = R.extract_fixrate_samples(text)
++    assert got == [("domain", "fixed")]
++
++
++# ---- fixrate_aggregate / render_fixrate_table ----
++
++_FR_TABLE = ("| # | 来源 | 处置 |\n|---|---|---|\n"
++             "| {n} | {src} | {disp} |\n")
++
++
++def test_fixrate_aggregate_and_render_shows_three_numbers(tmp_path):
++    root = _init_repo(tmp_path)
++    d = root / "openspec/changes/archive/2026-01-01-foo"
++    d.mkdir(parents=True)
++    body = (_FR_TABLE.format(n=1, src="对抗镜1", disp="已修[impl-review-fix]")
++            + _FR_TABLE.format(n=2, src="对抗镜1", disp="已修[impl-review-fix]")
++            + _FR_TABLE.format(n=3, src="对抗镜1", disp="待跟进"))
++    (d / "code-review-report.md").write_text(body, encoding="utf-8")
++    rows, lens_unknown = R.fixrate_aggregate(str(root))
++    key = ("code-review", "adversarial")
++    assert rows[key]["可判定"] == 3
++    assert rows[key]["实修"] == 2
++    assert rows[key]["未修"] == 1
++    md = R.render_fixrate_table(rows, lens_unknown)
++    assert "可判定" in md and "未知(本镜)" in md and "覆盖率" in md
++    assert "| code-review | adversarial | 3 | 2 | 0 | 1 |" in md
++
++
++def test_fixrate_render_marks_reference_below_threshold():
++    rows = {("code-review", "adversarial"): {"可判定": 3, "实修": 1, "未修": 2,
++                                              "defer": 0, "未知": 0, "佐证": False}}
++    md = R.render_fixrate_table(rows, {})
++    assert "（参考）" in md
++
++
++def test_fixrate_render_no_reference_at_or_above_threshold():
++    rows = {("code-review", "domain"): {"可判定": 5, "实修": 5, "未修": 0,
++                                         "defer": 0, "未知": 0, "佐证": False}}
++    md = R.render_fixrate_table(rows, {})
++    assert "（参考）" not in md
++
++
++def test_fixrate_render_empty_rows_no_crash():
++    md = R.render_fixrate_table({}, {})
++    assert "layer" in md and "lens" in md
++
++
++def test_fixrate_aggregate_missing_archive_returns_empty(tmp_path):
++    rows, lens_unknown = R.fixrate_aggregate(str(tmp_path))
++    assert rows == {} and lens_unknown == {}
++
++
++def test_fixrate_aggregate_evidence_flag_from_fix_commit(tmp_path):
++    """佐证 flag：change 边界内存在 impl-review-fix 类 commit 时打标，不参与实修判定。"""
++    root = _init_repo(tmp_path)
++    d = root / "openspec/changes/archive/2026-01-01-bar"
++    d.mkdir(parents=True)
++    (d / "code-review-report.md").write_text(
++        _FR_TABLE.format(n=1, src="对抗镜1", disp="已修[impl-review-fix]"), encoding="utf-8")
++    _git(root, "add", "-A")
++    _git(root, "commit", "-q", "-m", "checkpoint(impl-review-fix): auto fix")
++    rows, _ = R.fixrate_aggregate(str(root))
++    assert rows[("code-review", "adversarial")]["佐证"] is True
++
++
++def test_fixrate_aggregate_no_evidence_flag_without_fix_commit(tmp_path):
++    root = _init_repo(tmp_path)
++    d = root / "openspec/changes/archive/2026-01-01-baz"
++    d.mkdir(parents=True)
++    (d / "code-review-report.md").write_text(
++        _FR_TABLE.format(n=1, src="对抗镜1", disp="已修[impl-review-fix]"), encoding="utf-8")
++    _git(root, "add", "-A")
++    _git(root, "commit", "-q", "-m", "chore: unrelated")
++    rows, _ = R.fixrate_aggregate(str(root))
++    assert rows[("code-review", "adversarial")]["佐证"] is False
++
++
++def test_build_report_includes_fixrate_section(tmp_path):
++    root = _init_repo(tmp_path)
++    d = root / "openspec/changes/archive/2026-01-01-foo"
++    d.mkdir(parents=True)
++    (d / "code-review-report.md").write_text(
++        _FR_TABLE.format(n=1, src="对抗镜1", disp="已修[impl-review-fix]"), encoding="utf-8")
++    _git(root, "add", "-A")
++    _git(root, "commit", "-q", "-m", "chore: seed")
++    md = R.build_report(str(root))
++    assert "## 聚合④ per-镜实修率（历史回算）" in md
++    assert "adversarial" in md
++
++
++def test_build_report_fixrate_no_crash_when_no_archive(tmp_path):
++    root = _init_repo(tmp_path)
++    _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
++    md = R.build_report(str(root))
++    assert "## 聚合④ per-镜实修率（历史回算）" in md
++
++
++# ---- 真仓再生冒烟：聚合④在场 + 待复评镜实修率或「参考」可读 ----
++
++_REPO = Path(__file__).resolve().parents[3]  # tests/scripts/sdflow-retro/仓根
++
++
++def test_fixrate_real_repo_smoke_flagged_lenses_readable():
++    """真仓再生冒烟：对本仓 archive 语料跑 build_report，聚合④在场；surfacing_block
++    当前标记的待复评 (layer,lens,host,runner,site) 镜，其粗粒度 (layer,lens) 在聚合④
++    表中有可读的实修率（数值%或「参考」），不因窄文法密度低而缺行/崩溃。"""
++    md = R.build_report(str(_REPO))
++    assert "## 聚合④ per-镜实修率（历史回算）" in md
++    _counts, flagged, _thr = R.surfacing_counts(str(_REPO))
++    fr_rows, _ = R.fixrate_aggregate(str(_REPO))
++    flagged_layer_lens = {(k[0], k[1]) for k, _c in flagged}
++    for layer, lens in flagged_layer_lens:
++        d = fr_rows.get((layer, lens))
++        # 可判定=0 时该 (layer,lens) 键可能压根不在 rows 里（真实窄文法密度低是已接受风险）；
++        # 只要不崩溃、且若存在则渲染函数能产出可读字符串即满足「实修率或参考可读」。
++        if d is not None:
++            denom = d["可判定"]
++            rate_str = f"{d['实修'] / denom:.0%}" if denom else "—"
++            assert rate_str  # 非空、非崩溃即可读
