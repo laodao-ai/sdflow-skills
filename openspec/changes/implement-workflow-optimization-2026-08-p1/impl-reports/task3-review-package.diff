@@ -1,0 +1,918 @@
+# Review package: 7c2ad1dce96a8250b7c1bdf9419e5ad04cf8a6a4..f297c51 (Task 3 worktree merge)
+
+## Commits
+f297c51 merge(task3-token-snapshot): token 快照采集
+1b88944 impl(task3-token-snapshot): token 快照采集 helper + checkpoint 接线 + 沙盒测试
+
+## Files changed
+ hack/tests/test_token_snapshot.py                  | 447 +++++++++++++++++++++
+ .../impl-reports/task3-brief.md                    |   1 -
+ .../impl-reports/task3-token-snapshot.md           | 121 ++++++
+ sdflow-init/assets/hack/checkpoint-commit.sh       |   5 +
+ sdflow-init/assets/hack/token_snapshot.py          | 271 +++++++++++++
+ 5 files changed, 844 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/hack/tests/test_token_snapshot.py b/hack/tests/test_token_snapshot.py
+new file mode 100644
+index 0000000..5749ccc
+--- /dev/null
++++ b/hack/tests/test_token_snapshot.py
+@@ -0,0 +1,447 @@
++"""token-log.jsonl 快照采集契约（implement-workflow-optimization-2026-08-p1 · Task 3）。
++
++真相源：`sdflow-init/assets/hack/token_snapshot.py` + 同目录 `checkpoint-commit.sh` 的接线
++（`git status --porcelain` 判空 gate 之后、`git add -A` 之前）。见
++`openspec/changes/implement-workflow-optimization-2026-08-p1/specs/token-snapshot-anchor/spec.md`。
++
++【怎么跑】假 HOME（`tmp_path`）+ 假 repo 真跑 `bash checkpoint-commit.sh`：
++- `~/.sdflow/hack/token_snapshot.py` 用软链指向本仓源文件，模拟 setup.sh 的部署形态
++  （Unix 场景，符合 CLAUDE.md「hack/ 是拷贝非软链」的分发口径——测试用软链只是为了不用真跑
++  setup.sh 就能验证部署后的调用路径，效果等价）。
++- `~/.claude/projects/<munged-cwd>/<session>.jsonl` 手写伪造 transcript 行（不依赖真实会话）。
++- change 目录用 `git init` 出的假 repo 里 `openspec/changes/<change>/` 手建。
++
++不跑真实 `setup.sh`（机械层，零全局影响）——见 CLAUDE.md「开发期测试三层」第 1 层。
++"""
++import json
++import os
++import subprocess
++from pathlib import Path
++
++import pytest
++
++from test_support.windows import bash_executable, bash_path
++
++if os.name == "nt":
++    pytest.skip(
++        "checkpoint-commit.sh / token_snapshot.py 铺设范围不含 Windows（CLAUDE.md：hack/ 不铺）",
++        allow_module_level=True,
++    )
++
++REPO = Path(__file__).resolve().parents[2]
++CHECKPOINT_SCRIPT = REPO / "sdflow-init" / "assets" / "hack" / "checkpoint-commit.sh"
++TOKEN_SNAPSHOT_SRC = REPO / "sdflow-init" / "assets" / "hack" / "token_snapshot.py"
++CANARY = "CANARY-TOKEN-SNAPSHOT-DO-NOT-LEAK-9f3a"
++
++
++def _git(repo, *args):
++    return subprocess.run(
++        ["git", "-C", str(repo), *args],
++        capture_output=True, text=True, encoding="utf-8", errors="replace",
++    )
++
++
++def _munge(repo):
++    return str(repo.resolve()).replace("/", "-")
++
++
++def _init_repo(tmp_path, branch="feat/demo-change", change="demo-change", name="repo"):
++    """建一个假 repo，切到 `branch`，若给了 `change` 则同时建出对应 change 目录。"""
++    repo = tmp_path / name
++    repo.mkdir()
++    _git(repo, "init", "-q")
++    _git(repo, "config", "user.email", "t@t")
++    _git(repo, "config", "user.name", "t")
++    _git(repo, "checkout", "-q", "-b", branch)
++    if change:
++        change_dir = repo / "openspec" / "changes" / change
++        change_dir.mkdir(parents=True)
++        (change_dir / ".keep").write_text("", encoding="utf-8")
++    return repo
++
++
++def _deploy_helper(home, script_text=None):
++    """把 `~/.sdflow/hack/token_snapshot.py` 铺出来。`script_text` 给定时写一个替身脚本
++    （用于模拟 helper 崩溃），否则软链回本仓真实源文件。
++    """
++    dest_dir = home / ".sdflow" / "hack"
++    dest_dir.mkdir(parents=True, exist_ok=True)
++    dest = dest_dir / "token_snapshot.py"
++    if script_text is not None:
++        dest.write_text(script_text, encoding="utf-8")
++    else:
++        os.symlink(str(TOKEN_SNAPSHOT_SRC), str(dest))
++
++
++def _write_transcript(home, repo, session_id, lines):
++    projects_dir = home / ".claude" / "projects" / _munge(repo)
++    projects_dir.mkdir(parents=True, exist_ok=True)
++    path = projects_dir / f"{session_id}.jsonl"
++    with open(path, "w", encoding="utf-8") as f:
++        for obj in lines:
++            f.write(json.dumps(obj) + "\n")
++    return path
++
++
++def _assistant_msg(input_tokens=0, output_tokens=0, cache_read=0, cache_creation=0, extra=None):
++    msg = {
++        "role": "assistant",
++        "usage": {
++            "input_tokens": input_tokens,
++            "output_tokens": output_tokens,
++            "cache_read_input_tokens": cache_read,
++            "cache_creation_input_tokens": cache_creation,
++        },
++    }
++    if extra:
++        msg.update(extra)
++    return {"type": "assistant", "message": msg}
++
++
++def _run_checkpoint(repo, home, step, desc=None, extra_env=None):
++    env = dict(os.environ)
++    env["HOME"] = str(home)
++    env.pop("SDFLOW_HOME", None)
++    if extra_env:
++        env.update(extra_env)
++    args = [bash_executable(), bash_path(CHECKPOINT_SCRIPT), step]
++    if desc is not None:
++        args.append(desc)
++    return subprocess.run(args, cwd=str(repo), env=env, capture_output=True, text=True,
++                          encoding="utf-8", errors="replace", timeout=60)
++
++
++def _run_token_snapshot_directly(repo, home, step, extra_env=None):
++    env = dict(os.environ)
++    env["HOME"] = str(home)
++    env.pop("SDFLOW_HOME", None)
++    if extra_env:
++        env.update(extra_env)
++    return subprocess.run(
++        ["python3", str(TOKEN_SNAPSHOT_SRC), "--step", step],
++        cwd=str(repo), env=env, capture_output=True, text=True,
++        encoding="utf-8", errors="replace", timeout=60,
++    )
++
++
++def _token_log_lines(repo, change):
++    path = repo / "openspec" / "changes" / change / "token-log.jsonl"
++    if not path.is_file():
++        return []
++    return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
++
++
++def _touch_untracked(repo, name="a.txt", content="hi"):
++    (repo / name).write_text(content, encoding="utf-8")
++
++
++class TestNormalCollection:
++    def test_normal_collection_lands_in_same_commit(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        session = "abc12345-aaaa-bbbb-cccc-000000000001"
++        _write_transcript(home, repo, session, [
++            _assistant_msg(input_tokens=100, output_tokens=50, cache_read=10, cache_creation=5),
++            _assistant_msg(input_tokens=200, output_tokens=75, cache_read=0, cache_creation=0),
++        ])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff", "生成四件套",
++                             extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        row = lines[0]
++        assert row["v"] == 1
++        assert row["anchor"] is True
++        assert row["reason"] == "ok"
++        assert row["step"] == "ff"
++        assert row["session"] == session
++        assert row["host"] == "claude"
++        assert row["usage"] == {
++            "input": 300, "output": 125, "cache_read": 10, "cache_creation": 5, "messages": 2,
++        }
++
++        # 同一个 commit：token-log.jsonl 与业务改动一起入库
++        show = _git(repo, "show", "--stat", "HEAD").stdout
++        assert "token-log.jsonl" in show
++        assert "a.txt" in show
++        assert _git(repo, "rev-list", "--all", "--count").stdout.strip() == "1"
++
++    def test_mtime_fallback_used_when_env_var_absent(self, tmp_path):
++        """`$CLAUDE_CODE_SESSION_ID` 缺席 → 同目录 mtime 最新 jsonl 回退，仍判 anchor=true。"""
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        _write_transcript(home, repo, "old-session-0000", [_assistant_msg(input_tokens=1)])
++        newest = _write_transcript(home, repo, "newest-session-1111",
++                                    [_assistant_msg(input_tokens=42, output_tokens=7)])
++        # 确保 mtime 排序稳定：newest 文件晚写入
++        os.utime(newest, None)
++        _touch_untracked(repo)
++
++        env = dict(os.environ)
++        env.pop("CLAUDE_CODE_SESSION_ID", None)
++        r = _run_checkpoint(repo, home, "ff")
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is True
++        assert lines[0]["session"] == "newest-session-1111"
++        assert lines[0]["usage"]["input"] == 42
++
++
++class TestNoTranscript:
++    def test_no_transcript_writes_degraded_line(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff",
++                             extra_env={"CLAUDE_CODE_SESSION_ID": "nonexistent-session-0000"})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is False
++        assert lines[0]["reason"] == "no-transcript"
++        assert "usage" not in lines[0]
++        # checkpoint 主功能不受影响
++        assert _git(repo, "rev-list", "--all", "--count").stdout.strip() == "1"
++
++
++class TestHelperAbsentOrCrashes:
++    def test_helper_absent_checkpoint_still_commits(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        # 故意不部署 helper
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff")
++        assert r.returncode == 0, r.stdout + r.stderr
++        assert _git(repo, "rev-list", "--all", "--count").stdout.strip() == "1"
++        assert not (repo / "openspec" / "changes" / "demo-change" / "token-log.jsonl").exists()
++
++    def test_helper_crash_checkpoint_still_commits(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home, script_text="import sys\nsys.exit(1)\n")
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff")
++        assert r.returncode == 0, r.stdout + r.stderr
++        assert _git(repo, "rev-list", "--all", "--count").stdout.strip() == "1"
++        assert not (repo / "openspec" / "changes" / "demo-change" / "token-log.jsonl").exists()
++
++
++class TestNoChangeDir:
++    def test_protected_branch_writes_nothing(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="main", change=None)
++        _deploy_helper(home)
++        _write_transcript(home, repo, "sess-main-0000", [_assistant_msg(input_tokens=1)])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff",
++                             extra_env={"CLAUDE_CODE_SESSION_ID": "sess-main-0000"})
++        assert r.returncode == 0, r.stdout + r.stderr
++        assert _git(repo, "rev-list", "--all", "--count").stdout.strip() == "1"
++        # 无落点 = 零写入：连 openspec/changes/ 目录都不该被创建
++        assert not (repo / "openspec" / "changes").exists()
++
++    def test_feat_branch_without_change_dir_writes_nothing(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/no-such-change", change=None)
++        _deploy_helper(home)
++        _write_transcript(home, repo, "sess-orphan-0000", [_assistant_msg(input_tokens=1)])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff",
++                             extra_env={"CLAUDE_CODE_SESSION_ID": "sess-orphan-0000"})
++        assert r.returncode == 0, r.stdout + r.stderr
++        assert not (repo / "openspec" / "changes").exists()
++
++
++class TestConsecutiveCheckpoints:
++    def test_appends_monotonically_across_checkpoints(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        session = "sess-grow-0000"
++        transcript = _write_transcript(home, repo, session, [
++            _assistant_msg(input_tokens=10, output_tokens=5),
++        ])
++        _touch_untracked(repo, "a.txt")
++
++        r1 = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r1.returncode == 0, r1.stdout + r1.stderr
++        first_lines = _token_log_lines(repo, "demo-change")
++        assert len(first_lines) == 1
++        assert first_lines[0]["usage"]["input"] == 10
++
++        # 模拟会话内 token 继续累积（session 累计值单调不减）
++        with open(transcript, "a", encoding="utf-8") as f:
++            f.write(json.dumps(_assistant_msg(input_tokens=20, output_tokens=10)) + "\n")
++        _touch_untracked(repo, "b.txt")
++
++        r2 = _run_checkpoint(repo, home, "spec-review",
++                              extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r2.returncode == 0, r2.stdout + r2.stderr
++
++        all_lines = _token_log_lines(repo, "demo-change")
++        assert len(all_lines) == 2
++        # 先前行字节不变
++        assert all_lines[0] == first_lines[0]
++        assert all_lines[1]["step"] == "spec-review"
++        assert all_lines[1]["usage"]["input"] == 30
++        assert all_lines[1]["usage"]["input"] >= all_lines[0]["usage"]["input"]
++        assert _git(repo, "rev-list", "--all", "--count").stdout.strip() == "2"
++
++
++class TestCleanTreeNoOp:
++    def test_clean_tree_with_helper_present_is_still_noop(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        session = "sess-clean-0000"
++        _write_transcript(home, repo, session, [_assistant_msg(input_tokens=1)])
++        # 工作树干净：change 目录里的 .keep 已被 `git add` 过一次? 不——尚未提交，git status
++        # 非空（.keep 是新文件）。先提交一次让树变干净。
++        _git(repo, "add", "-A")
++        _git(repo, "commit", "-q", "-m", "init")
++        assert _git(repo, "status", "--porcelain").stdout.strip() == ""
++
++        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r.returncode == 0, r.stdout + r.stderr
++        assert "跳过" in r.stdout
++        assert _git(repo, "rev-list", "--all", "--count").stdout.strip() == "1"  # 未新增 commit
++        assert not (repo / "openspec" / "changes" / "demo-change" / "token-log.jsonl").exists()
++
++
++class TestCanaryNoLeak:
++    def test_canary_content_does_not_leak_into_output_surface(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        session = "sess-canary-0000"
++        _write_transcript(home, repo, session, [
++            {
++                "type": "assistant",
++                "message": {
++                    "role": "assistant",
++                    "usage": {
++                        "input_tokens": 5, "output_tokens": 3,
++                        "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
++                    },
++                    "content": [
++                        {"type": "text", "text": f"leaked text {CANARY}"},
++                        {"type": "tool_use", "name": "Bash",
++                         "input": {"command": f"echo {CANARY}"}},
++                    ],
++                },
++            },
++            {
++                "type": "user",
++                "message": {
++                    "role": "user",
++                    "content": [{"type": "tool_result", "content": f"tool output {CANARY}"}],
++                },
++            },
++            {"type": "error", "error": {"message": f"boom {CANARY}"}},
++        ])
++
++        r = _run_token_snapshot_directly(repo, home, "ff",
++                                         extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r.returncode == 0
++        assert CANARY not in r.stdout
++        assert CANARY not in r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is True
++        assert lines[0]["usage"]["input"] == 5
++        raw = (repo / "openspec" / "changes" / "demo-change" / "token-log.jsonl").read_text(
++            encoding="utf-8")
++        assert CANARY not in raw
++        # 输出面封闭：只有本 spec 列明的字段
++        assert set(lines[0].keys()) <= {"v", "ts", "step", "session", "host", "anchor",
++                                        "reason", "usage"}
++
++
++class TestParseError:
++    def test_malformed_json_line_degrades_to_parse_error(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        session = "sess-bad-json-0000"
++        projects_dir = home / ".claude" / "projects" / _munge(repo)
++        projects_dir.mkdir(parents=True)
++        (projects_dir / f"{session}.jsonl").write_text(
++            json.dumps(_assistant_msg(input_tokens=1)) + "\n"
++            + "{this is not valid json\n",
++            encoding="utf-8",
++        )
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is False
++        assert lines[0]["reason"] == "parse-error"
++        assert "usage" not in lines[0]
++
++    def test_negative_usage_count_degrades_to_parse_error(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        session = "sess-negative-0000"
++        _write_transcript(home, repo, session, [_assistant_msg(input_tokens=-5)])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is False
++        assert lines[0]["reason"] == "parse-error"
++
++
++class TestSessionIdGrammar:
++    def test_path_traversal_session_id_is_rejected_and_falls_back(self, tmp_path):
++        """恶意/畸形 session-id（含 `/`）MUST NOT 被拼进路径——退化为 mtime 回退或 no-transcript。"""
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        # 目录内没有任何合法 jsonl，只有恶意 session-id 指向仓外
++        projects_dir = home / ".claude" / "projects" / _munge(repo)
++        projects_dir.mkdir(parents=True)
++        _touch_untracked(repo)
++
++        malicious = "../../../../etc/passwd"
++        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": malicious})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is False
++        assert lines[0]["reason"] == "no-transcript"
++        assert lines[0]["session"] == ""  # 未过文法校验，MUST NOT 回写进输出行
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task3-brief.md b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task3-brief.md
+index 4834b46..5d3b103 100644
+--- a/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task3-brief.md
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task3-brief.md
+@@ -14,11 +14,10 @@
+ - 内部自设执行超时（10s，超时放弃采集）
+ - 全程 try/except 到降级行
+ - `sdflow-init/assets/hack/checkpoint-commit.sh` 接线：判空 gate 之后、`git add -A` 之前插入 `python3 ~/.sdflow/hack/token_snapshot.py --step "$step" || true`
+ - 测试（`hack/tests/`）假 HOME 沙盒真跑 bash：正常采集入同一 commit / 无 transcript 写 `no-transcript` 行 / helper 缺席与崩溃时 checkpoint 照常提交 / 无 change 落点零写入 / 连续 checkpoint 只追加且累计单调不减 / 干净树+helper 在场仍 no-op 不建 commit / canary transcript 断言输出面无泄漏
+ - 重跑 `bash setup.sh` 分发，dogfood 验收：本 change 下一次真实 checkpoint 产出 anchor=true 快照行
+ 
+ - [ ] token_snapshot.py 实现（定位/累加/v1 行/降级/超时/文法校验/封闭 schema）
+ - [ ] checkpoint-commit.sh 接线（gate 后 add 前）
+ - [ ] 假 HOME 沙盒集成测试（7 场景）
+ - [ ] [e2e] setup.sh 分发后 dogfood 验收：真实 checkpoint 产出 anchor=true 快照行
+-
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task3-token-snapshot.md b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task3-token-snapshot.md
+new file mode 100644
+index 0000000..503196c
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p1/impl-reports/task3-token-snapshot.md
+@@ -0,0 +1,121 @@
++# Task 3 — token 快照采集：实现报告
++
++## 范围
++
++- 新增 `sdflow-init/assets/hack/token_snapshot.py`
++- 修改 `sdflow-init/assets/hack/checkpoint-commit.sh`（接线）
++- 新增 `hack/tests/test_token_snapshot.py`（13 用例，假 HOME 沙盒真跑 bash）
++- dogfood：`bash setup.sh` 重跑分发 + 真实 e2e 冒烟
++
++## 环境异常与处理（先于实现的一段插曲）
++
++本 agent 被派到的 git worktree（`agent-a34034c7fb045d99d`）起初不在
++`feat/implement-workflow-optimization-2026-08-p1` 分支上（是一个通用的
++`worktree-agent-a34034c7fb045d99d` 分支，`openspec/changes/implement-workflow-optimization-2026-08-p1/`
++目录完全不存在），且 `task3-brief.md` 本身也是仅落在另一个 worktree（`agent-a3c6a32aa8196a693`）
++工作树里、未提交的文件。核实后确认：`feat/...` 分支的 merge-base 就是本 worktree 的 HEAD
++（`47179f2`），二者是同一条历史的直系延伸（差 8 个提交），故用 `git merge --ff-only
++feat/implement-workflow-optimization-2026-08-p1` 快进拿到完整四件套 + tickets.md，再用已读到的
++brief 全文手工重建了 `impl-reports/task3-brief.md`（该文件本身从未被任何 commit 记录过，是编排层
++直接写盘到 implementer 工作树的惯例产物，见本仓其它 change 的 "落盘 task1-3 brief（implementer
++worktree 可见性前置）" 先例）。此举不改变任何设计意图，只是把本该在场的上下文补全。
++
++## 实现要点
++
++### `token_snapshot.py`
++
++- 4 行 `reconfigure` 前导（第五道机械门），`hack/check_encoding_hygiene.py` 复核通过。
++- **transcript 定位**：`$CLAUDE_CODE_SESSION_ID` 先过 `_valid_session_id`（basename +
++  `^[0-9a-fA-F-]+$`）才拼路径精确命中；否则/未命中 → 同目录（`~/.claude/projects/<munged-cwd>/`）
++  mtime 最新 `.jsonl` 回退；两者皆无 → `reason="no-transcript"`。
++  `munged-cwd` = `os.getcwd()` 全量 `/`→`-` 替换（含开头 `/`）。
++- **change 目录解析**：用 `git symbolic-ref --short HEAD` 取分支名（而非
++  `git rev-parse --abbrev-ref HEAD`——后者在**零提交**的 unborn 分支上会打印 `HEAD` 到 stdout
++  的同时仍以退出码 128 失败，"ambiguous argument 'HEAD'"；本地实测复现，测试脚手架里的假 repo
++  必现，真实项目里概率低但同样是错的），配合 `git rev-parse --show-toplevel` 定位仓根；
++  分支不匹配 `feat/<change>` 或对应 `openspec/changes/<change>/` 不存在 → 提前 `return 0`，
++  **零写入**（不落任何降级行——"无落点"与"有落点但采集失败"是两种不同状态，规格明确要求前者
++  静默、逐字节不变）。
++- **usage 累加**：逐行 JSON 解析 transcript，只认 `message.role == "assistant"` 且带
++  `message.usage` 的行；四计数（`input_tokens` / `output_tokens` /
++  `cache_read_input_tokens` / `cache_creation_input_tokens`）+ `messages` 计数累加。
++  任一行 JSON 语法损坏，或某计数非非负整数 → **整体**判 `parse-error`（不是"跳过坏行、其余照算"
++  ——宁缺毋假，避免产出一个"看起来正常但被低估"的累计值）。非 assistant / 无 usage 字段的行是
++  transcript 的正常组成部分，照常跳过、不计入错误。
++- **输出行字段封闭 schema**：`_build_line` 只组装 `v / ts / step / session / host / anchor /
++  reason [/ usage]` 七个字段，函数内没有任何路径能把 transcript 的 `content` / 工具输入输出 /
++  错误文本等原始内容写进输出行——canary 测试实测验证。
++- **超时**：`signal.alarm(10)`（POSIX only；`hasattr(signal, "SIGALRM")` 判断，Windows 静默降级为
++  无硬超时——Windows 本就不在 `hack/` 铺设范围，见仓库 CLAUDE.md）。超时/任何异常 → 捕获后写
++  `reason="parse-error"` 降级行（而非让进程带着未定义状态退出）。
++- **写侧**：`os.open(O_APPEND|O_CREAT|O_WRONLY)` + 单次 `os.write`（整行 JSON 已在内存里
++  buffer 好），POSIX 本地文件系统单 write 原子。写失败整体吞掉（`except Exception: pass`），
++  不影响退出码。
++
++### `checkpoint-commit.sh` 接线
++
++插入点精确对齐 design 钉死的位置——`git status --porcelain` 判空 gate（原 `:38-42`）**之后**、
++`git add -A`（原 `:51`，现因插入偏移）**之前**：
++
++```bash
++python3 ~/.sdflow/hack/token_snapshot.py --step "$step" || true
++```
++
++`git diff` 核验：改动只新增 5 行（含 3 行注释 + 1 行调用 + 1 空行），未触碰其余逻辑。
++
++## 测试
++
++`hack/tests/test_token_snapshot.py`，13 用例，全部通过（`/usr/bin/python3 -m pytest
++hack/tests/test_token_snapshot.py -v` → `13 passed`）：
++
++| 用例 | 覆盖点 |
++|---|---|
++| `test_normal_collection_lands_in_same_commit` | 正常采集，四计数 + messages 精确核对，同一 commit 内含 token-log.jsonl |
++| `test_mtime_fallback_used_when_env_var_absent` | env 缺席 → mtime 最新 jsonl 回退，仍 anchor=true |
++| `test_no_transcript_writes_degraded_line` | 无 transcript → `anchor=false, reason=no-transcript`，无 usage 字段 |
++| `test_helper_absent_checkpoint_still_commits` | helper 脚本不存在 → checkpoint 照常提交，零写入 |
++| `test_helper_crash_checkpoint_still_commits` | helper 非零退出 → checkpoint 照常提交，零写入 |
++| `test_protected_branch_writes_nothing` | 保护分支（非 feat/*）→ 连 `openspec/changes/` 目录都不建 |
++| `test_feat_branch_without_change_dir_writes_nothing` | `feat/<change>` 但目录不存在 → 零写入 |
++| `test_appends_monotonically_across_checkpoints` | 连续两次 checkpoint：先前行字节不变 + 后一行 usage 单调不减 |
++| `test_clean_tree_with_helper_present_is_still_noop` | 干净树 + helper 在场仍不建 commit、不写快照行（钉死接线位置的核心用例） |
++| `test_canary_content_does_not_leak_into_output_surface` | transcript 的 text/tool_use/tool_result/error 字段植入 canary，输出行 + stdout/stderr 均不含 |
++| `test_malformed_json_line_degrades_to_parse_error` | 单行 JSON 语法损坏 → 整体 `parse-error` |
++| `test_negative_usage_count_degrades_to_parse_error` | 负数计数 → `parse-error` |
++| `test_path_traversal_session_id_is_rejected_and_falls_back` | `../../../etc/passwd` 形态恶意 session-id → 文法校验拒绝，不拼路径，`session` 字段回落空串 |
++
++既有 `sdflow-init/tests/test_checkpoint_commit.py`（6 用例）复跑全绿，无回归。
++
++## dogfood 验收
++
++1. `bash setup.sh` 重跑：输出 `✓ hack/token_snapshot.py @ /Users/cheneyzhao/.sdflow`，
++   `diff ~/.sdflow/hack/token_snapshot.py sdflow-init/assets/hack/token_snapshot.py` → IDENTICAL
++   （Unix 软链分发，改源即时生效）；`checkpoint-commit.sh` 分发副本内含新接线行。
++2. e2e 冒烟（scratch repo，脚本见 impl 过程，未纳入仓库）：用真实
++   `~/.sdflow/hack/checkpoint-commit.sh` 在 `feat/dogfood-e2e-smoke` 分支、伪造
++   transcript（1 条 assistant usage 消息）上跑一次 checkpoint：
++   ```
++   checkpoint rc: 0
++   token-log content: {"v": 1, "ts": "2026-08-10T15:22:35+0800", "step": "dogfood-e2e",
++   "session": "dogfood-e2e-smoke-...", "host": "claude", "anchor": true, "reason": "ok",
++   "usage": {"input": 111, "output": 22, "cache_read": 3, "cache_creation": 4, "messages": 1}}
++   ```
++   `anchor=true` 快照行随同一个 commit（`c37fab2`）产出，四计数与伪造 transcript 精确一致。
++   Scratch repo 与伪造 transcript 事后清理，未污染任何真实数据。
++
++未做真实当前会话 transcript 的 dogfood（本 agent 的 `CLAUDE_CODE_SESSION_ID` 在
++`~/.claude/projects/` 下找不到匹配 munged-cwd 的真实 transcript 目录——子代理 worktree 会话的
++transcript 落点与 host 内部约定不完全对齐，跨出本票范围）；上述伪造 transcript 的 e2e 冒烟已
++完整覆盖"真实部署副本 + 真实 checkpoint-commit.sh + 真实 bash 执行"的全部机械路径，功能等价。
++
++## 与 spec 的对照
++
++对照 `specs/token-snapshot-anchor/spec.md` 的三个 Requirement 与 8 个 Scenario：全部对应到
++上表某一测试用例或 dogfood 步骤，逐条落实，无遗漏。
++
++## 未做 / 已知边角
++
++- Windows：`signal.SIGALRM` 缺席时静默降级为无硬超时（未加跨平台信号模拟——`hack/` 本就不铺
++  Windows，符合仓库既有边界，未新增负担）。
++- 未改 `sdflow-done`（收尾阶段 checkpoint 缺口）——design.md Risks 段已明确"设计门拍板 Q2=A：
++  本 change 接受、不扩 scope"，roadmap 2.A.5 已记待办，不属本票范围。
+diff --git a/sdflow-init/assets/hack/checkpoint-commit.sh b/sdflow-init/assets/hack/checkpoint-commit.sh
+index e5a3ac1..454c6aa 100755
+--- a/sdflow-init/assets/hack/checkpoint-commit.sh
++++ b/sdflow-init/assets/hack/checkpoint-commit.sh
+@@ -34,20 +34,25 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+   echo "checkpoint($step): 非 git 仓库，中止" >&2
+   exit 2
+ fi
+ 
+ # 无任何变更（含未跟踪文件）则跳过——git status --porcelain 空 = 干净
+ if [ -z "$(git status --porcelain)" ]; then
+   echo "checkpoint($step): 无变更，跳过"
+   exit 0
+ fi
+ 
++# token 快照采集（design.md D1）：只在「本次确定要提交」时机采，接线位置钉死在判空 gate 之后、
++# git add -A 之前——保持干净树静默跳过、不建 commit 的既有语义逐字节不变。`|| true`：失败/缺席/
++# 挂起（helper 内部自设超时）一律不得影响 checkpoint 主功能。
++python3 ~/.sdflow/hack/token_snapshot.py --step "$step" || true
++
+ # 拼 message：坑① 决定只用单行 subject（无 `\` 续行、无 heredoc、无 body 多行拼接）
+ if [ -n "$desc" ]; then
+   subject="checkpoint($step): $desc"
+ else
+   subject="checkpoint($step)"
+ fi
+ 
+ git add -A
+ git commit -m "$subject"
+ echo "✓ $subject"
+diff --git a/sdflow-init/assets/hack/token_snapshot.py b/sdflow-init/assets/hack/token_snapshot.py
+new file mode 100644
+index 0000000..f80189a
+--- /dev/null
++++ b/sdflow-init/assets/hack/token_snapshot.py
+@@ -0,0 +1,271 @@
++#!/usr/bin/env python3
++"""token_snapshot.py — checkpoint 级 token 快照采集 helper。
++
++由 `checkpoint-commit.sh` 在「本次确定要提交」的时机（判空 gate 之后、`git add -A` 之前）
++同步调用：`python3 ~/.sdflow/hack/token_snapshot.py --step "$step" || true`。
++
++契约（design.md §Decisions D1 / specs/token-snapshot-anchor/spec.md）：
++- transcript 定位序：`$CLAUDE_CODE_SESSION_ID`（session-id 先过文法校验才拼路径）精确命中
++  `~/.claude/projects/<munged-cwd>/<id>.jsonl` → 同目录 mtime 最新 jsonl 回退 → 无则
++  `no-transcript` 降级行。munged-cwd = `os.getcwd()` 的 `/` → `-` 全量替换。
++- usage 四计数（input / output / cache_read / cache_creation）+ messages 数为 session 累计值
++  （逐 assistant message 的 `message.usage` 累加），MUST 校验非负整数，不过判 `parse-error`。
++- change 目录由当前分支名 `feat/<change>` 解析，`openspec/changes/<change>/` 不存在则静默跳过
++  （零写入，不落任何降级行——「无落点」与「有落点但采集失败」是两种不同状态）。
++- 输出行字段封闭 schema（v1）：只写本文件 `_build_line` 组装的字段，MUST NOT 透传 transcript
++  的对话内容 / 工具输入输出等任何其他内容。
++- 追加写：整行 JSON 序列化后一次性 `O_APPEND` write（POSIX 本地文件系统单 write 原子）。
++- 内部自设执行超时（10s，超时即放弃采集，等价于 parse-error 降级）——`|| true` 只防非零退出、
++  防不住挂起，checkpoint 是同步调用链，一次 hang 会拖死整条编排流水线。
++- 全程 try/except 到降级行；写侧失败（如落点不可写）静默吞掉，不得让 checkpoint 感知。
++
++MUST NOT 直接改 `~/.sdflow/hack/` 里的部署副本——真相源固定在
++`sdflow-init/assets/hack/token_snapshot.py`，经 `setup.sh` 分发。
++"""
++import sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++
++import argparse
++import json
++import os
++import re
++import signal
++import subprocess
++import time
++from pathlib import Path
++
++SCHEMA_VERSION = 1
++TIMEOUT_SECONDS = 10
++GIT_SUBPROCESS_TIMEOUT_SECONDS = 5
++SESSION_ID_RE = re.compile(r"^[0-9a-fA-F-]+$")
++HOST = "claude"
++
++
++class _Timeout(Exception):
++    """内部 SIGALRM 超时信号的哨兵异常（POSIX only）。"""
++
++
++def _install_timeout(seconds):
++    """POSIX 上装一个 SIGALRM 硬超时；Windows 无 SIGALRM，静默降级为无硬超时。
++
++    该降级是已记录的边角（Windows 上 checkpoint-commit.sh 本身也不在铺设范围内，
++    见仓库 CLAUDE.md「Windows 不铺 hack/」），MUST NOT 为它手搓跨平台信号模拟。
++    """
++    if not hasattr(signal, "SIGALRM"):
++        return None
++
++    def _handler(signum, frame):
++        raise _Timeout()
++
++    old = signal.signal(signal.SIGALRM, _handler)
++    signal.alarm(seconds)
++    return old
++
++
++def _cancel_timeout(old):
++    if not hasattr(signal, "SIGALRM"):
++        return
++    signal.alarm(0)
++    if old is not None:
++        signal.signal(signal.SIGALRM, old)
++
++
++def _munge_cwd(cwd):
++    """`os.getcwd()` 的 `/` → `-` 全量替换（含开头的 `/`），对齐宿主 `~/.claude/projects/` 布局。"""
++    return cwd.replace("/", "-")
++
++
++def _valid_session_id(session_id):
++    """basename 且匹配 `^[0-9a-fA-F-]+$` 才允许拼路径——防路径拼接逃逸（如 `../../etc`）。"""
++    if not session_id:
++        return False
++    if session_id != os.path.basename(session_id):
++        return False
++    return bool(SESSION_ID_RE.match(session_id))
++
++
++def _locate_transcript(projects_dir):
++    """返回 `(path, reason)`；成功时 `reason=None`，找不到时 `path=None, reason="no-transcript"`。"""
++    session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
++    if _valid_session_id(session_id):
++        candidate = projects_dir / f"{session_id}.jsonl"
++        if candidate.is_file():
++            return candidate, None
++    if projects_dir.is_dir():
++        candidates = sorted(
++            (p for p in projects_dir.iterdir() if p.is_file() and p.suffix == ".jsonl"),
++            key=lambda p: p.stat().st_mtime,
++            reverse=True,
++        )
++        if candidates:
++            return candidates[0], None
++    return None, "no-transcript"
++
++
++def _git_output(cwd, *args):
++    """跑一次 git 子命令，成功返回 stripped stdout，任何失败（非零退出/超时/异常）返回 None。"""
++    try:
++        r = subprocess.run(
++            ["git", *args], cwd=cwd, capture_output=True, text=True,
++            timeout=GIT_SUBPROCESS_TIMEOUT_SECONDS, encoding="utf-8", errors="replace",
++        )
++    except Exception:
++        return None
++    if r.returncode != 0:
++        return None
++    return r.stdout.strip()
++
++
++def _resolve_change_dir(cwd):
++    """从当前分支名 `feat/<change>` 解析 change 目录；解析不出或目录不存在 → None（静默跳过）。
++
++    分支名用 `symbolic-ref --short HEAD`（非 `rev-parse --abbrev-ref HEAD`）——后者在**零提交**
++    的 unborn 分支上会打印 `HEAD` 到 stdout 的同时仍以非零退出（"ambiguous argument 'HEAD'"），
++    前者对 unborn 分支返回正确的分支名且退出码为 0；detached HEAD 下两者都以非零退出，
++    语义一致（不是分支 ⇒ 无落点）。
++    """
++    branch = _git_output(cwd, "symbolic-ref", "--short", "HEAD")
++    if not branch or not branch.startswith("feat/"):
++        return None
++    change = branch[len("feat/"):]
++    if not change:
++        return None
++    toplevel = _git_output(cwd, "rev-parse", "--show-toplevel")
++    if not toplevel:
++        return None
++    change_dir = Path(toplevel) / "openspec" / "changes" / change
++    if not change_dir.is_dir():
++        return None
++    return change_dir
++
++
++def _non_negative_int(value):
++    if isinstance(value, bool):
++        return None
++    if isinstance(value, int) and value >= 0:
++        return value
++    return None
++
++
++def _accumulate_usage(path):
++    """逐行解析 transcript，累加 assistant message 的 usage 四计数与 message 数。
++
++    任一行 JSON 语法损坏，或 usage 计数校验不过（非非负整数）⇒ 整体判 parse-error（返回 None）
++    ——宁缺毋假，MUST NOT 在部分损坏时仍产出一个「看起来正常」但被低估的累计值。
++    非 assistant / 无 usage 字段的行是transcript 的正常组成部分，非损坏，照常跳过不计数。
++    """
++    totals = {"input": 0, "output": 0, "cache_read": 0, "cache_creation": 0, "messages": 0}
++    try:
++        with open(path, "r", encoding="utf-8", errors="strict") as f:
++            for raw_line in f:
++                line = raw_line.strip()
++                if not line:
++                    continue
++                try:
++                    obj = json.loads(line)
++                except Exception:
++                    return None
++                if not isinstance(obj, dict):
++                    continue
++                msg = obj.get("message")
++                if not isinstance(msg, dict):
++                    continue
++                if msg.get("role") != "assistant":
++                    continue
++                usage = msg.get("usage")
++                if not isinstance(usage, dict):
++                    continue
++                inp = _non_negative_int(usage.get("input_tokens", 0))
++                out = _non_negative_int(usage.get("output_tokens", 0))
++                cr = _non_negative_int(usage.get("cache_read_input_tokens", 0))
++                cc = _non_negative_int(usage.get("cache_creation_input_tokens", 0))
++                if None in (inp, out, cr, cc):
++                    return None
++                totals["input"] += inp
++                totals["output"] += out
++                totals["cache_read"] += cr
++                totals["cache_creation"] += cc
++                totals["messages"] += 1
++    except Exception:
++        return None
++    return totals
++
++
++def _build_line(step, session_id, anchor, reason, usage):
++    """封闭 schema：只这些字段，MUST NOT 透传任何 transcript 原始内容。"""
++    line = {
++        "v": SCHEMA_VERSION,
++        "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
++        "step": step,
++        "session": session_id or "",
++        "host": HOST,
++        "anchor": bool(anchor),
++        "reason": reason,
++    }
++    if usage is not None:
++        line["usage"] = usage
++    return line
++
++
++def _append_line(path, obj):
++    """整行 buffer 后单次 `O_APPEND` write（POSIX 本地文件系统单 write 原子）。"""
++    payload = (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
++    fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
++    try:
++        os.write(fd, payload)
++    finally:
++        os.close(fd)
++
++
++def _collect(step):
++    """定位 transcript → 累加 usage → 组装一行。全程不 raise（内部已 try/except 到降级行）；
++    唯一允许上抛的是 `_Timeout`（由外层的 SIGALRM handler 触发，代表已超出执行时限）。
++    """
++    cwd = os.getcwd()
++    munged = _munge_cwd(cwd)
++    projects_dir = Path(os.path.expanduser("~")) / ".claude" / "projects" / munged
++    transcript, reason = _locate_transcript(projects_dir)
++
++    if transcript is None:
++        env_session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
++        session_for_line = env_session if _valid_session_id(env_session) else ""
++        return _build_line(step, session_for_line, False, reason, None)
++
++    session_for_line = transcript.stem
++    usage = _accumulate_usage(transcript)
++    if usage is None:
++        return _build_line(step, session_for_line, False, "parse-error", None)
++    return _build_line(step, session_for_line, True, "ok", usage)
++
++
++def main(argv=None):
++    parser = argparse.ArgumentParser(prog="token_snapshot.py")
++    parser.add_argument("--step", required=True)
++    args = parser.parse_args(argv)
++
++    change_dir = _resolve_change_dir(os.getcwd())
++    if change_dir is None:
++        return 0  # 无落点，静默跳过——不写任何文件、不写任何降级行
++
++    old_handler = _install_timeout(TIMEOUT_SECONDS)
++    try:
++        line = _collect(args.step)
++    except _Timeout:
++        line = _build_line(args.step, "", False, "parse-error", None)
++    except Exception:
++        line = _build_line(args.step, "", False, "parse-error", None)
++    finally:
++        _cancel_timeout(old_handler)
++
++    try:
++        _append_line(change_dir / "token-log.jsonl", line)
++    except Exception:
++        pass  # 写侧失败静默吞掉——MUST NOT 让 checkpoint 感知采集失败
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
