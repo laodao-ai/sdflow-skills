@@ -19,7 +19,7 @@ wco roadmap 阶段 2：13 面评审镜达到待复评轮数阈值（≥10 轮）
 
 ### Modified Capabilities
 
-- `spec-workflow`: Step3 裁决协议 Requirement 变更——置信过滤豁免条款（现 spec「置信过滤豁免 SHALL 按合法组合矩阵…」及其 Scenario）整体替换为「机械前置 + 二元裁决 + 置信降排序」；镜 roster 支持条件化派发（降采样语义）。
+- `spec-workflow`: **BREAKING**〔spec-review-amendment：与 What Changes 标记一致〕Step3 裁决协议 Requirement 变更——置信过滤豁免条款（现 spec「置信过滤豁免 SHALL 按合法组合矩阵…」及其 Scenario）整体替换为「机械前置 + 二元裁决 + 置信降排序」；镜 roster 支持条件化派发（降采样语义）。
 - `workflow-retro`: 待复评区块新增处置记录消费——已处置镜行内注记处置结果，未处置镜照旧 flag。
 - `token-snapshot-anchor`: 新增 done 收尾终态快照采集点（同口径、同锚文件、失败显式降级不挡收尾）。
 
@@ -71,4 +71,4 @@ N/A（仓内工具链与流程规则改造，无外部合规面）。
 
 ## 成本估算〔TG-24〕
 
-历史重放为一次性 LLM 成本：3-5 份报告 ×（弱档 validator 逐条核 + 强档二元重裁），量级 = 单轮 code-review Step3 的 3-5 倍弱档 + 等量强档裁决，一次性、不进常驻成本。前瞻窗口复用正常评审轮，无增量成本。终态快照为本地脚本，零 LLM 成本。
+历史重放为一次性 LLM 成本：3-5 份报告 ×（机械脚本引用核〔零 LLM 成本，design DD4 已由弱档模型升格为纯脚本，spec-review-amendment〕+ 强档二元重裁），量级 = 3-5 份报告的等量强档裁决，一次性、不进常驻成本。前瞻窗口复用正常评审轮，无增量成本。终态快照为本地脚本，零 LLM 成本。

@@ -6,22 +6,30 @@
 
 两评审 skill（sdflow-spec-review / sdflow-code-review）的裁决入口 SHALL 为三层各司其职（`adr/0041`）：
 
-1. **机械引用核（前置门，确定性脚本）**：逐条核 finding 的引用真实性——引用路径存在、`file:line` 落在文件行数内、单行引文为目标文件子串（spec-review 侧核对象含 change 四件套文档与代码）。任一不过、或该条既无单行引文又无可复核证据包 ⇒ **机械落报告「已裁掉」区**，来源标 `[ref-check]` 与裁决裁掉项可区分。引文与断言的**语义对应**不在本层职责（归二元裁决）。脚本输出 SHALL 遵循消费型信号校验器输出诚实原则（不得 emit 与「已完整验证」不可区分的裸通过码）。
+1. **机械引用核（前置门，确定性脚本）**：输入 SHALL 为结构化 JSON（每条 finding 带 `{file, line, quote}` 或 `evidence_pack` 机读字段，由 Step2 各镜输出契约保证；脚本 MUST NOT 解析 markdown 散文）〔spec-review-amendment〕。逐条核 finding 的引用真实性——引用路径存在、`file:line` 落在文件行数内、单行引文**命中所报行（或显式行范围）**〔spec-review-amendment：整文件子串核可被任意行号 + 他处文本绕过〕（spec-review 侧核对象含 change 四件套文档与代码）。输出三态〔spec-review-amendment〕：pass；fail（结构化字段在、任一查不过，或既无单行引文又无可复核证据包 ⇒ **机械落报告「已裁掉」区**，来源标 `[ref-check]` 与裁决裁掉项可区分）；**uncheckable**（引用为证据包 / 设计层引用等非干净 `path:N` 形态 ⇒ 不裁，原样直进二元裁决并标注未经机械核）。脚本本体不可恢复错误 SHALL 显式降级（整批标 `[ref-check-unavailable]` 直进二元裁决 + 报告显著标注机械门未生效，MUST NOT 呈现「全部 pass」假象、MUST NOT 阻断报告产出）〔spec-review-amendment〕。引文与断言的**语义对应**不在本层职责（归二元裁决）。脚本输出 SHALL 遵循消费型信号校验器输出诚实原则（不得 emit 与「已完整验证」不可区分的裸通过码）。
 2. **二元裁决（强档）**：每条通过前置门的 finding SHALL 裁 `采纳 / 裁掉 / defer` 三态之一并附一句 critique 理由；裁「裁掉」的连理由落「已裁掉」区（反静默压制既有条款不变）。
 3. **自报置信降级为排序信号**：置信仅 MAY 用于裁决处理顺序与报告排序，**MUST NOT 作为滤除门**——协议中 MUST NOT 存在任何数值置信阈值滤除（含封顶式间接滤除）。severity SHALL 保留为输出字段，**MUST NOT 作门**（与置信同为自报信号）。
 
 同构边界：以上三层为两 skill 共同的「裁决动作层」；sdflow-spec-review 的「拿不准 → 决策登记区」人门路由 SHALL 保留（与置信数字脱钩，服务设计 HARD-GATE），sdflow-code-review 无人门、按既有 `T10-choice` / defer 路径处置，两侧 Step3 条款不要求全文同构。
 
 #### Scenario: 引用失实的 finding 被机械裁掉且留痕
-- **WHEN** 某条 finding 引用的 `file:line` 超出目标文件行数，或其单行引文不是目标文件子串
+- **WHEN** 某条 finding 引用的 `file:line` 超出目标文件行数，或其单行引文不命中所报行〔spec-review-amendment〕
 - **THEN** 该条不进入二元裁决，落「已裁掉」区并标 `[ref-check]` 与失败原因；MUST NOT 静默丢弃
+
+#### Scenario: 非干净引用形态的 finding 不被机械错杀〔spec-review-amendment〕
+- **WHEN** 某条 finding 的证据为证据包 / 设计层引用（如指向 proposal 决策点），无干净 `path:N` 三元组
+- **THEN** 机械核判 uncheckable、不裁，该条原样进入二元裁决并标注未经机械核；MUST NOT 因形态非 `path:N` 落「已裁掉」区
+
+#### Scenario: 机械核脚本崩溃时显式降级不假绿〔spec-review-amendment〕
+- **WHEN** `findings_ref_check.py` 本体 crash 或输入 JSON 畸形
+- **THEN** 整批 findings 标 `[ref-check-unavailable]` 直进二元裁决，报告显著标注机械门未生效；MUST NOT 静默呈现「全部 pass」，MUST NOT 阻断报告产出
 
 #### Scenario: 低自报置信的 finding 不被滤除
 - **WHEN** 某条 finding 自报置信极低（如 30）但引用核通过
 - **THEN** 该条 MUST 进入二元裁决（置信只影响处理顺序）；裁决按 critique 理由定采纳/裁掉/defer，MUST NOT 因置信数字直接滤除
 
 #### Scenario: 引文真实但断言不成立的 finding 由裁决层裁掉
-- **WHEN** 某条 finding 的引文确为目标文件子串（引用核通过），但其断言与代码语义不符
+- **WHEN** 某条 finding 的引文确实命中所报行（引用核通过），但其断言与代码语义不符〔spec-review-amendment〕
 - **THEN** 二元裁决裁「裁掉」并附 critique 理由落「已裁掉」区——语义判断归裁决层，机械层 MUST NOT 越权判语义
 
 ### Requirement: 镜 roster 条件化派发（降采样）
@@ -75,7 +83,7 @@ outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdf
 
 #### Scenario: Codex 宿主下的 codex findings 不再误享豁免〔add-codex-host-support〕
 - **WHEN** `host="codex"` 且某条 finding 的 `runner="codex"`（同族 fallback 产物）
-- **THEN** 该条走统一裁决入口——豁免通道已整体废除，不存在任何可被 `runner` 取值误触的豁免分支（旧规则假绿点随豁免机制一并消灭）
+- **THEN** 该条走统一裁决入口——豁免通道已整体废除，不存在任何可被 `runner` 取值误触的豁免分支
 
 ### Requirement: sdflow-code-review 为每次全跑的独立强制主审
 

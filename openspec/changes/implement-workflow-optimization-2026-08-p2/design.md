@@ -26,6 +26,8 @@
 - **消费**：`retro_report.py` surfacing_block 读之——命中的镜行内追加 `→ 已处置: <disposition> (<date>)`；文件缺失 = 零注记照旧 flag（向后兼容）；yaml 坏 / disposition 非法 ⇒ fail-loud 非零退出（宁红勿静默，同报告工具反静默方向 adr/0016）；文件内含未命中任何锚组的键 ⇒ 告警不阻断（可能是已淘汰镜的存量记录）。
 - **砍掉的候选**：处置写进 SKILL.md 注释（retro 读不到）；写进 retro 报告本身（view-only 再生即丢）。
 - **落位理由**：`openspec/retro/` 已是 retro 域目录（report.md 所在）；yaml 承 adr/0036（yq 可操作）。
+- **解析手段〔spec-review-amendment〕**：`retro_report.py` 读取走 yq（mikefarah/yq CLI subprocess，同 `anchor_lint.py` `_yq()` idiom，承 adr/0036），**MUST NOT `import yaml`**——保持仓内「零第三方依赖 + YAML 读取点收敛」惯例。
+- **淘汰态落地〔spec-review-amendment〕**：`disposition="淘汰"` 时 roster 段整段移除该镜派发逻辑，yaml 条目保留作历史注记（本轮无淘汰，此规则为 schema 合法值的落地路径备案）。
 
 ### DD2 「按条件跳过」锚表达 = 复用 `runner="none"` + findings=0，cause 枚举扩一值
 
@@ -39,11 +41,21 @@
 
 ### DD4 validator 复核层 = 机械脚本，不是弱档模型
 
-T112 原文写「弱档 validator」，本设计升格为**纯机械脚本**（暂名 `findings_ref_check.py`，落 `sdflow-init/assets/workflow/tools/` 同类脚本旁，实施定名）：逐条核 finding 的 ① 引用路径存在 ② file:line 落在文件行数内 ③ 单行引文为目标文件子串（pre-emit 引文纪律已强制 findings 带单行引文或证据包，`sdflow-code-review/SKILL.md:318`）。三查全过 = pass；任一不过或无引文无证据包 = 机械落「已裁掉」区留痕。**引文与断言的语义对应不查**——那是强档二元裁决本来的活（基准 1 切分：有确定性信号的下沉脚本，语义残余留裁决）。spec-review 侧同脚本，核对象含四件套文档。输出遵循消费型信号校验器输出诚实（CONTEXT.md「信号内诚实」）。**砍掉的候选**：弱档子代理逐条核（模型做子串比对 = 把机械活交给会幻觉的层，且更贵）。
+validator 复核层为**纯机械脚本**（暂名 `findings_ref_check.py`，落 `sdflow-init/assets/workflow/tools/` 同类脚本旁，实施定名）：逐条核 finding 的 ① 引用路径存在 ② file:line 落在文件行数内 ③ 单行引文**命中所报行（或显式行范围）**〔spec-review-amendment：整文件子串核可被任意合法行号 + 他处文本绕过〕（pre-emit 引文纪律已强制 findings 带单行引文或证据包，`sdflow-code-review/SKILL.md:318`）。**引文与断言的语义对应不查**——那是强档二元裁决本来的活（基准 1 切分：有确定性信号的下沉脚本，语义残余留裁决）。spec-review 侧同脚本，核对象含四件套文档。输出遵循消费型信号校验器输出诚实（CONTEXT.md「信号内诚实」）。**砍掉的候选**：弱档子代理逐条核（模型做子串比对 = 把机械活交给会幻觉的层，且更贵）。
+
+**输入契约与三态输出〔spec-review-amendment〕**（归档实抽样证伪「finding 引用总是干净 `path:N`」——函数名冒号 / 多行号 / 设计层引用占比高，无界文本面手搓解析是基准 5 反面教训）：
+
+- 脚本**只吃结构化 JSON**（每条 finding 带机读字段 `{file, line, quote}` 或 `evidence_pack`），**MUST NOT 解析 markdown 散文**；Step2 各镜 prompt 的 findings 输出契约同步改为强制携带该结构化字段（tasks 1.2/1.3 连带）。
+- 输出**三态**：pass（三查全过）/ fail（结构化字段在、任一查不过 ⇒ 机械落「已裁掉」区标 `[ref-check]`）/ **uncheckable**（引用非干净 `path:N` 形态——证据包、设计层引用、行范围外形态 ⇒ **不裁**，原样直进强档二元裁决并标注未经机械核）。「无引文无证据包 = 机械裁掉」仅在结构化字段确认两者皆缺时触发。
+- **脚本级不可恢复错误 = 显式降级**：脚本本体 crash / 输入 JSON 畸形 ⇒ 整批 findings 标 `[ref-check-unavailable]` 直进二元裁决 + 报告显著标注机械门未生效——MUST NOT 静默 fail-open 呈现「全部 pass」假象，也 MUST NOT 挡「恒产报告」既有硬约束；pytest 覆盖脚本级崩溃场景。
 
 ### DD5 历史重放 = 一次性 harness，不进常驻资产
 
 重放脚本/流程落本 change 目录（`impl-reports/replay/`），对 3-5 份归档报告：`git worktree` checkout `reviewed_sha` → findings 逐条过 DD4 脚本 + 强档二元重裁 → 与历史裁决对表出报告（误杀率红线 = 0 才可部署；噪声重入率标「参考」）。不装进 bundle、不留运行时入口。
+
+### DD7 前瞻窗口方向性判据〔spec-review-amendment：兑现 decision-memo D3「设计相位定宽松方向性判据」承诺〕
+
+前瞻 3-change 窗口的「采纳率持续方向性劣化」判据 = **连续 2 个 change 采纳率环比下降 > 10pp**（对照 retro 基线 code-review ~73% / spec-review ~87-93%），命中即触发裁决协议归因复查（C3 归因：采纳率偏移归裁决协议）。定性宽松判据、非硬 gate——单 change 波动不触发，方向性连续劣化才触发。
 
 ### DD6 处置表草案（13 面镜 · 依据 = 独立率 + 实修率(达标者) + 结构角色 · **终拍板 = 设计门**）
 
@@ -64,6 +76,8 @@ T112 原文写「弱档 validator」，本设计升格为**纯机械脚本**（�
 | 13 | spec-review | outside-voice codex/hr-tg | 12 | 34%/94% | — | **保留** | 同 #6，本已条件化 |
 
 草案净效果：2 降采样 + 1 不适用注记 + 10 保留，无淘汰（弱产出镜优先降采样是 roadmap 既定纪律）。**此表为草案，逐镜终拍板在设计 HARD-GATE 由人一次过**；拍板结果实施期写入 `mirror-dispositions.yaml` + SKILL roster 段。
+
+> 〔spec-review-amendment〕统计诚实度脚注：Σfindings < 30 的行（#2 broad 18 条、#4 history 21 条等）独立率对 ±1-2 条 finding 敏感（摆动 5-11pp），**仅作参考、不单独定论**——与实修率 n≥5 阈值同一纪律。评审另对 #10 grounding 处置提出重议（守卫角色豁免不一致 + 判据信号错位），见 spec-review-report Q3，设计门一并拍板。
 
 ## 数据模型与生命周期〔TG-05〕
 
@@ -96,7 +110,7 @@ T112 原文写「弱档 validator」，本设计升格为**纯机械脚本**（�
 
 ## Risks / Trade-offs
 
-- [强档裁决输入量增大（无 <80 预滤）] → validator 机械前置先杀引用失实项对冲；C4 实证数值滤独立击杀本就极少，净变化小；per-change token 维已可观测（p1），窗口期看趋势。
+- [强档裁决输入量增大（无 <80 预滤）] → validator 机械前置先杀引用失实项对冲；C4 实证数值滤独立击杀本就极少，净变化小；per-change token 维已可观测（p1），窗口期看趋势。〔spec-review-amendment〕上界兜底：合并池 > 100 条时分批裁决（每批 ≤50，批间携带已裁清单防重复采纳），报告标注分批数——历史单场次最高 415 条，不能只赌历史分布。
 - [误杀历史上会被采纳的 finding] → 部署前历史重放误杀率红线 = 0；出现即逐条追查，不部署。
 - [降采样条件误判（该派没派）] → 锚行必落（DD2）使跳过可审计；前瞻窗口漏检归因 roster，独立 commit revert（C3）。
 - [处置表草案数据薄（11 面无达标实修率）] → 草案仅 2 降采样、无淘汰，保守方向；设计门人工逐镜复核（D1 fallback 既定）。
