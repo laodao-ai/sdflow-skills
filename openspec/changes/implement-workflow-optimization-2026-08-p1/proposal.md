@@ -24,7 +24,7 @@
 
 ## Impact
 
-- **代码**：`sdflow-retro/scripts/retro_report.py`（+实修率回算与两列渲染）、`sdflow-issues/scripts/issues_v2.py` + `sdflow_issues_core/`（+reopen）、`sdflow-init/assets/hack/checkpoint-commit.sh`（+token helper 调用；全局资产，真相源在 assets，改后须重跑 `setup.sh`）+ 新增 token helper 脚本。
+- **代码**：`sdflow-retro/scripts/retro_report.py`（+实修率回算与两列渲染）、`sdflow-issues/scripts/issues_v2.py`（+reopen，内联复用其自身 M-2 mechanics——`sdflow_issues_core/` 已于 bad1f87 删除脱钩，MUST NOT 引用 [spec-review-amendment]）、`sdflow-init/assets/hack/checkpoint-commit.sh`（+token helper 调用；全局资产，真相源在 assets，改后须重跑 `setup.sh`）+ 新增 token helper 脚本。
 - **测试**：`sdflow-retro/scripts/tests/`、`sdflow-issues/tests/`、`hack/tests/`（checkpoint 假 HOME 沙盒模式）同步扩展。
 - **数据面**：新文件形态 `openspec/changes/<name>/token-log.jsonl` 从本 change 起出现在各 change 目录并随归档保留；归档报告只读不改写。
 - **技术栈**：纯 Python/Bash + Markdown，不命中 TG-01/02/03 领域清单。
@@ -54,7 +54,7 @@
 
 ## Success Metrics
 
-- retro 再生报告含实修率列 + 可判定/未知/覆盖率三数注记，13 面待复评镜的实修率可读（达标或标「参考」）。
+- retro 再生报告含实修率列 + 可判定/未知/覆盖率三数注记，13 面待复评镜在 **(layer, lens) 粒度**的实修率可读（达标或标「参考」）。[spec-review-amendment] 粒度诚实边界：历史 finding 行的镜归属信号只到 lens 级，五元组（host/runner/site）细分不可回算；真实语料试算显示可判定密度低，**大面积「参考」亦为合法产出**——「判据密度不足以支持砍留」本身就是诚实结论，不构成验收失败。
 - 本 change 自身的 checkpoint 产出 token-log.jsonl 快照行（dogfood 即验收：跑一次真实 checkpoint 验证）。
 - `reopen` 往返契约测试绿（add→终态→reopen→字段/目录/INDEX/CLOSED 全一致）+ 拒绝面测试绿。
 - 全仓 pytest 绿。
