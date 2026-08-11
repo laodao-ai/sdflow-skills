@@ -7,7 +7,7 @@ import pytest
 
 from conftest import commit_all, mkchange, head_sha, write_report
 from test_gate_preflight import run_gate
-from test_gate_impl_progress import approved_change, PLAN2, _sg
+from test_gate_impl_progress import approved_change, PLAN2, PLAN2_TICKETS, _sg
 from test_gate_tail import impl_done
 
 BASE = "openspec/changes/demo/"
@@ -82,14 +82,14 @@ def test_unclosed_verify_frontmatter_keeps_structural_hint(repo):
 
 def test_design_anchor_survives_impl_commits(repo):
     # Q1=B 断言①：实现提交不令 design-approved 失鲜
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     touch_code(repo)
     _, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL"   # 而非 REFUSE_START（链自锁反例）
 
 def test_design_anchor_stale_on_design_edit(repo):
     # Q1=B 断言②：四件套被改 → design-approved 失鲜
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     (d / "design.md").write_text("# 拍板后又改了设计\n", encoding="utf-8")
     commit_all(repo, "edit design after approval")
     code, js, _ = run_gate(repo)
@@ -130,7 +130,7 @@ def test_openspec_only_commits_keep_fresh(repo):
 def test_chinese_named_spec_edit_still_stale(repo):
     # 〔Adv-A / impl-review-fix〕core.quotePath: 拍板后改中文名 spec 路径 → 必须仍判失鲜
     # （git 默认 C-quote 非 ASCII 路径会让裸 startswith 失配 → 静默放行=假✅）
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     specs = d / "specs"
     specs.mkdir(exist_ok=True)
     (specs / "功能规格.md").write_text("拍板后偷改设计语义\n", encoding="utf-8")
@@ -180,7 +180,7 @@ def _reanchor(repo, d):
 
 def _seed_tasks(repo, data=b"### Task 1: A\n- [ ] s\n"):
     """建一个已有 tasks.md 的 change，返回 (change_dir, 该提交 sha)。"""
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     _write_tasks(repo, data)
     commit_all(repo, "seed tasks.md")
     return d, _head(repo)
@@ -317,7 +317,7 @@ def test_impl_review_subject_no_longer_buys_any_exemption(repo):
     这个显式越权口不再买得到任何豁免——这是 design.md ADR-3 登记在案的**行为收紧**，
     不是 bug。本例把该收紧钉死，防后人「顺手把 subject 豁免加回来」。
     """
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     (d / "design.md").write_text("v1\n", encoding="utf-8")
     commit_all(repo, "checkpoint(impl-review): 收尾修订")
     code, js, _h = run_gate(repo)
@@ -463,7 +463,7 @@ _PURE_FLIP = b"### Task 1: A\n- [x] s\n"          # 纯勾选翻转（零设计�
 _SEMANTIC = b"### Task 1: A retitled\n- [ ] s\n"  # 勾选框以外的语义改动（标题措辞）
 
 
-def _approved_with_tasks(repo, data=b"### Task 1: A\n- [ ] s\n", plan=PLAN2):
+def _approved_with_tasks(repo, data=b"### Task 1: A\n- [ ] s\n", plan=PLAN2_TICKETS):
     """建 change → 落 tasks.md → 重锚到「含 tasks.md 的盘面」。返回 change 目录。"""
     d = approved_change(repo, plan=plan)
     _write_tasks(repo, data)
@@ -477,23 +477,25 @@ def _design_stale(repo):
     return _sg.is_stale(repo, _ANCHOR_REL, "design", "demo")
 
 
-# ── 5.1 监视集保住：实现期改源码 + 勾 superpowers-plan.md 复选框 ⇒ fresh ──────
+# ── 5.1 监视集保住：实现期改源码 + 勾 tickets.md 复选框 ⇒ fresh ──────────────
 
 def test_impl_source_edits_and_plan_checkbox_flip_keep_design_fresh(repo):
     """🔴 本 change 的**头号自噬风险**钉：判定收紧后若把监视集画大（如整个 change 目录、
     或整棵树），实现期的正常动作会立刻把设计门自锁死。
 
-    实现期两个正常动作各来一次：① 改源码 ② 勾 `superpowers-plan.md` 的复选框
+    实现期两个正常动作各来一次：① 改源码 ② 勾 `tickets.md` 的复选框
     （它是**实现计划**，不在 design 监视集内——监视集只有四件套与 specs/）。
 
-    🔴 本用例经 `_approved_with_tasks` → `approved_change` 写盘（共享 fixture，写**旧名**——
-    见 test_gate_impl_progress.py 的注释），此处 MUST 沿用同一文件名，否则新旧两名同时落盘
-    会被 resolver 判 `PlanNameConflict` → UNKNOWN，而非本用例要测的 fresh 判定。
+    [remove-superpowers-pipeline Task2] 单名 resolver 下 `_approved_with_tasks` →
+    `approved_change` 写盘的文件名是 `tickets.md`（原写旧名 `superpowers-plan.md`）——
+    本用例的"勾选回填"须写同一个文件（模拟实现期原地编辑 plan），MUST 沿用该文件名，
+    否则会凭空多出一份未消费的 `superpowers-plan.md`（resolver 只认 `tickets.md`，
+    该文件会被静默忽略而非引发冲突，但测不到本用例要验的"勾选回填"场景）。
     """
     d = _approved_with_tasks(repo)
     (repo / "src.py").write_text("# impl\n", encoding="utf-8")
-    (d / "superpowers-plan.md").write_text(
-        PLAN2.replace("- [ ] s\n### Task 2", "- [x] s\n### Task 2", 1), encoding="utf-8")
+    (d / "tickets.md").write_text(
+        PLAN2_TICKETS.replace("- [ ] s\n### Task 2", "- [x] s\n### Task 2", 1), encoding="utf-8")
     commit_all(repo, "checkpoint(task1-a): 实现 + 勾计划")
     assert _design_stale(repo) == (False, "fresh")
     code, js, _h = run_gate(repo)
@@ -513,8 +515,8 @@ def test_impl_reports_and_tail_artifacts_keep_design_fresh(repo):
 # ── 5.2 勾选豁免常开、按内容切、不按阶段切 ────────────────────────────────
 
 @pytest.mark.parametrize("plan,verdict", [
-    (None, "RUN_PLAN"),            # 阶段①：实现计划尚未产出
-    (PLAN2, "CONTINUE_IMPL"),      # 阶段②：实现进行中
+    (None, "RUN_PLAN"),               # 阶段①：实现计划尚未产出
+    (PLAN2_TICKETS, "CONTINUE_IMPL"), # 阶段②：实现进行中
 ])
 def test_pure_checkbox_flip_is_fresh_in_every_phase(repo, plan, verdict):
     """[ADR-3] 豁免 **MUST 常开、按内容切**——**MUST NOT 按阶段切**。
@@ -611,7 +613,7 @@ def test_revert_to_pre_anchor_content_is_stale(repo):
     任何「这份内容在历史上出现过就算见过」的判据都会在此假绿。
     内容比较锚的是**被批准的那一份**，∴ 换回旧版同样是失鲜。
     """
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     (d / "design.md").write_text("v1 旧设计\n", encoding="utf-8")
     commit_all(repo, "design v1")
     (d / "design.md").write_text("v2 被批准的设计\n", encoding="utf-8")
@@ -685,7 +687,7 @@ def test_legacy_reanchoring_implementation_would_have_judged_fresh(repo):
 # ── 5.10 specs/ 子树：新增 / 删除 / rename（内容不变）三类各判失鲜 ──────────
 
 def test_specs_added_file_is_stale(repo):
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     _reanchor(repo, d)
     specs = d / "specs"
     specs.mkdir(parents=True, exist_ok=True)
@@ -697,7 +699,7 @@ def test_specs_added_file_is_stale(repo):
 
 
 def test_specs_deleted_file_is_stale(repo):
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     specs = d / "specs"
     specs.mkdir(parents=True, exist_ok=True)
     (specs / "gone.md").write_text("# delta\n", encoding="utf-8")
@@ -1193,7 +1195,7 @@ def test_window_run_plan_evaluates_design_freshness(repo):
 # ── 5.3c CONTINUE_IMPL 分支 ──────────────────────────────────────────
 
 def test_window_continue_impl_evaluates_design_freshness(repo):
-    d = approved_change(repo, plan=PLAN2)         # plan 在、任务未完 ⇒ CONTINUE_IMPL
+    d = approved_change(repo, plan=PLAN2_TICKETS)  # plan 在、任务未完 ⇒ CONTINUE_IMPL
     assert run_gate(repo)[1]["verdict"] == "CONTINUE_IMPL"
     _revise_design(d, repo)
     _assert_windowed_refusal(repo, d)

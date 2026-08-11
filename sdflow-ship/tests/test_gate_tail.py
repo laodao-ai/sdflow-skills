@@ -1,9 +1,12 @@
 from conftest import commit_all, mkchange, head_sha, write_report
 from test_gate_preflight import run_gate
-from test_gate_impl_progress import approved_change, PLAN2
+from test_gate_impl_progress import approved_change, PLAN2_TICKETS
 
 def impl_done(repo):
-    d = approved_change(repo, plan=PLAN2)
+    # [remove-superpowers-pipeline Task2] 单名 tickets.md 下第四道校验无条件生效——
+    # 需带合法收尾 ticket 的 plan 才能推进到 RUN_CODE_REVIEW，故用 PLAN2_TICKETS
+    # 取代裸 PLAN2（本 helper 被 test_gate_freshness.py 等多个文件重用）。
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-a): A")
     commit_all(repo, "checkpoint(task2-b): B")
     return d

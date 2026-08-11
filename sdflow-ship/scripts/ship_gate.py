@@ -42,7 +42,7 @@ inline 锚行字面集（grep -F 语义，零正则；Task6 后**仅归档读半
 
 verdict × exit × next 契约表:
     REFUSE_START     3  -                  未过设计门（补锚）｜change 不存在（active 与 archive 均无）〔B3〕
-    RUN_PLAN         0  writing-plans      计划文件缺（tickets.md / superpowers-plan.md 均未找到）
+    RUN_PLAN         0  writing-plans      计划文件缺（tickets.md 未找到）
     CONTINUE_IMPL    0  subagent-dev       plan_ids⊄done_ids〔B4 集合归属〕（JSON done_tasks=计划内已完成号集，SDD 勿重派）
     RUN_CODE_REVIEW  0  sdflow-code-review code-review-report.md 缺
     BLOCKED_UPSTREAM 4  -                  code-review=blocked
@@ -51,9 +51,10 @@ verdict × exit × next 契约表:
     RERUN_STALE      0  <该步 skill>        D9 陈旧结论 → 重跑该步
     STEP_IN_PROGRESS 0  <该步 skill>        产物在但无锚行
     SHIPPED          0  -                  归档已并 base + archived verify=PASS 锚〔B3+D3硬化,含归档后重跑识别；active 缺席才判,detached 无关〕
-    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能/计划文件名双存在(tickets.md 与 superpowers-plan.md 同时存在)/收尾票缺失或 Blocked-by 未覆盖全部功能票号(仅 tickets.md 新名校验,旧名 grandfather)
+    UNKNOWN          6  -                  多锚冲突/双通道不可判/标题0/归档在 base 缺 verify 锚(空壳 fail-safe)/无 base 判不能/tickets.md 缺席且遗留 superpowers-plan.md 单独存在(fail-closed,人工清理提示,remove-superpowers-pipeline Q1)/收尾票缺失或 Blocked-by 未覆盖全部功能票号(单名 tickets.md 一律校验,不再 grandfather)
 
-完成判据窗口〔B1 闭区间〕: 计划文件（经共享 resolver 定位的 tickets.md / superpowers-plan.md）
+完成判据窗口〔B1 闭区间〕: 计划文件（经共享 resolver 定位的 tickets.md 单名；`superpowers-plan.md`
+    仅作遗留旧名兜底探测，命中即 fail-closed UNKNOWN，不参与本窗口）
     首次提交 sha 起，窗口 [sha, HEAD] 闭区间
     `git log <sha>..HEAD --no-merges` 加 sha 自身 subject（同前缀+TAG_RE 规则）收集
     checkpoint(<change>:task<k>- 命名空间标签去重任务号集 done_ids〔ship-gate-hardening-2 T32：
@@ -61,10 +62,10 @@ verdict × exit × next 契约表:
         旧格式向后兼容仍计入窗口；startswith 前缀过滤放宽为 "checkpoint("〕；
     复选框辅通道按 `### Task <n>:` 分段绑定并入 done_ids〔T34：行锚定+忽略代码块，非全局全勾放行〕；
     plan `### Task <n>:` 号集 plan_ids；plan_ids ⊆ done_ids 判完成〔B4 集合归属,非基数〕；
-    第四道校验〔harden-implement-review-loop Task5 · H12/M17〕: 当且仅当计划文件名为 tickets.md
-        （新名）时，MUST 恰含一张 R-ID: all 的收尾 ticket 且其 Blocked-by ⊇ 全部功能 ticket 号，
-        否则 UNKNOWN；文件名为 superpowers-plan.md（旧名）时跳过并输出一行 grandfather 提示
-        （随后续 verdict 的 reason 一并带出，非独立 emit）；
+    第四道校验〔harden-implement-review-loop Task5 · H12/M17；remove-superpowers-pipeline Task2
+        起单名 resolver 下无条件生效〕: plan MUST 恰含一张 R-ID: all 的收尾 ticket 且其
+        Blocked-by ⊇ 全部功能 ticket 号，否则 UNKNOWN——不再按文件名分流（旧名 grandfather
+        跳过分支已随双名探测一并退役）；
     标题命中 0 → UNKNOWN；重号 Task 段 → UNKNOWN〔T34：set 折叠掩盖假✅〕。
 
 D9 新鲜度 = **录锚 + 比内容 + 限定求值窗口**〔harden-gate-git-layer ADR-1/2/3；决策与实证 openspec/adr/0026〕:
@@ -1326,41 +1327,47 @@ TASK_TITLE_RE = re.compile(r"^### Task (\d+):", re.M)   # 计数用；锚行才�
 TAG_RE = re.compile(r"checkpoint\((?:([a-z0-9][a-z0-9-]*):)?task(\d+)-")  # [T32] 可选命名空间组
 
 
-# [harden-implement-review-loop D5 / adr/0033 · Task 3] 计划文件名共享 resolver——
-# 单一源，`sdflow-implement/scripts/impl_route.py` 经既有 sibling-import（同 FenceTracker
-# 的引入方式）导入本函数，MUST NOT 手抄第二份候选列表。
+# [harden-implement-review-loop D5 / adr/0033 · Task 3 · remove-superpowers-pipeline Task2]
+# 计划文件名单一源：`PLAN_FILENAMES` 是仓内唯一的候选文件名清单，`resolve_plan_path` 是唯一
+# 的定位 helper，MUST NOT 手抄第二份候选列表。文件名**只用于定位**、不参与任何路由判定——
+# tickets 已是唯一实现管线（adr/0042），`impl_route.py` 的路由半场（含曾被引用的
+# `resolve_pipeline`）已随 Task1 整体切除，本仓不再有路由权威这个概念。
 #
-# 两轨计划文件名分列：tickets 轨新名 `tickets.md`，superpowers 轨旧名 `superpowers-plan.md`
-# （两轨曾共用旧名，见 decision-memo C14）。文件名**只用于定位**、MUST NOT 参与轨道路由
-# 判定——路由权威仍是 config 键 + plan frontmatter marker（`impl_route.resolve_pipeline`）。
+# 遗留旧名兜底：`tickets.md` 缺席 ∧ 遗留旧名 `superpowers-plan.md`（tickets 轨迁移前的计划
+# 文件名）单独存在 ⇒ 视为迁移残留，fail-closed 判 UNKNOWN + 人工清理提示——不静默忽略后
+# 导致该 change 被重复出票〔设计门 Q1 拍板〕。`superpowers-plan.md` MUST NOT 被当作可用计划
+# 文件返回，它只触发这一条兜底诊断。
 #
 # 🔴 在途 plan MUST NOT 被重命名（design Migration Plan 逐字）：`plan_first_sha` 用
 # `git log --diff-filter=A`，不跟随重命名——改名会把完成判据窗口起点推到改名 commit，
 # 使改名前的全部 checkpoint 标签落到窗口外、已完成 ticket 被判未完成。resolver 本身不
-# 试图侦测/修复这个窗口重置（那需要重命名跟踪，超出本 change 范围）；它只负责在两个
-# 名字里找到当前真实落盘的那一个，向后兼容在途的旧名 plan。
-PLAN_FILENAMES = ("tickets.md", "superpowers-plan.md")   # 按序探测：新名优先，旧名向后兼容
+# 试图侦测/修复这个窗口重置（那需要重命名跟踪，超出本 change 范围）；`stray_done_tag_commits`
+# 检测的是该风险的**结果**（窗口外完成标签），而非改名这个动作本身，见下方大段说明。
+PLAN_FILENAMES = ("tickets.md",)              # 单名（resolver 函数形状保留，供 gate/测试共用）
+LEGACY_PLAN_FILENAME = "superpowers-plan.md"  # 仅用于遗留旧名兜底探测，不参与定位
 
 
-class PlanNameConflict(Exception):
-    """两个计划文件名同时存在于同一 change 目录——fail-closed，不猜哪个有效。"""
+class LegacyPlanNameFound(Exception):
+    """`tickets.md` 缺席、遗留旧名 `superpowers-plan.md` 单独存在——fail-closed，提示人工清理。"""
 
 
 def resolve_plan_path(change_dir):
-    """在 `change_dir` 下按序探测计划文件（`tickets.md` / `superpowers-plan.md`）。
-
-    返回命中的 `Path`；两者都不存在时返回 `None`（调用方按 RUN_PLAN / 缺席处置）。
-    两者同时存在 ⇒ raise `PlanNameConflict`（调用方按 fail-closed UNKNOWN 处置，
-    提示人工删除其一——不猜哪个是真的，见 adr/0033）。
+    """在 `change_dir` 下探测计划文件：`tickets.md` 存在 ⇒ 返回之；`tickets.md` 缺席但遗留
+    旧名 `superpowers-plan.md` 存在 ⇒ raise `LegacyPlanNameFound`（调用方按 fail-closed
+    UNKNOWN 处置，提示人工清理——迁移残留不静默忽略）；两者皆缺 ⇒ 返回 `None`（调用方按
+    RUN_PLAN 处置）。
     """
     change_dir = Path(change_dir)
     hits = [change_dir / name for name in PLAN_FILENAMES if (change_dir / name).is_file()]
-    if len(hits) > 1:
-        raise PlanNameConflict(
-            "计划文件名冲突：" + str(change_dir) + " 下 "
-            + " 与 ".join(sorted(p.name for p in hits))
-            + " 同时存在，请人工删除其一（不可判哪个有效）")
-    return hits[0] if hits else None
+    if hits:
+        return hits[0]
+    legacy = change_dir / LEGACY_PLAN_FILENAME
+    if legacy.is_file():
+        raise LegacyPlanNameFound(
+            "计划文件名遗留：" + str(change_dir) + " 下 " + PLAN_FILENAMES[0]
+            + " 缺席，但发现遗留旧名 " + LEGACY_PLAN_FILENAME
+            + "，请人工清理（迁移到 " + PLAN_FILENAMES[0] + " 或删除该文件）")
+    return None
 
 
 def plan_task_ids(plan):
@@ -1454,7 +1461,7 @@ def stray_done_tag_commits(root, sha, change):
 
 def done_task_ids(root, sha, change):
     # [spec-review-amendment B1] 窗口闭区间 [sha, HEAD]：{sha}..HEAD 排他 + sha 自身 subject。
-    # checkpoint 的 add -A 会把未提交的 superpowers-plan.md 与 task1 锚打进同一 commit（即 sha），
+    # checkpoint 的 add -A 会把未提交的 tickets.md 与 task1 锚打进同一 commit（即 sha），
     # 排他 {sha}..HEAD 会漏数 task1；追加解析 sha 自身 subject（同前缀+TAG_RE 规则）补齐。
     # [ship-gate-hardening-2 T32] change 命名空间归属：命名标签 checkpoint(<ns>:task<N>-)
     # 仅当 ns==change（精确==，非前缀）计入；裸标签 checkpoint(task<N>-) 走窗口计入（A1 兼容）。
@@ -1537,12 +1544,11 @@ def plan_unbalanced_fence(plan):
 
 
 # ────────────────────── 第四道 plan 校验：收尾票（harden-implement-review-loop Task5） ──────────
-# [D3/D3b · spec-review-amendment H12/M17] 当且仅当计划文件名为 `tickets.md`（tickets 轨新名）时，
-# plan MUST 恰含一张「实现验证」收尾 ticket（`R-ID: all`）且其 `Blocked-by` ⊇ 全部功能 ticket 号；
-# 文件名为 `superpowers-plan.md`（旧名）时跳过本校验并返回一行 grandfather 提示——该名同时覆盖
-# superpowers 轨（本就无收尾票要求）与改名生效前落盘的在途 tickets 轨 plan（见 design Migration
-# Plan）。**本校验只用文件名区分「新出 plan / 在途或他轨 plan」，MUST NOT 被解读为轨道路由**——
-# gate 不读 config/marker 即可执行本校验。
+# [D3/D3b · spec-review-amendment H12/M17 · remove-superpowers-pipeline Task2 起无条件生效]
+# plan MUST 恰含一张「实现验证」收尾 ticket（`R-ID: all`）且其 `Blocked-by` ⊇ 全部功能
+# ticket 号，否则 UNKNOWN——由 `resolve_plan_path` 定位到的 plan 恒为 `tickets.md`
+# （单名 resolver，见其上方注释），本校验不再按文件名分流，旧名 grandfather 跳过分支已随
+# 双名探测一并退役。**MUST NOT 被解读为轨道路由**——gate 不读 config/marker 即可执行本校验。
 CLOSING_TICKET_R_ID = "all"
 # [基准 5：无界语法禁手搓] R-ID 逐 task 提取是本文件目前唯一的「R-ID 字面值」消费点，沿用与
 # Blocked-by（impl_route.BLOCKED_BY_RE）同构的「行内前缀 + 加粗可选」写法，仅认这一个字面槽位，
@@ -1595,14 +1601,9 @@ def _load_parse_blocked_by():
 def plan_closing_ticket_check(plan):
     """第四道 plan 校验。返回 `(ok, note)`：
 
-    - `ok=True`：`note` 是提示串——旧名 grandfather 提示，或新名校验通过时的空串。
+    - `ok=True`：`note` 是空串（无条件校验，不再有旧名 grandfather 分支）。
     - `ok=False`：`note` 是拒绝原因，调用方按 UNKNOWN(6) fail-closed 处置。
     """
-    if plan.name != "tickets.md":
-        # superpowers 轨的 plan、或改名生效前落盘的在途 tickets 轨 plan——grandfather，不校验。
-        return True, (f"在途 plan 未含收尾票校验（grandfathered：文件名 {plan.name!r} 非 "
-                       "tickets.md 新名，见 design Migration Plan）")
-
     text = plan.read_text(encoding="utf-8", errors="replace")
     plan_ids = plan_task_ids(plan)   # 复用既有单一源（set of str），fence-aware
     if not plan_ids:
@@ -1714,17 +1715,18 @@ def decide(root, change):
     if vfile.is_file():
         live_ship_gate_state(vfile, "verify")   # 坏→UNKNOWN(6) 早停；live 只读 frontmatter
     # ── step 6/7：plan 与完成判据〔Q2 窗口主锚〕──────────────────
-    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名经共享 resolver 定位；
-    # 双存在 → fail-closed UNKNOWN（不猜哪个有效，提示人工删除其一）。
+    # [harden-implement-review-loop Task3 · D5/adr-0033 · remove-superpowers-pipeline Task2]
+    # 计划文件名经共享 resolver 定位（单名 tickets.md）；tickets.md 缺席且遗留旧名
+    # superpowers-plan.md 单独存在 → fail-closed UNKNOWN（人工清理提示，设计门 Q1）。
     try:
         plan = resolve_plan_path(cdir)
-    except PlanNameConflict as exc:
+    except LegacyPlanNameFound as exc:
         emit("UNKNOWN", EXIT_UNKNOWN, None, str(exc))
     if plan is None:
         # [Task4 · tasks 2.6] 窗口入口①
         emit_windowed(root, change, report,
                       "RUN_PLAN", EXIT_OK, "writing-plans",
-                      "计划文件缺（tickets.md / superpowers-plan.md 均未找到）")
+                      "计划文件缺（tickets.md 未找到）")
     # [impl-review-fix CR-F1] 未闭合 fenced code block（悬空 ```）→ 悬空围栏会吞掉真实
     # 未勾项与 Task 标题（假✅/漏 task）→ plan 无法可靠解析 → fail-safe UNKNOWN（先于其余判据）。
     if plan_unbalanced_fence(plan):
@@ -1741,8 +1743,8 @@ def decide(root, change):
              "plan 出现重号 '### Task <n>:' 段（手改/复制粘贴），完成判据不可判"
              "——重号折叠会掩盖某段未完成的假✅")
     plan_rel = str(plan.relative_to(root))
-    # [harden-implement-review-loop Task5 · H12/M17] 第四道校验：收尾票存在性 + Blocked-by 覆盖
-    # （当且仅当计划文件名为 tickets.md 时生效；旧名 grandfather，见函数注释）。
+    # [harden-implement-review-loop Task5 · H12/M17 · remove-superpowers-pipeline Task2]
+    # 第四道校验：收尾票存在性 + Blocked-by 覆盖（无条件生效，见函数注释）。
     plan_ok, plan_note = plan_closing_ticket_check(plan)
     if not plan_ok:
         emit("UNKNOWN", EXIT_UNKNOWN, None, plan_note)

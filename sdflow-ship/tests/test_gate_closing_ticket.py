@@ -1,18 +1,24 @@
-"""ship_gate 第四道 plan 校验的测试（harden-implement-review-loop Task5，D3/D3b · H12/M17）。
+"""ship_gate 第四道 plan 校验的测试（harden-implement-review-loop Task5，D3/D3b · H12/M17；
+remove-superpowers-pipeline Task2 起单名 resolver 下无条件生效，grandfather 分支已退役）。
 
-当且仅当计划文件名为 `tickets.md`（tickets 轨新名）时，MUST 恰含一张「实现验证」收尾 ticket
-（`R-ID: all`）且其 `Blocked-by` ⊇ 全部功能 ticket 号；文件名为 `superpowers-plan.md`（旧名）时
-跳过本校验（grandfather：同时覆盖 superpowers 轨与改名生效前落盘的在途 tickets 轨 plan）。
+plan MUST 恰含一张「实现验证」收尾 ticket（`R-ID: all`）且其 `Blocked-by` ⊇ 全部功能
+ticket 号——由 resolver 定位到的 plan 恒为 `tickets.md`（单名），本校验不再按文件名分流。
 
 覆盖（tasks.md §4.10 逐字）：
 1. 含收尾票 → 绿（CONTINUE_IMPL / RUN_CODE_REVIEW 均能正常推进）
 2. 删掉收尾票（无任一 Task 段 R-ID: all）→ 必红（UNKNOWN）
 3. `Blocked-by` 缺一张功能票号 → 必红（UNKNOWN）
-4. grandfather 路径（旧名 `superpowers-plan.md`）→ 不红，即使 plan 本身没有收尾票
-5. 额外：收尾票不唯一（>1 张 R-ID: all）同样必红——"恰含一张"的另一半
+4. 额外：收尾票不唯一（>1 张 R-ID: all）同样必红——"恰含一张"的另一半
 
 另加两条单元层测试，直接调 `plan_closing_ticket_check` / `_plan_task_r_ids`，覆盖
 `ship_gate.py` 内部实现细节（不必每次都绕 subprocess 全流程）。
+
+[remove-superpowers-pipeline Task2] 原「4. grandfather 路径（旧名 superpowers-plan.md）→
+不红」用例（`test_grandfather_old_name_without_closing_ticket_not_rejected` /
+`test_plan_closing_ticket_check_grandfathers_old_name`）随文件名分流分支一并退役——
+`plan_closing_ticket_check` 已不再按文件名判断是否跳过校验（见其函数注释），断言参照系
+（旧名 plan 可绕过收尾票校验）已是目标态不存在的行为；`_seed_with_old_name` helper 因不再
+有任何调用点一并删除。
 """
 import sys
 from pathlib import Path
@@ -67,18 +73,6 @@ def _seed_with_new_name(repo, plan):
     return d
 
 
-def _seed_with_old_name(repo, plan):
-    """落盘旧名 superpowers-plan.md 的已批准 change（grandfather 路径）。"""
-    d = mkchange(repo)
-    (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
-    (d / "superpowers-plan.md").write_text(plan, encoding="utf-8")
-    commit_all(repo, "seed change artifacts (old plan name)")
-    write_report(d, "spec-review-report.md", head_sha(repo),
-                 body="# 设计审报告\n", design_approved="true")
-    commit_all(repo, "spec-review report (approved)")
-    return d
-
-
 # ─────────────────────────────────────────────────────────────────────────
 # 1. 含收尾票 → 绿
 # ─────────────────────────────────────────────────────────────────────────
@@ -124,19 +118,7 @@ def test_closing_ticket_missing_functional_dependency_is_unknown(repo):
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# 4. grandfather：旧名 superpowers-plan.md 不校验（即使无收尾票）→ 不红
-# ─────────────────────────────────────────────────────────────────────────
-
-def test_grandfather_old_name_without_closing_ticket_not_rejected(repo):
-    _seed_with_old_name(repo, PLAN_MISSING_CLOSER)   # 旧名，且明确无收尾票
-    commit_all(repo, "checkpoint(task1-foo): done A")
-    code, js, _ = run_gate(repo)
-    assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
-    assert "grandfather" in js["reason"].lower()
-
-
-# ─────────────────────────────────────────────────────────────────────────
-# 5. 收尾票不唯一（>1 张 R-ID: all）→ 必红（"恰含一张"的另一半）
+# 4. 收尾票不唯一（>1 张 R-ID: all）→ 必红（"恰含一张"的另一半）
 # ─────────────────────────────────────────────────────────────────────────
 
 def test_duplicate_closing_tickets_is_unknown(repo):
@@ -155,14 +137,6 @@ def test_plan_task_r_ids_extracts_per_task_value(tmp_path):
     text = ("### Task 1: A\n**R-ID:** R2\n- [ ] s\n"
             "### Task 2: 实现验证\n**R-ID:** all\n- [ ] s\n")
     assert _sg._plan_task_r_ids(text) == {"1": "R2", "2": "all"}
-
-
-def test_plan_closing_ticket_check_grandfathers_old_name(tmp_path):
-    d = mkchange(tmp_path)
-    plan = d / "superpowers-plan.md"
-    plan.write_text(PLAN_MISSING_CLOSER, encoding="utf-8")
-    ok, note = _sg.plan_closing_ticket_check(plan)
-    assert ok is True and "grandfather" in note.lower()
 
 
 def test_plan_closing_ticket_check_passes_new_name_with_closer(tmp_path):

@@ -36,12 +36,14 @@ def approved_change(repo, plan=None, revise=None, anchor="head"):
     d = mkchange(repo)
     (d / "proposal.md").write_text("# p\n〔TG-01：工具链〕\n", encoding="utf-8")
     if plan is not None:
-        # 🔴 共享 fixture：`approved_change` 被 6 个测试文件 import（test_gate_namespace.py /
-        # test_gate_git_layer.py / test_plan_resolver.py / test_gate_reviewed_sha.py /
-        # test_gate_tail.py / test_gate_freshness.py）。`test_plan_resolver.py` 的双存在/
-        # 改名检测用例依赖它写**旧名**（另行显式写 `tickets.md` 制造双文件冲突态）——
-        # 改这里会连累那些用例，MUST NOT 改（rename-string-consumers-span-file-types 教训）。
-        (d / "superpowers-plan.md").write_text(plan, encoding="utf-8")
+        # 🔴 共享 fixture：`approved_change` 被 7 个测试文件消费（test_gate_git_layer.py /
+        # test_gate_freshness.py / test_gate_namespace.py / test_gate_impl_progress.py（本文件）/
+        # test_gate_tail.py / test_gate_reviewed_sha.py / test_plan_resolver.py）。
+        # [remove-superpowers-pipeline Task2] 单名 resolver 下写入名改 `tickets.md`（原写
+        # `superpowers-plan.md`）——resolve_plan_path 只认单名，plan=PLAN2（无收尾 ticket）的
+        # 调用点已逐一核验并按需换成 PLAN2_TICKETS（收尾票在单名下无条件校验，改动这个写入名
+        # 前先 grep 全部消费点，rename-string-consumers-span-file-types 教训）。
+        (d / "tickets.md").write_text(plan, encoding="utf-8")
     commit_all(repo, "seed change artifacts")      # ① 被批准的盘面
     pre_revision = head_sha(repo)
     if revise is not None:                          # ② 拍板前二次修订（单独落盘）
@@ -54,13 +56,13 @@ def approved_change(repo, plan=None, revise=None, anchor="head"):
     return d
 
 def test_continue_impl_with_done_set(repo):
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-foo): done A")
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
 
 def test_all_tags_present_advances(repo):
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-foo): A")
     commit_all(repo, "checkpoint(task2-bar): B")
     code, js, _ = run_gate(repo)
@@ -71,7 +73,7 @@ def test_window_excludes_legacy_and_merge(repo):
     (repo / "seed.txt").write_text("x", encoding="utf-8")
     commit_all(repo, "checkpoint(task1-legacy): 旧 change 遗留")
     commit_all(repo, "checkpoint(task2-legacy): 旧 change 遗留")
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     # 污染②：真实双分支 merge——side 分支上做一个不带 task 标签的普通提交，
     # 切回 main 后 --no-ff 合并，merge commit 自身消息携带外部标签
     # （--no-merges 只滤 merge commit 本身；merge commit 消息携带的标签必须被滤除）
@@ -95,7 +97,7 @@ def test_merged_branch_inner_commits_do_enter_window(repo):
     # --no-merges 能滤除整条分支的贡献。
     (repo / "seed.txt").write_text("x", encoding="utf-8")
     commit_all(repo, "seed")
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     subprocess.run(["git", "-C", str(repo), "checkout", "-b", "side"],
                     check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
     (repo / "side.txt").write_text("y", encoding="utf-8")
@@ -130,7 +132,7 @@ def test_plan_task1_same_commit_counts(repo):
 def test_offplan_task_no_false_complete(repo):
     # 〔B4 集合归属〕plan=task1/task2，只完成 task1 + 一个计划外 task9（遗留/错号/merge 内）
     # → 基数判齐会假齐(len={1,9}=2=N)；集合归属须判 CONTINUE_IMPL（task2 未完不放行）
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-a): A")
     commit_all(repo, "checkpoint(task9-stray): 计划外/遗留")
     code, js, _ = run_gate(repo)
@@ -155,14 +157,17 @@ def test_plan_zero_titles_unknown(repo):
     assert code == 6 and js["verdict"] == "UNKNOWN"
 
 def test_checkbox_fallback_advances(repo):
-    plan = "### Task 1: A\n- [x] s\n### Task 2: B\n- [x] s\n"
+    # [remove-superpowers-pipeline Task2] 单名 tickets.md 下第四道校验无条件生效——
+    # task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket（其余语义不变：无标签靠复选框全勾）。
+    plan = ("### Task 1: A\n**Blocked-by:** none\n- [x] s\n"
+            "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [x] s\n")
     approved_change(repo, plan=plan)  # 无标签但复选框全勾（回勾型执行器）
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "RUN_CODE_REVIEW"
 
 # [impl-review-fix] 裁决项1/2 回归覆盖
 def test_revert_commit_not_counted(repo):
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-a): x")
     commit_all(repo, 'Revert "checkpoint(task2-b): y"')
     code, js, _ = run_gate(repo)
@@ -171,13 +176,20 @@ def test_revert_commit_not_counted(repo):
 def test_t34_no_checkbox_task_not_globally_passed(repo):
     # 〔T34〕task1 段全勾、task2 段无复选框(仅散文) → 旧全局 checkboxes_all 会因"全文无 - [ ]"
     # 假齐放行(假✅)；分段绑定后 task2 无框不计入 → CONTINUE_IMPL done_tasks==["1"]
-    d = approved_change(repo, plan="### Task 1: A\n- [x] done\n### Task 2: B\n还没做（无复选框）\n")
+    # [remove-superpowers-pipeline Task2] task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket
+    # （第四道校验无条件生效），散文正文与「无复选框」语义不变。
+    d = approved_change(repo, plan=(
+        "### Task 1: A\n**Blocked-by:** none\n- [x] done\n"
+        "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n还没做（无复选框）\n"))
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["1"]
 
 def test_t34_checkbox_union_with_checkpoint(repo):
     # 〔T34〕task1 由 checkpoint、task2 由其段复选框全勾 → 两通道并集齐 → RUN_CODE_REVIEW
-    approved_change(repo, plan="### Task 1: A\n(无框,靠 checkpoint)\n### Task 2: B\n- [x] done\n")
+    # [remove-superpowers-pipeline Task2] task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket。
+    approved_change(repo, plan=(
+        "### Task 1: A\n**Blocked-by:** none\n(无框,靠 checkpoint)\n"
+        "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [x] done\n"))
     commit_all(repo, "checkpoint(task1-a): A")
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "RUN_CODE_REVIEW"
@@ -185,8 +197,9 @@ def test_t34_checkbox_union_with_checkpoint(repo):
 def test_t34_fenced_checkbox_not_counted(repo):
     # 〔T34/codex#4〕task1 段只有 fenced code block 里的伪 [x]、无真实清单行 → 忽略代码块后
     # task1 不算完成（若不忽略则假✅ 齐）；task2 真勾 → 仅 task1 未完 → CONTINUE_IMPL
-    plan = ("### Task 1: A\n实现说明\n```\n- [x] 这是代码块里的示例，不是真勾\n```\n"
-            "### Task 2: B\n- [x] real\n")
+    # [remove-superpowers-pipeline Task2] task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket。
+    plan = ("### Task 1: A\n**Blocked-by:** none\n实现说明\n```\n- [x] 这是代码块里的示例，不是真勾\n```\n"
+            "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [x] real\n")
     approved_change(repo, plan=plan)
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
@@ -213,8 +226,9 @@ def test_t34_unclosed_fence_unknown(repo):
 def test_t34_task_header_in_fence_not_counted(repo):
     # 〔impl-review-fix CR-F2/对抗B场景4〕fenced 代码块内的 `### Task N:` 是模板/格式示例、
     # 非真任务 → 不得计入 plan_ids、不得误判重号 UNKNOWN（标题正则须与复选框同 fence 口径）。
-    plan = ("### Task 1: 真实任务\n- [x] done\n模板示例:\n```\n### Task 1: <替换标题>\n"
-            "- [ ] <替换>\n```\n### Task 2: B\n- [x] d\n")
+    # [remove-superpowers-pipeline Task2] task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket。
+    plan = ("### Task 1: 真实任务\n**Blocked-by:** none\n- [x] done\n模板示例:\n```\n### Task 1: <替换标题>\n"
+            "- [ ] <替换>\n```\n### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [x] d\n")
     approved_change(repo, plan=plan)
     commit_all(repo, "checkpoint(task1-a): A")
     commit_all(repo, "checkpoint(task2-b): B")
@@ -224,7 +238,9 @@ def test_t34_task_header_in_fence_not_counted(repo):
 def test_t34_fence_any_checkbox_consistent(repo):
     # 〔impl-review-fix 场景3〕plan_has_any_checkbox 与 checkbox_done_ids 对同一 fence 口径
     # 一致（统一 _parse_plan 后不再矛盾）：task1 段仅代码块内伪框(忽略)、task2 真勾。
-    plan = ("### Task 1: A\n```\n- [x] 代码块示例\n```\n真实无框\n### Task 2: B\n- [x] real\n")
+    # [remove-superpowers-pipeline Task2] task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket。
+    plan = ("### Task 1: A\n**Blocked-by:** none\n```\n- [x] 代码块示例\n```\n真实无框\n"
+            "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [x] real\n")
     approved_change(repo, plan=plan)
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
@@ -244,8 +260,9 @@ def test_non_git_root_unknown(tmp_path_factory):
 
 def test_t34_tilde_fenced_checkbox_not_counted(repo):
     # `~~~` 代码块内的伪 [x]：不计入 ⇒ task1 未完成 ⇒ CONTINUE_IMPL（旧口径此处假✅齐）
-    plan = ("### Task 1: A\n实现说明\n~~~\n- [x] 代码块里的示例，不是真勾\n~~~\n"
-            "### Task 2: B\n- [x] real\n")
+    # [remove-superpowers-pipeline Task2] task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket。
+    plan = ("### Task 1: A\n**Blocked-by:** none\n实现说明\n~~~\n- [x] 代码块里的示例，不是真勾\n~~~\n"
+            "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [x] real\n")
     approved_change(repo, plan=plan)
     code, js, _ = run_gate(repo)
     assert js["verdict"] == "CONTINUE_IMPL" and js["done_tasks"] == ["2"]
@@ -253,8 +270,9 @@ def test_t34_tilde_fenced_checkbox_not_counted(repo):
 
 def test_t34_tilde_task_header_in_fence_not_counted(repo):
     # `~~~` 块内的 `### Task 1:` 示例标题不算 task、不误判重号
-    plan = ("### Task 1: 真实任务\n- [x] done\n模板示例:\n~~~\n### Task 1: <替换标题>\n"
-            "- [ ] <替换>\n~~~\n### Task 2: B\n- [x] d\n")
+    # [remove-superpowers-pipeline Task2] task2 补 Blocked-by:1 + R-ID:all 兼作收尾 ticket。
+    plan = ("### Task 1: 真实任务\n**Blocked-by:** none\n- [x] done\n模板示例:\n~~~\n### Task 1: <替换标题>\n"
+            "- [ ] <替换>\n~~~\n### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [x] d\n")
     approved_change(repo, plan=plan)
     commit_all(repo, "checkpoint(task1-a): A")
     commit_all(repo, "checkpoint(task2-b): B")

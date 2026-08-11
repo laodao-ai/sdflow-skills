@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from conftest import commit_all, mkchange, head_sha, write_report
-from test_gate_impl_progress import approved_change, PLAN2, _sg
+from test_gate_impl_progress import approved_change, PLAN2_TICKETS, _sg
 
 GATE = Path(__file__).resolve().parents[1] / "scripts" / "ship_gate.py"
 CONTRACT_EXITS = {0, 3, 4, 5, 6}
@@ -161,7 +161,7 @@ def test_shared_timeout_constant_value():
 # ── 5.9c：顶层入口映射 + 五类诊断可区分 ────────────────────────────────
 
 def test_main_maps_git_unavailable_to_unknown(repo, tmp_path, monkeypatch, capsys):
-    approved_change(repo, plan=PLAN2)      # 盘面先建好，再让 git 消失
+    approved_change(repo, plan=PLAN2_TICKETS)      # 盘面先建好，再让 git 消失
     _drop_git_from_path(tmp_path, monkeypatch)
     with pytest.raises(SystemExit) as ex:
         _sg.main(["--change", "demo", "--root", str(repo)])
@@ -176,7 +176,7 @@ def test_main_maps_git_unavailable_during_repo_root_resolution(repo, tmp_path, c
     # 仓根解析（`--root` 缺省 → `rev-parse --show-toplevel`）**本身是一次 git 调用**。
     # 它若落在 try 之外，最常见的失败（git 不在 PATH）会从第一行逸出成退出码 1，
     # 绕过为它准备的整套诊断——守卫写了但主路径够不着，是本仓有实证的假绿形态。
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     monkeypatch.chdir(repo)
     _drop_git_from_path(tmp_path, monkeypatch)
     with pytest.raises(SystemExit) as ex:
@@ -187,7 +187,7 @@ def test_main_maps_git_unavailable_during_repo_root_resolution(repo, tmp_path, c
 
 
 def test_main_maps_timeout_to_unknown(repo, monkeypatch, capsys):
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     _inject_timeout(monkeypatch)
     with pytest.raises(SystemExit) as ex:
         _sg.main(["--change", "demo", "--root", str(repo)])
@@ -199,7 +199,7 @@ def test_main_maps_timeout_to_unknown(repo, monkeypatch, capsys):
 
 def test_exit_code_stays_in_contract_under_git_failures(repo, tmp_path):
     # 端到端（真跑脚本）：环境级失败 MUST NOT 逸出成 Python 默认退出码 1。
-    approved_change(repo, plan=PLAN2)
+    approved_change(repo, plan=PLAN2_TICKETS)
     empty = tmp_path / "empty-bin"
     empty.mkdir(exist_ok=True)
     code, js, _err = run_gate_env(repo, {"PATH": str(empty)})
@@ -249,7 +249,7 @@ def _polluted_repo_config(repo):
 
 @pytest.mark.parametrize("scenario", ["fresh", "stale"])
 def test_verdict_is_identical_under_polluted_git_env(repo, scenario):
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     if scenario == "stale":
         (d / "design.md").write_text("# 拍板后偷改设计\n", encoding="utf-8")
         commit_all(repo, "docs: 改设计（未重审）")
@@ -319,7 +319,7 @@ def test_global_gitconfig_cannot_alter_judgment_input(repo, tmp_path, monkeypatc
 @pytest.mark.parametrize("scenario", ["fresh", "stale"])
 def test_verdict_is_identical_under_polluted_global_config(repo, tmp_path, scenario):
     # 判定结论级（端到端跑脚本，含 HOME/XDG 经子进程 env 传入）：MUST 与干净环境一致。
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     if scenario == "stale":
         (d / "design.md").write_text("# 拍板后偷改设计\n", encoding="utf-8")
         commit_all(repo, "docs: 改设计（未重审）")
@@ -438,7 +438,7 @@ def _skip_if_root_or_non_posix():
 def test_read_reviewed_sha_maps_permission_error_to_read_failed(repo):
     # 单元级：直接测 `read_reviewed_sha`——`is_file()` 判真之后，读取本体撞 PermissionError。
     _skip_if_root_or_non_posix()
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     report = d / "spec-review-report.md"     # approved_change 已落盘并提交的报告
     report.chmod(0o000)
     try:
@@ -454,7 +454,7 @@ def test_unreadable_code_review_report_stays_in_contract(repo):
     # 端到端（真跑 main()）：`live_ship_gate_state` 读 code-review-report.md 时撞权限错误，
     # 退出码 MUST NOT 逸出成 Python 默认的 1。
     _skip_if_root_or_non_posix()
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     commit_all(repo, "checkpoint(task1-a): A")
     commit_all(repo, "checkpoint(task2-b): B")
     cr = write_report(d, "code-review-report.md", head_sha(repo),
