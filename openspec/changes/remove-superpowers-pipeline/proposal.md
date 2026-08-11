@@ -6,10 +6,10 @@
 
 ## What Changes
 
-- **BREAKING** 删除 superpowers 实现管线路由：`impl_route.py` 切除 `route` 子命令与全部路由函数（`read_config_pipeline` / `read_plan_marker` / `resolve_pipeline` / `LEGAL_PIPELINES` / `RouteStop` / `_get_plan_sha` / PIPELINE_RECEIPT）；保留 `frontier` / `task-text` 子命令与 `parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE` / `_yq`（tickets 基础设施 + ship_gate sibling-import 单一源），文件名不改（memo D2）。
+- **BREAKING** 删除 superpowers 实现管线路由：`impl_route.py` 切除 `route` 子命令与全部路由函数（`read_config_pipeline` / `read_plan_marker` / `resolve_pipeline` / `LEGAL_PIPELINES` / `RouteStop` / `_get_plan_sha` / PIPELINE_RECEIPT，及 `_yq`——其唯一调用点全在被删路由函数内，设计门 Q2 拍板随删、`test_yq_wrapper_consistency.py` 成员表同步〔spec-review-amendment〕）；保留 `frontier` / `task-text` 子命令与 `parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE`（tickets 基础设施 + ship_gate sibling-import 单一源），文件名不改（memo D2）。
 - **BREAKING** ship 链序直连：RUN_PLAN → `sdflow-implement mode=tickets-plan`、CONTINUE_IMPL → `mode=tickets-exec done_tasks=…`，不再经 route helper；`pipeline=superpowers → writing-plans` 派发分支、marker 缺席回退 SDD 分支删除。
 - **BREAKING** `openspec/config.yaml` 的 `impl-pipeline` 键退役：本仓键 + 注释删除，`config.template.yaml` 键注释删除；存量键成无读取方的惰性键（本机下游为零，memo C2/C10）。
-- ship_gate 计划文件 resolver 缩单名 `tickets.md`：双名探测、双存在判 UNKNOWN、旧名收尾票 grandfather 删除；完成判据窗口机制（`git log --diff-filter=A`）不变（memo C4）。
+- ship_gate 计划文件 resolver 缩单名 `tickets.md`：双名探测、双存在判 UNKNOWN、旧名收尾票 grandfather 删除；完成判据窗口机制（`git log --diff-filter=A`）不变（memo C4）。新增遗留旧名兜底〔设计门 Q1 拍板，spec-review-amendment〕：`tickets.md` 缺席 ∧ `superpowers-plan.md` 存在 ⇒ fail-closed 判 UNKNOWN + 人工清理提示（防历史残留文件被静默忽略后重复出票）。
 - 删除 `sdflow-init/assets/workflow/prompts/step6-writing-plans.md`（唯一运行时消费者即被删分支，memo C5）。
 - SKILL 文案收口：`sdflow-ship`（链序段）、`sdflow-implement`（「缺省一律 superpowers」、聚合锚条件化、双名分列引述）、`sdflow-done`（verify 的「superpowers 轨判不适用」分支与 grandfather 警示）。
 - bundle 资产收口并推下游：`workflow.md` / `WORKFLOW-GUIDE.md` / `ff-generation-constraints.md`（切片建议条件恒真化 → 无条件）/ `snippets/claude-section.md` / `reference/quality-layering.md`（superpowers SDD 注入点 A/B 与相关检查清单节退役）；改后 `sdflow-init update` 刷本仓托管区块（CLAUDE.md / AGENTS.md）。
@@ -50,7 +50,7 @@
 - 不卸载 superpowers 插件、不动其任何非管线技能的使用。
 - 不动 `sdflow-upstream-watch` 的 superpowers 上游追踪。
 - 不改 `tickets.md` 文件格式（frontmatter marker 保留为惰性契约）。
-- 不改 archive 历史件与既有 ADR 文本（adr/0033 双名语境由 adr/0042 声明为历史）。
+- 不改 archive 历史件与既有 ADR 正文（例外〔设计门 Q3 拍板，spec-review-amendment〕：`adr/0033` 头部加一行 Superseded-by 指针指向 `adr/0042`、`adr/0042` 加一句 supersede 声明，两侧互指——对齐 adr/0002→0040 既有惯例，正文其余逐字不动）。
 - 不重命名 `impl_route.py`。
 
 ## 需求优先级

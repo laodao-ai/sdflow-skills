@@ -31,7 +31,7 @@
 |---|---|---|
 | RUN_PLAN | `impl_route.py route` 读 config 键 → PIPELINE_RECEIPT → tickets ⇒ 派 `sdflow-implement mode=tickets-plan`；superpowers ⇒ 派 writing-plans（step6 prompt 全文） | 无 helper 调用，直接派 `sdflow-implement mode=tickets-plan change={change}` |
 | CONTINUE_IMPL | 重调 `route` 读 plan marker → tickets ⇒ `mode=tickets-exec`；marker 缺席 ⇒ 回退 SDD dispatch；marker 非法 ⇒ RouteStop/UNKNOWN | 无 helper 调用，直接派 `sdflow-implement mode=tickets-exec done_tasks={gate JSON 透传}` |
-| 计划文件定位 | 双名按序探测（`tickets.md` → `superpowers-plan.md`）；双存在 ⇒ UNKNOWN；旧名 ⇒ 收尾票校验 grandfather 跳过 | 单名 `tickets.md`；存在 ⇒ 用之（收尾票校验一律执行）；不存在 ⇒ RUN_PLAN |
+| 计划文件定位 | 双名按序探测（`tickets.md` → `superpowers-plan.md`）；双存在 ⇒ UNKNOWN；旧名 ⇒ 收尾票校验 grandfather 跳过 | 单名 `tickets.md`；存在 ⇒ 用之（收尾票校验一律执行）；不存在 ⇒ RUN_PLAN；`tickets.md` 缺席 ∧ 遗留 `superpowers-plan.md` 存在 ⇒ fail-closed 判 UNKNOWN + 清理提示〔设计门 Q1 拍板，spec-review-amendment〕 |
 | config `impl-pipeline` 键 | tickets/superpowers 合法值；缺省 tickets | 无读取方（键退役；存量键惰性无害） |
 | `tickets.md` frontmatter marker | 路由锁定信号（`read_plan_marker` 消费） | 惰性文件格式契约（写而不读，模板不变，memo D3） |
 | gate JSON `next` 在 RUN_PLAN/CONTINUE_IMPL | 输出 writing-plans/subagent-dev，仅信息性（试验期权威声明凌驾） | 与实际派发一致（信息性错位随分支消失而消解） |
@@ -59,8 +59,8 @@
 
 | 组件 | 动作 |
 |---|---|
-| `sdflow-implement/scripts/impl_route.py` | 切除：`route` 子命令、`_cmd_route`、`read_config_pipeline`、`read_plan_marker`、`resolve_pipeline`、`LEGAL_PIPELINES`、`_PIPELINE_KEY_RE`、`RouteStop`、`_get_plan_sha`、文件头三跳注释改写为「tickets 调度 helper」自述。保留：`frontier` / `task-text` 子命令、`parse_blocked_by`、`_detect_cycle`、`next_ready`、`extract_task_text`、`TopoError`、`BLOCKED_BY_RE`、`_yq`——**接口与行为逐字不变** |
-| `sdflow-ship/scripts/ship_gate.py` | `PLAN_FILENAMES` → `("tickets.md",)`（或收敛为常量单名，保留 resolver 函数形状供 gate/测试共用）；删旧名 grandfather 分支与双存在 UNKNOWN 分支；RUN_PLAN reason / UNKNOWN 表 / 文件头注释中的双名表述改单名；`PLAN_FILENAMES` 上方 :1329-1335「共享 resolver」说明注释块（引用被删符号 `impl_route.resolve_pipeline`）一并改写〔spec-review-amendment〕 |
+| `sdflow-implement/scripts/impl_route.py` | 切除：`route` 子命令、`_cmd_route`、`read_config_pipeline`、`read_plan_marker`、`resolve_pipeline`、`LEGAL_PIPELINES`、`_PIPELINE_KEY_RE`、`RouteStop`、`_get_plan_sha`、`_yq` 及仅为其服务的 import（唯一调用点全在被删路由函数内〔设计门 Q2 拍板，spec-review-amendment〕，`test_yq_wrapper_consistency.py` 成员表同步去 impl_route 条目）、文件头三跳注释改写为「tickets 调度 helper」自述。保留：`frontier` / `task-text` 子命令、`parse_blocked_by`、`_detect_cycle`、`next_ready`、`extract_task_text`、`TopoError`、`BLOCKED_BY_RE`——**接口与行为逐字不变** |
+| `sdflow-ship/scripts/ship_gate.py` | `PLAN_FILENAMES` → `("tickets.md",)`（或收敛为常量单名，保留 resolver 函数形状供 gate/测试共用）；删旧名 grandfather 分支与双存在 UNKNOWN 分支；RUN_PLAN reason / UNKNOWN 表 / 文件头注释中的双名表述改单名；`PLAN_FILENAMES` 上方 :1329-1335「共享 resolver」说明注释块（引用被删符号 `impl_route.resolve_pipeline`）一并改写〔spec-review-amendment〕；新增遗留旧名兜底分支（`tickets.md` 缺席 ∧ `superpowers-plan.md` 存在 ⇒ UNKNOWN + 清理提示）〔设计门 Q1 拍板〕 |
 | `sdflow-ship/SKILL.md` | 链序 RUN_PLAN/CONTINUE_IMPL 段重写为直连派发（含删「试验期权威声明」——`next` 信息性错位随分支消失）；完成摘要行 `pipeline={superpowers\|tickets}` → 删该槽位 |
 | `sdflow-implement/SKILL.md` | 删「缺省一律 superpowers」「双名分列」「聚合锚按管线条件化」表述——聚合锚无条件化；frontmatter marker 表述改「文件格式契约（无路由读取方）」；**description frontmatter**（触发条件唯一权威文本，现锚定 impl-pipeline 键）改「tickets 唯一管线，由 /sdflow-ship 按 gate 判定以显式 mode= 参数派发」〔spec-review-amendment〕 |
 | `sdflow-done/SKILL.md` | 删 verify 的轨道判定步（`read_plan_marker`/`resolve_pipeline` 引用）、「superpowers 轨判不适用」分支、grandfather 警示——「实现期聚合覆盖」锚无条件要求 |
@@ -68,6 +68,7 @@
 | `sdflow-init/assets/snippets/claude-section.md` | 「实现管线缺省 = tickets／显式 superpowers」段 → 「实现管线 = tickets（唯一）」；改后 `sdflow-init update` 刷本仓 CLAUDE.md/AGENTS.md 托管区块 |
 | `openspec/config.yaml` | `impl-pipeline` 键 + 注释（:60-64）删除 |
 | `openspec/INDEX.md` | impl-orchestration 描述行（「手动路由三跳」）改单管线表述〔spec-review-amendment〕 |
+| `openspec/adr/0033-tickets-plan-filename-split-by-track.md` / `openspec/adr/0042-tickets-sole-impl-pipeline.md` | 0033 头部一行 Superseded-by 指针、0042 一句 supersede 声明（互指，正文其余逐字不动）〔设计门 Q3 拍板，spec-review-amendment〕 |
 | 测试群 | 见 memo C7 逐文件映射；另 `test_workflow_authority.py`（step6 TAG_RE 样例断言）与 `test_workflow_split.py` / `test_checkpoint_slug_coverage.py` 的 step6 条目随文件删除退役/改名单；gate 共享 fixture `approved_change` 默认写入名迁 `tickets.md`（test_gate_git_layer / freshness / namespace / impl_progress / tail / reviewed_sha / plan_resolver 7 文件 63 处消费点逐一核验），`test_gate_closing_ticket.py` :130/:160 两条 grandfather 用例退役〔spec-review-amendment〕 |
 | `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` | 头部一行 obsolete 标注（指向 adr/0042）；现役视图文档 `docs/workflow-overview.md` / `docs/workflow-map.md`(+`.html`) / `docs/workflow-console.html` / `docs/criteria-mechanization-tracker.md` 同步去旧路由叙述〔spec-review-amendment〕 |
 | specs | 见 proposal《Modified Capabilities》，delta 文件在本 change `specs/` 下 |
@@ -78,6 +79,7 @@
 - [SKILL 文案收口遗漏（双轨表述残留某处）] → Success Metrics 的 grep 扫尾判据兜底（运行时路径仅剩合法残留清单）；评审接地镜核对。
 - [下游仓 update 窗口期文案双态] → 已接受边角（memo「接受的边角」第三条）：无行为分叉，仅人读层双态。
 - [其他机器存在未扫到的显式旧值键] → 键退役使任何取值无行为差异（proposal《假设》）；无静默混跑面。
+- [异机仓显式旧值键无废弃信号（update 保留用户 config、lint 不查退役键）] → 显式登记为接受边角，不加 lint 提示——提示价值仅限人读困惑、行为面零风险，不为此加宽改动面〔设计门 Q4 拍板，spec-review-amendment〕。
 - [step6 删除连带 checkpoint 标签契约样例丢失] → 标签契约权威本就是 `ship_gate.py TAG_RE`（step6 只是样例载体）；tickets 轨的标签指令在 `sdflow-implement/SKILL.md` 自持，`test_checkpoint_slug_coverage.py` 名单更新后继续守其余载体。
 
 ## Migration Plan
