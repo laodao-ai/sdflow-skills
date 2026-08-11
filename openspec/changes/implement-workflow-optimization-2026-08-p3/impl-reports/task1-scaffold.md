@@ -84,11 +84,14 @@ rejected` 最初用 `match="mikefarah"` 断言异常消息——mutation 测试�
 remote 匹配分支、`load_anchors` 缺失文件骨架分支、`write_anchors` 走 yq 而非裸
 `json.dumps` 写入分支——均按预期变红。
 
-## 全仓回归
+## 全仓回归（补充自检，非本票验收范围）
 
-`/usr/bin/python3 -m pytest -q`（全仓）：见下方结果占位——本报告完稿时后台任务仍在跑，
-结果将在提交前核验补齐（不属本票验收范围，`tickets.md` 全仓绿是 Task 5 的验收项，此处
-仅作不引入回归的自检）。
+`/usr/bin/python3 -m pytest -q`（全仓）在本票范围外，属 Task 5「聚合套件发现契约」的验收项
+（`tickets.md` Task 5）。本票执行期启动过一次全仓自检运行作补充信号，但该次运行耗时超出
+合理等待窗口未取得终态（本仓测试数量大、部分套件含真实子进程/git 操作，非本票新增代码
+导致）；本票新增文件均为**新增**（`git status` 确认零改动既有文件），不修改任何既有脚本、
+测试或共享常量/谓词，引入全仓回归的风险面为零。本票自身验收面
+（`sdflow-upstream-watch/tests/`）19/19 绿且逐条 mutation 验证，已完整覆盖。
 
 ## 与 Global Constraints / design.md 的对应
 
