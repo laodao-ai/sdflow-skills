@@ -240,7 +240,7 @@ facts 来源：openspec/upstream/.facts/<facts文件名>.json
 
 ## gstack
 
-**采集状态**：ok（锚 `<anchor_sha 或"无（首轮）">` .. `<head_sha>`）/ degraded（<原因>）
+**采集状态**：ok（HEAD `<head_sha>`）/ degraded（<原因>）
 
 - `<sha>` <subject> — **分诊**：吸收候选 / 观望 / 不吸。理由：<与本仓同类面一句对照>。
   （若吸收候选，附预生成命令，见下方「入池衔接」模板）
@@ -261,7 +261,7 @@ facts 来源：openspec/upstream/.facts/<facts文件名>.json
 
 ## superpowers
 
-**采集状态**：ok（marketplace 锚 `<anchor_sha>` .. `<head_sha>`，`installed_version`=<本地已装版本>）
+**采集状态**：ok（marketplace HEAD `<head_sha>`，`installed_version`=<本地已装版本>）
 / degraded
 
 - marketplace.json 变更 commit `<sha>`（`commits[i]`）→ 该版本 superpowers 条目
