@@ -288,8 +288,18 @@ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**�
 **默认开、仅机判无逻辑面才关，非「高风险才跑」**；判器缺失/不可执行 → 视同 NOT_EXEMPT 照跑（不静默免）。
 
 **规划镜头（主 session）**：按 `{change_dir}` 命中的 TG/栈定**领域镜**；按风险定**对抗镜**（普通 2 / 高风险 3）；
-固定 1 个**历史镜**。linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
+linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
 **TG-27 → domains/llm.md**（代码消费 LLM/agent 产出并持久化/执行/外呼，与 TG-01→backend 同构）——命中即选该领域清单叠加。
+
+- **历史镜条件化派发〔DD6 处置=降采样，`openspec/retro/mirror-dispositions.yaml` layer=code-review lens=history 行〕**：
+  判定命令（机械可判，二者任一命中即派）：
+  `git diff --diff-filter=R -M --name-only "$DIFF_BASE"..HEAD` 非空（命中 rename）**或**
+  `git diff --diff-filter=M --numstat "$DIFF_BASE"..HEAD` 中任一既有文件 (加行数+删行数) ≥200（大规模改动既有文件）
+  → 派 1 个**历史镜**；两者皆否 → 本轮跳过。
+  **跳过时锚行仍必落**（DD2 合法组合矩阵扩展，锚行必落=跳过可见）：roster 该行填
+  `{lens:"history", runner:"none", site:"—"}`（MUST NOT 从 roster 整行省略），emitter 归约后产出
+  `runner="none" findings="0"` 的合法锚；报告 Step2 段落一行说明「历史镜本轮条件未命中，按处置表
+  降采样跳过（判据：diff 无 rename 且无≥200 行既有文件大改）」。
 
 - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
 
@@ -303,7 +313,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 |----|------|--------|-----------|
 | **领域镜** | 每命中领域 1 个 | 读 `DIFF_BASE..HEAD` diff + 相关真实代码，逐条过 `code-review-base.md` CR-01~09 + `domains/<栈>` CR-* 项，列违反/存疑项（带 `file:line`） | 中档（判断） |
 | **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | 中档（对抗推理） |
-| **历史镜** | 1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） |
+| **历史镜**〔条件化，见上「规划镜头」〕 | 0-1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） |
 
 > 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回结构化 findings（每条带：
 > 问题 / CR 编号 / 证据 `file:line` / 严重度 / 建议），**不要 AskUserQuestion**"。
@@ -369,7 +379,9 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 - **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕〔impl-review-fix mlh-p4〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg`
   各独立计数）的裁决结果**构造进** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/history/broad +
   outside-voice 每个调用过的 site）——若第零步能力探针判 `subagents="unavailable"` 已缩 roster，此处 MUST 同步只含实际
-  独立完成的行键], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见契约
+  独立完成的行键], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`〔DD2：历史镜若按上方「规划镜头」条件本轮
+  跳过，roster **仍 MUST 含该行**、`runner` 填 `"none"`（合法组合，findings 恒 0）——MUST NOT 因跳过而整行省略，
+  跳过=零执行也是一种「参与」，锚行必落使跳过可审计〕（input schema 权威见契约
   `lens-metric-contract.md` 的 `lens-metric-input-schema` 机读块——bundle 分发可达、消费仓亦可读，非手数；源仓另有 golden fixture
   示范 `tools/tests/fixtures/lens_metric_input.json`，消费仓非 full 拷贝不含 `tests/`，以契约 schema 块为准）〔impl-review-fix mlh-p4：引用改指 bundle 可达契约块〕——原「voice分桶」自由 prose 台账行已被此锚吸收
   取代，这份 roster+findings 是下方「反馈回路〔泛化〕」判据的数据来源，Step5 调 emitter 归约后落成结构化可 grep 的锚。

@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -592,6 +593,83 @@ def hr_tg_flags(info):
             "code_hr_tg": pick("code-review-report.md")}
 
 
+class DispositionError(Exception):
+    """mirror-dispositions.yaml 结构性坏（非 yq 可解析 / 非列表 / 条目缺字段 /
+    disposition 越域 / 降采样缺 condition）—— fail-loud，DD1「宁红勿静默」（adr/0016）。"""
+    pass
+
+
+_DISPOSITION_VALUES = {"保留", "降采样", "淘汰", "不适用"}
+_DISPOSITION_FIELDS = ("layer", "lens", "host", "runner", "site",
+                       "disposition", "condition", "date", "rationale")
+_yq_bin = None  # 进程内缓存（同 anchor_lint._yq idiom 重实现，不跨 tools/ 目录 import——DD1 契约：
+                # MUST NOT `import yaml`，保持仓内「零第三方依赖 + YAML 读取点收敛」惯例）
+
+
+def _yq(expression, file, *, default=None):
+    """yq(mikefarah) subprocess 薄封装——同 anchor_lint._yq idiom（承 adr/0036）。
+    exit≠0（文件不可读/解析失败）MUST raise DispositionError，不吞；「键不存在」
+    （exit 0 + stdout=null）走 default，两条分支不可混同。"""
+    global _yq_bin
+    if _yq_bin is None:
+        yq = shutil.which("yq")
+        if not yq:
+            raise DispositionError(
+                "yq 未安装。安装方式：\n"
+                "  macOS:   brew install yq\n"
+                "  Windows: winget install --id MikeFarah.yq\n"
+                "  Linux:   snap install yq")
+        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+                            encoding="utf-8", errors="replace")
+        if "mikefarah" not in vr.stdout:
+            raise DispositionError(
+                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。请卸载后安装正确版本："
+                "macOS: brew install yq / Windows: winget install --id MikeFarah.yq / Linux: snap install yq")
+        _yq_bin = yq
+    r = subprocess.run([_yq_bin, "-o", "json", expression, str(file)],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        raise DispositionError(f"yq failed on {file}: {r.stderr.strip()}")
+    raw = r.stdout.strip()
+    if not raw or raw == "null":
+        return default
+    return json.loads(raw)
+
+
+def load_mirror_dispositions(root):
+    """读 `openspec/retro/mirror-dispositions.yaml`（DD1 单一权威源）→
+    {(layer,lens,host,runner,site): entry-dict}。
+
+    错误语义三态（DD1）：①文件缺失 → {}（零注记照旧 flag，向后兼容）；②文件存在但结构坏
+    （yq 解析失败 / 顶层非列表 / 条目缺字段 / disposition 非法域 / disposition=降采样却缺
+    condition）→ DispositionError（fail-loud，宁红勿静默，adr/0016）；③解析出的键与本轮
+    扫描的锚组有无交集，不在本函数判——由调用方 surfacing_block 逐键核对，未命中告警不阻断
+    （可能是已淘汰镜的存量记录，或该组合本轮尚未出现）。"""
+    path = Path(root) / "openspec" / "retro" / "mirror-dispositions.yaml"
+    if not path.is_file():
+        return {}
+    entries = _yq(".", path, default=[])
+    if entries is None:
+        entries = []
+    if not isinstance(entries, list):
+        raise DispositionError("mirror-dispositions.yaml 顶层须为列表")
+    out = {}
+    for i, ent in enumerate(entries):
+        if not isinstance(ent, dict) or not all(k in ent for k in _DISPOSITION_FIELDS):
+            raise DispositionError(
+                f"mirror-dispositions.yaml 第 {i} 项缺字段（须含 {_DISPOSITION_FIELDS}）: {ent!r}")
+        disp = ent["disposition"]
+        if disp not in _DISPOSITION_VALUES:
+            raise DispositionError(
+                f"mirror-dispositions.yaml 第 {i} 项 disposition 非法域(须∈{sorted(_DISPOSITION_VALUES)}): {disp!r}")
+        condition = str(ent.get("condition") or "").strip()
+        if disp == "降采样" and (not condition or condition == "—"):
+            raise DispositionError(f"mirror-dispositions.yaml 第 {i} 项 disposition=降采样 但 condition 缺失: {ent!r}")
+        key = (ent["layer"], ent["lens"], ent["host"], ent["runner"], ent["site"])
+        out[key] = ent
+    return out
+
+
 def surfacing_counts(root):
     """扫 archive 的 lens-metric 锚，按 (layer,lens,host,runner,site) 分组计「出现
     轮数」〔add-codex-host-support:task5 升维加 host〕（口径与 lens_metric_aggregate.
@@ -619,13 +697,27 @@ def surfacing_block(root):
     同源，文档不写死字面量）的镜在报告顶部独立区块列出，固定前缀标记 `⚠️ 待复评:`
     （可机验，MUST NOT 仅用形容词）。无命中也必须输出固定行——防止「长期无命中」被
     静默省略成死列（同 hr-tg 空箱同理，grill-not-skippable 教训：跳过类判定不能不可见）。
+
+    〔DD1，implement-workflow-optimization-2026-08-p2 Task 2D〕命中 `mirror-dispositions.yaml`
+    的待复评行内追加 `→ 已处置: <disposition> (<date>)`；错误语义三态见 load_mirror_dispositions
+    docstring——文件缺失零注记、结构坏 fail-loud（不吞，异常直接向上传播出本函数）、键未命中扫描到
+    的全部锚组（不止 flagged 子集，避免"当前轮次未过阈值"被误判"已淘汰"）仅告警（stderr）不阻断。
     """
     counts, flagged, thr = surfacing_counts(root)
+    dispositions = load_mirror_dispositions(root)  # 结构坏在此 raise，向上传播（fail-loud，不吞）
+    for key in dispositions:
+        if key not in counts:
+            print(f"[sdflow-retro] WARN mirror-dispositions.yaml 键未命中任何锚组"
+                  f"（可能是已淘汰镜的存量记录，或该组合本轮尚未出现）: {key}", file=sys.stderr)
     if not flagged:
         return f"⚠️ 待复评: 无（所有镜出现轮数<{thr}）"
     lines = [f"⚠️ 待复评: 以下镜出现轮数≥{thr}、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:"]
     for (layer, lens, host, runner, site), c in sorted(flagged):
-        lines.append(f"  - {lens}（layer={layer} host={host} runner={runner} site={site}，出现轮数 {c}）")
+        line = f"  - {lens}（layer={layer} host={host} runner={runner} site={site}，出现轮数 {c}）"
+        ent = dispositions.get((layer, lens, host, runner, site))
+        if ent is not None:
+            line += f" → 已处置: {ent['disposition']} ({ent['date']})"
+        lines.append(line)
     return "\n".join(lines)
 
 

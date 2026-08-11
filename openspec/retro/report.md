@@ -1,30 +1,30 @@
 # 全项目 change 成本×价值复盘（view-only 再生）
 
-> 覆盖 70 change / 有真锚 51 / 边界不可解析 7
+> 覆盖 71 change / 有真锚 52 / 边界不可解析 7
 > 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。
 
 ⚠️ 待复评: 以下镜出现轮数≥10、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:
-  - adversarial（layer=code-review host=claude runner=claude site=—，出现轮数 35）
-  - broad（layer=code-review host=claude runner=claude site=—，出现轮数 31）
-  - domain（layer=code-review host=claude runner=claude site=—，出现轮数 33）
-  - history（layer=code-review host=claude runner=claude site=—，出现轮数 34）
-  - outside-voice（layer=code-review host=claude runner=codex site=code-voice，出现轮数 31）
-  - outside-voice（layer=code-review host=claude runner=codex site=hr-tg，出现轮数 16）
-  - adversarial（layer=spec-review host=claude runner=claude site=—，出现轮数 39）
-  - broad（layer=spec-review host=claude runner=claude site=—，出现轮数 39）
-  - domain（layer=spec-review host=claude runner=claude site=—，出现轮数 17）
-  - grounding（layer=spec-review host=claude runner=claude site=—，出现轮数 39）
-  - outside-voice（layer=spec-review host=claude runner=claude site=design-voice，出现轮数 11）
-  - outside-voice（layer=spec-review host=claude runner=codex site=design-voice，出现轮数 31）
-  - outside-voice（layer=spec-review host=claude runner=codex site=hr-tg，出现轮数 12）
+  - adversarial（layer=code-review host=claude runner=claude site=—，出现轮数 35） → 已处置: 保留 (2026-08-10)
+  - broad（layer=code-review host=claude runner=claude site=—，出现轮数 31） → 已处置: 保留 (2026-08-10)
+  - domain（layer=code-review host=claude runner=claude site=—，出现轮数 33） → 已处置: 保留 (2026-08-10)
+  - history（layer=code-review host=claude runner=claude site=—，出现轮数 34） → 已处置: 降采样 (2026-08-10)
+  - outside-voice（layer=code-review host=claude runner=codex site=code-voice，出现轮数 31） → 已处置: 保留 (2026-08-10)
+  - outside-voice（layer=code-review host=claude runner=codex site=hr-tg，出现轮数 16） → 已处置: 保留 (2026-08-10)
+  - adversarial（layer=spec-review host=claude runner=claude site=—，出现轮数 40） → 已处置: 保留 (2026-08-10)
+  - broad（layer=spec-review host=claude runner=claude site=—，出现轮数 40） → 已处置: 保留 (2026-08-10)
+  - domain（layer=spec-review host=claude runner=claude site=—，出现轮数 18） → 已处置: 保留 (2026-08-10)
+  - grounding（layer=spec-review host=claude runner=claude site=—，出现轮数 40） → 已处置: 保留 (2026-08-10)
+  - outside-voice（layer=spec-review host=claude runner=claude site=design-voice，出现轮数 11） → 已处置: 不适用 (2026-08-10)
+  - outside-voice（layer=spec-review host=claude runner=codex site=design-voice，出现轮数 32） → 已处置: 保留 (2026-08-10)
+  - outside-voice（layer=spec-review host=claude runner=codex site=hr-tg，出现轮数 13） → 已处置: 保留 (2026-08-10)
 
 ## 一览
 
 | 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |
 |---|---|---|---|
-| 70 | ~603.7 hr | 51 | 13 |
+| 71 | ~617.1 hr | 52 | 13 |
 
-本轮复盘覆盖 **70 个 change**，累计评审墙钟约 **603.7 hr**（其中 51 个带真实度量锚、可参与价值统计）。评审时间集中在 收尾 27%、设计审 25%（两者合计 52%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审广审镜（415 条，采纳率 87%）。另有 13 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
+本轮复盘覆盖 **71 个 change**，累计评审墙钟约 **617.1 hr**（其中 52 个带真实度量锚、可参与价值统计）。评审时间集中在 设计审 27%、收尾 26%（两者合计 53%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审广审镜（423 条，采纳率 87%）。另有 13 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
 
 ## per-change 明细
 
@@ -52,7 +52,7 @@
 | fix-b11-b12-tools-hardening | 0.0（边界不可解析） | — | — | — | — | 1 | — | — | — | 无度量锚 | — | — | archived |
 | fix-design-gate-freshness-proxy | 447.5 | 227.7 | 28.6 | 23.0 | 10.5 | 26 | none | TG-17 | 46 | 0.83 | 22 | — | archived |
 | fix-mechanical-layer-silent-failures | 999.7 | 52.8 | 98.0 | 532.8 | 38.5 | 19 | TG-08,TG-17 | TG-08,TG-09,TG-17,TG-26 | 42 | 0.83 | 27 | — | archived |
-| fix-probe-scan-precision | 1174.0 | 719.5 | 22.3 | 9.8 | 22.0 | 23 | TG-07,TG-17 | none | 48 | 0.96 | 46 | — | archived |
+| fix-probe-scan-precision | 1173.9 | 719.5 | 22.3 | 9.8 | 22.0 | 23 | TG-07,TG-17 | none | 48 | 0.96 | 46 | — | archived |
 | fix-voice-quoting-and-mirror-vocab | 316.7 | 239.8 | 17.6 | 9.7 | 11.6 | 18 | TG-17 | TG-17 | 21 | 0.86 | 6 | — | archived |
 | fix-windows-encoding-crash | 875.6 | 769.6 | 26.3 | — | 6.5 | 34 | none | none | 48 | 0.94 | 13 | — | archived |
 | gate-anchor-line-scoped | 7.0 | — | — | — | 7.0 | 9 | none | none | — | 无度量锚 | — | — | archived |
@@ -65,7 +65,8 @@
 | harden-repo-root-fail-closed | 522.4 | 160.7 | 53.0 | 7.3 | 19.3 | 28 | TG-08 | TG-08 | 54 | 0.83 | 32 | — | archived |
 | harden-sdflow-spec-followups | 353.4 | 85.3 | 18.4 | 20.9 | 17.6 | 34 | none | TG-08,TG-17 | 28 | 0.64 | 6 | — | archived |
 | implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 110.6 | 70.6 | 23.1 | 7.6 | 9 | TG-06 | TG-06 | 67 | 0.88 | 13 | — | archived |
-| implement-workflow-optimization-2026-08-p1 | 296.1 | 219.3 | 15.7 | — | — | 17 | TG-09,TG-17 | — | 36 | 0.89 | 15 | out 100.8k / in 501 / cc 629.1k / cr 23.5M | in-progress |
+| implement-workflow-optimization-2026-08-p1 | 347.7 | 219.3 | 32.1 | 14.9 | 10.6 | 23 | TG-09,TG-17 | none | 36 | 0.89 | 15 | out 161.2k / in 875 / cc 852k / cr 52.5M | archived |
+| implement-workflow-optimization-2026-08-p2 | 751.8 | 728.7 | — | — | — | 6 | none | — | 31 | 0.61 | 12 | out 723.8k / in 10k / cc 2M / cr 41M | in-progress |
 | issues-pool-batch-mgmt | 0.0（边界不可解析） | — | — | — | — | 0 | — | — | — | 无度量锚 | — | — | archived |
 | issues-pool-hardening | 206.3 | 37.8 | — | 116.8 | 8.8 | 10 | none | none | 28 | 0.86 | 9 | — | archived |
 | issues-v2-single-file-model | 204.3 | 44.8 | 118.8 | 13.8 | 11.9 | 15 | TG-09 | none | 36 | 1.0 | 11 | — | archived |
@@ -107,14 +108,14 @@
 
 | 阶段 | 墙钟(min) | 占比 |
 |---|---|---|
-| done | 9639.8 | 27% |
-| spec-review | 9141.3 | 25% |
-| unknown | 6612.2 | 18% |
-| impl | 4650.4 | 13% |
-| code-review | 3565.0 | 10% |
+| spec-review | 9870.0 | 27% |
+| done | 9650.4 | 26% |
+| unknown | 6622.1 | 18% |
+| impl | 4666.7 | 13% |
+| code-review | 3579.9 | 10% |
 | grill | 1825.0 | 5% |
-| other | 583.2 | 2% |
-| ff | 204.3 | 1% |
+| other | 594.7 | 2% |
+| ff | 215.9 | 1% |
 
 ## 聚合② 成本双峰（总墙钟 x / code-review 占比% y）
 
@@ -142,7 +143,7 @@
 | fix-b11-b12-tools-hardening | 0.0 | — |
 | fix-design-gate-freshness-proxy | 447.5 | 5% |
 | fix-mechanical-layer-silent-failures | 999.7 | 53% |
-| fix-probe-scan-precision | 1174.0 | 1% |
+| fix-probe-scan-precision | 1173.9 | 1% |
 | fix-voice-quoting-and-mirror-vocab | 316.7 | 3% |
 | fix-windows-encoding-crash | 875.6 | 0% |
 | gate-anchor-line-scoped | 7.0 | 0% |
@@ -155,7 +156,8 @@
 | harden-repo-root-fail-closed | 522.4 | 1% |
 | harden-sdflow-spec-followups | 353.4 | 6% |
 | implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 10% |
-| implement-workflow-optimization-2026-08-p1 | 296.1 | 0% |
+| implement-workflow-optimization-2026-08-p1 | 347.7 | 4% |
+| implement-workflow-optimization-2026-08-p2 | 751.8 | 0% |
 | issues-pool-batch-mgmt | 0.0 | — |
 | issues-pool-hardening | 206.3 | 57% |
 | issues-v2-single-file-model | 204.3 | 7% |
@@ -231,31 +233,31 @@
 | spec-review | adversarial | claude | claude | d1-t2 | 1 | 5 | 4 | 1 | 0 | 2 | 80% | 40% | — |
 | spec-review | adversarial | claude | claude | d2-d3-scope | 1 | 4 | 4 | 0 | 0 | 2 | 100% | 50% | — |
 | spec-review | adversarial | claude | claude | none | 2 | 30 | 28 | 2 | 0 | 9 | 93% | 30% | — |
-| spec-review | adversarial | claude | claude | — | 39 | 378 | 350 | 20 | 8 | 176 | 93% | 47% | ≥10待复评 |
+| spec-review | adversarial | claude | claude | — | 40 | 391 | 363 | 20 | 8 | 182 | 93% | 47% | ≥10待复评 |
 | spec-review | adversarial | codex | codex | — | 3 | 23 | 23 | 0 | 0 | 10 | 100% | 43% | — |
 | spec-review | broad | claude | claude | - | 1 | 3 | 3 | 0 | 0 | 1 | 100% | 33% | — |
 | spec-review | broad | claude | claude | autoplan-adapted | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | spec-review | broad | claude | claude | none | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
-| spec-review | broad | claude | claude | — | 39 | 415 | 361 | 35 | 19 | 172 | 87% | 41% | ≥10待复评 |
+| spec-review | broad | claude | claude | — | 40 | 423 | 368 | 36 | 19 | 176 | 87% | 42% | ≥10待复评 |
 | spec-review | broad | claude | grill-substituted | design | 1 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
 | spec-review | broad | codex | codex | — | 3 | 26 | 22 | 4 | 0 | 6 | 85% | 23% | — |
 | spec-review | domain | claude | claude | backend | 1 | 5 | 5 | 0 | 0 | 1 | 100% | 20% | — |
 | spec-review | domain | claude | claude | none | 2 | 12 | 12 | 0 | 0 | 3 | 100% | 25% | — |
-| spec-review | domain | claude | claude | — | 17 | 82 | 79 | 1 | 2 | 35 | 96% | 43% | ≥10待复评 |
+| spec-review | domain | claude | claude | — | 18 | 86 | 83 | 1 | 2 | 38 | 97% | 44% | ≥10待复评 |
 | spec-review | grounding | claude | claude | - | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | spec-review | grounding | claude | claude | code-facts | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 | spec-review | grounding | claude | claude | none | 2 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
-| spec-review | grounding | claude | claude | — | 39 | 80 | 58 | 21 | 0 | 24 | 73% | 30% | ≥10待复评 |
+| spec-review | grounding | claude | claude | — | 40 | 81 | 59 | 21 | 0 | 24 | 74% | 30% | ≥10待复评 |
 | spec-review | grounding | codex | codex | — | 3 | 13 | 13 | 0 | 0 | 5 | 100% | 38% | — |
 | spec-review | outside-voice | claude | claude | design-voice | 11 | 42 | 37 | 1 | 4 | 10 | 88% | 24% | ≥10待复评 |
 | spec-review | outside-voice | claude | claude | hr-tg | 4 | 20 | 19 | 1 | 0 | 8 | 95% | 40% | — |
-| spec-review | outside-voice | claude | codex | design-voice | 31 | 219 | 171 | 37 | 11 | 42 | 78% | 19% | ≥10待复评 |
-| spec-review | outside-voice | claude | codex | hr-tg | 12 | 50 | 47 | 0 | 3 | 17 | 94% | 34% | ≥10待复评 |
+| spec-review | outside-voice | claude | codex | design-voice | 32 | 225 | 176 | 37 | 12 | 43 | 78% | 19% | ≥10待复评 |
+| spec-review | outside-voice | claude | codex | hr-tg | 13 | 54 | 49 | 2 | 3 | 18 | 91% | 33% | ≥10待复评 |
 | spec-review | outside-voice | codex | codex | design-voice | 2 | 6 | 4 | 2 | 0 | 2 | 67% | 33% | — |
 | spec-review | outside-voice | codex | codex | hr-tg | 2 | 8 | 8 | 0 | 0 | 2 | 100% | 25% | — |
 | spec-review | outside-voice | codex | none | design-voice | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
 
-> 无锚样本 39 份（旧格式,不纳入；份=报告文件数，每 change 常含 spec/code 两份，非 change 数；去重后 26 个 change）: 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-streamline-workflow-automation, 2026-07-03-minimize-repo-footprint, 2026-07-03-minimize-repo-footprint, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-ship, 2026-07-03-sdflow-ship, 2026-07-04-cross-model-outside-voice, 2026-07-04-cross-model-outside-voice, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening-2, 2026-07-04-ship-gate-hardening-2, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-review-tool-followups, 2026-07-05-review-tool-followups, 2026-07-05-three-lens-decision-framework, 2026-07-05-three-lens-decision-framework, 2026-07-05-workflow-metrics-loop, 2026-07-16-add-codex-host-support, 2026-07-16-scoped-test-per-task, 2026-07-19-fix-mechanical-layer-silent-failures, 2026-07-31-align-sdflow-spec-with-openspec-schema, 2026-07-31-curb-rework-loop-cost, 2026-08-01-parallelize-grounding-mirror, 2026-08-02-harden-issues-read-write, 2026-08-04-issues-v2-single-file-model, 2026-08-05-simplify-workflow, 2026-08-07-fix-probe-scan-precision, 2026-08-09-absorb-gstack-autoplan
+> 无锚样本 40 份（旧格式,不纳入；份=报告文件数，每 change 常含 spec/code 两份，非 change 数；去重后 27 个 change）: 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-streamline-workflow-automation, 2026-07-03-minimize-repo-footprint, 2026-07-03-minimize-repo-footprint, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-ship, 2026-07-03-sdflow-ship, 2026-07-04-cross-model-outside-voice, 2026-07-04-cross-model-outside-voice, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening-2, 2026-07-04-ship-gate-hardening-2, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-review-tool-followups, 2026-07-05-review-tool-followups, 2026-07-05-three-lens-decision-framework, 2026-07-05-three-lens-decision-framework, 2026-07-05-workflow-metrics-loop, 2026-07-16-add-codex-host-support, 2026-07-16-scoped-test-per-task, 2026-07-19-fix-mechanical-layer-silent-failures, 2026-07-31-align-sdflow-spec-with-openspec-schema, 2026-07-31-curb-rework-loop-cost, 2026-08-01-parallelize-grounding-mirror, 2026-08-02-harden-issues-read-write, 2026-08-04-issues-v2-single-file-model, 2026-08-05-simplify-workflow, 2026-08-07-fix-probe-scan-precision, 2026-08-09-absorb-gstack-autoplan, 2026-08-10-implement-workflow-optimization-2026-08-p1
 > 解析失败 0 份（编码/IO 错误，已跳过未计入聚合，不拖垮全局）: 无
 > 独立率跨轮不保证同口径（dedup 合并尺度可能漂移），复评时校验最近几轮尺度一致。
 
@@ -266,11 +268,11 @@
 | code-review | adversarial | 6 | 2 | 4 | 0 | 3 | 67% | 33% | — |
 | code-review | domain | 6 | 3 | 3 | 0 | 0 | 100% | 50% | — |
 | code-review | history | 2 | 1 | 1 | 0 | 1 | 67% | 50%（参考） | — |
-| code-review | outside-voice | 0 | 0 | 0 | 0 | 1 | 0% | — | — |
-| spec-review | adversarial | 0 | 0 | 0 | 0 | 1 | 0% | — | — |
+| code-review | outside-voice | 0 | 0 | 0 | 0 | 1 | 0% | —（参考） | — |
+| spec-review | adversarial | 0 | 0 | 0 | 0 | 1 | 0% | —（参考） | — |
 | spec-review | broad | 2 | 0 | 2 | 0 | 0 | 100% | 0%（参考） | 有 commit 佐证 |
 | spec-review | grounding | 3 | 0 | 0 | 3 | 0 | 100% | 0%（参考） | 有 commit 佐证 |
 
-> 「未知(本镜)」= fix-status 不可判（裸 impl-review-fix/处置动词但不命中精确 needle）但 lens 已解析的样本，计入该镜自身；lens 本身不可解析（0/2+ 命中或无有界记号）的样本无法归属具体镜，按 layer 汇总另计：code-review=609, spec-review=521。
+> 「未知(本镜)」= fix-status 不可判（裸 impl-review-fix/处置动词但不命中精确 needle）但 lens 已解析的样本，计入该镜自身；lens 本身不可解析（0/2+ 命中或无有界记号）的样本无法归属具体镜，按 layer 汇总另计：code-review=621, spec-review=550。
 > 可判定 < 5（单一源阈值）标「参考」，MUST NOT 作砍留依据；窄文法宁缺毋假，MUST NOT 为提覆盖率放宽文法猜测归属。
 

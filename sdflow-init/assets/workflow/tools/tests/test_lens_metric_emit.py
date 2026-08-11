@@ -272,13 +272,45 @@ def test_reduce_ov_runner_none_legal_all_zero():
     assert 'runner="none"' in ov and 'findings="0"' in ov and '采纳="0"' in ov and '独立="0"' in ov
     assert 'sev="致0/高0/中0/低0"' in ov
 
-def test_reduce_non_ov_runner_none_fail_closed():
-    # runner="none" 只对 outside-voice 行合法——非-ov 行必须 runner==host，host 从不取 "none"
+def test_reduce_non_ov_runner_none_findings_zero_legal():
+    # DD2/设计门 Q1（implement-workflow-optimization-2026-08-p2）：合法组合矩阵扩展——
+    # 普通镜行「条件跳过」锚 runner="none" ∧ findings=0 合法（此前 fail-closed，方向已改）。
+    # 结构性防伪造：非-ov hit 折叠时 runner 恒取 --host（fold_hit GC-8），故任何真实 finding
+    # 都不可能落进 runner="none" 的行键 ⇒ findings=0 由 fold_hit 天然保证，无需额外校验。
     m, e, f = _ef()
     roster = [{"lens":"broad","runner":"none","site":"—"},
               {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+    lines = m.reduce(roster, [], "spec-review", "claude", e, f)
+    broad = [l for l in lines if 'lens="broad"' in l][0]
+    assert 'runner="none"' in broad and 'findings="0"' in broad and '采纳="0"' in broad
+
+def test_reduce_non_ov_runner_none_bad_site_fail_closed():
+    # DD2 合法组合仍要求 site="—"（跳过锚只放宽 runner，不放宽 site）
+    m, e, f = _ef()
+    roster = [{"lens":"broad","runner":"none","site":"x"},
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
     with pytest.raises(m.EmitError):
         m.reduce(roster, [], "spec-review", "claude", e, f)
+
+def test_reduce_non_ov_runner_none_finding_still_rejected_by_roster_mismatch():
+    # 边界锁：即便 roster 声明某镜 runner="none"，若仍有 finding 命中该镜（真的跑了却谎报跳过），
+    # fold_hit 会把该 hit 折到 (lens,host,host,"—") 键——与 roster 键 (lens,host,"none","—") 不同，
+    # 触发 C4「finding 命中行不在 roster」fail-closed，而非静默把 findings 顶到非零。
+    m, e, f = _ef()
+    roster = [{"lens":"broad","runner":"none","site":"—"},
+              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+    findings = [{"hits":[{"raw":"broad"}], "verdict":"采纳", "sev":"高"}]
+    with pytest.raises(m.EmitError):
+        m.reduce(roster, findings, "spec-review", "claude", e, f)
+
+def test_reduce_finding_extra_confidence_field_ignored():
+    # Task 3（裁决协议重写）移除置信数值滤后，findings JSON 仍可能携带遗留 confidence 字段
+    # （旧调用方/过渡期）——emitter 只按 schema 必需字段校验，MUST 兼容多余字段、不报错。
+    m, e, f = _ef()
+    findings = [{"hits":[{"raw":"broad"}], "verdict":"采纳", "sev":"高", "confidence": 92}]
+    lines = m.reduce(_base_roster(), findings, "spec-review", "claude", e, f)
+    broad = [l for l in lines if 'lens="broad"' in l][0]
+    assert '采纳="1"' in broad
 
 def test_reduce_ov_roster_runner_unknown_fail_closed():
     # outside-voice roster 行 runner 越出收紧域 {claude,codex,none}（不取 unknown）

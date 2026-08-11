@@ -144,8 +144,15 @@ def reduce(roster, findings, layer, host, enums, fold_map):
         if _SITE_BAD.search(it["site"]):
             raise EmitError(f"roster site 注入: {it['site']!r}")
         if it["lens"] != "outside-voice":
-            if it["runner"] != host or it["site"] != "—":            # Fix B：防幽灵行击穿强制行
-                raise EmitError(f"非 outside-voice 行键必须 runner==--host({host!r}) 且 site=—: {it!r}")
+            # Fix B：防幽灵行击穿强制行；DD2〔implement-workflow-optimization-2026-08-p2 设计门 Q1〕：
+            # 合法组合矩阵扩展——普通镜行 runner="none"（本轮条件跳过，findings 恒 0）新增合法，
+            # site 仍恒须 "—"。findings=0 由 fold_hit 非-ov 分支恒取 runner=host 天然保证
+            # （真实 hit 不可能折到 runner="none" 的行键），无需在此另设 findings 校验。
+            if it["site"] != "—" or (it["runner"] != host and it["runner"] != "none"):
+                raise EmitError(
+                    f"非 outside-voice 行键必须 runner==--host({host!r}) 或 \"none\"（DD2 条件跳过）"
+                    f" 且 site=—: {it!r}"
+                )
         elif it["runner"] not in _OV_RUNNER_DOMAIN:
             raise EmitError(f"outside-voice 行键 runner 越域(须∈{sorted(_OV_RUNNER_DOMAIN)}): {it!r}")
         key = (it["lens"], host, it["runner"], it["site"])

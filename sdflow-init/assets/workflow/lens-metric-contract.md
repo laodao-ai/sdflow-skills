@@ -1,5 +1,9 @@
 # lens-metric v1 锚契约（评审价值度量单一权威源）
 
+> **契约文档版本：v2**〔implement-workflow-optimization-2026-08-p2 · DD2/设计门 Q1〕——新增合法组合
+> 「普通镜行 `runner="none"` ∧ `findings="0"`」（条件跳过锚，见下方约束①段与「合法组合矩阵」小节）；
+> 锚字段集/枚举域/anchor 行的字面 `v1` 前缀均不变（本版本号只标记契约文档自身的合法组合矩阵变更历史）。
+
 ## 锚形（一行一 (layer,lens,host,runner,site,轮)）〔add-codex-host-support：行键由 (layer,lens,runner,site,轮) 升维，插入 host〕
 <!-- sdflow:lens-metric v1 layer="…" lens="…" host="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
 
@@ -8,7 +12,7 @@
 - layer ∈ {spec-review, code-review}
 - lens  ∈ {domain, adversarial, grounding, history, outside-voice, broad}（canonical 投影；折叠表见 §折叠）
 - host  ∈ {claude, codex, unknown}（**谁在跑这次评审**，由 `resolve-models.sh` 按正信号判定；`unknown` = 两个正信号都无）〔add-codex-host-support〕
-- runner∈ {claude, codex, none, unknown}（**谁执行了这个镜，只记机队家族**；`claude-fallback` **废弃**——它把跨模型性藏进了枚举值，Codex 宿主下必然说谎，见 §跨模型性。`none` = 该轮无执行〔D6：host-unknown/secret-hit/fallback-unavailable 用之，MUST 伴 `findings=0`〕；`unknown` = `host=unknown` 时普通镜的主审机队，**仅合法于非-outside-voice 普通镜行 ∧ `host=unknown`**——`sdflow:outside-voice` 锚的 `runner` 恒 ∈{claude,codex,none}，不取 `unknown`）〔add-codex-host-support〕
+- runner∈ {claude, codex, none, unknown}（**谁执行了这个镜，只记机队家族**；`claude-fallback` **废弃**——它把跨模型性藏进了枚举值，Codex 宿主下必然说谎，见 §跨模型性。`none` = 该轮无执行——outside-voice 锚〔D6：host-unknown/secret-hit/fallback-unavailable 用之，MUST 伴 `findings=0`〕；**普通（非-outside-voice）镜行同样合法**〔DD2/设计门 Q1，implement-workflow-optimization-2026-08-p2：本轮按 roster 段派发条件判「不派」，MUST 伴 `findings="0"`——锚行必落，跳过成因由 `mirror-dispositions.yaml` 的 `condition` 字段（机读）+ 报告一行散文承载，`condition-not-met` 不作为锚字段〕；`unknown` = `host=unknown` 时普通镜的主审机队，**仅合法于非-outside-voice 普通镜行 ∧ `host=unknown`**——`sdflow:outside-voice` 锚的 `runner` 恒 ∈{claude,codex,none}，不取 `unknown`）〔add-codex-host-support〕
 - reason_code ∈ {ok, not-installed, preflight-error, timeout, exec-error, host-unknown, secret-hit, fallback-unavailable}（**仅 `sdflow:outside-voice` 锚必填，`sdflow:lens-metric` 锚无此字段**——本轮 voice 结局：成功跨模型固定哨兵 `ok`〔不复用 `none`，防与 `runner="none"` 词面重载混判〕；同族降级 ∈{not-installed,preflight-error,timeout,exec-error}；无执行 ∈{host-unknown,secret-hit,fallback-unavailable}）〔add-codex-host-support〕
 - site  ∈ {code-voice, hr-tg, design-voice, —}（可选消歧，仅 outside-voice，不进 lens enum；非 outside-voice 用 —）
   **〔impl-review-fix CF-补2〕site 仅分组消歧、不纳入越域自检**：任意取值只多一个分组行，不阻塞（与 layer/lens/host/runner/sev
@@ -78,7 +82,9 @@ scope-audit: broad
 ```
 > 约束（emitter fail-closed 强制）：① roster 每个 `(lens,runner,site)` 行键各一条（含零-finding 行）；
 > 非 outside-voice 普通镜行 MUST `runner==host`（本轮宿主/主审机队，取自 `--host`；`host="unknown"` 时该行
-> `runner` 同为 `"unknown"`）、`site="—"`。② finding `hits` 非空；`verdict=采纳` 时 `sev` 必填非空、
+> `runner` 同为 `"unknown"`）**或 `runner="none"`**〔DD2/设计门 Q1：本轮 roster 段判「条件跳过」该镜，
+> findings 恒 0——由 fold_hit 非-ov 分支恒取 runner=host 天然保证，emitter 不再另设 findings 校验〕、
+> `site="—"`。② finding `hits` 非空；`verdict=采纳` 时 `sev` 必填非空、
 > 其余 verdict 若带 sev 也须合法级。③ **无 per-finding `layer`**——锚 layer 单一源 = `--layer`。
 > ④ 所有字段类型 MUST 为字符串（非字符串 fail-closed，非静默）。
 
