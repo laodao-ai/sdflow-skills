@@ -110,14 +110,14 @@ impl-pipeline: tickets
 6. 全仓 `/usr/bin/python3 -m pytest` 绿。
 7. 手工验收 upgrade 提醒两分支（超阈值提醒行 / 无锚静默）。
 
-- [ ] setup.sh 新链建立成功 + sync_principles --check 绿
-- [ ] 首轮 collect 四源均产出 facts（ok 或 degraded 各有据）
-- [ ] 报告落盘且 gstack 节含真 delta
-- [ ] advance 建锚成功（anchors.yaml 已创建、last_run 已写入）
-- [ ] T264 已 set-status DONE（evidence 指采集器）
-- [ ] T245/T246/T267 池内原状未变
-- [ ] 全仓 pytest 绿
-- [ ] [e2e] upgrade 提醒超阈值时输出一行含天数的提醒、无锚时静默跳过
+- [x] setup.sh 新链建立成功 + sync_principles --check 绿
+- [x] 首轮 collect 四源均产出 facts（ok 或 degraded 各有据）
+- [x] 报告落盘且 gstack 节含真 delta
+- [x] advance 建锚成功（anchors.yaml 已创建、last_run 已写入）
+- [x] T264 已 set-status DONE（evidence 指采集器）
+- [x] T245/T246/T267 池内原状未变
+- [x] 全仓 pytest 绿
+- [x] [e2e] upgrade 提醒超阈值时输出一行含天数的提醒、无锚时静默跳过
 
 ### Task 5: 实现验证（收尾，不计入 3–6 预算）
 
@@ -127,6 +127,6 @@ impl-pipeline: tickets
 按「聚合套件发现契约」运行本 change 的单元+集成+e2e 测试套件并全部通过，证据落
 `impl-reports/task5-verify-all.md`（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）。
 
-- [ ] 单元测试证据齐全并通过
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 单元测试证据齐全并通过
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
