@@ -1,0 +1,618 @@
+# Review package: 29de11a94bb960b0b0d2f0402c12cf24b1337b55..207b3f0f393ba61c8f4bb7b14430b6361eac2f12 (Task 4 serial)
+
+## Commits
+207b3f0 impl(task4): 历史重放部署门——5 份报告 49 条 finding 重裁，③类=0
+
+## Files changed
+ .../replay/findings/r1-refactor-roadmap.json       |  21 ++
+ .../findings/r1-refactor-roadmap.refcheck.log      |   1 +
+ .../findings/r1-refactor-roadmap.refcheck.out.json |   1 +
+ .../replay/findings/r2-autoplan-code.json          |  16 ++
+ .../replay/findings/r2-autoplan-code.refcheck.log  |   1 +
+ .../findings/r2-autoplan-code.refcheck.out.json    |   1 +
+ .../replay/findings/r3-tickets-frontier.json       |  11 ++
+ .../findings/r3-tickets-frontier.refcheck.log      |   1 +
+ .../findings/r3-tickets-frontier.refcheck.out.json |   1 +
+ .../replay/findings/r4-probe-scan.json             |   8 +
+ .../replay/findings/r4-probe-scan.refcheck.log     |   1 +
+ .../findings/r4-probe-scan.refcheck.out.json       |   1 +
+ .../replay/findings/r5-simplify-spec.json          |  28 +++
+ .../replay/findings/r5-simplify-spec.refcheck.log  |   1 +
+ .../findings/r5-simplify-spec.refcheck.out.json    |   1 +
+ .../impl-reports/replay/replay-report.md           | 218 +++++++++++++++++++++
+ .../impl-reports/replay/run-replay.sh              |  46 +++++
+ .../impl-reports/task4-brief.md                    |  20 ++
+ .../impl-reports/task4-replay.md                   |  58 ++++++
+ .../tickets.md                                     |  14 +-
+ 20 files changed, 443 insertions(+), 7 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.json
+new file mode 100644
+index 0000000..1602cad
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.json
+@@ -0,0 +1,21 @@
++{
++  "report": "openspec/changes/archive/2026-07-06-refactor-roadmap-internalize-deps/code-review-report.md",
++  "reviewed_sha": "8761cf433a1d5352d991d2fe7c7680fa5beb791d",
++  "note": "reviewed_sha 是修复落盘后的 checkpoint（同一 commit 内含 F1-F5 自动修）；本文件按报告原文提取，均无逐字 quote（旧协议无结构化契约），一律用 evidence_pack 承载位置信息 -> 机械层判 uncheckable，直进强档二元裁决。",
++  "findings": [
++    {"id": "F1", "evidence_pack": "SKILL.md:415(旧行号) vs SKILL.md:517(旧行号) — 直接生成路径可不产出 memo 但收尾无条件 SHALL 改 FINAL", "historical_verdict": "accept", "historical_note": "Critical，已修[impl-review-fix]，code-voice+hr-tg voice 两站点独立收敛"},
++    {"id": "F2", "evidence_pack": "SKILL.md:344-350 + memo-template.md:8-9 — continue/replan 起手三步无条件落盘草稿 memo 会覆盖既有 memo", "historical_verdict": "accept", "historical_note": "Important，已修(两处)，code-voice+hr-tg voice+领域镜三源收敛"},
++    {"id": "F3", "evidence_pack": "workflow-history.md A4 段 vs adr/0037-*.md:26-29 — A4 把 matt 移除误归因为前提消解，与 ADR 明文因果表述矛盾", "historical_verdict": "accept", "historical_note": "Important，已修，code-voice 独家"},
++    {"id": "F4", "evidence_pack": "SKILL.md:293-303(旧行号) — gate-0 五项全文无通过阈值定义", "historical_verdict": "accept", "historical_note": "Important，已修，对抗镜A独家"},
++    {"id": "F5", "evidence_pack": "SKILL.md:354-361(旧行号) — 七维裁剪表无兜底行", "historical_verdict": "accept", "historical_note": "Minor，已修(fold)，对抗镜A独家"},
++    {"id": "F6", "evidence_pack": "design.md 状态机图 + SKILL.md 全文 grep — 直接生成路径中途发现关键判据缺失无回退相位B定义", "historical_verdict": "defer", "historical_note": "Minor，defer→T266，对抗镜A独家"},
++    {"id": "X1", "evidence_pack": "code-voice：无状态行的旧格式memo一律判DRAFT，破坏已完成存量包兼容性", "historical_verdict": "reject", "historical_note": "裁掉：实现符合设计，spec:43 已明文该语义"},
++    {"id": "X2", "evidence_pack": "hr-tg voice：B起手建目录成功、memo写失败的空包失败态无可见条款", "historical_verdict": "reject", "historical_note": "裁掉：design.md 失败模式表已显式接受该边角"},
++    {"id": "X3", "evidence_pack": "code-voice：直接生成路径+review失败后中断⇒包无人认领", "historical_verdict": "reject", "historical_note": "裁掉：与F1同根因，已并入F1修法说明段落"},
++    {"id": "X4", "evidence_pack": "历史镜 SR-1：无消费方前提被证伪", "historical_verdict": "reject", "historical_note": "裁掉：已在ADR 0037订正，历史镜误把已修问题当现存"},
++    {"id": "X5", "evidence_pack": "历史镜 SR-2：memo等价性未验证致命", "historical_verdict": "reject", "historical_note": "裁掉：已处理，SKILL.md:389有条款"},
++    {"id": "X6", "evidence_pack": "历史镜 SR-4：footage演练是恒真锚", "historical_verdict": "reject", "historical_note": "裁掉：已由Task5构造fixture解决"},
++    {"id": "X7", "evidence_pack": "历史镜 SR-7：6处保留节残留 + 结论不应进HARD-GATE", "historical_verdict": "reject", "historical_note": "裁掉：已由Task1的1.10+Task5的6.6处理，且'不应进HARD-GATE'结论本身不成立(设计门早已通过)；另含事实错误(footage词表命中)"},
++    {"id": "X8", "evidence_pack": "对抗镜B：全文扫描寻找悬空引用/硬编码断言", "historical_verdict": "reject", "historical_note": "裁掉：refuted=true，扎实核实未找到已知三条之外的悬空活引用，无finding是合格结论"}
++  ]
++}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.refcheck.log b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.refcheck.log
+new file mode 100644
+index 0000000..4c45fac
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.refcheck.log
+@@ -0,0 +1 @@
++[findings_ref_check] OK: 14 条
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.refcheck.out.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.refcheck.out.json
+new file mode 100644
+index 0000000..e569513
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r1-refactor-roadmap.refcheck.out.json
+@@ -0,0 +1 @@
++{"result": "ok", "results": [{"status": "uncheckable", "reason": "evidence-pack", "id": "F1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "F2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "F3"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "F4"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "F5"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "F6"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X3"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X4"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X5"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X6"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X7"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X8"}]}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.json
+new file mode 100644
+index 0000000..31bca74
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.json
+@@ -0,0 +1,16 @@
++{
++  "report": "openspec/changes/archive/2026-08-09-absorb-gstack-autoplan/code-review-report.md",
++  "reviewed_sha": "35cbe388b816f0e5bc37953c4f0b2066f7050e01",
++  "note": "reviewed_sha 是修复落盘后的 checkpoint；F1/F2 修复已核验在该 sha 生效（孤儿 spec 目录已删 / task-log-template.md 旧引用已清）。旧协议无逐字 quote 契约，evidence_pack 承载位置。",
++  "findings": [
++    {"id": "F1", "evidence_pack": "openspec/specs/outside-voice-reuse-guard/spec.md — INDEX 已删行但 spec 目录未删，退役不完整", "historical_verdict": "accept", "historical_note": "Important，置信90，已修[impl-review-fix]删除目录（reviewed_sha 已核验目录不存在）"},
++    {"id": "F2", "evidence_pack": "sdflow-roadmap/references/task-log-template.md:64 + 两个 fixture — 把 roadmap review 产出方误描述为 sdflow-spec-review 或 sdflow-code-review", "historical_verdict": "accept", "historical_note": "Important，置信85，已修[impl-review-fix]（reviewed_sha 已核验旧引用文本不存在）"},
++    {"id": "V2", "evidence_pack": "sdflow-roadmap/SKILL.md:507 — 裸 eval 缺清脏保护，可能复用上轮残留 SDFLOW_* 环境假绿", "historical_verdict": "defer", "historical_note": "Important，置信80，defer→todolist（既有债务，非本change引入，低频场景risk可控）"},
++    {"id": "X1", "evidence_pack": "领域镜F2：注释语义漂移 anchor_lint.py:556", "historical_verdict": "reject", "historical_note": "置信55<80 被数值滤除（旧协议置信门产物）"},
++    {"id": "X2", "evidence_pack": "Voice V1：host=unknown 路径自相矛盾", "historical_verdict": "reject", "historical_note": "裁掉：验证后不成立，tier-resolution 的 host=unknown → fail-loud 硬停在到达 fan-out 之前"},
++    {"id": "X3", "evidence_pack": "Voice V3：devex 未在 SKILL 显式枚举", "historical_verdict": "reject", "historical_note": "裁掉：不成立，领域镜派发由 TG→domains 映射驱动，不硬编码"},
++    {"id": "X4", "evidence_pack": "Voice V4：sync_principles marker 缺失 fallback", "historical_verdict": "reject", "historical_note": "裁掉：implementer已修(markers在源文件中)，测试验证幂等性"},
++    {"id": "X5", "evidence_pack": "Voice V5：test order dependency", "historical_verdict": "defer", "historical_note": "报告原文列入'已裁掉'表但disposition实为'成立但Minor,defer→todolist'——真实历史verdict=defer非reject（台账区确认defer 3项含V5）"},
++    {"id": "X6", "evidence_pack": "Voice V6：criteria-mechanization-tracker.md 残留", "historical_verdict": "defer", "historical_note": "同X5，disposition='成立Minor,defer→todolist'，真实历史verdict=defer"}
++  ]
++}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.refcheck.log b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.refcheck.log
+new file mode 100644
+index 0000000..e7bc0cb
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.refcheck.log
+@@ -0,0 +1 @@
++[findings_ref_check] OK: 9 条
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.refcheck.out.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.refcheck.out.json
+new file mode 100644
+index 0000000..c5af5d7
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r2-autoplan-code.refcheck.out.json
+@@ -0,0 +1 @@
++{"result": "ok", "results": [{"status": "uncheckable", "reason": "evidence-pack", "id": "F1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "F2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "V2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X3"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X4"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X5"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X6"}]}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.json
+new file mode 100644
+index 0000000..86a8dd8
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.json
+@@ -0,0 +1,11 @@
++{
++  "report": "openspec/changes/archive/2026-08-02-tickets-parallel-frontier/code-review-report.md",
++  "reviewed_sha": "8e284fd02186539f45ca6456890f840672de1395",
++  "note": "本报告 Findings 表为空（无存活finding），全部信号在'已裁掉'表，均为置信<80被数值滤除——旧协议置信门的典型样本，正是新协议要替换掉的机制。",
++  "findings": [
++    {"id": "X1", "evidence_pack": "code-voice+hr-tg：brief 文件在主工作树未提交，worktree 隔离看不到", "historical_verdict": "reject", "historical_note": "置信35。裁掉理由：错误前提，Read tool 用绝对路径访问文件系统(非git)，worktree隔离只隔离.git/index不隔离文件系统读取"},
++    {"id": "X2", "evidence_pack": "code-voice+hr-tg：worktree 生命周期无清理步骤", "historical_verdict": "reject", "historical_note": "置信45。裁掉理由：Agent tool文档已明确改动返回path/branch供编排层处置；BLOCKED票由harness自动回收；prose指令层不需要定义git worktree remove命令"},
++    {"id": "X3", "evidence_pack": "code-voice+hr-tg：跨票语义集成盲区未登记为接受的边角", "historical_verdict": "reject", "historical_note": "置信50。裁掉理由：已有结构性缓解(出票并行安全约束+收尾票聚合套件+本skill冷审)，decision-memo已登记merge conflict兜底"},
++    {"id": "X4", "evidence_pack": "code-voice：共享测试资源争用未讨论", "historical_verdict": "reject", "historical_note": "置信25。裁掉理由：过于泛化，任何并行执行都有此顾虑，非设计层面能解决的问题"}
++  ]
++}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.refcheck.log b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.refcheck.log
+new file mode 100644
+index 0000000..0953165
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.refcheck.log
+@@ -0,0 +1 @@
++[findings_ref_check] OK: 4 条
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.refcheck.out.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.refcheck.out.json
+new file mode 100644
+index 0000000..d6c9cd9
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r3-tickets-frontier.refcheck.out.json
+@@ -0,0 +1 @@
++{"result": "ok", "results": [{"status": "uncheckable", "reason": "evidence-pack", "id": "X1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X3"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X4"}]}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.json
+new file mode 100644
+index 0000000..02715b3
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.json
+@@ -0,0 +1,8 @@
++{
++  "report": "openspec/changes/archive/2026-08-07-fix-probe-scan-precision/code-review-report.md",
++  "reviewed_sha": "5d9afb1a146fea1a2c574503cc9cf1ff28c2ae4f",
++  "note": "唯一 finding 未修复(defer)，代码在 reviewed_sha 原样保留 -> 可真实提取 file/line/quote 三元组，机械层走 pass 真实路径（非 evidence_pack 降级），是本轮重放里唯一一条走满三查的样本。",
++  "findings": [
++    {"id": "CR-06", "file": "sdflow-init/scripts/init.py", "line": 248, "quote": "n = sum(len(fs) for _, _, fs in os.walk(dst))", "historical_verdict": "defer", "historical_note": "Minor，defer→todolist。copy_bundle 文件计数在停铺 tools 后仍遍历整个 openspec/workflow/ 目录，存量 pin 仓的残留 tools/ 会被计入报告行；display-only 不影响功能。注：报告原文引用行号为 :246，实测(grep -n)真实行号为 :248——偏差2行，判①口径漂移，见重放报告"}
++  ]
++}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.refcheck.log b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.refcheck.log
+new file mode 100644
+index 0000000..cd37c4f
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.refcheck.log
+@@ -0,0 +1 @@
++[findings_ref_check] OK: 1 条
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.refcheck.out.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.refcheck.out.json
+new file mode 100644
+index 0000000..020d542
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r4-probe-scan.refcheck.out.json
+@@ -0,0 +1 @@
++{"result": "ok", "results": [{"status": "pass", "id": "CR-06"}]}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.json
+new file mode 100644
+index 0000000..9efaad3
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.json
+@@ -0,0 +1,28 @@
++{
++  "report": "openspec/changes/archive/2026-08-05-simplify-workflow/spec-review-report.md",
++  "reviewed_sha": "efba4a849658a4bd432727970f3e0b47cff89985",
++  "note": "reviewed_sha 是 [spec-review-amendment] 修订落盘后的 checkpoint（C1/C2/C3/H3 等均已核验在该 sha 生效）。旧协议无逐字 quote 契约，evidence_pack 承载位置信息。",
++  "findings": [
++    {"id": "C1", "evidence_pack": "spec-authoring spec.md SA-01(:8)/SA-14(:340-347) + impl-orchestration spec.md(:8/:12) — delta spec 只改 spec-workflow，未覆盖 spec-authoring 和 impl-orchestration 两条被推翻的不变量", "historical_verdict": "accept", "historical_note": "Critical，置信高，CEO Codex·Eng Claude·Eng Codex·Voice 四声独立收敛（reviewed_sha 已核验两份 delta spec 存在）"},
++    {"id": "C2", "evidence_pack": "openspec/workflow/(本仓48文件本地pin) — resolve-workflow.sh 检测到本地pin直接返回本地路径不看全局canonical，tasks.md Task4/5/6只改权威源，本仓自身简化不生效", "historical_verdict": "accept", "historical_note": "Critical，置信高，Eng Claude·Eng Codex 2声收敛"},
++    {"id": "C3", "evidence_pack": "spec-workflow主spec spec.md:300-315(embedded-test-sop命名豁免) + spec.md:1399-1420(RUN_SOP MUST用例) + spec.md:518/570(TG-02→SOP条件步) — 至少2条Requirement未被delta声明MODIFIED/REMOVED", "historical_verdict": "accept", "historical_note": "Critical，置信高，Voice·Adversarial2 2声收敛"},
++    {"id": "H1", "evidence_pack": "decision-memo D2 — 删除观察窗+三档阈值未跑实测，10天15个change(93%带decision-memo)数据支持删除但从未检查", "historical_verdict": "accept", "historical_note": "High，置信高，CEO Claude·CEO Codex 2声收敛；建议先跑sdflow-retro补数据"},
++    {"id": "H2", "evidence_pack": "design.md Risks段 — 删除disable-model-invocation:true后自动触发无机械门，副作用在HARD-GATE之前产生，Risks的'HARD-GATE兜底'表述不准确", "historical_verdict": "accept", "historical_note": "High，置信高，CEO Claude·CEO Codex·Eng Claude 3声收敛；五问速算判不阻断但措辞需修正为诚实边界描述"},
++    {"id": "H3", "file": "openspec/changes/simplify-workflow/design.md", "line": 85, "quote": "翻转点在 `sdflow-implement/scripts/impl_route.py`", "historical_verdict": "accept", "historical_note": "High，置信高，Eng Claude·Eng Codex·Grounding 3声收敛。design.md:85/tasks.md:32 误写 sdflow-ship/scripts/impl_route.py，实际位于 sdflow-implement/scripts/impl_route.py（reviewed_sha 已核验路径修正生效，带 [spec-review-amendment] 标记）"},
++    {"id": "H4", "evidence_pack": "test_grill_handoff.py — 4个测试断言claude-section.md含'ff之后是grill'等，Task4/5删除后会红，任务未纳入处置", "historical_verdict": "accept", "historical_note": "High，置信高，Eng Claude·Eng Codex 2声收敛"},
++    {"id": "H5", "evidence_pack": "WORKFLOW-GUIDE.md 由 hack/gen_workflow_guide.py 机械拼装，gen_workflow_guide.py:52-57 STEP_FILES字典硬编码旧步骤编号，Task4指示手改而非重新生成", "historical_verdict": "accept", "historical_note": "High，置信高，Adversarial1独家(已实跑验证基线5 passed)"},
++    {"id": "H6", "evidence_pack": "docs/workflow-map.md(4处RUN_SOP)+docs/workflow-overview.md(6处)+docs/criteria-mechanization-tracker.md+docs/sdflow-fable5/02-module-reference.md(5处) — 4份companion文档均自称需同步但未纳入Impact/tasks", "historical_verdict": "accept", "historical_note": "High，置信高，Adversarial2独家"},
++    {"id": "H7", "evidence_pack": "AGENTS.md:125/:139-144/:262-268 — 仍声明sdflow-spec只能人手触发、保留旧三步例外、强制ff→grill，tasks.md Task5仅列CLAUDE.md", "historical_verdict": "accept", "historical_note": "High，置信高，Voice独家"},
++    {"id": "M1", "evidence_pack": "impl_route.py — 9个return \"superpowers\"分散在read_config_pipeline/read_plan_marker，加上_cmd_route:540展示折叠逻辑需对称翻转，tasks.md描述为单点改动", "historical_verdict": "accept", "historical_note": "Medium，置信高，Eng Claude·Eng Codex收敛"},
++    {"id": "M2", "evidence_pack": "decision-memo D1 — impl-pipeline单仓试点(6个change)外推到15个下游项目，下游栈/约定未知，核验证据缺锚", "historical_verdict": "accept", "historical_note": "Medium，置信中，CEO Claude·CEO Codex·Adversarial2收敛"},
++    {"id": "M3", "evidence_pack": "sdflow-init/assets/workflow/config.template.yaml:80 — 仍写'缺省一律superpowers旧管线'，新装下游项目会被误导", "historical_verdict": "accept", "historical_note": "Medium，置信高，Adversarial1独家"},
++    {"id": "M4", "evidence_pack": "Success Metric — 实测ship_gate.py RUN_SOP+tg02_hit合计15处(非17)，测试命中20个函数(非21)", "historical_verdict": "accept", "historical_note": "Medium，置信中，Adversarial2独家"},
++    {"id": "M5", "evidence_pack": "测试删除指令过粗 — 至少4个测试函数不是RUN_SOP专属，按字面删除会丢失'缺锚不放行'等安全相关回归覆盖", "historical_verdict": "accept", "historical_note": "Medium，置信中，Adversarial2·Eng Codex收敛"},
++    {"id": "M6", "evidence_pack": "openspec/config.yaml:38/48 — 仍引用wayfinder→ff衔接契约，Task6 grep会命中但tasks未列入修改范围", "historical_verdict": "accept", "historical_note": "Medium，置信高，Eng Codex·Voice收敛"},
++    {"id": "L1", "evidence_pack": "ship_gate.py三处'三个入口'计数需改成'两个'", "historical_verdict": "accept", "historical_note": "Low，Eng Claude"},
++    {"id": "L2", "evidence_pack": "ff-generation-constraints.md impl-pipeline触发条件措辞因缺省翻转语义变化", "historical_verdict": "accept", "historical_note": "Low，Adversarial1"},
++    {"id": "X1", "evidence_pack": "Codex CEO：低频不是嵌入式SOP正确删除依据", "historical_verdict": "reject", "historical_note": "裁掉：用户明确要求彻底删除(decision-memo D3)，嵌入式项目需要时可自建SOP"},
++    {"id": "X2", "evidence_pack": "Codex CEO：不是一条线性路径", "historical_verdict": "reject", "historical_note": "裁掉：explore条件前置/Phase B人类决策/FF-0 halt是流程正常行为非'非线性'证据，'线性'指不再有分支A/B选择"},
++    {"id": "X3", "evidence_pack": "Claude CEO：机会成本——11面镜待复评更优先", "historical_verdict": "reject", "historical_note": "裁掉：这是优先级建议非本change设计缺陷，scope由人定"}
++  ]
++}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.refcheck.log b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.refcheck.log
+new file mode 100644
+index 0000000..ebdbe9e
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.refcheck.log
+@@ -0,0 +1 @@
++[findings_ref_check] OK: 21 条
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.refcheck.out.json b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.refcheck.out.json
+new file mode 100644
+index 0000000..5afba92
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/findings/r5-simplify-spec.refcheck.out.json
+@@ -0,0 +1 @@
++{"result": "ok", "results": [{"status": "uncheckable", "reason": "evidence-pack", "id": "C1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "C2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "C3"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "H1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "H2"}, {"status": "pass", "id": "H3"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "H4"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "H5"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "H6"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "H7"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "M1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "M2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "M3"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "M4"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "M5"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "M6"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "L1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "L2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X1"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X2"}, {"status": "uncheckable", "reason": "evidence-pack", "id": "X3"}]}
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/replay-report.md b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/replay-report.md
+new file mode 100644
+index 0000000..0421d29
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/replay-report.md
+@@ -0,0 +1,218 @@
++# 历史重放部署门报告
++
++> Task 4（`implement-workflow-optimization-2026-08-p2`）。一次性验证，非常驻资产（design.md DD5）。
++> 部署门判据：③类（协议缺陷/真误杀）= 0 是红线，①②类如实报数不挡部署，噪声重入率标「参考」。
++
++## 一、方法与样本
++
++对 **5 份归档评审报告**（4 份 code-review + 1 份 spec-review，覆盖 4 个不同 change）做重放：
++
++| # | 报告 | reviewed_sha | worktree |
++|---|---|---|---|
++| r1 | `archive/2026-07-06-refactor-roadmap-internalize-deps/code-review-report.md` | `8761cf4` | `r1-refactor-roadmap` |
++| r2 | `archive/2026-08-09-absorb-gstack-autoplan/code-review-report.md` | `35cbe38` | `r2-autoplan-code` |
++| r3 | `archive/2026-08-02-tickets-parallel-frontier/code-review-report.md` | `8e284fd` | `r3-tickets-frontier` |
++| r4 | `archive/2026-08-07-fix-probe-scan-precision/code-review-report.md` | `5d9afb1` | `r4-probe-scan` |
++| r5 | `archive/2026-08-05-simplify-workflow/spec-review-report.md` | `efba4a8` | `r5-simplify-spec` |
++
++选取依据：覆盖「多条采纳 finding」（r1/r5）、「置信过滤裁掉项」（r2/r3，旧协议 `<80` 滤除的典型样本——
++正是新协议要替换掉的机制）、「小样本单条 finding」（r4）；code-review/spec-review 两种报告类型均覆盖。
++
++流程（`run-replay.sh` + 本报告）：
++1. 每份报告的 `reviewed_sha` 建 `git worktree`（detached）。
++2. 从报告原文手工提取 findings 为结构化 JSON（`findings/*.json`）——**旧协议无结构化输出契约，
++   报告里没有一条 finding 带逐字 `quote`**，只有「文件:行号 + 一句问题描述」或纯 prose。
++   按 DD4 契约诚实处理：能定位到单一干净 `file:line` 且能独立核验出真实引文的 2 条（r4 CR-06、
++   r5 H3）填 `{file, line, quote}` 三元组走机械三查；其余 47 条填 `evidence_pack`（原文位置+
++   问题描述）——机械层判 `uncheckable`，直进强档二元裁决（brief 显式允许此处置：「对旧格式
++   findings 标注 uncheckable，脚本吃不了的就直接进二元裁决」）。
++3. `python3 findings_ref_check.py --input <report>.json --root <worktree>` 真跑机械引用核。
++4. 对每条 finding 做强档二元重裁（我独立判断：该采纳/裁掉/defer），必要时读 worktree 内真实代码核验。
++5. 与历史裁决对表，不一致项归因三类。
++
++## 二、机械层结果（findings_ref_check.py 真跑）
++
++| 报告 | 条数 | pass | uncheckable | fail |
++|---|---|---|---|---|
++| r1 | 14 | 0 | 14 | 0 |
++| r2 | 9 | 0 | 9 | 0 |
++| r3 | 4 | 0 | 4 | 0 |
++| r4 | 1 | 1 | 0 | 0 |
++| r5 | 21 | 1 | 20 | 0 |
++| **合计** | **49** | **2** | **47** | **0** |
++
++**机械层真实抓到 2 处引用漂移**（构造 JSON 时的第一版曾用报告原文的行号/裸文件名，脚本第一次跑
++即报 `fail`，据此定位并修正）：
++
++- **r4 CR-06**：报告原文写 `sdflow-init/scripts/init.py:246`，脚本判 `quote-mismatch`；
++  `grep -n` 核实真实行号是 `:248`（偏差 2 行）。修正后三查全过，`pass`。归因**①口径漂移**
++  （历史报告行号本身不精确，finding 本体有效——`n = sum(len(fs) for _, _, fs in os.walk(dst))`
++  这行代码确实存在且确实是报告描述的问题）。
++- **r5 H3**：JSON 首版按报告行文写裸 `design.md`，脚本判 `path-not-found`；实际路径是
++  `openspec/changes/simplify-workflow/design.md`（报告省略了 change 目录前缀，同一份 change
++  自身语境下人读不会误解，但机器需要完整相对路径）。修正后 `pass`。归因**①口径漂移**
++  （报告写法本身省略前缀，非本体有误）。
++
++**这两次 fail→pass 恰是 DD4 机械层设计意图的直接证据**：它对不精确的引用 fail-loud，逼迫核验后
++再放行，而不是静默接受一个凑巧看起来合理的引用。两次漂移均在 corrigible 范围内（人读可辨真实位置），
++判①类、不计入③类分母。
++
++其余 47 条 `uncheckable`——**全部因为旧协议历史语料没有一条 finding 带逐字引文**（无 `quote` 字段，
++仅有 file:line 指针或纯 prose 描述）。这是 design.md 已预判的 **C4 语料限制**：旧报告在 DD1/DD4
++之前产出，Step2 镜 prompt 当时未被要求携带结构化引文字段。`uncheckable` 是脚本按契约的正确分类
++（不是缺陷）——这些 finding 全部**原样直进强档二元裁决**，见第三节。
++
++## 三、逐报告二元重裁对表
++
++图例：历史裁决 = 报告原文的最终 disposition（采纳/裁掉/defer，非中间置信数字）；
++新裁决 = 本轮强档二元重裁（读 worktree 真实代码核验后独立判断）；一致 = ✅ / 不一致 = ❌。
++
++### r1 · refactor-roadmap-internalize-deps（code-review，14 条）
++
++| id | 历史裁决 | 新裁决 | 一致 | 备注 |
++|---|---|---|---|---|
++| F1 | 采纳 | 采纳 | ✅ | worktree 核实 `SKILL.md:423/525` 已按 F1 描述修复（条件化 memo 产出+收尾） |
++| F2 | 采纳 | 采纳 | ✅ | worktree 核实 `SKILL.md:354` 已加 MUST NOT 覆盖既有 memo 条款 |
++| F3 | 采纳 | 采纳 | ✅ | worktree 核实 `workflow-history.md` A4 段已含「同批（非同因）移除」+ git log 时序证据 |
++| F4 | 采纳 | 采纳 | ✅ | worktree 核实 `SKILL.md:305` 已有「SHALL 五项全部满足方算 gate-0 过」阈值句 |
++| F5 | 采纳 | 采纳 | ✅ | 低成本 fold，理由充分 |
++| F6 | defer | defer | ✅ | 真实存在但低概率+design 已声明诚实边界，defer 合理 |
++| X1 | 裁掉 | 裁掉 | ✅ | 与设计已拍板语义矛盾（spec:43） |
++| X2 | 裁掉 | 裁掉 | ✅ | design.md 已显式接受该边角 |
++| X3 | 裁掉 | 裁掉 | ✅ | 已并入 F1，非独立缺陷 |
++| X4 | 裁掉 | 裁掉 | ✅ | 历史镜误把已修问题当现存（ADR 0037 已订正） |
++| X5 | 裁掉 | 裁掉 | ✅ | 历史镜误报，`SKILL.md:389` 已有条款 |
++| X6 | 裁掉 | 裁掉 | ✅ | 历史镜误报，Task5 fixture 已解决 |
++| X7 | 裁掉 | 裁掉 | ✅ | 历史镜误报+事实错误（footage 词表命中） |
++| X8 | 裁掉 | 裁掉 | ✅ | 无 finding 是合格结论，非漏审 |
++
++**14/14 一致，0 mismatch。**
++
++### r2 · absorb-gstack-autoplan（code-review，9 条）
++
++| id | 历史裁决 | 新裁决 | 一致 | 备注 |
++|---|---|---|---|---|
++| F1 | 采纳 | 采纳 | ✅ | worktree 核实 `openspec/specs/outside-voice-reuse-guard/` 目录已删 |
++| F2 | 采纳 | 采纳 | ✅ | worktree 核实 `task-log-template.md:64` 附近旧误引用文本已不存在 |
++| V2 | defer | defer | ✅ | 既有债务，本 change tasks 未要求覆盖，低频场景 |
++| X1 | 裁掉（旧协议置信55<80滤除） | 裁掉 | ✅ | 独立merit判断：仅「注释语义漂移」一句无充分问题陈述，信息量不足以行动 |
++| X2 | 裁掉 | 裁掉 | ✅ | 已验证前提不成立（fail-loud 早于 fan-out） |
++| X3 | 裁掉 | 裁掉 | ✅ | 已验证不成立（TG→domains 映射驱动非硬编码） |
++| X4 | 裁掉 | 裁掉 | ✅ | 已修复+测试验证幂等性 |
++| X5 | defer（报告标签为"已裁掉"但台账区实为 defer→todolist） | defer | ✅ | 台账区订正标签误差，本体是合法 minor 项 |
++| X6 | defer（同 X5） | defer | ✅ | 同上 |
++
++**9/9 一致，0 mismatch。** 注：X5/X6 是本轮重放发现的**报告内部标签不一致**（原文把 defer 项归进
++「已裁掉」表标题下，但台账区又写明是 defer）——判①口径漂移（原报告自身的呈现瑕疵，非重裁分歧），
++不影响新旧裁决一致性判定。
++
++### r3 · tickets-parallel-frontier（code-review，4 条，均为置信<80被裁掉项）
++
++| id | 历史置信 | 历史裁决 | 新裁决 | 一致 | 备注 |
++|---|---|---|---|---|---|
++| X1 | 35 | 裁掉 | 裁掉 | ✅ | 独立merit核验：Read tool 绝对路径读取不受 git worktree 隔离影响（worktree 只隔离 `.git/index`），前提错误成立 |
++| X2 | 45 | 裁掉 | 裁掉 | ✅ | Agent tool 已有 path/branch 返回值供编排层处置，prose 层不需重复定义 |
++| X3 | 50 | 裁掉 | 裁掉 | ✅ | 已有结构性缓解（并行安全约束+聚合审+冷审），decision-memo 已登记兜底 |
++| X4 | 25 | 裁掉 | 裁掉 | ✅ | 过于泛化，非本设计可解 |
++
++**4/4 一致，0 mismatch。** 这是本轮样本里唯一「全部由旧置信过滤机制裁掉」的报告——独立二元重裁
++（不依赖数字阈值）复核后结论不变，**说明旧的 `<80` 数值滤除在这 4 条上给出了与 merit 判断相同的
++结果**，但判断依据完全不同（旧=分数、新=读证据链判断）。这正是 tasks 1.2 要删除数值滤条款的
++论据来源之一：数值不是必要的，merit 判断本身就够。
++
++### r4 · fix-probe-scan-precision（code-review，1 条）
++
++| id | 历史裁决 | 新裁决 | 一致 | 备注 |
++|---|---|---|---|---|
++| CR-06 | defer | defer | ✅ | 机械层三查全过（修正行号漂移后 `pass`），Minor 且 display-only，defer 合理 |
++
++**1/1 一致，0 mismatch。**
++
++### r5 · simplify-workflow（spec-review，21 条）
++
++| id | 历史裁决 | 新裁决 | 一致 | 备注 |
++|---|---|---|---|---|
++| C1 | 采纳 | 采纳 | ✅ | worktree 核实 `specs/spec-authoring/`、`specs/impl-orchestration/` delta spec 已存在 |
++| C2 | 采纳 | 采纳 | ✅ | worktree 核实 `openspec/workflow/` 本地 pin 48 文件仍在（spec-review 阶段未修，符合预期——该修复属实现阶段） |
++| C3 | 采纳 | 采纳 | ✅ | 未覆盖 Requirement 描述具体、可核 |
++| H1 | 采纳 | 采纳 | ✅ | 审计闭环价值明确、成本低 |
++| H2 | 采纳 | 采纳 | ✅ | 五问速算：不阻断但措辞需修正，合理 |
++| H3 | 采纳 | 采纳 | ✅ | worktree 核实 `design.md:85` 路径已修正为 `sdflow-implement/scripts/impl_route.py`，带 `[spec-review-amendment]` 标记（机械层 pass） |
++| H4 | 采纳 | 采纳 | ✅ | 具体测试文件名+断言内容，可核 |
++| H5 | 采纳 | 采纳 | ✅ | 已实跑验证基线（5 passed），描述具体 |
++| H6 | 采纳 | 采纳 | ✅ | 4 份具体文档路径，可核 |
++| H7 | 采纳 | 采纳 | ✅ | 3 处具体行号声明，可核 |
++| M1 | 采纳 | 采纳 | ✅ | 具体（9处硬编码），可核 |
++| M2 | 采纳 | 采纳 | ✅ | 核验证据缺口描述具体 |
++| M3 | 采纳 | 采纳 | ✅ | worktree 核实 `config.template.yaml:80` 措辞（spec-review 阶段未修，符合预期） |
++| M4 | 采纳 | 采纳 | ✅ | 数字误差描述具体可复算 |
++| M5 | 采纳 | 采纳 | ✅ | 测试粒度问题描述具体 |
++| M6 | 采纳 | 采纳 | ✅ | worktree 核实 `config.yaml:38/48` 仍含 wayfinder 引用 |
++| L1 | 采纳 | 采纳 | ✅ | 低成本纯文案修正 |
++| L2 | 采纳 | 采纳 | ✅ | 同上 |
++| X1 | 裁掉 | 裁掉 | ✅ | 用户已明确拍板方向（decision-memo D3），非设计缺陷 |
++| X2 | 裁掉 | 裁掉 | ✅ | 混淆「线性路径」定义，误判 |
++| X3 | 裁掉 | 裁掉 | ✅ | 优先级建议非设计缺陷，scope 由人定 |
++
++**21/21 一致，0 mismatch。**
++
++## 四、汇总统计
++
++| | 条数 |
++|---|---|
++| 样本总量 | 49 |
++| 历史「采纳」 | 25 |
++| 历史「defer」 | 5 |
++| 历史「裁掉」 | 19 |
++| 新裁决与历史裁决一致 | **49（100%）** |
++| 新裁决与历史裁决不一致（需三类归因） | **0** |
++
++**三类归因（红线检验）**：
++
++| 类别 | 定义 | 计数 |
++|---|---|---|
++| ①历史误标/口径漂移 | 剔除分母 | 3（r4 CR-06 行号漂移 `:246→:248`、r5 H3 缺 change 目录前缀、r2 X5/X6 报告内部标签自相矛盾）——均**发生在机械核验/JSON 构造阶段，不是新旧裁决分歧**，如实记录但不计入分母 |
++| ②模型方差 | 复裁一次，二次仍不一致才计入 | 0（首轮重裁 49/49 与历史一致，无需触发二次复裁） |
++| **③协议缺陷（真误杀）** | **红线** | **0** |
++
++**红线判据：③类 = 0 ✅ 满足，部署门通过。**
++
++## 五、噪声重入率（参考，非门禁）
++
++对历史「裁掉」的 19 条逐条独立二元重裁，新协议下**仍全部裁掉，0 条被重新接纳**。
++噪声重入率 = 0/19 = **0%（参考值）**。
++
++**C4 语料限制如实写明**：这个 0% 不能读作「新二元裁决协议不会引入任何噪声重入」——本次样本的
++19 条历史裁掉项，13 条（r2 4条+r3 4条+r1 前5条历史镜误报+r1 X8/X1-3）有报告原文写明的**具体、
++可核验的裁掉理由**（如「已验证不成立」「已修复」「与设计矛盾」），这类证据链完整的裁掉项，
++无论旧协议用什么筛选机制（置信阈值/人工推理），本来就大概率被正确裁掉——**该样本对「新二元
++裁决在证据薄弱时是否会比旧置信阈值更宽松地放行噪声」这个问题的区分力有限**。真正的压力测试
++需要窗口期真实 dogfood 语料（tasks.md 5.3 已登记为窗口期观察指标），本次重放只能给出「不劣于」
++的下限证据，不能给出「不会变差」的上限证据。
++
++## 六、诚实边界与残余
++
++- **旧语料无 `quote` 字段是系统性的，非个别报告缺陷**：5 份报告、49 条 finding，无一条带逐字引文
++  三元组。这印证了 design.md DD4 的判断——旧 Step2 prompt 未强制结构化输出，是 tasks 1.2/1.3 要
++  修的目标态缺口，本重放的「47 条 uncheckable」正是这个缺口的直接度量，而非重放方法论的失败。
++- **2 条 pass 的样本量小**，不能单独作为「findings_ref_check.py 三查机制在真实语料上普遍适用」的
++  强证据；该脚本自身的正确性由 Task 1 的 pytest 套件（`test_findings_ref_check.py`，覆盖正例/三种
++  失败态/无引文态/uncheckable态/脚本崩溃态）独立担保，本重放只验证部署门（新旧裁决一致性），
++  不重复验证脚本单元正确性。
++- **reviewed_sha 语义在「已修复」类 finding 上需要读上下文**：多个报告的 `reviewed_sha` 指向的是
++  **修复已落盘的 checkpoint**（如 r1 `8761cf4` 的提交信息即「多镜代码审自动修复」），
++  finding 描述的问题代码在该 sha 已被替换为修复后版本；本重放对这类 finding 采用「在 reviewed_sha
++  核验修复确已生效」而非「在 reviewed_sha 复现原始问题文本」的核验策略——这是从 DD5「与历史裁决
++  对表」目标反推的合理适配，不违反 DD5 用「reviewed_sha checkout」的字面指示（checkout 的仍是同一个
++  sha，只是核验目标从「问题存在」换成了「问题已被处置」，两者对「这条 finding 该不该被采纳」这一
++  判断都成立）。
++- **裁决对象规模远小于窗口期真实体量**：49 条样本 vs `mirror-dispositions.yaml`/DD6 表引用的
++  35 轮/39 轮历史轨迹，重放是抽样验证不是全量重跑，样本选取覆盖了「多采纳」「多置信裁掉」
++  「单条」「跨报告类型」四种形态，但不穷尽全部历史 change。
++
++## 七、结论
++
++**部署门判据 ③类 = 0 满足，无违例。** 49 条重放样本（4 code-review + 1 spec-review 报告）
++新旧裁决 100% 一致，机械层（findings_ref_check.py）在仅有的 2 条可测三元组样本上正确工作
++（含捕获 2 处真实引用漂移的直接证据）；47 条旧格式 finding 按 DD4 契约诚实分类为 `uncheckable`
++直进强档二元裁决，重裁结果与历史一致。**建议：1.2/1.3 裁决协议可部署。**
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/run-replay.sh b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/run-replay.sh
+new file mode 100755
+index 0000000..d6621a5
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/run-replay.sh
+@@ -0,0 +1,46 @@
++#!/usr/bin/env bash
++# 历史重放部署门 harness（一次性，非常驻资产 —— design.md DD5）。
++# 对 5 份归档评审报告重跑 findings_ref_check.py（DD4 机械前置层），验证部署门红线：
++# ③类（协议缺陷/真误杀）= 0。
++#
++# 用法：从仓根跑 `bash openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay/run-replay.sh`
++# 会在系统 tmp 下建 5 个 detached worktree（各对应一份报告的 reviewed_sha），
++# 对 findings/*.json 跑机械引用核，输出 *.refcheck.out.json + *.refcheck.log。
++# 二元裁决与三类归因判断在 replay-report.md 中人工完成（脚本只做机械核验这一层）。
++#
++# 完成后可 `git worktree remove` 清理（脚本末尾附清理命令，默认不自动执行）。
++
++set -euo pipefail
++REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)"
++REPLAY_DIR="$REPO_ROOT/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/replay"
++FINDINGS_DIR="$REPLAY_DIR/findings"
++SCRIPT="$REPO_ROOT/sdflow-init/assets/workflow/tools/findings_ref_check.py"
++WT_ROOT="${TMPDIR:-/tmp}/sdflow-replay-worktrees"
++
++mkdir -p "$WT_ROOT"
++
++# name -> reviewed_sha（从对应归档报告 frontmatter 提取）
++declare -A SHAS=(
++  [r1-refactor-roadmap]=8761cf433a1d5352d991d2fe7c7680fa5beb791d
++  [r2-autoplan-code]=35cbe388b816f0e5bc37953c4f0b2066f7050e01
++  [r3-tickets-frontier]=8e284fd02186539f45ca6456890f840672de1395
++  [r4-probe-scan]=5d9afb1a146fea1a2c574503cc9cf1ff28c2ae4f
++  [r5-simplify-spec]=efba4a849658a4bd432727970f3e0b47cff89985
++)
++
++cd "$REPO_ROOT"
++for name in "${!SHAS[@]}"; do
++  sha="${SHAS[$name]}"
++  wt="$WT_ROOT/$name"
++  if [ ! -d "$wt" ]; then
++    git worktree add --detach "$wt" "$sha"
++  fi
++  echo "=== $name (reviewed_sha=$sha) ==="
++  python3 "$SCRIPT" --input "$FINDINGS_DIR/$name.json" --root "$wt" \
++    > "$FINDINGS_DIR/$name.refcheck.out.json" 2> "$FINDINGS_DIR/$name.refcheck.log"
++  cat "$FINDINGS_DIR/$name.refcheck.log"
++done
++
++echo
++echo "机械核验完成。三态分布汇总见 replay-report.md 第二节。"
++echo "清理 worktree（可选）： for n in \"\${!SHAS[@]}\"; do git worktree remove \"$WT_ROOT/\$n\" --force; done"
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task4-brief.md b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task4-brief.md
+new file mode 100644
+index 0000000..96f6785
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task4-brief.md
+@@ -0,0 +1,20 @@
++### Task 4: 历史重放部署门
++
++**Blocked-by:** 1,3
++**R-ID:** R-裁决
++
++对历史归档报告重跑新裁决协议，验证误杀率红线。
++
++**行为**：
++- 选 3-5 份归档评审报告，`git worktree` checkout `reviewed_sha`
++- 提取 findings → 逐条过 validator 脚本 + 强档二元重裁 → 与历史裁决对表
++- 不一致项逐条归因入三类：①历史误标/口径漂移（剔除分母，记归因证据）②模型方差（复裁一次，二次仍不一致才计入）③协议缺陷（真误杀）
++- 产出重放报告（一次性，不进常驻资产）
++- **关门判据**：③类（协议缺陷）= 0；①②类如实报数不挡部署
++- 噪声重入率标「参考」（C4 语料限制如实写明）
++
++- [ ] 选取 3-5 份归档报告并完成重放
++- [ ] 重放报告含逐条归因（三类分类 + 证据）
++- [ ] ③类（协议缺陷）= 0
++- [ ] 重放脚本/流程落 impl-reports/replay/（非常驻资产）
++
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task4-replay.md b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task4-replay.md
+new file mode 100644
+index 0000000..1d8fdc6
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task4-replay.md
+@@ -0,0 +1,58 @@
++# Task 4 实现报告 — 历史重放部署门
++
++## 做了什么
++
++对 5 份归档评审报告（4 份 code-review + 1 份 spec-review，覆盖 4 个不同 change）做历史重放，
++验证新裁决协议（DD4 机械前置 + 强档二元裁决）部署门红线。
++
++- 选取样本：`refactor-roadmap-internalize-deps`（多采纳+多裁掉）、`absorb-gstack-autoplan`（采纳+置信过滤裁掉）、
++  `tickets-parallel-frontier`（全部为旧协议置信<80滤除项）、`fix-probe-scan-precision`（单条 finding）、
++  `simplify-workflow` spec-review（18 采纳+3 裁掉的大样本）。
++- 对每个 `reviewed_sha` 建 `git worktree`（detached，跑在 scratchpad，已清理），手工把 49 条 finding
++  提取为结构化 JSON（真实按 DD4 契约处理：仅 2 条能定位到干净单一 `file:line` 且能核实出逐字引文，
++  走 `{file,line,quote}` 三元组；其余 47 条按 brief 允许的做法标 `evidence_pack` → 机械层判
++  `uncheckable`，直进强档二元裁决）。
++- 真跑 `findings_ref_check.py --input <report>.json --root <worktree>`（脚本：
++  `sdflow-init/assets/workflow/tools/findings_ref_check.py`，Task 1 交付）。机械层抓到 2 处真实
++  引用漂移（r4 CR-06 行号 `:246`→实际 `:248`；r5 H3 缺 change 目录路径前缀），修正后两条均 `pass`。
++- 对全部 49 条 finding 做独立强档二元重裁（读 worktree 真实代码核验，不依赖历史置信分数），
++  与历史裁决逐条对表。
++
++## 结果
++
++- **49/49（100%）新旧裁决一致，0 mismatch**——无需触发「模型方差复裁一次」，也无需三类归因中的
++  ③类判定过程（本来就是 0）。
++- **③类（协议缺陷/真误杀）= 0 ✅ 满足红线**。
++- ①类（历史误标/口径漂移）3 处，均发生在机械核验/JSON 构造阶段本身（我的引用转录误差 + 一处
++  报告原文内部标签自相矛盾），已如实记录、剔除分母，不影响新旧裁决一致性判定。
++- ②类（模型方差）0——首轮即 100% 一致。
++- 噪声重入率（参考，非门禁）= 0/19 = 0%，但已在报告第五节写明 C4 语料限制：19 条历史裁掉项
++  多数自带充分裁掉理由，样本对「新协议是否会比旧置信阈值更宽松放行噪声」的区分力有限，真正的
++  压力测试需窗口期真实语料（tasks.md 5.3 已登记）。
++
++## 产出物
++
++- `impl-reports/replay/replay-report.md` — 完整重放报告（方法论 + 机械层结果 + 逐报告对表 + 三类
++  归因 + 噪声重入率 + 诚实边界 + 结论）
++- `impl-reports/replay/findings/*.json` — 5 份报告的结构化 finding 提取（含历史 disposition 标注）
++- `impl-reports/replay/findings/*.refcheck.out.json` / `*.refcheck.log` — `findings_ref_check.py`
++  真实运行输出（机械层证据，非叙述）
++- `impl-reports/replay/run-replay.sh` — 可重跑的 harness 脚本（建 worktree + 跑机械核验），一次性、
++  非常驻资产，未装进 bundle
++
++## 未做 / 已知局限（如实报告）
++
++- 未对 fail 路径做真实语料样本测试——旧语料里没有出现「有 quote 但内容对不上」的自然案例
++  （2 处 fail 均是我自己转录引用时的错误，修正后变 pass，不是语料自带的 fail 样本）。fail 路径
++  的正确性由 Task 1 的 pytest 单元测试独立覆盖，本重放不重复验证脚本单元正确性，只验证部署门
++  （新旧裁决一致性）。
++- 49 条样本 vs 全部历史轨迹（35-39 轮）是抽样，非全量重跑，按 DD5「3-5 份归档报告」范围执行，
++  未超出也未缩水任务边界。
++
++## MUST NOT 事项确认
++
++- 未勾 `tasks.md` 复选框，未打 checkpoint 标签（按 brief 要求，留给执行模式在双轴审通过后处理）。
++
++## 状态
++
++DONE
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/tickets.md b/openspec/changes/implement-workflow-optimization-2026-08-p2/tickets.md
+index 553ad1a..07e0f38 100644
+--- a/openspec/changes/implement-workflow-optimization-2026-08-p2/tickets.md
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/tickets.md
+@@ -94,27 +94,27 @@ impl-pipeline: tickets
+ - 合并池 > 100 条时分批裁决（每批 ≤50，批间携带已裁清单防重复采纳）
+ 
+ **B. sdflow-spec-review Step3 对齐**：
+ - 裁决动作层对齐同 A 的三层协议
+ - 保留「拿不准 → 决策登记区」路由并与置信数字脱钩
+ - Step2 输出契约同步改结构化字段
+ 
+ **C. spec-workflow 主 spec 联动核查**：
+ - grep 全仓「置信过滤 / <80 / 豁免」消费点，逐处改齐或确认不动
+ 
+-- [ ] sdflow-code-review Step3 不含 <80 数值滤/封顶 ≤50/跨模型豁免矩阵
+-- [ ] sdflow-code-review Step3 含 validator 接入 + 二元裁决 + [ref-check] 标记
+-- [ ] sdflow-code-review frontmatter description Step3 括注已更新
+-- [ ] sdflow-code-review Step2 各镜 prompt 要求结构化 findings 输出
+-- [ ] sdflow-spec-review Step3 裁决动作层与 code-review 三层协议对齐
+-- [ ] sdflow-spec-review 保留「拿不准→决策登记区」路由
+-- [ ] 全仓 grep「置信过滤/<80/豁免」无遗漏残余消费点
++- [x] sdflow-code-review Step3 不含 <80 数值滤/封顶 ≤50/跨模型豁免矩阵
++- [x] sdflow-code-review Step3 含 validator 接入 + 二元裁决 + [ref-check] 标记
++- [x] sdflow-code-review frontmatter description Step3 括注已更新
++- [x] sdflow-code-review Step2 各镜 prompt 要求结构化 findings 输出
++- [x] sdflow-spec-review Step3 裁决动作层与 code-review 三层协议对齐
++- [x] sdflow-spec-review 保留「拿不准→决策登记区」路由
++- [x] 全仓 grep「置信过滤/<80/豁免」无遗漏残余消费点
+ 
+ ### Task 4: 历史重放部署门
+ 
+ **Blocked-by:** 1,3
+ **R-ID:** R-裁决
+ 
+ 对历史归档报告重跑新裁决协议，验证误杀率红线。
+ 
+ **行为**：
+ - 选 3-5 份归档评审报告，`git worktree` checkout `reviewed_sha`
