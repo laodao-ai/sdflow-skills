@@ -114,12 +114,12 @@ impl-pipeline: tickets
 
 **全仓 pytest**：`/usr/bin/python3 -m pytest` 全绿（含保留半场、gate 回归、hack 守卫全量）；verify-report 对 Success Metrics 第三条（ship 直连 e2e）显式标注「事后锚——由下一真实 change 的 /sdflow-ship 首跑承接」，MUST NOT 留白或假绿。
 
-- [ ] `impl-pipeline-matt-vs-superpowers.md` 头部已加 obsolete 标注
-- [ ] 现役视图文档已去 superpowers 管线叙述
-- [ ] ADR 0033/0042 已互加指针
-- [ ] `CLAUDE.md`:215 手写段已修正
-- [ ] grep 扫尾判据通过（运行时路径仅剩合法残留）
-- [ ] [e2e] 全仓 `/usr/bin/python3 -m pytest` 全绿
+- [x] `impl-pipeline-matt-vs-superpowers.md` 头部已加 obsolete 标注
+- [x] 现役视图文档已去 superpowers 管线叙述
+- [x] ADR 0033/0042 已互加指针
+- [x] `CLAUDE.md`:215 手写段已修正
+- [x] grep 扫尾判据通过（运行时路径仅剩合法残留）
+- [x] [e2e] 全仓 `/usr/bin/python3 -m pytest` 全绿
 
 ### Task 6: 实现验证（收尾，不计入 3–6 预算）
 
@@ -128,6 +128,6 @@ impl-pipeline: tickets
 
 按「聚合套件发现契约」运行本 change 的单元+集成+e2e 测试套件并全部通过，证据落 `impl-reports/task6-verify.md`（每层一行 `<层>|<命令原文>|<退出码>|<SHA>`）。
 
-- [ ] 单元测试证据齐全并通过
-- [ ] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
-- [ ] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] 单元测试证据齐全并通过
+- [x] 集成测试证据齐全并通过（或记「未覆盖」+ 判定依据）
+- [x] e2e 测试证据齐全并通过（或记「未覆盖」+ 判定依据）
