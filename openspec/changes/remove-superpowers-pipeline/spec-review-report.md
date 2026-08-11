@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: b4d887dcf98c4fcad9c3c382a4a2844d97628478
+---
+
 # spec-review-report · remove-superpowers-pipeline
 
 评审日期 2026-08-11 · host=claude（强档 opus 主审 / 中档 sonnet 镜 / 弱档 haiku 接地）· 单批 dispatch 7 面（广审双镜 strategy/plan-eng + devex 领域镜 + 对抗镜 ×2 + 接地镜 + design-voice 跨模型）· 全部独立跑完，无降级。
@@ -68,6 +74,10 @@
 
 （无——15 条合并 finding 全部采纳或上抛，机械引用核也无裁掉项。反静默压制无适用对象。）
 
+### 拍板记录（设计门）
+
+**设计门已拍板批准，日期 2026-08-11。** Q1-Q4 均批选项 A：Q1=resolver 遗留旧名 fail-closed 兜底、Q2=`_yq` 随 route 半场删除（golden test 成员表同步）、Q3=adr/0033↔0042 Superseded-by 互指、Q4=接受现状 + design Risks 显式登记。四条 defer 项终裁转采纳（15/15 采纳、0 裁掉）。对应二次修订已按 ADR-7(b) 单独 checkpoint（`b4d887dcf98c4fcad9c3c382a4a2844d97628478`，即 frontmatter `reviewed_sha` 指向的被批准盘面）。
+
 ---
 
 ## 各镜 findings 与裁决
@@ -98,11 +108,13 @@
 
 ## lens-metric（metrics.enabled=true，emitter exit 0；拍板回写时随终裁更新〔SR-M〕）
 
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="10" 采纳="8" 裁掉="0" defer="2" 独立="5" sev="致1/高2/中4/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="4" 采纳="2" 裁掉="0" defer="2" 独立="2" sev="致0/高0/中1/低1" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="2" 采纳="1" 裁掉="0" defer="1" 独立="1" sev="致0/高1/中0/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="10" 采纳="10" 裁掉="0" defer="0" 独立="5" sev="致1/高3/中5/低1" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="3" sev="致0/高1/中2/低1" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="2" 采纳="2" 裁掉="0" defer="0" 独立="2" sev="致0/高1/中1/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="0" 采纳="0" 裁掉="0" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="4" 采纳="3" 裁掉="0" defer="1" 独立="0" sev="致1/高1/中1/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="0" sev="致1/高1/中2/低0" -->
+
+（拍板终裁版〔SR-M〕：Q1-Q4 四条 defer 项经设计门批 A 全部转采纳，emitter 以终裁 verdicts 重算覆盖草稿值。）
 
 残余信任边界声明（照契约）：分类正确性、roster 完备性、findings 誊写准确仍是主 session 信任边界；emitter 只保证给定输入的确定性归约。`findings=N` 与合并池实收数的数值一致性同为信任边界，非机械可验。本 skill 只落锚不聚合；复评/淘汰一律 `/sdflow-retro` 聚合后人决。
 
@@ -116,3 +128,5 @@
 ## 收敛口
 
 **建议进设计 HARD-GATE**：11 条采纳项 amendment 已落盘，无 blocker 级未决项；Q1-Q4 均带推荐，人拍板即可（Q1/Q2 若批 A 会引入小幅 scope 调整——resolver 兜底分支与 `_yq` 删除——批后需按拍板回写协议把二次修订单独 checkpoint 再落锚）。批准 → `/clear` → `/sdflow-ship`。
+
+> **已执行**：设计门批准（见上「拍板记录」），Q1-Q4 二次修订落盘于 `b4d887d`，frontmatter 机判锚已回写。下一步：`/clear` → `/sdflow-ship`。
