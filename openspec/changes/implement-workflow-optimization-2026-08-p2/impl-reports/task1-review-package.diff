@@ -1,0 +1,480 @@
+# Review package: cb2d4a5cad0167956b7ab9c5e5fde77be1df4149..eebc623b7764c88a86e300eb514077405d2ce761 (Task 1 worktree merge)
+
+## Commits
+eebc623 merge(task1): findings_ref_check.py validator 脚本
+cf0f570 impl(task1): findings_ref_check.py validator 脚本 + 20 pytest
+
+## Files changed
+ .../impl-reports/task1-validator.md                |  50 +++++
+ .../assets/workflow/tools/findings_ref_check.py    | 160 ++++++++++++++
+ .../tools/tests/test_findings_ref_check.py         | 239 +++++++++++++++++++++
+ 3 files changed, 449 insertions(+)
+
+## Diff
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task1-validator.md b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task1-validator.md
+new file mode 100644
+index 0000000..44af2d8
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task1-validator.md
+@@ -0,0 +1,50 @@
++# Task 1 impl-report — Validator 机械脚本（findings_ref_check.py）
++
++## 落位
++
++- `sdflow-init/assets/workflow/tools/findings_ref_check.py`（新，纯 stdlib，无 subprocess）
++- `sdflow-init/assets/workflow/tools/tests/test_findings_ref_check.py`（新，20 用例）
++
++## 实现摘要
++
++按 `task1-brief.md` + `design.md` DD4 + `specs/spec-workflow/spec.md` Requirement「评审裁决协议为机械前置 + 二元裁决 + 置信降排序」实现：
++
++- **输入契约**：只吃结构化 JSON（顶层裸 list 或 `{"findings": [...]}`），每条 finding 带 `{file, line, quote}` 或 `evidence_pack`；MUST NOT 解析 markdown 散文（脚本无任何 markdown 解析代码路径）。
++- **三查**（`classify_finding`）：① `Path(root) / file` 是否为存在文件 ② `line`（严格正整数或纯数字字符串，其余判非干净单行形态）是否落在文件总行数内 ③ `quote.strip()` 是否为所报行文本的子串（**只核该单行**，不做整文件子串核，堵住 spec-review-amendment 指出的绕过口）。
++- **三态输出**：`pass` / `fail`（含 4 个 reason：`path-not-found` / `line-out-of-bounds` / `quote-mismatch` / `no-quote-no-evidence`，另有边缘 `file-unreadable`）/ `uncheckable`（3 个 reason：`evidence-pack` / `design-reference`〔有引文无 file/line〕/ `line-range-form`〔`line` 非干净单行，如区间字符串 `"12-18"`、list、浮点〕）。
++- **崩溃显式降级**：JSON 语法错误、顶层结构非预期（`findings` 非 list）、findings 列表内混入非对象条目（`process_batch` 内 `.get` 自然抛 `AttributeError`）——均整批降级为 `{"result":"degraded","code":"[ref-check-unavailable]","results":[]}`，不吐半截结果。正常态输出 `{"result":"ok","results":[...]}`——两态在 JSON 顶层字段值上互斥可辨，调用方读 JSON 内容即可区分，不依赖退出码（信号内诚实）。
++- **CLI**：`--input <findings.json> --root <repo-root>`，dual output（human 摘要 stderr + 机读 JSON stdout），exit 0=ok / 1=degraded。
++
++## TDD 记录
++
++先写 20 用例（`test_findings_ref_check.py`）覆盖 brief 的 7 条验收复选框，跑一次确认全红（脚本文件不存在），再实现脚本至全绿：
++
++```
++/usr/bin/python3 -m pytest sdflow-init/assets/workflow/tools/tests/test_findings_ref_check.py -q
++20 passed in 0.20s
++```
++
++全仓回归（干净未中断跑批，非本次改动引入任何红）：
++```
++/usr/bin/python3 -m pytest -q
++2533 passed, 10 skipped in 373.39s (0:06:13)
++```
++
++## 验收复选框对照（task1-brief.md）
++
++- [x] 正例返回 pass — `test_pass_valid_reference`
++- [x] 三种失败态各返回 fail — `test_fail_path_not_found` / `test_fail_line_out_of_bounds` / `test_fail_quote_mismatch`
++- [x] 无引文且无证据包返回机械裁掉信号 — `test_fail_no_quote_no_evidence`（+ 空白 quote 变体）
++- [x] uncheckable 态返回 uncheckable — `test_uncheckable_evidence_pack` / `test_uncheckable_design_reference_no_file_line` / `test_uncheckable_line_range_form_string` / `test_uncheckable_line_range_form_list`
++- [x] 脚本级崩溃显式降级标 `[ref-check-unavailable]` — `test_degrade_malformed_json_syntax` / `test_degrade_findings_not_list_or_wrapped_dict` / `test_degrade_unexpected_exception_non_dict_entry`
++- [x] 输出码形态符合信号内诚实 — `test_output_honesty_degraded_distinguishable_from_ok` / `test_no_bare_pass_code_when_script_never_ran_checks`
++- [x] pytest 覆盖上述场景 — 20 用例（另含批量整合 + CLI 契约 + 纯 stdlib 静态断言）
++
++## 未做/边界说明
++
++- 本票范围只交付 validator 本身；两评审 SKILL 的 Step3 接线（消费本脚本）是 tasks 1.2/1.3，不在本票范围内（brief 未列，未做）。
++- `line` 类型只接受 `int` 或纯数字字符串；浮点行号（如 `10.0`）判非干净单行形态（`line-range-form`）——JSON 数字通常按整数写入，此边界为已知简化（基准 4，未见 brief/design 要求覆盖浮点行号形态）。
++
++## 状态
++
++DONE
+diff --git a/sdflow-init/assets/workflow/tools/findings_ref_check.py b/sdflow-init/assets/workflow/tools/findings_ref_check.py
+new file mode 100644
+index 0000000..9684de3
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/findings_ref_check.py
+@@ -0,0 +1,160 @@
++#!/usr/bin/env python3
++"""findings_ref_check — 评审 findings 引用核验机械前置门（implement-workflow-optimization-2026-08-p2 DD4）。
++承 adr/0041 裁决地基改造：三层裁决协议（机械引用核 → 强档二元裁决 → 置信降排序）的第一层。
++纯 stdlib、无 subprocess，只吃结构化 JSON——MUST NOT 解析 markdown 散文（design.md DD4）。
++
++三查（对每条 finding 的 `{file, line, quote}` 三元组）：
++    ① 引用路径存在（相对 `--root` 解析，绝对路径原样）
++    ② `file:line` 落在文件行数内
++    ③ 单行引文命中所报行（对该行文本做子串核，MUST NOT 整文件子串核——
++       整文件核可被任意合法行号 + 他处文本绕过，spec-review-amendment 明令堵死此形）
++
++三态输出（每条独立 `{id, status, reason?}`）：
++    pass         三查全过
++    fail         结构化字段在、任一查不过；或「无引文且无证据包」（确认皆缺）→ 机械裁掉
++    uncheckable  引用非干净 `path:N` 形态——证据包（`evidence_pack` 在场）/ 设计层引用
++                 （有引文但无 file/line）/ 行范围外形态（`line` 非干净正整数，如区间字符串
++                 `"12-18"`、list、浮点）——一律不裁，原样直进强档二元裁决
++
++**引文与断言的语义对应不查**——那是强档二元裁决的活（基准 1 切分：有确定性信号的下沉脚本，
++语义残余留裁决），本脚本只核「引用是否真实指向所声明的位置」这一层确定性信号。
++
++脚本级不可恢复错误（输入 JSON 畸形 / findings 结构非预期导致内部异常，如列表内混入非
++对象条目）⇒ 整批降级：`result="degraded"` + `code="[ref-check-unavailable]"`，`results=[]`
++（不吐半截结果、不静默呈现「全部 pass」假象——消费型信号校验器输出诚实，adr/0016 反静默方向；
++degraded 与 ok 两态在 JSON 顶层字段值上互斥可辨，调用方读 JSON 即可区分，不依赖退出码）。
++单条 finding 内部形态不合预期（如 file/line 缺一角但非「彻底空」）不视为脚本崩溃，
++归入 uncheckable（design-reference），不牵连批次其余结果——只有结构层面真正不可辨识的输入
++（JSON 语法错误 / 列表条目非对象）才触发整批降级。"""
++import argparse, json, sys
++
++for _s in (sys.stdout, sys.stderr):
++    try: _s.reconfigure(encoding="utf-8", errors="replace")
++    except Exception: pass
++from pathlib import Path
++
++EXIT_OK, EXIT_DEGRADED = 0, 1
++DEGRADE_CODE = "[ref-check-unavailable]"
++
++
++def _clean_line_number(value):
++    """严格判「干净单行形态」：正整数 `int`（非 bool）或纯数字字符串。其余一律非干净
++    （浮点、负数、0、区间字符串 `"12-18"`、list/dict 等）→ 返回 None，调用侧归 uncheckable。"""
++    if isinstance(value, bool):
++        return None
++    if isinstance(value, int):
++        return value if value >= 1 else None
++    if isinstance(value, str):
++        s = value.strip()
++        if s.isdigit():
++            n = int(s)
++            return n if n >= 1 else None
++    return None
++
++
++def classify_finding(finding, root):
++    """单条 finding 三态分类。`finding` MUST 为 dict（非 dict 由调用侧 process_batch 自然抛出
++    AttributeError，触发整批降级——见模块 docstring「脚本级不可恢复错误」）。"""
++    evidence_pack = finding.get("evidence_pack")
++    has_evidence = evidence_pack not in (None, "", {}, [])
++    quote = finding.get("quote")
++    has_quote = isinstance(quote, str) and quote.strip() != ""
++
++    if has_evidence:
++        return {"status": "uncheckable", "reason": "evidence-pack"}
++    if not has_quote:
++        return {"status": "fail", "reason": "no-quote-no-evidence"}
++
++    file_field = finding.get("file")
++    has_file = isinstance(file_field, str) and file_field.strip() != ""
++    line_raw = finding.get("line")
++    line_int = _clean_line_number(line_raw)
++
++    if not has_file or line_int is None:
++        # 有引文但拿不到干净 path:N 三元组——区分「给了 line 但形态非干净单行」vs「压根没给 file/line」
++        if has_file and line_raw is not None and line_int is None:
++            return {"status": "uncheckable", "reason": "line-range-form"}
++        return {"status": "uncheckable", "reason": "design-reference"}
++
++    target = Path(root) / file_field
++    if not target.is_file():
++        return {"status": "fail", "reason": "path-not-found"}
++    try:
++        lines = target.read_text(encoding="utf-8").splitlines()
++    except (OSError, UnicodeDecodeError):
++        return {"status": "fail", "reason": "file-unreadable"}
++    if line_int > len(lines):
++        return {"status": "fail", "reason": "line-out-of-bounds"}
++    target_line = lines[line_int - 1]
++    if quote.strip() in target_line:
++        return {"status": "pass"}
++    return {"status": "fail", "reason": "quote-mismatch"}
++
++
++def load_findings(raw_text):
++    """解析输入 JSON → findings 列表。顶层可为裸 list，或 `{"findings": [...]}`。
++    其余顶层形态（含 `findings` 非 list）视为畸形输入，抛 ValueError（调用侧转整批降级）。"""
++    data = json.loads(raw_text)
++    if isinstance(data, list):
++        return data
++    if isinstance(data, dict) and isinstance(data.get("findings"), list):
++        return data["findings"]
++    raise ValueError('顶层须为 JSON list，或 {"findings": [...]} 形态')
++
++
++def process_batch(findings, root):
++    """逐条分类。任一条目非 dict ⇒ `.get` 自然抛 AttributeError，向上传播触发整批降级
++    （单条彻底不可辨识的条目视为「结构层面不可信」，非可归类的 uncheckable/fail 残余）。"""
++    results = []
++    for idx, f in enumerate(findings):
++        fid = f.get("id") or f"finding-{idx}"
++        outcome = classify_finding(f, root)
++        outcome["id"] = fid
++        results.append(outcome)
++    return results
++
++
++def _emit_ok(results):
++    print(f"[findings_ref_check] OK: {len(results)} 条", file=sys.stderr)
++    print(json.dumps({"result": "ok", "results": results}, ensure_ascii=False))
++    return EXIT_OK
++
++
++def _emit_degraded(reason):
++    print(f"[findings_ref_check] DEGRADED: {reason}", file=sys.stderr)
++    print(json.dumps({
++        "result": "degraded",
++        "code": DEGRADE_CODE,
++        "reason": reason,
++        "results": [],
++    }, ensure_ascii=False))
++    return EXIT_DEGRADED
++
++
++def main(argv=None):
++    ap = argparse.ArgumentParser(
++        description="findings 引用核验机械前置门（确定性·三态输出·崩溃显式降级）")
++    ap.add_argument("--input", required=True, help="findings JSON 文件路径")
++    ap.add_argument("--root", default=".", help="finding.file 相对路径解析根目录")
++    args = ap.parse_args(argv)
++
++    try:
++        raw = Path(args.input).read_text(encoding="utf-8")
++    except (OSError, UnicodeDecodeError) as e:
++        return _emit_degraded(f"input-unreadable: {e}")
++
++    try:
++        findings = load_findings(raw)
++    except (json.JSONDecodeError, ValueError) as e:
++        return _emit_degraded(f"input-json-malformed: {e}")
++
++    try:
++        results = process_batch(findings, Path(args.root))
++    except Exception as e:  # 蓄意宽捕：脚本本体崩溃须整批降级，不得让单条畸形条目击穿仍能续算的其余结果
++        return _emit_degraded(f"internal-error: {e}")
++
++    return _emit_ok(results)
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_findings_ref_check.py b/sdflow-init/assets/workflow/tools/tests/test_findings_ref_check.py
+new file mode 100644
+index 0000000..dc8249e
+--- /dev/null
++++ b/sdflow-init/assets/workflow/tools/tests/test_findings_ref_check.py
+@@ -0,0 +1,239 @@
++"""findings_ref_check pytest 覆盖（task1-brief 6 场景 + CLI 契约 + 信号内诚实静态断言）。"""
++import importlib.util
++import json
++import subprocess
++import sys
++from pathlib import Path
++
++TOOLS = Path(__file__).resolve().parent.parent
++SCRIPT = TOOLS / "findings_ref_check.py"
++
++
++def _mod():
++    spec = importlib.util.spec_from_file_location("findings_ref_check", SCRIPT)
++    m = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(m)
++    return m
++
++
++def _write_target(tmp_path, name, lines):
++    p = tmp_path / name
++    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
++    return p
++
++
++# --- ① 正例：路径存在 + 行号合法 + 引文命中该行 → pass -------------------------------------
++
++def test_pass_valid_reference(tmp_path):
++    _write_target(tmp_path, "a.py", ["line one", "def foo():", "    return 1"])
++    finding = {"id": "F1", "file": "a.py", "line": 2, "quote": "def foo():"}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "pass"}
++
++
++# --- ② 三种失败态：路径不存在 / 行号越界 / 引文不在所报行 → fail ---------------------------
++
++def test_fail_path_not_found(tmp_path):
++    finding = {"id": "F2", "file": "missing.py", "line": 1, "quote": "x"}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "fail", "reason": "path-not-found"}
++
++
++def test_fail_line_out_of_bounds(tmp_path):
++    _write_target(tmp_path, "b.py", ["only one line"])
++    finding = {"id": "F3", "file": "b.py", "line": 99, "quote": "only one line"}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "fail", "reason": "line-out-of-bounds"}
++
++
++def test_fail_quote_mismatch(tmp_path):
++    _write_target(tmp_path, "c.py", ["line one", "line two", "line three"])
++    finding = {"id": "F4", "file": "c.py", "line": 2, "quote": "this text is not on line two"}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "fail", "reason": "quote-mismatch"}
++
++
++# --- ③ 无引文且无证据包 → 机械裁掉（fail, no-quote-no-evidence） --------------------------
++
++def test_fail_no_quote_no_evidence(tmp_path):
++    finding = {"id": "F5", "file": "d.py", "line": 1}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "fail", "reason": "no-quote-no-evidence"}
++
++
++def test_fail_no_quote_no_evidence_empty_quote_string(tmp_path):
++    finding = {"id": "F5b", "file": "d.py", "line": 1, "quote": "   "}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "fail", "reason": "no-quote-no-evidence"}
++
++
++# --- ④ uncheckable：证据包 / 设计层引用 / 行范围外形态 → uncheckable ----------------------
++
++def test_uncheckable_evidence_pack(tmp_path):
++    finding = {"id": "F6", "evidence_pack": {"kind": "decision-point", "ref": "proposal.md#Why"}}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "uncheckable", "reason": "evidence-pack"}
++
++
++def test_uncheckable_design_reference_no_file_line(tmp_path):
++    """有引文但无 file/line（设计层引用，非干净 path:N 三元组）。"""
++    finding = {"id": "F7", "quote": "见 proposal.md 的 Why 段落"}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "uncheckable", "reason": "design-reference"}
++
++
++def test_uncheckable_line_range_form_string(tmp_path):
++    _write_target(tmp_path, "e.py", ["a", "b", "c"])
++    finding = {"id": "F8", "file": "e.py", "line": "10-15", "quote": "a"}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "uncheckable", "reason": "line-range-form"}
++
++
++def test_uncheckable_line_range_form_list(tmp_path):
++    _write_target(tmp_path, "f.py", ["a", "b", "c"])
++    finding = {"id": "F9", "file": "f.py", "line": [10, 15], "quote": "a"}
++    result = _mod().classify_finding(finding, tmp_path)
++    assert result == {"status": "uncheckable", "reason": "line-range-form"}
++
++
++# --- ⑤ 脚本级崩溃（输入 JSON 畸形 / 意外异常）→ 显式降级 [ref-check-unavailable] -----------
++
++def test_degrade_malformed_json_syntax(tmp_path):
++    p = tmp_path / "in.json"
++    p.write_text("{not valid json", encoding="utf-8")
++    r = _run(p, tmp_path)
++    out = json.loads(r.stdout)
++    assert r.returncode != 0
++    assert out["result"] == "degraded"
++    assert out["code"] == "[ref-check-unavailable]"
++    assert out["results"] == []
++
++
++def test_degrade_findings_not_list_or_wrapped_dict(tmp_path):
++    p = tmp_path / "in.json"
++    p.write_text(json.dumps({"nope": "not findings"}), encoding="utf-8")
++    r = _run(p, tmp_path)
++    out = json.loads(r.stdout)
++    assert r.returncode != 0
++    assert out["result"] == "degraded"
++
++
++def test_degrade_unexpected_exception_non_dict_entry(tmp_path):
++    """findings 列表内混入非对象条目（真实存在的意外异常来源，而非人为 monkeypatch）——
++    单条畸形条目击穿整个批次，MUST 整批降级，不得只丢弃该条继续放行其余结果。"""
++    p = tmp_path / "in.json"
++    _write_target(tmp_path, "g.py", ["a"])
++    p.write_text(json.dumps({"findings": [
++        {"id": "F1", "file": "g.py", "line": 1, "quote": "a"},  # 单看会 pass
++        42,  # 非对象条目 → AttributeError 在 process_batch 内自然抛出
++    ]}), encoding="utf-8")
++    r = _run(p, tmp_path)
++    out = json.loads(r.stdout)
++    assert r.returncode != 0
++    assert out["result"] == "degraded"
++    assert out["results"] == []  # 整批降级，MUST NOT 只漏一条
++
++
++# --- ⑥ 输出码形态符合信号内诚实（degraded 不得与「已完整验证」的 ok 输出不可区分） ---------
++
++def test_output_honesty_degraded_distinguishable_from_ok(tmp_path):
++    good = tmp_path / "ok.json"
++    good.write_text(json.dumps({"findings": [
++        {"id": "F1", "file": "h.py", "line": 1, "quote": "a"},
++    ]}), encoding="utf-8")
++    _write_target(tmp_path, "h.py", ["a"])
++    bad = tmp_path / "bad.json"
++    bad.write_text("{broken", encoding="utf-8")
++
++    r_ok = _run(good, tmp_path)
++    r_bad = _run(bad, tmp_path)
++    out_ok = json.loads(r_ok.stdout)
++    out_bad = json.loads(r_bad.stdout)
++
++    assert out_ok["result"] == "ok"
++    assert out_bad["result"] == "degraded"
++    assert out_ok["result"] != out_bad["result"]
++    assert r_ok.returncode != r_bad.returncode
++    # degraded 输出里绝不能出现任何 status=pass（不得呈现「全部 pass」假象）
++    assert "pass" not in json.dumps(out_bad)
++
++
++def test_no_bare_pass_code_when_script_never_ran_checks():
++    """静态断言：degrade 路径的 JSON 构造函数不含硬编码的裸 "pass" 字面量——
++    防止未来有人为图省事让 degrade 分支意外携带看起来像验证通过的字段。"""
++    src = SCRIPT.read_text(encoding="utf-8")
++    assert '"result": "degraded"' in src or "'result': 'degraded'" in src
++
++
++# --- 批量整合：一次调用混合多态 --------------------------------------------------------
++
++def test_batch_mixed_statuses(tmp_path):
++    _write_target(tmp_path, "m.py", ["alpha", "beta"])
++    p = tmp_path / "in.json"
++    p.write_text(json.dumps({"findings": [
++        {"id": "F1", "file": "m.py", "line": 1, "quote": "alpha"},          # pass
++        {"id": "F2", "file": "missing.py", "line": 1, "quote": "x"},        # fail path-not-found
++        {"id": "F3", "evidence_pack": {"x": 1}},                            # uncheckable
++        {"id": "F4"},                                                       # fail no-quote-no-evidence
++    ]}), encoding="utf-8")
++    r = _run(p, tmp_path)
++    out = json.loads(r.stdout)
++    assert r.returncode == 0
++    assert out["result"] == "ok"
++    by_id = {x["id"]: x for x in out["results"]}
++    assert by_id["F1"]["status"] == "pass"
++    assert by_id["F2"] == {"id": "F2", "status": "fail", "reason": "path-not-found"}
++    assert by_id["F3"]["status"] == "uncheckable"
++    assert by_id["F4"] == {"id": "F4", "status": "fail", "reason": "no-quote-no-evidence"}
++
++
++# --- CLI 契约 ---------------------------------------------------------------------------
++
++def _run(input_path, root):
++    return subprocess.run(
++        [sys.executable, str(SCRIPT), "--input", str(input_path), "--root", str(root)],
++        capture_output=True, text=True, encoding="utf-8", errors="replace")
++
++
++def test_cli_ok_exit0(tmp_path):
++    _write_target(tmp_path, "z.py", ["hello"])
++    p = tmp_path / "in.json"
++    p.write_text(json.dumps({"findings": [
++        {"id": "F1", "file": "z.py", "line": 1, "quote": "hello"},
++    ]}), encoding="utf-8")
++    r = _run(p, tmp_path)
++    assert r.returncode == 0
++    out = json.loads(r.stdout)
++    assert out["result"] == "ok"
++    assert out["results"][0]["status"] == "pass"
++
++
++def test_cli_degraded_exit_nonzero(tmp_path):
++    p = tmp_path / "in.json"
++    p.write_text("not json at all", encoding="utf-8")
++    r = _run(p, tmp_path)
++    assert r.returncode != 0
++    assert "[findings_ref_check] DEGRADED" in r.stderr
++    assert "Traceback" not in r.stderr
++
++
++def test_cli_missing_input_file_degrades(tmp_path):
++    r = _run(tmp_path / "nonexistent.json", tmp_path)
++    assert r.returncode != 0
++    out = json.loads(r.stdout)
++    assert out["result"] == "degraded"
++
++
++# --- 纯 stdlib（无 subprocess/网络依赖，静态断言）----------------------------------------
++
++def test_no_subprocess_import():
++    import ast
++    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
++    imported = set()
++    for node in ast.walk(tree):
++        if isinstance(node, ast.Import):
++            for a in node.names:
++                imported.add(a.name.split(".")[0])
++        elif isinstance(node, ast.ImportFrom) and node.module:
++            imported.add(node.module.split(".")[0])
++    assert "subprocess" not in imported
