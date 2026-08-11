@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 618b738c667240c58bcfdeda28bd8346e0924948
+---
+
 # spec-review-report · implement-workflow-optimization-2026-08-p3
 
 > 评审日期 2026-08-11 · 宿主 claude（强档 opus 主审 / 中档 sonnet 镜 / 弱档 haiku 接地）·
@@ -61,9 +67,11 @@ TG 判定：命中 TG-05/08/11/13/18/19/22/23/28（`hr_tg_intersect.py` 确定�
   本地化（不复用「上游 URL」模板）｜入池命令模板在报告内预生成（连 `source_change` 一起写好，人拍板后
   直接跑，替代纯 prose MUST）｜关键错误文案实现期定稿进脚本 docstring。
 
-### [需拍板]
+### [需拍板]（已拍板，见下方拍板记录）
 
-- **Q1（M8）T264 schema drift 对比基线**（voice 独家）：现设计对比 fork vs **本机已安装版**；registry 已出
+- **Q1（M8）T264 schema drift 对比基线**（voice 独家）——**已拍板：采推荐 A**（2026-08-11，
+  对应修订已落 618b738 提交：spec R3 + design TD3 补「报告明示对比基线」条款）。原始登记：
+  现设计对比 fork vs **本机已安装版**；registry 已出
   新版而本机未升级时，看不到新版 schema 细节（只有版本差一行）。
   - **推荐 A：维持已安装版对比** + 报告明示「drift 基于已安装版 X，registry 最新 Y」+ 版本差单独呈报。
     三面后果——系统镜：零新增实现面；用户镜：新版 schema 细节延迟到升级后一轮才见（「有新版」信号已在场，
@@ -71,7 +79,8 @@ TG 判定：命中 TG-05/08/11/13/18/19/22/23/28（`hr_tg_intersect.py` 确定�
     T264 的痛点是「从不重看」，版本差提醒已破局。
   - 备选 B：`npm pack` 拉 registry 最新解包对比。系统镜：+网络+临时目录+清理面；用户镜：drift 细节即时；
     开发循环镜：实现与测试面增。
-- **Q2（M3 残部）`last_run` 语义**：推荐 A=全局单值（D4 已按此改；代价：全源 degraded 的一轮也会刷新
+- **Q2（M3 残部）`last_run` 语义**——**已拍板：采推荐 A**（2026-08-11，全局单值，D4 修订即终态，
+  边角照登记接受）。原始登记：推荐 A=全局单值（D4 已按此改；代价：全源 degraded 的一轮也会刷新
   提醒时钟，掩盖连续失败——概率低影响小，记边角）。备选 B=per-source `last_success_at` + 提醒取最旧
   （两路 voice 均推荐；代价：anchors schema 与提醒逻辑复杂化）。
 
@@ -132,19 +141,20 @@ TG-13/TG-11 命中 → design「组件与数据流」ASCII 图存在且与 TD1�
 superpowers 支路与 facts 落点标注需随 amendment 微调，已在修订中处理）；TG-18 → tasks 3.5 测试覆盖图
 表在场。无缺失图。
 
-## lens-metric（Step3 pre-gate 临时裁决；拍板回写时最终化〔SR-M〕）
+## lens-metric（拍板后最终值〔SR-M〕：M8 defer→采纳(高)，emitter 重算覆盖 pre-gate 草稿）
 
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="adversarial" host="claude" runner="claude" site="—" findings="9" 采纳="9" 裁掉="0" defer="0" 独立="6" sev="致2/高4/中3/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="broad" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="4" sev="致0/高2/中4/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="domain" host="claude" runner="claude" site="—" findings="6" 采纳="6" 裁掉="0" defer="0" 独立="4" sev="致0/高2/中3/低1" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="grounding" host="claude" runner="claude" site="—" findings="1" 采纳="0" 裁掉="1" defer="0" 独立="0" sev="致0/高0/中0/低0" -->
-<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="4" 裁掉="0" defer="1" 独立="2" sev="致0/高2/中2/低0" -->
+<!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="design-voice" findings="5" 采纳="5" 裁掉="0" defer="0" 独立="3" sev="致0/高3/中2/低0" -->
 <!-- sdflow:lens-metric v1 layer="spec-review" lens="outside-voice" host="claude" runner="codex" site="hr-tg" findings="4" 采纳="4" 裁掉="0" defer="0" 独立="0" sev="致1/高3/中0/低0" -->
 
 残余信任边界声明：分类正确性、roster 完备性、findings 誊写准确仍是主 session 信任边界；emitter 只保证
 确定性归约。`findings=N` 与合并池实收数的数值一致性同为信任边界，非机械可验。
 
-## 收敛口
+## 收敛口 · 拍板记录
 
-四件套修订（D1–D11 对应 amendment）已落盘，Q1/Q2 待人拍板。**建议进设计 HARD-GATE**：过本报告拍板
-Q1/Q2 + 确认 D1–D11 默认采纳后即可批准进入阶段三（批准前若再改四件套，须按 1.7b 先单独 checkpoint 再回写锚）。
+四件套修订（D1–D11 对应 amendment）已落盘。**设计门已拍板批准，日期 2026-08-11**：D1–D11 确认采纳，
+Q1/Q2 均采推荐 A；Q1 对应二次修订按 1.7b 单独落盘于提交 618b738（即 frontmatter `reviewed_sha`
+所指的被批准盘面），M8 随拍板由 defer 转采纳、lens-metric 已重算最终化。→ 进入阶段三（`/sdflow-ship`）。
