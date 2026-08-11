@@ -14,7 +14,7 @@ import pytest
 
 from conftest import commit_all, mkchange, head_sha, write_report, sg_frontmatter
 from test_gate_preflight import run_gate
-from test_gate_impl_progress import approved_change, PLAN2, _sg
+from test_gate_impl_progress import approved_change, PLAN2_TICKETS, _sg
 
 GOOD_SHA = "0123456789abcdef0123456789abcdef01234567"   # 语法合法、语义上本仓解析不到
 
@@ -206,7 +206,7 @@ def test_touching_the_report_does_not_move_the_anchor(repo):
     # 都推不动它。旧反推实现在此盘面上会把锚前移到「排版提交」，从而把锚前的设计改动埋掉。
     # ⚠ 本条的变异手段与其余不同源：新实现里没有「反推逻辑」可删（复活 report_last_sha
     #   直接违反 Compliance），故以**旧实现为参照物**做对比——见 impl-report Task1 §变异证明。
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     (d / "design.md").write_text("# 拍板后偷改设计\n", encoding="utf-8")
     commit_all(repo, "docs: 改设计（未重审）")
     # 之后有人顺带给报告补了个空行（旧实现：锚前移到这一提交 ⇒ 上面那次改设计被埋掉）
@@ -220,7 +220,7 @@ def test_touching_the_report_does_not_move_the_anchor(repo):
 # ── 测试基座：两段 / 三段提交模型（tasks 4.1 / 4.1b）─────────────────────
 
 def test_fixture_two_stage_model_puts_artifacts_before_report(repo):
-    d = approved_change(repo, plan=PLAN2)
+    d = approved_change(repo, plan=PLAN2_TICKETS)
     subjects = _git(repo, "log", "--format=%s").splitlines()
     assert subjects[0] == "spec-review report (approved)"       # 报告单独一段
     assert "seed change artifacts" in subjects                   # 四件套先落盘
@@ -236,7 +236,7 @@ def test_fixture_third_stage_models_pre_approval_revision(repo):
     def revise(d):
         (d / "design.md").write_text("# 拍板前二次修订\n", encoding="utf-8")
 
-    d = approved_change(repo, plan=PLAN2, revise=revise)
+    d = approved_change(repo, plan=PLAN2_TICKETS, revise=revise)
     subjects = _git(repo, "log", "--format=%s").splitlines()
     assert "pre-approval revision" in subjects
     code, js, _ = run_gate(repo)
@@ -251,7 +251,7 @@ def test_fixture_third_stage_can_express_adr7b_selflock(repo):
         (d / "design.md").write_text("# 拍板前二次修订（未单独落盘的等价形态）\n",
                                      encoding="utf-8")
 
-    approved_change(repo, plan=PLAN2, revise=revise, anchor="pre-revision")
+    approved_change(repo, plan=PLAN2_TICKETS, revise=revise, anchor="pre-revision")
     code, js, _ = run_gate(repo)
     assert code == 3 and js["verdict"] == "REFUSE_START"
 
@@ -271,7 +271,7 @@ def test_adr7b_second_revision_anchored_after_is_not_refused(repo):
     def revise(d):
         (d / "design.md").write_text("# 拍板前二次修订（已单独落盘）\n", encoding="utf-8")
 
-    approved_change(repo, plan=PLAN2, revise=revise, anchor="head")
+    approved_change(repo, plan=PLAN2_TICKETS, revise=revise, anchor="head")
     code, js, _ = run_gate(repo)
     assert js["verdict"] != "REFUSE_START", ("锚含二次修订却仍被拒", js)
     # 落在实现窗口（plan 在、无 checkpoint）→ CONTINUE_IMPL，正常推进
@@ -286,6 +286,6 @@ def test_adr7b_second_revision_anchored_before_self_locks(repo):
         (d / "design.md").write_text("# 拍板前二次修订（未单独落盘的等价形态）\n",
                                      encoding="utf-8")
 
-    approved_change(repo, plan=PLAN2, revise=revise, anchor="pre-revision")
+    approved_change(repo, plan=PLAN2_TICKETS, revise=revise, anchor="pre-revision")
     code, js, _ = run_gate(repo)
     assert code == 3 and js["verdict"] == "REFUSE_START", js
