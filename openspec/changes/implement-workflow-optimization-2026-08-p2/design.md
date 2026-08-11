@@ -13,7 +13,7 @@
 
 **Goals（设计层边界）**：裁决协议改动收敛在两个评审 SKILL 的 Step3 段 + 一个新机械脚本；处置机制收敛在一个数据文件 + `retro_report.py` 一处消费；终态快照零新采集路径。
 
-**Non-Goals**：不改 lens-metric 锚 schema；不动 anchor_lint 合法组合矩阵；不改 Step1/Step2 编排结构（roster 段只加派发条件行）；范围级 Non-Goals 见 proposal。
+**Non-Goals**：不改 lens-metric 锚**字段集**（合法组合矩阵扩展除外〔设计门 Q1〕）；不改 Step1/Step2 编排结构（roster 段只加派发条件行）；范围级 Non-Goals 见 proposal。
 
 ## Decisions
 
@@ -29,9 +29,13 @@
 - **解析手段〔spec-review-amendment〕**：`retro_report.py` 读取走 yq（mikefarah/yq CLI subprocess，同 `anchor_lint.py` `_yq()` idiom，承 adr/0036），**MUST NOT `import yaml`**——保持仓内「零第三方依赖 + YAML 读取点收敛」惯例。
 - **淘汰态落地〔spec-review-amendment〕**：`disposition="淘汰"` 时 roster 段整段移除该镜派发逻辑，yaml 条目保留作历史注记（本轮无淘汰，此规则为 schema 合法值的落地路径备案）。
 
-### DD2 「按条件跳过」锚表达 = 复用 `runner="none"` + findings=0，cause 枚举扩一值
+### DD2 「按条件跳过」锚表达 = 复用 `runner="none"` + findings=0，合法组合矩阵扩展〔设计门 Q1 拍板：选项 A〕
 
-条件化派发判「本轮不派」的镜 **MUST 照落锚行**（`runner="none"`、`findings=0`），并在 lens-metric contract 的 `runner="none"` 成因清单（现 host-unknown / secret-hit / fallback-unavailable）扩一值 `condition-not-met`，按 contract §enum 扩展治理升版本。**锚行必落 = 跳过可见**（grill-not-skippable：跳过类判定不能不可见）；出现轮数照计，处置追踪口径一致。**砍掉的候选**：不落锚行（「忘了派」与「条件跳过」不可区分，正是空箱纪律要杀的静默形态）；新 reason_code 字段（reason_code 属 outside-voice 锚语义，普通镜行引入 = 无谓扩面）。
+条件化派发判「本轮不派」的镜 **MUST 照落锚行**（`runner="none"`、`findings=0`）。**锚行必落 = 跳过可见**（grill-not-skippable：跳过类判定不能不可见）；出现轮数照计，处置追踪口径一致。
+
+**合法组合矩阵扩展**：contract 约束①（普通镜行 `runner==host`）+ emitter + anchor_lint 扩一条合法组合「**普通镜行 `runner="none"` ∧ `findings=0`**」（contract 升版本，枚举域不动）。`condition-not-met` **不作为锚字段**——跳过成因由 `mirror-dispositions.yaml` 的 `condition` 字段（机读）+ 报告一行散文承载。Non-Goals 改为「不改 lens-metric 锚**字段集**（合法组合矩阵扩展除外）」。
+
+**砍掉的候选**：不落锚行（「忘了派」与「条件跳过」不可区分，正是空箱纪律要杀的静默形态）；新 reason_code 字段（reason_code 属 outside-voice 锚语义，普通镜行引入 = 无谓扩面）；新增 `cause` 可选字段（schema 真扩面，三个消费脚本全动，改动面 ~3 倍，且该字段唯一取值恒为 condition-not-met，信息密度趋零）。
 
 ### DD3 终态 token 快照 = done 第 3 步（Archive）起手前主 session 采一次
 
@@ -51,7 +55,9 @@ validator 复核层为**纯机械脚本**（暂名 `findings_ref_check.py`，落
 
 ### DD5 历史重放 = 一次性 harness，不进常驻资产
 
-重放脚本/流程落本 change 目录（`impl-reports/replay/`），对 3-5 份归档报告：`git worktree` checkout `reviewed_sha` → findings 逐条过 DD4 脚本 + 强档二元重裁 → 与历史裁决对表出报告（误杀率红线 = 0 才可部署；噪声重入率标「参考」）。不装进 bundle、不留运行时入口。
+重放脚本/流程落本 change 目录（`impl-reports/replay/`），对 3-5 份归档报告：`git worktree` checkout `reviewed_sha` → findings 逐条过 DD4 脚本 + 强档二元重裁 → 与历史裁决对表出报告。不装进 bundle、不留运行时入口。
+
+**部署门关门判据〔设计门 Q2 拍板：三类归因法〕**：重裁不一致项逐条人工归因入三类——①历史误标/口径漂移（剔除分母，需在重放报告记归因证据）②模型方差（同一 finding 复裁一次，二次仍不一致才计入）③协议缺陷（真误杀）。**红线 = ③类（协议缺陷）= 0**；①②类如实报数不挡部署。误杀率语义不变（协议不得杀真金），假精确消除。
 
 ### DD7 前瞻窗口方向性判据〔spec-review-amendment：兑现 decision-memo D3「设计相位定宽松方向性判据」承诺〕
 
@@ -70,12 +76,12 @@ validator 复核层为**纯机械脚本**（暂名 `findings_ref_check.py`，落
 | 7 | spec-review | adversarial | 39 | 47%/93% | 无数据 | **保留** | 采纳率全场最高段 |
 | 8 | spec-review | broad（strategy/plan-eng 广审） | 39 | 41%/87% | 0%（参考，n=2） | **保留** | 最大产出源（415 条） |
 | 9 | spec-review | domain | 17 | 43%/96% | — | **保留** | 采纳率 96%，TG 条件化本已存在 |
-| 10 | spec-review | grounding | 39 | 30%/73% | 0%（参考，n=3） | **降采样** | 独立率低段；条件：design 引用既有代码事实时才派（greenfield 无接地对象，机械可判：delta 是否触碰已存在文件） |
+| 10 | spec-review | grounding | 39 | 30%/73% | 0%（参考，n=3） | **保留** | 守卫类角色（机械读码核验 spec 代码事实），同 #3 豁免产量逻辑〔设计门 Q3 拍板：撤回降采样——弱档成本极低、判据信号错位、本轮接地全绿且为 Q1 共同发现者实证〕 |
 | 11 | spec-review | outside-voice claude/design-voice | 11 | 24%/88% | — | **不适用** | 此行是 codex 不可用时的**回落路径产物**，非独立 roster 成员，砍留随 voice 机制本体 |
 | 12 | spec-review | outside-voice codex/design-voice | 31 | 19%/78% | — | **保留** | 独立率数字与实战印象有张力（历史独家高危 2 条），跨模型 spec 默认开；窗口期重点观察对象 |
 | 13 | spec-review | outside-voice codex/hr-tg | 12 | 34%/94% | — | **保留** | 同 #6，本已条件化 |
 
-草案净效果：2 降采样 + 1 不适用注记 + 10 保留，无淘汰（弱产出镜优先降采样是 roadmap 既定纪律）。**此表为草案，逐镜终拍板在设计 HARD-GATE 由人一次过**；拍板结果实施期写入 `mirror-dispositions.yaml` + SKILL roster 段。
+草案净效果：1 降采样（code-review history）+ 1 不适用注记 + 11 保留，无淘汰。**此表经设计门逐镜拍板确认**（grounding 由降采样改保留，见 Q3）；拍板结果实施期写入 `mirror-dispositions.yaml` + SKILL roster 段。
 
 > 〔spec-review-amendment〕统计诚实度脚注：Σfindings < 30 的行（#2 broad 18 条、#4 history 21 条等）独立率对 ±1-2 条 finding 敏感（摆动 5-11pp），**仅作参考、不单独定论**——与实修率 n≥5 阈值同一纪律。评审另对 #10 grounding 处置提出重议（守卫角色豁免不一致 + 判据信号错位），见 spec-review-report Q3，设计门一并拍板。
 
@@ -101,21 +107,21 @@ validator 复核层为**纯机械脚本**（暂名 `findings_ref_check.py`，落
  ┌─ roster 面（commit A）──────────────┐      lens-metric 锚（archive）
  │ SKILL roster 段：per-镜派发条件行     │             ▼
  │ 跳过轮 → 锚行 runner="none"          │      retro_report.py ◀── mirror-dispositions.yaml
- │   findings=0 (condition-not-met)    │      （待复评区块行内注记）
+ │   findings=0 (合法组合扩展,Q1)      │      （待复评区块行内注记）
  └────────────────────────────────────┘
  sdflow-done 第3步起手 ─▶ token_snapshot.py --step done-final ─▶ token-log.jsonl
 ```
 
-组件清单：`findings_ref_check.py`（新，机械）｜两评审 SKILL Step3+roster 段（改）｜`mirror-dispositions.yaml`（新，数据）｜`retro_report.py` surfacing 注记（改）｜`sdflow-done/SKILL.md` 第 3 步接线（改）｜lens-metric contract cause 枚举（改，升版本）｜重放 harness（一次性，不入 bundle）。
+组件清单：`findings_ref_check.py`（新，机械）｜两评审 SKILL Step3+roster 段（改）｜`mirror-dispositions.yaml`（新，数据）｜`retro_report.py` surfacing 注记（改）｜`sdflow-done/SKILL.md` 第 3 步接线（改）｜lens-metric contract 合法组合矩阵扩展（改，升版本〔设计门 Q1〕）｜emitter + anchor_lint 普通镜行校验扩展（改）｜重放 harness（一次性，不入 bundle）。
 
 ## Risks / Trade-offs
 
 - [强档裁决输入量增大（无 <80 预滤）] → validator 机械前置先杀引用失实项对冲；C4 实证数值滤独立击杀本就极少，净变化小；per-change token 维已可观测（p1），窗口期看趋势。〔spec-review-amendment〕上界兜底：合并池 > 100 条时分批裁决（每批 ≤50，批间携带已裁清单防重复采纳），报告标注分批数——历史单场次最高 415 条，不能只赌历史分布。
-- [误杀历史上会被采纳的 finding] → 部署前历史重放误杀率红线 = 0；出现即逐条追查，不部署。
+- [误杀历史上会被采纳的 finding] → 部署前历史重放三类归因法〔设计门 Q2〕：红线 = ③类（协议缺陷）= 0；①历史误标②模型方差如实报数不挡部署。
 - [降采样条件误判（该派没派）] → 锚行必落（DD2）使跳过可审计；前瞻窗口漏检归因 roster，独立 commit revert（C3）。
-- [处置表草案数据薄（11 面无达标实修率）] → 草案仅 2 降采样、无淘汰，保守方向；设计门人工逐镜复核（D1 fallback 既定）。
+- [处置表草案数据薄（11 面无达标实修率）] → 草案仅 1 降采样、无淘汰，保守方向〔设计门 Q3 拍板后 grounding 改保留〕；设计门人工逐镜复核（D1 fallback 既定）。
 - [重放语料的裁掉项原文缺失] → 噪声重入率降级「参考」，接受边角（memo §接受的边角）。
-- [contract 枚举升版本牵连消费方] → cause 清单是文档层散文枚举（非机读块），实耗为 grep 消费方 + 文档同步，面小。
+- [contract 合法组合矩阵扩展牵连消费方] → emitter + anchor_lint 各一处旁路（合法组合判定逻辑已收敛为 anchor_lint 单一实现〔设计门 Q1〕），面小。
 
 ## Migration Plan
 
