@@ -1,0 +1,28 @@
+{
+  "report": "openspec/changes/archive/2026-08-05-simplify-workflow/spec-review-report.md",
+  "reviewed_sha": "efba4a849658a4bd432727970f3e0b47cff89985",
+  "note": "reviewed_sha 是 [spec-review-amendment] 修订落盘后的 checkpoint（C1/C2/C3/H3 等均已核验在该 sha 生效）。旧协议无逐字 quote 契约，evidence_pack 承载位置信息。",
+  "findings": [
+    {"id": "C1", "evidence_pack": "spec-authoring spec.md SA-01(:8)/SA-14(:340-347) + impl-orchestration spec.md(:8/:12) — delta spec 只改 spec-workflow，未覆盖 spec-authoring 和 impl-orchestration 两条被推翻的不变量", "historical_verdict": "accept", "historical_note": "Critical，置信高，CEO Codex·Eng Claude·Eng Codex·Voice 四声独立收敛（reviewed_sha 已核验两份 delta spec 存在）"},
+    {"id": "C2", "evidence_pack": "openspec/workflow/(本仓48文件本地pin) — resolve-workflow.sh 检测到本地pin直接返回本地路径不看全局canonical，tasks.md Task4/5/6只改权威源，本仓自身简化不生效", "historical_verdict": "accept", "historical_note": "Critical，置信高，Eng Claude·Eng Codex 2声收敛"},
+    {"id": "C3", "evidence_pack": "spec-workflow主spec spec.md:300-315(embedded-test-sop命名豁免) + spec.md:1399-1420(RUN_SOP MUST用例) + spec.md:518/570(TG-02→SOP条件步) — 至少2条Requirement未被delta声明MODIFIED/REMOVED", "historical_verdict": "accept", "historical_note": "Critical，置信高，Voice·Adversarial2 2声收敛"},
+    {"id": "H1", "evidence_pack": "decision-memo D2 — 删除观察窗+三档阈值未跑实测，10天15个change(93%带decision-memo)数据支持删除但从未检查", "historical_verdict": "accept", "historical_note": "High，置信高，CEO Claude·CEO Codex 2声收敛；建议先跑sdflow-retro补数据"},
+    {"id": "H2", "evidence_pack": "design.md Risks段 — 删除disable-model-invocation:true后自动触发无机械门，副作用在HARD-GATE之前产生，Risks的'HARD-GATE兜底'表述不准确", "historical_verdict": "accept", "historical_note": "High，置信高，CEO Claude·CEO Codex·Eng Claude 3声收敛；五问速算判不阻断但措辞需修正为诚实边界描述"},
+    {"id": "H3", "file": "openspec/changes/simplify-workflow/design.md", "line": 85, "quote": "翻转点在 `sdflow-implement/scripts/impl_route.py`", "historical_verdict": "accept", "historical_note": "High，置信高，Eng Claude·Eng Codex·Grounding 3声收敛。design.md:85/tasks.md:32 误写 sdflow-ship/scripts/impl_route.py，实际位于 sdflow-implement/scripts/impl_route.py（reviewed_sha 已核验路径修正生效，带 [spec-review-amendment] 标记）"},
+    {"id": "H4", "evidence_pack": "test_grill_handoff.py — 4个测试断言claude-section.md含'ff之后是grill'等，Task4/5删除后会红，任务未纳入处置", "historical_verdict": "accept", "historical_note": "High，置信高，Eng Claude·Eng Codex 2声收敛"},
+    {"id": "H5", "evidence_pack": "WORKFLOW-GUIDE.md 由 hack/gen_workflow_guide.py 机械拼装，gen_workflow_guide.py:52-57 STEP_FILES字典硬编码旧步骤编号，Task4指示手改而非重新生成", "historical_verdict": "accept", "historical_note": "High，置信高，Adversarial1独家(已实跑验证基线5 passed)"},
+    {"id": "H6", "evidence_pack": "docs/workflow-map.md(4处RUN_SOP)+docs/workflow-overview.md(6处)+docs/criteria-mechanization-tracker.md+docs/sdflow-fable5/02-module-reference.md(5处) — 4份companion文档均自称需同步但未纳入Impact/tasks", "historical_verdict": "accept", "historical_note": "High，置信高，Adversarial2独家"},
+    {"id": "H7", "evidence_pack": "AGENTS.md:125/:139-144/:262-268 — 仍声明sdflow-spec只能人手触发、保留旧三步例外、强制ff→grill，tasks.md Task5仅列CLAUDE.md", "historical_verdict": "accept", "historical_note": "High，置信高，Voice独家"},
+    {"id": "M1", "evidence_pack": "impl_route.py — 9个return \"superpowers\"分散在read_config_pipeline/read_plan_marker，加上_cmd_route:540展示折叠逻辑需对称翻转，tasks.md描述为单点改动", "historical_verdict": "accept", "historical_note": "Medium，置信高，Eng Claude·Eng Codex收敛"},
+    {"id": "M2", "evidence_pack": "decision-memo D1 — impl-pipeline单仓试点(6个change)外推到15个下游项目，下游栈/约定未知，核验证据缺锚", "historical_verdict": "accept", "historical_note": "Medium，置信中，CEO Claude·CEO Codex·Adversarial2收敛"},
+    {"id": "M3", "evidence_pack": "sdflow-init/assets/workflow/config.template.yaml:80 — 仍写'缺省一律superpowers旧管线'，新装下游项目会被误导", "historical_verdict": "accept", "historical_note": "Medium，置信高，Adversarial1独家"},
+    {"id": "M4", "evidence_pack": "Success Metric — 实测ship_gate.py RUN_SOP+tg02_hit合计15处(非17)，测试命中20个函数(非21)", "historical_verdict": "accept", "historical_note": "Medium，置信中，Adversarial2独家"},
+    {"id": "M5", "evidence_pack": "测试删除指令过粗 — 至少4个测试函数不是RUN_SOP专属，按字面删除会丢失'缺锚不放行'等安全相关回归覆盖", "historical_verdict": "accept", "historical_note": "Medium，置信中，Adversarial2·Eng Codex收敛"},
+    {"id": "M6", "evidence_pack": "openspec/config.yaml:38/48 — 仍引用wayfinder→ff衔接契约，Task6 grep会命中但tasks未列入修改范围", "historical_verdict": "accept", "historical_note": "Medium，置信高，Eng Codex·Voice收敛"},
+    {"id": "L1", "evidence_pack": "ship_gate.py三处'三个入口'计数需改成'两个'", "historical_verdict": "accept", "historical_note": "Low，Eng Claude"},
+    {"id": "L2", "evidence_pack": "ff-generation-constraints.md impl-pipeline触发条件措辞因缺省翻转语义变化", "historical_verdict": "accept", "historical_note": "Low，Adversarial1"},
+    {"id": "X1", "evidence_pack": "Codex CEO：低频不是嵌入式SOP正确删除依据", "historical_verdict": "reject", "historical_note": "裁掉：用户明确要求彻底删除(decision-memo D3)，嵌入式项目需要时可自建SOP"},
+    {"id": "X2", "evidence_pack": "Codex CEO：不是一条线性路径", "historical_verdict": "reject", "historical_note": "裁掉：explore条件前置/Phase B人类决策/FF-0 halt是流程正常行为非'非线性'证据，'线性'指不再有分支A/B选择"},
+    {"id": "X3", "evidence_pack": "Claude CEO：机会成本——11面镜待复评更优先", "historical_verdict": "reject", "historical_note": "裁掉：这是优先级建议非本change设计缺陷，scope由人定"}
+  ]
+}

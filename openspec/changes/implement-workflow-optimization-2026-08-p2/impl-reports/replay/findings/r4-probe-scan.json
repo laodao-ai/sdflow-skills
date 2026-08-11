@@ -1,0 +1,8 @@
+{
+  "report": "openspec/changes/archive/2026-08-07-fix-probe-scan-precision/code-review-report.md",
+  "reviewed_sha": "5d9afb1a146fea1a2c574503cc9cf1ff28c2ae4f",
+  "note": "唯一 finding 未修复(defer)，代码在 reviewed_sha 原样保留 -> 可真实提取 file/line/quote 三元组，机械层走 pass 真实路径（非 evidence_pack 降级），是本轮重放里唯一一条走满三查的样本。",
+  "findings": [
+    {"id": "CR-06", "file": "sdflow-init/scripts/init.py", "line": 248, "quote": "n = sum(len(fs) for _, _, fs in os.walk(dst))", "historical_verdict": "defer", "historical_note": "Minor，defer→todolist。copy_bundle 文件计数在停铺 tools 后仍遍历整个 openspec/workflow/ 目录，存量 pin 仓的残留 tools/ 会被计入报告行；display-only 不影响功能。注：报告原文引用行号为 :246，实测(grep -n)真实行号为 :248——偏差2行，判①口径漂移，见重放报告"}
+  ]
+}

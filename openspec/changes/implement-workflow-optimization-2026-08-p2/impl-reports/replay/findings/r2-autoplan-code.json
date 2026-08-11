@@ -1,0 +1,16 @@
+{
+  "report": "openspec/changes/archive/2026-08-09-absorb-gstack-autoplan/code-review-report.md",
+  "reviewed_sha": "35cbe388b816f0e5bc37953c4f0b2066f7050e01",
+  "note": "reviewed_sha 是修复落盘后的 checkpoint；F1/F2 修复已核验在该 sha 生效（孤儿 spec 目录已删 / task-log-template.md 旧引用已清）。旧协议无逐字 quote 契约，evidence_pack 承载位置。",
+  "findings": [
+    {"id": "F1", "evidence_pack": "openspec/specs/outside-voice-reuse-guard/spec.md — INDEX 已删行但 spec 目录未删，退役不完整", "historical_verdict": "accept", "historical_note": "Important，置信90，已修[impl-review-fix]删除目录（reviewed_sha 已核验目录不存在）"},
+    {"id": "F2", "evidence_pack": "sdflow-roadmap/references/task-log-template.md:64 + 两个 fixture — 把 roadmap review 产出方误描述为 sdflow-spec-review 或 sdflow-code-review", "historical_verdict": "accept", "historical_note": "Important，置信85，已修[impl-review-fix]（reviewed_sha 已核验旧引用文本不存在）"},
+    {"id": "V2", "evidence_pack": "sdflow-roadmap/SKILL.md:507 — 裸 eval 缺清脏保护，可能复用上轮残留 SDFLOW_* 环境假绿", "historical_verdict": "defer", "historical_note": "Important，置信80，defer→todolist（既有债务，非本change引入，低频场景risk可控）"},
+    {"id": "X1", "evidence_pack": "领域镜F2：注释语义漂移 anchor_lint.py:556", "historical_verdict": "reject", "historical_note": "置信55<80 被数值滤除（旧协议置信门产物）"},
+    {"id": "X2", "evidence_pack": "Voice V1：host=unknown 路径自相矛盾", "historical_verdict": "reject", "historical_note": "裁掉：验证后不成立，tier-resolution 的 host=unknown → fail-loud 硬停在到达 fan-out 之前"},
+    {"id": "X3", "evidence_pack": "Voice V3：devex 未在 SKILL 显式枚举", "historical_verdict": "reject", "historical_note": "裁掉：不成立，领域镜派发由 TG→domains 映射驱动，不硬编码"},
+    {"id": "X4", "evidence_pack": "Voice V4：sync_principles marker 缺失 fallback", "historical_verdict": "reject", "historical_note": "裁掉：implementer已修(markers在源文件中)，测试验证幂等性"},
+    {"id": "X5", "evidence_pack": "Voice V5：test order dependency", "historical_verdict": "defer", "historical_note": "报告原文列入'已裁掉'表但disposition实为'成立但Minor,defer→todolist'——真实历史verdict=defer非reject（台账区确认defer 3项含V5）"},
+    {"id": "X6", "evidence_pack": "Voice V6：criteria-mechanization-tracker.md 残留", "historical_verdict": "defer", "historical_note": "同X5，disposition='成立Minor,defer→todolist'，真实历史verdict=defer"}
+  ]
+}

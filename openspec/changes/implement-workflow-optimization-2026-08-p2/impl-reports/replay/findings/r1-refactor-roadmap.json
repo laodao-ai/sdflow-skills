@@ -1,0 +1,21 @@
+{
+  "report": "openspec/changes/archive/2026-07-06-refactor-roadmap-internalize-deps/code-review-report.md",
+  "reviewed_sha": "8761cf433a1d5352d991d2fe7c7680fa5beb791d",
+  "note": "reviewed_sha 是修复落盘后的 checkpoint（同一 commit 内含 F1-F5 自动修）；本文件按报告原文提取，均无逐字 quote（旧协议无结构化契约），一律用 evidence_pack 承载位置信息 -> 机械层判 uncheckable，直进强档二元裁决。",
+  "findings": [
+    {"id": "F1", "evidence_pack": "SKILL.md:415(旧行号) vs SKILL.md:517(旧行号) — 直接生成路径可不产出 memo 但收尾无条件 SHALL 改 FINAL", "historical_verdict": "accept", "historical_note": "Critical，已修[impl-review-fix]，code-voice+hr-tg voice 两站点独立收敛"},
+    {"id": "F2", "evidence_pack": "SKILL.md:344-350 + memo-template.md:8-9 — continue/replan 起手三步无条件落盘草稿 memo 会覆盖既有 memo", "historical_verdict": "accept", "historical_note": "Important，已修(两处)，code-voice+hr-tg voice+领域镜三源收敛"},
+    {"id": "F3", "evidence_pack": "workflow-history.md A4 段 vs adr/0037-*.md:26-29 — A4 把 matt 移除误归因为前提消解，与 ADR 明文因果表述矛盾", "historical_verdict": "accept", "historical_note": "Important，已修，code-voice 独家"},
+    {"id": "F4", "evidence_pack": "SKILL.md:293-303(旧行号) — gate-0 五项全文无通过阈值定义", "historical_verdict": "accept", "historical_note": "Important，已修，对抗镜A独家"},
+    {"id": "F5", "evidence_pack": "SKILL.md:354-361(旧行号) — 七维裁剪表无兜底行", "historical_verdict": "accept", "historical_note": "Minor，已修(fold)，对抗镜A独家"},
+    {"id": "F6", "evidence_pack": "design.md 状态机图 + SKILL.md 全文 grep — 直接生成路径中途发现关键判据缺失无回退相位B定义", "historical_verdict": "defer", "historical_note": "Minor，defer→T266，对抗镜A独家"},
+    {"id": "X1", "evidence_pack": "code-voice：无状态行的旧格式memo一律判DRAFT，破坏已完成存量包兼容性", "historical_verdict": "reject", "historical_note": "裁掉：实现符合设计，spec:43 已明文该语义"},
+    {"id": "X2", "evidence_pack": "hr-tg voice：B起手建目录成功、memo写失败的空包失败态无可见条款", "historical_verdict": "reject", "historical_note": "裁掉：design.md 失败模式表已显式接受该边角"},
+    {"id": "X3", "evidence_pack": "code-voice：直接生成路径+review失败后中断⇒包无人认领", "historical_verdict": "reject", "historical_note": "裁掉：与F1同根因，已并入F1修法说明段落"},
+    {"id": "X4", "evidence_pack": "历史镜 SR-1：无消费方前提被证伪", "historical_verdict": "reject", "historical_note": "裁掉：已在ADR 0037订正，历史镜误把已修问题当现存"},
+    {"id": "X5", "evidence_pack": "历史镜 SR-2：memo等价性未验证致命", "historical_verdict": "reject", "historical_note": "裁掉：已处理，SKILL.md:389有条款"},
+    {"id": "X6", "evidence_pack": "历史镜 SR-4：footage演练是恒真锚", "historical_verdict": "reject", "historical_note": "裁掉：已由Task5构造fixture解决"},
+    {"id": "X7", "evidence_pack": "历史镜 SR-7：6处保留节残留 + 结论不应进HARD-GATE", "historical_verdict": "reject", "historical_note": "裁掉：已由Task1的1.10+Task5的6.6处理，且'不应进HARD-GATE'结论本身不成立(设计门早已通过)；另含事实错误(footage词表命中)"},
+    {"id": "X8", "evidence_pack": "对抗镜B：全文扫描寻找悬空引用/硬编码断言", "historical_verdict": "reject", "historical_note": "裁掉：refuted=true，扎实核实未找到已知三条之外的悬空活引用，无finding是合格结论"}
+  ]
+}

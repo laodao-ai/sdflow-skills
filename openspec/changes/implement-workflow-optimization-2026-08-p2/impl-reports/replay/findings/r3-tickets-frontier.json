@@ -1,0 +1,11 @@
+{
+  "report": "openspec/changes/archive/2026-08-02-tickets-parallel-frontier/code-review-report.md",
+  "reviewed_sha": "8e284fd02186539f45ca6456890f840672de1395",
+  "note": "本报告 Findings 表为空（无存活finding），全部信号在'已裁掉'表，均为置信<80被数值滤除——旧协议置信门的典型样本，正是新协议要替换掉的机制。",
+  "findings": [
+    {"id": "X1", "evidence_pack": "code-voice+hr-tg：brief 文件在主工作树未提交，worktree 隔离看不到", "historical_verdict": "reject", "historical_note": "置信35。裁掉理由：错误前提，Read tool 用绝对路径访问文件系统(非git)，worktree隔离只隔离.git/index不隔离文件系统读取"},
+    {"id": "X2", "evidence_pack": "code-voice+hr-tg：worktree 生命周期无清理步骤", "historical_verdict": "reject", "historical_note": "置信45。裁掉理由：Agent tool文档已明确改动返回path/branch供编排层处置；BLOCKED票由harness自动回收；prose指令层不需要定义git worktree remove命令"},
+    {"id": "X3", "evidence_pack": "code-voice+hr-tg：跨票语义集成盲区未登记为接受的边角", "historical_verdict": "reject", "historical_note": "置信50。裁掉理由：已有结构性缓解(出票并行安全约束+收尾票聚合套件+本skill冷审)，decision-memo已登记merge conflict兜底"},
+    {"id": "X4", "evidence_pack": "code-voice：共享测试资源争用未讨论", "historical_verdict": "reject", "historical_note": "置信25。裁掉理由：过于泛化，任何并行执行都有此顾虑，非设计层面能解决的问题"}
+  ]
+}

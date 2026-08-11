@@ -101,13 +101,13 @@ impl-pipeline: tickets
 **C. spec-workflow 主 spec 联动核查**：
 - grep 全仓「置信过滤 / <80 / 豁免」消费点，逐处改齐或确认不动
 
-- [ ] sdflow-code-review Step3 不含 <80 数值滤/封顶 ≤50/跨模型豁免矩阵
-- [ ] sdflow-code-review Step3 含 validator 接入 + 二元裁决 + [ref-check] 标记
-- [ ] sdflow-code-review frontmatter description Step3 括注已更新
-- [ ] sdflow-code-review Step2 各镜 prompt 要求结构化 findings 输出
-- [ ] sdflow-spec-review Step3 裁决动作层与 code-review 三层协议对齐
-- [ ] sdflow-spec-review 保留「拿不准→决策登记区」路由
-- [ ] 全仓 grep「置信过滤/<80/豁免」无遗漏残余消费点
+- [x] sdflow-code-review Step3 不含 <80 数值滤/封顶 ≤50/跨模型豁免矩阵
+- [x] sdflow-code-review Step3 含 validator 接入 + 二元裁决 + [ref-check] 标记
+- [x] sdflow-code-review frontmatter description Step3 括注已更新
+- [x] sdflow-code-review Step2 各镜 prompt 要求结构化 findings 输出
+- [x] sdflow-spec-review Step3 裁决动作层与 code-review 三层协议对齐
+- [x] sdflow-spec-review 保留「拿不准→决策登记区」路由
+- [x] 全仓 grep「置信过滤/<80/豁免」无遗漏残余消费点
 
 ### Task 4: 历史重放部署门
 
