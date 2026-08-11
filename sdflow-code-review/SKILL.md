@@ -448,7 +448,7 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
    `reviewed_sha`（模板见「报告格式」，语义句「被审的盘面，不是写报告的时刻」）。**报告写盘 MUST
    在本步之后、下一步之前**——第 3 步的「仅源码」承诺要成立，报告文件在第 3 步提交那一刻就不能
    已经存在于工作树。
-6. **写报告** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings≥80 + 已裁掉区
+6. **写报告** `{change_dir}/code-review-report.md`（见下格式：命中范围 + Findings（已采纳） + 已裁掉区
    + 裁决 + 修复/defer 台账 + 度量锚），frontmatter 带上一步取得的 `reviewed_sha`：
    - **度量锚落锚〔impl-review-fix mlh-p4〕**：`metrics.enabled=false` → 本段不落、**不调 emitter**；`true` → 用 Step4「裁决计数」
      构造好的 roster+findings 调 `python3 $RULES_ROOT/tools/lens_metric_emit.py --layer code-review --host "$SDFLOW_HOST" --input <构造的f>`
