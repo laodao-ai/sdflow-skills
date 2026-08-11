@@ -1161,6 +1161,29 @@ def test_compute_token_deltas_reads_archive_dir_too(tmp_path):
     assert deltas["foo"] == {"out": 2, "in": 1, "cc": 4, "cr": 3}
 
 
+def test_compute_token_deltas_reads_done_final_step_row(tmp_path):
+    """〔implement-workflow-optimization-2026-08-p2 · Task 5 冒烟〕`step="done-final"` 是
+    sdflow-done 第三步起手前新增的终态快照行——retro 消费侧对 `step` 值不做白名单校验（只认
+    anchor=true + usage 四计数合法 + session/step 非空字符串），该行随 archive 一起进
+    `archive_dir` 后必须仍可被 join：证明「新 step 值免入侵改动即可读」，非只在活跃目录测过。
+    """
+    d = tmp_path / "openspec/changes/archive/2026-08-11-demo-change"
+    d.mkdir(parents=True)
+    body = "\n".join([
+        _tok_line("s1", "verify", "2026-08-11T09:00:00+0800", 100, 200, 300, 400),
+        _tok_line("s1", "done-final", "2026-08-11T09:30:00+0800", 150, 260, 380, 470),
+    ])
+    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
+    changes = {"demo-change": {"active": False, "active_dir": None, "archive_dir": str(d)}}
+
+    rows = R.read_token_log(str(d / "token-log.jsonl"))
+    assert [r["step"] for r in rows] == ["verify", "done-final"]
+
+    deltas = R.compute_token_deltas(str(tmp_path), changes)
+    # 首行全额 200/100/400/300 + done-final 行对首行差分 60/50/70/80
+    assert deltas["demo-change"] == {"out": 260, "in": 150, "cc": 470, "cr": 380}
+
+
 def test_fmt_compact_count():
     assert R._fmt_compact_count(500) == "500"
     assert R._fmt_compact_count(12300) == "12.3k"

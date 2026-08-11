@@ -5,8 +5,14 @@
 同步调用：`python3 ~/.sdflow/hack/token_snapshot.py --step "$step" || true`。
 
 契约（design.md §Decisions D1 / specs/token-snapshot-anchor/spec.md）：
-- transcript 定位序：`$CLAUDE_CODE_SESSION_ID`（session-id 先过文法校验才拼路径）精确命中
-  `~/.claude/projects/<munged-cwd>/<id>.jsonl` → 同目录 mtime 最新 jsonl 回退 → 无则
+- 宿主判定〔implement-workflow-optimization-2026-08-p2 Task 5〕：`detect_host()` 与
+  `outside-voice-job.py` 同口径（`CLAUDECODE=1` → claude；`CODEX_THREAD_ID` 非空 → codex；
+  两者同时出现 = 冲突 → unknown；均缺席 → unknown）。**非 claude 宿主（codex/unknown）
+  MUST NOT 走 `~/.claude/projects/` 的 mtime 回退扫描**——直接落 `no-transcript` 降级行，
+  不做任何目录 I/O（该目录本就不属于非 Claude 宿主，扫描它既无意义也是多余的信任假设）。
+  `host` 字段如实写检测值（此前恒为 `"claude"` 的写法在多宿主场景下失实，随本次一并修正）。
+- transcript 定位序（仅 claude 宿主）：`$CLAUDE_CODE_SESSION_ID`（session-id 先过文法校验才拼路径）
+  精确命中 `~/.claude/projects/<munged-cwd>/<id>.jsonl` → 同目录 mtime 最新 jsonl 回退 → 无则
   `no-transcript` 降级行。munged-cwd = `os.getcwd()` 的 `/` → `-` 全量替换。
 - usage 四计数（input / output / cache_read / cache_creation）+ messages 数为 session 累计值
   （逐 assistant message 的 `message.usage` 累加），MUST 校验非负整数，不过判 `parse-error`。
@@ -41,7 +47,28 @@ SCHEMA_VERSION = 1
 TIMEOUT_SECONDS = 10
 GIT_SUBPROCESS_TIMEOUT_SECONDS = 5
 SESSION_ID_RE = re.compile(r"^[0-9a-fA-F-]+$")
-HOST = "claude"
+HOST_CLAUDE = "claude"
+HOST_CODEX = "codex"
+HOST_UNKNOWN = "unknown"
+
+
+def detect_host(env=None):
+    """→ "claude" | "codex" | "unknown"——与 `outside-voice-job.py:detect_host()` 同口径。
+
+    正信号判定，MUST NOT「缺失即另一方」推断；两个信号同时出现 = 冲突，落 unknown
+    （MUST NOT 静默取其一）。判不出一律 unknown，non-claude 宿主一律不碰
+    `~/.claude/projects/`（见模块 docstring）。
+    """
+    env = os.environ if env is None else env
+    claude_sig = env.get("CLAUDECODE") == "1"
+    codex_sig = bool(env.get("CODEX_THREAD_ID"))
+    if claude_sig and codex_sig:
+        return HOST_UNKNOWN
+    if claude_sig:
+        return HOST_CLAUDE
+    if codex_sig:
+        return HOST_CODEX
+    return HOST_UNKNOWN
 
 
 class _Timeout(Exception):
@@ -194,14 +221,14 @@ def _accumulate_usage(path):
     return totals
 
 
-def _build_line(step, session_id, anchor, reason, usage):
+def _build_line(step, session_id, anchor, reason, usage, host):
     """封闭 schema：只这些字段，MUST NOT 透传任何 transcript 原始内容。"""
     line = {
         "v": SCHEMA_VERSION,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "step": step,
         "session": session_id or "",
-        "host": HOST,
+        "host": host,
         "anchor": bool(anchor),
         "reason": reason,
     }
@@ -221,9 +248,18 @@ def _append_line(path, obj):
 
 
 def _collect(step):
-    """定位 transcript → 累加 usage → 组装一行。全程不 raise（内部已 try/except 到降级行）；
-    唯一允许上抛的是 `_Timeout`（由外层的 SIGALRM handler 触发，代表已超出执行时限）。
+    """判定宿主 → （仅 claude 宿主）定位 transcript → 累加 usage → 组装一行。
+    全程不 raise（内部已 try/except 到降级行）；唯一允许上抛的是 `_Timeout`
+    （由外层的 SIGALRM handler 触发，代表已超出执行时限）。
+
+    非 claude 宿主（codex/unknown）直接落 `no-transcript` 降级行，MUST NOT 触碰
+    `~/.claude/projects/`——那个目录语义上不属于非 Claude 宿主，扫描它既拿不到
+    真实数据也是多余的信任假设。
     """
+    host = detect_host()
+    if host != HOST_CLAUDE:
+        return _build_line(step, "", False, "no-transcript", None, host)
+
     cwd = os.getcwd()
     munged = _munge_cwd(cwd)
     projects_dir = Path(os.path.expanduser("~")) / ".claude" / "projects" / munged
@@ -232,13 +268,13 @@ def _collect(step):
     if transcript is None:
         env_session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
         session_for_line = env_session if _valid_session_id(env_session) else ""
-        return _build_line(step, session_for_line, False, reason, None)
+        return _build_line(step, session_for_line, False, reason, None, host)
 
     session_for_line = transcript.stem
     usage = _accumulate_usage(transcript)
     if usage is None:
-        return _build_line(step, session_for_line, False, "parse-error", None)
-    return _build_line(step, session_for_line, True, "ok", usage)
+        return _build_line(step, session_for_line, False, "parse-error", None, host)
+    return _build_line(step, session_for_line, True, "ok", usage, host)
 
 
 def main(argv=None):
@@ -254,9 +290,9 @@ def main(argv=None):
     try:
         line = _collect(args.step)
     except _Timeout:
-        line = _build_line(args.step, "", False, "parse-error", None)
+        line = _build_line(args.step, "", False, "parse-error", None, detect_host())
     except Exception:
-        line = _build_line(args.step, "", False, "parse-error", None)
+        line = _build_line(args.step, "", False, "parse-error", None, detect_host())
     finally:
         _cancel_timeout(old_handler)
 

@@ -373,6 +373,18 @@ python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
 
 ⚠️ 归档**必须**用 `openspec archive` CLI（同步 delta→`openspec/specs/` + INDEX + 校验），**禁手动 `mv`**（漏 spec 同步）。
 
+### 3.0 终态 token 快照（Archive 子代理派发前，主 session 直接跑）〔token-snapshot-anchor · DD3〕
+
+派发 Archive 子代理**之前**、change 目录仍在原位时，主 session 直接跑一次终态快照（纯机械、无需子代理）：
+
+```bash
+python3 ~/.sdflow/hack/token_snapshot.py --step done-final || true
+```
+
+- 采集成功即在 `{change_dir}/token-log.jsonl` 追加一行 `step="done-final"` 的 `anchor=true` 记录，随后随 archive 一起搬进归档目录；失败（transcript 不可读、非 claude 宿主等）显式降级为 `anchor=false` 行，与 checkpoint 侧同口径——`|| true` 确保**任何采集失败都不得阻挡收尾流程**。
+- 覆盖范围 = Verify（收尾最重步）+ hand-off 累计用量；archive/commit/merge 自身用量不在覆盖内，是已声明的残余盲区（见 `openspec/specs/token-snapshot-anchor/spec.md`），MUST NOT 表述为「收尾用量已全量覆盖」。
+- 已知边界：若本 change 收尾跨 session 重试（如 archive 失败后新会话重跑），该行会被记作新 session 的分组首行、其累计用量全额计入——token 统计可能重复计入，这是 view-only 精度边界，非阻断项。
+
 派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
 
 ```
