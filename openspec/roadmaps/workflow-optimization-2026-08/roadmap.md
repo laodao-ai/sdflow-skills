@@ -13,8 +13,11 @@
 机制设计需一次独立 grill，现在预写子任务分解会是假精确，留雾。
 
 > **进度快照（2026-08-11）**：阶段 1、阶段 2 已完成归档（阶段 2 验收 3 的 dogfood 观察
-> 窗口 1/3，随后续 change 自然累积，不阻塞）。当前 frontier = 阶段 3（上游吸收机制），
-> 入口 = `/sdflow-spec implement-workflow-optimization-2026-08-p3` 相位 B 补细。
+> 窗口 1/3，随后续 change 自然累积，不阻塞）。阶段 3（上游吸收机制）实现已完成
+> （change `implement-workflow-optimization-2026-08-p3`：5/5 ticket 交付，verify PASS
+> 2607 passed；首轮真实 dogfood 已跑通，T264→DONE），当前处于 code-review 修复环节
+> （`[impl-review-fix]`），尚未 archive/merge。<!-- [impl-review-fix] -->阶段 4/5 仍待
+> frontier 到达后补细。
 
 五阶段演进，每阶段独立可交付；阶段 3 与阶段 1/2 无依赖关系，可并行或提前。
 
@@ -22,7 +25,7 @@
 |---|---|---|---|
 | **阶段 1** · 度量决策端补全 + 池对账 | 本周 | retro 报实修率 + token 快照锚开始累积；四条错关项理由归真 | **✅ 全部完成 2026-08-10** |
 | **阶段 2** · 镜 roster 复评 + 裁决地基改造 | 阶段 1 后 1-2 周 | 13 面待复评镜逐一处置；置信硬滤被替代方案取代 | **✅ 完成 2026-08-11**（验收 3 观察窗口 1/3 进行中） |
-| **阶段 3** · 上游套件吸收机制 | 无依赖，随时 | 四源有锚、watch 跑通一轮 delta 分诊 | 雾区（目标句 + 备注） |
+| **阶段 3** · 上游套件吸收机制 | 无依赖，随时 | 四源有锚、watch 跑通一轮 delta 分诊 | **实现完成 2026-08-11**（5/5 ticket，verify PASS；待 code-review→done 归档） |
 | **阶段 4** · 成本工程剩余 | 阶段 1 数据到位后 | effort/thinking 按步分档落地 | 雾区（目标句 + 备注） |
 | **阶段 5** · 人类门减负与 context 工程 | 远期 | 设计门报告摘要头 + SKILL 考古层清理 | 雾区（目标句 + 备注） |
 
@@ -195,15 +198,73 @@
 
 ## 阶段 3 · 上游套件吸收机制
 
+<!-- [impl-review-fix] 阶段 3 里程碑回填（参考阶段 1/2 格式）：change
+     implement-workflow-optimization-2026-08-p3 实现已完成，尚未 archive/merge。 -->
+
 **阶段目标**：建立四源（gstack / superpowers / matt 套件 / OpenSpec CLI）的版本锚与
-delta 分诊机制（暂名 `sdflow-upstream-watch`，数据类 skill），一次运行产出「锚点以来
+delta 分诊机制（`sdflow-upstream-watch`，数据类 skill），一次运行产出「锚点以来
 可吸收项」报告，吸掉 T264/T245/T246/T267 散点（见 design.md 决策 3）。
 
-**雾区备注**：缺机制设计 grill 的拍板信息——锚文件格式、四源采集器各自的锚信号
-（plugin cache 无 git 历史如何取版本）、触发节奏（手动 / 月度 / 挂 `/sdflow-upgrade`）、
-与 setup-matt-pocock-skills 既有 triage-labels 的关系。到 frontier 走一次
-`/sdflow-spec implement-workflow-optimization-2026-08-p3` 的相位 B 补细。
-无依赖，可先于阶段 1/2 起手。
+### 前置条件
+
+- [x] 阶段 1/2 已归档，无阻塞依赖（阶段 3 本无入边，可独立起手）
+      **✅ 2026-08-11**
+- [x] `/sdflow-spec implement-workflow-optimization-2026-08-p3` 相位 B 拷问补细：
+      D1 scope 边界（只建机制，T264 一关三留）/ D2 触发节奏（手动 + upgrade 轻提醒）/
+      D3 上游观察面（superpowers 盯 marketplace 仓、matt 盯上游全量）等拍板
+      **✅ 2026-08-11**（decision-memo.md D1–D3，过 spec-review HARD-GATE）
+
+### 目标
+
+- 四源采集器（gstack / matt / superpowers / openspec）零解析出 delta 事实，单源失败
+  降级、不互相传染（design.md 基准 5 + 决策 3）
+- `anchors.yaml` 只由脚本维护，锚推进与本轮报告+facts 绑定（R1）
+- `sdflow-upstream-watch` SKILL 编排出人可拍板的三分诊报告，入池衔接经 recorder
+  显式 `source_change`（R4/R5）
+- T264 收口关闭；T245/T246/T267 作为首轮报告 seed 分诊条目，池内原状保留（D1）
+
+### 子任务（tickets 管线，change `implement-workflow-optimization-2026-08-p3`）
+
+- [x] Task 1 脚手架 + anchors 基础设施 + cwd 守卫
+      **✅ 2026-08-11 交付**——SKILL.md 骨架 + 通则托管块注入、`openspec/upstream/` 目录、
+      cwd 守卫（git remote 判定 fail-loud）、anchors.yaml 三态读写（yq mikefarah 探测）
+- [x] Task 2 四源采集器 + facts 输出 + advance 门
+      **✅ 2026-08-11 交付**——gstack/matt/superpowers/openspec 四采集器、bare 缓存自愈、
+      is-ancestor 锚祖先守卫、facts JSON 输出、advance 报告+facts 双参数绑定门
+- [x] Task 3 SKILL 编排层 + 消费端
+      **✅ 2026-08-11 交付**——SKILL.md 编排正文（collect→报告→advance→呈报）、首轮 seed
+      条款（T245/T246/T267）、入池衔接模板、`sdflow-upgrade` 第 5 步提醒段、README 登记
+- [x] Task 4 首轮 dogfood + 收口
+      **✅ 2026-08-11 交付**——真实四源网络 collect + 报告落盘 + advance 建锚；
+      T264→DONE（evidence 指 schema drift 采集器）；T245/T246/T267 池内原状保留
+- [x] Task 5 实现验证收尾
+      **✅ 2026-08-11 交付**——全仓 `/usr/bin/python3 -m pytest -q`：2607 passed,
+      10 skipped（SHA `7e1e06d`）；集成/e2e 层判定「本仓无该层」，Task 4 手工验收作旁证
+- [x] code-review 修复（6 项 finding 采纳）
+      **✅ 2026-08-11 交付**——advance 报告读取异常保护、schema drift OSError 不再丢版本
+      数据、错误消息路径脱敏（`_tildify`）、SKILL.md 缓存路径模板改真实路径、
+      `_observed_anchor` 拒绝 null 锚（新增 2 项契约测试）、本节 roadmap 回填
+      （标 `[impl-review-fix]`）
+
+### 验收标准
+
+- [x] 首轮 `/sdflow-upstream-watch` 真实运行产出报告 + 锚已建立
+      **✅ 2026-08-11**（`openspec/upstream/reports/` 首份报告 + `anchors.yaml` 首轮建档）
+- [x] 全仓 pytest 绿
+      **✅ 2026-08-11**（2607 passed, 10 skipped；本轮 fix 后复测仍绿，60/60 skill 内测试）
+- [ ] change 归档（code-review → sdflow-done → merge）
+      **⏳ 进行中**——本轮 6 项 finding 已修复，待重跑双轴审 + verify 通过后进 archive
+
+### 交付物
+
+- `sdflow-upstream-watch/`（SKILL.md + `scripts/upstream_watch.py` + `tests/`）新 skill
+- `openspec/upstream/anchors.yaml`（首轮建档）+ 首份分诊报告
+- T264 收口关闭；`sdflow-upgrade` 陈旧提醒段接入
+
+**雾区备注（已解除，保留存档）**：原「锚文件格式、四源采集器各自的锚信号、触发节奏、
+与 setup-matt-pocock-skills 既有 triage-labels 的关系」等待拍板项，均已在
+`/sdflow-spec implement-workflow-optimization-2026-08-p3` 相位 B 拷问中定案
+（decision-memo.md D1–D3），不再是雾区。
 
 ---
 
@@ -244,10 +305,10 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 |---|---|---|
 | 阶段 1 | 8（1.A×4 + 1.B×4） | **✅ 8/8 完成 2026-08-10** |
 | 阶段 2 | 5（2.A×5） | **✅ 5/5 完成 2026-08-11**（验收 3 观察窗口随后续 change 累积） |
-| 阶段 3 | （雾区——frontier 到达补细后再登记） | — |
+| 阶段 3 | 5（tickets 管线 Task1–5） | **✅ 5/5 实现完成 2026-08-11**（含 code-review 修复；待 archive/merge） |
 | 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
 | 阶段 5 | （雾区——frontier 到达补细后再登记） | — |
-| **合计**（仅计入近期已细化阶段） | **13** | — |
+| **合计**（仅计入近期已细化阶段） | **18** | — |
 
 ## 附录 C · 未来 OpenSpec 变更映射
 
@@ -255,7 +316,7 @@ SKILL.md 考古层清理（1.A.2 入池项的执行）+ compaction/PreCompact �
 |---|---|---|
 | 阶段 1 | `implement-workflow-optimization-2026-08-p1` **✅ 归档 2026-08-10**（1.B 四项交付，verify PASS；1.A 为 recorder 直写操作，待独立执行） | spec-workflow（度量锚相关 Requirement） |
 | 阶段 2 | `implement-workflow-optimization-2026-08-p2` **✅ 归档 2026-08-11**（2.A 五项全交付，verify PASS；验收 3 观察窗口 1/3 随后续 change 累积） | spec-workflow（评审编排 Requirement） |
-| 阶段 3 | （雾区——建议名 `implement-workflow-optimization-2026-08-p3`，子任务待 grill） | — |
+| 阶段 3 | `implement-workflow-optimization-2026-08-p3` **实现完成 2026-08-11**（5/5 ticket 交付，verify PASS 2607 passed；code-review 修复中，待 archive） | — |
 | 阶段 4 | （雾区——frontier 到达补细后再登记） | — |
 | 阶段 5 | （雾区——frontier 到达补细后再登记） | — |
 

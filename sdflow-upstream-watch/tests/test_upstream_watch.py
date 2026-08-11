@@ -905,6 +905,44 @@ def test_cmd_advance_first_run_creates_anchors_file(tmp_path, monkeypatch):
     assert W.get_source_anchor(anchors, "openspec") == {"anchor_version": "1.8.0"}
 
 
+def test_cmd_advance_rejects_null_anchor_sha_for_ok_source(tmp_path, monkeypatch):
+    """[impl-review-fix] Fix 5：status=ok 但 head_sha=None（gstack/matt/superpowers 用
+    anchor_sha）时拒绝推进，anchors.yaml 不落盘——空锚一旦写入会被下轮误判"无锚首轮"。"""
+    repo = _init_repo(tmp_path / "sdflow-skills",
+                       remote="https://github.com/laodao-ai/sdflow-skills.git")
+    monkeypatch.chdir(repo)
+    facts_path = repo / "facts.json"
+    _write_facts(facts_path, {
+        "gstack": {"status": "ok", "head_sha": None, "commits": []},
+    })
+    report_path = repo / "report.md"
+    report_path.write_text("gstack 节：本轮无新 commit。\n", encoding="utf-8")
+
+    args = argparse_ns(report=str(report_path), facts=str(facts_path))
+    with pytest.raises(W.AdvanceGateError, match="gstack"):
+        W.cmd_advance(args)
+    assert not (repo / "openspec" / "upstream" / "anchors.yaml").exists()
+
+
+def test_cmd_advance_rejects_null_anchor_version_for_openspec(tmp_path, monkeypatch):
+    """[impl-review-fix] Fix 5：openspec 源用 anchor_version，installed_version=None 时
+    同样拒绝推进（不同源种类的观测值字段名不同，两条分支都要覆盖）。"""
+    repo = _init_repo(tmp_path / "sdflow-skills",
+                       remote="https://github.com/laodao-ai/sdflow-skills.git")
+    monkeypatch.chdir(repo)
+    facts_path = repo / "facts.json"
+    _write_facts(facts_path, {
+        "openspec": {"status": "ok", "installed_version": None, "commits": []},
+    })
+    report_path = repo / "report.md"
+    report_path.write_text("openspec 节：版本读取异常。\n", encoding="utf-8")
+
+    args = argparse_ns(report=str(report_path), facts=str(facts_path))
+    with pytest.raises(W.AdvanceGateError, match="openspec"):
+        W.cmd_advance(args)
+    assert not (repo / "openspec" / "upstream" / "anchors.yaml").exists()
+
+
 def test_cli_advance_missing_args_in_valid_repo_rejects_via_main(tmp_path, monkeypatch):
     """main() 层：cwd 合法但零参数调用 advance —— 报告路径缺失须拒绝推进（非 argparse
     usage error，也不是 CwdGuardError），退出码非零，anchors.yaml 不被创建。"""

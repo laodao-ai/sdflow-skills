@@ -55,6 +55,35 @@ voice 留痕：`runner=codex reason_code=ok`（跨模型第二意见，gpt-5.6-s
 
 ## 2026-08-11
 
+### [阶段 3 / 实现完成] 上游套件吸收机制五票交付（change `implement-workflow-optimization-2026-08-p3`）
+
+<!-- [impl-review-fix] 阶段 3 里程碑回填 -->
+
+- **状态**: ✅ 实现完成（5/5 ticket；code-review 修复中，尚未 archive/merge）
+- **相位 B 拷问**: decision-memo.md D1–D3 拍板——D1 scope 边界（只建机制，T264 一关三留：
+  T264→DONE、T245/T246/T267 原地保留作首轮报告 seed）；D2 触发节奏（手动命令 +
+  `/sdflow-upgrade` 收尾轻提醒，>30 天默认阈值）；D3 上游观察面（superpowers 盯
+  marketplace 仓、matt 盯上游全量 + `.skill-lock.json` 辅助）；过 spec-review HARD-GATE
+- **产出**:
+  - Task 1 脚手架：SKILL.md + `scripts/upstream_watch.py`（cwd 守卫 + anchors.yaml 三态
+    读写，yq mikefarah 探测）+ `openspec/upstream/` 目录
+  - Task 2 四源采集器：gstack（既有 checkout）/ matt（bare 缓存）/ superpowers
+    （marketplace.json `source.sha` 序列追踪）/ openspec（版本对照 + schema fork sha256
+    drift）+ facts JSON + advance 报告+facts 双参数绑定门
+  - Task 3 SKILL 编排层：collect→模型写报告→advance→呈报全路径 + 首轮 seed 条款
+    （T245/T246/T267）+ 入池衔接模板 + `sdflow-upgrade` 第 5 步提醒段 + README 登记
+  - Task 4 首轮真实 dogfood：四源真实网络 collect + 报告落盘 + advance 建锚；
+    T264→DONE（evidence=schema drift 采集器实现+测试）
+  - Task 5 验证收尾：全仓 pytest 2607 passed, 10 skipped（SHA `7e1e06d`）；集成/e2e
+    判定「本仓无该层」，Task 4 手工验收作旁证
+- **验证**: verify PASS（task5-verify-all.md）；code-review 采纳 6 项 finding 并当场修复
+  （advance 报告读取异常保护、schema drift OSError 不再丢版本数据、错误消息路径脱敏、
+  SKILL.md 缓存路径模板改真实路径、`_observed_anchor` 拒绝 null 锚 + 新增 2 项契约测试、
+  本文件与 roadmap.md 回填），修复后 60/60 skill 内测试绿
+- **下一步**: 本轮 fix 完成后重跑双轴审 → `sdflow-done`（verify/archive/merge）；归档后
+  阶段 3 状态改「✅ 完成」并回填归档日期
+- **备注**: 阶段 4/5 仍为雾区，待各自 frontier 到达后走相位 B 补细
+
 ### [阶段 2 完成总结] 镜 roster 复评 + 裁决地基改造全部完成（change `implement-workflow-optimization-2026-08-p2`）
 
 - **状态**: ✅ 完成（5/5 子任务；验收 3 观察窗口 1/3 进行中，不阻塞）

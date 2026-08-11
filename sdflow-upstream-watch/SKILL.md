@@ -291,8 +291,14 @@ schema drift（对比基线 = 已安装版 `<installed_version>`，非 registry 
 ```
 
 **证据不足条款**：仅凭 commit subject 看不出实质影响时，MUST 标「观望/待核查」，不得硬判
-吸收或不吸——可对候选 commit 在 bare 缓存里按需 `git -C ~/.cache/sdflow-upstream/<source>.git
-show <sha>` 取内容辅助判断（blobless clone 按需拉 blob，git 自己回答，不是手搓解析）。
+吸收或不吸——可对候选 commit 在 bare 缓存里按需取内容辅助判断（blobless clone 按需拉
+blob，git 自己回答，不是手搓解析）。<!-- [impl-review-fix] 缓存路径按源分别列出，不用不存在的 <source>.git 模板 -->
+两个 bare 缓存源的真实路径：
+- matt：`git -C ~/.cache/sdflow-upstream/matt.git show <sha>`
+- superpowers：`git -C ~/.cache/sdflow-upstream/superpowers-marketplace.git show <sha>`
+
+（gstack 走本地既有 checkout `~/.skills/gstack`，非 bare 缓存；openspec 无 bare 缓存层，
+schema drift 靠逐文件 sha256 对比，无 commit sha 可查。）
 
 ## 入池衔接（人拍板后才执行）
 

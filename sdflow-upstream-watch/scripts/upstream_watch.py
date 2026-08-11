@@ -63,6 +63,12 @@ class AdvanceGateError(Exception):
     （spec Requirement「锚文件由脚本独占维护，锚推进与本轮报告 + facts 绑定」）。"""
 
 
+def _tildify(path):
+    """[impl-review-fix] 错误消息路径脱敏：把 home 目录前缀替换为 `~`，避免报告/日志文本
+    中泄露包含用户名的本机绝对路径。纯字符串替换，不做存在性校验、不影响实际路径解析。"""
+    return str(path).replace(str(Path.home()), "~", 1)
+
+
 def _run(cmd, *, input=None):
     """全仓外部子进程统一入口：带 `SUBPROCESS_TIMEOUT_SECONDS` 超时。
     调用方按返回值 `returncode` 自行判定，超时以 `subprocess.TimeoutExpired` 抛出
@@ -256,7 +262,8 @@ def _ensure_bare_cache(cache_dir, upstream_url):
     cache_dir.parent.mkdir(parents=True, exist_ok=True)
     r = _run(["git", "clone", "--filter=blob:none", "--bare", upstream_url, str(cache_dir)])
     if r.returncode != 0:
-        raise CollectError(f"bare 缓存 clone 失败（缓存路径 {cache_dir}）: {r.stderr.strip()}")
+        # [impl-review-fix] 路径脱敏
+        raise CollectError(f"bare 缓存 clone 失败（缓存路径 {_tildify(cache_dir)}）: {r.stderr.strip()}")
     return cache_dir
 
 
@@ -269,7 +276,7 @@ def collect_gstack(anchor, *, checkout_dir):
     """
     checkout_dir = Path(checkout_dir)
     if not (checkout_dir / ".git").exists():
-        raise CollectError(f"本地 checkout 不存在: {checkout_dir}")
+        raise CollectError(f"本地 checkout 不存在: {_tildify(checkout_dir)}")  # [impl-review-fix]
 
     fr = _run(["git", "-C", str(checkout_dir), "fetch", "origin"])
     if fr.returncode != 0:
@@ -297,18 +304,19 @@ def _read_matt_installed_skills(skill_lock_path):
     try:
         data = json.loads(skill_lock_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
-        raise CollectError(f"格式漂移: 无法解析 {skill_lock_path}: {e}")
+        raise CollectError(f"格式漂移: 无法解析 {_tildify(skill_lock_path)}: {e}")  # [impl-review-fix]
     skills = data.get("skills") if isinstance(data, dict) else None
     if not isinstance(skills, dict):
-        raise CollectError(f"格式漂移: {skill_lock_path} 缺少 skills 映射")
+        raise CollectError(f"格式漂移: {_tildify(skill_lock_path)} 缺少 skills 映射")  # [impl-review-fix]
     result = {}
     for name, entry in skills.items():
         if not isinstance(entry, dict):
-            raise CollectError(f"格式漂移: {skill_lock_path} 的 {name} 条目非法")
+            raise CollectError(f"格式漂移: {_tildify(skill_lock_path)} 的 {name} 条目非法")  # [impl-review-fix]
         if entry.get("source") != "mattpocock/skills":
             continue
         if "skillFolderHash" not in entry:
-            raise CollectError(f"格式漂移: {skill_lock_path} 的 {name} 缺少 skillFolderHash 键")
+            # [impl-review-fix] 路径脱敏
+            raise CollectError(f"格式漂移: {_tildify(skill_lock_path)} 的 {name} 缺少 skillFolderHash 键")
         result[name] = entry["skillFolderHash"]
     return result
 
@@ -351,15 +359,17 @@ def _read_superpowers_installed_version(installed_plugins_path):
     """
     installed_plugins_path = Path(installed_plugins_path)
     if not installed_plugins_path.is_file():
-        raise CollectError(f"本地锚源缺失: {installed_plugins_path}")
+        raise CollectError(f"本地锚源缺失: {_tildify(installed_plugins_path)}")  # [impl-review-fix]
     try:
         data = json.loads(installed_plugins_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
-        raise CollectError(f"格式漂移: 无法解析 {installed_plugins_path}: {e}")
+        # [impl-review-fix] 路径脱敏
+        raise CollectError(f"格式漂移: 无法解析 {_tildify(installed_plugins_path)}: {e}")
 
     plugins = data.get("plugins") if isinstance(data, dict) else None
     if not isinstance(plugins, dict):
-        raise CollectError(f"格式漂移: {installed_plugins_path} 缺少 plugins 映射")
+        # [impl-review-fix] 路径脱敏
+        raise CollectError(f"格式漂移: {_tildify(installed_plugins_path)} 缺少 plugins 映射")
 
     records = None
     for key, val in plugins.items():
@@ -498,7 +508,10 @@ def collect_openspec(*, repo_root, fork_dir=None, npm_root_g=None):
             raise CollectError(f"上游 schema 目录不存在: {upstream_dir}")
         drift = _diff_dirs_sha256(fork_dir, upstream_dir)
         result["schema_drift"] = {"status": "ok", **drift}
-    except CollectError as e:
+    except (CollectError, OSError) as e:
+        # [impl-review-fix] _diff_dirs_sha256 内部 open() 可抛 OSError（如权限不足）；
+        # 原来只捕 CollectError 会让它穿透到 _collect_source_safe，丢掉本函数已采集到的
+        # installed_version/latest_version（版本对照子项不应被 schema_drift 子项的失败连累）。
         result["schema_drift"] = {"status": "degraded", "reason": str(e)}
 
     return result
@@ -617,7 +630,13 @@ def cmd_advance(args):
     if not isinstance(facts, dict):
         raise AdvanceGateError(f"facts 文件形状非法（须为映射）: {facts_path}")
 
-    report_text = report_path.read_text(encoding="utf-8")
+    try:
+        report_text = report_path.read_text(encoding="utf-8")
+    except (OSError, ValueError) as e:
+        # [impl-review-fix] 报告存在性已在上面 is_file() 判过，但读取仍可能因权限/编码等
+        # 原因失败；未保护会让原始异常穿透，不符合 advance 全程 fail-loud 走 AdvanceGateError
+        # 的既有约定。
+        raise AdvanceGateError(f"报告文件不可读: {report_path}: {e}")
     sources = facts.get("sources") or {}
 
     missing_shas = []
@@ -640,7 +659,17 @@ def cmd_advance(args):
     for source_name, entry in sources.items():
         if not isinstance(entry, dict) or entry.get("status") != "ok":
             continue  # degraded 源锚不推进，逐字保留
-        anchors["sources"][source_name] = _observed_anchor(source_name, entry)
+        observed = _observed_anchor(source_name, entry)
+        # [impl-review-fix] status=ok 但观测值字段为空（None）时拒绝推进——
+        # 空锚一旦写入 anchors.yaml，下一轮采集会把它当"无锚首轮"重新走一遍全量 delta，
+        # 静默丢失本应记录的推进点，且不会在当轮报出任何错误。
+        anchor_key = "anchor_version" if source_name == "openspec" else "anchor_sha"
+        if not observed.get(anchor_key):
+            raise AdvanceGateError(
+                f"{source_name} 源 status=ok 但观测值 {anchor_key} 为空，拒绝推进锚"
+                f"（facts 文件: {facts_path}）"
+            )
+        anchors["sources"][source_name] = observed
 
     anchors["last_run"] = _utc_now_iso()
     write_anchors(anchors_path, anchors)
