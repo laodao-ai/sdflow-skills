@@ -1,4 +1,5 @@
-"""token-log.jsonl 快照采集契约（implement-workflow-optimization-2026-08-p1 · Task 3）。
+"""token-log.jsonl 快照采集契约（implement-workflow-optimization-2026-08-p1 · Task 3；
+宿主判定补丁见 implement-workflow-optimization-2026-08-p2 · Task 5）。
 
 真相源：`sdflow-init/assets/hack/token_snapshot.py` + 同目录 `checkpoint-commit.sh` 的接线
 （`git status --porcelain` 判空 gate 之后、`git add -A` 之前）。见
@@ -12,6 +13,14 @@
 - change 目录用 `git init` 出的假 repo 里 `openspec/changes/<change>/` 手建。
 
 不跑真实 `setup.sh`（机械层，零全局影响）——见 CLAUDE.md「开发期测试三层」第 1 层。
+
+【宿主基线】`_run_checkpoint` / `_run_token_snapshot_directly` 默认注入 `CLAUDECODE=1` +
+清空 `CODEX_THREAD_ID`（claude 宿主基线），使 host 分支测试**不依赖运行本测试套件的真实
+环境是否恰好在 Claude Code 会话里跑**（Task 5 引入 `detect_host()` 前，`host` 字段被硬编码
+`"claude"`，测试对宿主环境零依赖；引入后必须显式钉死基线，否则在无 `CLAUDECODE` 的 CI/裸
+终端跑会因宿主判 unknown 而全体误入「跳过 mtime 回退」分支，产生与本机结果不一致的假象）。
+`extra_env` 里某 key 的值传 `None` = 从基线里删除该 key（而非设为空串），供
+`TestHostDetection` 显式切换/清空宿主信号。
 """
 import json
 import os
@@ -98,12 +107,28 @@ def _assistant_msg(input_tokens=0, output_tokens=0, cache_read=0, cache_creation
     return {"type": "assistant", "message": msg}
 
 
+def _apply_host_baseline(env, extra_env):
+    """claude 宿主基线（`CLAUDECODE=1` + 清空 `CODEX_THREAD_ID`），再叠加 `extra_env`。
+
+    `extra_env` 某 key 值为 `None` ⇒ 从 env 里删除该 key（用于 `TestHostDetection` 显式
+    清空 `CLAUDECODE` 或注入 `CODEX_THREAD_ID`）；其余 key 正常覆盖写入。
+    """
+    env["CLAUDECODE"] = "1"
+    env.pop("CODEX_THREAD_ID", None)
+    if extra_env:
+        for k, v in extra_env.items():
+            if v is None:
+                env.pop(k, None)
+            else:
+                env[k] = v
+    return env
+
+
 def _run_checkpoint(repo, home, step, desc=None, extra_env=None):
     env = dict(os.environ)
     env["HOME"] = str(home)
     env.pop("SDFLOW_HOME", None)
-    if extra_env:
-        env.update(extra_env)
+    _apply_host_baseline(env, extra_env)
     args = [bash_executable(), bash_path(CHECKPOINT_SCRIPT), step]
     if desc is not None:
         args.append(desc)
@@ -115,8 +140,7 @@ def _run_token_snapshot_directly(repo, home, step, extra_env=None):
     env = dict(os.environ)
     env["HOME"] = str(home)
     env.pop("SDFLOW_HOME", None)
-    if extra_env:
-        env.update(extra_env)
+    _apply_host_baseline(env, extra_env)
     return subprocess.run(
         ["python3", str(TOKEN_SNAPSHOT_SRC), "--step", step],
         cwd=str(repo), env=env, capture_output=True, text=True,
@@ -422,6 +446,95 @@ class TestParseError:
         assert len(lines) == 1
         assert lines[0]["anchor"] is False
         assert lines[0]["reason"] == "parse-error"
+
+
+class TestHostDetection:
+    """implement-workflow-optimization-2026-08-p2 · Task 5：codex/unknown 宿主 MUST NOT 走
+    Claude transcript mtime 回退——即便回退目录里摆着一份完全合法、能命中的 transcript，
+    非 claude 宿主也必须直接落 `no-transcript` 降级行，不得读到它。`host` 字段如实写检测值
+    （而非历史上恒为 `"claude"` 的写法）。
+    """
+
+    def test_codex_host_skips_mtime_fallback_even_with_matching_transcript(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
+        _deploy_helper(home)
+        # mtime 回退目录里摆一份完全合法、会被 claude 宿主命中的 transcript——
+        # 用来证明 codex 宿主是「主动不看」，不是「碰巧没找到」。
+        _write_transcript(home, repo, "would-be-picked-0000",
+                           [_assistant_msg(input_tokens=99, output_tokens=1)])
+        _touch_untracked(repo)
+
+        r = _run_checkpoint(repo, home, "ff", extra_env={
+            "CLAUDECODE": None, "CODEX_THREAD_ID": "codex-thread-abc123",
+        })
+        assert r.returncode == 0, r.stdout + r.stderr
+
+        lines = _token_log_lines(repo, "demo-change")
+        assert len(lines) == 1
+        assert lines[0]["anchor"] is False
+        assert lines[0]["reason"] == "no-transcript"
+        assert lines[0]["host"] == "codex"
+        assert "usage" not in lines[0]
+        assert lines[0]["session"] == ""
+
+    def test_unknown_host_skips_mtime_fallback_when_no_signal_present(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
+        _deploy_helper(home)
+        _write_transcript(home, repo, "would-be-picked-1111",
+                           [_assistant_msg(input_tokens=7)])
+        _touch_untracked(repo)
+
+        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDECODE": None})
+        assert r.returncode == 0, r.stdout + r.stderr
+
+        lines = _token_log_lines(repo, "demo-change")
+        assert len(lines) == 1
+        assert lines[0]["anchor"] is False
+        assert lines[0]["reason"] == "no-transcript"
+        assert lines[0]["host"] == "unknown"
+
+    def test_conflicting_host_signals_fall_to_unknown_and_skip_fallback(self, tmp_path):
+        """两个宿主信号同时出现 = 冲突，MUST NOT 静默取其一——落 unknown，同样不碰 mtime 回退。"""
+        home = tmp_path / "home"
+        home.mkdir()
+        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
+        _deploy_helper(home)
+        _write_transcript(home, repo, "would-be-picked-2222",
+                           [_assistant_msg(input_tokens=3)])
+        _touch_untracked(repo)
+
+        r = _run_checkpoint(repo, home, "ff",
+                             extra_env={"CODEX_THREAD_ID": "codex-thread-conflict"})
+        assert r.returncode == 0, r.stdout + r.stderr
+
+        lines = _token_log_lines(repo, "demo-change")
+        assert len(lines) == 1
+        assert lines[0]["anchor"] is False
+        assert lines[0]["reason"] == "no-transcript"
+        assert lines[0]["host"] == "unknown"
+
+    def test_claude_host_baseline_still_reports_host_claude(self, tmp_path):
+        """基线场景（本文件默认注入的 claude 宿主）：host 字段如实写 "claude"，行为不变。"""
+        home = tmp_path / "home"
+        home.mkdir()
+        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
+        _deploy_helper(home)
+        session = "sess-claude-baseline-0000"
+        _write_transcript(home, repo, session, [_assistant_msg(input_tokens=11)])
+        _touch_untracked(repo)
+
+        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": session})
+        assert r.returncode == 0, r.stdout + r.stderr
+
+        lines = _token_log_lines(repo, "demo-change")
+        assert len(lines) == 1
+        assert lines[0]["anchor"] is True
+        assert lines[0]["host"] == "claude"
+        assert lines[0]["usage"]["input"] == 11
 
 
 class TestSessionIdGrammar:
