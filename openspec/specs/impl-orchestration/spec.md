@@ -3,150 +3,14 @@
 ## Purpose
 TBD - created by archiving change matt-workflow-integration. Update Purpose after archive.
 ## Requirements
-### Requirement: 管线路由为手动确定值，零模型自动判断
-
-实现管线选择 SHALL 仅由手改/落盘的确定值决定，路由三跳为：① `openspec/config.yaml` 可选键 `impl-pipeline`（人手编辑，仅在新出 ticket 时刻读一次）；② plan 文件头 frontmatter 管线 marker（出 ticket 落盘后只读，锁定在途 change 归属）；③ 键缺失或值不识别 → 一律 **tickets** 管线（`sdflow-implement`；新缺省，原为 superpowers）〔simplify-workflow：缺省翻转〕。显式 `impl-pipeline: superpowers` 仍路由到旧管线（`writing-plans → subagent-driven-development`）；已有 plan 文件的 marker 锁定优先于 config 缺省。MUST NOT 引入任何模型自由裁量的管线判断；改 config MUST NOT 影响任何已出 ticket 在途 change 的续跑。ship_gate MUST NOT 读取 config（保零依赖不变量）。键与 marker 的读取 SHALL 落确定性脚本（stdlib-only enum reader / route helper，不触 gate）〔spec-review-amendment F4〕；ship 派发 sdflow-implement 时 SHALL 以显式字面 args 传递模式与 done_tasks（SKILL.md 与 ship 链序两处共享同一契约串）〔F4〕。marker **存在但非法/重复/损坏** SHALL 停（UNKNOWN 语义）并留痕，MUST NOT 静默回退旧管线（防两管线混跑）——静默回退仅适用「键/marker 缺席」的缺省态〔F4〕。路由结果 SHALL 产出一行 PIPELINE_RECEIPT（读到的键值/选定管线/marker/plan sha）进当轮输出与判赢材料〔F3a〕。
-
-#### Scenario: 无 impl-pipeline 键默认走 tickets〔simplify-workflow〕
-
-- **WHEN** 项目 config.yaml 不含 `impl-pipeline` 键
-- **THEN** `impl_route.py route` 输出 `pipeline=tickets`
-
-#### Scenario: 非法值/YAML 损坏回退〔simplify-workflow〕
-
-- **WHEN** 项目 config.yaml 的 `impl-pipeline` 值不识别或 YAML 损坏
-- **THEN** `impl_route.py route` 回退到 `tickets`（新缺省），并在 stderr 报告诊断信息
-
-#### Scenario: 显式 superpowers 不受影响
-
-- **WHEN** 项目 config.yaml 含 `impl-pipeline: superpowers`
-- **THEN** `impl_route.py route` 输出 `pipeline=superpowers`，行为与本变更前一致
-
-#### Scenario: 在途 change 不受 config 切换影响
-
-- **WHEN** 某 change 已以 tickets 管线出 ticket（marker 在盘面），随后 config 键被改回 superpowers
-- **THEN** 该 change 的 CONTINUE_IMPL 续跑仍路由 sdflow-implement 执行模式（只认 marker），新出 ticket 的 change 才走新 config 值
-
-#### Scenario: 对在途强制换管线属显式越权
-
-- **WHEN** 操作者人工修改在途 change 的 plan 文件 marker
-- **THEN** 视为显式越权通道（git 留痕、产物一致性自担）；skill MUST NOT 主动建议此操作
-
-### Requirement: 出 ticket 模式产出 tracer-bullet ticket 并落盘即返回
-
-sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
-
-**验收标准的语法面有界性闸门 SHALL 在出票时施加**〔curb-rework-loop-cost〕：某条验收标准若要求对某种语法面**做机械判定**，出票方 SHALL 先判该语法面能否穷举——**有界**（如 CommonMark fence 变体、自有格式的机器锚行）⇒ 可写为机械门；**无界**（通用编程语言源码、YAML、make、shell）⇒ **MUST NOT 写成机械门**，SHALL 改为「让该工具自己回答」（真跑一遍看行为 / 调用该格式的权威解析器），或降级为 best-effort 展示且**不作判定依据**。该判据 SHALL 覆盖伪装形态——不仅匹配「扫描 / 识别 / 拒绝某形态 / 指纹」这类显式措辞，**还 SHALL 匹配「在某格式文件中定位 / 插入 / 修改某处」**（「只动一个键值」听起来不像解析，但「找到那个键」本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为机械保证。**
-
-**计划文件名 SHALL 按轨分列**〔spec-review-amendment · adr/0033〕：tickets 轨落盘 `tickets.md`，superpowers 轨保持 `superpowers-plan.md`。**在途 plan MUST NOT 被重命名**——完成判据窗口起点由 `git log --diff-filter=A -- <plan 路径>` 取得，该判据**不跟随重命名**，改名会把窗口起点推到改名 commit，使改名前的全部 checkpoint 标签落到窗口外、已完成 ticket 被判未完成并可能重派。∴ 在途 plan SHALL 保留原文件名直至该 change 归档。gate 与 route helper SHALL 经**同一份共享 resolver** 定位计划文件（MUST NOT 各自手抄文件名列表）：按序探测两个名字；**两者同时存在 SHALL fail-closed 判 UNKNOWN**（不猜哪个是真的）；均不存在则判 RUN_PLAN。**文件名 MUST NOT 参与轨道路由判定**——路由权威仍是 config 键 + plan frontmatter marker，文件名只用于定位，避免新增一个会与 marker 冲突的冗余信号。
-
-出 ticket SHALL 落盘即返回编排层（ship），MUST NOT 在同一调用内直通执行——保 ship_gate 在出 ticket 后/执行前的校验插入点。原版 to-tickets 的 quiz-the-user 人类步 SHALL 删除（阶段三无人类门），粒度争议按 `T10-choice` 三级决策协议处理（①有客观判据自动选并**按三镜 + 主次**记理由；②无客观判据派 **strong 档**对抗镜复核推荐切分方案，通过方自动选；③复核不过或无从复核 defer）〔spec-review-amendment M3：首版此处漏了「按三镜 + 主次」限定词〕。**出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change 目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果**无处可落**〔spec-review-amendment M15〕。
-
-**出 ticket 模式 SHALL 在全部功能垂直切片之后追加一张强制的「实现验证」收尾 ticket**，`Blocked-by` 声明为全部功能 ticket 号，`R-ID` 为 `all`（语义 = 覆盖本 change 全部需求的聚合验证，Spec 轴据此核验而非逐条溯源）〔spec-review-amendment M6〕，其验收标准 SHALL 为「按下述发现契约运行本 change 的聚合测试套件（单元+集成+e2e）并全部通过」。
-
-**聚合套件发现契约（MUST NOT 解析构建文件）**〔spec-review-amendment Q6〕：① 命令来源优先级 = `openspec/config.yaml` 的 `test-suites.{unit,integration,e2e}` 显式配置 → 缺失则由该票 implementer 依仓内既有约定判定并在票报告写明命令原文与判定依据；② 「某命令能不能跑」SHALL 由**真跑一遍看退出码**回答，MUST NOT 靠解析 Makefile/package.json 预判 target 是否存在；③ 仓内确无某层时 SHALL 记「未覆盖（本仓无此层）」并附依据，**MUST NOT fail-closed 罢工**——`sdflow-implement` 的承诺是「不管什么项目都能跑完实现管线」，罢工分支直接背叛该承诺；④ 证据 SHALL 落确定性 schema，每层一行 `<层> | <命令原文> | <退出码> | <测试时 git rev-parse HEAD>`，未覆盖层写 `<层> | — | 未覆盖 | <依据>`；⑤ 退出码非 0 SHALL 分四类处置：本 change 引入的回归 → 进 fix 循环；仓内既有红测（以 base SHA 复跑确认）→ 记录放行；flaky（同命令复跑一次即绿）→ 记录放行；环境故障 → halt envelope 停并上抛。
-
-**`test-suites` SHALL 支持成本分档**〔curb-rework-loop-cost〕：每层的值为**字符串**时 quick 与 full 两档同命令（今日形状，继续有效）；为**映射**时读 `quick` / `full` 两键——缺 `quick` 视为该层无 quick 档，缺 `full` 视为未分档（quick=full 同命令）。旧形状是新形状的合法子集，**未配置的消费仓行为 SHALL 等同于扩展前**，MUST NOT 要求下游同步改配置。`test-suites` 的具体命令因项目而异，**SHALL 由 `sdflow-devenv` 运行时调研项目测试基础设施后推荐写入**（已有配置时保留不覆盖），本 change 只定义 schema 与消费语义。
-
-**中间 fix 轮与收口轮的测试范围 SHALL 分离，且范围 SHALL 由确定信息界定**〔curb-rework-loop-cost · adr/0035〕：
-
-- **中间 fix 轮** SHALL 只跑 **unit 全层**（整层跑、不做用例筛选；若该层配了 `quick` 则取 `quick`，**无 `quick` 则取 `full`——unit 层 MUST NOT 因缺 quick 档被跳过**）**加上轮失败的具体用例（⊂ unit 层）**；集成与 e2e SHALL 整体推迟到收口。中间轮的结果**仅供诊断，SHALL NOT 作为最终报告的通过证据**。
-- **收口时**（双轴审判通过、打完成标签之前）SHALL 跑一次全量（各层取 `full`），报告中所有判「通过」的行 SHALL 锚**同一个最终 SHA**（= 最后一次修复之后的 `git rev-parse HEAD`）。**单一盘面语义不变**〔原 impl-review-fix FIX-4〕：`unit@A → integration@B` 拼接式的「全部通过」依旧非法。
-- 🔴 **范围 MUST NOT 由「哪层受影响」的判断界定**——e2e 按定义端到端、集成测试跨模块，任何改动都可能影响它们，「本次不影响某层」是不可靠判断，把它放进关键路径等于把 fail-open 写进条款。**要求实施者为该判断写明依据不构成缓解**：要求解释一个不可靠判断，只会得到一个有说服力的错误判断。
-
-**该票 SHALL 走跟普通 ticket 相同的 implementer + 双轴审 + fix 循环**，但 SHALL 定制三处执行契约〔spec-review-amendment H9〕：① **豁免 red-before-green**（该票不写产品代码，验收物是证据不是 diff）；② **主证据锚 = 该票 impl-report 文件 + 其内的 SHA 三元组，MUST NOT 依赖该票产生 commit**（`checkpoint-commit.sh` 在干净树上直接成功退出、不建 commit，聚合套件一次绿时可能根本无 commit）；③ Standards 轴核验范围 SHALL 为「修复方式未靠**加 skip / 改测试配置 / 删除或弱化断言**蒙混过关」（原措辞只禁删除或弱化断言，挡不住加 skip）。
-
-**`sdflow-done` 的 verify SHALL 引用该票 impl-report 作为「实现期聚合覆盖」需求的证据锚，不扩张 verify 自身职责**；**锚的语义 SHALL 限定为「实现期结束时聚合套件通过」，MUST NOT 表述为「最终代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其自动修复循环之前，code-review 之后的修复由其自身保障机制覆盖，此证据时效缺口是已知且接受的残余风险〔spec-review-amendment Q2〕。**该锚 SHALL 按实现管线条件化**：仅当本 change 走 tickets 轨时要求；superpowers 轨（canonical 缺省）下该需求判「不适用」，**MUST NOT 判 gap**〔spec-review-amendment C2〕。
-
-**收尾票的存在与位置 SHALL 有机械保证**〔spec-review-amendment H12〕：`ship_gate` 的 plan 校验 SHALL 增加一道——**当且仅当计划文件名为 `tickets.md`** 时，该 plan MUST 恰含一张「实现验证」收尾 ticket 且其 `Blocked-by` ⊇ 全部功能 ticket 号，不满足即判非 0；文件名为 `superpowers-plan.md` 时 SHALL 跳过此项并输出一行提示（该名同时覆盖两种情形：superpowers 轨的 plan——本就无收尾票要求；以及改名生效前落盘的在途 tickets 轨 plan——grandfather）。**此处以文件名为判据 SHALL 仅用于区分「新出 plan / 在途或他轨 plan」，MUST NOT 被解读为用文件名做轨道路由**——gate 无需知道当前轨道即可执行本校验，路由权威仍是 config 键 + frontmatter marker。
-
-出票落盘前 SHALL 做一次全 ticket 语义一致性自扫（拓扑之外的语义矛盾，如某票假设的接口形状被另一票废弃）；发现矛盾按 `T10-choice` 三级决策协议处理（①有客观判据自动选并**按三镜 + 主次**记理由；②无客观判据派 **strong 档**对抗镜复核；③复核不过或无从复核则停并上抛），不批量问人，仲裁记录同样落 `impl-reports/planning-decisions.md`。
-
-**出票时 SHALL 评估并行安全性**〔spec-review-amendment〕：对 `Blocked-by` 声明使得 `next_ready` 可能同时返回的一组 ticket（即它们的 `Blocked-by` 集合是 `done` 集的子集，会同时出现在 ready 列表中），出票方 SHALL 确认——① 它们的行为边界不重叠（不改同一模块的同一接口）；② 一个的产出不是另一个的输入；③ 有疑问时 SHALL 保守声明依赖（宁可串行不可误并行）；④ 若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的 `Blocked-by`，确保收尾节点唯一（`next_ready` 只返回一个收尾候选）。该约束为指令层语义约束（出票方的模型判断）；兜底为 worktree 隔离下 `git merge --no-ff` 的原生冲突检测（真正的 fail-loud）——即使出票判断失误（两票改同一文件），各自 commit 到独立 worktree 分支，merge 回主分支时 git 正常冲突检测会 fail-loud（见「执行模式宿主条件化受限并行工作 frontier 并以文件交接」需求）。
-
-#### Scenario: 并行安全的 ticket 不声明互相 Blocked-by
-
-- **WHEN** 某 change 有 3 张功能 ticket，T2 改脚本 A，T3 改脚本 B，T4 改 SKILL.md 的不同段，三者均只 Blocked-by T1
-- **THEN** 出票方判定三者行为边界不重叠、产出不互为输入，保留 `Blocked-by: 1` 不加互相依赖
-
-#### Scenario: 有数据流依赖时保守声明串行
-
-- **WHEN** T2 新增一个函数，T3 的验收标准调用该函数
-- **THEN** 出票方 SHALL 让 T3 声明 `Blocked-by: 1,2`，确保 T3 在 T2 完成后才执行
-
-#### Scenario: 出 ticket 后 gate 先行校验再执行
-
-- **WHEN** 出 ticket 模式完成落盘并返回
-- **THEN** ship 重跑 ship_gate，plan 文件经 fence/标题/重号**及收尾票**四道校验后才发出 CONTINUE_IMPL，执行模式才被派发
-
-#### Scenario: 宽重构走 expand–contract
-
-- **WHEN** 某 tasks.md 条目是重命名共享符号类宽重构
-- **THEN** 出 ticket 为 expand ticket → 迁移批次 ticket（各自 Blocked-by expand）→ contract ticket（Blocked-by 全部迁移批次），不产出「一 ticket 打穿全仓」的伪垂直切片
-
-#### Scenario: 出票模式恒含实现验证收尾票
-
-- **WHEN** 出 ticket 模式产出 N 张功能垂直切片（3≤N≤6）
-- **THEN** `tickets.md` 额外含一张「实现验证」收尾 ticket，`Blocked-by` 全部 N 张功能票号，`R-ID: all`，不计入 3–6 预算计数
-
-#### Scenario: 缺少收尾票的 plan 被 gate 拒绝
-
-- **WHEN** `tickets.md` 不含收尾票，或其 `Blocked-by` 漏了某张功能票号
-- **THEN** ship_gate 判非 0 并指出缺失项；旧名 `superpowers-plan.md` 的在途 plan 不触发此校验，只输出 grandfather 提示
-
-#### Scenario: 两个计划文件名同时存在则 fail-closed
-
-- **WHEN** change 目录下 `tickets.md` 与 `superpowers-plan.md` 同时存在
-- **THEN** gate 判 UNKNOWN 并提示人工删除其一，MUST NOT 猜测哪个是当前有效计划
-
-#### Scenario: 仓内无 e2e 层时记未覆盖而非罢工
-
-- **WHEN** 收尾票 implementer 判定本仓确无 e2e 层
-- **THEN** 证据行记 `e2e | — | 未覆盖 | <判定依据>`，该票仍可通过双轴审，MUST NOT 因缺层停机
-
-#### Scenario: superpowers 轨不因缺聚合锚被判 gap
-
-- **WHEN** 某 change 走 canonical 缺省的 superpowers 轨，无「实现验证」收尾票
-- **THEN** `sdflow-done` verify 对「实现期聚合覆盖」需求判「不适用（非 tickets 轨）」，MUST NOT 判 gap
-
-#### Scenario: 粒度争议派 strong 档复核并落审计
-
-- **WHEN** design.md 无「切片建议」节，编排层需自主决定切分方案且存在 ≥2 个合理候选
-- **THEN** 无客观判据可判时派一个 strong 档对抗镜复核推荐的切分方案，不问用户；仲裁结论按行格式落 `impl-reports/planning-decisions.md`
-
-#### Scenario: 一致性自扫发现矛盾派 strong 档复核
-
-- **WHEN** 全 ticket 语义一致性自扫发现某票假设的接口形状被另一票明确废弃，且无客观判据可自动选
-- **THEN** 派一个 strong 档对抗镜复核该矛盾的处置方案，复核不过或无从复核则停并上抛，不批量问人，仲裁结论落 `impl-reports/planning-decisions.md`
-
-#### Scenario: 中间 fix 轮不跑集成与 e2e
-
-- **WHEN** 收尾票的聚合套件在某轮失败，implementer 修复后进入下一轮
-- **THEN** 该轮只跑 unit 全层加上轮失败的具体用例（⊂ unit 层），集成与 e2e 不跑；该轮报告中集成/e2e 层 SHALL NOT 出现「通过」证据行
-
-#### Scenario: 收口轮跑全量且所有通过行锚同一 SHA
-
-- **WHEN** 双轴审判定该票通过、准备打完成标签
-- **THEN** 各层取 `full` 命令跑一次全量，报告中所有判「通过」的行锚同一个最终 SHA；若某层的通过行锚在更早的 SHA 上，该报告 SHALL 判不合格
-
-#### Scenario: 未配 quick 档的消费仓行为不变
-
-- **WHEN** 某消费仓的 `test-suites.unit` 仍是字符串形状（未分档）
-- **THEN** quick 与 full 两档均取该字符串命令，行为等同于扩展前，MUST NOT 因缺 quick 档报错或罢工
-
-#### Scenario: 验收标准要求解析无界语法面时被出票闸门拦下
-
-- **WHEN** 某待出 ticket 的验收标准写作「静态门须能识别私有 Tab/focus trap 指纹」或「窄范围 patch 逻辑只动 YAML 的某单键值」
-- **THEN** 出票方 SHALL 判该语法面无界并改写该验收标准——改为让该工具自己回答（真跑一遍 / 调权威解析器），或降级为不作判定依据的展示；MUST NOT 原样出票
-
 ### Requirement: ticket 文件兼容 ship_gate 既有完成判据契约
 
-ticket 文件 SHALL 写入 change 目录的 `superpowers-plan.md`（试验期外衣文件名），每 ticket 以 `### Task N: <ticket 名>` 为标题、ticket 内含验收标准复选框；出 ticket 收尾 SHALL 显式 checkpoint（plan 单独提交建立完成窗口锚）〔grill-amendment〕。完成信号 SHALL **后置双写**〔spec-review-amendment F1；设计门 2026-07-10 拍板定稿（方案甲）〕：implementer 实现期提交 MUST NOT 带 `task<N>-` 完成标签；该 ticket 双轴审 + 修复环通过后，由执行模式补打 `checkpoint(<change>:task<N>-<slug>)` 完成标签并勾全验收复选框——**审过才算 done**；resume 发现「实现提交在、完成标签缺」SHALL 进入续审而非重实现。plan 首次提交后结构 SHALL 不可变：MUST NOT 重号/重排/删除/复用 Task 号，重规划只可追加新号〔F1〕。plan 文件 frontmatter SHALL 含且仅含 `impl-pipeline` 单键（无注释/示例/第二块——marker 块内杂行会被 gate 计为幻影任务）〔F5〕。ship_gate.py SHALL 零改动。
+ticket 文件 SHALL 写入 change 目录的 `tickets.md`，每 ticket 以 `### Task N: <ticket 名>` 为标题、ticket 内含验收标准复选框；出 ticket 收尾 SHALL 显式 checkpoint（plan 单独提交建立完成窗口锚）〔grill-amendment〕。完成信号 SHALL **后置双写**〔spec-review-amendment F1；设计门 2026-07-10 拍板定稿（方案甲）〕：implementer 实现期提交 MUST NOT 带 `task<N>-` 完成标签；该 ticket 双轴审 + 修复环通过后，由执行模式补打 `checkpoint(<change>:task<N>-<slug>)` 完成标签并勾全验收复选框——**审过才算 done**；resume 发现「实现提交在、完成标签缺」SHALL 进入续审而非重实现。plan 首次提交后结构 SHALL 不可变：MUST NOT 重号/重排/删除/复用 Task 号，重规划只可追加新号〔F1〕。plan 文件 frontmatter SHALL 含且仅含 `impl-pipeline` 单键（无注释/示例/第二块——marker 块内杂行会被 gate 计为幻影任务）〔F5〕；该键为文件格式契约，SHALL 无路由读取方〔adr/0042〕。
 
 #### Scenario: gate 以既有双通道判定 ticket 完成
 
 - **WHEN** 某 ticket 双轴审通过、执行模式按契约补打完成标签并勾框
-- **THEN** 既有 ship_gate（未改动）经 checkpoint 标签 ∪ 复选框双通道判定该 Task 号 done，CONTINUE_IMPL 的 done_tasks 集合正确携带；审前中断 resume 时该 ticket 不在 done_tasks 中、进入续审〔spec-review-amendment F1〕
+- **THEN** 既有 ship_gate 经 checkpoint 标签 ∪ 复选框双通道判定该 Task 号 done，CONTINUE_IMPL 的 done_tasks 集合正确携带；审前中断 resume 时该 ticket 不在 done_tasks 中、进入续审〔spec-review-amendment F1〕
 
 ### Requirement: 执行模式宿主条件化受限并行工作 frontier 并以文件交接
 
@@ -162,7 +26,7 @@ ticket 文件 SHALL 写入 change 目录的 `superpowers-plan.md`（试验期外
 
 **异常处理（Claude 宿主）**：并行 implementer 中某个返回 BLOCKED / NEEDS_CONTEXT 时，harness 无中途取消能力，编排层 SHALL 等全部返回后逐个处理状态；BLOCKED 票的 worktree 直接丢弃（不 merge 回主分支），无脏改动污染；完成态票据正常走完 merge+审+checkpoint，不因兄弟票 BLOCKED 而搁置，白跑成本为可接受边角。`git merge --no-ff` 冲突时编排层 SHALL 上报人介入（halt envelope 五要素）——worktree 隔离下 merge conflict 是**真正的 fail-loud**。
 
-其余契约不变：每 ticket 派发 fresh implementer 子代理，契约为 TDD at pre-agreed seams、定期 typecheck、**单元测试 + 本 ticket 声明的 e2e 场景 + 本 ticket `Blocked-by` 链上模块的集成测试**（MUST NOT 跑**与本票无依赖关系**的集成/e2e 套件——聚合回归由「实现验证」收尾 ticket 承担，见「出 ticket 模式产出 tracer-bullet ticket 并落盘即返回」需求）、完成信号双写；「本 ticket 声明的 e2e 场景」SHALL 由 ticket 验收标准中标注为 e2e 的条目界定，未标注即该票无 e2e 场景〔spec-review-amendment M7〕；implementer 状态词表为 DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED——NEEDS_CONTEXT SHALL 由编排层从盘面（design.md/specs/ticket 文本）自答，答不出走 defer 或停，MUST NOT 编造；BLOCKED 无法消解 SHALL 停并上抛。子代理产物 SHALL 以文件交接：implementer 全量报告写 report file（按 ticket 名命名）只返回状态摘要；reviewer 输入 diff 经 review-package 式文件传递，MUST NOT 把大产物粘贴进 dispatch prompt。审出的 cannot-verify-from-diff 项（需求活在未改动代码或跨 ticket）SHALL 由编排层亲自消解，且 SHALL 设预算上界：需触碰超过 3 个文件、或从盘面（design/specs/ticket 文本）不可直接解答时，MUST 按「确认缺口退回 implementer」处理〔spec-review-amendment F7〕。frontier 的 next-ready 判定 SHALL 由确定性 helper 计算（解析 Blocked-by + gate done_tasks 拓扑排序，stdlib-only）〔F8〕。一切停机（BLOCKED/依赖缺失/gate 拒绝）SHALL 以统一 halt envelope 呈现：错误码、ticket 号与名、已核证据、已写盘副作用、精确恢复步骤〔F7〕；BLOCKED 的 blocker 记录 SHALL 落盘 report file（change 目录内、git-tracked，防 compaction 蒸发）〔F7〕。DONE_WITH_CONCERNS SHALL 与 DONE 同路径进双轴审，implementer 所述 concerns 逐字附给两轴〔F7〕。
+其余契约不变：每 ticket 派发 fresh implementer 子代理，契约为 TDD at pre-agreed seams、定期 typecheck、**单元测试 + 本 ticket 声明的 e2e 场景 + 本 ticket `Blocked-by` 链上模块的集成测试**（MUST NOT 跑**与本票无依赖关系**的集成/e2e 套件——聚合回归由「实现验证」收尾 ticket 承担，见「出 ticket 模式产出 tracer-bullet ticket 并落盘即返回（tickets.md 单名）」需求）、完成信号双写；「本 ticket 声明的 e2e 场景」SHALL 由 ticket 验收标准中标注为 e2e 的条目界定，未标注即该票无 e2e 场景〔spec-review-amendment M7〕；implementer 状态词表为 DONE / DONE_WITH_CONCERNS / NEEDS_CONTEXT / BLOCKED——NEEDS_CONTEXT SHALL 由编排层从盘面（design.md/specs/ticket 文本）自答，答不出走 defer 或停，MUST NOT 编造；BLOCKED 无法消解 SHALL 停并上抛。子代理产物 SHALL 以文件交接：implementer 全量报告写 report file（按 ticket 名命名）只返回状态摘要；reviewer 输入 diff 经 review-package 式文件传递，MUST NOT 把大产物粘贴进 dispatch prompt。审出的 cannot-verify-from-diff 项（需求活在未改动代码或跨 ticket）SHALL 由编排层亲自消解，且 SHALL 设预算上界：需触碰超过 3 个文件、或从盘面（design/specs/ticket 文本）不可直接解答时，MUST 按「确认缺口退回 implementer」处理〔spec-review-amendment F7〕。frontier 的 next-ready 判定 SHALL 由确定性 helper 计算（解析 Blocked-by + gate done_tasks 拓扑排序，stdlib-only）〔F8〕。一切停机（BLOCKED/依赖缺失/gate 拒绝）SHALL 以统一 halt envelope 呈现：错误码、ticket 号与名、已核证据、已写盘副作用、精确恢复步骤〔F7〕；BLOCKED 的 blocker 记录 SHALL 落盘 report file（change 目录内、git-tracked，防 compaction 蒸发）〔F7〕。DONE_WITH_CONCERNS SHALL 与 DONE 同路径进双轴审，implementer 所述 concerns 逐字附给两轴〔F7〕。
 
 #### Scenario: Claude 宿主 frontier 受限并行推进（worktree 隔离）
 
@@ -266,27 +130,18 @@ ticket 文件 SHALL 写入 change 目录的 `superpowers-plan.md`（试验期外
 - **WHEN** 执行中途会话中断，重调 /sdflow-ship
 - **THEN** gate 从盘面输出 done_tasks 已完成 ticket 号集，编排层跳过已完成 ticket 从 frontier 续跑，全程无 ledger 参与
 
-### Requirement: 试点回退与熔断哨兵
-
-新管线 SHALL 以试点方式启用（逐仓/逐 change 翻 config 键），缺省路径（不翻键）SHALL 与本变更前行为一致。试点期 SHALL 以冷层 code-review Critical/严重 findings 相对同类型基线为熔断哨兵：恶化即停试点（config 回缺省），在途 tickets change 按 marker 跑完或人工越权处置。每个试点 change SHIPPED 后、选定下一试点前 SHALL 再生 retro 报告核对哨兵〔spec-review-amendment F3a〕；试点样本计入判赢集前 SHALL 核对 PIPELINE_RECEIPT/marker 与 config 意图一致（误路由 change 剔除样本）〔F3a〕；选样拒绝条件：跨模块宽重构、接口高度不确定、纯文档/琐碎类 MUST NOT 入样〔F3a〕。
-
-#### Scenario: 哨兵触发回退
-
-- **WHEN** 某试点 change 的冷层报告出现应被每 ticket 双轴审拦住的严重缺陷且相对基线明显上升
-- **THEN** 停止新试点（config 键回缺省），恶化实证记入判赢材料，ticket 粒度/审深度回炉再议
-
 ### Requirement: implementer dispatch 携带信号权威归属声明
 
 `sdflow-implement` 派发 implementer / fix 子代理时，dispatch prompt SHALL 携带一份**信号权威表**，正面声明「完成信号写哪里」与「设计工件不可碰」——子代理跑在 fresh context，看不见 SKILL.md 与 CLAUDE.md，未声明即等同未约束。
 
 声明 SHALL 为正面陈述（列出权威归属），MUST NOT 仅写成禁令清单——禁令只挡列举到的那一种越界，权威表挡的是整个范畴。
 
-本要求的适用面 SHALL 限于本仓自有的 `sdflow-implement`；第三方实现 skill（superpowers `subagent-driven-development`、matt `implement`）不受本要求约束，故本要求 MUST NOT 被当作设计门失鲜问题的唯一防线（机械防线在 `spec-workflow` 的设计门新鲜度内容判据）。
+本要求的适用面 SHALL 限于本仓自有的 `sdflow-implement`；本要求 MUST NOT 被当作设计门失鲜问题的唯一防线（机械防线在 `spec-workflow` 的设计门新鲜度内容判据）。
 
 #### Scenario: dispatch prompt 含信号权威表
 
 - **WHEN** `sdflow-implement` 执行模式派发 implementer 或 fix 子代理
-- **THEN** prompt MUST 含信号权威表，至少覆盖两行归属：完成信号 = `superpowers-plan.md` 验收复选框 + `checkpoint(<change>:task<N>-<slug>)` 标签；设计工件 = `proposal.md` / `design.md` / `tasks.md` / `specs/`，实现期不修改
+- **THEN** prompt MUST 含信号权威表，至少覆盖两行归属：完成信号 = `tickets.md` 验收复选框 + `checkpoint(<change>:task<N>-<slug>)` 标签；设计工件 = `proposal.md` / `design.md` / `tasks.md` / `specs/`，实现期不修改
 - **AND** 该表 MUST 与 `ship_gate.py` 实际消费的完成判据一致（plan 复选框 + checkpoint 标签），MUST NOT 声明 gate 并不读取的信号源
 
 #### Scenario: 权威表缺席不得静默降级
@@ -355,4 +210,120 @@ implementer 的 TDD 契约为 red-before-green（见「执行模式宿主条件�
 
 - **WHEN** 「实现验证」收尾票按既有契约豁免 red-before-green
 - **THEN** 该豁免继续有效——收尾票不写产品代码、验收物是证据不是 diff，本需求的扩展 MUST NOT 被解读为取消该豁免
+
+### Requirement: 阶段三派发直连 sdflow-implement（唯一管线）
+
+tickets SHALL 为唯一实现管线〔adr/0042，取代「管线路由为手动确定值，零模型自动判断」需求〕。ship 编排 SHALL 无路由直连派发：gate 判 RUN_PLAN ⇒ 派发 `sdflow-implement mode=tickets-plan change={change}`；判 CONTINUE_IMPL ⇒ 派发 `sdflow-implement mode=tickets-exec change={change} done_tasks={gate JSON done_tasks 原样透传}`。派发 SHALL 以显式字面 args 传递模式与 done_tasks（SKILL.md 与 ship 链序两处共享同一契约串）〔承 F4〕。`openspec/config.yaml` 的 `impl-pipeline` 键 SHALL 无读取方（键退役）：存量键 MUST NOT 影响任何行为。ship_gate MUST NOT 读取 config（零依赖不变量，逐字保留）。计划文件 `tickets.md` 的 frontmatter SHALL 含且仅含 `impl-pipeline: tickets` 单键——该键为文件格式契约（无注释/示例/第二块，marker 块内杂行会被 gate 计为幻影任务〔承 F5〕），SHALL 无路由读取方。
+
+#### Scenario: RUN_PLAN 直连出票模式
+
+- **WHEN** gate 判定 RUN_PLAN
+- **THEN** ship 直接派发 `sdflow-implement mode=tickets-plan`，全程无路由 helper 调用、无 PIPELINE_RECEIPT 产出
+
+#### Scenario: CONTINUE_IMPL 直连执行模式
+
+- **WHEN** gate 判定 CONTINUE_IMPL 且 JSON `done_tasks` 为已完成号集
+- **THEN** ship 直接派发 `sdflow-implement mode=tickets-exec done_tasks={原样透传}`，MUST NOT 重算或猜测 done_tasks
+
+#### Scenario: 存量 impl-pipeline 键不影响行为
+
+- **WHEN** 某仓 `config.yaml` 仍残留 `impl-pipeline` 键（任意取值，含 `superpowers`）
+- **THEN** 阶段三行为与无键完全一致（键无读取方），MUST NOT 报错、MUST NOT 路由到任何旧管线
+
+### Requirement: 出 ticket 模式产出 tracer-bullet ticket 并落盘即返回（tickets.md 单名）
+
+sdflow-implement 出 ticket 模式 SHALL 从 design.md 与 tasks.md 产出 3-6 张 tracer-bullet 垂直切片 ticket（计数仅约束垂直切片；expand–contract 例外序列的迁移批次、以及下述「实现验证」收尾 ticket 均不占该预算〔spec-review-amendment E5〕）：每 ticket 为打穿全层、可独立验证的行为级描述，MUST NOT 预写实现代码或具体文件路径；每 ticket SHALL 声明显式 Blocked-by 阻塞边与 R-ID 需求标注；宽重构（单一机械改动 blast radius 扫全仓）SHALL 走 expand–contract 序列例外而非强行垂直切片。ticket 文件头部 SHALL 逐字携带 design 领域约束为 Global Constraints 节。
+
+**验收标准的语法面有界性闸门 SHALL 在出票时施加**〔curb-rework-loop-cost〕：某条验收标准若要求对某种语法面**做机械判定**，出票方 SHALL 先判该语法面能否穷举——**有界**（如 CommonMark fence 变体、自有格式的机器锚行）⇒ 可写为机械门；**无界**（通用编程语言源码、YAML、make、shell）⇒ **MUST NOT 写成机械门**，SHALL 改为「让该工具自己回答」（真跑一遍看行为 / 调用该格式的权威解析器），或降级为 best-effort 展示且**不作判定依据**。该判据 SHALL 覆盖伪装形态——不仅匹配「扫描 / 识别 / 拒绝某形态 / 指纹」这类显式措辞，**还 SHALL 匹配「在某格式文件中定位 / 插入 / 修改某处」**（「只动一个键值」听起来不像解析，但「找到那个键」本身就要解析）。**本闸门是指令层约束，MUST NOT 被表述为机械保证。**
+
+**计划文件名 SHALL 为 `tickets.md` 单名**〔adr/0042；adr/0033 的按轨分列语境成为历史〕。**在途 plan MUST NOT 被重命名**——完成判据窗口起点由 `git log --diff-filter=A -- <plan 路径>` 取得，该判据**不跟随重命名**，改名会把窗口起点推到改名 commit，使改名前的全部 checkpoint 标签落到窗口外、已完成 ticket 被判未完成并可能重派。∴ 在途 plan SHALL 保留原文件名直至该 change 归档。gate SHALL 经共享 resolver 定位计划文件：`tickets.md` 存在即用之；不存在则判 RUN_PLAN。
+
+出 ticket SHALL 落盘即返回编排层（ship），MUST NOT 在同一调用内直通执行——保 ship_gate 在出 ticket 后/执行前的校验插入点。原版 to-tickets 的 quiz-the-user 人类步 SHALL 删除（阶段三无人类门），粒度争议按 `T10-choice` 三级决策协议处理（①有客观判据自动选并**按三镜 + 主次**记理由；②无客观判据派 **strong 档**对抗镜复核推荐切分方案，通过方自动选；③复核不过或无从复核 defer）〔spec-review-amendment M3：首版此处漏了「按三镜 + 主次」限定词〕。**出票模式的仲裁记录 SHALL 有确定性审计落点**：写入 `impl-reports/planning-decisions.md`（change 目录内、git-tracked，由出票落盘的同一次 checkpoint 一并提交），行格式 = 「`T10-choice` 复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>」——出票模式无 code-review 报告产物，此前该仲裁结果**无处可落**〔spec-review-amendment M15〕。
+
+**出 ticket 模式 SHALL 在全部功能垂直切片之后追加一张强制的「实现验证」收尾 ticket**，`Blocked-by` 声明为全部功能 ticket 号，`R-ID` 为 `all`（语义 = 覆盖本 change 全部需求的聚合验证，Spec 轴据此核验而非逐条溯源）〔spec-review-amendment M6〕，其验收标准 SHALL 为「按下述发现契约运行本 change 的聚合测试套件（单元+集成+e2e）并全部通过」。
+
+**聚合套件发现契约（MUST NOT 解析构建文件）**〔spec-review-amendment Q6〕：① 命令来源优先级 = `openspec/config.yaml` 的 `test-suites.{unit,integration,e2e}` 显式配置 → 缺失则由该票 implementer 依仓内既有约定判定并在票报告写明命令原文与判定依据；② 「某命令能不能跑」SHALL 由**真跑一遍看退出码**回答，MUST NOT 靠解析 Makefile/package.json 预判 target 是否存在；③ 仓内确无某层时 SHALL 记「未覆盖（本仓无此层）」并附依据，**MUST NOT fail-closed 罢工**——`sdflow-implement` 的承诺是「不管什么项目都能跑完实现管线」，罢工分支直接背叛该承诺；④ 证据 SHALL 落确定性 schema，每层一行 `<层> | <命令原文> | <退出码> | <测试时 git rev-parse HEAD>`，未覆盖层写 `<层> | — | 未覆盖 | <依据>`；⑤ 退出码非 0 SHALL 分四类处置：本 change 引入的回归 → 进 fix 循环；仓内既有红测（以 base SHA 复跑确认）→ 记录放行；flaky（同命令复跑一次即绿）→ 记录放行；环境故障 → halt envelope 停并上抛。
+
+**`test-suites` SHALL 支持成本分档**〔curb-rework-loop-cost〕：每层的值为**字符串**时 quick 与 full 两档同命令（今日形状，继续有效）；为**映射**时读 `quick` / `full` 两键——缺 `quick` 视为该层无 quick 档，缺 `full` 视为未分档（quick=full 同命令）。旧形状是新形状的合法子集，**未配置的消费仓行为 SHALL 等同于扩展前**，MUST NOT 要求下游同步改配置。`test-suites` 的具体命令因项目而异，**SHALL 由 `sdflow-devenv` 运行时调研项目测试基础设施后推荐写入**（已有配置时保留不覆盖），本 change 只定义 schema 与消费语义。
+
+**中间 fix 轮与收口轮的测试范围 SHALL 分离，且范围 SHALL 由确定信息界定**〔curb-rework-loop-cost · adr/0035〕：
+
+- **中间 fix 轮** SHALL 只跑 **unit 全层**（整层跑、不做用例筛选；若该层配了 `quick` 则取 `quick`，**无 `quick` 则取 `full`——unit 层 MUST NOT 因缺 quick 档被跳过**）**加上轮失败的具体用例（⊂ unit 层）**；集成与 e2e SHALL 整体推迟到收口。中间轮的结果**仅供诊断，SHALL NOT 作为最终报告的通过证据**。
+- **收口时**（双轴审判通过、打完成标签之前）SHALL 跑一次全量（各层取 `full`），报告中所有判「通过」的行 SHALL 锚**同一个最终 SHA**（= 最后一次修复之后的 `git rev-parse HEAD`）。**单一盘面语义不变**〔原 impl-review-fix FIX-4〕：`unit@A → integration@B` 拼接式的「全部通过」依旧非法。
+- 🔴 **范围 MUST NOT 由「哪层受影响」的判断界定**——e2e 按定义端到端、集成测试跨模块，任何改动都可能影响它们，「本次不影响某层」是不可靠判断，把它放进关键路径等于把 fail-open 写进条款。**要求实施者为该判断写明依据不构成缓解**：要求解释一个不可靠判断，只会得到一个有说服力的错误判断。
+
+**该票 SHALL 走跟普通 ticket 相同的 implementer + 双轴审 + fix 循环**，但 SHALL 定制三处执行契约〔spec-review-amendment H9〕：① **豁免 red-before-green**（该票不写产品代码，验收物是证据不是 diff）；② **主证据锚 = 该票 impl-report 文件 + 其内的 SHA 三元组，MUST NOT 依赖该票产生 commit**（`checkpoint-commit.sh` 在干净树上直接成功退出、不建 commit，聚合套件一次绿时可能根本无 commit）；③ Standards 轴核验范围 SHALL 为「修复方式未靠**加 skip / 改测试配置 / 删除或弱化断言**蒙混过关」（原措辞只禁删除或弱化断言，挡不住加 skip）。
+
+**`sdflow-done` 的 verify SHALL 引用该票 impl-report 作为「实现期聚合覆盖」需求的证据锚，不扩张 verify 自身职责**；**锚的语义 SHALL 限定为「实现期结束时聚合套件通过」，MUST NOT 表述为「最终代码通过全量回归」**——该票执行于 `sdflow-code-review` 及其自动修复循环之前，code-review 之后的修复由其自身保障机制覆盖，此证据时效缺口是已知且接受的残余风险〔spec-review-amendment Q2〕。**该锚为无条件要求**（tickets 为唯一实现管线〔adr/0042〕）。
+
+**收尾票的存在与位置 SHALL 有机械保证**〔spec-review-amendment H12〕：`ship_gate` 的 plan 校验 SHALL 含一道——该 plan MUST 恰含一张「实现验证」收尾 ticket 且其 `Blocked-by` ⊇ 全部功能 ticket 号，不满足即判非 0〔adr/0042：旧名 grandfather 条款随双名退役删除〕。
+
+出票落盘前 SHALL 做一次全 ticket 语义一致性自扫（拓扑之外的语义矛盾，如某票假设的接口形状被另一票废弃）；发现矛盾按 `T10-choice` 三级决策协议处理（①有客观判据自动选并**按三镜 + 主次**记理由；②无客观判据派 **strong 档**对抗镜复核；③复核不过或无从复核则停并上抛），不批量问人，仲裁记录同样落 `impl-reports/planning-decisions.md`。
+
+**出票时 SHALL 评估并行安全性**〔spec-review-amendment〕：对 `Blocked-by` 声明使得 `next_ready` 可能同时返回的一组 ticket（即它们的 `Blocked-by` 集合是 `done` 集的子集，会同时出现在 ready 列表中），出票方 SHALL 确认——① 它们的行为边界不重叠（不改同一模块的同一接口）；② 一个的产出不是另一个的输入；③ 有疑问时 SHALL 保守声明依赖（宁可串行不可误并行）；④ 若产出多张 `Blocked-by` 覆盖全部其余票号的 ticket，SHALL 让后者追加声明对前者的 `Blocked-by`，确保收尾节点唯一（`next_ready` 只返回一个收尾候选）。该约束为指令层语义约束（出票方的模型判断）；兜底为 worktree 隔离下 `git merge --no-ff` 的原生冲突检测（真正的 fail-loud）——即使出票判断失误（两票改同一文件），各自 commit 到独立 worktree 分支，merge 回主分支时 git 正常冲突检测会 fail-loud（见「执行模式宿主条件化受限并行工作 frontier 并以文件交接」需求）。
+
+#### Scenario: 并行安全的 ticket 不声明互相 Blocked-by
+
+- **WHEN** 某 change 有 3 张功能 ticket，T2 改脚本 A，T3 改脚本 B，T4 改 SKILL.md 的不同段，三者均只 Blocked-by T1
+- **THEN** 出票方判定三者行为边界不重叠、产出不互为输入，保留 `Blocked-by: 1` 不加互相依赖
+
+#### Scenario: 有数据流依赖时保守声明串行
+
+- **WHEN** T2 新增一个函数，T3 的验收标准调用该函数
+- **THEN** 出票方 SHALL 让 T3 声明 `Blocked-by: 1,2`，确保 T3 在 T2 完成后才执行
+
+#### Scenario: 出 ticket 后 gate 先行校验再执行
+
+- **WHEN** 出 ticket 模式完成落盘并返回
+- **THEN** ship 重跑 ship_gate，plan 文件经 fence/标题/重号**及收尾票**四道校验后才发出 CONTINUE_IMPL，执行模式才被派发
+
+#### Scenario: 宽重构走 expand–contract
+
+- **WHEN** 某 tasks.md 条目是重命名共享符号类宽重构
+- **THEN** 出 ticket 为 expand ticket → 迁移批次 ticket（各自 Blocked-by expand）→ contract ticket（Blocked-by 全部迁移批次），不产出「一 ticket 打穿全仓」的伪垂直切片
+
+#### Scenario: 出票模式恒含实现验证收尾票
+
+- **WHEN** 出 ticket 模式产出 N 张功能垂直切片（3≤N≤6）
+- **THEN** `tickets.md` 额外含一张「实现验证」收尾 ticket，`Blocked-by` 全部 N 张功能票号，`R-ID: all`，不计入 3–6 预算计数
+
+#### Scenario: 缺少收尾票的 plan 被 gate 拒绝
+
+- **WHEN** `tickets.md` 不含收尾票，或其 `Blocked-by` 漏了某张功能票号
+- **THEN** ship_gate 判非 0 并指出缺失项
+
+#### Scenario: 仓内无 e2e 层时记未覆盖而非罢工
+
+- **WHEN** 收尾票 implementer 判定本仓确无 e2e 层
+- **THEN** 证据行记 `e2e | — | 未覆盖 | <判定依据>`，该票仍可通过双轴审，MUST NOT 因缺层停机
+
+#### Scenario: 粒度争议派 strong 档复核并落审计
+
+- **WHEN** design.md 无「切片建议」节，编排层需自主决定切分方案且存在 ≥2 个合理候选
+- **THEN** 无客观判据可判时派一个 strong 档对抗镜复核推荐的切分方案，不问用户；仲裁结论按行格式落 `impl-reports/planning-decisions.md`
+
+#### Scenario: 一致性自扫发现矛盾派 strong 档复核
+
+- **WHEN** 全 ticket 语义一致性自扫发现某票假设的接口形状被另一票明确废弃，且无客观判据可自动选
+- **THEN** 派一个 strong 档对抗镜复核该矛盾的处置方案，复核不过或无从复核则停并上抛，不批量问人，仲裁结论落 `impl-reports/planning-decisions.md`
+
+#### Scenario: 中间 fix 轮不跑集成与 e2e
+
+- **WHEN** 收尾票的聚合套件在某轮失败，implementer 修复后进入下一轮
+- **THEN** 该轮只跑 unit 全层加上轮失败的具体用例（⊂ unit 层），集成与 e2e 不跑；该轮报告中集成/e2e 层 SHALL NOT 出现「通过」证据行
+
+#### Scenario: 收口轮跑全量且所有通过行锚同一 SHA
+
+- **WHEN** 双轴审判定该票通过、准备打完成标签
+- **THEN** 各层取 `full` 命令跑一次全量，报告中所有判「通过」的行锚同一个最终 SHA；若某层的通过行锚在更早的 SHA 上，该报告 SHALL 判不合格
+
+#### Scenario: 未配 quick 档的消费仓行为不变
+
+- **WHEN** 某消费仓的 `test-suites.unit` 仍是字符串形状（未分档）
+- **THEN** quick 与 full 两档均取该字符串命令，行为等同于扩展前，MUST NOT 因缺 quick 档报错或罢工
+
+#### Scenario: 验收标准要求解析无界语法面时被出票闸门拦下
+
+- **WHEN** 某待出 ticket 的验收标准写作「静态门须能识别私有 Tab/focus trap 指纹」或「窄范围 patch 逻辑只动 YAML 的某单键值」
+- **THEN** 出票方 SHALL 判该语法面无界并改写该验收标准——改为让该工具自己回答（真跑一遍 / 调权威解析器），或降级为不作判定依据的展示；MUST NOT 原样出票
 

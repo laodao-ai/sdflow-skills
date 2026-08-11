@@ -112,40 +112,6 @@
 - **WHEN** 运行机器未安装 gstack skill
 - **THEN** sdflow-code-review 全流程 SHALL 正常完成（Step1 无降级日志、无模拟分支）——scope 审计为自持能力，MUST NOT 依赖任何 gstack 资产在场
 
-### Requirement: 阶段三过设计门后连续自动跑到 merge
-
-阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `实现管线 → sdflow-code-review → sdflow-done`；实现管线为可选双轨——缺省 `writing-plans → subagent-dev`，或经 `impl-orchestration` 能力的手动路由（config 键 + 盘面 marker，缺省/非法值一律 superpowers）选择 `sdflow-implement 双模式（出 ticket → 执行）`；**编排层入口 = `/sdflow-ship`**（一次调用驱动 5.5→9，按「阶段三编排台账确定性」需求经 ship_gate 推进；手动逐步仍为合法 reference 路径）。**两轨的计划文件名 SHALL 分列**——tickets 轨 `tickets.md`、superpowers 轨 `superpowers-plan.md`，由 gate 与 route helper 经同一份共享 resolver 定位；两者同时存在 SHALL fail-closed 判 UNKNOWN；**文件名 MUST NOT 参与轨道路由判定**（路由权威仍是 config 键 + plan frontmatter marker）〔spec-review-amendment · adr/0033〕。管线选择 MUST NOT 引入模型自动判断，MUST NOT 新增人类门。实现管线内不可消解的 BLOCKED 停机属「defer-to-human 异常终态」而非人类门——与既有 BLOCKED_UPSTREAM 同构（停并上抛、人工再入口），不违背「无阻塞人类门」承诺（正常路径仍连续到 merge）〔spec-review-amendment F7〕。能修的自动修；**遇 ≥2 方案 MUST 按三级决策协议 `T10-choice`**〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名。语义边界见 `adr/0031`：本规则**只覆盖「多个候选方案选哪个」**，`sdflow-implement` 的「同一发现反复未消解」熔断由 `review-loop-breaker` 独立定义，两者 MUST NOT 互相引用〕：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次**记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告；出票模式无报告产物时落 `impl-reports/planning-decisions.md`）；③复核不过或无从复核 → defer 进 buglist/todolist 并由 hand-off 引导另开 change 清理。MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。修不了或需拍板的 MUST 进 buglist/todolist 延后。
-
-#### Scenario: 修不了的问题延后而非阻塞
-
-- **WHEN** sdflow-code-review 发现一个本 change 修不掉的问题
-- **THEN** 它进 buglist/todolist(defer) 并写入 hand-off，流程继续跑到 sdflow-done，不设人类门阻塞
-
-#### Scenario: 无客观判据的两方案走 strong 档对抗复核
-
-- **WHEN** 阶段三某步遇两个可行方案且无测试/断言可判优劣
-- **THEN** 派 strong 档对抗镜尝试证伪推荐方案：未被证伪 → 自动选并按三镜+主次记复核记录；被证伪或复核无法开展 → defer，MUST NOT 凭"有把握"直接选，MUST NOT 用 mid 档同档互判代替 strong 档仲裁
-
-#### Scenario: 一次调用驱动到 merge 建议
-
-- **WHEN** 对已过设计门的 change 调用 /sdflow-ship 且各步门禁全通过
-- **THEN** 链依 gate 判定逐步推进至 sdflow-done 完成（含 merge 缺省语义），输出最终摘要；全程无 AskUserQuestion
-
-#### Scenario: ship 零 git 写操作、merge 意图透传〔grill-amendment〕
-
-- **WHEN** 用户以"跑到 merge 前停"类意图调用 /sdflow-ship
-- **THEN** ship 将 opt-out 原样透传给 sdflow-done（merge 由 done 一处执行/跳过）；ship 自身 MUST NOT commit/merge/push，MUST NOT 自动 push（摘要提醒手动 push；toolkit 源仓附激活提示）
-
-#### Scenario: 实现管线按手动确定值路由
-
-- **WHEN** gate 判定 RUN_PLAN 且 config 键值为 `tickets`
-- **THEN** ship 派发 sdflow-implement 出 ticket 模式；键缺省/非法/为 superpowers 时派发 writing-plans，行为与本变更前一致；CONTINUE_IMPL 一律按 plan 文件 marker 路由
-
-#### Scenario: 计划文件按轨定位且双存在即停
-
-- **WHEN** gate 需要定位某 change 的计划文件
-- **THEN** 经共享 resolver 依次探测 `tickets.md` 与 `superpowers-plan.md`：命中其一即用之；两者皆无判 RUN_PLAN；**两者同时存在判 UNKNOWN 并提示人工删除其一**，MUST NOT 猜测哪个有效
-
 ### Requirement: verify 为收尾最终门，位于所有修复之后
 
 `sdflow-done` 的 verify MUST 在本 change 全部修复之后运行作为最终完整性门，SHALL NOT 前移进 sdflow-code-review（否则修复后 verify 结果 stale）；verify 判 ✅ 的每条需求 MUST 附一个可机验证据锚点（测试名/commit/文件:行），无锚点的 ✅ MUST 降级为 gap。
@@ -461,10 +427,10 @@ skills（sdflow-spec-review / sdflow-code-review / sdflow-done / sdflow-buglist�
 
 #### Scenario: 前置产物缺失点名
 - **WHEN** 某步产物缺失（如 code-review-report.md 不在）
-- **THEN** gate 输出 next=对应 skill 与 missing 清单，编排按此推进；实现完成判据 MUST 以 **git 历史 checkpoint 任务标签为主锚**（plan 任务数 N 对 checkpoint 去重任务号集，齐 N 判完成〔grill-amendment〕；标签 MUST 按 change 命名空间归属过滤 `checkpoint(<change>:task<k>-`（裸 `checkpoint(task<k>-` 向后兼容），见下「命名空间隔离」Scenario 组〔ship-gate-hardening-2〕；**收集窗口 MUST 为含 superpowers-plan.md 首次提交自身的闭区间 `[sha, HEAD]`**——即 `git log <sha>..HEAD --no-merges` 加对 `<sha>` 自身 commit subject 的同规则解析；plan 与首个 task 锚同 commit（checkpoint `add -A` 携带未提交 plan 的合法盘面）时该 task MUST 计入，MUST NOT 漏数〔B1 修复，替换旧排他窗口表述〕；MUST NOT 全历史扫描——main 遗留标签会造成假齐 N〔spec-review-amendment 设计门拍板 Q2〕；plan 标题命中 0 → UNKNOWN；**重号 `### Task <n>:` 段 → UNKNOWN**〔ship-gate-hardening-2〕）、plan 复选框**按 `### Task <n>:` 段绑定**为辅（MUST NOT 全局全勾放行所有 task，见下「分段绑定」Scenario 组〔ship-gate-hardening-2〕），两通道皆不可判时 gate 判 UNKNOWN 停上抛，MUST NOT 猜测推进、MUST NOT 以 gitignored 的 SDD ledger 为判据
+- **THEN** gate 输出 next=对应 skill 与 missing 清单，编排按此推进；实现完成判据 MUST 以 **git 历史 checkpoint 任务标签为主锚**（plan 任务数 N 对 checkpoint 去重任务号集，齐 N 判完成〔grill-amendment〕；标签 MUST 按 change 命名空间归属过滤 `checkpoint(<change>:task<k>-`（裸 `checkpoint(task<k>-` 向后兼容），见下「命名空间隔离」Scenario 组〔ship-gate-hardening-2〕；**收集窗口 MUST 为含计划文件（`tickets.md`）首次提交自身的闭区间 `[sha, HEAD]`**——即 `git log <sha>..HEAD --no-merges` 加对 `<sha>` 自身 commit subject 的同规则解析；plan 与首个 task 锚同 commit（checkpoint `add -A` 携带未提交 plan 的合法盘面）时该 task MUST 计入，MUST NOT 漏数〔B1 修复，替换旧排他窗口表述〕；MUST NOT 全历史扫描——main 遗留标签会造成假齐 N〔spec-review-amendment 设计门拍板 Q2〕；plan 标题命中 0 → UNKNOWN；**重号 `### Task <n>:` 段 → UNKNOWN**〔ship-gate-hardening-2〕）、plan 复选框**按 `### Task <n>:` 段绑定**为辅（MUST NOT 全局全勾放行所有 task，见下「分段绑定」Scenario 组〔ship-gate-hardening-2〕），两通道皆不可判时 gate 判 UNKNOWN 停上抛，MUST NOT 猜测推进、MUST NOT 以 gitignored 的 SDD ledger 为判据
 
 #### Scenario: plan 与首个 task 锚同 commit 不漏数〔B1〕
-- **WHEN** superpowers-plan.md 的首次提交 commit 本身就是 `checkpoint(task1-<slug>)` 提交（plan 未单独提交、被首个 task 的 checkpoint `add -A` 一并携带入库）
+- **WHEN** `tickets.md` 的首次提交 commit 本身就是 `checkpoint(task1-<slug>)` 提交（plan 未单独提交、被首个 task 的 checkpoint `add -A` 一并携带入库）
 - **THEN** gate 的完成任务号集 MUST 含 task1（窗口为含该 commit 自身的闭区间），plan 任务数 N 齐时 MUST NOT 输出 CONTINUE_IMPL 误报
 
 #### Scenario: 陈旧 FAIL 不卡死 resume〔grill-amendment D9〕
@@ -509,7 +475,7 @@ design 域监视集 SHALL 保持固定四件套不变。豁免 SHALL 仅覆盖**
 #### Scenario: 豁免面 MUST NOT 由被监管方书写的声明决定〔spec-review-amendment〕
 
 - **WHEN** 设计判据在「内容等值」与「被监管方可书写的声明」（commit subject、某文件是否存在、工作树状态）之间取舍
-- **THEN** 豁免判据 MUST 取自被比较的内容本身；MUST NOT 以 `superpowers-plan.md` 的存在性、或除既有 `checkpoint(impl-review)` 精确式之外的任何 subject 形态，作为 `tasks.md` 豁免的判据
+- **THEN** 豁免判据 MUST 取自被比较的内容本身；MUST NOT 以计划文件（`tickets.md`）的存在性、或除既有 `checkpoint(impl-review)` 精确式之外的任何 subject 形态，作为 `tasks.md` 豁免的判据
 - **AND** 既有 `checkpoint(impl-review)` 精确式 subject 豁免（BR-7）MUST 逐字保留、不受本条影响
 
 #### Scenario: 失鲜 REFUSE_START 须携带触发点与处置指引
@@ -1406,8 +1372,8 @@ design 域失鲜保护的风险是「照着一份已经变了的设计继续建�
 
 #### Scenario: 实现期不得让设计门失鲜
 
-- **WHEN** 设计门拍板后进入实现期，提交改动源码文件，并把 `superpowers-plan.md` 中该 ticket 的验收复选框由 `- [ ]` 勾成 `- [x]`
-- **THEN** gate MUST 判 design 域 fresh——源码与 `superpowers-plan.md` 均不在 design 域监视集内
+- **WHEN** 设计门拍板后进入实现期，提交改动源码文件，并把计划文件 `tickets.md` 中该 ticket 的验收复选框由 `- [ ]` 勾成 `- [x]`
+- **THEN** gate MUST 判 design 域 fresh——源码与 `tickets.md` 均不在 design 域监视集内
 - **AND** **监视集是承重的**：任何令实现期提交使设计门失鲜的实现（如裸 `reviewed_sha == HEAD` 比较）MUST 判为不合格
 
 #### Scenario: `specs/` 子树的新增、删除与 rename 均判失鲜
@@ -1673,20 +1639,6 @@ FF-0 PreToolUse hook SHALL 仅在整条命令完整匹配有限的单条直接 l
 - **WHEN** 用户运行 `setup.sh`
 - **THEN** `~/.claude/skills/` 下无 `embedded-test-sop` 链接（skill 目录已从源仓删除）
 
-### Requirement: impl-pipeline 缺省为 tickets
-
-`impl_route.py` 的 `route` 子命令 SHALL 在 `openspec/config.yaml` 无 `impl-pipeline` 键时默认路由到 `tickets` 管线（`sdflow-implement`）。显式 `impl-pipeline: superpowers` 仍路由到旧管线（`writing-plans → subagent-driven-development`）。
-
-#### Scenario: 无 impl-pipeline 键默认走 tickets
-
-- **WHEN** 项目 config.yaml 不含 `impl-pipeline` 键
-- **THEN** `impl_route.py route` 输出 `pipeline=tickets`
-
-#### Scenario: 显式 superpowers 不受影响
-
-- **WHEN** 项目 config.yaml 含 `impl-pipeline: superpowers`
-- **THEN** `impl_route.py route` 输出 `pipeline=superpowers`
-
 ### Requirement: 代码审 finding 须引出触发行原文（pre-emit 引文纪律）
 
 Step2 各镜子代理产出的每条 finding MUST 附「触发该 finding 的具体代码行」的**结构化**引用（`{file, line, quote}`，DD4/adr-0041——机械引用核 `findings_ref_check.py` 消费此字段，MUST NOT 只写散文引用）；引文指向框架元构造生成的符号时（ORM 声明/装饰器/迁移文件），SHALL 引创建该符号的元构造原文而非期待字面名出现在类体。**非局部 finding（缺失校验 / 跨文件数据流 / 时序竞态 / absence 类——无单一触发行者）SHALL 以「可复核证据包」（`evidence_pack`）替代单行引文**：多处 file:line 逐字引文、或「应在而不在」的缺失对照（引出本应包含该防护的位置原文），仍 MUST 可复核定位；MUST NOT 因「引不出单一触发行」让此类 finding 被误判为「无引文无证据包」而机械裁掉（否则与 CR-11「必须读 diff 外代码」自相矛盾、系统性压制依赖链/时序/缺失性 bug）〔spec-review-amendment〕——非局部 finding 只要携带 `evidence_pack` 即在机械引用核中归 `uncheckable`（不裁，直进裁决层），不归 `fail`。**既无单行引文（结构化 `file`/`line`/`quote`）、又无可复核证据包（`evidence_pack`）的 finding**⇒ 机械引用核判 `fail`（`reason=no-quote-no-evidence`，implement-workflow-optimization-2026-08-p2 DD4）⇒ **机械裁掉**，标 `[ref-check]`，按反静默压制条款在「已裁掉」区一行留痕（可审计），不进裁决层。
@@ -1717,4 +1669,38 @@ Step2 各镜子代理产出的每条 finding MUST 附「触发该 finding 的具
 #### Scenario: 条件满足照常派发
 - **WHEN** 该镜的派发条件被本轮 diff 满足
 - **THEN** 照常 fan-out，锚行按实际执行落，与无条件镜无差别
+
+### Requirement: 阶段三过设计门后连续自动跑到 merge（tickets 唯一管线）
+
+阶段三 SHALL 在阶段二设计门之后无任何阻塞人类门地连续运行 `sdflow-implement 双模式（出 ticket → 执行）→ sdflow-code-review → sdflow-done`；tickets 为唯一实现管线〔adr/0042〕；**编排层入口 = `/sdflow-ship`**（一次调用驱动 5.5→9，按「阶段三编排台账确定性」需求经 ship_gate 推进；手动逐步仍为合法 reference 路径）。**计划文件名为 `tickets.md` 单名**，由 gate 经共享 resolver 定位，不存在判 RUN_PLAN〔adr/0042；adr/0033 分列语境成为历史〕。管线派发 MUST NOT 引入模型自动判断，MUST NOT 新增人类门。实现管线内不可消解的 BLOCKED 停机属「defer-to-human 异常终态」而非人类门——与既有 BLOCKED_UPSTREAM 同构（停并上抛、人工再入口），不违背「无阻塞人类门」承诺（正常路径仍连续到 merge）〔spec-review-amendment F7〕。能修的自动修；**遇 ≥2 方案 MUST 按三级决策协议 `T10-choice`**〔具名规则，取代旧「T10」单一编号；"T10" 保留为历史别名。语义边界见 `adr/0031`：本规则**只覆盖「多个候选方案选哪个」**，`sdflow-implement` 的「同一发现反复未消解」熔断由 `review-loop-breaker` 独立定义，两者 MUST NOT 互相引用〕：①有客观判据（测试/断言/基准可判）→ 自动选并**按三镜 + 主次**记理由；②无客观判据 → 派 **strong 档**对抗镜复核推荐项，通过方自动选（复核记录进报告；出票模式无报告产物时落 `impl-reports/planning-decisions.md`）；③复核不过或无从复核 → defer 进 buglist/todolist 并由 hand-off 引导另开 change 清理。MUST NOT 以自评置信（"有把握"）作为自动选定的唯一依据。修不了或需拍板的 MUST 进 buglist/todolist 延后。
+
+#### Scenario: 修不了的问题延后而非阻塞
+
+- **WHEN** sdflow-code-review 发现一个本 change 修不掉的问题
+- **THEN** 它进 buglist/todolist(defer) 并写入 hand-off，流程继续跑到 sdflow-done，不设人类门阻塞
+
+#### Scenario: 无客观判据的两方案走 strong 档对抗复核
+
+- **WHEN** 阶段三某步遇两个可行方案且无测试/断言可判优劣
+- **THEN** 派 strong 档对抗镜尝试证伪推荐方案：未被证伪 → 自动选并按三镜+主次记复核记录；被证伪或复核无法开展 → defer，MUST NOT 凭"有把握"直接选，MUST NOT 用 mid 档同档互判代替 strong 档仲裁
+
+#### Scenario: 一次调用驱动到 merge 建议
+
+- **WHEN** 对已过设计门的 change 调用 /sdflow-ship 且各步门禁全通过
+- **THEN** 链依 gate 判定逐步推进至 sdflow-done 完成（含 merge 缺省语义），输出最终摘要；全程无 AskUserQuestion
+
+#### Scenario: ship 零 git 写操作、merge 意图透传〔grill-amendment〕
+
+- **WHEN** 用户以"跑到 merge 前停"类意图调用 /sdflow-ship
+- **THEN** ship 将 opt-out 原样透传给 sdflow-done（merge 由 done 一处执行/跳过）；ship 自身 MUST NOT commit/merge/push，MUST NOT 自动 push（摘要提醒手动 push；toolkit 源仓附激活提示）
+
+#### Scenario: 实现步直连派发
+
+- **WHEN** gate 判定 RUN_PLAN（或 CONTINUE_IMPL 且 JSON `done_tasks` 为已完成号集）
+- **THEN** ship 直接派发 sdflow-implement 出 ticket 模式（或执行模式，`done_tasks` 原样透传），全程无路由 helper 调用
+
+#### Scenario: 计划文件单名定位
+
+- **WHEN** gate 需要定位某 change 的计划文件
+- **THEN** 经共享 resolver 探测 `tickets.md`：存在即用之；不存在判 RUN_PLAN
 
