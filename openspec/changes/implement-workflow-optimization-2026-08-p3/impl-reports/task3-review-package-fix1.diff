@@ -1,0 +1,59 @@
+# Review package: 9b41758ead626b19f7a076ff67b39b79f01980f3..f3a6f3ac89ae90d79844e0487bfd5f86a34de2c3 (Task 3 fix round 1)
+
+## Commits
+f3a6f3a fix(sdflow-upstream-watch): 报告模板去掉 anchor_sha 引用，改用 head_sha
+
+## Files changed
+ sdflow-upstream-watch/SKILL.md | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/sdflow-upstream-watch/SKILL.md b/sdflow-upstream-watch/SKILL.md
+index 1f00f6d..e2b9021 100644
+--- a/sdflow-upstream-watch/SKILL.md
++++ b/sdflow-upstream-watch/SKILL.md
+@@ -233,42 +233,42 @@ facts 来源：openspec/upstream/.facts/<facts文件名>.json
+ 
+ - **T245**：<标题>。与 T246 共享同一个前置人工决定——是否解除 design D8
+   （matt-workflow-integration）把 implementer 档位钉死为 mid 档的试点期变量控制约束；
+   该决定未定前两条均分诊为**观望**。
+ - **T246**：<标题>。同上，共享 D8 mid 档钉死解除的前置决定，分诊为**观望**。
+ - **T267**：<标题>。gstack Pass-2 遗留、python.md checklist domain 尚未建立，分诊为
+   **<按当轮证据判定：吸收候选/观望/不吸>**。
+ 
+ ## gstack
+ 
+-**采集状态**：ok（锚 `<anchor_sha 或"无（首轮）">` .. `<head_sha>`）/ degraded（<原因>）
++**采集状态**：ok（HEAD `<head_sha>`）/ degraded（<原因>）
+ 
+ - `<sha>` <subject> — **分诊**：吸收候选 / 观望 / 不吸。理由：<与本仓同类面一句对照>。
+   （若吸收候选，附预生成命令，见下方「入池衔接」模板）
+ - …
+ 
+ （若 degraded）**采集降级**：<原因>，请自行核查 <上游 URL>。
+ 
+ ## matt
+ 
+ **采集状态**：同上结构；`installed_skills`（若 facts 附带）列出本地已装 skill 的 hash 对照。
+ 
+ （本地元数据格式漂移分支——`.skill-lock.json` 键路径断言失败时）
+ **采集降级：格式漂移**。请核查本地文件 `~/.agents/.skill-lock.json` 的
+ `skills[].source` / `skills[].skillFolderHash` 键路径（不是"请查上游 URL"——这是本地文件
+ 形状问题）。
+ 
+ …
+ 
+ ## superpowers
+ 
+-**采集状态**：ok（marketplace 锚 `<anchor_sha>` .. `<head_sha>`，`installed_version`=<本地已装版本>）
++**采集状态**：ok（marketplace HEAD `<head_sha>`，`installed_version`=<本地已装版本>）
+ / degraded
+ 
+ - marketplace.json 变更 commit `<sha>`（`commits[i]`）→ 该版本 superpowers 条目
+   `source.sha` = `<source_sha_sequence[i]>` —
+   **分诊**：吸收候选 / 观望 / 不吸。理由：<...>。`commits` 与 `source_sha_sequence` 按同一
+   索引一一对应（facts 数据结构），逐项配对呈现，不要只摘录 `source_sha_sequence` 丢掉可供
+   `advance` 校验的 marketplace 仓 commit sha。
+ 
+ （本地元数据格式漂移分支——`installed_plugins.json` 键路径断言失败时）
+ **采集降级：格式漂移**。请核查本地文件 `~/.claude/plugins/installed_plugins.json` 的
