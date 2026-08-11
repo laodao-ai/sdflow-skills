@@ -39,13 +39,13 @@ impl-pipeline: tickets
 6. 实现外部子进程统一超时常量（单点定义，默认 60s）。
 7. 测试覆盖：cwd 守卫（非本仓 cwd 拒绝零写入）+ anchors 语义（首轮初始化 / yq 失败硬停 / 值缺失无锚）。
 
-- [ ] SKILL.md 骨架已建、通则托管块已注入（sync_principles --apply 绿且计数 +1）
-- [ ] `openspec/upstream/` 目录在 git 中（reports/ 有 .gitkeep）
-- [ ] cwd 守卫在非 sdflow-skills 仓 cwd 下 fail-loud 退出且零写入
-- [ ] anchors.yaml 三态读写正确（缺失=初始化 / yq 坏=硬停 / 值缺失=无锚）
-- [ ] mikefarah-flavor yq 探测正确，非 mikefarah 报错
-- [ ] 超时常量单点定义且 argparse 入口可用
-- [ ] 上述各路径有对应 pytest 测试绿
+- [x] SKILL.md 骨架已建、通则托管块已注入（sync_principles --apply 绿且计数 +1）
+- [x] `openspec/upstream/` 目录在 git 中（reports/ 有 .gitkeep）
+- [x] cwd 守卫在非 sdflow-skills 仓 cwd 下 fail-loud 退出且零写入
+- [x] anchors.yaml 三态读写正确（缺失=初始化 / yq 坏=硬停 / 值缺失=无锚）
+- [x] mikefarah-flavor yq 探测正确，非 mikefarah 报错
+- [x] 超时常量单点定义且 argparse 入口可用
+- [x] 上述各路径有对应 pytest 测试绿
 
 ### Task 2: 四源采集器 + facts 输出 + advance 门
 

@@ -1,0 +1,1678 @@
+# Review package: 3eb8aac5cb0efd210512b76efc3ae6feb8722f36..63328ba9bc3f9f6a3bb827977da63246c4c89f77
+
+## Commits
+63328ba feat(sdflow-upstream-watch): 四源采集器 + facts 输出 + advance 门
+
+## Files changed
+ .gitignore                                         |   3 +
+ .../impl-reports/task2-brief.md                    |  27 +
+ .../impl-reports/task2-collectors.md               | 186 ++++++
+ sdflow-upstream-watch/scripts/upstream_watch.py    | 504 +++++++++++++-
+ sdflow-upstream-watch/tests/test_upstream_watch.py | 744 ++++++++++++++++++++-
+ 5 files changed, 1441 insertions(+), 23 deletions(-)
+
+## Diff
+diff --git a/.gitignore b/.gitignore
+index 19e0bcb..fdacb12 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -22,10 +22,13 @@ node_modules/
+ 
+ # Python 运行期产物（防 checkpoint-commit.sh 的 git add -A 把测试/运行生成的字节码缓存
+ # 裹进手写 commit——batch-triage 大扫除批一项一 commit 协议同根因风险）[impl-review-fix]
+ __pycache__/
+ *.pyc
+ .pytest_cache/
+ /openspec/issues/.recorder.lock
+ 
+ # FF-0 守卫的一次性 ack 哨兵（人 touch、hook 读到即删）——本地令牌，不该入库
+ /openspec/.ff0-ack
++
++# sdflow-upstream-watch facts 中间产物（collect 写、advance 读，一轮一份，非留存状态）
++/openspec/upstream/.facts/
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task2-brief.md b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task2-brief.md
+new file mode 100644
+index 0000000..ead8afa
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task2-brief.md
+@@ -0,0 +1,27 @@
++### Task 2: 四源采集器 + facts 输出 + advance 门
++
++**Blocked-by:** 1
++**R-ID:** R1, R2, R3
++
++在 Task 1 建立的骨架上实现全部采集逻辑与锚推进门：
++
++1. gstack 采集器：既有 checkout `git fetch origin` + `merge-base --is-ancestor` 锚祖先守卫 + `log --name-only 锚..FETCH_HEAD`；checkout 缺失→degraded；首轮以本地 checkout HEAD 为天然锚出真 delta。
++2. bare 缓存采集器（matt / superpowers 共用缓存层）：`clone --filter=blob:none --bare` 到 `~/.cache/sdflow-upstream/`（已存在则 fetch；fetch 失败→删缓存重 clone 自愈）+ is-ancestor 守卫；matt 取 `log --name-only 锚..HEAD`；superpowers 取 marketplace.json superpowers 条目 `source.sha` 字段变化序列（MUST NOT 路径过滤）。
++3. openspec 采集器：`openspec --version` vs `npm view` 版本对照 + schema fork 双侧逐文件 sha256 对比（changed/added/removed 清单，零解析）。
++4. 本地元数据键路径断言（`installed_plugins.json` superpowers 条目 / `.skill-lock.json`）：断言失败→显式格式漂移 degraded；多记录数组取值策略：优先 scope=user、无则版本最大。
++5. facts JSON 输出（per-source，落 `.facts/<UTC时间戳>.json` + `.gitignore`）。
++6. `advance` 双参数前置校验（报告缺失/报告缺 facts 任一 commit sha→非零退出锚不动；观测值只读 facts 禁网络；degraded 源锚逐字保留）。
++7. 测试覆盖：advance 门（报告缺/缺 sha 拒推/正常推/degraded 不动）+ 采集器降级矩阵（单源不可达/超时/本地缺失/格式漂移/多 scope/非祖先/缓存自愈）+ schema drift（changed/added/removed + 上游缺失降级）+ superpowers 字段追踪 + R5 不改池不变量 + facts 形状快照断言。
++
++- [ ] gstack 采集器在有 checkout 时产出正确 delta（含首轮天然锚逻辑），checkout 缺失时 degraded
++- [ ] bare 缓存采集器正确处理 matt（log --name-only）和 superpowers（marketplace.json source.sha 字段追踪）
++- [ ] bare 缓存 fetch 失败自愈一次、再失败 degraded
++- [ ] is-ancestor 守卫对三个 git 源生效，非祖先时 degraded
++- [ ] openspec 采集器版本对照 + schema drift 清单（changed/added/removed）正确
++- [ ] 元数据键路径断言失败→格式漂移 degraded（不给错锚）；多 scope 取值正确
++- [ ] facts JSON 形状正确落盘 + .gitignore 生效
++- [ ] advance 门：报告缺失拒推/缺 sha 拒推/正常推进 + last_run 更新/degraded 锚不动
++- [ ] 单源失败不传染（四源降级矩阵测试绿）
++- [ ] R5 不变量：collect+advance 后 issues 树无变化
++- [ ] 上述全部路径有对应 pytest 测试绿
++
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task2-collectors.md b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task2-collectors.md
+new file mode 100644
+index 0000000..48f5bd3
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task2-collectors.md
+@@ -0,0 +1,186 @@
++# Task 2 impl-report: 四源采集器 + facts 输出 + advance 门
++
++**R-ID:** R1, R2, R3
++**Ticket:** Task 2（tickets.md，Blocked-by 1）
++**范围声明**：在 Task 1 骨架上实现四源采集逻辑（gstack / matt / superpowers / openspec）、
++facts JSON 输出、`advance` 报告+facts 双参数绑定门。SKILL 编排正文、`sdflow-upgrade` 消费端、
++README 登记属 Task 3，未在本票触碰。
++
++## 做了什么
++
++### 1. 通用 git 子进程小工具
++
++- `_rev_parse` / `_assert_is_ancestor` / `_git_log_delta`（`--pretty=%H\t%s` 可控格式串 +
++  `--name-only` 提取，零解析上游内容，基准 5）。
++- `_ensure_bare_cache(cache_dir, upstream_url)`：matt / superpowers 共用的 blobless bare
++  缓存层。**关键实测坐实**（design.md TD2 文字写的是「HEAD」语义）：bare clone **不会**
++  自动配置 `remote.origin.fetch` refspec，裸调用 `git fetch origin`（无 refspec）只落
++  `FETCH_HEAD`、**不会**前移本地 `refs/heads/*`——若照此实现，`log 锚..HEAD` 永远读不到新
++  提交（HEAD 语义死锁）。实测验证后改为显式 `fetch origin '+refs/heads/*:refs/heads/*'`
++  （`+` 前缀允许非快进强制更新，对齐「上游可能 force-push」场景），令裸仓 `HEAD` 真实前移。
++  fetch 失败 → 删缓存重 clone 一次自愈，再失败才 `CollectError`（原因文案含缓存路径）。
++
++### 2. gstack 采集器（`collect_gstack`）
++
++既有 checkout `fetch origin` + `merge-base --is-ancestor` 锚祖先守卫 +
++`log --name-only 锚..FETCH_HEAD`。checkout 缺失 → `CollectError`「本地 checkout 不存在」。
++无持久锚（首轮）→ 以本地 checkout 现有 `HEAD` 为天然锚，出真 delta。
++
++### 3. matt 采集器（`collect_matt`）
++
++bare 缓存 `log --name-only 锚..HEAD` + `.skill-lock.json` 键路径断言（仅校验
++`source == "mattpocock/skills"` 的条目须含 `skillFolderHash`，其余来源的 skill 不是断言
++目标——避免把 vercel-labs/skills 等其他来源的形状差异误报成 matt 的格式漂移）。
++`.skill-lock.json` 文件缺失 = 无辅助信息（非错误，与「格式漂移」是两条不同分支）。
++无持久锚 → 「无锚 ⇒ 当前上游态即基线」零 delta。
++
++### 4. superpowers 采集器（`collect_superpowers`）
++
++`installed_plugins.json` 键路径断言 + 多 scope 取值策略（优先 `scope=user`，无则
++`_version_sort_key` 数值化 token 排序取最大——特意用 `"1.9.0"` vs `"1.10.0"` 的测试用例
++证明不是词典序，因为词典序会把 `"1.9.0"` 误判为更大）+ marketplace bare 缓存追踪：
++`log --reverse 锚..HEAD -- .claude-plugin/marketplace.json` 圈定触碰该文件的 commit
++（**MUST NOT 用 `plugins/superpowers` 路径过滤**——design.md 已实查坐实该仓不 vendor 插件
++内容，该路径永远不存在），逐 commit `git show <sha>:.claude-plugin/marketplace.json` 读取
++superpowers 条目的 `source.sha` 字段（有界 JSON 字段提取，非手搓解析）。`commits` 字段
++（advance 门读取转录校验的对象）= marketplace 仓自身的 commit sha 序列；
++`source_sha_sequence` = 提取出的 obra/superpowers 被打包 commit 序列（供报告引用，不参与
++advance 门校验，因为它不是「facts 里的 commit sha」而是文件字段值）。
++
++### 5. openspec 采集器（`collect_openspec`）
++
++`openspec --version` vs `npm view @fission-ai/openspec version` 版本对照 +
++fork 目录（`sdflow-init/assets/schemas/sdflow-spec-driven/`）vs `npm root -g` 定位的上游
++安装目录逐文件整字节 sha256 对比（`_diff_dirs_sha256`，changed/added/removed 三分类，方向
++按 spec Scenario 明定：`added` = 上游有 fork 没有，`removed` = fork 有上游没有）。
++**子项独立降级**：上游 schema 目录定位失败只让 `schema_drift` 子项标 degraded，外层
++`status`（版本对照）不受影响——直接对应 spec Scenario「上游 schema 目录定位失败降级」。
++
++### 6. facts 编排 + `collect` 子命令
++
++`collect_all(anchors, *, repo_root, home=None)`：四源经 `_collect_source_safe` 隔离
++（`CollectError` / `subprocess.TimeoutExpired` / `OSError` 均转 `{status: degraded, reason}`，
++单源失败不传染）。`cmd_collect` 落 `openspec/upstream/.facts/<UTC时间戳>.json`
++（`schema_version` + `collected_at` + `sources`），已加 `.gitignore`（根 `.gitignore` 新增
++`/openspec/upstream/.facts/`）。
++
++### 7. `advance` 报告+facts 双参数门
++
++`advance <report-path> <facts-path>`（`argparse` 两个 `nargs="?"` 可选位置参数——**未做成
++`required` 位置参数**：guard_cwd() 必须永远是第一道检查，Task 1 既有 CLI 测试断言非本仓 cwd
++下裸 `advance`（零参）仍走 `CwdGuardError` 分支而非 argparse usage-error；若做成 required，
++argparse 会在 `guard_cwd()` 执行前就因缺参报错，破坏既有测试契约）。前置校验：报告存在、
++facts 存在且可解析、报告文本包含 facts 中**每源全部** commit sha（零解析子串校验，逐条列出
++缺失的 `source:sha`）。校验通过后仅推进 `status=ok` 源的锚（`_observed_anchor`：git 三源写
++`anchor_sha=head_sha`；openspec 写 `anchor_version=installed_version`；superpowers 额外携带
++`installed_version` 辅助信息），degraded 源逐字保留，更新 `last_run`。`main()` 新增
++`AdvanceGateError`（exit 3）与 `AnchorsError`（exit 1，此前 Task 1 遗留未捕获路径一并补上）
++两条异常处理分支。
++
++## Global Constraints 对应
++
++- **零解析上游内容**：全部 delta 事实来自 `git log`/`git show`/`npm view`/`npm root -g`/
++  sha256 自身输出；`_extract_superpowers_source_sha` 是有界 JSON 字段读取（`json.loads` +
++  取键），不是手搓 marketplace.json 语法解析器。
++- **advance 双参数绑定**：见上「7」。
++- **采集失败按源降级、fail-loud、不互相传染**：`_collect_source_safe` 逐源隔离；
++  `test_collect_all_single_source_unreachable_others_unaffected` 直接验证。
++- **统一数字化超时**：全部新增子进程调用均走既有 `_run()`（唯一入口），沿用
++  `SUBPROCESS_TIMEOUT_SECONDS`；`_collect_source_safe` 捕获 `TimeoutExpired` → degraded
++  「原因=超时」。
++- **is-ancestor 锚祖先守卫**：三个 git 源（gstack/matt/superpowers）取 log 前均先
++  `_assert_is_ancestor`；非祖先 → degraded「锚失效」。
++- **bare 缓存自愈**：`_ensure_bare_cache` fetch 失败→删缓存重 clone 一次，再失败才 degraded。
++- **`installed_plugins.json` 多 scope 取值**：优先 `scope=user`，无则版本最大
++  （`_version_sort_key`）。
++- **superpowers MUST NOT 路径过滤**：追踪 `marketplace.json` 的 `source.sha` 字段变化序列，
++  未使用 `plugins/superpowers` 路径。
++- **facts 落 `.facts/` 且 `.gitignore`**：已加。
++- **advance 只读 facts、禁网络**：`cmd_advance` 全程只读 `report_path`/`facts_path`/
++  `anchors_path` 三个本地文件，未调用 `_run`。
++- **git 跟踪产物本机路径 tilde 记法**：本票未产出任何含真实本机绝对路径的 git 跟踪内容
++  （测试全部走 `tmp_path`，`anchors.yaml` 实例仅测试临时文件）。
++- **测试沙盒化**：四源采集器测试均用真实本地 git 仓（`_make_bare_upstream` 等 fixture，
++  非 bare 但可正常被 `--bare` clone，行为等价远程仓、零网络）；仅 openspec 采集器（依赖真实
++  安装的 `openspec` CLI / npm registry）用 `monkeypatch` 桩子进程调用，不落地真实网络请求。
++
++## 关键实现决策（design.md 之外，实现级、非承重）
++
++- **advance 的 report/facts 参数用可选位置参数而非 required**：见「7」的详细论证，纯粹是
++  为了不破坏 Task 1 既有的「guard_cwd 永远最先检查」CLI 契约，不是对 design.md 的偏离
++  （design.md 未规定 argparse 层实现细节）。
++- **openspec schema drift 未持久化聚合 digest**：design.md 数据模型段提到
++  `schema_fork_digest: <fork 目录聚合 sha256>` 作为 anchors.yaml 字段，但 spec Requirement
++  与验收 Scenario 只要求 changed/added/removed 三清单**正确**，未要求持久化聚合指纹作为
++  「是否要重新对比」的门控（本实现每轮都全量对比，从不跳过）。按基准 4（不为未测试的推断
++  字段增加复杂度）略去该字段，仅推进 `anchor_version`。如后续报告成文/`sdflow-upgrade`
++  提醒需要该聚合指纹，属 Task 3 或后续增量，非本票遗漏——已如实在此记录，供后续 Task 判断
++  是否需要补。
++
++## 测试
++
++`sdflow-upstream-watch/tests/test_upstream_watch.py`，**58 个用例**（Task 1 原 19 个全部
++保留且更新了 1 个因行为变化而需重写的用例，Task 2 新增 39 个），全部沙盒化：
++
++```
++$ /usr/bin/python3 -m pytest sdflow-upstream-watch/tests/ -q
++..........................................................
++58 passed in 4.24s
++```
++
++覆盖矩阵（对应 brief 验收清单逐条）：
++
++- gstack：checkout 缺失 degraded；首轮天然锚出真 delta；持久锚 delta；零 delta；
++  历史重写（`git checkout --orphan` 强制不相关历史，非「在锚上继续提交」那种仍保祖先关系
++  的伪重写）degraded「锚失效」。
++- bare 缓存层：clone-when-missing；fetch-when-present；fetch 失败自愈重 clone 成功；
++  自愈也失败 → `CollectError` 含缓存路径。
++- matt：首轮零 delta；持久锚 delta；历史重写 degraded；`.skill-lock.json` 缺失非错误；
++  matt 来源条目缺键格式漂移 degraded；非 matt 来源条目缺键**不**误报（作用域正确性）。
++- superpowers：`_extract_superpowers_source_sha` 直接单测（命中/未命中两分支）；首轮零
++  delta；`source.sha` 变化序列追踪（含一条无关提交验证 path filter 生效排除它）；
++  `installed_plugins.json` 缺失/缺版本键 degraded；多 scope 优先 user；无 user 时数值化
++  取最大（`1.9.0` vs `1.10.0` 反词典序用例）；历史重写 degraded。
++- openspec：版本对照 + drift 清单正确（`_diff_dirs_sha256` 独立单测 changed/added/removed
++  三分类）；上游 schema 目录缺失只降级子项、版本对照不受影响；`openspec` CLI 缺失整源
++  `CollectError`。
++- `collect_all`：单源失败（monkeypatch matt 抛错）其余三源不受影响；
++  `_collect_source_safe` 把 `TimeoutExpired` 转 degraded。
++- `advance`：报告缺失拒推 + anchors 不变；报告漏转录 sha 拒推 + anchors 不变（错误信息含
++  缺失 sha）；正常推进（多源）+ `last_run` 更新；degraded 源锚逐字保留（先建一份既有
++  anchors.yaml 含 matt 旧锚，advance 后核对未变）；首轮（anchors.yaml 不存在）建档；CLI
++  层零参数（`main(["advance"])`）在合法 cwd 下走新 gate 分支（非 argparse usage error），
++  exit 3，anchors.yaml 未创建。
++- R5 不改池不变量：`openspec/issues/` 目录树（含既有条目内容）在一轮 `collect` + `advance`
++  前后逐路径比对完全一致。
++- facts 形状快照：`schema_version`/`collected_at`/四源 key 齐全、`degraded` 源 `reason`
++  透传、`schema_drift` 嵌套结构正确。
++- `.gitignore` 含 `openspec/upstream/.facts` 的机械断言（读根 `.gitignore` 真实内容，非
++  复述）。
++
++**mutation 验证**（对三处安全关键逻辑逐一「破坏 → 确认对应测试红 → 恢复 → 确认绿」）：
++
++1. 注掉 `collect_gstack` 里的 `_assert_is_ancestor` 调用 →
++   `test_collect_gstack_rewritten_history_degrades_stale_anchor` 红（虽然报错分支不同——
++   `git log` 自身对不相关 range 报 `Invalid revision range` 而非我们的「锚失效」文案——
++   但确认了该测试不是恒真断言，移除守卫后行为可观测地改变）。
++2. `cmd_advance` 里 `if missing_shas:` 改 `if False and missing_shas:` →
++   `test_cmd_advance_rejects_when_report_missing_a_commit_sha` 红（`DID NOT RAISE`）。
++3. `cmd_advance` 里丢弃 `entry.get("status") != "ok"` 判据（只保留 `isinstance` 检查）→
++   `test_cmd_advance_preserves_degraded_source_anchor_verbatim` 红（degraded 源的锚被错误
++   推进为 `None`）。
++
++三处均已恢复，恢复后完整套件重新跑绿（58 passed）。
++
++## 已知 gotcha（供后续维护者参考）
++
++`git clone --bare` **不会**给远端配置默认 fetch refspec（`remote.origin.fetch` 为空）——
++裸调用 `git fetch origin` 只更新 `FETCH_HEAD`，**不会**前移本地 `refs/heads/*`，因此裸仓的
++`HEAD`（symbolic-ref 指向 clone 时的默认分支）在后续 fetch 后**不会自动前移**。这与非 bare
++`git clone` 的日常直觉相反（本地 checkout 也有同款差异——`collect_gstack` 因此显式用
++`FETCH_HEAD` 而非 `HEAD`）。本票在 `_ensure_bare_cache` 里用显式
++`fetch origin '+refs/heads/*:refs/heads/*'` refspec 解决（`+` 前缀允许强制非快进更新，
++天然覆盖「上游 force-push」场景，配合 `_assert_is_ancestor` 检测该场景并 degrade）。
++此实测已写入 `_ensure_bare_cache` docstring；design.md TD2 文字里的「`log 锚..HEAD`」字面
++描述若脱离本注记单看，容易让后续实现者踩同一个坑（先用 plain fetch 试一版会发现 delta
++永远是空的，因为 HEAD 从不前移）。
+diff --git a/sdflow-upstream-watch/scripts/upstream_watch.py b/sdflow-upstream-watch/scripts/upstream_watch.py
+index 34f1a42..e5ad0be 100644
+--- a/sdflow-upstream-watch/scripts/upstream_watch.py
++++ b/sdflow-upstream-watch/scripts/upstream_watch.py
+@@ -1,53 +1,75 @@
+ """sdflow-upstream-watch 机械层——四源上游追踪的 collect/advance 双子命令。
+ 
+ Task 1（脚手架阶段）范围：cwd 守卫（proposal A4）+ anchors.yaml 三态读写层
+ （mikefarah-flavor yq idiom，同 `sdflow-retro/scripts/retro_report.py` 的 `_yq` 各自实现、
+-不跨目录 import）+ 外部子进程统一超时常量 + collect/advance 子命令骨架。四源采集逻辑与
+-`advance` 的报告+facts 绑定门属于 Task 2，本阶段仅占位。
++不跨目录 import）+ 外部子进程统一超时常量 + collect/advance 子命令骨架。
++
++Task 2（本阶段）范围：四源采集器（gstack / matt / superpowers / openspec）+ facts JSON 输出 +
++`advance` 报告+facts 双参数绑定门。零解析上游内容——delta 事实全部由 git / npm / sha256
++自己回答（design.md 基准 5）；采集失败按源降级、fail-loud、不互相传染。
+ 
+ 本脚本 MUST 从 sdflow-skills 仓内某处运行（cwd 守卫据此判定，不限定必须是仓根——
+ `guard_cwd()` 用 `git rev-parse --show-toplevel` 解析真实仓根，供调用方定位
+ `openspec/upstream/` 等数据路径，避免子目录 cwd 下的相对路径踩空）。
+ """
+ import argparse
++import hashlib
+ import json
+ import shutil
+ import subprocess
+ import sys
++from datetime import datetime, timezone
+ from pathlib import Path
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ 
+ # 【外部子进程统一超时常量】单点定义（design.md TD1）：全部子进程调用（git / yq / npm）
+-# 共用同一超时值，超时按该源 degraded 处置（Task 2 实现降级分支时消费本常量）。
++# 共用同一超时值，超时按该源 degraded 处置。
+ SUBPROCESS_TIMEOUT_SECONDS = 60
+ 
+ # 【cwd 守卫锚定值】proposal A4：本 skill 语义单仓专用，硬编码指向本仓 remote。
+ EXPECTED_REMOTE_SUBSTR = "laodao-ai/sdflow-skills"
+ 
+ # 【anchors.yaml 数据模型常量】design.md「数据模型」段。
+ SCHEMA_VERSION = 1
+ DEFAULT_REMIND_AFTER_DAYS = 30
+ 
++# 【四源上游 URL】design.md 数据模型段实查坐实（decision-memo C1/C3）。gstack 不需要独立
++# 常量——它复用本地 checkout 既有的 `origin` remote，不在此处硬编码。
++MATT_UPSTREAM_URL = "https://github.com/mattpocock/skills.git"
++SUPERPOWERS_MARKETPLACE_URL = "https://github.com/anthropics/claude-plugins-official.git"
++OPENSPEC_NPM_PACKAGE = "@fission-ai/openspec"
++MARKETPLACE_JSON_PATH = ".claude-plugin/marketplace.json"
++
+ 
+ class CwdGuardError(Exception):
+     """cwd 非 sdflow-skills 仓（proposal A4）——fail-loud，调用方 MUST NOT 写任何文件。"""
+ 
+ 
+ class AnchorsError(Exception):
+     """anchors.yaml 不可解析 / yq 不可用 / yq 非 mikefarah 家族——fail-loud 硬停，
+     MUST NOT 按"无锚"猜测续跑（区别于"文件缺失=首轮初始化"这一正常状态）。"""
+ 
+ 
++class CollectError(Exception):
++    """单源采集失败（上游不可达 / 本地锚源缺失 / 格式漂移 / 锚失效）——调用方捕获后
++    转为该源 degraded 记录，MUST NOT 向上传染到其余源（design.md 失败模式表）。"""
++
++
++class AdvanceGateError(Exception):
++    """advance 报告+facts 双参数前置校验失败——拒绝推进，anchors.yaml 内容不变
++    （spec Requirement「锚文件由脚本独占维护，锚推进与本轮报告 + facts 绑定」）。"""
++
++
+ def _run(cmd, *, input=None):
+     """全仓外部子进程统一入口：带 `SUBPROCESS_TIMEOUT_SECONDS` 超时。
+     调用方按返回值 `returncode` 自行判定，超时以 `subprocess.TimeoutExpired` 抛出
+     （由调用方按"该源 degraded"处置，Task 2 消费）。"""
+     return subprocess.run(
+         cmd, input=input, capture_output=True, text=True,
+         encoding="utf-8", errors="replace", timeout=SUBPROCESS_TIMEOUT_SECONDS,
+     )
+ 
+ 
+@@ -163,54 +185,506 @@ def write_anchors(path, anchors):
+     不手写 YAML 序列化字符串（基准 5 同款零解析/零手搓纪律）。"""
+     yq = _resolve_yq()
+     path = Path(path)
+     path.parent.mkdir(parents=True, exist_ok=True)
+     r = _run([yq, "-o=yaml", "-P", ".", "-"], input=json.dumps(anchors))
+     if r.returncode != 0:
+         raise AnchorsError(f"yq 写 anchors.yaml 失败：{r.stderr.strip()}")
+     path.write_text(r.stdout, encoding="utf-8")
+ 
+ 
++# ============================ 通用 git 子进程小工具 ============================
++
++def _rev_parse(repo_dir, ref):
++    """解析 `ref` 为完整 sha；失败（ref 不存在 / repo 不可读）→ CollectError。"""
++    r = _run(["git", "-C", str(repo_dir), "rev-parse", ref])
++    if r.returncode != 0:
++        raise CollectError(f"无法解析 {ref}（{repo_dir}）: {r.stderr.strip()}")
++    return r.stdout.strip()
++
++
++def _assert_is_ancestor(repo_dir, anchor_sha, head_sha):
++    """`merge-base --is-ancestor`：锚非 head 祖先（上游历史被重写）→ CollectError
++    「锚失效」（design.md TD2 + 失败模式表，防 exit 0 假成功）。"""
++    r = _run(["git", "-C", str(repo_dir), "merge-base", "--is-ancestor", anchor_sha, head_sha])
++    if r.returncode != 0:
++        raise CollectError("上游历史疑似被重写，锚失效")
++
++
++def _git_log_delta(repo_dir, anchor_sha, head_sha, *, path_filter=None, reverse=False):
++    """`git log <anchor>..<head>` 的零解析结构化提取：commits（sha+subject，用可控的
++    `--pretty` 格式串，非手搓上游内容解析）+ changed_paths（`--name-only` 全路径去重）。
++    `path_filter` 给定时只返回 commits（changed_paths 恒为空，调用方不需要）。"""
++    range_arg = f"{anchor_sha}..{head_sha}"
++    cmd = ["git", "-C", str(repo_dir), "log", "--pretty=format:%H%x09%s"]
++    if reverse:
++        cmd.append("--reverse")
++    cmd.append(range_arg)
++    if path_filter:
++        cmd += ["--", path_filter]
++    r = _run(cmd)
++    if r.returncode != 0:
++        raise CollectError(f"git log 失败（{repo_dir}）: {r.stderr.strip()}")
++    commits = []
++    for line in r.stdout.splitlines():
++        if not line.strip():
++            continue
++        sha, _, subject = line.partition("\t")
++        commits.append({"sha": sha, "subject": subject})
++
++    if path_filter:
++        return commits, []
++
++    cmd2 = ["git", "-C", str(repo_dir), "log", "--name-only", "--pretty=format:", range_arg]
++    r2 = _run(cmd2)
++    if r2.returncode != 0:
++        raise CollectError(f"git log --name-only 失败（{repo_dir}）: {r2.stderr.strip()}")
++    paths = {line.strip() for line in r2.stdout.splitlines() if line.strip()}
++    return commits, sorted(paths)
++
++
++def _ensure_bare_cache(cache_dir, upstream_url):
++    """matt / superpowers 共用的 blobless bare 缓存层（design.md TD2）：已存在则 fetch
++    （显式 refspec 更新本地 `refs/heads/*`，使裸仓 HEAD 语义可用——plain `fetch` 只落
++    FETCH_HEAD、不会前移本地分支引用，验证见本票 impl-report 附实测）；fetch 失败 →
++    删缓存重 clone 一次自愈，再失败才 CollectError（degraded，原因文案带缓存路径）。"""
++    cache_dir = Path(cache_dir)
++    if cache_dir.is_dir():
++        r = _run(["git", "-C", str(cache_dir), "fetch", "origin", "+refs/heads/*:refs/heads/*"])
++        if r.returncode == 0:
++            return cache_dir
++        shutil.rmtree(cache_dir, ignore_errors=True)
++    cache_dir.parent.mkdir(parents=True, exist_ok=True)
++    r = _run(["git", "clone", "--filter=blob:none", "--bare", upstream_url, str(cache_dir)])
++    if r.returncode != 0:
++        raise CollectError(f"bare 缓存 clone 失败（缓存路径 {cache_dir}）: {r.stderr.strip()}")
++    return cache_dir
++
++
++# ============================ gstack 采集器 ============================
++
++def collect_gstack(anchor, *, checkout_dir):
++    """既有本地 checkout：`fetch origin` + `merge-base --is-ancestor` 锚祖先守卫 +
++    `log --name-only 锚..FETCH_HEAD`。checkout 缺失 → degraded。首轮（无持久锚）以本地
++    checkout 现有 HEAD 为天然锚，出真 delta（design.md 失败模式表「首轮初始化」的 gstack 分支）。
++    """
++    checkout_dir = Path(checkout_dir)
++    if not (checkout_dir / ".git").exists():
++        raise CollectError(f"本地 checkout 不存在: {checkout_dir}")
++
++    fr = _run(["git", "-C", str(checkout_dir), "fetch", "origin"])
++    if fr.returncode != 0:
++        raise CollectError(f"fetch 失败（{checkout_dir}）: {fr.stderr.strip()}")
++
++    head_sha = _rev_parse(checkout_dir, "FETCH_HEAD")
++    anchor_sha = (anchor or {}).get("anchor_sha")
++    if anchor_sha is None:
++        anchor_sha = _rev_parse(checkout_dir, "HEAD")
++
++    _assert_is_ancestor(checkout_dir, anchor_sha, head_sha)
++    commits, changed_paths = _git_log_delta(checkout_dir, anchor_sha, head_sha)
++    return {"status": "ok", "head_sha": head_sha, "commits": commits, "changed_paths": changed_paths}
++
++
++# ============================ matt 采集器（bare 缓存 + .skill-lock.json 辅助）========
++
++def _read_matt_installed_skills(skill_lock_path):
++    """`.skill-lock.json` 键路径断言（仅校验 `source == mattpocock/skills` 的条目——
++    其余来源的 skill 不是本采集器的断言目标，避免误报格式漂移）。文件缺失 = 无辅助信息，
++    非错误（R2「本地锚源缺失」与「格式漂移」是两条不同分支，此处只有后者才 degrade）。"""
++    skill_lock_path = Path(skill_lock_path)
++    if not skill_lock_path.is_file():
++        return {}
++    try:
++        data = json.loads(skill_lock_path.read_text(encoding="utf-8"))
++    except (OSError, json.JSONDecodeError) as e:
++        raise CollectError(f"格式漂移: 无法解析 {skill_lock_path}: {e}")
++    skills = data.get("skills") if isinstance(data, dict) else None
++    if not isinstance(skills, dict):
++        raise CollectError(f"格式漂移: {skill_lock_path} 缺少 skills 映射")
++    result = {}
++    for name, entry in skills.items():
++        if not isinstance(entry, dict):
++            raise CollectError(f"格式漂移: {skill_lock_path} 的 {name} 条目非法")
++        if entry.get("source") != "mattpocock/skills":
++            continue
++        if "skillFolderHash" not in entry:
++            raise CollectError(f"格式漂移: {skill_lock_path} 的 {name} 缺少 skillFolderHash 键")
++        result[name] = entry["skillFolderHash"]
++    return result
++
++
++def collect_matt(anchor, *, cache_dir, skill_lock_path, upstream_url=MATT_UPSTREAM_URL):
++    """bare 缓存（`log --name-only 锚..HEAD`）+ `.skill-lock.json` 辅助信息。无持久锚
++    （首轮）→ 「无锚 ⇒ 当前上游态即基线」零 delta（design.md 失败模式表）。"""
++    installed_skills = _read_matt_installed_skills(skill_lock_path)  # 键路径断言失败即抛出
++
++    cache_dir = _ensure_bare_cache(cache_dir, upstream_url)
++    head_sha = _rev_parse(cache_dir, "HEAD")
++    anchor_sha = (anchor or {}).get("anchor_sha")
++    if anchor_sha is not None:
++        _assert_is_ancestor(cache_dir, anchor_sha, head_sha)
++        commits, changed_paths = _git_log_delta(cache_dir, anchor_sha, head_sha)
++    else:
++        commits, changed_paths = [], []
++
++    result = {"status": "ok", "head_sha": head_sha, "commits": commits, "changed_paths": changed_paths}
++    if installed_skills:
++        result["installed_skills"] = installed_skills
++    return result
++
++
++# ============================ superpowers 采集器（marketplace source.sha 追踪）======
++
++def _version_sort_key(version):
++    """宽松版本排序键（基准 4：不为「无 scope=user 记录时的次要 tie-break」手搓完整
++    semver）——数字段按数值比较，非数字段按字符串比较，对本仓实查到的 `X.Y.Z` 与
++    短 sha 两种版本形状均可确定性排序。"""
++    parts = []
++    for token in str(version).replace("-", ".").split("."):
++        parts.append((0, int(token)) if token.isdigit() else (1, token))
++    return parts
++
++
++def _read_superpowers_installed_version(installed_plugins_path):
++    """`installed_plugins.json`（per-plugin 多记录数组）键路径断言 + 取值策略：
++    优先 `scope=user` 记录，无则取版本最大者（design.md 数据模型段 + spec 多 scope Scenario）。
++    """
++    installed_plugins_path = Path(installed_plugins_path)
++    if not installed_plugins_path.is_file():
++        raise CollectError(f"本地锚源缺失: {installed_plugins_path}")
++    try:
++        data = json.loads(installed_plugins_path.read_text(encoding="utf-8"))
++    except (OSError, json.JSONDecodeError) as e:
++        raise CollectError(f"格式漂移: 无法解析 {installed_plugins_path}: {e}")
++
++    plugins = data.get("plugins") if isinstance(data, dict) else None
++    if not isinstance(plugins, dict):
++        raise CollectError(f"格式漂移: {installed_plugins_path} 缺少 plugins 映射")
++
++    records = None
++    for key, val in plugins.items():
++        if key.split("@", 1)[0] == "superpowers":
++            records = val
++            break
++    if records is None:
++        raise CollectError(f"本地锚源缺失: installed_plugins.json 中无 superpowers 记录")
++    if not isinstance(records, list) or not records:
++        raise CollectError(f"格式漂移: superpowers 记录不是非空数组")
++
++    user_records = [r for r in records if isinstance(r, dict) and r.get("scope") == "user"]
++    chosen = user_records[0] if user_records else max(
++        records, key=lambda r: _version_sort_key(r.get("version", "")) if isinstance(r, dict) else []
++    )
++    if not isinstance(chosen, dict) or "version" not in chosen:
++        raise CollectError(f"格式漂移: superpowers 记录缺少 version 键")
++    version = chosen["version"]
++    if not isinstance(version, str) or not version:
++        raise CollectError("格式漂移: superpowers version 字段非法")
++    return version
++
++
++def _extract_superpowers_source_sha(marketplace_json_text):
++    """从某一版本的 `marketplace.json` 全文中零解析式提取 superpowers 条目的
++    `source.sha` 字段（有界 JSON 字段读取，非手搓上游格式解析——基准 5）。"""
++    try:
++        data = json.loads(marketplace_json_text)
++    except json.JSONDecodeError as e:
++        raise CollectError(f"marketplace.json 解析失败: {e}")
++    plugins = data.get("plugins") if isinstance(data, dict) else None
++    if not isinstance(plugins, list):
++        raise CollectError("marketplace.json 缺少 plugins 数组")
++    for entry in plugins:
++        if isinstance(entry, dict) and entry.get("name") == "superpowers":
++            source = entry.get("source")
++            if isinstance(source, dict) and "sha" in source:
++                return source["sha"]
++            raise CollectError("marketplace.json superpowers 条目缺少 source.sha 字段")
++    raise CollectError("marketplace.json 中未找到 superpowers 条目")
++
++
++def collect_superpowers(anchor, *, cache_dir, installed_plugins_path,
++                         upstream_url=SUPERPOWERS_MARKETPLACE_URL):
++    """marketplace 仓不 vendor 插件内容（`plugins/superpowers` 路径不存在，双对抗镜实查
++    坐实）⇒ MUST NOT 路径过滤；改追踪 `.claude-plugin/marketplace.json` 中 superpowers
++    条目 `source.sha` 字段的变化序列（design.md TD2）。"""
++    installed_version = _read_superpowers_installed_version(installed_plugins_path)
++
++    cache_dir = _ensure_bare_cache(cache_dir, upstream_url)
++    head_sha = _rev_parse(cache_dir, "HEAD")
++    anchor_sha = (anchor or {}).get("anchor_sha")
++
++    commits = []
++    source_sha_sequence = []
++    if anchor_sha is not None:
++        _assert_is_ancestor(cache_dir, anchor_sha, head_sha)
++        commits, _ = _git_log_delta(
++            cache_dir, anchor_sha, head_sha, path_filter=MARKETPLACE_JSON_PATH, reverse=True
++        )
++        for c in commits:
++            show = _run(["git", "-C", str(cache_dir), "show", f"{c['sha']}:{MARKETPLACE_JSON_PATH}"])
++            if show.returncode != 0:
++                raise CollectError(
++                    f"读取 {MARKETPLACE_JSON_PATH}@{c['sha']} 失败: {show.stderr.strip()}"
++                )
++            source_sha_sequence.append(_extract_superpowers_source_sha(show.stdout))
++
++    return {
++        "status": "ok",
++        "head_sha": head_sha,
++        "commits": commits,
++        "source_sha_sequence": source_sha_sequence,
++        "installed_version": installed_version,
++    }
++
++
++# ============================ OpenSpec 采集器（npm 版本对照 + schema fork drift）====
++
++def _sha256_file(path):
++    h = hashlib.sha256()
++    with open(path, "rb") as f:
++        for chunk in iter(lambda: f.read(65536), b""):
++            h.update(chunk)
++    return h.hexdigest()
++
++
++def _diff_dirs_sha256(fork_dir, upstream_dir):
++    """fork 目录 vs 上游安装目录逐文件整字节 sha256 对比（T264 机械实现，design.md TD3）。
++    零解析——只比对字节，不解析文件内容语义。`added` = 上游有 fork 没有；
++    `removed` = fork 有上游没有（spec Scenario「双侧新增与删除文件分类」明定方向）。"""
++    fork_dir, upstream_dir = Path(fork_dir), Path(upstream_dir)
++    files_fork = {p.relative_to(fork_dir).as_posix(): _sha256_file(p)
++                  for p in fork_dir.rglob("*") if p.is_file()}
++    files_upstream = {p.relative_to(upstream_dir).as_posix(): _sha256_file(p)
++                       for p in upstream_dir.rglob("*") if p.is_file()}
++    common = files_fork.keys() & files_upstream.keys()
++    changed = sorted(k for k in common if files_fork[k] != files_upstream[k])
++    added = sorted(files_upstream.keys() - files_fork.keys())
++    removed = sorted(files_fork.keys() - files_upstream.keys())
++    return {"changed": changed, "added": added, "removed": removed}
++
++
++def collect_openspec(*, repo_root, fork_dir=None, npm_root_g=None):
++    """`openspec --version` vs `npm view` 版本对照 + schema fork 双侧逐文件 sha256 对比。
++    上游 schema 目录定位失败时只降级 schema_drift 子项，版本对照子项不受影响（spec Scenario）。
++    """
++    openspec_bin = shutil.which("openspec")
++    if not openspec_bin:
++        raise CollectError("本地锚源缺失: openspec CLI 未安装 / 不在 PATH")
++    vr = _run([openspec_bin, "--version"])
++    if vr.returncode != 0:
++        raise CollectError(f"openspec --version 失败: {vr.stderr.strip()}")
++    installed_version = vr.stdout.strip()
++
++    nr = _run(["npm", "view", OPENSPEC_NPM_PACKAGE, "version"])
++    if nr.returncode != 0:
++        raise CollectError(f"npm view 失败: {nr.stderr.strip()}")
++    latest_version = nr.stdout.strip()
++
++    result = {"status": "ok", "installed_version": installed_version, "latest_version": latest_version}
++
++    fork_dir = Path(fork_dir) if fork_dir else (
++        Path(repo_root) / "sdflow-init" / "assets" / "schemas" / "sdflow-spec-driven"
++    )
++    try:
++        if npm_root_g is not None:
++            root_g = npm_root_g
++        else:
++            rr = _run(["npm", "root", "-g"])
++            if rr.returncode != 0:
++                raise CollectError(f"npm root -g 失败: {rr.stderr.strip()}")
++            root_g = rr.stdout.strip()
++        upstream_dir = Path(root_g) / "@fission-ai" / "openspec" / "schemas" / "spec-driven"
++        if not upstream_dir.is_dir():
++            raise CollectError(f"上游 schema 目录不存在: {upstream_dir}")
++        drift = _diff_dirs_sha256(fork_dir, upstream_dir)
++        result["schema_drift"] = {"status": "ok", **drift}
++    except CollectError as e:
++        result["schema_drift"] = {"status": "degraded", "reason": str(e)}
++
++    return result
++
++
++# ============================ facts 采集编排 + collect 子命令 ============================
++
++def _degraded(reason):
++    return {"status": "degraded", "reason": reason}
++
++
++def _collect_source_safe(fn):
++    """单源采集失败隔离：CollectError / 超时 / 未预期 OSError 均转 degraded，
++    MUST NOT 向上传染阻塞其余源（design.md「采集失败按源降级、fail-loud、不互相传染」）。"""
++    try:
++        return fn()
++    except CollectError as e:
++        return _degraded(str(e))
++    except subprocess.TimeoutExpired:
++        return _degraded(f"超时（>{SUBPROCESS_TIMEOUT_SECONDS}s）")
++    except OSError as e:
++        return _degraded(f"意外错误: {e}")
++
++
++def collect_all(anchors, *, repo_root, home=None):
++    """四源采集编排：默认锚源路径均从 `home`（默认 `Path.home()`，可注入供测试）派生。"""
++    home = Path(home) if home is not None else Path.home()
++    cache_root = home / ".cache" / "sdflow-upstream"
++
++    sources = {}
++    sources["gstack"] = _collect_source_safe(lambda: collect_gstack(
++        get_source_anchor(anchors, "gstack"), checkout_dir=home / ".skills" / "gstack",
++    ))
++    sources["matt"] = _collect_source_safe(lambda: collect_matt(
++        get_source_anchor(anchors, "matt"),
++        cache_dir=cache_root / "matt.git",
++        skill_lock_path=home / ".agents" / ".skill-lock.json",
++    ))
++    sources["superpowers"] = _collect_source_safe(lambda: collect_superpowers(
++        get_source_anchor(anchors, "superpowers"),
++        cache_dir=cache_root / "superpowers-marketplace.git",
++        installed_plugins_path=home / ".claude" / "plugins" / "installed_plugins.json",
++    ))
++    sources["openspec"] = _collect_source_safe(lambda: collect_openspec(repo_root=repo_root))
++    return sources
++
++
++def _utc_now_iso():
++    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
++
++
++def _utc_timestamp_for_filename():
++    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
++
++
+ def cmd_collect(args):
+-    """`collect` 子命令骨架：cwd 守卫起手，四源采集逻辑属 Task 2。"""
+-    guard_cwd()
+-    print("collect: 采集逻辑由 Task 2 实现（脚手架阶段占位，未写入任何文件）",
+-          file=sys.stderr)
+-    return 2
++    """`collect`：cwd 守卫 → 读锚 → 四源采集 → facts JSON 落
++    `openspec/upstream/.facts/<UTC时间戳>.json`（不 git 跟踪）。"""
++    root = guard_cwd()
++    anchors_path = root / "openspec" / "upstream" / "anchors.yaml"
++    anchors = load_anchors(anchors_path)
++
++    sources = collect_all(anchors, repo_root=root)
++    facts = {
++        "schema_version": SCHEMA_VERSION,
++        "collected_at": _utc_now_iso(),
++        "sources": sources,
++    }
++
++    facts_dir = root / "openspec" / "upstream" / ".facts"
++    facts_dir.mkdir(parents=True, exist_ok=True)
++    facts_path = facts_dir / f"{_utc_timestamp_for_filename()}.json"
++    facts_path.write_text(json.dumps(facts, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
++
++    print(f"facts 已写入: {facts_path}")
++    return 0
++
++
++# ============================ advance 子命令（报告+facts 双参数门）============================
++
++def _observed_anchor(source_name, entry):
++    """facts 某源 `status=ok` 记录 → anchors.yaml 该源应推进到的观测值
++    （design.md 数据模型段：git 三源用 anchor_sha；openspec 用 anchor_version；
++    superpowers 额外携带 installed_version 辅助信息）。"""
++    if source_name == "openspec":
++        return {"anchor_version": entry.get("installed_version")}
++    rec = {"anchor_sha": entry.get("head_sha")}
++    if source_name == "superpowers" and "installed_version" in entry:
++        rec["installed_version"] = entry["installed_version"]
++    return rec
+ 
+ 
+ def cmd_advance(args):
+-    """`advance` 子命令骨架：cwd 守卫起手，报告+facts 绑定门与锚推进逻辑属 Task 2。"""
+-    guard_cwd()
+-    print("advance: 锚推进逻辑由 Task 2 实现（脚手架阶段占位，未写入任何文件）",
+-          file=sys.stderr)
+-    return 2
++    """`advance <report-path> <facts-path>`：cwd 守卫 → 报告+facts 双参数前置校验
++    （报告存在 + 报告文本包含 facts 全部 commit sha，零解析子串校验）→ 仅推进
++    `status=ok` 源的锚（degraded 源逐字保留）→ 更新 `last_run`。
++    advance 自身 MUST NOT 发起任何网络/git 查询——观测值只读 facts 文件。"""
++    root = guard_cwd()
++
++    if not args.report:
++        raise AdvanceGateError("缺少报告路径参数：advance <report-path> <facts-path>")
++    if not args.facts:
++        raise AdvanceGateError("缺少 facts 路径参数：advance <report-path> <facts-path>")
++
++    report_path = Path(args.report)
++    facts_path = Path(args.facts)
++    if not report_path.is_file():
++        raise AdvanceGateError(f"报告文件不存在: {report_path}")
++    if not facts_path.is_file():
++        raise AdvanceGateError(f"facts 文件不存在: {facts_path}")
++
++    try:
++        facts = json.loads(facts_path.read_text(encoding="utf-8"))
++    except (OSError, json.JSONDecodeError) as e:
++        raise AdvanceGateError(f"facts 文件不可解析: {facts_path}: {e}")
++    if not isinstance(facts, dict):
++        raise AdvanceGateError(f"facts 文件形状非法（须为映射）: {facts_path}")
++
++    report_text = report_path.read_text(encoding="utf-8")
++    sources = facts.get("sources") or {}
++
++    missing_shas = []
++    for source_name, entry in sources.items():
++        if not isinstance(entry, dict):
++            continue
++        for c in entry.get("commits") or []:
++            sha = c.get("sha") if isinstance(c, dict) else None
++            if sha and sha not in report_text:
++                missing_shas.append(f"{source_name}:{sha}")
++    if missing_shas:
++        raise AdvanceGateError(
++            "报告缺少 facts 中的 commit sha 转录（防漏转录后锚照推）: " + ", ".join(missing_shas)
++        )
++
++    anchors_path = root / "openspec" / "upstream" / "anchors.yaml"
++    anchors = load_anchors(anchors_path)
++    anchors.setdefault("sources", {})
++
++    for source_name, entry in sources.items():
++        if not isinstance(entry, dict) or entry.get("status") != "ok":
++            continue  # degraded 源锚不推进，逐字保留
++        anchors["sources"][source_name] = _observed_anchor(source_name, entry)
++
++    anchors["last_run"] = _utc_now_iso()
++    write_anchors(anchors_path, anchors)
++
++    print(f"advance: 锚已推进（{anchors_path}）")
++    return 0
+ 
+ 
+ def build_parser():
+     parser = argparse.ArgumentParser(
+         prog="upstream_watch.py",
+         description="四源上游追踪（gstack/superpowers/matt/OpenSpec）——collect 采集事实，"
+                      "advance 校验报告后推进锚。仅服务 sdflow-skills 仓自身。",
+     )
+     sub = parser.add_subparsers(dest="command", required=True)
+-    sub.add_parser("collect", help="采集四源 delta 事实，落 facts JSON（Task 2 实现）")
+-    sub.add_parser("advance", help="校验报告+facts 双参数后推进锚（Task 2 实现）")
++    sub.add_parser("collect", help="采集四源 delta 事实，落 facts JSON")
++    advance_parser = sub.add_parser("advance", help="校验报告+facts 双参数后推进锚")
++    # nargs="?" + 默认 None：缺参不在 argparse 层报错，而是在 cmd_advance 内部
++    # guard_cwd() 之后才判定——保持"cwd 守卫永远最先检查"的既有 CLI 行为不变
++    # （Task 1 既有测试：非本仓 cwd 下裸 `advance`（零参）仍须落到 CwdGuardError 分支）。
++    advance_parser.add_argument("report", nargs="?", default=None, help="本轮分诊报告路径")
++    advance_parser.add_argument("facts", nargs="?", default=None, help="本轮 facts JSON 路径")
+     return parser
+ 
+ 
+ def main(argv=None):
+     parser = build_parser()
+     args = parser.parse_args(argv)
+     try:
+         if args.command == "collect":
+             return cmd_collect(args)
+         if args.command == "advance":
+             return cmd_advance(args)
+     except CwdGuardError as e:
+         print(f"fail-loud: {e}", file=sys.stderr)
+         return 1
++    except AdvanceGateError as e:
++        print(f"advance 拒绝推进: {e}", file=sys.stderr)
++        return 3
++    except AnchorsError as e:
++        print(f"fail-loud: {e}", file=sys.stderr)
++        return 1
+     return 1  # pragma: no cover — argparse required=True 已排除未知子命令
+ 
+ 
+ if __name__ == "__main__":
+     sys.exit(main())
+diff --git a/sdflow-upstream-watch/tests/test_upstream_watch.py b/sdflow-upstream-watch/tests/test_upstream_watch.py
+index a7393ee..0f03e50 100644
+--- a/sdflow-upstream-watch/tests/test_upstream_watch.py
++++ b/sdflow-upstream-watch/tests/test_upstream_watch.py
+@@ -1,16 +1,20 @@
+-"""upstream_watch.py 机械层测试（Task 1：脚手架 + anchors 基础设施 + cwd 守卫）。
++"""upstream_watch.py 机械层测试。
+ 
+-标的：`guard_cwd`（cwd 守卫，proposal A4）+ `load_anchors`/`get_source_anchor`/
+-`write_anchors`（anchors.yaml 三态读写层，R1）+ `SUBPROCESS_TIMEOUT_SECONDS` 单点超时常量 +
+-`main` 的 collect/advance argparse 入口。四源采集与 advance 报告+facts 绑定门属 Task 2，
+-不在本文件范围内。
++Task 1：脚手架 + anchors 基础设施 + cwd 守卫 —— `guard_cwd`（proposal A4）+
++`load_anchors`/`get_source_anchor`/`write_anchors`（anchors.yaml 三态读写层，R1）+
++`SUBPROCESS_TIMEOUT_SECONDS` 单点超时常量 + `main` 的 collect/advance argparse 入口。
++
++Task 2：四源采集器（gstack/matt/superpowers/openspec）+ facts JSON 输出 + `advance`
++报告+facts 双参数绑定门 + R5 不改池不变量。四源全部用**真实本地 git 仓**（`file://` 之外
++的本地路径 clone，等价行为、零网络）做 fixture，不 stub git 语义本身——只有 openspec
++采集器（依赖真实安装的 `openspec` CLI / npm registry）用 `monkeypatch` 桩子进程调用。
+ 
+ 全部用例走 tmp_path + `monkeypatch.chdir`（禁裸 `os.chdir`，见仓根 conftest.py 纪律），
+ 零全局影响；真实 mikefarah/yq 二进制默认参与（本机/CI 均已安装，同 `retro_report` 测试先例
+ 不 stub 正常路径），仅"非 mikefarah 家族"场景需要一个假 yq 可执行文件注入 PATH。
+ """
+ import json
+ import subprocess
+ import sys
+ from pathlib import Path
+ 
+@@ -33,20 +37,65 @@ def _git(*args, cwd):
+ def _init_repo(path, remote=None):
+     path.mkdir(parents=True, exist_ok=True)
+     _git("init", "-q", cwd=path)
+     _git("config", "user.email", "test@example.com", cwd=path)
+     _git("config", "user.name", "Test", cwd=path)
+     if remote:
+         _git("remote", "add", "origin", remote, cwd=path)
+     return path
+ 
+ 
++# ============================ Task 2 共用 git fixture 小工具 ============================
++
++def _commit_file(repo, relname, content, message):
++    """在 `repo` 里写/改一个文件并提交，返回新提交的完整 sha。"""
++    p = repo / relname
++    p.parent.mkdir(parents=True, exist_ok=True)
++    p.write_text(content, encoding="utf-8")
++    _git("add", relname, cwd=repo)
++    _git("commit", "-q", "-m", message, cwd=repo)
++    return _git("rev-parse", "HEAD", cwd=repo).stdout.strip()
++
++
++def _make_bare_upstream(path):
++    """建一个真实（非 bare）本地 git 仓，充当"上游"——可被 clone/fetch，行为与远程仓
++    等价，测试零网络。"""
++    _init_repo(path)
++    _commit_file(path, "README.md", "seed\n", "seed commit")
++    return path
++
++
++def _marketplace_json_text(sha, name="superpowers"):
++    return json.dumps({
++        "plugins": [
++            {"name": name, "source": {"source": "url",
++                                       "url": "https://github.com/obra/superpowers.git",
++                                       "sha": sha}},
++        ]
++    })
++
++
++def _rev(repo):
++    return _git("rev-parse", "HEAD", cwd=repo).stdout.strip()
++
++
++def _force_rewrite_history_away_from(repo, branch="main"):
++    """强制用一条全新孤立历史替换 `branch`——替换前的全部提交（含当前 anchor）都不再是
++    新 HEAD 的祖先，模拟上游 force-push 历史重写（区别于"在锚上继续提交"，那仍保持祖先关系，
++    不是真的历史重写）。"""
++    _git("checkout", "-q", "--orphan", "__rewrite_tmp__", cwd=repo)
++    _git("commit", "-q", "--allow-empty", "-m", "rewritten history", cwd=repo)
++    _git("branch", "-q", "-f", branch, "__rewrite_tmp__", cwd=repo)
++    _git("checkout", "-q", branch, cwd=repo)
++    _git("branch", "-q", "-D", "__rewrite_tmp__", cwd=repo)
++
++
+ # ============================ cwd 守卫（guard_cwd，unit-level）============================
+ 
+ def test_guard_cwd_rejects_dir_outside_any_git_repo(tmp_path, monkeypatch):
+     outside = tmp_path / "not-a-repo"
+     outside.mkdir()
+     monkeypatch.chdir(outside)
+     with pytest.raises(W.CwdGuardError):
+         W.guard_cwd()
+ 
+ 
+@@ -140,29 +189,42 @@ def test_cli_help_lists_both_subcommands():
+ 
+ def test_cli_missing_subcommand_errors():
+     r = subprocess.run(
+         [sys.executable, SCRIPT],
+         capture_output=True, text=True, encoding="utf-8", errors="replace",
+     )
+     assert r.returncode != 0
+ 
+ 
+ def test_main_dispatches_to_collect_inside_matching_repo(tmp_path, monkeypatch):
++    """守卫通过后 main() 正确路由到 cmd_collect（Task 2：真实四源采集逻辑已落地，
++    此处只验证 CLI 分发 + facts 落盘的编排接线——用 monkeypatch 隔断 `collect_all`
++    本体，四源各自的采集逻辑由下方专门的 collect_* 用例覆盖，不在此处重复触发真实
++    git/npm 子进程（零网络依赖纪律）。"""
+     repo = _init_repo(
+         tmp_path / "sdflow-skills",
+         remote="https://github.com/laodao-ai/sdflow-skills.git",
+     )
+     monkeypatch.chdir(repo)
++    monkeypatch.setattr(
++        W, "collect_all",
++        lambda anchors, *, repo_root, home=None: {
++            "gstack": {"status": "ok", "head_sha": "deadbeef", "commits": [], "changed_paths": []},
++        },
++    )
+     rc = W.main(["collect"])
+-    # 守卫已通过（未抛 CwdGuardError）；Task 1 阶段占位实现返回非零"未实现"信号，
+-    # 但绝不是守卫拒绝——用返回码类型与守卫失败路径（1）区分开。
+-    assert rc == 2
++    assert rc == 0
++    facts_dir = repo / "openspec" / "upstream" / ".facts"
++    facts_files = list(facts_dir.glob("*.json"))
++    assert len(facts_files) == 1
++    facts = json.loads(facts_files[0].read_text(encoding="utf-8"))
++    assert facts["sources"]["gstack"]["head_sha"] == "deadbeef"
+ 
+ 
+ # ============================ 超时常量单点定义 ============================
+ 
+ def test_timeout_constant_is_single_point_definition():
+     assert W.SUBPROCESS_TIMEOUT_SECONDS == 60
+     assert isinstance(W.SUBPROCESS_TIMEOUT_SECONDS, int)
+ 
+ 
+ # ============================ anchors.yaml 三态读取（load_anchors，R1）====================
+@@ -260,10 +322,676 @@ def test_write_anchors_then_load_roundtrip(tmp_path):
+ 
+ 
+ def test_write_anchors_only_writer_of_anchors_yaml(tmp_path):
+     """R1: anchors.yaml SHALL 只由 watch 机械层脚本读写——本用例只断言 write_anchors
+     产出的文件人类可读为 YAML（非 JSON 字面量),佐证走 yq 转换而非手写字符串拼接。"""
+     path = tmp_path / "anchors.yaml"
+     W.write_anchors(path, {"schema_version": 1, "sources": {}})
+     text = path.read_text(encoding="utf-8")
+     assert "schema_version: 1" in text
+     assert not text.strip().startswith("{")
++
++
++# =========================================================================================
++# Task 2: gstack 采集器
++# =========================================================================================
++
++def test_collect_gstack_missing_checkout_degrades():
++    with pytest.raises(W.CollectError, match="本地 checkout 不存在"):
++        W.collect_gstack(None, checkout_dir=Path("/nonexistent/gstack/checkout"))
++
++
++def test_collect_gstack_first_run_uses_local_head_as_natural_anchor(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "gstack-upstream")
++    checkout = tmp_path / "gstack-checkout"
++    _git("clone", "-q", str(upstream), str(checkout), cwd=tmp_path)
++
++    # 上游产出新提交（本地 checkout 尚未见过）
++    c2 = _commit_file(upstream, "f.txt", "two", "second commit")
++
++    fact = W.collect_gstack(None, checkout_dir=checkout)
++    assert fact["status"] == "ok"
++    assert fact["head_sha"] == c2
++    assert [c["sha"] for c in fact["commits"]] == [c2]
++    assert "f.txt" in fact["changed_paths"]
++
++
++def test_collect_gstack_with_persisted_anchor_delta_since_anchor(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "gstack-upstream")
++    checkout = tmp_path / "gstack-checkout"
++    _git("clone", "-q", str(upstream), str(checkout), cwd=tmp_path)
++    anchor_sha = _rev(checkout)
++
++    c2 = _commit_file(upstream, "g.txt", "two", "second commit")
++
++    fact = W.collect_gstack({"anchor_sha": anchor_sha}, checkout_dir=checkout)
++    assert fact["status"] == "ok"
++    assert [c["sha"] for c in fact["commits"]] == [c2]
++
++
++def test_collect_gstack_no_new_commits_zero_delta(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "gstack-upstream")
++    checkout = tmp_path / "gstack-checkout"
++    _git("clone", "-q", str(upstream), str(checkout), cwd=tmp_path)
++    anchor_sha = _rev(checkout)
++
++    fact = W.collect_gstack({"anchor_sha": anchor_sha}, checkout_dir=checkout)
++    assert fact["status"] == "ok"
++    assert fact["commits"] == []
++    assert fact["changed_paths"] == []
++
++
++def test_collect_gstack_rewritten_history_degrades_stale_anchor(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "gstack-upstream")
++    checkout = tmp_path / "gstack-checkout"
++    _git("clone", "-q", str(upstream), str(checkout), cwd=tmp_path)
++    stale_anchor = _commit_file(upstream, "g.txt", "two", "second commit")
++
++    # 模拟上游 force-push 历史重写：回退并另开分叉提交，原 stale_anchor 不再是祖先
++    _git("reset", "-q", "--hard", "HEAD~1", cwd=upstream)
++    _commit_file(upstream, "h.txt", "rewritten", "rewritten history commit")
++
++    with pytest.raises(W.CollectError, match="锚失效"):
++        W.collect_gstack({"anchor_sha": stale_anchor}, checkout_dir=checkout)
++
++
++# =========================================================================================
++# Task 2: bare 缓存层（matt / superpowers 共用 `_ensure_bare_cache`）
++# =========================================================================================
++
++def test_ensure_bare_cache_clones_when_missing(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "cache-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    result = W._ensure_bare_cache(cache_dir, str(upstream))
++    assert result == cache_dir
++    assert cache_dir.is_dir()
++    assert W._rev_parse(cache_dir, "HEAD") == _rev(upstream)
++
++
++def test_ensure_bare_cache_fetches_when_present(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "cache-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    W._ensure_bare_cache(cache_dir, str(upstream))
++
++    c2 = _commit_file(upstream, "new.txt", "x", "new upstream commit")
++    W._ensure_bare_cache(cache_dir, str(upstream))
++    assert W._rev_parse(cache_dir, "HEAD") == c2
++
++
++def test_ensure_bare_cache_self_heals_on_fetch_failure(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "cache-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    W._ensure_bare_cache(cache_dir, str(upstream))
++
++    # 损坏缓存（删 objects 目录）令后续 fetch 必然非零退出
++    import shutil as _shutil
++    _shutil.rmtree(cache_dir / "objects")
++
++    c2 = _commit_file(upstream, "healed.txt", "x", "commit after corruption")
++    result = W._ensure_bare_cache(cache_dir, str(upstream))
++    assert result == cache_dir
++    assert W._rev_parse(cache_dir, "HEAD") == c2
++
++
++def test_ensure_bare_cache_degrades_when_self_heal_also_fails(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "cache-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    W._ensure_bare_cache(cache_dir, str(upstream))
++
++    import shutil as _shutil
++    _shutil.rmtree(cache_dir / "objects")
++
++    bogus_upstream = tmp_path / "does-not-exist"
++    with pytest.raises(W.CollectError, match=str(cache_dir)):
++        W._ensure_bare_cache(cache_dir, str(bogus_upstream))
++
++
++# =========================================================================================
++# Task 2: matt 采集器
++# =========================================================================================
++
++def test_collect_matt_first_run_zero_delta_no_persisted_anchor(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "matt-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    fact = W.collect_matt(
++        None, cache_dir=cache_dir, skill_lock_path=tmp_path / "no-such-lock.json",
++        upstream_url=str(upstream),
++    )
++    assert fact["status"] == "ok"
++    assert fact["commits"] == []
++    assert fact["changed_paths"] == []
++    assert "installed_skills" not in fact
++
++
++def test_collect_matt_delta_since_anchor(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "matt-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    anchor_sha = _rev(upstream)
++    c2 = _commit_file(upstream, "skills/new-skill/SKILL.md", "content", "add new skill")
++
++    fact = W.collect_matt(
++        {"anchor_sha": anchor_sha}, cache_dir=cache_dir,
++        skill_lock_path=tmp_path / "no-such-lock.json", upstream_url=str(upstream),
++    )
++    assert fact["status"] == "ok"
++    assert [c["sha"] for c in fact["commits"]] == [c2]
++    assert "skills/new-skill/SKILL.md" in fact["changed_paths"]
++
++
++def test_collect_matt_rewritten_history_degrades(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "matt-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    W.collect_matt(None, cache_dir=cache_dir, skill_lock_path=tmp_path / "no-lock.json",
++                    upstream_url=str(upstream))
++    stale_anchor = _rev(upstream)
++    _force_rewrite_history_away_from(upstream)
++
++    with pytest.raises(W.CollectError, match="锚失效"):
++        W.collect_matt({"anchor_sha": stale_anchor}, cache_dir=cache_dir,
++                        skill_lock_path=tmp_path / "no-lock.json", upstream_url=str(upstream))
++
++
++def test_collect_matt_skill_lock_absent_is_not_an_error(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "matt-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    fact = W.collect_matt(None, cache_dir=cache_dir, skill_lock_path=tmp_path / "absent.json",
++                           upstream_url=str(upstream))
++    assert fact["status"] == "ok"
++
++
++def test_collect_matt_skill_lock_key_path_assertion_failure_degrades(tmp_path):
++    upstream = _make_bare_upstream(tmp_path / "matt-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    lock_path = tmp_path / ".skill-lock.json"
++    # mattpocock/skills 来源的条目缺 skillFolderHash 键 —— 格式漂移
++    lock_path.write_text(json.dumps({
++        "skills": {
++            "handoff": {"source": "mattpocock/skills", "skillPath": "skills/productivity/handoff"},
++        }
++    }), encoding="utf-8")
++
++    with pytest.raises(W.CollectError, match="格式漂移"):
++        W.collect_matt(None, cache_dir=cache_dir, skill_lock_path=lock_path, upstream_url=str(upstream))
++
++
++def test_collect_matt_skill_lock_ignores_non_matt_sources(tmp_path):
++    """键路径断言只针对 `source == mattpocock/skills` 的条目——其余来源缺键不该误报。"""
++    upstream = _make_bare_upstream(tmp_path / "matt-upstream")
++    cache_dir = tmp_path / "cache" / "matt.git"
++    lock_path = tmp_path / ".skill-lock.json"
++    lock_path.write_text(json.dumps({
++        "skills": {
++            "find-skills": {"source": "vercel-labs/skills"},  # 无 skillFolderHash，但非 matt 来源
++            "handoff": {"source": "mattpocock/skills", "skillFolderHash": "abc123"},
++        }
++    }), encoding="utf-8")
++
++    fact = W.collect_matt(None, cache_dir=cache_dir, skill_lock_path=lock_path, upstream_url=str(upstream))
++    assert fact["status"] == "ok"
++    assert fact["installed_skills"] == {"handoff": "abc123"}
++
++
++# =========================================================================================
++# Task 2: superpowers 采集器
++# =========================================================================================
++
++def _installed_plugins_json(records):
++    return json.dumps({"plugins": {"superpowers@claude-plugins-official": records}})
++
++
++def test_extract_superpowers_source_sha_direct():
++    text = _marketplace_json_text("aaa111")
++    assert W._extract_superpowers_source_sha(text) == "aaa111"
++
++
++def test_extract_superpowers_source_sha_missing_entry_raises():
++    with pytest.raises(W.CollectError, match="未找到 superpowers 条目"):
++        W._extract_superpowers_source_sha(json.dumps({"plugins": []}))
++
++
++def test_collect_superpowers_first_run_zero_delta(tmp_path):
++    marketplace_upstream = tmp_path / "marketplace-upstream"
++    _init_repo(marketplace_upstream)
++    _commit_file(marketplace_upstream, ".claude-plugin/marketplace.json",
++                  _marketplace_json_text("aaa111"), "seed marketplace")
++
++    installed = tmp_path / "installed_plugins.json"
++    installed.write_text(_installed_plugins_json([
++        {"scope": "user", "version": "6.2.0"},
++    ]), encoding="utf-8")
++
++    fact = W.collect_superpowers(
++        None, cache_dir=tmp_path / "cache" / "marketplace.git",
++        installed_plugins_path=installed, upstream_url=str(marketplace_upstream),
++    )
++    assert fact["status"] == "ok"
++    assert fact["commits"] == []
++    assert fact["source_sha_sequence"] == []
++    assert fact["installed_version"] == "6.2.0"
++
++
++def test_collect_superpowers_tracks_source_sha_sequence_via_path_filtered_commits(tmp_path):
++    marketplace_upstream = tmp_path / "marketplace-upstream"
++    _init_repo(marketplace_upstream)
++    _commit_file(marketplace_upstream, ".claude-plugin/marketplace.json",
++                  _marketplace_json_text("aaa111"), "seed marketplace")
++    anchor_sha = _rev(marketplace_upstream)
++
++    c2 = _commit_file(marketplace_upstream, ".claude-plugin/marketplace.json",
++                       _marketplace_json_text("bbb222"), "bump superpowers pin")
++    # 与 superpowers 追踪无关的提交（未触碰 marketplace.json）—— path filter 必须排除它
++    _commit_file(marketplace_upstream, "other-plugin/README.md", "noise", "unrelated commit")
++
++    installed = tmp_path / "installed_plugins.json"
++    installed.write_text(_installed_plugins_json([{"scope": "user", "version": "6.2.0"}]),
++                          encoding="utf-8")
++
++    fact = W.collect_superpowers(
++        {"anchor_sha": anchor_sha}, cache_dir=tmp_path / "cache" / "marketplace.git",
++        installed_plugins_path=installed, upstream_url=str(marketplace_upstream),
++    )
++    assert fact["status"] == "ok"
++    assert [c["sha"] for c in fact["commits"]] == [c2]
++    assert fact["source_sha_sequence"] == ["bbb222"]
++
++
++def test_collect_superpowers_installed_plugins_missing_file_degrades(tmp_path):
++    marketplace_upstream = _make_bare_upstream(tmp_path / "marketplace-upstream")
++    with pytest.raises(W.CollectError, match="本地锚源缺失"):
++        W.collect_superpowers(
++            None, cache_dir=tmp_path / "cache" / "marketplace.git",
++            installed_plugins_path=tmp_path / "no-such-file.json",
++            upstream_url=str(marketplace_upstream),
++        )
++
++
++def test_collect_superpowers_installed_plugins_missing_version_key_degrades(tmp_path):
++    marketplace_upstream = _make_bare_upstream(tmp_path / "marketplace-upstream")
++    installed = tmp_path / "installed_plugins.json"
++    installed.write_text(_installed_plugins_json([{"scope": "user"}]), encoding="utf-8")  # 缺 version
++
++    with pytest.raises(W.CollectError, match="格式漂移"):
++        W.collect_superpowers(
++            None, cache_dir=tmp_path / "cache" / "marketplace.git",
++            installed_plugins_path=installed, upstream_url=str(marketplace_upstream),
++        )
++
++
++def test_collect_superpowers_multi_scope_prefers_user_scope(tmp_path):
++    marketplace_upstream = _make_bare_upstream(tmp_path / "marketplace-upstream")
++    installed = tmp_path / "installed_plugins.json"
++    installed.write_text(_installed_plugins_json([
++        {"scope": "project", "version": "9.9.9"},
++        {"scope": "user", "version": "6.2.0"},
++        {"scope": "project", "version": "1.0.0"},
++    ]), encoding="utf-8")
++
++    fact = W.collect_superpowers(
++        None, cache_dir=tmp_path / "cache" / "marketplace.git",
++        installed_plugins_path=installed, upstream_url=str(marketplace_upstream),
++    )
++    assert fact["installed_version"] == "6.2.0"
++
++
++def test_collect_superpowers_multi_scope_no_user_takes_max_version_numeric_not_lexicographic(tmp_path):
++    marketplace_upstream = _make_bare_upstream(tmp_path / "marketplace-upstream")
++    installed = tmp_path / "installed_plugins.json"
++    # 词典序会误判 "1.9.0" > "1.10.0"；数值化 tokenizing 必须选出真正的 1.10.0
++    installed.write_text(_installed_plugins_json([
++        {"scope": "project", "version": "1.9.0"},
++        {"scope": "project", "version": "1.10.0"},
++    ]), encoding="utf-8")
++
++    fact = W.collect_superpowers(
++        None, cache_dir=tmp_path / "cache" / "marketplace.git",
++        installed_plugins_path=installed, upstream_url=str(marketplace_upstream),
++    )
++    assert fact["installed_version"] == "1.10.0"
++
++
++def test_collect_superpowers_rewritten_history_degrades(tmp_path):
++    marketplace_upstream = tmp_path / "marketplace-upstream"
++    _init_repo(marketplace_upstream)
++    _commit_file(marketplace_upstream, ".claude-plugin/marketplace.json",
++                  _marketplace_json_text("aaa111"), "seed marketplace")
++    installed = tmp_path / "installed_plugins.json"
++    installed.write_text(_installed_plugins_json([{"scope": "user", "version": "6.2.0"}]),
++                          encoding="utf-8")
++
++    cache_dir = tmp_path / "cache" / "marketplace.git"
++    W.collect_superpowers(None, cache_dir=cache_dir, installed_plugins_path=installed,
++                           upstream_url=str(marketplace_upstream))
++    stale_anchor = _rev(marketplace_upstream)
++    _force_rewrite_history_away_from(marketplace_upstream)
++
++    with pytest.raises(W.CollectError, match="锚失效"):
++        W.collect_superpowers({"anchor_sha": stale_anchor}, cache_dir=cache_dir,
++                               installed_plugins_path=installed, upstream_url=str(marketplace_upstream))
++
++
++# =========================================================================================
++# Task 2: OpenSpec 采集器（版本对照 + schema fork drift）
++# =========================================================================================
++
++def _fake_completed(returncode=0, stdout="", stderr=""):
++    return subprocess.CompletedProcess(args=[], returncode=returncode, stdout=stdout, stderr=stderr)
++
++
++def test_diff_dirs_sha256_changed_added_removed(tmp_path):
++    fork = tmp_path / "fork"
++    upstream = tmp_path / "upstream"
++    fork.mkdir(); upstream.mkdir()
++    (fork / "schema.yaml").write_text("v1", encoding="utf-8")
++    (upstream / "schema.yaml").write_text("v2", encoding="utf-8")  # changed
++    (upstream / "new-template.md").write_text("new", encoding="utf-8")  # added(上游有fork没有)
++    (fork / "old-template.md").write_text("old", encoding="utf-8")  # removed(fork有上游没有)
++
++    drift = W._diff_dirs_sha256(fork, upstream)
++    assert drift["changed"] == ["schema.yaml"]
++    assert drift["added"] == ["new-template.md"]
++    assert drift["removed"] == ["old-template.md"]
++
++
++def test_collect_openspec_version_compare_and_schema_drift(tmp_path, monkeypatch):
++    fork_dir = tmp_path / "fork"
++    upstream_schema_root = tmp_path / "npm-root-g"
++    upstream_dir = upstream_schema_root / "@fission-ai" / "openspec" / "schemas" / "spec-driven"
++    fork_dir.mkdir(parents=True)
++    upstream_dir.mkdir(parents=True)
++    (fork_dir / "schema.yaml").write_text("same", encoding="utf-8")
++    (upstream_dir / "schema.yaml").write_text("same", encoding="utf-8")
++
++    monkeypatch.setattr(W.shutil, "which", lambda name: "/usr/bin/openspec")
++
++    def fake_run(cmd, input=None):
++        if cmd[:2] == ["/usr/bin/openspec", "--version"]:
++            return _fake_completed(stdout="1.8.0\n")
++        if cmd[:3] == ["npm", "view", W.OPENSPEC_NPM_PACKAGE]:
++            return _fake_completed(stdout="1.9.0\n")
++        raise AssertionError(f"unexpected cmd: {cmd}")
++
++    monkeypatch.setattr(W, "_run", fake_run)
++
++    fact = W.collect_openspec(repo_root=tmp_path, fork_dir=fork_dir, npm_root_g=str(upstream_schema_root))
++    assert fact["status"] == "ok"
++    assert fact["installed_version"] == "1.8.0"
++    assert fact["latest_version"] == "1.9.0"
++    assert fact["schema_drift"] == {"status": "ok", "changed": [], "added": [], "removed": []}
++
++
++def test_collect_openspec_upstream_schema_dir_missing_degrades_subitem_only(tmp_path, monkeypatch):
++    fork_dir = tmp_path / "fork"
++    fork_dir.mkdir()
++    (fork_dir / "schema.yaml").write_text("x", encoding="utf-8")
++
++    monkeypatch.setattr(W.shutil, "which", lambda name: "/usr/bin/openspec")
++
++    def fake_run(cmd, input=None):
++        if cmd[:2] == ["/usr/bin/openspec", "--version"]:
++            return _fake_completed(stdout="1.8.0\n")
++        if cmd[:3] == ["npm", "view", W.OPENSPEC_NPM_PACKAGE]:
++            return _fake_completed(stdout="1.8.0\n")
++        raise AssertionError(f"unexpected cmd: {cmd}")
++
++    monkeypatch.setattr(W, "_run", fake_run)
++
++    fact = W.collect_openspec(
++        repo_root=tmp_path, fork_dir=fork_dir, npm_root_g=str(tmp_path / "no-such-npm-root"),
++    )
++    # 版本对照子项不受影响
++    assert fact["status"] == "ok"
++    assert fact["installed_version"] == "1.8.0"
++    assert fact["latest_version"] == "1.8.0"
++    # schema drift 子项独立降级
++    assert fact["schema_drift"]["status"] == "degraded"
++    assert "reason" in fact["schema_drift"]
++
++
++def test_collect_openspec_cli_missing_raises(tmp_path, monkeypatch):
++    monkeypatch.setattr(W.shutil, "which", lambda name: None)
++    with pytest.raises(W.CollectError, match="本地锚源缺失"):
++        W.collect_openspec(repo_root=tmp_path)
++
++
++# =========================================================================================
++# Task 2: collect_all 单源失败不传染 + 超时降级
++# =========================================================================================
++
++def test_collect_all_single_source_unreachable_others_unaffected(tmp_path, monkeypatch):
++    monkeypatch.setattr(W, "collect_gstack", lambda anchor, **kw: {"status": "ok", "head_sha": "g1",
++                                                                     "commits": [], "changed_paths": []})
++    monkeypatch.setattr(W, "collect_matt", lambda anchor, **kw: (_ for _ in ()).throw(
++        W.CollectError("matt 上游不可达")))
++    monkeypatch.setattr(W, "collect_superpowers", lambda anchor, **kw: {
++        "status": "ok", "head_sha": "s1", "commits": [], "source_sha_sequence": [],
++        "installed_version": "6.2.0"})
++    monkeypatch.setattr(W, "collect_openspec", lambda **kw: {"status": "ok",
++                                                               "installed_version": "1.8.0",
++                                                               "latest_version": "1.8.0"})
++
++    sources = W.collect_all({}, repo_root=tmp_path, home=tmp_path)
++    assert sources["gstack"]["status"] == "ok"
++    assert sources["matt"]["status"] == "degraded"
++    assert "matt 上游不可达" in sources["matt"]["reason"]
++    assert sources["superpowers"]["status"] == "ok"
++    assert sources["openspec"]["status"] == "ok"
++
++
++def test_collect_source_safe_converts_timeout_to_degraded():
++    def _times_out():
++        raise subprocess.TimeoutExpired(cmd=["git", "fetch"], timeout=W.SUBPROCESS_TIMEOUT_SECONDS)
++
++    result = W._collect_source_safe(_times_out)
++    assert result["status"] == "degraded"
++    assert "超时" in result["reason"]
++
++
++# =========================================================================================
++# Task 2: advance 双参数门
++# =========================================================================================
++
++def _write_facts(path, sources):
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(json.dumps({"schema_version": 1, "collected_at": "2026-08-11T09:00:00Z",
++                                 "sources": sources}), encoding="utf-8")
++
++
++def test_cmd_advance_rejects_when_report_missing(tmp_path, monkeypatch):
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++    facts_path = repo / "facts.json"
++    _write_facts(facts_path, {"gstack": {"status": "ok", "head_sha": "abc",
++                                          "commits": [{"sha": "abc", "subject": "x"}]}})
++
++    args = argparse_ns(report=str(repo / "no-such-report.md"), facts=str(facts_path))
++    with pytest.raises(W.AdvanceGateError, match="报告文件不存在"):
++        W.cmd_advance(args)
++    assert not (repo / "openspec" / "upstream" / "anchors.yaml").exists()
++
++
++def argparse_ns(**kwargs):
++    class _NS:
++        pass
++    ns = _NS()
++    for k, v in kwargs.items():
++        setattr(ns, k, v)
++    return ns
++
++
++def test_cmd_advance_rejects_when_report_missing_a_commit_sha(tmp_path, monkeypatch):
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++    facts_path = repo / "facts.json"
++    _write_facts(facts_path, {"gstack": {"status": "ok", "head_sha": "abc123",
++                                          "commits": [{"sha": "abc123", "subject": "x"}]}})
++    report_path = repo / "report.md"
++    report_path.write_text("这份报告没有提到那个 commit sha\n", encoding="utf-8")
++
++    args = argparse_ns(report=str(report_path), facts=str(facts_path))
++    with pytest.raises(W.AdvanceGateError, match="abc123"):
++        W.cmd_advance(args)
++    assert not (repo / "openspec" / "upstream" / "anchors.yaml").exists()
++
++
++def test_cmd_advance_advances_anchors_when_report_transcribes_all_shas(tmp_path, monkeypatch):
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++    facts_path = repo / "facts.json"
++    _write_facts(facts_path, {
++        "gstack": {"status": "ok", "head_sha": "abc123",
++                   "commits": [{"sha": "abc123", "subject": "x"}]},
++        "openspec": {"status": "ok", "installed_version": "1.9.0", "commits": []},
++    })
++    report_path = repo / "report.md"
++    report_path.write_text("gstack 节：commit abc123 已核查。openspec 节：1.9.0。\n", encoding="utf-8")
++
++    args = argparse_ns(report=str(report_path), facts=str(facts_path))
++    rc = W.cmd_advance(args)
++    assert rc == 0
++
++    anchors_path = repo / "openspec" / "upstream" / "anchors.yaml"
++    anchors = W.load_anchors(anchors_path)
++    assert W.get_source_anchor(anchors, "gstack") == {"anchor_sha": "abc123"}
++    assert W.get_source_anchor(anchors, "openspec") == {"anchor_version": "1.9.0"}
++    assert anchors["last_run"] is not None
++
++
++def test_cmd_advance_preserves_degraded_source_anchor_verbatim(tmp_path, monkeypatch):
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++    anchors_path = repo / "openspec" / "upstream" / "anchors.yaml"
++    W.write_anchors(anchors_path, {
++        "schema_version": 1, "last_run": "2026-08-01T00:00:00Z", "remind_after_days": 30,
++        "sources": {"matt": {"anchor_sha": "old-matt-sha-unchanged"}},
++    })
++
++    facts_path = repo / "facts.json"
++    _write_facts(facts_path, {
++        "gstack": {"status": "ok", "head_sha": "new-gstack-sha",
++                   "commits": [{"sha": "new-gstack-sha", "subject": "x"}]},
++        "matt": {"status": "degraded", "reason": "matt 上游不可达", "commits": []},
++    })
++    report_path = repo / "report.md"
++    report_path.write_text("gstack: new-gstack-sha 已核查。matt: 采集降级，下轮重试同一窗口。\n",
++                            encoding="utf-8")
++
++    args = argparse_ns(report=str(report_path), facts=str(facts_path))
++    W.cmd_advance(args)
++
++    anchors = W.load_anchors(anchors_path)
++    assert W.get_source_anchor(anchors, "matt") == {"anchor_sha": "old-matt-sha-unchanged"}
++    assert W.get_source_anchor(anchors, "gstack") == {"anchor_sha": "new-gstack-sha"}
++
++
++def test_cmd_advance_first_run_creates_anchors_file(tmp_path, monkeypatch):
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++    anchors_path = repo / "openspec" / "upstream" / "anchors.yaml"
++    assert not anchors_path.exists()
++
++    facts_path = repo / "facts.json"
++    _write_facts(facts_path, {"openspec": {"status": "ok", "installed_version": "1.8.0", "commits": []}})
++    report_path = repo / "report.md"
++    report_path.write_text("首轮建锚：openspec 1.8.0。\n", encoding="utf-8")
++
++    args = argparse_ns(report=str(report_path), facts=str(facts_path))
++    W.cmd_advance(args)
++    assert anchors_path.is_file()
++    anchors = W.load_anchors(anchors_path)
++    assert W.get_source_anchor(anchors, "openspec") == {"anchor_version": "1.8.0"}
++
++
++def test_cli_advance_missing_args_in_valid_repo_rejects_via_main(tmp_path, monkeypatch):
++    """main() 层：cwd 合法但零参数调用 advance —— 报告路径缺失须拒绝推进（非 argparse
++    usage error，也不是 CwdGuardError），退出码非零，anchors.yaml 不被创建。"""
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++    rc = W.main(["advance"])
++    assert rc == 3
++    assert not (repo / "openspec" / "upstream" / "anchors.yaml").exists()
++
++
++# =========================================================================================
++# Task 2: R5 不改池不变量
++# =========================================================================================
++
++def test_collect_and_advance_do_not_touch_issues_tree(tmp_path, monkeypatch):
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++    issues_dir = repo / "openspec" / "issues" / "open"
++    issues_dir.mkdir(parents=True)
++    (issues_dir / "T1.md").write_text("existing issue\n", encoding="utf-8")
++    before = sorted(p.relative_to(repo) for p in (repo / "openspec" / "issues").rglob("*"))
++
++    monkeypatch.setattr(
++        W, "collect_all",
++        lambda anchors, *, repo_root, home=None: {
++            "gstack": {"status": "ok", "head_sha": "deadbeef",
++                       "commits": [{"sha": "deadbeef", "subject": "x"}], "changed_paths": []},
++        },
++    )
++    rc_collect = W.main(["collect"])
++    assert rc_collect == 0
++
++    facts_files = list((repo / "openspec" / "upstream" / ".facts").glob("*.json"))
++    assert len(facts_files) == 1
++    report_path = repo / "openspec" / "upstream" / "reports" / "report.md"
++    report_path.parent.mkdir(parents=True, exist_ok=True)
++    report_path.write_text("gstack: deadbeef 已核查。\n", encoding="utf-8")
++
++    rc_advance = W.main(["advance", str(report_path), str(facts_files[0])])
++    assert rc_advance == 0
++
++    after = sorted(p.relative_to(repo) for p in (repo / "openspec" / "issues").rglob("*"))
++    assert before == after
++    assert (issues_dir / "T1.md").read_text(encoding="utf-8") == "existing issue\n"
++
++
++# =========================================================================================
++# Task 2: facts JSON 形状快照断言
++# =========================================================================================
++
++def test_facts_json_shape_snapshot(tmp_path, monkeypatch):
++    repo = _init_repo(tmp_path / "sdflow-skills",
++                       remote="https://github.com/laodao-ai/sdflow-skills.git")
++    monkeypatch.chdir(repo)
++
++    monkeypatch.setattr(
++        W, "collect_all",
++        lambda anchors, *, repo_root, home=None: {
++            "gstack": {"status": "ok", "head_sha": "g1",
++                       "commits": [{"sha": "g1", "subject": "s"}], "changed_paths": ["a.md"]},
++            "matt": {"status": "degraded", "reason": "matt 上游不可达"},
++            "superpowers": {"status": "ok", "head_sha": "s1", "commits": [],
++                             "source_sha_sequence": [], "installed_version": "6.2.0"},
++            "openspec": {"status": "ok", "installed_version": "1.8.0", "latest_version": "1.8.0",
++                         "schema_drift": {"status": "ok", "changed": [], "added": [], "removed": []}},
++        },
++    )
++    rc = W.main(["collect"])
++    assert rc == 0
++
++    facts_files = list((repo / "openspec" / "upstream" / ".facts").glob("*.json"))
++    assert len(facts_files) == 1
++    facts = json.loads(facts_files[0].read_text(encoding="utf-8"))
++
++    assert facts["schema_version"] == W.SCHEMA_VERSION
++    assert "collected_at" in facts
++    assert set(facts["sources"].keys()) == {"gstack", "matt", "superpowers", "openspec"}
++    assert facts["sources"]["gstack"]["status"] == "ok"
++    assert facts["sources"]["matt"]["status"] == "degraded"
++    assert facts["sources"]["matt"]["reason"] == "matt 上游不可达"
++    assert facts["sources"]["superpowers"]["installed_version"] == "6.2.0"
++    assert facts["sources"]["openspec"]["schema_drift"]["changed"] == []
++
++
++def test_facts_dot_facts_dir_has_gitignore():
++    gitignore = Path(__file__).parent.parent.parent / ".gitignore"
++    text = gitignore.read_text(encoding="utf-8")
++    assert "openspec/upstream/.facts" in text
