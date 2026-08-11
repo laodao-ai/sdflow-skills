@@ -29,3 +29,6 @@ __pycache__/
 
 # FF-0 守卫的一次性 ack 哨兵（人 touch、hook 读到即删）——本地令牌，不该入库
 /openspec/.ff0-ack
+
+# sdflow-upstream-watch facts 中间产物（collect 写、advance 读，一轮一份，非留存状态）
+/openspec/upstream/.facts/
