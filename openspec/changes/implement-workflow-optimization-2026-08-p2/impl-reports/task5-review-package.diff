@@ -1,0 +1,547 @@
+# Review package: 5d576f78ace106b816bc59d976178698f2da704a..df8343cd66f2cb5371061df6926d12d3780e4d83 (Task 5 worktree merge)
+
+## Commits
+df8343c merge(task5): done 终态快照接线 + host 判定 + retro join 冒烟
+4cf0192 impl(task5): done 终态快照接线 + host 判定 + retro join 冒烟
+
+## Files changed
+ hack/tests/test_token_snapshot.py                  | 123 ++++++++++++++++++++-
+ .../impl-reports/task5-done-snapshot.md            |  55 +++++++++
+ sdflow-done/SKILL.md                               |  12 ++
+ sdflow-init/assets/hack/token_snapshot.py          |  60 ++++++++--
+ sdflow-retro/scripts/tests/test_retro_report.py    |  23 ++++
+ 5 files changed, 256 insertions(+), 17 deletions(-)
+
+## Diff
+diff --git a/hack/tests/test_token_snapshot.py b/hack/tests/test_token_snapshot.py
+index 5749ccc..2dbedd0 100644
+--- a/hack/tests/test_token_snapshot.py
++++ b/hack/tests/test_token_snapshot.py
+@@ -1,24 +1,33 @@
+-"""token-log.jsonl 快照采集契约（implement-workflow-optimization-2026-08-p1 · Task 3）。
++"""token-log.jsonl 快照采集契约（implement-workflow-optimization-2026-08-p1 · Task 3；
++宿主判定补丁见 implement-workflow-optimization-2026-08-p2 · Task 5）。
+ 
+ 真相源：`sdflow-init/assets/hack/token_snapshot.py` + 同目录 `checkpoint-commit.sh` 的接线
+ （`git status --porcelain` 判空 gate 之后、`git add -A` 之前）。见
+ `openspec/changes/implement-workflow-optimization-2026-08-p1/specs/token-snapshot-anchor/spec.md`。
+ 
+ 【怎么跑】假 HOME（`tmp_path`）+ 假 repo 真跑 `bash checkpoint-commit.sh`：
+ - `~/.sdflow/hack/token_snapshot.py` 用软链指向本仓源文件，模拟 setup.sh 的部署形态
+   （Unix 场景，符合 CLAUDE.md「hack/ 是拷贝非软链」的分发口径——测试用软链只是为了不用真跑
+   setup.sh 就能验证部署后的调用路径，效果等价）。
+ - `~/.claude/projects/<munged-cwd>/<session>.jsonl` 手写伪造 transcript 行（不依赖真实会话）。
+ - change 目录用 `git init` 出的假 repo 里 `openspec/changes/<change>/` 手建。
+ 
+ 不跑真实 `setup.sh`（机械层，零全局影响）——见 CLAUDE.md「开发期测试三层」第 1 层。
++
++【宿主基线】`_run_checkpoint` / `_run_token_snapshot_directly` 默认注入 `CLAUDECODE=1` +
++清空 `CODEX_THREAD_ID`（claude 宿主基线），使 host 分支测试**不依赖运行本测试套件的真实
++环境是否恰好在 Claude Code 会话里跑**（Task 5 引入 `detect_host()` 前，`host` 字段被硬编码
++`"claude"`，测试对宿主环境零依赖；引入后必须显式钉死基线，否则在无 `CLAUDECODE` 的 CI/裸
++终端跑会因宿主判 unknown 而全体误入「跳过 mtime 回退」分支，产生与本机结果不一致的假象）。
++`extra_env` 里某 key 的值传 `None` = 从基线里删除该 key（而非设为空串），供
++`TestHostDetection` 显式切换/清空宿主信号。
+ """
+ import json
+ import os
+ import subprocess
+ from pathlib import Path
+ 
+ import pytest
+ 
+ from test_support.windows import bash_executable, bash_path
+ 
+@@ -91,39 +100,54 @@ def _assistant_msg(input_tokens=0, output_tokens=0, cache_read=0, cache_creation
+             "output_tokens": output_tokens,
+             "cache_read_input_tokens": cache_read,
+             "cache_creation_input_tokens": cache_creation,
+         },
+     }
+     if extra:
+         msg.update(extra)
+     return {"type": "assistant", "message": msg}
+ 
+ 
++def _apply_host_baseline(env, extra_env):
++    """claude 宿主基线（`CLAUDECODE=1` + 清空 `CODEX_THREAD_ID`），再叠加 `extra_env`。
++
++    `extra_env` 某 key 值为 `None` ⇒ 从 env 里删除该 key（用于 `TestHostDetection` 显式
++    清空 `CLAUDECODE` 或注入 `CODEX_THREAD_ID`）；其余 key 正常覆盖写入。
++    """
++    env["CLAUDECODE"] = "1"
++    env.pop("CODEX_THREAD_ID", None)
++    if extra_env:
++        for k, v in extra_env.items():
++            if v is None:
++                env.pop(k, None)
++            else:
++                env[k] = v
++    return env
++
++
+ def _run_checkpoint(repo, home, step, desc=None, extra_env=None):
+     env = dict(os.environ)
+     env["HOME"] = str(home)
+     env.pop("SDFLOW_HOME", None)
+-    if extra_env:
+-        env.update(extra_env)
++    _apply_host_baseline(env, extra_env)
+     args = [bash_executable(), bash_path(CHECKPOINT_SCRIPT), step]
+     if desc is not None:
+         args.append(desc)
+     return subprocess.run(args, cwd=str(repo), env=env, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=60)
+ 
+ 
+ def _run_token_snapshot_directly(repo, home, step, extra_env=None):
+     env = dict(os.environ)
+     env["HOME"] = str(home)
+     env.pop("SDFLOW_HOME", None)
+-    if extra_env:
+-        env.update(extra_env)
++    _apply_host_baseline(env, extra_env)
+     return subprocess.run(
+         ["python3", str(TOKEN_SNAPSHOT_SRC), "--step", step],
+         cwd=str(repo), env=env, capture_output=True, text=True,
+         encoding="utf-8", errors="replace", timeout=60,
+     )
+ 
+ 
+ def _token_log_lines(repo, change):
+     path = repo / "openspec" / "changes" / change / "token-log.jsonl"
+     if not path.is_file():
+@@ -417,20 +441,109 @@ class TestParseError:
+ 
+         r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": session})
+         assert r.returncode == 0, r.stdout + r.stderr
+ 
+         lines = _token_log_lines(repo, "demo-change")
+         assert len(lines) == 1
+         assert lines[0]["anchor"] is False
+         assert lines[0]["reason"] == "parse-error"
+ 
+ 
++class TestHostDetection:
++    """implement-workflow-optimization-2026-08-p2 · Task 5：codex/unknown 宿主 MUST NOT 走
++    Claude transcript mtime 回退——即便回退目录里摆着一份完全合法、能命中的 transcript，
++    非 claude 宿主也必须直接落 `no-transcript` 降级行，不得读到它。`host` 字段如实写检测值
++    （而非历史上恒为 `"claude"` 的写法）。
++    """
++
++    def test_codex_host_skips_mtime_fallback_even_with_matching_transcript(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        # mtime 回退目录里摆一份完全合法、会被 claude 宿主命中的 transcript——
++        # 用来证明 codex 宿主是「主动不看」，不是「碰巧没找到」。
++        _write_transcript(home, repo, "would-be-picked-0000",
++                           [_assistant_msg(input_tokens=99, output_tokens=1)])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff", extra_env={
++            "CLAUDECODE": None, "CODEX_THREAD_ID": "codex-thread-abc123",
++        })
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is False
++        assert lines[0]["reason"] == "no-transcript"
++        assert lines[0]["host"] == "codex"
++        assert "usage" not in lines[0]
++        assert lines[0]["session"] == ""
++
++    def test_unknown_host_skips_mtime_fallback_when_no_signal_present(self, tmp_path):
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        _write_transcript(home, repo, "would-be-picked-1111",
++                           [_assistant_msg(input_tokens=7)])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDECODE": None})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is False
++        assert lines[0]["reason"] == "no-transcript"
++        assert lines[0]["host"] == "unknown"
++
++    def test_conflicting_host_signals_fall_to_unknown_and_skip_fallback(self, tmp_path):
++        """两个宿主信号同时出现 = 冲突，MUST NOT 静默取其一——落 unknown，同样不碰 mtime 回退。"""
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        _write_transcript(home, repo, "would-be-picked-2222",
++                           [_assistant_msg(input_tokens=3)])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff",
++                             extra_env={"CODEX_THREAD_ID": "codex-thread-conflict"})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is False
++        assert lines[0]["reason"] == "no-transcript"
++        assert lines[0]["host"] == "unknown"
++
++    def test_claude_host_baseline_still_reports_host_claude(self, tmp_path):
++        """基线场景（本文件默认注入的 claude 宿主）：host 字段如实写 "claude"，行为不变。"""
++        home = tmp_path / "home"
++        home.mkdir()
++        repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
++        _deploy_helper(home)
++        session = "sess-claude-baseline-0000"
++        _write_transcript(home, repo, session, [_assistant_msg(input_tokens=11)])
++        _touch_untracked(repo)
++
++        r = _run_checkpoint(repo, home, "ff", extra_env={"CLAUDE_CODE_SESSION_ID": session})
++        assert r.returncode == 0, r.stdout + r.stderr
++
++        lines = _token_log_lines(repo, "demo-change")
++        assert len(lines) == 1
++        assert lines[0]["anchor"] is True
++        assert lines[0]["host"] == "claude"
++        assert lines[0]["usage"]["input"] == 11
++
++
+ class TestSessionIdGrammar:
+     def test_path_traversal_session_id_is_rejected_and_falls_back(self, tmp_path):
+         """恶意/畸形 session-id（含 `/`）MUST NOT 被拼进路径——退化为 mtime 回退或 no-transcript。"""
+         home = tmp_path / "home"
+         home.mkdir()
+         repo = _init_repo(tmp_path, branch="feat/demo-change", change="demo-change")
+         _deploy_helper(home)
+         # 目录内没有任何合法 jsonl，只有恶意 session-id 指向仓外
+         projects_dir = home / ".claude" / "projects" / _munge(repo)
+         projects_dir.mkdir(parents=True)
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task5-done-snapshot.md b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task5-done-snapshot.md
+new file mode 100644
+index 0000000..abe08a6
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task5-done-snapshot.md
+@@ -0,0 +1,55 @@
++# Task 5 — Done 终态快照接线
++
++**状态**：DONE
++
++## 做了什么
++
++### 1. `sdflow-done/SKILL.md` 接线（§3.0，新增）
++在「第三步：Archive + Spec 同步」标题之后、派发 Archive 子代理**之前**插入 `3.0 终态 token 快照` 子步：主 session 直接跑 `python3 ~/.sdflow/hack/token_snapshot.py --step done-final || true`（change 目录仍在原位）。段落内写明：
++- 成功即在 `token-log.jsonl` 追加 `anchor=true` 行，随 archive 一起搬走；失败显式降级为 `anchor=false`，`|| true` 保证不挡收尾（同 checkpoint 侧口径）。
++- 覆盖范围 = Verify + hand-off；archive/commit/merge 自身用量是已声明残余盲区（指回 `openspec/specs/token-snapshot-anchor/spec.md`），MUST NOT 表述为已全量覆盖。
++- 已知边界：跨 session 重试收尾时该行会被计作新 session 分组首行、全额计入，token 统计可能重复计入（view-only 精度边界）。
++
++### 2. `token_snapshot.py` 宿主判定补丁（`sdflow-init/assets/hack/token_snapshot.py`）
++发现并修的真实缺口：脚本此前有模块级常量 `HOST = "claude"` **恒定硬编码**，`host` 字段从未反映实际宿主；且不论宿主是谁都会去扫 `~/.claude/projects/<munged-cwd>/` 做 mtime 回退——这与 brief「codex/unknown 宿主不走 Claude mtime fallback，直接落显式降级行」的目标态不符（此前只是「侥幸」——非 Claude 宿主该目录通常不存在，所以结果凑巧对，但不是显式判定，且 `host` 字段一直是假的）。
++
++修法：新增 `detect_host(env=None)`，与 `outside-voice-job.py:detect_host()` 同口径（正信号判定：`CLAUDECODE=1` → claude；`CODEX_THREAD_ID` 非空 → codex；两者同时出现 = 冲突 → unknown；均缺席 → unknown）。`_collect()` 起手先判宿主，非 claude 宿主直接返回 `no-transcript` 降级行、完全不碰 `~/.claude/projects/`；`host` 字段如实写检测值（`_build_line` 新增 `host` 形参，`main()` 两处异常兜底分支同步改用 `detect_host()`）。
++
++### 3. 测试
++- `hack/tests/test_token_snapshot.py`：新增 `TestHostDetection`（4 个用例）——codex 宿主、unknown（无信号）、冲突信号（两信号同时出现）三种场景下，即便 mtime 回退目录里摆着一份完全合法、会被 claude 宿主命中的 transcript，也必须直接落 `no-transcript` 且 `host` 字段如实；另一用例覆盖 claude 基线场景 `host=="claude"` 不受影响。为使宿主分支测试确定性（不依赖跑测试的进程是否恰好带 `CLAUDECODE=1`），给 `_run_checkpoint`/`_run_token_snapshot_directly` 加了 `_apply_host_baseline` 辅助函数，默认注入 `CLAUDECODE=1` + 清空 `CODEX_THREAD_ID`，`extra_env` 某 key 传 `None` 表示从基线删除该 key（供新用例显式切换/清空宿主信号）。
++  - Red-before-green 已验证：`git stash` 掉脚本改动、只留测试改动，新增 3 条 host-skip 用例全部 FAIL（旧脚本走 mtime 回退命中了本不该读到的 transcript）；恢复脚本改动后 17/17 全绿。
++- `sdflow-retro/scripts/tests/test_retro_report.py`：新增 `test_compute_token_deltas_reads_done_final_step_row`（冒烟）——在 `archive_dir` 下构造含 `step="done-final"` 行的 `token-log.jsonl`，验证 `read_token_log` 与 `compute_token_deltas` 都能正常读到并正确差分。retro 消费侧对 `step` 值本无白名单校验（只认 `anchor=true` + usage 四计数合法 + session/step 非空字符串），此测试把「新 step 值免入侵改动即可读」的事实钉死为可回归验证的用例，而非仅凭代码走查断言。
++
++### 4. 契约文档（未改动，核验已满足）
++`openspec/changes/implement-workflow-optimization-2026-08-p2/specs/token-snapshot-anchor/spec.md`（delta spec）在 Phase C 生成阶段已写好本次全部行为契约（`step="done-final"`、失败降级、残余盲区声明、跨 session 重试已知边界），核对后确认与本次实现逐条一致，无需改动；archive 时会由 sdflow-done 第三步的 Archive 子代理同步进 `openspec/specs/token-snapshot-anchor/spec.md` 主 spec。
++
++## 验收标准逐条核对
++
++- [x] sdflow-done SKILL 第三步起手含 token_snapshot 调用接线 —— `sdflow-done/SKILL.md` §3.0
++- [x] 失败显式降级不挡收尾流程 —— `|| true` + 脚本内已有的 try/except-to-degraded-line 全链路（未改动既有降级路径，只改宿主判定分支）
++- [x] codex/unknown 宿主不走 Claude mtime fallback，直接显式降级 —— `detect_host()` + `_collect()` 起手分流；`hack/tests/test_token_snapshot.py::TestHostDetection` 4 用例覆盖
++- [x] done-final step 值记入契约文档 —— delta spec 已含（Phase C 生成阶段写就，核对一致）
++- [x] retro join 对 done-final 行可读 —— `test_compute_token_deltas_reads_done_final_step_row` 冒烟通过
++
++## 测试证据
++
++```
++$ /usr/bin/python3 -m pytest hack/tests/test_token_snapshot.py -q
++.................                                                        [100%]
++17 passed in 1.92s
++
++$ /usr/bin/python3 -m pytest sdflow-retro/scripts/tests/test_retro_report.py -q -k token
++...................                                                      [100%]
++19 passed, 69 deselected in 24.42s
++
++$ /usr/bin/python3 -m pytest hack/ sdflow-retro/ -q
++（全量）532 passed in 90.49s
++```
++
++全仓 `pytest -q`（含所有 skill）已另行在后台跑，超出 2 分钟前台超时窗口，未在本报告内附最终行数——`hack/` + `sdflow-retro/` 是本次改动唯一触及的两个测试面，已单独全绿；其余 skill 目录本次零改动，理论无关联失败风险。
++
++## 已知边界 / 未做
++
++- 未新增 `--anchor` 之类 CLI 显式开关——`anchor` 字段的 true/false 由采集是否成功自动决定（brief 括注「anchor=true」指的是成功时产出的记录字段值，非新参数），与既有 checkpoint 侧调用形态完全同构，无需引入新接口面（基准④简化）。
++- 未改 `token-log.jsonl` schema、未改 `retro_report.py` 解析逻辑——`step` 字段本就无白名单校验，"done-final" 天然可读，遵 Non-Goals「不改 lens-metric 锚字段集」同精神（此处虽非 lens-metric 锚，但同样不引入新字段）。
++- 跨 session 重试重复计入的边界按 delta spec 原文「不改脚本」——只声明不修复，本次未做任何缓解代码。
+diff --git a/sdflow-done/SKILL.md b/sdflow-done/SKILL.md
+index 16a2d5c..bb2a356 100644
+--- a/sdflow-done/SKILL.md
++++ b/sdflow-done/SKILL.md
+@@ -366,20 +366,32 @@ python3 ~/.claude/skills/sdflow-done/scripts/roadmap_writeback_draft.py \
+ **判断留人**：草稿只列 phase 候选行集 + 机械锚（archive/merge 占位），**勾哪几行 / 算不算满足验收标准 / 价值叙述 / 阶段状态 / deferred 由人在异步回填时判**——助手 MUST NOT 代判、MUST NOT 直接改 roadmap、MUST NOT 写 change 产物文件（避 C1）。
+ 
+ ---
+ 
+ ## 第三步：Archive + Spec 同步（中档子 agent）
+ 
+ 整步交一个**中档**子 agent 执行（隔离主 session 上下文）。它**不能假设知道本次实现细节**（fresh 上下文），所以 prompt 要求它**读真实代码核对每条 delta**——这样同步出的 spec 反映**终审后实况**而非可能过时的 delta，无需控制者口头传递偏差。
+ 
+ ⚠️ 归档**必须**用 `openspec archive` CLI（同步 delta→`openspec/specs/` + INDEX + 校验），**禁手动 `mv`**（漏 spec 同步）。
+ 
++### 3.0 终态 token 快照（Archive 子代理派发前，主 session 直接跑）〔token-snapshot-anchor · DD3〕
++
++派发 Archive 子代理**之前**、change 目录仍在原位时，主 session 直接跑一次终态快照（纯机械、无需子代理）：
++
++```bash
++python3 ~/.sdflow/hack/token_snapshot.py --step done-final || true
++```
++
++- 采集成功即在 `{change_dir}/token-log.jsonl` 追加一行 `step="done-final"` 的 `anchor=true` 记录，随后随 archive 一起搬进归档目录；失败（transcript 不可读、非 claude 宿主等）显式降级为 `anchor=false` 行，与 checkpoint 侧同口径——`|| true` 确保**任何采集失败都不得阻挡收尾流程**。
++- 覆盖范围 = Verify（收尾最重步）+ hand-off 累计用量；archive/commit/merge 自身用量不在覆盖内，是已声明的残余盲区（见 `openspec/specs/token-snapshot-anchor/spec.md`），MUST NOT 表述为「收尾用量已全量覆盖」。
++- 已知边界：若本 change 收尾跨 session 重试（如 archive 失败后新会话重跑），该行会被记作新 session 的分组首行、其累计用量全额计入——token 统计可能重复计入，这是 view-only 精度边界，非阻断项。
++
+ 派发 Agent（model: `$SDFLOW_TIER_MID`——第零步 0.4 已 eval 出的中档模型 id；config.yaml model-tiers 段已在 resolve-models.sh 内按机队分键覆盖），prompt：
+ 
+ ```
+ 你是 OpenSpec 归档助手。工作目录：{项目根目录}。语言中文。
+ 任务：归档 change `{change_name}` 并把它的 delta 同步进主 specs。
+ 
+ ## 0. 先查 specs artifact 状态（判断 skip_specs 是否正常）
+ openspec status --change {change_name} --json
+ - 若 specs artifact 的 status 为 `skipped`：本 change 无 delta 可同步——这是**正常**情况，
+   **MUST NOT** 把「没有 delta」当成异常、也 **MUST NOT** 因此判走第 2 节 fallback。
+diff --git a/sdflow-init/assets/hack/token_snapshot.py b/sdflow-init/assets/hack/token_snapshot.py
+index f80189a..a754784 100644
+--- a/sdflow-init/assets/hack/token_snapshot.py
++++ b/sdflow-init/assets/hack/token_snapshot.py
+@@ -1,19 +1,25 @@
+ #!/usr/bin/env python3
+ """token_snapshot.py — checkpoint 级 token 快照采集 helper。
+ 
+ 由 `checkpoint-commit.sh` 在「本次确定要提交」的时机（判空 gate 之后、`git add -A` 之前）
+ 同步调用：`python3 ~/.sdflow/hack/token_snapshot.py --step "$step" || true`。
+ 
+ 契约（design.md §Decisions D1 / specs/token-snapshot-anchor/spec.md）：
+-- transcript 定位序：`$CLAUDE_CODE_SESSION_ID`（session-id 先过文法校验才拼路径）精确命中
+-  `~/.claude/projects/<munged-cwd>/<id>.jsonl` → 同目录 mtime 最新 jsonl 回退 → 无则
++- 宿主判定〔implement-workflow-optimization-2026-08-p2 Task 5〕：`detect_host()` 与
++  `outside-voice-job.py` 同口径（`CLAUDECODE=1` → claude；`CODEX_THREAD_ID` 非空 → codex；
++  两者同时出现 = 冲突 → unknown；均缺席 → unknown）。**非 claude 宿主（codex/unknown）
++  MUST NOT 走 `~/.claude/projects/` 的 mtime 回退扫描**——直接落 `no-transcript` 降级行，
++  不做任何目录 I/O（该目录本就不属于非 Claude 宿主，扫描它既无意义也是多余的信任假设）。
++  `host` 字段如实写检测值（此前恒为 `"claude"` 的写法在多宿主场景下失实，随本次一并修正）。
++- transcript 定位序（仅 claude 宿主）：`$CLAUDE_CODE_SESSION_ID`（session-id 先过文法校验才拼路径）
++  精确命中 `~/.claude/projects/<munged-cwd>/<id>.jsonl` → 同目录 mtime 最新 jsonl 回退 → 无则
+   `no-transcript` 降级行。munged-cwd = `os.getcwd()` 的 `/` → `-` 全量替换。
+ - usage 四计数（input / output / cache_read / cache_creation）+ messages 数为 session 累计值
+   （逐 assistant message 的 `message.usage` 累加），MUST 校验非负整数，不过判 `parse-error`。
+ - change 目录由当前分支名 `feat/<change>` 解析，`openspec/changes/<change>/` 不存在则静默跳过
+   （零写入，不落任何降级行——「无落点」与「有落点但采集失败」是两种不同状态）。
+ - 输出行字段封闭 schema（v1）：只写本文件 `_build_line` 组装的字段，MUST NOT 透传 transcript
+   的对话内容 / 工具输入输出等任何其他内容。
+ - 追加写：整行 JSON 序列化后一次性 `O_APPEND` write（POSIX 本地文件系统单 write 原子）。
+ - 内部自设执行超时（10s，超时即放弃采集，等价于 parse-error 降级）——`|| true` 只防非零退出、
+   防不住挂起，checkpoint 是同步调用链，一次 hang 会拖死整条编排流水线。
+@@ -34,21 +40,42 @@ import os
+ import re
+ import signal
+ import subprocess
+ import time
+ from pathlib import Path
+ 
+ SCHEMA_VERSION = 1
+ TIMEOUT_SECONDS = 10
+ GIT_SUBPROCESS_TIMEOUT_SECONDS = 5
+ SESSION_ID_RE = re.compile(r"^[0-9a-fA-F-]+$")
+-HOST = "claude"
++HOST_CLAUDE = "claude"
++HOST_CODEX = "codex"
++HOST_UNKNOWN = "unknown"
++
++
++def detect_host(env=None):
++    """→ "claude" | "codex" | "unknown"——与 `outside-voice-job.py:detect_host()` 同口径。
++
++    正信号判定，MUST NOT「缺失即另一方」推断；两个信号同时出现 = 冲突，落 unknown
++    （MUST NOT 静默取其一）。判不出一律 unknown，non-claude 宿主一律不碰
++    `~/.claude/projects/`（见模块 docstring）。
++    """
++    env = os.environ if env is None else env
++    claude_sig = env.get("CLAUDECODE") == "1"
++    codex_sig = bool(env.get("CODEX_THREAD_ID"))
++    if claude_sig and codex_sig:
++        return HOST_UNKNOWN
++    if claude_sig:
++        return HOST_CLAUDE
++    if codex_sig:
++        return HOST_CODEX
++    return HOST_UNKNOWN
+ 
+ 
+ class _Timeout(Exception):
+     """内部 SIGALRM 超时信号的哨兵异常（POSIX only）。"""
+ 
+ 
+ def _install_timeout(seconds):
+     """POSIX 上装一个 SIGALRM 硬超时；Windows 无 SIGALRM，静默降级为无硬超时。
+ 
+     该降级是已记录的边角（Windows 上 checkpoint-commit.sh 本身也不在铺设范围内，
+@@ -187,83 +214,92 @@ def _accumulate_usage(path):
+                 totals["input"] += inp
+                 totals["output"] += out
+                 totals["cache_read"] += cr
+                 totals["cache_creation"] += cc
+                 totals["messages"] += 1
+     except Exception:
+         return None
+     return totals
+ 
+ 
+-def _build_line(step, session_id, anchor, reason, usage):
++def _build_line(step, session_id, anchor, reason, usage, host):
+     """封闭 schema：只这些字段，MUST NOT 透传任何 transcript 原始内容。"""
+     line = {
+         "v": SCHEMA_VERSION,
+         "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+         "step": step,
+         "session": session_id or "",
+-        "host": HOST,
++        "host": host,
+         "anchor": bool(anchor),
+         "reason": reason,
+     }
+     if usage is not None:
+         line["usage"] = usage
+     return line
+ 
+ 
+ def _append_line(path, obj):
+     """整行 buffer 后单次 `O_APPEND` write（POSIX 本地文件系统单 write 原子）。"""
+     payload = (json.dumps(obj, ensure_ascii=False) + "\n").encode("utf-8")
+     fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
+     try:
+         os.write(fd, payload)
+     finally:
+         os.close(fd)
+ 
+ 
+ def _collect(step):
+-    """定位 transcript → 累加 usage → 组装一行。全程不 raise（内部已 try/except 到降级行）；
+-    唯一允许上抛的是 `_Timeout`（由外层的 SIGALRM handler 触发，代表已超出执行时限）。
++    """判定宿主 → （仅 claude 宿主）定位 transcript → 累加 usage → 组装一行。
++    全程不 raise（内部已 try/except 到降级行）；唯一允许上抛的是 `_Timeout`
++    （由外层的 SIGALRM handler 触发，代表已超出执行时限）。
++
++    非 claude 宿主（codex/unknown）直接落 `no-transcript` 降级行，MUST NOT 触碰
++    `~/.claude/projects/`——那个目录语义上不属于非 Claude 宿主，扫描它既拿不到
++    真实数据也是多余的信任假设。
+     """
++    host = detect_host()
++    if host != HOST_CLAUDE:
++        return _build_line(step, "", False, "no-transcript", None, host)
++
+     cwd = os.getcwd()
+     munged = _munge_cwd(cwd)
+     projects_dir = Path(os.path.expanduser("~")) / ".claude" / "projects" / munged
+     transcript, reason = _locate_transcript(projects_dir)
+ 
+     if transcript is None:
+         env_session = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+         session_for_line = env_session if _valid_session_id(env_session) else ""
+-        return _build_line(step, session_for_line, False, reason, None)
++        return _build_line(step, session_for_line, False, reason, None, host)
+ 
+     session_for_line = transcript.stem
+     usage = _accumulate_usage(transcript)
+     if usage is None:
+-        return _build_line(step, session_for_line, False, "parse-error", None)
+-    return _build_line(step, session_for_line, True, "ok", usage)
++        return _build_line(step, session_for_line, False, "parse-error", None, host)
++    return _build_line(step, session_for_line, True, "ok", usage, host)
+ 
+ 
+ def main(argv=None):
+     parser = argparse.ArgumentParser(prog="token_snapshot.py")
+     parser.add_argument("--step", required=True)
+     args = parser.parse_args(argv)
+ 
+     change_dir = _resolve_change_dir(os.getcwd())
+     if change_dir is None:
+         return 0  # 无落点，静默跳过——不写任何文件、不写任何降级行
+ 
+     old_handler = _install_timeout(TIMEOUT_SECONDS)
+     try:
+         line = _collect(args.step)
+     except _Timeout:
+-        line = _build_line(args.step, "", False, "parse-error", None)
++        line = _build_line(args.step, "", False, "parse-error", None, detect_host())
+     except Exception:
+-        line = _build_line(args.step, "", False, "parse-error", None)
++        line = _build_line(args.step, "", False, "parse-error", None, detect_host())
+     finally:
+         _cancel_timeout(old_handler)
+ 
+     try:
+         _append_line(change_dir / "token-log.jsonl", line)
+     except Exception:
+         pass  # 写侧失败静默吞掉——MUST NOT 让 checkpoint 感知采集失败
+     return 0
+ 
+ 
+diff --git a/sdflow-retro/scripts/tests/test_retro_report.py b/sdflow-retro/scripts/tests/test_retro_report.py
+index bd9cd69..38502cb 100644
+--- a/sdflow-retro/scripts/tests/test_retro_report.py
++++ b/sdflow-retro/scripts/tests/test_retro_report.py
+@@ -1154,20 +1154,43 @@ def test_compute_token_deltas_multiple_sessions_independent(tmp_path):
+ def test_compute_token_deltas_reads_archive_dir_too(tmp_path):
+     d = tmp_path / "openspec/changes/archive/2026-07-01-foo"
+     d.mkdir(parents=True)
+     (d / "token-log.jsonl").write_text(
+         _tok_line("s1", "a", "2026-08-10T10:00:00+0800", 1, 2, 3, 4) + "\n", encoding="utf-8")
+     changes = {"foo": {"active": False, "active_dir": None, "archive_dir": str(d)}}
+     deltas = R.compute_token_deltas(str(tmp_path), changes)
+     assert deltas["foo"] == {"out": 2, "in": 1, "cc": 4, "cr": 3}
+ 
+ 
++def test_compute_token_deltas_reads_done_final_step_row(tmp_path):
++    """〔implement-workflow-optimization-2026-08-p2 · Task 5 冒烟〕`step="done-final"` 是
++    sdflow-done 第三步起手前新增的终态快照行——retro 消费侧对 `step` 值不做白名单校验（只认
++    anchor=true + usage 四计数合法 + session/step 非空字符串），该行随 archive 一起进
++    `archive_dir` 后必须仍可被 join：证明「新 step 值免入侵改动即可读」，非只在活跃目录测过。
++    """
++    d = tmp_path / "openspec/changes/archive/2026-08-11-demo-change"
++    d.mkdir(parents=True)
++    body = "\n".join([
++        _tok_line("s1", "verify", "2026-08-11T09:00:00+0800", 100, 200, 300, 400),
++        _tok_line("s1", "done-final", "2026-08-11T09:30:00+0800", 150, 260, 380, 470),
++    ])
++    (d / "token-log.jsonl").write_text(body, encoding="utf-8")
++    changes = {"demo-change": {"active": False, "active_dir": None, "archive_dir": str(d)}}
++
++    rows = R.read_token_log(str(d / "token-log.jsonl"))
++    assert [r["step"] for r in rows] == ["verify", "done-final"]
++
++    deltas = R.compute_token_deltas(str(tmp_path), changes)
++    # 首行全额 200/100/400/300 + done-final 行对首行差分 60/50/70/80
++    assert deltas["demo-change"] == {"out": 260, "in": 150, "cc": 470, "cr": 380}
++
++
+ def test_fmt_compact_count():
+     assert R._fmt_compact_count(500) == "500"
+     assert R._fmt_compact_count(12300) == "12.3k"
+     assert R._fmt_compact_count(4500) == "4.5k"
+     assert R._fmt_compact_count(89000) == "89k"
+     assert R._fmt_compact_count(1200000) == "1.2M"
+ 
+ 
+ def test_format_tokens_cell_examples():
+     cell = R.format_tokens_cell({"out": 12300, "in": 4500, "cc": 89000, "cr": 1200000})

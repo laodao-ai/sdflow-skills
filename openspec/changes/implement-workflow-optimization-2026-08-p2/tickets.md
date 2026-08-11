@@ -68,15 +68,15 @@ impl-pipeline: tickets
 - 错误语义分治：缺失=零注记 / 坏yaml=fail-loud / 未命中键=告警不阻断
 - 解析走 yq（MUST NOT `import yaml`）
 
-- [ ] contract 含新合法组合且版本号已递增
-- [ ] emitter 接受 `runner="none" ∧ findings=0` 普通镜行不报错
-- [ ] anchor_lint 对该组合判合法
-- [ ] emitter 对含置信字段的 findings JSON 兼容
-- [ ] 处置数据文件含 13 面镜完整记录且 schema 合规
-- [ ] 降采样镜条件阈值为具体数值与命令，非定性词
-- [ ] retro_report.py 对命中镜行追加处置注记
-- [ ] retro_report.py 对缺失/坏yaml/未命中键三态各正确处置
-- [ ] pytest 覆盖 retro_report.py 处置注记四态
+- [x] contract 含新合法组合且版本号已递增
+- [x] emitter 接受 `runner="none" ∧ findings=0` 普通镜行不报错
+- [x] anchor_lint 对该组合判合法
+- [x] emitter 对含置信字段的 findings JSON 兼容
+- [x] 处置数据文件含 13 面镜完整记录且 schema 合规
+- [x] 降采样镜条件阈值为具体数值与命令，非定性词
+- [x] retro_report.py 对命中镜行追加处置注记
+- [x] retro_report.py 对缺失/坏yaml/未命中键三态各正确处置
+- [x] pytest 覆盖 retro_report.py 处置注记四态
 
 ### Task 3: 裁决协议重写 + 联动核查
 
