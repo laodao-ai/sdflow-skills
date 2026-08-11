@@ -15,9 +15,9 @@ import ship_gate as _sg
 
 PLAN2 = "### Task 1: A\n- [ ] s\n### Task 2: B\n- [ ] s\n"
 
-# [harden-implement-review-loop Task5 · H12/M17] gate 第四道校验只对文件名 `tickets.md`（新名）
-# 生效——同 PLAN2 形状（2 张 task、各自一条复选框），但 Task 2 兼作「实现验证」收尾 ticket
-# （Blocked-by: 1 + R-ID: all），供**新名**测试用例使用，使其在第四道校验下仍合法。
+# [harden-implement-review-loop Task5 · H12/M17] gate 第四道校验对 tickets.md 无条件生效
+# ——同 PLAN2 形状（2 张 task），但 Task 2 兼作「实现验证」收尾 ticket
+# （Blocked-by: 1 + R-ID: all），使其在第四道校验下仍合法。
 PLAN2_TICKETS = (
     "### Task 1: A\n**Blocked-by:** none\n- [ ] s\n"
     "### Task 2: 实现验证\n**Blocked-by:** 1\n**R-ID:** all\n- [ ] s\n"

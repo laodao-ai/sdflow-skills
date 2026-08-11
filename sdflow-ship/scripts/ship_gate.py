@@ -42,8 +42,8 @@ inline 锚行字面集（grep -F 语义，零正则；Task6 后**仅归档读半
 
 verdict × exit × next 契约表:
     REFUSE_START     3  -                  未过设计门（补锚）｜change 不存在（active 与 archive 均无）〔B3〕
-    RUN_PLAN         0  writing-plans      计划文件缺（tickets.md 未找到）
-    CONTINUE_IMPL    0  subagent-dev       plan_ids⊄done_ids〔B4 集合归属〕（JSON done_tasks=计划内已完成号集，SDD 勿重派）
+    RUN_PLAN         0  sdflow-implement   计划文件缺（tickets.md 未找到）
+    CONTINUE_IMPL    0  sdflow-implement   plan_ids⊄done_ids〔B4 集合归属〕（JSON done_tasks=计划内已完成号集）
     RUN_CODE_REVIEW  0  sdflow-code-review code-review-report.md 缺
     BLOCKED_UPSTREAM 4  -                  code-review=blocked
     RUN_VERIFY       0  sdflow-done        verify-report.md 缺｜active 存在 verify=PASS 待收尾｜归档未并 base 待 merge 收尾〔B3/BR-10〕
