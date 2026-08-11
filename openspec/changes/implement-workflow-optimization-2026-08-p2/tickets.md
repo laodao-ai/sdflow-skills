@@ -34,13 +34,13 @@ impl-pipeline: tickets
 - 脚本级不可恢复错误（crash / 输入 JSON 畸形）→ 显式降级：整批标 `[ref-check-unavailable]` 直进裁决 + 报告显著标注机械门未生效，MUST NOT 静默呈现全部 pass
 - 输出遵循消费型信号校验器输出诚实（不 emit 裸通过码）
 
-- [ ] 正例（路径存在+行号合法+引文命中该行）返回 pass
-- [ ] 三种失败态（路径不存在/行号越界/引文不在所报行）各返回 fail
-- [ ] 无引文且无证据包态返回机械裁掉信号
-- [ ] uncheckable 态（证据包/设计层引用/行范围外形态）返回 uncheckable
-- [ ] 脚本级崩溃（输入 JSON 畸形/意外异常）→ 显式降级标 `[ref-check-unavailable]`
-- [ ] 输出码形态符合信号内诚实
-- [ ] pytest 覆盖上述 6 个场景
+- [x] 正例（路径存在+行号合法+引文命中该行）返回 pass
+- [x] 三种失败态（路径不存在/行号越界/引文不在所报行）各返回 fail
+- [x] 无引文且无证据包态返回机械裁掉信号
+- [x] uncheckable 态（证据包/设计层引用/行范围外形态）返回 uncheckable
+- [x] 脚本级崩溃（输入 JSON 畸形/意外异常）→ 显式降级标 `[ref-check-unavailable]`
+- [x] 输出码形态符合信号内诚实
+- [x] pytest 覆盖上述 6 个场景
 
 ### Task 2: 合法组合扩展 + Roster 条件化 + 处置系统
 

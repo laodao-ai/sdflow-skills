@@ -1,0 +1,1150 @@
+# Review package: 4b808abf815a20fd50faba3bf8db821597efaa76..e9a139e9e49fc2d25b5e82bd91cdb9e78378714c (Task 2 worktree merge)
+
+## Commits
+e9a139e merge(task2): 合法组合扩展 + roster 条件化 + mirror-dispositions + retro 注记
+0baac59 impl(task2): 合法组合扩展 + roster 条件化 + mirror-dispositions + retro 注记
+
+## Files changed
+ .../impl-reports/task2-roster-dispositions.md      | 106 +++++++++++++++
+ openspec/retro/mirror-dispositions.yaml            | 150 +++++++++++++++++++++
+ openspec/retro/report.md                           |  76 ++++++-----
+ sdflow-code-review/SKILL.md                        |  18 ++-
+ .../assets/workflow/lens-metric-contract.md        |  10 +-
+ sdflow-init/assets/workflow/tools/anchor_lint.py   |   9 +-
+ .../assets/workflow/tools/lens_metric_emit.py      |  11 +-
+ .../workflow/tools/tests/test_anchor_lint.py       |  17 +++
+ .../workflow/tools/tests/test_lens_metric_emit.py  |  36 ++++-
+ sdflow-retro/scripts/retro_report.py               |  94 ++++++++++++-
+ sdflow-retro/scripts/tests/test_retro_report.py    |  96 +++++++++++++
+ sdflow-spec-review/SKILL.md                        |   6 +
+ 12 files changed, 581 insertions(+), 48 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task2-roster-dispositions.md b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task2-roster-dispositions.md
+new file mode 100644
+index 0000000..fabd759
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p2/impl-reports/task2-roster-dispositions.md
+@@ -0,0 +1,106 @@
++# Task 2 impl-report — 合法组合扩展 + Roster 条件化 + 处置系统
++
++**R-ID**: R-roster, R-裁决, R-处置 | **Blocked-by**: none
++
++## 范围复述
++
++DD2 合法组合矩阵扩展 + DD1 处置记录 + DD6 roster 条件化 + `retro_report.py` 处置注记——
++四件串联成一条「让镜可以条件化跳过且跳过可审计」的垂直切片，四子部分 A-D 全部完成。
++
++## A. 合法组合矩阵扩展（DD2/设计门 Q1）
++
++- **`sdflow-init/assets/workflow/lens-metric-contract.md`**：新增契约文档版本标记（`v2`，与锚字面
++  `v1` 前缀/字段集/枚举域区分——只标记合法组合矩阵变更历史）；`runner` 字段散文注记新增「普通镜行
++  `runner="none"` 合法（DD2 条件跳过）」；机读输入 schema 约束①段同步放宽。
++- **`sdflow-init/assets/workflow/tools/lens_metric_emit.py`**：`reduce()` 非-outside-voice 行键校验
++  从「`runner==host`」放宽为「`runner==host` 或 `runner="none"`」（site 仍恒须 `"—"`）。`findings=0`
++  不变量**无需额外代码**——`fold_hit` 非-ov 分支恒取 `runner=host`（不读 roster 的 `"none"`），任何真实
++  finding hit 折叠后的行键第三分量恒为 host 值而非 `"none"`，与 roster 键 `(lens,host,"none","—")`
++  结构性不同，命中即触发既有 C4「finding 命中行不在 roster」fail-closed——机制自然防伪造，非新增校验。
++- **`sdflow-init/assets/workflow/tools/anchor_lint.py`**：`check_lens_metric()` 普通镜行 `runner`
++  绑定校验新增 `runner="none" ∧ findings="0"` 为放行组合；`findings≠0` 时仍判 `ordinary-runner-host-mismatch`
++  （边界锁：只放宽这一种组合，非放宽 `runner="none"` 本身）。
++
++**测试**（TDD：先写红后写绿，已验证）：
++- `sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py`：改 1（`test_reduce_non_ov_runner_none_fail_closed`
++  → `test_reduce_non_ov_runner_none_findings_zero_legal`，语义反转）+ 新增 3（bad-site 边界锁、
++  finding 命中行不在 roster 边界锁、`confidence` 额外字段兼容回归锁）。
++- `sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py`：新增 2（legal 组合放行 + nonzero-findings
++  边界仍拦）。
++- 全部 331 项 `sdflow-init/assets/workflow/tools/tests/` 测试绿（`/usr/bin/python3 -m pytest
++  sdflow-init/assets/workflow/tools/tests/ -q` → `331 passed`）。
++
++## B. 处置记录（DD1）
++
++新建 `openspec/retro/mirror-dispositions.yaml`（13 面镜完整记录，schema
++`{layer,lens,host,runner,site,disposition,condition,date,rationale}`，匹配键与
++`lens_metric_aggregate.group_key` 同键）：
++
++- 11 条**保留**、1 条**降采样**（code-review/history）、1 条**不适用**（spec-review outside-voice
++  claude/design-voice 回落路径产物），净效果与 design.md DD6 表一致。
++- `host` 统一取 `"claude"`（历史语料以 Claude 宿主为主，理由见 yaml 文件头注释）——**已用真实仓库
++  archive 语料验证**：对本仓 71 个 change 跑 `retro_report.py` 再生，13 面待复评镜**全部**精确命中
++  对应处置条目、零「未命中键」告警（见下方「集成验证」）。
++- 降采样条件写具体命令而非定性词：
++  `git diff --diff-filter=R -M --name-only "$DIFF_BASE"..HEAD` 非空（rename）**或**
++  `git diff --diff-filter=M --numstat "$DIFF_BASE"..HEAD` 中任一既有文件 (加+删) ≥200 行 → 派；否则跳过。
++
++## C. SKILL roster 段条件化（DD6）
++
++- **`sdflow-code-review/SKILL.md`**「规划镜头」段：新增历史镜条件化派发子条目（判定命令同上、锚行
++  必落说明、报告注明句式）；fan-out 表历史镜行数量列改 `0-1` 并加条件化标注；「裁决计数」段补一句
++  「历史镜若本轮跳过，roster 仍 MUST 含该行、`runner` 填 `"none"`，MUST NOT 整行省略」。
++- **`sdflow-spec-review/SKILL.md`**「规划镜头」段：新增 roster 条件化派发说明——本轮 13 面镜设计门
++  拍板全 5 类 spec-review 侧镜类型均**保留**（接地镜 Q3 撤回降采样），当前**无**条件跳过镜；机制文档
++  与 code-review 侧同构，供未来复评轮判「降采样」时复用（未凭空发明一个当前不存在的条件）。
++
++## D. `retro_report.py` 处置注记（DD1 消费）
++
++- 新增 `DispositionError` 异常类 + 本地 `_yq()` 薄封装（同 `anchor_lint._yq` idiom 重实现，MUST NOT
++  `import yaml`——DD1 契约）+ `load_mirror_dispositions(root)`（三态错误语义：文件缺失→`{}` 零注记；
++  结构坏〔非列表/条目缺字段/`disposition` 越域/降采样缺 `condition`〕→ `DispositionError` fail-loud，
++  未捕获异常经 `main()` 无 try/except 天然向上传播为非零退出码；未命中键不在此函数判）。
++- `surfacing_block()` 消费：命中 `counts`（全部扫描到的锚组，非仅 `flagged` 子集）的键即时告警
++  （stderr，不阻断）；`flagged` 行内命中处置表则追加 `→ 已处置: <disposition> (<date>)`。
++
++**测试**（TDD）：`sdflow-retro/scripts/tests/test_retro_report.py` 新增 5 项覆盖四态
++（文件缺失/命中注记/`disposition` 非法值 fail-loud/yaml 结构坏 fail-loud/未命中键告警不阻断），
++均先验证红后实现绿。全部 133 项 `sdflow-retro/scripts/tests/` 测试绿。
++
++## 集成验证（真实仓库语料，非合成 fixture）
++
++对本仓运行 `python3 sdflow-retro/scripts/retro_report.py --root .`：exit 0，`openspec/retro/report.md`
++成功再生，待复评区块 13 行**全部**追加 `→ 已处置: …` 注记且与 `mirror-dispositions.yaml` 内容逐字匹配，
++零告警。此为处置表 `host="claude"` 假设的经验证据，非仅理论推断。
++
++`report.md` 的 diff 中另含无关的自然漂移（自上次再生以来新归档的 change，如
++`implement-workflow-optimization-2026-08-p1` 已归档、`implement-workflow-optimization-2026-08-p2`
++新出现于 in-progress 行等）——这是 view-only 再生工具的预期行为，非本 ticket 引入的变更，已随
++`mirror-dispositions.yaml` 一并纳入本次改动（该文件的存在必然改变再生输出）。
++
++## 全局约束核对
++
++- Goals 边界：改动收敛在两个评审 SKILL 的 roster 段 + 一个新数据文件 + `retro_report.py` 一处消费；
++  未触碰 Step3 裁决协议本体（留给 Task 3）。
++- Non-Goals：未改锚字段集，仅按声明豁免扩展合法组合矩阵；未改 Step1/Step2 编排结构，仅 roster 段
++  加派发条件行。
++- DD1/DD2/DD6 错误语义、锚行必落、处置表格式与阈值具体化——均已落地并测试覆盖。
++- 四条通则：无自加约束（未额外限定「后端零改动」等未声明范围）；完成即全部完成，如实报告
++  （无遗留子项）；落笔前已用真实语料证伪 host 假设，非空想推断。
++
++## 全仓回归
++
++`/usr/bin/python3 -m pytest -q`（仓根，全量发现）：**2523 passed, 10 skipped, 0 failed**（362.5s）。
++10 skip 为既有跳过项，与本 ticket 改动无关（未新增/未消除任何 skip）。
++
++## 已知边界（非本 ticket 缺陷，明确声明）
++
++- `mirror-dispositions.yaml` 的 `host="claude"` 是历史语料统计假设，非机械保证——未来 Codex 宿主
++  产出足量同镜数据后，若需独立处置判断，应追加 `host="codex"` 的独立条目（覆写用同键，git 史即
++  审计链），本 ticket 不预先造条目（DD1 错误语义「未命中键仅告警不阻断」已覆盖该演进路径）。
++- Task 1（validator 机械脚本 `findings_ref_check.py`）与本 ticket 并行、`Blocked-by: none`，本 ticket
++  未依赖其产出，交叉验证留给 Task 3/Task 6。
++
++## 状态
++
++DONE
+diff --git a/openspec/retro/mirror-dispositions.yaml b/openspec/retro/mirror-dispositions.yaml
+new file mode 100644
+index 0000000..043994b
+--- /dev/null
++++ b/openspec/retro/mirror-dispositions.yaml
+@@ -0,0 +1,150 @@
++# mirror-dispositions.yaml — 评审镜处置记录（DD1，implement-workflow-optimization-2026-08-p2）
++#
++# 单一权威源：本文件由人在设计门/复评轮拍板后手工维护；唯一消费方 = sdflow-retro/scripts/retro_report.py
++# 的 surfacing_block（命中的待复评镜行内追加 `→ 已处置: <disposition> (<date>)`）。
++#
++# schema（每项）: {layer, lens, host, runner, site, disposition, condition, date, rationale}
++# 匹配键 = (layer,lens,host,runner,site)，与 lens_metric_aggregate.group_key 同键（不另造口径）。
++# disposition ∈ {保留, 降采样, 淘汰, 不适用}；condition 仅 disposition=降采样 必填（其余填 "—"，
++# 写机械可判派发条件原文——判定命令见对应评审 SKILL.md 的「规划镜头」段，两处保持同源）。
++#
++# 错误语义（retro_report.py 消费侧契约，DD1）：文件缺失 = 零注记照旧 flag（向后兼容）；yaml 坏 /
++# disposition 非法 ⇒ fail-loud 非零退出（宁红勿静默，adr/0016）；键未命中任何锚组 ⇒ 告警不阻断
++# （可能是已淘汰镜的存量记录，或该组合本轮尚未出现）。
++# 淘汰态落地：disposition="淘汰" 时对应评审 SKILL 的 roster 段整段移除该镜派发逻辑，本文件条目保留
++# 作历史注记（本轮无淘汰，此规则为 schema 合法值的落地路径备案）。
++#
++# 本表 13 面镜为设计门 2026-08-10 逐镜拍板确认（design.md DD6 处置表）。host 统一取 "claude"——
++# 支撑这些百分比的历史语料以 Claude 宿主为主（Codex 宿主支持晚近落地，尚未积累可比量级）；
++# Codex 宿主真实轮次若产出同镜新数据，键不命中即无注记（DD1 错误语义：未命中键仅告警不阻断），
++# 不影响本表既有条目，未来复评轮可按需追加 host="codex" 的独立条目（覆写用同键条目、git 史即审计链）。
++
++- layer: code-review
++  lens: adversarial
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "双率最高段（独立52%/采纳73%），实修率33%达标"
++
++- layer: code-review
++  lens: domain
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "实修率最高（50%），TG 条件化本已存在"
++
++- layer: code-review
++  lens: broad
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "产量低但为 scope-drift 守卫，spec 钉死守卫时序，非产量逻辑"
++
++- layer: code-review
++  lens: history
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 降采样
++  condition: "git diff --diff-filter=R -M --name-only \"$DIFF_BASE\"..HEAD 非空（命中 rename）或 git diff --diff-filter=M --numstat \"$DIFF_BASE\"..HEAD 中任一既有文件(加行数+删行数)≥200 → 派 1 个历史镜；两者皆否 → 本轮跳过"
++  date: "2026-08-10"
++  rationale: "双率最低段（独立29%/采纳57%），条件=git 历史敏感形态，机械可判"
++
++- layer: code-review
++  lens: outside-voice
++  host: claude
++  runner: codex
++  site: code-voice
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "跨模型第二意见 spec 默认开；跨模型 voice 产出碾压同族温镜（实战独家贡献实证）"
++
++- layer: code-review
++  lens: outside-voice
++  host: claude
++  runner: codex
++  site: hr-tg
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "本已 HR-TG 条件化，无进一步降采样空间"
++
++- layer: spec-review
++  lens: adversarial
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "采纳率全场最高段（93%）"
++
++- layer: spec-review
++  lens: broad
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "最大产出源（415 条）"
++
++- layer: spec-review
++  lens: domain
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "采纳率 96%，TG 条件化本已存在"
++
++- layer: spec-review
++  lens: grounding
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "守卫类角色（机械读码核验 spec 代码事实）；设计门 Q3 拍板撤回降采样——弱档成本低、判据信号错位、本轮接地全绿"
++
++- layer: spec-review
++  lens: outside-voice
++  host: claude
++  runner: claude
++  site: design-voice
++  disposition: 不适用
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "此行是 codex 不可用时的回落路径产物，非独立 roster 成员，砍留随 voice 机制本体"
++
++- layer: spec-review
++  lens: outside-voice
++  host: claude
++  runner: codex
++  site: design-voice
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "独立率数字与实战印象有张力（历史独家高危2条），跨模型 spec 默认开，窗口期重点观察对象"
++
++- layer: spec-review
++  lens: outside-voice
++  host: claude
++  runner: codex
++  site: hr-tg
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "同 code-review hr-tg，本已条件化"
+diff --git a/openspec/retro/report.md b/openspec/retro/report.md
+index 04e554f..2b2f69b 100644
+--- a/openspec/retro/report.md
++++ b/openspec/retro/report.md
+@@ -1,37 +1,37 @@
+ # 全项目 change 成本×价值复盘（view-only 再生）
+ 
+-> 覆盖 70 change / 有真锚 51 / 边界不可解析 7
++> 覆盖 71 change / 有真锚 52 / 边界不可解析 7
+ > 阶段墙钟为「阶段级 elapsed（含人读/拍板/生成时间）」口径（adr/0009），非纯 agent 耗时。
+ 
+ ⚠️ 待复评: 以下镜出现轮数≥10、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:
+-  - adversarial（layer=code-review host=claude runner=claude site=—，出现轮数 35）
+-  - broad（layer=code-review host=claude runner=claude site=—，出现轮数 31）
+-  - domain（layer=code-review host=claude runner=claude site=—，出现轮数 33）
+-  - history（layer=code-review host=claude runner=claude site=—，出现轮数 34）
+-  - outside-voice（layer=code-review host=claude runner=codex site=code-voice，出现轮数 31）
+-  - outside-voice（layer=code-review host=claude runner=codex site=hr-tg，出现轮数 16）
+-  - adversarial（layer=spec-review host=claude runner=claude site=—，出现轮数 39）
+-  - broad（layer=spec-review host=claude runner=claude site=—，出现轮数 39）
+-  - domain（layer=spec-review host=claude runner=claude site=—，出现轮数 17）
+-  - grounding（layer=spec-review host=claude runner=claude site=—，出现轮数 39）
+-  - outside-voice（layer=spec-review host=claude runner=claude site=design-voice，出现轮数 11）
+-  - outside-voice（layer=spec-review host=claude runner=codex site=design-voice，出现轮数 31）
+-  - outside-voice（layer=spec-review host=claude runner=codex site=hr-tg，出现轮数 12）
++  - adversarial（layer=code-review host=claude runner=claude site=—，出现轮数 35） → 已处置: 保留 (2026-08-10)
++  - broad（layer=code-review host=claude runner=claude site=—，出现轮数 31） → 已处置: 保留 (2026-08-10)
++  - domain（layer=code-review host=claude runner=claude site=—，出现轮数 33） → 已处置: 保留 (2026-08-10)
++  - history（layer=code-review host=claude runner=claude site=—，出现轮数 34） → 已处置: 降采样 (2026-08-10)
++  - outside-voice（layer=code-review host=claude runner=codex site=code-voice，出现轮数 31） → 已处置: 保留 (2026-08-10)
++  - outside-voice（layer=code-review host=claude runner=codex site=hr-tg，出现轮数 16） → 已处置: 保留 (2026-08-10)
++  - adversarial（layer=spec-review host=claude runner=claude site=—，出现轮数 40） → 已处置: 保留 (2026-08-10)
++  - broad（layer=spec-review host=claude runner=claude site=—，出现轮数 40） → 已处置: 保留 (2026-08-10)
++  - domain（layer=spec-review host=claude runner=claude site=—，出现轮数 18） → 已处置: 保留 (2026-08-10)
++  - grounding（layer=spec-review host=claude runner=claude site=—，出现轮数 40） → 已处置: 保留 (2026-08-10)
++  - outside-voice（layer=spec-review host=claude runner=claude site=design-voice，出现轮数 11） → 已处置: 不适用 (2026-08-10)
++  - outside-voice（layer=spec-review host=claude runner=codex site=design-voice，出现轮数 32） → 已处置: 保留 (2026-08-10)
++  - outside-voice（layer=spec-review host=claude runner=codex site=hr-tg，出现轮数 13） → 已处置: 保留 (2026-08-10)
+ 
+ ## 一览
+ 
+ | 复盘 change | 总墙钟 | 有真锚 | 待复评镜 |
+ |---|---|---|---|
+-| 70 | ~603.7 hr | 51 | 13 |
++| 71 | ~617.1 hr | 52 | 13 |
+ 
+-本轮复盘覆盖 **70 个 change**，累计评审墙钟约 **603.7 hr**（其中 51 个带真实度量锚、可参与价值统计）。评审时间集中在 收尾 27%、设计审 25%（两者合计 52%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审广审镜（415 条，采纳率 87%）。另有 13 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
++本轮复盘覆盖 **71 个 change**，累计评审墙钟约 **617.1 hr**（其中 52 个带真实度量锚、可参与价值统计）。评审时间集中在 设计审 27%、收尾 26%（两者合计 53%）。单个 change 耗时最重的是 scoped-test-per-task（约 165.5 hr）、最轻的是 plan-mechanical-layer-hardening（0.2 min）。价值侧，出问题最多的是 设计审广审镜（423 条，采纳率 87%）。另有 13 面镜达到待复评轮数阈值，详见下方 ⚠️ 待复评区块。
+ 
+ ## per-change 明细
+ 
+ | change | 总墙钟(min) | spec-rev Δ | impl Δ | code-rev Δ | done Δ | #ckpt | spec_hr_tg | code_hr_tg | Σfindings | 采纳率 | 独立Σ | tokens | 状态 |
+ |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+ | absorb-gstack-autoplan | 356.5 | 148.3 | 32.4 | 12.1 | 21.3 | 22 | none | — | 49 | 0.76 | 7 | — | archived |
+ | absorb-gstack-review | 313.5 | 138.2 | 40.3 | 39.8 | 19.7 | 24 | none | TG-06,TG-08 | 51 | 0.71 | 18 | — | archived |
+ | adaptive-workflow-routing | 111.1 | 50.9 | 46.6 | 10.1 | 3.5 | 7 | none | none | 28 | 0.96 | 19 | — | archived |
+ | add-codex-host-support | 5026.3 | 260.3 | 190.3 | 1074.7 | 29.3 | 20 | TG-06,TG-08,TG-17 | TG-04,TG-06,TG-07,TG-08,TG-17 | 14 | 0.86 | 10 | — | archived |
+ | add-sdflow-architecture | 378.4 | 59.1 | 169.3 | 77.8 | 15.4 | 9 | TG-06,TG-08,TG-09 | TG-06,TG-08,TG-09 | 108 | 0.83 | 35 | — | archived |
+@@ -45,34 +45,35 @@
+ | cross-model-outside-voice | 229.7 | 78.1 | 57.1 | 57.0 | 5.8 | 12 | — | TG-08,TG-17 | — | 无度量锚 | — | — | archived |
+ | curb-rework-loop-cost | 247.6 | 146.1 | 51.2 | 22.0 | 6.9 | 15 | none | none | 31 | 0.45 | 8 | — | archived |
+ | dedupe-issues-scripts-shared-layer | 1336.2 | 955.2 | 51.5 | 34.1 | 20.3 | 26 | TG-06 | TG-06,TG-26 | 38 | 0.89 | 7 | — | archived |
+ | done-roadmap-writeback | 193.4 | 118.2 | 11.6 | 31.8 | 6.9 | 13 | none | none | 52 | 0.94 | 10 | — | archived |
+ | drop-per-dir-review-stub | 53.8 | — | 36.9 | — | 12.8 | 5 | — | none | — | 无度量锚 | — | — | archived |
+ | drop-review-html-viewer | 0.0（边界不可解析） | — | — | — | — | 1 | — | — | — | 无度量锚 | — | — | archived |
+ | enable-codex-background-outside-voice | 0.0（边界不可解析） | — | — | — | — | 1 | TG-08,TG-09,TG-16,TG-17,TG-26 | TG-08,TG-09,TG-16,TG-17,TG-26 | 40 | 0.72 | 9 | — | archived |
+ | fix-b11-b12-tools-hardening | 0.0（边界不可解析） | — | — | — | — | 1 | — | — | — | 无度量锚 | — | — | archived |
+ | fix-design-gate-freshness-proxy | 447.5 | 227.7 | 28.6 | 23.0 | 10.5 | 26 | none | TG-17 | 46 | 0.83 | 22 | — | archived |
+ | fix-mechanical-layer-silent-failures | 999.7 | 52.8 | 98.0 | 532.8 | 38.5 | 19 | TG-08,TG-17 | TG-08,TG-09,TG-17,TG-26 | 42 | 0.83 | 27 | — | archived |
+-| fix-probe-scan-precision | 1174.0 | 719.5 | 22.3 | 9.8 | 22.0 | 23 | TG-07,TG-17 | none | 48 | 0.96 | 46 | — | archived |
++| fix-probe-scan-precision | 1173.9 | 719.5 | 22.3 | 9.8 | 22.0 | 23 | TG-07,TG-17 | none | 48 | 0.96 | 46 | — | archived |
+ | fix-voice-quoting-and-mirror-vocab | 316.7 | 239.8 | 17.6 | 9.7 | 11.6 | 18 | TG-17 | TG-17 | 21 | 0.86 | 6 | — | archived |
+ | fix-windows-encoding-crash | 875.6 | 769.6 | 26.3 | — | 6.5 | 34 | none | none | 48 | 0.94 | 13 | — | archived |
+ | gate-anchor-line-scoped | 7.0 | — | — | — | 7.0 | 9 | none | none | — | 无度量锚 | — | — | archived |
+ | gate-checkpoint-hardening | 87.8 | 27.6 | 17.1 | 13.8 | 7.3 | 10 | none | none | — | 无度量锚 | — | — | archived |
+ | harden-gate-git-layer | 617.0 | 253.9 | 52.3 | 10.1 | 13.4 | 36 | TG-17 | TG-17 | 54 | 0.8 | 37 | — | archived |
+ | harden-hr-tg-anchor-consistency | 183.6 | 55.3 | 16.7 | 104.4 | 7.2 | 6 | none | none | 24 | 1.0 | 20 | — | archived |
+ | harden-implement-review-loop | 1203.0 | 758.5 | 83.0 | 48.5 | 24.3 | 26 | none | none | 61 | 0.82 | 42 | — | archived |
+ | harden-issues-read-write | 148.2 | 94.1 | 9.2 | 12.0 | 7.3 | 17 | none | TG-06 | 25 | 0.8 | 4 | — | archived |
+ | harden-outside-voice-scripts | 119.6 | 47.7 | 12.3 | 10.3 | 7.4 | 16 | none | none | 21 | 0.62 | 2 | — | archived |
+ | harden-repo-root-fail-closed | 522.4 | 160.7 | 53.0 | 7.3 | 19.3 | 28 | TG-08 | TG-08 | 54 | 0.83 | 32 | — | archived |
+ | harden-sdflow-spec-followups | 353.4 | 85.3 | 18.4 | 20.9 | 17.6 | 34 | none | TG-08,TG-17 | 28 | 0.64 | 6 | — | archived |
+ | implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 110.6 | 70.6 | 23.1 | 7.6 | 9 | TG-06 | TG-06 | 67 | 0.88 | 13 | — | archived |
+-| implement-workflow-optimization-2026-08-p1 | 296.1 | 219.3 | 15.7 | — | — | 17 | TG-09,TG-17 | — | 36 | 0.89 | 15 | out 100.8k / in 501 / cc 629.1k / cr 23.5M | in-progress |
++| implement-workflow-optimization-2026-08-p1 | 347.7 | 219.3 | 32.1 | 14.9 | 10.6 | 23 | TG-09,TG-17 | none | 36 | 0.89 | 15 | out 161.2k / in 875 / cc 852k / cr 52.5M | archived |
++| implement-workflow-optimization-2026-08-p2 | 751.8 | 728.7 | — | — | — | 6 | none | — | 31 | 0.61 | 12 | out 723.8k / in 10k / cc 2M / cr 41M | in-progress |
+ | issues-pool-batch-mgmt | 0.0（边界不可解析） | — | — | — | — | 0 | — | — | — | 无度量锚 | — | — | archived |
+ | issues-pool-hardening | 206.3 | 37.8 | — | 116.8 | 8.8 | 10 | none | none | 28 | 0.86 | 9 | — | archived |
+ | issues-v2-single-file-model | 204.3 | 44.8 | 118.8 | 13.8 | 11.9 | 15 | TG-09 | none | 36 | 1.0 | 11 | — | archived |
+ | matt-workflow-integration | 0.0（边界不可解析） | — | — | — | — | 1 | TG-06,TG-08 | TG-06,TG-08 | 70 | 0.79 | 21 | — | archived |
+ | minimize-repo-footprint | 136.5 | 34.5 | 60.2 | 32.1 | 9.7 | 10 | — | — | — | 无度量锚 | — | — | archived |
+ | mlh-p1-issues-sweep | 42.7 | 2.6 | 15.6 | 17.4 | 7.2 | 6 | none | none | 36 | 0.81 | 8 | — | archived |
+ | mlh-p2-anchor-lint | 90.2 | 29.9 | — | 32.1 | 7.2 | 6 | none | none | 38 | 0.82 | 18 | — | archived |
+ | mlh-p3-determ-guards | 166.8 | 1.9 | 89.4 | 64.5 | 10.9 | 5 | none | none | 37 | 0.86 | 10 | — | archived |
+ | mlh-p4-maintain-scan | 221.7 | 38.8 | 14.3 | 106.3 | 8.4 | 7 | none | none | 39 | 0.97 | 17 | — | archived |
+ | mlh-p4-reason-code-validators | 310.3 | 98.3 | 15.7 | 6.6 | 9.2 | 19 | TG-08 | none | 39 | 0.74 | 14 | — | archived |
+@@ -100,28 +101,28 @@
+ | three-lens-decision-framework | 75.3 | 35.5 | 13.5 | 16.1 | 5.2 | 10 | none | none | — | 无度量锚 | — | — | archived |
+ | tickets-parallel-frontier | 188.4 | 135.0 | 8.4 | 10.9 | 7.8 | 15 | none | TG-04,TG-17 | 21 | 1.0 | 6 | — | archived |
+ | workflow-metrics-loop | 119.2 | 21.6 | 8.9 | 78.2 | 10.5 | 6 | none | none | 16 | 0.94 | 10 | — | archived |
+ 
+ > tokens 列：数值为各会话累计口径聚合，tickets 管线下多为独立短会话的首行全额之和，非严格阶段增量。
+ 
+ ## 聚合① 阶段占比
+ 
+ | 阶段 | 墙钟(min) | 占比 |
+ |---|---|---|
+-| done | 9639.8 | 27% |
+-| spec-review | 9141.3 | 25% |
+-| unknown | 6612.2 | 18% |
+-| impl | 4650.4 | 13% |
+-| code-review | 3565.0 | 10% |
++| spec-review | 9870.0 | 27% |
++| done | 9650.4 | 26% |
++| unknown | 6622.1 | 18% |
++| impl | 4666.7 | 13% |
++| code-review | 3579.9 | 10% |
+ | grill | 1825.0 | 5% |
+-| other | 583.2 | 2% |
+-| ff | 204.3 | 1% |
++| other | 594.7 | 2% |
++| ff | 215.9 | 1% |
+ 
+ ## 聚合② 成本双峰（总墙钟 x / code-review 占比% y）
+ 
+ | change | 总墙钟(min) | code-review 占比 |
+ |---|---|---|
+ | absorb-gstack-autoplan | 356.5 | 3% |
+ | absorb-gstack-review | 313.5 | 13% |
+ | adaptive-workflow-routing | 111.1 | 9% |
+ | add-codex-host-support | 5026.3 | 21% |
+ | add-sdflow-architecture | 378.4 | 21% |
+@@ -135,34 +136,35 @@
+ | cross-model-outside-voice | 229.7 | 25% |
+ | curb-rework-loop-cost | 247.6 | 9% |
+ | dedupe-issues-scripts-shared-layer | 1336.2 | 3% |
+ | done-roadmap-writeback | 193.4 | 16% |
+ | drop-per-dir-review-stub | 53.8 | 0% |
+ | drop-review-html-viewer | 0.0 | — |
+ | enable-codex-background-outside-voice | 0.0 | — |
+ | fix-b11-b12-tools-hardening | 0.0 | — |
+ | fix-design-gate-freshness-proxy | 447.5 | 5% |
+ | fix-mechanical-layer-silent-failures | 999.7 | 53% |
+-| fix-probe-scan-precision | 1174.0 | 1% |
++| fix-probe-scan-precision | 1173.9 | 1% |
+ | fix-voice-quoting-and-mirror-vocab | 316.7 | 3% |
+ | fix-windows-encoding-crash | 875.6 | 0% |
+ | gate-anchor-line-scoped | 7.0 | 0% |
+ | gate-checkpoint-hardening | 87.8 | 16% |
+ | harden-gate-git-layer | 617.0 | 2% |
+ | harden-hr-tg-anchor-consistency | 183.6 | 57% |
+ | harden-implement-review-loop | 1203.0 | 4% |
+ | harden-issues-read-write | 148.2 | 8% |
+ | harden-outside-voice-scripts | 119.6 | 9% |
+ | harden-repo-root-fail-closed | 522.4 | 1% |
+ | harden-sdflow-spec-followups | 353.4 | 6% |
+ | implement-mechanical-layer-hardening-p4-lens-metric-emit | 234.5 | 10% |
+-| implement-workflow-optimization-2026-08-p1 | 296.1 | 0% |
++| implement-workflow-optimization-2026-08-p1 | 347.7 | 4% |
++| implement-workflow-optimization-2026-08-p2 | 751.8 | 0% |
+ | issues-pool-batch-mgmt | 0.0 | — |
+ | issues-pool-hardening | 206.3 | 57% |
+ | issues-v2-single-file-model | 204.3 | 7% |
+ | matt-workflow-integration | 0.0 | — |
+ | minimize-repo-footprint | 136.5 | 24% |
+ | mlh-p1-issues-sweep | 42.7 | 41% |
+ | mlh-p2-anchor-lint | 90.2 | 36% |
+ | mlh-p3-determ-guards | 166.8 | 39% |
+ | mlh-p4-maintain-scan | 221.7 | 48% |
+ | mlh-p4-reason-code-validators | 310.3 | 2% |
+@@ -224,53 +226,53 @@
+ | code-review | outside-voice | claude | codex | hr-tg | 16 | 54 | 41 | 4 | 10 | 23 | 75% | 43% | ≥10待复评 |
+ | code-review | outside-voice | claude | none | code-voice | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | code-review | outside-voice | claude | none | hr-tg | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | code-review | outside-voice | codex | claude | code-voice | 1 | 6 | 1 | 5 | 0 | 1 | 17% | 17% | — |
+ | code-review | outside-voice | codex | claude | hr-tg | 1 | 5 | 0 | 5 | 0 | 0 | 0% | 0% | — |
+ | code-review | outside-voice | codex | codex | code-voice | 1 | 2 | 2 | 0 | 0 | 0 | 100% | 0% | — |
+ | spec-review | adversarial | claude | claude | - | 1 | 8 | 8 | 0 | 0 | 4 | 100% | 50% | — |
+ | spec-review | adversarial | claude | claude | d1-t2 | 1 | 5 | 4 | 1 | 0 | 2 | 80% | 40% | — |
+ | spec-review | adversarial | claude | claude | d2-d3-scope | 1 | 4 | 4 | 0 | 0 | 2 | 100% | 50% | — |
+ | spec-review | adversarial | claude | claude | none | 2 | 30 | 28 | 2 | 0 | 9 | 93% | 30% | — |
+-| spec-review | adversarial | claude | claude | — | 39 | 378 | 350 | 20 | 8 | 176 | 93% | 47% | ≥10待复评 |
++| spec-review | adversarial | claude | claude | — | 40 | 391 | 363 | 20 | 8 | 182 | 93% | 47% | ≥10待复评 |
+ | spec-review | adversarial | codex | codex | — | 3 | 23 | 23 | 0 | 0 | 10 | 100% | 43% | — |
+ | spec-review | broad | claude | claude | - | 1 | 3 | 3 | 0 | 0 | 1 | 100% | 33% | — |
+ | spec-review | broad | claude | claude | autoplan-adapted | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | spec-review | broad | claude | claude | none | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+-| spec-review | broad | claude | claude | — | 39 | 415 | 361 | 35 | 19 | 172 | 87% | 41% | ≥10待复评 |
++| spec-review | broad | claude | claude | — | 40 | 423 | 368 | 36 | 19 | 176 | 87% | 42% | ≥10待复评 |
+ | spec-review | broad | claude | grill-substituted | design | 1 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
+ | spec-review | broad | codex | codex | — | 3 | 26 | 22 | 4 | 0 | 6 | 85% | 23% | — |
+ | spec-review | domain | claude | claude | backend | 1 | 5 | 5 | 0 | 0 | 1 | 100% | 20% | — |
+ | spec-review | domain | claude | claude | none | 2 | 12 | 12 | 0 | 0 | 3 | 100% | 25% | — |
+-| spec-review | domain | claude | claude | — | 17 | 82 | 79 | 1 | 2 | 35 | 96% | 43% | ≥10待复评 |
++| spec-review | domain | claude | claude | — | 18 | 86 | 83 | 1 | 2 | 38 | 97% | 44% | ≥10待复评 |
+ | spec-review | grounding | claude | claude | - | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | spec-review | grounding | claude | claude | code-facts | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ | spec-review | grounding | claude | claude | none | 2 | 3 | 3 | 0 | 0 | 0 | 100% | 0% | — |
+-| spec-review | grounding | claude | claude | — | 39 | 80 | 58 | 21 | 0 | 24 | 73% | 30% | ≥10待复评 |
++| spec-review | grounding | claude | claude | — | 40 | 81 | 59 | 21 | 0 | 24 | 74% | 30% | ≥10待复评 |
+ | spec-review | grounding | codex | codex | — | 3 | 13 | 13 | 0 | 0 | 5 | 100% | 38% | — |
+ | spec-review | outside-voice | claude | claude | design-voice | 11 | 42 | 37 | 1 | 4 | 10 | 88% | 24% | ≥10待复评 |
+ | spec-review | outside-voice | claude | claude | hr-tg | 4 | 20 | 19 | 1 | 0 | 8 | 95% | 40% | — |
+-| spec-review | outside-voice | claude | codex | design-voice | 31 | 219 | 171 | 37 | 11 | 42 | 78% | 19% | ≥10待复评 |
+-| spec-review | outside-voice | claude | codex | hr-tg | 12 | 50 | 47 | 0 | 3 | 17 | 94% | 34% | ≥10待复评 |
++| spec-review | outside-voice | claude | codex | design-voice | 32 | 225 | 176 | 37 | 12 | 43 | 78% | 19% | ≥10待复评 |
++| spec-review | outside-voice | claude | codex | hr-tg | 13 | 54 | 49 | 2 | 3 | 18 | 91% | 33% | ≥10待复评 |
+ | spec-review | outside-voice | codex | codex | design-voice | 2 | 6 | 4 | 2 | 0 | 2 | 67% | 33% | — |
+ | spec-review | outside-voice | codex | codex | hr-tg | 2 | 8 | 8 | 0 | 0 | 2 | 100% | 25% | — |
+ | spec-review | outside-voice | codex | none | design-voice | 1 | 0 | 0 | 0 | 0 | 0 | — | — | — |
+ 
+-> 无锚样本 39 份（旧格式,不纳入；份=报告文件数，每 change 常含 spec/code 两份，非 change 数；去重后 26 个 change）: 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-streamline-workflow-automation, 2026-07-03-minimize-repo-footprint, 2026-07-03-minimize-repo-footprint, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-ship, 2026-07-03-sdflow-ship, 2026-07-04-cross-model-outside-voice, 2026-07-04-cross-model-outside-voice, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening-2, 2026-07-04-ship-gate-hardening-2, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-review-tool-followups, 2026-07-05-review-tool-followups, 2026-07-05-three-lens-decision-framework, 2026-07-05-three-lens-decision-framework, 2026-07-05-workflow-metrics-loop, 2026-07-16-add-codex-host-support, 2026-07-16-scoped-test-per-task, 2026-07-19-fix-mechanical-layer-silent-failures, 2026-07-31-align-sdflow-spec-with-openspec-schema, 2026-07-31-curb-rework-loop-cost, 2026-08-01-parallelize-grounding-mirror, 2026-08-02-harden-issues-read-write, 2026-08-04-issues-v2-single-file-model, 2026-08-05-simplify-workflow, 2026-08-07-fix-probe-scan-precision, 2026-08-09-absorb-gstack-autoplan
++> 无锚样本 40 份（旧格式,不纳入；份=报告文件数，每 change 常含 spec/code 两份，非 change 数；去重后 27 个 change）: 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-issues-pool-batch-mgmt, 2026-07-02-streamline-workflow-automation, 2026-07-03-minimize-repo-footprint, 2026-07-03-minimize-repo-footprint, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-rebrand, 2026-07-03-sdflow-ship, 2026-07-03-sdflow-ship, 2026-07-04-cross-model-outside-voice, 2026-07-04-cross-model-outside-voice, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening, 2026-07-04-ship-gate-hardening-2, 2026-07-04-ship-gate-hardening-2, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-checkpoint-tag-single-source, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-drop-per-dir-review-stub, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-anchor-line-scoped, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-gate-checkpoint-hardening, 2026-07-05-review-tool-followups, 2026-07-05-review-tool-followups, 2026-07-05-three-lens-decision-framework, 2026-07-05-three-lens-decision-framework, 2026-07-05-workflow-metrics-loop, 2026-07-16-add-codex-host-support, 2026-07-16-scoped-test-per-task, 2026-07-19-fix-mechanical-layer-silent-failures, 2026-07-31-align-sdflow-spec-with-openspec-schema, 2026-07-31-curb-rework-loop-cost, 2026-08-01-parallelize-grounding-mirror, 2026-08-02-harden-issues-read-write, 2026-08-04-issues-v2-single-file-model, 2026-08-05-simplify-workflow, 2026-08-07-fix-probe-scan-precision, 2026-08-09-absorb-gstack-autoplan, 2026-08-10-implement-workflow-optimization-2026-08-p1
+ > 解析失败 0 份（编码/IO 错误，已跳过未计入聚合，不拖垮全局）: 无
+ > 独立率跨轮不保证同口径（dedup 合并尺度可能漂移），复评时校验最近几轮尺度一致。
+ 
+ ## 聚合④ per-镜实修率（历史回算）
+ 
+ | layer | lens | 可判定 | 实修 | defer | 未修 | 未知(本镜) | 覆盖率 | 实修率 | 佐证 |
+ |---|---|---|---|---|---|---|---|---|---|
+ | code-review | adversarial | 6 | 2 | 4 | 0 | 3 | 67% | 33% | — |
+ | code-review | domain | 6 | 3 | 3 | 0 | 0 | 100% | 50% | — |
+ | code-review | history | 2 | 1 | 1 | 0 | 1 | 67% | 50%（参考） | — |
+-| code-review | outside-voice | 0 | 0 | 0 | 0 | 1 | 0% | — | — |
+-| spec-review | adversarial | 0 | 0 | 0 | 0 | 1 | 0% | — | — |
++| code-review | outside-voice | 0 | 0 | 0 | 0 | 1 | 0% | —（参考） | — |
++| spec-review | adversarial | 0 | 0 | 0 | 0 | 1 | 0% | —（参考） | — |
+ | spec-review | broad | 2 | 0 | 2 | 0 | 0 | 100% | 0%（参考） | 有 commit 佐证 |
+ | spec-review | grounding | 3 | 0 | 0 | 3 | 0 | 100% | 0%（参考） | 有 commit 佐证 |
+ 
+-> 「未知(本镜)」= fix-status 不可判（裸 impl-review-fix/处置动词但不命中精确 needle）但 lens 已解析的样本，计入该镜自身；lens 本身不可解析（0/2+ 命中或无有界记号）的样本无法归属具体镜，按 layer 汇总另计：code-review=609, spec-review=521。
++> 「未知(本镜)」= fix-status 不可判（裸 impl-review-fix/处置动词但不命中精确 needle）但 lens 已解析的样本，计入该镜自身；lens 本身不可解析（0/2+ 命中或无有界记号）的样本无法归属具体镜，按 layer 汇总另计：code-review=621, spec-review=550。
+ > 可判定 < 5（单一源阈值）标「参考」，MUST NOT 作砍留依据；窄文法宁缺毋假，MUST NOT 为提覆盖率放宽文法猜测归属。
+ 
+diff --git a/sdflow-code-review/SKILL.md b/sdflow-code-review/SKILL.md
+index d4c6466..efeb5b4 100644
+--- a/sdflow-code-review/SKILL.md
++++ b/sdflow-code-review/SKILL.md
+@@ -281,36 +281,46 @@ Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份**
+ **Step2 前置·无逻辑面白名单免除判定（机判·post-diff）**：fan-out 前跑
+ `python3 $RULES_ROOT/tools/trivial_shape.py --base "$DIFF_BASE" --root "$(git rev-parse --show-toplevel)"`——
+ 退出码 **0=EXEMPT**（diff 仅无逻辑面白名单形状：代码内注释/约定文档路径 README·CHANGELOG·docs·VERSION/仅新增 tests/；
+ 多镜结构上零产出）→ **免本步 fan-out**，报告 Step2 段注明「无逻辑面豁免（trivial_shape EXEMPT）」并附判器 JSON 的 `reason`；
+ **免除判定 MUST 阻塞等待 Step1（scope 审计）结果收齐**（见 Step1「并行边界」）——Step1 揭出隐藏逻辑则本判定作废、
+ 照常 fan-out。**1=NOT_EXEMPT**（有逻辑面 / 命中行为面路径 bundle·SKILL.md·workflow.md·
+ ship_gate.py，即便 diff 是 markdown）/ **2=ERROR** → **照常 fan-out**（保守，此时 Step1 MAY 与本步 fan-out 并行）。
+ **默认开、仅机判无逻辑面才关，非「高风险才跑」**；判器缺失/不可执行 → 视同 NOT_EXEMPT 照跑（不静默免）。
+ 
+ **规划镜头（主 session）**：按 `{change_dir}` 命中的 TG/栈定**领域镜**；按风险定**对抗镜**（普通 2 / 高风险 3）；
+-固定 1 个**历史镜**。linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
++linter/typechecker/编译器能抓的（导入/类型/格式/纯风格）不进任何镜——CI 会跑。
+ **TG-27 → domains/llm.md**（代码消费 LLM/agent 产出并持久化/执行/外呼，与 TG-01→backend 同构）——命中即选该领域清单叠加。
+ 
++- **历史镜条件化派发〔DD6 处置=降采样，`openspec/retro/mirror-dispositions.yaml` layer=code-review lens=history 行〕**：
++  判定命令（机械可判，二者任一命中即派）：
++  `git diff --diff-filter=R -M --name-only "$DIFF_BASE"..HEAD` 非空（命中 rename）**或**
++  `git diff --diff-filter=M --numstat "$DIFF_BASE"..HEAD` 中任一既有文件 (加行数+删行数) ≥200（大规模改动既有文件）
++  → 派 1 个**历史镜**；两者皆否 → 本轮跳过。
++  **跳过时锚行仍必落**（DD2 合法组合矩阵扩展，锚行必落=跳过可见）：roster 该行填
++  `{lens:"history", runner:"none", site:"—"}`（MUST NOT 从 roster 整行省略），emitter 归约后产出
++  `runner="none" findings="0"` 的合法锚；报告 Step2 段落一行说明「历史镜本轮条件未命中，按处置表
++  降采样跳过（判据：diff 无 rename 且无≥200 行既有文件大改）」。
++
+ - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+ 
+ **能力探针已于第零步完成**（与档位解析同位，Step1 与本步共用同一次结果）——本步 fan-out 直接读该结果，**不另探**。
+ `subagents="unavailable"` 时本轮**缩 roster 到主 session 实际独立完成的镜**，报告显著标注「⚠️ 单镜降级（子代理不可用，
+ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「能力探针」全文。
+ 
+ **fan-out（一条消息内全部派出，各子代理 fresh context、无用户交互、返回结构化 findings）**：
+ 
+ | 镜 | 数量 | 干什么 | 建议档位 |
+ |----|------|--------|-----------|
+ | **领域镜** | 每命中领域 1 个 | 读 `DIFF_BASE..HEAD` diff + 相关真实代码，逐条过 `code-review-base.md` CR-01~09 + `domains/<栈>` CR-* 项，列违反/存疑项（带 `file:line`） | 中档（判断） |
+ | **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | 中档（对抗推理） |
+-| **历史镜** | 1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） |
++| **历史镜**〔条件化，见上「规划镜头」〕 | 0-1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） |
+ 
+ > 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回结构化 findings（每条带：
+ > 问题 / CR 编号 / 证据 `file:line` / 严重度 / 建议），**不要 AskUserQuestion**"。
+ >
+ > **🔴 每个子代理 prompt MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——见传播纪律。
+ > **代码审是通则 ③ 的最高发区**：子代理眼前只有「已经写出来的代码」，漏带这三条，它**必然**把「它现在能跑 / 现在没出过事」当成「它是对的、不用改」。
+ > **判据是「目标态下会不会出问题」，不是「现在出没出过问题」。**
+ >
+ > **🔴 pre-emit 引文纪律（产出纪律非机械门，C9）**：每条 finding MUST 引出触发它的具体代码行原文
+ > （file:line + 逐字引文）；**非局部 finding**（缺失校验 / 跨文件数据流 / 时序竞态 / absence 类——
+@@ -362,21 +372,23 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「
+     靠延长本循环来兜。
+   - **无自动修复时不触发本复审**（无源码改动 ⇒ 锚取当前 HEAD 即被审基线，本就自洽）。
+   - **两侧表述统一**：本 skill 与 `sdflow-implement` 关于「code-review 是否存在 fix 循环」的描述
+     SHALL 一致，统一为「**存在复审循环，硬上限 1 轮**」——**MUST NOT** 出现「无 re-review 闭环」
+     类相反表述（见上「与注入点 B 的关系」对比表）。
+   - **诚实边界**：本条是**指令层约束**，由编排器自报遵守；`ship_gate` 不为复审轮数新增机械门，
+     **MUST NOT** 将其表述为机械保证。
+ - **裁决计数〔4.6·M4，已被 lens-metric 锚吸收〕〔impl-review-fix mlh-p4〕**：各参与镜（outside-voice 按 `site=code-voice|hr-tg`
+   各独立计数）的裁决结果**构造进** `{roster:[{lens,runner,site}…本轮实际跑过的每个行键（domain/adversarial/history/broad +
+   outside-voice 每个调用过的 site）——若第零步能力探针判 `subagents="unavailable"` 已缩 roster，此处 MUST 同步只含实际
+-  独立完成的行键], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`（input schema 权威见契约
++  独立完成的行键], findings:[{hits:[{raw,runner?,site?}…],verdict,sev}…]}`〔DD2：历史镜若按上方「规划镜头」条件本轮
++  跳过，roster **仍 MUST 含该行**、`runner` 填 `"none"`（合法组合，findings 恒 0）——MUST NOT 因跳过而整行省略，
++  跳过=零执行也是一种「参与」，锚行必落使跳过可审计〕（input schema 权威见契约
+   `lens-metric-contract.md` 的 `lens-metric-input-schema` 机读块——bundle 分发可达、消费仓亦可读，非手数；源仓另有 golden fixture
+   示范 `tools/tests/fixtures/lens_metric_input.json`，消费仓非 full 拷贝不含 `tests/`，以契约 schema 块为准）〔impl-review-fix mlh-p4：引用改指 bundle 可达契约块〕——原「voice分桶」自由 prose 台账行已被此锚吸收
+   取代，这份 roster+findings 是下方「反馈回路〔泛化〕」判据的数据来源，Step5 调 emitter 归约后落成结构化可 grep 的锚。
+ 
+ ## 第五步：产出 + 收敛口
+ 
+ 🔴 **执行顺序 MUST 按下方编号，不是按小标题在文档里出现的先后**〔impl-review-fix F4〕：
+ 若照旧措辞的书写顺序执行（第一条就是「写报告」，「两段提交」在后面才出现），报告会在
+ 两段提交的第 1 段（`checkpoint-commit.sh` 的 `git add -A`）之前就已落在工作树——于是「仅
+ 源码」的第 1 段提交会把报告文件、连同任何其它无关残留改动一并卷入，而 `git status
+diff --git a/sdflow-init/assets/workflow/lens-metric-contract.md b/sdflow-init/assets/workflow/lens-metric-contract.md
+index d931584..52e35a3 100644
+--- a/sdflow-init/assets/workflow/lens-metric-contract.md
++++ b/sdflow-init/assets/workflow/lens-metric-contract.md
+@@ -1,21 +1,25 @@
+ # lens-metric v1 锚契约（评审价值度量单一权威源）
+ 
++> **契约文档版本：v2**〔implement-workflow-optimization-2026-08-p2 · DD2/设计门 Q1〕——新增合法组合
++> 「普通镜行 `runner="none"` ∧ `findings="0"`」（条件跳过锚，见下方约束①段与「合法组合矩阵」小节）；
++> 锚字段集/枚举域/anchor 行的字面 `v1` 前缀均不变（本版本号只标记契约文档自身的合法组合矩阵变更历史）。
++
+ ## 锚形（一行一 (layer,lens,host,runner,site,轮)）〔add-codex-host-support：行键由 (layer,lens,runner,site,轮) 升维，插入 host〕
+ <!-- sdflow:lens-metric v1 layer="…" lens="…" host="…" runner="…" site="…" findings="N" 采纳="N" 裁掉="N" defer="N" 独立="N" sev="致N/高N/中N/低N" -->
+ 
+ ## 字段与取值域
+ > **机读取值域单一源见下方 `## 机读取值域` 的 ```lens-metric-enums``` 块**——消费脚本（`anchor_lint` 读、`lens_metric_aggregate` 硬编码由一致性测试守卫）MUST 从该块取 layer/lens/host/runner/sev，MUST NOT 在脚本内另复制清单〔mlh-p2-anchor-lint grill〕。以下散文条目为人读语义注记（折叠/消歧说明），取值以机读块为准。**本块同时是 `sdflow:outside-voice` 锚的 `host`/`runner`/`reason_code` 枚举单一源**〔add-codex-host-support：两类锚共用同一份枚举权威，见 design TG-05〕。
+ - layer ∈ {spec-review, code-review}
+ - lens  ∈ {domain, adversarial, grounding, history, outside-voice, broad}（canonical 投影；折叠表见 §折叠）
+ - host  ∈ {claude, codex, unknown}（**谁在跑这次评审**，由 `resolve-models.sh` 按正信号判定；`unknown` = 两个正信号都无）〔add-codex-host-support〕
+-- runner∈ {claude, codex, none, unknown}（**谁执行了这个镜，只记机队家族**；`claude-fallback` **废弃**——它把跨模型性藏进了枚举值，Codex 宿主下必然说谎，见 §跨模型性。`none` = 该轮无执行〔D6：host-unknown/secret-hit/fallback-unavailable 用之，MUST 伴 `findings=0`〕；`unknown` = `host=unknown` 时普通镜的主审机队，**仅合法于非-outside-voice 普通镜行 ∧ `host=unknown`**——`sdflow:outside-voice` 锚的 `runner` 恒 ∈{claude,codex,none}，不取 `unknown`）〔add-codex-host-support〕
++- runner∈ {claude, codex, none, unknown}（**谁执行了这个镜，只记机队家族**；`claude-fallback` **废弃**——它把跨模型性藏进了枚举值，Codex 宿主下必然说谎，见 §跨模型性。`none` = 该轮无执行——outside-voice 锚〔D6：host-unknown/secret-hit/fallback-unavailable 用之，MUST 伴 `findings=0`〕；**普通（非-outside-voice）镜行同样合法**〔DD2/设计门 Q1，implement-workflow-optimization-2026-08-p2：本轮按 roster 段派发条件判「不派」，MUST 伴 `findings="0"`——锚行必落，跳过成因由 `mirror-dispositions.yaml` 的 `condition` 字段（机读）+ 报告一行散文承载，`condition-not-met` 不作为锚字段〕；`unknown` = `host=unknown` 时普通镜的主审机队，**仅合法于非-outside-voice 普通镜行 ∧ `host=unknown`**——`sdflow:outside-voice` 锚的 `runner` 恒 ∈{claude,codex,none}，不取 `unknown`）〔add-codex-host-support〕
+ - reason_code ∈ {ok, not-installed, preflight-error, timeout, exec-error, host-unknown, secret-hit, fallback-unavailable}（**仅 `sdflow:outside-voice` 锚必填，`sdflow:lens-metric` 锚无此字段**——本轮 voice 结局：成功跨模型固定哨兵 `ok`〔不复用 `none`，防与 `runner="none"` 词面重载混判〕；同族降级 ∈{not-installed,preflight-error,timeout,exec-error}；无执行 ∈{host-unknown,secret-hit,fallback-unavailable}）〔add-codex-host-support〕
+ - site  ∈ {code-voice, hr-tg, design-voice, —}（可选消歧，仅 outside-voice，不进 lens enum；非 outside-voice 用 —）
+   **〔impl-review-fix CF-补2〕site 仅分组消歧、不纳入越域自检**：任意取值只多一个分组行，不阻塞（与 layer/lens/host/runner/sev
+   五个受自检约束的必检字段不同，两 SKILL 的锚行存在性自检 MUST NOT 因 site 值另类而报错）。
+ - findings/采纳/裁掉/defer/独立 = int≥0
+ - sev = 致N/高N/中N/低N（四级定序、零也写 0、分隔符恒 /；仅采纳项计入）
+ 
+ ### 跨模型性 = 派生量，MUST NOT 编码进枚举值、MUST NOT 简写裸 `runner≠host`〔add-codex-host-support · spec-review-r2 C1〕
+ 「跨模型性」（本轮是否拿到另一机队的真第二意见）SHALL 由**合法组合矩阵**（design TG-05「数据模型与生命周期」段；能力 `host-adaptive-execution`）统一判定：`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`。**矩阵的关系式判定逻辑 MUST NOT 落成本文件的可 parse 机读块**——平铺 `key: 逗号分隔值` 结构装不下 `runner≠host`、`findings=0` 这类关系式谓词（r3-narrow 修正）；本文件的机读块**只承载枚举域**，矩阵逻辑收敛为 `anchor_lint` 单一本地实现、以全笛卡尔 golden 自测防漂移（`outside_voice_guard` 的跨工具重实现随其复用路径退役而并入）。**MUST NOT 简写为裸 `runner≠host`**——`runner="none"` 时 `none≠host` 恒真，会把一切无执行轮次误判为跨模型（C1 击穿）；矩阵要求 `host,runner` 均落在 `{claude,codex}` 内才谈跨模型。
+ 
+@@ -71,21 +75,23 @@ scope-audit: broad
+     {"lens": "<canonical ∈ lens enum>", "runner": "<∈ runner enum>", "site": "<code-voice|hr-tg|design-voice|—>"}
+   ],
+   "findings": [
+     {"hits": [{"raw": "<原始镜名>", "runner": "<outside-voice 时必填>", "site": "<outside-voice 时必填>"}],
+      "verdict": "采纳|裁掉|defer", "sev": "致|高|中|低"}
+   ]
+ }
+ ```
+ > 约束（emitter fail-closed 强制）：① roster 每个 `(lens,runner,site)` 行键各一条（含零-finding 行）；
+ > 非 outside-voice 普通镜行 MUST `runner==host`（本轮宿主/主审机队，取自 `--host`；`host="unknown"` 时该行
+-> `runner` 同为 `"unknown"`）、`site="—"`。② finding `hits` 非空；`verdict=采纳` 时 `sev` 必填非空、
++> `runner` 同为 `"unknown"`）**或 `runner="none"`**〔DD2/设计门 Q1：本轮 roster 段判「条件跳过」该镜，
++> findings 恒 0——由 fold_hit 非-ov 分支恒取 runner=host 天然保证，emitter 不再另设 findings 校验〕、
++> `site="—"`。② finding `hits` 非空；`verdict=采纳` 时 `sev` 必填非空、
+ > 其余 verdict 若带 sev 也须合法级。③ **无 per-finding `layer`**——锚 layer 单一源 = `--layer`。
+ > ④ 所有字段类型 MUST 为字符串（非字符串 fail-closed，非静默）。
+ 
+ ## enum 扩展治理
+ 新增镜类型（enum 未列）MUST 先升版本号至 v2 + 更新折叠表，MUST NOT 静默塞入 broad。
+ 
+ ## config 门控
+ 度量落锚受 config.yaml `metrics.enabled` 门控：源仓默认 true / 消费仓默认 false；关闭时不落锚、缺锚不阻塞。
+ 
+ ## 示范锚 fence（防聚合器自指误取）
+diff --git a/sdflow-init/assets/workflow/tools/anchor_lint.py b/sdflow-init/assets/workflow/tools/anchor_lint.py
+index b4c7c92..a6d4e35 100644
+--- a/sdflow-init/assets/workflow/tools/anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/anchor_lint.py
+@@ -807,21 +807,28 @@ def check_lens_metric(report_text, cli_layer, enums):
+                 v.append({"anchor": ln.strip()[:80], "field": cf, "kind": "not-nonneg-int"})
+         # add-codex-host-support（Step 5）：普通镜（非-outside-voice）行 runner 与 host 绑定——
+         # host∈{claude,codex} ⇒ 普通镜在本机跑，runner MUST==host（∴ 普通镜 MUST NOT runner='none'/跨机队/unknown）；
+         # host='unknown' ⇒ runner MUST=='unknown'（契约：unknown 仅合法于非-outside-voice 普通镜行 ∧ host=unknown）。
+         # outside-voice lens-metric 行的跨模型 runner≠host 是合法的，∴ 只校验非-outside-voice 行。site 不校验（CF-补2）。
+         lens_v = kv.get("lens")
+         if lens_v and lens_v != "outside-voice" and "host" in kv and "runner" in kv:
+             host_v, runner_v = kv["host"], kv["runner"]
+             expected = "unknown" if host_v == "unknown" else (host_v if host_v in _DUOS else None)
+             if expected is not None and runner_v != expected:
+-                v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ordinary-runner-host-mismatch"})
++                # DD2/设计门 Q1（implement-workflow-optimization-2026-08-p2）：合法组合矩阵扩展——
++                # 普通镜行「条件跳过」锚 runner="none" ∧ findings="0" 合法（锚行必落、跳过可见）；
++                # findings 非法值已由上方 not-nonneg-int 另报，此处只放行严格 "0"，非零 findings
++                # 仍判 mismatch（谎报跳过却计了数）。
++                findings_v = kv.get("findings")
++                legal_skip = runner_v == "none" and findings_v == "0"
++                if not legal_skip:
++                    v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ordinary-runner-host-mismatch"})
+         # add-codex-host-support（B1）：outside-voice lens-metric 行的 runner≠host（跨模型）合法，故不套普通镜规则——
+         # 但仍有三条结构不变量 MUST 守（此前完全脱离校验 ⇒ 手写/emitter-bypass 的矛盾锚汇入 retro 价值表）。
+         # 不依赖 reason_code（lens-metric 锚无该字段），纯结构判定，与 emitter 侧 _OV_RUNNER_DOMAIN/零执行不变量对齐：
+         elif lens_v == "outside-voice" and "host" in kv and "runner" in kv:
+             host_v, runner_v = kv["host"], kv["runner"]
+             findings_v = kv.get("findings")
+             # ③ OV 行 runner 域收紧 ∈{claude,codex,none}，MUST NOT="unknown"（unknown 只属非-ov 普通镜行，契约「跨模型性」段）
+             if runner_v == "unknown":
+                 v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ov-runner-unknown"})
+             # ② host="unknown"（本轮无 voice 目标）⇒ runner MUST="none"
+diff --git a/sdflow-init/assets/workflow/tools/lens_metric_emit.py b/sdflow-init/assets/workflow/tools/lens_metric_emit.py
+index c45b05b..5aa3c58 100644
+--- a/sdflow-init/assets/workflow/tools/lens_metric_emit.py
++++ b/sdflow-init/assets/workflow/tools/lens_metric_emit.py
+@@ -137,22 +137,29 @@ def reduce(roster, findings, layer, host, enums, fold_map):
+             raise EmitError(f"roster 项缺字段: {it!r}")
+         if not all(isinstance(it[k], str) for k in ("lens","runner","site")):
+             raise EmitError(f"roster 字段类型非字符串: {it!r}")
+         if it["lens"] not in enums["lens"]:
+             raise EmitError(f"roster lens 越域: {it['lens']}")
+         if it["runner"] not in enums["runner"]:
+             raise EmitError(f"roster runner 越域: {it['runner']}")
+         if _SITE_BAD.search(it["site"]):
+             raise EmitError(f"roster site 注入: {it['site']!r}")
+         if it["lens"] != "outside-voice":
+-            if it["runner"] != host or it["site"] != "—":            # Fix B：防幽灵行击穿强制行
+-                raise EmitError(f"非 outside-voice 行键必须 runner==--host({host!r}) 且 site=—: {it!r}")
++            # Fix B：防幽灵行击穿强制行；DD2〔implement-workflow-optimization-2026-08-p2 设计门 Q1〕：
++            # 合法组合矩阵扩展——普通镜行 runner="none"（本轮条件跳过，findings 恒 0）新增合法，
++            # site 仍恒须 "—"。findings=0 由 fold_hit 非-ov 分支恒取 runner=host 天然保证
++            # （真实 hit 不可能折到 runner="none" 的行键），无需在此另设 findings 校验。
++            if it["site"] != "—" or (it["runner"] != host and it["runner"] != "none"):
++                raise EmitError(
++                    f"非 outside-voice 行键必须 runner==--host({host!r}) 或 \"none\"（DD2 条件跳过）"
++                    f" 且 site=—: {it!r}"
++                )
+         elif it["runner"] not in _OV_RUNNER_DOMAIN:
+             raise EmitError(f"outside-voice 行键 runner 越域(须∈{sorted(_OV_RUNNER_DOMAIN)}): {it!r}")
+         key = (it["lens"], host, it["runner"], it["site"])
+         if key in seen:
+             raise EmitError(f"roster 重复行键: {key}")
+         seen.add(key); roster_keys.append(key)
+     roster_lenses = {k[0] for k in roster_keys}
+     for need in MANDATORY_LENS:                          # 被调即视 metrics-on
+         if need not in roster_lenses:
+             raise EmitError(f"roster 缺强制行 lens={need}（MIN_LENS_ROWS）")
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+index 8c7d319..d51bf10 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_anchor_lint.py
+@@ -793,20 +793,37 @@ def test_ordinary_mirror_runner_unknown_host_unknown_ok():      # host=unknown l
+ def test_ordinary_mirror_runner_none_blocked():                # 普通镜 runner=none → 拦（none 仅 outside-voice 无执行）
+     al = _mod()
+     v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="none"), "code-review", _enums())
+     assert _has(v, "ordinary-runner-host-mismatch")
+ 
+ def test_ordinary_mirror_runner_eq_host_ok():                  # host=codex lens=domain runner=codex → 放行
+     al = _mod()
+     v = al.check_lens_metric(_lm(layer="code-review", host="codex", lens="domain", runner="codex"), "code-review", _enums())
+     assert not _has(v, "ordinary-runner-host-mismatch")
+ 
++def test_ordinary_mirror_runner_none_findings_zero_legal():
++    # DD2/设计门 Q1（implement-workflow-optimization-2026-08-p2）：合法组合矩阵扩展——
++    # 普通镜行「条件跳过」锚 runner="none" ∧ findings="0" 放行（此前恒拦，方向已改）。
++    al = _mod()
++    v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="none", findings="0",
++                                 采纳="0", 裁掉="0", 独立="0", sev="致0/高0/中0/低0"),
++                             "code-review", _enums())
++    assert not _has(v, "ordinary-runner-host-mismatch")
++
++def test_ordinary_mirror_runner_none_findings_nonzero_still_blocked():
++    # DD2 边界锁：runner="none" 但 findings≠0（谎报跳过却计了数）仍须拦——合法组合只放宽
++    # runner="none"∧findings=0 这一种组合，非放宽 runner="none" 本身。
++    al = _mod()
++    v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="none", findings="3"),
++                             "code-review", _enums())
++    assert _has(v, "ordinary-runner-host-mismatch")
++
+ def test_outside_voice_lens_row_cross_model_not_flagged():     # lens=outside-voice 行 runner≠host 合法，不套普通镜规则
+     al = _mod()
+     v = al.check_lens_metric(_lm(host="claude", lens="outside-voice", runner="codex", site="code-voice"),
+                              "code-review", _enums())
+     assert not _has(v, "ordinary-runner-host-mismatch")
+ 
+ 
+ # 🔴 B1 回归：outside-voice lens-metric 行此前**完全脱离**校验（check_lens_metric 显式 lens!="outside-voice" 才校）
+ # → 手写/emitter-bypass 的三类矛盾锚被放行、经 aggregator 汇入 retro 价值表。面治覆盖 OV 行完整不变量集：
+ #   ① runner="none"（无执行）⇒ findings MUST=0；② host="unknown"（无 voice 目标）⇒ runner MUST="none"；
+diff --git a/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py b/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py
+index 4c26293..fd21f98 100644
+--- a/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py
++++ b/sdflow-init/assets/workflow/tools/tests/test_lens_metric_emit.py
+@@ -265,28 +265,60 @@ def test_reduce_host_out_of_domain_fail_closed():
+ def test_reduce_ov_runner_none_legal_all_zero():
+     # D6：outside-voice 行 runner="none"（host-unknown/secret-hit 的无执行轮次）合法且恒全零
+     m, e, f = _ef()
+     roster = [{"lens":"broad","runner":"unknown","site":"—"},
+               {"lens":"outside-voice","runner":"none","site":"hr-tg"}]
+     lines = m.reduce(roster, [], "spec-review", "unknown", e, f)
+     ov = [l for l in lines if 'lens="outside-voice"' in l][0]
+     assert 'runner="none"' in ov and 'findings="0"' in ov and '采纳="0"' in ov and '独立="0"' in ov
+     assert 'sev="致0/高0/中0/低0"' in ov
+ 
+-def test_reduce_non_ov_runner_none_fail_closed():
+-    # runner="none" 只对 outside-voice 行合法——非-ov 行必须 runner==host，host 从不取 "none"
++def test_reduce_non_ov_runner_none_findings_zero_legal():
++    # DD2/设计门 Q1（implement-workflow-optimization-2026-08-p2）：合法组合矩阵扩展——
++    # 普通镜行「条件跳过」锚 runner="none" ∧ findings=0 合法（此前 fail-closed，方向已改）。
++    # 结构性防伪造：非-ov hit 折叠时 runner 恒取 --host（fold_hit GC-8），故任何真实 finding
++    # 都不可能落进 runner="none" 的行键 ⇒ findings=0 由 fold_hit 天然保证，无需额外校验。
+     m, e, f = _ef()
+     roster = [{"lens":"broad","runner":"none","site":"—"},
+               {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
++    lines = m.reduce(roster, [], "spec-review", "claude", e, f)
++    broad = [l for l in lines if 'lens="broad"' in l][0]
++    assert 'runner="none"' in broad and 'findings="0"' in broad and '采纳="0"' in broad
++
++def test_reduce_non_ov_runner_none_bad_site_fail_closed():
++    # DD2 合法组合仍要求 site="—"（跳过锚只放宽 runner，不放宽 site）
++    m, e, f = _ef()
++    roster = [{"lens":"broad","runner":"none","site":"x"},
++              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
+     with pytest.raises(m.EmitError):
+         m.reduce(roster, [], "spec-review", "claude", e, f)
+ 
++def test_reduce_non_ov_runner_none_finding_still_rejected_by_roster_mismatch():
++    # 边界锁：即便 roster 声明某镜 runner="none"，若仍有 finding 命中该镜（真的跑了却谎报跳过），
++    # fold_hit 会把该 hit 折到 (lens,host,host,"—") 键——与 roster 键 (lens,host,"none","—") 不同，
++    # 触发 C4「finding 命中行不在 roster」fail-closed，而非静默把 findings 顶到非零。
++    m, e, f = _ef()
++    roster = [{"lens":"broad","runner":"none","site":"—"},
++              {"lens":"outside-voice","runner":"codex","site":"hr-tg"}]
++    findings = [{"hits":[{"raw":"broad"}], "verdict":"采纳", "sev":"高"}]
++    with pytest.raises(m.EmitError):
++        m.reduce(roster, findings, "spec-review", "claude", e, f)
++
++def test_reduce_finding_extra_confidence_field_ignored():
++    # Task 3（裁决协议重写）移除置信数值滤后，findings JSON 仍可能携带遗留 confidence 字段
++    # （旧调用方/过渡期）——emitter 只按 schema 必需字段校验，MUST 兼容多余字段、不报错。
++    m, e, f = _ef()
++    findings = [{"hits":[{"raw":"broad"}], "verdict":"采纳", "sev":"高", "confidence": 92}]
++    lines = m.reduce(_base_roster(), findings, "spec-review", "claude", e, f)
++    broad = [l for l in lines if 'lens="broad"' in l][0]
++    assert '采纳="1"' in broad
++
+ def test_reduce_ov_roster_runner_unknown_fail_closed():
+     # outside-voice roster 行 runner 越出收紧域 {claude,codex,none}（不取 unknown）
+     m, e, f = _ef()
+     roster = [{"lens":"broad","runner":"unknown","site":"—"},
+               {"lens":"outside-voice","runner":"unknown","site":"hr-tg"}]
+     with pytest.raises(m.EmitError):
+         m.reduce(roster, [], "spec-review", "unknown", e, f)
+ 
+ def test_reduce_ov_hit_runner_none_fail_closed_not_counted():
+     # 复评 Critical repro：roster 有合法 (outside-voice,none,hr-tg) 零执行行 + 一条 hits runner="none" 的
+diff --git a/sdflow-retro/scripts/retro_report.py b/sdflow-retro/scripts/retro_report.py
+index 87a749d..d2fa054 100644
+--- a/sdflow-retro/scripts/retro_report.py
++++ b/sdflow-retro/scripts/retro_report.py
+@@ -1,14 +1,15 @@
+ import argparse
+ import json
+ import os
+ import re
++import shutil
+ import subprocess
+ import sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ import tempfile
+ from collections import defaultdict
+ from datetime import datetime
+ from pathlib import Path
+@@ -585,20 +586,97 @@ def hr_tg_flags(info):
+     def pick(rn):
+         for base in (info.get("active_dir"), info.get("archive_dir")):
+             hit = _read_hr_hit(base, rn)
+             if hit != "—":
+                 return hit
+         return "—"
+     return {"spec_hr_tg": pick("spec-review-report.md"),
+             "code_hr_tg": pick("code-review-report.md")}
+ 
+ 
++class DispositionError(Exception):
++    """mirror-dispositions.yaml 结构性坏（非 yq 可解析 / 非列表 / 条目缺字段 /
++    disposition 越域 / 降采样缺 condition）—— fail-loud，DD1「宁红勿静默」（adr/0016）。"""
++    pass
++
++
++_DISPOSITION_VALUES = {"保留", "降采样", "淘汰", "不适用"}
++_DISPOSITION_FIELDS = ("layer", "lens", "host", "runner", "site",
++                       "disposition", "condition", "date", "rationale")
++_yq_bin = None  # 进程内缓存（同 anchor_lint._yq idiom 重实现，不跨 tools/ 目录 import——DD1 契约：
++                # MUST NOT `import yaml`，保持仓内「零第三方依赖 + YAML 读取点收敛」惯例）
++
++
++def _yq(expression, file, *, default=None):
++    """yq(mikefarah) subprocess 薄封装——同 anchor_lint._yq idiom（承 adr/0036）。
++    exit≠0（文件不可读/解析失败）MUST raise DispositionError，不吞；「键不存在」
++    （exit 0 + stdout=null）走 default，两条分支不可混同。"""
++    global _yq_bin
++    if _yq_bin is None:
++        yq = shutil.which("yq")
++        if not yq:
++            raise DispositionError(
++                "yq 未安装。安装方式：\n"
++                "  macOS:   brew install yq\n"
++                "  Windows: winget install --id MikeFarah.yq\n"
++                "  Linux:   snap install yq")
++        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
++                            encoding="utf-8", errors="replace")
++        if "mikefarah" not in vr.stdout:
++            raise DispositionError(
++                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。请卸载后安装正确版本："
++                "macOS: brew install yq / Windows: winget install --id MikeFarah.yq / Linux: snap install yq")
++        _yq_bin = yq
++    r = subprocess.run([_yq_bin, "-o", "json", expression, str(file)],
++                       capture_output=True, text=True, encoding="utf-8", errors="replace")
++    if r.returncode != 0:
++        raise DispositionError(f"yq failed on {file}: {r.stderr.strip()}")
++    raw = r.stdout.strip()
++    if not raw or raw == "null":
++        return default
++    return json.loads(raw)
++
++
++def load_mirror_dispositions(root):
++    """读 `openspec/retro/mirror-dispositions.yaml`（DD1 单一权威源）→
++    {(layer,lens,host,runner,site): entry-dict}。
++
++    错误语义三态（DD1）：①文件缺失 → {}（零注记照旧 flag，向后兼容）；②文件存在但结构坏
++    （yq 解析失败 / 顶层非列表 / 条目缺字段 / disposition 非法域 / disposition=降采样却缺
++    condition）→ DispositionError（fail-loud，宁红勿静默，adr/0016）；③解析出的键与本轮
++    扫描的锚组有无交集，不在本函数判——由调用方 surfacing_block 逐键核对，未命中告警不阻断
++    （可能是已淘汰镜的存量记录，或该组合本轮尚未出现）。"""
++    path = Path(root) / "openspec" / "retro" / "mirror-dispositions.yaml"
++    if not path.is_file():
++        return {}
++    entries = _yq(".", path, default=[])
++    if entries is None:
++        entries = []
++    if not isinstance(entries, list):
++        raise DispositionError("mirror-dispositions.yaml 顶层须为列表")
++    out = {}
++    for i, ent in enumerate(entries):
++        if not isinstance(ent, dict) or not all(k in ent for k in _DISPOSITION_FIELDS):
++            raise DispositionError(
++                f"mirror-dispositions.yaml 第 {i} 项缺字段（须含 {_DISPOSITION_FIELDS}）: {ent!r}")
++        disp = ent["disposition"]
++        if disp not in _DISPOSITION_VALUES:
++            raise DispositionError(
++                f"mirror-dispositions.yaml 第 {i} 项 disposition 非法域(须∈{sorted(_DISPOSITION_VALUES)}): {disp!r}")
++        condition = str(ent.get("condition") or "").strip()
++        if disp == "降采样" and (not condition or condition == "—"):
++            raise DispositionError(f"mirror-dispositions.yaml 第 {i} 项 disposition=降采样 但 condition 缺失: {ent!r}")
++        key = (ent["layer"], ent["lens"], ent["host"], ent["runner"], ent["site"])
++        out[key] = ent
++    return out
++
++
+ def surfacing_counts(root):
+     """扫 archive 的 lens-metric 锚，按 (layer,lens,host,runner,site) 分组计「出现
+     轮数」〔add-codex-host-support:task5 升维加 host〕（口径与 lens_metric_aggregate.
+     render_table 同源——复用 group_key，含其双代兼容读），返回 (counts, flagged, thr)。
+     单一源：surfacing_block 的文本渲染与 build_report 顶部「一览」卡片的待复评镜
+     计数都从此取，杜绝两处各算一遍出现漂移。
+     """
+     archive_root = os.path.join(root, "openspec", "changes", "archive")
+     counts = defaultdict(int)
+     # [T61] aggregate 已按显式契约处理缺失/非目录 archive（返空不抛），逐文件读错也在其内部
+@@ -612,27 +690,41 @@ def surfacing_counts(root):
+ 
+ 
+ def surfacing_block(root):
+     """D12：待复评镜 surfacing 机械契约。扫 archive 的 lens-metric 锚，
+     按 (layer,lens,host,runner,site) 分组计「出现轮数」〔add-codex-host-support:task5
+     升维加 host〕（口径须与 lens_metric_aggregate.render_table 一致——直接复用同一
+     分组键，不重复定义）；轮数 ≥ 阈值（`LMA.REVIEW_ROUNDS_THRESHOLD`，与 render_table
+     同源，文档不写死字面量）的镜在报告顶部独立区块列出，固定前缀标记 `⚠️ 待复评:`
+     （可机验，MUST NOT 仅用形容词）。无命中也必须输出固定行——防止「长期无命中」被
+     静默省略成死列（同 hr-tg 空箱同理，grill-not-skippable 教训：跳过类判定不能不可见）。
++
++    〔DD1，implement-workflow-optimization-2026-08-p2 Task 2D〕命中 `mirror-dispositions.yaml`
++    的待复评行内追加 `→ 已处置: <disposition> (<date>)`；错误语义三态见 load_mirror_dispositions
++    docstring——文件缺失零注记、结构坏 fail-loud（不吞，异常直接向上传播出本函数）、键未命中扫描到
++    的全部锚组（不止 flagged 子集，避免"当前轮次未过阈值"被误判"已淘汰"）仅告警（stderr）不阻断。
+     """
+     counts, flagged, thr = surfacing_counts(root)
++    dispositions = load_mirror_dispositions(root)  # 结构坏在此 raise，向上传播（fail-loud，不吞）
++    for key in dispositions:
++        if key not in counts:
++            print(f"[sdflow-retro] WARN mirror-dispositions.yaml 键未命中任何锚组"
++                  f"（可能是已淘汰镜的存量记录，或该组合本轮尚未出现）: {key}", file=sys.stderr)
+     if not flagged:
+         return f"⚠️ 待复评: 无（所有镜出现轮数<{thr}）"
+     lines = [f"⚠️ 待复评: 以下镜出现轮数≥{thr}、只提示不判断不自动砍——人读后自行决定保留/降采样/淘汰:"]
+     for (layer, lens, host, runner, site), c in sorted(flagged):
+-        lines.append(f"  - {lens}（layer={layer} host={host} runner={runner} site={site}，出现轮数 {c}）")
++        line = f"  - {lens}（layer={layer} host={host} runner={runner} site={site}，出现轮数 {c}）"
++        ent = dispositions.get((layer, lens, host, runner, site))
++        if ent is not None:
++            line += f" → 已处置: {ent['disposition']} ({ent['date']})"
++        lines.append(line)
+     return "\n".join(lines)
+ 
+ 
+ def _stage_col(wt, stage):
+     """[impl-review-fix F12] per-change 表阶段 Δ 列格式化——0 或缺失均显 "—"，
+     非 0 时四舍五入 1 位小数，与其余 "—" 空箱口径一致（同 hr-tg/无度量锚同理）。"""
+     v = wt["stages"].get(stage, 0)
+     return round(v, 1) if v else "—"
+ 
+ 
+diff --git a/sdflow-retro/scripts/tests/test_retro_report.py b/sdflow-retro/scripts/tests/test_retro_report.py
+index 15ce205..bd9cd69 100644
+--- a/sdflow-retro/scripts/tests/test_retro_report.py
++++ b/sdflow-retro/scripts/tests/test_retro_report.py
+@@ -503,20 +503,116 @@ def test_surfacing_threshold_uses_shared_constant(tmp_path, monkeypatch):
+     monkeypatch.setattr(LMA, "REVIEW_ROUNDS_THRESHOLD", 3)
+     for i in range(1, 4):
+         d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
+         d.mkdir(parents=True)
+         (d / "spec-review-report.md").write_text(
+             ANCHOR.format(layer="spec-review", f=1, a=1, ind=1) + "\n", encoding="utf-8")
+     block = R.surfacing_block(str(tmp_path))
+     assert "出现轮数 3" in block
+ 
+ 
++# ============================ DD1: mirror-dispositions.yaml 处置注记（四态）============================
++# implement-workflow-optimization-2026-08-p2 Task 2D。schema: {layer,lens,host,runner,site,
++# disposition,condition,date,rationale}；匹配键=(layer,lens,host,runner,site)，与 LMA.group_key 同键。
++# ANCHOR fixture 无 host 字段 → 双代兼容读 host="claude"；lens="domain" runner="claude" site="—"。
++
++def _write_dispositions(root, entries_yaml):
++    d = root / "openspec" / "retro"
++    d.mkdir(parents=True, exist_ok=True)
++    (d / "mirror-dispositions.yaml").write_text(entries_yaml, encoding="utf-8")
++
++
++def _flagged_archive(tmp_path, layer="spec-review"):
++    for i in range(1, 11):
++        d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
++        d.mkdir(parents=True)
++        (d / "spec-review-report.md").write_text(
++            ANCHOR.format(layer=layer, f=1, a=1, ind=1) + "\n", encoding="utf-8")
++
++
++def test_dispositions_file_missing_zero_annotation(tmp_path):
++    # 状态①：文件缺失 = 零注记照旧 flag（向后兼容），不报错
++    _flagged_archive(tmp_path)
++    block = R.surfacing_block(str(tmp_path))
++    assert "出现轮数 10" in block
++    assert "已处置" not in block
++
++
++def test_dispositions_matched_key_annotates_flagged_line(tmp_path):
++    # 状态②：命中键 → 待复评行内追加 "→ 已处置: <disposition> (<date>)"
++    _flagged_archive(tmp_path)
++    _write_dispositions(tmp_path, """\
++- layer: spec-review
++  lens: domain
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 保留
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "测试命中注记"
++""")
++    block = R.surfacing_block(str(tmp_path))
++    assert "→ 已处置: 保留 (2026-08-10)" in block
++
++
++def test_dispositions_bad_disposition_value_fail_loud(tmp_path):
++    # 状态③：disposition 非法域 → fail-loud 非零退出（此处以异常传播体现，MUST NOT 静默吞）
++    _flagged_archive(tmp_path)
++    _write_dispositions(tmp_path, """\
++- layer: spec-review
++  lens: domain
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 乱填一个值
++  condition: "—"
++  date: "2026-08-10"
++  rationale: "非法 disposition"
++""")
++    with pytest.raises(Exception):
++        R.surfacing_block(str(tmp_path))
++
++
++def test_dispositions_malformed_yaml_fail_loud(tmp_path):
++    # 状态③变体：yaml 本身解析失败（缺字段）→ fail-loud
++    _flagged_archive(tmp_path)
++    _write_dispositions(tmp_path, """\
++- layer: spec-review
++  lens: domain
++  disposition: 保留
++""")
++    with pytest.raises(Exception):
++        R.surfacing_block(str(tmp_path))
++
++
++def test_dispositions_unmatched_key_warns_not_blocking(tmp_path, capsys):
++    # 状态④：键未命中任何锚组 → 告警不阻断（可能是已淘汰镜的存量记录）——报告仍正常生成
++    _flagged_archive(tmp_path)
++    _write_dispositions(tmp_path, """\
++- layer: code-review
++  lens: history
++  host: claude
++  runner: claude
++  site: "—"
++  disposition: 降采样
++  condition: "diff 含 rename 或大规模改动既有文件"
++  date: "2026-08-10"
++  rationale: "本轮 archive 语料无 code-review 数据，此键必不命中"
++""")
++    block = R.surfacing_block(str(tmp_path))
++    assert "出现轮数 10" in block           # 报告仍正常产出，未被未命中键拖垮
++    assert "已处置" not in block            # 未命中键不注记到 spec-review/domain 行
++    err = capsys.readouterr().err
++    assert "未命中" in err or "unmatched" in err.lower()
++
++
+ def test_build_report_includes_surfacing_block(tmp_path):
+     root = _init_repo(tmp_path)
+     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")
+     md = R.build_report(str(root))
+     assert "⚠️ 待复评:" in md
+ 
+ 
+ def test_surfacing_groupkey_matches_render_table_on_empty_lens(tmp_path):
+     # lens="" 的锚：surfacing 分组键须与 render_table 归一化一致(空串→"?")，否则漏报
+     # [add-codex-host-support:task5] 分组键升 (layer,lens,host,runner,site)；
+diff --git a/sdflow-spec-review/SKILL.md b/sdflow-spec-review/SKILL.md
+index add0af7..3113ea8 100644
+--- a/sdflow-spec-review/SKILL.md
++++ b/sdflow-spec-review/SKILL.md
+@@ -219,20 +219,26 @@ DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**
+   token，合法降级、不进 dead-fanout 计数集，`anchor_lint.py:674-676` 现行为已支持）。**诚实边界**：mode
+   值为主 session 自报，`anchor_lint` 对本锚只验族存在性（前缀匹配），不校验 mode 枚举值，MUST NOT 声称有
+   机械保证。（旧 `mode="native|simulated"` 枚举与广审产物独立落盘、复用判定机制整体删除。）
+ 
+ **规划镜头（主 session）**：
+ 
+ - **广审双镜（strategy/plan-eng）恒跑**，不受 TG 命中门控——职责划分见下方「广审镜」小节。
+ - 按 `{change_dir}` 实际涉及的栈 + 内容判命中的 TG/领域 → 决定开哪几个**领域镜**（backend·go / embedded·ml307c·esp32 / frontend）。
+ - 按风险定**对抗镜**数量：普通 2 个，高风险 3 个。固定 1 个**接地镜**（机械读码核验）。
+ - 只审命中的；config 已固化的结构/占位/一致性（T/S）不进任何镜。
++- **roster 条件化派发〔DD6/DD2，implement-workflow-optimization-2026-08-p2〕**：全部评审镜（两层合计 13 面）
++  的降采样处置见 `openspec/retro/mirror-dispositions.yaml`（单一权威源）——本层（spec-review）7 面镜
++  （adversarial/broad/domain/grounding/outside-voice ×3 site）设计门拍板结果**全部保留**（接地镜 Q3 撤回
++  降采样），**当前无条件跳过镜**；机制与 code-review 侧历史镜条件化同构，供未来复评轮判「降采样」时复用——
++  届时该镜的 roster 行填 `runner="none"`（DD2 合法组合，锚行必落，MUST NOT 整行省略）+ 本步报告一行说明，
++  判定命令写进处置表 `condition` 字段（机械可判，非定性词）。
+ - **分工线（base 与 domains 二分）**：**base 的 R 项（`spec-checklists/spec-quality-base.md`）归广审镜，
+   domains/ 的 R 项归领域镜**——两层清单本就互斥（base=domain-agnostic 计划级/工程级，domains=栈特定），
+   无需额外去重协商；plan-eng 镜另有防重叠语义补句处理话题层残余重叠（见下方广审镜 prompt 契约）。
+ - **HR-TG 判定〔C4·R3〕〔mlh-p4 T81〕**：**你判**命中 TG 集（命中哪些 TG 无确定性信号，判断归模型），交脚本做确定性交集 + 出锚——`python3 $RULES_ROOT/tools/hr_tg_intersect.py --tg-set "TG-xx,TG-yy" --trigger-catalog $RULES_ROOT/trigger-catalog.md`（空集传 `--tg-set ""`；HR-TG 子集由脚本从 trigger-catalog `## 七、HR-TG` 段 `> 成员：` 行单一源 parse，**不在此复制清单**）。脚本 stdout 两行：结果行 `hit:[…]｜依据模型判定:[…]` 或 `none｜依据模型判定:[…]`（你给的命中集显式可见供复审）+ 规范锚行 `<!-- sdflow:hr-tg v1 hit="…|none" declared="…" -->`（`declared=` 承你判定的命中集，adr/0018 输入可见）；坏输入/单一源损坏 → 退出码非 0 + stderr `[hr_tg_intersect] FAIL`，遵其判定 MUST NOT 静默吞。**hit 非空**（∩ HR-TG ≠ ∅）→ 单开一次领域专属 cross-model（按「helper 调用协议」，site="hr-tg"，context=命中判据触发点+相关 diff hunk，「找领域镜漏的」）——**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（能力探针、fan-out 各镜），结果在 Step3 barrier 处 collect**。判定无论正反写报告，报告锚行取脚本 emit 的 `hit=`/`declared=`，再由你手填 `evidence="<判据触发点一句>"`（命中必填 evidence，30 秒可人工复核）。
+ 
+ ### 广审镜（strategy / plan-eng）
+ 
+ <!-- sdflow:broad-mirror-def:start —— 真相源 sdflow-init/assets/snippets/broad-mirrors.md，由 hack/sync_principles.py 注入，勿手改本区块 -->
+ **广审镜（strategy / plan-eng）— base R 项自持双镜，恒跑、不受 TG 命中门控**
+ 
