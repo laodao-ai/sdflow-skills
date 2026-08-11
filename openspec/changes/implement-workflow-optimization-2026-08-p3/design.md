@@ -67,7 +67,9 @@
   `git fetch origin` + `log 锚..FETCH_HEAD`（fetch 只动 remote-tracking refs，无工作树影响）。
 - **TD3 schema drift = 整文件 sha256 对比**：fork 目录 vs 上游安装目录逐文件 digest，
   报 changed/added/removed 文件清单（T264 的机械实现）。零解析（基准 5 A21 同款）；
-  「变化意味着什么」留给分诊判断。
+  「变化意味着什么」留给分诊判断。**对比基线 = 本机已安装版（设计门拍板 Q1）**：报告 OpenSpec
+  节明示「drift 基于已安装版 X，registry 最新 Y」；registry 新版的 schema 细节延迟到升级后
+  一轮呈现，「有新版」信号由版本对照子项独立承担 [spec-review-amendment]。
 - **TD4 anchors.yaml 读写走 `yq`**：与 `retro_report.py` 的 mirror-dispositions 解析同模式
   （三态错误语义：文件缺失=首轮初始化；yq 失败=fail-loud；值缺失=该源视为无锚首轮），
   **含其 mikefarah-flavor 探测 idiom（各自实现、不跨目录 import；非 mikefarah 家族 yq 直接报错

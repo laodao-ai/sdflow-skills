@@ -85,9 +85,10 @@ superpowers 条目 `source.sha` 字段的变化序列（该仓不 vendor 插件�
 ### Requirement: OpenSpec schema fork drift 机械对比
 
 采集 SHALL 对 schema fork 目录与已安装上游 schema 目录做逐文件整字节 digest 对比，
-输出 changed / added / removed 文件清单；对比 MUST NOT 解析文件内容语义。上游 schema
-目录定位失败时该子项 SHALL 降级并附原因。本 Requirement 为 T264（fork 漂移无机械提醒）
-的收口实现。
+输出 changed / added / removed 文件清单；对比 MUST NOT 解析文件内容语义。报告 OpenSpec 节
+SHALL 明示对比基线（已安装版本号）与 registry 最新版本号 [spec-review-amendment·拍板 Q1]。
+上游 schema 目录定位失败时该子项 SHALL 降级并附原因。本 Requirement 为 T264（fork 漂移无
+机械提醒）的收口实现。
 
 #### Scenario: fork 与上游出现文件差异
 
