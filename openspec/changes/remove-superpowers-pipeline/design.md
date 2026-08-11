@@ -60,20 +60,21 @@
 | 组件 | 动作 |
 |---|---|
 | `sdflow-implement/scripts/impl_route.py` | 切除：`route` 子命令、`_cmd_route`、`read_config_pipeline`、`read_plan_marker`、`resolve_pipeline`、`LEGAL_PIPELINES`、`_PIPELINE_KEY_RE`、`RouteStop`、`_get_plan_sha`、文件头三跳注释改写为「tickets 调度 helper」自述。保留：`frontier` / `task-text` 子命令、`parse_blocked_by`、`_detect_cycle`、`next_ready`、`extract_task_text`、`TopoError`、`BLOCKED_BY_RE`、`_yq`——**接口与行为逐字不变** |
-| `sdflow-ship/scripts/ship_gate.py` | `PLAN_FILENAMES` → `("tickets.md",)`（或收敛为常量单名，保留 resolver 函数形状供 gate/测试共用）；删旧名 grandfather 分支与双存在 UNKNOWN 分支；RUN_PLAN reason / UNKNOWN 表 / 文件头注释中的双名表述改单名 |
+| `sdflow-ship/scripts/ship_gate.py` | `PLAN_FILENAMES` → `("tickets.md",)`（或收敛为常量单名，保留 resolver 函数形状供 gate/测试共用）；删旧名 grandfather 分支与双存在 UNKNOWN 分支；RUN_PLAN reason / UNKNOWN 表 / 文件头注释中的双名表述改单名；`PLAN_FILENAMES` 上方 :1329-1335「共享 resolver」说明注释块（引用被删符号 `impl_route.resolve_pipeline`）一并改写〔spec-review-amendment〕 |
 | `sdflow-ship/SKILL.md` | 链序 RUN_PLAN/CONTINUE_IMPL 段重写为直连派发（含删「试验期权威声明」——`next` 信息性错位随分支消失）；完成摘要行 `pipeline={superpowers\|tickets}` → 删该槽位 |
-| `sdflow-implement/SKILL.md` | 删「缺省一律 superpowers」「双名分列」「聚合锚按管线条件化」表述——聚合锚无条件化；frontmatter marker 表述改「文件格式契约（无路由读取方）」 |
+| `sdflow-implement/SKILL.md` | 删「缺省一律 superpowers」「双名分列」「聚合锚按管线条件化」表述——聚合锚无条件化；frontmatter marker 表述改「文件格式契约（无路由读取方）」；**description frontmatter**（触发条件唯一权威文本，现锚定 impl-pipeline 键）改「tickets 唯一管线，由 /sdflow-ship 按 gate 判定以显式 mode= 参数派发」〔spec-review-amendment〕 |
 | `sdflow-done/SKILL.md` | 删 verify 的轨道判定步（`read_plan_marker`/`resolve_pipeline` 引用）、「superpowers 轨判不适用」分支、grandfather 警示——「实现期聚合覆盖」锚无条件要求 |
 | `sdflow-init/assets/workflow/` | `workflow.md`（子步骤 A、显式 superpowers 段、检查清单行）/ `WORKFLOW-GUIDE.md`（同上）/ `ff-generation-constraints.md`（切片建议条件行改无条件）/ `config.template.yaml`（键注释删）/ `prompts/step6-writing-plans.md`（**整文件删**）/ `reference/quality-layering.md`（superpowers SDD 注入点 A/B 与「用 superpowers 跑实现时」清单节删） |
 | `sdflow-init/assets/snippets/claude-section.md` | 「实现管线缺省 = tickets／显式 superpowers」段 → 「实现管线 = tickets（唯一）」；改后 `sdflow-init update` 刷本仓 CLAUDE.md/AGENTS.md 托管区块 |
 | `openspec/config.yaml` | `impl-pipeline` 键 + 注释（:60-64）删除 |
-| 测试群 | 见 memo C7 逐文件映射；另 `test_workflow_authority.py`（step6 TAG_RE 样例断言）与 `test_workflow_split.py` / `test_checkpoint_slug_coverage.py` 的 step6 条目随文件删除退役/改名单 |
-| `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` | 头部一行 obsolete 标注（指向 adr/0042） |
+| `openspec/INDEX.md` | impl-orchestration 描述行（「手动路由三跳」）改单管线表述〔spec-review-amendment〕 |
+| 测试群 | 见 memo C7 逐文件映射；另 `test_workflow_authority.py`（step6 TAG_RE 样例断言）与 `test_workflow_split.py` / `test_checkpoint_slug_coverage.py` 的 step6 条目随文件删除退役/改名单；gate 共享 fixture `approved_change` 默认写入名迁 `tickets.md`（test_gate_git_layer / freshness / namespace / impl_progress / tail / reviewed_sha / plan_resolver 7 文件 63 处消费点逐一核验），`test_gate_closing_ticket.py` :130/:160 两条 grandfather 用例退役〔spec-review-amendment〕 |
+| `docs/workflow-skills/impl-pipeline-matt-vs-superpowers.md` | 头部一行 obsolete 标注（指向 adr/0042）；现役视图文档 `docs/workflow-overview.md` / `docs/workflow-map.md`(+`.html`) / `docs/workflow-console.html` / `docs/criteria-mechanization-tracker.md` 同步去旧路由叙述〔spec-review-amendment〕 |
 | specs | 见 proposal《Modified Capabilities》，delta 文件在本 change `specs/` 下 |
 
 ## Risks / Trade-offs
 
-- [gate sibling-import 断裂：切除 route 时误删/误动 `parse_blocked_by` 依赖的符号] → 保留半场接口逐字不变为硬约束；`test_gate_closing_ticket.py` 与 `test_impl_route.py` 保留半场用例作回归网；实现票按「先删测试再删实现」顺序防漏。
+- [gate sibling-import 断裂：切除 route 时误删/误动 `parse_blocked_by` 依赖的符号] → 保留半场接口逐字不变为硬约束；`test_gate_closing_ticket.py`（:130/:160 两条 grandfather 用例除外——它们断言被删行为，随本 change 退役〔spec-review-amendment〕）与 `test_impl_route.py` 保留半场用例作回归网；实现票按「先删测试再删实现」顺序防漏。
 - [SKILL 文案收口遗漏（双轨表述残留某处）] → Success Metrics 的 grep 扫尾判据兜底（运行时路径仅剩合法残留清单）；评审接地镜核对。
 - [下游仓 update 窗口期文案双态] → 已接受边角（memo「接受的边角」第三条）：无行为分叉，仅人读层双态。
 - [其他机器存在未扫到的显式旧值键] → 键退役使任何取值无行为差异（proposal《假设》）；无静默混跑面。
@@ -82,7 +83,7 @@
 ## Migration Plan
 
 1. 本仓实现 + 全仓 pytest 绿 + 评审 + merge main（常规 change 流程，无特殊迁移步）。
-2. 运行 checkout：`git pull` + **立即** `bash setup.sh`（发布纪律；pull 与 setup 间勿跑阶段三——既有窗口期纪律，本 change 删除了 route helper，窗口期触发 RUN_PLAN 的 ship 旧 SKILL 会调已删的 route 子命令而 fail-loud，非静默错轨）。
+2. 运行 checkout：`git pull` + **立即** `bash setup.sh`（发布纪律不变）。本 change 的真实偏斜向量不是 pull→setup 窗口——sdflow-ship / sdflow-implement 均为既存 symlink skill，pull 即原子刷新 SKILL 与脚本；而是**长跑 session 已把旧 SKILL 读入 context、磁盘其间被 pull 更新**：此时旧链序调已删的 route 子命令，argparse 报 invalid choice 且 exit 2——fail-loud，非静默错轨〔spec-review-amendment〕。
 3. 下游仓：各自下次 `sdflow-init update` 收敛文案；不强制立即执行（行为无变化）。
 4. **回滚** = `git revert` 本 change → 运行 checkout 重跑 `setup.sh` → 各已 update 的下游仓重跑 `sdflow-init update`。方向性成本高，不设计快捷回滚（adr/0042《Consequences》）。
 
