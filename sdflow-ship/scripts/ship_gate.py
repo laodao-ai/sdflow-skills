@@ -1725,7 +1725,7 @@ def decide(root, change):
     if plan is None:
         # [Task4 · tasks 2.6] 窗口入口①
         emit_windowed(root, change, report,
-                      "RUN_PLAN", EXIT_OK, "writing-plans",
+                      "RUN_PLAN", EXIT_OK, "sdflow-implement",
                       "计划文件缺（tickets.md 未找到）")
     # [impl-review-fix CR-F1] 未闭合 fenced code block（悬空 ```）→ 悬空围栏会吞掉真实
     # 未勾项与 Task 标题（假✅/漏 task）→ plan 无法可靠解析 → fail-safe UNKNOWN（先于其余判据）。
@@ -1775,7 +1775,7 @@ def decide(root, change):
                  (plan_note + "；" if plan_note else "") + "plan 未提交且无复选框，双通道皆不可判")
         # [Task4 · tasks 2.6] 窗口入口②
         emit_windowed(root, change, report,
-                      "CONTINUE_IMPL", EXIT_OK, "subagent-dev",
+                      "CONTINUE_IMPL", EXIT_OK, "sdflow-implement",
                       (plan_note + "；" if plan_note else "")
                       + f"实现进度 {len(done_in_plan)}/{n}（窗口 [{sha[:7] or '-'}, HEAD] 闭区间，集合归属）",
                       done_tasks=sorted(done_in_plan, key=int))
