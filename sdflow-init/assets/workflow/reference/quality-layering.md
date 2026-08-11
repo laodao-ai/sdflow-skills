@@ -103,7 +103,7 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 - **注入点 B 与 sdflow-code-review 并存不是重复**（见 workflow.md §三.6 / design §7.2）：前者循环内即时闭环、便宜早修；
   后者事后独立兜底网。机制/职责不同，**别把任一个优化掉**。
 - shift-left 消掉的是**通用质量的冗余**（CR base 三层已查），不是 sdflow-code-review 本身。sdflow-code-review 编排器
-  Step1 自持 scope 审计（scope-drift + 完成度），Step2 并入领域镜 + 对抗镜 + 历史镜 + 置信过滤，合成一份 code-review-report.md。
+  Step1 自持 scope 审计（scope-drift + 完成度），Step2 并入领域镜 + 对抗镜 + 历史镜，Step3 机械引用核 + 二元裁决，合成一份 code-review-report.md。
 - **无 `/clear`（G1）**：独立性由评审 fan-out 的 fresh 子代理给，不由 `/clear` 给。
   - 🔴 **本条的射程仅限「评审独立性」，MUST NOT 据此推出「全流程不用 `/clear`」**——`/clear` 还有本条谈不到的其它作用（见下面两处交界例外的理由）。
   - 🔴 **具名例外（两处，均在阶段交界：一处是 `/sdflow-spec` 的出口，一处是 `/sdflow-ship` 的入口）**：

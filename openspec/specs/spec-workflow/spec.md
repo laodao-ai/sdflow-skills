@@ -72,7 +72,7 @@
 阶段三的 `sdflow-code-review` MUST **每次必跑**、以独立冷视角作为强制代码评审主审（依据实测能抓真问题），MUST **恒产 code-review-report.md**，SHALL NOT 跳过代码评审、SHALL NOT 降级为「高风险才跑的残差抽查」（**默认开、仅机判无逻辑面才关**，非风险判断 gate-on）。深度按**两层**规则：
 
 - **Step1（scope 审计：scope-drift + 计划完成度，自持）MUST 每次必跑**，MUST NOT 因任何判定降级或跳过——既是便宜的评审地板，又是**验白名单形状诚实性的守卫**（自称无逻辑面的 diff 若偷藏逻辑改动，scope-drift 抓）。执行位 SHALL 为 fresh 子代理（消除「主 session 携带生成历史、自查自己顺手多改」的结构性偏置）；**意图源 SHALL 锚 OpenSpec 四件套**（proposal 的 scope/Non-Goals + tasks.md + design.md，确定性来源，MUST NOT 依赖 plan-file 路径猜测或 commit-message 推断作为首选意图源）；子代理不可用时 SHALL 降级主 session 亲做并在报告显著标注「scope 审计降级（存在自查偏置）」，恒跑语义不变。报告锚 `step1-broad-review` 的 `mode` SHALL 如实记执行位（`subagent`=子代理独立完成 | `main-session`=降级亲做）。能力探针 SHALL 于第零步（宿主/档位解析同位）一次性执行，Step1 与 Step2 共用**同一次**探针结果（`fanout-capability` 锚每轮恰一条的既有约束不变，MUST NOT 为 Step1 另探一次落第二条锚）〔spec-review-amendment〕。
-- **Step2（多镜 fan-out：领域镜+对抗镜+历史镜+置信过滤+对抗裁决）MUST 对任何含行为/逻辑面的 change 每次全跑**；**仅当** change 的 diff **机判命中「无逻辑面白名单形状」**时可免 Step2（多镜结构上零产出）。免除 MUST 由 Step1 scope-drift 守卫：scope-drift 揭出隐藏逻辑 → 白名单判定作废 → Step2 照跑。**守卫时序 SHALL 钉死**〔spec-review-amendment〕：diff 命中白名单形状（EXEMPT 候选）时，Step2 的免除判定 MUST **阻塞等待 Step1 结果收齐后**才可定案（否则 Step1 迟到的揭穿换不回已跳过的多镜，守卫空转）；diff 非白名单形状（Step2 反正要跑）时，Step1 MAY 与 Step2 fan-out 并行、结果在 Step3 barrier 收齐。
+- **Step2（多镜 fan-out：领域镜+对抗镜+历史镜+机械引用核+二元裁决〔adr/0041〕）MUST 对任何含行为/逻辑面的 change 每次全跑**；**仅当** change 的 diff **机判命中「无逻辑面白名单形状」**时可免 Step2（多镜结构上零产出）。免除 MUST 由 Step1 scope-drift 守卫：scope-drift 揭出隐藏逻辑 → 白名单判定作废 → Step2 照跑。**守卫时序 SHALL 钉死**〔spec-review-amendment〕：diff 命中白名单形状（EXEMPT 候选）时，Step2 的免除判定 MUST **阻塞等待 Step1 结果收齐后**才可定案（否则 Step1 迟到的揭穿换不回已跳过的多镜，守卫空转）；diff 非白名单形状（Step2 反正要跑）时，Step1 MAY 与 Step2 fan-out 并行、结果在 Step3 barrier 收齐。
 
 **无逻辑面白名单形状**（机判、post-diff、由确定性脚本判，MUST NOT 依作者自评）SHALL 仅含：①`diff 仅动代码内注释行（语言感知）或约定文档文件`——约定文档**扩展名锚定**：`VERSION` / `README·CHANGELOG·LICENSE·NOTICE`（无扩展或 `.md/.rst/.txt`）/ `.rst` / `docs/` 下 `.md·.rst·.txt`；**裸 `*.txt` 不算文档**（`requirements.txt`/`runtime.txt` 等依赖 pin 是 load-bearing，落 NOT）、**`docs/` 下 `.py` 等源码不算文档**（按代码判定）、**任意其他 `.md`（消费仓散落 markdown 可能承载行为）默认 NOT**；②`diff 仅新增 tests/ 下文件`（排除 import 副作用 `conftest.py`/`__init__.py`）；③版本常量收窄为 `VERSION`/`CHANGELOG`（代码里的 `API_VERSION`/`SCHEMA_VERSION` 无法机判是否切 code-path → NOT）。判器 MUST **语言感知**（按语言解析注释/块注释/多行字符串边界，MUST NOT 裸正则前缀）；MUST 应用**行为面路径豁免清单**——凡 diff 触及 workflow bundle 自身（`sdflow-init/assets/workflow/**`、编排/评审 `SKILL.md`、`ship_gate.py`、`route`/判器脚本、`workflow.md`）即 NOT 无逻辑面（**这些 markdown/脚本承载行为，非文档**），即便 diff 形状看似「仅动 markdown」；`tests/` 豁免 MUST 排除被生产码 import 的 test helper（如 `conftest.py`）；版本常量 MUST 整行匹配 `^\s*<IDENT>\s*=\s*<version-literal>\s*$` 且拒绝任何附加 token（防夹带 `API_VERSION`/`SCHEMA_VERSION` 等切 code-path 的 load-bearing 常量）。
 
@@ -665,13 +665,41 @@ sdflow-spec-review 与 sdflow-code-review SHALL 默认启用跨模型 outside vo
 - **WHEN** 命中集 ∩ HR-TG = ∅
 - **THEN** 不开领域 cross-model，报告记「HR-TG 判定：未命中」；锚 `hit="none"`、`declared=` 承模型判定集（可为空）
 
+### Requirement: 评审裁决协议为机械前置 + 二元裁决 + 置信降排序
+
+两评审 skill（sdflow-spec-review / sdflow-code-review）的裁决入口 SHALL 为三层各司其职（`adr/0041`）：
+
+1. **机械引用核（前置门，确定性脚本）**：输入 SHALL 为结构化 JSON（每条 finding 带 `{file, line, quote}` 或 `evidence_pack` 机读字段，由 Step2 各镜输出契约保证；脚本 MUST NOT 解析 markdown 散文）〔spec-review-amendment〕。逐条核 finding 的引用真实性——引用路径存在、`file:line` 落在文件行数内、单行引文**命中所报行（或显式行范围）**〔spec-review-amendment：整文件子串核可被任意行号 + 他处文本绕过〕（spec-review 侧核对象含 change 四件套文档与代码）。输出三态〔spec-review-amendment〕：pass；fail（结构化字段在、任一查不过，或既无单行引文又无可复核证据包 ⇒ **机械落报告「已裁掉」区**，来源标 `[ref-check]` 与裁决裁掉项可区分）；**uncheckable**（引用为证据包 / 设计层引用等非干净 `path:N` 形态 ⇒ 不裁，原样直进二元裁决并标注未经机械核）。脚本本体不可恢复错误 SHALL 显式降级（整批标 `[ref-check-unavailable]` 直进二元裁决 + 报告显著标注机械门未生效，MUST NOT 呈现「全部 pass」假象、MUST NOT 阻断报告产出）〔spec-review-amendment〕。引文与断言的**语义对应**不在本层职责（归二元裁决）。脚本输出 SHALL 遵循消费型信号校验器输出诚实原则（不得 emit 与「已完整验证」不可区分的裸通过码）。
+2. **二元裁决（强档）**：每条通过前置门的 finding SHALL 裁 `采纳 / 裁掉 / defer` 三态之一并附一句 critique 理由；裁「裁掉」的连理由落「已裁掉」区（反静默压制既有条款不变）。
+3. **自报置信降级为排序信号**：置信仅 MAY 用于裁决处理顺序与报告排序，**MUST NOT 作为滤除门**——协议中 MUST NOT 存在任何数值置信阈值滤除（含封顶式间接滤除）。severity SHALL 保留为输出字段，**MUST NOT 作门**（与置信同为自报信号）。
+
+同构边界：以上三层为两 skill 共同的「裁决动作层」；sdflow-spec-review 的「拿不准 → 决策登记区」人门路由 SHALL 保留（与置信数字脱钩，服务设计 HARD-GATE），sdflow-code-review 无人门、按既有 `T10-choice` / defer 路径处置，两侧 Step3 条款不要求全文同构。
+
+#### Scenario: 引用失实的 finding 被机械裁掉且留痕
+- **WHEN** 某条 finding 引用的 `file:line` 超出目标文件行数，或其单行引文不命中所报行〔spec-review-amendment〕
+- **THEN** 该条不进入二元裁决，落「已裁掉」区并标 `[ref-check]` 与失败原因；MUST NOT 静默丢弃
+
+#### Scenario: 非干净引用形态的 finding 不被机械错杀〔spec-review-amendment〕
+- **WHEN** 某条 finding 的证据为证据包 / 设计层引用（如指向 proposal 决策点），无干净 `path:N` 三元组
+- **THEN** 机械核判 uncheckable、不裁，该条原样进入二元裁决并标注未经机械核；MUST NOT 因形态非 `path:N` 落「已裁掉」区
+
+#### Scenario: 机械核脚本崩溃时显式降级不假绿〔spec-review-amendment〕
+- **WHEN** `findings_ref_check.py` 本体 crash 或输入 JSON 畸形
+- **THEN** 整批 findings 标 `[ref-check-unavailable]` 直进二元裁决，报告显著标注机械门未生效；MUST NOT 静默呈现「全部 pass」，MUST NOT 阻断报告产出
+
+#### Scenario: 低自报置信的 finding 不被滤除
+- **WHEN** 某条 finding 自报置信极低（如 30）但引用核通过
+- **THEN** 该条 MUST 进入二元裁决（置信只影响处理顺序）；裁决按 critique 理由定采纳/裁掉/defer，MUST NOT 因置信数字直接滤除
+
+#### Scenario: 引文真实但断言不成立的 finding 由裁决层裁掉
+- **WHEN** 某条 finding 的引文确实命中所报行（引用核通过），但其断言与代码语义不符〔spec-review-amendment〕
+- **THEN** 二元裁决裁「裁掉」并附 critique 理由落「已裁掉」区——语义判断归裁决层，机械层 MUST NOT 越权判语义
+
 ### Requirement: outside-voice tension 不静默采纳
 
 outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdflow-spec-review 写入报告决策登记区（选项 + 推荐 + 两方视角 + **三面后果（系统 / 用户 / 开发循环）+ 主次判定**，设计 HARD-GATE 人一次性拍板）；sdflow-code-review 按 `T10-choice` 三级协议自动裁决（有客观判据自动裁 / 无则派 **strong 档**对抗镜复核 / 复核不过或无从复核则 defer 进 buglist/todolist + hand-off）并**按三镜 + 主次记理由**，MUST NOT 以自评置信（"有把握"）为自动裁决唯一依据〔impl-review-fix F1/CV2〕。outside voice 的建议 MUST NOT 被静默自动采纳（不直接改代码/设计而不留痕）。
 
-**置信过滤豁免 SHALL 按合法组合矩阵的「跨模型」判定，MUST NOT 自写 `runner ≠ host` 或按 runner 枚举值硬编码**〔add-codex-host-support · spec-review-r2 C1〕：**矩阵判「跨模型」为真**（`host,runner 均∈{claude,codex} ∧ runner≠host ∧ reason_code="ok"`）的 outside-voice findings MUST NOT 经自评置信阈值（<80）预过滤——跨模型自评不可比、异见易被同族标尺误杀——一律直通对抗裁决，被裁掉的连理由落报告「已裁掉」区〔grill-amendment Q4〕；**其余**（同族 fallback `runner==host`、**及无执行 `runner="none"`**）照过同族置信滤（豁免理由对其不成立；`runner="none"` 的 findings 恒 0、豁免无意义）。
-
-> 〔为何引用矩阵而非自写 `runner≠host`〕旧规则写死 `runner=codex` 豁免——该值在 Codex 宿主下恰恰是**自审**；而首轮改的 `runner ≠ host` 又被 `runner="none"` 击穿（`none≠host` 恒真 → 无执行轮被误豁免，spec-review-r2 C1）。∴ 判据 MUST 引用合法组合矩阵的单一「跨模型」判定，不在此重写关系式。
+**裁决入口对一切 findings 一视同仁**〔adr/0041〕：outside-voice findings（无论 `runner` 取值）与同族镜 findings 走同一「机械引用核 → 二元裁决」入口（见「评审裁决协议为机械前置 + 二元裁决 + 置信降排序」），不存在自评置信预过滤，也不再存在按合法组合矩阵的豁免通道——豁免机制随数值滤废除而失去对象。合法组合矩阵仍由 anchor_lint 用于 lens-metric 跨模型性度量，**MUST NOT 在裁决路径被重新引用为过滤或豁免判据**。被裁掉的连理由落报告「已裁掉」区不变。
 
 #### Scenario: 设计侧分歧进决策登记区
 - **WHEN** outside voice 与 spec-review 主审对同一设计点结论相反
@@ -681,17 +709,25 @@ outside voice 与主审分歧（tension）SHALL 中立并陈、标 TENSION：sdf
 - **WHEN** outside voice 与 code-review 主审分歧且裁决无客观判据
 - **THEN** 派 strong 档对抗镜复核，复核不过或无从复核则 defer 进 issues 池并写入 hand-off，不静默采纳任一方，MUST NOT 用 mid 档同档互判代替
 
+#### Scenario: 跨模型与同族 finding 同一裁决入口
+- **WHEN** 同一轮 Step3 合并池同时含跨模型 outside-voice finding 与同族镜 finding
+- **THEN** 两者走同一「机械引用核 → 二元裁决」路径，均不经任何数值置信滤，也无豁免分支；裁掉的各自连理由落「已裁掉」区
+
+#### Scenario: 无执行轮无裁决对象
+- **WHEN** 某 outside-voice 锚 `runner="none"`（该轮无执行）
+- **THEN** 其 findings 恒 0、无任何条目进入裁决入口；MUST NOT 出现「对无执行轮豁免/过滤」的判定分支
+
 #### Scenario: 低自评置信的跨模型 finding 不被预筛
-- **WHEN** 某条 `runner ≠ host` 的 finding 自评置信低于 Step3 阈值（<80）
-- **THEN** 该条仍进入对抗裁决（不被置信滤拦截）；若裁决不成立，连理由落报告「已裁掉」区
+- **WHEN** 某条跨模型 outside-voice finding 自报置信极低
+- **THEN** 该条仍进入「机械引用核 → 二元裁决」（新协议下**任何** finding 都不被置信预筛，本保证从跨模型专属扩展为全量默认）；裁决不成立则连理由落「已裁掉」区
 
 #### Scenario: 同族 fallback finding 照过同族滤
-- **WHEN** 某条 `runner == host` 的 finding 自评置信低于阈值
-- **THEN** 按同族 findings 常规处理（过滤规则一致），不享受跨模型豁免
+- **WHEN** 某条 `runner == host` 的同族 fallback finding 进入 Step3
+- **THEN** 〔adr/0041 语义更新：「同族置信滤」已废除〕该条与其他 findings 走同一「机械引用核 → 二元裁决」入口，无任何按 runner 分流的特殊处理分支
 
 #### Scenario: Codex 宿主下的 codex findings 不再误享豁免〔add-codex-host-support〕
 - **WHEN** `host="codex"` 且某条 finding 的 `runner="codex"`（同族 fallback 产物）
-- **THEN** 照过同族置信滤，MUST NOT 因 `runner` 值恰为 `codex` 而豁免（旧规则的假绿点）
+- **THEN** 该条走统一裁决入口——豁免通道已整体废除，不存在任何可被 `runner` 取值误触的豁免分支
 
 ### Requirement: checkpoint 标签 producer→parser 契约测试
 
@@ -1653,13 +1689,13 @@ FF-0 PreToolUse hook SHALL 仅在整条命令完整匹配有限的单条直接 l
 
 ### Requirement: 代码审 finding 须引出触发行原文（pre-emit 引文纪律）
 
-Step2 各镜子代理产出的每条 finding MUST 附「触发该 finding 的具体代码行」（file:line + 逐字引文）；引文指向框架元构造生成的符号时（ORM 声明/装饰器/迁移文件），SHALL 引创建该符号的元构造原文而非期待字面名出现在类体。**非局部 finding（缺失校验 / 跨文件数据流 / 时序竞态 / absence 类——无单一触发行者）SHALL 以「可复核证据包」替代单行引文**：多处 file:line 逐字引文、或「应在而不在」的缺失对照（引出本应包含该防护的位置原文），仍 MUST 可复核定位；MUST NOT 因「引不出单一触发行」把此类 finding 一律压到 ≤50（否则与 CR-11「必须读 diff 外代码」自相矛盾、系统性压制依赖链/时序/缺失性 bug）〔spec-review-amendment〕。既无单行引文、又无可复核证据包的 finding，其自报置信 MUST ≤50；Step3 置信过滤 SHALL 将其滤出主结论，并按反静默压制条款在「已裁掉」区一行留痕（可审计）。
+Step2 各镜子代理产出的每条 finding MUST 附「触发该 finding 的具体代码行」的**结构化**引用（`{file, line, quote}`，DD4/adr-0041——机械引用核 `findings_ref_check.py` 消费此字段，MUST NOT 只写散文引用）；引文指向框架元构造生成的符号时（ORM 声明/装饰器/迁移文件），SHALL 引创建该符号的元构造原文而非期待字面名出现在类体。**非局部 finding（缺失校验 / 跨文件数据流 / 时序竞态 / absence 类——无单一触发行者）SHALL 以「可复核证据包」（`evidence_pack`）替代单行引文**：多处 file:line 逐字引文、或「应在而不在」的缺失对照（引出本应包含该防护的位置原文），仍 MUST 可复核定位；MUST NOT 因「引不出单一触发行」让此类 finding 被误判为「无引文无证据包」而机械裁掉（否则与 CR-11「必须读 diff 外代码」自相矛盾、系统性压制依赖链/时序/缺失性 bug）〔spec-review-amendment〕——非局部 finding 只要携带 `evidence_pack` 即在机械引用核中归 `uncheckable`（不裁，直进裁决层），不归 `fail`。**既无单行引文（结构化 `file`/`line`/`quote`）、又无可复核证据包（`evidence_pack`）的 finding**⇒ 机械引用核判 `fail`（`reason=no-quote-no-evidence`，implement-workflow-optimization-2026-08-p2 DD4）⇒ **机械裁掉**，标 `[ref-check]`，按反静默压制条款在「已裁掉」区一行留痕（可审计），不进裁决层。
 
-本纪律为**产出纪律非机械门**——引文真实性由子代理自报，无机械核验路径；SKILL 与报告 MUST NOT 声称其为机械保证。**本纪律仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据**（后者的证据形态为 diff 内证据/task 条目引用，由五态判定纪律独立约束）〔spec-review-amendment〕。
+本纪律的机械核验边界分两层〔implement-workflow-optimization-2026-08-p2 DD4，取代旧「产出纪律非机械门」单层表述〕：① **引文是否真指向所声明位置**（路径存在 / file:line 界内 / 引文命中该行）自 DD4 起由 `findings_ref_check.py` 机械核验；但**引文与断言的语义对应**（该代码是否真支持这条 finding 的论断）仍无机械核验，是裁决层（sdflow-code-review 强档二元裁决 / sdflow-spec-review 对抗裁决）的活。② **「这条是否真属非局部类」这个分类判断本身仍是子代理自报、同样无核验**——一条本可给出单行引文的局部 finding 只需自称非局部类并附 `evidence_pack` 即可改走 `uncheckable` 通道、绕开单行引文的机械核验；SKILL 与报告 MUST NOT 就此声称机械保证。**本纪律仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据**（后者的证据形态为 diff 内证据/task 条目引用，由五态判定纪律独立约束）〔spec-review-amendment〕。
 
-#### Scenario: 引不出触发行的 finding 被滤出主结论
-- **WHEN** 某镜报出「字段 X 不存在于模型 Y」类 finding 但未引出模型 Y 定义处的逐字代码行
-- **THEN** 该 finding 自报置信 MUST ≤50 → Step3 SHALL 滤出主结论并在「已裁掉」区一行留痕，MUST NOT 以置信 ≥80 直接进 Findings 主区
+#### Scenario: 引不出触发行且无证据包的 finding 被机械裁掉
+- **WHEN** 某镜报出「字段 X 不存在于模型 Y」类 finding 但既未引出模型 Y 定义处的逐字代码行、也未附 `evidence_pack`
+- **THEN** `findings_ref_check.py` 判该条 `fail`（`reason=no-quote-no-evidence`）→ 机械裁掉标 `[ref-check]`，在「已裁掉」区一行留痕，MUST NOT 直接进裁决层或 Findings 主区
 
 #### Scenario: 引文纪律不豁免反静默压制
 - **WHEN** 无引文 finding 被滤除

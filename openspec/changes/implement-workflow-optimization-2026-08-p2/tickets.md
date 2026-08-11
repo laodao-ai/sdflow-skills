@@ -146,11 +146,11 @@ impl-pipeline: tickets
 - retro join 对该行可读（冒烟）
 - 已知边界声明：done 收尾跨 session 重试时 token 统计可能重复计入（view-only 精度边界）
 
-- [ ] sdflow-done SKILL 第三步起手含 token_snapshot 调用接线
-- [ ] 失败显式降级不挡收尾流程
-- [ ] codex/unknown 宿主不走 Claude mtime fallback，直接显式降级
-- [ ] done-final step 值记入契约文档
-- [ ] retro join 对 done-final 行可读
+- [x] sdflow-done SKILL 第三步起手含 token_snapshot 调用接线
+- [x] 失败显式降级不挡收尾流程
+- [x] codex/unknown 宿主不走 Claude mtime fallback，直接显式降级
+- [x] done-final step 值记入契约文档
+- [x] retro join 对 done-final 行可读
 
 ### Task 6: 实现验证（收尾，不计入 3–6 预算）
 

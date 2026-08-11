@@ -388,7 +388,7 @@ ticket**，承担该聚合回归执行点：
 聚合套件是否通过」，**不声称**「最终代码通过聚合套件」。既有 Requirement「verify 为收尾最终门，
 位于所有修复之后」未被触碰：verify 仍在 `sdflow-done`、仍在所有修复之后，本 change 不修改它，
 收尾票不是 verify、不替代 verify、不前移 verify。code-review 之后的修复由其自身保障机制（双轴/
-领域镜 + 置信过滤 + 对抗裁决 + fix 循环）覆盖；「收尾票锚点相对 code-review 修复而言不是最新」是
+领域镜 + 机械引用核 + 二元裁决 + fix 循环）覆盖；「收尾票锚点相对 code-review 修复而言不是最新」是
 **已知且接受**的残余风险，见 design「收尾票的定位」节与 `decision-memo.md`「接受的边角」。
 `sdflow-done` 的 verify 引用该票 impl-report 作为「**实现期**聚合覆盖」证据锚时，措辞 MUST 与此
 定位一致——**MUST NOT** 写成「最终全量回归通过」；该锚**按管线条件化**，superpowers 轨判「不

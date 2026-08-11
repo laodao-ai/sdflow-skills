@@ -16,8 +16,8 @@ sdflow-spec-review / sdflow-code-review 各有一段 host 调度逻辑（内层�
       【各自语义正确】，指代对方一律写「另一评审 SKILL」。本脚本机械守（FORBIDDEN_IN_SEGMENT
       —— 查【整段含两行 marker】，因为 start 行本身也参与比对、同样不许写死到某一侧）。
   (2) 段内出现的 `Step3` 在两侧都成立，是因为 sdflow-spec-review 与 sdflow-code-review
-      的第三步【恰好同为「合并 / 裁决 barrier」】（code-review 第三步 = 置信过滤 + 综合 +
-      对抗裁决，其「第二步半」已写「findings 进 Step3 合并池」）。
+      的第三步【恰好同为「合并 / 裁决 barrier」】（code-review 第三步 = 机械引用核 + 综合 +
+      二元裁决，其「第二步半」已写「findings 进 Step3 合并池」）。
       🔴 这是站点无关性的【跨文件前提】—— 若将来任一侧重编步号（第三步不再是合并 barrier），
       本段即失效，必须同时重写两侧，而不是只改一侧再来放宽本门。
 

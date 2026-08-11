@@ -52,12 +52,12 @@ outside voice 的 runner SHALL 恒为**当前宿主之外的另一个机队的�
 - **THEN** 本轮不跑 outside voice；锚行记 `host="unknown" runner="none" reason_code="host-unknown"`〔spec-review-amendment D6：无执行用 `runner="none"`，MUST NOT 任选 claude/codex 伪造"谁执行"〕；报告显著标注「宿主判不出，本轮无跨模型第二意见」，MUST NOT 随便挑一个 runner 跑了当作跨模型
 
 #### Scenario: 禁止自审（合法组合矩阵同族行子句）〔spec-review-amendment D1 · spec-review-r2 C1〕
-- **WHEN** 任一实现路径试图在 `runner == host` 时把 findings 当作跨模型第二意见（豁免置信过滤 / 复用守卫认作跨模型段 / 锚行不标降级）
+- **WHEN** 任一实现路径试图在 `runner == host` 时把 findings 当作跨模型第二意见（裁决层给予特殊通道 / 复用守卫认作跨模型段 / 锚行不标降级）
 - **THEN** 该实现为违规；`anchor_lint` SHALL 对 **`sdflow:outside-voice` 锚**（非 lens-metric 锚——只有 outside-voice 锚同时承载 `runner`/`host`/`reason_code`）判「`runner == host` ∧ `reason_code ∉ {not-installed,preflight-error,timeout,exec-error}`」为自审、报错阻塞（此即下方**合法组合矩阵**的同族行子句，非并列第二条规则）；`anchor_lint` **SHALL 新增 outside-voice 锚的 KV 字段解析**（现状只记该锚存在性、零字段解析），且该校验 **MUST always-on、不受 `metrics.enabled` 门控**（读真实性信号非价值度量）
 
 ### Requirement: 锚行合法组合矩阵是「跨模型性」的机械单一源〔spec-review-r2 C1/Q1〕
 
-「跨模型性」SHALL NOT 由散落多处的 `runner ≠ host` 各判一遍——因 `runner="none"`（D6 无执行值）满足 `none ≠ host`，会被误判为跨模型（击穿本能力核心不变式）。`anchor_lint` SHALL 以一条 **always-on 的合法组合矩阵**统一定义 `sdflow:outside-voice` 锚的合法 `(host, runner, reason_code, findings)` 组合，其余组合报错阻塞；**派生语义、置信过滤豁免（`spec-workflow`）SHALL 引用矩阵的「跨模型」判定，MUST NOT 各自重写 `runner ≠ host`**。矩阵：
+「跨模型性」SHALL NOT 由散落多处的 `runner ≠ host` 各判一遍——因 `runner="none"`（D6 无执行值）满足 `none ≠ host`，会被误判为跨模型（击穿本能力核心不变式）。`anchor_lint` SHALL 以一条 **always-on 的合法组合矩阵**统一定义 `sdflow:outside-voice` 锚的合法 `(host, runner, reason_code, findings)` 组合，其余组合报错阻塞；**任何需要「跨模型性」判定的下游逻辑（含 `spec-workflow` 的派生语义与报告展示）SHALL 引用矩阵的「跨模型」判定，MUST NOT 各自重写 `runner ≠ host`**（原「置信过滤豁免」consumer 已随 implement-workflow-optimization-2026-08-p2 DD4 退役——裁决层不再有数值阈值、故无需豁免；矩阵判定本身保留供其余下游引用，如 anchor 校验、declared-sites 完整性）。矩阵：
 
 - **跨模型 voice**：`host ∈ {claude,codex} ∧ runner ∈ {claude,codex} ∧ runner ≠ host ∧ reason_code = "ok"`（成功哨兵 `ok`，D5，不复用 `none`）
 - **同族 fallback**：`host ∈ {claude,codex} ∧ runner == host ∧ reason_code ∈ {not-installed,preflight-error,timeout,exec-error}`（`missing-deps` 归约入 `preflight-error`，D7）

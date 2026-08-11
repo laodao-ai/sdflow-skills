@@ -80,7 +80,7 @@
 
 #### B. sdflow-code-review
 
-编排器：**每次全跑·独立冷·强制主审**〔P3c〕。Step1 自持 scope 审计（scope-drift + 完成度审计）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤。能修自动修标 `[impl-review-fix]`、修不了/拿不准 defer → buglist/todolist；汇总一份 `code-review-report.md`。跨模型 outside voice（always code voice + HR-TG 领域 cross-model）。checkpoint。
+编排器：**每次全跑·独立冷·强制主审**〔P3c〕。Step1 自持 scope 审计（scope-drift + 完成度审计）+ 领域镜 + 对抗镜 + 历史镜 + 机械引用核（`findings_ref_check.py`，DD4）+ 二元裁决。能修自动修标 `[impl-review-fix]`、修不了/拿不准 defer → buglist/todolist；汇总一份 `code-review-report.md`。跨模型 outside voice（always code voice + HR-TG 领域 cross-model）。checkpoint。
 
 #### C. sdflow-done
 
@@ -127,7 +127,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
 - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
 - [ ] 阶段三实现管线是否按 impl-pipeline 缺省正确路由（缺省 tickets → sdflow-implement；显式 `superpowers` → writing-plans/subagent-dev）？
-- [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、置信过滤）？
+- [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、机械引用核+二元裁决）？
 - [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
 - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
 

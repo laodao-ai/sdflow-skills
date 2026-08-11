@@ -18,7 +18,10 @@
 1. 评审对象路径（调用方 SKILL 在本区块外声明的具体路径/文件集）。
 2. **四条通则原文整段复制**（`sdflow:principles` 从 start 到 end，不转述、不摘要——见各 SKILL 传播纪律）。
 3. 本镜职责清单（上表对应行的 R 项范围）。
-4. 返回结构化 findings 列表（每条：问题 / 证据 file:line / 置信度(高/中/低) / 严重度 / 建议）。
+4. 返回**结构化** findings 列表（每条：问题 / 证据 `{file, line, quote}` 或 `evidence_pack`〔调用方若接入
+   机械引用核 `findings_ref_check.py`（DD4，implement-workflow-optimization-2026-08-p2）消费此字段；未接入
+   的调用方原样按结构化字段读取即可，不强制调用脚本〕/ 置信度(高/中/低，仅供报告排序，不作裁决判据) /
+   严重度 / 建议）。
 5. 不 AskUserQuestion。
 
 **plan-eng 镜防重叠语义补句（MUST 含）**：文件归属线（base 归广审镜、domains/ 归领域镜）不足以消解话题层

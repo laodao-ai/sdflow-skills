@@ -4,7 +4,7 @@ description: >
   阶段二「设计评审编排器」——自持广审双镜（strategy/plan-eng，按 base R 项划分）+ 本项目标准的并行多镜审
   （领域镜 + 对抗镜 + 接地镜，按 domains/ R 项划分）+ design-voice 跨模型第二意见，单批一条消息内并行
   fan-out，产出**一份** spec-review-report.md 的评审。主 session（强档）协调：Step1 单批 dispatch 全部镜，
-  Step3 去重合并 + 对抗裁决 → 一份报告。**中途不打断**——撞到"≥2 方案 / 核验不了的事实"不 AskUserQuestion，而是写进报告「决策登记区」
+  Step3 机械引用核 + 去重合并 + 对抗裁决 → 一份报告。**中途不打断**——撞到"≥2 方案 / 核验不了的事实"不 AskUserQuestion，而是写进报告「决策登记区」
   （≥2 方案：选项 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定；事实核验：待核验证据 + 风险 + 默认处理，不强制三镜），人工在设计 HARD-GATE 一次性过报告拍板。**不依赖 /clear**——子代理 fresh
   context 即独立性。只审 prevention（config 固化的结构/约束）焊不住的残差：①Validation ②对抗 ③接地读码。
   出报告标 [spec-review-amendment]。也可说"sdflow 设计审"。
@@ -259,7 +259,10 @@ DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**
 1. 评审对象路径（调用方 SKILL 在本区块外声明的具体路径/文件集）。
 2. **四条通则原文整段复制**（`sdflow:principles` 从 start 到 end，不转述、不摘要——见各 SKILL 传播纪律）。
 3. 本镜职责清单（上表对应行的 R 项范围）。
-4. 返回结构化 findings 列表（每条：问题 / 证据 file:line / 置信度(高/中/低) / 严重度 / 建议）。
+4. 返回**结构化** findings 列表（每条：问题 / 证据 `{file, line, quote}` 或 `evidence_pack`〔调用方若接入
+   机械引用核 `findings_ref_check.py`（DD4，implement-workflow-optimization-2026-08-p2）消费此字段；未接入
+   的调用方原样按结构化字段读取即可，不强制调用脚本〕/ 置信度(高/中/低，仅供报告排序，不作裁决判据) /
+   严重度 / 建议）。
 5. 不 AskUserQuestion。
 
 **plan-eng 镜防重叠语义补句（MUST 含）**：文件归属线（base 归广审镜、domains/ 归领域镜）不足以消解话题层
@@ -295,7 +298,9 @@ Step3 合并去重 + 对抗裁决 ──▶ Step4 报告 + amendment
 
 > 档位与缺省见「模型选择」节。上表只列领域/对抗/接地三镜的职责/档位；广审双镜见上方专节。
 
-> 每个子代理 prompt 必须自带：`{change_dir}` 路径、它负责的清单/角度、"返回结构化 findings 列表（每条带：问题 / 证据 file:line / **置信度(高/中/低)** / 严重度 / 建议），**不要 AskUserQuestion**"。
+> 每个子代理 prompt 必须自带：`{change_dir}` 路径、它负责的清单/角度、"返回**结构化** findings 列表（每条带：
+> 问题 / 证据 **`{file, line, quote}` 或 `evidence_pack`**〔DD4，机械引用核消费字段，MUST 结构化、MUST NOT
+> 只写散文引用〕/ **置信度(高/中/低，仅供报告排序，不作裁决判据)** / 严重度 / 建议），**不要 AskUserQuestion**"。
 >
 > **🔴 每个子代理 prompt MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——见传播纪律。
 > **设计审是通则 ③ 的最高发区**：子代理眼前只有「现在的代码/现在的设计」，漏带这三条，它**必然**把「现状不是这么做的」当成「这个设计该缩水」。**评审的基准是目标态。**
@@ -306,14 +311,24 @@ helper 调用协议」，site="design-voice"，context=proposal「What Changes�
 context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下 fan-out 工作，结果在
 Step3 barrier 处 collect。
 
-## 第三步：综合 + 对抗裁决 → 决策登记进报告（主 session · 强档）
+## 第三步：机械引用核 + 综合裁决 → 决策登记进报告（主 session · 强档）
 
 - 🔴 **进合并去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的合并去重。
 - **合并去重**：把广审双镜（strategy/plan-eng）+ 领域镜 + 对抗镜 + 接地镜 findings 汇成一池，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，折叠到 canonical lens 后供第四步落锚时导出各镜`独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
-- **对抗裁决**：对每条 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
-- **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由），供人类设计门复核"裁得对不对"。
-- **置信分流**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值 <80 一刀切**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。
-- **outside-voice findings 直通〔R4〕**：被 `anchor_lint` 合法组合矩阵判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，非固定 `runner=codex`——Codex 宿主下跨模型 runner 恰是 `claude`）的 voice findings 与各镜同池对抗裁决；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
+- **机械引用核前置〔DD4，adr/0041，裁决动作层与 sdflow-code-review 同三层协议对齐〕**：把去重后的合并池组装成
+  结构化 JSON（每条 finding 携带 `{id, file, line, quote}` 或 `evidence_pack`——本层核对象含四件套文档
+  proposal/design/specs/tasks，`file` 可为四件套内路径或真实代码路径），调
+  `python3 $RULES_ROOT/tools/findings_ref_check.py --input <构造的f> --root "$(git rev-parse --show-toplevel)"`。
+  **>100 条时分批**（每批 ≤50，批间携带「已裁清单」防重复采纳/裁决；报告注明分批数）。三态处置与
+  sdflow-code-review 同一脚本、同一契约（接口细节见其 SKILL.md Step3 或 `findings_ref_check.py` 头注释，
+  不在此复述）：`pass` → 进下方对抗裁决；`fail`（含既无引文又无证据包）→ **机械裁掉**，落「已裁掉」区标
+  `[ref-check]`，不进对抗裁决；`uncheckable`（证据包 / 设计层引用等非干净单行形态）→ 不裁，原样直进对抗
+  裁决，标注「未经机械核」；脚本级 `degraded`（崩溃/输入畸形）→ 整批标 `[ref-check-unavailable]` 直进对抗
+  裁决，报告本段**显著标注**「⚠️ 机械引用核未生效」。
+- **对抗裁决**：对每条通过机械前置的 finding 判"是否真的会在实现期出问题"——对抗镜的反驳若 ≥ 多数成立则采信；存疑的降级或标"需人确认"。
+- **反静默压制（escalate-not-drop，Q3 铁律）**：热主 session 裁决对 reviewer 子代理的 finding **只能降级 / 批注、不得静默丢弃**。判"不成立"的也须连理由落入报告「已裁掉」区（原始发现 + 裁掉理由；机械裁掉项标 `[ref-check]`，与对抗裁决裁掉的来源可辨），供人类设计门复核"裁得对不对"。
+- **置信分流（与置信数字脱钩，仅供报告排序/展示，MUST NOT 作裁决门槛）**：高=直接采信、中=标"需人确认"进决策区、低=**仍上抛（一行带过），绝不静默滤除**。**不照搬 sdflow-code-review 的数值门槛**：设计漏掉的代价高（传导进实现），spec 评审优化召回而非精度；对抗裁决（强档带上下文）已强于数值打分。**「拿不准 → 决策登记区」这条路由由是否真拿不准决定，不由任何置信数字决定**——本层从未有过数值滤，此处只是显式重申决策登记区路由与置信度脱钩这一既有事实，与 sdflow-code-review 同期把数值滤/跨模型豁免矩阵一并退役对齐。
+- **outside-voice findings 直通〔R4〕**：被 `anchor_lint` 合法组合矩阵判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`，非固定 `runner=codex`——Codex 宿主下跨模型 runner 恰是 `claude`）的 voice findings 同走上方机械引用核 + 对抗裁决，与各镜 findings 同池、不享任何特殊通道；tension（voice 与主审分歧）→ 决策登记区 TENSION 条目（两方视角 + 推荐 + 三面后果(系统/用户/开发循环) + 主次判定），绝不静默采纳（user sovereignty）。
 - **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、第四步对应自检项跳过、**不调 emitter**（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按第四步「度量锚」描述构造 roster+findings 并调 `lens_metric_emit.py`（**采纳/裁掉/defer 为设计门拍板前的临时裁决，MUST 在拍板回写时最终确定，见〔SR-M〕**）。
 - **锚行自检（确定性脚本门）〔R1/R3/R5〕〔mlh-p2-anchor-lint〕**：出报告后调 `$RULES_ROOT/tools/anchor_lint.py --report {change_dir}/spec-review-report.md --layer spec-review --root "$(git rev-parse --show-toplevel)" --trigger-catalog $RULES_ROOT/trigger-catalog.md`——退出码非 0（1=违规/2=fail-closed）即本步报错阻塞，遵其判定，MUST NOT 静默吞。脚本机验四类 v1 锚存在性 + lens-metric 字段/枚举/sev/layer==--layer/计数 int≥0（枚举从契约 `lens-metric-enums` 块单一源读）+ metrics 开时 broad/outside-voice 最小必有行。**保留信任边界声明**：`findings=N` 与合并池实收数的**数值一致性**仍是主 session 信任边界、非机械可验——脚本不谎称保证数值正确。config `metrics.enabled` 关/无 metrics 块时 lens-metric 一类跳过（脚本内门控）。**此门只挡「同一会话内忘记跑这步」，挡不住「整段跳过本步」**（诚实拦截力）。
 - **决策登记（取代中途 AskUserQuestion，G2）**：撞到"≥2 方案 / 核验不了的事实"→ **不打断**，写进报告「决策登记区」（见下格式）。
@@ -329,6 +344,7 @@ Step3 barrier 处 collect。
   │ [需拍板]  Q1  ≥2 方案: 选项A/B + 推荐 + 三面后果 + 主次判定 │  人工设计门时勾
   │ [需拍板]  Q2  核验不了的事实(函数名/字段/API 路径)     │  人工确认
   │ [已裁掉]  X1  reviewer 原始发现 + 主 session 裁掉理由   │  反静默压制,可审计(不静默丢)
+  │ [已裁掉]  X2[ref-check]  machine-裁掉(findings_ref_check.py reason=…) │  机械裁掉来源可辨
   └─────────────────────────────────────────────────────┘
 ```
 

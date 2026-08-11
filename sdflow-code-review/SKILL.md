@@ -4,9 +4,9 @@ description: >
   阶段三「代码评审编排器」——**每次全跑·独立冷视角·强制主审**（非"高风险才跑的边际抽查"；实测能抓循环内被
   controller 说服放过的真问题）。主 session（强档）协调：Step1 自持 scope 审计（派 fresh 中档子代理，
   以本 change 四件套为确定性意图源做 scope-drift + 计划完成度审计），Step2 fan-out 多个 fresh 子代理并行审本项目 code-checklists（领域镜 + 对抗镜 + 历史镜），
-  Step3 置信过滤（<80 滤除）+ 对抗裁决，Step4 **能修的自动修**（标 [impl-review-fix]）、≥2 方案按 `T10-choice`（strong 档）三级协议自动选推荐（按三镜 + 主次记理由）、修不了/拿不准的 defer 进 buglist/todolist，Step5 汇总**一份** code-review-report.md。
+  Step3 机械引用核+二元裁决，Step4 **能修的自动修**（标 [impl-review-fix]）、≥2 方案按 `T10-choice`（strong 档）三级协议自动选推荐（按三镜 + 主次记理由）、修不了/拿不准的 defer 进 buglist/todolist，Step5 汇总**一份** code-review-report.md。
   **阶段三无人类门**——不 AskUserQuestion，自动修/自动裁/defer，残差交 hand-off 异步再入口。**不依赖 /clear**
-  ——子代理 fresh context 即独立性。代码即 ground truth（无接地镜，换历史镜 + 置信过滤）。出报告标
+  ——子代理 fresh context 即独立性。代码即 ground truth（无接地镜，换历史镜 + 机械引用核）。出报告标
   [impl-review-fix]。也可说"sdflow 代码审"。Trigger with /sdflow-code-review。
 ---
 
@@ -155,7 +155,7 @@ description: >
 
 把 workflow 规则集的 `code-checklists/`（经 resolve-workflow.sh 解析，通用 base CR-01~09 + 领域 delta CR-*）操作化为一次
 **连续跑的编排代码评审**：Step1 自持 scope 审计（scope-drift + 完成度）→ Step2 并行多镜（本项目清单）→
-Step3 置信过滤 + 对抗裁决 → Step4 自动修/defer → Step5 **一份** `code-review-report.md`。
+Step3 机械引用核 + 二元裁决 → Step4 自动修/defer → Step5 **一份** `code-review-report.md`。
 
 > **定位升级（P3c，须知情）**：本 skill **不是**"高风险才跑的冷独立抽查、边际残差"——那是旧
 > `quality-layering.md §五` 的结论，**已被否决**。sdflow-code-review 是**每次全跑的独立强制主审**：实测能抓出
@@ -315,42 +315,75 @@ host=codex）」，`mirrors=` 只含实际独立完成的镜；见第零步「�
 | **对抗镜** | 2-3 | 各从一个**不同角度**「证明这段代码运行期会爆」：并发竞态 / 资源泄漏 / 错误路径未覆盖。默认 refuted=true，找到爆点才记 | 中档（对抗推理） |
 | **历史镜**〔条件化，见上「规划镜头」〕 | 0-1 | `git blame` 改动行 + 读历史 PR 评论：这块以前修过/revert 过吗？本次是否重蹈或忽略旧 review 意见 | 弱档（机械） |
 
-> 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回结构化 findings（每条带：
-> 问题 / CR 编号 / 证据 `file:line` / 严重度 / 建议），**不要 AskUserQuestion**"。
+> 每个子代理 prompt 必须自带：`{change_dir}` + diff 范围、负责的清单/角度、"返回**结构化** findings（每条带：
+> 问题 / CR 编号 / 证据 **`{file, line, quote}` 或 `evidence_pack`**〔DD4，机械引用核消费字段，MUST 结构化、
+> MUST NOT 只写散文引用〕/ 严重度 / 建议 / 置信度（自报 0–100，**仅供报告排序，不作裁决判据**）），
+> **不要 AskUserQuestion**"。
 >
 > **🔴 每个子代理 prompt MUST 原文携带本 SKILL.md 顶部的「四条通则」区块**（`sdflow:principles` 从 start 到 end，**整段复制，不转述、不摘要**）——见传播纪律。
 > **代码审是通则 ③ 的最高发区**：子代理眼前只有「已经写出来的代码」，漏带这三条，它**必然**把「它现在能跑 / 现在没出过事」当成「它是对的、不用改」。
 > **判据是「目标态下会不会出问题」，不是「现在出没出过问题」。**
 >
-> **🔴 pre-emit 引文纪律（产出纪律非机械门，C9）**：每条 finding MUST 引出触发它的具体代码行原文
-> （file:line + 逐字引文）；**非局部 finding**（缺失校验 / 跨文件数据流 / 时序竞态 / absence 类——
-> 无单一触发行者）SHALL 以**「可复核证据包」**替代单行引文（多处 file:line 逐字引文、或「应在而不在」
-> 的缺失对照——引出本应含该防护的位置原文），仍须可复核定位；**两者皆无 ⇒ 该条自报置信 MUST ≤50**。
+> **🔴 pre-emit 引文纪律（产出纪律非机械门，C9；引文字段本身自 DD4 起进结构化机械核）**：每条 finding MUST
+> 携带触发它的具体代码行原文的**结构化**引用（`{file, line, quote}`）；**非局部 finding**（缺失校验 /
+> 跨文件数据流 / 时序竞态 / absence 类——无单一触发行者）SHALL 以**「可复核证据包」**（`evidence_pack`）
+> 替代单行引文（多处 file:line 逐字引文、或「应在而不在」的缺失对照——引出本应含该防护的位置原文），仍须
+> 可复核定位；**两者皆无 ⇒ 该条在 Step3 机械引用核（`findings_ref_check.py`）判 `fail`（reason=
+> no-quote-no-evidence），机械裁掉，标 `[ref-check]`，落「已裁掉」区（见 Step3）**——自报置信仍可照填，
+> 但不再决定该条是否进主结论，置信只作报告内排序（DD4）。
 > 本纪律仅约束 Step2 各镜的代码 finding，不作用于 Step1 scope 审计的任务级证据。**诚实边界（两个维度，
-> 缺一即声明不全）**：① **引文真实性**无机械核验（子代理自报）；② 🔴 **「这条是否真属非局部类」这个
-> 分类判断本身同样是子代理自报、同样无核验**〔impl-review-fix〕——一个本可给出单行 `file:line` 的普通
-> 局部 bug，只需自称「跨文件数据流 / absence 类」即可改走门槛更松的证据包路径，绕开单行逐字引文的硬
-> 要求。**MUST NOT 靠再加一层校验来"堵"这个口**（校验方同样是 LLM，只是把同一个自报判断多套一层），
-> 正解是**如实声明它**：本条是产出纪律非机械门，MUST NOT 声称机械保证。
+> 缺一即声明不全）**：① **引文是否真指向所声明位置**（路径存在 / file:line 界内 / 引文命中该行）自 DD4 起
+> 已由机械引用核核验（`findings_ref_check.py`）；但**引文与断言的语义对应**（这段代码是否真支持该 finding
+> 的论断）仍无机械核验，是强档二元裁决的活（基准 1 切分：有确定性信号的下沉脚本，语义残余留裁决）；
+> ② 🔴 **「这条是否真属非局部类」这个分类判断本身仍是子代理自报、同样无核验**〔impl-review-fix，DD4 后依然
+> 成立〕——一个本可给出单行 `file:line` 的普通局部 bug，只需自称「跨文件数据流 / absence 类」并附
+> `evidence_pack` 即可改走机械引用核的 `uncheckable` 通道（不裁、直进二元裁决），绕开单行逐字引文的机械
+> 核验。**MUST NOT 靠再加一层校验来"堵"这个口**（校验方同样是 LLM，只是把同一个自报判断多套一层），
+> 正解是**如实声明它**：本条分类判断是产出纪律非机械门，MUST NOT 声称机械保证。
 
 **第二步半：code outside voice（跨模型，always〔C3·R1〕）**：按「helper 调用协议」（site="code-voice"，context = `git diff $DIFF_BASE..HEAD` 全量）跑一次整体找漏第二意见——不受清单约束、不占镜位。**context 就绪即派；async 分支下 dispatch 调用派出即返回，MUST 立刻继续本步余下工作（进第三步汇总），结果在 Step3 barrier 处 collect**。findings 进 Step3 合并池；v1 锚行按位点写入报告。**复评条款已泛化〔workflow-metrics-loop ADR-5，见第五步「反馈回路」〕**：原「累计 10 次后按采纳率复评降采样为 HR-only」是本条 outside-voice 专属规则，现升级为 per-(层,镜) 通用条款（本镜只是其中一个评估单元，不再单独定义判据）。
 
-## 第三步：置信过滤 + 综合 + 对抗裁决（主 session · 强档）
+## 第三步：机械引用核 + 二元裁决（主 session · 强档）
 
 0. 🔴 **进汇总去重前 MUST 先完成 outside-voice collect barrier**（见「outside-voice helper 调用协议」节 ⑥⑧）：按 ⑧ 的站点↔任务标识表**逐站点**取，每个**实际 dispatch 过的**站点其结果 MUST 已在手、或已按 ⑦ 降级完毕（仍 RUNNING 的站点 MUST 让出轮次等通知，MUST NOT 早退落 `timeout`），方可进下面的汇总去重。
 1. 汇总 Step1（自持 scope 审计）+ 各镜 findings，**去重**（同一问题多镜命中合并）；去重时记录每条 finding 的**命中镜集合**，
    折叠到 canonical lens 后供 Step5 落锚时导出各镜 `独立`（唯一报过 ∧ 被采纳 +1；归属/折叠规则见规则根 `lens-metric-contract.md`，唯一权威源）。
-2. **置信过滤**（借官方 code-review rubric，可下放弱档子代理逐条打分）：每条打 0–100，**滤掉 <80**。
-   明确滤除：CI 能抓的 / 纯 nitpick / 未改动行的既有问题 / 仅主观风格 / 已被注释显式抑制的 /
-   **阈值或常量取值不强制求注释**（调参即腐，Suppressions 扩） / **无害冗余、有助可读性的不标**（Suppressions 扩）。
-   **pre-emit 引文纪律裁决〔C9〕**：Step2 各镜 finding 既无单行引文又无可复核证据包 ⇒ 其自报置信 MUST ≤50 ⇒
-   必被本步 <80 数值滤除 → 落「已裁掉」区一行留痕（可审计，反静默压制既有条款覆盖）；本条不作用于 Step1
-   scope 审计的任务级证据（后者的证据形态由五态判定纪律独立约束）。
-   **outside-voice 豁免〔R4·D8，ADR-5/C1〕**：豁免判据 = 该条 finding 所属 outside-voice 锚被 `anchor_lint` **合法组合矩阵**判定为「跨模型」（`host,runner 均∈{claude,codex}∧runner≠host∧reason_code="ok"`）——**MUST NOT 自写裸 `runner≠host`**（被 `runner="none"` 击穿）、**MUST NOT 按 runner 取值硬编码**（旧规则 `runner=codex` 在 Codex 宿主下恰是自审，是本条要杀的假绿点）。矩阵判「跨模型」为真的 findings 跳过 <80 数值滤直通对抗裁决（跨模型自评不可比、异见不被同族标尺误杀）；**其余一律照过同族置信滤**——含同族 fallback（`runner==host`，`claude-fallback` 枚举值已废弃）与无执行（`runner="none"`，findings 恒 0，豁免无意义）。
-3. **对抗裁决**：对每条存活 finding 判"是否真的运行期出问题"——对抗镜反驳 ≥ 多数成立则采信。
-4. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
-   判"不成立"的连理由落入报告「已裁掉」区。<80 滤除项也**一行带过（可审计），不静默丢**（静默 = "全过了"的假象）。
-5. **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、
+2. **机械引用核前置〔DD4，adr/0041，取代旧数值置信滤〕**：把去重后的合并池组装成结构化 JSON（每条 finding 携带
+   pre-emit 引文纪律要求的 `{id, file, line, quote}` 或 `evidence_pack`），调
+   `python3 $RULES_ROOT/tools/findings_ref_check.py --input <构造的f> --root "$(git rev-parse --show-toplevel)"`。
+   脚本**只吃结构化 JSON、只吐结构化 JSON**，MUST NOT 解析 markdown 散文（design DD4）。
+   **合并池 > 100 条时分批调用**（每批 ≤50，按顺序分批；批间携带「已裁清单」——已在前一批判 `fail` 的 id
+   集合原样带入下一批的裁决上下文，防止分批边界导致同一条被重复采纳或重复裁决）；报告本段注明分批数
+   （历史单场次最高约 415 条 finding，不能只赌历史分布——见 design Risks 上界兜底）。
+   三态处置（脚本输出契约见 `findings_ref_check.py` 头注释）：
+   - **`pass`**（三查全过：路径存在 + file:line 界内 + 引文命中该行）→ 进下方「二元裁决」。
+   - **`fail`**（结构化字段在、任一查不过；或引文与证据包确认皆缺，`reason=no-quote-no-evidence`）→
+     **机械裁掉**，直接落入「已裁掉」区，标来源 `[ref-check]`（reason 取脚本输出的 `reason` 字段），
+     **不进二元裁决**——这是唯一不经强档裁决即可裁掉的路径，因为核验对象是「引用是否真实指向所声明
+     位置」这类有确定性信号的机械判断（基准 1）。
+   - **`uncheckable`**（`evidence_pack` 在场 / 有引文但拿不到干净 `file`+`line` 单行形态——设计层引用 /
+     行范围字符串等）→ **不裁**，原样直进二元裁决，报告该条 finding 旁标注「未经机械核」。
+   - **脚本级不可恢复错误**（`result="degraded"`，输入 JSON 畸形 / 脚本本体崩溃）→ **整批**标
+     `[ref-check-unavailable]` 直进二元裁决，报告本段**显著标注**「⚠️ 机械引用核未生效（degraded），
+     本轮全部 findings 未经机械前置」——MUST NOT 静默呈现「全部 pass」假象，MUST NOT 挡「恒产报告」
+     既有硬约束。
+3. **二元裁决**〔取代旧数值置信滤 + 跨模型豁免矩阵条款〕：对每条通过机械前置（`pass`/`uncheckable`/整批
+   `degraded`）的 finding，主 session 判**采纳 / 裁掉 / defer** 三态之一 + 一句 **critique**（裁决理由，可
+   审计）：
+   - **采纳**：真实运行期问题或真实 scope/spec 偏离，进 Step4 修复/自动选/defer 台账。
+   - **裁掉**：判"不成立"——CI 能抓的 / 纯 nitpick / 未改动行既有问题 / 仅主观风格 / 已被注释显式抑制 /
+     阈值常量取值不强制求注释 / 无害冗余不标（Suppressions 既有口径不变）；理由落「已裁掉」区（不标
+     `[ref-check]`，与机械裁掉来源可辨）。
+   - **defer**：真实但拿不准优先级/方案 → 进 Step4 defer 台账（buglist/todolist）。
+   **outside-voice 跨模型 finding 与同族 finding 同走本条二元裁决**——旧「被 `anchor_lint` 合法组合矩阵判
+   「跨模型」即跳过数值滤直通对抗裁决」的豁免条款随数值滤一并废止：数值滤门槛已不存在，「豁免于该门槛」
+   这一概念随之消失，跨模型 finding 不再需要任何特殊通道；矩阵本身（`host-adaptive-execution` 单一源）
+   继续供其余用途（如 anchor 校验、declared-sites 完整性）引用，未被删除。
+4. **置信仅排序**：Step2 各镜自报置信（0–100）**只用于报告内 Findings 区展示排序**，**MUST NOT** 作为
+   采纳/裁掉/defer 的判据或任何数值门槛——门槛判断已收窄为上方机械三态 + 二元裁决两层。
+5. **反静默压制（escalate-not-drop，Q3 铁律）**：裁决对 reviewer finding **只能降级/批注、不得静默丢弃**；
+   判"裁掉"的连 critique 落入报告「已裁掉」区（机械裁掉标 `[ref-check]`，裁决裁掉不标，来源可辨）。
+6. **lens-metric 度量锚门控**：落锚前读 config.yaml 的 `metrics.enabled`——缺省或 `false` → 本轮**不落** `lens-metric` 锚、
    Step5 对应自检项跳过、**不调 emitter**（仅本仓源仓 dogfood 默认 `true`）；为 `true` → 按 Step4「裁决计数」构造 roster+findings，
    Step5 调 `lens_metric_emit.py` 产出后落进「报告格式」区。
 
@@ -617,10 +650,11 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
 ### 子代理能力锚（host=codex 报告必填，语义核验非机械门，见第零步「能力探针」）
   <!-- sdflow:fanout-capability v1 host="…" subagents="available|unavailable" mirrors="domain,adversarial,history,broad|—" -->
   subagents="unavailable" 时本报告 MUST 显著标注「⚠️ 单镜降级」（见命中范围/结论区）。
-### Findings（置信 ≥80）
+### Findings（已采纳，按置信降序排列）
   [严重度] CR-04 资源泄漏 | file.go:42 | 错误路径未释放 conn | 置信 90 | 已修[impl-review-fix] / defer→buglist
 ### 已裁掉（反静默压制，可审计）
-  X1  reviewer 原始发现 + 主 session 裁掉理由；<80 滤除项一行带过（含无引文/无证据包 finding 的置信封顶滤除）
+  X1  reviewer 原始发现 + 主 session 裁掉理由（二元裁决裁掉）
+  X2[ref-check]  reviewer 原始发现 + 机械引用核裁掉理由（`findings_ref_check.py` reason=…，含无引文/无证据包 finding）
 ### 修复 / defer 台账
   自动修 N 项[impl-review-fix]；自动选推荐 M 项(按三镜+主次附理由)；defer K 项 → buglist/todolist
   T10-choice复核: <方案> | 对抗镜结论 <通过/证伪> | <理由(三镜+主次)>   ← 无客观判据的 ≥2 方案自动选必附
@@ -648,10 +682,11 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
 ```
   主 session（裁决 / 自动裁 / 出报告）        强档 = $SDFLOW_TIER_STRONG ← 这是门禁,弱档=假绿
   领域镜 / 对抗镜（判断、对抗推理）           中档 = $SDFLOW_TIER_MID
-  历史镜 / 置信过滤（git blame/打分，机械）   弱档 = $SDFLOW_TIER_LIGHT
+  历史镜（git blame，机械）                   弱档 = $SDFLOW_TIER_LIGHT
 ```
 
-依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读 blame/打分可下放弱档。
+依据：评审是门禁，综合判断这层弱档会"看着过其实没深究"；机械读 blame 可下放弱档；机械引用核
+（Step3）是纯脚本，不占模型档位（DD4：砍掉弱档子代理逐条核的候选，模型做子串比对既贵又会幻觉）。
 **不要**把综合判断委派给弱档子代理。阶段三无人类门（不 AskUserQuestion，自动修/裁/defer）。
 
 ## 与官方 code-review 的分工（弃用为独立 step）
@@ -659,17 +694,17 @@ MUST 与 `code_review` 字段**在同一次文件写入中落盘**（不可拆�
 | | 官方 /code-review | 本 skill（sdflow-code-review 编排器） |
 |---|---|---|
 | 现状 | **弃用为独立 step（P3d）** | 每次全跑·独立冷·强制主审（Step1 自持 scope 审计 + Step2 多镜清单） |
-| 干什么 | 插件能力仅供历史镜/置信过滤**内部借用** | 清单逐条 + 对抗 + 置信过滤 + 合并出报告 |
+| 干什么 | 插件能力仅供历史镜**内部借用** | 清单逐条 + 对抗 + 机械引用核 + 二元裁决 + 合并出报告 |
 | 决策 | 不再独立 gh 回帖 | 主 session 对抗裁决 + 自动修/裁/defer |
 
 > P3d：官方 `/code-review` 不再作独立 step（subagent-dev production-readiness + 本 skill 已覆盖，
-> 本地合并无需 gh 留痕）；但保留其插件能力供历史镜 / 置信过滤内部借用。
+> 本地合并无需 gh 留痕）；但保留其插件能力供历史镜内部借用。
 
 ## 注意
 
 - **每次全跑，非高风险才跑**（P3c；旧 quality-layering §五"缩成残差"结论已否决）。
-- **置信过滤要可审计**：滤掉的 <80 项一行带过，不静默丢。
+- **裁决要可审计**：机械裁掉（`[ref-check]`）与二元裁决裁掉均一行带过，不静默丢（Step3）。
 - **不重扫 CI 能抓的**：linter/typechecker/编译器范围内的不进镜。
-- **代码即 ground truth**：直接读 diff 与真实代码，不设接地镜（与 sdflow-spec-review 的唯一结构差异，换历史镜 + 置信过滤）。
+- **代码即 ground truth**：直接读 diff 与真实代码，不设接地镜（与 sdflow-spec-review 的唯一结构差异，换历史镜 + 机械引用核）。
 - checkpoint 脚本 = `~/.sdflow/hack/checkpoint-commit.sh`（setup.sh 全局安装）；缺失则先跑 setup，或退化为普通 `git add -A && git commit`。
 - 项目无关：规则路径一律经 `~/.sdflow/hack/resolve-workflow.sh` 解析（本地 pin 或全局 canonical），不硬编码 `openspec/workflow/`。
