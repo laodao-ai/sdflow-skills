@@ -53,6 +53,36 @@ voice 留痕：`runner=codex reason_code=ok`（跨模型第二意见，gpt-5.6-s
 
 ---
 
+## 2026-08-11
+
+### [阶段 2 完成总结] 镜 roster 复评 + 裁决地基改造全部完成（change `implement-workflow-optimization-2026-08-p2`）
+
+- **状态**: ✅ 完成（5/5 子任务；验收 3 观察窗口 1/3 进行中，不阻塞）
+- **产出**:
+  - 2.A.1 roster 复评（commit A 独立）：`openspec/retro/mirror-dispositions.yaml`
+    13 面镜处置——11 保留 + history 降采样（条件化：diff ≥200 行 / 含 rename 才派）+
+    1 不适用；SKILL roster 段条件化 + `retro_report.py` 处置注记
+  - 2.A.2 T106 裁决协议改造（commit B 独立）：D2 合成形态（`openspec/adr/0041`）——
+    机械前置门 → 二元裁决（采纳/裁掉/defer + critique）→ 置信降级为排序信号；
+    删 <80 硬滤/置信封顶/跨模型豁免矩阵；历史重放部署门 5 报告 49 findings ③类=0
+  - 2.A.3 T112 复核层：`findings_ref_check.py` 机械引用核（三查三态+崩溃降级，20 pytest）
+  - 2.A.4 lens-metric contract v2 + anchor_lint CLEAN + retro 再生冒烟
+  - 2.A.5 评估结论=做：`sdflow-done` §3.0 done-final token 快照 + host 判定补丁
+- **验证**: verify PASS（6 tasks / 40+ reqs）；全仓 pytest 2549 passed, 10 skipped；
+  code-review 5 面镜 + code-voice（2 项自动修 + 3 defer + 6 裁掉）
+- **计划外**:
+  - **T102 fold 未执行**——阶段 1 拍板「fold 进阶段 2」，但 p2 scope 未纳入对抗镜措辞
+    收紧；处置改挂验收 3 观察窗口结论后重判（已记 roadmap 阶段 2「遗留」段），池状态
+    保持 PROPOSED
+  - hand-off 残项 D1–D5（docs 同步 / ref-check 路径穿越 / done-final 降级确认 /
+    前瞻窗口判读 / 一行描述更新），见 p2 归档 hand-off.md
+- **池对账**: T106→DONE、T112→DONE（evidence = adr/0041 + findings_ref_check.py，
+  见本日 recorder 操作）
+- **下一步**: 阶段 3（上游吸收机制）——雾区补细走
+  `/sdflow-spec implement-workflow-optimization-2026-08-p3` 相位 B grill
+
+---
+
 ## 2026-08-10
 
 ### [阶段 1 完成总结] 度量补全 + 池对账全部完成

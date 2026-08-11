@@ -23,21 +23,17 @@
 | [T90](open/todo/T90.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | frontmatter 解析与 ship_gate.py 全量 parity 缺口：BOM/tab缩进/YAML行尾注释未处理（nested-key 已 FIX-3 修） |
 | [T91](open/todo/T91.md) | todo | PROPOSED | 2026-07-01 | `roadmap_writeback_draft.py` | PREFIX_RE 贪婪 .+ 对含 -pN- 样式 roadmap 名/描述性尾缀的 change 名有命名固有歧义（取最后 -pN） |
 | [T92](open/todo/T92.md) | todo | PROPOSED | 2026-07-01 | `test_roadmap_writeback_draft.py` | test_verify_state_malformed_duplicate_key/bad_enum 无 ship-gate 包裹,FIX-3 后经无顶层 ship-gate 走 malformed 非经子路径 |
-| [T97](open/todo/T97.md) | todo | OPEN | 2026-07-01 | `model-tiers` | 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1） |
 | [T98](open/todo/T98.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | prompt 前缀缓存稳定化：子代理 prompt 组装序=稳定规则→半稳定→动态（04 提案 §2.2） |
-| [T100](open/todo/T100.md) | todo | OPEN | 2026-07-01 | `workflow` | 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4） |
 | [T101](open/todo/T101.md) | todo | PROPOSED | 2026-07-01 | `spec-review` | 设计门报告三层摘要头+结构化拍板三问（04 提案 §3.1） |
 | [T102](open/todo/T102.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 对抗镜措辞收紧：只报影响正确性/明示需求的 gap，其余标 optional（04 提案 §4.5） |
 | [T103](open/todo/T103.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 每镜 effort scaling 预算+输出封顶：四要素 prompt 槽+1-2k 回传目标（04 提案 §2.5） |
 | [T104](open/todo/T104.md) | todo | PROPOSED | 2026-07-01 | `retro` | retro 补 token 维度量：checkpoint 落 token 快照锚+join（04 提案 §2.6） |
 | [T105](open/todo/T105.md) | todo | PROPOSED | 2026-07-01 | `model-tiers` | thinking/effort 预算按步分档：model-tiers 加第二维（04 提案 §2.7） |
-| [T106](open/todo/T106.md) | todo | PROPOSED | 2026-07-01 | `code-review` | 裁决二元化 pass/fail+critique 替代连续置信分，retro 收敛校准（04 提案 §4.1） |
 | [T107](open/todo/T107.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 位置去偏：HIGH 级裁决换序重跑+fan-out 输入顺序打散（04 提案 §4.2） |
 | [T108](open/todo/T108.md) | todo | PROPOSED | 2026-07-01 | `retro` | 镜价值指标升级 resolution rate+假阳模式沉淀回 checklist（04 提案 §4.3） |
 | [T109](open/todo/T109.md) | todo | PROPOSED | 2026-07-01 | `code-checklists` | 测试大改=红旗 硬规则+intake diff 体积提示（04 提案 §4.4） |
 | [T110](open/todo/T110.md) | todo | PROPOSED | 2026-07-01 | `bundle` | 明码自动决策原则清单 decision-principles.md，T10 第①级引用（04 提案 §5.6） |
 | [T111](open/todo/T111.md) | todo | PROPOSED | 2026-07-01 | `outside-voice` | injection 前缀：发 codex 的 context 冠不读 skill 定义目录（04 提案 §4.7） |
-| [T112](open/todo/T112.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | 弱档 validator 复核层：置信过滤后复核 findings 引用真实性（04 提案 §4.6） |
 | [T113](open/todo/T113.md) | todo | PROPOSED | 2026-07-01 | `评审编排` | HIGH 级终局裁决跨模型双栈：outside-voice 延伸到裁决层（04 提案 §4.6） |
 | [T114](open/todo/T114.md) | todo | PROPOSED | 2026-07-01 | `bundle` | 规则条款元维护：条款触发证据扫描，零触发列待复评（04 提案 §6.3） |
 | [T115](open/todo/T115.md) | todo | PROPOSED | 2026-07-01 | `bundle` | spec 模版增强：EARS 句式+三必填槽+测试 seam 决策槽（04 提案 §3.2/§3.3） |

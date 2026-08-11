@@ -105,7 +105,11 @@
 | [T94](closed/todo/T94.md) | todo | WONTDO | 2026-07-01 | `maintain_scan.py + init.py` | 陈旧遮蔽告警文案第三处跨脚本复述 + checkpoint 孤儿路径：R-guard 不机验文案（文案守卫脆），maintain 抄 init 文案仅语义等价、漂移不被捕获——已知残差 | 2026-08-05 | main | 文案守卫脆(R-guard不机验文案)+两处受众不同(maintain报告vs init终端),统一反降可读性;已知残差 |
 | [T95](closed/todo/T95.md) | todo | WONTDO | 2026-07-01 | `sdflow-maintain/tests/test_marker_consistency.py` | 守卫加载用 assert os.path.isfile + exec_module hard-fail；sdflow-init 目录整体缺席场景可加 importorskip 更优雅降级（当前 path-assert 直接 fail，defer 兜底优化） | 2026-08-05 | main | 硬失败是正确设计(注释写缺席=硬失败非跳过);importorskip会让守卫静默跳过,违背守卫初衷 |
 | [T96](closed/todo/T96.md) | todo | DONE | 2026-07-01 | `maintain_scan.py _SPEC_LINK/_RULE_LINK` | 链接正则 [a-z0-9-]+ 与 scan_fs_specs/rules 目录名零字符集限制不对称：非规范命名(大写/下划线)的 spec/rule 被删且 INDEX 仍链接时，链接不命中正则→静默归②b排除→不进 stale→漏报已删未清理。openspec 强制 kebab 故低概率，彻底修需 scan_fs 也检非规范命名 | 2026-08-05 | main |  |
+| [T97](closed/todo/T97.md) | todo | DONE | 2026-07-01 | `model-tiers` | 档位强制落地：镜 dispatch 显式带 model 参数，advisory→enforced（04 提案 §2.1） | 2026-08-10 | main |  |
 | [T99](closed/todo/T99.md) | todo | WONTDO | 2026-07-01 | `code-review` | 确定性检查前置准入门：pytest/lint/typecheck 未绿不进 fan-out（04 提案 §2.3） | 2026-08-10 | main | 粒度错位是结构性的：sdflow 是 per-change 粒度，pytest 是仓级 CI 信号；假红会卡评审进度；verify 阶段全仓 pytest 已兜底，前置准入门不该做 |
+| [T100](closed/todo/T100.md) | todo | WONTDO | 2026-07-01 | `workflow` | 微变更快速通道：全流程深度三档 micro/standard/deep 机判分层（04 提案 §2.4） | 2026-08-10 | main | trigger-catalog TG 已按命中决定生成约束深度，评审深度由镜 roster 自然调节；额外 micro/standard/deep 三档机判分层收益不抵复杂度（判据设计是开放问题，完美成本过高） |
+| [T106](closed/todo/T106.md) | todo | DONE | 2026-07-01 | `code-review` | 裁决二元化 pass/fail+critique 替代连续置信分，retro 收敛校准（04 提案 §4.1） | 2026-08-11 | main |  |
+| [T112](closed/todo/T112.md) | todo | DONE | 2026-07-01 | `评审编排` | 弱档 validator 复核层：置信过滤后复核 findings 引用真实性（04 提案 §4.6） | 2026-08-11 | main |  |
 | [T118](closed/todo/T118.md) | todo | DONE | 2026-07-01 | `writing-plans` | tasks 依赖 DAG 化+frontier 受限并行（保守试点）（04 提案 §5.1） | 2026-07-01 |  |  |
 | [T119](closed/todo/T119.md) | todo | DONE | 2026-07-01 | `roadmap` | fog-of-war 进 roadmap 模版：远期阶段留雾区（04 提案 §5.2） | 2026-08-10 | main |  |
 | [T120](closed/todo/T120.md) | todo | WONTDO | 2026-07-01 | `bundle` | expand-contract 宽重构协议进 bundle（04 提案 §5.3） | 2026-07-01 | matt-workflow-integration | matt-workflow-integration change |
