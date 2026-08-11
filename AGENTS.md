@@ -226,7 +226,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 - **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
-  子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
+  子 agent 调度期间（sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
 - **阶段一入口为唯一线性路径**：问题模糊/方向未定先 `opsx:explore` 发散，清晰则直接进 `/sdflow-spec`。
   人可直接触发；**人示意收敛**（如"开搞"/"做吧"/"开 change"）时**模型 SHALL 自动 invoke `/sdflow-spec`**。
   **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发，触发方式的改变不缩减

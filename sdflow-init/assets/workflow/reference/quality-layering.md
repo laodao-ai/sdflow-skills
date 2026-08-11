@@ -8,15 +8,17 @@
 
 ---
 
-## 一、生成期已经焊进三层 review（不是裸生成）
+## 一、生成期已经焊进 review（不是裸生成）
 
-`superpowers:subagent-driven-development` 内部**自带**一条多层评审流水线（读其 SKILL + 模板得出）：
+`sdflow-implement`（tickets 轨，阶段三唯一实现管线）内部**自带**一条评审流水线——设计脉络借鉴自
+已退役的 superpowers `subagent-driven-development`（reviewer 模板 / pre-flight 冲突扫描，见其自身
+`SKILL.md` 附录 B 出处说明），机制现况：
 
 ```
-每任务:  implementer TDD + 自审 + commit
-         → task-reviewer(fresh 子agent, "Do Not Trust the Report")出双判决: spec 合规 + 代码质量
-         → Critical/Important 进 fix 循环, re-review 到 Approved
-全任务后: final whole-branch reviewer(最强模型, fresh context)
+每 ticket:  implementer TDD + 自审 + commit
+            → 双轴审(fresh 子agent×2, "Do Not Trust the Report") 并行出双判决: Standards 轴 + Spec 轴
+            → Critical/Important 进 fix 循环, re-review 到 Approved
+出票收尾:   全 ticket 语义一致性自扫(T10-choice 无人类门自主裁决，取代原版"批量呈给人拍板")
 ```
 
 **关键**：这些 reviewer 都是 **fresh-context 独立子 agent**。所以"独立性"——我们一直强调的卖点——
@@ -24,17 +26,19 @@
 
 ## 二、但它们查的是**通用 rubric**，不是我们的领域清单
 
-task-reviewer / final-reviewer 的检查项是 `clean separation / error handling / DRY / edge cases /
-tests verify real behavior / architecture / security`——**纯通用**。它们**完全不碰**
-`code-checklists/domains/` 的领域 CR-*（嵌入式看门狗/flash 寿命/ISR、芯片 AT 超时、并发锁序…）。
+双轴审 Standards 轴的基线检查项是 `clean separation / error handling / DRY / edge cases /
+tests verify real behavior / architecture / security`——**通用部分**注入 Fowler smell 基线；
+`code-checklists/domains/` 的领域 CR-*（嵌入式看门狗/flash 寿命/ISR、芯片 AT 超时、并发锁序…）作为
+Standards 轴 dispatch 模板**必填槽**已前移进循环（见 `sdflow-implement/SKILL.md`「每 ticket 双轴审」节），
+不再是通用 rubric 盲区。
 
 | 维度 | 生成期已做? | 事后 review 重复? |
 |---|---|---|
-| spec 合规（建的=要的） | ✅ task-reviewer Part 1 | Step1 自持 scope 审计 **部分重复** |
-| 通用代码质量（CR-01~09 base） | ✅ 三层都查 | /sdflow-code-review base **大幅重复** |
-| **领域规则（CR-EMB/ML307C/ESP32/GO）** | ❌ 通用 rubric 盲区 | **真残差** ← 唯一不可替代 |
+| spec 合规（建的=要的） | ✅ Spec 轴 | Step1 自持 scope 审计 **部分重复** |
+| 通用代码质量（CR-01~09 base） | ✅ Standards 轴 | /sdflow-code-review base **大幅重复** |
+| **领域规则（CR-EMB/ML307C/ESP32/GO）** | ✅ Standards 轴必填槽已注入 | **冷独立兜底**（见下方 P3c，非"唯一残差"） |
 | scope-drift / 计划完成度 | ⚠️ 部分 | Step1 自持 scope 审计补全 |
-| 全冷独立（脱离 controller） | ❌ 终审仍 controller 裁决 | /sdflow-code-review 补，但边际 |
+| 全冷独立（脱离 controller） | ❌ 双轴审仍 implementer/controller 同轮次 | /sdflow-code-review 补，但边际 |
 | PR 级 DB/API/Auth 改动 | ❌ | 官方 code-review |
 
 **结论**：后置 review 的**通用质量部分是冗余**；真正残差只剩 **领域规则 + scope-drift + PR 风险 + 一点冷独立**。

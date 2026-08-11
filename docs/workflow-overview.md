@@ -9,9 +9,9 @@
 > **展开文档（[workflow-skills/](./workflow-skills/)）**：主流程涉及的每个 skill 都有一份「详解」——
 > 内部流程图 + 内部再调度的子 skill + **本 workflow 注入规则是建议式还是强制**。步骤表与 §5 表内均有「详解」链接直达。
 >
-> - **外部黑盒**（本文只画契约、详解展内部）：[superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)（`opsx:ff` 暂未展开）
+> - **历史参考（已退役，非运行时依赖）**：[superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) · [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)——阶段三旧 superpowers 轨，已被 tickets 单管线整体取代（`adr/0042`，用户 2026-08-11 拍板「以后只走 tickets」），两文档保留供了解设计脉络参考；`opsx:ff` 暂未展开详解
 > - **第三方 skill 参考（非运行时依赖）**：[gstack /review](./workflow-skills/gstack-review.md)（`sdflow-code-review` Step1 已改自持，不再调用）· [gstack autoplan](./workflow-skills/gstack-autoplan.md)（`sdflow-spec-review`/`sdflow-roadmap` 广审已改自持双镜，不再调用）——两者均文档保留供了解设计脉络参考
-> - **自制编排器**：[grill-with-docs](./workflow-skills/grill-with-docs.md) · [sdflow-spec-review](./workflow-skills/sdflow-spec-review.md) · [sdflow-code-review](./workflow-skills/sdflow-code-review.md) · [sdflow-done](./workflow-skills/sdflow-done.md)
+> - **自制编排器**：[grill-with-docs](./workflow-skills/grill-with-docs.md) · [sdflow-spec-review](./workflow-skills/sdflow-spec-review.md) · [sdflow-code-review](./workflow-skills/sdflow-code-review.md) · [sdflow-done](./workflow-skills/sdflow-done.md) · `sdflow-implement`（阶段三唯一实现管线，tickets 轨，出票/执行两模式，暂无独立「详解」文档）
 > - **横向提炼**：[自建 Skill 最佳实践](./skill-authoring-best-practices.md)（从上述 skill 提炼可迁移做法 + 我们的补强项）
 > - **可视化控制台**：[workflow-console.html](./workflow-console.html)（本文的视觉/精简版，同 session 产出——本文是其内容超集）
 > - **字段 / 脚本映射速查**：[workflow-map.html](./workflow-map.html) · [workflow-map.md](./workflow-map.md)（阶段 × skill × 脚本 × frontmatter 字段全景，本次新增）
@@ -31,7 +31,7 @@ flowchart TD
     A -.人示意收敛，模型自动 invoke.-> SP["/sdflow-spec<br/>澄清 → 拷问 → 生成，一次连续跑"]
     SP --> D["sdflow-spec-review<br/>广审 + 并行多镜 → 一份报告"]
     D --> E{{"★ 设计 HARD-GATE<br/>全流程唯一人类门"}}
-    E -->|批准| G["writing-plans → subagent-driven-development<br/>（缺省 tickets 轨路由 sdflow-implement）"]
+    E -->|批准| G["sdflow-implement<br/>（tickets 轨，出票 → 执行，唯一管线）"]
     G --> H["sdflow-code-review<br/>每次全跑 · 独立冷 · 强制主审"]
     H --> I["sdflow-done<br/>verify → hand-off → archive → commit → merge"]
     I -.异步.-> J["人类读 hand-off.md<br/>→ 决定开清理 change → 下个 change 输入"]
@@ -151,7 +151,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    IN(["过设计门"]) --> P["writing-plans 🔒 → subagent-driven-development 🔒<br/>原子任务 TDD + 注入点B 领域终审"]
+    IN(["过设计门"]) --> P["sdflow-implement<br/>出票(RUN_PLAN) → 执行(CONTINUE_IMPL)，每 ticket 双轴审"]
     P --> CR["sdflow-code-review<br/>每次全跑 · 独立冷 · 强制主审"]
     CR --> DN["sdflow-done<br/>verify → hand-off → archive → commit → merge"]
     DN --> OUT(["merged ✅"])
@@ -160,13 +160,13 @@ flowchart TD
 
 | 步 | skill | 目标 | 产出 | 注意事项 |
 |---|---|---|---|---|
-| 6 | `writing-plans` 🔒 [详解](./workflow-skills/superpowers-writing-plans.md) | 把 design 拆成**原子任务 TDD 计划** | `superpowers-plan.md` | design 领域约束**逐字**进 plan 的 Global Constraints；每任务 commit 步 MUST 用命名空间标签 `checkpoint-commit.sh <change>:task<N>-<slug>`（gate 完成判据主锚） |
-| 7 | `subagent-driven-development` 🔒 [详解](./workflow-skills/superpowers-subagent-dev.md) | fresh 子代理**逐任务实现 + 逐任务审**，末尾整支终审 | 代码 + 逐任务 checkpoint | **注入点B**：领域清单 `code-checklists/domains/<栈>` 附给终审 reviewer（领域审前移进循环，即时 fix + re-review 闭环） |
+| 6 | `sdflow-implement`（mode=tickets-plan） | 从 design.md/tasks.md 出**3-6 张 tracer-bullet ticket**，落盘即返回 | `tickets.md` | design 领域约束**逐字**进 `## Global Constraints`（implementer/reviewer 共享同一份注意力透镜） |
+| 7 | `sdflow-implement`（mode=tickets-exec） | 宿主条件化受限并行派 fresh implementer 子代理，**每 ticket 双轴审**（Standards 轴 + Spec 轴，即时 fix + re-review 闭环） | 代码 + 逐 ticket checkpoint | Standards 轴必填槽注入领域清单 `code-checklists/domains/<栈>`；完成信号（复选框 + `checkpoint(<change>:task<N>-<slug>)`）**双轴审通过后**才由执行模式补打 |
 | 8 | `sdflow-code-review` [详解](./workflow-skills/sdflow-code-review.md) | **每次全跑的独立冷主审**：Step1 自持 scope 审计（fresh 子代理，scope-drift + 完成度）+ 领域镜 + 对抗镜 + 历史镜 + 置信过滤 | `code-review-report.md` | **P3c**：非「高风险才跑」，是每次全跑（实测能抓循环内被说服放过的真问题）；与注入点B **并存不是重复**（前者循环内即时、后者事后独立兜底）；能修自动修 `[impl-review-fix]`、拿不准 defer |
 | 9 | `sdflow-done` [详解](./workflow-skills/sdflow-done.md) | **闭环**：verify → hand-off → archive → commit → merge | verify-report + hand-off.md + 归档 + commit + merge | verify **防假✅**（每 ✅ 附锚点）；archive 走 `openspec archive` CLI **同步 delta 到主 specs**（禁手动 `mv`）；含 **issues sweep 子步**（分诊本 change OPEN 项入批次 → reindex）；merge 缺省 ff-only、**不自动 push** |
 
-> 🔒 = 黑盒：`writing-plans` / `subagent-driven-development` 的内部循环（implementer/reviewer 派发、review-package、ledger）本文不展开，
-> 只认其契约：**进** = design + plan；**出** = 带命名空间 checkpoint 标签的代码 commit。
+> `sdflow-implement`（自制，非外部黑盒）的内部循环（implementer/双轴审派发、fix 循环、frontier 受限并行）见其自身
+> `SKILL.md`，本文只画契约：**进** = design + plan/tickets；**出** = 带命名空间 checkpoint 标签的代码 commit。
 
 ### 4.2 底座：ship_gate 判定机（阶段三最底层）
 
@@ -176,8 +176,8 @@ flowchart TD
 flowchart LR
     G(("ship_gate<br/>每步前后必调"))
     G -->|"REFUSE_START · exit3"| X1["停：未过设计门 / change 不存在"]
-    G -->|RUN_PLAN| S2["writing-plans → SDD"]
-    G -->|"CONTINUE_IMPL"| S3["SDD 续跑（传 done_tasks，勿重派）"]
+    G -->|RUN_PLAN| S2["sdflow-implement（出票）"]
+    G -->|"CONTINUE_IMPL"| S3["sdflow-implement 续跑（传 done_tasks，勿重派）"]
     G -->|RUN_CODE_REVIEW| S4["sdflow-code-review"]
     G -->|RUN_VERIFY| S5["sdflow-done"]
     G -->|"BLOCKED_UPSTREAM · exit4"| X2["停：上抛 blocker 清单"]
@@ -197,8 +197,8 @@ flowchart LR
 | 判定态 | 含义 | ship 动作 | exit |
 |---|---|---|---|
 | `REFUSE_START` | 未过设计门 / change 不存在 | 停，转述 reason（拍板已发生可人工补 frontmatter 字段=显式越权留痕） | 3 |
-| `RUN_PLAN` | plan 缺 | `writing-plans` → `subagent-dev` | 0 |
-| `CONTINUE_IMPL` | 实现未完成 | 把 `done_tasks` 传 SDD **勿重派** | 0 |
+| `RUN_PLAN` | plan 缺 | `sdflow-implement`（mode=tickets-plan，出票） | 0 |
+| `CONTINUE_IMPL` | 实现未完成 | `sdflow-implement`（mode=tickets-exec），`done_tasks` 原样透传**勿重派** | 0 |
 | `RUN_CODE_REVIEW` | 实现完成 | `/sdflow-code-review` | 0 |
 | `RUN_VERIFY` | 进入收尾 | `/sdflow-done`（透传 merge 意图） | 0 |
 | `BLOCKED_UPSTREAM` | 上游阻塞 | 停，原样上抛 blocker | 4 |
@@ -220,8 +220,12 @@ flowchart LR
 | 黑盒 skill | 在流程里的角色 | 进（输入） | 出（产出契约） | 详解 |
 |---|---|---|---|---|
 | `opsx:ff` | 旧入口（保留不删，不在默认管线内）；默认由自制 `/sdflow-spec` 承担生成，非黑盒 | 需求 + config.yaml + trigger-catalog | 四件套 + feature 分支 | （暂未展开） |
-| superpowers `writing-plans` | 阶段三 plan 生成 | design + 评审结论 | `superpowers-plan.md`（含命名空间 commit 步） | [→](./workflow-skills/superpowers-writing-plans.md) |
-| superpowers `subagent-driven-development` | 阶段三逐任务实现 | plan | 带 `<change>:task<N>-` checkpoint 标签的代码 commit | [→](./workflow-skills/superpowers-subagent-dev.md) |
+
+> 阶段三已无外部黑盒 skill——旧 superpowers 轨（`writing-plans` / `subagent-driven-development`）随 `adr/0042`
+> （用户 2026-08-11 拍板「以后只走 tickets」）整体删除，`sdflow-implement`（自制，tickets 轨）是阶段三唯一实现
+> 管线，详见其自身 `SKILL.md`（暂无独立「详解」文档）。旧管线两份「详解」文档
+> （[superpowers writing-plans](./workflow-skills/superpowers-writing-plans.md) ·
+> [superpowers subagent-dev](./workflow-skills/superpowers-subagent-dev.md)）保留供了解设计脉络参考，不再是运行时依赖。
 
 ---
 
@@ -274,7 +278,7 @@ flowchart TD
 - [ ] `/sdflow-spec` 相位 B 起手是否过了 **FF-0 三分支判定**？每步是否 checkpoint？
 - [ ] 相位 B 拷问是否照常全深度执行（触发方式改变不缩减拷问）？
 - [ ] `sdflow-spec-review` 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
-- [ ] 设计是否过 HARD-GATE（用户批准）才进 `writing-plans`？（阶段二唯一人类门）
+- [ ] 设计是否过 HARD-GATE（用户批准）才进 `sdflow-implement`？（阶段二唯一人类门）
 - [ ] `sdflow-code-review` 是否**每次全跑**（并入 scope+完成度、领域清单、对抗、置信过滤）？
 - [ ] 阶段三是否连续跑到 merge（无 `/clear`、无人类门）？能修自动修、拿不准 defer？
 - [ ] `sdflow-done` 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
@@ -290,7 +294,7 @@ flowchart TD
 
 1. 这些外部 skill 都是 **prompt 驱动**（模型读指令跟随），本 workflow 的注入也在 **prompt 层** → **默认建议式**（执行它的模型可偏离/忽略，无特权分级）。
 2. 只有当注入项背后有**确定性载体**——脚本、文件、或被下游门禁读取的 git 产物——才**转成强制**。
-3. 关键手法：本 workflow **不控制外部 skill 内部**，而是**在下游放一道确定性门（`ship_gate` 读 git、设计门读 frontmatter、SDD 台账读文件）去读注入本应产出的锚/产物**——产不出就 REFUSE / 循环重跑。即 **注入处建议式 + 下游门处强制**。
+3. 关键手法：本 workflow **不控制外部 skill 内部**，而是**在下游放一道确定性门（`ship_gate` 读 git、设计门读 frontmatter、`sdflow-implement` 的 `done_tasks` 透传读 gate）去读注入本应产出的锚/产物**——产不出就 REFUSE / 循环重跑。即 **注入处建议式 + 下游门处强制**。
 
 ```mermaid
 flowchart LR
@@ -308,10 +312,10 @@ flowchart LR
 | 人类门登记进报告（不弹窗） | 广审双镜（strategy/plan-eng） | 建议式（与其硬不变量张力，主 session 承接） | sdflow 编排层锚行自检 + 设计门 HARD-GATE |
 | findings 落盘 + 进合并池 | 广审双镜 / review | 编排层强制（非 skill 内部） | 主 session 落盘 + sdflow grep 锚行自检 |
 | 必审 scope-drift + 完成度 | review | 建议式（本就内建、默认不阻断） | —（想阻断需 prompt 显式改停走） |
-| checkpoint 命名空间标签 `<change>:task<N>-<slug>` | writing-plans / SDD | 建议式（无 commit-msg 校验） | **`ship_gate` 读 git 标签作完成判据 → 写错卡 gate** |
-| design 约束逐字进 Global Constraints | writing-plans | 建议式（无校验漏抄不抓） | —（靠模型自觉 + 下游 reviewer lens） |
-| 领域清单作终审 review lens（注入点 B） | SDD | 建议式（dispatch 一句话，漏填静默丢） | **事后 `sdflow-code-review` 每次全跑独立主审兜底** |
-| `done_tasks` 别重派 | SDD | **强制** | 台账文件 `.superpowers/sdd/progress.md` + git |
+| checkpoint 命名空间标签 `<change>:task<N>-<slug>` | `sdflow-implement`（tickets-exec，双轴审通过后补打） | 建议式（无 commit-msg 校验） | **`ship_gate` 读 git 标签作完成判据 → 写错卡 gate** |
+| design 约束逐字进 Global Constraints | `sdflow-implement`（tickets-plan 出票） | 建议式（无校验漏抄不抓） | —（靠模型自觉 + 下游 reviewer lens，implementer/reviewer 共享同一份注意力透镜） |
+| 领域清单作 Standards 轴必填槽（`code-checklists/domains/<栈>`） | `sdflow-implement`（每 ticket 双轴审） | dispatch 模板必填槽（resolver 不可达须显式停/降级记录，非静默） | **事后 `sdflow-code-review` 每次全跑独立主审兜底** |
+| `done_tasks` 别重派 | `sdflow-implement`（tickets-exec） | **强制** | `ship_gate` 透传的 `done_tasks`（原样传递不重算）+ git checkpoint 标签 |
 | 设计已批（放行阶段三） | ship 链 | **强制** | `ship_gate` pre-flight 读报告头部 frontmatter `design_approved: true` |
 
 **一句话**：想让注入**强制**，就给它一个**确定性载体**（进 git 的 commit/标签、文件、被门读的锚）；只在 prompt 里写一句，永远只是**建议**。本 workflow 的健壮性正来自「把判断留给模型、把不变量焊进下游门」这条分工线。

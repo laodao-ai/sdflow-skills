@@ -365,7 +365,7 @@
         </div>
         <div class="routes">
           <div class="route stop"><div><div class="verdict">REFUSE_START</div><div class="act">未过设计门 / change 不存在</div></div><span class="ec">exit 3</span></div>
-          <div class="route go"><div><div class="verdict">RUN_PLAN</div><div class="act">writing-plans → SDD</div></div><span class="ec">exit 0</span></div>
+          <div class="route go"><div><div class="verdict">RUN_PLAN</div><div class="act">sdflow-implement（出票）</div></div><span class="ec">exit 0</span></div>
           <div class="route go"><div><div class="verdict">CONTINUE_IMPL</div><div class="act">传 done_tasks，勿重派</div></div><span class="ec">exit 0</span></div>
           <div class="route go"><div><div class="verdict">RUN_CODE_REVIEW</div><div class="act">实现完成，进代码审</div></div><span class="ec">exit 0</span></div>
           <div class="route go"><div><div class="verdict">RUN_VERIFY</div><div class="act">进收尾 sdflow-done</div></div><span class="ec">exit 0</span></div>
@@ -387,8 +387,10 @@
     <section id="skills" class="reveal">
       <div class="eyebrow">03 — 每个 skill 的角色与契约</div>
       <h2>skill 矩阵</h2>
-      <p class="sub">主流程涉及的 skill 分两类：<strong>外部黑盒</strong>（gstack / superpowers，只画契约、内部另有详解）与
-        <strong>自制编排器</strong>（sdflow-* / grill）。每张卡标注「本 workflow 注入是建议式还是强制」的主基调。</p>
+      <p class="sub">主流程涉及的 skill 分两类：<strong>外部黑盒</strong>（gstack，只画契约、内部另有详解）与
+        <strong>自制编排器</strong>（sdflow-* / grill）。每张卡标注「本 workflow 注入是建议式还是强制」的主基调。
+        阶段三旧 superpowers 轨（writing-plans / subagent-dev）已随 <code>adr/0042</code>（用户 2026-08-11 拍板
+        「以后只走 tickets」）整体删除，<code>sdflow-implement</code>（自制，tickets 轨）是阶段三唯一实现管线，见下方自制编排器。</p>
 
       <h3>外部黑盒</h3>
       <div class="matrix">
@@ -398,17 +400,15 @@
           <div class="io"><span><b>进</b> 计划文件</span><span><b>出</b> 增补计划 + gstack-review.md</span></div>
           <div class="foot"><span class="pill adv">注入多为建议式</span><span class="pill enf">下游锚兜底</span></div>
         </div>
+      </div>
+
+      <h3>自制编排器 · 阶段三实现</h3>
+      <div class="matrix">
         <div class="skill">
-          <div class="top"><span class="nm">superpowers · writing-plans</span><span class="kind">外部 / 计划</span></div>
-          <div class="role">拆成原子任务 TDD 计划。纯文本产物、<strong>零机械校验</strong>，三道自觉护栏。</div>
-          <div class="io"><span><b>进</b> design + 评审</span><span><b>出</b> superpowers-plan.md</span></div>
-          <div class="foot"><span class="pill adv">全建议式</span><span class="pill enf">ship_gate 读标签强制</span></div>
-        </div>
-        <div class="skill">
-          <div class="top"><span class="nm">superpowers · subagent-dev</span><span class="kind">外部 / 实现</span></div>
-          <div class="role">逐任务 fresh 实现 + 双裁决审 + fix 闭环 + 整支终审；台账 resume 抗 compaction。</div>
-          <div class="io"><span><b>进</b> plan</span><span><b>出</b> commits + progress.md</span></div>
-          <div class="foot"><span class="pill enf">台账/commit 强制</span><span class="pill adv">注入点B 建议式</span></div>
+          <div class="top"><span class="nm">sdflow-implement</span><span class="kind">自制 / 出票 + 执行（tickets 唯一管线）</span></div>
+          <div class="role">RUN_PLAN → 出票模式：从 design/tasks 出 3-6 张 tracer-bullet ticket，落盘即返回。CONTINUE_IMPL(done_tasks) → 执行模式：宿主条件化受限并行派 fresh implementer，每 ticket 双轴审（Standards+Spec）+ fix 闭环。</div>
+          <div class="io"><span><b>进</b> design + tasks / plan</span><span><b>出</b> tickets.md / commits + checkpoint 标签</span></div>
+          <div class="foot"><span class="pill enf">ship_gate 读标签强制</span><span class="pill adv">Global Constraints 注入建议式</span></div>
         </div>
       </div>
 
@@ -465,10 +465,10 @@
             <tr><td class="k">人类门登记进报告（不弹窗）</td><td>autoplan</td><td><span class="pill adv">建议式</span></td><td>sdflow 锚行自检 + 设计门 HARD-GATE</td></tr>
             <tr><td class="k">findings 落盘 + 进合并池</td><td>autoplan / review</td><td><span class="pill adv">编排层</span></td><td>主 session 落盘 + grep 锚行自检</td></tr>
             <tr><td class="k">必审 scope-drift + 完成度</td><td>review</td><td><span class="pill adv">建议式</span></td><td>本就内建、默认不阻断</td></tr>
-            <tr><td class="k">checkpoint 命名空间标签 <code>&lt;change&gt;:task&lt;N&gt;</code></td><td>writing-plans / SDD</td><td><span class="pill adv">建议式</span></td><td><strong>ship_gate 读 git 标签作完成判据 → 写错卡 gate</strong></td></tr>
-            <tr><td class="k">design 约束逐字进 Global Constraints</td><td>writing-plans</td><td><span class="pill adv">建议式</span></td><td>无校验漏抄不抓</td></tr>
-            <tr><td class="k">领域清单作终审 review lens（注入点 B）</td><td>SDD</td><td><span class="pill adv">建议式</span></td><td><strong>事后 sdflow-code-review 每次全跑独立主审兜底</strong></td></tr>
-            <tr><td class="k"><code>done_tasks</code> 别重派</td><td>SDD</td><td><span class="pill enf">强制</span></td><td>台账文件 progress.md + git</td></tr>
+            <tr><td class="k">checkpoint 命名空间标签 <code>&lt;change&gt;:task&lt;N&gt;</code></td><td>sdflow-implement（tickets-exec）</td><td><span class="pill adv">建议式</span></td><td><strong>ship_gate 读 git 标签作完成判据 → 写错卡 gate</strong></td></tr>
+            <tr><td class="k">design 约束逐字进 Global Constraints</td><td>sdflow-implement（tickets-plan）</td><td><span class="pill adv">建议式</span></td><td>无校验漏抄不抓</td></tr>
+            <tr><td class="k">领域清单作 Standards 轴必填槽</td><td>sdflow-implement（每 ticket 双轴审）</td><td><span class="pill adv">建议式</span></td><td><strong>事后 sdflow-code-review 每次全跑独立主审兜底</strong></td></tr>
+            <tr><td class="k"><code>done_tasks</code> 别重派</td><td>sdflow-implement（tickets-exec）</td><td><span class="pill enf">强制</span></td><td>ship_gate 透传 done_tasks（原样不重算）+ git checkpoint 标签</td></tr>
             <tr><td class="k">设计已批（放行阶段三）</td><td>ship 链</td><td><span class="pill enf">强制</span></td><td>ship_gate 读 frontmatter <code>design_approved: true</code></td></tr>
           </tbody>
         </table>

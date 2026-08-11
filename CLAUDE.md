@@ -212,7 +212,7 @@ pytest sdflow-issues/tests/test_issues_v2.py::test_xxx -v    # 单个用例
   知情临时指 dev，测完/合并后在运行 checkout 重跑 setup 还原。但这是测试三层里的**最后一层**，
   能用低层就别翻全局，见下方「开发期测试三层」。
 - **发布边界** = push（开发）→ pull（运行）→ **立即** setup（pull 与 setup 之间是"新 SKILL 调旧脚本"的窗口期）。
-- **反向窗口**：pull 后既有 SKILL 路由（如 ship 链序）即生效（symlink 即时），而新增 skill 的链接须 setup 后才存在——已开 `impl-pipeline: tickets` 的仓在窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement；故 pull 与 setup 之间勿跑阶段三。
+- **反向窗口**：pull 后既有 SKILL 路由（如 ship 链序）即生效（symlink 即时），而新增 skill 的链接须 setup 后才存在——窗口期触发 RUN_PLAN 会调不存在的 sdflow-implement（实现管线唯一为 tickets，无需判 `impl-pipeline` 键存在性）；故 pull 与 setup 之间勿跑阶段三。
 - **回滚** = 运行 checkout `git checkout <上一已知良好 commit>` + 重跑 setup.sh。
   🔴 若回滚的是 `adr/0039`（消灭双链）本身：改动集中且几乎全是删除 ⇒ `git revert` 即复原；复原后
   MUST 依次执行——每台机回运行 checkout 重跑 `bash setup.sh`（拿回三步链 resolver）→ 各消费仓重跑
@@ -417,7 +417,7 @@ MUST NOT 为低概率、影响小、或完美成本过高的问题反复来回�
 - **起手判触发**：收到 `opsx:ff` / `propose` / `explore`，先按 `trigger-catalog.md` 的 TG 判命中，
   据此激活对应的生成约束 / 领域清单 / 画图 / 模版必填槽（深度由触发决定，不分 S/M/L）。
 - **审查顺序不可颠倒**：`/review`（本地 diff）→ push PR → `/code-review`（远程 PR）。
-  子 agent 调度期间（subagent-driven-development / sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
+  子 agent 调度期间（sdflow-implement / sdflow-spec-review / sdflow-code-review 运行中）禁 `/clear`。
 - **阶段一入口为唯一线性路径**：问题模糊/方向未定先 `opsx:explore` 发散，清晰则直接进 `/sdflow-spec`。
   人可直接触发；**人示意收敛**（如"开搞"/"做吧"/"开 change"）时**模型 SHALL 自动 invoke `/sdflow-spec`**。
   **模型 MUST NOT 自主判断「该开 change 了」**——须有人的示意信号才触发，触发方式的改变不缩减

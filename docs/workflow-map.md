@@ -44,8 +44,10 @@
   (meta-orch)      │      │ 步前:「NEXT 谁+前置缺啥」 步后:「产物落没+门禁结论」      │
                    │      └──────────────────────────────────────────────────────┘
                    │
-     RUN_PLAN(0)───▶ writing-plans            TAG_RE checkpoint 契约              superpowers-plan.md
-   CONTINUE_IMPL(0)▶ subagent-driven-dev      done_ids⊇plan_ids (集合归属)        checkpoint(task<N>-) 提交
+     RUN_PLAN(0)───▶ sdflow-implement          TAG_RE checkpoint 契约              tickets.md（出票，落盘即返回）
+                     (mode=tickets-plan)
+   CONTINUE_IMPL(0)▶ sdflow-implement          done_ids⊇plan_ids (集合归属)        checkpoint(task<N>-) 提交
+                     (mode=tickets-exec)
                    │                          注入点B 即时修复闭环
  RUN_CODE_REVIEW(0)▶ sdflow-code-review  ──▶  anchor_lint --layer code-review ✅#2  code-review-report.md
                    │  置信<80过滤·T10自动裁    trivial_shape.py · outside-voice     └─ frontmatter:
@@ -73,8 +75,8 @@
 | — | **人类门①** 拷问 | （`/sdflow-spec` 相位 B 内） | 人类拍板 | ship 不跨（adr/0004） | 拷问记录进 decision-memo.md | — |
 | 2 | **spec-review 设计审** | `sdflow-spec-review` | `anchor_lint --layer spec-review` ✅#1 · outside-voice · HR-TG | 未过 → **REFUSE_START(3)** | `spec-review-report.md` → `design_approved: true` + lens-metric 锚 | ✅ #1 |
 | — | **人类门②** 设计 HARD-GATE | `sdflow-spec-review` 收敛口 | `design_approved: true`（机判锚） | REFUSE_START(3) 若未过 | 拍板后 prepend 头部 frontmatter | — |
-| 3a | ship·plan | `superpowers:writing-plans` | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `superpowers-plan.md`（缺省 tickets 轨路由 sdflow-implement，不产出本文件） | — |
-| 3b | ship·实现 | `subagent-driven-development` | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交 | — |
+| 3a | ship·出票 | `sdflow-implement`（mode=tickets-plan） | `TAG_RE` checkpoint 契约 | **RUN_PLAN(0)** | `tickets.md`（3-6 张 tracer-bullet ticket，落盘即返回，唯一管线） | — |
+| 3b | ship·实现 | `sdflow-implement`（mode=tickets-exec） | 完成集 = checkpoint ∪ 复选框（集合归属） | **CONTINUE_IMPL(0)** | `checkpoint({change}:task<N>-…)` 提交 | — |
 | 3c | ship·代码审 | `sdflow-code-review` | `anchor_lint --layer code-review` ✅#2 · `trivial_shape` · outside-voice | **RUN_CODE_REVIEW(0)**；blocked → **BLOCKED_UPSTREAM(4)** | `code-review-report.md` → `code_review: pass\|blocked` | ✅ #2 |
 | 3d | ship·收尾 | `sdflow-done` | verify=唯一终门（每 ✅ 须机验锚点）· `issues.py sweep` · `openspec archive` · merge 前 untracked 硬检查 | **RUN_VERIFY(0)**；FAIL → **VERIFY_FAIL(5)**；陈旧 → **RERUN_STALE(0)** | `verify-report.md` → `verify: PASS\|FAIL` + `hand-off.md` | — |
 | 4 | archive + merge | `sdflow-done`（内部） | `openspec archive` + ff-only | active 缺席+base可达+PASS → **SHIPPED(0)**；异常 → **UNKNOWN(6)** | `archive/{date}-{change}/` | — |
@@ -92,7 +94,7 @@
 | verdict | exit | 含义 |
 |---------|:----:|------|
 | REFUSE_START | **3** | 未过设计门 / change 不存在 |
-| RUN_PLAN | 0 | plan 缺 → writing-plans |
+| RUN_PLAN | 0 | plan 缺 → sdflow-implement（mode=tickets-plan，出票） |
 | CONTINUE_IMPL | 0 | plan 号集 ⊄ 完成集 |
 | RUN_CODE_REVIEW | 0 | 代码审报告缺 |
 | BLOCKED_UPSTREAM | **4** | `code_review = blocked` |

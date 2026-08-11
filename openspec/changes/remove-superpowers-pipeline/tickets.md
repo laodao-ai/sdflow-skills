@@ -92,12 +92,12 @@ impl-pipeline: tickets
 
 **specs delta**：`specs/yq-yaml-operations/spec.md` delta——R3/R5/R6 的 impl-pipeline Scenario 删除落主 spec；主 spec Purpose 脚本枚举去 `impl_route.py`；`test_yq_wrapper_consistency.py` 成员表核验（Task 1 已完成去条目）。
 
-- [ ] `step6-writing-plans.md` 已删除，三份守卫测试名单已同步
-- [ ] 六份 bundle 资产 superpowers 叙述已收口
-- [ ] 本仓 `openspec/config.yaml` 的 `impl-pipeline` 键已删除
-- [ ] `sdflow-init update` 已执行，CLAUDE.md / AGENTS.md 托管区块已刷新
-- [ ] `openspec/INDEX.md` 描述行已更新
-- [ ] yq-yaml-operations delta spec 已同步
+- [x] `step6-writing-plans.md` 已删除，三份守卫测试名单已同步
+- [x] 六份 bundle 资产 superpowers 叙述已收口
+- [x] 本仓 `openspec/config.yaml` 的 `impl-pipeline` 键已删除
+- [x] `sdflow-init update` 已执行，CLAUDE.md / AGENTS.md 托管区块已刷新
+- [x] `openspec/INDEX.md` 描述行已更新
+- [x] yq-yaml-operations delta spec 已同步
 
 ### Task 5: docs 与全仓扫尾
 

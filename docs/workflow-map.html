@@ -388,12 +388,12 @@
           <div class="stage">
             <div class="stage-left">
               <div class="stage-tag">3b</div>
-              <div class="stage-name">plan</div>
-              <span class="stage-skill">superpowers:writing-plans</span>
+              <div class="stage-name">出票</div>
+              <span class="stage-skill">sdflow-implement（mode=tickets-plan）</span>
             </div>
             <div class="stage-body">
-              <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_PLAN · 0</span> plan 缺；每任务 commit 步须按 <code>TAG_RE</code> 显式写 checkpoint 命令（主锚契约）</span></div>
-              <div class="row-line"><span class="row-k">产物</span><span class="row-v art">superpowers-plan.md（### Task N: 段）</span></div>
+              <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">RUN_PLAN · 0</span> plan 缺；出 3-6 张 tracer-bullet ticket，落盘即返回；每任务 commit 步须按 <code>TAG_RE</code> 显式写 checkpoint 命令（主锚契约）</span></div>
+              <div class="row-line"><span class="row-k">产物</span><span class="row-v art">tickets.md（### Task N: 段）</span></div>
             </div>
           </div>
 
@@ -401,11 +401,11 @@
             <div class="stage-left">
               <div class="stage-tag">3c · 实现</div>
               <div class="stage-name">impl 循环</div>
-              <span class="stage-skill">subagent-driven-development</span>
+              <span class="stage-skill">sdflow-implement（mode=tickets-exec）</span>
             </div>
             <div class="stage-body">
               <div class="row-line"><span class="row-k">裁决</span><span class="row-v"><span class="code-chip c-ok">CONTINUE_IMPL · 0</span> plan 号集 ⊄ 完成集；<code>done_tasks</code> 已完成号勿重派</span></div>
-              <div class="row-line"><span class="row-k">判据</span><span class="row-v">完成 = checkpoint 标签集 ∪ 复选框集（集合归属）；注入点B 即时修复闭环</span></div>
+              <div class="row-line"><span class="row-k">判据</span><span class="row-v">完成 = checkpoint 标签集 ∪ 复选框集（集合归属）；每 ticket 双轴审（Standards+Spec）即时修复闭环</span></div>
               <div class="row-line"><span class="row-k">产物</span><span class="row-v art">checkpoint(&#123;change&#125;:task&lt;N&gt;-…) 提交</span></div>
             </div>
           </div>
@@ -482,7 +482,7 @@
       <p class="sec-sub"><code>ship_gate.py</code> 从盘面（committed 产物 + frontmatter 锚）确定性推导下一步。退出码承载门禁语义：<b>0</b> 可推进 · <b>3/4</b> 拒绝/阻塞 · <b>5</b> verify 失败 · <b>6</b> 判定不能。契约表 <code>ship_gate.py:32-44</code>。</p>
       <div class="verdict-grid">
         <div class="verdict"><div class="v-top"><span class="v-name">REFUSE_START</span><span class="code-chip c-blocked">3</span></div><div class="v-desc">未过设计门 / change 不存在</div></div>
-        <div class="verdict"><div class="v-top"><span class="v-name">RUN_PLAN</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 缺 → writing-plans</div></div>
+        <div class="verdict"><div class="v-top"><span class="v-name">RUN_PLAN</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 缺 → sdflow-implement（出票）</div></div>
         <div class="verdict"><div class="v-top"><span class="v-name">CONTINUE_IMPL</span><span class="code-chip c-ok">0</span></div><div class="v-desc">plan 号集 ⊄ 完成集</div></div>
         <div class="verdict"><div class="v-top"><span class="v-name">RUN_CODE_REVIEW</span><span class="code-chip c-ok">0</span></div><div class="v-desc">代码审报告缺</div></div>
         <div class="verdict"><div class="v-top"><span class="v-name">BLOCKED_UPSTREAM</span><span class="code-chip c-blocked">4</span></div><div class="v-desc">code_review = blocked</div></div>

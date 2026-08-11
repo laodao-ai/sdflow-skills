@@ -57,14 +57,17 @@
 | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
 |---|---|---|---|---|---|
 | 5.1 | 下一步是谁（11 verdict 推导）| 🟢 | 盘面（四件套/三报告 frontmatter/checkpoint）| `ship_gate.py`（`:32-44`,`:647`；exit 0/3/4/5/6）| 阶段三判官核心 |
-| 5.2 | 管线路由（config→marker→缺省）| 🟢 | `PIPELINE_RECEIPT`（route emit）+ plan frontmatter marker | `impl_route.py route`（回显+机判）| tickets/superpowers |
 | 5.3 | 坏 frontmatter 分类（越域/重复键/bad-type/tab/absent）| 🟢 | — | `ship_gate.py:295-345`（live→UNKNOWN(6)/归档→fail-safe none）| — |
 | 5.4 | 熔断无进展（STEP_IN_PROGRESS / RERUN_STALE）| 🟢 | 报告 frontmatter 状态集快照 | `ship_gate.py` `anchor_set`/`breaker_no_progress`（单 invocation 持有）| mlh-p5 |
 
-## 5b. ship·plan（tickets/superpowers）
+> 旧 5.2「管线路由（config→marker→缺省）」随 `adr/0042`（tickets 成唯一管线，用户 2026-08-11 拍板）整体删除——
+> `impl_route.py route` 子命令 / `PIPELINE_RECEIPT` / plan marker 路由均已切除，RUN_PLAN/CONTINUE_IMPL 直连
+> `sdflow-implement`，无残余路由判据可跟踪（行号不回收，避免下游引用错位）。
+
+## 5b. ship·plan（tickets 唯一管线）
 | # | 判据 | 档 | 写锚点 | 用锚点 | 备注/去向 |
 |---|---|---|---|---|---|
-| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `tickets.md`（tickets 轨）/ `superpowers-plan.md`（superpowers 轨，D5/adr-0033）| `ship_gate`（共享 resolver 按序探测两名，双存在 fail-closed；plan 缺）| — |
+| 5b.1 | plan 是否缺 → RUN_PLAN | 🟢 | `tickets.md`（单名，D5/adr-0033 双名分列已随 adr/0042 收口为单名）| `ship_gate`（resolver 缩为单名探测；plan 缺）| — |
 | 5b.2 | checkpoint 完成标签契约 | 🟢 | `checkpoint({change}:task<N>-…)` commit | `ship_gate.py:492` `TAG_RE` | slug 须含横杠（memory）|
 | 5b.3 | ticket 切片粒度 / Blocked-by 拓扑划分 | 🔵 | `Blocked-by:` 声明（写） | — | 划成几片=判断；拓扑解析=🟢下条 |
 | 5b.4 | next-ready ticket（Blocked-by 拓扑 + done 集）| 🟢 | `Blocked-by:` | `impl_route.py frontier` | tickets 管线 |

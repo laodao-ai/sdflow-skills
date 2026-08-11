@@ -94,7 +94,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 5. **提交 = 步骤显式收尾动作 + 共享脚本兜底（G4/G5）**：不用 hook 驱动提交（"逻辑步骤完成"是语义不是事件）；每步末调 `~/.sdflow/hack/checkpoint-commit.sh`（git add -A + 固定 Conventional message，焊死本机三坑）。不 squash（保碎 commit 的细粒度回退点）。hook 仅做"有未提交产物"的警告安全网。
 6. **评审两层、不重复**：
    - **设计侧**：sdflow-spec-review 编排器 = 自持广审双镜（strategy/plan-eng，按 base R 项划分）+ 本项目多镜（领域镜+对抗镜+接地镜，按 domains/ R 项划分）单批并行 dispatch 合成一份报告。base 与 domains 两层清单本就互斥，无需去重协商。
-   - **代码侧（生成期已三层审，事后强制主审）**：subagent-dev 内三层 fresh-context 审 + **注入点 B** 把 domains 附终审（领域审前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**注入点B 与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
+   - **代码侧（生成期已有双轴审，事后强制主审）**：`sdflow-implement` 每 ticket **双轴审**（Standards 轴 + Spec 轴，fresh-context 子代理；Standards 轴 dispatch 模板**必填槽**把 domains 领域清单前移进循环、即时 fix+re-review）；事后 **sdflow-code-review 编排器每次全跑**（Step1 自持 scope 审计 scope-drift+完成度，P3c 独立冷强制主审，实测抓循环内被说服放过的真问题）。**每 ticket 双轴审与 sdflow-code-review 并存不是重复**——前者循环内即时闭环、后者事后独立兜底，机制/职责不同，别把任一个优化掉（见 quality-layering.md）。
 7. **verify 防假✅（P3f/P3h）**：阶段三去人类门后 verify 是**唯一终门**。每条 ✅ 必附机验锚点（测试名/commit/文件:行），无锚点 ✅ 降级 gap；verify 用强模型 + "Do Not Trust" 冷启、禁弱模型。见 `reference/quality-layering.md`。
 8. **闭环用 `sdflow-done`**：verify → hand-off.md → archive → commit → merge，archive 子代理拿 delta **对真实代码核验后再同步** spec。尾部不再需单独 apply/verify/archive。
 9. **深度按 TG / 风险**：explore（模糊才跑）；不分 S/M/L 档。〔Phase C 补：outside voice 默认开，命中 HR-TG 单开领域 cross-model〕
@@ -127,7 +127,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
 - [ ] 阶段三实现管线是否正确路由至 `sdflow-implement`（唯一管线，无需判 impl-pipeline 键）？
 - [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、机械引用核+二元裁决）？
-- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
+- [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
 - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？
 
 ## 附录 A：G1 完整分析（`/clear` 纪律为何如此设计）
@@ -135,7 +135,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 > 本节是**演进推导**（DOC-1 附录）：正文（§三.2）只留结论，这里留完整论证。**跑流程不用读本节**——
 > 只在需要理解「为什么恰是这两处，不多不少」时查。
 
-**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/subagent-dev 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 `quality-layering.md`）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（subagent-dev/sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
+**评审独立性由子代理 fresh-context 提供，不由 `/clear` 提供**：sdflow-spec-review/sdflow-code-review/sdflow-implement 的评审**本就 fan-out 到 fresh-context 子代理**——独立性是"子代理冷上下文"给的，不是 `/clear` 给的（依据 `quality-layering.md`）。故**阶段内部不用 `/clear`**，管线连续跑。代价：评审末尾"对抗裁决"留热主 session（看过生成过程），一丝合成层偏置——由**反静默压制**（裁掉的 finding 连理由进报告"已裁掉"区）焊死边界。**注意**：子 agent 调度（sdflow-implement）运行中仍禁 `/clear`，必须跑完再进下一步。
 
 🔴 **上述结论只覆盖「评审独立性」这一个面，MUST NOT 据此推出「全流程不用 `/clear`」**。曾有措辞称「`/clear` 唯一作用是给评审独立上下文」——**该前提为假**，由它导出的全流程禁令是**过度泛化**：`spec-workflow` spec 的对应 Requirement 也只约束「MUST NOT 依赖 `/clear` 隔离**评审**上下文」，从未禁止全流程。
 
@@ -146,7 +146,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 
 🔴 **MUST NOT 拿「主审裁决需要冷视角」当任一处例外的理由**——那一条已被上述结论正面回答（独立性由 fan-out 的 fresh 子代理提供，不由 `/clear` 提供），拿它当依据是漏查。
 
-**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 subagent-dev / sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
+**边界**：仅这两处**阶段交界**。**阶段内部一律禁 `/clear`**——阶段二内部、阶段三内部（含 sdflow-implement 调度期间、code-review → done 交接）。阶段三内部需要控上下文时用 **`/compact` 而非 `/clear`**：merge 意图不在盘上、`VERIFY_FAIL` 恢复也要重建理解，而 done 的 verify 本就是冷子代理、清不清都一样冷。
 
 *流程 v2（三阶段连续化，单轨线性）· 配套 generation-process.md（生成）/ spec-review.md（评审）/ trigger-catalog.md（深度）/ reference/quality-layering.md（分层）*
 

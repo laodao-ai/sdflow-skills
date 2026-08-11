@@ -1,5 +1,7 @@
 # tickets 成唯一实现管线（superpowers 路由退役）
 
+> Supersedes [adr/0033](./0033-tickets-plan-filename-split-by-track.md)（两轨计划文件名分列，双名语境随本决策成为历史）。
+
 阶段三实现管线的 superpowers 旧轨（`writing-plans → subagent-driven-development`）整体删除，tickets 成唯一管线（用户 2026-08-11 拍板「以后只走 tickets」，T277）：`impl_route.py` 的 `route` 子命令与全部路由函数（config 键读取 / plan marker 路由 / `resolve_pipeline` / PIPELINE_RECEIPT）切除，ship 链序 RUN_PLAN/CONTINUE_IMPL 直连 `sdflow-implement mode=tickets-plan|tickets-exec`；`openspec/config.yaml` 的 `impl-pipeline` 键退役（存量键成无读取方的惰性键）；ship_gate 计划文件 resolver 缩为单名 `tickets.md`（双名探测 / 双存在判 UNKNOWN / 旧名收尾票 grandfather 一并删除）；`workflow/prompts/step6-writing-plans.md` 整文件删除。删除时机的前置条件已验证：在途 superpowers 轨 change 为零、本机全部下游消费仓无显式 `impl-pipeline: superpowers` 键。
 
 **adr/0033（两轨计划文件名分列）的双名语境随本决策成为历史**——单名态下不存在「按轨分列」；0033 本文不改（历史记录照旧），其存活遗产是「在途 plan MUST NOT 重命名」（完成判据窗口锚 `git log --diff-filter=A -- <plan路径>` 不跟随重命名，此约束与轨道无关、继续有效）。adr/0017/0032 的双轨措辞同理按历史语境读。

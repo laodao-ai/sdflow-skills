@@ -1,5 +1,7 @@
 # 计划文件名按轨分列（`tickets.md` / `superpowers-plan.md`），双存在 fail-closed
 
+> **Superseded by [adr/0042](./0042-tickets-sole-impl-pipeline.md)**
+
 > 状态：**Accepted**（2026-07-28，`harden-implement-review-loop` 拷问阶段收敛，用户拍板）· 关联 change：`harden-implement-review-loop`
 
 `superpowers-plan.md` 是 sdflow 阶段三**superpowers-only 时期**的遗留文件名——`writing-plans` 生成它、`subagent-driven-development` 消费它、`ship_gate.py` 按字面名判定 `RUN_PLAN`。`matt-workflow-integration` 引入 tickets 实现管线（`sdflow-implement`）时，为了让 `ship_gate.py` **零改动**兼容，选择让 tickets 轨的出票文件也借用同一个文件名（`adr/0017` 的"试验期外衣"决策）。这个借壳从一开始就是已知的命名负债：文件名叫 `superpowers-plan.md`，内容却是 tickets 轨的行为级 ticket，对读者是明显的误导（`openspec/issues/todolist/2026-07-todolist.md` T135 记录了这条 todo）。

@@ -1,5 +1,7 @@
 # 实现管线替换调研：matt to-tickets/implement vs superpowers writing-plans/subagent-dev
 
+> **已过时**：superpowers 旧轨已随 `openspec/adr/0042-tickets-sole-impl-pipeline.md`（tickets 成唯一实现管线）整体删除，本文调研过程与结论保留供了解设计脉络参考，不代表当前实现。
+
 > 2026-07-10 探索会结论沉淀。议题：能否用 matt 套件的 to-spec → to-tickets → implement → code-review
 > 替换 sdflow 阶段三的 writing-plans → subagent-driven-development？
 > **目标锚定：质量已被现管线保住，痛点是慢 + token 贵——分析框架 = 换了省在哪、质量护栏丢不丢。**
