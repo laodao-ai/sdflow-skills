@@ -160,6 +160,18 @@ SKILL.md 软链即时生效、`~/.sdflow/hack/` 脚本拷贝生效，只 pull �
 4. **提示**：规则与评审工具全局单份共享（`adr/0039`），本步 setup 完成后各消费仓即时生效，
    **无需**再跑任何命令；消费仓仅在要刷新人读 `WORKFLOW-GUIDE.md`、或想看仓内死件残留告警时，
    才按需在该仓跑 `sdflow-init update`（本 skill 不代跑）。
+5. **陈旧提醒**（`sdflow-upstream-watch` 消费端，零网络、零失败面）：读运行 checkout 内
+   `openspec/upstream/anchors.yaml` 的 `last_run` 与 `remind_after_days`（默认 30）：
+   ```bash
+   yq -o json '.last_run' ~/.skills/sdflow-skills/openspec/upstream/anchors.yaml
+   yq -o json '.remind_after_days // 30' ~/.skills/sdflow-skills/openspec/upstream/anchors.yaml
+   ```
+   - 文件不存在 / `last_run` 为 `null` / yq 解析失败（含 yq 未安装）→ **静默跳过**，不输出
+     任何提醒、不报错——提醒是 nice-to-have，MUST NOT 让 upgrade 因这一步失败而中断或告警。
+   - 可解析且 `last_run` 距今（UTC 当前时间）超过 `remind_after_days` 天 → 输出一行提醒：
+     「距上次 `/sdflow-upstream-watch` 已 N 天（阈值 M 天），建议找时间跑一轮」。
+   - 未超阈值 → 不输出任何提醒。
+   - 本步骤 MUST NOT 发起任何网络请求（只读本地文件），不影响本次 upgrade 的整体结果。
 
 ## 回滚
 

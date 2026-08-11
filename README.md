@@ -48,10 +48,11 @@ git clone https://github.com/laodao-ai/sdflow-skills.git && cd sdflow-skills && 
 | 规划 | `sdflow-architecture` | 系统架构设计编排器：简单需求 → skeleton-ready SAD（openspec/architecture/ 单例）+ 骨架切片建议交棒 |
 | 规划 | `sdflow-devenv` | 开发/测试环境副驾：定测试策略（单元/集成/e2e 三层，一层不留白）→ 落脚手架 → 尽可能真跑一遍确认 → 出 `testing-strategy.md` + `environments.md` |
 | 规划 | `sdflow-roadmap` | 分阶段 roadmap 规划工作流，直写产出 design/roadmap/task-log 三件套（可选 memo），不经 change 壳 |
+| 维护（单仓专用） | `sdflow-upstream-watch` | 追踪四个上游源（gstack / superpowers / matt 套件 / OpenSpec CLI）的 delta，产出人可拍板的三分诊报告；**仅服务本仓（sdflow-skills）自身**，其他项目 cwd 下调用会被机械守卫拒绝 |
 | 记录（issues 台账） | `sdflow-issues` | issues 台账单一 skill：bug 池（缺陷记录 + 状态回写 OPEN→VERIFIED→FIXED，B-ID）+ todo 池（改进 / 技术债，T-ID）两池记录，跨池 `issues/INDEX.md` 重建与批次注册表维护，保证 ID 不撞号、总览/详情双写一致 |
 | 复盘 | `sdflow-retro` | 只读再生 workflow 成本×价值复盘报告（阶段墙钟×per-镜价值 join），不决策不改动 |
 
-> `sdflow-issues`、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture` 与 `sdflow-devenv` 为**数据类 skill**（带 `scripts/` + `tests/`），
+> `sdflow-issues`、`sdflow-retro`、`sdflow-init`、`sdflow-maintain`、`sdflow-implement`、`sdflow-architecture`、`sdflow-devenv` 与 `sdflow-upstream-watch` 为**数据类 skill**（带 `scripts/` + `tests/`），
 > 由脚本保证确定性；其余（含 `sdflow-roadmap`）为纯 Markdown 编排类。
 
 > **已迁出 skills**：`openspec-upgrade` 与 `embedded-test-sop` 由

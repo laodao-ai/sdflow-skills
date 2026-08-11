@@ -1,9 +1,14 @@
 ---
 name: sdflow-upstream-watch
 description: >
-  [脚手架阶段 — 编排正文由 Task 3 补全] 追踪四个上游源（gstack / superpowers / matt 套件 /
-  OpenSpec CLI）自上次锚点以来的 delta，产出人可拍板的分诊报告。仅服务 sdflow-skills 仓自身
-  （proposal A4，非通用铺设类 skill），不适用于其他项目。
+  追踪四个上游源（gstack / superpowers / matt 套件 / OpenSpec CLI）自上次锚点以来的 delta，
+  产出人可拍板的三分诊报告（吸收候选 / 观望 / 不吸），供人拍板后经 recorder 显式
+  `source_change` 衔接进 issues 池。**仅服务本仓（sdflow-skills）自身**，不适用于任何其他
+  项目——在其他项目 cwd 下调用会被机械 cwd 守卫（git remote 判定）拒绝、不写任何文件。
+  当用户在本仓说"上游追踪"、"跑一轮上游分诊"、"看看上游有什么新东西可以吸收"、
+  "/sdflow-upstream-watch" 时触发；不要与 `sdflow-upgrade`（升级本工具链运行 checkout 的
+  git pull + setup）或 `sdflow-maintain`（扫描 openspec 目录结构一致性）混淆——三者职责
+  互不重叠，本 skill 不升级任何东西、不扫结构，只做「上游有什么新东西、值不值得抄」的分诊。
 ---
 
 # sdflow-upstream-watch — 上游追踪与分诊报告
@@ -149,23 +154,176 @@ description: >
 
 <!-- sdflow:principles:end -->
 
-## 状态（脚手架阶段，Task 1）
+把「上游有没有新东西、值不值得抄」这件机械可判定的事实采集交给脚本
+（[scripts/upstream_watch.py](scripts/upstream_watch.py)：`collect` 采四源 delta 事实、
+`advance` 校验报告后推锚），模型只做**三分诊判断**（吸收候选 / 观望 / 不吸）和**报告成文**——
+零解析上游内容，delta 全部由 git / npm / sha256 自己回答（design.md 基准 5）。
 
-本 Task 只建立目录骨架与机械层基础设施：
+> **本 skill 仅服务本仓自身**：两子命令起手都会校验 cwd 位于 sdflow-skills 仓
+> （git remote 含 `laodao-ai/sdflow-skills`），非本仓 fail-loud 退出、不写任何文件
+> （proposal A4）。在其他项目里被误触发时，直接如实告知用户「本 skill 仅服务
+> sdflow-skills 工具链自身，此仓不适用」，不要尝试变通执行。
 
-- `scripts/upstream_watch.py`：`collect` / `advance` 子命令骨架 + cwd 守卫（proposal A4，
-  两子命令起手校验 cwd 位于本仓，非本仓 fail-loud 退出、不写任何文件）+ `anchors.yaml`
-  三态读写层（yq，mikefarah-flavor 探测）。
-- `openspec/upstream/anchors.yaml`：四源锚 + `last_run` + `remind_after_days`（脚本独占维护）。
-- `openspec/upstream/reports/`：分诊报告落点（本阶段仅 `.gitkeep`）。
+## 何时用 / 何时不用
 
-**尚未实现**（后续 Task 落地）：
+- ✅ 想知道 gstack / superpowers / matt 套件 / OpenSpec CLI 自上次锚点以来有什么新
+  commit/版本，哪些值得抄进本仓。
+- ✅ `sdflow-upgrade` 提示"距上次上游追踪已 N 天"之后，找时间跑一轮。
+- ⚠️ 不用于：升级本工具链自身（`sdflow-upgrade`）；扫描本仓 openspec 目录结构一致性
+  （`sdflow-maintain`）；不在 sdflow-skills 仓内的项目（机械守卫会拒绝）。
 
-- 四源采集逻辑、facts JSON 输出、`advance` 报告+facts 绑定门（Task 2）。
-- 本 SKILL 的编排正文——collect → 模型读 facts 写报告 → advance → 呈报人的完整流程，
-  以及 frontmatter `description` 的触发词收敛（Task 3）。
-- `sdflow-upgrade` 第 5 步陈旧提醒消费端、README Skills 列表登记（Task 3）。
+## 运行序列
 
-在编排正文补全前，本 SKILL MUST NOT 被当作可用的分诊工具触发——上方 description 已
-显式标注脚手架阶段，避免误触发。设计详情见
+**MUST 在 sdflow-skills 仓根（或其子目录）下运行**——下列命令用相对路径，若当前 cwd 不是
+仓根，先 `cd "$(git rev-parse --show-toplevel)"`。
+
+### 1. collect（机械层，采四源事实）
+
+```bash
+python3 sdflow-upstream-watch/scripts/upstream_watch.py collect
+```
+
+- 输出一行 `facts 已写入: <路径>`；facts 落 `openspec/upstream/.facts/<UTC时间戳>.json`
+  （`.gitignore` 该目录，非留存状态）。
+- cwd 非本仓 → fail-loud 非零退出，不写任何文件；`anchors.yaml` 不可解析 → fail-loud 硬停
+  （状态文件坏了不能猜，据实呈报给人，不要自行"修复"该文件）。
+- 四源采集互相隔离：单源不可达/超时/格式漂移只让该源在 facts 里标 `degraded` 并附原因，
+  不影响其余源，`collect` 本身仍以零退出正常返回。
+
+### 2. 模型读 facts 写报告（判断层，本 skill 的核心工作）
+
+- 取 `openspec/upstream/.facts/` 下**最新**一份（文件名即 UTC 时间戳，字典序即时间序，
+  取排序后最后一个 `.json`）：
+  ```bash
+  ls -1 openspec/upstream/.facts/*.json | sort | tail -1
+  ```
+- 生成报告文件名（UTC 时间戳到秒）：`openspec/upstream/reports/$(date -u +%Y%m%dT%H%M%SZ).md`。
+  **MUST NOT 覆盖既有报告**——一次运行一份；facts 时间戳与报告时间戳允许相差几秒（成文耗时），
+  `advance` 只核验报告文本是否包含 facts 里的 commit sha，不核验两个时间戳的字面对应关系。
+- 按下方「报告模板」逐源分节写正文（Write 新文件，不追加进旧报告）。
+
+### 3. advance（机械层，校验报告后推锚）
+
+```bash
+python3 sdflow-upstream-watch/scripts/upstream_watch.py advance <报告路径> <facts路径>
+```
+
+- 前置校验：报告文件存在 + 报告文本包含 facts 中每源全部 commit sha（零解析子串检查）——
+  任一不满足 → 非零退出（exit 3）且 `anchors.yaml` 内容不变，错误信息列出缺失的 sha。
+  **若命中此分支**：回到步骤 2 补全报告里遗漏的 sha 转录后重跑本步，不要绕过检查手改
+  `anchors.yaml`。
+- 通过后：仅推进 `status=ok` 且观测值完整的源；`degraded` 源锚逐字保留，下轮同一窗口重试。
+- 首轮（`anchors.yaml` 不存在）：advance 会建档并记录各源当前观测值 + `last_run`。
+
+### 4. 呈报人
+
+向用户输出报告摘要：本轮报告路径、每源采集状态（ok/degraded/首轮）、吸收候选条数、
+待人拍板的下一步（"报告里已附预生成的 recorder add 命令，你确认吸收哪几条后我可以直接跑，
+或你自己跑也行"）。**不要**自己代人拍板执行 recorder add——那是下一节的边界。
+
+## 报告模板
+
+```markdown
+# 上游追踪分诊报告 <UTC 时间戳>
+
+生成时间：<facts.collected_at>
+facts 来源：openspec/upstream/.facts/<facts文件名>.json
+
+## Seed 分诊条目（仅首轮报告含此节）
+
+- **T245**：<标题>。与 T246 共享同一个前置人工决定——是否解除 design D8
+  （matt-workflow-integration）把 implementer 档位钉死为 mid 档的试点期变量控制约束；
+  该决定未定前两条均分诊为**观望**。
+- **T246**：<标题>。同上，共享 D8 mid 档钉死解除的前置决定，分诊为**观望**。
+- **T267**：<标题>。gstack Pass-2 遗留、python.md checklist domain 尚未建立，分诊为
+  **<按当轮证据判定：吸收候选/观望/不吸>**。
+
+## gstack
+
+**采集状态**：ok（锚 `<anchor_sha 或"无（首轮）">` .. `<head_sha>`）/ degraded（<原因>）
+
+- `<sha>` <subject> — **分诊**：吸收候选 / 观望 / 不吸。理由：<与本仓同类面一句对照>。
+  （若吸收候选，附预生成命令，见下方「入池衔接」模板）
+- …
+
+（若 degraded）**采集降级**：<原因>，请自行核查 <上游 URL>。
+
+## matt
+
+**采集状态**：同上结构；`installed_skills`（若 facts 附带）列出本地已装 skill 的 hash 对照。
+
+（本地元数据格式漂移分支——`.skill-lock.json` 键路径断言失败时）
+**采集降级：格式漂移**。请核查本地文件 `~/.agents/.skill-lock.json` 的
+`skills[].source` / `skills[].skillFolderHash` 键路径（不是"请查上游 URL"——这是本地文件
+形状问题）。
+
+…
+
+## superpowers
+
+**采集状态**：ok（marketplace 锚 `<anchor_sha>` .. `<head_sha>`，`installed_version`=<本地已装版本>）
+/ degraded
+
+- marketplace.json 变更 commit `<sha>`（`commits[i]`）→ 该版本 superpowers 条目
+  `source.sha` = `<source_sha_sequence[i]>` —
+  **分诊**：吸收候选 / 观望 / 不吸。理由：<...>。`commits` 与 `source_sha_sequence` 按同一
+  索引一一对应（facts 数据结构），逐项配对呈现，不要只摘录 `source_sha_sequence` 丢掉可供
+  `advance` 校验的 marketplace 仓 commit sha。
+
+（本地元数据格式漂移分支——`installed_plugins.json` 键路径断言失败时）
+**采集降级：格式漂移**。请核查本地文件 `~/.claude/plugins/installed_plugins.json` 的
+`plugins.superpowers[].version` 键路径（不是"请查上游 URL"——这是本地文件形状问题）。
+
+## OpenSpec
+
+版本对照：已安装 `<installed_version>` vs registry 最新 `<latest_version>`。
+
+schema drift（对比基线 = 已安装版 `<installed_version>`，非 registry 最新版）：
+- changed: <清单或"无">
+- added: <清单或"无">
+- removed: <清单或"无">
+
+（若 schema_drift 降级）**schema 目录定位失败**：<原因>，版本对照子项不受影响。
+
+## 分诊摘要
+
+共 <N> 条 delta；吸收候选 <M> 条、观望 <K> 条、不吸 <J> 条；<D> 源降级。
+```
+
+**证据不足条款**：仅凭 commit subject 看不出实质影响时，MUST 标「观望/待核查」，不得硬判
+吸收或不吸——可对候选 commit 在 bare 缓存里按需 `git -C ~/.cache/sdflow-upstream/<source>.git
+show <sha>` 取内容辅助判断（blobless clone 按需拉 blob，git 自己回答，不是手搓解析）。
+
+## 入池衔接（人拍板后才执行）
+
+watch **MUST NOT** 直接创建、修改或关闭 `openspec/issues/` 下任何条目——报告只呈现分诊，
+不改池。人对某条「吸收候选」拍板后，用报告里预生成的命令经 `sdflow-issues` 的 recorder
+`add` 显式传 `source_change`（**不要**省略该字段等它自动探测——省略会把这条记录误挂到当时
+恰好活跃的 change 目录，污染那个 change 的 sweep 圈选；这些条目的来源是本次 watch 运行，
+不是任何在途 change）：
+
+```bash
+# todo 池（多数吸收候选是"可以抄的改进/机制"）
+python3 sdflow-issues/scripts/issues_v2.py add --pool todo --json '{
+  "module": "<上游模块/文件路径或机制名>",
+  "summary": "<一句话：抄什么、为什么>",
+  "type": "上游吸收",
+  "source_change": "sdflow-upstream-watch"
+}'
+
+# bug 池（若发现的是本仓对照下的缺陷而非改进）
+python3 sdflow-issues/scripts/issues_v2.py add --pool bug --json '{
+  "module": "<本仓对应文件:行 或组件名>",
+  "summary": "<一句话：现象>",
+  "priority": "P2",
+  "source_change": "sdflow-upstream-watch"
+}'
+```
+
+`source_change: "sdflow-upstream-watch"` 是固定的溯源标记（不是某个 `openspec/changes/`
+目录名）——它让这批条目可辨认来自上游追踪而非某次 change 实现，后续 sweep/复盘按该值可
+单独圈选。add 之后按需 Read + Edit 补写 body（现象/根因/思路），脚本只管 frontmatter。
+
+## 设计详情
+
 [`openspec/changes/implement-workflow-optimization-2026-08-p3/design.md`](../openspec/changes/implement-workflow-optimization-2026-08-p3/design.md)。
