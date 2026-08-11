@@ -14,9 +14,12 @@
 
 - **新增数据类 skill `sdflow-upstream-watch/`**（SKILL.md + `scripts/` + `tests/`）：
   - 机械层脚本：维护 `openspec/upstream/anchors.yaml`（四源锚 + `last_run`）；四源采集器
-    （gstack=git ls-remote+log、superpowers=marketplace 仓、matt=mattpocock/skills 全量 +
+    （gstack=git ls-remote+log、superpowers=marketplace 仓 `.claude-plugin/marketplace.json`
+    条目 `source.sha` 字段追踪〔该仓不 vendor 插件内容，路径过滤不可行，评审实查坐实〕
+    [spec-review-amendment]、matt=mattpocock/skills 全量 +
     `.skill-lock.json` 已装项 hash 辅助、OpenSpec=npm registry + **schema fork 内容对比
-    （T264 的机械实现）**）；产出 `openspec/upstream/reports/<UTC日期>.md` delta 报告骨架。
+    （T264 的机械实现）**）；产出 `openspec/upstream/reports/<UTC时间戳>.md` delta 报告骨架
+    （文件名含 UTC 时间戳到秒，一次运行一份 [spec-review-amendment]）。
   - 模型层（SKILL 编排）：对 delta 逐条「与本仓同类面对照」三分诊（吸收候选 / 观望 / 不吸）；
     人拍板「吸」的经 recorder `add` 入池（显式 `source_change`），watch 自身不改池。
 - **`sdflow-upgrade/SKILL.md` 加轻提醒段**：收尾读 `anchors.yaml` 的 `last_run`，距今 >30 天
@@ -63,6 +66,9 @@
   形状断言进 tests）。
 - **A3 recorder `add` 契约稳定**（`--json` + 显式 `source_change`；本 session 实操验证，
   失效影响：入池步骤手工执行，报告仍产出）。
+- **A4 `/sdflow-upstream-watch` 仅在 sdflow-skills 仓（开发 checkout）根目录下运行**
+  [spec-review-amendment]——本 skill 随 setup.sh 全局分发但语义单仓专用（四源与本地锚源均硬编码
+  指向本仓工具生态）；脚本起手守卫检测 cwd 非本仓时 fail-loud 退出，不在其他项目写入任何文件。
 
 ## Success Metrics
 
@@ -90,4 +96,6 @@
 
 ## Compliance
 
-N/A（无合规 / 隐私 / 许可证面：只读公开仓元数据与本机自有文件，不上传任何数据）。
+无合规 / 隐私 / 许可证面：只读公开仓元数据与本机自有文件，不主动上传数据。
+[spec-review-amendment] 注：anchors.yaml 与报告为 git 跟踪文件、本仓为公开仓——写入其中的本机路径
+一律用 tilde（`~/...`）记法不展开绝对路径（避免用户名等本机信息进入公开历史），不含凭证/密钥。
