@@ -1,0 +1,1278 @@
+# Review package: 17f2e6a..039bcea
+
+## Commits
+039bcea Task 1: 路由切除与保留半场回归
+
+## Files changed
+ hack/tests/test_yq_wrapper_consistency.py          |  51 +--
+ .../impl-reports/task1-brief.md                    |  18 +
+ .../impl-reports/task1-route-excision.md           | 137 +++++++
+ sdflow-implement/scripts/impl_route.py             | 344 +----------------
+ sdflow-implement/tests/test_impl_route.py          | 413 +--------------------
+ 5 files changed, 211 insertions(+), 752 deletions(-)
+
+## Diff
+diff --git a/hack/tests/test_yq_wrapper_consistency.py b/hack/tests/test_yq_wrapper_consistency.py
+index 5f9da7c..84d1789 100644
+--- a/hack/tests/test_yq_wrapper_consistency.py
++++ b/hack/tests/test_yq_wrapper_consistency.py
+@@ -1,112 +1,115 @@
+ """`_yq()` 一致性 golden test（shared-yaml-subset-parser · Task 5 · R12）。
+ 
+ [fix-probe-scan-precision task4 · R12 去计数] 原 7 份含消费仓镜像
+ `openspec/workflow/tools/anchor_lint.py`；该镜像已随 D13（规则/工具全局单份共享）
+ 停止铺设，本仓残留副本亦已删除（tasks 6.1）——权威源 `sdflow-init/assets/workflow/
+-tools/anchor_lint.py` 条目保留。以下计数改为 **6 份**。
++tools/anchor_lint.py` 条目保留。计数改为 6 份。
+ 
+-6 份脚本各自内联一份 `_yq()`（design.md §1 决定：不跨脚本共享——各脚本「零依赖不变量」
++[remove-superpowers-pipeline Task 1] `sdflow-implement/scripts/impl_route.py` 的 `_yq()`
++随管线路由半场整体切除退出消费面（tickets 成为唯一管线，路由三跳不再需要读 config/
++plan frontmatter 的 YAML 值）——以下计数再去 1 份，改为 **5 份**。
++
++5 份脚本各自内联一份 `_yq()`（design.md §1 决定：不跨脚本共享——各脚本「零依赖不变量」
+ 不允许互相 import，且 `~10` 行的封装体量本就不值得为共享而抽公共模块）。「各自内联」
+-不等于「各自漂移」——本文件机械校验 6 份实现共享的**核心逻辑**骨架：
++不等于「各自漂移」——本文件机械校验 5 份实现共享的**核心逻辑**骨架：
+ 
+   ① `shutil.which("yq")` 探测二进制
+   ② `--version` 输出身份校验须含 `mikefarah`（拒 kislyuk/yq，语法不兼容）
+   ③ 进程内缓存（模块级 `_yq_bin`：`global` 声明 + `is None` 判空 + 命中后赋值）
+   ④ subprocess 调用统一 `encoding="utf-8"` + `errors="replace"`（Windows GBK/cp936 防护）
+   ⑤ 非零退出码 fail-loud（`returncode != 0` 分支必须存在，且 yq 缺失/身份不对分支
+      必须 `raise` 或 `sys.exit`，不得静默 return/pass）
+   ⑥ `--front-matter=` 条件处理
+   ⑦ 非 in-place 模式下走 `-o json`
+   ⑧ stdout 为空/`null` 时走 `default`
+   ⑨ 用 `json` 模块解码 stdout
+ 
+ 【已知且已在各自 docstring 记录的差异——不在本文件检查范围内】
+   - `ship_gate.py` / `sad_schema.py` 额外支持 `text=` stdin 参数（frontmatter 消费方
+-    需要从 `git show` 结果/内存中的 text 读，而非只从磁盘路径读）；其余 4 份只接受
++    需要从 `git show` 结果/内存中的 text 读，而非只从磁盘路径读）；其余 3 份只接受
+     文件路径。
+   - `init.py` 额外带 `--header-preprocess=false`（`config.yaml` 的 `--- # 注释` 起始
+-    形态会触发 yq 吞行 bug，需要显式关闭该预处理；其余 5 份的消费文件不含这类写法）。
+-  - `init.py` / `ship_gate.py` / `impl_route.py` / `roadmap_writeback_draft.py` /
+-    `sad_schema.py` 有 F3 多文档防御（`json.JSONDecoder().raw_decode` + 检测 stdout
+-    是否含一个以上 JSON 值）；`anchor_lint.py`（Task 2 最早落地）用简单
+-    `json.loads`，未加此防御——其唯一消费点查 `.metrics.enabled`（布尔叶子，由
+-    sdflow-init 生成/管理的文件，非任意用户输入，F3 场景在此不适用）。
++    形态会触发 yq 吞行 bug，需要显式关闭该预处理；其余 4 份的消费文件不含这类写法）。
++  - `init.py` / `ship_gate.py` / `roadmap_writeback_draft.py` / `sad_schema.py`
++    有 F3 多文档防御（`json.JSONDecoder().raw_decode` + 检测 stdout 是否含一个以上
++    JSON 值）；`anchor_lint.py`（Task 2 最早落地）用简单 `json.loads`，未加此防御——
++    其唯一消费点查 `.metrics.enabled`（布尔叶子，由 sdflow-init 生成/管理的文件，
++    非任意用户输入，F3 场景在此不适用）。
+   - `sad_schema.py` 额外带 `object_pairs_hook` 重复键检测（其既有测试套件要求
+-    duplicate-key 场景 fail-closed；其余 5 份的消费点无此要求）。
++    duplicate-key 场景 fail-closed；其余 4 份的消费点无此要求）。
+   - `ship_gate.py` / `init.py` 在 `front_matter=True` 且 `default is not None` 时对
+     非 dict 顶层结构做 R5/F4 校验（design.md 参考实现原样保留该分支，即使部分文件的
+     调用点当前不触发）；`anchor_lint.py` 同样保留该分支（design.md §1 原文）。
+ 
+-本文件不做「6 份字节完全一致」的机械 diff——那会强迫无差异化需求的脚本背上不需要的
++本文件不做「5 份字节完全一致」的机械 diff——那会强迫无差异化需求的脚本背上不需要的
+ 代码（如让 `anchor_lint.py` 平白多出 `text=` stdin 支持），与 CLAUDE.md 基准 4
+ （不为低概率影响纠结完美方案）相悖。核对方式：对每份 `_yq()` 的**源码文本**做结构性
+ 断言（正则/子串搜索核心模式），容忍上方已记录的差异，不容忍其它任何一项核心要素缺失。
+ """
+ import importlib.util
+ import inspect
+ import re
+ from pathlib import Path
+ 
+ import pytest
+ 
+ REPO = Path(__file__).resolve().parents[2]
+ 
+-# 6 份 _yq() 消费点（design.md §2 改动清单 + Task 5 新增两份；fix-probe-scan-precision
+-# task4 删除消费仓镜像条目——权威源条目保留，见上方 docstring 说明）。
++# 5 份 _yq() 消费点（design.md §2 改动清单 + Task 5 新增两份；fix-probe-scan-precision
++# task4 删除消费仓镜像条目——权威源条目保留，见上方 docstring 说明；remove-superpowers-pipeline
++# Task 1 删 impl_route.py 条目——`_yq` 随路由半场整体切除退出消费面）。
+ TARGETS = {
+     "sdflow-init/scripts/init.py":
+         REPO / "sdflow-init" / "scripts" / "init.py",
+     "sdflow-ship/scripts/ship_gate.py":
+         REPO / "sdflow-ship" / "scripts" / "ship_gate.py",
+-    "sdflow-implement/scripts/impl_route.py":
+-        REPO / "sdflow-implement" / "scripts" / "impl_route.py",
+     "sdflow-init/assets/workflow/tools/anchor_lint.py":
+         REPO / "sdflow-init" / "assets" / "workflow" / "tools" / "anchor_lint.py",
+     "sdflow-done/scripts/roadmap_writeback_draft.py":
+         REPO / "sdflow-done" / "scripts" / "roadmap_writeback_draft.py",
+     "sdflow-architecture/scripts/sad_schema.py":
+         REPO / "sdflow-architecture" / "scripts" / "sad_schema.py",
+ }
+ 
+ 
+ def _load_module(path, unique_name):
+     """从文件路径加载模块，不注册进 `sys.modules`（避免同名模块跨文件互相遮蔽，
+     也避免污染其它测试文件的 import 状态）。"""
+     spec = importlib.util.spec_from_file_location(unique_name, path)
+     module = importlib.util.module_from_spec(spec)
+     spec.loader.exec_module(module)
+     return module
+ 
+ 
+ @pytest.fixture(scope="module")
+ def yq_sources():
+-    """{label: _yq() 源码文本}，6 份都取得到才算本 fixture 成功——取不到直接让依赖它的
+-    每条用例报错（比 skip 更诚实：golden test 的前提是"6 份都在"，任一份加载失败就是
++    """{label: _yq() 源码文本}，5 份都取得到才算本 fixture 成功——取不到直接让依赖它的
++    每条用例报错（比 skip 更诚实：golden test 的前提是"5 份都在"，任一份加载失败就是
+     本身要抓的问题，不该被静默跳过）。"""
+     out = {}
+     for i, (label, path) in enumerate(TARGETS.items()):
+         assert path.is_file(), f"golden test 目标文件缺失：{label} ({path})"
+         module = _load_module(path, f"_yq_golden_target_{i}")
+         fn = getattr(module, "_yq", None)
+         assert fn is not None, f"{label} 未定义模块级 _yq()"
+         out[label] = inspect.getsource(fn)
+     return out
+ 
+ 
+-def test_all_six_targets_are_distinct_files():
+-    """6 个 label 各指向存在且互不相同的文件（防复制粘贴把两个 label 指向同一路径、
+-    悄悄漏掉真正该覆盖的第 6 份）。"""
++def test_all_five_targets_are_distinct_files():
++    """5 个 label 各指向存在且互不相同的文件（防复制粘贴把两个 label 指向同一路径、
++    悄悄漏掉真正该覆盖的第 5 份）。"""
+     paths = list(TARGETS.values())
+-    assert len(paths) == 6, f"golden test 应覆盖 6 份 _yq()，实际登记 {len(paths)} 份"
++    assert len(paths) == 5, f"golden test 应覆盖 5 份 _yq()，实际登记 {len(paths)} 份"
+     resolved = {p.resolve() for p in paths}
+-    assert len(resolved) == 6, f"存在重复路径：{TARGETS}"
++    assert len(resolved) == 5, f"存在重复路径：{TARGETS}"
+ 
+ 
+ # ── 核心逻辑骨架：正则模式 → 人读理由 ──────────────────────────────────────────────
+ CORE_PATTERNS = {
+     "① shutil.which(\"yq\") 探测二进制":
+         re.compile(r'shutil\.which\(\s*["\']yq["\']\s*\)'),
+     "② --version 调用":
+         re.compile(r'["\']--version["\']'),
+     "② mikefarah 身份校验":
+         re.compile(r'mikefarah'),
+@@ -162,18 +165,18 @@ def test_mikefarah_identity_check_branch_fails_loud_not_silently(yq_sources):
+         m = re.search(r'if\s+["\']mikefarah["\']\s+not in\s+vr\.stdout:\s*\n((?:.*\n)*?)(?=\s*_yq_bin = yq)', src)
+         assert m, f"{label}: 未找到 mikefarah 身份校验分支（golden test 前提假设不成立，需要人工核查）"
+         branch = m.group(1)
+         assert ("raise" in branch or "sys.exit" in branch), (
+             f"{label}: 身份校验失败分支既未 raise 也未 sys.exit，疑似静默失败：\n{branch}"
+         )
+ 
+ 
+ def test_non_zero_exit_branch_fails_loud_not_silently(yq_sources):
+     """yq 主调用非零退出 MUST raise（[R7/F2]：解析失败与"键不存在"是两条不同分支，
+-    不得吞非零退出、也不得因 default 而静默）——这一分支 6 份统一用 `raise`（不像
++    不得吞非零退出、也不得因 default 而静默）——这一分支 5 份统一用 `raise`（不像
+     "yq 未安装"分支那样允许 sys.exit，因为它发生在缓存建立之后，函数已进入
+     "正常调用路径"，语义上更贴近"这次查询失败"而非"环境不可用"）。"""
+     for label, src in yq_sources.items():
+         m = re.search(r'returncode\s*!=\s*0:\s*\n((?:.*\n)*?)(?=\s*if in_place|\s*raw\s*=)', src)
+         assert m, f"{label}: 未找到非零退出分支体（golden test 前提假设不成立，需要人工核查）"
+         branch = m.group(1)
+         assert "raise" in branch, f"{label}: 非零退出分支未 raise：\n{branch}"
+diff --git a/openspec/changes/remove-superpowers-pipeline/impl-reports/task1-brief.md b/openspec/changes/remove-superpowers-pipeline/impl-reports/task1-brief.md
+new file mode 100644
+index 0000000..0b882d8
+--- /dev/null
++++ b/openspec/changes/remove-superpowers-pipeline/impl-reports/task1-brief.md
+@@ -0,0 +1,18 @@
++### Task 1: 路由切除与保留半场回归
++
++**Blocked-by:** none
++**R-ID:** R1, R6
++
++从 `sdflow-implement/scripts/impl_route.py` 切除全部路由函数与 `route` 子命令：删除 `_cmd_route` / route subparser / `read_config_pipeline` / `read_plan_marker` / `resolve_pipeline` / `LEGAL_PIPELINES` / `_PIPELINE_KEY_RE` / `RouteStop` / `_get_plan_sha`、`_yq` 及仅为其服务的 import；文件头注释从「管线路由三跳」改写为 tickets 调度 helper 自述。
++
++同步测试：`test_impl_route.py` 的 route/config/marker 参照系用例退役（断言目标态已不存在的行为），frontier / task-text / 拓扑用例保留并全绿。`test_yq_wrapper_consistency.py` 成员表去 impl_route 条目（`_yq` 随路由删除退出消费面）。
++
++核验保留半场接口逐字不变：`parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE` 签名与行为零改动，gate sibling-import 回归绿（`test_gate_closing_ticket.py` 保留用例通过）。
++
++- [ ] `impl_route.py` 路由函数与 `route` 子命令已删除，文件头注释已改写
++- [ ] `_yq` 及仅为其服务的 import 已删除
++- [ ] `test_impl_route.py` 路由相关用例已退役，保留半场用例全绿
++- [ ] `test_yq_wrapper_consistency.py` 成员表已去 impl_route 条目
++- [ ] 保留半场接口（`parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE`）签名与行为零改动
++- [ ] `test_gate_closing_ticket.py` 保留用例（gate sibling-import）通过
++
+diff --git a/openspec/changes/remove-superpowers-pipeline/impl-reports/task1-route-excision.md b/openspec/changes/remove-superpowers-pipeline/impl-reports/task1-route-excision.md
+new file mode 100644
+index 0000000..365b8d9
+--- /dev/null
++++ b/openspec/changes/remove-superpowers-pipeline/impl-reports/task1-route-excision.md
+@@ -0,0 +1,137 @@
++# Task 1: 路由切除与保留半场回归 — 实现报告
++
++## 概述
++
++从 `sdflow-implement/scripts/impl_route.py` 整体切除「管线路由三跳」（config 键 →
++plan frontmatter marker → 缺省）相关的全部函数、类与 `route` 子命令，文件头注释改写为
++tickets 调度 helper 自述。同步退役 `test_impl_route.py` 的 route/config/marker 参照系用例，
++`test_yq_wrapper_consistency.py` 成员表去 `impl_route` 条目。保留半场（`frontier` /
++`task-text` 子命令、`parse_blocked_by`、`_detect_cycle`、`next_ready`、`extract_task_text`、
++`TopoError`、`BLOCKED_BY_RE`）接口与行为逐字不变，回归绿。
++
++## 改动清单
++
++### `sdflow-implement/scripts/impl_route.py`
++
++删除：
++- 文件头「管线路由三跳」+ `[shared-yaml-subset-parser]` 两段说明性 docstring 段落，改写为
++  「tickets 调度 helper」自述（保留 `[impl-review-fix F4]` 围栏词法单一源说明段，未改动）。
++- `_yq_bin` / `_yq()`（yq subprocess 薄封装，唯一调用点在被删的 `read_config_pipeline` /
++  `read_plan_marker` 内）。
++- `LEGAL_PIPELINES`、`_PIPELINE_KEY_RE`、`_FRONTMATTER_DELIM`。
++- `RouteStop` 异常类。
++- `read_config_pipeline()`（① config 键读取）。
++- `read_plan_marker()`（② plan frontmatter marker 读取）。
++- `resolve_pipeline()`（③ 路由合成）。
++- `_get_plan_sha()`（route CLI 专用的 plan_sha 取值）。
++- `_cmd_route()` 及 `build_parser()` 里的 `route` 子命令 subparser。
++- sibling-import 块中的 `resolve_plan_path` / `PlanNameConflict` / `PLAN_FILENAMES`
++  三个符号（design.md :62「唯一调用点全在被删路由函数内」〔设计门 Q2 拍板〕已核实：三者
++  在 impl_route.py 内的唯一消费点全在 `_cmd_route()` 内部，随其一并删除；保留
++  `FenceTracker` sibling-import，`parse_blocked_by`/`extract_task_text` 仍依赖）。
++- 不再被任何保留函数使用的 `json` / `shutil` / `subprocess` 三个 import（均只服务
++  `_yq()` 与 `_get_plan_sha()`）。
++
++保留（接口与行为逐字不变，未作任何改动）：
++- `frontier` / `task-text` 子命令（`_cmd_frontier` / `_cmd_task_text`）
++- `parse_blocked_by` / `_detect_cycle` / `next_ready` / `extract_task_text`
++- `TopoError` / `BLOCKED_BY_RE` / `TASK_HEADER_RE` / `BLOCKED_BY_VARIANT_RE`
++- `EXIT_ROUTE_STOP`（虽命名沿用旧路由术语，但为 frontier/task-text 共用的通用退出码，
++  brief 未列入删除清单，且改名超出本票范围，予以保留——不改名不算「加宽」也不算「缩水」，
++  是最小 diff 原则的直接应用）
++- `_FenceTracker` sibling-import 与其 fail-closed 兜底（`_FENCE_IMPORT_ERR`）
++
++`build_parser()` 顶层 `description` 从「sdflow-implement 路由/拓扑 stdlib helper（只读，
++不改 ship_gate.py）」改为「sdflow-implement tickets 调度 stdlib helper（只读，不改
++ship_gate.py）」。`main()` 里的 `route` 分支同步删除。
++
++验证：改动后 `python3 -c "import impl_route; print(dir(impl_route))"` 公开符号表已不含
++`route`/`RouteStop`/`resolve_pipeline`/`read_config_pipeline`/`read_plan_marker`/`_yq`/
++`LEGAL_PIPELINES`/`_get_plan_sha`/`_resolve_plan_path`；保留符号全部存在。
++
++### `sdflow-implement/tests/test_impl_route.py`
++
++退役（route/config/marker 参照系，断言目标态已不存在的行为）：
++- `read_config_pipeline` 全部用例（缺失/空值/tickets/superpowers/拼错值/引号值/BOM/
++  冒号前空格/损坏引号/注释行/缩进提及，14 条）
++- `read_plan_marker` 全部用例（缺文件/无 frontmatter/合法单键/键重复/非法值/未闭合
++  frontmatter/BOM/冒号前空格/损坏引号，11 条）
++- CLI `route` 全部用例（PIPELINE_RECEIPT 格式、路由合成、marker 锁定、RouteStop 退出码、
++  plan_sha、双名冲突 fail-closed 等，14 条）
++- `test_resolve_plan_path_single_source_used_by_route`（核验 `ir._resolve_plan_path` 身份，
++  该符号本票已删除）
++- 辅助函数 `_write_config` / `_mkchange` / `_run_route`（仅服务上述已退役用例）
++
++保留并回归绿（35 条，全绿）：
++- `parse_blocked_by` / `next_ready` 拓扑用例（线性链/菱形/环/自环/缺依赖/done 过滤）
++- fence-aware 解析 + 标题正则收紧用例（含 3 个跨脚本 golden fixture 回归）
++- Blocked-by 三态 fail-closed 用例（缺失/重复/大小写变体/全角冒号/行内形态）
++- CLI `frontier` 全部用例（含 2 个 golden fixture 回归）
++- 围栏词法单一源核验（`ir._FenceTracker is sg.FenceTracker` 身份断言 + 嵌套围栏跨脚本一致性）
++- `extract_task_text` 用例 + CLI `task-text` 全部用例
++
++模块 docstring 改写为仅描述保留半场覆盖范围，并留一段指向 design.md 的退役说明。
++
++### `hack/tests/test_yq_wrapper_consistency.py`
++
++`TARGETS` 成员表删除 `sdflow-implement/scripts/impl_route.py` 条目（`_yq` 随路由半场整体
++切除退出消费面），消费点数从 6 份改为 5 份。同步修正：
++- 顶部 docstring 的计数陈述与差异登记段（`text=` 支持「其余 4 份」→「其余 3 份」，
++  `--header-preprocess` 「其余 5 份」→「其余 4 份」，F3 多文档防御名单去 `impl_route.py`，
++  `object_pairs_hook` 「其余 5 份」→「其余 4 份」）
++- `test_all_six_targets_are_distinct_files` 重命名为 `test_all_five_targets_are_distinct_files`，
++  断言 `== 6` 改 `== 5`
++- `yq_sources` fixture docstring 「6 份」→「5 份」
++- `test_non_zero_exit_branch_fails_loud_not_silently` docstring 「6 份」→「5 份」
++
++未改动：本仓其余 5 份 `_yq()` 消费点脚本本身、以及它们各自的测试。
++
++## 测试结果
++
++```
++/usr/bin/python3 -m pytest sdflow-implement/tests/test_impl_route.py -v
++→ 35 passed
++
++/usr/bin/python3 -m pytest hack/tests/test_yq_wrapper_consistency.py -v
++→ 17 passed
++
++/usr/bin/python3 -m pytest sdflow-ship/tests/test_gate_closing_ticket.py -v
++→ 10 passed（含 Task 2 待退役的 2 条 grandfather 用例——Task 1 未触碰 ship_gate.py，
++  两条用例仍按现行 grandfather 行为断言，回归绿，不在本票退役范围内）
++```
++
++合并核验（三处一次跑）：
++
++```
++/usr/bin/python3 -m pytest sdflow-implement/tests/ sdflow-ship/tests/test_gate_closing_ticket.py hack/tests/test_yq_wrapper_consistency.py -x -q
++→ 66 passed in 1.49s
++```
++
++（`sdflow-implement/tests/` 目录内除 `test_impl_route.py` 外无其它测试文件，故该目录整体
++跑等价于单独跑 `test_impl_route.py`。）
++
++未跑全仓 `/usr/bin/python3 -m pytest`——超出本票范围（Task 5 明确把「全仓 pytest 全绿」列为
++自己的验收项，需等 Task 2-4 落地后才有意义）；本票验收面（brief 列出的三个文件 + gate
++sibling-import 回归）已按上述命令覆盖完整。
++
++## 保留半场核验
++
++- `parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE` 源码逐字未改动（仅其上下文中已删除的
++  `RouteStop`/路由函数被移走，函数体本身零改动，`git diff` 可核）。
++- `ship_gate.py` 的 `_load_parse_blocked_by()` sibling-import `parse_blocked_by`/`TopoError`
++  路径未受影响——`test_gate_closing_ticket.py` 全部 10 条用例（含 sibling-import 依赖的
++  收尾票校验用例）回归绿，证实 sibling-import 未断裂。
++- `ship_gate.py` :1335 提及 `impl_route.resolve_pipeline` 的注释句现指向已删符号——本票
++  Global Constraints 明确该文件是 Task 2 的改动范围（`Blocked-by: 1`），本票不改动
++  该文件；该注释句失效属预期的跨票中间态，由 Task 2 收口（design.md :63 已登记）。
++
++## 范围声明
++
++严格按 tickets.md Task 1 与 brief 执行：只改 `impl_route.py` 本体、
++`test_impl_route.py`、`test_yq_wrapper_consistency.py` 三个文件。未触碰 `ship_gate.py`、
++`test_plan_resolver.py`、`test_superpowers_track_regression.py`、任何 SKILL.md 或
++bundle 资产——均属 Task 2/3/4/5 范围。`_resolve_plan_path`/`PlanNameConflict`/
++`PLAN_FILENAMES` 三个 sibling-import 符号虽未被 brief 文字逐一点名，但其在 impl_route.py
++内的唯一消费点（`_cmd_route`）已随本票删除，design.md :62 已就此给出「唯一调用点全在被删
++路由函数内」的设计门拍板依据，故一并删除；未改动 `ship_gate.py` 侧同名符号的定义与实现
++（那是 Task 2 的范围）。
+diff --git a/sdflow-implement/scripts/impl_route.py b/sdflow-implement/scripts/impl_route.py
+index d9706da..2d440ee 100644
+--- a/sdflow-implement/scripts/impl_route.py
++++ b/sdflow-implement/scripts/impl_route.py
+@@ -1,294 +1,88 @@
+ #!/usr/bin/env python3
+ # -*- coding: utf-8 -*-
+-"""impl_route.py — sdflow-implement 路由/拓扑 stdlib-only helper（只读、零副作用）
+-
+-管线路由三跳（design F4/F12/F13，逐字见 archive/2026-07-10-matt-workflow-integration/superpowers-plan.md
+-Task 2 Interfaces；[simplify-workflow] 缺省已翻转为 tickets，见下方③）：
+-    ① openspec/config.yaml 顶层 `impl-pipeline:` 键（仅新出 ticket 首跳读一次）
+-    ② plan 文件头 frontmatter marker（在途只读，marker 存在即锁定，优先于 config）
+-    ③ config 键缺席/空值/非法值 → 一律 tickets（新缺省态，静默回退）；
+-       plan 已存在但 frontmatter/marker 缺席 → 仍一律 superpowers（旧缺省，冻结不变，
+-       避免静默切换在途 change——marker 是"已出票"的信号，不该被本次翻转影响）。
+-marker **存在但非法/重复/损坏** 一律停（RouteStop，UNKNOWN 语义），不静默回退——
+-防两管线混跑。
+-
+-本文件不 `import yaml`（零依赖不变量）——config.yaml / plan frontmatter 的 YAML **取值**
+-委托给外部 yq(mikefarah) 二进制（同 git 的外部二进制先例，`_yq()`，见 shared-yaml-subset-parser）。
+-**不改** sdflow-ship/scripts/ship_gate.py（gate 零改动铁律：本文件不影响 gate 任何判定）；
+-subprocess 除 `_yq()` 外仅用于取 plan_sha（`git log -1 --format=%h`），取不到时输出 "-"。
+-
+-[shared-yaml-subset-parser] frontmatter/键重复检测**不能**委托给 yq——实测 yq 对重复
+-`impl-pipeline:` 键静默取最后值（exit 0），且 `--front-matter=extract` 不要求闭合 `---`
+-（未闭合时会把之后内容当同一份 YAML 文档处理，`### Task N:` 类行被当注释吞掉，"看似"
+-解析成功）。这两类结构诊断保留轻量原始文本预扫描，在 yq 调用之前执行（与 ship_gate.py
+-的 duplicate-key/tab-indent 预扫描同一分工原则：prescan 管结构，yq 管取值）。
++"""impl_route.py — sdflow-implement tickets 调度 helper（stdlib-only，只读、零副作用）
++
++本文件是 tickets 管线（唯一实现管线，见 adr/0042）的调度基础设施，提供两个子命令：
++    `frontier`   —— 按 Blocked-by 拓扑算 next-ready ticket 号
++    `task-text`  —— 机械抠出单张 Task 段原文落盘，供 dispatch prompt 引用文件路径
++                     （替代编排层手抄 Task N 段落全文——手抄=转录风险）
++两者共用同一份 `parse_blocked_by` 拓扑解析（Blocked-by 依赖图单一源，基准 5：无界语法禁手搓）。
++
++[remove-superpowers-pipeline] 本文件原含「管线路由三跳」（config 键 → plan frontmatter marker →
++缺省，二选一派发 tickets/superpowers）——tickets 成为唯一管线后，route 子命令与全部路由函数
++（`read_config_pipeline` / `read_plan_marker` / `resolve_pipeline` / `RouteStop` / `_get_plan_sha`
++/ `_yq`）已整体切除（design.md 决策，adr/0042 supersede adr/0033）。保留半场（`frontier` /
++`task-text` 子命令、`parse_blocked_by`、`_detect_cycle`、`next_ready`、`extract_task_text`、
++`TopoError`、`BLOCKED_BY_RE`）接口与行为逐字不变——`sdflow-ship/scripts/ship_gate.py` 经既有
++sibling-import 消费 `parse_blocked_by`/`TopoError`（收尾票 Blocked-by 校验单一源），本次切除
++对其零感知。
+ 
+ [impl-review-fix F4] 唯一例外：**fenced code block 的围栏词法**从 ship_gate 引入
+ （`FenceTracker`，只读纯函数）。原先此处手抄 `line.lstrip().startswith("```")` 并在注释里
+ 声称「口径与 ship_gate._parse_plan 一致」——gate 侧已收敛到 FenceTracker（同种 + 长度 ≥ 开启符
+ + 尾部校验），手抄副本没跟上，那句注释成了假话，两个解析器对同一 plan 给出不同段落边界
+ （仓内实证：archive/2026-07-03-sdflow-ship/superpowers-plan.md 的 ```markdown 块内嵌 ```bash
+ 示例，旧口径被内层 ``` 提前关掉围栏 ⇒ 多认了 2 个复选框）。后果：`Blocked-by` 依赖图与
+ 完成判据基于两套边界，被隐藏的行若恰是唯一未勾项 ⇒ 完成判据侧假 ✅。
+ ⇒ 改为**单一源** import。引不到 ⇒ parse_blocked_by 直接 TopoError（fail-closed），
+ MUST NOT 回退手抄副本——那正是本条要根治的漂移面。
+ """
+ from __future__ import annotations
+ 
+ import argparse
+-import json
+ import re
+-import shutil
+-import subprocess
+ import sys
+ 
+ for _s in (sys.stdout, sys.stderr):
+     try: _s.reconfigure(encoding="utf-8", errors="replace")
+     except Exception: pass
+ from pathlib import Path
+ from typing import Dict, Iterable, List, Optional, Set, Tuple
+ 
+-_FRONTMATTER_DELIM = "---"
+-LEGAL_PIPELINES = ("tickets", "superpowers")
+-
+-
+-# ────────────────────────────── yq(mikefarah) subprocess 薄封装 ──────────────────────────
+-# [shared-yaml-subset-parser] 本文件自己内联一份 `_yq()`（各脚本各自内联，不跨脚本 import，
+-# 见 sdflow-ship/scripts/ship_gate.py 同名函数的姊妹实现）。与 ship_gate.py 的版本相比，本
+-# 版本**不**做 front-matter 顶层结构必须为 dict 的校验——本文件的两处 front_matter 用法
+-# （`."impl-pipeline"`）查的是**标量叶子**，不是整个 frontmatter 段，预期结果天然是
+-# str/None，不是 dict。
+-_yq_bin = None  # 进程内缓存
+-
+-
+-def _yq(expression, file, *, front_matter=False, default=None):
+-    """yq(mikefarah) subprocess 薄封装（只读，本文件不产生任何 in-place 写操作）。
+-
+-    [R7/F2] exit≠0 恒 raise（转发 stderr）——「键不存在」（exit 0 + stdout=null，走 `default`）
+-    与「解析失败」（exit≠0）MUST 是两条不同分支，调用方按需自行捕获处理（本文件两处调用
+-    均捕获 RuntimeError 并映射为各自的 fail-closed 语义：config→unknown-value，marker→RouteStop）。
+-    [F6] 身份校验：`--version` 输出须含 `mikefarah`，拒 kislyuk/yq（jq 语法不兼容）；
+-    未安装 / 身份校验不过同样走 `raise RuntimeError`（不 `sys.exit`），与「解析失败」同一
+-    异常类型，交调用方按既有 fail-closed 语义映射——env 级失败不该绕过该映射直接落进程退出，
+-    否则会在 exit-code 契约集 `{0, EXIT_ROUTE_STOP}` 之外裸吐 Python 默认退出码 1。
+-    [F10] `encoding="utf-8", errors="replace"`——Windows 默认 GBK/cp936 会破坏非 ASCII 内容。
+-    [F3] 多文档防御：stdout 若含一个以上 JSON 值（疑似多文档 YAML）→ raise，不静默只取第一个。
+-    """
+-    global _yq_bin
+-    if _yq_bin is None:
+-        yq = shutil.which("yq")
+-        if not yq:
+-            raise RuntimeError(
+-                "yq 未安装。安装方式：\n"
+-                "  macOS:   brew install yq\n"
+-                "  Windows: winget install --id MikeFarah.yq\n"
+-                "  Linux:   snap install yq")
+-        vr = subprocess.run([yq, "--version"], capture_output=True, text=True,
+-                            encoding="utf-8", errors="replace")
+-        if "mikefarah" not in vr.stdout:
+-            raise RuntimeError(
+-                "检测到的 yq 不是 mikefarah/yq（可能是 kislyuk/yq）。\n"
+-                "  请卸载后安装正确版本：\n"
+-                "  macOS:   brew install yq\n"
+-                "  Windows: winget install --id MikeFarah.yq\n"
+-                "  Linux:   snap install yq")
+-        _yq_bin = yq
+-    cmd = [_yq_bin]
+-    if front_matter:
+-        cmd.append("--front-matter=extract")
+-    cmd += ["-o", "json", expression, str(file)]
+-    r = subprocess.run(cmd, capture_output=True, text=True,
+-                       encoding="utf-8", errors="replace")
+-    if r.returncode != 0:
+-        raise RuntimeError(f"yq failed on {file}: {r.stderr.strip()}")
+-    raw = r.stdout.strip()
+-    if not raw or raw == "null":
+-        return default
+-    decoder = json.JSONDecoder()
+-    parsed, idx = decoder.raw_decode(raw)
+-    if raw[idx:].strip():
+-        raise RuntimeError(f"yq 输出多个 JSON 值（疑似多文档 YAML，不支持）: {raw[:200]!r}")
+-    return parsed
+-
+ # [impl-review-fix F4] 围栏词法单一源 = ship_gate.FenceTracker。
+ # 定位方式：本文件在 <root>/sdflow-implement/scripts/ 下，gate 在同级 <root>/sdflow-ship/scripts/。
+ # 两种安装形态都成立——symlink 安装时 Path(__file__).resolve() 落回仓内；Windows copy 安装时
+ # 两个 skill 目录在 ~/.claude/skills/ 下互为兄弟。抽第三个共享模块反而两种形态都找不到
+ # （它没有 SKILL.md，setup.sh 不装它），故取 sibling import。
+ _GATE_SCRIPTS = Path(__file__).resolve().parents[2] / "sdflow-ship" / "scripts"
+ try:
+     if str(_GATE_SCRIPTS) not in sys.path:
+         sys.path.insert(0, str(_GATE_SCRIPTS))
+     from ship_gate import FenceTracker as _FenceTracker  # type: ignore
+-    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名 resolver 单一源同样是
+-    # ship_gate——与上面 FenceTracker 同一条 sibling-import 路径，MUST NOT 在本文件手抄
+-    # 第二份候选文件名列表（两轨共用一个文件名，见 tasks.md §5 前言 C14）。
+-    from ship_gate import (  # type: ignore
+-        resolve_plan_path as _resolve_plan_path,
+-        PlanNameConflict as _PlanNameConflict,
+-        PLAN_FILENAMES as _PLAN_FILENAMES,
+-    )
+ except Exception as _e:                                  # noqa: BLE001
+     _FenceTracker = None                                 # fail-closed，见 parse_blocked_by
+-    _resolve_plan_path = None                            # fail-closed，见 _cmd_route
+-    _PlanNameConflict = None
+-    _PLAN_FILENAMES = ()
+     # [impl-review-fix] 记下失败原因串：fail-closed 本身对，但吞掉原因会让
+     # 「装歪了 vs 语法错 vs 版本不符」三种情况在诊断上无法区分。
+     _FENCE_IMPORT_ERR = f"{type(_e).__name__}: {_e}"
+ else:
+     _FENCE_IMPORT_ERR = ""
+ 
+ # [impl-review-fix] 语义对齐 ship_gate.EXIT_UNKNOWN=6（设计禁 import gate，手动同步；
+ # gate 侧字面见 ship_gate.py:137 `EXIT_OK, EXIT_REFUSE, EXIT_BLOCKED, EXIT_VFAIL, EXIT_UNKNOWN
+ # = 0, 3, 4, 5, 6`）。
+ EXIT_ROUTE_STOP = 6
+ 
+-# [shared-yaml-subset-parser R11 同类预扫描] 仅用于**结构诊断**——数 `impl-pipeline:` 键
+-# 出现次数（yq 对重复键静默取最后值，这一诊断只能在 yq 调用之前用文本扫描兜底），不再用于
+-# 提取/解析值本身（那部分已委托给 `_yq()`，见 read_config_pipeline/read_plan_marker）。
+-# 列 0 锚定 + 冒号前容忍空白（`impl-pipeline : tickets` 一类变体也命中）。
+-_PIPELINE_KEY_RE = re.compile(r"^impl-pipeline\s*:")
+-
+ # [impl-review-fix] 与 ship_gate.TASK_TITLE_RE 逐字一致（^### Task (\d+):，单空格、无 M 标志——
+ # 本模块逐行扫描不需要 MULTILINE）。排版漂移（`###Task 1:`/`### Task  1:`）不计任务，行为与
+ # gate 一致（sdflow-ship/scripts/ship_gate.py:483 TASK_TITLE_RE）。
+ TASK_HEADER_RE = re.compile(r"^### Task (\d+):")
+ BLOCKED_BY_RE = re.compile(r"\*{0,2}Blocked-by:\*{0,2}\s*(.*)$")
+ # [impl-review-fix] 疑似变体检测（大小写不同 / 全角冒号），case-insensitive、半角全角冒号皆认；
+ # 仅当某行未被 BLOCKED_BY_RE 命中时才检查此正则，命中即判「疑似声明格式不识别」。
+ BLOCKED_BY_VARIANT_RE = re.compile(r"(?i)\*{0,2}blocked-by\*{0,2}\s*[:：]")
+ 
+ 
+-class RouteStop(Exception):
+-    """管线 marker 存在但非法/重复/损坏——UNKNOWN 语义，停，不静默回退。"""
+-
+-
+ class TopoError(Exception):
+     """Blocked-by 拓扑非法：环/自环/引用不存在的依赖号。"""
+ 
+ 
+-# ---------------------------------------------------------------------------
+-# ① config 键
+-# ---------------------------------------------------------------------------
+-
+-def read_config_pipeline(root) -> Tuple[str, str]:
+-    """读 <root>/openspec/config.yaml 顶层 `impl-pipeline:` 行（取值委托给 `_yq()`）。
+-
+-    返回 (pipeline, note)：
+-        缺失/空值      → ("tickets", "absent")
+-        tickets/superpowers → (值, "ok")
+-        其他值/整份 config.yaml 语法损坏 → ("tickets", "unknown-value:<原文或 yq 诊断>")
+-        （F12：非法值回显，区别于缺省；语法损坏同归此路径——fail 向新缺省管线（tickets），且可诊断。
+-        [simplify-workflow] 缺省从 superpowers 翻转为 tickets——tickets 管线已是本仓与
+-        下游试点的常态路径，superpowers 现在只作显式声明保留（不变：显式
+-        `impl-pipeline: superpowers` 仍生效，见下方 LEGAL_PIPELINES 分支）。
+-        [shared-yaml-subset-parser] 旧版的「损坏标量」（未闭合引号等）在 yq 方案下不再是
+-        本函数自己判定的一类——那类输入会让 yq 对整份 config.yaml 的解析直接失败
+-        （exit≠0），与其它语法错误一样落入下方 `except RuntimeError` 分支，诊断精度从
+-        「点名具体哪个标量坏」降为「yq 报的原始错误」，是切换到真解析器的已知代价
+-        （design.md spec-review-amendment F9 已登记，tasks.md §8.3 同类）。
+-    """
+-    config_path = Path(root) / "openspec" / "config.yaml"
+-    if not config_path.exists():
+-        return "tickets", "absent"
+-
+-    try:
+-        raw = _yq('."impl-pipeline"', config_path, default=None)
+-    except RuntimeError as exc:
+-        return "tickets", f"unknown-value:{exc}"
+-
+-    if raw is None:
+-        return "tickets", "absent"
+-    if not isinstance(raw, str):
+-        # yq 解出的是非字符串结构（如 list/map/number）——本字段的合法值域只有两个字面串，
+-        # 结构类型错本身就是「非法值」，与字符串越域同归 unknown-value。
+-        return "tickets", f"unknown-value:{raw!r}"
+-    if raw == "":
+-        return "tickets", "absent"
+-    if raw in LEGAL_PIPELINES:
+-        return raw, "ok"
+-    return "tickets", f"unknown-value:{raw}"
+-
+-
+-# ---------------------------------------------------------------------------
+-# ② plan frontmatter marker
+-# ---------------------------------------------------------------------------
+-
+-def read_plan_marker(plan_path) -> Optional[str]:
+-    """读 plan 文件头 frontmatter 的 `impl-pipeline` marker（取值委托给 `_yq()`）。
+-
+-    文件缺            → None
+-    无 frontmatter / 无键 → "superpowers"（旧管线产物，不嗅探正文内容）
+-    首块 frontmatter 含 impl-pipeline: tickets|superpowers 单值 → 该值
+-    键重复 / 值非法 / 值损坏（未闭合引号等）/ frontmatter 未闭合 → raise RouteStop（UNKNOWN 语义，停）
+-
+-    [simplify-workflow] 本函数的"无 frontmatter/无键 → superpowers"缺省**刻意冻结不变**
+-    （不随 read_config_pipeline 的缺省翻转而翻转）：marker 只在 plan 文件已存在时才有意义，
+-    已存在的 plan 代表"已出票"——若把这里也悄悄改成 tickets，会让翻转前用旧管线出的、
+-    frontmatter 尚无 marker 的在途 plan 静默改道，与"marker 存在即锁定优先于 config"的
+-    设计初衷（防两管线混跑）自相矛盾。
+-
+-    [shared-yaml-subset-parser] frontmatter 边界（首行 `---` + 闭合 `---`）与
+-    `impl-pipeline` 键重复计数仍走原始文本预扫描（原因见文件头注释：yq 既不要求闭合
+-    `---`、也不会报告重复键），预扫描通过后才调 `_yq()` 取真值——值损坏（未闭合引号等）
+-    此时体现为 yq 对该 frontmatter 段解析失败（`RuntimeError`），同样映射为 RouteStop。
+-    """
+-    p = Path(plan_path)
+-    if not p.exists():
+-        return None
+-
+-    text = p.read_text(encoding="utf-8", errors="replace")
+-    if text.startswith("﻿"):
+-        text = text[1:]  # [impl-review-fix] BOM 剥离，口径对齐 ship_gate.py:308
+-    lines = text.splitlines()
+-    if not lines or lines[0].strip() != _FRONTMATTER_DELIM:
+-        return "superpowers"  # 无 frontmatter
+-
+-    close_idx: Optional[int] = None
+-    for i in range(1, len(lines)):
+-        if lines[i].strip() == _FRONTMATTER_DELIM:
+-            close_idx = i
+-            break
+-    if close_idx is None:
+-        # 必须在调用 yq 之前短路：`--front-matter=extract` 不要求闭合 `---`——未闭合时会把
+-        # 之后全部内容当同一份 YAML 文档处理（`### Task N:` 类行被当注释吞掉），从而对
+-        # 「未闭合」这一结构性契约缺陷"看似"解析成功，掩盖掉本该 raise 的 RouteStop。
+-        raise RouteStop(f"plan frontmatter 未闭合: {p}")
+-
+-    key_hits = sum(1 for line in lines[1:close_idx] if _PIPELINE_KEY_RE.match(line))
+-    if key_hits == 0:
+-        return "superpowers"  # frontmatter 在，但无 impl-pipeline 键
+-    if key_hits > 1:
+-        raise RouteStop(f"plan frontmatter impl-pipeline 键重复: {p}")
+-
+-    try:
+-        value = _yq('."impl-pipeline"', p, front_matter=True, default=None)
+-    except RuntimeError as exc:
+-        raise RouteStop(
+-            f"plan frontmatter impl-pipeline 值损坏（yq 解析失败: {exc}）: {p}") from exc
+-    if not isinstance(value, str) or value not in LEGAL_PIPELINES:
+-        raise RouteStop(f"plan frontmatter impl-pipeline 值非法: {value!r} ({p})")
+-    return value
+-
+-
+-# ---------------------------------------------------------------------------
+-# 路由合成：marker 存在（非 None）优先（在途锁定）；marker 为 None（plan 缺）→ 用 config（首跳）
+-# ---------------------------------------------------------------------------
+-
+-def resolve_pipeline(config_pipeline: str, marker: Optional[str]) -> str:
+-    if marker is None:
+-        return config_pipeline
+-    return marker
+-
+-
+ # ---------------------------------------------------------------------------
+ # Blocked-by 拓扑
+ # ---------------------------------------------------------------------------
+ 
+ def parse_blocked_by(plan_text: str) -> Dict[int, Set[int]]:
+     """按 `### Task N:` 分段解析 `Blocked-by:`（`none` 或逗号号列）。
+ 
+     [impl-review-fix F4] fence-aware：围栏内的行对标题与声明行均不可见，口径与
+     ship_gate._parse_plan **同源**——直接复用 `ship_gate.FenceTracker`（`` ``` `` 与 `~~~`
+     两族、闭合须同种且长度 ≥ 开启符、尾部只余空白），MUST NOT 再手抄
+@@ -461,122 +255,24 @@ def extract_task_text(plan_text: str, task_id: int) -> Optional[str]:
+         if collecting and cur_tid == task_id:
+             out_lines.append(line)
+ 
+     if fence.inside:
+         raise TopoError("plan 存在未闭合的 fenced 代码块（```），解析不可靠")
+     if not seen:
+         return None
+     return "\n".join(out_lines) + "\n"
+ 
+ 
+-# ---------------------------------------------------------------------------
+-# plan_sha（唯一 subprocess 用途）
+-# ---------------------------------------------------------------------------
+-
+-def _get_plan_sha(root: Path, plan_path: Path) -> str:
+-    if not plan_path.exists():
+-        return "-"
+-    try:
+-        rel = plan_path.relative_to(root)
+-        target = str(rel)
+-    except ValueError:
+-        target = str(plan_path)
+-    try:
+-        result = subprocess.run(
+-            ["git", "-C", str(root), "log", "-1", "--format=%h", "--", target],
+-            capture_output=True, text=True, timeout=10,
+-            encoding="utf-8", errors="replace",
+-        )
+-    except Exception:
+-        return "-"
+-    if result.returncode != 0:
+-        return "-"
+-    sha = result.stdout.strip()
+-    return sha if sha else "-"
+-
+-
+ # ---------------------------------------------------------------------------
+ # CLI
+ # ---------------------------------------------------------------------------
+ 
+-def _cmd_route(args: argparse.Namespace) -> int:
+-    root = Path(args.root)
+-    change = args.change
+-    change_dir = root / "openspec" / "changes" / change
+-
+-    # [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名经共享 resolver 定位
+-    # （单一源 = ship_gate.resolve_plan_path，见上方 sibling-import）；MUST NOT 在此手抄
+-    # 候选文件名列表。resolver 引不到（装歪/版本不符）⇒ fail-closed，与 FenceTracker 缺失
+-    # 同一停机纪律，不静默回退旧硬编码文件名。
+-    if _resolve_plan_path is None:
+-        print("无法加载计划文件名 resolver 单一源 ship_gate.resolve_plan_path，"
+-              "拒绝以分叉口径定位计划文件"
+-              + (f"（import 失败原因：{_FENCE_IMPORT_ERR}）" if _FENCE_IMPORT_ERR else ""),
+-              file=sys.stderr)
+-        return EXIT_ROUTE_STOP
+-    try:
+-        plan_path = _resolve_plan_path(change_dir)
+-    except _PlanNameConflict as e:
+-        print(str(e), file=sys.stderr)
+-        return EXIT_ROUTE_STOP
+-    if plan_path is None:
+-        # 两者皆缺——用新名占位（不存在的路径），下游 read_plan_marker/_get_plan_sha
+-        # 对不存在的文件均已定义为「缺席」语义，行为与改造前的硬编码路径等价。
+-        # [harden-implement-review-loop Task3 fix1 · finding3] 无 `else "tickets.md"` 兜底：
+-        # 走到本行时 `_resolve_plan_path is not None` 已在上面判过（否则第 461 行已
+-        # return EXIT_ROUTE_STOP），即 import 必已成功、`_PLAN_FILENAMES` 必非空——
+-        # 该分支在当前控制流下不可达，且与 `PLAN_FILENAMES[0]` 重复硬编码，纯死代码。
+-        plan_path = change_dir / _PLAN_FILENAMES[0]
+-
+-    config_pipeline, config_note = read_config_pipeline(root)
+-
+-    try:
+-        marker = read_plan_marker(plan_path)
+-    except RouteStop as e:
+-        print(str(e), file=sys.stderr)
+-        return EXIT_ROUTE_STOP
+-
+-    pipeline = resolve_pipeline(config_pipeline, marker)
+-
+-    # [simplify-workflow] config_display / marker_display 的折叠锚点对称翻转后**刻意不同**
+-    # （非遗漏）：两侧缺省态锚在不同的字面值——
+-    #   config 侧锚新缺省 tickets：absent/unknown-value 分支现在都回退到 "tickets"
+-    #     （read_config_pipeline 已翻转），但展示仍保留三态原文（absent/raw 值/tickets），
+-    #     不折叠——config_note 元组本就区分得开，折叠反而丢诊断信息。
+-    #   marker 侧锚仍是旧缺省 superpowers（read_plan_marker 冻结不翻转，见其 docstring）：
+-    #     "无法区分"显式声明 superpowers"与"无 frontmatter/无键的隐式缺省"——两者
+-    #     read_plan_marker 返回值相同，且路由行为等价（均不锁 tickets，即不会让新缺省
+-    #     生效），折叠显示 none。这一折叠与 config 侧的翻转无关——marker 的锚点本就
+-    #     没有翻转，折叠触发条件（`marker == "superpowers"`）同样不随之改变。
+-    if config_note == "absent":
+-        config_display = "absent"
+-    elif config_note == "ok":
+-        config_display = config_pipeline
+-    elif config_note.startswith("unknown-value:"):
+-        config_display = config_note[len("unknown-value:"):]
+-    else:  # pragma: no cover - 防御性兜底，理论不可达
+-        config_display = config_note
+-
+-    if marker is None:
+-        marker_display = "absent"
+-    elif marker == "superpowers":
+-        marker_display = "none"
+-    else:
+-        marker_display = marker
+-
+-    plan_sha = _get_plan_sha(root, plan_path)
+-
+-    print(f"PIPELINE_RECEIPT change={change} config={config_display} "
+-          f"marker={marker_display} pipeline={pipeline} plan_sha={plan_sha}")
+-    return 0
+-
+-
+ def _cmd_frontier(args: argparse.Namespace) -> int:
+     plan_path = Path(args.plan)
+     if not plan_path.exists():
+         print(f"plan 文件不存在: {plan_path}", file=sys.stderr)
+         return EXIT_ROUTE_STOP
+ 
+     text = plan_path.read_text(encoding="utf-8", errors="replace")
+ 
+     done_arg = args.done.strip()
+     if done_arg.lower() == "none" or not done_arg:
+@@ -627,46 +323,40 @@ def _cmd_task_text(args: argparse.Namespace) -> int:
+         # report/review-package 文件命名惯例（plan_path.parent 即 change_dir）。
+         out_path = plan_path.parent / "impl-reports" / f"task{args.task}-brief.md"
+     out_path.parent.mkdir(parents=True, exist_ok=True)
+     out_path.write_text(extracted, encoding="utf-8")
+     print(f"wrote {out_path}: {len(extracted.splitlines())} lines")
+     return 0
+ 
+ 
+ def build_parser() -> argparse.ArgumentParser:
+     p = argparse.ArgumentParser(
+-        description="sdflow-implement 路由/拓扑 stdlib helper（只读，不改 ship_gate.py）")
++        description="sdflow-implement tickets 调度 stdlib helper（只读，不改 ship_gate.py）")
+     sub = p.add_subparsers(dest="cmd", required=True)
+ 
+-    route_p = sub.add_parser("route", help="计算实现管线路由（config → marker → 缺省）")
+-    route_p.add_argument("--root", required=True, help="仓根路径")
+-    route_p.add_argument("--change", required=True, help="change 名")
+-
+     frontier_p = sub.add_parser("frontier", help="按 Blocked-by 拓扑算 next-ready ticket 号")
+     frontier_p.add_argument("--plan", required=True, help="plan 文件路径")
+     frontier_p.add_argument("--done", required=True, help="逗号分隔已完成号列，或 none")
+ 
+     task_text_p = sub.add_parser(
+         "task-text", help="机械抠出单张 Task 段原文落盘，供 dispatch prompt 引用路径而非手抄")
+     task_text_p.add_argument("--plan", required=True, help="plan 文件路径")
+     task_text_p.add_argument("--task", required=True, type=int, help="Task 号")
+     task_text_p.add_argument(
+         "--out", help="输出路径（默认 <change_dir>/impl-reports/task<N>-brief.md）")
+ 
+     return p
+ 
+ 
+ def main(argv=None) -> int:
+     parser = build_parser()
+     args = parser.parse_args(argv)
+-    if args.cmd == "route":
+-        return _cmd_route(args)
+     if args.cmd == "frontier":
+         return _cmd_frontier(args)
+     if args.cmd == "task-text":
+         return _cmd_task_text(args)
+     parser.error(f"未知子命令: {args.cmd}")  # pragma: no cover
+     return 2
+ 
+ 
+ if __name__ == "__main__":
+     sys.exit(main())
+diff --git a/sdflow-implement/tests/test_impl_route.py b/sdflow-implement/tests/test_impl_route.py
+index 1c62c2d..758f908 100644
+--- a/sdflow-implement/tests/test_impl_route.py
++++ b/sdflow-implement/tests/test_impl_route.py
+@@ -1,431 +1,42 @@
+-"""pytest for sdflow-implement/scripts/impl_route.py
++"""pytest for sdflow-implement/scripts/impl_route.py（tickets 调度 helper：frontier /
++task-text 子命令 + Blocked-by 拓扑解析）
+ 
+-覆盖 plan Task 2 Step 1 的完整矩阵（TDD 先写，后实现）：
+-- read_config_pipeline：缺失/空值/tickets/superpowers/拼错值/带引号值
+-- read_plan_marker：缺文件/无 frontmatter/合法单键/键重复→停/非法值→停/未闭合 frontmatter→停
+-- CLI route：PIPELINE_RECEIPT 行格式（含在途锁定 vs 首跳 config 的路由合成规则）
++覆盖保留半场（frontier / task-text / parse_blocked_by / next_ready / extract_task_text /
++TopoError / BLOCKED_BY_RE）的完整矩阵：
+ - parse_blocked_by/next_ready：线性链/菱形/环→错/自环→错/缺依赖号→错/done 集过滤
+ - CLI frontier：next-ready 号列 + TopoError 退出码
+-
+-[impl-review-fix] 补充矩阵（code-review 裁决修复，TDD 先写后实现）：
+-- BOM 剥离：read_config_pipeline / read_plan_marker
+-- 键匹配容忍冒号前空格：`impl-pipeline : tickets`（config 与 frontmatter 两处）
+-- 损坏引号值 fail-closed：未闭合引号 / 闭合引号后跟垃圾字符（config→unknown-value，marker→RouteStop）
+ - parse_blocked_by fence-aware + 标题正则收紧（对 sdflow-ship golden fixtures 的跨脚本一致性回归）
+ - Blocked-by 三态 fail-closed：缺失/重复/大小写变体/全角冒号 → TopoError
+-- CLI route：显式 marker=superpowers 折叠显示（锁现行 display 行为）
++- 围栏词法单一源 = ship_gate.FenceTracker（跨脚本一致性）
++- extract_task_text：单张 Task 原文机械抠取 + CLI task-text
++
++[remove-superpowers-pipeline Task 1] route/config/marker 参照系用例已随 impl_route.py 路由
++半场一并退役——那些用例断言的是本文件已不存在的行为（`route` 子命令、`read_config_pipeline`
++/ `read_plan_marker` / `resolve_pipeline` / `RouteStop` / `_get_plan_sha` / `_yq` /
++`_resolve_plan_path` 单一源核验，见 openspec/changes/remove-superpowers-pipeline/design.md）。
++保留半场接口与行为逐字不变，本文件即回归网。
+ """
+ import subprocess
+ import sys
+ from pathlib import Path
+ 
+ import pytest
+ 
+ SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "impl_route.py"
+ sys.path.insert(0, str(SCRIPT.parent))
+ import impl_route as ir  # noqa: E402
+ 
+ REPO_ROOT = Path(__file__).resolve().parents[2]
+ SHIP_FIXTURES = REPO_ROOT / "sdflow-ship" / "tests" / "fixtures"
+ 
+ 
+-def _write_config(root: Path, body: str):
+-    cfg_dir = root / "openspec"
+-    cfg_dir.mkdir(parents=True, exist_ok=True)
+-    (cfg_dir / "config.yaml").write_text(body, encoding="utf-8")
+-
+-
+-def _mkchange(root: Path, name: str = "demo") -> Path:
+-    d = root / "openspec" / "changes" / name
+-    d.mkdir(parents=True, exist_ok=True)
+-    return d
+-
+-
+-# ---------------------------------------------------------------------------
+-# read_config_pipeline
+-# ---------------------------------------------------------------------------
+-
+-def test_config_missing_file(tmp_path):
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+-
+-
+-def test_config_missing_key(tmp_path):
+-    _write_config(tmp_path, "schema: spec-driven\nmetrics:\n  enabled: true\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+-
+-
+-def test_config_empty_value(tmp_path):
+-    _write_config(tmp_path, "impl-pipeline:\nmetrics:\n  enabled: true\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+-
+-
+-def test_config_value_tickets(tmp_path):
+-    _write_config(tmp_path, "impl-pipeline: tickets\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "ok")
+-
+-
+-def test_config_value_superpowers(tmp_path):
+-    _write_config(tmp_path, "impl-pipeline: superpowers\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "ok")
+-
+-
+-def test_config_value_typo(tmp_path):
+-    _write_config(tmp_path, "impl-pipeline: tikets\n")
+-    pipeline, note = ir.read_config_pipeline(tmp_path)
+-    assert pipeline == "tickets"
+-    assert note == "unknown-value:tikets"
+-
+-
+-def test_config_value_quoted_double(tmp_path):
+-    _write_config(tmp_path, 'impl-pipeline: "tickets"\n')
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "ok")
+-
+-
+-def test_config_value_quoted_single(tmp_path):
+-    _write_config(tmp_path, "impl-pipeline: 'superpowers'\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("superpowers", "ok")
+-
+-
+-def test_config_commented_line_ignored(tmp_path):
+-    # 模板注释态（config.template.yaml 先例）：`# impl-pipeline: tickets` 不应被当真键读到
+-    _write_config(tmp_path, "# impl-pipeline: tickets\nschema: spec-driven\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+-
+-
+-def test_config_indented_mention_not_matched(tmp_path):
+-    # 非顶层（缩进）出现的同名文本不应误判为键命中（如 context 块标量内提及）
+-    _write_config(tmp_path, "context: |\n  聊到 impl-pipeline: tickets 只是举例\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "absent")
+-
+-
+-# ---------------------------------------------------------------------------
+-# [impl-review-fix] BOM 剥离
+-# ---------------------------------------------------------------------------
+-
+-def test_config_bom_prefix_legal_value(tmp_path):
+-    # BOM + 合法 frontmatter/键值：剥 BOM 前会被误判「无键命中」，静默锁错管线
+-    _write_config(tmp_path, "﻿impl-pipeline: tickets\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "ok")
+-
+-
+-def test_marker_bom_prefix_tickets(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("﻿---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+-                 encoding="utf-8")
+-    assert ir.read_plan_marker(p) == "tickets"
+-
+-
+-# ---------------------------------------------------------------------------
+-# [impl-review-fix] 键匹配容忍冒号前空格
+-# ---------------------------------------------------------------------------
+-
+-def test_config_key_space_before_colon(tmp_path):
+-    _write_config(tmp_path, "impl-pipeline : tickets\n")
+-    assert ir.read_config_pipeline(tmp_path) == ("tickets", "ok")
+-
+-
+-def test_marker_key_space_before_colon(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("---\nimpl-pipeline : tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+-                 encoding="utf-8")
+-    assert ir.read_plan_marker(p) == "tickets"
+-
+-
+-# ---------------------------------------------------------------------------
+-# [impl-review-fix] 损坏引号值 fail-closed（未闭合引号 / 闭合引号后跟垃圾字符）
+-# ---------------------------------------------------------------------------
+-
+-def test_config_value_quoted_unclosed_damaged(tmp_path):
+-    _write_config(tmp_path, 'impl-pipeline: "tickets\n')
+-    pipeline, note = ir.read_config_pipeline(tmp_path)
+-    assert pipeline == "tickets"
+-    assert note.startswith("unknown-value:")
+-
+-
+-def test_config_value_quoted_trailing_junk_damaged(tmp_path):
+-    _write_config(tmp_path, 'impl-pipeline: "tickets" junk\n')
+-    pipeline, note = ir.read_config_pipeline(tmp_path)
+-    assert pipeline == "tickets"
+-    assert note.startswith("unknown-value:")
+-
+-
+-def test_marker_quoted_unclosed_stops(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text('---\nimpl-pipeline: "tickets\n---\n### Task 1: A\nBlocked-by: none\n',
+-                 encoding="utf-8")
+-    with pytest.raises(ir.RouteStop):
+-        ir.read_plan_marker(p)
+-
+-
+-def test_marker_quoted_trailing_junk_stops(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text('---\nimpl-pipeline: "tickets" junk\n---\n### Task 1: A\nBlocked-by: none\n',
+-                 encoding="utf-8")
+-    with pytest.raises(ir.RouteStop):
+-        ir.read_plan_marker(p)
+-
+-
+-# ---------------------------------------------------------------------------
+-# read_plan_marker
+-# ---------------------------------------------------------------------------
+-
+-def test_marker_file_missing(tmp_path):
+-    assert ir.read_plan_marker(tmp_path / "tickets.md") is None
+-
+-
+-def test_marker_no_frontmatter(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
+-    assert ir.read_plan_marker(p) == "superpowers"
+-
+-
+-def test_marker_empty_file(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("", encoding="utf-8")
+-    assert ir.read_plan_marker(p) == "superpowers"
+-
+-
+-def test_marker_frontmatter_no_key(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("---\ntitle: x\n---\n### Task 1: A\n", encoding="utf-8")
+-    assert ir.read_plan_marker(p) == "superpowers"
+-
+-
+-def test_marker_valid_single_key_tickets(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
+-    assert ir.read_plan_marker(p) == "tickets"
+-
+-
+-def test_marker_valid_single_key_superpowers(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("---\nimpl-pipeline: superpowers\n---\n### Task 1: A\n", encoding="utf-8")
+-    assert ir.read_plan_marker(p) == "superpowers"
+-
+-
+-def test_marker_duplicate_key_stops(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text(
+-        "---\nimpl-pipeline: tickets\nimpl-pipeline: superpowers\n---\n### Task 1: A\n",
+-        encoding="utf-8")
+-    with pytest.raises(ir.RouteStop):
+-        ir.read_plan_marker(p)
+-
+-
+-def test_marker_illegal_value_stops(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("---\nimpl-pipeline: bogus\n---\n### Task 1: A\n", encoding="utf-8")
+-    with pytest.raises(ir.RouteStop):
+-        ir.read_plan_marker(p)
+-
+-
+-def test_marker_unclosed_frontmatter_stops(tmp_path):
+-    p = tmp_path / "plan.md"
+-    p.write_text("---\nimpl-pipeline: tickets\n### Task 1: A\n", encoding="utf-8")
+-    with pytest.raises(ir.RouteStop):
+-        ir.read_plan_marker(p)
+-
+-
+-# ---------------------------------------------------------------------------
+-# CLI: route → PIPELINE_RECEIPT（路由合成规则 + receipt 行格式）
+-# ---------------------------------------------------------------------------
+-
+-def _run_route(root, change):
+-    r = subprocess.run(
+-        [sys.executable, str(SCRIPT), "route", "--root", str(root), "--change", change],
+-        capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    return r.returncode, r.stdout.strip(), r.stderr.strip()
+-
+-
+-def test_cli_route_absent_absent_defaults_tickets(tmp_path):
+-    _mkchange(tmp_path)
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert out == ("PIPELINE_RECEIPT change=demo config=absent marker=absent "
+-                    "pipeline=tickets plan_sha=-")
+-
+-
+-def test_cli_route_config_tickets_plan_missing_first_jump(tmp_path):
+-    # marker 缺席（plan 文件不存在）→ 用 config 值（首跳）
+-    _mkchange(tmp_path)
+-    _write_config(tmp_path, "impl-pipeline: tickets\n")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert "config=tickets" in out
+-    assert "marker=absent" in out
+-    assert "pipeline=tickets" in out
+-
+-
+-def test_cli_route_marker_locks_over_config_change(tmp_path):
+-    # marker 存在（tickets）时 marker 优先——事后把 config 改回 superpowers 不影响在途 change
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text(
+-        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
+-    _write_config(tmp_path, "impl-pipeline: superpowers\n")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert "marker=tickets" in out
+-    assert "pipeline=tickets" in out
+-
+-
+-def test_cli_route_marker_implicit_superpowers_locks_over_config(tmp_path):
+-    # marker 存在但无显式声明（旧管线产物，隐式 superpowers）——同样锁定，不因 config 现在
+-    # 说 tickets 就切换（防两管线混跑）
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
+-    _write_config(tmp_path, "impl-pipeline: tickets\n")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert "marker=none" in out
+-    assert "pipeline=superpowers" in out
+-
+-
+-def test_cli_route_marker_explicit_superpowers_displays_none(tmp_path):
+-    # [impl-review-fix 补测 7] 现行折叠行为：显式 marker=superpowers 与隐式缺省（无
+-    # frontmatter/无键）在 receipt 里显示相同（marker=none）——read_plan_marker 两种情形返回
+-    # 同一个字符串 "superpowers"，receipt 无法区分（display 改进已 defer），本用例锁定现状。
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text(
+-        "---\nimpl-pipeline: superpowers\n---\n### Task 1: A\nBlocked-by: none\n",
+-        encoding="utf-8")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert "marker=none" in out
+-    assert "pipeline=superpowers" in out
+-
+-
+-def test_cli_route_stop_on_bad_marker(tmp_path):
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text(
+-        "---\nimpl-pipeline: tickets\nimpl-pipeline: superpowers\n---\n### Task 1: A\n",
+-        encoding="utf-8")
+-    code, out, err = _run_route(tmp_path, "demo")
+-    assert code == 6
+-    assert out == ""
+-    assert err  # stderr 原因非空
+-
+-
+-def test_cli_route_unknown_config_value_echoed(tmp_path):
+-    _mkchange(tmp_path)
+-    _write_config(tmp_path, "impl-pipeline: tikets\n")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert "config=tikets" in out
+-    assert "pipeline=tickets" in out
+-
+-
+-def test_cli_route_plan_sha_dash_when_no_plan(tmp_path):
+-    _mkchange(tmp_path)
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert "plan_sha=-" in out
+-
+-
+-def test_cli_route_plan_sha_present_when_committed(tmp_path):
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text(
+-        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\n", encoding="utf-8")
+-    subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "seed"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    sha_field = [seg for seg in out.split() if seg.startswith("plan_sha=")][0]
+-    sha = sha_field.split("=", 1)[1]
+-    assert sha != "-"
+-    assert len(sha) == 7
+-    assert all(c in "0123456789abcdef" for c in sha)
+-
+-
+-# ---------------------------------------------------------------------------
+-# [harden-implement-review-loop Task3 · D5/adr-0033] 计划文件名共享 resolver：
+-# route 侧同样经 ship_gate.resolve_plan_path 定位（单一源，非本文件手抄第二份候选）。
+-# ---------------------------------------------------------------------------
+-
+-def test_cli_route_picks_up_new_plan_name_tickets_md(tmp_path):
+-    # 仅新名 tickets.md 存在（无旧名）→ resolver 照常识别（marker/pipeline 行为与旧名等价）
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text(
+-        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+-        encoding="utf-8")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    assert "marker=tickets" in out
+-    assert "pipeline=tickets" in out
+-
+-
+-def test_cli_route_both_plan_names_present_fails_closed(tmp_path):
+-    # 两个计划文件名同时存在 → fail-closed（不猜哪个有效），退出码与既有 RouteStop 语义一致
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text(
+-        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+-        encoding="utf-8")
+-    (d / "superpowers-plan.md").write_text(
+-        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+-        encoding="utf-8")
+-    code, out, err = _run_route(tmp_path, "demo")
+-    assert code == ir.EXIT_ROUTE_STOP
+-    assert out == ""
+-    assert "tickets.md" in err and "superpowers-plan.md" in err
+-
+-
+-def test_cli_route_new_plan_name_plan_sha_present_when_committed(tmp_path):
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text(
+-        "---\nimpl-pipeline: tickets\n---\n### Task 1: A\nBlocked-by: none\n",
+-        encoding="utf-8")
+-    subprocess.run(["git", "init", "-q", "-b", "main", str(tmp_path)],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@t"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    subprocess.run(["git", "-C", str(tmp_path), "commit", "-q", "-m", "seed"],
+-                    check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
+-    code, out, _ = _run_route(tmp_path, "demo")
+-    assert code == 0
+-    sha_field = [seg for seg in out.split() if seg.startswith("plan_sha=")][0]
+-    assert sha_field.split("=", 1)[1] != "-"
+-
+-
+-def test_resolve_plan_path_single_source_used_by_route(tmp_path):
+-    # 单一源核验：impl_route 引入的 resolve_plan_path 与 ship_gate 里的是同一个对象，
+-    # 非各自手抄的两份实现（MUST NOT 手抄第二份，见 tasks.md §5 前言）。
+-    #
+-    # [harden-implement-review-loop Task3 fix1 · finding2] 行为等价断言（旧版本仅
+-    # `== d / "tickets.md"`）对「手抄了一份等价实现」是恒真锚——若真被换成手抄副本，
+-    # 该断言仍全绿。改用身份断言（同 :653 `ir._FenceTracker is sg.FenceTracker` 的范式），
+-    # 手抄副本会让 `is` 判假、测试必红。三个导入（resolve_plan_path / PlanNameConflict /
+-    # PLAN_FILENAMES）逐一核身份，而非只核其中一个函数的返回值。
+-    sys.path.insert(0, str(REPO_ROOT / "sdflow-ship" / "scripts"))
+-    import ship_gate as sg  # noqa: E402
+-
+-    assert ir._resolve_plan_path is not None
+-    assert ir._resolve_plan_path is sg.resolve_plan_path
+-    assert ir._PlanNameConflict is sg.PlanNameConflict
+-    assert ir._PLAN_FILENAMES is sg.PLAN_FILENAMES
+-
+-    d = _mkchange(tmp_path)
+-    (d / "tickets.md").write_text("### Task 1: A\n- [ ] x\n", encoding="utf-8")
+-    assert ir._resolve_plan_path(d) == d / "tickets.md"
+-
+-
+ # ---------------------------------------------------------------------------
+ # parse_blocked_by / next_ready（拓扑）
+ # ---------------------------------------------------------------------------
+ 
+ def test_parse_linear_chain():
+     text = (
+         "### Task 1: A\n**Blocked-by:** none\n- [ ] x\n"
+         "### Task 2: B\n**Blocked-by:** 1\n- [ ] x\n"
+         "### Task 3: C\n**Blocked-by:** 2\n- [ ] x\n"
+     )
