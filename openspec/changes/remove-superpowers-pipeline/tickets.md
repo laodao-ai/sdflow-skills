@@ -25,12 +25,12 @@ impl-pipeline: tickets
 
 核验保留半场接口逐字不变：`parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE` 签名与行为零改动，gate sibling-import 回归绿（`test_gate_closing_ticket.py` 保留用例通过）。
 
-- [ ] `impl_route.py` 路由函数与 `route` 子命令已删除，文件头注释已改写
-- [ ] `_yq` 及仅为其服务的 import 已删除
-- [ ] `test_impl_route.py` 路由相关用例已退役，保留半场用例全绿
-- [ ] `test_yq_wrapper_consistency.py` 成员表已去 impl_route 条目
-- [ ] 保留半场接口（`parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE`）签名与行为零改动
-- [ ] `test_gate_closing_ticket.py` 保留用例（gate sibling-import）通过
+- [x] `impl_route.py` 路由函数与 `route` 子命令已删除，文件头注释已改写
+- [x] `_yq` 及仅为其服务的 import 已删除
+- [x] `test_impl_route.py` 路由相关用例已退役，保留半场用例全绿
+- [x] `test_yq_wrapper_consistency.py` 成员表已去 impl_route 条目
+- [x] 保留半场接口（`parse_blocked_by` / `TopoError` / `BLOCKED_BY_RE`）签名与行为零改动
+- [x] `test_gate_closing_ticket.py` 保留用例（gate sibling-import）通过
 
 ### Task 2: gate 单名 resolver 与测试同步
 
