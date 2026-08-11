@@ -15,7 +15,7 @@ bash setup.sh
 ```
 
 - `sdflow-upstream-watch` 新链在 `~/.claude/skills/` 与 `~/.codex/skills/` 均建立成功（symlink
-  → `/Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-upstream-watch`，`readlink` 核实过）。
+  → `~/Documents/04-sdflow-skills/sdflow-upstream-watch`，`readlink` 核实过）。
 - `python3 hack/sync_principles.py --check` → `✅ 23 个投放面全部与真相源一致`，exit 0。
 - setup.sh 输出同时含 `[gen_workflow_guide]` `[async-branch-parity]` `[tier-resolution-parity]`
   `[encoding-hygiene]` 四道机械门，均 ✅。
@@ -96,7 +96,7 @@ sources:
 ### 5. T264 → DONE
 
 ```bash
-python3 sdflow-issues/scripts/issues_v2.py --root /Users/cheneyzhao/Documents/04-sdflow-skills \
+python3 sdflow-issues/scripts/issues_v2.py --root ~/Documents/04-sdflow-skills \
   set-status --id T264 --to DONE \
   --evidence "schema drift 采集器实现 + 测试：sdflow-upstream-watch/scripts/upstream_watch.py collect_openspec() + _diff_dirs_sha256() + tests/test_upstream_watch.py 相关用例"
 ```

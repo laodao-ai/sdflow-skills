@@ -87,13 +87,13 @@ impl-pipeline: tickets
 4. `sdflow-upgrade/SKILL.md` 追加第 5 步提醒段：读 `~/.skills/sdflow-skills/openspec/upstream/anchors.yaml` 的 `last_run` + 阈值比较，缺失/不可解析静默跳过，零网络。
 5. README「Skills 列表」加 `sdflow-upstream-watch` 行（注明单仓专用）。
 
-- [ ] SKILL.md 编排正文完整（collect→报告→advance→呈报全路径）
-- [ ] 报告模板含三分诊、每源状态行、degraded 不罢工展示、格式漂移指本地路径
-- [ ] 吸收候选条目附预生成 recorder add 命令（含 source_change）
-- [ ] 首轮 seed 含 T245/T246/T267 条目
-- [ ] frontmatter description 触发词不与 sdflow-upgrade/sdflow-maintain 冲突、声明单仓专用
-- [ ] sdflow-upgrade 第 5 步提醒段：超阈值提醒/缺失静默跳过/未超阈值不提醒
-- [ ] README Skills 列表已更新
+- [x] SKILL.md 编排正文完整（collect→报告→advance→呈报全路径）
+- [x] 报告模板含三分诊、每源状态行、degraded 不罢工展示、格式漂移指本地路径
+- [x] 吸收候选条目附预生成 recorder add 命令（含 source_change）
+- [x] 首轮 seed 含 T245/T246/T267 条目
+- [x] frontmatter description 触发词不与 sdflow-upgrade/sdflow-maintain 冲突、声明单仓专用
+- [x] sdflow-upgrade 第 5 步提醒段：超阈值提醒/缺失静默跳过/未超阈值不提醒
+- [x] README Skills 列表已更新
 
 ### Task 4: 首轮 dogfood + 收口
 

@@ -1,0 +1,451 @@
+# Review package: 337f8a079354595f1c205f763c1e716f2e12a6fa..ed68a0537ad488935e8f84cbb036ef94178537fe
+
+## Commits
+ed68a05 feat(sdflow-upstream-watch): 首轮真实 dogfood + T264 收口
+
+## Files changed
+ .../impl-reports/task4-brief.md                    |  24 +++
+ .../impl-reports/task4-dogfood.md                  | 181 +++++++++++++++++++++
+ openspec/issues/{open => closed}/todo/T264.md      |   7 +-
+ openspec/upstream/anchors.yaml                     |  13 ++
+ openspec/upstream/reports/20260811T123502Z.md      | 158 ++++++++++++++++++
+ 5 files changed, 380 insertions(+), 3 deletions(-)
+
+## Diff
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task4-brief.md b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task4-brief.md
+new file mode 100644
+index 0000000..060dece
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task4-brief.md
+@@ -0,0 +1,24 @@
++### Task 4: 首轮 dogfood + 收口
++
++**Blocked-by:** 3
++**R-ID:** R1, R2, R3, R4
++
++跑首轮真实 `/sdflow-upstream-watch`（真网络四源采集）并收口散点：
++
++1. 开发 checkout 跑 `bash setup.sh` 验证新链建立 + `--check` 门绿。
++2. 真跑 collect（四源真实网络）→ 报告落 `openspec/upstream/reports/` → advance 建锚。
++3. 验证 gstack 节含真 delta（`960c3a8..` 区间非空为预期基线）。
++4. T264 → DONE（recorder set-status，evidence 指 schema drift 采集器实现 + 测试）。
++5. 确认 T245/T246/T267 在首轮报告 seed 节在场后保持池内原状。
++6. 全仓 `/usr/bin/python3 -m pytest` 绿。
++7. 手工验收 upgrade 提醒两分支（超阈值提醒行 / 无锚静默）。
++
++- [ ] setup.sh 新链建立成功 + sync_principles --check 绿
++- [ ] 首轮 collect 四源均产出 facts（ok 或 degraded 各有据）
++- [ ] 报告落盘且 gstack 节含真 delta
++- [ ] advance 建锚成功（anchors.yaml 已创建、last_run 已写入）
++- [ ] T264 已 set-status DONE（evidence 指采集器）
++- [ ] T245/T246/T267 池内原状未变
++- [ ] 全仓 pytest 绿
++- [ ] [e2e] upgrade 提醒超阈值时输出一行含天数的提醒、无锚时静默跳过
++
+diff --git a/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task4-dogfood.md b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task4-dogfood.md
+new file mode 100644
+index 0000000..fab027b
+--- /dev/null
++++ b/openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task4-dogfood.md
+@@ -0,0 +1,181 @@
++# Task 4: 首轮 dogfood + 收口 — 实现报告
++
++## 概述
++
++按 `impl-reports/task4-brief.md` 逐项跑通 `sdflow-upstream-watch` 首轮真实链路（真网络四源采集
++→ 模型写分诊报告 → advance 建锚）+ 收口 T264/T245/T246/T267 四个散点 + 全仓回归。全部 8 项验收
++标准逐条核验通过，无跳过项。
++
++## 逐步执行结果
++
++### 1. setup.sh 验证
++
++```bash
++bash setup.sh
++```
++
++- `sdflow-upstream-watch` 新链在 `~/.claude/skills/` 与 `~/.codex/skills/` 均建立成功（symlink
++  → `/Users/cheneyzhao/Documents/04-sdflow-skills/sdflow-upstream-watch`，`readlink` 核实过）。
++- `python3 hack/sync_principles.py --check` → `✅ 23 个投放面全部与真相源一致`，exit 0。
++- setup.sh 输出同时含 `[gen_workflow_guide]` `[async-branch-parity]` `[tier-resolution-parity]`
++  `[encoding-hygiene]` 四道机械门，均 ✅。
++
++### 2. 首轮 collect（真实网络）
++
++```bash
++python3 sdflow-upstream-watch/scripts/upstream_watch.py collect
++```
++
++facts 落 `openspec/upstream/.facts/20260811T123253Z.json`（该目录 `.gitignore`，非留存产物）。
++四源均 `status: ok`，无降级：
++
++- **gstack**：`status: ok`，`head_sha=94993f74…`，`commits` 含 1 条（v1.61.0.0 fix wave）。
++  本地锚源 `~/.skills/gstack` 实测 HEAD = `960c3a8d6c4d…`（v1.60.2.0），已用
++  `git -C ~/.skills/gstack log --oneline 960c3a8..FETCH_HEAD` 核实区间非空——**真 delta 确认**，
++  非「当前态即基线」零 delta 分支。
++- **matt**：`status: ok`，`head_sha=84fdeffd…`，首轮无持久锚 → `commits=[]`（design 定义的
++  预期行为），`installed_skills` 附带 36 个本地已装 skill 的 hash 快照。
++- **superpowers**：`status: ok`，`head_sha=920824c3…`，`installed_version=6.2.0`，首轮同样
++  `commits=[]`（无持久锚 ⇒ 当前态即基线）。
++- **openspec**：`status: ok`，`installed_version=latest_version=1.8.0`（无版本差）；
++  `schema_drift.status=ok`，`changed=[schema.yaml, templates/proposal.md]`，`added=[]`，
++  `removed=[]`。
++
++### 3. 模型写报告
++
++报告落 `openspec/upstream/reports/20260811T123502Z.md`，按 SKILL.md 模板逐源分节 + 三分诊。
++关键判断（均基于 `git show`/`diff` 实际读取内容，非解析上游语义）：
++
++- **gstack**（1 条 squashed 发布提交，9 个子修复）→ **不吸**（整体）。逐项核对：
++  - AskUserQuestion / `permissionDecision:'defer'` 语义漂移修复 → 已核对本仓唯一 PreToolUse
++    判定型 hook（`sdflow-init/assets/hooks/ff0-branch-guard.py`），其未判定路径本就只输出
++    `additionalContext`、从不设 `permissionDecision`（`ff-generation-constraints.md` 明文
++    约束）——本仓已站在正确一侧，无对应缺陷可修。
++  - `/careful` 链式 rm 绕过、`/context-restore` worktree 误读、`/sync-gbrain` drift 重注册、
++    developer-profile 计数重复、one-way-door 凭据网、design CLI 数值 flag NaN → 均已核实本仓
++    无对应机制/无同类缺陷面（已 grep 全部 `add_argument` 调用确认无数值型 flag 静默失败面）。
++- **matt/superpowers**：首轮零 delta（设计预期），无可分诊内容。
++- **OpenSpec**：**吸收候选** 1 条——`diff` 实读两文件后确认 schema drift 混合两类差异：
++  本仓既有意图性定制（`name: sdflow-spec-driven`、`sdflow:delegation` STOP 指令块）+ 上游
++  真实新能力（capability 标识从扁平 `<name>` 改为支持嵌套路径的 `<capability-path>`，如
++  `identity/user-auth`）。已在报告内预生成完整 `recorder add` 命令（含
++  `source_change: "sdflow-upstream-watch"`），未执行（人拍板后才执行，watch 自身不改池）。
++- **Seed T245/T246**：观望（D8 mid 档钉死前置决定未解除）。
++- **Seed T267**：吸收候选（scope 已由此前评审定义清楚，无阻塞前置决定；已在池内以 T267
++  追踪，本轮无需重新 add）。
++
++### 4. advance 建锚
++
++```bash
++python3 sdflow-upstream-watch/scripts/upstream_watch.py advance \
++  openspec/upstream/reports/20260811T123502Z.md \
++  openspec/upstream/.facts/20260811T123253Z.json
++```
++
++（注：`upstream_watch.py advance` 的实际 CLI 是位置参数 `advance <报告路径> <facts路径>`，
++非 `--report`/`--facts` 具名参数——已核实脚本 `argparse` 定义并按实际签名调用。）
++
++输出 `advance: 锚已推进`，exit 0。`openspec/upstream/anchors.yaml` 首次建档：
++
++```yaml
++schema_version: 1
++last_run: "2026-08-11T12:36:49Z"
++remind_after_days: 30
++sources:
++  gstack:
++    anchor_sha: 94993f74012782fd94416dd44b8314f6363a13a4
++  matt:
++    anchor_sha: 84fdeffd12f2ee307994d1eb6feb48173b6e0502
++  superpowers:
++    anchor_sha: 920824c3e9509890fbec03ba6097014222393022
++    installed_version: 6.2.0
++  openspec:
++    anchor_version: 1.8.0
++```
++
++### 5. T264 → DONE
++
++```bash
++python3 sdflow-issues/scripts/issues_v2.py --root /Users/cheneyzhao/Documents/04-sdflow-skills \
++  set-status --id T264 --to DONE \
++  --evidence "schema drift 采集器实现 + 测试：sdflow-upstream-watch/scripts/upstream_watch.py collect_openspec() + _diff_dirs_sha256() + tests/test_upstream_watch.py 相关用例"
++```
++
++（注：脚本实际 CLI 是 `--to`（非 brief 里写的 `--status`）、`--root` 须置于子命令前——已按
++`issues_v2.py --help` 实际签名调整，非按 brief 字面死跑。）
++
++输出 `{"id": "T264", "pool": "todo", "old": "PROPOSED", "new": "DONE", "file":
++"openspec/issues/closed/todo/T264.md"}`，exit 0。文件已迁移到
++`openspec/issues/closed/todo/T264.md`。
++
++### 6. T245/T246/T267 池内原状核验
++
++执行前后各取一次 sha1sum，逐字节比对：
++
++| 文件 | 执行前 | 执行后 | 一致 |
++|---|---|---|---|
++| T245.md | `3550b235…` | `3550b235…` | ✅ |
++| T246.md | `4999d4ff…` | `4999d4ff…` | ✅ |
++| T267.md | `8a1841f6…` | `8a1841f6…` | ✅ |
++
++三文件哈希在 collect/advance/set-status 全程前后完全一致，未被本轮任何机械操作触动。
++
++### 7. 全仓 pytest
++
++```bash
++/usr/bin/python3 -m pytest -q
++```
++
++`2607 passed, 10 skipped in 361.41s (0:06:01)`，0 failed。
++
++### 8. 手工验收 upgrade 提醒两分支 [e2e]
++
++未真跑 `sdflow-upgrade`（会真升级运行 checkout，超出本票范围），改为按 `sdflow-upgrade/SKILL.md`
++第 5 步文本描述的确定性 shell 逻辑逐分支手工模拟验证（`yq` 命令与判定条件均取自 SKILL.md 原文）：
++
++| 分支 | 输入 | 预期 | 实测结果 |
++|---|---|---|---|
++| 文件不存在 | 不存在的 anchors.yaml 路径 | 静默跳过（yq 非零退出被捕获） | `yq` 报 `Error: open … no such file`，exit 1 → 符合「静默跳过」前置条件 |
++| `last_run: null` | 构造的 scratch anchors.yaml | 静默跳过 | `yq -o json '.last_run'` → 输出字面 `null` → 符合「静默跳过」判据 |
++| 真实当前态（0 天） | 本轮刚建的真实 anchors.yaml | 未超阈值，不提醒 | `last_run` 距今 0 天 < 30 天阈值 → 不提醒 ✅ |
++| 超阈值（40 天前） | 构造的 scratch anchors.yaml（`last_run` = 40 天前） | 输出含天数的提醒行 | 输出：「距上次 `/sdflow-upstream-watch` 已 40 天（阈值 30 天），建议找时间跑一轮」✅ |
++
++四分支（含 brief 要求的「超阈值提醒」与「无锚静默」两条核心分支）逻辑均验证通过，构造文件均在
++scratchpad 临时目录操作、验证后清理，未污染仓内任何文件。
++
++## 验收标准逐条核验
++
++- [x] setup.sh 新链建立成功 + sync_principles --check 绿
++- [x] 首轮 collect 四源均产出 facts（4 源全部 `status: ok`，均有据——gstack 有真 delta，
++      matt/superpowers/openspec 首轮零 delta 为设计预期行为，非降级）
++- [x] 报告落盘且 gstack 节含真 delta（`960c3a8..94993f7` 区间非空，1 条 commit）
++- [x] advance 建锚成功（`anchors.yaml` 已创建、`last_run` 已写入）
++- [x] T264 已 set-status DONE（evidence 指采集器实现+测试）
++- [x] T245/T246/T267 池内原状未变（sha1sum 前后逐字节比对一致）
++- [x] 全仓 pytest 绿（2607 passed, 10 skipped, 0 failed）
++- [x] [e2e] upgrade 提醒超阈值时输出一行含天数的提醒、无锚时静默跳过（四分支手工模拟验证）
++
++## 发现与偏离
++
++- brief 中 `advance --report <路径> --facts <路径>` 与 `set-status --status <值>` 两处命令语法
++  与脚本实际 CLI 不符（实际为位置参数 `advance <报告> <facts>`、`set-status --to <值>` 且
++  `--root` 须在子命令前）。已按脚本 `--help`/`argparse` 定义实际签名调整执行，未改动脚本本身——
++  这是 brief 文本的笔误，不是代码缺陷，如实记录供后续参考。
++- OpenSpec schema drift 的 `changed` 结果混合了「本仓既有意图性定制」与「上游真实新能力
++  （嵌套 capability 路径）」两类差异，报告内已用人工 diff 阅读区分并只把后者判「吸收候选」，
++  前者判「不吸/预期差异」——避免把已知定制误报为待办漂移。
++
++## 产出物清单
++
++- `openspec/upstream/anchors.yaml`（新建，首轮建锚）
++- `openspec/upstream/reports/20260811T123502Z.md`（新建，首轮分诊报告）
++- `openspec/upstream/.facts/20260811T123253Z.json`（`.gitignore`，非留存产物，未提交）
++- `openspec/issues/open/todo/T264.md` → `openspec/issues/closed/todo/T264.md`（DONE）
++- `openspec/changes/implement-workflow-optimization-2026-08-p3/impl-reports/task4-dogfood.md`（本文件）
++
++## 未改动确认
++
++- 未修改 `tickets.md` / `design.md` / `proposal.md` / `specs/` / `tasks.md`（`tickets.md` 的
++  工作区改动是任务开始前已存在的 Task 3 复选框补打，非本次改动，`git diff` 已核实内容与本票
++  执行内容无关）。
++- 未打 `task4-` 标签，未 `git commit`——按输出契约留给编排层双轴审后处理。
+diff --git a/openspec/issues/open/todo/T264.md b/openspec/issues/closed/todo/T264.md
+similarity index 81%
+rename from openspec/issues/open/todo/T264.md
+rename to openspec/issues/closed/todo/T264.md
+index 248e049..e6acc85 100644
+--- a/openspec/issues/open/todo/T264.md
++++ b/openspec/issues/closed/todo/T264.md
+@@ -1,25 +1,26 @@
+ ---
+ id: "T264"
+ pool: "todo"
+-status: "PROPOSED"
++status: "DONE"
+ priority: null
+ type: "基础设施"
+ date: "2026-07-01"
+ source_change: "align-sdflow-spec-with-openspec-schema"
+ module: "sdflow-init/assets/schemas/sdflow-spec-driven/ + openspec-1.7.0-followup roadmap"
+ summary: "project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。"
+-resolved_by: null
+-closed_date: null
++resolved_by: "implement-workflow-optimization-2026-08-p3"
++closed_date: "2026-08-11"
+ closed_reason: null
+ ---
+ ## T264: project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。
+ > project-local schema 是一次性 fork 快照；上游 spec-driven 更新后没有机械门提醒本仓漂移，当前 change 只记录边界，不实现 drift 检测或自动 rebase。
+ 
+ **关联文档**：`openspec/roadmaps/archive/openspec-1.7.0-followup/roadmap.md`、`sdflow-init/assets/workflow/generation-process.md`
+ 
+ **动机**：schema fork 的 instruction、模板与依赖图不会随上游自动更新，长期可能造成消费项目契约漂移。
+ 
+ **思路**：另开 change 设计并实现 fork 与上游的版本/内容比较、告警或 fail-closed 门；本 change 保持现状并在阶段一文档与 roadmap 明确该边界。
+ > 2026-07 状态：OPEN → PROPOSED
+ 
+ > [迁移自批次 align-sdflow-spec-with-openspec-schema] 原计划: <待填>
++> 2026-08-11 状态：PROPOSED → DONE（schema drift 采集器实现 + 测试：sdflow-upstream-watch/scripts/upstream_watch.py collect_openspec() + _diff_dirs_sha256() + tests/test_upstream_watch.py 相关用例）
+diff --git a/openspec/upstream/anchors.yaml b/openspec/upstream/anchors.yaml
+new file mode 100644
+index 0000000..1433b13
+--- /dev/null
++++ b/openspec/upstream/anchors.yaml
+@@ -0,0 +1,13 @@
++schema_version: 1
++last_run: "2026-08-11T12:36:49Z"
++remind_after_days: 30
++sources:
++  gstack:
++    anchor_sha: 94993f74012782fd94416dd44b8314f6363a13a4
++  matt:
++    anchor_sha: 84fdeffd12f2ee307994d1eb6feb48173b6e0502
++  superpowers:
++    anchor_sha: 920824c3e9509890fbec03ba6097014222393022
++    installed_version: 6.2.0
++  openspec:
++    anchor_version: 1.8.0
+diff --git a/openspec/upstream/reports/20260811T123502Z.md b/openspec/upstream/reports/20260811T123502Z.md
+new file mode 100644
+index 0000000..6d8c806
+--- /dev/null
++++ b/openspec/upstream/reports/20260811T123502Z.md
+@@ -0,0 +1,158 @@
++# 上游追踪分诊报告 20260811T123502Z
++
++生成时间：2026-08-11T12:32:53Z
++facts 来源：openspec/upstream/.facts/20260811T123253Z.json
++
++## Seed 分诊条目（仅首轮报告含此节）
++
++- **T245**：fix loop 熔断前插入一轮「换更强模型 fresh implementer 重试」，对齐 superpowers
++  subagent-driven-development 的第4-5轮机制。与 T246 共享同一个前置人工决定——是否解除
++  design D8（matt-workflow-integration）把 implementer 档位钉死为 mid 档的试点期变量控制
++  约束；该决定未定前两条均分诊为**观望**。
++- **T246**：按任务复杂度动态选 implementer 档位，对齐 superpowers subagent-driven-development
++  的 Model Selection 复杂度信号。同上，共享 D8 mid 档钉死解除的前置决定，分诊为**观望**。
++- **T267**：建立 python.md checklist domain 承接 Async/Sync 混用等 Python 专属检查点
++  （gstack Pass-2 遗留、absorb-gstack-review 因归属 domain 不存在而 defer）。无共享前置决定、
++  scope 已在此前评审中定义清楚（decision-memo D1 明确记录为「读法 B 候选」——本轮 p3 有意不
++  顺手做，理由是 scope 纪律而非价值存疑），分诊为**吸收候选**（已在池内以 T267 追踪，本轮
++  无需重新 add）。
++
++## gstack
++
++**采集状态**：ok（HEAD `94993f74012782fd94416dd44b8314f6363a13a4`）
++
++本地锚源（`~/.skills/gstack`）HEAD 为 `960c3a8d6c4d14cb4c5e551a8847f8ec7c4267df`
++（v1.60.2.0），首轮以此为天然锚，`960c3a8..94993f7` 区间非空——**确认真 delta**（非「当前态
++即基线」零 delta 分支）。
++
++- `94993f74012782fd94416dd44b8314f6363a13a4` v1.61.0.0 fix wave: guards failing open /
++  silent failures (9 fixes, 4 community PRs absorbed) (#2472) — **分诊：不吸**（整体）。
++  理由：单条 squashed 发布提交打包 9 个 gstack 自有 skill/hook 的 guard 修复，逐项与本仓
++  同类面对照如下（`git show` 取内容辅助判断，非解析上游语义，仅人工阅读 CHANGELOG.md 与
++  commit body）：
++  - AskUserQuestion 在 CC 2.1.89+ 被孤立（`question-preference-hook` 的
++    `permissionDecision:'defer'` 语义漂移为「暂停待外部恢复」）→ **不吸**：本仓无
++    question-preference 类 hook；已核对 `sdflow-init/assets/hooks/ff0-branch-guard.py`
++    （本仓唯一 PreToolUse 判定型 hook），其未判定路径本就只输出 `additionalContext`、
++    从不设置 `permissionDecision`（`ff-generation-constraints.md` 明文约束），已站在正确
++    一侧，无需吸收此修复。
++  - `/careful` 链式 `rm` 绕过（正则只看链中最后一个 `rm` 目标）→ **不吸**：本仓无同类
++    「按正则白名单放行危险命令链」的 guard 代码，无对应修补面。
++  - `/context-restore` 误读兄弟 worktree 的 checkpoint → **不吸**：本仓无 context-restore
++    类 skill。
++  - `/sync-gbrain` drift 重复注册 → **不吸**：本仓不集成 gbrain。
++  - developer-profile 会话计数重复计入 → **不吸**：本仓无 developer-profile 功能。
++  - one-way-door 凭据关键词网（复数形式 + 运行时接线）→ **不吸**：本仓无 one-way-door /
++    凭据拦截类功能。
++  - design CLI 数值 flag 静默 NaN（`--count`/`--retry`/`--timeout` 改为 loud 失败）→
++    **不吸**：已 grep 本仓全部 `add_argument` 调用，数值型参数均省略或统一走
++    `argparse` 默认字符串/choices 校验，无「非法数值静默吞掉」的等价缺陷面；巡查成本已付，
++    结论是无同类缺陷，非「未查」。
++  - 「closed as already fixed with receipts」三条（#1965/#1950/#1964）→ 不适用，均为
++    gstack 自身既有修复的回溯记录，非本仓可吸收面。
++
++（无采集降级）
++
++## matt
++
++**采集状态**：ok（bare 缓存 HEAD `84fdeffd12f2ee307994d1eb6feb48173b6e0502`）
++
++首轮无持久锚 ⇒「无锚 ⇒ 当前上游态即基线」，`commits` 为空（零 delta，非降级）。
++`installed_skills`（本地 `.skill-lock.json` 快照，仅记录，无历史对比对象）：
++
++| skill | skillFolderHash |
++|---|---|
++| grill-me | `8320e7b8` |
++| grill-with-docs | `21adba95` |
++| handoff | `3f7df8e7` |
++| improve-codebase-architecture | `e5beae48` |
++| prototype | `046ef7c3` |
++| setup-matt-pocock-skills | `3676b312` |
++| tdd | `57e1bee8` |
++| triage | `3e7a4915` |
++| domain-modeling | `028a0e44` |
++| grilling | `0ace40ac` |
++| ask-matt | `affab267` |
++| code-review | `9df6fdac` |
++| codebase-design | `c5dfc023` |
++| diagnosing-bugs | `0ecacff0` |
++| implement | `aa659906` |
++| research | `06c848c1` |
++| teach | `3b6a4245` |
++| to-spec | `b2f449aa` |
++| to-tickets | `b6224517` |
++| wayfinder | `83a96a44` |
++| writing-great-skills | `c84411b3` |
++| claude-handoff | `4da13972` |
++| design-an-interface | `59d5eca0` |
++| edit-article | `d3e748a6` |
++| git-guardrails-claude-code | `f02ae7c2` |
++| loop-me | `1cec9dea` |
++| migrate-to-shoehorn | `ad722b79` |
++| obsidian-vault | `1e814d16` |
++| qa | `3eed5beeb1` |
++| request-refactor-plan | `b0617c9c` |
++| resolving-merge-conflicts | `b601c904` |
++| scaffold-exercises | `ef19ca90` |
++| setup-pre-commit | `5e6e9301` |
++| ubiquitous-language | `483fe10b` |
++| wizard | `651aef46` |
++| writing-beats | `28c4a84a` |
++| writing-fragments | `ae1380ae` |
++| writing-shape | `2ca73419` |
++
++无 delta 可分诊（首轮建锚）。下一轮起 `advance` 已建的锚会推进，届时对比才产生真实
++commit delta。
++
++## superpowers
++
++**采集状态**：ok（marketplace HEAD `920824c3e9509890fbec03ba6097014222393022`，
++`installed_version`=6.2.0）
++
++首轮无持久锚 ⇒「无锚 ⇒ 当前上游态即基线」，`commits`/`source_sha_sequence` 均为空
++（零 delta，非降级）。已安装版本 6.2.0，无历史 delta 可分诊。
++
++## OpenSpec
++
++版本对照：已安装 `1.8.0` vs registry 最新 `1.8.0`（无版本差）。
++
++schema drift（对比基线 = fork 目录 `sdflow-init/assets/schemas/sdflow-spec-driven/`
++vs 已安装版 `@fission-ai/openspec` 的 `schemas/spec-driven/`，非 registry 最新版；
++零解析逐文件字节级 sha256 对比）：
++- changed: `schema.yaml`、`templates/proposal.md`
++- added: 无
++- removed: 无
++
++人工核对两文件的实际 diff（非解析，直接 `diff` 读内容）：混合两类差异——
++1. **本仓既有意图性定制**（预期差异，非新信号）：`name: sdflow-spec-driven`、
++   proposal 阶段的 `<!-- sdflow:delegation:start -->` STOP 指令块、行折行格式差异。
++2. **上游新增能力，fork 尚未跟进**（真实 delta）：上游模板把 capability 标识从扁平
++   `<name>`（`user-auth`）改为支持嵌套路径的 `<capability-path>`（如
++   `identity/user-auth`），并把 Modified Capabilities 一节的匹配口径从
++   「existing spec names」改为「exact existing path under openspec/specs/」——
++   即 OpenSpec 官方 schema 已原生支持嵌套 capability 目录组织，本仓 fork 的
++   `schema.yaml` / `templates/proposal.md` 措辞仍停留在扁平命名假设。
++
++**分诊：吸收候选**——第②类差异是本仓 fork 该跟进的真实上游能力升级（嵌套 capability
++路径组织对多模块项目有实际价值，且改动范围小，只涉及两个模板文件的措辞）。预生成入池
++命令：
++
++```bash
++python3 sdflow-issues/scripts/issues_v2.py add --pool todo --json '{
++  "module": "sdflow-init/assets/schemas/sdflow-spec-driven/schema.yaml + templates/proposal.md",
++  "summary": "跟随上游 OpenSpec CLI（@fission-ai/openspec 1.8.0）schema 模板变更：capability 标识从扁平 <name> 改为支持嵌套路径的 <capability-path>（如 identity/user-auth），Modified Capabilities 匹配口径改为精确既有路径；更新本仓 fork 的 schema.yaml + templates/proposal.md 措辞，保留既有 sdflow:delegation STOP 指令块不动",
++  "type": "上游吸收",
++  "source_change": "sdflow-upstream-watch"
++}'
++```
++
++（无采集降级）
++
++## 分诊摘要
++
++共 2 条 delta 具备可分诊内容（gstack 1 条 squashed 发布提交、OpenSpec 1 处 schema
++drift；matt/superpowers 首轮零 delta 仅建锚）；吸收候选 1 条（OpenSpec schema 嵌套
++capability 路径）、观望 2 条（seed T245/T246，D8 前置决定未解除）、不吸 1 条（gstack
++v1.61.0.0 fix wave，逐项核对无本仓等价缺陷面）；0 源降级（gstack/matt/superpowers/
++OpenSpec 均 `status: ok`）。T267 作为独立 seed 条目分诊为吸收候选（已在池内追踪，非
++本轮新增）。
