@@ -38,7 +38,7 @@
  阶段三·ship ── 过设计门后连续跑到 merge,无人类门 ─────────────────
    〔入口前 SHALL /clear（G1 交界例外之二，见 §三.2）；调 /sdflow-ship 时重述 merge 意图〕
    /sdflow-ship {change dir}                一次调用经 ship_gate 确定性台账驱动到底
-     ├─ 子步骤 A：实现管线（缺省 tickets → sdflow-implement；显式 superpowers → writing-plans + subagent-dev）
+     ├─ 子步骤 A：实现管线（sdflow-implement，唯一管线）
      │  └─ 逐 ticket/任务 [checkpoint]
      ├─ 子步骤 B：sdflow-code-review（每次全跑·独立冷视角·强制主审 → code-review-report.md）
      │  └─ [checkpoint]
@@ -74,8 +74,7 @@
 
 #### A. 实现管线
 
-- **缺省（tickets 轨）**：路由至 `sdflow-implement` 出票执行（产出 `tickets.md`〔D5/adr-0033〕）；逐 ticket checkpoint。
-- **显式 `impl-pipeline: superpowers`**：走 writing-plans → subagent-driven-development（产出 `superpowers-plan.md`）；quality-layering 注入点 A/B；逐任务 checkpoint。
+- **唯一管线**：路由至 `sdflow-implement` 出票执行（产出 `tickets.md`〔D5/adr-0033〕）；逐 ticket checkpoint。
 - 🔴 **派 implementer / task-reviewer / fix / 终审子代理时，dispatch prompt MUST 原文携带四条通则**——子代理是 fresh context，看不见 CLAUDE.md。
 
 #### B. sdflow-code-review
@@ -126,7 +125,7 @@ verify（防假✅，证据锚点）→ issues sweep 子步（§2.1：分诊本 
 - [ ] `/clear` 只在**两处阶段交界**用过（阶段一→阶段二、阶段二→阶段三；G1 具名例外）？**阶段内部**全程无 `/clear`？
 - [ ] sdflow-spec-review 是否一份报告 + 决策登记区（无中途 AskUserQuestion）？读了真实代码、过了命中领域清单、对抗裁决？
 - [ ] 设计是否过 HARD-GATE（用户批准）才进阶段三？（阶段二唯一人类门）
-- [ ] 阶段三实现管线是否按 impl-pipeline 缺省正确路由（缺省 tickets → sdflow-implement；显式 `superpowers` → writing-plans/subagent-dev）？
+- [ ] 阶段三实现管线是否正确路由至 `sdflow-implement`（唯一管线，无需判 impl-pipeline 键）？
 - [ ] sdflow-code-review 是否**每次全跑**（Step1 自持 scope 审计 scope+完成度、领域 code-checklists、对抗、机械引用核+二元裁决）？
 - [ ] 阶段三是否连续跑到 merge（**阶段内部**无 /clear——含 subagent-dev/sdflow-implement 执行模式、code-review→done 交接、无人类门；需控上下文用 /compact）？能修的自动修、拿不准的 defer？
 - [ ] sdflow-done 的 verify 是否每条 ✅ 附锚点（防假✅）？是否产出 hand-off.md？

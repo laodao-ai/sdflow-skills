@@ -74,12 +74,6 @@ rules:
 #   mid: <claude-model-id>
 #   light: <claude-model-id>
 
-# impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
-# 缺省请勿填（缺省一律 tickets；缺失/非法值同归此路径）；仅在新出 ticket 时刻读一次，
-# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change；
-# 显式 `impl-pipeline: superpowers` 仍生效，走旧管线。
-# impl-pipeline: tickets
-
 # test-suites（可选段）——sdflow-implement「聚合套件发现契约」的命令来源，优先于该票
 # implementer 运行时判定。缺省请勿填（未配置层由该票 implementer 依仓内既有约定判定）。
 # 具体命令因项目而异，由 sdflow-devenv 运行时调研测试基础设施后推荐写入（已有配置时保留不覆盖），

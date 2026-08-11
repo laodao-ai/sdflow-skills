@@ -70,10 +70,10 @@ impl-pipeline: tickets
 
 收口后全文 `grep -nE "superpowers|writing-plans|subagent-driven"` 逐条按 Success Metrics 合法残留清单分类处置——覆盖具名短语之外的残句。
 
-- [ ] `sdflow-ship/SKILL.md` 链序段已重写为直连派发，完成摘要已删管线槽位
-- [ ] `sdflow-implement/SKILL.md` 双轨表述已收口，description 已更新
-- [ ] `sdflow-done/SKILL.md` 轨道判定步与条件化分支已删除
-- [ ] 三 SKILL 的 superpowers/writing-plans/subagent-driven grep 仅剩合法残留
+- [x] `sdflow-ship/SKILL.md` 链序段已重写为直连派发，完成摘要已删管线槽位
+- [x] `sdflow-implement/SKILL.md` 双轨表述已收口，description 已更新
+- [x] `sdflow-done/SKILL.md` 轨道判定步与条件化分支已删除
+- [x] 三 SKILL 的 superpowers/writing-plans/subagent-driven grep 仅剩合法残留
 
 ### Task 4: bundle 资产与 config 收口
 

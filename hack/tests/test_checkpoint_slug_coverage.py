@@ -76,11 +76,11 @@ PLACEHOLDERS = {
 
 # 抠到的调用点数量下限 —— 防「正则一个字都没匹配上 ⇒ 循环空转 ⇒ 恒真绿」。
 # 语义是下限：新增调用点计数上升，不红；删光/正则失配则立刻打到下限之下。
-# 当前实测 16 处：SKILL.md 侧 9（sdflow-code-review ×2 / sdflow-spec-review ×3 /
-# sdflow-spec ×2 / sdflow-implement ×2）+ bundle 权威源 ×3 /
-# `checkpoint-commit.sh --help` 样例 ×4。（simplify-workflow 删除 embedded-test-sop
-# 和本仓 workflow 副本后从 17 降至 16）
-MIN_CALLSITES = 16
+# 当前实测 15 处：SKILL.md 侧 8（sdflow-code-review ×2 / sdflow-spec-review ×2 /
+# sdflow-spec ×2 / sdflow-implement ×2）+ bundle 权威源 sdflow-init/assets/workflow ×2 +
+# 本仓已解析副本 openspec/workflow ×1 + `checkpoint-commit.sh --help` 样例 ×4。
+# （remove-superpowers-pipeline 删除 prompts/step6-writing-plans.md 后从 16 降至 15）
+MIN_CALLSITES = 15
 
 
 def _resolve(slug):
@@ -123,7 +123,6 @@ def test_producer_globs_cover_the_downstream_authority_bundle():
     """
     files = {rel for rel, _, _ in collect_slugs()}
     for want in ("sdflow-init/assets/workflow/WORKFLOW-GUIDE.md",
-                 "sdflow-init/assets/workflow/prompts/step6-writing-plans.md",
                  "sdflow-init/assets/workflow/workflow.md",
                  "sdflow-init/assets/hack/checkpoint-commit.sh"):
         assert want in files, (

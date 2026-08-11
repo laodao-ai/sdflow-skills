@@ -57,12 +57,6 @@ rules:
 #   mid: <model-id>
 #   light: <model-id>
 
-# impl-pipeline（可选键）——阶段三实现管线路由：tickets | superpowers。
-# 缺省一律 tickets（缺失/非法值同归此路径）；仅在新出 ticket 时刻读一次，
-# 在途 change 以 plan frontmatter marker 为准，改本键不影响已出 ticket 的 change；
-# 显式 `impl-pipeline: superpowers` 仍生效，走旧管线。
-impl-pipeline: tickets
-
 # operations（可选段）——按操作类型（如 archive）下沉给执行子代理的硬约束指引。
 # guidance 形状为字符串数组（非字符串），否则 CLI 拒绝并打警告。
 operations:

@@ -1,8 +1,7 @@
 # yq-yaml-operations Specification
 
 ## Purpose
-本仓 6 个脚本（`sdflow-init/scripts/init.py`、`sdflow-ship/scripts/ship_gate.py`、
-`sdflow-implement/scripts/impl_route.py`、
+本仓 5 个脚本（`sdflow-init/scripts/init.py`、`sdflow-ship/scripts/ship_gate.py`、
 `sdflow-init/assets/workflow/tools/anchor_lint.py`（评审机械层权威源，全局单份共享，
 不再有消费仓镜像——见 `openspec/adr/0039-eliminate-dual-distribution-chain.md`）、
 `sdflow-done/scripts/roadmap_writeback_draft.py`、
