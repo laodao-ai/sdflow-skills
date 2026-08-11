@@ -1,3 +1,9 @@
+---
+ship-gate:
+  design_approved: true
+  reviewed_sha: 34fcfcb9d576d0690feba40a9a505d470423d8c6
+---
+
 # spec-review-report — implement-workflow-optimization-2026-08-p2
 
 评审轮：2026-08-10 · host=claude · 强档主审（opus）· 单批 dispatch：广审双镜（strategy/plan-eng）+ devex 领域镜（TG-28）+ 对抗镜 ×3（高风险档：BREAKING 裁决地基改造）+ 接地镜 + design-voice（codex/gpt-5.6-sol）。
