@@ -39,7 +39,7 @@ tests verify real behavior / architecture / security`——**纯通用**。它�
 
 **结论**：后置 review 的**通用质量部分是冗余**；真正残差只剩 **领域规则 + scope-drift + PR 风险 + 一点冷独立**。
 
-## 四、与 spec 侧同构（同一个元模式）
+## 四、与 spec 侧同构（同一个元模式）  <!-- §三已退役（remove-superpowers-pipeline），编号保留供外部引用 -->
 
 ```
         Prevention(建对)             Inline Detection(循环内抓)          Residual(冷,事后)
