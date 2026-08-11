@@ -510,6 +510,102 @@ def test_surfacing_threshold_uses_shared_constant(tmp_path, monkeypatch):
     assert "出现轮数 3" in block
 
 
+# ============================ DD1: mirror-dispositions.yaml 处置注记（四态）============================
+# implement-workflow-optimization-2026-08-p2 Task 2D。schema: {layer,lens,host,runner,site,
+# disposition,condition,date,rationale}；匹配键=(layer,lens,host,runner,site)，与 LMA.group_key 同键。
+# ANCHOR fixture 无 host 字段 → 双代兼容读 host="claude"；lens="domain" runner="claude" site="—"。
+
+def _write_dispositions(root, entries_yaml):
+    d = root / "openspec" / "retro"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "mirror-dispositions.yaml").write_text(entries_yaml, encoding="utf-8")
+
+
+def _flagged_archive(tmp_path, layer="spec-review"):
+    for i in range(1, 11):
+        d = tmp_path / "openspec/changes/archive" / f"2026-07-{i:02d}-c{i}"
+        d.mkdir(parents=True)
+        (d / "spec-review-report.md").write_text(
+            ANCHOR.format(layer=layer, f=1, a=1, ind=1) + "\n", encoding="utf-8")
+
+
+def test_dispositions_file_missing_zero_annotation(tmp_path):
+    # 状态①：文件缺失 = 零注记照旧 flag（向后兼容），不报错
+    _flagged_archive(tmp_path)
+    block = R.surfacing_block(str(tmp_path))
+    assert "出现轮数 10" in block
+    assert "已处置" not in block
+
+
+def test_dispositions_matched_key_annotates_flagged_line(tmp_path):
+    # 状态②：命中键 → 待复评行内追加 "→ 已处置: <disposition> (<date>)"
+    _flagged_archive(tmp_path)
+    _write_dispositions(tmp_path, """\
+- layer: spec-review
+  lens: domain
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "测试命中注记"
+""")
+    block = R.surfacing_block(str(tmp_path))
+    assert "→ 已处置: 保留 (2026-08-10)" in block
+
+
+def test_dispositions_bad_disposition_value_fail_loud(tmp_path):
+    # 状态③：disposition 非法域 → fail-loud 非零退出（此处以异常传播体现，MUST NOT 静默吞）
+    _flagged_archive(tmp_path)
+    _write_dispositions(tmp_path, """\
+- layer: spec-review
+  lens: domain
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 乱填一个值
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "非法 disposition"
+""")
+    with pytest.raises(Exception):
+        R.surfacing_block(str(tmp_path))
+
+
+def test_dispositions_malformed_yaml_fail_loud(tmp_path):
+    # 状态③变体：yaml 本身解析失败（缺字段）→ fail-loud
+    _flagged_archive(tmp_path)
+    _write_dispositions(tmp_path, """\
+- layer: spec-review
+  lens: domain
+  disposition: 保留
+""")
+    with pytest.raises(Exception):
+        R.surfacing_block(str(tmp_path))
+
+
+def test_dispositions_unmatched_key_warns_not_blocking(tmp_path, capsys):
+    # 状态④：键未命中任何锚组 → 告警不阻断（可能是已淘汰镜的存量记录）——报告仍正常生成
+    _flagged_archive(tmp_path)
+    _write_dispositions(tmp_path, """\
+- layer: code-review
+  lens: history
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 降采样
+  condition: "diff 含 rename 或大规模改动既有文件"
+  date: "2026-08-10"
+  rationale: "本轮 archive 语料无 code-review 数据，此键必不命中"
+""")
+    block = R.surfacing_block(str(tmp_path))
+    assert "出现轮数 10" in block           # 报告仍正常产出，未被未命中键拖垮
+    assert "已处置" not in block            # 未命中键不注记到 spec-review/domain 行
+    err = capsys.readouterr().err
+    assert "未命中" in err or "unmatched" in err.lower()
+
+
 def test_build_report_includes_surfacing_block(tmp_path):
     root = _init_repo(tmp_path)
     _commit(root, {"openspec/changes/foo/proposal.md": "a"}, "checkpoint(ff)")

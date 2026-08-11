@@ -814,7 +814,14 @@ def check_lens_metric(report_text, cli_layer, enums):
             host_v, runner_v = kv["host"], kv["runner"]
             expected = "unknown" if host_v == "unknown" else (host_v if host_v in _DUOS else None)
             if expected is not None and runner_v != expected:
-                v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ordinary-runner-host-mismatch"})
+                # DD2/设计门 Q1（implement-workflow-optimization-2026-08-p2）：合法组合矩阵扩展——
+                # 普通镜行「条件跳过」锚 runner="none" ∧ findings="0" 合法（锚行必落、跳过可见）；
+                # findings 非法值已由上方 not-nonneg-int 另报，此处只放行严格 "0"，非零 findings
+                # 仍判 mismatch（谎报跳过却计了数）。
+                findings_v = kv.get("findings")
+                legal_skip = runner_v == "none" and findings_v == "0"
+                if not legal_skip:
+                    v.append({"anchor": ln.strip()[:80], "field": "runner", "kind": "ordinary-runner-host-mismatch"})
         # add-codex-host-support（B1）：outside-voice lens-metric 行的 runner≠host（跨模型）合法，故不套普通镜规则——
         # 但仍有三条结构不变量 MUST 守（此前完全脱离校验 ⇒ 手写/emitter-bypass 的矛盾锚汇入 retro 价值表）。
         # 不依赖 reason_code（lens-metric 锚无该字段），纯结构判定，与 emitter 侧 _OV_RUNNER_DOMAIN/零执行不变量对齐：

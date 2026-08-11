@@ -1,0 +1,150 @@
+# mirror-dispositions.yaml — 评审镜处置记录（DD1，implement-workflow-optimization-2026-08-p2）
+#
+# 单一权威源：本文件由人在设计门/复评轮拍板后手工维护；唯一消费方 = sdflow-retro/scripts/retro_report.py
+# 的 surfacing_block（命中的待复评镜行内追加 `→ 已处置: <disposition> (<date>)`）。
+#
+# schema（每项）: {layer, lens, host, runner, site, disposition, condition, date, rationale}
+# 匹配键 = (layer,lens,host,runner,site)，与 lens_metric_aggregate.group_key 同键（不另造口径）。
+# disposition ∈ {保留, 降采样, 淘汰, 不适用}；condition 仅 disposition=降采样 必填（其余填 "—"，
+# 写机械可判派发条件原文——判定命令见对应评审 SKILL.md 的「规划镜头」段，两处保持同源）。
+#
+# 错误语义（retro_report.py 消费侧契约，DD1）：文件缺失 = 零注记照旧 flag（向后兼容）；yaml 坏 /
+# disposition 非法 ⇒ fail-loud 非零退出（宁红勿静默，adr/0016）；键未命中任何锚组 ⇒ 告警不阻断
+# （可能是已淘汰镜的存量记录，或该组合本轮尚未出现）。
+# 淘汰态落地：disposition="淘汰" 时对应评审 SKILL 的 roster 段整段移除该镜派发逻辑，本文件条目保留
+# 作历史注记（本轮无淘汰，此规则为 schema 合法值的落地路径备案）。
+#
+# 本表 13 面镜为设计门 2026-08-10 逐镜拍板确认（design.md DD6 处置表）。host 统一取 "claude"——
+# 支撑这些百分比的历史语料以 Claude 宿主为主（Codex 宿主支持晚近落地，尚未积累可比量级）；
+# Codex 宿主真实轮次若产出同镜新数据，键不命中即无注记（DD1 错误语义：未命中键仅告警不阻断），
+# 不影响本表既有条目，未来复评轮可按需追加 host="codex" 的独立条目（覆写用同键条目、git 史即审计链）。
+
+- layer: code-review
+  lens: adversarial
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "双率最高段（独立52%/采纳73%），实修率33%达标"
+
+- layer: code-review
+  lens: domain
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "实修率最高（50%），TG 条件化本已存在"
+
+- layer: code-review
+  lens: broad
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "产量低但为 scope-drift 守卫，spec 钉死守卫时序，非产量逻辑"
+
+- layer: code-review
+  lens: history
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 降采样
+  condition: "git diff --diff-filter=R -M --name-only \"$DIFF_BASE\"..HEAD 非空（命中 rename）或 git diff --diff-filter=M --numstat \"$DIFF_BASE\"..HEAD 中任一既有文件(加行数+删行数)≥200 → 派 1 个历史镜；两者皆否 → 本轮跳过"
+  date: "2026-08-10"
+  rationale: "双率最低段（独立29%/采纳57%），条件=git 历史敏感形态，机械可判"
+
+- layer: code-review
+  lens: outside-voice
+  host: claude
+  runner: codex
+  site: code-voice
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "跨模型第二意见 spec 默认开；跨模型 voice 产出碾压同族温镜（实战独家贡献实证）"
+
+- layer: code-review
+  lens: outside-voice
+  host: claude
+  runner: codex
+  site: hr-tg
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "本已 HR-TG 条件化，无进一步降采样空间"
+
+- layer: spec-review
+  lens: adversarial
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "采纳率全场最高段（93%）"
+
+- layer: spec-review
+  lens: broad
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "最大产出源（415 条）"
+
+- layer: spec-review
+  lens: domain
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "采纳率 96%，TG 条件化本已存在"
+
+- layer: spec-review
+  lens: grounding
+  host: claude
+  runner: claude
+  site: "—"
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "守卫类角色（机械读码核验 spec 代码事实）；设计门 Q3 拍板撤回降采样——弱档成本低、判据信号错位、本轮接地全绿"
+
+- layer: spec-review
+  lens: outside-voice
+  host: claude
+  runner: claude
+  site: design-voice
+  disposition: 不适用
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "此行是 codex 不可用时的回落路径产物，非独立 roster 成员，砍留随 voice 机制本体"
+
+- layer: spec-review
+  lens: outside-voice
+  host: claude
+  runner: codex
+  site: design-voice
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "独立率数字与实战印象有张力（历史独家高危2条），跨模型 spec 默认开，窗口期重点观察对象"
+
+- layer: spec-review
+  lens: outside-voice
+  host: claude
+  runner: codex
+  site: hr-tg
+  disposition: 保留
+  condition: "—"
+  date: "2026-08-10"
+  rationale: "同 code-review hr-tg，本已条件化"

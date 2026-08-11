@@ -226,6 +226,12 @@ DD1：Step1/Step2 旧两段串行 dispatch 合并为**单批全并行 dispatch**
 - 按 `{change_dir}` 实际涉及的栈 + 内容判命中的 TG/领域 → 决定开哪几个**领域镜**（backend·go / embedded·ml307c·esp32 / frontend）。
 - 按风险定**对抗镜**数量：普通 2 个，高风险 3 个。固定 1 个**接地镜**（机械读码核验）。
 - 只审命中的；config 已固化的结构/占位/一致性（T/S）不进任何镜。
+- **roster 条件化派发〔DD6/DD2，implement-workflow-optimization-2026-08-p2〕**：全部评审镜（两层合计 13 面）
+  的降采样处置见 `openspec/retro/mirror-dispositions.yaml`（单一权威源）——本层（spec-review）7 面镜
+  （adversarial/broad/domain/grounding/outside-voice ×3 site）设计门拍板结果**全部保留**（接地镜 Q3 撤回
+  降采样），**当前无条件跳过镜**；机制与 code-review 侧历史镜条件化同构，供未来复评轮判「降采样」时复用——
+  届时该镜的 roster 行填 `runner="none"`（DD2 合法组合，锚行必落，MUST NOT 整行省略）+ 本步报告一行说明，
+  判定命令写进处置表 `condition` 字段（机械可判，非定性词）。
 - **分工线（base 与 domains 二分）**：**base 的 R 项（`spec-checklists/spec-quality-base.md`）归广审镜，
   domains/ 的 R 项归领域镜**——两层清单本就互斥（base=domain-agnostic 计划级/工程级，domains=栈特定），
   无需额外去重协商；plan-eng 镜另有防重叠语义补句处理话题层残余重叠（见下方广审镜 prompt 契约）。

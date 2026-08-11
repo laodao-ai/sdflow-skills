@@ -800,6 +800,23 @@ def test_ordinary_mirror_runner_eq_host_ok():                  # host=codex lens
     v = al.check_lens_metric(_lm(layer="code-review", host="codex", lens="domain", runner="codex"), "code-review", _enums())
     assert not _has(v, "ordinary-runner-host-mismatch")
 
+def test_ordinary_mirror_runner_none_findings_zero_legal():
+    # DD2/设计门 Q1（implement-workflow-optimization-2026-08-p2）：合法组合矩阵扩展——
+    # 普通镜行「条件跳过」锚 runner="none" ∧ findings="0" 放行（此前恒拦，方向已改）。
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="none", findings="0",
+                                 采纳="0", 裁掉="0", 独立="0", sev="致0/高0/中0/低0"),
+                             "code-review", _enums())
+    assert not _has(v, "ordinary-runner-host-mismatch")
+
+def test_ordinary_mirror_runner_none_findings_nonzero_still_blocked():
+    # DD2 边界锁：runner="none" 但 findings≠0（谎报跳过却计了数）仍须拦——合法组合只放宽
+    # runner="none"∧findings=0 这一种组合，非放宽 runner="none" 本身。
+    al = _mod()
+    v = al.check_lens_metric(_lm(host="claude", lens="domain", runner="none", findings="3"),
+                             "code-review", _enums())
+    assert _has(v, "ordinary-runner-host-mismatch")
+
 def test_outside_voice_lens_row_cross_model_not_flagged():     # lens=outside-voice 行 runner≠host 合法，不套普通镜规则
     al = _mod()
     v = al.check_lens_metric(_lm(host="claude", lens="outside-voice", runner="codex", site="code-voice"),
