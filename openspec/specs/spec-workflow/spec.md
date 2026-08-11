@@ -1701,3 +1701,20 @@ Step2 各镜子代理产出的每条 finding MUST 附「触发该 finding 的具
 - **WHEN** 无引文 finding 被滤除
 - **THEN** 该滤除 SHALL 可审计（已裁掉区一行带过），MUST NOT 静默丢弃
 
+### Requirement: 镜 roster 条件化派发（降采样）
+
+评审 skill 的 roster 段 MAY 为单个镜声明**派发条件**（降采样处置的实现形态）。约束：
+
+- 条件 MUST 为 dispatch 时**机械可判**的信号（TG 命中 / diff 规模 / 栈 / change 类型），**MUST NOT 引入运行时模型自判难度路由**。
+- 条件判「本轮不派」的镜 MUST 照落 lens-metric 锚行（`runner="none"`、`findings=0`）〔设计门 Q1：合法组合矩阵扩展，condition-not-met 不进锚字段，跳过成因由 `mirror-dispositions.yaml` condition 字段 + 报告散文承载〕——跳过 MUST 可审计，MUST NOT 以不落锚的方式静默消失。
+- 复评处置决定（保留 / 降采样 / 淘汰 / 不适用）SHALL 记录于 `openspec/retro/mirror-dispositions.yaml`（匹配键与 lens-metric 聚合分组键同构），roster 段改动与处置记录 SHALL 同轮一致。
+- roster 处置改动与裁决协议改动 SHALL 落独立 commit，可分别 revert。
+
+#### Scenario: 条件不满足的镜跳过但留锚
+- **WHEN** 某镜声明派发条件「diff 含 rename 或触碰既有文件 ≥ N」且本轮 diff 不满足
+- **THEN** 该镜不派发，本轮报告仍落其锚行 `runner="none" findings="0"`（合法组合矩阵扩展〔设计门 Q1〕），报告可见一行跳过说明；跳过成因在 `mirror-dispositions.yaml` condition 字段机读可查
+
+#### Scenario: 条件满足照常派发
+- **WHEN** 该镜的派发条件被本轮 diff 满足
+- **THEN** 照常 fan-out，锚行按实际执行落，与无条件镜无差别
+
